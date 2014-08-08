@@ -2589,35 +2589,18 @@ void
 fs_visitor::emit_untyped_surface_read(unsigned surf_index, fs_reg dst,
                                       fs_reg offset)
 {
-   const unsigned operand_len = dispatch_width / 8;
-   unsigned mlen = 0;
+   const unsigned reg_width = dispatch_width / 8;
 
-   /* Initialize the sample mask in the message header. */
-   emit(MOV(brw_uvec_mrf(8, mlen, 0), fs_reg(0u)))
-      ->force_writemask_all = true;
-
-   if (fp->UsesKill) {
-      emit(MOV(brw_uvec_mrf(1, mlen, 7), brw_flag_reg(0, 1)))
-         ->force_writemask_all = true;
-   } else {
-      emit(MOV(brw_uvec_mrf(1, mlen, 7),
-               retype(brw_vec1_grf(1, 7), BRW_REGISTER_TYPE_UD)))
-         ->force_writemask_all = true;
-   }
-
-   mlen++;
+   fs_reg payload = fs_reg(this, glsl_type::uvec2_type);
 
    /* Set the surface read offset. */
-   emit(MOV(brw_uvec_mrf(dispatch_width, mlen, 0), offset));
-   mlen += operand_len;
+   emit(MOV(::offset(payload, 1), offset));
 
    /* Emit the instruction. */
-   fs_inst *inst = new(mem_ctx)
-      fs_inst(SHADER_OPCODE_UNTYPED_SURFACE_READ, dst, surf_index);
-   inst->base_mrf = 0;
-   inst->mlen = mlen;
+   fs_inst *inst = emit(SHADER_OPCODE_UNTYPED_SURFACE_READ, dst,
+                        surf_index, payload);
+   inst->mlen = 1 + reg_width;
    inst->header_present = true;
-   emit(inst);
 }
 
 fs_inst *

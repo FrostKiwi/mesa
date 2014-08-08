@@ -1331,12 +1331,31 @@ fs_generator::generate_untyped_atomic(fs_inst *inst, struct brw_reg dst,
 
 void
 fs_generator::generate_untyped_surface_read(fs_inst *inst, struct brw_reg dst,
-                                            struct brw_reg surf_index)
+                                            struct brw_reg surf_index,
+                                            struct brw_reg payload)
 {
    assert(surf_index.file == BRW_IMMEDIATE_VALUE &&
 	  surf_index.type == BRW_REGISTER_TYPE_UD);
 
-   brw_untyped_surface_read(p, dst, brw_message_reg(inst->base_mrf),
+   brw_push_insn_state(p);
+   brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+   brw_set_default_compression_control(p, BRW_COMPRESSION_NONE);
+
+   if (dispatch_width == 16)
+      payload.nr++;
+
+   brw_MOV(p, payload, brw_imm_ud(0u));
+
+   if (fp->UsesKill) {
+      brw_MOV(p, get_element_ud(payload, 7), brw_flag_reg(0, 1));
+   } else {
+      brw_MOV(p, get_element_ud(payload, 7),
+              retype(brw_vec1_grf(1, 7), BRW_REGISTER_TYPE_UD));
+   }
+
+   brw_pop_insn_state(p);
+
+   brw_untyped_surface_read(p, dst, payload,
                             surf_index.dw1.ud,
                             inst->mlen, dispatch_width / 8);
 
@@ -1734,7 +1753,7 @@ fs_generator::generate_code(exec_list *instructions)
          break;
 
       case SHADER_OPCODE_UNTYPED_SURFACE_READ:
-         generate_untyped_surface_read(inst, dst, src[0]);
+         generate_untyped_surface_read(inst, dst, src[0], src[1]);
          break;
 
       case FS_OPCODE_SET_SIMD4X2_OFFSET:
