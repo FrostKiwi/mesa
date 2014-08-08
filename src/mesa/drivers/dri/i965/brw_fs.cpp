@@ -370,6 +370,7 @@ fs_inst::is_send_from_grf() const
 {
    return (opcode == FS_OPCODE_VARYING_PULL_CONSTANT_LOAD_GEN7 ||
            opcode == SHADER_OPCODE_SHADER_TIME_ADD ||
+           opcode == SHADER_OPCODE_UNTYPED_ATOMIC ||
            opcode == FS_OPCODE_INTERPOLATE_AT_CENTROID ||
            opcode == FS_OPCODE_INTERPOLATE_AT_SAMPLE ||
            opcode == FS_OPCODE_INTERPOLATE_AT_SHARED_OFFSET ||
@@ -768,12 +769,14 @@ fs_inst::is_partial_write() const
 int
 fs_inst::regs_read(fs_visitor *v, int arg) const
 {
+   int payload_count = v->dispatch_width == 16 ? (mlen + 1) / 2 : mlen;
+
    if (is_tex() && arg == 0 && src[0].file == GRF) {
-      if (v->dispatch_width == 16)
-	 return (mlen + 1) / 2;
-      else
-	 return mlen;
+      return payload_count;
+   } else if (opcode == SHADER_OPCODE_UNTYPED_ATOMIC && arg == 2) {
+      return payload_count;
    }
+
    return 1;
 }
 

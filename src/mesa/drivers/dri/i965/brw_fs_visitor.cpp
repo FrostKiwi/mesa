@@ -2545,46 +2545,44 @@ fs_visitor::emit_untyped_atomic(unsigned atomic_op, unsigned surf_index,
                                 fs_reg dst, fs_reg offset, fs_reg src0,
                                 fs_reg src1)
 {
-   const unsigned operand_len = dispatch_width / 8;
-   unsigned mlen = 0;
+   const unsigned reg_width = dispatch_width / 8;
+   unsigned num_srcs, mlen, length;
 
-   /* Initialize the sample mask in the message header. */
-   emit(MOV(brw_uvec_mrf(8, mlen, 0), fs_reg(0u)))
-      ->force_writemask_all = true;
-
-   if (fp->UsesKill) {
-      emit(MOV(brw_uvec_mrf(1, mlen, 7), brw_flag_reg(0, 1)))
-         ->force_writemask_all = true;
-   } else {
-      emit(MOV(brw_uvec_mrf(1, mlen, 7),
-               retype(brw_vec1_grf(1, 7), BRW_REGISTER_TYPE_UD)))
-         ->force_writemask_all = true;
+   fs_reg *sources = ralloc_array(mem_ctx, fs_reg, MAX_SAMPLER_MESSAGE_SIZE);
+   for (int i = 0; i < MAX_SAMPLER_MESSAGE_SIZE; i++) {
+      sources[i] = fs_reg(this, glsl_type::uint_type);
    }
 
-   mlen++;
+   /* We need this in the generator, so we just allocate for now */
+   sources[0] = reg_undef;
 
    /* Set the atomic operation offset. */
-   emit(MOV(brw_uvec_mrf(dispatch_width, mlen, 0), offset));
-   mlen += operand_len;
+   emit(MOV(sources[1], offset));
 
+   num_srcs = 0;
    /* Set the atomic operation arguments. */
    if (src0.file != BAD_FILE) {
-      emit(MOV(brw_uvec_mrf(dispatch_width, mlen, 0), src0));
-      mlen += operand_len;
+      emit(MOV(sources[2], src0));
+      num_srcs++;
    }
 
    if (src1.file != BAD_FILE) {
-      emit(MOV(brw_uvec_mrf(dispatch_width, mlen, 0), src1));
-      mlen += operand_len;
+      emit(MOV(sources[3], src1));
+      num_srcs++;
    }
 
+   length = 2 + num_srcs;
+   mlen = 1 + reg_width * (1 + num_srcs);
+
+   fs_reg src_payload = fs_reg(GRF, virtual_grf_alloc(length),
+                               BRW_REGISTER_TYPE_UD);
+   emit(LOAD_PAYLOAD(src_payload, sources, length));
+
    /* Emit the instruction. */
-   fs_inst *inst = new(mem_ctx) fs_inst(SHADER_OPCODE_UNTYPED_ATOMIC, dst,
-                                        atomic_op, surf_index);
-   inst->base_mrf = 0;
+   fs_inst *inst = emit(SHADER_OPCODE_UNTYPED_ATOMIC, dst,
+                        atomic_op, surf_index, src_payload);
    inst->mlen = mlen;
    inst->header_present = true;
-   emit(inst);
 }
 
 void
