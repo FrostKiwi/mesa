@@ -667,7 +667,8 @@ private:
 
    void generate_untyped_surface_read(fs_inst *inst,
                                       struct brw_reg dst,
-                                      struct brw_reg surf_index);
+                                      struct brw_reg surf_index,
+                                      struct brw_reg payload);
 
    bool patch_discard_jumps_to_fb_writes();
 

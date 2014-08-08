@@ -370,6 +370,7 @@ fs_inst::is_send_from_grf() const
    return (opcode == FS_OPCODE_VARYING_PULL_CONSTANT_LOAD_GEN7 ||
            opcode == SHADER_OPCODE_SHADER_TIME_ADD ||
            opcode == SHADER_OPCODE_UNTYPED_ATOMIC ||
+           opcode == SHADER_OPCODE_UNTYPED_SURFACE_READ ||
            opcode == FS_OPCODE_INTERPOLATE_AT_CENTROID ||
            opcode == FS_OPCODE_INTERPOLATE_AT_SAMPLE ||
            opcode == FS_OPCODE_INTERPOLATE_AT_SHARED_OFFSET ||
@@ -773,6 +774,8 @@ fs_inst::regs_read(fs_visitor *v, int arg) const
    if (is_tex() && arg == 0 && src[0].file == GRF) {
       return payload_count;
    } else if (opcode == SHADER_OPCODE_UNTYPED_ATOMIC && arg == 2) {
+      return payload_count;
+   } else if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_READ && arg == 1) {
       return payload_count;
    }
 

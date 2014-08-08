@@ -2690,7 +2690,7 @@ brw_set_dp_untyped_surface_read_message(struct brw_compile *p,
 void
 brw_untyped_surface_read(struct brw_compile *p,
                          struct brw_reg dest,
-                         struct brw_reg mrf,
+                         struct brw_reg src,
                          unsigned bind_table_index,
                          unsigned msg_length,
                          unsigned response_length)
@@ -2699,7 +2699,7 @@ brw_untyped_surface_read(struct brw_compile *p,
    brw_inst *insn = next_insn(p, BRW_OPCODE_SEND);
 
    brw_set_dest(p, insn, retype(dest, BRW_REGISTER_TYPE_UD));
-   brw_set_src0(p, insn, retype(mrf, BRW_REGISTER_TYPE_UD));
+   brw_set_src0(p, insn, retype(src, BRW_REGISTER_TYPE_UD));
    brw_set_dp_untyped_surface_read_message(
       p, insn, bind_table_index, msg_length, response_length,
       brw_inst_access_mode(brw, insn) == BRW_ALIGN_1);
