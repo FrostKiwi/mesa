@@ -75,6 +75,7 @@ public:
    fs_reg(struct brw_reg fixed_hw_reg);
    fs_reg(enum register_file file, int reg);
    fs_reg(enum register_file file, int reg, enum brw_reg_type type);
+   fs_reg(enum register_file file, int reg, enum brw_reg_type type, uint8_t width);
    fs_reg(class fs_visitor *v, const struct glsl_type *type);
 
    bool equals(const fs_reg &r) const;

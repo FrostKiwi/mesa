@@ -205,7 +205,7 @@ fs_visitor::opt_cse_local(bblock_t *block)
 
                fs_reg orig_dst = entry->generator->dst;
                fs_reg tmp = fs_reg(GRF, virtual_grf_alloc(written),
-                                   orig_dst.type);
+                                   orig_dst.type, orig_dst.width);
                entry->tmp = tmp;
                entry->generator->dst = tmp;
 

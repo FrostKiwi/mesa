@@ -905,6 +905,17 @@ fs_reg::fs_reg(enum register_file file, int reg, enum brw_reg_type type)
    }
 }
 
+/** Fixed HW reg constructor. */
+fs_reg::fs_reg(enum register_file file, int reg, enum brw_reg_type type,
+               uint8_t width)
+{
+   init();
+   this->file = file;
+   this->reg = reg;
+   this->type = type;
+   this->width = width;
+}
+
 /** Automatic reg constructor. */
 fs_reg::fs_reg(class fs_visitor *v, const struct glsl_type *type)
 {
