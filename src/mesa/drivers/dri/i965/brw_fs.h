@@ -93,6 +93,14 @@ public:
 
    fs_reg *reladdr;
 
+   /**
+    * The register width.  This indicates how many hardware values are
+    * represented by each virtual value.  Valid values are 1, 8, or 16.
+    * For immediate values, this is 1.  Most of the rest of the time, it
+    * will be equal to the dispatch width.
+    */
+   uint8_t width;
+
    /** Register region horizontal stride */
    uint8_t stride;
 };
