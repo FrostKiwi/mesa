@@ -53,7 +53,8 @@ extern "C" {
 #include "glsl/glsl_types.h"
 
 void
-fs_inst::init(enum opcode opcode, const fs_reg &dst, fs_reg *src, int sources)
+fs_inst::init(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
+              fs_reg *src, int sources)
 {
    memset(this, 0, sizeof(*this));
 
@@ -61,6 +62,33 @@ fs_inst::init(enum opcode opcode, const fs_reg &dst, fs_reg *src, int sources)
    this->dst = dst;
    this->src = src;
    this->sources = sources;
+   this->exec_size = exec_size;
+
+   assert(dst.file != IMM && dst.file != UNIFORM);
+
+   /* If exec_size == 0, try to guess it from the registers.  Since all
+    * manner of things may use hardware registers, we first try to guess
+    * based on GRF registers.  If this fails, we will go ahead and take the
+    * width from the destination register.
+    */
+   if (this->exec_size == 0) {
+      if (dst.file == GRF) {
+         this->exec_size = dst.width;
+      } else {
+         for (int i = 0; i < sources; ++i) {
+            if (src[i].file != GRF)
+               continue;
+
+            if (this->exec_size <= 1)
+               this->exec_size = src[i].width;
+            assert(src[i].width == 1 || src[i].width == this->exec_size);
+         }
+      }
+
+      if (this->exec_size == 0 && dst.file != BAD_FILE)
+         this->exec_size = dst.width;
+   }
+   assert(this->exec_size != 0);
 
    this->conditional_mod = BRW_CONDITIONAL_NONE;
 
@@ -84,17 +112,29 @@ fs_inst::init(enum opcode opcode, const fs_reg &dst, fs_reg *src, int sources)
    this->writes_accumulator = false;
 }
 
+fs_inst::fs_inst()
+{
+   fs_reg *src = ralloc_array(this, fs_reg, 3);
+   init(BRW_OPCODE_NOP, 8, dst, src, 0);
+}
+
+fs_inst::fs_inst(enum opcode opcode, uint8_t exec_size)
+{
+   fs_reg *src = ralloc_array(this, fs_reg, 3);
+   init(opcode, exec_size, reg_undef, src, 0);
+}
+
 fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst)
 {
    fs_reg *src = ralloc_array(this, fs_reg, 3);
-   init(opcode, dst, src, 0);
+   init(opcode, 0, dst, src, 0);
 }
 
 fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0)
 {
    fs_reg *src = ralloc_array(this, fs_reg, 3);
    src[0] = src0;
-   init(opcode, dst, src, 1);
+   init(opcode, 0, dst, src, 1);
 }
 
 fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0,
@@ -103,7 +143,7 @@ fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0,
    fs_reg *src = ralloc_array(this, fs_reg, 3);
    src[0] = src0;
    src[1] = src1;
-   init(opcode, dst, src, 2);
+   init(opcode, 0, dst, src, 2);
 }
 
 fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0,
@@ -113,12 +153,18 @@ fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0,
    src[0] = src0;
    src[1] = src1;
    src[2] = src2;
-   init(opcode, dst, src, 3);
+   init(opcode, 0, dst, src, 3);
 }
 
 fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst, fs_reg src[], int sources)
 {
-   init(opcode, dst, src, sources);
+   init(opcode, 0, dst, src, sources);
+}
+
+fs_inst::fs_inst(enum opcode opcode, uint8_t exec_width, const fs_reg &dst,
+                 fs_reg src[], int sources)
+{
+   init(opcode, exec_width, dst, src, sources);
 }
 
 fs_inst::fs_inst(const fs_inst &that)
@@ -206,7 +252,7 @@ ALU2(MAC)
 fs_inst *
 fs_visitor::IF(enum brw_predicate predicate)
 {
-   fs_inst *inst = new(mem_ctx) fs_inst(BRW_OPCODE_IF);
+   fs_inst *inst = new(mem_ctx) fs_inst(BRW_OPCODE_IF, dispatch_width);
    inst->predicate = predicate;
    return inst;
 }
@@ -217,7 +263,7 @@ fs_visitor::IF(const fs_reg &src0, const fs_reg &src1,
                enum brw_conditional_mod condition)
 {
    assert(brw->gen == 6);
-   fs_inst *inst = new(mem_ctx) fs_inst(BRW_OPCODE_IF,
+   fs_inst *inst = new(mem_ctx) fs_inst(BRW_OPCODE_IF, dispatch_width,
                                         reg_null_d, src0, src1);
    inst->conditional_mod = condition;
    return inst;
@@ -380,6 +426,7 @@ fs_inst::equals(fs_inst *inst) const
            eot == inst->eot &&
            header_present == inst->header_present &&
            shadow_compare == inst->shadow_compare &&
+           exec_size == inst->exec_size &&
            offset == inst->offset);
 }
 
@@ -760,7 +807,7 @@ fs_visitor::no16(const char *format, ...)
 fs_inst *
 fs_visitor::emit(enum opcode opcode)
 {
-   return emit(new(mem_ctx) fs_inst(opcode));
+   return emit(new(mem_ctx) fs_inst(opcode, dispatch_width));
 }
 
 fs_inst *
@@ -2129,7 +2176,7 @@ fs_visitor::demote_pull_constants()
          } else {
             fs_reg offset = fs_reg((unsigned)(pull_index * 4) & ~15);
             fs_inst *pull =
-               new(mem_ctx) fs_inst(FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD,
+               new(mem_ctx) fs_inst(FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD, 8,
                                     dst, surf_index, offset);
             inst->insert_before(block, pull);
             inst->src[i].set_smear(pull_index & 3);
@@ -2840,7 +2887,7 @@ fs_visitor::lower_uniform_pull_constant_loads()
           * by live variable analysis, or register allocation will explode.
           */
          fs_inst *setup = new(mem_ctx) fs_inst(FS_OPCODE_SET_SIMD4X2_OFFSET,
-                                               payload, const_offset_reg);
+                                               8, payload, const_offset_reg);
          setup->force_writemask_all = true;
 
          setup->ir = inst->ir;
