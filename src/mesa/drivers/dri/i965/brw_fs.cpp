@@ -3600,10 +3600,14 @@ fs_visitor::run()
        * functions called "main").
        */
       if (shader) {
-         foreach_in_list(ir_instruction, ir, shader->base.ir) {
-            base_ir = ir;
-            this->result = reg_undef;
-            ir->accept(this);
+         if (getenv("INTEL_USE_NIR") != NULL) {
+            emit_nir_code();
+         } else {
+            foreach_in_list(ir_instruction, ir, shader->base.ir) {
+               base_ir = ir;
+               this->result = reg_undef;
+               ir->accept(this);
+            }
          }
       } else {
          emit_fragment_program_code();
