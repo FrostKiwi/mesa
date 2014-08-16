@@ -2415,8 +2415,7 @@ fs_visitor::compute_to_mrf()
       int mrf_high;
       if (inst->dst.reg & BRW_MRF_COMPR4) {
 	 mrf_high = mrf_low + 4;
-      } else if (dispatch_width == 16 &&
-		 (!inst->force_uncompressed && !inst->force_sechalf)) {
+      } else if (inst->exec_size == 16) {
 	 mrf_high = mrf_low + 1;
       } else {
 	 mrf_high = mrf_low;
@@ -2509,9 +2508,7 @@ fs_visitor::compute_to_mrf()
 
 	    if (scan_inst->dst.reg & BRW_MRF_COMPR4) {
 	       scan_mrf_high = scan_mrf_low + 4;
-	    } else if (dispatch_width == 16 &&
-		       (!scan_inst->force_uncompressed &&
-			!scan_inst->force_sechalf)) {
+	    } else if (scan_inst->exec_size == 16) {
 	       scan_mrf_high = scan_mrf_low + 1;
 	    } else {
 	       scan_mrf_high = scan_mrf_low;
@@ -2666,10 +2663,6 @@ static void
 clear_deps_for_inst_src(fs_inst *inst, int dispatch_width, bool *deps,
                         int first_grf, int grf_len)
 {
-   bool inst_simd16 = (dispatch_width > 8 &&
-                       !inst->force_uncompressed &&
-                       !inst->force_sechalf);
-
    /* Clear the flag for registers that actually got read (as expected). */
    for (int i = 0; i < inst->sources; i++) {
       int grf;
@@ -2685,7 +2678,7 @@ clear_deps_for_inst_src(fs_inst *inst, int dispatch_width, bool *deps,
       if (grf >= first_grf &&
           grf < first_grf + grf_len) {
          deps[grf - first_grf] = false;
-         if (inst_simd16)
+         if (inst->exec_size == 16)
             deps[grf - first_grf + 1] = false;
       }
    }
@@ -2742,10 +2735,6 @@ fs_visitor::insert_gen4_pre_send_dependency_workarounds(fs_inst *inst)
          return;
       }
 
-      bool scan_inst_simd16 = (dispatch_width > 8 &&
-                               !scan_inst->force_uncompressed &&
-                               !scan_inst->force_sechalf);
-
       /* We insert our reads as late as possible on the assumption that any
        * instruction but a MOV that might have left us an outstanding
        * dependency has more latency than a MOV.
@@ -2759,7 +2748,7 @@ fs_visitor::insert_gen4_pre_send_dependency_workarounds(fs_inst *inst)
                 needs_dep[reg - first_write_grf]) {
                inst->insert_before(DEP_RESOLVE_MOV(reg));
                needs_dep[reg - first_write_grf] = false;
-               if (scan_inst_simd16)
+               if (scan_inst->exec_size == 16)
                   needs_dep[reg - first_write_grf + 1] = false;
             }
          }
