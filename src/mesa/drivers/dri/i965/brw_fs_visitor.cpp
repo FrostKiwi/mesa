@@ -1613,7 +1613,7 @@ fs_visitor::emit_texture_gen7(ir_texture *ir, fs_reg dst, fs_reg coordinate,
       }
    }
 
-   fs_reg src_payload = fs_reg(GRF, virtual_grf_alloc(length),
+   fs_reg src_payload = fs_reg(GRF, virtual_grf_alloc(length * reg_width),
                                BRW_REGISTER_TYPE_F);
    emit(LOAD_PAYLOAD(src_payload, sources, length));
 
@@ -1775,7 +1775,7 @@ fs_visitor::emit_mcs_fetch(ir_texture *ir, fs_reg coordinate, fs_reg sampler)
 {
    int reg_width = dispatch_width / 8;
    int length = ir->coordinate->type->vector_elements;
-   fs_reg payload = fs_reg(GRF, virtual_grf_alloc(length),
+   fs_reg payload = fs_reg(GRF, virtual_grf_alloc(length * reg_width),
                            BRW_REGISTER_TYPE_F);
    fs_reg dest = fs_reg(this, glsl_type::uvec4_type);
    fs_reg *sources = ralloc_array(mem_ctx, fs_reg, length);
