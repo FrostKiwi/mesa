@@ -948,9 +948,10 @@ fs_reg::fs_reg(enum register_file file, int reg, enum brw_reg_type type,
 fs_reg::fs_reg(fs_visitor *v, const struct glsl_type *type)
 {
    init();
+   int reg_width = v->dispatch_width / 8;
 
    this->file = GRF;
-   this->reg = v->virtual_grf_alloc(v->type_size(type));
+   this->reg = v->virtual_grf_alloc(v->type_size(type) * reg_width);
    this->reg_offset = 0;
    this->type = brw_type_for_base_type(type);
    this->width = v->dispatch_width;
@@ -2241,12 +2242,12 @@ fs_visitor::opt_register_renaming()
 
       if (depth == 0 &&
           inst->dst.file == GRF &&
-          virtual_grf_sizes[inst->dst.reg] == 1 &&
+          virtual_grf_sizes[inst->dst.reg] == inst->dst.width / 8 &&
           !inst->is_partial_write()) {
          if (remap[dst] == -1) {
             remap[dst] = dst;
          } else {
-            remap[dst] = virtual_grf_alloc(1);
+            remap[dst] = virtual_grf_alloc(inst->dst.width / 8);
             inst->dst.reg = remap[dst];
             progress = true;
          }
