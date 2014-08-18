@@ -1663,6 +1663,7 @@ fs_visitor::split_virtual_grfs()
 {
    int num_vars = this->virtual_grf_count;
    bool split_grf[num_vars];
+   uint8_t reg_widths[num_vars];
    int new_virtual_grf[num_vars];
 
    memset(split_grf, 0, sizeof(split_grf));
@@ -1678,11 +1679,6 @@ fs_visitor::split_virtual_grfs()
       }
    }
 
-   /* Only split registers with size > 1. */
-   for (int i = 0; i < num_vars; i++)
-      if (this->virtual_grf_sizes[i] <= 1)
-	 split_grf[i] = false;
-
    if (brw->has_pln &&
        this->delta_x[BRW_WM_PERSPECTIVE_PIXEL_BARYCENTRIC].file == GRF) {
       /* PLN opcodes rely on the delta_xy being contiguous.  We only have to
@@ -1695,6 +1691,23 @@ fs_visitor::split_virtual_grfs()
    }
 
    foreach_in_list(fs_inst, inst, &instructions) {
+      /* In SIMD16 mode, we can have registers that are genuinely 2-wide.
+       * Record the individual register widths (1 in SIMD8, 2 in SIMD16)
+       * and only mark the register for splitting if it's bigger than this.
+       */
+      if (inst->dst.file == GRF) {
+         reg_widths[inst->dst.reg] = inst->dst.width / 8;
+         if (virtual_grf_sizes[inst->dst.reg] <= reg_widths[inst->dst.reg])
+            split_grf[inst->dst.reg] = false;
+      }
+      for (int i = 0; i < inst->sources; i++) {
+         if (inst->src[i].file == GRF) {
+            reg_widths[inst->src[i].reg] = inst->src[i].width / 8;
+            if (virtual_grf_sizes[inst->src[i].reg] <= reg_widths[inst->src[i].reg])
+               split_grf[inst->src[i].reg] = false;
+         }
+      }
+
       /* If there's a SEND message that requires contiguous destination
        * registers, no splitting is allowed.
        */
@@ -1719,13 +1732,13 @@ fs_visitor::split_virtual_grfs()
     */
    for (int i = 0; i < num_vars; i++) {
       if (split_grf[i]) {
-	 new_virtual_grf[i] = virtual_grf_alloc(1);
-	 for (int j = 2; j < this->virtual_grf_sizes[i]; j++) {
-	    int reg = virtual_grf_alloc(1);
+	 new_virtual_grf[i] = virtual_grf_alloc(reg_widths[i]);
+	 for (int j = 2; j < this->virtual_grf_sizes[i] / reg_widths[i]; j++) {
+	    int reg = virtual_grf_alloc(reg_widths[i]);
 	    assert(reg == new_virtual_grf[i] + j - 1);
 	    (void) reg;
 	 }
-	 this->virtual_grf_sizes[i] = 1;
+	 this->virtual_grf_sizes[i] = reg_widths[i];
       }
    }
 
@@ -1734,7 +1747,7 @@ fs_visitor::split_virtual_grfs()
 	  split_grf[inst->dst.reg] &&
 	  inst->dst.reg_offset != 0) {
 	 inst->dst.reg = (new_virtual_grf[inst->dst.reg] +
-			  inst->dst.reg_offset - 1);
+			  inst->dst.reg_offset / (inst->dst.width / 8) - 1);
 	 inst->dst.reg_offset = 0;
       }
       for (int i = 0; i < inst->sources; i++) {
@@ -1742,7 +1755,7 @@ fs_visitor::split_virtual_grfs()
 	     split_grf[inst->src[i].reg] &&
 	     inst->src[i].reg_offset != 0) {
 	    inst->src[i].reg = (new_virtual_grf[inst->src[i].reg] +
-				inst->src[i].reg_offset - 1);
+				inst->src[i].reg_offset / (inst->src[i].width / 8) - 1);
 	    inst->src[i].reg_offset = 0;
 	 }
       }
