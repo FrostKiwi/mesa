@@ -1758,10 +1758,10 @@ fs_visitor::compact_virtual_grfs()
    if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER))
       return;
 
-   /* Mark which virtual GRFs are used, and count how many. */
    int remap_table[this->virtual_grf_count];
    memset(remap_table, -1, sizeof(remap_table));
 
+   /* Mark which virtual GRFs are used. */
    foreach_in_list(const fs_inst, inst, &instructions) {
       if (inst->dst.file == GRF)
          remap_table[inst->dst.reg] = 0;
