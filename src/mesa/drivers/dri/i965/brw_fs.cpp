@@ -1630,13 +1630,23 @@ fs_visitor::split_virtual_grfs()
    bool split_grf[num_vars];
    int new_virtual_grf[num_vars];
 
-   /* Try to split anything > 0 sized. */
-   for (int i = 0; i < num_vars; i++) {
-      if (this->virtual_grf_sizes[i] != 1)
-	 split_grf[i] = true;
-      else
-	 split_grf[i] = false;
+   memset(split_grf, 0, sizeof(split_grf));
+
+   /* Mark all used registers as splittable */
+   foreach_in_list(fs_inst, inst, &instructions) {
+      if (inst->dst.file == GRF)
+         split_grf[inst->dst.reg] = true;
+
+      for (int i = 0; i < inst->sources; i++) {
+         if (inst->src[i].file == GRF)
+            split_grf[inst->src[i].reg] = true;
+      }
    }
+
+   /* Only split registers with size > 1. */
+   for (int i = 0; i < num_vars; i++)
+      if (this->virtual_grf_sizes[i] <= 1)
+	 split_grf[i] = false;
 
    if (brw->has_pln &&
        this->delta_x[BRW_WM_PERSPECTIVE_PIXEL_BARYCENTRIC].file == GRF) {
