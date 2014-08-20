@@ -31,11 +31,11 @@
 #include "glsl/ir_optimization.h"
 
 static void
-assign_reg(int *reg_hw_locations, fs_reg *reg, int reg_width)
+assign_reg(int *reg_hw_locations, fs_reg *reg)
 {
    if (reg->file == GRF) {
       assert(reg->reg_offset >= 0);
-      reg->reg = reg_hw_locations[reg->reg] + reg->reg_offset * reg_width;
+      reg->reg = reg_hw_locations[reg->reg] + reg->reg_offset;
       reg->reg_offset = 0;
    }
 }
@@ -51,14 +51,14 @@ fs_visitor::assign_regs_trivial()
    hw_reg_mapping[0] = ALIGN(this->first_non_payload_grf, reg_width);
    for (i = 1; i <= this->virtual_grf_count; i++) {
       hw_reg_mapping[i] = (hw_reg_mapping[i - 1] +
-			   this->virtual_grf_sizes[i - 1] * reg_width);
+			   this->virtual_grf_sizes[i - 1]);
    }
    this->grf_used = hw_reg_mapping[this->virtual_grf_count];
 
    foreach_in_list(fs_inst, inst, &instructions) {
-      assign_reg(hw_reg_mapping, &inst->dst, reg_width);
+      assign_reg(hw_reg_mapping, &inst->dst);
       for (i = 0; i < inst->sources; i++) {
-         assign_reg(hw_reg_mapping, &inst->src[i], reg_width);
+         assign_reg(hw_reg_mapping, &inst->src[i]);
       }
    }
 
@@ -75,7 +75,7 @@ static void
 brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
 {
    const struct brw_device_info *devinfo = screen->devinfo;
-   int base_reg_count = BRW_MAX_GRF / reg_width;
+   int base_reg_count = BRW_MAX_GRF;
    int index = reg_width - 1;
 
    /* The registers used to make up almost all values handled in the compiler
@@ -105,8 +105,7 @@ brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
    int class_sizes[BRW_MAX_MRF];
 
    if (devinfo->gen >= 7) {
-      for (class_count = 0; class_count < MAX_SAMPLER_MESSAGE_SIZE;
-           class_count++)
+      for (class_count = 0; class_count < BRW_MAX_MRF; class_count++)
          class_sizes[class_count] = class_count + 1;
    } else {
       for (class_count = 0; class_count < 4; class_count++)
@@ -162,7 +161,7 @@ brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
    /* Add a special class for aligned pairs, which we'll put delta_x/y
     * in on gen5 so that we can do PLN.
     */
-   if (devinfo->has_pln && reg_width == 1 && devinfo->gen < 6) {
+   if (devinfo->has_pln && devinfo->gen < 6) {
       aligned_pairs_class = ra_alloc_reg_class(regs);
 
       for (int i = 0; i < pairs_reg_count; i++) {
@@ -235,7 +234,6 @@ fs_visitor::setup_payload_interference(struct ra_graph *g,
                                        int payload_node_count,
                                        int first_payload_node)
 {
-   int reg_width = dispatch_width / 8;
    int loop_depth = 0;
    int loop_end_ip = 0;
 
@@ -275,7 +273,7 @@ fs_visitor::setup_payload_interference(struct ra_graph *g,
       for (int i = 0; i < inst->sources; i++) {
          if (inst->src[i].file == HW_REG &&
              inst->src[i].fixed_hw_reg.file == BRW_GENERAL_REGISTER_FILE) {
-            int node_nr = inst->src[i].fixed_hw_reg.nr / reg_width;
+            int node_nr = inst->src[i].fixed_hw_reg.nr;
             if (node_nr >= payload_node_count)
                continue;
 
@@ -291,8 +289,8 @@ fs_visitor::setup_payload_interference(struct ra_graph *g,
           * sideband.  It also really freaks out driver developers to see g0
           * used in unusual places, so just always reserve it.
           */
-         payload_last_use_ip[0 / reg_width] = use_ip;
-         payload_last_use_ip[1 / reg_width] = use_ip;
+         payload_last_use_ip[0] = use_ip;
+         payload_last_use_ip[1] = use_ip;
          break;
 
       case FS_OPCODE_LINTERP:
@@ -306,8 +304,7 @@ fs_visitor::setup_payload_interference(struct ra_graph *g,
             if (inst->src[delta_x_arg].file == HW_REG &&
                 inst->src[delta_x_arg].fixed_hw_reg.file ==
                 BRW_GENERAL_REGISTER_FILE) {
-               int sechalf_node = (inst->src[delta_x_arg].fixed_hw_reg.nr /
-                                   reg_width) + 1;
+               int sechalf_node = inst->src[delta_x_arg].fixed_hw_reg.nr + 1;
                assert(sechalf_node < payload_node_count);
                payload_last_use_ip[sechalf_node] = use_ip;
             }
@@ -390,8 +387,6 @@ fs_visitor::get_used_mrfs(bool *mrf_used)
 void
 fs_visitor::setup_mrf_hack_interference(struct ra_graph *g, int first_mrf_node)
 {
-   int reg_width = dispatch_width / 8;
-
    bool mrf_used[BRW_MAX_MRF];
    get_used_mrfs(mrf_used);
 
@@ -401,8 +396,7 @@ fs_visitor::setup_mrf_hack_interference(struct ra_graph *g, int first_mrf_node)
        * The alternative would be to have per-physical-register classes, which
        * would just be silly.
        */
-      ra_set_node_reg(g, first_mrf_node + i,
-                      (GEN7_MRF_HACK_START + i) / reg_width);
+      ra_set_node_reg(g, first_mrf_node + i, GEN7_MRF_HACK_START + i);
 
       /* Since we don't have any live/dead analysis on the MRFs, just mark all
        * that are used as conflicting with all virtual GRFs.
@@ -427,8 +421,7 @@ fs_visitor::assign_regs(bool allow_spilling)
     */
    int reg_width = dispatch_width / 8;
    int hw_reg_mapping[this->virtual_grf_count];
-   int payload_node_count = (ALIGN(this->first_non_payload_grf, reg_width) /
-                            reg_width);
+   int payload_node_count = ALIGN(this->first_non_payload_grf, reg_width);
    int rsi = reg_width - 1; /* Which screen->wm_reg_sets[] to use */
    calculate_live_intervals();
 
@@ -510,20 +503,19 @@ fs_visitor::assign_regs(bool allow_spilling)
     * regs in the register classes back down to real hardware reg
     * numbers.
     */
-   this->grf_used = payload_node_count * reg_width;
+   this->grf_used = payload_node_count;
    for (int i = 0; i < this->virtual_grf_count; i++) {
       int reg = ra_get_node_reg(g, i);
 
-      hw_reg_mapping[i] = screen->wm_reg_sets[rsi].ra_reg_to_grf[reg] * reg_width;
+      hw_reg_mapping[i] = screen->wm_reg_sets[rsi].ra_reg_to_grf[reg];
       this->grf_used = MAX2(this->grf_used,
-			    hw_reg_mapping[i] + this->virtual_grf_sizes[i] *
-			    reg_width);
+			    hw_reg_mapping[i] + this->virtual_grf_sizes[i]);
    }
 
    foreach_in_list(fs_inst, inst, &instructions) {
-      assign_reg(hw_reg_mapping, &inst->dst, reg_width);
+      assign_reg(hw_reg_mapping, &inst->dst);
       for (int i = 0; i < inst->sources; i++) {
-         assign_reg(hw_reg_mapping, &inst->src[i], reg_width);
+         assign_reg(hw_reg_mapping, &inst->src[i]);
       }
    }
 
