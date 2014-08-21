@@ -187,7 +187,8 @@ fs_visitor::register_coalesce()
          src_size = virtual_grf_sizes[inst->src[0].reg];
          assert(src_size <= MAX_SAMPLER_MESSAGE_SIZE);
 
-         channels_remaining = src_size;
+         assert(inst->src[0].width % 8 == 0);
+         channels_remaining = src_size / (inst->src[0].width / 8);
          memset(mov, 0, sizeof(mov));
 
          reg_to = inst->dst.reg;
@@ -205,6 +206,8 @@ fs_visitor::register_coalesce()
       } else {
          const int offset = inst->src[0].reg_offset;
          reg_to_offset[offset] = inst->dst.reg_offset;
+         if (inst->src[0].width == 16)
+            reg_to_offset[offset + 1] = inst->dst.reg_offset + 1;
          mov[offset] = inst;
          channels_remaining--;
       }
