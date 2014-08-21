@@ -330,19 +330,21 @@ fs_visitor::setup_payload_interference(struct ra_graph *g,
          break;
 
       case FS_OPCODE_LINTERP:
-         /* On gen6+ in SIMD16, there are 4 adjacent registers (so 2 nodes)
-          * used by PLN's sourcing of the deltas, while we list only the first
-          * two in the arguments (1 node).  Pre-gen6, the deltas are computed
-          * in normal VGRFs.
+         /* On gen6+ in SIMD16, there are 4 adjacent registers used by
+          * PLN's sourcing of the deltas, while we list only the first one
+          * in the arguments.  Pre-gen6, the deltas are computed in normal
+          * VGRFs.
           */
          if (brw->gen >= 6) {
             int delta_x_arg = 0;
             if (inst->src[delta_x_arg].file == HW_REG &&
                 inst->src[delta_x_arg].fixed_hw_reg.file ==
                 BRW_GENERAL_REGISTER_FILE) {
-               int sechalf_node = inst->src[delta_x_arg].fixed_hw_reg.nr + 1;
-               assert(sechalf_node < payload_node_count);
-               payload_last_use_ip[sechalf_node] = use_ip;
+               for (int i = 1; i < 4; ++i) {
+                  int node = inst->src[delta_x_arg].fixed_hw_reg.nr + i;
+                  assert(node < payload_node_count);
+                  payload_last_use_ip[node] = use_ip;
+               }
             }
          }
          break;
