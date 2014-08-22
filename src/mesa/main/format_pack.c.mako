@@ -281,13 +281,15 @@ _mesa_pack_ubyte_rgba_row(mesa_format format, GLuint n,
 
    switch (format) {
 %for f in rgb_formats:
-   %if not f.is_compressed():
-      case ${f.name}:
-         for (i = 0; i < n; ++i) {
-            pack_ubyte_${f.short_name()}(src[i], d);
-            d += ${f.block_size() / 8};
-         }
+   %if f.is_compressed():
+      <% continue %>
    %endif
+
+   case ${f.name}:
+      for (i = 0; i < n; ++i) {
+         pack_ubyte_${f.short_name()}(src[i], d);
+         d += ${f.block_size() / 8};
+      }
 %endfor
    default:
       assert(!"Invalid format");
