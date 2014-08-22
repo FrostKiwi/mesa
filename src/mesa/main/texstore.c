@@ -917,13 +917,13 @@ _mesa_texstore_rgb565(TEXSTORE_PARAMS)
          /* check for byteswapped format */
          if (dstFormat == MESA_FORMAT_B5G6R5_UNORM) {
             for (col = 0; col < srcWidth; col++) {
-               dstUS[col] = PACK_COLOR_565( srcUB[0], srcUB[1], srcUB[2] );
+               dstUS[col] = PACK_COLOR_565( srcUB[2], srcUB[1], srcUB[0] );
                srcUB += 3;
             }
          }
          else {
             for (col = 0; col < srcWidth; col++) {
-               dstUS[col] = PACK_COLOR_565_REV( srcUB[0], srcUB[1], srcUB[2] );
+               dstUS[col] = PACK_COLOR_565( srcUB[0], srcUB[1], srcUB[2] );
                srcUB += 3;
             }
          }
