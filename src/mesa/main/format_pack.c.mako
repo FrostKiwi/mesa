@@ -290,6 +290,7 @@ _mesa_pack_ubyte_rgba_row(mesa_format format, GLuint n,
          pack_ubyte_${f.short_name()}(src[i], d);
          d += ${f.block_size() / 8};
       }
+      break;
 %endfor
    default:
       assert(!"Invalid format");
@@ -317,6 +318,7 @@ _mesa_pack_float_rgba_row(mesa_format format, GLuint n,
          pack_float_${f.short_name()}(src[i], d);
          d += ${f.block_size() / 8};
       }
+      break;
 %endfor
    default:
       assert(!"Invalid format");
