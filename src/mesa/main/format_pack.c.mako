@@ -65,6 +65,8 @@ for f in formats:
    rgb_formats.append(f)
 %>
 
+/* ubyte packing functions */
+
 %for f in rgb_formats:
    %if f.name in ('MESA_FORMAT_R9G9B9E5_FLOAT', 'MESA_FORMAT_R11G11B10_FLOAT'):
       <% continue %>
@@ -148,20 +150,8 @@ pack_ubyte_r11g11b10_float(const GLubyte src[4], void *dst)
    *d = float3_to_r11g11b10f(rgb);
 }
 
-%for f in rgb_formats:
-   %if f.is_compressed():
-      <% continue %>
-   %endif
-static inline void
-pack_row_ubyte_${f.short_name()}(GLuint n, const GLubyte src[][4], void *dst)
-{
-   GLuint i;
-   for (i = 0; i < n; ++i) {
-      pack_ubyte_${f.short_name()}(src[i], dst);
-      dst = (char *)dst + ${f.block_size()/8};
-   }
-}
-%endfor
+
+/* float packing functions */
 
 %for f in rgb_formats:
    %if f.name in ('MESA_FORMAT_R9G9B9E5_FLOAT', 'MESA_FORMAT_R11G11B10_FLOAT'):
@@ -239,45 +229,24 @@ pack_float_r11g11b10_float(const GLfloat src[4], void *dst)
    *d = float3_to_r11g11b10f(src);
 }
 
-%for f in rgb_formats:
-   %if f.is_compressed():
-      <% continue %>
-   %endif
-static inline void
-pack_row_float_${f.short_name()}(GLuint n, const GLfloat src[][4], void *dst)
-{
-   GLuint i;
-   for (i = 0; i < n; ++i) {
-      pack_float_${f.short_name()}(src[i], dst);
-      dst = (char *)dst + ${f.block_size()/8};
-   }
-}
-%endfor
-
 /**
  * Return a function that can pack a GLubyte rgba[4] color.
  */
 gl_pack_ubyte_rgba_func
 _mesa_get_pack_ubyte_rgba_function(mesa_format format)
 {
-   static gl_pack_ubyte_rgba_func table[MESA_FORMAT_COUNT];
-   static GLboolean initialized = GL_FALSE;
-
-   if (!initialized) {
-      memset(table, 0, sizeof(table));
-
+   switch (format) {
 %for f in rgb_formats:
    %if f.is_compressed():
-      table[${f.name}] = NULL;
-   %else:
-      table[${f.name}] = pack_ubyte_${f.short_name()};
+      <% continue %>
    %endif
+
+   case ${f.name}:
+      return pack_ubyte_${f.short_name()};
 %endfor
-
-      initialized = GL_TRUE;
+   default:
+      return NULL;
    }
-
-   return table[format];
 }
 
 /**
@@ -286,28 +255,19 @@ _mesa_get_pack_ubyte_rgba_function(mesa_format format)
 gl_pack_float_rgba_func
 _mesa_get_pack_float_rgba_function(mesa_format format)
 {
-   static gl_pack_float_rgba_func table[MESA_FORMAT_COUNT];
-   static GLboolean initialized = GL_FALSE;
-
-   if (!initialized) {
-      memset(table, 0, sizeof(table));
-
+   switch (format) {
 %for f in rgb_formats:
    %if f.is_compressed():
-      table[${f.name}] = NULL;
-   %else:
-      table[${f.name}] = pack_float_${f.short_name()};
+      <% continue %>
    %endif
+
+   case ${f.name}:
+      return pack_float_${f.short_name()};
 %endfor
-
-      initialized = GL_TRUE;
+   default:
+      return NULL;
    }
-
-   return table[format];
 }
-
-typedef void (*pack_ubyte_rgba_row_func)(GLuint n,
-                                         const GLubyte src[][4], void *dst);
 
 /**
  * Pack a row of GLubyte rgba[4] values to the destination.
@@ -316,34 +276,23 @@ void
 _mesa_pack_ubyte_rgba_row(mesa_format format, GLuint n,
                           const GLubyte src[][4], void *dst)
 {
-   static pack_ubyte_rgba_row_func table[MESA_FORMAT_COUNT];
-   static GLboolean initialized = GL_FALSE;
+   GLuint i;
+   GLubyte *d = dst;
 
-   if (!initialized) {
-      /* We don't need a special row packing function for each format.
-       * There's a generic fallback which uses a per-pixel packing function.
-       */
-      memset(table, 0, sizeof(table));
-
+   switch (format) {
 %for f in rgb_formats:
-   %if f.is_compressed():
-      table[${f.name}] = NULL;
-   %else:
-      table[${f.name}] = pack_row_ubyte_${f.short_name()};
+   %if not f.is_compressed():
+      case ${f.name}:
+         for (i = 0; i < n; ++i) {
+            pack_ubyte_${f.short_name()}(src[i], d);
+            d += ${f.block_size() / 8};
+         }
    %endif
 %endfor
-
-      initialized = GL_TRUE;
+   default:
+      assert(!"Invalid format");
    }
-
-   assert(table[format]);
-
-   table[format](n, src, dst);
 }
-
-
-typedef void (*pack_float_rgba_row_func)(GLuint n,
-                                         const GLfloat src[][4], void *dst);
 
 /**
  * Pack a row of GLfloat rgba[4] values to the destination.
@@ -352,29 +301,24 @@ void
 _mesa_pack_float_rgba_row(mesa_format format, GLuint n,
                           const GLfloat src[][4], void *dst)
 {
-   static pack_float_rgba_row_func table[MESA_FORMAT_COUNT];
-   static GLboolean initialized = GL_FALSE;
+   GLuint i;
+   GLubyte *d = dst;
 
-   if (!initialized) {
-      /* We don't need a special row packing function for each format.
-       * There's a generic fallback which uses a per-pixel packing function.
-       */
-      memset(table, 0, sizeof(table));
-
+   switch (format) {
 %for f in rgb_formats:
    %if f.is_compressed():
-      table[${f.name}] = NULL;
-   %else:
-      table[${f.name}] = pack_row_float_${f.short_name()};
+      <% continue %>
    %endif
+
+   case ${f.name}:
+      for (i = 0; i < n; ++i) {
+         pack_float_${f.short_name()}(src[i], d);
+         d += ${f.block_size() / 8};
+      }
 %endfor
-
-      initialized = GL_TRUE;
+   default:
+      assert(!"Invalid format");
    }
-
-   assert(table[format]);
-
-   table[format](n, src, dst);
 }
 
 /**
@@ -406,7 +350,6 @@ _mesa_pack_ubyte_rgba_rect(mesa_format format, GLuint width, GLuint height,
       }
    }
 }
-
 
 
 /** Helper struct for MESA_FORMAT_Z32_FLOAT_S8X24_UINT */
