@@ -76,15 +76,19 @@ for f in formats:
 static inline void
 unpack_float_${f.short_name()}(const void *void_src, GLfloat dst[4])
 {
+   ${format_datatype(f)} *src = (${format_datatype(f)} *)void_src;
    %if f.layout == parser.PACKED:
-      ${format_datatype(f)} src[${len(f.channels)}];
-      %for (i, c) in enumerate(f.channels):
+      %for c in f.channels:
          %if c.type != 'x':
-            src[${i}] = UNPACK(*(GLuint *)void_src, ${c.shift}, ${c.size});
+            ${channel_datatype(c)} ${c.name} = UNPACK(*src, ${c.shift}, ${c.size});
          %endif
       %endfor
    %elif f.layout == parser.ARRAY:
-      ${format_datatype(f)} *src = (${format_datatype(f)} *)void_src;
+      %for (i, c) in enumerate(f.channels):
+         %if c.type != 'x':
+            ${channel_datatype(c)} ${c.name} = src[${i}];
+         %endif
+      %endfor
    %else:
       <% assert False %>
    %endif
@@ -96,17 +100,17 @@ unpack_float_${f.short_name()}(const void *void_src, GLfloat dst[4])
          %if c.type == parser.UNSIGNED:
             %if f.colorspace == 'srgb' and c.name in 'rgb':
                <% assert c.size == 8 %>
-               dst[${i}] = util_format_srgb_8unorm_to_linear_float(src[${s}]);
+               dst[${i}] = util_format_srgb_8unorm_to_linear_float(${c.name});
             %else:
-               dst[${i}] = _mesa_unorm_to_float(src[${s}], ${c.size});
+               dst[${i}] = _mesa_unorm_to_float(${c.name}, ${c.size});
             %endif
          %elif c.type == parser.SIGNED:
-            dst[${i}] = _mesa_snorm_to_float(src[${s}], ${c.size});
+            dst[${i}] = _mesa_snorm_to_float(${c.name}, ${c.size});
          %elif c.type == parser.FLOAT:
             %if c.size == 32:
-               dst[${i}] = src[${s}];
+               dst[${i}] = ${c.name};
             %elif c.size == 16:
-               dst[${i}] = _mesa_half_to_float(src[${s}]);
+               dst[${i}] = _mesa_half_to_float(${c.name});
             %else:
                <% assert False %>
             %endif
@@ -198,15 +202,19 @@ unpack_float_ycbcr_rev(const void *src, GLfloat dst[][4], GLuint n)
 static inline void
 unpack_ubyte_${f.short_name()}(const void *void_src, GLubyte dst[4])
 {
+   ${format_datatype(f)} *src = (${format_datatype(f)} *)void_src;
    %if f.layout == parser.PACKED:
-      ${format_datatype(f)} src[${len(f.channels)}];
-      %for (i, c) in enumerate(f.channels):
+      %for c in f.channels:
          %if c.type != 'x':
-            src[${i}] = UNPACK(*(GLuint *)void_src, ${c.shift}, ${c.size});
+            ${channel_datatype(c)} ${c.name} = UNPACK(*src, ${c.shift}, ${c.size});
          %endif
       %endfor
    %elif f.layout == parser.ARRAY:
-      ${format_datatype(f)} *src = (${format_datatype(f)} *)void_src;
+      %for (i, c) in enumerate(f.channels):
+         %if c.type != 'x':
+            ${channel_datatype(c)} ${c.name} = src[${i}];
+         %endif
+      %endfor
    %else:
       <% assert False %>
    %endif
@@ -218,17 +226,17 @@ unpack_ubyte_${f.short_name()}(const void *void_src, GLubyte dst[4])
          %if c.type == parser.UNSIGNED:
             %if f.colorspace == 'srgb' and c.name in 'rgb':
                <% assert c.size == 8 %>
-               dst[${i}] = util_format_srgb_to_linear_8unorm(src[${s}]);
+               dst[${i}] = util_format_srgb_to_linear_8unorm(${c.name});
             %else:
-               dst[${i}] = _mesa_unorm_to_unorm(src[${s}], ${c.size}, 8);
+               dst[${i}] = _mesa_unorm_to_unorm(${c.name}, ${c.size}, 8);
             %endif
          %elif c.type == parser.SIGNED:
-            dst[${i}] = _mesa_snorm_to_unorm(src[${s}], ${c.size}, 8);
+            dst[${i}] = _mesa_snorm_to_unorm(${c.name}, ${c.size}, 8);
          %elif c.type == parser.FLOAT:
             %if c.size == 32:
-               dst[${i}] = _mesa_float_to_unorm(src[${s}], 8);
+               dst[${i}] = _mesa_float_to_unorm(${c.name}, 8);
             %elif c.size == 16:
-               dst[${i}] = _mesa_half_to_unorm(src[${s}], 8);
+               dst[${i}] = _mesa_half_to_unorm(${c.name}, 8);
             %else:
                <% assert False %>
             %endif
@@ -259,15 +267,19 @@ unpack_ubyte_${f.short_name()}(const void *void_src, GLubyte dst[4])
 static inline void
 unpack_int_${f.short_name()}(const void *void_src, GLuint dst[4])
 {
+   ${format_datatype(f)} *src = (${format_datatype(f)} *)void_src;
    %if f.layout == parser.PACKED:
-      ${format_datatype(f)} src[${len(f.channels)}];
-      %for (i, c) in enumerate(f.channels):
+      %for c in f.channels:
          %if c.type != 'x':
-            src[${i}] = UNPACK(*(GLuint *)void_src, ${c.shift}, ${c.size});
+            ${channel_datatype(c)} ${c.name} = UNPACK(*src, ${c.shift}, ${c.size});
          %endif
       %endfor
    %elif f.layout == parser.ARRAY:
-      ${format_datatype(f)} *src = (${format_datatype(f)} *)void_src;
+      %for (i, c) in enumerate(f.channels):
+         %if c.type != 'x':
+            ${channel_datatype(c)} ${c.name} = src[${i}];
+         %endif
+      %endfor
    %else:
       <% assert False %>
    %endif
@@ -275,7 +287,7 @@ unpack_int_${f.short_name()}(const void *void_src, GLuint dst[4])
    %for i in range(4):
       <% s = f.swizzle[i] %>
       %if 0 <= s and s <= parser.Swizzle.SWIZZLE_W:
-         dst[${i}] = src[${s}];
+         dst[${i}] = ${f.channels[s].name};
       %elif s == parser.Swizzle.SWIZZLE_ZERO:
          dst[${i}] = 0;
       %elif s == parser.Swizzle.SWIZZLE_ONE:
