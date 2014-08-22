@@ -114,14 +114,14 @@ pack_ubyte_${f.short_name()}(const GLubyte src[4], void *dst)
          d[${i}] = ${c.name};
       %endfor
    %elif f.layout == parser.PACKED:
-      GLuint d = 0;
+      ${format_datatype(f)} d = 0;
       %for (i, c) in enumerate(f.channels):
          %if c.type == 'x':
             <% continue %>
          %endif
          d |= PACK(${c.name}, ${c.shift}, ${c.size});
       %endfor
-      (*(GLuint *)dst) = d;
+      (*(${format_datatype(f)} *)dst) = d;
    %else:
       <% assert False %>
    %endif
@@ -201,14 +201,14 @@ pack_float_${f.short_name()}(const GLfloat src[4], void *dst)
          d[${i}] = ${c.name};
       %endfor
    %elif f.layout == parser.PACKED:
-      GLuint d = 0;
+      ${format_datatype(f)} d = 0;
       %for (i, c) in enumerate(f.channels):
          %if c.type == 'x':
             <% continue %>
          %endif
          d |= PACK(${c.name}, ${c.shift}, ${c.size});
       %endfor
-      (*(GLuint *)dst) = d;
+      (*(${format_datatype(f)} *)dst) = d;
    %else:
       <% assert False %>
    %endif
