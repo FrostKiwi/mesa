@@ -1733,6 +1733,14 @@ texstore_rgba(TEXSTORE_PARAMS)
       return GL_TRUE;
    }
 
+   if (texstore_swizzle(ctx, dims, baseInternalFormat,
+                        dstFormat,
+                        dstRowStride, dstSlices,
+                        srcWidth, srcHeight, srcDepth,
+                        srcFormat, srcType, srcAddr, srcPacking)) {
+      return GL_TRUE;
+   }
+
    if (_mesa_is_format_integer(dstFormat)) {
       return texstore_rgba_integer(ctx, dims, baseInternalFormat,
                                    dstFormat, dstRowStride, dstSlices,
