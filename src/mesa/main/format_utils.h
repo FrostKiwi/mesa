@@ -61,7 +61,7 @@ _mesa_unorm_to_float(unsigned x, unsigned src_bits)
 static inline float
 _mesa_snorm_to_float(int x, unsigned src_bits)
 {
-   if (x == -MAX_INT(src_bits))
+   if (x < -MAX_INT(src_bits))
       return -1.0f;
    else
       return x * (1.0f / (float)MAX_INT(src_bits));
