@@ -471,6 +471,30 @@ fs_visitor::assign_regs(bool allow_spilling)
    if (brw->gen >= 7)
       setup_mrf_hack_interference(g, first_mrf_hack_node);
 
+   if (dispatch_width > 8) {
+      /* In 16-wide dispatch we have an issue where a compressed
+       * instruction is actually two instructions executed simultaneiously.
+       * It's actually ok to have the source and destination registers be
+       * the same.  In this case, each instruction over-writes its own
+       * source and there's no problem.  The real problem here is if the
+       * source and destination registers are off by one.  Then you can end
+       * up in a scenario where the first instruction over-writes the
+       * source of the second instruction.  Since the compiler doesn't know
+       * about this level of granularity, we simply make the source and
+       * destination interfere.
+       */
+      foreach_in_list(fs_inst, inst, &instructions) {
+         if (inst->dst.file != GRF)
+            continue;
+
+         for (int i = 0; i < inst->sources; ++i) {
+            if (inst->src[i].file == GRF) {
+               ra_add_node_interference(g, inst->dst.reg, inst->src[i].reg);
+            }
+         }
+      }
+   }
+
    /* Debug of register spilling: Go spill everything. */
    if (0) {
       int reg = choose_spill_reg(g);
