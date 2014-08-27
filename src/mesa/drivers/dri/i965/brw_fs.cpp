@@ -65,7 +65,17 @@ fs_inst::init(enum opcode opcode, const fs_reg &dst, fs_reg *src, int sources)
    this->conditional_mod = BRW_CONDITIONAL_NONE;
 
    /* This will be the case for almost all instructions. */
-   this->regs_written = 1;
+   switch (dst.file) {
+   case GRF:
+      this->regs_written = dst.width / 8;
+      break;
+   case BAD_FILE:
+      this->regs_written = 0;
+      break;
+   default:
+      this->regs_written = 1;
+      break;
+   }
 
    this->writes_accumulator = false;
 }
@@ -1708,7 +1718,7 @@ fs_visitor::split_virtual_grfs()
       /* If there's a SEND message that requires contiguous destination
        * registers, no splitting is allowed.
        */
-      if (inst->regs_written > 1) {
+      if (inst->regs_written > inst->dst.width / 8) {
 	 split_grf[inst->dst.reg] = false;
       }
 
@@ -2263,7 +2273,7 @@ fs_visitor::compute_to_mrf()
             /* Things returning more than one register would need us to
              * understand coalescing out more than one MOV at a time.
              */
-            if (scan_inst->regs_written > 1)
+            if (scan_inst->regs_written > scan_inst->dst.width / 8)
                break;
 
 	    /* SEND instructions can't have MRF as a destination. */
@@ -2578,8 +2588,7 @@ clear_deps_for_inst_src(fs_inst *inst, int dispatch_width, bool *deps,
 void
 fs_visitor::insert_gen4_pre_send_dependency_workarounds(fs_inst *inst)
 {
-   int reg_size = dispatch_width / 8;
-   int write_len = inst->regs_written * reg_size;
+   int write_len = inst->regs_written;
    int first_write_grf = inst->dst.reg;
    bool needs_dep[BRW_MAX_MRF];
    assert(write_len < (int)sizeof(needs_dep) - 1);
@@ -2621,7 +2630,7 @@ fs_visitor::insert_gen4_pre_send_dependency_workarounds(fs_inst *inst)
        */
       if (scan_inst->dst.file == GRF) {
          for (int i = 0; i < scan_inst->regs_written; i++) {
-            int reg = scan_inst->dst.reg + i * reg_size;
+            int reg = scan_inst->dst.reg + i;
 
             if (reg >= first_write_grf &&
                 reg < first_write_grf + write_len &&
@@ -2659,7 +2668,7 @@ fs_visitor::insert_gen4_pre_send_dependency_workarounds(fs_inst *inst)
 void
 fs_visitor::insert_gen4_post_send_dependency_workarounds(fs_inst *inst)
 {
-   int write_len = inst->regs_written * dispatch_width / 8;
+   int write_len = inst->regs_written;
    int first_write_grf = inst->dst.reg;
    bool needs_dep[BRW_MAX_MRF];
    assert(write_len < (int)sizeof(needs_dep) - 1);
