@@ -65,7 +65,21 @@ fs_inst::init(enum opcode opcode, const fs_reg &dst, fs_reg *src, int sources)
    this->conditional_mod = BRW_CONDITIONAL_NONE;
 
    /* This will be the case for almost all instructions. */
-   this->regs_written = 1;
+   switch (dst.file) {
+   case GRF:
+   case HW_REG:
+   case MRF:
+      this->regs_written = (dst.width * dst.stride * type_sz(dst.type) + 31) / 32;
+      break;
+   case BAD_FILE:
+      this->regs_written = 0;
+      break;
+   case IMM:
+   case UNIFORM:
+      unreachable("Invalid destination register file");
+   default:
+      unreachable("Invalid register file");
+   }
 
    this->writes_accumulator = false;
 }
@@ -2354,7 +2368,7 @@ fs_visitor::compute_to_mrf()
             /* Things returning more than one register would need us to
              * understand coalescing out more than one MOV at a time.
              */
-            if (scan_inst->regs_written > 1)
+            if (scan_inst->regs_written > scan_inst->dst.width / 8)
                break;
 
 	    /* SEND instructions can't have MRF as a destination. */
@@ -2615,8 +2629,7 @@ void
 fs_visitor::insert_gen4_pre_send_dependency_workarounds(bblock_t *block,
                                                         fs_inst *inst)
 {
-   int reg_size = dispatch_width / 8;
-   int write_len = inst->regs_written * reg_size;
+   int write_len = inst->regs_written;
    int first_write_grf = inst->dst.reg;
    bool needs_dep[BRW_MAX_MRF];
    assert(write_len < (int)sizeof(needs_dep) - 1);
@@ -2655,7 +2668,7 @@ fs_visitor::insert_gen4_pre_send_dependency_workarounds(bblock_t *block,
        */
       if (scan_inst->dst.file == GRF) {
          for (int i = 0; i < scan_inst->regs_written; i++) {
-            int reg = scan_inst->dst.reg + i * reg_size;
+            int reg = scan_inst->dst.reg + i;
 
             if (reg >= first_write_grf &&
                 reg < first_write_grf + write_len &&
@@ -2693,7 +2706,7 @@ fs_visitor::insert_gen4_pre_send_dependency_workarounds(bblock_t *block,
 void
 fs_visitor::insert_gen4_post_send_dependency_workarounds(bblock_t *block, fs_inst *inst)
 {
-   int write_len = inst->regs_written * dispatch_width / 8;
+   int write_len = inst->regs_written;
    int first_write_grf = inst->dst.reg;
    bool needs_dep[BRW_MAX_MRF];
    assert(write_len < (int)sizeof(needs_dep) - 1);
