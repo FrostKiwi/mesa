@@ -294,7 +294,7 @@ fs_visitor::VARYING_PULL_CONSTANT_LOAD(const fs_reg &dst,
                               varying_offset, const_offset & ~3));
 
    int scale = 1;
-   if (brw->gen == 4 && dispatch_width == 8) {
+   if (brw->gen == 4 || dispatch_width == 16) {
       /* Pre-gen5, we can either use a SIMD8 message that requires (header,
        * u, v, r) as parameters, or we can just use the SIMD16 message
        * consisting of (header, u).  We choose the second, at the cost of a
@@ -309,6 +309,7 @@ fs_visitor::VARYING_PULL_CONSTANT_LOAD(const fs_reg &dst,
    else
       op = FS_OPCODE_VARYING_PULL_CONSTANT_LOAD;
    fs_reg vec4_result = fs_reg(GRF, virtual_grf_alloc(4 * scale), dst.type);
+   vec4_result.width = 8 * scale;
    inst = new(mem_ctx) fs_inst(op, vec4_result, surf_index, vec4_offset);
    inst->regs_written = 4 * scale;
    instructions.push_tail(inst);
@@ -322,7 +323,7 @@ fs_visitor::VARYING_PULL_CONSTANT_LOAD(const fs_reg &dst,
          inst->mlen = 1 + dispatch_width / 8;
    }
 
-   fs_reg result = offset(vec4_result, (const_offset & 3) * scale);
+   fs_reg result = offset(vec4_result, (const_offset & 3));
    instructions.push_tail(MOV(dst, result));
 
    return instructions;
