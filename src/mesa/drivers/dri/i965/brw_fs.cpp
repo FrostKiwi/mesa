@@ -774,10 +774,7 @@ int
 fs_inst::regs_read(fs_visitor *v, int arg) const
 {
    if (is_tex() && arg == 0 && src[0].file == GRF) {
-      if (v->dispatch_width == 16)
-	 return (mlen + 1) / 2;
-      else
-	 return mlen;
+      return ALIGN(mlen, v->dispatch_width / 8);
    }
    return 1;
 }
