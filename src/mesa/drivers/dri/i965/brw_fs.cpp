@@ -853,8 +853,7 @@ bool
 fs_inst::is_partial_write() const
 {
    return ((this->predicate && this->opcode != BRW_OPCODE_SEL) ||
-           this->force_uncompressed ||
-           this->force_sechalf || !this->dst.is_contiguous());
+           this->exec_size < 8 || !this->dst.is_contiguous());
 }
 
 int
