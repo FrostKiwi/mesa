@@ -752,8 +752,8 @@ fs_visitor::spill_reg(int spill_reg)
           * inst->regs_written(), then we need to unspill the destination
           * since we write back out all of the regs_written().
 	  */
-	 if (inst->predicate || inst->force_uncompressed ||
-             inst->force_sechalf || inst->dst.subreg_offset) {
+	 if (inst->predicate || inst->exec_size < inst->dst.width ||
+             inst->dst.subreg_offset) {
             emit_unspill(block, inst, spill_src, subset_spill_offset,
                          inst->regs_written);
 	 }
