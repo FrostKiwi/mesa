@@ -2958,11 +2958,9 @@ fs_visitor::emit_color_write(int target, int index, int first_color_mrf)
                          color));
 	 inst->saturate = key->clamp_fragment_color;
       } else {
-	 push_force_uncompressed();
 	 inst = emit(MOV(fs_reg(MRF, first_color_mrf + index, color.type),
                          color));
 	 inst->saturate = key->clamp_fragment_color;
-	 pop_force_uncompressed();
 
 	 inst = emit(MOV(fs_reg(MRF, first_color_mrf + index + 4, color.type),
                          half(color, 1)));
@@ -3066,10 +3064,8 @@ fs_visitor::emit_fb_writes()
    }
 
    if (payload.aa_dest_stencil_reg) {
-      push_force_uncompressed();
       emit(MOV(fs_reg(MRF, nr++),
                fs_reg(brw_vec8_grf(payload.aa_dest_stencil_reg, 0))));
-      pop_force_uncompressed();
    }
 
    prog_data->uses_omask =
