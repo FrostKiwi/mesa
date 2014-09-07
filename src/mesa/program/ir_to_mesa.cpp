@@ -2978,6 +2978,22 @@ _mesa_glsl_link_shader(struct gl_context *ctx, struct gl_shader_program *prog)
       }
    }
 
+   FILE *file = NULL;
+   if (ctx->_Shader->Flags & GLSL_DUMP) {
+      char filename[100];
+      _mesa_snprintf(filename, sizeof(filename), "/tmp/mesa/%u.shader_test", prog->Name);
+      file = fopen(filename, "w");
+      if (file) {
+         fprintf(file, "[require]\nGLSL >= %u.%u\n\n", prog->Version / 100, prog->Version % 100);
+         for (unsigned i = 0; i < prog->NumShaders; i++) {
+            fprintf(file, "[%s shader]\n%s\n",
+                    _mesa_shader_stage_to_string(prog->Shaders[i]->Stage),
+                    prog->Shaders[i]->Source);
+         }
+         fclose(file);
+      }
+   }
+
    if (ctx->_Shader->Flags & GLSL_DUMP) {
       if (!prog->LinkStatus) {
 	 fprintf(stderr, "GLSL shader program %d failed to link\n", prog->Name);

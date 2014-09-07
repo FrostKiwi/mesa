@@ -355,6 +355,8 @@ _mesa_ProgramStringARB(GLenum target, GLenum format, GLsizei len,
    }
 
    if (ctx->_Shader->Flags & GLSL_DUMP) {
+      FILE *file;
+      char filename[100];
       const char *shader_type =
          target == GL_FRAGMENT_PROGRAM_ARB ? "fragment" : "vertex";
 
@@ -372,6 +374,14 @@ _mesa_ProgramStringARB(GLenum target, GLenum format, GLsizei len,
          fprintf(stderr, "\n");
       }
       fflush(stderr);
+
+      _mesa_snprintf(filename, sizeof(filename), "/tmp/mesa/%cp-%u.shader_test", shader_type[0], base->Id);
+      file = fopen(filename, "w");
+      if (file) {
+         fprintf(file, "[require]\nGL_ARB_%s_program\n\n[%s program]\n%s\n",
+                 shader_type, shader_type, (const char *) string);
+         fclose(file);
+      }
    }
 }
 
