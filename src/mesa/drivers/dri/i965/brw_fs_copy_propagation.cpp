@@ -628,11 +628,15 @@ fs_visitor::opt_copy_propagate_local(void *copy_prop_ctx, bblock_t *block,
 	 acp[entry->dst.reg % ACP_HASH_SIZE].push_tail(entry);
       } else if (inst->opcode == SHADER_OPCODE_LOAD_PAYLOAD &&
                  inst->dst.file == GRF) {
+         int offset = 0;
          for (int i = 0; i < inst->sources; i++) {
+            int regs_written = ((inst->src[i].effective_width(this) *
+                                 type_sz(inst->src[i].type)) + 31) / 32;
             if (inst->src[i].file == GRF) {
                acp_entry *entry = ralloc(copy_prop_ctx, acp_entry);
                entry->dst = inst->dst;
-               entry->dst.reg_offset = i;
+               entry->dst.reg_offset = offset;
+               entry->dst.width = inst->src[i].effective_width(this);
                entry->src = inst->src[i];
                entry->opcode = inst->opcode;
                if (!entry->dst.equals(inst->src[i])) {
@@ -641,6 +645,7 @@ fs_visitor::opt_copy_propagate_local(void *copy_prop_ctx, bblock_t *block,
                   ralloc_free(entry);
                }
             }
+            offset += regs_written;
          }
       }
    }
