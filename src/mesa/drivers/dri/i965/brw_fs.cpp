@@ -268,7 +268,16 @@ fs_visitor::LOAD_PAYLOAD(const fs_reg &dst, fs_reg *src, int sources)
 {
    fs_inst *inst = new(mem_ctx) fs_inst(SHADER_OPCODE_LOAD_PAYLOAD, dst, src,
                                         sources);
-   inst->regs_written = sources;
+   inst->regs_written = 0;
+   for (int i = 0; i < sources; ++i) {
+      /* The LOAD_PAYLOAD instruction only really makes sense if we are
+       * dealing with whole registers.  If this ever changes, we can deal
+       * with it later.
+       */
+      int size = src[i].effective_width(this) * type_sz(src[i].type);
+      assert(size % 32 == 0);
+      inst->regs_written += (size + 31) / 32;
+   }
 
    return inst;
 }
@@ -2862,15 +2871,19 @@ fs_visitor::lower_load_payload()
       if (inst->opcode == SHADER_OPCODE_LOAD_PAYLOAD) {
          fs_reg dst = inst->dst;
 
-         /* src[0] represents the (optional) message header. */
-         if (inst->src[0].file != BAD_FILE) {
-            inst->insert_before(block, MOV(dst, inst->src[0]));
-         }
-         dst.reg_offset++;
+         for (int i = 0; i < inst->sources; i++) {
+            dst.width = inst->src[i].effective_width(this);
+            dst.type = inst->src[i].type;
 
-         for (int i = 1; i < inst->sources; i++) {
-            inst->insert_before(block, MOV(dst, inst->src[i]));
-            dst.reg_offset++;
+            if (inst->src[i].file == BAD_FILE) {
+               /* Do nothing but otherwise increment as normal */
+            } else {
+               fs_inst *mov = MOV(dst, inst->src[i]);
+               mov->force_writemask_all = true;
+               inst->insert_before(block, mov);
+            }
+
+            dst = offset(dst, 1);
          }
 
          inst->remove(block);
