@@ -66,18 +66,19 @@ is_nop_mov(const fs_inst *inst)
 static bool
 is_copy_payload(const fs_inst *inst, int src_size)
 {
-   if (src_size != inst->sources)
+   if (src_size != inst->regs_written)
       return false;
 
    const int reg = inst->src[0].reg;
-   if (inst->src[0].reg_offset != 0)
-      return false;
 
-   for (int i = 1; i < inst->sources; i++) {
+   int offset = 0;
+   for (int i = 0; i < inst->sources; i++) {
+      assert(inst->src[i].width % 8 == 0);
       if (inst->src[i].reg != reg ||
-          inst->src[i].reg_offset != i) {
+          inst->src[i].reg_offset != offset) {
          return false;
       }
+      offset += inst->src[i].width / 8;
    }
    return true;
 }

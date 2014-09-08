@@ -262,7 +262,9 @@ fs_visitor::LOAD_PAYLOAD(const fs_reg &dst, fs_reg *src, int sources)
 {
    fs_inst *inst = new(mem_ctx) fs_inst(SHADER_OPCODE_LOAD_PAYLOAD, dst, src,
                                         sources);
-   inst->regs_written = sources;
+   inst->regs_written = 0;
+   for (int i = 0; i < sources; ++i)
+      inst->regs_written += src[i].width / 8;
 
    return inst;
 }
@@ -2831,13 +2833,27 @@ fs_visitor::lower_load_payload()
 
          /* src[0] represents the (optional) message header. */
          if (inst->src[0].file != BAD_FILE) {
+            if (inst->src[0].width == 1) {
+               dst.width = dispatch_width;
+            } else {
+               assert(inst->src[0].width % 8 == 0);
+               dst.width = inst->src[0].width;
+            }
             inst->insert_before(block, MOV(dst, inst->src[0]));
+            dst.reg_offset += dst.width / 8;
+         } else {
+            dst.reg_offset += dispatch_width / 8;
          }
-         dst.reg_offset++;
 
          for (int i = 1; i < inst->sources; i++) {
+            if (inst->src[i].width == 1) {
+               dst.width = dispatch_width;
+            } else {
+               assert(inst->src[i].width % 8 == 0);
+               dst.width = inst->src[i].width;
+            }
             inst->insert_before(block, MOV(dst, inst->src[i]));
-            dst.reg_offset++;
+            dst.reg_offset += dst.width / 8;
          }
 
          inst->remove(block);
