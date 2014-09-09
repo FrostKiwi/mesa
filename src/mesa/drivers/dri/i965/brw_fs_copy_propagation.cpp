@@ -286,7 +286,8 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
 
    /* Bail if inst is reading more than entry is writing. */
    if ((inst->regs_read(this, arg) * inst->src[arg].stride *
-        type_sz(inst->src[arg].type)) > type_sz(entry->dst.type))
+        type_sz(inst->src[arg].type) * inst->src[arg].width) >
+        type_sz(entry->dst.type) * entry->dst.width)
       return false;
 
    if (inst->src[arg].file != entry->dst.file ||
@@ -363,6 +364,7 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
    inst->src[arg].reg = entry->src.reg;
    inst->src[arg].reg_offset = entry->src.reg_offset;
    inst->src[arg].subreg_offset = entry->src.subreg_offset;
+   inst->src[arg].width = entry->src.width;
    inst->src[arg].stride *= entry->src.stride;
    inst->saturate = inst->saturate || entry->saturate;
 
