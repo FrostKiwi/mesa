@@ -42,6 +42,7 @@ namespace { /* avoid conflict with opt_copy_propagation_elements */
 struct acp_entry : public exec_node {
    fs_reg dst;
    fs_reg src;
+   uint8_t regs_written;
    enum opcode opcode;
    bool saturate;
 };
@@ -285,8 +286,7 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
       return false;
 
    /* Bail if inst is reading more than entry is writing. */
-   if ((inst->regs_read(this, arg) * inst->src[arg].stride *
-        type_sz(inst->src[arg].type)) > type_sz(entry->dst.type))
+   if (inst->regs_read(this, arg) > entry->regs_written)
       return false;
 
    if (inst->src[arg].file != entry->dst.file ||
@@ -363,6 +363,7 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
    inst->src[arg].reg = entry->src.reg;
    inst->src[arg].reg_offset = entry->src.reg_offset;
    inst->src[arg].subreg_offset = entry->src.subreg_offset;
+   inst->src[arg].width = entry->src.width;
    inst->src[arg].stride *= entry->src.stride;
    inst->saturate = inst->saturate || entry->saturate;
 
@@ -580,6 +581,7 @@ fs_visitor::opt_copy_propagate_local(void *copy_prop_ctx, bblock_t *block,
 	 acp_entry *entry = ralloc(copy_prop_ctx, acp_entry);
 	 entry->dst = inst->dst;
 	 entry->src = inst->src[0];
+         entry->regs_written = inst->regs_written;
          entry->opcode = inst->opcode;
          entry->saturate = inst->saturate;
 	 acp[entry->dst.reg % ACP_HASH_SIZE].push_tail(entry);
@@ -595,6 +597,7 @@ fs_visitor::opt_copy_propagate_local(void *copy_prop_ctx, bblock_t *block,
                entry->dst.reg_offset = offset;
                entry->dst.width = inst->src[i].effective_width(this);
                entry->src = inst->src[i];
+               entry->regs_written = regs_written;
                entry->opcode = inst->opcode;
                if (!entry->dst.equals(inst->src[i])) {
                   acp[entry->dst.reg % ACP_HASH_SIZE].push_tail(entry);
