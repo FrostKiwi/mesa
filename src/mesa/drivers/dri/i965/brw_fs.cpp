@@ -3236,40 +3236,40 @@ fs_visitor::run()
       char filename[64];
       if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
          snprintf(filename, 64, "fs%d-%04d-00-emit_fb_writes",
-                  dispatch_width, shader_prog->Name);
+                  dispatch_width, shader_prog ? shader_prog->Name : 0);
          backend_visitor::dump_instructions(filename);
       }
 
       split_virtual_grfs();
       if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
          snprintf(filename, 64, "fs%d-%04d-00-split_virtual_grfs",
-                  dispatch_width, shader_prog->Name);
+                  dispatch_width, shader_prog ? shader_prog->Name : 0);
          backend_visitor::dump_instructions(filename);
       }
 
       move_uniform_array_access_to_pull_constants();
       if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
          snprintf(filename, 64, "fs%d-%04d-00-move_uniform_array_acess_to_pull_constants",
-                  dispatch_width, shader_prog->Name);
+                  dispatch_width, shader_prog ? shader_prog->Name : 0);
          backend_visitor::dump_instructions(filename);
       }
       assign_constant_locations();
       if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
          snprintf(filename, 64, "fs%d-%04d-00-assign_constant_locations",
-                  dispatch_width, shader_prog->Name);
+                  dispatch_width, shader_prog ? shader_prog->Name : 0);
          backend_visitor::dump_instructions(filename);
       }
       demote_pull_constants();
       if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
          snprintf(filename, 64, "fs%d-%04d-00-demote_pull_constants",
-                  dispatch_width, shader_prog->Name);
+                  dispatch_width, shader_prog ? shader_prog->Name : 0);
          backend_visitor::dump_instructions(filename);
       }
 
       opt_drop_redundant_mov_to_flags();
       if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
          snprintf(filename, 64, "fs%d-%04d-00-drop_redundnat_mov_to_flags",
-                  dispatch_width, shader_prog->Name);
+                  dispatch_width, shader_prog ? shader_prog->Name : 0);
          backend_visitor::dump_instructions(filename);
       }
 
@@ -3322,19 +3322,19 @@ fs_visitor::run()
       if (lower_load_payload()) {
          if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
             snprintf(filename, 64, "fs%d-%04d-99-01-lower_load_payload",
-                     dispatch_width, shader_prog->Name);
+                     dispatch_width, shader_prog ? shader_prog->Name : 0);
             backend_visitor::dump_instructions(filename);
          }
          register_coalesce();
          if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
             snprintf(filename, 64, "fs%d-%04d-99-02-register_coalesce",
-                     dispatch_width, shader_prog->Name);
+                     dispatch_width, shader_prog ? shader_prog->Name : 0);
             backend_visitor::dump_instructions(filename);
          }
          dead_code_eliminate();
          if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
             snprintf(filename, 64, "fs%d-%04d-99-03-dead_code_eliminate",
-                     dispatch_width, shader_prog->Name);
+                     dispatch_width, shader_prog ? shader_prog->Name : 0);
             backend_visitor::dump_instructions(filename);
          }
       }
@@ -3342,20 +3342,20 @@ fs_visitor::run()
       lower_uniform_pull_constant_loads();
       if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
          snprintf(filename, 64, "fs%d-%04d-99-04-lower_uniform_pull_constant_loads",
-                  dispatch_width, shader_prog->Name);
+                  dispatch_width, shader_prog ? shader_prog->Name : 0);
          backend_visitor::dump_instructions(filename);
       }
 
       assign_curb_setup();
       if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
          snprintf(filename, 64, "fs%d-%04d-99-05-assign_curb_setup",
-                  dispatch_width, shader_prog->Name);
+                  dispatch_width, shader_prog ? shader_prog->Name : 0);
          backend_visitor::dump_instructions(filename);
       }
       assign_urb_setup();
       if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
          snprintf(filename, 64, "fs%d-%04d-99-06-assign_urb_setup",
-                  dispatch_width, shader_prog->Name);
+                  dispatch_width, shader_prog ? shader_prog->Name : 0);
          backend_visitor::dump_instructions(filename);
       }
 
