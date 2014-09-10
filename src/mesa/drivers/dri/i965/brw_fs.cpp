@@ -390,6 +390,7 @@ fs_visitor::DEP_RESOLVE_MOV(int grf)
    /* The caller always wants uncompressed to emit the minimal extra
     * dependencies, and to avoid having to deal with aligning its regs to 2.
     */
+   inst->exec_size = 8;
    inst->force_uncompressed = true;
 
    return inst;
@@ -610,6 +611,7 @@ fs_visitor::get_timestamp()
     */
    mov->force_writemask_all = true;
    mov->force_uncompressed = true;
+   mov->exec_size = 8;
 
    /* The caller wants the low 32 bits of the timestamp.  Since it's running
     * at the GPU clock rate of ~1.2ghz, it will roll over every ~3 seconds,
