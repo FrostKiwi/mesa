@@ -2767,11 +2767,13 @@ fs_visitor::lower_load_payload()
 
          /* src[0] represents the (optional) message header. */
          if (inst->src[0].file != BAD_FILE) {
+            dst.type = inst->src[0].type;
             inst->insert_before(block, MOV(dst, inst->src[0]));
          }
          dst.reg_offset++;
 
          for (int i = 1; i < inst->sources; i++) {
+            dst.type = inst->src[i].type;
             inst->insert_before(block, MOV(dst, inst->src[i]));
             dst.reg_offset++;
          }
