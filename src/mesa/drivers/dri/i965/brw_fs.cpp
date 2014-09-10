@@ -126,11 +126,28 @@ fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst)
    init(opcode, 0, dst, src, 0);
 }
 
+fs_inst::fs_inst(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
+                 const fs_reg &src0)
+{
+   fs_reg *src = ralloc_array(this, fs_reg, 3);
+   src[0] = src0;
+   init(opcode, exec_size, dst, src, 1);
+}
+
 fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0)
 {
    fs_reg *src = ralloc_array(this, fs_reg, 3);
    src[0] = src0;
    init(opcode, 0, dst, src, 1);
+}
+
+fs_inst::fs_inst(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
+                 const fs_reg &src0, const fs_reg &src1)
+{
+   fs_reg *src = ralloc_array(this, fs_reg, 3);
+   src[0] = src0;
+   src[1] = src1;
+   init(opcode, exec_size, dst, src, 2);
 }
 
 fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0,
@@ -140,6 +157,16 @@ fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0,
    src[0] = src0;
    src[1] = src1;
    init(opcode, 0, dst, src, 2);
+}
+
+fs_inst::fs_inst(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
+                 const fs_reg &src0, const fs_reg &src1, const fs_reg &src2)
+{
+   fs_reg *src = ralloc_array(this, fs_reg, 3);
+   src[0] = src0;
+   src[1] = src1;
+   src[2] = src2;
+   init(opcode, exec_size, dst, src, 3);
 }
 
 fs_inst::fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0,
