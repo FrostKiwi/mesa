@@ -359,17 +359,18 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
       }
    }
 
-   inst->src[arg].file = entry->src.file;
-   inst->src[arg].reg = entry->src.reg;
-   inst->src[arg].reg_offset = entry->src.reg_offset;
-   inst->src[arg].subreg_offset = entry->src.subreg_offset;
-   inst->src[arg].stride *= entry->src.stride;
-   inst->saturate = inst->saturate || entry->saturate;
+   fs_reg new_src = entry->src;
+   new_src.stride *= inst->src[arg].stride;
 
-   if (!inst->src[arg].abs) {
-      inst->src[arg].abs = entry->src.abs;
-      inst->src[arg].negate ^= entry->src.negate;
+   if (inst->src[arg].abs) {
+      new_src.abs = true;
+      new_src.negate = inst->src[arg].negate;
+   } else {
+      new_src.negate ^= inst->src[arg].negate;
    }
+
+   inst->src[arg] = new_src;
+   inst->saturate = inst->saturate || entry->saturate;
 
    return true;
 }
