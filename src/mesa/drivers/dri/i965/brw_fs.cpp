@@ -2135,6 +2135,7 @@ fs_visitor::demote_pull_constants()
          inst->src[i].file = GRF;
          inst->src[i].reg = dst.reg;
          inst->src[i].reg_offset = 0;
+         inst->src[i].width = dispatch_width;
       }
    }
    invalidate_live_intervals();
