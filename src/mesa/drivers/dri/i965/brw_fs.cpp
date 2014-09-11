@@ -95,7 +95,7 @@ fs_inst::init(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
    /* This will be the case for almost all instructions. */
    switch (dst.file) {
    case GRF:
-      this->regs_written = dst.width / 8;
+      this->regs_written = (dst.width + 7) / 8;
       break;
    case BAD_FILE:
       this->regs_written = 0;
