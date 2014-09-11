@@ -592,7 +592,11 @@ void
 fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
                          uint32_t spill_offset, int count)
 {
-   for (int i = 0; i < count; i++) {
+   int reg_size = 1;
+   if (count % 2 == 0)
+      reg_size = 2;
+
+   for (int i = 0; i < count / reg_size; i++) {
       /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
       bool gen7_read = brw->gen >= 7 && spill_offset < (1 << 12) * REG_SIZE;
 
@@ -611,8 +615,32 @@ fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
       }
       inst->insert_before(block, unspill_inst);
 
-      dst = offset(dst, 1);
-      spill_offset += dispatch_width * sizeof(float);
+      dst.reg_offset += reg_size;
+      spill_offset += reg_size * 8 * sizeof(float);
+   }
+}
+
+void
+fs_visitor::emit_spill(bblock_t *block, fs_inst *inst, fs_reg src,
+                       uint32_t spill_offset, int count)
+{
+   int spill_base_mrf = dispatch_width > 8 ? 13 : 14;
+
+   int reg_size = 1;
+   if (count % 2 == 0)
+      reg_size = 2;
+
+   for (int i = 0; i < count / reg_size; i++) {
+      fs_inst *spill_inst =
+         new(mem_ctx) fs_inst(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
+                              reg_null_f, src);
+      src.reg_offset += reg_size;
+      spill_inst->offset = spill_offset + i * reg_size;
+      spill_inst->ir = inst->ir;
+      spill_inst->annotation = inst->annotation;
+      spill_inst->mlen = 1 + reg_size; /* header, value */
+      spill_inst->base_mrf = spill_base_mrf;
+      inst->insert_after(block, spill_inst);
    }
 }
 
@@ -765,18 +793,8 @@ fs_visitor::spill_reg(int spill_reg)
                          inst->regs_written);
 	 }
 
-	 for (int chan = 0; chan < inst->regs_written; chan++) {
-	    fs_inst *spill_inst =
-               new(mem_ctx) fs_inst(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
-                                    reg_null_f, spill_src);
-	    spill_src = offset(spill_src, 1);
-	    spill_inst->offset = subset_spill_offset + chan * reg_size;
-	    spill_inst->ir = inst->ir;
-	    spill_inst->annotation = inst->annotation;
-	    spill_inst->mlen = 1 + dispatch_width / 8; /* header, value */
-	    spill_inst->base_mrf = spill_base_mrf;
-	    inst->insert_after(block, spill_inst);
-	 }
+         emit_spill(block, inst, spill_src, subset_spill_offset,
+                    inst->regs_written);
       }
    }
 
