@@ -285,9 +285,7 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
       return false;
 
    /* Bail if inst is reading more than entry is writing. */
-   if ((inst->regs_read(this, arg) * inst->src[arg].stride *
-        type_sz(inst->src[arg].type) * inst->src[arg].width) >
-        type_sz(entry->dst.type) * entry->dst.width)
+   if (inst->regs_read(this, arg) > (entry->dst.width / 8))
       return false;
 
    if (inst->src[arg].file != entry->dst.file ||
