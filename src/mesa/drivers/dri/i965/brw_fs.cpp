@@ -895,7 +895,7 @@ int
 fs_inst::regs_read(fs_visitor *v, int arg) const
 {
    if (is_tex() && arg == 0 && src[0].file == GRF) {
-      return ALIGN(mlen, v->dispatch_width / 8);
+      return mlen;
    } else if (opcode == SHADER_OPCODE_UNTYPED_ATOMIC && arg == 0) {
       return mlen;
    }
