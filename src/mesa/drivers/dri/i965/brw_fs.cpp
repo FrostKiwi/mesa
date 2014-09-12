@@ -336,8 +336,13 @@ fs_visitor::LOAD_PAYLOAD(const fs_reg &dst, fs_reg *src, int sources)
    fs_inst *inst = new(mem_ctx) fs_inst(SHADER_OPCODE_LOAD_PAYLOAD, dst, src,
                                         sources);
    inst->regs_written = 0;
-   for (int i = 0; i < sources; ++i)
+   for (int i = 0; i < sources; ++i) {
+      assert(inst->src[i].width % dst.width == 0);
+      if (inst->src[i].width > inst->exec_size)
+         inst->exec_size = inst->src[i].width;
+
       inst->regs_written += inst->src[i].effective_width(inst) / 8;
+   }
 
    return inst;
 }
