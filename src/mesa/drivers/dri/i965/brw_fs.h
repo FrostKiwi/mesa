@@ -140,7 +140,8 @@ static inline fs_reg
 byte_offset(fs_reg reg, unsigned delta)
 {
    assert(delta == 0 || (reg.file != HW_REG && reg.file != IMM));
-   reg.subreg_offset += delta;
+   reg.reg_offset += delta / 32;
+   reg.subreg_offset += delta % 32;
    return reg;
 }
 
