@@ -1476,7 +1476,7 @@ fs_visitor::emit_texture_gen7(ir_texture *ir, fs_reg dst, fs_reg coordinate,
        * need to offset the Sampler State Pointer in the header.
        */
       header_present = true;
-      sources[length] = reg_undef;
+      sources[0] = fs_reg(GRF, virtual_grf_alloc(1), BRW_REGISTER_TYPE_UD);
       length++;
    }
 
@@ -1614,7 +1614,13 @@ fs_visitor::emit_texture_gen7(ir_texture *ir, fs_reg dst, fs_reg coordinate,
       }
    }
 
-   fs_reg src_payload = fs_reg(GRF, virtual_grf_alloc(length * reg_width),
+   int mlen;
+   if (reg_width == 2)
+      mlen = length * reg_width - header_present;
+   else
+      mlen = length * reg_width;
+
+   fs_reg src_payload = fs_reg(GRF, virtual_grf_alloc(mlen),
                                BRW_REGISTER_TYPE_F);
    emit(LOAD_PAYLOAD(src_payload, sources, length));
 
@@ -1641,10 +1647,7 @@ fs_visitor::emit_texture_gen7(ir_texture *ir, fs_reg dst, fs_reg coordinate,
    }
    fs_inst *inst = emit(opcode, dst, src_payload, sampler);
    inst->base_mrf = -1;
-   if (reg_width == 2)
-      inst->mlen = length * reg_width - header_present;
-   else
-      inst->mlen = length * reg_width;
+   inst->mlen = mlen;
    inst->header_present = header_present;
    inst->regs_written = 4 * reg_width;
 
