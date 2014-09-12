@@ -591,12 +591,7 @@ fs_visitor::opt_copy_propagate_local(void *copy_prop_ctx, bblock_t *block,
                acp_entry *entry = ralloc(copy_prop_ctx, acp_entry);
                entry->dst = inst->dst;
                entry->dst.reg_offset = offset;
-               if (inst->src[i].width == 1) {
-                  entry->dst.width = dispatch_width;
-               } else {
-                  assert(inst->src[i].width % 8 == 0);
-                  entry->dst.width = inst->src[i].width;
-               }
+               entry->dst.width = inst->src[i].effective_width(inst);
                entry->src = inst->src[i];
                entry->opcode = inst->opcode;
                if (!entry->dst.equals(inst->src[i])) {
@@ -605,11 +600,7 @@ fs_visitor::opt_copy_propagate_local(void *copy_prop_ctx, bblock_t *block,
                   ralloc_free(entry);
                }
             }
-            if (inst->src[i].file != BAD_FILE) {
-               offset += inst->src[i].width / 8;
-            } else {
-               offset += dispatch_width / 8;
-            }
+            offset += inst->src[i].width / 8;
          }
       }
    }

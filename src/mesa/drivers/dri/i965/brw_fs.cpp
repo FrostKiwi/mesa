@@ -337,7 +337,7 @@ fs_visitor::LOAD_PAYLOAD(const fs_reg &dst, fs_reg *src, int sources)
                                         sources);
    inst->regs_written = 0;
    for (int i = 0; i < sources; ++i)
-      inst->regs_written += src[i].width / 8;
+      inst->regs_written += inst->src[i].effective_width(inst) / 8;
 
    return inst;
 }
@@ -2881,28 +2881,19 @@ fs_visitor::lower_load_payload()
       if (inst->opcode == SHADER_OPCODE_LOAD_PAYLOAD) {
          fs_reg dst = inst->dst;
 
-         /* src[0] represents the (optional) message header. */
-         if (inst->src[0].file != BAD_FILE) {
-            if (inst->src[0].width == 1) {
-               dst.width = dispatch_width;
-            } else {
-               assert(inst->src[0].width % 8 == 0);
-               dst.width = inst->src[0].width;
-            }
-            inst->insert_before(block, MOV(dst, inst->src[0]));
-            dst.reg_offset += dst.width / 8;
-         } else {
-            dst.reg_offset += dispatch_width / 8;
-         }
+         for (int i = 0; i < inst->sources; i++) {
+            dst.width = inst->src[i].effective_width(inst);
+            dst.type = inst->src[i].type;
 
-         for (int i = 1; i < inst->sources; i++) {
-            if (inst->src[i].width == 1) {
-               dst.width = dispatch_width;
+            if (inst->src[i].file == BAD_FILE) {
+               /* Do nothing but otherwise increment as normal */
+               continue;
             } else {
-               assert(inst->src[i].width % 8 == 0);
-               dst.width = inst->src[i].width;
+               fs_inst *mov = MOV(dst, inst->src[i]);
+               mov->force_writemask_all = true;
+               inst->insert_before(block, mov);
             }
-            inst->insert_before(block, MOV(dst, inst->src[i]));
+
             dst.reg_offset += dst.width / 8;
          }
 

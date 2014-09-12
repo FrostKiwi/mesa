@@ -73,12 +73,11 @@ is_copy_payload(const fs_inst *inst, int src_size)
 
    int offset = 0;
    for (int i = 0; i < inst->sources; i++) {
-      assert(inst->src[i].width % 8 == 0);
       if (inst->src[i].reg != reg ||
           inst->src[i].reg_offset != offset) {
          return false;
       }
-      offset += inst->src[i].width / 8;
+      offset += inst->src[i].effective_width(inst) / 8;
    }
    return true;
 }
