@@ -116,8 +116,10 @@ brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
    /* Compute the total number of registers across all classes. */
    int ra_reg_count = 0;
    for (int i = 0; i < class_count; i++) {
+      screen->wm_reg_sets[index].class_first_reg[i] = ra_reg_count;
       ra_reg_count += base_reg_count - (class_sizes[i] - 1);
    }
+   screen->wm_reg_sets[index].class_first_reg[class_count] = ra_reg_count;
 
    uint8_t *ra_reg_to_grf = ralloc_array(screen, uint8_t, ra_reg_count);
    struct ra_regs *regs = ra_alloc_reg_set(screen, ra_reg_count);
@@ -469,8 +471,28 @@ fs_visitor::assign_regs(bool allow_spilling)
    }
 
    setup_payload_interference(g, payload_node_count, first_payload_node);
-   if (brw->gen >= 7)
+   if (brw->gen >= 7) {
       setup_mrf_hack_interference(g, first_mrf_hack_node);
+
+      foreach_in_list(fs_inst, inst, &instructions) {
+         /* When we do send-from-GRF for FB writes, we need to ensure that
+          * the last write instruction sends from a high register.  This is
+          * because the vertex fetcher wants to start filling the low
+          * payload registers while the pixel data port is still working on
+          * writing out the memory.  If we don't do this, we get rendering
+          * artifacts.
+          *
+          * We could just do "something high".  Instead, we just pick the
+          * highest register that works.
+          */
+         if (inst->opcode == FS_OPCODE_FB_WRITE && inst->eot) {
+            int size = virtual_grf_sizes[inst->src[0].reg];
+            int reg = screen->wm_reg_sets[rsi].class_first_reg[size] - 1;
+            ra_set_node_reg(g, inst->src[0].reg, reg);
+            break;
+         }
+      }
+   }
 
    if (dispatch_width > 8) {
       /* In 16-wide dispatch we have an issue where a compressed

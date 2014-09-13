@@ -90,6 +90,11 @@ struct intel_screen
       int classes[16];
 
       /**
+       * Array of the first ra reg in eahch ra class.
+       */
+      int class_first_reg[17];
+
+      /**
        * Mapping for register-allocated objects in *regs to the first
        * GRF for that object.
        */
