@@ -561,6 +561,32 @@ fs_reg::equals(const fs_reg &r) const
            stride == r.stride);
 }
 
+uint8_t
+fs_reg::effective_width(const fs_inst *inst) const
+{
+   switch (this->file) {
+   case BAD_FILE:
+      assert(inst->opcode == SHADER_OPCODE_LOAD_PAYLOAD);
+      /* This can only be used in LOAD_PAYLOAD and indicates that the given
+       * register is a 1-register placeholder.
+       */
+      return 8;
+   case UNIFORM:
+   case IMM:
+      assert(this->width == 1);
+      return inst->exec_size;
+   case GRF:
+   case HW_REG:
+      assert(this->width > 1 && this->width <= inst->exec_size);
+      assert(this->width % 8 == 0);
+      return this->width;
+   case MRF:
+      unreachable("MRF registers cannot be used as sources");
+   default:
+      unreachable("Invalid register file");
+   }
+}
+
 fs_reg &
 fs_reg::apply_stride(unsigned stride)
 {

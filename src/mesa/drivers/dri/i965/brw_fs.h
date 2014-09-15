@@ -62,6 +62,8 @@ namespace brw {
    class fs_live_variables;
 }
 
+class fs_inst;
+
 class fs_reg : public backend_reg {
 public:
    DECLARE_RALLOC_CXX_OPERATORS(fs_reg)
@@ -101,6 +103,14 @@ public:
     * will be equal to the dispatch width.
     */
    uint8_t width;
+
+   /**
+    * Returns the effective register width when used as a source in the
+    * given instruction.  Registers such as uniforms and immediates
+    * effectively take on the width of the instruction in which they are
+    * used.
+    */
+   uint8_t effective_width(const fs_inst *inst) const;
 
    /** Register region horizontal stride */
    uint8_t stride;
