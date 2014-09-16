@@ -1208,6 +1208,7 @@ brw_reg_from_fs_reg(fs_reg *reg)
       }
 
       brw_reg = retype(brw_reg, reg->type);
+      brw_reg = offset(brw_reg, reg->reg_offset);
       brw_reg = byte_offset(brw_reg, reg->subreg_offset);
       break;
    case IMM:
