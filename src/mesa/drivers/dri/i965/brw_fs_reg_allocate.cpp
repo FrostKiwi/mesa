@@ -117,7 +117,21 @@ brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
    /* Compute the total number of registers across all classes. */
    int ra_reg_count = 0;
    for (int i = 0; i < class_count; i++) {
-      ra_reg_count += base_reg_count - (class_sizes[i] - 1);
+      if (devinfo->gen <= 5 && reg_width == 2) {
+         /* From the GM5 PRM:
+          *
+          * In order to reduce the hardware complexity, the following
+          * rules and restrictions apply to the compressed instruction:
+          * ...
+          * * Operand Alignment Rule: With the exceptions listed below, a
+          *   source/destination operand in general should be aligned to
+          *   even 256-bit physical register with a region size equal to
+          *   two 256-bit physical register
+          */
+         ra_reg_count += (base_reg_count - (class_sizes[i] - 1)) / 2;
+      } else {
+         ra_reg_count += base_reg_count - (class_sizes[i] - 1);
+      }
    }
 
    uint8_t *ra_reg_to_grf = ralloc_array(screen, uint8_t, ra_reg_count);
@@ -134,27 +148,48 @@ brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
    int pairs_base_reg = 0;
    int pairs_reg_count = 0;
    for (int i = 0; i < class_count; i++) {
-      int class_reg_count = base_reg_count - (class_sizes[i] - 1);
+      int class_reg_count;
+      if (devinfo->gen <= 5 && reg_width == 2) {
+         class_reg_count = (base_reg_count - (class_sizes[i] - 1)) / 2;
+      } else {
+         class_reg_count = base_reg_count - (class_sizes[i] - 1);
+      }
       classes[i] = ra_alloc_reg_class(regs);
 
       /* Save this off for the aligned pair class at the end. */
       if (class_sizes[i] == 2) {
-	 pairs_base_reg = reg;
-	 pairs_reg_count = class_reg_count;
+         pairs_base_reg = reg;
+         pairs_reg_count = class_reg_count;
       }
 
-      for (int j = 0; j < class_reg_count; j++) {
-	 ra_class_add_reg(regs, classes[i], reg);
+      if (devinfo->gen <= 5 && reg_width == 2) {
+         for (int j = 0; j < class_reg_count; j++) {
+            ra_class_add_reg(regs, classes[i], reg);
 
-	 ra_reg_to_grf[reg] = j;
+            ra_reg_to_grf[reg] = j * 2;
 
-	 for (int base_reg = j;
-	      base_reg < j + class_sizes[i];
-	      base_reg++) {
-	    ra_add_transitive_reg_conflict(regs, base_reg, reg);
-	 }
+            for (int base_reg = j * 2;
+                 base_reg < j * 2 + class_sizes[i];
+                 base_reg++) {
+               ra_add_transitive_reg_conflict(regs, base_reg, reg);
+            }
 
-	 reg++;
+            reg++;
+         }
+      } else {
+         for (int j = 0; j < class_reg_count; j++) {
+            ra_class_add_reg(regs, classes[i], reg);
+
+            ra_reg_to_grf[reg] = j;
+
+            for (int base_reg = j;
+                 base_reg < j + class_sizes[i];
+                 base_reg++) {
+               ra_add_transitive_reg_conflict(regs, base_reg, reg);
+            }
+
+            reg++;
+         }
       }
    }
    assert(reg == ra_reg_count);
