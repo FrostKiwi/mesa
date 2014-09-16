@@ -187,7 +187,7 @@ fs_visitor::register_coalesce()
          assert(src_size <= MAX_SAMPLER_MESSAGE_SIZE);
 
          assert(inst->src[0].width % 8 == 0);
-         channels_remaining = src_size / (inst->src[0].width / 8);
+         channels_remaining = src_size;
          memset(mov, 0, sizeof(mov));
 
          reg_to = inst->dst.reg;
@@ -201,14 +201,14 @@ fs_visitor::register_coalesce()
             reg_to_offset[i] = i;
          }
          mov[0] = inst;
-         channels_remaining -= inst->sources;
+         channels_remaining -= inst->regs_written;
       } else {
          const int offset = inst->src[0].reg_offset;
          reg_to_offset[offset] = inst->dst.reg_offset;
          if (inst->src[0].width == 16)
             reg_to_offset[offset + 1] = inst->dst.reg_offset + 1;
          mov[offset] = inst;
-         channels_remaining--;
+         channels_remaining -= inst->src[0].effective_width(inst) / 8;
       }
 
       if (channels_remaining)
