@@ -117,7 +117,11 @@ brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
    int ra_reg_count = 0;
    for (int i = 0; i < class_count; i++) {
       screen->wm_reg_sets[index].class_first_reg[i] = ra_reg_count;
-      ra_reg_count += base_reg_count - (class_sizes[i] - 1);
+      if (class_sizes[i] == 2) {
+         ra_reg_count += base_reg_count / 2;
+      } else {
+         ra_reg_count += base_reg_count - (class_sizes[i] - 1);
+      }
    }
    screen->wm_reg_sets[index].class_first_reg[class_count] = ra_reg_count;
 
@@ -135,27 +139,37 @@ brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
    int pairs_base_reg = 0;
    int pairs_reg_count = 0;
    for (int i = 0; i < class_count; i++) {
-      int class_reg_count = base_reg_count - (class_sizes[i] - 1);
-      classes[i] = ra_alloc_reg_class(regs);
-
-      /* Save this off for the aligned pair class at the end. */
       if (class_sizes[i] == 2) {
-	 pairs_base_reg = reg;
-	 pairs_reg_count = class_reg_count;
-      }
+         int class_reg_count = base_reg_count / 2;
+         classes[i] = ra_alloc_reg_class(regs);
 
-      for (int j = 0; j < class_reg_count; j++) {
-	 ra_class_add_reg(regs, classes[i], reg);
+         for (int j = 0; j < class_reg_count; j++) {
+            ra_class_add_reg(regs, classes[i], reg);
 
-	 ra_reg_to_grf[reg] = j;
+            ra_reg_to_grf[reg] = j * 2;
 
-	 for (int base_reg = j;
-	      base_reg < j + class_sizes[i];
-	      base_reg++) {
-	    ra_add_transitive_reg_conflict(regs, base_reg, reg);
-	 }
+            ra_add_transitive_reg_conflict(regs, j * 2, reg);
+            ra_add_transitive_reg_conflict(regs, j * 2 + 1, reg);
 
-	 reg++;
+            reg++;
+         }
+      } else {
+         int class_reg_count = base_reg_count - (class_sizes[i] - 1);
+         classes[i] = ra_alloc_reg_class(regs);
+
+         for (int j = 0; j < class_reg_count; j++) {
+            ra_class_add_reg(regs, classes[i], reg);
+
+            ra_reg_to_grf[reg] = j;
+
+            for (int base_reg = j;
+                 base_reg < j + class_sizes[i];
+                 base_reg++) {
+               ra_add_transitive_reg_conflict(regs, base_reg, reg);
+            }
+
+            reg++;
+         }
       }
    }
    assert(reg == ra_reg_count);
