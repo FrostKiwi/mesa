@@ -2956,6 +2956,20 @@ fs_visitor::lower_load_payload()
 
             if (inst->src[i].file == BAD_FILE) {
                /* Do nothing but otherwise increment as normal */
+            } else if (dst.file == MRF &&
+                       dst.width == 8 &&
+                       brw->has_compr4 &&
+                       i + 4 < inst->sources &&
+                       inst->src[i + 4].equals(horiz_offset(inst->src[i], 8))) {
+               struct brw_reg hw_reg = brw_vec16_reg(MRF,
+                                                     dst.reg + BRW_MRF_COMPR4,
+                                                     dst.subreg_offset);
+               fs_inst *mov = MOV(hw_reg, inst->src[i]);
+               mov->exec_size = 16;
+               mov->force_writemask_all = true;
+               inst->insert_before(block, mov);
+               /* Mark i+4 as BAD_FILE so we don't emit a MOV for it */
+               inst->src[i + 4].file = BAD_FILE;
             } else {
                fs_inst *mov = MOV(dst, inst->src[i]);
                mov->force_writemask_all = true;
