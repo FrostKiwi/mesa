@@ -2895,6 +2895,16 @@ fs_visitor::lower_load_payload()
                /* Do nothing but otherwise increment as normal */
                dst.reg_offset += dst.width / 8;
                continue;
+            } else if (dst.file == MRF &&
+                       dst.width == 16 &&
+                       brw->has_compr4 &&
+                       i + 4 < inst->sources &&
+                       inst->src[i + 4].equals(byte_offset(inst->src[i], 32))) {
+               struct brw_reg hw_reg = dst.fixed_hw_reg;
+               hw_reg.nr +=  BRW_MRF_COMPR4;
+               mov = MOV(hw_reg, inst->src[i]);
+               mov->exec_size = 16;
+               inst->src[i + 4].file = BAD_FILE;
             } else if ((dst.file == GRF || dst.file == MRF) &&
                        inst->src[i].file == GRF &&
                        inst->src[i].width == 8 &&
