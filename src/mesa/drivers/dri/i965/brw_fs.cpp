@@ -2890,14 +2890,26 @@ fs_visitor::lower_load_payload()
             dst.width = inst->src[i].effective_width(inst);
             dst.type = inst->src[i].type;
 
+            fs_inst *mov;
             if (inst->src[i].file == BAD_FILE) {
                /* Do nothing but otherwise increment as normal */
+               dst.reg_offset += dst.width / 8;
                continue;
+            } else if ((dst.file == GRF || dst.file == MRF) &&
+                       inst->src[i].file == GRF &&
+                       inst->src[i].width == 8 &&
+                       i + 1 < inst->sources &&
+                       inst->src[i + 1].equals(byte_offset(inst->src[i], 32))) {
+               /* We can just do a 16-wide move here */
+               dst.width = 16;
+               inst->src[i].width = 16;
+               mov = MOV(dst, inst->src[i]);
+               i++;
             } else {
-               fs_inst *mov = MOV(dst, inst->src[i]);
-               mov->force_writemask_all = true;
-               inst->insert_before(block, mov);
+               mov = MOV(dst, inst->src[i]);
             }
+            mov->force_writemask_all = true;
+            inst->insert_before(block, mov);
 
             dst.reg_offset += dst.width / 8;
          }
