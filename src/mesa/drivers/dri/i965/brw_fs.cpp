@@ -3177,11 +3177,14 @@ fs_visitor::dump_instruction(backend_instruction *be_inst, FILE *file)
 
    fprintf(file, " ");
 
-   if (inst->force_uncompressed)
-      fprintf(file, "1sthalf ");
-
-   if (inst->force_sechalf)
-      fprintf(file, "2ndhalf ");
+   if (inst->exec_size < 8) {
+      fprintf(file, "%d-wide ", inst->exec_size);
+   } else if (dispatch_width == 16 && inst->exec_size == 8) {
+      if (inst->force_sechalf)
+         fprintf(file, "2ndhalf ");
+      else
+         fprintf(file, "1sthalf ");
+   }
 
    fprintf(file, "\n");
 }
