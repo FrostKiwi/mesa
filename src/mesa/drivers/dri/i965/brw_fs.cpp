@@ -473,7 +473,7 @@ fs_inst::is_send_from_grf() const
    case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD:
       return src[1].file == GRF;
    case FS_OPCODE_FB_WRITE:
-      return src[1].file == GRF;
+      return src[0].file == GRF;
    default:
       if (is_tex())
          return src[0].file == GRF;
