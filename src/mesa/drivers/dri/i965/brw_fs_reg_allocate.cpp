@@ -108,9 +108,8 @@ brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
       for (class_count = 0; class_count < BRW_MAX_MRF; class_count++)
          class_sizes[class_count] = class_count + 1;
    } else {
-      for (class_count = 0; class_count < 4; class_count++)
+      for (class_count = 0; class_count < 8; class_count++)
          class_sizes[class_count] = class_count + 1;
-      class_sizes[class_count++] = 8;
    }
 
    /* Compute the total number of registers across all classes. */
