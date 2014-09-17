@@ -3477,15 +3477,23 @@ fs_visitor::run()
                      dispatch_width, shader_prog ? shader_prog->Name : 0);
             backend_visitor::dump_instructions(filename);
          }
+
+         split_virtual_grfs();
+         if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
+            snprintf(filename, 64, "fs%d-%04d-99-02-split_virtual_grfs",
+                     dispatch_width, shader_prog ? shader_prog->Name : 0);
+            backend_visitor::dump_instructions(filename);
+         }
+
          register_coalesce();
          if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
-            snprintf(filename, 64, "fs%d-%04d-99-02-register_coalesce",
+            snprintf(filename, 64, "fs%d-%04d-99-03-register_coalesce",
                      dispatch_width, shader_prog ? shader_prog->Name : 0);
             backend_visitor::dump_instructions(filename);
          }
          dead_code_eliminate();
          if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
-            snprintf(filename, 64, "fs%d-%04d-99-03-dead_code_eliminate",
+            snprintf(filename, 64, "fs%d-%04d-99-04-dead_code_eliminate",
                      dispatch_width, shader_prog ? shader_prog->Name : 0);
             backend_visitor::dump_instructions(filename);
          }
