@@ -1792,20 +1792,38 @@ void
 fs_visitor::split_virtual_grfs()
 {
    int num_vars = this->virtual_grf_count;
-   bool split_grf[num_vars];
-   uint8_t reg_widths[num_vars];
-   int new_virtual_grf[num_vars];
 
-   memset(split_grf, 0, sizeof(split_grf));
+   /* Count the total number of registers */
+   int reg_count = 0;
+   int vgrf_to_reg[num_vars];
+   for (int i = 0; i < num_vars; i++) {
+      vgrf_to_reg[i] = reg_count;
+      reg_count += virtual_grf_sizes[i];
+   }
 
-   /* Mark all used registers as splittable */
+   /* An array of "split points".  For each register slot, this indicates
+    * if this slot can be separated from the previous slot.  Every time an
+    * instruction uses multiple elements of a register (as a source or
+    * destination), we mark the used slots as inseparable.  Then we go
+    * through and split the registers into the smallest pieces we can.
+    */
+   bool split_points[reg_count];
+   memset(split_points, 0, sizeof(split_points));
+
+   /* Mark all used registers as fully splittable */
    foreach_in_list(fs_inst, inst, &instructions) {
-      if (inst->dst.file == GRF)
-         split_grf[inst->dst.reg] = true;
+      if (inst->dst.file == GRF) {
+         int reg = vgrf_to_reg[inst->dst.reg];
+         for (int j = 1; j < this->virtual_grf_sizes[inst->dst.reg]; j++)
+            split_points[reg + j] = true;
+      }
 
       for (int i = 0; i < inst->sources; i++) {
-         if (inst->src[i].file == GRF)
-            split_grf[inst->src[i].reg] = true;
+         if (inst->src[i].file == GRF) {
+            int reg = vgrf_to_reg[inst->src[i].reg];
+            for (int j = 1; j < this->virtual_grf_sizes[inst->src[i].reg]; j++)
+               split_points[reg + j] = true;
+         }
       }
    }
 
@@ -1816,78 +1834,75 @@ fs_visitor::split_virtual_grfs()
        * Gen6, that was the only supported interpolation mode, and since Gen6,
        * delta_x and delta_y are in fixed hardware registers.
        */
-      split_grf[this->delta_x[BRW_WM_PERSPECTIVE_PIXEL_BARYCENTRIC].reg] =
-         false;
+      int vgrf = this->delta_x[BRW_WM_PERSPECTIVE_PIXEL_BARYCENTRIC].reg;
+      split_points[vgrf_to_reg[vgrf] + 1] = 0;
    }
 
    foreach_in_list(fs_inst, inst, &instructions) {
-      /* In SIMD16 mode, we can have registers that are genuinely 2-wide.
-       * Record the individual register widths (1 in SIMD8, 2 in SIMD16)
-       * and only mark the register for splitting if it's bigger than this.
-       */
       if (inst->dst.file == GRF) {
-         reg_widths[inst->dst.reg] = inst->dst.width / 8;
-         if (virtual_grf_sizes[inst->dst.reg] <= reg_widths[inst->dst.reg])
-            split_grf[inst->dst.reg] = false;
+         int reg = vgrf_to_reg[inst->dst.reg] + inst->dst.reg_offset;
+         for (int j = 1; j < inst->regs_written; j++)
+            split_points[reg + j] = false;
       }
       for (int i = 0; i < inst->sources; i++) {
          if (inst->src[i].file == GRF) {
-            reg_widths[inst->src[i].reg] = inst->src[i].width / 8;
-            if (virtual_grf_sizes[inst->src[i].reg] <= reg_widths[inst->src[i].reg])
-               split_grf[inst->src[i].reg] = false;
-         }
-      }
-
-      /* If there's a SEND message that requires contiguous destination
-       * registers, no splitting is allowed.
-       */
-      if (inst->regs_written > inst->dst.width / 8) {
-	 split_grf[inst->dst.reg] = false;
-      }
-
-      /* If we're sending from a GRF, don't split it, on the assumption that
-       * the send is reading the whole thing.
-       */
-      if (inst->is_send_from_grf()) {
-         for (int i = 0; i < inst->sources; i++) {
-            if (inst->src[i].file == GRF) {
-               split_grf[inst->src[i].reg] = false;
-            }
+            int reg = vgrf_to_reg[inst->src[i].reg] + inst->src[i].reg_offset;
+            for (int j = 1; j < inst->regs_read(this, i); j++)
+               split_points[reg + j] = false;
          }
       }
    }
 
-   /* Allocate new space for split regs.  Note that the virtual
-    * numbers will be contiguous.
-    */
+   int new_virtual_grf[reg_count];
+   int new_reg_offset[reg_count];
+
+   int reg = 0;
    for (int i = 0; i < num_vars; i++) {
-      if (split_grf[i]) {
-	 new_virtual_grf[i] = virtual_grf_alloc(reg_widths[i]);
-	 for (int j = 2; j < this->virtual_grf_sizes[i] / reg_widths[i]; j++) {
-	    int reg = virtual_grf_alloc(reg_widths[i]);
-	    assert(reg == new_virtual_grf[i] + j - 1);
-	    (void) reg;
-	 }
-	 this->virtual_grf_sizes[i] = reg_widths[i];
+      /* The first one should always be 0 as a quick sanity check. */
+      assert(split_points[reg] == false);
+
+      /* j = 0 case */
+      new_reg_offset[reg] = 0;
+      reg++;
+      int offset = 1;
+
+      /* j > 0 case */
+      for (int j = 1; j < virtual_grf_sizes[i]; j++) {
+         /* If this is a split point, reset the offset to 0 and allocate a
+          * new virtual GRF for the previous offset many registers
+          */
+         if (split_points[reg]) {
+            int grf = virtual_grf_alloc(offset);
+            for (int k = reg - offset; k < reg; k++)
+               new_virtual_grf[k] = grf;
+            offset = 0;
+         }
+         new_reg_offset[reg] = offset;
+         offset++;
+         reg++;
       }
+
+      /* The last one gets the original register number */
+      virtual_grf_sizes[i] = offset;
+      for (int k = reg - offset; k < reg; k++)
+         new_virtual_grf[k] = i;
    }
+   assert(reg == reg_count);
 
    foreach_in_list(fs_inst, inst, &instructions) {
-      if (inst->dst.file == GRF &&
-	  split_grf[inst->dst.reg] &&
-	  inst->dst.reg_offset != 0) {
-	 inst->dst.reg = (new_virtual_grf[inst->dst.reg] +
-			  inst->dst.reg_offset / (inst->dst.width / 8) - 1);
-	 inst->dst.reg_offset = 0;
+      if (inst->dst.file == GRF) {
+         reg = vgrf_to_reg[inst->dst.reg] + inst->dst.reg_offset;
+         inst->dst.reg = new_virtual_grf[reg];
+         inst->dst.reg_offset = new_reg_offset[reg];
+         assert(new_reg_offset[reg] < virtual_grf_sizes[new_virtual_grf[reg]]);
       }
       for (int i = 0; i < inst->sources; i++) {
-	 if (inst->src[i].file == GRF &&
-	     split_grf[inst->src[i].reg] &&
-	     inst->src[i].reg_offset != 0) {
-	    inst->src[i].reg = (new_virtual_grf[inst->src[i].reg] +
-				inst->src[i].reg_offset / (inst->src[i].width / 8) - 1);
-	    inst->src[i].reg_offset = 0;
-	 }
+	 if (inst->src[i].file == GRF) {
+            reg = vgrf_to_reg[inst->src[i].reg] + inst->src[i].reg_offset;
+            inst->src[i].reg = new_virtual_grf[reg];
+            inst->src[i].reg_offset = new_reg_offset[reg];
+            assert(new_reg_offset[reg] < virtual_grf_sizes[new_virtual_grf[reg]]);
+         }
       }
    }
    invalidate_live_intervals(false);
