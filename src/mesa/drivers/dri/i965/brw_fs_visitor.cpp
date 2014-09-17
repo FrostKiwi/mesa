@@ -3207,22 +3207,24 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
       length++;
    }
 
-   fs_reg payload;
    fs_inst *load;
+   fs_inst *write;
    if (brw->gen >= 7) {
       /* Send from the GRF */
-      payload = fs_reg(GRF, -1, BRW_REGISTER_TYPE_F);
+      fs_reg payload = fs_reg(GRF, -1, BRW_REGISTER_TYPE_F);
       load = emit(LOAD_PAYLOAD(payload, sources, length));
       payload.reg = virtual_grf_alloc(load->regs_written);
       load->dst = payload;
+      write = emit(FS_OPCODE_FB_WRITE, reg_undef, payload);
+      write->base_mrf = -1;
    } else {
       /* Send from the MRF */
-      payload = fs_reg(MRF, 1, BRW_REGISTER_TYPE_F);
-      load = emit(LOAD_PAYLOAD(payload, sources, length));
+      load = emit(LOAD_PAYLOAD(fs_reg(MRF, 1, BRW_REGISTER_TYPE_F),
+                               sources, length));
+      write = emit(FS_OPCODE_FB_WRITE);
+      write->base_mrf = 1;
    }
 
-   fs_inst *write = emit(FS_OPCODE_FB_WRITE, reg_undef, payload);
-   write->base_mrf = payload.file == MRF ? payload.reg : -1;
    write->mlen = load->regs_written;
    write->header_present = header_present;
    if ((brw->gen >= 8 || brw->is_haswell) && fp->UsesKill) {
