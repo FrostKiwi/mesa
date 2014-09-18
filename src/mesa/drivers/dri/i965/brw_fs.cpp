@@ -2911,11 +2911,9 @@ fs_visitor::lower_load_payload()
             dst.width = inst->src[i].effective_width(inst);
             dst.type = inst->src[i].type;
 
-            fs_inst *mov;
+            fs_inst *mov = NULL;
             if (inst->src[i].file == BAD_FILE) {
                /* Do nothing but otherwise increment as normal */
-               dst.reg_offset += dst.width / 8;
-               continue;
             } else if (dst.file == MRF &&
                        dst.width == 16 &&
                        brw->has_compr4 &&
@@ -2939,10 +2937,25 @@ fs_visitor::lower_load_payload()
             } else {
                mov = MOV(dst, inst->src[i]);
             }
-            mov->force_writemask_all = true;
-            inst->insert_before(block, mov);
 
-            dst.reg_offset += dst.width / 8;
+            if (mov) {
+               mov->force_writemask_all = true;
+               inst->insert_before(block, mov);
+            }
+
+            switch (dst.file) {
+            case MRF:
+               dst.reg += dst.width / 8;
+               break;
+            case HW_REG:
+               dst.fixed_hw_reg.nr += dst.width / 8;
+               break;
+            case GRF:
+               dst.reg_offset += dst.width / 8;
+               break;
+            default:
+               unreachable("Invalid LOAD_PAYLOAD destination");
+            }
          }
 
          inst->remove(block);
