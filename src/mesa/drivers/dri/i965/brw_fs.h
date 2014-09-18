@@ -127,10 +127,16 @@ static inline fs_reg
 offset(fs_reg reg, unsigned delta)
 {
    assert(delta == 0 || (reg.file != HW_REG && reg.file != IMM));
-   if (reg.file == GRF) {
+   switch (reg.file) {
+   case GRF:
       assert(reg.width % 8 == 0);
       reg.reg_offset += delta * (reg.width / 8);
-   } else {
+      break;
+   case MRF:
+      assert(reg.width % 8 == 0);
+      reg.reg += delta * (reg.width / 8);
+      break;
+   default:
       reg.reg_offset += delta;
    }
    return reg;
