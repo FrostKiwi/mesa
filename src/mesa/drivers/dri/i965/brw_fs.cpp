@@ -3514,6 +3514,13 @@ fs_visitor::run()
                      dispatch_width, shader_prog ? shader_prog->Name : 0);
             backend_visitor::dump_instructions(filename);
          }
+
+         compute_to_mrf();
+         if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
+            snprintf(filename, 64, "fs%d-%04d-99-05-compute_to_mrf",
+                     dispatch_width, shader_prog ? shader_prog->Name : 0);
+            backend_visitor::dump_instructions(filename);
+         }
       }
 
       lower_uniform_pull_constant_loads();
