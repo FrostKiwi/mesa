@@ -631,7 +631,8 @@ fs_visitor::visit(ir_expression *ir)
             if (brw->gen >= 7)
                no16("SIMD16 explicit accumulator operands unsupported\n");
 
-            struct brw_reg acc = retype(brw_acc_reg(), this->result.type);
+            struct brw_reg acc = retype(brw_acc_reg(dispatch_width),
+                                        this->result.type);
 
             emit(MUL(acc, op[0], op[1]));
             emit(MACH(reg_null_d, op[0], op[1]));
@@ -645,7 +646,8 @@ fs_visitor::visit(ir_expression *ir)
       if (brw->gen >= 7)
          no16("SIMD16 explicit accumulator operands unsupported\n");
 
-      struct brw_reg acc = retype(brw_acc_reg(), this->result.type);
+      struct brw_reg acc = retype(brw_acc_reg(dispatch_width),
+                                  this->result.type);
 
       emit(MUL(acc, op[0], op[1]));
       emit(MACH(this->result, op[0], op[1]));
@@ -660,7 +662,8 @@ fs_visitor::visit(ir_expression *ir)
       if (brw->gen >= 7)
          no16("SIMD16 explicit accumulator operands unsupported\n");
 
-      struct brw_reg acc = retype(brw_acc_reg(), BRW_REGISTER_TYPE_UD);
+      struct brw_reg acc = retype(brw_acc_reg(dispatch_width),
+                                  BRW_REGISTER_TYPE_UD);
 
       emit(ADDC(reg_null_ud, op[0], op[1]));
       emit(MOV(this->result, fs_reg(acc)));
@@ -670,7 +673,8 @@ fs_visitor::visit(ir_expression *ir)
       if (brw->gen >= 7)
          no16("SIMD16 explicit accumulator operands unsupported\n");
 
-      struct brw_reg acc = retype(brw_acc_reg(), BRW_REGISTER_TYPE_UD);
+      struct brw_reg acc = retype(brw_acc_reg(dispatch_width),
+                                  BRW_REGISTER_TYPE_UD);
 
       emit(SUBB(reg_null_ud, op[0], op[1]));
       emit(MOV(this->result, fs_reg(acc)));
