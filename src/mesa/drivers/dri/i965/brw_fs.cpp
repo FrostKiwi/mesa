@@ -2927,7 +2927,8 @@ fs_visitor::lower_load_payload()
                mov = MOV(hw_reg, inst->src[i]);
                mov->exec_size = 16;
                inst->src[i + 4].file = BAD_FILE;
-            } else if ((dst.file == GRF || dst.file == MRF) &&
+            } else if (brw->gen > 4 &&
+                       (dst.file == GRF || dst.file == MRF) &&
                        inst->src[i].file == GRF &&
                        inst->src[i].width == 8 &&
                        i + 1 < inst->sources &&
