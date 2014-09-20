@@ -62,7 +62,7 @@ namespace brw {
    class fs_live_variables;
 }
 
-class fs_visitor;
+class fs_inst;
 
 class fs_reg : public backend_reg {
 public:
@@ -110,7 +110,7 @@ public:
     * effectively take on the width of the instruction in which they are
     * used.
     */
-   uint8_t effective_width(const fs_visitor *v) const;
+   uint8_t effective_width(const fs_inst *inst) const;
 
    /** Register region horizontal stride */
    uint8_t stride;
