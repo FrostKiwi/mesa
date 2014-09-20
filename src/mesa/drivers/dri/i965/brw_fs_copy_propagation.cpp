@@ -631,13 +631,13 @@ fs_visitor::opt_copy_propagate_local(void *copy_prop_ctx, bblock_t *block,
                  inst->dst.file == GRF) {
          int offset = 0;
          for (int i = 0; i < inst->sources; i++) {
-            int regs_written = ((inst->src[i].effective_width(this) *
+            int regs_written = ((inst->src[i].effective_width(inst) *
                                  type_sz(inst->src[i].type)) + 31) / 32;
             if (inst->src[i].file == GRF) {
                acp_entry *entry = ralloc(copy_prop_ctx, acp_entry);
                entry->dst = inst->dst;
                entry->dst.reg_offset = offset;
-               entry->dst.width = inst->src[i].effective_width(this);
+               entry->dst.width = inst->src[i].effective_width(inst);
                entry->src = inst->src[i];
                entry->regs_written = regs_written;
                entry->opcode = inst->opcode;
