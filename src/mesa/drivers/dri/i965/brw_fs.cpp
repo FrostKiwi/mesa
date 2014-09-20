@@ -3474,7 +3474,9 @@ fs_visitor::run()
       } while (progress);
 
       if (lower_load_payload()) {
+         split_virtual_grfs();
          register_coalesce();
+         compute_to_mrf();
          dead_code_eliminate();
       }
 
