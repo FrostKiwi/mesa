@@ -352,7 +352,7 @@ fs_visitor::LOAD_PAYLOAD(const fs_reg &dst, fs_reg *src, int sources)
        * dealing with whole registers.  If this ever changes, we can deal
        * with it later.
        */
-      int size = src[i].effective_width(this) * type_sz(src[i].type);
+      int size = src[i].effective_width(inst) * type_sz(src[i].type);
       assert(size % 32 == 0);
       inst->regs_written += (size + 31) / 32;
    }
@@ -581,7 +581,7 @@ fs_reg::equals(const fs_reg &r) const
 }
 
 uint8_t
-fs_reg::effective_width(const fs_visitor *v) const
+fs_reg::effective_width(const fs_inst *inst) const
 {
    switch (this->file) {
    case BAD_FILE:
@@ -589,10 +589,10 @@ fs_reg::effective_width(const fs_visitor *v) const
    case UNIFORM:
    case IMM:
       assert(this->width == 1);
-      return v->dispatch_width;
+      return inst->exec_size;
    case GRF:
    case HW_REG:
-      assert(this->width > 1 && this->width <= v->dispatch_width);
+      assert(this->width > 1 && this->width <= inst->exec_size);
       assert(this->width % 8 == 0);
       return this->width;
    case MRF:
@@ -2994,7 +2994,7 @@ fs_visitor::lower_load_payload()
          fs_reg dst = inst->dst;
 
          for (int i = 0; i < inst->sources; i++) {
-            dst.width = inst->src[i].effective_width(this);
+            dst.width = inst->src[i].effective_width(inst);
             dst.type = inst->src[i].type;
 
             if (inst->src[i].file == BAD_FILE) {
