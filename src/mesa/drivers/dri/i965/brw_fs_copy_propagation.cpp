@@ -363,9 +363,31 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
    inst->src[arg].reg = entry->src.reg;
    inst->src[arg].reg_offset = entry->src.reg_offset;
    inst->src[arg].subreg_offset = entry->src.subreg_offset;
-   inst->src[arg].width = entry->src.width;
    inst->src[arg].stride *= entry->src.stride;
    inst->saturate = inst->saturate || entry->saturate;
+
+   switch (entry->src.file) {
+   case UNIFORM:
+      assert(entry->src.width == 1);
+      inst->src[arg].width = entry->src.width;
+      break;
+   case GRF:
+   case HW_REG:
+   case BAD_FILE:
+      assert(entry->src.width % inst->src[arg].width == 0);
+      /* In this case, we'll just leave it alone.  The source register
+       * could have different widths depending on how it is being used.
+       * For instance, if only half of the register was used then we want
+       * to preserve that and continue to only use half. */
+      break;
+   case IMM:
+      unreachable("excluded above");
+   case MRF:
+      unreachable("MRF not allowed for source registers");
+      break;
+   default:
+      unreachable("Invalid register file");
+   }
 
    if (!inst->src[arg].abs) {
       inst->src[arg].abs = entry->src.abs;
