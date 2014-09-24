@@ -452,6 +452,7 @@ fs_visitor::try_constant_propagate(fs_inst *inst, acp_entry *entry)
 
       switch (inst->opcode) {
       case BRW_OPCODE_MOV:
+      case SHADER_OPCODE_LOAD_PAYLOAD:
          inst->src[i] = entry->src;
          progress = true;
          break;
