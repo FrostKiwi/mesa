@@ -418,9 +418,8 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
 }
 
 
-static bool
-try_constant_propagate(struct brw_context *brw, fs_inst *inst,
-                       acp_entry *entry)
+bool
+fs_visitor::try_constant_propagate(fs_inst *inst, acp_entry *entry)
 {
    bool progress = false;
 
@@ -428,12 +427,21 @@ try_constant_propagate(struct brw_context *brw, fs_inst *inst,
       return false;
 
    for (int i = inst->sources - 1; i >= 0; i--) {
-      if (inst->src[i].file != entry->dst.file ||
-          inst->src[i].reg != entry->dst.reg ||
-          inst->src[i].reg_offset != entry->dst.reg_offset ||
-          inst->src[i].subreg_offset != entry->dst.subreg_offset ||
-          inst->src[i].type != entry->dst.type ||
-          inst->src[i].stride > 1)
+      if (inst->src[i].file != GRF)
+         continue;
+
+      assert(entry->dst.file == GRF);
+      if (inst->src[i].reg != entry->dst.reg ||
+          inst->src[i].type != entry->dst.type)
+         continue;
+
+      /* Bail if inst is reading a range that isn't contained in the range
+       * that entry is writing.
+       */
+      if (inst->src[i].reg_offset < entry->dst.reg_offset ||
+          (inst->src[i].reg_offset * 32 + inst->src[i].subreg_offset +
+           inst->regs_read(this, i) * inst->src[i].stride * 32) >
+          (entry->dst.reg_offset + entry->regs_written) * 32)
          continue;
 
       /* Don't bother with cases that should have been taken care of by the
@@ -589,7 +597,7 @@ fs_visitor::opt_copy_propagate_local(void *copy_prop_ctx, bblock_t *block,
             continue;
 
          foreach_in_list(acp_entry, entry, &acp[inst->src[i].reg % ACP_HASH_SIZE]) {
-            if (try_constant_propagate(brw, inst, entry))
+            if (try_constant_propagate(inst, entry))
                progress = true;
 
             if (try_copy_propagate(inst, i, entry))
