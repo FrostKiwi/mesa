@@ -3051,6 +3051,7 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components)
        */
       for (unsigned i = 0; i < components; ++i) {
          inst = emit(MOV(dst[i], offset(color, i)));
+         inst->force_writemask_all = true;
          inst->saturate = key->clamp_fragment_color;
       }
       return 4;
@@ -3067,9 +3068,11 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components)
        */
       for (unsigned i = 0; i < 4; ++i) {
          inst = emit(MOV(dst[i], half(offset(color, i), 0)));
+         inst->force_writemask_all = true;
          inst->saturate = key->clamp_fragment_color;
 
          inst = emit(MOV(dst[i + 4], half(offset(color, i), 1)));
+         inst->force_writemask_all = true;
          inst->saturate = key->clamp_fragment_color;
       }
       return 8;
