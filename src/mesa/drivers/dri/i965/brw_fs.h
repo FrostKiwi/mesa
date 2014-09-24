@@ -165,7 +165,6 @@ horiz_offset(fs_reg reg, unsigned delta)
 static inline fs_reg
 offset(fs_reg reg, unsigned delta)
 {
-   assert(reg.stride > 0);
    switch (reg.file) {
    case BAD_FILE:
       break;
