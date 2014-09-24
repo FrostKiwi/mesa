@@ -277,24 +277,30 @@ is_logic_op(enum opcode opcode)
 bool
 fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
 {
+   if (inst->src[arg].file != GRF)
+      return false;
+
    if (entry->src.file == IMM)
       return false;
+   assert(entry->src.file == GRF || entry->src.file == UNIFORM);
 
    if (entry->opcode == SHADER_OPCODE_LOAD_PAYLOAD &&
        inst->opcode == SHADER_OPCODE_LOAD_PAYLOAD)
       return false;
 
-   /* Bail if inst is reading more than entry is writing. */
-   if ((inst->regs_read(this, arg) * inst->src[arg].stride *
-        type_sz(inst->src[arg].type)) > type_sz(entry->dst.type))
+   assert(entry->dst.file == GRF);
+   if (inst->src[arg].reg != entry->dst.reg)
       return false;
 
-   if (inst->src[arg].file != entry->dst.file ||
-       inst->src[arg].reg != entry->dst.reg ||
-       inst->src[arg].reg_offset != entry->dst.reg_offset ||
-       inst->src[arg].subreg_offset != entry->dst.subreg_offset) {
+   /* Bail if inst is reading a range that isn't contained in the range
+    * that entry is writing.
+    */
+   int reg_size = dispatch_width * sizeof(float);
+   if (inst->src[arg].reg_offset < entry->dst.reg_offset ||
+       (inst->src[arg].reg_offset * reg_size + inst->src[arg].subreg_offset +
+        inst->regs_read(this, arg) * inst->src[arg].stride * reg_size) >
+       (entry->dst.reg_offset + 1) * reg_size)
       return false;
-   }
 
    /* See resolve_ud_negate() and comment in brw_fs_emit.cpp. */
    if (inst->conditional_mod &&
@@ -361,10 +367,38 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
 
    inst->src[arg].file = entry->src.file;
    inst->src[arg].reg = entry->src.reg;
-   inst->src[arg].reg_offset = entry->src.reg_offset;
-   inst->src[arg].subreg_offset = entry->src.subreg_offset;
    inst->src[arg].stride *= entry->src.stride;
    inst->saturate = inst->saturate || entry->saturate;
+
+   switch (entry->src.file) {
+   case BAD_FILE:
+   case HW_REG:
+   case UNIFORM:
+      inst->src[arg].reg_offset = entry->src.reg_offset;
+      inst->src[arg].subreg_offset = entry->src.subreg_offset;
+      break;
+   case GRF:
+      {
+         /* In this case, we have to deal with mapping parts of vgrfs to
+          * other parts of vgrfs so we have to do some reg_offset magic.
+          */
+
+         /* Compute the offset of inst->src[arg] relative to inst->dst */
+         assert(entry->dst.subreg_offset == 0);
+         int rel_offset = inst->src[arg].reg_offset - entry->dst.reg_offset;
+         int rel_suboffset = inst->src[arg].subreg_offset;
+
+         /* Compute the final register offset (in bytes) */
+         int offset = entry->src.reg_offset * reg_size + entry->src.subreg_offset;
+         offset += rel_offset * reg_size + rel_suboffset;
+         inst->src[arg].reg_offset = offset / reg_size;
+         inst->src[arg].subreg_offset = offset % reg_size;
+      }
+      break;
+   default:
+      unreachable("Invalid register file");
+      break;
+   }
 
    if (!inst->src[arg].abs) {
       inst->src[arg].abs = entry->src.abs;
