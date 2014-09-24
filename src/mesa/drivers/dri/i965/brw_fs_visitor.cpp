@@ -3008,28 +3008,19 @@ fs_visitor::emit_color_write(fs_reg color, int index, int first_color_mrf)
 int
 fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components)
 {
-   int reg_size = color.width / 8;
    fs_inst *inst;
 
    if (color.file == BAD_FILE) {
       return 4 * (dispatch_width / 8);
    }
 
-   /* Fill the array with registers */
-   if (dispatch_width == 8 || brw->gen >= 6) {
-      for (unsigned i = 0; i < 4; ++i)
-         dst[i] = fs_reg(GRF, virtual_grf_alloc(reg_size),
-                         color.type, color.width);
-   } else {
-      for (unsigned i = 0; i < 8; ++i)
-         dst[i] = fs_reg(GRF, virtual_grf_alloc(1), color.type);
-   }
-
+   uint8_t colors_enabled;
    if (components == 0) {
       /* We want to write one component to the alpha channel */
-      color = offset(color, 3);
-      dst += 3;
-      components = 1;
+      colors_enabled = 0x8;
+   } else {
+      /* Enable the first components-many channels */
+      colors_enabled = (1 << components) - 1;
    }
 
    if (dispatch_width == 8 || brw->gen >= 6) {
@@ -3049,12 +3040,21 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components)
        * m + 6: a0
        * m + 7: a1
        */
-      for (unsigned i = 0; i < components; ++i) {
-         inst = emit(MOV(dst[i], offset(color, i)));
-         inst->force_writemask_all = true;
-         inst->saturate = key->clamp_fragment_color;
+      int len = 0;
+      for (unsigned i = 0; i < 4; ++i) {
+         if (colors_enabled & (1 << i)) {
+            dst[len] = fs_reg(GRF, virtual_grf_alloc(color.width / 8),
+                              color.type, color.width);
+            inst = emit(MOV(dst[len], offset(color, i)));
+            inst->force_writemask_all = true;
+            inst->saturate = key->clamp_fragment_color;
+         } else if (color.width == 16) {
+            /* We need two BAD_FILE slots for a 16-wide color */
+            len++;
+         }
+         len++;
       }
-      return 4;
+      return len;
    } else {
       /* pre-gen6 SIMD16 single source DP write looks like:
        * m + 0: r0
@@ -3067,13 +3067,17 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components)
        * m + 7: a1
        */
       for (unsigned i = 0; i < 4; ++i) {
-         inst = emit(MOV(dst[i], half(offset(color, i), 0)));
-         inst->force_writemask_all = true;
-         inst->saturate = key->clamp_fragment_color;
+         if (colors_enabled & (1 << i)) {
+            dst[i] = fs_reg(GRF, virtual_grf_alloc(1), color.type);
+            inst = emit(MOV(dst[i], half(offset(color, i), 0)));
+            inst->force_writemask_all = true;
+            inst->saturate = key->clamp_fragment_color;
 
-         inst = emit(MOV(dst[i + 4], half(offset(color, i), 1)));
-         inst->force_writemask_all = true;
-         inst->saturate = key->clamp_fragment_color;
+            dst[i + 4] = fs_reg(GRF, virtual_grf_alloc(1), color.type);
+            inst = emit(MOV(dst[i + 4], half(offset(color, i), 1)));
+            inst->force_writemask_all = true;
+            inst->saturate = key->clamp_fragment_color;
+         }
       }
       return 8;
    }
