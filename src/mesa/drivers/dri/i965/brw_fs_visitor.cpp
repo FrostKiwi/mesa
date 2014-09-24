@@ -3256,6 +3256,9 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
       write = emit(FS_OPCODE_FB_WRITE);
       write->base_mrf = 1;
    }
+   /* The omask register can throw the auto-detected width off.  We know
+    * what it actually is. */
+   load->exec_size = dispatch_width;
 
    write->mlen = load->regs_written;
    write->header_present = header_present;

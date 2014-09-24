@@ -402,6 +402,7 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
          offset += rel_offset * 32 + rel_suboffset;
          inst->src[arg].reg_offset = offset / 32;
          inst->src[arg].subreg_offset = offset % 32;
+         assert(inst->src[arg].reg_offset < virtual_grf_sizes[inst->src[arg].reg]);
       }
       break;
    default:

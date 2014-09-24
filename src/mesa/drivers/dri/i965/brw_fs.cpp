@@ -597,7 +597,6 @@ fs_reg::effective_width(const fs_inst *inst) const
       return inst->exec_size;
    case GRF:
    case HW_REG:
-      assert(this->width > 1 && this->width <= inst->exec_size);
       assert(this->width % 8 == 0);
       return this->width;
    case MRF:
@@ -1928,16 +1927,16 @@ fs_visitor::split_virtual_grfs()
    foreach_in_list(fs_inst, inst, &instructions) {
       if (inst->dst.file == GRF) {
          reg = vgrf_to_reg[inst->dst.reg] + inst->dst.reg_offset;
+         assert(new_reg_offset[reg] < virtual_grf_sizes[new_virtual_grf[reg]]);
          inst->dst.reg = new_virtual_grf[reg];
          inst->dst.reg_offset = new_reg_offset[reg];
-         assert(new_reg_offset[reg] < virtual_grf_sizes[new_virtual_grf[reg]]);
       }
       for (int i = 0; i < inst->sources; i++) {
 	 if (inst->src[i].file == GRF) {
             reg = vgrf_to_reg[inst->src[i].reg] + inst->src[i].reg_offset;
+            assert(new_reg_offset[reg] < virtual_grf_sizes[new_virtual_grf[reg]]);
             inst->src[i].reg = new_virtual_grf[reg];
             inst->src[i].reg_offset = new_reg_offset[reg];
-            assert(new_reg_offset[reg] < virtual_grf_sizes[new_virtual_grf[reg]]);
          }
       }
    }
@@ -2971,6 +2970,9 @@ fs_visitor::lower_load_payload()
                /* Mark i+4 as BAD_FILE so we don't emit a MOV for it */
                inst->src[i + 4].file = BAD_FILE;
             } else {
+               assert(dst.file != GRF ||
+                      dst.reg_offset < virtual_grf_sizes[dst.reg]);
+
                fs_inst *mov = MOV(dst, inst->src[i]);
                mov->force_writemask_all = true;
                inst->insert_before(block, mov);
