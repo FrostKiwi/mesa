@@ -348,13 +348,15 @@ fs_visitor::LOAD_PAYLOAD(const fs_reg &dst, fs_reg *src, int sources)
 
    fs_inst *inst = new(mem_ctx) fs_inst(SHADER_OPCODE_LOAD_PAYLOAD, exec_size,
                                         dst, src, sources);
+   inst->src_widths = ralloc_array(inst, uint8_t, sources);
    inst->regs_written = 0;
    for (int i = 0; i < sources; ++i) {
+      inst->src_widths[i] = inst->src[i].width;
       /* The LOAD_PAYLOAD instruction only really makes sense if we are
        * dealing with whole registers.  If this ever changes, we can deal
        * with it later.
        */
-      int size = src[i].effective_width(inst) * type_sz(src[i].type);
+      int size = inst->src[i].width * type_sz(inst->src[i].type);
       assert(size % 32 == 0);
       inst->regs_written += (size + 31) / 32;
    }
@@ -583,27 +585,6 @@ fs_reg::equals(const fs_reg &r) const
            memcmp(&fixed_hw_reg, &r.fixed_hw_reg, sizeof(fixed_hw_reg)) == 0 &&
            width == r.width &&
            stride == r.stride);
-}
-
-uint8_t
-fs_reg::effective_width(const fs_inst *inst) const
-{
-   switch (this->file) {
-   case BAD_FILE:
-      return 8;
-   case UNIFORM:
-   case IMM:
-      assert(this->width == 1);
-      return inst->exec_size;
-   case GRF:
-   case HW_REG:
-      assert(this->width % 8 == 0);
-      return this->width;
-   case MRF:
-      unreachable("MRF registers cannot be used as sources");
-   default:
-      unreachable("Invalid register file");
-   }
 }
 
 fs_reg &
@@ -911,6 +892,30 @@ fs_inst::is_partial_write() const
            !this->dst.is_contiguous());
 }
 
+uint8_t
+fs_inst::src_width(int arg) const
+{
+   if (src_widths)
+      return src_widths[arg];
+
+   switch (this->src[arg].file) {
+   case BAD_FILE:
+      return 8;
+   case UNIFORM:
+   case IMM:
+      assert(this->src[arg].width == 1);
+      return this->exec_size;
+   case GRF:
+   case HW_REG:
+      assert(this->src[arg].width % 8 == 0);
+      return this->src[arg].width;
+   case MRF:
+      unreachable("MRF registers cannot be used as sources");
+   default:
+      unreachable("Invalid register file");
+   }
+}
+
 int
 fs_inst::regs_read(fs_visitor *v, int arg) const
 {
@@ -924,26 +929,8 @@ fs_inst::regs_read(fs_visitor *v, int arg) const
       return mlen;
    }
 
-   switch (src[arg].file) {
-   case BAD_FILE:
-   case UNIFORM:
-   case IMM:
-      return 1;
-   case GRF:
-   case HW_REG:
-      if (src[arg].stride == 0) {
-         return 1;
-      } else {
-         int size = src[arg].width * src[arg].stride * type_sz(src[arg].type);
-         return (size + 31) / 32;
-      }
-   case MRF:
-      unreachable("MRF registers are not allowed as sources");
-      break;
-   default:
-      unreachable("Invalid register file");
-      break;
-   }
+   int size = src_width(arg) * src[arg].stride * type_sz(src[arg].type);
+   return (size + 31) / 32;
 }
 
 bool
@@ -2950,7 +2937,7 @@ fs_visitor::lower_load_payload()
          fs_reg dst = inst->dst;
 
          for (int i = 0; i < inst->sources; i++) {
-            dst.width = inst->src[i].effective_width(inst);
+            dst.width = inst->src_width(i);
             dst.type = inst->src[i].type;
 
             if (inst->src[i].file == BAD_FILE) {

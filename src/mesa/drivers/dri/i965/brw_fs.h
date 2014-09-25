@@ -104,14 +104,6 @@ public:
     */
    uint8_t width;
 
-   /**
-    * Returns the effective register width when used as a source in the
-    * given instruction.  Registers such as uniforms and immediates
-    * effectively take on the width of the instruction in which they are
-    * used.
-    */
-   uint8_t effective_width(const fs_inst *inst) const;
-
    /** Register region horizontal stride */
    uint8_t stride;
 };
@@ -255,6 +247,7 @@ public:
    bool is_send_from_grf() const;
    bool is_partial_write() const;
    int regs_read(fs_visitor *v, int arg) const;
+   uint8_t src_width(int arg) const;
    bool can_do_source_mods(struct brw_context *brw);
 
    bool reads_flag() const;
@@ -264,6 +257,13 @@ public:
    fs_reg *src;
 
    uint8_t sources; /**< Number of fs_reg sources. */
+
+   /* Used by LOAD_PAYLOAD instructions to store the widths of the input
+    * registers.  Since LOAD_PAYLOAD instructions take a variety of widths,
+    * we need to be able to keep track of it all even when optimizations
+    * swap stuff in and out.
+    */
+   uint8_t *src_widths;
 
    /**
     * Execution size of the instruction.  This is used by the generator to
