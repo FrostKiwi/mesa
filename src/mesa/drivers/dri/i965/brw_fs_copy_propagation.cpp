@@ -450,10 +450,13 @@ fs_visitor::try_constant_propagate(fs_inst *inst, acp_entry *entry)
       if (inst->src[i].negate || inst->src[i].abs)
          continue;
 
+      fs_reg val = entry->src;
+      val.effective_width = inst->src[i].effective_width;
+
       switch (inst->opcode) {
       case BRW_OPCODE_MOV:
       case SHADER_OPCODE_LOAD_PAYLOAD:
-         inst->src[i] = entry->src;
+         inst->src[i] = val;
          progress = true;
          break;
 
@@ -469,7 +472,7 @@ fs_visitor::try_constant_propagate(fs_inst *inst, acp_entry *entry)
       case BRW_OPCODE_SHR:
       case BRW_OPCODE_SUBB:
          if (i == 1) {
-            inst->src[i] = entry->src;
+            inst->src[i] = val;
             progress = true;
          }
          break;
@@ -482,7 +485,7 @@ fs_visitor::try_constant_propagate(fs_inst *inst, acp_entry *entry)
       case BRW_OPCODE_XOR:
       case BRW_OPCODE_ADDC:
          if (i == 1) {
-            inst->src[i] = entry->src;
+            inst->src[i] = val;
             progress = true;
          } else if (i == 0 && inst->src[1].file != IMM) {
             /* Fit this constant in by commuting the operands.
@@ -495,7 +498,7 @@ fs_visitor::try_constant_propagate(fs_inst *inst, acp_entry *entry)
                  inst->src[1].type == BRW_REGISTER_TYPE_UD))
                break;
             inst->src[0] = inst->src[1];
-            inst->src[1] = entry->src;
+            inst->src[1] = val;
             progress = true;
          }
          break;
@@ -503,7 +506,7 @@ fs_visitor::try_constant_propagate(fs_inst *inst, acp_entry *entry)
       case BRW_OPCODE_CMP:
       case BRW_OPCODE_IF:
          if (i == 1) {
-            inst->src[i] = entry->src;
+            inst->src[i] = val;
             progress = true;
          } else if (i == 0 && inst->src[1].file != IMM) {
             enum brw_conditional_mod new_cmod;
@@ -514,7 +517,7 @@ fs_visitor::try_constant_propagate(fs_inst *inst, acp_entry *entry)
                 * flipping the test
                 */
                inst->src[0] = inst->src[1];
-               inst->src[1] = entry->src;
+               inst->src[1] = val;
                inst->conditional_mod = new_cmod;
                progress = true;
             }
@@ -523,11 +526,11 @@ fs_visitor::try_constant_propagate(fs_inst *inst, acp_entry *entry)
 
       case BRW_OPCODE_SEL:
          if (i == 1) {
-            inst->src[i] = entry->src;
+            inst->src[i] = val;
             progress = true;
          } else if (i == 0 && inst->src[1].file != IMM) {
             inst->src[0] = inst->src[1];
-            inst->src[1] = entry->src;
+            inst->src[1] = val;
 
             /* If this was predicated, flipping operands means
              * we also need to flip the predicate.
@@ -549,14 +552,14 @@ fs_visitor::try_constant_propagate(fs_inst *inst, acp_entry *entry)
          assert(i == 0);
          if (inst->src[0].fixed_hw_reg.dw1.f != 0.0f) {
             inst->opcode = BRW_OPCODE_MOV;
-            inst->src[0] = entry->src;
+            inst->src[0] = val;
             inst->src[0].fixed_hw_reg.dw1.f = 1.0f / inst->src[0].fixed_hw_reg.dw1.f;
             progress = true;
          }
          break;
 
       case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD:
-         inst->src[i] = entry->src;
+         inst->src[i] = val;
          progress = true;
          break;
 
