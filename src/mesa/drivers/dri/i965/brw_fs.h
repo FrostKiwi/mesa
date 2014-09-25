@@ -110,7 +110,7 @@ public:
     * effectively take on the width of the instruction in which they are
     * used.
     */
-   uint8_t effective_width(const fs_inst *inst) const;
+   uint8_t effective_width;
 
    /** Register region horizontal stride */
    uint8_t stride;
