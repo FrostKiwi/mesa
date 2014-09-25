@@ -346,7 +346,7 @@ fs_generator::generate_math_gen4(fs_inst *inst,
       brw_set_default_compression_control(p, BRW_COMPRESSION_NONE);
       gen4_math(p, firsthalf(dst),
 	        op,
-	        inst->base_mrf + 1, firsthalf(src),
+	        inst->base_mrf, firsthalf(src),
 	        BRW_MATH_DATA_VECTOR,
 	        BRW_MATH_PRECISION_FULL);
       brw_set_default_compression_control(p, BRW_COMPRESSION_2NDHALF);
