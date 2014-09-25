@@ -2966,7 +2966,9 @@ fs_visitor::lower_load_payload()
                fs_reg compr4_dst = dst;
                compr4_dst.reg += BRW_MRF_COMPR4;
                compr4_dst.width = 16;
-               fs_inst *mov = MOV(compr4_dst, inst->src[i]);
+               fs_reg compr4_src = inst->src[i];
+               compr4_src.width = 16;
+               fs_inst *mov = MOV(compr4_dst, compr4_src);
                mov->force_writemask_all = true;
                inst->insert_before(block, mov);
                /* Mark i+4 as BAD_FILE so we don't emit a MOV for it */
