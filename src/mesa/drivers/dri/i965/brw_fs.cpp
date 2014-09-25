@@ -2946,10 +2946,39 @@ fs_visitor::lower_load_payload()
 {
    bool progress = false;
 
+   int vgrf_to_reg[virtual_grf_count];
+   int reg_count = 16; /* Leave room for MRF */
+   for (int i = 0; i < virtual_grf_count; ++i) {
+      vgrf_to_reg[i] = reg_count;
+      reg_count += virtual_grf_sizes[i];
+   }
+
+   struct {
+      bool force_writemask_all:1;
+      bool force_sechalf:1;
+   } metadata[reg_count];
+
    calculate_cfg();
 
    foreach_block_and_inst_safe (block, fs_inst, inst, cfg) {
+      int dst_reg;
+      if (inst->dst.file == MRF) {
+         dst_reg = inst->dst.reg;
+      } else if (inst->dst.file == GRF) {
+         dst_reg = vgrf_to_reg[inst->dst.reg];
+      }
+
+      if (inst->dst.file == MRF || inst->dst.file == GRF) {
+         bool force_sechalf = inst->exec_size == 16 && inst->force_sechalf;
+         for (int i = 0; i < inst->regs_written; ++i) {
+            metadata[dst_reg + i].force_sechalf = force_sechalf;
+            metadata[dst_reg + i].force_writemask_all = inst->force_writemask_all;
+            force_sechalf = inst->exec_size == 16 && !force_sechalf;
+         }
+      }
+
       if (inst->opcode == SHADER_OPCODE_LOAD_PAYLOAD) {
+         assert(inst->dst.file == MRF || inst->dst.file == GRF);
          fs_reg dst = inst->dst;
 
          for (int i = 0; i < inst->sources; i++) {
@@ -2969,13 +2998,30 @@ fs_visitor::lower_load_payload()
                fs_reg compr4_src = inst->src[i];
                compr4_src.width = 16;
                fs_inst *mov = MOV(compr4_dst, compr4_src);
-               mov->force_writemask_all = true;
                inst->insert_before(block, mov);
                /* Mark i+4 as BAD_FILE so we don't emit a MOV for it */
                inst->src[i + 4].file = BAD_FILE;
             } else {
                fs_inst *mov = MOV(dst, inst->src[i]);
-               mov->force_writemask_all = true;
+               if (inst->src[i].file == GRF) {
+                  int src_reg = vgrf_to_reg[inst->src[i].reg] +
+                                inst->src[i].reg_offset;
+                  assert(dst.width <= 8 ||
+                         (!metadata[src_reg].force_sechalf &&
+                          metadata[src_reg + 1].force_sechalf));
+                  mov->force_sechalf = metadata[src_reg].force_sechalf;
+                  mov->force_writemask_all = metadata[src_reg].force_writemask_all;
+                  metadata[dst_reg] = metadata[src_reg];
+                  if (dst.width == 16)
+                     metadata[dst_reg + 1] = metadata[src_reg + 1];
+               } else {
+                  metadata[dst_reg].force_writemask_all = false;
+                  metadata[dst_reg].force_sechalf = false;
+                  if (dst.width == 16) {
+                     metadata[dst_reg + 1].force_writemask_all = false;
+                     metadata[dst_reg + 1].force_sechalf = true;
+                  }
+               }
                inst->insert_before(block, mov);
             }
 

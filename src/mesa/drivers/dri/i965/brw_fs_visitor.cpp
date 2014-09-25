@@ -3046,7 +3046,6 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components)
             dst[len] = fs_reg(GRF, virtual_grf_alloc(color.width / 8),
                               color.type, color.width);
             inst = emit(MOV(dst[len], offset(color, i)));
-            inst->force_writemask_all = true;
             inst->saturate = key->clamp_fragment_color;
          } else if (color.width == 16) {
             /* We need two BAD_FILE slots for a 16-wide color */
@@ -3070,13 +3069,12 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components)
          if (colors_enabled & (1 << i)) {
             dst[i] = fs_reg(GRF, virtual_grf_alloc(1), color.type);
             inst = emit(MOV(dst[i], half(offset(color, i), 0)));
-            inst->force_writemask_all = true;
             inst->saturate = key->clamp_fragment_color;
 
             dst[i + 4] = fs_reg(GRF, virtual_grf_alloc(1), color.type);
             inst = emit(MOV(dst[i + 4], half(offset(color, i), 1)));
-            inst->force_writemask_all = true;
             inst->saturate = key->clamp_fragment_color;
+            inst->force_sechalf = true;
          }
       }
       return 8;
