@@ -2954,9 +2954,11 @@ fs_visitor::lower_load_payload()
    }
 
    struct {
+      bool written:1; /* Whether this register has ever been written */
       bool force_writemask_all:1;
       bool force_sechalf:1;
    } metadata[reg_count];
+   memset(metadata, 0, sizeof(metadata));
 
    calculate_cfg();
 
@@ -2969,11 +2971,14 @@ fs_visitor::lower_load_payload()
       }
 
       if (inst->dst.file == MRF || inst->dst.file == GRF) {
-         bool force_sechalf = inst->exec_size == 16 && inst->force_sechalf;
+         bool force_sechalf = inst->force_sechalf;
+         bool toggle_sechalf = inst->dst.width == 16 &&
+                               type_sz(inst->dst.type) == 4;
          for (int i = 0; i < inst->regs_written; ++i) {
+            metadata[dst_reg + i].written = true;
             metadata[dst_reg + i].force_sechalf = force_sechalf;
             metadata[dst_reg + i].force_writemask_all = inst->force_writemask_all;
-            force_sechalf = inst->exec_size == 16 && !force_sechalf;
+            force_sechalf = (toggle_sechalf != force_sechalf);
          }
       }
 
@@ -3006,14 +3011,16 @@ fs_visitor::lower_load_payload()
                if (inst->src[i].file == GRF) {
                   int src_reg = vgrf_to_reg[inst->src[i].reg] +
                                 inst->src[i].reg_offset;
-                  assert(dst.width <= 8 ||
-                         (!metadata[src_reg].force_sechalf &&
-                          metadata[src_reg + 1].force_sechalf));
                   mov->force_sechalf = metadata[src_reg].force_sechalf;
                   mov->force_writemask_all = metadata[src_reg].force_writemask_all;
                   metadata[dst_reg] = metadata[src_reg];
-                  if (dst.width == 16)
+                  if (dst.width * type_sz(dst.type) > 32) {
+                     assert((!metadata[src_reg].written ||
+                             !metadata[src_reg].force_sechalf) &&
+                            (!metadata[src_reg + 1].written ||
+                             metadata[src_reg + 1].force_sechalf));
                      metadata[dst_reg + 1] = metadata[src_reg + 1];
+                  }
                } else {
                   metadata[dst_reg].force_writemask_all = false;
                   metadata[dst_reg].force_sechalf = false;
