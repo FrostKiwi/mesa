@@ -113,17 +113,37 @@ brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
       class_sizes[class_count++] = 8;
    }
 
+   memset(screen->wm_reg_sets[index].class_to_ra_reg_range, 0,
+          sizeof(screen->wm_reg_sets[index].class_to_ra_reg_range));
+   int *class_to_ra_reg_range = screen->wm_reg_sets[index].class_to_ra_reg_range;
+
    /* Compute the total number of registers across all classes. */
    int ra_reg_count = 0;
    for (int i = 0; i < class_count; i++) {
-      screen->wm_reg_sets[index].class_first_reg[i] = ra_reg_count;
-      if (class_sizes[i] == 2) {
-         ra_reg_count += base_reg_count / 2;
+      if (devinfo->gen <= 5 && reg_width == 2) {
+         /* From the GM5 PRM:
+          *
+          * In order to reduce the hardware complexity, the following
+          * rules and restrictions apply to the compressed instruction:
+          * ...
+          * * Operand Alignment Rule: With the exceptions listed below, a
+          *   source/destination operand in general should be aligned to
+          *   even 256-bit physical register with a region size equal to
+          *   two 256-bit physical register
+          */
+         ra_reg_count += (base_reg_count - (class_sizes[i] - 1)) / 2;
       } else {
          ra_reg_count += base_reg_count - (class_sizes[i] - 1);
       }
+      /* Mark the last register. We'll fill in the beginnings later. */
+      class_to_ra_reg_range[class_sizes[i]] = ra_reg_count;
    }
-   screen->wm_reg_sets[index].class_first_reg[class_count] = ra_reg_count;
+
+   /* Fill out the rest of the range markers */
+   for (int i = 1; i < 17; ++i) {
+      if (class_to_ra_reg_range[i] == 0)
+         class_to_ra_reg_range[i] = class_to_ra_reg_range[i-1];
+   }
 
    uint8_t *ra_reg_to_grf = ralloc_array(screen, uint8_t, ra_reg_count);
    struct ra_regs *regs = ra_alloc_reg_set(screen, ra_reg_count);
@@ -139,24 +159,33 @@ brw_alloc_reg_set(struct intel_screen *screen, int reg_width)
    int pairs_base_reg = 0;
    int pairs_reg_count = 0;
    for (int i = 0; i < class_count; i++) {
-      if (class_sizes[i] == 2) {
-         int class_reg_count = base_reg_count / 2;
-         classes[i] = ra_alloc_reg_class(regs);
+      int class_reg_count = class_to_ra_reg_range[class_sizes[i]] -
+                            class_to_ra_reg_range[class_sizes[i] - 1];
+      classes[i] = ra_alloc_reg_class(regs);
 
+      /* Save this off for the aligned pair class at the end. */
+      if (class_sizes[i] == 2) {
+         pairs_base_reg = reg;
+         pairs_reg_count = class_reg_count;
+      }
+
+      if (devinfo->gen <= 5 && reg_width == 2) {
+         assert(class_reg_count == (base_reg_count - (class_sizes[i] - 1)) / 2);
          for (int j = 0; j < class_reg_count; j++) {
             ra_class_add_reg(regs, classes[i], reg);
 
             ra_reg_to_grf[reg] = j * 2;
 
-            ra_add_transitive_reg_conflict(regs, j * 2, reg);
-            ra_add_transitive_reg_conflict(regs, j * 2 + 1, reg);
+            for (int base_reg = j * 2;
+                 base_reg < j * 2 + class_sizes[i];
+                 base_reg++) {
+               ra_add_transitive_reg_conflict(regs, base_reg, reg);
+            }
 
             reg++;
          }
       } else {
-         int class_reg_count = base_reg_count - (class_sizes[i] - 1);
-         classes[i] = ra_alloc_reg_class(regs);
-
+         assert(class_reg_count == base_reg_count - (class_sizes[i] - 1));
          for (int j = 0; j < class_reg_count; j++) {
             ra_class_add_reg(regs, classes[i], reg);
 
@@ -501,7 +530,7 @@ fs_visitor::assign_regs(bool allow_spilling)
           */
          if (inst->opcode == FS_OPCODE_FB_WRITE && inst->eot) {
             int size = virtual_grf_sizes[inst->src[0].reg];
-            int reg = screen->wm_reg_sets[rsi].class_first_reg[size] - 1;
+            int reg = screen->wm_reg_sets[rsi].class_to_ra_reg_range[size] - 1;
             ra_set_node_reg(g, inst->src[0].reg, reg);
             break;
          }
