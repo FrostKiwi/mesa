@@ -568,6 +568,82 @@ intel_emit_linear_blit(struct brw_context *brw,
    }
 }
 
+/* Emits a blit that sets the color of a buffer.  The color is copied
+ * exactly with no conversion or blending.  This roughtly corresponds to
+ * doing a memset on the surface.
+ *
+ * The color parameter specifies the 32, 24, 16, or 8-bit color value to
+ * write.  When writing a 32-bit color, the set_rgb and set_alpha options
+ * controle whether the rgb components or alpha components are overwritten
+ * respectively. These two parameters do nothing for colors with less than
+ * 32 bits.
+ */
+bool
+intel_emit_color_blit(struct brw_context *brw,
+                      unsigned cpp,
+                      uint32_t color,
+                      int16_t dst_pitch,
+		      drm_intel_bo *dst_buffer,
+		      unsigned dst_offset, uint32_t dst_tiling,
+                      int16_t x, int16_t y, int16_t width, int16_t height,
+                      bool set_rgb, bool set_alpha)
+{
+   uint32_t BR13, CMD;
+   drm_intel_bo *aper_array[2];
+
+   if (dst_tiling != I915_TILING_NONE && (dst_offset & 4095))
+      return false;
+   if (cpp > 4)
+      return false;
+
+   CMD = XY_COLOR_BLT_CMD;
+   if (set_alpha)
+      CMD |= XY_BLT_WRITE_ALPHA;
+   if (set_rgb)
+      CMD |= XY_BLT_WRITE_RGB;
+
+   bool dst_y_tiled = dst_tiling == I915_TILING_Y;
+
+   BR13 = br13_for_cpp(cpp) | 0xf0 << 16;
+   if (dst_y_tiled) {
+      CMD |= XY_DST_TILED;
+      dst_pitch /= 4;
+   }
+   BR13 |= dst_pitch;
+
+   /* do space check before going any further */
+   aper_array[0] = brw->batch.bo;
+   aper_array[1] = dst_buffer;
+
+   if (drm_intel_bufmgr_check_aperture_space(aper_array,
+					     ARRAY_SIZE(aper_array)) != 0) {
+      intel_batchbuffer_flush(brw);
+   }
+
+   unsigned length = brw->gen >= 8 ? 7 : 6;
+
+   BEGIN_BATCH_BLT_TILED(length, dst_y_tiled, false);
+   OUT_BATCH(CMD | (length - 2));
+   OUT_BATCH(BR13);
+   OUT_BATCH(SET_FIELD(y, BLT_Y) | SET_FIELD(x, BLT_X));
+   OUT_BATCH(SET_FIELD(y + height, BLT_Y) | SET_FIELD(x + width, BLT_X));
+   if (brw->gen >= 8) {
+      OUT_RELOC64(dst_buffer,
+                  I915_GEM_DOMAIN_RENDER, I915_GEM_DOMAIN_RENDER,
+                  dst_offset);
+   } else {
+      OUT_RELOC(dst_buffer,
+                I915_GEM_DOMAIN_RENDER, I915_GEM_DOMAIN_RENDER,
+                dst_offset);
+   }
+   OUT_BATCH(0xffffffff); /* white, but only alpha gets written */
+   ADVANCE_BATCH_TILED(dst_y_tiled, false);
+
+   intel_batchbuffer_emit_mi_flush(brw);
+
+   return false;
+}
+
 /**
  * Used to initialize the alpha value of an ARGB8888 miptree after copying
  * into it from an XRGB8888 source.
@@ -578,57 +654,17 @@ intel_emit_linear_blit(struct brw_context *brw,
  */
 static void
 intel_miptree_set_alpha_to_one(struct brw_context *brw,
-                              struct intel_mipmap_tree *mt,
-                              int x, int y, int width, int height)
+                               struct intel_mipmap_tree *mt,
+                               int x, int y, int width, int height)
 {
-   uint32_t BR13, CMD;
-   int pitch, cpp;
-   drm_intel_bo *aper_array[2];
-
-   pitch = mt->pitch;
-   cpp = mt->cpp;
-
+   bool ok;
    DBG("%s dst:buf(%p)/%d %d,%d sz:%dx%d\n",
-       __FUNCTION__, mt->bo, pitch, x, y, width, height);
+       __FUNCTION__, mt->bo, mt->pitch, x, y, width, height);
 
-   BR13 = br13_for_cpp(cpp) | 0xf0 << 16;
-   CMD = XY_COLOR_BLT_CMD;
-   CMD |= XY_BLT_WRITE_ALPHA;
+   ok = intel_emit_color_blit(brw, mt->cpp, 0xffffffff, mt->pitch, mt->bo,
+                              mt->offset, mt->tiling, x, y, width, height,
+                              false, true);
 
-   if (mt->tiling != I915_TILING_NONE) {
-      CMD |= XY_DST_TILED;
-      pitch /= 4;
-   }
-   BR13 |= pitch;
-
-   /* do space check before going any further */
-   aper_array[0] = brw->batch.bo;
-   aper_array[1] = mt->bo;
-
-   if (drm_intel_bufmgr_check_aperture_space(aper_array,
-					     ARRAY_SIZE(aper_array)) != 0) {
-      intel_batchbuffer_flush(brw);
-   }
-
-   unsigned length = brw->gen >= 8 ? 7 : 6;
-   bool dst_y_tiled = mt->tiling == I915_TILING_Y;
-
-   BEGIN_BATCH_BLT_TILED(length, dst_y_tiled, false);
-   OUT_BATCH(CMD | (length - 2));
-   OUT_BATCH(BR13);
-   OUT_BATCH(SET_FIELD(y, BLT_Y) | SET_FIELD(x, BLT_X));
-   OUT_BATCH(SET_FIELD(y + height, BLT_Y) | SET_FIELD(x + width, BLT_X));
-   if (brw->gen >= 8) {
-      OUT_RELOC64(mt->bo,
-                  I915_GEM_DOMAIN_RENDER, I915_GEM_DOMAIN_RENDER,
-                  0);
-   } else {
-      OUT_RELOC(mt->bo,
-                I915_GEM_DOMAIN_RENDER, I915_GEM_DOMAIN_RENDER,
-                0);
-   }
-   OUT_BATCH(0xffffffff); /* white, but only alpha gets written */
-   ADVANCE_BATCH_TILED(dst_y_tiled, false);
-
-   intel_batchbuffer_emit_mi_flush(brw);
+   if (!ok)
+      _mesa_problem(&brw->ctx, "Failed to set alpha to 1");
 }
