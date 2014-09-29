@@ -50,6 +50,7 @@
 #include "brw_draw.h"
 #include "intel_fbo.h"
 #include "intel_batchbuffer.h"
+#include "intel_blit.h"
 
 #include "brw_blorp.h"
 
@@ -404,6 +405,39 @@ use_rectlist(struct brw_context *brw, bool enable)
    brw->state.dirty.brw |= BRW_NEW_FRAGMENT_PROGRAM;
 }
 
+/* This function attempts to do a fast clear using the blitter.
+ *
+ * The official documentation describes how to do a fast clear using the
+ * render pipeline by setting various bits and using a replicated send
+ * instruction with a rectlist.  Doing fast clears with the blitter isn't
+ * documented to work, but in practice it works just fine.  Doing it this
+ * way allows us to avoid touching GL state and just use the blit pipeline.
+ */
+static bool
+try_fast_clear_with_blitter(struct brw_context *brw,
+                            struct intel_mipmap_tree *mt)
+{
+   /* Out of bounds for the blitter */
+   if (mt->mcs_mt->pitch > INT16_MAX || mt->mcs_mt->total_height > INT16_MAX)
+      return false;
+
+   assert(mt->mcs_mt->tiling == I915_TILING_Y);
+   assert(mt->mcs_mt->cpp <= 4);
+
+   int full_width = mt->mcs_mt->pitch / mt->mcs_mt->cpp;
+   if (!intel_emit_color_blit(brw, mt->mcs_mt->cpp, 0xffffffff,
+                              mt->mcs_mt->pitch, mt->mcs_mt->bo,
+                              mt->mcs_mt->offset, mt->mcs_mt->tiling,
+                              0, 0,
+                              mt->mcs_mt->pitch / mt->mcs_mt->cpp,
+                              mt->mcs_mt->total_height,
+                              true, true))
+      return false;
+
+   mt->fast_clear_state = INTEL_FAST_CLEAR_STATE_CLEAR;
+   return true;
+}
+
 bool
 brw_meta_fast_clear(struct brw_context *brw, struct gl_framebuffer *fb,
                     GLbitfield buffers, bool partial_clear)
@@ -501,6 +535,9 @@ brw_meta_fast_clear(struct brw_context *brw, struct gl_framebuffer *fb,
           * updated the fast clear color above though.
           */
          if (irb->mt->fast_clear_state == INTEL_FAST_CLEAR_STATE_CLEAR)
+            continue;
+
+         if (try_fast_clear_with_blitter(brw, irb->mt))
             continue;
 
          /* Set fast_clear_state to RESOLVED so we don't try resolve them when
