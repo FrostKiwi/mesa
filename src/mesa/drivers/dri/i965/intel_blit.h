@@ -76,4 +76,14 @@ void intel_emit_linear_blit(struct brw_context *brw,
 			    unsigned int src_offset,
 			    unsigned int size);
 
+bool
+intel_emit_color_blit(struct brw_context *brw,
+                      unsigned cpp,
+                      uint32_t color,
+                      int16_t dst_pitch,
+		      drm_intel_bo *dst_buffer,
+		      unsigned dst_offset, uint32_t dst_tiling,
+                      int16_t x, int16_t y, int16_t width, int16_t height,
+                      bool set_rgb, bool set_alpha);
+
 #endif
