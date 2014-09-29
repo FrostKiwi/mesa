@@ -58,9 +58,9 @@ copy_image_with_blitter(struct brw_context *brw,
     *    represented per scan line’s worth of graphics data depends on the
     *    color depth.
     *
-    * Furthermore, intelEmitCopyBlit (which is called below) uses a signed
-    * 16-bit integer to represent buffer pitch, so it can only handle buffer
-    * pitches < 32k.
+    * Furthermore, intel_emit_copy_blit (which is called below) uses a
+    * signed 16-bit integer to represent buffer pitch, so it can only
+    * handle buffer pitches < 32k.
     *
     * As a result of these two limitations, we can only use the blitter to do
     * this copy when the miptree's pitch is less than 32k.
@@ -121,18 +121,18 @@ copy_image_with_blitter(struct brw_context *brw,
    dst_x += dst_image_x;
    dst_y += dst_image_y;
 
-   return intelEmitCopyBlit(brw,
-                            cpp,
-                            src_mt->pitch,
-                            src_mt->bo, src_mt->offset,
-                            src_mt->tiling,
-                            dst_mt->pitch,
-                            dst_mt->bo, dst_mt->offset,
-                            dst_mt->tiling,
-                            src_x, src_y,
-                            dst_x, dst_y,
-                            src_width, src_height,
-                            GL_COPY);
+   return intel_emit_copy_blit(brw,
+                               cpp,
+                               src_mt->pitch,
+                               src_mt->bo, src_mt->offset,
+                               src_mt->tiling,
+                               dst_mt->pitch,
+                               dst_mt->bo, dst_mt->offset,
+                               dst_mt->tiling,
+                               src_x, src_y,
+                               dst_x, dst_y,
+                               src_width, src_height,
+                               GL_COPY);
 }
 
 static void

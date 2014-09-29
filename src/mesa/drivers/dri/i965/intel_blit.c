@@ -195,9 +195,9 @@ intel_miptree_blit(struct brw_context *brw,
     *    represented per scan line’s worth of graphics data depends on the
     *    color depth.
     *
-    * Furthermore, intelEmitCopyBlit (which is called below) uses a signed
-    * 16-bit integer to represent buffer pitch, so it can only handle buffer
-    * pitches < 32k.
+    * Furthermore, intel_emit_copy_blit (which is called below) uses a
+    * signed 16-bit integer to represent buffer pitch, so it can only
+    * handle buffer pitches < 32k.
     *
     * As a result of these two limitations, we can only use the blitter to do
     * this copy when the miptree's pitch is less than 32k.
@@ -258,18 +258,18 @@ intel_miptree_blit(struct brw_context *brw,
       return false;
    }
 
-   if (!intelEmitCopyBlit(brw,
-                          src_mt->cpp,
-                          src_pitch,
-                          src_mt->bo, src_mt->offset,
-                          src_mt->tiling,
-                          dst_mt->pitch,
-                          dst_mt->bo, dst_mt->offset,
-                          dst_mt->tiling,
-                          src_x, src_y,
-                          dst_x, dst_y,
-                          width, height,
-                          logicop)) {
+   if (!intel_emit_copy_blit(brw,
+                             src_mt->cpp,
+                             src_pitch,
+                             src_mt->bo, src_mt->offset,
+                             src_mt->tiling,
+                             dst_mt->pitch,
+                             dst_mt->bo, dst_mt->offset,
+                             dst_mt->tiling,
+                             src_x, src_y,
+                             dst_x, dst_y,
+                             width, height,
+                             logicop)) {
       return false;
    }
 
@@ -286,20 +286,20 @@ intel_miptree_blit(struct brw_context *brw,
 /* Copy BitBlt
  */
 bool
-intelEmitCopyBlit(struct brw_context *brw,
-		  GLuint cpp,
-		  GLshort src_pitch,
-		  drm_intel_bo *src_buffer,
-		  GLuint src_offset,
-		  uint32_t src_tiling,
-		  GLshort dst_pitch,
-		  drm_intel_bo *dst_buffer,
-		  GLuint dst_offset,
-		  uint32_t dst_tiling,
-		  GLshort src_x, GLshort src_y,
-		  GLshort dst_x, GLshort dst_y,
-		  GLshort w, GLshort h,
-		  GLenum logic_op)
+intel_emit_copy_blit(struct brw_context *brw,
+                     GLuint cpp,
+                     GLshort src_pitch,
+                     drm_intel_bo *src_buffer,
+                     GLuint src_offset,
+                     uint32_t src_tiling,
+                     GLshort dst_pitch,
+                     drm_intel_bo *dst_buffer,
+                     GLuint dst_offset,
+                     uint32_t dst_tiling,
+                     GLshort src_x, GLshort src_y,
+                     GLshort dst_x, GLshort dst_y,
+                     GLshort w, GLshort h,
+                     GLenum logic_op)
 {
    GLuint CMD, BR13, pass = 0;
    int dst_y2 = dst_y + h;
@@ -435,17 +435,17 @@ intelEmitCopyBlit(struct brw_context *brw,
 }
 
 bool
-intelEmitImmediateColorExpandBlit(struct brw_context *brw,
-				  GLuint cpp,
-				  GLubyte *src_bits, GLuint src_size,
-				  GLuint fg_color,
-				  GLshort dst_pitch,
-				  drm_intel_bo *dst_buffer,
-				  GLuint dst_offset,
-				  uint32_t dst_tiling,
-				  GLshort x, GLshort y,
-				  GLshort w, GLshort h,
-				  GLenum logic_op)
+intel_emit_immediate_color_expand_blit(struct brw_context *brw,
+                                       GLuint cpp,
+                                       GLubyte *src_bits, GLuint src_size,
+                                       GLuint fg_color,
+                                       GLshort dst_pitch,
+                                       drm_intel_bo *dst_buffer,
+                                       GLuint dst_offset,
+                                       uint32_t dst_tiling,
+                                       GLshort x, GLshort y,
+                                       GLshort w, GLshort h,
+                                       GLenum logic_op)
 {
    int dwords = ALIGN(src_size, 8) / 4;
    uint32_t opcode, br13, blit_cmd;
@@ -540,13 +540,13 @@ intel_emit_linear_blit(struct brw_context *brw,
     */
    pitch = ROUND_DOWN_TO(MIN2(size, (1 << 15) - 1), 4);
    height = (pitch == 0) ? 1 : size / pitch;
-   ok = intelEmitCopyBlit(brw, 1,
-			  pitch, src_bo, src_offset, I915_TILING_NONE,
-			  pitch, dst_bo, dst_offset, I915_TILING_NONE,
-			  0, 0, /* src x/y */
-			  0, 0, /* dst x/y */
-			  pitch, height, /* w, h */
-			  GL_COPY);
+   ok = intel_emit_copy_blit(brw, 1,
+                             pitch, src_bo, src_offset, I915_TILING_NONE,
+                             pitch, dst_bo, dst_offset, I915_TILING_NONE,
+                             0, 0, /* src x/y */
+                             0, 0, /* dst x/y */
+                             pitch, height, /* w, h */
+                             GL_COPY);
    if (!ok)
       _mesa_problem(ctx, "Failed to linear blit %dx%d\n", pitch, height);
 
@@ -556,13 +556,13 @@ intel_emit_linear_blit(struct brw_context *brw,
    assert (size < (1 << 15));
    pitch = ALIGN(size, 4);
    if (size != 0) {
-      ok = intelEmitCopyBlit(brw, 1,
-			     pitch, src_bo, src_offset, I915_TILING_NONE,
-			     pitch, dst_bo, dst_offset, I915_TILING_NONE,
-			     0, 0, /* src x/y */
-			     0, 0, /* dst x/y */
-			     size, 1, /* w, h */
-			     GL_COPY);
+      ok = intel_emit_copy_blit(brw, 1,
+                                pitch, src_bo, src_offset, I915_TILING_NONE,
+                                pitch, dst_bo, dst_offset, I915_TILING_NONE,
+                                0, 0, /* src x/y */
+                                0, 0, /* dst x/y */
+                                size, 1, /* w, h */
+                                GL_COPY);
       if (!ok)
          _mesa_problem(ctx, "Failed to linear blit %dx%d\n", size, 1);
    }
