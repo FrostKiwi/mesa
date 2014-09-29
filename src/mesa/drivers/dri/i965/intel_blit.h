@@ -31,20 +31,20 @@
 #include "brw_context.h"
 
 bool
-intelEmitCopyBlit(struct brw_context *brw,
-                              GLuint cpp,
-                              GLshort src_pitch,
-                              drm_intel_bo *src_buffer,
-                              GLuint src_offset,
-			      uint32_t src_tiling,
-                              GLshort dst_pitch,
-                              drm_intel_bo *dst_buffer,
-                              GLuint dst_offset,
-			      uint32_t dst_tiling,
-                              GLshort srcx, GLshort srcy,
-                              GLshort dstx, GLshort dsty,
-                              GLshort w, GLshort h,
-			      GLenum logicop );
+intel_emit_copy_blit(struct brw_context *brw,
+                     GLuint cpp,
+                     GLshort src_pitch,
+                     drm_intel_bo *src_buffer,
+                     GLuint src_offset,
+                     uint32_t src_tiling,
+                     GLshort dst_pitch,
+                     drm_intel_bo *dst_buffer,
+                     GLuint dst_offset,
+                     uint32_t dst_tiling,
+                     GLshort srcx, GLshort srcy,
+                     GLshort dstx, GLshort dsty,
+                     GLshort w, GLshort h,
+                     GLenum logicop );
 
 bool intel_miptree_blit(struct brw_context *brw,
                         struct intel_mipmap_tree *src_mt,
@@ -57,17 +57,18 @@ bool intel_miptree_blit(struct brw_context *brw,
                         GLenum logicop);
 
 bool
-intelEmitImmediateColorExpandBlit(struct brw_context *brw,
-				  GLuint cpp,
-				  GLubyte *src_bits, GLuint src_size,
-				  GLuint fg_color,
-				  GLshort dst_pitch,
-				  drm_intel_bo *dst_buffer,
-				  GLuint dst_offset,
-				  uint32_t dst_tiling,
-				  GLshort x, GLshort y,
-				  GLshort w, GLshort h,
-				  GLenum logic_op);
+intel_emit_immediate_color_expand_blit(struct brw_context *brw,
+                                       GLuint cpp,
+                                       GLubyte *src_bits, GLuint src_size,
+                                       GLuint fg_color,
+                                       GLshort dst_pitch,
+                                       drm_intel_bo *dst_buffer,
+                                       GLuint dst_offset,
+                                       uint32_t dst_tiling,
+                                       GLshort x, GLshort y,
+                                       GLshort w, GLshort h,
+                                       GLenum logic_op);
+
 void intel_emit_linear_blit(struct brw_context *brw,
 			    drm_intel_bo *dst_bo,
 			    unsigned int dst_offset,

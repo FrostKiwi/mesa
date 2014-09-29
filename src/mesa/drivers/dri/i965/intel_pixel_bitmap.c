@@ -291,19 +291,19 @@ do_blit_bitmap( struct gl_context *ctx,
          if (count == 0)
 	    continue;
 
-	 if (!intelEmitImmediateColorExpandBlit(brw,
-						irb->mt->cpp,
-						(GLubyte *)stipple,
-						sz,
-						color,
-						irb->mt->pitch,
-						irb->mt->bo,
-						0,
-						irb->mt->tiling,
-						dstx + px,
-						dsty + py,
-						w, h,
-						logic_op)) {
+	 if (!intel_emit_immediate_color_expand_blit(brw,
+                                                     irb->mt->cpp,
+                                                     (GLubyte *)stipple,
+                                                     sz,
+                                                     color,
+                                                     irb->mt->pitch,
+                                                     irb->mt->bo,
+                                                     0,
+                                                     irb->mt->tiling,
+                                                     dstx + px,
+                                                     dsty + py,
+                                                     w, h,
+                                                     logic_op)) {
 	    return false;
 	 }
 
