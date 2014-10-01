@@ -405,6 +405,7 @@ use_rectlist(struct brw_context *brw, bool enable)
    brw->state.dirty.brw |= BRW_NEW_FRAGMENT_PROGRAM;
 }
 
+#if 0
 /* This function attempts to do a fast clear using the blitter.
  *
  * The official documentation describes how to do a fast clear using the
@@ -429,7 +430,7 @@ try_fast_clear_with_blitter(struct brw_context *brw,
                               mt->mcs_mt->pitch, mt->mcs_mt->bo,
                               mt->mcs_mt->offset, mt->mcs_mt->tiling,
                               0, 0,
-                              mt->mcs_mt->pitch / mt->mcs_mt->cpp,
+                              mt->mcs_mt->total_width,
                               mt->mcs_mt->total_height,
                               true, true))
       return false;
@@ -437,6 +438,7 @@ try_fast_clear_with_blitter(struct brw_context *brw,
    mt->fast_clear_state = INTEL_FAST_CLEAR_STATE_CLEAR;
    return true;
 }
+#endif
 
 bool
 brw_meta_fast_clear(struct brw_context *brw, struct gl_framebuffer *fb,
@@ -537,8 +539,35 @@ brw_meta_fast_clear(struct brw_context *brw, struct gl_framebuffer *fb,
          if (irb->mt->fast_clear_state == INTEL_FAST_CLEAR_STATE_CLEAR)
             continue;
 
-         if (try_fast_clear_with_blitter(brw, irb->mt))
-            continue;
+         get_fast_clear_rect(brw, fb, irb, &fast_clear_rect);
+
+         if (irb->mt->mcs_mt->pitch <= INT16_MAX &&
+             fast_clear_rect.y1 <= INT16_MAX) {
+            assert(irb->mt->mcs_mt->tiling == I915_TILING_Y);
+            assert(irb->mt->mcs_mt->cpp <= 4);
+
+            /* Technically, this isn't documented to work; however, it
+             * works in all of the cases I've seen.  The official
+             * documentation describes how to do a fast clear using the
+             * render pipeline by setting various bits and using a
+             * replicated send instruction with a rectlist.  Doing it this
+             * way allows us to avoid touching GL state (thanks to meta)
+             * and just use the blit pipeline.
+             */
+            if (intel_emit_color_blit(brw, irb->mt->mcs_mt->cpp, 0xffffffff,
+                                      irb->mt->mcs_mt->pitch,
+                                      irb->mt->mcs_mt->bo,
+                                      irb->mt->mcs_mt->offset,
+                                      irb->mt->mcs_mt->tiling,
+                                      fast_clear_rect.x0,
+                                      fast_clear_rect.y0,
+                                      fast_clear_rect.x1 - fast_clear_rect.x0,
+                                      fast_clear_rect.y1 - fast_clear_rect.y0,
+                                      true, true)) {
+               irb->mt->fast_clear_state = INTEL_FAST_CLEAR_STATE_CLEAR;
+               continue;
+            }
+         }
 
          /* Set fast_clear_state to RESOLVED so we don't try resolve them when
           * we draw, in case the mt is also bound as a texture.
@@ -546,7 +575,6 @@ brw_meta_fast_clear(struct brw_context *brw, struct gl_framebuffer *fb,
          irb->mt->fast_clear_state = INTEL_FAST_CLEAR_STATE_RESOLVED;
          irb->need_downsample = true;
          fast_clear_buffers |= 1 << index;
-         get_fast_clear_rect(brw, fb, irb, &fast_clear_rect);
          break;
 
       case REP_CLEAR:
