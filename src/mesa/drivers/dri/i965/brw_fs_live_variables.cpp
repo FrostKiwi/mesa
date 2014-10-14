@@ -94,6 +94,7 @@ fs_live_variables::setup_one_read(bblock_t *block, fs_inst *inst,
    }
 
    end[var] = MAX2(end[var], end_ip);
+   bd[block->num].reg_end[var] = MAX2(bd[block->num].reg_end[var], end_ip);
 
    /* The use[] bitset marks when the block makes use of a variable (VGRF
     * channel) without having completely defined that variable within the
@@ -111,6 +112,7 @@ fs_live_variables::setup_one_write(bblock_t *block, fs_inst *inst,
    assert(var < num_vars);
 
    start[var] = MIN2(start[var], ip);
+   bd[block->num].reg_start[var] = MIN2(bd[block->num].reg_start[var], ip);
 
    /* The def[] bitset marks when an initialization in a block completely
     * screens off previous updates of that variable (VGRF channel).
@@ -222,10 +224,12 @@ fs_live_variables::compute_start_end()
       for (int i = 0; i < num_vars; i++) {
 	 if (BITSET_TEST(bd[block->num].livein, i)) {
 	    start[i] = MIN2(start[i], block->start_ip);
+            bd[block->num].reg_start[i] = block->start_ip;
 	 }
 
 	 if (BITSET_TEST(bd[block->num].liveout, i)) {
 	    end[i] = MAX2(end[i], block->end_ip);
+            bd[block->num].reg_end[i] = block->end_ip;
 	 }
       }
    }
@@ -267,11 +271,17 @@ fs_live_variables::fs_live_variables(fs_visitor *v, const cfg_t *cfg)
    bd = rzalloc_array(mem_ctx, struct block_data, cfg->num_blocks);
 
    bitset_words = BITSET_WORDS(num_vars);
-   for (int i = 0; i < cfg->num_blocks; i++) {
-      bd[i].def = rzalloc_array(mem_ctx, BITSET_WORD, bitset_words);
-      bd[i].use = rzalloc_array(mem_ctx, BITSET_WORD, bitset_words);
-      bd[i].livein = rzalloc_array(mem_ctx, BITSET_WORD, bitset_words);
-      bd[i].liveout = rzalloc_array(mem_ctx, BITSET_WORD, bitset_words);
+   foreach_block(block, cfg) {
+      bd[block->num].def = rzalloc_array(mem_ctx, BITSET_WORD, bitset_words);
+      bd[block->num].use = rzalloc_array(mem_ctx, BITSET_WORD, bitset_words);
+      bd[block->num].livein = rzalloc_array(mem_ctx, BITSET_WORD, bitset_words);
+      bd[block->num].liveout = rzalloc_array(mem_ctx, BITSET_WORD, bitset_words);
+      bd[block->num].reg_start = ralloc_array(mem_ctx, int, num_vars);
+      bd[block->num].reg_end = rzalloc_array(mem_ctx, int, num_vars);
+      for (int i = 0; i < num_vars; i++) {
+         bd[block->num].reg_start[i] = MAX_INSTRUCTION;
+         bd[block->num].reg_end[i] = -1;
+      }
    }
 
    setup_def_use();
@@ -329,13 +339,29 @@ fs_visitor::calculate_live_intervals()
 bool
 fs_live_variables::vars_interfere(int a, int b)
 {
-   return !(end[b] <= start[a] ||
-            end[a] <= start[b]);
+   if (!(end[b] <= start[a] || end[a] <= start[b])) {
+      for (int i = 0; i < cfg->num_blocks; i++) {
+         if (!(bd[i].reg_end[b] <= bd[i].reg_start[a] ||
+               bd[i].reg_end[a] <= bd[i].reg_start[b]))
+            return true;
+      }
+   }
+
+   return false;
 }
 
 bool
 fs_visitor::virtual_grf_interferes(int a, int b)
 {
-   return !(virtual_grf_end[a] <= virtual_grf_start[b] ||
-            virtual_grf_end[b] <= virtual_grf_start[a]);
+   assert(live_intervals);
+
+   int var_a = live_intervals->var_from_vgrf[a];
+   int var_b = live_intervals->var_from_vgrf[b];
+
+   for (int i = 0; i < virtual_grf_sizes[a]; i++)
+      for (int j = 0; j < virtual_grf_sizes[b]; j++)
+         if (live_intervals->vars_interfere(var_a + i, var_b + j))
+            return true;
+
+   return false;
 }

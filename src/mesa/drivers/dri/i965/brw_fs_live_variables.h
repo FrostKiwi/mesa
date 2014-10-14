@@ -51,6 +51,9 @@ struct block_data {
 
    /** Which defs reach the exit point of the block. */
    BITSET_WORD *liveout;
+
+   int *reg_start;
+   int *reg_end;
 };
 
 class fs_live_variables {
