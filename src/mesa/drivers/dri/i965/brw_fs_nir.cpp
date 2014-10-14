@@ -316,7 +316,7 @@ fs_visitor::nir_setup_uniform(nir_variable *var)
          slots *= storage->array_elements;
 
       for (unsigned i = 0; i < slots; i++) {
-         stage_prog_data->param[index++] = &storage->storage[i].f;
+         stage_prog_data->param[index++] = &storage->storage[i];
       }
    }
 
@@ -350,7 +350,7 @@ fs_visitor::nir_setup_builtin_uniform(nir_variable *var)
          last_swiz = swiz;
 
          stage_prog_data->param[uniform_index++] =
-            &prog->Parameters->ParameterValues[index][swiz].f;
+            &prog->Parameters->ParameterValues[index][swiz];
       }
    }
 }
@@ -1546,8 +1546,7 @@ fs_visitor::nir_emit_texture(nir_tex_instr *instr)
    bool is_cube_array = instr->sampler_dim == GLSL_SAMPLER_DIM_CUBE &&
                         instr->is_array;
 
-   int lod_components;
-   bool has_offset = false;
+   int lod_components, offset_components = 0;
 
    fs_reg coordinate, shadow_comparitor, lod, lod2, sample_index, mcs, offset;
 
@@ -1577,8 +1576,11 @@ fs_visitor::nir_emit_texture(nir_tex_instr *instr)
          sample_index = src;
          break;
       case nir_tex_src_offset:
-         has_offset = true;
          offset = src;
+         if (instr->is_array)
+            offset_components = instr->coord_components - 1;
+         else
+            offset_components = instr->coord_components;
          break;
       case nir_tex_src_projector:
          unreachable("should be lowered");
@@ -1596,13 +1598,14 @@ fs_visitor::nir_emit_texture(nir_tex_instr *instr)
          mcs = fs_reg(0u);
    }
 
-   int *const_offset = NULL;
-   for (unsigned i = 0; i < 4; i++)
+   for (unsigned i = 0; i < 4; i++) {
       if (instr->const_offset[i] != 0) {
-         const_offset = instr->const_offset;
-         has_offset = true;
+         assert(offset_components == 0);
+         offset = fs_reg(instr->const_offset[i]);
+         offset_components = 1;
          break;
       }
+   }
 
    enum glsl_base_type dest_base_type;
    switch (instr->dest_type) {
@@ -1639,18 +1642,10 @@ fs_visitor::nir_emit_texture(nir_tex_instr *instr)
       unreachable("unknown texture opcode");
    }
 
-   int offset_components = 0;
-   if (has_offset) {
-      if (instr->is_array)
-         offset_components = instr->coord_components - 1;
-      else
-         offset_components = instr->coord_components;
-   }
-
    emit_texture(op, dest_type, coordinate, instr->coord_components,
-               shadow_comparitor, lod, lod2, lod_components, sample_index,
-               has_offset, offset, const_offset, offset_components, mcs,
-               gather_component, is_cube_array, is_rect, sampler, texunit);
+                shadow_comparitor, lod, lod2, lod_components, sample_index,
+                offset,offset_components, mcs, gather_component,
+                is_cube_array, is_rect, sampler, fs_reg(sampler), texunit);
 
    fs_reg dest = get_nir_dest(instr->dest);
    dest.type = this->result.type;
