@@ -3608,6 +3608,8 @@ fs_visitor::run()
             ir->accept(this);
          }
 #else
+         if (!brw->use_rep_send)
+            no16("Cannot do 16-wide in NIR yet");
          emit_nir_code();
 #endif
       } else {
