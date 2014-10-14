@@ -229,10 +229,10 @@ nir_visitor::visit(ir_variable *ir)
    var->type = ir->type;
    var->name = ralloc_strdup(var, ir->name);
 
-   if (ir->max_ifc_array_access != NULL) {
+   if (ir->is_interface_instance() && ir->get_max_ifc_array_access() != NULL) {
       unsigned size = ir->get_interface_type()->length;
       var->max_ifc_array_access = ralloc_array(var, unsigned, size);
-      memcpy(var->max_ifc_array_access, ir->max_ifc_array_access,
+      memcpy(var->max_ifc_array_access, ir->get_max_ifc_array_access(),
              size * sizeof(unsigned));
    } else {
       var->max_ifc_array_access = NULL;
@@ -317,22 +317,24 @@ nir_visitor::visit(ir_variable *ir)
    var->data.location = ir->data.location;
    var->data.index = ir->data.index;
    var->data.binding = ir->data.binding;
-   var->data.atomic.buffer_index = ir->data.atomic.buffer_index;
+   /* XXX Get rid of buffer_index */
+   var->data.atomic.buffer_index = ir->data.binding;
    var->data.atomic.offset = ir->data.atomic.offset;
-   var->data.image.read_only = ir->data.image.read_only;
-   var->data.image.write_only = ir->data.image.write_only;
-   var->data.image.coherent = ir->data.image.coherent;
-   var->data.image._volatile = ir->data.image._volatile;
-   var->data.image.restrict_flag = ir->data.image.restrict_flag;
-   var->data.image.format = ir->data.image.format;
+   var->data.image.read_only = ir->data.image_read_only;
+   var->data.image.write_only = ir->data.image_write_only;
+   var->data.image.coherent = ir->data.image_coherent;
+   var->data.image._volatile = ir->data.image_volatile;
+   var->data.image.restrict_flag = ir->data.image_restrict;
+   var->data.image.format = ir->data.image_format;
    var->data.max_array_access = ir->data.max_array_access;
 
-   var->num_state_slots = ir->num_state_slots;
+   var->num_state_slots = ir->get_num_state_slots();
    var->state_slots = ralloc_array(var, nir_state_slot, var->num_state_slots);
+   ir_state_slot *state_slots = ir->get_state_slots();
    for (unsigned i = 0; i < var->num_state_slots; i++) {
       for (unsigned j = 0; j < 5; j++)
-         var->state_slots[i].tokens[j] = ir->state_slots[i].tokens[j];
-      var->state_slots[i].swizzle = ir->state_slots[i].swizzle;
+         var->state_slots[i].tokens[j] = state_slots[i].tokens[j];
+      var->state_slots[i].swizzle = state_slots[i].swizzle;
    }
 
    var->constant_value = constant_copy(ir->constant_value, var);
