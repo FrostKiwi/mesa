@@ -93,7 +93,6 @@ fs_live_variables::setup_one_read(bblock_t *block, fs_inst *inst,
       end_ip++;
    }
 
-   start[var] = MIN2(start[var], ip);
    end[var] = MAX2(end[var], end_ip);
 
    /* The use[] bitset marks when the block makes use of a variable (VGRF
@@ -112,7 +111,6 @@ fs_live_variables::setup_one_write(bblock_t *block, fs_inst *inst,
    assert(var < num_vars);
 
    start[var] = MIN2(start[var], ip);
-   end[var] = MAX2(end[var], ip);
 
    /* The def[] bitset marks when an initialization in a block completely
     * screens off previous updates of that variable (VGRF channel).
