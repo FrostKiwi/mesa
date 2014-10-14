@@ -27,11 +27,11 @@
 
 #pragma once
 
-#include "main/hash_table.h"
+#include "util/hash_table.h"
 #include "main/set.h"
 #include "../list.h"
 #include "GL/gl.h" /* GLenum */
-#include "../ralloc.h"
+#include "util/ralloc.h"
 #include "nir_types.h"
 #include <stdio.h>
 
