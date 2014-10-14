@@ -126,6 +126,8 @@ fs_visitor::nir_setup_inputs(nir_shader *shader)
 void
 fs_visitor::nir_emit_interpolation(nir_variable *var, fs_reg *varying)
 {
+   brw_wm_prog_data *prog_data = (brw_wm_prog_data*) this->prog_data;
+   brw_wm_prog_key *key = (brw_wm_prog_key*) this->key;
    fs_reg reg = *varying;
    reg.type = brw_type_for_base_type(var->type->get_scalar_type());
 
@@ -218,6 +220,7 @@ fs_visitor::nir_emit_interpolation(nir_variable *var, fs_reg *varying)
 void
 fs_visitor::nir_setup_outputs(nir_shader *shader)
 {
+   brw_wm_prog_key *key = (brw_wm_prog_key*) this->key;
    fs_reg reg = nir_outputs;
 
    struct hash_entry *entry;
@@ -332,7 +335,7 @@ fs_visitor::nir_setup_builtin_uniform(nir_variable *var)
       /* This state reference has already been setup by ir_to_mesa, but we'll
        * get the same index back here.
        */
-      int index = _mesa_add_state_reference(this->fp->Base.Parameters,
+      int index = _mesa_add_state_reference(this->prog->Parameters,
                                             (gl_state_index *)slots[i].tokens);
 
       /* Add each of the unique swizzles of the element as a parameter.
@@ -347,7 +350,7 @@ fs_visitor::nir_setup_builtin_uniform(nir_variable *var)
          last_swiz = swiz;
 
          stage_prog_data->param[uniform_index++] =
-            &fp->Base.Parameters->ParameterValues[index][swiz].f;
+            &prog->Parameters->ParameterValues[index][swiz].f;
       }
    }
 }
@@ -631,7 +634,7 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       if (brw->gen >= 7)
          no16("SIMD16 explicit accumulator operands unsupported\n");
 
-      struct brw_reg acc = retype(brw_acc_reg(), result.type);
+      struct brw_reg acc = retype(brw_acc_reg(dispatch_width), result.type);
 
       emit_percomp(MUL(acc, op[0], op[1]), instr->dest.write_mask);
       emit_percomp(MACH(reg_null_d, op[0], op[1]), instr->dest.write_mask);
@@ -644,7 +647,7 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       if (brw->gen >= 7)
          no16("SIMD16 explicit accumulator operands unsupported\n");
 
-      struct brw_reg acc = retype(brw_acc_reg(), result.type);
+      struct brw_reg acc = retype(brw_acc_reg(dispatch_width), result.type);
 
       emit_percomp(MUL(acc, op[0], op[1]), instr->dest.write_mask);
       emit_percomp(MACH(result, op[0], op[1]), instr->dest.write_mask);
@@ -661,7 +664,8 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       if (brw->gen >= 7)
          no16("SIMD16 explicit accumulator operands unsupported\n");
 
-      struct brw_reg acc = retype(brw_acc_reg(), BRW_REGISTER_TYPE_UD);
+      struct brw_reg acc = retype(brw_acc_reg(dispatch_width),
+                                  BRW_REGISTER_TYPE_UD);
 
       emit_percomp(ADDC(reg_null_ud, op[0], op[1]), instr->dest.write_mask);
       emit_percomp(MOV(result, fs_reg(acc)), instr->dest.write_mask);
@@ -672,7 +676,8 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       if (brw->gen >= 7)
          no16("SIMD16 explicit accumulator operands unsupported\n");
 
-      struct brw_reg acc = retype(brw_acc_reg(), BRW_REGISTER_TYPE_UD);
+      struct brw_reg acc = retype(brw_acc_reg(dispatch_width),
+                                  BRW_REGISTER_TYPE_UD);
 
       emit_percomp(SUBB(reg_null_ud, op[0], op[1]), instr->dest.write_mask);
       emit_percomp(MOV(result, fs_reg(acc)), instr->dest.write_mask);
@@ -1367,7 +1372,7 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
    case nir_intrinsic_load_ubo_vec2:
    case nir_intrinsic_load_ubo_vec3:
    case nir_intrinsic_load_ubo_vec4: {
-      fs_reg surf_index = fs_reg(prog_data->base.binding_table.ubo_start +
+      fs_reg surf_index = fs_reg(prog_data->binding_table.ubo_start +
                                  (unsigned) instr->const_index[0]);
       fs_reg packed_consts = fs_reg(this, glsl_type::float_type);
       packed_consts.type = dest.type;
@@ -1399,7 +1404,7 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
    case nir_intrinsic_load_ubo_vec2_indirect:
    case nir_intrinsic_load_ubo_vec3_indirect:
    case nir_intrinsic_load_ubo_vec4_indirect: {
-      fs_reg surf_index = fs_reg(prog_data->base.binding_table.ubo_start +
+      fs_reg surf_index = fs_reg(prog_data->binding_table.ubo_start +
                                  instr->const_index[0]);
       /* Turn the byte offset into a dword offset. */
       unsigned base_offset = instr->const_index[1] / 4;
@@ -1525,6 +1530,7 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
 void
 fs_visitor::nir_emit_texture(nir_tex_instr *instr)
 {
+   brw_wm_prog_key *key = (brw_wm_prog_key*) this->key;
    int sampler = instr->sampler_index;
 
    /* FINISHME: We're failing to recompile our programs when the sampler is
@@ -1585,7 +1591,7 @@ fs_visitor::nir_emit_texture(nir_tex_instr *instr)
 
    if (instr->op == nir_texop_txf_ms) {
       if (brw->gen >= 7 && key->tex.compressed_multisample_layout_mask & (1<<sampler))
-         mcs = emit_mcs_fetch(coordinate, instr->coord_components, sampler);
+         mcs = emit_mcs_fetch(coordinate, instr->coord_components, fs_reg(sampler));
       else
          mcs = fs_reg(0u);
    }
@@ -1659,13 +1665,13 @@ fs_visitor::nir_emit_load_const(nir_load_const_instr *instr)
    dest.type = BRW_REGISTER_TYPE_UD;
    if (instr->array_elems == 0) {
       for (unsigned i = 0; i < instr->num_components; i++) {
-         emit(MOV(dest, instr->value.u[i]));
+         emit(MOV(dest, fs_reg(instr->value.u[i])));
          dest.reg_offset++;
       }
    } else {
       for (unsigned i = 0; i < instr->array_elems; i++) {
          for (unsigned j = 0; j < instr->num_components; j++) {
-            emit(MOV(dest, instr->array[i].u[j]));
+            emit(MOV(dest, fs_reg(instr->array[i].u[j])));
             dest.reg_offset++;
          }
       }
