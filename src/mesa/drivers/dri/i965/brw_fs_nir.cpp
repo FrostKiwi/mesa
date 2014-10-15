@@ -497,6 +497,8 @@ brw_type_for_nir_type(nir_alu_type type)
 void
 fs_visitor::nir_emit_alu(nir_alu_instr *instr)
 {
+   struct brw_wm_prog_key *fs_key = (struct brw_wm_prog_key *) this->key;
+
    fs_reg op[3];
    fs_reg dest = retype(get_nir_dest(instr->dest.dest),
                         brw_type_for_nir_type(nir_op_infos[instr->op].output_type));
@@ -605,12 +607,40 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       break;
 
    case nir_op_fddx:
-      emit_percomp(FS_OPCODE_DDX, result, op[0], instr->dest.write_mask,
-                   instr->dest.saturate);
+      if (fs_key->high_quality_derivatives)
+         emit_percomp(FS_OPCODE_DDX_FINE, result, op[0],
+                      instr->dest.write_mask, instr->dest.saturate);
+      else
+         emit_percomp(FS_OPCODE_DDX_COARSE, result, op[0],
+                      instr->dest.write_mask, instr->dest.saturate);
+      break;
+   case nir_op_fddx_fine:
+      emit_percomp(FS_OPCODE_DDX_FINE, result, op[0],
+                   instr->dest.write_mask, instr->dest.saturate);
+      break;
+   case nir_op_fddx_coarse:
+      emit_percomp(FS_OPCODE_DDX_COARSE, result, op[0],
+                   instr->dest.write_mask, instr->dest.saturate);
       break;
    case nir_op_fddy:
-      emit_percomp(FS_OPCODE_DDY, result, op[0], instr->dest.write_mask,
-                   instr->dest.saturate);
+      if (fs_key->high_quality_derivatives)
+         emit_percomp(FS_OPCODE_DDY_FINE, result, op[0],
+                      fs_reg(fs_key->render_to_fbo),
+                      instr->dest.write_mask, instr->dest.saturate);
+      else
+         emit_percomp(FS_OPCODE_DDY_COARSE, result, op[0],
+                      fs_reg(fs_key->render_to_fbo),
+                      instr->dest.write_mask, instr->dest.saturate);
+      break;
+   case nir_op_fddy_fine:
+      emit_percomp(FS_OPCODE_DDY_FINE, result, op[0],
+                   fs_reg(fs_key->render_to_fbo),
+                   instr->dest.write_mask, instr->dest.saturate);
+      break;
+   case nir_op_fddy_coarse:
+      emit_percomp(FS_OPCODE_DDY_COARSE, result, op[0],
+                   fs_reg(fs_key->render_to_fbo),
+                   instr->dest.write_mask, instr->dest.saturate);
       break;
 
    case nir_op_fadd:
