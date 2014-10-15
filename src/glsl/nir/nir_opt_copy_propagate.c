@@ -61,7 +61,7 @@ is_swizzleless_move(nir_alu_instr *instr)
 
    for (unsigned i = 0; i < 4; i++) {
       if (!((instr->dest.write_mask >> i) & 1))
-         break;
+         continue;
       if (instr->src[0].swizzle[i] != i)
          return false;
    }
