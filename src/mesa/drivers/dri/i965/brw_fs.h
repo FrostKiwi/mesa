@@ -463,7 +463,11 @@ public:
    fs_reg *emit_frontfacing_interpolation();
    fs_reg *emit_samplepos_setup();
    fs_reg *emit_sampleid_setup();
-   fs_reg *emit_general_interpolation(ir_variable *ir);
+   void emit_general_interpolation(fs_reg attr, const char *name,
+                                   const glsl_type *type,
+                                   glsl_interp_qualifier interpolation_mode,
+                                   int location, bool mod_centroid,
+                                   bool mod_sample);
    void emit_interpolation_setup_gen4();
    void emit_interpolation_setup_gen6();
    void compute_sample_position(fs_reg dst, fs_reg int_sample_pos);
