@@ -841,6 +841,7 @@ handle_jump(nir_block *block)
             unlink_blocks(last_block, after_block);
       }
    } else {
+      assert(jump_instr->type == nir_jump_return);
       link_blocks(block, impl->end_block, NULL);
    }
 }
