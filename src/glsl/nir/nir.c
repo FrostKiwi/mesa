@@ -1335,6 +1335,7 @@ nir_index_local_regs(nir_function_impl *impl)
    foreach_list_typed(nir_register, reg, node, &impl->registers) {
       reg->index = index++;
    }
+   impl->reg_alloc = index;
 }
 
 void
@@ -1344,6 +1345,7 @@ nir_index_global_regs(nir_shader *shader)
    foreach_list_typed(nir_register, reg, node, &shader->registers) {
       reg->index = index++;
    }
+   shader->reg_alloc = index;
 }
 
 static bool
@@ -1766,4 +1768,5 @@ nir_index_ssa_defs(nir_function_impl *impl)
 {
    unsigned index = 0;
    nir_foreach_block(impl, index_ssa_block, &index);
+   impl->ssa_alloc = index;
 }
