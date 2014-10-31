@@ -85,12 +85,12 @@ _mesa_clear_texture_object(struct gl_context *ctx,
                            struct gl_texture_object *obj);
 
 extern void
-_mesa_reference_texobj_(struct gl_texture_object **ptr,
-                        struct gl_texture_object *tex);
+_mesa_reference_texobj_( struct gl_texture_object **ptr,
+                         struct gl_texture_object *tex );
 
 static inline void
-_mesa_reference_texobj(struct gl_texture_object **ptr,
-                       struct gl_texture_object *tex)
+_mesa_reference_texobj( struct gl_texture_object **ptr,
+                        struct gl_texture_object *tex )
 {
    if (*ptr != tex)
       _mesa_reference_texobj_(ptr, tex);
@@ -190,6 +190,11 @@ _mesa_unlock_context_textures( struct gl_context *ctx );
 extern void
 _mesa_lock_context_textures( struct gl_context *ctx );
 
+extern void
+_mesa_bind_texture_unit( struct gl_context *ctx,
+                         GLuint unit,
+                         struct gl_texture_object *texObj );
+
 /*@}*/
 
 /**
@@ -210,6 +215,8 @@ _mesa_DeleteTextures( GLsizei n, const GLuint *textures );
 extern void GLAPIENTRY
 _mesa_BindTexture( GLenum target, GLuint texture );
 
+extern void GLAPIENTRY
+_mesa_BindTextureUnit( GLuint unit, GLuint texture );
 
 extern void GLAPIENTRY
 _mesa_BindTextures( GLuint first, GLsizei count, const GLuint *textures );
