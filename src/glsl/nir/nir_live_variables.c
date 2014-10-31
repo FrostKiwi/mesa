@@ -51,8 +51,8 @@ index_dest(nir_dest *dest, void *void_state)
 {
    struct live_variables_state *state = void_state;
 
-   assert(dest->is_ssa);
-   dest->ssa.live_index = state->num_ssa_defs++;
+   if (dest->is_ssa)
+      dest->ssa.live_index = state->num_ssa_defs++;
 
    return true;
 }
@@ -95,7 +95,9 @@ set_src_live(nir_src *src, void *void_live)
 {
    BITSET_WORD *live = void_live;
 
-   assert(src->is_ssa);
+   if (!src->is_ssa)
+      return true;
+
    if (src->ssa->live_index == 0)
       return true;   /* undefined variables are never live */
 
@@ -109,8 +111,8 @@ set_dest_dead(nir_dest *dest, void *void_live)
 {
    BITSET_WORD *live = void_live;
 
-   assert(dest->is_ssa);
-   BITSET_CLEAR(live, dest->ssa.live_index);
+   if (dest->is_ssa)
+      BITSET_CLEAR(live, dest->ssa.live_index);
 
    return true;
 }
