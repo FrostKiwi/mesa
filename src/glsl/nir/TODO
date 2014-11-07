@@ -1,0 +1,32 @@
+Rework variable lowering
+========================
+
+We want to move variable dereference lowering to happen durring the
+optimization loop after we are already in SSA form.  That way, as various
+variable cease to be used indirectly (due to constant folding, loop
+unrolling, etc.) they can be lowered to SSA values.  At the end, we'll
+lower whatever arrays are left to register arrays and hand those to the
+backend.
+
+Ultimately, we'd like to just go directly from glsl IR to SSA-based NIR and
+skip registers entirely until we go out of SSA.
+
+
+Vectorize intrinsics
+====================
+
+Right now, all intrinsics have an explicit number of components that they
+act on.  Therefore, if we want to have an intrinsic that can work on
+anywhere between 1 and 4 components, we need 4 intrinsics.  Instead, we
+could simply allow intrinsics to be vectorized in a way similar to the way
+ALU ops already work.  This would remove the need for quite as many
+intrinsics and make several things substantially simpler.
+
+Add support for immediate registers
+===================================
+
+Right now, the only way to get immediates is through immediate load
+intrinsics.  This works very will in SSA where it's easy to get to the
+definition of a variable from its use.  However, this is really bad for
+backends that aren't SSA because it requires them to do constant folding
+for every single constant in all of NIR.
