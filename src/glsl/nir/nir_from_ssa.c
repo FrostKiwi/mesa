@@ -470,6 +470,12 @@ get_register_for_ssa_def(nir_ssa_def *def, struct from_ssa_state *state)
    if (entry) {
       return (nir_register *)entry->data;
    } else {
+      /* We leave load_const SSA values alone.  They act as immediates to
+       * the backend.  If it got coalesced into a phi, that's ok.
+       */
+      if (def->parent_instr->type == nir_instr_type_load_const)
+         return NULL;
+
       nir_register *reg = nir_local_reg_create(state->current_impl);
       reg->name = def->name;
       reg->num_components = def->num_components;
@@ -487,12 +493,18 @@ rewrite_ssa_src(nir_src *src, void *void_state)
    struct from_ssa_state *state = void_state;
 
    if (src->is_ssa) {
-      /* We don't need to remove it from the uses set because that is going
-       * away.  We just need to add it to the one for the register. */
       nir_register *reg = get_register_for_ssa_def(src->ssa, state);
+
+      if (reg == NULL) {
+         assert(src->ssa->parent_instr->type == nir_instr_type_load_const);
+         return true;
+      }
+
       memset(src, 0, sizeof *src);
       src->reg.reg = reg;
 
+      /* We don't need to remove it from the uses set because that is going
+       * away.  We just need to add it to the one for the register. */
       _mesa_set_add(reg->uses, _mesa_hash_pointer(state->current_instr),
                     state->current_instr);
    }
@@ -506,10 +518,16 @@ rewrite_ssa_dest(nir_dest *dest, void *void_state)
    struct from_ssa_state *state = void_state;
 
    if (dest->is_ssa) {
+      nir_register *reg = get_register_for_ssa_def(&dest->ssa, state);
+
+      if (reg == NULL) {
+         assert(dest->ssa.parent_instr->type == nir_instr_type_load_const);
+         return true;
+      }
+
       _mesa_set_destroy(dest->ssa.uses, NULL);
       _mesa_set_destroy(dest->ssa.if_uses, NULL);
 
-      nir_register *reg = get_register_for_ssa_def(&dest->ssa, state);
       memset(dest, 0, sizeof *dest);
       dest->reg.reg = reg;
 
@@ -537,7 +555,6 @@ resolve_registers_block(nir_block *block, void *void_state)
           instr->type == nir_instr_type_phi) {
          nir_instr_remove(instr);
          ralloc_steal(state->dead_ctx, instr);
-         continue;
       }
    }
    state->current_instr = NULL;
