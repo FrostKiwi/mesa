@@ -37,33 +37,6 @@ struct cse_state {
 };
 
 static bool
-nir_srcs_equal(nir_src src1, nir_src src2)
-{
-   if (src1.is_ssa) {
-      if (src2.is_ssa) {
-         return src1.ssa == src2.ssa;
-      } else {
-         return false;
-      }
-   } else {
-      if (src2.is_ssa) {
-         return false;
-      } else {
-         if ((src1.reg.indirect == NULL) != (src2.reg.indirect == NULL))
-            return false;
-
-         if (src1.reg.indirect) {
-            if (!nir_srcs_equal(*src1.reg.indirect, *src2.reg.indirect))
-               return false;
-         }
-
-         return src1.reg.reg == src2.reg.reg &&
-                src1.reg.base_offset == src2.reg.base_offset;
-      }
-   }
-}
-
-static bool
 nir_alu_srcs_equal(nir_alu_src src1, nir_alu_src src2, uint8_t read_mask)
 {
    if (src1.abs != src2.abs || src1.negate != src2.negate)
