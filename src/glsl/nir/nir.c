@@ -536,6 +536,7 @@ static nir_deref_var *
 copy_deref_var(void *mem_ctx, nir_deref_var *deref)
 {
    nir_deref_var *ret = nir_deref_var_create(mem_ctx, deref->var);
+   ret->deref.type = deref->deref.type;
    if (deref->deref.child)
       ret->deref.child = nir_copy_deref(mem_ctx, deref->deref.child);
    return ret;
@@ -546,8 +547,10 @@ copy_deref_array(void *mem_ctx, nir_deref_array *deref)
 {
    nir_deref_array *ret = nir_deref_array_create(mem_ctx);
    ret->base_offset = deref->base_offset;
-   if (deref->has_indirect)
+   if (deref->has_indirect) {
+      ret->has_indirect = true;
       ret->indirect = deref->indirect;
+   }
    ret->deref.type = deref->deref.type;
    if (deref->deref.child)
       ret->deref.child = nir_copy_deref(mem_ctx, deref->deref.child);
@@ -568,15 +571,14 @@ nir_deref *
 nir_copy_deref(void *mem_ctx, nir_deref *deref)
 {
    switch (deref->deref_type) {
-      case nir_deref_type_var:
-         return &copy_deref_var(mem_ctx, nir_deref_as_var(deref))->deref;
-      case nir_deref_type_array:
-         return &copy_deref_array(mem_ctx, nir_deref_as_array(deref))->deref;
-      case nir_deref_type_struct:
-         return &copy_deref_struct(mem_ctx, nir_deref_as_struct(deref))->deref;
-      default:
-         assert(0);
-         break;
+   case nir_deref_type_var:
+      return &copy_deref_var(mem_ctx, nir_deref_as_var(deref))->deref;
+   case nir_deref_type_array:
+      return &copy_deref_array(mem_ctx, nir_deref_as_array(deref))->deref;
+   case nir_deref_type_struct:
+      return &copy_deref_struct(mem_ctx, nir_deref_as_struct(deref))->deref;
+   default:
+      unreachable("Invalid dereference type");
    }
 
    return NULL;
