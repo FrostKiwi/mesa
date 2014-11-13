@@ -574,15 +574,28 @@ resolve_registers_block(nir_block *block, void *void_state)
 }
 
 static void
-emit_copy(nir_parallel_copy_instr *pcopy, nir_register *src,
-          nir_register *dest, void *mem_ctx)
+emit_copy(nir_parallel_copy_instr *pcopy, nir_src src, nir_src dest_src,
+          void *mem_ctx)
 {
-   assert(src->num_components >= dest->num_components);
+   assert(!dest_src.is_ssa &&
+          dest_src.reg.indirect == NULL &&
+          dest_src.reg.base_offset == 0);
+   nir_dest dest = {
+      .reg.reg = dest_src.reg.reg,
+      .reg.indirect = NULL,
+      .reg.base_offset = 0,
+      .is_ssa = false,
+   };
+
+   if (src.is_ssa)
+      assert(src.ssa->num_components >= dest.reg.reg->num_components);
+   else
+      assert(src.reg.reg->num_components >= dest.reg.reg->num_components);
 
    nir_alu_instr *mov = nir_alu_instr_create(mem_ctx, nir_op_imov);
-   mov->src[0].src.reg.reg = src;
-   mov->dest.dest.reg.reg = dest;
-   mov->dest.write_mask = (1 << dest->num_components) - 1;
+   mov->src[0].src = nir_src_copy(src, mem_ctx);
+   mov->dest.dest = nir_dest_copy(dest, mem_ctx);
+   mov->dest.write_mask = (1 << dest.reg.reg->num_components) - 1;
 
    nir_instr_insert_before(&pcopy->instr, &mov->instr);
 }
@@ -615,13 +628,12 @@ resolve_parallel_copy(nir_parallel_copy_instr *pcopy,
 {
    unsigned num_copies = 0;
    foreach_list_typed_safe(nir_parallel_copy_copy, copy, node, &pcopy->copies) {
-      if (copy->src.reg.reg == copy->dest.reg.reg)
+      /* Sources may be SSA */
+      if (!copy->src.is_ssa && copy->src.reg.reg == copy->dest.reg.reg)
          continue;
 
       /* Set both indices equal to UINT_MAX to mark them as not indexed yet. */
       num_copies++;
-      copy->src.reg.reg->index = UINT_MAX;
-      copy->dest.reg.reg->index = UINT_MAX;
    }
 
    if (num_copies == 0) {
@@ -630,8 +642,9 @@ resolve_parallel_copy(nir_parallel_copy_instr *pcopy,
       return;
    }
 
-   /* The register corresponding to the given location */
-   nir_register *regs[num_copies * 2];
+   /* The register/source corresponding to the given index */
+   nir_src values[num_copies * 2];
+   memset(values, 0, sizeof values);
 
    /* The current location of a given piece of data */
    int loc[num_copies * 2];
@@ -647,46 +660,68 @@ resolve_parallel_copy(nir_parallel_copy_instr *pcopy,
    int to_do[num_copies * 2];
    int to_do_idx = -1;
 
+   /* Now we set everything up:
+    *  - All values get assigned a temporary index
+    *  - Current locations are set from sources
+    *  - Predicessors are recorded from sources and destinations
+    */
+   int num_vals = 0;
+   foreach_list_typed(nir_parallel_copy_copy, copy, node, &pcopy->copies) {
+      /* Sources may be SSA */
+      if (!copy->src.is_ssa && copy->src.reg.reg == copy->dest.reg.reg)
+         continue;
+
+      int src_idx = -1;
+      for (int i = 0; i < num_vals; ++i) {
+         if (nir_srcs_equal(values[i], copy->src))
+            src_idx = i;
+      }
+      if (src_idx < 0) {
+         src_idx = num_vals++;
+         values[src_idx] = copy->src;
+      }
+
+      nir_src dest_src = {
+         .reg.reg = copy->dest.reg.reg,
+         .reg.indirect = NULL,
+         .reg.base_offset = 0,
+         .is_ssa = false,
+      };
+
+      int dest_idx = -1;
+      for (int i = 0; i < num_vals; ++i) {
+         if (nir_srcs_equal(values[i], dest_src))
+            dest_idx = i;
+      }
+      if (dest_idx < 0) {
+         dest_idx = num_vals++;
+         values[dest_idx] = dest_src;
+      }
+
+      loc[src_idx] = src_idx;
+      pred[dest_idx] = src_idx;
+
+      to_do[++to_do_idx] = dest_idx;
+   }
+
    /* Currently empty destinations we can go ahead and fill */
    int ready[num_copies * 2];
    int ready_idx = -1;
 
-   /* Now we set everything up:
-    *  - All registers get assigned a temporary index
-    *  - Current locations are set from sources
-    *  - Predicessors are recorded from sources and destinations
+   /* Mark the ones that are ready for copying.  We know an index is a
+    * destination if it has a predecessor and it's ready for copying if
+    * it's not marked as containing data.
     */
-   unsigned num_regs = 0;
-   foreach_list_typed(nir_parallel_copy_copy, copy, node, &pcopy->copies) {
-      if (copy->src.reg.reg == copy->dest.reg.reg)
-         continue;
-
-      if (copy->src.reg.reg->index == UINT_MAX)
-         copy->src.reg.reg->index = num_regs++;
-      if (copy->dest.reg.reg->index == UINT_MAX)
-         copy->dest.reg.reg->index = num_regs++;
-
-      regs[copy->src.reg.reg->index] = copy->src.reg.reg;
-      regs[copy->dest.reg.reg->index] = copy->dest.reg.reg;
-      loc[copy->src.reg.reg->index] = copy->src.reg.reg->index;
-      pred[copy->dest.reg.reg->index] = copy->src.reg.reg->index;
-
-      to_do[++to_do_idx] = copy->dest.reg.reg->index;
-   }
-
-   foreach_list_typed(nir_parallel_copy_copy, copy, node, &pcopy->copies) {
-      if (copy->src.reg.reg == copy->dest.reg.reg)
-         continue;
-
-      if (loc[copy->dest.reg.reg->index] == -1)
-         ready[++ready_idx] = copy->dest.reg.reg->index;
+   for (int i = 0; i < num_vals; i++) {
+      if (pred[i] != -1 && loc[i] == -1)
+         ready[++ready_idx] = i;
    }
 
    while (to_do_idx >= 0) {
       while (ready_idx >= 0) {
          int b = ready[ready_idx--];
          int a = pred[b];
-         emit_copy(pcopy, regs[loc[a]], regs[b], state->mem_ctx);
+         emit_copy(pcopy, values[loc[a]], values[b], state->mem_ctx);
 
          /* If any other copies want a they can find it at b */
          loc[a] = b;
@@ -711,16 +746,21 @@ resolve_parallel_copy(nir_parallel_copy_instr *pcopy,
        * dependencies for the backend to deal with.  If it wants, the
        * backend can coalesce the (possibly multiple) temporaries.
        */
+      assert(num_vals < num_copies * 2);
       nir_register *reg = nir_local_reg_create(state->current_impl);
       reg->name = "copy_temp";
-      reg->num_components = regs[b]->num_components;
       reg->num_array_elems = 0;
-      regs[num_regs] = reg;
+      if (values[b].is_ssa)
+         reg->num_components = values[b].ssa->num_components;
+      else
+         reg->num_components = values[b].reg.reg->num_components;
+      values[num_vals].is_ssa = false;
+      values[num_vals].reg.reg = reg;
 
-      emit_copy(pcopy, regs[b], reg, state->mem_ctx);
-      loc[b] = num_regs;
+      emit_copy(pcopy, values[b], values[num_vals], state->mem_ctx);
+      loc[b] = num_vals;
       ready[++ready_idx] = b;
-      num_regs++;
+      num_vals++;
    }
 
    nir_instr_remove(&pcopy->instr);
@@ -793,9 +833,6 @@ nir_convert_from_ssa_impl(nir_function_impl *impl)
    nir_foreach_block(impl, resolve_registers_block, &state);
 
    nir_foreach_block(impl, resolve_parallel_copies_block, &state);
-
-   /* Resolving parallel copies blew away register index information. */
-   nir_index_local_regs(impl);
 
    /* Clean up dead instructions and the hash tables */
    _mesa_hash_table_destroy(state.ssa_table, NULL);
