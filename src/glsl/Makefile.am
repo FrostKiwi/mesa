@@ -25,6 +25,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/mapi \
 	-I$(top_srcdir)/src/mesa/ \
 	-I$(top_srcdir)/src/glsl/glcpp \
+	-I$(top_srcdir)/src/glsl/nir \
 	-I$(top_srcdir)/src/gtest/include \
 	$(DEFINES)
 AM_CFLAGS = $(VISIBILITY_CFLAGS)
@@ -193,8 +194,18 @@ BUILT_SOURCES =						\
 	glsl_parser.cpp					\
 	glsl_lexer.cpp					\
 	glcpp/glcpp-parse.c				\
-	glcpp/glcpp-lex.c
+	glcpp/glcpp-lex.c				\
+        nir/nir_opt_algebraic.c
 CLEANFILES =						\
 	glcpp/glcpp-parse.h				\
 	glsl_parser.h					\
 	$(BUILT_SOURCES)
+
+nir/nir_opt_algebraic.c: nir/nir_opt_algebraic.c.mako			\
+			nir/nir_opt_algebraic.py
+	$(AM_V_GEN)set -e;						\
+	$(MKDIR_P) nir
+	$(PYTHON2) $(PYTHON_FLAGS) $(srcdir)/nir/nir_opt_algebraic.py	\
+                   $< > $@.tmp;						\
+	mv $@.tmp $@;
+
