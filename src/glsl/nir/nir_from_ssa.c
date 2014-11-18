@@ -563,11 +563,18 @@ resolve_registers_block(nir_block *block, void *void_state)
    if (following_if && following_if->condition.is_ssa) {
       nir_register *reg = get_register_for_ssa_def(following_if->condition.ssa,
                                                    state);
-      memset(&following_if->condition, 0, sizeof following_if->condition);
-      following_if->condition.reg.reg = reg;
+      if (reg) {
+         memset(&following_if->condition, 0, sizeof following_if->condition);
+         following_if->condition.reg.reg = reg;
 
-      _mesa_set_add(reg->if_uses, _mesa_hash_pointer(following_if),
-                    following_if);
+         _mesa_set_add(reg->if_uses, _mesa_hash_pointer(following_if),
+                       following_if);
+      } else {
+         /* FIXME: We really shouldn't hit this.  We should be doing
+          * constant control flow propagation.
+          */
+         assert(following_if->condition.ssa->parent_instr->type == nir_instr_type_load_const);
+      }
    }
 
    return true;
