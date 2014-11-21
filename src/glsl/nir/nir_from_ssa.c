@@ -38,8 +38,8 @@ struct from_ssa_state {
    void *dead_ctx;
    struct hash_table *ssa_table;
    struct hash_table *merge_node_table;
-   nir_function_impl *current_impl;
-   nir_instr *current_instr;
+   nir_instr *instr;
+   nir_function_impl *impl;
 };
 
 /* Returns true if a dominates b */
@@ -455,7 +455,7 @@ get_register_for_ssa_def(nir_ssa_def *def, struct from_ssa_state *state)
        * matter which node's definition we use.
        */
       if (node->set->reg == NULL) {
-         node->set->reg = nir_local_reg_create(state->current_impl);
+         node->set->reg = nir_local_reg_create(state->impl);
          node->set->reg->name = def->name;
          node->set->reg->num_components = def->num_components;
          node->set->reg->num_array_elems = 0;
@@ -475,7 +475,7 @@ get_register_for_ssa_def(nir_ssa_def *def, struct from_ssa_state *state)
       if (def->parent_instr->type == nir_instr_type_load_const)
          return NULL;
 
-      nir_register *reg = nir_local_reg_create(state->current_impl);
+      nir_register *reg = nir_local_reg_create(state->impl);
       reg->name = def->name;
       reg->num_components = def->num_components;
       reg->num_array_elems = 0;
@@ -504,8 +504,7 @@ rewrite_ssa_src(nir_src *src, void *void_state)
 
       /* We don't need to remove it from the uses set because that is going
        * away.  We just need to add it to the one for the register. */
-      _mesa_set_add(reg->uses, _mesa_hash_pointer(state->current_instr),
-                    state->current_instr);
+      _mesa_set_add(reg->uses, _mesa_hash_pointer(state->instr), state->instr);
    }
 
    return true;
@@ -530,8 +529,7 @@ rewrite_ssa_dest(nir_dest *dest, void *void_state)
       memset(dest, 0, sizeof *dest);
       dest->reg.reg = reg;
 
-      _mesa_set_add(reg->defs, _mesa_hash_pointer(state->current_instr),
-                    state->current_instr);
+      _mesa_set_add(reg->defs, _mesa_hash_pointer(state->instr), state->instr);
    }
 
    return true;
@@ -546,7 +544,7 @@ resolve_registers_block(nir_block *block, void *void_state)
    struct from_ssa_state *state = void_state;
 
    nir_foreach_instr_safe(block, instr) {
-      state->current_instr = instr;
+      state->instr = instr;
       nir_foreach_src(instr, rewrite_ssa_src, state);
       nir_foreach_dest(instr, rewrite_ssa_dest, state);
 
@@ -556,7 +554,7 @@ resolve_registers_block(nir_block *block, void *void_state)
          ralloc_steal(state->dead_ctx, instr);
       }
    }
-   state->current_instr = NULL;
+   state->instr = NULL;
 
    nir_if *following_if = nir_block_following_if(block);
    if (following_if && following_if->condition.is_ssa) {
@@ -753,7 +751,7 @@ resolve_parallel_copy(nir_parallel_copy_instr *pcopy,
        * backend can coalesce the (possibly multiple) temporaries.
        */
       assert(num_vals < num_copies * 2);
-      nir_register *reg = nir_local_reg_create(state->current_impl);
+      nir_register *reg = nir_local_reg_create(state->impl);
       reg->name = "copy_temp";
       reg->num_array_elems = 0;
       if (values[b].is_ssa)
@@ -821,7 +819,7 @@ nir_convert_from_ssa_impl(nir_function_impl *impl)
 
    state.mem_ctx = ralloc_parent(impl);
    state.dead_ctx = ralloc_context(NULL);
-   state.current_impl = impl;
+   state.impl = impl;
    state.merge_node_table = _mesa_hash_table_create(NULL,
                                                     _mesa_key_pointer_equal);
 
