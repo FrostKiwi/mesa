@@ -155,7 +155,7 @@ typedef struct {
        *
        * \sa nir_variable_mode
        */
-      unsigned mode:4;
+      nir_variable_mode mode:4;
 
       /**
        * Interpolation mode for shader inputs / outputs
