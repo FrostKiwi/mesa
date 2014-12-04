@@ -186,7 +186,7 @@ _mesa_get_current_tex_object(struct gl_context *ctx, GLenum target)
  *
  * Called via ctx->Driver.NewTextureObject, unless overridden by a device
  * driver.
- * 
+ *
  * \param shared the shared GL state structure to contain the texture object
  * \param name integer name for the texture object
  * \param target either GL_TEXTURE_1D, GL_TEXTURE_2D, GL_TEXTURE_3D,
@@ -789,7 +789,7 @@ _mesa_test_texobj_completeness( const struct gl_context *ctx,
                /* Extra checks for cube textures */
                if (face > 0) {
                   /* check that cube faces are the same size */
-                  if (img->Width2 != t->Image[0][i]->Width2 || 
+                  if (img->Width2 != t->Image[0][i]->Width2 ||
                       img->Height2 != t->Image[0][i]->Height2) {
 		     incomplete(t, MIPMAP, "CubeMap Image[n][i] bad size");
 		     return;
@@ -797,7 +797,7 @@ _mesa_test_texobj_completeness( const struct gl_context *ctx,
                }
             }
          }
-         
+
          if (width == 1 && height == 1 && depth == 1) {
             return;  /* found smallest needed mipmap, all done! */
          }
@@ -1208,7 +1208,7 @@ create_textures( struct gl_context *ctx, GLenum target,
  * Calls _mesa_HashFindFreeKeyBlock() to find a block of free texture
  * IDs which are stored in \p textures.  Corresponding empty texture
  * objects are also generated.
- */ 
+ */
 void GLAPIENTRY
 _mesa_GenTextures( GLsizei n, GLuint *textures )
 {
@@ -1228,7 +1228,7 @@ _mesa_GenTextures( GLsizei n, GLuint *textures )
  * Calls _mesa_HashFindFreeKeyBlock() to find a block of free texture
  * IDs which are stored in \p textures.  Corresponding empty texture
  * objects are also generated.
- */ 
+ */
 void GLAPIENTRY
 _mesa_CreateTextures( GLenum target, GLsizei n, GLuint *textures )
 {
@@ -1522,10 +1522,10 @@ _mesa_tex_target_to_index(const struct gl_context *ctx, GLenum target)
 
 /**
  * Bind a named texture to a texturing target.
- * 
+ *
  * \param target texture target.
  * \param texName texture name.
- * 
+ *
  * \sa glBindTexture().
  *
  * Determines the old texture object bound and returns immediately if rebinding
@@ -1687,10 +1687,10 @@ _mesa_bind_texture_unit( struct gl_context *ctx,
 
 /**
  * Bind a named texture to the specified texture unit.
- * 
+ *
  * \param unit texture unit.
  * \param texture texture name.
- * 
+ *
  * \sa glBindTexture().
  *
  * If the named texture is 0, this will reset each target for the specified
@@ -1844,13 +1844,13 @@ _mesa_BindTextures(GLuint first, GLsizei count, const GLuint *textures)
 
 /**
  * Set texture priorities.
- * 
+ *
  * \param n number of textures.
  * \param texName texture names.
  * \param priorities corresponding texture priorities.
- * 
+ *
  * \sa glPrioritizeTextures().
- * 
+ *
  * Looks up each texture in the hash, clamps the corresponding priority between
  * 0.0 and 1.0, and calls dd_function_table::PrioritizeTexture.
  */
@@ -1890,13 +1890,14 @@ _mesa_PrioritizeTextures( GLsizei n, const GLuint *texName,
 
 /**
  * See if textures are loaded in texture memory.
- * 
+ *
  * \param n number of textures to query.
  * \param texName array with the texture names.
  * \param residences array which will hold the residence status.
  *
- * \return GL_TRUE if all textures are resident and \p residences is left unchanged, 
- * 
+ * \return GL_TRUE if all textures are resident and \p residences
+ * is left unchanged,
+ *
  * Note: we assume all textures are always resident
  */
 GLboolean GLAPIENTRY
@@ -1932,7 +1933,7 @@ _mesa_AreTexturesResident(GLsizei n, const GLuint *texName,
          return GL_FALSE;
       }
    }
-   
+
    return allResident;
 }
 
@@ -1944,7 +1945,7 @@ _mesa_AreTexturesResident(GLsizei n, const GLuint *texName,
  *
  * \return GL_TRUE if texture name corresponds to a texture, or GL_FALSE
  * otherwise.
- * 
+ *
  * \sa glIsTexture().
  *
  * Calls _mesa_HashLookup().
