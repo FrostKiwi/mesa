@@ -1410,6 +1410,136 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
       break;
    }
 
+   case nir_intrinsic_interp_at_centroid_indirect:
+   case nir_intrinsic_interp_at_sample_indirect:
+   case nir_intrinsic_interp_at_offset_indirect:
+      has_indirect = true;
+   case nir_intrinsic_interp_at_centroid:
+   case nir_intrinsic_interp_at_sample:
+   case nir_intrinsic_interp_at_offset: {
+      /* in SIMD16 mode, the pixel interpolator returns coords interleaved
+       * 8 channels at a time, same as the barycentric coords presented in
+       * the FS payload. this requires a bit of extra work to support.
+       */
+      no16("interpolate_at_* not yet supported in SIMD16 mode.");
+
+      fs_reg dst_x(GRF, virtual_grf_alloc(2), BRW_REGISTER_TYPE_F);
+      fs_reg dst_y = offset(dst_x, 1);
+
+      /* For most messages, we need one reg of ignored data; the hardware
+       * requires mlen==1 even when there is no payload. in the per-slot
+       * offset case, we'll replace this with the proper source data.
+       */
+      fs_reg src(this, glsl_type::float_type);
+      int mlen = 1;     /* one reg unless overriden */
+      fs_inst *inst;
+
+      switch (instr->intrinsic) {
+      case nir_intrinsic_interp_at_centroid:
+      case nir_intrinsic_interp_at_centroid_indirect:
+         inst = emit(FS_OPCODE_INTERPOLATE_AT_CENTROID, dst_x, src, fs_reg(0u));
+         break;
+
+      case nir_intrinsic_interp_at_sample:
+      case nir_intrinsic_interp_at_sample_indirect: {
+         nir_src sample;
+         if (instr->intrinsic == nir_intrinsic_interp_at_sample) {
+            sample = instr->src[0];
+         } else {
+            sample = instr->src[1];
+         }
+
+         /* XXX: We should probably handle non-constant sample id's */
+         assert(sample.is_ssa);
+         assert(sample.ssa->parent_instr->type == nir_instr_type_load_const);
+         nir_load_const_instr *sample_load =
+            nir_instr_as_load_const(sample.ssa->parent_instr);
+
+         unsigned msg_data = sample_load->value.i[0] << 4;
+         inst = emit(FS_OPCODE_INTERPOLATE_AT_SAMPLE, dst_x, src,
+                     fs_reg(msg_data));
+         break;
+      }
+
+      case nir_intrinsic_interp_at_offset:
+      case nir_intrinsic_interp_at_offset_indirect:
+         nir_src off;
+         if (instr->intrinsic == nir_intrinsic_interp_at_sample) {
+            off = instr->src[0];
+         } else {
+            off = instr->src[1];
+         }
+
+         if (off.is_ssa) {
+            assert(off.ssa->parent_instr->type == nir_instr_type_load_const);
+            nir_load_const_instr *offset_load =
+               nir_instr_as_load_const(off.ssa->parent_instr);
+
+            int off_x = MIN2((int)(offset_load->value.f[0] * 16), 7) & 0xf;
+            int off_y = MIN2((int)(offset_load->value.f[1] * 16), 7) & 0xf;
+
+            inst = emit(FS_OPCODE_INTERPOLATE_AT_SHARED_OFFSET, dst_x, src,
+                        fs_reg(off_x | (off_y << 4)));
+         } else {
+            src = fs_reg(this, glsl_type::ivec2_type);
+            fs_reg off_src = get_nir_src(off);
+            for (int i = 0; i < 2; i++) {
+               fs_reg temp(this, glsl_type::float_type);
+               emit(MUL(temp, offset(off_src, i), fs_reg(16.0f)));
+               fs_reg itemp(this, glsl_type::int_type);
+               emit(MOV(itemp, temp));  /* float to int */
+
+               /* Clamp the upper end of the range to +7/16.
+                * ARB_gpu_shader5 requires that we support a maximum offset
+                * of +0.5, which isn't representable in a S0.4 value -- if
+                * we didn't clamp it, we'd end up with -8/16, which is the
+                * opposite of what the shader author wanted.
+                *
+                * This is legal due to ARB_gpu_shader5's quantization
+                * rules:
+                *
+                * "Not all values of <offset> may be supported; x and y
+                * offsets may be rounded to fixed-point values with the
+                * number of fraction bits given by the
+                * implementation-dependent constant
+                * FRAGMENT_INTERPOLATION_OFFSET_BITS"
+                */
+
+               emit(BRW_OPCODE_SEL, offset(src, i), itemp, fs_reg(7))
+                   ->conditional_mod = BRW_CONDITIONAL_L; /* min(src2, 7) */
+            }
+
+            mlen = 2;
+            inst = emit(FS_OPCODE_INTERPOLATE_AT_PER_SLOT_OFFSET, dst_x, src,
+                        fs_reg(0u));
+         }
+
+         break;
+      }
+
+      inst->mlen = mlen;
+      inst->regs_written = 2; /* 2 floats per slot returned */
+      inst->pi_noperspective = instr->variables[0]->var->data.interpolation ==
+                               INTERP_QUALIFIER_NOPERSPECTIVE;
+
+      unsigned index = 0;
+      for (int i = 0; i < instr->const_index[1]; i++) {
+         for (unsigned j = 0; j < instr->num_components; j++) {
+            fs_reg src = offset(nir_inputs, instr->const_index[0] + index);
+            if (has_indirect)
+               src.reladdr = new(mem_ctx) fs_reg(get_nir_src(instr->src[0]));
+            src.type = dest.type;
+            index++;
+
+            fs_inst *inst = emit(FS_OPCODE_LINTERP, dest, dst_x, dst_y, src);
+            if (instr->has_predicate)
+               inst->predicate = BRW_PREDICATE_NORMAL;
+            dest.reg_offset++;
+         }
+      }
+      break;
+   }
+
    case nir_intrinsic_store_output_indirect:
       has_indirect = true;
    case nir_intrinsic_store_output: {
