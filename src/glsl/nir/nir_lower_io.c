@@ -198,6 +198,11 @@ nir_lower_io_block(nir_block *block, void *void_state)
       nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
 
       switch (intrin->intrinsic) {
+      case nir_intrinsic_interp_var_at_centroid:
+      case nir_intrinsic_interp_var_at_offset:
+      case nir_intrinsic_interp_var_at_sample:
+         assert(intrin->variables[0]->var->data.mode == nir_var_shader_in);
+         /* fall through */
       case nir_intrinsic_load_var: {
          nir_variable_mode mode = intrin->variables[0]->var->data.mode;
          if (mode != nir_var_shader_in && mode != nir_var_uniform)
@@ -205,25 +210,39 @@ nir_lower_io_block(nir_block *block, void *void_state)
 
          bool has_indirect = deref_has_indirect(intrin->variables[0]);
 
+         /* Figure out the opcode */
          nir_intrinsic_op load_op;
-         switch (mode) {
-         case nir_var_shader_in:
-            if (has_indirect) {
-               load_op = nir_intrinsic_load_input_indirect;
-            } else {
-               load_op = nir_intrinsic_load_input;
-            }
+         switch (intrin->intrinsic) {
+         case nir_intrinsic_interp_var_at_centroid:
+            load_op = has_indirect ? nir_intrinsic_interp_at_centroid_indirect :
+                                     nir_intrinsic_interp_at_centroid;
             break;
-         case nir_var_uniform:
-            if (has_indirect) {
-               load_op = nir_intrinsic_load_uniform_indirect;
-            } else {
-               load_op = nir_intrinsic_load_uniform;
+         case nir_intrinsic_interp_var_at_offset:
+            load_op = has_indirect ? nir_intrinsic_interp_at_offset_indirect :
+                                     nir_intrinsic_interp_at_offset;
+            break;
+         case nir_intrinsic_interp_var_at_sample:
+            load_op = has_indirect ? nir_intrinsic_interp_at_sample_indirect :
+                                     nir_intrinsic_interp_at_sample;
+            break;
+         case nir_intrinsic_load_var:
+            switch (mode) {
+            case nir_var_shader_in:
+               load_op = has_indirect ? nir_intrinsic_load_input_indirect :
+                                        nir_intrinsic_load_input;
+               break;
+            case nir_var_uniform:
+               load_op = has_indirect ? nir_intrinsic_load_uniform_indirect :
+                                        nir_intrinsic_load_uniform;
+               break;
+            default:
+               unreachable("Unknown variable mode");
             }
             break;
          default:
-            unreachable("Unknown variable mode");
+            unreachable("Invalid intrinsic");
          }
+
          nir_intrinsic_instr *load = nir_intrinsic_instr_create(state->mem_ctx,
                                                                 load_op);
          load->num_components = intrin->num_components;
@@ -238,6 +257,21 @@ nir_lower_io_block(nir_block *block, void *void_state)
 
          if (has_indirect)
             load->src[0] = indirect;
+
+         switch (intrin->intrinsic) {
+         case nir_intrinsic_interp_var_at_offset:
+         case nir_intrinsic_interp_var_at_sample:
+            if (has_indirect)
+               load->src[1] = nir_src_copy(intrin->src[0], state->mem_ctx);
+            else
+               load->src[0] = nir_src_copy(intrin->src[0], state->mem_ctx);
+            break;
+         case nir_intrinsic_load_var:
+         case nir_intrinsic_interp_var_at_centroid:
+            break;
+         default:
+            unreachable("Invalid intrinsic");
+         }
 
          if (intrin->dest.is_ssa) {
             load->dest.is_ssa = true;

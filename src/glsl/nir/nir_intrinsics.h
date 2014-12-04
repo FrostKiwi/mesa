@@ -110,11 +110,20 @@ LOAD(input, 2, NIR_INTRINSIC_CAN_REORDER)
 /* LOAD(ssbo, 2, 0) */
 
 /*
- * Interpolation of input.  These are similar to the load_input* intrinsics
- * except they interpolate differently.  The interp_at_offset* and
- * interp_at_offset* intrinsics take a second source that is either a
- * sample id or a vec2 position offset.
+ * Interpolation of input.  The interp_var_at* intrinsics are similar to the
+ * load_var intrinsic and the interp_at* intrinsics are similar to the
+ * load_input* intrinsics.  The only difference is in the way that they
+ * interpolate the input variable.  The at_sample and at_offset intrinsics
+ * take an aditional source that is a integer sample id or a vec2 position
+ * offset respectively.
  */
+
+INTRINSIC(interp_var_at_centroid, 0, ARR(0), true, 0, 1, 0,
+          NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
+INTRINSIC(interp_var_at_sample, 1, ARR(1), true, 0, 1, 0,
+          NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
+INTRINSIC(interp_var_at_offset, 1, ARR(2), true, 0, 1, 0,
+          NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
 
 #define INTERP(name, num_srcs, src_comps) \
    INTRINSIC(interp_##name, num_srcs, ARR(src_comps), true, \
@@ -124,7 +133,7 @@ LOAD(input, 2, NIR_INTRINSIC_CAN_REORDER)
 
 INTERP(at_centroid, 0, 0)
 INTERP(at_sample, 1, 1)
-INTERP(at_offset, 1, 1)
+INTERP(at_offset, 1, 2)
 
 /*
  * Stores work the same way as loads, except now the first register input is
