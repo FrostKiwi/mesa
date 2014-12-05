@@ -480,7 +480,7 @@ validate_instr(nir_instr *instr, validate_state *state)
          break;
 
       case nir_instr_type_texture:
-         validate_tex_instr(nir_instr_as_texture(instr), state);
+         validate_tex_instr(nir_instr_as_tex(instr), state);
          break;
 
       case nir_instr_type_load_const:

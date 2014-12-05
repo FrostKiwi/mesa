@@ -76,7 +76,7 @@ add_var_use_block(nir_block *block, void *state)
             break;
 
          case nir_instr_type_texture:
-            add_var_use_tex(nir_instr_as_texture(instr), live);
+            add_var_use_tex(nir_instr_as_tex(instr), live);
             break;
 
          default:

@@ -1448,7 +1448,7 @@ nir_foreach_dest(nir_instr *instr, nir_foreach_dest_cb cb, void *state)
       case nir_instr_type_intrinsic:
          return visit_intrinsic_dest(nir_instr_as_intrinsic(instr), cb, state);
       case nir_instr_type_texture:
-         return visit_texture_dest(nir_instr_as_texture(instr), cb, state);
+         return visit_texture_dest(nir_instr_as_tex(instr), cb, state);
       case nir_instr_type_load_const:
          return visit_load_const_dest(nir_instr_as_load_const(instr), cb, state);
       case nir_instr_type_phi:
@@ -1631,7 +1631,7 @@ nir_foreach_src(nir_instr *instr, nir_foreach_src_cb cb, void *state)
             return false;
          break;
       case nir_instr_type_texture:
-         if (!visit_tex_src(nir_instr_as_texture(instr), cb, state))
+         if (!visit_tex_src(nir_instr_as_tex(instr), cb, state))
             return false;
          break;
       case nir_instr_type_call:

@@ -993,7 +993,7 @@ typedef struct {
 NIR_DEFINE_CAST(nir_instr_as_alu, nir_instr, nir_alu_instr, instr)
 NIR_DEFINE_CAST(nir_instr_as_call, nir_instr, nir_call_instr, instr)
 NIR_DEFINE_CAST(nir_instr_as_jump, nir_instr, nir_jump_instr, instr)
-NIR_DEFINE_CAST(nir_instr_as_texture, nir_instr, nir_tex_instr, instr)
+NIR_DEFINE_CAST(nir_instr_as_tex, nir_instr, nir_tex_instr, instr)
 NIR_DEFINE_CAST(nir_instr_as_intrinsic, nir_instr, nir_intrinsic_instr, instr)
 NIR_DEFINE_CAST(nir_instr_as_load_const, nir_instr, nir_load_const_instr, instr)
 NIR_DEFINE_CAST(nir_instr_as_ssa_undef, nir_instr, nir_ssa_undef_instr, instr)

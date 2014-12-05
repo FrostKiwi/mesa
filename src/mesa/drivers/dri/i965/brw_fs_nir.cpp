@@ -388,7 +388,7 @@ fs_visitor::nir_emit_instr(nir_instr *instr)
       break;
 
    case nir_instr_type_texture:
-      nir_emit_texture(nir_instr_as_texture(instr));
+      nir_emit_texture(nir_instr_as_tex(instr));
       break;
 
    case nir_instr_type_load_const:
