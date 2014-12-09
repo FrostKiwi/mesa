@@ -101,7 +101,7 @@ MAIN_FILES = \
 	$(SRCDIR)main/formats.h \
 	$(BUILDDIR)main/format_pack.c \
 	$(SRCDIR)main/format_pack.h \
-	$(SRCDIR)main/format_unpack.c \
+	$(BUILDDIR)main/format_unpack.c \
 	$(SRCDIR)main/format_unpack.h \
 	$(SRCDIR)main/format_utils.c \
 	$(SRCDIR)main/format_utils.h \
