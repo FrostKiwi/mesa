@@ -1873,6 +1873,9 @@ static GLboolean
 mutable_tex_object(struct gl_context *ctx, GLenum target)
 {
    struct gl_texture_object *texObj = _mesa_get_current_tex_object(ctx, target);
+   if (!texObj)
+      return GL_FALSE;
+
    return !texObj->Immutable;
 }
 
@@ -3379,6 +3382,9 @@ _mesa_EGLImageTargetTexture2DOES (GLenum target, GLeglImageOES image)
       _mesa_update_state(ctx);
 
    texObj = _mesa_get_current_tex_object(ctx, target);
+   if (!texObj)
+      return;
+
    _mesa_lock_texture(ctx, texObj);
 
    if (texObj->Immutable) {
@@ -3476,7 +3482,11 @@ texsubimage(struct gl_context *ctx, GLuint dims, GLenum target, GLint level,
 {
    struct gl_texture_object *texObj;
    struct gl_texture_image *texImage;
+
    texObj = _mesa_get_current_tex_object(ctx, target);
+   if (!texObj)
+      return;
+
    if (texsubimage_error_check(ctx, dims, texObj, target, level,
                                xoffset, yoffset, zoffset,
                                width, height, depth, format, type, false)) {
@@ -5286,7 +5296,10 @@ _mesa_TexImage2DMultisample(GLenum target, GLsizei samples,
 {
    struct gl_texture_object *texObj;
    GET_CURRENT_CONTEXT(ctx);
+
    texObj = _mesa_get_current_tex_object(ctx, target);
+   if (!texObj)
+      return;
 
    _mesa_texture_image_multisample(ctx, 2, texObj, target, samples,
                                    internalformat, width, height, 1,
@@ -5303,7 +5316,10 @@ _mesa_TexImage3DMultisample(GLenum target, GLsizei samples,
 {
    struct gl_texture_object *texObj;
    GET_CURRENT_CONTEXT(ctx);
+
    texObj = _mesa_get_current_tex_object(ctx, target);
+   if (!texObj)
+      return;
 
    _mesa_texture_image_multisample(ctx, 3, texObj, target, samples,
                                    internalformat, width, height, depth,
@@ -5319,7 +5335,10 @@ _mesa_TexStorage2DMultisample(GLenum target, GLsizei samples,
 {
    struct gl_texture_object *texObj;
    GET_CURRENT_CONTEXT(ctx);
+
    texObj = _mesa_get_current_tex_object(ctx, target);
+   if (!texObj)
+      return;
 
    _mesa_texture_image_multisample(ctx, 2, texObj, target, samples,
                                    internalformat, width, height, 1,
@@ -5335,7 +5354,10 @@ _mesa_TexStorage3DMultisample(GLenum target, GLsizei samples,
 {
    struct gl_texture_object *texObj;
    GET_CURRENT_CONTEXT(ctx);
+
    texObj = _mesa_get_current_tex_object(ctx, target);
+   if (!texObj)
+      return;
 
    _mesa_texture_image_multisample(ctx, 3, texObj, target, samples,
                                    internalformat, width, height, depth,
