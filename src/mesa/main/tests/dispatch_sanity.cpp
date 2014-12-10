@@ -968,6 +968,7 @@ const struct function gl_core_functions_possible[] = {
    { "glTextureParameteriv", 45, -1 },
    { "glGetTextureLevelParameterfv", 45, -1 },
    { "glGetTextureLevelParameteriv", 45, -1 },
+   { "glGetTextureParameterfv", 45, -1 },
 
    { NULL, 0, -1 }
 };
