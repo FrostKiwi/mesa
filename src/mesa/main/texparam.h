@@ -43,6 +43,12 @@ extern void
 _mesa_texture_parameterfv( struct gl_context *ctx,
                            struct gl_texture_object *texObj,
                            GLenum pname, const GLfloat *params, bool dsa );
+
+extern void
+_mesa_texture_parameteri( struct gl_context *ctx,
+                          struct gl_texture_object *texObj,
+                          GLenum pname, GLint param, bool dsa );
+
 /*@}*/
 
 /**
@@ -99,5 +105,7 @@ _mesa_TextureParameterfv( GLuint texture, GLenum pname,
 extern void GLAPIENTRY
 _mesa_TextureParameterf( GLuint texture, GLenum pname, GLfloat param );
 
+extern void GLAPIENTRY
+_mesa_TextureParameteri( GLuint texture, GLenum pname, GLint param );
 
 #endif /* TEXPARAM_H */
