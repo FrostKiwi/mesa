@@ -1283,7 +1283,8 @@ static void
 get_tex_level_parameter_image(struct gl_context *ctx,
                               const struct gl_texture_object *texObj,
                               GLenum target, GLint level,
-                              GLenum pname, GLint *params)
+                              GLenum pname, GLint *params,
+                              const char *func)
 {
    const struct gl_texture_image *img = NULL;
    struct gl_texture_image dummy_image;
@@ -1398,7 +1399,7 @@ get_tex_level_parameter_image(struct gl_context *ctx,
 	 }
 	 else {
 	    _mesa_error(ctx, GL_INVALID_OPERATION,
-			"glGetTexLevelParameter[if]v(pname)");
+			"%s(pname)", func);
 	 }
          break;
       case GL_TEXTURE_COMPRESSED:
@@ -1446,7 +1447,7 @@ get_tex_level_parameter_image(struct gl_context *ctx,
 
 invalid_pname:
    _mesa_error(ctx, GL_INVALID_ENUM,
-               "glGetTexLevelParameter[if]v(pname=%s)",
+               "%s(pname=%s)", func,
                _mesa_lookup_enum_by_nr(pname));
 }
 
@@ -1454,7 +1455,8 @@ invalid_pname:
 static void
 get_tex_level_parameter_buffer(struct gl_context *ctx,
                                const struct gl_texture_object *texObj,
-                               GLenum pname, GLint *params)
+                               GLenum pname, GLint *params,
+                               const char *func)
 {
    const struct gl_buffer_object *bo = texObj->BufferObject;
    mesa_format texFormat = texObj->_BufferObjectFormat;
@@ -1529,7 +1531,7 @@ get_tex_level_parameter_buffer(struct gl_context *ctx,
       case GL_TEXTURE_COMPRESSED_IMAGE_SIZE:
          /* Always illegal for GL_TEXTURE_BUFFER */
          _mesa_error(ctx, GL_INVALID_OPERATION,
-                     "glGetTexLevelParameter[if]v(pname)");
+                     "%s(pname)", func);
          break;
 
       /* GL_ARB_texture_float */
@@ -1557,57 +1559,135 @@ get_tex_level_parameter_buffer(struct gl_context *ctx,
 
 invalid_pname:
    _mesa_error(ctx, GL_INVALID_ENUM,
-               "glGetTexLevelParameter[if]v(pname=%s)",
+               "%s(pname=%s)", func,
                _mesa_lookup_enum_by_nr(pname));
 }
 
 
-void GLAPIENTRY
-_mesa_GetTexLevelParameterfv( GLenum target, GLint level,
-                              GLenum pname, GLfloat *params )
+static bool
+levels_valid( struct gl_context *ctx, GLenum target, GLint level,
+              const char *func)
 {
-   GLint iparam;
-   _mesa_GetTexLevelParameteriv( target, level, pname, &iparam );
-   *params = (GLfloat) iparam;
-}
-
-
-void GLAPIENTRY
-_mesa_GetTexLevelParameteriv( GLenum target, GLint level,
-                              GLenum pname, GLint *params )
-{
-   struct gl_texture_object *texObj;
    GLint maxLevels;
-   GET_CURRENT_CONTEXT(ctx);
+
+   /* Need this because glGetTexLevelParameteri and f are different. We don't
+    * want to keep track of both the dsa flag and iv, i, f, etc. That's too
+    * much work. */
+   bool dsa = strstr(func, "Texture") ? true : false;
 
    if (ctx->Texture.CurrentUnit >= ctx->Const.MaxCombinedTextureImageUnits) {
       _mesa_error(ctx, GL_INVALID_OPERATION,
-                  "glGetTexLevelParameteriv(current unit)");
-      return;
+                  "%s(current unit)", func);
+      return false;
    }
 
-   if (!legal_get_tex_level_parameter_target(ctx, target, false)) {
+   if (!legal_get_tex_level_parameter_target(ctx, target, dsa)) {
       _mesa_error(ctx, GL_INVALID_ENUM,
-                  "glGetTexLevelParameter[if]v(target=0x%x)", target);
-      return;
+                  "%s(target=0x%x)", func, target);
+      return false;
    }
 
    maxLevels = _mesa_max_texture_levels(ctx, target);
    assert(maxLevels != 0);
 
    if (level < 0 || level >= maxLevels) {
-      _mesa_error( ctx, GL_INVALID_VALUE, "glGetTexLevelParameter[if]v" );
-      return;
+      _mesa_error( ctx, GL_INVALID_VALUE, "%s", func );
+      return false;
    }
 
-   texObj = _mesa_get_current_tex_object(ctx, target);
-
-   if (target == GL_TEXTURE_BUFFER)
-      get_tex_level_parameter_buffer(ctx, texObj, pname, params);
-   else
-      get_tex_level_parameter_image(ctx, texObj, target, level, pname, params);
+   return true;
 }
 
+/**
+ * This isn't exposed to the rest of the driver because it is a part of the
+ * OpenGL API that is rarely used.
+ */
+static void
+get_tex_level_parameteriv( struct gl_context *ctx,
+                           struct gl_texture_object *texObj,
+                           GLenum target, GLint level,
+                           GLenum pname, GLint *params,
+                           const char *func )
+{
+   if (!levels_valid(ctx, target, level, func))
+      return;
+
+   if (target == GL_TEXTURE_BUFFER) {
+      get_tex_level_parameter_buffer(ctx, texObj, pname, params, func);
+   }
+   else {
+      get_tex_level_parameter_image(ctx, texObj, target,
+                                    level, pname, params, func);
+   }
+}
+
+void GLAPIENTRY
+_mesa_GetTexLevelParameterfv( GLenum target, GLint level,
+                              GLenum pname, GLfloat *params )
+{
+   struct gl_texture_object *texObj;
+   GLint iparam;
+   GET_CURRENT_CONTEXT(ctx);
+
+   texObj = _mesa_get_current_tex_object(ctx, target);
+   if (!texObj)
+      return;
+
+   get_tex_level_parameteriv(ctx, texObj, target, level,
+                             pname, &iparam, "glGetTexLevelParameterfv");
+
+   *params = (GLfloat) iparam;
+}
+
+void GLAPIENTRY
+_mesa_GetTexLevelParameteriv( GLenum target, GLint level,
+                              GLenum pname, GLint *params )
+{
+   struct gl_texture_object *texObj;
+   GET_CURRENT_CONTEXT(ctx);
+
+   texObj = _mesa_get_current_tex_object(ctx, target);
+   if (!texObj)
+      return;
+
+   get_tex_level_parameteriv(ctx, texObj, target, level,
+                             pname, params, "glGetTexLevelParameteriv");
+}
+
+void GLAPIENTRY
+_mesa_GetTextureLevelParameterfv( GLuint texture, GLint level,
+                                  GLenum pname, GLfloat *params )
+{
+   struct gl_texture_object *texObj;
+   GLint iparam;
+   GET_CURRENT_CONTEXT(ctx);
+
+   texObj = _mesa_lookup_texture_err(ctx, texture,
+                                     "glGetTextureLevelParameterfv");
+   if (!texObj)
+      return;
+
+   get_tex_level_parameteriv(ctx, texObj, texObj->Target, level,
+                             pname, &iparam, "glGetTextureLevelParameterfv");
+
+   *params = (GLfloat) iparam;
+}
+
+void GLAPIENTRY
+_mesa_GetTextureLevelParameteriv( GLuint texture, GLint level,
+                                  GLenum pname, GLint *params )
+{
+   struct gl_texture_object *texObj;
+   GET_CURRENT_CONTEXT(ctx);
+
+   texObj = _mesa_lookup_texture_err(ctx, texture,
+                                     "glGetTextureLevelParameteriv");
+   if (!texObj)
+      return;
+
+   get_tex_level_parameteriv(ctx, texObj, texObj->Target, level,
+                             pname, params, "glGetTextureLevelParameteriv");
+}
 
 void GLAPIENTRY
 _mesa_GetTexParameterfv( GLenum target, GLenum pname, GLfloat *params )
