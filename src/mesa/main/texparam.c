@@ -602,7 +602,7 @@ invalid_enum:
 static GLboolean
 set_tex_parameterf(struct gl_context *ctx,
                    struct gl_texture_object *texObj,
-                   GLenum pname, const GLfloat *params)
+                   GLenum pname, const GLfloat *params, bool dsa)
 {
    switch (pname) {
    case GL_TEXTURE_MIN_LOD:
@@ -610,7 +610,7 @@ set_tex_parameterf(struct gl_context *ctx,
          goto invalid_pname;
 
       if (!target_allows_setting_sampler_parameters(texObj->Target))
-         goto invalid_operation;
+         goto invalid_enum;
 
       if (texObj->Sampler.MinLod == params[0])
          return GL_FALSE;
@@ -623,7 +623,7 @@ set_tex_parameterf(struct gl_context *ctx,
          goto invalid_pname;
 
       if (!target_allows_setting_sampler_parameters(texObj->Target))
-         goto invalid_operation;
+         goto invalid_enum;
 
       if (texObj->Sampler.MaxLod == params[0])
          return GL_FALSE;
@@ -642,12 +642,13 @@ set_tex_parameterf(struct gl_context *ctx,
    case GL_TEXTURE_MAX_ANISOTROPY_EXT:
       if (ctx->Extensions.EXT_texture_filter_anisotropic) {
          if (!target_allows_setting_sampler_parameters(texObj->Target))
-            goto invalid_operation;
+            goto invalid_enum;
 
          if (texObj->Sampler.MaxAnisotropy == params[0])
             return GL_FALSE;
          if (params[0] < 1.0) {
-            _mesa_error(ctx, GL_INVALID_VALUE, "glTexParameter(param)" );
+            _mesa_error(ctx, GL_INVALID_VALUE, "glTex%sParameter(param)",
+                        dsa ? "ture" : "");
             return GL_FALSE;
          }
          flush(ctx);
@@ -669,7 +670,7 @@ set_tex_parameterf(struct gl_context *ctx,
          goto invalid_pname;
 
       if (!target_allows_setting_sampler_parameters(texObj->Target))
-         goto invalid_operation;
+         goto invalid_enum;
 
       if (texObj->Sampler.LodBias != params[0]) {
 	 flush(ctx);
@@ -683,7 +684,7 @@ set_tex_parameterf(struct gl_context *ctx,
          goto invalid_pname;
 
       if (!target_allows_setting_sampler_parameters(texObj->Target))
-         goto invalid_operation;
+         goto invalid_enum;
 
       flush(ctx);
       /* ARB_texture_float disables clamping */
@@ -706,12 +707,14 @@ set_tex_parameterf(struct gl_context *ctx,
    return GL_FALSE;
 
 invalid_pname:
-   _mesa_error(ctx, GL_INVALID_ENUM, "glTexParameter(pname=%s)",
+   _mesa_error(ctx, GL_INVALID_ENUM, "glTex%sParameter(pname=%s)",
+               dsa ? "ture" : "",
                _mesa_lookup_enum_by_nr(pname));
    return GL_FALSE;
 
-invalid_operation:
-   _mesa_error(ctx, GL_INVALID_OPERATION, "glTexParameter(pname=%s)",
+invalid_enum:
+   _mesa_error(ctx, GL_INVALID_ENUM, "glTex%sParameter(pname=%s)",
+               dsa ? "ture" : "",
                _mesa_lookup_enum_by_nr(pname));
    return GL_FALSE;
 }
@@ -763,7 +766,7 @@ _mesa_TexParameterf(GLenum target, GLenum pname, GLfloat param)
          GLfloat p[4];
          p[0] = param;
          p[1] = p[2] = p[3] = 0.0F;
-         need_update = set_tex_parameterf(ctx, texObj, pname, p);
+         need_update = set_tex_parameterf(ctx, texObj, pname, p, false);
       }
    }
 
@@ -836,7 +839,7 @@ _mesa_TexParameterfv(GLenum target, GLenum pname, const GLfloat *params)
       break;
    default:
       /* this will generate an error if pname is illegal */
-      need_update = set_tex_parameterf(ctx, texObj, pname, params);
+      need_update = set_tex_parameterf(ctx, texObj, pname, params, false);
    }
 
    if (ctx->Driver.TexParameter && need_update) {
@@ -868,7 +871,7 @@ _mesa_TexParameteri(GLenum target, GLenum pname, GLint param)
          fparam[0] = (GLfloat) param;
          fparam[1] = fparam[2] = fparam[3] = 0.0F;
          /* convert int param to float */
-         need_update = set_tex_parameterf(ctx, texObj, pname, fparam);
+         need_update = set_tex_parameterf(ctx, texObj, pname, fparam, false);
       }
       break;
    default:
@@ -908,7 +911,7 @@ _mesa_TexParameteriv(GLenum target, GLenum pname, const GLint *params)
          fparams[1] = INT_TO_FLOAT(params[1]);
          fparams[2] = INT_TO_FLOAT(params[2]);
          fparams[3] = INT_TO_FLOAT(params[3]);
-         need_update = set_tex_parameterf(ctx, texObj, pname, fparams);
+         need_update = set_tex_parameterf(ctx, texObj, pname, fparams, false);
       }
       break;
    case GL_TEXTURE_MIN_LOD:
@@ -922,7 +925,7 @@ _mesa_TexParameteriv(GLenum target, GLenum pname, const GLint *params)
          GLfloat fparams[4];
          fparams[0] = (GLfloat) params[0];
          fparams[1] = fparams[2] = fparams[3] = 0.0F;
-         need_update = set_tex_parameterf(ctx, texObj, pname, fparams);
+         need_update = set_tex_parameterf(ctx, texObj, pname, fparams, false);
       }
       break;
    default:
