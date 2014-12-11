@@ -234,12 +234,12 @@ target_allows_setting_sampler_parameters(GLenum target)
 static GLboolean
 set_tex_parameteri(struct gl_context *ctx,
                    struct gl_texture_object *texObj,
-                   GLenum pname, const GLint *params)
+                   GLenum pname, const GLint *params, bool dsa)
 {
    switch (pname) {
    case GL_TEXTURE_MIN_FILTER:
       if (!target_allows_setting_sampler_parameters(texObj->Target))
-         goto invalid_operation;
+         goto invalid_enum;
 
       if (texObj->Sampler.MinFilter == params[0])
          return GL_FALSE;
@@ -267,7 +267,7 @@ set_tex_parameteri(struct gl_context *ctx,
 
    case GL_TEXTURE_MAG_FILTER:
       if (!target_allows_setting_sampler_parameters(texObj->Target))
-         goto invalid_operation;
+         goto invalid_enum;
 
       if (texObj->Sampler.MagFilter == params[0])
          return GL_FALSE;
@@ -284,7 +284,7 @@ set_tex_parameteri(struct gl_context *ctx,
 
    case GL_TEXTURE_WRAP_S:
       if (!target_allows_setting_sampler_parameters(texObj->Target))
-         goto invalid_operation;
+         goto invalid_enum;
 
       if (texObj->Sampler.WrapS == params[0])
          return GL_FALSE;
@@ -297,7 +297,7 @@ set_tex_parameteri(struct gl_context *ctx,
 
    case GL_TEXTURE_WRAP_T:
       if (!target_allows_setting_sampler_parameters(texObj->Target))
-         goto invalid_operation;
+         goto invalid_enum;
 
       if (texObj->Sampler.WrapT == params[0])
          return GL_FALSE;
@@ -310,7 +310,7 @@ set_tex_parameteri(struct gl_context *ctx,
 
    case GL_TEXTURE_WRAP_R:
       if (!target_allows_setting_sampler_parameters(texObj->Target))
-         goto invalid_operation;
+         goto invalid_enum;
 
       if (texObj->Sampler.WrapR == params[0])
          return GL_FALSE;
@@ -332,10 +332,17 @@ set_tex_parameteri(struct gl_context *ctx,
            texObj->Target == GL_TEXTURE_2D_MULTISAMPLE_ARRAY) && params[0] != 0)
          goto invalid_operation;
 
-      if (params[0] < 0 ||
-          (texObj->Target == GL_TEXTURE_RECTANGLE_ARB && params[0] != 0)) {
+      if (params[0] < 0) {
          _mesa_error(ctx, GL_INVALID_VALUE,
-                     "glTexParameter(param=%d)", params[0]);
+                     "glTex%sParameter(param=%d)", dsa ? "ture" : "",
+                     params[0]);
+         return GL_FALSE;
+      }
+      if (texObj->Target == GL_TEXTURE_RECTANGLE_ARB && params[0] != 0) {
+         _mesa_error(ctx, GL_INVALID_OPERATION,
+                     "glTex%sParameter(target=%s, param=%d)",
+                     dsa ? "true" : "",
+                     _mesa_lookup_enum_by_nr(texObj->Target), params[0]);
          return GL_FALSE;
       }
       incomplete(ctx, texObj);
@@ -355,7 +362,8 @@ set_tex_parameteri(struct gl_context *ctx,
       if (params[0] < 0 ||
           (texObj->Target == GL_TEXTURE_RECTANGLE_ARB && params[0] > 0)) {
          _mesa_error(ctx, GL_INVALID_VALUE,
-                     "glTexParameter(param=%d)", params[0]);
+                     "glTex%sParameter(param=%d)", dsa ? "ture" : "",
+                     params[0]);
          return GL_FALSE;
       }
       incomplete(ctx, texObj);
@@ -392,7 +400,7 @@ set_tex_parameteri(struct gl_context *ctx,
           || _mesa_is_gles3(ctx)) {
 
          if (!target_allows_setting_sampler_parameters(texObj->Target))
-            goto invalid_operation;
+            goto invalid_enum;
 
          if (texObj->Sampler.CompareMode == params[0])
             return GL_FALSE;
@@ -411,7 +419,7 @@ set_tex_parameteri(struct gl_context *ctx,
           || _mesa_is_gles3(ctx)) {
 
          if (!target_allows_setting_sampler_parameters(texObj->Target))
-            goto invalid_operation;
+            goto invalid_enum;
 
          if (texObj->Sampler.CompareFunc == params[0])
             return GL_FALSE;
@@ -486,7 +494,8 @@ set_tex_parameteri(struct gl_context *ctx,
          const GLint swz = comp_to_swizzle(params[0]);
          if (swz < 0) {
             _mesa_error(ctx, GL_INVALID_ENUM,
-                        "glTexParameter(swizzle 0x%x)", params[0]);
+                        "glTex%sParameter(swizzle 0x%x)", dsa ? "ture" : "",
+                        params[0]);
             return GL_FALSE;
          }
          ASSERT(comp < 4);
@@ -511,7 +520,8 @@ set_tex_parameteri(struct gl_context *ctx,
             }
             else {
                _mesa_error(ctx, GL_INVALID_ENUM,
-                           "glTexParameter(swizzle 0x%x)", params[comp]);
+                           "glTex%sParameter(swizzle 0x%x)",
+                           dsa ? "ture" : "", params[comp]);
                return GL_FALSE;
             }
          }
@@ -525,7 +535,7 @@ set_tex_parameteri(struct gl_context *ctx,
          GLenum decode = params[0];
 
          if (!target_allows_setting_sampler_parameters(texObj->Target))
-            goto invalid_operation;
+            goto invalid_enum;
 
 	 if (decode == GL_DECODE_EXT || decode == GL_SKIP_DECODE_EXT) {
 	    if (texObj->Sampler.sRGBDecode != decode) {
@@ -543,7 +553,7 @@ set_tex_parameteri(struct gl_context *ctx,
          GLenum param = params[0];
 
          if (!target_allows_setting_sampler_parameters(texObj->Target))
-            goto invalid_operation;
+            goto invalid_enum;
 
          if (param != GL_TRUE && param != GL_FALSE) {
             goto invalid_param;
@@ -561,17 +571,25 @@ set_tex_parameteri(struct gl_context *ctx,
    }
 
 invalid_pname:
-   _mesa_error(ctx, GL_INVALID_ENUM, "glTexParameter(pname=%s)",
-               _mesa_lookup_enum_by_nr(pname));
+   _mesa_error(ctx, GL_INVALID_ENUM, "glTex%sParameter(pname=%s)",
+               dsa ? "ture" : "", _mesa_lookup_enum_by_nr(pname));
    return GL_FALSE;
 
 invalid_param:
-   _mesa_error(ctx, GL_INVALID_ENUM, "glTexParameter(param=%s)",
+   _mesa_error(ctx, GL_INVALID_ENUM, "glTex%sParameter(param=%s)",
+               dsa ? "ture" : "",
                _mesa_lookup_enum_by_nr(params[0]));
    return GL_FALSE;
 
 invalid_operation:
-   _mesa_error(ctx, GL_INVALID_OPERATION, "glTexParameter(pname=%s)",
+   _mesa_error(ctx, GL_INVALID_OPERATION, "glTex%sParameter(pname=%s)",
+               dsa ? "ture" : "",
+               _mesa_lookup_enum_by_nr(pname));
+   return GL_FALSE;
+
+invalid_enum:
+   _mesa_error(ctx, GL_INVALID_ENUM, "glTex%sParameter(pname=%s)",
+               dsa ? "ture" : "",
                _mesa_lookup_enum_by_nr(pname));
    return GL_FALSE;
 }
@@ -736,7 +754,7 @@ _mesa_TexParameterf(GLenum target, GLenum pname, GLfloat param)
                 ((param < INT_MIN) ? INT_MIN : (GLint) (param - 0.5));
 
          p[1] = p[2] = p[3] = 0;
-         need_update = set_tex_parameteri(ctx, texObj, pname, p);
+         need_update = set_tex_parameteri(ctx, texObj, pname, p, false);
       }
       break;
    default:
@@ -786,7 +804,7 @@ _mesa_TexParameterfv(GLenum target, GLenum pname, const GLfloat *params)
          GLint p[4];
          p[0] = (GLint) params[0];
          p[1] = p[2] = p[3] = 0;
-         need_update = set_tex_parameteri(ctx, texObj, pname, p);
+         need_update = set_tex_parameteri(ctx, texObj, pname, p, false);
       }
       break;
    case GL_TEXTURE_CROP_RECT_OES:
@@ -797,7 +815,7 @@ _mesa_TexParameterfv(GLenum target, GLenum pname, const GLfloat *params)
          iparams[1] = (GLint) params[1];
          iparams[2] = (GLint) params[2];
          iparams[3] = (GLint) params[3];
-         need_update = set_tex_parameteri(ctx, texObj, pname, iparams);
+         need_update = set_tex_parameteri(ctx, texObj, pname, iparams, false);
       }
       break;
    case GL_TEXTURE_SWIZZLE_R_EXT:
@@ -813,7 +831,7 @@ _mesa_TexParameterfv(GLenum target, GLenum pname, const GLfloat *params)
             p[2] = (GLint) params[2];
             p[3] = (GLint) params[3];
          }
-         need_update = set_tex_parameteri(ctx, texObj, pname, p);
+         need_update = set_tex_parameteri(ctx, texObj, pname, p, false);
       }
       break;
    default:
@@ -859,7 +877,7 @@ _mesa_TexParameteri(GLenum target, GLenum pname, GLint param)
          GLint iparam[4];
          iparam[0] = param;
          iparam[1] = iparam[2] = iparam[3] = 0;
-         need_update = set_tex_parameteri(ctx, texObj, pname, iparam);
+         need_update = set_tex_parameteri(ctx, texObj, pname, iparam, false);
       }
    }
 
@@ -909,7 +927,7 @@ _mesa_TexParameteriv(GLenum target, GLenum pname, const GLint *params)
       break;
    default:
       /* this will generate an error if pname is illegal */
-      need_update = set_tex_parameteri(ctx, texObj, pname, params);
+      need_update = set_tex_parameteri(ctx, texObj, pname, params, false);
    }
 
    if (ctx->Driver.TexParameter && need_update) {
