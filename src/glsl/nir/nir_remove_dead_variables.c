@@ -67,20 +67,20 @@ add_var_use_block(nir_block *block, void *state)
 
    nir_foreach_instr(block, instr) {
       switch(instr->type) {
-         case nir_instr_type_intrinsic:
-            add_var_use_intrinsic(nir_instr_as_intrinsic(instr), live);
-            break;
+      case nir_instr_type_intrinsic:
+         add_var_use_intrinsic(nir_instr_as_intrinsic(instr), live);
+         break;
 
-         case nir_instr_type_call:
-            add_var_use_call(nir_instr_as_call(instr), live);
-            break;
+      case nir_instr_type_call:
+         add_var_use_call(nir_instr_as_call(instr), live);
+         break;
 
-         case nir_instr_type_texture:
-            add_var_use_tex(nir_instr_as_texture(instr), live);
-            break;
+      case nir_instr_type_texture:
+         add_var_use_tex(nir_instr_as_texture(instr), live);
+         break;
 
-         default:
-            break;
+      default:
+         break;
       }
    }
 
