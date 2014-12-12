@@ -68,4 +68,9 @@ intel_texsubimage_tiled_memcpy(struct gl_context *ctx,
                                const struct gl_pixelstore_attrib *packing,
                                bool for_glTexImage);
 
+bool
+intel_getteximage_tiled_memcpy(struct gl_context *ctx,
+                    GLenum format, GLenum type, GLvoid *pixels,
+                    struct gl_texture_image *texImage);
+
 #endif

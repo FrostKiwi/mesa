@@ -44,8 +44,7 @@
 #include "intel_mipmap_tree.h"
 #include "intel_pixel.h"
 #include "intel_buffer_objects.h"
-
-#define FILE_DEBUG_FLAG DEBUG_PIXEL
+#include "intel_tiled_memcpy.h"
 
 /* For many applications, the new ability to pull the source buffers
  * back out of the GTT and then do the packing/conversion operations
@@ -161,16 +160,121 @@ do_blit_readpixels(struct gl_context * ctx,
    return true;
 }
 
+/**
+ * \brief A fast path for glReadPixels
+ *
+ * This fast path is taken when the source format is BGRA, RGBA,
+ * A or L and when the texture memory is X- or Y-tiled.  It downloads
+ * the source data by mapping the memory without a GTT fence, thus
+ * acquiring a linear view of the memory.
+ *
+ * This is a performance win over the conventional texture download path.
+ * In the conventional texture download path,
+ *
+ */
+
+bool
+intel_readpixels_tiled_memcpy(struct gl_context * ctx,
+                             GLint x, GLint y, GLsizei width, GLsizei height,
+                             GLenum format, GLenum type,
+                             const struct gl_pixelstore_attrib *pack, GLvoid * pixels)
+{
+   struct brw_context *brw = brw_context(ctx);
+
+   struct gl_renderbuffer *rb = ctx->ReadBuffer->_ColorReadBuffer;
+   struct intel_renderbuffer *irb = intel_renderbuffer(rb);
+
+   int dst_pitch;
+
+   drm_intel_bo *src_buffer;
+
+   int error = 0;
+   uint32_t cpp;
+   mem_copy_fn mem_copy = NULL;
+
+   if (!brw->has_llc ||
+       !(type == GL_UNSIGNED_BYTE || type == GL_UNSIGNED_INT_8_8_8_8_REV) ||
+       pixels == NULL ||
+       _mesa_is_bufferobj(pack->BufferObj) ||
+       pack->Alignment > 4 ||
+       pack->SkipPixels > 0 ||
+       pack->SkipRows > 0 ||
+       (pack->RowLength != 0 && pack->RowLength != width) ||
+       pack->SwapBytes ||
+       pack->LsbFirst ||
+       pack->Invert)
+      return false;
+
+   if (!intel_get_memcpy(rb->Format, format, type, &mem_copy, &cpp))
+      return false;
+
+   if (!irb->mt ||
+       (irb->mt->tiling != I915_TILING_X &&
+       irb->mt->tiling != I915_TILING_Y)) {
+      /* The algorithm is written only for X- or Y-tiled memory. */
+      return false;
+   }
+
+   /* Since we are going to write raw data to the miptree, we need to resolve
+    * any pending fast color clears before we start.
+    */
+   intel_miptree_resolve_color(brw, irb->mt);
+
+   src_buffer = irb->mt->bo;
+
+   if (drm_intel_bo_references(brw->batch.bo, src_buffer)) {
+      perf_debug("Flushing before mapping a referenced bo.\n");
+      intel_batchbuffer_flush(brw);
+   }
+
+   error = brw_bo_map(brw, src_buffer, false /* write enable */, "miptree");
+   if (error || src_buffer->virtual == NULL) {
+      DBG("%s: failed to map bo\n", __FUNCTION__);
+      return false;
+   }
+
+   dst_pitch = _mesa_image_row_stride(pack, width, format, type);
+
+   DBG("%s: x,y=(%d,%d) (w,h)=(%d,%d) format=0x%x type=0x%x "
+       "mesa_format=0x%x tiling=%d "
+       "pack=(alignment=%d row_length=%d skip_pixels=%d skip_rows=%d)\n",
+       __FUNCTION__, x, y, width, height,
+       format, type, rb->Format, irb->mt->tiling,
+       pack->Alignment, pack->RowLength, pack->SkipPixels,
+       pack->SkipRows);
+
+   tiled_to_linear(
+      x * cpp, (x + width) * cpp,
+      y, y + height,
+      pixels,
+      src_buffer->virtual - y * irb->mt->pitch - x * cpp,
+      dst_pitch, irb->mt->pitch,
+      brw->has_swizzling,
+      irb->mt->tiling,
+      mem_copy
+   );
+
+   drm_intel_bo_unmap(src_buffer);
+   return true;
+}
+
 void
 intelReadPixels(struct gl_context * ctx,
                 GLint x, GLint y, GLsizei width, GLsizei height,
                 GLenum format, GLenum type,
                 const struct gl_pixelstore_attrib *pack, GLvoid * pixels)
 {
+   bool ok;
+
    struct brw_context *brw = brw_context(ctx);
    bool dirty;
 
    DBG("%s\n", __FUNCTION__);
+
+   ok = intel_readpixels_tiled_memcpy(ctx, x, y, width, height,
+                                      format, type, pack, pixels);
+   if(ok)
+      return;
 
    if (_mesa_is_bufferobj(pack->BufferObj)) {
       /* Using PBOs, so try the BLT based path. */

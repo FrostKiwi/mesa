@@ -60,4 +60,11 @@ void intelBitmap(struct gl_context * ctx,
 		 const struct gl_pixelstore_attrib *unpack,
 		 const GLubyte * pixels);
 
+bool
+intel_readpixels_tiled_memcpy(struct gl_context * ctx,
+                             GLint x, GLint y, GLsizei width, GLsizei height,
+                             GLenum format, GLenum type,
+                             const struct gl_pixelstore_attrib *pack, GLvoid * pixels);
+
+
 #endif
