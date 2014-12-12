@@ -549,15 +549,14 @@ nir_deref *
 nir_copy_deref(void *mem_ctx, nir_deref *deref)
 {
    switch (deref->deref_type) {
-      case nir_deref_type_var:
-         return &copy_deref_var(mem_ctx, nir_deref_as_var(deref))->deref;
-      case nir_deref_type_array:
-         return &copy_deref_array(mem_ctx, nir_deref_as_array(deref))->deref;
-      case nir_deref_type_struct:
-         return &copy_deref_struct(mem_ctx, nir_deref_as_struct(deref))->deref;
-      default:
-         assert(0);
-         break;
+   case nir_deref_type_var:
+      return &copy_deref_var(mem_ctx, nir_deref_as_var(deref))->deref;
+   case nir_deref_type_array:
+      return &copy_deref_array(mem_ctx, nir_deref_as_array(deref))->deref;
+   case nir_deref_type_struct:
+      return &copy_deref_struct(mem_ctx, nir_deref_as_struct(deref))->deref;
+   default:
+      unreachable("Invalid dereference type");
    }
 
    return NULL;
@@ -1373,26 +1372,26 @@ bool
 nir_foreach_dest(nir_instr *instr, nir_foreach_dest_cb cb, void *state)
 {
    switch (instr->type) {
-      case nir_instr_type_alu:
-         return visit_alu_dest(nir_instr_as_alu(instr), cb, state);
-      case nir_instr_type_intrinsic:
-         return visit_intrinsic_dest(nir_instr_as_intrinsic(instr), cb, state);
-      case nir_instr_type_texture:
-         return visit_texture_dest(nir_instr_as_texture(instr), cb, state);
-      case nir_instr_type_load_const:
-         return visit_load_const_dest(nir_instr_as_load_const(instr), cb, state);
-      case nir_instr_type_phi:
-         return visit_phi_dest(nir_instr_as_phi(instr), cb, state);
-         break;
+   case nir_instr_type_alu:
+      return visit_alu_dest(nir_instr_as_alu(instr), cb, state);
+   case nir_instr_type_intrinsic:
+      return visit_intrinsic_dest(nir_instr_as_intrinsic(instr), cb, state);
+   case nir_instr_type_texture:
+      return visit_texture_dest(nir_instr_as_texture(instr), cb, state);
+   case nir_instr_type_load_const:
+      return visit_load_const_dest(nir_instr_as_load_const(instr), cb, state);
+   case nir_instr_type_phi:
+      return visit_phi_dest(nir_instr_as_phi(instr), cb, state);
+      break;
 
-      case nir_instr_type_ssa_undef:
-      case nir_instr_type_call:
-      case nir_instr_type_jump:
-         break;
+   case nir_instr_type_ssa_undef:
+   case nir_instr_type_call:
+   case nir_instr_type_jump:
+      break;
 
-      default:
-         assert(0);
-         break;
+   default:
+      unreachable("Invalid instruction type");
+      break;
    }
 
    return true;
@@ -1538,37 +1537,37 @@ bool
 nir_foreach_src(nir_instr *instr, nir_foreach_src_cb cb, void *state)
 {
    switch (instr->type) {
-      case nir_instr_type_alu:
-         if (!visit_alu_src(nir_instr_as_alu(instr), cb, state))
-            return false;
-         break;
-      case nir_instr_type_intrinsic:
-         if (!visit_intrinsic_src(nir_instr_as_intrinsic(instr), cb, state))
-            return false;
-         break;
-      case nir_instr_type_texture:
-         if (!visit_tex_src(nir_instr_as_texture(instr), cb, state))
-            return false;
-         break;
-      case nir_instr_type_call:
-         if (!visit_call_src(nir_instr_as_call(instr), cb, state))
-            return false;
-         break;
-      case nir_instr_type_load_const:
-         if (!visit_load_const_src(nir_instr_as_load_const(instr), cb, state))
-            return false;
-         break;
-      case nir_instr_type_phi:
-         if (!visit_phi_src(nir_instr_as_phi(instr), cb, state))
-            return false;
-         break;
-      case nir_instr_type_jump:
-      case nir_instr_type_ssa_undef:
-         return true;
+   case nir_instr_type_alu:
+      if (!visit_alu_src(nir_instr_as_alu(instr), cb, state))
+         return false;
+      break;
+   case nir_instr_type_intrinsic:
+      if (!visit_intrinsic_src(nir_instr_as_intrinsic(instr), cb, state))
+         return false;
+      break;
+   case nir_instr_type_texture:
+      if (!visit_tex_src(nir_instr_as_texture(instr), cb, state))
+         return false;
+      break;
+   case nir_instr_type_call:
+      if (!visit_call_src(nir_instr_as_call(instr), cb, state))
+         return false;
+      break;
+   case nir_instr_type_load_const:
+      if (!visit_load_const_src(nir_instr_as_load_const(instr), cb, state))
+         return false;
+      break;
+   case nir_instr_type_phi:
+      if (!visit_phi_src(nir_instr_as_phi(instr), cb, state))
+         return false;
+      break;
+   case nir_instr_type_jump:
+   case nir_instr_type_ssa_undef:
+      return true;
 
-      default:
-         assert(0);
-         break;
+   default:
+      unreachable("Invalid instruction type");
+      break;
    }
 
    visit_dest_indirect_state dest_state;
@@ -1618,17 +1617,17 @@ static bool
 foreach_cf_node(nir_cf_node *node, nir_foreach_block_cb cb, void *state)
 {
    switch (node->type) {
-      case nir_cf_node_block:
-         return foreach_block(nir_cf_node_as_block(node), cb, state);
-      case nir_cf_node_if:
-         return foreach_if(nir_cf_node_as_if(node), cb, state);
-      case nir_cf_node_loop:
-         return foreach_loop(nir_cf_node_as_loop(node), cb, state);
-         break;
+   case nir_cf_node_block:
+      return foreach_block(nir_cf_node_as_block(node), cb, state);
+   case nir_cf_node_if:
+      return foreach_if(nir_cf_node_as_if(node), cb, state);
+   case nir_cf_node_loop:
+      return foreach_loop(nir_cf_node_as_loop(node), cb, state);
+      break;
 
-      default:
-         assert(0);
-         break;
+   default:
+      unreachable("Invalid CFG node type");
+      break;
    }
 
    return false;
