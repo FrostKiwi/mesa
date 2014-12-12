@@ -74,44 +74,44 @@ init_instr(nir_instr *instr, struct exec_list *worklist)
    instr->live = false;
 
    switch (instr->type) {
-      case nir_instr_type_call:
-      case nir_instr_type_jump:
+   case nir_instr_type_call:
+   case nir_instr_type_jump:
+      worklist_push(worklist, instr);
+      break;
+
+   case nir_instr_type_alu:
+      alu_instr = nir_instr_as_alu(instr);
+      if (!alu_instr->dest.dest.is_ssa)
          worklist_push(worklist, instr);
-         break;
+      break;
 
-      case nir_instr_type_alu:
-         alu_instr = nir_instr_as_alu(instr);
-         if (!alu_instr->dest.dest.is_ssa)
-            worklist_push(worklist, instr);
-         break;
-
-      case nir_instr_type_intrinsic:
-         intrin_instr = nir_instr_as_intrinsic(instr);
-         if (nir_intrinsic_infos[intrin_instr->intrinsic].flags &
-             NIR_INTRINSIC_CAN_ELIMINATE) {
-            if (nir_intrinsic_infos[intrin_instr->intrinsic].has_dest &&
-                !intrin_instr->dest.is_ssa) {
-               worklist_push(worklist, instr);
-            }
-         } else {
+   case nir_instr_type_intrinsic:
+      intrin_instr = nir_instr_as_intrinsic(instr);
+      if (nir_intrinsic_infos[intrin_instr->intrinsic].flags &
+          NIR_INTRINSIC_CAN_ELIMINATE) {
+         if (nir_intrinsic_infos[intrin_instr->intrinsic].has_dest &&
+             !intrin_instr->dest.is_ssa) {
             worklist_push(worklist, instr);
          }
-         break;
+      } else {
+         worklist_push(worklist, instr);
+      }
+      break;
 
-      case nir_instr_type_texture:
-         tex_instr = nir_instr_as_texture(instr);
-         if (!tex_instr->dest.is_ssa)
-            worklist_push(worklist, instr);
-         break;
+   case nir_instr_type_texture:
+      tex_instr = nir_instr_as_texture(instr);
+      if (!tex_instr->dest.is_ssa)
+         worklist_push(worklist, instr);
+      break;
 
-      case nir_instr_type_load_const:
-         load_const_instr = nir_instr_as_load_const(instr);
-         if (!load_const_instr->dest.is_ssa)
-            worklist_push(worklist, instr);
-         break;
+   case nir_instr_type_load_const:
+      load_const_instr = nir_instr_as_load_const(instr);
+      if (!load_const_instr->dest.is_ssa)
+         worklist_push(worklist, instr);
+      break;
 
-      default:
-         break;
+   default:
+      break;
    }
 }
 
