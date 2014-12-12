@@ -176,47 +176,47 @@ constant_copy(ir_constant *ir, void *mem_ctx)
    unsigned total_elems = ir->type->components();
    unsigned i;
    switch (ir->type->base_type) {
-      case GLSL_TYPE_UINT:
-         for (i = 0; i < total_elems; i++)
-            ret->value.u[i] = ir->value.u[i];
-         break;
+   case GLSL_TYPE_UINT:
+      for (i = 0; i < total_elems; i++)
+         ret->value.u[i] = ir->value.u[i];
+      break;
 
-      case GLSL_TYPE_INT:
-         for (i = 0; i < total_elems; i++)
-            ret->value.i[i] = ir->value.i[i];
-         break;
+   case GLSL_TYPE_INT:
+      for (i = 0; i < total_elems; i++)
+         ret->value.i[i] = ir->value.i[i];
+      break;
 
-      case GLSL_TYPE_FLOAT:
-         for (i = 0; i < total_elems; i++)
-            ret->value.f[i] = ir->value.f[i];
-         break;
+   case GLSL_TYPE_FLOAT:
+      for (i = 0; i < total_elems; i++)
+         ret->value.f[i] = ir->value.f[i];
+      break;
 
-      case GLSL_TYPE_BOOL:
-         for (i = 0; i < total_elems; i++)
-            ret->value.b[i] = ir->value.b[i];
-         break;
+   case GLSL_TYPE_BOOL:
+      for (i = 0; i < total_elems; i++)
+         ret->value.b[i] = ir->value.b[i];
+      break;
 
-      case GLSL_TYPE_STRUCT:
-         ret->elements = ralloc_array(mem_ctx, nir_constant *,
-                                      ir->type->length);
-         i = 0;
-         foreach_in_list(ir_constant, field, &ir->components) {
-            ret->elements[i] = constant_copy(field, mem_ctx);
-            i++;
-         }
-         break;
+   case GLSL_TYPE_STRUCT:
+      ret->elements = ralloc_array(mem_ctx, nir_constant *,
+                                   ir->type->length);
+      i = 0;
+      foreach_in_list(ir_constant, field, &ir->components) {
+         ret->elements[i] = constant_copy(field, mem_ctx);
+         i++;
+      }
+      break;
 
-      case GLSL_TYPE_ARRAY:
-         ret->elements = ralloc_array(mem_ctx, nir_constant *,
-                                      ir->type->length);
+   case GLSL_TYPE_ARRAY:
+      ret->elements = ralloc_array(mem_ctx, nir_constant *,
+                                   ir->type->length);
 
-         for (i = 0; i < ir->type->length; i++)
-            ret->elements[i] = constant_copy(ir->array_elements[i], mem_ctx);
-         break;
+      for (i = 0; i < ir->type->length; i++)
+         ret->elements[i] = constant_copy(ir->array_elements[i], mem_ctx);
+      break;
 
-      default:
-         assert(0);
-         break;
+   default:
+      assert(0);
+      break;
    }
 
    return ret;
@@ -244,41 +244,41 @@ nir_visitor::visit(ir_variable *ir)
    var->data.invariant = ir->data.invariant;
 
    switch(ir->data.mode) {
-      case ir_var_auto:
-      case ir_var_temporary:
-         if (is_global)
-            var->data.mode = nir_var_global;
-         else
-            var->data.mode = nir_var_local;
-         break;
-
-      case ir_var_function_in:
-      case ir_var_function_out:
-      case ir_var_function_inout:
-      case ir_var_const_in:
+   case ir_var_auto:
+   case ir_var_temporary:
+      if (is_global)
+         var->data.mode = nir_var_global;
+      else
          var->data.mode = nir_var_local;
-         break;
+      break;
 
-      case ir_var_shader_in:
-         var->data.mode = nir_var_shader_in;
-         break;
+   case ir_var_function_in:
+   case ir_var_function_out:
+   case ir_var_function_inout:
+   case ir_var_const_in:
+      var->data.mode = nir_var_local;
+      break;
 
-      case ir_var_shader_out:
-         var->data.mode = nir_var_shader_out;
-         break;
+   case ir_var_shader_in:
+      var->data.mode = nir_var_shader_in;
+      break;
 
-      case ir_var_uniform:
-         var->data.mode = nir_var_uniform;
-         break;
+   case ir_var_shader_out:
+      var->data.mode = nir_var_shader_out;
+      break;
+
+   case ir_var_uniform:
+      var->data.mode = nir_var_uniform;
+      break;
 
 
-      case ir_var_system_value:
-         var->data.mode = nir_var_system_value;
-         break;
+   case ir_var_system_value:
+      var->data.mode = nir_var_system_value;
+      break;
 
-      default:
-         assert(0);
-         break;
+   default:
+      assert(0);
+      break;
    }
 
    var->data.interpolation = ir->data.interpolation;
@@ -294,24 +294,24 @@ nir_visitor::visit(ir_variable *ir)
    var->data.from_named_ifc_block_nonarray = ir->data.from_named_ifc_block_nonarray;
 
    switch (ir->data.depth_layout) {
-      case ir_depth_layout_none:
-         var->data.depth_layout = nir_depth_layout_none;
-         break;
-      case ir_depth_layout_any:
-         var->data.depth_layout = nir_depth_layout_any;
-         break;
-      case ir_depth_layout_greater:
-         var->data.depth_layout = nir_depth_layout_greater;
-         break;
-      case ir_depth_layout_less:
-         var->data.depth_layout = nir_depth_layout_less;
-         break;
-      case ir_depth_layout_unchanged:
-         var->data.depth_layout = nir_depth_layout_unchanged;
-         break;
-      default:
-         assert(0);
-         break;
+   case ir_depth_layout_none:
+      var->data.depth_layout = nir_depth_layout_none;
+      break;
+   case ir_depth_layout_any:
+      var->data.depth_layout = nir_depth_layout_any;
+      break;
+   case ir_depth_layout_greater:
+      var->data.depth_layout = nir_depth_layout_greater;
+      break;
+   case ir_depth_layout_less:
+      var->data.depth_layout = nir_depth_layout_less;
+      break;
+   case ir_depth_layout_unchanged:
+      var->data.depth_layout = nir_depth_layout_unchanged;
+      break;
+   default:
+      assert(0);
+      break;
    }
 
    var->data.location = ir->data.location;
@@ -343,36 +343,36 @@ nir_visitor::visit(ir_variable *ir)
    var->interface_type = ir->get_interface_type();
 
    switch (var->data.mode) {
-      case nir_var_local:
-         exec_list_push_tail(&impl->locals, &var->node);
-         break;
+   case nir_var_local:
+      exec_list_push_tail(&impl->locals, &var->node);
+      break;
 
-      case nir_var_global:
-         exec_list_push_tail(&shader->globals, &var->node);
-         break;
+   case nir_var_global:
+      exec_list_push_tail(&shader->globals, &var->node);
+      break;
 
-      case nir_var_shader_in:
-         _mesa_hash_table_insert(shader->inputs, _mesa_hash_string(var->name),
-                                 var->name, var);
-         break;
+   case nir_var_shader_in:
+      _mesa_hash_table_insert(shader->inputs, _mesa_hash_string(var->name),
+                              var->name, var);
+      break;
 
-      case nir_var_shader_out:
-         _mesa_hash_table_insert(shader->outputs, _mesa_hash_string(var->name),
-                                 var->name, var);
-         break;
+   case nir_var_shader_out:
+      _mesa_hash_table_insert(shader->outputs, _mesa_hash_string(var->name),
+                              var->name, var);
+      break;
 
-      case nir_var_uniform:
-         _mesa_hash_table_insert(shader->uniforms, _mesa_hash_string(var->name),
-                                 var->name, var);
-         break;
+   case nir_var_uniform:
+      _mesa_hash_table_insert(shader->uniforms, _mesa_hash_string(var->name),
+                              var->name, var);
+      break;
 
-      case nir_var_system_value:
-         exec_list_push_tail(&shader->system_values, &var->node);
-         break;
+   case nir_var_system_value:
+      exec_list_push_tail(&shader->system_values, &var->node);
+      break;
 
-      default:
-         assert(0);
-         break;
+   default:
+      assert(0);
+      break;
    }
 
    _mesa_hash_table_insert(var_table, _mesa_hash_pointer(ir), ir, var);
@@ -413,21 +413,21 @@ nir_visitor::create_overload(ir_function_signature *ir, nir_function *function)
    unsigned i = 0;
    foreach_in_list(ir_variable, param, &ir->parameters) {
       switch (param->data.mode) {
-         case ir_var_function_in:
-            overload->params[i].param_type = nir_parameter_in;
-            break;
+      case ir_var_function_in:
+         overload->params[i].param_type = nir_parameter_in;
+         break;
 
-         case ir_var_function_out:
-            overload->params[i].param_type = nir_parameter_out;
-            break;
+      case ir_var_function_out:
+         overload->params[i].param_type = nir_parameter_out;
+         break;
 
-         case ir_var_function_inout:
-            overload->params[i].param_type = nir_parameter_inout;
-            break;
+      case ir_var_function_inout:
+         overload->params[i].param_type = nir_parameter_inout;
+         break;
 
-         default:
-            assert(0);
-            break;
+      default:
+         assert(0);
+         break;
       }
 
       overload->params[i].type = param->type;
@@ -565,15 +565,15 @@ nir_visitor::visit(ir_loop_jump *ir)
 {
    nir_jump_type type;
    switch (ir->mode) {
-      case ir_loop_jump::jump_break:
-         type = nir_jump_break;
-         break;
-      case ir_loop_jump::jump_continue:
-         type = nir_jump_continue;
-         break;
-      default:
-         assert(0);
-         break;
+   case ir_loop_jump::jump_break:
+      type = nir_jump_break;
+      break;
+   case ir_loop_jump::jump_continue:
+      type = nir_jump_continue;
+      break;
+   default:
+      assert(0);
+      break;
    }
 
    nir_jump_instr *instr = nir_jump_instr_create(this->shader, type);
@@ -998,509 +998,509 @@ nir_visitor::visit(ir_expression *ir)
    nir_op op;
 
    switch (ir->operation) {
-      case ir_unop_bit_not: emit(nir_op_inot, dest_size, srcs); break;
-      case ir_unop_logic_not:
-         emit(supports_ints ? nir_op_inot : nir_op_fnot, dest_size, srcs);
-         break;
-      case ir_unop_neg:
-         instr = emit(types[0] == GLSL_TYPE_FLOAT ? nir_op_fmov : nir_op_imov,
-                      dest_size, srcs);
-         instr->src[0].negate = true;
-         break;
-      case ir_unop_abs:
-         instr = emit(types[0] == GLSL_TYPE_FLOAT ? nir_op_fmov : nir_op_imov,
-                      dest_size, srcs);
-         instr->src[0].abs = true;
-         break;
-      case ir_unop_sign:
-         emit(types[0] == GLSL_TYPE_FLOAT ? nir_op_fsign : nir_op_isign,
+   case ir_unop_bit_not: emit(nir_op_inot, dest_size, srcs); break;
+   case ir_unop_logic_not:
+      emit(supports_ints ? nir_op_inot : nir_op_fnot, dest_size, srcs);
+      break;
+   case ir_unop_neg:
+      instr = emit(types[0] == GLSL_TYPE_FLOAT ? nir_op_fmov : nir_op_imov,
+                   dest_size, srcs);
+      instr->src[0].negate = true;
+      break;
+   case ir_unop_abs:
+      instr = emit(types[0] == GLSL_TYPE_FLOAT ? nir_op_fmov : nir_op_imov,
+                   dest_size, srcs);
+      instr->src[0].abs = true;
+      break;
+   case ir_unop_sign:
+      emit(types[0] == GLSL_TYPE_FLOAT ? nir_op_fsign : nir_op_isign,
+           dest_size, srcs);
+      break;
+   case ir_unop_rcp:  emit(nir_op_frcp, dest_size, srcs);  break;
+   case ir_unop_rsq:  emit(nir_op_frsq, dest_size, srcs);  break;
+   case ir_unop_sqrt: emit(nir_op_fsqrt, dest_size, srcs); break;
+   case ir_unop_exp:  emit(nir_op_fexp, dest_size, srcs);  break;
+   case ir_unop_log:  emit(nir_op_flog, dest_size, srcs);  break;
+   case ir_unop_exp2: emit(nir_op_fexp2, dest_size, srcs); break;
+   case ir_unop_log2: emit(nir_op_flog2, dest_size, srcs); break;
+   case ir_unop_i2f:
+      emit(supports_ints ? nir_op_i2f : nir_op_fmov, dest_size, srcs);
+      break;
+   case ir_unop_u2f:
+      emit(supports_ints ? nir_op_u2f : nir_op_fmov, dest_size, srcs);
+      break;
+   case ir_unop_b2f:
+      emit(supports_ints ? nir_op_b2f : nir_op_fmov, dest_size, srcs);
+      break;
+   case ir_unop_f2i:  emit(nir_op_f2i, dest_size, srcs);   break;
+   case ir_unop_f2u:  emit(nir_op_f2u, dest_size, srcs);   break;
+   case ir_unop_f2b:  emit(nir_op_f2b, dest_size, srcs);   break;
+   case ir_unop_i2b:  emit(nir_op_i2b, dest_size, srcs);   break;
+   case ir_unop_b2i:  emit(nir_op_b2i, dest_size, srcs);   break;
+   case ir_unop_i2u:
+   case ir_unop_u2i:
+   case ir_unop_bitcast_i2f:
+   case ir_unop_bitcast_f2i:
+   case ir_unop_bitcast_u2f:
+   case ir_unop_bitcast_f2u:
+      /* no-op */
+      emit(nir_op_imov, dest_size, srcs);
+      break;
+   case ir_unop_any:
+      switch (ir->operands[0]->type->vector_elements) {
+      case 2:
+         emit(supports_ints ? nir_op_bany2 : nir_op_fany2,
               dest_size, srcs);
          break;
-      case ir_unop_rcp:  emit(nir_op_frcp, dest_size, srcs);  break;
-      case ir_unop_rsq:  emit(nir_op_frsq, dest_size, srcs);  break;
-      case ir_unop_sqrt: emit(nir_op_fsqrt, dest_size, srcs); break;
-      case ir_unop_exp:  emit(nir_op_fexp, dest_size, srcs);  break;
-      case ir_unop_log:  emit(nir_op_flog, dest_size, srcs);  break;
-      case ir_unop_exp2: emit(nir_op_fexp2, dest_size, srcs); break;
-      case ir_unop_log2: emit(nir_op_flog2, dest_size, srcs); break;
-      case ir_unop_i2f:
-         emit(supports_ints ? nir_op_i2f : nir_op_fmov, dest_size, srcs);
-         break;
-      case ir_unop_u2f:
-         emit(supports_ints ? nir_op_u2f : nir_op_fmov, dest_size, srcs);
-         break;
-      case ir_unop_b2f:
-         emit(supports_ints ? nir_op_b2f : nir_op_fmov, dest_size, srcs);
-         break;
-      case ir_unop_f2i:  emit(nir_op_f2i, dest_size, srcs);   break;
-      case ir_unop_f2u:  emit(nir_op_f2u, dest_size, srcs);   break;
-      case ir_unop_f2b:  emit(nir_op_f2b, dest_size, srcs);   break;
-      case ir_unop_i2b:  emit(nir_op_i2b, dest_size, srcs);   break;
-      case ir_unop_b2i:  emit(nir_op_b2i, dest_size, srcs);   break;
-      case ir_unop_i2u:
-      case ir_unop_u2i:
-      case ir_unop_bitcast_i2f:
-      case ir_unop_bitcast_f2i:
-      case ir_unop_bitcast_u2f:
-      case ir_unop_bitcast_f2u:
-         /* no-op */
-         emit(nir_op_imov, dest_size, srcs);
-         break;
-      case ir_unop_any:
-         switch (ir->operands[0]->type->vector_elements) {
-            case 2:
-               emit(supports_ints ? nir_op_bany2 : nir_op_fany2,
-                    dest_size, srcs);
-               break;
-            case 3:
-               emit(supports_ints ? nir_op_bany3 : nir_op_fany3,
-                    dest_size, srcs);
-               break;
-            case 4:
-               emit(supports_ints ? nir_op_bany4 : nir_op_fany4,
-                    dest_size, srcs);
-               break;
-            default:
-               assert(0);
-               break;
-         }
-         break;
-      case ir_unop_trunc: emit(nir_op_ftrunc, dest_size, srcs); break;
-      case ir_unop_ceil:  emit(nir_op_fceil,  dest_size, srcs); break;
-      case ir_unop_floor: emit(nir_op_ffloor, dest_size, srcs); break;
-      case ir_unop_fract: emit(nir_op_ffract, dest_size, srcs); break;
-      case ir_unop_round_even: emit(nir_op_fround_even, dest_size, srcs); break;
-      case ir_unop_sin:   emit(nir_op_fsin,   dest_size, srcs); break;
-      case ir_unop_cos:   emit(nir_op_fcos,   dest_size, srcs); break;
-      case ir_unop_sin_reduced:
-         emit(nir_op_fsin_reduced, dest_size, srcs);
-         break;
-      case ir_unop_cos_reduced:
-         emit(nir_op_fcos_reduced, dest_size, srcs);
-         break;
-      case ir_unop_dFdx:  emit(nir_op_fddx,   dest_size, srcs); break;
-      case ir_unop_dFdy:  emit(nir_op_fddy,   dest_size, srcs); break;
-      case ir_unop_pack_snorm_2x16:
-         emit(nir_op_pack_snorm_2x16, dest_size, srcs);
-         break;
-      case ir_unop_pack_snorm_4x8:
-         emit(nir_op_pack_snorm_4x8, dest_size, srcs);
-         break;
-      case ir_unop_pack_unorm_2x16:
-         emit(nir_op_pack_unorm_2x16, dest_size, srcs);
-         break;
-      case ir_unop_pack_unorm_4x8:
-         emit(nir_op_pack_unorm_4x8, dest_size, srcs);
-         break;
-      case ir_unop_pack_half_2x16:
-         emit(nir_op_pack_half_2x16, dest_size, srcs);
-         break;
-      case ir_unop_unpack_snorm_2x16:
-         emit(nir_op_unpack_snorm_2x16, dest_size, srcs);
-         break;
-      case ir_unop_unpack_snorm_4x8:
-         emit(nir_op_unpack_snorm_4x8, dest_size, srcs);
-         break;
-      case ir_unop_unpack_unorm_2x16:
-         emit(nir_op_unpack_unorm_2x16, dest_size, srcs);
-         break;
-      case ir_unop_unpack_unorm_4x8:
-         emit(nir_op_unpack_unorm_4x8, dest_size, srcs);
-         break;
-      case ir_unop_unpack_half_2x16:
-         emit(nir_op_unpack_half_2x16, dest_size, srcs);
-         break;
-      case ir_unop_unpack_half_2x16_split_x:
-         emit(nir_op_unpack_half_2x16_split_x, dest_size, srcs);
-         break;
-      case ir_unop_unpack_half_2x16_split_y:
-         emit(nir_op_unpack_half_2x16_split_y, dest_size, srcs);
-         break;
-      case ir_unop_bitfield_reverse:
-         emit(nir_op_bitfield_reverse, dest_size, srcs);
-         break;
-      case ir_unop_bit_count: emit(nir_op_bit_count, dest_size, srcs); break;
-      case ir_unop_find_msb:  emit(nir_op_find_msb,  dest_size, srcs); break;
-      case ir_unop_find_lsb:  emit(nir_op_find_lsb,  dest_size, srcs); break;
-      case ir_unop_noise:
-         switch (ir->type->vector_elements) {
-            case 1:
-               switch (ir->operands[0]->type->vector_elements) {
-                  case 1: emit(nir_op_fnoise1_1, dest_size, srcs); break;
-                  case 2: emit(nir_op_fnoise1_2, dest_size, srcs); break;
-                  case 3: emit(nir_op_fnoise1_3, dest_size, srcs); break;
-                  case 4: emit(nir_op_fnoise1_4, dest_size, srcs); break;
-                  default: assert(0); break;
-               }
-               break;
-            case 2:
-               switch (ir->operands[0]->type->vector_elements) {
-                  case 1: emit(nir_op_fnoise2_1, dest_size, srcs); break;
-                  case 2: emit(nir_op_fnoise2_2, dest_size, srcs); break;
-                  case 3: emit(nir_op_fnoise2_3, dest_size, srcs); break;
-                  case 4: emit(nir_op_fnoise2_4, dest_size, srcs); break;
-                  default: assert(0); break;
-               }
-               break;
-            case 3:
-               switch (ir->operands[0]->type->vector_elements) {
-                  case 1: emit(nir_op_fnoise3_1, dest_size, srcs); break;
-                  case 2: emit(nir_op_fnoise3_2, dest_size, srcs); break;
-                  case 3: emit(nir_op_fnoise3_3, dest_size, srcs); break;
-                  case 4: emit(nir_op_fnoise3_4, dest_size, srcs); break;
-                  default: assert(0); break;
-               }
-               break;
-            case 4:
-               switch (ir->operands[0]->type->vector_elements) {
-                  case 1: emit(nir_op_fnoise4_1, dest_size, srcs); break;
-                  case 2: emit(nir_op_fnoise4_2, dest_size, srcs); break;
-                  case 3: emit(nir_op_fnoise4_3, dest_size, srcs); break;
-                  case 4: emit(nir_op_fnoise4_4, dest_size, srcs); break;
-                  default: assert(0); break;
-               }
-               break;
-            default:
-               assert(0);
-               break;
-         }
-         break;
-      case ir_binop_add:
-      case ir_binop_sub:
-      case ir_binop_mul:
-      case ir_binop_div:
-      case ir_binop_mod:
-      case ir_binop_min:
-      case ir_binop_max:
-      case ir_binop_pow:
-      case ir_binop_bit_and:
-      case ir_binop_bit_or:
-      case ir_binop_bit_xor:
-      case ir_binop_lshift:
-      case ir_binop_rshift:
-         switch (ir->operation) {
-            case ir_binop_add:
-               if (out_type == GLSL_TYPE_FLOAT)
-                  op = nir_op_fadd;
-               else
-                  op = nir_op_iadd;
-               break;
-            case ir_binop_sub:
-               if (out_type == GLSL_TYPE_FLOAT)
-                  op = nir_op_fsub;
-               else
-                  op = nir_op_isub;
-               break;
-            case ir_binop_mul:
-               if (out_type == GLSL_TYPE_FLOAT)
-                  op = nir_op_fmul;
-               else
-                  op = nir_op_imul;
-               break;
-            case ir_binop_div:
-               if (out_type == GLSL_TYPE_FLOAT)
-                  op = nir_op_fdiv;
-               else if (out_type == GLSL_TYPE_INT)
-                  op = nir_op_idiv;
-               else
-                  op = nir_op_udiv;
-               break;
-            case ir_binop_mod:
-               if (out_type == GLSL_TYPE_FLOAT)
-                  op = nir_op_fmod;
-               else
-                  op = nir_op_umod;
-               break;
-            case ir_binop_min:
-               if (out_type == GLSL_TYPE_FLOAT)
-                  op = nir_op_fmin;
-               else if (out_type == GLSL_TYPE_INT)
-                  op = nir_op_imin;
-               else
-                  op = nir_op_umin;
-               break;
-            case ir_binop_max:
-               if (out_type == GLSL_TYPE_FLOAT)
-                  op = nir_op_fmax;
-               else if (out_type == GLSL_TYPE_INT)
-                  op = nir_op_imax;
-               else
-                  op = nir_op_umax;
-               break;
-            case ir_binop_bit_and:
-               op = nir_op_iand;
-               break;
-            case ir_binop_bit_or:
-               op = nir_op_ior;
-               break;
-            case ir_binop_bit_xor:
-               op = nir_op_ixor;
-               break;
-            case ir_binop_lshift:
-               op = nir_op_ishl;
-               break;
-            case ir_binop_rshift:
-               if (out_type == GLSL_TYPE_INT)
-                  op = nir_op_ishr;
-               else
-                  op = nir_op_ushr;
-               break;
-            case ir_binop_pow:
-               op = nir_op_fpow;
-               break;
-
-            default:
-               assert(0);
-               break;
-         }
-
-         instr = emit(op, dest_size, srcs);
-
-         if (ir->operands[0]->type->vector_elements != 1 &&
-             ir->operands[1]->type->vector_elements == 1) {
-            for (unsigned i = 0; i < ir->operands[0]->type->vector_elements;
-                 i++) {
-               instr->src[1].swizzle[i] = 0;
-            }
-         }
-
-         if (ir->operands[1]->type->vector_elements != 1 &&
-             ir->operands[0]->type->vector_elements == 1) {
-            for (unsigned i = 0; i < ir->operands[1]->type->vector_elements;
-                 i++) {
-               instr->src[0].swizzle[i] = 0;
-            }
-         }
-
-         break;
-      case ir_binop_imul_high:
-         emit(out_type == GLSL_TYPE_UINT ? nir_op_umul_high : nir_op_imul_high,
+      case 3:
+         emit(supports_ints ? nir_op_bany3 : nir_op_fany3,
               dest_size, srcs);
          break;
-      case ir_binop_carry:  emit(nir_op_uadd_carry, dest_size, srcs);  break;
-      case ir_binop_borrow: emit(nir_op_usub_borrow, dest_size, srcs); break;
-      case ir_binop_less:
-         if (supports_ints) {
-            if (types[0] == GLSL_TYPE_FLOAT)
-               emit(nir_op_flt, dest_size, srcs);
-            else if (types[0] == GLSL_TYPE_INT)
-               emit(nir_op_ilt, dest_size, srcs);
-            else
-               emit(nir_op_ult, dest_size, srcs);
-         } else {
-            emit(nir_op_slt, dest_size, srcs);
-         }
+      case 4:
+         emit(supports_ints ? nir_op_bany4 : nir_op_fany4,
+              dest_size, srcs);
          break;
-      case ir_binop_greater:
-         if (supports_ints) {
-            if (types[0] == GLSL_TYPE_FLOAT)
-               emit(nir_op_flt, dest_size, srcs[1], srcs[0]);
-            else if (types[0] == GLSL_TYPE_INT)
-               emit(nir_op_ilt, dest_size, srcs[1], srcs[0]);
-            else
-               emit(nir_op_ult, dest_size, srcs[1], srcs[0]);
-         } else {
-            emit(nir_op_slt, dest_size, srcs[1], srcs[0]);
-         }
+      default:
+         assert(0);
          break;
-      case ir_binop_lequal:
-         if (supports_ints) {
-            if (types[0] == GLSL_TYPE_FLOAT)
-               emit(nir_op_fge, dest_size, srcs[1], srcs[0]);
-            else if (types[0] == GLSL_TYPE_INT)
-               emit(nir_op_ige, dest_size, srcs[1], srcs[0]);
-            else
-               emit(nir_op_uge, dest_size, srcs[1], srcs[0]);
-         } else {
-            emit(nir_op_slt, dest_size, srcs[1], srcs[0]);
-         }
-         break;
-      case ir_binop_gequal:
-         if (supports_ints) {
-            if (types[0] == GLSL_TYPE_FLOAT)
-               emit(nir_op_fge, dest_size, srcs);
-            else if (types[0] == GLSL_TYPE_INT)
-               emit(nir_op_ige, dest_size, srcs);
-            else
-               emit(nir_op_uge, dest_size, srcs);
-         } else {
-            emit(nir_op_slt, dest_size, srcs);
-         }
-         break;
-      case ir_binop_equal:
-         if (supports_ints) {
-            if (types[0] == GLSL_TYPE_FLOAT)
-               emit(nir_op_feq, dest_size, srcs);
-            else
-               emit(nir_op_ieq, dest_size, srcs);
-         } else {
-            emit(nir_op_seq, dest_size, srcs);
-         }
-         break;
-      case ir_binop_nequal:
-         if (supports_ints) {
-            if (types[0] == GLSL_TYPE_FLOAT)
-               emit(nir_op_fne, dest_size, srcs);
-            else
-               emit(nir_op_ine, dest_size, srcs);
-         } else {
-            emit(nir_op_sne, dest_size, srcs);
-         }
-         break;
-      case ir_binop_all_equal:
-         if (supports_ints) {
-            if (types[0] == GLSL_TYPE_FLOAT) {
-               switch (ir->operands[0]->type->vector_elements) {
-                  case 1: emit(nir_op_feq, dest_size, srcs); break;
-                  case 2: emit(nir_op_ball_fequal2, dest_size, srcs); break;
-                  case 3: emit(nir_op_ball_fequal3, dest_size, srcs); break;
-                  case 4: emit(nir_op_ball_fequal4, dest_size, srcs); break;
-                  default:
-                     assert(0);
-                     break;
-               }
-            } else {
-               switch (ir->operands[0]->type->vector_elements) {
-                  case 1: emit(nir_op_ieq, dest_size, srcs); break;
-                  case 2: emit(nir_op_ball_iequal2, dest_size, srcs); break;
-                  case 3: emit(nir_op_ball_iequal3, dest_size, srcs); break;
-                  case 4: emit(nir_op_ball_iequal4, dest_size, srcs); break;
-                  default:
-                     assert(0);
-                     break;
-               }
-            }
-         } else {
-            switch (ir->operands[0]->type->vector_elements) {
-               case 1: emit(nir_op_seq, dest_size, srcs); break;
-               case 2: emit(nir_op_fall_equal2, dest_size, srcs); break;
-               case 3: emit(nir_op_fall_equal3, dest_size, srcs); break;
-               case 4: emit(nir_op_fall_equal4, dest_size, srcs); break;
-               default:
-                  assert(0);
-                  break;
-            }
-         }
-         break;
-      case ir_binop_any_nequal:
-         if (supports_ints) {
-            if (types[0] == GLSL_TYPE_FLOAT) {
-               switch (ir->operands[0]->type->vector_elements) {
-                  case 1: emit(nir_op_fne, dest_size, srcs); break;
-                  case 2: emit(nir_op_bany_fnequal2, dest_size, srcs); break;
-                  case 3: emit(nir_op_bany_fnequal3, dest_size, srcs); break;
-                  case 4: emit(nir_op_bany_fnequal4, dest_size, srcs); break;
-                  default:
-                     assert(0);
-                     break;
-               }
-            } else {
-               switch (ir->operands[0]->type->vector_elements) {
-                  case 1: emit(nir_op_ine, dest_size, srcs); break;
-                  case 2: emit(nir_op_bany_inequal2, dest_size, srcs); break;
-                  case 3: emit(nir_op_bany_inequal3, dest_size, srcs); break;
-                  case 4: emit(nir_op_bany_inequal4, dest_size, srcs); break;
-                  default:
-                     assert(0);
-                     break;
-               }
-            }
-         } else {
-            switch (ir->operands[0]->type->vector_elements) {
-               case 1: emit(nir_op_sne, dest_size, srcs); break;
-               case 2: emit(nir_op_fany_nequal2, dest_size, srcs); break;
-               case 3: emit(nir_op_fany_nequal3, dest_size, srcs); break;
-               case 4: emit(nir_op_fany_nequal4, dest_size, srcs); break;
-               default:
-                  assert(0);
-                  break;
-            }
-         }
-         break;
-      case ir_binop_logic_and:
-         if (supports_ints)
-            emit(nir_op_iand, dest_size, srcs);
-         else
-            emit(nir_op_fand, dest_size, srcs);
-         break;
-      case ir_binop_logic_or:
-         if (supports_ints)
-            emit(nir_op_ior, dest_size, srcs);
-         else
-            emit(nir_op_for, dest_size, srcs);
-         break;
-      case ir_binop_logic_xor:
-         if (supports_ints)
-            emit(nir_op_ixor, dest_size, srcs);
-         else
-            emit(nir_op_fxor, dest_size, srcs);
-         break;
-      case ir_binop_dot:
+      }
+      break;
+   case ir_unop_trunc: emit(nir_op_ftrunc, dest_size, srcs); break;
+   case ir_unop_ceil:  emit(nir_op_fceil,  dest_size, srcs); break;
+   case ir_unop_floor: emit(nir_op_ffloor, dest_size, srcs); break;
+   case ir_unop_fract: emit(nir_op_ffract, dest_size, srcs); break;
+   case ir_unop_round_even: emit(nir_op_fround_even, dest_size, srcs); break;
+   case ir_unop_sin:   emit(nir_op_fsin,   dest_size, srcs); break;
+   case ir_unop_cos:   emit(nir_op_fcos,   dest_size, srcs); break;
+   case ir_unop_sin_reduced:
+      emit(nir_op_fsin_reduced, dest_size, srcs);
+      break;
+   case ir_unop_cos_reduced:
+      emit(nir_op_fcos_reduced, dest_size, srcs);
+      break;
+   case ir_unop_dFdx:  emit(nir_op_fddx,   dest_size, srcs); break;
+   case ir_unop_dFdy:  emit(nir_op_fddy,   dest_size, srcs); break;
+   case ir_unop_pack_snorm_2x16:
+      emit(nir_op_pack_snorm_2x16, dest_size, srcs);
+      break;
+   case ir_unop_pack_snorm_4x8:
+      emit(nir_op_pack_snorm_4x8, dest_size, srcs);
+      break;
+   case ir_unop_pack_unorm_2x16:
+      emit(nir_op_pack_unorm_2x16, dest_size, srcs);
+      break;
+   case ir_unop_pack_unorm_4x8:
+      emit(nir_op_pack_unorm_4x8, dest_size, srcs);
+      break;
+   case ir_unop_pack_half_2x16:
+      emit(nir_op_pack_half_2x16, dest_size, srcs);
+      break;
+   case ir_unop_unpack_snorm_2x16:
+      emit(nir_op_unpack_snorm_2x16, dest_size, srcs);
+      break;
+   case ir_unop_unpack_snorm_4x8:
+      emit(nir_op_unpack_snorm_4x8, dest_size, srcs);
+      break;
+   case ir_unop_unpack_unorm_2x16:
+      emit(nir_op_unpack_unorm_2x16, dest_size, srcs);
+      break;
+   case ir_unop_unpack_unorm_4x8:
+      emit(nir_op_unpack_unorm_4x8, dest_size, srcs);
+      break;
+   case ir_unop_unpack_half_2x16:
+      emit(nir_op_unpack_half_2x16, dest_size, srcs);
+      break;
+   case ir_unop_unpack_half_2x16_split_x:
+      emit(nir_op_unpack_half_2x16_split_x, dest_size, srcs);
+      break;
+   case ir_unop_unpack_half_2x16_split_y:
+      emit(nir_op_unpack_half_2x16_split_y, dest_size, srcs);
+      break;
+   case ir_unop_bitfield_reverse:
+      emit(nir_op_bitfield_reverse, dest_size, srcs);
+      break;
+   case ir_unop_bit_count: emit(nir_op_bit_count, dest_size, srcs); break;
+   case ir_unop_find_msb:  emit(nir_op_find_msb,  dest_size, srcs); break;
+   case ir_unop_find_lsb:  emit(nir_op_find_lsb,  dest_size, srcs); break;
+   case ir_unop_noise:
+      switch (ir->type->vector_elements) {
+      case 1:
          switch (ir->operands[0]->type->vector_elements) {
-            case 2: emit(nir_op_fdot2, dest_size, srcs); break;
-            case 3: emit(nir_op_fdot3, dest_size, srcs); break;
-            case 4: emit(nir_op_fdot4, dest_size, srcs); break;
-            default:
-               assert(0);
-               break;
-         }
-         break;
-
-      case ir_binop_pack_half_2x16_split:
-            emit(nir_op_pack_half_2x16_split, dest_size, srcs);
-            break;
-      case ir_binop_bfm:   emit(nir_op_bfm, dest_size, srcs);   break;
-      case ir_binop_ldexp: emit(nir_op_ldexp, dest_size, srcs); break;
-      case ir_triop_fma:   emit(nir_op_ffma, dest_size, srcs);  break;
-      case ir_triop_lrp:
-         instr = emit(nir_op_flrp, dest_size, srcs);
-         if (ir->operands[0]->type->vector_elements != 1 &&
-             ir->operands[2]->type->vector_elements == 1) {
-            for (unsigned i = 0; i < ir->operands[0]->type->vector_elements;
-                 i++) {
-               instr->src[2].swizzle[i] = 0;
-            }
-         }
-         break;
-      case ir_triop_csel:
-         if (supports_ints)
-            emit(nir_op_bcsel, dest_size, srcs);
-         else
-            emit(nir_op_fcsel, dest_size, srcs);
-         break;
-      case ir_triop_bfi:
-         instr = emit(nir_op_bfi, dest_size, srcs);
-         for (unsigned i = 0; i < ir->operands[1]->type->vector_elements; i++) {
-            instr->src[0].swizzle[i] = 0;
-         }
-         break;
-      case ir_triop_bitfield_extract:
-         instr = emit(out_type == GLSL_TYPE_INT ? nir_op_ibitfield_extract :
-                      nir_op_ubitfield_extract, dest_size, srcs);
-         for (unsigned i = 0; i < ir->operands[0]->type->vector_elements; i++) {
-            instr->src[1].swizzle[i] = 0;
-            instr->src[2].swizzle[i] = 0;
-         }
-         break;
-      case ir_quadop_bitfield_insert:
-         instr = emit(nir_op_bitfield_insert, dest_size, srcs);
-         for (unsigned i = 0; i < ir->operands[0]->type->vector_elements; i++) {
-            instr->src[2].swizzle[i] = 0;
-            instr->src[3].swizzle[i] = 0;
-         }
-         break;
-      case ir_quadop_vector:
-         switch (ir->type->vector_elements) {
-            case 2: emit(nir_op_vec2, dest_size, srcs); break;
-            case 3: emit(nir_op_vec3, dest_size, srcs); break;
-            case 4: emit(nir_op_vec4, dest_size, srcs); break;
+            case 1: emit(nir_op_fnoise1_1, dest_size, srcs); break;
+            case 2: emit(nir_op_fnoise1_2, dest_size, srcs); break;
+            case 3: emit(nir_op_fnoise1_3, dest_size, srcs); break;
+            case 4: emit(nir_op_fnoise1_4, dest_size, srcs); break;
             default: assert(0); break;
          }
+         break;
+      case 2:
+         switch (ir->operands[0]->type->vector_elements) {
+            case 1: emit(nir_op_fnoise2_1, dest_size, srcs); break;
+            case 2: emit(nir_op_fnoise2_2, dest_size, srcs); break;
+            case 3: emit(nir_op_fnoise2_3, dest_size, srcs); break;
+            case 4: emit(nir_op_fnoise2_4, dest_size, srcs); break;
+            default: assert(0); break;
+         }
+         break;
+      case 3:
+         switch (ir->operands[0]->type->vector_elements) {
+            case 1: emit(nir_op_fnoise3_1, dest_size, srcs); break;
+            case 2: emit(nir_op_fnoise3_2, dest_size, srcs); break;
+            case 3: emit(nir_op_fnoise3_3, dest_size, srcs); break;
+            case 4: emit(nir_op_fnoise3_4, dest_size, srcs); break;
+            default: assert(0); break;
+         }
+         break;
+      case 4:
+         switch (ir->operands[0]->type->vector_elements) {
+            case 1: emit(nir_op_fnoise4_1, dest_size, srcs); break;
+            case 2: emit(nir_op_fnoise4_2, dest_size, srcs); break;
+            case 3: emit(nir_op_fnoise4_3, dest_size, srcs); break;
+            case 4: emit(nir_op_fnoise4_4, dest_size, srcs); break;
+            default: assert(0); break;
+         }
+         break;
+      default:
+         assert(0);
+         break;
+      }
+      break;
+   case ir_binop_add:
+   case ir_binop_sub:
+   case ir_binop_mul:
+   case ir_binop_div:
+   case ir_binop_mod:
+   case ir_binop_min:
+   case ir_binop_max:
+   case ir_binop_pow:
+   case ir_binop_bit_and:
+   case ir_binop_bit_or:
+   case ir_binop_bit_xor:
+   case ir_binop_lshift:
+   case ir_binop_rshift:
+      switch (ir->operation) {
+      case ir_binop_add:
+         if (out_type == GLSL_TYPE_FLOAT)
+            op = nir_op_fadd;
+         else
+            op = nir_op_iadd;
+         break;
+      case ir_binop_sub:
+         if (out_type == GLSL_TYPE_FLOAT)
+            op = nir_op_fsub;
+         else
+            op = nir_op_isub;
+         break;
+      case ir_binop_mul:
+         if (out_type == GLSL_TYPE_FLOAT)
+            op = nir_op_fmul;
+         else
+            op = nir_op_imul;
+         break;
+      case ir_binop_div:
+         if (out_type == GLSL_TYPE_FLOAT)
+            op = nir_op_fdiv;
+         else if (out_type == GLSL_TYPE_INT)
+            op = nir_op_idiv;
+         else
+            op = nir_op_udiv;
+         break;
+      case ir_binop_mod:
+         if (out_type == GLSL_TYPE_FLOAT)
+            op = nir_op_fmod;
+         else
+            op = nir_op_umod;
+         break;
+      case ir_binop_min:
+         if (out_type == GLSL_TYPE_FLOAT)
+            op = nir_op_fmin;
+         else if (out_type == GLSL_TYPE_INT)
+            op = nir_op_imin;
+         else
+            op = nir_op_umin;
+         break;
+      case ir_binop_max:
+         if (out_type == GLSL_TYPE_FLOAT)
+            op = nir_op_fmax;
+         else if (out_type == GLSL_TYPE_INT)
+            op = nir_op_imax;
+         else
+            op = nir_op_umax;
+         break;
+      case ir_binop_bit_and:
+         op = nir_op_iand;
+         break;
+      case ir_binop_bit_or:
+         op = nir_op_ior;
+         break;
+      case ir_binop_bit_xor:
+         op = nir_op_ixor;
+         break;
+      case ir_binop_lshift:
+         op = nir_op_ishl;
+         break;
+      case ir_binop_rshift:
+         if (out_type == GLSL_TYPE_INT)
+            op = nir_op_ishr;
+         else
+            op = nir_op_ushr;
+         break;
+      case ir_binop_pow:
+         op = nir_op_fpow;
          break;
 
       default:
          assert(0);
          break;
+      }
+
+      instr = emit(op, dest_size, srcs);
+
+      if (ir->operands[0]->type->vector_elements != 1 &&
+          ir->operands[1]->type->vector_elements == 1) {
+         for (unsigned i = 0; i < ir->operands[0]->type->vector_elements;
+              i++) {
+            instr->src[1].swizzle[i] = 0;
+         }
+      }
+
+      if (ir->operands[1]->type->vector_elements != 1 &&
+          ir->operands[0]->type->vector_elements == 1) {
+         for (unsigned i = 0; i < ir->operands[1]->type->vector_elements;
+              i++) {
+            instr->src[0].swizzle[i] = 0;
+         }
+      }
+
+      break;
+   case ir_binop_imul_high:
+      emit(out_type == GLSL_TYPE_UINT ? nir_op_umul_high : nir_op_imul_high,
+           dest_size, srcs);
+      break;
+   case ir_binop_carry:  emit(nir_op_uadd_carry, dest_size, srcs);  break;
+   case ir_binop_borrow: emit(nir_op_usub_borrow, dest_size, srcs); break;
+   case ir_binop_less:
+      if (supports_ints) {
+         if (types[0] == GLSL_TYPE_FLOAT)
+            emit(nir_op_flt, dest_size, srcs);
+         else if (types[0] == GLSL_TYPE_INT)
+            emit(nir_op_ilt, dest_size, srcs);
+         else
+            emit(nir_op_ult, dest_size, srcs);
+      } else {
+         emit(nir_op_slt, dest_size, srcs);
+      }
+      break;
+   case ir_binop_greater:
+      if (supports_ints) {
+         if (types[0] == GLSL_TYPE_FLOAT)
+            emit(nir_op_flt, dest_size, srcs[1], srcs[0]);
+         else if (types[0] == GLSL_TYPE_INT)
+            emit(nir_op_ilt, dest_size, srcs[1], srcs[0]);
+         else
+            emit(nir_op_ult, dest_size, srcs[1], srcs[0]);
+      } else {
+         emit(nir_op_slt, dest_size, srcs[1], srcs[0]);
+      }
+      break;
+   case ir_binop_lequal:
+      if (supports_ints) {
+         if (types[0] == GLSL_TYPE_FLOAT)
+            emit(nir_op_fge, dest_size, srcs[1], srcs[0]);
+         else if (types[0] == GLSL_TYPE_INT)
+            emit(nir_op_ige, dest_size, srcs[1], srcs[0]);
+         else
+            emit(nir_op_uge, dest_size, srcs[1], srcs[0]);
+      } else {
+         emit(nir_op_slt, dest_size, srcs[1], srcs[0]);
+      }
+      break;
+   case ir_binop_gequal:
+      if (supports_ints) {
+         if (types[0] == GLSL_TYPE_FLOAT)
+            emit(nir_op_fge, dest_size, srcs);
+         else if (types[0] == GLSL_TYPE_INT)
+            emit(nir_op_ige, dest_size, srcs);
+         else
+            emit(nir_op_uge, dest_size, srcs);
+      } else {
+         emit(nir_op_slt, dest_size, srcs);
+      }
+      break;
+   case ir_binop_equal:
+      if (supports_ints) {
+         if (types[0] == GLSL_TYPE_FLOAT)
+            emit(nir_op_feq, dest_size, srcs);
+         else
+            emit(nir_op_ieq, dest_size, srcs);
+      } else {
+         emit(nir_op_seq, dest_size, srcs);
+      }
+      break;
+   case ir_binop_nequal:
+      if (supports_ints) {
+         if (types[0] == GLSL_TYPE_FLOAT)
+            emit(nir_op_fne, dest_size, srcs);
+         else
+            emit(nir_op_ine, dest_size, srcs);
+      } else {
+         emit(nir_op_sne, dest_size, srcs);
+      }
+      break;
+   case ir_binop_all_equal:
+      if (supports_ints) {
+         if (types[0] == GLSL_TYPE_FLOAT) {
+            switch (ir->operands[0]->type->vector_elements) {
+               case 1: emit(nir_op_feq, dest_size, srcs); break;
+               case 2: emit(nir_op_ball_fequal2, dest_size, srcs); break;
+               case 3: emit(nir_op_ball_fequal3, dest_size, srcs); break;
+               case 4: emit(nir_op_ball_fequal4, dest_size, srcs); break;
+               default:
+                  assert(0);
+                  break;
+            }
+         } else {
+            switch (ir->operands[0]->type->vector_elements) {
+               case 1: emit(nir_op_ieq, dest_size, srcs); break;
+               case 2: emit(nir_op_ball_iequal2, dest_size, srcs); break;
+               case 3: emit(nir_op_ball_iequal3, dest_size, srcs); break;
+               case 4: emit(nir_op_ball_iequal4, dest_size, srcs); break;
+               default:
+                  assert(0);
+                  break;
+            }
+         }
+      } else {
+         switch (ir->operands[0]->type->vector_elements) {
+            case 1: emit(nir_op_seq, dest_size, srcs); break;
+            case 2: emit(nir_op_fall_equal2, dest_size, srcs); break;
+            case 3: emit(nir_op_fall_equal3, dest_size, srcs); break;
+            case 4: emit(nir_op_fall_equal4, dest_size, srcs); break;
+            default:
+               assert(0);
+               break;
+         }
+      }
+      break;
+   case ir_binop_any_nequal:
+      if (supports_ints) {
+         if (types[0] == GLSL_TYPE_FLOAT) {
+            switch (ir->operands[0]->type->vector_elements) {
+               case 1: emit(nir_op_fne, dest_size, srcs); break;
+               case 2: emit(nir_op_bany_fnequal2, dest_size, srcs); break;
+               case 3: emit(nir_op_bany_fnequal3, dest_size, srcs); break;
+               case 4: emit(nir_op_bany_fnequal4, dest_size, srcs); break;
+               default:
+                  assert(0);
+                  break;
+            }
+         } else {
+            switch (ir->operands[0]->type->vector_elements) {
+               case 1: emit(nir_op_ine, dest_size, srcs); break;
+               case 2: emit(nir_op_bany_inequal2, dest_size, srcs); break;
+               case 3: emit(nir_op_bany_inequal3, dest_size, srcs); break;
+               case 4: emit(nir_op_bany_inequal4, dest_size, srcs); break;
+               default:
+                  assert(0);
+                  break;
+            }
+         }
+      } else {
+         switch (ir->operands[0]->type->vector_elements) {
+            case 1: emit(nir_op_sne, dest_size, srcs); break;
+            case 2: emit(nir_op_fany_nequal2, dest_size, srcs); break;
+            case 3: emit(nir_op_fany_nequal3, dest_size, srcs); break;
+            case 4: emit(nir_op_fany_nequal4, dest_size, srcs); break;
+            default:
+               assert(0);
+               break;
+         }
+      }
+      break;
+   case ir_binop_logic_and:
+      if (supports_ints)
+         emit(nir_op_iand, dest_size, srcs);
+      else
+         emit(nir_op_fand, dest_size, srcs);
+      break;
+   case ir_binop_logic_or:
+      if (supports_ints)
+         emit(nir_op_ior, dest_size, srcs);
+      else
+         emit(nir_op_for, dest_size, srcs);
+      break;
+   case ir_binop_logic_xor:
+      if (supports_ints)
+         emit(nir_op_ixor, dest_size, srcs);
+      else
+         emit(nir_op_fxor, dest_size, srcs);
+      break;
+   case ir_binop_dot:
+      switch (ir->operands[0]->type->vector_elements) {
+         case 2: emit(nir_op_fdot2, dest_size, srcs); break;
+         case 3: emit(nir_op_fdot3, dest_size, srcs); break;
+         case 4: emit(nir_op_fdot4, dest_size, srcs); break;
+         default:
+            assert(0);
+            break;
+      }
+      break;
+
+   case ir_binop_pack_half_2x16_split:
+         emit(nir_op_pack_half_2x16_split, dest_size, srcs);
+         break;
+   case ir_binop_bfm:   emit(nir_op_bfm, dest_size, srcs);   break;
+   case ir_binop_ldexp: emit(nir_op_ldexp, dest_size, srcs); break;
+   case ir_triop_fma:   emit(nir_op_ffma, dest_size, srcs);  break;
+   case ir_triop_lrp:
+      instr = emit(nir_op_flrp, dest_size, srcs);
+      if (ir->operands[0]->type->vector_elements != 1 &&
+          ir->operands[2]->type->vector_elements == 1) {
+         for (unsigned i = 0; i < ir->operands[0]->type->vector_elements;
+              i++) {
+            instr->src[2].swizzle[i] = 0;
+         }
+      }
+      break;
+   case ir_triop_csel:
+      if (supports_ints)
+         emit(nir_op_bcsel, dest_size, srcs);
+      else
+         emit(nir_op_fcsel, dest_size, srcs);
+      break;
+   case ir_triop_bfi:
+      instr = emit(nir_op_bfi, dest_size, srcs);
+      for (unsigned i = 0; i < ir->operands[1]->type->vector_elements; i++) {
+         instr->src[0].swizzle[i] = 0;
+      }
+      break;
+   case ir_triop_bitfield_extract:
+      instr = emit(out_type == GLSL_TYPE_INT ? nir_op_ibitfield_extract :
+                   nir_op_ubitfield_extract, dest_size, srcs);
+      for (unsigned i = 0; i < ir->operands[0]->type->vector_elements; i++) {
+         instr->src[1].swizzle[i] = 0;
+         instr->src[2].swizzle[i] = 0;
+      }
+      break;
+   case ir_quadop_bitfield_insert:
+      instr = emit(nir_op_bitfield_insert, dest_size, srcs);
+      for (unsigned i = 0; i < ir->operands[0]->type->vector_elements; i++) {
+         instr->src[2].swizzle[i] = 0;
+         instr->src[3].swizzle[i] = 0;
+      }
+      break;
+   case ir_quadop_vector:
+      switch (ir->type->vector_elements) {
+         case 2: emit(nir_op_vec2, dest_size, srcs); break;
+         case 3: emit(nir_op_vec3, dest_size, srcs); break;
+         case 4: emit(nir_op_vec4, dest_size, srcs); break;
+         default: assert(0); break;
+      }
+      break;
+
+   default:
+      assert(0);
+      break;
    }
 }
 
@@ -1522,61 +1522,61 @@ nir_visitor::visit(ir_texture *ir)
    unsigned num_srcs;
    nir_texop op;
    switch (ir->op) {
-      case ir_tex:
-         op = nir_texop_tex;
+   case ir_tex:
+      op = nir_texop_tex;
+      num_srcs = 1; /* coordinate */
+      break;
+
+   case ir_txb:
+   case ir_txl:
+      op = (ir->op == ir_txb) ? nir_texop_txb : nir_texop_txl;
+      num_srcs = 2; /* coordinate, bias/lod */
+      break;
+
+   case ir_txd:
+      op = nir_texop_txd; /* coordinate, dPdx, dPdy */
+      num_srcs = 3;
+      break;
+
+   case ir_txf:
+      op = nir_texop_txf;
+      if (ir->lod_info.lod != NULL)
+         num_srcs = 2; /* coordinate, lod */
+      else
          num_srcs = 1; /* coordinate */
-         break;
+      break;
 
-      case ir_txb:
-      case ir_txl:
-         op = (ir->op == ir_txb) ? nir_texop_txb : nir_texop_txl;
-         num_srcs = 2; /* coordinate, bias/lod */
-         break;
+   case ir_txf_ms:
+      op = nir_texop_txf_ms;
+      num_srcs = 2; /* coordinate, sample_index */
+      break;
 
-      case ir_txd:
-         op = nir_texop_txd; /* coordinate, dPdx, dPdy */
-         num_srcs = 3;
-         break;
-
-      case ir_txf:
-         op = nir_texop_txf;
-         if (ir->lod_info.lod != NULL)
-            num_srcs = 2; /* coordinate, lod */
-         else
-            num_srcs = 1; /* coordinate */
-         break;
-
-      case ir_txf_ms:
-         op = nir_texop_txf_ms;
-         num_srcs = 2; /* coordinate, sample_index */
-         break;
-
-      case ir_txs:
-         op = nir_texop_txs;
-         if (ir->lod_info.lod != NULL)
-            num_srcs = 1; /* lod */
-         else
-            num_srcs = 0;
-         break;
-
-      case ir_lod:
-         op = nir_texop_lod;
-         num_srcs = 1; /* coordinate */
-         break;
-
-      case ir_tg4:
-         op = nir_texop_tg4;
-         num_srcs = 1; /* coordinate */
-         break;
-
-      case ir_query_levels:
-         op = nir_texop_query_levels;
+   case ir_txs:
+      op = nir_texop_txs;
+      if (ir->lod_info.lod != NULL)
+         num_srcs = 1; /* lod */
+      else
          num_srcs = 0;
-         break;
+      break;
 
-      default:
-         assert(0);
-         break;
+   case ir_lod:
+      op = nir_texop_lod;
+      num_srcs = 1; /* coordinate */
+      break;
+
+   case ir_tg4:
+      op = nir_texop_tg4;
+      num_srcs = 1; /* coordinate */
+      break;
+
+   case ir_query_levels:
+      op = nir_texop_query_levels;
+      num_srcs = 0;
+      break;
+
+   default:
+      assert(0);
+      break;
    }
 
    if (ir->projector != NULL)
@@ -1596,17 +1596,17 @@ nir_visitor::visit(ir_texture *ir)
    if (instr->is_shadow)
       instr->is_new_style_shadow = (ir->type->vector_elements == 1);
    switch (ir->type->base_type) {
-      case GLSL_TYPE_FLOAT:
-         instr->dest_type = nir_type_float;
-         break;
-      case GLSL_TYPE_INT:
-         instr->dest_type = nir_type_int;
-         break;
-      case GLSL_TYPE_UINT:
-         instr->dest_type = nir_type_unsigned;
-         break;
-      default:
-         assert(0);
+   case GLSL_TYPE_FLOAT:
+      instr->dest_type = nir_type_float;
+      break;
+   case GLSL_TYPE_INT:
+      instr->dest_type = nir_type_int;
+      break;
+   case GLSL_TYPE_UINT:
+      instr->dest_type = nir_type_unsigned;
+      break;
+   default:
+      assert(0);
    }
 
    ir->sampler->accept(this);
@@ -1649,43 +1649,43 @@ nir_visitor::visit(ir_texture *ir)
    }
 
    switch (ir->op) {
-      case ir_txb:
-         instr->src[src_number] = evaluate_rvalue(ir->lod_info.bias);
-         instr->src_type[src_number] = nir_tex_src_bias;
+   case ir_txb:
+      instr->src[src_number] = evaluate_rvalue(ir->lod_info.bias);
+      instr->src_type[src_number] = nir_tex_src_bias;
+      src_number++;
+      break;
+
+   case ir_txl:
+   case ir_txf:
+   case ir_txs:
+      if (ir->lod_info.lod != NULL) {
+         instr->src[src_number] = evaluate_rvalue(ir->lod_info.lod);
+         instr->src_type[src_number] = nir_tex_src_lod;
          src_number++;
-         break;
+      }
+      break;
 
-      case ir_txl:
-      case ir_txf:
-      case ir_txs:
-         if (ir->lod_info.lod != NULL) {
-            instr->src[src_number] = evaluate_rvalue(ir->lod_info.lod);
-            instr->src_type[src_number] = nir_tex_src_lod;
-            src_number++;
-         }
-         break;
+   case ir_txd:
+      instr->src[src_number] = evaluate_rvalue(ir->lod_info.grad.dPdx);
+      instr->src_type[src_number] = nir_tex_src_ddx;
+      src_number++;
+      instr->src[src_number] = evaluate_rvalue(ir->lod_info.grad.dPdy);
+      instr->src_type[src_number] = nir_tex_src_ddy;
+      src_number++;
+      break;
 
-      case ir_txd:
-         instr->src[src_number] = evaluate_rvalue(ir->lod_info.grad.dPdx);
-         instr->src_type[src_number] = nir_tex_src_ddx;
-         src_number++;
-         instr->src[src_number] = evaluate_rvalue(ir->lod_info.grad.dPdy);
-         instr->src_type[src_number] = nir_tex_src_ddy;
-         src_number++;
-         break;
+   case ir_txf_ms:
+      instr->src[src_number] = evaluate_rvalue(ir->lod_info.sample_index);
+      instr->src_type[src_number] = nir_tex_src_ms_index;
+      src_number++;
+      break;
 
-      case ir_txf_ms:
-         instr->src[src_number] = evaluate_rvalue(ir->lod_info.sample_index);
-         instr->src_type[src_number] = nir_tex_src_ms_index;
-         src_number++;
-         break;
+   case ir_tg4:
+      instr->component = ir->lod_info.component->as_constant()->value.u[0];
+      break;
 
-      case ir_tg4:
-         instr->component = ir->lod_info.component->as_constant()->value.u[0];
-         break;
-
-      default:
-         break;
+   default:
+      break;
    }
 
    assert(src_number == num_srcs);
