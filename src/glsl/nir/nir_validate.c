@@ -257,24 +257,24 @@ validate_deref_chain(nir_deref *deref, validate_state *state)
    nir_deref *parent = NULL;
    while (deref != NULL) {
       switch (deref->deref_type) {
-         case nir_deref_type_array:
-            assert(deref->type == glsl_get_array_element(parent->type));
-            if (nir_deref_as_array(deref)->has_indirect)
-               validate_src(&nir_deref_as_array(deref)->indirect, state);
-            break;
+      case nir_deref_type_array:
+         assert(deref->type == glsl_get_array_element(parent->type));
+         if (nir_deref_as_array(deref)->has_indirect)
+            validate_src(&nir_deref_as_array(deref)->indirect, state);
+         break;
 
-         case nir_deref_type_struct:
-            assert(deref->type ==
-                   glsl_get_struct_field(parent->type,
-                                         nir_deref_as_struct(deref)->elem));
-            break;
+      case nir_deref_type_struct:
+         assert(deref->type ==
+                glsl_get_struct_field(parent->type,
+                                      nir_deref_as_struct(deref)->elem));
+         break;
 
-         case nir_deref_type_var:
-            break;
+      case nir_deref_type_var:
+         break;
 
-         default:
-            assert(0);
-            break;
+      default:
+         assert(!"Invalid deref type");
+         break;
       }
 
       parent = deref;
@@ -410,40 +410,40 @@ validate_instr(nir_instr *instr, validate_state *state)
    state->instr = instr;
 
    switch (instr->type) {
-      case nir_instr_type_alu:
-         validate_alu_instr(nir_instr_as_alu(instr), state);
-         break;
+   case nir_instr_type_alu:
+      validate_alu_instr(nir_instr_as_alu(instr), state);
+      break;
 
-      case nir_instr_type_call:
-         validate_call_instr(nir_instr_as_call(instr), state);
-         break;
+   case nir_instr_type_call:
+      validate_call_instr(nir_instr_as_call(instr), state);
+      break;
 
-      case nir_instr_type_intrinsic:
-         validate_intrinsic_instr(nir_instr_as_intrinsic(instr), state);
-         break;
+   case nir_instr_type_intrinsic:
+      validate_intrinsic_instr(nir_instr_as_intrinsic(instr), state);
+      break;
 
-      case nir_instr_type_texture:
-         validate_tex_instr(nir_instr_as_texture(instr), state);
-         break;
+   case nir_instr_type_texture:
+      validate_tex_instr(nir_instr_as_texture(instr), state);
+      break;
 
-      case nir_instr_type_load_const:
-         validate_load_const_instr(nir_instr_as_load_const(instr), state);
-         break;
+   case nir_instr_type_load_const:
+      validate_load_const_instr(nir_instr_as_load_const(instr), state);
+      break;
 
-      case nir_instr_type_phi:
-         validate_phi_instr(nir_instr_as_phi(instr), state);
-         break;
+   case nir_instr_type_phi:
+      validate_phi_instr(nir_instr_as_phi(instr), state);
+      break;
 
-      case nir_instr_type_ssa_undef:
-         validate_ssa_undef_instr(nir_instr_as_ssa_undef(instr), state);
-         break;
+   case nir_instr_type_ssa_undef:
+      validate_ssa_undef_instr(nir_instr_as_ssa_undef(instr), state);
+      break;
 
-      case nir_instr_type_jump:
-         break;
+   case nir_instr_type_jump:
+      break;
 
-      default:
-         assert(0);
-         break;
+   default:
+      assert(!"Invalid ALU instruction type");
+      break;
    }
 }
 
@@ -592,21 +592,21 @@ validate_cf_node(nir_cf_node *node, validate_state *state)
    assert(node->parent == state->parent_node);
 
    switch (node->type) {
-      case nir_cf_node_block:
-         validate_block(nir_cf_node_as_block(node), state);
-         break;
+   case nir_cf_node_block:
+      validate_block(nir_cf_node_as_block(node), state);
+      break;
 
-      case nir_cf_node_if:
-         validate_if(nir_cf_node_as_if(node), state);
-         break;
+   case nir_cf_node_if:
+      validate_if(nir_cf_node_as_if(node), state);
+      break;
 
-      case nir_cf_node_loop:
-         validate_loop(nir_cf_node_as_loop(node), state);
-         break;
+   case nir_cf_node_loop:
+      validate_loop(nir_cf_node_as_loop(node), state);
+      break;
 
-      default:
-         assert(0);
-         break;
+   default:
+      assert(!"Invalid ALU instruction type");
+      break;
    }
 }
 
