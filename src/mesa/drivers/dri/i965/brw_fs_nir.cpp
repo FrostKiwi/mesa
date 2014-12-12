@@ -380,20 +380,20 @@ fs_visitor::nir_emit_cf_list(exec_list *list)
 {
    foreach_list_typed(nir_cf_node, node, node, list) {
       switch (node->type) {
-         case nir_cf_node_if:
-            nir_emit_if(nir_cf_node_as_if(node));
-            break;
+      case nir_cf_node_if:
+         nir_emit_if(nir_cf_node_as_if(node));
+         break;
 
-         case nir_cf_node_loop:
-            nir_emit_loop(nir_cf_node_as_loop(node));
-            break;
+      case nir_cf_node_loop:
+         nir_emit_loop(nir_cf_node_as_loop(node));
+         break;
 
-         case nir_cf_node_block:
-            nir_emit_block(nir_cf_node_as_block(node));
-            break;
+      case nir_cf_node_block:
+         nir_emit_block(nir_cf_node_as_block(node));
+         break;
 
-         default:
-            assert(0);
+      default:
+         unreachable("Invalid CFG node block");
       }
    }
 }
@@ -480,15 +480,15 @@ static brw_reg_type
 brw_type_for_nir_type(nir_alu_type type)
 {
    switch (type) {
-      case nir_type_bool:
-      case nir_type_unsigned:
-         return BRW_REGISTER_TYPE_UD;
-      case nir_type_int:
-         return BRW_REGISTER_TYPE_D;
-      case nir_type_float:
-         return BRW_REGISTER_TYPE_F;
-      default:
-         unreachable("unknown type");
+   case nir_type_bool:
+   case nir_type_unsigned:
+      return BRW_REGISTER_TYPE_UD;
+   case nir_type_int:
+      return BRW_REGISTER_TYPE_D;
+   case nir_type_float:
+      return BRW_REGISTER_TYPE_F;
+   default:
+      unreachable("unknown type");
    }
 
    return BRW_REGISTER_TYPE_F;
