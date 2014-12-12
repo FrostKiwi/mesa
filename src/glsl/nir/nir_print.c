@@ -287,21 +287,20 @@ print_deref(nir_deref *deref, print_var_state *state, FILE *fp)
 {
    while (deref != NULL) {
       switch (deref->deref_type) {
-         case nir_deref_type_var:
-            print_deref_var(nir_deref_as_var(deref), state, fp);
-            break;
+      case nir_deref_type_var:
+         print_deref_var(nir_deref_as_var(deref), state, fp);
+         break;
 
-         case nir_deref_type_array:
-            print_deref_array(nir_deref_as_array(deref), state, fp);
-            break;
+      case nir_deref_type_array:
+         print_deref_array(nir_deref_as_array(deref), state, fp);
+         break;
 
-         case nir_deref_type_struct:
-            print_deref_struct(nir_deref_as_struct(deref), state, fp);
-            break;
+      case nir_deref_type_struct:
+         print_deref_struct(nir_deref_as_struct(deref), state, fp);
+         break;
 
-         default:
-            assert(0);
-            break;
+      default:
+         unreachable("Invalid deref type");
       }
 
       deref = deref->child;
@@ -382,40 +381,40 @@ print_tex_instr(nir_tex_instr *instr, print_var_state *state, FILE *fp)
    fprintf(fp, " = ");
 
    switch (instr->op) {
-      case nir_texop_tex:
-         fprintf(fp, "tex ");
-         break;
-      case nir_texop_txb:
-         fprintf(fp, "txb ");
-         break;
-      case nir_texop_txl:
-         fprintf(fp, "txl ");
-         break;
-      case nir_texop_txd:
-         fprintf(fp, "txd ");
-         break;
-      case nir_texop_txf:
-         fprintf(fp, "txf ");
-         break;
-      case nir_texop_txf_ms:
-         fprintf(fp, "txf_ms ");
-         break;
-      case nir_texop_txs:
-         fprintf(fp, "txs ");
-         break;
-      case nir_texop_lod:
-         fprintf(fp, "lod ");
-         break;
-      case nir_texop_tg4:
-         fprintf(fp, "tg4 ");
-         break;
-      case nir_texop_query_levels:
-         fprintf(fp, "query_levels ");
-         break;
+   case nir_texop_tex:
+      fprintf(fp, "tex ");
+      break;
+   case nir_texop_txb:
+      fprintf(fp, "txb ");
+      break;
+   case nir_texop_txl:
+      fprintf(fp, "txl ");
+      break;
+   case nir_texop_txd:
+      fprintf(fp, "txd ");
+      break;
+   case nir_texop_txf:
+      fprintf(fp, "txf ");
+      break;
+   case nir_texop_txf_ms:
+      fprintf(fp, "txf_ms ");
+      break;
+   case nir_texop_txs:
+      fprintf(fp, "txs ");
+      break;
+   case nir_texop_lod:
+      fprintf(fp, "lod ");
+      break;
+   case nir_texop_tg4:
+      fprintf(fp, "tg4 ");
+      break;
+   case nir_texop_query_levels:
+      fprintf(fp, "query_levels ");
+      break;
 
-      default:
-         assert(0);
-         break;
+   default:
+      unreachable("Invalid texture operation");
+      break;
    }
 
    for (unsigned i = 0; i < instr->num_srcs; i++) {
@@ -424,40 +423,40 @@ print_tex_instr(nir_tex_instr *instr, print_var_state *state, FILE *fp)
       fprintf(fp, " ");
 
       switch(instr->src_type[i]) {
-         case nir_tex_src_coord:
-            fprintf(fp, "(coord)");
-            break;
-         case nir_tex_src_projector:
-            fprintf(fp, "(projector)");
-            break;
-         case nir_tex_src_comparitor:
-            fprintf(fp, "(comparitor)");
-            break;
-         case nir_tex_src_offset:
-            fprintf(fp, "(offset)");
-            break;
-         case nir_tex_src_bias:
-            fprintf(fp, "(bias)");
-            break;
-         case nir_tex_src_lod:
-            fprintf(fp, "(lod)");
-            break;
-         case nir_tex_src_ms_index:
-            fprintf(fp, "(ms_index)");
-            break;
-         case nir_tex_src_ddx:
-            fprintf(fp, "(ddx)");
-            break;
-         case nir_tex_src_ddy:
-            fprintf(fp, "(ddy)");
-            break;
-         case nir_tex_src_sampler_index:
-            fprintf(fp, "(sampler_index)");
-            break;
+      case nir_tex_src_coord:
+         fprintf(fp, "(coord)");
+         break;
+      case nir_tex_src_projector:
+         fprintf(fp, "(projector)");
+         break;
+      case nir_tex_src_comparitor:
+         fprintf(fp, "(comparitor)");
+         break;
+      case nir_tex_src_offset:
+         fprintf(fp, "(offset)");
+         break;
+      case nir_tex_src_bias:
+         fprintf(fp, "(bias)");
+         break;
+      case nir_tex_src_lod:
+         fprintf(fp, "(lod)");
+         break;
+      case nir_tex_src_ms_index:
+         fprintf(fp, "(ms_index)");
+         break;
+      case nir_tex_src_ddx:
+         fprintf(fp, "(ddx)");
+         break;
+      case nir_tex_src_ddy:
+         fprintf(fp, "(ddy)");
+         break;
+      case nir_tex_src_sampler_index:
+         fprintf(fp, "(sampler_index)");
+         break;
 
-         default:
-            assert(0);
-            break;
+      default:
+         unreachable("Invalid texture source type");
+         break;
       }
 
       fprintf(fp, ", ");
@@ -569,17 +568,17 @@ static void
 print_jump_instr(nir_jump_instr *instr, FILE *fp)
 {
    switch (instr->type) {
-      case nir_jump_break:
-         fprintf(fp, "break");
-         break;
+   case nir_jump_break:
+      fprintf(fp, "break");
+      break;
 
-      case nir_jump_continue:
-         fprintf(fp, "continue");
-         break;
+   case nir_jump_continue:
+      fprintf(fp, "continue");
+      break;
 
-      case nir_jump_return:
-         fprintf(fp, "return");
-         break;
+   case nir_jump_return:
+      fprintf(fp, "return");
+      break;
    }
 }
 
@@ -613,42 +612,41 @@ print_instr(nir_instr *instr, print_var_state *state, unsigned tabs, FILE *fp)
    print_tabs(tabs, fp);
 
    switch (instr->type) {
-      case nir_instr_type_alu:
-         print_alu_instr(nir_instr_as_alu(instr), fp);
-         break;
+   case nir_instr_type_alu:
+      print_alu_instr(nir_instr_as_alu(instr), fp);
+      break;
 
-      case nir_instr_type_call:
-         print_call_instr(nir_instr_as_call(instr), state, fp);
-         break;
+   case nir_instr_type_call:
+      print_call_instr(nir_instr_as_call(instr), state, fp);
+      break;
 
-      case nir_instr_type_intrinsic:
-         print_intrinsic_instr(nir_instr_as_intrinsic(instr), state, fp);
-         break;
+   case nir_instr_type_intrinsic:
+      print_intrinsic_instr(nir_instr_as_intrinsic(instr), state, fp);
+      break;
 
-      case nir_instr_type_texture:
-         print_tex_instr(nir_instr_as_texture(instr), state, fp);
-         break;
+   case nir_instr_type_texture:
+      print_tex_instr(nir_instr_as_texture(instr), state, fp);
+      break;
 
-      case nir_instr_type_load_const:
-         print_load_const_instr(nir_instr_as_load_const(instr), tabs, fp);
-         break;
+   case nir_instr_type_load_const:
+      print_load_const_instr(nir_instr_as_load_const(instr), tabs, fp);
+      break;
 
-      case nir_instr_type_jump:
-         print_jump_instr(nir_instr_as_jump(instr), fp);
-         break;
+   case nir_instr_type_jump:
+      print_jump_instr(nir_instr_as_jump(instr), fp);
+      break;
 
-      case nir_instr_type_ssa_undef:
-         print_ssa_undef_instr(nir_instr_as_ssa_undef(instr), fp);
-         break;
+   case nir_instr_type_ssa_undef:
+      print_ssa_undef_instr(nir_instr_as_ssa_undef(instr), fp);
+      break;
 
-      case nir_instr_type_phi:
-         print_phi_instr(nir_instr_as_phi(instr), fp);
-         break;
+   case nir_instr_type_phi:
+      print_phi_instr(nir_instr_as_phi(instr), fp);
+      break;
 
-      default:
-         assert(0);
-         fprintf(fp, "error");
-         break;
+   default:
+      unreachable("Invalid instruction type");
+      break;
    }
 
    fprintf(fp, "\n");
@@ -744,21 +742,20 @@ print_cf_node(nir_cf_node *node, print_var_state *state, unsigned int tabs,
               FILE *fp)
 {
    switch (node->type) {
-      case nir_cf_node_block:
-         print_block(nir_cf_node_as_block(node), state, tabs, fp);
-         break;
+   case nir_cf_node_block:
+      print_block(nir_cf_node_as_block(node), state, tabs, fp);
+      break;
 
-      case nir_cf_node_if:
-         print_if(nir_cf_node_as_if(node), state, tabs, fp);
-         break;
+   case nir_cf_node_if:
+      print_if(nir_cf_node_as_if(node), state, tabs, fp);
+      break;
 
-      case nir_cf_node_loop:
-         print_loop(nir_cf_node_as_loop(node), state, tabs, fp);
-         break;
+   case nir_cf_node_loop:
+      print_loop(nir_cf_node_as_loop(node), state, tabs, fp);
+      break;
 
-      default:
-         assert(0);
-         break;
+   default:
+      unreachable("Invalid CFG node type");
    }
 }
 
@@ -815,18 +812,17 @@ print_function_overload(nir_function_overload *overload,
          fprintf(fp, ", ");
 
       switch (overload->params[i].param_type) {
-         case nir_parameter_in:
-            fprintf(fp, "in ");
-            break;
-         case nir_parameter_out:
-            fprintf(fp, "out ");
-            break;
-         case nir_parameter_inout:
-            fprintf(fp, "inout ");
-            break;
-         default:
-            assert(0);
-            break;
+      case nir_parameter_in:
+         fprintf(fp, "in ");
+         break;
+      case nir_parameter_out:
+         fprintf(fp, "out ");
+         break;
+      case nir_parameter_inout:
+         fprintf(fp, "inout ");
+         break;
+      default:
+         unreachable("Invalid parameter type");
       }
 
       glsl_print_type(overload->params[i].type, fp);
