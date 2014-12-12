@@ -373,10 +373,10 @@ rewrite_alu_instr_forward(nir_alu_instr *instr, rewrite_state *state)
 
       nir_op op;
       switch (reg->num_components) {
-         case 2: op = nir_op_vec2; break;
-         case 3: op = nir_op_vec3; break;
-         case 4: op = nir_op_vec4; break;
-         default: assert(0); break;
+      case 2: op = nir_op_vec2; break;
+      case 3: op = nir_op_vec3; break;
+      case 4: op = nir_op_vec4; break;
+      default: assert(0); break;
       }
 
       nir_alu_instr *vec = nir_alu_instr_create(state->mem_ctx, op);
@@ -441,36 +441,36 @@ get_instr_predicate(nir_instr *instr)
    nir_tex_instr *tex_instr;
 
    switch (instr->type) {
-      case nir_instr_type_alu:
-         alu_instr = nir_instr_as_alu(instr);
-         if (alu_instr->has_predicate)
-            return &alu_instr->predicate;
-         else
-            return NULL;
+   case nir_instr_type_alu:
+      alu_instr = nir_instr_as_alu(instr);
+      if (alu_instr->has_predicate)
+         return &alu_instr->predicate;
+      else
+         return NULL;
 
-      case nir_instr_type_load_const:
-         load_const_instr = nir_instr_as_load_const(instr);
-         if (load_const_instr->has_predicate)
-            return &load_const_instr->predicate;
-         else
-            return NULL;
+   case nir_instr_type_load_const:
+      load_const_instr = nir_instr_as_load_const(instr);
+      if (load_const_instr->has_predicate)
+         return &load_const_instr->predicate;
+      else
+         return NULL;
 
-      case nir_instr_type_intrinsic:
-         intrinsic_instr = nir_instr_as_intrinsic(instr);
-         if (intrinsic_instr->has_predicate)
-            return &intrinsic_instr->predicate;
-         else
-            return NULL;
+   case nir_instr_type_intrinsic:
+      intrinsic_instr = nir_instr_as_intrinsic(instr);
+      if (intrinsic_instr->has_predicate)
+         return &intrinsic_instr->predicate;
+      else
+         return NULL;
 
-      case nir_instr_type_texture:
-         tex_instr = nir_instr_as_texture(instr);
-         if (tex_instr->has_predicate)
-            return &tex_instr->predicate;
-         else
-            return NULL;
+   case nir_instr_type_texture:
+      tex_instr = nir_instr_as_texture(instr);
+      if (tex_instr->has_predicate)
+         return &tex_instr->predicate;
+      else
+         return NULL;
 
-      default:
-         break;
+   default:
+      break;
    }
 
    return NULL;
