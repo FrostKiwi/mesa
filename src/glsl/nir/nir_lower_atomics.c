@@ -38,20 +38,20 @@ lower_instr(nir_intrinsic_instr *instr, nir_function_impl *impl)
 {
    nir_intrinsic_op op;
    switch (instr->intrinsic) {
-      case nir_intrinsic_atomic_counter_read_var:
-         op = nir_intrinsic_atomic_counter_read;
-         break;
+   case nir_intrinsic_atomic_counter_read_var:
+      op = nir_intrinsic_atomic_counter_read;
+      break;
 
-      case nir_intrinsic_atomic_counter_inc_var:
-         op = nir_intrinsic_atomic_counter_inc;
-         break;
+   case nir_intrinsic_atomic_counter_inc_var:
+      op = nir_intrinsic_atomic_counter_inc;
+      break;
 
-      case nir_intrinsic_atomic_counter_dec_var:
-         op = nir_intrinsic_atomic_counter_dec;
-         break;
+   case nir_intrinsic_atomic_counter_dec_var:
+      op = nir_intrinsic_atomic_counter_dec;
+      break;
 
-      default:
-         return;
+   default:
+      return;
    }
 
    if (instr->variables[0]->var->data.mode != nir_var_uniform)
