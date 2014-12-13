@@ -859,7 +859,7 @@ handle_jump(nir_block *block)
    unlink_block_successors(block);
 
    nir_function_impl *impl = nir_cf_node_get_function(&block->cf_node);
-   nir_metadata_dirty(impl, nir_metadata_none);
+   nir_metadata_preserve(impl, nir_metadata_none);
 
    if (jump_instr->type == nir_jump_break ||
        jump_instr->type == nir_jump_continue) {
@@ -957,7 +957,7 @@ handle_remove_jump(nir_block *block, nir_jump_type type)
    }
 
    nir_function_impl *impl = nir_cf_node_get_function(&block->cf_node);
-   nir_metadata_dirty(impl, nir_metadata_none);
+   nir_metadata_preserve(impl, nir_metadata_none);
 }
 
 /**
@@ -1063,7 +1063,7 @@ nir_cf_node_insert_after(nir_cf_node *node, nir_cf_node *after)
    }
 
    nir_function_impl *impl = nir_cf_node_get_function(node);
-   nir_metadata_dirty(impl, nir_metadata_none);
+   nir_metadata_preserve(impl, nir_metadata_none);
 }
 
 void
@@ -1105,7 +1105,7 @@ nir_cf_node_insert_before(nir_cf_node *node, nir_cf_node *before)
    }
 
    nir_function_impl *impl = nir_cf_node_get_function(node);
-   nir_metadata_dirty(impl, nir_metadata_none);
+   nir_metadata_preserve(impl, nir_metadata_none);
 }
 
 void
@@ -1151,7 +1151,7 @@ void
 nir_cf_node_remove(nir_cf_node *node)
 {
    nir_function_impl *impl = nir_cf_node_get_function(node);
-   nir_metadata_dirty(impl, nir_metadata_none);
+   nir_metadata_preserve(impl, nir_metadata_none);
 
    if (node->type == nir_cf_node_block) {
       /*
