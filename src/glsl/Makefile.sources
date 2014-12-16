@@ -134,8 +134,7 @@ LIBGLSL_FILES = \
 	$(GLSL_SRCDIR)/opt_vectorize.cpp \
 	$(GLSL_SRCDIR)/program.h \
 	$(GLSL_SRCDIR)/s_expression.cpp \
-	$(GLSL_SRCDIR)/s_expression.h \
-        $(NIR_FILES)
+	$(GLSL_SRCDIR)/s_expression.h
 
 # glsl_compiler
 
