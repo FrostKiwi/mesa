@@ -984,6 +984,7 @@ const struct function gl_core_functions_possible[] = {
    { "glTextureStorage2DMultisample", 45, -1 },
    { "glTextureStorage3DMultisample", 45, -1 },
    { "glTextureBuffer", 45, -1 },
+   { "glTextureBufferRange", 45, -1 },
 
    { NULL, 0, -1 }
 };

@@ -4942,7 +4942,7 @@ _mesa_validate_texbuffer_format(const struct gl_context *ctx,
 
 void
 _mesa_texture_buffer_range(struct gl_context *ctx,
-                           struct gl_texture_object *texObj, GLenum target, 
+                           struct gl_texture_object *texObj, GLenum target,
                            GLenum internalFormat,
                            struct gl_buffer_object *bufObj,
                            GLintptr offset, GLsizeiptr size, bool range,
@@ -5106,6 +5106,83 @@ _mesa_TextureBuffer(GLuint texture, GLenum internalFormat, GLuint buffer)
 
    _mesa_texture_buffer_range(ctx, texObj, texObj->Target, internalFormat,
                               bufObj, 0, buffer ? -1 : 0, false, true);
+}
+
+void GLAPIENTRY
+_mesa_TextureBufferRange(GLuint texture, GLenum internalFormat, GLuint buffer,
+                         GLintptr offset, GLsizeiptr size)
+{
+   struct gl_texture_object *texObj;
+   struct gl_buffer_object *bufObj;
+
+   GET_CURRENT_CONTEXT(ctx);
+
+   /* NOTE: ARB_texture_buffer_object has interactions with
+    * the compatibility profile that are not implemented.
+    */
+   if (!(ctx->API == API_OPENGL_CORE &&
+         ctx->Extensions.ARB_texture_buffer_object)) {
+      _mesa_error(ctx, GL_INVALID_OPERATION, "glTextureBufferRange");
+      return;
+   }
+
+   bufObj = _mesa_lookup_bufferobj(ctx, buffer);
+   if (bufObj) {
+      /* OpenGL 4.5 core spec (30.10.2014) says in Section 8.9 Buffer
+       * Textures:
+       *    "An INVALID_VALUE error is generated if offset is negative, if
+       *    size is less than or equal to zero, or if offset + size is greater
+       *    than the value of BUFFER_SIZE for the buffer bound to target."
+       */
+      if (offset < 0 ||
+          size <= 0 ||
+           (offset + size) > bufObj->Size) {
+         _mesa_error(ctx, GL_INVALID_VALUE,
+                     "glTextureBufferRange("
+                     "offset %d, size %d, buffer_size %d)", (int) offset,
+                     (int) size, (int) bufObj->Size);
+         return;
+      }
+      /* OpenGL 4.5 core spec (30.10.2014) says in Section 8.9 Buffer
+       * Textures:
+       *    "An INVALID_VALUE error is generated if offset is not an integer
+       *    multiple of the value of TEXTURE_BUFFER_OFFSET_ALIGNMENT."
+       */
+      if (offset % ctx->Const.TextureBufferOffsetAlignment) {
+         _mesa_error(ctx, GL_INVALID_VALUE,
+                     "glTextureBufferRange(invalid offset alignment)");
+         return;
+      }
+   } else if (buffer) {
+      _mesa_error(ctx, GL_INVALID_OPERATION,
+                  "glTextureBufferRange(buffer %u)", buffer);
+      return;
+   } else {
+
+      /* OpenGL 4.5 core spec (30.10.2014) says in Section 8.9 Buffer
+       * Textures:
+       *    "If buffer is zero, then any buffer object attached to the buffer
+       *    texture is detached, the values offset and size are ignored and
+       *    the state for offset and size for the buffer texture are reset to
+       *    zero."
+       */
+      offset = 0;
+      size = 0;
+   }
+
+   /* Get the texture object by Name. */
+   texObj = _mesa_lookup_texture_err(ctx, texture,
+                                     "glTextureBufferRange(texture)");
+   if (!texObj)
+      return;
+
+   if (texObj->Target != GL_TEXTURE_BUFFER_ARB) {
+      _mesa_error(ctx, GL_INVALID_ENUM, "glTextureBufferRange(target)");
+      return;
+   }
+
+   _mesa_texture_buffer_range(ctx, texObj, texObj->Target, internalFormat,
+                              bufObj, offset, size, true, true);
 }
 
 static GLboolean
