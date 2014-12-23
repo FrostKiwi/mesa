@@ -36,6 +36,10 @@ nir_optimize(nir_shader *nir)
       nir_validate_shader(nir);
       progress |= nir_copy_prop(nir);
       nir_validate_shader(nir);
+      nir_lower_phis_to_scalar(nir);
+      nir_validate_shader(nir);
+      progress |= nir_copy_prop(nir);
+      nir_validate_shader(nir);
       progress |= nir_opt_dce(nir);
       nir_validate_shader(nir);
       progress |= nir_opt_cse(nir);
@@ -83,6 +87,9 @@ fs_visitor::emit_nir_code()
    nir_validate_shader(nir);
 
    nir_split_var_copies(nir);
+   nir_validate_shader(nir);
+
+   nir_lower_alu_to_scalar(nir);
    nir_validate_shader(nir);
 
    nir_optimize(nir);
@@ -540,20 +547,30 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++)
       op[i] = get_nir_alu_src(instr, i);
 
+   if (nir_op_infos[instr->op].output_size == 0) {
+      /* We've already scalarized, so we know that we only have one
+       * channel.  The only question is which channel.
+       */
+      assert(_mesa_bitcount(instr->dest.write_mask) == 1);
+      unsigned off = ffs(instr->dest.write_mask) - 1;
+      result = offset(result, off);
+
+      for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++)
+         op[i] = offset(op[i], off);
+   }
+
    switch (instr->op) {
    case nir_op_fmov:
    case nir_op_i2f:
-   case nir_op_u2f: {
-      fs_inst *inst = MOV(result, op[0]);
-      inst->saturate = instr->dest.saturate;
-      emit_percomp(inst, instr->dest.write_mask);
-   }
+   case nir_op_u2f:
+      emit(MOV(result, op[0]))
+          ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_imov:
    case nir_op_f2i:
    case nir_op_f2u:
-      emit_percomp(MOV(result, op[0]), instr->dest.write_mask);
+      emit(MOV(result, op[0]));
       break;
 
    case nir_op_fsign: {
@@ -562,55 +579,46 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
          * Predicated OR ORs 1.0 (0x3f800000) with the sign bit if val is not
          * zero.
          */
-      emit_percomp(CMP(reg_null_f, op[0], fs_reg(0.0f), BRW_CONDITIONAL_NZ),
-                   instr->dest.write_mask);
+      emit(CMP(reg_null_f, op[0], fs_reg(0.0f), BRW_CONDITIONAL_NZ));
 
       fs_reg result_int = retype(result, BRW_REGISTER_TYPE_UD);
       op[0].type = BRW_REGISTER_TYPE_UD;
       result.type = BRW_REGISTER_TYPE_UD;
-      emit_percomp(AND(result_int, op[0], fs_reg(0x80000000u)),
-                   instr->dest.write_mask);
+      emit(AND(result_int, op[0], fs_reg(0x80000000u)));
 
-      fs_inst *inst = OR(result_int, result_int, fs_reg(0x3f800000u));
-      inst->predicate = BRW_PREDICATE_NORMAL;
-      emit_percomp(inst, instr->dest.write_mask);
+      emit(OR(result_int, result_int, fs_reg(0x3f800000u)))
+          ->predicate = BRW_PREDICATE_NORMAL;
       if (instr->dest.saturate) {
-         fs_inst *inst = MOV(result, result);
-         inst->saturate = true;
-         emit_percomp(inst, instr->dest.write_mask);
+         emit(MOV(result, result))
+             ->saturate = true;
       }
       break;
    }
 
-   case nir_op_isign: {
+   case nir_op_isign:
       /*  ASR(val, 31) -> negative val generates 0xffffffff (signed -1).
-         *               -> non-negative val generates 0x00000000.
-         *  Predicated OR sets 1 if val is positive.
-         */
-      emit_percomp(CMP(reg_null_d, op[0], fs_reg(0), BRW_CONDITIONAL_G),
-                   instr->dest.write_mask);
-
-      emit_percomp(ASR(result, op[0], fs_reg(31)), instr->dest.write_mask);
-
-      fs_inst *inst = OR(result, result, fs_reg(1));
-      inst->predicate = BRW_PREDICATE_NORMAL;
-      emit_percomp(inst, instr->dest.write_mask);
+       *               -> non-negative val generates 0x00000000.
+       *  Predicated OR sets 1 if val is positive.
+       */
+      emit(CMP(reg_null_d, op[0], fs_reg(0), BRW_CONDITIONAL_G));
+      emit(ASR(result, op[0], fs_reg(31)));
+      emit(OR(result, result, fs_reg(1)))
+          ->predicate = BRW_PREDICATE_NORMAL;
       break;
-   }
 
    case nir_op_frcp:
-      emit_math_percomp(SHADER_OPCODE_RCP, result, op[0],
-                        instr->dest.write_mask, instr->dest.saturate);
+      emit_math(SHADER_OPCODE_RCP, result, op[0])
+               ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_fexp2:
-      emit_math_percomp(SHADER_OPCODE_EXP2, result, op[0],
-                        instr->dest.write_mask, instr->dest.saturate);
+      emit_math(SHADER_OPCODE_EXP2, result, op[0])
+               ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_flog2:
-      emit_math_percomp(SHADER_OPCODE_LOG2, result, op[0],
-                        instr->dest.write_mask, instr->dest.saturate);
+      emit_math(SHADER_OPCODE_LOG2, result, op[0])
+               ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_fexp:
@@ -619,67 +627,59 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
 
    case nir_op_fsin:
    case nir_op_fsin_reduced:
-      emit_math_percomp(SHADER_OPCODE_SIN, result, op[0],
-                        instr->dest.write_mask, instr->dest.saturate);
+      emit_math(SHADER_OPCODE_SIN, result, op[0])
+               ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_fcos:
    case nir_op_fcos_reduced:
-      emit_math_percomp(SHADER_OPCODE_COS, result, op[0],
-                        instr->dest.write_mask, instr->dest.saturate);
+      emit_math(SHADER_OPCODE_COS, result, op[0])
+               ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_fddx:
       if (fs_key->high_quality_derivatives)
-         emit_percomp(FS_OPCODE_DDX_FINE, result, op[0],
-                      instr->dest.write_mask, instr->dest.saturate);
+         emit(FS_OPCODE_DDX_FINE, result, op[0])
+             ->saturate = instr->dest.saturate;
       else
-         emit_percomp(FS_OPCODE_DDX_COARSE, result, op[0],
-                      instr->dest.write_mask, instr->dest.saturate);
+         emit(FS_OPCODE_DDX_COARSE, result, op[0])
+             ->saturate = instr->dest.saturate;
       break;
    case nir_op_fddx_fine:
-      emit_percomp(FS_OPCODE_DDX_FINE, result, op[0],
-                   instr->dest.write_mask, instr->dest.saturate);
+      emit(FS_OPCODE_DDX_FINE, result, op[0])
+          ->saturate = instr->dest.saturate;
       break;
    case nir_op_fddx_coarse:
-      emit_percomp(FS_OPCODE_DDX_COARSE, result, op[0],
-                   instr->dest.write_mask, instr->dest.saturate);
+      emit(FS_OPCODE_DDX_COARSE, result, op[0])
+          ->saturate = instr->dest.saturate;
       break;
    case nir_op_fddy:
       if (fs_key->high_quality_derivatives)
-         emit_percomp(FS_OPCODE_DDY_FINE, result, op[0],
-                      fs_reg(fs_key->render_to_fbo),
-                      instr->dest.write_mask, instr->dest.saturate);
+         emit(FS_OPCODE_DDY_FINE, result, op[0], fs_reg(fs_key->render_to_fbo))
+             ->saturate = instr->dest.saturate;
       else
-         emit_percomp(FS_OPCODE_DDY_COARSE, result, op[0],
-                      fs_reg(fs_key->render_to_fbo),
-                      instr->dest.write_mask, instr->dest.saturate);
+         emit(FS_OPCODE_DDY_COARSE, result, op[0], fs_reg(fs_key->render_to_fbo))
+             ->saturate = instr->dest.saturate;
       break;
    case nir_op_fddy_fine:
-      emit_percomp(FS_OPCODE_DDY_FINE, result, op[0],
-                   fs_reg(fs_key->render_to_fbo),
-                   instr->dest.write_mask, instr->dest.saturate);
+      emit(FS_OPCODE_DDY_FINE, result, op[0], fs_reg(fs_key->render_to_fbo))
+           ->saturate = instr->dest.saturate;
       break;
    case nir_op_fddy_coarse:
-      emit_percomp(FS_OPCODE_DDY_COARSE, result, op[0],
-                   fs_reg(fs_key->render_to_fbo),
-                   instr->dest.write_mask, instr->dest.saturate);
+      emit(FS_OPCODE_DDY_COARSE, result, op[0], fs_reg(fs_key->render_to_fbo))
+           ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_fadd:
-   case nir_op_iadd: {
-      fs_inst *inst = ADD(result, op[0], op[1]);
-      inst->saturate = instr->dest.saturate;
-      emit_percomp(inst, instr->dest.write_mask);
+   case nir_op_iadd:
+      emit(ADD(result, op[0], op[1]))
+          ->saturate = instr->dest.saturate;
       break;
-   }
 
-   case nir_op_fmul: {
-      fs_inst *inst = MUL(result, op[0], op[1]);
-      inst->saturate = instr->dest.saturate;
-      emit_percomp(inst, instr->dest.write_mask);
+   case nir_op_fmul:
+      emit(MUL(result, op[0], op[1]))
+          ->saturate = instr->dest.saturate;
       break;
-   }
 
    case nir_op_imul: {
       /* TODO put in the 16-bit constant optimization once we have SSA */
@@ -689,9 +689,9 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
 
       struct brw_reg acc = retype(brw_acc_reg(dispatch_width), result.type);
 
-      emit_percomp(MUL(acc, op[0], op[1]), instr->dest.write_mask);
-      emit_percomp(MACH(reg_null_d, op[0], op[1]), instr->dest.write_mask);
-      emit_percomp(MOV(result, fs_reg(acc)), instr->dest.write_mask);
+      emit(MUL(acc, op[0], op[1]));
+      emit(MACH(reg_null_d, op[0], op[1]));
+      emit(MOV(result, fs_reg(acc)));
       break;
    }
 
@@ -702,15 +702,14 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
 
       struct brw_reg acc = retype(brw_acc_reg(dispatch_width), result.type);
 
-      emit_percomp(MUL(acc, op[0], op[1]), instr->dest.write_mask);
-      emit_percomp(MACH(result, op[0], op[1]), instr->dest.write_mask);
+      emit(MUL(acc, op[0], op[1]));
+      emit(MACH(result, op[0], op[1]));
       break;
    }
 
    case nir_op_idiv:
    case nir_op_udiv:
-      emit_math_percomp(SHADER_OPCODE_INT_QUOTIENT, result, op[0], op[1],
-                        instr->dest.write_mask);
+      emit_math(SHADER_OPCODE_INT_QUOTIENT, result, op[0], op[1]);
       break;
 
    case nir_op_uadd_carry: {
@@ -720,8 +719,8 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       struct brw_reg acc = retype(brw_acc_reg(dispatch_width),
                                   BRW_REGISTER_TYPE_UD);
 
-      emit_percomp(ADDC(reg_null_ud, op[0], op[1]), instr->dest.write_mask);
-      emit_percomp(MOV(result, fs_reg(acc)), instr->dest.write_mask);
+      emit(ADDC(reg_null_ud, op[0], op[1]));
+      emit(MOV(result, fs_reg(acc)));
       break;
    }
 
@@ -732,40 +731,35 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       struct brw_reg acc = retype(brw_acc_reg(dispatch_width),
                                   BRW_REGISTER_TYPE_UD);
 
-      emit_percomp(SUBB(reg_null_ud, op[0], op[1]), instr->dest.write_mask);
-      emit_percomp(MOV(result, fs_reg(acc)), instr->dest.write_mask);
+      emit(SUBB(reg_null_ud, op[0], op[1]));
+      emit(MOV(result, fs_reg(acc)));
       break;
    }
 
    case nir_op_umod:
-      emit_math_percomp(SHADER_OPCODE_INT_REMAINDER, result, op[0],
-                        op[1], instr->dest.write_mask);
+      emit_math(SHADER_OPCODE_INT_REMAINDER, result, op[0], op[1]);
       break;
 
    case nir_op_flt:
    case nir_op_ilt:
    case nir_op_ult:
-      emit_percomp(CMP(result, op[0], op[1], BRW_CONDITIONAL_L),
-                   instr->dest.write_mask);
+      emit(CMP(result, op[0], op[1], BRW_CONDITIONAL_L));
       break;
 
    case nir_op_fge:
    case nir_op_ige:
    case nir_op_uge:
-      emit_percomp(CMP(result, op[0], op[1], BRW_CONDITIONAL_GE),
-                   instr->dest.write_mask);
+      emit(CMP(result, op[0], op[1], BRW_CONDITIONAL_GE));
       break;
 
    case nir_op_feq:
    case nir_op_ieq:
-      emit_percomp(CMP(result, op[0], op[1], BRW_CONDITIONAL_Z),
-                   instr->dest.write_mask);
+      emit(CMP(result, op[0], op[1], BRW_CONDITIONAL_Z));
       break;
 
    case nir_op_fne:
    case nir_op_ine:
-      emit_percomp(CMP(result, op[0], op[1], BRW_CONDITIONAL_NZ),
-                   instr->dest.write_mask);
+      emit(CMP(result, op[0], op[1], BRW_CONDITIONAL_NZ));
       break;
 
    case nir_op_ball_fequal2:
@@ -773,72 +767,38 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
    case nir_op_ball_fequal3:
    case nir_op_ball_iequal3:
    case nir_op_ball_fequal4:
-   case nir_op_ball_iequal4: {
-      unsigned num_components = nir_op_infos[instr->op].input_sizes[0];
-      fs_reg temp = vgrf(num_components);
-      emit_percomp(CMP(temp, op[0], op[1], BRW_CONDITIONAL_Z),
-                   (1 << num_components) - 1);
-      emit_reduction(BRW_OPCODE_AND, result, temp, num_components);
-      break;
-   }
-
+   case nir_op_ball_iequal4:
    case nir_op_bany_fnequal2:
    case nir_op_bany_inequal2:
    case nir_op_bany_fnequal3:
    case nir_op_bany_inequal3:
    case nir_op_bany_fnequal4:
-   case nir_op_bany_inequal4: {
-      unsigned num_components = nir_op_infos[instr->op].input_sizes[0];
-      fs_reg temp = vgrf(num_components);
-      temp.type = BRW_REGISTER_TYPE_UD;
-      emit_percomp(CMP(temp, op[0], op[1], BRW_CONDITIONAL_NZ),
-                   (1 << num_components) - 1);
-      emit_reduction(BRW_OPCODE_OR, result, temp, num_components);
-      break;
-   }
+   case nir_op_bany_inequal4:
+      unreachable("Lowered by nir_lower_alu_reductions");
 
    case nir_op_inot:
-      emit_percomp(NOT(result, op[0]), instr->dest.write_mask);
+      emit(NOT(result, op[0]));
       break;
    case nir_op_ixor:
-      emit_percomp(XOR(result, op[0], op[1]), instr->dest.write_mask);
+      emit(XOR(result, op[0], op[1]));
       break;
    case nir_op_ior:
-      emit_percomp(OR(result, op[0], op[1]), instr->dest.write_mask);
+      emit(OR(result, op[0], op[1]));
       break;
    case nir_op_iand:
-      emit_percomp(AND(result, op[0], op[1]), instr->dest.write_mask);
+      emit(AND(result, op[0], op[1]));
       break;
 
    case nir_op_fdot2:
    case nir_op_fdot3:
-   case nir_op_fdot4: {
-      unsigned num_components = nir_op_infos[instr->op].input_sizes[0];
-      fs_reg temp = vgrf(num_components);
-      emit_percomp(MUL(temp, op[0], op[1]), (1 << num_components) - 1);
-      emit_reduction(BRW_OPCODE_ADD, result, temp, num_components);
-      if (instr->dest.saturate) {
-         fs_inst *inst = emit(MOV(result, result));
-         inst->saturate = true;
-      }
-      break;
-   }
-
+   case nir_op_fdot4:
    case nir_op_bany2:
    case nir_op_bany3:
-   case nir_op_bany4: {
-      unsigned num_components = nir_op_infos[instr->op].input_sizes[0];
-      emit_reduction(BRW_OPCODE_OR, result, op[0], num_components);
-      break;
-   }
-
+   case nir_op_bany4:
    case nir_op_ball2:
    case nir_op_ball3:
-   case nir_op_ball4: {
-      unsigned num_components = nir_op_infos[instr->op].input_sizes[0];
-      emit_reduction(BRW_OPCODE_AND, result, op[0], num_components);
-      break;
-   }
+   case nir_op_ball4:
+      unreachable("Lowered by nir_lower_alu_reductions");
 
    case nir_op_fnoise1_1:
    case nir_op_fnoise1_2:
@@ -867,83 +827,67 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       unreachable("not reached: should be handled by ldexp_to_arith()");
 
    case nir_op_fsqrt:
-      emit_math_percomp(SHADER_OPCODE_SQRT, result, op[0],
-                        instr->dest.write_mask, instr->dest.saturate);
+      emit_math(SHADER_OPCODE_SQRT, result, op[0])
+               ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_frsq:
-      emit_math_percomp(SHADER_OPCODE_RSQ, result, op[0],
-                        instr->dest.write_mask, instr->dest.saturate);
+      emit_math(SHADER_OPCODE_RSQ, result, op[0])
+               ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_b2i:
-      emit_percomp(AND(result, op[0], fs_reg(1)), instr->dest.write_mask);
+      emit(AND(result, op[0], fs_reg(1)));
       break;
-   case nir_op_b2f: {
-      emit_percomp(AND(retype(result, BRW_REGISTER_TYPE_UD), op[0],
-                       fs_reg(0x3f800000u)),
-                   instr->dest.write_mask);
+   case nir_op_b2f:
+      emit(AND(retype(result, BRW_REGISTER_TYPE_UD), op[0], fs_reg(0x3f800000u)));
       break;
-   }
 
    case nir_op_f2b:
-      emit_percomp(CMP(result, op[0], fs_reg(0.0f), BRW_CONDITIONAL_NZ),
-                   instr->dest.write_mask);
+      emit(CMP(result, op[0], fs_reg(0.0f), BRW_CONDITIONAL_NZ));
       break;
    case nir_op_i2b:
-      emit_percomp(CMP(result, op[0], fs_reg(0), BRW_CONDITIONAL_NZ),
-                   instr->dest.write_mask);
+      emit(CMP(result, op[0], fs_reg(0), BRW_CONDITIONAL_NZ));
       break;
 
-   case nir_op_ftrunc: {
-      fs_inst *inst = RNDZ(result, op[0]);
-      inst->saturate = instr->dest.saturate;
-      emit_percomp(inst, instr->dest.write_mask);
+   case nir_op_ftrunc:
+      emit(RNDZ(result, op[0]))
+          ->saturate = instr->dest.saturate;
       break;
-   }
+
    case nir_op_fceil: {
       op[0].negate = !op[0].negate;
-      fs_reg temp = vgrf(glsl_type::vec4_type);
-      emit_percomp(RNDD(temp, op[0]), instr->dest.write_mask);
+      fs_reg temp = vgrf(glsl_type::float_type);
+      emit(RNDD(temp, op[0]));
       temp.negate = true;
-      fs_inst *inst = MOV(result, temp);
-      inst->saturate = instr->dest.saturate;
-      emit_percomp(inst, instr->dest.write_mask);
+      emit(MOV(result, temp))
+          ->saturate = instr->dest.saturate;
       break;
    }
-   case nir_op_ffloor: {
-      fs_inst *inst = RNDD(result, op[0]);
-      inst->saturate = instr->dest.saturate;
-      emit_percomp(inst, instr->dest.write_mask);
+   case nir_op_ffloor:
+      emit(RNDD(result, op[0]))
+          ->saturate = instr->dest.saturate;
       break;
-   }
-   case nir_op_ffract: {
-      fs_inst *inst = FRC(result, op[0]);
-      inst->saturate = instr->dest.saturate;
-      emit_percomp(inst, instr->dest.write_mask);
+   case nir_op_ffract:
+      emit(FRC(result, op[0]))
+          ->saturate = instr->dest.saturate;
       break;
-   }
-   case nir_op_fround_even: {
-      fs_inst *inst = RNDE(result, op[0]);
-      inst->saturate = instr->dest.saturate;
-      emit_percomp(inst, instr->dest.write_mask);
+   case nir_op_fround_even:
+      emit(RNDE(result, op[0]))
+          ->saturate = instr->dest.saturate;
       break;
-   }
 
    case nir_op_fmin:
    case nir_op_imin:
    case nir_op_umin:
       if (brw->gen >= 6) {
-         emit_percomp(BRW_OPCODE_SEL, result, op[0], op[1],
-                      instr->dest.write_mask, instr->dest.saturate,
-                      BRW_PREDICATE_NONE, BRW_CONDITIONAL_L);
+         fs_inst *sel = emit(BRW_OPCODE_SEL, result, op[0], op[1]);
+         sel->conditional_mod = BRW_CONDITIONAL_L;
+         sel->saturate = instr->dest.saturate;
       } else {
-         emit_percomp(CMP(reg_null_d, op[0], op[1], BRW_CONDITIONAL_L),
-                      instr->dest.write_mask);
-
-         emit_percomp(BRW_OPCODE_SEL, result, op[0], op[1],
-                      instr->dest.write_mask, instr->dest.saturate,
-                      BRW_PREDICATE_NORMAL);
+         emit(CMP(reg_null_d, op[0], op[1], BRW_CONDITIONAL_L));
+         emit(SEL(result, op[0], op[1]))
+             ->saturate = instr->dest.saturate;
       }
       break;
 
@@ -951,16 +895,13 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
    case nir_op_imax:
    case nir_op_umax:
       if (brw->gen >= 6) {
-         emit_percomp(BRW_OPCODE_SEL, result, op[0], op[1],
-                      instr->dest.write_mask, instr->dest.saturate,
-                      BRW_PREDICATE_NONE, BRW_CONDITIONAL_GE);
+         fs_inst *sel = emit(BRW_OPCODE_SEL, result, op[0], op[1]);
+         sel->conditional_mod = BRW_CONDITIONAL_GE;
+         sel->saturate = instr->dest.saturate;
       } else {
-         emit_percomp(CMP(reg_null_d, op[0], op[1], BRW_CONDITIONAL_GE),
-                      instr->dest.write_mask);
-
-         emit_percomp(BRW_OPCODE_SEL, result, op[0], op[1],
-                      instr->dest.write_mask, instr->dest.saturate,
-                      BRW_PREDICATE_NORMAL);
+         emit(CMP(reg_null_d, op[0], op[1], BRW_CONDITIONAL_GE));
+         emit(SEL(result, op[0], op[1]))
+             ->saturate = instr->dest.saturate;
       }
       break;
 
@@ -977,60 +918,57 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       unreachable("not reached: should be handled by lower_packing_builtins");
 
    case nir_op_unpack_half_2x16_split_x:
-      emit_percomp(FS_OPCODE_UNPACK_HALF_2x16_SPLIT_X, result, op[0],
-                   instr->dest.write_mask, instr->dest.saturate);
+      emit(FS_OPCODE_UNPACK_HALF_2x16_SPLIT_X, result, op[0])
+          ->saturate = instr->dest.saturate;
       break;
    case nir_op_unpack_half_2x16_split_y:
-      emit_percomp(FS_OPCODE_UNPACK_HALF_2x16_SPLIT_Y, result, op[0],
-           instr->dest.write_mask, instr->dest.saturate);
+      emit(FS_OPCODE_UNPACK_HALF_2x16_SPLIT_Y, result, op[0])
+          ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_fpow:
-      emit_percomp(SHADER_OPCODE_POW, result, op[0], op[1],
-                   instr->dest.write_mask, instr->dest.saturate);
+      emit(SHADER_OPCODE_POW, result, op[0], op[1])
+          ->saturate = instr->dest.saturate;
       break;
 
    case nir_op_bitfield_reverse:
-      emit_percomp(BFREV(result, op[0]), instr->dest.write_mask);
+      emit(BFREV(result, op[0]));
       break;
 
    case nir_op_bit_count:
-      emit_percomp(CBIT(result, op[0]), instr->dest.write_mask);
+      emit(CBIT(result, op[0]));
       break;
 
    case nir_op_ufind_msb:
    case nir_op_ifind_msb: {
-      emit_percomp(FBH(retype(result, BRW_REGISTER_TYPE_UD), op[0]),
-                   instr->dest.write_mask);
+      emit(FBH(retype(result, BRW_REGISTER_TYPE_UD), op[0]));
 
       /* FBH counts from the MSB side, while GLSL's findMSB() wants the count
        * from the LSB side. If FBH didn't return an error (0xFFFFFFFF), then
        * subtract the result from 31 to convert the MSB count into an LSB count.
        */
 
-      emit_percomp(CMP(reg_null_d, result, fs_reg(-1), BRW_CONDITIONAL_NZ),
-                   instr->dest.write_mask);
+      emit(CMP(reg_null_d, result, fs_reg(-1), BRW_CONDITIONAL_NZ));
       fs_reg neg_result(result);
       neg_result.negate = true;
-      fs_inst *inst = ADD(result, neg_result, fs_reg(31));
-      inst->predicate = BRW_PREDICATE_NORMAL;
-      emit_percomp(inst, instr->dest.write_mask);
+      emit(ADD(result, neg_result, fs_reg(31)))
+          ->predicate = BRW_PREDICATE_NORMAL;
       break;
    }
 
    case nir_op_find_lsb:
-      emit_percomp(FBL(result, op[0]), instr->dest.write_mask);
+      emit(FBL(result, op[0]));
       break;
 
    case nir_op_ubitfield_extract:
    case nir_op_ibitfield_extract:
-      emit_percomp(BFE(result, op[2], op[1], op[0]), instr->dest.write_mask);
+      emit(BFE(result, op[2], op[1], op[0]));
       break;
    case nir_op_bfm:
-      emit_percomp(BFI1(result, op[0], op[1]), instr->dest.write_mask);
+      emit(BFI1(result, op[0], op[1]));
       break;
    case nir_op_bfi:
-      emit_percomp(BFI2(result, op[0], op[1], op[2]), instr->dest.write_mask);
+      emit(BFI2(result, op[0], op[1], op[2]));
       break;
 
    case nir_op_bitfield_insert:
@@ -1038,38 +976,32 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
                   "lower_instructions::bitfield_insert_to_bfm_bfi");
 
    case nir_op_ishl:
-      emit_percomp(SHL(result, op[0], op[1]), instr->dest.write_mask);
+      emit(SHL(result, op[0], op[1]));
       break;
    case nir_op_ishr:
-      emit_percomp(ASR(result, op[0], op[1]), instr->dest.write_mask);
+      emit(ASR(result, op[0], op[1]));
       break;
    case nir_op_ushr:
-      emit_percomp(SHR(result, op[0], op[1]), instr->dest.write_mask);
+      emit(SHR(result, op[0], op[1]));
       break;
 
    case nir_op_pack_half_2x16_split:
-      emit_percomp(FS_OPCODE_PACK_HALF_2x16_SPLIT, result, op[0], op[1],
-                   instr->dest.write_mask);
+      emit(FS_OPCODE_PACK_HALF_2x16_SPLIT, result, op[0], op[1]);
       break;
 
    case nir_op_ffma:
-      emit_percomp(MAD(result, op[2], op[1], op[0]), instr->dest.write_mask);
+      emit(MAD(result, op[2], op[1], op[0]));
       break;
 
    case nir_op_flrp:
       /* TODO emulate for gen < 6 */
-      emit_percomp(LRP(result, op[2], op[1], op[0]), instr->dest.write_mask);
+      emit(LRP(result, op[2], op[1], op[0]));
       break;
 
    case nir_op_bcsel:
-      for (unsigned i = 0; i < 4; i++) {
-         if (!((instr->dest.write_mask >> i) & 1))
-            continue;
-
-         emit(CMP(reg_null_d, offset(op[0], i), fs_reg(0), BRW_CONDITIONAL_NZ));
-         emit(SEL(offset(result, i), offset(op[1], i), offset(op[2], i)))
-             ->predicate = BRW_PREDICATE_NORMAL;
-      }
+      emit(CMP(reg_null_d, op[0], fs_reg(0), BRW_CONDITIONAL_NZ));
+      emit(SEL(result, op[1], op[2]))
+          ->predicate = BRW_PREDICATE_NORMAL;
       break;
 
    default:
@@ -1186,111 +1118,6 @@ fs_visitor::emit_percomp(fs_inst *inst, unsigned wr_mask)
 
       emit(new_inst);
    }
-}
-
-void
-fs_visitor::emit_percomp(enum opcode op, fs_reg dest, fs_reg src0,
-                         unsigned wr_mask, bool saturate,
-                         enum brw_predicate predicate,
-                         enum brw_conditional_mod mod)
-{
-   for (unsigned i = 0; i < 4; i++) {
-      if (!((wr_mask >> i) & 1))
-         continue;
-
-      fs_reg new_src0 = src0.file == GRF ? offset(src0, i) : src0;
-      fs_inst *new_inst = new(mem_ctx) fs_inst(op, offset(dest, i), new_src0);
-
-      new_inst->predicate = predicate;
-      new_inst->conditional_mod = mod;
-      new_inst->saturate = saturate;
-      emit(new_inst);
-   }
-}
-
-void
-fs_visitor::emit_percomp(enum opcode op, fs_reg dest, fs_reg src0, fs_reg src1,
-                         unsigned wr_mask, bool saturate,
-                         enum brw_predicate predicate,
-                         enum brw_conditional_mod mod)
-{
-   for (unsigned i = 0; i < 4; i++) {
-      if (!((wr_mask >> i) & 1))
-         continue;
-
-      fs_reg new_src0 = src0.file == GRF ? offset(src0, i) : src0;
-      fs_reg new_src1 = src1.file == GRF ? offset(src1, i) : src1;
-      fs_inst *new_inst =
-         new(mem_ctx) fs_inst(op, offset(dest, i), new_src0, new_src1);
-
-      new_inst->predicate = predicate;
-      new_inst->conditional_mod = mod;
-      new_inst->saturate = saturate;
-      emit(new_inst);
-   }
-}
-
-void
-fs_visitor::emit_math_percomp(enum opcode op, fs_reg dest, fs_reg src0,
-                              unsigned wr_mask, bool saturate)
-{
-   for (unsigned i = 0; i < 4; i++) {
-      if (!((wr_mask >> i) & 1))
-         continue;
-
-      fs_reg new_src0 = src0.file == GRF ? offset(src0, i) : src0;
-      fs_inst *new_inst = emit_math(op, offset(dest, i), new_src0);
-      new_inst->saturate = saturate;
-   }
-}
-
-void
-fs_visitor::emit_math_percomp(enum opcode op, fs_reg dest, fs_reg src0,
-                              fs_reg src1, unsigned wr_mask,
-                              bool saturate)
-{
-   for (unsigned i = 0; i < 4; i++) {
-      if (!((wr_mask >> i) & 1))
-         continue;
-
-      fs_reg new_src0 = src0.file == GRF ? offset(src0, i) : src0;
-      fs_reg new_src1 = src1.file == GRF ? offset(src1, i) : src1;
-      fs_inst *new_inst = emit_math(op, offset(dest, i), new_src0, new_src1);
-      new_inst->saturate = saturate;
-   }
-}
-
-void
-fs_visitor::emit_reduction(enum opcode op, fs_reg dest, fs_reg src,
-                           unsigned num_components)
-{
-   fs_reg src0 = src;
-   fs_reg src1 = offset(src, 1);
-
-   if (num_components == 2) {
-      emit(op, dest, src0, src1);
-      return;
-   }
-
-   fs_reg temp1 = vgrf(1);
-   temp1.type = src.type;
-   emit(op, temp1, src0, src1);
-
-   fs_reg src2 = offset(src, 2);
-
-   if (num_components == 3) {
-      emit(op, dest, temp1, src2);
-      return;
-   }
-
-   assert(num_components == 4);
-
-   fs_reg src3 = offset(src, 3);
-   fs_reg temp2 = vgrf(1);
-   temp2.type = src.type;
-
-   emit(op, temp2, src2, src3);
-   emit(op, dest, temp1, temp2);
 }
 
 void
