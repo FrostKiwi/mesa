@@ -32,6 +32,7 @@
 #include "intel_mipmap_tree.h"
 #include "intel_resolve_map.h"
 #include "intel_tex.h"
+#include "intel_tiled_memcpy.h"
 #include "intel_blit.h"
 #include "intel_fbo.h"
 
@@ -1930,6 +1931,110 @@ intel_miptree_unmap_movntdqa(struct brw_context *brw,
 #endif
 
 static void
+intel_miptree_map_cpu_detile(struct brw_context *brw,
+                             struct intel_mipmap_tree *mt,
+                             struct intel_miptree_map *map,
+                             unsigned int level, unsigned int slice)
+{
+   assert(!(map->mode & BRW_MAP_DIRECT_BIT));
+
+   DBG("%s: %d,%d %dx%d from mt %p (%s) %d,%d = %p/%d\n", __FUNCTION__,
+       map->x, map->y, map->w, map->h,
+       mt, _mesa_get_format_name(mt->format),
+       level, slice, map->ptr, map->stride);
+
+   /* Create an untiled temporary buffer for the mapping. */
+   map->stride = _mesa_format_row_stride(mt->format, map->w);
+   map->buffer = _mesa_align_malloc(map->stride * map->h, 16);
+   map->ptr = map->buffer;
+
+   /* If INVALIDATE_RANGE_BIT is set, don't bother detiling */
+   if (map->mode & GL_MAP_INVALIDATE_RANGE_BIT)
+      return;
+
+   /* Map the original image */
+   uint32_t image_x;
+   uint32_t image_y;
+   intel_miptree_get_image_offset(mt, level, slice, &image_x, &image_y);
+   image_x += map->x;
+   image_y += map->y;
+
+   if (drm_intel_bo_references(brw->batch.bo, mt->bo))
+      intel_batchbuffer_flush(brw);
+
+   brw_bo_map(brw, mt->bo, (map->mode & GL_MAP_WRITE_BIT) != 0, "miptree");
+
+   tiled_to_linear(
+      image_x * mt->cpp, (image_x + map->w) * mt->cpp,
+      image_y, image_y + map->h,
+      map->ptr - (ptrdiff_t) image_y * map->stride - (ptrdiff_t) image_x * mt->cpp,
+      mt->bo->virtual,
+      map->stride, mt->pitch,
+      brw->has_swizzling,
+      mt->tiling,
+      memcpy
+   );
+
+   /* If we're not planning to write it, go ahead and unmap immediately */
+   if (!(map->mode & GL_MAP_WRITE_BIT))
+      drm_intel_bo_unmap(mt->bo);
+}
+
+static void
+intel_miptree_unmap_cpu_tile(struct brw_context *brw,
+                             struct intel_mipmap_tree *mt,
+                             struct intel_miptree_map *map,
+                             unsigned int level, unsigned int slice)
+{
+   assert(!(map->mode & BRW_MAP_DIRECT_BIT));
+
+   DBG("%s: %d,%d %dx%d from mt %p (%s) %d,%d = %p/%d\n", __FUNCTION__,
+       map->x, map->y, map->w, map->h,
+       mt, _mesa_get_format_name(mt->format),
+       level, slice, map->ptr, map->stride);
+
+   /* If we're only reading, don't bother with tiling, just delete it. */
+   if (!(map->mode & GL_MAP_WRITE_BIT)) {
+      _mesa_align_free(map->buffer);
+      map->buffer = NULL;
+      map->ptr = NULL;
+      return;
+   }
+
+   /* Map the original image */
+   uint32_t image_x;
+   uint32_t image_y;
+   intel_miptree_get_image_offset(mt, level, slice, &image_x, &image_y);
+   image_x += map->x;
+   image_y += map->y;
+
+   /* If INVALIDATE_RANGE_BIT is set, we never mapped and detiled; map now */
+   if (map->mode & GL_MAP_INVALIDATE_RANGE_BIT) {
+      if (drm_intel_bo_references(brw->batch.bo, mt->bo))
+         intel_batchbuffer_flush(brw);
+
+      brw_bo_map(brw, mt->bo, true, "miptree");
+   }
+
+   linear_to_tiled(
+      image_x * mt->cpp, (image_x + map->w) * mt->cpp,
+      image_y, image_y + map->h,
+      mt->bo->virtual,
+      map->ptr - (ptrdiff_t) image_y * map->stride - (ptrdiff_t) image_x * mt->cpp,
+      mt->pitch, map->stride,
+      brw->has_swizzling,
+      mt->tiling,
+      memcpy
+   );
+
+   drm_intel_bo_unmap(mt->bo);
+
+   _mesa_align_free(map->buffer);
+   map->buffer = NULL;
+   map->ptr = NULL;
+}
+
+static void
 intel_miptree_map_s8(struct brw_context *brw,
 		     struct intel_mipmap_tree *mt,
 		     struct intel_miptree_map *map,
@@ -2307,6 +2412,9 @@ intel_miptree_map(struct brw_context *brw,
    } else if (mt->stencil_mt && !(mode & BRW_MAP_DIRECT_BIT)) {
       intel_miptree_map_depthstencil(brw, mt, map, level, slice);
    }
+   else if (mt->tiling == I915_TILING_X || mt->tiling == I915_TILING_Y) {
+      intel_miptree_map_cpu_detile(brw, mt, map, level, slice);
+   }
    /* See intel_miptree_blit() for details on the 32k pitch limit. */
    else if (brw->has_llc &&
             !(mode & GL_MAP_WRITE_BIT) &&
@@ -2357,6 +2465,8 @@ intel_miptree_unmap(struct brw_context *brw,
       intel_miptree_unmap_etc(brw, mt, map, level, slice);
    } else if (mt->stencil_mt && !(map->mode & BRW_MAP_DIRECT_BIT)) {
       intel_miptree_unmap_depthstencil(brw, mt, map, level, slice);
+   } else if (mt->tiling == I915_TILING_X || mt->tiling == I915_TILING_Y) {
+      intel_miptree_unmap_cpu_tile(brw, mt, map, level, slice);
    } else if (map->mt) {
       intel_miptree_unmap_blit(brw, mt, map, level, slice);
 #if defined(USE_SSE41)
