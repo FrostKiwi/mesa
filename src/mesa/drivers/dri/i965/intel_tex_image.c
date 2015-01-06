@@ -120,8 +120,7 @@ try_pbo_upload(struct gl_context *ctx,
                                              format, type, false)) {
       DBG("%s: format mismatch (upload to %s with format 0x%x, type 0x%x)\n",
 	  __FUNCTION__, _mesa_get_format_name(intelImage->mt->format),
-	  format, type);
-      return false;
+	  format, type); return false;
    }
 
    if (image->TexObject->Target == GL_TEXTURE_1D_ARRAY ||
@@ -172,13 +171,22 @@ intelTexImage(struct gl_context * ctx,
               GLenum format, GLenum type, const void *pixels,
               const struct gl_pixelstore_attrib *unpack)
 {
+   struct intel_texture_image *intelImage = intel_texture_image(texImage);
    bool ok;
+
+   bool tex_busy = intelImage->mt && drm_intel_bo_busy(intelImage->mt->bo);
 
    DBG("%s mesa_format %s target %s format %s type %s level %d %dx%dx%d\n",
        __FUNCTION__, _mesa_get_format_name(texImage->TexFormat),
        _mesa_lookup_enum_by_nr(texImage->TexObject->Target),
        _mesa_lookup_enum_by_nr(format), _mesa_lookup_enum_by_nr(type),
        texImage->Level, texImage->Width, texImage->Height, texImage->Depth);
+
+   ok = _mesa_meta_TexSubImage(ctx, dims, texImage, 0, 0, 0,
+                               texImage->Width, texImage->Height, texImage->Depth,
+                               format, type, pixels, true, tex_busy, unpack);
+   if (ok)
+      return;
 
    ok = intel_texsubimage_tiled_memcpy(ctx, dims, texImage,
                                        0, 0, 0, /*x,y,z offsets*/
