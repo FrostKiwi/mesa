@@ -35,6 +35,7 @@
 #include "main/texstore.h"
 #include "main/texcompress.h"
 #include "main/enums.h"
+#include "drivers/common/meta.h"
 
 #include "brw_context.h"
 #include "intel_batchbuffer.h"
@@ -676,13 +677,22 @@ intelTexSubImage(struct gl_context * ctx,
                  const GLvoid * pixels,
                  const struct gl_pixelstore_attrib *packing)
 {
+   struct intel_texture_image *intelImage = intel_texture_image(texImage);
    bool ok;
+
+   bool tex_busy = intelImage->mt && drm_intel_bo_busy(intelImage->mt->bo);
 
    DBG("%s mesa_format %s target %s format %s type %s level %d %dx%dx%d\n",
        __FUNCTION__, _mesa_get_format_name(texImage->TexFormat),
        _mesa_lookup_enum_by_nr(texImage->TexObject->Target),
        _mesa_lookup_enum_by_nr(format), _mesa_lookup_enum_by_nr(type),
        texImage->Level, texImage->Width, texImage->Height, texImage->Depth);
+
+   ok = _mesa_meta_TexSubImage(ctx, dims, texImage, xoffset, yoffset, zoffset,
+                               width, height, depth, format, type,
+                               pixels, false, tex_busy, packing);
+   if (ok)
+      return;
 
    ok = intel_texsubimage_tiled_memcpy(ctx, dims, texImage,
                                        xoffset, yoffset, zoffset,
