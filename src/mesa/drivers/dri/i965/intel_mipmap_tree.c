@@ -473,12 +473,14 @@ intel_miptree_choose_tiling(struct brw_context *brw,
    if (minimum_pitch < 64)
       return I915_TILING_NONE;
 
+#if 0
    if (ALIGN(minimum_pitch, 512) >= 32768 ||
        mt->total_width >= 32768 || mt->total_height >= 32768) {
       perf_debug("%dx%d miptree too large to blit, falling back to untiled",
                  mt->total_width, mt->total_height);
       return I915_TILING_NONE;
    }
+#endif
 
    /* Pre-gen6 doesn't have BLORP to handle Y-tiling, so use X-tiling. */
    if (brw->gen < 6)
@@ -620,6 +622,7 @@ intel_miptree_create(struct brw_context *brw,
                                       BO_ALLOC_FOR_RENDER : 0));
    mt->pitch = pitch;
 
+#if 0
    /* If the BO is too large to fit in the aperture, we need to use the
     * BLT engine to support it.  The BLT paths can't currently handle Y-tiling,
     * so we need to fall back to X.
@@ -637,6 +640,7 @@ intel_miptree_create(struct brw_context *brw,
                                          BO_ALLOC_FOR_RENDER : 0));
       mt->pitch = pitch;
    }
+#endif
 
    mt->offset = 0;
 
