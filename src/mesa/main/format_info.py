@@ -24,6 +24,7 @@
 
 import format_parser as parser
 import sys
+from mako.template import Template
 
 def get_gl_base_format(fmat):
    if fmat.name == 'MESA_FORMAT_NONE':
@@ -139,9 +140,7 @@ def get_channel_bits(fmat, chan_name):
             return chan.size
       return 0
 
-formats = parser.parse(sys.argv[1])
-
-print '''
+template = Template('''
 /*
  * Mesa 3-D graphics library
  *
@@ -173,41 +172,42 @@ print '''
 
 static struct gl_format_info format_info[MESA_FORMAT_COUNT] =
 {
-'''
+% for f in formats:
+   {
+      ${f.name},
+      "${f.name}",
+      ${get_mesa_layout(f)},
+      ${get_gl_base_format(f)},
+      ${get_gl_data_type(f)},
+   % for name in ['r', 'g', 'b', 'a', 'l', 'i', 'z', 's']:
+      ${get_channel_bits(f, name)},
+   % endfor
+      ${f.block_width}, ${f.block_height}, ${f.block_size() / 8},
+      { ${', '.join(map(str, f.swizzle))} },
+   % if f.is_array():
+      <% c = f.array_element() %>
+      <% norm = c.norm or c.type == parser.FLOAT %>
+      MESA_ARRAY_FORMAT(${c.size / 8},
+                        ${int(c.sign)},
+                        ${int(c.type == parser.FLOAT)},
+                        ${int(norm)},
+                        ${len(f.channels)},
+                        ${f.swizzle[0]},
+                        ${f.swizzle[1]},
+                        ${f.swizzle[2]},
+                        ${f.swizzle[3]})
+   % else:
+      0,
+   % endif
+   },
+% endfor
+};
+''')
 
-for fmat in formats:
-   print '   {'
-   print '      {0},'.format(fmat.name)
-   print '      "{0}",'.format(fmat.name)
-   print '      {0},'.format(get_mesa_layout(fmat))
-   print '      {0},'.format(get_gl_base_format(fmat))
-   print '      {0},'.format(get_gl_data_type(fmat))
-
-   bits = [ get_channel_bits(fmat, name) for name in ['r', 'g', 'b', 'a']]
-   print '      {0},'.format(', '.join(map(str, bits)))
-   bits = [ get_channel_bits(fmat, name) for name in ['l', 'i', 'z', 's']]
-   print '      {0},'.format(', '.join(map(str, bits)))
-
-   print '      {0}, {1}, {2},'.format(fmat.block_width, fmat.block_height,
-                                       int(fmat.block_size() / 8))
-
-   print '      {{ {0} }},'.format(', '.join(map(str, fmat.swizzle)))
-   if fmat.is_array():
-      chan = fmat.array_element()
-      norm = chan.norm or chan.type == parser.FLOAT
-      print '      MESA_ARRAY_FORMAT({0}),'.format(', '.join([
-         str(chan.size / 8),
-         str(int(chan.sign)),
-         str(int(chan.type == parser.FLOAT)),
-         str(int(norm)),
-         str(len(fmat.channels)),
-         str(fmat.swizzle[0]),
-         str(fmat.swizzle[1]),
-         str(fmat.swizzle[2]),
-         str(fmat.swizzle[3]),
-      ]))
-   else:
-      print '      0,'
-   print '   },'
-
-print '};'
+print template.render(
+   formats = parser.parse(sys.argv[1]),
+   parser = parser,
+   get_mesa_layout = get_mesa_layout,
+   get_gl_base_format = get_gl_base_format,
+   get_gl_data_type = get_gl_data_type,
+   get_channel_bits = get_channel_bits)
