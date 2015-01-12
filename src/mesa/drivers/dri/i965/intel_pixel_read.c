@@ -35,6 +35,7 @@
 #include "main/readpix.h"
 #include "main/state.h"
 #include "main/glformats.h"
+#include "drivers/common/meta.h"
 
 #include "brw_context.h"
 #include "intel_screen.h"
@@ -173,6 +174,10 @@ intelReadPixels(struct gl_context * ctx,
    DBG("%s\n", __FUNCTION__);
 
    if (_mesa_is_bufferobj(pack->BufferObj)) {
+      if (_mesa_meta_GetTexSubImage(ctx, 2, NULL, x, y, 0, width, height, 0,
+                                    format, type, pixels, pack))
+         return;
+
       /* Using PBOs, so try the BLT based path. */
       if (do_blit_readpixels(ctx, x, y, width, height, format, type, pack,
                              pixels)) {

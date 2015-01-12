@@ -523,6 +523,12 @@ intel_get_tex_image(struct gl_context *ctx,
    DBG("%s\n", __FUNCTION__);
 
    if (_mesa_is_bufferobj(ctx->Pack.BufferObj)) {
+      if (_mesa_meta_GetTexSubImage(ctx, 3, texImage, 0, 0, 0, 
+                                    texImage->Width, texImage->Height,
+                                    texImage->Depth, format, type,
+                                    pixels, &ctx->Pack))
+         return;
+
       /* Using PBOs, so try the BLT based path. */
       if (blit_texture_to_pbo(ctx, format, type, pixels, texImage))
          return;
