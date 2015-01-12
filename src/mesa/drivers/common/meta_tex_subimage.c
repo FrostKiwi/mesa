@@ -42,6 +42,88 @@
 #include "uniforms.h"
 #include "varray.h"
 
+static struct gl_texture_image *
+create_texture_for_pbo(struct gl_context *ctx, bool create_pbo,
+                       GLenum pbo_target, int width, int height, int depth,
+                       GLenum format, GLenum type, const void *pixels,
+                       const struct gl_pixelstore_attrib *packing,
+                       GLuint *tmp_pbo, GLuint *tmp_tex)
+{
+   uint32_t pbo_format;
+   GLenum internal_format;
+   unsigned row_stride;
+   struct gl_buffer_object *buffer_obj;
+   struct gl_texture_object *tex_obj;
+   struct gl_texture_image *tex_image;
+
+   if ((packing->ImageHeight != 0 && packing->ImageHeight != height) ||
+       packing->SwapBytes ||
+       packing->LsbFirst ||
+       packing->Invert)
+      return NULL;
+
+   pbo_format = _mesa_format_from_format_and_type(format, type);
+   if (_mesa_format_is_mesa_array_format(pbo_format))
+      pbo_format = _mesa_format_from_array_format(pbo_format);
+
+   if (!pbo_format || !ctx->TextureFormatSupported[pbo_format])
+      return NULL;
+
+   internal_format = _mesa_get_format_base_format(pbo_format);
+   row_stride = _mesa_format_row_stride(pbo_format, width);
+
+   /* Account for SKIP_PIXELS, SKIP_ROWS, ALIGNMENT, and SKIP_IMAGES */
+   pixels = _mesa_image_address3d(packing, pixels,
+                                  width, height, format, type, 0, 0, 0);
+   row_stride = _mesa_image_row_stride(packing, width, format, type);
+
+   /* Only stash the current FBO */
+   _mesa_meta_begin(ctx, 0);
+
+   if (_mesa_is_bufferobj(packing->BufferObj)) {
+      *tmp_pbo = 0;
+      buffer_obj = packing->BufferObj;
+   } else {
+      assert(create_pbo);
+
+      _mesa_GenBuffers(1, tmp_pbo);
+
+      /* We are not doing this inside meta_begin/end.  However, we know the
+       * client doesn't have the given target bound, so we can go ahead and
+       * squash it.  We'll set it back when we're done.
+       */
+      _mesa_BindBuffer(pbo_target, *tmp_pbo);
+
+      _mesa_BufferData(pbo_target, row_stride * height, pixels, GL_STREAM_DRAW);
+
+      buffer_obj = ctx->Unpack.BufferObj;
+      pixels = NULL;
+
+      _mesa_BindBuffer(pbo_target, 0);
+   }
+
+   _mesa_GenTextures(1, tmp_tex);
+   tex_obj = _mesa_lookup_texture(ctx, *tmp_tex);
+   tex_obj->Target = depth > 2 ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
+   tex_obj->Immutable = GL_TRUE;
+   _mesa_initialize_texture_object(ctx, tex_obj, *tmp_tex, GL_TEXTURE_2D);
+
+   tex_image = _mesa_get_tex_image(ctx, tex_obj, tex_obj->Target, 0);
+   _mesa_init_teximage_fields(ctx, tex_image, width, height, depth,
+                              0, internal_format, pbo_format);
+
+   if (!ctx->Driver.SetTextureStorageForBufferObject(ctx, tex_obj,
+                                                     buffer_obj,
+                                                     (intptr_t)pixels,
+                                                     row_stride)) {
+      _mesa_DeleteTextures(1, tmp_tex);
+      _mesa_DeleteBuffers(1, tmp_pbo);
+      return NULL;
+   }
+
+   return tex_image;
+}
+
 bool
 _mesa_meta_TexSubImage(struct gl_context *ctx, GLuint dims,
                        struct gl_texture_image *tex_image,
@@ -51,13 +133,9 @@ _mesa_meta_TexSubImage(struct gl_context *ctx, GLuint dims,
                        bool allocate_storage, bool create_pbo,
                        const struct gl_pixelstore_attrib *packing)
 {
-   uint32_t pbo_format;
-   GLenum internal_format, status;
    GLuint pbo = 0, pbo_tex = 0, fbos[2] = { 0, 0 };
-   unsigned row_stride;
-   struct gl_texture_object *pbo_tex_obj;
    struct gl_texture_image *pbo_tex_image;
-   struct gl_buffer_object *buffer_obj;
+   GLenum status;
    bool success = false;
 
    /* XXX: This should probably be passed in from somewhere */
@@ -72,25 +150,6 @@ _mesa_meta_TexSubImage(struct gl_context *ctx, GLuint dims,
        format == GL_COLOR_INDEX)
       return false;
 
-   if ((packing->ImageHeight != 0 && packing->ImageHeight != height) ||
-       packing->SwapBytes ||
-       packing->LsbFirst ||
-       packing->Invert)
-      return false;
-
-   pbo_format = _mesa_format_from_format_and_type(format, type);
-   if (_mesa_format_is_mesa_array_format(pbo_format))
-      pbo_format = _mesa_format_from_array_format(pbo_format);
-
-   if (!pbo_format)
-      return false;
-
-   if (!ctx->TextureFormatSupported[pbo_format])
-      return false;
-
-   internal_format = _mesa_get_format_base_format(pbo_format);
-   row_stride = _mesa_format_row_stride(pbo_format, width);
-
    if (!_mesa_validate_pbo_access(dims, packing, width, height, depth,
                                   format, type, INT_MAX, pixels)) {
       _mesa_error(ctx, GL_INVALID_OPERATION,
@@ -104,54 +163,16 @@ _mesa_meta_TexSubImage(struct gl_context *ctx, GLuint dims,
       return true;
    }
 
-   if (allocate_storage)
-      ctx->Driver.AllocTextureImageBuffer(ctx, tex_image);
-
-   /* Account for SKIP_PIXELS, SKIP_ROWS, ALIGNMENT, and SKIP_IMAGES */
-   pixels = _mesa_image_address(dims, packing, pixels,
-                                width, height, format, type, 0, 0, 0);
-   row_stride = _mesa_image_row_stride(packing, width, format, type);
+   pbo_tex_image = create_texture_for_pbo(ctx, create_pbo,
+                                          GL_PIXEL_UNPACK_BUFFER,
+                                          width, height, depth,
+                                          format, type, pixels, packing,
+                                          &pbo, &pbo_tex);
+   if (!pbo_tex_image)
+      return false;
 
    /* Only stash the current FBO */
    _mesa_meta_begin(ctx, 0);
-
-   pbo = 0;
-   if (_mesa_is_bufferobj(packing->BufferObj)) {
-      buffer_obj = packing->BufferObj;
-   } else {
-      assert(create_pbo);
-
-      _mesa_GenBuffers(1, &pbo);
-
-      /* We know the client doesn't have this bound */
-      _mesa_BindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-
-      _mesa_BufferData(GL_PIXEL_UNPACK_BUFFER, row_stride * height,
-                       pixels, GL_STREAM_DRAW);
-
-      buffer_obj = ctx->Unpack.BufferObj;
-      pixels = NULL;
-
-      _mesa_BindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-   }
-
-   _mesa_GenTextures(1, &pbo_tex);
-   pbo_tex_obj = _mesa_lookup_texture(ctx, pbo_tex);
-   pbo_tex_obj->Target = depth > 2 ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
-   pbo_tex_obj->Immutable = GL_TRUE;
-   _mesa_initialize_texture_object(ctx, pbo_tex_obj, pbo_tex, GL_TEXTURE_2D);
-
-   pbo_tex_image = _mesa_get_tex_image(ctx, pbo_tex_obj,
-                                       pbo_tex_obj->Target, 0);
-   _mesa_init_teximage_fields(ctx, pbo_tex_image, width, height, depth,
-                              0, internal_format, pbo_format);
-
-   if (!ctx->Driver.SetTextureStorageForBufferObject(ctx, pbo_tex_obj,
-                                                     buffer_obj,
-                                                     (intptr_t)pixels,
-                                                     row_stride)) {
-      goto fail;
-   }
 
    _mesa_GenFramebuffers(2, fbos);
    _mesa_BindFramebuffer(GL_READ_FRAMEBUFFER, fbos[0]);
