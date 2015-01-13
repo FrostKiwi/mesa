@@ -96,10 +96,13 @@ _mesa_half_to_unorm(uint16_t x, unsigned dst_bits)
 static inline unsigned
 _mesa_unorm_to_unorm(unsigned x, unsigned src_bits, unsigned dst_bits)
 {
+/*
    if (src_bits < dst_bits)
       return EXTEND_NORMALIZED_INT(x, src_bits, dst_bits);
    else
       return x >> (src_bits - dst_bits);
+*/
+   return F_TO_I(((float)x / MAX_UINT(src_bits)) * MAX_UINT(dst_bits));
 }
 
 static inline unsigned
@@ -108,7 +111,8 @@ _mesa_snorm_to_unorm(int x, unsigned src_bits, unsigned dst_bits)
    if (x < 0)
       return 0;
    else
-      return _mesa_unorm_to_unorm(x, src_bits - 1, dst_bits);
+      return F_TO_I(((float)x / MAX_INT(src_bits)) * MAX_UINT(dst_bits));
+      //return _mesa_unorm_to_unorm(x, src_bits - 1, dst_bits);
 }
 
 static inline int
@@ -139,10 +143,14 @@ _mesa_snorm_to_snorm(int x, unsigned src_bits, unsigned dst_bits)
 {
    if (x < -MAX_INT(src_bits))
       return -MAX_INT(dst_bits);
+   else
+      return F_TO_I(((float)x / MAX_INT(src_bits)) * MAX_INT(dst_bits));
+/*
    else if (src_bits < dst_bits)
       return EXTEND_NORMALIZED_INT(x, src_bits - 1, dst_bits - 1);
    else
       return x >> (src_bits - dst_bits);
+*/
 }
 
 static inline unsigned
