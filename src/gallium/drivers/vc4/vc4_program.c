@@ -315,6 +315,14 @@ get_swizzled_channel(struct vc4_compile *c,
         }
 }
 
+static inline struct qreg
+qir_SAT(struct vc4_compile *c, struct qreg val)
+{
+        return qir_FMAX(c,
+                        qir_FMIN(c, val, qir_uniform_f(c, 1.0)),
+                        qir_uniform_f(c, 0.0));
+}
+
 static struct qreg
 tgsi_to_qir_alu(struct vc4_compile *c,
                 struct tgsi_full_instruction *tgsi_inst,
@@ -686,13 +694,11 @@ tgsi_to_qir_tex(struct vc4_compile *c,
         }
 
         if (c->key->tex[unit].wrap_s == PIPE_TEX_WRAP_CLAMP) {
-                s = qir_FMIN(c, qir_FMAX(c, s, qir_uniform_f(c, 0.0)),
-                             qir_uniform_f(c, 1.0));
+                s = qir_SAT(c, s);
         }
 
         if (c->key->tex[unit].wrap_t == PIPE_TEX_WRAP_CLAMP) {
-                t = qir_FMIN(c, qir_FMAX(c, t, qir_uniform_f(c, 0.0)),
-                             qir_uniform_f(c, 1.0));
+                t = qir_SAT(c, t);
         }
 
         qir_TEX_T(c, t, texture_u[next_texture_u++]);
@@ -1076,17 +1082,13 @@ static void
 emit_vertex_input(struct vc4_compile *c, int attr)
 {
         enum pipe_format format = c->vs_key->attr_formats[attr];
+        uint32_t attr_size = util_format_get_blocksize(format);
         struct qreg vpm_reads[4];
 
-        /* Right now, we're setting the VPM offsets to be 16 bytes wide every
-         * time, so we always read 4 32-bit VPM entries.
-         */
-        for (int i = 0; i < 4; i++) {
-                vpm_reads[i] = qir_get_temp(c);
-                qir_emit(c, qir_inst(QOP_VPM_READ,
-                                     vpm_reads[i],
-                                     c->undef,
-                                     c->undef));
+        c->vattr_sizes[attr] = align(attr_size, 4);
+        for (int i = 0; i < align(attr_size, 4) / 4; i++) {
+                struct qreg vpm = { QFILE_VPM, attr * 4 + i };
+                vpm_reads[i] = qir_MOV(c, vpm);
                 c->num_inputs++;
         }
 
@@ -1594,6 +1596,15 @@ vc4_blend(struct vc4_compile *c, struct qreg *result,
                 return;
         }
 
+        struct qreg clamped_src[4];
+        struct qreg clamped_dst[4];
+        for (int i = 0; i < 4; i++) {
+                clamped_src[i] = qir_SAT(c, src_color[i]);
+                clamped_dst[i] = qir_SAT(c, dst_color[i]);
+        }
+        src_color = clamped_src;
+        dst_color = clamped_dst;
+
         struct qreg src_blend[4], dst_blend[4];
         for (int i = 0; i < 3; i++) {
                 src_blend[i] = vc4_blend_channel(c,
@@ -1843,32 +1854,22 @@ emit_frag_end(struct vc4_compile *c)
                 qir_TLB_Z_WRITE(c, z);
         }
 
-        bool color_written = false;
+        struct qreg packed_color = c->undef;
         for (int i = 0; i < 4; i++) {
-                if (swizzled_outputs[i].file != QFILE_NULL)
-                        color_written = true;
-        }
-
-        struct qreg packed_color;
-        if (color_written) {
-                /* Fill in any undefined colors.  The simulator will assertion
-                 * fail if we read something that wasn't written, and I don't
-                 * know what hardware does.
-                 */
-                for (int i = 0; i < 4; i++) {
-                        if (swizzled_outputs[i].file == QFILE_NULL)
-                                swizzled_outputs[i] = qir_uniform_f(c, 0.0);
+                if (swizzled_outputs[i].file == QFILE_NULL)
+                        continue;
+                if (packed_color.file == QFILE_NULL) {
+                        packed_color = qir_PACK_8888_F(c, swizzled_outputs[i]);
+                } else {
+                        packed_color = qir_PACK_8_F(c,
+                                                    packed_color,
+                                                    swizzled_outputs[i],
+                                                    i);
                 }
-                packed_color = qir_get_temp(c);
-                qir_emit(c, qir_inst4(QOP_PACK_COLORS, packed_color,
-                                      swizzled_outputs[0],
-                                      swizzled_outputs[1],
-                                      swizzled_outputs[2],
-                                      swizzled_outputs[3]));
-        } else {
-                packed_color = qir_uniform_ui(c, 0);
         }
 
+        if (packed_color.file == QFILE_NULL)
+                packed_color = qir_uniform_ui(c, 0);
 
         if (c->fs_key->logicop_func != PIPE_LOGICOP_COPY) {
                 packed_color = vc4_logicop(c, packed_color, packed_dst_color);
@@ -1948,13 +1949,10 @@ emit_stub_vpm_read(struct vc4_compile *c)
         if (c->num_inputs)
                 return;
 
-        for (int i = 0; i < 4; i++) {
-                qir_emit(c, qir_inst(QOP_VPM_READ,
-                                     qir_get_temp(c),
-                                     c->undef,
-                                     c->undef));
-                c->num_inputs++;
-        }
+        c->vattr_sizes[0] = 4;
+        struct qreg vpm = { QFILE_VPM, 0 };
+        (void)qir_MOV(c, vpm);
+        c->num_inputs++;
 }
 
 static void
@@ -2292,6 +2290,15 @@ vc4_get_compiled_shader(struct vc4_context *vc4, enum qstage stage,
                 }
         } else {
                 shader->num_inputs = c->num_inputs;
+
+                shader->vattr_offsets[0] = 0;
+                for (int i = 0; i < 8; i++) {
+                        shader->vattr_offsets[i + 1] =
+                                shader->vattr_offsets[i] + c->vattr_sizes[i];
+
+                        if (c->vattr_sizes[i])
+                                shader->vattrs_live |= (1 << i);
+                }
         }
 
         copy_uniform_state_to_shader(shader, c);
@@ -2372,7 +2379,7 @@ vc4_update_compiled_fs(struct vc4_context *vc4, uint8_t prim_mode)
                             VC4_DIRTY_RASTERIZER |
                             VC4_DIRTY_FRAGTEX |
                             VC4_DIRTY_TEXSTATE |
-                            VC4_DIRTY_PROG))) {
+                            VC4_DIRTY_UNCOMPILED_FS))) {
                 return;
         }
 
@@ -2416,6 +2423,7 @@ vc4_update_compiled_fs(struct vc4_context *vc4, uint8_t prim_mode)
         if (vc4->prog.fs == old_fs)
                 return;
 
+        vc4->dirty |= VC4_DIRTY_COMPILED_FS;
         if (vc4->rasterizer->base.flatshade &&
             old_fs && vc4->prog.fs->color_inputs != old_fs->color_inputs) {
                 vc4->dirty |= VC4_DIRTY_FLAT_SHADE_FLAGS;
@@ -2433,7 +2441,8 @@ vc4_update_compiled_vs(struct vc4_context *vc4, uint8_t prim_mode)
                             VC4_DIRTY_VERTTEX |
                             VC4_DIRTY_TEXSTATE |
                             VC4_DIRTY_VTXSTATE |
-                            VC4_DIRTY_PROG))) {
+                            VC4_DIRTY_UNCOMPILED_VS |
+                            VC4_DIRTY_COMPILED_FS))) {
                 return;
         }
 
@@ -2793,7 +2802,7 @@ vc4_write_uniforms(struct vc4_context *vc4, struct vc4_compiled_shader *shader,
 
                 case QUNIFORM_BLEND_CONST_COLOR:
                         cl_aligned_f(&vc4->uniforms,
-                                     vc4->blend_color.color[uinfo->data[i]]);
+                                     CLAMP(vc4->blend_color.color[uinfo->data[i]], 0, 1));
                         break;
 
                 case QUNIFORM_STENCIL:
@@ -2822,8 +2831,7 @@ vc4_fp_state_bind(struct pipe_context *pctx, void *hwcso)
 {
         struct vc4_context *vc4 = vc4_context(pctx);
         vc4->prog.bind_fs = hwcso;
-        vc4->prog.dirty |= VC4_SHADER_DIRTY_FP;
-        vc4->dirty |= VC4_DIRTY_PROG;
+        vc4->dirty |= VC4_DIRTY_UNCOMPILED_FS;
 }
 
 static void
@@ -2831,8 +2839,7 @@ vc4_vp_state_bind(struct pipe_context *pctx, void *hwcso)
 {
         struct vc4_context *vc4 = vc4_context(pctx);
         vc4->prog.bind_vs = hwcso;
-        vc4->prog.dirty |= VC4_SHADER_DIRTY_VP;
-        vc4->dirty |= VC4_DIRTY_PROG;
+        vc4->dirty |= VC4_DIRTY_UNCOMPILED_VS;
 }
 
 void

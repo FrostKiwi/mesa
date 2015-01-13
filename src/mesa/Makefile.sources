@@ -93,14 +93,14 @@ MAIN_FILES = \
 	$(SRCDIR)main/ffvertex_prog.h \
 	$(SRCDIR)main/fog.c \
 	$(SRCDIR)main/fog.h \
-	$(SRCDIR)main/format_pack.c \
 	$(SRCDIR)main/format_pack.h \
+	$(BUILDDIR)main/format_pack.c \
+	$(SRCDIR)main/format_unpack.h \
+	$(BUILDDIR)main/format_unpack.c \
 	$(SRCDIR)main/formatquery.c \
 	$(SRCDIR)main/formatquery.h \
 	$(SRCDIR)main/formats.c \
 	$(SRCDIR)main/formats.h \
-	$(SRCDIR)main/format_unpack.c \
-	$(SRCDIR)main/format_unpack.h \
 	$(SRCDIR)main/format_utils.c \
 	$(SRCDIR)main/format_utils.h \
 	$(SRCDIR)main/framebuffer.c \
@@ -585,6 +585,7 @@ COMMON_DRIVER_FILES =			\
 	$(SRCDIR)drivers/common/meta_blit.c	\
 	$(SRCDIR)drivers/common/meta_copy_image.c	\
 	$(SRCDIR)drivers/common/meta_generate_mipmap.c	\
+	$(SRCDIR)drivers/common/meta_tex_subimage.c	\
 	$(SRCDIR)drivers/common/meta.c \
 	$(SRCDIR)drivers/common/meta.h
 

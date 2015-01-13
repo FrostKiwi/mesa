@@ -1680,16 +1680,35 @@ _mesa_GetProgramBinary(GLuint program, GLsizei bufSize, GLsizei *length,
                        GLenum *binaryFormat, GLvoid *binary)
 {
    struct gl_shader_program *shProg;
+   GLsizei length_dummy;
    GET_CURRENT_CONTEXT(ctx);
 
    shProg = _mesa_lookup_shader_program_err(ctx, program, "glGetProgramBinary");
    if (!shProg)
       return;
 
+   /* The ARB_get_program_binary spec says:
+    *
+    *     "If <length> is NULL, then no length is returned."
+    *
+    * Ensure that length always points to valid storage to avoid multiple NULL
+    * pointer checks below.
+    */
+   if (length != NULL)
+      length = &length_dummy;
+
+
+   /* The ARB_get_program_binary spec says:
+    *
+    *     "When a program object's LINK_STATUS is FALSE, its program binary
+    *     length is zero, and a call to GetProgramBinary will generate an
+    *     INVALID_OPERATION error.
+    */
    if (!shProg->LinkStatus) {
       _mesa_error(ctx, GL_INVALID_OPERATION,
                   "glGetProgramBinary(program %u not linked)",
                   shProg->Name);
+      *length = 0;
       return;
    }
 
@@ -1698,12 +1717,9 @@ _mesa_GetProgramBinary(GLuint program, GLsizei bufSize, GLsizei *length,
       return;
    }
 
-   /* The ARB_get_program_binary spec says:
-    *
-    *     "If <length> is NULL, then no length is returned."
-    */
-   if (length != NULL)
-      *length = 0;
+   *length = 0;
+   _mesa_error(ctx, GL_INVALID_OPERATION,
+               "glGetProgramBinary(driver supports zero binary formats)");
 
    (void) binaryFormat;
    (void) binary;
@@ -1722,8 +1738,31 @@ _mesa_ProgramBinary(GLuint program, GLenum binaryFormat,
 
    (void) binaryFormat;
    (void) binary;
-   (void) length;
-   _mesa_error(ctx, GL_INVALID_OPERATION, "glProgramBinary");
+
+   /* Section 2.3.1 (Errors) of the OpenGL 4.5 spec says:
+    *
+    *     "If a negative number is provided where an argument of type sizei or
+    *     sizeiptr is specified, an INVALID_VALUE error is generated."
+    */
+   if (length < 0) {
+      _mesa_error(ctx, GL_INVALID_VALUE, "glProgramBinary(length < 0)");
+      return;
+   }
+
+   /* The ARB_get_program_binary spec says:
+    *
+    *     "<binaryFormat> and <binary> must be those returned by a previous
+    *     call to GetProgramBinary, and <length> must be the length of the
+    *     program binary as returned by GetProgramBinary or GetProgramiv with
+    *     <pname> PROGRAM_BINARY_LENGTH. Loading the program binary will fail,
+    *     setting the LINK_STATUS of <program> to FALSE, if these conditions
+    *     are not met."
+    *
+    * Since any value of binaryFormat passed "is not one of those specified as
+    * allowable for [this] command, an INVALID_ENUM error is generated."
+    */
+   shProg->LinkStatus = GL_FALSE;
+   _mesa_error(ctx, GL_INVALID_ENUM, "glProgramBinary");
 }
 
 

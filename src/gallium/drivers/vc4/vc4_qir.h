@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "util/macros.h"
 #include "util/u_simple_list.h"
 #include "tgsi/tgsi_parse.h"
 
@@ -100,8 +101,11 @@ enum qop {
         QOP_VW_SETUP,
         QOP_VR_SETUP,
         QOP_PACK_SCALED,
-        QOP_PACK_COLORS,
-        QOP_VPM_READ,
+        QOP_PACK_8888_F,
+        QOP_PACK_8A_F,
+        QOP_PACK_8B_F,
+        QOP_PACK_8C_F,
+        QOP_PACK_8D_F,
         QOP_TLB_DISCARD_SETUP,
         QOP_TLB_STENCIL_SETUP,
         QOP_TLB_Z_WRITE,
@@ -309,6 +313,8 @@ struct vc4_compile {
         struct qreg line_x, point_x, point_y;
         struct qreg discard;
 
+        uint8_t vattr_sizes[8];
+
         /**
          * Array of the TGSI semantics of all FS QFILE_VARY reads.
          *
@@ -374,6 +380,7 @@ struct qreg qir_get_temp(struct vc4_compile *c);
 int qir_get_op_nsrc(enum qop qop);
 bool qir_reg_equals(struct qreg a, struct qreg b);
 bool qir_has_side_effects(struct vc4_compile *c, struct qinst *inst);
+bool qir_has_side_effect_reads(struct vc4_compile *c, struct qinst *inst);
 bool qir_is_multi_instruction(struct qinst *inst);
 bool qir_depends_on_flags(struct qinst *inst);
 bool qir_writes_r4(struct qinst *inst);
@@ -473,6 +480,11 @@ QIR_ALU1(RSQ)
 QIR_ALU1(EXP2)
 QIR_ALU1(LOG2)
 QIR_ALU2(PACK_SCALED)
+QIR_ALU1(PACK_8888_F)
+QIR_ALU2(PACK_8A_F)
+QIR_ALU2(PACK_8B_F)
+QIR_ALU2(PACK_8C_F)
+QIR_ALU2(PACK_8D_F)
 QIR_ALU1(VARY_ADD_C)
 QIR_NODST_2(TEX_S)
 QIR_NODST_2(TEX_T)
@@ -535,6 +547,14 @@ qir_UNPACK_16_I(struct vc4_compile *c, struct qreg src, int i)
 {
         struct qreg t = qir_get_temp(c);
         qir_emit(c, qir_inst(QOP_UNPACK_16A_I + i, t, src, c->undef));
+        return t;
+}
+
+static inline struct qreg
+qir_PACK_8_F(struct vc4_compile *c, struct qreg rest, struct qreg val, int chan)
+{
+        struct qreg t = qir_get_temp(c);
+        qir_emit(c, qir_inst(QOP_PACK_8A_F + chan, t, rest, val));
         return t;
 }
 

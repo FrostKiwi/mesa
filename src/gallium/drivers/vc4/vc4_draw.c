@@ -185,18 +185,19 @@ vc4_draw_vbo(struct pipe_context *pctx, const struct pipe_draw_info *info)
         cl_u32(&vc4->shader_rec, 0); /* UBO offset written by kernel */
 
         cl_u16(&vc4->shader_rec, 0); /* vs num uniforms */
-        cl_u8(&vc4->shader_rec, (1 << num_elements_emit) - 1); /* vs attribute array bitfield */
-        cl_u8(&vc4->shader_rec, 16 * num_elements_emit); /* vs total attribute size */
+        cl_u8(&vc4->shader_rec, vc4->prog.vs->vattrs_live);
+        cl_u8(&vc4->shader_rec, vc4->prog.vs->vattr_offsets[8]);
         cl_reloc(vc4, &vc4->shader_rec, vc4->prog.vs->bo, 0);
         cl_u32(&vc4->shader_rec, 0); /* UBO offset written by kernel */
 
         cl_u16(&vc4->shader_rec, 0); /* cs num uniforms */
-        cl_u8(&vc4->shader_rec, (1 << num_elements_emit) - 1); /* cs attribute array bitfield */
-        cl_u8(&vc4->shader_rec, 16 * num_elements_emit); /* cs total attribute size */
+        cl_u8(&vc4->shader_rec, vc4->prog.cs->vattrs_live);
+        cl_u8(&vc4->shader_rec, vc4->prog.cs->vattr_offsets[8]);
         cl_reloc(vc4, &vc4->shader_rec, vc4->prog.cs->bo, 0);
         cl_u32(&vc4->shader_rec, 0); /* UBO offset written by kernel */
 
         uint32_t max_index = 0xffff;
+        uint32_t vpm_offset = 0;
         for (int i = 0; i < vtx->num_elements; i++) {
                 struct pipe_vertex_element *elem = &vtx->pipe[i];
                 struct pipe_vertex_buffer *vb =
@@ -210,8 +211,10 @@ vc4_draw_vbo(struct pipe_context *pctx, const struct pipe_draw_info *info)
                 cl_reloc(vc4, &vc4->shader_rec, rsc->bo, offset);
                 cl_u8(&vc4->shader_rec, elem_size - 1);
                 cl_u8(&vc4->shader_rec, vb->stride);
-                cl_u8(&vc4->shader_rec, i * 16); /* VS VPM offset */
-                cl_u8(&vc4->shader_rec, i * 16); /* CS VPM offset */
+                cl_u8(&vc4->shader_rec, vc4->prog.vs->vattr_offsets[i]);
+                cl_u8(&vc4->shader_rec, vc4->prog.cs->vattr_offsets[i]);
+
+                vpm_offset += align(elem_size, 4);
 
                 if (vb->stride > 0) {
                         max_index = MIN2(max_index,
@@ -285,7 +288,10 @@ pack_rgba(enum pipe_format format, const float *rgba)
 {
         union util_color uc;
         util_pack_color(rgba, format, &uc);
-        return uc.ui[0];
+        if (util_format_get_blocksize(format) == 2)
+                return uc.us;
+        else
+                return uc.ui[0];
 }
 
 static void

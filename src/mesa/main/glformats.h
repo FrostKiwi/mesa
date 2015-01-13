@@ -35,6 +35,9 @@
 extern "C" {
 #endif
 
+extern void
+_mesa_compute_component_mapping(GLenum inFormat, GLenum outFormat, GLubyte *map);
+
 extern GLboolean
 _mesa_type_is_packed(GLenum type);
 
@@ -125,6 +128,8 @@ extern GLenum
 _mesa_es3_error_check_format_and_type(GLenum format, GLenum type,
                                       GLenum internalFormat);
 
+extern uint32_t
+_mesa_format_from_format_and_type(GLenum format, GLenum type);
 
 #ifdef __cplusplus
 }

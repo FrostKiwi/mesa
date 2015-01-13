@@ -83,6 +83,8 @@ BUILT_SOURCES = \
 	main/get_hash.h \
         main/format_info.c \
 	$(BUILDDIR)main/git_sha1.h \
+	main/format_pack.c \
+	main/format_unpack.c \
 	$(BUILDDIR)program/program_parse.tab.c \
 	$(BUILDDIR)program/lex.yy.c
 CLEANFILES = \
@@ -105,6 +107,22 @@ main/format_info.c: main/formats.csv                                    \
 	$(PYTHON2) $(PYTHON_FLAGS) $(srcdir)/main/format_info.py        \
                    $< > $@.tmp;                                         \
 	mv $@.tmp $@;
+
+main/format_pack.c: main/format_pack.py main/formats.csv		\
+                    main/format_parser.py
+	$(AM_V_GEN)set -e;						\
+	$(PYTHON2) $(PYTHON_FLAGS)					\
+			$(srcdir)/main/format_pack.py			\
+			$(srcdir)/main/formats.csv			\
+		| $(INDENT) $(INDENT_FLAGS) > $@;
+
+main/format_unpack.c: main/format_unpack.py main/formats.csv	\
+                      main/format_parser.py
+	$(AM_V_GEN)set -e;						\
+	$(PYTHON2) $(PYTHON_FLAGS)					\
+			$(srcdir)/main/format_unpack.py			\
+			$(srcdir)/main/formats.csv			\
+		| $(INDENT) $(INDENT_FLAGS) > $@;
 
 main/formats.c: main/format_info.c
 

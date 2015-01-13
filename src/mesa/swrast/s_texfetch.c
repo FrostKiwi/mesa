@@ -180,6 +180,13 @@ texfetch_funcs[] =
       fetch_texel_2d_Z24_UNORM_S8_UINT,
       fetch_texel_3d_Z24_UNORM_S8_UINT
    },
+   FETCH_NULL(R3G3B2_UNORM),
+   FETCH_NULL(A4B4G4R4_UNORM),
+   FETCH_NULL(R4G4B4A4_UNORM),
+   FETCH_NULL(R5G5B5A1_UNORM),
+   FETCH_NULL(A2B10G10R10_UNORM),
+   FETCH_NULL(A2R10G10B10_UNORM),
+
    FETCH_FUNCS(YCBCR),
    FETCH_FUNCS(YCBCR_REV),
 
@@ -276,6 +283,8 @@ texfetch_funcs[] =
    /* Packed signed/unsigned non-normalized integer formats */
    FETCH_NULL(B10G10R10A2_UINT),
    FETCH_NULL(R10G10B10A2_UINT),
+   FETCH_NULL(A2B10G10R10_UINT),
+   FETCH_NULL(A2R10G10B10_UINT),
 
    /* Array signed/unsigned non-normalized integer formats */
    FETCH_NULL(A_UINT8),
