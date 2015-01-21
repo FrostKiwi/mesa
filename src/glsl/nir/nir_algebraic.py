@@ -28,6 +28,7 @@ import itertools
 import struct
 import sys
 import mako.template
+import re
 
 # Represents a set of variables, each with a unique id
 class VarSet(object):
@@ -60,6 +61,7 @@ static const ${val.c_type} ${val.name} = {
    { ${hex(val)} /* ${val.value} */ },
 % elif isinstance(val, Variable):
    ${val.index}, /* ${val.var_name} */
+   { ${', '.join(str(s) for s in val.swizzle)} },
 % elif isinstance(val, Expression):
    nir_op_${val.opcode},
    { ${', '.join(src.c_ptr for src in val.sources)} },
@@ -106,9 +108,19 @@ class Constant(Value):
       else:
          assert False
 
+_swizzle_re = re.compile(r'(.*)\.([xyzw]{1,4})')
+
 class Variable(Value):
    def __init__(self, val, name, varset):
       Value.__init__(self, name, "variable")
+
+      match = _swizzle_re.match(val)
+      if match:
+         val = match.group(1)
+         self.swizzle = ['xyzw'.find(s) for s in match.group(2)]
+      else:
+         self.swizzle = range(4)
+
       self.var_name = val
       self.index = varset[val]
       self.name = name

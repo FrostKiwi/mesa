@@ -47,6 +47,13 @@ typedef struct {
 
    /** The variable index;  Must be less than NIR_SEARCH_MAX_VARIABLES */
    unsigned variable;
+
+   /** A swizzle value corresponding to nir_alu_src.swizzle
+    *
+    * This is currently only allowed in replacement expressions, not
+    * searches.
+    */
+   uint8_t swizzle[4];
 } nir_search_variable;
 
 typedef struct {

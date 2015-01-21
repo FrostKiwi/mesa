@@ -69,6 +69,8 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
    case nir_search_value_variable: {
       nir_search_variable *var = nir_search_value_as_variable(value);
 
+      assert(memcmp(var->swizzle, identity_swizzle, 4) == 0);
+
       if (state->variables_seen & (1 << var->variable)) {
          if (state->variables[var->variable].ssa != instr->src[src].src.ssa)
             return false;
@@ -239,7 +241,9 @@ construct_value(const nir_search_value *value, nir_alu_type type,
       val.src = nir_src_for_ssa(state->variables[var->variable].ssa);
       val.abs = false;
       val.negate = false;
-      memcpy(val.swizzle, state->variables[var->variable].swizzle, 4);
+
+      for (unsigned i = 0; i < 4; ++i)
+         val.swizzle[i] = state->variables[var->variable].swizzle[var->swizzle[i]];
 
       return val;
    }
