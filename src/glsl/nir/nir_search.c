@@ -314,12 +314,8 @@ nir_replace_instr(nir_alu_instr *instr, const nir_search_expression *search,
                                  &instr->instr, mem_ctx);
    nir_instr_insert_before(&instr->instr, &mov->instr);
 
-   nir_src replace_src = {
-      .is_ssa = true,
-      .ssa = &mov->dest.dest.ssa,
-   };
-
-   nir_ssa_def_rewrite_uses(&instr->dest.dest.ssa, replace_src, mem_ctx);
+   nir_ssa_def_rewrite_uses(&instr->dest.dest.ssa,
+                            nir_src_for_ssa(&mov->dest.dest.ssa), mem_ctx);
 
    /* We know this one has no more uses because we just rewrote them all,
     * so we can remove it.  The rest of the matched expression, however, we
