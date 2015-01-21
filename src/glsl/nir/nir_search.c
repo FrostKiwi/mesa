@@ -27,9 +27,14 @@
 
 #include "nir_search.h"
 
+struct match_var {
+   nir_ssa_def *ssa;
+   uint8_t swizzle[4];
+};
+
 struct match_state {
    unsigned variables_seen;
-   nir_alu_src variables[NIR_SEARCH_MAX_VARIABLES];
+   struct match_var variables[NIR_SEARCH_MAX_VARIABLES];
 };
 
 static bool
@@ -65,8 +70,7 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
       nir_search_variable *var = nir_search_value_as_variable(value);
 
       if (state->variables_seen & (1 << var->variable)) {
-         if (!nir_srcs_equal(state->variables[var->variable].src,
-                             instr->src[src].src))
+         if (state->variables[var->variable].ssa != instr->src[src].src.ssa)
             return false;
 
          assert(!instr->src[src].abs && !instr->src[src].negate);
@@ -79,9 +83,7 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
          return true;
       } else {
          state->variables_seen |= (1 << var->variable);
-         state->variables[var->variable].src = instr->src[src].src;
-         state->variables[var->variable].abs = false;
-         state->variables[var->variable].negate = false;
+         state->variables[var->variable].ssa = instr->src[src].src.ssa;
 
          for (int i = 0; i < 4; ++i) {
             if (i < num_components)
@@ -233,8 +235,11 @@ construct_value(const nir_search_value *value, nir_alu_type type,
       const nir_search_variable *var = nir_search_value_as_variable(value);
       assert(state->variables_seen & (1 << var->variable));
 
-      nir_alu_src val = state->variables[var->variable];
-      val.src = nir_src_copy(val.src, mem_ctx);
+      nir_alu_src val;
+      val.src = nir_src_for_ssa(state->variables[var->variable].ssa);
+      val.abs = false;
+      val.negate = false;
+      memcpy(val.swizzle, state->variables[var->variable].swizzle, 4);
 
       return val;
    }
