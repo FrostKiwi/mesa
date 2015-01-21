@@ -216,6 +216,7 @@ BUILT_SOURCES =						\
 	glsl_lexer.cpp					\
 	glcpp/glcpp-parse.c				\
 	glcpp/glcpp-lex.c				\
+	nir/nir_lower_alu_reductions.c			\
 	nir/nir_opt_algebraic.c
 CLEANFILES =						\
 	glcpp/glcpp-parse.h				\
@@ -228,6 +229,11 @@ clean-local:
 dist-hook:
 	$(RM) glcpp/tests/*.out
 	$(RM) glcpp/tests/subtest*/*.out
+
+nir/nir_lower_alu_reductions.c: nir/nir_lower_alu_reductions.py		\
+                                nir/nir_algebraic.py
+	$(MKDIR_P) nir;							\
+	$(PYTHON2) $(PYTHON_FLAGS) $< > $@
 
 nir/nir_opt_algebraic.c: nir/nir_opt_algebraic.py nir/nir_algebraic.py
 	$(MKDIR_P) nir;							\
