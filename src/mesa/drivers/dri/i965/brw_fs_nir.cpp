@@ -491,27 +491,59 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
 {
    struct brw_wm_prog_key *fs_key = (struct brw_wm_prog_key *) this->key;
 
-   fs_reg op[3];
    fs_reg result = get_nir_dest(instr->dest.dest);
    result.type = brw_type_for_nir_type(nir_op_infos[instr->op].output_type);
 
-   for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++)
-      op[i] = get_nir_alu_src(instr, i);
+   fs_reg op[3];
+   for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
+      op[i] = get_nir_src(instr->src[i].src);
+      op[i].type = brw_type_for_nir_type(nir_op_infos[instr->op].input_types[i]);
+      op[i].abs = instr->src[i].abs;
+      op[i].negate = instr->src[i].negate;
+   }
 
+   /* We get a bunch of mov's out of the from_ssa pass and they may still
+    * be vectorized.  We'll handle them as a special-case.
+    */
+   if (instr->op == nir_op_imov || instr->op == nir_op_fmov) {
+      /* The source and destination need to be different or the trivial way
+       * we're emitting them won't work.  That said, we came out of SSA, so
+       * this should always be true.
+       */
+      assert(instr->src[0].src.is_ssa ||
+             instr->dest.dest.reg.reg != instr->src[0].src.reg.reg);
+
+      for (unsigned i = 0; i < 4; i++) {
+         if (!(instr->dest.write_mask & (1 << i)))
+            continue;
+
+         emit(MOV(offset(result, i), offset(op[0], instr->src[0].swizzle[i])))
+             ->saturate = instr->dest.saturate;
+      }
+
+      return;
+   }
+
+   unsigned channel = 0;
    if (nir_op_infos[instr->op].output_size == 0) {
-      /* We've already scalarized, so we know that we only have one
-       * channel.  The only question is which channel.
+      /* Since NIR is doing the scalarizing for us, we should only ever see
+       * vectorized operations with a single channel.
        */
       assert(_mesa_bitcount(instr->dest.write_mask) == 1);
-      unsigned off = ffs(instr->dest.write_mask) - 1;
-      result = offset(result, off);
+      channel = ffs(instr->dest.write_mask) - 1;
 
-      for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++)
-         op[i] = offset(op[i], off);
+      result = offset(result, channel);
+   }
+
+   /* At this point, all operations have at most one channel per input.  We
+    * do, however, need to deal with the swizzle which we do here.
+    */
+   for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
+      assert(nir_op_infos[instr->op].input_sizes[i] < 2);
+      op[i] = offset(op[i], instr->src[i].swizzle[channel]);
    }
 
    switch (instr->op) {
-   case nir_op_fmov:
    case nir_op_i2f:
    case nir_op_u2f:
       emit(MOV(result, op[0]))
@@ -993,46 +1025,6 @@ fs_visitor::get_nir_src(nir_src src)
 
       return reg;
    }
-}
-
-fs_reg
-fs_visitor::get_nir_alu_src(nir_alu_instr *instr, unsigned src)
-{
-   fs_reg reg = get_nir_src(instr->src[src].src);
-
-   reg.type = brw_type_for_nir_type(nir_op_infos[instr->op].input_types[src]);
-   reg.abs = instr->src[src].abs;
-   reg.negate = instr->src[src].negate;
-
-   bool needs_swizzle = false;
-   unsigned num_components = 0;
-   for (unsigned i = 0; i < 4; i++) {
-      if (!nir_alu_instr_channel_used(instr, src, i))
-         continue;
-
-      if (instr->src[src].swizzle[i] != i)
-         needs_swizzle = true;
-
-      num_components = i + 1;
-   }
-
-   if (needs_swizzle) {
-      /* resolve the swizzle through MOV's */
-      fs_reg new_reg = vgrf(num_components);
-      new_reg.type = reg.type;
-
-      for (unsigned i = 0; i < 4; i++) {
-         if (!nir_alu_instr_channel_used(instr, src, i))
-            continue;
-
-         emit(MOV(offset(new_reg, i),
-                  offset(reg, instr->src[src].swizzle[i])));
-      }
-
-      return new_reg;
-   }
-
-   return reg;
 }
 
 fs_reg
