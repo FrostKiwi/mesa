@@ -221,13 +221,11 @@ construct_value(const nir_search_value *value, nir_alu_type type,
 
       nir_instr_insert_before(instr, &alu->instr);
 
-      nir_alu_src val = {
-         .src.is_ssa = true,
-         .src.ssa = &alu->dest.dest.ssa,
-         .negate = false,
-         .abs = false,
-         .swizzle = { 0, 1, 2, 3 }
-      };
+      nir_alu_src val;
+      val.src = nir_src_for_ssa(&alu->dest.dest.ssa);
+      val.negate = false;
+      val.abs = false,
+      memcpy(val.swizzle, identity_swizzle, sizeof val.swizzle);
 
       return val;
    }
@@ -265,13 +263,11 @@ construct_value(const nir_search_value *value, nir_alu_type type,
 
       nir_instr_insert_before(instr, &load->instr);
 
-      nir_alu_src val = {
-         .src.is_ssa = true,
-         .src.ssa = &load->def,
-         .negate = false,
-         .abs = false,
-         .swizzle = { 0, 0, 0, 0 } /* Splatted scalar */
-      };
+      nir_alu_src val;
+      val.src = nir_src_for_ssa(&load->def);
+      val.negate = false;
+      val.abs = false,
+      memset(val.swizzle, 0, sizeof val.swizzle);
 
       return val;
    }
