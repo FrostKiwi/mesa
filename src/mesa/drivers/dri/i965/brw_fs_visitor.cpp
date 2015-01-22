@@ -154,34 +154,39 @@ fs_visitor::visit(ir_variable *ir)
 	 }
       }
    } else if (ir->data.mode == ir_var_uniform) {
-      int param_index = uniforms;
+      if (ir->type->contains_atomic()) {
+         reg = new(this->mem_ctx) fs_reg(ir->data.atomic.offset);
 
-      /* Thanks to the lower_ubo_reference pass, we will see only
-       * ir_binop_ubo_load expressions and not ir_dereference_variable for UBO
-       * variables, so no need for them to be in variable_ht.
-       *
-       * Some uniforms, such as samplers and atomic counters, have no actual
-       * storage, so we should ignore them.
-       */
-      if (ir->is_in_uniform_block() || type_size(ir->type) == 0)
+      } else if (ir->is_in_uniform_block() || type_size(ir->type) == 0) {
+         /* Thanks to the lower_ubo_reference pass, we will see only
+          * ir_binop_ubo_load expressions and not ir_dereference_variable for UBO
+          * variables, so no need for them to be in variable_ht.
+          *
+          * Some uniforms such as samplers have no actual storage, so we
+          * should ignore them.
+          */
          return;
 
-      if (dispatch_width == 16) {
-	 if (!variable_storage(ir)) {
-	    fail("Failed to find uniform '%s' in SIMD16\n", ir->name);
-	 }
-	 return;
-      }
-
-      param_size[param_index] = type_size(ir->type);
-      if (!strncmp(ir->name, "gl_", 3)) {
-	 setup_builtin_uniform_values(ir);
       } else {
-	 setup_uniform_values(ir);
-      }
+         int param_index = uniforms;
 
-      reg = new(this->mem_ctx) fs_reg(UNIFORM, param_index);
-      reg->type = brw_type_for_base_type(ir->type);
+         if (dispatch_width == 16) {
+            if (!variable_storage(ir)) {
+               fail("Failed to find uniform '%s' in SIMD16\n", ir->name);
+            }
+            return;
+         }
+
+         param_size[param_index] = type_size(ir->type);
+         if (!strncmp(ir->name, "gl_", 3)) {
+            setup_builtin_uniform_values(ir);
+         } else {
+            setup_uniform_values(ir);
+         }
+
+         reg = new(this->mem_ctx) fs_reg(UNIFORM, param_index);
+         reg->type = brw_type_for_base_type(ir->type);
+      }
 
    } else if (ir->data.mode == ir_var_system_value) {
       switch (ir->data.location) {
@@ -255,38 +260,50 @@ fs_visitor::visit(ir_dereference_array *ir)
    src = this->result;
    src.type = brw_type_for_base_type(ir->type);
 
-   if (constant_index) {
-      if (src.file == ATTR) {
-         /* Attribute arrays get loaded as one vec4 per element.  In that case
-          * offset the source register.
-          */
-         src.reg += constant_index->value.i[0];
-      } else {
-         assert(src.file == UNIFORM || src.file == GRF || src.file == HW_REG);
-         src = offset(src, constant_index->value.i[0] * element_size);
-      }
-   } else {
-      /* Variable index array dereference.  We attach the variable index
-       * component to the reg as a pointer to a register containing the
-       * offset.  Currently only uniform arrays are supported in this patch,
-       * and that reladdr pointer is resolved by
-       * move_uniform_array_access_to_pull_constants().  All other array types
-       * are lowered by lower_variable_index_to_cond_assign().
-       */
+   if (ir->array->type->contains_atomic()) {
+      fs_reg tmp = vgrf(glsl_type::uint_type);
+
       ir->array_index->accept(this);
+      emit(MUL(tmp, this->result, fs_reg(ATOMIC_COUNTER_SIZE)));
+      emit(ADD(tmp, tmp, src));
+      this->result = tmp;
 
-      fs_reg index_reg;
-      index_reg = vgrf(glsl_type::int_type);
-      emit(BRW_OPCODE_MUL, index_reg, this->result, fs_reg(element_size));
+   } else {
+      if (constant_index) {
+         if (src.file == ATTR) {
+            /* Attribute arrays get loaded as one vec4 per element.  In that case
+             * offset the source register.
+             */
+            src.reg += constant_index->value.i[0];
+         } else {
+            assert(src.file == UNIFORM || src.file == GRF || src.file == HW_REG);
+            src = offset(src, constant_index->value.i[0] * element_size);
+         }
 
-      if (src.reladdr) {
-         emit(BRW_OPCODE_ADD, index_reg, *src.reladdr, index_reg);
+      } else {
+         /* Variable index array dereference.  We attach the variable index
+          * component to the reg as a pointer to a register containing the
+          * offset.  Currently only uniform arrays are supported in this patch,
+          * and that reladdr pointer is resolved by
+          * move_uniform_array_access_to_pull_constants().  All other array types
+          * are lowered by lower_variable_index_to_cond_assign().
+          */
+         ir->array_index->accept(this);
+
+         fs_reg index_reg;
+         index_reg = vgrf(glsl_type::int_type);
+         emit(BRW_OPCODE_MUL, index_reg, this->result, fs_reg(element_size));
+
+         if (src.reladdr) {
+            emit(BRW_OPCODE_ADD, index_reg, *src.reladdr, index_reg);
+         }
+
+         src.reladdr = ralloc(mem_ctx, fs_reg);
+         memcpy(src.reladdr, &index_reg, sizeof(index_reg));
       }
 
-      src.reladdr = ralloc(mem_ctx, fs_reg);
-      memcpy(src.reladdr, &index_reg, sizeof(index_reg));
+      this->result = src;
    }
-   this->result = src;
 }
 
 fs_inst *
@@ -3147,20 +3164,8 @@ fs_visitor::visit_atomic_counter_intrinsic(ir_call *ir)
    ir_variable *location = deref->variable_referenced();
    unsigned surf_index = (stage_prog_data->binding_table.abo_start +
                           location->data.binding);
-
-   /* Calculate the surface offset */
-   fs_reg offset = vgrf(glsl_type::uint_type);
-   ir_dereference_array *deref_array = deref->as_dereference_array();
-
-   if (deref_array) {
-      deref_array->array_index->accept(this);
-
-      fs_reg tmp = vgrf(glsl_type::uint_type);
-      emit(MUL(tmp, this->result, fs_reg(ATOMIC_COUNTER_SIZE)));
-      emit(ADD(offset, tmp, fs_reg(location->data.atomic.offset)));
-   } else {
-      offset = fs_reg(location->data.atomic.offset);
-   }
+   deref->accept(this);
+   const fs_reg offset = this->result;
 
    /* Emit the appropriate machine instruction */
    const char *callee = ir->callee->function_name();
