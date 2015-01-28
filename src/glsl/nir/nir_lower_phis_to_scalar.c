@@ -78,6 +78,18 @@ is_phi_src_scalarizable(nir_phi_src *src,
       /* These are trivially scalarizable */
       return true;
 
+   case nir_instr_type_intrinsic: {
+      nir_intrinsic_instr *src_intrin = nir_instr_as_intrinsic(src_instr);
+
+      switch (src_intrin->intrinsic) {
+      case nir_intrinsic_load_var:
+         return src_intrin->variables[0]->var->data.mode == nir_var_shader_in ||
+                src_intrin->variables[0]->var->data.mode == nir_var_uniform;
+      default:
+         break;
+      }
+   }
+
    default:
       /* We can't scalarize this type of instruction */
       return false;
