@@ -92,6 +92,9 @@ optimizations = [
    (('fxor', a, a), 0.0),
    (('ixor', a, a), 0),
    (('inot', ('inot', a)), a),
+   # Boolean identities
+   (('ior', ('iand', a, b), ('iand', a, c)), ('iand', a, ('ior', b, c))),
+   (('iand', ('ior', a, b), ('ior', a, c)), ('ior', a, ('iand', b, c))),
    # DeMorgan's Laws
    (('iand', ('inot', a), ('inot', b)), ('inot', ('ior',  a, b))),
    (('ior',  ('inot', a), ('inot', b)), ('inot', ('iand', a, b))),
