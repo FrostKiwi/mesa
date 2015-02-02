@@ -67,6 +67,7 @@ optimizations = [
    (('ffma', a, b, 0.0), ('fmul', a, b)),
    (('ffma', a, 1.0, b), ('fadd', a, b)),
    (('ffma', 1.0, a, b), ('fadd', a, b)),
+   (('ffma', '#a', '#b', c), ('fadd', ('fmul', a, b), c)),
    (('flrp', a, b, 0.0), a),
    (('flrp', a, b, 1.0), b),
    (('flrp', a, a, b), a),
