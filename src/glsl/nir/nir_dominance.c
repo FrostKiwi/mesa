@@ -131,6 +131,9 @@ calc_dom_frontier_cb(nir_block *block, void *state)
  * 3. For each node, add itself to its parent's list of children, using
  *    num_dom_children as an index - at the end of this step, num_dom_children
  *    for each node will be the same as it was at the end of step #1.
+ *
+ *    While we're at it, this is also a convenient time to set the
+ *    dominator depth for each node.
  */
 
 static bool
@@ -161,8 +164,12 @@ block_add_child(nir_block *block, void *state)
 {
    (void) state;
 
-   if (block->imm_dom)
+   if (block->imm_dom) {
       block->imm_dom->dom_children[block->imm_dom->num_dom_children++] = block;
+      block->dom_depth = block->imm_dom->dom_depth + 1;
+   } else {
+      block->dom_depth = 0;
+   }
 
    return true;
 }

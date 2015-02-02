@@ -1136,6 +1136,9 @@ typedef struct nir_block {
     */
    struct nir_block *imm_dom;
 
+   /* This block's depth in the dominator tree; zero for the start block */
+   unsigned dom_depth;
+
    /* This node's children in the dominance tree */
    unsigned num_dom_children;
    struct nir_block **dom_children;
