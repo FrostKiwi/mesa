@@ -1589,6 +1589,8 @@ bool nir_opt_cse(nir_shader *shader);
 bool nir_opt_dce_impl(nir_function_impl *impl);
 bool nir_opt_dce(nir_shader *shader);
 
+void nir_opt_gcm(nir_shader *shader);
+
 bool nir_opt_peephole_select(nir_shader *shader);
 bool nir_opt_peephole_ffma(nir_shader *shader);
 
