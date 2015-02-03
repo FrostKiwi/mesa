@@ -352,6 +352,7 @@ instr_init(nir_instr *instr, nir_instr_type type)
 {
    instr->type = type;
    instr->block = NULL;
+   instr->index = UINT_MAX;
    exec_node_init(&instr->node);
 }
 
@@ -2080,4 +2081,23 @@ nir_index_ssa_defs(nir_function_impl *impl)
    unsigned index = 0;
    nir_foreach_block(impl, index_ssa_block, &index);
    impl->ssa_alloc = index;
+}
+
+static bool
+index_instrs_block(nir_block *block, void *state)
+{
+   unsigned *index = (unsigned *)state;
+
+   nir_foreach_instr(block, instr)
+      instr->index = (*index)++;
+
+   return true;
+}
+
+unsigned
+nir_index_instrs(nir_function_impl *impl)
+{
+   unsigned index = 0;
+   nir_foreach_block(impl, index_instrs_block, &index);
+   return index;
 }
