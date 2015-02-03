@@ -44,6 +44,8 @@ nir_optimize(nir_shader *nir)
       nir_validate_shader(nir);
       progress |= nir_opt_dce(nir);
       nir_validate_shader(nir);
+      nir_opt_gcm(nir);
+      nir_validate_shader(nir);
       progress |= nir_opt_cse(nir);
       nir_validate_shader(nir);
       progress |= nir_opt_peephole_select(nir);
