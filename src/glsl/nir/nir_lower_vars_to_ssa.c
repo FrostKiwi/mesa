@@ -678,6 +678,8 @@ get_ssa_def_for_block(struct deref_node *node, nir_block *block,
    /* If we got here then we don't have a definition that dominates the
     * given block.  This means that we need to add an undef and use that.
     */
+   assert(!"Encountered an undefined variable.  Fix the app!");
+
    nir_ssa_undef_instr *undef =
       nir_ssa_undef_instr_create(state->mem_ctx,
                                  glsl_get_vector_elements(node->type));
