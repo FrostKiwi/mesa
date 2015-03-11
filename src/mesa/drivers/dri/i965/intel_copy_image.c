@@ -226,11 +226,13 @@ intel_copy_image_sub_data(struct gl_context *ctx,
    bool is_multisampled = intel_src_image->mt->num_samples > 0 ||
                           intel_dst_image->mt->num_samples > 0;
 
-   if (_mesa_meta_CopyImageSubData_uncompressed(ctx,
-                                                src_image, src_x, src_y, src_z,
-                                                dst_image, dst_x, dst_y, dst_z,
-                                                src_width, src_height)) {
-      return;
+   if (is_multisampled || brw->gen >= 6) {
+      if (_mesa_meta_CopyImageSubData_uncompressed(ctx,
+                                                   src_image, src_x, src_y, src_z,
+                                                   dst_image, dst_x, dst_y, dst_z,
+                                                   src_width, src_height)) {
+         return;
+      }
    }
 
    if (is_multisampled) {
