@@ -223,6 +223,9 @@ intel_copy_image_sub_data(struct gl_context *ctx,
    struct intel_texture_image *intel_src_image = intel_texture_image(src_image);
    struct intel_texture_image *intel_dst_image = intel_texture_image(dst_image);
 
+   bool is_multisampled = intel_src_image->mt->num_samples > 0 ||
+                          intel_dst_image->mt->num_samples > 0;
+
    if (_mesa_meta_CopyImageSubData_uncompressed(ctx,
                                                 src_image, src_x, src_y, src_z,
                                                 dst_image, dst_x, dst_y, dst_z,
@@ -230,8 +233,7 @@ intel_copy_image_sub_data(struct gl_context *ctx,
       return;
    }
 
-   if (intel_src_image->mt->num_samples > 0 ||
-       intel_dst_image->mt->num_samples > 0) {
+   if (is_multisampled) {
       _mesa_problem(ctx, "Failed to copy multisampled texture with meta path\n");
       return;
    }
