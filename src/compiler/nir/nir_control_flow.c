@@ -491,8 +491,7 @@ nir_handle_add_jump(nir_block *block)
          link_blocks(block, after_block, NULL);
       }
    } else if (jump_instr->type == nir_jump_goto_if) {
-      nir_block *after = nir_block_cf_tree_next(block);
-      link_blocks(block, after, jump_instr->target);
+      /* do nothing */
    } else {
       assert(jump_instr->type == nir_jump_return);
       link_blocks(block, impl->end_block, NULL);
