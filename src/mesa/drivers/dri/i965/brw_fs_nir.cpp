@@ -507,9 +507,8 @@ void
 fs_visitor::nir_emit_if(nir_if *if_stmt)
 {
    /* first, put the condition into f0 */
-   fs_inst *inst = emit(MOV(reg_null_d,
-                            retype(get_nir_src(if_stmt->condition),
-                                   BRW_REGISTER_TYPE_UD)));
+   fs_inst *inst = emit(MOV(reg_null_d, get_nir_src(if_stmt->condition,
+                                                    BRW_REGISTER_TYPE_UD)));
    inst->conditional_mod = BRW_CONDITIONAL_NZ;
 
    emit(IF(BRW_PREDICATE_NORMAL));
@@ -694,8 +693,9 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
 
    fs_reg op[4];
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
-      op[i] = get_nir_src(instr->src[i].src);
-      op[i].type = brw_type_for_nir_type(nir_op_infos[instr->op].input_types[i]);
+      brw_reg_type reg_type =
+         brw_type_for_nir_type(nir_op_infos[instr->op].input_types[i]);
+      op[i] = get_nir_src(instr->src[i].src, reg_type);
       op[i].abs = instr->src[i].abs;
       op[i].negate = instr->src[i].negate;
    }
@@ -1259,16 +1259,15 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
 }
 
 fs_reg
-fs_visitor::get_nir_src(nir_src src)
+fs_visitor::get_nir_src(nir_src src, brw_reg_type type)
 {
    if (src.is_ssa) {
       assert(src.ssa->parent_instr->type == nir_instr_type_load_const);
       nir_load_const_instr *load = nir_instr_as_load_const(src.ssa->parent_instr);
-      fs_reg reg = vgrf(src.ssa->num_components);
-      reg.type = BRW_REGISTER_TYPE_D;
+      fs_reg reg = retype(vgrf(src.ssa->num_components), type);
 
       for (unsigned i = 0; i < src.ssa->num_components; ++i)
-         emit(MOV(offset(reg, i), fs_reg(load->value.i[i])));
+         emit(MOV(offset(reg, i), retype(fs_reg(load->value.i[i]), type)));
 
       return reg;
    } else {
@@ -1278,15 +1277,10 @@ fs_visitor::get_nir_src(nir_src src)
       else
          reg = nir_locals[src.reg.reg->index];
 
-      /* to avoid floating-point denorm flushing problems, set the type by
-       * default to D - instructions that need floating point semantics will set
-       * this to F if they need to
-       */
-      reg = retype(offset(reg, src.reg.base_offset), BRW_REGISTER_TYPE_D);
+      reg = retype(offset(reg, src.reg.base_offset), type);
       if (src.reg.indirect) {
          reg.reladdr = new(mem_ctx) fs_reg();
-         *reg.reladdr = retype(get_nir_src(*src.reg.indirect),
-                               BRW_REGISTER_TYPE_D);
+         *reg.reladdr = get_nir_src(*src.reg.indirect, BRW_REGISTER_TYPE_D);
       }
 
       return reg;
@@ -1305,8 +1299,7 @@ fs_visitor::get_nir_dest(nir_dest dest)
    reg = offset(reg, dest.reg.base_offset);
    if (dest.reg.indirect) {
       reg.reladdr = new(mem_ctx) fs_reg();
-      *reg.reladdr = retype(get_nir_src(*dest.reg.indirect),
-                            BRW_REGISTER_TYPE_D);
+      *reg.reladdr = get_nir_src(*dest.reg.indirect, BRW_REGISTER_TYPE_D);
    }
 
    return reg;
@@ -1348,7 +1341,8 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
        */
       fs_inst *cmp;
       if (instr->intrinsic == nir_intrinsic_discard_if) {
-         cmp = emit(CMP(reg_null_f, get_nir_src(instr->src[0]),
+         cmp = emit(CMP(reg_null_f, get_nir_src(instr->src[0],
+                                                BRW_REGISTER_TYPE_D),
                         fs_reg(0), BRW_CONDITIONAL_Z));
       } else {
          fs_reg some_reg = fs_reg(retype(brw_vec8_grf(0, 0),
@@ -1379,7 +1373,7 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
    case nir_intrinsic_atomic_counter_read: {
       unsigned surf_index = prog_data->binding_table.abo_start +
                             (unsigned) instr->const_index[0];
-      fs_reg offset = fs_reg(get_nir_src(instr->src[0]));
+      fs_reg offset = get_nir_src(instr->src[0], BRW_REGISTER_TYPE_D);
 
       switch (instr->intrinsic) {
          case nir_intrinsic_atomic_counter_inc:
@@ -1465,7 +1459,8 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
             fs_reg src = offset(retype(nir_uniforms, dest.type),
                                 instr->const_index[0] + index);
             if (has_indirect)
-               src.reladdr = new(mem_ctx) fs_reg(get_nir_src(instr->src[0]));
+               src.reladdr = new(mem_ctx) fs_reg(get_nir_src(instr->src[0],
+                                                             BRW_REGISTER_TYPE_D));
             index++;
 
             emit(MOV(dest, src));
@@ -1491,7 +1486,7 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
           * a value from any live channel.
           */
          surf_index = vgrf(glsl_type::uint_type);
-         emit(ADD(surf_index, get_nir_src(instr->src[0]),
+         emit(ADD(surf_index, get_nir_src(instr->src[0], BRW_REGISTER_TYPE_D),
                   fs_reg(stage_prog_data->binding_table.ubo_start)))
             ->force_writemask_all = true;
 
@@ -1506,8 +1501,7 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
       if (has_indirect) {
          /* Turn the byte offset into a dword offset. */
          fs_reg base_offset = vgrf(glsl_type::int_type);
-         emit(SHR(base_offset, retype(get_nir_src(instr->src[1]),
-                                 BRW_REGISTER_TYPE_D),
+         emit(SHR(base_offset, get_nir_src(instr->src[1], BRW_REGISTER_TYPE_D),
                   fs_reg(2)));
 
          unsigned vec4_offset = instr->const_index[0] / 4;
@@ -1547,7 +1541,8 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
             fs_reg src = offset(retype(nir_inputs, dest.type),
                                 instr->const_index[0] + index);
             if (has_indirect)
-               src.reladdr = new(mem_ctx) fs_reg(get_nir_src(instr->src[0]));
+               src.reladdr = new(mem_ctx) fs_reg(get_nir_src(instr->src[0],
+                                                             BRW_REGISTER_TYPE_D));
             index++;
 
             emit(MOV(dest, src));
@@ -1621,8 +1616,7 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
                         fs_reg(off_x | (off_y << 4)));
          } else {
             src = vgrf(glsl_type::ivec2_type);
-            fs_reg offset_src = retype(get_nir_src(instr->src[0]),
-                                       BRW_REGISTER_TYPE_F);
+            fs_reg offset_src = get_nir_src(instr->src[0], BRW_REGISTER_TYPE_F);
             for (int i = 0; i < 2; i++) {
                fs_reg temp = vgrf(glsl_type::float_type);
                emit(MUL(temp, offset(offset_src, i), fs_reg(16.0f)));
@@ -1678,14 +1672,15 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
    case nir_intrinsic_store_output_indirect:
       has_indirect = true;
    case nir_intrinsic_store_output: {
-      fs_reg src = get_nir_src(instr->src[0]);
+      fs_reg src = get_nir_src(instr->src[0], BRW_REGISTER_TYPE_D);
       unsigned index = 0;
       for (int i = 0; i < instr->const_index[1]; i++) {
          for (unsigned j = 0; j < instr->num_components; j++) {
             fs_reg new_dest = offset(retype(nir_outputs, src.type),
                                      instr->const_index[0] + index);
             if (has_indirect)
-               src.reladdr = new(mem_ctx) fs_reg(get_nir_src(instr->src[1]));
+               src.reladdr = new(mem_ctx) fs_reg(get_nir_src(instr->src[1],
+                                                             BRW_REGISTER_TYPE_D));
             index++;
             emit(MOV(new_dest, src));
             src = offset(src, 1);
@@ -1723,7 +1718,7 @@ fs_visitor::nir_emit_texture(nir_tex_instr *instr)
    fs_reg coordinate, shadow_comparitor, lod, lod2, sample_index, mcs, offset;
 
    for (unsigned i = 0; i < instr->num_srcs; i++) {
-      fs_reg src = get_nir_src(instr->src[i].src);
+      fs_reg src = get_nir_src(instr->src[i].src, BRW_REGISTER_TYPE_D);
       switch (instr->src[i].src_type) {
       case nir_tex_src_bias:
          lod = retype(src, BRW_REGISTER_TYPE_F);
