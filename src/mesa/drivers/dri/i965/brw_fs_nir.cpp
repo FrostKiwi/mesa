@@ -1283,12 +1283,93 @@ fs_visitor::get_nir_src(nir_src src, brw_reg_type type)
    }
 }
 
+static nir_alu_instr *
+get_bool_alu_parent_instr(nir_src src)
+{
+   nir_instr *parent_instr = src.is_ssa ? src.ssa->parent_instr :
+                                          src.reg.reg->parent_instr;
+   if (!parent_instr || parent_instr->type != nir_instr_type_alu)
+      return NULL;
+
+   nir_alu_instr *alu = nir_instr_as_alu(parent_instr);
+
+   /* Instead of trying to algorithmically determine what instructions can
+    * or cannot be reconstructed to make a boolean, we give and explicit
+    * list for now.  This has three primary benifits.  1) It's simple.
+    * 2) It's not liable to hit strange edge-cases that don't have piglit
+    * tests.  3) All of these instructions we *know* get emitted in a
+    * single instruction so we won't hurt too much by re-emitting them.
+    */
+   switch (alu->op) {
+   case nir_op_flt:
+   case nir_op_ilt:
+   case nir_op_ult:
+   case nir_op_fge:
+   case nir_op_ige:
+   case nir_op_uge:
+   case nir_op_feq:
+   case nir_op_ieq:
+   case nir_op_fne:
+   case nir_op_ine:
+   case nir_op_inot:
+   case nir_op_ixor:
+   case nir_op_ior:
+   case nir_op_iand:
+   case nir_op_f2b:
+   case nir_op_i2b:
+      break;
+   default:
+      return NULL;
+   }
+
+   /* Now we need to check that all of the sources are at least psudo-ssa.
+    * If one of them was involved in a phi node then we can't be sure that
+    * just re-creating the value will work.
+    */
+   for (unsigned i = 0; i < nir_op_infos[alu->op].num_inputs; i++)
+      if (!alu->src[i].src.is_ssa &&
+          alu->src[i].src.reg.reg->parent_instr == NULL)
+         return NULL;
+
+   switch (nir_op_infos[alu->op].output_type) {
+   case nir_type_int:
+   case nir_type_unsigned:
+   case nir_type_bool:
+      return alu;
+
+   case nir_type_float:
+   default:
+      /* We can't treat a float-destination instruction as if it were a
+       * bool.  Doing so would require messing with the types which might
+       * be bad and could even hang the GPU.
+       */
+      return NULL;
+   }
+}
+
 void
 fs_visitor::get_nir_src_as_flag(nir_src src, unsigned comp)
 {
-   fs_reg cond_src = get_nir_src(src, BRW_REGISTER_TYPE_UD);
-   fs_inst *inst = emit(MOV(reg_null_d, offset(cond_src, comp)));
-   inst->conditional_mod = BRW_CONDITIONAL_NZ;
+   nir_alu_instr *bool_alu = get_bool_alu_parent_instr(src);
+
+   if (bool_alu) {
+      /* If it's an ALU instruction, we're *probably* better off just
+       * re-emitting it with a conditional mod than actually saving off the
+       * value and copying it to the flag register.
+       */
+      assert(bool_alu->dest.write_mask == 1);
+      nir_emit_alu(bool_alu);
+      fs_inst *alu_inst = (fs_inst *) this->instructions.get_tail();
+      alu_inst->dst = retype(reg_null_d, alu_inst->dst.type);
+
+      if (alu_inst->conditional_mod == BRW_CONDITIONAL_NONE)
+         alu_inst->conditional_mod = BRW_CONDITIONAL_NZ;
+   } else {
+      /* The tried-and-true solution */
+      fs_reg cond_src = get_nir_src(src, BRW_REGISTER_TYPE_UD);
+      fs_inst *inst = emit(MOV(reg_null_d, offset(cond_src, comp)));
+      inst->conditional_mod = BRW_CONDITIONAL_NZ;
+   }
 }
 
 fs_reg
