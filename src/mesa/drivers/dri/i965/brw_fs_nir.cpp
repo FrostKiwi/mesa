@@ -506,10 +506,7 @@ fs_visitor::nir_emit_cf_list(exec_list *list)
 void
 fs_visitor::nir_emit_if(nir_if *if_stmt)
 {
-   /* first, put the condition into f0 */
-   fs_inst *inst = emit(MOV(reg_null_d, get_nir_src(if_stmt->condition,
-                                                    BRW_REGISTER_TYPE_UD)));
-   inst->conditional_mod = BRW_CONDITIONAL_NZ;
+   get_nir_src_as_flag(if_stmt->condition, 0);
 
    emit(IF(BRW_PREDICATE_NORMAL));
 
@@ -1247,8 +1244,7 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
    case nir_op_bcsel:
       if (optimize_frontfacing_ternary(instr, result))
          return;
-
-      emit(CMP(reg_null_d, op[0], fs_reg(0), BRW_CONDITIONAL_NZ));
+      get_nir_src_as_flag(instr->src[0].src, instr->src[0].swizzle[0]);
       inst = emit(SEL(result, op[1], op[2]));
       inst->predicate = BRW_PREDICATE_NORMAL;
       break;
@@ -1285,6 +1281,14 @@ fs_visitor::get_nir_src(nir_src src, brw_reg_type type)
 
       return reg;
    }
+}
+
+void
+fs_visitor::get_nir_src_as_flag(nir_src src, unsigned comp)
+{
+   fs_reg cond_src = get_nir_src(src, BRW_REGISTER_TYPE_UD);
+   fs_inst *inst = emit(MOV(reg_null_d, offset(cond_src, comp)));
+   inst->conditional_mod = BRW_CONDITIONAL_NZ;
 }
 
 fs_reg

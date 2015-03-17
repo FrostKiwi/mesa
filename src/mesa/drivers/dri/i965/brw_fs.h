@@ -364,6 +364,7 @@ public:
    void nir_emit_texture(nir_tex_instr *instr);
    void nir_emit_jump(nir_jump_instr *instr);
    fs_reg get_nir_src(nir_src src, brw_reg_type type);
+   void get_nir_src_as_flag(nir_src src, unsigned comp);
    fs_reg get_nir_dest(nir_dest dest);
    void emit_percomp(fs_inst *inst, unsigned wr_mask);
 
