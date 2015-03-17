@@ -57,104 +57,6 @@ get_resolve_state_for_src(nir_alu_instr *alu, unsigned src_idx)
    }
 }
 
-static void
-compute_boolean_flags_instr(nir_instr *instr)
-{
-   /* Clear the boolean state */
-   instr->pass_flags &= ~BRW_NIR_BOOLEAN_MASK;
-
-   switch (instr->type) {
-   case nir_instr_type_alu:
-      /* For ALU instructions, we handle [un]resolved booleans below. */
-      break;
-
-   case nir_instr_type_load_const: {
-      /* For load_const instructions, it's a boolean exactly when it holds
-       * one of the values NIR_TRUE or NIR_FALSE.
-       */
-      nir_load_const_instr *load = nir_instr_as_load_const(instr);
-      if (load->value.u[0] == NIR_TRUE || load->value.u[0] == NIR_FALSE) {
-         instr->pass_flags |= BRW_NIR_BOOLEAN_NO_RESOLVE;
-      } else {
-         instr->pass_flags |= BRW_NIR_NON_BOOLEAN;
-      }
-      return;
-   }
-
-   default:
-      /* Everything else is an unknown non-boolean value */
-      instr->pass_flags |= BRW_NIR_NON_BOOLEAN;
-      return;
-   }
-
-   nir_alu_instr *alu = nir_instr_as_alu(instr);
-   switch (alu->op) {
-   case nir_op_flt:
-   case nir_op_ilt:
-   case nir_op_ult:
-   case nir_op_fge:
-   case nir_op_ige:
-   case nir_op_uge:
-   case nir_op_feq:
-   case nir_op_ieq:
-   case nir_op_fne:
-   case nir_op_ine:
-   case nir_op_f2b:
-   case nir_op_i2b:
-      instr->pass_flags |= BRW_NIR_BOOLEAN_UNRESOLVED;
-      break;
-
-   case nir_op_imov:
-   case nir_op_inot:
-      if (alu->dest.write_mask == 1) {
-         /* This is a single-source instruction.  Just copy the resolution
-          * state from the source.
-          */
-         instr->pass_flags |= get_resolve_state_for_src(alu, 0);
-      } else {
-         instr->pass_flags |= BRW_NIR_NON_BOOLEAN;
-      }
-      break;
-
-   case nir_op_iand:
-   case nir_op_ior:
-   case nir_op_ixor: {
-      assert(alu->dest.write_mask == 1);
-
-      uint8_t src0_flags = get_resolve_state_for_src(alu, 0);
-      uint8_t src1_flags = get_resolve_state_for_src(alu, 1);
-
-      if (src0_flags == src1_flags) {
-         instr->pass_flags |= src0_flags;
-      } else if (src0_flags == BRW_NIR_NON_BOOLEAN ||
-                 src1_flags == BRW_NIR_NON_BOOLEAN) {
-         instr->pass_flags |= BRW_NIR_NON_BOOLEAN;
-      } else {
-         /* At this point one of them is a true boolean and one is a
-          * boolean that needs a resolve.  We could either resolve the
-          * unresolved source or we could resolve here.  If we resolve
-          * the unresolved source then we get two resolves for the price
-          * of one.  Just set this one to BOOLEAN_NO_RESOLVE and we'll
-          * let the code below force a resolve on the unresolved source.
-          */
-         instr->pass_flags |= BRW_NIR_BOOLEAN_NO_RESOLVE;
-      }
-      break;
-   }
-
-   default:
-      instr->pass_flags |= BRW_NIR_NON_BOOLEAN;
-   }
-
-   /* If the destination is SSA-like, go ahead allow unresolved booleans.
-    * If the destination register doesn't have a well-defined parent_instr
-    * we need to resolve immediately.
-    */
-   if (alu->dest.dest.reg.reg->parent_instr == NULL &&
-       (instr->pass_flags & BRW_NIR_BOOLEAN_MASK) == BRW_NIR_BOOLEAN_UNRESOLVED)
-      instr->pass_flags |= BRW_NIR_BOOLEAN_NEEDS_RESOLVE;
-}
-
 static bool
 src_mark_needs_resolve(nir_src *src, void *void_state)
 {
@@ -179,9 +81,114 @@ static bool
 analize_boolean_resolves_block(nir_block *block, void *void_state)
 {
    nir_foreach_instr(block, instr) {
-      compute_boolean_flags_instr(instr);
+      /* Clear the boolean state */
+      instr->pass_flags &= ~BRW_NIR_BOOLEAN_MASK;
 
-      switch (instr->pass_flags & BRW_NIR_BOOLEAN_MASK) {
+      switch (instr->type) {
+      case nir_instr_type_alu:
+         /* For ALU instructions, we handle [un]resolved booleans below. */
+         break;
+
+      case nir_instr_type_load_const: {
+         /* For load_const instructions, it's a boolean exactly when it holds
+          * one of the values NIR_TRUE or NIR_FALSE.
+          */
+         nir_load_const_instr *load = nir_instr_as_load_const(instr);
+         if (load->value.u[0] == NIR_TRUE || load->value.u[0] == NIR_FALSE) {
+            instr->pass_flags |= BRW_NIR_BOOLEAN_NO_RESOLVE;
+         } else {
+            instr->pass_flags |= BRW_NIR_NON_BOOLEAN;
+         }
+         continue;
+      }
+
+      default:
+         /* Everything else is an unknown non-boolean value and needs to
+          * have all sources resolved.
+          */
+         instr->pass_flags |= BRW_NIR_NON_BOOLEAN;
+         nir_foreach_src(instr, src_mark_needs_resolve, NULL);
+         continue;
+      }
+
+      uint8_t bool_status;
+      nir_alu_instr *alu = nir_instr_as_alu(instr);
+      switch (alu->op) {
+      case nir_op_flt:
+      case nir_op_ilt:
+      case nir_op_ult:
+      case nir_op_fge:
+      case nir_op_ige:
+      case nir_op_uge:
+      case nir_op_feq:
+      case nir_op_ieq:
+      case nir_op_fne:
+      case nir_op_ine:
+      case nir_op_f2b:
+      case nir_op_i2b:
+         bool_status = BRW_NIR_BOOLEAN_UNRESOLVED;
+
+         /* Even though the destination is allowed to be left unresolved,
+          * we need to resolve all the sources of a compare.
+          */
+         nir_foreach_src(instr, src_mark_needs_resolve, NULL);
+         break;
+
+      case nir_op_imov:
+      case nir_op_inot:
+         if (alu->dest.write_mask == 1) {
+            /* This is a single-source instruction.  Just copy the resolution
+             * state from the source.
+             */
+            bool_status = get_resolve_state_for_src(alu, 0);
+         } else {
+            bool_status = BRW_NIR_NON_BOOLEAN;
+         }
+         break;
+
+      case nir_op_iand:
+      case nir_op_ior:
+      case nir_op_ixor: {
+         assert(alu->dest.write_mask == 1);
+
+         uint8_t src0_flags = get_resolve_state_for_src(alu, 0);
+         uint8_t src1_flags = get_resolve_state_for_src(alu, 1);
+
+         if (src0_flags == src1_flags) {
+            bool_status = src0_flags;
+         } else if (src0_flags == BRW_NIR_NON_BOOLEAN ||
+                    src1_flags == BRW_NIR_NON_BOOLEAN) {
+            bool_status = BRW_NIR_NON_BOOLEAN;
+         } else {
+            /* At this point one of them is a true boolean and one is a
+             * boolean that needs a resolve.  We could either resolve the
+             * unresolved source or we could resolve here.  If we resolve
+             * the unresolved source then we get two resolves for the price
+             * of one.  Just set this one to BOOLEAN_NO_RESOLVE and we'll
+             * let the code below force a resolve on the unresolved source.
+             */
+            bool_status = BRW_NIR_BOOLEAN_NO_RESOLVE;
+         }
+         break;
+      }
+
+      default:
+         bool_status = BRW_NIR_NON_BOOLEAN;
+      }
+
+      /* If the destination is SSA-like, go ahead allow unresolved booleans.
+       * If the destination register doesn't have a well-defined parent_instr
+       * we need to resolve immediately.
+       */
+      if (alu->dest.dest.reg.reg->parent_instr == NULL &&
+          bool_status == BRW_NIR_BOOLEAN_UNRESOLVED) {
+         bool_status = BRW_NIR_BOOLEAN_NEEDS_RESOLVE;
+      }
+
+      instr->pass_flags |= bool_status;
+
+      /* Finally, resolve sources if it's needed */
+      switch (bool_status) {
       case BRW_NIR_BOOLEAN_NEEDS_RESOLVE:
       case BRW_NIR_BOOLEAN_UNRESOLVED:
          /* This instruction is either unresolved or we're doing the
