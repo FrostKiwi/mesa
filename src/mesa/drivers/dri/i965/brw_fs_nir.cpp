@@ -1238,7 +1238,13 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       break;
 
    case nir_op_ffma:
-      inst = emit(MAD(result, op[2], op[1], op[0]));
+      if (brw->gen >= 6) {
+         inst = emit(MAD(result, op[2], op[1], op[0]));
+      } else {
+         fs_reg temp = vgrf(glsl_type::float_type);
+         emit(MUL(temp, op[0], op[1]));
+         inst = emit(ADD(result, temp, op[2]));
+      }
       inst->saturate = instr->dest.saturate;
       break;
 
