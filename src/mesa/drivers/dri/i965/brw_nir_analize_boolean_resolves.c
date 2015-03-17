@@ -44,7 +44,7 @@ get_resolve_state_for_src(nir_alu_instr *alu, unsigned src_idx)
    }
 
    if (src_instr) {
-      uint8_t state = src_instr->pass_flags & ~BRW_NIR_BOOLEAN_MASK;
+      uint8_t state = src_instr->pass_flags & BRW_NIR_BOOLEAN_MASK;
 
       /* If the source instruction nees resolve then, from the perspective
        * of the user, it's a true boolean.
