@@ -25,6 +25,7 @@
 #include "glsl/ir_optimization.h"
 #include "glsl/nir/glsl_to_nir.h"
 #include "brw_fs.h"
+#include "brw_nir.h"
 
 static void
 nir_optimize(nir_shader *nir)
@@ -148,6 +149,14 @@ fs_visitor::emit_nir_code()
 
    nir_convert_from_ssa(nir);
    nir_validate_shader(nir);
+
+   /* This is the last pass we run before we start emitting stuff.  It
+    * determines when we need to insert boolean resolves on GEN <= 5.  We
+    * run it last because it stashes data in instr->pass_flags and we don't
+    * want that to be squashed by other NIR passes.
+    */
+   if (brw->gen <= 5)
+      brw_nir_analize_boolean_resolves(nir);
 
    /* emit the arrays used for inputs and outputs - load/store intrinsics will
     * be converted to reads/writes of these arrays
@@ -551,7 +560,7 @@ fs_visitor::nir_emit_instr(nir_instr *instr)
 {
    switch (instr->type) {
    case nir_instr_type_alu:
-      nir_emit_alu(nir_instr_as_alu(instr));
+      nir_emit_alu(nir_instr_as_alu(instr), true);
       break;
 
    case nir_instr_type_intrinsic:
@@ -680,7 +689,7 @@ fs_visitor::optimize_frontfacing_ternary(nir_alu_instr *instr,
 }
 
 void
-fs_visitor::nir_emit_alu(nir_alu_instr *instr)
+fs_visitor::nir_emit_alu(nir_alu_instr *instr, bool resolve_booleans)
 {
    struct brw_wm_prog_key *fs_key = (struct brw_wm_prog_key *) this->key;
    fs_inst *inst;
@@ -1259,6 +1268,18 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
    default:
       unreachable("unhandled instruction");
    }
+
+   /* If we need to do a boolean resolve, replace the result with -(x & 1)
+    * to convert it from junk in the top 31 bits and the actual boolean in
+    * the bottom bit to the NIR standard of 0/~0.
+    */
+   if (brw->gen <= 5 && resolve_booleans &&
+       (instr->instr.pass_flags & BRW_NIR_BOOLEAN_MASK) == BRW_NIR_BOOLEAN_NEEDS_RESOLVE) {
+      fs_reg masked = vgrf(glsl_type::int_type);
+      emit(AND(masked, result, fs_reg(1)));
+      masked.negate = true;
+      emit(MOV(result, masked));
+   }
 }
 
 fs_reg
@@ -1365,7 +1386,7 @@ fs_visitor::get_nir_src_as_flag(nir_src src, unsigned comp)
        * value and copying it to the flag register.
        */
       assert(bool_alu->dest.write_mask == 1);
-      nir_emit_alu(bool_alu);
+      nir_emit_alu(bool_alu, false /* Don't emit a resolve */);
       fs_inst *alu_inst = (fs_inst *) this->instructions.get_tail();
       alu_inst->dst = retype(reg_null_d, alu_inst->dst.type);
 
