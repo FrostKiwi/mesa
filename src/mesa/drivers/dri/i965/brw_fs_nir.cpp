@@ -1129,6 +1129,7 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       } else {
          emit(CMP(reg_null_d, op[0], op[1], BRW_CONDITIONAL_L));
          inst = emit(SEL(result, op[0], op[1]));
+         inst->predicate = BRW_PREDICATE_NORMAL;
       }
       inst->saturate = instr->dest.saturate;
       break;
@@ -1142,6 +1143,7 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       } else {
          emit(CMP(reg_null_d, op[0], op[1], BRW_CONDITIONAL_GE));
          inst = emit(SEL(result, op[0], op[1]));
+         inst->predicate = BRW_PREDICATE_NORMAL;
       }
       inst->saturate = instr->dest.saturate;
       break;
