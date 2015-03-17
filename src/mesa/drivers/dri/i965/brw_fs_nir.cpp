@@ -560,7 +560,7 @@ fs_visitor::nir_emit_instr(nir_instr *instr)
 {
    switch (instr->type) {
    case nir_instr_type_alu:
-      nir_emit_alu(nir_instr_as_alu(instr), true);
+      nir_emit_alu(nir_instr_as_alu(instr));
       break;
 
    case nir_instr_type_intrinsic:
@@ -689,7 +689,7 @@ fs_visitor::optimize_frontfacing_ternary(nir_alu_instr *instr,
 }
 
 void
-fs_visitor::nir_emit_alu(nir_alu_instr *instr, bool resolve_booleans)
+fs_visitor::nir_emit_alu(nir_alu_instr *instr)
 {
    struct brw_wm_prog_key *fs_key = (struct brw_wm_prog_key *) this->key;
    fs_inst *inst;
@@ -1273,7 +1273,7 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr, bool resolve_booleans)
     * to convert it from junk in the top 31 bits and the actual boolean in
     * the bottom bit to the NIR standard of 0/~0.
     */
-   if (brw->gen <= 5 && resolve_booleans &&
+   if (brw->gen <= 5 &&
        (instr->instr.pass_flags & BRW_NIR_BOOLEAN_MASK) == BRW_NIR_BOOLEAN_NEEDS_RESOLVE) {
       fs_reg masked = vgrf(glsl_type::int_type);
       emit(AND(masked, result, fs_reg(1)));
@@ -1386,7 +1386,7 @@ fs_visitor::get_nir_src_as_flag(nir_src src, unsigned comp)
        * value and copying it to the flag register.
        */
       assert(bool_alu->dest.write_mask == 1);
-      nir_emit_alu(bool_alu, false /* Don't emit a resolve */);
+      nir_emit_alu(bool_alu);
       fs_inst *alu_inst = (fs_inst *) this->instructions.get_tail();
       alu_inst->dst = retype(reg_null_d, alu_inst->dst.type);
 
