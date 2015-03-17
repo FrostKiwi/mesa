@@ -206,6 +206,10 @@ analize_boolean_resolves_block(nir_block *block, void *void_state)
       }
    }
 
+   nir_if *following_if = nir_block_get_following_if(block);
+   if (following_if)
+      src_mark_needs_resolve(&following_if->condition, NULL);
+
    return true;
 }
 
