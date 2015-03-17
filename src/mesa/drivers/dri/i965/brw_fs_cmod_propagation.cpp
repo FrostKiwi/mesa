@@ -80,6 +80,15 @@ opt_cmod_propagation_local(bblock_t *block)
                 scan_inst->dst.reg_offset != inst->src[0].reg_offset)
                break;
 
+            if (inst->conditional_mod == BRW_CONDITIONAL_NZ &&
+                scan_inst->opcode == BRW_OPCODE_CMP &&
+                (inst->dst.type == BRW_REGISTER_TYPE_D ||
+                 inst->dst.type == BRW_REGISTER_TYPE_UD)) {
+               inst->remove(block);
+               progress = true;
+               break;
+            }
+
             /* Comparisons operate differently for ints and floats */
             if (scan_inst->dst.type != inst->dst.type)
                break;
