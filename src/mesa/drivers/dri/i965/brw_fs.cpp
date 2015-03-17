@@ -3958,7 +3958,7 @@ fs_visitor::run_fs()
        * functions called "main").
        */
       if (shader) {
-         if (env_var_as_boolean("INTEL_USE_NIR", false)) {
+         if (env_var_as_boolean("INTEL_USE_NIR", true)) {
             emit_nir_code();
          } else {
             foreach_in_list(ir_instruction, ir, shader->base.ir) {
