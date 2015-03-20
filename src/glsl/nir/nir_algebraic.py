@@ -225,7 +225,7 @@ ${pass_name}_block(nir_block *block, void *void_state)
          for (unsigned i = 0; i < ARRAY_SIZE(${pass_name}_${opcode}_xforms); i++) {
             const struct transform *xform = &${pass_name}_${opcode}_xforms[i];
             if (state->condition_flags[xform->condition_offset] &&
-                nir_replace_instr(alu, xform->search, xform->replace,
+                nir_replace_instr(alu, xform->search, xform->replace, 0,
                                   state->mem_ctx)) {
                state->progress = true;
                break;

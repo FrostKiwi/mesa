@@ -30,6 +30,7 @@
 struct match_state {
    unsigned variables_seen;
    nir_alu_src variables[NIR_SEARCH_MAX_VARIABLES];
+   unsigned unique_instrs;
 };
 
 static bool
@@ -40,6 +41,15 @@ match_expression(const nir_search_expression *expr, nir_alu_instr *instr,
 static const uint8_t identity_swizzle[] = { 0, 1, 2, 3 };
 
 static bool alu_instr_is_bool(nir_alu_instr *instr);
+
+static bool
+instr_has_one_use(nir_alu_instr *instr)
+{
+   assert(instr->dest.dest.is_ssa);
+
+   return instr->dest.dest.ssa.uses->entries == 1 &&
+          instr->dest.dest.ssa.if_uses->entries == 0;
+}
 
 static bool
 src_is_bool(nir_src src)
@@ -215,6 +225,9 @@ match_expression(const nir_search_expression *expr, nir_alu_instr *instr,
       }
    }
 
+   if (instr_has_one_use(instr))
+      state->unique_instrs++;
+
    if (matched)
       return true;
 
@@ -328,13 +341,26 @@ construct_value(const nir_search_value *value, nir_alu_type type,
  * expression and all uses of instr are changed to point to the new
  * expression.
  *
- * \param instr   The instruction to potentially replace
- * \param search  The expression we are searching for
- * \param replace The replacement expression
+ * The uniqueness_threshold parameter specifies how many instructions must
+ * be unique to this expression for a replacement to occur.  The number of
+ * unique instructions is always at least one (the root of the expression
+ * tree).  However, if the expression tree is more complicated then some or
+ * all of the instructions in the tree may be unique to the tree.  At the
+ * moment, we are pretty sloppy about this calculation.  Instead of
+ * actually figuring out if the instruction is unique to the expression, we
+ * just look and see if the instruction has only one use.
+ *
+ * \param instr                  The instruction to potentially replace
+ * \param search                 The expression we are searching for
+ * \param replace                The replacement expression
+ * \param uniqueness_threshold   The number of instructions that must be
+ *                               unique to this expression for the
+ *                               replacement to occur
  */
 nir_alu_instr *
 nir_replace_instr(nir_alu_instr *instr, const nir_search_expression *search,
-                  const nir_search_value *replace, void *mem_ctx)
+                  const nir_search_value *replace,
+                  unsigned uniqueness_threshold, void *mem_ctx)
 {
    uint8_t swizzle[4] = { 0, 0, 0, 0 };
 
@@ -345,9 +371,20 @@ nir_replace_instr(nir_alu_instr *instr, const nir_search_expression *search,
 
    struct match_state state;
    state.variables_seen = 0;
+   state.unique_instrs = 0;
 
    if (!match_expression(search, instr, instr->dest.dest.ssa.num_components,
                          swizzle, &state))
+      return NULL;
+
+   /* If the root instruction has one use then we will have already counted
+    * it as a unique instruction.  If it has more than one use then it was
+    * not counted and we need to count it now.
+    */
+   if (!instr_has_one_use(instr))
+      state.unique_instrs++;
+
+   if (state.unique_instrs < uniqueness_threshold)
       return NULL;
 
    /* Inserting a mov may be unnecessary.  However, it's much easier to
