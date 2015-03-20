@@ -321,6 +321,17 @@ construct_value(const nir_search_value *value, nir_alu_type type,
    }
 }
 
+/** Attempts to do a search-and-replace operation on the given instruction
+ *
+ * This function looks at instr and sees if it matches the search
+ * expression.  If it matches, instr is replaced with the replace
+ * expression and all uses of instr are changed to point to the new
+ * expression.
+ *
+ * \param instr   The instruction to potentially replace
+ * \param search  The expression we are searching for
+ * \param replace The replacement expression
+ */
 nir_alu_instr *
 nir_replace_instr(nir_alu_instr *instr, const nir_search_expression *search,
                   const nir_search_value *replace, void *mem_ctx)
