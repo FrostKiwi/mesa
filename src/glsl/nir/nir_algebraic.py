@@ -155,10 +155,17 @@ class SearchAndReplace(object):
 
       search = transform[0]
       replace = transform[1]
-      if len(transform) > 2:
-         self.condition = transform[2]
-      else:
-         self.condition = 'true'
+
+      # Determine the values of optional extra arguments
+      self.condition = 'true'
+      self.uniqueness_threshold = 0
+      for arg in transform[2:]:
+         if isinstance(arg, (int, long)):
+            self.uniqueness_threshold = arg
+         elif isinstance(arg, (str, unicode)):
+            self.condition = arg
+         else:
+            assert False, "Invalid extra argument to search/replace operation"
 
       if self.condition not in condition_list:
          condition_list.append(self.condition)
@@ -185,6 +192,7 @@ struct transform {
    const nir_search_expression *search;
    const nir_search_value *replace;
    unsigned condition_offset;
+   unsigned uniqueness_threshold;
 };
 
 % for (opcode, xform_list) in xform_dict.iteritems():
@@ -195,7 +203,8 @@ struct transform {
 
 static const struct transform ${pass_name}_${opcode}_xforms[] = {
 % for xform in xform_list:
-   { &${xform.search.name}, ${xform.replace.c_ptr}, ${xform.condition_index} },
+   { &${xform.search.name}, ${xform.replace.c_ptr},
+     ${xform.condition_index}, ${xform.uniqueness_threshold} },
 % endfor
 };
 % endfor
@@ -225,7 +234,8 @@ ${pass_name}_block(nir_block *block, void *void_state)
          for (unsigned i = 0; i < ARRAY_SIZE(${pass_name}_${opcode}_xforms); i++) {
             const struct transform *xform = &${pass_name}_${opcode}_xforms[i];
             if (state->condition_flags[xform->condition_offset] &&
-                nir_replace_instr(alu, xform->search, xform->replace, 0,
+                nir_replace_instr(alu, xform->search, xform->replace,
+                                  xform->uniqueness_threshold,
                                   state->mem_ctx)) {
                state->progress = true;
                break;
