@@ -1055,28 +1055,32 @@ vec4_visitor::visit(ir_variable *ir)
       break;
 
    case ir_var_uniform:
-      reg = new(this->mem_ctx) dst_reg(UNIFORM, this->uniforms);
+      if (ir->type->contains_atomic()) {
+         reg = new(this->mem_ctx) dst_reg(ir->data.atomic.offset);
 
-      /* Thanks to the lower_ubo_reference pass, we will see only
-       * ir_binop_ubo_load expressions and not ir_dereference_variable for UBO
-       * variables, so no need for them to be in variable_ht.
-       *
-       * Some uniforms, such as samplers and atomic counters, have no actual
-       * storage, so we should ignore them.
-       */
-      if (ir->is_in_uniform_block() || type_size(ir->type) == 0)
+      } else if (ir->is_in_uniform_block() || type_size(ir->type) == 0) {
+         /* Thanks to the lower_ubo_reference pass, we will see only
+          * ir_binop_ubo_load expressions and not ir_dereference_variable for
+          * UBO variables, so no need for them to be in variable_ht.
+          *
+          * Some uniforms such as samplers have no actual storage, so we
+          * should ignore them.
+          */
          return;
-
-      /* Track how big the whole uniform variable is, in case we need to put a
-       * copy of its data into pull constants for array access.
-       */
-      assert(this->uniforms < uniform_array_size);
-      this->uniform_size[this->uniforms] = type_size(ir->type);
-
-      if (!strncmp(ir->name, "gl_", 3)) {
-	 setup_builtin_uniform_values(ir);
       } else {
-	 setup_uniform_values(ir);
+         reg = new(this->mem_ctx) dst_reg(UNIFORM, this->uniforms);
+
+         /* Track how big the whole uniform variable is, in case we need to
+          * put a copy of its data into pull constants for array access.
+          */
+         assert(this->uniforms < uniform_array_size);
+         this->uniform_size[this->uniforms] = type_size(ir->type);
+
+         if (!strncmp(ir->name, "gl_", 3)) {
+            setup_builtin_uniform_values(ir);
+         } else {
+            setup_uniform_values(ir);
+         }
       }
       break;
 
@@ -2042,45 +2046,56 @@ vec4_visitor::visit(ir_dereference_array *ir)
    ir->array->accept(this);
    src = this->result;
 
-   if (constant_index) {
-      src.reg_offset += constant_index->value.i[0] * array_stride;
-   } else {
-      /* Variable index array dereference.  It eats the "vec4" of the
-       * base of the array and an index that offsets the Mesa register
-       * index.
-       */
+   if (ir->array->type->contains_atomic()) {
+      dst_reg tmp(this, glsl_type::uint_type);
+
       ir->array_index->accept(this);
+      emit(MUL(tmp, this->result, ATOMIC_COUNTER_SIZE));
+      emit(ADD(tmp, src_reg(tmp), src));
+      this->result = src_reg(tmp);
 
-      src_reg index_reg;
-
-      if (array_stride == 1) {
-	 index_reg = this->result;
+   } else {
+      if (constant_index) {
+         src.reg_offset += constant_index->value.i[0] * array_stride;
       } else {
-	 index_reg = src_reg(this, glsl_type::int_type);
+         /* Variable index array dereference.  It eats the "vec4" of the
+          * base of the array and an index that offsets the Mesa register
+          * index.
+          */
+         ir->array_index->accept(this);
 
-	 emit(MUL(dst_reg(index_reg), this->result, src_reg(array_stride)));
+         src_reg index_reg;
+
+         if (array_stride == 1) {
+            index_reg = this->result;
+         } else {
+            index_reg = src_reg(this, glsl_type::int_type);
+
+            emit(MUL(dst_reg(index_reg), this->result, src_reg(array_stride)));
+         }
+
+         if (src.reladdr) {
+            src_reg temp = src_reg(this, glsl_type::int_type);
+
+            emit(ADD(dst_reg(temp), *src.reladdr, index_reg));
+
+            index_reg = temp;
+         }
+
+         src.reladdr = ralloc(mem_ctx, src_reg);
+         memcpy(src.reladdr, &index_reg, sizeof(index_reg));
       }
 
-      if (src.reladdr) {
-	 src_reg temp = src_reg(this, glsl_type::int_type);
+      /* If the type is smaller than a vec4, replicate the last channel out. */
+      if (ir->type->is_scalar() || ir->type->is_vector() ||
+          ir->type->is_matrix())
+         src.swizzle = brw_swizzle_for_size(ir->type->vector_elements);
+      else
+         src.swizzle = BRW_SWIZZLE_NOOP;
+      src.type = brw_type_for_base_type(ir->type);
 
-	 emit(ADD(dst_reg(temp), *src.reladdr, index_reg));
-
-	 index_reg = temp;
-      }
-
-      src.reladdr = ralloc(mem_ctx, src_reg);
-      memcpy(src.reladdr, &index_reg, sizeof(index_reg));
+      this->result = src;
    }
-
-   /* If the type is smaller than a vec4, replicate the last channel out. */
-   if (ir->type->is_scalar() || ir->type->is_vector() || ir->type->is_matrix())
-      src.swizzle = brw_swizzle_for_size(ir->type->vector_elements);
-   else
-      src.swizzle = BRW_SWIZZLE_NOOP;
-   src.type = brw_type_for_base_type(ir->type);
-
-   this->result = src;
 }
 
 void
@@ -2410,19 +2425,8 @@ vec4_visitor::visit_atomic_counter_intrinsic(ir_call *ir)
    ir_variable *location = deref->variable_referenced();
    unsigned surf_index = (prog_data->base.binding_table.abo_start +
                           location->data.binding);
-
-   /* Calculate the surface offset */
-   src_reg offset(this, glsl_type::uint_type);
-   ir_dereference_array *deref_array = deref->as_dereference_array();
-   if (deref_array) {
-      deref_array->array_index->accept(this);
-
-      src_reg tmp(this, glsl_type::uint_type);
-      emit(MUL(dst_reg(tmp), this->result, ATOMIC_COUNTER_SIZE));
-      emit(ADD(dst_reg(offset), tmp, location->data.atomic.offset));
-   } else {
-      offset = location->data.atomic.offset;
-   }
+   deref->accept(this);
+   const src_reg offset = this->result;
 
    /* Emit the appropriate machine instruction */
    const char *callee = ir->callee->function_name();
