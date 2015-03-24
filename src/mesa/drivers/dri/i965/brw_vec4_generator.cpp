@@ -325,7 +325,7 @@ vec4_generator::generate_tex(vec4_instruction *inst,
     * to set it up explicitly and load the offset bitfield.  Otherwise, we can
     * use an implied move from g0 to the first message register.
     */
-   if (inst->header_present) {
+   if (inst->header_size != 0) {
       if (brw->gen < 6 && !inst->offset) {
          /* Set up an implied move from g0 to the MRF. */
          src = brw_vec8_grf(0, 0);
@@ -390,7 +390,7 @@ vec4_generator::generate_tex(vec4_instruction *inst,
                  msg_type,
                  1, /* response length */
                  inst->mlen,
-                 inst->header_present,
+                 inst->header_size != 0,
                  BRW_SAMPLER_SIMD_MODE_SIMD4X2,
                  return_format);
 
@@ -430,7 +430,7 @@ vec4_generator::generate_tex(vec4_instruction *inst,
                               msg_type,
                               1 /* rlen */,
                               inst->mlen /* mlen */,
-                              inst->header_present /* header */,
+                              inst->header_size != 0 /* header */,
                               BRW_SAMPLER_SIMD_MODE_SIMD4X2,
                               return_format);
 
