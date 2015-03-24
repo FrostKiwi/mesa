@@ -3548,7 +3548,8 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
        * alpha out the pipeline to our null renderbuffer to support
        * alpha-testing, alpha-to-coverage, and so on.
        */
-      sources[length + 3] = offset(this->outputs[0], 3);
+      if (this->outputs[0].file != BAD_FILE)
+         sources[length + 3] = offset(this->outputs[0], 3);
       length += 4;
    } else if (color1.file == BAD_FILE) {
       if (src0_alpha.file != BAD_FILE)
