@@ -3435,7 +3435,7 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components,
    fs_inst *inst;
 
    if (color.file == BAD_FILE) {
-      return 4 * (dispatch_width / 8);
+      return 4;
    }
 
    uint8_t colors_enabled;
