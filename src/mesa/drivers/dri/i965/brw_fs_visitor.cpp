@@ -3559,13 +3559,24 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
          sources[length + i] = offset(color0, i);
       length += 4;
    } else {
-      for (unsigned i = 0; i < components; i++)
-         sources[length + i] = half(offset(color0, i), use_2nd_half ? 1 : 0);
-      length += 4;
+      if (exec_size < dispatch_width) {
+         unsigned half_idx = use_2nd_half ? 1 : 0;
+         for (unsigned i = 0; i < components; i++)
+            sources[length + i] = half(offset(color0, i), half_idx);
+         length += 4;
 
-      for (unsigned i = 0; i < components; i++)
-         sources[length + i] = half(offset(color1, i), use_2nd_half ? 1 : 0);
-      length += 4;
+         for (unsigned i = 0; i < components; i++)
+            sources[length + i] = half(offset(color1, i), half_idx);
+         length += 4;
+      } else {
+         for (unsigned i = 0; i < components; i++)
+            sources[length + i] = offset(color0, i);
+         length += 4;
+
+         for (unsigned i = 0; i < components; i++)
+            sources[length + i] = offset(color1, i);
+         length += 4;
+      }
    }
 
    if (source_depth_to_render_target) {
