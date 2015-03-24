@@ -50,7 +50,7 @@ vec4_instruction::vec4_instruction(enum opcode opcode, const dst_reg &dst,
    this->shadow_compare = false;
    this->ir = NULL;
    this->urb_write_flags = BRW_URB_WRITE_NO_FLAGS;
-   this->header_present = false;
+   this->header_size = 0;
    this->flag_subreg = 0;
    this->mlen = 0;
    this->base_mrf = 0;
@@ -2596,19 +2596,19 @@ vec4_visitor::visit(ir_texture *ir)
     * - Gather channel selection
     * - Sampler indices too large to fit in a 4-bit value.
     */
-   inst->header_present =
-      brw->gen < 5 || brw->gen >= 9 ||
-      inst->offset != 0 || ir->op == ir_tg4 ||
-      is_high_sampler(brw, sampler_reg);
+   inst->header_size =
+      (brw->gen < 5 || brw->gen >= 9 ||
+       inst->offset != 0 || ir->op == ir_tg4 ||
+       is_high_sampler(brw, sampler_reg)) ? 1 : 0;
    inst->base_mrf = 2;
-   inst->mlen = inst->header_present + 1; /* always at least one */
+   inst->mlen = inst->header_size + 1; /* always at least one */
    inst->dst.writemask = WRITEMASK_XYZW;
    inst->shadow_compare = ir->shadow_comparitor != NULL;
 
    inst->src[1] = sampler_reg;
 
    /* MRF for the first parameter */
-   int param_base = inst->base_mrf + inst->header_present;
+   int param_base = inst->base_mrf + inst->header_size;
 
    if (ir->op == ir_txs || ir->op == ir_query_levels) {
       int writemask = brw->gen == 4 ? WRITEMASK_W : WRITEMASK_X;
