@@ -430,7 +430,7 @@ fs_visitor::VARYING_PULL_CONSTANT_LOAD(const fs_reg &dst,
 
    if (brw->gen < 7) {
       inst->base_mrf = 13;
-      inst->header_present = true;
+      inst->header_size = 1;
       if (brw->gen == 4)
          inst->mlen = 3;
       else
@@ -478,7 +478,7 @@ fs_inst::equals(fs_inst *inst) const
            base_mrf == inst->base_mrf &&
            target == inst->target &&
            eot == inst->eot &&
-           header_present == inst->header_present &&
+           header_size == inst->header_size &&
            shadow_compare == inst->shadow_compare &&
            exec_size == inst->exec_size &&
            offset == inst->offset);
@@ -2835,7 +2835,7 @@ fs_visitor::emit_repclear_shader()
       write->saturate = key->clamp_fragment_color;
       write->base_mrf = color_mrf;
       write->target = 0;
-      write->header_present = false;
+      write->header_size = 0;
       write->mlen = 1;
    } else {
       assume(key->nr_color_regions > 0);
@@ -2844,7 +2844,7 @@ fs_visitor::emit_repclear_shader()
          write->saturate = key->clamp_fragment_color;
          write->base_mrf = base_mrf;
          write->target = i;
-         write->header_present = true;
+         write->header_size = 2;
          write->mlen = 3;
       }
    }

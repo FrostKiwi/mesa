@@ -243,7 +243,7 @@ fs_generator::fire_fb_write(fs_inst *inst,
                 0,
                 inst->eot,
                 last_render_target,
-                inst->header_present);
+                inst->header_size != 0);
 
    brw_mark_surface_used(&prog_data->base, surf_index);
 }
@@ -265,7 +265,7 @@ fs_generator::generate_fb_write(fs_inst *inst, struct brw_reg payload)
    /* Header is 2 regs, g0 and g1 are the contents. g0 will be implied
     * move, here's g1.
     */
-   if (inst->header_present) {
+   if (inst->header_size != 0) {
       brw_push_insn_state(p);
       brw_set_default_mask_control(p, BRW_MASK_DISABLE);
       brw_set_default_predicate_control(p, BRW_PREDICATE_NONE);
@@ -381,7 +381,7 @@ fs_generator::generate_blorp_fb_write(fs_inst *inst)
                 0,
                 true,
                 true,
-                inst->header_present);
+                inst->header_size != 0);
 }
 
 /* Computes the integer pixel x,y values from the origin.
@@ -676,7 +676,7 @@ fs_generator::generate_tex(fs_inst *inst, struct brw_reg dst, struct brw_reg src
       dst = vec16(dst);
    }
 
-   assert(brw->gen < 7 || !inst->header_present ||
+   assert(brw->gen < 7 || inst->header_size == 0 ||
           src.file == BRW_GENERAL_REGISTER_FILE);
 
    assert(sampler_index.type == BRW_REGISTER_TYPE_UD);
@@ -685,7 +685,7 @@ fs_generator::generate_tex(fs_inst *inst, struct brw_reg dst, struct brw_reg src
     * we need to set it up explicitly and load the offset bitfield.
     * Otherwise, we can use an implied move from g0 to the first message reg.
     */
-   if (inst->header_present) {
+   if (inst->header_size != 0) {
       if (brw->gen < 6 && !inst->offset) {
          /* Set up an implied move from g0 to the MRF. */
          src = retype(brw_vec8_grf(0, 0), BRW_REGISTER_TYPE_UW);
@@ -733,7 +733,7 @@ fs_generator::generate_tex(fs_inst *inst, struct brw_reg dst, struct brw_reg src
                  msg_type,
                  rlen,
                  inst->mlen,
-                 inst->header_present,
+                 inst->header_size != 0,
                  simd_mode,
                  return_format);
 
@@ -773,7 +773,7 @@ fs_generator::generate_tex(fs_inst *inst, struct brw_reg dst, struct brw_reg src
                               msg_type,
                               rlen,
                               inst->mlen /* mlen */,
-                              inst->header_present /* header */,
+                              inst->header_size != 0 /* header */,
                               simd_mode,
                               return_format);
 
@@ -1110,7 +1110,7 @@ fs_generator::generate_varying_pull_constant_load(fs_inst *inst,
                                                   struct brw_reg offset)
 {
    assert(brw->gen < 7); /* Should use the gen7 variant. */
-   assert(inst->header_present);
+   assert(inst->header_size != 0);
    assert(inst->mlen);
 
    assert(index.file == BRW_IMMEDIATE_VALUE &&
@@ -1163,7 +1163,7 @@ fs_generator::generate_varying_pull_constant_load(fs_inst *inst,
                            msg_type,
                            rlen,
                            inst->mlen,
-                           inst->header_present,
+                           inst->header_size != 0,
                            simd_mode,
                            return_format);
 
@@ -1180,7 +1180,7 @@ fs_generator::generate_varying_pull_constant_load_gen7(fs_inst *inst,
    /* Varying-offset pull constant loads are treated as a normal expression on
     * gen7, so the fact that it's a send message is hidden at the IR level.
     */
-   assert(!inst->header_present);
+   assert(!inst->header_size != 0);
    assert(!inst->mlen);
    assert(index.type == BRW_REGISTER_TYPE_UD);
 
