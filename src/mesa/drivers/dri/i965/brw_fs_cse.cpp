@@ -212,7 +212,8 @@ fs_visitor::opt_cse_local(bblock_t *block)
                   fs_reg *sources = ralloc_array(mem_ctx, fs_reg, written / dst_width);
                   for (int i = 0; i < written / dst_width; i++)
                      sources[i] = offset(tmp, i);
-                  copy = LOAD_PAYLOAD(orig_dst, sources, written / dst_width);
+                  copy = LOAD_PAYLOAD(orig_dst, sources, written / dst_width,
+                                      entry->generator->header_size);
                } else {
                   copy = MOV(orig_dst, tmp);
                   copy->force_writemask_all =
@@ -235,7 +236,8 @@ fs_visitor::opt_cse_local(bblock_t *block)
                   fs_reg *sources = ralloc_array(mem_ctx, fs_reg, written / dst_width);
                   for (int i = 0; i < written / dst_width; i++)
                      sources[i] = offset(tmp, i);
-                  copy = LOAD_PAYLOAD(dst, sources, written / dst_width);
+                  copy = LOAD_PAYLOAD(dst, sources, written / dst_width,
+                                      inst->header_size);
                } else {
                   copy = MOV(dst, tmp);
                   copy->force_writemask_all = inst->force_writemask_all;
