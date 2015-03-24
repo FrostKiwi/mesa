@@ -3602,9 +3602,6 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components,
                               color.type, color.width);
             inst = emit(MOV(dst[len], offset(color, i)));
             inst->saturate = key->clamp_fragment_color;
-         } else if (color.width == 16) {
-            /* We need two BAD_FILE slots for a 16-wide color */
-            len++;
          }
          len++;
       }
