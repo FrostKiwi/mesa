@@ -3593,7 +3593,7 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
    brw_wm_prog_key *key = (brw_wm_prog_key*) this->key;
 
    this->current_annotation = "FB write header";
-   int header_size = 2;
+   int header_size = 2, payload_header_size;
    int reg_size = exec_size / 8;
 
    /* We can potentially have a message length of up to 15, so we have to set
@@ -3622,11 +3622,13 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
       length += 2;
    }
 
+   payload_header_size = header_size;
    if (payload.aa_dest_stencil_reg) {
       sources[length] = fs_reg(GRF, alloc.allocate(1));
       emit(MOV(sources[length],
                fs_reg(brw_vec8_grf(payload.aa_dest_stencil_reg, 0))));
       length++;
+      payload_header_size++;
    }
 
    prog_data->uses_omask =
@@ -3641,6 +3643,7 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
                                BRW_REGISTER_TYPE_UW, 16);
       emit(FS_OPCODE_SET_OMASK, sources[length], this->sample_mask);
       length++;
+      payload_header_size++;
    }
 
    if (color0.file == BAD_FILE) {
@@ -3703,7 +3706,7 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
    if (brw->gen >= 7) {
       /* Send from the GRF */
       fs_reg payload = fs_reg(GRF, -1, BRW_REGISTER_TYPE_F, exec_size);
-      load = emit(LOAD_PAYLOAD(payload, sources, length, header_size));
+      load = emit(LOAD_PAYLOAD(payload, sources, length, payload_header_size));
       payload.reg = alloc.allocate(load->regs_written);
       load->dst = payload;
       write = emit(FS_OPCODE_FB_WRITE, reg_undef, payload);
@@ -3711,7 +3714,7 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
    } else {
       /* Send from the MRF */
       load = emit(LOAD_PAYLOAD(fs_reg(MRF, 1, BRW_REGISTER_TYPE_F, exec_size),
-                               sources, length, header_size));
+                               sources, length, payload_header_size));
       write = emit(FS_OPCODE_FB_WRITE);
       write->exec_size = exec_size;
       write->base_mrf = 1;
