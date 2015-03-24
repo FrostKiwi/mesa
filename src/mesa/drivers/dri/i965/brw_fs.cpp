@@ -527,9 +527,13 @@ fs_inst::is_copy_payload(const brw::simple_allocator &grf_alloc) const
    if (grf_alloc.sizes[reg.reg] != this->regs_written)
       return false;
 
-   for (int i = 1; i < this->sources; i++)
-      if (!this->src[i].equals(::offset(reg, i)))
+   for (int i = 0; i < this->sources; i++) {
+      reg.type = this->src[i].type;
+      reg.width = this->src[i].width;
+      if (!this->src[i].equals(reg))
          return false;
+      reg = ::offset(reg, 1);
+   }
 
    return true;
 }
