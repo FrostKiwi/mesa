@@ -71,9 +71,13 @@ is_copy_payload(const fs_visitor *v, const fs_inst *inst)
 
    fs_reg reg = inst->src[0];
 
-   for (int i = 0; i < inst->sources; i++)
-      if (!inst->src[i].equals(offset(reg, i)))
+   for (int i = 0; i < inst->sources; i++) {
+      reg.type = inst->src[i].type;
+      reg.width = inst->src[i].width;
+      if (!inst->src[i].equals(reg))
          return false;
+      reg = offset(reg, 1);
+   }
 
    return true;
 }
