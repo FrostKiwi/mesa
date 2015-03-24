@@ -367,7 +367,7 @@ fs_visitor::LOAD_PAYLOAD(const fs_reg &dst, fs_reg *src, int sources,
    assert(dst.width % 8 == 0);
 
    for (int i = 0; i < header_size; i++)
-      assert(src[i].file != GRF || src[i].width == 8);
+      assert(src[i].file != GRF || src[i].width * type_sz(src[i].type) == 32);
    inst->regs_written = header_size;
 
    for (int i = header_size; i < sources; ++i)
@@ -3203,7 +3203,10 @@ fs_visitor::lower_load_payload()
          dst.width = 8;
          for (uint8_t i = 0; i < inst->header_size; i++) {
             if (inst->src[i].file != BAD_FILE) {
-               fs_inst *mov = MOV(retype(dst, inst->src[i].type), inst->src[i]);
+               fs_reg mov_dst = retype(dst, BRW_REGISTER_TYPE_UD);
+               fs_reg mov_src = retype(inst->src[i], BRW_REGISTER_TYPE_UD);
+               mov_src.width = 8;
+               fs_inst *mov = MOV(mov_dst, mov_src);
                mov->force_writemask_all = true;
                inst->insert_before(block, mov);
             }
