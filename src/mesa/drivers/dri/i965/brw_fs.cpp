@@ -517,9 +517,13 @@ fs_inst::is_copy_payload() const
    if (reg.file != GRF || reg.reg_offset != 0 || reg.stride == 0)
       return false;
 
-   for (int i = 1; i < this->sources; i++)
-      if (!this->src[i].equals(::offset(reg, i)))
+   for (int i = 0; i < this->sources; i++) {
+      reg.type = this->src[i].type;
+      reg.width = this->src[i].width;
+      if (!this->src[i].equals(reg))
          return false;
+      reg = ::offset(reg, 1);
+   }
 
    return true;
 }
