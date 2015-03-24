@@ -140,12 +140,13 @@ struct backend_instruction {
    bool no_dd_check:1;
    bool saturate:1;
    bool shadow_compare:1;
-   bool header_present:1;
 
    /* Chooses which flag subregister (f0.0 or f0.1) is used for conditional
     * mod and predication.
     */
    unsigned flag_subreg:1;
+
+   uint8_t header_size;
 };
 
 #ifdef __cplusplus
