@@ -2002,7 +2002,7 @@ fs_visitor::emit_texture_gen7(ir_texture_opcode op, fs_reg dst,
       mlen = length * reg_width;
 
    fs_reg src_payload = fs_reg(GRF, alloc.allocate(mlen),
-                               BRW_REGISTER_TYPE_F);
+                               BRW_REGISTER_TYPE_F, dispatch_width);
    emit(LOAD_PAYLOAD(src_payload, sources, length, header_size));
 
    /* Generate the SEND */
@@ -2159,7 +2159,7 @@ fs_visitor::emit_mcs_fetch(fs_reg coordinate, int components, fs_reg sampler)
 {
    int reg_width = dispatch_width / 8;
    fs_reg payload = fs_reg(GRF, alloc.allocate(components * reg_width),
-                           BRW_REGISTER_TYPE_F);
+                           BRW_REGISTER_TYPE_F, dispatch_width);
    fs_reg dest = vgrf(glsl_type::uvec4_type);
    fs_reg *sources = ralloc_array(mem_ctx, fs_reg, components);
 
@@ -3295,7 +3295,7 @@ fs_visitor::emit_untyped_atomic(unsigned atomic_op, unsigned surf_index,
 
    int mlen = 1 + (length - 1) * reg_width;
    fs_reg src_payload = fs_reg(GRF, alloc.allocate(mlen),
-                               BRW_REGISTER_TYPE_UD);
+                               BRW_REGISTER_TYPE_UD, dispatch_width);
    emit(LOAD_PAYLOAD(src_payload, sources, length, 1));
 
    /* Emit the instruction. */
@@ -3343,7 +3343,7 @@ fs_visitor::emit_untyped_surface_read(unsigned surf_index, fs_reg dst,
 
    int mlen = 1 + reg_width;
    fs_reg src_payload = fs_reg(GRF, alloc.allocate(mlen),
-                               BRW_REGISTER_TYPE_UD);
+                               BRW_REGISTER_TYPE_UD, dispatch_width);
    fs_inst *inst = emit(LOAD_PAYLOAD(src_payload, sources, 2, 1));
 
    /* Emit the instruction. */
@@ -3838,16 +3838,15 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
    fs_inst *write;
    if (devinfo->gen >= 7) {
       /* Send from the GRF */
-      fs_reg payload = fs_reg(GRF, -1, BRW_REGISTER_TYPE_F);
+      fs_reg payload = fs_reg(GRF, -1, BRW_REGISTER_TYPE_F, exec_size);
       load = emit(LOAD_PAYLOAD(payload, sources, length, payload_header_size));
       payload.reg = alloc.allocate(load->regs_written);
-      payload.width = dispatch_width;
       load->dst = payload;
       write = emit(FS_OPCODE_FB_WRITE, reg_undef, payload);
       write->base_mrf = -1;
    } else {
       /* Send from the MRF */
-      load = emit(LOAD_PAYLOAD(fs_reg(MRF, 1, BRW_REGISTER_TYPE_F),
+      load = emit(LOAD_PAYLOAD(fs_reg(MRF, 1, BRW_REGISTER_TYPE_F, exec_size),
                                sources, length, payload_header_size));
       write = emit(FS_OPCODE_FB_WRITE);
       write->exec_size = exec_size;
@@ -4137,7 +4136,7 @@ fs_visitor::emit_urb_writes()
       if (flush) {
          fs_reg *payload_sources = ralloc_array(mem_ctx, fs_reg, length + 1);
          fs_reg payload = fs_reg(GRF, alloc.allocate(length + 1),
-                                 BRW_REGISTER_TYPE_F);
+                                 BRW_REGISTER_TYPE_F, dispatch_width);
 
          /* We need WE_all on the MOV for the message header (the URB handles)
           * so do a MOV to a dummy register and set force_writemask_all on the
