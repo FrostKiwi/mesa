@@ -358,28 +358,18 @@ fs_inst *
 fs_visitor::LOAD_PAYLOAD(const fs_reg &dst, fs_reg *src, int sources,
                          int header_size)
 {
+   assert(dst.width % 8 == 0);
+   fs_inst *inst = new(mem_ctx) fs_inst(SHADER_OPCODE_LOAD_PAYLOAD, dst.width,
+                                        dst, src, sources);
+   inst->header_size = header_size;
+
    for (int i = 0; i < header_size; i++)
       assert(src[i].file != GRF || src[i].width * type_sz(src[i].type) == 32);
+   inst->regs_written = header_size;
 
-   uint8_t exec_size = dst.width;
-   for (int i = 0; i < sources; ++i) {
-      assert(src[i].width % dst.width == 0);
-      if (src[i].width > exec_size)
-         exec_size = src[i].width;
-   }
-
-   fs_inst *inst = new(mem_ctx) fs_inst(SHADER_OPCODE_LOAD_PAYLOAD, exec_size,
-                                        dst, src, sources);
-   inst->regs_written = 0;
-   for (int i = 0; i < sources; ++i) {
-      /* The LOAD_PAYLOAD instruction only really makes sense if we are
-       * dealing with whole registers.  If this ever changes, we can deal
-       * with it later.
-       */
-      int size = inst->src[i].effective_width * type_sz(src[i].type);
-      assert(size % 32 == 0);
-      inst->regs_written += (size + 31) / 32;
-   }
+   for (int i = header_size; i < sources; ++i)
+      assert(src[i].file != GRF || src[i].width == dst.width);
+   inst->regs_written += (sources - header_size) * (dst.width / 8);
 
    return inst;
 }
