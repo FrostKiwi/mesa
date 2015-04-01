@@ -3229,10 +3229,12 @@ fs_visitor::lower_load_payload()
          }
 
          dst.width = inst->exec_size;
-         if (inst->dst.file == MRF && inst->dst.reg & BRW_MRF_COMPR4) {
+         if (inst->dst.file == MRF && (inst->dst.reg & BRW_MRF_COMPR4) &&
+             inst->exec_size > 8) {
             /* In this case, the payload portion of the LOAD_PAYLOAD isn't
              * a straightforward copy.  Instead, the result of the
-             * LOAD_PAYLOAD is treated as interlaced and unpacked as:
+             * LOAD_PAYLOAD is treated as interlaced and the first four
+             * non-header sources are unpacked as:
              *
              * m + 0: r0
              * m + 1: g0
@@ -3245,7 +3247,6 @@ fs_visitor::lower_load_payload()
              *
              * This is used for gen <= 5 fb writes.
              */
-            assert(inst->sources - inst->header_size == 4);
             assert(inst->exec_size == 16);
             if (brw->has_compr4) {
                dst.reg |= BRW_MRF_COMPR4;
@@ -3280,17 +3281,22 @@ fs_visitor::lower_load_payload()
                   dst.reg++;
                }
             }
-         } else {
-            for (uint8_t i = inst->header_size; i < inst->sources; i++) {
-               if (inst->src[i].file != BAD_FILE) {
-                  fs_inst *mov = MOV(retype(dst, inst->src[i].type),
-                                     inst->src[i]);
-                  mov->force_writemask_all = inst->force_writemask_all;
-                  mov->saturate = inst->saturate;
-                  inst->insert_before(block, mov);
-               }
-               dst = offset(dst, 1);
+
+            /* The COMPR4 code took care of the first 4 sources.  We'll let
+             * the regular path handle any remaining sources.
+             */
+            inst->header_size += 4;
+         }
+
+         for (uint8_t i = inst->header_size; i < inst->sources; i++) {
+            if (inst->src[i].file != BAD_FILE) {
+               fs_inst *mov = MOV(retype(dst, inst->src[i].type),
+                                  inst->src[i]);
+               mov->force_writemask_all = inst->force_writemask_all;
+               mov->saturate = inst->saturate;
+               inst->insert_before(block, mov);
             }
+            dst = offset(dst, 1);
          }
 
          inst->remove(block);
