@@ -3519,13 +3519,11 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
       length += 2;
    }
 
-   payload_header_size = header_size;
    if (payload.aa_dest_stencil_reg) {
       sources[length] = fs_reg(GRF, alloc.allocate(1));
       emit(MOV(sources[length],
                fs_reg(brw_vec8_grf(payload.aa_dest_stencil_reg, 0))));
       length++;
-      payload_header_size++;
    }
 
    prog_data->uses_omask =
@@ -3540,8 +3538,9 @@ fs_visitor::emit_single_fb_write(fs_reg color0, fs_reg color1,
                                BRW_REGISTER_TYPE_UW, 16);
       emit(FS_OPCODE_SET_OMASK, sources[length], this->sample_mask);
       length++;
-      payload_header_size++;
    }
+
+   payload_header_size = length;
 
    if (color0.file == BAD_FILE) {
       /* Even if there's no color buffers enabled, we still need to send
