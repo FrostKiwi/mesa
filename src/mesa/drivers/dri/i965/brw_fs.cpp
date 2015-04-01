@@ -517,6 +517,20 @@ fs_inst::is_send_from_grf() const
 }
 
 bool
+fs_inst::is_copy_payload() const
+{
+   fs_reg reg = this->src[0];
+   if (reg.file != GRF || reg.reg_offset != 0 || reg.stride == 0)
+      return false;
+
+   for (int i = 1; i < this->sources; i++)
+      if (!this->src[i].equals(::offset(reg, i)))
+         return false;
+
+   return true;
+}
+
+bool
 fs_inst::can_do_source_mods(struct brw_context *brw)
 {
    if (brw->gen == 6 && is_math())
