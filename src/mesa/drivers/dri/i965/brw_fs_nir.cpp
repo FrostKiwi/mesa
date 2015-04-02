@@ -734,6 +734,62 @@ fs_visitor::optimize_frontfacing_ternary(nir_alu_instr *instr,
    return true;
 }
 
+static nir_alu_type
+get_alu_instr_output_type(nir_alu_instr *instr)
+{
+   unsigned first_passthrough_src = 0;
+   switch (instr->op) {
+   case nir_op_bcsel:
+      first_passthrough_src = 1;
+      /* Fall through */
+   case nir_op_imov:
+   case nir_op_fmov:
+   case nir_op_vec2:
+   case nir_op_vec3:
+   case nir_op_vec4: {
+      /* These instructions are transparent to the source type and just
+       * pass bits through blindly.  Instead of using the types from NIR,
+       * we figure out what type it is by looking at the sources.
+       */
+      nir_alu_type output_type = nir_type_invalid;
+      for (unsigned i = first_passthrough_src;
+           i < nir_op_infos[instr->op].num_inputs; i++) {
+         /* First off, if we have source modifiers then we must use the
+          * same types as NIR gave us.
+          */
+         if (instr->src[i].abs || instr->src[i].negate)
+            return nir_op_infos[instr->op].output_type;
+
+         nir_instr *src_instr = nir_src_get_parent_instr(&instr->src[i].src);
+
+         /* If we can't figure out what kind of source it is, don't worry
+          * about it for now and just keep going
+          */
+         if (src_instr == NULL || src_instr->type != nir_instr_type_alu)
+            continue;
+
+         nir_alu_type src_type =
+            get_alu_instr_output_type(nir_instr_as_alu(src_instr));
+         assert(src_type != nir_type_invalid);
+
+         if (output_type == nir_type_invalid)
+            output_type = src_type;
+         else if (output_type != src_type)
+            /* We have differing types.  Fall back to the default */
+            return nir_op_infos[instr->op].output_type;
+      }
+
+      if (output_type != nir_type_invalid)
+         return output_type;
+      else
+         return nir_op_infos[instr->op].output_type;
+   }
+
+   default:
+      return nir_op_infos[instr->op].output_type;
+   }
+}
+
 void
 fs_visitor::nir_emit_alu(nir_alu_instr *instr)
 {
@@ -749,6 +805,30 @@ fs_visitor::nir_emit_alu(nir_alu_instr *instr)
       op[i].type = brw_type_for_nir_type(nir_op_infos[instr->op].input_types[i]);
       op[i].abs = instr->src[i].abs;
       op[i].negate = instr->src[i].negate;
+   }
+
+   /* For moves and selects, the type of the data doesn't really matter for
+    * us.  However, in order for the backend copy propagation and similar
+    * passes to work, we need to have sane types.
+    */
+   switch (instr->op) {
+   case nir_op_imov:
+   case nir_op_fmov:
+   case nir_op_vec2:
+   case nir_op_vec3:
+   case nir_op_vec4:
+   case nir_op_bcsel:
+      result.type = brw_type_for_nir_type(get_alu_instr_output_type(instr));
+
+      if (instr->op != nir_op_bcsel)
+         op[0].type = result.type;
+
+      for (unsigned i = 1; i < nir_op_infos[instr->op].num_inputs; i++)
+         op[i].type = result.type;
+      break;
+
+   default:
+      break;
    }
 
    /* We get a bunch of mov's out of the from_ssa pass and they may still
