@@ -561,7 +561,7 @@ brw_initialize_context_constants(struct brw_context *brw)
    };
 
    bool use_nir_default[MESA_SHADER_STAGES];
-   use_nir_default[MESA_SHADER_VERTEX] = false;
+   use_nir_default[MESA_SHADER_VERTEX] = brw->gen >= 8;
    use_nir_default[MESA_SHADER_GEOMETRY] = false;
    use_nir_default[MESA_SHADER_FRAGMENT] = true;
    use_nir_default[MESA_SHADER_COMPUTE] = false;
