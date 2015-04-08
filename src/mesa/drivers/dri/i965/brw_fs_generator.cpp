@@ -1079,8 +1079,73 @@ fs_generator::generate_scratch_read(fs_inst *inst, struct brw_reg dst)
 {
    assert(inst->mlen != 0);
 
-   brw_oword_block_read_scratch(p, dst, brw_message_reg(inst->base_mrf),
-                                inst->exec_size / 8, inst->offset);
+   uint32_t msg_control;
+   int rlen;
+
+   unsigned offset = inst->offset;
+   if (brw->gen >= 6)
+      offset /= 16;
+
+   struct brw_reg mrf;
+   if (brw->gen >= 7) {
+      /* On gen 7 and above, we no longer have message registers and we can
+       * send from any register we want.  By using the destination register
+       * for the message, we guarantee that the implied message write won't
+       * accidentally overwrite anything.  This has been a problem because
+       * the MRF registers and source for the final FB write are both fixed
+       * and may overlap.
+       */
+      mrf = retype(dst, BRW_REGISTER_TYPE_UD);
+   } else {
+      mrf = retype(brw_message_reg(inst->base_mrf), BRW_REGISTER_TYPE_UD);
+   }
+   dst = retype(dst, BRW_REGISTER_TYPE_UW);
+
+   if (inst->exec_size == 8) {
+      msg_control = BRW_DATAPORT_OWORD_BLOCK_2_OWORDS;
+      rlen = 1;
+   } else {
+      msg_control = BRW_DATAPORT_OWORD_BLOCK_4_OWORDS;
+      rlen = 2;
+   }
+
+   {
+      brw_push_insn_state(p);
+      brw_set_default_compression_control(p, BRW_COMPRESSION_NONE);
+      brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+
+      brw_MOV(p, mrf, retype(brw_vec8_grf(0, 0), BRW_REGISTER_TYPE_UD));
+
+      /* set message header global offset field (reg 0, element 2) */
+      brw_MOV(p, get_element_ud(mrf, 2), brw_imm_ud(offset));
+
+      brw_pop_insn_state(p);
+   }
+
+   {
+      brw_inst *insn = brw_next_insn(p, BRW_OPCODE_SEND);
+
+      assert(brw_inst_pred_control(brw, insn) == 0);
+      brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
+
+      brw_set_dest(p, insn, dst);	/* UW? */
+      if (brw->gen >= 6) {
+	 brw_set_src0(p, insn, mrf);
+      } else {
+	 brw_set_src0(p, insn, brw_null_reg());
+         brw_inst_set_base_mrf(brw, insn, mrf.nr);
+      }
+
+      brw_set_dp_read_message(p,
+			      insn,
+			      255, /* binding table index (255=stateless) */
+			      msg_control,
+			      BRW_DATAPORT_READ_MESSAGE_OWORD_BLOCK_READ, /* msg_type */
+			      BRW_DATAPORT_READ_TARGET_RENDER_CACHE,
+			      1, /* msg_length */
+                              true, /* header_present */
+			      rlen);
+   }
 }
 
 void
