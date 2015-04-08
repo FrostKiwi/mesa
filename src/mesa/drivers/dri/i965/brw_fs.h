@@ -211,6 +211,10 @@ public:
    void spill_reg(int spill_reg);
    void split_virtual_grfs();
    bool compact_virtual_grfs();
+   void emit_scratch_read(bblock_t *block, fs_inst *inst, fs_reg dst,
+                          uint32_t spill_offset);
+   void emit_scratch_write(bblock_t *block, fs_inst *inst, fs_reg src,
+                           uint32_t spill_offset);
    void move_uniform_array_access_to_pull_constants();
    void assign_constant_locations();
    void demote_pull_constants();
