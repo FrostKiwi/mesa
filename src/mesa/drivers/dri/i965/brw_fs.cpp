@@ -2254,15 +2254,33 @@ fs_visitor::split_virtual_grfs()
 
    foreach_block_and_inst(block, fs_inst, inst, cfg) {
       if (inst->dst.file == GRF) {
-         int reg = vgrf_to_reg[inst->dst.reg] + inst->dst.reg_offset;
-         for (int j = 1; j < inst->regs_written; j++)
-            split_points[reg + j] = false;
+         if (inst->dst.reladdr) {
+            /* reladdr has been used.  This register isn't splittable. */
+            int reg = vgrf_to_reg[inst->dst.reg];
+            for (unsigned j = 1; j < this->alloc.sizes[inst->dst.reg]; j++)
+               split_points[reg + j] = false;
+         } else {
+            int reg = vgrf_to_reg[inst->dst.reg] + inst->dst.reg_offset;
+            assert(inst->dst.reg_offset + inst->regs_written <=
+                   (int)this->alloc.sizes[inst->dst.reg]);
+            for (int j = 1; j < inst->regs_written; j++)
+               split_points[reg + j] = false;
+         }
       }
       for (int i = 0; i < inst->sources; i++) {
          if (inst->src[i].file == GRF) {
-            int reg = vgrf_to_reg[inst->src[i].reg] + inst->src[i].reg_offset;
-            for (int j = 1; j < inst->regs_read(i); j++)
-               split_points[reg + j] = false;
+            if (inst->src[i].reladdr) {
+               /* reladdr has been used.  This register isn't splittable. */
+               int reg = vgrf_to_reg[inst->src[i].reg];
+               for (unsigned j = 1; j < this->alloc.sizes[inst->src[i].reg]; j++)
+                  split_points[reg + j] = false;
+            } else {
+               int reg = vgrf_to_reg[inst->src[i].reg] + inst->src[i].reg_offset;
+               assert(inst->src[i].reg_offset + inst->regs_read(i) <=
+                      (int)this->alloc.sizes[inst->src[i].reg]);
+               for (int j = 1; j < inst->regs_read(i); j++)
+                  split_points[reg + j] = false;
+            }
          }
       }
    }
@@ -2298,7 +2316,6 @@ fs_visitor::split_virtual_grfs()
       }
 
       /* The last one gets the original register number */
-      assert(offset <= MAX_VGRF_SIZE);
       alloc.sizes[i] = offset;
       for (int k = reg - offset; k < reg; k++)
          new_virtual_grf[k] = i;
