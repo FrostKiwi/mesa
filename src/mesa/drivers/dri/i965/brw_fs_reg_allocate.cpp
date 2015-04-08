@@ -799,16 +799,8 @@ fs_visitor::spill_reg(int spill_reg)
       for (unsigned int i = 0; i < inst->sources; i++) {
 	 if (inst->src[i].file == GRF &&
 	     inst->src[i].reg == spill_reg) {
-            int regs_read = inst->regs_read(i);
-            int subset_spill_offset = (spill_offset +
-                                       REG_SIZE * inst->src[i].reg_offset);
-            fs_reg unspill_dst(GRF, alloc.allocate(regs_read));
-
-            inst->src[i].reg = unspill_dst.reg;
-            inst->src[i].reg_offset = 0;
-
-            emit_unspill(block, inst, unspill_dst, subset_spill_offset,
-                         regs_read);
+            emit_unspill(block, inst, &inst->src[i], spill_offset,
+                         inst->regs_read(i));
 	 }
       }
 
