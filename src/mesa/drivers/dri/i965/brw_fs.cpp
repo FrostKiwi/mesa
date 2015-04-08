@@ -2152,14 +2152,14 @@ fs_visitor::emit_scratch_read(bblock_t *block, fs_inst *inst, fs_reg dst,
    assert(type_sz(dst.type) == sizeof(float));
 
    /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
-   bool gen7_read = brw->gen >= 7 && scratch_offset < (1 << 12) * REG_SIZE;
+   bool gen7_read = brw->gen >= 7 && scratch_offset < (1 << 12);
 
    fs_inst *read_inst =
       new(mem_ctx) fs_inst(gen7_read ?
                            SHADER_OPCODE_GEN7_SCRATCH_READ :
                            SHADER_OPCODE_GEN4_SCRATCH_READ,
                            dst);
-   read_inst->offset = scratch_offset;
+   read_inst->offset = scratch_offset * REG_SIZE;
    read_inst->ir = inst->ir;
    read_inst->annotation = inst->annotation;
    read_inst->regs_written = dst.width / 8;
@@ -2180,7 +2180,7 @@ fs_visitor::emit_scratch_write(bblock_t *block, fs_inst *inst, fs_reg src,
    fs_inst *write_inst =
       new(mem_ctx) fs_inst(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
                            src.width, reg_null_f, src);
-   write_inst->offset = scratch_offset;
+   write_inst->offset = scratch_offset * REG_SIZE;
    write_inst->ir = inst->ir;
    write_inst->annotation = inst->annotation;
    write_inst->mlen = 1 + src.width / 8; /* header, value */
@@ -3894,7 +3894,7 @@ fs_visitor::allocate_registers()
       schedule_instructions(SCHEDULE_POST);
 
    if (last_scratch > 0)
-      prog_data->total_scratch = brw_get_scratch_size(last_scratch);
+      prog_data->total_scratch = brw_get_scratch_size(last_scratch * REG_SIZE);
 }
 
 bool

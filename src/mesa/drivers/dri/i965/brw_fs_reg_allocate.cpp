@@ -699,7 +699,7 @@ fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
    for (int i = 0; i < count / reg_size; i++) {
       emit_scratch_read(block, inst, dst, spill_offset);
       dst.reg_offset += reg_size;
-      spill_offset += reg_size * REG_SIZE;
+      spill_offset += reg_size;
    }
 }
 
@@ -720,7 +720,7 @@ fs_visitor::emit_spill(bblock_t *block, fs_inst *inst, fs_reg src,
       emit_scratch_write(block, inst, src, spill_offset);
 
       src.reg_offset += reg_size;
-      spill_offset += reg_size * REG_SIZE;
+      spill_offset += reg_size;
    }
 }
 
@@ -805,7 +805,6 @@ fs_visitor::spill_reg(int spill_reg)
 {
    int size = alloc.sizes[spill_reg];
    unsigned int spill_offset = last_scratch;
-   assert(ALIGN(spill_offset, 16) == spill_offset); /* oword read/write req. */
    int spill_base_mrf = dispatch_width > 8 ? 13 : 14;
 
    /* Spills may use MRFs 13-15 in the SIMD16 case.  Our texturing is done
@@ -829,7 +828,7 @@ fs_visitor::spill_reg(int spill_reg)
       spilled_any_registers = true;
    }
 
-   last_scratch += size * REG_SIZE;
+   last_scratch += size;
 
    /* Generate spill/unspill instructions for the objects being
     * spilled.  Right now, we spill or unspill the whole thing to a
@@ -841,8 +840,7 @@ fs_visitor::spill_reg(int spill_reg)
 	 if (inst->src[i].file == GRF &&
 	     inst->src[i].reg == spill_reg) {
             int regs_read = inst->regs_read(i);
-            int subset_spill_offset = (spill_offset +
-                                       REG_SIZE * inst->src[i].reg_offset);
+            int subset_spill_offset = (spill_offset + inst->src[i].reg_offset);
             fs_reg unspill_dst(GRF, alloc.allocate(regs_read));
 
             inst->src[i].reg = unspill_dst.reg;
@@ -855,8 +853,7 @@ fs_visitor::spill_reg(int spill_reg)
 
       if (inst->dst.file == GRF &&
 	  inst->dst.reg == spill_reg) {
-         int subset_spill_offset = (spill_offset +
-                                    REG_SIZE * inst->dst.reg_offset);
+         int subset_spill_offset = (spill_offset + inst->dst.reg_offset);
          fs_reg spill_src(GRF, alloc.allocate(inst->regs_written));
 
          inst->dst.reg = spill_src.reg;

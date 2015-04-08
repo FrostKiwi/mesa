@@ -447,7 +447,7 @@ public:
    /** Total number of direct uniforms we can get from NIR */
    unsigned num_direct_uniforms;
 
-   /** Byte-offset for the next available spot in the scratch space buffer. */
+   /** 8DWord-offset for the next available spot in the scratch space buffer. */
    unsigned last_scratch;
 
    /**
