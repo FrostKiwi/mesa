@@ -1186,6 +1186,100 @@ fs_generator::generate_scratch_read_gen7(fs_inst *inst, struct brw_reg dst)
 }
 
 void
+fs_generator::generate_dword_scattered_read(fs_inst *inst, struct brw_reg dst,
+                                            struct brw_reg payload)
+{
+   assert(inst->mlen != 0);
+
+   uint32_t msg_control;
+   int rlen;
+
+   if (inst->exec_size == 8) {
+      msg_control = BRW_DATAPORT_DWORD_SCATTERED_BLOCK_8DWORDS;
+      rlen = 1;
+   } else {
+      msg_control = BRW_DATAPORT_DWORD_SCATTERED_BLOCK_16DWORDS;
+      rlen = 2;
+   }
+
+   unsigned msg_type;
+   if (devinfo->gen >= 7) {
+      msg_type = GEN7_DATAPORT_DC_DWORD_SCATTERED_READ;
+   } else if (devinfo->gen > 4) {
+      msg_type = G45_DATAPORT_READ_MESSAGE_DWORD_SCATTERED_READ;
+   } else {
+      msg_type = BRW_DATAPORT_READ_MESSAGE_DWORD_SCATTERED_READ;
+   }
+
+   brw_inst *insn = brw_next_insn(p, BRW_OPCODE_SEND);
+
+   assert(brw_inst_pred_control(devinfo, insn) == 0);
+   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
+
+   brw_set_dest(p, insn, retype(dst, BRW_REGISTER_TYPE_UD)); /* UW? */
+   if (devinfo->gen >= 6) {
+      brw_set_src0(p, insn, retype(payload, BRW_REGISTER_TYPE_UD));
+   } else {
+      brw_set_src0(p, insn, brw_null_reg());
+      brw_inst_set_base_mrf(devinfo, insn, inst->base_mrf);
+   }
+
+   brw_set_dp_read_message(p,
+                           insn,
+                           255, /* binding table index (255=stateless) */
+                           msg_control,
+                           msg_type, /* msg_type */
+                           BRW_DATAPORT_READ_TARGET_RENDER_CACHE,
+                           inst->mlen, /* msg_length */
+                           true, /* header_present */
+                           rlen);
+}
+
+void
+fs_generator::generate_dword_scattered_write(fs_inst *inst, struct brw_reg dst,
+                                             struct brw_reg payload)
+{
+   assert(inst->mlen != 0);
+
+   uint32_t msg_control;
+   if (inst->exec_size == 8) {
+      msg_control = BRW_DATAPORT_DWORD_SCATTERED_BLOCK_8DWORDS;
+   } else {
+      msg_control = BRW_DATAPORT_DWORD_SCATTERED_BLOCK_16DWORDS;
+   }
+
+   unsigned msg_type;
+   if (devinfo->gen >= 6) {
+      msg_type = GEN6_DATAPORT_WRITE_MESSAGE_DWORD_SCATTERED_WRITE;
+   } else {
+      msg_type = BRW_DATAPORT_WRITE_MESSAGE_DWORD_SCATTERED_WRITE;
+   }
+
+   brw_inst *insn = brw_next_insn(p, BRW_OPCODE_SEND);
+
+   assert(brw_inst_pred_control(devinfo, insn) == 0);
+   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
+
+   brw_set_dest(p, insn, retype(dst, BRW_REGISTER_TYPE_UD)); /* UW? */
+   if (devinfo->gen >= 6) {
+      brw_set_src0(p, insn, retype(payload, BRW_REGISTER_TYPE_UD));
+   } else {
+      brw_set_src0(p, insn, brw_null_reg());
+      brw_inst_set_base_mrf(devinfo, insn, inst->base_mrf);
+   }
+
+   brw_set_dp_read_message(p,
+                           insn,
+                           255, /* binding table index (255=stateless) */
+                           msg_control,
+                           msg_type, /* msg_type */
+                           BRW_DATAPORT_READ_TARGET_RENDER_CACHE,
+                           inst->mlen, /* msg_length */
+                           true, /* header_present */
+                           0 /* rlen */);
+}
+
+void
 fs_generator::generate_uniform_pull_constant_load(fs_inst *inst,
                                                   struct brw_reg dst,
                                                   struct brw_reg index,
@@ -2166,6 +2260,14 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
       case SHADER_OPCODE_URB_WRITE_SIMD8:
 	 generate_urb_write(inst, src[0]);
 	 break;
+
+      case FS_OPCODE_DWORD_SCATTERED_READ:
+         generate_dword_scattered_read(inst, dst, src[0]);
+         break;
+
+      case FS_OPCODE_DWORD_SCATTERED_WRITE:
+         generate_dword_scattered_write(inst, dst, src[0]);
+         break;
 
       case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD:
 	 generate_uniform_pull_constant_load(inst, dst, src[0], src[1]);

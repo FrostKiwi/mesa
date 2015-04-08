@@ -951,6 +951,10 @@ fs_inst::regs_read(int arg) const
       return mlen;
    } else if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_READ && arg == 0) {
       return mlen;
+   } else if (opcode == FS_OPCODE_DWORD_SCATTERED_READ && arg == 0) {
+      return mlen;
+   } else if (opcode == FS_OPCODE_DWORD_SCATTERED_WRITE && arg == 0) {
+      return mlen;
    } else if (opcode == FS_OPCODE_INTERPOLATE_AT_PER_SLOT_OFFSET && arg == 0) {
       return mlen;
    } else if (opcode == FS_OPCODE_LINTERP && arg == 0) {
@@ -1044,6 +1048,8 @@ fs_visitor::implied_mrf_writes(fs_inst *inst)
    case SHADER_OPCODE_UNTYPED_ATOMIC:
    case SHADER_OPCODE_UNTYPED_SURFACE_READ:
    case SHADER_OPCODE_URB_WRITE_SIMD8:
+   case FS_OPCODE_DWORD_SCATTERED_READ:
+   case FS_OPCODE_DWORD_SCATTERED_WRITE:
    case FS_OPCODE_INTERPOLATE_AT_CENTROID:
    case FS_OPCODE_INTERPOLATE_AT_SAMPLE:
    case FS_OPCODE_INTERPOLATE_AT_SHARED_OFFSET:
