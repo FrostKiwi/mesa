@@ -109,8 +109,6 @@ brw_compiler_create(void *mem_ctx, const struct brw_device_info *devinfo)
       compiler->glsl_compiler_options[i].EmitNoIndirectInput = true;
       compiler->glsl_compiler_options[i].EmitNoIndirectOutput =
 	 (i == MESA_SHADER_FRAGMENT);
-      compiler->glsl_compiler_options[i].EmitNoIndirectTemp =
-	 (i == MESA_SHADER_FRAGMENT);
       compiler->glsl_compiler_options[i].EmitNoIndirectUniform = false;
       compiler->glsl_compiler_options[i].LowerClipDistance = true;
 
@@ -128,7 +126,6 @@ brw_compiler_create(void *mem_ctx, const struct brw_device_info *devinfo)
           * configure these accordingly.
           */
          compiler->glsl_compiler_options[MESA_SHADER_VERTEX].EmitNoIndirectOutput = true;
-         compiler->glsl_compiler_options[MESA_SHADER_VERTEX].EmitNoIndirectTemp = true;
       }
       compiler->glsl_compiler_options[MESA_SHADER_VERTEX].OptimizeForAOS = false;
 
