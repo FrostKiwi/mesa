@@ -758,7 +758,7 @@ brw_set_sampler_message(struct brw_codegen *p,
    }
 }
 
-static void
+void
 gen7_set_dp_scratch_message(struct brw_codegen *p,
                             brw_inst *inst,
                             bool write,

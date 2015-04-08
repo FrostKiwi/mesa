@@ -228,6 +228,17 @@ void brw_set_dp_write_message(struct brw_codegen *p,
 			      unsigned end_of_thread,
 			      unsigned send_commit_msg);
 
+void gen7_set_dp_scratch_message(struct brw_codegen *p,
+                                 brw_inst *inst,
+                                 bool write,
+                                 bool dword,
+                                 bool invalidate_after_read,
+                                 unsigned num_regs,
+                                 unsigned addr_offset,
+                                 unsigned mlen,
+                                 unsigned rlen,
+                                 bool header_present);
+
 void brw_urb_WRITE(struct brw_codegen *p,
 		   struct brw_reg dest,
 		   unsigned msg_reg_nr,
