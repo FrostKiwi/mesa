@@ -1341,9 +1341,13 @@ fs_visitor::emit_discard_jump()
 }
 
 void
-fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
+fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg *dst,
                          uint32_t scratch_offset, int count)
 {
+   fs_reg spill_reg(GRF, alloc.allocate(count));
+
+   scratch_offset += dst->reg_offset * REG_SIZE;
+
    int reg_size = 1;
    if (dispatch_width == 16 && count % 2 == 0)
       reg_size = 2;
@@ -1359,7 +1363,7 @@ fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
       fs_inst *unspill_inst = ibld.emit(gen7_read ?
                                         SHADER_OPCODE_GEN7_SCRATCH_READ :
                                         SHADER_OPCODE_GEN4_SCRATCH_READ,
-                                        dst);
+                                        spill_reg);
       unspill_inst->offset = scratch_offset;
       unspill_inst->regs_written = reg_size;
 
@@ -1368,9 +1372,12 @@ fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
          unspill_inst->mlen = 1; /* header contains offset */
       }
 
-      dst.reg_offset += reg_size;
+      spill_reg.reg_offset += reg_size;
       scratch_offset += reg_size * REG_SIZE;
    }
+
+   dst->reg = spill_reg.reg;
+   dst->reg_offset = 0;
 }
 
 /* Modify the given instruction so that its destination is, instead,
@@ -1380,9 +1387,6 @@ void
 fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
                        uint32_t scratch_offset)
 {
-   scratch_offset += inst->dst.reg_offset * REG_SIZE;
-   fs_reg spill_reg(GRF, alloc.allocate(inst->regs_written), inst->dst.type);
-
    /* If we're immediately spilling the register, we should not use
     * destination dependency hints.  Doing so will cause the GPU do
     * try to read and write the register at the same time and may
@@ -1395,9 +1399,21 @@ fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
     * inst->regs_written(), then we need to unspill the destination
     * since we write back out all of the regs_written().
     */
-   if (inst->is_partial_write())
-      emit_unspill(block, inst, spill_reg, scratch_offset,
+   fs_reg spill_reg;
+   if (inst->is_partial_write()) {
+      /* We don't need to create a register because emit_unspill will do
+       * that for us.  However, emit_unspill needs information from inst->dst,
+       * so we hand it a copy.
+       */
+      spill_reg = inst->dst;
+
+      emit_unspill(block, inst, &spill_reg, scratch_offset,
                    inst->regs_written);
+   } else {
+      spill_reg = fs_reg(GRF, alloc.allocate(inst->regs_written));
+   }
+
+   scratch_offset += inst->dst.reg_offset * REG_SIZE;
 
    int reg_size = 1;
    int spill_base_mrf = 14;
