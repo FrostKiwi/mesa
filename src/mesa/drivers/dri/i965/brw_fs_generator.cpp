@@ -1151,7 +1151,37 @@ fs_generator::generate_scratch_read(fs_inst *inst, struct brw_reg dst)
 void
 fs_generator::generate_scratch_read_gen7(fs_inst *inst, struct brw_reg dst)
 {
-   gen7_block_read_scratch(p, dst, inst->exec_size / 8, inst->offset);
+   assert(brw->gen >= 7);
+
+   brw_inst *insn = brw_next_insn(p, BRW_OPCODE_SEND);
+   assert(brw_inst_pred_control(brw, insn) == BRW_PREDICATE_NONE);
+
+   brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
+   brw_set_dest(p, insn, retype(dst, BRW_REGISTER_TYPE_UW));
+
+   /* The HW requires that the header is present; this is to get the g0.5
+    * scratch offset.
+    */
+   brw_set_src0(p, insn, brw_vec8_grf(0, 0));
+
+   /* According to the docs, offset is "A 12-bit HWord offset into the memory
+    * Immediate Memory buffer as specified by binding table 0xFF."  An HWORD
+    * is 32 bytes, which happens to be the size of a register.
+    */
+   unsigned offset = inst->offset / REG_SIZE;
+   assert(offset < (1 << 12));
+
+   unsigned num_regs = inst->exec_size / 8;
+
+   gen7_set_dp_scratch_message(p, insn,
+                               false, /* scratch read */
+                               false, /* OWords */
+                               false, /* invalidate after read */
+                               num_regs,
+                               offset,
+                               1,        /* mlen: just g0 */
+                               num_regs, /* rlen */
+                               true);    /* header present */
 }
 
 void
