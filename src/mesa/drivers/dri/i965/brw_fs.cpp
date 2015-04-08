@@ -4089,6 +4089,7 @@ fs_visitor::optimize()
 
    split_virtual_grfs();
 
+   move_grf_array_access_to_scratch();
    move_uniform_array_access_to_pull_constants();
    assign_constant_locations();
    demote_pull_constants();

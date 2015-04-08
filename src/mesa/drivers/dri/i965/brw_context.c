@@ -575,8 +575,7 @@ brw_initialize_context_constants(struct brw_context *brw)
       ctx->Const.ShaderCompilerOptions[i].EmitNoIndirectInput = true;
       ctx->Const.ShaderCompilerOptions[i].EmitNoIndirectOutput =
 	 (i == MESA_SHADER_FRAGMENT);
-      ctx->Const.ShaderCompilerOptions[i].EmitNoIndirectTemp =
-	 (i == MESA_SHADER_FRAGMENT);
+      ctx->Const.ShaderCompilerOptions[i].EmitNoIndirectTemp = false;
       ctx->Const.ShaderCompilerOptions[i].EmitNoIndirectUniform = false;
       ctx->Const.ShaderCompilerOptions[i].LowerClipDistance = true;
 
@@ -592,7 +591,6 @@ brw_initialize_context_constants(struct brw_context *brw)
        * configure these accordingly.
        */
       ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].EmitNoIndirectOutput = true;
-      ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].EmitNoIndirectTemp = true;
       ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].OptimizeForAOS = false;
    }
 
