@@ -211,6 +211,9 @@ public:
    void spill_reg(int spill_reg);
    void split_virtual_grfs();
    bool compact_virtual_grfs();
+   void emit_resolve_reladdr(int scratch_loc[], bblock_t *block,
+                             fs_inst *inst, fs_reg *src, int count);
+   void move_grf_array_access_to_scratch();
    void move_uniform_array_access_to_pull_constants();
    void assign_constant_locations();
    void demote_pull_constants();

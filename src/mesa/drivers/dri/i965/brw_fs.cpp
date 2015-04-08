@@ -2408,6 +2408,115 @@ fs_visitor::compact_virtual_grfs()
    return progress;
 }
 
+
+/**
+ * Checks if \p src and/or \p src.reladdr require a scratch read, and if so,
+ * adds the scratch read(s) before \p inst. The function also checks for
+ * recursive reladdr scratch accesses, issuing the corresponding scratch
+ * loads and rewriting reladdr references accordingly.
+ *
+ * \return \p src if it did not require a scratch load, otherwise, the
+ * register holding the result of the scratch load that the caller should
+ * use to rewrite src.
+ */
+void
+fs_visitor::emit_resolve_reladdr(int scratch_loc[], bblock_t *block,
+                                 fs_inst *inst, fs_reg *src, int count)
+{
+   /* Resolve recursive reladdr scratch access by calling ourselves
+    * with src.reladdr
+    */
+   if (src->reladdr) {
+      assert(src->reladdr->width % 8 == 0);
+      emit_resolve_reladdr(scratch_loc, block, inst, src->reladdr,
+                           src->reladdr->width / 8);
+   }
+
+   /* Now handle scratch access on src */
+   if (src->file == GRF && scratch_loc[src->reg] != -1) {
+      assert(src->width % 8 == 0 && src->stride == 1);
+      emit_unspill(block, inst, src, scratch_loc[src->reg], count);
+   }
+}
+
+/**
+ * We can't generally support array access in GRF space, because a
+ * single instruction's destination can only span 2 contiguous
+ * registers.  So, we send all GRF arrays that get variable index
+ * access to scratch space.
+ */
+void
+fs_visitor::move_grf_array_access_to_scratch()
+{
+   int scratch_loc[this->alloc.count];
+   memset(scratch_loc, -1, sizeof(scratch_loc));
+
+   /* First, calculate the set of virtual GRFs that need to be punted
+    * to scratch due to having any array access on them, and where in
+    * scratch.
+    */
+   foreach_block_and_inst(block, fs_inst, inst, cfg) {
+      if (inst->dst.file == GRF && inst->dst.reladdr) {
+         for (fs_reg *iter = &inst->dst;
+              iter->reladdr;
+              iter = iter->reladdr) {
+            if (iter->file == GRF && scratch_loc[iter->reg] == -1) {
+               scratch_loc[iter->reg] = last_scratch;
+               last_scratch += this->alloc.sizes[iter->reg] * REG_SIZE;
+            }
+         }
+      }
+
+      for (int i = 0 ; i < 3; i++) {
+         for (fs_reg *iter = &inst->src[i];
+              iter->reladdr;
+              iter = iter->reladdr) {
+            if (iter->file == GRF && scratch_loc[iter->reg] == -1) {
+               scratch_loc[iter->reg] = last_scratch;
+               last_scratch += this->alloc.sizes[iter->reg] * REG_SIZE;
+            }
+         }
+      }
+   }
+
+   /* Now, for anything that will be accessed through scratch, rewrite
+    * it to load/store.  Note that this is a _safe list walk, because
+    * we may generate a new scratch_write instruction after the one
+    * we're processing.
+    */
+   foreach_block_and_inst_safe(block, fs_inst, inst, cfg) {
+      /* Set up the annotation tracking for new generated instructions. */
+      base_ir = inst->ir;
+      current_annotation = inst->annotation;
+
+      /* First handle scratch access on the dst. Notice we have to handle
+       * the case where the dst's reladdr also points to scratch space.
+       */
+      if (inst->dst.reladdr) {
+         assert(inst->dst.reladdr->width % 8 == 0);
+         emit_resolve_reladdr(scratch_loc, block, inst, inst->dst.reladdr,
+                              inst->dst.reladdr->width / 8);
+      }
+
+      /* Now that we have handled any (possibly recursive) reladdr scratch
+       * accesses for dst we can safely do the scratch write for dst itself
+       */
+      if (inst->dst.file == GRF && scratch_loc[inst->dst.reg] != -1)
+         emit_spill(block, inst, scratch_loc[inst->dst.reg]);
+
+      /* Now handle scratch access on any src. In this case, since inst->src[i]
+       * already is a src_reg, we can just call emit_resolve_reladdr with
+       * inst->src[i] and it will take care of handling scratch loads for
+       * both src and src.reladdr (recursively).
+       */
+      for (int i = 0 ; i < 3; i++) {
+         emit_resolve_reladdr(scratch_loc, block, inst, &inst->src[i],
+                              inst->regs_read(i));
+      }
+   }
+}
+
+
 /*
  * Implements array access of uniforms by inserting a
  * PULL_CONSTANT_LOAD instruction.
