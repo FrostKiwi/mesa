@@ -1344,45 +1344,126 @@ fs_visitor::emit_discard_jump()
    discard_jump->predicate_inverse = true;
 }
 
+static void
+setup_dword_scatter_header(const fs_builder &bld,
+                           const brw_device_info *devinfo, fs_reg *sources,
+                           unsigned base_offset, fs_reg rel_offset)
+{
+   /* Everything has to be at least DWord-aligned */
+   assert(base_offset % 4 == 0);
+
+   if (devinfo->gen >= 6)
+      /* On SNB+, the base offset is in dwords */
+      base_offset /= 4;
+
+   const fs_builder hbld = bld.exec_all().group(8, 0);
+
+   sources[0] = hbld.vgrf(BRW_REGISTER_TYPE_UD, 1);
+   hbld.MOV(sources[0], retype(brw_vec8_grf(0, 0), BRW_REGISTER_TYPE_UD));
+   hbld.group(1, 0).MOV(component(sources[0], 2), fs_reg(base_offset));
+
+   /* Compute the offset in dwords */
+   fs_reg dwords = bld.vgrf(BRW_REGISTER_TYPE_D, 1);
+   bld.MUL(dwords, rel_offset, fs_reg(8));
+
+   fs_reg stagger = bld.vgrf(BRW_REGISTER_TYPE_W, 1);
+   if (bld.dispatch_width() == 8) {
+      bld.MOV(stagger, brw_imm_v(0x76543210));
+   } else {
+      assert(bld.dispatch_width() == 16);
+      bld.half(0).MOV(stagger, brw_imm_v(0x76543210));
+      fs_reg imm8w = retype(fs_reg(8 << 16 | 8), BRW_REGISTER_TYPE_W);
+      bld.half(1).ADD(half(stagger, 1), half(stagger, 0), imm8w);
+   }
+   bld.ADD(dwords, dwords, stagger);
+
+   sources[1] = bld.vgrf(BRW_REGISTER_TYPE_D, 1);
+   if (devinfo->gen < 6) {
+      /* On Gen < 6, the offsets are in bytes */
+      bld.MUL(sources[1], dwords, fs_reg(4));
+   } else {
+      /* On SNB+, the offsets are in dwords */
+      bld.MOV(sources[1], dwords);
+   }
+}
+
 void
 fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg *dst,
                          uint32_t scratch_offset, int count,
                          bool use_high_mrf)
 {
-   fs_reg spill_reg(GRF, alloc.allocate(count));
+   fs_reg spill_reg(GRF, alloc.allocate(count), dst->type);
 
    scratch_offset += dst->reg_offset * REG_SIZE;
 
-   int reg_size = 1;
-   if (dispatch_width == 16 && count % 2 == 0)
-      reg_size = 2;
+   if (dst->reladdr == NULL || dst->reladdr->file == IMM) {
+      if (dst->reladdr)
+         scratch_offset += dst->reladdr->fixed_hw_reg.dw1.ud * REG_SIZE;
 
-   const fs_builder ibld = bld.annotate(inst->annotation, inst->ir)
-                              .group(reg_size * 8, 0)
-                              .at(block, inst);
+      int reg_size = 1;
+      if (dispatch_width == 16 && count % 2 == 0)
+         reg_size = 2;
 
-   for (int i = 0; i < count / reg_size; i++) {
-      /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
-      bool gen7_read = devinfo->gen >= 7 &&
-                       scratch_offset < (1 << 12) * REG_SIZE;
-      fs_inst *unspill_inst = ibld.emit(gen7_read ?
-                                        SHADER_OPCODE_GEN7_SCRATCH_READ :
-                                        SHADER_OPCODE_GEN4_SCRATCH_READ,
-                                        spill_reg);
-      unspill_inst->offset = scratch_offset;
-      unspill_inst->regs_written = reg_size;
+      const fs_builder ibld = bld.annotate(inst->annotation, inst->ir)
+                                 .group(reg_size * 8, 0)
+                                 .at(block, inst);
 
-      if (!gen7_read) {
-         unspill_inst->base_mrf = use_high_mrf ? 14 : 1;
-         unspill_inst->mlen = 1; /* header contains offset */
+      for (int i = 0; i < count / reg_size; i++) {
+         /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
+         bool gen7_read = devinfo->gen >= 7 &&
+                          scratch_offset < (1 << 12) * REG_SIZE;
+         fs_inst *unspill_inst = ibld.emit(gen7_read ?
+                                           SHADER_OPCODE_GEN7_SCRATCH_READ :
+                                           SHADER_OPCODE_GEN4_SCRATCH_READ,
+                                           spill_reg);
+         unspill_inst->offset = scratch_offset;
+         unspill_inst->regs_written = reg_size;
+
+         if (!gen7_read) {
+            unspill_inst->base_mrf = use_high_mrf ? 14 : 1;
+            unspill_inst->mlen = 1; /* header contains offset */
+         }
+
+         spill_reg.reg_offset += reg_size;
+         scratch_offset += reg_size * REG_SIZE;
       }
+   } else {
+      /* XXX: This won't work for double-precision */
+      int reg_size = inst->exec_size / 8;
+      assert(count % reg_size == 0);
 
-      spill_reg.reg_offset += reg_size;
-      scratch_offset += reg_size * REG_SIZE;
+      const fs_builder ibld = fs_builder(this, block, inst);
+
+      for (int i = 0; i < count / reg_size; i++) {
+         fs_reg *sources = ralloc_array(mem_ctx, fs_reg, 2);
+
+         setup_dword_scatter_header(ibld, devinfo, sources,
+                                    scratch_offset, *dst->reladdr);
+
+         int mlen = 1 + reg_size;
+         if (devinfo->gen >= 7) {
+            fs_reg payload(GRF, alloc.allocate(mlen), BRW_REGISTER_TYPE_UD);
+            ibld.LOAD_PAYLOAD(payload, sources, 2, 1);
+            fs_inst *read = ibld.emit(FS_OPCODE_DWORD_SCATTERED_READ,
+                                      spill_reg, payload);
+            read->mlen = mlen;
+         } else {
+            int base_mrf = use_high_mrf ? 16 - mlen : 1;
+            ibld.LOAD_PAYLOAD(fs_reg(MRF, base_mrf), sources, 2, 1);
+            fs_inst *read = ibld.emit(FS_OPCODE_DWORD_SCATTERED_READ,
+                                      spill_reg);
+            read->base_mrf = base_mrf;
+            read->mlen = mlen;
+         }
+
+         spill_reg.reg_offset += reg_size;
+         scratch_offset += reg_size * REG_SIZE;
+      }
    }
 
    dst->reg = spill_reg.reg;
    dst->reg_offset = 0;
+   dst->reladdr = NULL;
 }
 
 /* Modify the given instruction so that its destination is, instead,
@@ -1415,35 +1496,77 @@ fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
       emit_unspill(block, inst, &spill_reg, scratch_offset,
                    inst->regs_written, use_high_mrf);
    } else {
-      spill_reg = fs_reg(GRF, alloc.allocate(inst->regs_written));
+      spill_reg = fs_reg(GRF, alloc.allocate(inst->regs_written),
+                         inst->dst.type);
    }
 
    scratch_offset += inst->dst.reg_offset * REG_SIZE;
 
-   int reg_size = 1;
-   int spill_base_mrf = use_high_mrf ? 14 : 2;
-   if (dispatch_width == 16 && inst->regs_written % 2 == 0) {
-      spill_base_mrf--;
-      reg_size = 2;
-   }
+   if (inst->dst.reladdr == NULL || inst->dst.reladdr->file == IMM) {
+      if (inst->dst.reladdr)
+         scratch_offset += inst->dst.reladdr->fixed_hw_reg.dw1.ud * REG_SIZE;
 
-   const fs_builder ibld = bld.annotate(inst->annotation, inst->ir)
-                              .group(reg_size * 8, 0)
-                              .at(block, inst->next);
+      int reg_size = 1;
+      int spill_base_mrf = use_high_mrf ? 14 : 2;
+      if (dispatch_width == 16 && inst->regs_written % 2 == 0) {
+         spill_base_mrf--;
+         reg_size = 2;
+      }
 
-   for (int i = 0; i < inst->regs_written / reg_size; i++) {
-      fs_inst *spill_inst = ibld.emit(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
-                                      ibld.null_reg_f(), spill_reg);
-      spill_inst->offset = scratch_offset;
-      spill_inst->mlen = 1 + reg_size; /* header, value */
-      spill_inst->base_mrf = spill_base_mrf;
+      const fs_builder ibld = bld.annotate(inst->annotation, inst->ir)
+                                 .group(reg_size * 8, 0)
+                                 .at(block, inst->next);
 
-      spill_reg.reg_offset += reg_size;
-      scratch_offset += reg_size * REG_SIZE;
+      for (int i = 0; i < inst->regs_written / reg_size; i++) {
+         fs_inst *spill_inst = ibld.emit(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
+                                         ibld.null_reg_f(), spill_reg);
+         spill_inst->offset = scratch_offset;
+         spill_inst->mlen = 1 + reg_size; /* header, value */
+         spill_inst->base_mrf = spill_base_mrf;
+
+         spill_reg.reg_offset += reg_size;
+         scratch_offset += reg_size * REG_SIZE;
+      }
+   } else {
+      /* XXX: This won't work for double-precision */
+      int reg_size = inst->exec_size / 8;
+      assert(inst->regs_written % reg_size == 0);
+
+      const fs_builder ibld = fs_builder(this, block, inst).at(block, inst->next);
+
+      for (int i = 0; i < inst->regs_written / reg_size; i++) {
+         fs_reg *sources = ralloc_array(mem_ctx, fs_reg, 3);
+
+         setup_dword_scatter_header(ibld, devinfo, sources,
+                                    scratch_offset, *inst->dst.reladdr);
+
+         sources[2] = ibld.vgrf(inst->dst.type, 1);
+         ibld.MOV(sources[2], spill_reg);
+
+         int mlen = 1 + reg_size * 2;
+         if (devinfo->gen >= 7) {
+            fs_reg payload(GRF, alloc.allocate(mlen), BRW_REGISTER_TYPE_UD);
+            ibld.LOAD_PAYLOAD(payload, sources, 3, 1);
+            fs_inst *write = ibld.emit(FS_OPCODE_DWORD_SCATTERED_WRITE,
+                                       ibld.null_reg_ud(), payload);
+            write->mlen = mlen;
+         } else {
+            int base_mrf = use_high_mrf ? 16 - mlen : 1;
+            ibld.LOAD_PAYLOAD(fs_reg(MRF, base_mrf), sources, 3, 1);
+            fs_inst *write = ibld.emit(FS_OPCODE_DWORD_SCATTERED_WRITE,
+                                       ibld.null_reg_ud());
+            write->base_mrf = base_mrf;
+            write->mlen = mlen;
+         }
+
+         spill_reg.reg_offset += reg_size;
+         scratch_offset += reg_size * REG_SIZE;
+      }
    }
 
    inst->dst.reg = spill_reg.reg;
    inst->dst.reg_offset = 0;
+   inst->dst.reladdr = NULL;
 }
 
 void
