@@ -1714,25 +1714,29 @@ fs_visitor::emit_discard_jump()
 }
 
 void
-fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
-                         uint32_t spill_offset, int count)
+fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg *dst,
+                         uint32_t scratch_offset, int count)
 {
+   fs_reg spill_reg(GRF, alloc.allocate(count));
+
+   scratch_offset += dst->reg_offset * REG_SIZE;
+
    int reg_size = 1;
    if (dispatch_width == 16 && count % 2 == 0) {
       reg_size = 2;
-      dst.width = 16;
+      spill_reg.width = 16;
    }
 
    for (int i = 0; i < count / reg_size; i++) {
       /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
-      bool gen7_read = devinfo->gen >= 7 && spill_offset < (1 << 12) * REG_SIZE;
+      bool gen7_read = devinfo->gen >= 7 && scratch_offset < (1 << 12) * REG_SIZE;
 
       fs_inst *unspill_inst =
          new(mem_ctx) fs_inst(gen7_read ?
                               SHADER_OPCODE_GEN7_SCRATCH_READ :
                               SHADER_OPCODE_GEN4_SCRATCH_READ,
-                              dst);
-      unspill_inst->offset = spill_offset;
+                              spill_reg);
+      unspill_inst->offset = scratch_offset;
       unspill_inst->ir = inst->ir;
       unspill_inst->annotation = inst->annotation;
       unspill_inst->regs_written = reg_size;
@@ -1743,9 +1747,12 @@ fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
       }
       inst->insert_before(block, unspill_inst);
 
-      dst.reg_offset += reg_size;
-      spill_offset += reg_size * REG_SIZE;
+      spill_reg.reg_offset += reg_size;
+      scratch_offset += reg_size * REG_SIZE;
    }
+
+   dst->reg = spill_reg.reg;
+   dst->reg_offset = 0;
 }
 
 /* Modify the given instruction so that its destination is, instead,
@@ -1755,10 +1762,6 @@ void
 fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
                        uint32_t scratch_offset)
 {
-   scratch_offset += inst->dst.reg_offset * REG_SIZE;
-   fs_reg spill_reg(GRF, alloc.allocate(inst->regs_written),
-                    inst->dst.type, inst->dst.width);
-
    /* If we're immediately spilling the register, we should not use
     * destination dependency hints.  Doing so will cause the GPU do
     * try to read and write the register at the same time and may
@@ -1771,9 +1774,22 @@ fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
     * inst->regs_written(), then we need to unspill the destination
     * since we write back out all of the regs_written().
     */
-   if (inst->is_partial_write())
-      emit_unspill(block, inst, spill_reg, scratch_offset,
+   fs_reg spill_reg;
+   if (inst->is_partial_write()) {
+      /* We don't need to create a register because emit_unspill will do
+       * that for us.  However, emit_unspill needs the reg_offset from
+       * inst->dst.
+       */
+      spill_reg = fs_reg(GRF, -1);
+      spill_reg.reg_offset = inst->dst.reg_offset;
+
+      emit_unspill(block, inst, &spill_reg, scratch_offset,
                    inst->regs_written);
+   } else {
+      spill_reg = fs_reg(GRF, alloc.allocate(inst->regs_written));
+   }
+
+   scratch_offset += inst->dst.reg_offset * REG_SIZE;
 
    int reg_size = 1;
    int spill_base_mrf = 14;
