@@ -1712,6 +1712,54 @@ fs_visitor::emit_discard_jump()
 }
 
 void
+fs_visitor::setup_dword_scatter_header(bblock_t *block, fs_inst *inst,
+                                       fs_reg *sources,
+                                       unsigned base_offset, fs_reg rel_offset)
+{
+   /* Everything has to be at least DWord-aligned */
+   assert(base_offset % 4 == 0);
+
+   if (brw->gen >= 6)
+      /* On SNB+, the base offset is in dwords */
+      base_offset /= 4;
+
+   sources[0] = fs_reg(GRF, alloc.allocate(1), BRW_REGISTER_TYPE_UD);
+   fs_inst *mov = MOV(sources[0],
+                      retype(brw_vec8_grf(0, 0), BRW_REGISTER_TYPE_UD));
+   mov->force_writemask_all = true;
+   inst->insert_before(block, mov);
+   mov = MOV(component(sources[0], 2), fs_reg(base_offset));
+   mov->force_writemask_all = true;
+   inst->insert_before(block, mov);
+
+   /* Compute the offset in dwords */
+   fs_reg dwords = vgrf(glsl_type::int_type);
+   inst->insert_before(block, MUL(dwords, rel_offset, fs_reg(8)));
+
+   fs_reg stagger(GRF, alloc.allocate(1),
+                  BRW_REGISTER_TYPE_W, rel_offset.width);
+   if (rel_offset.width == 8) {
+      inst->insert_before(block, MOV(stagger, brw_imm_v(0x76543210)));
+   } else {
+      inst->insert_before(block, MOV(half(stagger, 0), brw_imm_v(0x76543210)));
+      fs_inst *add = ADD(half(stagger, 1), half(stagger, 0), fs_reg(8));
+      add->force_sechalf = true;
+      add->src[1].type = BRW_REGISTER_TYPE_W;
+      inst->insert_before(block, add);
+   }
+   inst->insert_before(block, ADD(dwords, dwords, stagger));
+
+   sources[1] = vgrf(glsl_type::int_type);
+   if (brw->gen < 6) {
+      /* On Gen < 6, the offsets are in bytes */
+      inst->insert_before(block, MUL(sources[1], dwords, fs_reg(4)));
+   } else {
+      /* On SNB+, the offsets are in dwords */
+      inst->insert_before(block, MOV(sources[1], dwords));
+   }
+}
+
+void
 fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg *dst,
                          uint32_t scratch_offset, int count)
 {
@@ -1719,38 +1767,88 @@ fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg *dst,
 
    scratch_offset += dst->reg_offset * REG_SIZE;
 
-   int reg_size = 1;
-   if (dispatch_width == 16 && count % 2 == 0) {
-      reg_size = 2;
-      spill_reg.width = 16;
-   }
+   if (dst->reladdr == NULL || dst->reladdr->file == IMM) {
+      if (dst->reladdr)
+         scratch_offset += dst->reladdr->fixed_hw_reg.dw1.ud * REG_SIZE;
 
-   for (int i = 0; i < count / reg_size; i++) {
-      /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
-      bool gen7_read = brw->gen >= 7 && scratch_offset < (1 << 12) * REG_SIZE;
-
-      fs_inst *unspill_inst =
-         new(mem_ctx) fs_inst(gen7_read ?
-                              SHADER_OPCODE_GEN7_SCRATCH_READ :
-                              SHADER_OPCODE_GEN4_SCRATCH_READ,
-                              spill_reg);
-      unspill_inst->offset = scratch_offset;
-      unspill_inst->ir = inst->ir;
-      unspill_inst->annotation = inst->annotation;
-      unspill_inst->regs_written = reg_size;
-
-      if (!gen7_read) {
-         unspill_inst->base_mrf = 14;
-         unspill_inst->mlen = 1; /* header contains offset */
+      int reg_size = 1;
+      if (dispatch_width == 16 && count % 2 == 0) {
+         reg_size = 2;
+         spill_reg.width = 16;
       }
-      inst->insert_before(block, unspill_inst);
 
-      spill_reg.reg_offset += reg_size;
-      scratch_offset += reg_size * REG_SIZE;
+      for (int i = 0; i < count / reg_size; i++) {
+         /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
+         bool gen7_read = brw->gen >= 7 && scratch_offset < (1 << 12) * REG_SIZE;
+
+         fs_inst *unspill_inst =
+            new(mem_ctx) fs_inst(gen7_read ?
+                                 SHADER_OPCODE_GEN7_SCRATCH_READ :
+                                 SHADER_OPCODE_GEN4_SCRATCH_READ,
+                                 spill_reg);
+         unspill_inst->offset = scratch_offset;
+         unspill_inst->ir = inst->ir;
+         unspill_inst->annotation = inst->annotation;
+         unspill_inst->regs_written = reg_size;
+
+         if (!gen7_read) {
+            unspill_inst->base_mrf = 14;
+            unspill_inst->mlen = 1; /* header contains offset */
+         }
+         inst->insert_before(block, unspill_inst);
+
+         spill_reg.reg_offset += reg_size;
+         scratch_offset += reg_size * REG_SIZE;
+      }
+   } else {
+      /* If we're in this case the the given register came from an array
+       * somewhere so we should be able to assume that its width etc. is
+       * sane.  Also, things should match the instruction fairly well too.
+       */
+      assert(dst->width % 8 == 0);
+      assert(inst->opcode == SHADER_OPCODE_LOAD_PAYLOAD ||
+             inst->exec_size == dst->width);
+
+      spill_reg.width = inst->dst.width;
+      spill_reg.type = inst->dst.type;
+
+      int reg_size = dst->width / 8;
+      assert(count % reg_size == 0);
+
+      fs_reg reladdr = *dst->reladdr;
+      if (dst->width < reladdr.width)
+         reladdr = half(reladdr, dst->reg_offset % 2);
+
+      for (int i = 0; i < count / reg_size; i++) {
+         fs_reg *sources = ralloc_array(mem_ctx, fs_reg, 2);
+
+         setup_dword_scatter_header(block, inst, sources, scratch_offset, reladdr);
+
+         fs_reg payload;
+         if (brw->gen >= 7) {
+            payload = fs_reg(GRF, alloc.allocate(1 + reg_size),
+                             BRW_REGISTER_TYPE_UD);
+         } else {
+            payload = fs_reg(MRF, 1, BRW_REGISTER_TYPE_UD);
+         }
+         fs_inst *load_payload = LOAD_PAYLOAD(payload, sources, 2);
+         inst->insert_before(block, load_payload);
+
+         fs_inst *read = new(mem_ctx) fs_inst(FS_OPCODE_DWORD_SCATTERED_READ,
+                                              spill_reg, payload);
+         read->mlen = load_payload->regs_written;
+         if (brw->gen <= 6)
+            read->base_mrf = 1;
+         inst->insert_before(block, read);
+
+         spill_reg.reg_offset += reg_size;
+         scratch_offset += reg_size * REG_SIZE;
+      }
    }
 
    dst->reg = spill_reg.reg;
    dst->reg_offset = 0;
+   dst->reladdr = NULL;
 }
 
 /* Modify the given instruction so that its destination is, instead,
@@ -1775,11 +1873,15 @@ fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
    fs_reg spill_reg;
    if (inst->is_partial_write()) {
       /* We don't need to create a register because emit_unspill will do
-       * that for us.  However, emit_unspill needs the reg_offset from
-       * inst->dst.
+       * that for us.  However, emit_unspill needs the reg_offset, reladdr,
+       * and width from inst->dst.
        */
       spill_reg = fs_reg(GRF, -1);
       spill_reg.reg_offset = inst->dst.reg_offset;
+      if (inst->dst.reladdr) {
+         spill_reg.reladdr = inst->dst.reladdr;
+         spill_reg.width = inst->dst.width;
+      }
 
       emit_unspill(block, inst, &spill_reg, scratch_offset,
                    inst->regs_written);
@@ -1789,30 +1891,85 @@ fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
 
    scratch_offset += inst->dst.reg_offset * REG_SIZE;
 
-   int reg_size = 1;
-   int spill_base_mrf = 14;
-   if (dispatch_width == 16 && inst->regs_written % 2 == 0) {
-      spill_base_mrf = 13;
-      reg_size = 2;
-   }
+   if (inst->dst.reladdr == NULL || inst->dst.reladdr->file == IMM) {
+      if (inst->dst.reladdr)
+         scratch_offset += inst->dst.reladdr->fixed_hw_reg.dw1.ud * REG_SIZE;
 
-   for (int i = 0; i < inst->regs_written / reg_size; i++) {
-      fs_inst *spill_inst =
-         new(mem_ctx) fs_inst(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
-                              reg_size * 8, reg_null_f, spill_reg);
-      spill_inst->offset = scratch_offset;
-      spill_inst->ir = inst->ir;
-      spill_inst->annotation = inst->annotation;
-      spill_inst->mlen = 1 + reg_size; /* header, value */
-      spill_inst->base_mrf = spill_base_mrf;
-      inst->insert_after(block, spill_inst);
+      int reg_size = 1;
+      int spill_base_mrf = 14;
+      if (dispatch_width == 16 && inst->regs_written % 2 == 0) {
+         spill_base_mrf = 13;
+         reg_size = 2;
+      }
 
-      spill_reg.reg_offset += reg_size;
-      scratch_offset += reg_size * REG_SIZE;
+      for (int i = 0; i < inst->regs_written / reg_size; i++) {
+         fs_inst *spill_inst =
+            new(mem_ctx) fs_inst(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
+                                 reg_size * 8, reg_null_f, spill_reg);
+         spill_inst->offset = scratch_offset;
+         spill_inst->ir = inst->ir;
+         spill_inst->annotation = inst->annotation;
+         spill_inst->mlen = 1 + reg_size; /* header, value */
+         spill_inst->base_mrf = spill_base_mrf;
+         inst->insert_after(block, spill_inst);
+
+         spill_reg.reg_offset += reg_size;
+         scratch_offset += reg_size * REG_SIZE;
+      }
+   } else {
+      /* If we're in this case the the given register came from an array
+       * somewhere so we should be able to assume that its width etc. is
+       * sane.  Also, things should match the instruction fairly well too.
+       */
+      assert(inst->dst.width % 8 == 0);
+      assert(inst->exec_size == inst->dst.width);
+
+      spill_reg.width = inst->dst.width;
+      spill_reg.type = inst->dst.type;
+
+      int reg_size = inst->dst.width / 8;
+      assert(inst->regs_written % reg_size == 0);
+
+      fs_reg reladdr = *inst->dst.reladdr;
+      if (inst->dst.width < reladdr.width)
+         reladdr = half(reladdr, inst->dst.reg_offset % 2);
+
+      for (int i = 0; i < inst->regs_written / reg_size; i++) {
+         fs_reg *sources = ralloc_array(mem_ctx, fs_reg, 3);
+
+         sources[2] = fs_reg(GRF, alloc.allocate(reg_size),
+                             inst->dst.type, inst->dst.width);
+         fs_inst *mov = MOV(sources[2], spill_reg);
+         inst->insert_after(block, mov);
+
+         setup_dword_scatter_header(block, mov, sources, scratch_offset, reladdr);
+
+         fs_reg payload;
+         if (brw->gen >= 7) {
+            payload = fs_reg(GRF, alloc.allocate(1 + reg_size * 2),
+                             BRW_REGISTER_TYPE_UD);
+         } else {
+            payload = fs_reg(MRF, 1, BRW_REGISTER_TYPE_UD);
+         }
+         fs_inst *load_payload = LOAD_PAYLOAD(payload, sources, 3);
+         mov->insert_after(block, load_payload);
+
+         fs_inst *write = new(mem_ctx) fs_inst(FS_OPCODE_DWORD_SCATTERED_WRITE,
+                                               spill_reg.width, reg_null_ud,
+                                               payload);
+         write->mlen = load_payload->regs_written;
+         if (brw->gen <= 6)
+            write->base_mrf = 1;
+         load_payload->insert_after(block, write);
+
+         spill_reg.reg_offset += reg_size;
+         scratch_offset += reg_size * REG_SIZE;
+      }
    }
 
    inst->dst.reg = spill_reg.reg;
    inst->dst.reg_offset = 0;
+   inst->dst.reladdr = NULL;
 }
 
 void

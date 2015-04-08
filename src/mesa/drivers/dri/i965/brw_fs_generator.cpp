@@ -1221,6 +1221,7 @@ fs_generator::generate_dword_scattered_read(fs_inst *inst, struct brw_reg dst,
    } else {
       brw_set_src0(p, insn, brw_null_reg());
       brw_inst_set_base_mrf(brw, insn, inst->base_mrf);
+   }
 
    brw_set_dp_read_message(p,
                            insn,

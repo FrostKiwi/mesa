@@ -325,6 +325,9 @@ public:
    void emit_bool_to_cond_code(ir_rvalue *condition);
    void emit_bool_to_cond_code_of_reg(ir_expression *expr, fs_reg op[3]);
    void emit_if_gen6(ir_if *ir);
+   void setup_dword_scatter_header(bblock_t *block, fs_inst *inst,
+                                   fs_reg *sources,
+                                   unsigned base_offset, fs_reg rel_offset);
    void emit_unspill(bblock_t *block, fs_inst *inst, fs_reg *reg,
                      uint32_t scratch_offset, int count);
    void emit_spill(bblock_t *block, fs_inst *inst, uint32_t scratch_offset);
