@@ -1975,42 +1975,6 @@ void gen6_math(struct brw_codegen *p,
    brw_set_src1(p, insn, src1);
 }
 
-void
-gen7_block_read_scratch(struct brw_codegen *p,
-                        struct brw_reg dest,
-                        int num_regs,
-                        unsigned offset)
-{
-   const struct brw_device_info *devinfo = p->devinfo;
-   brw_inst *insn = next_insn(p, BRW_OPCODE_SEND);
-   assert(brw_inst_pred_control(devinfo, insn) == BRW_PREDICATE_NONE);
-
-   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
-   brw_set_dest(p, insn, retype(dest, BRW_REGISTER_TYPE_UW));
-
-   /* The HW requires that the header is present; this is to get the g0.5
-    * scratch offset.
-    */
-   brw_set_src0(p, insn, brw_vec8_grf(0, 0));
-
-   /* According to the docs, offset is "A 12-bit HWord offset into the memory
-    * Immediate Memory buffer as specified by binding table 0xFF."  An HWORD
-    * is 32 bytes, which happens to be the size of a register.
-    */
-   offset /= REG_SIZE;
-   assert(offset < (1 << 12));
-
-   gen7_set_dp_scratch_message(p, insn,
-                               false, /* scratch read */
-                               false, /* OWords */
-                               false, /* invalidate after read */
-                               num_regs,
-                               offset,
-                               1,        /* mlen: just g0 */
-                               num_regs, /* rlen */
-                               true);    /* header present */
-}
-
 /**
  * Read a float[4] vector from the data port Data Cache (const buffer).
  * Location (in buffer) should be a multiple of 16.
