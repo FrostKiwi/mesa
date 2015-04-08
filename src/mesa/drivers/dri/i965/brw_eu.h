@@ -316,12 +316,6 @@ void brw_oword_block_read(struct brw_compile *p,
 			  uint32_t offset,
 			  uint32_t bind_table_index);
 
-void brw_oword_block_read_scratch(struct brw_compile *p,
-				  struct brw_reg dest,
-				  struct brw_reg mrf,
-				  int num_regs,
-				  unsigned offset);
-
 void gen7_block_read_scratch(struct brw_compile *p,
                              struct brw_reg dest,
                              int num_regs,
