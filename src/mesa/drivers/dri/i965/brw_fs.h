@@ -211,6 +211,9 @@ public:
    void spill_reg(int spill_reg);
    void split_virtual_grfs();
    bool compact_virtual_grfs();
+   void setup_dword_scatter_header(bblock_t *block, fs_inst *inst,
+                                   fs_reg *sources,
+                                   unsigned offset, fs_reg rel_offset);
    void emit_scratch_read(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
                           fs_reg dst, uint32_t base_scratch_offset);
    void emit_scratch_write(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
