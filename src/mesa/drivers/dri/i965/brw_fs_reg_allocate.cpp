@@ -684,62 +684,42 @@ fs_visitor::assign_regs(bool allow_spilling)
 }
 
 void
-fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
-                         uint32_t spill_offset, int count)
+fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
+                         fs_reg dst, uint32_t base_scratch_offset, int count)
 {
    int reg_size = 1;
+   spill_reg.width = 8;
+   dst.width = 8;
    if (dispatch_width == 16 && count % 2 == 0) {
       reg_size = 2;
+      spill_reg.width = 16;
       dst.width = 16;
    }
 
    for (int i = 0; i < count / reg_size; i++) {
-      /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
-      bool gen7_read = brw->gen >= 7 && spill_offset < (1 << 12) * REG_SIZE;
-
-      fs_inst *unspill_inst =
-         new(mem_ctx) fs_inst(gen7_read ?
-                              SHADER_OPCODE_GEN7_SCRATCH_READ :
-                              SHADER_OPCODE_GEN4_SCRATCH_READ,
-                              dst);
-      unspill_inst->offset = spill_offset;
-      unspill_inst->ir = inst->ir;
-      unspill_inst->annotation = inst->annotation;
-      unspill_inst->regs_written = reg_size;
-
-      if (!gen7_read) {
-         unspill_inst->base_mrf = 14;
-         unspill_inst->mlen = 1; /* header contains offset */
-      }
-      inst->insert_before(block, unspill_inst);
-
+      emit_scratch_read(block, inst, spill_reg, dst, base_scratch_offset);
+      spill_reg.reg_offset += reg_size;
       dst.reg_offset += reg_size;
-      spill_offset += reg_size * REG_SIZE;
    }
 }
 
 void
-fs_visitor::emit_spill(bblock_t *block, fs_inst *inst, fs_reg src,
-                       uint32_t spill_offset, int count)
+fs_visitor::emit_spill(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
+                       fs_reg src, uint32_t base_scratch_offset, int count)
 {
    int reg_size = 1;
-   int spill_base_mrf = 14;
+   spill_reg.width = 8;
+   src.width = 8;
    if (dispatch_width == 16 && count % 2 == 0) {
-      spill_base_mrf = 13;
       reg_size = 2;
+      spill_reg.width = 16;
+      src.width = 16;
    }
 
    for (int i = 0; i < count / reg_size; i++) {
-      fs_inst *spill_inst =
-         new(mem_ctx) fs_inst(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
-                              reg_size * 8, reg_null_f, src);
+      emit_scratch_write(block, inst, spill_reg, src, base_scratch_offset);
+      spill_reg.reg_offset += reg_size;
       src.reg_offset += reg_size;
-      spill_inst->offset = spill_offset + i * reg_size * REG_SIZE;
-      spill_inst->ir = inst->ir;
-      spill_inst->annotation = inst->annotation;
-      spill_inst->mlen = 1 + reg_size; /* header, value */
-      spill_inst->base_mrf = spill_base_mrf;
-      inst->insert_after(block, spill_inst);
    }
 }
 
@@ -860,26 +840,19 @@ fs_visitor::spill_reg(int spill_reg)
 	 if (inst->src[i].file == GRF &&
 	     inst->src[i].reg == spill_reg) {
             int regs_read = inst->regs_read(i);
-            int subset_spill_offset = (spill_offset +
-                                       REG_SIZE * inst->src[i].reg_offset);
             fs_reg unspill_dst(GRF, alloc.allocate(regs_read));
+
+            emit_unspill(block, inst, inst->src[i], unspill_dst, spill_offset,
+                         regs_read);
 
             inst->src[i].reg = unspill_dst.reg;
             inst->src[i].reg_offset = 0;
-
-            emit_unspill(block, inst, unspill_dst, subset_spill_offset,
-                         regs_read);
 	 }
       }
 
       if (inst->dst.file == GRF &&
 	  inst->dst.reg == spill_reg) {
-         int subset_spill_offset = (spill_offset +
-                                    REG_SIZE * inst->dst.reg_offset);
          fs_reg spill_src(GRF, alloc.allocate(inst->regs_written));
-
-         inst->dst.reg = spill_src.reg;
-         inst->dst.reg_offset = 0;
 
          /* If we're immediately spilling the register, we should not use
           * destination dependency hints.  Doing so will cause the GPU do
@@ -894,11 +867,14 @@ fs_visitor::spill_reg(int spill_reg)
           * since we write back out all of the regs_written().
 	  */
 	 if (inst->is_partial_write())
-            emit_unspill(block, inst, spill_src, subset_spill_offset,
+            emit_unspill(block, inst, inst->dst, spill_src, spill_offset,
                          inst->regs_written);
 
-         emit_spill(block, inst, spill_src, subset_spill_offset,
+         emit_spill(block, inst, inst->dst, spill_src, spill_offset,
                     inst->regs_written);
+
+         inst->dst.reg = spill_src.reg;
+         inst->dst.reg_offset = 0;
       }
    }
 

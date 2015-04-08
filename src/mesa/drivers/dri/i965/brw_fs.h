@@ -211,6 +211,10 @@ public:
    void spill_reg(int spill_reg);
    void split_virtual_grfs();
    bool compact_virtual_grfs();
+   void emit_scratch_read(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
+                          fs_reg dst, uint32_t base_scratch_offset);
+   void emit_scratch_write(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
+                           fs_reg src, uint32_t base_scratch_offset);
    void move_uniform_array_access_to_pull_constants();
    void assign_constant_locations();
    void demote_pull_constants();
@@ -325,10 +329,10 @@ public:
    void emit_bool_to_cond_code(ir_rvalue *condition);
    void emit_bool_to_cond_code_of_reg(ir_expression *expr, fs_reg op[3]);
    void emit_if_gen6(ir_if *ir);
-   void emit_unspill(bblock_t *block, fs_inst *inst, fs_reg reg,
-                     uint32_t spill_offset, int count);
-   void emit_spill(bblock_t *block, fs_inst *inst, fs_reg reg,
-                   uint32_t spill_offset, int count);
+   void emit_unspill(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
+                     fs_reg dst, uint32_t spill_offset, int count);
+   void emit_spill(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
+                   fs_reg src, uint32_t spill_offset, int count);
 
    void emit_fragment_program_code();
    void setup_fp_regs();
