@@ -772,7 +772,7 @@ brw_set_sampler_message(struct brw_compile *p,
    }
 }
 
-static void
+void
 gen7_set_dp_scratch_message(struct brw_compile *p,
                             brw_inst *inst,
                             bool write,
