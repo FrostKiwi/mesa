@@ -972,11 +972,107 @@ fs_generator::generate_scratch_write(fs_inst *inst, struct brw_reg src)
 {
    assert(inst->mlen != 0);
 
+   uint32_t msg_control, msg_type;
+   int mlen;
+
+   unsigned offset = inst->offset;
+   if (brw->gen >= 6)
+      offset /= 16;
+
+   struct brw_reg mrf = retype(brw_message_reg(inst->base_mrf),
+                               BRW_REGISTER_TYPE_UD);
+
+   if (inst->exec_size == 8) {
+      msg_control = BRW_DATAPORT_OWORD_BLOCK_2_OWORDS;
+      mlen = 2;
+   } else {
+      msg_control = BRW_DATAPORT_OWORD_BLOCK_4_OWORDS;
+      mlen = 3;
+   }
+
+   /* Set up the message header.  This is g0, with g0.2 filled with
+    * the offset.  We don't want to leave our offset around in g0 or
+    * it'll screw up texture samples, so set it up inside the message
+    * reg.
+    */
+   {
+      brw_push_insn_state(p);
+      brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+      brw_set_default_compression_control(p, BRW_COMPRESSION_NONE);
+
+      brw_MOV(p, mrf, retype(brw_vec8_grf(0, 0), BRW_REGISTER_TYPE_UD));
+
+      /* set message header global offset field (reg 0, element 2) */
+      brw_MOV(p,
+	      retype(brw_vec1_reg(BRW_MESSAGE_REGISTER_FILE,
+				  mrf.nr,
+				  2), BRW_REGISTER_TYPE_UD),
+	      brw_imm_ud(offset));
+
+      brw_pop_insn_state(p);
+   }
+
    brw_MOV(p,
 	   brw_uvec_mrf(inst->exec_size, (inst->base_mrf + 1), 0),
 	   retype(src, BRW_REGISTER_TYPE_UD));
-   brw_oword_block_write_scratch(p, brw_message_reg(inst->base_mrf),
-                                 inst->exec_size / 8, inst->offset);
+
+   {
+      struct brw_reg dest;
+      brw_inst *insn = brw_next_insn(p, BRW_OPCODE_SEND);
+      int send_commit_msg;
+      struct brw_reg src_header = retype(brw_vec8_grf(0, 0),
+					 BRW_REGISTER_TYPE_UW);
+
+      if (brw_inst_qtr_control(devinfo, insn) != BRW_COMPRESSION_NONE) {
+         brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
+	 src_header = vec16(src_header);
+      }
+      assert(brw_inst_pred_control(devinfo, insn) == BRW_PREDICATE_NONE);
+      if (devinfo->gen < 6)
+         brw_inst_set_base_mrf(devinfo, insn, mrf.nr);
+
+      /* Until gen6, writes followed by reads from the same location
+       * are not guaranteed to be ordered unless write_commit is set.
+       * If set, then a no-op write is issued to the destination
+       * register to set a dependency, and a read from the destination
+       * can be used to ensure the ordering.
+       *
+       * For gen6, only writes between different threads need ordering
+       * protection.  Our use of DP writes is all about register
+       * spilling within a thread.
+       */
+      if (devinfo->gen >= 6) {
+	 dest = retype(vec16(brw_null_reg()), BRW_REGISTER_TYPE_UW);
+	 send_commit_msg = 0;
+      } else {
+	 dest = src_header;
+	 send_commit_msg = 1;
+      }
+
+      brw_set_dest(p, insn, dest);
+      if (brw->gen >= 6) {
+	 brw_set_src0(p, insn, mrf);
+      } else {
+	 brw_set_src0(p, insn, brw_null_reg());
+      }
+
+      if (brw->gen >= 6)
+	 msg_type = GEN6_DATAPORT_WRITE_MESSAGE_OWORD_BLOCK_WRITE;
+      else
+	 msg_type = BRW_DATAPORT_WRITE_MESSAGE_OWORD_BLOCK_WRITE;
+
+      brw_set_dp_write_message(p,
+			       insn,
+			       255, /* binding table index (255=stateless) */
+			       msg_control,
+			       msg_type,
+			       mlen,
+			       true, /* header_present */
+			       0, /* not a render target */
+			       send_commit_msg, /* response_length */
+			       0, /* eot */
+			       send_commit_msg);
+   }
 }
 
 void
