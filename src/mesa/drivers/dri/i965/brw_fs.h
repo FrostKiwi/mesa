@@ -575,6 +575,10 @@ private:
    void generate_scratch_write(fs_inst *inst, struct brw_reg src);
    void generate_scratch_read(fs_inst *inst, struct brw_reg dst);
    void generate_scratch_read_gen7(fs_inst *inst, struct brw_reg dst);
+   void generate_dword_scattered_read(fs_inst *inst, struct brw_reg dst,
+                                      struct brw_reg payload);
+   void generate_dword_scattered_write(fs_inst *inst, struct brw_reg dst,
+                                       struct brw_reg payload);
    void generate_uniform_pull_constant_load(fs_inst *inst, struct brw_reg dst,
                                             struct brw_reg index,
                                             struct brw_reg offset);

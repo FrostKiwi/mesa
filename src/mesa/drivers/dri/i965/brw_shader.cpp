@@ -508,6 +508,10 @@ brw_instruction_name(enum opcode op)
    case FS_OPCODE_LINTERP:
       return "linterp";
 
+   case FS_OPCODE_DWORD_SCATTERED_READ:
+      return "dword_scattered_read";
+   case FS_OPCODE_DWORD_SCATTERED_WRITE:
+      return "dword_scattered_write";
    case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD:
       return "uniform_pull_const";
    case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD_GEN7:
@@ -1007,6 +1011,7 @@ backend_instruction::has_side_effects() const
    case SHADER_OPCODE_UNTYPED_ATOMIC:
    case SHADER_OPCODE_GEN4_SCRATCH_WRITE:
    case SHADER_OPCODE_URB_WRITE_SIMD8:
+   case FS_OPCODE_DWORD_SCATTERED_WRITE:
    case FS_OPCODE_FB_WRITE:
       return true;
    default:
