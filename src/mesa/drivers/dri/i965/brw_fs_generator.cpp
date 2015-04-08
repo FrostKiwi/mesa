@@ -976,16 +976,16 @@ fs_generator::generate_scratch_write(fs_inst *inst, struct brw_reg src)
 
    unsigned offset = inst->offset;
    if (brw->gen >= 6)
-      offset /= 16;
+      offset /= 8;
 
    struct brw_reg mrf = retype(brw_message_reg(inst->base_mrf),
                                BRW_REGISTER_TYPE_UD);
 
    if (inst->exec_size == 8) {
-      msg_control = BRW_DATAPORT_OWORD_BLOCK_2_OWORDS;
+      msg_control = BRW_DATAPORT_DWORD_SCATTERED_BLOCK_8DWORDS;
       mlen = 2;
    } else {
-      msg_control = BRW_DATAPORT_OWORD_BLOCK_4_OWORDS;
+      msg_control = BRW_DATAPORT_DWORD_SCATTERED_BLOCK_16DWORDS;
       mlen = 3;
    }
 
@@ -1084,7 +1084,7 @@ fs_generator::generate_scratch_read(fs_inst *inst, struct brw_reg dst)
 
    unsigned offset = inst->offset;
    if (brw->gen >= 6)
-      offset /= 16;
+      offset /= 8;
 
    struct brw_reg mrf;
    if (brw->gen >= 7) {
@@ -1102,10 +1102,10 @@ fs_generator::generate_scratch_read(fs_inst *inst, struct brw_reg dst)
    dst = retype(dst, BRW_REGISTER_TYPE_UW);
 
    if (inst->exec_size == 8) {
-      msg_control = BRW_DATAPORT_OWORD_BLOCK_2_OWORDS;
+      msg_control = BRW_DATAPORT_DWORD_SCATTERED_BLOCK_8DWORDS;
       rlen = 1;
    } else {
-      msg_control = BRW_DATAPORT_OWORD_BLOCK_4_OWORDS;
+      msg_control = BRW_DATAPORT_DWORD_SCATTERED_BLOCK_16DWORDS;
       rlen = 2;
    }
 
