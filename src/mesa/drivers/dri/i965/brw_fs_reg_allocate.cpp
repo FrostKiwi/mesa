@@ -813,31 +813,7 @@ fs_visitor::spill_reg(int spill_reg)
 
       if (inst->dst.file == GRF &&
 	  inst->dst.reg == spill_reg) {
-         int subset_spill_offset = (spill_offset +
-                                    REG_SIZE * inst->dst.reg_offset);
-         fs_reg spill_src(GRF, alloc.allocate(inst->regs_written));
-
-         inst->dst.reg = spill_src.reg;
-         inst->dst.reg_offset = 0;
-
-         /* If we're immediately spilling the register, we should not use
-          * destination dependency hints.  Doing so will cause the GPU do
-          * try to read and write the register at the same time and may
-          * hang the GPU.
-          */
-         inst->no_dd_clear = false;
-         inst->no_dd_check = false;
-
-	 /* If our write is going to affect just part of the
-          * inst->regs_written(), then we need to unspill the destination
-          * since we write back out all of the regs_written().
-	  */
-	 if (inst->is_partial_write())
-            emit_unspill(block, inst, spill_src, subset_spill_offset,
-                         inst->regs_written);
-
-         emit_spill(block, inst, spill_src, subset_spill_offset,
-                    inst->regs_written);
+         emit_spill(block, inst, spill_offset);
       }
    }
 
