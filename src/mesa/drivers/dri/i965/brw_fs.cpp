@@ -957,6 +957,7 @@ fs_inst::regs_read(int arg) const
    case BAD_FILE:
    case UNIFORM:
    case IMM:
+   case ATTR:
       return 1;
    case GRF:
    case HW_REG:
