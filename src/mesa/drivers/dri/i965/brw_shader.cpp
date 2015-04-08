@@ -508,6 +508,10 @@ brw_instruction_name(enum opcode op)
    case FS_OPCODE_LINTERP:
       return "linterp";
 
+   case FS_OPCODE_DWORD_SCATTERED_READ:
+      return "dword_scattered_read";
+   case FS_OPCODE_DWORD_SCATTERED_WRITE:
+      return "dword_scattered_write";
    case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD:
       return "uniform_pull_const";
    case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD_GEN7:
