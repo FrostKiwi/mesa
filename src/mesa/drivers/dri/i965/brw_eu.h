@@ -322,11 +322,6 @@ void brw_oword_block_read_scratch(struct brw_compile *p,
 				  int num_regs,
 				  unsigned offset);
 
-void brw_oword_block_write_scratch(struct brw_compile *p,
-				   struct brw_reg mrf,
-				   int num_regs,
-				   unsigned offset);
-
 void gen7_block_read_scratch(struct brw_compile *p,
                              struct brw_reg dest,
                              int num_regs,
