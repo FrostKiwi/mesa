@@ -2146,6 +2146,36 @@ fs_visitor::compact_virtual_grfs()
 }
 
 void
+fs_visitor::setup_dword_scatter_header(bblock_t *block, fs_inst *inst,
+                                       fs_reg *sources,
+                                       unsigned base_offset, fs_reg rel_offset)
+{
+   /* Everything has to be at least DWord-aligned */
+   assert(base_offset % 4 == 0);
+
+   unsigned multiplier;
+   if (brw->gen < 6) {
+      /* Offsets are in bytes */
+      multiplier = REG_SIZE;
+   } else {
+      /* Offsets are in dwords */
+      multiplier = 8;
+      base_offset /= 4;
+   }
+
+   sources[0] = fs_reg(GRF, alloc.allocate(1), BRW_REGISTER_TYPE_UD);
+   fs_inst *mov = MOV(sources[0],
+                      retype(brw_vec8_grf(0, 0), BRW_REGISTER_TYPE_UD));
+   inst->insert_before(block, mov);
+   mov = MOV(component(sources[0], 2), fs_reg(base_offset));
+   inst->insert_before(block, mov);
+
+   sources[1] = vgrf(glsl_type::uint_type);
+   fs_inst *mul = MUL(sources[1], rel_offset, fs_reg(multiplier));
+   inst->insert_before(block, mul);
+}
+
+void
 fs_visitor::emit_scratch_read(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
                               fs_reg dst, uint32_t base_scratch_offset)
 {
@@ -2153,25 +2183,44 @@ fs_visitor::emit_scratch_read(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
    assert(dst.width == spill_reg.width);
    assert(type_sz(dst.type) == sizeof(float));
 
+   assert(spill_reg.width % 8 == 0);
+   unsigned reg_size = spill_reg.width / 8;
    unsigned offset = base_scratch_offset + spill_reg.reg_offset * REG_SIZE;
-   /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
-   bool gen7_read = brw->gen >= 7 && offset < (1 << 12) * REG_SIZE;
 
-   fs_inst *read_inst =
-      new(mem_ctx) fs_inst(gen7_read ?
-                           SHADER_OPCODE_GEN7_SCRATCH_READ :
-                           SHADER_OPCODE_GEN4_SCRATCH_READ,
-                           dst);
-   read_inst->offset = offset;
-   read_inst->ir = inst->ir;
-   read_inst->annotation = inst->annotation;
-   read_inst->regs_written = spill_reg.width / 8;
+   if (spill_reg.reladdr == NULL) {
+      /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
+      bool gen7_read = brw->gen >= 7 && offset < (1 << 12) * REG_SIZE;
 
-   if (!gen7_read) {
-      read_inst->base_mrf = 14;
-      read_inst->mlen = 1; /* header contains offset */
+      fs_inst *read_inst =
+         new(mem_ctx) fs_inst(gen7_read ?
+                              SHADER_OPCODE_GEN7_SCRATCH_READ :
+                              SHADER_OPCODE_GEN4_SCRATCH_READ,
+                              dst);
+      read_inst->offset = offset;
+      read_inst->ir = inst->ir;
+      read_inst->annotation = inst->annotation;
+      read_inst->regs_written = reg_size;
+
+      if (!gen7_read) {
+         read_inst->base_mrf = 14;
+         read_inst->mlen = 1; /* header contains offset */
+      }
+      inst->insert_before(block, read_inst);
+   } else {
+      fs_reg *sources = ralloc_array(mem_ctx, fs_reg, 2);
+
+      setup_dword_scatter_header(block, inst, sources, offset,
+                                 *spill_reg.reladdr);
+
+      fs_reg payload = fs_reg(GRF, alloc.allocate(1 + reg_size),
+                              BRW_REGISTER_TYPE_UD);
+      fs_inst *load_payload = LOAD_PAYLOAD(payload, sources, 2);
+      inst->insert_before(block, load_payload);
+
+      fs_inst *read = new(mem_ctx) fs_inst(FS_OPCODE_DWORD_SCATTERED_READ,
+                                           dst, payload);
+      inst->insert_before(block, read);
    }
-   inst->insert_before(block, read_inst);
 }
 
 void
@@ -2181,15 +2230,41 @@ fs_visitor::emit_scratch_write(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
    assert(spill_reg.file == GRF);
    assert(type_sz(src.type) == sizeof(float));
 
-   fs_inst *write_inst =
-      new(mem_ctx) fs_inst(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
-                           src.width, reg_null_f, src);
-   write_inst->offset = base_scratch_offset + spill_reg.reg_offset * REG_SIZE;
-   write_inst->ir = inst->ir;
-   write_inst->annotation = inst->annotation;
-   write_inst->mlen = 1 + spill_reg.width / 8; /* header, value */
-   write_inst->base_mrf = spill_reg.width == 8 ? 14 : 13;
-   inst->insert_after(block, write_inst);
+   assert(spill_reg.width % 8 == 0);
+   unsigned reg_size = spill_reg.width / 8;
+   unsigned offset = base_scratch_offset + spill_reg.reg_offset * REG_SIZE;
+
+   if (spill_reg.reladdr == NULL) {
+      fs_inst *write_inst =
+         new(mem_ctx) fs_inst(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
+                              spill_reg.width, reg_null_f, src);
+      write_inst->offset = offset;
+      write_inst->ir = inst->ir;
+      write_inst->annotation = inst->annotation;
+      write_inst->mlen = 1 + reg_size; /* header, value */
+      write_inst->base_mrf = spill_reg.width == 8 ? 14 : 13;
+      inst->insert_after(block, write_inst);
+   } else {
+      fs_reg *sources = ralloc_array(mem_ctx, fs_reg, 3);
+
+      sources[2] = fs_reg(GRF, alloc.allocate(reg_size),
+                          src.type, spill_reg.width);
+      fs_inst *mov = MOV(sources[2], src);
+      inst->insert_after(block, mov);
+
+      setup_dword_scatter_header(block, mov, sources, offset,
+                                 *spill_reg.reladdr);
+
+      fs_reg payload = fs_reg(GRF, alloc.allocate(1 + reg_size * 2),
+                              BRW_REGISTER_TYPE_UD);
+      fs_inst *load_payload = LOAD_PAYLOAD(payload, sources, 3);
+      mov->insert_after(block, load_payload);
+
+      fs_inst *write = new(mem_ctx) fs_inst(FS_OPCODE_DWORD_SCATTERED_WRITE,
+                                            spill_reg.width, reg_null_ud,
+                                            payload);
+      load_payload->insert_after(block, write);
+   }
 }
 
 /*
