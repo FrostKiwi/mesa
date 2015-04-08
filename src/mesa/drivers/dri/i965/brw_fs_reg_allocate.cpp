@@ -684,43 +684,42 @@ fs_visitor::assign_regs(bool allow_spilling)
 }
 
 void
-fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
-                         uint32_t spill_offset, int count)
+fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
+                         fs_reg dst, uint32_t base_scratch_offset, int count)
 {
-   dst.type = BRW_REGISTER_TYPE_UD;
-
    int reg_size = 1;
+   spill_reg.width = 8;
    dst.width = 8;
    if (dispatch_width == 16 && count % 2 == 0) {
       reg_size = 2;
+      spill_reg.width = 16;
       dst.width = 16;
    }
 
    for (int i = 0; i < count / reg_size; i++) {
-      emit_scratch_read(block, inst, dst, spill_offset);
+      emit_scratch_read(block, inst, spill_reg, dst, base_scratch_offset);
+      spill_reg.reg_offset += reg_size;
       dst.reg_offset += reg_size;
-      spill_offset += reg_size;
    }
 }
 
 void
-fs_visitor::emit_spill(bblock_t *block, fs_inst *inst, fs_reg src,
-                       uint32_t spill_offset, int count)
+fs_visitor::emit_spill(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
+                       fs_reg src, uint32_t base_scratch_offset, int count)
 {
-   src.type = BRW_REGISTER_TYPE_UD;
-
    int reg_size = 1;
+   spill_reg.width = 8;
    src.width = 8;
    if (dispatch_width == 16 && count % 2 == 0) {
       reg_size = 2;
+      spill_reg.width = 16;
       src.width = 16;
    }
 
    for (int i = 0; i < count / reg_size; i++) {
-      emit_scratch_write(block, inst, src, spill_offset);
-
+      emit_scratch_write(block, inst, spill_reg, src, base_scratch_offset);
+      spill_reg.reg_offset += reg_size;
       src.reg_offset += reg_size;
-      spill_offset += reg_size;
    }
 }
 
@@ -840,24 +839,19 @@ fs_visitor::spill_reg(int spill_reg)
 	 if (inst->src[i].file == GRF &&
 	     inst->src[i].reg == spill_reg) {
             int regs_read = inst->regs_read(i);
-            int subset_spill_offset = (spill_offset + inst->src[i].reg_offset);
             fs_reg unspill_dst(GRF, alloc.allocate(regs_read));
+
+            emit_unspill(block, inst, inst->src[i], unspill_dst, spill_offset,
+                         regs_read);
 
             inst->src[i].reg = unspill_dst.reg;
             inst->src[i].reg_offset = 0;
-
-            emit_unspill(block, inst, unspill_dst, subset_spill_offset,
-                         regs_read);
 	 }
       }
 
       if (inst->dst.file == GRF &&
 	  inst->dst.reg == spill_reg) {
-         int subset_spill_offset = (spill_offset + inst->dst.reg_offset);
          fs_reg spill_src(GRF, alloc.allocate(inst->regs_written));
-
-         inst->dst.reg = spill_src.reg;
-         inst->dst.reg_offset = 0;
 
          /* If we're immediately spilling the register, we should not use
           * destination dependency hints.  Doing so will cause the GPU do
@@ -872,11 +866,14 @@ fs_visitor::spill_reg(int spill_reg)
           * since we write back out all of the regs_written().
 	  */
 	 if (inst->is_partial_write())
-            emit_unspill(block, inst, spill_src, subset_spill_offset,
+            emit_unspill(block, inst, inst->dst, spill_src, spill_offset,
                          inst->regs_written);
 
-         emit_spill(block, inst, spill_src, subset_spill_offset,
+         emit_spill(block, inst, inst->dst, spill_src, spill_offset,
                     inst->regs_written);
+
+         inst->dst.reg = spill_src.reg;
+         inst->dst.reg_offset = 0;
       }
    }
 

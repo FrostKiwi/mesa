@@ -2146,23 +2146,26 @@ fs_visitor::compact_virtual_grfs()
 }
 
 void
-fs_visitor::emit_scratch_read(bblock_t *block, fs_inst *inst, fs_reg dst,
-                              uint32_t scratch_offset)
+fs_visitor::emit_scratch_read(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
+                              fs_reg dst, uint32_t base_scratch_offset)
 {
+   assert(spill_reg.file == GRF);
+   assert(dst.width == spill_reg.width);
    assert(type_sz(dst.type) == sizeof(float));
 
+   unsigned offset = (spill_reg.reg_offset + base_scratch_offset) * REG_SIZE;
    /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
-   bool gen7_read = brw->gen >= 7 && scratch_offset < (1 << 12);
+   bool gen7_read = brw->gen >= 7 && offset < (1 << 12);
 
    fs_inst *read_inst =
       new(mem_ctx) fs_inst(gen7_read ?
                            SHADER_OPCODE_GEN7_SCRATCH_READ :
                            SHADER_OPCODE_GEN4_SCRATCH_READ,
                            dst);
-   read_inst->offset = scratch_offset * REG_SIZE;
+   read_inst->offset = offset;
    read_inst->ir = inst->ir;
    read_inst->annotation = inst->annotation;
-   read_inst->regs_written = dst.width / 8;
+   read_inst->regs_written = spill_reg.width / 8;
 
    if (!gen7_read) {
       read_inst->base_mrf = 14;
@@ -2172,19 +2175,20 @@ fs_visitor::emit_scratch_read(bblock_t *block, fs_inst *inst, fs_reg dst,
 }
 
 void
-fs_visitor::emit_scratch_write(bblock_t *block, fs_inst *inst, fs_reg src,
-                               uint32_t scratch_offset)
+fs_visitor::emit_scratch_write(bblock_t *block, fs_inst *inst, fs_reg spill_reg,
+                               fs_reg src, uint32_t base_scratch_offset)
 {
+   assert(spill_reg.file == GRF);
    assert(type_sz(src.type) == sizeof(float));
 
    fs_inst *write_inst =
       new(mem_ctx) fs_inst(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
-                           src.width, reg_null_f, src);
-   write_inst->offset = scratch_offset * REG_SIZE;
+                           spill_reg.width, reg_null_f, src);
+   write_inst->offset = (spill_reg.reg_offset + base_scratch_offset) * REG_SIZE;
    write_inst->ir = inst->ir;
    write_inst->annotation = inst->annotation;
-   write_inst->mlen = 1 + src.width / 8; /* header, value */
-   write_inst->base_mrf = src.width == 8 ? 14 : 13;
+   write_inst->mlen = 1 + spill_reg.width / 8; /* header, value */
+   write_inst->base_mrf = spill_reg.width == 8 ? 14 : 13;
    inst->insert_after(block, write_inst);
 }
 
