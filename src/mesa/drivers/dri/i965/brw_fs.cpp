@@ -3840,6 +3840,8 @@ fs_visitor::dump_instruction(backend_instruction *be_inst, FILE *file)
           inst->dst.subreg_offset)
          fprintf(file, "+%d.%d",
                  inst->dst.reg_offset, inst->dst.subreg_offset);
+      if (inst->dst.reladdr)
+         fprintf(file, "+reladdr");
       break;
    case MRF:
       fprintf(file, "m%d", inst->dst.reg);
@@ -3900,6 +3902,8 @@ fs_visitor::dump_instruction(backend_instruction *be_inst, FILE *file)
              inst->src[i].subreg_offset)
             fprintf(file, "+%d.%d", inst->src[i].reg_offset,
                     inst->src[i].subreg_offset);
+         if (inst->src[i].reladdr)
+            fprintf(file, "+reladdr");
          break;
       case MRF:
          fprintf(file, "***m%d***", inst->src[i].reg);
