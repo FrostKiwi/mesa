@@ -274,6 +274,14 @@ fs_visitor::visit(ir_dereference_array *ir)
        */
       ir->array_index->accept(this);
 
+      if (src.file == GRF) {
+         /* Unfortunately, we don't have the little offset() helper here to
+          * help us so we have to handle adjusting slement_size manually.
+          */
+         assert(src.width == 8 || src.width == 16);
+         element_size *= src.width / 8;
+      }
+
       fs_reg index_reg;
       index_reg = vgrf(glsl_type::int_type);
       emit(BRW_OPCODE_MUL, index_reg, this->result, fs_reg(element_size));
