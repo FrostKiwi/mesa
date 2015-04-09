@@ -611,6 +611,18 @@ brw_imm_w(int16_t w)
  * numbers alias with _V and _VF below:
  */
 
+/** Construct vector of eight unsigned half-byte values */
+static inline struct brw_reg
+brw_imm_uv(unsigned v)
+{
+   struct brw_reg imm = brw_imm_reg(BRW_REGISTER_TYPE_UV);
+   imm.vstride = BRW_VERTICAL_STRIDE_0;
+   imm.width = BRW_WIDTH_8;
+   imm.hstride = BRW_HORIZONTAL_STRIDE_1;
+   imm.dw1.ud = v;
+   return imm;
+}
+
 /** Construct vector of eight signed half-byte values */
 static inline struct brw_reg
 brw_imm_v(unsigned v)
