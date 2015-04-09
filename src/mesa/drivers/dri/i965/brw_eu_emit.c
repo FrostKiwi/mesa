@@ -223,7 +223,7 @@ validate_reg(const struct brw_device_info *devinfo,
        * mean the destination has to be 128-bit aligned and the
        * destination horiz stride has to be a word.
        */
-      if (reg.type == BRW_REGISTER_TYPE_V) {
+      if (reg.type == BRW_REGISTER_TYPE_V || reg.type == BRW_REGISTER_TYPE_UV) {
          assert(hstride_for_reg[brw_inst_dst_hstride(devinfo, inst)] *
                 reg_type_size[brw_inst_dst_reg_type(devinfo, inst)] == 2);
       }
