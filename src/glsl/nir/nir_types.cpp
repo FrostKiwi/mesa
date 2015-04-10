@@ -103,7 +103,21 @@ glsl_get_matrix_columns(const struct glsl_type *type)
 unsigned
 glsl_get_length(const struct glsl_type *type)
 {
-   return type->length;
+   switch (glsl_get_base_type(type)) {
+   case GLSL_TYPE_STRUCT:
+   case GLSL_TYPE_ARRAY:
+      return type->length;
+   case GLSL_TYPE_FLOAT:
+   case GLSL_TYPE_INT:
+   case GLSL_TYPE_UINT:
+   case GLSL_TYPE_BOOL:
+      if (type->is_matrix())
+         return type->matrix_columns;
+      else
+         return type->vector_elements;
+   default:
+      unreachable("Invalid base type");
+   }
 }
 
 const char *
