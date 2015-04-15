@@ -44,13 +44,12 @@ static void guess_execution_size(struct brw_compile *p,
 				 brw_inst *insn,
 				 struct brw_reg reg)
 {
-   const struct brw_context *brw = p->brw;
 
    if (reg.width == BRW_WIDTH_8 && p->compressed) {
-      brw_inst_set_exec_size(brw, insn, BRW_EXECUTE_16);
+      brw_inst_set_exec_size(p->devinfo, insn, BRW_EXECUTE_16);
    } else {
       /* Register width definitions are compatible with BRW_EXECUTE_* enums. */
-      brw_inst_set_exec_size(brw, insn, reg.width);
+      brw_inst_set_exec_size(p->devinfo, insn, reg.width);
    }
 }
 
@@ -109,7 +108,7 @@ gen7_convert_mrf_to_grf(struct brw_compile *p, struct brw_reg *reg)
  * The hardware encoding may depend on whether the value is an immediate.
  */
 unsigned
-brw_reg_type_to_hw_type(const struct brw_context *brw,
+brw_reg_type_to_hw_type(const struct brw_device_info *devinfo,
                         enum brw_reg_type type, unsigned file)
 {
    if (file == BRW_IMMEDIATE_VALUE) {
@@ -131,7 +130,7 @@ brw_reg_type_to_hw_type(const struct brw_context *brw,
       };
       assert(type < ARRAY_SIZE(imm_hw_types));
       assert(imm_hw_types[type] != -1);
-      assert(brw->gen >= 8 || type < BRW_REGISTER_TYPE_DF);
+      assert(devinfo->gen >= 8 || type < BRW_REGISTER_TYPE_DF);
       return imm_hw_types[type];
    } else {
       /* Non-immediate registers */
@@ -153,8 +152,8 @@ brw_reg_type_to_hw_type(const struct brw_context *brw,
       };
       assert(type < ARRAY_SIZE(hw_types));
       assert(hw_types[type] != -1);
-      assert(brw->gen >= 7 || type < BRW_REGISTER_TYPE_DF);
-      assert(brw->gen >= 8 || type < BRW_REGISTER_TYPE_HF);
+      assert(devinfo->gen >= 7 || type < BRW_REGISTER_TYPE_DF);
+      assert(devinfo->gen >= 8 || type < BRW_REGISTER_TYPE_HF);
       return hw_types[type];
    }
 }
@@ -162,7 +161,7 @@ brw_reg_type_to_hw_type(const struct brw_context *brw,
 void
 brw_set_dest(struct brw_compile *p, brw_inst *inst, struct brw_reg dest)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    if (dest.file != BRW_ARCHITECTURE_REGISTER_FILE &&
        dest.file != BRW_MESSAGE_REGISTER_FILE)
@@ -170,22 +169,23 @@ brw_set_dest(struct brw_compile *p, brw_inst *inst, struct brw_reg dest)
 
    gen7_convert_mrf_to_grf(p, &dest);
 
-   brw_inst_set_dst_reg_file(brw, inst, dest.file);
-   brw_inst_set_dst_reg_type(brw, inst, brw_reg_type_to_hw_type(brw, dest.type,
-                                                                dest.file));
-   brw_inst_set_dst_address_mode(brw, inst, dest.address_mode);
+   brw_inst_set_dst_reg_file(devinfo, inst, dest.file);
+   brw_inst_set_dst_reg_type(devinfo, inst,
+                             brw_reg_type_to_hw_type(devinfo, dest.type,
+                                                     dest.file));
+   brw_inst_set_dst_address_mode(devinfo, inst, dest.address_mode);
 
    if (dest.address_mode == BRW_ADDRESS_DIRECT) {
-      brw_inst_set_dst_da_reg_nr(brw, inst, dest.nr);
+      brw_inst_set_dst_da_reg_nr(devinfo, inst, dest.nr);
 
-      if (brw_inst_access_mode(brw, inst) == BRW_ALIGN_1) {
-         brw_inst_set_dst_da1_subreg_nr(brw, inst, dest.subnr);
+      if (brw_inst_access_mode(devinfo, inst) == BRW_ALIGN_1) {
+         brw_inst_set_dst_da1_subreg_nr(devinfo, inst, dest.subnr);
 	 if (dest.hstride == BRW_HORIZONTAL_STRIDE_0)
 	    dest.hstride = BRW_HORIZONTAL_STRIDE_1;
-         brw_inst_set_dst_hstride(brw, inst, dest.hstride);
+         brw_inst_set_dst_hstride(devinfo, inst, dest.hstride);
       } else {
-         brw_inst_set_dst_da16_subreg_nr(brw, inst, dest.subnr / 16);
-         brw_inst_set_da16_writemask(brw, inst, dest.dw1.bits.writemask);
+         brw_inst_set_dst_da16_subreg_nr(devinfo, inst, dest.subnr / 16);
+         brw_inst_set_da16_writemask(devinfo, inst, dest.dw1.bits.writemask);
          if (dest.file == BRW_GENERAL_REGISTER_FILE ||
              dest.file == BRW_MESSAGE_REGISTER_FILE) {
             assert(dest.dw1.bits.writemask != 0);
@@ -194,24 +194,24 @@ brw_set_dest(struct brw_compile *p, brw_inst *inst, struct brw_reg dest)
 	  *    Although Dst.HorzStride is a don't care for Align16, HW needs
 	  *    this to be programmed as "01".
 	  */
-         brw_inst_set_dst_hstride(brw, inst, 1);
+         brw_inst_set_dst_hstride(devinfo, inst, 1);
       }
    } else {
-      brw_inst_set_dst_ia_subreg_nr(brw, inst, dest.subnr);
+      brw_inst_set_dst_ia_subreg_nr(devinfo, inst, dest.subnr);
 
       /* These are different sizes in align1 vs align16:
        */
-      if (brw_inst_access_mode(brw, inst) == BRW_ALIGN_1) {
-         brw_inst_set_dst_ia1_addr_imm(brw, inst,
+      if (brw_inst_access_mode(devinfo, inst) == BRW_ALIGN_1) {
+         brw_inst_set_dst_ia1_addr_imm(devinfo, inst,
                                        dest.dw1.bits.indirect_offset);
 	 if (dest.hstride == BRW_HORIZONTAL_STRIDE_0)
 	    dest.hstride = BRW_HORIZONTAL_STRIDE_1;
-         brw_inst_set_dst_hstride(brw, inst, dest.hstride);
+         brw_inst_set_dst_hstride(devinfo, inst, dest.hstride);
       } else {
-         brw_inst_set_dst_ia16_addr_imm(brw, inst,
+         brw_inst_set_dst_ia16_addr_imm(devinfo, inst,
                                         dest.dw1.bits.indirect_offset);
 	 /* even ignored in da16, still need to set as '01' */
-         brw_inst_set_dst_hstride(brw, inst, 1);
+         brw_inst_set_dst_hstride(devinfo, inst, 1);
       }
    }
 
@@ -224,7 +224,8 @@ brw_set_dest(struct brw_compile *p, brw_inst *inst, struct brw_reg dest)
 extern int reg_type_size[];
 
 static void
-validate_reg(const struct brw_context *brw, brw_inst *inst, struct brw_reg reg)
+validate_reg(const struct brw_device_info *devinfo,
+             brw_inst *inst, struct brw_reg reg)
 {
    const int hstride_for_reg[] = {0, 1, 2, 4};
    const int vstride_for_reg[] = {0, 1, 2, 4, 8, 16, 32};
@@ -238,8 +239,8 @@ validate_reg(const struct brw_context *brw, brw_inst *inst, struct brw_reg reg)
        * destination horiz stride has to be a word.
        */
       if (reg.type == BRW_REGISTER_TYPE_V) {
-         assert(hstride_for_reg[brw_inst_dst_hstride(brw, inst)] *
-                reg_type_size[brw_inst_dst_reg_type(brw, inst)] == 2);
+         assert(hstride_for_reg[brw_inst_dst_hstride(devinfo, inst)] *
+                reg_type_size[brw_inst_dst_reg_type(devinfo, inst)] == 2);
       }
 
       return;
@@ -262,9 +263,9 @@ validate_reg(const struct brw_context *brw, brw_inst *inst, struct brw_reg reg)
    assert(reg.width >= 0 && reg.width < ARRAY_SIZE(width_for_reg));
    width = width_for_reg[reg.width];
 
-   assert(brw_inst_exec_size(brw, inst) >= 0 &&
-          brw_inst_exec_size(brw, inst) < ARRAY_SIZE(execsize_for_reg));
-   execsize = execsize_for_reg[brw_inst_exec_size(brw, inst)];
+   assert(brw_inst_exec_size(devinfo, inst) >= 0 &&
+          brw_inst_exec_size(devinfo, inst) < ARRAY_SIZE(execsize_for_reg));
+   execsize = execsize_for_reg[brw_inst_exec_size(devinfo, inst)];
 
    /* Restrictions from 3.3.10: Register Region Restrictions. */
    /* 3. */
@@ -312,15 +313,15 @@ is_compactable_immediate(unsigned imm)
 void
 brw_set_src0(struct brw_compile *p, brw_inst *inst, struct brw_reg reg)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    if (reg.file != BRW_ARCHITECTURE_REGISTER_FILE)
       assert(reg.nr < 128);
 
    gen7_convert_mrf_to_grf(p, &reg);
 
-   if (brw->gen >= 6 && (brw_inst_opcode(brw, inst) == BRW_OPCODE_SEND ||
-                         brw_inst_opcode(brw, inst) == BRW_OPCODE_SENDC)) {
+   if (devinfo->gen >= 6 && (brw_inst_opcode(devinfo, inst) == BRW_OPCODE_SEND ||
+                             brw_inst_opcode(devinfo, inst) == BRW_OPCODE_SENDC)) {
       /* Any source modifiers or regions will be ignored, since this just
        * identifies the MRF/GRF to start reading the message contents from.
        * Check for some likely failures.
@@ -330,17 +331,17 @@ brw_set_src0(struct brw_compile *p, brw_inst *inst, struct brw_reg reg)
       assert(reg.address_mode == BRW_ADDRESS_DIRECT);
    }
 
-   validate_reg(brw, inst, reg);
+   validate_reg(devinfo, inst, reg);
 
-   brw_inst_set_src0_reg_file(brw, inst, reg.file);
-   brw_inst_set_src0_reg_type(brw, inst,
-                              brw_reg_type_to_hw_type(brw, reg.type, reg.file));
-   brw_inst_set_src0_abs(brw, inst, reg.abs);
-   brw_inst_set_src0_negate(brw, inst, reg.negate);
-   brw_inst_set_src0_address_mode(brw, inst, reg.address_mode);
+   brw_inst_set_src0_reg_file(devinfo, inst, reg.file);
+   brw_inst_set_src0_reg_type(devinfo, inst,
+                              brw_reg_type_to_hw_type(devinfo, reg.type, reg.file));
+   brw_inst_set_src0_abs(devinfo, inst, reg.abs);
+   brw_inst_set_src0_negate(devinfo, inst, reg.negate);
+   brw_inst_set_src0_address_mode(devinfo, inst, reg.address_mode);
 
    if (reg.file == BRW_IMMEDIATE_VALUE) {
-      brw_inst_set_imm_ud(brw, inst, reg.dw1.ud);
+      brw_inst_set_imm_ud(devinfo, inst, reg.dw1.ud);
 
       /* The Bspec's section titled "Non-present Operands" claims that if src0
        * is an immediate that src1's type must be the same as that of src0.
@@ -364,12 +365,12 @@ brw_set_src0(struct brw_compile *p, brw_inst *inst, struct brw_reg reg)
        * so it's not clear whether it has the restriction. We'll assume it was
        * lifted on SNB. (FINISHME: decode the GM45 tables and check.)
        */
-      brw_inst_set_src1_reg_file(brw, inst, BRW_ARCHITECTURE_REGISTER_FILE);
-      if (brw->gen < 6) {
-         brw_inst_set_src1_reg_type(brw, inst,
-                                    brw_inst_src0_reg_type(brw, inst));
+      brw_inst_set_src1_reg_file(devinfo, inst, BRW_ARCHITECTURE_REGISTER_FILE);
+      if (devinfo->gen < 6) {
+         brw_inst_set_src1_reg_type(devinfo, inst,
+                                    brw_inst_src0_reg_type(devinfo, inst));
       } else {
-         brw_inst_set_src1_reg_type(brw, inst, BRW_HW_REG_TYPE_UD);
+         brw_inst_set_src1_reg_type(devinfo, inst, BRW_HW_REG_TYPE_UD);
       }
 
       /* Compacted instructions only have 12-bits (plus 1 for the other 20)
@@ -383,67 +384,67 @@ brw_set_src0(struct brw_compile *p, brw_inst *inst, struct brw_reg reg)
        *
        * If we see a 0.0:F, change the type to VF so that it can be compacted.
        */
-      if (brw_inst_imm_ud(brw, inst) == 0x0 &&
-          brw_inst_src0_reg_type(brw, inst) == BRW_HW_REG_TYPE_F) {
-         brw_inst_set_src0_reg_type(brw, inst, BRW_HW_REG_IMM_TYPE_VF);
+      if (brw_inst_imm_ud(devinfo, inst) == 0x0 &&
+          brw_inst_src0_reg_type(devinfo, inst) == BRW_HW_REG_TYPE_F) {
+         brw_inst_set_src0_reg_type(devinfo, inst, BRW_HW_REG_IMM_TYPE_VF);
       }
 
       /* There are no mappings for dst:d | i:d, so if the immediate is suitable
        * set the types to :UD so the instruction can be compacted.
        */
-      if (is_compactable_immediate(brw_inst_imm_ud(brw, inst)) &&
-          brw_inst_cond_modifier(brw, inst) == BRW_CONDITIONAL_NONE &&
-          brw_inst_src0_reg_type(brw, inst) == BRW_HW_REG_TYPE_D &&
-          brw_inst_dst_reg_type(brw, inst) == BRW_HW_REG_TYPE_D) {
-         brw_inst_set_src0_reg_type(brw, inst, BRW_HW_REG_TYPE_UD);
-         brw_inst_set_dst_reg_type(brw, inst, BRW_HW_REG_TYPE_UD);
+      if (is_compactable_immediate(brw_inst_imm_ud(devinfo, inst)) &&
+          brw_inst_cond_modifier(devinfo, inst) == BRW_CONDITIONAL_NONE &&
+          brw_inst_src0_reg_type(devinfo, inst) == BRW_HW_REG_TYPE_D &&
+          brw_inst_dst_reg_type(devinfo, inst) == BRW_HW_REG_TYPE_D) {
+         brw_inst_set_src0_reg_type(devinfo, inst, BRW_HW_REG_TYPE_UD);
+         brw_inst_set_dst_reg_type(devinfo, inst, BRW_HW_REG_TYPE_UD);
       }
    } else {
       if (reg.address_mode == BRW_ADDRESS_DIRECT) {
-         brw_inst_set_src0_da_reg_nr(brw, inst, reg.nr);
-         if (brw_inst_access_mode(brw, inst) == BRW_ALIGN_1) {
-             brw_inst_set_src0_da1_subreg_nr(brw, inst, reg.subnr);
+         brw_inst_set_src0_da_reg_nr(devinfo, inst, reg.nr);
+         if (brw_inst_access_mode(devinfo, inst) == BRW_ALIGN_1) {
+             brw_inst_set_src0_da1_subreg_nr(devinfo, inst, reg.subnr);
 	 } else {
-            brw_inst_set_src0_da16_subreg_nr(brw, inst, reg.subnr / 16);
+            brw_inst_set_src0_da16_subreg_nr(devinfo, inst, reg.subnr / 16);
 	 }
       } else {
-         brw_inst_set_src0_ia_subreg_nr(brw, inst, reg.subnr);
+         brw_inst_set_src0_ia_subreg_nr(devinfo, inst, reg.subnr);
 
-         if (brw_inst_access_mode(brw, inst) == BRW_ALIGN_1) {
-            brw_inst_set_src0_ia1_addr_imm(brw, inst, reg.dw1.bits.indirect_offset);
+         if (brw_inst_access_mode(devinfo, inst) == BRW_ALIGN_1) {
+            brw_inst_set_src0_ia1_addr_imm(devinfo, inst, reg.dw1.bits.indirect_offset);
 	 } else {
-            brw_inst_set_src0_ia_subreg_nr(brw, inst, reg.dw1.bits.indirect_offset);
+            brw_inst_set_src0_ia_subreg_nr(devinfo, inst, reg.dw1.bits.indirect_offset);
 	 }
       }
 
-      if (brw_inst_access_mode(brw, inst) == BRW_ALIGN_1) {
+      if (brw_inst_access_mode(devinfo, inst) == BRW_ALIGN_1) {
 	 if (reg.width == BRW_WIDTH_1 &&
-             brw_inst_exec_size(brw, inst) == BRW_EXECUTE_1) {
-            brw_inst_set_src0_hstride(brw, inst, BRW_HORIZONTAL_STRIDE_0);
-            brw_inst_set_src0_width(brw, inst, BRW_WIDTH_1);
-            brw_inst_set_src0_vstride(brw, inst, BRW_VERTICAL_STRIDE_0);
+             brw_inst_exec_size(devinfo, inst) == BRW_EXECUTE_1) {
+            brw_inst_set_src0_hstride(devinfo, inst, BRW_HORIZONTAL_STRIDE_0);
+            brw_inst_set_src0_width(devinfo, inst, BRW_WIDTH_1);
+            brw_inst_set_src0_vstride(devinfo, inst, BRW_VERTICAL_STRIDE_0);
 	 } else {
-            brw_inst_set_src0_hstride(brw, inst, reg.hstride);
-            brw_inst_set_src0_width(brw, inst, reg.width);
-            brw_inst_set_src0_vstride(brw, inst, reg.vstride);
+            brw_inst_set_src0_hstride(devinfo, inst, reg.hstride);
+            brw_inst_set_src0_width(devinfo, inst, reg.width);
+            brw_inst_set_src0_vstride(devinfo, inst, reg.vstride);
 	 }
       } else {
-         brw_inst_set_src0_da16_swiz_x(brw, inst,
+         brw_inst_set_src0_da16_swiz_x(devinfo, inst,
             BRW_GET_SWZ(reg.dw1.bits.swizzle, BRW_CHANNEL_X));
-         brw_inst_set_src0_da16_swiz_y(brw, inst,
+         brw_inst_set_src0_da16_swiz_y(devinfo, inst,
             BRW_GET_SWZ(reg.dw1.bits.swizzle, BRW_CHANNEL_Y));
-         brw_inst_set_src0_da16_swiz_z(brw, inst,
+         brw_inst_set_src0_da16_swiz_z(devinfo, inst,
             BRW_GET_SWZ(reg.dw1.bits.swizzle, BRW_CHANNEL_Z));
-         brw_inst_set_src0_da16_swiz_w(brw, inst,
+         brw_inst_set_src0_da16_swiz_w(devinfo, inst,
             BRW_GET_SWZ(reg.dw1.bits.swizzle, BRW_CHANNEL_W));
 
 	 /* This is an oddity of the fact we're using the same
 	  * descriptions for registers in align_16 as align_1:
 	  */
 	 if (reg.vstride == BRW_VERTICAL_STRIDE_8)
-            brw_inst_set_src0_vstride(brw, inst, BRW_VERTICAL_STRIDE_4);
+            brw_inst_set_src0_vstride(devinfo, inst, BRW_VERTICAL_STRIDE_4);
 	 else
-            brw_inst_set_src0_vstride(brw, inst, reg.vstride);
+            brw_inst_set_src0_vstride(devinfo, inst, reg.vstride);
       }
    }
 }
@@ -452,7 +453,7 @@ brw_set_src0(struct brw_compile *p, brw_inst *inst, struct brw_reg reg)
 void
 brw_set_src1(struct brw_compile *p, brw_inst *inst, struct brw_reg reg)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    if (reg.file != BRW_ARCHITECTURE_REGISTER_FILE)
       assert(reg.nr < 128);
@@ -460,20 +461,20 @@ brw_set_src1(struct brw_compile *p, brw_inst *inst, struct brw_reg reg)
    gen7_convert_mrf_to_grf(p, &reg);
    assert(reg.file != BRW_MESSAGE_REGISTER_FILE);
 
-   validate_reg(brw, inst, reg);
+   validate_reg(devinfo, inst, reg);
 
-   brw_inst_set_src1_reg_file(brw, inst, reg.file);
-   brw_inst_set_src1_reg_type(brw, inst,
-                              brw_reg_type_to_hw_type(brw, reg.type, reg.file));
-   brw_inst_set_src1_abs(brw, inst, reg.abs);
-   brw_inst_set_src1_negate(brw, inst, reg.negate);
+   brw_inst_set_src1_reg_file(devinfo, inst, reg.file);
+   brw_inst_set_src1_reg_type(devinfo, inst,
+                              brw_reg_type_to_hw_type(devinfo, reg.type, reg.file));
+   brw_inst_set_src1_abs(devinfo, inst, reg.abs);
+   brw_inst_set_src1_negate(devinfo, inst, reg.negate);
 
    /* Only src1 can be immediate in two-argument instructions.
     */
-   assert(brw_inst_src0_reg_file(brw, inst) != BRW_IMMEDIATE_VALUE);
+   assert(brw_inst_src0_reg_file(devinfo, inst) != BRW_IMMEDIATE_VALUE);
 
    if (reg.file == BRW_IMMEDIATE_VALUE) {
-      brw_inst_set_imm_ud(brw, inst, reg.dw1.ud);
+      brw_inst_set_imm_ud(devinfo, inst, reg.dw1.ud);
    } else {
       /* This is a hardware restriction, which may or may not be lifted
        * in the future:
@@ -481,41 +482,41 @@ brw_set_src1(struct brw_compile *p, brw_inst *inst, struct brw_reg reg)
       assert (reg.address_mode == BRW_ADDRESS_DIRECT);
       /* assert (reg.file == BRW_GENERAL_REGISTER_FILE); */
 
-      brw_inst_set_src1_da_reg_nr(brw, inst, reg.nr);
-      if (brw_inst_access_mode(brw, inst) == BRW_ALIGN_1) {
-         brw_inst_set_src1_da1_subreg_nr(brw, inst, reg.subnr);
+      brw_inst_set_src1_da_reg_nr(devinfo, inst, reg.nr);
+      if (brw_inst_access_mode(devinfo, inst) == BRW_ALIGN_1) {
+         brw_inst_set_src1_da1_subreg_nr(devinfo, inst, reg.subnr);
       } else {
-         brw_inst_set_src1_da16_subreg_nr(brw, inst, reg.subnr / 16);
+         brw_inst_set_src1_da16_subreg_nr(devinfo, inst, reg.subnr / 16);
       }
 
-      if (brw_inst_access_mode(brw, inst) == BRW_ALIGN_1) {
+      if (brw_inst_access_mode(devinfo, inst) == BRW_ALIGN_1) {
 	 if (reg.width == BRW_WIDTH_1 &&
-             brw_inst_exec_size(brw, inst) == BRW_EXECUTE_1) {
-            brw_inst_set_src1_hstride(brw, inst, BRW_HORIZONTAL_STRIDE_0);
-            brw_inst_set_src1_width(brw, inst, BRW_WIDTH_1);
-            brw_inst_set_src1_vstride(brw, inst, BRW_VERTICAL_STRIDE_0);
+             brw_inst_exec_size(devinfo, inst) == BRW_EXECUTE_1) {
+            brw_inst_set_src1_hstride(devinfo, inst, BRW_HORIZONTAL_STRIDE_0);
+            brw_inst_set_src1_width(devinfo, inst, BRW_WIDTH_1);
+            brw_inst_set_src1_vstride(devinfo, inst, BRW_VERTICAL_STRIDE_0);
 	 } else {
-            brw_inst_set_src1_hstride(brw, inst, reg.hstride);
-            brw_inst_set_src1_width(brw, inst, reg.width);
-            brw_inst_set_src1_vstride(brw, inst, reg.vstride);
+            brw_inst_set_src1_hstride(devinfo, inst, reg.hstride);
+            brw_inst_set_src1_width(devinfo, inst, reg.width);
+            brw_inst_set_src1_vstride(devinfo, inst, reg.vstride);
 	 }
       } else {
-         brw_inst_set_src1_da16_swiz_x(brw, inst,
+         brw_inst_set_src1_da16_swiz_x(devinfo, inst,
             BRW_GET_SWZ(reg.dw1.bits.swizzle, BRW_CHANNEL_X));
-         brw_inst_set_src1_da16_swiz_y(brw, inst,
+         brw_inst_set_src1_da16_swiz_y(devinfo, inst,
             BRW_GET_SWZ(reg.dw1.bits.swizzle, BRW_CHANNEL_Y));
-         brw_inst_set_src1_da16_swiz_z(brw, inst,
+         brw_inst_set_src1_da16_swiz_z(devinfo, inst,
             BRW_GET_SWZ(reg.dw1.bits.swizzle, BRW_CHANNEL_Z));
-         brw_inst_set_src1_da16_swiz_w(brw, inst,
+         brw_inst_set_src1_da16_swiz_w(devinfo, inst,
             BRW_GET_SWZ(reg.dw1.bits.swizzle, BRW_CHANNEL_W));
 
 	 /* This is an oddity of the fact we're using the same
 	  * descriptions for registers in align_16 as align_1:
 	  */
 	 if (reg.vstride == BRW_VERTICAL_STRIDE_8)
-            brw_inst_set_src1_vstride(brw, inst, BRW_VERTICAL_STRIDE_4);
+            brw_inst_set_src1_vstride(devinfo, inst, BRW_VERTICAL_STRIDE_4);
 	 else
-            brw_inst_set_src1_vstride(brw, inst, reg.vstride);
+            brw_inst_set_src1_vstride(devinfo, inst, reg.vstride);
       }
    }
 }
@@ -537,7 +538,7 @@ brw_set_message_descriptor(struct brw_compile *p,
 			   bool header_present,
 			   bool end_of_thread)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    brw_set_src1(p, inst, brw_imm_d(0));
 
@@ -548,17 +549,17 @@ brw_set_message_descriptor(struct brw_compile *p,
     * since they go on the later SEND/SENDC instead and if set here would
     * instead clobber the conditionalmod bits.
     */
-   unsigned opcode = brw_inst_opcode(brw, inst);
+   unsigned opcode = brw_inst_opcode(devinfo, inst);
    if (opcode == BRW_OPCODE_SEND || opcode == BRW_OPCODE_SENDC) {
-      brw_inst_set_sfid(brw, inst, sfid);
+      brw_inst_set_sfid(devinfo, inst, sfid);
    }
 
-   brw_inst_set_mlen(brw, inst, msg_length);
-   brw_inst_set_rlen(brw, inst, response_length);
-   brw_inst_set_eot(brw, inst, end_of_thread);
+   brw_inst_set_mlen(devinfo, inst, msg_length);
+   brw_inst_set_rlen(devinfo, inst, response_length);
+   brw_inst_set_eot(devinfo, inst, end_of_thread);
 
-   if (brw->gen >= 5) {
-      brw_inst_set_header_present(brw, inst, header_present);
+   if (devinfo->gen >= 5) {
+      brw_inst_set_header_present(devinfo, inst, header_present);
    }
 }
 
@@ -569,7 +570,7 @@ static void brw_set_math_message( struct brw_compile *p,
 				  bool low_precision,
 				  unsigned dataType )
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    unsigned msg_length;
    unsigned response_length;
 
@@ -600,12 +601,12 @@ static void brw_set_math_message( struct brw_compile *p,
 
    brw_set_message_descriptor(p, inst, BRW_SFID_MATH,
 			      msg_length, response_length, false, false);
-   brw_inst_set_math_msg_function(brw, inst, function);
-   brw_inst_set_math_msg_signed_int(brw, inst, integer_type);
-   brw_inst_set_math_msg_precision(brw, inst, low_precision);
-   brw_inst_set_math_msg_saturate(brw, inst, brw_inst_saturate(brw, inst));
-   brw_inst_set_math_msg_data_type(brw, inst, dataType);
-   brw_inst_set_saturate(brw, inst, 0);
+   brw_inst_set_math_msg_function(devinfo, inst, function);
+   brw_inst_set_math_msg_signed_int(devinfo, inst, integer_type);
+   brw_inst_set_math_msg_precision(devinfo, inst, low_precision);
+   brw_inst_set_math_msg_saturate(devinfo, inst, brw_inst_saturate(devinfo, inst));
+   brw_inst_set_math_msg_data_type(devinfo, inst, dataType);
+   brw_inst_set_saturate(devinfo, inst, 0);
 }
 
 
@@ -615,17 +616,17 @@ static void brw_set_ff_sync_message(struct brw_compile *p,
 				    unsigned response_length,
 				    bool end_of_thread)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    brw_set_message_descriptor(p, insn, BRW_SFID_URB,
 			      1, response_length, true, end_of_thread);
-   brw_inst_set_urb_opcode(brw, insn, 1); /* FF_SYNC */
-   brw_inst_set_urb_allocate(brw, insn, allocate);
+   brw_inst_set_urb_opcode(devinfo, insn, 1); /* FF_SYNC */
+   brw_inst_set_urb_allocate(devinfo, insn, allocate);
    /* The following fields are not used by FF_SYNC: */
-   brw_inst_set_urb_global_offset(brw, insn, 0);
-   brw_inst_set_urb_swizzle_control(brw, insn, 0);
-   brw_inst_set_urb_used(brw, insn, 0);
-   brw_inst_set_urb_complete(brw, insn, 0);
+   brw_inst_set_urb_global_offset(devinfo, insn, 0);
+   brw_inst_set_urb_swizzle_control(devinfo, insn, 0);
+   brw_inst_set_urb_used(devinfo, insn, 0);
+   brw_inst_set_urb_complete(devinfo, insn, 0);
 }
 
 static void brw_set_urb_message( struct brw_compile *p,
@@ -636,11 +637,11 @@ static void brw_set_urb_message( struct brw_compile *p,
 				 unsigned offset,
 				 unsigned swizzle_control )
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
-   assert(brw->gen < 7 || swizzle_control != BRW_URB_SWIZZLE_TRANSPOSE);
-   assert(brw->gen < 7 || !(flags & BRW_URB_WRITE_ALLOCATE));
-   assert(brw->gen >= 7 || !(flags & BRW_URB_WRITE_PER_SLOT_OFFSET));
+   assert(devinfo->gen < 7 || swizzle_control != BRW_URB_SWIZZLE_TRANSPOSE);
+   assert(devinfo->gen < 7 || !(flags & BRW_URB_WRITE_ALLOCATE));
+   assert(devinfo->gen >= 7 || !(flags & BRW_URB_WRITE_PER_SLOT_OFFSET));
 
    brw_set_message_descriptor(p, insn, BRW_SFID_URB,
 			      msg_length, response_length, true,
@@ -648,23 +649,23 @@ static void brw_set_urb_message( struct brw_compile *p,
 
    if (flags & BRW_URB_WRITE_OWORD) {
       assert(msg_length == 2); /* header + one OWORD of data */
-      brw_inst_set_urb_opcode(brw, insn, BRW_URB_OPCODE_WRITE_OWORD);
+      brw_inst_set_urb_opcode(devinfo, insn, BRW_URB_OPCODE_WRITE_OWORD);
    } else {
-      brw_inst_set_urb_opcode(brw, insn, BRW_URB_OPCODE_WRITE_HWORD);
+      brw_inst_set_urb_opcode(devinfo, insn, BRW_URB_OPCODE_WRITE_HWORD);
    }
 
-   brw_inst_set_urb_global_offset(brw, insn, offset);
-   brw_inst_set_urb_swizzle_control(brw, insn, swizzle_control);
+   brw_inst_set_urb_global_offset(devinfo, insn, offset);
+   brw_inst_set_urb_swizzle_control(devinfo, insn, swizzle_control);
 
-   if (brw->gen < 8) {
-      brw_inst_set_urb_complete(brw, insn, !!(flags & BRW_URB_WRITE_COMPLETE));
+   if (devinfo->gen < 8) {
+      brw_inst_set_urb_complete(devinfo, insn, !!(flags & BRW_URB_WRITE_COMPLETE));
    }
 
-   if (brw->gen < 7) {
-      brw_inst_set_urb_allocate(brw, insn, !!(flags & BRW_URB_WRITE_ALLOCATE));
-      brw_inst_set_urb_used(brw, insn, !(flags & BRW_URB_WRITE_UNUSED));
+   if (devinfo->gen < 7) {
+      brw_inst_set_urb_allocate(devinfo, insn, !!(flags & BRW_URB_WRITE_ALLOCATE));
+      brw_inst_set_urb_used(devinfo, insn, !(flags & BRW_URB_WRITE_UNUSED));
    } else {
-      brw_inst_set_urb_per_slot_offset(brw, insn,
+      brw_inst_set_urb_per_slot_offset(devinfo, insn,
          !!(flags & BRW_URB_WRITE_PER_SLOT_OFFSET));
    }
 }
@@ -682,16 +683,16 @@ brw_set_dp_write_message(struct brw_compile *p,
 			 unsigned end_of_thread,
 			 unsigned send_commit_msg)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    unsigned sfid;
 
-   if (brw->gen >= 7) {
+   if (devinfo->gen >= 7) {
       /* Use the Render Cache for RT writes; otherwise use the Data Cache */
       if (msg_type == GEN6_DATAPORT_WRITE_MESSAGE_RENDER_TARGET_WRITE)
 	 sfid = GEN6_SFID_DATAPORT_RENDER_CACHE;
       else
 	 sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
-   } else if (brw->gen == 6) {
+   } else if (devinfo->gen == 6) {
       /* Use the render cache for all write messages. */
       sfid = GEN6_SFID_DATAPORT_RENDER_CACHE;
    } else {
@@ -701,12 +702,12 @@ brw_set_dp_write_message(struct brw_compile *p,
    brw_set_message_descriptor(p, insn, sfid, msg_length, response_length,
 			      header_present, end_of_thread);
 
-   brw_inst_set_binding_table_index(brw, insn, binding_table_index);
-   brw_inst_set_dp_write_msg_type(brw, insn, msg_type);
-   brw_inst_set_dp_write_msg_control(brw, insn, msg_control);
-   brw_inst_set_rt_last(brw, insn, last_render_target);
-   if (brw->gen < 7) {
-      brw_inst_set_dp_write_commit(brw, insn, send_commit_msg);
+   brw_inst_set_binding_table_index(devinfo, insn, binding_table_index);
+   brw_inst_set_dp_write_msg_type(devinfo, insn, msg_type);
+   brw_inst_set_dp_write_msg_control(devinfo, insn, msg_control);
+   brw_inst_set_rt_last(devinfo, insn, last_render_target);
+   if (devinfo->gen < 7) {
+      brw_inst_set_dp_write_commit(devinfo, insn, send_commit_msg);
    }
 }
 
@@ -721,12 +722,12 @@ brw_set_dp_read_message(struct brw_compile *p,
                         bool header_present,
 			unsigned response_length)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    unsigned sfid;
 
-   if (brw->gen >= 7) {
+   if (devinfo->gen >= 7) {
       sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
-   } else if (brw->gen == 6) {
+   } else if (devinfo->gen == 6) {
       if (target_cache == BRW_DATAPORT_READ_TARGET_RENDER_CACHE)
 	 sfid = GEN6_SFID_DATAPORT_RENDER_CACHE;
       else
@@ -738,11 +739,11 @@ brw_set_dp_read_message(struct brw_compile *p,
    brw_set_message_descriptor(p, insn, sfid, msg_length, response_length,
 			      header_present, false);
 
-   brw_inst_set_binding_table_index(brw, insn, binding_table_index);
-   brw_inst_set_dp_read_msg_type(brw, insn, msg_type);
-   brw_inst_set_dp_read_msg_control(brw, insn, msg_control);
-   if (brw->gen < 6)
-      brw_inst_set_dp_read_target_cache(brw, insn, target_cache);
+   brw_inst_set_binding_table_index(devinfo, insn, binding_table_index);
+   brw_inst_set_dp_read_msg_type(devinfo, insn, msg_type);
+   brw_inst_set_dp_read_msg_control(devinfo, insn, msg_control);
+   if (devinfo->gen < 6)
+      brw_inst_set_dp_read_target_cache(devinfo, insn, target_cache);
 }
 
 void
@@ -757,18 +758,18 @@ brw_set_sampler_message(struct brw_compile *p,
                         unsigned simd_mode,
                         unsigned return_format)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    brw_set_message_descriptor(p, inst, BRW_SFID_SAMPLER, msg_length,
 			      response_length, header_present, false);
 
-   brw_inst_set_binding_table_index(brw, inst, binding_table_index);
-   brw_inst_set_sampler(brw, inst, sampler);
-   brw_inst_set_sampler_msg_type(brw, inst, msg_type);
-   if (brw->gen >= 5) {
-      brw_inst_set_sampler_simd_mode(brw, inst, simd_mode);
-   } else if (brw->gen == 4 && !brw->is_g4x) {
-      brw_inst_set_sampler_return_format(brw, inst, return_format);
+   brw_inst_set_binding_table_index(devinfo, inst, binding_table_index);
+   brw_inst_set_sampler(devinfo, inst, sampler);
+   brw_inst_set_sampler_msg_type(devinfo, inst, msg_type);
+   if (devinfo->gen >= 5) {
+      brw_inst_set_sampler_simd_mode(devinfo, inst, simd_mode);
+   } else if (devinfo->gen == 4 && !devinfo->is_g4x) {
+      brw_inst_set_sampler_return_format(devinfo, inst, return_format);
    }
 }
 
@@ -784,24 +785,24 @@ gen7_set_dp_scratch_message(struct brw_compile *p,
                             unsigned rlen,
                             bool header_present)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    assert(num_regs == 1 || num_regs == 2 || num_regs == 4 ||
-          (brw->gen >= 8 && num_regs == 8));
+          (devinfo->gen >= 8 && num_regs == 8));
    brw_set_message_descriptor(p, inst, GEN7_SFID_DATAPORT_DATA_CACHE,
                               mlen, rlen, header_present, false);
-   brw_inst_set_dp_category(brw, inst, 1); /* Scratch Block Read/Write msgs */
-   brw_inst_set_scratch_read_write(brw, inst, write);
-   brw_inst_set_scratch_type(brw, inst, dword);
-   brw_inst_set_scratch_invalidate_after_read(brw, inst, invalidate_after_read);
-   brw_inst_set_scratch_block_size(brw, inst, ffs(num_regs) - 1);
-   brw_inst_set_scratch_addr_offset(brw, inst, addr_offset);
+   brw_inst_set_dp_category(devinfo, inst, 1); /* Scratch Block Read/Write msgs */
+   brw_inst_set_scratch_read_write(devinfo, inst, write);
+   brw_inst_set_scratch_type(devinfo, inst, dword);
+   brw_inst_set_scratch_invalidate_after_read(devinfo, inst, invalidate_after_read);
+   brw_inst_set_scratch_block_size(devinfo, inst, ffs(num_regs) - 1);
+   brw_inst_set_scratch_addr_offset(devinfo, inst, addr_offset);
 }
 
 #define next_insn brw_next_insn
 brw_inst *
 brw_next_insn(struct brw_compile *p, unsigned opcode)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
 
    if (p->nr_insn + 1 > p->store_size) {
@@ -813,7 +814,7 @@ brw_next_insn(struct brw_compile *p, unsigned opcode)
    insn = &p->store[p->nr_insn++];
    memcpy(insn, p->current, sizeof(*insn));
 
-   brw_inst_set_opcode(brw, insn, opcode);
+   brw_inst_set_opcode(devinfo, insn, opcode);
    return insn;
 }
 
@@ -853,12 +854,12 @@ static brw_inst *
 brw_alu3(struct brw_compile *p, unsigned opcode, struct brw_reg dest,
          struct brw_reg src0, struct brw_reg src1, struct brw_reg src2)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *inst = next_insn(p, opcode);
 
    gen7_convert_mrf_to_grf(p, &dest);
 
-   assert(brw_inst_access_mode(brw, inst) == BRW_ALIGN_16);
+   assert(brw_inst_access_mode(devinfo, inst) == BRW_ALIGN_16);
 
    assert(dest.file == BRW_GENERAL_REGISTER_FILE ||
 	  dest.file == BRW_MESSAGE_REGISTER_FILE);
@@ -867,49 +868,49 @@ brw_alu3(struct brw_compile *p, unsigned opcode, struct brw_reg dest,
    assert(dest.type == BRW_REGISTER_TYPE_F ||
           dest.type == BRW_REGISTER_TYPE_D ||
           dest.type == BRW_REGISTER_TYPE_UD);
-   if (brw->gen == 6) {
-      brw_inst_set_3src_dst_reg_file(brw, inst,
+   if (devinfo->gen == 6) {
+      brw_inst_set_3src_dst_reg_file(devinfo, inst,
                                      dest.file == BRW_MESSAGE_REGISTER_FILE);
    }
-   brw_inst_set_3src_dst_reg_nr(brw, inst, dest.nr);
-   brw_inst_set_3src_dst_subreg_nr(brw, inst, dest.subnr / 16);
-   brw_inst_set_3src_dst_writemask(brw, inst, dest.dw1.bits.writemask);
+   brw_inst_set_3src_dst_reg_nr(devinfo, inst, dest.nr);
+   brw_inst_set_3src_dst_subreg_nr(devinfo, inst, dest.subnr / 16);
+   brw_inst_set_3src_dst_writemask(devinfo, inst, dest.dw1.bits.writemask);
    guess_execution_size(p, inst, dest);
 
    assert(src0.file == BRW_GENERAL_REGISTER_FILE);
    assert(src0.address_mode == BRW_ADDRESS_DIRECT);
    assert(src0.nr < 128);
-   brw_inst_set_3src_src0_swizzle(brw, inst, src0.dw1.bits.swizzle);
-   brw_inst_set_3src_src0_subreg_nr(brw, inst, get_3src_subreg_nr(src0));
-   brw_inst_set_3src_src0_reg_nr(brw, inst, src0.nr);
-   brw_inst_set_3src_src0_abs(brw, inst, src0.abs);
-   brw_inst_set_3src_src0_negate(brw, inst, src0.negate);
-   brw_inst_set_3src_src0_rep_ctrl(brw, inst,
+   brw_inst_set_3src_src0_swizzle(devinfo, inst, src0.dw1.bits.swizzle);
+   brw_inst_set_3src_src0_subreg_nr(devinfo, inst, get_3src_subreg_nr(src0));
+   brw_inst_set_3src_src0_reg_nr(devinfo, inst, src0.nr);
+   brw_inst_set_3src_src0_abs(devinfo, inst, src0.abs);
+   brw_inst_set_3src_src0_negate(devinfo, inst, src0.negate);
+   brw_inst_set_3src_src0_rep_ctrl(devinfo, inst,
                                    src0.vstride == BRW_VERTICAL_STRIDE_0);
 
    assert(src1.file == BRW_GENERAL_REGISTER_FILE);
    assert(src1.address_mode == BRW_ADDRESS_DIRECT);
    assert(src1.nr < 128);
-   brw_inst_set_3src_src1_swizzle(brw, inst, src1.dw1.bits.swizzle);
-   brw_inst_set_3src_src1_subreg_nr(brw, inst, get_3src_subreg_nr(src1));
-   brw_inst_set_3src_src1_reg_nr(brw, inst, src1.nr);
-   brw_inst_set_3src_src1_abs(brw, inst, src1.abs);
-   brw_inst_set_3src_src1_negate(brw, inst, src1.negate);
-   brw_inst_set_3src_src1_rep_ctrl(brw, inst,
+   brw_inst_set_3src_src1_swizzle(devinfo, inst, src1.dw1.bits.swizzle);
+   brw_inst_set_3src_src1_subreg_nr(devinfo, inst, get_3src_subreg_nr(src1));
+   brw_inst_set_3src_src1_reg_nr(devinfo, inst, src1.nr);
+   brw_inst_set_3src_src1_abs(devinfo, inst, src1.abs);
+   brw_inst_set_3src_src1_negate(devinfo, inst, src1.negate);
+   brw_inst_set_3src_src1_rep_ctrl(devinfo, inst,
                                    src1.vstride == BRW_VERTICAL_STRIDE_0);
 
    assert(src2.file == BRW_GENERAL_REGISTER_FILE);
    assert(src2.address_mode == BRW_ADDRESS_DIRECT);
    assert(src2.nr < 128);
-   brw_inst_set_3src_src2_swizzle(brw, inst, src2.dw1.bits.swizzle);
-   brw_inst_set_3src_src2_subreg_nr(brw, inst, get_3src_subreg_nr(src2));
-   brw_inst_set_3src_src2_reg_nr(brw, inst, src2.nr);
-   brw_inst_set_3src_src2_abs(brw, inst, src2.abs);
-   brw_inst_set_3src_src2_negate(brw, inst, src2.negate);
-   brw_inst_set_3src_src2_rep_ctrl(brw, inst,
+   brw_inst_set_3src_src2_swizzle(devinfo, inst, src2.dw1.bits.swizzle);
+   brw_inst_set_3src_src2_subreg_nr(devinfo, inst, get_3src_subreg_nr(src2));
+   brw_inst_set_3src_src2_reg_nr(devinfo, inst, src2.nr);
+   brw_inst_set_3src_src2_abs(devinfo, inst, src2.abs);
+   brw_inst_set_3src_src2_negate(devinfo, inst, src2.negate);
+   brw_inst_set_3src_src2_rep_ctrl(devinfo, inst,
                                    src2.vstride == BRW_VERTICAL_STRIDE_0);
 
-   if (brw->gen >= 7) {
+   if (devinfo->gen >= 7) {
       /* Set both the source and destination types based on dest.type,
        * ignoring the source register types.  The MAD and LRP emitters ensure
        * that all four types are float.  The BFE and BFI2 emitters, however,
@@ -918,16 +919,16 @@ brw_alu3(struct brw_compile *p, unsigned opcode, struct brw_reg dest,
        */
       switch (dest.type) {
       case BRW_REGISTER_TYPE_F:
-         brw_inst_set_3src_src_type(brw, inst, BRW_3SRC_TYPE_F);
-         brw_inst_set_3src_dst_type(brw, inst, BRW_3SRC_TYPE_F);
+         brw_inst_set_3src_src_type(devinfo, inst, BRW_3SRC_TYPE_F);
+         brw_inst_set_3src_dst_type(devinfo, inst, BRW_3SRC_TYPE_F);
          break;
       case BRW_REGISTER_TYPE_D:
-         brw_inst_set_3src_src_type(brw, inst, BRW_3SRC_TYPE_D);
-         brw_inst_set_3src_dst_type(brw, inst, BRW_3SRC_TYPE_D);
+         brw_inst_set_3src_src_type(devinfo, inst, BRW_3SRC_TYPE_D);
+         brw_inst_set_3src_dst_type(devinfo, inst, BRW_3SRC_TYPE_D);
          break;
       case BRW_REGISTER_TYPE_UD:
-         brw_inst_set_3src_src_type(brw, inst, BRW_3SRC_TYPE_UD);
-         brw_inst_set_3src_dst_type(brw, inst, BRW_3SRC_TYPE_UD);
+         brw_inst_set_3src_src_type(devinfo, inst, BRW_3SRC_TYPE_UD);
+         brw_inst_set_3src_dst_type(devinfo, inst, BRW_3SRC_TYPE_UD);
          break;
       }
    }
@@ -992,17 +993,17 @@ void brw_##OP(struct brw_compile *p,					      \
 	      struct brw_reg dest,					      \
 	      struct brw_reg src)					      \
 {									      \
-   struct brw_context *brw = p->brw;					      \
+   const struct brw_device_info *devinfo = p->devinfo;					      \
    brw_inst *rnd, *add;							      \
    rnd = next_insn(p, BRW_OPCODE_##OP);					      \
    brw_set_dest(p, rnd, dest);						      \
    brw_set_src0(p, rnd, src);						      \
 									      \
-   if (brw->gen < 6) {							      \
+   if (devinfo->gen < 6) {							      \
       /* turn on round-increments */					      \
-      brw_inst_set_cond_modifier(brw, rnd, BRW_CONDITIONAL_R);                \
+      brw_inst_set_cond_modifier(devinfo, rnd, BRW_CONDITIONAL_R);            \
       add = brw_ADD(p, dest, dest, brw_imm_f(1.0f));			      \
-      brw_inst_set_pred_control(brw, add, BRW_PREDICATE_NORMAL);              \
+      brw_inst_set_pred_control(devinfo, add, BRW_PREDICATE_NORMAL);          \
    }									      \
 }
 
@@ -1132,15 +1133,15 @@ brw_LINE(struct brw_compile *p, struct brw_reg dest,
 brw_inst *
 brw_F32TO16(struct brw_compile *p, struct brw_reg dst, struct brw_reg src)
 {
-   const struct brw_context *brw = p->brw;
-   const bool align16 = brw_inst_access_mode(brw, p->current) == BRW_ALIGN_16;
+   const struct brw_device_info *devinfo = p->devinfo;
+   const bool align16 = brw_inst_access_mode(devinfo, p->current) == BRW_ALIGN_16;
    /* The F32TO16 instruction doesn't support 32-bit destination types in
     * Align1 mode, and neither does the Gen8 implementation in terms of a
     * converting MOV.  Gen7 does zero out the high 16 bits in Align16 mode as
     * an undocumented feature.
     */
    const bool needs_zero_fill = (dst.type == BRW_REGISTER_TYPE_UD &&
-                                 (!align16 || brw->gen >= 8));
+                                 (!align16 || devinfo->gen >= 8));
    brw_inst *inst;
 
    if (align16) {
@@ -1159,17 +1160,17 @@ brw_F32TO16(struct brw_compile *p, struct brw_reg dst, struct brw_reg src)
       dst = spread(retype(dst, BRW_REGISTER_TYPE_W), 2);
    }
 
-   if (brw->gen >= 8) {
+   if (devinfo->gen >= 8) {
       inst = brw_MOV(p, retype(dst, BRW_REGISTER_TYPE_HF), src);
    } else {
-      assert(brw->gen == 7);
+      assert(devinfo->gen == 7);
       inst = brw_alu1(p, BRW_OPCODE_F32TO16, dst, src);
    }
 
    if (needs_zero_fill) {
-      brw_inst_set_no_dd_clear(brw, inst, true);
+      brw_inst_set_no_dd_clear(devinfo, inst, true);
       inst = brw_MOV(p, suboffset(dst, 1), brw_imm_ud(0u));
-      brw_inst_set_no_dd_check(brw, inst, true);
+      brw_inst_set_no_dd_check(devinfo, inst, true);
    }
 
    brw_pop_insn_state(p);
@@ -1179,8 +1180,8 @@ brw_F32TO16(struct brw_compile *p, struct brw_reg dst, struct brw_reg src)
 brw_inst *
 brw_F16TO32(struct brw_compile *p, struct brw_reg dst, struct brw_reg src)
 {
-   const struct brw_context *brw = p->brw;
-   bool align16 = brw_inst_access_mode(brw, p->current) == BRW_ALIGN_16;
+   const struct brw_device_info *devinfo = p->devinfo;
+   bool align16 = brw_inst_access_mode(devinfo, p->current) == BRW_ALIGN_16;
 
    if (align16) {
       assert(src.type == BRW_REGISTER_TYPE_UD);
@@ -1199,10 +1200,10 @@ brw_F16TO32(struct brw_compile *p, struct brw_reg dst, struct brw_reg src)
              src.type == BRW_REGISTER_TYPE_HF);
    }
 
-   if (brw->gen >= 8) {
+   if (devinfo->gen >= 8) {
       return brw_MOV(p, dst, retype(src, BRW_REGISTER_TYPE_HF));
    } else {
-      assert(brw->gen == 7);
+      assert(devinfo->gen == 7);
       return brw_alu1(p, BRW_OPCODE_F16TO32, dst, src);
    }
 }
@@ -1228,14 +1229,14 @@ brw_inst *
 brw_JMPI(struct brw_compile *p, struct brw_reg index,
          unsigned predicate_control)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    struct brw_reg ip = brw_ip_reg();
    brw_inst *inst = brw_alu2(p, BRW_OPCODE_JMPI, ip, ip, index);
 
-   brw_inst_set_exec_size(brw, inst, BRW_EXECUTE_2);
-   brw_inst_set_qtr_control(brw, inst, BRW_COMPRESSION_NONE);
-   brw_inst_set_mask_control(brw, inst, BRW_MASK_DISABLE);
-   brw_inst_set_pred_control(brw, inst, predicate_control);
+   brw_inst_set_exec_size(devinfo, inst, BRW_EXECUTE_2);
+   brw_inst_set_qtr_control(devinfo, inst, BRW_COMPRESSION_NONE);
+   brw_inst_set_mask_control(devinfo, inst, BRW_MASK_DISABLE);
+   brw_inst_set_pred_control(devinfo, inst, predicate_control);
 
    return inst;
 }
@@ -1298,41 +1299,41 @@ get_inner_do_insn(struct brw_compile *p)
 brw_inst *
 brw_IF(struct brw_compile *p, unsigned execute_size)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
 
    insn = next_insn(p, BRW_OPCODE_IF);
 
    /* Override the defaults for this instruction:
     */
-   if (brw->gen < 6) {
+   if (devinfo->gen < 6) {
       brw_set_dest(p, insn, brw_ip_reg());
       brw_set_src0(p, insn, brw_ip_reg());
       brw_set_src1(p, insn, brw_imm_d(0x0));
-   } else if (brw->gen == 6) {
+   } else if (devinfo->gen == 6) {
       brw_set_dest(p, insn, brw_imm_w(0));
-      brw_inst_set_gen6_jump_count(brw, insn, 0);
+      brw_inst_set_gen6_jump_count(devinfo, insn, 0);
       brw_set_src0(p, insn, vec1(retype(brw_null_reg(), BRW_REGISTER_TYPE_D)));
       brw_set_src1(p, insn, vec1(retype(brw_null_reg(), BRW_REGISTER_TYPE_D)));
-   } else if (brw->gen == 7) {
+   } else if (devinfo->gen == 7) {
       brw_set_dest(p, insn, vec1(retype(brw_null_reg(), BRW_REGISTER_TYPE_D)));
       brw_set_src0(p, insn, vec1(retype(brw_null_reg(), BRW_REGISTER_TYPE_D)));
       brw_set_src1(p, insn, brw_imm_w(0));
-      brw_inst_set_jip(brw, insn, 0);
-      brw_inst_set_uip(brw, insn, 0);
+      brw_inst_set_jip(devinfo, insn, 0);
+      brw_inst_set_uip(devinfo, insn, 0);
    } else {
       brw_set_dest(p, insn, vec1(retype(brw_null_reg(), BRW_REGISTER_TYPE_D)));
       brw_set_src0(p, insn, brw_imm_d(0));
-      brw_inst_set_jip(brw, insn, 0);
-      brw_inst_set_uip(brw, insn, 0);
+      brw_inst_set_jip(devinfo, insn, 0);
+      brw_inst_set_uip(devinfo, insn, 0);
    }
 
-   brw_inst_set_exec_size(brw, insn, execute_size);
-   brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
-   brw_inst_set_pred_control(brw, insn, BRW_PREDICATE_NORMAL);
-   brw_inst_set_mask_control(brw, insn, BRW_MASK_ENABLE);
-   if (!p->single_program_flow && brw->gen < 6)
-      brw_inst_set_thread_control(brw, insn, BRW_THREAD_SWITCH);
+   brw_inst_set_exec_size(devinfo, insn, execute_size);
+   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
+   brw_inst_set_pred_control(devinfo, insn, BRW_PREDICATE_NORMAL);
+   brw_inst_set_mask_control(devinfo, insn, BRW_MASK_ENABLE);
+   if (!p->single_program_flow && devinfo->gen < 6)
+      brw_inst_set_thread_control(devinfo, insn, BRW_THREAD_SWITCH);
 
    push_if_stack(p, insn);
    p->if_depth_in_loop[p->loop_stack_depth]++;
@@ -1346,21 +1347,21 @@ brw_inst *
 gen6_IF(struct brw_compile *p, enum brw_conditional_mod conditional,
 	struct brw_reg src0, struct brw_reg src1)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
 
    insn = next_insn(p, BRW_OPCODE_IF);
 
    brw_set_dest(p, insn, brw_imm_w(0));
-   brw_inst_set_exec_size(brw, insn, p->compressed ? BRW_EXECUTE_16
+   brw_inst_set_exec_size(devinfo, insn, p->compressed ? BRW_EXECUTE_16
                                                    : BRW_EXECUTE_8);
-   brw_inst_set_gen6_jump_count(brw, insn, 0);
+   brw_inst_set_gen6_jump_count(devinfo, insn, 0);
    brw_set_src0(p, insn, src0);
    brw_set_src1(p, insn, src1);
 
-   assert(brw_inst_qtr_control(brw, insn) == BRW_COMPRESSION_NONE);
-   assert(brw_inst_pred_control(brw, insn) == BRW_PREDICATE_NONE);
-   brw_inst_set_cond_modifier(brw, insn, conditional);
+   assert(brw_inst_qtr_control(devinfo, insn) == BRW_COMPRESSION_NONE);
+   assert(brw_inst_pred_control(devinfo, insn) == BRW_PREDICATE_NONE);
+   brw_inst_set_cond_modifier(devinfo, insn, conditional);
 
    push_if_stack(p, insn);
    return insn;
@@ -1373,15 +1374,15 @@ static void
 convert_IF_ELSE_to_ADD(struct brw_compile *p,
                        brw_inst *if_inst, brw_inst *else_inst)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    /* The next instruction (where the ENDIF would be, if it existed) */
    brw_inst *next_inst = &p->store[p->nr_insn];
 
    assert(p->single_program_flow);
-   assert(if_inst != NULL && brw_inst_opcode(brw, if_inst) == BRW_OPCODE_IF);
-   assert(else_inst == NULL || brw_inst_opcode(brw, else_inst) == BRW_OPCODE_ELSE);
-   assert(brw_inst_exec_size(brw, if_inst) == BRW_EXECUTE_1);
+   assert(if_inst != NULL && brw_inst_opcode(devinfo, if_inst) == BRW_OPCODE_IF);
+   assert(else_inst == NULL || brw_inst_opcode(devinfo, else_inst) == BRW_OPCODE_ELSE);
+   assert(brw_inst_exec_size(devinfo, if_inst) == BRW_EXECUTE_1);
 
    /* Convert IF to an ADD instruction that moves the instruction pointer
     * to the first instruction of the ELSE block.  If there is no ELSE
@@ -1391,19 +1392,19 @@ convert_IF_ELSE_to_ADD(struct brw_compile *p,
     * stack operations, and if we're currently executing, we just want to
     * continue normally.
     */
-   brw_inst_set_opcode(brw, if_inst, BRW_OPCODE_ADD);
-   brw_inst_set_pred_inv(brw, if_inst, true);
+   brw_inst_set_opcode(devinfo, if_inst, BRW_OPCODE_ADD);
+   brw_inst_set_pred_inv(devinfo, if_inst, true);
 
    if (else_inst != NULL) {
       /* Convert ELSE to an ADD instruction that points where the ENDIF
        * would be.
        */
-      brw_inst_set_opcode(brw, else_inst, BRW_OPCODE_ADD);
+      brw_inst_set_opcode(devinfo, else_inst, BRW_OPCODE_ADD);
 
-      brw_inst_set_imm_ud(brw, if_inst, (else_inst - if_inst + 1) * 16);
-      brw_inst_set_imm_ud(brw, else_inst, (next_inst - else_inst) * 16);
+      brw_inst_set_imm_ud(devinfo, if_inst, (else_inst - if_inst + 1) * 16);
+      brw_inst_set_imm_ud(devinfo, else_inst, (next_inst - else_inst) * 16);
    } else {
-      brw_inst_set_imm_ud(brw, if_inst, (next_inst - if_inst) * 16);
+      brw_inst_set_imm_ud(devinfo, if_inst, (next_inst - if_inst) * 16);
    }
 }
 
@@ -1414,7 +1415,7 @@ static void
 patch_IF_ELSE(struct brw_compile *p,
               brw_inst *if_inst, brw_inst *else_inst, brw_inst *endif_inst)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    /* We shouldn't be patching IF and ELSE instructions in single program flow
     * mode when gen < 6, because in single program flow mode on those
@@ -1428,71 +1429,71 @@ patch_IF_ELSE(struct brw_compile *p,
     * instructions to conditional ADDs.  So we do patch IF and ELSE
     * instructions in single program flow mode on those platforms.
     */
-   if (brw->gen < 6)
+   if (devinfo->gen < 6)
       assert(!p->single_program_flow);
 
-   assert(if_inst != NULL && brw_inst_opcode(brw, if_inst) == BRW_OPCODE_IF);
+   assert(if_inst != NULL && brw_inst_opcode(devinfo, if_inst) == BRW_OPCODE_IF);
    assert(endif_inst != NULL);
-   assert(else_inst == NULL || brw_inst_opcode(brw, else_inst) == BRW_OPCODE_ELSE);
+   assert(else_inst == NULL || brw_inst_opcode(devinfo, else_inst) == BRW_OPCODE_ELSE);
 
-   unsigned br = brw_jump_scale(brw);
+   unsigned br = brw_jump_scale(devinfo);
 
-   assert(brw_inst_opcode(brw, endif_inst) == BRW_OPCODE_ENDIF);
-   brw_inst_set_exec_size(brw, endif_inst, brw_inst_exec_size(brw, if_inst));
+   assert(brw_inst_opcode(devinfo, endif_inst) == BRW_OPCODE_ENDIF);
+   brw_inst_set_exec_size(devinfo, endif_inst, brw_inst_exec_size(devinfo, if_inst));
 
    if (else_inst == NULL) {
       /* Patch IF -> ENDIF */
-      if (brw->gen < 6) {
+      if (devinfo->gen < 6) {
 	 /* Turn it into an IFF, which means no mask stack operations for
 	  * all-false and jumping past the ENDIF.
 	  */
-         brw_inst_set_opcode(brw, if_inst, BRW_OPCODE_IFF);
-         brw_inst_set_gen4_jump_count(brw, if_inst,
+         brw_inst_set_opcode(devinfo, if_inst, BRW_OPCODE_IFF);
+         brw_inst_set_gen4_jump_count(devinfo, if_inst,
                                       br * (endif_inst - if_inst + 1));
-         brw_inst_set_gen4_pop_count(brw, if_inst, 0);
-      } else if (brw->gen == 6) {
+         brw_inst_set_gen4_pop_count(devinfo, if_inst, 0);
+      } else if (devinfo->gen == 6) {
 	 /* As of gen6, there is no IFF and IF must point to the ENDIF. */
-         brw_inst_set_gen6_jump_count(brw, if_inst, br*(endif_inst - if_inst));
+         brw_inst_set_gen6_jump_count(devinfo, if_inst, br*(endif_inst - if_inst));
       } else {
-         brw_inst_set_uip(brw, if_inst, br * (endif_inst - if_inst));
-         brw_inst_set_jip(brw, if_inst, br * (endif_inst - if_inst));
+         brw_inst_set_uip(devinfo, if_inst, br * (endif_inst - if_inst));
+         brw_inst_set_jip(devinfo, if_inst, br * (endif_inst - if_inst));
       }
    } else {
-      brw_inst_set_exec_size(brw, else_inst, brw_inst_exec_size(brw, if_inst));
+      brw_inst_set_exec_size(devinfo, else_inst, brw_inst_exec_size(devinfo, if_inst));
 
       /* Patch IF -> ELSE */
-      if (brw->gen < 6) {
-         brw_inst_set_gen4_jump_count(brw, if_inst,
+      if (devinfo->gen < 6) {
+         brw_inst_set_gen4_jump_count(devinfo, if_inst,
                                       br * (else_inst - if_inst));
-         brw_inst_set_gen4_pop_count(brw, if_inst, 0);
-      } else if (brw->gen == 6) {
-         brw_inst_set_gen6_jump_count(brw, if_inst,
+         brw_inst_set_gen4_pop_count(devinfo, if_inst, 0);
+      } else if (devinfo->gen == 6) {
+         brw_inst_set_gen6_jump_count(devinfo, if_inst,
                                       br * (else_inst - if_inst + 1));
       }
 
       /* Patch ELSE -> ENDIF */
-      if (brw->gen < 6) {
+      if (devinfo->gen < 6) {
 	 /* BRW_OPCODE_ELSE pre-gen6 should point just past the
 	  * matching ENDIF.
 	  */
-         brw_inst_set_gen4_jump_count(brw, else_inst,
+         brw_inst_set_gen4_jump_count(devinfo, else_inst,
                                       br * (endif_inst - else_inst + 1));
-         brw_inst_set_gen4_pop_count(brw, else_inst, 1);
-      } else if (brw->gen == 6) {
+         brw_inst_set_gen4_pop_count(devinfo, else_inst, 1);
+      } else if (devinfo->gen == 6) {
 	 /* BRW_OPCODE_ELSE on gen6 should point to the matching ENDIF. */
-         brw_inst_set_gen6_jump_count(brw, else_inst,
+         brw_inst_set_gen6_jump_count(devinfo, else_inst,
                                       br * (endif_inst - else_inst));
       } else {
 	 /* The IF instruction's JIP should point just past the ELSE */
-         brw_inst_set_jip(brw, if_inst, br * (else_inst - if_inst + 1));
+         brw_inst_set_jip(devinfo, if_inst, br * (else_inst - if_inst + 1));
 	 /* The IF instruction's UIP and ELSE's JIP should point to ENDIF */
-         brw_inst_set_uip(brw, if_inst, br * (endif_inst - if_inst));
-         brw_inst_set_jip(brw, else_inst, br * (endif_inst - else_inst));
-         if (brw->gen >= 8) {
+         brw_inst_set_uip(devinfo, if_inst, br * (endif_inst - if_inst));
+         brw_inst_set_jip(devinfo, else_inst, br * (endif_inst - else_inst));
+         if (devinfo->gen >= 8) {
             /* Since we don't set branch_ctrl, the ELSE's JIP and UIP both
              * should point to ENDIF.
              */
-            brw_inst_set_uip(brw, else_inst, br * (endif_inst - else_inst));
+            brw_inst_set_uip(devinfo, else_inst, br * (endif_inst - else_inst));
          }
       }
    }
@@ -1501,37 +1502,37 @@ patch_IF_ELSE(struct brw_compile *p,
 void
 brw_ELSE(struct brw_compile *p)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
 
    insn = next_insn(p, BRW_OPCODE_ELSE);
 
-   if (brw->gen < 6) {
+   if (devinfo->gen < 6) {
       brw_set_dest(p, insn, brw_ip_reg());
       brw_set_src0(p, insn, brw_ip_reg());
       brw_set_src1(p, insn, brw_imm_d(0x0));
-   } else if (brw->gen == 6) {
+   } else if (devinfo->gen == 6) {
       brw_set_dest(p, insn, brw_imm_w(0));
-      brw_inst_set_gen6_jump_count(brw, insn, 0);
+      brw_inst_set_gen6_jump_count(devinfo, insn, 0);
       brw_set_src0(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       brw_set_src1(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
-   } else if (brw->gen == 7) {
+   } else if (devinfo->gen == 7) {
       brw_set_dest(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       brw_set_src0(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       brw_set_src1(p, insn, brw_imm_w(0));
-      brw_inst_set_jip(brw, insn, 0);
-      brw_inst_set_uip(brw, insn, 0);
+      brw_inst_set_jip(devinfo, insn, 0);
+      brw_inst_set_uip(devinfo, insn, 0);
    } else {
       brw_set_dest(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       brw_set_src0(p, insn, brw_imm_d(0));
-      brw_inst_set_jip(brw, insn, 0);
-      brw_inst_set_uip(brw, insn, 0);
+      brw_inst_set_jip(devinfo, insn, 0);
+      brw_inst_set_uip(devinfo, insn, 0);
    }
 
-   brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
-   brw_inst_set_mask_control(brw, insn, BRW_MASK_ENABLE);
-   if (!p->single_program_flow && brw->gen < 6)
-      brw_inst_set_thread_control(brw, insn, BRW_THREAD_SWITCH);
+   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
+   brw_inst_set_mask_control(devinfo, insn, BRW_MASK_ENABLE);
+   if (!p->single_program_flow && devinfo->gen < 6)
+      brw_inst_set_thread_control(devinfo, insn, BRW_THREAD_SWITCH);
 
    push_if_stack(p, insn);
 }
@@ -1539,7 +1540,7 @@ brw_ELSE(struct brw_compile *p)
 void
 brw_ENDIF(struct brw_compile *p)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn = NULL;
    brw_inst *else_inst = NULL;
    brw_inst *if_inst = NULL;
@@ -1558,7 +1559,7 @@ brw_ENDIF(struct brw_compile *p)
     * instructions to conditional ADDs.  So we only do this trick on Gen4 and
     * Gen5.
     */
-   if (brw->gen < 6 && p->single_program_flow)
+   if (devinfo->gen < 6 && p->single_program_flow)
       emit_endif = false;
 
    /*
@@ -1572,7 +1573,7 @@ brw_ENDIF(struct brw_compile *p)
    /* Pop the IF and (optional) ELSE instructions from the stack */
    p->if_depth_in_loop[p->loop_stack_depth]--;
    tmp = pop_if_stack(p);
-   if (brw_inst_opcode(brw, tmp) == BRW_OPCODE_ELSE) {
+   if (brw_inst_opcode(devinfo, tmp) == BRW_OPCODE_ELSE) {
       else_inst = tmp;
       tmp = pop_if_stack(p);
    }
@@ -1584,15 +1585,15 @@ brw_ENDIF(struct brw_compile *p)
       return;
    }
 
-   if (brw->gen < 6) {
+   if (devinfo->gen < 6) {
       brw_set_dest(p, insn, retype(brw_vec4_grf(0,0), BRW_REGISTER_TYPE_UD));
       brw_set_src0(p, insn, retype(brw_vec4_grf(0,0), BRW_REGISTER_TYPE_UD));
       brw_set_src1(p, insn, brw_imm_d(0x0));
-   } else if (brw->gen == 6) {
+   } else if (devinfo->gen == 6) {
       brw_set_dest(p, insn, brw_imm_w(0));
       brw_set_src0(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       brw_set_src1(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
-   } else if (brw->gen == 7) {
+   } else if (devinfo->gen == 7) {
       brw_set_dest(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       brw_set_src0(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       brw_set_src1(p, insn, brw_imm_w(0));
@@ -1600,19 +1601,19 @@ brw_ENDIF(struct brw_compile *p)
       brw_set_src0(p, insn, brw_imm_d(0));
    }
 
-   brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
-   brw_inst_set_mask_control(brw, insn, BRW_MASK_ENABLE);
-   if (brw->gen < 6)
-      brw_inst_set_thread_control(brw, insn, BRW_THREAD_SWITCH);
+   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
+   brw_inst_set_mask_control(devinfo, insn, BRW_MASK_ENABLE);
+   if (devinfo->gen < 6)
+      brw_inst_set_thread_control(devinfo, insn, BRW_THREAD_SWITCH);
 
    /* Also pop item off the stack in the endif instruction: */
-   if (brw->gen < 6) {
-      brw_inst_set_gen4_jump_count(brw, insn, 0);
-      brw_inst_set_gen4_pop_count(brw, insn, 1);
-   } else if (brw->gen == 6) {
-      brw_inst_set_gen6_jump_count(brw, insn, 2);
+   if (devinfo->gen < 6) {
+      brw_inst_set_gen4_jump_count(devinfo, insn, 0);
+      brw_inst_set_gen4_pop_count(devinfo, insn, 1);
+   } else if (devinfo->gen == 6) {
+      brw_inst_set_gen6_jump_count(devinfo, insn, 2);
    } else {
-      brw_inst_set_jip(brw, insn, 2);
+      brw_inst_set_jip(devinfo, insn, 2);
    }
    patch_IF_ELSE(p, if_inst, else_inst, insn);
 }
@@ -1620,14 +1621,14 @@ brw_ENDIF(struct brw_compile *p)
 brw_inst *
 brw_BREAK(struct brw_compile *p)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
 
    insn = next_insn(p, BRW_OPCODE_BREAK);
-   if (brw->gen >= 8) {
+   if (devinfo->gen >= 8) {
       brw_set_dest(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       brw_set_src0(p, insn, brw_imm_d(0x0));
-   } else if (brw->gen >= 6) {
+   } else if (devinfo->gen >= 6) {
       brw_set_dest(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       brw_set_src0(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       brw_set_src1(p, insn, brw_imm_d(0x0));
@@ -1635,11 +1636,11 @@ brw_BREAK(struct brw_compile *p)
       brw_set_dest(p, insn, brw_ip_reg());
       brw_set_src0(p, insn, brw_ip_reg());
       brw_set_src1(p, insn, brw_imm_d(0x0));
-      brw_inst_set_gen4_pop_count(brw, insn,
+      brw_inst_set_gen4_pop_count(devinfo, insn,
                                   p->if_depth_in_loop[p->loop_stack_depth]);
    }
-   brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
-   brw_inst_set_exec_size(brw, insn, p->compressed ? BRW_EXECUTE_16
+   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
+   brw_inst_set_exec_size(devinfo, insn, p->compressed ? BRW_EXECUTE_16
                                                    : BRW_EXECUTE_8);
 
    return insn;
@@ -1648,24 +1649,24 @@ brw_BREAK(struct brw_compile *p)
 brw_inst *
 brw_CONT(struct brw_compile *p)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
 
    insn = next_insn(p, BRW_OPCODE_CONTINUE);
    brw_set_dest(p, insn, brw_ip_reg());
-   if (brw->gen >= 8) {
+   if (devinfo->gen >= 8) {
       brw_set_src0(p, insn, brw_imm_d(0x0));
    } else {
       brw_set_src0(p, insn, brw_ip_reg());
       brw_set_src1(p, insn, brw_imm_d(0x0));
    }
 
-   if (brw->gen < 6) {
-      brw_inst_set_gen4_pop_count(brw, insn,
+   if (devinfo->gen < 6) {
+      brw_inst_set_gen4_pop_count(devinfo, insn,
                                   p->if_depth_in_loop[p->loop_stack_depth]);
    }
-   brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
-   brw_inst_set_exec_size(brw, insn, p->compressed ? BRW_EXECUTE_16
+   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
+   brw_inst_set_exec_size(devinfo, insn, p->compressed ? BRW_EXECUTE_16
                                                    : BRW_EXECUTE_8);
    return insn;
 }
@@ -1673,12 +1674,12 @@ brw_CONT(struct brw_compile *p)
 brw_inst *
 gen6_HALT(struct brw_compile *p)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
 
    insn = next_insn(p, BRW_OPCODE_HALT);
    brw_set_dest(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
-   if (brw->gen >= 8) {
+   if (devinfo->gen >= 8) {
       brw_set_src0(p, insn, brw_imm_d(0x0));
    } else {
       brw_set_src0(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
@@ -1686,10 +1687,10 @@ gen6_HALT(struct brw_compile *p)
    }
 
    if (p->compressed) {
-      brw_inst_set_exec_size(brw, insn, BRW_EXECUTE_16);
+      brw_inst_set_exec_size(devinfo, insn, BRW_EXECUTE_16);
    } else {
-      brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
-      brw_inst_set_exec_size(brw, insn, BRW_EXECUTE_8);
+      brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
+      brw_inst_set_exec_size(devinfo, insn, BRW_EXECUTE_8);
    }
    return insn;
 }
@@ -1713,9 +1714,9 @@ gen6_HALT(struct brw_compile *p)
 brw_inst *
 brw_DO(struct brw_compile *p, unsigned execute_size)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
-   if (brw->gen >= 6 || p->single_program_flow) {
+   if (devinfo->gen >= 6 || p->single_program_flow) {
       push_loop_stack(p, &p->store[p->nr_insn]);
       return &p->store[p->nr_insn];
    } else {
@@ -1729,9 +1730,9 @@ brw_DO(struct brw_compile *p, unsigned execute_size)
       brw_set_src0(p, insn, brw_null_reg());
       brw_set_src1(p, insn, brw_null_reg());
 
-      brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
-      brw_inst_set_exec_size(brw, insn, execute_size);
-      brw_inst_set_pred_control(brw, insn, BRW_PREDICATE_NONE);
+      brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
+      brw_inst_set_exec_size(devinfo, insn, execute_size);
+      brw_inst_set_pred_control(devinfo, insn, BRW_PREDICATE_NONE);
 
       return insn;
    }
@@ -1747,24 +1748,24 @@ brw_DO(struct brw_compile *p, unsigned execute_size)
 static void
 brw_patch_break_cont(struct brw_compile *p, brw_inst *while_inst)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *do_inst = get_inner_do_insn(p);
    brw_inst *inst;
-   unsigned br = brw_jump_scale(brw);
+   unsigned br = brw_jump_scale(devinfo);
 
-   assert(brw->gen < 6);
+   assert(devinfo->gen < 6);
 
    for (inst = while_inst - 1; inst != do_inst; inst--) {
       /* If the jump count is != 0, that means that this instruction has already
        * been patched because it's part of a loop inside of the one we're
        * patching.
        */
-      if (brw_inst_opcode(brw, inst) == BRW_OPCODE_BREAK &&
-          brw_inst_gen4_jump_count(brw, inst) == 0) {
-         brw_inst_set_gen4_jump_count(brw, inst, br*((while_inst - inst) + 1));
-      } else if (brw_inst_opcode(brw, inst) == BRW_OPCODE_CONTINUE &&
-                 brw_inst_gen4_jump_count(brw, inst) == 0) {
-         brw_inst_set_gen4_jump_count(brw, inst, br * (while_inst - inst));
+      if (brw_inst_opcode(devinfo, inst) == BRW_OPCODE_BREAK &&
+          brw_inst_gen4_jump_count(devinfo, inst) == 0) {
+         brw_inst_set_gen4_jump_count(devinfo, inst, br*((while_inst - inst) + 1));
+      } else if (brw_inst_opcode(devinfo, inst) == BRW_OPCODE_CONTINUE &&
+                 brw_inst_gen4_jump_count(devinfo, inst) == 0) {
+         brw_inst_set_gen4_jump_count(devinfo, inst, br * (while_inst - inst));
       }
    }
 }
@@ -1772,31 +1773,31 @@ brw_patch_break_cont(struct brw_compile *p, brw_inst *while_inst)
 brw_inst *
 brw_WHILE(struct brw_compile *p)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn, *do_insn;
-   unsigned br = brw_jump_scale(brw);
+   unsigned br = brw_jump_scale(devinfo);
 
-   if (brw->gen >= 6) {
+   if (devinfo->gen >= 6) {
       insn = next_insn(p, BRW_OPCODE_WHILE);
       do_insn = get_inner_do_insn(p);
 
-      if (brw->gen >= 8) {
+      if (devinfo->gen >= 8) {
          brw_set_dest(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
          brw_set_src0(p, insn, brw_imm_d(0));
-         brw_inst_set_jip(brw, insn, br * (do_insn - insn));
-      } else if (brw->gen == 7) {
+         brw_inst_set_jip(devinfo, insn, br * (do_insn - insn));
+      } else if (devinfo->gen == 7) {
          brw_set_dest(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
          brw_set_src0(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
          brw_set_src1(p, insn, brw_imm_w(0));
-         brw_inst_set_jip(brw, insn, br * (do_insn - insn));
+         brw_inst_set_jip(devinfo, insn, br * (do_insn - insn));
       } else {
          brw_set_dest(p, insn, brw_imm_w(0));
-         brw_inst_set_gen6_jump_count(brw, insn, br * (do_insn - insn));
+         brw_inst_set_gen6_jump_count(devinfo, insn, br * (do_insn - insn));
          brw_set_src0(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
          brw_set_src1(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_D));
       }
 
-      brw_inst_set_exec_size(brw, insn, p->compressed ? BRW_EXECUTE_16
+      brw_inst_set_exec_size(devinfo, insn, p->compressed ? BRW_EXECUTE_16
                                                       : BRW_EXECUTE_8);
    } else {
       if (p->single_program_flow) {
@@ -1806,25 +1807,25 @@ brw_WHILE(struct brw_compile *p)
 	 brw_set_dest(p, insn, brw_ip_reg());
 	 brw_set_src0(p, insn, brw_ip_reg());
 	 brw_set_src1(p, insn, brw_imm_d((do_insn - insn) * 16));
-         brw_inst_set_exec_size(brw, insn, BRW_EXECUTE_1);
+         brw_inst_set_exec_size(devinfo, insn, BRW_EXECUTE_1);
       } else {
 	 insn = next_insn(p, BRW_OPCODE_WHILE);
          do_insn = get_inner_do_insn(p);
 
-         assert(brw_inst_opcode(brw, do_insn) == BRW_OPCODE_DO);
+         assert(brw_inst_opcode(devinfo, do_insn) == BRW_OPCODE_DO);
 
 	 brw_set_dest(p, insn, brw_ip_reg());
 	 brw_set_src0(p, insn, brw_ip_reg());
 	 brw_set_src1(p, insn, brw_imm_d(0));
 
-         brw_inst_set_exec_size(brw, insn, brw_inst_exec_size(brw, do_insn));
-         brw_inst_set_gen4_jump_count(brw, insn, br * (do_insn - insn + 1));
-         brw_inst_set_gen4_pop_count(brw, insn, 0);
+         brw_inst_set_exec_size(devinfo, insn, brw_inst_exec_size(devinfo, do_insn));
+         brw_inst_set_gen4_jump_count(devinfo, insn, br * (do_insn - insn + 1));
+         brw_inst_set_gen4_pop_count(devinfo, insn, 0);
 
 	 brw_patch_break_cont(p, insn);
       }
    }
-   brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
+   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
 
    p->loop_stack_depth--;
 
@@ -1835,17 +1836,17 @@ brw_WHILE(struct brw_compile *p)
  */
 void brw_land_fwd_jump(struct brw_compile *p, int jmp_insn_idx)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *jmp_insn = &p->store[jmp_insn_idx];
    unsigned jmpi = 1;
 
-   if (brw->gen >= 5)
+   if (devinfo->gen >= 5)
       jmpi = 2;
 
-   assert(brw_inst_opcode(brw, jmp_insn) == BRW_OPCODE_JMPI);
-   assert(brw_inst_src1_reg_file(brw, jmp_insn) == BRW_IMMEDIATE_VALUE);
+   assert(brw_inst_opcode(devinfo, jmp_insn) == BRW_OPCODE_JMPI);
+   assert(brw_inst_src1_reg_file(devinfo, jmp_insn) == BRW_IMMEDIATE_VALUE);
 
-   brw_inst_set_gen4_jump_count(brw, jmp_insn,
+   brw_inst_set_gen4_jump_count(devinfo, jmp_insn,
                                 jmpi * (p->nr_insn - jmp_insn_idx - 1));
 }
 
@@ -1859,10 +1860,10 @@ void brw_CMP(struct brw_compile *p,
 	     struct brw_reg src0,
 	     struct brw_reg src1)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn = next_insn(p, BRW_OPCODE_CMP);
 
-   brw_inst_set_cond_modifier(brw, insn, conditional);
+   brw_inst_set_cond_modifier(devinfo, insn, conditional);
    brw_set_dest(p, insn, dest);
    brw_set_src0(p, insn, src0);
    brw_set_src1(p, insn, src1);
@@ -1874,10 +1875,10 @@ void brw_CMP(struct brw_compile *p,
     * It also applies to other Gen7 platforms (IVB, BYT) even though it isn't
     * mentioned on their work-arounds pages.
     */
-   if (brw->gen == 7) {
+   if (devinfo->gen == 7) {
       if (dest.file == BRW_ARCHITECTURE_REGISTER_FILE &&
           dest.nr == BRW_ARF_NULL) {
-         brw_inst_set_thread_control(brw, insn, BRW_THREAD_SWITCH);
+         brw_inst_set_thread_control(devinfo, insn, BRW_THREAD_SWITCH);
       }
    }
 }
@@ -1895,7 +1896,7 @@ void gen4_math(struct brw_compile *p,
 	       struct brw_reg src,
 	       unsigned precision )
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn = next_insn(p, BRW_OPCODE_SEND);
    unsigned data_type;
    if (has_scalar_region(src)) {
@@ -1904,13 +1905,13 @@ void gen4_math(struct brw_compile *p,
       data_type = BRW_MATH_DATA_VECTOR;
    }
 
-   assert(brw->gen < 6);
+   assert(devinfo->gen < 6);
 
    /* Example code doesn't set predicate_control for send
     * instructions.
     */
-   brw_inst_set_pred_control(brw, insn, 0);
-   brw_inst_set_base_mrf(brw, insn, msg_reg_nr);
+   brw_inst_set_pred_control(devinfo, insn, 0);
+   brw_inst_set_base_mrf(devinfo, insn, msg_reg_nr);
 
    brw_set_dest(p, insn, dest);
    brw_set_src0(p, insn, src);
@@ -1928,18 +1929,18 @@ void gen6_math(struct brw_compile *p,
 	       struct brw_reg src0,
 	       struct brw_reg src1)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn = next_insn(p, BRW_OPCODE_MATH);
 
-   assert(brw->gen >= 6);
+   assert(devinfo->gen >= 6);
 
    assert(dest.file == BRW_GENERAL_REGISTER_FILE ||
-          (brw->gen >= 7 && dest.file == BRW_MESSAGE_REGISTER_FILE));
+          (devinfo->gen >= 7 && dest.file == BRW_MESSAGE_REGISTER_FILE));
    assert(src0.file == BRW_GENERAL_REGISTER_FILE ||
-          (brw->gen >= 8 && src0.file == BRW_IMMEDIATE_VALUE));
+          (devinfo->gen >= 8 && src0.file == BRW_IMMEDIATE_VALUE));
 
    assert(dest.hstride == BRW_HORIZONTAL_STRIDE_1);
-   if (brw->gen == 6) {
+   if (devinfo->gen == 6) {
       assert(src0.hstride == BRW_HORIZONTAL_STRIDE_1);
       assert(src1.hstride == BRW_HORIZONTAL_STRIDE_1);
    }
@@ -1950,13 +1951,13 @@ void gen6_math(struct brw_compile *p,
       assert(src0.type != BRW_REGISTER_TYPE_F);
       assert(src1.type != BRW_REGISTER_TYPE_F);
       assert(src1.file == BRW_GENERAL_REGISTER_FILE ||
-             (brw->gen >= 8 && src1.file == BRW_IMMEDIATE_VALUE));
+             (devinfo->gen >= 8 && src1.file == BRW_IMMEDIATE_VALUE));
    } else {
       assert(src0.type == BRW_REGISTER_TYPE_F);
       assert(src1.type == BRW_REGISTER_TYPE_F);
       if (function == BRW_MATH_FUNCTION_POW) {
          assert(src1.file == BRW_GENERAL_REGISTER_FILE ||
-                (brw->gen >= 8 && src1.file == BRW_IMMEDIATE_VALUE));
+                (devinfo->gen >= 8 && src1.file == BRW_IMMEDIATE_VALUE));
       } else {
          assert(src1.file == BRW_ARCHITECTURE_REGISTER_FILE &&
                 src1.nr == BRW_ARF_NULL);
@@ -1964,14 +1965,14 @@ void gen6_math(struct brw_compile *p,
    }
 
    /* Source modifiers are ignored for extended math instructions on Gen6. */
-   if (brw->gen == 6) {
+   if (devinfo->gen == 6) {
       assert(!src0.negate);
       assert(!src0.abs);
       assert(!src1.negate);
       assert(!src1.abs);
    }
 
-   brw_inst_set_math_function(brw, insn, function);
+   brw_inst_set_math_function(devinfo, insn, function);
 
    brw_set_dest(p, insn, dest);
    brw_set_src0(p, insn, src0);
@@ -1991,11 +1992,11 @@ void brw_oword_block_write_scratch(struct brw_compile *p,
 				   int num_regs,
 				   unsigned offset)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    uint32_t msg_control, msg_type;
    int mlen;
 
-   if (brw->gen >= 6)
+   if (devinfo->gen >= 6)
       offset /= 16;
 
    mrf = retype(mrf, BRW_REGISTER_TYPE_UD);
@@ -2037,13 +2038,13 @@ void brw_oword_block_write_scratch(struct brw_compile *p,
       struct brw_reg src_header = retype(brw_vec8_grf(0, 0),
 					 BRW_REGISTER_TYPE_UW);
 
-      if (brw_inst_qtr_control(brw, insn) != BRW_COMPRESSION_NONE) {
-         brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
+      if (brw_inst_qtr_control(devinfo, insn) != BRW_COMPRESSION_NONE) {
+         brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
 	 src_header = vec16(src_header);
       }
-      assert(brw_inst_pred_control(brw, insn) == BRW_PREDICATE_NONE);
-      if (brw->gen < 6)
-         brw_inst_set_base_mrf(brw, insn, mrf.nr);
+      assert(brw_inst_pred_control(devinfo, insn) == BRW_PREDICATE_NONE);
+      if (devinfo->gen < 6)
+         brw_inst_set_base_mrf(devinfo, insn, mrf.nr);
 
       /* Until gen6, writes followed by reads from the same location
        * are not guaranteed to be ordered unless write_commit is set.
@@ -2055,7 +2056,7 @@ void brw_oword_block_write_scratch(struct brw_compile *p,
        * protection.  Our use of DP writes is all about register
        * spilling within a thread.
        */
-      if (brw->gen >= 6) {
+      if (devinfo->gen >= 6) {
 	 dest = retype(vec16(brw_null_reg()), BRW_REGISTER_TYPE_UW);
 	 send_commit_msg = 0;
       } else {
@@ -2064,13 +2065,13 @@ void brw_oword_block_write_scratch(struct brw_compile *p,
       }
 
       brw_set_dest(p, insn, dest);
-      if (brw->gen >= 6) {
+      if (devinfo->gen >= 6) {
 	 brw_set_src0(p, insn, mrf);
       } else {
 	 brw_set_src0(p, insn, brw_null_reg());
       }
 
-      if (brw->gen >= 6)
+      if (devinfo->gen >= 6)
 	 msg_type = GEN6_DATAPORT_WRITE_MESSAGE_OWORD_BLOCK_WRITE;
       else
 	 msg_type = BRW_DATAPORT_WRITE_MESSAGE_OWORD_BLOCK_WRITE;
@@ -2104,14 +2105,14 @@ brw_oword_block_read_scratch(struct brw_compile *p,
 			     int num_regs,
 			     unsigned offset)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    uint32_t msg_control;
    int rlen;
 
-   if (brw->gen >= 6)
+   if (devinfo->gen >= 6)
       offset /= 16;
 
-   if (p->brw->gen >= 7) {
+   if (p->devinfo->gen >= 7) {
       /* On gen 7 and above, we no longer have message registers and we can
        * send from any register we want.  By using the destination register
        * for the message, we guarantee that the implied message write won't
@@ -2149,15 +2150,15 @@ brw_oword_block_read_scratch(struct brw_compile *p,
    {
       brw_inst *insn = next_insn(p, BRW_OPCODE_SEND);
 
-      assert(brw_inst_pred_control(brw, insn) == 0);
-      brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
+      assert(brw_inst_pred_control(devinfo, insn) == 0);
+      brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
 
       brw_set_dest(p, insn, dest);	/* UW? */
-      if (brw->gen >= 6) {
+      if (devinfo->gen >= 6) {
 	 brw_set_src0(p, insn, mrf);
       } else {
 	 brw_set_src0(p, insn, brw_null_reg());
-         brw_inst_set_base_mrf(brw, insn, mrf.nr);
+         brw_inst_set_base_mrf(devinfo, insn, mrf.nr);
       }
 
       brw_set_dp_read_message(p,
@@ -2178,11 +2179,11 @@ gen7_block_read_scratch(struct brw_compile *p,
                         int num_regs,
                         unsigned offset)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn = next_insn(p, BRW_OPCODE_SEND);
-   assert(brw_inst_pred_control(brw, insn) == BRW_PREDICATE_NONE);
+   assert(brw_inst_pred_control(devinfo, insn) == BRW_PREDICATE_NONE);
 
-   brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
+   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
    brw_set_dest(p, insn, retype(dest, BRW_REGISTER_TYPE_UW));
 
    /* The HW requires that the header is present; this is to get the g0.5
@@ -2219,10 +2220,10 @@ void brw_oword_block_read(struct brw_compile *p,
 			  uint32_t offset,
 			  uint32_t bind_table_index)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    /* On newer hardware, offset is in units of owords. */
-   if (brw->gen >= 6)
+   if (devinfo->gen >= 6)
       offset /= 16;
 
    mrf = retype(mrf, BRW_REGISTER_TYPE_UD);
@@ -2247,11 +2248,11 @@ void brw_oword_block_read(struct brw_compile *p,
    dest = retype(vec8(dest), BRW_REGISTER_TYPE_UW);
 
    brw_set_dest(p, insn, dest);
-   if (brw->gen >= 6) {
+   if (devinfo->gen >= 6) {
       brw_set_src0(p, insn, mrf);
    } else {
       brw_set_src0(p, insn, brw_null_reg());
-      brw_inst_set_base_mrf(brw, insn, mrf.nr);
+      brw_inst_set_base_mrf(devinfo, insn, mrf.nr);
    }
 
    brw_set_dp_read_message(p,
@@ -2280,7 +2281,7 @@ void brw_fb_WRITE(struct brw_compile *p,
                   bool last_render_target,
                   bool header_present)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
    unsigned msg_type;
    struct brw_reg dest, src0;
@@ -2290,21 +2291,21 @@ void brw_fb_WRITE(struct brw_compile *p,
    else
       dest = retype(vec8(brw_null_reg()), BRW_REGISTER_TYPE_UW);
 
-   if (brw->gen >= 6) {
+   if (devinfo->gen >= 6) {
       insn = next_insn(p, BRW_OPCODE_SENDC);
    } else {
       insn = next_insn(p, BRW_OPCODE_SEND);
    }
-   brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
+   brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
 
-   if (brw->gen >= 6) {
+   if (devinfo->gen >= 6) {
       /* headerless version, just submit color payload */
       src0 = payload;
 
       msg_type = GEN6_DATAPORT_WRITE_MESSAGE_RENDER_TARGET_WRITE;
    } else {
       assert(payload.file == BRW_MESSAGE_REGISTER_FILE);
-      brw_inst_set_base_mrf(brw, insn, payload.nr);
+      brw_inst_set_base_mrf(devinfo, insn, payload.nr);
       src0 = implied_header;
 
       msg_type = BRW_DATAPORT_WRITE_MESSAGE_RENDER_TARGET_WRITE;
@@ -2344,14 +2345,14 @@ void brw_SAMPLE(struct brw_compile *p,
 		unsigned simd_mode,
 		unsigned return_format)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
 
    if (msg_reg_nr != -1)
       gen6_resolve_implied_move(p, &src0, msg_reg_nr);
 
    insn = next_insn(p, BRW_OPCODE_SEND);
-   brw_inst_set_pred_control(brw, insn, BRW_PREDICATE_NONE); /* XXX */
+   brw_inst_set_pred_control(devinfo, insn, BRW_PREDICATE_NONE); /* XXX */
 
    /* From the 965 PRM (volume 4, part 1, section 14.2.41):
     *
@@ -2365,11 +2366,11 @@ void brw_SAMPLE(struct brw_compile *p,
     * are allowed in SIMD16 mode and they could not work without SecHalf.  For
     * these reasons, we allow BRW_COMPRESSION_2NDHALF here.
     */
-   if (brw_inst_qtr_control(brw, insn) != BRW_COMPRESSION_2NDHALF)
-      brw_inst_set_qtr_control(brw, insn, BRW_COMPRESSION_NONE);
+   if (brw_inst_qtr_control(devinfo, insn) != BRW_COMPRESSION_2NDHALF)
+      brw_inst_set_qtr_control(devinfo, insn, BRW_COMPRESSION_NONE);
 
-   if (brw->gen < 6)
-      brw_inst_set_base_mrf(brw, insn, msg_reg_nr);
+   if (devinfo->gen < 6)
+      brw_inst_set_base_mrf(devinfo, insn, msg_reg_nr);
 
    brw_set_dest(p, insn, dest);
    brw_set_src0(p, insn, src0);
@@ -2400,14 +2401,14 @@ void brw_adjust_sampler_state_pointer(struct brw_compile *p,
     * exclusively use the offset - we have to use both.
     */
 
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    if (sampler_index.file == BRW_IMMEDIATE_VALUE) {
       const int sampler_state_size = 16; /* 16 bytes */
       uint32_t sampler = sampler_index.dw1.ud;
 
       if (sampler >= 16) {
-         assert(brw->is_haswell || brw->gen >= 8);
+         assert(devinfo->is_haswell || devinfo->gen >= 8);
          brw_ADD(p,
                  get_element_ud(header, 3),
                  get_element_ud(brw_vec8_grf(0, 0), 3),
@@ -2415,7 +2416,7 @@ void brw_adjust_sampler_state_pointer(struct brw_compile *p,
       }
    } else {
       /* Non-const sampler array indexing case */
-      if (brw->gen < 8 && !brw->is_haswell) {
+      if (devinfo->gen < 8 && !devinfo->is_haswell) {
          return;
       }
 
@@ -2444,12 +2445,12 @@ void brw_urb_WRITE(struct brw_compile *p,
 		   unsigned offset,
 		   unsigned swizzle)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
 
    gen6_resolve_implied_move(p, &src0, msg_reg_nr);
 
-   if (brw->gen >= 7 && !(flags & BRW_URB_WRITE_USE_CHANNEL_MASKS)) {
+   if (devinfo->gen >= 7 && !(flags & BRW_URB_WRITE_USE_CHANNEL_MASKS)) {
       /* Enable Channel Masks in the URB_WRITE_HWORD message header */
       brw_push_insn_state(p);
       brw_set_default_access_mode(p, BRW_ALIGN_1);
@@ -2469,8 +2470,8 @@ void brw_urb_WRITE(struct brw_compile *p,
    brw_set_src0(p, insn, src0);
    brw_set_src1(p, insn, brw_imm_d(0));
 
-   if (brw->gen < 6)
-      brw_inst_set_base_mrf(brw, insn, msg_reg_nr);
+   if (devinfo->gen < 6)
+      brw_inst_set_base_mrf(devinfo, insn, msg_reg_nr);
 
    brw_set_urb_message(p,
 		       insn,
@@ -2488,7 +2489,7 @@ brw_send_indirect_message(struct brw_compile *p,
                           struct brw_reg payload,
                           struct brw_reg desc)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    struct brw_inst *send, *setup;
 
    assert(desc.type == BRW_REGISTER_TYPE_UD);
@@ -2519,7 +2520,7 @@ brw_send_indirect_message(struct brw_compile *p,
 
    brw_set_dest(p, send, dst);
    brw_set_src0(p, send, retype(payload, BRW_REGISTER_TYPE_UD));
-   brw_inst_set_sfid(brw, send, sfid);
+   brw_inst_set_sfid(devinfo, send, sfid);
 
    return setup;
 }
@@ -2529,14 +2530,14 @@ brw_find_next_block_end(struct brw_compile *p, int start_offset)
 {
    int offset;
    void *store = p->store;
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
-   for (offset = next_offset(brw, store, start_offset);
+   for (offset = next_offset(devinfo, store, start_offset);
         offset < p->next_insn_offset;
-        offset = next_offset(brw, store, offset)) {
+        offset = next_offset(devinfo, store, offset)) {
       brw_inst *insn = store + offset;
 
-      switch (brw_inst_opcode(brw, insn)) {
+      switch (brw_inst_opcode(devinfo, insn)) {
       case BRW_OPCODE_ENDIF:
       case BRW_OPCODE_ELSE:
       case BRW_OPCODE_WHILE:
@@ -2555,24 +2556,24 @@ brw_find_next_block_end(struct brw_compile *p, int start_offset)
 static int
 brw_find_loop_end(struct brw_compile *p, int start_offset)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    int offset;
-   int scale = 16 / brw_jump_scale(brw);
+   int scale = 16 / brw_jump_scale(devinfo);
    void *store = p->store;
 
-   assert(brw->gen >= 6);
+   assert(devinfo->gen >= 6);
 
    /* Always start after the instruction (such as a WHILE) we're trying to fix
     * up.
     */
-   for (offset = next_offset(brw, store, start_offset);
+   for (offset = next_offset(devinfo, store, start_offset);
         offset < p->next_insn_offset;
-        offset = next_offset(brw, store, offset)) {
+        offset = next_offset(devinfo, store, offset)) {
       brw_inst *insn = store + offset;
 
-      if (brw_inst_opcode(brw, insn) == BRW_OPCODE_WHILE) {
-         int jip = brw->gen == 6 ? brw_inst_gen6_jump_count(brw, insn)
-                                 : brw_inst_jip(brw, insn);
+      if (brw_inst_opcode(devinfo, insn) == BRW_OPCODE_WHILE) {
+         int jip = devinfo->gen == 6 ? brw_inst_gen6_jump_count(devinfo, insn)
+                                     : brw_inst_jip(devinfo, insn);
 	 if (offset + jip * scale <= start_offset)
 	    return offset;
       }
@@ -2587,54 +2588,54 @@ brw_find_loop_end(struct brw_compile *p, int start_offset)
 void
 brw_set_uip_jip(struct brw_compile *p)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    int offset;
-   int br = brw_jump_scale(brw);
+   int br = brw_jump_scale(devinfo);
    int scale = 16 / br;
    void *store = p->store;
 
-   if (brw->gen < 6)
+   if (devinfo->gen < 6)
       return;
 
    for (offset = 0; offset < p->next_insn_offset;
-        offset = next_offset(brw, store, offset)) {
+        offset = next_offset(devinfo, store, offset)) {
       brw_inst *insn = store + offset;
 
-      if (brw_inst_cmpt_control(brw, insn)) {
+      if (brw_inst_cmpt_control(devinfo, insn)) {
 	 /* Fixups for compacted BREAK/CONTINUE not supported yet. */
-         assert(brw_inst_opcode(brw, insn) != BRW_OPCODE_BREAK &&
-                brw_inst_opcode(brw, insn) != BRW_OPCODE_CONTINUE &&
-                brw_inst_opcode(brw, insn) != BRW_OPCODE_HALT);
+         assert(brw_inst_opcode(devinfo, insn) != BRW_OPCODE_BREAK &&
+                brw_inst_opcode(devinfo, insn) != BRW_OPCODE_CONTINUE &&
+                brw_inst_opcode(devinfo, insn) != BRW_OPCODE_HALT);
 	 continue;
       }
 
       int block_end_offset = brw_find_next_block_end(p, offset);
-      switch (brw_inst_opcode(brw, insn)) {
+      switch (brw_inst_opcode(devinfo, insn)) {
       case BRW_OPCODE_BREAK:
          assert(block_end_offset != 0);
-         brw_inst_set_jip(brw, insn, (block_end_offset - offset) / scale);
+         brw_inst_set_jip(devinfo, insn, (block_end_offset - offset) / scale);
 	 /* Gen7 UIP points to WHILE; Gen6 points just after it */
-         brw_inst_set_uip(brw, insn,
+         brw_inst_set_uip(devinfo, insn,
 	    (brw_find_loop_end(p, offset) - offset +
-             (brw->gen == 6 ? 16 : 0)) / scale);
+             (devinfo->gen == 6 ? 16 : 0)) / scale);
 	 break;
       case BRW_OPCODE_CONTINUE:
          assert(block_end_offset != 0);
-         brw_inst_set_jip(brw, insn, (block_end_offset - offset) / scale);
-         brw_inst_set_uip(brw, insn,
+         brw_inst_set_jip(devinfo, insn, (block_end_offset - offset) / scale);
+         brw_inst_set_uip(devinfo, insn,
             (brw_find_loop_end(p, offset) - offset) / scale);
 
-         assert(brw_inst_uip(brw, insn) != 0);
-         assert(brw_inst_jip(brw, insn) != 0);
+         assert(brw_inst_uip(devinfo, insn) != 0);
+         assert(brw_inst_jip(devinfo, insn) != 0);
 	 break;
 
       case BRW_OPCODE_ENDIF: {
          int32_t jump = (block_end_offset == 0) ?
                         1 * br : (block_end_offset - offset) / scale;
-         if (brw->gen >= 7)
-            brw_inst_set_jip(brw, insn, jump);
+         if (devinfo->gen >= 7)
+            brw_inst_set_jip(devinfo, insn, jump);
          else
-            brw_inst_set_gen6_jump_count(brw, insn, jump);
+            brw_inst_set_gen6_jump_count(devinfo, insn, jump);
 	 break;
       }
 
@@ -2651,12 +2652,12 @@ brw_set_uip_jip(struct brw_compile *p)
 	  * instruction.
 	  */
 	 if (block_end_offset == 0) {
-            brw_inst_set_jip(brw, insn, brw_inst_uip(brw, insn));
+            brw_inst_set_jip(devinfo, insn, brw_inst_uip(devinfo, insn));
 	 } else {
-            brw_inst_set_jip(brw, insn, (block_end_offset - offset) / scale);
+            brw_inst_set_jip(devinfo, insn, (block_end_offset - offset) / scale);
 	 }
-         assert(brw_inst_uip(brw, insn) != 0);
-         assert(brw_inst_jip(brw, insn) != 0);
+         assert(brw_inst_uip(devinfo, insn) != 0);
+         assert(brw_inst_jip(devinfo, insn) != 0);
 	 break;
       }
    }
@@ -2670,7 +2671,7 @@ void brw_ff_sync(struct brw_compile *p,
 		   unsigned response_length,
 		   bool eot)
 {
-   struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn;
 
    gen6_resolve_implied_move(p, &src0, msg_reg_nr);
@@ -2680,8 +2681,8 @@ void brw_ff_sync(struct brw_compile *p,
    brw_set_src0(p, insn, src0);
    brw_set_src1(p, insn, brw_imm_d(0));
 
-   if (brw->gen < 6)
-      brw_inst_set_base_mrf(brw, insn, msg_reg_nr);
+   if (devinfo->gen < 6)
+      brw_inst_set_base_mrf(devinfo, insn, msg_reg_nr);
 
    brw_set_ff_sync_message(p,
 			   insn,
@@ -2735,7 +2736,7 @@ brw_surface_payload_size(struct brw_compile *p,
                          bool has_simd4x2,
                          bool has_simd16)
 {
-   if (has_simd4x2 && brw_inst_access_mode(p->brw, p->current) == BRW_ALIGN_16)
+   if (has_simd4x2 && brw_inst_access_mode(p->devinfo, p->current) == BRW_ALIGN_16)
       return 1;
    else if (has_simd16 && p->compressed)
       return 2 * num_channels;
@@ -2752,26 +2753,26 @@ brw_set_dp_untyped_atomic_message(struct brw_compile *p,
                                   unsigned response_length,
                                   bool header_present)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
 
    unsigned msg_control =
       atomic_op | /* Atomic Operation Type: BRW_AOP_* */
       (response_length ? 1 << 5 : 0); /* Return data expected */
 
-   if (brw->gen >= 8 || brw->is_haswell) {
+   if (devinfo->gen >= 8 || devinfo->is_haswell) {
       brw_set_message_descriptor(p, insn, HSW_SFID_DATAPORT_DATA_CACHE_1,
                                  msg_length, response_length,
                                  header_present, false);
 
 
-      if (brw_inst_access_mode(brw, insn) == BRW_ALIGN_1) {
-         if (brw_inst_exec_size(brw, insn) != BRW_EXECUTE_16)
+      if (brw_inst_access_mode(devinfo, insn) == BRW_ALIGN_1) {
+         if (brw_inst_exec_size(devinfo, insn) != BRW_EXECUTE_16)
             msg_control |= 1 << 4; /* SIMD8 mode */
 
-         brw_inst_set_dp_msg_type(brw, insn,
+         brw_inst_set_dp_msg_type(devinfo, insn,
                                   HSW_DATAPORT_DC_PORT1_UNTYPED_ATOMIC_OP);
       } else {
-         brw_inst_set_dp_msg_type(brw, insn,
+         brw_inst_set_dp_msg_type(devinfo, insn,
             HSW_DATAPORT_DC_PORT1_UNTYPED_ATOMIC_OP_SIMD4X2);
       }
    } else {
@@ -2779,14 +2780,14 @@ brw_set_dp_untyped_atomic_message(struct brw_compile *p,
                                  msg_length, response_length,
                                  header_present, false);
 
-      brw_inst_set_dp_msg_type(brw, insn, GEN7_DATAPORT_DC_UNTYPED_ATOMIC_OP);
+      brw_inst_set_dp_msg_type(devinfo, insn, GEN7_DATAPORT_DC_UNTYPED_ATOMIC_OP);
 
-      if (brw_inst_exec_size(brw, insn) != BRW_EXECUTE_16)
+      if (brw_inst_exec_size(devinfo, insn) != BRW_EXECUTE_16)
          msg_control |= 1 << 4; /* SIMD8 mode */
    }
 
-   brw_inst_set_binding_table_index(brw, insn, bind_table_index);
-   brw_inst_set_dp_msg_control(brw, insn, msg_control);
+   brw_inst_set_binding_table_index(devinfo, insn, bind_table_index);
+   brw_inst_set_dp_msg_control(devinfo, insn, msg_control);
 }
 
 void
@@ -2798,8 +2799,8 @@ brw_untyped_atomic(struct brw_compile *p,
                    unsigned msg_length,
                    bool response_expected)
 {
-   const struct brw_context *brw = p->brw;
-   const bool align1 = brw_inst_access_mode(brw, p->current) == BRW_ALIGN_1;
+   const struct brw_device_info *devinfo = p->devinfo;
+   const bool align1 = brw_inst_access_mode(devinfo, p->current) == BRW_ALIGN_1;
    /* Mask out unused components -- This is especially important in Align16
     * mode on generations that don't have native support for SIMD4x2 atomics,
     * because unused but enabled components will cause the dataport to perform
@@ -2816,7 +2817,7 @@ brw_untyped_atomic(struct brw_compile *p,
    brw_set_dp_untyped_atomic_message(
       p, insn, atomic_op, bind_table_index, msg_length,
       brw_surface_payload_size(p, response_expected,
-                               brw->gen >= 8 || brw->is_haswell, true),
+                               devinfo->gen >= 8 || devinfo->is_haswell, true),
       align1);
 }
 
@@ -2829,38 +2830,38 @@ brw_set_dp_untyped_surface_read_message(struct brw_compile *p,
                                         unsigned num_channels,
                                         bool header_present)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    const unsigned dispatch_width =
-      (brw_inst_exec_size(brw, insn) == BRW_EXECUTE_16 ? 16 : 8);
+      (brw_inst_exec_size(devinfo, insn) == BRW_EXECUTE_16 ? 16 : 8);
 
-   if (brw->gen >= 8 || brw->is_haswell) {
+   if (devinfo->gen >= 8 || devinfo->is_haswell) {
       brw_set_message_descriptor(p, insn, HSW_SFID_DATAPORT_DATA_CACHE_1,
                                  msg_length, response_length,
                                  header_present, false);
 
-      brw_inst_set_dp_msg_type(brw, insn,
+      brw_inst_set_dp_msg_type(devinfo, insn,
                                HSW_DATAPORT_DC_PORT1_UNTYPED_SURFACE_READ);
    } else {
       brw_set_message_descriptor(p, insn, GEN7_SFID_DATAPORT_DATA_CACHE,
                                  msg_length, response_length,
                                  header_present, false);
 
-      brw_inst_set_dp_msg_type(brw, insn,
+      brw_inst_set_dp_msg_type(devinfo, insn,
                                GEN7_DATAPORT_DC_UNTYPED_SURFACE_READ);
    }
 
    /* Set mask of 32-bit channels to drop. */
    unsigned msg_control = (0xf & (0xf << num_channels));
 
-   if (brw_inst_access_mode(brw, insn) == BRW_ALIGN_1) {
+   if (brw_inst_access_mode(devinfo, insn) == BRW_ALIGN_1) {
       if (dispatch_width == 16)
          msg_control |= 1 << 4; /* SIMD16 mode */
       else
          msg_control |= 2 << 4; /* SIMD8 mode */
    }
 
-   brw_inst_set_binding_table_index(brw, insn, bind_table_index);
-   brw_inst_set_dp_msg_control(brw, insn, msg_control);
+   brw_inst_set_binding_table_index(devinfo, insn, bind_table_index);
+   brw_inst_set_dp_msg_control(devinfo, insn, msg_control);
 }
 
 void
@@ -2871,7 +2872,7 @@ brw_untyped_surface_read(struct brw_compile *p,
                          unsigned msg_length,
                          unsigned num_channels)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    brw_inst *insn = next_insn(p, BRW_OPCODE_SEND);
 
    brw_set_dest(p, insn, retype(dest, BRW_REGISTER_TYPE_UD));
@@ -2879,7 +2880,7 @@ brw_untyped_surface_read(struct brw_compile *p,
    brw_set_dp_untyped_surface_read_message(
       p, insn, bind_table_index, msg_length,
       brw_surface_payload_size(p, num_channels, true, true),
-      num_channels, brw_inst_access_mode(brw, insn) == BRW_ALIGN_1);
+      num_channels, brw_inst_access_mode(devinfo, insn) == BRW_ALIGN_1);
 }
 
 void
@@ -2892,7 +2893,7 @@ brw_pixel_interpolator_query(struct brw_compile *p,
                              unsigned msg_length,
                              unsigned response_length)
 {
-   const struct brw_context *brw = p->brw;
+   const struct brw_device_info *devinfo = p->devinfo;
    struct brw_inst *insn = next_insn(p, BRW_OPCODE_SEND);
 
    brw_set_dest(p, insn, dest);
@@ -2903,11 +2904,11 @@ brw_pixel_interpolator_query(struct brw_compile *p,
                               false);
 
    brw_inst_set_pi_simd_mode(
-         brw, insn, brw_inst_exec_size(brw, insn) == BRW_EXECUTE_16);
-   brw_inst_set_pi_slot_group(brw, insn, 0); /* zero unless 32/64px dispatch */
-   brw_inst_set_pi_nopersp(brw, insn, noperspective);
-   brw_inst_set_pi_message_type(brw, insn, mode);
-   brw_inst_set_pi_message_data(brw, insn, data);
+         devinfo, insn, brw_inst_exec_size(devinfo, insn) == BRW_EXECUTE_16);
+   brw_inst_set_pi_slot_group(devinfo, insn, 0); /* zero unless 32/64px dispatch */
+   brw_inst_set_pi_nopersp(devinfo, insn, noperspective);
+   brw_inst_set_pi_message_type(devinfo, insn, mode);
+   brw_inst_set_pi_message_data(devinfo, insn, data);
 }
 
 /**
@@ -2930,7 +2931,7 @@ void brw_shader_time_add(struct brw_compile *p,
                          struct brw_reg payload,
                          uint32_t surf_index)
 {
-   assert(p->brw->gen >= 7);
+   assert(p->devinfo->gen >= 7);
 
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
