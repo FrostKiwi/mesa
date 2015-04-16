@@ -1618,16 +1618,17 @@ vec4_generator::generate_code(const cfg_t *cfg)
       ralloc_free(annotation.ann);
    }
 
-   static GLuint msg_id = 0;
-   _mesa_gl_debug(&brw->ctx, &msg_id,
-                  MESA_DEBUG_SOURCE_SHADER_COMPILER,
-                  MESA_DEBUG_TYPE_OTHER,
-                  MESA_DEBUG_SEVERITY_NOTIFICATION,
+   const int debug_str_size = 160;
+   char debug_str[debug_str_size];
+   int len;
+   len = snprintf(debug_str, debug_str_size,
                   "%s vec4 shader: %d inst, %d loops, "
                   "compacted %d to %d bytes.\n",
                   stage_abbrev,
                   before_size / 16, loop_count,
                   before_size, after_size);
+   assert(len < debug_str_size); (void)len;
+   brw->intelScreen->compiler->shader_debug_log(debug_str);
 }
 
 const unsigned *

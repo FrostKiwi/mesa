@@ -2111,15 +2111,16 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
       ralloc_free(annotation.ann);
    }
 
-   static GLuint msg_id = 0;
-   _mesa_gl_debug(&brw->ctx, &msg_id,
-                  MESA_DEBUG_SOURCE_SHADER_COMPILER,
-                  MESA_DEBUG_TYPE_OTHER,
-                  MESA_DEBUG_SEVERITY_NOTIFICATION,
+   const int debug_str_size = 160;
+   char debug_str[debug_str_size];
+   int len;
+   len = snprintf(debug_str, debug_str_size,
                   "%s SIMD%d shader: %d inst, %d loops, %d:%d spills:fills, "
                   "Promoted %u constants, compacted %d to %d bytes.\n",
                   stage_abbrev, dispatch_width, before_size / 16, loop_count,
                   spill_count, fill_count, promoted_constants, before_size, after_size);
+   assert(len < debug_str_size); (void)len;
+   brw->intelScreen->compiler->shader_debug_log(debug_str);
 
    return start_offset;
 }
