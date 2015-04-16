@@ -121,7 +121,7 @@ brw_reg_from_fs_reg(fs_reg *reg)
    return brw_reg;
 }
 
-fs_generator::fs_generator(struct brw_context *brw,
+fs_generator::fs_generator(const struct brw_compiler *compiler,
                            void *mem_ctx,
                            const void *key,
                            struct brw_stage_prog_data *prog_data,
@@ -130,7 +130,7 @@ fs_generator::fs_generator(struct brw_context *brw,
                            bool runtime_check_aads_emit,
                            const char *stage_abbrev)
 
-   : brw(brw), devinfo(brw->intelScreen->devinfo), key(key),
+   : compiler(compiler), devinfo(compiler->devinfo), key(key),
      prog_data(prog_data),
      prog(prog), promoted_constants(promoted_constants),
      runtime_check_aads_emit(runtime_check_aads_emit), debug_flag(false),
@@ -2120,7 +2120,7 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
                   stage_abbrev, dispatch_width, before_size / 16, loop_count,
                   spill_count, fill_count, promoted_constants, before_size, after_size);
    assert(len < debug_str_size); (void)len;
-   brw->intelScreen->compiler->shader_debug_log(debug_str);
+   compiler->shader_debug_log(debug_str);
 
    return start_offset;
 }

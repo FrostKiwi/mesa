@@ -422,7 +422,7 @@ private:
 class vec4_generator
 {
 public:
-   vec4_generator(struct brw_context *brw,
+   vec4_generator(const struct brw_compiler *compiler,
                   struct gl_shader_program *shader_prog,
                   struct gl_program *prog,
                   struct brw_vue_prog_data *prog_data,
@@ -513,7 +513,7 @@ private:
                                       struct brw_reg dst,
                                       struct brw_reg surf_index);
 
-   struct brw_context *brw;
+   const struct brw_compiler *compiler;
    const struct brw_device_info *devinfo;
 
    struct brw_codegen *p;
