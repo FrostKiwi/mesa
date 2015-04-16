@@ -50,6 +50,7 @@
 
 #include "brw_context.h"
 #include "brw_defines.h"
+#include "brw_shader.h"
 #include "brw_draw.h"
 #include "brw_state.h"
 
@@ -67,8 +68,6 @@
 #include "tnl/tnl.h"
 #include "tnl/t_pipeline.h"
 #include "util/ralloc.h"
-
-#include "glsl/nir/nir.h"
 
 /***************************************
  * Mesa's Driver Functions
@@ -551,48 +550,11 @@ brw_initialize_context_constants(struct brw_context *brw)
       ctx->Const.Program[MESA_SHADER_FRAGMENT].MaxInputComponents = 128;
    }
 
-   static const nir_shader_compiler_options nir_options = {
-      .native_integers = true,
-      /* In order to help allow for better CSE at the NIR level we tell NIR
-       * to split all ffma instructions during opt_algebraic and we then
-       * re-combine them as a later step.
-       */
-      .lower_ffma = true,
-      .lower_sub = true,
-   };
-
    /* We want the GLSL compiler to emit code that uses condition codes */
    for (int i = 0; i < MESA_SHADER_STAGES; i++) {
-      ctx->Const.ShaderCompilerOptions[i].MaxIfDepth = brw->gen < 6 ? 16 : UINT_MAX;
-      ctx->Const.ShaderCompilerOptions[i].EmitCondCodes = true;
-      ctx->Const.ShaderCompilerOptions[i].EmitNoNoise = true;
-      ctx->Const.ShaderCompilerOptions[i].EmitNoMainReturn = true;
-      ctx->Const.ShaderCompilerOptions[i].EmitNoIndirectInput = true;
-      ctx->Const.ShaderCompilerOptions[i].EmitNoIndirectOutput =
-	 (i == MESA_SHADER_FRAGMENT);
-      ctx->Const.ShaderCompilerOptions[i].EmitNoIndirectTemp =
-	 (i == MESA_SHADER_FRAGMENT);
-      ctx->Const.ShaderCompilerOptions[i].EmitNoIndirectUniform = false;
-      ctx->Const.ShaderCompilerOptions[i].LowerClipDistance = true;
+      ctx->Const.ShaderCompilerOptions[i] =
+         brw->intelScreen->compiler->glsl_compiler_options[i];
    }
-
-   ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].OptimizeForAOS = true;
-   ctx->Const.ShaderCompilerOptions[MESA_SHADER_GEOMETRY].OptimizeForAOS = true;
-
-   if (brw->scalar_vs) {
-      /* If we're using the scalar backend for vertex shaders, we need to
-       * configure these accordingly.
-       */
-      ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].EmitNoIndirectOutput = true;
-      ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].EmitNoIndirectTemp = true;
-      ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].OptimizeForAOS = false;
-
-      if (brw_env_var_as_boolean("INTEL_USE_NIR", false))
-         ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].NirOptions = &nir_options;
-   }
-
-   if (brw_env_var_as_boolean("INTEL_USE_NIR", true))
-      ctx->Const.ShaderCompilerOptions[MESA_SHADER_FRAGMENT].NirOptions = &nir_options;
 
    /* ARB_viewport_array */
    if (brw->gen >= 7 && ctx->API == API_OPENGL_CORE) {
@@ -797,9 +759,6 @@ brwCreateContext(gl_api api,
 
    if (INTEL_DEBUG & DEBUG_AUB)
       drm_intel_bufmgr_gem_set_aub_dump(brw->bufmgr, true);
-
-   if (brw->gen >= 8 && !(INTEL_DEBUG & DEBUG_VEC4VS))
-      brw->scalar_vs = true;
 
    brw_initialize_context_constants(brw);
 

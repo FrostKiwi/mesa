@@ -1836,7 +1836,7 @@ brw_vs_emit(struct brw_context *brw,
          brw_create_nir(brw, NULL, &c->vp->program.Base, MESA_SHADER_VERTEX);
    }
 
-   if (brw->scalar_vs && (prog || use_nir)) {
+   if (brw->intelScreen->compiler->scalar_vs && (prog || use_nir)) {
       fs_visitor v(brw, mem_ctx, &c->key, prog_data, prog, &c->vp->program, 8);
       if (!v.run_vs()) {
          if (prog) {
