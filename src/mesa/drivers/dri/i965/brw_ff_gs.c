@@ -46,7 +46,7 @@
 #include "util/ralloc.h"
 
 void
-brw_compile_ff_gs_prog(struct brw_context *brw,
+brw_codegen_ff_gs_prog(struct brw_context *brw,
                        struct brw_ff_gs_prog_key *key)
 {
    struct brw_ff_gs_compile c;
@@ -255,7 +255,7 @@ brw_upload_ff_gs_prog(struct brw_context *brw)
       if (!brw_search_cache(&brw->cache, BRW_CACHE_FF_GS_PROG,
 			    &key, sizeof(key),
 			    &brw->ff_gs.prog_offset, &brw->ff_gs.prog_data)) {
-         brw_compile_ff_gs_prog(brw, &key);
+         brw_codegen_ff_gs_prog(brw, &key);
       }
    }
 }

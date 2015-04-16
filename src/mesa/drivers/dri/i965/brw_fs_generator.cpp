@@ -136,7 +136,7 @@ fs_generator::fs_generator(struct brw_context *brw,
      runtime_check_aads_emit(runtime_check_aads_emit), debug_flag(false),
      stage_abbrev(stage_abbrev), mem_ctx(mem_ctx)
 {
-   p = rzalloc(mem_ctx, struct brw_compile);
+   p = rzalloc(mem_ctx, struct brw_codegen);
    brw_init_compile(devinfo, p, mem_ctx);
 }
 
