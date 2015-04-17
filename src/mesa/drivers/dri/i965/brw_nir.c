@@ -48,6 +48,8 @@ nir_optimize(nir_shader *nir)
       nir_validate_shader(nir);
       progress |= nir_opt_peephole_select(nir);
       nir_validate_shader(nir);
+      nir_opt_gcm(nir);
+      nir_validate_shader(nir);
       progress |= nir_opt_algebraic(nir);
       nir_validate_shader(nir);
       progress |= nir_opt_constant_folding(nir);
