@@ -788,7 +788,15 @@ brwCreateContext(gl_api api,
    _mesa_meta_init(ctx);
 
    brw_process_driconf_options(brw);
-   brw_process_intel_debug_variable(brw);
+
+   if (INTEL_DEBUG & DEBUG_BUFMGR)
+      dri_bufmgr_set_debug(brw->bufmgr, true);
+
+   if (INTEL_DEBUG & DEBUG_PERF)
+      brw->perf_debug = true;
+
+   if (INTEL_DEBUG & DEBUG_AUB)
+      drm_intel_bufmgr_gem_set_aub_dump(brw->bufmgr, true);
 
    if (brw->gen >= 8 && !(INTEL_DEBUG & DEBUG_VEC4VS))
       brw->scalar_vs = true;

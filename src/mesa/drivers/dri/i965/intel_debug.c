@@ -86,25 +86,16 @@ intel_debug_flag_for_shader_stage(gl_shader_stage stage)
 }
 
 void
-brw_process_intel_debug_variable(struct brw_context *brw)
+brw_process_intel_debug_variable(const struct brw_device_info *devinfo)
 {
    uint64_t intel_debug = driParseDebugString(getenv("INTEL_DEBUG"), debug_control);
    (void) p_atomic_cmpxchg(&INTEL_DEBUG, 0, intel_debug);
 
-   if (INTEL_DEBUG & DEBUG_BUFMGR)
-      dri_bufmgr_set_debug(brw->bufmgr, true);
-
-   if ((INTEL_DEBUG & DEBUG_SHADER_TIME) && brw->gen < 7) {
+   if ((INTEL_DEBUG & DEBUG_SHADER_TIME) && devinfo->gen < 7) {
       fprintf(stderr,
               "shader_time debugging requires gen7 (Ivybridge) or better.\n");
       INTEL_DEBUG &= ~DEBUG_SHADER_TIME;
    }
-
-   if (INTEL_DEBUG & DEBUG_PERF)
-      brw->perf_debug = true;
-
-   if (INTEL_DEBUG & DEBUG_AUB)
-      drm_intel_bufmgr_gem_set_aub_dump(brw->bufmgr, true);
 }
 
 /**
