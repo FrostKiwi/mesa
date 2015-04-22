@@ -553,4 +553,104 @@ namespace {
          return BRW_PREDICATE_NORMAL;
       }
    }
+
+   namespace image_coordinates {
+      /**
+       * Calculate the offset in memory of the texel given by \p coord.
+       *
+       * This is meant to be used with untyped surface messages to access a
+       * tiled surface, what involves taking into account the tiling and
+       * swizzling modes of the surface manually so it will hopefully not
+       * happen very often.
+       */
+      fs_reg
+      emit_address_calculation(const fs_builder &bld, const fs_reg &image,
+                               const fs_reg &coord, unsigned dims)
+      {
+         const fs_reg off = offset(image, BRW_IMAGE_PARAM_OFFSET_OFFSET);
+         const fs_reg stride = offset(image, BRW_IMAGE_PARAM_STRIDE_OFFSET);
+         const fs_reg tile = offset(image, BRW_IMAGE_PARAM_TILING_OFFSET);
+         const fs_reg swz = offset(image, BRW_IMAGE_PARAM_SWIZZLING_OFFSET);
+         const fs_reg addr = bld.vgrf(BRW_REGISTER_TYPE_UD, 2);
+         const fs_reg tmp = bld.vgrf(BRW_REGISTER_TYPE_UD, 2);
+         const fs_reg minor = bld.vgrf(BRW_REGISTER_TYPE_UD, 2);
+         const fs_reg major = bld.vgrf(BRW_REGISTER_TYPE_UD, 2);
+         const fs_reg dst = bld.vgrf(BRW_REGISTER_TYPE_UD);
+
+         /* Shift the coordinates by the fixed surface offset. */
+         for (unsigned c = 0; c < 2; ++c)
+            bld.ADD(offset(addr, c), offset(off, c),
+                    (c < dims ? offset(retype(coord, BRW_REGISTER_TYPE_UD), c) :
+                     fs_reg(0)));
+
+         if (dims > 2) {
+            /* Decompose z into a major (tmp.y) and a minor (tmp.x)
+             * index.
+             */
+            bld.BFE(offset(tmp, 0), offset(tile, 2), fs_reg(0),
+                    offset(retype(coord, BRW_REGISTER_TYPE_UD), 2));
+            bld.SHR(offset(tmp, 1),
+                    offset(retype(coord, BRW_REGISTER_TYPE_UD), 2),
+                    offset(tile, 2));
+
+            /* Take into account the horizontal (tmp.x) and vertical (tmp.y)
+             * slice offset.
+             */
+            for (unsigned c = 0; c < 2; ++c) {
+               bld.MUL(offset(tmp, c), offset(stride, 2 + c), offset(tmp, c));
+               bld.ADD(offset(addr, c), offset(addr, c), offset(tmp, c));
+            }
+         }
+
+         if (dims > 1) {
+            for (unsigned c = 0; c < 2; ++c) {
+               /* Calculate the minor x and y indices. */
+               bld.BFE(offset(minor, c), offset(tile, c),
+                       fs_reg(0), offset(addr, c));
+
+               /* Calculate the major x and y indices. */
+               bld.SHR(offset(major, c), offset(addr, c), offset(tile, c));
+            }
+
+            /* Calculate the texel index from the start of the tile row and
+             * the vertical coordinate of the row.
+             * Equivalent to:
+             *   tmp.x = (major.x << tile.y << tile.x) +
+             *           (minor.y << tile.x) + minor.x
+             *   tmp.y = major.y << tile.y
+             */
+            bld.SHL(tmp, major, offset(tile, 1));
+            bld.ADD(tmp, tmp, offset(minor, 1));
+            bld.SHL(tmp, tmp, offset(tile, 0));
+            bld.ADD(tmp, tmp, minor);
+            bld.SHL(offset(tmp, 1), offset(major, 1), offset(tile, 1));
+
+            /* Add it to the start of the tile row. */
+            bld.MUL(offset(tmp, 1), offset(tmp, 1), offset(stride, 1));
+            bld.ADD(tmp, tmp, offset(tmp, 1));
+
+            /* Multiply by the Bpp value. */
+            bld.MUL(dst, tmp, stride);
+
+            if (bld.devinfo->gen < 8 && !bld.devinfo->is_baytrail) {
+               /* Take into account the two dynamically specified shifts. */
+               for (unsigned c = 0; c < 2; ++c)
+                  bld.SHR(offset(tmp, c), dst, offset(swz, c));
+
+               /* XOR tmp.x and tmp.y with bit 6 of the memory address. */
+               bld.XOR(tmp, tmp, offset(tmp, 1));
+               bld.AND(tmp, tmp, fs_reg(1 << 6));
+               bld.XOR(dst, dst, tmp);
+            }
+
+         } else {
+            /* Multiply by the Bpp/stride value. */
+            bld.MUL(offset(addr, 1), offset(addr, 1), offset(stride, 1));
+            bld.ADD(addr, addr, offset(addr, 1));
+            bld.MUL(dst, addr, stride);
+         }
+
+         return dst;
+      }
+   }
 }
