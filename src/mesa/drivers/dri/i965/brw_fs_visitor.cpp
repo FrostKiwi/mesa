@@ -157,6 +157,10 @@ fs_visitor::visit(ir_variable *ir)
       if (ir->type->contains_atomic()) {
          reg = new(this->mem_ctx) fs_reg(ir->data.atomic.offset);
 
+         brw_mark_surface_used(stage_prog_data,
+                               stage_prog_data->binding_table.abo_start +
+                               ir->data.binding);
+
       } else if (ir->is_in_uniform_block() || type_size(ir->type) == 0) {
          /* Thanks to the lower_ubo_reference pass, we will see only
           * ir_binop_ubo_load expressions and not ir_dereference_variable for UBO
