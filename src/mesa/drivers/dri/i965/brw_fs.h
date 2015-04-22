@@ -430,8 +430,12 @@ public:
    fs_reg get_timestamp(fs_inst **out_mov);
 
    struct brw_reg interp_reg(int location, int channel);
+
+   virtual void setup_vector_uniform_values(const gl_constant_value *values,
+                                            unsigned n);
    void setup_uniform_values(ir_variable *ir);
    void setup_builtin_uniform_values(ir_variable *ir);
+
    int implied_mrf_writes(fs_inst *inst);
 
    virtual void dump_instructions();

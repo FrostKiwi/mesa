@@ -1164,6 +1164,18 @@ fs_visitor::import_uniforms(fs_visitor *v)
    this->param_size = v->param_size;
 }
 
+void
+fs_visitor::setup_vector_uniform_values(const gl_constant_value *values, unsigned n)
+{
+   static const gl_constant_value zero = { 0 };
+
+   for (unsigned i = 0; i < n; ++i)
+      stage_prog_data->param[uniforms++] = &values[i];
+
+   for (unsigned i = n; i < 4; ++i)
+      stage_prog_data->param[uniforms++] = &zero;
+}
+
 /* Our support for uniforms is piggy-backed on the struct
  * gl_fragment_program, because that's where the values actually
  * get stored, rather than in some global gl_shader_program uniform
