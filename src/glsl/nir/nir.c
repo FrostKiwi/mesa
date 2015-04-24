@@ -1864,6 +1864,18 @@ nir_instr_rewrite_src(nir_instr *instr, nir_src *src, nir_src new_src)
 }
 
 void
+nir_instr_move_src(nir_instr *dest_instr, nir_src *dest, nir_src *src)
+{
+   assert(!src_is_valid(dest) || dest->parent_instr == dest_instr);
+
+   src_remove_all_uses(dest);
+   src_remove_all_uses(src);
+   *dest = *src;
+   *src = NIR_SRC_INIT;
+   src_add_all_uses(dest, dest_instr, NULL);
+}
+
+void
 nir_if_rewrite_condition(nir_if *if_stmt, nir_src new_src)
 {
    nir_src *src = &if_stmt->condition;
