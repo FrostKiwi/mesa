@@ -213,5 +213,22 @@ namespace brw {
                  _mesa_get_format_datatype(format) == GL_INT);
       }
    }
+
+   namespace image_access {
+      fs_reg
+      emit_image_load(const fs_builder &bld,
+                      const fs_reg &image, const fs_reg &addr,
+                      mesa_format format, unsigned dims);
+
+      void
+      emit_image_store(const fs_builder &bld, const fs_reg &image,
+                       const fs_reg &addr, const fs_reg &src,
+                       mesa_format format, unsigned dims);
+      fs_reg
+      emit_image_atomic(const fs_builder &bld,
+                        const fs_reg &image, const fs_reg &addr,
+                        const fs_reg &src0, const fs_reg &src1,
+                        unsigned dims, unsigned rsize, unsigned op);
+   }
 }
 #endif
