@@ -24,6 +24,7 @@
 #include "glsl/ir.h"
 #include "glsl/ir_optimization.h"
 #include "glsl/nir/glsl_to_nir.h"
+#include "main/shaderimage.h"
 #include "program/prog_to_nir.h"
 #include "brw_fs.h"
 #include "brw_fs_surface_builder.h"
@@ -1283,6 +1284,99 @@ fs_visitor::emit_percomp(fs_inst *inst, unsigned wr_mask)
    }
 }
 
+/**
+ * Get the matching channel register datatype for an image intrinsic of the
+ * specified GLSL image type.
+ */
+static brw_reg_type
+get_image_base_type(const glsl_type *type)
+{
+   switch ((glsl_base_type)type->sampler_type) {
+   case GLSL_TYPE_UINT:
+      return BRW_REGISTER_TYPE_UD;
+   case GLSL_TYPE_INT:
+      return BRW_REGISTER_TYPE_D;
+   case GLSL_TYPE_FLOAT:
+      return BRW_REGISTER_TYPE_F;
+   default:
+      unreachable("Not reached.");
+   }
+}
+
+/**
+ * Get the appropriate atomic op for an image atomic intrinsic.
+ */
+static unsigned
+get_image_atomic_op(nir_intrinsic_op op, const glsl_type *type)
+{
+   switch (op) {
+   case nir_intrinsic_image_atomic_add:
+      return BRW_AOP_ADD;
+   case nir_intrinsic_image_atomic_min:
+      return (get_image_base_type(type) == BRW_REGISTER_TYPE_D ?
+              BRW_AOP_IMIN : BRW_AOP_UMIN);
+   case nir_intrinsic_image_atomic_max:
+      return (get_image_base_type(type) == BRW_REGISTER_TYPE_D ?
+              BRW_AOP_IMAX : BRW_AOP_UMAX);
+   case nir_intrinsic_image_atomic_and:
+      return BRW_AOP_AND;
+   case nir_intrinsic_image_atomic_or:
+      return BRW_AOP_OR;
+   case nir_intrinsic_image_atomic_xor:
+      return BRW_AOP_XOR;
+   case nir_intrinsic_image_atomic_exchange:
+      return BRW_AOP_MOV;
+   case nir_intrinsic_image_atomic_comp_swap:
+      return BRW_AOP_CMPWR;
+   default:
+      unreachable("Not reachable.");
+   }
+}
+
+/**
+ * Return true if the image is a 1D array and the implementation
+ * requires the array index to be passed in as the Z component of the
+ * coordinate vector.
+ */
+static bool
+needs_zero_y_image_coordinate(const fs_builder &bld,
+                              const nir_variable *image)
+{
+   const glsl_type *type = image->type->without_array();
+   const mesa_format format =
+      _mesa_get_shader_image_format(image->data.image.format);
+   /* HSW in vec4 mode and our software coordinate handling for untyped
+    * reads want the array index to be at the Z component.
+    */
+   const bool array_index_at_z = !image->data.image.write_only &&
+      !image_format_info::has_matching_typed_format(bld.devinfo, format);
+
+   return (type->sampler_dimensionality == GLSL_SAMPLER_DIM_1D &&
+           type->sampler_array && array_index_at_z);
+}
+
+/**
+ * Transform image coordinates into the form expected by the
+ * implementation.
+ */
+static fs_reg
+fix_image_address(const fs_builder &bld,
+                  const nir_variable *image, const fs_reg &addr)
+{
+   if (needs_zero_y_image_coordinate(bld, image)) {
+      assert(image->type->without_array()->coordinate_components() == 2);
+      const fs_reg tmp = bld.vgrf(addr.type, 3);
+
+      bld.MOV(tmp, addr);
+      bld.MOV(offset(tmp, 1), fs_reg(0));
+      bld.MOV(offset(tmp, 2), offset(addr, 1));
+
+      return tmp;
+   } else {
+      return addr;
+   }
+}
+
 void
 fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
 {
@@ -1359,6 +1453,70 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
 
       /* Mark the surface as used. */
       brw_mark_surface_used(stage_prog_data, surface);
+      break;
+   }
+
+   case nir_intrinsic_image_load:
+   case nir_intrinsic_image_store:
+   case nir_intrinsic_image_atomic_add:
+   case nir_intrinsic_image_atomic_min:
+   case nir_intrinsic_image_atomic_max:
+   case nir_intrinsic_image_atomic_and:
+   case nir_intrinsic_image_atomic_or:
+   case nir_intrinsic_image_atomic_xor:
+   case nir_intrinsic_image_atomic_exchange:
+   case nir_intrinsic_image_atomic_comp_swap: {
+      using namespace image_access;
+
+      const bool uses_kill = (stage == MESA_SHADER_FRAGMENT &&
+                              ((brw_wm_prog_data *)prog_data)->uses_kill);
+      fs_builder bld(devinfo, mem_ctx, alloc, instructions,
+                     dispatch_width, stage, uses_kill);
+
+      /* Get the referenced image variable and type. */
+      const nir_variable *var = instr->variables[0]->var;
+      const glsl_type *type = var->type->without_array();
+      const brw_reg_type base_type = get_image_base_type(type);
+
+      /* Get some metadata from the image intrinsic. */
+      const nir_intrinsic_info *info = &nir_intrinsic_infos[instr->intrinsic];
+      const unsigned dims = (type->coordinate_components() +
+                             (needs_zero_y_image_coordinate(bld, var) ? 1 : 0));
+      const mesa_format format =
+         (var->data.image.write_only ? MESA_FORMAT_NONE :
+          _mesa_get_shader_image_format(var->data.image.format));
+
+      /* Get the arguments of the image intrinsic. */
+      const fs_reg image = get_nir_image_deref(instr->variables[0]);
+      const fs_reg addr = fix_image_address(bld, var,
+                                            retype(get_nir_src(instr->src[0]),
+                                                   BRW_REGISTER_TYPE_UD));
+      const fs_reg src0 = (info->num_srcs >= 3 ?
+                           retype(get_nir_src(instr->src[2]), base_type) :
+                           fs_reg());
+      const fs_reg src1 = (info->num_srcs >= 4 ?
+                           retype(get_nir_src(instr->src[3]), base_type) :
+                           fs_reg());
+      fs_reg tmp;
+
+      /* Emit an image load, store or atomic op. */
+      if (instr->intrinsic == nir_intrinsic_image_load)
+         tmp = emit_image_load(bld, image, addr, format, dims);
+
+      else if (instr->intrinsic == nir_intrinsic_image_store)
+         emit_image_store(bld, image, addr, src0, format, dims);
+
+      else
+         tmp = emit_image_atomic(bld, image, addr, src0, src1,
+                                 dims, info->dest_components,
+                                 get_image_atomic_op(instr->intrinsic, type));
+
+      /* Assign the result. */
+      if (info->has_dest) {
+         for (unsigned c = 0; c < info->dest_components; ++c)
+            bld.MOV(offset(retype(dest, base_type), c),
+                    offset(tmp, c));
+      }
       break;
    }
 
