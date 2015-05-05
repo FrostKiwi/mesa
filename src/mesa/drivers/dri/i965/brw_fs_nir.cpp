@@ -226,17 +226,32 @@ fs_visitor::nir_setup_uniform(nir_variable *var)
          continue;
       }
 
-      unsigned slots = storage->type->component_slots();
-      if (storage->array_elements)
-         slots *= storage->array_elements;
+      if (storage->type->is_image()) {
+         const struct brw_image_param *image_params =
+            (stage == MESA_SHADER_FRAGMENT ? brw->wm.base.image_params :
+             stage == MESA_SHADER_VERTEX ? brw->vs.base.image_params :
+             stage == MESA_SHADER_COMPUTE ? brw->cs.base.image_params : NULL);
+         assert(image_params);
 
-      for (unsigned i = 0; i < slots; i++) {
-         stage_prog_data->param[index++] = &storage->storage[i];
+         /* Images don't get a valid location assigned by nir_lower_io()
+          * because their size is driver-specific, so we need to allocate
+          * space for them here at the end of the parameter array.
+          */
+         var->data.driver_location = uniforms;
+         param_size[uniforms] =
+            BRW_IMAGE_PARAM_SIZE * MAX2(storage->array_elements, 1);
+
+         setup_image_uniform_values(storage, image_params);
+      } else {
+         unsigned slots = storage->type->component_slots();
+         if (storage->array_elements)
+            slots *= storage->array_elements;
+
+         for (unsigned i = 0; i < slots; i++) {
+            stage_prog_data->param[index++] = &storage->storage[i];
+         }
       }
    }
-
-   /* Make sure we actually initialized the right amount of stuff here. */
-   assert(var->data.driver_location + var->type->component_slots() == index);
 }
 
 void
@@ -1225,6 +1240,30 @@ fs_visitor::get_nir_dest(nir_dest dest)
 {
    return fs_reg_for_nir_reg(this, dest.reg.reg, dest.reg.base_offset,
                              dest.reg.indirect);
+}
+
+fs_reg
+fs_visitor::get_nir_image_deref(const nir_deref_var *deref)
+{
+   fs_reg image(UNIFORM, deref->var->data.driver_location,
+                BRW_REGISTER_TYPE_UD);
+
+   if (deref->deref.child) {
+      const nir_deref_array *deref_array =
+         nir_deref_as_array(deref->deref.child);
+      assert(deref_array->deref.child == NULL);
+
+      image = offset(image, deref_array->base_offset * BRW_IMAGE_PARAM_SIZE);
+
+      if (deref_array->deref_array_type == nir_deref_array_type_indirect) {
+         fs_reg *tmp = new(mem_ctx) fs_reg(vgrf(glsl_type::int_type));
+         emit(MUL(*tmp, get_nir_src(deref_array->indirect),
+                  fs_reg(BRW_IMAGE_PARAM_SIZE)));
+         image.reladdr = tmp;
+      }
+   }
+
+   return image;
 }
 
 void
