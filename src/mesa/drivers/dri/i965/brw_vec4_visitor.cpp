@@ -611,6 +611,7 @@ type_size(const struct glsl_type *type)
    case GLSL_TYPE_ATOMIC_UINT:
       return 0;
    case GLSL_TYPE_IMAGE:
+      return BRW_IMAGE_PARAM_SIZE / 4;
    case GLSL_TYPE_VOID:
    case GLSL_TYPE_DOUBLE:
    case GLSL_TYPE_ERROR:
