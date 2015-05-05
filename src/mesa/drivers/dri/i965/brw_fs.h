@@ -59,6 +59,7 @@ namespace {
 
 namespace brw {
    class fs_live_variables;
+   class fs_builder;
 }
 
 /**
@@ -443,7 +444,7 @@ public:
    void dump_instruction(backend_instruction *inst);
    void dump_instruction(backend_instruction *inst, FILE *file);
 
-   void visit_atomic_counter_intrinsic(ir_call *ir);
+   void visit_atomic_counter_intrinsic(const brw::fs_builder &bld, ir_call *ir);
 
    const void *const key;
    const struct brw_sampler_prog_key_data *key_tex;

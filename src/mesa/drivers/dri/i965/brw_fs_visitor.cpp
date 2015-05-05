@@ -42,11 +42,13 @@
 #include "brw_cs.h"
 #include "brw_vec4.h"
 #include "brw_fs.h"
+#include "brw_fs_surface_builder.h"
 #include "main/uniforms.h"
 #include "glsl/glsl_types.h"
 #include "glsl/ir_optimization.h"
 #include "program/sampler.h"
 
+using namespace brw;
 
 fs_reg *
 fs_visitor::emit_vs_system_value(int location)
@@ -3161,31 +3163,38 @@ fs_visitor::visit(ir_loop_jump *ir)
 }
 
 void
-fs_visitor::visit_atomic_counter_intrinsic(ir_call *ir)
+fs_visitor::visit_atomic_counter_intrinsic(const fs_builder &bld, ir_call *ir)
 {
+   using namespace surface_access;
    ir_dereference *deref = static_cast<ir_dereference *>(
       ir->actual_parameters.get_head());
    ir_variable *location = deref->variable_referenced();
-   unsigned surf_index = (stage_prog_data->binding_table.abo_start +
-                          location->data.binding);
+   const fs_reg surface(stage_prog_data->binding_table.abo_start +
+                        location->data.binding);
    deref->accept(this);
    const fs_reg offset = this->result;
 
    /* Emit the appropriate machine instruction */
    const char *callee = ir->callee->function_name();
-   ir->return_deref->accept(this);
-   fs_reg dst = this->result;
+   fs_reg tmp;
 
-   if (!strcmp("__intrinsic_atomic_read", callee)) {
-      emit_untyped_surface_read(surf_index, dst, offset);
+   if (!strcmp("__intrinsic_atomic_read", callee))
+      tmp = surface_access::emit_untyped_read(bld, surface, offset, 1, 1);
 
-   } else if (!strcmp("__intrinsic_atomic_increment", callee)) {
-      emit_untyped_atomic(BRW_AOP_INC, surf_index, dst, offset,
-                          fs_reg(), fs_reg());
+   else if (!strcmp("__intrinsic_atomic_increment", callee))
+      tmp = surface_access::emit_untyped_atomic(
+         bld, surface, offset, fs_reg(), fs_reg(),
+         1, 1, BRW_AOP_INC);
 
-   } else if (!strcmp("__intrinsic_atomic_predecrement", callee)) {
-      emit_untyped_atomic(BRW_AOP_PREDEC, surf_index, dst, offset,
-                          fs_reg(), fs_reg());
+   else if (!strcmp("__intrinsic_atomic_predecrement", callee))
+      tmp = surface_access::emit_untyped_atomic(
+         bld, surface, offset, fs_reg(), fs_reg(),
+         1, 1, BRW_AOP_PREDEC);
+
+   /* Assign the result. */
+   if (ir->return_deref) {
+      ir->return_deref->accept(this);
+      bld.MOV(this->result, tmp);
    }
 }
 
@@ -3193,11 +3202,18 @@ void
 fs_visitor::visit(ir_call *ir)
 {
    const char *callee = ir->callee->function_name();
+   const bool uses_kill = (stage == MESA_SHADER_FRAGMENT &&
+                           ((brw_wm_prog_data *)prog_data)->uses_kill);
+   fs_builder bld(devinfo, mem_ctx, alloc, instructions, dispatch_width,
+                  stage, uses_kill);
+
+   bld.set_annotation(current_annotation);
+   bld.set_base_ir(base_ir);
 
    if (!strcmp("__intrinsic_atomic_read", callee) ||
        !strcmp("__intrinsic_atomic_increment", callee) ||
        !strcmp("__intrinsic_atomic_predecrement", callee)) {
-      visit_atomic_counter_intrinsic(ir);
+      visit_atomic_counter_intrinsic(bld, ir);
    } else {
       unreachable("Unsupported intrinsic.");
    }
