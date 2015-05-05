@@ -39,21 +39,9 @@ fs_visitor::emit_nir_code()
    /* emit the arrays used for inputs and outputs - load/store intrinsics will
     * be converted to reads/writes of these arrays
     */
-
-   if (nir->num_inputs > 0) {
-      nir_inputs = vgrf(nir->num_inputs);
-      nir_setup_inputs(nir);
-   }
-
-   if (nir->num_outputs > 0) {
-      nir_outputs = vgrf(nir->num_outputs);
-      nir_setup_outputs(nir);
-   }
-
-   if (nir->num_uniforms > 0) {
-      nir_setup_uniforms(nir);
-   }
-
+   nir_setup_inputs(nir);
+   nir_setup_outputs(nir);
+   nir_setup_uniforms(nir);
    nir_emit_system_values(nir);
 
    nir_globals = ralloc_array(mem_ctx, fs_reg, nir->reg_alloc);
@@ -75,6 +63,9 @@ fs_visitor::emit_nir_code()
 void
 fs_visitor::nir_setup_inputs(nir_shader *shader)
 {
+   nir_inputs = (shader->num_inputs > 0 ?
+                 vgrf(shader->num_inputs) : fs_reg());
+
    foreach_list_typed(nir_variable, var, node, &shader->inputs) {
       enum brw_reg_type type = brw_type_for_base_type(var->type);
       fs_reg input = offset(nir_inputs, var->data.driver_location);
@@ -126,6 +117,9 @@ void
 fs_visitor::nir_setup_outputs(nir_shader *shader)
 {
    brw_wm_prog_key *key = (brw_wm_prog_key*) this->key;
+
+   nir_outputs = (shader->num_outputs > 0 ?
+                  vgrf(shader->num_outputs) : fs_reg());
 
    foreach_list_typed(nir_variable, var, node, &shader->outputs) {
       fs_reg reg = offset(nir_outputs, var->data.driver_location);
