@@ -1520,6 +1520,13 @@ fs_visitor::nir_emit_intrinsic(nir_intrinsic_instr *instr)
       break;
    }
 
+   case nir_intrinsic_memory_barrier: {
+      const fs_reg tmp = vgrf(16 / dispatch_width);
+      emit(SHADER_OPCODE_MEMORY_FENCE, tmp)
+         ->regs_written = 2;
+      break;
+   }
+
    case nir_intrinsic_load_front_face:
       emit(MOV(retype(dest, BRW_REGISTER_TYPE_D),
                *emit_frontfacing_interpolation()));
