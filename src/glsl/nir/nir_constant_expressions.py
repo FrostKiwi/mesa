@@ -31,6 +31,8 @@ template = """\
 #include "util/rounding.h" /* for _mesa_roundeven */
 #include "nir_constant_expressions.h"
 
+typedef unsigned int uint;
+
 #if defined(_MSC_VER) && (_MSC_VER < 1800)
 static int isnormal(double x)
 {
@@ -224,7 +226,7 @@ unpack_half_1x16(uint16_t u)
 }
 
 /* Some typed vector structures to make things like src0.y work */
-% for type in ["float", "int", "unsigned", "bool"]:
+% for type in ["float", "int", "uint", "bool"]:
 struct ${type}_vec {
    ${type} x;
    ${type} y;

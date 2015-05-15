@@ -474,7 +474,7 @@ static brw_reg_type
 brw_type_for_nir_type(nir_alu_type type)
 {
    switch (type) {
-   case nir_type_unsigned:
+   case nir_type_uint:
       return BRW_REGISTER_TYPE_UD;
    case nir_type_bool:
    case nir_type_int:
@@ -1738,7 +1738,7 @@ fs_visitor::nir_emit_texture(nir_tex_instr *instr)
    case nir_type_int:
       dest_base_type = GLSL_TYPE_INT;
       break;
-   case nir_type_unsigned:
+   case nir_type_uint:
       dest_base_type = GLSL_TYPE_UINT;
       break;
    default:
