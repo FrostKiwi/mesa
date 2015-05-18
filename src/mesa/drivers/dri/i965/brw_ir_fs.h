@@ -240,6 +240,7 @@ public:
    int regs_read(int arg) const;
    bool can_do_source_mods(const struct brw_device_info *devinfo);
    bool has_side_effects() const;
+   bool source_is_payload(unsigned i) const;
 
    bool reads_flag() const;
    bool writes_flag() const;

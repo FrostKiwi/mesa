@@ -534,6 +534,35 @@ fs_inst::has_side_effects() const
    return this->eot || backend_instruction::has_side_effects();
 }
 
+bool
+fs_inst::source_is_payload(unsigned i) const
+{
+   if ((is_tex() && src[0].file == GRF) ||
+       opcode == FS_OPCODE_FB_WRITE ||
+       opcode == SHADER_OPCODE_URB_WRITE_SIMD8 ||
+       opcode == SHADER_OPCODE_UNTYPED_ATOMIC ||
+       opcode == SHADER_OPCODE_UNTYPED_SURFACE_READ ||
+       opcode == SHADER_OPCODE_UNTYPED_SURFACE_WRITE ||
+       opcode == SHADER_OPCODE_TYPED_ATOMIC ||
+       opcode == SHADER_OPCODE_TYPED_SURFACE_READ ||
+       opcode == SHADER_OPCODE_TYPED_SURFACE_WRITE ||
+       opcode == FS_OPCODE_INTERPOLATE_AT_PER_SLOT_OFFSET)
+      return i == 0;
+
+   else if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_READ_SPLIT ||
+            opcode == SHADER_OPCODE_TYPED_SURFACE_READ_SPLIT)
+      return i < 2;
+
+   else if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_WRITE_SPLIT ||
+            opcode == SHADER_OPCODE_TYPED_SURFACE_WRITE_SPLIT ||
+            opcode == SHADER_OPCODE_UNTYPED_ATOMIC_SPLIT ||
+            opcode == SHADER_OPCODE_TYPED_ATOMIC_SPLIT)
+      return i < 3;
+
+   else
+      return false;
+}
+
 void
 fs_reg::init()
 {
@@ -950,28 +979,40 @@ fs_inst::is_partial_write() const
 int
 fs_inst::regs_read(int arg) const
 {
-   if (is_tex() && arg == 0 && src[0].file == GRF) {
-      return mlen;
-   } else if (opcode == FS_OPCODE_FB_WRITE && arg == 0) {
-      return mlen;
-   } else if (opcode == SHADER_OPCODE_URB_WRITE_SIMD8 && arg == 0) {
-      return mlen;
-   } else if (opcode == SHADER_OPCODE_UNTYPED_ATOMIC && arg == 0) {
-      return mlen;
-   } else if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_READ && arg == 0) {
-      return mlen;
-   } else if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_WRITE && arg == 0) {
-      return mlen;
-   } else if (opcode == SHADER_OPCODE_TYPED_ATOMIC && arg == 0) {
-      return mlen;
-   } else if (opcode == SHADER_OPCODE_TYPED_SURFACE_READ && arg == 0) {
-      return mlen;
-   } else if (opcode == SHADER_OPCODE_TYPED_SURFACE_WRITE && arg == 0) {
-      return mlen;
-   } else if (opcode == FS_OPCODE_INTERPOLATE_AT_PER_SLOT_OFFSET && arg == 0) {
-      return mlen;
-   } else if (opcode == FS_OPCODE_LINTERP && arg == 0) {
+   if (opcode == FS_OPCODE_LINTERP && arg == 0) {
       return exec_size / 4;
+
+   } else if (source_is_payload(arg)) {
+      if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_READ_SPLIT ||
+          opcode == SHADER_OPCODE_TYPED_SURFACE_READ_SPLIT) {
+         assert(arg < 2 && src[3].file == BRW_IMMEDIATE_VALUE);
+         return arg == 0 ? header_size :
+            DIV_ROUND_UP(src[3].fixed_hw_reg.dw1.ud * exec_size, 8);
+
+      } else if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_WRITE_SPLIT ||
+                 opcode == SHADER_OPCODE_TYPED_SURFACE_WRITE_SPLIT) {
+         assert(arg < 3 &&
+                src[4].file == BRW_IMMEDIATE_VALUE &&
+                src[5].file == BRW_IMMEDIATE_VALUE);
+         return arg == 0 ? header_size :
+            DIV_ROUND_UP(src[3 + arg].fixed_hw_reg.dw1.ud * exec_size, 8);
+
+      } else if (opcode == SHADER_OPCODE_UNTYPED_ATOMIC_SPLIT ||
+                 opcode == SHADER_OPCODE_TYPED_ATOMIC_SPLIT) {
+         assert(arg < 3 &&
+                src[4].file == BRW_IMMEDIATE_VALUE &&
+                src[5].file == BRW_IMMEDIATE_VALUE);
+         const unsigned op = src[5].fixed_hw_reg.dw1.ud;
+         const unsigned arg_size =
+            op == BRW_AOP_INC || op == BRW_AOP_DEC || op == BRW_AOP_PREDEC ? 0 :
+            op == BRW_AOP_CMPWR ? 2 : 1;
+         return arg == 0 ? header_size :
+            DIV_ROUND_UP((arg == 1 ? src[4].fixed_hw_reg.dw1.ud : arg_size) *
+                         exec_size, 8);
+
+      } else {
+         return mlen;
+      }
    }
 
    switch (src[arg].file) {
