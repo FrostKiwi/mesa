@@ -259,6 +259,7 @@ public:
    void lower_uniform_pull_constant_loads();
    bool lower_load_payload();
    bool lower_split_payload();
+   bool lower_simd_width();
    bool opt_combine_constants();
 
    void emit_dummy_fs();

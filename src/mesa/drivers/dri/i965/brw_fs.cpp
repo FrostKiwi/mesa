@@ -3694,6 +3694,133 @@ fs_visitor::lower_split_payload()
    return progress;
 }
 
+static inline unsigned
+maximum_native_simd_width(const struct brw_device_info *devinfo,
+                          const fs_inst *inst)
+{
+   switch (inst->opcode) {
+   case SHADER_OPCODE_TYPED_ATOMIC:
+   case SHADER_OPCODE_TYPED_ATOMIC_SPLIT:
+   case SHADER_OPCODE_TYPED_SURFACE_READ:
+   case SHADER_OPCODE_TYPED_SURFACE_READ_SPLIT:
+   case SHADER_OPCODE_TYPED_SURFACE_WRITE:
+   case SHADER_OPCODE_TYPED_SURFACE_WRITE_SPLIT:
+      return 8;
+   default:
+      return inst->exec_size;
+   }
+}
+
+/**
+ * Copy one every \p src_stride logical components of the argument into
+ * one every \p dst_stride logical components of the result.
+ */
+static inline fs_reg
+emit_stride(const fs_builder &bld, const fs_reg &src, unsigned size,
+            unsigned dst_stride, unsigned src_stride)
+{
+   const fs_reg dst = bld.vgrf(src.type, size * dst_stride);
+
+   for (unsigned i = 0; i < size; ++i)
+      bld.MOV(offset(dst, i * dst_stride),
+              offset(src, i * src_stride));
+
+   return dst;
+}
+
+/**
+ * Interleave logical components from the given arguments.  If two
+ * arguments are provided \p size components will be copied from each to
+ * the even and odd components of the result respectively.
+ *
+ * It may be safely used to merge the two halves of a value calculated
+ * separately.
+ */
+static inline fs_inst *
+emit_zip(const fs_builder &bld, const fs_reg &dst,
+         const fs_reg &src0, const fs_reg &src1,
+         unsigned size)
+{
+   const fs_reg srcs[] = { src0, src1 };
+   fs_reg *const components = new fs_reg[2 * size];
+
+   for (unsigned i = 0; i < size; ++i) {
+      for (unsigned j = 0; j < 2; ++j)
+         components[j + 2 * i] = retype(offset(srcs[j], i),
+                                        BRW_REGISTER_TYPE_UD);
+   }
+
+   fs_inst *inst = set_exec_all(bld.LOAD_PAYLOAD(dst, components, 2 * size, 0));
+
+   delete[] components;
+   return inst;
+}
+
+bool
+fs_visitor::lower_simd_width()
+{
+   const bool uses_kill = (stage == MESA_SHADER_FRAGMENT &&
+                           ((brw_wm_prog_data *)prog_data)->uses_kill);
+   fs_builder bld(devinfo, mem_ctx, alloc, instructions, dispatch_width,
+                  stage, uses_kill);
+   bool progress = false;
+
+   bld.set_annotation(current_annotation);
+   bld.set_base_ir(base_ir);
+
+   foreach_block_and_inst_safe(block, fs_inst, inst, cfg) {
+      const unsigned lower_size = maximum_native_simd_width(devinfo, inst);
+
+      if (lower_size < inst->exec_size) {
+         const unsigned n = inst->exec_size / lower_size;
+         const unsigned dst_size = inst->regs_written * 8 / inst->exec_size;
+         fs_reg dsts[2];
+         assert(n == 2 && !inst->writes_accumulator && !inst->mlen);
+
+         for (unsigned i = 0; i < n; i++) {
+            const fs_builder ubld = bld.half(i);
+            fs_inst *split_inst = bld.at(block, inst).emit(*inst);
+
+            split_inst->exec_size = lower_size;
+            split_inst->force_uncompressed = true;
+            split_inst->force_sechalf = i;
+
+            for (unsigned j = 0; j < inst->sources; j++) {
+               if (inst->src[j].width > lower_size) {
+                  assert(inst->src[j].width == inst->exec_size);
+                  const fs_reg tmp = emit_stride(
+                     ubld.at(block, split_inst),
+                     half(inst->src[j], i),
+                     inst->regs_read(j) * 8 / inst->src[j].width,
+                     1, 2);
+
+                  split_inst->src[j] = tmp;
+               }
+            }
+
+            if (inst->regs_written) {
+               split_inst->dst = dsts[i] =
+                  ubld.vgrf(inst->dst.type, dst_size);
+               split_inst->regs_written = dst_size * lower_size / 8;
+            }
+         }
+
+         if (inst->regs_written)
+            emit_zip(bld.at(block, inst).half(0),
+                     half(inst->dst, 0), dsts[0], dsts[1],
+                     dst_size);
+
+         inst->remove(block);
+         progress = true;
+      }
+   }
+
+   if (progress)
+      invalidate_live_intervals();
+
+   return progress;
+}
+
 void
 fs_visitor::dump_instructions()
 {
@@ -4135,6 +4262,7 @@ fs_visitor::optimize()
    int iteration = 0;
    int pass_num = 0;
 
+   OPT(lower_simd_width);
    OPT(lower_split_payload);
 
    do {
