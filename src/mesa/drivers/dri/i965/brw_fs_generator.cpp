@@ -1562,7 +1562,7 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
       if (unlikely(debug_flag))
          annotate(p->devinfo, &annotation, cfg, inst, p->next_insn_offset);
 
-      for (unsigned int i = 0; i < inst->sources; i++) {
+      for (unsigned int i = 0; i < MIN2(3, inst->sources); i++) {
 	 src[i] = brw_reg_from_fs_reg(&inst->src[i]);
 
 	 /* The accumulator result appears to get used for the
@@ -2016,38 +2016,41 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
          break;
 
       case SHADER_OPCODE_UNTYPED_ATOMIC:
-         assert(src[2].file == BRW_IMMEDIATE_VALUE);
-         brw_untyped_atomic(p, dst, src[0], src[1], src[2].dw1.ud,
+         assert(inst->src[3].file == IMM);
+         brw_untyped_atomic(p, dst, src[0], src[1],
+                            inst->src[3].fixed_hw_reg.dw1.ud,
                             inst->mlen, !inst->dst.is_null());
          break;
 
       case SHADER_OPCODE_UNTYPED_SURFACE_READ:
-         assert(src[2].file == BRW_IMMEDIATE_VALUE);
-         brw_untyped_surface_read(p, dst, src[0], src[1],
-                                  inst->mlen, src[2].dw1.ud);
+         assert(inst->src[3].file == IMM);
+         brw_untyped_surface_read(p, dst, src[0], src[1], inst->mlen,
+                                  inst->src[3].fixed_hw_reg.dw1.ud);
          break;
 
       case SHADER_OPCODE_UNTYPED_SURFACE_WRITE:
-         assert(src[2].file == BRW_IMMEDIATE_VALUE);
-         brw_untyped_surface_write(p, src[0], src[1],
-                                   inst->mlen, src[2].dw1.ud);
+         assert(inst->src[3].file == IMM);
+         brw_untyped_surface_write(p, src[0], src[1], inst->mlen,
+                                   inst->src[3].fixed_hw_reg.dw1.ud);
          break;
 
       case SHADER_OPCODE_TYPED_ATOMIC:
-         assert(src[2].file == BRW_IMMEDIATE_VALUE);
+         assert(inst->src[3].file == IMM);
          brw_typed_atomic(p, dst, src[0], src[1],
-                          src[2].dw1.ud, inst->mlen, !inst->dst.is_null());
+                          inst->src[3].fixed_hw_reg.dw1.ud,
+                          inst->mlen, !inst->dst.is_null());
          break;
 
       case SHADER_OPCODE_TYPED_SURFACE_READ:
-         assert(src[2].file == BRW_IMMEDIATE_VALUE);
-         brw_typed_surface_read(p, dst, src[0], src[1],
-                                inst->mlen, src[2].dw1.ud);
+         assert(inst->src[3].file == IMM);
+         brw_typed_surface_read(p, dst, src[0], src[1], inst->mlen,
+                                inst->src[3].fixed_hw_reg.dw1.ud);
          break;
 
       case SHADER_OPCODE_TYPED_SURFACE_WRITE:
-         assert(src[2].file == BRW_IMMEDIATE_VALUE);
-         brw_typed_surface_write(p, src[0], src[1], inst->mlen, src[2].dw1.ud);
+         assert(inst->src[3].file == IMM);
+         brw_typed_surface_write(p, src[0], src[1], inst->mlen,
+                                 inst->src[3].fixed_hw_reg.dw1.ud);
          break;
 
       case SHADER_OPCODE_MEMORY_FENCE:
