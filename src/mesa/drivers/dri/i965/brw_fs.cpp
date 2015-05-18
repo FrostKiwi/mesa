@@ -46,8 +46,11 @@
 #include "brw_dead_control_flow.h"
 #include "main/uniforms.h"
 #include "brw_fs_live_variables.h"
+#include "brw_fs_builder.h"
 #include "glsl/glsl_types.h"
 #include "program/sampler.h"
+
+using namespace brw;
 
 void
 fs_inst::init(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
@@ -3583,6 +3586,114 @@ fs_visitor::lower_load_payload()
    return progress;
 }
 
+static inline opcode
+split_payload_lowered_opcode(const fs_inst *inst)
+{
+   switch (inst->opcode) {
+   case SHADER_OPCODE_UNTYPED_ATOMIC_SPLIT:
+      return SHADER_OPCODE_UNTYPED_ATOMIC;
+   case SHADER_OPCODE_UNTYPED_SURFACE_READ_SPLIT:
+      return SHADER_OPCODE_UNTYPED_SURFACE_READ;
+   case SHADER_OPCODE_UNTYPED_SURFACE_WRITE_SPLIT:
+      return SHADER_OPCODE_UNTYPED_SURFACE_WRITE;
+   case SHADER_OPCODE_TYPED_ATOMIC_SPLIT:
+      return SHADER_OPCODE_TYPED_ATOMIC;
+   case SHADER_OPCODE_TYPED_SURFACE_READ_SPLIT:
+      return SHADER_OPCODE_TYPED_SURFACE_READ;
+   case SHADER_OPCODE_TYPED_SURFACE_WRITE_SPLIT:
+      return SHADER_OPCODE_TYPED_SURFACE_WRITE;
+   default:
+      return inst->opcode;
+   }
+}
+
+static inline unsigned
+split_payload_size(const fs_inst *inst)
+{
+   unsigned size = 0;
+
+   for (unsigned i = 0; i < inst->sources; i++) {
+      if (inst->source_is_payload(i))
+         size += inst->regs_read(i);
+   }
+
+   return size;
+}
+
+static inline fs_reg
+emit_collect_split_sources(const fs_builder &bld, const fs_inst *inst)
+{
+   const unsigned size = split_payload_size(inst);
+   const fs_reg dst = bld.vgrf(BRW_REGISTER_TYPE_UD,
+                               DIV_ROUND_UP(size * 8, bld.dispatch_width()));
+   fs_reg *const components = new fs_reg[size];
+   unsigned n = 0;
+
+   for (unsigned i = 0; i < inst->sources; i++) {
+      if (inst->source_is_payload(i)) {
+         const int width = (n < inst->header_size ? 1 :
+                            DIV_ROUND_UP(inst->exec_size, 8));
+
+         for (int j = 0; j < inst->regs_read(i) / width; j++)
+            components[n++] = retype(offset(inst->src[i], j),
+                                     BRW_REGISTER_TYPE_UD);
+      }
+   }
+
+   bld.LOAD_PAYLOAD(dst, components, n, inst->header_size);
+
+   delete[] components;
+   return dst;
+}
+
+bool
+fs_visitor::lower_split_payload()
+{
+   const bool uses_kill = (stage == MESA_SHADER_FRAGMENT &&
+                           ((brw_wm_prog_data *)prog_data)->uses_kill);
+   fs_builder bld(devinfo, mem_ctx, alloc, instructions, dispatch_width,
+                  stage, uses_kill);
+   bool progress = false;
+
+   bld.set_annotation(current_annotation);
+   bld.set_base_ir(base_ir);
+
+   foreach_block_and_inst_safe(block, fs_inst, inst, cfg) {
+      const opcode opcode = split_payload_lowered_opcode(inst);
+
+      if (inst->opcode != opcode) {
+         const fs_builder ubld = (inst->exec_size < dispatch_width ?
+                                  bld.half(inst->force_sechalf) : bld);
+         const fs_reg payload = emit_collect_split_sources(
+            ubld.at(block, inst), inst);
+         bool payload_seen = false;
+         unsigned n = 0;
+
+         inst->mlen = split_payload_size(inst);
+
+         for (unsigned i = 0; i < inst->sources; i++) {
+            if (inst->source_is_payload(i)) {
+               if (!payload_seen) {
+                  inst->src[n++] = payload;
+                  payload_seen = true;
+               }
+            } else {
+               inst->src[n++] = inst->src[i];
+            }
+         }
+
+         inst->opcode = opcode;
+         inst->resize_sources(n);
+         progress = true;
+      }
+   }
+
+   if (progress)
+      invalidate_live_intervals();
+
+   return progress;
+}
+
 void
 fs_visitor::dump_instructions()
 {
@@ -4020,9 +4131,12 @@ fs_visitor::optimize()
       backend_visitor::dump_instructions(filename);
    }
 
-   bool progress;
+   bool progress = false;
    int iteration = 0;
    int pass_num = 0;
+
+   OPT(lower_split_payload);
+
    do {
       progress = false;
       pass_num = 0;
