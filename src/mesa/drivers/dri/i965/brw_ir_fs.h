@@ -100,6 +100,10 @@ byte_offset(fs_reg reg, unsigned delta)
    case MRF:
       reg.reg += delta / 32;
       break;
+   case HW_REG:
+      reg.fixed_hw_reg.nr += delta / 32;
+      reg.fixed_hw_reg.subnr += delta % 32;
+      return reg;
    default:
       assert(delta == 0);
    }
@@ -121,6 +125,7 @@ horiz_offset(fs_reg reg, unsigned delta)
    case GRF:
    case MRF:
    case ATTR:
+   case HW_REG:
       return byte_offset(reg, delta * reg.stride * type_sz(reg.type));
    default:
       assert(delta == 0);

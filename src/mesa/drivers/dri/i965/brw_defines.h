@@ -866,6 +866,7 @@ enum opcode {
     * instructions.
     */
    FS_OPCODE_FB_WRITE = 128,
+   FS_OPCODE_FB_WRITE_LOGICAL,
    FS_OPCODE_BLORP_FB_WRITE,
    FS_OPCODE_REP_FB_WRITE,
    SHADER_OPCODE_RCP,

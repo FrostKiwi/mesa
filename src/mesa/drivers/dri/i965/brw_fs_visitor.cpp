@@ -1407,15 +1407,15 @@ fs_visitor::emit_interpolation_setup_gen6()
    }
 }
 
-void
-fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components,
-                                unsigned exec_size, bool use_2nd_half)
+static void
+setup_color_payload(const brw::fs_builder &bld,
+                    fs_reg *dst, fs_reg color, unsigned components,
+                    bool clamp_fragment_color)
 {
-   brw_wm_prog_key *key = (brw_wm_prog_key*) this->key;
    fs_inst *inst;
 
-   if (key->clamp_fragment_color) {
-      fs_reg tmp = vgrf(glsl_type::vec4_type);
+   if (clamp_fragment_color) {
+      fs_reg tmp = bld.vgrf(BRW_REGISTER_TYPE_F, components);
       assert(color.type == BRW_REGISTER_TYPE_F);
       for (unsigned i = 0; i < components; i++) {
          inst = bld.MOV(offset(tmp, i), offset(color, i));
@@ -1424,14 +1424,8 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components,
       color = tmp;
    }
 
-   if (exec_size < dispatch_width) {
-      unsigned half_idx = use_2nd_half ? 1 : 0;
-      for (unsigned i = 0; i < components; i++)
-         dst[i] = half(offset(color, i), half_idx);
-   } else {
-      for (unsigned i = 0; i < components; i++)
-         dst[i] = offset(color, i);
-   }
+   for (unsigned i = 0; i < components; i++)
+      dst[i] = offset(color, i);
 }
 
 static enum brw_conditional_mod
@@ -1488,12 +1482,16 @@ fs_visitor::emit_alpha_test()
    cmp->flag_subreg = 1;
 }
 
-fs_inst *
-fs_visitor::emit_single_fb_write(const fs_builder &bld,
-                                 fs_reg color0, fs_reg color1,
-                                 fs_reg src0_alpha, unsigned components,
-                                 unsigned exec_size, bool use_2nd_half)
+void
+fs_visitor::lower_logical_fb_write(const fs_builder &bld, fs_inst *write)
 {
+   const fs_reg &color0 = write->src[0];
+   const fs_reg &color1 = write->src[1];
+   const fs_reg &src0_alpha = write->src[2];
+   const fs_reg &frag_depth = write->src[3];
+   const fs_reg &compare_depth = write->src[4];
+   unsigned components = write->src[5].fixed_hw_reg.dw1.ud;
+
    assert(stage == MESA_SHADER_FRAGMENT);
    brw_wm_prog_data *prog_data = (brw_wm_prog_data*) this->prog_data;
    brw_wm_prog_key *key = (brw_wm_prog_key*) this->key;
@@ -1554,28 +1552,82 @@ fs_visitor::emit_single_fb_write(const fs_builder &bld,
        * alpha out the pipeline to our null renderbuffer to support
        * alpha-testing, alpha-to-coverage, and so on.
        */
+      assert(src0_alpha.file != BAD_FILE);
       if (this->outputs[0].file != BAD_FILE)
-         setup_color_payload(&sources[length + 3], offset(this->outputs[0], 3),
-                             1, exec_size, false);
+         setup_color_payload(bld, &sources[length + 3], src0_alpha, 1,
+                             key->clamp_fragment_color);
       length += 4;
    } else if (color1.file == BAD_FILE) {
       if (src0_alpha.file != BAD_FILE) {
-         setup_color_payload(&sources[length], src0_alpha, 1, exec_size, false);
+         setup_color_payload(bld, &sources[length], src0_alpha, 1,
+                             key->clamp_fragment_color);
          length++;
       }
 
-      setup_color_payload(&sources[length], color0, components,
-                          exec_size, use_2nd_half);
+      setup_color_payload(bld, &sources[length], color0, components,
+                          key->clamp_fragment_color);
       length += 4;
    } else {
-      setup_color_payload(&sources[length], color0, components,
-                          exec_size, use_2nd_half);
+      setup_color_payload(bld, &sources[length], color0, components,
+                          key->clamp_fragment_color);
       length += 4;
-      setup_color_payload(&sources[length], color1, components,
-                          exec_size, use_2nd_half);
+      setup_color_payload(bld, &sources[length], color1, components,
+                          key->clamp_fragment_color);
       length += 4;
    }
 
+   if (frag_depth.file != BAD_FILE) {
+      if (devinfo->gen == 6) {
+	 /* For outputting oDepth on gen6, SIMD8 writes have to be
+	  * used.  This would require SIMD8 moves of each half to
+	  * message regs, kind of like pre-gen5 SIMD16 FB writes.
+	  * Just bail on doing so for now.
+	  */
+	 no16("Missing support for simd16 depth writes on gen6\n");
+      }
+      sources[length++] = frag_depth;
+   }
+
+   if (compare_depth.file != BAD_FILE)
+      sources[length++] = compare_depth;
+
+   fs_inst *load = bld.LOAD_PAYLOAD(sources, length, payload_header_size);
+   if (load->dst.file == GRF) {
+      assert(devinfo->gen >= 7);
+
+      write->src[0] = load->dst;
+      write->sources = 1;
+      write->base_mrf = -1;
+   } else {
+      assert(devinfo->gen < 7);
+
+      /* On pre-SNB, we have to interlace the color values.  LOAD_PAYLOAD
+       * will do this for us if we just give it a COMPR4 destination.
+       */
+      if (brw->gen < 6 && write->exec_size == 16)
+         load->dst.reg |= BRW_MRF_COMPR4;
+
+      write->sources = 0;
+      write->base_mrf = load->dst.reg;
+   }
+
+   write->opcode = FS_OPCODE_FB_WRITE;
+   write->mlen = load->regs_written;
+   write->header_size = header_size;
+   if (prog_data->uses_kill) {
+      write->predicate = BRW_PREDICATE_NORMAL;
+      write->flag_subreg = 1;
+   }
+}
+
+void
+fs_visitor::emit_fb_writes()
+{
+   assert(stage == MESA_SHADER_FRAGMENT);
+   brw_wm_prog_data *prog_data = (brw_wm_prog_data*) this->prog_data;
+   brw_wm_prog_key *key = (brw_wm_prog_key*) this->key;
+
+   fs_reg frag_depth, compare_depth;
    if (source_depth_to_render_target) {
       if (devinfo->gen == 6) {
 	 /* For outputting oDepth on gen6, SIMD8 writes have to be
@@ -1589,95 +1641,30 @@ fs_visitor::emit_single_fb_write(const fs_builder &bld,
       if (prog->OutputsWritten & BITFIELD64_BIT(FRAG_RESULT_DEPTH)) {
 	 /* Hand over gl_FragDepth. */
 	 assert(this->frag_depth.file != BAD_FILE);
-         if (exec_size < dispatch_width) {
-            sources[length] = half(this->frag_depth, use_2nd_half);
-         } else {
-            sources[length] = this->frag_depth;
-         }
+         frag_depth = this->frag_depth;
       } else {
 	 /* Pass through the payload depth. */
-         sources[length] = fs_reg(brw_vec8_grf(payload.source_depth_reg, 0));
+         frag_depth = fs_reg(brw_vec8_grf(payload.source_depth_reg, 0));
       }
-      length++;
    }
 
    if (payload.dest_depth_reg)
-      sources[length++] = fs_reg(brw_vec8_grf(payload.dest_depth_reg, 0));
-
-   const fs_builder ubld = bld.group(exec_size, use_2nd_half);
-   fs_inst *load;
-   fs_inst *write;
-   if (devinfo->gen >= 7) {
-      /* Send from the GRF */
-      fs_reg payload = fs_reg(GRF, -1, BRW_REGISTER_TYPE_F, exec_size);
-      load = ubld.LOAD_PAYLOAD(payload, sources, length, payload_header_size);
-      payload.reg = alloc.allocate(load->regs_written);
-      load->dst = payload;
-      write = ubld.emit(FS_OPCODE_FB_WRITE, reg_undef, payload);
-      write->base_mrf = -1;
-   } else {
-      /* Send from the MRF */
-      load = ubld.LOAD_PAYLOAD(fs_reg(MRF, 1, BRW_REGISTER_TYPE_F, exec_size),
-                               sources, length, payload_header_size);
-
-      /* On pre-SNB, we have to interlace the color values.  LOAD_PAYLOAD
-       * will do this for us if we just give it a COMPR4 destination.
-       */
-      if (brw->gen < 6 && exec_size == 16)
-         load->dst.reg |= BRW_MRF_COMPR4;
-
-      write = ubld.emit(FS_OPCODE_FB_WRITE);
-      write->exec_size = exec_size;
-      write->base_mrf = 1;
-   }
-
-   write->mlen = load->regs_written;
-   write->header_size = header_size;
-   if (prog_data->uses_kill) {
-      write->predicate = BRW_PREDICATE_NORMAL;
-      write->flag_subreg = 1;
-   }
-   return write;
-}
-
-void
-fs_visitor::emit_fb_writes()
-{
-   assert(stage == MESA_SHADER_FRAGMENT);
-   brw_wm_prog_data *prog_data = (brw_wm_prog_data*) this->prog_data;
-   brw_wm_prog_key *key = (brw_wm_prog_key*) this->key;
+      compare_depth = fs_reg(brw_vec8_grf(payload.dest_depth_reg, 0));
 
    fs_inst *inst = NULL;
    if (do_dual_src) {
       const fs_builder abld = bld.annotate("FB dual-source write");
 
-      inst = emit_single_fb_write(abld, this->outputs[0],
-                                  this->dual_src_output, reg_undef, 4, 8);
+      fs_reg srcs[] = {
+         this->outputs[0],
+         this->dual_src_output,
+         reg_undef,
+         frag_depth,
+         compare_depth,
+         fs_reg(4)
+      };
+      inst = abld.emit(FS_OPCODE_FB_WRITE_LOGICAL, abld.null_reg_f(), srcs, 6);
       inst->target = 0;
-
-      /* SIMD16 dual source blending requires to send two SIMD8 dual source
-       * messages, where each message contains color data for 8 pixels. Color
-       * data for the first group of pixels is stored in the "lower" half of
-       * the color registers, so in SIMD16, the previous message did:
-       * m + 0: r0
-       * m + 1: g0
-       * m + 2: b0
-       * m + 3: a0
-       *
-       * Here goes the second message, which packs color data for the
-       * remaining 8 pixels. Color data for these pixels is stored in the
-       * "upper" half of the color registers, so we need to do:
-       * m + 0: r1
-       * m + 1: g1
-       * m + 2: b1
-       * m + 3: a1
-       */
-      if (dispatch_width == 16) {
-         inst = emit_single_fb_write(abld, this->outputs[0],
-                                     this->dual_src_output, reg_undef, 4, 8,
-                                     true);
-         inst->target = 0;
-      }
 
       prog_data->dual_src_blend = true;
    } else {
@@ -1693,10 +1680,16 @@ fs_visitor::emit_fb_writes()
          if (devinfo->gen >= 6 && key->replicate_alpha && target != 0)
             src0_alpha = offset(outputs[0], 3);
 
-         inst = emit_single_fb_write(abld, this->outputs[target], reg_undef,
-                                     src0_alpha,
-                                     this->output_components[target],
-                                     dispatch_width);
+         fs_reg srcs[] = {
+            this->outputs[target],
+            reg_undef,
+            src0_alpha,
+            frag_depth,
+            compare_depth,
+            fs_reg(this->output_components[target]),
+         };
+         inst = abld.emit(FS_OPCODE_FB_WRITE_LOGICAL,
+                          abld.null_reg_f(), srcs, 6);
          inst->target = target;
       }
    }
@@ -1706,12 +1699,18 @@ fs_visitor::emit_fb_writes()
        * alpha out the pipeline to our null renderbuffer to support
        * alpha-testing, alpha-to-coverage, and so on.
        */
-      inst = emit_single_fb_write(bld, reg_undef, reg_undef, reg_undef, 0,
-                                  dispatch_width);
+      fs_reg src0_alpha = offset(outputs[0], 3);
+      fs_reg srcs[] = {
+         reg_undef,
+         reg_undef,
+         src0_alpha,
+         frag_depth,
+         compare_depth,
+         fs_reg(0)
+      };
+      inst = bld.emit(FS_OPCODE_FB_WRITE_LOGICAL, bld.null_reg_f(), srcs, 6);
       inst->target = 0;
    }
-
-   inst->eot = true;
 }
 
 void

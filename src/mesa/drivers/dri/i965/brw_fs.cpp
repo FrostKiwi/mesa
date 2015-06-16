@@ -744,6 +744,7 @@ fs_inst::is_partial_write() const
 int
 fs_inst::regs_read(int arg) const
 {
+   unsigned components = 1;
    switch (opcode) {
    case FS_OPCODE_FB_WRITE:
    case SHADER_OPCODE_URB_WRITE_SIMD8:
@@ -756,6 +757,11 @@ fs_inst::regs_read(int arg) const
    case FS_OPCODE_INTERPOLATE_AT_PER_SLOT_OFFSET:
       if (arg == 0)
          return mlen;
+      break;
+
+   case FS_OPCODE_FB_WRITE_LOGICAL:
+      if (arg <= 1)
+         components = src[5].fixed_hw_reg.dw1.ud;
       break;
 
    case FS_OPCODE_LINTERP:
@@ -779,8 +785,8 @@ fs_inst::regs_read(int arg) const
       if (src[arg].stride == 0) {
          return 1;
       } else {
-         int size = src[arg].width * src[arg].stride * type_sz(src[arg].type);
-         return (size + 31) / 32;
+         int size = components * src[arg].width * type_sz(src[arg].type);
+         return DIV_ROUND_UP(size * src[arg].stride, 32);
       }
    case MRF:
       unreachable("MRF registers are not allowed as sources");
@@ -1741,6 +1747,143 @@ fs_visitor::compact_virtual_grfs()
    }
 
    return progress;
+}
+
+static unsigned
+maximum_exec_size(fs_inst *inst)
+{
+   switch (inst->opcode) {
+   case FS_OPCODE_FB_WRITE_LOGICAL:
+      return 8;
+      /* Dual-source blend can't be done in SIMD16 */
+      if (inst->src[1].file != BAD_FILE)
+         return 8;
+      return 16;
+
+   default: {
+      unsigned width = MAX2(32, 64 / type_sz(inst->dst.type));
+      for (int i = 0; i < inst->sources; i++) {
+         unsigned size = type_sz(inst->src[i].type);
+         if (size)
+            width = MAX2(width, 64 / size);
+      }
+      return width;
+   }
+   }
+}
+
+bool
+fs_visitor::lower_simd_widths()
+{
+   bool progress = false;
+
+   foreach_block_and_inst_safe(block, fs_inst, inst, cfg) {
+      unsigned lower_size = maximum_exec_size(inst);
+
+      if (inst->exec_size <= lower_size)
+         continue;
+
+      unsigned n = inst->exec_size / lower_size;
+
+      for (unsigned i = 0; i < n; i++) {
+         fs_builder ubld = bld.group(lower_size, i).at(block, inst);
+
+         fs_inst *new_inst = new(mem_ctx) fs_inst(*inst);
+         new_inst->exec_size = lower_size;
+
+         for (unsigned j = 0; j < inst->sources; j++) {
+            switch (inst->src[j].file) {
+            case BAD_FILE:
+            case UNIFORM:
+            case IMM:
+               /* These only have a single component that is implicitly
+                * splatted.  We don't need to do anything to handle them.
+                */
+               continue;
+            default:
+               break;
+            }
+
+            /* If they have a stride of 0, we don't need to do anything
+             * either */
+            if (inst->src[j].stride == 0)
+               continue;
+
+            assert(inst->src[j].width == inst->exec_size);
+
+            unsigned components = DIV_ROUND_UP(inst->regs_read(j),
+                                               inst->exec_size / 8);
+            fs_reg tmp = ubld.vgrf(inst->src[j].type, components);
+            for (unsigned k = 0; k < components; k++) {
+               fs_reg comp = offset(inst->src[j], k);
+               fs_reg simd_chunk = horiz_offset(comp, i * n);
+               simd_chunk.width = lower_size;
+               ubld.MOV(offset(tmp, k), simd_chunk);
+            }
+
+            new_inst->src[j] = tmp;
+         }
+
+         if (inst->regs_written) {
+            assert(inst->regs_written % (inst->exec_size / 8) == 0);
+            unsigned components = DIV_ROUND_UP(inst->regs_written,
+                                               inst->exec_size / 8);
+            assert(inst->regs_written % n == 0);
+            new_inst->regs_written = inst->regs_written / n;
+
+            fs_reg tmp = ubld.vgrf(inst->dst.type, components);
+            for (unsigned k = 0; k < components; k++) {
+               fs_reg comp = offset(inst->dst, k);
+               fs_reg simd_chunk = horiz_offset(comp, i * n);
+               simd_chunk.width = lower_size;
+               ubld.MOV(simd_chunk, offset(tmp, k));
+            }
+
+            new_inst->dst = tmp;
+         } else {
+            new_inst->dst.width = lower_size;
+         }
+
+         ubld.emit(new_inst);
+      }
+
+      inst->remove(block);
+   }
+
+   if (progress)
+      invalidate_live_intervals();
+   return progress;
+}
+
+void
+fs_visitor::lower_logical_sends()
+{
+   foreach_block_and_inst_safe(block, fs_inst, inst, cfg) {
+      /* We need to early-fail here because setting up the builder asserts
+       * a variety of things that may not be true for some instructions.
+       */
+      switch (inst->opcode) {
+      case FS_OPCODE_FB_WRITE_LOGICAL:
+         break;
+
+      default:
+         continue;
+      }
+
+      fs_builder ubld = bld.group(inst->exec_size, inst->force_sechalf);
+      ubld = ubld.at(block, inst);
+
+      switch (inst->opcode) {
+      case FS_OPCODE_FB_WRITE_LOGICAL:
+         lower_logical_fb_write(ubld, inst);
+         break;
+
+      default:
+         unreachable("Cannot lower logical send instruction");
+      }
+   }
+
+   invalidate_live_intervals();
 }
 
 /*
@@ -3670,6 +3813,27 @@ fs_visitor::optimize()
     * make it trip.
     */
    bld = bld.at(NULL, NULL);
+
+   lower_simd_widths();
+   lower_logical_sends();
+
+   bblock_t *last_bblock = cfg->blocks[cfg->num_blocks - 1];
+   fs_inst *last_inst = static_cast<fs_inst *>(bblock_end(last_bblock));
+
+   switch (stage) {
+   case MESA_SHADER_FRAGMENT:
+      assert(last_inst->opcode == FS_OPCODE_FB_WRITE);
+      break;
+   case MESA_SHADER_VERTEX:
+      assert(last_inst->opcode == SHADER_OPCODE_URB_WRITE_SIMD8);
+      break;
+   case MESA_SHADER_COMPUTE:
+      assert(last_inst->opcode == CS_OPCODE_CS_TERMINATE);
+      break;
+   default:
+      unreachable("Invalid scalar shader stage");
+   }
+   last_inst->eot = true;
 
    split_virtual_grfs();
 

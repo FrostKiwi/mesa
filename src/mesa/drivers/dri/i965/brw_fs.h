@@ -125,6 +125,8 @@ public:
    void spill_reg(int spill_reg);
    void split_virtual_grfs();
    bool compact_virtual_grfs();
+   bool lower_simd_widths();
+   void lower_logical_sends();
    void move_uniform_array_access_to_pull_constants();
    void assign_constant_locations();
    void demote_pull_constants();
@@ -262,9 +264,8 @@ public:
    bool optimize_frontfacing_ternary(nir_alu_instr *instr,
                                      const fs_reg &result);
 
-   void setup_color_payload(fs_reg *dst, fs_reg color, unsigned components,
-                            unsigned exec_size, bool use_2nd_half);
    void emit_alpha_test();
+   void lower_logical_fb_write(const brw::fs_builder &bld, fs_inst *inst);
    fs_inst *emit_single_fb_write(const brw::fs_builder &bld,
                                  fs_reg color1, fs_reg color2,
                                  fs_reg src0_alpha, unsigned components,

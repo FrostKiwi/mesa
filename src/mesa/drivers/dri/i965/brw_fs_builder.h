@@ -306,6 +306,16 @@ namespace brw {
       }
 
       /**
+       * Create and insert a n-ary instruction into the program.
+       */
+      instruction *
+      emit(enum opcode opcode, const dst_reg &dst,
+           const src_reg src[], unsigned sources) const
+      {
+         return emit(instruction(opcode, dst.width, dst, src, sources));
+      }
+
+      /**
        * Insert a preallocated instruction into the program.
        */
       instruction *
@@ -531,6 +541,26 @@ namespace brw {
          inst->regs_written += (sources - header_size) * (dst.width / 8);
 
          return inst;
+      }
+
+      /**
+       * Collect a number of registers in a contiguous range of registers.
+       */
+      instruction *
+      LOAD_PAYLOAD(const src_reg *src, unsigned sources,
+                   unsigned header_size) const
+      {
+         instruction *load;
+         if (shader->devinfo->gen >= 7) {
+            dst_reg payload(GRF, -1, BRW_REGISTER_TYPE_F, dispatch_width());
+            load = LOAD_PAYLOAD(payload, src, sources, header_size);
+            payload.reg = shader->alloc.allocate(load->regs_written);
+            load->dst = payload;
+         } else {
+            dst_reg payload(MRF, 1, BRW_REGISTER_TYPE_F, dispatch_width());
+            load = LOAD_PAYLOAD(payload, src, sources, header_size);
+         }
+         return load;
       }
 
       backend_shader *shader;
