@@ -333,6 +333,17 @@ fs_visitor::CMP(fs_reg dst, fs_reg src0, fs_reg src1,
 }
 
 fs_inst *
+fs_visitor::LOAD_PAYLOAD(fs_reg *src, int sources, int header_size)
+{
+   fs_reg payload = fs_reg(GRF, -1, BRW_REGISTER_TYPE_F, bls.dispatch_width);
+   fs_inst *load = bld.LOAD_PAYLOAD(payload, srcs, num_srcs, 1);
+   payload.reg = alloc.allocate(load->regs_written);
+   load->dst = payload;
+
+   return load;
+}
+
+fs_inst *
 fs_visitor::LOAD_PAYLOAD(const fs_reg &dst, fs_reg *src, int sources,
                          int header_size)
 {
@@ -535,35 +546,6 @@ bool
 fs_inst::has_side_effects() const
 {
    return this->eot || backend_instruction::has_side_effects();
-}
-
-bool
-fs_inst::source_is_payload(unsigned i) const
-{
-   if ((is_tex() && src[0].file == GRF) ||
-       opcode == FS_OPCODE_FB_WRITE ||
-       opcode == SHADER_OPCODE_URB_WRITE_SIMD8 ||
-       opcode == SHADER_OPCODE_UNTYPED_ATOMIC ||
-       opcode == SHADER_OPCODE_UNTYPED_SURFACE_READ ||
-       opcode == SHADER_OPCODE_UNTYPED_SURFACE_WRITE ||
-       opcode == SHADER_OPCODE_TYPED_ATOMIC ||
-       opcode == SHADER_OPCODE_TYPED_SURFACE_READ ||
-       opcode == SHADER_OPCODE_TYPED_SURFACE_WRITE ||
-       opcode == FS_OPCODE_INTERPOLATE_AT_PER_SLOT_OFFSET)
-      return i == 0;
-
-   else if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_READ_SPLIT ||
-            opcode == SHADER_OPCODE_TYPED_SURFACE_READ_SPLIT)
-      return i < 2;
-
-   else if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_WRITE_SPLIT ||
-            opcode == SHADER_OPCODE_TYPED_SURFACE_WRITE_SPLIT ||
-            opcode == SHADER_OPCODE_UNTYPED_ATOMIC_SPLIT ||
-            opcode == SHADER_OPCODE_TYPED_ATOMIC_SPLIT)
-      return i < 3;
-
-   else
-      return false;
 }
 
 void
@@ -982,40 +964,44 @@ fs_inst::is_partial_write() const
 int
 fs_inst::regs_read(int arg) const
 {
-   if (opcode == FS_OPCODE_LINTERP && arg == 0) {
-      return exec_size / 4;
+   int components = 1;
 
-   } else if (source_is_payload(arg)) {
-      if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_READ_SPLIT ||
-          opcode == SHADER_OPCODE_TYPED_SURFACE_READ_SPLIT) {
-         assert(arg < 2 && src[3].file == BRW_IMMEDIATE_VALUE);
-         return arg == 0 ? header_size :
-            DIV_ROUND_UP(src[3].fixed_hw_reg.dw1.ud * exec_size, 8);
+   switch (this->opcode) {
+   case FS_OPCODE_LINTERP:
+      if (arg == 0)
+         components = 2;
+      break;
 
-      } else if (opcode == SHADER_OPCODE_UNTYPED_SURFACE_WRITE_SPLIT ||
-                 opcode == SHADER_OPCODE_TYPED_SURFACE_WRITE_SPLIT) {
-         assert(arg < 3 &&
-                src[4].file == BRW_IMMEDIATE_VALUE &&
-                src[5].file == BRW_IMMEDIATE_VALUE);
-         return arg == 0 ? header_size :
-            DIV_ROUND_UP(src[3 + arg].fixed_hw_reg.dw1.ud * exec_size, 8);
-
-      } else if (opcode == SHADER_OPCODE_UNTYPED_ATOMIC_SPLIT ||
-                 opcode == SHADER_OPCODE_TYPED_ATOMIC_SPLIT) {
-         assert(arg < 3 &&
-                src[4].file == BRW_IMMEDIATE_VALUE &&
-                src[5].file == BRW_IMMEDIATE_VALUE);
-         const unsigned op = src[5].fixed_hw_reg.dw1.ud;
-         const unsigned arg_size =
-            op == BRW_AOP_INC || op == BRW_AOP_DEC || op == BRW_AOP_PREDEC ? 0 :
-            op == BRW_AOP_CMPWR ? 2 : 1;
-         return arg == 0 ? header_size :
-            DIV_ROUND_UP((arg == 1 ? src[4].fixed_hw_reg.dw1.ud : arg_size) *
-                         exec_size, 8);
-
-      } else {
+   case FS_OPCODE_FB_WRITE:
+   case SHADER_OPCODE_URB_WRITE_SIMD8:
+   case SHADER_OPCODE_UNTYPED_ATOMIC:
+   case SHADER_OPCODE_UNTYPED_SURFACE_READ:
+   case SHADER_OPCODE_UNTYPED_SURFACE_WRITE:
+   case SHADER_OPCODE_TYPED_ATOMIC:
+   case SHADER_OPCODE_TYPED_SURFACE_READ:
+   case SHADER_OPCODE_TYPED_SURFACE_WRITE:
+   case FS_OPCODE_INTERPOLATE_AT_PER_SLOT_OFFSET:
+      if (arg == 0)
          return mlen;
-      }
+      break;
+
+   case SHADER_OPCODE_UNTYPED_ATOMIC_LOGICAL:
+   case SHADER_OPCODE_UNTYPED_SURFACE_READ_LOGICAL:
+   case SHADER_OPCODE_UNTYPED_SURFACE_WRITE_LOGICAL:
+   case SHADER_OPCODE_TYPED_ATOMIC_LOGICAL:
+   case SHADER_OPCODE_TYPED_SURFACE_READ_LOGICAL:
+   case SHADER_OPCODE_TYPED_SURFACE_WRITE_LOGICAL:
+      /* The second argument is an address and the third argument is the
+       * dimensionality of the address.
+       */
+      if (arg == 1)
+         components = this->src[2].fixed_hw_reg.dw1.ud;
+      break;
+
+   default:
+      if (is_tex() && arg == 0 && src[0].file == GRF)
+         return mlen;
+      break;
    }
 
    switch (src[arg].file) {
@@ -1028,8 +1014,8 @@ fs_inst::regs_read(int arg) const
       if (src[arg].stride == 0) {
          return 1;
       } else {
-         int size = src[arg].width * src[arg].stride * type_sz(src[arg].type);
-         return (size + 31) / 32;
+         int size = components & src[arg].width * type_sz(src[arg].type);
+         return DIV_ROUND_UP(size * src[arg].stride, 32);
       }
    case MRF:
       unreachable("MRF registers are not allowed as sources");
@@ -3586,68 +3572,139 @@ fs_visitor::lower_load_payload()
    return progress;
 }
 
-static inline opcode
-split_payload_lowered_opcode(const fs_inst *inst)
+static void
+lower_surface_read(const fs_builder &bld, const fs_inst *inst)
 {
+   const fs_reg &surface = inst->src[0];
+   const fs_reg &addr = inst->src[1];
+   unsigned dims = inst->src[2].fixed_hw_reg.dw1.ud;
+   unsigned size = inst->src[3].fixed_hw_reg.dw1.ud;
+
+   unsigned p = 0;
+   fs_reg *sources = ralloc_array(mem_ctx, fs_reg, 4);
+
+   sources[p++] = emit_surface_header(bld, fs_reg(0xffff));
+
+   /* Surface address */
+   for (unsigned i = 0; i < dims; i++)
+      sources[p++] = offset(addr, i);
+
+   fs_inst *load = bld.LOAD_PAYLOAD(payload, srcs, num_srcs, 1);
+
    switch (inst->opcode) {
-   case SHADER_OPCODE_UNTYPED_ATOMIC_SPLIT:
-      return SHADER_OPCODE_UNTYPED_ATOMIC;
-   case SHADER_OPCODE_UNTYPED_SURFACE_READ_SPLIT:
-      return SHADER_OPCODE_UNTYPED_SURFACE_READ;
-   case SHADER_OPCODE_UNTYPED_SURFACE_WRITE_SPLIT:
-      return SHADER_OPCODE_UNTYPED_SURFACE_WRITE;
-   case SHADER_OPCODE_TYPED_ATOMIC_SPLIT:
-      return SHADER_OPCODE_TYPED_ATOMIC;
-   case SHADER_OPCODE_TYPED_SURFACE_READ_SPLIT:
-      return SHADER_OPCODE_TYPED_SURFACE_READ;
-   case SHADER_OPCODE_TYPED_SURFACE_WRITE_SPLIT:
-      return SHADER_OPCODE_TYPED_SURFACE_WRITE;
+   case SHADER_OPCODE_UNTYPED_SURFACE_READ_LOGICAL:
+      inst->opcode = SHADER_OPCODE_UNTYPED_SURFACE_READ;
+      break;
+   case SHADER_OPCODE_TYPED_SURFACE_READ_LOGICAL:
+      inst->opcode = SHADER_OPCODE_TYPED_SURFACE_READ;
+      break;
    default:
-      return inst->opcode;
+      unreachable("Invalid surface read opcode");
    }
+
+   inst->src[0] = load->dst;
+   inst->src[1] = surface;
+   inst->src[2] = size;
+   inst->sources = 3;
 }
 
-static inline unsigned
-split_payload_size(const fs_inst *inst)
+static void
+lower_surface_write(const fs_builder &bld, const fs_inst *inst)
 {
-   unsigned size = 0;
+   const fs_reg &surface = inst->src[0];
+   const fs_reg &addr = inst->src[1];
+   unsigned dims = inst->src[2].fixed_hw_reg.dw1.ud;
+   unsigned size = inst->src[3].fixed_hw_reg.dw1.ud;
 
-   for (unsigned i = 0; i < inst->sources; i++) {
-      if (inst->source_is_payload(i))
-         size += inst->regs_read(i);
+   unsigned p = 0;
+   fs_reg *sources = ralloc_array(mem_ctx, fs_reg, 8);
+
+   sources[p++] = emit_surface_header(bld, bld.sample_mask_reg());
+
+   /* Surface address */
+   for (unsigned i = 0; i < dims; i++)
+      sources[p++] = offset(addr, i);
+
+   const fs_reg &data = inst->src[4];
+   for (unsigned i = 0; i < size; i++)
+      sources[p++] = offset(data, i);
+
+   fs_inst *load = bld.LOAD_PAYLOAD(payload, srcs, num_srcs, 1);
+
+   switch (inst->opcode) {
+   case SHADER_OPCODE_UNTYPED_SURFACE_WRITE_LOGICAL:
+      inst->opcode = SHADER_OPCODE_UNTYPED_SURFACE_WRITE;
+      break;
+   case SHADER_OPCODE_TYPED_SURFACE_WRITE_LOGICAL:
+      inst->opcode = SHADER_OPCODE_TYPED_SURFACE_WRITE;
+      break;
+   default:
+      unreachable("Invalid surface read opcode");
    }
 
-   return size;
+   inst->src[0] = load->dst;
+   inst->src[1] = surface;
+   inst->src[2] = size;
+   inst->sources = 3;
 }
 
-static inline fs_reg
-emit_collect_split_sources(const fs_builder &bld, const fs_inst *inst)
+static void
+lower_surface_atomic(const fs_builder &bld, const fs_inst *inst)
 {
-   const unsigned size = split_payload_size(inst);
-   const fs_reg dst = bld.vgrf(BRW_REGISTER_TYPE_UD,
-                               DIV_ROUND_UP(size * 8, bld.dispatch_width()));
-   fs_reg *const components = new fs_reg[size];
-   unsigned n = 0;
+   const fs_reg &surface = inst->src[0];
+   const fs_reg &addr = inst->src[1];
+   unsigned dims = inst->src[2].fixed_hw_reg.dw1.ud;
+   uint32_t atomic_op = inst->src[3].fixed_hw_reg.dw1.ud;
 
-   for (unsigned i = 0; i < inst->sources; i++) {
-      if (inst->source_is_payload(i)) {
-         const int width = (n < inst->header_size ? 1 :
-                            DIV_ROUND_UP(inst->exec_size, 8));
+   unsigned p = 0;
 
-         for (int j = 0; j < inst->regs_read(i) / width; j++)
-            components[n++] = retype(offset(inst->src[i], j),
-                                     BRW_REGISTER_TYPE_UD);
-      }
+   fs_reg *sources = ralloc_array(mem_ctx, fs_reg, 6);
+
+   payload[p++] = emit_surface_header(bld, bld.sample_mask_reg());
+
+   /* Surface address */
+   for (unsigned i = 0; i < dims; i++)
+      payload[p++] = offset(addr, i);
+
+   switch (atomic_op) {
+   case BRW_AOP_INC:
+   case BRW_AOP_DEC:
+      /* No sources */
+      break;
+
+   case BRW_AOP_CMPWR:
+      /* Two atomic sources */
+      payload[p++] = inst->src[4];
+      payload[p++] = inst->src[5];
+      break;
+
+   default:
+      /* Atomic src0 */
+      payload[p++] = inst->src[4];
+      break;
    }
 
-   bld.LOAD_PAYLOAD(dst, components, n, inst->header_size);
+   fs_inst *load = bld.LOAD_PAYLOAD(payload, srcs, num_srcs, 1);
 
-   delete[] components;
-   return dst;
+   switch (inst->opcode) {
+   case SHADER_OPCODE_UNTYPED_ATOMIC_LOGICAL:
+      inst->opcode = SHADER_OPCODE_UNTYPED_ATOMIC;
+      break;
+   case SHADER_OPCODE_TYPED_ATOMIC_LOGICAL:
+      inst->opcode = SHADER_OPCODE_TYPED_ATOMIC;
+      break;
+   default:
+      unreachable("Invalid surface read opcode");
+   }
+
+   inst->src[0] = load->dst;
+   inst->src[1] = surface;
+   inst->src[2] = atomic_op;
+   inst->sources = 3;
 }
 
 bool
-fs_visitor::lower_split_payload()
+fs_visitor::lower_logical_sends()
 {
    const bool uses_kill = (stage == MESA_SHADER_FRAGMENT &&
                            ((brw_wm_prog_data *)prog_data)->uses_kill);
@@ -3659,33 +3716,28 @@ fs_visitor::lower_split_payload()
    bld.set_base_ir(base_ir);
 
    foreach_block_and_inst_safe(block, fs_inst, inst, cfg) {
-      const opcode opcode = split_payload_lowered_opcode(inst);
+      fs_builder ubld = (inst->exec_size < dispatch_width ?
+                         bld.half(inst->force_sechalf) : bld);
+      ubld = ubld.at(block, inst);
 
-      if (inst->opcode != opcode) {
-         const fs_builder ubld = (inst->exec_size < dispatch_width ?
-                                  bld.half(inst->force_sechalf) : bld);
-         const fs_reg payload = emit_collect_split_sources(
-            ubld.at(block, inst), inst);
-         bool payload_seen = false;
-         unsigned n = 0;
-
-         inst->mlen = split_payload_size(inst);
-
-         for (unsigned i = 0; i < inst->sources; i++) {
-            if (inst->source_is_payload(i)) {
-               if (!payload_seen) {
-                  inst->src[n++] = payload;
-                  payload_seen = true;
-               }
-            } else {
-               inst->src[n++] = inst->src[i];
-            }
-         }
-
-         inst->opcode = opcode;
-         inst->resize_sources(n);
-         progress = true;
+      switch (inst->opcode) {
+      case SHADER_OPCODE_UNTYPED_ATOMIC_LOGICAL:
+      case SHADER_OPCODE_TYPED_ATOMIC_LOGICAL:
+         lower_surface_atomic(ubld, inst);
+         break;
+      case SHADER_OPCODE_UNTYPED_SURFACE_READ_LOGICAL:
+      case SHADER_OPCODE_TYPED_SURFACE_READ_LOGICAL:
+         lower_surface_read(ubld, inst);
+         break;
+      case SHADER_OPCODE_UNTYPED_SURFACE_WRITE_LOGICAL:
+      case SHADER_OPCODE_TYPED_SURFACE_WRITE_LOGICAL:
+         lower_surface_write(ubld, inst);
+         break;
+      default:
+         continue;
       }
+
+      progress = true;
    }
 
    if (progress)
@@ -3699,33 +3751,16 @@ maximum_native_simd_width(const struct brw_device_info *devinfo,
                           const fs_inst *inst)
 {
    switch (inst->opcode) {
-   case SHADER_OPCODE_TYPED_ATOMIC:
-   case SHADER_OPCODE_TYPED_ATOMIC_SPLIT:
-   case SHADER_OPCODE_TYPED_SURFACE_READ:
-   case SHADER_OPCODE_TYPED_SURFACE_READ_SPLIT:
-   case SHADER_OPCODE_TYPED_SURFACE_WRITE:
-   case SHADER_OPCODE_TYPED_SURFACE_WRITE_SPLIT:
+   case SHADER_OPCODE_TYPED_ATOMIC_LOGICAL:
+   case SHADER_OPCODE_TYPED_SURFACE_READ_LOGICAL:
+   case SHADER_OPCODE_TYPED_SURFACE_WRITE_LOGICAL:
+   case SHADER_OPCODE_UNTYPED_ATOMIC_LOGICAL:
+   case SHADER_OPCODE_UNTYPED_SURFACE_READ_LOGICAL:
+   case SHADER_OPCODE_UNTYPED_SURFACE_WRITE_LOGICAL:
       return 8;
    default:
       return inst->exec_size;
    }
-}
-
-/**
- * Copy one every \p src_stride logical components of the argument into
- * one every \p dst_stride logical components of the result.
- */
-static inline fs_reg
-emit_stride(const fs_builder &bld, const fs_reg &src, unsigned size,
-            unsigned dst_stride, unsigned src_stride)
-{
-   const fs_reg dst = bld.vgrf(src.type, size * dst_stride);
-
-   for (unsigned i = 0; i < size; ++i)
-      bld.MOV(offset(dst, i * dst_stride),
-              offset(src, i * src_stride));
-
-   return dst;
 }
 
 /**
@@ -3786,16 +3821,32 @@ fs_visitor::lower_simd_width()
             split_inst->force_sechalf = i;
 
             for (unsigned j = 0; j < inst->sources; j++) {
-               if (inst->src[j].width > lower_size) {
-                  assert(inst->src[j].width == inst->exec_size);
-                  const fs_reg tmp = emit_stride(
-                     ubld.at(block, split_inst),
-                     half(inst->src[j], i),
-                     inst->regs_read(j) * 8 / inst->src[j].width,
-                     1, 2);
-
-                  split_inst->src[j] = tmp;
+               switch (inst->src[j].file) {
+               case BAD_FILE:
+               case UNIFORM:
+               case IMM:
+                  continue;
                }
+
+               if (inst->src[j].stride == 0)
+                  continue;
+
+               assert(inst->src[j].width == inst->exec_size);
+
+               fs_reg src = horiz_offset(inst->src[j], i * lower_size);
+               src.width = lower_size;
+
+               int components = inst->regs_read(j) * 8 / inst->src[j].width;
+               if (components == 1) {
+                  inst->src[j] = src;
+                  continue;
+               }
+
+               fs_reg tmp = bld.vgrf(src.type, components);
+               for (int k = 0; k < components; k++)
+                  bld.emit(MOV(offset(inst->src[j], k), offset(src, k)));
+
+               inst->src[j] = tmp;
             }
 
             if (inst->regs_written) {

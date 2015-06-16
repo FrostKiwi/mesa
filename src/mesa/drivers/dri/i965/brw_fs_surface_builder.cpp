@@ -65,59 +65,33 @@ namespace brw {
           * Generate a send opcode for a surface message and return the
           * result.
           */
-         fs_reg
+         fs_inst *
          emit_send(const fs_builder &bld, enum opcode opcode,
-                   const fs_reg &header, const fs_reg &addr, const fs_reg &src,
-                   const fs_reg &surface,
-                   unsigned dims, unsigned arg, unsigned rlen,
-                   brw_predicate pred = BRW_PREDICATE_NONE)
+                   const fs_reg &dst, const fs_reg &surface, const fs_reg &addr,
+                   unsigned dims, unsigned arg,
+                   const fs_reg &src0 = fs_reg(), const fs_reg &src1 = fs_reg())
          {
-            const fs_reg usurface =
-               component(bld.vgrf(BRW_REGISTER_TYPE_UD), 0);
-            const fs_reg dst =
-               rlen ? bld.vgrf(BRW_REGISTER_TYPE_UD,
-                               rlen * 8 / bld.dispatch_width()) :
-               bld.null_reg_ud();
-            fs_reg srcs[6];
-            unsigned n = 0;
-
             /* Reduce the dynamically uniform surface index to a single
              * scalar.
              */
+            const fs_reg usurface =
+               component(bld.vgrf(BRW_REGISTER_TYPE_UD), 0);
             bld.emit_uniformize(usurface, surface);
 
-            srcs[n++] = header;
-            srcs[n++] = addr;
+            fs_reg regs[] = {
+               surface,
+               addr,
+               fs_reg(dims),
+               fs_reg(arg),
+               src0,
+               src1
+            };
 
-            if (src.file != BAD_FILE)
-               srcs[n++] = src;
-
-            srcs[n++] = usurface;
-            srcs[n++] = fs_reg(dims);
-            srcs[n++] = fs_reg(arg);
-
-            assert(n <= ARRAY_SIZE(srcs));
+            int n = 4 + (src0.file != BAD_FILE) + (src1.file != BAD_FILE);
 
             fs_inst *inst = bld.emit(opcode, dst, srcs, n);
-            inst->header_size = (header.file != BAD_FILE);
-            inst->regs_written = rlen;
-            inst->predicate = pred;
 
-            return dst;
-         }
-
-         /**
-          * Initialize the header present in some typed and untyped surface
-          * messages.
-          */
-         fs_reg
-         emit_header(const fs_builder &bld, const fs_reg &sample_mask)
-         {
-            fs_builder ubld = bld.half(0);
-            const fs_reg dst = ubld.vgrf(BRW_REGISTER_TYPE_UD);
-            set_exec_all(ubld.MOV(dst, fs_reg(0)));
-            set_exec_all(ubld.MOV(component(dst, 7), sample_mask));
-            return dst;
+            return inst;
          }
       }
 
@@ -132,10 +106,15 @@ namespace brw {
                         unsigned dims, unsigned size,
                         brw_predicate pred)
       {
-         const unsigned rlen = size * bld.dispatch_width() / 8;
-         return emit_send(bld, SHADER_OPCODE_UNTYPED_SURFACE_READ_SPLIT,
-                          emit_header(bld, fs_reg(0xffff)), addr,
-                          fs_reg(), surface, dims, size, rlen, pred);
+         const fs_reg dst = bld.vgrf(BRW_REGISTER_TYPE_UD, size);
+
+         fs_inst *inst =
+            emit_send(bld, SHADER_OPCODE_UNTYPED_SURFACE_READ_LOGICAL,
+                      dst, surface, addr, dims, size);
+         inst->regs_written = size * bld.dispatch_width() / 8;
+         inst->predicate = pred;
+
+         return dst;
       }
 
       /**
@@ -149,9 +128,10 @@ namespace brw {
                          unsigned dims, unsigned size,
                          brw_predicate pred)
       {
-         emit_send(bld, SHADER_OPCODE_UNTYPED_SURFACE_WRITE_SPLIT,
-                   emit_header(bld, bld.sample_mask_reg()),
-                   addr, src, surface, dims, size, 0, pred);
+         fs_inst *inst =
+            emit_send(bld, SHADER_OPCODE_UNTYPED_SURFACE_WRITE_LOGICAL,
+                      bld.null_reg_ud(), surface, addr, dims, size, 0);
+         inst->predicate = pred;
       }
 
       /**
@@ -166,17 +146,15 @@ namespace brw {
                           unsigned dims, unsigned rsize, unsigned op,
                           brw_predicate pred)
       {
-         const unsigned size = (src0.file != BAD_FILE) + (src1.file != BAD_FILE);
-         /* Zip the components of both sources, they are represented as the X
-          * and Y components of the same vector.
-          */
-         const fs_reg srcs = emit_zip(bld, src0, src1, 1);
-         return emit_send(bld, SHADER_OPCODE_UNTYPED_ATOMIC_SPLIT,
-                          emit_header(bld, bld.sample_mask_reg()),
-                          addr,
-                          (size == 0 ? bld.vgrf(BRW_REGISTER_TYPE_UD) : srcs),
-                          surface, dims, op, rsize * bld.dispatch_width() / 8,
-                          pred);
+         const fs_reg dst = bld.vgrf(BRW_REGISTER_TYPE_UD, 1);
+
+         fs_inst *inst =
+            emit_send(bld, SHADER_OPCODE_UNTYPED_ATOMIC_LOGICAL,
+                      dst, surface, addr, dims, op, src0, src1);
+         inst->regs_written = bld.dispatch_width() / 8;
+         inst->predicate = pred;
+
+         return dst;
       }
 
       /**
@@ -188,10 +166,15 @@ namespace brw {
       emit_typed_read(const fs_builder &bld, const fs_reg &surface,
                       const fs_reg &addr, unsigned dims, unsigned size)
       {
-         return emit_send(bld, SHADER_OPCODE_TYPED_SURFACE_READ_SPLIT,
-                          emit_header(bld, fs_reg(0xffff)),
-                          addr, fs_reg(), surface, dims, size,
-                          size * bld.dispatch_width() / 8);
+         const fs_reg dst = bld.vgrf(BRW_REGISTER_TYPE_UD, size);
+
+         fs_inst *inst =
+            emit_send(bld, SHADER_OPCODE_TYPED_SURFACE_READ_LOGICAL,
+                      dst, surface, addr, dims, size,
+                      size * bld.dispatch_width() / 8);
+         inst->regs_written = size * bld.dispatch_width() / 8;
+
+         return dst;
       }
 
       /**
@@ -204,9 +187,8 @@ namespace brw {
                        const fs_reg &addr, const fs_reg &src,
                        unsigned dims, unsigned size)
       {
-         emit_send(bld, SHADER_OPCODE_TYPED_SURFACE_WRITE_SPLIT,
-                   emit_header(bld, bld.sample_mask_reg()),
-                   addr, src, surface, dims, size, 0);
+         emit_send(bld, SHADER_OPCODE_UNTYPED_SURFACE_WRITE_LOGICAL,
+                   bld.null_reg_ud(), surface, addr, dims, size, 0);
       }
 
       /**
@@ -221,16 +203,14 @@ namespace brw {
                         unsigned dims, unsigned rsize, unsigned op,
                         brw_predicate pred)
       {
-         const unsigned size = (src0.file != BAD_FILE) + (src1.file != BAD_FILE);
-         /* Zip the components of both sources, they are represented as the X
-          * and Y components of the same vector.
-          */
-         const fs_reg srcs = emit_zip(bld, src0, src1, 1);
-         return emit_send(bld, SHADER_OPCODE_TYPED_ATOMIC_SPLIT,
-                          emit_header(bld, bld.sample_mask_reg()),
-                          addr,
-                          (size == 0 ? bld.vgrf(BRW_REGISTER_TYPE_UD) : srcs),
-                          surface, dims, op, rsize * bld.dispatch_width() / 8);
+         const fs_reg dst = bld.vgrf(BRW_REGISTER_TYPE_UD, 1);
+
+         fs_inst *inst =
+            emit_send(bld, SHADER_OPCODE_UNTYPED_ATOMIC_LOGICAL,
+                      dst, surface, addr, dims, op, src0, src1);
+         inst->regs_written = bld.dispatch_width() / 8;
+
+         return dst;
       }
    }
 }

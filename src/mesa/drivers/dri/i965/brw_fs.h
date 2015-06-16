@@ -189,6 +189,7 @@ public:
 					   fs_inst *end,
 					   const fs_reg &reg);
 
+   fs_inst *LOAD_PAYLOAD(fs_reg *src, int sources, int header_size);
    fs_inst *LOAD_PAYLOAD(const fs_reg &dst, fs_reg *src, int sources,
                          int header_size);
 

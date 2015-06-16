@@ -493,6 +493,18 @@ namespace brw {
          }
       }
 
+      instruction *
+      LOAD_PAYLOAD(const dst_reg &dst, const src_reg *src,
+                   unsigned sources, unsigned header_size) const
+      {
+         fs_reg payload = fs_reg(GRF, -1, BRW_REGISTER_TYPE_F, dispatch_width);
+         fs_inst *load = LOAD_PAYLOAD(payload, srcs, num_srcs, 1);
+         payload.reg = alloc.allocate(load->regs_written);
+         load->dst = payload;
+
+         return load;
+      }
+
       /**
        * Collect a number of registers in a contiguous range of registers.
        */
