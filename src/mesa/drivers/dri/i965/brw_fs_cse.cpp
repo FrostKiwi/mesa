@@ -179,7 +179,7 @@ static void
 create_copy_instr(const fs_builder &bld, fs_inst *inst, fs_reg src, bool negate)
 {
    int written = inst->regs_written;
-   int dst_width = inst->dst.width / 8;
+   int dst_width = (inst->exec_size * type_sz(inst->dst.type)) / 32;
    const fs_builder ubld = bld.group(inst->exec_size, inst->force_sechalf)
                               .exec_all(inst->force_writemask_all);
    fs_inst *copy;
@@ -200,12 +200,11 @@ create_copy_instr(const fs_builder &bld, fs_inst *inst, fs_reg src, bool negate)
       payload = ralloc_array(bld.shader->mem_ctx, fs_reg, sources);
       for (int i = 0; i < header_size; i++) {
          payload[i] = src;
-         payload[i].width = 8;
          src.reg_offset++;
       }
       for (int i = header_size; i < sources; i++) {
          payload[i] = src;
-         src = offset(src, 1);
+         src = ubld.offset(src, 1);
       }
       copy = ubld.LOAD_PAYLOAD(inst->dst, payload, sources, header_size);
    } else {
@@ -260,11 +259,9 @@ fs_visitor::opt_cse_local(bblock_t *block)
             bool no_existing_temp = entry->tmp.file == BAD_FILE;
             if (no_existing_temp && !entry->generator->dst.is_null()) {
                int written = entry->generator->regs_written;
-               assert((written * 8) % entry->generator->dst.width == 0);
 
                entry->tmp = fs_reg(GRF, alloc.allocate(written),
-                                   entry->generator->dst.type,
-                                   entry->generator->dst.width);
+                                   entry->generator->dst.type);
 
                create_copy_instr(bld.at(block, entry->generator->next),
                                  entry->generator, entry->tmp, false);
@@ -275,7 +272,6 @@ fs_visitor::opt_cse_local(bblock_t *block)
             /* dest <- temp */
             if (!inst->dst.is_null()) {
                assert(inst->regs_written == entry->generator->regs_written);
-               assert(inst->dst.width == entry->generator->dst.width);
                assert(inst->dst.type == entry->tmp.type);
 
                create_copy_instr(bld.at(block, inst), inst, entry->tmp, negate);

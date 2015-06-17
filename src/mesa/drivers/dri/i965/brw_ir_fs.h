@@ -44,7 +44,11 @@ public:
    fs_reg(struct brw_reg fixed_hw_reg);
    fs_reg(enum register_file file, int reg);
    fs_reg(enum register_file file, int reg, enum brw_reg_type type);
-   fs_reg(enum register_file file, int reg, enum brw_reg_type type, uint8_t width);
+   fs_reg(enum register_file file, int reg, enum brw_reg_type type,
+          uint8_t width)
+   {
+      unreachable("Invalid constructor");
+   }
 
    bool equals(const fs_reg &r) const;
    bool is_contiguous() const;
@@ -59,14 +63,6 @@ public:
    int subreg_offset;
 
    fs_reg *reladdr;
-
-   /**
-    * The register width.  This indicates how many hardware values are
-    * represented by each virtual value.  Valid values are 1, 8, or 16.
-    * For immediate values, this is 1.  Most of the rest of the time, it
-    * will be equal to the dispatch width.
-    */
-   uint8_t width;
 
    /** Register region horizontal stride */
    uint8_t stride;
@@ -128,6 +124,7 @@ horiz_offset(fs_reg reg, unsigned delta)
    return reg;
 }
 
+#if 0
 static inline fs_reg
 offset(fs_reg reg, unsigned delta)
 {
@@ -148,14 +145,15 @@ offset(fs_reg reg, unsigned delta)
    }
    return reg;
 }
+#endif
 
 static inline fs_reg
 component(fs_reg reg, unsigned idx)
 {
    assert(reg.subreg_offset == 0);
-   assert(idx < reg.width);
+   //assert(idx < reg.width);
    reg.subreg_offset = idx * type_sz(reg.type);
-   reg.width = 1;
+   //reg.width = 1;
    reg.stride = 0;
    return reg;
 }
@@ -163,10 +161,11 @@ component(fs_reg reg, unsigned idx)
 static inline bool
 is_uniform(const fs_reg &reg)
 {
-   return (reg.width == 1 || reg.stride == 0 || reg.is_null()) &&
+   return (reg.stride == 0 || reg.is_null()) &&
           (!reg.reladdr || is_uniform(*reg.reladdr));
 }
 
+#if 0
 /**
  * Get either of the 8-component halves of a 16-component register.
  *
@@ -185,8 +184,8 @@ half(fs_reg reg, unsigned idx)
 
    case GRF:
    case MRF:
-      assert(reg.width == 16);
-      reg.width = 8;
+//      assert(reg.width == 16);
+//      reg.width = 8;
       return horiz_offset(reg, 8 * idx);
 
    case ATTR:
@@ -196,6 +195,7 @@ half(fs_reg reg, unsigned idx)
    }
    return reg;
 }
+#endif
 
 static const fs_reg reg_undef;
 
@@ -210,20 +210,13 @@ public:
 
    fs_inst();
    fs_inst(enum opcode opcode, uint8_t exec_size);
-   fs_inst(enum opcode opcode, const fs_reg &dst);
+   fs_inst(enum opcode opcode, uint8_t exec_size, const fs_reg &dst);
    fs_inst(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
            const fs_reg &src0);
-   fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0);
    fs_inst(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
            const fs_reg &src0, const fs_reg &src1);
-   fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0,
-           const fs_reg &src1);
    fs_inst(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
            const fs_reg &src0, const fs_reg &src1, const fs_reg &src2);
-   fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg &src0,
-           const fs_reg &src1, const fs_reg &src2);
-   fs_inst(enum opcode opcode, const fs_reg &dst, const fs_reg src[],
-           unsigned sources);
    fs_inst(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
            const fs_reg src[], unsigned sources);
    fs_inst(const fs_inst &that);

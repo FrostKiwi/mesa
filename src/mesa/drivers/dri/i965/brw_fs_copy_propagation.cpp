@@ -42,6 +42,7 @@ namespace { /* avoid conflict with opt_copy_propagation_elements */
 struct acp_entry : public exec_node {
    fs_reg dst;
    fs_reg src;
+   uint8_t copy_width;
    uint8_t regs_written;
    enum opcode opcode;
    bool saturate;
@@ -388,17 +389,15 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
 
    switch (entry->src.file) {
    case UNIFORM:
-      assert(entry->src.width == 1);
    case BAD_FILE:
    case HW_REG:
-      inst->src[arg].width = entry->src.width;
       inst->src[arg].reg_offset = entry->src.reg_offset;
       inst->src[arg].subreg_offset = entry->src.subreg_offset;
       break;
    case ATTR:
    case GRF:
       {
-         assert(entry->src.width % inst->src[arg].width == 0);
+         assert(entry->copy_width % inst->exec_size == 0);
          /* In this case, we'll just leave the width alone.  The source
           * register could have different widths depending on how it is
           * being used.  For instance, if only half of the register was
@@ -701,6 +700,7 @@ fs_visitor::opt_copy_propagate_local(void *copy_prop_ctx, bblock_t *block,
 	 acp_entry *entry = ralloc(copy_prop_ctx, acp_entry);
 	 entry->dst = inst->dst;
 	 entry->src = inst->src[0];
+         entry->copy_width = inst->exec_size;
          entry->regs_written = inst->regs_written;
          entry->opcode = inst->opcode;
          entry->saturate = inst->saturate;
@@ -715,8 +715,8 @@ fs_visitor::opt_copy_propagate_local(void *copy_prop_ctx, bblock_t *block,
                acp_entry *entry = ralloc(copy_prop_ctx, acp_entry);
                entry->dst = inst->dst;
                entry->dst.reg_offset = offset;
-               entry->dst.width = effective_width;
                entry->src = inst->src[i];
+               entry->copy_width = effective_width;
                entry->regs_written = regs_written;
                entry->opcode = inst->opcode;
                if (!entry->dst.equals(inst->src[i])) {

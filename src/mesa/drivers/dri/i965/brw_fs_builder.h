@@ -151,6 +151,50 @@ namespace brw {
          return _dispatch_width;
       }
 
+      src_reg
+      offset(src_reg reg, unsigned delta) const
+      {
+         switch (reg.file) {
+         case BAD_FILE:
+            break;
+         case GRF:
+         case MRF:
+         case ATTR:
+            return byte_offset(reg,
+                               delta * dispatch_width() * reg.stride *
+                               type_sz(reg.type));
+         case UNIFORM:
+            reg.reg_offset += delta;
+            break;
+         default:
+            assert(delta == 0);
+         }
+         return reg;
+      }
+
+      fs_reg
+      half(fs_reg reg, unsigned idx) const
+      {
+         assert(idx < 2);
+      
+         switch (reg.file) {
+         case BAD_FILE:
+         case UNIFORM:
+         case IMM:
+            return reg;
+      
+         case GRF:
+         case MRF:
+            return horiz_offset(reg, (dispatch_width() / 2) * idx);
+      
+         case ATTR:
+         case HW_REG:
+         default:
+            unreachable("Cannot take half of this register type");
+         }
+         return reg;
+      }
+
       /**
        * Allocate a virtual register of natural vector size (one for this IR)
        * and SIMD width.  \p n gives the amount of space to allocate in
@@ -163,7 +207,7 @@ namespace brw {
          return dst_reg(GRF, shader->alloc.allocate(
                            DIV_ROUND_UP(n * type_sz(type) * dispatch_width(),
                                         REG_SIZE)),
-                        type, dispatch_width());
+                        type);
       }
 
       /**
@@ -235,7 +279,7 @@ namespace brw {
       instruction *
       emit(enum opcode opcode, const dst_reg &dst) const
       {
-         return emit(instruction(opcode, dst));
+         return emit(instruction(opcode, dispatch_width(), dst));
       }
 
       /**
@@ -253,11 +297,11 @@ namespace brw {
          case SHADER_OPCODE_SIN:
          case SHADER_OPCODE_COS:
             return fix_math_instruction(
-               emit(instruction(opcode, dst.width, dst,
+               emit(instruction(opcode, dispatch_width(), dst,
                                 fix_math_operand(src0))));
 
          default:
-            return emit(instruction(opcode, dst.width, dst, src0));
+            return emit(instruction(opcode, dispatch_width(), dst, src0));
          }
       }
 
@@ -273,12 +317,12 @@ namespace brw {
          case SHADER_OPCODE_INT_QUOTIENT:
          case SHADER_OPCODE_INT_REMAINDER:
             return fix_math_instruction(
-               emit(instruction(opcode, dst.width, dst,
+               emit(instruction(opcode, dispatch_width(), dst,
                                 fix_math_operand(src0),
                                 fix_math_operand(src1))));
 
          default:
-            return emit(instruction(opcode, dst.width, dst, src0, src1));
+            return emit(instruction(opcode, dispatch_width(), dst, src0, src1));
 
          }
       }
@@ -295,13 +339,14 @@ namespace brw {
          case BRW_OPCODE_BFI2:
          case BRW_OPCODE_MAD:
          case BRW_OPCODE_LRP:
-            return emit(instruction(opcode, dst.width, dst,
+            return emit(instruction(opcode, dispatch_width(), dst,
                                     fix_3src_operand(src0),
                                     fix_3src_operand(src1),
                                     fix_3src_operand(src2)));
 
          default:
-            return emit(instruction(opcode, dst.width, dst, src0, src1, src2));
+            return emit(instruction(opcode, dispatch_width(), dst,
+                                    src0, src1, src2));
          }
       }
 
@@ -515,20 +560,12 @@ namespace brw {
       LOAD_PAYLOAD(const dst_reg &dst, const src_reg *src,
                    unsigned sources, unsigned header_size) const
       {
-         assert(dst.width % 8 == 0);
          instruction *inst = emit(instruction(SHADER_OPCODE_LOAD_PAYLOAD,
-                                              dst.width, dst, src, sources));
+                                              dispatch_width(), dst,
+                                              src, sources));
          inst->header_size = header_size;
-
-         for (unsigned i = 0; i < header_size; i++)
-            assert(src[i].file != GRF ||
-                   src[i].width * type_sz(src[i].type) == 32);
-         inst->regs_written = header_size;
-
-         for (unsigned i = header_size; i < sources; ++i)
-            assert(src[i].file != GRF ||
-                   src[i].width == dst.width);
-         inst->regs_written += (sources - header_size) * (dst.width / 8);
+         inst->regs_written = header_size +
+                              (sources - header_size) * dispatch_width() / 8;
 
          return inst;
       }
