@@ -1357,10 +1357,11 @@ fs_visitor::emit_interpolation_setup_gen6()
        */
       fs_reg int_pixel_xy(GRF, alloc.allocate(dispatch_width / 8),
                           BRW_REGISTER_TYPE_UW, dispatch_width * 2);
-      abld.exec_all()
-          .ADD(int_pixel_xy,
-               fs_reg(stride(suboffset(g1_uw, 4), 1, 4, 0)),
-               fs_reg(brw_imm_v(0x11001010)));
+      fs_inst *add = abld.exec_all()
+                         .ADD(int_pixel_xy,
+                              fs_reg(stride(suboffset(g1_uw, 4), 1, 4, 0)),
+                              fs_reg(brw_imm_v(0x11001010)));
+      add->exec_size = dispatch_width * 2;
 
       this->pixel_x = vgrf(glsl_type::float_type);
       this->pixel_y = vgrf(glsl_type::float_type);
