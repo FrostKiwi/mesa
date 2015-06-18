@@ -1542,7 +1542,7 @@ fs_visitor::emit_single_fb_write(const fs_builder &bld,
        * it's unsinged single words, one vgrf is always 16-wide.
        */
       sources[length] = fs_reg(GRF, alloc.allocate(1),
-                               BRW_REGISTER_TYPE_UW, 16);
+                               BRW_REGISTER_TYPE_UW);
       bld.exec_all().annotate("FB write oMask")
          .emit(FS_OPCODE_SET_OMASK, sources[length], this->sample_mask);
       length++;
