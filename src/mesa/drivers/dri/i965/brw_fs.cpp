@@ -267,7 +267,7 @@ fs_visitor::VARYING_PULL_CONSTANT_LOAD(const fs_builder &bld,
          inst->mlen = 1 + dispatch_width / 8;
    }
 
-   bld.MOV(dst, offset(vec4_result, (const_offset & 3) * scale));
+   bld.MOV(dst, bld.offset(vec4_result, (const_offset & 3) * scale));
 }
 
 /**
@@ -361,7 +361,12 @@ fs_inst::is_copy_payload(const brw::simple_allocator &grf_alloc) const
       reg.width = this->src[i].width;
       if (!this->src[i].equals(reg))
          return false;
-      reg = ::offset(reg, 1);
+
+      if (i < this->header_size) {
+         reg.reg_offset += 1;
+      } else {
+         reg.reg_offset += this->exec_size / 8;
+      }
    }
 
    return true;
@@ -957,7 +962,7 @@ fs_visitor::emit_fragcoord_interpolation(bool pixel_center_integer,
    } else {
       bld.ADD(wpos, this->pixel_x, fs_reg(0.5f));
    }
-   wpos = offset(wpos, 1);
+   wpos = bld.offset(wpos, 1);
 
    /* gl_FragCoord.y */
    if (!flip && pixel_center_integer) {
@@ -973,7 +978,7 @@ fs_visitor::emit_fragcoord_interpolation(bool pixel_center_integer,
 
       bld.ADD(wpos, pixel_y, fs_reg(offset));
    }
-   wpos = offset(wpos, 1);
+   wpos = bld.offset(wpos, 1);
 
    /* gl_FragCoord.z */
    if (devinfo->gen >= 6) {
@@ -983,7 +988,7 @@ fs_visitor::emit_fragcoord_interpolation(bool pixel_center_integer,
            this->delta_xy[BRW_WM_PERSPECTIVE_PIXEL_BARYCENTRIC],
            interp_reg(VARYING_SLOT_POS, 2));
    }
-   wpos = offset(wpos, 1);
+   wpos = bld.offset(wpos, 1);
 
    /* gl_FragCoord.w: Already set up in emit_interpolation */
    bld.MOV(wpos, this->wpos_w);
@@ -1066,7 +1071,7 @@ fs_visitor::emit_general_interpolation(fs_reg attr, const char *name,
 	    /* If there's no incoming setup data for this slot, don't
 	     * emit interpolation for it.
 	     */
-	    attr = offset(attr, type->vector_elements);
+	    attr = bld.offset(attr, type->vector_elements);
 	    location++;
 	    continue;
 	 }
@@ -1081,7 +1086,7 @@ fs_visitor::emit_general_interpolation(fs_reg attr, const char *name,
 	       interp = suboffset(interp, 3);
                interp.type = attr.type;
                bld.emit(FS_OPCODE_CINTERP, attr, fs_reg(interp));
-	       attr = offset(attr, 1);
+	       attr = bld.offset(attr, 1);
 	    }
 	 } else {
 	    /* Smooth/noperspective interpolation case. */
@@ -1119,7 +1124,7 @@ fs_visitor::emit_general_interpolation(fs_reg attr, const char *name,
                if (devinfo->gen < 6 && interpolation_mode == INTERP_QUALIFIER_SMOOTH) {
                   bld.MUL(attr, attr, this->pixel_w);
                }
-	       attr = offset(attr, 1);
+	       attr = bld.offset(attr, 1);
 	    }
 
 	 }
@@ -1221,19 +1226,19 @@ fs_visitor::emit_samplepos_setup()
    if (dispatch_width == 8) {
       abld.MOV(int_sample_x, fs_reg(sample_pos_reg));
    } else {
-      abld.half(0).MOV(half(int_sample_x, 0), fs_reg(sample_pos_reg));
-      abld.half(1).MOV(half(int_sample_x, 1),
+      abld.half(0).MOV(abld.half(int_sample_x, 0), fs_reg(sample_pos_reg));
+      abld.half(1).MOV(abld.half(int_sample_x, 1),
                        fs_reg(suboffset(sample_pos_reg, 16)));
    }
    /* Compute gl_SamplePosition.x */
    compute_sample_position(pos, int_sample_x);
-   pos = offset(pos, 1);
+   pos = abld.offset(pos, 1);
    if (dispatch_width == 8) {
       abld.MOV(int_sample_y, fs_reg(suboffset(sample_pos_reg, 1)));
    } else {
-      abld.half(0).MOV(half(int_sample_y, 0),
+      abld.half(0).MOV(abld.half(int_sample_y, 0),
                        fs_reg(suboffset(sample_pos_reg, 1)));
-      abld.half(1).MOV(half(int_sample_y, 1),
+      abld.half(1).MOV(abld.half(int_sample_y, 1),
                        fs_reg(suboffset(sample_pos_reg, 17)));
    }
    /* Compute gl_SamplePosition.y */
@@ -3012,10 +3017,6 @@ fs_visitor::lower_load_payload()
 
       assert(inst->dst.file == MRF || inst->dst.file == GRF);
       assert(inst->saturate == false);
-
-      const fs_builder ibld = bld.group(inst->exec_size, inst->force_sechalf)
-                                 .exec_all(inst->force_writemask_all)
-                                 .at(block, inst);
       fs_reg dst = inst->dst;
 
       /* Get rid of COMPR4.  We'll add it back in if we need it */
@@ -3023,17 +3024,23 @@ fs_visitor::lower_load_payload()
          dst.reg = dst.reg & ~BRW_MRF_COMPR4;
 
       dst.width = 8;
+      const fs_builder hbld = bld.group(8, 0).exec_all().at(block, inst);
+
       for (uint8_t i = 0; i < inst->header_size; i++) {
          if (inst->src[i].file != BAD_FILE) {
             fs_reg mov_dst = retype(dst, BRW_REGISTER_TYPE_UD);
             fs_reg mov_src = retype(inst->src[i], BRW_REGISTER_TYPE_UD);
             mov_src.width = 8;
-            ibld.exec_all().MOV(mov_dst, mov_src);
+            hbld.MOV(mov_dst, mov_src);
          }
-         dst = offset(dst, 1);
+         dst = hbld.offset(dst, 1);
       }
 
       dst.width = inst->exec_size;
+      const fs_builder ibld = bld.group(inst->exec_size, inst->force_sechalf)
+                                 .exec_all(inst->force_writemask_all)
+                                 .at(block, inst);
+
       if (inst->dst.file == MRF && (inst->dst.reg & BRW_MRF_COMPR4) &&
           inst->exec_size > 8) {
          /* In this case, the payload portion of the LOAD_PAYLOAD isn't
@@ -3064,8 +3071,10 @@ fs_visitor::lower_load_payload()
                   /* Platform doesn't have COMPR4.  We have to fake it */
                   fs_reg mov_dst = retype(dst, inst->src[i].type);
                   mov_dst.width = 8;
-                  ibld.half(0).MOV(mov_dst, half(inst->src[i], 0));
-                  ibld.half(1).MOV(offset(mov_dst, 4), half(inst->src[i], 1));
+                  ibld.half(0).MOV(mov_dst,
+                                   ibld.half(inst->src[i], 0));
+                  ibld.half(1).MOV(ibld.offset(mov_dst, 4),
+                                   ibld.half(inst->src[i], 1));
                }
             }
 
@@ -3090,7 +3099,7 @@ fs_visitor::lower_load_payload()
       for (uint8_t i = inst->header_size; i < inst->sources; i++) {
          if (inst->src[i].file != BAD_FILE)
             ibld.MOV(retype(dst, inst->src[i].type), inst->src[i]);
-         dst = offset(dst, 1);
+         dst = ibld.offset(dst, 1);
       }
 
       inst->remove(block);

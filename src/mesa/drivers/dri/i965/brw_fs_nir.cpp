@@ -76,7 +76,7 @@ fs_visitor::nir_setup_inputs(nir_shader *shader)
 {
    foreach_list_typed(nir_variable, var, node, &shader->inputs) {
       enum brw_reg_type type = brw_type_for_base_type(var->type);
-      fs_reg input = offset(nir_inputs, var->data.driver_location);
+      fs_reg input = bld.offset(nir_inputs, var->data.driver_location);
 
       fs_reg reg;
       switch (stage) {
@@ -95,8 +95,8 @@ fs_visitor::nir_setup_inputs(nir_shader *shader)
          unsigned array_length = var->type->is_array() ? var->type->length : 1;
          for (unsigned i = 0; i < array_length; i++) {
             for (unsigned j = 0; j < components; j++) {
-               bld.MOV(retype(offset(input, components * i + j), type),
-                       offset(fs_reg(ATTR, var->data.location + i, type), j));
+               bld.MOV(retype(bld.offset(input, components * i + j), type),
+                       bld.offset(fs_reg(ATTR, var->data.location + i, type), j));
             }
          }
          break;
@@ -127,7 +127,7 @@ fs_visitor::nir_setup_outputs(nir_shader *shader)
    brw_wm_prog_key *key = (brw_wm_prog_key*) this->key;
 
    foreach_list_typed(nir_variable, var, node, &shader->outputs) {
-      fs_reg reg = offset(nir_outputs, var->data.driver_location);
+      fs_reg reg = bld.offset(nir_outputs, var->data.driver_location);
 
       int vector_elements =
          var->type->is_array() ? var->type->fields.array->vector_elements
@@ -136,7 +136,7 @@ fs_visitor::nir_setup_outputs(nir_shader *shader)
       if (stage == MESA_SHADER_VERTEX) {
          for (int i = 0; i < ALIGN(type_size(var->type), 4) / 4; i++) {
             int output = var->data.location + i;
-            this->outputs[output] = offset(reg, 4 * i);
+            this->outputs[output] = bld.offset(reg, 4 * i);
             this->output_components[output] = vector_elements;
          }
       } else if (var->data.index > 0) {
@@ -162,7 +162,7 @@ fs_visitor::nir_setup_outputs(nir_shader *shader)
          /* General color output. */
          for (unsigned int i = 0; i < MAX2(1, var->type->length); i++) {
             int output = var->data.location - FRAG_RESULT_DATA0 + i;
-            this->outputs[output] = offset(reg, vector_elements * i);
+            this->outputs[output] = bld.offset(reg, vector_elements * i);
             this->output_components[output] = vector_elements;
          }
       }
@@ -618,11 +618,11 @@ fs_visitor::nir_emit_alu(const fs_builder &bld, nir_alu_instr *instr)
             continue;
 
          if (instr->op == nir_op_imov || instr->op == nir_op_fmov) {
-            inst = bld.MOV(offset(temp, i),
-                           offset(op[0], instr->src[0].swizzle[i]));
+            inst = bld.MOV(bld.offset(temp, i),
+                           bld.offset(op[0], instr->src[0].swizzle[i]));
          } else {
-            inst = bld.MOV(offset(temp, i),
-                           offset(op[i], instr->src[i].swizzle[0]));
+            inst = bld.MOV(bld.offset(temp, i),
+                           bld.offset(op[i], instr->src[i].swizzle[0]));
          }
          inst->saturate = instr->dest.saturate;
       }
@@ -636,7 +636,7 @@ fs_visitor::nir_emit_alu(const fs_builder &bld, nir_alu_instr *instr)
             if (!(instr->dest.write_mask & (1 << i)))
                continue;
 
-            bld.MOV(offset(result, i), offset(temp, i));
+            bld.MOV(bld.offset(result, i), bld.offset(temp, i));
          }
       }
       return;
@@ -657,12 +657,12 @@ fs_visitor::nir_emit_alu(const fs_builder &bld, nir_alu_instr *instr)
       assert(_mesa_bitcount(instr->dest.write_mask) == 1);
       channel = ffs(instr->dest.write_mask) - 1;
 
-      result = offset(result, channel);
+      result = bld.offset(result, channel);
    }
 
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
       assert(nir_op_infos[instr->op].input_sizes[i] < 2);
-      op[i] = offset(op[i], instr->src[i].swizzle[channel]);
+      op[i] = bld.offset(op[i], instr->src[i].swizzle[channel]);
    }
 
    switch (instr->op) {
@@ -1156,7 +1156,7 @@ fs_reg_for_nir_reg(fs_visitor *v, nir_register *nir_reg,
    else
       reg = v->nir_locals[nir_reg->index];
 
-   reg = offset(reg, base_offset * nir_reg->num_components);
+   reg = v->bld.offset(reg, base_offset * nir_reg->num_components);
    if (indirect) {
       int multiplier = nir_reg->num_components * (v->dispatch_width / 8);
 
@@ -1177,7 +1177,7 @@ fs_visitor::get_nir_src(nir_src src)
       fs_reg reg = bld.vgrf(BRW_REGISTER_TYPE_D, src.ssa->num_components);
 
       for (unsigned i = 0; i < src.ssa->num_components; ++i)
-         bld.MOV(offset(reg, i), fs_reg(load->value.i[i]));
+         bld.MOV(bld.offset(reg, i), fs_reg(load->value.i[i]));
 
       return reg;
    } else {
@@ -1208,10 +1208,10 @@ fs_visitor::emit_percomp(const fs_builder &bld, const fs_inst &inst,
          continue;
 
       fs_inst *new_inst = new(mem_ctx) fs_inst(inst);
-      new_inst->dst = offset(new_inst->dst, i);
+      new_inst->dst = bld.offset(new_inst->dst, i);
       for (unsigned j = 0; j < new_inst->sources; j++)
          if (new_inst->src[j].file == GRF)
-            new_inst->src[j] = offset(new_inst->src[j], i);
+            new_inst->src[j] = bld.offset(new_inst->src[j], i);
 
       bld.emit(new_inst);
    }
@@ -1322,7 +1322,7 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       assert(sample_pos.file != BAD_FILE);
       dest.type = sample_pos.type;
       bld.MOV(dest, sample_pos);
-      bld.MOV(offset(dest, 1), offset(sample_pos, 1));
+      bld.MOV(bld.offset(dest, 1), bld.offset(sample_pos, 1));
       break;
    }
 
@@ -1349,13 +1349,13 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       }
 
       for (unsigned j = 0; j < instr->num_components; j++) {
-         fs_reg src = offset(retype(uniform_reg, dest.type), index);
+         fs_reg src = bld.offset(retype(uniform_reg, dest.type), index);
          if (has_indirect)
             src.reladdr = new(mem_ctx) fs_reg(get_nir_src(instr->src[0]));
          index++;
 
          bld.MOV(dest, src);
-         dest = offset(dest, 1);
+         dest = bld.offset(dest, 1);
       }
       break;
    }
@@ -1397,7 +1397,7 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
 
          unsigned vec4_offset = instr->const_index[0] / 4;
          for (int i = 0; i < instr->num_components; i++)
-            VARYING_PULL_CONSTANT_LOAD(bld, offset(dest, i), surf_index,
+            VARYING_PULL_CONSTANT_LOAD(bld, bld.offset(dest, i), surf_index,
                                        base_offset, vec4_offset + i);
       } else {
          fs_reg packed_consts = vgrf(glsl_type::float_type);
@@ -1416,7 +1416,7 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
             assert(packed_consts.subreg_offset < 32);
 
             bld.MOV(dest, packed_consts);
-            dest = offset(dest, 1);
+            dest = bld.offset(dest, 1);
          }
       }
       break;
@@ -1428,14 +1428,14 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
    case nir_intrinsic_load_input: {
       unsigned index = 0;
       for (unsigned j = 0; j < instr->num_components; j++) {
-         fs_reg src = offset(retype(nir_inputs, dest.type),
+         fs_reg src = bld.offset(retype(nir_inputs, dest.type),
                              instr->const_index[0] + index);
          if (has_indirect)
             src.reladdr = new(mem_ctx) fs_reg(get_nir_src(instr->src[0]));
          index++;
 
          bld.MOV(dest, src);
-         dest = offset(dest, 1);
+         dest = bld.offset(dest, 1);
       }
       break;
    }
@@ -1508,7 +1508,7 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
                                        BRW_REGISTER_TYPE_F);
             for (int i = 0; i < 2; i++) {
                fs_reg temp = vgrf(glsl_type::float_type);
-               bld.MUL(temp, offset(offset_src, i), fs_reg(16.0f));
+               bld.MUL(temp, bld.offset(offset_src, i), fs_reg(16.0f));
                fs_reg itemp = vgrf(glsl_type::int_type);
                bld.MOV(itemp, temp);  /* float to int */
 
@@ -1528,7 +1528,7 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
                 * FRAGMENT_INTERPOLATION_OFFSET_BITS"
                 */
                set_condmod(BRW_CONDITIONAL_L,
-                           bld.SEL(offset(src, i), itemp, fs_reg(7)));
+                           bld.SEL(bld.offset(src, i), itemp, fs_reg(7)));
             }
 
             mlen = 2;
@@ -1552,7 +1552,7 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
          src.type = dest.type;
 
          bld.emit(FS_OPCODE_LINTERP, dest, dst_xy, src);
-         dest = offset(dest, 1);
+         dest = bld.offset(dest, 1);
       }
       break;
    }
@@ -1564,13 +1564,13 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       fs_reg src = get_nir_src(instr->src[0]);
       unsigned index = 0;
       for (unsigned j = 0; j < instr->num_components; j++) {
-         fs_reg new_dest = offset(retype(nir_outputs, src.type),
-                                  instr->const_index[0] + index);
+         fs_reg new_dest = bld.offset(retype(nir_outputs, src.type),
+                                      instr->const_index[0] + index);
          if (has_indirect)
             src.reladdr = new(mem_ctx) fs_reg(get_nir_src(instr->src[1]));
          index++;
          bld.MOV(new_dest, src);
-         src = offset(src, 1);
+         src = bld.offset(src, 1);
       }
       break;
    }

@@ -151,6 +151,52 @@ namespace brw {
          return _dispatch_width;
       }
 
+      src_reg
+      offset(src_reg reg, unsigned delta) const
+      {
+         switch (reg.file) {
+         case BAD_FILE:
+            break;
+         case GRF:
+         case MRF:
+         case ATTR:
+            return byte_offset(reg,
+                               delta * MAX2(reg.width * reg.stride, 1) *
+                               type_sz(reg.type));
+         case UNIFORM:
+            reg.reg_offset += delta;
+            break;
+         default:
+            assert(delta == 0);
+         }
+         return reg;
+      }
+
+      fs_reg
+      half(fs_reg reg, unsigned idx) const
+      {
+         assert(idx < 2);
+
+         switch (reg.file) {
+         case BAD_FILE:
+         case UNIFORM:
+         case IMM:
+            return reg;
+
+         case GRF:
+         case MRF:
+            assert(reg.width == 16);
+            reg.width = 8;
+            return horiz_offset(reg, 8 * idx);
+
+         case ATTR:
+         case HW_REG:
+         default:
+            unreachable("Cannot take half of this register type");
+         }
+         return reg;
+      }
+
       /**
        * Allocate a virtual register of natural vector size (one for this IR)
        * and SIMD width.  \p n gives the amount of space to allocate in

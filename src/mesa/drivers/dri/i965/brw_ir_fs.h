@@ -129,27 +129,6 @@ horiz_offset(fs_reg reg, unsigned delta)
 }
 
 static inline fs_reg
-offset(fs_reg reg, unsigned delta)
-{
-   switch (reg.file) {
-   case BAD_FILE:
-      break;
-   case GRF:
-   case MRF:
-   case ATTR:
-      return byte_offset(reg,
-                         delta * MAX2(reg.width * reg.stride, 1) *
-                         type_sz(reg.type));
-   case UNIFORM:
-      reg.reg_offset += delta;
-      break;
-   default:
-      assert(delta == 0);
-   }
-   return reg;
-}
-
-static inline fs_reg
 component(fs_reg reg, unsigned idx)
 {
    assert(reg.subreg_offset == 0);
@@ -165,36 +144,6 @@ is_uniform(const fs_reg &reg)
 {
    return (reg.width == 1 || reg.stride == 0 || reg.is_null()) &&
           (!reg.reladdr || is_uniform(*reg.reladdr));
-}
-
-/**
- * Get either of the 8-component halves of a 16-component register.
- *
- * Note: this also works if \c reg represents a SIMD16 pair of registers.
- */
-static inline fs_reg
-half(fs_reg reg, unsigned idx)
-{
-   assert(idx < 2);
-
-   switch (reg.file) {
-   case BAD_FILE:
-   case UNIFORM:
-   case IMM:
-      return reg;
-
-   case GRF:
-   case MRF:
-      assert(reg.width == 16);
-      reg.width = 8;
-      return horiz_offset(reg, 8 * idx);
-
-   case ATTR:
-   case HW_REG:
-   default:
-      unreachable("Cannot take half of this register type");
-   }
-   return reg;
 }
 
 static const fs_reg reg_undef;

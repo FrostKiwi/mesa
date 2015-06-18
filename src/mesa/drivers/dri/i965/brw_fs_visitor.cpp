@@ -95,7 +95,7 @@ fs_visitor::emit_texture_gen4(ir_texture_opcode op, fs_reg dst,
    if (shadow_c.file != BAD_FILE) {
       for (int i = 0; i < coord_components; i++) {
          bld.MOV(fs_reg(MRF, base_mrf + mlen + i), coordinate);
-	 coordinate = offset(coordinate, 1);
+	 coordinate = bld.offset(coordinate, 1);
       }
 
       /* gen4's SIMD8 sampler always has the slots for u,v,r present.
@@ -124,7 +124,7 @@ fs_visitor::emit_texture_gen4(ir_texture_opcode op, fs_reg dst,
    } else if (op == ir_tex) {
       for (int i = 0; i < coord_components; i++) {
          bld.MOV(fs_reg(MRF, base_mrf + mlen + i), coordinate);
-	 coordinate = offset(coordinate, 1);
+	 coordinate = bld.offset(coordinate, 1);
       }
       /* zero the others. */
       for (int i = coord_components; i<3; i++) {
@@ -137,7 +137,7 @@ fs_visitor::emit_texture_gen4(ir_texture_opcode op, fs_reg dst,
 
       for (int i = 0; i < coord_components; i++) {
          bld.MOV(fs_reg(MRF, base_mrf + mlen + i), coordinate);
-	 coordinate = offset(coordinate, 1);
+	 coordinate = bld.offset(coordinate, 1);
       }
       /* the slots for u and v are always present, but r is optional */
       mlen += MAX2(coord_components, 2);
@@ -158,13 +158,13 @@ fs_visitor::emit_texture_gen4(ir_texture_opcode op, fs_reg dst,
        */
       for (int i = 0; i < grad_components; i++) {
          bld.MOV(fs_reg(MRF, base_mrf + mlen), dPdx);
-	 dPdx = offset(dPdx, 1);
+	 dPdx = bld.offset(dPdx, 1);
       }
       mlen += MAX2(grad_components, 2);
 
       for (int i = 0; i < grad_components; i++) {
          bld.MOV(fs_reg(MRF, base_mrf + mlen), dPdy);
-	 dPdy = offset(dPdy, 1);
+	 dPdy = bld.offset(dPdy, 1);
       }
       mlen += MAX2(grad_components, 2);
    } else if (op == ir_txs) {
@@ -182,7 +182,7 @@ fs_visitor::emit_texture_gen4(ir_texture_opcode op, fs_reg dst,
       for (int i = 0; i < coord_components; i++) {
          bld.MOV(fs_reg(MRF, base_mrf + mlen + i * 2, coordinate.type),
                  coordinate);
-	 coordinate = offset(coordinate, 1);
+	 coordinate = bld.offset(coordinate, 1);
       }
 
       /* Initialize the rest of u/v/r with 0.0.  Empirically, this seems to
@@ -232,8 +232,8 @@ fs_visitor::emit_texture_gen4(ir_texture_opcode op, fs_reg dst,
    if (simd16) {
       for (int i = 0; i < 4; i++) {
          bld.MOV(orig_dst, dst);
-	 orig_dst = offset(orig_dst, 1);
-	 dst = offset(dst, 2);
+	 orig_dst = bld.offset(orig_dst, 1);
+	 dst = bld.offset(dst, 2);
       }
    }
 
@@ -257,30 +257,30 @@ fs_visitor::emit_texture_gen4_simd16(ir_texture_opcode op, fs_reg dst,
 
    /* Copy the coordinates. */
    for (int i = 0; i < vector_elements; i++) {
-      bld.MOV(retype(offset(message, i), coordinate.type), coordinate);
-      coordinate = offset(coordinate, 1);
+      bld.MOV(retype(bld.offset(message, i), coordinate.type), coordinate);
+      coordinate = bld.offset(coordinate, 1);
    }
 
-   fs_reg msg_end = offset(message, vector_elements);
+   fs_reg msg_end = bld.offset(message, vector_elements);
 
    /* Messages other than sample and ld require all three components */
    if (has_lod || shadow_c.file != BAD_FILE) {
       for (int i = vector_elements; i < 3; i++) {
-         bld.MOV(offset(message, i), fs_reg(0.0f));
+         bld.MOV(bld.offset(message, i), fs_reg(0.0f));
       }
    }
 
    if (has_lod) {
-      fs_reg msg_lod = retype(offset(message, 3), op == ir_txf ?
+      fs_reg msg_lod = retype(bld.offset(message, 3), op == ir_txf ?
                               BRW_REGISTER_TYPE_UD : BRW_REGISTER_TYPE_F);
       bld.MOV(msg_lod, lod);
-      msg_end = offset(msg_lod, 1);
+      msg_end = bld.offset(msg_lod, 1);
    }
 
    if (shadow_c.file != BAD_FILE) {
-      fs_reg msg_ref = offset(message, 3 + has_lod);
+      fs_reg msg_ref = bld.offset(message, 3 + has_lod);
       bld.MOV(msg_ref, shadow_c);
-      msg_end = offset(msg_ref, 1);
+      msg_end = bld.offset(msg_ref, 1);
    }
 
    enum opcode opcode;
@@ -334,16 +334,16 @@ fs_visitor::emit_texture_gen5(ir_texture_opcode op, fs_reg dst,
    }
 
    for (int i = 0; i < vector_elements; i++) {
-      bld.MOV(retype(offset(msg_coords, i), coordinate.type), coordinate);
-      coordinate = offset(coordinate, 1);
+      bld.MOV(retype(bld.offset(msg_coords, i), coordinate.type), coordinate);
+      coordinate = bld.offset(coordinate, 1);
    }
-   fs_reg msg_end = offset(msg_coords, vector_elements);
-   fs_reg msg_lod = offset(msg_coords, 4);
+   fs_reg msg_end = bld.offset(msg_coords, vector_elements);
+   fs_reg msg_lod = bld.offset(msg_coords, 4);
 
    if (shadow_c.file != BAD_FILE) {
       fs_reg msg_shadow = msg_lod;
       bld.MOV(msg_shadow, shadow_c);
-      msg_lod = offset(msg_shadow, 1);
+      msg_lod = bld.offset(msg_shadow, 1);
       msg_end = msg_lod;
    }
 
@@ -354,13 +354,13 @@ fs_visitor::emit_texture_gen5(ir_texture_opcode op, fs_reg dst,
       break;
    case ir_txb:
       bld.MOV(msg_lod, lod);
-      msg_end = offset(msg_lod, 1);
+      msg_end = bld.offset(msg_lod, 1);
 
       opcode = FS_OPCODE_TXB;
       break;
    case ir_txl:
       bld.MOV(msg_lod, lod);
-      msg_end = offset(msg_lod, 1);
+      msg_end = bld.offset(msg_lod, 1);
 
       opcode = SHADER_OPCODE_TXL;
       break;
@@ -377,12 +377,12 @@ fs_visitor::emit_texture_gen5(ir_texture_opcode op, fs_reg dst,
       msg_end = msg_lod;
       for (int i = 0; i < grad_components; i++) {
          bld.MOV(msg_end, lod);
-         lod = offset(lod, 1);
-         msg_end = offset(msg_end, 1);
+         lod = bld.offset(lod, 1);
+         msg_end = bld.offset(msg_end, 1);
 
          bld.MOV(msg_end, lod2);
-         lod2 = offset(lod2, 1);
-         msg_end = offset(msg_end, 1);
+         lod2 = bld.offset(lod2, 1);
+         msg_end = bld.offset(msg_end, 1);
       }
 
       opcode = SHADER_OPCODE_TXD;
@@ -391,31 +391,31 @@ fs_visitor::emit_texture_gen5(ir_texture_opcode op, fs_reg dst,
    case ir_txs:
       msg_lod = retype(msg_end, BRW_REGISTER_TYPE_UD);
       bld.MOV(msg_lod, lod);
-      msg_end = offset(msg_lod, 1);
+      msg_end = bld.offset(msg_lod, 1);
 
       opcode = SHADER_OPCODE_TXS;
       break;
    case ir_query_levels:
       msg_lod = msg_end;
       bld.MOV(retype(msg_lod, BRW_REGISTER_TYPE_UD), fs_reg(0u));
-      msg_end = offset(msg_lod, 1);
+      msg_end = bld.offset(msg_lod, 1);
 
       opcode = SHADER_OPCODE_TXS;
       break;
    case ir_txf:
-      msg_lod = offset(msg_coords, 3);
+      msg_lod = bld.offset(msg_coords, 3);
       bld.MOV(retype(msg_lod, BRW_REGISTER_TYPE_UD), lod);
-      msg_end = offset(msg_lod, 1);
+      msg_end = bld.offset(msg_lod, 1);
 
       opcode = SHADER_OPCODE_TXF;
       break;
    case ir_txf_ms:
-      msg_lod = offset(msg_coords, 3);
+      msg_lod = bld.offset(msg_coords, 3);
       /* lod */
       bld.MOV(retype(msg_lod, BRW_REGISTER_TYPE_UD), fs_reg(0u));
       /* sample index */
-      bld.MOV(retype(offset(msg_lod, 1), BRW_REGISTER_TYPE_UD), sample_index);
-      msg_end = offset(msg_lod, 2);
+      bld.MOV(retype(bld.offset(msg_lod, 1), BRW_REGISTER_TYPE_UD), sample_index);
+      msg_end = bld.offset(msg_lod, 2);
 
       opcode = SHADER_OPCODE_TXF_CMS;
       break;
@@ -525,7 +525,7 @@ fs_visitor::emit_texture_gen7(ir_texture_opcode op, fs_reg dst,
        */
       for (int i = 0; i < coord_components; i++) {
          bld.MOV(sources[length], coordinate);
-	 coordinate = offset(coordinate, 1);
+	 coordinate = bld.offset(coordinate, 1);
 	 length++;
 
          /* For cube map array, the coordinate is (u,v,r,ai) but there are
@@ -533,11 +533,11 @@ fs_visitor::emit_texture_gen7(ir_texture_opcode op, fs_reg dst,
           */
          if (i < grad_components) {
             bld.MOV(sources[length], lod);
-            lod = offset(lod, 1);
+            lod = bld.offset(lod, 1);
             length++;
 
             bld.MOV(sources[length], lod2);
-            lod2 = offset(lod2, 1);
+            lod2 = bld.offset(lod2, 1);
             length++;
          }
       }
@@ -559,13 +559,13 @@ fs_visitor::emit_texture_gen7(ir_texture_opcode op, fs_reg dst,
        */
 
       bld.MOV(retype(sources[length], BRW_REGISTER_TYPE_D), coordinate);
-      coordinate = offset(coordinate, 1);
+      coordinate = bld.offset(coordinate, 1);
       length++;
 
       if (devinfo->gen >= 9) {
          if (coord_components >= 2) {
             bld.MOV(retype(sources[length], BRW_REGISTER_TYPE_D), coordinate);
-            coordinate = offset(coordinate, 1);
+            coordinate = bld.offset(coordinate, 1);
          }
          length++;
       }
@@ -575,7 +575,7 @@ fs_visitor::emit_texture_gen7(ir_texture_opcode op, fs_reg dst,
 
       for (int i = devinfo->gen >= 9 ? 2 : 1; i < coord_components; i++) {
          bld.MOV(retype(sources[length], BRW_REGISTER_TYPE_D), coordinate);
-	 coordinate = offset(coordinate, 1);
+	 coordinate = bld.offset(coordinate, 1);
 	 length++;
       }
 
@@ -594,7 +594,7 @@ fs_visitor::emit_texture_gen7(ir_texture_opcode op, fs_reg dst,
        */
       for (int i = 0; i < coord_components; i++) {
          bld.MOV(retype(sources[length], BRW_REGISTER_TYPE_D), coordinate);
-         coordinate = offset(coordinate, 1);
+         coordinate = bld.offset(coordinate, 1);
          length++;
       }
 
@@ -608,19 +608,19 @@ fs_visitor::emit_texture_gen7(ir_texture_opcode op, fs_reg dst,
          /* More crazy intermixing */
          for (int i = 0; i < 2; i++) { /* u, v */
             bld.MOV(sources[length], coordinate);
-            coordinate = offset(coordinate, 1);
+            coordinate = bld.offset(coordinate, 1);
             length++;
          }
 
          for (int i = 0; i < 2; i++) { /* offu, offv */
             bld.MOV(retype(sources[length], BRW_REGISTER_TYPE_D), offset_value);
-            offset_value = offset(offset_value, 1);
+            offset_value = bld.offset(offset_value, 1);
             length++;
          }
 
          if (coord_components == 3) { /* r if present */
             bld.MOV(sources[length], coordinate);
-            coordinate = offset(coordinate, 1);
+            coordinate = bld.offset(coordinate, 1);
             length++;
          }
 
@@ -633,7 +633,7 @@ fs_visitor::emit_texture_gen7(ir_texture_opcode op, fs_reg dst,
    if (!coordinate_done) {
       for (int i = 0; i < coord_components; i++) {
          bld.MOV(sources[length], coordinate);
-         coordinate = offset(coordinate, 1);
+         coordinate = bld.offset(coordinate, 1);
          length++;
       }
    }
@@ -746,8 +746,8 @@ fs_visitor::rescale_texcoord(fs_reg coordinate, int coord_components,
       coordinate = dst;
 
       bld.MUL(dst, src, scale_x);
-      dst = offset(dst, 1);
-      src = offset(src, 1);
+      dst = bld.offset(dst, 1);
+      src = bld.offset(src, 1);
       bld.MUL(dst, src, scale_y);
    } else if (is_rect) {
       /* On gen6+, the sampler handles the rectangle coordinates
@@ -760,7 +760,7 @@ fs_visitor::rescale_texcoord(fs_reg coordinate, int coord_components,
       for (int i = 0; i < 2; i++) {
 	 if (key_tex->gl_clamp_mask[i] & (1 << sampler)) {
 	    fs_reg chan = coordinate;
-	    chan = offset(chan, i);
+	    chan = bld.offset(chan, i);
 
             set_condmod(BRW_CONDITIONAL_GE,
                         bld.emit(BRW_OPCODE_SEL, chan, chan, fs_reg(0.0f)));
@@ -785,7 +785,7 @@ fs_visitor::rescale_texcoord(fs_reg coordinate, int coord_components,
       for (int i = 0; i < MIN2(coord_components, 3); i++) {
 	 if (key_tex->gl_clamp_mask[i] & (1 << sampler)) {
 	    fs_reg chan = coordinate;
-	    chan = offset(chan, i);
+	    chan = bld.offset(chan, i);
             set_saturate(true, bld.MOV(chan, chan));
 	 }
       }
@@ -807,7 +807,7 @@ fs_visitor::emit_mcs_fetch(fs_reg coordinate, int components, fs_reg sampler)
    for (int i = 0; i < components; i++) {
       sources[i] = vgrf(glsl_type::float_type);
       bld.MOV(retype(sources[i], BRW_REGISTER_TYPE_D), coordinate);
-      coordinate = offset(coordinate, 1);
+      coordinate = bld.offset(coordinate, 1);
    }
 
    bld.LOAD_PAYLOAD(payload, sources, components, 0);
@@ -853,7 +853,7 @@ fs_visitor::emit_texture(ir_texture_opcode op,
 
          for (int i=0; i<4; i++) {
             bld.MOV(res, fs_reg(swiz == SWIZZLE_ZERO ? 0.0f : 1.0f));
-            res = offset(res, 1);
+            res = bld.offset(res, 1);
          }
          return;
       }
@@ -907,7 +907,7 @@ fs_visitor::emit_texture(ir_texture_opcode op,
 
    /* fixup #layers for cube map arrays */
    if (op == ir_txs && is_cube_array) {
-      fs_reg depth = offset(dst, 2);
+      fs_reg depth = bld.offset(dst, 2);
       fs_reg fixed_depth = vgrf(glsl_type::int_type);
       bld.emit(SHADER_OPCODE_INT_QUOTIENT, fixed_depth, depth, fs_reg(6));
 
@@ -917,7 +917,7 @@ fs_visitor::emit_texture(ir_texture_opcode op,
          if (i == 2) {
             fixed_payload[i] = fixed_depth;
          } else {
-            fixed_payload[i] = offset(dst, i);
+            fixed_payload[i] = bld.offset(dst, i);
          }
       }
       bld.LOAD_PAYLOAD(dst, fixed_payload, components, 0);
@@ -952,7 +952,7 @@ fs_visitor::emit_gen6_gather_wa(uint8_t wa, fs_reg dst)
          bld.ASR(dst, dst, fs_reg(32 - width));
       }
 
-      dst = offset(dst, 1);
+      dst = bld.offset(dst, 1);
    }
 }
 
@@ -989,7 +989,7 @@ fs_visitor::swizzle_result(ir_texture_opcode op, int dest_components,
 {
    if (op == ir_query_levels) {
       /* # levels is in .w */
-      this->result = offset(orig_val, 3);
+      this->result = bld.offset(orig_val, 3);
       return;
    }
 
@@ -1010,15 +1010,15 @@ fs_visitor::swizzle_result(ir_texture_opcode op, int dest_components,
       for (int i = 0; i < 4; i++) {
 	 int swiz = GET_SWZ(key_tex->swizzles[sampler], i);
 	 fs_reg l = swizzled_result;
-	 l = offset(l, i);
+	 l = bld.offset(l, i);
 
 	 if (swiz == SWIZZLE_ZERO) {
             bld.MOV(l, fs_reg(0.0f));
 	 } else if (swiz == SWIZZLE_ONE) {
             bld.MOV(l, fs_reg(1.0f));
 	 } else {
-            bld.MOV(l, offset(orig_val,
-                              GET_SWZ(key_tex->swizzles[sampler], i)));
+            bld.MOV(l, bld.offset(orig_val,
+                                  GET_SWZ(key_tex->swizzles[sampler], i)));
 	 }
       }
       this->result = swizzled_result;
@@ -1315,14 +1315,14 @@ fs_visitor::emit_interpolation_setup_gen4()
 
    if (devinfo->has_pln && dispatch_width == 16) {
       for (unsigned i = 0; i < 2; i++) {
-         abld.half(i).ADD(half(offset(delta_xy, i), 0),
-                          half(this->pixel_x, i), xstart);
-         abld.half(i).ADD(half(offset(delta_xy, i), 1),
-                          half(this->pixel_y, i), ystart);
+         abld.half(i).ADD(abld.half(abld.offset(delta_xy, i), 0),
+                          abld.half(this->pixel_x, i), xstart);
+         abld.half(i).ADD(abld.half(abld.offset(delta_xy, i), 1),
+                          abld.half(this->pixel_y, i), ystart);
       }
    } else {
-      abld.ADD(offset(delta_xy, 0), this->pixel_x, xstart);
-      abld.ADD(offset(delta_xy, 1), this->pixel_y, ystart);
+      abld.ADD(abld.offset(delta_xy, 0), this->pixel_x, xstart);
+      abld.ADD(abld.offset(delta_xy, 1), this->pixel_y, ystart);
    }
 
    abld = bld.annotate("compute pos.w and 1/pos.w");
@@ -1419,7 +1419,7 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components,
       fs_reg tmp = vgrf(glsl_type::vec4_type);
       assert(color.type == BRW_REGISTER_TYPE_F);
       for (unsigned i = 0; i < components; i++) {
-         inst = bld.MOV(offset(tmp, i), offset(color, i));
+         inst = bld.MOV(bld.offset(tmp, i), bld.offset(color, i));
          inst->saturate = true;
       }
       color = tmp;
@@ -1428,10 +1428,10 @@ fs_visitor::setup_color_payload(fs_reg *dst, fs_reg color, unsigned components,
    if (exec_size < dispatch_width) {
       unsigned half_idx = use_2nd_half ? 1 : 0;
       for (unsigned i = 0; i < components; i++)
-         dst[i] = half(offset(color, i), half_idx);
+         dst[i] = bld.half(bld.offset(color, i), half_idx);
    } else {
       for (unsigned i = 0; i < components; i++)
-         dst[i] = offset(color, i);
+         dst[i] = bld.offset(color, i);
    }
 }
 
@@ -1479,7 +1479,7 @@ fs_visitor::emit_alpha_test()
                      BRW_CONDITIONAL_NEQ);
    } else {
       /* RT0 alpha */
-      fs_reg color = offset(outputs[0], 3);
+      fs_reg color = bld.offset(outputs[0], 3);
 
       /* f0.1 &= func(color, ref) */
       cmp = abld.CMP(bld.null_reg_f(), color, fs_reg(key->alpha_test_ref),
@@ -1556,7 +1556,8 @@ fs_visitor::emit_single_fb_write(const fs_builder &bld,
        * alpha-testing, alpha-to-coverage, and so on.
        */
       if (this->outputs[0].file != BAD_FILE)
-         setup_color_payload(&sources[length + 3], offset(this->outputs[0], 3),
+         setup_color_payload(&sources[length + 3],
+                             bld.offset(this->outputs[0], 3),
                              1, exec_size, false);
       length += 4;
    } else if (color1.file == BAD_FILE) {
@@ -1591,7 +1592,7 @@ fs_visitor::emit_single_fb_write(const fs_builder &bld,
 	 /* Hand over gl_FragDepth. */
 	 assert(this->frag_depth.file != BAD_FILE);
          if (exec_size < dispatch_width) {
-            sources[length] = half(this->frag_depth, use_2nd_half);
+            sources[length] = bld.half(this->frag_depth, use_2nd_half);
          } else {
             sources[length] = this->frag_depth;
          }
@@ -1692,7 +1693,7 @@ fs_visitor::emit_fb_writes()
 
          fs_reg src0_alpha;
          if (devinfo->gen >= 6 && key->replicate_alpha && target != 0)
-            src0_alpha = offset(outputs[0], 3);
+            src0_alpha = bld.offset(outputs[0], 3);
 
          inst = emit_single_fb_write(abld, this->outputs[target], reg_undef,
                                      src0_alpha,
@@ -1776,7 +1777,7 @@ void fs_visitor::compute_clip_distance()
       abld.MUL(output, outputs[clip_vertex], u);
       for (int j = 1; j < 4; j++) {
          u.reg = userplane[i].reg + j;
-         abld.MAD(output, output, offset(outputs[clip_vertex], j), u);
+         abld.MAD(output, output, bld.offset(outputs[clip_vertex], j), u);
       }
    }
 }
@@ -1890,13 +1891,13 @@ fs_visitor::emit_urb_writes()
              */
             for (int i = 0; i < 4; i++) {
                reg = fs_reg(GRF, alloc.allocate(1), outputs[varying].type);
-               src = offset(this->outputs[varying], i);
+               src = bld.offset(this->outputs[varying], i);
                set_saturate(true, bld.MOV(reg, src));
                sources[length++] = reg;
             }
          } else {
             for (int i = 0; i < 4; i++)
-               sources[length++] = offset(this->outputs[varying], i);
+               sources[length++] = bld.offset(this->outputs[varying], i);
          }
          break;
       }
