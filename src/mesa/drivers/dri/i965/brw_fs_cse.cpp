@@ -200,7 +200,6 @@ create_copy_instr(const fs_builder &bld, fs_inst *inst, fs_reg src, bool negate)
       payload = ralloc_array(bld.shader->mem_ctx, fs_reg, sources);
       for (int i = 0; i < header_size; i++) {
          payload[i] = src;
-         payload[i].width = 8;
          src.reg_offset++;
       }
       for (int i = header_size; i < sources; i++) {
@@ -275,7 +274,6 @@ fs_visitor::opt_cse_local(bblock_t *block)
             /* dest <- temp */
             if (!inst->dst.is_null()) {
                assert(inst->regs_written == entry->generator->regs_written);
-               assert(inst->dst.width == entry->generator->dst.width);
                assert(inst->dst.type == entry->tmp.type);
 
                create_copy_instr(bld.at(block, inst), inst, entry->tmp, negate);
