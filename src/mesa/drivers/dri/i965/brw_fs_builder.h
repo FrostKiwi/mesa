@@ -161,7 +161,7 @@ namespace brw {
          case MRF:
          case ATTR:
             return byte_offset(reg,
-                               delta * MAX2(reg.width * reg.stride, 1) *
+                               delta * dispatch_width() * reg.stride *
                                type_sz(reg.type));
          case UNIFORM:
             reg.reg_offset += delta;
@@ -185,9 +185,9 @@ namespace brw {
 
          case GRF:
          case MRF:
-            assert(reg.width == 16);
-            reg.width = 8;
-            return horiz_offset(reg, 8 * idx);
+            assert(dispatch_width() == 16);
+            reg.width = dispatch_width() / 2;
+            return horiz_offset(reg, (dispatch_width() / 2) * idx);
 
          case ATTR:
          case HW_REG:
