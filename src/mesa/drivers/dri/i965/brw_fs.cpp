@@ -3047,7 +3047,7 @@ fs_visitor::lower_integer_multiplication()
           inst->src[1].fixed_hw_reg.dw1.ud < (1 << 16)) {
          if (devinfo->gen < 7) {
             fs_reg imm(GRF, alloc.allocate(dispatch_width / 8),
-                       inst->dst.type, dispatch_width);
+                       inst->dst.type);
             ibld.MOV(imm, inst->src[1]);
             ibld.MUL(inst->dst, imm, inst->src[0]);
          } else {
@@ -3101,11 +3101,11 @@ fs_visitor::lower_integer_multiplication()
 
          if (inst->conditional_mod && inst->dst.is_null()) {
             inst->dst = fs_reg(GRF, alloc.allocate(dispatch_width / 8),
-                               inst->dst.type, dispatch_width);
+                               inst->dst.type);
          }
          fs_reg low = inst->dst;
          fs_reg high(GRF, alloc.allocate(dispatch_width / 8),
-                     inst->dst.type, dispatch_width);
+                     inst->dst.type);
 
          if (brw->gen >= 7) {
             fs_reg src1_0_w = inst->src[1];
