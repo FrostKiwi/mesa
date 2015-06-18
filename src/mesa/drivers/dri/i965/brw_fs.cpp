@@ -203,10 +203,8 @@ fs_visitor::VARYING_PULL_CONSTANT_LOAD(const fs_builder &bld,
    else
       op = FS_OPCODE_VARYING_PULL_CONSTANT_LOAD;
 
-   assert(dst.width % 8 == 0);
    int regs_written = 4 * (bld.dispatch_width() / 8) * scale;
-   fs_reg vec4_result = fs_reg(GRF, alloc.allocate(regs_written),
-                               dst.type, bld.dispatch_width());
+   fs_reg vec4_result = fs_reg(GRF, alloc.allocate(regs_written), dst.type);
    fs_inst *inst = bld.emit(op, vec4_result, surf_index, vec4_offset);
    inst->regs_written = regs_written;
 
