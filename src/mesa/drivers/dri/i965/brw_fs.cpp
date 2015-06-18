@@ -2985,10 +2985,9 @@ fs_visitor::lower_load_payload()
                } else {
                   /* Platform doesn't have COMPR4.  We have to fake it */
                   fs_reg mov_dst = retype(dst, inst->src[i].type);
-                  ibld.half(0).MOV(mov_dst,
-                                   ibld.half(inst->src[i], 0));
-                  ibld.half(1).MOV(ibld.offset(mov_dst, 4),
-                                   ibld.half(inst->src[i], 1));
+                  ibld.half(0).MOV(mov_dst, ibld.half(inst->src[i], 0));
+                  mov_dst.reg += 4;
+                  ibld.half(1).MOV(mov_dst, ibld.half(inst->src[i], 1));
                }
             }
 
