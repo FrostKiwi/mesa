@@ -396,7 +396,6 @@ fs_visitor::try_copy_propagate(fs_inst *inst, int arg, acp_entry *entry)
    case ATTR:
    case GRF:
       {
-         assert(entry->src.width % inst->src[arg].width == 0);
          /* In this case, we'll just leave the width alone.  The source
           * register could have different widths depending on how it is
           * being used.  For instance, if only half of the register was

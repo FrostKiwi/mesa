@@ -259,11 +259,9 @@ fs_visitor::opt_cse_local(bblock_t *block)
             bool no_existing_temp = entry->tmp.file == BAD_FILE;
             if (no_existing_temp && !entry->generator->dst.is_null()) {
                int written = entry->generator->regs_written;
-               assert((written * 8) % entry->generator->dst.width == 0);
 
                entry->tmp = fs_reg(GRF, alloc.allocate(written),
-                                   entry->generator->dst.type,
-                                   entry->generator->dst.width);
+                                   entry->generator->dst.type);
 
                create_copy_instr(bld.at(block, entry->generator->next),
                                  entry->generator, entry->tmp, false);
