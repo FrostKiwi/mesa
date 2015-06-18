@@ -713,6 +713,8 @@ fs_inst::regs_read(int arg) const
       return mlen;
    } else if (opcode == FS_OPCODE_LINTERP && arg == 0) {
       return exec_size / 4;
+   } else if (opcode == FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD_GEN7 && arg == 1) {
+      return 1; /* This is a single SIMD4x2 register */
    }
 
    switch (src[arg].file) {
