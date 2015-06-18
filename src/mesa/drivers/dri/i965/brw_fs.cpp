@@ -79,7 +79,7 @@ fs_inst::init(enum opcode opcode, uint8_t exec_size, const fs_reg &dst,
    case MRF:
    case ATTR:
       this->regs_written =
-         DIV_ROUND_UP(MAX2(dst.width * dst.stride, 1) * type_sz(dst.type), 32);
+         DIV_ROUND_UP(MAX2(exec_size * dst.stride, 1) * type_sz(dst.type), 32);
       break;
    case BAD_FILE:
       this->regs_written = 0;
@@ -696,7 +696,7 @@ bool
 fs_inst::is_partial_write() const
 {
    return ((this->predicate && this->opcode != BRW_OPCODE_SEL) ||
-           (this->dst.width * type_sz(this->dst.type)) < 32 ||
+           (this->exec_size * type_sz(this->dst.type)) < 32 ||
            !this->dst.is_contiguous());
 }
 
@@ -744,8 +744,8 @@ fs_inst::regs_read(int arg) const
       if (src[arg].stride == 0) {
          return 1;
       } else {
-         int size = src[arg].width * src[arg].stride * type_sz(src[arg].type);
-         return (size + 31) / 32;
+         int size = this->exec_size * src[arg].stride * type_sz(src[arg].type);
+         return DIV_ROUND_UP(size, 32);
       }
    case MRF:
       unreachable("MRF registers are not allowed as sources");
