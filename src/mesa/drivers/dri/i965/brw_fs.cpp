@@ -763,6 +763,12 @@ fs_inst::regs_read(int arg) const
          return exec_size / 4;
       break;
 
+   case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD_GEN7:
+      /* The second argument is a single SIMD4x2 register */
+      if (arg == 1)
+         return 1;
+      break;
+
    default:
       if (is_tex() && arg == 0 && src[0].file == GRF)
          return mlen;
