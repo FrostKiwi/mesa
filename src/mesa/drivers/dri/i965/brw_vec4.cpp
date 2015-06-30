@@ -1995,7 +1995,7 @@ brw_vs_emit(struct brw_context *brw,
 
       fs_visitor v(brw->intelScreen->compiler, brw,
                    mem_ctx, MESA_SHADER_VERTEX, key,
-                   &prog_data->base.base, prog, &vp->Base,
+                   &prog_data->base.base, &vp->Base,
                    8, st_index);
       if (!v.run_vs(brw_select_clip_planes(&brw->ctx))) {
          if (prog) {

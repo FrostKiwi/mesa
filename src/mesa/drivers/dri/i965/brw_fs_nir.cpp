@@ -172,7 +172,9 @@ fs_visitor::nir_setup_outputs(nir_shader *shader)
 }
 
 void
-fs_visitor::nir_setup_uniforms(nir_shader *shader)
+fs_visitor::nir_setup_uniforms(nir_shader *shader,
+                               struct gl_shader_program *shader_prog,
+                               struct gl_program *prog)
 {
    num_direct_uniforms = shader->num_direct_uniforms;
 

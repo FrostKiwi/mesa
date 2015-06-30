@@ -96,7 +96,6 @@ public:
               gl_shader_stage stage,
               const void *key,
               struct brw_stage_prog_data *prog_data,
-              struct gl_shader_program *shader_prog,
               struct gl_program *prog,
               unsigned dispatch_width,
               int shader_time_index);
@@ -241,7 +240,9 @@ public:
    void emit_nir_code();
    void nir_setup_inputs(nir_shader *shader);
    void nir_setup_outputs(nir_shader *shader);
-   void nir_setup_uniforms(nir_shader *shader);
+   void nir_setup_uniforms(nir_shader *shader,
+                           struct gl_shader_program *shader_prog,
+                           struct gl_program *prog);
    void nir_setup_uniform(nir_variable *var);
    void nir_setup_builtin_uniform(nir_variable *var);
    void nir_emit_system_values(nir_shader *shader);
