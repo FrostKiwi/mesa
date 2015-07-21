@@ -380,9 +380,17 @@ nir_lower_io_block(nir_block *block, void *void_state)
          nir_src indirect;
          unsigned offset = get_io_offset(intrin->variables[0],
                                          &intrin->instr, &indirect, state);
-         offset += intrin->variables[0]->var->data.driver_location;
 
-         store->const_index[0] = offset;
+         /* Some non-scalar backends (like i965's NIR-vec4) need the orginal
+          * variable's varying value instead of the driver_location.
+          */
+         if (!state->is_scalar) {
+            store->const_index[0] =
+               intrin->variables[0]->var->data.location + offset;
+         } else {
+            store->const_index[0] =
+               intrin->variables[0]->var->data.driver_location + offset;
+         }
 
          nir_src_copy(&store->src[0], &intrin->src[0], state->mem_ctx);
 
