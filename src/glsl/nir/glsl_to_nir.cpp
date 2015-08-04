@@ -1193,6 +1193,24 @@ nir_visitor::visit(ir_expression *ir)
          unreachable("not reached");
       }
       break;
+   case ir_unop_all:
+      switch (ir->operands[0]->type->vector_elements) {
+      case 2:
+         emit(supports_ints ? nir_op_ball2 : nir_op_fall2,
+              dest_size, srcs);
+         break;
+      case 3:
+         emit(supports_ints ? nir_op_ball3 : nir_op_fall3,
+              dest_size, srcs);
+         break;
+      case 4:
+         emit(supports_ints ? nir_op_ball4 : nir_op_fall4,
+              dest_size, srcs);
+         break;
+      default:
+         unreachable("not reached");
+      }
+      break;
    case ir_unop_trunc: emit(nir_op_ftrunc, dest_size, srcs); break;
    case ir_unop_ceil:  emit(nir_op_fceil,  dest_size, srcs); break;
    case ir_unop_floor: emit(nir_op_ffloor, dest_size, srcs); break;
