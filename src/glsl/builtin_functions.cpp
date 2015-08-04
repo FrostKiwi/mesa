@@ -4015,25 +4015,7 @@ builtin_builder::_any(const glsl_type *type)
 ir_function_signature *
 builtin_builder::_all(const glsl_type *type)
 {
-   ir_variable *v = in_var(type, "v");
-   MAKE_SIG(glsl_type::bool_type, always_available, 1, v);
-
-   switch (type->vector_elements) {
-   case 2:
-      body.emit(ret(logic_and(swizzle_x(v), swizzle_y(v))));
-      break;
-   case 3:
-      body.emit(ret(logic_and(logic_and(swizzle_x(v), swizzle_y(v)),
-                              swizzle_z(v))));
-      break;
-   case 4:
-      body.emit(ret(logic_and(logic_and(logic_and(swizzle_x(v), swizzle_y(v)),
-                                        swizzle_z(v)),
-                              swizzle_w(v))));
-      break;
-   }
-
-   return sig;
+   return unop(always_available, ir_unop_all, glsl_type::bool_type, type);
 }
 
 UNOP(not, ir_unop_logic_not, always_available)
