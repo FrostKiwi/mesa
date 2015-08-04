@@ -1713,6 +1713,17 @@ vec4_visitor::visit(ir_expression *ir)
       inst->predicate = BRW_PREDICATE_ALIGN16_ANY4H;
       break;
 
+   case ir_unop_all:
+      if (devinfo->gen <= 5) {
+         resolve_bool_comparison(ir->operands[0], &op[0]);
+      }
+      emit(CMP(dst_null_d(), op[0], src_reg(0), BRW_CONDITIONAL_NZ));
+      emit(MOV(result_dst, src_reg(0)));
+
+      inst = emit(MOV(result_dst, src_reg(~0)));
+      inst->predicate = BRW_PREDICATE_ALIGN16_ALL4H;
+      break;
+
    case ir_binop_logic_xor:
       emit(XOR(result_dst, op[0], op[1]));
       break;

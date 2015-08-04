@@ -1291,6 +1291,20 @@ vec4_visitor::nir_emit_alu(nir_alu_instr *instr)
       break;
    }
 
+   case nir_op_ball2:
+   case nir_op_ball3:
+   case nir_op_ball4: {
+      dst_reg tmp = dst_reg(this, glsl_type::bool_type);
+      tmp.writemask = brw_writemask_for_size(nir_op_infos[instr->op].input_sizes[0]);
+
+      emit(CMP(tmp, op[0], src_reg(0), BRW_CONDITIONAL_NZ));
+
+      emit(MOV(dst, src_reg(0)));
+      inst = emit(MOV(dst, src_reg(~0)));
+      inst->predicate = BRW_PREDICATE_ALIGN16_ALL4H;
+      break;
+   }
+
    case nir_op_fabs:
    case nir_op_iabs:
    case nir_op_fneg:
