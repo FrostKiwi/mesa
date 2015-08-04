@@ -311,6 +311,10 @@ ir_expression::ir_expression(int op, ir_rvalue *op0)
       this->type = glsl_type::bool_type;
       break;
 
+   case ir_unop_all:
+      this->type = glsl_type::bool_type;
+      break;
+
    case ir_unop_pack_snorm_2x16:
    case ir_unop_pack_snorm_4x8:
    case ir_unop_pack_unorm_2x16:

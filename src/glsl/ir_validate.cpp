@@ -324,6 +324,11 @@ ir_validate::visit_leave(ir_expression *ir)
       assert(ir->type == glsl_type::bool_type);
       break;
 
+   case ir_unop_all:
+      assert(ir->operands[0]->type->base_type == GLSL_TYPE_BOOL);
+      assert(ir->type == glsl_type::bool_type);
+      break;
+
    case ir_unop_trunc:
    case ir_unop_round_even:
    case ir_unop_ceil:

@@ -669,6 +669,14 @@ ir_expression::constant_expression_value(struct hash_table *variable_context)
 	    data.b[0] = true;
       }
       break;
+   case ir_unop_all:
+      assert(op[0]->type->is_boolean());
+      data.b[0] = true;
+      for (unsigned c = 0; c < op[0]->type->components(); c++) {
+	 if (!op[0]->value.b[c])
+	    data.b[0] = false;
+      }
+      break;
    case ir_unop_d2f:
       assert(op[0]->type->base_type == GLSL_TYPE_DOUBLE);
       for (unsigned c = 0; c < op[0]->type->components(); c++) {
