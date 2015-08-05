@@ -75,13 +75,12 @@ brw_create_nir(struct brw_context *brw,
    struct gl_context *ctx = &brw->ctx;
    const nir_shader_compiler_options *options =
       ctx->Const.ShaderCompilerOptions[stage].NirOptions;
-   struct gl_shader *shader = shader_prog ? shader_prog->_LinkedShaders[stage] : NULL;
    bool debug_enabled = INTEL_DEBUG & intel_debug_flag_for_shader_stage(stage);
    nir_shader *nir;
 
    /* First, lower the GLSL IR or Mesa IR to NIR */
    if (shader_prog) {
-      nir = glsl_to_nir(shader, options);
+      nir = glsl_to_nir(shader_prog, stage, options);
    } else {
       nir = prog_to_nir(prog, options);
       nir_convert_to_ssa(nir); /* turn registers into SSA */
