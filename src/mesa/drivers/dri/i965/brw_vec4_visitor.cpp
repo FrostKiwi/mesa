@@ -3750,6 +3750,7 @@ vec4_visitor::vec4_visitor(const struct brw_compiler *compiler,
                            int shader_time_index)
    : backend_shader(compiler, log_data, mem_ctx,
                     prog, &prog_data->base, stage),
+     prog(prog),
      key(key),
      prog_data(prog_data),
      shader_prog(shader_prog),

@@ -34,6 +34,10 @@ using namespace brw;
 void
 fs_visitor::emit_nir_code()
 {
+   /* XXX: Use the real thing here */
+   struct gl_shader_program *shader_prog = NULL;
+   struct gl_program *prog = NULL;
+
    nir_shader *nir = prog->nir;
 
    /* emit the arrays used for inputs and outputs - load/store intrinsics will
@@ -41,7 +45,7 @@ fs_visitor::emit_nir_code()
     */
    nir_setup_inputs(nir);
    nir_setup_outputs(nir);
-   nir_setup_uniforms(nir);
+   nir_setup_uniforms(nir, shader_prog, prog);
    nir_emit_system_values(nir);
 
    /* get the main function and emit it */
@@ -198,15 +202,15 @@ fs_visitor::nir_setup_uniforms(nir_shader *shader,
             continue;
 
          if (strncmp(var->name, "gl_", 3) == 0)
-            nir_setup_builtin_uniform(var);
+            nir_setup_builtin_uniform(var, prog);
          else
-            nir_setup_uniform(var);
+            nir_setup_uniform(var, shader_prog);
       }
    } else {
       /* prog_to_nir doesn't create uniform variables; set param up directly. */
       for (unsigned p = 0; p < prog->Parameters->NumParameters; p++) {
          for (unsigned int i = 0; i < 4; i++) {
-            stage_prog_data->param[4 * p + i] =
+            prog_data->param[4 * p + i] =
                &prog->Parameters->ParameterValues[p][i];
          }
       }
@@ -214,7 +218,8 @@ fs_visitor::nir_setup_uniforms(nir_shader *shader,
 }
 
 void
-fs_visitor::nir_setup_uniform(nir_variable *var)
+fs_visitor::nir_setup_uniform(nir_variable *var,
+                              struct gl_shader_program *shader_prog)
 {
    int namelen = strlen(var->name);
 
@@ -244,7 +249,7 @@ fs_visitor::nir_setup_uniform(nir_variable *var)
          slots *= storage->array_elements;
 
       for (unsigned i = 0; i < slots; i++) {
-         stage_prog_data->param[index++] = &storage->storage[i];
+         prog_data->param[index++] = &storage->storage[i];
       }
    }
 
@@ -253,7 +258,8 @@ fs_visitor::nir_setup_uniform(nir_variable *var)
 }
 
 void
-fs_visitor::nir_setup_builtin_uniform(nir_variable *var)
+fs_visitor::nir_setup_builtin_uniform(nir_variable *var,
+                                      struct gl_program *prog)
 {
    const nir_state_slot *const slots = var->state_slots;
    assert(var->state_slots != NULL);
@@ -263,7 +269,7 @@ fs_visitor::nir_setup_builtin_uniform(nir_variable *var)
       /* This state reference has already been setup by ir_to_mesa, but we'll
        * get the same index back here.
        */
-      int index = _mesa_add_state_reference(this->prog->Parameters,
+      int index = _mesa_add_state_reference(prog->Parameters,
                                             (gl_state_index *)slots[i].tokens);
 
       /* Add each of the unique swizzles of the element as a parameter.
@@ -277,7 +283,7 @@ fs_visitor::nir_setup_builtin_uniform(nir_variable *var)
             break;
          last_swiz = swiz;
 
-         stage_prog_data->param[uniform_index++] =
+         prog_data->param[uniform_index++] =
             &prog->Parameters->ParameterValues[index][swiz];
       }
    }
@@ -1240,7 +1246,7 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
 
       /* Get the arguments of the atomic intrinsic. */
       const fs_reg offset = get_nir_src(instr->src[0]);
-      const unsigned surface = (stage_prog_data->binding_table.abo_start +
+      const unsigned surface = (prog_data->binding_table.abo_start +
                                 instr->const_index[0]);
       fs_reg tmp;
 
@@ -1268,7 +1274,7 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       bld.MOV(retype(dest, BRW_REGISTER_TYPE_UD), tmp);
 
       /* Mark the surface as used. */
-      brw_mark_surface_used(stage_prog_data, surface);
+      brw_mark_surface_used(prog_data, surface);
       break;
    }
 
@@ -1370,7 +1376,7 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       fs_reg surf_index;
 
       if (const_index) {
-         surf_index = fs_reg(stage_prog_data->binding_table.ubo_start +
+         surf_index = fs_reg(prog_data->binding_table.ubo_start +
                              const_index->u[0]);
       } else {
          /* The block index is not a constant. Evaluate the index expression
@@ -1379,15 +1385,15 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
           */
          surf_index = vgrf(glsl_type::uint_type);
          bld.ADD(surf_index, get_nir_src(instr->src[0]),
-                 fs_reg(stage_prog_data->binding_table.ubo_start));
+                 fs_reg(prog_data->binding_table.ubo_start));
          surf_index = bld.emit_uniformize(surf_index);
 
          /* Assume this may touch any UBO. It would be nice to provide
           * a tighter bound, but the array information is already lowered away.
           */
          brw_mark_surface_used(prog_data,
-                               stage_prog_data->binding_table.ubo_start +
-                               shader_prog->NumUniformBlocks - 1);
+                               prog_data->binding_table.ubo_start +
+                               20 /* XXX: shader_prog->NumUniformBlocks - 1 */);
       }
 
       if (has_indirect) {
@@ -1666,9 +1672,9 @@ fs_visitor::nir_emit_texture(const fs_builder &bld, nir_tex_instr *instr)
          /* Figure out the highest possible sampler index and mark it as used */
          uint32_t max_used = sampler + instr->sampler_array_size - 1;
          if (instr->op == nir_texop_tg4 && devinfo->gen < 8) {
-            max_used += stage_prog_data->binding_table.gather_texture_start;
+            max_used += prog_data->binding_table.gather_texture_start;
          } else {
-            max_used += stage_prog_data->binding_table.texture_start;
+            max_used += prog_data->binding_table.texture_start;
          }
          brw_mark_surface_used(prog_data, max_used);
 

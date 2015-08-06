@@ -4689,8 +4689,9 @@ fs_visitor::optimize()
                                                                         \
       if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER) && this_progress) {   \
          char filename[64];                                             \
-         snprintf(filename, 64, "%s%d-%04d-%02d-%02d-" #pass,              \
-                  stage_abbrev, dispatch_width, shader_prog ? shader_prog->Name : 0, iteration, pass_num); \
+         snprintf(filename, 64, "%s%d-%04d-%02d-%02d-" #pass,           \
+                  stage_abbrev, dispatch_width, 42 /* XXX */,           \
+                  iteration, pass_num);                                 \
                                                                         \
          backend_shader::dump_instructions(filename);                   \
       }                                                                 \
@@ -4702,8 +4703,7 @@ fs_visitor::optimize()
    if (unlikely(INTEL_DEBUG & DEBUG_OPTIMIZER)) {
       char filename[64];
       snprintf(filename, 64, "%s%d-%04d-00-start",
-               stage_abbrev, dispatch_width,
-               shader_prog ? shader_prog->Name : 0);
+               stage_abbrev, dispatch_width, 42 /* XXX */);
 
       backend_shader::dump_instructions(filename);
    }
@@ -4972,7 +4972,6 @@ bool
 fs_visitor::run_cs()
 {
    assert(stage == MESA_SHADER_COMPUTE);
-   assert(shader);
 
    sanity_param_count = prog->Parameters->NumParameters;
 

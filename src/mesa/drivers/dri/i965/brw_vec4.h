@@ -100,6 +100,7 @@ public:
       return dst_reg(retype(brw_null_reg(), BRW_REGISTER_TYPE_UD));
    }
 
+   struct gl_program * const prog;
    const struct brw_vue_prog_key * const key;
    struct brw_vue_prog_data * const prog_data;
    struct gl_shader_program * const shader_prog;

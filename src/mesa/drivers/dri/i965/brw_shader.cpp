@@ -904,17 +904,13 @@ brw_abs_immediate(enum brw_reg_type type, struct brw_reg *reg)
 backend_shader::backend_shader(const struct brw_compiler *compiler,
                                void *log_data,
                                void *mem_ctx,
-                               struct gl_shader_program *shader_prog,
                                struct gl_program *prog,
                                struct brw_stage_prog_data *stage_prog_data,
                                gl_shader_stage stage)
    : compiler(compiler),
      log_data(log_data),
      devinfo(compiler->devinfo),
-     shader(shader_prog ?
-        (struct brw_shader *)shader_prog->_LinkedShaders[stage] : NULL),
-     shader_prog(shader_prog),
-     prog(prog),
+     gl_prog(prog),
      stage_prog_data(stage_prog_data),
      mem_ctx(mem_ctx),
      cfg(NULL),
@@ -1361,14 +1357,13 @@ backend_shader::invalidate_cfg()
 void
 backend_shader::assign_common_binding_table_offsets(uint32_t next_binding_table_offset)
 {
-   int num_textures = _mesa_fls(prog->SamplersUsed);
-
+   nir_shader_info *info = &gl_prog->nir->info;
    stage_prog_data->binding_table.texture_start = next_binding_table_offset;
-   next_binding_table_offset += num_textures;
+   next_binding_table_offset += info->num_textures;
 
-   if (shader) {
+   if (info->num_ubos > 0) {
       stage_prog_data->binding_table.ubo_start = next_binding_table_offset;
-      next_binding_table_offset += shader->base.NumUniformBlocks;
+      next_binding_table_offset += info->num_ubos;
    } else {
       stage_prog_data->binding_table.ubo_start = 0xd0d0d0d0;
    }
@@ -1380,28 +1375,28 @@ backend_shader::assign_common_binding_table_offsets(uint32_t next_binding_table_
       stage_prog_data->binding_table.shader_time_start = 0xd0d0d0d0;
    }
 
-   if (prog->UsesGather) {
+   if (info->uses_texture_gather) {
       if (devinfo->gen >= 8) {
          stage_prog_data->binding_table.gather_texture_start =
             stage_prog_data->binding_table.texture_start;
       } else {
          stage_prog_data->binding_table.gather_texture_start = next_binding_table_offset;
-         next_binding_table_offset += num_textures;
+         next_binding_table_offset += info->num_textures;
       }
    } else {
       stage_prog_data->binding_table.gather_texture_start = 0xd0d0d0d0;
    }
 
-   if (shader_prog && shader_prog->NumAtomicBuffers) {
+   if (info->num_abos > 0) {
       stage_prog_data->binding_table.abo_start = next_binding_table_offset;
-      next_binding_table_offset += shader_prog->NumAtomicBuffers;
+      next_binding_table_offset += info->num_abos;
    } else {
       stage_prog_data->binding_table.abo_start = 0xd0d0d0d0;
    }
 
-   if (shader && shader->base.NumImages) {
+   if (info->num_images > 0) {
       stage_prog_data->binding_table.image_start = next_binding_table_offset;
-      next_binding_table_offset += shader->base.NumImages;
+      next_binding_table_offset += info->num_images;
    } else {
       stage_prog_data->binding_table.image_start = 0xd0d0d0d0;
    }

@@ -234,8 +234,7 @@ public:
    void *log_data; /* Passed to compiler->*_log functions */
 
    const struct brw_device_info * const devinfo;
-   struct brw_shader * const shader;
-   struct gl_program * const prog;
+   struct gl_program *const gl_prog;
    struct brw_stage_prog_data * const stage_prog_data;
 
    /** ralloc context for temporary data used during compile */
