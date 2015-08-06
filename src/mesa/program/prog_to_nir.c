@@ -1117,6 +1117,16 @@ prog_to_nir(const struct gl_program *prog,
 
    ptn_add_output_stores(c);
 
+   s->info.name = ralloc_asprintf(s, "ARB%d", prog->Id);
+   s->info.num_textures = _mesa_fls(prog->SamplersUsed);
+   s->info.num_ubos = 0;
+   s->info.num_abos = 0;
+   s->info.num_images = 0;
+   s->info.inputs_read = prog->InputsRead;
+   s->info.outputs_written = prog->OutputsWritten;
+   s->info.uses_texture_gather = false;
+   s->info.uses_clip_distance_out = false;
+
 fail:
    if (c->error) {
       ralloc_free(s);

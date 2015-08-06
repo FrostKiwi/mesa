@@ -1434,6 +1434,30 @@ typedef struct nir_shader_compiler_options {
    bool native_integers;
 } nir_shader_compiler_options;
 
+typedef struct nir_shader_info {
+   const char *name;
+
+   /* Number of textures used by this shader */
+   unsigned num_textures;
+   /* Number of uniform buffers used by this shader */
+   unsigned num_ubos;
+   /* Number of atomic buffers used by this shader */
+   unsigned num_abos;
+   /* Number of images used by this shader */
+   unsigned num_images;
+
+   /* Which inputs are actually read */
+   uint64_t inputs_read;
+   /* Which outputs are actually written */
+   uint64_t outputs_written;
+
+   /* Whether or not this shader ever uses textureGather() */
+   bool uses_texture_gather;
+
+   /* Whether or not this shader uses the gl_ClipDistance output */
+   bool uses_clip_distance_out;
+} nir_shader_info;
+
 typedef struct nir_shader {
    /** hash table of name -> uniform nir_variable */
    struct exec_list uniforms;
@@ -1450,6 +1474,9 @@ typedef struct nir_shader {
     * copy by the driver.
     */
    const struct nir_shader_compiler_options *options;
+
+   /** Various bits of compile-time information about a given shader */
+   struct nir_shader_info info;
 
    /** list of global variables in the shader */
    struct exec_list globals;
