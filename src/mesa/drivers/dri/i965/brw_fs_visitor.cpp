@@ -92,7 +92,7 @@ fs_visitor::rescale_texcoord(fs_reg coordinate, int coord_components,
        (devinfo->gen < 6 ||
         (devinfo->gen >= 6 && (key_tex->gl_clamp_mask[0] & (1 << sampler) ||
                                key_tex->gl_clamp_mask[1] & (1 << sampler))))) {
-      struct gl_program_parameter_list *params = prog->Parameters;
+      struct gl_program_parameter_list *params = gl_prog->Parameters;
       int tokens[STATE_LENGTH] = {
 	 STATE_INTERNAL,
 	 STATE_TEXRECT_SCALE,
@@ -781,7 +781,7 @@ fs_visitor::emit_single_fb_write(const fs_builder &bld,
    fs_reg src_depth;
 
    if (source_depth_to_render_target) {
-      if (prog->OutputsWritten & BITFIELD64_BIT(FRAG_RESULT_DEPTH))
+      if (nir_info->outputs_written & BITFIELD64_BIT(FRAG_RESULT_DEPTH))
          src_depth = frag_depth;
       else
          src_depth = fs_reg(brw_vec8_grf(payload.source_depth_reg, 0));
@@ -899,7 +899,7 @@ void fs_visitor::compute_clip_distance(gl_clip_plane *clip_planes)
       (const struct brw_vue_prog_key *) this->key;
 
    /* Bail unless some sort of legacy clipping is enabled */
-   if (!key->userclip_active || prog->UsesClipDistanceOut)
+   if (!key->userclip_active || nir_info->uses_clip_distance_out)
       return;
 
    /* From the GLSL 1.30 spec, section 7.1 (Vertex Shader Special Variables):
@@ -1152,7 +1152,7 @@ fs_visitor::fs_visitor(const struct brw_compiler *compiler, void *log_data,
                        unsigned dispatch_width,
                        int shader_time_index)
    : backend_shader(compiler, log_data, mem_ctx, prog, prog_data, stage),
-     key(key), prog_data(prog_data),
+     key(key), nir_info(&prog->nir->info), prog_data(prog_data),
      dispatch_width(dispatch_width),
      shader_time_index(shader_time_index),
      promoted_constants(0),

@@ -127,7 +127,7 @@ void fs_visitor::setup_payload_gen4()
    GLuint reg = 2;
    bool kill_stats_promoted_workaround = false;
    int lookup = key->iz_lookup;
-   bool uses_depth = (prog->Base.InputsRead & (1 << VARYING_SLOT_POS)) != 0;
+   bool uses_depth = (nir_info->inputs_read & (1 << VARYING_SLOT_POS)) != 0;
 
    assert(lookup < IZ_BIT_MAX);
 

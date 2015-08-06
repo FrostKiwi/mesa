@@ -103,6 +103,7 @@ public:
    struct gl_program * const prog;
    const struct brw_vue_prog_key * const key;
    struct brw_vue_prog_data * const prog_data;
+   struct brw_shader * const shader;
    struct gl_shader_program * const shader_prog;
    unsigned int sanity_param_count;
 

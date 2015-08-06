@@ -305,6 +305,7 @@ public:
 
    const void *const key;
    const struct brw_sampler_prog_key_data *key_tex;
+   const struct nir_shader_info *nir_info;
 
    struct brw_stage_prog_data *prog_data;
    unsigned int sanity_param_count;

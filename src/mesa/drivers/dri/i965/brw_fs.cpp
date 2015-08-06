@@ -1401,7 +1401,7 @@ fs_visitor::calculate_urb_setup()
    int urb_next = 0;
    /* Figure out where each of the incoming setup attributes lands. */
    if (devinfo->gen >= 6) {
-      if (_mesa_bitcount_64(prog->InputsRead &
+      if (_mesa_bitcount_64(nir_info->inputs_read &
                             BRW_FS_VARYING_INPUT_MASK) <= 16) {
          /* The SF/SBE pipeline stage can do arbitrary rearrangement of the
           * first 16 varying inputs, so we can put them wherever we want.
@@ -1413,7 +1413,7 @@ fs_visitor::calculate_urb_setup()
           * a different vertex (or geometry) shader.
           */
          for (unsigned int i = 0; i < VARYING_SLOT_MAX; i++) {
-            if (prog->InputsRead & BRW_FS_VARYING_INPUT_MASK &
+            if (nir_info->inputs_read & BRW_FS_VARYING_INPUT_MASK &
                 BITFIELD64_BIT(i)) {
                prog_data->urb_setup[i] = urb_next++;
             }
@@ -1436,7 +1436,7 @@ fs_visitor::calculate_urb_setup()
              * unused.
              */
             if (varying != BRW_VARYING_SLOT_COUNT &&
-                (prog->InputsRead & BRW_FS_VARYING_INPUT_MASK &
+                (nir_info->inputs_read & BRW_FS_VARYING_INPUT_MASK &
                  BITFIELD64_BIT(varying))) {
                prog_data->urb_setup[varying] = slot - first_slot;
             }
@@ -1469,7 +1469,7 @@ fs_visitor::calculate_urb_setup()
        *
        * See compile_sf_prog() for more info.
        */
-      if (prog->InputsRead & BITFIELD64_BIT(VARYING_SLOT_PNTC))
+      if (nir_info->inputs_read & BITFIELD64_BIT(VARYING_SLOT_PNTC))
          prog_data->urb_setup[VARYING_SLOT_PNTC] = urb_next++;
    }
 
@@ -4534,7 +4534,7 @@ void
 fs_visitor::setup_payload_gen6()
 {
    bool uses_depth =
-      (prog->InputsRead & (1 << VARYING_SLOT_POS)) != 0;
+      (nir_info->inputs_read & (1 << VARYING_SLOT_POS)) != 0;
    unsigned barycentric_interp_modes =
       (stage == MESA_SHADER_FRAGMENT) ?
       ((brw_wm_prog_data*) this->prog_data)->barycentric_interp_modes : 0;
@@ -4606,7 +4606,7 @@ fs_visitor::setup_payload_gen6()
    /* R34-: bary for 32-pixel. */
    /* R58-59: interp W for 32-pixel. */
 
-   if (prog->OutputsWritten & BITFIELD64_BIT(FRAG_RESULT_DEPTH)) {
+   if (nir_info->outputs_written & BITFIELD64_BIT(FRAG_RESULT_DEPTH)) {
       source_depth_to_render_target = true;
    }
 }
