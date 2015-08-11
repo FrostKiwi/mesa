@@ -234,8 +234,10 @@ public:
    bool opt_cmod_propagation();
    bool opt_zero_samples();
    void emit_unspill(bblock_t *block, fs_inst *inst, fs_reg *reg,
-                     uint32_t scratch_offset, int count);
-   void emit_spill(bblock_t *block, fs_inst *inst, uint32_t scratch_offset);
+                     uint32_t scratch_offset, int count,
+                     bool use_high_mrf);
+   void emit_spill(bblock_t *block, fs_inst *inst, uint32_t scratch_offset,
+                   bool use_high_mrf);
 
    void emit_nir_code();
    void nir_setup_inputs(nir_shader *shader);

@@ -1342,7 +1342,8 @@ fs_visitor::emit_discard_jump()
 
 void
 fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg *dst,
-                         uint32_t scratch_offset, int count)
+                         uint32_t scratch_offset, int count,
+                         bool use_high_mrf)
 {
    fs_reg spill_reg(GRF, alloc.allocate(count));
 
@@ -1368,7 +1369,7 @@ fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg *dst,
       unspill_inst->regs_written = reg_size;
 
       if (!gen7_read) {
-         unspill_inst->base_mrf = 14;
+         unspill_inst->base_mrf = use_high_mrf ? 14 : 1;
          unspill_inst->mlen = 1; /* header contains offset */
       }
 
@@ -1385,7 +1386,7 @@ fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg *dst,
  */
 void
 fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
-                       uint32_t scratch_offset)
+                       uint32_t scratch_offset, bool use_high_mrf)
 {
    /* If we're immediately spilling the register, we should not use
     * destination dependency hints.  Doing so will cause the GPU do
@@ -1408,7 +1409,7 @@ fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
       spill_reg = inst->dst;
 
       emit_unspill(block, inst, &spill_reg, scratch_offset,
-                   inst->regs_written);
+                   inst->regs_written, use_high_mrf);
    } else {
       spill_reg = fs_reg(GRF, alloc.allocate(inst->regs_written));
    }
@@ -1416,9 +1417,9 @@ fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
    scratch_offset += inst->dst.reg_offset * REG_SIZE;
 
    int reg_size = 1;
-   int spill_base_mrf = 14;
+   int spill_base_mrf = use_high_mrf ? 14 : 2;
    if (dispatch_width == 16 && inst->regs_written % 2 == 0) {
-      spill_base_mrf = 13;
+      spill_base_mrf--;
       reg_size = 2;
    }
 

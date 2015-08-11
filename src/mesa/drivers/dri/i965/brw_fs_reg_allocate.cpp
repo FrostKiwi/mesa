@@ -815,13 +815,13 @@ fs_visitor::spill_reg(int spill_reg)
 	 if (inst->src[i].file == GRF &&
 	     inst->src[i].reg == spill_reg) {
             emit_unspill(block, inst, &inst->src[i], spill_offset,
-                         inst->regs_read(i));
+                         inst->regs_read(i), true);
 	 }
       }
 
       if (inst->dst.file == GRF &&
 	  inst->dst.reg == spill_reg) {
-         emit_spill(block, inst, spill_offset);
+         emit_spill(block, inst, spill_offset, true);
       }
    }
 
