@@ -1342,7 +1342,7 @@ fs_visitor::emit_discard_jump()
 
 void
 fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
-                         uint32_t spill_offset, int count)
+                         uint32_t scratch_offset, int count)
 {
    int reg_size = 1;
    if (dispatch_width == 16 && count % 2 == 0)
@@ -1354,12 +1354,13 @@ fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
 
    for (int i = 0; i < count / reg_size; i++) {
       /* The gen7 descriptor-based offset is 12 bits of HWORD units. */
-      bool gen7_read = devinfo->gen >= 7 && spill_offset < (1 << 12) * REG_SIZE;
+      bool gen7_read = devinfo->gen >= 7 &&
+                       scratch_offset < (1 << 12) * REG_SIZE;
       fs_inst *unspill_inst = ibld.emit(gen7_read ?
                                         SHADER_OPCODE_GEN7_SCRATCH_READ :
                                         SHADER_OPCODE_GEN4_SCRATCH_READ,
                                         dst);
-      unspill_inst->offset = spill_offset;
+      unspill_inst->offset = scratch_offset;
       unspill_inst->regs_written = reg_size;
 
       if (!gen7_read) {
@@ -1368,13 +1369,13 @@ fs_visitor::emit_unspill(bblock_t *block, fs_inst *inst, fs_reg dst,
       }
 
       dst.reg_offset += reg_size;
-      spill_offset += reg_size * REG_SIZE;
+      scratch_offset += reg_size * REG_SIZE;
    }
 }
 
 void
 fs_visitor::emit_spill(bblock_t *block, fs_inst *inst, fs_reg src,
-                       uint32_t spill_offset, int count)
+                       uint32_t scratch_offset, int count)
 {
    int reg_size = 1;
    int spill_base_mrf = 14;
@@ -1391,7 +1392,7 @@ fs_visitor::emit_spill(bblock_t *block, fs_inst *inst, fs_reg src,
       fs_inst *spill_inst =
          ibld.emit(SHADER_OPCODE_GEN4_SCRATCH_WRITE, ibld.null_reg_f(), src);
       src.reg_offset += reg_size;
-      spill_inst->offset = spill_offset + i * reg_size * REG_SIZE;
+      spill_inst->offset = scratch_offset + i * reg_size * REG_SIZE;
       spill_inst->mlen = 1 + reg_size; /* header, value */
       spill_inst->base_mrf = spill_base_mrf;
    }
