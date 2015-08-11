@@ -1410,31 +1410,35 @@ fs_visitor::emit_spill(bblock_t *block, fs_inst *inst,
       emit_unspill(block, inst, &spill_reg, scratch_offset,
                    inst->regs_written);
    } else {
-      spill_reg = fs_reg(GRF, alloc.allocate(inst->regs_written));
+      spill_reg = fs_reg(GRF, alloc.allocate(inst->regs_written),
+                         inst->dst.type);
    }
 
    scratch_offset += inst->dst.reg_offset * REG_SIZE;
 
-   int reg_size = 1;
-   int spill_base_mrf = 14;
-   if (dispatch_width == 16 && inst->regs_written % 2 == 0) {
-      spill_base_mrf = 13;
-      reg_size = 2;
-   }
+   /* By the time we get to spilling, all LOAD_PAYLOAD operations should be
+    * lowered away.  This is good because they're the only instructions that
+    * do funny things with their destinations.
+    */
+   assert(inst->opcode != SHADER_OPCODE_LOAD_PAYLOAD);
 
-   const fs_builder ibld = bld.annotate(inst->annotation, inst->ir)
-                              .group(reg_size * 8, 0)
-                              .at(block, inst->next);
+   const fs_builder ibld = fs_builder(this, block, inst).at(block, inst->next);
+
+   const int spill_base_mrf = inst->exec_size == 8 ? 14 : 13;
+
+   const int comp_size = inst->dst.component_size(inst->exec_size);
+   assert(comp_size % REG_SIZE == 0);
+   const int reg_size = comp_size / REG_SIZE;
+   assert(inst->regs_written % reg_size == 0);
 
    for (int i = 0; i < inst->regs_written / reg_size; i++) {
       fs_inst *spill_inst = ibld.emit(SHADER_OPCODE_GEN4_SCRATCH_WRITE,
                                       ibld.null_reg_f(), spill_reg);
-      spill_inst->offset = scratch_offset;
+      spill_inst->offset = scratch_offset + spill_reg.reg_offset * REG_SIZE;
       spill_inst->mlen = 1 + reg_size; /* header, value */
       spill_inst->base_mrf = spill_base_mrf;
 
-      spill_reg.reg_offset += reg_size;
-      scratch_offset += reg_size * REG_SIZE;
+      spill_reg = offset(spill_reg, ibld, 1);
    }
 
    inst->dst.reg = spill_reg.reg;
