@@ -1810,6 +1810,12 @@ fs_visitor::assign_constant_locations()
          if (inst->src[i].reladdr) {
             int uniform = inst->src[i].reg;
 
+            /* Mark everything in the array as live */
+            for (int j = uniform; j < uniform + param_size[uniform]; j++) {
+               if (j >= 0 && j < (int) uniforms)
+                  is_live[j] = true;
+            }
+
             /* If this array isn't already present in the pull constant buffer,
              * add it.
              */
