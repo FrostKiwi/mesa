@@ -1792,9 +1792,7 @@ fs_visitor::compact_virtual_grfs()
  * maximum number of fragment shader uniform components (64).  If
  * there are too many of these, they'd fill up all of register space.
  * So, this will push some of them out to the pull constant buffer and
- * update the program to load them.  We also use pull constants for all
- * indirect constant loads because we don't support indirect accesses in
- * registers yet.
+ * update the program to load them.
  */
 void
 fs_visitor::assign_constant_locations()
@@ -1811,12 +1809,15 @@ fs_visitor::assign_constant_locations()
    bool is_live[uniforms];
    memset(is_live, 0, sizeof(is_live));
 
+   bool has_indirect[uniforms];
+   memset(has_indirect, 0, sizeof(has_indirect));
+
    /* First, we walk through the instructions and do two things:
     *
     *  1) Figure out which uniforms are live.
     *
-    *  2) Find all indirect access of uniform arrays and flag them as needing
-    *     to go into the pull constant buffer.
+    *  2) Find all indirect access of uniform arrays and, if the array is too
+    *     large, flag it as needing to go into the pull constant buffer.
     *
     * Note that we don't move constant-indexed accesses to arrays.  No
     * testing has been done of the performance impact of this choice.
@@ -1829,16 +1830,22 @@ fs_visitor::assign_constant_locations()
          if (inst->src[i].reladdr) {
             int uniform = inst->src[i].reg;
 
+            has_indirect[uniform] = true;
+
             /* Mark everything in the array as live */
             for (int j = uniform; j < uniform + param_size[uniform]; j++) {
                if (j >= 0 && j < (int) uniforms)
                   is_live[j] = true;
             }
 
-            /* If this array isn't already present in the pull constant buffer,
-             * add it.
+            /* For small (less than 16) uniforms, we might as well go ahead
+             * and push them if we can.  However, for large arrays, we don't
+             * even consider it; instead, we just flag them for pushing if we
+             * haven't already.
+             *
+             * FINISHME: We should put more thought into this number.
              */
-            if (pull_constant_loc[uniform] == -1) {
+            if (param_size[uniform] > 32 && pull_constant_loc[uniform] == -1) {
                assert(param_size[uniform]);
                for (int j = 0; j < param_size[uniform]; j++)
                   pull_constant_loc[uniform + j] = num_pull_constants++;
@@ -1865,25 +1872,30 @@ fs_visitor::assign_constant_locations()
 
    push_constant_loc = ralloc_array(mem_ctx, int, uniforms);
 
-   for (unsigned int i = 0; i < uniforms; i++) {
+   for (unsigned int i = 0; i < uniforms;) {
       if (!is_live[i] || pull_constant_loc[i] != -1) {
          /* This UNIFORM register is either dead, or has already been demoted
           * to a pull const.  Mark it as no longer living in the param[] array.
           */
          push_constant_loc[i] = -1;
+         i++;
          continue;
       }
 
-      if (num_push_constants < max_push_components) {
-         /* Retain as a push constant.  Record the location in the params[]
-          * array.
-          */
-         push_constant_loc[i] = num_push_constants++;
+      unsigned int size = has_indirect[i] ? param_size[i] : 1;
+
+      if (num_push_constants + size <= max_push_components) {
+         /* Flag as a push constant. */
+         for (unsigned j = 0; j < size; ++j)
+            push_constant_loc[i + j] = num_push_constants++;
       } else {
          /* Demote to a pull constant. */
-         push_constant_loc[i] = -1;
-         pull_constant_loc[i] = num_pull_constants++;
+         for (unsigned j = 0; j < size; ++j) {
+            push_constant_loc[i + j] = -1;
+            pull_constant_loc[i + j] = num_pull_constants++;
+         }
       }
+      i += size;
    }
 
    stage_prog_data->nr_params = num_push_constants;
