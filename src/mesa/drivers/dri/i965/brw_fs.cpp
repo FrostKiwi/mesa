@@ -1920,37 +1920,64 @@ fs_visitor::lower_constant_loads()
 	 if (inst->src[i].file != UNIFORM)
 	    continue;
 
-         int pull_index;
          unsigned location = inst->src[i].reg + inst->src[i].reg_offset;
-         if (location >= uniforms) /* Out of bounds access */
-            pull_index = -1;
-         else
-            pull_index = pull_constant_loc[location];
 
-         if (pull_index == -1)
-	    continue;
+         if (location >= uniforms) /* Out of bounds access */
+            continue;
+
+         assert(inst->src[i].stride == 0);
 
          /* Set up the annotation tracking for new generated instructions. */
          const fs_builder ibld(this, block, inst);
          fs_reg surf_index(stage_prog_data->binding_table.pull_constants_start);
-         fs_reg dst = vgrf(glsl_type::float_type);
+         fs_reg dst = ibld.vgrf(inst->src[i].type, 1);
 
-         assert(inst->src[i].stride == 0);
+         if (push_constant_loc[location] != -1) {
+            if (inst->src[i].reladdr) {
+               fs_reg sources[4];
 
-         /* Generate a pull load into dst. */
-         if (inst->src[i].reladdr) {
-            VARYING_PULL_CONSTANT_LOAD(ibld, dst,
-                                       surf_index,
-                                       *inst->src[i].reladdr,
-                                       pull_index);
-            inst->src[i].reladdr = NULL;
-            inst->src[i].stride = 1;
-         } else {
-            const fs_builder ubld = ibld.exec_all().group(8, 0);
-            fs_reg offset = fs_reg((unsigned)(pull_index * 4) & ~15);
-            ubld.emit(FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD,
-                      dst, surf_index, offset);
-            inst->src[i].set_smear(pull_index & 3);
+               /* A stripped down "base register" */
+               sources[0] = inst->src[i];
+               sources[0].reg_offset = 0;
+               sources[0].reladdr = NULL;
+
+               /* The base offset in bytes */
+               sources[1] = fs_reg(inst->src[i].reg_offset * 4);
+
+               /* The indirect offset in bytes */
+               sources[2] = ibld.vgrf(BRW_REGISTER_TYPE_D, 1);
+               ibld.MUL(sources[2], *inst->src[i].reladdr, fs_reg(4));
+
+               /* The maximum possible total offset */
+               sources[3] = fs_reg((param_size[inst->src[i].reg] - 1) * 4);
+
+               ibld.emit(FS_OPCODE_PUSH_CONSTANT_LOAD, dst, sources, 4);
+
+               inst->src[i].reladdr = NULL;
+               inst->src[i].stride = 1;
+            } else {
+               /* We don't do anything for direct push constants loads.  Those
+                * are lowered later by assign_curb_setup();
+                */
+               continue;
+            }
+         } else if (pull_constant_loc[location] != -1) {
+            /* Generate a pull load into dst. */
+            int pull_index = pull_constant_loc[location];
+            if (inst->src[i].reladdr) {
+               VARYING_PULL_CONSTANT_LOAD(ibld, dst,
+                                          surf_index,
+                                          *inst->src[i].reladdr,
+                                          pull_index);
+               inst->src[i].reladdr = NULL;
+               inst->src[i].stride = 1;
+            } else {
+               const fs_builder ubld = ibld.exec_all().group(8, 0);
+               fs_reg offset = fs_reg((unsigned)(pull_index * 4) & ~15);
+               ubld.emit(FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD,
+                         dst, surf_index, offset);
+               inst->src[i].set_smear(pull_index & 3);
+            }
          }
 
          /* Rewrite the instruction to use the temporary VGRF. */
