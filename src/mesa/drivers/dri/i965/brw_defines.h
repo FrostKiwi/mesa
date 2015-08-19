@@ -1029,6 +1029,23 @@ enum opcode {
    FS_OPCODE_LINTERP,
    FS_OPCODE_PIXEL_X,
    FS_OPCODE_PIXEL_Y,
+
+   /**
+    * Loads a uniform push constant with an indirect.  This opcode takes four
+    * arguments:
+    *
+    *  0) The uniform register to load only without a NULL reladdr
+    *  1) An immediate base offset (in bytes)
+    *  2) A register indirect offset (in bytes)
+    *  3) The immediate value representing the maximum possible total offset.
+    *
+    * The base offset and indirect offset are added together to get a the
+    * total offset which is then added to the starting address of the register
+    * in src0.  The reason for the multiplicity of arguments is so that the
+    * range [reg, reg + regs_read()) is an accurate representation of all of
+    * the values that could be read by the instruction.
+    */
+   FS_OPCODE_PUSH_CONSTANT_LOAD,
    FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD,
    FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD_GEN7,
    FS_OPCODE_VARYING_PULL_CONSTANT_LOAD,

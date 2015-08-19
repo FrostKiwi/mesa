@@ -1031,6 +1031,72 @@ fs_generator::generate_scratch_read_gen7(fs_inst *inst, struct brw_reg dst)
 }
 
 void
+fs_generator::generate_push_constant_load(fs_inst *inst, struct brw_reg dst,
+                                          struct brw_reg reg,
+                                          struct brw_reg base_offset_reg,
+                                          struct brw_reg indirect)
+{
+   assert(base_offset_reg.file == BRW_IMMEDIATE_VALUE);
+   unsigned base_offset = base_offset_reg.dw1.ud;
+
+   /* Add in the register position to get the absolute offset */
+   base_offset += reg.nr * REG_SIZE + reg.subnr;
+
+   assert(indirect.type == BRW_REGISTER_TYPE_D ||
+          indirect.type == BRW_REGISTER_TYPE_UD);
+
+   if (indirect.file == BRW_IMMEDIATE_VALUE) {
+      base_offset += indirect.dw1.d;
+
+      reg.nr = base_offset / REG_SIZE;
+      reg.subnr = base_offset % REG_SIZE;
+      brw_MOV(p, dst, reg);
+   } else {
+      struct brw_reg addr = vec8(brw_address_reg(0));
+
+      /* The destination stride of an instruction (in bytes) must be greater
+       * than or equal to the size of the rest of the instruction.  Since the
+       * address register is of type UW, we can't use a D-type instruction.
+       * In order to get around this, re re-type to UW and use a stride.
+       */
+      indirect = spread(indirect, 2);
+      indirect.type = BRW_REGISTER_TYPE_UW;
+
+      if (devinfo->gen < 8) {
+         /* Prior to Broadwell, there are a couple silly restrictions that
+          * we have to work around.  First, we only have 8 address register
+          * entries so this is SIMD8-only.
+          */
+         assert(inst->exec_size <= 8);
+
+         /* Finally, the bottom 5 bits of the base offset and the bottom 5
+          * bits of the indirect must add to less than 32.  In other words,
+          * the hardware needs to be able to add the bottom five bits of the
+          * two to get the subnumber and add the next 7 bits of each to get
+          * the actual register number.  Since uniforms frequently cross
+          * register boundaries, this makes it almost useless.  We could try
+          * and do something clever where we use a actual base offset if
+          * base_offset % 32 == 0 but that would mean we were generating
+          * different code depending on the base offset.  Instead, for the
+          * sake of consistency, we'll just do the add ourselves.
+          */
+         brw_ADD(p, addr, indirect, brw_imm_uw(base_offset));
+         base_offset = 0;
+      } else {
+         /* On Broadwell and above, we have 16 address registers and
+          * everything seems to "just work".
+          */
+         brw_MOV(p, addr, indirect);
+      }
+
+      /* Get a VxH indirect for a0.0. */
+      struct brw_reg src = brw_VxH_indirect(0, base_offset);
+
+      brw_MOV(p, dst, retype(src, dst.type));
+   }
+}
+
+void
 fs_generator::generate_uniform_pull_constant_load(fs_inst *inst,
                                                   struct brw_reg dst,
                                                   struct brw_reg index,
@@ -1949,6 +2015,10 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
 
       case SHADER_OPCODE_URB_WRITE_SIMD8:
 	 generate_urb_write(inst, src[0]);
+	 break;
+
+      case FS_OPCODE_PUSH_CONSTANT_LOAD:
+	 generate_push_constant_load(inst, dst, src[0], src[1], src[2]);
 	 break;
 
       case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD:

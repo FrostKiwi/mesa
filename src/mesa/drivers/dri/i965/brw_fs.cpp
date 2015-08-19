@@ -796,6 +796,25 @@ fs_inst::regs_read(int arg) const
    case CS_OPCODE_CS_TERMINATE:
       return 1;
 
+   case FS_OPCODE_PUSH_CONSTANT_LOAD:
+      if (arg == 0) {
+         assert(src[3].file == IMM);
+         unsigned max_indirect = src[3].fixed_hw_reg.dw1.ud;
+
+         if (src[0].file == UNIFORM) {
+            return (max_indirect / 4) + 1;
+         } else {
+            /* This is the case after assign_curb_setup() */
+            assert(src[0].file == HW_REG);
+
+            struct brw_reg reg = src[0].fixed_hw_reg;
+            unsigned base_offset = reg.nr * REG_SIZE + reg.subnr;
+            unsigned max_offset = base_offset + max_indirect;
+            return (max_offset / REG_SIZE) - (base_offset / REG_SIZE) + 1;
+         }
+      }
+      break;
+
    default:
       if (is_tex() && arg == 0 && src[0].file == GRF)
          return mlen;
@@ -4234,6 +4253,10 @@ get_lowered_simd_width(const struct brw_device_info *devinfo,
    case SHADER_OPCODE_TYPED_SURFACE_READ_LOGICAL:
    case SHADER_OPCODE_TYPED_SURFACE_WRITE_LOGICAL:
       return 8;
+
+   case FS_OPCODE_PUSH_CONSTANT_LOAD:
+      /* Prior to BDW, we only have 8 address registers */
+      return devinfo->gen < 8 ? 8 : inst->exec_size;
 
    default:
       return inst->exec_size;
