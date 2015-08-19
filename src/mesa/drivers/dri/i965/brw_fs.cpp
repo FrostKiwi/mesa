@@ -1894,7 +1894,7 @@ fs_visitor::assign_constant_locations()
  * or VARYING_PULL_CONSTANT_LOAD instructions which load values into VGRFs.
  */
 void
-fs_visitor::demote_pull_constants()
+fs_visitor::lower_constant_loads()
 {
    foreach_block_and_inst (block, fs_inst, inst, cfg) {
       for (int i = 0; i < inst->sources; i++) {
@@ -4787,7 +4787,7 @@ fs_visitor::optimize()
    bld = fs_builder(this, 64);
 
    assign_constant_locations();
-   demote_pull_constants();
+   lower_constant_loads();
 
    split_virtual_grfs();
 
