@@ -1584,7 +1584,7 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
       brw_set_default_compression_control(p, BRW_COMPRESSION_COMPRESSED);
 
    int start_offset = p->next_insn_offset;
-   int spill_count = 0, fill_count = 0;
+   int spill_count = 0, fill_count = 0, pull_count = 0;
    int loop_count = 0;
 
    struct annotation_info annotation;
@@ -2023,18 +2023,22 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
 
       case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD:
 	 generate_uniform_pull_constant_load(inst, dst, src[0], src[1]);
+         pull_count++;
 	 break;
 
       case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD_GEN7:
 	 generate_uniform_pull_constant_load_gen7(inst, dst, src[0], src[1]);
+         pull_count++;
 	 break;
 
       case FS_OPCODE_VARYING_PULL_CONSTANT_LOAD:
 	 generate_varying_pull_constant_load(inst, dst, src[0], src[1]);
+         pull_count++;
 	 break;
 
       case FS_OPCODE_VARYING_PULL_CONSTANT_LOAD_GEN7:
 	 generate_varying_pull_constant_load_gen7(inst, dst, src[0], src[1]);
+         pull_count++;
 	 break;
 
       case FS_OPCODE_REP_FB_WRITE:
@@ -2195,10 +2199,12 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
 
    if (unlikely(debug_flag)) {
       fprintf(stderr, "Native code for %s\n"
-              "SIMD%d shader: %d instructions. %d loops. %d:%d spills:fills. Promoted %u constants. Compacted %d to %d"
+              "SIMD%d shader: %d instructions. %d loops. %d:%d spills:fills."
+              " %d uniform pulls. Promoted %u constants. Compacted %d to %d"
               " bytes (%.0f%%)\n",
               shader_name, dispatch_width, before_size / 16, loop_count,
-              spill_count, fill_count, promoted_constants, before_size, after_size,
+              spill_count, fill_count, promoted_constants, pull_count,
+              before_size, after_size,
               100.0f * (before_size - after_size) / before_size);
 
       dump_assembly(p->store, annotation.ann_count, annotation.ann,
@@ -2208,10 +2214,11 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
 
    compiler->shader_debug_log(log_data,
                               "%s SIMD%d shader: %d inst, %d loops, "
-                              "%d:%d spills:fills, Promoted %u constants, "
+                              "%d:%d spills:fills, %d uniform pulls, "
+                              "Promoted %u constants, "
                               "compacted %d to %d bytes.\n",
                               stage_abbrev, dispatch_width, before_size / 16,
-                              loop_count, spill_count, fill_count,
+                              loop_count, spill_count, fill_count, pull_count,
                               promoted_constants, before_size, after_size);
 
    return start_offset;
