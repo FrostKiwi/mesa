@@ -79,17 +79,23 @@ move_vec_src_uses_to_dest_block(nir_block *block, void *shader)
          continue; /* The loop */
       }
 
+      /* Can't handle non-SSA vec operations */
+      if (!vec->dest.dest.is_ssa)
+         continue;
+
       /* Can't handle saturation */
       if (vec->dest.saturate)
          continue;
-
-      assert(vec->dest.dest.is_ssa);
 
       /* First, mark all of the sources we are going to consider for rewriting
        * to the destination
        */
       int srcs_remaining = 0;
       for (unsigned i = 0; i < nir_op_infos[vec->op].num_inputs; i++) {
+         /* We can't rewrite a source if it's not in SSA form */
+         if (!vec->src[i].src.is_ssa)
+            continue;
+
          /* We can't rewrite a source if it has modifiers */
          if (vec->src[i].abs || vec->src[i].negate)
             continue;
@@ -97,9 +103,11 @@ move_vec_src_uses_to_dest_block(nir_block *block, void *shader)
          srcs_remaining |= 1 << i;
       }
 
-      for (unsigned i; i = ffs(srcs_remaining) - 1, srcs_remaining;) {
-         assert(vec->src[i].src.is_ssa);
+      /* We can't actually do anything with this instruction */
+      if (srcs_remaining == 0)
+         continue;
 
+      for (unsigned i; i = ffs(srcs_remaining) - 1, srcs_remaining;) {
          int8_t swizzle[4] = { -1, -1, -1, -1 };
 
          for (unsigned j = i; j < nir_op_infos[vec->op].num_inputs; j++) {
