@@ -39,6 +39,7 @@ namespace brw {
 
 struct copy_entry {
    src_reg *value[4];
+   vec4_instruction *inst[4];
    int saturatemask;
 };
 
@@ -320,7 +321,8 @@ try_copy_propagate(const struct brw_device_info *devinfo,
 
    if (has_source_modifiers &&
        value.type != inst->src[arg].type &&
-       !can_change_source_types(inst))
+       !can_change_source_types(inst) &&
+       !can_change_source_types(entry->inst[arg]))
       return false;
 
    if (has_source_modifiers &&
@@ -338,7 +340,8 @@ try_copy_propagate(const struct brw_device_info *devinfo,
     * instead. See also resolve_ud_negate().
     */
    if (value.negate &&
-       value.type == BRW_REGISTER_TYPE_UD)
+       value.type == BRW_REGISTER_TYPE_UD &&
+       !can_change_source_types(entry->inst[arg]))
       return false;
 
    /* Don't report progress if this is a noop. */
@@ -376,17 +379,25 @@ try_copy_propagate(const struct brw_device_info *devinfo,
 
    if (has_source_modifiers &&
        value.type != inst->src[arg].type) {
-      /* We are propagating source modifiers from a MOV with a different
-       * type.  If we got here, then we can just change the source and
-       * destination types of the instruction and keep going.
+      /* We are propagating source modifiers from a safe instruction with a
+       * different type. If we got here, then we can just change the source
+       * and destination types of the current instruction or the instruction
+       * from we are propagating.
        */
-      assert(can_change_source_types(inst));
-      for (int i = 0; i < 3; i++) {
-         inst->src[i].type = value.type;
+      assert(can_change_source_types(inst) ||
+             can_change_source_types(entry->inst[arg]));
+
+      if (can_change_source_types(inst)) {
+         for (int i = 0; i < 3; i++) {
+            inst->src[i].type = value.type;
+         }
+         inst->dst.type = value.type;
+      } else {
+         value.type = inst->src[arg].type;
       }
-      inst->dst.type = value.type;
-   } else
+   } else {
       value.type = inst->src[arg].type;
+   }
    inst->src[arg] = value;
    return true;
 }
@@ -439,7 +450,7 @@ vec4_visitor::opt_copy_propagation(bool do_constant_prop)
 	 for (c = 0; c < 4; c++) {
             int channel = BRW_GET_SWZ(inst->src[i].swizzle, c);
             entry.value[c] = entries[reg].value[channel];
-
+            entry.inst[c] = entries[reg].inst[channel];
 	    /* If there's no available copy for this channel, bail.
 	     * We could be more aggressive here -- some channels might
 	     * not get used based on the destination writemask.
@@ -484,6 +495,7 @@ vec4_visitor::opt_copy_propagation(bool do_constant_prop)
                entries[reg].value[i] = direct_copy ? &inst->src[0] : NULL;
                entries[reg].saturatemask |=
                   inst->saturate && direct_copy ? 1 << i : 0;
+               entries[reg].inst[i] = direct_copy ? inst : NULL;
             }
 	 }
 
@@ -498,6 +510,7 @@ vec4_visitor::opt_copy_propagation(bool do_constant_prop)
 		  if (is_channel_updated(inst, entries[i].value, j)) {
 		     entries[i].value[j] = NULL;
 		     entries[i].saturatemask &= ~(1 << j);
+                     entries[i].inst[j] = NULL;
                   }
 	       }
 	    }
