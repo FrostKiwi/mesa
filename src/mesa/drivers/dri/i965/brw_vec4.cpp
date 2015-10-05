@@ -1969,7 +1969,7 @@ brw_vs_emit(struct brw_context *brw,
 
       fs_generator g(brw->intelScreen->compiler, brw,
                      mem_ctx, (void *) key, &prog_data->base.base,
-                     &vp->Base, v.promoted_constants,
+                     v.promoted_constants,
                      v.runtime_check_aads_emit, "VS");
       if (INTEL_DEBUG & DEBUG_VS) {
          char *name;

@@ -5167,7 +5167,7 @@ brw_wm_fs_emit(struct brw_context *brw,
 
    fs_generator g(brw->intelScreen->compiler, brw,
                   mem_ctx, (void *) key, &prog_data->base,
-                  &fp->Base, v.promoted_constants, v.runtime_check_aads_emit, "FS");
+                  v.promoted_constants, v.runtime_check_aads_emit, "FS");
 
    if (unlikely(INTEL_DEBUG & DEBUG_WM)) {
       char *name;
@@ -5323,7 +5323,7 @@ brw_cs_emit(struct brw_context *brw,
    }
 
    fs_generator g(brw->intelScreen->compiler, brw,
-                  mem_ctx, (void*) key, &prog_data->base, &cp->Base,
+                  mem_ctx, (void*) key, &prog_data->base,
                   v8.promoted_constants, v8.runtime_check_aads_emit, "CS");
    if (INTEL_DEBUG & DEBUG_CS) {
       char *name = ralloc_asprintf(mem_ctx, "%s compute shader %d",
