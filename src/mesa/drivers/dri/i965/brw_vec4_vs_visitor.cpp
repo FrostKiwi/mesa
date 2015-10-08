@@ -77,7 +77,8 @@ vec4_vs_visitor::emit_prolog()
             /* ES 3.0 has different rules for converting signed normalized
              * fixed-point numbers than desktop GL.
              */
-            if ((wa_flags & BRW_ATTRIB_WA_SIGN) && !use_legacy_snorm_formula) {
+            if ((wa_flags & BRW_ATTRIB_WA_SIGN) &&
+                !key->use_legacy_snorm_formula) {
                /* According to equation 2.2 of the ES 3.0 specification,
                 * signed normalization conversion is done by:
                 *
@@ -304,14 +305,12 @@ vec4_vs_visitor::vec4_vs_visitor(const struct brw_compiler *compiler,
                                  const nir_shader *shader,
                                  gl_clip_plane *clip_planes,
                                  void *mem_ctx,
-                                 int shader_time_index,
-                                 bool use_legacy_snorm_formula)
+                                 int shader_time_index)
    : vec4_visitor(compiler, log_data, &key->tex, &vs_prog_data->base, shader,
                   mem_ctx, false /* no_spills */, shader_time_index),
      key(key),
      vs_prog_data(vs_prog_data),
-     clip_planes(clip_planes),
-     use_legacy_snorm_formula(use_legacy_snorm_formula)
+     clip_planes(clip_planes)
 {
 }
 

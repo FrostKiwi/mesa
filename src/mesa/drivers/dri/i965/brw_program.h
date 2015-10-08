@@ -91,6 +91,8 @@ struct brw_vs_prog_key {
 
    bool clamp_vertex_color:1;
 
+   bool use_legacy_snorm_formula:1;
+
    /**
     * How many user clipping planes are being uploaded to the vertex shader as
     * push constants.

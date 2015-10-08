@@ -31,6 +31,7 @@
 
 
 #include "main/compiler.h"
+#include "main/context.h"
 #include "brw_context.h"
 #include "brw_vs.h"
 #include "brw_util.h"
@@ -328,6 +329,8 @@ brw_vs_populate_key(struct brw_context *brw,
       /* _NEW_LIGHT | _NEW_BUFFERS */
       key->clamp_vertex_color = ctx->Light._ClampVertexColor;
    }
+
+   key->use_legacy_snorm_formula = !_mesa_is_gles3(&brw->ctx);
 
    /* _NEW_POINT */
    if (brw->gen < 6 && ctx->Point.PointSprite) {

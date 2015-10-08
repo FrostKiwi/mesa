@@ -1992,8 +1992,7 @@ brw_vs_emit(struct brw_context *brw,
 
       vec4_vs_visitor v(brw->intelScreen->compiler, brw, key, prog_data,
                         vp->Base.nir, brw_select_clip_planes(&brw->ctx),
-                        mem_ctx, shader_time_index,
-                        !_mesa_is_gles3(&brw->ctx));
+                        mem_ctx, shader_time_index);
       if (!v.run()) {
          if (prog) {
             prog->LinkStatus = false;
