@@ -161,6 +161,8 @@ struct brw_vs_prog_key {
 
    bool clamp_vertex_color:1;
 
+   bool use_legacy_snorm_formula:1;
+
    /**
     * How many user clipping planes are being uploaded to the vertex shader as
     * push constants.
@@ -588,7 +590,6 @@ brw_compile_vs(const struct brw_compiler *compiler, void *log_data,
                struct brw_vs_prog_data *prog_data,
                const struct nir_shader *shader,
                gl_clip_plane *clip_planes,
-               bool use_legacy_snorm_formula,
                int shader_time_index,
                unsigned *final_assembly_size,
                char **error_str);

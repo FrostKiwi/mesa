@@ -1926,7 +1926,6 @@ brw_compile_vs(const struct brw_compiler *compiler, void *log_data,
                struct brw_vs_prog_data *prog_data,
                const nir_shader *shader,
                gl_clip_plane *clip_planes,
-               bool use_legacy_snorm_formula,
                int shader_time_index,
                unsigned *final_assembly_size,
                char **error_str)
@@ -1965,8 +1964,7 @@ brw_compile_vs(const struct brw_compiler *compiler, void *log_data,
       prog_data->base.dispatch_mode = DISPATCH_MODE_4X2_DUAL_OBJECT;
 
       vec4_vs_visitor v(compiler, log_data, key, prog_data,
-                        shader, clip_planes, mem_ctx,
-                        shader_time_index, use_legacy_snorm_formula);
+                        shader, clip_planes, mem_ctx, shader_time_index);
       if (!v.run()) {
          if (error_str)
             *error_str = ralloc_strdup(mem_ctx, v.fail_msg);

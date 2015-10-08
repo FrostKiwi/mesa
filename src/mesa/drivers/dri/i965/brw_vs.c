@@ -218,7 +218,6 @@ brw_codegen_vs_prog(struct brw_context *brw,
    program = brw_compile_vs(brw->intelScreen->compiler, brw, mem_ctx, key,
                             &prog_data, vp->program.Base.nir,
                             brw_select_clip_planes(&brw->ctx),
-                            !_mesa_is_gles3(&brw->ctx),
                             st_index, &program_size, &error_str);
    if (program == NULL) {
       if (prog) {
@@ -374,6 +373,8 @@ brw_vs_populate_key(struct brw_context *brw,
       /* _NEW_LIGHT | _NEW_BUFFERS */
       key->clamp_vertex_color = ctx->Light._ClampVertexColor;
    }
+
+   key->use_legacy_snorm_formula = !_mesa_is_gles3(&brw->ctx);
 
    /* _NEW_POINT */
    if (brw->gen < 6 && ctx->Point.PointSprite) {
