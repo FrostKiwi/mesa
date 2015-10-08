@@ -181,10 +181,10 @@ brw_codegen_vs_prog(struct brw_context *brw,
    /* Emit GEN4 code.
     */
    char *error_str;
-   program = brw_vs_emit(brw->intelScreen->compiler, brw, mem_ctx, key,
-                         &prog_data, vp->program.Base.nir,
-                         brw_select_clip_planes(&brw->ctx),
-                         st_index, &program_size, &error_str);
+   program = brw_compile_vs(brw->intelScreen->compiler, brw, mem_ctx, key,
+                            &prog_data, vp->program.Base.nir,
+                            brw_select_clip_planes(&brw->ctx),
+                            st_index, &program_size, &error_str);
    if (program == NULL) {
       if (prog) {
          prog->LinkStatus = false;
