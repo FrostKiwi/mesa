@@ -150,7 +150,7 @@ glsl_to_nir(const struct gl_shader_program *shader_prog,
       if (sh->Program->SamplersUsed & (1 << i))
          num_textures = i;
 
-   shader->info.name = ralloc_asprintf(shader, "GLSL%d", sh->Name);
+   shader->info.name = ralloc_asprintf(shader, "GLSL%d", shader_prog->Name);
    if (shader_prog->Label)
       shader->info.label = ralloc_strdup(shader, shader_prog->Label);
    shader->info.num_textures = num_textures;
