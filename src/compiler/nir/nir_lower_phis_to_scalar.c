@@ -282,23 +282,20 @@ lower_phis_to_scalar_block(nir_block *block,
 }
 
 static bool
-lower_phis_to_scalar_impl(nir_function_impl *impl)
+lower_phis_to_scalar_impl(nir_function_impl *impl,
+                          UNUSED void *unused, void *dead_ctx)
 {
    struct lower_phis_to_scalar_state state;
    bool progress = false;
 
    state.mem_ctx = ralloc_parent(impl);
-   state.dead_ctx = ralloc_context(NULL);
-   state.phi_table = _mesa_pointer_hash_table_create(state.dead_ctx);
+   state.dead_ctx = dead_ctx;
+   state.phi_table = _mesa_pointer_hash_table_create(dead_ctx);
 
    nir_foreach_block(block, impl) {
       progress = lower_phis_to_scalar_block(block, &state) || progress;
    }
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
-
-   ralloc_free(state.dead_ctx);
    return progress;
 }
 
@@ -309,15 +306,7 @@ lower_phis_to_scalar_impl(nir_function_impl *impl)
  * instance, if one of the sources is a non-scalarizable vector, then we
  * don't bother lowering because that would generate hard-to-coalesce movs.
  */
-bool
-nir_lower_phis_to_scalar(nir_shader *shader)
-{
-   bool progress = false;
-
-   nir_foreach_function(function, shader) {
-      if (function->impl)
-         progress = lower_phis_to_scalar_impl(function->impl) || progress;
-   }
-
-   return progress;
-}
+const nir_pass nir_lower_phis_to_scalar_pass = {
+   .impl_pass_func = lower_phis_to_scalar_impl,
+   .metadata_preserved = nir_metadata_block_index | nir_metadata_dominance,
+};
