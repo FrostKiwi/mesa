@@ -286,7 +286,6 @@ NIR_FILES = \
 	nir/nir_lower_viewport_transform.c \
 	nir/nir_lower_wpos_center.c \
 	nir/nir_lower_wpos_ytransform.c \
-	nir/nir_metadata.c \
 	nir/nir_move_load_const.c \
 	nir/nir_move_vec_src_uses_to_dest.c \
 	nir/nir_normalize_cubemap_coords.c \
@@ -316,6 +315,7 @@ NIR_FILES = \
 	nir/nir_opt_trivial_continues.c \
 	nir/nir_opt_undef.c \
 	nir/nir_opt_vectorize.c \
+	nir/nir_pass.c \
 	nir/nir_phi_builder.c \
 	nir/nir_phi_builder.h \
 	nir/nir_print.c \
