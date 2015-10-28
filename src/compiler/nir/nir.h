@@ -3331,6 +3331,30 @@ bool nir_shader_lower_instructions(nir_shader *shader,
                                    nir_lower_instr_cb lower,
                                    void *cb_data);
 
+typedef struct nir_pass {
+   bool (*shader_pass_func)(nir_shader *shader, void *data, void *mem_ctx);
+   bool (*impl_pass_func)(nir_function_impl *impl, void *data, void *mem_ctx);
+   bool (*block_pass_func)(struct nir_builder *build, nir_block *block,
+                           void *data, void *mem_ctx);
+   bool (*instr_pass_func)(struct nir_builder *build, nir_instr *instr,
+                           void *data, void *mem_ctx);
+   bool (*ssa_def_filter_func)(const nir_ssa_def *def, const void *data);
+   nir_ssa_def *(*ssa_def_pass_func)(struct nir_builder *build,
+                                     nir_ssa_def *def, void *data);
+   nir_metadata metadata_preserved;
+} nir_pass;
+
+bool nir_shader_run_pass(nir_shader *shader, const nir_pass *pass, void *data);
+bool nir_function_impl_run_pass(nir_function_impl *impl, const nir_pass *pass,
+                                void *data);
+
+#define NIR_DECL_PASS(name) \
+   const extern nir_pass name##_pass; \
+   static inline bool name(nir_shader *shader) \
+   { \
+      return nir_shader_run_pass(shader, &name##_pass, NULL); \
+   }
+
 void nir_calc_dominance_impl(nir_function_impl *impl);
 void nir_calc_dominance(nir_shader *shader);
 
