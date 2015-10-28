@@ -62,37 +62,16 @@ cse_block(nir_block *block, struct set *dominance_set)
 }
 
 static bool
-nir_opt_cse_impl(nir_function_impl *impl)
+nir_opt_cse_impl(nir_function_impl *impl, UNUSED void *unused, void *mem_ctx)
 {
-   struct set *instr_set = nir_instr_set_create(NULL);
+   struct set *instr_set = nir_instr_set_create(mem_ctx);
 
    nir_metadata_require(impl, nir_metadata_dominance);
 
-   bool progress = cse_block(nir_start_block(impl), instr_set);
-
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
-   }
-
-   nir_instr_set_destroy(instr_set);
-   return progress;
+   return cse_block(nir_start_block(impl), instr_set);
 }
 
-bool
-nir_opt_cse(nir_shader *shader)
-{
-   bool progress = false;
-
-   nir_foreach_function(function, shader) {
-      if (function->impl)
-         progress |= nir_opt_cse_impl(function->impl);
-   }
-
-   return progress;
-}
-
+const nir_pass nir_opt_cse_pass = {
+   .impl_pass_func = nir_opt_cse_impl,
+   .metadata_preserved = nir_metadata_block_index | nir_metadata_dominance,
+};

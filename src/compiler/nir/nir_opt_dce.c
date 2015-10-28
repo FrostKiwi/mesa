@@ -121,7 +121,8 @@ init_block(nir_block *block, nir_instr_worklist *worklist)
 }
 
 static bool
-nir_opt_dce_impl(nir_function_impl *impl)
+nir_opt_dce_impl(nir_function_impl *impl,
+                 UNUSED void *unused, UNUSED void *mem_ctx)
 {
    nir_instr_worklist *worklist = nir_instr_worklist_create();
 
@@ -145,26 +146,10 @@ nir_opt_dce_impl(nir_function_impl *impl)
       }
    }
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
-   }
-
    return progress;
 }
 
-bool
-nir_opt_dce(nir_shader *shader)
-{
-   bool progress = false;
-   nir_foreach_function(function, shader) {
-      if (function->impl && nir_opt_dce_impl(function->impl))
-         progress = true;
-   }
-
-   return progress;
-}
+const nir_pass nir_opt_dce_pass = {
+   .impl_pass_func = nir_opt_dce_impl,
+   .metadata_preserved = nir_metadata_block_index | nir_metadata_dominance,
+};

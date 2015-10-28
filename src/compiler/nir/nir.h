@@ -3923,13 +3923,13 @@ bool nir_opt_constant_folding(nir_shader *shader);
 
 bool nir_opt_combine_stores(nir_shader *shader, nir_variable_mode modes);
 
-bool nir_copy_prop(nir_shader *shader);
+NIR_DECL_PASS(nir_copy_prop)
 
 bool nir_opt_copy_prop_vars(nir_shader *shader);
 
-bool nir_opt_cse(nir_shader *shader);
+NIR_DECL_PASS(nir_opt_cse)
 
-bool nir_opt_dce(nir_shader *shader);
+NIR_DECL_PASS(nir_opt_dce)
 
 bool nir_opt_dead_cf(nir_shader *shader);
 

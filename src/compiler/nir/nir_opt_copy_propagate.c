@@ -256,42 +256,24 @@ copy_prop_if(nir_if *if_stmt)
 }
 
 static bool
-nir_copy_prop_impl(nir_function_impl *impl)
+nir_copy_prop_block(UNUSED struct nir_builder *build, nir_block *block,
+                    UNUSED void *unused, UNUSED void *mem_ctx)
 {
    bool progress = false;
 
-   nir_foreach_block(block, impl) {
-      nir_foreach_instr(instr, block) {
-         if (copy_prop_instr(instr))
-            progress = true;
-      }
-
-      nir_if *if_stmt = nir_block_get_following_if(block);
-      if (if_stmt && copy_prop_if(if_stmt))
+   nir_foreach_instr(instr, block) {
+      if (copy_prop_instr(instr))
          progress = true;
-      }
-
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
    }
+
+   nir_if *if_stmt = nir_block_get_following_if(block);
+   if (if_stmt && copy_prop_if(if_stmt))
+      progress = true;
 
    return progress;
 }
 
-bool
-nir_copy_prop(nir_shader *shader)
-{
-   bool progress = false;
-
-   nir_foreach_function(function, shader) {
-      if (function->impl && nir_copy_prop_impl(function->impl))
-         progress = true;
-   }
-
-   return progress;
-}
+const nir_pass nir_copy_prop_pass = {
+   .block_pass_func = nir_copy_prop_block,
+   .metadata_preserved = nir_metadata_block_index | nir_metadata_dominance,
+};
