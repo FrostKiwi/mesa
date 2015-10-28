@@ -706,12 +706,13 @@ rename_variables(struct lower_variables_state *state)
  *     with SSA definitions and SSA uses.
  */
 static bool
-nir_lower_vars_to_ssa_impl(nir_function_impl *impl)
+nir_lower_vars_to_ssa_impl(nir_function_impl *impl,
+                           UNUSED void *unused, void *dead_ctx)
 {
    struct lower_variables_state state;
 
    state.shader = impl->function->shader;
-   state.dead_ctx = ralloc_context(state.shader);
+   state.dead_ctx = dead_ctx;
    state.impl = impl;
 
    state.deref_var_nodes = _mesa_pointer_hash_table_create(state.dead_ctx);
@@ -749,12 +750,8 @@ nir_lower_vars_to_ssa_impl(nir_function_impl *impl)
       foreach_deref_node_match(path, lower_copies_to_load_store, &state);
    }
 
-   if (!progress) {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
+   if (!progress)
       return false;
-   }
 
    nir_metadata_require(impl, nir_metadata_dominance);
 
@@ -798,23 +795,10 @@ nir_lower_vars_to_ssa_impl(nir_function_impl *impl)
 
    nir_phi_builder_finish(state.phi_builder);
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
-
-   ralloc_free(state.dead_ctx);
-
    return progress;
 }
 
-bool
-nir_lower_vars_to_ssa(nir_shader *shader)
-{
-   bool progress = false;
-
-   nir_foreach_function(function, shader) {
-      if (function->impl)
-         progress |= nir_lower_vars_to_ssa_impl(function->impl);
-   }
-
-   return progress;
-}
+const nir_pass nir_lower_vars_to_ssa_pass = {
+   .impl_pass_func = nir_lower_vars_to_ssa_impl,
+   .metadata_preserved = nir_metadata_block_index | nir_metadata_dominance,
+};

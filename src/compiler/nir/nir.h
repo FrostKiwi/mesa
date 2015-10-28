@@ -3565,7 +3565,7 @@ bool nir_is_per_vertex_io(const nir_variable *var, gl_shader_stage stage);
 
 bool nir_lower_regs_to_ssa_impl(nir_function_impl *impl);
 bool nir_lower_regs_to_ssa(nir_shader *shader);
-bool nir_lower_vars_to_ssa(nir_shader *shader);
+NIR_DECL_PASS(nir_lower_vars_to_ssa)
 
 bool nir_remove_dead_derefs(nir_shader *shader);
 bool nir_remove_dead_derefs_impl(nir_function_impl *impl);
