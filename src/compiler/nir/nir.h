@@ -3916,9 +3916,9 @@ bool nir_opt_comparison_pre_impl(nir_function_impl *impl);
 
 bool nir_opt_comparison_pre(nir_shader *shader);
 
-bool nir_opt_algebraic(nir_shader *shader);
-bool nir_opt_algebraic_before_ffma(nir_shader *shader);
-bool nir_opt_algebraic_late(nir_shader *shader);
+NIR_DECL_PASS(nir_opt_algebraic)
+NIR_DECL_PASS(nir_opt_algebraic_before_ffma)
+NIR_DECL_PASS(nir_opt_algebraic_late)
 bool nir_opt_constant_folding(nir_shader *shader);
 
 bool nir_opt_combine_stores(nir_shader *shader, nir_variable_mode modes);

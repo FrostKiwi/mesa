@@ -133,7 +133,7 @@ void brw_postprocess_nir(nir_shader *nir,
 bool brw_nir_apply_attribute_workarounds(nir_shader *nir,
                                          const uint8_t *attrib_wa_flags);
 
-bool brw_nir_apply_trig_workarounds(nir_shader *nir);
+NIR_DECL_PASS(brw_nir_apply_trig_workarounds);
 
 void brw_nir_apply_tcs_quads_workaround(nir_shader *nir);
 

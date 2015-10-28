@@ -1181,8 +1181,20 @@ ${pass_name}_block(nir_builder *build, nir_block *block,
 }
 
 static bool
-${pass_name}_impl(nir_function_impl *impl, const bool *condition_flags)
+${pass_name}_impl(nir_function_impl *impl,
+                  UNUSED void *unused, UNUSED void *mem_ctx)
 {
+   nir_shader *shader = impl->function->shader;
+   const nir_shader_compiler_options *options = shader->options;
+   const shader_info *info = &shader->info;
+   (void) options;
+   (void) info;
+
+   bool condition_flags[${len(condition_list)}];
+   % for index, condition in enumerate(condition_list):
+   condition_flags[${index}] = ${condition};
+   % endfor
+
    bool progress = false;
 
    nir_builder build;
@@ -1204,40 +1216,13 @@ ${pass_name}_impl(nir_function_impl *impl, const bool *condition_flags)
 
    free(states);
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-    } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
-    }
-
    return progress;
 }
 
-
-bool
-${pass_name}(nir_shader *shader)
-{
-   bool progress = false;
-   bool condition_flags[${len(condition_list)}];
-   const nir_shader_compiler_options *options = shader->options;
-   const shader_info *info = &shader->info;
-   (void) options;
-   (void) info;
-
-   % for index, condition in enumerate(condition_list):
-   condition_flags[${index}] = ${condition};
-   % endfor
-
-   nir_foreach_function(function, shader) {
-      if (function->impl)
-         progress |= ${pass_name}_impl(function->impl, condition_flags);
-   }
-
-   return progress;
-}
+const nir_pass ${pass_name}_pass = {
+   .impl_pass_func = ${pass_name}_impl,
+   .metadata_preserved = nir_metadata_block_index | nir_metadata_dominance,
+};
 """)
 
 
