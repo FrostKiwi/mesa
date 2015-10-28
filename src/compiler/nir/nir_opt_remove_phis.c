@@ -146,7 +146,8 @@ nir_opt_remove_phis_block(nir_block *block)
 }
 
 static bool
-nir_opt_remove_phis_impl(nir_function_impl *impl)
+remove_phis_impl(nir_function_impl *impl,
+                 UNUSED void *unused, UNUSED void *mem_ctx)
 {
    bool progress = false;
    nir_builder bld;
@@ -156,27 +157,10 @@ nir_opt_remove_phis_impl(nir_function_impl *impl)
       progress |= remove_phis_block(block, &bld);
    }
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
-   }
-
    return progress;
 }
 
-bool
-nir_opt_remove_phis(nir_shader *shader)
-{
-   bool progress = false;
-
-   nir_foreach_function(function, shader)
-      if (function->impl)
-         progress = nir_opt_remove_phis_impl(function->impl) || progress;
-
-   return progress;
-}
-
+const nir_pass nir_opt_remove_phis_pass = {
+   .impl_pass_func = remove_phis_impl,
+   .metadata_preserved = nir_metadata_block_index | nir_metadata_dominance,
+};

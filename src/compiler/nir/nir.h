@@ -3931,7 +3931,7 @@ NIR_DECL_PASS(nir_opt_cse)
 
 NIR_DECL_PASS(nir_opt_dce)
 
-bool nir_opt_dead_cf(nir_shader *shader);
+NIR_DECL_PASS(nir_opt_dead_cf)
 
 bool nir_opt_dead_write_vars(nir_shader *shader);
 
@@ -3963,14 +3963,14 @@ bool nir_opt_peephole_select(nir_shader *shader, unsigned limit,
 
 bool nir_opt_rematerialize_compares(nir_shader *shader);
 
-bool nir_opt_remove_phis(nir_shader *shader);
+NIR_DECL_PASS(nir_opt_remove_phis)
 bool nir_opt_remove_phis_block(nir_block *block);
 
 bool nir_opt_shrink_load(nir_shader *shader);
 
 bool nir_opt_trivial_continues(nir_shader *shader);
 
-bool nir_opt_undef(nir_shader *shader);
+NIR_DECL_PASS(nir_opt_undef)
 
 bool nir_opt_vectorize(nir_shader *shader);
 

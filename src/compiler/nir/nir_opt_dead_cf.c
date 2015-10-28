@@ -348,30 +348,14 @@ dead_cf_list(struct exec_list *list, bool *list_ends_in_jump)
 }
 
 static bool
-opt_dead_cf_impl(nir_function_impl *impl)
+opt_dead_cf_impl(nir_function_impl *impl,
+                UNUSED void *unused, UNUSED void *mem_ctx)
 {
    bool dummy;
-   bool progress = dead_cf_list(&impl->body, &dummy);
-
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_none);
-    } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
-    }
-
-   return progress;
+   return dead_cf_list(&impl->body, &dummy);
 }
 
-bool
-nir_opt_dead_cf(nir_shader *shader)
-{
-   bool progress = false;
-
-   nir_foreach_function(function, shader)
-      if (function->impl)
-         progress |= opt_dead_cf_impl(function->impl);
-
-   return progress;
-}
+const nir_pass nir_opt_dead_cf_pass = {
+   .impl_pass_func = opt_dead_cf_impl,
+   .metadata_preserved = nir_metadata_none,
+};
