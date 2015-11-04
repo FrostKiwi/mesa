@@ -946,7 +946,7 @@ namespace brw {
       emit_image_load(const fs_builder &bld,
                       const fs_reg &image, const fs_reg &addr,
                       unsigned surf_dims, unsigned arr_dims,
-                      mesa_format mformat)
+                      uint32_t format)
       {
          using namespace image_format_info;
          using namespace image_format_conversion;
@@ -954,7 +954,6 @@ namespace brw {
          using namespace image_coordinates;
          using namespace surface_access;
          const brw_device_info *devinfo = bld.shader->devinfo;
-         const uint32_t format = brw_format_for_mesa_format(mformat);
          const uint32_t lower_format = brw_lower_image_format(devinfo, format);
          fs_reg tmp;
 
@@ -1054,7 +1053,7 @@ namespace brw {
       emit_image_store(const fs_builder &bld, const fs_reg &image,
                        const fs_reg &addr, const fs_reg &src,
                        unsigned surf_dims, unsigned arr_dims,
-                       mesa_format mformat)
+                       uint32_t format)
       {
          using namespace image_format_info;
          using namespace image_format_conversion;
@@ -1062,7 +1061,6 @@ namespace brw {
          using namespace image_coordinates;
          using namespace surface_access;
          const brw_device_info *devinfo = bld.shader->devinfo;
-         uint32_t format = brw_format_for_mesa_format(mformat);
 
          /* Transform the image coordinates into actual surface coordinates. */
          const fs_reg saddr =
@@ -1070,7 +1068,7 @@ namespace brw {
          const unsigned dims =
             num_image_coordinates(bld, surf_dims, arr_dims, format);
 
-         if (format == MESA_FORMAT_NONE) {
+         if (format == BRW_SURFACEFORMAT_RAW) {
             /* We don't know what the format is, but that's fine because it
              * implies write-only access, and typed surface writes are always
              * able to take care of type conversion and packing for us.
@@ -1166,10 +1164,10 @@ namespace brw {
          /* Transform the image coordinates into actual surface coordinates. */
          const fs_reg saddr =
             emit_image_coordinates(bld, addr, surf_dims, arr_dims,
-                                  MESA_FORMAT_R_UINT32);
+                                   BRW_SURFACEFORMAT_R32_UINT);
          const unsigned dims =
             num_image_coordinates(bld, surf_dims, arr_dims,
-                                  MESA_FORMAT_R_UINT32);
+                                  BRW_SURFACEFORMAT_R32_UINT);
 
          /* Thankfully we can do without untyped atomics here. */
          const fs_reg tmp = emit_typed_atomic(bld, image, saddr, src0, src1,

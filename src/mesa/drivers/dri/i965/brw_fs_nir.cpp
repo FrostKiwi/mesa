@@ -31,6 +31,7 @@
 #include "brw_nir.h"
 #include "brw_fs_surface_builder.h"
 #include "brw_vec4_gs_visitor.h"
+#include "brw_image_load_store.h"
 
 using namespace brw;
 using namespace brw::surface_access;
@@ -1290,9 +1291,9 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       const nir_intrinsic_info *info = &nir_intrinsic_infos[instr->intrinsic];
       const unsigned arr_dims = type->sampler_array ? 1 : 0;
       const unsigned surf_dims = type->coordinate_components() - arr_dims;
-      const mesa_format format =
-         (var->data.image.write_only ? MESA_FORMAT_NONE :
-          _mesa_get_shader_image_format(var->data.image.format));
+      const uint32_t format =
+         (var->data.image.write_only ? BRW_SURFACEFORMAT_RAW :
+          brw_image_format_for_gl_format(var->data.image.format));
 
       /* Get the arguments of the image intrinsic. */
       const fs_reg image = get_nir_image_deref(instr->variables[0]);
