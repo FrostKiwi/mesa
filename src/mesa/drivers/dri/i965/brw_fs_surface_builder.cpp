@@ -463,6 +463,7 @@ namespace {
           * reads want the array index to be at the Z component.
           */
          const bool array_index_at_z =
+            brw_format != BRW_SURFACEFORMAT_RAW &&
             !image_format_info::has_matching_typed_format(
                bld.shader->devinfo, brw_format);
          const unsigned zero_dims =
