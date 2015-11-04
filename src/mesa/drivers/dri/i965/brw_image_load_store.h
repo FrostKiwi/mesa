@@ -51,6 +51,8 @@ struct brw_image_format_info {
 
 extern const struct brw_image_format_info brw_image_format_info[];
 
+uint32_t brw_image_format_for_gl_format(uint32_t gl_format);
+
 uint32_t brw_lower_image_format(const struct brw_device_info *devinfo,
                                 uint32_t format);
 #ifdef __cplusplus

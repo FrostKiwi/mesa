@@ -72,6 +72,55 @@ const struct brw_image_format_info brw_image_format_info[] = {
 #undef IF
 
 uint32_t
+brw_image_format_for_gl_format(uint32_t gl_format)
+{
+   switch (gl_format) {
+   case GL_R8:             return BRW_SURFACEFORMAT_R8_UNORM;
+   case GL_R8_SNORM:       return BRW_SURFACEFORMAT_R8_SNORM;
+   case GL_R8UI:           return BRW_SURFACEFORMAT_R8_UINT;
+   case GL_R8I:            return BRW_SURFACEFORMAT_R8_SINT;
+   case GL_RG8:            return BRW_SURFACEFORMAT_R8G8_UNORM;
+   case GL_RG8_SNORM:      return BRW_SURFACEFORMAT_R8G8_SNORM;
+   case GL_RG8UI:          return BRW_SURFACEFORMAT_R8G8_UINT;
+   case GL_RG8I:           return BRW_SURFACEFORMAT_R8G8_SINT;
+   case GL_RGBA8:          return BRW_SURFACEFORMAT_R8G8B8A8_UNORM;
+   case GL_RGBA8_SNORM:    return BRW_SURFACEFORMAT_R8G8B8A8_SNORM;
+   case GL_RGBA8UI:        return BRW_SURFACEFORMAT_R8G8B8A8_UINT;
+   case GL_RGBA8I:         return BRW_SURFACEFORMAT_R8G8B8A8_SINT;
+   case GL_R11F_G11F_B10F: return BRW_SURFACEFORMAT_R11G11B10_FLOAT;
+   case GL_RGB10_A2:       return BRW_SURFACEFORMAT_R10G10B10A2_UNORM;
+   case GL_RGB10_A2UI:     return BRW_SURFACEFORMAT_R10G10B10A2_UINT;
+   case GL_R16:            return BRW_SURFACEFORMAT_R16_UNORM;
+   case GL_R16_SNORM:      return BRW_SURFACEFORMAT_R16_SNORM;
+   case GL_R16F:           return BRW_SURFACEFORMAT_R16_FLOAT;
+   case GL_R16UI:          return BRW_SURFACEFORMAT_R16_UINT;
+   case GL_R16I:           return BRW_SURFACEFORMAT_R16_SINT;
+   case GL_RG16:           return BRW_SURFACEFORMAT_R16G16_UNORM;
+   case GL_RG16_SNORM:     return BRW_SURFACEFORMAT_R16G16_SNORM;
+   case GL_RG16F:          return BRW_SURFACEFORMAT_R16G16_FLOAT;
+   case GL_RG16UI:         return BRW_SURFACEFORMAT_R16G16_UINT;
+   case GL_RG16I:          return BRW_SURFACEFORMAT_R16G16_SINT;
+   case GL_RGBA16:         return BRW_SURFACEFORMAT_R16G16B16A16_UNORM;
+   case GL_RGBA16_SNORM:   return BRW_SURFACEFORMAT_R16G16B16A16_SNORM;
+   case GL_RGBA16F:        return BRW_SURFACEFORMAT_R16G16B16A16_FLOAT;
+   case GL_RGBA16UI:       return BRW_SURFACEFORMAT_R16G16B16A16_UINT;
+   case GL_RGBA16I:        return BRW_SURFACEFORMAT_R16G16B16A16_SINT;
+   case GL_R32F:           return BRW_SURFACEFORMAT_R32_FLOAT;
+   case GL_R32UI:          return BRW_SURFACEFORMAT_R32_UINT;
+   case GL_R32I:           return BRW_SURFACEFORMAT_R32_SINT;
+   case GL_RG32F:          return BRW_SURFACEFORMAT_R32G32_FLOAT;
+   case GL_RG32UI:         return BRW_SURFACEFORMAT_R32G32_UINT;
+   case GL_RG32I:          return BRW_SURFACEFORMAT_R32G32_SINT;
+   case GL_RGBA32F:        return BRW_SURFACEFORMAT_R32G32B32A32_FLOAT;
+   case GL_RGBA32UI:       return BRW_SURFACEFORMAT_R32G32B32A32_UINT;
+   case GL_RGBA32I:        return BRW_SURFACEFORMAT_R32G32B32A32_SINT;
+   default:
+      assert(!"Invalid image format");
+      return GL_NONE;
+   }
+}
+
+uint32_t
 brw_lower_image_format(const struct brw_device_info *devinfo,
                        uint32_t format)
 {
