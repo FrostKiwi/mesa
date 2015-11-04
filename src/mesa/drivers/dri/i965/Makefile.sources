@@ -36,6 +36,8 @@ i965_compiler_FILES = \
 	brw_fs_validate.cpp \
 	brw_fs_vector_splitting.cpp \
 	brw_fs_visitor.cpp \
+	brw_image_load_store.c \
+	brw_image_load_store.h \
 	brw_inst.h \
 	brw_interpolation_map.c \
 	brw_ir_allocator.h \

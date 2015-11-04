@@ -47,6 +47,7 @@
 #include "brw_context.h"
 #include "brw_state.h"
 #include "brw_defines.h"
+#include "brw_image_load_store.h"
 #include "brw_wm.h"
 
 GLuint
@@ -1143,9 +1144,14 @@ get_image_format(struct brw_context *brw, mesa_format format, GLenum access)
           (_mesa_get_format_bytes(format) >= 8 &&
            (brw->gen == 7 && !brw->is_haswell)))
          return BRW_SURFACEFORMAT_RAW;
-      else
-         return brw_format_for_mesa_format(
+      else {
+         uint32_t format1 = brw_format_for_mesa_format(
             brw_lower_mesa_image_format(brw->intelScreen->devinfo, format));
+         uint32_t format2 = brw_lower_image_format(
+            brw->intelScreen->devinfo, brw_format_for_mesa_format(format));
+         assert(format1 == format2);
+         return format1;
+      }
    }
 }
 
