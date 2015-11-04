@@ -26,6 +26,51 @@
 #include "brw_defines.h"
 #include "brw_image_load_store.h"
 
+#define IF(r, g, b, a, dt, f) \
+   [BRW_SURFACEFORMAT_##f] = { true, r, g, b, a, BRW_IMAGE_FORMAT_##dt },
+const struct brw_image_format_info brw_image_format_info[] = {
+   IF( 8,  0,  0,  0, UNORM, R8_UNORM)
+   IF( 8,  0,  0,  0, SNORM, R8_SNORM)
+   IF( 8,  0,  0,  0,  UINT, R8_UINT)
+   IF( 8,  0,  0,  0,  SINT, R8_SINT)
+   IF( 8,  8,  0,  0, UNORM, R8G8_UNORM)
+   IF( 8,  8,  0,  0, SNORM, R8G8_SNORM)
+   IF( 8,  8,  0,  0,  UINT, R8G8_UINT)
+   IF( 8,  8,  0,  0,  SINT, R8G8_SINT)
+   IF( 8,  8,  8,  8, UNORM, R8G8B8A8_UNORM)
+   IF( 8,  8,  8,  8, SNORM, R8G8B8A8_SNORM)
+   IF( 8,  8,  8,  8,  UINT, R8G8B8A8_UINT)
+   IF( 8,  8,  8,  8,  SINT, R8G8B8A8_SINT)
+   IF(11, 11, 10,  0, FLOAT, R11G11B10_FLOAT)
+   IF(10, 10, 10,  2, UNORM, R10G10B10A2_UNORM)
+   IF(10, 10, 10,  2,  UINT, R10G10B10A2_UINT)
+   IF(16,  0,  0,  0, UNORM, R16_UNORM)
+   IF(16,  0,  0,  0, SNORM, R16_SNORM)
+   IF(16,  0,  0,  0, FLOAT, R16_FLOAT)
+   IF(16,  0,  0,  0,  UINT, R16_UINT)
+   IF(16,  0,  0,  0,  SINT, R16_SINT)
+   IF(16, 16,  0,  0, UNORM, R16G16_UNORM)
+   IF(16, 16,  0,  0, SNORM, R16G16_SNORM)
+   IF(16, 16,  0,  0, FLOAT, R16G16_FLOAT)
+   IF(16, 16,  0,  0,  UINT, R16G16_UINT)
+   IF(16, 16,  0,  0,  SINT, R16G16_SINT)
+   IF(16, 16, 16, 16, UNORM, R16G16B16A16_UNORM)
+   IF(16, 16, 16, 16, SNORM, R16G16B16A16_SNORM)
+   IF(16, 16, 16, 16, FLOAT, R16G16B16A16_FLOAT)
+   IF(16, 16, 16, 16,  UINT, R16G16B16A16_UINT)
+   IF(16, 16, 16, 16,  SINT, R16G16B16A16_SINT)
+   IF(32,  0,  0,  0, FLOAT, R32_FLOAT)
+   IF(32,  0,  0,  0,  UINT, R32_UINT)
+   IF(32,  0,  0,  0,  SINT, R32_SINT)
+   IF(32, 32,  0,  0, FLOAT, R32G32_FLOAT)
+   IF(32, 32,  0,  0,  UINT, R32G32_UINT)
+   IF(32, 32,  0,  0,  SINT, R32G32_SINT)
+   IF(32, 32, 32, 32, FLOAT, R32G32B32A32_FLOAT)
+   IF(32, 32, 32, 32,  UINT, R32G32B32A32_UINT)
+   IF(32, 32, 32, 32,  SINT, R32G32B32A32_SINT)
+};
+#undef IF
+
 uint32_t
 brw_lower_image_format(const struct brw_device_info *devinfo,
                        uint32_t format)

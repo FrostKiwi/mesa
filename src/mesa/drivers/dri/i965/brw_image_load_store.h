@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "brw_device_info.h"
@@ -30,6 +31,25 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+enum brw_image_format_data_type {
+   BRW_IMAGE_FORMAT_UNORM,
+   BRW_IMAGE_FORMAT_SNORM,
+   BRW_IMAGE_FORMAT_UINT,
+   BRW_IMAGE_FORMAT_SINT,
+   BRW_IMAGE_FORMAT_FLOAT,
+};
+
+struct brw_image_format_info {
+   bool is_image_format;
+   uint8_t red_bits;
+   uint8_t green_bits;
+   uint8_t blue_bits;
+   uint8_t alpha_bits;
+   enum brw_image_format_data_type data_type;
+};
+
+extern const struct brw_image_format_info brw_image_format_info[];
 
 uint32_t brw_lower_image_format(const struct brw_device_info *devinfo,
                                 uint32_t format);
