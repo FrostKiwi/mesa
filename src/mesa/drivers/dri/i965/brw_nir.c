@@ -171,12 +171,23 @@ brw_nir_lower_outputs(nir_shader *nir, bool is_scalar)
    }
 }
 
+static int
+type_size_scalar_bytes(const struct glsl_type *type)
+{
+   return type_size_scalar(type) * 4;
+}
+
 static void
 brw_nir_lower_uniforms(nir_shader *nir, bool is_scalar)
 {
-   nir_assign_var_locations(&nir->uniforms,
-                            &nir->num_uniforms,
-                            is_scalar ? type_size_scalar : type_size_vec4);
+   if (is_scalar) {
+      nir_assign_var_locations(&nir->uniforms, &nir->num_uniforms,
+                               type_size_scalar_bytes);
+      nir_lower_io(nir, nir_var_uniform, type_size_scalar_bytes);
+   } else {
+      nir_assign_var_locations(&nir->uniforms, &nir->num_uniforms,
+                               type_size_vec4);
+   }
 }
 
 static bool

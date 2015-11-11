@@ -153,7 +153,7 @@ fs_visitor::nir_setup_uniforms()
    if (dispatch_width != 8)
       return;
 
-   uniforms = nir->num_uniforms;
+   uniforms = nir->num_uniforms / 4;
 
    nir_foreach_variable(var, &nir->uniforms) {
       /* UBO's and atomics don't take up space in the uniform file */
@@ -161,7 +161,7 @@ fs_visitor::nir_setup_uniforms()
          continue;
 
       if (type_size_scalar(var->type) > 0)
-         param_size[var->data.driver_location] = type_size_scalar(var->type);
+         param_size[var->data.driver_location / 4] = type_size_scalar(var->type);
    }
 }
 
@@ -1145,7 +1145,7 @@ fs_visitor::get_nir_image_deref(const nir_deref_var *deref)
             bld.MOV(tmp, get_nir_src(deref_array->indirect));
          }
 
-         bld.MUL(tmp, tmp, brw_imm_ud(element_size));
+         bld.MUL(tmp, tmp, brw_imm_ud(element_size * 4));
          if (image.reladdr)
             bld.ADD(*image.reladdr, *image.reladdr, tmp);
          else
@@ -2280,8 +2280,12 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       has_indirect = true;
       /* fallthrough */
    case nir_intrinsic_load_uniform: {
-      fs_reg uniform_reg(UNIFORM, instr->const_index[0]);
-      uniform_reg.reg_offset = instr->const_index[1];
+      /* Offsets are in bytes but they should always be multiples of 4 */
+      assert(instr->const_index[0] % 4 == 0);
+      assert(instr->const_index[1] % 4 == 0);
+
+      fs_reg uniform_reg(UNIFORM, instr->const_index[0] / 4);
+      uniform_reg.reg_offset = instr->const_index[1] / 4;
 
       for (unsigned j = 0; j < instr->num_components; j++) {
          fs_reg src = offset(retype(uniform_reg, dest.type), bld, j);
