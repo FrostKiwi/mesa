@@ -111,10 +111,8 @@ typedef struct nir_constant {
     */
    union nir_constant_data value;
 
-   /* we could get this from the var->type but makes clone *much* easier to
-    * not have to care about the type.
-    */
-   unsigned num_elements;
+   /* The type of data storred in this nir_constant object */
+   const struct glsl_type *type;
 
    /* Array elements / Structure Fields */
    struct nir_constant **elements;

@@ -84,10 +84,16 @@ clone_constant(clone_state *state, const nir_constant *c, nir_variable *nvar)
    nir_constant *nc = ralloc(nvar, nir_constant);
 
    nc->value = c->value;
-   nc->num_elements = c->num_elements;
-   nc->elements = ralloc_array(nvar, nir_constant *, c->num_elements);
-   for (unsigned i = 0; i < c->num_elements; i++) {
-      nc->elements[i] = clone_constant(state, c->elements[i], nvar);
+   nc->type = c->type;
+
+   if (c->elements) {
+      assert(glsl_get_base_type(c->type) == GLSL_TYPE_STRUCT ||
+             glsl_get_base_type(c->type) == GLSL_TYPE_ARRAY);
+      unsigned num_elements = glsl_get_length(c->type);
+      nc->elements = ralloc_array(nvar, nir_constant *, num_elements);
+      for (unsigned i = 0; i < num_elements; i++) {
+         nc->elements[i] = clone_constant(state, c->elements[i], nvar);
+      }
    }
 
    return nc;
