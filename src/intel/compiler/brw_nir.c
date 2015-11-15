@@ -570,6 +570,11 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
       OPT(nir_opt_dce);
       OPT(nir_opt_cse);
 
+      if (!is_scalar) {
+         OPT(nir_opt_vectorize);
+         OPT(nir_copy_prop);
+      }
+
       /* Passing 0 to the peephole select pass causes it to convert
        * if-statements that contain only move instructions in the branches
        * regardless of the count.
