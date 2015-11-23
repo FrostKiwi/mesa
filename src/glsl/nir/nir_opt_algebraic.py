@@ -202,6 +202,12 @@ optimizations = [
    (('f2i', ('ftrunc', a)), ('f2i', a)),
    (('f2u', ('ftrunc', a)), ('f2u', a)),
 
+   # Byte extraction
+   (('u2f', ('iand', 0xff, ('ushr', a, 24))), ('byte_to_float', a, 3)),
+   (('u2f', ('iand', 0xff, ('ushr', a, 16))), ('byte_to_float', a, 2)),
+   (('u2f', ('iand', 0xff, ('ushr', a,  8))), ('byte_to_float', a, 1)),
+   (('u2f', ('iand', 0xff, a)), ('byte_to_float', a, 0)),
+
    # Subtracts
    (('fsub', a, ('fsub', 0.0, b)), ('fadd', a, b)),
    (('isub', a, ('isub', 0, b)), ('iadd', a, b)),

@@ -638,6 +638,12 @@ fs_visitor::nir_emit_alu(const fs_builder &bld, nir_alu_instr *instr)
       bld.MOV(result, op[0]);
       break;
 
+   case nir_op_byte_to_float: {
+      nir_const_value *byte = nir_src_as_const_value(instr->src[1].src);
+      bld.MOV(result, offset(retype(op[0], BRW_REGISTER_TYPE_UB), byte->u[0]));
+      break;
+   }
+
    case nir_op_fsign: {
       /* AND(val, 0x80000000) gives the sign bit.
          *

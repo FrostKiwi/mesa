@@ -540,6 +540,10 @@ dst.x = src0.x;
 dst.y = src1.x;
 """)
 
+# Byte extraction
+binop_convert("byte_to_float", tfloat, tunsigned, "", "(unsigned)src0 >> (src1 * 8) & 0xff")
+
+
 def triop(name, ty, const_expr):
    opcode(name, 0, ty, [0, 0, 0], [ty, ty, ty], "", const_expr)
 def triop_horiz(name, output_size, src1_size, src2_size, src3_size, const_expr):
@@ -636,5 +640,4 @@ dst.y = src1.x;
 dst.z = src2.x;
 dst.w = src3.x;
 """)
-
 
