@@ -188,6 +188,11 @@ match_expression(const nir_search_expression *expr, nir_alu_instr *instr,
                  unsigned num_components, const uint8_t *swizzle,
                  struct match_state *state)
 {
+   if (expr->is_unique &&
+       (!list_empty(&instr->dest.dest.ssa.if_uses) ||
+        !list_is_singular(&instr->dest.dest.ssa.uses)))
+      return false;
+
    if (instr->op != expr->opcode)
       return false;
 

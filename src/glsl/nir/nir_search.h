@@ -83,6 +83,9 @@ typedef struct {
 
    nir_op opcode;
    const nir_search_value *srcs[4];
+
+   /* Specifies that this expression is only used once */
+   bool is_unique;
 } nir_search_expression;
 
 NIR_DEFINE_CAST(nir_search_value_as_variable, nir_search_value,

@@ -71,6 +71,7 @@ static const ${val.c_type} ${val.name} = {
 % elif isinstance(val, Expression):
    nir_op_${val.opcode},
    { ${', '.join(src.c_ptr for src in val.sources)} },
+   ${'true' if val.is_unique else 'false'},
 % endif
 };""")
 
@@ -132,12 +133,19 @@ class Variable(Value):
 
       self.index = varset[self.var_name]
 
+_expr_op_re = re.compile(r"(?P<unique>!)?(?P<opcode>\w+)")
+
 class Expression(Value):
    def __init__(self, expr, name_base, varset):
       Value.__init__(self, name_base, "expression")
       assert isinstance(expr, tuple)
 
-      self.opcode = expr[0]
+      m = _expr_op_re.match(expr[0])
+      assert m and m.group('opcode') is not None
+
+      self.opcode = m.group('opcode')
+      self.is_unique = m.group('unique') is not None
+
       self.sources = [ Value.create(src, "{0}_{1}".format(name_base, i), varset)
                        for (i, src) in enumerate(expr[1:]) ]
 
