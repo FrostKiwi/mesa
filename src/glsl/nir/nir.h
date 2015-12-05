@@ -2064,6 +2064,10 @@ void nir_convert_to_ssa(nir_shader *shader);
  */
 void nir_convert_from_ssa(nir_shader *shader, bool phi_webs_only);
 
+/* Tries to constant-fold the given ALU instruction */
+nir_load_const_instr *nir_constant_fold_alu(nir_alu_instr *instr,
+                                            nir_shader *shader);
+
 bool nir_opt_algebraic(nir_shader *shader);
 bool nir_opt_algebraic_late(nir_shader *shader);
 bool nir_opt_constant_folding(nir_shader *shader);

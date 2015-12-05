@@ -37,22 +37,22 @@ struct constant_fold_state {
    bool progress;
 };
 
-static bool
-constant_fold_alu_instr(nir_alu_instr *instr, nir_shader *shader)
+nir_load_const_instr *
+nir_constant_fold_alu(nir_alu_instr *instr, nir_shader *shader)
 {
    nir_const_value src[4];
 
    if (!instr->dest.dest.is_ssa)
-      return false;
+      return NULL;
 
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
       if (!instr->src[i].src.is_ssa)
-         return false;
+         return NULL;
 
       nir_instr *src_instr = instr->src[i].src.ssa->parent_instr;
 
       if (src_instr->type != nir_instr_type_load_const)
-         return false;
+         return NULL;
       nir_load_const_instr* load_const = nir_instr_as_load_const(src_instr);
 
       for (unsigned j = 0; j < nir_ssa_alu_instr_src_components(instr, i);
@@ -75,15 +75,26 @@ constant_fold_alu_instr(nir_alu_instr *instr, nir_shader *shader)
       nir_eval_const_opcode(instr->op, instr->dest.dest.ssa.num_components,
                             src);
 
-   nir_instr_insert_before(&instr->instr, &folded->instr);
+   return folded;
+}
 
-   nir_ssa_def_rewrite_uses(&instr->dest.dest.ssa,
-                            nir_src_for_ssa(&folded->def));
+static bool
+constant_fold_alu_instr(nir_alu_instr *instr, nir_shader *shader)
+{
+   nir_load_const_instr *folded = nir_constant_fold_alu(instr, shader);
+   if (folded) {
+      nir_instr_insert_before(&instr->instr, &folded->instr);
 
-   nir_instr_remove(&instr->instr);
-   ralloc_free(instr);
+      nir_ssa_def_rewrite_uses(&instr->dest.dest.ssa,
+                               nir_src_for_ssa(&folded->def));
 
-   return true;
+      nir_instr_remove(&instr->instr);
+      ralloc_free(instr);
+
+      return true;
+   } else {
+      return false;
+   }
 }
 
 static bool
