@@ -33,13 +33,12 @@
  */
 
 struct constant_fold_state {
-   void *mem_ctx;
-   nir_function_impl *impl;
+   nir_shader *shader;
    bool progress;
 };
 
 static bool
-constant_fold_alu_instr(nir_alu_instr *instr, void *mem_ctx)
+constant_fold_alu_instr(nir_alu_instr *instr, nir_shader *shader)
 {
    nir_const_value src[4];
 
@@ -68,20 +67,18 @@ constant_fold_alu_instr(nir_alu_instr *instr, void *mem_ctx)
    /* We shouldn't have any saturate modifiers in the optimization loop. */
    assert(!instr->dest.saturate);
 
-   nir_const_value dest =
+   nir_load_const_instr *folded =
+      nir_load_const_instr_create(shader,
+                                  instr->dest.dest.ssa.num_components);
+
+   folded->value =
       nir_eval_const_opcode(instr->op, instr->dest.dest.ssa.num_components,
                             src);
 
-   nir_load_const_instr *new_instr =
-      nir_load_const_instr_create(mem_ctx,
-                                  instr->dest.dest.ssa.num_components);
-
-   new_instr->value = dest;
-
-   nir_instr_insert_before(&instr->instr, &new_instr->instr);
+   nir_instr_insert_before(&instr->instr, &folded->instr);
 
    nir_ssa_def_rewrite_uses(&instr->dest.dest.ssa,
-                            nir_src_for_ssa(&new_instr->def));
+                            nir_src_for_ssa(&folded->def));
 
    nir_instr_remove(&instr->instr);
    ralloc_free(instr);
@@ -151,7 +148,7 @@ constant_fold_block(nir_block *block, void *void_state)
       switch (instr->type) {
       case nir_instr_type_alu:
          state->progress |= constant_fold_alu_instr(nir_instr_as_alu(instr),
-                                                    state->mem_ctx);
+                                                    state->shader);
          break;
       case nir_instr_type_intrinsic:
          state->progress |=
@@ -170,12 +167,11 @@ constant_fold_block(nir_block *block, void *void_state)
 }
 
 static bool
-nir_opt_constant_folding_impl(nir_function_impl *impl)
+nir_opt_constant_folding_impl(nir_function_impl *impl, nir_shader *shader)
 {
    struct constant_fold_state state;
 
-   state.mem_ctx = ralloc_parent(impl);
-   state.impl = impl;
+   state.shader = shader;
    state.progress = false;
 
    nir_foreach_block(impl, constant_fold_block, &state);
@@ -194,7 +190,7 @@ nir_opt_constant_folding(nir_shader *shader)
 
    nir_foreach_overload(shader, overload) {
       if (overload->impl)
-         progress |= nir_opt_constant_folding_impl(overload->impl);
+         progress |= nir_opt_constant_folding_impl(overload->impl, shader);
    }
 
    return progress;
