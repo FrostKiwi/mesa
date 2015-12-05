@@ -266,6 +266,7 @@ construct_value(const nir_search_value *value, nir_alu_type type,
       alu->dest.write_mask = (1 << num_components) - 1;
       alu->dest.saturate = false;
 
+      bool all_const = true;
       for (unsigned i = 0; i < nir_op_infos[expr->opcode].num_inputs; i++) {
          /* If the source is an explicitly sized source, then we need to reset
           * the number of components to match.
@@ -277,6 +278,9 @@ construct_value(const nir_search_value *value, nir_alu_type type,
                                        nir_op_infos[alu->op].input_types[i],
                                        num_components,
                                        state, instr, mem_ctx);
+         if (!alu->src[i].src.is_ssa ||
+             alu->src[i].src.ssa->parent_instr->type != nir_instr_type_load_const)
+            all_const = false;
       }
 
       nir_instr_insert_before(instr, &alu->instr);

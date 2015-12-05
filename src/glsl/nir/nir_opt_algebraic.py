@@ -215,7 +215,20 @@ optimizations = [
    (('iadd', a, ('isub', 0, b)), ('isub', a, b)),
    (('fabs', ('fsub', 0.0, a)), ('fabs', a)),
    (('iabs', ('isub', 0, a)), ('iabs', a)),
+
+   # Distributive law.  In order to make this safe, We can only do this if we
+   # know this is the only use of the add and that one of the multiplies will
+   # get constant-folded.
+   (('imul', ('!iadd', a, '#b'), '#c'), ('iadd', ('imul', a, c), ('imul', b, c))),
 ]
+
+# Add optimizations to do percilate constants to the tops of trees.
+
+for op in ['imul', 'iadd', 'fmul', 'fadd']:
+   optimizations += [
+      ((op, ('!' + op, 'a', '#b'), '#c'), (op, 'a', (op, 'b', 'c'))),
+      ((op, ('!' + op, 'a', '#b'), 'c'), (op, (op, 'a', 'c'), 'b')),
+   ]
 
 # Add optimizations to handle the case where the result of a ternary is
 # compared to a constant.  This way we can take things like
