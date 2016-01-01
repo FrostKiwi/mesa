@@ -401,7 +401,7 @@ compute_version(const struct gl_extensions *extensions,
    }
    else if (ver_4_2) {
       major = 4;
-      minor = 2;
+      minor = 3;
    }
    else if (ver_4_1) {
       major = 4;
