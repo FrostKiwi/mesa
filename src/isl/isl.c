@@ -452,7 +452,7 @@ isl_calc_phys_level0_extent_sa(const struct isl_device *dev,
       case ISL_DIM_LAYOUT_GEN9_1D:
       case ISL_DIM_LAYOUT_GEN4_2D:
          *phys_level0_sa = (struct isl_extent4d) {
-            .w = info->width,
+            .w = isl_align(info->width, fmtl->bw),
             .h = 1,
             .d = 1,
             .a = info->array_len,
