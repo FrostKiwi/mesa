@@ -653,6 +653,22 @@ struct isl_surf_init_info {
    isl_tiling_flags_t tiling_flags;
 };
 
+/**
+ * @brief Input to initialize a HiZ surface.
+ *
+ * @invariant primary_surf->usage & ISL_SURF_USAGE_DEPTH_BIT
+ * @invariant !(primary_surf->usage & ISL_SURF_USAGE_DISABLE_AUX_BIT)
+ */
+struct isl_hiz_surf_init_info {
+   const struct isl_surf *primary_surf;
+
+   /** Lower bound for isl_surf::alignment, in bytes. */
+   uint32_t min_alignment;
+
+   /** Lower bound for isl_surf::pitch, in bytes. */
+   uint32_t min_pitch;
+};
+
 struct isl_surf {
    enum isl_surf_dim dim;
    enum isl_dim_layout dim_layout;
@@ -897,6 +913,22 @@ bool
 isl_surf_init_s(const struct isl_device *dev,
                 struct isl_surf *surf,
                 const struct isl_surf_init_info *restrict info);
+
+/**
+ * @brief Convenience wrapper for initializing a HiZ surface.
+ *
+ * This function thinly wraps isl_surf_init().  When creating a HiZ surface,
+ * you're not required to use it. You can use isl_surf_init() directly if you
+ * wish.
+ */
+#define isl_hiz_surf_init(dev, hiz_surf, ...) \
+   isl_hiz_surf_init_s((dev), (hiz_surf), \
+                       &(struct isl_hiz_surf_init_info) {  __VA_ARGS__ })
+
+bool
+isl_hiz_surf_init_s(const struct isl_device *dev,
+                    struct isl_surf *hiz_surf,
+                    const struct isl_hiz_surf_init_info *restrict info);
 
 void
 isl_surf_get_tile_info(const struct isl_device *dev,

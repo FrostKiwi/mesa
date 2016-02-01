@@ -1454,3 +1454,33 @@ isl_surf_get_depth_format(const struct isl_device *dev,
       return 5; /* D16_UNORM */
    }
 }
+
+bool
+isl_hiz_surf_init_s(const struct isl_device *dev,
+                    struct isl_surf *hiz_surf,
+                    const struct isl_hiz_surf_init_info *restrict info)
+{
+   const struct isl_surf *surf = info->primary_surf;
+
+   assert(surf->usage & ISL_SURF_USAGE_DEPTH_BIT);
+
+   if (ISL_DEV_GEN(dev) < 6)
+      return false;
+
+   if (surf->usage & ISL_SURF_USAGE_DISABLE_AUX_BIT)
+      return false;
+
+   return isl_surf_init(dev, hiz_surf,
+         .dim = surf->dim,
+         .format = ISL_FORMAT_HIZ,
+         .width = surf->logical_level0_px.width,
+         .height = surf->logical_level0_px.height,
+         .depth = surf->logical_level0_px.depth,
+         .levels = surf->levels,
+         .array_len = surf->logical_level0_px.array_len,
+         .samples = surf->samples,
+         .min_alignment = 0,
+         .min_pitch = 0,
+         .usage = ISL_SURF_USAGE_HIZ,
+         .tiling_flags = (surf->tiling << 1));
+}
