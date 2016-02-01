@@ -1622,6 +1622,16 @@ struct anv_surface *
 anv_image_get_surface_for_aspect_mask(struct anv_image *image,
                                       VkImageAspectFlags aspect_mask);
 
+static inline bool
+anv_image_has_hiz(const struct anv_image *image)
+{
+   /* We must check the usage because anv_image::hiz_surface belongs to
+    * a union.
+    */
+   return (image->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) &&
+          image->hiz_surface.isl.size > 0;
+}
+
 void anv_image_view_init(struct anv_image_view *view,
                          struct anv_device *device,
                          const VkImageViewCreateInfo* pCreateInfo,
