@@ -97,6 +97,16 @@ get_surface(struct anv_image *image, VkImageAspectFlags aspect)
    }
 }
 
+static void
+add_surface(struct anv_image *image, struct anv_surface *surf)
+{
+   assert(surf->isl.size > 0); /* isl surface must be initialized */
+
+   surf->offset = align_u32(image->size, surf->isl.alignment);
+   image->size = surf->offset + surf->isl.size;
+   image->alignment = MAX(image->alignment, surf->isl.alignment);
+}
+
 /**
  * Initialize the anv_image::*_surface selected by \a aspect. Then update the
  * image's memory requirements (that is, the image's size and alignment).
@@ -144,9 +154,21 @@ make_surface(const struct anv_device *dev,
     */
    assert(ok);
 
-   anv_surf->offset = align_u32(image->size, anv_surf->isl.alignment);
-   image->size = anv_surf->offset + anv_surf->isl.size;
-   image->alignment = MAX(image->alignment, anv_surf->isl.alignment);
+   add_surface(image, anv_surf);
+
+   if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
+      ok = isl_hiz_surf_init(&dev->isl_dev, &image->hiz_surface.isl,
+                             .primary_surf = &image->depth_surface.isl,
+                             .min_alignment = 0,
+                             .min_pitch = 0);
+
+      /* Don't worry if HiZ initialization fails. Perhaps it failed for
+       * a valid reason, such as the surface's usage bits being incompatible
+       * with HiZ.
+       */
+      if (ok)
+         add_surface(image, &image->hiz_surface);
+   }
 
    return VK_SUCCESS;
 }
