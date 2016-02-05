@@ -1738,9 +1738,8 @@ struct anv_render_pass_attachment {
 struct anv_render_pass {
    uint32_t                                     attachment_count;
    uint32_t                                     subpass_count;
-   uint32_t *                                   subpass_attachments;
    struct anv_render_pass_attachment *          attachments;
-   struct anv_subpass                           subpasses[0];
+   struct anv_subpass *                         subpasses;
 };
 
 struct anv_query_pool_slot {
