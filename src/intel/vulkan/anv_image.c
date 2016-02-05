@@ -39,7 +39,8 @@ choose_isl_surf_usage(VkImageUsageFlags vk_usage,
    isl_surf_usage_flags_t isl_usage = 0;
 
    /* FINISHME: Support aux surfaces */
-   isl_usage |= ISL_SURF_USAGE_DISABLE_AUX_BIT;
+   if (aspect != VK_IMAGE_ASPECT_DEPTH_BIT)
+      isl_usage |= ISL_SURF_USAGE_DISABLE_AUX_BIT;
 
    if (vk_usage & VK_IMAGE_USAGE_SAMPLED_BIT)
       isl_usage |= ISL_SURF_USAGE_TEXTURE_BIT;
@@ -95,6 +96,16 @@ get_surface(struct anv_image *image, VkImageAspectFlags aspect)
    case VK_IMAGE_ASPECT_STENCIL_BIT:
       return &image->stencil_surface;
    }
+}
+
+static void
+add_surface(struct anv_image *image, struct anv_surface *surf)
+{
+   assert(surf->isl.size > 0); /* isl surface must be initialized */
+
+   surf->offset = align_u32(image->size, surf->isl.alignment);
+   image->size = surf->offset + surf->isl.size;
+   image->alignment = MAX(image->alignment, surf->isl.alignment);
 }
 
 /**
@@ -161,9 +172,21 @@ make_surface(const struct anv_device *dev,
     */
    assert(ok);
 
-   anv_surf->offset = align_u32(image->size, anv_surf->isl.alignment);
-   image->size = anv_surf->offset + anv_surf->isl.size;
-   image->alignment = MAX(image->alignment, anv_surf->isl.alignment);
+   add_surface(image, anv_surf);
+
+   if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
+      ok = isl_hiz_surf_init(&dev->isl_dev, &image->hiz_surface.isl,
+                             .primary_surf = &image->depth_surface.isl,
+                             .min_alignment = 0,
+                             .min_pitch = 0);
+
+      /* Don't worry if HiZ initialization fails. Perhaps it failed for
+       * a valid reason, such as the surface's usage bits being incompatible
+       * with HiZ.
+       */
+      if (ok)
+         add_surface(image, &image->hiz_surface);
+   }
 
    return VK_SUCCESS;
 }
