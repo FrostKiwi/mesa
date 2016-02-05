@@ -1532,6 +1532,7 @@ anv_format_is_depth_or_stencil(const struct anv_format *format)
  * Subsurface of an anv_image.
  */
 struct anv_surface {
+   /** Valid only if isl_surf::size > 0. */
    struct isl_surf isl;
 
    /**
@@ -1578,6 +1579,7 @@ struct anv_image {
 
       struct {
          struct anv_surface depth_surface;
+         struct anv_surface hiz_surface;
          struct anv_surface stencil_surface;
       };
    };
