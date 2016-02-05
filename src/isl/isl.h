@@ -297,8 +297,18 @@ enum isl_format {
    ISL_FORMAT_R8G8B8_SINT =                                    457,
    ISL_FORMAT_RAW =                                            511,
 
-   /* Hardware doesn't understand this out-of-band value */
-   ISL_FORMAT_UNSUPPORTED =                             UINT16_MAX,
+   /* The following format values are particular to isl. They lie outside the
+    * range of hardware enum SURFACE_FORMAT; hardware does not understand
+    * them.
+    *
+    * The isl_format_layout lookup table contains an entry for each of these
+    * formats.  Therefore the format values are small, in the neighborhood of
+    * max(SURFACE_FORMAT), to keep the table's size lean.
+    */
+   ISL_FORMAT_HIZ =                                            512,
+
+    /* Out-of-band format */
+   ISL_FORMAT_UNSUPPORTED =                             0xffffffff,
 };
 
 /**
@@ -455,6 +465,7 @@ typedef uint64_t isl_surf_usage_flags_t;
 #define ISL_SURF_USAGE_DISPLAY_ROTATE_270_BIT  (1u << 9)
 #define ISL_SURF_USAGE_DISPLAY_FLIP_X_BIT      (1u << 10)
 #define ISL_SURF_USAGE_DISPLAY_FLIP_Y_BIT      (1u << 11)
+#define ISL_SURF_USAGE_HIZ                     (1u << 12)
 /** @} */
 
 /**
@@ -604,6 +615,9 @@ struct isl_tile_info {
 
 /**
  * @brief Input to surface initialization
+ *
+ * To create a HiZ surface, set format = ISL_FORMAT_HIZ and
+ * usage = ISL_SURF_USAGE_HIZ.
  *
  * @invariant width >= 1
  * @invariant height >= 1

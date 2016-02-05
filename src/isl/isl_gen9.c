@@ -38,6 +38,8 @@ gen9_calc_std_image_alignment_sa(const struct isl_device *dev,
 {
    const struct isl_format_layout *fmtl = isl_format_get_layout(info->format);
 
+   /* TODO(hiz): Does HiZ respect the alignment of standard tiling formats? */
+
    assert(isl_tiling_is_std_y(tiling));
 
    const uint32_t bs = fmtl->bs;
@@ -161,6 +163,8 @@ gen9_choose_image_alignment_el(const struct isl_device *dev,
    if (info->dim == ISL_SURF_DIM_1D) {
       /* See the Skylake BSpec > Memory Views > Common Surface Formats > Surface
        * Layout and Tiling > 1D Surfaces > 1D Alignment Requirements.
+       *
+       * TODO(hiz): Gen9 1D HiZ, review equations.
        */
       *image_align_el = isl_extent3d(64, 1, 1);
       return;
