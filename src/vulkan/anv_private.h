@@ -1721,11 +1721,11 @@ struct anv_subpass {
    uint32_t *                                   input_attachments;
    uint32_t                                     color_count;
    uint32_t *                                   color_attachments;
-   uint32_t *                                   resolve_attachments;
-   uint32_t                                     depth_stencil_attachment;
 
-   /** Subpass has at least one resolve attachment */
-   bool                                         has_resolve;
+   /** Null if and only if the subpass has no resolve attachment. */
+   uint32_t *                                   resolve_attachments;
+
+   uint32_t                                     depth_stencil_attachment;
 };
 
 struct anv_render_pass_attachment {
