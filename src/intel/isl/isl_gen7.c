@@ -111,8 +111,10 @@ gen7_choose_msaa_layout(const struct isl_device *dev,
     * In the table above, MSFMT_MSS refers to ISL_MSAA_LAYOUT_ARRAY, and
     * MSFMT_DEPTH_STENCIL refers to ISL_MSAA_LAYOUT_INTERLEAVED.
     */
-   if (isl_surf_usage_is_depth_or_stencil(info->usage))
+   if (isl_surf_usage_is_depth_or_stencil(info->usage) ||
+       (info->usage & ISL_SURF_USAGE_HIZ)) {
       require_interleaved = true;
+   }
 
    /* From the Ivybridge PRM, Volume 4 Part 1 p72, SURFACE_STATE, Multisampled
     * Suface Storage Format:
@@ -216,7 +218,8 @@ gen7_filter_tiling(const struct isl_device *dev,
    *flags &= ~ISL_TILING_Yf_BIT; /* FINISHME[SKL]: Support Yf */
    *flags &= ~ISL_TILING_Ys_BIT; /* FINISHME[SKL]: Support Ys */
 
-   if (isl_surf_usage_is_depth(info->usage)) {
+   if (isl_surf_usage_is_depth(info->usage) ||
+       info->usage & ISL_SURF_USAGE_HIZ) {
       /* Depth requires Y. */
       *flags &= ISL_TILING_ANY_Y_MASK;
    }

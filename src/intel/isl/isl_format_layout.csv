@@ -285,3 +285,13 @@ ETC2_EAC_SRGB8_A8           , 128,  4,  4,  1,  un8,  un8,  un8,  un8,     ,    
 R8G8B8_UINT                 ,  24,  1,  1,  1,  ui8,  ui8,  ui8,     ,     ,     ,    , linear,
 R8G8B8_SINT                 ,  24,  1,  1,  1,  si8,  si8,  si8,     ,     ,     ,    , linear,
 RAW                         ,   0,  0,  0,  0,     ,     ,     ,     ,     ,     ,    ,       ,
+
+#
+# TODO(hiz) Where should this comment go? Maybe the README?
+#
+# The HiZ format is particular to isl.  There exists no hardware enum for the
+# HiZ format.  We define it here because it greatly simplifies the code; it
+# allows isl to handle HiZ surfaces like any other surface. This is possible
+# because the elements of a HiZ surface are 4x2 literal compression blocks.
+#
+HIZ                         ,   8,  4,  2,  1,     ,     ,     ,     ,     ,     ,    ,       ,

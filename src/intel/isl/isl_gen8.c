@@ -84,8 +84,10 @@ gen8_choose_msaa_layout(const struct isl_device *dev,
    if (isl_format_is_yuv(info->format))
       return false;
 
-   if (isl_surf_usage_is_depth_or_stencil(info->usage))
+   if (isl_surf_usage_is_depth_or_stencil(info->usage) ||
+       (info->usage & ISL_SURF_USAGE_HIZ)) {
       require_interleaved = true;
+   }
 
    if (require_array && require_interleaved)
       return false;

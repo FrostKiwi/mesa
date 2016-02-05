@@ -271,6 +271,8 @@ isl_choose_array_pitch_span(const struct isl_device *dev,
                             enum isl_dim_layout dim_layout,
                             const struct isl_extent4d *phys_level0_sa)
 {
+   /* TODO(hiz): Review HiZ QPitch equations. */
+
    switch (dim_layout) {
    case ISL_DIM_LAYOUT_GEN9_1D:
    case ISL_DIM_LAYOUT_GEN4_2D:
@@ -382,6 +384,12 @@ isl_choose_image_alignment_el(const struct isl_device *dev,
                               enum isl_msaa_layout msaa_layout,
                               struct isl_extent3d *image_align_el)
 {
+   if (info->format == ISL_FORMAT_HIZ) {
+      /* TODO(hiz): Reive HiZ equations */
+      *image_align_el = isl_extent3d(2, 2, 1);
+      return;
+   }
+
    if (ISL_DEV_GEN(dev) >= 9) {
       gen9_choose_image_alignment_el(dev, info, tiling, msaa_layout,
                                      image_align_el);
@@ -572,7 +580,9 @@ isl_calc_phys_slice0_extent_sa_gen4_2d(
 
    assert(phys_level0_sa->depth == 1);
 
-   if (info->levels == 1 && msaa_layout != ISL_MSAA_LAYOUT_INTERLEAVED) {
+   if (info->levels == 1 &&
+       msaa_layout != ISL_MSAA_LAYOUT_INTERLEAVED &&
+       info->format != ISL_FORMAT_HIZ) {
       /* Do not pad the surface to the image alignment. Instead, pad it only
        * to the pixel format's block alignment.
        *
@@ -587,6 +597,10 @@ isl_calc_phys_slice0_extent_sa_gen4_2d(
        * choose an arbitrary, non-aligned row pitch. If the surface backs
        * a VkBuffer, then an arbitrary pitch may be needed to accomodate
        * VkBufferImageCopy::bufferRowLength.
+       *
+       * Skip this optimization for HiZ surfaces because the physical surface,
+       * due to how the hardware fetches HiZ compression blocks in pairs, must
+       * be padded to the image alignment.
        */
       *phys_slice0_sa = (struct isl_extent2d) {
          .w = isl_align_npot(phys_level0_sa->w, fmtl->bw),
@@ -1055,11 +1069,25 @@ isl_calc_total_height_el(const struct isl_device *dev,
    return total_h_el;
 }
 
+static void
+check_surf_init_info(const struct isl_surf_init_info *info)
+{
+   /* If a surface is used for HiZ, then it must be used for nothing else. */
+   if (info->usage & ISL_SURF_USAGE_HIZ)
+      assert(info->usage == ISL_SURF_USAGE_HIZ);
+
+   /* HiZ format and HiZ usage must match. */
+   assert((info->format == ISL_FORMAT_HIZ) ==
+          (info->usage == ISL_SURF_USAGE_HIZ));
+}
+
 bool
 isl_surf_init_s(const struct isl_device *dev,
                 struct isl_surf *surf,
                 const struct isl_surf_init_info *restrict info)
 {
+   check_surf_init_info(info);
+
    const struct isl_format_layout *fmtl = isl_format_get_layout(info->format);
 
    const struct isl_extent4d logical_level0_px = {
