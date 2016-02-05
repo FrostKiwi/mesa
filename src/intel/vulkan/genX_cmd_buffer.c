@@ -801,6 +801,7 @@ cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer)
 {
    struct anv_device *device = cmd_buffer->device;
    const struct anv_framebuffer *fb = cmd_buffer->state.framebuffer;
+   const struct anv_subpass *subpass = cmd_buffer->state.subpass;
    const struct anv_image_view *iview =
       anv_cmd_buffer_get_depth_stencil_view(cmd_buffer);
    const struct anv_image *image = iview ? iview->image : NULL;
@@ -808,6 +809,11 @@ cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer)
       iview ? anv_format_for_vk_format(iview->vk_format) : NULL;
    const bool has_depth = iview && anv_format->has_depth;
    const bool has_stencil = iview && anv_format->has_stencil;
+
+   /* TODO(hiz): When should we enable hiz?
+    * TODO(hiz): Turn off hiz for misaligned miplevels.
+    */
+   bool has_hiz = has_depth && anv_image_has_hiz(image);
 
    /* FIXME: Implement the PMA stall W/A */
    /* FIXME: Width and Height are wrong */
@@ -818,7 +824,7 @@ cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer)
          .SurfaceType = SURFTYPE_2D,
          .DepthWriteEnable = true,
          .StencilWriteEnable = has_stencil,
-         .HierarchicalDepthBufferEnable = false,
+         .HierarchicalDepthBufferEnable = has_hiz,
          .SurfaceFormat = isl_surf_get_depth_format(&device->isl_dev,
                                                     &image->depth_surface.isl),
          .SurfacePitch = image->depth_surface.isl.row_pitch - 1,
@@ -889,11 +895,39 @@ cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer)
       anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_STENCIL_BUFFER));
    }
 
+#if GEN_GEN >= 8
+   if (has_hiz) {
+      anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_HIER_DEPTH_BUFFER),
+         .HierarchicalDepthBufferObjectControlState = GENX(MOCS),
+         .SurfacePitch = image->hiz_surface.isl.row_pitch - 1,
+         .SurfaceBaseAddress = {
+            .bo = image->bo,
+            .offset = image->offset + image->hiz_surface.offset,
+         },
+         /* TODO(hiz): Confirm qpitch */
+         .SurfaceQPitch = isl_surf_get_array_pitch_el_rows(&image->hiz_surface.isl) >> 2);
+   } else {
+      anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_HIER_DEPTH_BUFFER));
+   }
+
+   if (has_hiz) {
+      anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_CLEAR_PARAMS),
+         .DepthClearValue = cmd_buffer->state
+                            .attachments[subpass->depth_stencil_attachment]
+                            .clear_value.depthStencil.depth,
+         .DepthClearValueValid = true);
+   } else {
+      anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_CLEAR_PARAMS),
+         .DepthClearValue = 0.0,
+         .DepthClearValueValid = false);
+   }
+#else
    /* Disable hierarchial depth buffers. */
    anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_HIER_DEPTH_BUFFER));
 
    /* Clear the clear params. */
    anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_CLEAR_PARAMS));
+#endif
 }
 
 /**
