@@ -1544,7 +1544,7 @@ emit_tex(struct ir3_compile *ctx, nir_tex_instr *tex)
 		type = TYPE_U32;
 
 	sam = ir3_SAM(b, opc, type, TGSI_WRITEMASK_XYZW,
-			flags, tex->sampler_index, tex->sampler_index,
+			flags, tex->texture_index, tex->texture_index,
 			create_collect(b, src0, nsrc0),
 			create_collect(b, src1, nsrc1));
 
@@ -1571,7 +1571,7 @@ emit_tex_query_levels(struct ir3_compile *ctx, nir_tex_instr *tex)
 	dst = get_dst(ctx, &tex->dest, 1);
 
 	sam = ir3_SAM(b, OPC_GETINFO, TYPE_U32, TGSI_WRITEMASK_Z, 0,
-			tex->sampler_index, tex->sampler_index, NULL, NULL);
+			tex->texture_index, tex->texture_index, NULL, NULL);
 
 	/* even though there is only one component, since it ends
 	 * up in .z rather than .x, we need a split_dest()
@@ -1608,7 +1608,7 @@ emit_tex_txs(struct ir3_compile *ctx, nir_tex_instr *tex)
 	lod = get_src(ctx, &tex->src[0].src)[0];
 
 	sam = ir3_SAM(b, OPC_GETSIZE, TYPE_U32, TGSI_WRITEMASK_XYZW, flags,
-			tex->sampler_index, tex->sampler_index, lod, NULL);
+			tex->texture_index, tex->texture_index, lod, NULL);
 
 	split_dest(b, dst, sam, 4);
 
