@@ -1733,6 +1733,12 @@ struct anv_render_pass_attachment {
    uint32_t                                     samples;
    VkAttachmentLoadOp                           load_op;
    VkAttachmentLoadOp                           stencil_load_op;
+
+   /**
+    * The first subpass that reads from or writes to the attachment. If there
+    * is no such subpass, then UINT32_MAX.
+    */
+   uint32_t                                     first_subpass;
 };
 
 struct anv_render_pass {

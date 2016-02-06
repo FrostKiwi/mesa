@@ -50,6 +50,40 @@ pass_init_attachments(struct anv_render_pass *pass,
       a->samples = desc->samples;
       a->load_op = desc->loadOp;
       a->stencil_load_op = desc->stencilLoadOp;
+      a->first_subpass = UINT32_MAX;
+   }
+
+   /* For each attachment, find the first subpass that reads from or writes to
+    * it. Since we walk the list of subpasses in reverse order, the "last"
+    * subpass that uses an attachment is actually the first.
+    */
+   for (uint32_t s = info->subpassCount; s > 0; --s) {
+      const VkSubpassDescription *desc = &info->pSubpasses[s - 1];
+
+      #define USE(attachment) \
+         do { \
+            if (attachment != VK_ATTACHMENT_UNUSED) \
+               pass->attachments[attachment].first_subpass = s - 1; \
+         } while (0)
+
+      for (uint32_t j = 0; j < desc->inputAttachmentCount; ++j) {
+         USE(desc->pInputAttachments[j].attachment);
+      }
+
+      for (uint32_t j = 0; j < desc->colorAttachmentCount; ++j) {
+         USE(desc->pColorAttachments[j].attachment);
+      }
+
+      if (desc->pResolveAttachments) {
+         for (uint32_t j = 0; j < desc->colorAttachmentCount; ++j) {
+            USE(desc->pResolveAttachments[j].attachment);
+         }
+      }
+
+      if (desc->pDepthStencilAttachment)
+         USE(desc->pDepthStencilAttachment->attachment);
+
+      #undef USE
    }
 
    return VK_SUCCESS;
