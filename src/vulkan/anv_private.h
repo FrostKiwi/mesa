@@ -1098,7 +1098,6 @@ void anv_dynamic_state_copy(struct anv_dynamic_state *dest,
  * The clear value is valid only if there exists a pending clear.
  */
 struct anv_attachment_state {
-   VkImageAspectFlags                           pending_clear_aspects;
    VkClearValue                                 clear_value;
 };
 

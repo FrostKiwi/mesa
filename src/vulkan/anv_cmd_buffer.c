@@ -168,7 +168,6 @@ anv_cmd_state_setup_attachments(struct anv_cmd_buffer *cmd_buffer,
 
    for (uint32_t i = 0; i < pass->attachment_count; ++i) {
       struct anv_render_pass_attachment *a = &pass->attachments[i];
-      state->attachments[i].pending_clear_aspects = a->clear_aspects;
       if (a->clear_aspects) {
          assert(info->clearValueCount > i);
          state->attachments[i].clear_value = info->pClearValues[i];
