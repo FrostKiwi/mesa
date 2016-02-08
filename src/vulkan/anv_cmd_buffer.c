@@ -132,45 +132,39 @@ anv_cmd_state_reset(struct anv_cmd_buffer *cmd_buffer)
    state->dynamic = default_dynamic_state;
    state->need_query_wa = true;
 
-   if (state->attachments != NULL) {
-      anv_free(&cmd_buffer->pool->alloc, state->attachments);
-      state->attachments = NULL;
-   }
+   anv_free(&cmd_buffer->pool->alloc, state->clear_values);
+   state->clear_values = NULL;
 
    state->gen7.index_buffer = NULL;
 }
 
-/**
- * Setup anv_cmd_state::attachments for vkCmdBeginRenderPass.
- */
 void
-anv_cmd_state_setup_attachments(struct anv_cmd_buffer *cmd_buffer,
-                                const VkRenderPassBeginInfo *info)
+anv_cmd_state_set_clear_values(struct anv_cmd_buffer *cmd_buffer,
+                               const VkRenderPassBeginInfo *info)
 {
    struct anv_cmd_state *state = &cmd_buffer->state;
    ANV_FROM_HANDLE(anv_render_pass, pass, info->renderPass);
+   size_t size;
 
-   anv_free(&cmd_buffer->pool->alloc, state->attachments);
+   anv_free(&cmd_buffer->pool->alloc, state->clear_values);
 
    if (pass->attachment_count == 0) {
-      state->attachments = NULL;
+      state->clear_values = NULL;
       return;
    }
 
-   state->attachments = anv_alloc(&cmd_buffer->pool->alloc,
-                                  pass->attachment_count *
-                                       sizeof(state->attachments[0]),
-                                  8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   if (state->attachments == NULL) {
+   size =  pass->attachment_count * sizeof(state->clear_values[0]);
+   state->clear_values = anv_alloc(&cmd_buffer->pool->alloc, size, 8,
+                                   VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   if (state->clear_values == NULL) {
       /* FIXME: Propagate VK_ERROR_OUT_OF_HOST_MEMORY to vkEndCommandBuffer */
       abort();
    }
 
-   for (uint32_t i = 0; i < pass->attachment_count; ++i) {
-      struct anv_render_pass_attachment *a = &pass->attachments[i];
-      if (a->clear_aspects) {
-         assert(info->clearValueCount > i);
-         state->attachments[i].clear_value = info->pClearValues[i];
+   for (uint32_t a = 0; a < pass->attachment_count; ++a) {
+      if (pass->attachments[a].clear_aspects) {
+         assert(info->clearValueCount > a);
+         state->clear_values[a] = info->pClearValues[a];
       }
    }
 }
@@ -220,7 +214,7 @@ static VkResult anv_create_cmd_buffer(
    cmd_buffer->device = device;
    cmd_buffer->pool = pool;
    cmd_buffer->level = level;
-   cmd_buffer->state.attachments = NULL;
+   cmd_buffer->state.clear_values = NULL;
 
    result = anv_cmd_buffer_init_batch_bo_chain(cmd_buffer);
    if (result != VK_SUCCESS)
@@ -285,7 +279,7 @@ anv_cmd_buffer_destroy(struct anv_cmd_buffer *cmd_buffer)
    anv_state_stream_finish(&cmd_buffer->surface_state_stream);
    anv_state_stream_finish(&cmd_buffer->dynamic_state_stream);
 
-   anv_free(&cmd_buffer->pool->alloc, cmd_buffer->state.attachments);
+   anv_free(&cmd_buffer->pool->alloc, cmd_buffer->state.clear_values);
    anv_free(&cmd_buffer->pool->alloc, cmd_buffer);
 }
 

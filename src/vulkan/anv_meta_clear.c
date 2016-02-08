@@ -864,7 +864,7 @@ anv_cmd_buffer_clear_subpass(struct anv_cmd_buffer *cmd_buffer)
       VkClearAttachment clear_att = {
          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
          .colorAttachment = i, /* Use attachment index relative to subpass */
-         .clearValue = cmd_state->attachments[a].clear_value,
+         .clearValue = cmd_state->clear_values[a],
       };
 
       emit_clear(cmd_buffer, &clear_att, &clear_rect);
@@ -878,7 +878,7 @@ anv_cmd_buffer_clear_subpass(struct anv_cmd_buffer *cmd_buffer)
 
       VkClearAttachment clear_att = {
          .aspectMask = pass->attachments[ds].clear_aspects,
-         .clearValue = cmd_state->attachments[ds].clear_value,
+         .clearValue = cmd_state->clear_values[ds],
       };
 
       emit_clear(cmd_buffer, &clear_att, &clear_rect);
