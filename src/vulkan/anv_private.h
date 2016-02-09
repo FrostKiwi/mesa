@@ -1731,8 +1731,9 @@ struct anv_subpass {
 struct anv_render_pass_attachment {
    const struct anv_format                      *format;
    uint32_t                                     samples;
-   VkAttachmentLoadOp                           load_op;
-   VkAttachmentLoadOp                           stencil_load_op;
+
+   /** Aspects that have VK_ATTACHMENT_LOAD_OP_CLEAR. */
+   VkImageAspectFlags                           clear_aspects;
 
    /**
     * The first subpass that reads from or writes to the attachment. If there

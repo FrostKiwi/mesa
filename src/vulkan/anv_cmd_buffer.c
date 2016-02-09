@@ -167,28 +167,9 @@ anv_cmd_state_setup_attachments(struct anv_cmd_buffer *cmd_buffer,
    }
 
    for (uint32_t i = 0; i < pass->attachment_count; ++i) {
-      struct anv_render_pass_attachment *att = &pass->attachments[i];
-      VkImageAspectFlags clear_aspects = 0;
-
-      if (anv_format_is_color(att->format)) {
-         /* color attachment */
-         if (att->load_op == VK_ATTACHMENT_LOAD_OP_CLEAR) {
-            clear_aspects |= VK_IMAGE_ASPECT_COLOR_BIT;
-         }
-      } else {
-         /* depthstencil attachment */
-         if (att->format->has_depth &&
-             att->load_op == VK_ATTACHMENT_LOAD_OP_CLEAR) {
-            clear_aspects |= VK_IMAGE_ASPECT_DEPTH_BIT;
-         }
-         if (att->format->has_stencil &&
-             att->stencil_load_op == VK_ATTACHMENT_LOAD_OP_CLEAR) {
-            clear_aspects |= VK_IMAGE_ASPECT_STENCIL_BIT;
-         }
-      }
-
-      state->attachments[i].pending_clear_aspects = clear_aspects;
-      if (clear_aspects) {
+      struct anv_render_pass_attachment *a = &pass->attachments[i];
+      state->attachments[i].pending_clear_aspects = a->clear_aspects;
+      if (a->clear_aspects) {
          assert(info->clearValueCount > i);
          state->attachments[i].clear_value = info->pClearValues[i];
       }

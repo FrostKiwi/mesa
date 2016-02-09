@@ -48,9 +48,25 @@ pass_init_attachments(struct anv_render_pass *pass,
 
       a->format = anv_format_for_vk_format(desc->format);
       a->samples = desc->samples;
-      a->load_op = desc->loadOp;
-      a->stencil_load_op = desc->stencilLoadOp;
+      a->clear_aspects = 0;
       a->first_subpass = UINT32_MAX;
+
+      if (anv_format_is_color(a->format)) {
+         /* color attachment */
+         if (desc->loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+            a->clear_aspects |= VK_IMAGE_ASPECT_COLOR_BIT;
+         }
+      } else {
+         /* depthstencil attachment */
+         if (a->format->has_depth &&
+             desc->loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+            a->clear_aspects |= VK_IMAGE_ASPECT_DEPTH_BIT;
+         }
+         if (a->format->has_stencil &&
+             desc->stencilLoadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+            a->clear_aspects |= VK_IMAGE_ASPECT_STENCIL_BIT;
+         }
+      }
    }
 
    /* For each attachment, find the first subpass that reads from or writes to
