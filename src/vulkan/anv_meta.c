@@ -31,8 +31,6 @@
 #include "anv_private.h"
 #include "nir/nir_builder.h"
 
-struct anv_render_pass anv_meta_dummy_renderpass = {0};
-
 static nir_shader *
 build_nir_vertex_shader(bool attr_flat)
 {

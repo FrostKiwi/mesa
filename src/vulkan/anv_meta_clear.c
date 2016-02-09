@@ -117,6 +117,7 @@ build_color_shaders(struct nir_shader **out_vs,
 
 static VkResult
 create_pipeline(struct anv_device *device,
+                struct anv_render_pass *pass,
                 uint32_t samples,
                 struct nir_shader *vs_nir,
                 struct nir_shader *fs_nir,
@@ -205,7 +206,7 @@ create_pipeline(struct anv_device *device,
             },
          },
          .flags = 0,
-         .renderPass = anv_render_pass_to_handle(&anv_meta_dummy_renderpass),
+         .renderPass = anv_render_pass_to_handle(pass),
          .subpass = 0,
       },
       &(struct anv_graphics_pipeline_create_info) {
@@ -228,6 +229,7 @@ create_pipeline(struct anv_device *device,
 
 static VkResult
 create_color_pipeline(struct anv_device *device,
+                      struct anv_render_pass *pass,
                       uint32_t samples,
                       uint32_t frag_output,
                       struct anv_pipeline **pipeline)
@@ -299,10 +301,9 @@ create_color_pipeline(struct anv_device *device,
     * shader. We need the shader to write to the specified color attachment,
     * but the repclear shader writes to all color attachments.
     */
-   return
-      create_pipeline(device, samples, vs_nir, fs_nir, &vi_state, &ds_state,
-                      &cb_state, &device->meta_state.alloc,
-                      /*use_repclear*/ false, pipeline);
+   return create_pipeline(device, pass, samples, vs_nir, fs_nir, &vi_state,
+                          &ds_state, &cb_state, &device->meta_state.alloc,
+                          /*use_repclear*/ false, pipeline);
 }
 
 static void
@@ -314,6 +315,17 @@ destroy_pipeline(struct anv_device *device, struct anv_pipeline *pipeline)
    ANV_CALL(DestroyPipeline)(anv_device_to_handle(device),
                              anv_pipeline_to_handle(pipeline),
                              &device->meta_state.alloc);
+}
+
+static void
+destroy_pass(struct anv_device *device, struct anv_render_pass *pass)
+{
+   if (!pass)
+      return;
+
+   ANV_CALL(DestroyRenderPass)(anv_device_to_handle(device),
+                               anv_render_pass_to_handle(pass),
+                               &device->meta_state.alloc);
 }
 
 void
@@ -329,6 +341,9 @@ anv_device_finish_meta_clear_state(struct anv_device *device)
       destroy_pipeline(device, state->clear[i].depth_only_pipeline);
       destroy_pipeline(device, state->clear[i].stencil_only_pipeline);
       destroy_pipeline(device, state->clear[i].depthstencil_pipeline);
+
+      destroy_pass(device, state->clear[i].color_pass);
+      destroy_pass(device, state->clear[i].depthstencil_pass);
    }
 }
 
@@ -454,6 +469,7 @@ build_depthstencil_shader(struct nir_shader **out_vs)
 
 static VkResult
 create_depthstencil_pipeline(struct anv_device *device,
+                             struct anv_render_pass *pass,
                              VkImageAspectFlags aspects,
                              uint32_t samples,
                              struct anv_pipeline **pipeline)
@@ -514,8 +530,8 @@ create_depthstencil_pipeline(struct anv_device *device,
       .pAttachments = NULL,
    };
 
-   return create_pipeline(device, samples, vs_nir, NULL, &vi_state, &ds_state,
-                          &cb_state, &device->meta_state.alloc,
+   return create_pipeline(device, pass, samples, vs_nir, NULL, &vi_state,
+                          &ds_state, &cb_state, &device->meta_state.alloc,
                           /*use_repclear*/ true, pipeline);
 }
 
@@ -636,6 +652,7 @@ VkResult
 anv_device_init_meta_clear_state(struct anv_device *device)
 {
    VkResult res;
+   VkDevice device_h = anv_device_to_handle(device);
    struct anv_meta_state *state = &device->meta_state;
 
    zero(device->meta_state.clear);
@@ -643,26 +660,104 @@ anv_device_init_meta_clear_state(struct anv_device *device)
    for (uint32_t i = 0; i < ARRAY_SIZE(state->clear); ++i) {
       uint32_t samples = 1 << i;
 
+      VkRenderPass color_pass_h = VK_NULL_HANDLE;
+      res = anv_CreateRenderPass(device_h,
+         &(VkRenderPassCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+            .attachmentCount = 1,
+            .pAttachments = (VkAttachmentDescription[]) {
+               {
+                  .format = VK_FORMAT_UNDEFINED, /* Out shaders don't care */
+                  .samples = samples,
+                  .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                  .initialLayout = VK_IMAGE_LAYOUT_GENERAL,
+                  .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
+               },
+            },
+            .subpassCount = 1,
+            .pSubpasses = (VkSubpassDescription[]) {
+               {
+                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                  .colorAttachmentCount = 1,
+                  .pColorAttachments = (VkAttachmentReference[]) {
+                     {
+                        .attachment = 0,
+                        .layout = VK_IMAGE_LAYOUT_GENERAL,
+                     },
+                  },
+               },
+            },
+            .dependencyCount = 0,
+         },
+         &state->alloc,
+         &color_pass_h);
+      if (res != VK_SUCCESS)
+         goto fail;
+
+      state->clear[i].color_pass =
+         anv_render_pass_from_handle(color_pass_h);
+
+      VkRenderPass depthstencil_pass_h = VK_NULL_HANDLE;
+      res = anv_CreateRenderPass(device_h,
+         &(VkRenderPassCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+            .attachmentCount = 1,
+            .pAttachments = (VkAttachmentDescription[]) {
+               {
+                  .format = VK_FORMAT_UNDEFINED, /* Out shaders don't care */
+                  .samples = samples,
+                  .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
+                  .initialLayout = VK_IMAGE_LAYOUT_GENERAL,
+                  .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
+               },
+            },
+            .subpassCount = 1,
+            .pSubpasses = (VkSubpassDescription[]) {
+               {
+                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                  .pDepthStencilAttachment = (VkAttachmentReference[]) {
+                     {
+                        .attachment = 0,
+                        .layout = VK_IMAGE_LAYOUT_GENERAL,
+                     },
+                  },
+               },
+            },
+            .dependencyCount = 0,
+         },
+         &state->alloc,
+         &depthstencil_pass_h);
+      if (res != VK_SUCCESS)
+         goto fail;
+
+      state->clear[i].depthstencil_pass =
+         anv_render_pass_from_handle(depthstencil_pass_h);
+
       for (uint32_t j = 0; j < ARRAY_SIZE(state->clear[i].color_pipelines); ++j) {
-         res = create_color_pipeline(device, samples, /* frag_output */ j,
+         res = create_color_pipeline(device, state->clear[i].color_pass,
+                                     samples, /* frag_output */ j,
                                      &state->clear[i].color_pipelines[j]);
          if (res != VK_SUCCESS)
             goto fail;
       }
 
-      res = create_depthstencil_pipeline(device,
+      res = create_depthstencil_pipeline(device, state->clear[i].depthstencil_pass,
                                          VK_IMAGE_ASPECT_DEPTH_BIT, samples,
                                          &state->clear[i].depth_only_pipeline);
       if (res != VK_SUCCESS)
          goto fail;
 
-      res = create_depthstencil_pipeline(device,
+      res = create_depthstencil_pipeline(device, state->clear[i].depthstencil_pass,
                                          VK_IMAGE_ASPECT_STENCIL_BIT, samples,
                                          &state->clear[i].stencil_only_pipeline);
       if (res != VK_SUCCESS)
          goto fail;
 
-      res = create_depthstencil_pipeline(device,
+      res = create_depthstencil_pipeline(device, state->clear[i].depthstencil_pass,
                                          VK_IMAGE_ASPECT_DEPTH_BIT |
                                          VK_IMAGE_ASPECT_STENCIL_BIT, samples,
                                          &state->clear[i].depthstencil_pipeline);

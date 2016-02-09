@@ -576,10 +576,12 @@ struct anv_meta_state {
        * the render target write message.
        */
       struct anv_pipeline *color_pipelines[MAX_RTS];
+      struct anv_render_pass *color_pass;
 
       struct anv_pipeline *depth_only_pipeline;
       struct anv_pipeline *stencil_only_pipeline;
       struct anv_pipeline *depthstencil_pipeline;
+      struct anv_render_pass *depthstencil_pass;
    } clear[1 + MAX_SAMPLES_LOG2];
 
    struct {
@@ -1740,8 +1742,6 @@ struct anv_render_pass {
    struct anv_render_pass_attachment *          attachments;
    struct anv_subpass                           subpasses[0];
 };
-
-extern struct anv_render_pass anv_meta_dummy_renderpass;
 
 struct anv_query_pool_slot {
    uint64_t begin;
