@@ -1015,11 +1015,6 @@ anv_pipeline_validate_create_info(const VkGraphicsPipelineCreateInfo *info)
    renderpass = anv_render_pass_from_handle(info->renderPass);
    assert(renderpass);
 
-   if (renderpass != &anv_meta_dummy_renderpass) {
-      assert(info->subpass < renderpass->subpass_count);
-      subpass = &renderpass->subpasses[info->subpass];
-   }
-
    assert(info->stageCount >= 1);
    assert(info->pVertexInputState);
    assert(info->pInputAssemblyState);

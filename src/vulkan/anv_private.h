@@ -576,10 +576,12 @@ struct anv_meta_state {
        * the render target write message.
        */
       struct anv_pipeline *color_pipelines[MAX_RTS];
+      struct anv_render_pass *color_pass;
 
       struct anv_pipeline *depth_only_pipeline;
       struct anv_pipeline *stencil_only_pipeline;
       struct anv_pipeline *depthstencil_pipeline;
+      struct anv_render_pass *depthstencil_pass;
    } clear[1 + MAX_SAMPLES_LOG2];
 
    struct {
@@ -1090,16 +1092,6 @@ void anv_dynamic_state_copy(struct anv_dynamic_state *dest,
                             const struct anv_dynamic_state *src,
                             uint32_t copy_mask);
 
-/**
- * Attachment state when recording a renderpass instance.
- *
- * The clear value is valid only if there exists a pending clear.
- */
-struct anv_attachment_state {
-   VkImageAspectFlags                           pending_clear_aspects;
-   VkClearValue                                 clear_value;
-};
-
 /** State required while building cmd buffer */
 struct anv_cmd_state {
    /* PIPELINE_SELECT.PipelineSelection */
@@ -1116,6 +1108,10 @@ struct anv_cmd_state {
    struct anv_pipeline *                        pipeline;
    struct anv_pipeline *                        compute_pipeline;
    struct anv_framebuffer *                     framebuffer;
+
+   /** Array length is anv_render_pass::attachment_count. */
+   VkClearValue *                               clear_values;
+
    struct anv_render_pass *                     pass;
    struct anv_subpass *                         subpass;
    uint32_t                                     restart_index;
@@ -1126,12 +1122,6 @@ struct anv_cmd_state {
    struct anv_state                             samplers[MESA_SHADER_STAGES];
    struct anv_dynamic_state                     dynamic;
    bool                                         need_query_wa;
-
-   /**
-    * Array length is anv_cmd_state::pass::attachment_count. Array content is
-    * valid only when recording a render pass instance.
-    */
-   struct anv_attachment_state *                attachments;
 
    struct {
       struct anv_buffer *                       index_buffer;
@@ -1262,8 +1252,8 @@ void gen9_cmd_buffer_emit_state_base_address(struct anv_cmd_buffer *cmd_buffer);
 
 void anv_cmd_buffer_emit_state_base_address(struct anv_cmd_buffer *cmd_buffer);
 
-void anv_cmd_state_setup_attachments(struct anv_cmd_buffer *cmd_buffer,
-                                     const VkRenderPassBeginInfo *info);
+void anv_cmd_state_set_clear_values(struct anv_cmd_buffer *cmd_buffer,
+                                    const VkRenderPassBeginInfo *info);
 
 void gen7_cmd_buffer_set_subpass(struct anv_cmd_buffer *cmd_buffer,
                                    struct anv_subpass *subpass);
@@ -1719,29 +1709,33 @@ struct anv_subpass {
    uint32_t *                                   input_attachments;
    uint32_t                                     color_count;
    uint32_t *                                   color_attachments;
-   uint32_t *                                   resolve_attachments;
-   uint32_t                                     depth_stencil_attachment;
 
-   /** Subpass has at least one resolve attachment */
-   bool                                         has_resolve;
+   /** Null if and only if the subpass has no resolve attachment. */
+   uint32_t *                                   resolve_attachments;
+
+   uint32_t                                     depth_stencil_attachment;
 };
 
 struct anv_render_pass_attachment {
    const struct anv_format                      *format;
    uint32_t                                     samples;
-   VkAttachmentLoadOp                           load_op;
-   VkAttachmentLoadOp                           stencil_load_op;
+
+   /** Aspects that have VK_ATTACHMENT_LOAD_OP_CLEAR. */
+   VkImageAspectFlags                           clear_aspects;
+
+   /**
+    * The first subpass that reads from or writes to the attachment. If there
+    * is no such subpass, then UINT32_MAX.
+    */
+   uint32_t                                     first_subpass;
 };
 
 struct anv_render_pass {
    uint32_t                                     attachment_count;
    uint32_t                                     subpass_count;
-   uint32_t *                                   subpass_attachments;
    struct anv_render_pass_attachment *          attachments;
-   struct anv_subpass                           subpasses[0];
+   struct anv_subpass *                         subpasses;
 };
-
-extern struct anv_render_pass anv_meta_dummy_renderpass;
 
 struct anv_query_pool_slot {
    uint64_t begin;

@@ -117,6 +117,7 @@ build_color_shaders(struct nir_shader **out_vs,
 
 static VkResult
 create_pipeline(struct anv_device *device,
+                struct anv_render_pass *pass,
                 uint32_t samples,
                 struct nir_shader *vs_nir,
                 struct nir_shader *fs_nir,
@@ -205,7 +206,7 @@ create_pipeline(struct anv_device *device,
             },
          },
          .flags = 0,
-         .renderPass = anv_render_pass_to_handle(&anv_meta_dummy_renderpass),
+         .renderPass = anv_render_pass_to_handle(pass),
          .subpass = 0,
       },
       &(struct anv_graphics_pipeline_create_info) {
@@ -228,6 +229,7 @@ create_pipeline(struct anv_device *device,
 
 static VkResult
 create_color_pipeline(struct anv_device *device,
+                      struct anv_render_pass *pass,
                       uint32_t samples,
                       uint32_t frag_output,
                       struct anv_pipeline **pipeline)
@@ -299,10 +301,9 @@ create_color_pipeline(struct anv_device *device,
     * shader. We need the shader to write to the specified color attachment,
     * but the repclear shader writes to all color attachments.
     */
-   return
-      create_pipeline(device, samples, vs_nir, fs_nir, &vi_state, &ds_state,
-                      &cb_state, &device->meta_state.alloc,
-                      /*use_repclear*/ false, pipeline);
+   return create_pipeline(device, pass, samples, vs_nir, fs_nir, &vi_state,
+                          &ds_state, &cb_state, &device->meta_state.alloc,
+                          /*use_repclear*/ false, pipeline);
 }
 
 static void
@@ -314,6 +315,17 @@ destroy_pipeline(struct anv_device *device, struct anv_pipeline *pipeline)
    ANV_CALL(DestroyPipeline)(anv_device_to_handle(device),
                              anv_pipeline_to_handle(pipeline),
                              &device->meta_state.alloc);
+}
+
+static void
+destroy_pass(struct anv_device *device, struct anv_render_pass *pass)
+{
+   if (!pass)
+      return;
+
+   ANV_CALL(DestroyRenderPass)(anv_device_to_handle(device),
+                               anv_render_pass_to_handle(pass),
+                               &device->meta_state.alloc);
 }
 
 void
@@ -329,6 +341,9 @@ anv_device_finish_meta_clear_state(struct anv_device *device)
       destroy_pipeline(device, state->clear[i].depth_only_pipeline);
       destroy_pipeline(device, state->clear[i].stencil_only_pipeline);
       destroy_pipeline(device, state->clear[i].depthstencil_pipeline);
+
+      destroy_pass(device, state->clear[i].color_pass);
+      destroy_pass(device, state->clear[i].depthstencil_pass);
    }
 }
 
@@ -454,6 +469,7 @@ build_depthstencil_shader(struct nir_shader **out_vs)
 
 static VkResult
 create_depthstencil_pipeline(struct anv_device *device,
+                             struct anv_render_pass *pass,
                              VkImageAspectFlags aspects,
                              uint32_t samples,
                              struct anv_pipeline **pipeline)
@@ -514,8 +530,8 @@ create_depthstencil_pipeline(struct anv_device *device,
       .pAttachments = NULL,
    };
 
-   return create_pipeline(device, samples, vs_nir, NULL, &vi_state, &ds_state,
-                          &cb_state, &device->meta_state.alloc,
+   return create_pipeline(device, pass, samples, vs_nir, NULL, &vi_state,
+                          &ds_state, &cb_state, &device->meta_state.alloc,
                           /*use_repclear*/ true, pipeline);
 }
 
@@ -636,6 +652,7 @@ VkResult
 anv_device_init_meta_clear_state(struct anv_device *device)
 {
    VkResult res;
+   VkDevice device_h = anv_device_to_handle(device);
    struct anv_meta_state *state = &device->meta_state;
 
    zero(device->meta_state.clear);
@@ -643,26 +660,104 @@ anv_device_init_meta_clear_state(struct anv_device *device)
    for (uint32_t i = 0; i < ARRAY_SIZE(state->clear); ++i) {
       uint32_t samples = 1 << i;
 
+      VkRenderPass color_pass_h = VK_NULL_HANDLE;
+      res = anv_CreateRenderPass(device_h,
+         &(VkRenderPassCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+            .attachmentCount = 1,
+            .pAttachments = (VkAttachmentDescription[]) {
+               {
+                  .format = VK_FORMAT_UNDEFINED, /* Out shaders don't care */
+                  .samples = samples,
+                  .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                  .initialLayout = VK_IMAGE_LAYOUT_GENERAL,
+                  .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
+               },
+            },
+            .subpassCount = 1,
+            .pSubpasses = (VkSubpassDescription[]) {
+               {
+                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                  .colorAttachmentCount = 1,
+                  .pColorAttachments = (VkAttachmentReference[]) {
+                     {
+                        .attachment = 0,
+                        .layout = VK_IMAGE_LAYOUT_GENERAL,
+                     },
+                  },
+               },
+            },
+            .dependencyCount = 0,
+         },
+         &state->alloc,
+         &color_pass_h);
+      if (res != VK_SUCCESS)
+         goto fail;
+
+      state->clear[i].color_pass =
+         anv_render_pass_from_handle(color_pass_h);
+
+      VkRenderPass depthstencil_pass_h = VK_NULL_HANDLE;
+      res = anv_CreateRenderPass(device_h,
+         &(VkRenderPassCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+            .attachmentCount = 1,
+            .pAttachments = (VkAttachmentDescription[]) {
+               {
+                  .format = VK_FORMAT_UNDEFINED, /* Out shaders don't care */
+                  .samples = samples,
+                  .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
+                  .initialLayout = VK_IMAGE_LAYOUT_GENERAL,
+                  .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
+               },
+            },
+            .subpassCount = 1,
+            .pSubpasses = (VkSubpassDescription[]) {
+               {
+                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                  .pDepthStencilAttachment = (VkAttachmentReference[]) {
+                     {
+                        .attachment = 0,
+                        .layout = VK_IMAGE_LAYOUT_GENERAL,
+                     },
+                  },
+               },
+            },
+            .dependencyCount = 0,
+         },
+         &state->alloc,
+         &depthstencil_pass_h);
+      if (res != VK_SUCCESS)
+         goto fail;
+
+      state->clear[i].depthstencil_pass =
+         anv_render_pass_from_handle(depthstencil_pass_h);
+
       for (uint32_t j = 0; j < ARRAY_SIZE(state->clear[i].color_pipelines); ++j) {
-         res = create_color_pipeline(device, samples, /* frag_output */ j,
+         res = create_color_pipeline(device, state->clear[i].color_pass,
+                                     samples, /* frag_output */ j,
                                      &state->clear[i].color_pipelines[j]);
          if (res != VK_SUCCESS)
             goto fail;
       }
 
-      res = create_depthstencil_pipeline(device,
+      res = create_depthstencil_pipeline(device, state->clear[i].depthstencil_pass,
                                          VK_IMAGE_ASPECT_DEPTH_BIT, samples,
                                          &state->clear[i].depth_only_pipeline);
       if (res != VK_SUCCESS)
          goto fail;
 
-      res = create_depthstencil_pipeline(device,
+      res = create_depthstencil_pipeline(device, state->clear[i].depthstencil_pass,
                                          VK_IMAGE_ASPECT_STENCIL_BIT, samples,
                                          &state->clear[i].stencil_only_pipeline);
       if (res != VK_SUCCESS)
          goto fail;
 
-      res = create_depthstencil_pipeline(device,
+      res = create_depthstencil_pipeline(device, state->clear[i].depthstencil_pass,
                                          VK_IMAGE_ASPECT_DEPTH_BIT |
                                          VK_IMAGE_ASPECT_STENCIL_BIT, samples,
                                          &state->clear[i].depthstencil_pipeline);
@@ -697,18 +792,27 @@ emit_clear(struct anv_cmd_buffer *cmd_buffer,
 static bool
 subpass_needs_clear(const struct anv_cmd_buffer *cmd_buffer)
 {
-   const struct anv_cmd_state *cmd_state = &cmd_buffer->state;
-   uint32_t ds = cmd_state->subpass->depth_stencil_attachment;
+   const struct anv_render_pass *pass = cmd_buffer->state.pass;
+   const struct anv_subpass *subpass = cmd_buffer->state.subpass;
+   uint32_t subpass_idx = subpass - pass->subpasses;
 
-   for (uint32_t i = 0; i < cmd_state->subpass->color_count; ++i) {
-      uint32_t a = cmd_state->subpass->color_attachments[i];
-      if (cmd_state->attachments[a].pending_clear_aspects) {
+   assert(subpass_idx < pass->subpass_count);
+
+   for (uint32_t i = 0; i < subpass->color_count; ++i) {
+      uint32_t a = subpass->color_attachments[i];
+
+      if (a != VK_ATTACHMENT_UNUSED &&
+          pass->attachments[a].first_subpass == subpass_idx &&
+          pass->attachments[a].clear_aspects != 0) {
          return true;
       }
    }
 
+   uint32_t ds = subpass->depth_stencil_attachment;
+
    if (ds != VK_ATTACHMENT_UNUSED &&
-       cmd_state->attachments[ds].pending_clear_aspects) {
+       pass->attachments[ds].first_subpass == subpass_idx &&
+       pass->attachments[ds].clear_aspects != 0) {
       return true;
    }
 
@@ -725,7 +829,12 @@ anv_cmd_buffer_clear_subpass(struct anv_cmd_buffer *cmd_buffer)
 {
    struct anv_cmd_state *cmd_state = &cmd_buffer->state;
    struct anv_framebuffer *fb = cmd_buffer->state.framebuffer;
+   struct anv_render_pass *pass = cmd_buffer->state.pass;
+   struct anv_subpass *subpass = cmd_buffer->state.subpass;
+   uint32_t subpass_idx = subpass - pass->subpasses;
    struct anv_meta_saved_state saved_state;
+
+   assert(subpass_idx < pass->subpass_count);
 
    if (!subpass_needs_clear(cmd_buffer))
       return;
@@ -744,37 +853,35 @@ anv_cmd_buffer_clear_subpass(struct anv_cmd_buffer *cmd_buffer)
       .layerCount = 1, /* FINISHME: clear multi-layer framebuffer */
    };
 
-   for (uint32_t i = 0; i < cmd_state->subpass->color_count; ++i) {
-      uint32_t a = cmd_state->subpass->color_attachments[i];
+   for (uint32_t i = 0; i < subpass->color_count; ++i) {
+      uint32_t a = subpass->color_attachments[i];
 
-      if (!cmd_state->attachments[a].pending_clear_aspects)
+      if (a == VK_ATTACHMENT_UNUSED ||
+          pass->attachments[a].first_subpass != subpass_idx ||
+          pass->attachments[a].clear_aspects == 0)
          continue;
-
-      assert(cmd_state->attachments[a].pending_clear_aspects ==
-             VK_IMAGE_ASPECT_COLOR_BIT);
 
       VkClearAttachment clear_att = {
          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
          .colorAttachment = i, /* Use attachment index relative to subpass */
-         .clearValue = cmd_state->attachments[a].clear_value,
+         .clearValue = cmd_state->clear_values[a],
       };
 
       emit_clear(cmd_buffer, &clear_att, &clear_rect);
-      cmd_state->attachments[a].pending_clear_aspects = 0;
    }
 
-   uint32_t ds = cmd_state->subpass->depth_stencil_attachment;
+   uint32_t ds = subpass->depth_stencil_attachment;
 
    if (ds != VK_ATTACHMENT_UNUSED &&
-       cmd_state->attachments[ds].pending_clear_aspects) {
+       pass->attachments[ds].first_subpass == subpass_idx &&
+       pass->attachments[ds].clear_aspects != 0) {
 
       VkClearAttachment clear_att = {
-         .aspectMask = cmd_state->attachments[ds].pending_clear_aspects,
-         .clearValue = cmd_state->attachments[ds].clear_value,
+         .aspectMask = pass->attachments[ds].clear_aspects,
+         .clearValue = cmd_state->clear_values[ds],
       };
 
       emit_clear(cmd_buffer, &clear_att, &clear_rect);
-      cmd_state->attachments[ds].pending_clear_aspects = 0;
    }
 
    meta_clear_end(&saved_state, cmd_buffer);

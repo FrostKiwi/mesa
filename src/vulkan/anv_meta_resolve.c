@@ -822,7 +822,7 @@ anv_cmd_buffer_resolve_subpass(struct anv_cmd_buffer *cmd_buffer)
     *    guaranteed to overwrite all pixels in the render area.
     */
 
-   if (!subpass->has_resolve)
+   if (!subpass->resolve_attachments)
       return;
 
    meta_resolve_save(&saved_state, cmd_buffer);
