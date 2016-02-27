@@ -27,14 +27,12 @@
 
 /** Vertex attributes for color clears.  */
 struct color_clear_vattrs {
-   struct anv_vue_header vue_header;
    float position[2]; /**< 3DPRIM_RECTLIST */
    VkClearColorValue color;
 };
 
 /** Vertex attributes for depthstencil clears.  */
 struct depthstencil_clear_vattrs {
-   struct anv_vue_header vue_header;
    float position[2]; /*<< 3DPRIM_RECTLIST */
 };
 
@@ -213,7 +211,7 @@ create_pipeline(struct anv_device *device,
          .color_attachment_count = MAX_RTS,
          .use_repclear = use_repclear,
          .disable_viewport = true,
-         .disable_vs = true,
+         .disable_vs = false,
          .use_rectlist = true
       },
       alloc,
@@ -247,25 +245,18 @@ create_color_pipeline(struct anv_device *device,
             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
          },
       },
-      .vertexAttributeDescriptionCount = 3,
+      .vertexAttributeDescriptionCount = 2,
       .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]) {
          {
-            /* VUE Header */
-            .location = 0,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32A32_UINT,
-            .offset = offsetof(struct color_clear_vattrs, vue_header),
-         },
-         {
             /* Position */
-            .location = 1,
+            .location = 0,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = offsetof(struct color_clear_vattrs, position),
          },
          {
             /* Color */
-            .location = 2,
+            .location = 1,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32A32_SFLOAT,
             .offset = offsetof(struct color_clear_vattrs, color),
@@ -360,7 +351,6 @@ emit_color_clear(struct anv_cmd_buffer *cmd_buffer,
 
    const struct color_clear_vattrs vertex_data[3] = {
       {
-         .vue_header = { 0 },
          .position = {
             clear_rect->rect.offset.x,
             clear_rect->rect.offset.y,
@@ -368,7 +358,6 @@ emit_color_clear(struct anv_cmd_buffer *cmd_buffer,
          .color = clear_value,
       },
       {
-         .vue_header = { 0 },
          .position = {
             clear_rect->rect.offset.x + clear_rect->rect.extent.width,
             clear_rect->rect.offset.y,
@@ -376,7 +365,6 @@ emit_color_clear(struct anv_cmd_buffer *cmd_buffer,
          .color = clear_value,
       },
       {
-         .vue_header = { 0 },
          .position = {
             clear_rect->rect.offset.x + clear_rect->rect.extent.width,
             clear_rect->rect.offset.y + clear_rect->rect.extent.height,
@@ -474,18 +462,11 @@ create_depthstencil_pipeline(struct anv_device *device,
             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
          },
       },
-      .vertexAttributeDescriptionCount = 2,
+      .vertexAttributeDescriptionCount = 1,
       .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]) {
          {
-            /* VUE Header */
-            .location = 0,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32A32_UINT,
-            .offset = offsetof(struct depthstencil_clear_vattrs, vue_header),
-         },
-         {
             /* Position */
-            .location = 1,
+            .location = 0,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = offsetof(struct depthstencil_clear_vattrs, position),
@@ -548,21 +529,18 @@ emit_depthstencil_clear(struct anv_cmd_buffer *cmd_buffer,
 
    const struct depthstencil_clear_vattrs vertex_data[3] = {
       {
-         .vue_header = { 0 },
          .position = {
             clear_rect->rect.offset.x,
             clear_rect->rect.offset.y,
          },
       },
       {
-         .vue_header = { 0 },
          .position = {
             clear_rect->rect.offset.x + clear_rect->rect.extent.width,
             clear_rect->rect.offset.y,
          },
       },
       {
-         .vue_header = { 0 },
          .position = {
             clear_rect->rect.offset.x + clear_rect->rect.extent.width,
             clear_rect->rect.offset.y + clear_rect->rect.extent.height,
