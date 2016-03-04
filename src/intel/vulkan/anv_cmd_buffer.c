@@ -115,19 +115,23 @@ anv_cmd_state_reset(struct anv_cmd_buffer *cmd_buffer)
 {
    struct anv_cmd_state *state = &cmd_buffer->state;
 
-   memset(&state->descriptors, 0, sizeof(state->descriptors));
-   memset(&state->push_constants, 0, sizeof(state->push_constants));
+   memset(state->vertex_bindings, 0, sizeof(state->vertex_bindings));
+   memset(state->descriptors, 0, sizeof(state->descriptors));
+   memset(state->push_constants, 0, sizeof(state->push_constants));
    memset(state->binding_tables, 0, sizeof(state->binding_tables));
    memset(state->samplers, 0, sizeof(state->samplers));
 
    /* 0 isn't a valid config.  This ensures that we always configure L3$. */
    cmd_buffer->state.current_l3_config = 0;
 
-   state->dirty = ~0;
    state->vb_dirty = 0;
+   state->dirty = ~0;
+   state->compute_dirty = ~0;
    state->descriptors_dirty = 0;
    state->push_constants_dirty = 0;
    state->pipeline = NULL;
+   state->compute_pipeline = NULL;
+   state->current_pipeline = UINT32_MAX;
    state->restart_index = UINT32_MAX;
    state->dynamic = default_dynamic_state;
    state->need_query_wa = true;
@@ -329,7 +333,6 @@ VkResult anv_ResetCommandBuffer(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
 
    cmd_buffer->usage_flags = 0;
-   cmd_buffer->state.current_pipeline = UINT32_MAX;
    anv_cmd_buffer_reset_batch_bo_chain(cmd_buffer);
    anv_cmd_state_reset(cmd_buffer);
 
