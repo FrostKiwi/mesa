@@ -312,6 +312,8 @@ emit_base_vertex_instance(struct anv_cmd_buffer *cmd_buffer,
       &cmd_buffer->device->dynamic_state_block_pool.bo, id_state.offset);
 }
 
+static void cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer);
+
 void genX(CmdDraw)(
     VkCommandBuffer                             commandBuffer,
     uint32_t                                    vertexCount,
@@ -322,7 +324,15 @@ void genX(CmdDraw)(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    struct anv_pipeline *pipeline = cmd_buffer->state.pipeline;
 
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .TextureCacheInvalidationEnable = true);
+   cmd_buffer->state.vb_dirty = ~0;
+   cmd_buffer->state.dirty = ~0;
+   cmd_buffer->state.descriptors_dirty = ~0;
+
    genX(cmd_buffer_flush_state)(cmd_buffer);
+
+   cmd_buffer_emit_depth_stencil(cmd_buffer);
 
    if (cmd_buffer->state.pipeline->vs_prog_data.uses_basevertex ||
        cmd_buffer->state.pipeline->vs_prog_data.uses_baseinstance)
@@ -336,6 +346,13 @@ void genX(CmdDraw)(
       .InstanceCount                            = instanceCount,
       .StartInstanceLocation                    = firstInstance,
       .BaseVertexLocation                       = 0);
+
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .DepthStallEnable = true);
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .DepthCacheFlushEnable = true,
+                  .RenderTargetCacheFlushEnable = true,
+                  .CommandStreamerStallEnable = true);
 }
 
 void genX(CmdDrawIndexed)(
@@ -349,7 +366,15 @@ void genX(CmdDrawIndexed)(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    struct anv_pipeline *pipeline = cmd_buffer->state.pipeline;
 
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .TextureCacheInvalidationEnable = true);
+   cmd_buffer->state.vb_dirty = ~0;
+   cmd_buffer->state.dirty = ~0;
+   cmd_buffer->state.descriptors_dirty = ~0;
+
    genX(cmd_buffer_flush_state)(cmd_buffer);
+
+   cmd_buffer_emit_depth_stencil(cmd_buffer);
 
    if (cmd_buffer->state.pipeline->vs_prog_data.uses_basevertex ||
        cmd_buffer->state.pipeline->vs_prog_data.uses_baseinstance)
@@ -363,6 +388,13 @@ void genX(CmdDrawIndexed)(
       .InstanceCount                            = instanceCount,
       .StartInstanceLocation                    = firstInstance,
       .BaseVertexLocation                       = vertexOffset);
+
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .DepthStallEnable = true);
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .DepthCacheFlushEnable = true,
+                  .RenderTargetCacheFlushEnable = true,
+                  .CommandStreamerStallEnable = true);
 }
 
 /* Auto-Draw / Indirect Registers */
