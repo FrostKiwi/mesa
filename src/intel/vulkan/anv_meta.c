@@ -35,9 +35,7 @@ anv_meta_save(struct anv_meta_saved_state *state,
    memcpy(state->old_vertex_bindings, cmd_buffer->state.vertex_bindings,
           sizeof(state->old_vertex_bindings));
 
-   state->dynamic_mask = dynamic_mask;
-   anv_dynamic_state_copy(&state->dynamic, &cmd_buffer->state.dynamic,
-                          dynamic_mask);
+   state->dynamic = cmd_buffer->state.dynamic;
 }
 
 void
@@ -53,9 +51,8 @@ anv_meta_restore(const struct anv_meta_saved_state *state,
    cmd_buffer->state.dirty |= ANV_CMD_DIRTY_PIPELINE;
    cmd_buffer->state.descriptors_dirty |= VK_SHADER_STAGE_FRAGMENT_BIT;
 
-   anv_dynamic_state_copy(&cmd_buffer->state.dynamic, &state->dynamic,
-                          state->dynamic_mask);
-   cmd_buffer->state.dirty |= state->dynamic_mask;
+   cmd_buffer->state.dynamic = state->dynamic;
+   cmd_buffer->state.dirty |= ANV_CMD_DIRTY_DYNAMIC_ALL;
 
    /* Since we've used the pipeline with the VS disabled, set
     * need_query_wa. See CmdBeginQuery.
