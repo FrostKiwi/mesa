@@ -636,7 +636,6 @@ cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer)
    const bool has_stencil = iview && anv_format->has_stencil;
 
    /* FIXME: Implement the PMA stall W/A */
-   /* FIXME: Width and Height are wrong */
 
    /* Emit 3DSTATE_DEPTH_BUFFER */
    if (has_depth) {
@@ -652,11 +651,11 @@ cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer)
             .bo = image->bo,
             .offset = image->offset + image->depth_surface.offset,
          },
-         .Height = fb->height - 1,
-         .Width = fb->width - 1,
-         .LOD = 0,
-         .Depth = 1 - 1,
-         .MinimumArrayElement = 0,
+         .Height = image->extent.height - 1,
+         .Width = image->extent.width - 1,
+         .LOD = iview->base_mip,
+         .Depth = image->extent.depth - 1,
+         .MinimumArrayElement = iview->base_mip,
          .DepthBufferObjectControlState = GENX(MOCS),
 #if GEN_GEN >= 8
          .SurfaceQPitch = isl_surf_get_array_pitch_el_rows(&image->depth_surface.isl) >> 2,
@@ -686,6 +685,11 @@ cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer)
          .SurfaceFormat = D32_FLOAT,
          .Width = fb->width - 1,
          .Height = fb->height - 1,
+         .Height = (image ? image->extent.height : fb->height) - 1,
+         .Width = (image ? image->extent.width : fb->width) - 1,
+         .LOD = iview ? iview->base_mip : 0,
+         .Depth = (image ? image->extent.depth : 1) - 1,
+         .MinimumArrayElement = iview ? iview->base_mip : 0,
          .StencilWriteEnable = has_stencil);
    }
 
