@@ -202,6 +202,7 @@ emit_cb_state(struct anv_pipeline *pipeline,
 
 static void
 emit_ds_state(struct anv_pipeline *pipeline,
+              const VkGraphicsPipelineCreateInfo *pCreateInfo,
               const VkPipelineDepthStencilStateCreateInfo *info)
 {
    uint32_t *dw = GEN_GEN == 8 ?
@@ -218,11 +219,26 @@ emit_ds_state(struct anv_pipeline *pipeline,
       return;
    }
 
+   bool has_depth_attachment;
+   ANV_FROM_HANDLE(anv_render_pass, pass, pCreateInfo->renderPass);
+   struct anv_subpass *subpass = &pass->subpasses[pCreateInfo->subpass];
+   if (subpass->depth_stencil_attachment != VK_ATTACHMENT_UNUSED) {
+      if (subpass->depth_stencil_attachment < pass->attachment_count) {
+         const struct anv_format *ds_format =
+            pass->attachments[subpass->depth_stencil_attachment].format;
+         has_depth_attachment = ds_format->has_depth;
+      } else {
+         has_depth_attachment = true;
+      }
+   } else {
+      has_depth_attachment = false;
+   }
+
    /* VkBool32 depthBoundsTestEnable; // optional (depth_bounds_test) */
 
    struct GENX(3DSTATE_WM_DEPTH_STENCIL) wm_depth_stencil = {
-      .DepthTestEnable = info->depthTestEnable,
-      .DepthBufferWriteEnable = info->depthWriteEnable,
+      .DepthTestEnable = has_depth_attachment && info->depthTestEnable,
+      .DepthBufferWriteEnable = has_depth_attachment && info->depthWriteEnable,
       .DepthTestFunction = vk_to_gen_compare_op[info->depthCompareOp],
       .DoubleSidedStencilEnable = true,
 
@@ -327,7 +343,7 @@ genX(graphics_pipeline_create)(
    emit_rs_state(pipeline, pCreateInfo->pRasterizationState,
                  pCreateInfo->pMultisampleState, extra);
    emit_ms_state(pipeline, pCreateInfo->pMultisampleState);
-   emit_ds_state(pipeline, pCreateInfo->pDepthStencilState);
+   emit_ds_state(pipeline, pCreateInfo, pCreateInfo->pDepthStencilState);
    emit_cb_state(pipeline, pCreateInfo->pColorBlendState,
                            pCreateInfo->pMultisampleState);
 
