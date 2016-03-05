@@ -744,6 +744,9 @@ cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer)
          .StencilWriteEnable = has_stencil);
    }
 
+   /* Disable hierarchial depth buffers. */
+   anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_HIER_DEPTH_BUFFER));
+
    /* Emit 3DSTATE_STENCIL_BUFFER */
    if (has_stencil) {
       anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_STENCIL_BUFFER),
@@ -769,9 +772,6 @@ cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer)
    } else {
       anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_STENCIL_BUFFER));
    }
-
-   /* Disable hierarchial depth buffers. */
-   anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_HIER_DEPTH_BUFFER));
 
    /* Clear the clear params. */
    anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_CLEAR_PARAMS));
