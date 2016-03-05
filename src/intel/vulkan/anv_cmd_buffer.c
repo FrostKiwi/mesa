@@ -226,19 +226,15 @@ anv_cmd_buffer_ensure_push_constants_size(struct anv_cmd_buffer *cmd_buffer,
       (offsetof(struct anv_push_constants, field) + \
        sizeof(cmd_buffer->state.push_constants[0]->field)))
 
-static VkResult anv_create_cmd_buffer(
-    struct anv_device *                         device,
-    struct anv_cmd_pool *                       pool,
-    VkCommandBufferLevel                        level,
-    VkCommandBuffer*                            pCommandBuffer)
+static VkResult
+anv_cmd_buffer_init(struct anv_cmd_buffer *cmd_buffer,
+                    struct anv_device *device,
+                    struct anv_cmd_pool *pool,
+                    VkCommandBufferLevel level)
 {
-   struct anv_cmd_buffer *cmd_buffer;
    VkResult result;
 
-   cmd_buffer = anv_alloc(&pool->alloc, sizeof(*cmd_buffer), 8,
-                          VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   if (cmd_buffer == NULL)
-      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+   memset(cmd_buffer, 0, sizeof(*cmd_buffer));
 
    cmd_buffer->_loader_data.loaderMagic = ICD_LOADER_MAGIC;
    cmd_buffer->device = device;
@@ -248,7 +244,7 @@ static VkResult anv_create_cmd_buffer(
 
    result = anv_cmd_buffer_init_batch_bo_chain(cmd_buffer);
    if (result != VK_SUCCESS)
-      goto fail;
+      return result;
 
    anv_state_stream_init(&cmd_buffer->surface_state_stream,
                          &device->surface_state_block_pool);
@@ -264,12 +260,29 @@ static VkResult anv_create_cmd_buffer(
       list_inithead(&cmd_buffer->pool_link);
    }
 
-   *pCommandBuffer = anv_cmd_buffer_to_handle(cmd_buffer);
-
    return VK_SUCCESS;
+}
 
- fail:
-   anv_free(&cmd_buffer->pool->alloc, cmd_buffer);
+static VkResult anv_create_cmd_buffer(
+    struct anv_device *                         device,
+    struct anv_cmd_pool *                       pool,
+    VkCommandBufferLevel                        level,
+    VkCommandBuffer*                            pCommandBuffer)
+{
+   struct anv_cmd_buffer *cmd_buffer;
+   VkResult result;
+
+   cmd_buffer = anv_alloc(&pool->alloc, sizeof(*cmd_buffer), 8,
+                          VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   if (cmd_buffer == NULL)
+      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   result = anv_cmd_buffer_init(cmd_buffer, device, pool, level);
+
+   if (result == VK_SUCCESS)
+      *pCommandBuffer = anv_cmd_buffer_to_handle(cmd_buffer);
+   else
+      anv_free(&cmd_buffer->pool->alloc, cmd_buffer);
 
    return result;
 }
@@ -300,7 +313,7 @@ VkResult anv_AllocateCommandBuffers(
 }
 
 static void
-anv_cmd_buffer_destroy(struct anv_cmd_buffer *cmd_buffer)
+anv_cmd_buffer_finish(struct anv_cmd_buffer *cmd_buffer)
 {
    list_del(&cmd_buffer->pool_link);
 
@@ -310,6 +323,12 @@ anv_cmd_buffer_destroy(struct anv_cmd_buffer *cmd_buffer)
    anv_state_stream_finish(&cmd_buffer->dynamic_state_stream);
 
    anv_free(&cmd_buffer->pool->alloc, cmd_buffer->state.attachments);
+}
+
+static void
+anv_cmd_buffer_destroy(struct anv_cmd_buffer *cmd_buffer)
+{
+   anv_cmd_buffer_finish(cmd_buffer);
    anv_free(&cmd_buffer->pool->alloc, cmd_buffer);
 }
 
@@ -332,17 +351,14 @@ VkResult anv_ResetCommandBuffer(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
 
-   cmd_buffer->usage_flags = 0;
-   anv_cmd_buffer_reset_batch_bo_chain(cmd_buffer);
-   anv_cmd_state_reset(cmd_buffer);
+   VK_LOADER_DATA loader_data = cmd_buffer->_loader_data;
+   struct anv_device *device = cmd_buffer->device;
+   struct anv_cmd_pool *pool = cmd_buffer->pool;
+   VkCommandBufferLevel level = cmd_buffer->level;
 
-   anv_state_stream_finish(&cmd_buffer->surface_state_stream);
-   anv_state_stream_init(&cmd_buffer->surface_state_stream,
-                         &cmd_buffer->device->surface_state_block_pool);
-
-   anv_state_stream_finish(&cmd_buffer->dynamic_state_stream);
-   anv_state_stream_init(&cmd_buffer->dynamic_state_stream,
-                         &cmd_buffer->device->dynamic_state_block_pool);
+   anv_cmd_buffer_finish(cmd_buffer);
+   anv_cmd_buffer_init(cmd_buffer, device, pool, level);
+   cmd_buffer->_loader_data = loader_data;
 
    return VK_SUCCESS;
 }
