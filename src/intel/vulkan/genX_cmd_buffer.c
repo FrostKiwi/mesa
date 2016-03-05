@@ -325,7 +325,12 @@ void genX(CmdDraw)(
    struct anv_pipeline *pipeline = cmd_buffer->state.pipeline;
 
    anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
-                  .TextureCacheInvalidationEnable = true);
+                  .PipeControlFlushEnable = true,
+                  .TextureCacheInvalidationEnable = true,
+                  .InstructionCacheInvalidateEnable = true,
+                  .VFCacheInvalidationEnable = true,
+                  .ConstantCacheInvalidationEnable = true,
+                  .StateCacheInvalidationEnable = true);
    cmd_buffer->state.vb_dirty = ~0;
    cmd_buffer->state.dirty = ~0;
    cmd_buffer->state.descriptors_dirty = ~0;
@@ -352,6 +357,7 @@ void genX(CmdDraw)(
    anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
                   .DepthCacheFlushEnable = true,
                   .RenderTargetCacheFlushEnable = true,
+                  .DCFlushEnable = true,
                   .CommandStreamerStallEnable = true);
 }
 
@@ -367,7 +373,12 @@ void genX(CmdDrawIndexed)(
    struct anv_pipeline *pipeline = cmd_buffer->state.pipeline;
 
    anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
-                  .TextureCacheInvalidationEnable = true);
+                  .PipeControlFlushEnable = true,
+                  .TextureCacheInvalidationEnable = true,
+                  .InstructionCacheInvalidateEnable = true,
+                  .VFCacheInvalidationEnable = true,
+                  .ConstantCacheInvalidationEnable = true,
+                  .StateCacheInvalidationEnable = true);
    cmd_buffer->state.vb_dirty = ~0;
    cmd_buffer->state.dirty = ~0;
    cmd_buffer->state.descriptors_dirty = ~0;
@@ -394,6 +405,7 @@ void genX(CmdDrawIndexed)(
    anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
                   .DepthCacheFlushEnable = true,
                   .RenderTargetCacheFlushEnable = true,
+                  .DCFlushEnable = true,
                   .CommandStreamerStallEnable = true);
 }
 
@@ -668,6 +680,13 @@ cmd_buffer_emit_depth_stencil(struct anv_cmd_buffer *cmd_buffer)
    const bool has_stencil = iview && anv_format->has_stencil;
 
    /* FIXME: Implement the PMA stall W/A */
+
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .DepthStallEnable = true);
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .DepthCacheFlushEnable = true);
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .DepthStallEnable = true);
 
    /* Emit 3DSTATE_DEPTH_BUFFER */
    if (has_depth) {
