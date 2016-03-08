@@ -1097,6 +1097,17 @@ VkResult anv_QueueSubmit(
    struct anv_device *device = queue->device;
    VkResult result = VK_SUCCESS;
 
+   /* The anv_cmd_buffer_execbuf function does relocations in userspace.  Due
+    * to the fact that the surface state buffer is shared between batches, we
+    * can't afford to have that happen from multiple threads at the same time.
+    * Fortunately, this should almost never be contended because this lock is
+    * taken very few places and the client isn't allowed to call vkQueueSubmit
+    * from multiple threads on the same queue.  However, for safety against
+    * stupid apps (that bug would be a real pain to track down) we should lock
+    * around command buffer submission.
+    */
+   pthread_mutex_lock(&device->mutex);
+
    for (uint32_t i = 0; i < submitCount; i++) {
       for (uint32_t j = 0; j < pSubmits[i].commandBufferCount; j++) {
          ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer,
@@ -1105,7 +1116,7 @@ VkResult anv_QueueSubmit(
 
          result = anv_cmd_buffer_execbuf(device, cmd_buffer);
          if (result != VK_SUCCESS)
-            return result;
+            goto out;
       }
    }
 
@@ -1113,10 +1124,13 @@ VkResult anv_QueueSubmit(
       struct anv_bo *fence_bo = &fence->bo;
       result = anv_device_execbuf(device, &fence->execbuf, &fence_bo);
       if (result != VK_SUCCESS)
-         return result;
+         goto out;
    }
 
-   return VK_SUCCESS;
+out:
+   pthread_mutex_unlock(&device->mutex);
+
+   return result;
 }
 
 VkResult anv_QueueWaitIdle(
