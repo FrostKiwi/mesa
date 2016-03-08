@@ -1001,6 +1001,55 @@ void anv_GetDeviceQueue(
    *pQueue = anv_queue_to_handle(&device->queue);
 }
 
+static void
+write_reloc(const struct anv_device *device, void *p, uint64_t v)
+{
+   if (device->info.gen >= 8)
+      *(uint64_t *)p = v;
+   else
+      *(uint32_t *)p = v;
+}
+
+static void
+anv_reloc_list_apply(struct anv_reloc_list *list,
+                     struct anv_device *device, struct anv_bo *bo)
+{
+   for (size_t i = 0; i < list->num_relocs; i++) {
+      void *p = bo->map + list->relocs[i].offset;
+
+      struct anv_bo *target_bo = list->reloc_bos[i];
+      write_reloc(device, p, target_bo->offset + list->relocs[i].delta);
+      list->relocs[i].presumed_offset = bo->offset;
+   }
+}
+
+static void
+relocate_cmd_buffer(struct anv_cmd_buffer *cmd_buffer)
+{
+   if (!cmd_buffer->execbuf2.need_reloc) {
+      assert(cmd_buffer->execbuf2.execbuf.flags & I915_EXEC_NO_RELOC);
+      return;
+   }
+
+   anv_reloc_list_apply(&cmd_buffer->surface_relocs,
+                        cmd_buffer->device, cmd_buffer->execbuf2.bos[0]);
+
+   struct anv_batch_bo **bbo;
+   anv_vector_foreach(bbo, &cmd_buffer->seen_bbos) {
+      anv_reloc_list_apply(&(*bbo)->relocs,
+                           cmd_buffer->device, &(*bbo)->bo);
+   }
+
+   for (uint32_t i = 0; i < cmd_buffer->execbuf2.bo_count; i++) {
+      struct anv_bo *bo = cmd_buffer->execbuf2.bos[i];
+
+      cmd_buffer->execbuf2.objects[i].offset = bo->offset;
+   }
+
+   cmd_buffer->execbuf2.execbuf.flags |= I915_EXEC_NO_RELOC;
+   cmd_buffer->execbuf2.need_reloc = false;
+}
+
 VkResult anv_QueueSubmit(
     VkQueue                                     _queue,
     uint32_t                                    submitCount,
@@ -1010,7 +1059,10 @@ VkResult anv_QueueSubmit(
    ANV_FROM_HANDLE(anv_queue, queue, _queue);
    ANV_FROM_HANDLE(anv_fence, fence, _fence);
    struct anv_device *device = queue->device;
+   VkResult result = VK_SUCCESS;
    int ret;
+
+   pthread_mutex_lock(&device->mutex);
 
    for (uint32_t i = 0; i < submitCount; i++) {
       for (uint32_t j = 0; j < pSubmits[i].commandBufferCount; j++) {
@@ -1018,15 +1070,26 @@ VkResult anv_QueueSubmit(
                          pSubmits[i].pCommandBuffers[j]);
          assert(cmd_buffer->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
+         relocate_cmd_buffer(cmd_buffer);
+
          ret = anv_gem_execbuffer(device, &cmd_buffer->execbuf2.execbuf);
          if (ret != 0) {
-            /* We don't know the real error. */
-            return vk_errorf(VK_ERROR_OUT_OF_DEVICE_MEMORY,
-                             "execbuf2 failed: %m");
+            switch (errno) {
+            case ENOMEM:
+               result = vk_errorf(VK_ERROR_OUT_OF_DEVICE_MEMORY,
+                                  "execbuf2 failed: %m");
+               goto out;
+            case EINVAL:
+            case EIO:
+            default:
+               result = vk_errorf(VK_ERROR_DEVICE_LOST, "execbuf2 failed: %m");
+               goto out;
+            }
          }
 
          for (uint32_t k = 0; k < cmd_buffer->execbuf2.bo_count; k++)
-            cmd_buffer->execbuf2.bos[k]->offset = cmd_buffer->execbuf2.objects[k].offset;
+            cmd_buffer->execbuf2.bos[k]->offset =
+               cmd_buffer->execbuf2.objects[k].offset;
       }
    }
 
@@ -1034,12 +1097,15 @@ VkResult anv_QueueSubmit(
       ret = anv_gem_execbuffer(device, &fence->execbuf);
       if (ret != 0) {
          /* We don't know the real error. */
-         return vk_errorf(VK_ERROR_OUT_OF_DEVICE_MEMORY,
-                          "execbuf2 failed: %m");
+         result = vk_errorf(VK_ERROR_OUT_OF_DEVICE_MEMORY,
+                            "execbuf2 failed: %m");
       }
    }
 
-   return VK_SUCCESS;
+ out:
+   pthread_mutex_unlock(&device->mutex);
+
+   return result;
 }
 
 VkResult anv_QueueWaitIdle(
