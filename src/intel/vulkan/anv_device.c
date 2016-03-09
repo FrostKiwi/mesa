@@ -1018,6 +1018,9 @@ VkResult anv_QueueSubmit(
                          pSubmits[i].pCommandBuffers[j]);
          assert(cmd_buffer->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
+         if (!cmd_buffer->state.has_draw_or_dispatch)
+            continue;
+
          ret = anv_gem_execbuffer(device, &cmd_buffer->execbuf2.execbuf);
          if (ret != 0) {
             /* We don't know the real error. */

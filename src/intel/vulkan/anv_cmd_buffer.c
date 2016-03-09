@@ -132,6 +132,7 @@ anv_cmd_state_reset(struct anv_cmd_buffer *cmd_buffer)
    state->restart_index = UINT32_MAX;
    state->dynamic = default_dynamic_state;
    state->need_query_wa = true;
+   state->has_draw_or_dispatch = false;
 
    if (state->attachments != NULL) {
       anv_free(&cmd_buffer->pool->alloc, state->attachments);
