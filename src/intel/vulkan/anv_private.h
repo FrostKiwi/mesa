@@ -1155,6 +1155,7 @@ struct anv_cmd_state {
    uint32_t                                     restart_index;
    struct anv_vertex_binding                    vertex_bindings[MAX_VBS];
    struct anv_descriptor_set *                  descriptors[MAX_SETS];
+   VkShaderStageFlags                           push_constant_stages;
    struct anv_push_constants *                  push_constants[MESA_SHADER_STAGES];
    struct anv_state                             binding_tables[MESA_SHADER_STAGES];
    struct anv_state                             samplers[MESA_SHADER_STAGES];
@@ -1387,7 +1388,6 @@ struct anv_pipeline {
    uint32_t                                     scratch_start[MESA_SHADER_STAGES];
    uint32_t                                     total_scratch;
    struct {
-      uint8_t                                   push_size[MESA_SHADER_FRAGMENT + 1];
       uint32_t                                  start[MESA_SHADER_GEOMETRY + 1];
       uint32_t                                  size[MESA_SHADER_GEOMETRY + 1];
       uint32_t                                  entries[MESA_SHADER_GEOMETRY + 1];
