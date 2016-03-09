@@ -1073,12 +1073,12 @@ static void
 check_surf_init_info(const struct isl_surf_init_info *info)
 {
    /* If a surface is used for HiZ, then it must be used for nothing else. */
-   if (info->usage & ISL_SURF_USAGE_HIZ)
+   if (info->usage & ISL_SURF_USAGE_HIZ) {
       assert(info->usage == ISL_SURF_USAGE_HIZ);
-
-   /* HiZ format and HiZ usage must match. */
-   assert((info->format == ISL_FORMAT_HIZ) ==
-          (info->usage == ISL_SURF_USAGE_HIZ));
+      assert(info->format == ISL_FORMAT_HIZ);
+   } else {
+      assert((info->usage & ISL_SURF_USAGE_HIZ) == 0);
+   }
 }
 
 bool
