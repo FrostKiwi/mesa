@@ -326,11 +326,12 @@ anv_DestroyImage(VkDevice _device, VkImage _image,
 }
 
 VkResult anv_BindImageMemory(
-    VkDevice                                    device,
+    VkDevice                                    _device,
     VkImage                                     _image,
     VkDeviceMemory                              _memory,
     VkDeviceSize                                memoryOffset)
 {
+   ANV_FROM_HANDLE(anv_device, device, _device);
    ANV_FROM_HANDLE(anv_device_memory, mem, _memory);
    ANV_FROM_HANDLE(anv_image, image, _image);
 
@@ -340,6 +341,21 @@ VkResult anv_BindImageMemory(
    } else {
       image->bo = NULL;
       image->offset = 0;
+   }
+
+   if (anv_image_has_hiz(image)) {
+      /* HiZ surfaces need to have their memory cleared to 0xff before they
+       * can be used.  If we let it have garbage data, it can cause GPU
+       * hangs on some hardware.
+       */
+      void *map = anv_gem_mmap(device, image->bo->gem_handle,
+                               image->offset + image->hiz_surface.offset,
+                               image->hiz_surface.isl.size,
+                               device->info.has_llc ? 0 : I915_MMAP_WC);
+
+      memset(map, 0xff, image->hiz_surface.isl.size);
+
+      anv_gem_munmap(map, image->hiz_surface.isl.size);
    }
 
    return VK_SUCCESS;
