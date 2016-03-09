@@ -577,6 +577,8 @@ void genX(CmdDraw)(
       .InstanceCount                            = instanceCount,
       .StartInstanceLocation                    = firstInstance,
       .BaseVertexLocation                       = 0);
+
+   cmd_buffer->state.has_draw_or_dispatch = true;
 }
 
 void genX(CmdDrawIndexed)(
@@ -604,6 +606,8 @@ void genX(CmdDrawIndexed)(
       .InstanceCount                            = instanceCount,
       .StartInstanceLocation                    = firstInstance,
       .BaseVertexLocation                       = vertexOffset);
+
+   cmd_buffer->state.has_draw_or_dispatch = true;
 }
 
 /* Auto-Draw / Indirect Registers */
@@ -660,6 +664,8 @@ void genX(CmdDrawIndirect)(
       .IndirectParameterEnable                  = true,
       .VertexAccessType                         = SEQUENTIAL,
       .PrimitiveTopologyType                    = pipeline->topology);
+
+   cmd_buffer->state.has_draw_or_dispatch = true;
 }
 
 void genX(CmdDrawIndexedIndirect)(
@@ -692,6 +698,8 @@ void genX(CmdDrawIndexedIndirect)(
       .IndirectParameterEnable                  = true,
       .VertexAccessType                         = RANDOM,
       .PrimitiveTopologyType                    = pipeline->topology);
+
+   cmd_buffer->state.has_draw_or_dispatch = true;
 }
 
 
@@ -733,6 +741,8 @@ void genX(CmdDispatch)(
                   .BottomExecutionMask = 0xffffffff);
 
    anv_batch_emit(&cmd_buffer->batch, GENX(MEDIA_STATE_FLUSH));
+
+   cmd_buffer->state.has_draw_or_dispatch = true;
 }
 
 #define GPGPU_DISPATCHDIMX 0x2500
@@ -818,6 +828,8 @@ void genX(CmdDispatchIndirect)(
                   .BottomExecutionMask = 0xffffffff);
 
    anv_batch_emit(batch, GENX(MEDIA_STATE_FLUSH));
+
+   cmd_buffer->state.has_draw_or_dispatch = true;
 }
 
 static void
@@ -1143,6 +1155,8 @@ void genX(CmdBeginQuery)(
    default:
       unreachable("");
    }
+
+   cmd_buffer->state.has_draw_or_dispatch = true;
 }
 
 void genX(CmdEndQuery)(
@@ -1166,6 +1180,8 @@ void genX(CmdEndQuery)(
    default:
       unreachable("");
    }
+
+   cmd_buffer->state.has_draw_or_dispatch = true;
 }
 
 #define TIMESTAMP 0x2358
@@ -1202,6 +1218,8 @@ void genX(CmdWriteTimestamp)(
    }
 
    emit_query_availability(&cmd_buffer->batch, &pool->bo, query + 16);
+
+   cmd_buffer->state.has_draw_or_dispatch = true;
 }
 
 #if GEN_GEN > 7 || GEN_IS_HASWELL
@@ -1329,6 +1347,8 @@ void genX(CmdCopyQueryPoolResults)(
 
       dst_offset += destStride;
    }
+
+   cmd_buffer->state.has_draw_or_dispatch = true;
 }
 
 #endif

@@ -1161,6 +1161,7 @@ struct anv_cmd_state {
    struct anv_state                             samplers[MESA_SHADER_STAGES];
    struct anv_dynamic_state                     dynamic;
    bool                                         need_query_wa;
+   bool                                         has_draw_or_dispatch;
 
    /**
     * Array length is anv_cmd_state::pass::attachment_count. Array content is
