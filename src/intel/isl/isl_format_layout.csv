@@ -294,4 +294,4 @@ RAW                         ,   0,  0,  0,  0,     ,     ,     ,     ,     ,    
 # allows isl to handle HiZ surfaces like any other surface. This is possible
 # because the elements of a HiZ surface are 4x2 literal compression blocks.
 #
-HIZ                         ,   8,  4,  2,  1,     ,     ,     ,     ,     ,     ,    ,       ,
+HIZ                         , 128,  8,  4,  1,     ,     ,     ,     ,     ,     ,    ,       ,
