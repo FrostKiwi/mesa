@@ -494,6 +494,17 @@ genX(cmd_buffer_flush_dynamic_state)(struct anv_cmd_buffer *cmd_buffer)
    cmd_buffer->state.dirty = 0;
 }
 
+bool
+genX(cmd_buffer_do_hiz_clear)(struct anv_cmd_buffer *cmd_buffer,
+                              bool depth, bool stencil, VkRect2D area)
+{
+   return false;
+}
+
+void genX(cmd_buffer_do_hiz_resolve)(struct anv_cmd_buffer *cmd_buffer)
+{
+}
+
 void genX(CmdSetEvent)(
     VkCommandBuffer                             commandBuffer,
     VkEvent                                     event,

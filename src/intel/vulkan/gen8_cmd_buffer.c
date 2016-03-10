@@ -482,6 +482,52 @@ genX(cmd_buffer_flush_compute_state)(struct anv_cmd_buffer *cmd_buffer)
    cmd_buffer->state.compute_dirty = 0;
 }
 
+bool
+genX(cmd_buffer_do_hiz_clear)(struct anv_cmd_buffer *cmd_buffer,
+                              bool depth, bool stencil, VkRect2D area)
+{
+   bool aligned = (area.offset.x % 8) == 0 && (area.offset.y % 8) == 0 &&
+                  (area.extent.width % 8) == 0 && (area.extent.height % 8) == 0;
+
+   anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_WM_HZ_OP),
+                  .StencilBufferClearEnable = stencil,
+                  .DepthBufferClearEnable = depth,
+                  .ScissorRectangleEnable = false,
+                  .FullSurfaceDepthandStencilClear = aligned,
+                  .ClearRectangleXMin = area.offset.x,
+                  .ClearRectangleYMin = area.offset.y,
+                  .ClearRectangleXMax = area.offset.x + area.extent.width,
+                  .ClearRectangleYMax = area.offset.y + area.extent.height);
+
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .PostSyncOperation = WriteImmediateData,
+                  .Address = { &cmd_buffer->device->workaround_bo, 0 });
+
+   anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_WM_HZ_OP));
+
+   return true;
+}
+
+void genX(cmd_buffer_do_hiz_resolve)(struct anv_cmd_buffer *cmd_buffer)
+{
+   const struct anv_image_view *iview =
+      anv_cmd_buffer_get_depth_stencil_view(cmd_buffer);
+
+   anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_WM_HZ_OP),
+                  .DepthBufferResolveEnable = true,
+                  .ScissorRectangleEnable = false,
+                  .ClearRectangleXMin = 0,
+                  .ClearRectangleYMin = 0,
+                  .ClearRectangleXMax = align_u32(iview->extent.width, 8),
+                  .ClearRectangleYMax = align_u32(iview->extent.height, 4));
+
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL),
+                  .PostSyncOperation = WriteImmediateData,
+                  .Address = { &cmd_buffer->device->workaround_bo, 0 });
+
+   anv_batch_emit(&cmd_buffer->batch, GENX(3DSTATE_WM_HZ_OP));
+}
+
 void genX(CmdSetEvent)(
     VkCommandBuffer                             commandBuffer,
     VkEvent                                     _event,

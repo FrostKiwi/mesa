@@ -49,6 +49,10 @@ void genX(cmd_buffer_flush_dynamic_state)(struct anv_cmd_buffer *cmd_buffer);
 
 void genX(cmd_buffer_flush_compute_state)(struct anv_cmd_buffer *cmd_buffer);
 
+bool genX(cmd_buffer_do_hiz_clear)(struct anv_cmd_buffer *cmd_buffer,
+                                   bool depth, bool stencil, VkRect2D area);
+void genX(cmd_buffer_do_hiz_resolve)(struct anv_cmd_buffer *cmd_buffer);
+
 VkResult
 genX(graphics_pipeline_create)(VkDevice _device,
                                struct anv_pipeline_cache *cache,
