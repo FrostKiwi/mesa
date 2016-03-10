@@ -484,7 +484,7 @@ genX(cmd_buffer_flush_compute_state)(struct anv_cmd_buffer *cmd_buffer)
 
 bool
 genX(cmd_buffer_do_hiz_clear)(struct anv_cmd_buffer *cmd_buffer,
-                              bool depth, bool stencil, VkRect2D area)
+                              VkImageAspectFlags aspects, VkRect2D area)
 {
    bool aligned = (area.offset.x % 8) == 0 && (area.offset.y % 8) == 0 &&
                   (area.extent.width % 8) == 0 && (area.extent.height % 8) == 0;

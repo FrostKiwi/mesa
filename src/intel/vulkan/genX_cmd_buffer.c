@@ -944,6 +944,26 @@ genX(cmd_buffer_set_subpass)(struct anv_cmd_buffer *cmd_buffer,
    cmd_buffer_emit_depth_stencil(cmd_buffer);
 }
 
+static void
+cmd_buffer_clear_subpass(struct anv_cmd_buffer *cmd_buffer)
+{
+   uint32_t ds_aspects = cmd_state->state.attachments[ds].pending_clear_aspects;
+   if (ds != VK_ATTACHMENT_UNUSED && ds_aspects) {
+      cmd_buffer_do_hiz_clear(cmd_buffer,
+                              ds_aspects & VK_IMAGE_ASPECT_DEPTH_BIT
+
+      VkClearAttachment clear_att = {
+         .aspectMask = cmd_state->attachments[ds].pending_clear_aspects,
+         .clearValue = cmd_state->attachments[ds].clear_value,
+      };
+
+      emit_clear(cmd_buffer, &clear_att, &clear_rect);
+      cmd_state->attachments[ds].pending_clear_aspects = 0;
+   }
+
+   anv_cmd_buffer_clear_subpass(cmd_buffer);
+}
+
 void genX(CmdBeginRenderPass)(
     VkCommandBuffer                             commandBuffer,
     const VkRenderPassBeginInfo*                pRenderPassBegin,
@@ -972,7 +992,7 @@ void genX(CmdBeginRenderPass)(
                   .DrawingRectangleOriginX = 0);
 
    genX(cmd_buffer_set_subpass)(cmd_buffer, pass->subpasses);
-   anv_cmd_buffer_clear_subpass(cmd_buffer);
+   cmd_buffer_clear_subpass(cmd_buffer);
 }
 
 void genX(CmdNextSubpass)(
@@ -985,7 +1005,7 @@ void genX(CmdNextSubpass)(
 
    anv_cmd_buffer_resolve_subpass(cmd_buffer);
    genX(cmd_buffer_set_subpass)(cmd_buffer, cmd_buffer->state.subpass + 1);
-   anv_cmd_buffer_clear_subpass(cmd_buffer);
+   cmd_buffer_clear_subpass(cmd_buffer);
 }
 
 void genX(CmdEndRenderPass)(
