@@ -192,5 +192,7 @@ VkResult anv_QueuePresentKHR(
          return result;
    }
 
+   anv_gem_throttle(queue->device);
+
    return VK_SUCCESS;
 }

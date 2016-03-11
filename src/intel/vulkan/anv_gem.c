@@ -356,3 +356,9 @@ anv_gem_fd_to_handle(struct anv_device *device, int fd)
 
    return args.handle;
 }
+
+void
+anv_gem_throttle(struct anv_device *device)
+{
+   anv_ioctl(device->fd, DRM_I915_GEM_THROTTLE, NULL);
+}
