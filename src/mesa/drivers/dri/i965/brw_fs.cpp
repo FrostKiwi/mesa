@@ -2097,28 +2097,27 @@ fs_visitor::opt_algebraic()
    bool progress = false;
 
    foreach_block_and_inst(block, fs_inst, inst, cfg) {
+      /* We don't want to do any float algebraic optimizations in the backend
+       * because they aren't bit-for-bit safe and the backend doesn't know
+       * when a value is declared precise or invariant.
+       */
+      if (inst->dst.type == BRW_REGISTER_TYPE_F)
+         continue;
+
+      bool has_float_src = false;
+      for (unsigned i = 0; i < inst->sources; i++) {
+         if (inst->src[i].type == BRW_REGISTER_TYPE_F)
+            has_float_src = true;
+      }
+      if (has_float_src)
+         continue;
+
       switch (inst->opcode) {
-      case BRW_OPCODE_MOV:
-         if (inst->src[0].file != IMM)
-            break;
-
-         if (inst->saturate) {
-            if (inst->dst.type != inst->src[0].type)
-               assert(!"unimplemented: saturate mixed types");
-
-            if (brw_saturate_immediate(inst->dst.type,
-                                       &inst->src[0].as_brw_reg())) {
-               inst->saturate = false;
-               progress = true;
-            }
-         }
-         break;
-
       case BRW_OPCODE_MUL:
 	 if (inst->src[1].file != IMM)
 	    continue;
 
-	 /* a * 1.0 = a */
+	 /* a * 1 = a */
 	 if (inst->src[1].is_one()) {
 	    inst->opcode = BRW_OPCODE_MOV;
 	    inst->src[1] = reg_undef;
@@ -2126,7 +2125,7 @@ fs_visitor::opt_algebraic()
 	    break;
 	 }
 
-         /* a * -1.0 = -a */
+         /* a * -1 = -a */
          if (inst->src[1].is_negative_one()) {
             inst->opcode = BRW_OPCODE_MOV;
             inst->src[0].negate = !inst->src[0].negate;
@@ -2135,7 +2134,7 @@ fs_visitor::opt_algebraic()
             break;
          }
 
-         /* a * 0.0 = 0.0 */
+         /* a * 0 = 0 */
          if (inst->src[1].is_zero()) {
             inst->opcode = BRW_OPCODE_MOV;
             inst->src[0] = inst->src[1];
@@ -2157,7 +2156,7 @@ fs_visitor::opt_algebraic()
          if (inst->src[1].file != IMM)
             continue;
 
-         /* a + 0.0 = a */
+         /* a + 0 = a */
          if (inst->src[1].is_zero()) {
             inst->opcode = BRW_OPCODE_MOV;
             inst->src[1] = reg_undef;
@@ -2182,16 +2181,6 @@ fs_visitor::opt_algebraic()
             break;
          }
          break;
-      case BRW_OPCODE_LRP:
-         if (inst->src[1].equals(inst->src[2])) {
-            inst->opcode = BRW_OPCODE_MOV;
-            inst->src[0] = inst->src[1];
-            inst->src[1] = reg_undef;
-            inst->src[2] = reg_undef;
-            progress = true;
-            break;
-         }
-         break;
       case BRW_OPCODE_CMP:
          if (inst->conditional_mod == BRW_CONDITIONAL_GE &&
              inst->src[0].abs &&
@@ -2210,33 +2199,6 @@ fs_visitor::opt_algebraic()
             inst->src[1] = reg_undef;
             inst->predicate = BRW_PREDICATE_NONE;
             inst->predicate_inverse = false;
-            progress = true;
-         }
-         break;
-      case BRW_OPCODE_MAD:
-         if (inst->src[1].is_zero() || inst->src[2].is_zero()) {
-            inst->opcode = BRW_OPCODE_MOV;
-            inst->src[1] = reg_undef;
-            inst->src[2] = reg_undef;
-            progress = true;
-         } else if (inst->src[0].is_zero()) {
-            inst->opcode = BRW_OPCODE_MUL;
-            inst->src[0] = inst->src[2];
-            inst->src[2] = reg_undef;
-            progress = true;
-         } else if (inst->src[1].is_one()) {
-            inst->opcode = BRW_OPCODE_ADD;
-            inst->src[1] = inst->src[2];
-            inst->src[2] = reg_undef;
-            progress = true;
-         } else if (inst->src[2].is_one()) {
-            inst->opcode = BRW_OPCODE_ADD;
-            inst->src[2] = reg_undef;
-            progress = true;
-         } else if (inst->src[1].file == IMM && inst->src[2].file == IMM) {
-            inst->opcode = BRW_OPCODE_ADD;
-            inst->src[1].f *= inst->src[2].f;
-            inst->src[2] = reg_undef;
             progress = true;
          }
          break;
