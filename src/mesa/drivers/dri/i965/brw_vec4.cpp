@@ -633,23 +633,17 @@ vec4_visitor::opt_algebraic()
    bool progress = false;
 
    foreach_block_and_inst(block, vec4_instruction, inst, cfg) {
+      /* We don't want to do any float algebraic optimizations in the backend
+       * because they aren't bit-for-bit safe and the backend doesn't know
+       * when a value is declared precise or invariant.
+       */
+      if (inst->dst.type == BRW_REGISTER_TYPE_F ||
+          inst->src[0].type == BRW_REGISTER_TYPE_F ||
+          (inst->src[1].file != BAD_FILE &&
+           inst->src[1].type == BRW_REGISTER_TYPE_F))
+         continue;
+
       switch (inst->opcode) {
-      case BRW_OPCODE_MOV:
-         if (inst->src[0].file != IMM)
-            break;
-
-         if (inst->saturate) {
-            if (inst->dst.type != inst->src[0].type)
-               assert(!"unimplemented: saturate mixed types");
-
-            if (brw_saturate_immediate(inst->dst.type,
-                                       &inst->src[0].as_brw_reg())) {
-               inst->saturate = false;
-               progress = true;
-            }
-         }
-         break;
-
       case VEC4_OPCODE_UNPACK_UNIFORM:
          if (inst->src[0].file != UNIFORM) {
             inst->opcode = BRW_OPCODE_MOV;
@@ -669,9 +663,6 @@ vec4_visitor::opt_algebraic()
 	 if (inst->src[1].is_zero()) {
 	    inst->opcode = BRW_OPCODE_MOV;
 	    switch (inst->src[0].type) {
-	    case BRW_REGISTER_TYPE_F:
-	       inst->src[0] = brw_imm_f(0.0f);
-	       break;
 	    case BRW_REGISTER_TYPE_D:
 	       inst->src[0] = brw_imm_d(0);
 	       break;
@@ -706,17 +697,6 @@ vec4_visitor::opt_algebraic()
             break;
          }
          break;
-      case SHADER_OPCODE_RCP: {
-         vec4_instruction *prev = (vec4_instruction *)inst->prev;
-         if (prev->opcode == SHADER_OPCODE_SQRT) {
-            if (inst->src[0].equals(src_reg(prev->dst))) {
-               inst->opcode = SHADER_OPCODE_RSQ;
-               inst->src[0] = prev->src[0];
-               progress = true;
-            }
-         }
-         break;
-      }
       case SHADER_OPCODE_BROADCAST:
          if (is_uniform(inst->src[0]) ||
              inst->src[1].is_zero()) {
