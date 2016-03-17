@@ -375,6 +375,7 @@ vec4_visitor::opt_vector_float()
       if (inst->opcode != BRW_OPCODE_MOV ||
           inst->dst.writemask == WRITEMASK_XYZW ||
           inst->src[0].file != IMM ||
+          inst->src[0].type != inst->dst.type ||
           inst->predicate != BRW_PREDICATE_NONE) {
          progress |= vectorize_mov(block, inst, imm, imm_inst, inst_count,
                                    writemask);
