@@ -2211,40 +2211,6 @@ fs_visitor::opt_algebraic()
             inst->predicate = BRW_PREDICATE_NONE;
             inst->predicate_inverse = false;
             progress = true;
-         } else if (inst->saturate && inst->src[1].file == IMM) {
-            switch (inst->conditional_mod) {
-            case BRW_CONDITIONAL_LE:
-            case BRW_CONDITIONAL_L:
-               switch (inst->src[1].type) {
-               case BRW_REGISTER_TYPE_F:
-                  if (inst->src[1].f >= 1.0f) {
-                     inst->opcode = BRW_OPCODE_MOV;
-                     inst->src[1] = reg_undef;
-                     inst->conditional_mod = BRW_CONDITIONAL_NONE;
-                     progress = true;
-                  }
-                  break;
-               default:
-                  break;
-               }
-               break;
-            case BRW_CONDITIONAL_GE:
-            case BRW_CONDITIONAL_G:
-               switch (inst->src[1].type) {
-               case BRW_REGISTER_TYPE_F:
-                  if (inst->src[1].f <= 0.0f) {
-                     inst->opcode = BRW_OPCODE_MOV;
-                     inst->src[1] = reg_undef;
-                     inst->conditional_mod = BRW_CONDITIONAL_NONE;
-                     progress = true;
-                  }
-                  break;
-               default:
-                  break;
-               }
-            default:
-               break;
-            }
          }
          break;
       case BRW_OPCODE_MAD:
