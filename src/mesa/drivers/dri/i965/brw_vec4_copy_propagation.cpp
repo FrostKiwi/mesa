@@ -149,6 +149,9 @@ try_constant_propagate(const struct brw_device_info *devinfo,
    if (value.file != IMM)
       return false;
 
+   if (entry->saturatemask)
+      return false;
+
    if (value.type == BRW_REGISTER_TYPE_VF) {
       /* The result of bit-casting the component values of a vector float
        * cannot in general be represented as an immediate.
