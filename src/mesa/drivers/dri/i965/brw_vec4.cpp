@@ -384,7 +384,13 @@ vec4_visitor::opt_vector_float()
          continue;
       }
 
-      int vf = brw_float_to_vf(inst->src[0].f);
+      float f = inst->src[0].f;
+      if (inst->saturate) {
+         assert(inst->dst.type == BRW_REGISTER_TYPE_F);
+         f = CLAMP(f, 0.0f, 1.0f);
+      }
+
+      int vf = brw_float_to_vf(f);
       if (vf == -1)
          continue;
 
