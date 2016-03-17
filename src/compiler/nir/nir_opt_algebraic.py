@@ -113,6 +113,8 @@ optimizations = [
    (('fmax', ('fmin', a, 1.0), 0.0), ('fsat', a), '!options->lower_fsat'),
    (('fsat', a), ('fmin', ('fmax', a, 0.0), 1.0), 'options->lower_fsat'),
    (('fsat', ('fsat', a)), ('fsat', a)),
+   (('fsat', ('fmin', a, 1.0)), ('fsat', a)),
+   (('fsat', ('fmax', a, 0.0)), ('fsat', a)),
    (('fmin', ('fmax', ('fmin', ('fmax', a, 0.0), 1.0), 0.0), 1.0), ('fmin', ('fmax', a, 0.0), 1.0)),
    (('ior', ('flt', a, b), ('flt', a, c)), ('flt', a, ('fmax', b, c))),
    (('ior', ('flt', a, c), ('flt', b, c)), ('flt', ('fmin', a, b), c)),
