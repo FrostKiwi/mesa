@@ -370,6 +370,33 @@ optimizations = [
      'options->lower_unpack_snorm_4x8'),
 ]
 
+def fexp2i(exp):
+   # We assume that exp is already in range.
+   return ('ishl', ('iadd', exp, 127), 23)
+
+def ldexp32(f, exp):
+   # First, we clamp exp to a reasonable range.  The maximum range that we
+   # need is the largest range for an exponent, ([-127, 128] if you include
+   # inf and 0) plus the number of mantissa bits in either direction to
+   # account for denormals.  This means that we need at least a range of
+   # [-150, 151].  For our implementation, however, what we really care
+   # about is that neither exp/2 nor exp-exp/2 go out of the regular range
+   # for floating-point exponents.
+   exp = ('imin', ('imax', exp, -252), 254)
+
+   # Now we compute two powers of 2, one for exp/2 and one for exp-exp/2.
+   # While the spec technically defines ldexp as f * 2.0^exp, simply
+   # multiplying once doesn't work when denormals are involved because
+   # 2.0^exp may not be representable even though ldexp(f, exp) is (see
+   # comments above about range).  Instead, we create two powers of two and
+   # multiply by them each in turn.  That way the effective range of our
+   # exponent is doubled.
+   pow2_1 = fexp2i(('ishr', exp, 1))
+   pow2_2 = fexp2i(('isub', exp, ('ishr', exp, 1)))
+   return ('fmul', ('fmul', f, pow2_1), pow2_2)
+
+optimizations += [(('ldexp', 'x', 'exp'), ldexp32('x', 'exp'))]
+
 # Unreal Engine 4 demo applications open-codes bitfieldReverse()
 def bitfield_reverse(u):
     step1 = ('ior', ('ishl', u, 16), ('ushr', u, 16))
