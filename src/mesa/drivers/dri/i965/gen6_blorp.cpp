@@ -45,7 +45,7 @@
  */
 void
 gen6_blorp_emit_state_base_address(struct brw_context *brw,
-                                   const brw_blorp_params *params)
+                                   const struct brw_blorp_params *params)
 {
    uint8_t mocs = brw->gen == 7 ? GEN7_MOCS_L3 : 0;
 
@@ -127,7 +127,7 @@ gen6_blorp_emit_vertex_buffer_state(struct brw_context *brw,
 
 void
 gen6_blorp_emit_vertices(struct brw_context *brw,
-                         const brw_blorp_params *params)
+                         const struct brw_blorp_params *params)
 {
    uint32_t vertex_offset;
 
@@ -236,7 +236,7 @@ gen6_blorp_emit_vertices(struct brw_context *brw,
  */
 static void
 gen6_blorp_emit_urb_config(struct brw_context *brw,
-                           const brw_blorp_params *params)
+                           const struct brw_blorp_params *params)
 {
    BEGIN_BATCH(3);
    OUT_BATCH(_3DSTATE_URB << 16 | (3 - 2));
@@ -249,7 +249,7 @@ gen6_blorp_emit_urb_config(struct brw_context *brw,
 /* BLEND_STATE */
 uint32_t
 gen6_blorp_emit_blend_state(struct brw_context *brw,
-                            const brw_blorp_params *params)
+                            const struct brw_blorp_params *params)
 {
    uint32_t cc_blend_state_offset;
 
@@ -300,7 +300,7 @@ gen6_blorp_emit_cc_state(struct brw_context *brw)
  */
 uint32_t
 gen6_blorp_emit_depth_stencil_state(struct brw_context *brw,
-                                    const brw_blorp_params *params)
+                                    const struct brw_blorp_params *params)
 {
    uint32_t depthstencil_offset;
 
@@ -335,7 +335,7 @@ gen6_blorp_emit_depth_stencil_state(struct brw_context *brw,
  */
 static void
 gen6_blorp_emit_cc_state_pointers(struct brw_context *brw,
-                                  const brw_blorp_params *params,
+                                  const struct brw_blorp_params *params,
                                   uint32_t cc_blend_state_offset,
                                   uint32_t depthstencil_offset,
                                   uint32_t cc_state_offset)
@@ -352,7 +352,7 @@ gen6_blorp_emit_cc_state_pointers(struct brw_context *brw,
 /* WM push constants */
 uint32_t
 gen6_blorp_emit_wm_constants(struct brw_context *brw,
-                             const brw_blorp_params *params)
+                             const struct brw_blorp_params *params)
 {
    uint32_t wm_push_const_offset;
 
@@ -371,7 +371,7 @@ gen6_blorp_emit_wm_constants(struct brw_context *brw,
  */
 static uint32_t
 gen6_blorp_emit_surface_state(struct brw_context *brw,
-                              const brw_blorp_params *params,
+                              const struct brw_blorp_params *params,
                               const struct brw_blorp_surface_info *surface,
                               uint32_t read_domains, uint32_t write_domain)
 {
@@ -532,7 +532,7 @@ gen6_blorp_emit_sampler_state_pointers(struct brw_context *brw,
  */
 void
 gen6_blorp_emit_vs_disable(struct brw_context *brw,
-                           const brw_blorp_params *params)
+                           const struct brw_blorp_params *params)
 {
    /* From the BSpec, 3D Pipeline > Geometry > Vertex Shader > State,
     * 3DSTATE_VS, Dword 5.0 "VS Function Enable":
@@ -571,7 +571,7 @@ gen6_blorp_emit_vs_disable(struct brw_context *brw,
  */
 void
 gen6_blorp_emit_gs_disable(struct brw_context *brw,
-                           const brw_blorp_params *params)
+                           const struct brw_blorp_params *params)
 {
    /* Disable all the constant buffers. */
    BEGIN_BATCH(5);
@@ -641,7 +641,7 @@ gen6_blorp_emit_clip_disable(struct brw_context *brw)
  */
 static void
 gen6_blorp_emit_sf_config(struct brw_context *brw,
-                          const brw_blorp_params *params)
+                          const struct brw_blorp_params *params)
 {
    BEGIN_BATCH(20);
    OUT_BATCH(_3DSTATE_SF << 16 | (20 - 2));
@@ -662,7 +662,7 @@ gen6_blorp_emit_sf_config(struct brw_context *brw,
  */
 static void
 gen6_blorp_emit_wm_config(struct brw_context *brw,
-                          const brw_blorp_params *params)
+                          const struct brw_blorp_params *params)
 {
    const struct brw_blorp_prog_data *prog_data = params->wm_prog_data;
    uint32_t dw2, dw4, dw5, dw6;
@@ -736,7 +736,7 @@ gen6_blorp_emit_wm_config(struct brw_context *brw,
 
 static void
 gen6_blorp_emit_constant_ps(struct brw_context *brw,
-                            const brw_blorp_params *params,
+                            const struct brw_blorp_params *params,
                             uint32_t wm_push_const_offset)
 {
    /* Make sure the push constants fill an exact integer number of
@@ -761,7 +761,7 @@ gen6_blorp_emit_constant_ps(struct brw_context *brw,
 
 static void
 gen6_blorp_emit_constant_ps_disable(struct brw_context *brw,
-                                    const brw_blorp_params *params)
+                                    const struct brw_blorp_params *params)
 {
    /* Disable the push constant buffers. */
    BEGIN_BATCH(5);
@@ -793,7 +793,7 @@ gen6_blorp_emit_binding_table_pointers(struct brw_context *brw,
 
 static void
 gen6_blorp_emit_depth_stencil_config(struct brw_context *brw,
-                                     const brw_blorp_params *params)
+                                     const struct brw_blorp_params *params)
 {
    uint32_t surfwidth, surfheight;
    uint32_t surftype;
@@ -908,7 +908,7 @@ gen6_blorp_emit_depth_stencil_config(struct brw_context *brw,
 
 static void
 gen6_blorp_emit_depth_disable(struct brw_context *brw,
-                              const brw_blorp_params *params)
+                              const struct brw_blorp_params *params)
 {
    brw_emit_depth_stall_flushes(brw);
 
@@ -945,7 +945,7 @@ gen6_blorp_emit_depth_disable(struct brw_context *brw,
  */
 static void
 gen6_blorp_emit_clear_params(struct brw_context *brw,
-                             const brw_blorp_params *params)
+                             const struct brw_blorp_params *params)
 {
    BEGIN_BATCH(2);
    OUT_BATCH(_3DSTATE_CLEAR_PARAMS << 16 |
@@ -959,7 +959,7 @@ gen6_blorp_emit_clear_params(struct brw_context *brw,
 /* 3DSTATE_DRAWING_RECTANGLE */
 void
 gen6_blorp_emit_drawing_rectangle(struct brw_context *brw,
-                                  const brw_blorp_params *params)
+                                  const struct brw_blorp_params *params)
 {
    BEGIN_BATCH(4);
    OUT_BATCH(_3DSTATE_DRAWING_RECTANGLE << 16 | (4 - 2));
@@ -973,7 +973,7 @@ gen6_blorp_emit_drawing_rectangle(struct brw_context *brw,
 /* 3DSTATE_VIEWPORT_STATE_POINTERS */
 void
 gen6_blorp_emit_viewport_state(struct brw_context *brw,
-			       const brw_blorp_params *params)
+			       const struct brw_blorp_params *params)
 {
    struct brw_cc_viewport *ccv;
    uint32_t cc_vp_offset;
@@ -998,7 +998,7 @@ gen6_blorp_emit_viewport_state(struct brw_context *brw,
 /* 3DPRIMITIVE */
 static void
 gen6_blorp_emit_primitive(struct brw_context *brw,
-                          const brw_blorp_params *params)
+                          const struct brw_blorp_params *params)
 {
    BEGIN_BATCH(6);
    OUT_BATCH(CMD_3D_PRIM << 16 | (6 - 2) |
@@ -1023,7 +1023,7 @@ gen6_blorp_emit_primitive(struct brw_context *brw,
  */
 void
 gen6_blorp_exec(struct brw_context *brw,
-                const brw_blorp_params *params)
+                const struct brw_blorp_params *params)
 {
    uint32_t cc_blend_state_offset = 0;
    uint32_t cc_state_offset = 0;

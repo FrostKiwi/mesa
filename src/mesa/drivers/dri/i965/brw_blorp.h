@@ -219,11 +219,8 @@ struct brw_blorp_prog_data
 
 #define BRW_BLORP_NO_WM_PROG 1
 
-class brw_blorp_params
+struct brw_blorp_params
 {
-public:
-   brw_blorp_params();
-
    uint32_t x0;
    uint32_t y0;
    uint32_t x1;
@@ -235,10 +232,10 @@ public:
    enum gen6_hiz_op hiz_op;
    unsigned fast_clear_op;
    bool color_write_disable[4];
-   brw_blorp_wm_push_constants wm_push_consts;
-   const unsigned num_varyings;
-   const unsigned num_draw_buffers;
-   const unsigned num_layers;
+   struct brw_blorp_wm_push_constants wm_push_consts;
+   unsigned num_varyings;
+   unsigned num_draw_buffers;
+   unsigned num_layers;
 
    /**
     * The pointer (relative to instruction state base address) to the WM/PS
@@ -249,9 +246,11 @@ public:
    struct brw_blorp_prog_data *wm_prog_data;
 };
 
+void
+brw_blorp_params_init(struct brw_blorp_params *params);
 
 void
-brw_blorp_exec(struct brw_context *brw, const brw_blorp_params *params);
+brw_blorp_exec(struct brw_context *brw, const struct brw_blorp_params *params);
 
 void
 gen6_blorp_hiz_exec(struct brw_context *brw, struct intel_mipmap_tree *mt,
@@ -259,14 +258,14 @@ gen6_blorp_hiz_exec(struct brw_context *brw, struct intel_mipmap_tree *mt,
 
 void
 gen6_blorp_exec(struct brw_context *brw,
-                const brw_blorp_params *params);
+                const struct brw_blorp_params *params);
 
 void
 gen7_blorp_exec(struct brw_context *brw,
-                const brw_blorp_params *params);
+                const struct brw_blorp_params *params);
 
 void
-gen8_blorp_exec(struct brw_context *brw, const brw_blorp_params *params);
+gen8_blorp_exec(struct brw_context *brw, const struct brw_blorp_params *params);
 
 struct brw_blorp_blit_prog_key
 {
@@ -359,26 +358,26 @@ gen6_blorp_init(struct brw_context *brw);
 
 void
 gen6_blorp_emit_state_base_address(struct brw_context *brw,
-                                   const brw_blorp_params *params);
+                                   const struct brw_blorp_params *params);
 
 void
 gen6_blorp_emit_vertices(struct brw_context *brw,
-                         const brw_blorp_params *params);
+                         const struct brw_blorp_params *params);
 
 uint32_t
 gen6_blorp_emit_blend_state(struct brw_context *brw,
-                            const brw_blorp_params *params);
+                            const struct brw_blorp_params *params);
 
 uint32_t
 gen6_blorp_emit_cc_state(struct brw_context *brw);
 
 uint32_t
 gen6_blorp_emit_wm_constants(struct brw_context *brw,
-                             const brw_blorp_params *params);
+                             const struct brw_blorp_params *params);
 
 void
 gen6_blorp_emit_vs_disable(struct brw_context *brw,
-                           const brw_blorp_params *params);
+                           const struct brw_blorp_params *params);
 
 uint32_t
 gen6_blorp_emit_binding_table(struct brw_context *brw,
@@ -387,18 +386,18 @@ gen6_blorp_emit_binding_table(struct brw_context *brw,
 
 uint32_t
 gen6_blorp_emit_depth_stencil_state(struct brw_context *brw,
-                                    const brw_blorp_params *params);
+                                    const struct brw_blorp_params *params);
 
 void
 gen6_blorp_emit_gs_disable(struct brw_context *brw,
-                           const brw_blorp_params *params);
+                           const struct brw_blorp_params *params);
 
 void
 gen6_blorp_emit_clip_disable(struct brw_context *brw);
 
 void
 gen6_blorp_emit_drawing_rectangle(struct brw_context *brw,
-                                  const brw_blorp_params *params);
+                                  const struct brw_blorp_params *params);
 
 uint32_t
 gen6_blorp_emit_sampler_state(struct brw_context *brw,
@@ -431,7 +430,7 @@ gen7_blorp_emit_sampler_state_pointers_ps(struct brw_context *brw,
 
 void
 gen7_blorp_emit_clear_params(struct brw_context *brw,
-                             const brw_blorp_params *params);
+                             const struct brw_blorp_params *params);
 
 void
 gen7_blorp_emit_constant_ps(struct brw_context *brw,
@@ -442,7 +441,7 @@ gen7_blorp_emit_constant_ps_disable(struct brw_context *brw);
 
 void
 gen7_blorp_emit_primitive(struct brw_context *brw,
-                          const brw_blorp_params *params);
+                          const struct brw_blorp_params *params);
 
 /** \} */
 
