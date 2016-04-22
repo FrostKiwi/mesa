@@ -229,6 +229,7 @@ struct brw_blorp_prog_data
    bool persample_msaa_dispatch;
 };
 
+#define BRW_BLORP_NO_WM_PROG 1
 
 class brw_blorp_params
 {
@@ -236,9 +237,6 @@ public:
    brw_blorp_params(unsigned num_varyings = 0,
                     unsigned num_draw_buffers = 1,
                     unsigned num_layers = 1);
-
-   virtual uint32_t get_wm_prog(struct brw_context *brw,
-                                brw_blorp_prog_data **prog_data) const = 0;
 
    uint32_t x0;
    uint32_t y0;
@@ -251,11 +249,18 @@ public:
    enum gen6_hiz_op hiz_op;
    unsigned fast_clear_op;
    bool color_write_disable[4];
-   bool use_wm_prog;
    brw_blorp_wm_push_constants wm_push_consts;
    const unsigned num_varyings;
    const unsigned num_draw_buffers;
    const unsigned num_layers;
+
+   /**
+    * The pointer (relative to instruction state base address) to the WM/PS
+    * kernel to use for this operation.  If set to BLORP_NO_WM_PROG, the WM
+    * stage will be disabled.
+    */
+   uint32_t wm_prog_kernel;
+   struct brw_blorp_prog_data *wm_prog_data;
 };
 
 
@@ -288,9 +293,6 @@ public:
    brw_hiz_op_params(struct intel_mipmap_tree *mt,
                      unsigned int level, unsigned int layer,
                      gen6_hiz_op op);
-
-   virtual uint32_t get_wm_prog(struct brw_context *brw,
-                                brw_blorp_prog_data **prog_data) const;
 };
 
 struct brw_blorp_blit_prog_key
@@ -387,9 +389,6 @@ public:
                          GLfloat dst_x0, GLfloat dst_y0,
                          GLfloat dst_x1, GLfloat dst_y1,
                          GLenum filter, bool mirror_x, bool mirror_y);
-
-   virtual uint32_t get_wm_prog(struct brw_context *brw,
-                                brw_blorp_prog_data **prog_data) const;
 
 private:
    brw_blorp_blit_prog_key wm_prog_key;

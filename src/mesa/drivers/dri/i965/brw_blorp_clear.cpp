@@ -52,9 +52,6 @@ struct brw_blorp_const_color_prog_key
 class brw_blorp_const_color_params : public brw_blorp_params
 {
 public:
-   virtual uint32_t get_wm_prog(struct brw_context *brw,
-                                brw_blorp_prog_data **prog_data) const;
-
    brw_blorp_const_color_prog_key wm_prog_key;
 };
 
@@ -135,6 +132,25 @@ brw_blorp_const_color_program::~brw_blorp_const_color_program()
    ralloc_free(mem_ctx);
 }
 
+static void
+brw_blorp_params_get_clear_kernel(struct brw_context *brw,
+                                  struct brw_blorp_params *params,
+                                  brw_blorp_const_color_prog_key *wm_prog_key)
+{
+   if (!brw_search_cache(&brw->cache, BRW_CACHE_BLORP_PROG,
+                         wm_prog_key, sizeof(*wm_prog_key),
+                         &params->wm_prog_kernel, &params->wm_prog_data)) {
+      brw_blorp_const_color_program prog(brw, wm_prog_key);
+      GLuint program_size;
+      const GLuint *program = prog.compile(brw, &program_size);
+      brw_upload_cache(&brw->cache, BRW_CACHE_BLORP_PROG,
+                       wm_prog_key, sizeof(*wm_prog_key),
+                       program, program_size,
+                       &prog.prog_data, sizeof(prog.prog_data),
+                       &params->wm_prog_kernel, &params->wm_prog_data);
+   }
+}
+
 brw_blorp_clear_params::brw_blorp_clear_params(struct brw_context *brw,
                                                struct gl_framebuffer *fb,
                                                struct gl_renderbuffer *rb,
@@ -166,8 +182,6 @@ brw_blorp_clear_params::brw_blorp_clear_params(struct brw_context *brw,
    }
 
    memcpy(&wm_push_consts.dst_x0, ctx->Color.ClearColor.f, sizeof(float) * 4);
-
-   use_wm_prog = true;
 
    memset(&wm_prog_key, 0, sizeof(wm_prog_key));
 
@@ -204,6 +218,8 @@ brw_blorp_clear_params::brw_blorp_clear_params(struct brw_context *brw,
    } else {
       brw_meta_get_buffer_rect(fb, &x0, &y0, &x1, &y1);
    }
+
+   brw_blorp_params_get_clear_kernel(brw, this, &wm_prog_key);
 }
 
 
@@ -224,32 +240,12 @@ brw_blorp_rt_resolve_params::brw_blorp_rt_resolve_params(
     * ensure that the fragment shader delivers the data using the "replicated
     * color" message.
     */
-   use_wm_prog = true;
    memset(&wm_prog_key, 0, sizeof(wm_prog_key));
    wm_prog_key.use_simd16_replicated_data = true;
+
+   brw_blorp_params_get_clear_kernel(brw, this, &wm_prog_key);
 }
 
-
-uint32_t
-brw_blorp_const_color_params::get_wm_prog(struct brw_context *brw,
-                                          brw_blorp_prog_data **prog_data)
-   const
-{
-   uint32_t prog_offset = 0;
-   if (!brw_search_cache(&brw->cache, BRW_CACHE_BLORP_PROG,
-                         &this->wm_prog_key, sizeof(this->wm_prog_key),
-                         &prog_offset, prog_data)) {
-      brw_blorp_const_color_program prog(brw, &this->wm_prog_key);
-      GLuint program_size;
-      const GLuint *program = prog.compile(brw, &program_size);
-      brw_upload_cache(&brw->cache, BRW_CACHE_BLORP_PROG,
-                       &this->wm_prog_key, sizeof(this->wm_prog_key),
-                       program, program_size,
-                       &prog.prog_data, sizeof(prog.prog_data),
-                       &prog_offset, prog_data);
-   }
-   return prog_offset;
-}
 
 void
 brw_blorp_const_color_program::alloc_regs()
