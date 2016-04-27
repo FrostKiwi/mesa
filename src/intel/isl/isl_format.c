@@ -122,24 +122,3 @@ isl_format_rgb_to_rgba(enum isl_format rgb)
       return ISL_FORMAT_UNSUPPORTED;
    }
 }
-
-enum isl_format
-isl_format_rgb_to_rgbx(enum isl_format rgb)
-{
-   assert(isl_format_is_rgb(rgb));
-
-   switch (rgb) {
-   case ISL_FORMAT_R32G32B32_FLOAT:
-      return ISL_FORMAT_R32G32B32X32_FLOAT;
-   case ISL_FORMAT_R16G16B16_UNORM:
-      return ISL_FORMAT_R16G16B16X16_UNORM;
-   case ISL_FORMAT_R16G16B16_FLOAT:
-      return ISL_FORMAT_R16G16B16X16_FLOAT;
-   case ISL_FORMAT_R8G8B8_UNORM:
-      return ISL_FORMAT_R8G8B8X8_UNORM;
-   case ISL_FORMAT_R8G8B8_UNORM_SRGB:
-      return ISL_FORMAT_R8G8B8X8_UNORM_SRGB;
-   default:
-      return ISL_FORMAT_UNSUPPORTED;
-   }
-}

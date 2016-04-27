@@ -265,14 +265,9 @@ anv_get_isl_format(VkFormat format, VkImageAspectFlags aspect,
                  !util_is_power_of_two(anv_fmt->isl_layout->bs)) {
          /* Tiled formats *must* be power-of-two because we need up upload
           * them with the render pipeline.  For 3-channel formats, we fix
-          * this by switching them over to RGBX or RGBA formats under the
-          * hood.
+          * this by switching them over to RGBA formats under the hood.
           */
-         enum isl_format rgbx = isl_format_rgb_to_rgbx(anv_fmt->isl_format);
-         if (rgbx != ISL_FORMAT_UNSUPPORTED)
-            return rgbx;
-         else
-            return isl_format_rgb_to_rgba(anv_fmt->isl_format);
+         return isl_format_rgb_to_rgba(anv_fmt->isl_format);
       } else {
          return anv_fmt->isl_format;
       }
@@ -327,11 +322,25 @@ get_image_format_properties(int gen, enum isl_format base,
     * moved, then blending won't work correctly.  The PRM tells us
     * straight-up not to render to such a surface.
     */
-   if (info->render_target <= gen && swizzle.a == ISL_CHANNEL_SELECT_ALPHA) {
+   /* XXX: We handle 3-channel (NPOT) formats by switching them out for
+    * RGBA formats behind-the-scenes.  This works fine for textures
+    * because the upload process will fill in the extra channel.
+    * We could also support it for render targets, but it will take
+    * substantially more work.
+    */
+   if (info->render_target <= gen && swizzle.a == ISL_CHANNEL_SELECT_ALPHA &&
+       util_is_power_of_two(isl_format_layouts[base].bs)) {
       flags |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
                VK_FORMAT_FEATURE_BLIT_DST_BIT;
 
-      if (info->alpha_blend <= gen)
+      /* We can perform alpha blending if the format supports it on our gen,
+       * but we can't do so if we have an RGB base format on a gen prior to
+       * Gen8. This is because we lack the ability to set each RT alpha blend
+       * factor of the actual RGBA surface to 1, as required by section,
+       * 15.3.5. Conversion to RGBA, of the spec.
+       */
+      if (info->alpha_blend <= gen && !(gen < 80 &&
+          !util_is_power_of_two(isl_format_layouts[base].bs)))
          flags |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT;
    }
 
@@ -401,20 +410,6 @@ anv_physical_device_get_format_properties(struct anv_physical_device *physical_d
       tiled = get_image_format_properties(gen, linear_fmt, tiled_fmt,
                                           tiled_swizzle);
       buffer = get_buffer_format_properties(gen, linear_fmt);
-
-      /* XXX: We handle 3-channel formats by switching them out for RGBX or
-       * RGBA formats behind-the-scenes.  This works fine for textures
-       * because the upload process will fill in the extra channel.
-       * We could also support it for render targets, but it will take
-       * substantially more work and we have enough RGBX formats to handle
-       * what most clients will want.
-       */
-      if (linear_fmt != ISL_FORMAT_UNSUPPORTED &&
-          !util_is_power_of_two(isl_format_layouts[linear_fmt].bs) &&
-          isl_format_rgb_to_rgbx(linear_fmt) == ISL_FORMAT_UNSUPPORTED) {
-         tiled &= ~VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT &
-                  ~VK_FORMAT_FEATURE_BLIT_DST_BIT;
-      }
    }
 
    out_properties->linearTilingFeatures = linear;

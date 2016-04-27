@@ -912,7 +912,6 @@ isl_format_is_rgb(enum isl_format fmt)
 }
 
 enum isl_format isl_format_rgb_to_rgba(enum isl_format rgb) ATTRIBUTE_CONST;
-enum isl_format isl_format_rgb_to_rgbx(enum isl_format rgb) ATTRIBUTE_CONST;
 
 bool isl_is_storage_image_format(enum isl_format fmt);
 
