@@ -99,11 +99,14 @@ emit_rs_state(struct anv_pipeline *pipeline,
    GENX(3DSTATE_RASTER_pack)(NULL, pipeline->gen8.raster, &raster);
 }
 
+
 static void
 emit_cb_state(struct anv_pipeline *pipeline,
               const VkPipelineColorBlendStateCreateInfo *info,
-              const VkPipelineMultisampleStateCreateInfo *ms_info)
+              const VkPipelineMultisampleStateCreateInfo *ms_info,
+              const VkRenderPass renderPass)
 {
+   ANV_FROM_HANDLE(anv_render_pass, pass, renderPass);
    struct anv_device *device = pipeline->device;
 
    uint32_t num_dwords = GENX(BLEND_STATE_length);
@@ -187,6 +190,33 @@ emit_cb_state(struct anv_pipeline *pipeline,
           a->alphaBlendOp == VK_BLEND_OP_MAX) {
          blend_state.Entry[i].SourceAlphaBlendFactor = BLENDFACTOR_ONE;
          blend_state.Entry[i].DestinationAlphaBlendFactor = BLENDFACTOR_ONE;
+      }
+
+      /* According to section "15.3.5. Conversion to RGBA" in the Vulkan spec,
+       * RGB color attachments should have the alpha channel set to one.
+       * Modify the Destination Blend Factor to match this expectation.
+       */
+      if (pass != &anv_meta_dummy_renderpass) {
+         const struct anv_format *anv_fmt = pass->attachments[i].format;
+         if (!util_is_power_of_two(anv_fmt->isl_layout->bs)) {
+            uint32_t *blend_factor = &blend_state.Entry[i].DestinationBlendFactor;
+            switch (*blend_factor) {
+            case BLENDFACTOR_DST_ALPHA:
+               *blend_factor = BLENDFACTOR_ONE;
+               break;
+            case BLENDFACTOR_INV_DST_ALPHA:
+            case BLENDFACTOR_SRC_ALPHA_SATURATE:
+               *blend_factor = BLENDFACTOR_ZERO;
+               break;
+            default:
+               break;
+            }
+
+            /* Try to avoid unnecessary alpha computations in HW */
+            blend_state.Entry[i].WriteDisableAlpha = true;
+            blend_state.Entry[i].DestinationAlphaBlendFactor = BLENDFACTOR_ZERO;
+            blend_state.Entry[i].AlphaBlendFunction = BLENDFUNCTION_MIN;
+         }
       }
    }
 
@@ -345,7 +375,8 @@ genX(graphics_pipeline_create)(
    emit_ms_state(pipeline, pCreateInfo->pMultisampleState);
    emit_ds_state(pipeline, pCreateInfo->pDepthStencilState);
    emit_cb_state(pipeline, pCreateInfo->pColorBlendState,
-                           pCreateInfo->pMultisampleState);
+                           pCreateInfo->pMultisampleState,
+                           pCreateInfo->renderPass);
 
    emit_urb_setup(pipeline);
 
