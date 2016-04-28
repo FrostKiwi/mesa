@@ -515,6 +515,16 @@ anv_image_view_init(struct anv_image_view *iview,
       },
    };
 
+   /* Meet the channel value requirements described in section
+    * 15.3.5. Conversion to RGBA of the Vulkan spec.
+    */
+   enum isl_format orig_fmt =
+      anv_format_for_vk_format(pCreateInfo->format)->isl_format;
+   isl_sanitize_channel_select(orig_fmt, isl_view.channel_select,
+                               device->info.gen >= 8 &&
+                               (surface->isl.usage &
+                                ISL_SURF_USAGE_RENDER_TARGET_BIT));
+
    iview->extent = (VkExtent3D) {
       .width  = anv_minify(image->extent.width , range->baseMipLevel),
       .height = anv_minify(image->extent.height, range->baseMipLevel),
