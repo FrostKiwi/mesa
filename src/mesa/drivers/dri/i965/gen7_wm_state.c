@@ -227,29 +227,19 @@ gen7_upload_ps_state(struct brw_context *brw,
       _mesa_get_min_invocations_per_fragment(ctx, fp, false);
    assert(min_inv_per_frag >= 1);
 
-   if (prog_data->prog_offset_16 || prog_data->no_8) {
+   if (prog_data->dispatch_16)
       dw4 |= GEN7_PS_16_DISPATCH_ENABLE;
-      if (!prog_data->no_8 && min_inv_per_frag == 1) {
-         dw4 |= GEN7_PS_8_DISPATCH_ENABLE;
-         dw5 |= (prog_data->base.dispatch_grf_start_reg <<
-                 GEN7_PS_DISPATCH_START_GRF_SHIFT_0);
-         dw5 |= (prog_data->dispatch_grf_start_reg_16 <<
-                 GEN7_PS_DISPATCH_START_GRF_SHIFT_2);
-         ksp0 = stage_state->prog_offset;
-         ksp2 = stage_state->prog_offset + prog_data->prog_offset_16;
-      } else {
-         dw5 |= (prog_data->dispatch_grf_start_reg_16 <<
-                 GEN7_PS_DISPATCH_START_GRF_SHIFT_0);
-         ksp0 = stage_state->prog_offset + prog_data->prog_offset_16;
-      }
-   }
-   else {
-      dw4 |= GEN7_PS_8_DISPATCH_ENABLE;
-      dw5 |= (prog_data->base.dispatch_grf_start_reg <<
-              GEN7_PS_DISPATCH_START_GRF_SHIFT_0);
-      ksp0 = stage_state->prog_offset;
-   }
 
+   if (prog_data->dispatch_8)
+      dw4 |= GEN7_PS_8_DISPATCH_ENABLE;
+
+   dw5 |= prog_data->base.dispatch_grf_start_reg <<
+          GEN7_PS_DISPATCH_START_GRF_SHIFT_0;
+   dw5 |= prog_data->dispatch_grf_start_reg_2 <<
+          GEN7_PS_DISPATCH_START_GRF_SHIFT_2;
+
+   ksp0 = stage_state->prog_offset;
+   ksp2 = stage_state->prog_offset + prog_data->prog_offset_2;
 
    BEGIN_BATCH(8);
    OUT_BATCH(_3DSTATE_PS << 16 | (8 - 2));

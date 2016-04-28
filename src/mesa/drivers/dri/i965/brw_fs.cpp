@@ -5706,11 +5706,6 @@ fs_visitor::run_fs(bool do_rep_send)
          return false;
    }
 
-   if (dispatch_width == 8)
-      wm_prog_data->reg_blocks = brw_register_blocks(grf_used);
-   else
-      wm_prog_data->reg_blocks_16 = brw_register_blocks(grf_used);
-
    return !failed;
 }
 
@@ -5903,6 +5898,7 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
                                            shader);
 
    cfg_t *simd8_cfg = NULL, *simd16_cfg = NULL;
+   uint8_t simd8_grf_start, simd16_grf_start;
 
    fs_visitor v8(compiler, log_data, mem_ctx, key,
                  &prog_data->base, prog, shader, 8,
@@ -5914,7 +5910,7 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
       return NULL;
    } else if (likely(!(INTEL_DEBUG & DEBUG_NO8))) {
       simd8_cfg = v8.cfg;
-      prog_data->base.dispatch_grf_start_reg = v8.payload.num_regs;
+      simd8_grf_start = v8.payload.num_regs;
    }
 
    if (!v8.simd16_unsupported &&
@@ -5930,7 +5926,7 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
                                    v16.fail_msg);
       } else {
          simd16_cfg = v16.cfg;
-         prog_data->dispatch_grf_start_reg_16 = v16.payload.num_regs;
+         simd16_grf_start = v16.payload.num_regs;
       }
    }
 
@@ -5964,14 +5960,23 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
    }
 
    if (simd8_cfg) {
+      prog_data->dispatch_8 = true;
       g.generate_code(simd8_cfg, 8);
-      prog_data->no_8 = false;
-   } else {
-      prog_data->no_8 = true;
-   }
+      prog_data->base.dispatch_grf_start_reg = simd8_grf_start;
+      prog_data->reg_blocks_0 = brw_register_blocks(v8.grf_used);
 
-   if (simd16_cfg)
-      prog_data->prog_offset_16 = g.generate_code(simd16_cfg, 16);
+      if (simd16_cfg) {
+         prog_data->dispatch_16 = true;
+         prog_data->prog_offset_2 = g.generate_code(simd16_cfg, 16);
+         prog_data->dispatch_grf_start_reg_2 = simd16_grf_start;
+         prog_data->reg_blocks_2 = brw_register_blocks(v8.grf_used);
+      }
+   } else if (simd16_cfg) {
+      prog_data->dispatch_16 = true;
+      g.generate_code(simd16_cfg, 16);
+      prog_data->base.dispatch_grf_start_reg = simd16_grf_start;
+      prog_data->reg_blocks_0 = brw_register_blocks(v8.grf_used);
+   }
 
    return g.get_assembly(final_assembly_size);
 }

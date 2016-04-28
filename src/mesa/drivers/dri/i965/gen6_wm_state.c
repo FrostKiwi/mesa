@@ -132,29 +132,19 @@ gen6_upload_wm_state(struct brw_context *brw,
 
    assert(min_inv_per_frag >= 1);
 
-   if (prog_data->prog_offset_16 || prog_data->no_8) {
+   if (prog_data->dispatch_8)
+      dw5 |= GEN6_WM_8_DISPATCH_ENABLE;
+
+   if (prog_data->dispatch_16)
       dw5 |= GEN6_WM_16_DISPATCH_ENABLE;
 
-      if (!prog_data->no_8 && min_inv_per_frag == 1) {
-         dw5 |= GEN6_WM_8_DISPATCH_ENABLE;
-         dw4 |= (prog_data->base.dispatch_grf_start_reg <<
-                 GEN6_WM_DISPATCH_START_GRF_SHIFT_0);
-         dw4 |= (prog_data->dispatch_grf_start_reg_16 <<
-                 GEN6_WM_DISPATCH_START_GRF_SHIFT_2);
-         ksp0 = stage_state->prog_offset;
-         ksp2 = stage_state->prog_offset + prog_data->prog_offset_16;
-      } else {
-         dw4 |= (prog_data->dispatch_grf_start_reg_16 <<
-                GEN6_WM_DISPATCH_START_GRF_SHIFT_0);
-         ksp0 = stage_state->prog_offset + prog_data->prog_offset_16;
-      }
-   }
-   else {
-      dw5 |= GEN6_WM_8_DISPATCH_ENABLE;
-      dw4 |= (prog_data->base.dispatch_grf_start_reg <<
-              GEN6_WM_DISPATCH_START_GRF_SHIFT_0);
-      ksp0 = stage_state->prog_offset;
-   }
+   dw4 |= prog_data->base.dispatch_grf_start_reg <<
+          GEN6_WM_DISPATCH_START_GRF_SHIFT_0;
+   dw4 |= prog_data->dispatch_grf_start_reg_2 <<
+          GEN6_WM_DISPATCH_START_GRF_SHIFT_2;
+
+   ksp0 = stage_state->prog_offset;
+   ksp2 = stage_state->prog_offset + prog_data->prog_offset_2;
 
    if (dual_source_blend_enable)
       dw5 |= GEN6_WM_DUAL_SOURCE_BLEND_ENABLE;
