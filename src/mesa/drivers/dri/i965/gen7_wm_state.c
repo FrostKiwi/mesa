@@ -216,6 +216,8 @@ gen7_upload_ps_state(struct brw_context *brw,
    if (prog_data->num_varying_inputs != 0)
       dw4 |= GEN7_PS_ATTRIBUTE_ENABLE;
 
+   dw4 |= fast_clear_op;
+
    /* In case of non 1x per sample shading, only one of SIMD8 and SIMD16
     * should be enabled. We do 'SIMD16 only' dispatch if a SIMD16 shader
     * is successfully compiled. In majority of the cases that bring us
@@ -248,7 +250,6 @@ gen7_upload_ps_state(struct brw_context *brw,
       ksp0 = stage_state->prog_offset;
    }
 
-   dw4 |= fast_clear_op;
 
    BEGIN_BATCH(8);
    OUT_BATCH(_3DSTATE_PS << 16 | (8 - 2));
