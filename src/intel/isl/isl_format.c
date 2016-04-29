@@ -91,6 +91,73 @@ isl_format_get_num_channels(enum isl_format fmt)
 }
 
 enum isl_format
+isl_sanitize_channel_select(enum isl_format format,
+                            enum isl_channel_select channel_selects[4],
+                            bool needs_a_alpha)
+{
+   /* Formats used in GL */
+   bool is_intensity_fmt =
+      isl_format_layouts[format].channels.i.type != ISL_VOID;
+   bool is_luminance_fmt =
+      isl_format_layouts[format].channels.a.type == ISL_VOID &&
+      isl_format_layouts[format].channels.l.type != ISL_VOID;
+   bool is_luminance_alpha_fmt =
+      isl_format_layouts[format].channels.a.type != ISL_VOID &&
+      isl_format_layouts[format].channels.l.type != ISL_VOID;
+   bool is_alpha_fmt =
+      isl_format_layouts[format].channels.r.type == ISL_VOID &&
+      isl_format_layouts[format].channels.a.type != ISL_VOID &&
+      isl_format_layouts[format].channels.l.type == ISL_VOID;
+
+   /* Get the special requirements for each format */
+   bool needs_rgb_red = is_luminance_fmt ||
+                        is_intensity_fmt ||
+                        is_luminance_alpha_fmt;
+   bool needs_a_red = is_alpha_fmt ||
+                      is_intensity_fmt;
+   bool needs_a_green = is_luminance_alpha_fmt;
+
+   for (int chan = 0; chan < 4; ++chan) {
+
+      bool needs_data = false;
+      switch (channel_selects[chan]) {
+      case ISL_CHANNEL_SELECT_RED:
+         needs_data = isl_format_layouts[format].channels.r.type == ISL_VOID;
+         break;
+      case ISL_CHANNEL_SELECT_GREEN:
+         needs_data = isl_format_layouts[format].channels.g.type == ISL_VOID;
+         break;
+      case ISL_CHANNEL_SELECT_BLUE:
+         needs_data = isl_format_layouts[format].channels.b.type == ISL_VOID;
+         break;
+      case ISL_CHANNEL_SELECT_ALPHA:
+         needs_data = isl_format_layouts[format].channels.a.type == ISL_VOID;
+         if (needs_a_alpha) {
+            channel_selects[chan] = ISL_CHANNEL_SELECT_ALPHA;
+         } else if (needs_a_red) {
+            channel_selects[chan] = ISL_CHANNEL_SELECT_RED;
+         } else if (needs_a_green) {
+            channel_selects[chan] = ISL_CHANNEL_SELECT_GREEN;
+         } else if (needs_data) {
+            channel_selects[chan] = ISL_CHANNEL_SELECT_ONE;
+         }
+         continue;
+      default:
+         break;
+      }
+
+      if (needs_data)
+         channel_selects[chan] = needs_rgb_red ?  ISL_CHANNEL_SELECT_RED :
+                                                  ISL_CHANNEL_SELECT_ZERO;
+   }
+
+   /* TODO: create and use a lowering function to return the mapped format for
+    * A, I, L, LA, Y formats.
+    */
+   return format;
+}
+
+enum isl_format
 isl_format_rgb_to_rgba(enum isl_format rgb)
 {
    assert(isl_format_is_rgb(rgb));

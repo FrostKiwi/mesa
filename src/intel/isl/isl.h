@@ -1208,6 +1208,17 @@ uint32_t
 isl_surf_get_depth_format(const struct isl_device *dev,
                           const struct isl_surf *surf);
 
+/* While providing sane defaults for non-RGBA formats, this is used to
+ * satisfy the AlphaSCS = 1 Gen7+ requirement for RGB formats, and the
+ * AlphaSCS = Alpha for Gen8+ rendertargets.
+ *
+ * This implements half of the work to satisfy the Gen9+ performance
+ * suggestions for A, L, LA, I, and Y formats.
+ */
+enum isl_format
+isl_sanitize_channel_select(enum isl_format format,
+                            enum isl_channel_select channel_selects[4],
+                            bool needs_a_alpha);
 #ifdef __cplusplus
 }
 #endif
