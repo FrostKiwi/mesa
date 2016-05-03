@@ -24,8 +24,9 @@
 #include "anv_private.h"
 #include "brw_surface_formats.h"
 
-#define RGBA { 0, 1, 2, 3 }
-#define BGRA { 2, 1, 0, 3 }
+#define ICS(chan) ISL_CHANNEL_SELECT_ ## chan
+#define RGBA { ICS(RED),   ICS(GREEN), ICS(BLUE),  ICS(ALPHA) }
+#define BGRA { ICS(BLUE),  ICS(GREEN), ICS(RED),   ICS(ALPHA) }
 
 #define swiz_fmt(__vk_fmt, __hw_fmt, __swizzle, ...)     \
    [__vk_fmt] = { \
@@ -236,6 +237,7 @@ static const struct anv_format anv_formats[] = {
 };
 
 #undef fmt
+#undef ICS
 
 const struct anv_format *
 anv_format_for_vk_format(VkFormat format)
@@ -325,7 +327,7 @@ get_image_format_properties(int gen, enum isl_format base,
     * moved, then blending won't work correctly.  The PRM tells us
     * straight-up not to render to such a surface.
     */
-   if (info->render_target <= gen && swizzle.a == 3) {
+   if (info->render_target <= gen && swizzle.a == ISL_CHANNEL_SELECT_ALPHA) {
       flags |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
                VK_FORMAT_FEATURE_BLIT_DST_BIT;
 

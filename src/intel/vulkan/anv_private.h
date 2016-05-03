@@ -1512,10 +1512,10 @@ anv_graphics_pipeline_create(VkDevice device,
                              VkPipeline *pPipeline);
 
 struct anv_format_swizzle {
-   unsigned r:2;
-   unsigned g:2;
-   unsigned b:2;
-   unsigned a:2;
+   enum isl_channel_select r;
+   enum isl_channel_select g;
+   enum isl_channel_select b;
+   enum isl_channel_select a;
 };
 
 struct anv_format {
