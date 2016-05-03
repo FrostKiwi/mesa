@@ -328,10 +328,10 @@ get_image_format_properties(int gen, enum isl_format base,
    if (info->render_target <= gen && swizzle.a == 3) {
       flags |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
                VK_FORMAT_FEATURE_BLIT_DST_BIT;
-   }
 
-   if (info->alpha_blend <= gen && swizzle.a == 3)
-      flags |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT;
+      if (info->alpha_blend <= gen)
+         flags |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT;
+   }
 
    /* Load/store is determined based on base format.  This prevents RGB
     * formats from showing up as load/store capable.
