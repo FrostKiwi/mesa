@@ -328,8 +328,7 @@ get_image_format_properties(int gen, enum isl_format base,
     * We could also support it for render targets, but it will take
     * substantially more work.
     */
-   if (info->render_target <= gen && swizzle.a == ISL_CHANNEL_SELECT_ALPHA &&
-       util_is_power_of_two(isl_format_layouts[base].bs)) {
+   if (info->render_target <= gen && swizzle.a == ISL_CHANNEL_SELECT_ALPHA) {
       flags |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
                VK_FORMAT_FEATURE_BLIT_DST_BIT;
 
