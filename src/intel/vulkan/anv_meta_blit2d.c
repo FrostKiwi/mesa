@@ -667,6 +667,14 @@ anv_meta_blit2d(struct anv_cmd_buffer *cmd_buffer,
       return;
    } else if (dst->bs % 3 == 0) {
       anv_finishme("Blitting to RGB destinations not yet supported");
+      /* Steps :
+       * 1. Bind the SRC as usual, tiled RGBA image
+       * 2. Bind the Dst differently as an R image whose width is dst->bs * 3
+       *    Also need to choose an intratile offset that's bs aligned
+       * 3. Use a shader that picks the right channel from an RGBA texture
+       *    depending on the dest x location
+       * 4. Reduce the max image width to 4K to prevent max-width rgb image
+       */
       return;
    } else {
       assert(util_is_power_of_two(dst->bs));
