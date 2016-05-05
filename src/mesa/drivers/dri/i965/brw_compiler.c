@@ -72,7 +72,6 @@ shader_perf_log_mesa(void *data, const char *fmt, ...)
     * split all ffma instructions during opt_algebraic and we then re-combine \
     * them as a later step.                                                   \
     */                                                                        \
-   .lower_ffma = true,                                                        \
    .lower_sub = true,                                                         \
    .lower_fdiv = true,                                                        \
    .lower_scmp = true,                                                        \
