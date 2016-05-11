@@ -342,6 +342,7 @@ struct brw_blorp_blit_vars {
       nir_variable *offset;
    } u_x_transform, u_y_transform;
    nir_variable *u_src_z;
+   nir_variable *u_clear_color;
 
    /* gl_FragCoord */
    nir_variable *frag_coord;
@@ -370,6 +371,7 @@ brw_blorp_blit_vars_init(nir_builder *b, struct brw_blorp_blit_vars *v,
    LOAD_UNIFORM(y_transform.multiplier, glsl_float_type())
    LOAD_UNIFORM(y_transform.offset, glsl_float_type())
    LOAD_UNIFORM(src_z, glsl_uint_type())
+   LOAD_UNIFORM(clear_color, glsl_vec4_type())
 
 #undef DECL_UNIFORM
 
@@ -902,7 +904,8 @@ static nir_ssa_def *
 blorp_nir_manual_blend_average(nir_builder *b, nir_ssa_def *pos,
                                unsigned tex_samples,
                                enum intel_msaa_layout tex_layout,
-                               enum brw_reg_type dst_type)
+                               enum brw_reg_type dst_type,
+                               struct brw_blorp_blit_vars *v)
 {
    /* If non-null, this is the outer-most if statement */
    nir_if *outer_if = NULL;
@@ -911,8 +914,52 @@ blorp_nir_manual_blend_average(nir_builder *b, nir_ssa_def *pos,
       nir_local_variable_create(b->impl, glsl_vec4_type(), "color");
 
    nir_ssa_def *mcs = NULL;
-   if (tex_layout == INTEL_MSAA_LAYOUT_CMS)
+   if (tex_layout == INTEL_MSAA_LAYOUT_CMS) {
       mcs = blorp_nir_txf_ms_mcs(b, pos);
+
+      /* The MCS buffer stores a packed value that provides a mapping from
+       * samples to array slices.  The magic value of all ones means that all
+       * samples have the clear color.  In this case, we can short-circuit the
+       * sampling process and just use the clear color that we pushed into the
+       * shader.
+       */
+      nir_ssa_def *is_clear_color;
+      switch (tex_samples) {
+      case 2:
+         /* Empirical evidence suggests that the value returned from the
+          * sampler is not always 0x3 for clear color so we need to mask it.
+          */
+         is_clear_color =
+            nir_ieq(b, nir_iand(b, nir_channel(b, mcs, 0), nir_imm_int(b, 0x3)),
+                       nir_imm_int(b, 0x3));
+         break;
+      case 4:
+         is_clear_color =
+            nir_ieq(b, nir_channel(b, mcs, 0), nir_imm_int(b, 0xff));
+         break;
+      case 8:
+         is_clear_color =
+            nir_ieq(b, nir_channel(b, mcs, 0), nir_imm_int(b, ~0));
+         break;
+      case 16:
+         is_clear_color =
+            nir_iand(b, nir_ieq(b, nir_channel(b, mcs, 0), nir_imm_int(b, ~0)),
+                        nir_ieq(b, nir_channel(b, mcs, 1), nir_imm_int(b, ~0)));
+         break;
+      default:
+         unreachable("Invalid sample count");
+      }
+
+      nir_if *if_stmt = nir_if_create(b->shader);
+      if_stmt->condition = nir_src_for_ssa(is_clear_color);
+      nir_cf_node_insert(b->cursor, &if_stmt->cf_node);
+
+      b->cursor = nir_after_cf_list(&if_stmt->then_list);
+      nir_store_var(b, color, nir_load_var(b, v->u_clear_color), 0xf);
+
+      b->cursor = nir_after_cf_list(&if_stmt->else_list);
+      outer_if = if_stmt;
+   }
 
    /* We add together samples using a binary tree structure, e.g. for 4x MSAA:
     *
@@ -986,7 +1033,8 @@ blorp_nir_manual_blend_average(nir_builder *b, nir_ssa_def *pos,
          nir_store_var(b, color, texture_data[0], 0xf);
 
          b->cursor = nir_after_cf_list(&if_stmt->else_list);
-         outer_if = if_stmt;
+         if (!outer_if)
+            outer_if = if_stmt;
       }
 
       for (int j = 0; j < count_trailing_one_bits(i); j++) {
@@ -1431,7 +1479,7 @@ brw_blorp_build_nir_shader(struct brw_context *brw,
          /* Gen7+ hardware doesn't automaticaly blend. */
          color = blorp_nir_manual_blend_average(&b, src_pos, key->src_samples,
                                                 key->src_layout,
-                                                key->texture_data_type);
+                                                key->texture_data_type, &v);
       }
    } else if (key->blend && key->blit_scaled) {
       color = blorp_nir_manual_blend_bilinear(&b, src_pos, key->src_samples, key, &v);
@@ -1596,6 +1644,48 @@ compute_msaa_layout_for_pipeline(struct brw_context *brw, unsigned num_samples,
    }
 
    return true_layout;
+}
+
+
+static union gl_color_union
+brw_blorp_get_clear_color_for_mt(struct brw_context *brw,
+                                 struct intel_mipmap_tree *mt,
+                                 unsigned swizzle)
+{
+   union gl_color_union color;
+   if (brw->gen >= 9) {
+      color = mt->gen9_fast_clear_color;
+   } else if (_mesa_is_format_integer(mt->format)) {
+      color.i[0] = (mt->fast_clear_color_value & (1 << 31)) != 0;
+      color.i[1] = (mt->fast_clear_color_value & (1 << 30)) != 0;
+      color.i[2] = (mt->fast_clear_color_value & (1 << 29)) != 0;
+      color.i[3] = (mt->fast_clear_color_value & (1 << 28)) != 0;
+   } else {
+      color.f[0] = (mt->fast_clear_color_value & (1 << 31)) != 0;
+      color.f[1] = (mt->fast_clear_color_value & (1 << 30)) != 0;
+      color.f[2] = (mt->fast_clear_color_value & (1 << 29)) != 0;
+      color.f[3] = (mt->fast_clear_color_value & (1 << 28)) != 0;
+   }
+
+   if (swizzle != SWIZZLE_NOOP) {
+      union gl_color_union orig_color = color;
+      for (unsigned i = 0; i < 4; i++) {
+         unsigned s = GET_SWZ(swizzle, i);
+         if (s <= SWIZZLE_W) {
+            color.i[i] = orig_color.i[s];
+         } else if (s == SWIZZLE_ZERO) {
+            color.i[i] = 0;
+         } else {
+            assert(s == SWIZZLE_ONE);
+            if (_mesa_is_format_integer(mt->format))
+               color.i[i] = 1;
+            else
+               color.f[i] = 1;
+         }
+      }
+   }
+
+   return color;
 }
 
 
@@ -1767,6 +1857,9 @@ brw_blorp_blit_miptrees(struct brw_context *brw,
    if (filter == GL_LINEAR &&
        params.src.num_samples <= 1 && params.dst.num_samples <= 1)
       wm_prog_key.bilinear_filter = true;
+
+   params.wm_push_consts.clear_color =
+      brw_blorp_get_clear_color_for_mt(brw, src_mt, src_swizzle);
 
    GLenum base_format = _mesa_get_format_base_format(src_mt->format);
    if (base_format != GL_DEPTH_COMPONENT && /* TODO: what about depth/stencil? */

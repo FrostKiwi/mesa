@@ -197,7 +197,9 @@ struct brw_blorp_wm_push_constants
    uint32_t src_z;
 
    /* Pad out to an integral number of registers */
-   uint32_t pad[5];
+   uint32_t pad;
+
+   union gl_color_union clear_color;
 };
 
 #define BRW_BLORP_NUM_PUSH_CONSTANT_DWORDS \
