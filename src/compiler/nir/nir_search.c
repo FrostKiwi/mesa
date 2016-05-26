@@ -33,6 +33,7 @@ struct match_state {
    bool has_exact_alu;
    unsigned variables_seen;
    nir_alu_src variables[NIR_SEARCH_MAX_VARIABLES];
+   const nir_search_value_union *values;
 };
 
 static bool
@@ -95,6 +96,7 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
 
    switch (value->type) {
    case nir_search_value_expression:
+   case nir_search_value_compact_expression:
       if (!instr->src[src].src.is_ssa)
          return false;
 
@@ -238,23 +240,44 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
    }
 }
 
+static nir_search_expression
+value_to_expression(const nir_search_value *val, struct match_state *state)
+{
+   if (val->type == nir_search_value_expression) {
+      return *nir_search_value_as_expression(val);
+   } else {
+      assert(val->type == nir_search_value_compact_expression);
+      nir_search_compact_expression *compact =
+         nir_search_value_as_compact_expression(val);
+
+      nir_search_expression expr;
+      expr.value = compact->value;
+      expr.inexact = compact->inexact;
+      expr.opcode = compact->opcode;
+      for (unsigned i = 0; i < 4; i++)
+         expr.srcs[i] = &state->values[compact->srcs[i]].value;
+
+      return expr;
+   }
+}
+
 static bool
 match_expression(const nir_search_value *expr_val, nir_alu_instr *instr,
                  unsigned num_components, const uint8_t *swizzle,
                  struct match_state *state)
 {
-   nir_search_expression *expr = nir_search_value_as_expression(expr_val);
+   const nir_search_expression expr = value_to_expression(expr_val, state);
 
-   if (instr->op != expr->opcode)
+   if (instr->op != expr.opcode)
       return false;
 
    assert(instr->dest.dest.is_ssa);
 
-   if (expr->value.bit_size &&
-       instr->dest.dest.ssa.bit_size != expr->value.bit_size)
+   if (expr.value.bit_size &&
+       instr->dest.dest.ssa.bit_size != expr.value.bit_size)
       return false;
 
-   state->inexact_match = expr->inexact || state->inexact_match;
+   state->inexact_match = expr.inexact || state->inexact_match;
    state->has_exact_alu = instr->exact || state->has_exact_alu;
    if (state->inexact_match && state->has_exact_alu)
       return false;
@@ -282,7 +305,7 @@ match_expression(const nir_search_value *expr_val, nir_alu_instr *instr,
 
    bool matched = true;
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
-      if (!match_value(expr->srcs[i], instr, i, num_components,
+      if (!match_value(expr.srcs[i], instr, i, num_components,
                        swizzle, state)) {
          matched = false;
          break;
@@ -301,11 +324,11 @@ match_expression(const nir_search_value *expr_val, nir_alu_instr *instr,
        */
       state->variables_seen = variables_seen_stash;
 
-      if (!match_value(expr->srcs[0], instr, 1, num_components,
+      if (!match_value(expr.srcs[0], instr, 1, num_components,
                        swizzle, state))
          return false;
 
-      return match_value(expr->srcs[1], instr, 0, num_components,
+      return match_value(expr.srcs[1], instr, 0, num_components,
                          swizzle, state);
    } else {
       return false;
@@ -331,16 +354,17 @@ build_bitsize_tree(void *mem_ctx, struct match_state *state,
    bitsize_tree *tree = ralloc(mem_ctx, bitsize_tree);
 
    switch (value->type) {
-   case nir_search_value_expression: {
-      nir_search_expression *expr = nir_search_value_as_expression(value);
-      nir_op_info info = nir_op_infos[expr->opcode];
+   case nir_search_value_expression:
+   case nir_search_value_compact_expression: {
+      const nir_search_expression expr = value_to_expression(value, state);
+      nir_op_info info = nir_op_infos[expr.opcode];
       tree->num_srcs = info.num_inputs;
       tree->common_size = 0;
       for (unsigned i = 0; i < info.num_inputs; i++) {
          tree->is_src_sized[i] = !!nir_alu_type_get_type_size(info.input_types[i]);
          if (tree->is_src_sized[i])
             tree->src_size[i] = nir_alu_type_get_type_size(info.input_types[i]);
-         tree->srcs[i] = build_bitsize_tree(mem_ctx, state, expr->srcs[i]);
+         tree->srcs[i] = build_bitsize_tree(mem_ctx, state, expr.srcs[i]);
       }
       tree->is_dest_sized = !!nir_alu_type_get_type_size(info.output_type);
       if (tree->is_dest_sized)
@@ -437,13 +461,14 @@ construct_value(const nir_search_value *value,
                 nir_instr *instr, void *mem_ctx)
 {
    switch (value->type) {
-   case nir_search_value_expression: {
-      const nir_search_expression *expr = nir_search_value_as_expression(value);
+   case nir_search_value_expression:
+   case nir_search_value_compact_expression: {
+      const nir_search_expression expr = value_to_expression(value, state);
 
-      if (nir_op_infos[expr->opcode].output_size != 0)
-         num_components = nir_op_infos[expr->opcode].output_size;
+      if (nir_op_infos[expr.opcode].output_size != 0)
+         num_components = nir_op_infos[expr.opcode].output_size;
 
-      nir_alu_instr *alu = nir_alu_instr_create(mem_ctx, expr->opcode);
+      nir_alu_instr *alu = nir_alu_instr_create(mem_ctx, expr.opcode);
       nir_ssa_dest_init(&alu->instr, &alu->dest.dest, num_components,
                         bitsize->dest_size, NULL);
       alu->dest.write_mask = (1 << num_components) - 1;
@@ -456,14 +481,14 @@ construct_value(const nir_search_value *value,
        */
       alu->exact = state->has_exact_alu;
 
-      for (unsigned i = 0; i < nir_op_infos[expr->opcode].num_inputs; i++) {
+      for (unsigned i = 0; i < nir_op_infos[expr.opcode].num_inputs; i++) {
          /* If the source is an explicitly sized source, then we need to reset
           * the number of components to match.
           */
          if (nir_op_infos[alu->op].input_sizes[i] != 0)
             num_components = nir_op_infos[alu->op].input_sizes[i];
 
-         alu->src[i] = construct_value(expr->srcs[i],
+         alu->src[i] = construct_value(expr.srcs[i],
                                        num_components, bitsize->srcs[i],
                                        state, instr, mem_ctx);
       }
@@ -564,9 +589,11 @@ construct_value(const nir_search_value *value,
 
 nir_alu_instr *
 nir_replace_instr(nir_alu_instr *instr, const nir_search_value *search,
-                  const nir_search_value *replace, void *mem_ctx)
+                  const nir_search_value *replace,
+                  const nir_search_value_union *values, void *mem_ctx)
 {
-   assert(search->type == nir_search_value_expression);
+   assert(search->type == nir_search_value_expression ||
+          search->type == nir_search_value_compact_expression);
 
    uint8_t swizzle[4] = { 0, 0, 0, 0 };
 
@@ -579,6 +606,7 @@ nir_replace_instr(nir_alu_instr *instr, const nir_search_value *search,
    state.inexact_match = false;
    state.has_exact_alu = false;
    state.variables_seen = 0;
+   state.values = values;
 
    if (!match_expression(search, instr, instr->dest.dest.ssa.num_components,
                          swizzle, &state))

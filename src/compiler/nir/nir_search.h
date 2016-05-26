@@ -34,6 +34,7 @@
 
 typedef enum {
    nir_search_value_expression,
+   nir_search_value_compact_expression,
    nir_search_value_variable,
    nir_search_value_constant,
 } nir_search_value_type;
@@ -95,15 +96,38 @@ typedef struct {
    const nir_search_value *srcs[4];
 } nir_search_expression;
 
+typedef struct {
+   nir_search_value value;
+
+   /* When set on a search expression, the expression will only match an SSA
+    * value that does *not* have the exact bit set.  If unset, the exact bit
+    * on the SSA value is ignored.
+    */
+   bool inexact:1;
+
+   nir_op opcode:15;
+   uint16_t srcs[4];
+} nir_search_compact_expression;
+
+typedef union {
+   nir_search_value value;
+   nir_search_variable variable;
+   nir_search_constant constant;
+   nir_search_compact_expression expression;
+} nir_search_value_union;
+
 NIR_DEFINE_CAST(nir_search_value_as_variable, nir_search_value,
                 nir_search_variable, value)
 NIR_DEFINE_CAST(nir_search_value_as_constant, nir_search_value,
                 nir_search_constant, value)
 NIR_DEFINE_CAST(nir_search_value_as_expression, nir_search_value,
                 nir_search_expression, value)
+NIR_DEFINE_CAST(nir_search_value_as_compact_expression, nir_search_value,
+                nir_search_compact_expression, value)
 
 nir_alu_instr *
 nir_replace_instr(nir_alu_instr *instr, const nir_search_value *search,
-                  const nir_search_value *replace, void *mem_ctx);
+                  const nir_search_value *replace,
+                  const nir_search_value_union *values, void *mem_ctx);
 
 #endif /* _NIR_SEARCH_ */

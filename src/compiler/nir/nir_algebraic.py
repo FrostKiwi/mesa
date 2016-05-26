@@ -539,7 +539,7 @@ ${pass_name}_block(nir_block *block, const bool *condition_flags,
             const struct transform *xform = &${pass_name}_${opcode}_xforms[i];
             if (condition_flags[xform->condition_offset] &&
                 nir_replace_instr(alu, xform->search, xform->replace,
-                                  mem_ctx)) {
+                                  NULL, mem_ctx)) {
                progress = true;
                break;
             }
