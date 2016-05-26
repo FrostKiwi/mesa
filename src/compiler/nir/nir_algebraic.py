@@ -498,7 +498,7 @@ _algebraic_pass_template = mako.template.Template("""
 #define NIR_OPT_ALGEBRAIC_STRUCT_DEFS
 
 struct transform {
-   const nir_search_expression *search;
+   const nir_search_value *search;
    const nir_search_value *replace;
    unsigned condition_offset;
 };
@@ -513,7 +513,7 @@ struct transform {
 
 static const struct transform ${pass_name}_${opcode}_xforms[] = {
 % for xform in xform_list:
-   { &${xform.search.name}, ${xform.replace.c_ptr}, ${xform.condition_index} },
+   { ${xform.search.c_ptr}, ${xform.replace.c_ptr}, ${xform.condition_index} },
 % endfor
 };
 % endfor

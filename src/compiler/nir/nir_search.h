@@ -103,7 +103,7 @@ NIR_DEFINE_CAST(nir_search_value_as_expression, nir_search_value,
                 nir_search_expression, value)
 
 nir_alu_instr *
-nir_replace_instr(nir_alu_instr *instr, const nir_search_expression *search,
+nir_replace_instr(nir_alu_instr *instr, const nir_search_value *search,
                   const nir_search_value *replace, void *mem_ctx);
 
 #endif /* _NIR_SEARCH_ */

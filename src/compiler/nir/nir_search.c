@@ -36,7 +36,7 @@ struct match_state {
 };
 
 static bool
-match_expression(const nir_search_expression *expr, nir_alu_instr *instr,
+match_expression(const nir_search_value *expr, nir_alu_instr *instr,
                  unsigned num_components, const uint8_t *swizzle,
                  struct match_state *state);
 
@@ -101,7 +101,7 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
       if (instr->src[src].src.ssa->parent_instr->type != nir_instr_type_alu)
          return false;
 
-      return match_expression(nir_search_value_as_expression(value),
+      return match_expression(value,
                               nir_instr_as_alu(instr->src[src].src.ssa->parent_instr),
                               num_components, new_swizzle, state);
 
@@ -239,10 +239,12 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
 }
 
 static bool
-match_expression(const nir_search_expression *expr, nir_alu_instr *instr,
+match_expression(const nir_search_value *expr_val, nir_alu_instr *instr,
                  unsigned num_components, const uint8_t *swizzle,
                  struct match_state *state)
 {
+   nir_search_expression *expr = nir_search_value_as_expression(expr_val);
+
    if (instr->op != expr->opcode)
       return false;
 
@@ -561,9 +563,11 @@ construct_value(const nir_search_value *value,
 }
 
 nir_alu_instr *
-nir_replace_instr(nir_alu_instr *instr, const nir_search_expression *search,
+nir_replace_instr(nir_alu_instr *instr, const nir_search_value *search,
                   const nir_search_value *replace, void *mem_ctx)
 {
+   assert(search->type == nir_search_value_expression);
+
    uint8_t swizzle[4] = { 0, 0, 0, 0 };
 
    for (unsigned i = 0; i < instr->dest.dest.ssa.num_components; ++i)
