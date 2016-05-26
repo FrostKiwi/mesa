@@ -105,7 +105,7 @@ typedef struct {
     */
    bool inexact:1;
 
-   nir_op opcode:15;
+   unsigned opcode:15; /* enum nir_op */
    uint16_t srcs[4];
 } nir_search_compact_expression;
 
