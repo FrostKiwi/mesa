@@ -996,14 +996,14 @@ typedef enum {
 typedef struct {
    const char *name;
 
-   unsigned num_srcs; /** < number of register/SSA inputs */
+   uint8_t num_srcs; /** < number of register/SSA inputs */
 
    /** number of components of each input register
     *
     * If this value is 0, the number of components is given by the
     * num_components field of nir_intrinsic_instr.
     */
-   unsigned src_components[NIR_INTRINSIC_MAX_INPUTS];
+   uint8_t src_components[NIR_INTRINSIC_MAX_INPUTS];
 
    bool has_dest;
 
@@ -1012,16 +1012,16 @@ typedef struct {
     * If this value is 0, the number of components is given by the
     * num_components field of nir_intrinsic_instr.
     */
-   unsigned dest_components;
+   uint8_t dest_components;
 
    /** the number of inputs/outputs that are variables */
-   unsigned num_variables;
+   uint8_t num_variables;
 
    /** the number of constant indices used by the intrinsic */
-   unsigned num_indices;
+   uint8_t num_indices;
 
    /** indicates the usage of intr->const_index[n] */
-   unsigned index_map[NIR_INTRINSIC_NUM_INDEX_FLAGS];
+   uint8_t index_map[NIR_INTRINSIC_NUM_INDEX_FLAGS];
 
    /** semantic flags for calls to this intrinsic */
    nir_intrinsic_semantic_flag flags;
