@@ -692,7 +692,7 @@ typedef enum {
 typedef struct {
    const char *name;
 
-   unsigned num_inputs;
+   uint8_t num_inputs;
 
    /**
     * The number of components in the output
@@ -711,7 +711,7 @@ typedef struct {
     * though output_size is zero; in that case, the inputs with a zero
     * size act per-component, while the inputs with non-zero size don't.
     */
-   unsigned output_size;
+   uint8_t output_size;
 
    /**
     * The type of vector that the instruction outputs. Note that the
@@ -723,7 +723,7 @@ typedef struct {
    /**
     * The number of components in each input
     */
-   unsigned input_sizes[4];
+   uint8_t input_sizes[4];
 
    /**
     * The type of vector that each input takes. Note that negate and
