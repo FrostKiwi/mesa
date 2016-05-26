@@ -39,23 +39,23 @@ typedef enum {
 } nir_search_value_type;
 
 typedef struct {
-   nir_search_value_type type;
+   uint8_t type; /* enum nir_search_value_type */
 
-   unsigned bit_size;
+   uint8_t bit_size;
 } nir_search_value;
 
 typedef struct {
    nir_search_value value;
 
    /** The variable index;  Must be less than NIR_SEARCH_MAX_VARIABLES */
-   unsigned variable;
+   unsigned variable:7;
 
    /** Indicates that the given variable must be a constant
     *
     * This is only allowed in search expressions and indicates that the
     * given variable is only allowed to match constant values.
     */
-   bool is_constant;
+   bool is_constant:1;
 
    /** Indicates that the given variable must have a certain type
     *
@@ -67,13 +67,13 @@ typedef struct {
     * Note: A variable that is both constant and has a non-void type will
     * never match anything.
     */
-   nir_alu_type type;
+   uint8_t type; /* enum nir_alu_type */
 } nir_search_variable;
 
 typedef struct {
    nir_search_value value;
 
-   nir_alu_type type;
+   uint8_t type; /* enum nir_alu_type */
 
    union {
       uint64_t u;
