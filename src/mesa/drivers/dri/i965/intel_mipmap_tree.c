@@ -3167,6 +3167,76 @@ intel_miptree_get_isl_surf(struct brw_context *brw,
    surf->usage = 0; /* TODO */
 }
 
+/* WARNING: THE SURFACE CREATED BY THIS FUNCTION IS NOT COMPLETE AND CANNOT BE
+ * USED FOR ANY REAL CALCULATIONS.  THE ONLY VALID USE OF SUCH A SURFACE IS TO
+ * PASS IT INTO isl_surf_fill_state.
+ */
+void
+intel_miptree_get_ccs_isl_surf(struct brw_context *brw,
+                               const struct intel_mipmap_tree *mt,
+                               struct isl_surf *surf)
+{
+   /* Much is the same as the regular surface */
+   intel_miptree_get_isl_surf(brw, mt->mcs_mt, surf);
+
+   switch (mt->num_samples) {
+   case 0:
+   case 1:
+      /*
+       * From the BDW PRM, Volume 2d, page 260 (RENDER_SURFACE_STATE):
+       * "When MCS is enabled for non-MSRT, HALIGN_16 must be used"
+       *
+       * From the hardware spec for GEN9:
+       * "When Auxiliary Surface Mode is set to AUX_CCS_D or AUX_CCS_E, HALIGN
+       *  16 must be used."
+       */
+      if (brw->gen >= 9 || mt->num_samples == 1)
+         assert(mt->halign == 16);
+
+      if (intel_miptree_is_lossless_compressed(brw, mt)) {
+         assert(mt->tiling == I915_TILING_Y);
+         switch (_mesa_get_format_bytes(mt->format)) {
+         case 4:  surf->format = ISL_FORMAT_NOMSRT_CCS_E_32BPP;   break;
+         case 8:  surf->format = ISL_FORMAT_NOMSRT_CCS_E_64BPP;   break;
+         case 16: surf->format = ISL_FORMAT_NOMSRT_CCS_E_128BPP;  break;
+         default:
+            unreachable("Invalid format size for color compression");
+         }
+      } else if (mt->tiling == I915_TILING_Y) {
+         switch (_mesa_get_format_bytes(mt->format)) {
+         case 4:  surf->format = ISL_FORMAT_NOMSRT_CCS_D_32BPP_Y;    break;
+         case 8:  surf->format = ISL_FORMAT_NOMSRT_CCS_D_64BPP_Y;    break;
+         case 16: surf->format = ISL_FORMAT_NOMSRT_CCS_D_128BPP_X;   break;
+         default:
+            unreachable("Invalid format size for color compression");
+         }
+      } else {
+         assert(mt->tiling == I915_TILING_X);
+         switch (_mesa_get_format_bytes(mt->format)) {
+         case 4:  surf->format = ISL_FORMAT_NOMSRT_CCS_D_32BPP_X;    break;
+         case 8:  surf->format = ISL_FORMAT_NOMSRT_CCS_D_64BPP_X;    break;
+         case 16: surf->format = ISL_FORMAT_NOMSRT_CCS_D_128BPP_X;   break;
+         default:
+            unreachable("Invalid format size for color compression");
+         }
+      }
+      break;
+
+   case 2:
+   case 4:
+      surf->format = ISL_FORMAT_R8_UINT;
+      break;
+   case 8:
+      surf->format = ISL_FORMAT_R32_UINT;
+      break;
+   case 16:
+      surf->format = ISL_FORMAT_R32G32_UINT;
+      break;
+   default:
+      unreachable("Invalid number of samples");
+   }
+}
+
 union isl_color_value
 intel_miptree_get_isl_clear_color(struct brw_context *brw,
                                   const struct intel_mipmap_tree *mt)
