@@ -349,6 +349,22 @@ enum isl_format {
    ISL_FORMAT_ASTC_LDR_2D_12X10_FLT16 =                        638,
    ISL_FORMAT_ASTC_LDR_2D_12X12_FLT16 =                        639,
 
+   /* The formats that follow are internal to ISL and as such don't have an
+    * explicit number.  We'll just let the C compiler assign it for us.  Any
+    * actual hardware formats *must* come before these in the list.
+    */
+
+   /* Formats for representing a non-MSAA color control surface */
+   ISL_FORMAT_NOMSRT_CCS_D_32BPP_X,
+   ISL_FORMAT_NOMSRT_CCS_D_64BPP_X,
+   ISL_FORMAT_NOMSRT_CCS_D_128BPP_X,
+   ISL_FORMAT_NOMSRT_CCS_D_32BPP_Y,
+   ISL_FORMAT_NOMSRT_CCS_D_64BPP_Y,
+   ISL_FORMAT_NOMSRT_CCS_D_128BPP_Y,
+   ISL_FORMAT_NOMSRT_CCS_E_32BPP,
+   ISL_FORMAT_NOMSRT_CCS_E_64BPP,
+   ISL_FORMAT_NOMSRT_CCS_E_128BPP,
+
    /* Hardware doesn't understand this out-of-band value */
    ISL_FORMAT_UNSUPPORTED =                             UINT16_MAX,
 };

@@ -314,3 +314,12 @@ ASTC_LDR_2D_10X8_FLT16      , 128, 10,  8,  1, sf16, sf16, sf16, sf16,     ,    
 ASTC_LDR_2D_10X10_FLT16     , 128, 10, 10,  1, sf16, sf16, sf16, sf16,     ,     ,    , linear,  astc
 ASTC_LDR_2D_12X10_FLT16     , 128, 12, 10,  1, sf16, sf16, sf16, sf16,     ,     ,    , linear,  astc
 ASTC_LDR_2D_12X12_FLT16     , 128, 12, 12,  1, sf16, sf16, sf16, sf16,     ,     ,    , linear,  astc
+NOMSRT_CCS_D_32BPP_X        ,   8,  8,  4,  1,
+NOMSRT_CCS_D_64BPP_X        ,   8,  4,  4,  1,
+NOMSRT_CCS_D_128BPP_X       ,   8,  2,  4,  1,
+NOMSRT_CCS_D_32BPP_Y        ,   8, 16,  2,  1,
+NOMSRT_CCS_D_64BPP_Y        ,   8,  8,  2,  1,
+NOMSRT_CCS_D_128BPP_Y       ,   8,  4,  2,  1,
+NOMSRT_CCS_E_32BPP          ,  16, 16,  2,  1,
+NOMSRT_CCS_E_64BPP          ,  16,  8,  2,  1,
+NOMSRT_CCS_E_128BPP         ,  16,  4,  2,  1,
