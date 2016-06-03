@@ -1191,6 +1191,20 @@ isl_surf_fill_state_s(const struct isl_device *dev, void *state,
    }
 
    switch (ISL_DEV_GEN(dev)) {
+   case 4:
+      if (ISL_DEV_IS_G4X(dev)) {
+         isl_gen4_surf_fill_state_s(dev, state, info);
+      } else {
+         /* G45 surface state is the same as gen5 */
+         isl_gen5_surf_fill_state_s(dev, state, info);
+      }
+      break;
+   case 5:
+      isl_gen5_surf_fill_state_s(dev, state, info);
+      break;
+   case 6:
+      isl_gen6_surf_fill_state_s(dev, state, info);
+      break;
    case 7:
       if (ISL_DEV_IS_HASWELL(dev)) {
          isl_gen75_surf_fill_state_s(dev, state, info);
@@ -1214,6 +1228,20 @@ isl_buffer_fill_state_s(const struct isl_device *dev, void *state,
                         const struct isl_buffer_fill_state_info *restrict info)
 {
    switch (ISL_DEV_GEN(dev)) {
+   case 4:
+      if (ISL_DEV_IS_G4X(dev)) {
+         isl_gen4_buffer_fill_state_s(state, info);
+      } else {
+         /* G45 surface state is the same as gen5 */
+         isl_gen5_buffer_fill_state_s(state, info);
+      }
+      break;
+   case 5:
+      isl_gen5_buffer_fill_state_s(state, info);
+      break;
+   case 6:
+      isl_gen6_buffer_fill_state_s(state, info);
+      break;
    case 7:
       if (ISL_DEV_IS_HASWELL(dev)) {
          isl_gen75_buffer_fill_state_s(state, info);
