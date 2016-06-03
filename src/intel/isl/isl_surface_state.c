@@ -185,6 +185,28 @@ get_qpitch(const struct isl_surf *surf)
 }
 #endif /* GEN_GEN >= 8 */
 
+#if GEN_GEN >= 8
+static uint32_t
+get_aux_mode_for_format(const struct isl_device *dev,
+                        enum isl_format view_format,
+                        enum isl_format aux_format)
+{
+   /* TODO: HiZ */
+#if GEN_GEN >= 9
+   if (aux_format == ISL_FORMAT_NOMSRT_CCS_E_32BPP ||
+       aux_format == ISL_FORMAT_NOMSRT_CCS_E_64BPP ||
+       aux_format == ISL_FORMAT_NOMSRT_CCS_E_128BPP) {
+      assert(isl_format_supports_lossless_compression(dev->info, view_format));
+      return AUX_CCS_E;
+   } else {
+      return AUX_CCS_D;
+   }
+#else
+   return AUX_MCS;
+#endif
+}
+#endif /* GEN_GEN >= 8 */
+
 void
 isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
                             const struct isl_surf_fill_state_info *restrict info)
@@ -379,10 +401,24 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
    s.MOCS = info->mocs;
 #endif
 
+#if GEN_GEN >= 7
+   if (info->aux_surf) {
+      struct isl_tile_info tile_info;
+      isl_surf_get_tile_info(dev, info->aux_surf, &tile_info);
+      uint32_t pitch_in_tiles = info->aux_surf->row_pitch / tile_info.width;
+
 #if GEN_GEN >= 8
-   s.AuxiliarySurfaceMode = AUX_NONE;
-#elif GEN_GEN >= 7
-   s.MCSEnable = false;
+      s.AuxiliarySurfacePitch = pitch_in_tiles - 1;
+      s.AuxiliarySurfaceQPitch = get_qpitch(info->aux_surf) >> 2;
+      s.AuxiliarySurfaceBaseAddress = info->aux_address;
+      s.AuxiliarySurfaceMode = get_aux_mode_for_format(dev, info->view->format,
+                                                       info->aux_surf->format);
+#else
+      s.MCSBaseAddress = info->aux_address,
+      s.MCSSurfacePitch = pitch_in_tiles - 1;
+      s.MCSEnable = true;
+#endif
+   }
 #endif
 
 #if GEN_GEN >= 8

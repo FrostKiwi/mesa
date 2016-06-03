@@ -833,6 +833,12 @@ struct isl_surf_fill_state_info {
    uint32_t mocs;
 
    /**
+    * The auxilary surface or NULL if no auxilary surface is to be used.
+    */
+   const struct isl_surf *aux_surf;
+   uint64_t aux_address;
+
+   /**
     * The clear color for this surface
     *
     * Valid values depend on hardware generation.
