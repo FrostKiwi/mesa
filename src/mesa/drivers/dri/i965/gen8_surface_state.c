@@ -357,66 +357,6 @@ gen8_emit_texture_surface_state(struct brw_context *brw,
                            (rw ? I915_GEM_DOMAIN_SAMPLER : 0));
 }
 
-static void
-gen8_update_texture_surface(struct gl_context *ctx,
-                            unsigned unit,
-                            uint32_t *surf_offset,
-                            bool for_gather,
-                            uint32_t plane)
-{
-   struct brw_context *brw = brw_context(ctx);
-   struct gl_texture_object *obj = ctx->Texture.Unit[unit]._Current;
-
-   if (obj->Target == GL_TEXTURE_BUFFER) {
-      brw_update_buffer_texture_surface(ctx, unit, surf_offset);
-
-   } else {
-      struct gl_texture_image *firstImage = obj->Image[0][obj->BaseLevel];
-      struct intel_texture_object *intel_obj = intel_texture_object(obj);
-      struct intel_mipmap_tree *mt = intel_obj->mt;
-      struct gl_sampler_object *sampler = _mesa_get_samplerobj(ctx, unit);
-      /* If this is a view with restricted NumLayers, then our effective depth
-       * is not just the miptree depth.
-       */
-      const unsigned depth = (obj->Immutable && obj->Target != GL_TEXTURE_3D ?
-                              obj->NumLayers : mt->logical_depth0);
-
-      /* Handling GL_ALPHA as a surface format override breaks 1.30+ style
-       * texturing functions that return a float, as our code generation always
-       * selects the .x channel (which would always be 0).
-       */
-      const bool alpha_depth = obj->DepthMode == GL_ALPHA &&
-         (firstImage->_BaseFormat == GL_DEPTH_COMPONENT ||
-          firstImage->_BaseFormat == GL_DEPTH_STENCIL);
-      const unsigned swizzle = (unlikely(alpha_depth) ? SWIZZLE_XYZW :
-                                brw_get_texture_swizzle(&brw->ctx, obj));
-
-      unsigned format = translate_tex_format(brw, intel_obj->_Format,
-                                             sampler->sRGBDecode);
-      if (obj->StencilSampling && firstImage->_BaseFormat == GL_DEPTH_STENCIL) {
-         mt = mt->stencil_mt;
-         format = BRW_SURFACEFORMAT_R8_UINT;
-      } else if (obj->Target == GL_TEXTURE_EXTERNAL_OES) {
-         if (plane > 0)
-            mt = mt->plane[plane - 1];
-         if (mt == NULL)
-            return;
-
-         format = translate_tex_format(brw, mt->format, sampler->sRGBDecode);
-
-      }
-
-      const int surf_index = surf_offset - &brw->wm.base.surf_offset[0];
-
-      gen8_emit_texture_surface_state(brw, mt, obj->Target,
-                                      obj->MinLayer, obj->MinLayer + depth,
-                                      obj->MinLevel + obj->BaseLevel,
-                                      obj->MinLevel + intel_obj->_MaxLevel + 1,
-                                      format, swizzle, surf_offset,
-                                      surf_index, false, for_gather);
-   }
-}
-
 /**
  * Creates a null surface.
  *
@@ -575,7 +515,7 @@ gen8_update_renderbuffer_surface(struct brw_context *brw,
 void
 gen8_init_vtable_surface_functions(struct brw_context *brw)
 {
-   brw->vtbl.update_texture_surface = gen8_update_texture_surface;
+   brw->vtbl.update_texture_surface = brw_update_texture_surface;
    brw->vtbl.update_renderbuffer_surface = gen8_update_renderbuffer_surface;
    brw->vtbl.emit_null_surface_state = gen8_emit_null_surface_state;
    brw->vtbl.emit_texture_surface_state = gen8_emit_texture_surface_state;
