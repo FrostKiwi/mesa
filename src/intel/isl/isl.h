@@ -844,6 +844,9 @@ struct isl_surf_fill_state_info {
     * Valid values depend on hardware generation.
     */
    union isl_color_value clear_color;
+
+   /* Intra-tile offset */
+   uint16_t x_offset, y_offset;
 };
 
 struct isl_buffer_fill_state_info {
