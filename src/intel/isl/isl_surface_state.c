@@ -401,6 +401,15 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
    s.MOCS = info->mocs;
 #endif
 
+#if GEN_GEN > 4 || GEN_IS_G4X
+   const unsigned x_div = 4;
+   const unsigned y_div = GEN_GEN >= 8 ? 4 : 2;
+   assert(info->x_offset % x_div == 0);
+   assert(info->y_offset % y_div == 0);
+   s.XOffset = info->x_offset / x_div;
+   s.YOffset = info->y_offset / y_div;
+#endif
+
 #if GEN_GEN >= 7
    if (info->aux_surf) {
       struct isl_tile_info tile_info;
