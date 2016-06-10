@@ -240,6 +240,136 @@ brw_blorp_compile_nir_shader(struct brw_context *brw, struct nir_shader *nir,
    return program;
 }
 
+static enum isl_msaa_layout
+get_isl_msaa_layout(enum intel_msaa_layout layout)
+{
+   switch (layout) {
+   case INTEL_MSAA_LAYOUT_NONE:
+      return ISL_MSAA_LAYOUT_NONE;
+   case INTEL_MSAA_LAYOUT_IMS:
+      return ISL_MSAA_LAYOUT_INTERLEAVED;
+   case INTEL_MSAA_LAYOUT_UMS:
+   case INTEL_MSAA_LAYOUT_CMS:
+      return ISL_MSAA_LAYOUT_ARRAY;
+   default:
+      unreachable("Invalid MSAA layout");
+   }
+}
+
+struct surface_state_info {
+   unsigned num_dwords;
+   unsigned ss_align; /* Required alignment of RENDER_SURFACE_STATE in bytes */
+   unsigned reloc_dw;
+   unsigned aux_reloc_dw;
+   unsigned tex_mocs;
+   unsigned rb_mocs;
+};
+
+static const struct surface_state_info surface_state_infos[] = {
+   [6] = {6,  32, 1,  0},
+   [7] = {8,  32, 1,  6,  GEN7_MOCS_L3, GEN7_MOCS_L3},
+   [8] = {13, 64, 8,  10, BDW_MOCS_WB,  BDW_MOCS_PTE},
+   [9] = {16, 64, 8,  10, SKL_MOCS_WB,  SKL_MOCS_PTE},
+};
+
+uint32_t
+brw_blorp_emit_surface_state(struct brw_context *brw,
+                             const struct brw_blorp_surface_info *surface,
+                             uint32_t read_domains, uint32_t write_domain,
+                             bool is_render_target)
+{
+   struct intel_mipmap_tree *mt = surface->mt;
+
+   /* TODO: This should go in the context */
+   struct isl_device isl_dev;
+   isl_device_init(&isl_dev, brw->intelScreen->devinfo, brw->has_swizzling);
+
+   const struct surface_state_info ss_info = surface_state_infos[brw->gen];
+
+   struct isl_surf surf;
+   intel_miptree_get_isl_surf(brw, mt, &surf);
+
+   /* Stomp surface dimensions and tiling (if needed) with info from blorp */
+   surf.logical_level0_px.width = surface->width;
+   surf.logical_level0_px.height = surface->height;
+   surf.samples = MAX2(surface->num_samples, 1);
+   surf.msaa_layout = get_isl_msaa_layout(surface->msaa_layout);
+
+   if (surface->map_stencil_as_y_tiled) {
+      /* We need to fake W-tiling with Y-tiling */
+      surf.tiling = ISL_TILING_Y0;
+      surf.row_pitch *= 2;
+   }
+
+   union isl_color_value clear_color = { .u32 = { 0, 0, 0, 0 } };
+
+   struct isl_surf *aux_surf = NULL, aux_surf_s;
+   uint64_t aux_offset;
+   if (mt->mcs_mt) {
+      /* We should probably to similar stomping to above but most of the aux
+       * surf gets ignored when we fill out the surface state anyway so
+       * there's no point.
+       */
+      intel_miptree_get_ccs_isl_surf(brw, mt, &aux_surf_s);
+      aux_surf = &aux_surf_s;
+      assert(mt->mcs_mt->offset == 0);
+      aux_offset = surface->mt->mcs_mt->bo->offset64;
+
+      /* We only really need a clear color if we also have an auxiliary
+       * surfacae.  Without one, it does nothing.
+       */
+      clear_color = intel_miptree_get_isl_clear_color(brw, mt);
+   }
+
+   struct isl_view view = {
+      .format = surface->brw_surfaceformat,
+      .base_level = 0,
+      .levels = 1,
+      .base_array_layer = 0,
+      .array_len = 1,
+      .channel_select = {
+         ISL_CHANNEL_SELECT_RED,
+         ISL_CHANNEL_SELECT_GREEN,
+         ISL_CHANNEL_SELECT_BLUE,
+         ISL_CHANNEL_SELECT_ALPHA,
+      },
+      .usage = is_render_target ? ISL_SURF_USAGE_RENDER_TARGET_BIT :
+                                  ISL_SURF_USAGE_TEXTURE_BIT,
+   };
+
+   uint32_t offset, tile_x, tile_y;
+   offset = brw_blorp_compute_tile_offsets(surface, &tile_x, &tile_y);
+
+   uint32_t surf_offset;
+   uint32_t *dw = brw_state_batch(brw, AUB_TRACE_SURFACE_STATE,
+                                  ss_info.num_dwords * 4, ss_info.ss_align,
+                                  &surf_offset);
+
+   const uint32_t mocs = is_render_target ? ss_info.rb_mocs : ss_info.tex_mocs;
+
+   isl_surf_fill_state(&isl_dev, dw, .surf = &surf, .view = &view,
+                       .address = mt->bo->offset64 + offset,
+                       .aux_surf = aux_surf, .aux_address = aux_offset,
+                       .mocs = mocs, .clear_color = clear_color,
+                       .x_offset = tile_x, .y_offset = tile_y);
+
+   if (surface->mt->mcs_mt) {
+      drm_intel_bo_emit_reloc(brw->batch.bo,
+                              surf_offset + ss_info.aux_reloc_dw * 4,
+                              surface->mt->mcs_mt->bo, 0,
+                              read_domains, write_domain);
+   }
+
+   /* Emit relocation to surface contents */
+   drm_intel_bo_emit_reloc(brw->batch.bo,
+                           surf_offset + ss_info.reloc_dw * 4,
+                           mt->bo,
+                           dw[ss_info.reloc_dw] - mt->bo->offset64,
+                           read_domains, write_domain);
+
+   return surf_offset;
+}
+
 /**
  * Perform a HiZ or depth resolve operation.
  *
