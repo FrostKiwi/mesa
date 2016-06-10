@@ -285,7 +285,7 @@ ETC2_EAC_RGBA8              , 128,  4,  4,  1,  un8,  un8,  un8,  un8,     ,    
 ETC2_EAC_SRGB8_A8           , 128,  4,  4,  1,  un8,  un8,  un8,  un8,     ,     ,    ,   srgb,  etc2
 R8G8B8_UINT                 ,  24,  1,  1,  1,  ui8,  ui8,  ui8,     ,     ,     ,    , linear,
 R8G8B8_SINT                 ,  24,  1,  1,  1,  si8,  si8,  si8,     ,     ,     ,    , linear,
-RAW                         ,   0,  0,  0,  0,     ,     ,     ,     ,     ,     ,    ,       ,
+RAW                         ,   8,  0,  0,  0,     ,     ,     ,     ,     ,     ,    ,       ,
 ASTC_LDR_2D_4X4_U8SRGB      , 128,  4,  4,  1,  un8,  un8,  un8,  un8,     ,     ,    ,   srgb,  astc
 ASTC_LDR_2D_5X4_U8SRGB      , 128,  5,  4,  1,  un8,  un8,  un8,  un8,     ,     ,    ,   srgb,  astc
 ASTC_LDR_2D_5X5_U8SRGB      , 128,  5,  5,  1,  un8,  un8,  un8,  un8,     ,     ,    ,   srgb,  astc
