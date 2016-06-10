@@ -47,7 +47,7 @@ brw_upload_cs_state(struct brw_context *brw)
    struct brw_stage_prog_data *prog_data = &cs_prog_data->base;
 
    if (INTEL_DEBUG & DEBUG_SHADER_TIME) {
-      brw->vtbl.emit_buffer_surface_state(
+      brw_emit_buffer_surface_state(
          brw, &stage_state->surf_offset[
                  prog_data->binding_table.shader_time_start],
          brw->shader_time.bo, 0, BRW_SURFACEFORMAT_RAW,
