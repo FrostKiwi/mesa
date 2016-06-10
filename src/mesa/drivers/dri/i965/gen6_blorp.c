@@ -1017,9 +1017,9 @@ gen6_blorp_exec(struct brw_context *brw,
       wm_push_const_offset = gen6_blorp_emit_wm_constants(brw, params);
       intel_miptree_used_for_rendering(params->dst.mt);
       wm_surf_offset_renderbuffer =
-         gen6_blorp_emit_surface_state(brw, params, &params->dst,
-                                       I915_GEM_DOMAIN_RENDER,
-                                       I915_GEM_DOMAIN_RENDER);
+         brw_blorp_emit_surface_state(brw, &params->dst,
+                                      I915_GEM_DOMAIN_RENDER,
+                                      I915_GEM_DOMAIN_RENDER, true);
       if (params->src.mt) {
          wm_surf_offset_texture =
             gen6_blorp_emit_surface_state(brw, params, &params->src,
