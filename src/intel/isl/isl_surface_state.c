@@ -390,15 +390,17 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
    /* Prior to Sky Lake, we only have one bit for the clear color which
     * gives us 0 or 1 in whatever the surface's format happens to be.
     */
-   if (isl_format_has_int_channel(info->view->format)) {
-      for (unsigned i = 0; i < 4; i++) {
-         assert(info->clear_color.u32[i] == 0 ||
-                info->clear_color.u32[i] == 1);
-      }
-   } else {
-      for (unsigned i = 0; i < 4; i++) {
-         assert(info->clear_color.f32[i] == 0.0f ||
-                info->clear_color.f32[i] == 1.0f);
+   if (info->aux_surf) {
+      if (isl_format_has_int_channel(info->view->format)) {
+         for (unsigned i = 0; i < 4; i++) {
+            assert(info->clear_color.u32[i] == 0 ||
+                   info->clear_color.u32[i] == 1);
+         }
+      } else {
+         for (unsigned i = 0; i < 4; i++) {
+            assert(info->clear_color.f32[i] == 0.0f ||
+                   info->clear_color.f32[i] == 1.0f);
+         }
       }
    }
    s.RedClearColor = info->clear_color.u32[0] != 0;
