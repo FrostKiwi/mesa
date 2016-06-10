@@ -435,7 +435,7 @@ isl_genX(buffer_fill_state_s)(void *state,
       .SurfaceHorizontalAlignment = isl_to_gen_halign[4],
       .Height = ((num_elements - 1) >> 7) & 0x3fff,
       .Width = (num_elements - 1) & 0x7f,
-      .Depth = ((num_elements - 1) >> 21) & 0x3f,
+      .Depth = ((num_elements - 1) >> 21) & 0x3ff,
       .SurfacePitch = info->stride - 1,
       .NumberofMultisamples = MULTISAMPLECOUNT_1,
 
