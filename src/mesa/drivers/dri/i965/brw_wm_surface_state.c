@@ -88,6 +88,8 @@ brw_emit_surface_state(struct brw_context *brw,
    struct isl_surf surf;
    intel_miptree_get_isl_surf(brw, mt, &surf);
 
+   union isl_color_value clear_color = { .u32 = { 0, 0, 0, 0 } };
+
    struct isl_surf *aux_surf = NULL, aux_surf_s;
    uint64_t aux_offset = 0;
    if (mt->mcs_mt &&
@@ -97,24 +99,11 @@ brw_emit_surface_state(struct brw_context *brw,
       aux_surf = &aux_surf_s;
       assert(mt->mcs_mt->offset == 0);
       aux_offset = mt->mcs_mt->bo->offset64;
-   }
 
-   union isl_color_value clear_color;
-   if (brw->gen >= 9) {
-      clear_color.i32[0] = mt->gen9_fast_clear_color.i[0];
-      clear_color.i32[1] = mt->gen9_fast_clear_color.i[1];
-      clear_color.i32[2] = mt->gen9_fast_clear_color.i[2];
-      clear_color.i32[3] = mt->gen9_fast_clear_color.i[3];
-   } else if (isl_format_has_int_channel(view->format)) {
-      clear_color.i32[0] = (mt->fast_clear_color_value & (1u << 31)) != 0;
-      clear_color.i32[1] = (mt->fast_clear_color_value & (1u << 30)) != 0;
-      clear_color.i32[2] = (mt->fast_clear_color_value & (1u << 29)) != 0;
-      clear_color.i32[3] = (mt->fast_clear_color_value & (1u << 28)) != 0;
-   } else {
-      clear_color.f32[0] = (mt->fast_clear_color_value & (1u << 31)) != 0;
-      clear_color.f32[1] = (mt->fast_clear_color_value & (1u << 30)) != 0;
-      clear_color.f32[2] = (mt->fast_clear_color_value & (1u << 29)) != 0;
-      clear_color.f32[3] = (mt->fast_clear_color_value & (1u << 28)) != 0;
+      /* We only really need a clear color if we also have an auxiliary
+       * surfacae.  Without one, it does nothing.
+       */
+      clear_color = intel_miptree_get_isl_clear_color(brw, mt);
    }
 
    uint32_t *dw = __brw_state_batch(brw, AUB_TRACE_SURFACE_STATE,
