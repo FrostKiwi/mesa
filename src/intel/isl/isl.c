@@ -177,6 +177,15 @@ isl_tiling_get_info(const struct isl_device *dev,
       phys_B = isl_extent2d(128, 32);
       break;
 
+   case ISL_TILING_CCS:
+      /* CCS surfaces are required to have one of the GENX_CCS_* formats which
+       * have a block size of 1 or 2 bits per block.
+       */
+      assert(format_bpb == 1 || format_bpb == 2);
+      logical_el = isl_extent2d(128, 256 / format_bpb);
+      phys_B = isl_extent2d(128, 32);
+      break;
+
    default:
       unreachable("not reached");
    } /* end switch */
@@ -231,6 +240,7 @@ isl_surf_choose_tiling(const struct isl_device *dev,
       CHOOSE(ISL_TILING_LINEAR);
    }
 
+   CHOOSE(ISL_TILING_CCS);
    CHOOSE(ISL_TILING_HIZ);
    CHOOSE(ISL_TILING_Ys);
    CHOOSE(ISL_TILING_Yf);

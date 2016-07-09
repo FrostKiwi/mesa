@@ -103,6 +103,18 @@ gen9_choose_image_alignment_el(const struct isl_device *dev,
                                enum isl_msaa_layout msaa_layout,
                                struct isl_extent3d *image_align_el)
 {
+   const struct isl_format_layout *fmtl = isl_format_get_layout(info->format);
+   if (fmtl->txc == ISL_TXC_CCS) {
+      /* Sky Lake PRM Vol. 7, "MCS Buffer for Render Target(s)" (p. 632):
+       *
+       *    "Mip-mapped and arrayed surfaces are supported with MCS buffer
+       *    layout with these alignments in the RT space: Horizontal
+       *    Alignment = 128 and Vertical Alignment = 64."
+       */
+      *image_align_el = isl_extent3d(128 / fmtl->bw, 64 / fmtl->bh, 1);
+      return;
+   }
+
    /* This BSpec text provides some insight into the hardware's alignment
     * requirements [Skylake BSpec > Memory Views > Common Surface Formats >
     * Surface Layout and Tiling > 2D Surfaces]:
