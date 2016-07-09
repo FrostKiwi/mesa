@@ -89,6 +89,14 @@ gen6_choose_image_alignment_el(const struct isl_device *dev,
                                enum isl_msaa_layout msaa_layout,
                                struct isl_extent3d *image_align_el)
 {
+   if (info->format == ISL_FORMAT_HIZ) {
+      /* HiZ surfaces are always aligned to 8x16 pixels in the primary surface
+       * which works out to 2x2 HiZ elments.
+       */
+      *image_align_el = isl_extent3d(2, 2, 1);
+      return;
+   }
+
    /* Note that the surface's horizontal image alignment is not programmable
     * on Sandybridge.
     *

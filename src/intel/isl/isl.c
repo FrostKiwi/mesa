@@ -167,6 +167,16 @@ isl_tiling_get_info(const struct isl_device *dev,
       break;
    }
 
+   case ISL_TILING_HIZ:
+      /* HiZ buffers are required to have ISL_FORMAT_HIZ which is an 8x4
+       * 128bpb format.  The tiling has the same physical dimensions as
+       * Y-tiling but actually has two HiZ columns per Y-tiled column.
+       */
+      assert(bs == 16);
+      logical_el = isl_extent2d(16, 16);
+      phys_B = isl_extent2d(128, 32);
+      break;
+
    default:
       unreachable("not reached");
    } /* end switch */
@@ -221,6 +231,7 @@ isl_surf_choose_tiling(const struct isl_device *dev,
       CHOOSE(ISL_TILING_LINEAR);
    }
 
+   CHOOSE(ISL_TILING_HIZ);
    CHOOSE(ISL_TILING_Ys);
    CHOOSE(ISL_TILING_Yf);
    CHOOSE(ISL_TILING_Y0);
