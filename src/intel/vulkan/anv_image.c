@@ -631,7 +631,7 @@ void anv_buffer_view_init(struct anv_buffer_view *view,
    view->bo = buffer->bo;
    view->offset = buffer->offset + pCreateInfo->offset;
    view->range = pCreateInfo->range == VK_WHOLE_SIZE ?
-                 buffer->size - view->offset : pCreateInfo->range;
+                 buffer->size - pCreateInfo->offset : pCreateInfo->range;
 
    if (buffer->usage & VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT) {
       view->surface_state = alloc_surface_state(device, cmd_buffer);
