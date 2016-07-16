@@ -545,7 +545,7 @@ isl_calc_phys_level0_extent_sa(const struct isl_device *dev,
             .w = info->width,
             .h = info->height,
             .d = 1,
-            .a = info->samples,
+            .a = info->array_len * info->samples,
          };
          break;
 
