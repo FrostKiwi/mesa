@@ -453,7 +453,8 @@ isl_choose_image_alignment_el(const struct isl_device *dev,
 
 static enum isl_dim_layout
 isl_surf_choose_dim_layout(const struct isl_device *dev,
-                           enum isl_surf_dim logical_dim)
+                           enum isl_surf_dim logical_dim,
+                           isl_surf_usage_flags_t usage)
 {
    if (ISL_DEV_GEN(dev) >= 9) {
       switch (logical_dim) {
@@ -467,7 +468,10 @@ isl_surf_choose_dim_layout(const struct isl_device *dev,
       switch (logical_dim) {
       case ISL_SURF_DIM_1D:
       case ISL_SURF_DIM_2D:
-         return ISL_DIM_LAYOUT_GEN4_2D;
+         if (ISL_DEV_GEN(dev) <= 5 && (usage & ISL_SURF_USAGE_CUBE_BIT))
+            return ISL_DIM_LAYOUT_GEN4_3D;
+         else
+            return ISL_DIM_LAYOUT_GEN4_2D;
       case ISL_SURF_DIM_3D:
          return ISL_DIM_LAYOUT_GEN4_3D;
       }
@@ -709,6 +713,10 @@ isl_calc_phys_slice0_extent_sa_gen4_3d(
    assert(info->samples == 1);
    assert(phys_level0_sa->array_len == 1);
 
+   assert(info->dim == ISL_SURF_DIM_3D ||
+          (ISL_DEV_GEN(dev) <= 5 && info->dim == ISL_SURF_DIM_2D &&
+           (info->usage & ISL_SURF_USAGE_CUBE_BIT) && info->array_len == 6));
+
    uint32_t slice_w = 0;
    uint32_t slice_h = 0;
 
@@ -721,8 +729,10 @@ isl_calc_phys_slice0_extent_sa_gen4_3d(
       uint32_t level_h = isl_align_npot(isl_minify(H0, l), image_align_sa->h);
       uint32_t level_d = isl_align_npot(isl_minify(D0, l), image_align_sa->d);
 
-      uint32_t max_layers_horiz = MIN(level_d, 1u << l);
-      uint32_t max_layers_vert = isl_align(level_d, 1u << l) / (1u << l);
+      const uint32_t layers =
+         info->dim == ISL_SURF_DIM_3D ? level_d : info->array_len;
+      uint32_t max_layers_horiz = MIN(layers, 1u << l);
+      uint32_t max_layers_vert = isl_align(layers, 1u << l) / (1u << l);
 
       slice_w = MAX(slice_w, level_w * max_layers_horiz);
       slice_h += level_h * max_layers_vert;
@@ -1125,7 +1135,7 @@ isl_surf_init_s(const struct isl_device *dev,
    };
 
    enum isl_dim_layout dim_layout =
-      isl_surf_choose_dim_layout(dev, info->dim);
+      isl_surf_choose_dim_layout(dev, info->dim, info->usage);
 
    enum isl_tiling tiling;
    if (!isl_surf_choose_tiling(dev, info, &tiling))
@@ -1398,6 +1408,11 @@ get_image_offset_sa_gen4_3d(const struct isl_surf *surf,
    assert(logical_z_offset_px < isl_minify(surf->phys_level0_sa.depth, level));
    assert(surf->phys_level0_sa.array_len == 1);
 
+   assert(surf->dim == ISL_SURF_DIM_3D ||
+          (surf->dim == ISL_SURF_DIM_2D &&
+           (surf->usage & ISL_SURF_USAGE_CUBE_BIT) &&
+           surf->phys_level0_sa.array_len == 6));
+
    const struct isl_extent3d image_align_sa =
       isl_surf_get_image_alignment_sa(surf);
 
@@ -1411,7 +1426,9 @@ get_image_offset_sa_gen4_3d(const struct isl_surf *surf,
    for (uint32_t l = 0; l < level; ++l) {
       const uint32_t level_h = isl_align_npot(isl_minify(H0, l), image_align_sa.h);
       const uint32_t level_d = isl_align_npot(isl_minify(D0, l), image_align_sa.d);
-      const uint32_t max_layers_vert = isl_align(level_d, 1u << l) / (1u << l);
+      const uint32_t layers =
+         surf->dim == ISL_SURF_DIM_3D ? level_d : surf->phys_level0_sa.a;
+      const uint32_t max_layers_vert = isl_align(layers, 1u << l) / (1u << l);
 
       y += level_h * max_layers_vert;
    }
@@ -1420,7 +1437,9 @@ get_image_offset_sa_gen4_3d(const struct isl_surf *surf,
    const uint32_t level_h = isl_align_npot(isl_minify(H0, level), image_align_sa.h);
    const uint32_t level_d = isl_align_npot(isl_minify(D0, level), image_align_sa.d);
 
-   const uint32_t max_layers_horiz = MIN(level_d, 1u << level);
+   const uint32_t layers =
+      surf->dim == ISL_SURF_DIM_3D ? level_d : surf->phys_level0_sa.a;
+   const uint32_t max_layers_horiz = MIN(layers, 1u << level);
 
    x += level_w * (logical_z_offset_px % max_layers_horiz);
    y += level_h * (logical_z_offset_px / max_layers_horiz);
