@@ -114,14 +114,12 @@ create_shadow_temp(struct lower_io_state *state, nir_variable *var)
    /* Reparent the name to the new variable */
    ralloc_steal(nvar, nvar->name);
 
-   /* Reparent the constant initializer (if any) */
-   ralloc_steal(nvar, nvar->constant_initializer);
+   assert(nvar->constant_initializer == NULL);
 
    /* Give the original a new name with @<mode>-temp appended */
    const char *mode = (temp->data.mode == nir_var_shader_in) ? "in" : "out";
    temp->name = ralloc_asprintf(var, "%s@%s-temp", mode, nvar->name);
    temp->data.mode = nir_var_global;
-   temp->constant_initializer = NULL;
 
    return nvar;
 }
