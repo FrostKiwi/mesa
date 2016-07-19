@@ -1262,6 +1262,51 @@ isl_surf_get_tile_info(const struct isl_device *dev,
    isl_tiling_get_info(dev, surf->tiling, fmtl->bpb, tile_info);
 }
 
+/**
+ * Returs a single-level non-array 2-D surface representing the given slice
+ *
+ * It is safe to call this function with surf == slice_surf.
+ */
+void
+isl_surf_get_slice_surf(const struct isl_device *dev,
+                        const struct isl_surf *surf,
+                        struct isl_surf *slice_surf,
+                        uint32_t level,
+                        uint32_t logical_array_layer,
+                        uint32_t logical_z_offset_px,
+                        uint32_t *x_offset_sa,
+                        uint32_t *y_offset_sa)
+{
+   isl_surf_get_image_offset_sa(surf, level,
+                                logical_array_layer, logical_z_offset_px,
+                                x_offset_sa, y_offset_sa);
+
+#ifndef NDEBUG
+   /* Save off a copy of the surf for debug checks later. */
+   struct isl_surf old_surf = *surf;
+#endif
+
+   isl_surf_init(dev, slice_surf,
+                 .dim = ISL_SURF_DIM_2D,
+                 .format = surf->format,
+                 .width = isl_minify(surf->logical_level0_px.width, level),
+                 .height = isl_minify(surf->logical_level0_px.height, level),
+                 .depth = isl_minify(surf->logical_level0_px.depth, level),
+                 .levels = 1,
+                 .array_len = 1,
+                 .samples = surf->samples,
+                 .min_alignment = 0,
+                 .min_pitch = surf->row_pitch,
+                 .usage = surf->usage,
+                 .tiling_flags = 1 << surf->tiling);
+
+   /* Assert that it created the image we expected it to. */
+   assert(slice_surf->msaa_layout == old_surf.msaa_layout);
+   assert(slice_surf->tiling == old_surf.tiling);
+   assert(slice_surf->samples == old_surf.samples);
+   assert(slice_surf->row_pitch == old_surf.row_pitch);
+}
+
 void
 isl_surf_fill_state_s(const struct isl_device *dev, void *state,
                       const struct isl_surf_fill_state_info *restrict info)

@@ -1211,6 +1211,16 @@ isl_surf_get_tile_info(const struct isl_device *dev,
                        const struct isl_surf *surf,
                        struct isl_tile_info *tile_info);
 
+void
+isl_surf_get_slice_surf(const struct isl_device *dev,
+                        const struct isl_surf *surf,
+                        struct isl_surf *slice_surf,
+                        uint32_t level,
+                        uint32_t logical_array_layer,
+                        uint32_t logical_z_offset_px,
+                        uint32_t *x_offset_sa,
+                        uint32_t *y_offset_sa);
+
 #define isl_surf_fill_state(dev, state, ...) \
    isl_surf_fill_state_s((dev), (state), \
                          &(struct isl_surf_fill_state_info) {  __VA_ARGS__ });
