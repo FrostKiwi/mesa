@@ -3204,7 +3204,8 @@ intel_miptree_get_aux_isl_surf(struct brw_context *brw,
    } else if (mt->fast_clear_state != INTEL_FAST_CLEAR_STATE_NO_MCS) {
       *usage = ISL_AUX_USAGE_CCS_D;
    } else {
-      unreachable("Invalid MCS miptree");
+      *usage = ISL_AUX_USAGE_NONE;
+      return;
    }
 
    /* Figure out the format and tiling of the auxiliary surface */
