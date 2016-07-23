@@ -476,6 +476,63 @@ isl_format_get_num_channels(enum isl_format fmt)
           (fmtl->channels.i.bits > 0);
 }
 
+/**
+ * If the format is sRGB, returns the linear version, otherwise returns the
+ * regular format.
+ */
+enum isl_format
+isl_format_linear_if_srgb(enum isl_format format)
+{
+   switch (format) {
+#define SRGB_TO_LINEAR(f) case ISL_FORMAT_##f##_SRGB: return ISL_FORMAT_##f;
+   SRGB_TO_LINEAR(B8G8R8A8_UNORM)
+   SRGB_TO_LINEAR(R10G10B10A2_UNORM)
+   SRGB_TO_LINEAR(R8G8B8A8_UNORM)
+   SRGB_TO_LINEAR(B10G10R10A2_UNORM)
+   SRGB_TO_LINEAR(B8G8R8X8_UNORM)
+   SRGB_TO_LINEAR(R8G8B8X8_UNORM)
+   SRGB_TO_LINEAR(B5G6R5_UNORM)
+   SRGB_TO_LINEAR(B5G5R5A1_UNORM)
+   SRGB_TO_LINEAR(B4G4R4A4_UNORM)
+   SRGB_TO_LINEAR(L8A8_UNORM)
+   SRGB_TO_LINEAR(B5G5R5X1_UNORM)
+   SRGB_TO_LINEAR(L8_UNORM)
+   SRGB_TO_LINEAR(DXT1_RGB)
+   SRGB_TO_LINEAR(BC1_UNORM)
+   SRGB_TO_LINEAR(BC2_UNORM)
+   SRGB_TO_LINEAR(BC3_UNORM)
+   SRGB_TO_LINEAR(BC7_UNORM)
+   SRGB_TO_LINEAR(R8G8B8_UNORM)
+#undef SRGB_TO_LINEAR
+
+   case ISL_FORMAT_ETC2_SRGB8:         return ISL_FORMAT_ETC2_RGB8;
+   case ISL_FORMAT_ETC2_SRGB8_PTA:     return ISL_FORMAT_ETC2_RGB8_PTA;
+   case ISL_FORMAT_ETC2_EAC_SRGB8_A8:  return ISL_FORMAT_ETC2_EAC_RGBA8;
+
+#define ASTC_SRGB_TO_LINEAR(f) \
+   case ISL_FORMAT_ASTC_##f##_U8SRGB: return ISL_FORMAT_ASTC_##f##_FLT16;
+   ASTC_SRGB_TO_LINEAR(LDR_2D_4X4)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_5X4)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_5X5)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_6X5)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_6X6)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_8X5)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_8X6)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_8X8)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_10X5)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_10X6)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_10X8)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_10X10)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_12X10)
+   ASTC_SRGB_TO_LINEAR(LDR_2D_12X12)
+#undef ASTC_SRGB_TO_LINEAR
+
+   default:
+      assert(isl_format_get_layout(format)->colorspace != ISL_COLORSPACE_SRGB);
+      return format;
+   }
+}
+
 enum isl_format
 isl_format_rgb_to_rgba(enum isl_format rgb)
 {

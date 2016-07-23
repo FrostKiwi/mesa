@@ -1077,6 +1077,7 @@ isl_format_is_rgb(enum isl_format fmt)
           isl_format_layouts[fmt].channels.a.bits == 0;
 }
 
+enum isl_format isl_format_linear_if_srgb(enum isl_format srgb) ATTRIBUTE_CONST;
 enum isl_format isl_format_rgb_to_rgba(enum isl_format rgb) ATTRIBUTE_CONST;
 enum isl_format isl_format_rgb_to_rgbx(enum isl_format rgb) ATTRIBUTE_CONST;
 
