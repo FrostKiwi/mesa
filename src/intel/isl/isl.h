@@ -1213,6 +1213,21 @@ isl_surf_get_tile_info(const struct isl_device *dev,
                        struct isl_tile_info *tile_info);
 
 void
+isl_surf_get_mcs_surf(const struct isl_device *dev,
+                      const struct isl_surf *surf,
+                      struct isl_surf *mcs_surf);
+
+bool
+isl_surf_get_ccs_surf(const struct isl_device *dev,
+                      const struct isl_surf *surf,
+                      struct isl_surf *ccs_surf);
+
+void
+isl_surf_get_hiz_surf(const struct isl_device *dev,
+                      const struct isl_surf *surf,
+                      struct isl_surf *hiz_surf);
+
+void
 isl_surf_get_slice_surf(const struct isl_device *dev,
                         const struct isl_surf *surf,
                         struct isl_surf *slice_surf,
