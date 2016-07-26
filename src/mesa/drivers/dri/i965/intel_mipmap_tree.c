@@ -44,6 +44,7 @@
 #include "main/texcompress_etc.h"
 #include "main/teximage.h"
 #include "main/streaming-load-memcpy.h"
+#include "program/prog_instruction.h"
 #include "x86/common_x86_asm.h"
 
 #define FILE_DEBUG_FLAG DEBUG_MIPTREE

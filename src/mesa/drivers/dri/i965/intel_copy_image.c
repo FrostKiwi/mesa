@@ -33,6 +33,7 @@
 #include "main/formats.h"
 #include "main/teximage.h"
 #include "drivers/common/meta.h"
+#include "program/prog_instruction.h"
 
 static bool
 copy_image_with_blitter(struct brw_context *brw,
