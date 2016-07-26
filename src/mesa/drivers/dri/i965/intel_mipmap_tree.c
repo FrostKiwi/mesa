@@ -3208,6 +3208,9 @@ intel_miptree_get_aux_isl_surf(struct brw_context *brw,
       return;
    }
 
+   /* Start with a copy of the original surface. */
+   intel_miptree_get_isl_surf(brw, mt, surf);
+
    /* Figure out the format and tiling of the auxiliary surface */
    switch (*usage) {
    case ISL_AUX_USAGE_NONE:
@@ -3294,7 +3297,8 @@ intel_miptree_get_aux_isl_surf(struct brw_context *brw,
     * in elements of the primary color surface so we have to divide by the
     * compression block height.
     */
-   surf->array_pitch_el_rows = mt->qpitch / isl_format_get_layout(surf->format)->bh;
+   surf->array_pitch_el_rows =
+      mt->mcs_mt->qpitch / isl_format_get_layout(surf->format)->bh;
 }
 
 union isl_color_value
