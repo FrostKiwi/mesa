@@ -98,11 +98,11 @@ i965_FILES = \
 	blorp.c \
 	blorp.h \
 	blorp_blit.c \
+	blorp_clear.c \
 	blorp_priv.h \
 	brw_binding_tables.c \
 	brw_blorp.c \
 	brw_blorp.h \
-	brw_blorp_clear.cpp \
 	brw_cc.c \
 	brw_clear.c \
 	brw_clip.c \
