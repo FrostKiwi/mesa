@@ -21,6 +21,7 @@
  * IN THE SOFTWARE.
  */
 
+#include <X11/Xlib-xcb.h>
 #include <X11/xshmfence.h>
 #include <xcb/xcb.h>
 #include <xcb/dri3.h>
@@ -420,6 +421,32 @@ VkResult anv_CreateXcbSurfaceKHR(
    return VK_SUCCESS;
 }
 
+VkResult anv_CreateXlibSurfaceKHR(
+    VkInstance                                  _instance,
+    const VkXlibSurfaceCreateInfoKHR*           pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkSurfaceKHR*                               pSurface)
+{
+   ANV_FROM_HANDLE(anv_instance, instance, _instance);
+
+   assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR);
+
+   VkIcdSurfaceXlib *surface;
+
+   surface = anv_alloc2(&instance->alloc, pAllocator, sizeof *surface, 8,
+                        VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   if (surface == NULL)
+      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   surface->base.platform = VK_ICD_WSI_PLATFORM_XCB;
+   surface->dpy = pCreateInfo->dpy;
+   surface->window = pCreateInfo->window;
+
+   *pSurface = _VkIcdSurfaceBase_to_handle(&surface->base);
+
+   return VK_SUCCESS;
+}
+
 struct x11_image {
    struct anv_image *                        image;
    struct anv_device_memory *                memory;
@@ -752,7 +779,6 @@ x11_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
                              const VkAllocationCallbacks* pAllocator,
                              struct anv_swapchain **swapchain_out)
 {
-   VkIcdSurfaceXcb *surface = (VkIcdSurfaceXcb *)icd_surface;
    struct x11_swapchain *chain;
    xcb_void_cookie_t cookie;
    VkResult result;
@@ -782,8 +808,16 @@ x11_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
    chain->base.acquire_next_image = x11_acquire_next_image;
    chain->base.queue_present = x11_queue_present;
 
-   chain->conn = surface->connection;
-   chain->window = surface->window;
+   if (icd_surface->platform == VK_ICD_WSI_PLATFORM_XCB) {
+      VkIcdSurfaceXcb *surface = (VkIcdSurfaceXcb *)icd_surface;
+      chain->conn = surface->connection;
+      chain->window = surface->window;
+   } else {
+      assert(icd_surface->platform == VK_ICD_WSI_PLATFORM_XLIB);
+      VkIcdSurfaceXlib *surface = (VkIcdSurfaceXlib *)icd_surface;
+      chain->conn = XGetXCBConnection(surface->dpy);
+      chain->window = surface->window;
+   }
    chain->extent = pCreateInfo->imageExtent;
    chain->image_count = num_images;
 
