@@ -106,6 +106,61 @@ __gen_combine_address(struct brw_context *brw, void *location,
       _dw + 1; /* Array starts at dw[1] */               \
    })
 
+/* Once vertex fetcher has written full VUE entries with complete
+ * header the space requirement is as follows per vertex (in bytes):
+ *
+ *     Header    Position    Program constants
+ *   +--------+------------+-------------------+
+ *   |   16   |     16     |      n x 16       |
+ *   +--------+------------+-------------------+
+ *
+ * where 'n' stands for number of varying inputs expressed as vec4s.
+ *
+ * The URB size is in turn expressed in 64 bytes (512 bits).
+ */
+static inline unsigned
+gen7_blorp_get_vs_entry_size(const struct brw_blorp_params *params)
+{
+    const unsigned num_varyings =
+       params->wm_prog_data ? params->wm_prog_data->num_varying_inputs : 0;
+    const unsigned total_needed = 16 + 16 + num_varyings * 16;
+
+   return DIV_ROUND_UP(total_needed, 64);
+}
+
+/* 3DSTATE_URB_VS
+ * 3DSTATE_URB_HS
+ * 3DSTATE_URB_DS
+ * 3DSTATE_URB_GS
+ *
+ * If the 3DSTATE_URB_VS is emitted, than the others must be also.
+ * From the Ivybridge PRM, Volume 2 Part 1, section 1.7.1 3DSTATE_URB_VS:
+ *
+ *     3DSTATE_URB_HS, 3DSTATE_URB_DS, and 3DSTATE_URB_GS must also be
+ *     programmed in order for the programming of this state to be
+ *     valid.
+ */
+static void
+emit_urb_config(struct brw_context *brw,
+                const struct brw_blorp_params *params)
+{
+#if GEN_GEN >= 7
+   const unsigned vs_entry_size = gen7_blorp_get_vs_entry_size(params);
+
+   if (!(brw->ctx.NewDriverState & (BRW_NEW_CONTEXT | BRW_NEW_URB_SIZE)) &&
+       brw->urb.vsize >= vs_entry_size)
+      return;
+
+   brw->ctx.NewDriverState |= BRW_NEW_URB_SIZE;
+
+   gen7_upload_urb(brw, vs_entry_size, false, false);
+#else
+   blorp_emit(brw, GENX(3DSTATE_URB), urb) {
+      urb.VSNumberofURBEntries = brw->urb.max_vs_entries;
+   }
+#endif
+}
+
 static void
 blorp_emit_vertex_data(struct brw_context *brw,
                        const struct brw_blorp_params *params,
@@ -182,10 +237,20 @@ blorp_emit_vertex_buffers(struct brw_context *brw,
 
    unsigned num_buffers = 1;
 
+#if GEN_GEN == 7
+   uint32_t mocs = 1 /* GEN7_MOCS_L3 */;
+#else
+   uint32_t mocs = 0;
+#endif
+
    uint32_t size;
    blorp_emit_vertex_data(brw, params, &vb[0].BufferStartingAddress, &size);
    vb[0].VertexBufferIndex = 0;
    vb[0].BufferPitch = 2 * sizeof(float);
+   vb[0].VertexBufferMOCS = mocs;
+#if GEN_GEN >= 7
+   vb[0].AddressModifyEnable = true;
+#endif
    vb[0].BufferAccessType = VERTEXDATA;
    vb[0].EndAddress = vb[0].BufferStartingAddress;
    vb[0].EndAddress.offset += size - 1;
@@ -196,6 +261,10 @@ blorp_emit_vertex_buffers(struct brw_context *brw,
       vb[1].VertexBufferIndex = 1;
       vb[1].BufferPitch = 0;
       vb[1].BufferAccessType = INSTANCEDATA;
+      vb[1].VertexBufferMOCS = mocs;
+#if GEN_GEN >= 7
+      vb[1].AddressModifyEnable = true;
+#endif
       vb[1].EndAddress = vb[1].BufferStartingAddress;
       vb[1].EndAddress.offset += size;
       num_buffers++;
@@ -311,6 +380,34 @@ blorp_emit_sf_config(struct brw_context *brw,
 {
    const struct brw_blorp_prog_data *prog_data = params->wm_prog_data;
 
+#if GEN_GEN >= 7
+
+   blorp_emit(brw, GENX(3DSTATE_SF), sf) {
+      sf.FrontFaceFillMode = FILL_MODE_SOLID;
+      sf.BackFaceFillMode = FILL_MODE_SOLID;
+
+      sf.MultisampleRasterizationMode = params->dst.surf.samples > 1 ?
+         MSRASTMODE_ON_PATTERN : MSRASTMODE_OFF_PIXEL;
+
+#if GEN_GEN == 7
+      sf.DepthBufferSurfaceFormat = params->depth_format;
+#endif
+   }
+
+   blorp_emit(brw, GENX(3DSTATE_SBE), sbe) {
+      sbe.VertexURBEntryReadOffset = BRW_SF_URB_ENTRY_READ_OFFSET;
+      if (prog_data) {
+         sbe.NumberofSFOutputAttributes = prog_data->num_varying_inputs;
+         sbe.VertexURBEntryReadLength = brw_blorp_get_urb_length(prog_data);
+         sbe.ConstantInterpolationEnable = prog_data->flat_inputs;
+      } else {
+         sbe.NumberofSFOutputAttributes = 0;
+         sbe.VertexURBEntryReadLength = 1;
+      }
+   }
+
+#else /* GEN_GEN <= 6 */
+
    blorp_emit(brw, GENX(3DSTATE_SF), sf) {
       sf.FrontFaceFillMode = FILL_MODE_SOLID;
       sf.BackFaceFillMode = FILL_MODE_SOLID;
@@ -328,13 +425,94 @@ blorp_emit_sf_config(struct brw_context *brw,
          sf.VertexURBEntryReadLength = 1;
       }
    }
+
+#endif /* GEN_GEN */
 }
 
 static void
-blorp_emit_wm_config(struct brw_context *brw,
+blorp_emit_ps_config(struct brw_context *brw,
                      const struct brw_blorp_params *params)
 {
    const struct brw_blorp_prog_data *prog_data = params->wm_prog_data;
+
+#if GEN_GEN >= 7
+
+   blorp_emit(brw, GENX(3DSTATE_WM), wm) {
+      switch (params->hiz_op) {
+      case GEN6_HIZ_OP_DEPTH_CLEAR:
+         wm.DepthBufferClear = true;
+         break;
+      case GEN6_HIZ_OP_DEPTH_RESOLVE:
+         wm.DepthBufferResolveEnable = true;
+         break;
+      case GEN6_HIZ_OP_HIZ_RESOLVE:
+         wm.HierarchicalDepthBufferResolveEnable = true;
+         break;
+      case GEN6_HIZ_OP_NONE:
+         break;
+      default:
+         unreachable("not reached");
+      }
+
+      if (prog_data)
+         wm.ThreadDispatchEnable = true;
+
+      if (params->src.bo)
+         wm.PixelShaderKillPixel = true;
+
+      if (params->dst.surf.samples > 1) {
+         wm.MultisampleRasterizationMode = MSRASTMODE_ON_PATTERN;
+         wm.MultisampleDispatchMode =
+            (prog_data && prog_data->persample_msaa_dispatch) ?
+            MSDISPMODE_PERSAMPLE : MSDISPMODE_PERPIXEL;
+      } else {
+         wm.MultisampleRasterizationMode = MSRASTMODE_OFF_PIXEL;
+         wm.MultisampleDispatchMode = MSDISPMODE_PERSAMPLE;
+      }
+   }
+
+   blorp_emit(brw, GENX(3DSTATE_PS), ps) {
+      ps.MaximumNumberofThreads = brw->max_wm_threads - 1;
+
+#if GEN_IS_HASWELL
+      ps.SampleMask = 1;
+#endif
+
+      if (prog_data) {
+         ps.DispatchGRFStartRegisterforConstantSetupData0 =
+            prog_data->first_curbe_grf_0;
+         ps.DispatchGRFStartRegisterforConstantSetupData2 =
+            prog_data->first_curbe_grf_2;
+
+         ps.KernelStartPointer0 = params->wm_prog_kernel;
+         ps.KernelStartPointer2 =
+            params->wm_prog_kernel + prog_data->ksp_offset_2;
+
+         ps._8PixelDispatchEnable = prog_data->dispatch_8;
+         ps._16PixelDispatchEnable = prog_data->dispatch_16;
+
+         ps.AttributeEnable = prog_data->num_varying_inputs > 0;
+      } else {
+         /* Gen7 hardware gets angry if we don't enable at least one dispatch
+          * mode, so just enable 16-pixel dispatch if we don't have a program.
+          */
+         ps._16PixelDispatchEnable = true;
+      }
+
+      if (params->src.bo)
+         ps.SamplerCount = 1; /* Up to 4 samplers */
+
+      switch (params->fast_clear_op) {
+      case (1 << 6): /* GEN7_PS_RENDER_TARGET_RESOLVE_ENABLE */
+         ps.RenderTargetResolveEnable = true;
+         break;
+      case (1 << 8): /* GEN7_PS_RENDER_TARGET_FAST_CLEAR_ENABLE */
+         ps.RenderTargetFastClearEnable = true;
+         break;
+      }
+   }
+
+#else /* GEN_GEN <= 6 */
 
    blorp_emit(brw, GENX(3DSTATE_WM), wm) {
       wm.MaximumNumberofThreads = brw->max_wm_threads - 1;
@@ -388,6 +566,8 @@ blorp_emit_wm_config(struct brw_context *brw,
          wm.MultisampleDispatchMode = MSDISPMODE_PERSAMPLE;
       }
    }
+
+#endif /* GEN_GEN */
 }
 
 
@@ -396,6 +576,12 @@ blorp_emit_depth_stencil_config(struct brw_context *brw,
                                 const struct brw_blorp_params *params)
 {
    brw_emit_depth_stall_flushes(brw);
+
+#if GEN_GEN >= 7
+   const uint32_t mocs = 1; /* GEN7_MOCS_L3 */
+#else
+   const uint32_t mocs = 0;
+#endif
 
    blorp_emit(brw, GENX(3DSTATE_DEPTH_BUFFER), db) {
       switch (params->depth.surf.dim) {
@@ -412,12 +598,18 @@ blorp_emit_depth_stencil_config(struct brw_context *brw,
 
       db.SurfaceFormat = params->depth_format;
 
+#if GEN_GEN >= 7
+      db.DepthWriteEnable = true;
+#endif
+
+#if GEN_GEN <= 6
       db.TiledSurface = true;
       db.TileWalk = TILEWALK_YMAJOR;
       db.MIPMapLayoutMode = MIPLAYOUT_BELOW;
+      db.SeparateStencilBufferEnable = true;
+#endif
 
       db.HierarchicalDepthBufferEnable = true;
-      db.SeparateStencilBufferEnable = true;
 
       db.Width = params->depth.surf.logical_level0_px.width - 1;
       db.Height = params->depth.surf.logical_level0_px.height - 1;
@@ -435,6 +627,7 @@ blorp_emit_depth_stencil_config(struct brw_context *brw,
          .write_domain = I915_GEM_DOMAIN_RENDER,
          .offset = params->depth.offset,
       };
+      db.DepthBufferMOCS = mocs;
    }
 
    blorp_emit(brw, GENX(3DSTATE_HIER_DEPTH_BUFFER), hiz) {
@@ -445,6 +638,7 @@ blorp_emit_depth_stencil_config(struct brw_context *brw,
          .write_domain = I915_GEM_DOMAIN_RENDER,
          .offset = params->depth.aux_offset,
       };
+      hiz.HierarchicalDepthBufferMOCS = mocs;
    }
 
    blorp_emit(brw, GENX(3DSTATE_STENCIL_BUFFER), sb);
@@ -473,6 +667,12 @@ blorp_emit_blend_state(struct brw_context *brw,
                                  GENX(BLEND_STATE_length) * 4, 64, &offset);
    GENX(BLEND_STATE_pack)(NULL, state, &blend);
 
+#if GEN_GEN >= 7
+   blorp_emit(brw, GENX(3DSTATE_BLEND_STATE_POINTERS), sp) {
+      sp.BlendStatePointer = offset;
+   }
+#endif
+
    return offset;
 }
 
@@ -484,6 +684,12 @@ blorp_emit_color_calc_state(struct brw_context *brw,
    void *state = brw_state_batch(brw, AUB_TRACE_CC_STATE,
                                  GENX(COLOR_CALC_STATE_length) * 4, 64, &offset);
    memset(state, 0, GENX(COLOR_CALC_STATE_length) * 4);
+
+#if GEN_GEN >= 7
+   blorp_emit(brw, GENX(3DSTATE_CC_STATE_POINTERS), sp) {
+      sp.ColorCalcStatePointer = offset;
+   }
+#endif
 
    return offset;
 }
@@ -512,6 +718,12 @@ blorp_emit_depth_stencil_state(struct brw_context *brw,
                                  &offset);
    GENX(DEPTH_STENCIL_STATE_pack)(NULL, state, &ds);
 
+#if GEN_GEN >= 7
+   blorp_emit(brw, GENX(3DSTATE_DEPTH_STENCIL_STATE_POINTERS), sp) {
+      sp.PointertoDEPTH_STENCIL_STATE = offset;
+   }
+#endif
+
    return offset;
 }
 
@@ -535,10 +747,16 @@ blorp_emit_surface_states(struct brw_context *brw,
                                       I915_GEM_DOMAIN_SAMPLER, 0, false);
    }
 
+#if GEN_GEN >= 7
+   blorp_emit(brw, GENX(3DSTATE_BINDING_TABLE_POINTERS_PS), bt) {
+      bt.PointertoPSBindingTable = bind_offset;
+   }
+#else
    blorp_emit(brw, GENX(3DSTATE_BINDING_TABLE_POINTERS), bt) {
       bt.PSBindingTableChange = true;
       bt.PointertoPSBindingTable = bind_offset;
    }
+#endif
 }
 
 static void
@@ -569,12 +787,18 @@ blorp_emit_sampler_state(struct brw_context *brw,
                                  GENX(SAMPLER_STATE_length) * 4, 32, &offset);
    GENX(SAMPLER_STATE_pack)(NULL, state, &sampler);
 
+#if GEN_GEN >= 7
+   blorp_emit(brw, GENX(3DSTATE_SAMPLER_STATE_POINTERS_PS), ssp) {
+      ssp.PointertoPSSamplerState = offset;
+   }
+#else
    blorp_emit(brw, GENX(3DSTATE_SAMPLER_STATE_POINTERS), ssp) {
       ssp.VSSamplerStateChange = true;
       ssp.GSSamplerStateChange = true;
       ssp.PSSamplerStateChange = true;
       ssp.PointertoPSSamplerState = offset;
    }
+#endif
 }
 
 /* 3DSTATE_VIEWPORT_STATE_POINTERS */
@@ -594,10 +818,16 @@ blorp_emit_viewport_state(struct brw_context *brw,
          .MaximumDepth = 1.0,
       });
 
+#if GEN_GEN >= 7
+   blorp_emit(brw, GENX(3DSTATE_VIEWPORT_STATE_POINTERS_CC), vsp) {
+      vsp.CCViewportPointer = cc_vp_offset;
+   }
+#else
    blorp_emit(brw, GENX(3DSTATE_VIEWPORT_STATE_POINTERS), vsp) {
       vsp.CCViewportStateChange = true;
       vsp.PointertoCC_VIEWPORT = cc_vp_offset;
    }
+#endif
 }
 
 
@@ -618,17 +848,17 @@ genX(blorp_exec)(struct brw_context *brw,
    uint32_t color_calc_state_offset = 0;
    uint32_t depth_stencil_state_offset;
 
+#if GEN_GEN == 6
    /* Emit workaround flushes when we switch from drawing to blorping. */
    brw_emit_post_sync_nonzero_flush(brw);
+#endif
 
    brw_upload_state_base_address(brw);
 
    blorp_emit_vertex_buffers(brw, params);
    blorp_emit_vertex_elements(brw, params);
 
-   blorp_emit(brw, GENX(3DSTATE_URB), urb) {
-      urb.VSNumberofURBEntries = brw->urb.max_vs_entries;
-   }
+   emit_urb_config(brw, params);
 
    if (params->wm_prog_data) {
       blend_state_offset = blorp_emit_blend_state(brw, params);
@@ -636,6 +866,11 @@ genX(blorp_exec)(struct brw_context *brw,
    }
    depth_stencil_state_offset = blorp_emit_depth_stencil_state(brw, params);
 
+#if GEN_GEN <= 6
+   /* The dynamic state emit helpers emit their own STATE_POINTERS packets on
+    * gen7+.  However, on gen6 and earlier, they're all lumpped together in
+    * one CC_STATE_POINTERS packet so we have to emit that here.
+    */
    blorp_emit(brw, GENX(3DSTATE_CC_STATE_POINTERS), cc) {
       cc.BLEND_STATEChange = true;
       cc.COLOR_CALC_STATEChange = true;
@@ -644,10 +879,22 @@ genX(blorp_exec)(struct brw_context *brw,
       cc.PointertoCOLOR_CALC_STATE = color_calc_state_offset;
       cc.PointertoDEPTH_STENCIL_STATE = depth_stencil_state_offset;
    }
+#else
+   (void)blend_state_offset;
+   (void)color_calc_state_offset;
+   (void)depth_stencil_state_offset;
+#endif
 
    blorp_emit(brw, GENX(3DSTATE_CONSTANT_VS), vs);
+#if GEN_GEN >= 7
+   blorp_emit(brw, GENX(3DSTATE_CONSTANT_HS), hs);
+   blorp_emit(brw, GENX(3DSTATE_CONSTANT_DS), DS);
+#endif
    blorp_emit(brw, GENX(3DSTATE_CONSTANT_GS), gs);
    blorp_emit(brw, GENX(3DSTATE_CONSTANT_PS), ps);
+
+   if (brw->use_resource_streamer)
+      gen7_disable_hw_binding_tables(brw);
 
    if (params->wm_prog_data)
       blorp_emit_surface_states(brw, params);
@@ -662,6 +909,12 @@ genX(blorp_exec)(struct brw_context *brw,
    }
 
    blorp_emit(brw, GENX(3DSTATE_VS), vs);
+#if GEN_GEN >= 7
+   blorp_emit(brw, GENX(3DSTATE_HS), hs);
+   blorp_emit(brw, GENX(3DSTATE_TE), te);
+   blorp_emit(brw, GENX(3DSTATE_DS), DS);
+   blorp_emit(brw, GENX(3DSTATE_STREAMOUT), so);
+#endif
    blorp_emit(brw, GENX(3DSTATE_GS), gs);
 
    blorp_emit(brw, GENX(3DSTATE_CLIP), clip) {
@@ -669,7 +922,7 @@ genX(blorp_exec)(struct brw_context *brw,
    }
 
    blorp_emit_sf_config(brw, params);
-   blorp_emit_wm_config(brw, params);
+   blorp_emit_ps_config(brw, params);
 
    blorp_emit_viewport_state(brw, params);
 
