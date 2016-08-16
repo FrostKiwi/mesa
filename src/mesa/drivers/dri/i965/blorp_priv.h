@@ -179,7 +179,7 @@ struct brw_blorp_params
    unsigned num_draw_buffers;
    unsigned num_layers;
    uint32_t wm_prog_kernel;
-   struct brw_blorp_prog_data *wm_prog_data;
+   const struct brw_blorp_prog_data *wm_prog_data;
 };
 
 void
@@ -295,6 +295,27 @@ struct brw_blorp_blit_prog_key
  */
 
 void brw_blorp_init_wm_prog_key(struct brw_wm_prog_key *wm_key);
+
+enum blorp_shader_type {
+   BLORP_SHADER_TYPE_SLOW_CLEAR,
+   BLORP_SHADER_TYPE_REPCLEAR,
+   BLORP_SHADER_TYPE_BLIT,
+};
+
+bool
+blorp_find_shader(struct blorp_context *blorp,
+                  enum blorp_shader_type shader_type,
+                  const struct brw_blorp_blit_prog_key *blit_key,
+                  uint32_t *kernel_out,
+                  const struct brw_blorp_prog_data **prog_data_out);
+void
+blorp_upload_shader(struct blorp_context *blorp,
+                    enum blorp_shader_type shader_type,
+                    const struct brw_blorp_blit_prog_key *blit_key,
+                    const void *data, uint32_t size,
+                    const struct brw_blorp_prog_data *prog_data_in,
+                    uint32_t *kernel_out,
+                    const struct brw_blorp_prog_data **prog_data_out);
 
 const unsigned *
 brw_blorp_compile_nir_shader(struct brw_context *brw, struct nir_shader *nir,

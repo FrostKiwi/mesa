@@ -35,30 +35,21 @@
 #include "brw_meta_util.h"
 #include "brw_context.h"
 #include "brw_eu.h"
-#include "brw_state.h"
 
 #include "nir_builder.h"
 
 #define FILE_DEBUG_FLAG DEBUG_BLORP
-
-struct brw_blorp_const_color_prog_key
-{
-   bool use_simd16_replicated_data;
-   bool pad[3];
-};
 
 static void
 brw_blorp_params_get_clear_kernel(struct brw_context *brw,
                                   struct brw_blorp_params *params,
                                   bool use_replicated_data)
 {
-   struct brw_blorp_const_color_prog_key blorp_key;
-   memset(&blorp_key, 0, sizeof(blorp_key));
-   blorp_key.use_simd16_replicated_data = use_replicated_data;
+   const enum blorp_shader_type shader_type = use_replicated_data ?
+      BLORP_SHADER_TYPE_REPCLEAR : BLORP_SHADER_TYPE_SLOW_CLEAR;
 
-   if (brw_search_cache(&brw->cache, BRW_CACHE_BLORP_PROG,
-                        &blorp_key, sizeof(blorp_key),
-                        &params->wm_prog_kernel, &params->wm_prog_data))
+   if (blorp_find_shader(&brw->blorp, shader_type, NULL,
+                         &params->wm_prog_kernel, &params->wm_prog_data))
       return;
 
    void *mem_ctx = ralloc_context(NULL);
@@ -88,11 +79,9 @@ brw_blorp_params_get_clear_kernel(struct brw_context *brw,
       brw_blorp_compile_nir_shader(brw, b.shader, &wm_key, use_replicated_data,
                                    &prog_data, &program_size);
 
-   brw_upload_cache(&brw->cache, BRW_CACHE_BLORP_PROG,
-                    &blorp_key, sizeof(blorp_key),
-                    program, program_size,
-                    &prog_data, sizeof(prog_data),
-                    &params->wm_prog_kernel, &params->wm_prog_data);
+   blorp_upload_shader(&brw->blorp, shader_type, NULL,
+                       program, program_size, &prog_data,
+                       &params->wm_prog_kernel, &params->wm_prog_data);
 
    ralloc_free(mem_ctx);
 }

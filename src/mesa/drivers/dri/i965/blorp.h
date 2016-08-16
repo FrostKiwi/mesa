@@ -26,12 +26,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "c11/threads.h"
 #include "isl/isl.h"
 #include "intel_resolve_map.h" /* needed for enum gen6_hiz_op */
 #include "intel_bufmgr.h" /* needed for drm_intel_bo */
 
 struct brw_context;
 struct brw_wm_prog_key;
+struct hash_table;
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,6 +43,13 @@ struct blorp_context {
    void *driver_ctx;
 
    const struct isl_device *isl_dev;
+
+   void *ralloc_ctx;
+   mtx_t cache_mtx;
+   struct hash_table *shader_cache;
+
+   uint32_t (*upload_shader)(struct blorp_context *,
+                             const void *data, uint32_t size);
 };
 
 void blorp_init(struct blorp_context *blorp, void *driver_ctx,

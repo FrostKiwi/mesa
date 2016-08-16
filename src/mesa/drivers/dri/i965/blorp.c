@@ -30,17 +30,29 @@
 #include "brw_nir.h"
 #include "brw_state.h"
 
+static uint32_t blorp_hash_key(const void *void_key);
+static bool blorp_key_equal(const void *void_a, const void *void_b);
+
 void
 blorp_init(struct blorp_context *blorp, void *driver_ctx,
            struct isl_device *isl_dev)
 {
    blorp->driver_ctx = driver_ctx;
    blorp->isl_dev = isl_dev;
+
+   blorp->ralloc_ctx = ralloc_context(NULL);
+
+   mtx_init(&blorp->cache_mtx, mtx_plain);
+   blorp->shader_cache = _mesa_hash_table_create(blorp->ralloc_ctx,
+                                                 blorp_hash_key,
+                                                 blorp_key_equal);
 }
 
 void
 blorp_finish(struct blorp_context *blorp)
 {
+   mtx_destroy(&blorp->cache_mtx);
+   ralloc_free(blorp->ralloc_ctx);
    blorp->driver_ctx = NULL;
 }
 
@@ -145,6 +157,117 @@ brw_blorp_init_wm_prog_key(struct brw_wm_prog_key *wm_key)
    wm_key->nr_color_regions = 1;
    for (int i = 0; i < MAX_SAMPLERS; i++)
       wm_key->tex.swizzles[i] = SWIZZLE_XYZW;
+}
+
+struct blorp_shader_key {
+   enum blorp_shader_type shader_type;
+   struct brw_blorp_blit_prog_key blit_key;
+};
+
+struct blorp_shader_entry {
+   uint32_t kernel;
+   struct brw_blorp_prog_data prog_data;
+};
+
+static uint32_t
+blorp_hash_key(const void *void_key)
+{
+   const struct blorp_shader_key *key = void_key;
+
+   if (key->shader_type == BLORP_SHADER_TYPE_BLIT)
+      return _mesa_hash_data(&key->blit_key, sizeof(key->blit_key));
+   else
+      return key->shader_type;
+}
+
+static bool
+blorp_key_equal(const void *void_a, const void *void_b)
+{
+   const struct blorp_shader_key *a = void_a, *b = void_b;
+
+   if (a->shader_type != b->shader_type)
+      return false;
+
+   if (a->shader_type == BLORP_SHADER_TYPE_BLIT)
+      return memcmp(&a->blit_key, &b->blit_key, sizeof(b->blit_key)) == 0;
+
+   return true;
+}
+
+static bool
+blorp_find_shader_locked(struct blorp_context *blorp,
+                         enum blorp_shader_type shader_type,
+                         const struct brw_blorp_blit_prog_key *blit_key,
+                         uint32_t *kernel_out,
+                         const struct brw_blorp_prog_data **prog_data_out)
+{
+   struct blorp_shader_key key = {
+      .shader_type = shader_type,
+   };
+
+   if (shader_type == BLORP_SHADER_TYPE_BLIT)
+      key.blit_key = *blit_key;
+
+   struct hash_entry *entry = _mesa_hash_table_search(blorp->shader_cache, &key);
+   if (!entry)
+      return false;
+
+   const struct blorp_shader_entry *blorp_entry = entry->data;
+   *kernel_out = blorp_entry->kernel;
+   *prog_data_out = &blorp_entry->prog_data;
+
+   return true;
+}
+
+bool
+blorp_find_shader(struct blorp_context *blorp,
+                  enum blorp_shader_type shader_type,
+                  const struct brw_blorp_blit_prog_key *blit_key,
+                  uint32_t *kernel_out,
+                  const struct brw_blorp_prog_data **prog_data_out)
+{
+   mtx_lock(&blorp->cache_mtx);
+
+   bool found = blorp_find_shader_locked(blorp, shader_type, blit_key,
+                                         kernel_out, prog_data_out);
+
+   mtx_unlock(&blorp->cache_mtx);
+
+   return found;
+}
+
+void
+blorp_upload_shader(struct blorp_context *blorp,
+                    enum blorp_shader_type shader_type,
+                    const struct brw_blorp_blit_prog_key *blit_key,
+                    const void *data, uint32_t size,
+                    const struct brw_blorp_prog_data *prog_data_in,
+                    uint32_t *kernel_out,
+                    const struct brw_blorp_prog_data **prog_data_out)
+{
+   mtx_lock(&blorp->cache_mtx);
+
+   if (blorp_find_shader_locked(blorp, shader_type, blit_key,
+                                kernel_out, prog_data_out))
+      return;
+
+   struct blorp_shader_key *key =
+      rzalloc(blorp->ralloc_ctx, struct blorp_shader_key);
+   key->shader_type = shader_type;
+   if (shader_type == BLORP_SHADER_TYPE_BLIT)
+      key->blit_key = *blit_key;
+
+   struct blorp_shader_entry *entry =
+      rzalloc(blorp->ralloc_ctx, struct blorp_shader_entry);
+   entry->kernel = blorp->upload_shader(blorp, data, size);
+   entry->prog_data = *prog_data_in;
+
+   _mesa_hash_table_insert(blorp->shader_cache, key, entry);
+
+   mtx_unlock(&blorp->cache_mtx);
+
+   *kernel_out = entry->kernel;
+   *prog_data_out = &entry->prog_data;
 }
 
 static int

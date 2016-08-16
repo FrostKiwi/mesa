@@ -27,6 +27,7 @@
 #include "main/fbobject.h"
 #include "main/renderbuffer.h"
 #include "main/glformats.h"
+#include "util/u_atomic.h"
 
 #include "brw_blorp.h"
 #include "brw_context.h"
@@ -37,10 +38,31 @@
 
 #define FILE_DEBUG_FLAG DEBUG_BLORP
 
+static uint32_t
+brw_blorp_upload_shader(struct blorp_context *blorp,
+                        const void *data, uint32_t size)
+{
+   struct brw_context *brw = blorp->driver_ctx;
+   static unsigned shader_id = 0;
+
+   /* All we really need for a key is a way to make it unique */
+   const unsigned key = p_atomic_inc_return(&shader_id);
+
+   /* Use a prog data size of 0 since blorp will store prog_data itself */
+   void *prog_data;
+   uint32_t kernel;
+   brw_upload_cache(&brw->cache, BRW_CACHE_BLORP_PROG, &key, sizeof(key),
+                    data, size, NULL, 0, &kernel, &prog_data);
+
+   return kernel;
+}
+
 void
 brw_blorp_init(struct brw_context *brw)
 {
    blorp_init(&brw->blorp, brw, &brw->isl_dev);
+
+   brw->blorp.upload_shader = brw_blorp_upload_shader;
 }
 
 static void
