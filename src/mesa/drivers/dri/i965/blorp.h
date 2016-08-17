@@ -48,6 +48,12 @@ struct blorp_context {
    mtx_t cache_mtx;
    struct hash_table *shader_cache;
 
+   struct {
+      uint32_t tex;
+      uint32_t rb;
+      uint32_t vb;
+   } mocs;
+
    uint32_t (*upload_shader)(struct blorp_context *,
                              const void *data, uint32_t size);
 };
