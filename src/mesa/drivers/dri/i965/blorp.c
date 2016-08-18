@@ -345,31 +345,6 @@ brw_blorp_compile_nir_shader(struct brw_context *brw, struct nir_shader *nir,
 }
 
 void
-brw_blorp_exec(struct brw_context *brw, const struct brw_blorp_params *params)
-{
-   switch (brw->gen) {
-   case 6:
-      gen6_blorp_exec(brw, params);
-      break;
-   case 7:
-      if (brw->is_haswell)
-         gen75_blorp_exec(brw, params);
-      else
-         gen7_blorp_exec(brw, params);
-      break;
-   case 8:
-      gen8_blorp_exec(brw, params);
-      break;
-   case 9:
-      gen9_blorp_exec(brw, params);
-      break;
-   default:
-      /* BLORP is not supported before Gen6. */
-      unreachable("not reached");
-   }
-}
-
-void
 blorp_gen6_hiz_op(struct brw_context *brw, struct brw_blorp_surf *surf,
                   unsigned level, unsigned layer, enum gen6_hiz_op op)
 {
@@ -436,5 +411,5 @@ blorp_gen6_hiz_op(struct brw_context *brw, struct brw_blorp_surf *surf,
       unreachable("not reached");
    }
 
-   brw_blorp_exec(brw, &params);
+   brw->blorp.exec(&brw->blorp, brw, &params);
 }

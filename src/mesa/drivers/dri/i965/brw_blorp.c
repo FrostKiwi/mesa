@@ -58,6 +58,17 @@ brw_blorp_upload_shader(struct blorp_context *blorp,
    return kernel;
 }
 
+void gen6_blorp_exec(struct blorp_context *blorp, void *batch,
+                     const struct brw_blorp_params *params);
+void gen7_blorp_exec(struct blorp_context *blorp, void *batch,
+                     const struct brw_blorp_params *params);
+void gen75_blorp_exec(struct blorp_context *blorp, void *batch,
+                      const struct brw_blorp_params *params);
+void gen8_blorp_exec(struct blorp_context *blorp, void *batch,
+                     const struct brw_blorp_params *params);
+void gen9_blorp_exec(struct blorp_context *blorp, void *batch,
+                     const struct brw_blorp_params *params);
+
 void
 brw_blorp_init(struct brw_context *brw)
 {
@@ -68,21 +79,29 @@ brw_blorp_init(struct brw_context *brw)
       brw->blorp.mocs.tex = 0;
       brw->blorp.mocs.rb = 0;
       brw->blorp.mocs.vb = 0;
+      brw->blorp.exec = gen6_blorp_exec;
       break;
    case 7:
       brw->blorp.mocs.tex = GEN7_MOCS_L3;
       brw->blorp.mocs.rb = GEN7_MOCS_L3;
       brw->blorp.mocs.vb = GEN7_MOCS_L3;
+      if (brw->is_haswell) {
+         brw->blorp.exec = gen75_blorp_exec;
+      } else {
+         brw->blorp.exec = gen7_blorp_exec;
+      }
       break;
    case 8:
       brw->blorp.mocs.tex = BDW_MOCS_WB;
       brw->blorp.mocs.rb = BDW_MOCS_PTE;
       brw->blorp.mocs.vb = BDW_MOCS_WB;
+      brw->blorp.exec = gen8_blorp_exec;
       break;
    case 9:
       brw->blorp.mocs.tex = SKL_MOCS_WB;
       brw->blorp.mocs.rb = SKL_MOCS_PTE;
       brw->blorp.mocs.vb = SKL_MOCS_WB;
+      brw->blorp.exec = gen9_blorp_exec;
       break;
    default:
       unreachable("Invalid gen");

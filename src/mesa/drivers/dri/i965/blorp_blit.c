@@ -1647,5 +1647,5 @@ brw_blorp_blit(struct brw_context *brw,
          swizzle_to_scs(GET_SWZ(src_swizzle, i));
    }
 
-   brw_blorp_exec(brw, &params);
+   brw->blorp.exec(&brw->blorp, brw, &params);
 }

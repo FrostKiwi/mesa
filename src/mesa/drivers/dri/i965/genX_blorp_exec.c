@@ -166,10 +166,15 @@ blorp_emit_3dstate_multisample(struct blorp_context *blorp, void *batch,
 #endif
 }
 
+void genX(blorp_exec)(struct blorp_context *blorp, void *batch,
+                      const struct brw_blorp_params *params);
+
 void
-genX(blorp_exec)(struct brw_context *brw,
+genX(blorp_exec)(struct blorp_context *blorp, void *batch,
                  const struct brw_blorp_params *params)
 {
+   assert(blorp->driver_ctx == batch);
+   struct brw_context *brw = batch;
    struct gl_context *ctx = &brw->ctx;
    const uint32_t estimated_max_batch_usage = GEN_GEN >= 8 ? 1800 : 1500;
    bool check_aperture_failed_once = false;
@@ -208,7 +213,7 @@ retry:
 
    brw_emit_depth_stall_flushes(brw);
 
-   blorp_exec(&brw->blorp, brw, params);
+   blorp_exec(blorp, batch, params);
 
    /* Make sure we didn't wrap the batch unintentionally, and make sure we
     * reserved enough space that a wrap will never happen.

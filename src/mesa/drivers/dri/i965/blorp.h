@@ -39,6 +39,8 @@ struct hash_table;
 extern "C" {
 #endif
 
+struct brw_blorp_params;
+
 struct blorp_context {
    void *driver_ctx;
 
@@ -56,6 +58,8 @@ struct blorp_context {
 
    uint32_t (*upload_shader)(struct blorp_context *,
                              const void *data, uint32_t size);
+   void (*exec)(struct blorp_context *blorp, void *batch,
+                const struct brw_blorp_params *params);
 };
 
 void blorp_init(struct blorp_context *blorp, void *driver_ctx,

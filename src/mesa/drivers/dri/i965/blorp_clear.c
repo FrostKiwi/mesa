@@ -110,7 +110,7 @@ blorp_fast_clear(struct brw_context *brw, const struct brw_blorp_surf *surf,
    brw_blorp_surface_info_init(brw, &params.dst, surf, level, layer,
                                surf->surf->format, true);
 
-   brw_blorp_exec(brw, &params);
+   brw->blorp.exec(&brw->blorp, brw, &params);
 }
 
 
@@ -156,7 +156,7 @@ blorp_clear(struct brw_context *brw, const struct brw_blorp_surf *surf,
    brw_blorp_surface_info_init(brw, &params.dst, surf, level, layer,
                                format, true);
 
-   brw_blorp_exec(brw, &params);
+   brw->blorp.exec(&brw->blorp, brw, &params);
 }
 
 void
@@ -186,5 +186,5 @@ brw_blorp_ccs_resolve(struct brw_context *brw, struct brw_blorp_surf *surf,
 
    brw_blorp_params_get_clear_kernel(brw, &params, true);
 
-   brw_blorp_exec(brw, &params);
+   brw->blorp.exec(&brw->blorp, brw, &params);
 }
