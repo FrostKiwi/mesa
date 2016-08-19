@@ -46,6 +46,8 @@ struct blorp_context {
 
    const struct isl_device *isl_dev;
 
+   const struct brw_compiler *compiler;
+
    void *ralloc_ctx;
    mtx_t cache_mtx;
    struct hash_table *shader_cache;

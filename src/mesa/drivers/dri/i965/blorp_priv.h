@@ -295,7 +295,7 @@ blorp_upload_shader(struct blorp_context *blorp,
                     const struct brw_blorp_prog_data **prog_data_out);
 
 const unsigned *
-brw_blorp_compile_nir_shader(struct brw_context *brw, struct nir_shader *nir,
+brw_blorp_compile_nir_shader(struct blorp_context *blorp, struct nir_shader *nir,
                              const struct brw_wm_prog_key *wm_key,
                              bool use_repclear,
                              struct brw_blorp_prog_data *prog_data,
