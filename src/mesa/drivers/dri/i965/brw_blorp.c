@@ -339,7 +339,7 @@ brw_blorp_blit_miptrees(struct brw_context *brw,
    brw_blorp_surf_for_miptree(brw, &dst_surf, dst_mt, true,
                               &dst_level, &tmp_surfs[2]);
 
-   brw_blorp_blit(brw, &src_surf, src_level, src_layer,
+   brw_blorp_blit(&brw->blorp, brw, &src_surf, src_level, src_layer,
                   brw_blorp_to_isl_format(brw, src_format, false), src_swizzle,
                   &dst_surf, dst_level, dst_layer,
                   brw_blorp_to_isl_format(brw, dst_format, true),
@@ -735,7 +735,7 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
       DBG("%s (fast) to mt %p level %d layer %d\n", __FUNCTION__,
           irb->mt, irb->mt_level, irb->mt_layer);
 
-      blorp_fast_clear(brw, &surf, level, layer, x0, y0, x1, y1);
+      blorp_fast_clear(&brw->blorp, brw, &surf, level, layer, x0, y0, x1, y1);
 
       /* Now that the fast clear has occurred, put the buffer in
        * INTEL_FAST_CLEAR_STATE_CLEAR so that we won't waste time doing
@@ -749,7 +749,7 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
       union isl_color_value clear_color;
       memcpy(clear_color.f32, ctx->Color.ClearColor.f, sizeof(float) * 4);
 
-      blorp_clear(brw, &surf, level, layer, x0, y0, x1, y1,
+      blorp_clear(&brw->blorp, brw, &surf, level, layer, x0, y0, x1, y1,
                   (enum isl_format)brw->render_target_format[format],
                   clear_color, color_write_disable);
 
@@ -826,7 +826,8 @@ brw_blorp_resolve_color(struct brw_context *brw, struct intel_mipmap_tree *mt)
    unsigned level = 0;
    brw_blorp_surf_for_miptree(brw, &surf, mt, true, &level, isl_tmp);
 
-   brw_blorp_ccs_resolve(brw, &surf, brw_blorp_to_isl_format(brw, format, true));
+   brw_blorp_ccs_resolve(&brw->blorp, brw, &surf,
+                         brw_blorp_to_isl_format(brw, format, true));
 
    mt->fast_clear_state = INTEL_FAST_CLEAR_STATE_RESOLVED;
 }
@@ -844,7 +845,7 @@ gen6_blorp_hiz_exec(struct brw_context *brw, struct intel_mipmap_tree *mt,
    struct brw_blorp_surf surf;
    brw_blorp_surf_for_miptree(brw, &surf, mt, true, &level, isl_tmp);
 
-   blorp_gen6_hiz_op(brw, &surf, level, layer, op);
+   blorp_gen6_hiz_op(&brw->blorp, brw, &surf, level, layer, op);
 }
 
 /**

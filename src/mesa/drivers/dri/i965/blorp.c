@@ -57,7 +57,7 @@ blorp_finish(struct blorp_context *blorp)
 }
 
 void
-brw_blorp_surface_info_init(struct brw_context *brw,
+brw_blorp_surface_info_init(struct blorp_context *blorp,
                             struct brw_blorp_surface_info *info,
                             const struct brw_blorp_surf *surf,
                             unsigned int level, unsigned int layer,
@@ -89,7 +89,7 @@ brw_blorp_surface_info_init(struct brw_context *brw,
    } else if (surf->surf->usage & ISL_SURF_USAGE_STENCIL_BIT) {
       assert(surf->surf->format == ISL_FORMAT_R8_UINT);
       /* Prior to Broadwell, we can't render to R8_UINT */
-      if (brw->gen < 8)
+      if (blorp->isl_dev->info->gen < 8)
          format = ISL_FORMAT_R8_UNORM;
    }
 
@@ -346,15 +346,16 @@ brw_blorp_compile_nir_shader(struct blorp_context *blorp, struct nir_shader *nir
 }
 
 void
-blorp_gen6_hiz_op(struct brw_context *brw, struct brw_blorp_surf *surf,
-                  unsigned level, unsigned layer, enum gen6_hiz_op op)
+blorp_gen6_hiz_op(struct blorp_context *blorp, void *batch,
+                  struct brw_blorp_surf *surf, unsigned level, unsigned layer,
+                  enum gen6_hiz_op op)
 {
    struct brw_blorp_params params;
    brw_blorp_params_init(&params);
 
    params.hiz_op = op;
 
-   brw_blorp_surface_info_init(brw, &params.depth, surf, level, layer,
+   brw_blorp_surface_info_init(blorp, &params.depth, surf, level, layer,
                                surf->surf->format, true);
 
    /* Align the rectangle primitive to 8x4 pixels.
@@ -412,5 +413,5 @@ blorp_gen6_hiz_op(struct brw_context *brw, struct brw_blorp_surf *surf,
       unreachable("not reached");
    }
 
-   brw->blorp.exec(&brw->blorp, brw, &params);
+   blorp->exec(blorp, batch, &params);
 }
