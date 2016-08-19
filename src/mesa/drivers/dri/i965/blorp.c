@@ -142,7 +142,6 @@ void
 brw_blorp_params_init(struct brw_blorp_params *params)
 {
    memset(params, 0, sizeof(*params));
-   params->hiz_op = GEN6_HIZ_OP_NONE;
    params->num_draw_buffers = 1;
    params->num_layers = 1;
 }
@@ -347,7 +346,7 @@ brw_blorp_compile_nir_shader(struct blorp_context *blorp, struct nir_shader *nir
 void
 blorp_gen6_hiz_op(struct blorp_context *blorp, void *batch,
                   struct brw_blorp_surf *surf, unsigned level, unsigned layer,
-                  enum gen6_hiz_op op)
+                  enum blorp_hiz_op op)
 {
    struct brw_blorp_params params;
    brw_blorp_params_init(&params);
