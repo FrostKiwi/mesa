@@ -31,9 +31,9 @@
 #define FILE_DEBUG_FLAG DEBUG_BLORP
 
 static void
-brw_blorp_params_get_clear_kernel(struct blorp_context *blorp,
-                                  struct brw_blorp_params *params,
-                                  bool use_replicated_data)
+blorp_params_get_clear_kernel(struct blorp_context *blorp,
+                              struct blorp_params *params,
+                              bool use_replicated_data)
 {
    const enum blorp_shader_type shader_type = use_replicated_data ?
       BLORP_SHADER_TYPE_REPCLEAR : BLORP_SHADER_TYPE_SLOW_CLEAR;
@@ -200,12 +200,12 @@ get_fast_clear_rect(const struct isl_device *dev,
 
 void
 blorp_fast_clear(struct blorp_context *blorp, void *batch,
-                 const struct brw_blorp_surf *surf,
+                 const struct blorp_surf *surf,
                  uint32_t level, uint32_t layer,
                  uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
 {
-   struct brw_blorp_params params;
-   brw_blorp_params_init(&params);
+   struct blorp_params params;
+   blorp_params_init(&params);
 
    params.x0 = x0;
    params.y0 = y0;
@@ -218,7 +218,7 @@ blorp_fast_clear(struct blorp_context *blorp, void *batch,
    get_fast_clear_rect(blorp->isl_dev, surf->aux_surf,
                        &params.x0, &params.y0, &params.x1, &params.y1);
 
-   brw_blorp_params_get_clear_kernel(blorp, &params, true);
+   blorp_params_get_clear_kernel(blorp, &params, true);
 
    brw_blorp_surface_info_init(blorp, &params.dst, surf, level, layer,
                                surf->surf->format, true);
@@ -229,14 +229,14 @@ blorp_fast_clear(struct blorp_context *blorp, void *batch,
 
 void
 blorp_clear(struct blorp_context *blorp, void *batch,
-            const struct brw_blorp_surf *surf,
+            const struct blorp_surf *surf,
             uint32_t level, uint32_t layer,
             uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1,
             enum isl_format format, union isl_color_value clear_color,
             bool color_write_disable[4])
 {
-   struct brw_blorp_params params;
-   brw_blorp_params_init(&params);
+   struct blorp_params params;
+   blorp_params_init(&params);
 
    params.x0 = x0;
    params.y0 = y0;
@@ -265,7 +265,7 @@ blorp_clear(struct blorp_context *blorp, void *batch,
          use_simd16_replicated_data = false;
    }
 
-   brw_blorp_params_get_clear_kernel(blorp, &params, use_simd16_replicated_data);
+   blorp_params_get_clear_kernel(blorp, &params, use_simd16_replicated_data);
 
    brw_blorp_surface_info_init(blorp, &params.dst, surf, level, layer,
                                format, true);
@@ -274,11 +274,11 @@ blorp_clear(struct blorp_context *blorp, void *batch,
 }
 
 void
-brw_blorp_ccs_resolve(struct blorp_context *blorp, void *batch,
-                      struct brw_blorp_surf *surf, enum isl_format format)
+blorp_ccs_resolve(struct blorp_context *blorp, void *batch,
+                  struct blorp_surf *surf, enum isl_format format)
 {
-   struct brw_blorp_params params;
-   brw_blorp_params_init(&params);
+   struct blorp_params params;
+   blorp_params_init(&params);
 
    brw_blorp_surface_info_init(blorp, &params.dst, surf,
                                0 /* level */, 0 /* layer */, format, true);
@@ -329,7 +329,7 @@ brw_blorp_ccs_resolve(struct blorp_context *blorp, void *batch,
     * color" message.
     */
 
-   brw_blorp_params_get_clear_kernel(blorp, &params, true);
+   blorp_params_get_clear_kernel(blorp, &params, true);
 
    blorp->exec(blorp, batch, &params);
 }

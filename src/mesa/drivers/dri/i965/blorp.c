@@ -56,7 +56,7 @@ blorp_finish(struct blorp_context *blorp)
 void
 brw_blorp_surface_info_init(struct blorp_context *blorp,
                             struct brw_blorp_surface_info *info,
-                            const struct brw_blorp_surf *surf,
+                            const struct blorp_surf *surf,
                             unsigned int level, unsigned int layer,
                             enum isl_format format, bool is_render_target)
 {
@@ -136,7 +136,7 @@ brw_blorp_surface_info_init(struct blorp_context *blorp,
 
 
 void
-brw_blorp_params_init(struct brw_blorp_params *params)
+blorp_params_init(struct blorp_params *params)
 {
    memset(params, 0, sizeof(*params));
    params->num_draw_buffers = 1;
@@ -342,11 +342,11 @@ brw_blorp_compile_nir_shader(struct blorp_context *blorp, struct nir_shader *nir
 
 void
 blorp_gen6_hiz_op(struct blorp_context *blorp, void *batch,
-                  struct brw_blorp_surf *surf, unsigned level, unsigned layer,
+                  struct blorp_surf *surf, unsigned level, unsigned layer,
                   enum blorp_hiz_op op)
 {
-   struct brw_blorp_params params;
-   brw_blorp_params_init(&params);
+   struct blorp_params params;
+   blorp_params_init(&params);
 
    params.hiz_op = op;
 
