@@ -22,13 +22,10 @@
  */
 
 #include <errno.h>
-#include "intel_batchbuffer.h"
-#include "intel_fbo.h"
 
 #include "blorp_priv.h"
 #include "brw_compiler.h"
 #include "brw_nir.h"
-#include "brw_state.h"
 
 static uint32_t blorp_hash_key(const void *void_key);
 static bool blorp_key_equal(const void *void_a, const void *void_b);
