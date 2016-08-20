@@ -1478,9 +1478,6 @@ struct anv_pipeline {
 
    const struct brw_stage_prog_data *           prog_data[MESA_SHADER_STAGES];
    struct {
-      uint32_t                                  start[MESA_SHADER_GEOMETRY + 1];
-      uint32_t                                  size[MESA_SHADER_GEOMETRY + 1];
-      uint32_t                                  entries[MESA_SHADER_GEOMETRY + 1];
       const struct gen_l3_config *              l3_config;
       uint32_t                                  total_size;
    } urb;
