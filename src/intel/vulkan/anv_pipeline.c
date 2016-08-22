@@ -222,7 +222,7 @@ static const uint32_t vk_to_gen_primitive_type[] = {
 };
 
 static void
-populate_sampler_prog_key(const struct brw_device_info *devinfo,
+populate_sampler_prog_key(const struct gen_device_info *devinfo,
                           struct brw_sampler_prog_key_data *key)
 {
    /* XXX: Handle texture swizzle on HSW- */
@@ -233,7 +233,7 @@ populate_sampler_prog_key(const struct brw_device_info *devinfo,
 }
 
 static void
-populate_vs_prog_key(const struct brw_device_info *devinfo,
+populate_vs_prog_key(const struct gen_device_info *devinfo,
                      struct brw_vs_prog_key *key)
 {
    memset(key, 0, sizeof(*key));
@@ -246,7 +246,7 @@ populate_vs_prog_key(const struct brw_device_info *devinfo,
 }
 
 static void
-populate_gs_prog_key(const struct brw_device_info *devinfo,
+populate_gs_prog_key(const struct gen_device_info *devinfo,
                      struct brw_gs_prog_key *key)
 {
    memset(key, 0, sizeof(*key));
@@ -255,7 +255,7 @@ populate_gs_prog_key(const struct brw_device_info *devinfo,
 }
 
 static void
-populate_wm_prog_key(const struct brw_device_info *devinfo,
+populate_wm_prog_key(const struct gen_device_info *devinfo,
                      const VkGraphicsPipelineCreateInfo *info,
                      const struct anv_graphics_pipeline_create_info *extra,
                      struct brw_wm_prog_key *key)
@@ -297,7 +297,7 @@ populate_wm_prog_key(const struct brw_device_info *devinfo,
 }
 
 static void
-populate_cs_prog_key(const struct brw_device_info *devinfo,
+populate_cs_prog_key(const struct gen_device_info *devinfo,
                      struct brw_cs_prog_key *key)
 {
    memset(key, 0, sizeof(*key));
@@ -778,7 +778,7 @@ anv_pipeline_compile_cs(struct anv_pipeline *pipeline,
 void
 anv_setup_pipeline_l3_config(struct anv_pipeline *pipeline)
 {
-   const struct brw_device_info *devinfo = &pipeline->device->info;
+   const struct gen_device_info *devinfo = &pipeline->device->info;
    switch (devinfo->gen) {
    case 7:
       if (devinfo->is_haswell)
@@ -800,7 +800,7 @@ anv_setup_pipeline_l3_config(struct anv_pipeline *pipeline)
 void
 anv_compute_urb_partition(struct anv_pipeline *pipeline)
 {
-   const struct brw_device_info *devinfo = &pipeline->device->info;
+   const struct gen_device_info *devinfo = &pipeline->device->info;
 
    bool vs_present = pipeline->active_stages & VK_SHADER_STAGE_VERTEX_BIT;
    unsigned vs_size = vs_present ?
