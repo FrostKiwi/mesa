@@ -86,7 +86,10 @@ genX(graphics_pipeline_create)(
    emit_cb_state(pipeline, pCreateInfo->pColorBlendState,
                            pCreateInfo->pMultisampleState);
 
-   emit_urb_setup(pipeline);
+   genX(emit_urb_setup)(pipeline->device, &pipeline->batch,
+                        pipeline->active_stages,
+                        get_vs_prog_data(pipeline), get_gs_prog_data(pipeline),
+                        pipeline->urb.l3_config);
 
    emit_3dstate_clip(pipeline, pCreateInfo->pViewportState,
                      pCreateInfo->pRasterizationState, extra);
