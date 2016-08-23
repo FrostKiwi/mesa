@@ -56,6 +56,20 @@ blorp_finish(struct blorp_context *blorp)
 }
 
 void
+blorp_batch_init(struct blorp_context *blorp,
+                 struct blorp_batch *batch, void *driver_batch)
+{
+   batch->blorp = blorp;
+   batch->driver_batch = driver_batch;
+}
+
+void
+blorp_batch_finish(struct blorp_batch *batch)
+{
+   batch->blorp = NULL;
+}
+
+void
 brw_blorp_surface_info_init(struct blorp_context *blorp,
                             struct brw_blorp_surface_info *info,
                             const struct blorp_surf *surf,
@@ -343,7 +357,7 @@ brw_blorp_compile_nir_shader(struct blorp_context *blorp, struct nir_shader *nir
 }
 
 void
-blorp_gen6_hiz_op(struct blorp_context *blorp, void *batch,
+blorp_gen6_hiz_op(struct blorp_batch *batch,
                   struct blorp_surf *surf, unsigned level, unsigned layer,
                   enum blorp_hiz_op op)
 {
@@ -352,7 +366,7 @@ blorp_gen6_hiz_op(struct blorp_context *blorp, void *batch,
 
    params.hiz_op = op;
 
-   brw_blorp_surface_info_init(blorp, &params.depth, surf, level, layer,
+   brw_blorp_surface_info_init(batch->blorp, &params.depth, surf, level, layer,
                                surf->surf->format, true);
 
    /* Align the rectangle primitive to 8x4 pixels.
@@ -397,5 +411,5 @@ blorp_gen6_hiz_op(struct blorp_context *blorp, void *batch,
    params.dst.surf.logical_level0_px = params.depth.surf.logical_level0_px;
    params.depth_format = isl_format_get_depth_format(surf->surf->format, false);
 
-   blorp->exec(blorp, batch, &params);
+   batch->blorp->exec(batch, &params);
 }

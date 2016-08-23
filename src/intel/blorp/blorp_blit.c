@@ -1379,7 +1379,7 @@ surf_retile_w_to_y(const struct isl_device *isl_dev,
 }
 
 void
-blorp_blit(struct blorp_context *blorp, void *batch,
+blorp_blit(struct blorp_batch *batch,
            const struct blorp_surf *src_surf,
            unsigned src_level, unsigned src_layer,
            enum isl_format src_format, int src_swizzle,
@@ -1392,14 +1392,14 @@ blorp_blit(struct blorp_context *blorp, void *batch,
            float dst_x1, float dst_y1,
            GLenum filter, bool mirror_x, bool mirror_y)
 {
-   const struct gen_device_info *devinfo = blorp->isl_dev->info;
+   const struct gen_device_info *devinfo = batch->blorp->isl_dev->info;
 
    struct blorp_params params;
    blorp_params_init(&params);
 
-   brw_blorp_surface_info_init(blorp, &params.src, src_surf, src_level,
+   brw_blorp_surface_info_init(batch->blorp, &params.src, src_surf, src_level,
                                src_layer, src_format, false);
-   brw_blorp_surface_info_init(blorp, &params.dst, dst_surf, dst_level,
+   brw_blorp_surface_info_init(batch->blorp, &params.dst, dst_surf, dst_level,
                                dst_layer, dst_format, true);
 
    struct brw_blorp_blit_prog_key wm_prog_key;
@@ -1527,7 +1527,7 @@ blorp_blit(struct blorp_context *blorp, void *batch,
          unreachable("Unrecognized sample count in brw_blorp_blit_params ctor");
       }
 
-      surf_fake_interleaved_msaa(blorp->isl_dev, &params.dst);
+      surf_fake_interleaved_msaa(batch->blorp->isl_dev, &params.dst);
 
       wm_prog_key.use_kill = true;
    }
@@ -1586,7 +1586,7 @@ blorp_blit(struct blorp_context *blorp, void *batch,
       params.y1 = ALIGN(params.y1, y_align) / 2;
 
       /* Retile the surface to Y-tiled */
-      surf_retile_w_to_y(blorp->isl_dev, &params.dst);
+      surf_retile_w_to_y(batch->blorp->isl_dev, &params.dst);
 
       wm_prog_key.dst_tiled_w = true;
       wm_prog_key.use_kill = true;
@@ -1611,7 +1611,7 @@ blorp_blit(struct blorp_context *blorp, void *batch,
        *
        * TODO: what if this makes the texture size too large?
        */
-      surf_retile_w_to_y(blorp->isl_dev, &params.src);
+      surf_retile_w_to_y(batch->blorp->isl_dev, &params.src);
 
       wm_prog_key.src_tiled_w = true;
    }
@@ -1637,12 +1637,12 @@ blorp_blit(struct blorp_context *blorp, void *batch,
       wm_prog_key.persample_msaa_dispatch = true;
    }
 
-   brw_blorp_get_blit_kernel(blorp, &params, &wm_prog_key);
+   brw_blorp_get_blit_kernel(batch->blorp, &params, &wm_prog_key);
 
    for (unsigned i = 0; i < 4; i++) {
       params.src.view.channel_select[i] =
          swizzle_to_scs(GET_SWZ(src_swizzle, i));
    }
 
-   blorp->exec(blorp, batch, &params);
+   batch->blorp->exec(batch, &params);
 }

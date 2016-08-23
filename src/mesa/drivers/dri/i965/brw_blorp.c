@@ -58,15 +58,15 @@ brw_blorp_upload_shader(struct blorp_context *blorp,
    return kernel;
 }
 
-void gen6_blorp_exec(struct blorp_context *blorp, void *batch,
+void gen6_blorp_exec(struct blorp_batch *batch,
                      const struct blorp_params *params);
-void gen7_blorp_exec(struct blorp_context *blorp, void *batch,
+void gen7_blorp_exec(struct blorp_batch *batch,
                      const struct blorp_params *params);
-void gen75_blorp_exec(struct blorp_context *blorp, void *batch,
+void gen75_blorp_exec(struct blorp_batch *batch,
                       const struct blorp_params *params);
-void gen8_blorp_exec(struct blorp_context *blorp, void *batch,
+void gen8_blorp_exec(struct blorp_batch *batch,
                      const struct blorp_params *params);
-void gen9_blorp_exec(struct blorp_context *blorp, void *batch,
+void gen9_blorp_exec(struct blorp_batch *batch,
                      const struct blorp_params *params);
 
 void
@@ -339,13 +339,16 @@ brw_blorp_blit_miptrees(struct brw_context *brw,
    blorp_surf_for_miptree(brw, &dst_surf, dst_mt, true,
                           &dst_level, &tmp_surfs[2]);
 
-   blorp_blit(&brw->blorp, brw, &src_surf, src_level, src_layer,
+   struct blorp_batch batch;
+   blorp_batch_init(&brw->blorp, &batch, brw);
+   blorp_blit(&batch, &src_surf, src_level, src_layer,
               brw_blorp_to_isl_format(brw, src_format, false), src_swizzle,
               &dst_surf, dst_level, dst_layer,
               brw_blorp_to_isl_format(brw, dst_format, true),
               src_x0, src_y0, src_x1, src_y1,
               dst_x0, dst_y0, dst_x1, dst_y1,
               filter, mirror_x, mirror_y);
+   blorp_batch_finish(&batch);
 
    intel_miptree_slice_set_needs_hiz_resolve(dst_mt, dst_level, dst_layer);
 
@@ -735,7 +738,10 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
       DBG("%s (fast) to mt %p level %d layer %d\n", __FUNCTION__,
           irb->mt, irb->mt_level, irb->mt_layer);
 
-      blorp_fast_clear(&brw->blorp, brw, &surf, level, layer, x0, y0, x1, y1);
+      struct blorp_batch batch;
+      blorp_batch_init(&brw->blorp, &batch, brw);
+      blorp_fast_clear(&batch, &surf, level, layer, x0, y0, x1, y1);
+      blorp_batch_finish(&batch);
 
       /* Now that the fast clear has occurred, put the buffer in
        * INTEL_FAST_CLEAR_STATE_CLEAR so that we won't waste time doing
@@ -749,9 +755,12 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
       union isl_color_value clear_color;
       memcpy(clear_color.f32, ctx->Color.ClearColor.f, sizeof(float) * 4);
 
-      blorp_clear(&brw->blorp, brw, &surf, level, layer, x0, y0, x1, y1,
+      struct blorp_batch batch;
+      blorp_batch_init(&brw->blorp, &batch, brw);
+      blorp_clear(&batch, &surf, level, layer, x0, y0, x1, y1,
                   (enum isl_format)brw->render_target_format[format],
                   clear_color, color_write_disable);
+      blorp_batch_finish(&batch);
 
       if (intel_miptree_is_lossless_compressed(brw, irb->mt)) {
          /* Compressed buffers can be cleared also using normal rep-clear. In
@@ -826,8 +835,10 @@ brw_blorp_resolve_color(struct brw_context *brw, struct intel_mipmap_tree *mt)
    unsigned level = 0;
    blorp_surf_for_miptree(brw, &surf, mt, true, &level, isl_tmp);
 
-   blorp_ccs_resolve(&brw->blorp, brw, &surf,
-                     brw_blorp_to_isl_format(brw, format, true));
+   struct blorp_batch batch;
+   blorp_batch_init(&brw->blorp, &batch, brw);
+   blorp_ccs_resolve(&batch, &surf, brw_blorp_to_isl_format(brw, format, true));
+   blorp_batch_finish(&batch);
 
    mt->fast_clear_state = INTEL_FAST_CLEAR_STATE_RESOLVED;
 }
@@ -845,7 +856,10 @@ gen6_blorp_hiz_exec(struct brw_context *brw, struct intel_mipmap_tree *mt,
    struct blorp_surf surf;
    blorp_surf_for_miptree(brw, &surf, mt, true, &level, isl_tmp);
 
-   blorp_gen6_hiz_op(&brw->blorp, brw, &surf, level, layer, op);
+   struct blorp_batch batch;
+   blorp_batch_init(&brw->blorp, &batch, brw);
+   blorp_gen6_hiz_op(&batch, &surf, level, layer, op);
+   blorp_batch_finish(&batch);
 }
 
 /**

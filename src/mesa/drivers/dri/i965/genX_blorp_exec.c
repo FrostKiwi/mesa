@@ -32,10 +32,10 @@
 #include "blorp/blorp_genX_exec.h"
 
 static void *
-blorp_emit_dwords(struct blorp_context *blorp, void *batch, unsigned n)
+blorp_emit_dwords(struct blorp_batch *batch, unsigned n)
 {
-   assert(blorp->driver_ctx == batch);
-   struct brw_context *brw = batch;
+   assert(batch->blorp->driver_ctx == batch->driver_batch);
+   struct brw_context *brw = batch->driver_batch;
 
    intel_batchbuffer_begin(brw, n, RENDER_RING);
    uint32_t *map = brw->batch.map_next;
@@ -45,11 +45,11 @@ blorp_emit_dwords(struct blorp_context *blorp, void *batch, unsigned n)
 }
 
 static uint64_t
-blorp_emit_reloc(struct blorp_context *blorp, void *batch,
+blorp_emit_reloc(struct blorp_batch *batch,
                  void *location, struct blorp_address address, uint32_t delta)
 {
-   assert(blorp->driver_ctx == batch);
-   struct brw_context *brw = batch;
+   assert(batch->blorp->driver_ctx == batch->driver_batch);
+   struct brw_context *brw = batch->driver_batch;
 
    uint32_t offset = (char *)location - (char *)brw->batch.map;
    if (brw->gen >= 8) {
@@ -66,10 +66,11 @@ blorp_emit_reloc(struct blorp_context *blorp, void *batch,
 }
 
 static void
-blorp_surface_reloc(struct blorp_context *blorp, uint32_t ss_offset,
+blorp_surface_reloc(struct blorp_batch *batch, uint32_t ss_offset,
                     struct blorp_address address, uint32_t delta)
 {
-   struct brw_context *brw = blorp->driver_ctx;
+   assert(batch->blorp->driver_ctx == batch->driver_batch);
+   struct brw_context *brw = batch->driver_batch;
    drm_intel_bo *bo = address.buffer;
 
    drm_intel_bo_emit_reloc(brw->batch.bo, ss_offset,
@@ -86,23 +87,26 @@ blorp_surface_reloc(struct blorp_context *blorp, uint32_t ss_offset,
 }
 
 static void *
-blorp_alloc_dynamic_state(struct blorp_context *blorp,
+blorp_alloc_dynamic_state(struct blorp_batch *batch,
                           enum aub_state_struct_type type,
                           uint32_t size,
                           uint32_t alignment,
                           uint32_t *offset)
 {
-   struct brw_context *brw = blorp->driver_ctx;
+   assert(batch->blorp->driver_ctx == batch->driver_batch);
+   struct brw_context *brw = batch->driver_batch;
+
    return brw_state_batch(brw, type, size, alignment, offset);
 }
 
 static void
-blorp_alloc_binding_table(struct blorp_context *blorp, unsigned num_entries,
+blorp_alloc_binding_table(struct blorp_batch *batch, unsigned num_entries,
                           unsigned state_size, unsigned state_alignment,
                           uint32_t *bt_offset, uint32_t **bt_map,
                           void **surface_maps)
 {
-   struct brw_context *brw = blorp->driver_ctx;
+   assert(batch->blorp->driver_ctx == batch->driver_batch);
+   struct brw_context *brw = batch->driver_batch;
 
    *bt_map = brw_state_batch(brw, AUB_TRACE_BINDING_TABLE,
                              num_entries * sizeof(uint32_t), 32,
@@ -116,10 +120,11 @@ blorp_alloc_binding_table(struct blorp_context *blorp, unsigned num_entries,
 }
 
 static void *
-blorp_alloc_vertex_buffer(struct blorp_context *blorp, uint32_t size,
+blorp_alloc_vertex_buffer(struct blorp_batch *batch, uint32_t size,
                           struct blorp_address *addr)
 {
-   struct brw_context *brw = blorp->driver_ctx;
+   assert(batch->blorp->driver_ctx == batch->driver_batch);
+   struct brw_context *brw = batch->driver_batch;
 
    uint32_t offset;
    void *data = brw_state_batch(brw, AUB_TRACE_VERTEX_BUFFER,
@@ -136,11 +141,10 @@ blorp_alloc_vertex_buffer(struct blorp_context *blorp, uint32_t size,
 }
 
 static void
-blorp_emit_urb_config(struct blorp_context *blorp, void *batch,
-                      unsigned vs_entry_size)
+blorp_emit_urb_config(struct blorp_batch *batch, unsigned vs_entry_size)
 {
-   assert(blorp->driver_ctx == batch);
-   struct brw_context *brw = batch;
+   assert(batch->blorp->driver_ctx == batch->driver_batch);
+   struct brw_context *brw = batch->driver_batch;
 
 #if GEN_GEN >= 7
    if (!(brw->ctx.NewDriverState & (BRW_NEW_CONTEXT | BRW_NEW_URB_SIZE)) &&
@@ -156,26 +160,28 @@ blorp_emit_urb_config(struct blorp_context *blorp, void *batch,
 }
 
 static void
-blorp_emit_3dstate_multisample(struct blorp_context *blorp, void *batch,
-                               unsigned samples)
+blorp_emit_3dstate_multisample(struct blorp_batch *batch, unsigned samples)
 {
-   assert(blorp->driver_ctx == batch);
+   assert(batch->blorp->driver_ctx == batch->driver_batch);
+   struct brw_context *brw = batch->driver_batch;
+
 #if GEN_GEN >= 8
-   gen8_emit_3dstate_multisample(batch, samples);
+   gen8_emit_3dstate_multisample(brw, samples);
 #else
-   gen6_emit_3dstate_multisample(batch, samples);
+   gen6_emit_3dstate_multisample(brw, samples);
 #endif
 }
 
-void genX(blorp_exec)(struct blorp_context *blorp, void *batch,
+void genX(blorp_exec)(struct blorp_batch *batch,
                       const struct blorp_params *params);
 
 void
-genX(blorp_exec)(struct blorp_context *blorp, void *batch,
-                 const struct blorp_params *params)
+genX(blorp_exec)(struct blorp_batch *batch, const struct blorp_params *params)
 {
-   assert(blorp->driver_ctx == batch);
-   struct brw_context *brw = batch;
+   /* Both are set to our brw_context */
+   assert(batch->blorp->driver_ctx == batch->driver_batch);
+
+   struct brw_context *brw = batch->driver_batch;
    struct gl_context *ctx = &brw->ctx;
    const uint32_t estimated_max_batch_usage = GEN_GEN >= 8 ? 1800 : 1500;
    bool check_aperture_failed_once = false;
@@ -214,7 +220,7 @@ retry:
 
    brw_emit_depth_stall_flushes(brw);
 
-   blorp_exec(blorp, batch, params);
+   blorp_exec(batch, params);
 
    /* Make sure we didn't wrap the batch unintentionally, and make sure we
     * reserved enough space that a wrap will never happen.

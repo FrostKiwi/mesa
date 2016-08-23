@@ -37,6 +37,7 @@ struct hash_table;
 extern "C" {
 #endif
 
+struct blorp_batch;
 struct blorp_params;
 
 struct blorp_context {
@@ -58,13 +59,21 @@ struct blorp_context {
 
    uint32_t (*upload_shader)(struct blorp_context *,
                              const void *data, uint32_t size);
-   void (*exec)(struct blorp_context *blorp, void *batch,
-                const struct blorp_params *params);
+   void (*exec)(struct blorp_batch *batch, const struct blorp_params *params);
 };
 
 void blorp_init(struct blorp_context *blorp, void *driver_ctx,
                 struct isl_device *isl_dev);
 void blorp_finish(struct blorp_context *blorp);
+
+struct blorp_batch {
+   struct blorp_context *blorp;
+   void *driver_batch;
+};
+
+void blorp_batch_init(struct blorp_context *blorp, struct blorp_batch *batch,
+                      void *driver_batch);
+void blorp_batch_finish(struct blorp_batch *batch);
 
 struct blorp_address {
    void *buffer;
@@ -86,7 +95,7 @@ struct blorp_surf
 };
 
 void
-blorp_blit(struct blorp_context *blorp, void *batch,
+blorp_blit(struct blorp_batch *batch,
            const struct blorp_surf *src_surf,
            unsigned src_level, unsigned src_layer,
            enum isl_format src_format, int src_swizzle,
@@ -100,13 +109,13 @@ blorp_blit(struct blorp_context *blorp, void *batch,
            uint32_t filter, bool mirror_x, bool mirror_y);
 
 void
-blorp_fast_clear(struct blorp_context *blorp, void *batch,
+blorp_fast_clear(struct blorp_batch *batch,
                  const struct blorp_surf *surf,
                  uint32_t level, uint32_t layer,
                  uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1);
 
 void
-blorp_clear(struct blorp_context *blorp, void *batch,
+blorp_clear(struct blorp_batch *batch,
             const struct blorp_surf *surf,
             uint32_t level, uint32_t layer,
             uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1,
@@ -114,7 +123,7 @@ blorp_clear(struct blorp_context *blorp, void *batch,
             bool color_write_disable[4]);
 
 void
-blorp_ccs_resolve(struct blorp_context *blorp, void *batch,
+blorp_ccs_resolve(struct blorp_batch *batch,
                   struct blorp_surf *surf, enum isl_format format);
 
 /**
@@ -135,7 +144,7 @@ enum blorp_hiz_op {
 };
 
 void
-blorp_gen6_hiz_op(struct blorp_context *blorp, void *batch,
+blorp_gen6_hiz_op(struct blorp_batch *batch,
                   struct blorp_surf *surf, unsigned level, unsigned layer,
                   enum blorp_hiz_op op);
 

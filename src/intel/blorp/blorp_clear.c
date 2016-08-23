@@ -199,7 +199,7 @@ get_fast_clear_rect(const struct isl_device *dev,
 }
 
 void
-blorp_fast_clear(struct blorp_context *blorp, void *batch,
+blorp_fast_clear(struct blorp_batch *batch,
                  const struct blorp_surf *surf,
                  uint32_t level, uint32_t layer,
                  uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
@@ -215,20 +215,20 @@ blorp_fast_clear(struct blorp_context *blorp, void *batch,
    memset(&params.wm_inputs, 0xff, 4*sizeof(float));
    params.fast_clear_op = BLORP_FAST_CLEAR_OP_CLEAR;
 
-   get_fast_clear_rect(blorp->isl_dev, surf->aux_surf,
+   get_fast_clear_rect(batch->blorp->isl_dev, surf->aux_surf,
                        &params.x0, &params.y0, &params.x1, &params.y1);
 
-   blorp_params_get_clear_kernel(blorp, &params, true);
+   blorp_params_get_clear_kernel(batch->blorp, &params, true);
 
-   brw_blorp_surface_info_init(blorp, &params.dst, surf, level, layer,
+   brw_blorp_surface_info_init(batch->blorp, &params.dst, surf, level, layer,
                                surf->surf->format, true);
 
-   blorp->exec(blorp, batch, &params);
+   batch->blorp->exec(batch, &params);
 }
 
 
 void
-blorp_clear(struct blorp_context *blorp, void *batch,
+blorp_clear(struct blorp_batch *batch,
             const struct blorp_surf *surf,
             uint32_t level, uint32_t layer,
             uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1,
@@ -265,22 +265,23 @@ blorp_clear(struct blorp_context *blorp, void *batch,
          use_simd16_replicated_data = false;
    }
 
-   blorp_params_get_clear_kernel(blorp, &params, use_simd16_replicated_data);
+   blorp_params_get_clear_kernel(batch->blorp, &params,
+                                 use_simd16_replicated_data);
 
-   brw_blorp_surface_info_init(blorp, &params.dst, surf, level, layer,
+   brw_blorp_surface_info_init(batch->blorp, &params.dst, surf, level, layer,
                                format, true);
 
-   blorp->exec(blorp, batch, &params);
+   batch->blorp->exec(batch, &params);
 }
 
 void
-blorp_ccs_resolve(struct blorp_context *blorp, void *batch,
+blorp_ccs_resolve(struct blorp_batch *batch,
                   struct blorp_surf *surf, enum isl_format format)
 {
    struct blorp_params params;
    blorp_params_init(&params);
 
-   brw_blorp_surface_info_init(blorp, &params.dst, surf,
+   brw_blorp_surface_info_init(batch->blorp, &params.dst, surf,
                                0 /* level */, 0 /* layer */, format, true);
 
    /* From the Ivy Bridge PRM, Vol2 Part1 11.9 "Render Target Resolve":
@@ -297,10 +298,10 @@ blorp_ccs_resolve(struct blorp_context *blorp, void *batch,
    assert(aux_fmtl->txc == ISL_TXC_CCS);
 
    unsigned x_scaledown, y_scaledown;
-   if (ISL_DEV_GEN(blorp->isl_dev) >= 9) {
+   if (ISL_DEV_GEN(batch->blorp->isl_dev) >= 9) {
       x_scaledown = aux_fmtl->bw * 8;
       y_scaledown = aux_fmtl->bh * 8;
-   } else if (ISL_DEV_GEN(blorp->isl_dev) >= 8) {
+   } else if (ISL_DEV_GEN(batch->blorp->isl_dev) >= 8) {
       x_scaledown = aux_fmtl->bw * 8;
       y_scaledown = aux_fmtl->bh * 16;
    } else {
@@ -313,7 +314,7 @@ blorp_ccs_resolve(struct blorp_context *blorp, void *batch,
    params.x1 = ALIGN(params.x1, x_scaledown) / x_scaledown;
    params.y1 = ALIGN(params.y1, y_scaledown) / y_scaledown;
 
-   if (blorp->isl_dev->info->gen >= 9) {
+   if (batch->blorp->isl_dev->info->gen >= 9) {
       if (params.dst.aux_usage == ISL_AUX_USAGE_CCS_E)
          params.fast_clear_op = BLORP_FAST_CLEAR_OP_RESOLVE_FULL;
       else
@@ -329,7 +330,7 @@ blorp_ccs_resolve(struct blorp_context *blorp, void *batch,
     * color" message.
     */
 
-   blorp_params_get_clear_kernel(blorp, &params, true);
+   blorp_params_get_clear_kernel(batch->blorp, &params, true);
 
-   blorp->exec(blorp, batch, &params);
+   batch->blorp->exec(batch, &params);
 }
