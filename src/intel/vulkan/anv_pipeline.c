@@ -204,6 +204,12 @@ void anv_DestroyPipeline(
                          pAllocator ? pAllocator : &device->alloc);
    if (pipeline->blend_state.map)
       anv_state_pool_free(&device->dynamic_state_pool, pipeline->blend_state);
+
+   for (unsigned s = 0; s < MESA_SHADER_STAGES; s++) {
+      if (pipeline->shaders[s])
+         anv_shader_bin_unref(device, pipeline->shaders[s]);
+   }
+
    anv_free2(&device->alloc, pAllocator, pipeline);
 }
 
@@ -393,15 +399,34 @@ anv_fill_binding_table(struct brw_stage_prog_data *prog_data, unsigned bias)
    prog_data->binding_table.image_start = bias;
 }
 
+static struct anv_shader_bin *
+anv_pipeline_upload_kernel(struct anv_pipeline *pipeline,
+                           struct anv_pipeline_cache *cache,
+                           gl_shader_stage stage,
+                           const unsigned char *src_sha1,
+                           const void *kernel,
+                           size_t kernel_size,
+                           const struct brw_stage_prog_data *prog_data,
+                           const struct anv_pipeline_bind_map *bind_map)
+{
+   if (cache) {
+      return anv_pipeline_cache_upload_kernel(cache, stage, src_sha1,
+                                              kernel, kernel_size,
+                                              prog_data, bind_map);
+   } else {
+      return anv_shader_bin_create(pipeline->device, stage, src_sha1,
+                                   kernel, kernel_size, prog_data, bind_map);
+   }
+}
+
+
 static void
 anv_pipeline_add_compiled_stage(struct anv_pipeline *pipeline,
                                 gl_shader_stage stage,
-                                const struct brw_stage_prog_data *prog_data,
-                                struct anv_pipeline_bind_map *map)
+                                struct anv_shader_bin *shader)
 {
-   pipeline->prog_data[stage] = prog_data;
+   pipeline->shaders[stage] = shader;
    pipeline->active_stages |= mesa_to_vk_shader_stage(stage);
-   pipeline->bindings[stage] = *map;
 }
 
 static VkResult
@@ -414,21 +439,20 @@ anv_pipeline_compile_vs(struct anv_pipeline *pipeline,
 {
    const struct brw_compiler *compiler =
       pipeline->device->instance->physicalDevice.compiler;
-   const struct brw_stage_prog_data *stage_prog_data;
    struct anv_pipeline_bind_map map;
    struct brw_vs_prog_key key;
-   uint32_t kernel = NO_KERNEL;
+   struct anv_shader_bin *bin = NULL;
    unsigned char sha1[20];
 
    populate_vs_prog_key(&pipeline->device->info, &key);
 
-   if (module->size > 0) {
+   if (cache) {
       anv_hash_shader(sha1, &key, sizeof(key), module, entrypoint,
                       pipeline->layout, spec_info);
-      kernel = anv_pipeline_cache_search(cache, sha1, &stage_prog_data, &map);
+      bin = anv_pipeline_cache_search(cache, sha1);
    }
 
-   if (kernel == NO_KERNEL) {
+   if (bin == NULL) {
       struct brw_vs_prog_data prog_data = { 0, };
       struct anv_pipeline_binding surface_to_descriptor[256];
       struct anv_pipeline_binding sampler_to_descriptor[256];
@@ -467,28 +491,25 @@ anv_pipeline_compile_vs(struct anv_pipeline *pipeline,
          return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
       }
 
-      stage_prog_data = &prog_data.base.base;
-      kernel = anv_pipeline_cache_upload_kernel(cache,
-                                                module->size > 0 ? sha1 : NULL,
-                                                shader_code, code_size,
-                                                &stage_prog_data, sizeof(prog_data),
-                                                &map);
+      bin = anv_pipeline_upload_kernel(pipeline, cache,
+                                       MESA_SHADER_VERTEX, sha1,
+                                       shader_code, code_size,
+                                       &prog_data.base.base, &map);
+
       ralloc_free(mem_ctx);
    }
 
-   const struct brw_vs_prog_data *vs_prog_data =
-      (const struct brw_vs_prog_data *) stage_prog_data;
+   const struct brw_vs_prog_data *vs_prog_data = &bin->prog_data.vs;
 
    if (vs_prog_data->base.dispatch_mode == DISPATCH_MODE_SIMD8) {
-      pipeline->vs_simd8 = kernel;
+      pipeline->vs_simd8 = bin->kernel.offset;
       pipeline->vs_vec4 = NO_KERNEL;
    } else {
       pipeline->vs_simd8 = NO_KERNEL;
-      pipeline->vs_vec4 = kernel;
+      pipeline->vs_vec4 = bin->kernel.offset;
    }
 
-   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_VERTEX,
-                                   stage_prog_data, &map);
+   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_VERTEX, bin);
 
    return VK_SUCCESS;
 }
@@ -503,21 +524,20 @@ anv_pipeline_compile_gs(struct anv_pipeline *pipeline,
 {
    const struct brw_compiler *compiler =
       pipeline->device->instance->physicalDevice.compiler;
-   const struct brw_stage_prog_data *stage_prog_data;
    struct anv_pipeline_bind_map map;
    struct brw_gs_prog_key key;
-   uint32_t kernel = NO_KERNEL;
+   struct anv_shader_bin *bin = NULL;
    unsigned char sha1[20];
 
    populate_gs_prog_key(&pipeline->device->info, &key);
 
-   if (module->size > 0) {
+   if (cache) {
       anv_hash_shader(sha1, &key, sizeof(key), module, entrypoint,
                       pipeline->layout, spec_info);
-      kernel = anv_pipeline_cache_search(cache, sha1, &stage_prog_data, &map);
+      bin = anv_pipeline_cache_search(cache, sha1);
    }
 
-   if (kernel == NO_KERNEL) {
+   if (bin == NULL) {
       struct brw_gs_prog_data prog_data = { 0, };
       struct anv_pipeline_binding surface_to_descriptor[256];
       struct anv_pipeline_binding sampler_to_descriptor[256];
@@ -555,20 +575,17 @@ anv_pipeline_compile_gs(struct anv_pipeline *pipeline,
       }
 
       /* TODO: SIMD8 GS */
-      stage_prog_data = &prog_data.base.base;
-      kernel = anv_pipeline_cache_upload_kernel(cache,
-                                                module->size > 0 ? sha1 : NULL,
-                                                shader_code, code_size,
-                                                &stage_prog_data, sizeof(prog_data),
-                                                &map);
+      bin = anv_pipeline_upload_kernel(pipeline, cache,
+                                       MESA_SHADER_GEOMETRY, sha1,
+                                       shader_code, code_size,
+                                       &prog_data.base.base, &map);
 
       ralloc_free(mem_ctx);
    }
 
-   pipeline->gs_kernel = kernel;
+   pipeline->gs_kernel = bin->kernel.offset;
 
-   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_GEOMETRY,
-                                   stage_prog_data, &map);
+   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_GEOMETRY, bin);
 
    return VK_SUCCESS;
 }
@@ -584,21 +601,20 @@ anv_pipeline_compile_fs(struct anv_pipeline *pipeline,
 {
    const struct brw_compiler *compiler =
       pipeline->device->instance->physicalDevice.compiler;
-   const struct brw_stage_prog_data *stage_prog_data;
    struct anv_pipeline_bind_map map;
    struct brw_wm_prog_key key;
+   struct anv_shader_bin *bin = NULL;
    unsigned char sha1[20];
 
    populate_wm_prog_key(&pipeline->device->info, info, extra, &key);
 
-   if (module->size > 0) {
+   if (cache) {
       anv_hash_shader(sha1, &key, sizeof(key), module, entrypoint,
                       pipeline->layout, spec_info);
-      pipeline->ps_ksp0 =
-         anv_pipeline_cache_search(cache, sha1, &stage_prog_data, &map);
+      bin = anv_pipeline_cache_search(cache, sha1);
    }
 
-   if (pipeline->ps_ksp0 == NO_KERNEL) {
+   if (bin == NULL) {
       struct brw_wm_prog_data prog_data = { 0, };
       struct anv_pipeline_binding surface_to_descriptor[256];
       struct anv_pipeline_binding sampler_to_descriptor[256];
@@ -687,19 +703,17 @@ anv_pipeline_compile_fs(struct anv_pipeline *pipeline,
          return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
       }
 
-      stage_prog_data = &prog_data.base;
-      pipeline->ps_ksp0 =
-         anv_pipeline_cache_upload_kernel(cache,
-                                          module->size > 0 ? sha1 : NULL,
-                                          shader_code, code_size,
-                                                &stage_prog_data, sizeof(prog_data),
-                                                &map);
+      bin = anv_pipeline_upload_kernel(pipeline, cache,
+                                       MESA_SHADER_FRAGMENT, sha1,
+                                       shader_code, code_size,
+                                       &prog_data.base, &map);
 
       ralloc_free(mem_ctx);
    }
 
-   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_FRAGMENT,
-                                   stage_prog_data, &map);
+   pipeline->ps_ksp0 = bin->kernel.offset;
+
+   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_FRAGMENT, bin);
 
    return VK_SUCCESS;
 }
@@ -714,21 +728,20 @@ anv_pipeline_compile_cs(struct anv_pipeline *pipeline,
 {
    const struct brw_compiler *compiler =
       pipeline->device->instance->physicalDevice.compiler;
-   const struct brw_stage_prog_data *stage_prog_data;
    struct anv_pipeline_bind_map map;
    struct brw_cs_prog_key key;
-   uint32_t kernel = NO_KERNEL;
+   struct anv_shader_bin *bin = NULL;
    unsigned char sha1[20];
 
    populate_cs_prog_key(&pipeline->device->info, &key);
 
-   if (module->size > 0) {
+   if (cache) {
       anv_hash_shader(sha1, &key, sizeof(key), module, entrypoint,
                       pipeline->layout, spec_info);
-      kernel = anv_pipeline_cache_search(cache, sha1, &stage_prog_data, &map);
+      bin = anv_pipeline_cache_search(cache, sha1);
    }
 
-   if (module->size == 0 || kernel == NO_KERNEL) {
+   if (bin == NULL) {
       struct brw_cs_prog_data prog_data = { 0, };
       struct anv_pipeline_binding surface_to_descriptor[256];
       struct anv_pipeline_binding sampler_to_descriptor[256];
@@ -760,20 +773,17 @@ anv_pipeline_compile_cs(struct anv_pipeline *pipeline,
          return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
       }
 
-      stage_prog_data = &prog_data.base;
-      kernel = anv_pipeline_cache_upload_kernel(cache,
-                                                module->size > 0 ? sha1 : NULL,
-                                                shader_code, code_size,
-                                                &stage_prog_data, sizeof(prog_data),
-                                                &map);
+      bin = anv_pipeline_upload_kernel(pipeline, cache,
+                                       MESA_SHADER_COMPUTE, sha1,
+                                       shader_code, code_size,
+                                       &prog_data.base, &map);
 
       ralloc_free(mem_ctx);
    }
 
-   pipeline->cs_simd = kernel;
+   pipeline->cs_simd = bin->kernel.offset;
 
-   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_COMPUTE,
-                                   stage_prog_data, &map);
+   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_COMPUTE, bin);
 
    return VK_SUCCESS;
 }
@@ -1167,8 +1177,7 @@ anv_pipeline_init(struct anv_pipeline *pipeline,
    /* When we free the pipeline, we detect stages based on the NULL status
     * of various prog_data pointers.  Make them NULL by default.
     */
-   memset(pipeline->prog_data, 0, sizeof(pipeline->prog_data));
-   memset(pipeline->bindings, 0, sizeof(pipeline->bindings));
+   memset(pipeline->shaders, 0, sizeof(pipeline->shaders));
 
    pipeline->vs_simd8 = NO_KERNEL;
    pipeline->vs_vec4 = NO_KERNEL;
@@ -1283,9 +1292,6 @@ anv_graphics_pipeline_create(
    ANV_FROM_HANDLE(anv_device, device, _device);
    ANV_FROM_HANDLE(anv_pipeline_cache, cache, _cache);
 
-   if (cache == NULL)
-      cache = &device->default_pipeline_cache;
-
    switch (device->info.gen) {
    case 7:
       if (device->info.is_haswell)
@@ -1338,9 +1344,6 @@ static VkResult anv_compute_pipeline_create(
 {
    ANV_FROM_HANDLE(anv_device, device, _device);
    ANV_FROM_HANDLE(anv_pipeline_cache, cache, _cache);
-
-   if (cache == NULL)
-      cache = &device->default_pipeline_cache;
 
    switch (device->info.gen) {
    case 7:
