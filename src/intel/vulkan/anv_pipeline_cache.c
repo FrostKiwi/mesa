@@ -25,6 +25,92 @@
 #include "util/debug.h"
 #include "anv_private.h"
 
+static size_t
+anv_shader_bin_size(const struct anv_pipeline_bind_map *bind_map)
+{
+   return sizeof(struct anv_shader_bin) +
+          bind_map->surface_count * sizeof(struct anv_pipeline_binding) +
+          bind_map->sampler_count * sizeof(struct anv_pipeline_binding);
+}
+
+struct anv_shader_bin *
+anv_shader_bin_create(struct anv_device *device,
+                      gl_shader_stage stage,
+                      const unsigned char *src_sha1,
+                      const void *kernel, size_t kernel_size,
+                      const struct brw_stage_prog_data *prog_data,
+                      const struct anv_pipeline_bind_map *bind_map)
+{
+   const size_t size = anv_shader_bin_size(bind_map);
+
+   struct anv_shader_bin *shader =
+      anv_alloc(&device->alloc, size, 8, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
+   if (!shader)
+      return NULL;
+
+   shader->ref_cnt = 1;
+
+   shader->stage = stage;
+
+   shader->kernel =
+      anv_state_pool_alloc(&device->instruction_state_pool, kernel_size, 64);
+   memcpy(shader->kernel.map, kernel, kernel_size);
+   shader->kernel_size = kernel_size;
+
+   switch (stage) {
+   case MESA_SHADER_VERTEX:
+      shader->prog_data.vs = *(struct brw_vs_prog_data *)prog_data;
+      break;
+   case MESA_SHADER_GEOMETRY:
+      shader->prog_data.gs = *(struct brw_gs_prog_data *)prog_data;
+      break;
+   case MESA_SHADER_TESS_CTRL:
+      shader->prog_data.tcs = *(struct brw_tcs_prog_data *)prog_data;
+      break;
+   case MESA_SHADER_TESS_EVAL:
+      shader->prog_data.tes = *(struct brw_tes_prog_data *)prog_data;
+      break;
+   case MESA_SHADER_FRAGMENT:
+      shader->prog_data.fs = *(struct brw_wm_prog_data *)prog_data;
+      break;
+   case MESA_SHADER_COMPUTE:
+      shader->prog_data.cs = *(struct brw_cs_prog_data *)prog_data;
+      break;
+   default:
+      unreachable("Invalid shader stage");
+   }
+
+   shader->bind_map.surface_count = bind_map->surface_count;
+   shader->bind_map.sampler_count = bind_map->sampler_count;
+   shader->bind_map.image_count = bind_map->image_count;
+
+   struct anv_pipeline_binding *bindings = shader->bindings;
+
+   shader->bind_map.surface_to_descriptor = bindings;
+   typed_memcpy(shader->bind_map.surface_to_descriptor,
+                bind_map->surface_to_descriptor, bind_map->surface_count);
+   bindings += bind_map->surface_count;
+
+   shader->bind_map.sampler_to_descriptor = bindings;
+   typed_memcpy(shader->bind_map.sampler_to_descriptor,
+                bind_map->sampler_to_descriptor, bind_map->sampler_count);
+   bindings += bind_map->sampler_count;
+
+   if (src_sha1)
+      memcpy(shader->src_sha1, src_sha1, sizeof(shader->src_sha1));
+
+   return shader;
+}
+
+void
+anv_shader_bin_destroy(struct anv_device *device,
+                       struct anv_shader_bin *shader)
+{
+   assert(shader->ref_cnt == 0);
+   anv_state_pool_free(&device->instruction_state_pool, shader->kernel);
+   anv_free(&device->alloc, shader);
+}
+
 /* Remaining work:
  *
  * - Compact binding table layout so it's tight and not dependent on

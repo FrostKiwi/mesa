@@ -400,7 +400,7 @@ struct anv_fixed_size_state_pool {
 };
 
 #define ANV_MIN_STATE_SIZE_LOG2 6
-#define ANV_MAX_STATE_SIZE_LOG2 10
+#define ANV_MAX_STATE_SIZE_LOG2 16
 
 #define ANV_STATE_BUCKETS (ANV_MAX_STATE_SIZE_LOG2 - ANV_MIN_STATE_SIZE_LOG2)
 
@@ -704,6 +704,7 @@ struct anv_device {
     struct anv_state_pool                       dynamic_state_pool;
 
     struct anv_block_pool                       instruction_block_pool;
+    struct anv_state_pool                       instruction_state_pool;
     struct anv_pipeline_cache                   default_pipeline_cache;
 
     struct anv_block_pool                       surface_state_block_pool;
@@ -1462,6 +1463,58 @@ struct anv_pipeline_bind_map {
    struct anv_pipeline_binding *                surface_to_descriptor;
    struct anv_pipeline_binding *                sampler_to_descriptor;
 };
+
+struct anv_shader_bin {
+   uint32_t ref_cnt;
+
+   gl_shader_stage stage;
+
+   struct anv_state kernel;
+   uint32_t kernel_size;
+
+   union {
+      struct brw_stage_prog_data base;
+      struct brw_vs_prog_data vs;
+      struct brw_gs_prog_data gs;
+      struct brw_tcs_prog_data tcs;
+      struct brw_tes_prog_data tes;
+      struct brw_wm_prog_data fs;
+      struct brw_cs_prog_data cs;
+   } prog_data;
+
+   struct anv_pipeline_bind_map bind_map;
+
+   unsigned char src_sha1[20];
+
+   /* Bindings in the bind_map.  Surfaces first, then samplers */
+   struct anv_pipeline_binding bindings[0];
+};
+
+struct anv_shader_bin *
+anv_shader_bin_create(struct anv_device *device,
+                      gl_shader_stage stage,
+                      const unsigned char *src_sha1,
+                      const void *kernel, size_t kernel_size,
+                      const struct brw_stage_prog_data *prog_data,
+                      const struct anv_pipeline_bind_map *bind_map);
+
+void
+anv_shader_bin_destroy(struct anv_device *device, struct anv_shader_bin *shader);
+
+static inline void
+anv_shader_bin_ref(struct anv_shader_bin *shader)
+{
+   assert(shader->ref_cnt >= 1);
+   __sync_fetch_and_add(&shader->ref_cnt, 1);
+}
+
+static inline void
+anv_shader_bin_unref(struct anv_device *device, struct anv_shader_bin *shader)
+{
+   assert(shader->ref_cnt >= 1);
+   if (__sync_fetch_and_add(&shader->ref_cnt, -1) == 1)
+      anv_shader_bin_destroy(device, shader);
+}
 
 struct anv_pipeline {
    struct anv_device *                          device;
