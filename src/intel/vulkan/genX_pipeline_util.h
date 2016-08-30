@@ -333,7 +333,7 @@ genX(emit_urb_setup)(struct anv_device *device, struct anv_batch *batch,
     */
    anv_batch_emit(batch, GENX(3DSTATE_URB_VS), urb) {
       urb.VSURBStartingAddress      = push_constant_chunks;
-      urb.VSURBEntryAllocationSize  = vs_size - 1;
+      urb.VSURBEntryAllocationSize  = vs_size;
       urb.VSNumberofURBEntries      = nr_vs_entries;
    }
 
@@ -347,7 +347,7 @@ genX(emit_urb_setup)(struct anv_device *device, struct anv_batch *batch,
 
    anv_batch_emit(batch, GENX(3DSTATE_URB_GS), urb) {
       urb.GSURBStartingAddress      = push_constant_chunks + vs_chunks;
-      urb.GSURBEntryAllocationSize  = gs_size - 1;
+      urb.GSURBEntryAllocationSize  = gs_size;
       urb.GSNumberofURBEntries      = nr_gs_entries;
    }
 }
