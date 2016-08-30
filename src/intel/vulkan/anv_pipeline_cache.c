@@ -148,6 +148,57 @@ anv_shader_bin_write_data(const struct anv_shader_bin *shader, void *data)
  *   dual_src_blend.
  */
 
+static uint32_t
+shader_bin_key_hash_func(const void *void_key)
+{
+   const struct shader_bin_key *key = void_key;
+   return _mesa_hash_data(key->data, key->size);
+}
+
+static bool
+shader_bin_key_compare_func(const void *void_a, const void *void_b)
+{
+   const struct shader_bin_key *a = void_a, *b = void_b;
+   if (a->size != b->size)
+      return false;
+
+   return memcmp(a->data, b->data, a->size) == 0;
+}
+
+void
+anv_pipeline_cache_init(struct anv_pipeline_cache *cache,
+                        struct anv_device *device,
+                        bool cache_enabled)
+{
+   cache->device = device;
+   pthread_mutex_init(&cache->mutex, NULL);
+
+   if (cache_enabled) {
+      cache->cache = _mesa_hash_table_create(NULL, shader_bin_key_hash_func,
+                                             shader_bin_key_compare_func);
+   } else {
+      cache->cache = NULL;
+   }
+}
+
+void
+anv_pipeline_cache_finish(struct anv_pipeline_cache *cache)
+{
+   pthread_mutex_destroy(&cache->mutex);
+
+   if (cache->cache) {
+      /* This is a bit unfortunate.  In order to keep things from randomly
+       * going away, the shader cache has to hold a reference to all shader
+       * binaries it contains.  We unref them when we destroy the cache.
+       */
+      struct hash_entry *entry;
+      hash_table_foreach(cache->cache, entry)
+         anv_shader_bin_unref(cache->device, entry->data);
+
+      _mesa_hash_table_destroy(cache->cache, NULL);
+   }
+}
+
 void
 anv_hash_shader(unsigned char *hash, const void *key, size_t key_size,
                 struct anv_shader_module *module,
@@ -345,21 +396,13 @@ anv_pipeline_cache_load(struct anv_pipeline_cache *cache,
    }
 }
 
-static uint32_t
-sha1_hash_func(const void *void_key)
-{
-   const struct shader_bin_key *key = void_key;
-   return _mesa_hash_data(key->data, key->size);
-}
-
 static bool
-sha1_compare_func(const void *void_a, const void *void_b)
+pipeline_cache_enabled()
 {
-   const struct shader_bin_key *a = void_a, *b = void_b;
-   if (a->size != b->size)
-      return false;
-
-   return memcmp(a->data, b->data, a->size) == 0;
+   static int enabled = -1;
+   if (enabled < 0)
+      enabled = env_var_as_boolean("ANV_ENABLE_PIPELINE_CACHE", true);
+   return enabled;
 }
 
 VkResult anv_CreatePipelineCache(
@@ -380,15 +423,7 @@ VkResult anv_CreatePipelineCache(
    if (cache == NULL)
       return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
-   cache->device = device;
-   pthread_mutex_init(&cache->mutex, NULL);
-
-   if (env_var_as_boolean("ANV_ENABLE_PIPELINE_CACHE", true)) {
-      cache->cache = _mesa_hash_table_create(NULL, sha1_hash_func,
-                                             sha1_compare_func);
-   } else {
-      cache->cache = NULL;
-   }
+   anv_pipeline_cache_init(cache, device, pipeline_cache_enabled());
 
    if (pCreateInfo->initialDataSize > 0)
       anv_pipeline_cache_load(cache,
@@ -408,19 +443,7 @@ void anv_DestroyPipelineCache(
    ANV_FROM_HANDLE(anv_device, device, _device);
    ANV_FROM_HANDLE(anv_pipeline_cache, cache, _cache);
 
-   pthread_mutex_destroy(&cache->mutex);
-
-   if (cache->cache) {
-      /* This is a bit unfortunate.  In order to keep things from randomly
-       * going away, the shader cache has to hold a reference to all shader
-       * binaries it contains.  We unref them when we destroy the cache.
-       */
-      struct hash_entry *entry;
-      hash_table_foreach(cache->cache, entry)
-         anv_shader_bin_unref(device, entry->data);
-
-      _mesa_hash_table_destroy(cache->cache, NULL);
-   }
+   anv_pipeline_cache_finish(cache);
 
    anv_free2(&device->alloc, pAllocator, cache);
 }

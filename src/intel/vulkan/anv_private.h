@@ -666,6 +666,11 @@ struct anv_pipeline_cache {
 
 struct anv_pipeline_bind_map;
 
+void anv_pipeline_cache_init(struct anv_pipeline_cache *cache,
+                             struct anv_device *device,
+                             bool cache_enabled);
+void anv_pipeline_cache_finish(struct anv_pipeline_cache *cache);
+
 struct anv_shader_bin *
 anv_pipeline_cache_search(struct anv_pipeline_cache *cache,
                           const void *key, uint32_t key_size);
