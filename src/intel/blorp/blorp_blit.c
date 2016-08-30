@@ -1847,12 +1847,14 @@ blorp_copy(struct blorp_batch *batch,
    if (src_fmtl->bw > 1 || src_fmtl->bh > 1) {
       surf_convert_to_uncompressed(batch->blorp->isl_dev, &params.src,
                                    &src_x, &src_y, &src_width, &src_height);
+      wm_prog_key.need_dst_offset = true;
    }
 
    params.dst.view.format = get_copy_format_for_bpb(dst_fmtl->bpb);
    if (dst_fmtl->bw > 1 || dst_fmtl->bh > 1) {
       surf_convert_to_uncompressed(batch->blorp->isl_dev, &params.dst,
                                    &dst_x, &dst_y, NULL, NULL);
+      wm_prog_key.need_dst_offset = true;
    }
 
    /* Once both surfaces are stompped to uncompressed as needed, the
