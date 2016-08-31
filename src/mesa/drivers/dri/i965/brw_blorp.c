@@ -779,8 +779,9 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
 
       struct blorp_batch batch;
       blorp_batch_init(&brw->blorp, &batch, brw);
-      blorp_clear(&batch, &surf, level, layer, x0, y0, x1, y1,
+      blorp_clear(&batch, &surf,
                   (enum isl_format)brw->render_target_format[format],
+                  ISL_SWIZZLE_IDENTITY, level, layer, x0, y0, x1, y1,
                   clear_color, color_write_disable);
       blorp_batch_finish(&batch);
 
