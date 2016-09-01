@@ -99,6 +99,16 @@ get_surface(struct anv_image *image, VkImageAspectFlags aspect)
    }
 }
 
+static void
+add_surface(struct anv_image *image, struct anv_surface *surf)
+{
+   assert(surf->isl.size > 0); /* isl surface must be initialized */
+
+   surf->offset = align_u32(image->size, surf->isl.alignment);
+   image->size = surf->offset + surf->isl.size;
+   image->alignment = MAX(image->alignment, surf->isl.alignment);
+}
+
 /**
  * Initialize the anv_image::*_surface selected by \a aspect. Then update the
  * image's memory requirements (that is, the image's size and alignment).
@@ -160,9 +170,7 @@ make_surface(const struct anv_device *dev,
     */
    assert(ok);
 
-   anv_surf->offset = align_u32(image->size, anv_surf->isl.alignment);
-   image->size = anv_surf->offset + anv_surf->isl.size;
-   image->alignment = MAX(image->alignment, anv_surf->isl.alignment);
+   add_surface(image, anv_surf);
 
    return VK_SUCCESS;
 }
