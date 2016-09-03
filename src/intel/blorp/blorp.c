@@ -64,16 +64,6 @@ brw_blorp_surface_info_init(struct blorp_context *blorp,
                             unsigned int level, unsigned int layer,
                             enum isl_format format, bool is_render_target)
 {
-   /* Layer is a physical layer, so if this is a 2D multisample array texture
-    * using INTEL_MSAA_LAYOUT_UMS or INTEL_MSAA_LAYOUT_CMS, then it had better
-    * be a multiple of num_samples.
-    */
-   unsigned layer_multiplier = 1;
-   if (surf->surf->msaa_layout == ISL_MSAA_LAYOUT_ARRAY) {
-      assert(layer % surf->surf->samples == 0);
-      layer_multiplier = surf->surf->samples;
-   }
-
    if (format == ISL_FORMAT_UNSUPPORTED)
       format = surf->surf->format;
 
@@ -125,9 +115,9 @@ brw_blorp_surface_info_init(struct blorp_context *blorp,
       info->view.base_array_layer = 0;
       info->view.array_len = MAX2(info->surf.logical_level0_px.depth,
                                   info->surf.logical_level0_px.array_len);
-      info->z_offset = layer / layer_multiplier;
+      info->z_offset = layer;
    } else {
-      info->view.base_array_layer = layer / layer_multiplier;
+      info->view.base_array_layer = layer;
       info->view.array_len = 1;
       info->z_offset = 0;
    }

@@ -274,6 +274,20 @@ swizzle_to_scs(GLenum swizzle)
    return (enum isl_channel_select)((swizzle + 4) & 7);
 }
 
+static unsigned
+physical_to_logical_layer(struct intel_mipmap_tree *mt,
+                          unsigned physical_layer)
+{
+   if (mt->num_samples > 1 &&
+       (mt->msaa_layout == INTEL_MSAA_LAYOUT_UMS ||
+        mt->msaa_layout == INTEL_MSAA_LAYOUT_CMS)) {
+      assert(physical_layer % mt->num_samples == 0);
+      return physical_layer / mt->num_samples;
+   } else {
+      return physical_layer;
+   }
+}
+
 /**
  * Note: if the src (or dst) is a 2D multisample array texture on Gen7+ using
  * INTEL_MSAA_LAYOUT_UMS or INTEL_MSAA_LAYOUT_CMS, src_layer (dst_layer) is
@@ -360,9 +374,11 @@ brw_blorp_blit_miptrees(struct brw_context *brw,
 
    struct blorp_batch batch;
    blorp_batch_init(&brw->blorp, &batch, brw);
-   blorp_blit(&batch, &src_surf, src_level, src_layer,
+   blorp_blit(&batch, &src_surf, src_level,
+              physical_to_logical_layer(src_mt, src_layer),
               brw_blorp_to_isl_format(brw, src_format, false), src_isl_swizzle,
-              &dst_surf, dst_level, dst_layer,
+              &dst_surf, dst_level,
+              physical_to_logical_layer(dst_mt, dst_layer),
               brw_blorp_to_isl_format(brw, dst_format, true),
               ISL_SWIZZLE_IDENTITY,
               src_x0, src_y0, src_x1, src_y1,
@@ -760,7 +776,8 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
 
       struct blorp_batch batch;
       blorp_batch_init(&brw->blorp, &batch, brw);
-      blorp_fast_clear(&batch, &surf, level, layer,
+      blorp_fast_clear(&batch, &surf, level,
+                       physical_to_logical_layer(irb->mt, layer),
                        (enum isl_format)brw->render_target_format[format],
                        x0, y0, x1, y1);
       blorp_batch_finish(&batch);
@@ -781,8 +798,9 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
       blorp_batch_init(&brw->blorp, &batch, brw);
       blorp_clear(&batch, &surf,
                   (enum isl_format)brw->render_target_format[format],
-                  ISL_SWIZZLE_IDENTITY, level, layer, x0, y0, x1, y1,
-                  clear_color, color_write_disable);
+                  ISL_SWIZZLE_IDENTITY, level,
+                  physical_to_logical_layer(irb->mt, layer),
+                  x0, y0, x1, y1, clear_color, color_write_disable);
       blorp_batch_finish(&batch);
 
       if (intel_miptree_is_lossless_compressed(brw, irb->mt)) {
