@@ -188,14 +188,14 @@ void anv_CmdCopyImage(
       VkOffset3D srcOffset =
          anv_sanitize_image_offset(src_image->type, pRegions[r].srcOffset);
       VkOffset3D dstOffset =
-         anv_sanitize_image_offset(src_image->type, pRegions[r].dstOffset);
+         anv_sanitize_image_offset(dst_image->type, pRegions[r].dstOffset);
       VkExtent3D extent =
          anv_sanitize_image_extent(src_image->type, pRegions[r].extent);
 
       unsigned dst_base_layer, layer_count;
       if (dst_image->type == VK_IMAGE_TYPE_3D) {
          dst_base_layer = dstOffset.z;
-         layer_count = extent.depth;
+         layer_count = pRegions[r].extent.depth;
       } else {
          dst_base_layer = pRegions[r].dstSubresource.baseArrayLayer;
          layer_count = pRegions[r].dstSubresource.layerCount;
