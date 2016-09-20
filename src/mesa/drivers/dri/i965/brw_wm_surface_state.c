@@ -60,22 +60,16 @@ enum {
    INTEL_AUX_BUFFER_DISABLED = 1 << 1,
 };
 
-struct surface_state_info {
-   unsigned num_dwords;
-   unsigned ss_align; /* Required alignment of RENDER_SURFACE_STATE in bytes */
-   unsigned reloc_dw;
-   unsigned aux_reloc_dw;
-   unsigned tex_mocs;
-   unsigned rb_mocs;
+uint32_t tex_mocs[] = {
+   [7] = GEN7_MOCS_L3,
+   [8] = BDW_MOCS_WB,
+   [9] = SKL_MOCS_WB,
 };
 
-static const struct surface_state_info surface_state_infos[] = {
-   [4] = {6,  32, 1,  0},
-   [5] = {6,  32, 1,  0},
-   [6] = {6,  32, 1,  0},
-   [7] = {8,  32, 1,  6,  GEN7_MOCS_L3, GEN7_MOCS_L3},
-   [8] = {13, 64, 8,  10, BDW_MOCS_WB,  BDW_MOCS_PTE},
-   [9] = {16, 64, 8,  10, SKL_MOCS_WB,  SKL_MOCS_PTE},
+uint32_t rb_mocs[] = {
+   [7] = GEN7_MOCS_L3,
+   [8] = BDW_MOCS_PTE,
+   [9] = SKL_MOCS_PTE,
 };
 
 static void
@@ -85,7 +79,6 @@ brw_emit_surface_state(struct brw_context *brw,
                        uint32_t mocs, uint32_t *surf_offset, int surf_index,
                        unsigned read_domains, unsigned write_domains)
 {
-   const struct surface_state_info ss_info = surface_state_infos[brw->gen];
    uint32_t tile_x = mt->level[0].slice[0].x_offset;
    uint32_t tile_y = mt->level[0].slice[0].y_offset;
    uint32_t offset = mt->offset;
@@ -155,11 +148,12 @@ brw_emit_surface_state(struct brw_context *brw,
       clear_color = intel_miptree_get_isl_clear_color(brw, mt);
    }
 
-   uint32_t *dw = __brw_state_batch(brw, AUB_TRACE_SURFACE_STATE,
-                                    ss_info.num_dwords * 4, ss_info.ss_align,
-                                    surf_index, surf_offset);
+   void *state = __brw_state_batch(brw, AUB_TRACE_SURFACE_STATE,
+                                   brw->isl_dev.ss.size,
+                                   brw->isl_dev.ss.align,
+                                   surf_index, surf_offset);
 
-   isl_surf_fill_state(&brw->isl_dev, dw, .surf = &surf, .view = &view,
+   isl_surf_fill_state(&brw->isl_dev, state, .surf = &surf, .view = &view,
                        .address = mt->bo->offset64 + offset,
                        .aux_surf = aux_surf, .aux_usage = aux_usage,
                        .aux_address = aux_offset,
@@ -167,7 +161,7 @@ brw_emit_surface_state(struct brw_context *brw,
                        .x_offset_sa = tile_x, .y_offset_sa = tile_y);
 
    drm_intel_bo_emit_reloc(brw->batch.bo,
-                           *surf_offset + 4 * ss_info.reloc_dw,
+                           *surf_offset + brw->isl_dev.ss.addr_offset,
                            mt->bo, offset,
                            read_domains, write_domains);
 
@@ -179,9 +173,10 @@ brw_emit_surface_state(struct brw_context *brw,
        * an ordinary reloc to do the necessary address translation.
        */
       assert((aux_offset & 0xfff) == 0);
+      uint32_t *aux_addr = state + brw->isl_dev.ss.aux_addr_offset;
       drm_intel_bo_emit_reloc(brw->batch.bo,
-                              *surf_offset + 4 * ss_info.aux_reloc_dw,
-                              mt->mcs_mt->bo, dw[ss_info.aux_reloc_dw] & 0xfff,
+                              *surf_offset + brw->isl_dev.ss.aux_addr_offset,
+                              mt->mcs_mt->bo, *aux_addr & 0xfff,
                               read_domains, write_domains);
    }
 }
@@ -226,7 +221,7 @@ brw_update_renderbuffer_surface(struct brw_context *brw,
 
    uint32_t offset;
    brw_emit_surface_state(brw, mt, flags, mt->target, view,
-                          surface_state_infos[brw->gen].rb_mocs,
+                          rb_mocs[brw->gen],
                           &offset, surf_index,
                           I915_GEM_DOMAIN_RENDER,
                           I915_GEM_DOMAIN_RENDER);
@@ -627,7 +622,7 @@ brw_update_texture_surface(struct gl_context *ctx,
       const int flags =
          brw_disable_aux_surface(brw, mt) ? INTEL_AUX_BUFFER_DISABLED : 0;
       brw_emit_surface_state(brw, mt, flags, mt->target, view,
-                             surface_state_infos[brw->gen].tex_mocs,
+                             tex_mocs[brw->gen],
                              surf_offset, surf_index,
                              I915_GEM_DOMAIN_SAMPLER, 0);
    }
@@ -643,10 +638,9 @@ brw_emit_buffer_surface_state(struct brw_context *brw,
                               unsigned pitch,
                               bool rw)
 {
-   const struct surface_state_info ss_info = surface_state_infos[brw->gen];
-
    uint32_t *dw = brw_state_batch(brw, AUB_TRACE_SURFACE_STATE,
-                                  ss_info.num_dwords * 4, ss_info.ss_align,
+                                  brw->isl_dev.ss.size,
+                                  brw->isl_dev.ss.align,
                                   out_offset);
 
    isl_buffer_fill_state(&brw->isl_dev, dw,
@@ -654,11 +648,11 @@ brw_emit_buffer_surface_state(struct brw_context *brw,
                          .size = buffer_size,
                          .format = surface_format,
                          .stride = pitch,
-                         .mocs = ss_info.tex_mocs);
+                         .mocs = tex_mocs[brw->gen]);
 
    if (bo) {
       drm_intel_bo_emit_reloc(brw->batch.bo,
-                              *out_offset + 4 * ss_info.reloc_dw,
+                              *out_offset + brw->isl_dev.ss.addr_offset,
                               bo, buffer_offset,
                               I915_GEM_DOMAIN_SAMPLER,
                               (rw ? I915_GEM_DOMAIN_SAMPLER : 0));
@@ -1202,7 +1196,7 @@ update_renderbuffer_read_surfaces(struct brw_context *brw)
             const int flags = brw->draw_aux_buffer_disabled[i] ?
                                  INTEL_AUX_BUFFER_DISABLED : 0;
             brw_emit_surface_state(brw, irb->mt, flags, target, view,
-                                   surface_state_infos[brw->gen].tex_mocs,
+                                   tex_mocs[brw->gen],
                                    surf_offset, surf_index,
                                    I915_GEM_DOMAIN_SAMPLER, 0);
 
@@ -1759,7 +1753,7 @@ update_image_surface(struct brw_context *brw,
                mt->fast_clear_state == INTEL_FAST_CLEAR_STATE_RESOLVED ?
                INTEL_AUX_BUFFER_DISABLED : 0;
             brw_emit_surface_state(brw, mt, flags, mt->target, view,
-                                   surface_state_infos[brw->gen].tex_mocs,
+                                   tex_mocs[brw->gen],
                                    surf_offset, surf_index,
                                    I915_GEM_DOMAIN_SAMPLER,
                                    access == GL_READ_ONLY ? 0 :
