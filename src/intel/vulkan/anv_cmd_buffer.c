@@ -690,6 +690,18 @@ add_surface_state_reloc(struct anv_cmd_buffer *cmd_buffer,
                       state.offset + isl_dev->ss.addr_offset, bo, offset);
 }
 
+static void
+add_image_view_relocs(struct anv_cmd_buffer *cmd_buffer,
+                      const struct anv_image_view *iview,
+                      struct anv_state state)
+{
+   const struct isl_device *isl_dev = &cmd_buffer->device->isl_dev;
+
+   anv_reloc_list_add(&cmd_buffer->surface_relocs, &cmd_buffer->pool->alloc,
+                      state.offset + isl_dev->ss.addr_offset,
+                      iview->bo, iview->offset);
+}
+
 enum isl_format
 anv_isl_format_for_descriptor_type(VkDescriptorType type)
 {
@@ -802,8 +814,6 @@ anv_cmd_buffer_emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
       struct anv_pipeline_binding *binding = &map->surface_to_descriptor[s];
 
       struct anv_state surface_state;
-      struct anv_bo *bo;
-      uint32_t bo_offset;
 
       if (binding->set == ANV_DESCRIPTOR_SET_COLOR_ATTACHMENTS) {
          /* Color attachment binding */
@@ -815,8 +825,7 @@ anv_cmd_buffer_emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
 
             assert(iview->color_rt_surface_state.alloc_size);
             surface_state = iview->color_rt_surface_state;
-            add_surface_state_reloc(cmd_buffer, iview->color_rt_surface_state,
-                                    iview->bo, iview->offset);
+            add_image_view_relocs(cmd_buffer, iview, surface_state);
          } else {
             /* Null render target */
             struct anv_framebuffer *fb = cmd_buffer->state.framebuffer;
@@ -843,15 +852,13 @@ anv_cmd_buffer_emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
       case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
          surface_state = desc->image_view->sampler_surface_state;
          assert(surface_state.alloc_size);
-         bo = desc->image_view->bo;
-         bo_offset = desc->image_view->offset;
+         add_image_view_relocs(cmd_buffer, desc->image_view, surface_state);
          break;
 
       case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: {
          surface_state = desc->image_view->storage_surface_state;
          assert(surface_state.alloc_size);
-         bo = desc->image_view->bo;
-         bo_offset = desc->image_view->offset;
+         add_image_view_relocs(cmd_buffer, desc->image_view, surface_state);
 
          struct brw_image_param *image_param =
             &cmd_buffer->state.push_constants[stage]->images[image++];
@@ -868,15 +875,17 @@ anv_cmd_buffer_emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
       case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
          surface_state = desc->buffer_view->surface_state;
          assert(surface_state.alloc_size);
-         bo = desc->buffer_view->bo;
-         bo_offset = desc->buffer_view->offset;
+         add_surface_state_reloc(cmd_buffer, surface_state,
+                                 desc->buffer_view->bo,
+                                 desc->buffer_view->offset);
          break;
 
       case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
          surface_state = desc->buffer_view->storage_surface_state;
          assert(surface_state.alloc_size);
-         bo = desc->buffer_view->bo;
-         bo_offset = desc->buffer_view->offset;
+         add_surface_state_reloc(cmd_buffer, surface_state,
+                                 desc->buffer_view->bo,
+                                 desc->buffer_view->offset);
 
          struct brw_image_param *image_param =
             &cmd_buffer->state.push_constants[stage]->images[image++];
@@ -891,7 +900,6 @@ anv_cmd_buffer_emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
       }
 
       bt_map[bias + s] = surface_state.offset + state_offset;
-      add_surface_state_reloc(cmd_buffer, surface_state, bo, bo_offset);
    }
    assert(image == map->image_count);
 
