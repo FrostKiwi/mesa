@@ -1797,17 +1797,47 @@ VkResult anv_CreateFramebuffer(
    assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO);
 
    size_t size = sizeof(*framebuffer) +
-                 sizeof(struct anv_image_view *) * pCreateInfo->attachmentCount;
+      sizeof(*framebuffer->attachments) * pCreateInfo->attachmentCount;
    framebuffer = anv_alloc2(&device->alloc, pAllocator, size, 8,
                             VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
    if (framebuffer == NULL)
       return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
    framebuffer->attachment_count = pCreateInfo->attachmentCount;
+   unsigned color_count = 0;
    for (uint32_t i = 0; i < pCreateInfo->attachmentCount; i++) {
-      VkImageView _iview = pCreateInfo->pAttachments[i];
-      framebuffer->attachments[i] = anv_image_view_from_handle(_iview);
+      ANV_FROM_HANDLE(anv_image_view, iview, pCreateInfo->pAttachments[i]);
+
+      framebuffer->attachments[i].view = iview;
+      framebuffer->attachments[i].rt_state_offset = -1;
+
+      if (iview->image->aspects & VK_IMAGE_ASPECT_COLOR_BIT)
+         color_count++;
    }
+
+   framebuffer->surface_states =
+      anv_state_pool_alloc(&device->surface_state_pool,
+                           device->isl_dev.ss.align * color_count,
+                           device->isl_dev.ss.align);
+   unsigned color_idx = 0;
+   for (uint32_t i = 0; i < pCreateInfo->attachmentCount; i++) {
+      struct anv_image_view *iview = framebuffer->attachments[i].view;
+      if (iview->image->aspects & VK_IMAGE_ASPECT_COLOR_BIT) {
+         const uint16_t offset = (color_idx++) * device->isl_dev.ss.align;
+         framebuffer->attachments[i].rt_state_offset = offset;
+
+         struct isl_view isl_view = iview->isl;
+         isl_view.usage |= ISL_SURF_USAGE_RENDER_TARGET_BIT;
+         isl_surf_fill_state(&device->isl_dev,
+                             framebuffer->surface_states.map + offset,
+                             .surf = &iview->image->color_surface.isl,
+                             .view = &isl_view,
+                             .mocs = device->default_mocs);
+      }
+   }
+
+   if (device->info.has_llc)
+      anv_state_clflush(framebuffer->surface_states);
 
    framebuffer->width = pCreateInfo->width;
    framebuffer->height = pCreateInfo->height;
@@ -1825,6 +1855,8 @@ void anv_DestroyFramebuffer(
 {
    ANV_FROM_HANDLE(anv_device, device, _device);
    ANV_FROM_HANDLE(anv_framebuffer, fb, _fb);
+
+   anv_state_pool_free(&device->surface_state_pool, fb->surface_states);
 
    anv_free2(&device->alloc, pAllocator, fb);
 }

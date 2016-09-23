@@ -346,7 +346,7 @@ emit_color_clear(struct anv_cmd_buffer *cmd_buffer,
    const struct anv_framebuffer *fb = cmd_buffer->state.framebuffer;
    const uint32_t subpass_att = clear_att->colorAttachment;
    const uint32_t pass_att = subpass->color_attachments[subpass_att];
-   const struct anv_image_view *iview = fb->attachments[pass_att];
+   const struct anv_image_view *iview = fb->attachments[pass_att].view;
    const uint32_t samples = iview->image->samples;
    const uint32_t samples_log2 = ffs(samples) - 1;
    struct anv_pipeline *pipeline =
@@ -513,7 +513,7 @@ emit_depthstencil_clear(struct anv_cmd_buffer *cmd_buffer,
    const struct anv_subpass *subpass = cmd_buffer->state.subpass;
    const struct anv_framebuffer *fb = cmd_buffer->state.framebuffer;
    const uint32_t pass_att = subpass->depth_stencil_attachment;
-   const struct anv_image_view *iview = fb->attachments[pass_att];
+   const struct anv_image_view *iview = fb->attachments[pass_att].view;
    const uint32_t samples = iview->image->samples;
    const uint32_t samples_log2 = ffs(samples) - 1;
    VkClearDepthStencilValue clear_value = clear_att->clearValue.depthStencil;

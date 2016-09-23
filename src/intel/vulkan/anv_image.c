@@ -470,34 +470,6 @@ anv_image_view_init(struct anv_image_view *iview,
       iview->sampler_surface_state.alloc_size = 0;
    }
 
-   /* This is kind-of hackish.  It is possible, due to get_full_usage above,
-    * to get a surface state with a non-renderable format but with
-    * VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT.  This happens in particular for
-    * formats which aren't renderable but where we want to use Vulkan copy
-    * commands so VK_IMAGE_USAGE_TRANSFER_DST_BIT is set.  In the case of a
-    * copy, meta will use a format that we can render to, but most of the rest
-    * of the time, we don't want to create those surface states.  Once we
-    * start using blorp for copies, this problem will go away and we can
-    * remove a lot of hacks.
-    */
-   if ((image->usage & usage_mask & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) &&
-       isl_format_supports_rendering(&device->info, format.isl_format)) {
-      iview->color_rt_surface_state = alloc_surface_state(device, cmd_buffer);
-
-      struct isl_view view = iview->isl;
-      view.usage |= ISL_SURF_USAGE_RENDER_TARGET_BIT;
-      isl_surf_fill_state(&device->isl_dev,
-                          iview->color_rt_surface_state.map,
-                          .surf = &surface->isl,
-                          .view = &view,
-                          .mocs = device->default_mocs);
-
-      if (!device->info.has_llc)
-         anv_state_clflush(iview->color_rt_surface_state);
-   } else {
-      iview->color_rt_surface_state.alloc_size = 0;
-   }
-
    /* NOTE: This one needs to go last since it may stomp isl_view.format */
    if (image->usage & usage_mask & VK_IMAGE_USAGE_STORAGE_BIT) {
       iview->storage_surface_state = alloc_surface_state(device, cmd_buffer);
@@ -558,11 +530,6 @@ anv_DestroyImageView(VkDevice _device, VkImageView _iview,
 {
    ANV_FROM_HANDLE(anv_device, device, _device);
    ANV_FROM_HANDLE(anv_image_view, iview, _iview);
-
-   if (iview->color_rt_surface_state.alloc_size > 0) {
-      anv_state_pool_free(&device->surface_state_pool,
-                          iview->color_rt_surface_state);
-   }
 
    if (iview->sampler_surface_state.alloc_size > 0) {
       anv_state_pool_free(&device->surface_state_pool,

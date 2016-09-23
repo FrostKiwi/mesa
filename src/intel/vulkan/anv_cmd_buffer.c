@@ -820,12 +820,14 @@ anv_cmd_buffer_emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
          assert(stage == MESA_SHADER_FRAGMENT);
          assert(binding->binding == 0);
          if (binding->index < subpass->color_count) {
-            const struct anv_image_view *iview =
-               fb->attachments[subpass->color_attachments[binding->index]];
+            const struct anv_framebuffer_attachment *fb_att =
+               &fb->attachments[subpass->color_attachments[binding->index]];
 
-            assert(iview->color_rt_surface_state.alloc_size);
-            surface_state = iview->color_rt_surface_state;
-            add_image_view_relocs(cmd_buffer, iview, surface_state);
+            surface_state = fb->surface_states;
+            surface_state.offset += fb_att->rt_state_offset;
+            surface_state.map += fb_att->rt_state_offset;
+
+            add_image_view_relocs(cmd_buffer, fb_att->view, surface_state);
          } else {
             /* Null render target */
             struct anv_framebuffer *fb = cmd_buffer->state.framebuffer;
@@ -1292,7 +1294,7 @@ anv_cmd_buffer_get_depth_stencil_view(const struct anv_cmd_buffer *cmd_buffer)
       return NULL;
 
    const struct anv_image_view *iview =
-      fb->attachments[subpass->depth_stencil_attachment];
+      fb->attachments[subpass->depth_stencil_attachment].view;
 
    assert(iview->aspect_mask & (VK_IMAGE_ASPECT_DEPTH_BIT |
                                 VK_IMAGE_ASPECT_STENCIL_BIT));

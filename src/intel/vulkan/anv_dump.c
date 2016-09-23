@@ -408,7 +408,7 @@ anv_dump_add_framebuffer(struct anv_cmd_buffer *cmd_buffer,
    unsigned dump_idx = dump_count++;
 
    for (unsigned i = 0; i < fb->attachment_count; i++) {
-      struct anv_image_view *iview = fb->attachments[i];
+      struct anv_image_view *iview = fb->attachments[i].view;
 
       uint32_t b;
       for_each_bit(b, iview->image->aspects) {

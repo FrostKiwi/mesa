@@ -1730,9 +1730,6 @@ struct anv_image_view {
    VkFormat vk_format;
    VkExtent3D extent; /**< Extent of VkImageViewCreateInfo::baseMipLevel. */
 
-   /** RENDER_SURFACE_STATE when using image as a color render target. */
-   struct anv_state color_rt_surface_state;
-
    /** RENDER_SURFACE_STATE when using image as a sampler surface. */
    struct anv_state sampler_surface_state;
 
@@ -1836,13 +1833,20 @@ struct anv_sampler {
    uint32_t state[4];
 };
 
+struct anv_framebuffer_attachment {
+   struct anv_image_view *                      view;
+   int16_t                                      rt_state_offset;
+};
+
 struct anv_framebuffer {
    uint32_t                                     width;
    uint32_t                                     height;
    uint32_t                                     layers;
 
+   struct anv_state                             surface_states;
+
    uint32_t                                     attachment_count;
-   struct anv_image_view *                      attachments[0];
+   struct anv_framebuffer_attachment            attachments[0];
 };
 
 struct anv_subpass {

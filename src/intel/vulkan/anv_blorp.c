@@ -911,8 +911,8 @@ anv_cmd_buffer_resolve_subpass(struct anv_cmd_buffer *cmd_buffer)
       if (dst_att == VK_ATTACHMENT_UNUSED)
          continue;
 
-      struct anv_image_view *src_iview = fb->attachments[src_att];
-      struct anv_image_view *dst_iview = fb->attachments[dst_att];
+      struct anv_image_view *src_iview = fb->attachments[src_att].view;
+      struct anv_image_view *dst_iview = fb->attachments[dst_att].view;
 
       const VkRect2D render_area = cmd_buffer->state.render_area;
 
