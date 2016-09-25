@@ -1700,6 +1700,11 @@ struct anv_image {
          struct anv_surface stencil_surface;
       };
    };
+
+   /** The usage of the aux surface when not in a renderpass. */
+   enum isl_aux_usage aux_usage;
+
+   struct anv_surface aux_surface;
 };
 
 static inline uint32_t
@@ -1835,6 +1840,7 @@ struct anv_sampler {
 
 struct anv_framebuffer_attachment {
    struct anv_image_view *                      view;
+   enum isl_aux_usage                           aux_usage;
    int16_t                                      rt_state_offset;
 };
 

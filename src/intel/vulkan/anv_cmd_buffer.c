@@ -693,6 +693,7 @@ add_surface_state_reloc(struct anv_cmd_buffer *cmd_buffer,
 static void
 add_image_view_relocs(struct anv_cmd_buffer *cmd_buffer,
                       const struct anv_image_view *iview,
+                      enum isl_aux_usage aux_usage,
                       struct anv_state state)
 {
    const struct isl_device *isl_dev = &cmd_buffer->device->isl_dev;
@@ -700,6 +701,22 @@ add_image_view_relocs(struct anv_cmd_buffer *cmd_buffer,
    anv_reloc_list_add(&cmd_buffer->surface_relocs, &cmd_buffer->pool->alloc,
                       state.offset + isl_dev->ss.addr_offset,
                       iview->bo, iview->offset);
+
+   if (aux_usage != ISL_AUX_USAGE_NONE) {
+      uint32_t aux_offset = iview->offset + iview->image->aux_surface.offset;
+
+      /* On gen7 and prior, the bottom 12 bits of the MCS base address are
+       * used to store other information.  This should be ok, however, because
+       * surface buffer addresses are always 4K page alinged.
+       */
+      assert((aux_offset & 0xfff) == 0);
+      uint32_t *aux_addr_dw = state.map + isl_dev->ss.aux_addr_offset;
+      aux_offset += *aux_addr_dw & 0xfff;
+
+      anv_reloc_list_add(&cmd_buffer->surface_relocs, &cmd_buffer->pool->alloc,
+                         state.offset + isl_dev->ss.aux_addr_offset,
+                         iview->bo, aux_offset);
+   }
 }
 
 enum isl_format
@@ -827,7 +844,8 @@ anv_cmd_buffer_emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
             surface_state.offset += fb_att->rt_state_offset;
             surface_state.map += fb_att->rt_state_offset;
 
-            add_image_view_relocs(cmd_buffer, fb_att->view, surface_state);
+            add_image_view_relocs(cmd_buffer, fb_att->view, fb_att->aux_usage,
+                                  surface_state);
          } else {
             /* Null render target */
             struct anv_framebuffer *fb = cmd_buffer->state.framebuffer;
@@ -854,13 +872,17 @@ anv_cmd_buffer_emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
       case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
          surface_state = desc->image_view->sampler_surface_state;
          assert(surface_state.alloc_size);
-         add_image_view_relocs(cmd_buffer, desc->image_view, surface_state);
+         add_image_view_relocs(cmd_buffer, desc->image_view,
+                               desc->image_view->image->aux_usage,
+                               surface_state);
          break;
 
       case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: {
          surface_state = desc->image_view->storage_surface_state;
          assert(surface_state.alloc_size);
-         add_image_view_relocs(cmd_buffer, desc->image_view, surface_state);
+         add_image_view_relocs(cmd_buffer, desc->image_view,
+                               desc->image_view->image->aux_usage,
+                               surface_state);
 
          struct brw_image_param *image_param =
             &cmd_buffer->state.push_constants[stage]->images[image++];

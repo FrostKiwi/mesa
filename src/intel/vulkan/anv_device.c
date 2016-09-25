@@ -1789,6 +1789,7 @@ VkResult anv_CreateFramebuffer(
       ANV_FROM_HANDLE(anv_image_view, iview, pCreateInfo->pAttachments[i]);
 
       framebuffer->attachments[i].view = iview;
+      framebuffer->attachments[i].aux_usage = iview->image->aux_usage;
       framebuffer->attachments[i].rt_state_offset = -1;
 
       if (iview->image->aspects & VK_IMAGE_ASPECT_COLOR_BIT)
@@ -1812,6 +1813,8 @@ VkResult anv_CreateFramebuffer(
                              framebuffer->surface_states.map + offset,
                              .surf = &iview->image->color_surface.isl,
                              .view = &isl_view,
+                             .aux_surf = &iview->image->aux_surface.isl,
+                             .aux_usage = fb_att->aux_usage,
                              .mocs = device->default_mocs);
       }
    }

@@ -248,6 +248,7 @@ anv_image_create(VkDevice _device,
    image->samples = pCreateInfo->samples;
    image->usage = anv_image_get_full_usage(pCreateInfo, image->aspects);
    image->tiling = pCreateInfo->tiling;
+   image->aux_usage = ISL_AUX_USAGE_NONE;
 
    uint32_t b;
    for_each_bit(b, image->aspects) {
@@ -291,17 +292,33 @@ anv_DestroyImage(VkDevice _device, VkImage _image,
 }
 
 VkResult anv_BindImageMemory(
-    VkDevice                                    device,
+    VkDevice                                    _device,
     VkImage                                     _image,
     VkDeviceMemory                              _memory,
     VkDeviceSize                                memoryOffset)
 {
+   ANV_FROM_HANDLE(anv_device, device, _device);
    ANV_FROM_HANDLE(anv_device_memory, mem, _memory);
    ANV_FROM_HANDLE(anv_image, image, _image);
 
    if (mem) {
       image->bo = &mem->bo;
       image->offset = memoryOffset;
+
+      if (image->aux_surface.isl.size > 0) {
+         /* Auxiliary surfaces need to have their memory initialized before
+          * they can be used.  HiZ is particularly bad, where garbage data can
+          * lead go GPU hangs.
+          */
+         void *map = anv_gem_mmap(device, image->bo->gem_handle,
+                                  image->offset + image->aux_surface.offset,
+                                  image->aux_surface.isl.size,
+                                  device->info.has_llc ? 0 : I915_MMAP_WC);
+
+         memset(map, 0, image->aux_surface.isl.size);
+
+         anv_gem_munmap(map, image->aux_surface.isl.size);
+      }
    } else {
       image->bo = NULL;
       image->offset = 0;
