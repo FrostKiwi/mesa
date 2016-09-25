@@ -1765,6 +1765,30 @@ void anv_DestroySampler(
    anv_free2(&device->alloc, pAllocator, sampler);
 }
 
+static enum isl_aux_usage
+get_fb_attachment_aux_usage(struct anv_device *device,
+                            struct anv_framebuffer *fb,
+                            struct anv_framebuffer_attachment *fb_att)
+{
+   if (fb_att->view->image->aux_surface.isl.size == 0)
+      return ISL_AUX_USAGE_NONE; /* No aux surface */
+
+   /* This is a color buffer, it had better be CCS */
+   assert(fb_att->view->image->aux_surface.isl.usage & ISL_SURF_USAGE_CCS_BIT);
+
+   if (!isl_format_supports_lossless_compression(&device->info,
+                                                 fb_att->view->isl.format))
+      return ISL_AUX_USAGE_NONE; /* Unsupported format */
+
+   if (fb->layers > 1 || fb_att->view->isl.base_array_layer > 0)
+      return ISL_AUX_USAGE_NONE; /* Multi-layered CCS not yet supported */
+
+   if (fb_att->view->isl.base_level > 0)
+      return ISL_AUX_USAGE_NONE; /* Multi-LOD CCS not yet supported */
+
+   return ISL_AUX_USAGE_CCS_E;
+}
+
 VkResult anv_CreateFramebuffer(
     VkDevice                                    _device,
     const VkFramebufferCreateInfo*              pCreateInfo,
@@ -1782,6 +1806,10 @@ VkResult anv_CreateFramebuffer(
                             VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
    if (framebuffer == NULL)
       return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   framebuffer->width = pCreateInfo->width;
+   framebuffer->height = pCreateInfo->height;
+   framebuffer->layers = pCreateInfo->layers;
 
    framebuffer->attachment_count = pCreateInfo->attachmentCount;
    unsigned color_count = 0;
@@ -1802,10 +1830,14 @@ VkResult anv_CreateFramebuffer(
                            device->isl_dev.ss.align);
    unsigned color_idx = 0;
    for (uint32_t i = 0; i < pCreateInfo->attachmentCount; i++) {
-      struct anv_image_view *iview = framebuffer->attachments[i].view;
+      struct anv_framebuffer_attachment *fb_att = &framebuffer->attachments[i];
+      struct anv_image_view *iview = fb_att->view;
+
       if (iview->image->aspects & VK_IMAGE_ASPECT_COLOR_BIT) {
          const uint16_t offset = (color_idx++) * device->isl_dev.ss.align;
-         framebuffer->attachments[i].rt_state_offset = offset;
+         fb_att->rt_state_offset = offset;
+         fb_att->aux_usage =
+            get_fb_attachment_aux_usage(device, framebuffer, fb_att);
 
          struct isl_view isl_view = iview->isl;
          isl_view.usage |= ISL_SURF_USAGE_RENDER_TARGET_BIT;
@@ -1821,10 +1853,6 @@ VkResult anv_CreateFramebuffer(
 
    if (device->info.has_llc)
       anv_state_clflush(framebuffer->surface_states);
-
-   framebuffer->width = pCreateInfo->width;
-   framebuffer->height = pCreateInfo->height;
-   framebuffer->layers = pCreateInfo->layers;
 
    *pFramebuffer = anv_framebuffer_to_handle(framebuffer);
 

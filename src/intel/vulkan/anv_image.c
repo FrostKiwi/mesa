@@ -169,6 +169,15 @@ make_surface(const struct anv_device *dev,
 
    add_surface(image, anv_surf);
 
+   if (aspect == VK_IMAGE_ASPECT_COLOR_BIT) {
+      if (dev->info.gen >= 9 && vk_info->samples == 1) {
+         ok = isl_surf_get_ccs_surf(&dev->isl_dev, &anv_surf->isl,
+                                    &image->aux_surface.isl);
+         if (ok)
+            add_surface(image, &image->aux_surface);
+      }
+   }
+
    return VK_SUCCESS;
 }
 

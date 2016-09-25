@@ -929,3 +929,33 @@ anv_cmd_buffer_resolve_subpass(struct anv_cmd_buffer *cmd_buffer)
 
    blorp_batch_finish(&batch);
 }
+
+void
+anv_cmd_buffer_resolve_framebuffer(struct anv_cmd_buffer *cmd_buffer,
+                                   struct anv_framebuffer *fb)
+{
+   struct blorp_batch batch;
+   blorp_batch_init(&cmd_buffer->device->blorp, &batch, cmd_buffer);
+
+   for (uint32_t i = 0; i < fb->attachment_count; i++) {
+      struct anv_framebuffer_attachment *fb_att = &fb->attachments[i];
+      const struct anv_image *image = fb_att->view->image;
+
+      if (fb_att->aux_usage != ISL_AUX_USAGE_CCS_E &&
+          fb_att->aux_usage != ISL_AUX_USAGE_CCS_D)
+         continue;
+
+      struct blorp_surf surf;
+      get_blorp_surf_for_anv_image(image, VK_IMAGE_ASPECT_COLOR_BIT, &surf);
+      surf.aux_surf = &image->aux_surface.isl;
+      surf.aux_addr = (struct blorp_address) {
+         .buffer = image->bo,
+         .offset = image->offset + image->aux_surface.offset,
+      };
+      surf.aux_usage = fb_att->aux_usage;
+
+      blorp_ccs_resolve(&batch, &surf, fb_att->view->isl.format);
+   }
+
+   blorp_batch_finish(&batch);
+}

@@ -1346,6 +1346,23 @@ void genX(CmdEndRenderPass)(
 
    anv_cmd_buffer_resolve_subpass(cmd_buffer);
 
+   /* From the Sky Lake PRM Vol. 7, "Render Target Resolve":
+    *
+    *    "When performing a render target resolve, PIPE_CONTROL with end of
+    *    pipe sync must be delivered."
+    *
+    * By "end of pipe sync" it appears that they mean a pixel scoreboard stall
+    * This makes sense because the resolve operation probably needs the CCS to
+    * be fully valid before it looks at it.
+    */
+   anv_batch_emit(&cmd_buffer->batch, GENX(PIPE_CONTROL), pc) {
+      pc.StallAtPixelScoreboard     = true;
+      pc.CommandStreamerStallEnable = true;
+   }
+
+   anv_cmd_buffer_resolve_framebuffer(cmd_buffer,
+                                      cmd_buffer->state.framebuffer);
+
 #ifndef NDEBUG
    anv_dump_add_framebuffer(cmd_buffer, cmd_buffer->state.framebuffer);
 #endif
