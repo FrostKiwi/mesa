@@ -563,6 +563,7 @@ gcd_pow2_u64(uint64_t a, uint64_t b)
 /* This is maximum possible width/height our HW can handle */
 #define MAX_SURFACE_DIM (1ull << 14)
 
+#if 0
 void anv_CmdCopyBuffer(
     VkCommandBuffer                             commandBuffer,
     VkBuffer                                    srcBuffer,
@@ -624,6 +625,7 @@ void anv_CmdCopyBuffer(
 
    blorp_batch_finish(&batch);
 }
+#endif
 
 void anv_CmdUpdateBuffer(
     VkCommandBuffer                             commandBuffer,
