@@ -1115,7 +1115,7 @@ VkResult anv_QueueWaitIdle(
 {
    ANV_FROM_HANDLE(anv_queue, queue, _queue);
 
-   return ANV_CALL(DeviceWaitIdle)(anv_device_to_handle(queue->device));
+   return anv_DeviceWaitIdle(anv_device_to_handle(queue->device));
 }
 
 VkResult anv_DeviceWaitIdle(
