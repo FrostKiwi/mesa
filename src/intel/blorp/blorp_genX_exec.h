@@ -767,11 +767,8 @@ blorp_emit_depth_stencil_config(struct blorp_batch *batch,
          db.SurfacePitch = params->depth.surf.row_pitch - 1;
          db.SurfaceBaseAddress = params->depth.addr;
          db.DepthBufferMOCS = mocs;
-      } else {
+      } else if (params->stencil.addr.buffer) {
          db.SurfaceFormat = D32_FLOAT;
-
-         /* If we don't have a depth buffer, pull dimensions from stencil */
-         assert(params->stencil.addr.buffer != NULL);
 
          db.SurfaceType = isl_to_gen_surf_dim[params->stencil.surf.dim];
          db.Width = params->stencil.surf.logical_level0_px.width - 1;
@@ -782,6 +779,9 @@ blorp_emit_depth_stencil_config(struct blorp_batch *batch,
 
          db.LOD = params->stencil.view.base_level;
          db.MinimumArrayElement = params->stencil.view.base_array_layer;
+      } else {
+         db.SurfaceType = SURFTYPE_NULL;
+         db.SurfaceFormat = D32_FLOAT;
       }
    }
 
@@ -1238,17 +1238,7 @@ blorp_exec(struct blorp_batch *batch, const struct blorp_params *params)
 
    blorp_emit_viewport_state(batch, params);
 
-   if (params->depth.addr.buffer || params->stencil.addr.buffer) {
-      blorp_emit_depth_stencil_config(batch, params);
-   } else {
-      blorp_emit(batch, GENX(3DSTATE_DEPTH_BUFFER), db) {
-         db.SurfaceType = SURFTYPE_NULL;
-         db.SurfaceFormat = D32_FLOAT;
-      }
-      blorp_emit(batch, GENX(3DSTATE_HIER_DEPTH_BUFFER), hiz);
-      blorp_emit(batch, GENX(3DSTATE_STENCIL_BUFFER), sb);
-      blorp_emit(batch, GENX(3DSTATE_CLEAR_PARAMS), clear);
-   }
+   blorp_emit_depth_stencil_config(batch, params);
 
    blorp_emit(batch, GENX(3DPRIMITIVE), prim) {
       prim.VertexAccessType = SEQUENTIAL;
