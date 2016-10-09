@@ -933,6 +933,117 @@ brw_blorp_clear_color(struct brw_context *brw, struct gl_framebuffer *fb,
 }
 
 void
+brw_blorp_clear_depth_stencil(struct brw_context *brw,
+                              struct gl_framebuffer *fb,
+                              GLbitfield mask, bool partial_clear)
+{
+   const struct gl_context *ctx = &brw->ctx;
+   struct gl_renderbuffer *depth_rb =
+      fb->Attachment[BUFFER_DEPTH].Renderbuffer;
+   struct gl_renderbuffer *stencil_rb =
+      fb->Attachment[BUFFER_STENCIL].Renderbuffer;
+
+   if (!depth_rb)
+      mask &= ~BUFFER_BIT_DEPTH;
+
+   if (!stencil_rb)
+      mask &= ~BUFFER_BIT_STENCIL;
+
+   if (!(mask & (BUFFER_BIT_DEPTH | BUFFER_BIT_STENCIL)))
+      return;
+
+   uint32_t x0, x1, y0, y1, rb_name, rb_height;
+   if (depth_rb) {
+      rb_name = depth_rb->Name;
+      rb_height = depth_rb->Height;
+      if (stencil_rb) {
+         assert(depth_rb->Width == stencil_rb->Width);
+         assert(depth_rb->Height == stencil_rb->Height);
+      }
+   } else {
+      assert(stencil_rb);
+      rb_name = stencil_rb->Name;
+      rb_height = stencil_rb->Height;
+   }
+
+   x0 = fb->_Xmin;
+   x1 = fb->_Xmax;
+   if (rb_name != 0) {
+      y0 = fb->_Ymin;
+      y1 = fb->_Ymax;
+   } else {
+      y0 = rb_height - fb->_Ymax;
+      y1 = rb_height - fb->_Ymin;
+   }
+
+   /* If the clear region is empty, just return. */
+   if (x0 == x1 || y0 == y1)
+      return;
+
+   unsigned level, layer, num_layers;
+   struct isl_surf isl_tmp[4];
+   struct blorp_surf depth_surf, stencil_surf;
+
+   if (mask & BUFFER_BIT_DEPTH) {
+      struct intel_renderbuffer *irb = intel_renderbuffer(depth_rb);
+      struct intel_mipmap_tree *depth_mt =
+         find_miptree(GL_DEPTH_BUFFER_BIT, irb);
+
+      level = irb->mt_level;
+      layer = irb_logical_mt_layer(irb);
+      num_layers = fb->MaxNumLayers ? irb->layer_count : 1;
+
+      intel_miptree_used_for_rendering(depth_mt);
+      for (unsigned l = 0; l < num_layers; l++) {
+         intel_miptree_check_level_layer(depth_mt, level, layer + l);
+         intel_miptree_slice_set_needs_depth_resolve(depth_mt, level,
+                                                     layer + l);
+      }
+
+      unsigned depth_level = level;
+      blorp_surf_for_miptree(brw, &depth_surf, depth_mt, true,
+                             &depth_level, &isl_tmp[0]);
+      assert(depth_level == level);
+   }
+
+   uint8_t stencil_mask = 0;
+   if (mask & BUFFER_BIT_STENCIL) {
+      struct intel_renderbuffer *irb = intel_renderbuffer(stencil_rb);
+      struct intel_mipmap_tree *stencil_mt =
+         find_miptree(GL_STENCIL_BUFFER_BIT, irb);
+
+      if (mask & BUFFER_BIT_DEPTH) {
+         assert(level == irb->mt_level);
+         assert(layer == irb_logical_mt_layer(irb));
+         assert(num_layers == fb->MaxNumLayers ? irb->layer_count : 1);
+      } else {
+         level = irb->mt_level;
+         layer = irb_logical_mt_layer(irb);
+         num_layers = fb->MaxNumLayers ? irb->layer_count : 1;
+      }
+
+      stencil_mask = ctx->Stencil.WriteMask[0];
+
+      intel_miptree_used_for_rendering(stencil_mt);
+      for (unsigned l = 0; l < num_layers; l++)
+         intel_miptree_check_level_layer(stencil_mt, level, layer + l);
+
+      unsigned stencil_level = level;
+      blorp_surf_for_miptree(brw, &stencil_surf, stencil_mt, true,
+                             &stencil_level, &isl_tmp[2]);
+   }
+
+   struct blorp_batch batch;
+   blorp_batch_init(&brw->blorp, &batch, brw);
+   blorp_clear_depth_stencil(&batch, &depth_surf, &stencil_surf,
+                             level, layer, num_layers,
+                             x0, y0, x1, y1,
+                             (mask & BUFFER_BIT_DEPTH), ctx->Depth.Clear,
+                             stencil_mask, ctx->Stencil.Clear);
+   blorp_batch_finish(&batch);
+}
+
+void
 brw_blorp_resolve_color(struct brw_context *brw, struct intel_mipmap_tree *mt)
 {
    DBG("%s to mt %p\n", __FUNCTION__, mt);
