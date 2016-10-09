@@ -232,12 +232,14 @@ brw_clear(struct gl_context *ctx, GLbitfield mask)
    intel_prepare_render(brw);
    brw_workaround_depthstencil_alignment(brw, partial_clear ? 0 : mask);
 
+#if 0
    if (mask & BUFFER_BIT_DEPTH) {
       if (brw_fast_clear_depth(ctx)) {
 	 DBG("fast clear: depth\n");
 	 mask &= ~BUFFER_BIT_DEPTH;
       }
    }
+#endif
 
    if (mask & BUFFER_BIT_STENCIL) {
       struct intel_renderbuffer *stencil_irb =
