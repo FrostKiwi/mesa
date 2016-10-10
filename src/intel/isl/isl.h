@@ -1352,6 +1352,18 @@ isl_surf_get_row_pitch_el(const struct isl_surf *surf)
 }
 
 /**
+ * Pitch between vertically adjacent surface elements, in units of surface
+ * samples.
+ */
+static inline uint32_t
+isl_surf_get_row_pitch_sa(const struct isl_surf *surf)
+{
+   const struct isl_format_layout *fmtl = isl_format_get_layout(surf->format);
+
+   return isl_surf_get_row_pitch_el(surf) * fmtl->bw;
+}
+
+/**
  * Pitch between physical array slices, in rows of surface elements.
  */
 static inline uint32_t
