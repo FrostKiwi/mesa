@@ -448,7 +448,8 @@ const struct brw_tracked_state gen7_urb = {
              BRW_NEW_GS_PROG_DATA |
              BRW_NEW_TCS_PROG_DATA |
              BRW_NEW_TES_PROG_DATA |
-             BRW_NEW_VS_PROG_DATA,
+             BRW_NEW_VS_PROG_DATA |
+             BRW_NEW_BLORP,
    },
    .emit = upload_urb,
 };
