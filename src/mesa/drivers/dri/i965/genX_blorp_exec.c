@@ -249,7 +249,8 @@ retry:
     * rendering tracks for GL.
     */
    brw->ctx.NewDriverState |= BRW_NEW_BLORP;
-   brw->no_depth_or_stencil = false;
+   brw->no_depth_or_stencil = !params->depth.enabled &&
+                              !params->stencil.enabled;
    brw->ib.type = -1;
 
    /* Flush the sampler cache so any texturing from the destination is
