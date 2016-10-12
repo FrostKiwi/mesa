@@ -1033,6 +1033,9 @@ brw_blorp_clear_depth_stencil(struct brw_context *brw,
                              &stencil_level, &isl_tmp[2]);
    }
 
+   if (brw->gen == 8)
+      gen8_write_pma_stall_bits(brw, 0);
+
    struct blorp_batch batch;
    blorp_batch_init(&brw->blorp, &batch, brw);
    blorp_clear_depth_stencil(&batch, &depth_surf, &stencil_surf,
