@@ -258,11 +258,7 @@ brw_clear(struct gl_context *ctx, GLbitfield mask)
       }
    }
 
-   if (brw->gen >= 7 && (mask & BUFFER_BITS_DEPTH_STENCIL)) {
-      brw_blorp_clear_depth_stencil(brw, fb, mask, partial_clear);
-      debug_mask("blorp depth/stencil", mask & BUFFER_BITS_DEPTH_STENCIL);
-//      mask &= ~BUFFER_BITS_DEPTH_STENCIL;
-   }
+   uint32_t ds_mask = mask & BUFFER_BITS_DEPTH_STENCIL;
 
    GLbitfield tri_mask = mask & (BUFFER_BITS_COLOR |
 				 BUFFER_BIT_STENCIL |
@@ -277,6 +273,11 @@ brw_clear(struct gl_context *ctx, GLbitfield mask)
       } else {
          _mesa_meta_glsl_Clear(&brw->ctx, tri_mask);
       }
+   }
+
+   if (brw->gen >= 7 && ds_mask) {
+      brw_blorp_clear_depth_stencil(brw, fb, ds_mask, partial_clear);
+      debug_mask("blorp depth/stencil", mask & BUFFER_BITS_DEPTH_STENCIL);
    }
 
    /* Any strange buffers get passed off to swrast */
