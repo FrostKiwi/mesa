@@ -777,7 +777,7 @@ brw_upload_pipeline_state(struct brw_context *brw,
 
    brw_select_pipeline(brw, pipeline);
 
-   if (0) {
+   if (1) {
       /* Always re-emit all state. */
       brw->NewGLState = ~0;
       ctx->NewDriverState = ~0ull;
