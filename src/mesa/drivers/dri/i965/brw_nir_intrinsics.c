@@ -102,7 +102,7 @@ lower_cs_intrinsics_convert_block(struct lower_intrinsics_state *state,
           *        (gl_WorkGroupSize.x * gl_WorkGroupSize.y)) %
           *       gl_WorkGroupSize.z;
           */
-         unsigned *size = nir->info.cs.local_size;
+         unsigned *size = nir->info->cs.local_size;
 
          nir_ssa_def *local_index = nir_load_local_invocation_index(b);
 
