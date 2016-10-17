@@ -500,6 +500,9 @@ class Parser(object):
             self.platform = attrs["name"]
             self.gen = attrs["gen"].replace('.', '')
             print(pack_header % {'license': license, 'platform': self.platform, 'guard': self.gen_guard()})
+        elif name == "engine":
+            # Ignore engines for now
+            pass
         elif name in ("instruction", "struct", "register"):
             if name == "instruction":
                 self.instruction = safe_name(attrs["name"])
@@ -560,6 +563,9 @@ class Parser(object):
             self.enum = None
         elif name == "genxml":
             print('#endif /* %s */' % self.gen_guard())
+        elif name == "engine":
+            # Ignore engines for now
+            pass
 
     def emit_template_struct(self, name, group):
         print("struct %s {" % self.gen_prefix(name))
