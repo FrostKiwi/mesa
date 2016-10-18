@@ -3440,4 +3440,828 @@
 
   </engine>
 
+  <engine name="blitter">
+    <instruction name="XY_COLOR_BLT" bias="2" length="7">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="80"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint" default="5"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Solid Pattern Color" start="192" end="223" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_FAST_COPY_BLT" bias="2" length="10">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="66"/>
+      <field name="Source Tiling Method" start="20" end="21" type="uint">
+        <value name="Linear (Tiling Disabled)" value="0"/>
+        <value name="Legacy Tile-X" value="1"/>
+        <value name="Tile-Y" value="2"/>
+        <value name="64kb Tiling" value="3"/>
+      </field>
+      <field name="Source Tiled Resource Horizontal Alignment" start="17" end="19" type="uint">
+        <value name="32 pixels" value="0"/>
+        <value name="64 pixels" value="1"/>
+        <value name="128 pixels" value="2"/>
+        <value name="256 pixels" value="3"/>
+        <value name="512 pixels" value="4"/>
+      </field>
+      <field name="Source Tiled Resource Vertical Alignment" start="15" end="16" type="uint"/>
+      <field name="Destination Tiling Method" start="13" end="14" type="uint">
+        <value name="Linear (Tiling Disabled)" value="0"/>
+        <value name="Legacy Tile-X" value="1"/>
+        <value name="Tile-Y" value="2"/>
+        <value name="64kb Tiling" value="3"/>
+      </field>
+      <field name="Destination Tiled Resource Horizontal Alignment" start="10" end="12" type="uint">
+        <value name="32 pixels" value="0"/>
+        <value name="64 pixels" value="1"/>
+        <value name="128 pixels" value="2"/>
+        <value name="256 pixels" value="3"/>
+        <value name="512 pixels" value="4"/>
+      </field>
+      <field name="Destination Tiled Resource Vertical Alignment" start="8" end="9" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint" default="8"/>
+      <field name="Tile Y Type for Source" start="63" end="63" type="uint">
+        <value name="Legacy Tile-Y" value="0"/>
+        <value name="New 4k Tile-YF" value="1"/>
+      </field>
+      <field name="Tile Y Type for Destination" start="62" end="62" type="uint">
+        <value name="Legacy Tile-Y" value="0"/>
+        <value name="New 4k Tile-YF" value="1"/>
+      </field>
+      <field name="Color Depth" start="56" end="58" type="uint">
+        <value name="8 bit color" value="0"/>
+        <value name="16 bit color (565)" value="1"/>
+        <value name="16 bit color (1555)" value="2"/>
+        <value name="32 bit color" value="3"/>
+        <value name="64 bit color (for 64KB Tiling)" value="4"/>
+        <value name="128 bit color (for 64KB Tiling)" value="5"/>
+      </field>
+      <field name="Destination Pitch (signed)" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Source Y1 Coordinate (Top)" start="208" end="223" type="uint"/>
+      <field name="Source X1 Coordinate (Left)" start="192" end="207" type="uint"/>
+      <field name="Source Pitch (double word aligned)" start="224" end="239" type="uint"/>
+      <field name="Source Address" start="256" end="287" type="address"/>
+      <field name="Source Address High" start="288" end="303" type="address"/>
+    </instruction>
+
+    <instruction name="XY_FULL_BLT" bias="2" length="12">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="85"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Src Tiling Enable" start="15" end="15" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Dest Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint" default="10"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Source Pitch (double word aligned and signed) and in DWords" start="192" end="207" type="uint"/>
+      <field name="Source Y1 Coordinate (Top)" start="240" end="255" type="uint"/>
+      <field name="Source X1 Coordinate (Left)" start="224" end="239" type="uint"/>
+      <field name="Source Address" start="256" end="287" type="address"/>
+      <field name="Source Address High" start="288" end="303" type="address"/>
+      <field name="Pattern Base Address" start="320" end="351" type="address"/>
+      <field name="Pattern Base Address High" start="352" end="367" type="address"/>
+    </instruction>
+
+    <instruction name="XY_FULL_IMMEDIATE_PATTERN_BLT" bias="2">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="116"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Src Tiling Enable" start="15" end="15" type="uint">
+        <value name="Tiling Disabled (Linear)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Dest Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint" default="8"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Source Pitch (double word aligned and signed) and in DWords" start="192" end="207" type="uint"/>
+      <field name="Source Y1 Coordinate (Top)" start="240" end="255" type="uint"/>
+      <field name="Source X1 Coordinate (Left)" start="224" end="239" type="uint"/>
+      <field name="Source Address" start="256" end="287" type="address"/>
+      <field name="Source Address High" start="288" end="303" type="address"/>
+      <group count="0" start="320" size="32">
+        <field name="Immediate Data 0" start="0" end="31" type="uint"/>
+      </group>
+    </instruction>
+
+    <instruction name="XY_FULL_MONO_PATTERN_BLT" bias="2" length="14">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="87"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Src Tiling Enable" start="15" end="15" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Dest Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vectical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint"/>
+      <field name="Solid Pattern Select" start="63" end="63" type="uint">
+        <value name="No Solid Pattern" value="0"/>
+        <value name="Solid Pattern" value="1"/>
+      </field>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Mono Source Transparency Mode" start="59" end="60" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Source Pitch (double word aligned and signed) and in DWords" start="192" end="207" type="uint"/>
+      <field name="Source Y1 Coordinate (Top)" start="240" end="255" type="uint"/>
+      <field name="Source X1 Coordinate (Left)" start="224" end="239" type="uint"/>
+      <field name="Source Address" start="256" end="287" type="address"/>
+      <field name="Source Address High" start="288" end="303" type="address"/>
+      <field name="Pattern Background Color" start="320" end="351" type="uint"/>
+      <field name="Pattern Foreground Color" start="352" end="383" type="uint"/>
+      <field name="Pattern Data 0" start="384" end="415" type="uint"/>
+      <field name="Pattern Data 1" start="416" end="447" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_FULL_MONO_PATTERN_MONO_SRC_BLT" bias="2" length="14">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="88"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Monochrome source data bit position of the first pixel within a byte per scan line." start="17" end="19" type="uint"/>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint"/>
+      <field name="Solid Pattern Select" start="63" end="63" type="uint">
+        <value name="No Solid Pattern" value="0"/>
+        <value name="Solid Pattern" value="1"/>
+      </field>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Mono Source Transparency Mode" start="61" end="61" type="uint"/>
+      <field name="Mono Pattern Transparency Mode" start="60" end="60" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Mono Source Address" start="192" end="223" type="address"/>
+      <field name="Mono Source Address High" start="224" end="239" type="address"/>
+      <field name="Source Background Color" start="256" end="287" type="uint"/>
+      <field name="Source Foreground Color" start="288" end="319" type="uint"/>
+      <field name="Pattern Background Color" start="320" end="351" type="uint"/>
+      <field name="Pattern Foreground Color" start="352" end="383" type="uint"/>
+      <field name="Pattern Data 0" start="384" end="415" type="uint"/>
+      <field name="Pattern Data 1" start="416" end="447" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_FULL_MONO_SRC_BLT" bias="2" length="12">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="86"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Monochrome source data bit position of the first pixel within a byte per scan line." start="17" end="19" type="uint"/>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Mono Source Transparency Mode" start="61" end="61" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Mono Source Address" start="192" end="223" type="address"/>
+      <field name="Mono Source Address High" start="224" end="239" type="address"/>
+      <field name="Source Background Color" start="256" end="287" type="uint"/>
+      <field name="Source Foreground Color" start="288" end="319" type="uint"/>
+      <field name="Pattern Base Address" start="320" end="351" type="address"/>
+      <field name="Pattern Base Address High" start="352" end="367" type="address"/>
+    </instruction>
+
+    <instruction name="XY_FULL_MONO_SRC_IMMEDIATE_PATTERN_BLT" bias="2">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="117"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Monochrome source data bit position of the first pixel within a byte per scan line." start="17" end="19" type="uint"/>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint" default="8"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Mono Source Transparency Mode" start="61" end="61" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Mono Source Address" start="192" end="223" type="address"/>
+      <field name="Mono Source Address High" start="224" end="239" type="address"/>
+      <field name="Source Background Color" start="256" end="287" type="uint"/>
+      <field name="Source Foreground Color" start="288" end="319" type="uint"/>
+      <group count="0" start="320" size="32">
+        <field name="Immediate Data" start="0" end="31" type="uint"/>
+      </group>
+    </instruction>
+
+    <instruction name="XY_MONO_PAT_BLT" bias="2" length="10">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="82"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Mono Pattern Transparency Mode" start="60" end="60" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Pattern Background Color" start="192" end="223" type="uint"/>
+      <field name="Pattern Foreground Color" start="224" end="255" type="uint"/>
+      <field name="Pattern Data 0" start="256" end="287" type="uint"/>
+      <field name="Pattern Data 1" start="288" end="319" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_MONO_PAT_FIXED_BLT" bias="2" length="8">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="89"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Fixed Pattern" start="15" end="18" type="uint">
+        <value name="HS_HORIZONTAL" value="0"/>
+        <value name="HS_VERTICAL" value="1"/>
+        <value name="HS_FDIAGONAL" value="2"/>
+        <value name="HS_BDIAGONAL" value="3"/>
+        <value name="HS_CROSS" value="4"/>
+        <value name="HS_DIAGCROSS" value="5"/>
+        <value name="Screen Door" value="8"/>
+        <value name="SD Wide" value="9"/>
+        <value name="Walking Bit (one)" value="10"/>
+        <value name="Walking Zero" value="11"/>
+      </field>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Mono Pattern Transparency Mode" start="60" end="60" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Pattern Background Color" start="192" end="223" type="uint"/>
+      <field name="Pattern Foreground Color" start="224" end="255" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_MONO_SRC_COPY_BLT" bias="2" length="10">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="84"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Monochrome source data bit position of the first pixel within a byte per scan line." start="17" end="19" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Mono Source Transparency Mode" start="61" end="61" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Mono Source Address" start="192" end="223" type="address"/>
+      <field name="Mono Source Address High" start="224" end="239" type="address"/>
+      <field name="Source Background Color" start="256" end="287" type="uint"/>
+      <field name="Source Foreground Color" start="288" end="319" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_MONO_SRC_COPY_IMMEDIATE_BLT" bias="2">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="113"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Monochrome source data bit position of the first pixel within a byte per scan line." start="17" end="19" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint" default="6"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Mono Source Transparency Mode" start="61" end="61" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Source Background Color" start="192" end="223" type="uint"/>
+      <field name="Source Foreground Color" start="224" end="255" type="uint"/>
+      <group count="0" start="256" size="32">
+        <field name="Immediate Data" start="0" end="31" type="uint"/>
+      </group>
+    </instruction>
+
+    <instruction name="XY_PAT_BLT" bias="2" length="8">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="81"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint" default="6"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Pattern Base Address" start="192" end="223" type="address"/>
+      <field name="Pattern Base Address High" start="224" end="239" type="address"/>
+    </instruction>
+
+    <instruction name="XY_PAT_BLT_IMMEDIATE" bias="2">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="114"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint" default="4"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <group count="0" start="192" size="32">
+        <field name="Immediate Data" start="0" end="31" type="uint"/>
+      </group>
+    </instruction>
+
+    <instruction name="XY_PAT_CHROMA_BLT" bias="2" length="10">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="118"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Transparency Range Mode" start="17" end="19" type="uint"/>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint" default="8"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Pattern Base Address" start="192" end="223" type="address"/>
+      <field name="Pattern Base Address High" start="224" end="239" type="address"/>
+      <field name="Transparency Color Low" start="256" end="287" type="uint"/>
+      <field name="Transparency Color High" start="288" end="319" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_PAT_CHROMA_BLT_IMMEDIATE" bias="2">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="119"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name=" Transparency Range Mode" start="17" end="19" type="uint"/>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint" default="6"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Transparency Color Low" start="192" end="223" type="uint"/>
+      <field name="Transparency Color High" start="224" end="255" type="uint"/>
+      <group count="0" start="256" size="32">
+        <field name="Immediate Data" start="0" end="31" type="uint"/>
+      </group>
+    </instruction>
+
+    <instruction name="XY_PIXEL_BLT" bias="2" length="2">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="36"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint" default="0"/>
+      <field name="Destination Y1 Coordinate (Top)" start="48" end="63" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="32" end="47" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_SCANLINES_BLT" bias="2" length="3">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="37"/>
+      <field name="Pattern Horizontal Seed" start="12" end="14" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Pattern Vertical Seed" start="8" end="10" type="uint"/>
+      <field name="DWord Length" start="0" end="7" type="uint" default="1"/>
+      <field name="Destination Y1 Coordinate (Top)" start="48" end="63" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="32" end="47" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="80" end="95" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="64" end="79" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_SETUP_BLT" bias="2" length="10">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="1"/>
+      <field name="32 bpp Byte Mask" start="20" end="21" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled (Tile-X or Tile-Y)" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint" default="8"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Mono Source Transparency Mode" start="61" end="61" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="ClipRect Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="ClipRect X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="ClipRect Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="ClipRect X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Setup Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Setup Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Setup Background Color" start="192" end="223" type="uint"/>
+      <field name="Setup Foreground Color" start="224" end="255" type="uint"/>
+      <field name="Setup Pattern Base Address for Color Pattern" start="256" end="287" type="address"/>
+      <field name="Setup Pattern Base Address for Color Pattern High" start="288" end="303" type="address"/>
+    </instruction>
+
+    <instruction name="XY_SETUP_CLIP_BLT" bias="2" length="3">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="3"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled (Tile-X or Tile-Y" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint" default="1"/>
+      <field name="ClipRect Y1 Coordinate (Top)" start="48" end="63" type="uint"/>
+      <field name="ClipRect X1 Coordinate (Left)" start="32" end="47" type="uint"/>
+      <field name="ClipRect Y2 Coordinate (Bottom)" start="80" end="95" type="uint"/>
+      <field name="ClipRect X2 Coordinate (Right)" start="64" end="79" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_SETUP_MONO_PATTERN_SL_BLT" bias="2" length="10">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="17"/>
+      <field name="32 bpp Byte Mask" start="20" end="21" type="uint"/>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled (Tile-X or Tile-Y" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint" default="8"/>
+      <field name="Solid Pattern Select" start="63" end="63" type="uint">
+        <value name="No Solid Pattern" value="0"/>
+        <value name="Solid Pattern" value="1"/>
+      </field>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Mono Pattern Transparency Mode" start="60" end="60" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="ClipRect Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="ClipRect X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="ClipRect Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="ClipRect X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Setup Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Setup Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Setup Background Color" start="192" end="223" type="uint"/>
+      <field name="Setup Foreground Color" start="224" end="255" type="uint"/>
+      <field name="DW0 (least significant) for a Monochrome Pattern" start="256" end="287" type="uint"/>
+      <field name="DW1 (most significant) for a Monochrome Pattern" start="288" end="319" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_SRC_COPY_BLT" bias="2" length="10">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="83"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Src Tiling Enable" start="15" end="15" type="uint">
+        <value name="Tiling Disabled (Linear)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Dest Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Source Y1 Coordinate (Top)" start="208" end="223" type="uint"/>
+      <field name="Source X1 Coordinate (Left)" start="192" end="207" type="uint"/>
+      <field name="Source Pitch (double word aligned) and in DWords" start="224" end="239" type="uint"/>
+      <field name="Source Base Address" start="256" end="287" type="address"/>
+      <field name="Source Base Address High" start="288" end="303" type="address"/>
+    </instruction>
+
+    <instruction name="XY_SRC_COPY_CHROMA_BLT" bias="2" length="12">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="115"/>
+      <field name="32bpp Byte Mask" start="20" end="21" type="uint" default="0"/>
+      <field name="Transparency Range Mode" start="17" end="19" type="uint"/>
+      <field name="Src Tiling Enable" start="15" end="15" type="uint">
+        <value name="Tiling Disabled (Linear)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="Dest Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint"/>
+      <field name="Clipping Enabled" start="62" end="62" type="uint"/>
+      <field name="Color Depth" start="56" end="57" type="uint">
+        <value name="8 Bit Color" value="0"/>
+        <value name="16 Bit Color(565)" value="1"/>
+        <value name="16 Bit Color(1555)" value="2"/>
+        <value name="32 Bit Color" value="3"/>
+      </field>
+      <field name="Raster Operation" start="48" end="55" type="uint"/>
+      <field name="Destination Pitch in DWords" start="32" end="47" type="uint"/>
+      <field name="Destination Y1 Coordinate (Top)" start="80" end="95" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="64" end="79" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="112" end="127" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="96" end="111" type="uint"/>
+      <field name="Destination Base Address" start="128" end="159" type="address"/>
+      <field name="Destination Base Address High" start="160" end="175" type="address"/>
+      <field name="Source Y1 Coordinate (Top)" start="208" end="223" type="uint"/>
+      <field name="Source X1 Coordinate (Left)" start="192" end="207" type="uint"/>
+      <field name="Source Pitch (double word aligned) and in DWords" start="224" end="239" type="uint"/>
+      <field name="Source Base Address" start="256" end="287" type="address"/>
+      <field name="Source Base Address High" start="288" end="303" type="address"/>
+      <field name="Transparency Color Low" start="320" end="351" type="uint"/>
+      <field name="Transparency Color High" start="352" end="383" type="uint"/>
+    </instruction>
+
+    <instruction name="XY_TEXT_BLT" bias="2" length="5">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="38"/>
+      <field name="Bit / Byte Packed" start="16" end="16" type="uint">
+        <value name="Bit" value="0"/>
+        <value name="Byte" value="1"/>
+      </field>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint" default="3"/>
+      <field name="Destination Y1 Coordinate (Top)" start="48" end="63" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="32" end="47" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="80" end="95" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="64" end="79" type="uint"/>
+      <field name="Source Address" start="96" end="127" type="address"/>
+      <field name="Source Address High" start="128" end="143" type="address"/>
+    </instruction>
+
+    <instruction name="XY_TEXT_IMMEDIATE_BLT" bias="2">
+      <field name="Client" start="29" end="31" type="uint" default="2"/>
+      <field name="Instruction Target(Opcode)" start="22" end="28" type="uint" default="49"/>
+      <field name="Bit / Byte Packed" start="16" end="16" type="uint">
+        <value name="Bit" value="0"/>
+        <value name="Byte" value="1"/>
+      </field>
+      <field name="Tiling Enable" start="11" end="11" type="uint">
+        <value name="Tiling Disabled (Linear Blit)" value="0"/>
+        <value name="Tiling Enabled" value="1"/>
+      </field>
+      <field name="DWord Length" start="0" end="7" type="uint" default="1"/>
+      <field name="Destination Y1 Coordinate (Top)" start="48" end="63" type="uint"/>
+      <field name="Destination X1 Coordinate (Left)" start="32" end="47" type="uint"/>
+      <field name="Destination Y2 Coordinate (Bottom)" start="80" end="95" type="uint"/>
+      <field name="Destination X2 Coordinate (Right)" start="64" end="79" type="uint"/>
+      <group count="0" start="96" size="32">
+        <field name="Immediate Data" start="0" end="31" type="uint"/>
+      </group>
+    </instruction>
+
+  </engine>
+
 </genxml>
