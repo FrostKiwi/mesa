@@ -640,7 +640,6 @@ static struct dirty_bit_map brw_bits[] = {
    DEFINE_BIT(BRW_NEW_ATOMIC_BUFFER),
    DEFINE_BIT(BRW_NEW_IMAGE_UNITS),
    DEFINE_BIT(BRW_NEW_META_IN_PROGRESS),
-   DEFINE_BIT(BRW_NEW_INTERPOLATION_MAP),
    DEFINE_BIT(BRW_NEW_PUSH_CONSTANT_ALLOCATION),
    DEFINE_BIT(BRW_NEW_NUM_SAMPLES),
    DEFINE_BIT(BRW_NEW_TEXTURE_BUFFER),
@@ -734,13 +733,12 @@ brw_upload_programs(struct brw_context *brw,
             ctx->Const.MaxViewports : 1;
       }
 
+      brw_upload_wm_prog(brw);
+
       if (brw->gen < 6) {
-         brw_setup_vue_interpolation(brw);
          brw_upload_clip_prog(brw);
          brw_upload_sf_prog(brw);
       }
-
-      brw_upload_wm_prog(brw);
    } else if (pipeline == BRW_COMPUTE_PIPELINE) {
       brw_upload_cs_prog(brw);
    }

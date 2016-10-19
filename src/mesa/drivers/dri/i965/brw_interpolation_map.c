@@ -21,7 +21,8 @@
  * IN THE SOFTWARE.
  */
 
-#include "brw_state.h"
+#include "brw_compiler.h"
+#include "brw_context.h"
 #include "compiler/nir/nir.h"
 
 static char const *get_qual_name(int mode)
@@ -38,58 +39,52 @@ static char const *get_qual_name(int mode)
 
 /* Set up interpolation modes for every element in the VUE */
 void
-brw_setup_vue_interpolation(struct brw_context *brw)
+brw_setup_vue_interpolation(struct brw_vue_map *vue_map, nir_shader *nir,
+                            struct gl_program *prog,
+                            const struct gen_device_info *devinfo)
 {
-   const struct gl_fragment_program *fprog = brw->fragment_program;
-   struct brw_vue_map *vue_map = &brw->vue_map_geom_out;
+   struct gen5_fragment_program *fprog = (struct gen5_fragment_program *) prog;
 
-   if (!brw_state_dirty(brw,
-                        _NEW_LIGHT,
-                        BRW_NEW_BLORP |
-                        BRW_NEW_FRAGMENT_PROGRAM |
-                        BRW_NEW_VUE_MAP_GEOM_OUT))
+   memset(fprog->interp_mode, INTERP_MODE_NONE, sizeof(fprog->interp_mode));
+
+   if (!vue_map)
       return;
 
-   memset(&brw->interpolation_mode, INTERP_MODE_NONE, sizeof(brw->interpolation_mode));
+   /* HPOS always wants noperspective. setting it up here allows
+    * us to not need special handling in the SF program.
+    */
+   unsigned pos_slot = vue_map->varying_to_slot[VARYING_SLOT_POS];
+   if (pos_slot != -1) {;
+      fprog->interp_mode[pos_slot] = INTERP_MODE_NOPERSPECTIVE;
+      fprog->contains_noperspective_varying = true;
+   }
 
-   brw->ctx.NewDriverState |= BRW_NEW_INTERPOLATION_MAP;
-
-   if (!fprog)
-      return;
-
-   for (int i = 0; i < vue_map->num_slots; i++) {
-      int varying = vue_map->slot_to_varying[i];
-      if (varying == -1)
-         continue;
-
-      /* HPOS always wants noperspective. setting it up here allows
-       * us to not need special handling in the SF program. */
-      if (varying == VARYING_SLOT_POS) {
-         brw->interpolation_mode.mode[i] = INTERP_MODE_NOPERSPECTIVE;
-         continue;
+   foreach_list_typed(nir_variable, var, node, &nir->inputs) {
+      unsigned location = var->data.location;
+      unsigned slot_count = glsl_count_attribute_slots(var->type, false);
+      unsigned remap_count = 1;
+      if (location == VARYING_SLOT_COL0 || location == VARYING_SLOT_COL1) {
+         remap_count = 2;
       }
 
-      int frag_attrib = varying;
-      if (varying == VARYING_SLOT_BFC0 || varying == VARYING_SLOT_BFC1)
-         frag_attrib = varying - VARYING_SLOT_BFC0 + VARYING_SLOT_COL0;
+      for (unsigned j = 0; j < remap_count; j++) {
+         if (j == 1)
+            location = location + VARYING_SLOT_BFC0 - VARYING_SLOT_COL0;
 
-      if (!(fprog->Base.nir->info->inputs_read & BITFIELD64_BIT(frag_attrib)))
-         continue;
+         for (unsigned k = 0; k < slot_count; k++) {
+            unsigned slot = vue_map->varying_to_slot[location + k];
+            if (slot != -1 && fprog->interp_mode[slot] == INTERP_MODE_NONE) {
+               fprog->interp_mode[slot] = var->data.interpolation;
 
-      enum glsl_interp_mode mode = fprog->InterpQualifier[frag_attrib];
-
-      /* If the mode is not specified, the default varies: Color values
-       * follow GL_SHADE_MODEL; everything else is smooth.
-       */
-      if (mode == INTERP_MODE_NONE) {
-         if (frag_attrib == VARYING_SLOT_COL0 || frag_attrib == VARYING_SLOT_COL1)
-            mode = brw->ctx.Light.ShadeModel == GL_FLAT
-               ? INTERP_MODE_FLAT : INTERP_MODE_SMOOTH;
-         else
-            mode = INTERP_MODE_SMOOTH;
+               if (fprog->interp_mode[slot] == INTERP_MODE_FLAT) {
+                  fprog->contains_flat_varying = true;
+               } else if (fprog->interp_mode[slot] ==
+                          INTERP_MODE_NOPERSPECTIVE) {
+                  fprog->contains_noperspective_varying = true;
+               }
+            }
+         }
       }
-
-      brw->interpolation_mode.mode[i] = mode;
    }
 
    if (unlikely(INTEL_DEBUG & DEBUG_VUE)) {
@@ -103,7 +98,7 @@ brw_setup_vue_interpolation(struct brw_context *brw)
 
          fprintf(stderr, "%d: %d %s ofs %d\n",
                  i, varying,
-                 get_qual_name(brw->interpolation_mode.mode[i]),
+                 get_qual_name(fprog->interp_mode[i]),
                  brw_vue_slot_to_offset(i));
       }
    }
