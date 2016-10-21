@@ -152,6 +152,12 @@ struct brw_blorp_wm_inputs
    input; \
 })
 
+struct blorp_vs_inputs {
+   uint32_t base_layer;
+   uint32_t _instance_id; /* Set in hardware by SGVS */
+   uint32_t pad[2];
+};
+
 struct brw_blorp_prog_data
 {
    bool dispatch_8;
@@ -208,9 +214,12 @@ struct blorp_params
    enum blorp_fast_clear_op fast_clear_op;
    bool color_write_disable[4];
    struct brw_blorp_wm_inputs wm_inputs;
+   struct blorp_vs_inputs vs_inputs;
    unsigned num_samples;
    unsigned num_draw_buffers;
    unsigned num_layers;
+   uint32_t vs_prog_kernel;
+   struct brw_vs_prog_data *vs_prog_data;
    uint32_t wm_prog_kernel;
    struct brw_blorp_prog_data *wm_prog_data;
 };
@@ -337,6 +346,12 @@ blorp_compile_fs(struct blorp_context *blorp, void *mem_ctx,
                  const struct brw_wm_prog_key *wm_key,
                  bool use_repclear,
                  struct brw_blorp_prog_data *prog_data,
+                 unsigned *program_size);
+
+const unsigned *
+blorp_compile_vs(struct blorp_context *blorp, void *mem_ctx,
+                 struct nir_shader *nir,
+                 struct brw_vs_prog_data *vs_prog_data,
                  unsigned *program_size);
 
 /** \} */
