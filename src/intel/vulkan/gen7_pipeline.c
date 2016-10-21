@@ -120,14 +120,14 @@ genX(graphics_pipeline_create)(
          };
          vs.PerThreadScratchSpace      = scratch_space(&vs_prog_data->base.base);
 
-         vs.DispatchGRFStartRegisterforURBData    =
+         vs.DispatchGRFStartRegisterForURBData    =
             vs_prog_data->base.base.dispatch_grf_start_reg;
 
          vs.VertexURBEntryReadLength   = vs_prog_data->base.urb_read_length;
          vs.VertexURBEntryReadOffset   = 0;
          vs.MaximumNumberofThreads     = devinfo->max_vs_threads - 1;
          vs.StatisticsEnable           = true;
-         vs.VSFunctionEnable           = true;
+         vs.FunctionEnable             = true;
       }
 
    const struct brw_gs_prog_data *gs_prog_data = get_gs_prog_data(pipeline);
@@ -151,7 +151,7 @@ genX(graphics_pipeline_create)(
          gs.VertexURBEntryReadLength   = gs_prog_data->base.urb_read_length;
          gs.IncludeVertexHandles       = gs_prog_data->base.include_vue_handles;
 
-         gs.DispatchGRFStartRegisterforURBData =
+         gs.DispatchGRFStartRegisterForURBData =
             gs_prog_data->base.base.dispatch_grf_start_reg;
 
          gs.MaximumNumberofThreads     = devinfo->max_gs_threads - 1;
