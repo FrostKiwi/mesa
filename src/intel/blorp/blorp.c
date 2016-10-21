@@ -141,6 +141,7 @@ void
 blorp_params_init(struct blorp_params *params)
 {
    memset(params, 0, sizeof(*params));
+   params->num_samples = 1;
    params->num_draw_buffers = 1;
    params->num_layers = 1;
 }
