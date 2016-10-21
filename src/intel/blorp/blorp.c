@@ -156,11 +156,11 @@ brw_blorp_init_wm_prog_key(struct brw_wm_prog_key *wm_key)
 }
 
 const unsigned *
-brw_blorp_compile_nir_shader(struct blorp_context *blorp, struct nir_shader *nir,
-                             const struct brw_wm_prog_key *wm_key,
-                             bool use_repclear,
-                             struct brw_blorp_prog_data *prog_data,
-                             unsigned *program_size)
+blorp_compile_fs(struct blorp_context *blorp, struct nir_shader *nir,
+                 const struct brw_wm_prog_key *wm_key,
+                 bool use_repclear,
+                 struct brw_blorp_prog_data *prog_data,
+                 unsigned *program_size)
 {
    const struct brw_compiler *compiler = blorp->compiler;
 
