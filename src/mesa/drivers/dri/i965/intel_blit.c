@@ -287,21 +287,61 @@ intel_miptree_blit(struct brw_context *brw,
       return false;
    }
 
-   if (!intelEmitCopyBlit(brw,
-                          src_mt->cpp,
-                          src_flip == dst_flip ? src_mt->pitch : -src_mt->pitch,
-                          src_mt->bo, src_mt->offset,
-                          src_mt->tiling,
-                          src_mt->tr_mode,
-                          dst_mt->pitch,
-                          dst_mt->bo, dst_mt->offset,
-                          dst_mt->tiling,
-                          dst_mt->tr_mode,
-                          src_x, src_y,
-                          dst_x, dst_y,
-                          width, height,
-                          logicop)) {
-      return false;
+   const enum isl_tiling src_tiling = intel_miptree_get_isl_tiling(src_mt);
+   const enum isl_tiling dst_tiling = intel_miptree_get_isl_tiling(dst_mt);
+
+   struct isl_tile_info src_tile_info, dst_tile_info;
+   isl_tiling_get_info(&brw->isl_dev, src_tiling,
+                       src_mt->cpp * 8, &src_tile_info);
+   isl_tiling_get_info(&brw->isl_dev, dst_tiling,
+                       dst_mt->cpp * 8, &dst_tile_info);
+
+   const uint32_t max_chunk_w =
+      MAX2(src_tile_info.logical_extent_el.w,
+           dst_tile_info.logical_extent_el.w);
+   const uint32_t max_chunk_h =
+      MAX2(src_tile_info.logical_extent_el.h,
+           dst_tile_info.logical_extent_el.h);
+
+   for (uint32_t chunk_x = 0; chunk_x < width; chunk_x += max_chunk_w) {
+      for (uint32_t chunk_y = 0; chunk_y < height; chunk_y += max_chunk_h) {
+         const uint32_t chunk_w = MIN2(max_chunk_w, width - chunk_x);
+         const uint32_t chunk_h = MIN2(max_chunk_h, height - chunk_y);
+
+         uint32_t src_offset, src_tile_x, src_tile_y;
+         isl_tiling_get_intratile_offset_el(&brw->isl_dev, src_tiling,
+                                            src_mt->cpp, src_mt->pitch,
+                                            src_x + chunk_x, src_y + chunk_y,
+                                            &src_offset,
+                                            &src_tile_x, &src_tile_y);
+
+         uint32_t dst_offset, dst_tile_x, dst_tile_y;
+         isl_tiling_get_intratile_offset_el(&brw->isl_dev, dst_tiling,
+                                            dst_mt->cpp, dst_mt->pitch,
+                                            dst_x + chunk_x, dst_y + chunk_y,
+                                            &dst_offset,
+                                            &dst_tile_x, &dst_tile_y);
+
+         if (!intelEmitCopyBlit(brw,
+                                src_mt->cpp,
+                                src_flip == dst_flip ? src_mt->pitch :
+                                                       -src_mt->pitch,
+                                src_mt->bo, src_mt->offset + src_offset,
+                                src_mt->tiling,
+                                src_mt->tr_mode,
+                                dst_mt->pitch,
+                                dst_mt->bo, dst_mt->offset + dst_offset,
+                                dst_mt->tiling,
+                                dst_mt->tr_mode,
+                                src_tile_x, src_tile_y,
+                                dst_tile_x, dst_tile_y,
+                                chunk_w, chunk_h,
+                                logicop)) {
+            /* If this is ever going to fail, it will fail on the first chunk */
+            assert(chunk_x == 0 && chunk_y == 0);
+            return false;
+         }
+      }
    }
 
    /* XXX This could be done in a single pass using XY_FULL_MONO_PATTERN_BLT */
