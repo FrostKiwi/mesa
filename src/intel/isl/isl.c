@@ -104,7 +104,7 @@ isl_device_get_sample_counts(struct isl_device *dev)
 /**
  * @param[out] info is written only on success
  */
-static bool
+bool
 isl_tiling_get_info(const struct isl_device *dev,
                     enum isl_tiling tiling,
                     uint32_t format_bpb,
