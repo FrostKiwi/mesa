@@ -1528,10 +1528,11 @@ struct anv_image {
 
       struct {
          struct anv_surface depth_surface;
-         struct anv_surface hiz_surface;
          struct anv_surface stencil_surface;
       };
    };
+
+   struct anv_surface aux_surface;
 };
 
 static inline uint32_t
@@ -1596,7 +1597,7 @@ anv_image_has_hiz(const struct anv_image *image)
     * a union.
     */
    return (image->aspects & VK_IMAGE_ASPECT_DEPTH_BIT) &&
-          image->hiz_surface.isl.size > 0;
+          image->aux_surface.isl.size > 0;
 }
 
 struct anv_buffer_view {
