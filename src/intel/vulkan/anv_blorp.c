@@ -1058,6 +1058,60 @@ void anv_CmdClearAttachments(
    blorp_batch_finish(&batch);
 }
 
+static void
+flush_attachment(struct anv_cmd_buffer *cmd_buffer,
+                 struct anv_render_pass_attachment *att,
+                 bool color)
+{
+   struct anv_render_pass *pass = cmd_buffer->state.pass;
+   struct anv_subpass *subpass = cmd_buffer->state.subpass;
+   unsigned subpass_idx = subpass - pass->subpasses;
+   assert(subpass_idx < pass->subpass_count);
+
+   for (uint32_t s = subpass_idx + 1; s < pass->subpass_count; s++) {
+      enum anv_subpass_usage usage = att->subpass_usage[s];
+
+      /* If this attachment is going to be used as an input in this or any
+       * future subpass, then we need to flush its cache and invalidate the
+       * texture cache.
+       */
+      if (usage & (ANV_SUBPASS_USAGE_INPUT | ANV_SUBPASS_USAGE_RESOLVE_SRC)) {
+         enum anv_pipe_bits bits = ANV_PIPE_TEXTURE_CACHE_INVALIDATE_BIT;
+         if (color) {
+            bits |= ANV_PIPE_RENDER_TARGET_CACHE_FLUSH_BIT;
+         } else {
+            bits |= ANV_PIPE_DEPTH_CACHE_FLUSH_BIT;
+         }
+         cmd_buffer->state.pending_pipe_bits |= bits;
+      }
+
+      if (usage & (ANV_SUBPASS_USAGE_DRAW | ANV_SUBPASS_USAGE_RESOLVE_DST)) {
+         /* We found another subpass that draws to this attachment.  We'll
+          * wait to resolve until then.
+          */
+         return;
+      }
+   }
+}
+
+static void
+anv_cmd_buffer_flush_attachments(struct anv_cmd_buffer *cmd_buffer)
+{
+   struct anv_subpass *subpass = cmd_buffer->state.subpass;
+   struct anv_render_pass *pass = cmd_buffer->state.pass;
+
+   for (uint32_t i = 0; i < subpass->color_count; ++i) {
+      uint32_t att = subpass->color_attachments[i];
+      assert(att < pass->attachment_count);
+      flush_attachment(cmd_buffer, &pass->attachments[att], true);
+   }
+
+   if (subpass->depth_stencil_attachment != VK_ATTACHMENT_UNUSED) {
+      uint32_t att = subpass->depth_stencil_attachment;
+      flush_attachment(cmd_buffer, &pass->attachments[att], false);
+   }
+}
+
 static bool
 subpass_needs_clear(const struct anv_cmd_buffer *cmd_buffer)
 {
@@ -1137,6 +1191,8 @@ anv_cmd_buffer_clear_subpass(struct anv_cmd_buffer *cmd_buffer)
    }
 
    blorp_batch_finish(&batch);
+
+   anv_cmd_buffer_flush_attachments(cmd_buffer);
 }
 
 static void
@@ -1291,6 +1347,8 @@ anv_cmd_buffer_resolve_subpass(struct anv_cmd_buffer *cmd_buffer)
                              subpass->color_attachments[i]);
    }
 
+   anv_cmd_buffer_flush_attachments(cmd_buffer);
+
    if (subpass->has_resolve) {
       for (uint32_t i = 0; i < subpass->color_count; ++i) {
          uint32_t src_att = subpass->color_attachments[i];
@@ -1336,6 +1394,8 @@ anv_cmd_buffer_resolve_subpass(struct anv_cmd_buffer *cmd_buffer)
 
          ccs_resolve_attachment(cmd_buffer, &batch, dst_att);
       }
+
+      anv_cmd_buffer_flush_attachments(cmd_buffer);
    }
 
    blorp_batch_finish(&batch);
