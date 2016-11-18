@@ -786,6 +786,19 @@ void anv_CmdFillBuffer(
    blorp_batch_finish(&batch);
 }
 
+static union isl_color_value
+vk_to_isl_color(VkClearColorValue color)
+{
+   return (union isl_color_value) {
+      .u32 = {
+         color.uint32[0],
+         color.uint32[1],
+         color.uint32[2],
+         color.uint32[3],
+      },
+   };
+}
+
 void anv_CmdClearColorImage(
     VkCommandBuffer                             commandBuffer,
     VkImage                                     _image,
@@ -801,9 +814,6 @@ void anv_CmdClearColorImage(
 
    struct blorp_batch batch;
    blorp_batch_init(&cmd_buffer->device->blorp, &batch, cmd_buffer, 0);
-
-   union isl_color_value clear_color;
-   memcpy(clear_color.u32, pColor->uint32, sizeof(pColor->uint32));
 
    struct blorp_surf surf;
    get_blorp_surf_for_anv_image(image, VK_IMAGE_ASPECT_COLOR_BIT,
@@ -836,7 +846,7 @@ void anv_CmdClearColorImage(
                      src_format.isl_format, src_format.swizzle,
                      level, base_layer, layer_count,
                      0, 0, level_width, level_height,
-                     clear_color, color_write_disable);
+                     vk_to_isl_color(*pColor), color_write_disable);
       }
    }
 
@@ -963,9 +973,8 @@ clear_color_attachment(struct anv_cmd_buffer *cmd_buffer,
    uint32_t binding_table =
       binding_table_for_surface_state(cmd_buffer, att_state->color_rt_state);
 
-   union isl_color_value clear_color;
-   memcpy(clear_color.u32, attachment->clearValue.color.uint32,
-          sizeof(clear_color.u32));
+   union isl_color_value clear_color =
+      vk_to_isl_color(attachment->clearValue.color);
 
    for (uint32_t r = 0; r < rectCount; ++r) {
       const VkOffset2D offset = pRects[r].rect.offset;
