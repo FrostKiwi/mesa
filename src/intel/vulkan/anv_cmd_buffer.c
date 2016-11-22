@@ -632,7 +632,7 @@ anv_cmd_buffer_push_constants(struct anv_cmd_buffer *cmd_buffer,
    struct anv_state state =
       anv_cmd_buffer_alloc_dynamic_state(cmd_buffer,
                                          prog_data->nr_params * sizeof(float),
-                                         32 /* bottom 5 bits MBZ */);
+                                         64 /* bottom 5 bits MBZ */);
 
    /* Walk through the param array and fill the buffer with data */
    uint32_t *u32_map = state.map;
