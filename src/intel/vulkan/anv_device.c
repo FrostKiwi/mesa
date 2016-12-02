@@ -74,10 +74,36 @@ anv_physical_device_init_uuids(struct anv_physical_device *device)
    if (sha1_ctx == NULL)
       return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
+   /* The pipeline cache UUID is used for determining when a pipeline cache is
+    * invalid.  It needs both a driver build and the PCI ID of the device.
+    */
    _mesa_sha1_update(sha1_ctx, build_id_data(note), build_id_len);
    _mesa_sha1_update(sha1_ctx, &device->chipset_id, sizeof(device->chipset_id));
    _mesa_sha1_final(sha1_ctx, sha1);
    memcpy(device->pipeline_cache_uuid, sha1, VK_UUID_SIZE);
+
+   /* The driver UUID is used for determining sharability of images and memory
+    * between two Vulkan instances in separate processes.  People who want to
+    * share memory need to also check the device UUID (below) so all this
+    * needs to be is the build-id.
+    */
+   memcpy(device->driver_uuid, build_id_data(note), VK_UUID_SIZE);
+
+   sha1_ctx = _mesa_sha1_init();
+   if (sha1_ctx == NULL)
+      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   /* The device UUID uniquely identifies the given device within the machine.
+    * Since we never have more than one device, this doesn't need to be a real
+    * UUID.  However, on the off-chance that someone tries to use this to
+    * cache pre-tiled images or something of the like, we use the PCI ID and
+    * some bits if ISL info to ensure that this is safe.
+    */
+   _mesa_sha1_update(sha1_ctx, &device->chipset_id, sizeof(device->chipset_id));
+   _mesa_sha1_update(sha1_ctx, &device->isl_dev.has_bit6_swizzling,
+                     sizeof(device->isl_dev.has_bit6_swizzling));
+   _mesa_sha1_final(sha1_ctx, sha1);
+   memcpy(device->device_uuid, sha1, VK_UUID_SIZE);
 
    return VK_SUCCESS;
 }
@@ -163,10 +189,6 @@ anv_physical_device_init(struct anv_physical_device *device,
       goto fail;
    }
 
-   result = anv_physical_device_init_uuids(device);
-   if (result != VK_SUCCESS)
-      goto fail;
-
    bool swizzled = anv_gem_get_bit6_swizzle(fd, I915_TILING_X);
 
    /* GENs prior to 8 do not support EU/Subslice info */
@@ -206,13 +228,17 @@ anv_physical_device_init(struct anv_physical_device *device,
    device->compiler->shader_debug_log = compiler_debug_log;
    device->compiler->shader_perf_log = compiler_perf_log;
 
+   isl_device_init(&device->isl_dev, &device->info, swizzled);
+
+   result = anv_physical_device_init_uuids(device);
+   if (result != VK_SUCCESS)
+      goto fail;
+
    result = anv_init_wsi(device);
    if (result != VK_SUCCESS) {
       ralloc_free(device->compiler);
       goto fail;
    }
-
-   isl_device_init(&device->isl_dev, &device->info, swizzled);
 
    device->local_fd = fd;
    return VK_SUCCESS;
@@ -255,6 +281,10 @@ static const VkExtensionProperties global_extensions[] = {
 #endif
    {
       .extensionName = VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+      .specVersion = 1,
+   },
+   {
+      .extensionName = VK_KHX_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
       .specVersion = 1,
    },
 };
@@ -668,10 +698,21 @@ void anv_GetPhysicalDeviceProperties2KHR(
     VkPhysicalDevice                            physicalDevice,
     VkPhysicalDeviceProperties2KHR*             pProperties)
 {
+   ANV_FROM_HANDLE(anv_physical_device, pdevice, physicalDevice);
+
    anv_GetPhysicalDeviceProperties(physicalDevice, &pProperties->properties);
 
    vk_foreach_struct(ext, pProperties->pNext) {
       switch (ext->sType) {
+      case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES_KHX: {
+         VkPhysicalDeviceIDPropertiesKHX *id_props =
+            (VkPhysicalDeviceIDPropertiesKHX *)ext;
+         memcpy(id_props->deviceUUID, pdevice->device_uuid, VK_UUID_SIZE);
+         memcpy(id_props->driverUUID, pdevice->driver_uuid, VK_UUID_SIZE);
+         /* The LUID is for Windows. */
+         id_props->deviceLUIDValid = false;
+         break;
+      }
       default:
          anv_debug_ignored_stype(ext->sType);
          break;

@@ -671,13 +671,44 @@ VkResult anv_GetPhysicalDeviceImageFormatProperties2KHR(
 
    vk_foreach_struct(ext, pImageFormatProperties->pNext) {
       switch (ext->sType) {
+      case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO_KHX: {
+         const VkPhysicalDeviceExternalImageFormatInfoKHX *ext_info =
+            (const VkPhysicalDeviceExternalImageFormatInfoKHX *)ext;
+         if (ext_info->handleType != 0) {
+            /* FINISHME: Support at least one external memory type for images.
+             *
+             * From the Vulkan 1.x spec:
+             *    If handleType is not compatible with [the stuff in] in
+             *    VkPhysicalDeviceImageFormatInfo2KHR, then
+             *    vkGetPhysicalDeviceImageFormatProperties2KHR returns
+             *    VK_ERROR_FORMAT_NOT_SUPPORTED.
+             */
+            result = vk_errorf(VK_ERROR_FORMAT_NOT_SUPPORTED,
+                              "unsupported VkExternalMemoryTypeFlagBitsKHX 0x%x",
+                              ext_info->handleType);
+            if (result != VK_SUCCESS)
+               goto fail;
+         }
+         break;
+      }
       default:
          anv_debug_ignored_stype(ext->sType);
          break;
       }
    }
 
-   return VK_SUCCESS;
+fail:
+   if (result == VK_ERROR_FORMAT_NOT_SUPPORTED) {
+      /* From the Vulkan 1.x spec:
+       *    If the combination of parameters to
+       *    vkGetPhysicalDeviceImageFormatProperties2KHR is not supported by the
+       *    implementation for use in vkCreateImage, then all members of
+       *    imageFormatProperties will be filled with zero.
+       */
+      pImageFormatProperties->imageFormatProperties = (VkImageFormatProperties) {0};
+   }
+
+   return result;
 }
 
 void anv_GetPhysicalDeviceSparseImageFormatProperties(
@@ -702,4 +733,15 @@ void anv_GetPhysicalDeviceSparseImageFormatProperties2KHR(
 {
    /* Sparse images are not yet supported. */
    *pPropertyCount = 0;
+}
+
+void anv_GetPhysicalDeviceExternalBufferPropertiesKHX(
+    VkPhysicalDevice                             physicalDevice,
+    const VkPhysicalDeviceExternalBufferInfoKHX* pExternalBufferInfo,
+    VkExternalBufferPropertiesKHX*               pExternalBufferProperties)
+{
+   anv_finishme("Handle external buffers");
+
+   pExternalBufferProperties->externalMemoryProperties =
+      (VkExternalMemoryPropertiesKHX) {0};
 }
