@@ -652,11 +652,14 @@ emit_ds_state(struct anv_pipeline *pipeline,
       /* We're going to OR this together with the dynamic state.  We need
        * to make sure it's initialized to something useful.
        */
+      pipeline->writes_stencil = false;
       memset(depth_stencil_dw, 0, sizeof(depth_stencil_dw));
       return;
    }
 
    /* VkBool32 depthBoundsTestEnable; // optional (depth_bounds_test) */
+
+   pipeline->writes_stencil = info->stencilTestEnable;
 
 #if GEN_GEN <= 7
    struct GENX(DEPTH_STENCIL_STATE) depth_stencil = {
@@ -669,7 +672,6 @@ emit_ds_state(struct anv_pipeline *pipeline,
       .DoubleSidedStencilEnable = true,
 
       .StencilTestEnable = info->stencilTestEnable,
-      .StencilBufferWriteEnable = info->stencilTestEnable,
       .StencilFailOp = vk_to_gen_stencil_op[info->front.failOp],
       .StencilPassDepthPassOp = vk_to_gen_stencil_op[info->front.passOp],
       .StencilPassDepthFailOp = vk_to_gen_stencil_op[info->front.depthFailOp],

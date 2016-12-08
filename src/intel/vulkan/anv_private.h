@@ -1465,6 +1465,7 @@ struct anv_pipeline {
 
    uint32_t                                     cs_right_mask;
 
+   bool                                         writes_stencil;
    bool                                         depth_clamp_enable;
 
    struct {
