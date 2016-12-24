@@ -181,7 +181,8 @@ get_deref_reg_src(nir_deref_var *deref, nir_instr *instr,
             nir_alu_instr *add = nir_alu_instr_create(state->shader,
                                                       nir_op_iadd);
             add->src[0].src = *src.reg.indirect;
-            nir_src_copy(&add->src[1].src, &deref_array->indirect, add);
+            nir_src_copy(&add->src[1].src, &deref_array->indirect,
+                         state->shader);
             add->dest.write_mask = 1;
             nir_ssa_dest_init(&add->instr, &add->dest.dest, 1, 32, NULL);
             nir_instr_insert_before(instr, &add->instr);
@@ -221,7 +222,7 @@ lower_locals_to_regs_block(nir_block *block,
             nir_ssa_def_rewrite_uses(&intrin->dest.ssa,
                                      nir_src_for_ssa(&mov->dest.dest.ssa));
          } else {
-            nir_dest_copy(&mov->dest.dest, &intrin->dest, &mov->instr);
+            nir_dest_copy(&mov->dest.dest, &intrin->dest, state->shader);
          }
          nir_instr_insert_before(&intrin->instr, &mov->instr);
 
@@ -238,7 +239,7 @@ lower_locals_to_regs_block(nir_block *block,
                                              &intrin->instr, state);
 
          nir_alu_instr *mov = nir_alu_instr_create(state->shader, nir_op_imov);
-         nir_src_copy(&mov->src[0].src, &intrin->src[0], mov);
+         nir_src_copy(&mov->src[0].src, &intrin->src[0], state->shader);
          mov->dest.write_mask = nir_intrinsic_write_mask(intrin);
          mov->dest.dest.is_ssa = false;
          mov->dest.dest.reg.reg = reg_src.reg.reg;

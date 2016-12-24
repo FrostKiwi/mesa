@@ -130,7 +130,7 @@ lower_instr(nir_intrinsic_instr *instr,
          nir_alu_instr *mul = nir_alu_instr_create(mem_ctx, nir_op_imul);
          nir_ssa_dest_init(&mul->instr, &mul->dest.dest, 1, 32, NULL);
          mul->dest.write_mask = 0x1;
-         nir_src_copy(&mul->src[0].src, &deref_array->indirect, mul);
+         nir_src_copy(&mul->src[0].src, &deref_array->indirect, shader);
          mul->src[1].src.is_ssa = true;
          mul->src[1].src.ssa = &atomic_counter_size->def;
          nir_instr_insert_before(&instr->instr, &mul->instr);

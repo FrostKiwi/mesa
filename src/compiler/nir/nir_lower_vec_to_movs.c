@@ -58,8 +58,8 @@ insert_mov(nir_alu_instr *vec, unsigned start_idx, nir_shader *shader)
    assert(start_idx < nir_op_infos[vec->op].num_inputs);
 
    nir_alu_instr *mov = nir_alu_instr_create(shader, nir_op_imov);
-   nir_alu_src_copy(&mov->src[0], &vec->src[start_idx], mov);
-   nir_alu_dest_copy(&mov->dest, &vec->dest, mov);
+   nir_alu_src_copy(&mov->src[0], &vec->src[start_idx], shader);
+   nir_alu_dest_copy(&mov->dest, &vec->dest, shader);
 
    mov->dest.write_mask = (1u << start_idx);
    mov->src[0].swizzle[start_idx] = vec->src[start_idx].swizzle[0];

@@ -248,7 +248,7 @@ lower_store(nir_intrinsic_instr *intrin, struct lower_io_state *state,
       nir_intrinsic_instr_create(state->builder.shader, op);
    store->num_components = intrin->num_components;
 
-   nir_src_copy(&store->src[0], &intrin->src[0], store);
+   nir_src_copy(&store->src[0], &intrin->src[0], state->builder.shader);
 
    nir_intrinsic_set_base(store, var->data.driver_location);
 
@@ -298,7 +298,7 @@ lower_atomic(nir_intrinsic_instr *intrin, struct lower_io_state *state,
 
    atomic->src[0] = nir_src_for_ssa(offset);
    for (unsigned i = 0; i < nir_intrinsic_infos[intrin->intrinsic].num_srcs; i++) {
-      nir_src_copy(&atomic->src[i+1], &intrin->src[i], atomic);
+      nir_src_copy(&atomic->src[i+1], &intrin->src[i], state->builder.shader);
    }
 
    return atomic;
@@ -340,7 +340,7 @@ lower_interpolate_at(nir_intrinsic_instr *intrin, struct lower_io_state *state,
    nir_intrinsic_set_interp_mode(bary_setup, var->data.interpolation);
 
    if (intrin->intrinsic != nir_intrinsic_interp_var_at_centroid)
-      nir_src_copy(&bary_setup->src[0], &intrin->src[0], bary_setup);
+      nir_src_copy(&bary_setup->src[0], &intrin->src[0], state->builder.shader);
 
    nir_builder_instr_insert(&state->builder, &bary_setup->instr);
 
@@ -468,7 +468,8 @@ nir_lower_io_block(nir_block *block,
             nir_ssa_def_rewrite_uses(&intrin->dest.ssa,
                                      nir_src_for_ssa(&replacement->dest.ssa));
          } else {
-            nir_dest_copy(&replacement->dest, &intrin->dest, &intrin->instr);
+            nir_dest_copy(&replacement->dest, &intrin->dest,
+                          state->builder.shader);
          }
       }
 

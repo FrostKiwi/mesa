@@ -1206,14 +1206,14 @@ vtn_handle_function_call(struct vtn_builder *b, SpvOp opcode,
       struct vtn_value *arg = vtn_untyped_value(b, arg_id);
       if (arg->value_type == vtn_value_type_access_chain) {
          nir_deref_var *d = vtn_access_chain_to_deref(b, arg->access_chain);
-         call->params[i] = nir_deref_var_clone(d, call);
+         call->params[i] = nir_deref_var_clone(d, b->shader);
       } else {
          struct vtn_ssa_value *arg_ssa = vtn_ssa_value(b, arg_id);
 
          /* Make a temporary to store the argument in */
          nir_variable *tmp =
             nir_local_variable_create(b->impl, arg_ssa->type, "arg_tmp");
-         call->params[i] = nir_deref_var_create(call, tmp);
+         call->params[i] = nir_deref_var_create(b->shader, tmp);
 
          vtn_local_store(b, arg_ssa, call->params[i]);
       }
@@ -1223,7 +1223,7 @@ vtn_handle_function_call(struct vtn_builder *b, SpvOp opcode,
    if (!glsl_type_is_void(callee->return_type)) {
       out_tmp = nir_local_variable_create(b->impl, callee->return_type,
                                           "out_tmp");
-      call->return_deref = nir_deref_var_create(call, out_tmp);
+      call->return_deref = nir_deref_var_create(b->shader, out_tmp);
    }
 
    nir_builder_instr_insert(&b->nb, &call->instr);
@@ -1550,7 +1550,7 @@ vtn_handle_texture(struct vtn_builder *b, SpvOp opcode,
       texture = sampler;
    }
 
-   instr->texture = nir_deref_var_clone(texture, instr);
+   instr->texture = nir_deref_var_clone(texture, b->shader);
 
    switch (instr->op) {
    case nir_texop_tex:
@@ -1558,7 +1558,7 @@ vtn_handle_texture(struct vtn_builder *b, SpvOp opcode,
    case nir_texop_txl:
    case nir_texop_txd:
       /* These operations require a sampler */
-      instr->sampler = nir_deref_var_clone(sampler, instr);
+      instr->sampler = nir_deref_var_clone(sampler, b->shader);
       break;
    case nir_texop_txf:
    case nir_texop_txf_ms:
@@ -1599,7 +1599,7 @@ vtn_handle_texture(struct vtn_builder *b, SpvOp opcode,
          instrs[i]->is_new_style_shadow = instr->is_new_style_shadow;
          instrs[i]->component = instr->component;
          instrs[i]->dest_type = instr->dest_type;
-         instrs[i]->texture = nir_deref_var_clone(texture, instrs[i]);
+         instrs[i]->texture = nir_deref_var_clone(texture, b->shader);
          instrs[i]->sampler = NULL;
 
          memcpy(instrs[i]->src, srcs, instr->num_srcs * sizeof(*instr->src));
@@ -1806,7 +1806,7 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    nir_intrinsic_instr *intrin = nir_intrinsic_instr_create(b->shader, op);
 
    nir_deref_var *image_deref = vtn_access_chain_to_deref(b, image.image);
-   intrin->variables[0] = nir_deref_var_clone(image_deref, intrin);
+   intrin->variables[0] = nir_deref_var_clone(image_deref, b->shader);
 
    /* ImageQuerySize doesn't take any extra parameters */
    if (opcode != SpvOpImageQuerySize) {
@@ -1968,7 +1968,7 @@ vtn_handle_ssbo_or_shared_atomic(struct vtn_builder *b, SpvOp opcode,
       nir_deref_var *deref = vtn_access_chain_to_deref(b, chain);
       nir_intrinsic_op op = get_shared_nir_atomic_op(opcode);
       atomic = nir_intrinsic_instr_create(b->nb.shader, op);
-      atomic->variables[0] = nir_deref_var_clone(deref, atomic);
+      atomic->variables[0] = nir_deref_var_clone(deref, b->shader);
 
       switch (opcode) {
       case SpvOpAtomicLoad:

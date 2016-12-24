@@ -98,7 +98,7 @@ vtn_access_chain_to_deref(struct vtn_builder *b, struct vtn_access_chain *chain)
 {
    nir_deref_var *deref_var;
    if (chain->var->var) {
-      deref_var = nir_deref_var_create(b, chain->var->var);
+      deref_var = nir_deref_var_create(b->shader, chain->var->var);
    } else {
       assert(chain->var->members);
       /* Create the deref_var manually.  It will get filled out later. */
@@ -121,7 +121,7 @@ vtn_access_chain_to_deref(struct vtn_builder *b, struct vtn_access_chain *chain)
       case GLSL_TYPE_ARRAY: {
          deref_type = deref_type->array_element;
 
-         nir_deref_array *deref_arr = nir_deref_array_create(b);
+         nir_deref_array *deref_arr = nir_deref_array_create(b->shader);
          deref_arr->deref.type = deref_type->type;
 
          if (chain->link[i].mode == vtn_access_mode_literal) {
@@ -150,7 +150,8 @@ vtn_access_chain_to_deref(struct vtn_builder *b, struct vtn_access_chain *chain)
             assert(tail->type == deref_type->type);
             members = NULL;
          } else {
-            nir_deref_struct *deref_struct = nir_deref_struct_create(b, idx);
+            nir_deref_struct *deref_struct =
+               nir_deref_struct_create(b->shader, idx);
             deref_struct->deref.type = deref_type->type;
             tail->child = &deref_struct->deref;
             tail = tail->child;
@@ -186,7 +187,7 @@ _vtn_local_load_store(struct vtn_builder *b, bool load, nir_deref_var *deref,
                                    nir_intrinsic_store_var;
 
       nir_intrinsic_instr *intrin = nir_intrinsic_instr_create(b->shader, op);
-      intrin->variables[0] = nir_deref_var_clone(deref, intrin);
+      intrin->variables[0] = nir_deref_var_clone(deref, b->shader);
       intrin->num_components = glsl_get_vector_elements(tail->type);
 
       if (load) {
@@ -204,7 +205,7 @@ _vtn_local_load_store(struct vtn_builder *b, bool load, nir_deref_var *deref,
    } else if (glsl_get_base_type(tail->type) == GLSL_TYPE_ARRAY ||
               glsl_type_is_matrix(tail->type)) {
       unsigned elems = glsl_get_length(tail->type);
-      nir_deref_array *deref_arr = nir_deref_array_create(b);
+      nir_deref_array *deref_arr = nir_deref_array_create(b->shader);
       deref_arr->deref_array_type = nir_deref_array_type_direct;
       deref_arr->deref.type = glsl_get_array_element(tail->type);
       tail->child = &deref_arr->deref;
@@ -215,7 +216,7 @@ _vtn_local_load_store(struct vtn_builder *b, bool load, nir_deref_var *deref,
    } else {
       assert(glsl_get_base_type(tail->type) == GLSL_TYPE_STRUCT);
       unsigned elems = glsl_get_length(tail->type);
-      nir_deref_struct *deref_struct = nir_deref_struct_create(b, 0);
+      nir_deref_struct *deref_struct = nir_deref_struct_create(b->shader, 0);
       tail->child = &deref_struct->deref;
       for (unsigned i = 0; i < elems; i++) {
          deref_struct->index = i;

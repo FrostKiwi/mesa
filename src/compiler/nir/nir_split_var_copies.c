@@ -182,8 +182,8 @@ split_var_copy_instr(nir_intrinsic_instr *old_copy,
           * belongs to the copy instruction and b) the deref chains may
           * have some of the same links due to the way we constructed them
           */
-         new_copy->variables[0] = nir_deref_var_clone(dest_head, new_copy);
-         new_copy->variables[1] = nir_deref_var_clone(src_head, new_copy);
+         new_copy->variables[0] = nir_deref_var_clone(dest_head, state->shader);
+         new_copy->variables[1] = nir_deref_var_clone(src_head, state->shader);
 
          /* Emit the copy instruction after the old instruction.  We'll
           * remove the old one later.

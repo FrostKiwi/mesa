@@ -404,7 +404,7 @@ nir_load_var(nir_builder *build, nir_variable *var)
    nir_intrinsic_instr *load =
       nir_intrinsic_instr_create(build->shader, nir_intrinsic_load_var);
    load->num_components = num_components;
-   load->variables[0] = nir_deref_var_create(load, var);
+   load->variables[0] = nir_deref_var_create(build->shader, var);
    nir_ssa_dest_init(&load->instr, &load->dest, num_components,
                      glsl_get_bit_size(var->type), NULL);
    nir_builder_instr_insert(build, &load->instr);
@@ -421,7 +421,7 @@ nir_store_var(nir_builder *build, nir_variable *var, nir_ssa_def *value,
       nir_intrinsic_instr_create(build->shader, nir_intrinsic_store_var);
    store->num_components = num_components;
    nir_intrinsic_set_write_mask(store, writemask);
-   store->variables[0] = nir_deref_var_create(store, var);
+   store->variables[0] = nir_deref_var_create(build->shader, var);
    store->src[0] = nir_src_for_ssa(value);
    nir_builder_instr_insert(build, &store->instr);
 }
@@ -437,7 +437,7 @@ nir_store_deref_var(nir_builder *build, nir_deref_var *deref,
       nir_intrinsic_instr_create(build->shader, nir_intrinsic_store_var);
    store->num_components = num_components;
    store->const_index[0] = writemask & ((1 << num_components) - 1);
-   store->variables[0] = nir_deref_var_clone(deref, store);
+   store->variables[0] = nir_deref_var_clone(deref, build->shader);
    store->src[0] = nir_src_for_ssa(value);
    nir_builder_instr_insert(build, &store->instr);
 }
@@ -450,8 +450,8 @@ nir_copy_deref_var(nir_builder *build, nir_deref_var *dest, nir_deref_var *src)
 
    nir_intrinsic_instr *copy =
       nir_intrinsic_instr_create(build->shader, nir_intrinsic_copy_var);
-   copy->variables[0] = nir_deref_var_clone(dest, copy);
-   copy->variables[1] = nir_deref_var_clone(src, copy);
+   copy->variables[0] = nir_deref_var_clone(dest, build->shader);
+   copy->variables[1] = nir_deref_var_clone(src, build->shader);
    nir_builder_instr_insert(build, &copy->instr);
 }
 
@@ -460,8 +460,8 @@ nir_copy_var(nir_builder *build, nir_variable *dest, nir_variable *src)
 {
    nir_intrinsic_instr *copy =
       nir_intrinsic_instr_create(build->shader, nir_intrinsic_copy_var);
-   copy->variables[0] = nir_deref_var_create(copy, dest);
-   copy->variables[1] = nir_deref_var_create(copy, src);
+   copy->variables[0] = nir_deref_var_create(build->shader, dest);
+   copy->variables[1] = nir_deref_var_create(build->shader, src);
    nir_builder_instr_insert(build, &copy->instr);
 }
 

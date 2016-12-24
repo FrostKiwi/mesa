@@ -66,8 +66,8 @@ emit_copies(nir_cursor cursor, nir_shader *shader, struct exec_list *new_vars,
 
       nir_intrinsic_instr *copy =
          nir_intrinsic_instr_create(shader, nir_intrinsic_copy_var);
-      copy->variables[0] = nir_deref_var_create(copy, newv);
-      copy->variables[1] = nir_deref_var_create(copy, temp);
+      copy->variables[0] = nir_deref_var_create(shader, newv);
+      copy->variables[1] = nir_deref_var_create(shader, temp);
 
       nir_instr_insert(cursor, &copy->instr);
    }

@@ -90,7 +90,7 @@ private:
    nir_builder b;
    nir_ssa_def *result; /* result of the expression tree last visited */
 
-   nir_deref_var *evaluate_deref(nir_instr *mem_ctx, ir_instruction *ir);
+   nir_deref_var *evaluate_deref(ir_instruction *ir);
 
    /* the head of the dereference chain we're creating */
    nir_deref_var *deref_head;
@@ -185,10 +185,9 @@ nir_visitor::~nir_visitor()
 }
 
 nir_deref_var *
-nir_visitor::evaluate_deref(nir_instr *mem_ctx, ir_instruction *ir)
+nir_visitor::evaluate_deref(ir_instruction *ir)
 {
    ir->accept(this);
-   ralloc_steal(mem_ctx, this->deref_head);
    return this->deref_head;
 }
 
@@ -565,8 +564,9 @@ nir_visitor::visit(ir_return *ir)
       nir_intrinsic_instr *copy =
          nir_intrinsic_instr_create(this->shader, nir_intrinsic_copy_var);
 
-      copy->variables[0] = nir_deref_var_create(copy, this->impl->return_var);
-      copy->variables[1] = evaluate_deref(&copy->instr, ir->value);
+      copy->variables[0] = nir_deref_var_create(this->shader,
+                                                this->impl->return_var);
+      copy->variables[1] = evaluate_deref(ir->value);
    }
 
    nir_jump_instr *instr = nir_jump_instr_create(this->shader, nir_jump_return);
@@ -777,7 +777,7 @@ nir_visitor::visit(ir_call *ir)
          exec_node *param = ir->actual_parameters.get_head();
          ir_dereference *counter = (ir_dereference *)param;
 
-         instr->variables[0] = evaluate_deref(&instr->instr, counter);
+         instr->variables[0] = evaluate_deref(counter);
          param = param->get_next();
 
          /* Set the intrinsic destination. */
@@ -823,7 +823,7 @@ nir_visitor::visit(ir_call *ir)
          const glsl_type *type =
             image->variable_referenced()->type->without_array();
 
-         instr->variables[0] = evaluate_deref(&instr->instr, image);
+         instr->variables[0] = evaluate_deref(image);
          param = param->get_next();
 
          /* Set the intrinsic destination. */
@@ -1099,8 +1099,7 @@ nir_visitor::visit(ir_call *ir)
          nir_intrinsic_set_write_mask(store_instr,
                                       (1 << store_instr->num_components) - 1);
 
-         store_instr->variables[0] =
-            evaluate_deref(&store_instr->instr, ir->return_deref);
+         store_instr->variables[0] = evaluate_deref(ir->return_deref);
          store_instr->src[0] = nir_src_for_ssa(&dest->ssa);
 
          nir_builder_instr_insert(&b, &store_instr->instr);
@@ -1118,11 +1117,11 @@ nir_visitor::visit(ir_call *ir)
 
    unsigned i = 0;
    foreach_in_list(ir_dereference, param, &ir->actual_parameters) {
-      instr->params[i] = evaluate_deref(&instr->instr, param);
+      instr->params[i] = evaluate_deref(param);
       i++;
    }
 
-   instr->return_deref = evaluate_deref(&instr->instr, ir->return_deref);
+   instr->return_deref = evaluate_deref(ir->return_deref);
    nir_builder_instr_insert(&b, &instr->instr);
 }
 
@@ -1140,8 +1139,8 @@ nir_visitor::visit(ir_assignment *ir)
       nir_intrinsic_instr *copy =
          nir_intrinsic_instr_create(this->shader, nir_intrinsic_copy_var);
 
-      copy->variables[0] = evaluate_deref(&copy->instr, ir->lhs);
-      copy->variables[1] = evaluate_deref(&copy->instr, ir->rhs);
+      copy->variables[0] = evaluate_deref(ir->lhs);
+      copy->variables[1] = evaluate_deref(ir->rhs);
 
       if (ir->condition) {
          nir_if *if_stmt = nir_if_create(this->shader);
@@ -1179,7 +1178,7 @@ nir_visitor::visit(ir_assignment *ir)
       nir_intrinsic_instr_create(this->shader, nir_intrinsic_store_var);
    store->num_components = ir->lhs->type->vector_elements;
    nir_intrinsic_set_write_mask(store, ir->write_mask);
-   store->variables[0] = nir_deref_var_clone(lhs_deref, store);
+   store->variables[0] = nir_deref_var_clone(lhs_deref, this->shader);
    store->src[0] = nir_src_for_ssa(src);
 
    if (ir->condition) {
@@ -1260,7 +1259,6 @@ nir_visitor::evaluate_rvalue(ir_rvalue* ir)
          nir_intrinsic_instr_create(this->shader, nir_intrinsic_load_var);
       load_instr->num_components = ir->type->vector_elements;
       load_instr->variables[0] = this->deref_head;
-      ralloc_steal(load_instr, load_instr->variables[0]);
       unsigned bit_size = glsl_get_bit_size(ir->type);
       add_instr(&load_instr->instr, ir->type->vector_elements, bit_size);
    }
@@ -1345,7 +1343,6 @@ nir_visitor::visit(ir_expression *ir)
       nir_intrinsic_instr *intrin = nir_intrinsic_instr_create(shader, op);
       intrin->num_components = deref->type->vector_elements;
       intrin->variables[0] = this->deref_head;
-      ralloc_steal(intrin, intrin->variables[0]);
 
       if (intrin->intrinsic == nir_intrinsic_interp_var_at_offset ||
           intrin->intrinsic == nir_intrinsic_interp_var_at_sample)
@@ -1926,7 +1923,7 @@ nir_visitor::visit(ir_texture *ir)
       unreachable("not reached");
    }
 
-   instr->texture = evaluate_deref(&instr->instr, ir->sampler);
+   instr->texture = evaluate_deref(ir->sampler);
 
    unsigned src_number = 0;
 
@@ -2052,7 +2049,7 @@ nir_visitor::visit(ir_dereference_record *ir)
    int field_index = this->deref_tail->type->field_index(ir->field);
    assert(field_index >= 0);
 
-   nir_deref_struct *deref = nir_deref_struct_create(this->deref_tail, field_index);
+   nir_deref_struct *deref = nir_deref_struct_create(this->shader, field_index);
    deref->deref.type = ir->type;
    this->deref_tail->child = &deref->deref;
    this->deref_tail = &deref->deref;
@@ -2077,7 +2074,6 @@ nir_visitor::visit(ir_dereference_array *ir)
    ir->array->accept(this);
 
    this->deref_tail->child = &deref->deref;
-   ralloc_steal(this->deref_tail, deref);
    this->deref_tail = &deref->deref;
 }
 

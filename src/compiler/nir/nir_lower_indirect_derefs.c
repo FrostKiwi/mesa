@@ -122,7 +122,7 @@ emit_load_store(nir_builder *b, nir_intrinsic_instr *orig_instr,
       nir_intrinsic_instr *load =
          nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_var);
       load->num_components = orig_instr->num_components;
-      load->variables[0] = nir_deref_var_clone(deref, load);
+      load->variables[0] = nir_deref_var_clone(deref, b->shader);
       unsigned bit_size = orig_instr->dest.ssa.bit_size;
       nir_ssa_dest_init(&load->instr, &load->dest,
                         load->num_components, bit_size, NULL);
@@ -134,7 +134,7 @@ emit_load_store(nir_builder *b, nir_intrinsic_instr *orig_instr,
          nir_intrinsic_instr_create(b->shader, nir_intrinsic_store_var);
       store->num_components = orig_instr->num_components;
       nir_intrinsic_set_write_mask(store, nir_intrinsic_write_mask(orig_instr));
-      store->variables[0] = nir_deref_var_clone(deref, store);
+      store->variables[0] = nir_deref_var_clone(deref, b->shader);
       store->src[0] = nir_src_for_ssa(src);
       nir_builder_instr_insert(b, &store->instr);
    }

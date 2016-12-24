@@ -28,8 +28,8 @@
 static bool inline_function_impl(nir_function_impl *impl, struct set *inlined);
 
 static void
-convert_deref_to_param_deref(nir_instr *instr, nir_deref_var **deref,
-                             nir_call_instr *call)
+convert_deref_to_param_deref(nir_builder *b,
+                             nir_deref_var **deref, nir_call_instr *call)
 {
    /* This isn't a parameter, just return the deref */
    if ((*deref)->var->data.mode != nir_var_param)
@@ -49,7 +49,7 @@ convert_deref_to_param_deref(nir_instr *instr, nir_deref_var **deref,
    /* Now we make a new deref by concatenating the deref in the call's
     * parameter with the deref we were given.
     */
-   nir_deref_var *new_deref = nir_deref_var_clone(call_deref, instr);
+   nir_deref_var *new_deref = nir_deref_var_clone(call_deref, b->shader);
    nir_deref *new_tail = nir_deref_tail(&new_deref->deref);
    new_tail->child = (*deref)->deref.child;
    ralloc_steal(new_tail, new_tail->child);
@@ -57,7 +57,7 @@ convert_deref_to_param_deref(nir_instr *instr, nir_deref_var **deref,
 }
 
 static void
-rewrite_param_derefs(nir_instr *instr, nir_call_instr *call)
+rewrite_param_derefs(nir_builder *b, nir_instr *instr, nir_call_instr *call)
 {
    switch (instr->type) {
    case nir_instr_type_intrinsic: {
@@ -65,7 +65,7 @@ rewrite_param_derefs(nir_instr *instr, nir_call_instr *call)
 
       for (unsigned i = 0;
            i < nir_intrinsic_infos[intrin->intrinsic].num_variables; i++) {
-         convert_deref_to_param_deref(instr, &intrin->variables[i], call);
+         convert_deref_to_param_deref(b, &intrin->variables[i], call);
       }
       break;
    }
@@ -73,9 +73,9 @@ rewrite_param_derefs(nir_instr *instr, nir_call_instr *call)
    case nir_instr_type_tex: {
       nir_tex_instr *tex = nir_instr_as_tex(instr);
       if (tex->texture)
-         convert_deref_to_param_deref(&tex->instr, &tex->texture, call);
+         convert_deref_to_param_deref(b, &tex->texture, call);
       if (tex->sampler)
-         convert_deref_to_param_deref(&tex->instr, &tex->sampler, call);
+         convert_deref_to_param_deref(b, &tex->sampler, call);
       break;
    }
 
@@ -206,7 +206,7 @@ inline_functions_block(nir_block *block, nir_builder *b,
 
       nir_foreach_block(block, callee_copy) {
          nir_foreach_instr(instr, block)
-            rewrite_param_derefs(instr, call);
+            rewrite_param_derefs(b, instr, call);
       }
 
       /* Pluck the body out of the function and place it here */

@@ -204,7 +204,7 @@ nir_function_create(nir_shader *shader, const char *name)
    return func;
 }
 
-void nir_src_copy(nir_src *dest, const nir_src *src, void *mem_ctx)
+void nir_src_copy(nir_src *dest, const nir_src *src, nir_shader *shader)
 {
    dest->is_ssa = src->is_ssa;
    if (src->is_ssa) {
@@ -213,15 +213,15 @@ void nir_src_copy(nir_src *dest, const nir_src *src, void *mem_ctx)
       dest->reg.base_offset = src->reg.base_offset;
       dest->reg.reg = src->reg.reg;
       if (src->reg.indirect) {
-         dest->reg.indirect = ralloc(mem_ctx, nir_src);
-         nir_src_copy(dest->reg.indirect, src->reg.indirect, mem_ctx);
+         dest->reg.indirect = ralloc(shader, nir_src);
+         nir_src_copy(dest->reg.indirect, src->reg.indirect, shader);
       } else {
          dest->reg.indirect = NULL;
       }
    }
 }
 
-void nir_dest_copy(nir_dest *dest, const nir_dest *src, nir_instr *instr)
+void nir_dest_copy(nir_dest *dest, const nir_dest *src, nir_shader *shader)
 {
    /* Copying an SSA definition makes no sense whatsoever. */
    assert(!src->is_ssa);
@@ -231,8 +231,8 @@ void nir_dest_copy(nir_dest *dest, const nir_dest *src, nir_instr *instr)
    dest->reg.base_offset = src->reg.base_offset;
    dest->reg.reg = src->reg.reg;
    if (src->reg.indirect) {
-      dest->reg.indirect = ralloc(instr, nir_src);
-      nir_src_copy(dest->reg.indirect, src->reg.indirect, instr);
+      dest->reg.indirect = ralloc(shader, nir_src);
+      nir_src_copy(dest->reg.indirect, src->reg.indirect, shader);
    } else {
       dest->reg.indirect = NULL;
    }
@@ -240,9 +240,9 @@ void nir_dest_copy(nir_dest *dest, const nir_dest *src, nir_instr *instr)
 
 void
 nir_alu_src_copy(nir_alu_src *dest, const nir_alu_src *src,
-                 nir_alu_instr *instr)
+                 nir_shader *shader)
 {
-   nir_src_copy(&dest->src, &src->src, &instr->instr);
+   nir_src_copy(&dest->src, &src->src, shader);
    dest->abs = src->abs;
    dest->negate = src->negate;
    for (unsigned i = 0; i < 4; i++)
@@ -251,9 +251,9 @@ nir_alu_src_copy(nir_alu_src *dest, const nir_alu_src *src,
 
 void
 nir_alu_dest_copy(nir_alu_dest *dest, const nir_alu_dest *src,
-                  nir_alu_instr *instr)
+                  nir_shader *shader)
 {
-   nir_dest_copy(&dest->dest, &src->dest, &instr->instr);
+   nir_dest_copy(&dest->dest, &src->dest, shader);
    dest->write_mask = src->write_mask;
    dest->saturate = src->saturate;
 }
@@ -592,9 +592,9 @@ nir_ssa_undef_instr_create(nir_shader *shader,
 }
 
 nir_deref_var *
-nir_deref_var_create(void *mem_ctx, nir_variable *var)
+nir_deref_var_create(nir_shader *shader, nir_variable *var)
 {
-   nir_deref_var *deref = ralloc(mem_ctx, nir_deref_var);
+   nir_deref_var *deref = ralloc(shader, nir_deref_var);
    deref->deref.deref_type = nir_deref_type_var;
    deref->deref.child = NULL;
    deref->deref.type = var->type;
@@ -603,9 +603,9 @@ nir_deref_var_create(void *mem_ctx, nir_variable *var)
 }
 
 nir_deref_array *
-nir_deref_array_create(void *mem_ctx)
+nir_deref_array_create(nir_shader *shader)
 {
-   nir_deref_array *deref = ralloc(mem_ctx, nir_deref_array);
+   nir_deref_array *deref = ralloc(shader, nir_deref_array);
    deref->deref.deref_type = nir_deref_type_array;
    deref->deref.child = NULL;
    deref->deref_array_type = nir_deref_array_type_direct;
@@ -615,9 +615,9 @@ nir_deref_array_create(void *mem_ctx)
 }
 
 nir_deref_struct *
-nir_deref_struct_create(void *mem_ctx, unsigned field_index)
+nir_deref_struct_create(nir_shader *shader, unsigned field_index)
 {
-   nir_deref_struct *deref = ralloc(mem_ctx, nir_deref_struct);
+   nir_deref_struct *deref = ralloc(shader, nir_deref_struct);
    deref->deref.deref_type = nir_deref_type_struct;
    deref->deref.child = NULL;
    deref->index = field_index;
@@ -625,53 +625,56 @@ nir_deref_struct_create(void *mem_ctx, unsigned field_index)
 }
 
 nir_deref_var *
-nir_deref_var_clone(const nir_deref_var *deref, void *mem_ctx)
+nir_deref_var_clone(const nir_deref_var *deref, nir_shader *shader)
 {
-   nir_deref_var *ret = nir_deref_var_create(mem_ctx, deref->var);
+   if (deref == NULL)
+      return NULL;
+
+   nir_deref_var *ret = nir_deref_var_create(shader, deref->var);
    ret->deref.type = deref->deref.type;
    if (deref->deref.child)
-      ret->deref.child = nir_deref_clone(deref->deref.child, ret);
+      ret->deref.child = nir_deref_clone(deref->deref.child, shader);
    return ret;
 }
 
 static nir_deref_array *
-deref_array_clone(const nir_deref_array *deref, void *mem_ctx)
+deref_array_clone(const nir_deref_array *deref, nir_shader *shader)
 {
-   nir_deref_array *ret = nir_deref_array_create(mem_ctx);
+   nir_deref_array *ret = nir_deref_array_create(shader);
    ret->base_offset = deref->base_offset;
    ret->deref_array_type = deref->deref_array_type;
    if (deref->deref_array_type == nir_deref_array_type_indirect) {
-      nir_src_copy(&ret->indirect, &deref->indirect, mem_ctx);
+      nir_src_copy(&ret->indirect, &deref->indirect, shader);
    }
    ret->deref.type = deref->deref.type;
    if (deref->deref.child)
-      ret->deref.child = nir_deref_clone(deref->deref.child, ret);
+      ret->deref.child = nir_deref_clone(deref->deref.child, shader);
    return ret;
 }
 
 static nir_deref_struct *
-deref_struct_clone(const nir_deref_struct *deref, void *mem_ctx)
+deref_struct_clone(const nir_deref_struct *deref, nir_shader *shader)
 {
-   nir_deref_struct *ret = nir_deref_struct_create(mem_ctx, deref->index);
+   nir_deref_struct *ret = nir_deref_struct_create(shader, deref->index);
    ret->deref.type = deref->deref.type;
    if (deref->deref.child)
-      ret->deref.child = nir_deref_clone(deref->deref.child, ret);
+      ret->deref.child = nir_deref_clone(deref->deref.child, shader);
    return ret;
 }
 
 nir_deref *
-nir_deref_clone(const nir_deref *deref, void *mem_ctx)
+nir_deref_clone(const nir_deref *deref, nir_shader *shader)
 {
    if (deref == NULL)
       return NULL;
 
    switch (deref->deref_type) {
    case nir_deref_type_var:
-      return &nir_deref_var_clone(nir_deref_as_var(deref), mem_ctx)->deref;
+      return &nir_deref_var_clone(nir_deref_as_var(deref), shader)->deref;
    case nir_deref_type_array:
-      return &deref_array_clone(nir_deref_as_array(deref), mem_ctx)->deref;
+      return &deref_array_clone(nir_deref_as_array(deref), shader)->deref;
    case nir_deref_type_struct:
-      return &deref_struct_clone(nir_deref_as_struct(deref), mem_ctx)->deref;
+      return &deref_struct_clone(nir_deref_as_struct(deref), shader)->deref;
    default:
       unreachable("Invalid dereference type");
    }
@@ -1492,7 +1495,7 @@ nir_instr_rewrite_dest(nir_instr *instr, nir_dest *dest, nir_dest new_dest)
    /* We can't re-write with an SSA def */
    assert(!new_dest.is_ssa);
 
-   nir_dest_copy(dest, &new_dest, instr);
+   nir_dest_copy(dest, &new_dest, ralloc_parent(instr));
 
    dest->reg.parent_instr = instr;
    list_addtail(&dest->reg.def_link, &new_dest.reg.reg->defs);

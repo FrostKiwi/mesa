@@ -487,8 +487,8 @@ ttn_array_deref(struct ttn_compile *c, nir_intrinsic_instr *instr,
                 nir_variable *var, unsigned offset,
                 struct tgsi_ind_register *indirect)
 {
-   nir_deref_var *deref = nir_deref_var_create(instr, var);
-   nir_deref_array *arr = nir_deref_array_create(deref);
+   nir_deref_var *deref = nir_deref_var_create(c->build.shader, var);
+   nir_deref_array *arr = nir_deref_array_create(c->build.shader);
 
    arr->base_offset = offset;
    arr->deref.type = glsl_get_array_element(var->type);

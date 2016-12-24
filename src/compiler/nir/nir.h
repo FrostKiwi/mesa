@@ -585,8 +585,10 @@ nir_dest_bit_size(nir_dest dest)
    return dest.is_ssa ? dest.ssa.bit_size : dest.reg.reg->bit_size;
 }
 
-void nir_src_copy(nir_src *dest, const nir_src *src, void *instr_or_if);
-void nir_dest_copy(nir_dest *dest, const nir_dest *src, nir_instr *instr);
+void nir_src_copy(nir_src *dest, const nir_src *src,
+                  struct nir_shader *shader);
+void nir_dest_copy(nir_dest *dest, const nir_dest *src,
+                   struct nir_shader *shader);
 
 typedef struct {
    nir_src src;
@@ -742,9 +744,9 @@ typedef struct nir_alu_instr {
 } nir_alu_instr;
 
 void nir_alu_src_copy(nir_alu_src *dest, const nir_alu_src *src,
-                      nir_alu_instr *instr);
+                      struct nir_shader *shader);
 void nir_alu_dest_copy(nir_alu_dest *dest, const nir_alu_dest *src,
-                       nir_alu_instr *instr);
+                       struct nir_shader *shader);
 
 /* is this source channel used? */
 static inline bool
@@ -1923,9 +1925,10 @@ nir_ssa_undef_instr *nir_ssa_undef_instr_create(nir_shader *shader,
                                                 unsigned num_components,
                                                 unsigned bit_size);
 
-nir_deref_var *nir_deref_var_create(void *mem_ctx, nir_variable *var);
-nir_deref_array *nir_deref_array_create(void *mem_ctx);
-nir_deref_struct *nir_deref_struct_create(void *mem_ctx, unsigned field_index);
+nir_deref_var *nir_deref_var_create(nir_shader *shader, nir_variable *var);
+nir_deref_array *nir_deref_array_create(nir_shader *shader);
+nir_deref_struct *nir_deref_struct_create(nir_shader *shader,
+                                          unsigned field_index);
 
 typedef bool (*nir_deref_foreach_leaf_cb)(nir_deref_var *deref, void *state);
 bool nir_deref_foreach_leaf(nir_deref_var *deref,
@@ -2234,8 +2237,9 @@ nir_shader *nir_shader_clone(void *mem_ctx, const nir_shader *s);
 nir_function_impl *nir_function_impl_clone(const nir_function_impl *fi);
 nir_constant *nir_constant_clone(const nir_constant *c, nir_variable *var);
 nir_variable *nir_variable_clone(const nir_variable *c, nir_shader *shader);
-nir_deref *nir_deref_clone(const nir_deref *deref, void *mem_ctx);
-nir_deref_var *nir_deref_var_clone(const nir_deref_var *deref, void *mem_ctx);
+nir_deref *nir_deref_clone(const nir_deref *deref, nir_shader *shader);
+nir_deref_var *nir_deref_var_clone(const nir_deref_var *deref,
+                                   nir_shader *shader);
 
 #ifdef DEBUG
 void nir_validate_shader(nir_shader *shader);

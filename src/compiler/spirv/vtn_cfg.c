@@ -510,7 +510,7 @@ vtn_handle_phis_first_pass(struct vtn_builder *b, SpvOp opcode,
       nir_local_variable_create(b->nb.impl, type->type, "phi");
    _mesa_hash_table_insert(b->phi_table, w, phi_var);
 
-   val->ssa = vtn_local_load(b, nir_deref_var_create(b, phi_var));
+   val->ssa = vtn_local_load(b, nir_deref_var_create(b->shader, phi_var));
 
    return true;
 }
@@ -533,7 +533,7 @@ vtn_handle_phi_second_pass(struct vtn_builder *b, SpvOp opcode,
 
       b->nb.cursor = nir_after_instr(&pred->end_nop->instr);
 
-      vtn_local_store(b, src, nir_deref_var_create(b, phi_var));
+      vtn_local_store(b, src, nir_deref_var_create(b->shader, phi_var));
    }
 
    return true;
@@ -595,8 +595,8 @@ vtn_emit_cf_list(struct vtn_builder *b, struct list_head *cf_list,
 
          if ((*block->branch & SpvOpCodeMask) == SpvOpReturnValue) {
             struct vtn_ssa_value *src = vtn_ssa_value(b, block->branch[1]);
-            vtn_local_store(b, src,
-                            nir_deref_var_create(b, b->impl->return_var));
+            vtn_local_store(b, src, nir_deref_var_create(b->shader,
+                                                         b->impl->return_var));
          }
 
          if (block->branch_type != vtn_branch_type_none) {

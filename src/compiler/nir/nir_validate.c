@@ -156,6 +156,7 @@ validate_reg_src(nir_src *src, validate_state *state)
           "definitely out-of-bounds array access");
 
    if (src->reg.indirect) {
+      validate_assert(state, ralloc_parent(src->reg.indirect) == state->shader);
       validate_assert(state, src->reg.reg->num_array_elems != 0);
       validate_assert(state, (src->reg.indirect->is_ssa ||
               src->reg.indirect->reg.indirect == NULL) &&
@@ -368,10 +369,10 @@ validate_alu_instr(nir_alu_instr *instr, validate_state *state)
 static void
 validate_deref_chain(nir_deref *deref, validate_state *state)
 {
-   validate_assert(state, deref->child == NULL || ralloc_parent(deref->child) == deref);
-
    nir_deref *parent = NULL;
    while (deref != NULL) {
+      validate_assert(state, ralloc_parent(deref) == state->shader);
+
       switch (deref->deref_type) {
       case nir_deref_type_array:
          validate_assert(state, deref->type == glsl_get_array_element(parent->type));
@@ -412,10 +413,9 @@ validate_var_use(nir_variable *var, validate_state *state)
 }
 
 static void
-validate_deref_var(void *parent_mem_ctx, nir_deref_var *deref, validate_state *state)
+validate_deref_var(nir_deref_var *deref, validate_state *state)
 {
    validate_assert(state, deref != NULL);
-   validate_assert(state, ralloc_parent(deref) == parent_mem_ctx);
    validate_assert(state, deref->deref.type == deref->var->type);
 
    validate_var_use(deref->var, state);
@@ -446,7 +446,7 @@ validate_intrinsic_instr(nir_intrinsic_instr *instr, validate_state *state)
 
    unsigned num_vars = nir_intrinsic_infos[instr->intrinsic].num_variables;
    for (unsigned i = 0; i < num_vars; i++) {
-      validate_deref_var(instr, instr->variables[i], state);
+      validate_deref_var(instr->variables[i], state);
    }
 
    if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
@@ -515,10 +515,10 @@ validate_tex_instr(nir_tex_instr *instr, validate_state *state)
    }
 
    if (instr->texture != NULL)
-      validate_deref_var(instr, instr->texture, state);
+      validate_deref_var(instr->texture, state);
 
    if (instr->sampler != NULL)
-      validate_deref_var(instr, instr->sampler, state);
+      validate_deref_var(instr->sampler, state);
 
    validate_dest(&instr->dest, state);
 }
@@ -530,14 +530,14 @@ validate_call_instr(nir_call_instr *instr, validate_state *state)
       validate_assert(state, glsl_type_is_void(instr->callee->return_type));
    } else {
       validate_assert(state, instr->return_deref->deref.type == instr->callee->return_type);
-      validate_deref_var(instr, instr->return_deref, state);
+      validate_deref_var(instr->return_deref, state);
    }
 
    validate_assert(state, instr->num_params == instr->callee->num_params);
 
    for (unsigned i = 0; i < instr->num_params; i++) {
       validate_assert(state, instr->callee->params[i].type == instr->params[i]->deref.type);
-      validate_deref_var(instr, instr->params[i], state);
+      validate_deref_var(instr->params[i], state);
    }
 }
 

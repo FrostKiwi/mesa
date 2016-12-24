@@ -142,7 +142,7 @@ lower_io_types_block(struct lower_io_types_state *state, nir_block *block)
       nir_variable *nvar = get_new_var(state, var, deref_type, off);
 
       /* and then re-write the load/store_var deref: */
-      intr->variables[0] = nir_deref_var_create(intr, nvar);
+      intr->variables[0] = nir_deref_var_create(state->shader, nvar);
    }
 
    return true;

@@ -223,8 +223,7 @@ clone_reg_list(clone_state *state, struct exec_list *dst,
 }
 
 static void
-__clone_src(clone_state *state, void *ninstr_or_if,
-            nir_src *nsrc, const nir_src *src)
+__clone_src(clone_state *state, nir_src *nsrc, const nir_src *src)
 {
    nsrc->is_ssa = src->is_ssa;
    if (src->is_ssa) {
@@ -232,8 +231,8 @@ __clone_src(clone_state *state, void *ninstr_or_if,
    } else {
       nsrc->reg.reg = remap_reg(state, src->reg.reg);
       if (src->reg.indirect) {
-         nsrc->reg.indirect = ralloc(ninstr_or_if, nir_src);
-         __clone_src(state, ninstr_or_if, nsrc->reg.indirect, src->reg.indirect);
+         nsrc->reg.indirect = ralloc(state->ns, nir_src);
+         __clone_src(state, nsrc->reg.indirect, src->reg.indirect);
       }
       nsrc->reg.base_offset = src->reg.base_offset;
    }
@@ -251,74 +250,64 @@ __clone_dst(clone_state *state, nir_instr *ninstr,
    } else {
       ndst->reg.reg = remap_reg(state, dst->reg.reg);
       if (dst->reg.indirect) {
-         ndst->reg.indirect = ralloc(ninstr, nir_src);
-         __clone_src(state, ninstr, ndst->reg.indirect, dst->reg.indirect);
+         ndst->reg.indirect = ralloc(state->ns, nir_src);
+         __clone_src(state, ndst->reg.indirect, dst->reg.indirect);
       }
       ndst->reg.base_offset = dst->reg.base_offset;
    }
 }
 
-static nir_deref *clone_deref(clone_state *state, const nir_deref *deref,
-                              nir_instr *ninstr, nir_deref *parent);
+static nir_deref *clone_deref(clone_state *state, const nir_deref *deref);
 
 static nir_deref_var *
-clone_deref_var(clone_state *state, const nir_deref_var *dvar,
-                nir_instr *ninstr)
+clone_deref_var(clone_state *state, const nir_deref_var *dvar)
 {
    nir_variable *nvar = remap_var(state, dvar->var);
-   nir_deref_var *ndvar = nir_deref_var_create(ninstr, nvar);
+   nir_deref_var *ndvar = nir_deref_var_create(state->ns, nvar);
 
    if (dvar->deref.child)
-      ndvar->deref.child = clone_deref(state, dvar->deref.child,
-                                       ninstr, &ndvar->deref);
+      ndvar->deref.child = clone_deref(state, dvar->deref.child);
 
    return ndvar;
 }
 
 static nir_deref_array *
-clone_deref_array(clone_state *state, const nir_deref_array *darr,
-                  nir_instr *ninstr, nir_deref *parent)
+clone_deref_array(clone_state *state, const nir_deref_array *darr)
 {
-   nir_deref_array *ndarr = nir_deref_array_create(parent);
+   nir_deref_array *ndarr = nir_deref_array_create(state->ns);
 
    ndarr->deref.type = darr->deref.type;
    if (darr->deref.child)
-      ndarr->deref.child = clone_deref(state, darr->deref.child,
-                                       ninstr, &ndarr->deref);
+      ndarr->deref.child = clone_deref(state, darr->deref.child);
 
    ndarr->deref_array_type = darr->deref_array_type;
    ndarr->base_offset = darr->base_offset;
    if (ndarr->deref_array_type == nir_deref_array_type_indirect)
-      __clone_src(state, ninstr, &ndarr->indirect, &darr->indirect);
+      __clone_src(state, &ndarr->indirect, &darr->indirect);
 
    return ndarr;
 }
 
 static nir_deref_struct *
-clone_deref_struct(clone_state *state, const nir_deref_struct *dstr,
-                   nir_instr *ninstr, nir_deref *parent)
+clone_deref_struct(clone_state *state, const nir_deref_struct *dstr)
 {
-   nir_deref_struct *ndstr = nir_deref_struct_create(parent, dstr->index);
+   nir_deref_struct *ndstr = nir_deref_struct_create(state->ns, dstr->index);
 
    ndstr->deref.type = dstr->deref.type;
    if (dstr->deref.child)
-      ndstr->deref.child = clone_deref(state, dstr->deref.child,
-                                       ninstr, &ndstr->deref);
+      ndstr->deref.child = clone_deref(state, dstr->deref.child);
 
    return ndstr;
 }
 
 static nir_deref *
-clone_deref(clone_state *state, const nir_deref *dref,
-            nir_instr *ninstr, nir_deref *parent)
+clone_deref(clone_state *state, const nir_deref *dref)
 {
    switch (dref->deref_type) {
    case nir_deref_type_array:
-      return &clone_deref_array(state, nir_deref_as_array(dref),
-                                ninstr, parent)->deref;
+      return &clone_deref_array(state, nir_deref_as_array(dref))->deref;
    case nir_deref_type_struct:
-      return &clone_deref_struct(state, nir_deref_as_struct(dref),
-                                 ninstr, parent)->deref;
+      return &clone_deref_struct(state, nir_deref_as_struct(dref))->deref;
    default:
       unreachable("bad deref type");
       return NULL;
@@ -336,7 +325,7 @@ clone_alu(clone_state *state, const nir_alu_instr *alu)
    nalu->dest.write_mask = alu->dest.write_mask;
 
    for (unsigned i = 0; i < nir_op_infos[alu->op].num_inputs; i++) {
-      __clone_src(state, &nalu->instr, &nalu->src[i].src, &alu->src[i].src);
+      __clone_src(state, &nalu->src[i].src, &alu->src[i].src);
       nalu->src[i].negate = alu->src[i].negate;
       nalu->src[i].abs = alu->src[i].abs;
       memcpy(nalu->src[i].swizzle, alu->src[i].swizzle,
@@ -361,13 +350,11 @@ clone_intrinsic(clone_state *state, const nir_intrinsic_instr *itr)
    nitr->num_components = itr->num_components;
    memcpy(nitr->const_index, itr->const_index, sizeof(nitr->const_index));
 
-   for (unsigned i = 0; i < num_variables; i++) {
-      nitr->variables[i] = clone_deref_var(state, itr->variables[i],
-                                           &nitr->instr);
-   }
+   for (unsigned i = 0; i < num_variables; i++)
+      nitr->variables[i] = clone_deref_var(state, itr->variables[i]);
 
    for (unsigned i = 0; i < num_srcs; i++)
-      __clone_src(state, &nitr->instr, &nitr->src[i], &itr->src[i]);
+      __clone_src(state, &nitr->src[i], &itr->src[i]);
 
    return nitr;
 }
@@ -409,7 +396,7 @@ clone_tex(clone_state *state, const nir_tex_instr *tex)
    __clone_dst(state, &ntex->instr, &ntex->dest, &tex->dest);
    for (unsigned i = 0; i < ntex->num_srcs; i++) {
       ntex->src[i].src_type = tex->src[i].src_type;
-      __clone_src(state, &ntex->instr, &ntex->src[i].src, &tex->src[i].src);
+      __clone_src(state, &ntex->src[i].src, &tex->src[i].src);
    }
    ntex->coord_components = tex->coord_components;
    ntex->is_array = tex->is_array;
@@ -419,12 +406,12 @@ clone_tex(clone_state *state, const nir_tex_instr *tex)
 
    ntex->texture_index = tex->texture_index;
    if (tex->texture)
-      ntex->texture = clone_deref_var(state, tex->texture, &ntex->instr);
+      ntex->texture = clone_deref_var(state, tex->texture);
    ntex->texture_array_size = tex->texture_array_size;
 
    ntex->sampler_index = tex->sampler_index;
    if (tex->sampler)
-      ntex->sampler = clone_deref_var(state, tex->sampler, &ntex->instr);
+      ntex->sampler = clone_deref_var(state, tex->sampler);
 
    return ntex;
 }
@@ -488,10 +475,9 @@ clone_call(clone_state *state, const nir_call_instr *call)
    nir_call_instr *ncall = nir_call_instr_create(state->ns, ncallee);
 
    for (unsigned i = 0; i < ncall->num_params; i++)
-      ncall->params[i] = clone_deref_var(state, call->params[i], &ncall->instr);
+      ncall->params[i] = clone_deref_var(state, call->params[i]);
 
-   ncall->return_deref = clone_deref_var(state, call->return_deref,
-                                         &ncall->instr);
+   ncall->return_deref = clone_deref_var(state, call->return_deref);
 
    return ncall;
 }
@@ -565,7 +551,7 @@ clone_if(clone_state *state, struct exec_list *cf_list, const nir_if *i)
 {
    nir_if *ni = nir_if_create(state->ns);
 
-   __clone_src(state, ni, &ni->condition, &i->condition);
+   __clone_src(state, &ni->condition, &i->condition);
 
    nir_cf_node_insert_end(cf_list, &ni->cf_node);
 

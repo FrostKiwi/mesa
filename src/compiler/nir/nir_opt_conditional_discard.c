@@ -96,7 +96,7 @@ nir_opt_conditional_discard_block(nir_builder *b, nir_block *block)
 
    nir_intrinsic_instr *discard_if =
       nir_intrinsic_instr_create(b->shader, nir_intrinsic_discard_if);
-   nir_src_copy(&discard_if->src[0], &cond, discard_if);
+   nir_src_copy(&discard_if->src[0], &cond, b->shader);
 
    nir_instr_insert_before_cf(prev_node, &discard_if->instr);
    nir_instr_remove(&intrin->instr);

@@ -40,6 +40,16 @@
 
 static void sweep_cf_node(nir_shader *nir, nir_cf_node *cf_node);
 
+static void
+sweep_deref(nir_shader *nir, nir_deref *deref)
+{
+   if (!deref)
+      return;
+
+   ralloc_steal(nir, deref);
+   sweep_deref(nir, deref->child);
+}
+
 static bool
 sweep_src_indirect(nir_src *src, void *nir)
 {
@@ -59,16 +69,50 @@ sweep_dest_indirect(nir_dest *dest, void *nir)
 }
 
 static void
+sweep_instr(nir_shader *nir, nir_instr *instr)
+{
+   ralloc_steal(nir, instr);
+
+   switch (instr->type) {
+   case nir_instr_type_intrinsic: {
+      nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+      for (unsigned i = 0;
+           i < nir_intrinsic_infos[intrin->intrinsic].num_variables; i++) {
+         sweep_deref(nir, &intrin->variables[i]->deref);
+      }
+      break;
+   }
+
+   case nir_instr_type_tex: {
+      nir_tex_instr *tex = nir_instr_as_tex(instr);
+      sweep_deref(nir, &tex->texture->deref);
+      sweep_deref(nir, &tex->sampler->deref);
+      break;
+   }
+
+   case nir_instr_type_call: {
+      nir_call_instr *call = nir_instr_as_call(instr);
+      sweep_deref(nir, &call->return_deref->deref);
+      for (unsigned i = 0; i < call->num_params; i++)
+         sweep_deref(nir, &call->params[i]->deref);
+      break;
+   }
+
+   default:
+      break;
+   }
+
+   nir_foreach_src(instr, sweep_src_indirect, nir);
+   nir_foreach_dest(instr, sweep_dest_indirect, nir);
+}
+
+static void
 sweep_block(nir_shader *nir, nir_block *block)
 {
    ralloc_steal(nir, block);
 
-   nir_foreach_instr(instr, block) {
-      ralloc_steal(nir, instr);
-
-      nir_foreach_src(instr, sweep_src_indirect, nir);
-      nir_foreach_dest(instr, sweep_dest_indirect, nir);
-   }
+   nir_foreach_instr(instr, block)
+      sweep_instr(nir, instr);
 }
 
 static void
