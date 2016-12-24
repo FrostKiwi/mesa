@@ -2252,7 +2252,7 @@ should_clone_nir(void)
 {
    static int should_clone = -1;
    if (should_clone < 0)
-      should_clone = env_var_as_boolean("NIR_TEST_CLONE", false);
+      should_clone = env_var_as_boolean("NIR_TEST_CLONE", true);
 
    return should_clone;
 }
