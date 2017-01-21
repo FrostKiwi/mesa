@@ -33,10 +33,67 @@
 #include "main/framebuffer.h"
 #include "main/viewport.h"
 
+void
+brw_calculate_guardband_size(const struct gen_device_info *devinfo,
+                             float y_scale,
+                             float m00, float m11, float m30, float m31,
+                             float *xmin, float *xmax,
+                             float *ymin, float *ymax)
+{
+   /* According to the "Vertex X,Y Clamping and Quantization" section of the
+    * Strips and Fans documentation:
+    *
+    * "The vertex X and Y screen-space coordinates are also /clamped/ to the
+    *  fixed-point "guardband" range supported by the rasterization hardware"
+    *
+    * and
+    *
+    * "In almost all circumstances, if an object’s vertices are actually
+    *  modified by this clamping (i.e., had X or Y coordinates outside of
+    *  the guardband extent the rendered object will not match the intended
+    *  result.  Therefore software should take steps to ensure that this does
+    *  not happen - e.g., by clipping objects such that they do not exceed
+    *  these limits after the Drawing Rectangle is applied."
+    *
+    * I believe the fundamental restriction is that the rasterizer (in
+    * the SF/WM stages) have a limit on the number of pixels that can be
+    * rasterized.  We need to ensure any coordinates beyond the rasterizer
+    * limit are handled by the clipper.  So effectively that limit becomes
+    * the clipper's guardband size.
+    *
+    * It goes on to say:
+    *
+    * "In addition, in order to be correctly rendered, objects must have a
+    *  screenspace bounding box not exceeding 8K in the X or Y direction.
+    *  This additional restriction must also be comprehended by software,
+    *  i.e., enforced by use of clipping."
+    *
+    * So we limit the guardband to 8K.
+    */
+   const float size = 8192.0f;
+
+   if (m00 != 0 && m11 != 0) {
+      /* Reverse the viewport transform to turn the [-size, size]
+       * screenspace guardband coordinates into NDC coordinates.
+       */
+      *xmin = (-size - m30) / m00;
+      *xmax = ( size - m30) / m00;
+      *ymin = (-y_scale * size - m31) / m11;
+      *ymax = ( y_scale * size - m31) / m11;
+   } else {
+      /* The viewport scales to 0, so nothing will be rendered. */
+      *xmin = 0.0f;
+      *xmax = 0.0f;
+      *ymin = 0.0f;
+      *ymax = 0.0f;
+   }
+}
+
 static void
 gen6_upload_sf_and_clip_viewports(struct brw_context *brw)
 {
    struct gl_context *ctx = &brw->ctx;
+   const struct gen_device_info *devinfo = &brw->screen->devinfo;
    struct gen6_sf_viewport *sfv;
    struct brw_clipper_viewport *clv;
    GLfloat y_scale, y_bias;
@@ -75,25 +132,11 @@ gen6_upload_sf_and_clip_viewports(struct brw_context *brw)
       sfv[i].m31 = translate[1] * y_scale + y_bias;
       sfv[i].m32 = translate[2];
 
-      /* According to the "Vertex X,Y Clamping and Quantization" section of the
-       * Strips and Fans documentation, objects must not have a screen-space
-       * extents of over 8192 pixels, or they may be mis-rasterized.  The maximum
-       * screen space coordinates of a small object may larger, but we have no
-       * way to enforce the object size other than through clipping.
-       *
-       * If you're surprised that we set clip to -gbx to +gbx and it seems like
-       * we'll end up with 16384 wide, note that for a 8192-wide render target,
-       * we'll end up with a normal (-1, 1) clip volume that just covers the
-       * drawable.
-       */
-      const float maximum_post_clamp_delta = 8192;
-      float gbx = maximum_post_clamp_delta / ctx->ViewportArray[i].Width;
-      float gby = maximum_post_clamp_delta / ctx->ViewportArray[i].Height;
-
-      clv[i].xmin = -gbx;
-      clv[i].xmax = gbx;
-      clv[i].ymin = -gby;
-      clv[i].ymax = gby;
+      brw_calculate_guardband_size(devinfo, y_scale,
+                                   sfv[i].m00, sfv[i].m11,
+                                   sfv[i].m30, sfv[i].m31,
+                                   &clv[i].xmin, &clv[i].xmax,
+                                   &clv[i].ymin, &clv[i].ymax);
    }
 
    brw->ctx.NewDriverState |= BRW_NEW_SF_VP | BRW_NEW_CLIP_VP;
