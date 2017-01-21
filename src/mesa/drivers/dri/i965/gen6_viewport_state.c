@@ -88,9 +88,15 @@ brw_calculate_guardband_size(const struct gen_device_info *devinfo,
     *
     * I'm choosing to interpret this as a screenspace limit rather than
     * a limit on the resulting NDC coordinates.  It's not entirely clear.
+    *
+    * But then the Windows driver seems to implement WaGuardbandSize
+    * by programming the size to 32768.0 / 2.0 + 1.0 = 16385.0.  This
+    * looks like an off-by-one, but it's apparently needed to pass CTS
+    * tests.
     */
-   const float gb_min = devinfo->gen >= 7 ? -16384.0f : -8192.0f;
-   const float gb_max = devinfo->gen >= 7 ? 16383.0f : 8192.0f;
+   const float gb_size = devinfo->gen >= 7 ? 16385.0f : 8192.0f;
+   const float gb_min = -gb_size;
+   const float gb_max = gb_size;
 
    if (m00 != 0 && m11 != 0) {
       /* Reverse the viewport transform to turn the [-size, size]
