@@ -68,18 +68,38 @@ brw_calculate_guardband_size(const struct gen_device_info *devinfo,
     *  This additional restriction must also be comprehended by software,
     *  i.e., enforced by use of clipping."
     *
-    * So we limit the guardband to 8K.
+    * This makes no sense.  Gen7+ hardware supports 16K render targets,
+    * and you definitely need to be able to draw polygons that fill the
+    * surface.  Our assumption is that the rasterizer was limited to 8K
+    * on Sandybridge, which only supports 8K surfaces, and it was actually
+    * increased to 16K on Ivybridge and later.
+    *
+    * So, limit the guardband to 16K on Gen7+ and 8K on Sandybridge.
+    *
+    * The SF_CLIP_VIEWPORT documentation also restricts these fields
+    * (related to WaGuardbandSize, which seems to have something to do
+    * with fixed point math precision).
+    * 
+    * For XMin/YMin, it says:
+    *    "Minimum allowed value for this field is -16384."
+    *
+    * For XMax/YMax, it says:
+    *    "Maximum allowed value for this field is 16383."
+    *
+    * I'm choosing to interpret this as a screenspace limit rather than
+    * a limit on the resulting NDC coordinates.  It's not entirely clear.
     */
-   const float size = 8192.0f;
+   const float gb_min = devinfo->gen >= 7 ? -16384.0f : -8192.0f;
+   const float gb_max = devinfo->gen >= 7 ? 16383.0f : 8192.0f;
 
    if (m00 != 0 && m11 != 0) {
       /* Reverse the viewport transform to turn the [-size, size]
        * screenspace guardband coordinates into NDC coordinates.
        */
-      *xmin = (-size - m30) / m00;
-      *xmax = ( size - m30) / m00;
-      *ymin = (-y_scale * size - m31) / m11;
-      *ymax = ( y_scale * size - m31) / m11;
+      *xmin = (gb_min - m30) / m00;
+      *xmax = (gb_max - m30) / m00;
+      *ymin = (y_scale * gb_min - m31) / m11;
+      *ymax = (y_scale * gb_max - m31) / m11;
    } else {
       /* The viewport scales to 0, so nothing will be rendered. */
       *xmin = 0.0f;
