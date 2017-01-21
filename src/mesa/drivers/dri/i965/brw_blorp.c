@@ -284,6 +284,7 @@ brw_blorp_to_isl_format(struct brw_context *brw, mesa_format format,
    case MESA_FORMAT_S_UINT8:
       return ISL_FORMAT_R8_UINT;
    case MESA_FORMAT_Z24_UNORM_X8_UINT:
+   case MESA_FORMAT_Z24_UNORM_S8_UINT:
       return ISL_FORMAT_R24_UNORM_X8_TYPELESS;
    case MESA_FORMAT_Z_FLOAT32:
       return ISL_FORMAT_R32_FLOAT;
@@ -538,8 +539,6 @@ try_blorp_blit(struct brw_context *brw,
    /* Find buffers */
    struct intel_renderbuffer *src_irb;
    struct intel_renderbuffer *dst_irb;
-   struct intel_mipmap_tree *src_mt;
-   struct intel_mipmap_tree *dst_mt;
    switch (buffer_bit) {
    case GL_COLOR_BUFFER_BIT:
       src_irb = intel_renderbuffer(read_fb->_ColorReadBuffer);
@@ -559,16 +558,6 @@ try_blorp_blit(struct brw_context *brw,
          intel_renderbuffer(read_fb->Attachment[BUFFER_DEPTH].Renderbuffer);
       dst_irb =
          intel_renderbuffer(draw_fb->Attachment[BUFFER_DEPTH].Renderbuffer);
-      src_mt = find_miptree(buffer_bit, src_irb);
-      dst_mt = find_miptree(buffer_bit, dst_irb);
-
-      /* We can't handle format conversions between Z24 and other formats
-       * since we have to lie about the surface format. See the comments in
-       * brw_blorp_surface_info::set().
-       */
-      if ((src_mt->format == MESA_FORMAT_Z24_UNORM_X8_UINT) !=
-          (dst_mt->format == MESA_FORMAT_Z24_UNORM_X8_UINT))
-         return false;
 
       do_blorp_blit(brw, buffer_bit, src_irb, MESA_FORMAT_NONE,
                     dst_irb, MESA_FORMAT_NONE, srcX0, srcY0,
@@ -623,23 +612,6 @@ brw_blorp_copytexsubimage(struct brw_context *brw,
 
    /* BLORP is only supported from Gen6 onwards. */
    if (brw->gen < 6)
-      return false;
-
-   if (_mesa_get_format_base_format(src_rb->Format) !=
-       _mesa_get_format_base_format(dst_image->TexFormat)) {
-      return false;
-   }
-
-   /* We can't handle format conversions between Z24 and other formats since
-    * we have to lie about the surface format.  See the comments in
-    * brw_blorp_surface_info::set().
-    */
-   if ((src_mt->format == MESA_FORMAT_Z24_UNORM_X8_UINT) !=
-       (dst_mt->format == MESA_FORMAT_Z24_UNORM_X8_UINT)) {
-      return false;
-   }
-
-   if (!brw->format_supported_as_render_target[dst_image->TexFormat])
       return false;
 
    /* Source clipping shouldn't be necessary, since copytexsubimage (in
