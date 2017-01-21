@@ -1279,6 +1279,18 @@ brw_blorp_build_nir_shader(struct blorp_context *blorp, void *mem_ctx,
 
       nir_ssa_def *u = nir_ssa_undef(&b, 1, 32);
       color = nir_vec4(&b, color_component, u, u, u);
+   } else if (key->dst_r24x8) {
+      /* The destination image is bound as R32_UNORM but the data needs to be
+       * in R24_UNORM_X8_TYPELESS.  The bottom 24 are the actual data and the
+       * top 8 need to be zero.  We can accomplish this by simply multiplying
+       * by a factor to scale things down.
+       */
+      float factor = (float)((1 << 24) - 1) / (float)UINT32_MAX;
+      nir_ssa_def *value =
+         nir_fmul(&b, nir_fsat(&b, nir_channel(&b, color, 0)),
+                      nir_imm_float(&b, factor));
+      nir_ssa_def *u = nir_ssa_undef(&b, 1, 32);
+      color = nir_vec4(&b, value, u, u, u);
    }
 
    nir_store_var(&b, v.color_out, color, 0xf);
@@ -2058,6 +2070,11 @@ blorp_blit(struct blorp_batch *batch,
        * This implies we should not blend in that case.
        */
       wm_prog_key.blend = true;
+   }
+
+   if (params.dst.view.format == ISL_FORMAT_R24_UNORM_X8_TYPELESS) {
+      params.dst.view.format = ISL_FORMAT_R32_UNORM;
+      wm_prog_key.dst_r24x8 = true;
    }
 
    params.wm_inputs.rect_grid.x1 =

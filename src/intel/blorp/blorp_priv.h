@@ -268,6 +268,11 @@ struct brw_blorp_blit_prog_key
     */
    bool dst_rgb;
 
+   /* True if the destination is a Z24X8 format.  If true, the surface state
+    * format of the render target must be configured as R32_UNORM.
+    */
+   bool dst_r24x8;
+
    /* True if all source samples should be blended together to produce each
     * destination pixel.  If true, src_tiled_w must be false, tex_samples must
     * equal src_samples, and tex_samples must be nonzero.
