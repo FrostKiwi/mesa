@@ -35,11 +35,15 @@ gen8_upload_sf_clip_viewport(struct brw_context *brw)
    struct gl_context *ctx = &brw->ctx;
    const struct gen_device_info *devinfo = &brw->screen->devinfo;
    float y_scale, y_bias;
-   const float fb_height = (float)_mesa_geometric_height(ctx->DrawBuffer);
-   const bool render_to_fbo = _mesa_is_user_fbo(ctx->DrawBuffer);
 
    /* BRW_NEW_VIEWPORT_COUNT */
    const unsigned viewport_count = brw->clip.viewport_count;
+
+   /* _NEW_BUFFERS */
+   struct gl_framebuffer *fb = ctx->DrawBuffer;
+   const bool render_to_fbo = _mesa_is_user_fbo(fb);
+   const uint32_t fb_width = _mesa_geometric_width(ctx->DrawBuffer);
+   const uint32_t fb_height = _mesa_geometric_height(ctx->DrawBuffer);
 
    float *vp = brw_state_batch(brw, AUB_TRACE_SF_VP_STATE,
                                16 * 4 * viewport_count,
@@ -53,7 +57,7 @@ gen8_upload_sf_clip_viewport(struct brw_context *brw)
       y_bias = 0;
    } else {
       y_scale = -1.0;
-      y_bias = fb_height;
+      y_bias = (float)fb_height;
    }
 
    for (unsigned i = 0; i < viewport_count; i++) {
@@ -72,7 +76,7 @@ gen8_upload_sf_clip_viewport(struct brw_context *brw)
       vp[6] = 0;
       vp[7] = 0;
 
-      brw_calculate_guardband_size(devinfo, y_scale,
+      brw_calculate_guardband_size(devinfo, fb_width, fb_height, y_scale,
                                    vp[0], vp[1], vp[3], vp[4],
                                    &vp[8], &vp[9], &vp[10], &vp[11]);
 

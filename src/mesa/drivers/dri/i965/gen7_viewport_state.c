@@ -35,11 +35,16 @@ gen7_upload_sf_clip_viewport(struct brw_context *brw)
    struct gl_context *ctx = &brw->ctx;
    const struct gen_device_info *devinfo = &brw->screen->devinfo;
    GLfloat y_scale, y_bias;
-   const bool render_to_fbo = _mesa_is_user_fbo(ctx->DrawBuffer);
    struct gen7_sf_clip_viewport *vp;
 
    /* BRW_NEW_VIEWPORT_COUNT */
    const unsigned viewport_count = brw->clip.viewport_count;
+
+   /* _NEW_BUFFERS */
+   struct gl_framebuffer *fb = ctx->DrawBuffer;
+   const bool render_to_fbo = _mesa_is_user_fbo(fb);
+   const uint32_t fb_width = _mesa_geometric_width(ctx->DrawBuffer);
+   const uint32_t fb_height = _mesa_geometric_height(ctx->DrawBuffer);
 
    vp = brw_state_batch(brw, AUB_TRACE_SF_VP_STATE,
                         sizeof(*vp) * viewport_count, 64,
@@ -53,7 +58,7 @@ gen7_upload_sf_clip_viewport(struct brw_context *brw)
       y_bias = 0.0;
    } else {
       y_scale = -1.0;
-      y_bias = (float)_mesa_geometric_height(ctx->DrawBuffer);
+      y_bias = (float)fb_height;
    }
 
    for (unsigned i = 0; i < viewport_count; i++) {
@@ -68,7 +73,7 @@ gen7_upload_sf_clip_viewport(struct brw_context *brw)
       vp[i].viewport.m31 = translate[1] * y_scale + y_bias;
       vp[i].viewport.m32 = translate[2];
 
-      brw_calculate_guardband_size(devinfo, y_scale,
+      brw_calculate_guardband_size(devinfo, fb_width, fb_height, y_scale,
                                    vp[i].viewport.m00, vp[i].viewport.m11,
                                    vp[i].viewport.m30, vp[i].viewport.m31,
                                    &vp[i].guardband.xmin,

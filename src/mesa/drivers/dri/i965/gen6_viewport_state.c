@@ -35,6 +35,7 @@
 
 void
 brw_calculate_guardband_size(const struct gen_device_info *devinfo,
+                             uint32_t fb_width, uint32_t fb_height,
                              float y_scale,
                              float m00, float m11, float m30, float m31,
                              float *xmin, float *xmax,
@@ -123,10 +124,15 @@ gen6_upload_sf_and_clip_viewports(struct brw_context *brw)
    struct gen6_sf_viewport *sfv;
    struct brw_clipper_viewport *clv;
    GLfloat y_scale, y_bias;
-   const bool render_to_fbo = _mesa_is_user_fbo(ctx->DrawBuffer);
 
    /* BRW_NEW_VIEWPORT_COUNT */
    const unsigned viewport_count = brw->clip.viewport_count;
+
+   /* _NEW_BUFFERS */
+   struct gl_framebuffer *fb = ctx->DrawBuffer;
+   const bool render_to_fbo = _mesa_is_user_fbo(fb);
+   const uint32_t fb_width = _mesa_geometric_width(ctx->DrawBuffer);
+   const uint32_t fb_height = _mesa_geometric_height(ctx->DrawBuffer);
 
    sfv = brw_state_batch(brw, AUB_TRACE_SF_VP_STATE,
                          sizeof(*sfv) * viewport_count,
@@ -137,13 +143,12 @@ gen6_upload_sf_and_clip_viewports(struct brw_context *brw)
                          sizeof(*clv) * viewport_count,
                          32, &brw->clip.vp_offset);
 
-   /* _NEW_BUFFERS */
    if (render_to_fbo) {
       y_scale = 1.0;
       y_bias = 0.0;
    } else {
       y_scale = -1.0;
-      y_bias = (float)_mesa_geometric_height(ctx->DrawBuffer);
+      y_bias = (float)fb_height;
    }
 
    for (unsigned i = 0; i < viewport_count; i++) {
@@ -158,7 +163,7 @@ gen6_upload_sf_and_clip_viewports(struct brw_context *brw)
       sfv[i].m31 = translate[1] * y_scale + y_bias;
       sfv[i].m32 = translate[2];
 
-      brw_calculate_guardband_size(devinfo, y_scale,
+      brw_calculate_guardband_size(devinfo, fb_width, fb_height, y_scale,
                                    sfv[i].m00, sfv[i].m11,
                                    sfv[i].m30, sfv[i].m31,
                                    &clv[i].xmin, &clv[i].xmax,

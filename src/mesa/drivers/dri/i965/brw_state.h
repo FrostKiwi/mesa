@@ -455,6 +455,7 @@ use_state_point_size(const struct brw_context *brw)
 }
 
 void brw_calculate_guardband_size(const struct gen_device_info *devinfo,
+                                  uint32_t fb_width, uint32_t fb_height,
                                   float y_scale,
                                   float m00, float m11, float m30, float m31,
                                   float *xmin, float *xmax,
