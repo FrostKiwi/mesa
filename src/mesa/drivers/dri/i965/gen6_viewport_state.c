@@ -95,18 +95,36 @@ brw_calculate_guardband_size(const struct gen_device_info *devinfo,
     * looks like an off-by-one, but it's apparently needed to pass CTS
     * tests.
     */
-   const float gb_size = devinfo->gen >= 7 ? 16385.0f : 8192.0f;
-   const float gb_min = -gb_size;
-   const float gb_max = gb_size;
+   const float gb_size = devinfo->gen >= 7 ? 16384.0f : 8192.0f;
 
    if (m00 != 0 && m11 != 0) {
-      /* Reverse the viewport transform to turn the [-size, size]
-       * screenspace guardband coordinates into NDC coordinates.
+      /* First, we compute the screen-space render area */
+      const float ss_ra_xmin = MIN3(        0, m30 + m00, m30 - m00);
+      const float ss_ra_xmax = MAX3( fb_width, m30 + m00, m30 - m00);
+      const float ss_ra_ymin = MIN3(        0, m31 + m11, m31 - m11);
+      const float ss_ra_ymax = MAX3(fb_height, m31 + m11, m31 - m11);
+
+      /* We want the guardband to be centered on that */
+      const float ss_gb_xmin = (ss_ra_xmin + ss_ra_xmax) / 2 - gb_size;
+      const float ss_gb_xmax = (ss_ra_xmin + ss_ra_xmax) / 2 + gb_size;
+      const float ss_gb_ymin = (ss_ra_ymin + ss_ra_ymax) / 2 - gb_size;
+      const float ss_gb_ymax = (ss_ra_ymin + ss_ra_ymax) / 2 + gb_size;
+
+      /* Now we need it in native device coordinates */
+      const float ndc_gb_xmin = (ss_gb_xmin - m30) / m00;
+      const float ndc_gb_xmax = (ss_gb_xmax - m30) / m00;
+      const float ndc_gb_ymin = (ss_gb_ymin - m31) / m11;
+      const float ndc_gb_ymax = (ss_gb_ymax - m31) / m11;
+
+      /* Thanks to Y-flipping and ORIGIN_UPPER_LEFT, the Y coordinates may be
+       * flipped upside-down.  X should be fine though.  Also, we need to
+       * clamp to the valid range as specified in
        */
-      *xmin = (gb_min - m30) / m00;
-      *xmax = (gb_max - m30) / m00;
-      *ymin = (y_scale * gb_min - m31) / m11;
-      *ymax = (y_scale * gb_max - m31) / m11;
+      assert(ndc_gb_xmin <= ndc_gb_xmax);
+      *xmin = ndc_gb_xmin;
+      *xmax = ndc_gb_xmax;
+      *ymin = MIN2(ndc_gb_ymin, ndc_gb_ymax);
+      *ymax = MAX2(ndc_gb_ymin, ndc_gb_ymax);
    } else {
       /* The viewport scales to 0, so nothing will be rendered. */
       *xmin = 0.0f;
