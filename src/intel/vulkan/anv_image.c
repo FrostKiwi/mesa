@@ -231,16 +231,18 @@ make_surface(const struct anv_device *dev,
             if (!(vk_info->flags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) &&
                 isl_format_supports_ccs_e(&dev->info, format)) {
                if (vk_info->usage & VK_IMAGE_USAGE_STORAGE_BIT) {
-                  /*
-                   * For now, we leave compression off for anything that may
-                   * be used as a storage image.  This is because accessing
-                   * storage images may involve ccs-incompatible views or even
-                   * untyped messages which don't support compression at all.
+                  /* Storage images may involve a texture view type operation
+                   * for some formats because not all formats are supported by
+                   * the data-port.  However, we should at least always be
+                   * using a CCS_E compatible format for dataport access so
+                   * enabling compression is fine.
                    */
-                  anv_finishme("Enable CCS for storage images");
-               } else {
-                  image->aux_usage = ISL_AUX_USAGE_CCS_E;
+                  assert(isl_has_matching_typed_storage_image_format(&dev->info,
+                                                                     format));
+                  assert(isl_formats_are_ccs_e_compatible(&dev->info, format,
+                         isl_lower_storage_image_format(&dev->info, format)));
                }
+               image->aux_usage = ISL_AUX_USAGE_CCS_E;
             }
          }
       }
