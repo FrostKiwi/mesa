@@ -437,6 +437,21 @@ isl_format_supports_vertex_fetch(const struct gen_device_info *devinfo,
    return format_gen(devinfo) >= format_info[format].input_vb;
 }
 
+/**
+ * Returns true if the given format can support single-sample fast clears.
+ */
+bool
+isl_format_supports_ccs_d(const struct gen_device_info *devinfo,
+                          enum isl_format format)
+{
+   if (!isl_format_supports_rendering(devinfo, format))
+      return false;
+
+   const struct isl_format_layout *fmtl = isl_format_get_layout(format);
+
+   return fmtl->bpb == 32 || fmtl->bpb == 64 || fmtl->bpb == 128;
+}
+
 bool
 isl_format_supports_ccs_e(const struct gen_device_info *devinfo,
                           enum isl_format format)
