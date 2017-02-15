@@ -310,6 +310,10 @@ static const VkExtensionProperties device_extensions[] = {
       .extensionName = VK_KHX_EXTERNAL_MEMORY_EXTENSION_NAME,
       .specVersion = 1,
    },
+   {
+      .extensionName = VK_KHX_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+      .specVersion = 1,
+   },
 };
 
 static void *
@@ -1400,7 +1404,7 @@ VkResult anv_AllocateMemory(
 {
    ANV_FROM_HANDLE(anv_device, device, _device);
    struct anv_device_memory *mem;
-   VkResult result;
+   VkResult result = VK_SUCCESS;
 
    assert(pAllocateInfo->sType == VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO);
 
@@ -1418,17 +1422,49 @@ VkResult anv_AllocateMemory(
    if (mem == NULL)
       return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
-   /* The kernel is going to give us whole pages anyway */
-   uint64_t alloc_size = align_u64(pAllocateInfo->allocationSize, 4096);
-
-   result = anv_bo_init_new(&mem->bo, device, alloc_size);
-   if (result != VK_SUCCESS)
-      goto fail;
-
    mem->type_index = pAllocateInfo->memoryTypeIndex;
-
    mem->map = NULL;
    mem->map_size = 0;
+
+   const VkImportMemoryFdInfoKHX *fd_info =
+      vk_find_struct_const(pAllocateInfo->pNext, IMPORT_MEMORY_FD_INFO_KHX);
+
+   /* The Vulkan spec permits handleType to be 0, in which case the struct is
+    * ignored.
+    */
+   if (fd_info && fd_info->handleType) {
+      /* At the moment, we only support the OPAQUE_FD memory type which is
+       * just a GEM buffer.
+       */
+      assert(fd_info->handleType ==
+             VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHX);
+
+      uint32_t gem_handle = anv_gem_fd_to_handle(device, fd_info->fd);
+      if (!gem_handle) {
+         result = vk_error(VK_ERROR_INVALID_EXTERNAL_HANDLE_KHX);
+         goto fail;
+      }
+
+      /* From the Vulkan spec:
+       *
+       *    "Importing memory from a file descriptor transfers ownership of
+       *    the file descriptor from the application to the Vulkan
+       *    implementation. The application must not perform any operations on
+       *    the file descriptor after a successful import."
+       *
+       * If the import fails, we leave the file descriptor open.
+       */
+      close(fd_info->fd);
+
+      anv_bo_init(&mem->bo, gem_handle, pAllocateInfo->allocationSize);
+   } else {
+      /* The kernel is going to give us whole pages anyway */
+      uint64_t alloc_size = align_u64(pAllocateInfo->allocationSize, 4096);
+
+      result = anv_bo_init_new(&mem->bo, device, alloc_size);
+      if (result != VK_SUCCESS)
+         goto fail;
+   }
 
    *pMem = anv_device_memory_to_handle(mem);
 
@@ -1438,6 +1474,42 @@ VkResult anv_AllocateMemory(
    vk_free2(&device->alloc, pAllocator, mem);
 
    return result;
+}
+
+VkResult anv_GetMemoryFdKHX(
+    VkDevice                                    device_h,
+    VkDeviceMemory                              memory_h,
+    VkExternalMemoryHandleTypeFlagBitsKHX       handleType,
+    int*                                        pFd)
+{
+   ANV_FROM_HANDLE(anv_device, dev, device_h);
+   ANV_FROM_HANDLE(anv_device_memory, mem, memory_h);
+
+   /* We support only one handle type. */
+   assert(handleType == VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHX);
+
+   int fd = anv_gem_handle_to_fd(dev, mem->bo.gem_handle);
+   if (fd == -1)
+      return vk_error(VK_ERROR_INVALID_EXTERNAL_HANDLE_KHX);
+
+   *pFd = fd;
+
+   return VK_SUCCESS;
+}
+
+VkResult anv_GetMemoryFdPropertiesKHX(
+    VkDevice                                    device_h,
+    VkExternalMemoryHandleTypeFlagBitsKHX       handleType,
+    int                                         fd,
+    VkMemoryFdPropertiesKHX*                    pMemoryFdProperties)
+{
+   /* The valid usage section for this function says:
+    *
+    *    "handleType must not be one of the handle types defined as opaque."
+    *
+    * Since we only handle opaque handles for now, there are no FD properties.
+    */
+   return VK_ERROR_INVALID_EXTERNAL_HANDLE_KHX;
 }
 
 void anv_FreeMemory(
