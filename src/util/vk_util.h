@@ -40,4 +40,21 @@ struct vk_struct_common {
    for (const struct vk_struct_common *__iter = (const struct vk_struct_common *)(__start); \
         __iter; __iter = __iter->pNext)
 
+static inline void *
+__vk_find_struct(void *start, VkStructureType sType)
+{
+   vk_foreach_struct(s, start) {
+      if (s->sType == sType)
+         return s;
+   }
+
+   return NULL;
+}
+
+#define vk_find_struct(__start, __sType) \
+   __vk_find_struct((__start), VK_STRUCTURE_TYPE_##__sType)
+
+#define vk_find_struct_const(__start, __sType) \
+   (const void *)__vk_find_struct((void *)(__start), VK_STRUCTURE_TYPE_##__sType)
+
 #endif /* VK_UTIL_H */
