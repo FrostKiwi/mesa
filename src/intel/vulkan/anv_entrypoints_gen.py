@@ -47,6 +47,7 @@ SUPPORTED_EXTENSIONS = [
     'VK_KHX_external_memory',
     'VK_KHX_external_memory_capabilities',
     'VK_KHX_external_memory_fd',
+    'VK_KHX_external_semaphore',
     'VK_KHX_external_semaphore_capabilities',
 ]
 
