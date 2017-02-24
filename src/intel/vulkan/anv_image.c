@@ -127,7 +127,7 @@ make_surface(const struct anv_device *dev,
              const struct anv_image_create_info *anv_info,
              VkImageAspectFlags aspect)
 {
-   const VkImageCreateInfo *vk_info = anv_info->vk_info;
+   const VkImageCreateInfo *base_info = anv_info->vk_info;
    bool ok UNUSED;
 
    static const enum isl_surf_dim vk_to_isl_surf_dim[] = {
@@ -140,7 +140,7 @@ make_surface(const struct anv_device *dev,
     * result with an optionally provided ISL tiling argument.
     */
    isl_tiling_flags_t tiling_flags =
-      (vk_info->tiling == VK_IMAGE_TILING_LINEAR) ?
+      (base_info->tiling == VK_IMAGE_TILING_LINEAR) ?
       ISL_TILING_LINEAR_BIT : ISL_TILING_ANY_MASK;
 
    if (anv_info->isl_tiling_flags)
@@ -150,22 +150,22 @@ make_surface(const struct anv_device *dev,
 
    struct anv_surface *anv_surf = get_surface(image, aspect);
 
-   image->extent = anv_sanitize_image_extent(vk_info->imageType,
-                                             vk_info->extent);
+   image->extent = anv_sanitize_image_extent(base_info->imageType,
+                                             base_info->extent);
 
-   enum isl_format format = anv_get_isl_format(&dev->info, vk_info->format,
-                                               aspect, vk_info->tiling);
+   enum isl_format format = anv_get_isl_format(&dev->info, base_info->format,
+                                               aspect, base_info->tiling);
    assert(format != ISL_FORMAT_UNSUPPORTED);
 
    ok = isl_surf_init(&dev->isl_dev, &anv_surf->isl,
-      .dim = vk_to_isl_surf_dim[vk_info->imageType],
+      .dim = vk_to_isl_surf_dim[base_info->imageType],
       .format = format,
       .width = image->extent.width,
       .height = image->extent.height,
       .depth = image->extent.depth,
-      .levels = vk_info->mipLevels,
-      .array_len = vk_info->arrayLayers,
-      .samples = vk_info->samples,
+      .levels = base_info->mipLevels,
+      .array_len = base_info->arrayLayers,
+      .samples = base_info->samples,
       .min_alignment = 0,
       .row_pitch = anv_info->stride,
       .usage = choose_isl_surf_usage(image->usage, aspect),
@@ -193,11 +193,11 @@ make_surface(const struct anv_device *dev,
          /* It will never be used as an attachment, HiZ is pointless. */
       } else if (dev->info.gen == 7) {
          anv_perf_warn("Implement gen7 HiZ");
-      } else if (vk_info->mipLevels > 1) {
+      } else if (base_info->mipLevels > 1) {
          anv_perf_warn("Enable multi-LOD HiZ");
-      } else if (vk_info->arrayLayers > 1) {
+      } else if (base_info->arrayLayers > 1) {
          anv_perf_warn("Implement multi-arrayLayer HiZ clears and resolves");
-      } else if (dev->info.gen == 8 && vk_info->samples > 1) {
+      } else if (dev->info.gen == 8 && base_info->samples > 1) {
          anv_perf_warn("Enable gen8 multisampled HiZ");
       } else if (!unlikely(INTEL_DEBUG & DEBUG_NO_HIZ)) {
          assert(image->aux_surface.isl.size == 0);
@@ -207,7 +207,7 @@ make_surface(const struct anv_device *dev,
          add_surface(image, &image->aux_surface);
          image->aux_usage = ISL_AUX_USAGE_HIZ;
       }
-   } else if (aspect == VK_IMAGE_ASPECT_COLOR_BIT && vk_info->samples == 1) {
+   } else if (aspect == VK_IMAGE_ASPECT_COLOR_BIT && base_info->samples == 1) {
       if (!unlikely(INTEL_DEBUG & DEBUG_NO_RBC)) {
          assert(image->aux_surface.isl.size == 0);
          ok = isl_surf_get_ccs_surf(&dev->isl_dev, &anv_surf->isl,
@@ -223,16 +223,16 @@ make_surface(const struct anv_device *dev,
              * a render target.  This means that it's safe to just leave
              * compression on at all times for these formats.
              */
-            if (!(vk_info->usage & VK_IMAGE_USAGE_STORAGE_BIT) &&
-                !(vk_info->flags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) &&
+            if (!(base_info->usage & VK_IMAGE_USAGE_STORAGE_BIT) &&
+                !(base_info->flags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) &&
                 isl_format_supports_ccs_e(&dev->info, format)) {
                image->aux_usage = ISL_AUX_USAGE_CCS_E;
             }
          }
       }
-   } else if (aspect == VK_IMAGE_ASPECT_COLOR_BIT && vk_info->samples > 1) {
+   } else if (aspect == VK_IMAGE_ASPECT_COLOR_BIT && base_info->samples > 1) {
       assert(image->aux_surface.isl.size == 0);
-      assert(!(vk_info->usage & VK_IMAGE_USAGE_STORAGE_BIT));
+      assert(!(base_info->usage & VK_IMAGE_USAGE_STORAGE_BIT));
       ok = isl_surf_get_mcs_surf(&dev->isl_dev, &anv_surf->isl,
                                  &image->aux_surface.isl);
       if (ok) {
@@ -246,23 +246,23 @@ make_surface(const struct anv_device *dev,
 
 VkResult
 anv_image_create(VkDevice _device,
-                 const struct anv_image_create_info *create_info,
+                 const struct anv_image_create_info *anv_info,
                  const VkAllocationCallbacks* alloc,
                  VkImage *pImage)
 {
    ANV_FROM_HANDLE(anv_device, device, _device);
-   const VkImageCreateInfo *pCreateInfo = create_info->vk_info;
+   const VkImageCreateInfo *base_info = anv_info->vk_info;
    struct anv_image *image = NULL;
    VkResult r;
 
-   assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO);
+   assert(base_info->sType == VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO);
 
-   anv_assert(pCreateInfo->mipLevels > 0);
-   anv_assert(pCreateInfo->arrayLayers > 0);
-   anv_assert(pCreateInfo->samples > 0);
-   anv_assert(pCreateInfo->extent.width > 0);
-   anv_assert(pCreateInfo->extent.height > 0);
-   anv_assert(pCreateInfo->extent.depth > 0);
+   anv_assert(base_info->mipLevels > 0);
+   anv_assert(base_info->arrayLayers > 0);
+   anv_assert(base_info->samples > 0);
+   anv_assert(base_info->extent.width > 0);
+   anv_assert(base_info->extent.height > 0);
+   anv_assert(base_info->extent.depth > 0);
 
    image = vk_alloc2(&device->alloc, alloc, sizeof(*image), 8,
                       VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
@@ -270,20 +270,20 @@ anv_image_create(VkDevice _device,
       return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
    memset(image, 0, sizeof(*image));
-   image->type = pCreateInfo->imageType;
-   image->extent = pCreateInfo->extent;
-   image->vk_format = pCreateInfo->format;
+   image->type = base_info->imageType;
+   image->extent = base_info->extent;
+   image->vk_format = base_info->format;
    image->aspects = vk_format_aspects(image->vk_format);
-   image->levels = pCreateInfo->mipLevels;
-   image->array_size = pCreateInfo->arrayLayers;
-   image->samples = pCreateInfo->samples;
-   image->usage = pCreateInfo->usage;
-   image->tiling = pCreateInfo->tiling;
+   image->levels = base_info->mipLevels;
+   image->array_size = base_info->arrayLayers;
+   image->samples = base_info->samples;
+   image->usage = base_info->usage;
+   image->tiling = base_info->tiling;
    image->aux_usage = ISL_AUX_USAGE_NONE;
 
    uint32_t b;
    for_each_bit(b, image->aspects) {
-      r = make_surface(device, image, create_info, (1 << b));
+      r = make_surface(device, image, anv_info, (1 << b));
       if (r != VK_SUCCESS)
          goto fail;
    }
