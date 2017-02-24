@@ -132,6 +132,109 @@ add_surface(struct anv_image *image, struct anv_surface *surf)
    image->alignment = MAX2(image->alignment, surf->isl.alignment);
 }
 
+static void
+make_hiz_surface_maybe(const struct anv_device *dev,
+                       const VkImageCreateInfo *base_info,
+                       struct anv_image *image)
+{
+   bool ok;
+
+   assert(image->aux_surface.isl.size == 0);
+   assert(!(image->usage & VK_IMAGE_USAGE_STORAGE_BIT));
+
+   if (unlikely(INTEL_DEBUG & DEBUG_NO_HIZ))
+      return;
+
+   /* Allow the user to control HiZ enabling through environment variables.
+    * Disable by default on gen7 because resolves are not currently
+    * implemented pre-BDW.
+    */
+   if (!(image->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
+      /* It will never be used as an attachment, HiZ is pointless. */
+   } else if (dev->info.gen == 7) {
+      anv_perf_warn("Implement gen7 HiZ");
+   } else if (base_info->mipLevels > 1) {
+      anv_finishme("Enable multi-LOD HiZ");
+   } else if (base_info->arrayLayers > 1) {
+      anv_finishme("Implement multi-arrayLayer HiZ clears and resolves");
+   } else if (dev->info.gen == 8 && base_info->samples > 1) {
+      anv_finishme("Test gen8 multisampled HiZ");
+   } else {
+      ok = isl_surf_get_hiz_surf(&dev->isl_dev, &image->depth_surface.isl,
+                                 &image->aux_surface.isl);
+      assert(ok);
+      add_surface(image, &image->aux_surface);
+      image->aux_usage = ISL_AUX_USAGE_HIZ;
+   }
+}
+
+static void
+make_ccs_surface_maybe(const struct anv_device *dev,
+                       const VkImageCreateInfo *base_info,
+                       struct anv_image *image)
+{
+   bool ok;
+
+   assert(image->aux_surface.isl.size == 0);
+
+   if (unlikely(INTEL_DEBUG & DEBUG_NO_RBC))
+      return;
+
+   ok = isl_surf_get_ccs_surf(&dev->isl_dev, &image->color_surface.isl,
+                              &image->aux_surface.isl);
+   if (!ok)
+      return;
+
+   add_surface(image, &image->aux_surface);
+
+   /* For images created without MUTABLE_FORMAT_BIT set, we know that they will
+    * always be used with the original format.  In particular, they will always
+    * be used with a format that supports color compression.  If it's never
+    * used as a storage image, then it will only be used through the sampler or
+    * the as a render target.  This means that it's safe to just leave
+    * compression on at all times for these formats.
+    */
+   if (!(base_info->usage & VK_IMAGE_USAGE_STORAGE_BIT) &&
+       !(base_info->flags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) &&
+       isl_format_supports_ccs_e(&dev->info, image->color_surface.isl.format)) {
+      image->aux_usage = ISL_AUX_USAGE_CCS_E;
+   }
+}
+
+static void
+make_mcs_surface_maybe(const struct anv_device *dev,
+                       const VkImageCreateInfo *base_info,
+                       struct anv_image *image)
+{
+   bool ok;
+
+   assert(image->aux_surface.isl.size == 0);
+   assert(!(base_info->usage & VK_IMAGE_USAGE_STORAGE_BIT));
+
+   ok = isl_surf_get_mcs_surf(&dev->isl_dev, &image->color_surface.isl,
+                              &image->aux_surface.isl);
+   if (!ok)
+      return;
+
+   add_surface(image, &image->aux_surface);
+   image->aux_usage = ISL_AUX_USAGE_MCS;
+}
+
+static void
+make_aux_surface_maybe(const struct anv_device *dev,
+                       const VkImageCreateInfo *base_info,
+                       VkImageAspectFlags aspect,
+                       struct anv_image *image)
+{
+   if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
+      make_hiz_surface_maybe(dev, base_info, image);
+   } else if (aspect == VK_IMAGE_ASPECT_COLOR_BIT && base_info->samples == 1) {
+      make_ccs_surface_maybe(dev, base_info, image);
+   } else if (aspect == VK_IMAGE_ASPECT_COLOR_BIT && base_info->samples > 1) {
+      make_mcs_surface_maybe(dev, base_info, image);
+   }
+}
+
 /**
  * Initialize the anv_image::*_surface selected by \a aspect. Then update the
  * image's memory requirements (that is, the image's size and alignment).
@@ -139,10 +242,10 @@ add_surface(struct anv_image *image, struct anv_surface *surf)
  * Exactly one bit must be set in \a aspect.
  */
 static void
-make_surface(const struct anv_device *dev,
-             struct anv_image *image,
-             const struct anv_image_create_info *anv_info,
-             VkImageAspectFlags aspect)
+make_main_surface(const struct anv_device *dev,
+                  const struct anv_image_create_info *anv_info,
+                  VkImageAspectFlags aspect,
+                  struct anv_image *image)
 {
    const VkImageCreateInfo *base_info = anv_info->vk_info;
    bool ok UNUSED;
@@ -183,69 +286,6 @@ make_surface(const struct anv_device *dev,
    assert(ok);
 
    add_surface(image, anv_surf);
-
-   /* Add a HiZ surface to a depth buffer that will be used for rendering.
-    */
-   if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
-      /* We don't advertise that depth buffers could be used as storage
-       * images.
-       */
-       assert(!(image->usage & VK_IMAGE_USAGE_STORAGE_BIT));
-
-      /* Allow the user to control HiZ enabling. Disable by default on gen7
-       * because resolves are not currently implemented pre-BDW.
-       */
-      if (!(image->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
-         /* It will never be used as an attachment, HiZ is pointless. */
-      } else if (dev->info.gen == 7) {
-         anv_perf_warn("Implement gen7 HiZ");
-      } else if (base_info->mipLevels > 1) {
-         anv_perf_warn("Enable multi-LOD HiZ");
-      } else if (base_info->arrayLayers > 1) {
-         anv_perf_warn("Implement multi-arrayLayer HiZ clears and resolves");
-      } else if (dev->info.gen == 8 && base_info->samples > 1) {
-         anv_perf_warn("Enable gen8 multisampled HiZ");
-      } else if (!unlikely(INTEL_DEBUG & DEBUG_NO_HIZ)) {
-         assert(image->aux_surface.isl.size == 0);
-         ok = isl_surf_get_hiz_surf(&dev->isl_dev, &image->depth_surface.isl,
-                                    &image->aux_surface.isl);
-         assert(ok);
-         add_surface(image, &image->aux_surface);
-         image->aux_usage = ISL_AUX_USAGE_HIZ;
-      }
-   } else if (aspect == VK_IMAGE_ASPECT_COLOR_BIT && base_info->samples == 1) {
-      if (!unlikely(INTEL_DEBUG & DEBUG_NO_RBC)) {
-         assert(image->aux_surface.isl.size == 0);
-         ok = isl_surf_get_ccs_surf(&dev->isl_dev, &anv_surf->isl,
-                                    &image->aux_surface.isl);
-         if (ok) {
-            add_surface(image, &image->aux_surface);
-
-            /* For images created without MUTABLE_FORMAT_BIT set, we know that
-             * they will always be used with the original format.  In
-             * particular, they will always be used with a format that
-             * supports color compression.  If it's never used as a storage
-             * image, then it will only be used through the sampler or the as
-             * a render target.  This means that it's safe to just leave
-             * compression on at all times for these formats.
-             */
-            if (!(base_info->usage & VK_IMAGE_USAGE_STORAGE_BIT) &&
-                !(base_info->flags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) &&
-                isl_format_supports_ccs_e(&dev->info, format)) {
-               image->aux_usage = ISL_AUX_USAGE_CCS_E;
-            }
-         }
-      }
-   } else if (aspect == VK_IMAGE_ASPECT_COLOR_BIT && base_info->samples > 1) {
-      assert(image->aux_surface.isl.size == 0);
-      assert(!(base_info->usage & VK_IMAGE_USAGE_STORAGE_BIT));
-      ok = isl_surf_get_mcs_surf(&dev->isl_dev, &anv_surf->isl,
-                                 &image->aux_surface.isl);
-      if (ok) {
-         add_surface(image, &image->aux_surface);
-         image->aux_usage = ISL_AUX_USAGE_MCS;
-      }
-   }
 }
 
 VkResult
@@ -286,7 +326,9 @@ anv_image_create(VkDevice _device,
 
    uint32_t b;
    for_each_bit(b, image->aspects) {
-      make_surface(device, image, anv_info, (1 << b));
+      VkImageAspectFlagBits aspect = 1 << b;
+      make_main_surface(device, anv_info, aspect, image);
+      make_aux_surface_maybe(device, base_info, aspect, image);
    }
 
    *pImage = anv_image_to_handle(image);
