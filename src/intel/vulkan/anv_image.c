@@ -138,7 +138,7 @@ add_surface(struct anv_image *image, struct anv_surface *surf)
  *
  * Exactly one bit must be set in \a aspect.
  */
-static VkResult
+static void
 make_surface(const struct anv_device *dev,
              struct anv_image *image,
              const struct anv_image_create_info *anv_info,
@@ -246,8 +246,6 @@ make_surface(const struct anv_device *dev,
          image->aux_usage = ISL_AUX_USAGE_MCS;
       }
    }
-
-   return VK_SUCCESS;
 }
 
 VkResult
@@ -259,7 +257,6 @@ anv_image_create(VkDevice _device,
    ANV_FROM_HANDLE(anv_device, device, _device);
    const VkImageCreateInfo *base_info = anv_info->vk_info;
    struct anv_image *image = NULL;
-   VkResult r;
 
    assert(base_info->sType == VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO);
 
@@ -289,20 +286,12 @@ anv_image_create(VkDevice _device,
 
    uint32_t b;
    for_each_bit(b, image->aspects) {
-      r = make_surface(device, image, anv_info, (1 << b));
-      if (r != VK_SUCCESS)
-         goto fail;
+      make_surface(device, image, anv_info, (1 << b));
    }
 
    *pImage = anv_image_to_handle(image);
 
    return VK_SUCCESS;
-
-fail:
-   if (image)
-      vk_free2(&device->alloc, alloc, image);
-
-   return r;
 }
 
 VkResult
