@@ -32,6 +32,7 @@
 #include "util/strtod.h"
 #include "util/debug.h"
 #include "util/build_id.h"
+#include "util/mesa-sha1.h"
 #include "util/vk_util.h"
 
 #include "genxml/gen7_pack.h"
@@ -53,17 +54,27 @@ compiler_perf_log(void *data, const char *fmt, ...)
 }
 
 static bool
-anv_device_get_cache_uuid(void *uuid)
+anv_device_get_cache_uuid(void *uuid, uint16_t pci_id)
 {
    const struct build_id_note *note = build_id_find_nhdr("libvulkan_intel.so");
    if (!note)
       return false;
 
-   unsigned len = build_id_length(note);
-   if (len < VK_UUID_SIZE)
+   unsigned build_id_len = build_id_length(note);
+   if (build_id_len < 20) /* It should be a SHA-1 */
       return false;
 
-   memcpy(uuid, build_id_data(note), VK_UUID_SIZE);
+   uint8_t sha1[20];
+   STATIC_ASSERT(VK_UUID_SIZE <= sizeof(sha1));
+   struct mesa_sha1 *sha1_ctx = _mesa_sha1_init();
+   if (sha1_ctx == NULL)
+      return false;
+
+   _mesa_sha1_update(sha1_ctx, build_id_data(note), build_id_len);
+   _mesa_sha1_update(sha1_ctx, &pci_id, sizeof(pci_id));
+   _mesa_sha1_final(sha1_ctx, sha1);
+
+   memcpy(uuid, sha1, VK_UUID_SIZE);
    return true;
 }
 
@@ -148,7 +159,7 @@ anv_physical_device_init(struct anv_physical_device *device,
       goto fail;
    }
 
-   if (!anv_device_get_cache_uuid(device->uuid)) {
+   if (!anv_device_get_cache_uuid(device->uuid, device->chipset_id)) {
       result = vk_errorf(VK_ERROR_INITIALIZATION_FAILED,
                          "cannot generate UUID");
       goto fail;
