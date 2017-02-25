@@ -123,12 +123,17 @@ choose_isl_tiling_flags(const struct anv_image_create_info *anv_info)
 }
 
 static void
-add_surface(struct anv_image *image, struct anv_surface *surf)
+set_min_surface_offset(const struct anv_image *image, struct anv_surface *surf)
 {
    assert(surf->isl.size > 0); /* isl surface must be initialized */
-
    surf->offset = align_u32(image->size, surf->isl.alignment);
-   image->size = surf->offset + surf->isl.size;
+}
+
+static void
+add_surface(struct anv_image *image, const struct anv_surface *surf)
+{
+   assert(surf->isl.size > 0); /* isl surface must be initialized */
+   image->size = MAX2(image->size, surf->offset + surf->isl.size);
    image->alignment = MAX2(image->alignment, surf->isl.alignment);
 }
 
@@ -165,6 +170,7 @@ make_hiz_surface_maybe(const struct anv_device *dev,
       if (!ok)
          return;
 
+      set_min_surface_offset(image, &image->aux_surface);
       add_surface(image, &image->aux_surface);
       image->aux_usage = ISL_AUX_USAGE_HIZ;
    }
@@ -187,6 +193,7 @@ make_ccs_surface_maybe(const struct anv_device *dev,
    if (!ok)
       return;
 
+   set_min_surface_offset(image, &image->aux_surface);
    add_surface(image, &image->aux_surface);
 
    /* For images created without MUTABLE_FORMAT_BIT set, we know that they will
@@ -218,6 +225,7 @@ make_mcs_surface_maybe(const struct anv_device *dev,
    if (!ok)
       return;
 
+   set_min_surface_offset(image, &image->aux_surface);
    add_surface(image, &image->aux_surface);
    image->aux_usage = ISL_AUX_USAGE_MCS;
 }
@@ -287,6 +295,7 @@ make_main_surface(const struct anv_device *dev,
     */
    assert(ok);
 
+   set_min_surface_offset(image, anv_surf);
    add_surface(image, anv_surf);
 }
 
