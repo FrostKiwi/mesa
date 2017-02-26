@@ -499,6 +499,10 @@ static const VkExtensionProperties device_extensions[] = {
       .extensionName = VK_MESAX_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
       .specVersion = 0,
    },
+   {
+      .extensionName = VK_MESAX_EXTERNAL_IMAGE_DMA_BUF_EXTENSION_NAME,
+      .specVersion = 0,
+   },
 };
 
 static void *

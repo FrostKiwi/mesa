@@ -107,11 +107,31 @@ get_surface(struct anv_image *image, VkImageAspectFlags aspect)
 }
 
 static isl_tiling_flags_t
-choose_isl_tiling_flags(const struct anv_image_create_info *anv_info)
+choose_isl_tiling_flags(const struct anv_image_create_info *anv_info,
+                        const VkImportImageDmaBufInfoMESAX *import_dma_buf_info,
+                        const VkExportImageDmaBufInfoMESAX *export_dma_buf_info)
 {
-   isl_tiling_flags_t flags;
+   isl_tiling_flags_t flags = 0;
 
-   if (anv_info->vk_info->tiling == VK_IMAGE_TILING_LINEAR) {
+   if (import_dma_buf_info) {
+      uint64_t mod = import_dma_buf_info->drmFormatModifier;
+      enum isl_tiling t;
+      enum isl_aux_usage a;
+      if (isl_tiling_from_drm_format_mod(mod, &t, &a) &&
+          a == ISL_AUX_USAGE_NONE) {
+         flags = 1 << t;
+      }
+   } else if (export_dma_buf_info) {
+      for (uint32_t i = 0; i < export_dma_buf_info->drmFormatModifierCount; ++i) {
+         uint64_t mod = export_dma_buf_info->pDrmFormatModifiers[i];
+         enum isl_tiling t;
+         enum isl_aux_usage a;
+         if (isl_tiling_from_drm_format_mod(mod, &t, &a) &&
+             a == ISL_AUX_USAGE_NONE) {
+            flags |= 1 << t;
+         }
+      }
+   } else if (anv_info->vk_info->tiling == VK_IMAGE_TILING_LINEAR) {
       flags = ISL_TILING_LINEAR_BIT;
    } else {
       flags = ISL_TILING_ANY_MASK;
@@ -120,7 +140,47 @@ choose_isl_tiling_flags(const struct anv_image_create_info *anv_info)
    if (anv_info->isl_tiling_flags)
       flags &= anv_info->isl_tiling_flags;
 
+   assert(flags != 0);
+
    return flags;
+}
+
+static enum isl_format
+choose_isl_format(const struct anv_device *dev,
+                  const VkImageCreateInfo *base_info,
+                  VkImageAspectFlagBits aspect,
+                  VkExternalMemoryHandleTypeFlagsKHX handle_types)
+{
+   /* We don't yet support images compatible with multiple handle types
+    * because our choice of format depends on the handle type.  For
+    * non-external images and opaque fd images, we choose an "adjusted"
+    * format. For dma_buf images, we must use the exact format provided by the
+    * user.
+    */
+   assert(__builtin_popcount(handle_types) <= 1);
+
+   if (handle_types & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_MESAX) {
+      return anv_get_raw_isl_format(&dev->info, base_info->format);
+   } else {
+      return anv_get_isl_format(&dev->info, base_info->format, aspect,
+                                base_info->tiling);
+   }
+}
+
+static uint32_t
+choose_row_pitch(const struct anv_image_create_info *anv_info,
+                 const VkImportImageDmaBufPlaneInfoMESAX *plane_info)
+{
+   if (anv_info->stride != 0)
+      return anv_info->stride;
+
+   if (plane_info) {
+      assert(plane_info->rowPitch > 0);
+      return plane_info->rowPitch;
+   }
+
+   /* Let isl choose the pitch. */
+   return 0;
 }
 
 static void
@@ -235,8 +295,24 @@ static void
 make_aux_surface_maybe(const struct anv_device *dev,
                        const VkImageCreateInfo *base_info,
                        VkImageAspectFlags aspect,
+                       VkExternalMemoryHandleTypeFlagsKHX handle_types,
                        struct anv_image *image)
 {
+   /* We don't yet support images compatible with multiple handle types
+    * because our choice of aux surface depends on the handle type. For
+    * non-external images and opaque fd images, we choose the optimal aux
+    * surface. For dma_buf images, we must use the aux surface specified by
+    * the user.
+    */
+   assert(__builtin_popcount(handle_types) <= 1);
+
+   if (handle_types & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_MESAX) {
+      /* As of 2017-02-25, drm_fourcc.h still does not define a format modifier
+       * for any aux surface.
+       */
+      return;
+   }
+
    if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
       make_hiz_surface_maybe(dev, base_info, image);
    } else if (aspect == VK_IMAGE_ASPECT_COLOR_BIT && base_info->samples == 1) {
@@ -255,7 +331,10 @@ make_aux_surface_maybe(const struct anv_device *dev,
 static void
 make_main_surface(const struct anv_device *dev,
                   const struct anv_image_create_info *anv_info,
+                  const VkImportImageDmaBufInfoMESAX *import_dma_buf_info,
+                  const VkExportImageDmaBufInfoMESAX *export_dma_buf_info,
                   VkImageAspectFlags aspect,
+                  VkExternalMemoryHandleTypeFlagsKHX handle_types,
                   struct anv_image *image)
 {
    const VkImageCreateInfo *base_info = anv_info->vk_info;
@@ -267,14 +346,21 @@ make_main_surface(const struct anv_device *dev,
       [VK_IMAGE_TYPE_3D] = ISL_SURF_DIM_3D,
    };
 
-   const isl_tiling_flags_t tiling_flags = choose_isl_tiling_flags(anv_info);
+   const VkImportImageDmaBufPlaneInfoMESAX *plane_info = NULL;
+   if (import_dma_buf_info)
+      plane_info = &import_dma_buf_info->pPlanes[0];
+
+   const isl_tiling_flags_t tiling_flags =
+      choose_isl_tiling_flags(anv_info, import_dma_buf_info, export_dma_buf_info);
+   const uint32_t row_pitch = choose_row_pitch(anv_info, plane_info);
+
    struct anv_surface *anv_surf = get_surface(image, aspect);
 
    image->extent = anv_sanitize_image_extent(base_info->imageType,
                                              base_info->extent);
 
-   enum isl_format format = anv_get_isl_format(&dev->info, base_info->format,
-                                               aspect, base_info->tiling);
+   const enum isl_format format =
+      choose_isl_format(dev, base_info, aspect, handle_types);
    assert(format != ISL_FORMAT_UNSUPPORTED);
 
    ok = isl_surf_init(&dev->isl_dev, &anv_surf->isl,
@@ -287,7 +373,7 @@ make_main_surface(const struct anv_device *dev,
       .array_len = base_info->arrayLayers,
       .samples = base_info->samples,
       .min_alignment = 0,
-      .row_pitch = anv_info->stride,
+      .row_pitch = row_pitch,
       .usage = choose_isl_surf_usage(image->usage, aspect),
       .tiling_flags = tiling_flags);
 
@@ -296,7 +382,12 @@ make_main_surface(const struct anv_device *dev,
     */
    assert(ok);
 
-   set_min_surface_offset(image, anv_surf);
+   if (plane_info) {
+      anv_surf->offset = plane_info->offset;
+   } else {
+      set_min_surface_offset(image, anv_surf);
+   }
+
    add_surface(image, anv_surf);
 }
 
@@ -308,9 +399,35 @@ anv_image_create(VkDevice _device,
 {
    ANV_FROM_HANDLE(anv_device, device, _device);
    const VkImageCreateInfo *base_info = anv_info->vk_info;
+   const VkImportImageDmaBufInfoMESAX *import_dma_buf_info = NULL;
+   const VkExportImageDmaBufInfoMESAX *export_dma_buf_info = NULL;
+   VkExternalMemoryHandleTypeFlagsKHX handle_types = 0;
    struct anv_image *image = NULL;
 
    assert(base_info->sType == VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO);
+
+   vk_foreach_struct_const(s, base_info->pNext) {
+      switch (s->sType) {
+      case VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO_KHX:
+         handle_types =
+            ((const VkExternalMemoryImageCreateInfoKHX *) s)->handleTypes;
+         assert((handle_types & ~ANV_SUPPORTED_MEMORY_HANDLE_TYPES) == 0);
+         break;
+      case VK_STRUCTURE_TYPE_IMPORT_IMAGE_DMA_BUF_INFO_MESAX:
+         import_dma_buf_info = (const void *) s;
+         break;
+      case VK_STRUCTURE_TYPE_EXPORT_IMAGE_DMA_BUF_INFO_MESAX:
+         export_dma_buf_info = (const void *) s;
+         break;
+      default:
+         anv_debug_ignored_stype(s->sType);
+         break;
+      }
+   }
+
+   /* For dma_buf images, we require the user to provide DRM format modifiers. */
+   assert((bool)(handle_types & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_MESAX) ==
+          (import_dma_buf_info || export_dma_buf_info));
 
    anv_assert(base_info->mipLevels > 0);
    anv_assert(base_info->arrayLayers > 0);
@@ -339,8 +456,9 @@ anv_image_create(VkDevice _device,
    uint32_t b;
    for_each_bit(b, image->aspects) {
       VkImageAspectFlagBits aspect = 1 << b;
-      make_main_surface(device, anv_info, aspect, image);
-      make_aux_surface_maybe(device, base_info, aspect, image);
+      make_main_surface(device, anv_info, import_dma_buf_info,
+                        export_dma_buf_info, aspect, handle_types, image);
+      make_aux_surface_maybe(device, base_info, aspect, handle_types, image);
    }
 
    *pImage = anv_image_to_handle(image);
@@ -443,13 +561,53 @@ void anv_GetImageSubresourceLayout(
    }
 }
 
+static VkResult
+get_image_dma_buf_props(const struct anv_image *image,
+                        VkImageDmaBufPropertiesMESAX* dma_buf_props)
+{
+   VK_OUTARRAY_MAKE(planes, dma_buf_props->pPlanes,
+                    &dma_buf_props->planeCount);
+   bool ok UNUSED;
+
+   /* For now, we support exactly one format for dma_buf images. */
+   assert(image->vk_format == VK_FORMAT_R8G8B8A8_UNORM);
+
+   /* For now, We don't support dma_buf images with auxiliary surfaces. */
+   assert(image->aux_surface.isl.size == 0);
+
+   ok = isl_surf_get_drm_format_mod(&image->color_surface.isl,
+                                    image->aux_usage,
+                                    &dma_buf_props->drmFormatModifier);
+   assert(ok);
+
+   vk_outarray_append(&planes, p) {
+      p->offset = image->color_surface.offset;
+      p->rowPitch = image->color_surface.isl.row_pitch;
+   }
+
+   return vk_outarray_status(&planes);
+}
+
 VkResult anv_GetImagePropertiesEXT(
     VkDevice                                    device_h,
     VkImage                                     image_h,
     VkImagePropertiesEXT*                       base_props)
 {
+   ANV_FROM_HANDLE(anv_image, image, image_h);
+   VkResult result;
+
    vk_foreach_struct(s, base_props->pNext) {
-      anv_debug_ignored_stype(s->sType);
+      switch (s->sType) {
+      case VK_STRUCTURE_TYPE_IMAGE_DMA_BUF_PROPERTIES_MESAX:
+         result = get_image_dma_buf_props(image,
+                                          (VkImageDmaBufPropertiesMESAX *) s);
+         if (result != VK_SUCCESS)
+            return result;
+         break;
+      default:
+         anv_debug_ignored_stype(s->sType);
+         break;
+      }
    }
 
    return VK_SUCCESS;

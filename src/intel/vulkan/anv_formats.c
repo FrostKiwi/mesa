@@ -470,16 +470,64 @@ void anv_GetPhysicalDeviceFormatProperties(
                pFormatProperties);
 }
 
+static void
+get_dma_buf_format_props(struct anv_physical_device *phys_dev,
+                         VkFormat vk_format,
+                         VkDmaBufFormatPropertiesMESAX *props)
+{
+   struct anv_format anv_format = anv_formats[vk_format];
+   VK_OUTARRAY_MAKE(mod_props, props->pModifierProperties,
+                    &props->modifierCount);
+
+   VkFormatFeatureFlags image_features = 0;
+   if (vk_format == VK_FORMAT_R8G8B8A8_UNORM) {
+      /* FINISHME: Support more formats for dma_buf images. */
+
+      /* For dma_buf images, we must use the exact format provided by the
+       * user.  We must not adjust the format, as we do for non-external
+       * images, with swizzles and other tricks. In other words, the image's
+       * "base" format and "adjusted" format must be the same.
+       */
+      image_features = get_image_format_properties(&phys_dev->info,
+                        /*base format*/ anv_format.isl_format,
+                        /*adjusted format*/ anv_format);
+   }
+
+   if (image_features == 0)
+      return;
+
+   /* Return DRM format modifiers in order of decreasing preference. */
+   vk_outarray_append(&mod_props, p) {
+      p->drmFormatModifier = I915_FORMAT_MOD_Y_TILED;
+      p->imageFeatures = image_features;
+   }
+
+   vk_outarray_append(&mod_props, p) {
+      p->drmFormatModifier = I915_FORMAT_MOD_X_TILED;
+      p->imageFeatures = image_features;
+   }
+
+   vk_outarray_append(&mod_props, p) {
+      p->drmFormatModifier = DRM_FORMAT_MOD_LINEAR;
+      p->imageFeatures = image_features;
+   }
+}
+
 void anv_GetPhysicalDeviceFormatProperties2KHR(
     VkPhysicalDevice                            physicalDevice,
     VkFormat                                    format,
     VkFormatProperties2KHR*                     pFormatProperties)
 {
+   ANV_FROM_HANDLE(anv_physical_device, phys_dev, physicalDevice);
+
    anv_GetPhysicalDeviceFormatProperties(physicalDevice, format,
                                          &pFormatProperties->formatProperties);
 
    vk_foreach_struct(ext, pFormatProperties->pNext) {
       switch (ext->sType) {
+      case VK_STRUCTURE_TYPE_DMA_BUF_FORMAT_PROPERTIES_MESAX:
+         get_dma_buf_format_props(phys_dev, format, (VkDmaBufFormatPropertiesMESAX *) ext);
+         break;
       default:
          anv_debug_ignored_stype(ext->sType);
          break;
@@ -684,6 +732,91 @@ static const VkExternalMemoryPropertiesKHX dma_buf_mem_props = {
       VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_MESAX,
 };
 
+static VkResult
+get_dma_buf_image_format_props(struct anv_physical_device *phys_dev,
+                               const VkPhysicalDeviceImageFormatInfo2KHR *base_info,
+                               VkImageFormatProperties2KHR *base_props,
+                               VkExternalImageFormatPropertiesKHX *external_props,
+                               VkDmaBufImageFormatPropertiesMESAX *dma_buf_props)
+{
+   /* We reject vkGetPhysicalDeviceImageFormatProperties2KHR() on the
+    * DMA_BUF_BIT unless the user adds VkDmaBufImageFormatPropertiesMESAX to
+    * the output chain. The spec permits this behavior but does not require
+    * it.
+    */
+   if (dma_buf_props == NULL) {
+      return vk_errorf(VK_ERROR_FORMAT_NOT_SUPPORTED,
+                       "dma_buf images require VkDmaBufImageFormatPropertiesMESAX");
+   }
+
+   VK_OUTARRAY_MAKE(mod_props, dma_buf_props->pModifierProperties,
+                    &dma_buf_props->modifierCount);
+
+   if (base_info->type != VK_IMAGE_TYPE_2D) {
+      return vk_errorf(VK_ERROR_FORMAT_NOT_SUPPORTED,
+                       "dma_buf images require VK_IMAGE_TYPE_2D");
+   }
+
+   if (base_info->flags != 0) {
+      return vk_errorf(VK_ERROR_FORMAT_NOT_SUPPORTED,
+                       "dma_buf images support no VkImageCreateFlags");
+   }
+
+   if (base_info->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+      return vk_errorf(VK_ERROR_FORMAT_NOT_SUPPORTED,
+                       "dma_buf images do not support "
+                       "VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT");
+   }
+
+   if (base_info->format != VK_FORMAT_R8G8B8A8_UNORM) {
+      /* FINISHME: Support more formats for dma_buf images. */
+      return vk_errorf(VK_ERROR_FORMAT_NOT_SUPPORTED,
+                       "dma_buf images do not support VkFormat 0x%x",
+                       base_info->format);
+   }
+
+   /* We restrict some properties on dma_buf images. */
+   base_props->imageFormatProperties.maxMipLevels = 1;
+   base_props->imageFormatProperties.maxArrayLayers = 1;
+   base_props->imageFormatProperties.sampleCounts = VK_SAMPLE_COUNT_1_BIT;
+
+   /* Return DRM format modifiers in order of decreasing preference. */
+   if (base_info->tiling == VK_IMAGE_TILING_OPTIMAL) {
+      vk_outarray_append(&mod_props, p) {
+         p->drmFormatModifier = I915_FORMAT_MOD_Y_TILED;
+         p->maxRowPitch = 0;
+         p->rowPitchAlignment = 0;
+         p->imageFormatProperties = base_props->imageFormatProperties;
+      }
+
+      vk_outarray_append(&mod_props, p) {
+         p->drmFormatModifier = I915_FORMAT_MOD_X_TILED;
+         p->maxRowPitch = 0;
+         p->rowPitchAlignment = 0;
+         p->imageFormatProperties = base_props->imageFormatProperties;
+      }
+   }
+
+   vk_outarray_append(&mod_props, p) {
+      p->drmFormatModifier = DRM_FORMAT_MOD_LINEAR;
+      p->maxRowPitch = 1 << 18; /* See RENDER_SURFACE_STATE::SurfacePitch */
+      p->rowPitchAlignment = 1;
+      p->imageFormatProperties = base_props->imageFormatProperties;
+   }
+
+   /* Clobber the base properties.
+    *
+    * TODO(chadv): Explain why the interaction between
+    * VK_MESAX_external_image_dma_buf and VK_KHX_external_memory_capabilities
+    * requires us to zero the base properties.
+    */
+   base_props->imageFormatProperties = (VkImageFormatProperties) {0};
+
+   external_props->externalMemoryProperties = dma_buf_mem_props;
+
+   return vk_outarray_status(&mod_props);
+}
+
 VkResult anv_GetPhysicalDeviceImageFormatProperties2KHR(
     VkPhysicalDevice                            physicalDevice,
     const VkPhysicalDeviceImageFormatInfo2KHR*  base_info,
@@ -692,6 +825,7 @@ VkResult anv_GetPhysicalDeviceImageFormatProperties2KHR(
    ANV_FROM_HANDLE(anv_physical_device, physical_device, physicalDevice);
    const VkPhysicalDeviceExternalImageFormatInfoKHX *external_info = NULL;
    VkExternalImageFormatPropertiesKHX *external_props = NULL;
+   VkDmaBufImageFormatPropertiesMESAX *dma_buf_props = NULL;
    VkResult result;
 
    result = anv_get_image_format_properties(physical_device, base_info,
@@ -717,6 +851,9 @@ VkResult anv_GetPhysicalDeviceImageFormatProperties2KHR(
       case VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES_KHX:
          external_props = (void *) s;
          break;
+      case VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_FORMAT_PROPERTIES_MESAX:
+         dma_buf_props = (void *) s;
+         break;
       default:
          anv_debug_ignored_stype(s->sType);
          break;
@@ -736,7 +873,12 @@ VkResult anv_GetPhysicalDeviceImageFormatProperties2KHR(
             external_props->externalMemoryProperties = opaque_fd_props;
          break;
       case VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_MESAX:
-         /* Fallthrough. We support dma_buf for VkBuffer but not yet VkImage. */
+         result = get_dma_buf_image_format_props(physical_device, base_info,
+                                                 base_props, external_props,
+                                                 dma_buf_props);
+         if (result != VK_SUCCESS)
+            goto fail;
+         break;
       default:
          /* From the Vulkan 1.0.42 spec:
           *

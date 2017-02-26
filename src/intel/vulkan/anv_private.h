@@ -30,7 +30,13 @@
 #include <pthread.h>
 #include <assert.h>
 #include <stdint.h>
+
 #include <i915_drm.h>
+#include <drm_fourcc.h>
+
+#ifndef DRM_FORMAT_MOD_LINEAR /* new in Linux 4.10 */
+#define DRM_FORMAT_MOD_LINEAR 0
+#endif
 
 #ifdef HAVE_VALGRIND
 #include <valgrind.h>
