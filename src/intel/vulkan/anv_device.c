@@ -53,29 +53,33 @@ compiler_perf_log(void *data, const char *fmt, ...)
    va_end(args);
 }
 
-static bool
-anv_device_get_cache_uuid(void *uuid, uint16_t pci_id)
+static VkResult
+anv_physical_device_init_uuids(struct anv_physical_device *device)
 {
    const struct build_id_note *note = build_id_find_nhdr("libvulkan_intel.so");
-   if (!note)
-      return false;
+   if (!note) {
+      return vk_errorf(VK_ERROR_INITIALIZATION_FAILED,
+                       "Failed to find build-id");
+   }
 
    unsigned build_id_len = build_id_length(note);
-   if (build_id_len < 20) /* It should be a SHA-1 */
-      return false;
+   if (build_id_len < 20) {
+      return vk_errorf(VK_ERROR_INITIALIZATION_FAILED,
+                       "build-id too short.  It needs to be a SHA");
+   }
 
    uint8_t sha1[20];
    STATIC_ASSERT(VK_UUID_SIZE <= sizeof(sha1));
    struct mesa_sha1 *sha1_ctx = _mesa_sha1_init();
    if (sha1_ctx == NULL)
-      return false;
+      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
    _mesa_sha1_update(sha1_ctx, build_id_data(note), build_id_len);
-   _mesa_sha1_update(sha1_ctx, &pci_id, sizeof(pci_id));
+   _mesa_sha1_update(sha1_ctx, &device->chipset_id, sizeof(device->chipset_id));
    _mesa_sha1_final(sha1_ctx, sha1);
+   memcpy(device->uuid, sha1, VK_UUID_SIZE);
 
-   memcpy(uuid, sha1, VK_UUID_SIZE);
-   return true;
+   return VK_SUCCESS;
 }
 
 static VkResult
@@ -159,11 +163,10 @@ anv_physical_device_init(struct anv_physical_device *device,
       goto fail;
    }
 
-   if (!anv_device_get_cache_uuid(device->uuid, device->chipset_id)) {
-      result = vk_errorf(VK_ERROR_INITIALIZATION_FAILED,
-                         "cannot generate UUID");
+   result = anv_physical_device_init_uuids(device);
+   if (result != VK_SUCCESS)
       goto fail;
-   }
+
    bool swizzled = anv_gem_get_bit6_swizzle(fd, I915_TILING_X);
 
    /* GENs prior to 8 do not support EU/Subslice info */
