@@ -1384,6 +1384,23 @@ setup_execbuf_for_cmd_buffer(struct anv_execbuf *execbuf,
    return VK_SUCCESS;
 }
 
+static void
+setup_empty_execbuf(struct anv_execbuf *execbuf, struct anv_device *device)
+{
+   anv_execbuf_add_bo(execbuf, &device->trivial_batch_bo, NULL, 0,
+                      &device->alloc);
+
+   execbuf->execbuf = (struct drm_i915_gem_execbuffer2) {
+      .buffers_ptr = (uintptr_t) execbuf->objects,
+      .buffer_count = execbuf->bo_count,
+      .batch_start_offset = 0,
+      .batch_len = 8, /* GEN8_MI_BATCH_BUFFER_END and NOOP */
+      .flags = I915_EXEC_HANDLE_LUT | I915_EXEC_RENDER,
+      .rsvd1 = device->context_id,
+      .rsvd2 = 0,
+   };
+}
+
 VkResult
 anv_cmd_buffer_execbuf(struct anv_device *device,
                        struct anv_cmd_buffer *cmd_buffer,
@@ -1395,11 +1412,13 @@ anv_cmd_buffer_execbuf(struct anv_device *device,
    struct anv_execbuf execbuf;
    anv_execbuf_init(&execbuf);
 
+   int in_fence = -1;
    VkResult result = VK_SUCCESS;
    for (uint32_t i = 0; i < num_in_semaphores; i++) {
       ANV_FROM_HANDLE(anv_semaphore, semaphore, in_semaphores[i]);
-      assert(semaphore->temporary.type == ANV_SEMAPHORE_TYPE_NONE);
-      struct anv_semaphore_impl *impl = &semaphore->permanent;
+      struct anv_semaphore_impl *impl =
+         semaphore->temporary.type != ANV_SEMAPHORE_TYPE_NONE ?
+         &semaphore->temporary : &semaphore->permanent;
 
       switch (impl->type) {
       case ANV_SEMAPHORE_TYPE_BO:
@@ -1408,13 +1427,42 @@ anv_cmd_buffer_execbuf(struct anv_device *device,
          if (result != VK_SUCCESS)
             return result;
          break;
+
+      case ANV_SEMAPHORE_TYPE_SYNC_FILE:
+         if (in_fence == -1) {
+            in_fence = impl->fd;
+         } else {
+            int merge = anv_gem_sync_file_merge(device, in_fence, impl->fd);
+            if (merge == -1)
+               return vk_error(VK_ERROR_INVALID_EXTERNAL_HANDLE_KHX);
+
+            close(impl->fd);
+            close(in_fence);
+            in_fence = merge;
+         }
+
+         impl->fd = -1;
+         break;
+
       default:
          break;
       }
+
+      /* Waiting on a semaphore with temporary state implicitly resets it back
+       * to the permanent state.
+       */
+      if (semaphore->temporary.type != ANV_SEMAPHORE_TYPE_NONE) {
+         assert(semaphore->temporary.type == ANV_SEMAPHORE_TYPE_SYNC_FILE);
+         semaphore->temporary.type = ANV_SEMAPHORE_TYPE_NONE;
+      }
    }
 
+   bool need_out_fence = false;
    for (uint32_t i = 0; i < num_out_semaphores; i++) {
       ANV_FROM_HANDLE(anv_semaphore, semaphore, out_semaphores[i]);
+      /* Out fences can't have temporary state because that would imply
+       * that we imported a sync file and are trying to signal it.
+       */
       assert(semaphore->temporary.type == ANV_SEMAPHORE_TYPE_NONE);
       struct anv_semaphore_impl *impl = &semaphore->permanent;
 
@@ -1425,16 +1473,51 @@ anv_cmd_buffer_execbuf(struct anv_device *device,
          if (result != VK_SUCCESS)
             return result;
          break;
+
+      case ANV_SEMAPHORE_TYPE_SYNC_FILE:
+         need_out_fence = true;
+         break;
+
       default:
          break;
       }
    }
 
-   result = setup_execbuf_for_cmd_buffer(&execbuf, cmd_buffer);
-   if (result != VK_SUCCESS)
-      return result;
+   if (cmd_buffer) {
+      result = setup_execbuf_for_cmd_buffer(&execbuf, cmd_buffer);
+      if (result != VK_SUCCESS)
+         return result;
+   } else {
+      setup_empty_execbuf(&execbuf, device);
+   }
+
+   if (in_fence != -1) {
+      execbuf.execbuf.flags |= I915_EXEC_FENCE_IN;
+      execbuf.execbuf.rsvd2 |= (uint32_t)in_fence;
+   }
+
+   if (need_out_fence)
+      execbuf.execbuf.flags |= I915_EXEC_FENCE_OUT;
 
    result = anv_device_execbuf(device, &execbuf.execbuf, execbuf.bos);
+
+   if (result == VK_SUCCESS && need_out_fence) {
+      int out_fence = execbuf.execbuf.rsvd2 >> 32;
+      for (uint32_t i = 0; i < num_out_semaphores; i++) {
+         ANV_FROM_HANDLE(anv_semaphore, semaphore, out_semaphores[i]);
+         /* Out fences can't have temporary state because that would imply
+          * that we imported a sync file and are trying to signal it.
+          */
+         assert(semaphore->temporary.type == ANV_SEMAPHORE_TYPE_NONE);
+         struct anv_semaphore_impl *impl = &semaphore->permanent;
+
+         if (impl->type == ANV_SEMAPHORE_TYPE_SYNC_FILE) {
+            assert(impl->fd == -1);
+            impl->fd = dup(out_fence);
+         }
+      }
+      close(out_fence);
+   }
 
    anv_execbuf_finish(&execbuf, &device->alloc);
 
