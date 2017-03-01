@@ -112,10 +112,6 @@ if HAVE_EGL
 SUBDIRS += egl
 endif
 
-if HAVE_INTEL_DRIVERS
-SUBDIRS += intel/tools
-endif
-
 if HAVE_VULKAN_COMMON
 SUBDIRS += vulkan
 endif
