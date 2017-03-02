@@ -47,6 +47,10 @@ AM_CFLAGS = \
 MKDIR_GEN = $(AM_V_at)$(MKDIR_P) $(@D)
 PYTHON_GEN = $(AM_V_GEN)$(PYTHON2) $(PYTHON_FLAGS)
 
+lib_LTLIBRARIES =
+check_LTLIBRARIES =
+noinst_DATA =
+noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
 check_PROGRAMS =
@@ -61,5 +65,9 @@ include Makefile.compiler.am
 include Makefile.genxml.am
 include Makefile.isl.am
 include Makefile.tools.am
+
+if HAVE_INTEL_VULKAN
+include Makefile.vulkan.am
+endif
 
 CLEANFILES += $(BUILT_SOURCES)
