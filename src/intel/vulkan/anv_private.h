@@ -93,7 +93,7 @@ struct gen_l3_config;
 #define MAX_VIEWPORTS   16
 #define MAX_SCISSORS    16
 #define MAX_PUSH_CONSTANTS_SIZE 128
-#define MAX_DYNAMIC_BUFFERS 16
+#define MAX_DYNAMIC_BUFFERS 64
 #define MAX_IMAGES 8
 #define MAX_PUSH_DESCRIPTORS 32 /* Minimum requirement */
 
