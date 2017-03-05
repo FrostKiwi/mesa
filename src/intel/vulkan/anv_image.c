@@ -162,7 +162,9 @@ make_hiz_surface_maybe(const struct anv_device *dev,
    } else {
       ok = isl_surf_get_hiz_surf(&dev->isl_dev, &image->depth_surface.isl,
                                  &image->aux_surface.isl);
-      assert(ok);
+      if (!ok)
+         return;
+
       add_surface(image, &image->aux_surface);
       image->aux_usage = ISL_AUX_USAGE_HIZ;
    }
