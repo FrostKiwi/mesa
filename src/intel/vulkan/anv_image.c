@@ -392,13 +392,13 @@ make_main_surface(const struct anv_device *dev,
 }
 
 VkResult
-anv_image_create(VkDevice _device,
-                 const struct anv_image_create_info *anv_info,
-                 const VkAllocationCallbacks* alloc,
-                 VkImage *pImage)
+anv_CreateImage(VkDevice _device,
+                const VkImageCreateInfo *base_info,
+                const VkAllocationCallbacks* alloc,
+                VkImage *pImage)
 {
    ANV_FROM_HANDLE(anv_device, device, _device);
-   const VkImageCreateInfo *base_info = anv_info->vk_info;
+   const struct anv_image_create_info anv_info = { .vk_info = base_info };
    const VkImportImageDmaBufInfoMESAX *import_dma_buf_info = NULL;
    const VkExportImageDmaBufInfoMESAX *export_dma_buf_info = NULL;
    VkExternalMemoryHandleTypeFlagsKHX handle_types = 0;
@@ -456,7 +456,7 @@ anv_image_create(VkDevice _device,
    uint32_t b;
    for_each_bit(b, image->aspects) {
       VkImageAspectFlagBits aspect = 1 << b;
-      make_main_surface(device, anv_info, import_dma_buf_info,
+      make_main_surface(device, &anv_info, import_dma_buf_info,
                         export_dma_buf_info, aspect, handle_types, image);
       make_aux_surface_maybe(device, base_info, aspect, handle_types, image);
    }
@@ -464,20 +464,6 @@ anv_image_create(VkDevice _device,
    *pImage = anv_image_to_handle(image);
 
    return VK_SUCCESS;
-}
-
-VkResult
-anv_CreateImage(VkDevice device,
-                const VkImageCreateInfo *pCreateInfo,
-                const VkAllocationCallbacks *pAllocator,
-                VkImage *pImage)
-{
-   return anv_image_create(device,
-      &(struct anv_image_create_info) {
-         .vk_info = pCreateInfo,
-      },
-      pAllocator,
-      pImage);
 }
 
 void

@@ -2173,11 +2173,6 @@ struct anv_image_create_info {
    uint32_t stride;
 };
 
-VkResult anv_image_create(VkDevice _device,
-                          const struct anv_image_create_info *info,
-                          const VkAllocationCallbacks* alloc,
-                          VkImage *pImage);
-
 const struct anv_surface *
 anv_image_get_surface_for_aspect_mask(const struct anv_image *image,
                                       VkImageAspectFlags aspect_mask);
