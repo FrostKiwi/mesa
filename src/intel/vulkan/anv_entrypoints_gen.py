@@ -54,6 +54,7 @@ SUPPORTED_EXTENSIONS = [
     'VK_KHX_external_semaphore_capabilities',
     'VK_KHX_external_semaphore_fd',
     'VK_KHX_multiview',
+    'VK_MESAX_external_memory_dma_buf',
 ]
 
 # We generate a static hash table for entry point lookup

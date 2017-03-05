@@ -495,6 +495,10 @@ static const VkExtensionProperties device_extensions[] = {
       .extensionName = VK_KHX_MULTIVIEW_EXTENSION_NAME,
       .specVersion = 1,
    },
+   {
+      .extensionName = VK_MESAX_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
+      .specVersion = 0,
+   },
 };
 
 static void *
@@ -1561,11 +1565,7 @@ VkResult anv_AllocateMemory(
     * ignored.
     */
    if (fd_info && fd_info->handleType) {
-      /* At the moment, we only support the OPAQUE_FD memory type which is
-       * just a GEM buffer.
-       */
-      assert(fd_info->handleType ==
-             VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHX);
+      assert((fd_info->handleType & ~ANV_SUPPORTED_MEMORY_HANDLE_TYPES) == 0);
 
       result = anv_bo_cache_import(device, &device->bo_cache,
                                    fd_info->fd, pAllocateInfo->allocationSize,
@@ -1606,8 +1606,7 @@ VkResult anv_GetMemoryFdKHX(
    ANV_FROM_HANDLE(anv_device, dev, device_h);
    ANV_FROM_HANDLE(anv_device_memory, mem, memory_h);
 
-   /* We support only one handle type. */
-   assert(handleType == VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHX);
+   assert((handleType & ~ANV_SUPPORTED_MEMORY_HANDLE_TYPES) == 0);
 
    return anv_bo_cache_export(dev, &dev->bo_cache, mem->bo, pFd);
 }
@@ -1618,13 +1617,24 @@ VkResult anv_GetMemoryFdPropertiesKHX(
     int                                         fd,
     VkMemoryFdPropertiesKHX*                    pMemoryFdProperties)
 {
+   ANV_FROM_HANDLE(anv_device, device, device_h);
+
+   if (fd == -1)
+      return VK_ERROR_INVALID_EXTERNAL_HANDLE_KHX;
+
    /* The valid usage section for this function says:
     *
     *    "handleType must not be one of the handle types defined as opaque."
     *
-    * Since we only handle opaque handles for now, there are no FD properties.
+    * The only non-opaque fd type we support is dma_buf.
     */
-   return VK_ERROR_INVALID_EXTERNAL_HANDLE_KHX;
+   if (handleType != VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_MESAX)
+      return VK_ERROR_INVALID_EXTERNAL_HANDLE_KHX;
+
+   /* We support exactly one memory type on LLC, two on non-LLC.  */
+   pMemoryFdProperties->memoryTypeBits = device->info.has_llc ? 1 : 3;
+
+   return VK_SUCCESS;
 }
 
 void anv_FreeMemory(

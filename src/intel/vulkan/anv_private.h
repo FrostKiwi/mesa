@@ -1025,6 +1025,10 @@ struct anv_device_memory {
    void *                                       map;
 };
 
+#define ANV_SUPPORTED_MEMORY_HANDLE_TYPES \
+   (VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHX | \
+    VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_MESAX)
+
 /**
  * Header for Vertex URB Entry (VUE)
  */
