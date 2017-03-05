@@ -2164,15 +2164,6 @@ struct anv_image_view {
    struct brw_image_param storage_image_param;
 };
 
-struct anv_image_create_info {
-   const VkImageCreateInfo *vk_info;
-
-   /** An opt-in bitmask which filters an ISL-mapping of the Vulkan tiling. */
-   isl_tiling_flags_t isl_tiling_flags;
-
-   uint32_t stride;
-};
-
 const struct anv_surface *
 anv_image_get_surface_for_aspect_mask(const struct anv_image *image,
                                       VkImageAspectFlags aspect_mask);

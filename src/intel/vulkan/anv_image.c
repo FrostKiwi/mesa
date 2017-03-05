@@ -107,7 +107,7 @@ get_surface(struct anv_image *image, VkImageAspectFlags aspect)
 }
 
 static isl_tiling_flags_t
-choose_isl_tiling_flags(const struct anv_image_create_info *anv_info,
+choose_isl_tiling_flags(const VkImageCreateInfo *base_info,
                         const VkImportImageDmaBufInfoMESAX *import_dma_buf_info,
                         const VkExportImageDmaBufInfoMESAX *export_dma_buf_info)
 {
@@ -131,14 +131,11 @@ choose_isl_tiling_flags(const struct anv_image_create_info *anv_info,
             flags |= 1 << t;
          }
       }
-   } else if (anv_info->vk_info->tiling == VK_IMAGE_TILING_LINEAR) {
+   } else if (base_info->tiling == VK_IMAGE_TILING_LINEAR) {
       flags = ISL_TILING_LINEAR_BIT;
    } else {
       flags = ISL_TILING_ANY_MASK;
    }
-
-   if (anv_info->isl_tiling_flags)
-      flags &= anv_info->isl_tiling_flags;
 
    assert(flags != 0);
 
@@ -165,22 +162,6 @@ choose_isl_format(const struct anv_device *dev,
       return anv_get_isl_format(&dev->info, base_info->format, aspect,
                                 base_info->tiling);
    }
-}
-
-static uint32_t
-choose_row_pitch(const struct anv_image_create_info *anv_info,
-                 const VkImportImageDmaBufPlaneInfoMESAX *plane_info)
-{
-   if (anv_info->stride != 0)
-      return anv_info->stride;
-
-   if (plane_info) {
-      assert(plane_info->rowPitch > 0);
-      return plane_info->rowPitch;
-   }
-
-   /* Let isl choose the pitch. */
-   return 0;
 }
 
 static void
@@ -330,14 +311,13 @@ make_aux_surface_maybe(const struct anv_device *dev,
  */
 static void
 make_main_surface(const struct anv_device *dev,
-                  const struct anv_image_create_info *anv_info,
+                  const VkImageCreateInfo *base_info,
                   const VkImportImageDmaBufInfoMESAX *import_dma_buf_info,
                   const VkExportImageDmaBufInfoMESAX *export_dma_buf_info,
                   VkImageAspectFlags aspect,
                   VkExternalMemoryHandleTypeFlagsKHX handle_types,
                   struct anv_image *image)
 {
-   const VkImageCreateInfo *base_info = anv_info->vk_info;
    bool ok UNUSED;
 
    static const enum isl_surf_dim vk_to_isl_surf_dim[] = {
@@ -351,8 +331,13 @@ make_main_surface(const struct anv_device *dev,
       plane_info = &import_dma_buf_info->pPlanes[0];
 
    const isl_tiling_flags_t tiling_flags =
-      choose_isl_tiling_flags(anv_info, import_dma_buf_info, export_dma_buf_info);
-   const uint32_t row_pitch = choose_row_pitch(anv_info, plane_info);
+      choose_isl_tiling_flags(base_info, import_dma_buf_info, export_dma_buf_info);
+
+   uint32_t row_pitch = 0;
+   if (plane_info) {
+      assert(plane_info->rowPitch > 0);
+      row_pitch = plane_info->rowPitch;
+   }
 
    struct anv_surface *anv_surf = get_surface(image, aspect);
 
@@ -398,7 +383,6 @@ anv_CreateImage(VkDevice _device,
                 VkImage *pImage)
 {
    ANV_FROM_HANDLE(anv_device, device, _device);
-   const struct anv_image_create_info anv_info = { .vk_info = base_info };
    const VkImportImageDmaBufInfoMESAX *import_dma_buf_info = NULL;
    const VkExportImageDmaBufInfoMESAX *export_dma_buf_info = NULL;
    VkExternalMemoryHandleTypeFlagsKHX handle_types = 0;
@@ -456,7 +440,7 @@ anv_CreateImage(VkDevice _device,
    uint32_t b;
    for_each_bit(b, image->aspects) {
       VkImageAspectFlagBits aspect = 1 << b;
-      make_main_surface(device, &anv_info, import_dma_buf_info,
+      make_main_surface(device, base_info, import_dma_buf_info,
                         export_dma_buf_info, aspect, handle_types, image);
       make_aux_surface_maybe(device, base_info, aspect, handle_types, image);
    }
