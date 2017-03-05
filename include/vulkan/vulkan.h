@@ -304,6 +304,13 @@ typedef enum VkStructureType {
     VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR = 1000119002,
     VK_STRUCTURE_TYPE_IOS_SURFACE_CREATE_INFO_MVK = 1000122000,
     VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK = 1000123000,
+    VK_STRUCTURE_TYPE_DMA_BUF_FORMAT_PROPERTIES_MESAX = 1000126000,
+    VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_FORMAT_PROPERTIES_MESAX = 1000126001,
+    VK_STRUCTURE_TYPE_IMPORT_IMAGE_DMA_BUF_INFO_MESAX = 1000126002,
+    VK_STRUCTURE_TYPE_EXPORT_IMAGE_DMA_BUF_INFO_MESAX = 1000126003,
+    VK_STRUCTURE_TYPE_IMAGE_PROPERTIES_MESAX = 1000126004,
+    VK_STRUCTURE_TYPE_IMAGE_DMA_BUF_PROPERTIES_MESAX = 1000126005,
+    VK_STRUCTURE_TYPE_IMAGE_PROPERTIES_EXT = 1000199000,
     VK_STRUCTURE_TYPE_BEGIN_RANGE = VK_STRUCTURE_TYPE_APPLICATION_INFO,
     VK_STRUCTURE_TYPE_END_RANGE = VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO,
     VK_STRUCTURE_TYPE_RANGE_SIZE = (VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO - VK_STRUCTURE_TYPE_APPLICATION_INFO + 1),
@@ -4940,6 +4947,7 @@ typedef enum VkExternalMemoryHandleTypeFlagBitsKHX {
     VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_KMT_BIT_KHX = 0x00000010,
     VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_HEAP_BIT_KHX = 0x00000020,
     VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT_KHX = 0x00000040,
+    VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_MESAX = 0x00020000,
     VK_EXTERNAL_MEMORY_HANDLE_TYPE_FLAG_BITS_MAX_ENUM_KHX = 0x7FFFFFFF
 } VkExternalMemoryHandleTypeFlagBitsKHX;
 typedef VkFlags VkExternalMemoryHandleTypeFlagsKHX;
@@ -5918,6 +5926,102 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateMacOSSurfaceMVK(
     VkSurfaceKHR*                               pSurface);
 #endif
 #endif /* VK_USE_PLATFORM_MACOS_MVK */
+
+#define VK_MESAX_external_memory_dma_buf 1
+#define VK_MESAX_EXTERNAL_MEMORY_DMA_BUF_SPEC_VERSION 0
+#define VK_MESAX_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME "VK_MESAX_external_memory_dma_buf"
+
+
+#define VK_MESAX_external_image_dma_buf 1
+#define VK_MESAX_EXTERNAL_IMAGE_DMA_BUF_SPEC_VERSION 0
+#define VK_MESAX_EXTERNAL_IMAGE_DMA_BUF_EXTENSION_NAME "VK_MESAX_external_image_dma_buf"
+
+typedef struct VkDmaBufFormatModifierPropertiesMESAX {
+    uint64_t                drmFormatModifier;
+    VkFormatFeatureFlags    imageFeatures;
+} VkDmaBufFormatModifierPropertiesMESAX;
+
+typedef struct VkDmaBufFormatPropertiesMESAX {
+    VkStructureType                           sType;
+    void*                                     pNext;
+    uint32_t                                  modifierCount;
+    VkDmaBufFormatModifierPropertiesMESAX*    pModifierProperties;
+} VkDmaBufFormatPropertiesMESAX;
+
+typedef struct VkDmaBufImageFormatModifierPropertiesMESAX {
+    uint64_t                   drmFormatModifier;
+    VkDeviceSize               maxRowPitch;
+    VkDeviceSize               rowPitchAlignment;
+    VkImageFormatProperties    imageFormatProperties;
+} VkDmaBufImageFormatModifierPropertiesMESAX;
+
+typedef struct VkDmaBufImageFormatPropertiesMESAX {
+    VkStructureType                                sType;
+    void*                                          pNext;
+    uint32_t                                       modifierCount;
+    VkDmaBufImageFormatModifierPropertiesMESAX*    pModifierProperties;
+} VkDmaBufImageFormatPropertiesMESAX;
+
+typedef struct VkImportImageDmaBufPlaneInfoMESAX {
+    VkDeviceSize    offset;
+    VkDeviceSize    size;
+    VkDeviceSize    rowPitch;
+} VkImportImageDmaBufPlaneInfoMESAX;
+
+typedef struct VkImportImageDmaBufInfoMESAX {
+    VkStructureType                             sType;
+    const void*                                 pNext;
+    uint64_t                                    drmFormatModifier;
+    uint32_t                                    planeCount;
+    const VkImportImageDmaBufPlaneInfoMESAX*    pPlanes;
+} VkImportImageDmaBufInfoMESAX;
+
+typedef struct VkExportImageDmaBufInfoMESAX {
+    VkStructureType    sType;
+    const void*        pNext;
+    uint32_t           drmFormatModifierCount;
+    const uint64_t*    pDrmFormatModifiers;
+} VkExportImageDmaBufInfoMESAX;
+
+typedef struct VkImagePropertiesMESAX {
+    VkStructureType    sType;
+    void*              pNext;
+} VkImagePropertiesMESAX;
+
+typedef struct VkImageDmaBufPlanePropertiesMESAX {
+    VkDeviceSize    offset;
+    VkDeviceSize    size;
+    VkDeviceSize    rowPitch;
+} VkImageDmaBufPlanePropertiesMESAX;
+
+typedef struct VkImageDmaBufPropertiesMESAX {
+    VkStructureType                       sType;
+    void*                                 pNext;
+    uint64_t                              drmFormatModifier;
+    uint32_t                              planeCount;
+    VkImageDmaBufPlanePropertiesMESAX*    pPlanes;
+} VkImageDmaBufPropertiesMESAX;
+
+
+
+#define VK_EXT_get_image_properties 1
+#define VK_EXT_GET_IMAGE_PROPERTIES_SPEC_VERSION 1
+#define VK_EXT_GET_IMAGE_PROPERTIES_EXTENSION_NAME "VK_EXT_get_image_properties"
+
+typedef struct VkImagePropertiesEXT {
+    VkStructureType    sType;
+    void*              pNext;
+} VkImagePropertiesEXT;
+
+
+typedef VkResult (VKAPI_PTR *PFN_vkGetImagePropertiesEXT)(VkDevice device, VkImage image, VkImagePropertiesEXT* pProperties);
+
+#ifndef VK_NO_PROTOTYPES
+VKAPI_ATTR VkResult VKAPI_CALL vkGetImagePropertiesEXT(
+    VkDevice                                    device,
+    VkImage                                     image,
+    VkImagePropertiesEXT*                       pProperties);
+#endif
 
 #ifdef __cplusplus
 }

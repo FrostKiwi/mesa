@@ -2275,6 +2275,66 @@ maintained in the master branch of the Khronos Vulkan GitHub project.
             <member noautovalidity="true"><type>void</type>*                            <name>pNext</name></member>                    <!-- Pointer to next structure -->
             <member optional="true"><type>VkImageUsageFlags</type> <name>sharedPresentSupportedUsageFlags</name></member> <!-- Supported image usage flags if swapchain created using a shared present mode -->
         </type>
+        <type category="struct" name="VkImagePropertiesEXT">
+            <member values="VK_STRUCTURE_TYPE_IMAGE_PROPERTIES_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member><type>void</type>* <name>pNext</name></member>
+        </type>
+        <type category="struct" name="VkDmaBufFormatModifierPropertiesMESAX">
+            <member><type>uint64_t</type>               <name>drmFormatModifier</name></member>
+            <member><type>VkFormatFeatureFlags</type>   <name>imageFeatures</name></member>
+        </type>
+        <type category="struct" name="VkDmaBufFormatPropertiesMESAX">
+            <member values="VK_STRUCTURE_TYPE_DMA_BUF_FORMAT_PROPERTIES_MESAX"><type>VkStructureType</type> <name>sType</name></member>
+            <member><type>void</type>*                                                          <name>pNext</name></member>
+            <member optional="true"><type>uint32_t</type>                                       <name>modifierCount</name></member>
+            <member optional="true" len="modifierCount"><type>VkDmaBufFormatModifierPropertiesMESAX</type>*     <name>pModifierProperties</name></member>
+        </type>
+        <type category="struct" name="VkDmaBufImageFormatModifierPropertiesMESAX">
+            <member><type>uint64_t</type>                 <name>drmFormatModifier</name></member>
+            <member><type>VkDeviceSize</type>             <name>maxRowPitch</name></member>
+            <member><type>VkDeviceSize</type>             <name>rowPitchAlignment</name></member>
+            <member><type>VkImageFormatProperties</type>  <name>imageFormatProperties</name></member>
+        </type>
+        <type category="struct" name="VkDmaBufImageFormatPropertiesMESAX">
+            <member values="VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_FORMAT_PROPERTIES_MESAX"><type>VkStructureType</type> <name>sType</name></member>
+            <member><type>void</type>*                                                              <name>pNext</name></member>
+            <member optional="true"><type>uint32_t</type>                                           <name>modifierCount</name></member>
+            <member optional="true" len="modifierCount"><type>VkDmaBufImageFormatModifierPropertiesMESAX</type>*    <name>pModifierProperties</name></member>
+        </type>
+        <type category="struct" name="VkImportImageDmaBufPlaneInfoMESAX">
+            <member><type>VkDeviceSize</type>   <name>offset</name></member>
+            <member><type>VkDeviceSize</type>   <name>size</name></member>
+            <member><type>VkDeviceSize</type>   <name>rowPitch</name></member>
+        </type>
+        <type category="struct" name="VkImportImageDmaBufInfoMESAX">
+            <member values="VK_STRUCTURE_TYPE_IMPORT_IMAGE_DMA_BUF_INFO_MESAX"><type>VkStructureType</type> <name>sType</name></member>
+            <member>const <type>void</type>*                                                <name>pNext</name></member>
+            <member><type>uint64_t</type>                                                   <name>drmFormatModifier</name></member>
+            <member optional="true"><type>uint32_t</type>                                   <name>planeCount</name></member>
+            <member len="planeCount">const <type>VkImportImageDmaBufPlaneInfoMESAX</type>*  <name>pPlanes</name></member>
+        </type>
+        <type category="struct" name="VkExportImageDmaBufInfoMESAX">
+            <member values="VK_STRUCTURE_TYPE_EXPORT_IMAGE_DMA_BUF_INFO_MESAX"><type>VkStructureType</type> <name>sType</name></member>
+            <member>const <type>void</type>*                                    <name>pNext</name></member>
+            <member optional="true"><type>uint32_t</type>                       <name>drmFormatModifierCount</name></member>
+            <member len="drmFormatModifierCount">const <type>uint64_t</type>*   <name>pDrmFormatModifiers</name></member>
+        </type>
+        <type category="struct" name="VkImagePropertiesMESAX">
+            <member values="VK_STRUCTURE_TYPE_IMAGE_PROPERTIES_MESAX"><type>VkStructureType</type> <name>sType</name></member>
+            <member><type>void</type>* <name>pNext</name></member>
+        </type>
+        <type category="struct" name="VkImageDmaBufPlanePropertiesMESAX">
+            <member><type>VkDeviceSize</type>   <name>offset</name></member>
+            <member><type>VkDeviceSize</type>   <name>size</name></member>
+            <member><type>VkDeviceSize</type>   <name>rowPitch</name></member>
+        </type>
+        <type category="struct" name="VkImageDmaBufPropertiesMESAX">
+            <member values="VK_STRUCTURE_TYPE_IMAGE_DMA_BUF_PROPERTIES_MESAX"><type>VkStructureType</type> <name>sType</name></member>
+            <member><type>void</type>*                                                      <name>pNext</name></member>
+            <member><type>uint64_t</type>                                                   <name>drmFormatModifier</name></member>
+            <member optional="true"><type>uint32_t</type>                                   <name>planeCount</name></member>
+            <member optional="true" len="planeCount"><type>VkImageDmaBufPlanePropertiesMESAX</type>*  <name>pPlanes</name></member>
+        </type>
     </types>
 
     <!-- SECTION: Vulkan enumerant (token) definitions. -->
@@ -4866,6 +4926,12 @@ maintained in the master branch of the Khronos Vulkan GitHub project.
             <param optional="false,true"><type>uint32_t</type>* <name>pSurfaceFormatCount</name></param>
             <param optional="true" len="pSurfaceFormatCount"><type>VkSurfaceFormat2KHR</type>* <name>pSurfaceFormats</name></param>
         </command>
+        <command successcodes="VK_SUCCESS">
+            <proto><type>VkResult</type> <name>vkGetImagePropertiesEXT</name></proto>
+            <param><type>VkDevice</type> <name>device</name></param>
+            <param><type>VkImage</type> <name>image</name></param>
+            <param><type>VkImagePropertiesEXT</type>* <name>pProperties</name></param>
+        </command>
     </commands>
 
     <!-- SECTION: Vulkan API interface definitions -->
@@ -6302,18 +6368,36 @@ maintained in the master branch of the Khronos Vulkan GitHub project.
                 <enum value="&quot;VK_MVK_moltenvk&quot;"               name="VK_MVK_MOLTENVK_EXTENSION_NAME"/>
             </require>
         </extension>
-        <extension name="VK_MESA_extension_126" number="126" author="MESA" contact="Chad Versace @chadversary" supported="disabled">
+        <extension name="VK_MESAX_external_memory_dma_buf" number="126" type="device" requires="VK_KHX_external_memory_fd" author="MESA" contact="Chad Versace @chadversary" supported="vulkan">
             <require>
-                <enum value="0"                                         name="VK_MESA_EXTENSION_126_SPEC_VERSION"/>
-                <enum value="&quot;VK_MESA_extension_126&quot;"         name="VK_MESA_EXTENSION_126_EXTENSION_NAME"/>
+                <enum value="0"                                                name="VK_MESAX_EXTERNAL_MEMORY_DMA_BUF_SPEC_VERSION"/>
+                <enum value="&quot;VK_MESAX_external_memory_dma_buf&quot;"     name="VK_MESAX_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME"/>
+                <!-- FINISHME(mesa): placeholder bitpos -->
+                <enum bitpos="17" extends="VkExternalMemoryHandleTypeFlagBitsKHX" name="VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_MESAX"/>
             </require>
-        </extension>
-        <extension name="VK_MESA_extension_127" number="127" author="MESA" contact="Chad Versace @chadversary" supported="disabled">
+         </extension>
+         <extension name="VK_MESAX_external_image_dma_buf" number="127" type="device" requires="VK_MESAX_external_memory_dma_buf" author="MESA" contact="Chad Versace @chadversary" supported="vulkan">
             <require>
-                <enum value="0"                                         name="VK_MESA_EXTENSION_127_SPEC_VERSION"/>
-                <enum value="&quot;VK_MESA_extension_127&quot;"         name="VK_MESA_EXTENSION_127_EXTENSION_NAME"/>
+                <enum value="0"                                                name="VK_MESAX_EXTERNAL_IMAGE_DMA_BUF_SPEC_VERSION"/>
+                <enum value="&quot;VK_MESAX_external_image_dma_buf&quot;"      name="VK_MESAX_EXTERNAL_IMAGE_DMA_BUF_EXTENSION_NAME"/>
+                <enum offset="0" extends="VkStructureType"                     name="VK_STRUCTURE_TYPE_DMA_BUF_FORMAT_PROPERTIES_MESAX"/>
+                <enum offset="1" extends="VkStructureType"                     name="VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_FORMAT_PROPERTIES_MESAX"/>
+                <enum offset="2" extends="VkStructureType"                     name="VK_STRUCTURE_TYPE_IMPORT_IMAGE_DMA_BUF_INFO_MESAX"/>
+                <enum offset="3" extends="VkStructureType"                     name="VK_STRUCTURE_TYPE_EXPORT_IMAGE_DMA_BUF_INFO_MESAX"/>
+                <enum offset="4" extends="VkStructureType"                     name="VK_STRUCTURE_TYPE_IMAGE_PROPERTIES_MESAX"/>
+                <enum offset="5" extends="VkStructureType"                     name="VK_STRUCTURE_TYPE_IMAGE_DMA_BUF_PROPERTIES_MESAX"/>
+                <type name="VkDmaBufFormatPropertiesMESAX"/>
+                <type name="VkDmaBufFormatModifierPropertiesMESAX"/>
+                <type name="VkDmaBufImageFormatPropertiesMESAX"/>
+                <type name="VkDmaBufImageFormatModifierPropertiesMESAX"/>
+                <type name="VkImportImageDmaBufInfoMESAX"/>
+                <type name="VkImportImageDmaBufPlaneInfoMESAX"/>
+                <type name="VkExportImageDmaBufInfoMESAX"/>
+                <type name="VkImagePropertiesMESAX"/>
+                <type name="VkImageDmaBufPropertiesMESAX"/>
+                <type name="VkImageDmaBufPlanePropertiesMESAX"/>
             </require>
-        </extension>
+         </extension>
         <extension name="VK_KHR_extension_128" number="128" author="KHR" contact="James Jones @cubanismo" supported="disabled">
             <require>
                 <enum value="0"                                         name="VK_KHR_EXTENSION_128_SPEC_VERSION"/>
@@ -6486,6 +6570,15 @@ maintained in the master branch of the Khronos Vulkan GitHub project.
             <require>
                 <enum value="0"                                          name="VK_NV_EXTENSION_156_SPEC_VERSION"/>
                 <enum value="&quot;VK_NV_extension_156&quot;"            name="VK_NV_EXTENSION_156_EXTENSION_NAME"/>
+            </require>
+        </extension>
+        <extension name="VK_EXT_get_image_properties" number="159" type="device" author="EXT" contact="Chad Versace @chadversary" supported="vulkan">
+            <require>
+                <enum value="1"                                         name="VK_EXT_GET_IMAGE_PROPERTIES_SPEC_VERSION"/>
+                <enum value="&quot;VK_EXT_get_image_properties&quot;"   name="VK_EXT_GET_IMAGE_PROPERTIES_EXTENSION_NAME"/>
+                <enum offset="0" extends="VkStructureType"              name="VK_STRUCTURE_TYPE_IMAGE_PROPERTIES_EXT"/>
+                <type name="VkImagePropertiesEXT"/>
+                <command name="vkGetImagePropertiesEXT"/>
             </require>
         </extension>
     </extensions>
