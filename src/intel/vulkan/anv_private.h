@@ -69,7 +69,6 @@ struct anv_image_view;
 struct gen_l3_config;
 
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_intel.h>
 #include <vulkan/vk_icd.h>
 
 #include "anv_entrypoints.h"
