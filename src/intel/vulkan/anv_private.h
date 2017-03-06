@@ -1975,9 +1975,17 @@ struct anv_format {
    struct isl_swizzle swizzle;
 };
 
+struct anv_format ATTRIBUTE_PURE
+anv_get_raw_format(const struct gen_device_info *devinfo, VkFormat vk_format);
+
 struct anv_format
 anv_get_format(const struct gen_device_info *devinfo, VkFormat format,
                VkImageAspectFlags aspect, VkImageTiling tiling);
+
+static inline enum isl_format ATTRIBUTE_PURE
+anv_get_raw_isl_format(const struct gen_device_info *devinfo, VkFormat vk_format) {
+   return anv_get_raw_format(devinfo, vk_format).isl_format;
+}
 
 static inline enum isl_format
 anv_get_isl_format(const struct gen_device_info *devinfo, VkFormat vk_format,

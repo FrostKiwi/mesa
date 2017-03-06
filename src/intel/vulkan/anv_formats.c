@@ -250,6 +250,13 @@ static const struct anv_format anv_formats[] = {
 
 #undef fmt
 
+/** Like anv_get_format(), except the returned format is not adjusted. */
+struct anv_format
+anv_get_raw_format(const struct gen_device_info *devinfo, VkFormat vk_format)
+{
+   return anv_formats[vk_format];
+}
+
 /**
  * Exactly one bit must be set in \a aspect.
  */
