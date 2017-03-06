@@ -33,6 +33,7 @@ from mako.template import Template
 MAX_API_VERSION = 1.0
 
 SUPPORTED_EXTENSIONS = [
+    'VK_EXT_get_image_properties',
     'VK_KHR_descriptor_update_template',
     'VK_KHR_get_physical_device_properties2',
     'VK_KHR_get_surface_capabilities2',

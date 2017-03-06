@@ -30,6 +30,7 @@
 
 #include "anv_private.h"
 #include "util/debug.h"
+#include "vk_util.h"
 
 #include "vk_format_info.h"
 
@@ -440,6 +441,18 @@ void anv_GetImageSubresourceLayout(
    default:
       assert(!"Invalid image aspect");
    }
+}
+
+VkResult anv_GetImagePropertiesEXT(
+    VkDevice                                    device_h,
+    VkImage                                     image_h,
+    VkImagePropertiesEXT*                       base_props)
+{
+   vk_foreach_struct(s, base_props->pNext) {
+      anv_debug_ignored_stype(s->sType);
+   }
+
+   return VK_SUCCESS;
 }
 
 /**
