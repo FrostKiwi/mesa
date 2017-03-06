@@ -569,8 +569,9 @@ get_image_dma_buf_props(const struct anv_image *image,
                     &dma_buf_props->planeCount);
    bool ok UNUSED;
 
-   /* For now, we support exactly one format for dma_buf images. */
-   assert(image->vk_format == VK_FORMAT_R8G8B8A8_UNORM);
+   /* For now, we support exactly two formats for dma_buf images. */
+   assert(image->vk_format == VK_FORMAT_R8G8B8A8_UNORM ||
+          image->vk_format == VK_FORMAT_B8G8R8A8_UNORM);
 
    /* For now, We don't support dma_buf images with auxiliary surfaces. */
    assert(image->aux_surface.isl.size == 0);

@@ -185,11 +185,7 @@ anv_wsi_image_create(VkDevice device_h,
    struct anv_image *image;
 
    VkResult result;
-   result = anv_image_create(anv_device_to_handle(device),
-      &(struct anv_image_create_info) {
-         .isl_tiling_flags = ISL_TILING_X_BIT,
-         .stride = 0,
-         .vk_info =
+   result = anv_CreateImage(anv_device_to_handle(device),
       &(VkImageCreateInfo) {
          .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
          .imageType = VK_IMAGE_TYPE_2D,
@@ -207,7 +203,18 @@ anv_wsi_image_create(VkDevice device_h,
          .usage = (pCreateInfo->imageUsage |
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
          .flags = 0,
-      }},
+         .pNext =
+      &(VkExternalMemoryImageCreateInfoKHX) {
+         .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO_KHX,
+         .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_MESAX,
+         .pNext =
+      &(VkExportImageDmaBufInfoMESAX) {
+         .sType = VK_STRUCTURE_TYPE_EXPORT_IMAGE_DMA_BUF_INFO_MESAX,
+         .drmFormatModifierCount = 1,
+         .pDrmFormatModifiers = (uint64_t[]) {
+            I915_FORMAT_MOD_X_TILED,
+         },
+      }}},
       NULL,
       &image_h);
    if (result != VK_SUCCESS)

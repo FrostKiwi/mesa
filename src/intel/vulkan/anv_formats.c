@@ -480,7 +480,8 @@ get_dma_buf_format_props(struct anv_physical_device *phys_dev,
                     &props->modifierCount);
 
    VkFormatFeatureFlags image_features = 0;
-   if (vk_format == VK_FORMAT_R8G8B8A8_UNORM) {
+   if (vk_format == VK_FORMAT_R8G8B8A8_UNORM ||
+       vk_format == VK_FORMAT_B8G8R8A8_UNORM) {
       /* FINISHME: Support more formats for dma_buf images. */
 
       /* For dma_buf images, we must use the exact format provided by the
@@ -768,7 +769,8 @@ get_dma_buf_image_format_props(struct anv_physical_device *phys_dev,
                        "VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT");
    }
 
-   if (base_info->format != VK_FORMAT_R8G8B8A8_UNORM) {
+   if (base_info->format != VK_FORMAT_R8G8B8A8_UNORM &&
+       base_info->format != VK_FORMAT_B8G8R8A8_UNORM) {
       /* FINISHME: Support more formats for dma_buf images. */
       return vk_errorf(VK_ERROR_FORMAT_NOT_SUPPORTED,
                        "dma_buf images do not support VkFormat 0x%x",
