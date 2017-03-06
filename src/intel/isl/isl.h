@@ -1862,6 +1862,21 @@ uint32_t
 isl_surf_get_depth_format(const struct isl_device *dev,
                           const struct isl_surf *surf);
 
+/**
+ * The given surface must be a primary surface, not an auxiliary surface;
+ * otherwise behavior is undefined.
+ *
+ * The auxiliary usage must be compatible with the given surface; otherwise
+ * behavior is undefined.
+ *
+ * If no known DRM format modifier applies to the input, then return false.
+ * The output parameter is written only on success.
+ */
+bool ATTRIBUTE_PURE
+isl_surf_get_drm_format_mod(const struct isl_surf *main_surf,
+                            enum isl_aux_usage aux,
+                            uint64_t *mod);
+
 #ifdef __cplusplus
 }
 #endif

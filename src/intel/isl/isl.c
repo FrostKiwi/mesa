@@ -2372,3 +2372,38 @@ isl_surf_get_depth_format(const struct isl_device *dev,
       return 5; /* D16_UNORM */
    }
 }
+
+bool
+isl_surf_get_drm_format_mod(const struct isl_surf *main_surf,
+                            enum isl_aux_usage aux,
+                            uint64_t *mod)
+{
+   if (aux != ISL_AUX_USAGE_NONE) {
+      /* There are no modifiers defined yet for auxiliary surfaces, not even
+       * for CCS.
+       */
+      return false;
+   }
+
+   switch (main_surf->tiling) {
+   case ISL_TILING_LINEAR:
+      *mod = DRM_FORMAT_MOD_LINEAR;
+      break;
+   case ISL_TILING_X:
+      *mod = I915_FORMAT_MOD_X_TILED;
+      break;
+   case ISL_TILING_Y0:
+      *mod = I915_FORMAT_MOD_Y_TILED;
+      break;
+   case ISL_TILING_Yf:
+      *mod = I915_FORMAT_MOD_Yf_TILED;
+      break;
+   case ISL_TILING_Ys:
+   case ISL_TILING_W:
+   case ISL_TILING_HIZ:
+   case ISL_TILING_CCS:
+      return false;
+   }
+
+   return true;
+}
