@@ -26,6 +26,7 @@
 #include <stdio.h>
 
 #include "genxml/genX_bits.h"
+#include <drm_fourcc.h>
 
 #include "isl.h"
 #include "isl_gen4.h"
@@ -34,6 +35,10 @@
 #include "isl_gen8.h"
 #include "isl_gen9.h"
 #include "isl_priv.h"
+
+#ifndef DRM_FORMAT_MOD_LINEAR
+#define DRM_FORMAT_MOD_LINEAR 0 /* Linux 4.10 */
+#endif
 
 void PRINTFLIKE(3, 4) UNUSED
 __isl_finishme(const char *file, int line, const char *fmt, ...)
@@ -46,6 +51,60 @@ __isl_finishme(const char *file, int line, const char *fmt, ...)
    va_end(ap);
 
    fprintf(stderr, "%s:%d: FINISHME: %s\n", file, line, buf);
+}
+
+bool
+isl_tiling_from_drm_format_mod(uint64_t mod, enum isl_tiling *tiling,
+                               enum isl_aux_usage *aux_usage)
+{
+   switch (mod) {
+   case DRM_FORMAT_MOD_LINEAR:
+      *tiling = ISL_TILING_LINEAR;
+      *aux_usage = ISL_AUX_USAGE_NONE;
+      return true;
+   case I915_FORMAT_MOD_X_TILED:
+      *tiling = ISL_TILING_X;
+      *aux_usage = ISL_AUX_USAGE_NONE;
+      return true;
+   case I915_FORMAT_MOD_Y_TILED:
+      *tiling = ISL_TILING_Y0;
+      *aux_usage = ISL_AUX_USAGE_NONE;
+      return true;
+   case I915_FORMAT_MOD_Yf_TILED:
+      *tiling = ISL_TILING_Yf;
+      *aux_usage = ISL_AUX_USAGE_NONE;
+      return true;
+   }
+
+   return false;
+}
+
+uint64_t
+isl_tiling_to_drm_format_mod(enum isl_tiling tiling,
+                             enum isl_aux_usage aux_usage)
+{
+   /* XXX: Need to disambiguate aux surface usage; we can validly have a CCS
+    *      aux surface attached (e.g. Y_CCS modifier), but always resolve it
+    *      before usage such that sampling with no aux plane (e.g. plain Y mod)
+    *      is valid. Punt for now, and revisit when we expose aux surfaces to
+    *      external consumers. */
+
+   switch (tiling) {
+   case ISL_TILING_LINEAR:
+      return DRM_FORMAT_MOD_LINEAR;
+   case ISL_TILING_X:
+      return I915_FORMAT_MOD_X_TILED;
+   case ISL_TILING_Y0:
+      return I915_FORMAT_MOD_Y_TILED;
+   case ISL_TILING_Yf:
+      return I915_FORMAT_MOD_Yf_TILED;
+   case ISL_TILING_W:
+   case ISL_TILING_HIZ:
+   case ISL_TILING_CCS:
+      unreachable("non-color-buffer mode in isl_tiling_to_drm_format_mod");
+   }
+
+   unreachable("unknown tiling in isl_tiling_to_drm_format_mod");
 }
 
 void

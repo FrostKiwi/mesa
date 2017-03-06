@@ -1482,6 +1482,22 @@ bool
 isl_has_matching_typed_storage_image_format(const struct gen_device_info *devinfo,
                                             enum isl_format fmt);
 
+/**
+ * Map a DRM format modifier to tiling and aux usage. If the modifier is not
+ * known to ISL, return false. The output parameters are only written on
+ * success.
+ */
+bool isl_tiling_from_drm_format_mod(uint64_t mod,
+                                    enum isl_tiling *tiling,
+                                    enum isl_aux_usage *aux_usage);
+
+/**
+ * Map tiling and aux usage to a DRM format modifier to tiling and aux usage.
+ * The parameters provided must map to a valid modifier.
+ */
+uint64_t isl_tiling_to_drm_format_mod(enum isl_tiling tiling,
+                                      enum isl_aux_usage aux_usage);
+
 static inline bool
 isl_tiling_is_any_y(enum isl_tiling tiling)
 {

@@ -34,6 +34,7 @@ noinst_LTLIBRARIES += $(ISL_GEN_LIBS) isl/libisl.la
 
 isl_libisl_la_LIBADD = $(ISL_GEN_LIBS)
 isl_libisl_la_SOURCES = $(ISL_FILES) $(ISL_GENERATED_FILES)
+isl_libisl_la_CFLAGS = $(AM_CFLAGS) $(LIBDRM_CFLAGS)
 
 isl_libisl_gen4_la_SOURCES = $(ISL_GEN4_FILES)
 isl_libisl_gen4_la_CFLAGS = $(AM_CFLAGS) -DGEN_VERSIONx10=40
