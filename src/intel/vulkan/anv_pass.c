@@ -98,6 +98,7 @@ VkResult anv_CreateRenderPass(
    if (pass->subpass_attachments == NULL)
       goto fail_subpass_usages;
 
+   bool has_color = false, has_depth = false, has_input = false;
    p = pass->subpass_attachments;
    for (uint32_t i = 0; i < pCreateInfo->subpassCount; i++) {
       const VkSubpassDescription *desc = &pCreateInfo->pSubpasses[i];
@@ -115,6 +116,7 @@ VkResult anv_CreateRenderPass(
             uint32_t a = desc->pInputAttachments[j].attachment;
             subpass->input_attachments[j] = desc->pInputAttachments[j];
             if (a != VK_ATTACHMENT_UNUSED) {
+               has_input = true;
                pass->attachments[a].usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
                pass->attachments[a].subpass_usage[i] |= ANV_SUBPASS_USAGE_INPUT;
                pass->attachments[a].last_subpass_idx = i;
@@ -134,6 +136,7 @@ VkResult anv_CreateRenderPass(
             uint32_t a = desc->pColorAttachments[j].attachment;
             subpass->color_attachments[j] = desc->pColorAttachments[j];
             if (a != VK_ATTACHMENT_UNUSED) {
+               has_color = true;
                pass->attachments[a].usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
                pass->attachments[a].subpass_usage[i] |= ANV_SUBPASS_USAGE_DRAW;
                pass->attachments[a].last_subpass_idx = i;
@@ -170,6 +173,7 @@ VkResult anv_CreateRenderPass(
          *p++ = subpass->depth_stencil_attachment =
             *desc->pDepthStencilAttachment;
          if (a != VK_ATTACHMENT_UNUSED) {
+            has_depth = true;
             pass->attachments[a].usage |=
                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
             pass->attachments[a].subpass_usage[i] |= ANV_SUBPASS_USAGE_DRAW;
@@ -181,10 +185,92 @@ VkResult anv_CreateRenderPass(
       }
    }
 
+   pass->subpass_flushes =
+      vk_zalloc2(&device->alloc, pAllocator,
+                 (pass->subpass_count + 1) * sizeof(*pass->subpass_flushes),
+                 8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   if (pass->subpass_flushes == NULL)
+      goto fail_subpass_attachments;
+
+   for (uint32_t i = 0; i < pCreateInfo->dependencyCount; i++) {
+      const VkSubpassDependency *dep = &pCreateInfo->pDependencies[i];
+      if (dep->srcSubpass != VK_SUBPASS_EXTERNAL) {
+         pass->subpass_flushes[dep->dstSubpass] |=
+            anv_pipe_invalidate_bits_for_access_flags(dep->dstAccessMask);
+      }
+
+      if (dep->dstSubpass != VK_SUBPASS_EXTERNAL) {
+         pass->subpass_flushes[dep->srcSubpass + 1] |=
+            anv_pipe_flush_bits_for_access_flags(dep->srcAccessMask);
+      }
+   }
+
+   /* From the Vulkan 1.0.39 spec:
+    *
+    *    If there is no subpass dependency from VK_SUBPASS_EXTERNAL to the
+    *    first subpass that uses an attachment, then an implicit subpass
+    *    dependency exists from VK_SUBPASS_EXTERNAL to the first subpass it is
+    *    used in. The subpass dependency operates as if defined with the
+    *    following parameters:
+    *
+    *    VkSubpassDependency implicitDependency = {
+    *        .srcSubpass = VK_SUBPASS_EXTERNAL;
+    *        .dstSubpass = firstSubpass; // First subpass attachment is used in
+    *        .srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    *        .dstStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    *        .srcAccessMask = 0;
+    *        .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
+    *                         VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+    *                         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+    *                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+    *                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    *        .dependencyFlags = 0;
+    *    };
+    *
+    *    Similarly, if there is no subpass dependency from the last subpass
+    *    that uses an attachment to VK_SUBPASS_EXTERNAL, then an implicit
+    *    subpass dependency exists from the last subpass it is used in to
+    *    VK_SUBPASS_EXTERNAL. The subpass dependency operates as if defined
+    *    with the following parameters:
+    *
+    *    VkSubpassDependency implicitDependency = {
+    *        .srcSubpass = lastSubpass; // Last subpass attachment is used in
+    *        .dstSubpass = VK_SUBPASS_EXTERNAL;
+    *        .srcStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    *        .dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    *        .srcAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
+    *                         VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+    *                         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+    *                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+    *                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    *        .dstAccessMask = 0;
+    *        .dependencyFlags = 0;
+    *    };
+    *
+    * We could implement this by walking over all of the attachments and
+    * subpasses and checking to see if any of them don't have an external
+    * dependency.  Or, we could just be lazy and add a couple extra flushes.
+    * We choose to be lazy.
+    */
+   if (has_input) {
+      pass->subpass_flushes[0] |=
+         ANV_PIPE_TEXTURE_CACHE_INVALIDATE_BIT;
+   }
+   if (has_color) {
+      pass->subpass_flushes[pass->subpass_count] |=
+         ANV_PIPE_RENDER_TARGET_CACHE_FLUSH_BIT;
+   }
+   if (has_depth) {
+      pass->subpass_flushes[pass->subpass_count] |=
+         ANV_PIPE_DEPTH_CACHE_FLUSH_BIT;
+   }
+
    *pRenderPass = anv_render_pass_to_handle(pass);
 
    return VK_SUCCESS;
 
+fail_subpass_attachments:
+   vk_free2(&device->alloc, pAllocator, pass->subpass_attachments);
 fail_subpass_usages:
    vk_free2(&device->alloc, pAllocator, pass->subpass_usages);
 fail_pass:
