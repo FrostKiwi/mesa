@@ -59,10 +59,8 @@ VkResult anv_CreateRenderPass(
                  pass->subpass_count * pass->attachment_count *
                                        sizeof(*pass->subpass_usages),
                  8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   if (pass->subpass_usages == NULL) {
-      vk_free2(&device->alloc, pAllocator, pass);
-      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
-   }
+   if (pass->subpass_usages == NULL)
+      goto fail_pass;
 
    enum anv_subpass_usage *usages = pass->subpass_usages;
    for (uint32_t i = 0; i < pCreateInfo->attachmentCount; i++) {
@@ -97,11 +95,8 @@ VkResult anv_CreateRenderPass(
       vk_alloc2(&device->alloc, pAllocator,
                  subpass_attachment_count * sizeof(VkAttachmentReference), 8,
                  VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   if (pass->subpass_attachments == NULL) {
-      vk_free2(&device->alloc, pAllocator, pass->subpass_usages);
-      vk_free2(&device->alloc, pAllocator, pass);
-      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
-   }
+   if (pass->subpass_attachments == NULL)
+      goto fail_subpass_usages;
 
    p = pass->subpass_attachments;
    for (uint32_t i = 0; i < pCreateInfo->subpassCount; i++) {
@@ -189,6 +184,13 @@ VkResult anv_CreateRenderPass(
    *pRenderPass = anv_render_pass_to_handle(pass);
 
    return VK_SUCCESS;
+
+fail_subpass_usages:
+   vk_free2(&device->alloc, pAllocator, pass->subpass_usages);
+fail_pass:
+   vk_free2(&device->alloc, pAllocator, pass);
+
+   return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 }
 
 void anv_DestroyRenderPass(
