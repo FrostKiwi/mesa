@@ -98,6 +98,8 @@ enum brw_pixel_shader_computed_depth_mode {
 #define URB_WRITE_PRIM_START		0x2
 #define URB_WRITE_PRIM_TYPE_SHIFT	2
 
+#define BRW_SPRITE_POINT_ENABLE  16
+
 # define GEN7_GS_CONTROL_DATA_FORMAT_GSCTL_CUT		0
 # define GEN7_GS_CONTROL_DATA_FORMAT_GSCTL_SID		1
 

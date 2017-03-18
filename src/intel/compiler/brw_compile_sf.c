@@ -1,45 +1,71 @@
 /*
- Copyright (C) Intel Corp.  2006.  All Rights Reserved.
- Intel funded Tungsten Graphics to
- develop this 3D driver.
+ * Copyright © 2006 - 2017 Intel Corporation
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice (including the next
+ * paragraph) shall be included in all copies or substantial portions of the
+ * Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
 
- Permission is hereby granted, free of charge, to any person obtaining
- a copy of this software and associated documentation files (the
- "Software"), to deal in the Software without restriction, including
- without limitation the rights to use, copy, modify, merge, publish,
- distribute, sublicense, and/or sell copies of the Software, and to
- permit persons to whom the Software is furnished to do so, subject to
- the following conditions:
+#include "brw_compiler.h"
+#include "brw_eu.h"
 
- The above copyright notice and this permission notice (including the
- next paragraph) shall be included in all copies or substantial
- portions of the Software.
+struct brw_sf_compile {
+   struct brw_codegen func;
+   struct brw_sf_prog_key key;
+   struct brw_sf_prog_data prog_data;
 
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
- IN NO EVENT SHALL THE COPYRIGHT OWNER(S) AND/OR ITS SUPPLIERS BE
- LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
- OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+   struct brw_reg pv;
+   struct brw_reg det;
+   struct brw_reg dx0;
+   struct brw_reg dx2;
+   struct brw_reg dy0;
+   struct brw_reg dy2;
 
- **********************************************************************/
- /*
-  * Authors:
-  *   Keith Whitwell <keithw@vmware.com>
-  */
+   /* z and 1/w passed in seperately:
+    */
+   struct brw_reg z[3];
+   struct brw_reg inv_w[3];
 
+   /* The vertices:
+    */
+   struct brw_reg vert[3];
 
-#include "main/macros.h"
-#include "main/enums.h"
+    /* Temporaries, allocated after last vertex reg.
+    */
+   struct brw_reg inv_det;
+   struct brw_reg a1_sub_a0;
+   struct brw_reg a2_sub_a0;
+   struct brw_reg tmp;
 
-#include "intel_batchbuffer.h"
+   struct brw_reg m1Cx;
+   struct brw_reg m2Cy;
+   struct brw_reg m3C0;
 
-#include "brw_defines.h"
-#include "brw_context.h"
-#include "brw_util.h"
-#include "brw_sf.h"
+   GLuint nr_verts;
+   GLuint nr_attr_regs;
+   GLuint nr_setup_regs;
+   int urb_entry_read_offset;
 
+   /** The last known value of the f0.0 flag register. */
+   unsigned flag_value;
+
+   struct brw_vue_map vue_map;
+};
 
 /**
  * Determine the vue slot corresponding to the given half of the given register.
@@ -119,7 +145,7 @@ static void do_twoside_color( struct brw_sf_compile *c )
 
    /* Already done in clip program:
     */
-   if (c->key.primitive == SF_UNFILLED_TRIS)
+   if (c->key.primitive == BRW_SF_PRIM_UNFILLED_TRIS)
       return;
 
    /* If the vertex shader provides backface color, do the selection. The VS
@@ -195,7 +221,7 @@ static void do_flatshade_triangle( struct brw_sf_compile *c )
 
    /* Already done in clip program:
     */
-   if (c->key.primitive == SF_UNFILLED_TRIS)
+   if (c->key.primitive == BRW_SF_PRIM_UNFILLED_TRIS)
       return;
 
    if (p->devinfo->gen == 5)
@@ -227,7 +253,7 @@ static void do_flatshade_line( struct brw_sf_compile *c )
 
    /* Already done in clip program:
     */
-   if (c->key.primitive == SF_UNFILLED_TRIS)
+   if (c->key.primitive == BRW_SF_PRIM_UNFILLED_TRIS)
       return;
 
    if (p->devinfo->gen == 5)
@@ -410,7 +436,7 @@ set_predicate_control_flag_value(struct brw_codegen *p,
    }
 }
 
-void brw_emit_tri_setup(struct brw_sf_compile *c, bool allocate)
+static void brw_emit_tri_setup(struct brw_sf_compile *c, bool allocate)
 {
    struct brw_codegen *p = &c->func;
    GLuint i;
@@ -499,7 +525,7 @@ void brw_emit_tri_setup(struct brw_sf_compile *c, bool allocate)
 
 
 
-void brw_emit_line_setup(struct brw_sf_compile *c, bool allocate)
+static void brw_emit_line_setup(struct brw_sf_compile *c, bool allocate)
 {
    struct brw_codegen *p = &c->func;
    GLuint i;
@@ -571,7 +597,7 @@ void brw_emit_line_setup(struct brw_sf_compile *c, bool allocate)
    brw_set_default_predicate_control(p, BRW_PREDICATE_NONE);
 }
 
-void brw_emit_point_sprite_setup(struct brw_sf_compile *c, bool allocate)
+static void brw_emit_point_sprite_setup(struct brw_sf_compile *c, bool allocate)
 {
    struct brw_codegen *p = &c->func;
    GLuint i;
@@ -663,7 +689,7 @@ void brw_emit_point_sprite_setup(struct brw_sf_compile *c, bool allocate)
 /* Points setup - several simplifications as all attributes are
  * constant across the face of the point (point sprites excluded!)
  */
-void brw_emit_point_setup(struct brw_sf_compile *c, bool allocate)
+static void brw_emit_point_setup(struct brw_sf_compile *c, bool allocate)
 {
    struct brw_codegen *p = &c->func;
    GLuint i;
@@ -722,7 +748,7 @@ void brw_emit_point_setup(struct brw_sf_compile *c, bool allocate)
    brw_set_default_predicate_control(p, BRW_PREDICATE_NONE);
 }
 
-void brw_emit_anyprim_setup( struct brw_sf_compile *c )
+static void brw_emit_anyprim_setup( struct brw_sf_compile *c )
 {
    struct brw_codegen *p = &c->func;
    struct brw_reg payload_prim = brw_uw1_reg(BRW_GENERAL_REGISTER_FILE, 1, 0);
@@ -771,6 +797,72 @@ void brw_emit_anyprim_setup( struct brw_sf_compile *c )
    brw_emit_point_setup( c, false );
 }
 
+const unsigned *
+brw_compile_sf(struct brw_compiler *compiler,
+               void *mem_ctx,
+               const struct brw_sf_prog_key *key,
+               struct brw_sf_prog_data *prog_data,
+               struct brw_vue_map *vue_map,
+               unsigned *final_assembly_size)
+{
+   struct brw_sf_compile c;
+   memset(&c, 0, sizeof(c));
 
+   /* Begin the compilation:
+    */
+   brw_init_codegen(compiler->devinfo, &c.func, mem_ctx);
 
+   c.key = *key;
+   c.vue_map = *vue_map;
+   if (c.key.do_point_coord) {
+      /*
+       * gl_PointCoord is a FS instead of VS builtin variable, thus it's
+       * not included in c.vue_map generated in VS stage. Here we add
+       * it manually to let SF shader generate the needed interpolation
+       * coefficient for FS shader.
+       */
+      c.vue_map.varying_to_slot[BRW_VARYING_SLOT_PNTC] = c.vue_map.num_slots;
+      c.vue_map.slot_to_varying[c.vue_map.num_slots++] = BRW_VARYING_SLOT_PNTC;
+   }
+   c.urb_entry_read_offset = BRW_SF_URB_ENTRY_READ_OFFSET;
+   c.nr_attr_regs = (c.vue_map.num_slots + 1)/2 - c.urb_entry_read_offset;
+   c.nr_setup_regs = c.nr_attr_regs;
 
+   c.prog_data.urb_read_length = c.nr_attr_regs;
+   c.prog_data.urb_entry_size = c.nr_setup_regs * 2;
+
+   /* Which primitive?  Or all three?
+    */
+   switch (key->primitive) {
+   case BRW_SF_PRIM_TRIANGLES:
+      c.nr_verts = 3;
+      brw_emit_tri_setup( &c, true );
+      break;
+   case BRW_SF_PRIM_LINES:
+      c.nr_verts = 2;
+      brw_emit_line_setup( &c, true );
+      break;
+   case BRW_SF_PRIM_POINTS:
+      c.nr_verts = 1;
+      if (key->do_point_sprite)
+	  brw_emit_point_sprite_setup( &c, true );
+      else
+	  brw_emit_point_setup( &c, true );
+      break;
+   case BRW_SF_PRIM_UNFILLED_TRIS:
+      c.nr_verts = 3;
+      brw_emit_anyprim_setup( &c );
+      break;
+   default:
+      unreachable("not reached");
+   }
+
+   /* FINISHME: SF programs use calculated jumps (i.e., JMPI with a register
+    * source). Compacting would be difficult.
+    */
+   /* brw_compact_instructions(&c.func, 0, 0, NULL); */
+
+   *prog_data = c.prog_data;
+
+   return brw_get_program(&c.func, final_assembly_size);
+}
