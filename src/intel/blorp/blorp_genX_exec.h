@@ -207,13 +207,15 @@ blorp_emit_vertex_buffers(struct blorp_batch *batch,
    blorp_emit_vertex_data(batch, params, &vb[0].BufferStartingAddress, &size);
    vb[0].VertexBufferIndex = 0;
    vb[0].BufferPitch = 3 * sizeof(float);
+#if GEN_GEN >= 5
    vb[0].VertexBufferMOCS = batch->blorp->mocs.vb;
+#endif
 #if GEN_GEN >= 7
    vb[0].AddressModifyEnable = true;
 #endif
 #if GEN_GEN >= 8
    vb[0].BufferSize = size;
-#else
+#elif GEN_GEN >= 5
    vb[0].BufferAccessType = VERTEXDATA;
    vb[0].EndAddress = vb[0].BufferStartingAddress;
    vb[0].EndAddress.offset += size - 1;
@@ -223,13 +225,15 @@ blorp_emit_vertex_buffers(struct blorp_batch *batch,
                                  &vb[1].BufferStartingAddress, &size);
    vb[1].VertexBufferIndex = 1;
    vb[1].BufferPitch = 0;
+#if GEN_GEN >= 5
    vb[1].VertexBufferMOCS = batch->blorp->mocs.vb;
+#endif
 #if GEN_GEN >= 7
    vb[1].AddressModifyEnable = true;
 #endif
 #if GEN_GEN >= 8
    vb[1].BufferSize = size;
-#else
+#elif GEN_GEN >= 5
    vb[1].BufferAccessType = INSTANCEDATA;
    vb[1].EndAddress = vb[1].BufferStartingAddress;
    vb[1].EndAddress.offset += size - 1;
@@ -315,8 +319,10 @@ blorp_emit_vertex_elements(struct blorp_batch *batch,
     */
 #if GEN_GEN >= 8
    ve[0].Component1Control = VFCOMP_STORE_0;
-#else
+#elif GEN_GEN >= 5
    ve[0].Component1Control = VFCOMP_STORE_IID;
+#else
+   ve[0].Component1Control = VFCOMP_STORE_0;
 #endif
    ve[0].Component2Control = VFCOMP_STORE_SRC;
    ve[0].Component3Control = VFCOMP_STORE_SRC;
@@ -434,7 +440,9 @@ blorp_emit_null_surface_state(struct blorp_batch *batch,
       .MinimumArrayElement = surface->view.base_array_layer,
       .Depth = surface->view.array_len - 1,
       .RenderTargetViewExtent = surface->view.array_len - 1,
+#if GEN_GEN >= 5
       .NumberofMultisamples = ffs(surface->surf.samples) - 1,
+#endif
 
 #if GEN_GEN >= 7
       .SurfaceArray = surface->surf.dim != ISL_SURF_DIM_3D,
@@ -497,9 +505,13 @@ blorp_emit_surface_states(struct blorp_batch *batch,
    blorp_emit(batch, GENX(3DSTATE_BINDING_TABLE_POINTERS_PS), bt) {
       bt.PointertoPSBindingTable = bind_offset;
    }
-#else
+#elif GEN_GEN >= 5
    blorp_emit(batch, GENX(3DSTATE_BINDING_TABLE_POINTERS), bt) {
       bt.PSBindingTableChange = true;
+      bt.PointertoPSBindingTable = bind_offset;
+   }
+#else
+   blorp_emit(batch, GENX(3DSTATE_BINDING_TABLE_POINTERS), bt) {
       bt.PointertoPSBindingTable = bind_offset;
    }
 #endif
