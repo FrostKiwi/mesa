@@ -517,6 +517,10 @@ blorp_emit_surface_states(struct blorp_batch *batch,
 #endif
 }
 
-#include "blorp_gen6_exec_priv.h"
+#if GEN_GEN >= 6
+#  include "blorp_gen6_exec_priv.h"
+#else
+#  include "blorp_gen4_exec_priv.h"
+#endif
 
 #endif /* BLORP_GENX_EXEC_H */
