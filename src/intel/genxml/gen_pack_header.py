@@ -168,6 +168,31 @@ __gen_ufixed(float v, uint32_t start, uint32_t end, uint32_t fract_bits)
 #error #define __gen_combine_address before including this file
 #endif
 
+static inline uint64_t
+__gen_address(__gen_user_data *data, void *location, __gen_address_type addr,
+              uint32_t delta, uint32_t start, uint32_t end)
+{
+   __gen_validate_value(addr);
+
+   uint64_t offset = __gen_combine_address(data, location, addr, delta);
+
+   if (end >= 32) {
+      /* From the Broadwell PRM Vol. 2a, MI_LOAD_REGISTER_MEM::MemoryAddress:
+       *
+       *    "This field specifies the address of the memory location where the
+       *    register value specified in the DWord above will read from. The
+       *    address specifies the DWord location of the data. Range =
+       *    GraphicsVirtualAddress[63:2] for a DWord register GraphicsAddress
+       *    [63:48] are ignored by the HW and assumed to be in correct
+       *    canonical form [63:48] == [47]."
+       */
+      const int shift = 63 - 47;
+      return (((int64_t)offset) << shift) >> shift;
+   } else {
+      return offset;
+   }
+}
+
 #endif
 
 """
@@ -462,13 +487,16 @@ class Group(object):
 
             if dw.size == 32:
                 if dw.address:
-                    print("   dw[%d] = __gen_combine_address(data, &dw[%d], values->%s, %s);" % (index, index, dw.address.name, v))
+                    print("   dw[%d] = __gen_address(data, &dw[%d], values->%s, %s, %d, %d);" % \
+                          (index, index, dw.address.name, v,
+                           dw.address.start - dword_start, dw.address.end - dword_start))
                 continue
 
             if dw.address:
                 v_address = "v%d_address" % index
-                print("   const uint64_t %s =\n      __gen_combine_address(data, &dw[%d], values->%s, %s);" %
-                      (v_address, index, dw.address.name, v))
+                print("   const uint64_t %s =\n      __gen_address(data, &dw[%d], values->%s, %s, %d, %d);" %
+                      (v_address, index, dw.address.name, v,
+                       dw.address.start - dword_start, dw.address.end - dword_start))
                 v = v_address
 
             print("   dw[%d] = %s;" % (index, v))
