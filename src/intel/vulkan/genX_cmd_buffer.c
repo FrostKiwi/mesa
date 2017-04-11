@@ -155,7 +155,7 @@ genX(cmd_buffer_emit_state_base_address)(struct anv_cmd_buffer *cmd_buffer)
 static void
 add_surface_state_reloc(struct anv_cmd_buffer *cmd_buffer,
                         struct anv_state state,
-                        struct anv_bo *bo, uint32_t offset)
+                        struct anv_bo *bo, uint64_t offset)
 {
    const struct isl_device *isl_dev = &cmd_buffer->device->isl_dev;
 

@@ -788,8 +788,8 @@ void anv_reloc_list_finish(struct anv_reloc_list *list,
 
 VkResult anv_reloc_list_add(struct anv_reloc_list *list,
                             const VkAllocationCallbacks *alloc,
-                            uint32_t offset, struct anv_bo *target_bo,
-                            uint32_t delta);
+                            uint64_t offset, struct anv_bo *target_bo,
+                            int64_t delta);
 
 struct anv_batch_bo {
    /* Link in the anv_cmd_buffer.owned_batch_bos list */
@@ -831,7 +831,8 @@ struct anv_batch {
 void *anv_batch_emit_dwords(struct anv_batch *batch, int num_dwords);
 void anv_batch_emit_batch(struct anv_batch *batch, struct anv_batch *other);
 uint64_t anv_batch_emit_reloc(struct anv_batch *batch,
-                              void *location, struct anv_bo *bo, uint32_t offset);
+                              void *location, struct anv_bo *bo,
+                              int64_t offset);
 VkResult anv_device_submit_simple_batch(struct anv_device *device,
                                         struct anv_batch *batch);
 
@@ -852,7 +853,7 @@ anv_batch_has_error(struct anv_batch *batch)
 
 struct anv_address {
    struct anv_bo *bo;
-   uint32_t offset;
+   int64_t offset;
 };
 
 static inline uint64_t
@@ -1063,7 +1064,7 @@ struct anv_descriptor_set {
 struct anv_buffer_view {
    enum isl_format format; /**< VkBufferViewCreateInfo::format */
    struct anv_bo *bo;
-   uint32_t offset; /**< Offset into bo. */
+   uint64_t offset; /**< Offset into bo. */
    uint64_t range; /**< VkBufferViewCreateInfo::range */
 
    struct anv_state surface_state;
@@ -1226,7 +1227,7 @@ struct anv_buffer {
 
    /* Set when bound */
    struct anv_bo *                              bo;
-   VkDeviceSize                                 offset;
+   uint64_t                                     offset;
 };
 
 static inline uint64_t
@@ -1942,7 +1943,7 @@ struct anv_image {
 
    /* Set when bound */
    struct anv_bo *bo;
-   VkDeviceSize offset;
+   uint64_t offset;
 
    /**
     * Image subsurfaces
@@ -2019,7 +2020,7 @@ anv_get_levelCount(const struct anv_image *image,
 struct anv_image_view {
    const struct anv_image *image; /**< VkImageViewCreateInfo::image */
    struct anv_bo *bo;
-   uint32_t offset; /**< Offset into bo. */
+   uint64_t offset; /**< Offset into bo. */
 
    struct isl_view isl;
 

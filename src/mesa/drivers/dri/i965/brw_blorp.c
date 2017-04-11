@@ -111,7 +111,7 @@ static void
 apply_gen6_stencil_hiz_offset(struct isl_surf *surf,
                               struct intel_mipmap_tree *mt,
                               uint32_t lod,
-                              uint32_t *offset)
+                              uint64_t *offset)
 {
    assert(mt->array_layout == ALL_SLICES_AT_EACH_LOD);
 

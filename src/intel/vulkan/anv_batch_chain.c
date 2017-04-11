@@ -143,10 +143,17 @@ anv_reloc_list_grow(struct anv_reloc_list *list,
 VkResult
 anv_reloc_list_add(struct anv_reloc_list *list,
                    const VkAllocationCallbacks *alloc,
-                   uint32_t offset, struct anv_bo *target_bo, uint32_t delta)
+                   uint64_t offset, struct anv_bo *target_bo,
+                   int64_t delta)
 {
    struct drm_i915_gem_relocation_entry *entry;
    int index;
+
+   /* The drm_i915_gem_relocation_entry::delta field is a u32 but the kernel
+    * actually interprets it as a signed 32-bit value.  We need to ensure that
+    * the delta value is in-range so it doesn't wrap unexpectedly.
+    */
+   assert(delta >= INT32_MIN && delta <= INT32_MAX);
 
    const uint32_t domain =
       (target_bo->flags & EXEC_OBJECT_WRITE) ? I915_GEM_DOMAIN_RENDER : 0;
@@ -216,7 +223,8 @@ anv_batch_emit_dwords(struct anv_batch *batch, int num_dwords)
 
 uint64_t
 anv_batch_emit_reloc(struct anv_batch *batch,
-                     void *location, struct anv_bo *bo, uint32_t delta)
+                     void *location, struct anv_bo *bo,
+                     int64_t delta)
 {
    VkResult result = anv_reloc_list_add(batch->relocs, batch->alloc,
                                         location - batch->start, bo, delta);

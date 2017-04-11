@@ -91,7 +91,7 @@ struct blorp_address {
    void *buffer;
    uint32_t read_domains;
    uint32_t write_domain;
-   uint32_t offset;
+   uint64_t offset;
 };
 
 struct blorp_surf
