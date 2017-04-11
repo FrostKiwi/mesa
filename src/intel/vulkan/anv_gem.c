@@ -368,3 +368,82 @@ anv_gem_sync_file_merge(struct anv_device *device, int fd1, int fd2)
 
    return args.fence;
 }
+
+#define DRM_IOCTL_SYNCOBJ_CREATE	DRM_IOWR(0xBF, struct drm_syncobj_create_info)
+#define DRM_IOCTL_SYNCOBJ_DESTROY	DRM_IOWR(0xC0, struct drm_syncobj_destroy)
+#define DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD	DRM_IOWR(0xC1, struct drm_syncobj_handle)
+#define DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE	DRM_IOWR(0xC2, struct drm_syncobj_handle)
+#define DRM_IOCTL_SYNCOBJ_INFO		DRM_IOWR(0xC3, struct drm_syncobj_create_info)
+
+struct drm_syncobj_create_info {
+	__u32 handle;
+	__u32 type;
+	__u32 flags;
+	__u32 pad;
+};
+
+struct drm_syncobj_destroy {
+	__u32 handle;
+	__u32 pad;
+};
+
+struct drm_syncobj_handle {
+	__u32 handle;
+	/** Flags.. only applicable for handle->fd */
+	__u32 flags;
+
+	__s32 fd;
+};
+
+uint32_t
+anv_gem_syncobj_create(struct anv_device *device)
+{
+   struct drm_syncobj_create_info args = {
+      .type = 1 /* SYNC_FILE_TYPE_SEMAPHORE */,
+      .flags = 0,
+   };
+
+   int ret = anv_ioctl(device->fd, DRM_IOCTL_SYNCOBJ_CREATE, &args);
+   if (ret)
+      return 0;
+
+   return args.handle;
+}
+
+void
+anv_gem_syncobj_close(struct anv_device *device, uint32_t handle)
+{
+   struct drm_syncobj_destroy args = {
+      .handle = handle,
+   };
+
+   anv_ioctl(device->fd, DRM_IOCTL_SYNCOBJ_DESTROY, &args);
+}
+
+int
+anv_gem_syncobj_handle_to_fd(struct anv_device *device, uint32_t handle)
+{
+   struct drm_syncobj_handle args = {
+      .handle = handle,
+   };
+
+   int ret = anv_ioctl(device->fd, DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD, &args);
+   if (ret)
+      return -1;
+
+   return args.fd;
+}
+
+uint32_t
+anv_gem_syncobj_fd_to_handle(struct anv_device *device, int fd)
+{
+   struct drm_syncobj_handle args = {
+      .fd = fd,
+   };
+
+   int ret = anv_ioctl(device->fd, DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE, &args);
+   if (ret)
+      return 0;
+
+   return args.handle;
+}
