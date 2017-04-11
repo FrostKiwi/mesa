@@ -953,6 +953,19 @@ anv_cmd_buffer_add_secondary(struct anv_cmd_buffer *primary,
                          &secondary->surface_relocs, 0);
 }
 
+struct drm_i915_gem_exec_fence {
+	/**
+	 * User's handle for a dma-fence to wait on or signal.
+	 */
+	__u32 handle;
+
+	__u32 rsvd1;
+
+#define I915_EXEC_FENCE_WAIT            (1<<0)
+#define I915_EXEC_FENCE_SIGNAL          (1<<1)
+	__u64 flags;
+};
+
 struct anv_execbuf {
    struct drm_i915_gem_execbuffer2           execbuf;
 
@@ -962,6 +975,10 @@ struct anv_execbuf {
 
    /* Allocated length of the 'objects' and 'bos' arrays */
    uint32_t                                  array_length;
+
+   uint32_t                                  fence_count;
+   uint32_t                                  fence_array_length;
+   struct drm_i915_gem_exec_fence *          fences;
 };
 
 static void
@@ -976,6 +993,7 @@ anv_execbuf_finish(struct anv_execbuf *exec,
 {
    vk_free(alloc, exec->objects);
    vk_free(alloc, exec->bos);
+   vk_free(alloc, exec->fences);
 }
 
 static VkResult
@@ -1056,6 +1074,33 @@ anv_execbuf_add_bo(struct anv_execbuf *exec,
          anv_execbuf_add_bo(exec, relocs->reloc_bos[i], NULL, flags, alloc);
       }
    }
+
+   return VK_SUCCESS;
+}
+
+static VkResult
+anv_execbuf_add_syncobj(struct anv_execbuf *exec,
+                        uint32_t handle,
+                        uint32_t flags,
+                        const VkAllocationCallbacks *alloc)
+{
+   if (exec->fence_count >= exec->fence_array_length) {
+      uint32_t new_len = MAX2(exec->fence_array_length * 2, 64);
+
+      struct drm_i915_gem_exec_fence *new_fences =
+         vk_realloc(alloc, exec->fences, new_len * sizeof(*new_fences),
+                    8, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
+      if (new_fences == NULL)
+         return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+
+      exec->fences = new_fences;
+      exec->fence_array_length = new_len;
+   }
+
+   exec->fences[exec->fence_count] = (struct drm_i915_gem_exec_fence) {
+      .handle = handle,
+      .flags = flags,
+   };
 
    return VK_SUCCESS;
 }
@@ -1444,6 +1489,14 @@ anv_cmd_buffer_execbuf(struct anv_device *device,
          impl->fd = -1;
          break;
 
+      case ANV_SEMAPHORE_TYPE_DRM_SYNCOBJ:
+         result = anv_execbuf_add_syncobj(&execbuf, impl->syncobj,
+                                          I915_EXEC_FENCE_WAIT,
+                                          &device->alloc);
+         if (result != VK_SUCCESS)
+            return result;
+         break;
+
       default:
          break;
       }
@@ -1476,6 +1529,14 @@ anv_cmd_buffer_execbuf(struct anv_device *device,
 
       case ANV_SEMAPHORE_TYPE_SYNC_FILE:
          need_out_fence = true;
+         break;
+
+      case ANV_SEMAPHORE_TYPE_DRM_SYNCOBJ:
+         result = anv_execbuf_add_syncobj(&execbuf, impl->syncobj,
+                                          I915_EXEC_FENCE_SIGNAL,
+                                          &device->alloc);
+         if (result != VK_SUCCESS)
+            return result;
          break;
 
       default:

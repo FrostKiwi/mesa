@@ -616,6 +616,7 @@ struct anv_device {
     int                                         fd;
     bool                                        can_chain_batches;
     bool                                        robust_buffer_access;
+    bool                                        has_syncobj;
 
     struct anv_bo_pool                          batch_bo_pool;
 
@@ -1550,6 +1551,7 @@ enum anv_semaphore_type {
    ANV_SEMAPHORE_TYPE_DUMMY,
    ANV_SEMAPHORE_TYPE_BO,
    ANV_SEMAPHORE_TYPE_SYNC_FILE,
+   ANV_SEMAPHORE_TYPE_DRM_SYNCOBJ,
 };
 
 struct anv_semaphore_impl {
@@ -1568,6 +1570,12 @@ struct anv_semaphore_impl {
        * created or because it has been used for a wait, fd will be -1.
        */
       int fd;
+
+      /* Sync object handle when type == AKV_SEMAPHORE_TYPE_DRM_SYNCOBJ.
+       * Unlike GEM BOs, DRM sync objects aren't deduplicated by the kernel on
+       * import so we don't need to bother with a userspace cache.
+       */
+      uint32_t syncobj;
    };
 };
 

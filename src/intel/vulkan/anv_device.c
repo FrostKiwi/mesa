@@ -1039,6 +1039,9 @@ VkResult anv_CreateDevice(
    device->robust_buffer_access = pCreateInfo->pEnabledFeatures &&
       pCreateInfo->pEnabledFeatures->robustBufferAccess;
 
+   /* FINISHME */
+   device->has_syncobj = true;
+
    if (pthread_mutex_init(&device->mutex, NULL) != 0) {
       result = vk_error(VK_ERROR_INITIALIZATION_FAILED);
       goto fail_context_id;
