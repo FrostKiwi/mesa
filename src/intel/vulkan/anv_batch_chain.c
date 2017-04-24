@@ -455,7 +455,7 @@ anv_cmd_buffer_surface_base_address(struct anv_cmd_buffer *cmd_buffer)
 {
    struct anv_state *bt_block = u_vector_head(&cmd_buffer->bt_block_states);
    return (struct anv_address) {
-      .bo = &cmd_buffer->device->surface_state_block_pool.bo,
+      .bo = &cmd_buffer->device->surface_state_pool.block_pool.bo,
       .offset = bt_block->offset,
    };
 }
@@ -632,7 +632,7 @@ anv_cmd_buffer_alloc_binding_table(struct anv_cmd_buffer *cmd_buffer,
       return (struct anv_state) { 0 };
 
    state.offset = cmd_buffer->bt_next;
-   state.map = state_pool->block_pool->map + bt_block->offset + state.offset;
+   state.map = state_pool->block_pool.map + bt_block->offset + state.offset;
 
    cmd_buffer->bt_next += state.alloc_size;
 
@@ -1091,12 +1091,12 @@ write_reloc(const struct anv_device *device, void *p, uint64_t v, bool flush)
 }
 
 static void
-adjust_relocations_from_state_pool(struct anv_block_pool *pool,
+adjust_relocations_from_state_pool(struct anv_state_pool *pool,
                                    struct anv_reloc_list *relocs,
                                    uint32_t last_pool_center_bo_offset)
 {
-   assert(last_pool_center_bo_offset <= pool->center_bo_offset);
-   uint32_t delta = pool->center_bo_offset - last_pool_center_bo_offset;
+   assert(last_pool_center_bo_offset <= pool->block_pool.center_bo_offset);
+   uint32_t delta = pool->block_pool.center_bo_offset - last_pool_center_bo_offset;
 
    for (size_t i = 0; i < relocs->num_relocs; i++) {
       /* All of the relocations from this block pool to other BO's should
@@ -1109,13 +1109,13 @@ adjust_relocations_from_state_pool(struct anv_block_pool *pool,
 }
 
 static void
-adjust_relocations_to_state_pool(struct anv_block_pool *pool,
+adjust_relocations_to_state_pool(struct anv_state_pool *pool,
                                  struct anv_bo *from_bo,
                                  struct anv_reloc_list *relocs,
                                  uint32_t last_pool_center_bo_offset)
 {
-   assert(last_pool_center_bo_offset <= pool->center_bo_offset);
-   uint32_t delta = pool->center_bo_offset - last_pool_center_bo_offset;
+   assert(last_pool_center_bo_offset <= pool->block_pool.center_bo_offset);
+   uint32_t delta = pool->block_pool.center_bo_offset - last_pool_center_bo_offset;
 
    /* When we initially emit relocations into a block pool, we don't
     * actually know what the final center_bo_offset will be so we just emit
@@ -1124,7 +1124,7 @@ adjust_relocations_to_state_pool(struct anv_block_pool *pool,
     * relocations that point to the pool bo with the correct offset.
     */
    for (size_t i = 0; i < relocs->num_relocs; i++) {
-      if (relocs->reloc_bos[i] == &pool->bo) {
+      if (relocs->reloc_bos[i] == &pool->block_pool.bo) {
          /* Adjust the delta value in the relocation to correctly
           * correspond to the new delta.  Initially, this value may have
           * been negative (if treated as unsigned), but we trust in
@@ -1138,7 +1138,8 @@ adjust_relocations_to_state_pool(struct anv_block_pool *pool,
           * use by the GPU at the moment.
           */
          assert(relocs->relocs[i].offset < from_bo->size);
-         write_reloc(pool->device, from_bo->map + relocs->relocs[i].offset,
+         write_reloc(pool->block_pool.device,
+                     from_bo->map + relocs->relocs[i].offset,
                      relocs->relocs[i].presumed_offset +
                      relocs->relocs[i].delta, false);
       }
@@ -1228,7 +1229,7 @@ relocate_cmd_buffer(struct anv_cmd_buffer *cmd_buffer,
     * given time.  The only option is to always relocate them.
     */
    anv_reloc_list_apply(cmd_buffer->device, &cmd_buffer->surface_relocs,
-                        &cmd_buffer->device->surface_state_block_pool.bo,
+                        &cmd_buffer->device->surface_state_pool.block_pool.bo,
                         true /* always relocate surface states */);
 
    /* Since we own all of the batch buffers, we know what values are stored
@@ -1252,17 +1253,17 @@ anv_cmd_buffer_execbuf(struct anv_device *device,
                        struct anv_cmd_buffer *cmd_buffer)
 {
    struct anv_batch *batch = &cmd_buffer->batch;
-   struct anv_block_pool *ss_pool =
-      &cmd_buffer->device->surface_state_block_pool;
+   struct anv_state_pool *ss_pool =
+      &cmd_buffer->device->surface_state_pool;
 
    struct anv_execbuf execbuf;
    anv_execbuf_init(&execbuf);
 
    adjust_relocations_from_state_pool(ss_pool, &cmd_buffer->surface_relocs,
                                       cmd_buffer->last_ss_pool_center);
-   VkResult result =
-      anv_execbuf_add_bo(&execbuf, &ss_pool->bo, &cmd_buffer->surface_relocs,
-                         &cmd_buffer->pool->alloc);
+   VkResult result = anv_execbuf_add_bo(&execbuf, &ss_pool->block_pool.bo,
+                                        &cmd_buffer->surface_relocs,
+                                        &cmd_buffer->pool->alloc);
    if (result != VK_SUCCESS)
       return result;
 
@@ -1284,7 +1285,7 @@ anv_cmd_buffer_execbuf(struct anv_device *device,
     * record the surface state pool center so future executions of the command
     * buffer can adjust correctly.
     */
-   cmd_buffer->last_ss_pool_center = ss_pool->center_bo_offset;
+   cmd_buffer->last_ss_pool_center = ss_pool->block_pool.center_bo_offset;
 
    struct anv_batch_bo *first_batch_bo =
       list_first_entry(&cmd_buffer->batch_bos, struct anv_batch_bo, link);
