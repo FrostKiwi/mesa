@@ -658,6 +658,12 @@ anv_fixed_size_state_pool_alloc_new(struct anv_fixed_size_state_pool *pool,
    struct anv_block_state block, old, new;
    uint32_t offset;
 
+   /* If our state is large, we don't need any sub-allocation from a block.
+    * Instead, we just grab whole (potentially large) blocks.
+    */
+   if (state_size >= block_size)
+      return anv_block_pool_alloc(block_pool, state_size);
+
  restart:
    block.u64 = __sync_fetch_and_add(&pool->block.u64, state_size);
 
@@ -708,6 +714,43 @@ anv_state_pool_alloc_no_vg(struct anv_state_pool *pool,
                          &pool->block_pool.map, &state.offset)) {
       assert(state.offset >= 0);
       goto done;
+   }
+
+   /* Try to grab a chunk from some larger bucket and split it up */
+   for (unsigned b = bucket + 1; b < ANV_STATE_BUCKETS; b++) {
+      int32_t chunk_offset;
+      if (anv_free_list_pop(&pool->buckets[b].free_list,
+                            &pool->block_pool.map, &chunk_offset)) {
+         unsigned chunk_size = anv_state_pool_get_bucket_size(b);
+
+         if (chunk_size > pool->block_size &&
+             state.alloc_size < pool->block_size) {
+            assert(chunk_size % pool->block_size == 0);
+            /* We don't want to split giant chunks into tiny chunks.  Instead,
+             * break anything bigger than a block into block-sized chunks and
+             * then break it down into bucket-sized chunks from there.  Return
+             * all but the first block of the chunk to the block bucket.
+             */
+            const uint32_t block_bucket =
+               anv_state_pool_get_bucket(pool->block_size);
+            anv_free_list_push(&pool->buckets[block_bucket].free_list,
+                               pool->block_pool.map,
+                               chunk_offset + pool->block_size,
+                               pool->block_size,
+                               (chunk_size / pool->block_size) - 1);
+            chunk_size = pool->block_size;
+         }
+
+         assert(chunk_size % state.alloc_size == 0);
+         anv_free_list_push(&pool->buckets[bucket].free_list,
+                            pool->block_pool.map,
+                            chunk_offset + state.alloc_size,
+                            state.alloc_size,
+                            (chunk_size / state.alloc_size) - 1);
+
+         state.offset = chunk_offset;
+         goto done;
+      }
    }
 
    state.offset = anv_fixed_size_state_pool_alloc_new(&pool->buckets[bucket],
