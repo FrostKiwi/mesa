@@ -1074,28 +1074,31 @@ VkResult anv_CreateDevice(
    anv_bo_pool_init(&device->batch_bo_pool, device);
 
    result = anv_block_pool_init(&device->dynamic_state_block_pool, device,
-                                16384);
+                                16384 * 16);
    if (result != VK_SUCCESS)
       goto fail_batch_bo_pool;
 
    anv_state_pool_init(&device->dynamic_state_pool,
-                       &device->dynamic_state_block_pool);
+                       &device->dynamic_state_block_pool,
+                       16384);
 
    result = anv_block_pool_init(&device->instruction_block_pool, device,
-                                1024 * 1024);
+                                1024 * 1024 * 16);
    if (result != VK_SUCCESS)
       goto fail_dynamic_state_pool;
 
    anv_state_pool_init(&device->instruction_state_pool,
-                       &device->instruction_block_pool);
+                       &device->instruction_block_pool,
+                       1024 * 1024);
 
    result = anv_block_pool_init(&device->surface_state_block_pool, device,
-                                4096);
+                                4096 * 16);
    if (result != VK_SUCCESS)
       goto fail_instruction_state_pool;
 
    anv_state_pool_init(&device->surface_state_pool,
-                       &device->surface_state_block_pool);
+                       &device->surface_state_block_pool,
+                       4096);
 
    result = anv_bo_init_new(&device->workaround_bo, device, 1024);
    if (result != VK_SUCCESS)
