@@ -804,6 +804,9 @@ dri2_setup_extensions(_EGLDisplay *disp)
    if (!dri2_bind_extensions(dri2_dpy, mandatory_core_extensions, extensions, false))
       return EGL_FALSE;
 
+   dri2_dpy->multibuffers_available &=
+      (dri2_dpy->image && dri2_dpy->image->base.version >= 15);
+
    dri2_bind_extensions(dri2_dpy, optional_core_extensions, extensions, true);
    return EGL_TRUE;
 }

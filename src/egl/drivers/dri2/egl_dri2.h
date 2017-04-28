@@ -198,6 +198,7 @@ struct dri2_egl_display
    xcb_screen_t             *screen;
    int                      swap_available;
 #ifdef HAVE_DRI3
+   int                      multibuffers_available;
    struct loader_dri3_extensions loader_dri3_ext;
 #endif
 #endif
