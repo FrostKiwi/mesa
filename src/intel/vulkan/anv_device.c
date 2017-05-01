@@ -59,7 +59,7 @@ static VkResult
 anv_compute_heap_size(int fd, uint64_t *heap_size)
 {
    uint64_t gtt_size;
-   if (anv_gem_get_context_param(fd, 0, I915_CONTEXT_PARAM_GTT_SIZE,
+   if (1 || anv_gem_get_context_param(fd, 0, I915_CONTEXT_PARAM_GTT_SIZE,
                                  &gtt_size) == -1) {
       /* If, for whatever reason, we can't actually get the GTT size from the
        * kernel (too old?) fall back to the aperture size.
