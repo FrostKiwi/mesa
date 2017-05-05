@@ -95,6 +95,32 @@ anv_gem_mmap(struct anv_device *device, uint32_t gem_handle,
    return (void *)(uintptr_t) gem_mmap.addr_ptr;
 }
 
+/**
+ * Wrapper around DRM_IOCTL_I915_GEM_MMAP_GTT.
+ */
+void*
+anv_gem_mmap_gtt(struct anv_device *device, uint32_t gem_handle,
+                 uint64_t offset, uint64_t size)
+{
+   struct drm_i915_gem_mmap_gtt mmap_gtt = {
+      .handle = gem_handle,
+   };
+
+   int ret = anv_ioctl(device->fd, DRM_IOCTL_I915_GEM_MMAP_GTT, &mmap_gtt);
+   if (ret != 0)
+      return MAP_FAILED;
+
+   assert(mmap_gtt.offset % 4095);
+
+#ifdef __LP64__
+   return mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
+               device->fd, mmap_gtt.offset);
+#else
+   return mmap2(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                device->fd, mmap_gtt.offset >> 12);
+#endif
+}
+
 /* This is just a wrapper around munmap, but it also notifies valgrind that
  * this map is no longer valid.  Pair this with anv_gem_mmap().
  */

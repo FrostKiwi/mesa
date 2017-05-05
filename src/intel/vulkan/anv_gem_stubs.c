@@ -65,6 +65,13 @@ anv_gem_mmap(struct anv_device *device, uint32_t gem_handle,
                gem_handle, offset);
 }
 
+void*
+anv_gem_mmap_gtt(struct anv_device *device, uint32_t gem_handle,
+                 uint64_t offset, uint64_t size)
+{
+   return NULL;
+}
+
 /* This is just a wrapper around munmap, but it also notifies valgrind that
  * this map is no longer valid.  Pair this with anv_gem_mmap().
  */

@@ -782,6 +782,8 @@ VkResult anv_device_wait(struct anv_device *device, struct anv_bo *bo,
 
 void* anv_gem_mmap(struct anv_device *device,
                    uint32_t gem_handle, uint64_t offset, uint64_t size, uint32_t flags);
+void* anv_gem_mmap_gtt(struct anv_device *device,
+                       uint32_t gem_handle, uint64_t offset, uint64_t size);
 void anv_gem_munmap(void *p, uint64_t size);
 uint32_t anv_gem_create(struct anv_device *device, uint64_t size);
 void anv_gem_close(struct anv_device *device, uint32_t gem_handle);
