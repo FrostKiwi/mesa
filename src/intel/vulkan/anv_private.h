@@ -400,7 +400,7 @@ anv_bo_init(struct anv_bo *bo, uint32_t gem_handle, uint64_t size)
 {
    bo->gem_handle = gem_handle;
    bo->index = 0;
-   bo->offset = -1;
+   bo->offset = 0;
    bo->size = size;
    bo->map = NULL;
    bo->flags = 0;

@@ -1203,28 +1203,10 @@ anv_reloc_list_apply(struct anv_device *device,
  * probably the fastest mechanism for doing relocations since the kernel would
  * have to make a full copy of all the relocations lists.
  */
-static bool
+static void
 relocate_cmd_buffer(struct anv_cmd_buffer *cmd_buffer,
                     struct anv_execbuf *exec)
 {
-   static int userspace_relocs = -1;
-   if (userspace_relocs < 0)
-      userspace_relocs = env_var_as_boolean("ANV_USERSPACE_RELOCS", true);
-   if (!userspace_relocs)
-      return false;
-
-   /* First, we have to check to see whether or not we can even do the
-    * relocation.  New buffers which have never been submitted to the kernel
-    * don't have a valid offset so we need to let the kernel do relocations so
-    * that we can get offsets for them.  On future execbuf2 calls, those
-    * buffers will have offsets and we will be able to skip relocating.
-    * Invalid offsets are indicated by anv_bo::offset == (uint64_t)-1.
-    */
-   for (uint32_t i = 0; i < exec->bo_count; i++) {
-      if (exec->bos[i]->offset == (uint64_t)-1)
-         return false;
-   }
-
    /* Since surface states are shared between command buffers and we don't
     * know what order they will be submitted to the kernel, we don't know
     * what address is actually written in the surface state object at any
@@ -1246,8 +1228,6 @@ relocate_cmd_buffer(struct anv_cmd_buffer *cmd_buffer,
 
    for (uint32_t i = 0; i < exec->bo_count; i++)
       exec->objects[i].offset = exec->bos[i]->offset;
-
-   return true;
 }
 
 static VkResult
@@ -1332,55 +1312,40 @@ setup_execbuf_for_cmd_buffer(struct anv_execbuf *execbuf,
       .buffer_count = execbuf->bo_count,
       .batch_start_offset = 0,
       .batch_len = batch->next - batch->start,
-      .cliprects_ptr = 0,
-      .num_cliprects = 0,
-      .DR1 = 0,
-      .DR4 = 0,
-      .flags = I915_EXEC_HANDLE_LUT | I915_EXEC_RENDER |
-               I915_EXEC_CONSTANTS_REL_GENERAL,
+      .flags =
+	      I915_EXEC_RENDER |
+	      I915_EXEC_HANDLE_LUT |
+	      I915_EXEC_NO_RELOC |
+	      I915_EXEC_CONSTANTS_REL_GENERAL,
       .rsvd1 = cmd_buffer->device->context_id,
       .rsvd2 = 0,
    };
 
-   if (relocate_cmd_buffer(cmd_buffer, execbuf)) {
-      /* If we were able to successfully relocate everything, tell the kernel
-       * that it can skip doing relocations. The requirement for using
-       * NO_RELOC is:
-       *
-       *  1) The addresses written in the objects must match the corresponding
-       *     reloc.presumed_offset which in turn must match the corresponding
-       *     execobject.offset.
-       *
-       *  2) To avoid stalling, execobject.offset should match the current
-       *     address of that object within the active context.
-       *
-       * In order to satisfy all of the invariants that make userspace
-       * relocations to be safe (see relocate_cmd_buffer()), we need to
-       * further ensure that the addresses we use match those used by the
-       * kernel for the most recent execbuf2.
-       *
-       * The kernel may still choose to do relocations anyway if something has
-       * moved in the GTT. In this case, the relocation list still needs to be
-       * valid.  All relocations on the batch buffers are already valid and
-       * kept up-to-date.  For surface state relocations, by applying the
-       * relocations in relocate_cmd_buffer, we ensured that the address in
-       * the RENDER_SURFACE_STATE matches presumed_offset, so it should be
-       * safe for the kernel to relocate them as needed.
-       */
-      execbuf->execbuf.flags |= I915_EXEC_NO_RELOC;
-   } else {
-      /* In the case where we fall back to doing kernel relocations, we need
-       * to ensure that the relocation list is valid.  All relocations on the
-       * batch buffers are already valid and kept up-to-date.  Since surface
-       * states are shared between command buffers and we don't know what
-       * order they will be submitted to the kernel, we don't know what
-       * address is actually written in the surface state object at any given
-       * time.  The only option is to set a bogus presumed offset and let the
-       * kernel relocate them.
-       */
-      for (size_t i = 0; i < cmd_buffer->surface_relocs.num_relocs; i++)
-         cmd_buffer->surface_relocs.relocs[i].presumed_offset = -1;
-   }
+   /* If we were able to successfully relocate everything, tell the kernel
+    * that it can skip doing relocations. The requirement for using
+    * NO_RELOC is:
+    *
+    *  1) The addresses written in the objects must match the corresponding
+    *     reloc.presumed_offset which in turn must match the corresponding
+    *     execobject.offset.
+    *
+    *  2) To avoid stalling, execobject.offset should match the current
+    *     address of that object within the active context.
+    *
+    * In order to satisfy all of the invariants that make userspace
+    * relocations to be safe (see relocate_cmd_buffer()), we need to
+    * further ensure that the addresses we use match those used by the
+    * kernel for the most recent execbuf2.
+    *
+    * The kernel may still choose to do relocations anyway if something has
+    * moved in the GTT. In this case, the relocation list still needs to be
+    * valid.  All relocations on the batch buffers are already valid and
+    * kept up-to-date.  For surface state relocations, by applying the
+    * relocations in relocate_cmd_buffer, we ensured that the address in
+    * the RENDER_SURFACE_STATE matches presumed_offset, so it should be
+    * safe for the kernel to relocate them as needed.
+    */
+   relocate_cmd_buffer(cmd_buffer, execbuf);
 
    return VK_SUCCESS;
 }
