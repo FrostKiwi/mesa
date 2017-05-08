@@ -131,6 +131,13 @@ VkResult anv_QueueSubmit(
    if (result != VK_SUCCESS)
       return result;
 
+   __builtin_ia32_mfence();
+   volatile uint32_t *wa_data = queue->device->workaround_bo.map;
+   *wa_data = 42;
+   assert(*wa_data == 42);
+   __builtin_ia32_mfence();
+   __builtin_ia32_clflush(wa_data);
+
    /* We lock around QueueSubmit for three main reasons:
     *
     *  1) When a block pool is resized, we create a new gem handle with a

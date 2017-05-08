@@ -1125,6 +1125,11 @@ VkResult anv_CreateDevice(
    if (result != VK_SUCCESS)
       goto fail_surface_state_pool;
 
+   device->workaround_bo.map =
+      anv_gem_mmap_gtt(device, device->workaround_bo.gem_handle, 0, 1024);
+   if (device->workaround_bo.map == MAP_FAILED)
+      goto fail_workaround_bo;
+
    anv_scratch_pool_init(device, &device->scratch_pool);
 
    anv_queue_init(device, &device->queue);
@@ -1416,8 +1421,8 @@ anv_bo_init_new(struct anv_bo *bo, struct anv_device *device, uint64_t size)
    if (device->instance->physicalDevice.supports_48bit_addresses)
       bo->flags |= EXEC_OBJECT_SUPPORTS_48B_ADDRESS;
 
-   if (device->instance->physicalDevice.has_exec_async)
-      bo->flags |= EXEC_OBJECT_ASYNC;
+//   if (device->instance->physicalDevice.has_exec_async)
+//      bo->flags |= EXEC_OBJECT_ASYNC;
 
    return VK_SUCCESS;
 }
