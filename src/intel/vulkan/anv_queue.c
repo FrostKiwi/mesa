@@ -571,6 +571,11 @@ VkResult anv_CreateSemaphore(
        * EXEC_OBJECT_ASYNC bit set.
        */
       assert(!(semaphore->permanent.bo->flags & EXEC_OBJECT_ASYNC));
+   } else if (handleTypes & VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_FENCE_FD_BIT_KHX) {
+      assert(handleTypes == VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_FENCE_FD_BIT_KHX);
+
+      semaphore->permanent.type = ANV_SEMAPHORE_TYPE_SYNC_FILE;
+      semaphore->permanent.fd = -1;
    } else {
       assert(!"Unknown handle type");
       vk_free2(&device->alloc, pAllocator, semaphore);
@@ -596,6 +601,10 @@ anv_semaphore_impl_cleanup(struct anv_device *device,
 
    case ANV_SEMAPHORE_TYPE_BO:
       anv_bo_cache_release(device, &device->bo_cache, impl->bo);
+      return;
+
+   case ANV_SEMAPHORE_TYPE_SYNC_FILE:
+      close(impl->fd);
       return;
    }
 
@@ -624,6 +633,8 @@ void anv_GetPhysicalDeviceExternalSemaphorePropertiesKHX(
     const VkPhysicalDeviceExternalSemaphoreInfoKHX* pExternalSemaphoreInfo,
     VkExternalSemaphorePropertiesKHX*           pExternalSemaphoreProperties)
 {
+   ANV_FROM_HANDLE(anv_physical_device, device, physicalDevice);
+
    switch (pExternalSemaphoreInfo->handleType) {
    case VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT_KHX:
       pExternalSemaphoreProperties->exportFromImportedHandleTypes =
@@ -633,13 +644,27 @@ void anv_GetPhysicalDeviceExternalSemaphorePropertiesKHX(
       pExternalSemaphoreProperties->externalSemaphoreFeatures =
          VK_EXTERNAL_SEMAPHORE_FEATURE_EXPORTABLE_BIT_KHX |
          VK_EXTERNAL_SEMAPHORE_FEATURE_IMPORTABLE_BIT_KHX;
+      return;
+
+   case VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_FENCE_FD_BIT_KHX:
+      if (device->has_exec_fence) {
+         pExternalSemaphoreProperties->exportFromImportedHandleTypes = 0;
+         pExternalSemaphoreProperties->compatibleHandleTypes =
+            VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_FENCE_FD_BIT_KHX;
+         pExternalSemaphoreProperties->externalSemaphoreFeatures =
+            VK_EXTERNAL_SEMAPHORE_FEATURE_EXPORTABLE_BIT_KHX |
+            VK_EXTERNAL_SEMAPHORE_FEATURE_IMPORTABLE_BIT_KHX;
+         return;
+      }
       break;
 
    default:
-      pExternalSemaphoreProperties->exportFromImportedHandleTypes = 0;
-      pExternalSemaphoreProperties->compatibleHandleTypes = 0;
-      pExternalSemaphoreProperties->externalSemaphoreFeatures = 0;
+      break;
    }
+
+   pExternalSemaphoreProperties->exportFromImportedHandleTypes = 0;
+   pExternalSemaphoreProperties->compatibleHandleTypes = 0;
+   pExternalSemaphoreProperties->externalSemaphoreFeatures = 0;
 }
 
 VkResult anv_ImportSemaphoreFdKHX(
@@ -671,6 +696,14 @@ VkResult anv_ImportSemaphoreFdKHX(
       return VK_SUCCESS;
    }
 
+   case VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_FENCE_FD_BIT_KHX:
+      anv_semaphore_impl_cleanup(device, &semaphore->temporary);
+
+      semaphore->temporary.type = ANV_SEMAPHORE_TYPE_SYNC_FILE;
+      semaphore->temporary.fd = pImportSemaphoreFdInfo->fd;
+
+      return VK_SUCCESS;
+
    default:
       return vk_error(VK_ERROR_INVALID_EXTERNAL_HANDLE_KHX);
    }
@@ -689,6 +722,23 @@ VkResult anv_GetSemaphoreFdKHX(
    case ANV_SEMAPHORE_TYPE_BO:
       return anv_bo_cache_export(device, &device->bo_cache,
                                  semaphore->permanent.bo, pFd);
+
+   case ANV_SEMAPHORE_TYPE_SYNC_FILE:
+      /* There are two reasons why this could happen:
+       *
+       *  1) The user is trying to export without submitting something that
+       *     signals the semaphore.  If this is the case, it's their bug so
+       *     what we return here doesn't matter.
+       *
+       *  2) The kernel didn't give us a file descriptor.  The most likely
+       *     reason for this is running out of file descriptors.
+       */
+      if (semaphore->permanent.fd < 0)
+         return vk_error(VK_ERROR_TOO_MANY_OBJECTS);
+
+      *pFd = semaphore->permanent.fd;
+      semaphore->permanent.fd = -1;
+      return VK_SUCCESS;
 
    default:
       return vk_error(VK_ERROR_INVALID_EXTERNAL_HANDLE_KHX);
