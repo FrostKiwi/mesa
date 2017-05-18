@@ -897,3 +897,103 @@ blorp_mcs_partial_resolve(struct blorp_batch *batch,
 
    batch->blorp->exec(batch, &params);
 }
+
+/** Clear a CCS to the "uncompressed" state
+ *
+ * This pass is the CCS equivalent of a "HiZ resolve".  It sets the CCS values
+ * for a given layer/level of a surface to 0x0 which is the "uncompressed"
+ * state which tells the sampler to go look at the main surface.
+ */
+void
+blorp_ccs_ambiguate(struct blorp_batch *batch,
+                    struct blorp_surf *surf, uint32_t level,
+                    uint32_t layer, uint32_t z)
+{
+   struct blorp_params params;
+   blorp_params_init(&params);
+
+   assert(ISL_DEV_GEN(batch->blorp->isl_dev) >= 9);
+
+   const struct isl_format_layout *aux_fmtl =
+      isl_format_get_layout(surf->aux_surf->format);
+   assert(aux_fmtl->txc == ISL_TXC_CCS);
+
+   params.dst = (struct brw_blorp_surface_info) {
+      .enabled = true,
+      .addr = surf->aux_addr,
+      .view = {
+         .usage = ISL_SURF_USAGE_RENDER_TARGET_BIT,
+         .format = ISL_FORMAT_R32G32B32A32_UINT,
+         .base_level = 0,
+         .base_array_layer = 0,
+         .levels = 1,
+         .array_len = 1,
+         .swizzle = ISL_SWIZZLE_IDENTITY,
+      },
+   };
+
+   uint32_t offset_B, x_offset_el, y_offset_el;
+   isl_surf_get_image_offset_el(surf->aux_surf, level, layer, z,
+                                &x_offset_el, &y_offset_el);
+   isl_tiling_get_intratile_offset_el(surf->aux_surf->tiling, aux_fmtl->bpb,
+                                      surf->aux_surf->row_pitch,
+                                      x_offset_el, y_offset_el,
+                                      &offset_B, &x_offset_el, &y_offset_el);
+   params.dst.addr.offset += offset_B;
+
+   const uint32_t width_px = minify(surf->surf->logical_level0_px.width, level);
+   const uint32_t height_px = minify(surf->surf->logical_level0_px.height, level);
+   const uint32_t width_el = DIV_ROUND_UP(width_px, aux_fmtl->bw);
+   const uint32_t height_el = DIV_ROUND_UP(height_px, aux_fmtl->bh);
+
+   /* We're going to map it as a regular RGBA32_UINT surface.  We need to
+    * downscale a good deal.  From the Sky Lake PRM Vol. 12 in the section on
+    * planes:
+    *
+    *    "The Color Control Surface (CCS) contains the compression status
+    *    of the cache-line pairs. The compression state of the cache-line
+    *    pair is specified by 2 bits in the CCS.  Each CCS cache-line
+    *    represents an area on the main surface of 16x16 sets of 128 byte
+    *    Y-tiled cache-line-pairs. CCS is always Y tiled."
+    *
+    * Each 2-bit surface element in the CCS corresponds to a single cache-line
+    * pair in the main surface.  This means that 16x16 el block in the CCS
+    * maps to a Y-tiled cache line.  Fortunately, CCS layouts are calculated
+    * with a very large alignment so we can round up without worrying about
+    * overdraw.
+    */
+   assert(x_offset_el % 16 == 0 && y_offset_el % 4 == 0);
+   const uint32_t x_offset_rgba_px = x_offset_el / 16;
+   const uint32_t y_offset_rgba_px = y_offset_el / 4;
+   const uint32_t width_rgba_px = DIV_ROUND_UP(width_el, 16);
+   const uint32_t height_rgba_px = DIV_ROUND_UP(height_el, 4);
+
+   MAYBE_UNUSED bool ok =
+      isl_surf_init(batch->blorp->isl_dev, &params.dst.surf,
+                    .dim = ISL_SURF_DIM_2D,
+                    .format = ISL_FORMAT_R32G32B32A32_UINT,
+                    .width = width_rgba_px + x_offset_rgba_px,
+                    .height = height_rgba_px + y_offset_rgba_px,
+                    .depth = 1,
+                    .levels = 1,
+                    .array_len = 1,
+                    .samples = 1,
+                    .row_pitch = surf->aux_surf->row_pitch,
+                    .usage = ISL_SURF_USAGE_RENDER_TARGET_BIT,
+                    .tiling_flags = ISL_TILING_Y0_BIT);
+   assert(ok);
+
+   params.x0 = x_offset_rgba_px;
+   params.y0 = y_offset_rgba_px;
+   params.x1 = x_offset_rgba_px + width_rgba_px;
+   params.y1 = y_offset_rgba_px + height_rgba_px;
+
+   /* A CCS value of 0 means "uncompressed." */
+   memset(&params.wm_inputs.clear_color, 0,
+          sizeof(params.wm_inputs.clear_color));
+
+   if (!blorp_params_get_clear_kernel(batch->blorp, &params, true))
+      return;
+
+   batch->blorp->exec(batch, &params);
+}

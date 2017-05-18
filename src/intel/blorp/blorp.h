@@ -186,6 +186,7 @@ enum blorp_fast_clear_op {
    BLORP_FAST_CLEAR_OP_CLEAR,
    BLORP_FAST_CLEAR_OP_RESOLVE_PARTIAL,
    BLORP_FAST_CLEAR_OP_RESOLVE_FULL,
+   BLORP_FAST_CLEAR_OP_AMBIGUATE,
 };
 
 void
@@ -193,6 +194,11 @@ blorp_ccs_resolve(struct blorp_batch *batch,
                   struct blorp_surf *surf, uint32_t level, uint32_t layer,
                   enum isl_format format,
                   enum blorp_fast_clear_op resolve_op);
+
+void
+blorp_ccs_ambiguate(struct blorp_batch *batch,
+                    struct blorp_surf *surf, uint32_t level,
+                    uint32_t layer, uint32_t z);
 
 /* Resolves subresources of the image subresource range specified in the
  * binding table.
