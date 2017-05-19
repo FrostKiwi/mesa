@@ -1498,6 +1498,14 @@ bool isl_tiling_from_drm_format_mod(uint64_t mod,
 uint64_t isl_tiling_to_drm_format_mod(enum isl_tiling tiling,
                                       enum isl_aux_usage aux_usage);
 
+/**
+ * Map an ISL tiling/aux pair to a GEM tiling enum. If the ISL tiling/aux mode
+ * is not exportable, return false. The output parameters are only written on
+ * success.
+ */
+bool isl_tiling_to_gem_tiling(enum isl_tiling isl, enum isl_aux_usage aux_usage,
+                              uint32_t *gem_tiling);
+
 static inline bool
 isl_tiling_is_any_y(enum isl_tiling tiling)
 {

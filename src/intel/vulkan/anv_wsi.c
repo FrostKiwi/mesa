@@ -241,11 +241,11 @@ anv_wsi_image_create(VkDevice device_h,
    anv_BindImageMemory(device_h, image_h, memory_h, 0);
 
    struct anv_surface *surface = &image->color_surface;
-   assert(surface->isl.tiling == ISL_TILING_X);
-
+   uint32_t gem_tiling = I915_TILING_NONE;
+   isl_tiling_to_gem_tiling(surface->isl.tiling, image->aux_usage, &gem_tiling);
    *row_pitch = surface->isl.row_pitch;
    int ret = anv_gem_set_tiling(device, memory->bo->gem_handle,
-                                surface->isl.row_pitch, I915_TILING_X);
+                                surface->isl.row_pitch, gem_tiling);
    if (ret) {
       /* FINISHME: Choose a better error. */
       result = vk_errorf(VK_ERROR_OUT_OF_DEVICE_MEMORY,

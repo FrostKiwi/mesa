@@ -27,6 +27,7 @@
 
 #include "genxml/genX_bits.h"
 #include <drm_fourcc.h>
+#include <i915_drm.h>
 
 #include "isl.h"
 #include "isl_gen4.h"
@@ -105,6 +106,33 @@ isl_tiling_to_drm_format_mod(enum isl_tiling tiling,
    }
 
    unreachable("unknown tiling in isl_tiling_to_drm_format_mod");
+}
+
+bool
+isl_tiling_to_gem_tiling(enum isl_tiling isl, enum isl_aux_usage aux_usage,
+                         uint32_t *gem)
+{
+   switch (isl) {
+   case ISL_TILING_LINEAR:
+      *gem = I915_TILING_NONE;
+      return true;
+   case ISL_TILING_X:
+      *gem = I915_TILING_X;
+      return true;
+   case ISL_TILING_Y0:
+      if (aux_usage != ISL_AUX_USAGE_NONE && aux_usage != ISL_AUX_USAGE_CCS_E)
+         return false;
+      *gem = I915_TILING_Y;
+      return true;
+   case ISL_TILING_Yf:
+   case ISL_TILING_Ys:
+   case ISL_TILING_W:
+   case ISL_TILING_HIZ:
+   case ISL_TILING_CCS:
+      return false;
+   }
+
+   unreachable("unknown tiling in isl_tiling_to_gem_tiling");
 }
 
 void
