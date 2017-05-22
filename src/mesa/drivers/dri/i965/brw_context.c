@@ -33,6 +33,7 @@
 
 #include "compiler/nir/nir.h"
 #include "main/api_exec.h"
+#include "main/blend.h"
 #include "main/context.h"
 #include "main/fbobject.h"
 #include "main/extensions.h"
@@ -280,10 +281,12 @@ intel_update_state(struct gl_context * ctx, GLuint new_state)
             intel_renderbuffer(fb->_ColorDrawBuffers[i]);
 
          if (irb) {
-             intel_miptree_resolve_color(brw, irb->mt,
-                                         irb->mt_level, 1,
-                                         irb->mt_layer, irb->layer_count,
-                                         INTEL_MIPTREE_IGNORE_CCS_E);
+            enum intel_aux_bits aux_bits =
+               intel_miptree_get_aux_bits_for_texture(brw, irb->mt,
+                  _mesa_get_render_format(ctx, intel_rb_format(irb)));
+            intel_miptree_resolve(brw, irb->mt, irb->mt_level, 1,
+                                  irb->mt_layer, irb->layer_count,
+                                  aux_bits, false);
          }
       }
    }
@@ -294,28 +297,25 @@ intel_update_state(struct gl_context * ctx, GLuint new_state)
     * enabled because otherwise the surface state will be programmed with the
     * linear equivalent format anyway.
     */
-   if (brw->gen >= 9 && ctx->Color.sRGBEnabled) {
-      struct gl_framebuffer *fb = ctx->DrawBuffer;
-      for (int i = 0; i < fb->_NumColorDrawBuffers; i++) {
-         struct gl_renderbuffer *rb = fb->_ColorDrawBuffers[i];
+   struct gl_framebuffer *fb = ctx->DrawBuffer;
+   for (int i = 0; i < fb->_NumColorDrawBuffers; i++) {
+      struct gl_renderbuffer *rb = fb->_ColorDrawBuffers[i];
 
-         if (rb == NULL)
-            continue;
+      if (rb == NULL)
+         continue;
 
-         struct intel_renderbuffer *irb = intel_renderbuffer(rb);
-         struct intel_mipmap_tree *mt = irb->mt;
+      struct intel_renderbuffer *irb = intel_renderbuffer(rb);
+      struct intel_mipmap_tree *mt = irb->mt;
 
-         if (mt == NULL ||
-             mt->num_samples > 1 ||
-             _mesa_get_srgb_format_linear(mt->format) == mt->format)
-               continue;
+      if (mt == NULL)
+         continue;
 
-         /* Lossless compression is not supported for SRGB formats, it
-          * should be impossible to get here with such surfaces.
-          */
-         assert(!intel_miptree_is_lossless_compressed(brw, mt));
-         intel_miptree_all_slices_resolve_color(brw, mt, 0);
-      }
+      enum intel_aux_bits aux_bits =
+         intel_miptree_get_aux_bits_for_render(brw, irb->mt,
+            _mesa_get_render_format(ctx, intel_rb_format(irb)));
+      intel_miptree_resolve(brw, irb->mt, irb->mt_level, 1,
+                            irb->mt_layer, irb->layer_count,
+                            aux_bits, true);
    }
 
    _mesa_lock_context_textures(ctx);

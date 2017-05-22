@@ -2355,6 +2355,33 @@ intel_miptree_get_aux_bits_for_texture(struct brw_context *brw,
    }
 }
 
+enum intel_aux_bits
+intel_miptree_get_aux_bits_for_render(struct brw_context *brw,
+                                      struct intel_mipmap_tree *mt,
+                                      mesa_format format)
+{
+   if (!_mesa_is_format_color_format(mt->format))
+      return 0;
+
+   if (mt->num_samples > 1) {
+      /* We can always support MSAA compression. */
+      if (mt->msaa_layout == INTEL_MSAA_LAYOUT_CMS)
+         return INTEL_AUX_MCS_BIT;
+      else
+         return 0;
+   } else {
+      enum isl_format isl_format = brw->render_target_format[format];
+
+      enum intel_aux_bits supported =
+         INTEL_AUX_CCS_BIT | INTEL_AUX_CCS_CLEAR_BIT;
+
+      if (!isl_format_supports_ccs_e(&brw->screen->devinfo, isl_format))
+         supported &= ~INTEL_AUX_CCS_BIT;
+
+      return supported;
+   }
+}
+
 /**
  * Make it possible to share the BO backing the given miptree with another
  * process or another miptree.
