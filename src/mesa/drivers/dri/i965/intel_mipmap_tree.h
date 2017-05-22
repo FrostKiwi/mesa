@@ -970,6 +970,14 @@ enum intel_aux_bits
 intel_miptree_get_aux_bits_for_texture(struct brw_context *brw,
                                        struct intel_mipmap_tree *mt,
                                        mesa_format format);
+static inline enum intel_aux_bits
+intel_miptree_get_aux_bits_for_image(struct brw_context *brw,
+                                     struct intel_mipmap_tree *mt,
+                                     mesa_format format)
+{
+   /* The data port doesn't understand compression. */
+   return 0;
+}
 
 void
 intel_miptree_make_shareable(struct brw_context *brw,
