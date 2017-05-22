@@ -253,6 +253,43 @@ enum miptree_array_layout {
    ALL_SLICES_AT_EACH_LOD,
 };
 
+/**
+ * This enum describes the data that can exist in an auxiliary surface as a
+ * bitfield.  Fast clear color is explicitly split out as it's own bit in
+ * order to enable describing "supports CCS but not clear color".
+ */
+enum intel_aux_bits {
+   /** HiZ on gen6+ */
+   INTEL_AUX_HIZ_BIT =           (1 << 0),
+
+   /** HiZ which is out of sync with the depth surface
+    *
+    * Very few operations which support HiZ will actually support this.
+    * However, it is still a useful distinction to be able to describe a
+    * surface which has a HiZ buffer which is out of sync with depth.
+    */
+   INTEL_AUX_INVALID_HIZ_BIT =   (1 << 1),
+
+   /**
+    * CCS fast clear on gen9+ or single-sampled MCS on gen7-8
+    *
+    * This bit is distinct from INTEL_AUX_CCS_BIT because it is frequently
+    * useful to describe something which supports CCS compression but not
+    * fast-clear or vice-versa.
+    */
+   INTEL_AUX_CCS_CLEAR_BIT =     (1 << 2),
+
+   /**
+    * CCS compression on gen9+
+    *
+    * Not to be confused with fast clear (see a bove).
+    */
+   INTEL_AUX_CCS_BIT =           (1 << 3),
+
+   /** Multisample compression on gen7+ */
+   INTEL_AUX_MCS_BIT =           (1 << 4),
+};
+
 enum intel_aux_disable {
    INTEL_AUX_DISABLE_NONE = 0,
    INTEL_AUX_DISABLE_HIZ  = 1 << 1,
@@ -911,6 +948,23 @@ void
 intel_miptree_all_slices_resolve_color(struct brw_context *brw,
                                        struct intel_mipmap_tree *mt,
                                        int flags);
+
+bool
+intel_miptree_resolve(struct brw_context *brw,
+                      struct intel_mipmap_tree *mt,
+                      uint32_t start_level, uint32_t num_levels,
+                      uint32_t start_layer, uint32_t num_layers,
+                      enum intel_aux_bits aux_bits,
+                      bool will_write);
+static inline bool
+intel_miptree_all_slices_resolve(struct brw_context *brw,
+                                 struct intel_mipmap_tree *mt,
+                                 enum intel_aux_bits aux_bits,
+                                 bool will_write)
+{
+   return intel_miptree_resolve(brw, mt, 0, UINT32_MAX, 0, UINT32_MAX,
+                                aux_bits, will_write);
+}
 
 void
 intel_miptree_make_shareable(struct brw_context *brw,

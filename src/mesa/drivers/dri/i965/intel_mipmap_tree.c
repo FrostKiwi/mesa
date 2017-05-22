@@ -2204,8 +2204,71 @@ intel_miptree_all_slices_resolve_color(struct brw_context *brw,
                                        struct intel_mipmap_tree *mt,
                                        int flags)
 {
-
    intel_miptree_resolve_color(brw, mt, 0, UINT32_MAX, 0, UINT32_MAX, flags);
+}
+
+bool
+intel_miptree_resolve(struct brw_context *brw,
+                      struct intel_mipmap_tree *mt,
+                      uint32_t start_level, uint32_t num_levels,
+                      uint32_t start_layer, uint32_t num_layers,
+                      enum intel_aux_bits aux_bits,
+                      bool will_write)
+{
+   if (_mesa_is_format_color_format(mt->format)) {
+      /* Color compression isn't a thing until Ivy Bridge. */
+      if (brw->gen < 7)
+         return false;
+
+      if (mt->num_samples > 1) {
+         /* No resolves are required for MSAA */
+         if (mt->msaa_layout == INTEL_MSAA_LAYOUT_CMS)
+            assert(aux_bits & INTEL_AUX_MCS_BIT);
+         return false;
+      } else {
+         /* If the caller supports both CCS and fast-clear, then we have
+          * nothing to do.
+          */
+         if ((aux_bits & INTEL_AUX_CCS_BIT) &&
+             (aux_bits & INTEL_AUX_CCS_CLEAR_BIT))
+            return false;
+
+         int flags = 0;
+         if (aux_bits & INTEL_AUX_CCS_BIT) {
+            assert(!(aux_bits & INTEL_AUX_CCS_CLEAR_BIT));
+            flags |= INTEL_MIPTREE_IGNORE_CCS_E;
+         }
+
+         return intel_miptree_resolve_color(brw, mt,
+                                            0, UINT32_MAX,
+                                            0, UINT32_MAX,
+                                            flags);
+      }
+   } else {
+      if (brw->gen < 6)
+         return false;
+
+      bool resolved = false;
+      if (!(aux_bits & INTEL_AUX_HIZ_BIT)) {
+         resolved |= intel_miptree_depth_hiz_resolve(brw, mt,
+                                                     start_level, num_levels,
+                                                     start_layer, num_layers,
+                                                     BLORP_HIZ_OP_DEPTH_RESOLVE);
+      }
+      if (!(aux_bits & INTEL_AUX_INVALID_HIZ_BIT)) {
+         /* If the caller wants any HiZ at all, do a HiZ resolve.  This may be
+          * a bit over the top but HiZ resolves should be relatively cheap and
+          * uncommon.
+          */
+         resolved |= intel_miptree_depth_hiz_resolve(brw, mt,
+                                                     start_level, num_levels,
+                                                     start_layer, num_layers,
+                                                     BLORP_HIZ_OP_HIZ_RESOLVE);
+      }
+      return resolved;
+   }
+
+   return false;
 }
 
 /**
