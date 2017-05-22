@@ -136,10 +136,15 @@ intel_texsubimage_tiled_memcpy(struct gl_context * ctx,
       return false;
    }
 
+   int level = texImage->Level + texImage->TexObject->MinLevel;
+
    /* Since we are going to write raw data to the miptree, we need to resolve
-    * any pending fast color clears before we start.
+    * any pending fast color clears before we start.  This doesn't work on
+    * array textures, so we only care about slice 0.
     */
-   intel_miptree_all_slices_resolve_color(brw, image->mt, 0);
+   assert(texImage->TexObject->Target == GL_TEXTURE_2D ||
+          texImage->TexObject->Target == GL_TEXTURE_RECTANGLE);
+   intel_miptree_resolve(brw, image->mt, level, 1, 0, 1, 0, false);
 
    bo = image->mt->bo;
 
@@ -167,8 +172,6 @@ intel_texsubimage_tiled_memcpy(struct gl_context * ctx,
        format, type, texImage->TexFormat, image->mt->tiling,
        packing->Alignment, packing->RowLength, packing->SkipPixels,
        packing->SkipRows, for_glTexImage);
-
-   int level = texImage->Level + texImage->TexObject->MinLevel;
 
    /* Adjust x and y offset based on miplevel */
    xoffset += image->mt->level[level].level_x;
