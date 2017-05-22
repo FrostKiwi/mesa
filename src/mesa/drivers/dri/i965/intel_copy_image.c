@@ -131,15 +131,10 @@ copy_miptrees(struct brw_context *brw,
 
    /* We are now going to try and copy the texture using the blitter.  If
     * that fails, we will fall back mapping the texture and using memcpy.
-    * In either case, we need to do a full resolve.
+    * Since we only get here on Iron Lake and earlier, we don't need to
+    * resolve anything.
     */
-   intel_miptree_all_slices_resolve_hiz(brw, src_mt);
-   intel_miptree_all_slices_resolve_depth(brw, src_mt);
-   intel_miptree_all_slices_resolve_color(brw, src_mt, 0);
-
-   intel_miptree_all_slices_resolve_hiz(brw, dst_mt);
-   intel_miptree_all_slices_resolve_depth(brw, dst_mt);
-   intel_miptree_all_slices_resolve_color(brw, dst_mt, 0);
+   assert(brw->gen <= 5);
 
    _mesa_get_format_block_size(src_mt->format, &bw, &bh);
 
