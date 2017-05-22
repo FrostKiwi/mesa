@@ -2175,9 +2175,6 @@ intel_miptree_resolve_color(struct brw_context *brw,
    if (!intel_miptree_needs_color_resolve(brw, mt, flags))
       return false;
 
-   /* Arrayed fast clear is only supported for gen8+. */
-   assert(brw->gen >= 8 || num_layers == 1);
-
    bool resolved = false;
    foreach_list_typed_safe(struct intel_resolve_map, map, link,
                            &mt->color_resolve_map) {
@@ -2186,6 +2183,9 @@ intel_miptree_resolve_color(struct brw_context *brw,
           map->layer < start_layer ||
           map->layer >= (start_layer + num_layers))
          continue;
+
+      /* Arrayed fast clear is only supported for gen8+. */
+      assert(brw->gen >= 8 || map->layer == 0);
 
       intel_miptree_check_level_layer(mt, map->level, map->layer);
 
@@ -2269,6 +2269,90 @@ intel_miptree_resolve(struct brw_context *brw,
    }
 
    return false;
+}
+
+enum intel_aux_bits
+intel_miptree_get_aux_bits_for_texture(struct brw_context *brw,
+                                       struct intel_mipmap_tree *mt,
+                                       mesa_format format)
+{
+   if (_mesa_is_format_color_format(mt->format)) {
+      if (mt->num_samples > 1) {
+         /* We can always support MSAA compression. */
+         if (mt->msaa_layout == INTEL_MSAA_LAYOUT_CMS)
+            return INTEL_AUX_MCS_BIT;
+         else
+            return 0;
+      } else {
+         /* Prior to Sky Lake, the sampler can't handle any single-sample
+          * color compression.
+          */
+         if (brw->gen < 9)
+            return 0;
+
+         const enum isl_format isl_format =
+            brw_isl_format_for_mesa_format(format);
+
+         /* From the Sky Lake PRM, Vol. 2d, "RENDER_SURFACE_STATE::Auxiliary
+          * Surface Mode":
+          *
+          *    "If Number of Multisamples is MULTISAMPLECOUNT_1, AUX_CCS_D
+          *    setting is only allowed if Surface Format supported for Fast
+          *    Clear.  In addition, if the surface is bound to the sampling
+          *    engine, Surface Format must be supported for Render Target
+          *    Compression for surfaces bound to the sampling engine. For
+          *    render target surfaces, this setting disables render target
+          *    compression. For sampling engine surfaces, this mode behaves
+          *    the same as AUX_CCS_E."
+          */
+         if (!isl_format_supports_ccs_e(&brw->screen->devinfo, isl_format))
+            return 0;
+
+         enum isl_format isl_mt_format =
+            brw_isl_format_for_mesa_format(mt->format);
+
+         /* If we have texture views going on, we need to ensure that the
+          * formats are actually CCS compatible.  Otherwise, any attempt to
+          * interpret the compression will fail.
+          */
+         if (!isl_formats_are_ccs_e_compatible(&brw->screen->devinfo,
+                                               isl_mt_format, isl_format))
+            return 0;
+
+         enum intel_aux_bits supported =
+            INTEL_AUX_CCS_BIT | INTEL_AUX_CCS_CLEAR_BIT;
+
+         /* From the Sky Lake PRM, Vol. 2d, "RENDER_SURFACE_STATE::Red Clear
+          * Color":
+          *
+          *    "If Number of Multisamples is MULTISAMPLECOUNT_1 AND if this RT
+          *    is fast cleared with non-0/1 clear value, this RT must be
+          *    partially resolved (refer to Partial Resolve operation) before
+          *    binding this surface to Sampler."
+          */
+         if (!isl_color_value_is_zero_one(mt->fast_clear_color, isl_mt_format))
+            supported &= ~INTEL_AUX_CCS_CLEAR_BIT;
+
+         /* Clear color is specified as ints or floats and the conversion is
+          * done by the sampler.  If we have a texture view going on, we would
+          * have to perform the clear color conversion manually.
+          */
+         if (isl_format != isl_mt_format)
+            supported &= ~INTEL_AUX_CCS_CLEAR_BIT;
+
+         return supported;
+      }
+   } else {
+      /* HiZ is fully supported on Sky Lake and above.  On Broadwell, it's
+       * theoretically supported but it's unclear exactly what the
+       * restrictions are.  We can enable support later once we do a bit more
+       * research.
+       */
+      if (intel_miptree_sample_with_hiz(brw, mt))
+         return INTEL_AUX_HIZ_BIT;
+      else
+         return INTEL_AUX_INVALID_HIZ_BIT;
+   }
 }
 
 /**

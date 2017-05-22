@@ -966,6 +966,11 @@ intel_miptree_all_slices_resolve(struct brw_context *brw,
                                 aux_bits, will_write);
 }
 
+enum intel_aux_bits
+intel_miptree_get_aux_bits_for_texture(struct brw_context *brw,
+                                       struct intel_mipmap_tree *mt,
+                                       mesa_format format);
+
 void
 intel_miptree_make_shareable(struct brw_context *brw,
                              struct intel_mipmap_tree *mt);
