@@ -327,6 +327,7 @@ intel_miptree_blit(struct brw_context *brw,
     */
    intel_miptree_resolve(brw, src_mt, src_level, 1, src_slice, 1, 0, false);
    intel_miptree_resolve(brw, dst_mt, dst_level, 1, dst_slice, 1, 0, true);
+   intel_miptree_slice_set_needs_hiz_resolve(dst_mt, dst_level, dst_slice);
 
    if (src_flip)
       src_y = minify(src_mt->physical_height0, src_level - src_mt->first_level) - src_y - height;
@@ -383,6 +384,7 @@ intel_miptree_copy(struct brw_context *brw,
     */
    intel_miptree_resolve(brw, src_mt, src_level, 1, src_slice, 1, 0, false);
    intel_miptree_resolve(brw, dst_mt, dst_level, 1, dst_slice, 1, 0, true);
+   intel_miptree_slice_set_needs_hiz_resolve(dst_mt, dst_level, dst_slice);
 
    uint32_t src_image_x, src_image_y;
    intel_miptree_get_image_offset(src_mt, src_level, src_slice,
