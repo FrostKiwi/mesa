@@ -162,7 +162,11 @@ brw_fast_clear_depth(struct gl_context *ctx)
     * flags out of the HiZ buffer into the real depth buffer.
     */
    if (mt->fast_clear_color.f32[0] != ctx->Depth.Clear) {
-      intel_miptree_all_slices_resolve_depth(brw, mt);
+      /* We can handle invalid HiZ just fine because we're about to clear a
+       * slice.  Technically, HiZ is also ok, just not fast-cleared HiZ.
+       * However, the hardware has no partial resolve for HiZ.
+       */
+      intel_miptree_all_slices_resolve(brw, mt, INTEL_AUX_INVALID_HIZ_BIT, true);
       mt->fast_clear_color.f32[0] = ctx->Depth.Clear;
    }
 
