@@ -2004,44 +2004,6 @@ intel_miptree_depth_hiz_resolve(struct brw_context *brw,
    return did_resolve;
 }
 
-bool
-intel_miptree_slice_resolve_hiz(struct brw_context *brw,
-				struct intel_mipmap_tree *mt,
-				uint32_t level,
-				uint32_t layer)
-{
-   return intel_miptree_depth_hiz_resolve(brw, mt, level, 1, layer, 1,
-                                          BLORP_HIZ_OP_HIZ_RESOLVE);
-}
-
-bool
-intel_miptree_slice_resolve_depth(struct brw_context *brw,
-				  struct intel_mipmap_tree *mt,
-				  uint32_t level,
-				  uint32_t layer)
-{
-   return intel_miptree_depth_hiz_resolve(brw, mt, level, 1, layer, 1,
-                                          BLORP_HIZ_OP_DEPTH_RESOLVE);
-}
-
-bool
-intel_miptree_all_slices_resolve_hiz(struct brw_context *brw,
-				     struct intel_mipmap_tree *mt)
-{
-   return intel_miptree_depth_hiz_resolve(brw, mt,
-                                          0, UINT32_MAX, 0, UINT32_MAX,
-                                          BLORP_HIZ_OP_HIZ_RESOLVE);
-}
-
-bool
-intel_miptree_all_slices_resolve_depth(struct brw_context *brw,
-				       struct intel_mipmap_tree *mt)
-{
-   return intel_miptree_depth_hiz_resolve(brw, mt,
-                                          0, UINT32_MAX, 0, UINT32_MAX,
-                                          BLORP_HIZ_OP_DEPTH_RESOLVE);
-}
-
 enum intel_fast_clear_state
 intel_miptree_get_fast_clear_state(const struct intel_mipmap_tree *mt,
                                    unsigned level, unsigned layer)
@@ -2163,7 +2125,7 @@ intel_miptree_needs_color_resolve(const struct brw_context *brw,
    return true;
 }
 
-bool
+static bool
 intel_miptree_resolve_color(struct brw_context *brw,
                             struct intel_mipmap_tree *mt,
                             uint32_t start_level, uint32_t num_levels,
@@ -2197,14 +2159,6 @@ intel_miptree_resolve_color(struct brw_context *brw,
    }
 
    return resolved;
-}
-
-void
-intel_miptree_all_slices_resolve_color(struct brw_context *brw,
-                                       struct intel_mipmap_tree *mt,
-                                       int flags)
-{
-   intel_miptree_resolve_color(brw, mt, 0, UINT32_MAX, 0, UINT32_MAX, flags);
 }
 
 bool
