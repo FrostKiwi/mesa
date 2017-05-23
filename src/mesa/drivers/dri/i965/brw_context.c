@@ -204,8 +204,14 @@ intel_update_state(struct gl_context * ctx, GLuint new_state)
 
    /* Resolve the depth buffer's HiZ buffer. */
    depth_irb = intel_get_renderbuffer(ctx->DrawBuffer, BUFFER_DEPTH);
-   if (depth_irb)
-      intel_renderbuffer_resolve_hiz(brw, depth_irb);
+   if (depth_irb) {
+      enum intel_aux_bits aux_bits =
+         intel_miptree_get_aux_bits_for_depth(brw, depth_irb->mt);
+      intel_miptree_resolve(brw, depth_irb->mt,
+                            depth_irb->mt_level, 1,
+                            depth_irb->mt_layer, depth_irb->layer_count,
+                            aux_bits, true);
+   }
 
    memset(brw->draw_aux_buffer_disabled, 0,
           sizeof(brw->draw_aux_buffer_disabled));

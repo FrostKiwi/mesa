@@ -974,6 +974,9 @@ enum intel_aux_bits
 intel_miptree_get_aux_bits_for_render(struct brw_context *brw,
                                       struct intel_mipmap_tree *mt,
                                       mesa_format format);
+enum intel_aux_bits
+intel_miptree_get_aux_bits_for_depth(struct brw_context *brw,
+                                     struct intel_mipmap_tree *mt);
 static inline enum intel_aux_bits
 intel_miptree_get_aux_bits_for_image(struct brw_context *brw,
                                      struct intel_mipmap_tree *mt,
