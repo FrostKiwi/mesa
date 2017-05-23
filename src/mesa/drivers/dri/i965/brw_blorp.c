@@ -827,6 +827,9 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
    if (irb->layer_count > 1 || irb->mt_level || irb->mt_layer)
       can_fast_clear = false;
 
+   unsigned level = irb->mt_level;
+   const unsigned num_layers = fb->MaxNumLayers ? irb->layer_count : 1;
+
    if (can_fast_clear) {
       union isl_color_value clear_color =
          brw_meta_convert_fast_clear_color(brw, irb->mt,
@@ -855,23 +858,18 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
             return false;
          }
       }
-   }
 
-   const unsigned num_layers = fb->MaxNumLayers ? irb->layer_count : 1;
-
-   /* We can't setup the blorp_surf until we've allocated the MCS above */
-   struct isl_surf isl_tmp[2];
-   struct blorp_surf surf;
-   unsigned level = irb->mt_level;
-   blorp_surf_for_miptree(brw, &surf, irb->mt, true,
-                          (1 << ISL_AUX_USAGE_MCS) |
-                          (1 << ISL_AUX_USAGE_CCS_E) |
-                          (1 << ISL_AUX_USAGE_CCS_D),
-                          &level, logical_layer, num_layers, isl_tmp);
-
-   if (can_fast_clear) {
       DBG("%s (fast) to mt %p level %d layers %d+%d\n", __FUNCTION__,
           irb->mt, irb->mt_level, irb->mt_layer, num_layers);
+
+      /* We can't setup the blorp_surf until we've allocated the MCS above */
+      struct isl_surf isl_tmp[2];
+      struct blorp_surf surf;
+      blorp_surf_for_miptree(brw, &surf, irb->mt, true,
+                             (1 << ISL_AUX_USAGE_MCS) |
+                             (1 << ISL_AUX_USAGE_CCS_E) |
+                             (1 << ISL_AUX_USAGE_CCS_D),
+                             &level, logical_layer, num_layers, isl_tmp);
 
       struct blorp_batch batch;
       blorp_batch_init(&brw->blorp, &batch, brw, 0);
@@ -891,6 +889,14 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
    } else {
       DBG("%s (slow) to mt %p level %d layer %d+%d\n", __FUNCTION__,
           irb->mt, irb->mt_level, irb->mt_layer, num_layers);
+
+      struct isl_surf isl_tmp[2];
+      struct blorp_surf surf;
+      blorp_surf_for_miptree(brw, &surf, irb->mt, true,
+                             (1 << ISL_AUX_USAGE_MCS) |
+                             (1 << ISL_AUX_USAGE_CCS_E) |
+                             (1 << ISL_AUX_USAGE_CCS_D),
+                             &level, logical_layer, num_layers, isl_tmp);
 
       union isl_color_value clear_color;
       memcpy(clear_color.f32, ctx->Color.ClearColor.f, sizeof(float) * 4);
