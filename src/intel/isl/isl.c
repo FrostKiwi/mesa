@@ -268,6 +268,25 @@ isl_tiling_get_info(const struct isl_device *dev,
    return true;
 }
 
+bool
+isl_color_value_is_zero_one(union isl_color_value value,
+                            enum isl_format format)
+{
+   if (isl_format_has_int_channel(format)) {
+      for (unsigned i = 0; i < 4; i++) {
+         if (value.u32[i] != 0 && value.u32[i] != 1)
+            return false;
+      }
+   } else {
+      for (unsigned i = 0; i < 4; i++) {
+         if (value.f32[i] != 0.0f && value.f32[i] != 1.0f)
+            return false;
+      }
+   }
+
+   return true;
+}
+
 /**
  * @param[out] tiling is set only on success
  */
