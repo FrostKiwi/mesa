@@ -372,20 +372,22 @@ brw_postdraw_set_buffers_need_resolve(struct brw_context *brw)
       front_irb->need_downsample = true;
    if (back_irb)
       back_irb->need_downsample = true;
-   if (depth_irb && brw_depth_writes_enabled(brw)) {
+   if (depth_irb) {
+      bool depth_written = brw_depth_writes_enabled(brw);
       if (depth_att->Layered) {
          intel_miptree_finish_depth(brw, depth_irb->mt,
                                     depth_irb->mt_level,
                                     depth_irb->mt_layer,
                                     depth_irb->layer_count,
-                                    true);
+                                    depth_written);
       } else {
          intel_miptree_finish_depth(brw, depth_irb->mt,
                                     depth_irb->mt_level,
                                     depth_irb->mt_layer, 1,
-                                    true);
+                                    depth_written);
       }
-      brw_render_cache_set_add_bo(brw, depth_irb->mt->bo);
+      if (depth_written)
+         brw_render_cache_set_add_bo(brw, depth_irb->mt->bo);
    }
 
    if (ctx->Extensions.ARB_stencil_texturing &&
