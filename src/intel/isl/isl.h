@@ -560,6 +560,148 @@ enum isl_aux_usage {
    ISL_AUX_USAGE_CCS_E,
 };
 
+/**
+ * Enum for keeping track of the state an auxiliary compressed surface.
+ *
+ * For any given auxiliary surface compression format (HiZ, CCS, or MCS), any
+ * given slice (lod + array layer) can be in one of the six states described
+ * by this enum.  Draw and resolve operations may cause the slice to change
+ * from one state to another.  The six valid states are:
+ *
+ *    1) Clear:  In this state, each block in the auxiliary surface contains a
+ *       magic value that indicates that the block is in the clear state.  If
+ *       a block is in the clear state, it's values in the primary surface are
+ *       ignored and the color of the samples in the block is taken either the
+ *       RENDER_SURFACE_STATE packet for color or 3DSTATE_CLEAR_PARAMS for
+ *       depth.  Since neither the primary surface nor the auxiliary surface
+ *       contains the clear value, the surface can be cleared to a different
+ *       color by simply changing the clear color without modifying either
+ *       surface.
+ *
+ *    2) Compressed w/ Clear:  In this state, neither the auxiliary surface
+ *       nor the primary surface has a complete representation of the data.
+ *       Instead, both surfaces must be used together or else rendering
+ *       corruption may occur.  Depending on the auxiliary compression format
+ *       and the data, any given block in the primary surface may contain all,
+ *       some, or none of the data required to reconstruct the actual sample
+ *       values.  Blocks may also be in the clear state (see Clear) and have
+ *       their value taken from outside the surface.
+ *
+ *    3) Compressed w/o Clear:  This state is identical to the state above
+ *       except that no blocks are in the clear state.  In this state, all of
+ *       the data required to reconstruct the final sample values is contained
+ *       in the auxiliary and primary surface and the clear value is not
+ *       considered.
+ *
+ *    4) Resolved:  In this state, the primary surface contains 100% of the
+ *       data.  The auxiliary surface is also valid so the surface can be
+ *       validly used with or without aux enabled.  The auxiliary surface may,
+ *       however, contain non-trivial data and any update to the primary
+ *       surface with aux disabled will cause the two to get out of sync.
+ *
+ *    5) Pass-through:  In this state, the primary surface contains 100% of the
+ *       data and every block in the auxiliary surface contains a magic value
+ *       which indicates that the auxiliary surface should be ignored and the
+ *       only the primary surface should be considered.  Updating the primary
+ *       surface without aux works fine and can be done repeatedly in this
+ *       mode.  Writing to a surface in pass-through mode with aux enabled may
+ *       cause the auxiliary buffer to contain non-trivial data and no longer
+ *       be in the pass-through state.
+ *
+ *    5) Aux Invalid:  In this state, the primary surface contains 100% of the
+ *       data and the auxiliary surface is completely bogus.  Any attempt to
+ *       use the auxiliary surface is liable to result in rendering
+ *       corruption.  The only thing that one can do to re-enable aux once
+ *       this state is reached is to use an ambiguate pass to transition into
+ *       the pass-through state.
+ *
+ * Drawing with or without aux enabled may implicitly cause the surface to
+ * transition between these states.  There are also four types of "resolve"
+ * operations which cause an explicit transition:
+ *
+ *    1) Fast Clear:  This operation writes the magic "clear" value to the
+ *       auxiliary surface.  This operation will safely transition any slice
+ *       of a surface from any state to the clear state so long as the entire
+ *       slice is fast cleared at once.
+ *
+ *    2) Full Resolve:  This operation combines the auxiliary surface data
+ *       with the primary surface data and writes the result to the primary.
+ *       For HiZ, the docs call this a depth resolve.  For CCS, the hardware
+ *       full resolve operation is both a full resolve and an ambiguate so it
+ *       actually takes you all the way to the pass-through state.
+ *
+ *    3) Partial Resolve:  This operation considers blocks which are in the
+ *       "clear" state and writes the clear value directly into the primary or
+ *       auxiliary surface.  Once this operation completes, the surface is
+ *       still compressed but no longer references the clear color.  This
+ *       operation is only available for CCS.
+ *
+ *    4) Ambiguate:  This operation throws away the current auxiliary data and
+ *       replaces it with the magic pass-through value.  If an ambiguate
+ *       operation is performed when the primary surface does not contain 100%
+ *       of the data, data will be lost.  This operation is only implemented
+ *       in hardware for depth where it is called a HiZ resolve.
+ *
+ * Not all operations are valid or useful in all states.  The diagram below
+ * contains a complete description of the states and all valid and useful
+ * transitions except clear.
+ *
+ *   Draw w/ Aux
+ *   +----------+
+ *   |          |
+ *   |       +-------------+     Draw w/ Aux      +-------------+
+ *   +------>| Compressed  |<---------------------|    Clear    |
+ *           |  w/ Clear   |                      |             |
+ *           +-------------+                      +-------------+
+ *                  |   |                                |
+ *          Partial |   |                                |
+ *          Resolve |   |        Full Resolve            |
+ *                  |   +----------------------------+   |  Full
+ *                  |                                |   | Resolve
+ *   Draw w/ aux    |                                |   |
+ *   +----------+   |                                |   |
+ *   |          |  \|/                              \|/ \|/
+ *   |       +-------------+     Full Resolve     +-------------+
+ *   +------>| Compressed  |--------------------->|  Resolved   |
+ *           |  w/o Clear  |<---------------------|             |
+ *           +-------------+     Draw w/ Aux      +-------------+
+ *                 /|\                               |   |
+ *                  |  Draw                          |   |  Draw
+ *                  | w/ Aux                         |   | w/o Aux
+ *                  |             Ambiguate          |   |
+ *                  |   +----------------------------+   |
+ *   Draw w/o Aux   |   |                                |   Draw w/o Aux
+ *   +----------+   |   |                                |   +----------+
+ *   |          |   |  \|/                              \|/  |          |
+ *   |       +-------------+      Ambiguate       +-------------+       |
+ *   +------>|    Pass-    |<---------------------|     Aux     |<------+
+ *           |   through   |                      |   Invalid   |
+ *           +-------------+                      +-------------+
+ *
+ *
+ * As referenced in the description of the different operations above, not all
+ * auxiliary surface formats actually support all of the above modes.  With
+ * HiZ, for instance, does not have a partial resolve operation so the two
+ * "compressed" modes are the same.  With CCS, the resolve operation is
+ * destructive and takes you directly to passthrough so the "resolved" state
+ * doesn't really exist.  However, if you consider the CCS resolve operation
+ * as doing a resolve and then an ambiguate, the diagram is still accurate.
+ */
+enum isl_aux_state {
+   /** Describes the Clear state */
+   ISL_AUX_STATE_CLEAR = 0,
+   /** Describes the Compressed w/ Clear state */
+   ISL_AUX_STATE_COMPRESSED_CLEAR,
+   /** Describes the Compressed w/o Clear state */
+   ISL_AUX_STATE_COMPRESSED_NO_CLEAR,
+   /** Describes the Resolved state */
+   ISL_AUX_STATE_RESOLVED,
+   /** Describes the Pass-through state */
+   ISL_AUX_STATE_PASS_THROUGH,
+   /** Describes the Aux Invalid state */
+   ISL_AUX_STATE_AUX_INVALID,
+};
+
 /* TODO(chadv): Explain */
 enum isl_array_pitch_span {
    ISL_ARRAY_PITCH_SPAN_FULL,
