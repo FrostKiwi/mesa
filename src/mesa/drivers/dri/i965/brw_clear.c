@@ -207,7 +207,7 @@ brw_fast_clear_depth(struct gl_context *ctx)
        brw_emit_pipe_control_flush(brw, PIPE_CONTROL_DEPTH_STALL);
    }
 
-   if (fb->MaxNumLayers > 0) {
+   if (depth_att->Layered) {
       for (unsigned layer = 0; layer < depth_irb->layer_count; layer++) {
          intel_hiz_exec(brw, mt, depth_irb->mt_level,
                         depth_irb->mt_layer + layer,
@@ -236,7 +236,15 @@ brw_fast_clear_depth(struct gl_context *ctx)
    /* Now, the HiZ buffer contains data that needs to be resolved to the depth
     * buffer.
     */
-   intel_renderbuffer_att_set_needs_depth_resolve(depth_att);
+   if (fb->MaxNumLayers > 0) {
+      for (unsigned layer = 0; layer < depth_irb->layer_count; layer++) {
+         intel_miptree_slice_set_needs_depth_resolve(mt, depth_irb->mt_level,
+                                                     depth_irb->mt_layer + layer);
+      }
+   } else {
+      intel_miptree_slice_set_needs_depth_resolve(mt, depth_irb->mt_level,
+                                                  depth_irb->mt_layer);
+   }
 
    return true;
 }
