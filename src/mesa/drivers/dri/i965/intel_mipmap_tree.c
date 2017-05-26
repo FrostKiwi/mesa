@@ -206,12 +206,7 @@ intel_miptree_supports_non_msrt_fast_clear(struct brw_context *brw,
    if (!brw->format_supported_as_render_target[mt->format])
       return false;
 
-   if (brw->gen >= 9) {
-      mesa_format linear_format = _mesa_get_srgb_format_linear(mt->format);
-      const uint32_t brw_format = brw_isl_format_for_mesa_format(linear_format);
-      return isl_format_supports_ccs_e(&brw->screen->devinfo, brw_format);
-   } else
-      return true;
+   return true;
 }
 
 /* On Gen9 support for color buffer compression was extended to single
@@ -255,16 +250,12 @@ intel_miptree_supports_lossless_compressed(struct brw_context *brw,
    if (_mesa_get_format_datatype(mt->format) == GL_FLOAT)
       return false;
 
-   /* Fast clear mechanism and lossless compression go hand in hand. */
+   /* Fast clear support is a pre-requisite for lossless compression */
    if (!intel_miptree_supports_non_msrt_fast_clear(brw, mt))
       return false;
 
-   /* Fast clear can be also used to clear srgb surfaces by using equivalent
-    * linear format. This trick, however, can't be extended to be used with
-    * lossless compression and therefore a check is needed to see if the format
-    * really is linear.
-    */
-   return _mesa_get_srgb_format_linear(mt->format) == mt->format;
+   enum isl_format isl_format = brw_isl_format_for_mesa_format(mt->format);
+   return isl_format_supports_ccs_e(&brw->screen->devinfo, isl_format);
 }
 
 /**
