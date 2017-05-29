@@ -2601,7 +2601,12 @@ intel_miptree_finish_depth(struct brw_context *brw,
                            uint32_t start_layer, uint32_t layer_count,
                            bool depth_written)
 {
-   if (depth_written) {
+   /* On Sandy Bridge, any usage of depth is liable to flush out clear color
+    * blocks so we need to do finish_write regardless of whether or not depth
+    * was enabled whenever we have HiZ.
+    */
+   if (depth_written ||
+       (brw->gen == 6 && mt->hiz_buf)) {
       intel_miptree_finish_write(brw, mt, level, start_layer, layer_count,
                                  mt->hiz_buf != NULL);
    }
