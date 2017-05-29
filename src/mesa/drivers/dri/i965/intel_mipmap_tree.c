@@ -2216,8 +2216,20 @@ intel_miptree_prepare_hiz_access(struct brw_context *brw,
                                  uint32_t level, uint32_t layer,
                                  bool hiz_supported, bool fast_clear_supported)
 {
+   enum isl_aux_state aux_state = intel_miptree_get_aux_state(mt, level, layer);
+
+   /* On Sandy Bridge, any usage of depth with HiZ enabled is liable to flush
+    * out clear color blocks.  If the slice is in the clear state, it should
+    * now be considered to be in the compressed with clear state.
+    */
+   if (brw->gen == 6 && aux_state == ISL_AUX_STATE_CLEAR && hiz_supported) {
+      assert(fast_clear_supported);
+      intel_miptree_set_aux_state(brw, mt, level, layer, 1,
+                                  ISL_AUX_STATE_COMPRESSED_CLEAR);
+   }
+
    enum blorp_hiz_op hiz_op = BLORP_HIZ_OP_NONE;
-   switch (intel_miptree_get_aux_state(mt, level, layer)) {
+   switch (aux_state) {
    case ISL_AUX_STATE_CLEAR:
    case ISL_AUX_STATE_COMPRESSED_CLEAR:
       if (!hiz_supported || !fast_clear_supported)
