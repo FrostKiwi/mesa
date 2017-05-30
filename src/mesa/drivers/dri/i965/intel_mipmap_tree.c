@@ -521,14 +521,6 @@ intel_miptree_create_layout(struct brw_context *brw,
       layout_flags |= MIPTREE_LAYOUT_FORCE_HALIGN16;
    } else {
       mt->aux_disable |= INTEL_AUX_DISABLE_CCS;
-
-      const UNUSED bool is_lossless_compressed_aux =
-         brw->gen >= 9 && num_samples == 1 &&
-         mt->format == MESA_FORMAT_R_UINT32;
-
-      /* For now, nothing else has this requirement */
-      assert(is_lossless_compressed_aux ||
-             (layout_flags & MIPTREE_LAYOUT_FORCE_HALIGN16) == 0);
    }
 
    if (!brw_miptree_layout(brw, mt, layout_flags)) {
