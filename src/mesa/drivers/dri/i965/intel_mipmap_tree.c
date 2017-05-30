@@ -59,6 +59,11 @@ intel_miptree_alloc_mcs(struct brw_context *brw,
                         struct intel_mipmap_tree *mt,
                         GLuint num_samples);
 
+static void
+intel_miptree_init_mcs(struct brw_context *brw,
+                       struct intel_mipmap_tree *mt,
+                       int init_value);
+
 /**
  * Determine which MSAA layout should be used by the MSAA surface being
  * created, based on the chip generation and the surface type.
@@ -850,6 +855,54 @@ miptree_create_for_planar_image(struct brw_context *brw,
    return planar_mt;
 }
 
+static bool
+create_ccs_buf_for_image(struct brw_context *brw,
+                         __DRIimage *image,
+                         struct intel_mipmap_tree *mt)
+{
+   struct isl_surf temp_main_surf, temp_ccs_surf;
+
+   /* There isn't anything specifically wrong with there being an offset, in
+    * which case, the CCS miptree's offset should be mt->offset +
+    * image->aux_offset. However, the code today only will have an offset when
+    * this miptree is pointing to a slice from another miptree, and in that case
+    * we'd need to offset within the AUX CCS buffer properly. It's questionable
+    * whether our code handles that case properly, and since it can never happen
+    * for scanout, just use the assertion to prevent it.
+    */
+   assert(mt->offset == 0);
+
+   /* CCS is only supported for very simple miptrees */
+   assert(image->aux_offset && image->aux_pitch);
+   assert(image->tile_x == 0 && image->tile_y == 0);
+   assert(mt->num_samples <= 1);
+   assert(mt->first_level == 0);
+   assert(mt->last_level == 0);
+   assert(mt->logical_depth0 == 1);
+
+   intel_miptree_get_isl_surf(brw, mt, &temp_main_surf);
+   if (!isl_surf_get_ccs_surf(&brw->isl_dev, &temp_main_surf, &temp_ccs_surf))
+      return false;
+
+   assert(temp_ccs_surf.size <= image->bo->size - image->aux_offset);
+   assert(temp_ccs_surf.row_pitch <= image->aux_pitch);
+
+   mt->mcs_buf = calloc(1, sizeof(*mt->mcs_buf));
+   mt->mcs_buf->bo = image->bo;
+   brw_bo_reference(image->bo);
+
+   mt->mcs_buf->offset = image->aux_offset;
+   mt->mcs_buf->size = image->bo->size - image->aux_offset;
+   mt->mcs_buf->pitch = image->aux_pitch;
+   mt->mcs_buf->qpitch = 0;
+
+   intel_miptree_init_mcs(brw, mt, 0);
+   mt->aux_disable &= ~INTEL_AUX_DISABLE_CCS;
+   mt->msaa_layout = INTEL_MSAA_LAYOUT_CMS;
+
+   return true;
+}
+
 struct intel_mipmap_tree *
 intel_miptree_create_for_dri_image(struct brw_context *brw,
                                    __DRIimage *image, GLenum target)
@@ -894,6 +947,15 @@ intel_miptree_create_for_dri_image(struct brw_context *brw,
          intel_miptree_release(&mt);
          return NULL;
       }
+   }
+
+   const struct isl_drm_modifier_info *mod_info =
+      isl_drm_modifier_get_info(image->modifier);
+
+   if (mod_info->aux_usage == ISL_AUX_USAGE_CCS_E) {
+      create_ccs_buf_for_image(brw, image, mt);
+   } else {
+      assert(mod_info->aux_usage == ISL_AUX_USAGE_NONE);
    }
 
    return mt;
