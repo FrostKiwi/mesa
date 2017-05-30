@@ -1556,6 +1556,12 @@ uint64_t ATTRIBUTE_CONST
 isl_drm_modifier_from_tiling(enum isl_tiling tiling,
                              enum isl_aux_usage aux_usage);
 
+static inline bool
+isl_drm_modifier_has_aux(uint64_t modifier)
+{
+   return isl_drm_modifier_get_info(modifier)->aux_usage != ISL_AUX_USAGE_NONE;
+}
+
 struct isl_extent2d ATTRIBUTE_CONST
 isl_get_interleaved_msaa_px_size_sa(uint32_t samples);
 
