@@ -741,8 +741,7 @@ intel_miptree_create(struct brw_context *brw,
       const bool lossless_compression_disabled = INTEL_DEBUG & DEBUG_NO_RBC;
       const bool is_lossless_compressed =
          unlikely(!lossless_compression_disabled) &&
-         brw->gen >= 9 && !mt->is_scanout &&
-         intel_miptree_supports_lossless_compressed(brw, mt);
+         brw->gen >= 9 && intel_miptree_supports_lossless_compressed(brw, mt);
 
       if (is_lossless_compressed) {
          assert(!(mt->aux_disable & INTEL_AUX_DISABLE_CCS));
