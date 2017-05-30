@@ -58,6 +58,11 @@ intel_miptree_alloc_mcs(struct brw_context *brw,
                         struct intel_mipmap_tree *mt,
                         GLuint num_samples);
 
+static void
+intel_miptree_init_mcs(struct brw_context *brw,
+                       struct intel_mipmap_tree *mt,
+                       int init_value);
+
 /**
  * Determine which MSAA layout should be used by the MSAA surface being
  * created, based on the chip generation and the surface type.
@@ -808,6 +813,45 @@ intel_miptree_create_for_bo(struct brw_context *brw,
    return mt;
 }
 
+static bool
+create_ccs_buf_for_image(struct brw_context *intel,
+                         __DRIimage *image,
+                         struct intel_mipmap_tree *mt)
+{
+
+   struct isl_surf temp_main_surf;
+   struct isl_surf temp_ccs_surf;
+
+   /* There isn't anything specifically wrong with there being an offset, in
+    * which case, the CCS miptree's offset should be mt->offset +
+    * image->aux_offset. However, the code today only will have an offset when
+    * this miptree is pointing to a slice from another miptree, and in that case
+    * we'd need to offset within the AUX CCS buffer properly. It's questionable
+    * whether our code handles that case properly, and since it can never happen
+    * for scanout, just use the assertion to prevent it.
+    */
+   assert(mt->offset == 0);
+
+   intel_miptree_get_isl_surf(intel, mt, &temp_main_surf);
+   if (!isl_surf_get_ccs_surf(&intel->isl_dev, &temp_main_surf, &temp_ccs_surf))
+      return false;
+
+   mt->mcs_buf = calloc(1, sizeof(*mt->mcs_buf));
+   mt->mcs_buf->bo = image->bo;
+   brw_bo_reference(image->bo);
+
+   mt->mcs_buf->offset = image->aux_offset;
+   mt->mcs_buf->size = temp_ccs_surf.size;
+   mt->mcs_buf->pitch = temp_ccs_surf.row_pitch;
+   mt->mcs_buf->qpitch = isl_surf_get_array_pitch_sa_rows(&temp_ccs_surf);
+
+   intel_miptree_init_mcs(intel, mt, 0);
+   mt->aux_disable &= ~INTEL_AUX_DISABLE_CCS;
+   mt->msaa_layout = INTEL_MSAA_LAYOUT_CMS;
+
+   return true;
+}
+
 struct intel_mipmap_tree *
 intel_miptree_create_for_image(struct brw_context *intel,
                                __DRIimage *image,
@@ -818,17 +862,43 @@ intel_miptree_create_for_image(struct brw_context *intel,
                                uint32_t pitch,
                                uint32_t layout_flags)
 {
-   assert(layout_flags == 0);
-   layout_flags = MIPTREE_LAYOUT_DISABLE_AUX;
-   return intel_miptree_create_for_bo(intel,
-                                      image->bo,
-                                      format,
-                                      offset,
-                                      width,
-                                      height,
-                                      1,
-                                      pitch,
-                                      layout_flags);
+   struct intel_mipmap_tree *mt;
+
+   /* Other flags will be ignored, so make sure the caller didn't pass any. */
+   assert((layout_flags & ~MIPTREE_LAYOUT_FOR_SCANOUT) == 0);
+
+   if (!image->aux_offset)
+      layout_flags |= MIPTREE_LAYOUT_DISABLE_AUX;
+   else
+      layout_flags |= MIPTREE_LAYOUT_FORCE_HALIGN16;
+
+   mt = intel_miptree_create_for_bo(intel,
+                                    image->bo,
+                                    format,
+                                    offset,
+                                    width,
+                                    height,
+                                    1,
+                                    pitch,
+                                    layout_flags);
+
+   if (!intel_tiling_supports_non_msrt_mcs(intel, mt->tiling)) {
+      assert(image->aux_offset == 0);
+      return mt;
+   }
+
+   if (layout_flags & MIPTREE_LAYOUT_DISABLE_AUX)
+      return mt;
+
+   assert(image->aux_offset);
+   assert(mt->num_samples <= 1);
+   assert(mt->first_level == 0);
+   assert(mt->last_level == 0);
+   assert(mt->logical_depth0 == 1);
+
+   create_ccs_buf_for_image(intel, image, mt);
+
+   return mt;
 }
 
 /**
