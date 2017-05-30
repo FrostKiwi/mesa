@@ -111,6 +111,13 @@ struct intel_renderbuffer
     * for the duration of a mapping.
     */
    bool singlesample_mt_is_tmp;
+
+   /**
+    * Set to true if this buffer definitely does not have auxiliary data, like
+    * CCS, associated with it. It's generally to be used when importing a
+    * DRIimage, where that DRIimage had no modifier.
+    */
+   bool no_aux;
 };
 
 

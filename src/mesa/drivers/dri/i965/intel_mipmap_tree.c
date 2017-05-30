@@ -941,7 +941,8 @@ intel_update_winsys_renderbuffer_miptree(struct brw_context *intel,
                                                  height,
                                                  1,
                                                  pitch,
-                                                 MIPTREE_LAYOUT_FOR_SCANOUT);
+                                                 MIPTREE_LAYOUT_FOR_SCANOUT |
+                                                 irb->no_aux ? MIPTREE_LAYOUT_DISABLE_AUX: 0);
    if (!singlesample_mt)
       goto fail;
 

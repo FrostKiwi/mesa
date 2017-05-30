@@ -1669,6 +1669,9 @@ intel_update_image_buffer(struct brw_context *intel,
    if (last_mt && last_mt->bo == buffer->bo)
       return;
 
+   if (!buffer->aux_offset)
+      rb->no_aux = true;
+
    intel_update_winsys_renderbuffer_miptree(intel, rb, buffer->bo,
                                             buffer->width, buffer->height,
                                             buffer->pitch);
