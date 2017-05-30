@@ -641,6 +641,7 @@ intel_create_image_common(__DRIscreen *dri_screen,
    uint32_t tiling;
    uint64_t modifier = DRM_FORMAT_MOD_INVALID;
    unsigned tiled_height;
+   unsigned ccs_height = 0;
    int cpp;
 
    /* Callers of this may specify a modifier, or a dri usage, but not both. The
@@ -678,10 +679,33 @@ intel_create_image_common(__DRIscreen *dri_screen,
    if (image == NULL)
       return NULL;
 
+   /*
+    * CCS width is always going to be less than or equal to the image's width.
+    * All we need to do is make sure we add extra rows (height) for the CCS.
+    *
+    * A pair of CCS bits correspond to 8x4 pixels, and must be cacheline
+    * granularity. Each CCS tile is laid out in 8b strips, which corresponds to
+    * 1024x512 pixel region. In memory, it looks like the following:
+    *
+    * ┌─────────────────┐
+    * │                 │
+    * │                 │
+    * │                 │
+    * │      Image      │
+    * │                 │
+    * │                 │
+    * │xxxxxxxxxxxxxxxxx│
+    * ├─────┬───────────┘
+    * │     │           |
+    * │ccs  │  unused   |
+    * └─────┘-----------┘
+    * <------pitch------>
+    */
    cpp = _mesa_get_format_bytes(image->format);
-   image->bo = brw_bo_alloc_tiled(screen->bufmgr, "image",
-                                  width, tiled_height, cpp, tiling,
-                                  &image->pitch, 0);
+   image->bo = brw_bo_alloc_tiled(screen->bufmgr,
+                                  ccs_height ? "image+ccs" : "image+mod",
+                                  width, tiled_height + ccs_height,
+                                  cpp, tiling, &image->pitch, 0);
    if (image->bo == NULL) {
       free(image);
       return NULL;
@@ -690,7 +714,10 @@ intel_create_image_common(__DRIscreen *dri_screen,
    image->height = height;
    image->modifier = modifier;
 
-   image->aux_offset = 0; /* y_tiled_height * pitch */
+   if (ccs_height)
+      image->aux_offset = tiled_height * image->pitch /* + mt->offset */;
+   else
+      image->aux_offset = 0;
 
    return image;
 }
