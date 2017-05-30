@@ -51,6 +51,10 @@
 #define DRM_FORMAT_MOD_LINEAR 0
 #endif
 
+#ifndef I915_FORMAT_MOD_Y_TILED_CCS
+#define I915_FORMAT_MOD_Y_TILED_CCS fourcc_mod_code(INTEL, 4)
+#endif
+
 static const __DRIconfigOptionsExtension brw_config_options = {
    .base = { __DRI_CONFIG_OPTIONS, 1 },
    .xml =
@@ -306,6 +310,8 @@ static const struct {
      .since_gen = 1 },
    { .tiling = I915_TILING_Y, .modifier = I915_FORMAT_MOD_Y_TILED,
      .since_gen = 6 },
+   { .tiling = I915_TILING_Y, .modifier = I915_FORMAT_MOD_Y_TILED_CCS,
+     .since_gen = 9 },
 };
 
 static bool
@@ -569,6 +575,7 @@ enum modifier_priority {
    MODIFIER_PRIORITY_LINEAR,
    MODIFIER_PRIORITY_X,
    MODIFIER_PRIORITY_Y,
+   MODIFIER_PRIORITY_Y_CCS,
 };
 
 const uint64_t priority_to_modifier[] = {
@@ -576,6 +583,7 @@ const uint64_t priority_to_modifier[] = {
    [MODIFIER_PRIORITY_LINEAR] = DRM_FORMAT_MOD_LINEAR,
    [MODIFIER_PRIORITY_X] = I915_FORMAT_MOD_X_TILED,
    [MODIFIER_PRIORITY_Y] = I915_FORMAT_MOD_Y_TILED,
+   [MODIFIER_PRIORITY_Y_CCS] = I915_FORMAT_MOD_Y_TILED_CCS,
 };
 
 static uint64_t
@@ -587,6 +595,9 @@ select_best_modifier(struct gen_device_info *devinfo,
 
    for (int i = 0; i < count; i++) {
       switch (modifiers[i]) {
+      case I915_FORMAT_MOD_Y_TILED_CCS:
+         prio = MAX2(prio, MODIFIER_PRIORITY_Y_CCS);
+         break;
       case I915_FORMAT_MOD_Y_TILED:
          prio = MAX2(prio, MODIFIER_PRIORITY_Y);
          break;
