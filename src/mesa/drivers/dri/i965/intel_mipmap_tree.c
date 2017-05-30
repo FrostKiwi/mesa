@@ -329,7 +329,6 @@ intel_miptree_create_layout(struct brw_context *brw,
    mt->logical_depth0 = depth0;
    mt->aux_disable = (layout_flags & MIPTREE_LAYOUT_DISABLE_AUX) != 0 ?
       INTEL_AUX_DISABLE_ALL : INTEL_AUX_DISABLE_NONE;
-   mt->aux_disable |= INTEL_AUX_DISABLE_CCS;
    mt->is_scanout = (layout_flags & MIPTREE_LAYOUT_FOR_SCANOUT) != 0;
    mt->aux_state = NULL;
    mt->cpp = _mesa_get_format_bytes(format);
@@ -521,6 +520,8 @@ intel_miptree_create_layout(struct brw_context *brw,
    } else if (brw->gen >= 9 && num_samples > 1) {
       layout_flags |= MIPTREE_LAYOUT_FORCE_HALIGN16;
    } else {
+      mt->aux_disable |= INTEL_AUX_DISABLE_CCS;
+
       const UNUSED bool is_lossless_compressed_aux =
          brw->gen >= 9 && num_samples == 1 &&
          mt->format == MESA_FORMAT_R_UINT32;
@@ -739,7 +740,6 @@ intel_miptree_create(struct brw_context *brw,
     */
    if (intel_tiling_supports_non_msrt_mcs(brw, mt->tiling) &&
        intel_miptree_supports_non_msrt_fast_clear(brw, mt)) {
-      mt->aux_disable &= ~INTEL_AUX_DISABLE_CCS;
       assert(brw->gen < 8 || mt->halign == 16 || num_samples <= 1);
 
       /* On Gen9+ clients are not currently capable of consuming compressed
@@ -753,8 +753,11 @@ intel_miptree_create(struct brw_context *brw,
          intel_miptree_supports_lossless_compressed(brw, mt);
 
       if (is_lossless_compressed) {
+         assert(!(mt->aux_disable & INTEL_AUX_DISABLE_CCS));
          intel_miptree_alloc_non_msrt_mcs(brw, mt, is_lossless_compressed);
       }
+   } else {
+      mt->aux_disable |= INTEL_AUX_DISABLE_CCS;
    }
 
    return mt;
@@ -846,7 +849,7 @@ create_ccs_buf_for_image(struct brw_context *intel,
    mt->mcs_buf->qpitch = isl_surf_get_array_pitch_sa_rows(&temp_ccs_surf);
 
    intel_miptree_init_mcs(intel, mt, 0);
-   mt->aux_disable &= ~INTEL_AUX_DISABLE_CCS;
+   assert(!(mt->aux_disable & INTEL_AUX_DISABLE_CCS));
    mt->msaa_layout = INTEL_MSAA_LAYOUT_CMS;
 
    return true;
@@ -942,14 +945,14 @@ intel_update_winsys_renderbuffer_miptree(struct brw_context *intel,
    if (!singlesample_mt)
       goto fail;
 
-   /* If this miptree is capable of supporting fast color clears, set
-    * mcs_state appropriately to ensure that fast clears will occur.
+   /* If this miptree is not capable of supporting fast color clears, flag
+    * mcs allocation disabled.
     * Allocation of the MCS miptree will be deferred until the first fast
     * clear actually occurs.
     */
-   if (intel_tiling_supports_non_msrt_mcs(intel, singlesample_mt->tiling) &&
-       intel_miptree_supports_non_msrt_fast_clear(intel, singlesample_mt)) {
-      singlesample_mt->aux_disable &= ~INTEL_AUX_DISABLE_CCS;
+   if (!intel_tiling_supports_non_msrt_mcs(intel, singlesample_mt->tiling) ||
+       !intel_miptree_supports_non_msrt_fast_clear(intel, singlesample_mt)) {
+      singlesample_mt->aux_disable |= INTEL_AUX_DISABLE_CCS;
    }
 
    if (num_samples == 0) {
