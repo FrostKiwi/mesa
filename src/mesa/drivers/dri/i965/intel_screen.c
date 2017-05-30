@@ -307,6 +307,10 @@ static const struct {
      .since_gen = 1, .height_align = 8 },
    { .tiling = I915_TILING_Y, .modifier = I915_FORMAT_MOD_Y_TILED,
      .since_gen = 6, .height_align = 32 },
+   { .tiling = I915_TILING_Y, .modifier = /* I915_FORMAT_MOD_Y_TILED_CCS */ fourcc_mod_code(INTEL, 4),
+     .since_gen = 9, .height_align = 32,
+     .aux_w_block = 32, .aux_w_align = 128,
+     .aux_h_block = 16, .aux_h_align = 32 },
 };
 
 static bool
@@ -647,6 +651,7 @@ enum modifier_priority {
    MODIFIER_PRIORITY_LINEAR,
    MODIFIER_PRIORITY_X,
    MODIFIER_PRIORITY_Y,
+   MODIFIER_PRIORITY_Y_CCS,
 };
 
 const uint64_t priority_to_modifier[] = {
@@ -654,6 +659,7 @@ const uint64_t priority_to_modifier[] = {
    [MODIFIER_PRIORITY_LINEAR] = DRM_FORMAT_MOD_LINEAR,
    [MODIFIER_PRIORITY_X] = I915_FORMAT_MOD_X_TILED,
    [MODIFIER_PRIORITY_Y] = I915_FORMAT_MOD_Y_TILED,
+   [MODIFIER_PRIORITY_Y_CCS] =  /* I915_FORMAT_MOD_Y_TILED_CCS */ fourcc_mod_code(INTEL, 4),
 };
 
 static uint64_t
@@ -665,6 +671,9 @@ select_best_modifier(struct gen_device_info *devinfo,
 
    for (int i = 0; i < count; i++) {
       switch (modifiers[i]) {
+      case /* I915_FORMAT_MOD_Y_TILED_CCS */ fourcc_mod_code(INTEL, 4):
+         prio = MAX2(prio, MODIFIER_PRIORITY_Y_CCS);
+         break;
       case I915_FORMAT_MOD_Y_TILED:
          prio = MAX2(prio, MODIFIER_PRIORITY_Y);
          break;
@@ -729,6 +738,7 @@ intel_create_image_common(__DRIscreen *dri_screen,
    }
    tiling = modifier_to_tiling(modifier);
    tiled_height = get_tiled_height(modifier, height);
+   ccs_height = get_aux_height(modifier, height);
 
    image = intel_allocate_image(screen, format, loaderPrivate);
    if (image == NULL)
