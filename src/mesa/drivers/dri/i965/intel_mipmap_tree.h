@@ -707,6 +707,16 @@ intel_miptree_create_for_bo(struct brw_context *brw,
                             int pitch,
                             uint32_t layout_flags);
 
+struct intel_mipmap_tree *
+intel_miptree_create_for_image(struct brw_context *intel,
+                               __DRIimage *image,
+                               mesa_format format,
+                               uint32_t offset,
+                               uint32_t width,
+                               uint32_t height,
+                               uint32_t pitch,
+                               uint32_t layout_flags);
+
 void
 intel_update_winsys_renderbuffer_miptree(struct brw_context *intel,
                                          struct intel_renderbuffer *irb,

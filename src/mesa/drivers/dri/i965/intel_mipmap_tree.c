@@ -24,13 +24,13 @@
  */
 
 #include <GL/gl.h>
-#include <GL/internal/dri_interface.h>
 
 #include "intel_batchbuffer.h"
 #include "intel_mipmap_tree.h"
 #include "intel_tex.h"
 #include "intel_blit.h"
 #include "intel_fbo.h"
+#include "intel_image.h"
 
 #include "brw_blorp.h"
 #include "brw_context.h"
@@ -806,6 +806,29 @@ intel_miptree_create_for_bo(struct brw_context *brw,
    mt->tiling = tiling;
 
    return mt;
+}
+
+struct intel_mipmap_tree *
+intel_miptree_create_for_image(struct brw_context *intel,
+                               __DRIimage *image,
+                               mesa_format format,
+                               uint32_t offset,
+                               uint32_t width,
+                               uint32_t height,
+                               uint32_t pitch,
+                               uint32_t layout_flags)
+{
+   assert(layout_flags == 0);
+   layout_flags = MIPTREE_LAYOUT_DISABLE_AUX;
+   return intel_miptree_create_for_bo(intel,
+                                      image->bo,
+                                      format,
+                                      offset,
+                                      width,
+                                      height,
+                                      1,
+                                      pitch,
+                                      layout_flags);
 }
 
 /**

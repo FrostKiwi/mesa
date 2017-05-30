@@ -362,15 +362,14 @@ intel_image_target_renderbuffer_storage(struct gl_context *ctx,
     * buffer's content to the main buffer nor for invalidating the aux buffer's
     * content.
     */
-   irb->mt = intel_miptree_create_for_bo(brw,
-                                         image->bo,
-                                         image->format,
-                                         image->offset,
-                                         image->width,
-                                         image->height,
-                                         1,
-                                         image->pitch,
-                                         MIPTREE_LAYOUT_DISABLE_AUX);
+   irb->mt = intel_miptree_create_for_image(brw,
+                                            image,
+                                            image->format,
+                                            image->offset,
+                                            image->width,
+                                            image->height,
+                                            image->pitch,
+                                            0);
    if (!irb->mt)
       return;
 

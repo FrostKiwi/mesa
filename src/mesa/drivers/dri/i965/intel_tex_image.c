@@ -221,11 +221,11 @@ create_mt_for_planar_dri_image(struct brw_context *brw,
        * invalidating the aux buffer's content.
        */
       struct intel_mipmap_tree *mt =
-         intel_miptree_create_for_bo(brw, image->bo, format,
-                                     image->offsets[index],
-                                     width, height, 1,
-                                     image->strides[index],
-                                     MIPTREE_LAYOUT_DISABLE_AUX);
+         intel_miptree_create_for_image(brw, image, format,
+                                        image->offsets[index],
+                                        width, height,
+                                        image->strides[index],
+                                        0);
       if (mt == NULL)
          return NULL;
 
@@ -263,10 +263,9 @@ create_mt_for_dri_image(struct brw_context *brw,
     * buffer's content to the main buffer nor for invalidating the aux buffer's
     * content.
     */
-   mt = intel_miptree_create_for_bo(brw, image->bo, image->format,
-                                    0, image->width, image->height, 1,
-                                    image->pitch,
-                                    MIPTREE_LAYOUT_DISABLE_AUX);
+   mt = intel_miptree_create_for_image(brw, image, image->format,
+                                       0, image->width, image->height,
+                                       image->pitch, 0);
    if (mt == NULL)
       return NULL;
 
