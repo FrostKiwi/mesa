@@ -296,6 +296,10 @@ static const struct {
    uint64_t modifier;
    unsigned since_gen;
    unsigned height_align;
+   unsigned aux_w_block;
+   unsigned aux_w_align;
+   unsigned aux_h_block;
+   unsigned aux_h_align;
 } tiling_modifier_map[] = {
    { .tiling = I915_TILING_NONE, .modifier = DRM_FORMAT_MOD_LINEAR,
      .since_gen = 1, .height_align = 1 },
@@ -355,6 +359,57 @@ get_tiled_height(uint64_t modifier, unsigned height)
    }
 
    unreachable("get_tiled_height received unknown tiling mode");
+}
+
+static unsigned
+get_aux_width(uint64_t modifier, unsigned width)
+{
+   int i;
+
+   for (i = 0; i < ARRAY_SIZE(tiling_modifier_map); i++) {
+      if (tiling_modifier_map[i].modifier != modifier)
+         continue;
+      if (tiling_modifier_map[i].aux_w_block == 0)
+         return 0;
+      return ALIGN(DIV_ROUND_UP(width, tiling_modifier_map[i].aux_w_block),
+                   tiling_modifier_map[i].aux_w_align);
+   }
+
+   unreachable("get_aux_width received unknown modifier");
+}
+
+static unsigned
+get_aux_stride(uint64_t modifier, unsigned stride)
+{
+   int i;
+
+   for (i = 0; i < ARRAY_SIZE(tiling_modifier_map); i++) {
+      if (tiling_modifier_map[i].modifier != modifier)
+         continue;
+      if (tiling_modifier_map[i].aux_w_block == 0)
+         return 0;
+      return ALIGN(stride / tiling_modifier_map[i].aux_w_block,
+                   tiling_modifier_map[i].aux_w_align);
+   }
+
+   unreachable("get_aux_stride received unknown modifier");
+}
+
+static unsigned
+get_aux_height(uint64_t modifier, unsigned height)
+{
+   int i;
+
+   for (i = 0; i < ARRAY_SIZE(tiling_modifier_map); i++) {
+      if (tiling_modifier_map[i].modifier != modifier)
+         continue;
+      if (tiling_modifier_map[i].aux_h_block == 0)
+         return 0;
+      return ALIGN(DIV_ROUND_UP(height, tiling_modifier_map[i].aux_h_block),
+                   tiling_modifier_map[i].aux_h_align);
+   }
+
+   unreachable("get_aux_height received unknown modifier");
 }
 
 static void
@@ -774,7 +829,7 @@ intel_query_image(__DRIimage *image, int attrib, int *value)
    case __DRI_IMAGE_ATTRIB_FOURCC:
       return intel_lookup_fourcc(image->dri_format, value);
    case __DRI_IMAGE_ATTRIB_NUM_PLANES:
-      *value = 1;
+      *value = image->aux_offset ? 2: 1;
       return true;
    case __DRI_IMAGE_ATTRIB_OFFSET:
       *value = image->offset;
@@ -1116,20 +1171,33 @@ intel_from_planar(__DRIimage *parent, int plane, void *loaderPrivate)
     struct intel_image_format *f;
     __DRIimage *image;
 
-    if (parent == NULL || parent->planar_format == NULL)
-        return NULL;
+    if (parent == NULL) {
+       return NULL;
+    } else if (parent->planar_format == NULL) {
+       const bool is_aux = parent->aux_offset && plane == 1;
+       if (!is_aux)
+          return NULL;
 
-    f = parent->planar_format;
+       width = get_aux_width(parent->modifier, parent->width);
+       height = get_aux_width(parent->modifier, parent->height);
+       stride = get_aux_stride(parent->modifier, parent->pitch);
+       dri_format = parent->dri_format;
+       offset = parent->aux_offset;
+    } else {
+       /* Planar formats don't support aux buffers/images */
+       assert(!parent->aux_offset);
+       f = parent->planar_format;
 
-    if (plane >= f->nplanes)
-        return NULL;
+       if (plane >= f->nplanes)
+          return NULL;
 
-    width = parent->width >> f->planes[plane].width_shift;
-    height = parent->height >> f->planes[plane].height_shift;
-    dri_format = f->planes[plane].dri_format;
-    index = f->planes[plane].buffer_index;
-    offset = parent->offsets[index];
-    stride = parent->strides[index];
+       width = parent->width >> f->planes[plane].width_shift;
+       height = parent->height >> f->planes[plane].height_shift;
+       dri_format = f->planes[plane].dri_format;
+       index = f->planes[plane].buffer_index;
+       offset = parent->offsets[index];
+       stride = parent->strides[index];
+    }
 
     image = intel_allocate_image(parent->screen, dri_format, loaderPrivate);
     if (image == NULL)
