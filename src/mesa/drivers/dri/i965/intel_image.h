@@ -92,6 +92,9 @@ struct __DRIimageRec {
    /** The image was created with EGL_EXT_image_dma_buf_import. */
    bool dma_buf_imported;
 
+   /** The image has some ancillary data associated with it at offset. */
+   uint32_t aux_offset;
+
    /**
     * Provided by EGL_EXT_image_dma_buf_import.
     * \{

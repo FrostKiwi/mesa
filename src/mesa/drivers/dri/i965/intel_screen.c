@@ -690,6 +690,8 @@ intel_create_image_common(__DRIscreen *dri_screen,
    image->height = height;
    image->modifier = modifier;
 
+   image->aux_offset = 0; /* y_tiled_height * pitch */
+
    return image;
 }
 
