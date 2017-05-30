@@ -917,11 +917,10 @@ intel_miptree_create_for_image(struct brw_context *intel,
 bool
 intel_update_winsys_renderbuffer_miptree(struct brw_context *intel,
                                          struct intel_renderbuffer *irb,
-                                         struct brw_bo *bo,
+                                         struct intel_mipmap_tree *singlesample_mt,
                                          uint32_t width, uint32_t height,
                                          uint32_t pitch)
 {
-   struct intel_mipmap_tree *singlesample_mt = NULL;
    struct intel_mipmap_tree *multisample_mt = NULL;
    struct gl_renderbuffer *rb = &irb->Base.Base;
    mesa_format format = rb->Format;
@@ -933,18 +932,7 @@ intel_update_winsys_renderbuffer_miptree(struct brw_context *intel,
    assert(_mesa_get_format_base_format(format) == GL_RGB ||
           _mesa_get_format_base_format(format) == GL_RGBA);
 
-   singlesample_mt = intel_miptree_create_for_bo(intel,
-                                                 bo,
-                                                 format,
-                                                 0,
-                                                 width,
-                                                 height,
-                                                 1,
-                                                 pitch,
-                                                 MIPTREE_LAYOUT_FOR_SCANOUT |
-                                                 irb->no_aux ? MIPTREE_LAYOUT_DISABLE_AUX: 0);
-   if (!singlesample_mt)
-      goto fail;
+   assert(singlesample_mt);
 
    /* If this miptree is not capable of supporting fast color clears, flag
     * mcs allocation disabled.
@@ -984,7 +972,6 @@ intel_update_winsys_renderbuffer_miptree(struct brw_context *intel,
    return true;
 
 fail:
-   intel_miptree_release(&irb->singlesample_mt);
    intel_miptree_release(&irb->mt);
    return false;
 }

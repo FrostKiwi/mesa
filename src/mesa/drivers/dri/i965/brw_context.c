@@ -1611,10 +1611,25 @@ intel_process_dri2_buffer(struct brw_context *brw,
       return;
    }
 
-   if (!intel_update_winsys_renderbuffer_miptree(brw, rb, bo,
+   struct intel_mipmap_tree *mt = intel_miptree_create_for_bo(brw,
+                                                              bo,
+                                                              intel_rb_format(rb),
+                                                              0,
+                                                              drawable->w,
+                                                              drawable->h,
+                                                              1,
+                                                              buffer->pitch,
+                                                              MIPTREE_LAYOUT_FOR_SCANOUT);
+   if (!mt) {
+      brw_bo_unreference(bo);
+      return;
+   }
+
+   if (!intel_update_winsys_renderbuffer_miptree(brw, rb, mt,
                                                  drawable->w, drawable->h,
                                                  buffer->pitch)) {
       brw_bo_unreference(bo);
+      intel_miptree_release(&mt);
       return;
    }
 
@@ -1672,13 +1687,19 @@ intel_update_image_buffer(struct brw_context *intel,
    if (last_mt && last_mt->bo == buffer->bo)
       return;
 
-   if (!buffer->aux_offset)
-      rb->no_aux = true;
-
-   if (!intel_update_winsys_renderbuffer_miptree(intel, rb, buffer->bo,
-                                                 buffer->width, buffer->height,
-                                                 buffer->pitch))
+   struct intel_mipmap_tree *mt = intel_miptree_create_for_image(intel,
+                                                                 buffer, intel_rb_format(rb), 0,
+                                                                 buffer->width, buffer->height,
+                                                                 buffer->pitch, MIPTREE_LAYOUT_FOR_SCANOUT);
+   if (!mt)
       return;
+
+   if (!intel_update_winsys_renderbuffer_miptree(intel, rb, mt,
+                                                 buffer->width, buffer->height,
+                                                 buffer->pitch)) {
+      intel_miptree_release(&mt);
+      return;
+   }
 
    if (_mesa_is_front_buffer_drawing(fb) &&
        buffer_type == __DRI_IMAGE_BUFFER_FRONT &&
