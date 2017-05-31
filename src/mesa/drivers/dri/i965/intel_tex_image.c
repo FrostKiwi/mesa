@@ -121,8 +121,6 @@ intel_miptree_create_for_teximage(struct brw_context *brw,
 /**
  * \brief A fast path for glTexImage and glTexSubImage.
  *
- * \param for_glTexImage Was this called from glTexImage or glTexSubImage?
- *
  * This fast path is taken when the texture format is BGRA, RGBA,
  * A or L and when the texture memory is X- or Y-tiled.  It uploads
  * the texture data by mapping the texture memory without a GTT fence, thus
@@ -151,8 +149,7 @@ intel_texsubimage_tiled_memcpy(struct gl_context * ctx,
                                GLsizei width, GLsizei height, GLsizei depth,
                                GLenum format, GLenum type,
                                const GLvoid *pixels,
-                               const struct gl_pixelstore_attrib *packing,
-                               bool for_glTexImage)
+                               const struct gl_pixelstore_attrib *packing)
 {
    struct brw_context *brw = brw_context(ctx);
    struct intel_texture_image *image = intel_texture_image(texImage);
@@ -199,9 +196,6 @@ intel_texsubimage_tiled_memcpy(struct gl_context * ctx,
    if (texImage->TexObject->MinLayer)
       return false;
 
-   if (for_glTexImage)
-      ctx->Driver.AllocTextureImageBuffer(ctx, texImage);
-
    if (!image->mt ||
        (image->mt->tiling != I915_TILING_X &&
        image->mt->tiling != I915_TILING_Y)) {
@@ -237,12 +231,11 @@ intel_texsubimage_tiled_memcpy(struct gl_context * ctx,
     */
    DBG("%s: level=%d offset=(%d,%d) (w,h)=(%d,%d) format=0x%x type=0x%x "
        "mesa_format=0x%x tiling=%d "
-       "packing=(alignment=%d row_length=%d skip_pixels=%d skip_rows=%d) "
-       "for_glTexImage=%d\n",
+       "packing=(alignment=%d row_length=%d skip_pixels=%d skip_rows=%d) ",
        __func__, texImage->Level, xoffset, yoffset, width, height,
        format, type, texImage->TexFormat, image->mt->tiling,
        packing->Alignment, packing->RowLength, packing->SkipPixels,
-       packing->SkipRows, for_glTexImage);
+       packing->SkipRows);
 
    /* Adjust x and y offset based on miplevel */
    xoffset += image->mt->level[level].level_x;
@@ -306,8 +299,7 @@ intelTexImage(struct gl_context * ctx,
                                        texImage->Width,
                                        texImage->Height,
                                        texImage->Depth,
-                                       format, type, pixels, unpack,
-                                       false /*allocate_storage*/);
+                                       format, type, pixels, unpack);
    if (ok)
       return;
 
@@ -354,8 +346,7 @@ intelTexSubImage(struct gl_context * ctx,
    ok = intel_texsubimage_tiled_memcpy(ctx, dims, texImage,
                                        xoffset, yoffset, zoffset,
                                        width, height, depth,
-                                       format, type, pixels, packing,
-                                       false /*for_glTexImage*/);
+                                       format, type, pixels, packing);
    if (ok)
      return;
 
