@@ -857,6 +857,7 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
        */
       brw_emit_pipe_control_flush(brw,
                                   PIPE_CONTROL_RENDER_TARGET_FLUSH |
+                                  PIPE_CONTROL_DEPTH_CACHE_FLUSH |
                                   PIPE_CONTROL_CS_STALL);
 
       struct blorp_batch batch;
@@ -1077,6 +1078,7 @@ brw_blorp_resolve_color(struct brw_context *brw, struct intel_mipmap_tree *mt,
     */
    brw_emit_pipe_control_flush(brw,
                                PIPE_CONTROL_RENDER_TARGET_FLUSH |
+                               PIPE_CONTROL_DEPTH_CACHE_FLUSH |
                                PIPE_CONTROL_CS_STALL);
 
 
