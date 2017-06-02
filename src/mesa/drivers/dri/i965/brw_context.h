@@ -482,8 +482,11 @@ struct brw_transform_feedback_object {
    /** A buffer to hold SO_WRITE_OFFSET(n) values while paused. */
    struct brw_bo *offset_bo;
 
-   /** If true, SO_WRITE_OFFSET(n) should be reset to zero at next use. */
-   bool zero_offsets;
+   /**
+    * Bitfield that indicates which SO_WRITE_OFFSET(n) should be reset to
+    * zero at next use.
+    */
+   uint8_t zero_offset_bits;
 
    /** The most recent primitive mode (GL_TRIANGLES/GL_POINTS/GL_LINES). */
    GLenum primitive_mode;

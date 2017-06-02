@@ -3198,9 +3198,10 @@ genX(upload_3dstate_so_buffers)(struct brw_context *brw)
          sob.StreamOutputBufferOffsetAddress =
             instruction_bo(brw_obj->offset_bo, i * sizeof(uint32_t));
 
-         if (brw_obj->zero_offsets) {
+         if (brw_obj->zero_offset_bits & (1 << i)) {
             /* Zero out the offset and write that to offset_bo */
             sob.StreamOffset = 0;
+            brw_obj->zero_offset_bits &= ~(1 << i);
          } else {
             /* Use offset_bo as the "Stream Offset." */
             sob.StreamOffset = 0xFFFFFFFF;
@@ -3208,10 +3209,6 @@ genX(upload_3dstate_so_buffers)(struct brw_context *brw)
 #endif
       }
    }
-
-#if GEN_GEN >= 8
-   brw_obj->zero_offsets = false;
-#endif
 }
 
 static inline bool
