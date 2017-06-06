@@ -719,26 +719,53 @@ enum isl_aux_usage {
  *           +-------------+                      +-------------+
  *
  *
- * As referenced in the description of the different operations above, not all
- * auxiliary surface formats actually support all of the above modes.  With
- * HiZ, for instance, does not have a partial resolve operation so the two
- * "compressed" modes are the same.  With CCS, the resolve operation is
- * destructive and takes you directly to passthrough so the "resolved" state
- * doesn't really exist.  However, if you consider the CCS resolve operation
- * as doing a resolve and then an ambiguate, the diagram is still accurate.
+ * While the above general theory applies to all forms of auxiliary
+ * compression on Intel hardware, not all states and operations are available
+ * on all compression types.  However, each of the auxiliary states and
+ * operations can be fairly easily mapped onto the above diagram:
+ *
+ * HiZ:     Hierarchical depth compression is capable of being in any of the
+ *          states above.  Hardware provides three HiZ operations: "Depth
+ *          Clear", "Depth Resolve", and "HiZ Resolve" which map to "Fast
+ *          Clear", "Full Resolve", and "Ambiguate" respectively.  The
+ *          hardware provides no HiZ partial resolve operation so the only way
+ *          to get into the "Compressed w/o Clear" state is to render with HiZ
+ *          when the surface is in the resolved or pass-through states.
+ *
+ * MCS:     Multisample compression is technically capable of being in any of
+ *          the states above except that most of them aren't useful.  Both the
+ *          render engine and the sampler support MCS compression and, apart
+ *          from clear color, MCS is format-unaware so we leave the surface
+ *          compressed 100% of the time.  The hardware provides no MCS
+ *          operations.
+ *
+ * CCS_D:   Single-sample fast-clears (also called CCS_D in ISL) are one of
+ *          the simplest forms of compression since they don't do anything
+ *          beyond clear color tracking.  They really only support three of
+ *          the six states: Clear, Compressed w/ Clear, and Pass-through.  The
+ *          only CCS_D operation is "Resolve" which maps to a full resolve
+ *          followed by an ambiguate.
+ *
+ * CCS_E:   Single-sample render target compression (also called CCS_E in ISL)
+ *          is capable of being in almost all of the above states.  THe only
+ *          exception is that it does not have separate resolved and pass-
+ *          through states.  Instead, the CCS_E full resolve operation does
+ *          both a resolve and an ambiguate so it goes directly into the
+ *          pass-through state.  CCS_E also provides fast clear and partial
+ *          resolve operations which work as described above.
+ *
+ *          While it is technically possible to perform a CCS_E ambiguate, it
+ *          is not provided by Sky Lake hardware so we choose to avoid the aux
+ *          invalid state.  If the aux invalid state were determined to be
+ *          useful, a CCS ambiguate could be done by carefully rendering to
+ *          the CCS and filling it with zeros.
  */
 enum isl_aux_state {
-   /** Describes the Clear state */
    ISL_AUX_STATE_CLEAR = 0,
-   /** Describes the Compressed w/ Clear state */
    ISL_AUX_STATE_COMPRESSED_CLEAR,
-   /** Describes the Compressed w/o Clear state */
    ISL_AUX_STATE_COMPRESSED_NO_CLEAR,
-   /** Describes the Resolved state */
    ISL_AUX_STATE_RESOLVED,
-   /** Describes the Pass-through state */
    ISL_AUX_STATE_PASS_THROUGH,
-   /** Describes the Aux Invalid state */
    ISL_AUX_STATE_AUX_INVALID,
 };
 
