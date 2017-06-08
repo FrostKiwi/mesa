@@ -955,6 +955,8 @@ static VkResult
 x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
                const VkSwapchainCreateInfoKHR *pCreateInfo,
                const VkAllocationCallbacks* pAllocator,
+               uint64_t *modifiers,
+               int num_modifiers,
                struct x11_image *image)
 {
    xcb_void_cookie_t cookie;
@@ -964,10 +966,13 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
    uint32_t bpp = 32;
    int fd;
    uint32_t size;
+   uint64_t modifier;
 
    result = chain->base.image_fns->create_wsi_image(device_h,
                                                     pCreateInfo,
                                                     pAllocator,
+                                                    modifiers,
+                                                    num_modifiers,
                                                     chain->base.needs_linear_copy,
                                                     false,
                                                     &image->image,
@@ -975,7 +980,8 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
                                                     &size,
                                                     &offset,
                                                     &row_pitch,
-                                                    &fd);
+                                                    &fd,
+                                                    &modifier);
    if (result != VK_SUCCESS)
       return result;
 
@@ -983,6 +989,8 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
       result = chain->base.image_fns->create_wsi_image(device_h,
                                                        pCreateInfo,
                                                        pAllocator,
+                                                       modifiers,
+                                                       num_modifiers,
                                                        chain->base.needs_linear_copy,
                                                        true,
                                                        &image->linear_image,
@@ -990,7 +998,8 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
                                                        &size,
                                                        &offset,
                                                        &row_pitch,
-                                                       &fd);
+                                                       &fd,
+                                                       &modifier);
       if (result != VK_SUCCESS) {
          chain->base.image_fns->free_wsi_image(device_h, pAllocator,
                                                image->image, image->memory);
@@ -1186,7 +1195,7 @@ x11_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
    uint32_t image = 0;
    for (; image < chain->base.image_count; image++) {
       result = x11_image_init(device, chain, pCreateInfo, pAllocator,
-                              &chain->images[image]);
+                              NULL, 0, &chain->images[image]);
       if (result != VK_SUCCESS)
          goto fail_init_images;
    }

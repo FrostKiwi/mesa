@@ -35,6 +35,8 @@ struct wsi_image_fns {
    VkResult (*create_wsi_image)(VkDevice device_h,
                                 const VkSwapchainCreateInfoKHR *pCreateInfo,
                                 const VkAllocationCallbacks *pAllocator,
+                                uint64_t *modifiers,
+                                int num_modifiers,
                                 bool needs_linear_copy,
                                 bool linear,
                                 VkImage *image_p,
@@ -42,7 +44,8 @@ struct wsi_image_fns {
                                 uint32_t *size_p,
                                 uint32_t *offset_p,
                                 uint32_t *row_pitch_p,
-                                int *fd_p);
+                                int *fd_p,
+                                uint64_t *modifier_p);
    void (*free_wsi_image)(VkDevice device,
                           const VkAllocationCallbacks *pAllocator,
                           VkImage image_h,

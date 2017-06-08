@@ -172,17 +172,38 @@ static VkResult
 anv_wsi_image_create(VkDevice device_h,
                      const VkSwapchainCreateInfoKHR *pCreateInfo,
                      const VkAllocationCallbacks* pAllocator,
+                     uint64_t *modifiers,
+                     int num_modifiers,
                      bool different_gpu,
                      bool linear,
                      VkImage *image_p,
                      VkDeviceMemory *memory_p,
                      uint32_t *size,
                      uint32_t *offset,
-                     uint32_t *row_pitch, int *fd_p)
+                     uint32_t *row_pitch, int *fd_p, uint64_t *modifier)
 {
    struct anv_device *device = anv_device_from_handle(device_h);
    VkImage image_h;
    struct anv_image *image;
+   VkImageTiling vk_tiling = VK_IMAGE_TILING_LINEAR;
+   int i;
+
+   uint64_t modifiers_fallback[] = { I915_FORMAT_MOD_X_TILED };
+   if (num_modifiers == 0) {
+      modifiers = modifiers_fallback;
+      num_modifiers = ARRAY_SIZE(modifiers_fallback);
+   }
+
+   /* XXX: Retconning the VkImageTiling from modifiers is a bit hairy, because
+    *      the actual ISL tiling/aux selection happens further down, which may
+    *      filter the modes out and return linear even though we suggest a
+    *      tiling mode. */
+   for (i = 0; i < num_modifiers; i++) {
+      enum isl_tiling t;
+      enum isl_aux_usage a;
+      if (isl_tiling_from_drm_format_mod(modifiers[i], &t, &a))
+         vk_tiling = VK_IMAGE_TILING_OPTIMAL;
+   }
 
    VkResult result;
    result = anv_CreateImage(anv_device_to_handle(device),
@@ -199,7 +220,7 @@ anv_wsi_image_create(VkDevice device_h,
          .arrayLayers = 1,
          .samples = 1,
          /* FIXME: Need a way to use X tiling to allow scanout */
-         .tiling = VK_IMAGE_TILING_OPTIMAL,
+         .tiling = vk_tiling,
          .usage = (pCreateInfo->imageUsage |
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
          .flags = 0,
@@ -210,10 +231,8 @@ anv_wsi_image_create(VkDevice device_h,
          .pNext =
       &(VkExportImageDmaBufInfoMESAX) {
          .sType = VK_STRUCTURE_TYPE_EXPORT_IMAGE_DMA_BUF_INFO_MESAX,
-         .drmFormatModifierCount = 1,
-         .pDrmFormatModifiers = (uint64_t[]) {
-            I915_FORMAT_MOD_X_TILED,
-         },
+         .drmFormatModifierCount = ARRAY_SIZE(modifiers),
+         .pDrmFormatModifiers = modifiers,
       }}},
       NULL,
       &image_h);
@@ -273,6 +292,8 @@ anv_wsi_image_create(VkDevice device_h,
    *fd_p = fd;
    *size = image->size;
    *offset = image->offset;
+   *modifier = isl_tiling_to_drm_format_mod(image->color_surface.isl.tiling,
+                                            image->aux_usage);
    return VK_SUCCESS;
 fail_alloc_memory:
    anv_FreeMemory(device_h, memory_h, pAllocator);

@@ -141,19 +141,25 @@ static VkResult
 radv_wsi_image_create(VkDevice device_h,
 		      const VkSwapchainCreateInfoKHR *pCreateInfo,
 		      const VkAllocationCallbacks* pAllocator,
+		      uint64_t *modifiers,
+		      int num_modifiers,
 		      bool needs_linear_copy,
 		      bool linear,
 		      VkImage *image_p,
 		      VkDeviceMemory *memory_p,
 		      uint32_t *size,
 		      uint32_t *offset,
-		      uint32_t *row_pitch, int *fd_p)
+		      uint32_t *row_pitch, int *fd_p, uint64_t *modifier)
 {
 	VkResult result = VK_SUCCESS;
 	struct radeon_surf *surface;
 	VkImage image_h;
 	struct radv_image *image;
 	int fd;
+
+	/* FIXME: Square the circle. */
+	assert(!modifiers ||
+	       (num_modifiers == 1 && modifiers[0] == DRM_FORMAT_MOD_LINEAR));
 
 	result = radv_image_create(device_h,
 				   &(struct radv_image_create_info) {
@@ -225,6 +231,7 @@ radv_wsi_image_create(VkDevice device_h,
 	*size = image->size;
 	*offset = image->offset;
 	*row_pitch = surface->u.legacy.level[0].nblk_x * surface->bpe;
+	*modifier = DRM_FORMAT_MOD_INVALID;
 	return VK_SUCCESS;
  fail_alloc_memory:
 	radv_FreeMemory(device_h, memory_h, pAllocator);

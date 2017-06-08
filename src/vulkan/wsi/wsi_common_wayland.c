@@ -698,9 +698,12 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
    uint32_t size;
    uint32_t row_pitch;
    uint32_t offset;
+   uint64_t modifier;
    result = chain->base.image_fns->create_wsi_image(vk_device,
                                                     pCreateInfo,
                                                     pAllocator,
+                                                    NULL,
+                                                    0,
                                                     false,
                                                     false,
                                                     &image->image,
@@ -708,7 +711,8 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
                                                     &size,
                                                     &offset,
                                                     &row_pitch,
-                                                    &fd);
+                                                    &fd,
+                                                    &modifier);
    if (result != VK_SUCCESS)
       return result;
 
