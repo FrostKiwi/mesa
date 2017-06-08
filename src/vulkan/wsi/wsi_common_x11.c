@@ -36,12 +36,17 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <xf86drm.h>
+#include <drm_fourcc.h>
 #include "util/hash_table.h"
 
 #include "vk_util.h"
 #include "wsi_common.h"
 #include "wsi_common_x11.h"
 #include "wsi_common_queue.h"
+
+#ifndef DRM_FORMAT_MOD_INVALID
+#define DRM_FORMAT_MOD_INVALID (1ULL<<56)-1
+#endif
 
 #define typed_memcpy(dest, src, count) ({ \
    STATIC_ASSERT(sizeof(*src) == sizeof(*dest)); \
@@ -50,6 +55,7 @@
 
 struct wsi_x11_connection {
    bool has_dri3;
+   bool has_dri3_v1_1;
    bool has_present;
    bool is_proprietary_x11;
 };
@@ -164,6 +170,16 @@ wsi_x11_connection_create(const VkAllocationCallbacks *alloc,
    }
 
    wsi_conn->has_dri3 = dri3_reply->present != 0;
+   if (wsi_conn->has_dri3) {
+      xcb_dri3_query_version_cookie_t ver_cookie;
+      xcb_dri3_query_version_reply_t *ver_reply;
+
+      ver_cookie = xcb_dri3_query_version(conn, 1, 1);
+      ver_reply = xcb_dri3_query_version_reply(conn, ver_cookie, NULL);
+      wsi_conn->has_dri3_v1_1 = ver_reply->major_version > 1 ||
+                                ver_reply->minor_version >= 1;
+   }
+
    wsi_conn->has_present = pres_reply->present != 0;
    wsi_conn->is_proprietary_x11 = false;
    if (amd_reply && amd_reply->present)
@@ -246,6 +262,22 @@ static const VkPresentModeKHR present_modes[] = {
    VK_PRESENT_MODE_MAILBOX_KHR,
    VK_PRESENT_MODE_FIFO_KHR,
 };
+
+static uint32_t
+vk_format_to_fourcc(VkFormat vk_format, VkCompositeAlphaFlagsKHR vk_alpha)
+{
+   bool is_alpha = (vk_alpha == VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR);
+
+   /* XXX: Real lookup table. */
+   switch (vk_format) {
+   case VK_FORMAT_B8G8R8A8_UNORM:
+   case VK_FORMAT_B8G8R8A8_SRGB:
+      return is_alpha ? DRM_FORMAT_ARGB8888 : DRM_FORMAT_XRGB8888;
+      break;
+   default:
+      unreachable("unknown format in vk_format_to_fourcc");
+   }
+}
 
 static xcb_screen_t *
 get_screen_for_root(xcb_connection_t *conn, xcb_window_t root)
@@ -628,6 +660,8 @@ struct x11_image {
 struct x11_swapchain {
    struct wsi_swapchain                        base;
 
+   bool                                         has_dri3_v1_1;
+
    xcb_connection_t *                           conn;
    xcb_window_t                                 window;
    xcb_gc_t                                     gc;
@@ -966,7 +1000,9 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
    uint32_t bpp = 32;
    int fd;
    uint32_t size;
-   uint64_t modifier;
+   uint32_t fourcc = vk_format_to_fourcc(pCreateInfo->imageFormat,
+                                         pCreateInfo->compositeAlpha);
+   uint64_t modifier = DRM_FORMAT_MOD_INVALID;
 
    result = chain->base.image_fns->create_wsi_image(device_h,
                                                     pCreateInfo,
@@ -1009,15 +1045,36 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
 
    image->pixmap = xcb_generate_id(chain->conn);
 
-   cookie =
-      xcb_dri3_pixmap_from_buffer_checked(chain->conn,
-                                          image->pixmap,
-                                          chain->window,
-                                          size,
-                                          pCreateInfo->imageExtent.width,
-                                          pCreateInfo->imageExtent.height,
-                                          row_pitch,
-                                          chain->depth, bpp, fd);
+#if XCB_DRI3_MAJOR_VERSION > 1 || XCB_DRI3_MINOR_VERSION >= 1
+   if (chain->has_dri3_v1_1 && modifier != DRM_FORMAT_MOD_INVALID) {
+      cookie =
+         xcb_dri3_pixmap_from_buffers_checked(chain->conn,
+                                              image->pixmap,
+                                              chain->window,
+                                              1, /* XXX: multi-plane */
+                                              pCreateInfo->imageExtent.width,
+                                              pCreateInfo->imageExtent.height,
+                                              row_pitch, offset,
+                                              0, 0,
+                                              0, 0,
+                                              0, 0,
+                                              fourcc,
+                                              modifier >> 32,
+                                              modifier & 0xffffffff,
+                                              &fd);
+   } else
+#endif
+   {
+      cookie =
+         xcb_dri3_pixmap_from_buffer_checked(chain->conn,
+                                             image->pixmap,
+                                             chain->window,
+                                             size,
+                                             pCreateInfo->imageExtent.width,
+                                             pCreateInfo->imageExtent.height,
+                                             row_pitch,
+                                             chain->depth, bpp, fd);
+   }
    xcb_discard_reply(chain->conn, cookie.sequence);
 
    int fence_fd = xshmfence_alloc_shm();
@@ -1109,6 +1166,46 @@ x11_swapchain_destroy(struct wsi_swapchain *anv_chain,
    return VK_SUCCESS;
 }
 
+static void
+wsi_x11_get_dri3_modifiers(xcb_connection_t *conn, xcb_window_t window,
+                           VkFormat vk_format,
+                           VkCompositeAlphaFlagsKHR vk_alpha,
+                           uint64_t **modifiers_in, int *num_modifiers_in,
+                           const VkAllocationCallbacks* pAllocator)
+{
+#if XCB_DRI3_MAJOR_VERSION > 1 || XCB_DRI3_MINOR_VERSION >= 1
+   uint64_t *modifiers;
+   uint32_t fourcc = vk_format_to_fourcc(vk_format, vk_alpha);
+
+   xcb_generic_error_t *error = NULL;
+   xcb_dri3_get_supported_modifiers_cookie_t mod_cookie =
+      xcb_dri3_get_supported_modifiers(conn, window, fourcc);
+   xcb_dri3_get_supported_modifiers_reply_t *mod_reply =
+      xcb_dri3_get_supported_modifiers_reply(conn, mod_cookie, &error);
+   if (!mod_reply)
+      return;
+
+   if (!mod_reply->num_modifiers)
+      return;
+
+   modifiers = vk_alloc(pAllocator, mod_reply->num_modifiers * sizeof(uint64_t),
+                        8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   if (!modifiers)
+      return;
+
+   uint32_t *mod_parts = xcb_dri3_get_supported_modifiers_modifiers(mod_reply);
+   for (int i = 0; i < mod_reply->num_modifiers; i++) {
+      modifiers[i] = (uint64_t) mod_parts[i * 2] << 32;
+      modifiers[i] |= (uint64_t) mod_parts[i * 2 + 1] & 0xffffffff;
+   }
+
+   free(mod_reply);
+
+   *modifiers_in = modifiers;
+   *num_modifiers_in = mod_reply->num_modifiers;
+#endif
+}
+
 static VkResult
 x11_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
                              VkDevice device,
@@ -1122,6 +1219,8 @@ x11_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
    struct x11_swapchain *chain;
    xcb_void_cookie_t cookie;
    VkResult result;
+   uint64_t *modifiers = NULL;
+   int num_modifiers = 0;
 
    assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR);
 
@@ -1161,9 +1260,20 @@ x11_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
 
    free(geometry);
 
+   struct wsi_x11_connection *wsi_conn =
+      wsi_x11_get_connection(wsi_device, pAllocator, conn);
+   if (!wsi_conn)
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+   chain->has_dri3_v1_1 = wsi_conn->has_dri3_v1_1;
+
    chain->base.needs_linear_copy = false;
    if (!wsi_x11_check_dri3_compatible(conn, local_fd))
        chain->base.needs_linear_copy = true;
+
+   wsi_x11_get_dri3_modifiers(conn, window, pCreateInfo->imageFormat,
+                              pCreateInfo->compositeAlpha,
+                              &modifiers, &num_modifiers, pAllocator);
 
    chain->event_id = xcb_generate_id(chain->conn);
    xcb_present_select_input(chain->conn, chain->event_id, chain->window,
@@ -1195,7 +1305,7 @@ x11_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
    uint32_t image = 0;
    for (; image < chain->base.image_count; image++) {
       result = x11_image_init(device, chain, pCreateInfo, pAllocator,
-                              NULL, 0, &chain->images[image]);
+                              modifiers, num_modifiers, &chain->images[image]);
       if (result != VK_SUCCESS)
          goto fail_init_images;
    }
@@ -1231,11 +1341,16 @@ x11_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
       }
    }
 
+   if (modifiers)
+      vk_free(pAllocator, modifiers);
    *swapchain_out = &chain->base;
 
    return VK_SUCCESS;
 
 fail_init_images:
+   if (modifiers)
+      vk_free(pAllocator, modifiers);
+
    for (uint32_t j = 0; j < image; j++)
       x11_image_finish(chain, pAllocator, &chain->images[j]);
 

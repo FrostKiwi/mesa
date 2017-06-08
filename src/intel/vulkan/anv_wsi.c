@@ -201,8 +201,11 @@ anv_wsi_image_create(VkDevice device_h,
    for (i = 0; i < num_modifiers; i++) {
       enum isl_tiling t;
       enum isl_aux_usage a;
-      if (isl_tiling_from_drm_format_mod(modifiers[i], &t, &a))
+      if (modifiers[i] != DRM_FORMAT_MOD_LINEAR &&
+          isl_tiling_from_drm_format_mod(modifiers[i], &t, &a)) {
          vk_tiling = VK_IMAGE_TILING_OPTIMAL;
+	 break;
+      }
    }
 
    VkResult result;
@@ -231,7 +234,7 @@ anv_wsi_image_create(VkDevice device_h,
          .pNext =
       &(VkExportImageDmaBufInfoMESAX) {
          .sType = VK_STRUCTURE_TYPE_EXPORT_IMAGE_DMA_BUF_INFO_MESAX,
-         .drmFormatModifierCount = ARRAY_SIZE(modifiers),
+         .drmFormatModifierCount = num_modifiers,
          .pDrmFormatModifiers = modifiers,
       }}},
       NULL,
