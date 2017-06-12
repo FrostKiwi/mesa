@@ -867,7 +867,7 @@ intel_miptree_create_for_dri_image(struct brw_context *brw,
     */
    struct intel_mipmap_tree *mt =
       intel_miptree_create_for_bo(brw, image->bo, image->format,
-                                  0, image->width, image->height, 1,
+                                  image->offset, image->width, image->height, 1,
                                   image->pitch,
                                   MIPTREE_LAYOUT_DISABLE_AUX);
    if (mt == NULL)
@@ -893,8 +893,6 @@ intel_miptree_create_for_dri_image(struct brw_context *brw,
          return NULL;
       }
    }
-
-   mt->offset = image->offset;
 
    return mt;
 }
