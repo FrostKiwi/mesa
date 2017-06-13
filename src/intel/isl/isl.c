@@ -1688,7 +1688,8 @@ isl_surf_get_mcs_surf(const struct isl_device *dev,
 bool
 isl_surf_get_ccs_surf(const struct isl_device *dev,
                       const struct isl_surf *surf,
-                      struct isl_surf *ccs_surf)
+                      struct isl_surf *ccs_surf,
+                      uint32_t row_pitch)
 {
    assert(surf->samples == 1 && surf->msaa_layout == ISL_MSAA_LAYOUT_NONE);
    assert(ISL_DEV_GEN(dev) >= 7);
@@ -1745,6 +1746,7 @@ isl_surf_get_ccs_surf(const struct isl_device *dev,
                         .levels = surf->levels,
                         .array_len = surf->logical_level0_px.array_len,
                         .samples = 1,
+                        .row_pitch = row_pitch,
                         .usage = ISL_SURF_USAGE_CCS_BIT,
                         .tiling_flags = ISL_TILING_CCS_BIT);
 }
