@@ -48,6 +48,10 @@
 
 #define FILE_DEBUG_FLAG DEBUG_MIPTREE
 
+#ifndef DRM_FORMAT_MOD_INVALID
+#define DRM_FORMAT_MOD_INVALID ((1ULL<<56) - 1)
+#endif
+
 static void *intel_miptree_map_raw(struct brw_context *brw,
                                    struct intel_mipmap_tree *mt,
                                    GLbitfield mode);
@@ -331,6 +335,7 @@ intel_miptree_create_layout(struct brw_context *brw,
    mt->logical_height0 = height0;
    mt->logical_depth0 = depth0;
    mt->is_scanout = (layout_flags & MIPTREE_LAYOUT_FOR_SCANOUT) != 0;
+   mt->drm_modifier = DRM_FORMAT_MOD_INVALID;
    mt->aux_usage = ISL_AUX_USAGE_NONE;
    mt->supports_fast_clear = false;
    mt->aux_state = NULL;
@@ -979,6 +984,8 @@ miptree_create_for_planar_image(struct brw_context *brw,
          planar_mt->plane[i - 1] = mt;
    }
 
+   planar_mt->drm_modifier = image->modifier;
+
    return planar_mt;
 }
 
@@ -1119,6 +1126,7 @@ intel_miptree_create_for_dri_image(struct brw_context *brw,
    mt->level[0].slice[0].y_offset = image->tile_y;
    mt->total_width += image->tile_x;
    mt->total_height += image->tile_y;
+   mt->drm_modifier = image->modifier;
 
    /* From "OES_EGL_image" error reporting. We report GL_INVALID_OPERATION
     * for EGL images from non-tile aligned sufaces in gen4 hw and earlier which has
@@ -2771,6 +2779,35 @@ intel_miptree_finish_depth(struct brw_context *brw,
       intel_miptree_finish_write(brw, mt, level, start_layer, layer_count,
                                  mt->hiz_buf != NULL);
    }
+}
+
+void
+intel_miptree_prepare_external(struct brw_context *brw,
+                               struct intel_mipmap_tree *mt)
+{
+   bool supports_aux = false, supports_fast_clear = false;
+
+   const struct isl_drm_modifier_info *mod_info =
+      isl_drm_modifier_get_info(mt->drm_modifier);
+
+   if (mod_info && mod_info->aux_usage != ISL_AUX_USAGE_NONE) {
+      /* CCS_E is the only supported aux for external images and it's only
+       * supported on very simple images.
+       */
+      assert(mod_info->aux_usage == ISL_AUX_USAGE_CCS_E);
+      assert(_mesa_is_format_color_format(mt->format));
+      assert(mt->first_level == mt->last_level);
+      assert(mt->logical_depth0 == 1);
+      assert(mt->num_samples <= 1);
+      assert(mt->mcs_buf != NULL);
+
+      supports_aux = true;
+      supports_fast_clear = mod_info->supports_clear_color;
+   }
+
+   intel_miptree_prepare_access(brw, mt, 0, INTEL_REMAINING_LEVELS,
+                                0, INTEL_REMAINING_LAYERS,
+                                supports_aux, supports_fast_clear);
 }
 
 /**
