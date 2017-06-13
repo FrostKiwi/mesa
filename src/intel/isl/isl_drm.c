@@ -75,6 +75,10 @@ isl_tiling_from_i915_tiling(uint32_t tiling)
    unreachable("Invalid i915 tiling");
 }
 
+#ifndef I915_FORMAT_MOD_Y_TILED_CCS
+#define I915_FORMAT_MOD_Y_TILED_CCS fourcc_mod_code(INTEL, 4)
+#endif
+
 struct isl_drm_modifier_info modifier_info[] = {
    {
       .modifier = DRM_FORMAT_MOD_NONE,
@@ -90,6 +94,13 @@ struct isl_drm_modifier_info modifier_info[] = {
       .modifier = I915_FORMAT_MOD_Y_TILED,
       .name = "I915_FORMAT_MOD_Y_TILED",
       .tiling = ISL_TILING_Y0,
+   },
+   {
+      .modifier = I915_FORMAT_MOD_Y_TILED_CCS,
+      .name = "I915_FORMAT_MOD_Y_TILED_CCS",
+      .tiling = ISL_TILING_Y0,
+      .aux_usage = ISL_AUX_USAGE_CCS_E,
+      .supports_clear_color = false,
    },
 };
 
