@@ -231,7 +231,7 @@ make_ccs_surface_maybe(const struct anv_device *dev,
       return;
 
    ok = isl_surf_get_ccs_surf(&dev->isl_dev, &image->color_surface.isl,
-                              &image->aux_surface.isl);
+                              &image->aux_surface.isl, 0);
    if (!ok)
       return;
 

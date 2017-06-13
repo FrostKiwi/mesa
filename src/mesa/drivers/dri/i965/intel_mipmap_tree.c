@@ -881,7 +881,8 @@ create_ccs_buf_for_image(struct brw_context *brw,
    assert(mt->logical_depth0 == 1);
 
    intel_miptree_get_isl_surf(brw, mt, &temp_main_surf);
-   if (!isl_surf_get_ccs_surf(&brw->isl_dev, &temp_main_surf, &temp_ccs_surf))
+   if (!isl_surf_get_ccs_surf(&brw->isl_dev, &temp_main_surf,
+                              &temp_ccs_surf, 0))
       return false;
 
    assert(temp_ccs_surf.size <= image->bo->size - image->aux_offset);
@@ -1717,7 +1718,8 @@ intel_miptree_alloc_non_msrt_mcs(struct brw_context *brw,
     * calculate equivalent CCS surface against it.
     */
    intel_miptree_get_isl_surf(brw, mt, &temp_main_surf);
-   if (!isl_surf_get_ccs_surf(&brw->isl_dev, &temp_main_surf, &temp_ccs_surf))
+   if (!isl_surf_get_ccs_surf(&brw->isl_dev, &temp_main_surf,
+                              &temp_ccs_surf, 0))
       return false;
 
    assert(temp_ccs_surf.size &&
@@ -3945,7 +3947,7 @@ intel_miptree_get_aux_isl_surf(struct brw_context *brw,
       if (brw->gen >= 8)
          assert(mt->halign == 16);
 
-      isl_surf_get_ccs_surf(&brw->isl_dev, surf, surf);
+      isl_surf_get_ccs_surf(&brw->isl_dev, surf, surf, 0);
       break;
    }
 
