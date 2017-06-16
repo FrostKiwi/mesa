@@ -1688,15 +1688,8 @@ intel_update_image_buffer(struct brw_context *intel,
       return;
 
    struct intel_mipmap_tree *mt =
-      intel_miptree_create_for_bo(intel,
-                                  buffer->bo,
-                                  intel_rb_format(rb),
-                                  0,
-                                  buffer->width,
-                                  buffer->height,
-                                  1,
-                                  buffer->pitch,
-                                  MIPTREE_LAYOUT_FOR_SCANOUT);
+      intel_miptree_create_for_dri_image(intel, buffer, GL_TEXTURE_2D,
+                                         intel_rb_format(rb), true);
    if (!mt)
       return;
 
