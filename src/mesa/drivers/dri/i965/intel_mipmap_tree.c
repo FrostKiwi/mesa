@@ -1040,12 +1040,13 @@ miptree_create_for_planar_image(struct brw_context *brw,
 
 struct intel_mipmap_tree *
 intel_miptree_create_for_dri_image(struct brw_context *brw,
-                                   __DRIimage *image, GLenum target)
+                                   __DRIimage *image, GLenum target,
+                                   mesa_format format)
 {
    if (image->planar_format && image->planar_format->nplanes > 0)
       return miptree_create_for_planar_image(brw, image, target);
 
-   if (!brw->ctx.TextureFormatSupported[image->format])
+   if (!brw->ctx.TextureFormatSupported[format])
       return NULL;
 
    /* Disable creation of the texture's aux buffers because the driver exposes
@@ -1054,7 +1055,7 @@ intel_miptree_create_for_dri_image(struct brw_context *brw,
     * content.
     */
    struct intel_mipmap_tree *mt =
-      intel_miptree_create_for_bo(brw, image->bo, image->format,
+      intel_miptree_create_for_bo(brw, image->bo, format,
                                   image->offset, image->width, image->height, 1,
                                   image->pitch,
                                   MIPTREE_LAYOUT_DISABLE_AUX);
