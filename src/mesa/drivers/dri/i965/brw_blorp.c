@@ -175,6 +175,9 @@ blorp_surf_for_miptree(struct brw_context *brw,
       }
    }
 
+   if (mt->format == MESA_FORMAT_S_UINT8 && is_render_target && brw->gen <= 7)
+      mt->r8stencil_needs_update = true;
+
    if (surf->aux_usage == ISL_AUX_USAGE_HIZ &&
        !intel_miptree_level_has_hiz(mt, *level))
       surf->aux_usage = ISL_AUX_USAGE_NONE;
