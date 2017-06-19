@@ -59,9 +59,7 @@
 UNUSED static void *
 emit_dwords(struct brw_context *brw, unsigned n)
 {
-   intel_batchbuffer_begin(brw, n, RENDER_RING);
-   uint32_t *map = brw->batch.map_next;
-   brw->batch.map_next += n;
+   uint32_t *map = intel_batchbuffer_begin(brw, n, RENDER_RING);
    intel_batchbuffer_advance(brw);
    return map;
 }

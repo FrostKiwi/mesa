@@ -131,7 +131,7 @@ intel_batchbuffer_emit_float(struct intel_batchbuffer *batch, float f)
    intel_batchbuffer_emit_dword(batch, float_as_int(f));
 }
 
-static inline void
+static inline uint32_t *
 intel_batchbuffer_begin(struct brw_context *brw, int n, enum brw_gpu_ring ring)
 {
    intel_batchbuffer_require_space(brw, n * 4, ring);
@@ -140,6 +140,11 @@ intel_batchbuffer_begin(struct brw_context *brw, int n, enum brw_gpu_ring ring)
    brw->batch.emit = USED_BATCH(brw->batch);
    brw->batch.total = n;
 #endif
+
+   uint32_t *map = brw->batch.map_next;
+   brw->batch.map_next += n;
+
+   return map;
 }
 
 static inline void
@@ -160,15 +165,11 @@ intel_batchbuffer_advance(struct brw_context *brw)
 #endif
 }
 
-#define BEGIN_BATCH(n) do {                            \
-   intel_batchbuffer_begin(brw, (n), RENDER_RING);     \
-   uint32_t *__map = brw->batch.map_next;              \
-   brw->batch.map_next += (n)
+#define BEGIN_BATCH(n) do {                                          \
+   uint32_t *__map = intel_batchbuffer_begin(brw, (n), RENDER_RING);
 
-#define BEGIN_BATCH_BLT(n) do {                        \
-   intel_batchbuffer_begin(brw, (n), BLT_RING);        \
-   uint32_t *__map = brw->batch.map_next;              \
-   brw->batch.map_next += (n)
+#define BEGIN_BATCH_BLT(n) do {                                   \
+   uint32_t *__map = intel_batchbuffer_begin(brw, (n), BLT_RING);
 
 #define OUT_BATCH(d) *__map++ = (d)
 #define OUT_BATCH_F(f) OUT_BATCH(float_as_int((f)))

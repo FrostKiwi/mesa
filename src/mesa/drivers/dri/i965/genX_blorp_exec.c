@@ -44,9 +44,7 @@ blorp_emit_dwords(struct blorp_batch *batch, unsigned n)
    assert(batch->blorp->driver_ctx == batch->driver_batch);
    struct brw_context *brw = batch->driver_batch;
 
-   intel_batchbuffer_begin(brw, n, RENDER_RING);
-   uint32_t *map = brw->batch.map_next;
-   brw->batch.map_next += n;
+   uint32_t *map = intel_batchbuffer_begin(brw, n, RENDER_RING);
    intel_batchbuffer_advance(brw);
    return map;
 }
