@@ -487,6 +487,7 @@ _eglCreateExtensionsString(_EGLDisplay *dpy)
    _EGL_CHECK_EXTENSION(EXT_create_context_robustness);
    _EGL_CHECK_EXTENSION(EXT_image_dma_buf_import);
    _EGL_CHECK_EXTENSION(EXT_image_dma_buf_import_modifiers);
+   _EGL_CHECK_EXTENSION(EXT_image_implicit_sync_control);
    _EGL_CHECK_EXTENSION(EXT_swap_buffers_with_damage);
 
    _EGL_CHECK_EXTENSION(IMG_context_priority);

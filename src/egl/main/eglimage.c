@@ -265,6 +265,28 @@ _eglParseEXTImageDmaBufImportModifiersAttribs(_EGLImageAttribs *attrs,
    return EGL_SUCCESS;
 }
 
+static EGLint
+_eglParseEXTImageImplicitSyncControlAttribs(_EGLImageAttribs *attrs,
+                                            _EGLDisplay *dpy,
+                                            EGLint attr, EGLint val)
+{
+   if (!dpy->Extensions.EXT_image_implicit_sync_control)
+      return EGL_BAD_PARAMETER;
+
+   switch (attr) {
+   case EGL_IMPORT_SYNC_TYPE_EXT:
+      if (val != EGL_IMPORT_IMPLICIT_SYNC_EXT &&
+          val != EGL_IMPORT_EXPLICIT_SYNC_EXT)
+         return EGL_BAD_ATTRIBUTE;
+      attrs->ExplicitSync = (val == EGL_IMPORT_EXPLICIT_SYNC_EXT);
+      break;
+   default:
+      return EGL_BAD_PARAMETER;
+   }
+
+   return EGL_SUCCESS;
+}
+
 /**
  * Parse the list of image attributes.
  *
@@ -310,6 +332,10 @@ _eglParseImageAttribList(_EGLImageAttribs *attrs, _EGLDisplay *dpy,
          return _eglError(err, __func__);
 
       err = _eglParseEXTImageDmaBufImportModifiersAttribs(attrs, dpy, attr, val);
+      if (err == EGL_SUCCESS)
+         continue;
+
+      err = _eglParseEXTImageImplicitSyncControlAttribs(attrs, dpy, attr, val);
       if (err == EGL_SUCCESS)
          continue;
 
