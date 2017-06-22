@@ -1367,8 +1367,14 @@ intel_from_planar(__DRIimage *parent, int plane, void *loaderPrivate)
     return image;
 }
 
-static const __DRIimageExtension intelImageExtension = {
-    .base = { __DRI_IMAGE, 16 },
+static void
+intel_image_suppress_implicit_sync(__DRIimage *image)
+{
+    image->bo->kflags |= EXEC_OBJECT_ASYNC;
+}
+
+static __DRIimageExtension intelImageExtension = {
+    .base = { __DRI_IMAGE, 18 },
 
     .createImageFromName                = intel_create_image_from_name,
     .createImageFromRenderbuffer        = intel_create_image_from_renderbuffer,
@@ -1391,6 +1397,8 @@ static const __DRIimageExtension intelImageExtension = {
     .queryDmaBufFormats                 = intel_query_dma_buf_formats,
     .queryDmaBufModifiers               = intel_query_dma_buf_modifiers,
     .queryDmaBufFormatModifierAttribs   = intel_query_format_modifier_attribs,
+    .createImageFromRenderbuffer2       = NULL,
+    .suppressImplicitSync               = NULL,
 };
 
 static uint64_t
@@ -2657,6 +2665,11 @@ __DRIconfig **intelInitScreen2(__DRIscreen *dri_screen)
 
       screen->has_context_reset_notification =
          (ret != -1 || errno != EINVAL);
+   }
+
+   if (intel_get_boolean(screen, I915_PARAM_HAS_EXEC_ASYNC)) {
+      intelImageExtension.suppressImplicitSync =
+         intel_image_suppress_implicit_sync;
    }
 
    dri_screen->extensions = !screen->has_context_reset_notification
