@@ -1196,7 +1196,7 @@ struct __DRIdri2ExtensionRec {
  * extensions.
  */
 #define __DRI_IMAGE "DRI_IMAGE"
-#define __DRI_IMAGE_VERSION 17
+#define __DRI_IMAGE_VERSION 18
 
 /**
  * These formats correspond to the similarly named MESA_FORMAT_*
@@ -1667,6 +1667,14 @@ struct __DRIimageExtensionRec {
                                                 int renderbuffer,
                                                 void *loaderPrivate,
                                                 unsigned *error);
+
+   /*
+    * Suppress implicit synchronization for the image. Not mandatory but
+    * cannot fail if provided.
+    *
+    * \since 18
+    */
+   void (*suppressImplicitSync)(__DRIimage *image);
 };
 
 

@@ -768,6 +768,10 @@ dri2_setup_screen(_EGLDisplay *disp)
          disp->Extensions.EXT_image_dma_buf_import_modifiers = EGL_TRUE;
       }
 #endif
+      if (dri2_dpy->image->base.version >= 18 &&
+          dri2_dpy->image->suppressImplicitSync) {
+         disp->Extensions.EXT_image_implicit_sync_control = EGL_TRUE;
+      }
    }
 
    if (dri2_dpy->flush_control)
@@ -1876,6 +1880,7 @@ dri2_create_image_khr_renderbuffer(_EGLDisplay *disp, _EGLContext *ctx,
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
    struct dri2_egl_context *dri2_ctx = dri2_egl_context(ctx);
    GLuint renderbuffer = (GLuint) (uintptr_t) buffer;
+   _EGLImageAttribs attrs;
    __DRIimage *dri_image;
 
    if (renderbuffer == 0) {
@@ -1887,6 +1892,9 @@ dri2_create_image_khr_renderbuffer(_EGLDisplay *disp, _EGLContext *ctx,
       _eglError(EGL_BAD_PARAMETER, "dri2_create_image_khr");
       return EGL_NO_IMAGE_KHR;
    }
+
+   if (!_eglParseImageAttribList(&attrs, disp, attr_list))
+      return NULL;
 
    if (dri2_dpy->image->base.version >= 17 &&
        dri2_dpy->image->createImageFromRenderbuffer2) {
@@ -1909,6 +1917,9 @@ dri2_create_image_khr_renderbuffer(_EGLDisplay *disp, _EGLContext *ctx,
          return EGL_NO_IMAGE_KHR;
       }
    }
+
+   if (dri_image && attrs.ExplicitSync)
+      dri2_dpy->image->suppressImplicitSync(dri_image);
 
    return dri2_create_image_from_dri(disp, dri_image);
 }
@@ -1967,6 +1978,9 @@ dri2_create_image_wayland_wl_buffer(_EGLDisplay *disp, _EGLContext *ctx,
       _eglError(EGL_BAD_PARAMETER, "dri2_create_image_wayland_wl_buffer");
       return NULL;
    }
+
+   if (attrs.ExplicitSync)
+      dri2_dpy->image->suppressImplicitSync(dri_image);
 
    return dri2_create_image_from_dri(disp, dri_image);
 }
@@ -2076,6 +2090,10 @@ dri2_create_image_khr_texture(_EGLDisplay *disp, _EGLContext *ctx,
       free(dri2_img);
       return EGL_NO_IMAGE_KHR;
    }
+
+   if (attrs.ExplicitSync)
+      dri2_dpy->image->suppressImplicitSync(dri2_img->dri_image);
+
    return &dri2_img->base;
 }
 
@@ -2138,6 +2156,9 @@ dri2_create_image_mesa_drm_buffer(_EGLDisplay *disp, _EGLContext *ctx,
                                            name,
                                            pitch,
                                            NULL);
+
+   if (dri_image && attrs.ExplicitSync)
+      dri2_dpy->image->suppressImplicitSync(dri_image);
 
    return dri2_create_image_from_dri(disp, dri_image);
 }
@@ -2481,6 +2502,9 @@ dri2_create_image_dma_buf(_EGLDisplay *disp, _EGLContext *ctx,
    if (!dri_image)
       return EGL_NO_IMAGE_KHR;
 
+   if (attrs.ExplicitSync)
+      dri2_dpy->image->suppressImplicitSync(dri_image);
+
    res = dri2_create_image_from_dri(disp, dri_image);
 
    return res;
@@ -2553,6 +2577,9 @@ dri2_create_drm_image_mesa(_EGLDriver *drv, _EGLDisplay *disp,
        _eglError(EGL_BAD_ALLOC, "dri2_create_drm_image_mesa");
       return EGL_NO_IMAGE_KHR;
    }
+
+   if (attrs.ExplicitSync)
+      dri2_dpy->image->suppressImplicitSync(dri2_img->dri_image);
 
    return &dri2_img->base;
 }
