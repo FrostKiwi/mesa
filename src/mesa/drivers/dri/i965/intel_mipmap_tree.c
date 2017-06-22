@@ -2581,38 +2581,66 @@ intel_miptree_prepare_fb_fetch(struct brw_context *brw,
                                         start_layer, num_layers, NULL);
 }
 
+static enum isl_format
+miptree_render_format(struct intel_mipmap_tree *mt, bool srgb_enabled)
+{
+   mesa_format render_format =
+      srgb_enabled ? mt->format : _mesa_get_srgb_format_linear(mt->format);
+   return brw_isl_format_for_mesa_format(render_format);
+}
+
+enum isl_aux_usage
+intel_miptree_render_aux_usage(struct brw_context *brw,
+                               struct intel_mipmap_tree *mt,
+                               bool srgb_enabled)
+{
+   switch (mt->aux_usage) {
+   case ISL_AUX_USAGE_MCS:
+      assert(mt->mcs_buf);
+      return ISL_AUX_USAGE_MCS;
+
+   case ISL_AUX_USAGE_CCS_D:
+      return mt->mcs_buf ? ISL_AUX_USAGE_CCS_D : ISL_AUX_USAGE_NONE;
+
+   case ISL_AUX_USAGE_CCS_E: {
+      assert(mt->mcs_buf);
+      enum isl_format render_format = miptree_render_format(mt, srgb_enabled);
+      if (isl_format_supports_ccs_e(&brw->screen->devinfo, render_format))
+         return ISL_AUX_USAGE_CCS_E;
+      else
+         return ISL_AUX_USAGE_CCS_D;
+   }
+
+   default:
+      return ISL_AUX_USAGE_NONE;
+   }
+}
+
 void
 intel_miptree_prepare_render(struct brw_context *brw,
                              struct intel_mipmap_tree *mt, uint32_t level,
                              uint32_t start_layer, uint32_t layer_count,
                              bool srgb_enabled)
 {
-   /* If FRAMEBUFFER_SRGB is used on Gen9+ then we need to resolve any of
-    * the single-sampled color renderbuffers because the CCS buffer isn't
-    * supported for SRGB formats. This only matters if FRAMEBUFFER_SRGB is
-    * enabled because otherwise the surface state will be programmed with
-    * the linear equivalent format anyway.
-    */
-   if (brw->gen == 9 && srgb_enabled && mt->num_samples <= 1 &&
-       _mesa_get_srgb_format_linear(mt->format) != mt->format) {
-
-      /* Lossless compression is not supported for SRGB formats, it
-       * should be impossible to get here with such surfaces.
-       */
-      assert(!intel_miptree_is_lossless_compressed(brw, mt));
-      intel_miptree_prepare_access(brw, mt, level, 1, start_layer, layer_count,
-                                   false, false);
-   }
+   enum isl_aux_usage aux_usage =
+      intel_miptree_render_aux_usage(brw, mt, srgb_enabled);
+   intel_miptree_prepare_access(brw, mt, level, 1, start_layer, layer_count,
+                                aux_usage != ISL_AUX_USAGE_NONE,
+                                aux_usage != ISL_AUX_USAGE_NONE);
 }
 
 void
 intel_miptree_finish_render(struct brw_context *brw,
                             struct intel_mipmap_tree *mt, uint32_t level,
-                            uint32_t start_layer, uint32_t layer_count)
+                            uint32_t start_layer, uint32_t layer_count,
+                            bool srgb_enabled)
 {
    assert(_mesa_is_format_color_format(mt->format));
+
+   enum isl_aux_usage aux_usage =
+      intel_miptree_render_aux_usage(brw, mt, srgb_enabled);
    intel_miptree_finish_write(brw, mt, level, start_layer, layer_count,
-                              mt->mcs_buf != NULL);
+                              aux_usage != ISL_AUX_USAGE_NONE);
 }
 
 void
