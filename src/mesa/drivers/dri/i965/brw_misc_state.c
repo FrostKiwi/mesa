@@ -343,21 +343,6 @@ brw_emit_depthbuffer(struct brw_context *brw)
                                     width, height, tile_x, tile_y);
 }
 
-uint32_t
-brw_convert_depth_value(mesa_format format, float value)
-{
-   switch (format) {
-   case MESA_FORMAT_Z_FLOAT32:
-      return float_as_int(value);
-   case MESA_FORMAT_Z_UNORM16:
-      return value * ((1u << 16) - 1);
-   case MESA_FORMAT_Z24_UNORM_X8_UINT:
-      return value * ((1u << 24) - 1);
-   default:
-      unreachable("Invalid depth format");
-   }
-}
-
 void
 brw_emit_depth_stencil_hiz(struct brw_context *brw,
                            struct intel_mipmap_tree *depth_mt,

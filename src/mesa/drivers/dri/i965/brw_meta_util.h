@@ -42,11 +42,6 @@ brw_meta_mirror_clip_and_scissor(const struct gl_context *ctx,
                                  GLfloat *dstX1, GLfloat *dstY1,
                                  bool *mirror_x, bool *mirror_y);
 
-union isl_color_value
-brw_meta_convert_fast_clear_color(const struct brw_context *brw,
-                                  const struct intel_mipmap_tree *mt,
-                                  const union gl_color_union *color);
-
 bool
 brw_is_color_fast_clear_compatible(struct brw_context *brw,
                                    const struct intel_mipmap_tree *mt,

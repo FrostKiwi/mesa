@@ -31,6 +31,21 @@
 #include "brw_wm.h"
 #include "main/framebuffer.h"
 
+static uint32_t
+convert_depth_value(mesa_format format, uint32_t value)
+{
+   switch (format) {
+   case MESA_FORMAT_Z_FLOAT32:
+      return value;
+   case MESA_FORMAT_Z_UNORM16:
+      return float_as_int(value / (float)((1u << 16) - 1));
+   case MESA_FORMAT_Z24_UNORM_X8_UINT:
+      return float_as_int(value / (float)((1u << 24) - 1));
+   default:
+      unreachable("Invalid depth format");
+   }
+}
+
 /**
  * Helper function to emit depth related command packets.
  */
@@ -120,7 +135,12 @@ emit_depth_packets(struct brw_context *brw,
 
    BEGIN_BATCH(3);
    OUT_BATCH(GEN7_3DSTATE_CLEAR_PARAMS << 16 | (3 - 2));
-   OUT_BATCH(depth_mt ? depth_mt->fast_clear_color.u32[0] : 0);
+   if (depth_mt) {
+      OUT_BATCH(convert_depth_value(depth_mt->format,
+                                    depth_mt->fast_clear_value[0]));
+   } else {
+      OUT_BATCH(0);
+   }
    OUT_BATCH(1);
    ADVANCE_BATCH();
 

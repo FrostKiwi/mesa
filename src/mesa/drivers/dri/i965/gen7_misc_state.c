@@ -176,8 +176,7 @@ gen7_emit_depth_stencil_hiz(struct brw_context *brw,
    BEGIN_BATCH(3);
    OUT_BATCH(GEN7_3DSTATE_CLEAR_PARAMS << 16 | (3 - 2));
    if (depth_mt) {
-      OUT_BATCH(brw_convert_depth_value(depth_mt->format,
-                                        depth_mt->fast_clear_color.f32[0]));
+      OUT_BATCH(depth_mt->fast_clear_value[0]);
    } else {
       OUT_BATCH(0);
    }

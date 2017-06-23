@@ -2698,7 +2698,7 @@ intel_miptree_render_aux_usage(struct brw_context *brw,
        * properly apply the sRGB curve to the clear color when blending.
        */
       if (blend_enabled && isl_format_is_srgb(render_format) &&
-          !isl_color_value_is_zero_one(mt->fast_clear_color, render_format))
+          !(mt->fast_clear_value[0] == 0 || mt->fast_clear_value[0] == ~0))
          return ISL_AUX_USAGE_NONE;
 
       return ISL_AUX_USAGE_CCS_D;

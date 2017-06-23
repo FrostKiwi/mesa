@@ -168,8 +168,13 @@ blorp_surf_for_miptree(struct brw_context *brw,
    if (surf->aux_usage != ISL_AUX_USAGE_NONE) {
       /* We only really need a clear color if we also have an auxiliary
        * surface.  Without one, it does nothing.
+       *
+       * For some strange reason, with sRGB formats, the hardware seems to
+       * want the clear color to be in the linear colorspace.
        */
-      surf->clear_color = mt->fast_clear_color;
+      isl_color_value_unpack(&surf->clear_color,
+                             isl_format_srgb_to_linear(view_format),
+                             mt->fast_clear_value);
 
       surf->aux_surf = aux_surf;
       surf->aux_addr = (struct blorp_address) {
@@ -1213,12 +1218,17 @@ do_single_blorp_clear(struct brw_context *brw, struct gl_framebuffer *fb,
    if (can_fast_clear) {
       const enum isl_aux_state aux_state =
          intel_miptree_get_aux_state(irb->mt, irb->mt_level, irb->mt_layer);
-      union isl_color_value clear_color =
-         brw_meta_convert_fast_clear_color(brw, irb->mt,
-                                           &ctx->Color.ClearColor);
 
+      const union isl_color_value clear_color = {
+         .u32 = {
+            ctx->Color.ClearColor.ui[0],
+            ctx->Color.ClearColor.ui[1],
+            ctx->Color.ClearColor.ui[2],
+            ctx->Color.ClearColor.ui[3],
+         },
+      };
       bool same_clear_color =
-         !intel_miptree_set_clear_color(ctx, irb->mt, clear_color);
+         !intel_miptree_set_clear_color(ctx, irb->mt, isl_format, clear_color);
 
       /* If the buffer is already in INTEL_FAST_CLEAR_STATE_CLEAR, the clear
        * is redundant and can be skipped.

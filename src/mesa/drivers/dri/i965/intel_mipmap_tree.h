@@ -335,10 +335,10 @@ struct intel_mipmap_tree
    struct intel_mipmap_tree *plane[2];
 
    /**
-    * Fast clear color for this surface.  For depth surfaces, the clear value
-    * is stored as a float32 in the red component.
+    * Fast clear color for this surface, stored as a single pixel value
+    * encoded with mt->format.
     */
-   union isl_color_value fast_clear_color;
+   uint32_t fast_clear_value[4];
 
    /**
     * For external surfaces, this is DRM format modifier that was used to
@@ -717,10 +717,14 @@ intel_miptree_sample_with_hiz(struct brw_context *brw,
 static inline bool
 intel_miptree_set_clear_color(struct gl_context *ctx,
                               struct intel_mipmap_tree *mt,
+                              enum isl_format view_format,
                               union isl_color_value clear_color)
 {
-   if (memcmp(&mt->fast_clear_color, &clear_color, sizeof(clear_color)) != 0) {
-      mt->fast_clear_color = clear_color;
+   uint32_t clear_value[4];
+   isl_color_value_pack(&clear_color, view_format, clear_value);
+
+   if (memcmp(&mt->fast_clear_value, clear_value, sizeof(clear_value)) != 0) {
+      memcpy(mt->fast_clear_value, clear_value, sizeof(clear_value));
       ctx->NewDriverState |= BRW_NEW_AUX_STATE;
       return true;
    }
@@ -730,10 +734,15 @@ intel_miptree_set_clear_color(struct gl_context *ctx,
 static inline bool
 intel_miptree_set_depth_clear_value(struct gl_context *ctx,
                                     struct intel_mipmap_tree *mt,
-                                    float clear_value)
+                                    float depth_clear_value)
 {
-   if (mt->fast_clear_color.f32[0] != clear_value) {
-      mt->fast_clear_color.f32[0] = clear_value;
+   union isl_color_value clear_color = { .f32 = { depth_clear_value, } };
+
+   uint32_t clear_value;
+   isl_color_value_pack(&clear_color, mt->surf.format, &clear_value);
+
+   if (mt->fast_clear_value[0] != clear_value) {
+      mt->fast_clear_value[0] = clear_value;
       ctx->NewDriverState |= BRW_NEW_AUX_STATE;
       return true;
    }
