@@ -794,9 +794,13 @@
     <field name="Quilt Width" start="320" end="324" type="uint"/>
     <field name="Hierarchical Depth Clear Value" start="384" end="415" type="float"/>
     <field name="Red Clear Color" start="384" end="415" type="int"/>
+    <field name="Red Clear Color (Float)" start="384" end="415" type="float"/>
     <field name="Green Clear Color" start="416" end="447" type="int"/>
+    <field name="Green Clear Color (Float)" start="416" end="447" type="float"/>
     <field name="Blue Clear Color" start="448" end="479" type="int"/>
+    <field name="Blue Clear Color (Float)" start="448" end="479" type="float"/>
     <field name="Alpha Clear Color" start="480" end="511" type="int"/>
+    <field name="Alpha Clear Color (Float)" start="480" end="511" type="float"/>
   </struct>
 
   <struct name="FILTER_COEFFICIENT" length="1">
