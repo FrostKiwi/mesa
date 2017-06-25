@@ -2547,6 +2547,51 @@ intel_miptree_set_aux_state(struct brw_context *brw,
    }
 }
 
+bool
+intel_miptree_has_fast_clear(const struct intel_mipmap_tree *mt,
+                             unsigned start_level, unsigned num_levels,
+                             unsigned start_layer, unsigned num_layers)
+{
+   num_levels = miptree_level_range_length(mt, start_level, num_levels);
+
+   switch (mt->aux_usage) {
+   case ISL_AUX_USAGE_MCS:
+   case ISL_AUX_USAGE_CCS_D:
+   case ISL_AUX_USAGE_CCS_E:
+      /* For color surfaces, we only care about the first LOD and layer
+       * because we never even try to fast-clear anything else.
+       */
+      if (start_level == 0 && start_layer == 0) {
+         return isl_aux_state_has_clear(intel_miptree_get_aux_state(mt, 0, 0));
+      } else {
+         return false;
+      }
+
+   case ISL_AUX_USAGE_HIZ:
+      for (uint32_t l = 0; l < num_levels; l++) {
+         const uint32_t level = start_level + l;
+         if (!intel_miptree_level_has_hiz(mt, level))
+            continue;
+
+         const uint32_t level_layers =
+            miptree_layer_range_length(mt, level, start_layer, num_layers);
+         for (unsigned a = 0; a < level_layers; a++) {
+            const uint32_t layer = start_layer + a;
+            enum isl_aux_state aux_state =
+               intel_miptree_get_aux_state(mt, level, layer);
+            if (isl_aux_state_has_clear(aux_state))
+               return true;
+         }
+      }
+      return false;
+
+   case ISL_AUX_USAGE_NONE:
+      return false;
+   }
+
+   unreachable("Invalid aux usage");
+}
+
 /* On Gen9 color buffers may be compressed by the hardware (lossless
  * compression). There are, however, format restrictions and care needs to be
  * taken that the sampler engine is capable for re-interpreting a buffer with

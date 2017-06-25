@@ -165,16 +165,18 @@ blorp_surf_for_miptree(struct brw_context *brw,
        !intel_miptree_level_has_hiz(mt, *level))
       surf->aux_usage = ISL_AUX_USAGE_NONE;
 
+   memset(&surf->clear_color, 0, sizeof(surf->clear_color));
+
    if (surf->aux_usage != ISL_AUX_USAGE_NONE) {
-      /* We only really need a clear color if we also have an auxiliary
-       * surface.  Without one, it does nothing.
-       *
-       * For some strange reason, with sRGB formats, the hardware seems to
-       * want the clear color to be in the linear colorspace.
-       */
-      isl_color_value_unpack(&surf->clear_color,
-                             isl_format_srgb_to_linear(view_format),
-                             mt->fast_clear_value);
+      if (intel_miptree_has_fast_clear(mt, *level, 1,
+                                       start_layer, num_layers)) {
+         /* For some strange reason, with sRGB formats, the hardware seems to
+          * want the clear color to be in the linear colorspace.
+          */
+         isl_color_value_unpack(&surf->clear_color,
+                                isl_format_srgb_to_linear(view_format),
+                                mt->fast_clear_value);
+      }
 
       surf->aux_surf = aux_surf;
       surf->aux_addr = (struct blorp_address) {
@@ -196,7 +198,6 @@ blorp_surf_for_miptree(struct brw_context *brw,
       surf->aux_addr = (struct blorp_address) {
          .buffer = NULL,
       };
-      memset(&surf->clear_color, 0, sizeof(surf->clear_color));
    }
    assert((surf->aux_usage == ISL_AUX_USAGE_NONE) ==
           (surf->aux_addr.buffer == NULL));

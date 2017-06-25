@@ -614,6 +614,12 @@ intel_miptree_set_aux_state(struct brw_context *brw,
                             uint32_t start_layer, uint32_t num_layers,
                             enum isl_aux_state aux_state);
 
+/** Returns true if any slices in the given range use the clear color */
+bool
+intel_miptree_has_fast_clear(const struct intel_mipmap_tree *mt,
+                             unsigned start_level, unsigned num_levels,
+                             unsigned start_layer, unsigned num_layers);
+
 /**
  * Prepare a miptree for raw access
  *

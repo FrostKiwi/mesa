@@ -171,15 +171,15 @@ brw_emit_surface_state(struct brw_context *brw,
    }
 
    if (aux_usage != ISL_AUX_USAGE_NONE) {
-      /* We only really need a clear color if we also have an auxiliary
-       * surface.  Without one, it does nothing.
-       *
-       * For some strange reason, with sRGB formats, the hardware seems to
-       * want the clear color to be in the linear colorspace.
-       */
-      isl_color_value_unpack(&clear_color,
-                             isl_format_srgb_to_linear(view.format),
-                             mt->fast_clear_value);
+      if (intel_miptree_has_fast_clear(mt, 0, INTEL_REMAINING_LEVELS,
+                                       0, INTEL_REMAINING_LAYERS)) {
+         /* For some strange reason, with sRGB formats, the hardware seems to
+          * want the clear color to be in the linear colorspace.
+          */
+         isl_color_value_unpack(&clear_color,
+                                isl_format_srgb_to_linear(view.format),
+                                mt->fast_clear_value);
+      }
    }
 
    void *state = brw_state_batch(brw,
