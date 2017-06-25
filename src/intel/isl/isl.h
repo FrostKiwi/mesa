@@ -1562,6 +1562,25 @@ isl_tiling_to_i915_tiling(enum isl_tiling tiling);
 enum isl_tiling 
 isl_tiling_from_i915_tiling(uint32_t tiling);
 
+/** Returns true if aux_state allows for blocks to be in the clear state */
+static inline bool
+isl_aux_state_has_clear(enum isl_aux_state aux_state)
+{
+   switch (aux_state) {
+   case ISL_AUX_STATE_CLEAR:
+   case ISL_AUX_STATE_PARTIAL_CLEAR:
+   case ISL_AUX_STATE_COMPRESSED_CLEAR:
+      return true;
+   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
+   case ISL_AUX_STATE_RESOLVED:
+   case ISL_AUX_STATE_PASS_THROUGH:
+   case ISL_AUX_STATE_AUX_INVALID:
+      return false;
+   }
+
+   unreachable("Invalid aux state");
+}
+
 const struct isl_drm_modifier_info * ATTRIBUTE_CONST
 isl_drm_modifier_get_info(uint64_t modifier);
 
