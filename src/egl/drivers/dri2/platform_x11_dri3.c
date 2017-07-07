@@ -198,7 +198,9 @@ dri3_create_surface(_EGLDriver *drv, _EGLDisplay *disp, EGLint type,
 
    if (loader_dri3_drawable_init(dri2_dpy->conn, drawable,
                                  dri2_dpy->dri_screen,
-                                 dri2_dpy->is_different_gpu, dri_config,
+                                 dri2_dpy->is_different_gpu,
+                                 dri2_dpy->multibuffers_available,
+                                 dri_config,
                                  &dri2_dpy->loader_dri3_ext,
                                  &egl_dri3_vtable,
                                  &dri3_surf->loader_drawable)) {
@@ -341,15 +343,67 @@ dri3_create_image_khr_pixmap(_EGLDisplay *disp, _EGLContext *ctx,
    return &dri2_img->base;
 }
 
+#if XCB_DRI3_MAJOR_VERSION > 1 || (XCB_DRI3_MAJOR_VERSION == 1 && XCB_DRI3_MINOR_VERSION >= 1)
+static _EGLImage *
+dri3_create_image_khr_pixmap_from_buffers(_EGLDisplay *disp, _EGLContext *ctx,
+                                          EGLClientBuffer buffer,
+                                          const EGLint *attr_list)
+{
+   struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
+   struct dri2_egl_image *dri2_img;
+   xcb_dri3_buffers_from_pixmap_cookie_t bp_cookie;
+   xcb_dri3_buffers_from_pixmap_reply_t  *bp_reply;
+   xcb_drawable_t drawable;
+
+   drawable = (xcb_drawable_t) (uintptr_t) buffer;
+   bp_cookie = xcb_dri3_buffers_from_pixmap(dri2_dpy->conn, drawable);
+   bp_reply = xcb_dri3_buffers_from_pixmap_reply(dri2_dpy->conn,
+                                                 bp_cookie, NULL);
+
+   if (!bp_reply) {
+      _eglError(EGL_BAD_ATTRIBUTE, "dri3_create_image_khr");
+      return EGL_NO_IMAGE_KHR;
+   }
+
+   dri2_img = malloc(sizeof *dri2_img);
+   if (!dri2_img) {
+      _eglError(EGL_BAD_ALLOC, "dri3_create_image_khr");
+      return EGL_NO_IMAGE_KHR;
+   }
+   _eglInitImage(&dri2_img->base, disp);
+
+   dri2_img->dri_image = loader_dri3_create_image_from_buffers(dri2_dpy->conn,
+                                                               bp_reply,
+                                                               dri2_dpy->dri_screen,
+                                                               dri2_dpy->image,
+                                                               dri2_img);
+   free(bp_reply);
+
+   if (!dri2_img->dri_image) {
+      _eglError(EGL_BAD_ATTRIBUTE, "dri3_create_image_khr");
+      free(dri2_img);
+      return EGL_NO_IMAGE_KHR;
+   }
+
+   return &dri2_img->base;
+}
+#endif
+
 static _EGLImage *
 dri3_create_image_khr(_EGLDriver *drv, _EGLDisplay *disp,
                       _EGLContext *ctx, EGLenum target,
                       EGLClientBuffer buffer, const EGLint *attr_list)
 {
    (void) drv;
+   struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
 
    switch (target) {
    case EGL_NATIVE_PIXMAP_KHR:
+#if XCB_DRI3_MAJOR_VERSION > 1 || (XCB_DRI3_MAJOR_VERSION == 1 && XCB_DRI3_MINOR_VERSION >= 1)
+      if (dri2_dpy->multibuffers_available)
+         return dri3_create_image_khr_pixmap_from_buffers(disp, ctx, buffer,
+                                                          attr_list);
+#endif
       return dri3_create_image_khr_pixmap(disp, ctx, buffer, attr_list);
    default:
       return dri2_create_image_khr(drv, disp, ctx, target, buffer, attr_list);
@@ -502,6 +556,9 @@ dri3_x11_connect(struct dri2_egl_display *dri2_dpy)
       free(error);
       return EGL_FALSE;
    }
+
+   dri2_dpy->dri3_major_version = dri3_query->major_version;
+   dri2_dpy->dri3_minor_version = dri3_query->minor_version;
    free(dri3_query);
 
    present_query =
