@@ -376,7 +376,7 @@ typedef struct nir_variable {
          enum gl_access_qualifier access;
 
          /** Image internal format if specified explicitly, otherwise GL_NONE. */
-         GLenum format;
+         enum gl_image_format format;
       } image;
    } data;
 
