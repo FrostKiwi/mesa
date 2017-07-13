@@ -355,7 +355,7 @@ struct vtn_type {
          bool sampled;
 
          /* Image format for image_load_store type images */
-         unsigned image_format;
+         enum gl_image_format image_format;
 
          /* Access qualifier for storage images */
          SpvAccessQualifier access_qualifier;
