@@ -1077,7 +1077,7 @@ struct glsl_struct_field {
    /**
     * Layout format, applicable to image variables only.
     */
-   unsigned image_format:16;
+   enum gl_image_format image_format;
 
    /**
     * Any of the xfb_* qualifiers trigger the shader to be in transform
@@ -1094,8 +1094,8 @@ struct glsl_struct_field {
         sample(0), matrix_layout(GLSL_MATRIX_LAYOUT_INHERITED), patch(0),
         precision(GLSL_PRECISION_NONE), memory_read_only(0),
         memory_write_only(0), memory_coherent(0), memory_volatile(0),
-        memory_restrict(0), image_format(0), explicit_xfb_buffer(0),
-        implicit_sized_array(0)
+        memory_restrict(0), image_format(IMAGE_FORMAT_NONE),
+        explicit_xfb_buffer(0), implicit_sized_array(0)
    {
       /* empty */
    }
@@ -1106,8 +1106,8 @@ struct glsl_struct_field {
         sample(0), matrix_layout(0), patch(0),
         precision(0), memory_read_only(0),
         memory_write_only(0), memory_coherent(0), memory_volatile(0),
-        memory_restrict(0), image_format(0), explicit_xfb_buffer(0),
-        implicit_sized_array(0)
+        memory_restrict(0), image_format(IMAGE_FORMAT_NONE),
+        explicit_xfb_buffer(0), implicit_sized_array(0)
    {
       /* empty */
    }

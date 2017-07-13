@@ -872,7 +872,7 @@ public:
 
    public:
       /** Image internal format if specified explicitly, otherwise GL_NONE. */
-      uint16_t image_format;
+      gl_image_format image_format;
 
    private:
       /**

@@ -3486,7 +3486,7 @@ apply_image_qualifier_to_variable(const struct ast_type_qualifier *qual,
                              "`writeonly' must have a format layout qualifier");
          }
       }
-      var->data.image_format = GL_NONE;
+      var->data.image_format = IMAGE_FORMAT_NONE;
    }
 
    /* From page 70 of the GLSL ES 3.1 specification:
@@ -7530,7 +7530,7 @@ ast_process_struct_or_iface_block_members(exec_list *instructions,
                                       "qualifier");
                   }
 
-                  fields[i].image_format = GL_NONE;
+                  fields[i].image_format = IMAGE_FORMAT_NONE;
                }
             }
          }

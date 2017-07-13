@@ -764,7 +764,7 @@ struct ast_type_qualifier {
     * \note
     * This field is only valid if \c explicit_image_format is set.
     */
-   GLenum image_format;
+   gl_image_format image_format;
 
    /**
     * Base type of the data read from or written to this image.  Only
