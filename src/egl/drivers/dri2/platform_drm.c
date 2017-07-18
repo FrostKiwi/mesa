@@ -592,7 +592,7 @@ drm_add_configs_for_visuals(_EGLDriver *drv, _EGLDisplay *disp)
       { GBM_FORMAT_ARGB2101010, 0x3ff00000, 0xc0000000 },
       { GBM_FORMAT_XRGB8888,    0x00ff0000, 0x00000000 },
       { GBM_FORMAT_ARGB8888,    0x00ff0000, 0xff000000 },
-      { GBM_FORMAT_RGB565,      0x0000f800, 0x00000000 },
+//      { GBM_FORMAT_RGB565,      0x0000f800, 0x00000000 },
    };
 
    unsigned int format_count[ARRAY_SIZE(visuals)] = { 0 };
