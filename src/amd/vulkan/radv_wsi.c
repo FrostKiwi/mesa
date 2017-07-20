@@ -228,7 +228,7 @@ static VkResult
 radv_wsi_image_create(VkDevice device_h,
 		      const VkSwapchainCreateInfoKHR *pCreateInfo,
 		      const VkAllocationCallbacks* pAllocator,
-		      bool linear,
+		      bool different_gpu,
 		      struct wsi_image_base *wsi_image)
 {
 	VkResult result = VK_SUCCESS;
@@ -241,7 +241,7 @@ radv_wsi_image_create(VkDevice device_h,
 	if (result != VK_SUCCESS)
 		return result;
 
-	if (linear) {
+	if (different_gpu) {
 		result = radv_wsi_image_alloc(device_h, pCreateInfo, pAllocator,
 					      false, &wsi_image->linear_image,
 					      &wsi_image->linear_memory);
@@ -399,7 +399,7 @@ VkResult radv_CreateSwapchainKHR(
 	for (unsigned i = 0; i < ARRAY_SIZE(swapchain->fences); i++)
 		swapchain->fences[i] = VK_NULL_HANDLE;
 
-	if (swapchain->needs_linear_copy) {
+	if (swapchain->different_gpu) {
 		result = radv_wsi_create_prime_command_buffers(device, alloc,
 							       swapchain);
 		if (result != VK_SUCCESS)
@@ -433,7 +433,7 @@ void radv_DestroySwapchainKHR(
 			radv_DestroyFence(_device, swapchain->fences[i], pAllocator);
 	}
 
-	if (swapchain->needs_linear_copy)
+	if (swapchain->different_gpu)
 		radv_wsi_free_prime_command_buffers(device, swapchain);
 
 	swapchain->destroy(swapchain, alloc);
@@ -520,7 +520,7 @@ VkResult radv_QueuePresentKHR(
 					 1, &swapchain->fences[0]);
 		}
 
-		if (swapchain->needs_linear_copy) {
+		if (swapchain->different_gpu) {
 			int idx = (queue->queue_family_index * swapchain->image_count) + pPresentInfo->pImageIndices[i];
 			cs = radv_cmd_buffer_from_handle(swapchain->cmd_buffers[idx])->cs;
 		} else

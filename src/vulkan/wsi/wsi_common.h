@@ -49,7 +49,7 @@ struct wsi_image_fns {
    VkResult (*create_wsi_image)(VkDevice device_h,
                                 const VkSwapchainCreateInfoKHR *pCreateInfo,
                                 const VkAllocationCallbacks *pAllocator,
-                                bool linear,
+                                bool different_gpu,
                                 struct wsi_image_base *image_p);
    void (*free_wsi_image)(VkDevice device,
                           const VkAllocationCallbacks *pAllocator,
@@ -66,7 +66,7 @@ struct wsi_swapchain {
    VkCommandPool cmd_pools[3];
    VkPresentModeKHR present_mode;
    uint32_t image_count;
-   bool needs_linear_copy;
+   bool different_gpu;
 
    VkResult (*destroy)(struct wsi_swapchain *swapchain,
                        const VkAllocationCallbacks *pAllocator);

@@ -961,7 +961,7 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
    result = chain->base.image_fns->create_wsi_image(device_h,
                                                     pCreateInfo,
                                                     pAllocator,
-                                                    chain->base.needs_linear_copy,
+                                                    chain->base.different_gpu,
                                                     &image->base);
    if (result != VK_SUCCESS)
       return result;
@@ -1116,9 +1116,9 @@ x11_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
 
    free(geometry);
 
-   chain->base.needs_linear_copy = false;
+   chain->base.different_gpu = false;
    if (!wsi_x11_check_dri3_compatible(conn, local_fd))
-       chain->base.needs_linear_copy = true;
+       chain->base.different_gpu = true;
 
    chain->event_id = xcb_generate_id(chain->conn);
    xcb_present_select_input(chain->conn, chain->event_id, chain->window,

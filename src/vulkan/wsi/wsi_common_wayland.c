@@ -801,7 +801,7 @@ wsi_wl_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
    chain->base.image_fns = image_fns;
    chain->base.present_mode = pCreateInfo->presentMode;
    chain->base.image_count = num_images;
-   chain->base.needs_linear_copy = false;
+   chain->base.different_gpu = false;
    chain->extent = pCreateInfo->imageExtent;
    chain->vk_format = pCreateInfo->imageFormat;
    chain->drm_format = wl_drm_format_for_vk_format(chain->vk_format, alpha);

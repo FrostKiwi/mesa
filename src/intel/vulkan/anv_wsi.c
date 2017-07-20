@@ -172,7 +172,7 @@ static VkResult
 anv_wsi_image_create(VkDevice device_h,
                      const VkSwapchainCreateInfoKHR *pCreateInfo,
                      const VkAllocationCallbacks* pAllocator,
-                     bool linear,
+                     bool different_gpu,
                      struct wsi_image_base *wsi_image)
 {
    struct anv_device *device = anv_device_from_handle(device_h);
