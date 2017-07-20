@@ -523,8 +523,7 @@ VkResult wsi_create_wl_surface(const VkAllocationCallbacks *pAllocator,
 }
 
 struct wsi_wl_image {
-   VkImage image;
-   VkDeviceMemory memory;
+   struct wsi_image_base                        base;
    struct wl_buffer *                           buffer;
    bool                                         busy;
 };
@@ -570,7 +569,7 @@ wsi_wl_swapchain_get_images(struct wsi_swapchain *wsi_chain,
    }
 
    for (uint32_t i = 0; i < ret_count; i++)
-      pSwapchainImages[i] = chain->images[i].image;
+      pSwapchainImages[i] = chain->images[i].base.image;
 
    return result;
 }
@@ -694,33 +693,25 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
 {
    VkDevice vk_device = chain->base.device;
    VkResult result;
-   int fd;
-   uint32_t size;
-   uint32_t row_pitch;
-   uint32_t offset;
+
    result = chain->base.image_fns->create_wsi_image(vk_device,
                                                     pCreateInfo,
                                                     pAllocator,
                                                     false,
                                                     false,
-                                                    &image->image,
-                                                    &image->memory,
-                                                    &size,
-                                                    &offset,
-                                                    &row_pitch,
-                                                    &fd);
+                                                    &image->base);
    if (result != VK_SUCCESS)
       return result;
 
    image->buffer = wl_drm_create_prime_buffer(chain->drm_wrapper,
-                                              fd, /* name */
+                                              image->base.fd, /* name */
                                               chain->extent.width,
                                               chain->extent.height,
                                               chain->drm_format,
-                                              offset,
-                                              row_pitch,
+                                              image->base.offset,
+                                              image->base.row_pitch,
                                               0, 0, 0, 0 /* unused */);
-   close(fd);
+   close(image->base.fd);
 
    if (!image->buffer)
       goto fail_image;
@@ -730,8 +721,7 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
    return VK_SUCCESS;
 
 fail_image:
-   chain->base.image_fns->free_wsi_image(vk_device, pAllocator,
-                                         image->image, image->memory);
+   chain->base.image_fns->free_wsi_image(vk_device, pAllocator, &image->base);
 
    return result;
 }
@@ -746,8 +736,7 @@ wsi_wl_swapchain_destroy(struct wsi_swapchain *wsi_chain,
       if (chain->images[i].buffer) {
          wl_buffer_destroy(chain->images[i].buffer);
          chain->base.image_fns->free_wsi_image(chain->base.device, pAllocator,
-                                               chain->images[i].image,
-                                               chain->images[i].memory);
+                                               &chain->images[i].base);
       }
    }
 
