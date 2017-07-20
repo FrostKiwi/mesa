@@ -1546,11 +1546,15 @@ isl_tiling_is_std_y(enum isl_tiling tiling)
 uint32_t
 isl_tiling_to_i915_tiling(enum isl_tiling tiling);
 
-enum isl_tiling 
+enum isl_tiling
 isl_tiling_from_i915_tiling(uint32_t tiling);
 
 const struct isl_drm_modifier_info * ATTRIBUTE_CONST
 isl_drm_modifier_get_info(uint64_t modifier);
+
+uint64_t ATTRIBUTE_CONST
+isl_drm_modifier_from_tiling(enum isl_tiling tiling,
+                             enum isl_aux_usage aux_usage);
 
 struct isl_extent2d ATTRIBUTE_CONST
 isl_get_interleaved_msaa_px_size_sa(uint32_t samples);

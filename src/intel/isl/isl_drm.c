@@ -30,6 +30,10 @@
 #include "isl.h"
 #include "common/gen_device_info.h"
 
+#ifndef DRM_FORMAT_MOD_INVALID
+#define DRM_FORMAT_MOD_INVALID ((1ULL << 56) - 1)
+#endif
+
 uint32_t
 isl_tiling_to_i915_tiling(enum isl_tiling tiling)
 {
@@ -98,4 +102,17 @@ isl_drm_modifier_get_info(uint64_t modifier)
    }
 
    return NULL;
+}
+
+uint64_t
+isl_drm_modifier_from_tiling(enum isl_tiling tiling,
+                             enum isl_aux_usage aux_usage)
+{
+   for (unsigned i = 0; i < ARRAY_SIZE(modifier_info); i++) {
+      if (modifier_info[i].tiling == tiling &&
+          modifier_info[i].aux_usage == aux_usage)
+         return modifier_info[i].modifier;
+   }
+
+   return DRM_FORMAT_MOD_INVALID;
 }
