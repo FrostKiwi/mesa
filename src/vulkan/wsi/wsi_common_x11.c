@@ -962,6 +962,8 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
                                                     pCreateInfo,
                                                     pAllocator,
                                                     chain->base.different_gpu,
+                                                    NULL,
+                                                    0,
                                                     &image->base);
    if (result != VK_SUCCESS)
       return result;

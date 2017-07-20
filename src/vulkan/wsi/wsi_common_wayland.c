@@ -698,6 +698,8 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
                                                     pCreateInfo,
                                                     pAllocator,
                                                     false,
+                                                    NULL,
+                                                    0,
                                                     &image->base);
    if (result != VK_SUCCESS)
       return result;

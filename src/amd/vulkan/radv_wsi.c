@@ -229,11 +229,39 @@ radv_wsi_image_create(VkDevice device_h,
 		      const VkSwapchainCreateInfoKHR *pCreateInfo,
 		      const VkAllocationCallbacks* pAllocator,
 		      bool different_gpu,
+		      uint64_t *modifiers,
+		      int num_modifiers,
 		      struct wsi_image_base *wsi_image)
 {
 	VkResult result = VK_SUCCESS;
 	struct radeon_surf *surface;
 	struct radv_image *image;
+	bool linear;
+
+	/* If modifiers are provided, then try to use them. Unfortunately,
+	 * as there are no modifiers actually defined for AMD, if we're
+	 * provided with an explicit list of modifiers, then all we can do
+	 * is try to use linear.
+	 */
+	if (!modifiers) {
+		linear = different_gpu;
+	} else {
+		bool linear_found = false;
+		for (int i = 0; i < num_modifiers; i++) {
+			if (modifiers[i] == DRM_FORMAT_MOD_LINEAR) {
+				linear = true;
+				linear_found = true;
+				break;
+			}
+		}
+
+		/* The right error is probably more like SURFACE_LOST, since
+		 * we'll never be able to allocate for the surface with these
+		 * attributes, but then we'd have to lose the surface.
+		 */
+		if (!linear_found)
+			return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+	}
 
 	result = radv_wsi_image_alloc(device_h, pCreateInfo, pAllocator,
 				      false, &wsi_image->image,

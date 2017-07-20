@@ -50,6 +50,8 @@ struct wsi_image_fns {
                                 const VkSwapchainCreateInfoKHR *pCreateInfo,
                                 const VkAllocationCallbacks *pAllocator,
                                 bool different_gpu,
+                                uint64_t *modifiers,
+                                int num_modifiers,
                                 struct wsi_image_base *image_p);
    void (*free_wsi_image)(VkDevice device,
                           const VkAllocationCallbacks *pAllocator,

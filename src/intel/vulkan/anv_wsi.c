@@ -173,13 +173,42 @@ anv_wsi_image_create(VkDevice device_h,
                      const VkSwapchainCreateInfoKHR *pCreateInfo,
                      const VkAllocationCallbacks* pAllocator,
                      bool different_gpu,
+                     uint64_t *modifiers,
+                     int num_modifiers,
                      struct wsi_image_base *wsi_image)
 {
    struct anv_device *device = anv_device_from_handle(device_h);
    VkImage image_h;
    struct anv_image *image;
-   isl_tiling_flags_t isl_tiling = ISL_TILING_X_BIT;
+   isl_tiling_flags_t isl_tiling = 0;
    VkImageTiling vk_tiling = VK_IMAGE_TILING_OPTIMAL;
+
+   /* If we haven't been provided any modifiers, fall back to our previous
+    * default of X-tiling, which the other side can infer through the BO
+    * get_tiling ioctl. */
+   if (!modifiers) {
+      isl_tiling = ISL_TILING_X_BIT;
+   } else {
+      for (int i = 0; i < num_modifiers; i++) {
+         struct isl_drm_modifier_info *info =
+            isl_drm_modifier_get_info(modifiers[i]);
+         if (!info || info->aux_usage != ISL_AUX_USAGE_NONE)
+            continue;
+         isl_tiling |= (1 << info->tiling);
+      }
+   }
+
+   /* This isn't strictly correct; really we want something more like
+    * SURFACE_LOST, because we'll never be able to render to it in these
+    * conditions.
+    */
+   if (isl_tiling == 0)
+      return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+
+   if (isl_tiling & ISL_TILING_NON_LINEAR_MASK)
+      vk_tiling = VK_IMAGE_TILING_OPTIMAL;
+   else
+      vk_tiling = VK_IMAGE_TILING_LINEAR;
 
    VkResult result;
    result = anv_image_create(anv_device_to_handle(device),
