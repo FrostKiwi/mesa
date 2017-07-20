@@ -2903,34 +2903,6 @@ void genX(CmdDrawIndexedIndirect)(
    }
 }
 
-static void
-cmd_buffer_emit_compute_descriptor_load(struct anv_cmd_buffer *cmd_buffer)
-{
-   struct anv_pipeline *pipeline = cmd_buffer->state.compute.base.pipeline;
-
-   uint32_t iface_desc_data_dw[GENX(INTERFACE_DESCRIPTOR_DATA_length)];
-   struct GENX(INTERFACE_DESCRIPTOR_DATA) desc = {
-      .BindingTablePointer =
-         cmd_buffer->state.binding_tables[MESA_SHADER_COMPUTE].offset,
-      .SamplerStatePointer =
-         cmd_buffer->state.samplers[MESA_SHADER_COMPUTE].offset,
-   };
-   GENX(INTERFACE_DESCRIPTOR_DATA_pack)(NULL, iface_desc_data_dw, &desc);
-
-   struct anv_state state =
-      anv_cmd_buffer_merge_dynamic(cmd_buffer, iface_desc_data_dw,
-                                   pipeline->interface_descriptor_data,
-                                   GENX(INTERFACE_DESCRIPTOR_DATA_length),
-                                   64);
-
-   uint32_t size = GENX(INTERFACE_DESCRIPTOR_DATA_length) * sizeof(uint32_t);
-   anv_batch_emit(&cmd_buffer->batch,
-                  GENX(MEDIA_INTERFACE_DESCRIPTOR_LOAD), mid) {
-      mid.InterfaceDescriptorTotalLength        = size;
-      mid.InterfaceDescriptorDataStartAddress   = state.offset;
-   }
-}
-
 void
 genX(cmd_buffer_flush_compute_state)(struct anv_cmd_buffer *cmd_buffer)
 {
@@ -2938,6 +2910,8 @@ genX(cmd_buffer_flush_compute_state)(struct anv_cmd_buffer *cmd_buffer)
    MAYBE_UNUSED VkResult result;
 
    assert(pipeline->active_stages == VK_SHADER_STAGE_COMPUTE_BIT);
+
+   genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
 
    genX(cmd_buffer_config_l3)(cmd_buffer, pipeline->urb.l3_config);
 
@@ -2955,41 +2929,48 @@ genX(cmd_buffer_flush_compute_state)(struct anv_cmd_buffer *cmd_buffer)
       cmd_buffer->state.pending_pipe_bits |= ANV_PIPE_CS_STALL_BIT;
       genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
 
-      anv_batch_emit_batch(&cmd_buffer->batch, &pipeline->batch);
-
       /* The exact descriptor layout is pulled from the pipeline, so we need
        * to re-emit binding tables on every pipeline change.
        */
       cmd_buffer->state.descriptors_dirty |= VK_SHADER_STAGE_COMPUTE_BIT;
    }
 
-   bool descriptors_dirty = false;
-   if (cmd_buffer->state.descriptors_dirty & VK_SHADER_STAGE_COMPUTE_BIT) {
+   if (cmd_buffer->state.descriptors_dirty & VK_SHADER_STAGE_COMPUTE_BIT)
       flush_descriptor_sets(cmd_buffer, VK_SHADER_STAGE_COMPUTE_BIT);
-      descriptors_dirty = true;
+
+   /* MEDIA_VFE_STATE */
+   anv_batch_emit_batch(&cmd_buffer->batch, &pipeline->batch);
+
+   struct anv_state push_state =
+      anv_cmd_buffer_cs_push_constants(cmd_buffer);
+   anv_batch_emit(&cmd_buffer->batch, GENX(MEDIA_CURBE_LOAD), curbe) {
+      curbe.CURBETotalDataLength    = push_state.alloc_size;
+      curbe.CURBEDataStartAddress   = push_state.offset;
    }
 
-   if (cmd_buffer->state.push_constants_dirty & VK_SHADER_STAGE_COMPUTE_BIT) {
-      struct anv_state push_state =
-         anv_cmd_buffer_cs_push_constants(cmd_buffer);
+   uint32_t iface_desc_data_dw[GENX(INTERFACE_DESCRIPTOR_DATA_length)];
+   struct GENX(INTERFACE_DESCRIPTOR_DATA) desc = {
+      .BindingTablePointer =
+         cmd_buffer->state.binding_tables[MESA_SHADER_COMPUTE].offset,
+      .SamplerStatePointer =
+         cmd_buffer->state.samplers[MESA_SHADER_COMPUTE].offset,
+   };
+   GENX(INTERFACE_DESCRIPTOR_DATA_pack)(NULL, iface_desc_data_dw, &desc);
 
-      if (push_state.alloc_size) {
-         anv_batch_emit(&cmd_buffer->batch, GENX(MEDIA_CURBE_LOAD), curbe) {
-            curbe.CURBETotalDataLength    = push_state.alloc_size;
-            curbe.CURBEDataStartAddress   = push_state.offset;
-         }
-      }
+   struct anv_state desc_state =
+      anv_cmd_buffer_merge_dynamic(cmd_buffer, iface_desc_data_dw,
+                                   pipeline->interface_descriptor_data,
+                                   GENX(INTERFACE_DESCRIPTOR_DATA_length),
+                                   64);
 
-      if (GEN_GEN >= 9)
-         descriptors_dirty = true;
+   anv_batch_emit(&cmd_buffer->batch,
+                  GENX(MEDIA_INTERFACE_DESCRIPTOR_LOAD), mid) {
+      mid.InterfaceDescriptorTotalLength =
+         GENX(INTERFACE_DESCRIPTOR_DATA_length) * sizeof(uint32_t);
+      mid.InterfaceDescriptorDataStartAddress = desc_state.offset;
    }
-
-   if (descriptors_dirty)
-      cmd_buffer_emit_compute_descriptor_load(cmd_buffer);
 
    cmd_buffer->state.compute.pipeline_dirty = false;
-
-   genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
 }
 
 #if GEN_GEN == 7
