@@ -263,10 +263,11 @@ anv_wsi_image_create(VkDevice device_h,
 
    wsi_image->image = image_h;
    wsi_image->memory = memory_h;
-   wsi_image->fd = fd;
-   wsi_image->size = image->size;
-   wsi_image->offset = image->offset;
-   wsi_image->row_pitch = surface->isl.row_pitch;
+   wsi_image->num_planes = 1;
+   wsi_image->fds[0] = fd;
+   wsi_image->sizes[0] = image->size;
+   wsi_image->offsets[0] = image->offset;
+   wsi_image->row_pitches[0] = surface->isl.row_pitch;
    return VK_SUCCESS;
 fail_alloc_memory:
    anv_FreeMemory(device_h, memory_h, pAllocator);

@@ -987,18 +987,22 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
 
    struct wsi_image_base *image_ws =
       chain->base.needs_linear_copy ? &image->linear_base : &image->base;
+
+   /* Without passing modifiers, we can't have multi-plane RGB images. */
+   assert(image_ws->num_planes == 1);
+
    cookie =
       xcb_dri3_pixmap_from_buffer_checked(chain->conn,
                                           image->pixmap,
                                           chain->window,
-                                          image_ws->size,
+                                          image_ws->sizes[0],
                                           pCreateInfo->imageExtent.width,
                                           pCreateInfo->imageExtent.height,
-                                          image_ws->row_pitch,
+                                          image_ws->row_pitches[0],
                                           chain->depth, bpp,
-                                          image_ws->fd);
+                                          image_ws->fds[0]);
    xcb_discard_reply(chain->conn, cookie.sequence);
-   image_ws->fd = -1; /* XCB has now taken ownership of the FD */
+   image_ws->fds[0] = -1; /* XCB has now taken ownership of the FD */
 
    int fence_fd = xshmfence_alloc_shm();
    if (fence_fd < 0)

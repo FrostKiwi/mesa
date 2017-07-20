@@ -211,18 +211,19 @@ radv_wsi_image_create(VkDevice device_h,
 		RADV_FROM_HANDLE(radv_device_memory, memory, memory_h);
 		if (!radv_get_memory_fd(device, memory, &fd))
 			goto fail_alloc_memory;
-		wsi_image->fd = fd;
+		wsi_image->fds[0] = fd;
 	} else {
-		wsi_image->fd = -1;
+		wsi_image->fds[0] = -1;
 	}
 
 	surface = &image->surface;
 
 	wsi_image->image = image_h;
 	wsi_image->memory = memory_h;
-	wsi_image->size = image->size;
-	wsi_image->offset = image->offset;
-	wsi_image->row_pitch = surface->u.legacy.level[0].nblk_x * surface->bpe;
+	wsi_image->num_planes = 1;
+	wsi_image->sizes[0] = image->size;
+	wsi_image->offsets[0] = image->offset;
+	wsi_image->row_pitches[0] = surface->u.legacy.level[0].nblk_x * surface->bpe;
 	return VK_SUCCESS;
  fail_alloc_memory:
 	radv_FreeMemory(device_h, memory_h, pAllocator);
