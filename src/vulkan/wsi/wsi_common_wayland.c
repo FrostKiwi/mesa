@@ -697,7 +697,6 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
    result = chain->base.image_fns->create_wsi_image(vk_device,
                                                     pCreateInfo,
                                                     pAllocator,
-                                                    true,
                                                     false,
                                                     &image->base);
    if (result != VK_SUCCESS)

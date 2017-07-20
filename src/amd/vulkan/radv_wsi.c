@@ -211,45 +211,53 @@ static VkResult
 radv_wsi_image_create(VkDevice device_h,
 		      const VkSwapchainCreateInfoKHR *pCreateInfo,
 		      const VkAllocationCallbacks* pAllocator,
-		      bool should_export,
 		      bool linear,
 		      struct wsi_image_base *wsi_image)
 {
 	VkResult result = VK_SUCCESS;
 	struct radeon_surf *surface;
-	VkImage image_h;
-	VkDeviceMemory memory_h;
 	struct radv_image *image;
-	int fd;
 
 	result = radv_wsi_image_alloc(device_h, pCreateInfo, pAllocator,
-				      linear, &image_h, &memory_h);
+				      false, &wsi_image->image,
+				      &wsi_image->memory);
 	if (result != VK_SUCCESS)
 		return result;
 
-	if (should_export)
-		return VK_SUCCESS;
+	if (linear) {
+		result = radv_wsi_image_alloc(device_h, pCreateInfo, pAllocator,
+					      false, &wsi_image->linear_image,
+					      &wsi_image->linear_memory);
+		if (result != VK_SUCCESS)
+			goto fail_alloc;
+	} else {
+		wsi_image->linear_image = VK_NULL_HANDLE;
+		wsi_image->linear_memory = VK_NULL_HANDLE;
+	}
 
-	image = radv_image_from_handle(image_h);
+	RADV_FROM_HANDLE(radv_device_memory, memory,
+			 linear ? wsi_image->linear_memory : wsi_image->memory);
+	image = radv_image_from_handle(linear ? wsi_image->linear_image :
+	                                        wsi_image->image);
 	surface = &image->surface;
 
 	RADV_FROM_HANDLE(radv_device, device, device_h);
-	RADV_FROM_HANDLE(radv_device_memory, memory, memory_h);
-	if (!radv_get_memory_fd(device, memory, &fd))
-		goto fail_alloc;
-
-	wsi_image->fds[0] = fd;
-	wsi_image->image = image_h;
-	wsi_image->memory = memory_h;
+	if (!radv_get_memory_fd(device, memory, &wsi_image->fds[0]))
+		goto fail_linear;
 	wsi_image->num_planes = 1;
 	wsi_image->sizes[0] = image->size;
 	wsi_image->offsets[0] = image->offset;
 	wsi_image->row_pitches[0] = surface->u.legacy.level[0].nblk_x * surface->bpe;
 	return VK_SUCCESS;
 
- fail_alloc:
-	radv_FreeMemory(device_h, memory_h, pAllocator);
-	radv_DestroyImage(device_h, image_h, pAllocator);
+fail_linear:
+	if (wsi_image->linear_memory != VK_NULL_HANDLE)
+		radv_FreeMemory(device_h, wsi_image->linear_memory, pAllocator);
+	if (wsi_image->linear_image != VK_NULL_HANDLE)
+		radv_DestroyImage(device_h, wsi_image->linear_image, pAllocator);
+fail_alloc:
+	radv_FreeMemory(device_h, wsi_image->memory, pAllocator);
+	radv_DestroyImage(device_h, wsi_image->image, pAllocator);
 	return result;
 }
 
@@ -258,8 +266,11 @@ radv_wsi_image_free(VkDevice device,
 		    const VkAllocationCallbacks* pAllocator,
 		    struct wsi_image_base *wsi_image)
 {
+	if (wsi_image->linear_image != VK_NULL_HANDLE)
+		radv_DestroyImage(device, wsi_image->linear_image, pAllocator);
+	if (wsi_image->linear_memory != VK_NULL_HANDLE)
+		radv_FreeMemory(device, wsi_image->linear_memory, pAllocator);
 	radv_DestroyImage(device, wsi_image->image, pAllocator);
-
 	radv_FreeMemory(device, wsi_image->memory, pAllocator);
 }
 

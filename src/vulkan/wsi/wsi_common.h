@@ -33,6 +33,9 @@
 struct wsi_image_base {
    VkImage image;
    VkDeviceMemory memory;
+   VkImage linear_image;
+   VkDeviceMemory linear_memory;
+
    int num_planes;
    uint32_t sizes[4];
    uint32_t offsets[4];
@@ -45,7 +48,6 @@ struct wsi_image_fns {
    VkResult (*create_wsi_image)(VkDevice device_h,
                                 const VkSwapchainCreateInfoKHR *pCreateInfo,
                                 const VkAllocationCallbacks *pAllocator,
-                                bool should_export,
                                 bool linear,
                                 struct wsi_image_base *image_p);
    void (*free_wsi_image)(VkDevice device,

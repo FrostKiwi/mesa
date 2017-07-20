@@ -172,7 +172,6 @@ static VkResult
 anv_wsi_image_create(VkDevice device_h,
                      const VkSwapchainCreateInfoKHR *pCreateInfo,
                      const VkAllocationCallbacks* pAllocator,
-                     bool should_export,
                      bool linear,
                      struct wsi_image_base *wsi_image)
 {
@@ -248,17 +247,12 @@ anv_wsi_image_create(VkDevice device_h,
       goto fail_alloc_memory;
    }
 
-   int fd;
-   if (should_export) {
-      fd = anv_gem_handle_to_fd(device, memory->bo->gem_handle);
-      if (fd == -1) {
-         /* FINISHME: Choose a better error. */
-         result = vk_errorf(VK_ERROR_OUT_OF_DEVICE_MEMORY,
-                            "handle_to_fd failed: %m");
-         goto fail_alloc_memory;
-      }
-   } else {
-      fd = -1;
+   int fd = anv_gem_handle_to_fd(device, memory->bo->gem_handle);
+   if (fd == -1) {
+      /* FINISHME: Choose a better error. */
+      result = vk_errorf(VK_ERROR_OUT_OF_DEVICE_MEMORY,
+                         "handle_to_fd failed: %m");
+      goto fail_alloc_memory;
    }
 
    wsi_image->image = image_h;

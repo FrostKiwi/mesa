@@ -616,7 +616,6 @@ VkResult wsi_create_xlib_surface(const VkAllocationCallbacks *pAllocator,
 
 struct x11_image {
    struct wsi_image_base                     base;
-   struct wsi_image_base                     linear_base;
    xcb_pixmap_t                              pixmap;
    bool                                      busy;
    struct xshmfence *                        shm_fence;
@@ -679,7 +678,7 @@ x11_get_image_and_linear(struct wsi_swapchain *drv_chain,
 {
    struct x11_swapchain *chain = (struct x11_swapchain *)drv_chain;
    *image = chain->images[imageIndex].base.image;
-   *linear_image = chain->images[imageIndex].linear_base.image;
+   *linear_image = chain->images[imageIndex].base.linear_image;
 }
 
 static VkResult
@@ -962,47 +961,28 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
    result = chain->base.image_fns->create_wsi_image(device_h,
                                                     pCreateInfo,
                                                     pAllocator,
-                                                    !chain->base.needs_linear_copy,
-                                                    false,
+                                                    chain->base.needs_linear_copy,
                                                     &image->base);
    if (result != VK_SUCCESS)
       return result;
 
-   if (chain->base.needs_linear_copy) {
-      result = chain->base.image_fns->create_wsi_image(device_h,
-                                                       pCreateInfo,
-                                                       pAllocator,
-                                                       true,
-                                                       true,
-                                                       &image->linear_base);
-
-      if (result != VK_SUCCESS) {
-         chain->base.image_fns->free_wsi_image(device_h, pAllocator,
-                                               &image->base);
-         return result;
-      }
-   }
-
    image->pixmap = xcb_generate_id(chain->conn);
 
-   struct wsi_image_base *image_ws =
-      chain->base.needs_linear_copy ? &image->linear_base : &image->base;
-
    /* Without passing modifiers, we can't have multi-plane RGB images. */
-   assert(image_ws->num_planes == 1);
+   assert(image->base.num_planes == 1);
 
    cookie =
       xcb_dri3_pixmap_from_buffer_checked(chain->conn,
                                           image->pixmap,
                                           chain->window,
-                                          image_ws->sizes[0],
+                                          image->base.sizes[0],
                                           pCreateInfo->imageExtent.width,
                                           pCreateInfo->imageExtent.height,
-                                          image_ws->row_pitches[0],
+                                          image->base.row_pitches[0],
                                           chain->depth, bpp,
-                                          image_ws->fds[0]);
+                                          image->base.fds[0]);
    xcb_discard_reply(chain->conn, cookie.sequence);
-   image_ws->fds[0] = -1; /* XCB has now taken ownership of the FD */
+   image->base.fds[0] = -1; /* XCB has now taken ownership of the FD */
 
    int fence_fd = xshmfence_alloc_shm();
    if (fence_fd < 0)
@@ -1031,10 +1011,6 @@ fail_pixmap:
    cookie = xcb_free_pixmap(chain->conn, image->pixmap);
    xcb_discard_reply(chain->conn, cookie.sequence);
 
-   if (chain->base.needs_linear_copy) {
-      chain->base.image_fns->free_wsi_image(device_h, pAllocator,
-                                            &image->linear_base);
-   }
    chain->base.image_fns->free_wsi_image(device_h, pAllocator, &image->base);
 
    return result;
@@ -1054,10 +1030,6 @@ x11_image_finish(struct x11_swapchain *chain,
    cookie = xcb_free_pixmap(chain->conn, image->pixmap);
    xcb_discard_reply(chain->conn, cookie.sequence);
 
-   if (chain->base.needs_linear_copy) {
-      chain->base.image_fns->free_wsi_image(chain->base.device, pAllocator,
-                                            &image->linear_base);
-   }
    chain->base.image_fns->free_wsi_image(chain->base.device, pAllocator,
                                          &image->base);
 }
