@@ -36,6 +36,7 @@ struct wsi_image_base {
    VkImage linear_image;
    VkDeviceMemory linear_memory;
 
+   uint64_t drm_modifier;
    int num_planes;
    uint32_t sizes[4];
    uint32_t offsets[4];

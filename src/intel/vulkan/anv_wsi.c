@@ -259,6 +259,15 @@ anv_wsi_image_create(VkDevice device_h,
 
    wsi_image->image = image_h;
    wsi_image->memory = memory_h;
+
+   /* We don't yet allow sharing of aux planes with the winsys. Doing so
+    * would require a separate external_aux_usage member in the anv_image,
+    * to disambiguate between the case where we allocate an aux usage for our
+    * own internal use, as opposed to when the winsys can use it. Else we may
+    * incorrectly pass CCS surfaces to a non-CCS-aware winsys/kernel.
+    */
+   wsi_image->drm_modifier =
+      isl_drm_modifier_from_tiling(surface->isl.tiling, ISL_AUX_USAGE_NONE);
    wsi_image->num_planes = 1;
    wsi_image->fds[0] = fd;
    wsi_image->sizes[0] = image->size;

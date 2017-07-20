@@ -27,6 +27,11 @@
 #include "radv_meta.h"
 #include "wsi_common.h"
 #include "vk_util.h"
+#include <drm_fourcc.h>
+
+#ifndef DRM_FORMAT_MOD_INVALID
+#define DRM_FORMAT_MOD_INVALID ((1ULL << 56) - 1)
+#endif
 
 static const struct wsi_callbacks wsi_cbs = {
    .get_phys_device_format_properties = radv_GetPhysicalDeviceFormatProperties,
@@ -257,6 +262,7 @@ radv_wsi_image_create(VkDevice device_h,
 	if (!radv_get_memory_fd(device, memory, &wsi_image->fds[0]))
 		goto fail;
 	wsi_image->num_planes = 1;
+	wsi_image->drm_modifier = DRM_FORMAT_MOD_INVALID;
 	wsi_image->sizes[0] = image->size;
 	wsi_image->offsets[0] = image->offset;
 	wsi_image->row_pitches[0] = surface->u.legacy.level[0].nblk_x * surface->bpe;
