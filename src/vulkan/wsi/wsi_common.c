@@ -289,10 +289,11 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
    if (result != VK_SUCCESS)
       goto fail;
 
-   image->size = reqs.size;
-   image->row_pitch = image_layout.rowPitch;
-   image->offset = 0;
-   image->fd = fd;
+   image->num_planes = 1;
+   image->sizes[0] = reqs.size;
+   image->row_pitches[0] = image_layout.rowPitch;
+   image->offsets[0] = 0;
+   image->fds[0] = fd;
 
    return VK_SUCCESS;
 
@@ -489,10 +490,11 @@ wsi_create_prime_image(const struct wsi_swapchain *chain,
    if (result != VK_SUCCESS)
       goto fail;
 
-   image->size = linear_size;
-   image->row_pitch = linear_stride;
-   image->offset = 0;
-   image->fd = fd;
+   image->num_planes = 1;
+   image->sizes[0] = linear_size;
+   image->row_pitches[0] = linear_stride;
+   image->offsets[0] = 0;
+   image->fds[0] = fd;
 
    return VK_SUCCESS;
 
