@@ -206,6 +206,18 @@ fail_create_image:
 	return result;
 }
 
+static void
+radv_wsi_image_free(VkDevice device,
+		    const VkAllocationCallbacks* pAllocator,
+		    struct wsi_image_base *wsi_image)
+{
+	if (wsi_image->linear_image != VK_NULL_HANDLE)
+		radv_DestroyImage(device, wsi_image->linear_image, pAllocator);
+	if (wsi_image->linear_memory != VK_NULL_HANDLE)
+		radv_FreeMemory(device, wsi_image->linear_memory, pAllocator);
+	radv_DestroyImage(device, wsi_image->image, pAllocator);
+	radv_FreeMemory(device, wsi_image->memory, pAllocator);
+}
 
 static VkResult
 radv_wsi_image_create(VkDevice device_h,
@@ -229,7 +241,7 @@ radv_wsi_image_create(VkDevice device_h,
 					      false, &wsi_image->linear_image,
 					      &wsi_image->linear_memory);
 		if (result != VK_SUCCESS)
-			goto fail_alloc;
+			goto fail;
 	} else {
 		wsi_image->linear_image = VK_NULL_HANDLE;
 		wsi_image->linear_memory = VK_NULL_HANDLE;
@@ -243,35 +255,16 @@ radv_wsi_image_create(VkDevice device_h,
 
 	RADV_FROM_HANDLE(radv_device, device, device_h);
 	if (!radv_get_memory_fd(device, memory, &wsi_image->fds[0]))
-		goto fail_linear;
+		goto fail;
 	wsi_image->num_planes = 1;
 	wsi_image->sizes[0] = image->size;
 	wsi_image->offsets[0] = image->offset;
 	wsi_image->row_pitches[0] = surface->u.legacy.level[0].nblk_x * surface->bpe;
 	return VK_SUCCESS;
 
-fail_linear:
-	if (wsi_image->linear_memory != VK_NULL_HANDLE)
-		radv_FreeMemory(device_h, wsi_image->linear_memory, pAllocator);
-	if (wsi_image->linear_image != VK_NULL_HANDLE)
-		radv_DestroyImage(device_h, wsi_image->linear_image, pAllocator);
-fail_alloc:
-	radv_FreeMemory(device_h, wsi_image->memory, pAllocator);
-	radv_DestroyImage(device_h, wsi_image->image, pAllocator);
+fail:
+	radv_wsi_image_free(device_h, pAllocator, wsi_image);
 	return result;
-}
-
-static void
-radv_wsi_image_free(VkDevice device,
-		    const VkAllocationCallbacks* pAllocator,
-		    struct wsi_image_base *wsi_image)
-{
-	if (wsi_image->linear_image != VK_NULL_HANDLE)
-		radv_DestroyImage(device, wsi_image->linear_image, pAllocator);
-	if (wsi_image->linear_memory != VK_NULL_HANDLE)
-		radv_FreeMemory(device, wsi_image->linear_memory, pAllocator);
-	radv_DestroyImage(device, wsi_image->image, pAllocator);
-	radv_FreeMemory(device, wsi_image->memory, pAllocator);
 }
 
 static const struct wsi_image_fns radv_wsi_image_fns = {
