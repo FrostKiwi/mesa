@@ -178,11 +178,13 @@ anv_wsi_image_create(VkDevice device_h,
    struct anv_device *device = anv_device_from_handle(device_h);
    VkImage image_h;
    struct anv_image *image;
+   isl_tiling_flags_t isl_tiling = ISL_TILING_X_BIT;
+   VkImageTiling vk_tiling = VK_IMAGE_TILING_OPTIMAL;
 
    VkResult result;
    result = anv_image_create(anv_device_to_handle(device),
       &(struct anv_image_create_info) {
-         .isl_tiling_flags = ISL_TILING_X_BIT,
+         .isl_tiling_flags = isl_tiling,
          .stride = 0,
          .vk_info =
       &(VkImageCreateInfo) {
@@ -197,8 +199,7 @@ anv_wsi_image_create(VkDevice device_h,
          .mipLevels = 1,
          .arrayLayers = 1,
          .samples = 1,
-         /* FIXME: Need a way to use X tiling to allow scanout */
-         .tiling = VK_IMAGE_TILING_OPTIMAL,
+         .tiling = vk_tiling,
          .usage = (pCreateInfo->imageUsage |
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
          .flags = 0,
@@ -236,10 +237,11 @@ anv_wsi_image_create(VkDevice device_h,
    anv_BindImageMemory(device_h, image_h, memory_h, 0);
 
    struct anv_surface *surface = &image->color_surface;
-   assert(surface->isl.tiling == ISL_TILING_X);
+   assert(isl_tiling & (1 << surface->isl.tiling));
 
    int ret = anv_gem_set_tiling(device, memory->bo->gem_handle,
-                                surface->isl.row_pitch, I915_TILING_X);
+                                surface->isl.row_pitch,
+                                isl_tiling_to_i915_tiling(surface->isl.tiling));
    if (ret) {
       /* FINISHME: Choose a better error. */
       result = vk_errorf(VK_ERROR_OUT_OF_DEVICE_MEMORY,
