@@ -138,18 +138,15 @@ VkResult radv_GetPhysicalDeviceSurfacePresentModesKHR(
 }
 
 static VkResult
-radv_wsi_image_create(VkDevice device_h,
-		      const VkSwapchainCreateInfoKHR *pCreateInfo,
-		      const VkAllocationCallbacks* pAllocator,
-		      bool should_export,
-		      bool linear,
-		      struct wsi_image_base *wsi_image)
+radv_wsi_image_alloc(VkDevice device_h,
+		     const VkSwapchainCreateInfoKHR *pCreateInfo,
+		     const VkAllocationCallbacks *pAllocator,
+		     bool linear,
+		     VkImage *image_h_p,
+		     VkDeviceMemory *memory_h_p)
 {
-	VkResult result = VK_SUCCESS;
-	struct radeon_surf *surface;
 	VkImage image_h;
-	struct radv_image *image;
-	int fd;
+	VkResult result;
 
 	result = radv_image_create(device_h,
 				   &(struct radv_image_create_info) {
@@ -166,7 +163,6 @@ radv_wsi_image_create(VkDevice device_h,
 						   .mipLevels = 1,
 						   .arrayLayers = 1,
 						   .samples = 1,
-						   /* FIXME: Need a way to use X tiling to allow scanout */
 						   .tiling = linear ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL,
 						   .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 						   .flags = 0,
@@ -177,10 +173,6 @@ radv_wsi_image_create(VkDevice device_h,
 	if (result != VK_SUCCESS)
 		return result;
 
-	image = radv_image_from_handle(image_h);
-
-	VkDeviceMemory memory_h;
-
 	const VkMemoryDedicatedAllocateInfoKHR ded_alloc = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
 		.pNext = NULL,
@@ -188,6 +180,8 @@ radv_wsi_image_create(VkDevice device_h,
 		.image = image_h
 	};
 
+	struct radv_image *image = radv_image_from_handle(image_h);
+	VkDeviceMemory memory_h;
 	result = radv_AllocateMemory(device_h,
 				     &(VkMemoryAllocateInfo) {
 					     .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -202,22 +196,49 @@ radv_wsi_image_create(VkDevice device_h,
 
 	radv_BindImageMemory(device_h, image_h, memory_h, 0);
 
-	/*
-	 * return the fd for the image in the no copy mode,
-	 * or the fd for the linear image if a copy is required.
-	 */
-	if (should_export) {
-		RADV_FROM_HANDLE(radv_device, device, device_h);
-		RADV_FROM_HANDLE(radv_device_memory, memory, memory_h);
-		if (!radv_get_memory_fd(device, memory, &fd))
-			goto fail_alloc_memory;
-		wsi_image->fds[0] = fd;
-	} else {
-		wsi_image->fds[0] = -1;
-	}
+	*image_h_p = image_h;
+	*memory_h_p = memory_h;
 
+	return VK_SUCCESS;
+
+fail_create_image:
+	radv_DestroyImage(device_h, image_h, pAllocator);
+	return result;
+}
+
+
+static VkResult
+radv_wsi_image_create(VkDevice device_h,
+		      const VkSwapchainCreateInfoKHR *pCreateInfo,
+		      const VkAllocationCallbacks* pAllocator,
+		      bool should_export,
+		      bool linear,
+		      struct wsi_image_base *wsi_image)
+{
+	VkResult result = VK_SUCCESS;
+	struct radeon_surf *surface;
+	VkImage image_h;
+	VkDeviceMemory memory_h;
+	struct radv_image *image;
+	int fd;
+
+	result = radv_wsi_image_alloc(device_h, pCreateInfo, pAllocator,
+				      linear, &image_h, &memory_h);
+	if (result != VK_SUCCESS)
+		return result;
+
+	if (should_export)
+		return VK_SUCCESS;
+
+	image = radv_image_from_handle(image_h);
 	surface = &image->surface;
 
+	RADV_FROM_HANDLE(radv_device, device, device_h);
+	RADV_FROM_HANDLE(radv_device_memory, memory, memory_h);
+	if (!radv_get_memory_fd(device, memory, &fd))
+		goto fail_alloc;
+
+	wsi_image->fds[0] = fd;
 	wsi_image->image = image_h;
 	wsi_image->memory = memory_h;
 	wsi_image->num_planes = 1;
@@ -225,12 +246,10 @@ radv_wsi_image_create(VkDevice device_h,
 	wsi_image->offsets[0] = image->offset;
 	wsi_image->row_pitches[0] = surface->u.legacy.level[0].nblk_x * surface->bpe;
 	return VK_SUCCESS;
- fail_alloc_memory:
+
+ fail_alloc:
 	radv_FreeMemory(device_h, memory_h, pAllocator);
-
-fail_create_image:
 	radv_DestroyImage(device_h, image_h, pAllocator);
-
 	return result;
 }
 
