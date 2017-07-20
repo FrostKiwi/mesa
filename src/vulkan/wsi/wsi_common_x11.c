@@ -962,7 +962,7 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
    result = chain->base.image_fns->create_wsi_image(device_h,
                                                     pCreateInfo,
                                                     pAllocator,
-                                                    chain->base.needs_linear_copy,
+                                                    !chain->base.needs_linear_copy,
                                                     false,
                                                     &image->base);
    if (result != VK_SUCCESS)
@@ -972,7 +972,7 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
       result = chain->base.image_fns->create_wsi_image(device_h,
                                                        pCreateInfo,
                                                        pAllocator,
-                                                       chain->base.needs_linear_copy,
+                                                       true,
                                                        true,
                                                        &image->linear_base);
 

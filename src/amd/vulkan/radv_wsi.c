@@ -141,7 +141,7 @@ static VkResult
 radv_wsi_image_create(VkDevice device_h,
 		      const VkSwapchainCreateInfoKHR *pCreateInfo,
 		      const VkAllocationCallbacks* pAllocator,
-		      bool needs_linear_copy,
+		      bool should_export,
 		      bool linear,
 		      struct wsi_image_base *wsi_image)
 {
@@ -206,12 +206,14 @@ radv_wsi_image_create(VkDevice device_h,
 	 * return the fd for the image in the no copy mode,
 	 * or the fd for the linear image if a copy is required.
 	 */
-	if (!needs_linear_copy || (needs_linear_copy && linear)) {
+	if (should_export) {
 		RADV_FROM_HANDLE(radv_device, device, device_h);
 		RADV_FROM_HANDLE(radv_device_memory, memory, memory_h);
 		if (!radv_get_memory_fd(device, memory, &fd))
 			goto fail_alloc_memory;
 		wsi_image->fd = fd;
+	} else {
+		wsi_image->fd = -1;
 	}
 
 	surface = &image->surface;
