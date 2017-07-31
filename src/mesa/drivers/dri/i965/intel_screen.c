@@ -314,9 +314,15 @@ modifier_is_supported(const struct gen_device_info *devinfo,
                       struct intel_image_format *fmt, int dri_format,
                       uint64_t modifier)
 {
+   const struct isl_drm_modifier_info *modinfo =
+      isl_drm_modifier_get_info(modifier);
    int i;
 
-   if (isl_drm_modifier_get_info(modifier)->aux_usage == ISL_AUX_USAGE_CCS_E) {
+   /* ISL had better know about the modifier */
+   if (!modinfo)
+      return false;
+
+   if (modinfo->aux_usage == ISL_AUX_USAGE_CCS_E) {
       /* If INTEL_DEBUG=norbc is set, don't support any CCS_E modifiers */
       if (unlikely(INTEL_DEBUG & DEBUG_NO_RBC))
          return false;
