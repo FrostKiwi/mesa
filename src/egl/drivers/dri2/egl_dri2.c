@@ -2166,8 +2166,10 @@ dri2_check_dma_buf_format(const _EGLImageAttribs *attrs)
           *  this extension."
           */
          if (attrs->DMABufPlaneModifiersLo[i].IsPresent &&
-             attrs->DMABufPlaneModifiersHi[i].IsPresent)
+             attrs->DMABufPlaneModifiersHi[i].IsPresent) {
+            plane_n = i + 1;
             continue;
+	}
 
          _eglError(EGL_BAD_ATTRIBUTE, "too many plane attributes");
          return 0;
