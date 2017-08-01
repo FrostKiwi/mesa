@@ -743,6 +743,9 @@ isl_genX(buffer_fill_state_s)(void *state,
    s.SurfaceBaseAddress = info->address;
 #if GEN_GEN >= 6
    s.MOCS = info->mocs;
+
+   if (num_elements == 1 && info->format == ISL_FORMAT_R32_UINT)
+      s.MOCS = 0;
 #endif
 
 #if (GEN_GEN >= 8 || GEN_IS_HASWELL)
