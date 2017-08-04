@@ -1721,16 +1721,16 @@ enum anv_fence_type {
    ANV_FENCE_TYPE_SYNCOBJ,
 };
 
-enum anv_fence_state {
+enum anv_bo_fence_state {
    /** Indicates that this is a new (or newly reset fence) */
-   ANV_FENCE_STATE_RESET,
+   ANV_BO_FENCE_STATE_RESET,
 
    /** Indicates that this fence has been submitted to the GPU but is still
     * (as far as we know) in use by the GPU.
     */
-   ANV_FENCE_STATE_SUBMITTED,
+   ANV_BO_FENCE_STATE_SUBMITTED,
 
-   ANV_FENCE_STATE_SIGNALED,
+   ANV_BO_FENCE_STATE_SIGNALED,
 };
 
 struct anv_fence_impl {
@@ -1748,7 +1748,7 @@ struct anv_fence_impl {
        */
       struct {
          struct anv_bo bo;
-         enum anv_fence_state state;
+         enum anv_bo_fence_state state;
       } bo;
    };
 };
