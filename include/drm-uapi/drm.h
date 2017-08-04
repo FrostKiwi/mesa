@@ -712,6 +712,23 @@ struct drm_syncobj_handle {
 	__u32 pad;
 };
 
+#define DRM_SYNCOBJ_WAIT_FLAGS_WAIT_ALL (1 << 0)
+#define DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT (1 << 1)
+struct drm_syncobj_wait {
+	__u64 handles;
+	/* absolute timeout */
+	__s64 timeout_nsec;
+	__u32 count_handles;
+	__u32 flags;
+	__u32 first_signaled; /* only valid when not waiting all */
+	__u32 pad;
+};
+
+struct drm_syncobj_reset {
+	__u32 handle;
+	__u32 flags;
+};
+
 #if defined(__cplusplus)
 }
 #endif
@@ -834,6 +851,8 @@ extern "C" {
 #define DRM_IOCTL_SYNCOBJ_DESTROY	DRM_IOWR(0xC0, struct drm_syncobj_destroy)
 #define DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD	DRM_IOWR(0xC1, struct drm_syncobj_handle)
 #define DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE	DRM_IOWR(0xC2, struct drm_syncobj_handle)
+#define DRM_IOCTL_SYNCOBJ_WAIT		DRM_IOWR(0xC3, struct drm_syncobj_wait)
+#define DRM_IOCTL_SYNCOBJ_RESET		DRM_IOWR(0xC4, struct drm_syncobj_reset)
 
 /**
  * Device specific ioctls should only be in their respective headers
