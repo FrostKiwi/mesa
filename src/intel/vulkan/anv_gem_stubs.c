@@ -181,6 +181,19 @@ anv_gem_fd_to_handle(struct anv_device *device, int fd)
    unreachable("Unused");
 }
 
+int
+anv_gem_syncobj_export_sync_file(struct anv_device *device, uint32_t handle)
+{
+   unreachable("Unused");
+}
+
+int
+anv_gem_syncobj_import_sync_file(struct anv_device *device,
+                                 uint32_t handle, int fd)
+{
+   unreachable("Unused");
+}
+
 uint32_t
 anv_gem_syncobj_create(struct anv_device *device)
 {
