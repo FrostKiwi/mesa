@@ -1399,6 +1399,10 @@ blorp_surf_convert_to_single_slice(const struct isl_device *isl_dev,
     */
    assert(info->tile_x_sa == 0 && info->tile_y_sa == 0);
 
+   /* We should always be the first workaround */
+   assert(!info->has_workarounds);
+   info->has_workarounds = true;
+
    uint32_t layer = 0, z = 0;
    if (info->surf.dim == ISL_SURF_DIM_3D)
       z = info->view.base_array_layer + info->z_offset;
@@ -1579,6 +1583,33 @@ surf_fake_rgb_with_red(const struct isl_device *isl_dev,
           isl_format_get_layout(info->view.format)->channels.r.bits);
 
    info->surf.format = info->view.format = red_format;
+}
+
+static void
+surf_recreate_for_usage(const struct isl_device *isl_dev,
+                        struct brw_blorp_surface_info *info,
+                        isl_surf_usage_flags_t new_usage)
+{
+   /* We can only do this for simple surfaces */
+   assert(info->surf.dim == ISL_SURF_DIM_2D);
+   assert(info->surf.logical_level0_px.array_len == 1);
+   assert(info->surf.levels == 1);
+   assert(info->surf.samples == 1);
+
+   UNUSED bool ok;
+   ok = isl_surf_init(isl_dev, &info->surf,
+                      .dim = info->surf.dim,
+                      .format = info->view.format, /* Use the view format */
+                      .width = info->surf.logical_level0_px.width,
+                      .height = info->surf.logical_level0_px.height,
+                      .depth = 1,
+                      .levels = 1,
+                      .array_len = 1,
+                      .samples = 1,
+                      .row_pitch = info->surf.row_pitch,
+                      .usage = new_usage,
+                      .tiling_flags = (1 << info->surf.tiling));
+   assert(ok);
 }
 
 static void
@@ -1790,6 +1821,21 @@ try_blorp_blit(struct blorp_batch *batch,
 
       wm_prog_key->src_tiled_w = true;
       wm_prog_key->need_src_offset = true;
+   }
+
+   if (params->dst.has_workarounds) {
+      /* Sometimes there are restrictions that used to apply to the
+       * destination surface that no longer apply.  Usually this is something
+       * having to do with halign/valign.  For instance, compressed surfaces
+       * on gen8 and earlier have an halign/valigne of 1el which isn't
+       * representable by the hardware.  Also, when we fake RGB surfaces as
+       * red we can sometimes end up with a different alignment.  The easy
+       * workaround is to simply recreate the destination surface with the
+       * ISL_SURF_USAGE_RENDER_TARGET_BIT to ensure that we have the right
+       * parameters for rendering.
+       */
+      surf_recreate_for_usage(batch->blorp->isl_dev, &params->dst,
+                              ISL_SURF_USAGE_RENDER_TARGET_BIT);
    }
 
    /* tex_samples and rt_samples are the sample counts that are set up in

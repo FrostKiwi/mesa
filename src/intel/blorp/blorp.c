@@ -71,6 +71,7 @@ brw_blorp_surface_info_init(struct blorp_context *blorp,
                        surf->surf->logical_level0_px.array_len));
 
    info->enabled = true;
+   info->has_workarounds = false;
 
    if (format == ISL_FORMAT_UNSUPPORTED)
       format = surf->surf->format;

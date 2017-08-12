@@ -48,6 +48,11 @@ struct brw_blorp_surface_info
 {
    bool enabled;
 
+   /* True of this surface has been altered to work around hardware
+    * restrictions.  Set by convert_to_single_slice.
+    */
+   bool has_workarounds;
+
    struct isl_surf surf;
    struct blorp_address addr;
 
