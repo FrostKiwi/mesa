@@ -456,7 +456,7 @@ brw_upload_pipeline_state(struct brw_context *brw,
    struct gl_context *ctx = &brw->ctx;
    int i;
    static int dirty_count = 0;
-   struct brw_state_flags state = brw->state.pipelines[pipeline];
+   struct brw_state_flags *state = &brw->state.pipelines[pipeline];
    const unsigned fb_samples =
       MAX2(_mesa_geometric_samples(ctx->DrawBuffer), 1);
 
@@ -511,8 +511,8 @@ brw_upload_pipeline_state(struct brw_context *brw,
    }
 
    /* Exit early if no state is flagged as dirty */
-   merge_ctx_state(brw, &state);
-   if ((state.mesa | state.brw) == 0)
+   merge_ctx_state(brw, state);
+   if ((state->mesa | state->brw) == 0)
       return;
 
    /* Emit Sandybridge workaround flushes on every primitive, for safety. */
@@ -520,7 +520,7 @@ brw_upload_pipeline_state(struct brw_context *brw,
       brw_emit_post_sync_nonzero_flush(brw);
 
    brw_upload_programs(brw, pipeline);
-   merge_ctx_state(brw, &state);
+   merge_ctx_state(brw, state);
 
    brw_upload_state_base_address(brw);
 
@@ -535,13 +535,13 @@ brw_upload_pipeline_state(struct brw_context *brw,
        */
       struct brw_state_flags examined, prev;
       memset(&examined, 0, sizeof(examined));
-      prev = state;
+      prev = *state;
 
       for (i = 0; i < num_atoms; i++) {
 	 const struct brw_tracked_state *atom = &atoms[i];
 	 struct brw_state_flags generated;
 
-         check_and_emit_atom(brw, &state, atom);
+         check_and_emit_atom(brw, state, atom);
 
 	 accumulate_state(&examined, &atom->dirty);
 
@@ -549,24 +549,24 @@ brw_upload_pipeline_state(struct brw_context *brw,
 	  * if (examined & generated)
 	  *     fail;
 	  */
-	 xor_states(&generated, &prev, &state);
+	 xor_states(&generated, &prev, state);
 	 assert(!check_state(&examined, &generated));
-	 prev = state;
+	 prev = *state;
       }
    }
    else {
       for (i = 0; i < num_atoms; i++) {
 	 const struct brw_tracked_state *atom = &atoms[i];
 
-         check_and_emit_atom(brw, &state, atom);
+         check_and_emit_atom(brw, state, atom);
       }
    }
 
    if (unlikely(INTEL_DEBUG & DEBUG_STATE)) {
       STATIC_ASSERT(ARRAY_SIZE(brw_bits) == BRW_NUM_STATE_BITS + 1);
 
-      brw_update_dirty_count(mesa_bits, state.mesa);
-      brw_update_dirty_count(brw_bits, state.brw);
+      brw_update_dirty_count(mesa_bits, state->mesa);
+      brw_update_dirty_count(brw_bits, state->brw);
       if (dirty_count++ % 1000 == 0) {
 	 brw_print_dirty_count(mesa_bits);
 	 brw_print_dirty_count(brw_bits);
