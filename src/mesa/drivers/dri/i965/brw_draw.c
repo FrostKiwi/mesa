@@ -387,7 +387,7 @@ brw_predraw_resolve_inputs(struct brw_context *brw)
       intel_miptree_prepare_texture(brw, tex_obj->mt, view_format,
                                     &aux_supported);
 
-      if (!aux_supported && devinfo->gen >= 9 &&
+      if (tex_obj->mt->aux_usage == ISL_AUX_USAGE_CCS_E && !aux_supported &&
           intel_disable_rb_aux_buffer(brw, tex_obj->mt->bo)) {
          perf_debug("Sampling renderbuffer with non-compressible format - "
                     "turning off compression\n");
