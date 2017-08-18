@@ -179,7 +179,8 @@ blorp_emit_urb_config(struct blorp_batch *batch,
    struct brw_context *brw = batch->driver_batch;
 
 #if GEN_GEN >= 7
-   if (!(brw->ctx.NewDriverState & (BRW_NEW_CONTEXT | BRW_NEW_URB_SIZE)) &&
+   if (!(brw->state.pipelines[BRW_RENDER_PIPELINE].brw & BRW_NEW_CONTEXT) &&
+       !(brw->state.pipelines[BRW_RENDER_PIPELINE].brw & BRW_NEW_URB_SIZE) &&
        brw->urb.vsize >= vs_entry_size)
       return;
 
