@@ -1095,6 +1095,40 @@ brw_blorp_resolve_color(struct brw_context *brw, struct intel_mipmap_tree *mt,
    brw_emit_end_of_pipe_sync(brw, PIPE_CONTROL_RENDER_TARGET_FLUSH);
 }
 
+
+void
+brw_blorp_ccs_ambiguate(struct brw_context *brw, struct intel_mipmap_tree *mt,
+                        unsigned level, unsigned layer)
+{
+   DBG("%s to mt %p level %u layer %u\n", __FUNCTION__, mt, level, layer);
+
+   struct isl_surf isl_tmp[1];
+   struct blorp_surf surf;
+   blorp_surf_for_miptree(brw, &surf, mt, mt->aux_usage, true,
+                          &level, layer, 1 /* num_layers */,
+                          isl_tmp);
+
+   unsigned z = 0;
+   if (surf.surf->dim == ISL_SURF_DIM_3D) {
+      z = layer;
+      layer = 0;
+   }
+
+   /* We have no idea how rendering directly to the CCS will interact with
+    * other rendering (most likely, badly).  In order to prevent corruption
+    * issues, we fully stall the pipeline before and after the ambiguate.
+    * This is similar to what we do for fast-clears and resolves.
+    */
+   brw_emit_end_of_pipe_sync(brw, PIPE_CONTROL_RENDER_TARGET_FLUSH);
+
+   struct blorp_batch batch;
+   blorp_batch_init(&brw->blorp, &batch, brw, 0);
+   blorp_ccs_ambiguate(&batch, &surf, level, layer, z);
+   blorp_batch_finish(&batch);
+
+   brw_emit_end_of_pipe_sync(brw, PIPE_CONTROL_RENDER_TARGET_FLUSH);
+}
+
 void
 brw_blorp_mcs_partial_resolve(struct brw_context *brw,
                               struct intel_mipmap_tree *mt,

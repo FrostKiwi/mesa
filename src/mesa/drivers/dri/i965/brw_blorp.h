@@ -74,6 +74,10 @@ brw_blorp_resolve_color(struct brw_context *brw,
                         enum blorp_fast_clear_op resolve_op);
 
 void
+brw_blorp_ccs_ambiguate(struct brw_context *brw, struct intel_mipmap_tree *mt,
+                        unsigned level, unsigned layer);
+
+void
 brw_blorp_mcs_partial_resolve(struct brw_context *brw,
                               struct intel_mipmap_tree *mt,
                               uint32_t start_layer, uint32_t num_layers);
