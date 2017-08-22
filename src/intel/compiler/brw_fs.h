@@ -60,7 +60,7 @@ offset(const fs_reg &reg, const brw::fs_builder &bld, unsigned delta)
 class fs_visitor : public backend_shader
 {
 public:
-   DECLARE_RALLOC_CXX_OPERATORS(fs_reg)
+   DECLARE_RALLOC_CXX_OPERATORS(fs_visitor)
 
    fs_visitor(const struct brw_compiler *compiler, void *log_data,
               void *mem_ctx,
