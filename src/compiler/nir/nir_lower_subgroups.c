@@ -28,6 +28,43 @@
  * \file nir_opt_intrinsics.c
  */
 
+/* Converts a uint32_t or uint64_t value to uint64_t or uvec4 */
+static nir_ssa_def *
+uint_to_ballot_type(nir_builder *b, nir_ssa_def *value,
+                    unsigned num_components, unsigned bit_size,
+                    uint32_t extend_val)
+{
+   assert(value->num_components == 1);
+   assert(value->bit_size == 32 || value->bit_size == 64);
+
+   nir_ssa_def *extend = nir_imm_int(b, extend_val);
+   if (num_components > 1) {
+      /* SPIR-V uses a uvec4 for ballot values */
+      assert(num_components == 4);
+      assert(bit_size == 32);
+
+      if (value->bit_size == 32) {
+         return nir_vec4(b, value, extend, extend, extend);
+      } else {
+         assert(value->bit_size == 64);
+         return nir_vec4(b, nir_unpack_64_2x32_split_x(b, value),
+                            nir_unpack_64_2x32_split_y(b, value),
+                            extend, extend);
+      }
+   } else {
+      /* GLSL uses a uint64_t for ballot values */
+      assert(num_components == 1);
+      assert(bit_size == 64);
+
+      if (value->bit_size == 32) {
+         return nir_pack_64_2x32_split(b, value, extend);
+      } else {
+         assert(value->bit_size == 64);
+         return value;
+      }
+   }
+}
+
 static nir_ssa_def *
 lower_read_invocation_to_scalar(nir_builder *b, nir_intrinsic_instr *intrin)
 {
@@ -86,24 +123,78 @@ lower_subgroups_intrin(nir_builder *b, nir_intrinsic_instr *intrin,
       if (!options->lower_subgroup_masks)
          return NULL;
 
+      uint64_t mask;
+      switch (intrin->intrinsic) {
+      case nir_intrinsic_load_subgroup_eq_mask:
+         mask = 1ull;
+         break;
+      case nir_intrinsic_load_subgroup_ge_mask:
+      case nir_intrinsic_load_subgroup_lt_mask:
+         mask = ~0ull;
+         break;
+      case nir_intrinsic_load_subgroup_gt_mask:
+      case nir_intrinsic_load_subgroup_le_mask:
+         mask = ~1ull;
+         break;
+      default:
+         unreachable("you seriously can't tell this is unreachable?");
+      }
+
       nir_ssa_def *count = nir_load_subgroup_invocation(b);
+      nir_ssa_def *shifted;
+      if (options->ballot_bit_size == 32 && intrin->dest.ssa.bit_size == 32) {
+         assert(intrin->dest.ssa.num_components == 4);
+         shifted = nir_ishl(b, nir_imm_int(b, mask), count);
+      } else {
+         /* We're either working with 64-bit types natively or we're in OpenGL
+          * where we want a uint64_t as our final value.  In either case we
+          * know that we have 64-bit types.  In the first case, we need to use
+          * 64 bits because of the native subgroup size.  In the second, we
+          * want a 64-bit result and a 64-bit shift is likely more efficient
+          * than messing around with 32-bit shifts and packing.
+          */
+         assert(options->ballot_bit_size == 64 ||
+                intrin->dest.ssa.bit_size == 64);
+         shifted = nir_ishl(b, nir_imm_int64(b, mask), count);
+      }
+
+      nir_ssa_def *ballot =
+         uint_to_ballot_type(b, shifted,
+                             intrin->dest.ssa.num_components,
+                             intrin->dest.ssa.bit_size, mask >> 32);
 
       switch (intrin->intrinsic) {
       case nir_intrinsic_load_subgroup_eq_mask:
-         return nir_ishl(b, nir_imm_int64(b, 1ull), count);
       case nir_intrinsic_load_subgroup_ge_mask:
-         return nir_ishl(b, nir_imm_int64(b, ~0ull), count);
       case nir_intrinsic_load_subgroup_gt_mask:
-         return nir_ishl(b, nir_imm_int64(b, ~1ull), count);
+         return ballot;
       case nir_intrinsic_load_subgroup_le_mask:
-         return nir_inot(b, nir_ishl(b, nir_imm_int64(b, ~1ull), count));
       case nir_intrinsic_load_subgroup_lt_mask:
-         return nir_inot(b, nir_ishl(b, nir_imm_int64(b, ~0ull), count));
+         return nir_inot(b, ballot);
       default:
          unreachable("you seriously can't tell this is unreachable?");
       }
       break;
    }
+
+   case nir_intrinsic_ballot: {
+      if (intrin->dest.ssa.num_components == 1 &&
+          intrin->dest.ssa.bit_size == options->ballot_bit_size)
+         return NULL;
+
+      nir_intrinsic_instr *ballot =
+         nir_intrinsic_instr_create(b->shader, nir_intrinsic_ballot);
+      ballot->num_components = 1;
+      nir_ssa_dest_init(&ballot->instr, &ballot->dest,
+                        1, options->ballot_bit_size, NULL);
+      nir_src_copy(&ballot->src[0], &intrin->src[0], ballot);
+      nir_builder_instr_insert(b, &ballot->instr);
+
+      return uint_to_ballot_type(b, &ballot->dest.ssa,
+                                 intrin->dest.ssa.num_components,
+                                 intrin->dest.ssa.bit_size, 0);
+   }
+
    default:
       break;
    }
