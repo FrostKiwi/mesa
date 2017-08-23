@@ -557,6 +557,12 @@ vtn_value(struct vtn_builder *b, uint32_t value_id,
    return val;
 }
 
+static inline nir_constant *
+vtn_constant_value(struct vtn_builder *b, uint32_t value_id)
+{
+   return vtn_value(b, value_id, vtn_value_type_constant)->constant;
+}
+
 void _vtn_warn(const char *file, int line, const char *msg, ...);
 #define vtn_warn(...) _vtn_warn(__FILE__, __LINE__, __VA_ARGS__)
 
