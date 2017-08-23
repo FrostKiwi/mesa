@@ -109,6 +109,11 @@ lower_subgroups_intrin(nir_builder *b, nir_intrinsic_instr *intrin,
          return nir_imm_int(b, NIR_TRUE);
       break;
 
+   case nir_intrinsic_load_subgroup_size:
+      if (options->subgroup_size)
+         return nir_imm_int(b, options->subgroup_size);
+      break;
+
    case nir_intrinsic_read_invocation:
    case nir_intrinsic_read_first_invocation:
       if (options->lower_to_scalar)
