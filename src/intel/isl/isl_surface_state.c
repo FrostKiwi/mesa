@@ -78,6 +78,16 @@ static const uint8_t isl_to_gen_tiling[] = {
 };
 #endif
 
+#if GEN_GEN >= 9
+static const uint8_t isl_tiling_to_gen_trmode[] = {
+   [ISL_TILING_Y0]         = NONE,
+   [ISL_TILING_GEN9_Yf]    = TILEYF,
+   [ISL_TILING_GEN9_Ys]    = TILEYS,
+   [ISL_TILING_GEN10_Yf]   = TILEYF,
+   [ISL_TILING_GEN10_Ys]   = TILEYS,
+};
+#endif
+
 #if GEN_GEN >= 7
 static const uint32_t isl_to_gen_multisample_layout[] = {
    [ISL_MSAA_LAYOUT_NONE]           = MSFMT_MSS,
@@ -416,7 +426,6 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
    /* We don't use miptails yet.  The PRM recommends that you set "Mip Tail
     * Start LOD" to 15 to prevent the hardware from trying to use them.
     */
-   s.TiledResourceMode = NONE;
    s.MipTailStartLOD = 15;
 #endif
 
@@ -442,7 +451,15 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
                            ISL_ARRAY_PITCH_SPAN_COMPACT;
 #endif
 
-#if GEN_GEN >= 8
+#if GEN_GEN >= 9
+   s.TileMode = isl_to_gen_tiling[info->surf->tiling];
+   if (isl_tiling_is_std_y(info->surf->tiling)) {
+      /* 1D Yf/Ys is supposed to have a tile mode of linear */
+      if (info->surf->dim == ISL_SURF_DIM_1D)
+         s.TileMode = LINEAR;
+      s.TiledResourceMode = isl_tiling_to_gen_trmode[info->surf->tiling];
+   }
+#elif GEN_GEN >= 8
    s.TileMode = isl_to_gen_tiling[info->surf->tiling];
 #else
    s.TiledSurface = info->surf->tiling != ISL_TILING_LINEAR,
