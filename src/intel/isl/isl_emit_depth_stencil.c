@@ -58,6 +58,16 @@ static const uint32_t isl_to_gen_ds_surftype[] = {
    [ISL_SURF_DIM_3D] = SURFTYPE_3D,
 };
 
+#if GEN_GEN >= 9
+static const uint8_t isl_tiling_to_gen_trmode[] = {
+   [ISL_TILING_Y0]         = NONE,
+   [ISL_TILING_GEN9_Yf]    = TILEYF,
+   [ISL_TILING_GEN9_Ys]    = TILEYS,
+   [ISL_TILING_GEN10_Yf]   = TILEYF,
+   [ISL_TILING_GEN10_Ys]   = TILEYS,
+};
+#endif
+
 void
 isl_genX(emit_depth_stencil_hiz_s)(const struct isl_device *dev, void *batch,
                                    const struct isl_depth_stencil_hiz_emit_info *restrict info)
@@ -97,7 +107,18 @@ isl_genX(emit_depth_stencil_hiz_s)(const struct isl_device *dev, void *batch,
       db.DepthBufferMOCS = info->mocs;
 #endif
 
-#if GEN_GEN <= 6
+#if GEN_GEN >= 9
+      /* Gen9+ depth is always Y-tiled but it may be Y0, Yf, or Ys. */
+      assert(isl_tiling_is_any_y(info->depth_surf->tiling));
+      db.TiledResourceMode = isl_tiling_to_gen_trmode[info->depth_surf->tiling];
+
+      /* We don't use miptails yet.  The PRM recommends that you set "Mip Tail
+       * Start LOD" to 15 to prevent the hardware from trying to use them.
+       */
+      db.MipTailStartLOD = 15;
+#elif GEN_GEN >= 7
+      /* Gen7+ depth is always Y-tiled.  We don't even have a bit for it */
+#else
       db.TiledSurface = info->depth_surf->tiling != ISL_TILING_LINEAR;
       db.TileWalk = info->depth_surf->tiling == ISL_TILING_Y0 ? TILEWALK_YMAJOR :
                                                                 TILEWALK_XMAJOR;
