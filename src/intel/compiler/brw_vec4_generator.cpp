@@ -228,6 +228,7 @@ generate_tex(struct brw_codegen *p,
          brw_MOV(p, header, retype(brw_vec8_grf(0, 0), BRW_REGISTER_TYPE_UD));
 
          brw_set_default_access_mode(p, BRW_ALIGN_1);
+         brw_set_default_exec_size(p, BRW_EXECUTE_1);
 
          if (inst->offset)
             /* Set the texel offset bits in DWord 2. */
@@ -303,6 +304,7 @@ generate_tex(struct brw_codegen *p,
       brw_push_insn_state(p);
       brw_set_default_mask_control(p, BRW_MASK_DISABLE);
       brw_set_default_access_mode(p, BRW_ALIGN_1);
+      brw_set_default_exec_size(p, BRW_EXECUTE_1);
 
       if (brw_regs_equal(&surface_reg, &sampler_reg)) {
          brw_MUL(p, addr, sampler_reg, brw_imm_uw(0x101));
@@ -390,6 +392,7 @@ generate_gs_urb_write_allocate(struct brw_codegen *p, vec4_instruction *inst)
    /* Now put allocated urb handle in dst.0 */
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
    brw_MOV(p, get_element_ud(inst->dst.as_brw_reg(), 0),
            get_element_ud(inst->src[0].as_brw_reg(), 0));
@@ -438,6 +441,7 @@ generate_gs_set_write_offset(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+   brw_set_default_exec_size(p, BRW_EXECUTE_2);
    assert(p->devinfo->gen >= 7 &&
           src1.file == BRW_IMMEDIATE_VALUE &&
           src1.type == BRW_REGISTER_TYPE_UD &&
@@ -479,6 +483,7 @@ generate_gs_set_vertex_count(struct brw_codegen *p,
        *     mov (2) dst.4<1>:uw src<8;1,0>:uw   { Align1, Q1, NoMask }
        */
       brw_set_default_access_mode(p, BRW_ALIGN_1);
+      brw_set_default_exec_size(p, BRW_EXECUTE_2);
       brw_MOV(p,
               suboffset(stride(retype(dst, BRW_REGISTER_TYPE_UW), 2, 2, 1), 4),
               stride(retype(src, BRW_REGISTER_TYPE_UW), 8, 1, 0));
@@ -539,6 +544,7 @@ generate_gs_svb_set_destination_index(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, get_element_ud(dst, 5), get_element_ud(src, vertex));
    brw_pop_insn_state(p);
 }
@@ -551,6 +557,7 @@ generate_gs_set_dword_2(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, suboffset(vec1(dst), 2), suboffset(vec1(src), 0));
    brw_pop_insn_state(p);
 }
@@ -569,6 +576,7 @@ generate_gs_prepare_channel_masks(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_SHL(p, dst, dst, brw_imm_ud(4));
    brw_pop_insn_state(p);
 }
@@ -633,6 +641,7 @@ generate_gs_set_channel_masks(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_OR(p, suboffset(vec1(dst), 21), vec1(src), suboffset(vec1(src), 16));
    brw_pop_insn_state(p);
 }
@@ -648,6 +657,7 @@ generate_gs_get_instance_id(struct brw_codegen *p,
     */
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_8);
    dst = retype(dst, BRW_REGISTER_TYPE_UD);
    struct brw_reg r0(retype(brw_vec8_grf(0, 0), BRW_REGISTER_TYPE_UD));
    brw_SHR(p, dst, stride(r0, 1, 4, 0),
@@ -664,6 +674,7 @@ generate_gs_ff_sync_set_primitives(struct brw_codegen *p,
 {
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    /* Save src0 data in 16:31 bits of dst.0 */
    brw_AND(p, suboffset(vec1(dst), 0), suboffset(vec1(src0), 0),
            brw_imm_ud(0xffffu));
@@ -698,6 +709,7 @@ generate_gs_ff_sync(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, get_element_ud(header, 0), get_element_ud(src1, 0));
    brw_MOV(p, get_element_ud(header, 1), get_element_ud(src0, 0));
    brw_pop_insn_state(p);
@@ -715,6 +727,7 @@ generate_gs_ff_sync(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, get_element_ud(header, 0), get_element_ud(dst, 0));
 
    /* src1 is not an immediate when we use transform feedback */
@@ -734,6 +747,7 @@ generate_gs_set_primitive_id(struct brw_codegen *p, struct brw_reg dst)
    brw_push_insn_state(p);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, get_element_ud(dst, 0), get_element_ud(src, 1));
    brw_pop_insn_state(p);
 }
@@ -755,6 +769,7 @@ generate_tcs_get_instance_id(struct brw_codegen *p, struct brw_reg dst)
 
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
 
    const int mask = ivb ? INTEL_MASK(22, 16) : INTEL_MASK(23, 17);
    const int shift = ivb ? 16 : 17;
@@ -814,6 +829,7 @@ generate_tcs_input_urb_offsets(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, dst, brw_imm_ud(0));
 
    /* m0.5 bits 8-15 are channel enables */
@@ -882,12 +898,14 @@ generate_tcs_output_urb_offsets(struct brw_codegen *p,
    unsigned mask = write_mask.ud;
 
    /* m0.5 bits 15:12 and 11:8 are channel enables */
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, get_element_ud(dst, 5), brw_imm_ud((mask << 8) | (mask << 12)));
 
    /* HS patch URB handle is delivered in r0.0 */
    struct brw_reg urb_handle = brw_vec1_grf(0, 0);
 
    /* m0.0-0.1: URB handles */
+   brw_set_default_exec_size(p, BRW_EXECUTE_2);
    brw_MOV(p, vec2(get_element_ud(dst, 0)),
            retype(urb_handle, BRW_REGISTER_TYPE_UD));
 
@@ -910,11 +928,13 @@ generate_tes_create_input_read_header(struct brw_codegen *p,
    brw_MOV(p, dst, brw_imm_ud(0));
 
    /* Enable all the channels in m0.5 bits 15:8 */
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, get_element_ud(dst, 5), brw_imm_ud(0xff00));
 
    /* Copy g1.3 (the patch URB handle) to m0.0 and m0.1.  For safety,
     * mask out irrelevant "Reserved" bits, as they're not marked MBZ.
     */
+   brw_set_default_exec_size(p, BRW_EXECUTE_2);
    brw_AND(p, vec2(get_element_ud(dst, 0)),
            retype(brw_vec1_grf(1, 3), BRW_REGISTER_TYPE_UD),
            brw_imm_ud(0x1fff));
@@ -933,6 +953,7 @@ generate_tes_add_indirect_urb_offset(struct brw_codegen *p,
 
    brw_MOV(p, dst, header);
    /* m0.3-0.4: 128-bit-granular offsets into the URB from the handles */
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, vec2(get_element_ud(dst, 3)), stride(offset, 4, 1, 0));
 
    brw_pop_insn_state(p);
@@ -983,6 +1004,7 @@ generate_tcs_release_input(struct brw_codegen *p,
    brw_set_default_access_mode(p, BRW_ALIGN_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
    brw_MOV(p, header, brw_imm_ud(0));
+   brw_set_default_exec_size(p, BRW_EXECUTE_2);
    brw_MOV(p, vec2(get_element_ud(header, 0)), urb_handles);
    brw_pop_insn_state(p);
 
@@ -1007,10 +1029,13 @@ generate_tcs_thread_end(struct brw_codegen *p, vec4_instruction *inst)
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+   brw_set_default_exec_size(p, BRW_EXECUTE_8);
    brw_MOV(p, header, brw_imm_ud(0));
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, get_element_ud(header, 5), brw_imm_ud(WRITEMASK_X << 8));
    brw_MOV(p, get_element_ud(header, 0),
            retype(brw_vec1_grf(0, 0), BRW_REGISTER_TYPE_UD));
+   brw_set_default_exec_size(p, BRW_EXECUTE_8);
    brw_MOV(p, brw_message_reg(inst->base_mrf + 1), brw_imm_ud(0u));
    brw_pop_insn_state(p);
 
@@ -1031,6 +1056,7 @@ generate_tes_get_primitive_id(struct brw_codegen *p, struct brw_reg dst)
 {
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, dst, retype(brw_vec1_grf(1, 7), BRW_REGISTER_TYPE_D));
    brw_pop_insn_state(p);
 }
@@ -1040,6 +1066,7 @@ generate_tcs_get_primitive_id(struct brw_codegen *p, struct brw_reg dst)
 {
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, dst, retype(brw_vec1_grf(0, 1), BRW_REGISTER_TYPE_UD));
    brw_pop_insn_state(p);
 }
@@ -1057,6 +1084,7 @@ generate_tcs_create_barrier_header(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
 
    /* Zero the message header */
    brw_MOV(p, retype(dst, BRW_REGISTER_TYPE_UD), brw_imm_ud(0u));
@@ -1100,6 +1128,7 @@ generate_oword_dual_block_offsets(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
 
    brw_MOV(p, m1_0, index_0);
 
@@ -1120,6 +1149,7 @@ generate_unpack_flags(struct brw_codegen *p,
    brw_push_insn_state(p);
    brw_set_default_mask_control(p, BRW_MASK_DISABLE);
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
 
    struct brw_reg flags = brw_flag_reg(0, 0);
    struct brw_reg dst_0 = suboffset(vec1(dst), 0);
@@ -1419,6 +1449,7 @@ generate_set_simd4x2_header_gen9(struct brw_codegen *p,
    brw_MOV(p, vec8(dst), retype(brw_vec8_grf(0, 0), BRW_REGISTER_TYPE_UD));
 
    brw_set_default_access_mode(p, BRW_ALIGN_1);
+   brw_set_default_exec_size(p, BRW_EXECUTE_1);
    brw_MOV(p, get_element_ud(dst, 2),
            brw_imm_ud(GEN9_SAMPLER_SIMD_MODE_EXTENSION_SIMD4X2));
 
