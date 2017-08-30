@@ -2418,6 +2418,7 @@ void brw_urb_WRITE(struct brw_codegen *p,
       brw_push_insn_state(p);
       brw_set_default_access_mode(p, BRW_ALIGN_1);
       brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+      brw_set_default_exec_size(p, BRW_EXECUTE_1);
       brw_OR(p, retype(brw_vec1_reg(BRW_MESSAGE_REGISTER_FILE, msg_reg_nr, 5),
 		       BRW_REGISTER_TYPE_UD),
 	        retype(brw_vec1_grf(0, 5), BRW_REGISTER_TYPE_UD),
@@ -2477,6 +2478,7 @@ brw_send_indirect_message(struct brw_codegen *p,
       brw_push_insn_state(p);
       brw_set_default_access_mode(p, BRW_ALIGN_1);
       brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+      brw_set_default_exec_size(p, BRW_EXECUTE_1);
       brw_set_default_predicate_control(p, BRW_PREDICATE_NONE);
 
       /* Load the indirect descriptor to an address register using OR so the
@@ -2521,6 +2523,7 @@ brw_send_indirect_surface_message(struct brw_codegen *p,
       brw_push_insn_state(p);
       brw_set_default_access_mode(p, BRW_ALIGN_1);
       brw_set_default_mask_control(p, BRW_MASK_DISABLE);
+      brw_set_default_exec_size(p, BRW_EXECUTE_1);
       brw_set_default_predicate_control(p, BRW_PREDICATE_NONE);
 
       /* Mask out invalid bits from the surface index to avoid hangs e.g. when
