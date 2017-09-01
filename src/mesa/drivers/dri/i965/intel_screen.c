@@ -1316,7 +1316,8 @@ intel_from_planar(__DRIimage *parent, int plane, void *loaderPrivate)
 
     if (parent == NULL) {
        return NULL;
-    } else if (parent->planar_format == NULL) {
+    } else if (parent->planar_format == NULL ||
+               parent->planar_format->nplanes == 1) {
        const bool is_aux =
           isl_drm_modifier_has_aux(parent->modifier) && plane == 1;
        if (!is_aux)
