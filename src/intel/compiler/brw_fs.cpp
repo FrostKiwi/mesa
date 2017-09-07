@@ -5186,6 +5186,7 @@ fs_visitor::lower_simd_width()
 
          assert(!inst->writes_accumulator && !inst->mlen);
 
+         exec_node * const after_inst = inst->next;
          for (unsigned i = 0; i < n; i++) {
             /* Emit a copy of the original instruction with the lowered width.
              * If the EOT flag was set throw it away except for the last
@@ -5193,7 +5194,7 @@ fs_visitor::lower_simd_width()
              */
             fs_inst split_inst = *inst;
             split_inst.exec_size = lower_width;
-            split_inst.eot = inst->eot && i == n - 1;
+            split_inst.eot = inst->eot && i == 0;
 
             /* Select the correct channel enables for the i-th group, then
              * transform the sources and destination and emit the lowered
@@ -5205,11 +5206,11 @@ fs_visitor::lower_simd_width()
                split_inst.src[j] = emit_unzip(lbld.at(block, inst), inst, j);
 
             split_inst.dst = emit_zip(lbld.at(block, inst),
-                                      lbld.at(block, inst->next), inst);
+                                      lbld.at(block, after_inst), inst);
             split_inst.size_written =
                split_inst.dst.component_size(lower_width) * dst_size;
 
-            lbld.emit(split_inst);
+            lbld.at(block, inst->next).emit(split_inst);
          }
 
          inst->remove(block);
