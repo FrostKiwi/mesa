@@ -126,22 +126,30 @@ blob_write_bytes(struct blob *blob, const void *bytes, size_t to_write);
  * Reserve space in \blob for a number of bytes.
  *
  * Space will be allocated within the blob for these byes, but the bytes will
- * be left uninitialized. The caller is expected to use the return value to
- * write directly (and immediately) to these bytes.
+ * be left uninitialized. The caller is expected to use \sa
+ * blob_overwrite_bytes to write to these bytes.
  *
- * \note The return value is valid immediately upon return, but can be
- * invalidated by any other call to a blob function. So the caller should call
- * blob_reserve_byes immediately before writing through the returned pointer.
- *
- * This function is intended to be used when interfacing with an existing API
- * that is not aware of the blob API, (so that blob_write_bytes cannot be
- * called).
- *
- * \return A pointer to space allocated within \blob to which \to_write bytes
- * can be written, (or NULL in case of any allocation error).
+ * \return An offset to space allocated within \blob to which \to_write bytes
+ * can be written, (or -1 in case of any allocation error).
  */
-uint8_t *
+ssize_t
 blob_reserve_bytes(struct blob *blob, size_t to_write);
+
+/**
+ * Similar to \sa blob_reserve_bytes, but only reserves an uint32_t worth of
+ * space. Note that this must be used if later reading with \sa
+ * blob_read_uint32, since it aligns the offset correctly.
+ */
+ssize_t
+blob_reserve_uint32(struct blob *blob);
+
+/**
+ * Similar to \sa blob_reserve_bytes, but only reserves an intptr_t worth of
+ * space. Note that this must be used if later reading with \sa
+ * blob_read_intptr, since it aligns the offset correctly.
+ */
+ssize_t
+blob_reserve_intptr(struct blob *blob);
 
 /**
  * Overwrite some data previously written to the blob.
@@ -186,8 +194,7 @@ blob_write_uint32(struct blob *blob, uint32_t value);
  *
  *	size_t offset;
  *
- *	offset = blob->size;
- *	blob_write_uint32 (blob, 0); // placeholder
+ *	offset = blob_reserve_uint32(blob);
  *	... various blob write calls, writing N items ...
  *	blob_overwrite_uint32 (blob, offset, N);
  *
@@ -224,6 +231,23 @@ blob_write_uint64(struct blob *blob, uint64_t value);
  */
 bool
 blob_write_intptr(struct blob *blob, intptr_t value);
+
+/**
+ * Overwrite a uint32_t previously written to the blob.
+ *
+ * Writes a uint32_t value to an existing portion of the blob at an offset of
+ * \offset.  This data range must have previously been written to the blob by
+ * one of the blob_write_* calls.
+ *
+ * For example usage, see blob_overwrite_uint32
+ *
+ * \return True unless the requested position or position+to_write lie outside
+ * the current blob's size.
+ */
+bool
+blob_overwrite_intptr(struct blob *blob,
+                      size_t offset,
+                      intptr_t value);
 
 /**
  * Add a NULL-terminated string to a blob, (including the NULL terminator).
