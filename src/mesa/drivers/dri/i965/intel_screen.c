@@ -645,20 +645,22 @@ static __DRIimage *
 intel_create_image_common(__DRIscreen *dri_screen,
                           int width, int height, int format,
                           unsigned int use,
-                          const uint64_t *modifiers,
-                          unsigned count,
+                          const uint64_t **modifiers,
+                          const unsigned *counts,
+                          const unsigned tranches_count,
                           void *loaderPrivate)
 {
    __DRIimage *image;
    struct intel_screen *screen = dri_screen->driverPrivate;
    uint64_t modifier = DRM_FORMAT_MOD_INVALID;
    bool ok;
+   int i;
 
    /* Callers of this may specify a modifier, or a dri usage, but not both. The
     * newer modifier interface deprecates the older usage flags newer modifier
     * interface deprecates the older usage flags.
     */
-   assert(!(use && count));
+   assert(!(use && tranches_count));
 
    if (use & __DRI_IMAGE_USE_CURSOR) {
       if (width != 64 || height != 64)
@@ -670,10 +672,14 @@ intel_create_image_common(__DRIscreen *dri_screen,
       modifier = DRM_FORMAT_MOD_LINEAR;
 
    if (modifier == DRM_FORMAT_MOD_INVALID) {
-      if (modifiers) {
+      if (tranches_count > 0 && counts && modifiers && modifiers[0]) {
          /* User requested specific modifiers */
-         modifier = select_best_modifier(&screen->devinfo, format,
-                                         modifiers, count);
+         for (i = 0; i < tranches_count; i++) {
+            modifier = select_best_modifier(&screen->devinfo, format,
+                                            modifiers[i], counts[i]);
+            if (modifier != DRM_FORMAT_MOD_INVALID)
+               break;
+         }
          if (modifier == DRM_FORMAT_MOD_INVALID)
             return NULL;
       } else {
@@ -759,7 +765,7 @@ intel_create_image(__DRIscreen *dri_screen,
 		   unsigned int use,
 		   void *loaderPrivate)
 {
-   return intel_create_image_common(dri_screen, width, height, format, use, NULL, 0,
+   return intel_create_image_common(dri_screen, width, height, format, use, NULL, NULL, 0,
                                loaderPrivate);
 }
 
@@ -832,7 +838,20 @@ intel_create_image_with_modifiers(__DRIscreen *dri_screen,
                                   void *loaderPrivate)
 {
    return intel_create_image_common(dri_screen, width, height, format, 0,
-                                    modifiers, count, loaderPrivate);
+                                    &modifiers, &count, 1, loaderPrivate);
+}
+
+static __DRIimage *
+intel_create_image_with_modifiers2(__DRIscreen *dri_screen,
+                                   int width, int height, int format,
+                                   const uint64_t **modifiers,
+                                   const unsigned *counts,
+                                   const unsigned tranches_count,
+                                   void *loaderPrivate)
+{
+   return intel_create_image_common(dri_screen, width, height, format, 0,
+                                    modifiers, counts, tranches_count,
+                                    loaderPrivate);
 }
 
 static GLboolean
@@ -1374,7 +1393,7 @@ intel_image_suppress_implicit_sync(__DRIimage *image)
 }
 
 static __DRIimageExtension intelImageExtension = {
-    .base = { __DRI_IMAGE, 18 },
+    .base = { __DRI_IMAGE, 19 },
 
     .createImageFromName                = intel_create_image_from_name,
     .createImageFromRenderbuffer        = intel_create_image_from_renderbuffer,
@@ -1399,6 +1418,7 @@ static __DRIimageExtension intelImageExtension = {
     .queryDmaBufFormatModifierAttribs   = intel_query_format_modifier_attribs,
     .createImageFromRenderbuffer2       = NULL,
     .suppressImplicitSync               = NULL,
+    .createImageWithModifiers2          = intel_create_image_with_modifiers2,
 };
 
 static uint64_t

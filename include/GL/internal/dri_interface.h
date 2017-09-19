@@ -1196,7 +1196,7 @@ struct __DRIdri2ExtensionRec {
  * extensions.
  */
 #define __DRI_IMAGE "DRI_IMAGE"
-#define __DRI_IMAGE_VERSION 18
+#define __DRI_IMAGE_VERSION 19
 
 /**
  * These formats correspond to the similarly named MESA_FORMAT_*
@@ -1675,6 +1675,23 @@ struct __DRIimageExtensionRec {
     * \since 18
     */
    void (*suppressImplicitSync)(__DRIimage *image);
+
+
+   /**
+    * Like createImageWithModifiers, but can take multiple tranches/sets of
+    * modifiers according to the priority for which they should be selected.
+    *
+    * Modifier should be selected from the first tranche, from the second
+    * one if not possible, etc.
+    *
+    * \since 19
+    */
+   __DRIimage *(*createImageWithModifiers2)(__DRIscreen *screen,
+                                            int width, int height, int format,
+                                            const uint64_t **modifiers,
+                                            const unsigned int *counts,
+                                            const unsigned tranches_count,
+                                            void *loaderPrivate);
 };
 
 
