@@ -130,6 +130,8 @@ wsi_x11_connection_create(const VkAllocationCallbacks *alloc,
 {
    xcb_query_extension_cookie_t dri3_cookie, pres_cookie, amd_cookie, nv_cookie;
    xcb_query_extension_reply_t *dri3_reply, *pres_reply, *amd_reply, *nv_reply;
+   bool has_dri3_v1_1 = false;
+   bool has_present_v1_1 = false;
 
    struct wsi_x11_connection *wsi_conn =
       vk_alloc(alloc, sizeof(*wsi_conn), 8,
@@ -138,7 +140,7 @@ wsi_x11_connection_create(const VkAllocationCallbacks *alloc,
       return NULL;
 
    dri3_cookie = xcb_query_extension(conn, 4, "DRI3");
-   pres_cookie = xcb_query_extension(conn, 7, "PRESENT");
+   pres_cookie = xcb_query_extension(conn, 7, "Present");
 
    /* We try to be nice to users and emit a warning if they try to use a
     * Vulkan application on a system without DRI3 enabled.  However, this ends
@@ -173,13 +175,27 @@ wsi_x11_connection_create(const VkAllocationCallbacks *alloc,
 
       ver_cookie = xcb_dri3_query_version(conn, 1, 1);
       ver_reply = xcb_dri3_query_version_reply(conn, ver_cookie, NULL);
-      wsi_conn->has_dri3_modifiers =
+      has_dri3_v1_1 =
          (ver_reply->major_version > 1 || ver_reply->minor_version >= 1);
       free(ver_reply);
    }
 #endif
 
    wsi_conn->has_present = pres_reply->present != 0;
+#if XCB_PRESENT_MAJOR_VERSION > 1 || XCB_PRESENT_MINOR_VERSION >= 1
+   if (wsi_conn->has_present) {
+      xcb_present_query_version_cookie_t ver_cookie;
+      xcb_present_query_version_reply_t *ver_reply;
+
+      ver_cookie = xcb_present_query_version(conn, 1, 1);
+      ver_reply = xcb_present_query_version_reply(conn, ver_cookie, NULL);
+      has_present_v1_1 =
+        (ver_reply->major_version > 1 || ver_reply->minor_version >= 1);
+      free(ver_reply);
+   }
+#endif
+
+   wsi_conn->has_dri3_modifiers = has_dri3_v1_1 && has_present_v1_1;
    wsi_conn->is_proprietary_x11 = false;
    if (amd_reply && amd_reply->present)
       wsi_conn->is_proprietary_x11 = true;
@@ -651,6 +667,7 @@ struct x11_swapchain {
 
    bool                                         threaded;
    VkResult                                     status;
+   bool                                         suboptimal;
    struct wsi_queue                             present_queue;
    struct wsi_queue                             acquire_queue;
    pthread_t                                    queue_manager;
@@ -699,6 +716,10 @@ x11_handle_dri3_present_event(struct x11_swapchain *chain,
       xcb_present_complete_notify_event_t *complete = (void *) event;
       if (complete->kind == XCB_PRESENT_COMPLETE_KIND_PIXMAP)
          chain->last_present_msc = complete->msc;
+#if XCB_PRESENT_MAJOR_VERSION > 1 || XCB_PRESENT_MINOR_VERSION >= 1
+      if (complete->mode == XCB_PRESENT_COMPLETE_MODE_SUBOPTIMAL_COPY)
+         chain->suboptimal = true;
+#endif
       break;
    }
 
@@ -828,6 +849,11 @@ x11_present_to_x11(struct x11_swapchain *chain, uint32_t image_index,
    if (chain->base.present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR)
       options |= XCB_PRESENT_OPTION_ASYNC;
 
+#if XCB_PRESENT_MAJOR_VERSION > 1 || XCB_PRESENT_MINOR_VERSION >= 1
+   if (chain->has_dri3_modifiers)
+      options |= XCB_PRESENT_OPTION_SUBOPTIMAL;
+#endif
+
    xshmfence_reset(image->shm_fence);
 
    ++chain->send_sbc;
@@ -862,11 +888,18 @@ x11_acquire_next_image(struct wsi_swapchain *anv_chain,
                        uint32_t *image_index)
 {
    struct x11_swapchain *chain = (struct x11_swapchain *)anv_chain;
+   VkResult result;
 
    if (chain->threaded) {
-      return x11_acquire_next_image_from_queue(chain, image_index, timeout);
+      result = x11_acquire_next_image_from_queue(chain, image_index, timeout);
    } else {
-      return x11_acquire_next_image_poll_x11(chain, image_index, timeout);
+      result = x11_acquire_next_image_poll_x11(chain, image_index, timeout);
+   }
+
+   if (result != VK_SUCCESS) {
+      return result;
+   } else {
+      return chain->suboptimal ? VK_SUBOPTIMAL_KHR : VK_SUCCESS;
    }
 }
 
@@ -876,12 +909,19 @@ x11_queue_present(struct wsi_swapchain *anv_chain,
                   const VkPresentRegionKHR *damage)
 {
    struct x11_swapchain *chain = (struct x11_swapchain *)anv_chain;
+   VkResult result;
 
    if (chain->threaded) {
       wsi_queue_push(&chain->present_queue, image_index);
-      return chain->status;
+      result = chain->status;
    } else {
-      return x11_present_to_x11(chain, image_index, 0);
+      result = x11_present_to_x11(chain, image_index, 0);
+   }
+
+   if (result != VK_SUCCESS) {
+      return result;
+   } else {
+      return chain->suboptimal ? VK_SUBOPTIMAL_KHR : VK_SUCCESS;
    }
 }
 
@@ -1219,6 +1259,7 @@ x11_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
    chain->last_present_msc = 0;
    chain->threaded = false;
    chain->status = VK_SUCCESS;
+   chain->suboptimal = false;
    chain->has_dri3_modifiers = wsi_conn->has_dri3_modifiers;
 
    if (!wsi_x11_check_dri3_compatible(conn, local_fd))
