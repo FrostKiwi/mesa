@@ -825,6 +825,7 @@ gbm_dri_bo_get_offset(struct gbm_bo *_bo, int plane)
       dri->image->queryImage(image, __DRI_IMAGE_ATTRIB_OFFSET, &offset);
       dri->image->destroyImage(image);
    } else {
+      assert(plane == 0);
       dri->image->queryImage(bo->image, __DRI_IMAGE_ATTRIB_OFFSET, &offset);
    }
 
