@@ -34,6 +34,7 @@
 #include <X11/Xlib-xcb.h>
 
 #include "loader_dri3_helper.h"
+#include "util/macros.h"
 
 /* From xmlpool/options.h, user exposed so should be stable */
 #define DRI_CONF_VBLANK_NEVER 0
@@ -378,10 +379,22 @@ dri3_handle_present_event(struct loader_dri3_drawable *draw,
          switch (ce->mode) {
          case XCB_PRESENT_COMPLETE_MODE_FLIP:
             draw->flipping = true;
+            for (int b = 0; b < ARRAY_SIZE(draw->buffers); b++) {
+               if (draw->buffers[b])
+                  draw->buffers[b]->realloc_suboptimal = true;
+            }
             break;
          case XCB_PRESENT_COMPLETE_MODE_COPY:
             draw->flipping = false;
             break;
+#if XCB_PRESENT_MAJOR_VERSION > 1 || (XCB_PRESENT_MAJOR_VERSION == 1 && XCB_PRESENT_MINOR_VERSION >= 1)
+         case XCB_PRESENT_COMPLETE_MODE_SUBOPTIMAL_COPY:
+            draw->flipping = false;
+            for (int b = 0; b < ARRAY_SIZE(draw->buffers); b++) {
+               if (draw->buffers[b])
+                  draw->buffers[b]->suboptimal = true;
+            }
+#endif
          }
 
          if (draw->vtable->show_fps)
@@ -889,6 +902,11 @@ loader_dri3_swap_buffers_msc(struct loader_dri3_drawable *draw,
       if (!loader_dri3_have_image_blit(draw) && draw->cur_blit_source != -1)
          options |= XCB_PRESENT_OPTION_COPY;
 
+#if XCB_PRESENT_MAJOR_VERSION > 1 || (XCB_PRESENT_MAJOR_VERSION == 1 && XCB_PRESENT_MINOR_VERSION >= 1)
+      if (draw->multiplanes_available)
+         options  |= XCB_PRESENT_OPTION_SUBOPTIMAL;
+#endif
+
       back->busy = 1;
       back->last_swap = draw->send_sbc;
       xcb_present_pixmap(draw->conn,
@@ -1255,6 +1273,8 @@ dri3_alloc_render_buffer(struct loader_dri3_drawable *draw, unsigned int format,
    buffer->shm_fence = shm_fence;
    buffer->width = width;
    buffer->height = height;
+   buffer->suboptimal = false;
+   buffer->realloc_suboptimal = true;
 
    /* Mark the buffer as idle
     */
@@ -1599,7 +1619,8 @@ dri3_get_buffer(__DRIdrawable *driDrawable,
     * old one is the wrong size
     */
    if (!buffer || buffer->width != draw->width ||
-       buffer->height != draw->height) {
+       buffer->height != draw->height ||
+       (buffer->suboptimal && buffer->realloc_suboptimal)) {
       struct loader_dri3_buffer *new_buffer;
 
       /* Allocate the new buffers
@@ -1658,6 +1679,11 @@ dri3_get_buffer(__DRIdrawable *driDrawable,
                                           0, 0, 0);
          }
       }
+
+      /* Avoid multiple reallocations when the best we can use is a suboptimal
+       * format/modifier. */
+      new_buffer->realloc_suboptimal = buffer ? !buffer->suboptimal : true;
+
       buffer = new_buffer;
       draw->buffers[buf_id] = buffer;
    }
