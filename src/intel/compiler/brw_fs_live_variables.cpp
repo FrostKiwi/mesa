@@ -56,6 +56,7 @@ void
 fs_live_variables::setup_one_read(struct block_data *bd, fs_inst *inst,
                                   int ip, const fs_reg &reg)
 {
+   assert(reg.file == VGRF);
    int var = var_from_reg(reg);
    assert(var < num_vars);
 
@@ -74,6 +75,7 @@ void
 fs_live_variables::setup_one_write(struct block_data *bd, fs_inst *inst,
                                    int ip, const fs_reg &reg)
 {
+   assert(reg.file == VGRF);
    int var = var_from_reg(reg);
    assert(var < num_vars);
 
@@ -83,12 +85,10 @@ fs_live_variables::setup_one_write(struct block_data *bd, fs_inst *inst,
    /* The def[] bitset marks when an initialization in a block completely
     * screens off previous updates of that variable (VGRF channel).
     */
-   if (inst->dst.file == VGRF) {
-      if (!inst->is_partial_write() && !BITSET_TEST(bd->use, var))
-         BITSET_SET(bd->def, var);
+   if (!inst->is_partial_write() && !BITSET_TEST(bd->use, var))
+      BITSET_SET(bd->def, var);
 
-      BITSET_SET(bd->defout, var);
-   }
+   BITSET_SET(bd->defout, var);
 }
 
 /**
