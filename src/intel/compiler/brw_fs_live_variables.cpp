@@ -178,8 +178,9 @@ fs_live_variables::compute_live_variables()
 
                BITSET_WORD new_useout = (child_bd->usein[i] &
                                          ~bd->useout[i]);
-               if (new_useout) {
-                  bd->useout[i] |= new_useout;
+               if (child_bd->usein[i] & ~bd->useout[i]) {
+                  bd->useout[i] |= child_bd->usein[i];
+                  bd->usein[i] |= child_bd->usein[i];
                   cont = true;
                }
 	    }
@@ -198,12 +199,6 @@ fs_live_variables::compute_live_variables()
                                        ~bd->def[i]));
             if (new_livein & ~bd->livein[i]) {
                bd->livein[i] |= new_livein;
-               cont = true;
-            }
-
-            BITSET_WORD new_usein = bd->useout[i];
-            if (new_usein & ~bd->usein[i]) {
-               bd->usein[i] |= new_usein;
                cont = true;
             }
          }
