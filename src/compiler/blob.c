@@ -52,6 +52,11 @@ grow_to_fit(struct blob *blob, size_t additional)
    if (blob->size + additional <= blob->allocated)
       return true;
 
+   if (blob->fixed_allocation) {
+      blob->out_of_memory = true;
+      return false;
+   }
+
    if (blob->allocated == 0)
       to_allocate = BLOB_INITIAL_SIZE;
    else
@@ -86,7 +91,8 @@ align_blob(struct blob *blob, size_t alignment)
       if (!grow_to_fit(blob, new_size - blob->size))
          return false;
 
-      memset(blob->data + blob->size, 0, new_size - blob->size);
+      if (blob->data)
+         memset(blob->data + blob->size, 0, new_size - blob->size);
       blob->size = new_size;
    }
 
@@ -105,6 +111,17 @@ blob_init(struct blob *blob)
    blob->data = NULL;
    blob->allocated = 0;
    blob->size = 0;
+   blob->fixed_allocation = false;
+   blob->out_of_memory = false;
+}
+
+void
+blob_init_fixed(struct blob *blob, void *data, size_t size)
+{
+   blob->data = data;
+   blob->allocated = size;
+   blob->size = 0;
+   blob->fixed_allocation = true;
    blob->out_of_memory = false;
 }
 
@@ -120,7 +137,8 @@ blob_overwrite_bytes(struct blob *blob,
 
    VG(VALGRIND_CHECK_MEM_IS_DEFINED(bytes, to_write));
 
-   memcpy(blob->data + offset, bytes, to_write);
+   if (blob->data)
+      memcpy(blob->data + offset, bytes, to_write);
 
    return true;
 }
@@ -133,7 +151,8 @@ blob_write_bytes(struct blob *blob, const void *bytes, size_t to_write)
 
    VG(VALGRIND_CHECK_MEM_IS_DEFINED(bytes, to_write));
 
-   memcpy(blob->data + blob->size, bytes, to_write);
+   if (blob->data)
+      memcpy(blob->data + blob->size, bytes, to_write);
    blob->size += to_write;
 
    return true;
