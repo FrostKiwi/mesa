@@ -74,15 +74,14 @@ brw_get_graphics_reset_status(struct gl_context *ctx)
    return GL_NO_ERROR;
 }
 
-void
+bool
 brw_check_for_reset(struct brw_context *brw)
 {
    __DRIscreen *dri_screen = brw->screen->driScrnPriv;
    struct drm_i915_reset_stats stats = { .ctx_id = brw->hw_ctx };
 
    if (drmIoctl(dri_screen->fd, DRM_IOCTL_I915_GET_RESET_STATS, &stats) != 0)
-      return;
+      return false;
 
-   if (stats.batch_active > 0 || stats.batch_pending > 0)
-      _mesa_set_context_lost_dispatch(&brw->ctx);
+   return stats.batch_active > 0 || stats.batch_pending > 0;
 }

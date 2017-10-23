@@ -34,6 +34,7 @@
 #include "common/gen_decoder.h"
 
 #include "util/hash_table.h"
+#include "main/context.h"
 
 #include <xf86drm.h>
 #include <i915_drm.h>
@@ -101,7 +102,7 @@ intel_batchbuffer_init(struct brw_context *brw)
    batch->validation_list =
       malloc(batch->exec_array_size * sizeof(batch->validation_list[0]));
 
-   if (INTEL_DEBUG & DEBUG_BATCH) {
+   if (INTEL_DEBUG & (DEBUG_BATCH | DEBUG_ANGRY)) {
       batch->state_batch_sizes =
          _mesa_hash_table_create(NULL, uint_key_hash, uint_key_compare);
    }
@@ -384,7 +385,7 @@ intel_batchbuffer_require_space(struct brw_context *brw, GLuint sz,
    brw->batch.ring = ring;
 }
 
-#ifdef DEBUG
+#if 1
 #define CSI "\e["
 #define BLUE_HEADER  CSI "0;44m"
 #define NORMAL       CSI "0m"
@@ -880,13 +881,24 @@ submit_batch(struct brw_context *brw, int in_fence_fd, int *out_fence_fd)
    if (unlikely(INTEL_DEBUG & DEBUG_BATCH))
       do_batch_dump(brw);
 
-   if (brw->ctx.Const.ResetStrategy == GL_LOSE_CONTEXT_ON_RESET_ARB)
-      brw_check_for_reset(brw);
-
    if (ret != 0) {
       fprintf(stderr, "i965: Failed to submit batchbuffer: %s\n",
               strerror(-ret));
-      exit(1);
+      _exit(1);
+   }
+
+   if (brw->ctx.Const.ResetStrategy == GL_LOSE_CONTEXT_ON_RESET_ARB &&
+       brw_check_for_reset(brw)) {
+      _mesa_set_context_lost_dispatch(&brw->ctx);
+   }
+
+   if (unlikely(INTEL_DEBUG & DEBUG_ANGRY)) {
+      brw_bo_wait_rendering(brw->batch.batch.bo);
+      if (brw_check_for_reset(brw)) {
+         fprintf(stderr, "GPU HANG!\n");
+         do_batch_dump(brw);
+         _exit(1);
+      }
    }
 
    return ret;
@@ -1078,7 +1090,7 @@ brw_state_batch(struct brw_context *brw,
       assert(offset + size < batch->state.bo->size);
    }
 
-   if (unlikely(INTEL_DEBUG & DEBUG_BATCH)) {
+   if (unlikely(batch->state_batch_sizes)) {
       _mesa_hash_table_insert(batch->state_batch_sizes,
                               (void *) (uintptr_t) offset,
                               (void *) (uintptr_t) size);
