@@ -174,7 +174,7 @@ intel_finalize_mipmap_tree(struct brw_context *brw, GLuint unit)
 
    intelObj->validated_first_level = validate_first_level;
    intelObj->validated_last_level = validate_last_level;
-   intelObj->_Format = intelObj->mt->format;
+   intelObj->_Format = firstImage->base.Base.TexFormat,
    intelObj->needs_validate = false;
 }
 
