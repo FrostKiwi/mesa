@@ -1572,7 +1572,7 @@ gen7_upload_urb(struct brw_context *brw, unsigned vs_size,
 /* brw_reset.c */
 extern GLenum
 brw_get_graphics_reset_status(struct gl_context *ctx);
-void
+bool
 brw_check_for_reset(struct brw_context *brw);
 
 /* brw_compute.c */
