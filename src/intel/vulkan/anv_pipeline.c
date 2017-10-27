@@ -544,14 +544,6 @@ anv_fill_binding_table(struct brw_stage_prog_data *prog_data, unsigned bias)
    prog_data->binding_table.image_start = bias;
 }
 
-static void
-anv_pipeline_add_compiled_stage(struct anv_pipeline *pipeline,
-                                gl_shader_stage stage,
-                                struct anv_shader_bin *shader)
-{
-   pipeline->shaders[stage] = shader;
-}
-
 static VkResult
 anv_pipeline_compile_vs(struct anv_pipeline *pipeline,
                         struct anv_pipeline_cache *cache,
@@ -615,7 +607,7 @@ anv_pipeline_compile_vs(struct anv_pipeline *pipeline,
       ralloc_free(mem_ctx);
    }
 
-   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_VERTEX, bin);
+   pipeline->shaders[MESA_SHADER_VERTEX] = bin;
 
    return VK_SUCCESS;
 }
@@ -783,8 +775,8 @@ anv_pipeline_compile_tcs_tes(struct anv_pipeline *pipeline,
       ralloc_free(mem_ctx);
    }
 
-   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_TESS_CTRL, tcs_bin);
-   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_TESS_EVAL, tes_bin);
+   pipeline->shaders[MESA_SHADER_TESS_CTRL] = tcs_bin;
+   pipeline->shaders[MESA_SHADER_TESS_EVAL] = tes_bin;
 
    return VK_SUCCESS;
 }
@@ -853,7 +845,7 @@ anv_pipeline_compile_gs(struct anv_pipeline *pipeline,
       ralloc_free(mem_ctx);
    }
 
-   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_GEOMETRY, bin);
+   pipeline->shaders[MESA_SHADER_GEOMETRY] = bin;
 
    return VK_SUCCESS;
 }
@@ -1011,7 +1003,7 @@ anv_pipeline_compile_fs(struct anv_pipeline *pipeline,
       ralloc_free(mem_ctx);
    }
 
-   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_FRAGMENT, bin);
+   pipeline->shaders[MESA_SHADER_FRAGMENT] = bin;
 
    return VK_SUCCESS;
 }
@@ -1022,6 +1014,8 @@ anv_pipeline_compile_graphics(struct anv_pipeline *pipeline,
                               const VkGraphicsPipelineCreateInfo *info)
 {
    struct anv_pipeline_stage stages[MESA_SHADER_STAGES] = {};
+
+   pipeline->active_stages = 0;
 
    VkResult result;
    for (uint32_t i = 0; i < info->stageCount; i++) {
@@ -1083,7 +1077,7 @@ anv_pipeline_compile_graphics(struct anv_pipeline *pipeline,
                                       &stages[s].cache_key,
                                       sizeof(stages[s].cache_key));
       if (bin)
-         anv_pipeline_add_compiled_stage(pipeline, s, bin);
+         pipeline->shaders[s] = bin;
    }
 
    for (unsigned s = 0; s < MESA_SHADER_STAGES; s++) {
@@ -1206,7 +1200,8 @@ anv_pipeline_compile_cs(struct anv_pipeline *pipeline,
       ralloc_free(mem_ctx);
    }
 
-   anv_pipeline_add_compiled_stage(pipeline, MESA_SHADER_COMPUTE, bin);
+   pipeline->active_stages = VK_SHADER_STAGE_COMPUTE_BIT;
+   pipeline->shaders[MESA_SHADER_COMPUTE] = bin;
 
    return VK_SUCCESS;
 }
@@ -1470,8 +1465,6 @@ anv_pipeline_init(struct anv_pipeline *pipeline,
     * of various prog_data pointers.  Make them NULL by default.
     */
    memset(pipeline->shaders, 0, sizeof(pipeline->shaders));
-
-   pipeline->active_stages = 0;
 
    result = anv_pipeline_compile_graphics(pipeline, cache, pCreateInfo);
    if (result != VK_SUCCESS) {
