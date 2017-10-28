@@ -558,6 +558,9 @@ anv_pipeline_link_vs(const struct brw_compiler *compiler,
                      struct anv_pipeline_stage *next_stage)
 {
    anv_fill_binding_table(&vs_stage->prog_data.vs.base.base, 0);
+
+   if (next_stage)
+      brw_nir_link_shaders(compiler, &vs_stage->nir, &next_stage->nir);
 }
 
 static const unsigned *
@@ -622,6 +625,8 @@ anv_pipeline_link_tcs(const struct brw_compiler *compiler,
 
    anv_fill_binding_table(&tcs_stage->prog_data.tcs.base.base, 0);
 
+   brw_nir_link_shaders(compiler, &tcs_stage->nir, &tes_stage->nir);
+
    nir_lower_tes_patch_vertices(tes_stage->nir,
                                 tcs_stage->nir->info.tess.tcs_vertices_out);
 
@@ -666,6 +671,9 @@ anv_pipeline_link_tes(const struct brw_compiler *compiler,
                       struct anv_pipeline_stage *next_stage)
 {
    anv_fill_binding_table(&tes_stage->prog_data.tes.base.base, 0);
+
+   if (next_stage)
+      brw_nir_link_shaders(compiler, &tes_stage->nir, &next_stage->nir);
 }
 
 static const unsigned *
@@ -686,6 +694,9 @@ anv_pipeline_link_gs(const struct brw_compiler *compiler,
                      struct anv_pipeline_stage *next_stage)
 {
    anv_fill_binding_table(&gs_stage->prog_data.gs.base.base, 0);
+
+   if (next_stage)
+      brw_nir_link_shaders(compiler, &gs_stage->nir, &next_stage->nir);
 }
 
 static const unsigned *
