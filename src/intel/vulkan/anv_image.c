@@ -36,11 +36,12 @@
 #include "vk_format_info.h"
 
 static isl_surf_usage_flags_t
-choose_isl_surf_usage(VkImageCreateFlags vk_create_flags,
-                      VkImageUsageFlags vk_usage,
+choose_isl_surf_usage(const VkImageCreateInfo *vk_info,
                       isl_surf_usage_flags_t isl_extra_usage,
                       VkImageAspectFlagBits aspect)
 {
+   VkImageCreateFlags vk_create_flags = vk_info->flags;
+   VkImageUsageFlags vk_usage = vk_info->usage;
    isl_surf_usage_flags_t isl_usage = isl_extra_usage;
 
    if (vk_usage & VK_IMAGE_USAGE_SAMPLED_BIT)
@@ -88,6 +89,9 @@ choose_isl_surf_usage(VkImageCreateFlags vk_create_flags,
       isl_usage |= ISL_SURF_USAGE_RENDER_TARGET_BIT;
    }
 
+   if (vk_info->tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT)
+      isl_usage |= ISL_SURF_USAGE_DISABLE_AUX_BIT;
+
    return isl_usage;
 }
 
@@ -107,6 +111,9 @@ choose_isl_tiling_flags(const struct anv_image_create_info *anv_info,
       break;
    case VK_IMAGE_TILING_LINEAR:
       flags = ISL_TILING_LINEAR_BIT;
+      break;
+   case VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT:
+      flags = 1 << isl_mod_info->tiling;
       break;
    }
 
@@ -308,8 +315,7 @@ make_surface(const struct anv_device *dev,
    struct anv_surface *anv_surf = &image->planes[plane].surface;
 
    const isl_surf_usage_flags_t usage =
-      choose_isl_surf_usage(vk_info->flags, image->usage,
-                            anv_info->isl_extra_usage_flags, aspect);
+      choose_isl_surf_usage(vk_info, anv_info->isl_extra_usage_flags, aspect);
 
    /* If an image is created as BLOCK_TEXEL_VIEW_COMPATIBLE, then we need to
     * fall back to linear on Broadwell and earlier because we aren't
@@ -558,6 +564,12 @@ anv_image_create(VkDevice _device,
                                                  wsi_info->modifiers);
             assert(isl_mod_info);
          }
+         break;
+      case VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT:
+         vk_mod_list = (const VkImageDrmFormatModifierListCreateInfoEXT *) s;
+         isl_mod_info =
+            choose_drm_format_mod(vk_mod_list->drmFormatModifierCount,
+                                  vk_mod_list->pDrmFormatModifiers);
          break;
       default:
          anv_debug_ignored_stype(s->sType);
