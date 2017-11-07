@@ -67,7 +67,6 @@ struct anv_instance;
 struct gen_l3_config;
 
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_intel.h>
 #include <vulkan/vk_icd.h>
 #include <vulkan/vk_android_native_buffer.h>
 
