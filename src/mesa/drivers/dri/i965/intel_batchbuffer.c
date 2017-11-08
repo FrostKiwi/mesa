@@ -85,10 +85,10 @@ intel_batchbuffer_init(struct brw_context *brw)
    const struct gen_device_info *devinfo = &screen->devinfo;
 
    if (!devinfo->has_llc) {
-      batch->batch.cpu_map = malloc(BATCH_SZ);
+      batch->batch.cpu_map = malloc(MAX_BATCH_SIZE);
       batch->batch.map = batch->batch.cpu_map;
       batch->map_next = batch->batch.map;
-      batch->state.cpu_map = malloc(STATE_SZ);
+      batch->state.cpu_map = malloc(MAX_STATE_SIZE);
       batch->state.map = batch->state.cpu_map;
    }
 
@@ -174,7 +174,7 @@ intel_batchbuffer_reset(struct brw_context *brw)
    }
    batch->last_bo = batch->batch.bo;
 
-   batch->batch.bo = brw_bo_alloc(bufmgr, "batchbuffer", BATCH_SZ, 4096);
+   batch->batch.bo = brw_bo_alloc(bufmgr, "batchbuffer", MAX_BATCH_SIZE, 4096);
    batch->batch.partial_bo = NULL;
    batch->batch.partial_bytes = 0;
    if (!batch->batch.cpu_map) {
@@ -183,7 +183,7 @@ intel_batchbuffer_reset(struct brw_context *brw)
    }
    batch->map_next = batch->batch.map;
 
-   batch->state.bo = brw_bo_alloc(bufmgr, "statebuffer", STATE_SZ, 4096);
+   batch->state.bo = brw_bo_alloc(bufmgr, "statebuffer", MAX_STATE_SIZE, 4096);
    batch->state.bo->kflags =
       can_do_exec_capture(screen) ? EXEC_OBJECT_CAPTURE : 0;
    batch->state.partial_bo = NULL;
