@@ -625,7 +625,7 @@ make_surface(struct brw_context *brw, GLenum target, mesa_format format,
 
    if (!bo) {
       mt->bo = brw_bo_alloc_tiled(brw->bufmgr, "isl-miptree",
-                                  mt->surf.size,
+                                  mt->surf.size * 2,
                                   isl_tiling_to_i915_tiling(
                                      mt->surf.tiling),
                                   mt->surf.row_pitch, alloc_flags);
@@ -1678,7 +1678,7 @@ intel_alloc_aux_buffer(struct brw_context *brw,
     * Therefore one can pass the ISL dimensions in terms of bytes instead of
     * trying to recalculate based on different format block sizes.
     */
-   buf->bo = brw_bo_alloc_tiled(brw->bufmgr, name, buf->size,
+   buf->bo = brw_bo_alloc_tiled(brw->bufmgr, name, buf->size * 2,
                                 I915_TILING_Y, buf->pitch, alloc_flags);
    if (!buf->bo) {
       free(buf);
