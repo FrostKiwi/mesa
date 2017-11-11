@@ -244,8 +244,6 @@ color_attachment_compute_aux_usage(struct anv_device * device,
    } else if (iview->image->planes[0].aux_usage == ISL_AUX_USAGE_MCS) {
       att_state->aux_usage = ISL_AUX_USAGE_MCS;
       att_state->input_aux_usage = ISL_AUX_USAGE_MCS;
-      att_state->fast_clear = false;
-      return;
    } else if (iview->image->planes[0].aux_usage == ISL_AUX_USAGE_CCS_E) {
       att_state->aux_usage = ISL_AUX_USAGE_CCS_E;
       att_state->input_aux_usage = ISL_AUX_USAGE_CCS_E;
@@ -281,7 +279,8 @@ color_attachment_compute_aux_usage(struct anv_device * device,
       }
    }
 
-   assert(iview->image->planes[0].aux_surface.isl.usage & ISL_SURF_USAGE_CCS_BIT);
+   assert(iview->image->planes[0].aux_surface.isl.usage &
+            (ISL_SURF_USAGE_CCS_BIT | ISL_SURF_USAGE_MCS_BIT));
 
    att_state->clear_color_is_zero_one =
       color_is_zero_one(att_state->clear_value.color, iview->planes[0].isl.format);
@@ -723,9 +722,6 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
        * if the initial layout is COLOR_ATTACHMENT_OPTIMAL.
        */
       return;
-   } else if (image->samples > 1) {
-      /* MCS buffers don't need resolving. */
-      return;
    }
 
    /* Perform a resolve to synchronize data between the main and aux buffer.
@@ -757,10 +753,16 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
 
       genX(load_needs_resolve_predicate)(cmd_buffer, image, aspect, level);
 
-      anv_ccs_resolve(cmd_buffer, image, aspect, level, base_layer, layer_count,
-                      image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_E ?
-                      BLORP_FAST_CLEAR_OP_RESOLVE_PARTIAL :
-                      BLORP_FAST_CLEAR_OP_RESOLVE_FULL);
+      if (image->samples > 1) {
+         anv_mcs_partial_resolve(cmd_buffer, image, aspect,
+                                 base_layer, layer_count);
+      } else {
+         anv_ccs_resolve(cmd_buffer, image, aspect,
+                         level, base_layer, layer_count,
+                         image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_E ?
+                         BLORP_FAST_CLEAR_OP_RESOLVE_PARTIAL :
+                         BLORP_FAST_CLEAR_OP_RESOLVE_FULL);
+      }
 
       genX(set_image_needs_resolve)(cmd_buffer, image, aspect, level, false);
    }

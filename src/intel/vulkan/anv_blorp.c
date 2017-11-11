@@ -1549,6 +1549,12 @@ anv_cmd_buffer_resolve_subpass(struct anv_cmd_buffer *cmd_buffer)
          get_blorp_surf_for_anv_image(src_iview->image,
                                       VK_IMAGE_ASPECT_COLOR_BIT,
                                       src_aux_usage, &src_surf);
+         if (src_aux_usage == ISL_AUX_USAGE_MCS) {
+            src_surf.clear_color_addr = anv_to_blorp_address(
+               anv_image_get_clear_color_addr(cmd_buffer->device,
+                                              src_iview->image,
+                                              VK_IMAGE_ASPECT_COLOR_BIT, 0));
+         }
          get_blorp_surf_for_anv_image(dst_iview->image,
                                       VK_IMAGE_ASPECT_COLOR_BIT,
                                       dst_aux_usage, &dst_surf);
