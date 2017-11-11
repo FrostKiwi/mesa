@@ -2534,6 +2534,12 @@ anv_ccs_resolve(struct anv_cmd_buffer * const cmd_buffer,
                 const enum blorp_fast_clear_op op);
 
 void
+anv_mcs_partial_resolve(struct anv_cmd_buffer * const cmd_buffer,
+                        const struct anv_image * const image,
+                        VkImageAspectFlagBits aspect,
+                        const uint32_t start_layer, const uint32_t layer_count);
+
+void
 anv_image_fast_clear(struct anv_cmd_buffer *cmd_buffer,
                      const struct anv_image *image,
                      VkImageAspectFlagBits aspect,

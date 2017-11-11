@@ -1696,3 +1696,34 @@ anv_ccs_resolve(struct anv_cmd_buffer * const cmd_buffer,
 
    blorp_batch_finish(&batch);
 }
+
+void
+anv_mcs_partial_resolve(struct anv_cmd_buffer * const cmd_buffer,
+                        const struct anv_image * const image,
+                        VkImageAspectFlagBits aspect,
+                        const uint32_t start_layer, const uint32_t layer_count)
+{
+   assert(cmd_buffer && image);
+
+   uint32_t plane = anv_image_aspect_to_plane(image->aspects, aspect);
+
+   /* The resolved subresource range must have a CCS buffer. */
+   assert(aspect == VK_IMAGE_ASPECT_COLOR_BIT);
+   assert(start_layer + layer_count <= anv_image_aux_layers(image, aspect, 0));
+   assert(image->samples > 1);
+
+   struct blorp_batch batch;
+   blorp_batch_init(&cmd_buffer->device->blorp, &batch, cmd_buffer,
+                    BLORP_BATCH_PREDICATE_ENABLE);
+
+   struct blorp_surf surf;
+   get_blorp_surf_for_anv_image(image, aspect, ISL_AUX_USAGE_MCS, &surf);
+   surf.clear_color_addr = anv_to_blorp_address(
+      anv_image_get_clear_color_addr(cmd_buffer->device, image, aspect, 0));
+
+   blorp_mcs_partial_resolve(&batch, &surf,
+                             image->planes[plane].surface.isl.format,
+                             start_layer, layer_count);
+
+   blorp_batch_finish(&batch);
+}
