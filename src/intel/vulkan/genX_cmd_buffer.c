@@ -496,6 +496,7 @@ init_fast_clear_state_entry(struct anv_cmd_buffer *cmd_buffer,
       anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_DATA_IMM), sdi) {
          sdi.Address = anv_image_get_clear_color_addr(cmd_buffer->device,
                                                       image, aspect, level);
+         sdi.Address.offset += i;
 
          if (GEN_GEN >= 9) {
             /* MCS buffers on SKL+ can only have 1/0 clear colors. */
