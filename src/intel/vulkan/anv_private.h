@@ -2376,6 +2376,12 @@ struct anv_image {
    /** True if this is a legacy scanout image */
    bool legacy_scanout;
 
+   /**
+    * Must be DRM_FORMAT_MOD_INVALID unless tiling is
+    * VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT.
+    */
+   uint64_t drm_format_mod;
+
    VkDeviceSize size;
    uint32_t alignment;
 

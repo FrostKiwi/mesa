@@ -367,13 +367,9 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
    if (result != VK_SUCCESS)
       goto fail;
 
-   if (wsi->supports_modifiers)
+   if (image_modifier_count > 0) {
       image->drm_modifier = wsi->image_get_modifier(image->image);
-   else
-      image->drm_modifier = DRM_FORMAT_MOD_INVALID;
 
-   VkSubresourceLayout image_layout;
-   if (num_modifier_lists > 0) {
       for (uint32_t j = 0; j < modifier_prop_count; j++) {
          if (modifier_props[j].modifier == image->drm_modifier) {
             image->num_planes = modifier_props[j].modifier_plane_count;
@@ -387,6 +383,7 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
             .mipLevel = 0,
             .arrayLayer = 0,
          };
+         VkSubresourceLayout image_layout;
          wsi->GetImageSubresourceLayout(chain->device, image->image,
                                         &image_subresource, &image_layout);
          image->sizes[p] = image_layout.size;
@@ -410,9 +407,11 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
          .mipLevel = 0,
          .arrayLayer = 0,
       };
+      VkSubresourceLayout image_layout;
       wsi->GetImageSubresourceLayout(chain->device, image->image,
                                      &image_subresource, &image_layout);
 
+      image->drm_modifier = DRM_FORMAT_MOD_INVALID;
       image->num_planes = 1;
       image->sizes[0] = reqs.size;
       image->row_pitches[0] = image_layout.rowPitch;

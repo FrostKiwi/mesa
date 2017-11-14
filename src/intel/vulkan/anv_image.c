@@ -500,6 +500,39 @@ make_surface(const struct anv_device *dev,
    return VK_SUCCESS;
 }
 
+static uint32_t
+score_drm_format_mod(uint64_t modifier)
+{
+   switch (modifier) {
+   case DRM_FORMAT_MOD_LINEAR: return 1;
+   case I915_FORMAT_MOD_X_TILED: return 2;
+   case I915_FORMAT_MOD_Y_TILED: return 3;
+   case I915_FORMAT_MOD_Y_TILED_CCS: return 4;
+   default: unreachable("bad DRM format modifier");
+   }
+}
+
+static const struct isl_drm_modifier_info *
+choose_drm_format_mod(const struct anv_physical_device *device,
+                      uint32_t modifier_count, const uint64_t *modifiers)
+{
+   uint64_t best_mod = UINT64_MAX;
+   uint32_t best_score = 0;
+
+   for (uint32_t i = 0; i < modifier_count; ++i) {
+      uint32_t score = score_drm_format_mod(modifiers[i]);
+      if (score > best_score) {
+         best_mod = modifiers[i];
+         best_score = score;
+      }
+   }
+
+   if (best_score > 0)
+      return isl_drm_modifier_get_info(best_mod);
+   else
+      return NULL;
+}
+
 VkResult
 anv_image_create(VkDevice _device,
                  const struct anv_image_create_info *create_info,
@@ -516,6 +549,12 @@ anv_image_create(VkDevice _device,
 
    const struct wsi_image_create_info *wsi_info =
       vk_find_struct_const(pCreateInfo->pNext, WSI_IMAGE_CREATE_INFO_MESA);
+   if (wsi_info && wsi_info->modifier_count > 0) {
+      isl_mod_info = choose_drm_format_mod(&device->instance->physicalDevice,
+                                           wsi_info->modifier_count,
+                                           wsi_info->modifiers);
+      assert(isl_mod_info);
+   }
 
    anv_assert(pCreateInfo->mipLevels > 0);
    anv_assert(pCreateInfo->arrayLayers > 0);
@@ -541,6 +580,8 @@ anv_image_create(VkDevice _device,
    image->tiling = pCreateInfo->tiling;
    image->disjoint = pCreateInfo->flags & VK_IMAGE_CREATE_DISJOINT_BIT_KHR;
    image->legacy_scanout = wsi_info && wsi_info->scanout;
+   image->drm_format_mod = isl_mod_info ? isl_mod_info->modifier :
+                                          DRM_FORMAT_MOD_INVALID;
 
    const struct anv_format *format = anv_get_format(image->vk_format);
    assert(format != NULL);
@@ -698,8 +739,13 @@ void anv_GetImageSubresourceLayout(
     VkSubresourceLayout*                        layout)
 {
    ANV_FROM_HANDLE(anv_image, image, _image);
-   const struct anv_surface *surface =
-      get_surface(image, subresource->aspectMask);
+
+   const struct anv_surface *surface;
+   if (subresource->aspectMask == VK_IMAGE_ASPECT_PLANE_1_BIT_KHR &&
+       isl_drm_modifier_has_aux(image->drm_format_mod))
+      surface = &image->planes[0].aux_surface;
+   else
+      surface = get_surface(image, subresource->aspectMask);
 
    assert(__builtin_popcount(subresource->aspectMask) == 1);
 
@@ -814,25 +860,20 @@ anv_layout_to_aux_usage(const struct gen_device_info * const devinfo,
       }
 
 
-   case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+   case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
       assert(image->aspects == VK_IMAGE_ASPECT_COLOR_BIT);
 
-      /* On SKL+, the render buffer can be decompressed by the presentation
-       * engine. Support for this feature has not yet landed in the wider
-       * ecosystem. TODO: Update this code when support lands.
-       *
-       * From the BDW PRM, Vol 7, Render Target Resolve:
-       *
-       *    If the MCS is enabled on a non-multisampled render target, the
-       *    render target must be resolved before being used for other
-       *    purposes (display, texture, CPU lock) The clear value from
-       *    SURFACE_STATE is written into pixels in the render target
-       *    indicated as clear in the MCS.
-       *
-       * Pre-SKL, the render buffer must be resolved before being used for
-       * presentation. We can infer that the auxiliary buffer is not used.
+      /* When handing the image off to the presentation engine, we need to
+       * ensure that things are properly resolved.  For images with no
+       * modifier, we assume that they follow the old rules and always need
+       * a full resolve because the PE doesn't understand any form of
+       * compression.  For images with modifiers, we use the aux usage from
+       * the modifier.
        */
-      return ISL_AUX_USAGE_NONE;
+      const struct isl_drm_modifier_info *mod_info =
+         isl_drm_modifier_get_info(image->drm_format_mod);
+      return mod_info ? mod_info->aux_usage : ISL_AUX_USAGE_NONE;
+   }
 
 
    /* Rendering Layouts */
@@ -912,8 +953,20 @@ anv_layout_to_fast_clear_type(const struct gen_device_info * const devinfo,
    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
       return ANV_FAST_CLEAR_ANY;
 
-   case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
-      return ANV_FAST_CLEAR_NONE;
+   case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
+      assert(image->aspects == VK_IMAGE_ASPECT_COLOR_BIT);
+
+      /* When handing the image off to the presentation engine, we need to
+       * ensure that things are properly resolved.  For images with no
+       * modifier, we assume that they follow the old rules and always need
+       * a full resolve because the PE doesn't understand any form of
+       * compression.  For images with modifiers, we use the value from the
+       * modifier.
+       */
+      const struct isl_drm_modifier_info *mod_info =
+         isl_drm_modifier_get_info(image->drm_format_mod);
+      return mod_info && mod_info->supports_clear_color;
+   }
 
    default:
       /* If the image has CCS_E enabled all the time then we can use
