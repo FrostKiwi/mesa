@@ -593,6 +593,7 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
                         VkImageLayout initial_layout,
                         VkImageLayout final_layout)
 {
+   const struct gen_device_info *devinfo = &cmd_buffer->device->info;
    /* Validate the inputs. */
    assert(cmd_buffer);
    assert(image && image->aspects & VK_IMAGE_ASPECT_ANY_COLOR_BIT_ANV);
@@ -733,16 +734,47 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                  final_layout);
       }
-   } else if (initial_layout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
-      /* Resolves are only necessary if the subresource may contain blocks
-       * fast-cleared to values unsupported in other layouts. This only occurs
-       * if the initial layout is COLOR_ATTACHMENT_OPTIMAL.
-       */
-      return;
-   } else if (image->samples > 1) {
-      /* MCS buffers don't need resolving. */
       return;
    }
+
+   /* If initial aux usage is NONE, there is nothing to resolve */
+   enum isl_aux_usage initial_aux_usage =
+      anv_layout_to_aux_usage(devinfo, image, aspect, initial_layout);
+   if (initial_aux_usage == ISL_AUX_USAGE_NONE)
+      return;
+
+   enum isl_aux_op resolve_op = ISL_AUX_OP_NONE;
+
+   /* If the initial layout supports fast clear but the final one does not,
+    * then we need at least a partial resolve.
+    */
+   if (anv_layout_supports_fast_clear(devinfo, image, aspect, initial_layout) &&
+       !anv_layout_supports_fast_clear(devinfo, image, aspect, final_layout))
+      resolve_op = ISL_AUX_OP_PARTIAL_RESOLVE;
+
+   enum isl_aux_usage final_aux_usage =
+      anv_layout_to_aux_usage(devinfo, image, aspect, final_layout);
+   if (initial_aux_usage == ISL_AUX_USAGE_CCS_E &&
+       final_aux_usage != ISL_AUX_USAGE_CCS_E)
+      resolve_op = ISL_AUX_OP_FULL_RESOLVE;
+
+   /* CCS_D only supports full resolves and BLORP will assert on us if we try
+    * to do a partial resolve on a CCS_D surface.
+    */
+   if (resolve_op == ISL_AUX_OP_PARTIAL_RESOLVE &&
+       initial_aux_usage == ISL_AUX_USAGE_CCS_D)
+      resolve_op = ISL_AUX_OP_FULL_RESOLVE;
+
+   if (resolve_op == ISL_AUX_OP_NONE)
+      return;
+
+   /* Even though the above code can theoretically handle multiple resolve
+    * types such as CCS_D -> CCS_E, the predication code below can't.  We only
+    * really handle a couple of cases.
+    */
+   assert(initial_aux_usage == ISL_AUX_USAGE_NONE ||
+          final_aux_usage == ISL_AUX_USAGE_NONE ||
+          initial_aux_usage == final_aux_usage);
 
    /* Perform a resolve to synchronize data between the main and aux buffer.
     * Before we begin, we must satisfy the cache flushing requirement specified
@@ -774,10 +806,7 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
       genX(load_needs_resolve_predicate)(cmd_buffer, image, aspect, level);
 
       anv_image_ccs_op(cmd_buffer, image, aspect, level,
-                       base_layer, layer_count,
-                       image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_E ?
-                       ISL_AUX_OP_PARTIAL_RESOLVE : ISL_AUX_OP_FULL_RESOLVE,
-                       true);
+                       base_layer, layer_count, resolve_op, true);
 
       genX(set_image_needs_resolve)(cmd_buffer, image, aspect, level, false);
    }
