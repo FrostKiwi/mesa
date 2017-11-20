@@ -2559,6 +2559,11 @@ anv_layout_to_aux_usage(const struct gen_device_info * const devinfo,
                         const struct anv_image *image,
                         const VkImageAspectFlagBits aspect,
                         const VkImageLayout layout);
+bool
+anv_layout_supports_fast_clear(const struct gen_device_info * const devinfo,
+                               const struct anv_image * const image,
+                               const VkImageAspectFlagBits aspect,
+                               const VkImageLayout layout);
 
 /* This is defined as a macro so that it works for both
  * VkImageSubresourceRange and VkImageSubresourceLayers

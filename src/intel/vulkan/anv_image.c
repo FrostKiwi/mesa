@@ -837,6 +837,64 @@ anv_layout_to_aux_usage(const struct gen_device_info * const devinfo,
    unreachable("layout is not a VkImageLayout enumeration member.");
 }
 
+/**
+ * This function returns true if the given image in the given VkImageLayout
+ * supports unresolved fast-clears.
+ *
+ * @param devinfo The device information of the Intel GPU.
+ * @param image The image that may contain a collection of buffers.
+ * @param aspect The aspect of the image to be accessed.
+ * @param layout The current layout of the image aspect(s).
+ */
+bool
+anv_layout_supports_fast_clear(const struct gen_device_info * const devinfo,
+                               const struct anv_image * const image,
+                               const VkImageAspectFlagBits aspect,
+                               const VkImageLayout layout)
+{
+   /* The aspect must be exactly one of the image aspects. */
+   assert(_mesa_bitcount(aspect) == 1 && (aspect & image->aspects));
+
+   uint32_t plane = anv_image_aspect_to_plane(image->aspects, aspect);
+
+   /* If there is no auxiliary surface allocated, there are no fast-clears */
+   if (image->planes[plane].aux_surface.isl.size == 0)
+      return false;
+
+   /* All images that use an auxiliary surface are required to be tiled. */
+   assert(image->tiling == VK_IMAGE_TILING_OPTIMAL);
+
+   /* Stencil has no aux */
+   assert(aspect != VK_IMAGE_ASPECT_STENCIL_BIT);
+
+   if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
+      /* For depth images (with HiZ), the layout supports fast-clears if and
+       * only if it supports HiZ.
+       */
+      enum isl_aux_usage aux_usage =
+         anv_layout_to_aux_usage(devinfo, image, aspect, layout);
+      return aux_usage == ISL_AUX_USAGE_HIZ;
+   }
+
+   assert(image->aspects & VK_IMAGE_ASPECT_ANY_COLOR_BIT_ANV);
+
+   /* Multisample fast-clear is not yet supported. */
+   if (image->samples > 1)
+      return false;
+
+   /* The only layout which actually supports fast-clears today is
+    * VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.  Some day in the future
+    * this may change if our ability to track clear colors improves.
+    */
+   switch (layout) {
+   case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+      return true;
+
+   default:
+      return false;
+   }
+}
+
 
 static struct anv_state
 alloc_surface_state(struct anv_device *device)
