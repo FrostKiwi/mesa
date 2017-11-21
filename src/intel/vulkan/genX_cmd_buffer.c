@@ -411,7 +411,7 @@ transition_depth_buffer(struct anv_cmd_buffer *cmd_buffer,
  * performed properly.
  */
 static void
-genX(set_image_needs_resolve)(struct anv_cmd_buffer *cmd_buffer,
+set_image_needs_resolve(struct anv_cmd_buffer *cmd_buffer,
                         const struct anv_image *image,
                         VkImageAspectFlagBits aspect,
                         unsigned level, bool needs_resolve)
@@ -432,10 +432,10 @@ genX(set_image_needs_resolve)(struct anv_cmd_buffer *cmd_buffer,
 }
 
 static void
-genX(load_needs_resolve_predicate)(struct anv_cmd_buffer *cmd_buffer,
-                                   const struct anv_image *image,
-                                   VkImageAspectFlagBits aspect,
-                                   unsigned level)
+load_needs_resolve_predicate(struct anv_cmd_buffer *cmd_buffer,
+                             const struct anv_image *image,
+                             VkImageAspectFlagBits aspect,
+                             unsigned level)
 {
    assert(cmd_buffer && image);
    assert(image->aspects & VK_IMAGE_ASPECT_ANY_COLOR_BIT_ANV);
@@ -488,8 +488,8 @@ init_fast_clear_state_entry(struct anv_cmd_buffer *cmd_buffer,
     * to return incorrect data. The fast clear data in CCS_D buffers should
     * be removed because CCS_D isn't enabled all the time.
     */
-   genX(set_image_needs_resolve)(cmd_buffer, image, aspect, level,
-                                 aux_usage == ISL_AUX_USAGE_NONE);
+   set_image_needs_resolve(cmd_buffer, image, aspect, level,
+                           aux_usage == ISL_AUX_USAGE_NONE);
 
    /* The fast clear value dword(s) will be copied into a surface state object.
     * Ensure that the restrictions of the fields in the dword(s) are followed.
@@ -812,12 +812,12 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
          layer_count = MIN2(layer_count, anv_image_aux_layers(image, aspect, level));
       }
 
-      genX(load_needs_resolve_predicate)(cmd_buffer, image, aspect, level);
+      load_needs_resolve_predicate(cmd_buffer, image, aspect, level);
 
       anv_image_ccs_op(cmd_buffer, image, aspect, level,
                        base_layer, layer_count, resolve_op, true);
 
-      genX(set_image_needs_resolve)(cmd_buffer, image, aspect, level, false);
+      set_image_needs_resolve(cmd_buffer, image, aspect, level, false);
    }
 
    cmd_buffer->state.pending_pipe_bits |=
@@ -2992,15 +2992,15 @@ cmd_buffer_subpass_sync_fast_clear_values(struct anv_cmd_buffer *cmd_buffer)
              * will match what's in every RENDER_SURFACE_STATE object when it's
              * being used for sampling.
              */
-            genX(set_image_needs_resolve)(cmd_buffer, iview->image,
-                                          VK_IMAGE_ASPECT_COLOR_BIT,
-                                          iview->planes[0].isl.base_level,
-                                          false);
+            set_image_needs_resolve(cmd_buffer, iview->image,
+                                    VK_IMAGE_ASPECT_COLOR_BIT,
+                                    iview->planes[0].isl.base_level,
+                                    false);
          } else {
-            genX(set_image_needs_resolve)(cmd_buffer, iview->image,
-                                          VK_IMAGE_ASPECT_COLOR_BIT,
-                                          iview->planes[0].isl.base_level,
-                                          true);
+            set_image_needs_resolve(cmd_buffer, iview->image,
+                                    VK_IMAGE_ASPECT_COLOR_BIT,
+                                    iview->planes[0].isl.base_level,
+                                    true);
          }
       } else if (rp_att->load_op == VK_ATTACHMENT_LOAD_OP_LOAD) {
          /* The attachment may have been fast-cleared in a previous render
