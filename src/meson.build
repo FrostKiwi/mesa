@@ -59,7 +59,7 @@ endif
 if with_gallium_vc4 or with_gallium_v3d
   subdir('broadcom')
 endif
-if with_dri_i965 or with_intel_vk
+if with_dri_i965 or with_intel_vk or with_gallium_iris
   subdir('intel')
 endif
 subdir('mesa')
