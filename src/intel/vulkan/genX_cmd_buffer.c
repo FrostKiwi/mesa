@@ -460,6 +460,15 @@ genX(load_needs_resolve_predicate)(struct anv_cmd_buffer *cmd_buffer,
    }
 }
 
+void
+genX(cmd_buffer_mark_image_written)(struct anv_cmd_buffer *cmd_buffer,
+                                    const struct anv_image *image,
+                                    VkImageAspectFlagBits aspect,
+                                    enum isl_aux_usage aux_usage,
+                                    unsigned level)
+{
+}
+
 static void
 init_fast_clear_state_entry(struct anv_cmd_buffer *cmd_buffer,
                             const struct anv_image *image,
@@ -3014,6 +3023,14 @@ cmd_buffer_subpass_sync_fast_clear_values(struct anv_cmd_buffer *cmd_buffer)
                                          false /* copy to ss */);
          }
       }
+
+      /* We assume that if we're starting a subpass, we're going to do some
+       * rendering so we may end up with compressed data.
+       */
+      genX(cmd_buffer_mark_image_written)(cmd_buffer, iview->image,
+                                          VK_IMAGE_ASPECT_COLOR_BIT,
+                                          att_state->aux_usage,
+                                          iview->planes[0].isl.base_level);
    }
 }
 
