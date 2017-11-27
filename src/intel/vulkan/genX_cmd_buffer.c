@@ -404,6 +404,22 @@ transition_depth_buffer(struct anv_cmd_buffer *cmd_buffer,
                        0, 0, 1, hiz_op);
 }
 
+/** Bitfield representing the needed resolves.
+ *
+ * This bitfield represents the kinds of compression we may or may not have in
+ * a given image.  The ANV_IMAGE_NEEDS_* can be ANDed with the ANV_IMAGE_HAS
+ * bits to determine when a given resolve actually needs to happen.
+ *
+ * For convenience of dealing with MI_PREDICATE, we blow these two bits out
+ * into two dwords in the image meatadata page.
+ */
+enum anv_image_resolve_bits {
+   ANV_IMAGE_HAS_FAST_CLEAR_BIT           = 0x1,
+   ANV_IMAGE_HAS_COMPRESSION_BIT          = 0x2,
+   ANV_IMAGE_NEEDS_PARTIAL_RESOLVE_BITS   = 0x1,
+   ANV_IMAGE_NEEDS_FULL_RESOLVE_BITS      = 0x3,
+};
+
 #define MI_PREDICATE_SRC0  0x2400
 #define MI_PREDICATE_SRC1  0x2408
 
@@ -411,23 +427,62 @@ transition_depth_buffer(struct anv_cmd_buffer *cmd_buffer,
  * performed properly.
  */
 static void
-set_image_needs_resolve(struct anv_cmd_buffer *cmd_buffer,
-                        const struct anv_image *image,
-                        VkImageAspectFlagBits aspect,
-                        unsigned level, bool needs_resolve)
+set_image_needs_resolve_bits(struct anv_cmd_buffer *cmd_buffer,
+                             const struct anv_image *image,
+                             VkImageAspectFlagBits aspect,
+                             unsigned level,
+                             enum anv_image_resolve_bits set_bits)
 {
    assert(cmd_buffer && image);
    assert(image->aspects & VK_IMAGE_ASPECT_ANY_COLOR_BIT_ANV);
    assert(level < anv_image_aux_levels(image, aspect));
 
-   /* The HW docs say that there is no way to guarantee the completion of
-    * the following command. We use it nevertheless because it shows no
-    * issues in testing is currently being used in the GL driver.
-    */
-   anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_DATA_IMM), sdi) {
-      sdi.Address = anv_image_get_needs_resolve_addr(cmd_buffer->device,
-                                                     image, aspect, level);
-      sdi.ImmediateData = needs_resolve;
+   const struct anv_address resolve_flag_addr =
+      anv_image_get_needs_resolve_addr(cmd_buffer->device,
+                                       image, aspect, level);
+
+   if (set_bits & ANV_IMAGE_HAS_FAST_CLEAR_BIT) {
+      anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_DATA_IMM), sdi) {
+         sdi.Address = resolve_flag_addr;
+         sdi.ImmediateData = 1;
+      }
+   }
+   if (set_bits & ANV_IMAGE_HAS_COMPRESSION_BIT) {
+      anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_DATA_IMM), sdi) {
+         sdi.Address = resolve_flag_addr;
+         sdi.Address.offset += 4;
+         sdi.ImmediateData = 1;
+      }
+   }
+}
+
+static void
+clear_image_needs_resolve_bits(struct anv_cmd_buffer *cmd_buffer,
+                               const struct anv_image *image,
+                               VkImageAspectFlagBits aspect,
+                               unsigned level,
+                               enum anv_image_resolve_bits clear_bits)
+{
+   assert(cmd_buffer && image);
+   assert(image->aspects & VK_IMAGE_ASPECT_ANY_COLOR_BIT_ANV);
+   assert(level < anv_image_aux_levels(image, aspect));
+
+   const struct anv_address resolve_flag_addr =
+      anv_image_get_needs_resolve_addr(cmd_buffer->device,
+                                       image, aspect, level);
+
+   if (clear_bits & ANV_IMAGE_HAS_FAST_CLEAR_BIT) {
+      anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_DATA_IMM), sdi) {
+         sdi.Address = resolve_flag_addr;
+         sdi.ImmediateData = 0;
+      }
+   }
+   if (clear_bits & ANV_IMAGE_HAS_COMPRESSION_BIT) {
+      anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_DATA_IMM), sdi) {
+         sdi.Address = resolve_flag_addr;
+         sdi.Address.offset += 4;
+         sdi.ImmediateData = 0;
+      }
    }
 }
 
@@ -435,7 +490,8 @@ static void
 load_needs_resolve_predicate(struct anv_cmd_buffer *cmd_buffer,
                              const struct anv_image *image,
                              VkImageAspectFlagBits aspect,
-                             unsigned level)
+                             unsigned level,
+                             enum anv_image_resolve_bits bits)
 {
    assert(cmd_buffer && image);
    assert(image->aspects & VK_IMAGE_ASPECT_ANY_COLOR_BIT_ANV);
@@ -450,9 +506,27 @@ load_needs_resolve_predicate(struct anv_cmd_buffer *cmd_buffer,
     */
    emit_lri(&cmd_buffer->batch, MI_PREDICATE_SRC1    , 0);
    emit_lri(&cmd_buffer->batch, MI_PREDICATE_SRC1 + 4, 0);
-   emit_lri(&cmd_buffer->batch, MI_PREDICATE_SRC0    , 0);
-   emit_lrm(&cmd_buffer->batch, MI_PREDICATE_SRC0 + 4,
-            resolve_flag_addr.bo, resolve_flag_addr.offset);
+
+   /* Conditionally load the two dwords into the high and low portions of
+    * MI_PREDICATE_SRC0.  This effectively ANDs the bits passed into this
+    * function with the logical bits stored in the metadata page.  Because
+    * they're split out with one bit per dword, we don't need to use any
+    * sort of MI math.
+    */
+   if (bits & ANV_IMAGE_HAS_FAST_CLEAR_BIT) {
+      emit_lrm(&cmd_buffer->batch, MI_PREDICATE_SRC0,
+               resolve_flag_addr.bo, resolve_flag_addr.offset);
+   } else {
+      emit_lri(&cmd_buffer->batch, MI_PREDICATE_SRC0, 0);
+   }
+
+   if (bits & ANV_IMAGE_HAS_COMPRESSION_BIT) {
+      emit_lrm(&cmd_buffer->batch, MI_PREDICATE_SRC0 + 4,
+               resolve_flag_addr.bo, resolve_flag_addr.offset + 4);
+   } else {
+      emit_lri(&cmd_buffer->batch, MI_PREDICATE_SRC0 + 4, 0);
+   }
+
    anv_batch_emit(&cmd_buffer->batch, GENX(MI_PREDICATE), mip) {
       mip.LoadOperation    = LOAD_LOADINV;
       mip.CombineOperation = COMBINE_SET;
@@ -467,6 +541,18 @@ genX(cmd_buffer_mark_image_written)(struct anv_cmd_buffer *cmd_buffer,
                                     enum isl_aux_usage aux_usage,
                                     unsigned level)
 {
+   /* The only compression types with more than just fast-clears are MCS,
+    * CCS_E, and HiZ.  With HiZ we just trust the layout and don't actually
+    * track the current fast-clear and compression state.  This leaves us
+    * with just MCS and CCS_E.
+    */
+   if (aux_usage != ISL_AUX_USAGE_CCS_E &&
+       aux_usage != ISL_AUX_USAGE_MCS)
+      return;
+
+   set_image_needs_resolve_bits(cmd_buffer, image,
+                                VK_IMAGE_ASPECT_COLOR_BIT, level,
+                                ANV_IMAGE_HAS_COMPRESSION_BIT);
 }
 
 static void
@@ -488,8 +574,11 @@ init_fast_clear_state_entry(struct anv_cmd_buffer *cmd_buffer,
     * to return incorrect data. The fast clear data in CCS_D buffers should
     * be removed because CCS_D isn't enabled all the time.
     */
-   set_image_needs_resolve(cmd_buffer, image, aspect, level,
-                           aux_usage == ISL_AUX_USAGE_NONE);
+   if (aux_usage == ISL_AUX_USAGE_NONE) {
+      set_image_needs_resolve_bits(cmd_buffer, image, aspect, level, ~0);
+   } else {
+      clear_image_needs_resolve_bits(cmd_buffer, image, aspect, level, ~0);
+   }
 
    /* The fast clear value dword(s) will be copied into a surface state object.
     * Ensure that the restrictions of the fields in the dword(s) are followed.
@@ -812,12 +901,25 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
          layer_count = MIN2(layer_count, anv_image_aux_layers(image, aspect, level));
       }
 
-      load_needs_resolve_predicate(cmd_buffer, image, aspect, level);
+      enum anv_image_resolve_bits resolve_bits;
+      switch (resolve_op) {
+      case ISL_AUX_OP_FULL_RESOLVE:
+         resolve_bits = ANV_IMAGE_NEEDS_FULL_RESOLVE_BITS;
+         break;
+      case ISL_AUX_OP_PARTIAL_RESOLVE:
+         resolve_bits = ANV_IMAGE_NEEDS_PARTIAL_RESOLVE_BITS;
+         break;
+      default:
+         unreachable("Invalid resolve op");
+      }
+      load_needs_resolve_predicate(cmd_buffer, image, aspect, level,
+                                   resolve_bits);
 
       anv_image_ccs_op(cmd_buffer, image, aspect, level,
                        base_layer, layer_count, resolve_op, true);
 
-      set_image_needs_resolve(cmd_buffer, image, aspect, level, false);
+      clear_image_needs_resolve_bits(cmd_buffer, image, aspect,
+                                     level, resolve_bits);
    }
 
    cmd_buffer->state.pending_pipe_bits |=
@@ -2992,15 +3094,15 @@ cmd_buffer_subpass_sync_fast_clear_values(struct anv_cmd_buffer *cmd_buffer)
              * will match what's in every RENDER_SURFACE_STATE object when it's
              * being used for sampling.
              */
-            set_image_needs_resolve(cmd_buffer, iview->image,
-                                    VK_IMAGE_ASPECT_COLOR_BIT,
-                                    iview->planes[0].isl.base_level,
-                                    false);
+            clear_image_needs_resolve_bits(cmd_buffer, iview->image,
+                                           VK_IMAGE_ASPECT_COLOR_BIT,
+                                           iview->planes[0].isl.base_level,
+                                           ANV_IMAGE_HAS_FAST_CLEAR_BIT);
          } else {
-            set_image_needs_resolve(cmd_buffer, iview->image,
-                                    VK_IMAGE_ASPECT_COLOR_BIT,
-                                    iview->planes[0].isl.base_level,
-                                    true);
+            set_image_needs_resolve_bits(cmd_buffer, iview->image,
+                                         VK_IMAGE_ASPECT_COLOR_BIT,
+                                         iview->planes[0].isl.base_level,
+                                         ANV_IMAGE_HAS_FAST_CLEAR_BIT);
          }
       } else if (rp_att->load_op == VK_ATTACHMENT_LOAD_OP_LOAD) {
          /* The attachment may have been fast-cleared in a previous render

@@ -2476,16 +2476,16 @@ anv_fast_clear_state_entry_size(const struct anv_device *device)
 {
    assert(device);
    /* Entry contents:
-    *   +--------------------------------------------+
-    *   | clear value dword(s) | needs resolve dword |
-    *   +--------------------------------------------+
+    *   +---------------------------------------------+
+    *   | clear value dword(s) | needs resolve dwords |
+    *   +---------------------------------------------+
     */
 
-   /* Ensure that the needs resolve dword is in fact dword-aligned to enable
+   /* Ensure that the needs resolve dwords are in fact dword-aligned to enable
     * GPU memcpy operations.
     */
    assert(device->isl_dev.ss.clear_value_size % 4 == 0);
-   return device->isl_dev.ss.clear_value_size + 4;
+   return device->isl_dev.ss.clear_value_size + 8;
 }
 
 static inline struct anv_address
