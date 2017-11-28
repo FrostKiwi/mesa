@@ -2166,7 +2166,9 @@ VkResult radv_alloc_memory(VkDevice                        _device,
 
 	if (import_info) {
 		assert(import_info->handleType ==
-		       VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR);
+		       VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR ||
+		       import_info->handleType ==
+		       VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT);
 		mem->bo = device->ws->buffer_from_fd(device->ws, import_info->fd,
 						     NULL, NULL);
 		if (!mem->bo) {
@@ -3540,7 +3542,9 @@ VkResult radv_GetMemoryFdKHR(VkDevice _device,
 
 	/* We support only one handle type. */
 	assert(pGetFdInfo->handleType ==
-	       VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR);
+	       VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR ||
+	       pGetFdInfo->handleType ==
+	       VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT);
 
 	bool ret = radv_get_memory_fd(device, memory, pFD);
 	if (ret == false)
