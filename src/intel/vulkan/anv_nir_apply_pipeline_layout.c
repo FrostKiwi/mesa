@@ -116,12 +116,19 @@ lower_res_index_intrinsic(nir_intrinsic_instr *intrin,
    uint32_t array_size =
       state->layout->set[set].layout->binding[binding].array_size;
 
-   nir_ssa_def *block_index = nir_ssa_for_src(b, intrin->src[0], 1);
+   nir_const_value *const_block_index = nir_src_as_const_value(intrin->src[0]);
 
-   if (state->add_bounds_checks)
-      block_index = nir_umin(b, block_index, nir_imm_int(b, array_size - 1));
+   nir_ssa_def *block_index;
+   if (const_block_index) {
+      block_index = nir_imm_int(b, surface_index + const_block_index->u32[0]);
+   } else {
+      block_index = nir_ssa_for_src(b, intrin->src[0], 1);
 
-   block_index = nir_iadd(b, nir_imm_int(b, surface_index), block_index);
+      if (state->add_bounds_checks)
+         block_index = nir_umin(b, block_index, nir_imm_int(b, array_size - 1));
+
+      block_index = nir_iadd(b, nir_imm_int(b, surface_index), block_index);
+   }
 
    assert(intrin->dest.is_ssa);
    nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(block_index));
