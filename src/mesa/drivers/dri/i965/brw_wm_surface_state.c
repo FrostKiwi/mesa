@@ -605,6 +605,9 @@ static void brw_update_texture_surface(struct gl_context *ctx,
       enum isl_aux_usage aux_usage =
          intel_miptree_texture_aux_usage(brw, mt, format);
 
+      if (brw->gen9_astc5x5_wa_tex_mask & GEN9_ASTC5X5_WA_TEX_TYPE_ASTC5x5)
+         aux_usage = ISL_AUX_USAGE_NONE;
+
       brw_emit_surface_state(brw, mt, mt->target, view, aux_usage,
                              surf_offset, surf_index,
                              0);
@@ -1109,6 +1112,9 @@ update_renderbuffer_read_surfaces(struct brw_context *brw)
             enum isl_aux_usage aux_usage =
                intel_miptree_texture_aux_usage(brw, irb->mt, format);
             if (brw->draw_aux_usage[i] == ISL_AUX_USAGE_NONE)
+               aux_usage = ISL_AUX_USAGE_NONE;
+
+            if (brw->gen9_astc5x5_wa_tex_mask & GEN9_ASTC5X5_WA_TEX_TYPE_ASTC5x5)
                aux_usage = ISL_AUX_USAGE_NONE;
 
             brw_emit_surface_state(brw, irb->mt, target, view, aux_usage,

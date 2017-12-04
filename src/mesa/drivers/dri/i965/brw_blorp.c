@@ -178,11 +178,19 @@ blorp_surf_for_miptree(struct brw_context *brw,
 
       surf->aux_addr.buffer = mt->aux_buf->bo;
       surf->aux_addr.offset = mt->aux_buf->offset;
+
+      if (!is_render_target && brw->screen->devinfo.gen == 9)
+         gen9_astc5x5_sampler_wa(brw, GEN9_ASTC5X5_WA_TEX_TYPE_AUX);
    } else {
       surf->aux_addr = (struct blorp_address) {
          .buffer = NULL,
       };
       memset(&surf->clear_color, 0, sizeof(surf->clear_color));
+
+      if (!is_render_target && brw->screen->devinfo.gen == 9 &&
+          (mt->format == MESA_FORMAT_RGBA_ASTC_5x5 ||
+           mt->format == MESA_FORMAT_SRGB8_ALPHA8_ASTC_5x5))
+         gen9_astc5x5_sampler_wa(brw, GEN9_ASTC5X5_WA_TEX_TYPE_ASTC5x5);
    }
    assert((surf->aux_usage == ISL_AUX_USAGE_NONE) ==
           (surf->aux_addr.buffer == NULL));

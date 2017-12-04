@@ -2601,10 +2601,16 @@ intel_miptree_prepare_texture(struct brw_context *brw,
                               struct intel_mipmap_tree *mt,
                               enum isl_format view_format,
                               uint32_t start_level, uint32_t num_levels,
-                              uint32_t start_layer, uint32_t num_layers)
+                              uint32_t start_layer, uint32_t num_layers,
+                              bool force_disable_aux)
 {
    enum isl_aux_usage aux_usage =
       intel_miptree_texture_aux_usage(brw, mt, view_format);
+
+   /* This is needed for the ASTC5x5 workaround */
+   if (force_disable_aux)
+      aux_usage = ISL_AUX_USAGE_NONE;
+
    bool clear_supported = aux_usage != ISL_AUX_USAGE_NONE;
 
    /* Clear color is specified as ints or floats and the conversion is done by
