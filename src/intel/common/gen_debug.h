@@ -84,6 +84,7 @@ extern uint64_t INTEL_DEBUG;
 #define DEBUG_COLOR               (1ull << 40)
 #define DEBUG_REEMIT              (1ull << 41)
 #define DEBUG_ANGRY               (1ull << 42)
+#define DEBUG_OUT_OF_BOUND_CHK    (1ull << 43)
 
 #ifdef HAVE_ANDROID_PLATFORM
 #define LOG_TAG "INTEL-MESA"

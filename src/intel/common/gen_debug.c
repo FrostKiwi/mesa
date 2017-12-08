@@ -86,6 +86,7 @@ static const struct debug_control debug_control[] = {
    { "color",       DEBUG_COLOR },
    { "reemit",      DEBUG_REEMIT },
    { "angry",       DEBUG_ANGRY },
+   { "check_oob",   DEBUG_OUT_OF_BOUND_CHK },
    { NULL,    0 }
 };
 
