@@ -2685,28 +2685,28 @@ intel_miptree_render_aux_usage(struct brw_context *brw,
       return ISL_AUX_USAGE_MCS;
 
    case ISL_AUX_USAGE_CCS_D:
-      return mt->mcs_buf ? ISL_AUX_USAGE_CCS_D : ISL_AUX_USAGE_NONE;
-
-   case ISL_AUX_USAGE_CCS_E: {
-      /* If the format supports CCS_E and is compatible with the miptree,
-       * then we can use it.
-       */
-      if (format_ccs_e_compat_with_miptree(&brw->screen->devinfo,
-                                           mt, render_format))
-         return ISL_AUX_USAGE_CCS_E;
-
-      /* Otherwise, we have to fall back to CCS_D */
+   case ISL_AUX_USAGE_CCS_E:
+      if (!mt->mcs_buf) {
+         assert(mt->aux_usage == ISL_AUX_USAGE_CCS_D);
+         return ISL_AUX_USAGE_NONE;
+      }
 
       /* gen9 hardware technically supports non-0/1 clear colors with sRGB
        * formats.  However, there are issues with blending where it doesn't
        * properly apply the sRGB curve to the clear color when blending.
        */
-      if (blend_enabled && isl_format_is_srgb(render_format) &&
+      if (brw->screen->devinfo.gen == 9 && blend_enabled &&
+          isl_format_is_srgb(render_format) &&
           !isl_color_value_is_zero_one(mt->fast_clear_color, render_format))
          return ISL_AUX_USAGE_NONE;
 
+      if (mt->aux_usage == ISL_AUX_USAGE_CCS_E &&
+          format_ccs_e_compat_with_miptree(&brw->screen->devinfo,
+                                           mt, render_format))
+         return ISL_AUX_USAGE_CCS_E;
+
+      /* Otherwise, we have to fall back to CCS_D */
       return ISL_AUX_USAGE_CCS_D;
-   }
 
    default:
       return ISL_AUX_USAGE_NONE;
