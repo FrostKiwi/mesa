@@ -811,6 +811,8 @@ struct anv_instance {
     VkAllocationCallbacks                       alloc;
 
     uint32_t                                    apiVersion;
+    struct anv_instance_extension_table         enabled_extensions;
+
     int                                         physicalDeviceCount;
     struct anv_physical_device                  physicalDevice;
 
