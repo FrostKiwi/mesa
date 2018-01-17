@@ -1211,6 +1211,7 @@ VkResult anv_CreateDevice(
 
    assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO);
 
+   struct anv_device_extension_table enabled_extensions;
    for (uint32_t i = 0; i < pCreateInfo->enabledExtensionCount; i++) {
       int idx;
       for (idx = 0; idx < ANV_DEVICE_EXTENSION_COUNT; idx++) {
@@ -1224,6 +1225,8 @@ VkResult anv_CreateDevice(
 
       if (!physical_device->supported_extensions.extensions[idx])
          return vk_error(VK_ERROR_EXTENSION_NOT_PRESENT);
+
+      enabled_extensions.extensions[idx] = true;
    }
 
    /* Check enabled features */
@@ -1280,6 +1283,7 @@ VkResult anv_CreateDevice(
 
    device->robust_buffer_access = pCreateInfo->pEnabledFeatures &&
       pCreateInfo->pEnabledFeatures->robustBufferAccess;
+   device->enabled_extensions = enabled_extensions;
 
    if (pthread_mutex_init(&device->mutex, NULL) != 0) {
       result = vk_error(VK_ERROR_INITIALIZATION_FAILED);
