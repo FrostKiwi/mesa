@@ -573,6 +573,7 @@ VkResult anv_CreateInstance(
 
    instance->apiVersion = client_version;
    instance->enabled_extensions = enabled_extensions;
+   instance->dispatch = anv_dispatch_table;
    instance->physicalDeviceCount = -1;
 
    if (pthread_mutex_init(&instance->callbacks_mutex, NULL) != 0) {
@@ -1095,7 +1096,11 @@ PFN_vkVoidFunction anv_GetInstanceProcAddr(
    if (instance == NULL)
       return NULL;
 
-   return anv_lookup_entrypoint(NULL, pName);
+   int idx = anv_get_entrypoint_index(pName);
+   if (idx < 0)
+      return NULL;
+
+   return instance->dispatch.entrypoints[idx];
 }
 
 /* With version 1+ of the loader interface the ICD should expose
