@@ -82,139 +82,179 @@ iris_delete_shader_state(struct pipe_context *ctx, void *hwcso)
 }
 
 static void
-iris_codegen_vs(struct iris_context *ice)
+iris_bind_vs_state(struct pipe_context *ctx, void *hwcso)
 {
-   const struct brw_compiler *compiler = brw->screen->compiler;
-   const struct gen_device_info *devinfo = &brw->screen->devinfo;
-   const GLuint *program;
+   struct iris_context *ice = (struct iris_context *)ctx;
+
+   ice->progs[MESA_SHADER_VERTEX] = hwcso;
+   ice->state.dirty |= IRIS_DIRTY_UNCOMPILED_VS;
+}
+
+static void
+iris_bind_tcs_state(struct pipe_context *ctx, void *hwcso)
+{
+   struct iris_context *ice = (struct iris_context *)ctx;
+
+   ice->progs[MESA_SHADER_TESS_CTRL] = hwcso;
+   ice->state.dirty |= IRIS_DIRTY_UNCOMPILED_TCS;
+}
+
+static void
+iris_bind_tes_state(struct pipe_context *ctx, void *hwcso)
+{
+   struct iris_context *ice = (struct iris_context *)ctx;
+
+   ice->progs[MESA_SHADER_TESS_EVAL] = hwcso;
+   ice->state.dirty |= IRIS_DIRTY_UNCOMPILED_TES;
+}
+
+static void
+iris_bind_gs_state(struct pipe_context *ctx, void *hwcso)
+{
+   struct iris_context *ice = (struct iris_context *)ctx;
+
+   ice->progs[MESA_SHADER_GEOMETRY] = hwcso;
+   ice->state.dirty |= IRIS_DIRTY_UNCOMPILED_GS;
+}
+
+static void
+iris_bind_fs_state(struct pipe_context *ctx, void *hwcso)
+{
+   struct iris_context *ice = (struct iris_context *)ctx;
+
+   ice->progs[MESA_SHADER_FRAGMENT] = hwcso;
+   ice->state.dirty |= IRIS_DIRTY_UNCOMPILED_FS;
+}
+
+/**
+ * Sets up the starting offsets for the groups of binding table entries
+ * common to all pipeline stages.
+ *
+ * Unused groups are initialized to 0xd0d0d0d0 to make it obvious that they're
+ * unused but also make sure that addition of small offsets to them will
+ * trigger some of our asserts that surface indices are < BRW_MAX_SURFACES.
+ */
+static uint32_t
+assign_common_binding_table_offsets(const struct gen_device_info *devinfo,
+                                    const struct shader_info *info,
+                                    struct brw_stage_prog_data *prog_data,
+                                    uint32_t next_binding_table_offset)
+{
+   prog_data->binding_table.texture_start = next_binding_table_offset;
+   prog_data->binding_table.gather_texture_start = next_binding_table_offset;
+   next_binding_table_offset += info->num_textures;
+
+   if (info->num_ubos) {
+      //assert(info->num_ubos <= BRW_MAX_UBO);
+      prog_data->binding_table.ubo_start = next_binding_table_offset;
+      next_binding_table_offset += info->num_ubos;
+   } else {
+      prog_data->binding_table.ubo_start = 0xd0d0d0d0;
+   }
+
+   if (info->num_ssbos || info->num_abos) {
+      //assert(info->num_abos <= BRW_MAX_ABO);
+      //assert(info->num_ssbos <= BRW_MAX_SSBO);
+      prog_data->binding_table.ssbo_start = next_binding_table_offset;
+      next_binding_table_offset += info->num_abos + info->num_ssbos;
+   } else {
+      prog_data->binding_table.ssbo_start = 0xd0d0d0d0;
+   }
+
+   prog_data->binding_table.shader_time_start = 0xd0d0d0d0;
+
+   if (info->num_images) {
+      prog_data->binding_table.image_start = next_binding_table_offset;
+      next_binding_table_offset += info->num_images;
+   } else {
+      prog_data->binding_table.image_start = 0xd0d0d0d0;
+   }
+
+   /* This may or may not be used depending on how the compile goes. */
+   prog_data->binding_table.pull_constants_start = next_binding_table_offset;
+   next_binding_table_offset++;
+
+   /* Plane 0 is just the regular texture section */
+   prog_data->binding_table.plane_start[0] = prog_data->binding_table.texture_start;
+
+   prog_data->binding_table.plane_start[1] = next_binding_table_offset;
+   next_binding_table_offset += info->num_textures;
+
+   prog_data->binding_table.plane_start[2] = next_binding_table_offset;
+   next_binding_table_offset += info->num_textures;
+
+   /* prog_data->base.binding_table.size will be set by brw_mark_surface_used. */
+
+   //assert(next_binding_table_offset <= BRW_MAX_SURFACES);
+   return next_binding_table_offset;
+}
+
+static bool
+iris_compile_vs(struct iris_context *ice,
+                struct iris_uncompiled_shader *ish,
+                const struct brw_vs_prog_key *key)
+{
+   struct iris_screen *screen = (struct iris_screen *)ice->ctx.screen;
+   const struct brw_compiler *compiler = screen->compiler;
+   const struct gen_device_info *devinfo = &screen->devinfo;
+   const unsigned *program;
    struct brw_vs_prog_data prog_data;
    struct brw_stage_prog_data *stage_prog_data = &prog_data.base.base;
-   void *mem_ctx;
-   bool start_busy = false;
-   double start_time = 0;
+   void *mem_ctx = ralloc_context(NULL);
+
+   assert(ish->base.type == PIPE_SHADER_IR_NIR);
+
+   nir_shader *nir = ish->base.ir.nir;
 
    memset(&prog_data, 0, sizeof(prog_data));
 
-   /* Use ALT floating point mode for ARB programs so that 0^0 == 1. */
-   if (vp->program.is_arb_asm)
-      stage_prog_data->use_alt_mode = true;
-
-   mem_ctx = ralloc_context(NULL);
-
-   brw_assign_common_binding_table_offsets(devinfo, &vp->program,
-                                           &prog_data.base.base, 0);
-
-   if (!vp->program.is_arb_asm) {
-      brw_nir_setup_glsl_uniforms(mem_ctx, vp->program.nir, &vp->program,
-                                  &prog_data.base.base,
-                                  compiler->scalar_stage[MESA_SHADER_VERTEX]);
-      brw_nir_analyze_ubo_ranges(compiler, vp->program.nir,
-                                 prog_data.base.base.ubo_ranges);
-   } else {
-      brw_nir_setup_arb_uniforms(mem_ctx, vp->program.nir, &vp->program,
-                                 &prog_data.base.base);
-   }
-
-   uint64_t outputs_written =
-      brw_vs_outputs_written(brw, key, vp->program.nir->info.outputs_written);
-
+   // XXX: alt mode
+   assign_common_binding_table_offsets(devinfo, &nir->info,
+                                       &prog_data.base.base, 0);
    brw_compute_vue_map(devinfo,
-                       &prog_data.base.vue_map, outputs_written,
-                       vp->program.nir->info.separate_shader);
+                       &prog_data.base.vue_map, nir->info.outputs_written,
+                       nir->info.separate_shader);
 
-   if (0) {
-      _mesa_fprint_program_opt(stderr, &vp->program, PROG_PRINT_DEBUG, true);
-   }
-
-   if (unlikely(brw->perf_debug)) {
-      start_busy = (brw->batch.last_bo &&
-                    brw_bo_busy(brw->batch.last_bo));
-      start_time = get_time();
-   }
-
-   if (unlikely(INTEL_DEBUG & DEBUG_VS)) {
-      if (vp->program.is_arb_asm)
-         brw_dump_arb_asm("vertex", &vp->program);
-   }
-
-   int st_index = -1;
-   if (INTEL_DEBUG & DEBUG_SHADER_TIME) {
-      st_index = brw_get_shader_time_index(brw, &vp->program, ST_VS,
-                                           !vp->program.is_arb_asm);
-   }
-
-   /* Emit GEN4 code.
-    */
    char *error_str;
-   program = brw_compile_vs(compiler, brw, mem_ctx, key, &prog_data,
-                            vp->program.nir,
-                            st_index, &error_str);
+   program = brw_compile_vs(compiler, ice, mem_ctx, key, &prog_data,
+                            nir, -1, &error_str);
    if (program == NULL) {
-      if (!vp->program.is_arb_asm) {
-         vp->program.sh.data->LinkStatus = linking_failure;
-         ralloc_strcat(&vp->program.sh.data->InfoLog, error_str);
-      }
-
-      _mesa_problem(NULL, "Failed to compile vertex shader: %s\n", error_str);
+      fprintf(stderr, "Failed to compile vertex shader: %s\n", error_str);
 
       ralloc_free(mem_ctx);
       return false;
    }
 
-   if (unlikely(brw->perf_debug)) {
-      if (vp->compiled_once) {
-         brw_vs_debug_recompile(brw, &vp->program, key);
-      }
-      if (start_busy && !brw_bo_busy(brw->batch.last_bo)) {
-         perf_debug("VS compile took %.03f ms and stalled the GPU\n",
-                    (get_time() - start_time) * 1000);
-      }
-      vp->compiled_once = true;
-   }
-
-   /* Scratch space is used for register spilling */
-   brw_alloc_stage_scratch(brw, &brw->vs.base,
-                           prog_data.base.base.total_scratch);
-
    /* The param and pull_param arrays will be freed by the shader cache. */
    ralloc_steal(NULL, prog_data.base.base.param);
    ralloc_steal(NULL, prog_data.base.base.pull_param);
-   brw_upload_cache(&brw->cache, BRW_CACHE_VS_PROG,
-                    key, sizeof(struct brw_vs_prog_key),
-                    program, prog_data.base.base.program_size,
-                    &prog_data, sizeof(prog_data),
-                    &brw->vs.base.prog_offset, &brw->vs.base.prog_data);
+   //brw_upload_cache(&brw->cache, BRW_CACHE_VS_PROG,
+                    //key, sizeof(struct brw_vs_prog_key),
+                    //program, prog_data.base.base.program_size,
+                    //&prog_data, sizeof(prog_data),
+                    //&brw->vs.base.prog_offset, &brw->vs.base.prog_data);
    ralloc_free(mem_ctx);
 
    return true;
 }
 
-void
-iris_upload_vs_prog(struct iris_context *iris)
+static void
+iris_populate_vs_key(struct iris_context *ice, struct brw_vs_prog_key *key)
 {
-   struct brw_vs_prog_key key;
-   /* BRW_NEW_VERTEX_PROGRAM */
-   struct brw_program *vp =
-      (struct brw_program *) brw->programs[MESA_SHADER_VERTEX];
-
-   if (!brw_vs_state_dirty(brw))
-      return;
-
-   brw_vs_populate_key(brw, &key);
-
-   if (brw_search_cache(&brw->cache, BRW_CACHE_VS_PROG,
-                        &key, sizeof(key),
-                        &brw->vs.base.prog_offset, &brw->vs.base.prog_data))
-      return;
-
-   vp = (struct brw_program *) brw->programs[MESA_SHADER_VERTEX];
-   vp->id = key.program_string_id;
-
-   MAYBE_UNUSED bool success = brw_codegen_vs_prog(brw, vp, &key);
-   assert(success);
+   memset(key, 0, sizeof(*key));
 }
 
 static void
+iris_update_compiled_vs(struct iris_context *ice)
+{
+   struct brw_vs_prog_key key;
+   iris_populate_vs_key(ice, &key);
+
+   UNUSED bool success =
+      iris_compile_vs(ice, ice->progs[MESA_SHADER_VERTEX], &key);
+}
+
+void
 iris_update_compiled_shaders(struct iris_context *ice)
 {
    iris_update_compiled_vs(ice);
@@ -224,15 +264,21 @@ iris_update_compiled_shaders(struct iris_context *ice)
 void
 iris_init_program_functions(struct pipe_context *ctx)
 {
-   ctx->create_vs_state = iris_create_shader_state;
+   ctx->create_vs_state  = iris_create_shader_state;
    ctx->create_tcs_state = iris_create_shader_state;
    ctx->create_tes_state = iris_create_shader_state;
-   ctx->create_gs_state = iris_create_shader_state;
-   ctx->create_fs_state = iris_create_shader_state;
+   ctx->create_gs_state  = iris_create_shader_state;
+   ctx->create_fs_state  = iris_create_shader_state;
 
-   ctx->delete_vs_state = iris_delete_shader_state;
+   ctx->delete_vs_state  = iris_delete_shader_state;
    ctx->delete_tcs_state = iris_delete_shader_state;
    ctx->delete_tes_state = iris_delete_shader_state;
-   ctx->delete_gs_state = iris_delete_shader_state;
-   ctx->delete_fs_state = iris_delete_shader_state;
+   ctx->delete_gs_state  = iris_delete_shader_state;
+   ctx->delete_fs_state  = iris_delete_shader_state;
+
+   ctx->bind_vs_state  = iris_bind_vs_state;
+   ctx->bind_tcs_state = iris_bind_tcs_state;
+   ctx->bind_tes_state = iris_bind_tes_state;
+   ctx->bind_gs_state  = iris_bind_gs_state;
+   ctx->bind_fs_state  = iris_bind_fs_state;
 }
