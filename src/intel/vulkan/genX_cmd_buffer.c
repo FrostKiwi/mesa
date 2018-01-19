@@ -329,12 +329,17 @@ color_attachment_compute_aux_usage(struct anv_device * device,
        */
       if (att_state->fast_clear &&
           (iview->planes[0].isl.base_level > 0 ||
-           iview->image->type == VK_IMAGE_TYPE_3D ||
-           iview->image->array_size > 0)) {
+           iview->planes[0].isl.base_array_layer > 0 ||
+           cmd_state->framebuffer->layers > 1)) {
          anv_perf_warn(device->instance, iview->image,
                        "Rendering to a multi-LOD or multi-layer framebuffer "
-                       "with LOAD_OP_CLEAR.  Not fast-clearing");
-         att_state->fast_clear = false;
+                       "with LOAD_OP_CLEAR.  Only fast-clearing the first "
+                       "slice");
+
+         /* Leave fast_clear enabled if we are clearing the first slice. */
+         if (iview->planes[0].isl.base_level > 0 ||
+             iview->planes[0].isl.base_array_layer > 0)
+            att_state->fast_clear = false;
       }
 
       if (att_state->fast_clear) {
