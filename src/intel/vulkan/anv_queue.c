@@ -120,6 +120,11 @@ VkResult anv_QueueSubmit(
    ANV_FROM_HANDLE(anv_queue, queue, _queue);
    struct anv_device *device = queue->device;
 
+   /* Die on the third vkQueueSubmit */
+   static int submit = 0;
+   assert(submit < 3);
+   submit++;
+
    /* Query for device status prior to submitting.  Technically, we don't need
     * to do this.  However, if we have a client that's submitting piles of
     * garbage, we would rather break as early as possible to keep the GPU
