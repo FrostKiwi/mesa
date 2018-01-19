@@ -266,6 +266,8 @@ intelReadPixels(struct gl_context * ctx,
 
    DBG("%s\n", __func__);
 
+   assert(!"Ha!, you thought you were going to read pixels...");
+
    /* Reading pixels wont dirty the front buffer, so reset the dirty
     * flag after calling intel_prepare_render().
     */
