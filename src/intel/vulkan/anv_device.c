@@ -1147,7 +1147,7 @@ PFN_vkVoidFunction anv_GetDeviceProcAddr(
    if (idx < 0)
       return NULL;
 
-   return device->dispatch.entrypoints[idx];
+   return device->instance->dispatch.entrypoints[idx];
 }
 
 static void
