@@ -774,7 +774,7 @@ decode_batch(struct iris_batch *batch)
       return;
    }
 
-   uint32_t *end = batch_data + buffer_bytes_used(&batch->cmdbuf);
+   uint32_t *end = (void *) batch_data + buffer_bytes_used(&batch->cmdbuf);
    uint32_t batch_gtt_offset = batch->cmdbuf.bo->gtt_offset;
    uint32_t state_gtt_offset = batch->statebuf.bo->gtt_offset;
    int length;
