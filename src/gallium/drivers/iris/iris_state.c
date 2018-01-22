@@ -73,8 +73,6 @@ get_command_space(struct iris_batch *batch, unsigned bytes)
    return map;
 }
 
-           //VG(VALGRIND_CHECK_MEM_IS_DEFINED(_dst, __genxml_cmd_length(cmd) * 4));
-
 #define iris_pack_command(cmd, dst, name)                         \
    for (struct cmd name = { __genxml_cmd_header(cmd) },           \
         *_dst = (void *)(dst); __builtin_expect(_dst != NULL, 1); \
