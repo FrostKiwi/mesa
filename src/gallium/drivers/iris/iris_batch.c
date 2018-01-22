@@ -25,6 +25,7 @@
 #include "iris_batch.h"
 #include "iris_bufmgr.h"
 #include "iris_context.h"
+#include "common/gen_decoder.h"
 
 #include "util/hash_table.h"
 #include "main/macros.h"
@@ -45,6 +46,8 @@
  */
 #define BATCH_SZ (20 * 1024)
 #define STATE_SZ (18 * 1024)
+
+static void decode_batch(struct iris_batch *batch);
 
 static void
 iris_batch_reset(struct iris_batch *batch);
@@ -324,13 +327,13 @@ grow_buffer(struct iris_batch *batch,
     *
     * Consider this scenario:
     *
-    * 1. Somebody calls brw_state_batch() to get a region of memory, and
-    *    and then creates a brw_address pointing to brw->batch.state.bo.
-    * 2. They then call brw_state_batch() a second time, which happens to
+    * 1. Somebody calls iris_state_batch() to get a region of memory, and
+    *    and then creates a iris_address pointing to iris->batch.state.bo.
+    * 2. They then call iris_state_batch() a second time, which happens to
     *    grow and replace the state buffer.  They then try to emit a
     *    relocation to their first section of memory.
     *
-    * If we replace the brw->batch.state.bo pointer at step 2, we would
+    * If we replace the iris->batch.state.bo pointer at step 2, we would
     * break the address created in step 1.  They'd have a pointer to the
     * old destroyed BO.  Emitting a relocation would add this dead BO to
     * the validation list...causing /both/ statebuffers to be in the list,
@@ -339,18 +342,18 @@ grow_buffer(struct iris_batch *batch,
     * This is not a contrived case - BLORP vertex data upload hits this.
     *
     * There are worse scenarios too.  Fences for GL sync objects reference
-    * brw->batch.batch.bo.  If we replaced the batch pointer when growing,
+    * iris->batch.batch.bo.  If we replaced the batch pointer when growing,
     * we'd need to chase down every fence and update it to point to the
     * new BO.  Otherwise, it would refer to a "batch" that never actually
     * gets submitted, and would fail to trigger.
     *
     * To work around both of these issues, we transmutate the buffers in
-    * place, making the existing struct brw_bo represent the new buffer,
+    * place, making the existing struct iris_bo represent the new buffer,
     * and "new_bo" represent the old BO.  This is highly unusual, but it
     * seems like a necessary evil.
     *
     * We also defer the memcpy of the existing batch's contents.  Callers
-    * may make multiple brw_state_batch calls, and retain pointers to the
+    * may make multiple iris_state_batch calls, and retain pointers to the
     * old BO's map.  We'll perform the memcpy in finish_growing_bo() when
     * we finally submit the batch, at which point we've finished uploading
     * state, and nobody should have any old references anymore.
@@ -565,12 +568,12 @@ _iris_batch_flush_fence(struct iris_batch *batch,
    if (ret < 0)
       return ret;
 
-   //throttle(brw);
+   //throttle(iris);
 
-   //if (unlikely(INTEL_DEBUG & DEBUG_BATCH))
-      //do_batch_dump(brw);
+   if (unlikely(INTEL_DEBUG & DEBUG_BATCH))
+      decode_batch(batch);
 
-   //if (brw->ctx.Const.ResetStrategy == GL_LOSE_CONTEXT_ON_RESET_ARB)
+   //if (iris->ctx.Const.ResetStrategy == GL_LOSE_CONTEXT_ON_RESET_ARB)
       //iris_check_for_reset(ice);
 
    if (unlikely(INTEL_DEBUG & DEBUG_SYNC)) {
@@ -716,4 +719,163 @@ iris_emit_state(struct iris_batch *batch,
    void *dest = iris_alloc_state(batch, size, alignment, &out_offset);
    memcpy(dest, data, size);
    return out_offset;
+}
+
+#define CSI "\e["
+#define BLUE_HEADER  CSI "0;44m"
+#define NORMAL       CSI "0m"
+
+static void
+decode_struct(struct gen_spec *spec,
+              const char *struct_name, uint32_t *data,
+              uint32_t gtt_offset, uint32_t offset, bool color)
+{
+   struct gen_group *group = gen_spec_find_struct(spec, struct_name);
+   if (!group)
+      return;
+
+   fprintf(stderr, "%s\n", struct_name);
+   gen_print_group(stderr, group, gtt_offset + offset,
+                   &data[offset / 4], 0, color);
+}
+
+static void
+decode_structs(struct iris_batch *batch, struct gen_spec *spec,
+               const char *struct_name,
+               uint32_t *data, uint32_t gtt_offset, uint32_t offset,
+               int struct_size, bool color)
+{
+   struct gen_group *group = gen_spec_find_struct(spec, struct_name);
+   if (!group)
+      return;
+
+   int entries = iris_state_entry_size(batch, offset) / struct_size;
+   for (int i = 0; i < entries; i++) {
+      fprintf(stderr, "%s %d\n", struct_name, i);
+      gen_print_group(stderr, group, gtt_offset + offset,
+                      &data[(offset + i * struct_size) / 4], 0, color);
+   }
+}
+
+static void
+decode_batch(struct iris_batch *batch)
+{
+   const struct gen_device_info *devinfo = &batch->screen->devinfo;
+   struct gen_spec *spec = gen_spec_load(devinfo);
+
+   if (batch->ring != I915_EXEC_RENDER)
+      return;
+
+   uint32_t *batch_data = iris_bo_map(batch->dbg, batch->cmdbuf.bo, MAP_READ);
+   uint32_t *state = iris_bo_map(batch->dbg, batch->statebuf.bo, MAP_READ);
+   if (batch_data == NULL || state == NULL) {
+      fprintf(stderr, "WARNING: failed to map batchbuffer/statebuffer\n");
+      return;
+   }
+
+   uint32_t *end = batch_data + buffer_bytes_used(&batch->cmdbuf);
+   uint32_t batch_gtt_offset = batch->cmdbuf.bo->gtt_offset;
+   uint32_t state_gtt_offset = batch->statebuf.bo->gtt_offset;
+   int length;
+
+   bool color = INTEL_DEBUG & DEBUG_COLOR;
+   const char *header_color = color ? BLUE_HEADER : "";
+   const char *reset_color  = color ? NORMAL : "";
+
+   for (uint32_t *p = batch_data; p < end; p += length) {
+      struct gen_group *inst = gen_spec_find_instruction(spec, p);
+      length = gen_group_get_length(inst, p);
+      assert(inst == NULL || length > 0);
+      length = MAX2(1, length);
+      if (inst == NULL) {
+         fprintf(stderr, "unknown instruction %08x\n", p[0]);
+         continue;
+      }
+
+      uint64_t offset = batch_gtt_offset + 4 * (p - batch_data);
+
+      fprintf(stderr, "%s0x%08"PRIx64":  0x%08x:  %-80s%s\n", header_color,
+              offset, p[0], gen_group_get_name(inst), reset_color);
+
+      gen_print_group(stderr, inst, offset, p, 0, color);
+
+      switch (gen_group_get_opcode(inst) >> 16) {
+      case 0x7826: // _3DSTATE_BINDING_TABLE_POINTERS_VS:
+      case 0x7827: // _3DSTATE_BINDING_TABLE_POINTERS_HS:
+      case 0x7828: // _3DSTATE_BINDING_TABLE_POINTERS_DS:
+      case 0x7829: // _3DSTATE_BINDING_TABLE_POINTERS_GS:
+      case 0x782A: { // _3DSTATE_BINDING_TABLE_POINTERS_PS:
+         struct gen_group *group =
+            gen_spec_find_struct(spec, "RENDER_SURFACE_STATE");
+         if (!group)
+            break;
+
+         uint32_t bt_offset = p[1] & ~0x1fu;
+         int bt_entries = iris_state_entry_size(batch, bt_offset) / 4;
+         uint32_t *bt_pointers = &state[bt_offset / 4];
+         for (int i = 0; i < bt_entries; i++) {
+            fprintf(stderr, "SURFACE_STATE - BTI = %d\n", i);
+            gen_print_group(stderr, group, state_gtt_offset + bt_pointers[i],
+                            &state[bt_pointers[i] / 4], 0, color);
+         }
+         break;
+      }
+      case 0x782B: //_3DSTATE_SAMPLER_STATE_POINTERS_VS:
+      case 0x782C: //_3DSTATE_SAMPLER_STATE_POINTERS_HS:
+      case 0x782D: //_3DSTATE_SAMPLER_STATE_POINTERS_DS:
+      case 0x782E: //_3DSTATE_SAMPLER_STATE_POINTERS_GS:
+      case 0x782F: //_3DSTATE_SAMPLER_STATE_POINTERS_PS:
+         decode_structs(batch, spec, "SAMPLER_STATE", state,
+                        state_gtt_offset, p[1] & ~0x1fu, 4 * 4, color);
+         break;
+      case 0x7823: //_3DSTATE_VIEWPORT_STATE_POINTERS_CC:
+         decode_structs(batch, spec, "CC_VIEWPORT", state,
+                        state_gtt_offset, p[1] & ~0x3fu, 2 * 4, color);
+         break;
+      case 0x7821: //_3DSTATE_VIEWPORT_STATE_POINTERS_SF_CL:
+         decode_structs(batch, spec, "SF_CLIP_VIEWPORT", state,
+                        state_gtt_offset, p[1] & ~0x3fu, 16 * 4, color);
+         break;
+      case 0x780f: //_3DSTATE_SCISSOR_STATE_POINTERS:
+         decode_structs(batch, spec, "SCISSOR_RECT", state,
+                        state_gtt_offset, p[1] & ~0x1fu, 2 * 4, color);
+         break;
+      case 0x7824: //_3DSTATE_BLEND_STATE_POINTERS:
+         /* TODO: handle Gen8+ extra dword at the beginning */
+         decode_structs(batch, spec, "BLEND_STATE", state,
+                        state_gtt_offset, p[1] & ~0x3fu, 8 * 4, color);
+         break;
+      case 0x780e: //_3DSTATE_CC_STATE_POINTERS:
+         decode_struct(spec, "COLOR_CALC_STATE", state,
+                       state_gtt_offset, p[1] & ~0x3fu, color);
+         break;
+      case 0x7002: { //MEDIA_INTERFACE_DESCRIPTOR_LOAD:
+         struct gen_group *group =
+            gen_spec_find_struct(spec, "RENDER_SURFACE_STATE");
+         if (!group)
+            break;
+
+         uint32_t idd_offset = p[3] & ~0x1fu;
+         decode_struct(spec, "INTERFACE_DESCRIPTOR_DATA", state,
+                       state_gtt_offset, idd_offset, color);
+
+         uint32_t ss_offset = state[idd_offset / 4 + 3] & ~0x1fu;
+         decode_structs(batch, spec, "SAMPLER_STATE", state,
+                        state_gtt_offset, ss_offset, 4 * 4, color);
+
+         uint32_t bt_offset = state[idd_offset / 4 + 4] & ~0x1fu;
+         int bt_entries = iris_state_entry_size(batch, bt_offset) / 4;
+         uint32_t *bt_pointers = &state[bt_offset / 4];
+         for (int i = 0; i < bt_entries; i++) {
+            fprintf(stderr, "SURFACE_STATE - BTI = %d\n", i);
+            gen_print_group(stderr, group, state_gtt_offset + bt_pointers[i],
+                            &state[bt_pointers[i] / 4], 0, color);
+         }
+         break;
+      }
+      }
+   }
+
+   iris_bo_unmap(batch->cmdbuf.bo);
+   iris_bo_unmap(batch->statebuf.bo);
 }
