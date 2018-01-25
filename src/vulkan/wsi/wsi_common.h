@@ -35,35 +35,17 @@
  */
 #define VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA (VkStructureType)1000001002
 #define VK_STRUCTURE_TYPE_WSI_MEMORY_ALLOCATE_INFO_MESA (VkStructureType)1000001003
-#define VK_STRUCTURE_TYPE_WSI_FORMAT_MODIFIER_PROPERTIES_LIST_MESA (VkStructureType)1000001004
 
 struct wsi_image_create_info {
     VkStructureType sType;
     const void *pNext;
     bool scanout;
-
-    uint32_t modifier_count;
-    const uint64_t *modifiers;
 };
 
 struct wsi_memory_allocate_info {
     VkStructureType sType;
     const void *pNext;
     bool implicit_sync;
-};
-
-struct wsi_format_modifier_properties {
-   uint64_t modifier;
-   uint32_t modifier_plane_count;
-};
-
-/* Chain in for vkGetPhysicalDeviceFormatProperties2KHR */
-struct wsi_format_modifier_properties_list {
-   VkStructureType sType;
-   const void *pNext;
-
-   uint32_t modifier_count;
-   struct wsi_format_modifier_properties *modifier_properties;
 };
 
 struct wsi_interface;
@@ -76,7 +58,6 @@ struct wsi_device {
    uint32_t queue_family_count;
 
    bool supports_modifiers;
-   uint64_t (*image_get_modifier)(VkImage image);
 
 #define WSI_CB(cb) PFN_vk##cb cb
    WSI_CB(AllocateMemory);
