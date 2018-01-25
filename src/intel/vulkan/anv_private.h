@@ -2373,10 +2373,8 @@ struct anv_image {
    VkImageUsageFlags usage; /**< Superset of VkImageCreateInfo::usage. */
    VkImageTiling tiling; /** VkImageCreateInfo::tiling */
 
-   /**
-    * DRM format modifier for this image or DRM_FORMAT_MOD_INVALID.
-    */
-   uint64_t drm_format_mod;
+   /** True if this is a legacy scanout image */
+   bool legacy_scanout;
 
    VkDeviceSize size;
    uint32_t alignment;
