@@ -89,8 +89,11 @@ choose_isl_surf_usage(const VkImageCreateInfo *vk_info,
       isl_usage |= ISL_SURF_USAGE_RENDER_TARGET_BIT;
    }
 
+#if 0
+   /* TODO: We need a better story for aux with format modifiers */
    if (vk_info->tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT)
       isl_usage |= ISL_SURF_USAGE_DISABLE_AUX_BIT;
+#endif
 
    return isl_usage;
 }
