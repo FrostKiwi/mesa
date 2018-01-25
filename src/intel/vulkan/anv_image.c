@@ -513,8 +513,7 @@ score_drm_format_mod(uint64_t modifier)
 }
 
 static const struct isl_drm_modifier_info *
-choose_drm_format_mod(const struct anv_physical_device *device,
-                      uint32_t modifier_count, const uint64_t *modifiers)
+choose_drm_format_mod(uint32_t modifier_count, const uint64_t *modifiers)
 {
    uint64_t best_mod = UINT64_MAX;
    uint32_t best_score = 0;
@@ -541,19 +540,29 @@ anv_image_create(VkDevice _device,
 {
    ANV_FROM_HANDLE(anv_device, device, _device);
    const VkImageCreateInfo *pCreateInfo = create_info->vk_info;
+   const VkImageDrmFormatModifierListCreateInfoEXT *vk_mod_list = NULL;
+   const struct wsi_image_create_info *wsi_info = NULL;
    const struct isl_drm_modifier_info *isl_mod_info = NULL;
    struct anv_image *image = NULL;
    VkResult r;
 
    assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO);
 
-   const struct wsi_image_create_info *wsi_info =
-      vk_find_struct_const(pCreateInfo->pNext, WSI_IMAGE_CREATE_INFO_MESA);
-   if (wsi_info && wsi_info->modifier_count > 0) {
-      isl_mod_info = choose_drm_format_mod(&device->instance->physicalDevice,
-                                           wsi_info->modifier_count,
-                                           wsi_info->modifiers);
-      assert(isl_mod_info);
+   /* Extract input structs */
+   vk_foreach_struct_const(s, pCreateInfo->pNext) {
+      switch (s->sType) {
+      case VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA:
+         wsi_info = (const struct wsi_image_create_info *)s;
+         if (wsi_info->modifier_count) {
+            isl_mod_info = choose_drm_format_mod(wsi_info->modifier_count,
+                                                 wsi_info->modifiers);
+            assert(isl_mod_info);
+         }
+         break;
+      default:
+         anv_debug_ignored_stype(s->sType);
+         break;
+      }
    }
 
    anv_assert(pCreateInfo->mipLevels > 0);
