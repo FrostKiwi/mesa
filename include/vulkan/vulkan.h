@@ -147,6 +147,7 @@ typedef enum VkResult {
     VK_ERROR_INVALID_SHADER_NV = -1000012000,
     VK_ERROR_OUT_OF_POOL_MEMORY_KHR = -1000069000,
     VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR = -1000072003,
+    VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT = -1000158000,
     VK_ERROR_NOT_PERMITTED_EXT = -1000174001,
     VK_RESULT_BEGIN_RANGE = VK_ERROR_FRAGMENTED_POOL,
     VK_RESULT_END_RANGE = VK_INCOMPLETE,
@@ -354,6 +355,11 @@ typedef enum VkStructureType {
     VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_IMAGE_FORMAT_PROPERTIES_KHR = 1000156005,
     VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO_KHR = 1000157000,
     VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO_KHR = 1000157001,
+    VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT = 1000158000,
+    VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT = 1000158001,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT = 1000158002,
+    VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT = 1000158003,
+    VK_STRUCTURE_TYPE_IMAGE_EXCPLICIT_DRM_FORMAT_MODIFIER_CREATE_INFO_EXT = 1000158004,
     VK_STRUCTURE_TYPE_VALIDATION_CACHE_CREATE_INFO_EXT = 1000160000,
     VK_STRUCTURE_TYPE_SHADER_MODULE_VALIDATION_CACHE_CREATE_INFO_EXT = 1000160001,
     VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT = 1000174000,
@@ -633,6 +639,7 @@ typedef enum VkImageType {
 typedef enum VkImageTiling {
     VK_IMAGE_TILING_OPTIMAL = 0,
     VK_IMAGE_TILING_LINEAR = 1,
+    VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT = 1000158000,
     VK_IMAGE_TILING_BEGIN_RANGE = VK_IMAGE_TILING_OPTIMAL,
     VK_IMAGE_TILING_END_RANGE = VK_IMAGE_TILING_LINEAR,
     VK_IMAGE_TILING_RANGE_SIZE = (VK_IMAGE_TILING_LINEAR - VK_IMAGE_TILING_OPTIMAL + 1),
@@ -1214,6 +1221,7 @@ typedef enum VkImageAspectFlagBits {
     VK_IMAGE_ASPECT_PLANE_0_BIT_KHR = 0x00000010,
     VK_IMAGE_ASPECT_PLANE_1_BIT_KHR = 0x00000020,
     VK_IMAGE_ASPECT_PLANE_2_BIT_KHR = 0x00000040,
+    VK_IMAGE_ASPECT_PLANE_3_BIT_EXT = 0x00000080,
     VK_IMAGE_ASPECT_FLAG_BITS_MAX_ENUM = 0x7FFFFFFF
 } VkImageAspectFlagBits;
 typedef VkFlags VkImageAspectFlags;
@@ -6898,6 +6906,54 @@ typedef struct VkPipelineCoverageModulationStateCreateInfoNV {
 #define VK_EXT_POST_DEPTH_COVERAGE_SPEC_VERSION 1
 #define VK_EXT_POST_DEPTH_COVERAGE_EXTENSION_NAME "VK_EXT_post_depth_coverage"
 
+
+#define VK_EXT_image_drm_format_modifier 1
+#define VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_SPEC_VERSION 1
+#define VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME "VK_EXT_image_drm_format_modifier"
+
+typedef struct VkDrmFormatModifierPropertiesEXT {
+    uint64_t                drmFormatModifier;
+    uint32_t                drmFormatModifierPlaneCount;
+    VkFormatFeatureFlags    drmFormatModifierTilingFeatures;
+} VkDrmFormatModifierPropertiesEXT;
+
+typedef struct VkDrmFormatModifierPropertiesListEXT {
+    VkStructureType                      sType;
+    void*                                pNext;
+    uint32_t                             drmFormatModifierCount;
+    VkDrmFormatModifierPropertiesEXT*    pDrmFormatModifierProperties;
+} VkDrmFormatModifierPropertiesListEXT;
+
+typedef struct VkPhysicalDeviceImageDrmFormatModifierInfoEXT {
+    VkStructureType    sType;
+    const void*        pNext;
+    uint64_t           drmFormatModifier;
+} VkPhysicalDeviceImageDrmFormatModifierInfoEXT;
+
+typedef struct VkImageDrmFormatModifierListCreateInfoEXT {
+    VkStructureType    sType;
+    const void*        pNext;
+    uint32_t           drmFormatModifierCount;
+    const uint64_t*    pDrmFormatModifiers;
+} VkImageDrmFormatModifierListCreateInfoEXT;
+
+typedef struct VkImageExplicitDrmFormatModifierCreateInfoEXT {
+    VkStructureType         sType;
+    const void*             pNext;
+    uint64_t                drmFormatModifier;
+    uint32_t                planeCount;
+    VkSubresourceLayout*    pPlaneLayouts;
+} VkImageExplicitDrmFormatModifierCreateInfoEXT;
+
+
+typedef VkResult (VKAPI_PTR *PFN_vkGetImageDrmFormatModifierEXT)(VkDevice device, VkImage image, uint64_t* pDrmFormatModifier);
+
+#ifndef VK_NO_PROTOTYPES
+VKAPI_ATTR VkResult VKAPI_CALL vkGetImageDrmFormatModifierEXT(
+    VkDevice                                    device,
+    VkImage                                     image,
+    uint64_t*                                   pDrmFormatModifier);
+#endif
 
 #define VK_EXT_validation_cache 1
 VK_DEFINE_NON_DISPATCHABLE_HANDLE(VkValidationCacheEXT)

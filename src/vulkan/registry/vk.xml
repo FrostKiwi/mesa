@@ -2685,6 +2685,35 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <member><type>VkConservativeRasterizationModeEXT</type>                                               <name>conservativeRasterizationMode</name></member>      <!-- Conservative rasterization mode -->
             <member><type>float</type>                                                                            <name>extraPrimitiveOverestimationSize</name></member>   <!-- Extra overestimation to add to the primitive -->
         </type>
+        <type category="struct" name="VkDrmFormatModifierPropertiesListEXT" returnedonly="true">
+            <member values="VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member><type>void</type>* <name>pNext</name></member>
+            <member optional="true"><type>uint32_t</type> <name>drmFormatModifierCount</name></member>
+            <member optional="true,false" len="drmFormatModifierCount"><type>VkDrmFormatModifierPropertiesEXT</type>* <name>pDrmFormatModifierProperties</name></member>
+        </type>
+        <type category="struct" name="VkDrmFormatModifierPropertiesEXT" returnedonly="true">
+            <member><type>uint64_t</type> <name>drmFormatModifier</name></member>
+            <member><type>uint32_t</type> <name>drmFormatModifierPlaneCount</name></member>
+            <member><type>VkFormatFeatureFlags</type> <name>drmFormatModifierTilingFeatures</name></member>
+        </type>
+        <type category="struct" name="VkPhysicalDeviceImageDrmFormatModifierInfoEXT">
+            <member values="VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member>const <type>void</type>* <name>pNext</name></member>
+            <member><type>uint64_t</type> <name>drmFormatModifier</name></member>
+        </type>
+        <type category="struct" name="VkImageDrmFormatModifierListCreateInfoEXT">
+            <member values="VK_STRUCTURE_TYPE_FLEXIBLE_DRM_FORMAT_MODIFIER_LIST_IMAGE_CREATE_INFO_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member>const <type>void</type>* <name>pNext</name></member>
+            <member><type>uint32_t</type> <name>drmFormatModifierCount</name></member>
+            <member>const <type>uint64_t</type>* <name>pDrmFormatModifiers</name></member>
+        </type>
+        <type category="struct" name="VkImageExplicitDrmFormatModifierCreateInfoEXT">
+            <member values="VK_STRUCTURE_TYPE_IMAGE_EXCPLICIT_DRM_FORMAT_MODIFIER_CREATE_INFO_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member>const <type>void</type>* <name>pNext</name></member>
+            <member><type>uint64_t</type> <name>drmFormatModifier</name></member>
+            <member optional="false"><type>uint32_t</type> <name>planeCount</name></member>
+            <member len="planeCount"><type>VkSubresourceLayout</type>* <name>pPlaneLayouts</name></member>
+        </type>
     </types>
 
     <comment>Vulkan enumerant (token) definitions</comment>
@@ -5486,6 +5515,12 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <param optional="false">const <type>void</type>* <name>pHostPointer</name></param>
             <param><type>VkMemoryHostPointerPropertiesEXT</type>* <name>pMemoryHostPointerProperties</name></param>
         </command>
+        <command>
+            <proto><type>VkResult</type> <name>vkGetImageDrmFormatModifierEXT</name></proto>
+            <param><type>VkDevice</type> <name>device</name></param>
+            <param><type>VkImage</type> <name>image</name></param>
+            <param optional="false"><type>uint64_t</type>* <name>pDrmFormatModifier</name></param>
+        </command>
     </commands>
 
     <feature api="vulkan" name="VK_VERSION_1_0" number="1.0" comment="Vulkan core API interface definitions">
@@ -7370,10 +7405,29 @@ private version is maintained in the 1.0 branch of the member gitlab server.
                 <type name="VkBindImageMemoryInfoKHR"/>
             </require>
         </extension>
-        <extension name="VK_EXT_extension_159" number="159" author="EXT" contact="Chad Versace @chadversary" supported="disabled">
+        <extension name="VK_EXT_image_drm_format_modifier" number="159" type="device" requires="VK_KHR_bind_memory2,VK_KHR_sampler_ycbcr_conversion" author="EXT" contact="Chad Versace @chadversary" supported="vulkan">
             <require>
-                <enum value="0"                                          name="VK_EXT_EXTENSION_159_SPEC_VERSION"/>
-                <enum value="&quot;VK_EXT_extension_159&quot;"           name="VK_EXT_EXTENSION_159_EXTENSION_NAME"/>
+                <enum value="1" name="VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_SPEC_VERSION"/>
+                <enum value="&quot;VK_EXT_image_drm_format_modifier&quot;" name="VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME"/>
+
+                <enum offset="0" dir="-" extends="VkResult" name="VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT"/>
+
+                <enum offset="0" extends="VkStructureType" name="VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT"/>
+                <enum offset="1" extends="VkStructureType" name="VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT"/>
+                <enum offset="2" extends="VkStructureType" name="VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT"/>
+                <enum offset="3" extends="VkStructureType" name="VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT"/>
+                <enum offset="4" extends="VkStructureType" name="VK_STRUCTURE_TYPE_IMAGE_EXCPLICIT_DRM_FORMAT_MODIFIER_CREATE_INFO_EXT"/>
+
+                <enum offset="0" extends="VkImageTiling" name="VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT"/>
+                <enum bitpos="7" extends="VkImageAspectFlagBits" name="VK_IMAGE_ASPECT_PLANE_3_BIT_EXT"/>
+
+                <type name="VkDrmFormatModifierPropertiesListEXT"/>
+                <type name="VkDrmFormatModifierPropertiesEXT"/>
+                <type name="VkPhysicalDeviceImageDrmFormatModifierInfoEXT"/>
+                <type name="VkImageDrmFormatModifierListCreateInfoEXT"/>
+                <type name="VkImageExplicitDrmFormatModifierCreateInfoEXT"/>
+
+                <command name="vkGetImageDrmFormatModifierEXT"/>
             </require>
         </extension>
         <extension name="VK_EXT_extension_160" number="160" author="EXT" contact="Mark Young @MarkY_LunarG" supported="disabled">
