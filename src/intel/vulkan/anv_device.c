@@ -427,14 +427,14 @@ anv_physical_device_init(struct anv_physical_device *device,
    if (result != VK_SUCCESS)
       goto fail;
 
+   anv_physical_device_get_supported_extensions(device,
+                                                &device->supported_extensions);
+
    result = anv_init_wsi(device);
    if (result != VK_SUCCESS) {
       ralloc_free(device->compiler);
       goto fail;
    }
-
-   anv_physical_device_get_supported_extensions(device,
-                                                &device->supported_extensions);
 
    device->local_fd = fd;
    return VK_SUCCESS;
