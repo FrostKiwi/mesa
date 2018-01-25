@@ -904,7 +904,7 @@ anv_layout_to_aux_usage(const struct gen_device_info * const devinfo,
       return ISL_AUX_USAGE_NONE;
 
    /* All images that use an auxiliary surface are required to be tiled. */
-   assert(image->tiling == VK_IMAGE_TILING_OPTIMAL);
+   assert(image->tiling != VK_IMAGE_TILING_LINEAR);
 
    /* Stencil has no aux */
    assert(aspect != VK_IMAGE_ASPECT_STENCIL_BIT);
@@ -1028,7 +1028,7 @@ anv_layout_to_fast_clear_type(const struct gen_device_info * const devinfo,
       return ANV_FAST_CLEAR_NONE;
 
    /* All images that use an auxiliary surface are required to be tiled. */
-   assert(image->tiling == VK_IMAGE_TILING_OPTIMAL);
+   assert(image->tiling != VK_IMAGE_TILING_LINEAR);
 
    /* Stencil has no aux */
    assert(aspect != VK_IMAGE_ASPECT_STENCIL_BIT);
