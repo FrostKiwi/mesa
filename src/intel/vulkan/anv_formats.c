@@ -712,39 +712,6 @@ get_buffer_format_features(const struct gen_device_info *devinfo,
    return flags;
 }
 
-static void
-get_wsi_format_modifier_properties_list(const struct anv_physical_device *physical_device,
-                                        VkFormat vk_format,
-                                        struct wsi_format_modifier_properties_list *list)
-{
-   const struct anv_format *anv_format = anv_get_format(vk_format);
-
-   VK_OUTARRAY_MAKE(out, list->modifier_properties, &list->modifier_count);
-
-   /* This is a simplified list where all the modifiers are available */
-   assert(vk_format == VK_FORMAT_B8G8R8_SRGB ||
-          vk_format == VK_FORMAT_B8G8R8_UNORM ||
-          vk_format == VK_FORMAT_B8G8R8A8_SRGB ||
-          vk_format == VK_FORMAT_B8G8R8A8_UNORM);
-
-   uint64_t modifiers[] = {
-      DRM_FORMAT_MOD_LINEAR,
-      I915_FORMAT_MOD_X_TILED,
-      I915_FORMAT_MOD_Y_TILED,
-      I915_FORMAT_MOD_Y_TILED_CCS,
-   };
-
-   for (uint32_t i = 0; i < ARRAY_SIZE(modifiers); i++) {
-      vk_outarray_append(&out, mod_props) {
-         mod_props->modifier = modifiers[i];
-         if (isl_drm_modifier_has_aux(modifiers[i]))
-            mod_props->modifier_plane_count = 2;
-         else
-            mod_props->modifier_plane_count = anv_format->n_planes;
-      }
-   }
-}
-
 /**
  * Fill the VkDrmFormatModifierPropertiesEXT struct if the VkFormat supports
  * the DRM format modifier, and return true.  On failure, the output struct
@@ -842,10 +809,6 @@ void anv_GetPhysicalDeviceFormatProperties2KHR(
 
    vk_foreach_struct(ext, pFormatProperties->pNext) {
       switch (ext->sType) {
-      case VK_STRUCTURE_TYPE_WSI_FORMAT_MODIFIER_PROPERTIES_LIST_MESA:
-         get_wsi_format_modifier_properties_list(physical_device, format,
-                                                 (void *)ext);
-         break;
       case VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT:
          get_drm_format_modifier_properties_list(physical_device, format,
             (VkDrmFormatModifierPropertiesListEXT *)ext);

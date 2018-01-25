@@ -110,9 +110,11 @@ choose_isl_tiling_flags(const struct anv_image_create_info *anv_info,
    default:
       unreachable("bad VkImageTiling");
    case VK_IMAGE_TILING_OPTIMAL:
+      assert(isl_mod_info == NULL);
       flags = ISL_TILING_ANY_MASK;
       break;
    case VK_IMAGE_TILING_LINEAR:
+      assert(isl_mod_info == NULL);
       flags = ISL_TILING_LINEAR_BIT;
       break;
    case VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT:
@@ -625,11 +627,6 @@ anv_image_create(VkDevice _device,
       switch (s->sType) {
       case VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA:
          wsi_info = (const struct wsi_image_create_info *)s;
-         if (wsi_info->modifier_count) {
-            isl_mod_info = choose_drm_format_mod(wsi_info->modifier_count,
-                                                 wsi_info->modifiers);
-            assert(isl_mod_info);
-         }
          break;
       case VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT:
          vk_mod_list = (const VkImageDrmFormatModifierListCreateInfoEXT *) s;
