@@ -209,6 +209,7 @@ iris_upload_and_bind_shader(struct iris_context *ice,
    if (existing) {
       shader->prog_offset = existing->prog_offset;
    } else {
+      shader->buffer = NULL;
       u_upload_alloc(ice->shaders.uploader, 0, prog_data->program_size,
                      64, &shader->prog_offset, &shader->buffer, &shader->map);
       memcpy(shader->map, assembly, prog_data->program_size);
