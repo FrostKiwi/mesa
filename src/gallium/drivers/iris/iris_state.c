@@ -1437,8 +1437,15 @@ iris_populate_fs_key(const struct iris_context *ice,
    //pkt.PerThreadScratchSpace = prog_data->total_scratch == 0 ? 0 :        \
       //ffs(stage_state->per_thread_scratch) - 11;                          \
 
+static uint64_t
+KSP(const struct iris_compiled_shader *shader)
+{
+   struct iris_resource *res = (void *) shader->buffer;
+   return res->bo->gtt_offset + shader->offset;
+}
+
 #define INIT_THREAD_DISPATCH_FIELDS(pkt, prefix)                          \
-   pkt.KernelStartPointer = shader->prog_offset;                          \
+   pkt.KernelStartPointer = KSP(shader);                                  \
    pkt.BindingTableEntryCount = prog_data->binding_table.size_bytes / 4;  \
    pkt.FloatingPointMode = prog_data->use_alt_mode;                       \
                                                                           \
@@ -1603,9 +1610,8 @@ iris_set_fs_state(const struct gen_device_info *devinfo,
       ps.DispatchGRFStartRegisterForConstantSetupData2 =
          wm_prog_data->dispatch_grf_start_reg_2;
 
-      ps.KernelStartPointer0 = shader->prog_offset;
-      ps.KernelStartPointer2 =
-         shader->prog_offset + wm_prog_data->prog_offset_2;
+      ps.KernelStartPointer0 = KSP(shader);
+      ps.KernelStartPointer2 = KSP(shader) + wm_prog_data->prog_offset_2;
    }
 
    iris_pack_command(GENX(3DSTATE_PS_EXTRA), psx_state, psx) {
