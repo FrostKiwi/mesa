@@ -524,5 +524,8 @@ iris_screen_create(int fd)
    pscreen->fence_finish = iris_fence_finish;
    pscreen->query_memory_info = iris_query_memory_info;
 
+   /* Put them somewhere non-zero */
+   screen->next_instruction_address = 4096;
+
    return pscreen;
 }
