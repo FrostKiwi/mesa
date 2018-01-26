@@ -1771,6 +1771,7 @@ iris_upload_render_state(struct iris_context *ice,
    if (dirty & IRIS_DIRTY_BLEND_STATE) {
       struct iris_blend_state *cso_blend = ice->state.cso_blend;
       struct iris_depth_stencil_alpha_state *cso_zsa = ice->state.cso_zsa;
+      // nr_cbufs???
       // XXX: 3DSTATE_BLEND_STATE_POINTERS - BLEND_STATE
       // -> from iris_blend_state (most) + iris_depth_stencil_alpha_state
       //    (alpha test function/enable) + has writeable RT from ???????

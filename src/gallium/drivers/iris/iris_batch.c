@@ -851,8 +851,10 @@ decode_batch(struct iris_batch *batch)
          break;
       case 0x7824: //_3DSTATE_BLEND_STATE_POINTERS:
          /* TODO: handle Gen8+ extra dword at the beginning */
-         decode_structs(batch, spec, "BLEND_STATE", state,
-                        state_gtt_offset, p[1] & ~0x3fu, 8 * 4, color);
+         decode_struct(spec, "BLEND_STATE", state,
+                       state_gtt_offset, p[1] & ~0x3fu, color);
+         decode_structs(batch, spec, "BLEND_STATE_ENTRY", state,
+                        state_gtt_offset, p[1] & ~0x3fu + 4, 8 * 4, color);
          break;
       case 0x780e: //_3DSTATE_CC_STATE_POINTERS:
          decode_struct(spec, "COLOR_CALC_STATE", state,
