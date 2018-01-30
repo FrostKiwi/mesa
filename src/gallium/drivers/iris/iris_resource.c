@@ -355,11 +355,11 @@ iris_resource_get_handle(struct pipe_screen *pscreen,
 
    switch (whandle->type) {
    case DRM_API_HANDLE_TYPE_SHARED:
-      return iris_bo_flink(res->bo, &whandle->handle) > 0;
+      return iris_bo_flink(res->bo, &whandle->handle) == 0;
    case DRM_API_HANDLE_TYPE_KMS:
-      return iris_bo_export_gem_handle(res->bo);
+      return iris_bo_export_gem_handle(res->bo) == 0;
    case DRM_API_HANDLE_TYPE_FD:
-      return iris_bo_export_dmabuf(res->bo, (int *) &whandle->handle) > 0;
+      return iris_bo_export_dmabuf(res->bo, (int *) &whandle->handle) == 0;
    }
 
    return false;
