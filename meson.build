@@ -786,7 +786,8 @@ endif
 # Check for generic C arguments
 c_args = []
 foreach a : ['-Wall', '-Werror=implicit-function-declaration',
-             '-Werror=missing-prototypes', '-fno-math-errno',
+             '-Werror=missing-prototypes', '-Werror=return-type',
+             '-fno-math-errno',
              '-fno-trapping-math', '-Qunused-arguments']
   if cc.has_argument(a)
     c_args += a
