@@ -1936,7 +1936,7 @@ iris_upload_render_state(struct iris_context *ice,
          continue;
 
       // XXX: get sampler count from shader; don't emit them all...
-      const int count = IRIS_MAX_TEXTURE_SAMPLERS;
+      const int count = 1; //IRIS_MAX_TEXTURE_SAMPLERS;
 
       uint32_t offset;
       uint32_t *map = iris_alloc_state(batch,
