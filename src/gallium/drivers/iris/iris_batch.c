@@ -723,7 +723,7 @@ iris_alloc_state(struct iris_batch *batch,
    batch->statebuf.map_next += aligned_size;
 
    *out_offset = offset;
-   return batch->statebuf.map_next;
+   return batch->statebuf.map + offset;
 }
 
 uint32_t
