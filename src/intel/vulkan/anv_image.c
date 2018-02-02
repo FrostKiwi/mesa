@@ -471,8 +471,7 @@ make_surface(const struct anv_device *dev,
              * a render target.  This means that it's safe to just leave
              * compression on at all times for these formats.
              */
-            if (!(vk_info->usage & VK_IMAGE_USAGE_STORAGE_BIT) &&
-                all_formats_ccs_e_compatible(&dev->info, vk_info)) {
+            if (all_formats_ccs_e_compatible(&dev->info, vk_info)) {
                image->planes[plane].aux_usage = ISL_AUX_USAGE_CCS_E;
             }
          }
@@ -841,9 +840,22 @@ anv_layout_to_aux_usage(const struct gen_device_info * const devinfo,
       return ISL_AUX_USAGE_NONE;
 
 
+   case VK_IMAGE_LAYOUT_GENERAL:
+      if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
+         return ISL_AUX_USAGE_NONE;
+      } else if (image->usage & VK_IMAGE_USAGE_STORAGE_BIT) {
+         /* If we might be used as a storage image and we're in the general
+          * layout, we have to disable aux because the dataport doesn't
+          * support CCS.
+          */
+         return ISL_AUX_USAGE_NONE;
+      } else {
+         return image->planes[plane].aux_usage;
+      }
+
+
    /* Transfer Layouts
     */
-   case VK_IMAGE_LAYOUT_GENERAL:
    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
       if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
