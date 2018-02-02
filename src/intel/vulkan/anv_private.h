@@ -2573,8 +2573,15 @@ anv_image_get_compression_state_addr(const struct anv_device *device,
    struct anv_address addr =
       anv_image_get_fast_clear_type_addr(device, image, aspect);
    addr.offset += 4; /* Go past the fast clear type */
-   addr.offset += level * image->array_size * 4;
+
+   if (image->type == VK_IMAGE_TYPE_3D) {
+      for (uint32_t l = 0; l < level; l++)
+         addr.offset += anv_minify(image->extent.depth, l) * 4;
+   } else {
+      addr.offset += level * image->array_size * 4;
+   }
    addr.offset += array_layer * 4;
+
    return addr;
 }
 
