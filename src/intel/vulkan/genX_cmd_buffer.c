@@ -3320,6 +3320,12 @@ cmd_buffer_begin_subpass(struct anv_cmd_buffer *cmd_buffer,
          target_layout = subpass->attachments[i].layout;
       }
 
+      /* Clears are based on the image view for 3D surfaces but transitions
+       * are done on an entire miplevel at a time.
+       */
+      uint32_t base_clear_layer = iview->planes[0].isl.base_array_layer;
+      uint32_t clear_layer_count = fb->layers;
+
       if (image->aspects & VK_IMAGE_ASPECT_ANY_COLOR_BIT_ANV) {
          assert(image->aspects == VK_IMAGE_ASPECT_COLOR_BIT);
 
@@ -3333,30 +3339,8 @@ cmd_buffer_begin_subpass(struct anv_cmd_buffer *cmd_buffer,
             layer_count = fb->layers;
          }
 
-         transition_color_buffer(cmd_buffer, image, VK_IMAGE_ASPECT_COLOR_BIT,
-                                 iview->planes[0].isl.base_level, 1,
-                                 base_layer, layer_count,
-                                 att_state->current_layout, target_layout);
-      } else if (image->aspects & VK_IMAGE_ASPECT_DEPTH_BIT) {
-         transition_depth_buffer(cmd_buffer, image,
-                                 att_state->current_layout, target_layout);
-         att_state->aux_usage =
-            anv_layout_to_aux_usage(&cmd_buffer->device->info, image,
-                                    VK_IMAGE_ASPECT_DEPTH_BIT, target_layout);
-      }
-      att_state->current_layout = target_layout;
-
-      if (att_state->pending_clear_aspects & VK_IMAGE_ASPECT_COLOR_BIT) {
-         assert(att_state->pending_clear_aspects == VK_IMAGE_ASPECT_COLOR_BIT);
-
-         /* Multi-planar images are not supported as attachments */
-         assert(image->aspects == VK_IMAGE_ASPECT_COLOR_BIT);
-         assert(image->n_planes == 1);
-
-         uint32_t base_clear_layer = iview->planes[0].isl.base_array_layer;
-         uint32_t clear_layer_count = fb->layers;
-
-         if (att_state->fast_clear) {
+         if ((att_state->pending_clear_aspects & VK_IMAGE_ASPECT_COLOR_BIT) &&
+             att_state->fast_clear) {
             /* We only support fast-clears on the first layer */
             assert(iview->planes[0].isl.base_level == 0);
             assert(iview->planes[0].isl.base_array_layer == 0);
@@ -3365,6 +3349,13 @@ cmd_buffer_begin_subpass(struct anv_cmd_buffer *cmd_buffer,
                              0, 0, 1, ISL_AUX_OP_FAST_CLEAR, false);
             base_clear_layer++;
             clear_layer_count--;
+
+            /* Performing a fast clear takes care of all our transition needs
+             * for the first slice.  Increment the base layer and layer count
+             * so that later transitions don't touch layer 0.
+             */
+            base_layer++;
+            layer_count--;
 
             genX(copy_fast_clear_dwords)(cmd_buffer, att_state->color.state,
                                          image, VK_IMAGE_ASPECT_COLOR_BIT,
@@ -3385,6 +3376,29 @@ cmd_buffer_begin_subpass(struct anv_cmd_buffer *cmd_buffer,
                                           ANV_FAST_CLEAR_ANY);
             }
          }
+
+         if (layer_count > 0) {
+            transition_color_buffer(cmd_buffer, image,
+                                    VK_IMAGE_ASPECT_COLOR_BIT,
+                                    iview->planes[0].isl.base_level, 1,
+                                    base_layer, layer_count,
+                                    att_state->current_layout, target_layout);
+         }
+      } else if (image->aspects & VK_IMAGE_ASPECT_DEPTH_BIT) {
+         transition_depth_buffer(cmd_buffer, image,
+                                 att_state->current_layout, target_layout);
+         att_state->aux_usage =
+            anv_layout_to_aux_usage(&cmd_buffer->device->info, image,
+                                    VK_IMAGE_ASPECT_DEPTH_BIT, target_layout);
+      }
+      att_state->current_layout = target_layout;
+
+      if (att_state->pending_clear_aspects & VK_IMAGE_ASPECT_COLOR_BIT) {
+         assert(att_state->pending_clear_aspects == VK_IMAGE_ASPECT_COLOR_BIT);
+
+         /* Multi-planar images are not supported as attachments */
+         assert(image->aspects == VK_IMAGE_ASPECT_COLOR_BIT);
+         assert(image->n_planes == 1);
 
          if (clear_layer_count > 0) {
             assert(image->n_planes == 1);
