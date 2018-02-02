@@ -200,8 +200,8 @@ all_formats_ccs_e_compatible(const struct gen_device_info *devinfo,
  *
  *  * 1 or 4 dwords (depending on hardware generation) for the clear color
  *  * 1 dword for the anv_fast_clear_type of the clear color
- *  * On gen9+, 1 dword per level and layer of the image (3D levels count as
- *    having a single layer) in level-major order for compression state.
+ *  * On gen9+, 1 dword per level and layer of the image (3D levels count
+ *    multiple layers) in level-major order for compression state.
  *
  * For the purpose of discoverability, the algorithm used to manage
  * compression and fast-clears is described here:
@@ -262,11 +262,15 @@ add_aux_state_tracking_buffer(struct anv_image *image,
    /* Clear color and fast clear type */
    unsigned state_size = device->isl_dev.ss.clear_value_size + 4;
 
-   /* We only need to track compression on CCS_E surfaces.  We don't consider
-    * 3D images as actually having multiple array layers.
-    */
-   if (image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_E)
-      state_size += image->levels * image->array_size * 4;
+   /* We only need to track compression on CCS_E surfaces. */
+   if (image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_E) {
+      if (image->type == VK_IMAGE_TYPE_3D) {
+         for (uint32_t l = 0; l < image->levels; l++)
+            state_size += anv_minify(image->extent.depth, l) * 4;
+      } else {
+         state_size += image->levels * image->array_size * 4;
+      }
+   }
 
    image->planes[plane].fast_clear_state_offset =
       image->planes[plane].offset + image->planes[plane].size;

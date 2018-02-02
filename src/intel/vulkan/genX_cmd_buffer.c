@@ -641,14 +641,8 @@ anv_cmd_predicated_ccs_resolve(struct anv_cmd_buffer *cmd_buffer,
       mip.CompareOperation = COMPARE_SRCS_EQUAL;
    }
 
-   if (image->type == VK_IMAGE_TYPE_3D) {
-      anv_image_ccs_op(cmd_buffer, image, aspect, level,
-                       0, anv_minify(image->extent.depth, level),
-                       resolve_op, true);
-   } else {
-      anv_image_ccs_op(cmd_buffer, image, aspect, level,
-                       array_layer, 1, resolve_op, true);
-   }
+   anv_image_ccs_op(cmd_buffer, image, aspect, level,
+                    array_layer, 1, resolve_op, true);
 }
 
 void
@@ -671,11 +665,6 @@ genX(cmd_buffer_mark_image_written)(struct anv_cmd_buffer *cmd_buffer,
    if (aux_usage != ISL_AUX_USAGE_CCS_E &&
        aux_usage != ISL_AUX_USAGE_MCS)
       return;
-
-   if (image->type == VK_IMAGE_TYPE_3D) {
-      base_layer = 0;
-      layer_count = 1;
-   }
 
    set_image_compressed_bit(cmd_buffer, image, aspect,
                             level, base_layer, layer_count, true);
@@ -845,9 +834,6 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
                                base_layer, layer_count);
    }
 
-   if (image->type == VK_IMAGE_TYPE_3D)
-      base_layer = 0;
-
    if (base_layer >= anv_image_aux_layers(image, aspect, base_level))
       return;
 
@@ -904,10 +890,6 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
             const uint32_t level = base_level + l;
             uint32_t level_layer_count =
                MIN2(layer_count, anv_image_aux_layers(image, aspect, level));
-
-            /* A transition of a 3D subresource works on all slices. */
-            if (image->type == VK_IMAGE_TYPE_3D)
-               level_layer_count = anv_minify(image->extent.depth, level);
 
             anv_image_ccs_op(cmd_buffer, image, aspect, level,
                              base_layer, level_layer_count,
@@ -1002,7 +984,10 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
 
    for (uint32_t l = 0; l < level_count; l++) {
       uint32_t level = base_level + l;
-      for (uint32_t a = 0; a < layer_count; a++) {
+      uint32_t level_layer_count =
+         MIN2(layer_count, anv_image_aux_layers(image, aspect, level));
+
+      for (uint32_t a = 0; a < level_layer_count; a++) {
          uint32_t array_layer = base_layer + a;
          anv_cmd_predicated_ccs_resolve(cmd_buffer, image, aspect,
                                         level, array_layer, resolve_op,
@@ -1671,12 +1656,20 @@ void genX(CmdPipelineBarrier)(
             anv_image_expand_aspects(image, range->aspectMask);
          uint32_t aspect_bit;
 
+         uint32_t base_layer, layer_count;
+         if (image->type == VK_IMAGE_TYPE_3D) {
+            base_layer = 0;
+            layer_count = anv_minify(image->extent.depth, range->baseMipLevel);
+         } else {
+            base_layer = range->baseArrayLayer;
+            layer_count = anv_get_layerCount(image, range);
+         }
+
          anv_foreach_image_aspect_bit(aspect_bit, image, color_aspects) {
             transition_color_buffer(cmd_buffer, image, 1UL << aspect_bit,
                                     range->baseMipLevel,
                                     anv_get_levelCount(image, range),
-                                    range->baseArrayLayer,
-                                    anv_get_layerCount(image, range),
+                                    base_layer, layer_count,
                                     pImageMemoryBarriers[i].oldLayout,
                                     pImageMemoryBarriers[i].newLayout);
          }
