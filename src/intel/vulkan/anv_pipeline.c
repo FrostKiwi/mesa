@@ -550,6 +550,40 @@ anv_pipeline_compile_vs(struct anv_pipeline *pipeline,
                           nir->info.outputs_written,
                           nir->info.separate_shader);
 
+      unsigned instructions =
+         exec_list_length(&nir_start_block(nir_shader_get_entrypoint(nir))->instr_list);
+
+      bool maybe_bad = prog_data.base.base.ubo_ranges[2].length > 0 &&
+                       prog_data.base.base.ubo_ranges[1].block == 1 &&
+                       prog_data.base.base.ubo_ranges[2].block == 1 &&
+                       prog_data.base.base.ubo_ranges[0].start == 3 &&
+                       prog_data.base.base.ubo_ranges[2].start == 12 &&
+                       exec_list_length(&nir->uniforms) == 2 &&
+                       exec_list_length(&nir->inputs) == 7 &&
+                       exec_list_length(&nir->outputs) == 8 &&
+                       instructions == 466;
+
+      if (maybe_bad) {
+         fprintf(stderr, "UBO Ranges:\n");
+         for (unsigned i = 0; i < 4; i++) {
+            if (prog_data.base.base.ubo_ranges[i].length > 0) {
+               fprintf(stderr, "  [%d]: block %d  start %d  length %d\n", i,
+                       prog_data.base.base.ubo_ranges[i].block,
+                       prog_data.base.base.ubo_ranges[i].start,
+                       prog_data.base.base.ubo_ranges[i].length);
+            } else {
+               fprintf(stderr, "  [%d]: (none)\n", i);
+            }
+         }
+         fprintf(stderr, "\n");
+
+         fprintf(stderr, "%d NIR instructions\n\n", instructions);
+
+         INTEL_DEBUG |= DEBUG_VS;
+
+//         prog_data.base.base.ubo_ranges[2].length = 0;
+      }
+
       const unsigned *shader_code =
          brw_compile_vs(compiler, NULL, mem_ctx, &key, &prog_data, nir,
                         -1, NULL);
@@ -557,6 +591,8 @@ anv_pipeline_compile_vs(struct anv_pipeline *pipeline,
          ralloc_free(mem_ctx);
          return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
       }
+
+      INTEL_DEBUG &= ~DEBUG_VS;
 
       unsigned code_size = prog_data.base.base.program_size;
       bin = anv_pipeline_upload_kernel(pipeline, cache, sha1, 20,
