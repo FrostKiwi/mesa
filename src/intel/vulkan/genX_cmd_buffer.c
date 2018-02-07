@@ -463,19 +463,6 @@ transition_depth_buffer(struct anv_cmd_buffer *cmd_buffer,
 #define MI_PREDICATE_SRC1  0x2408
 
 static void
-set_image_fast_clear_state(struct anv_cmd_buffer *cmd_buffer,
-                           const struct anv_image *image,
-                           VkImageAspectFlagBits aspect,
-                           enum anv_fast_clear_type fast_clear)
-{
-   anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_DATA_IMM), sdi) {
-      sdi.Address = anv_image_get_fast_clear_type_addr(cmd_buffer->device,
-                                                       image, aspect);
-      sdi.ImmediateData = fast_clear;
-   }
-}
-
-static void
 set_image_compressed_bit(struct anv_cmd_buffer *cmd_buffer,
                          const struct anv_image *image,
                          VkImageAspectFlagBits aspect,
@@ -502,6 +489,25 @@ set_image_compressed_bit(struct anv_cmd_buffer *cmd_buffer,
          sdi.ImmediateData = compressed ? UINT32_MAX : 0;
       }
    }
+}
+
+static void
+set_image_fast_clear_state(struct anv_cmd_buffer *cmd_buffer,
+                           const struct anv_image *image,
+                           VkImageAspectFlagBits aspect,
+                           enum anv_fast_clear_type fast_clear)
+{
+   anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_DATA_IMM), sdi) {
+      sdi.Address = anv_image_get_fast_clear_type_addr(cmd_buffer->device,
+                                                       image, aspect);
+      sdi.ImmediateData = fast_clear;
+   }
+
+   /* Whenever we have fast-clear, we consider that slice to be compressed.
+    * This makes building predicates much easier.
+    */
+   if (fast_clear != ANV_FAST_CLEAR_NONE)
+      set_image_compressed_bit(cmd_buffer, image, aspect, 0, 0, 0, true);
 }
 
 #if GEN_IS_HASWELL || GEN_GEN >= 8
@@ -531,11 +537,11 @@ anv_cmd_predicated_ccs_resolve(struct anv_cmd_buffer *cmd_buffer,
                                enum isl_aux_op resolve_op,
                                enum anv_fast_clear_type fast_clear_supported)
 {
+   const uint32_t plane = anv_image_aspect_to_plane(image->aspects, aspect);
    struct anv_address fast_clear_type_addr =
       anv_image_get_fast_clear_type_addr(cmd_buffer->device, image, aspect);
 
 #if GEN_GEN >= 9
-   const uint32_t plane = anv_image_aspect_to_plane(image->aspects, aspect);
    const bool decompress =
       resolve_op == ISL_AUX_OP_FULL_RESOLVE &&
       image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_E;
@@ -543,101 +549,22 @@ anv_cmd_predicated_ccs_resolve(struct anv_cmd_buffer *cmd_buffer,
    /* This function shouldn't get called if it isn't going to do anything */
    assert(decompress || fast_clear_supported < ANV_FAST_CLEAR_ANY);
 
-   if (level == 0 && array_layer == 0) {
-      /* This is the complex case because we have to worry about dealing with
-       * the fast clear color.  Unfortunately, it's also the common case.
-       */
+   /* Name some registers */
+   const int image_fc_reg = MI_ALU_REG0;
+   const int fc_imm_reg = MI_ALU_REG1;
+   const int pred_reg = MI_ALU_REG2;
 
-      /* Poor-man's register allocation */
-      int next_reg = MI_ALU_REG0;
-      int pred_reg = -1;
+   uint32_t *dw;
 
-      /* Needed for ALU operations */
-      uint32_t *dw;
-
-      const int image_fc = next_reg++;
-      anv_batch_emit(&cmd_buffer->batch, GENX(MI_LOAD_REGISTER_MEM), lrm) {
-         lrm.RegisterAddress  = CS_GPR(image_fc);
-         lrm.MemoryAddress    = fast_clear_type_addr;
-      }
-      emit_lri(&cmd_buffer->batch, CS_GPR(image_fc) + 4, 0);
-
-      if (fast_clear_supported < ANV_FAST_CLEAR_ANY) {
-         /* We need to compute (fast_clear_supported < image->fast_clear).
-          * We do this by subtracting and storing the carry bit.
-          */
-         const int fc_imm = next_reg++;
-         emit_lri(&cmd_buffer->batch, CS_GPR(fc_imm), fast_clear_supported);
-         emit_lri(&cmd_buffer->batch, CS_GPR(fc_imm) + 4, 0);
-
-         assert(pred_reg == -1);
-         pred_reg = next_reg++;
-
-         dw = anv_batch_emitn(&cmd_buffer->batch, 5, GENX(MI_MATH));
-         dw[1] = mi_alu(MI_ALU_LOAD, MI_ALU_SRCA, fc_imm);
-         dw[2] = mi_alu(MI_ALU_LOAD, MI_ALU_SRCB, image_fc);
-         dw[3] = mi_alu(MI_ALU_SUB, 0, 0);
-         dw[4] = mi_alu(MI_ALU_STORE, pred_reg, MI_ALU_CF);
-      }
-
-      if (decompress) {
-         /* If we're doing a full resolve, we need the compression state */
-         struct anv_address compression_state_addr =
-            anv_image_get_compression_state_addr(cmd_buffer->device, image,
-                                                 aspect, level, array_layer);
-         if (pred_reg == -1) {
-            pred_reg = next_reg++;
-            anv_batch_emit(&cmd_buffer->batch, GENX(MI_LOAD_REGISTER_MEM), lrm) {
-               lrm.RegisterAddress  = CS_GPR(pred_reg);
-               lrm.MemoryAddress    = compression_state_addr;
-            }
-         } else {
-            /* OR the compression state into the predicate.  The compression
-             * state is already in 0/~0 form.
-             */
-            const int image_comp = next_reg++;
-            anv_batch_emit(&cmd_buffer->batch, GENX(MI_LOAD_REGISTER_MEM), lrm) {
-               lrm.RegisterAddress  = CS_GPR(image_comp);
-               lrm.MemoryAddress    = compression_state_addr;
-            }
-
-            dw = anv_batch_emitn(&cmd_buffer->batch, 5, GENX(MI_MATH));
-            dw[1] = mi_alu(MI_ALU_LOAD, MI_ALU_SRCA, pred_reg);
-            dw[2] = mi_alu(MI_ALU_LOAD, MI_ALU_SRCB, image_comp);
-            dw[3] = mi_alu(MI_ALU_OR, 0, 0);
-            dw[4] = mi_alu(MI_ALU_STORE, pred_reg, MI_ALU_ACCU);
-         }
-
-         anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_DATA_IMM), sdi) {
-            sdi.Address = compression_state_addr;
-            sdi.ImmediateData = 0;
-         }
-      }
-
-      /* Store the predicate */
-      assert(pred_reg != -1);
-      emit_lrr(&cmd_buffer->batch, MI_PREDICATE_SRC0, CS_GPR(pred_reg));
-
-      /* If the predicate is true, we want to write 0 to the fast clear type
-       * and, if it's false, leave it alone.  We can do this by writing
+   if (resolve_op == ISL_AUX_OP_FULL_RESOLVE) {
+      /* In this case, we're doing a full resolve which means we want the
+       * resolve to happen if any compression (including fast-clears) is
+       * present.
        *
-       * clear_type = clear_type & ~predicate;
+       * In order to simplify the logic a bit, we make the assumption that,
+       * if the first slice has been fast-cleared, it is also marked as
+       * compressed.  See also set_image_fast_clear_state.
        */
-      dw = anv_batch_emitn(&cmd_buffer->batch, 5, GENX(MI_MATH));
-      dw[1] = mi_alu(MI_ALU_LOAD, MI_ALU_SRCA, image_fc);
-      dw[2] = mi_alu(MI_ALU_LOADINV, MI_ALU_SRCB, pred_reg);
-      dw[3] = mi_alu(MI_ALU_AND, 0, 0);
-      dw[4] = mi_alu(MI_ALU_STORE, image_fc, MI_ALU_ACCU);
-
-      anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_REGISTER_MEM), srm) {
-         srm.RegisterAddress  = CS_GPR(image_fc);
-         srm.MemoryAddress    = fast_clear_type_addr;
-      }
-   } else if (decompress) {
-      /* We're trying to get rid of compression but we don't care about fast
-       * clears so all we need is the compression predicate.
-       */
-      assert(resolve_op == ISL_AUX_OP_FULL_RESOLVE);
       struct anv_address compression_state_addr =
          anv_image_get_compression_state_addr(cmd_buffer->device, image,
                                               aspect, level, array_layer);
@@ -646,13 +573,85 @@ anv_cmd_predicated_ccs_resolve(struct anv_cmd_buffer *cmd_buffer,
          lrm.MemoryAddress    = compression_state_addr;
       }
       anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_DATA_IMM), sdi) {
-         sdi.Address = compression_state_addr;
+         sdi.Address       = compression_state_addr;
          sdi.ImmediateData = 0;
+      }
+
+      if (level == 0 && array_layer == 0) {
+         /* If the predicate is true, we want to write 0 to the fast clear type
+          * and, if it's false, leave it alone.  We can do this by writing
+          *
+          * clear_type = clear_type & ~predicate;
+          */
+         anv_batch_emit(&cmd_buffer->batch, GENX(MI_LOAD_REGISTER_MEM), lrm) {
+            lrm.RegisterAddress  = CS_GPR(image_fc_reg);
+            lrm.MemoryAddress    = fast_clear_type_addr;
+         }
+         anv_batch_emit(&cmd_buffer->batch, GENX(MI_LOAD_REGISTER_REG), lrr) {
+            lrr.DestinationRegisterAddress   = CS_GPR(pred_reg);
+            lrr.SourceRegisterAddress        = MI_PREDICATE_SRC0;
+         }
+
+         dw = anv_batch_emitn(&cmd_buffer->batch, 5, GENX(MI_MATH));
+         dw[1] = mi_alu(MI_ALU_LOAD, MI_ALU_SRCA, image_fc_reg);
+         dw[2] = mi_alu(MI_ALU_LOADINV, MI_ALU_SRCB, pred_reg);
+         dw[3] = mi_alu(MI_ALU_AND, 0, 0);
+         dw[4] = mi_alu(MI_ALU_STORE, image_fc_reg, MI_ALU_ACCU);
+
+         anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_REGISTER_MEM), srm) {
+            srm.MemoryAddress    = fast_clear_type_addr;
+            srm.RegisterAddress  = CS_GPR(image_fc_reg);
+         }
+      }
+   } else if (level == 0 && array_layer == 0) {
+      /* In this case, we are doing a partial resolve to get rid of fast-clear
+       * colors.  We don't care about the compression state but we do care
+       * about how much fast clear is allowed by the final layout.
+       */
+      assert(resolve_op == ISL_AUX_OP_FULL_RESOLVE);
+      assert(fast_clear_supported < ANV_FAST_CLEAR_ANY);
+
+      anv_batch_emit(&cmd_buffer->batch, GENX(MI_LOAD_REGISTER_MEM), lrm) {
+         lrm.RegisterAddress  = CS_GPR(image_fc_reg);
+         lrm.MemoryAddress    = fast_clear_type_addr;
+      }
+      emit_lri(&cmd_buffer->batch, CS_GPR(image_fc_reg) + 4, 0);
+
+      emit_lri(&cmd_buffer->batch, CS_GPR(fc_imm_reg), fast_clear_supported);
+      emit_lri(&cmd_buffer->batch, CS_GPR(fc_imm_reg) + 4, 0);
+
+      /* We need to compute (fast_clear_supported < image->fast_clear).
+       * We do this by subtracting and storing the carry bit.
+       */
+      dw = anv_batch_emitn(&cmd_buffer->batch, 5, GENX(MI_MATH));
+      dw[1] = mi_alu(MI_ALU_LOAD, MI_ALU_SRCA, fc_imm_reg);
+      dw[2] = mi_alu(MI_ALU_LOAD, MI_ALU_SRCB, image_fc_reg);
+      dw[3] = mi_alu(MI_ALU_SUB, 0, 0);
+      dw[4] = mi_alu(MI_ALU_STORE, pred_reg, MI_ALU_CF);
+
+      /* Store the predicate */
+      emit_lrr(&cmd_buffer->batch, MI_PREDICATE_SRC0, CS_GPR(pred_reg));
+
+      /* If the predicate is true, we want to write 0 to the fast clear type
+       * and, if it's false, leave it alone.  We can do this by writing
+       *
+       * clear_type = clear_type & ~predicate;
+       */
+      dw = anv_batch_emitn(&cmd_buffer->batch, 5, GENX(MI_MATH));
+      dw[1] = mi_alu(MI_ALU_LOAD, MI_ALU_SRCA, image_fc_reg);
+      dw[2] = mi_alu(MI_ALU_LOADINV, MI_ALU_SRCB, pred_reg);
+      dw[3] = mi_alu(MI_ALU_AND, 0, 0);
+      dw[4] = mi_alu(MI_ALU_STORE, image_fc_reg, MI_ALU_ACCU);
+
+      anv_batch_emit(&cmd_buffer->batch, GENX(MI_STORE_REGISTER_MEM), srm) {
+         srm.RegisterAddress  = CS_GPR(image_fc_reg);
+         srm.MemoryAddress    = fast_clear_type_addr;
       }
    } else {
       /* In this case, we're trying to do a partial resolve on a slice that
        * doesn't have clear color.  There's nothing to do.
        */
+      assert(resolve_op == ISL_AUX_OP_FULL_RESOLVE);
       return;
    }
 
@@ -691,6 +690,13 @@ anv_cmd_predicated_ccs_resolve(struct anv_cmd_buffer *cmd_buffer,
       mip.CombineOperation = COMBINE_SET;
       mip.CompareOperation = COMPARE_SRCS_EQUAL;
    }
+
+   /* CCS_D only supports full resolves and BLORP will assert on us if we try
+    * to do a partial resolve on a CCS_D surface.
+    */
+   if (resolve_op == ISL_AUX_OP_PARTIAL_RESOLVE &&
+       image->planes[plane].aux_usage == ISL_AUX_USAGE_NONE)
+      resolve_op = ISL_AUX_OP_FULL_RESOLVE;
 
    anv_image_ccs_op(cmd_buffer, image, aspect, level,
                     array_layer, 1, resolve_op, true);
@@ -998,13 +1004,6 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
 
    if (initial_aux_usage == ISL_AUX_USAGE_CCS_E &&
        final_aux_usage != ISL_AUX_USAGE_CCS_E)
-      resolve_op = ISL_AUX_OP_FULL_RESOLVE;
-
-   /* CCS_D only supports full resolves and BLORP will assert on us if we try
-    * to do a partial resolve on a CCS_D surface.
-    */
-   if (resolve_op == ISL_AUX_OP_PARTIAL_RESOLVE &&
-       initial_aux_usage == ISL_AUX_USAGE_CCS_D)
       resolve_op = ISL_AUX_OP_FULL_RESOLVE;
 
    if (resolve_op == ISL_AUX_OP_NONE)
