@@ -1085,10 +1085,16 @@ brw_render_cache_add_bo(struct brw_context *brw, struct brw_bo *bo,
 }
 
 void
-brw_cache_flush_for_depth(struct brw_context *brw, struct brw_bo *bo)
+brw_render_cache_purge_bo(struct brw_context *brw, struct brw_bo *bo)
 {
    if (_mesa_hash_table_search(brw->render_cache, bo))
       flush_depth_and_render_caches(brw, bo);
+}
+
+void
+brw_cache_flush_for_depth(struct brw_context *brw, struct brw_bo *bo)
+{
+   brw_render_cache_purge_bo(brw, bo);
 }
 
 void
