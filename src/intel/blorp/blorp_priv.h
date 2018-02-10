@@ -63,6 +63,9 @@ struct brw_blorp_surface_info
    /* Z offset into a 3-D texture or slice of a 2-D array texture. */
    uint32_t z_offset;
 
+   /** True if this surface layout has been modified in any way */
+   bool layout_modified;
+
    uint32_t tile_x_sa, tile_y_sa;
 };
 

@@ -254,6 +254,9 @@ genX(blorp_exec)(struct blorp_batch *batch,
       brw_cache_flush_for_render(brw, params->dst.addr.buffer,
                                  params->dst.view.format,
                                  params->dst.aux_usage);
+
+      if (params->dst.layout_modified)
+         brw_render_cache_purge_bo(brw, params->dst.addr.buffer);
    }
    if (params->depth.enabled)
       brw_cache_flush_for_depth(brw, params->depth.addr.buffer);
@@ -328,6 +331,9 @@ retry:
       brw_render_cache_add_bo(brw, params->dst.addr.buffer,
                               params->dst.view.format,
                               params->dst.aux_usage);
+
+      if (params->dst.layout_modified)
+         brw_render_cache_purge_bo(brw, params->dst.addr.buffer);
    }
    if (params->depth.enabled)
       brw_depth_cache_add_bo(brw, params->depth.addr.buffer);

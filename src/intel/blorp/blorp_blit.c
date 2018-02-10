@@ -1441,6 +1441,9 @@ blorp_surf_convert_to_single_slice(const struct isl_device *isl_dev,
    info->view.base_array_layer = 0;
    info->view.array_len = 1;
    info->z_offset = 0;
+
+   /* Flag this surface as having a modified layout */
+   info->layout_modified = true;
 }
 
 static void
