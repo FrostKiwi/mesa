@@ -814,7 +814,8 @@ void anv_CmdClearColorImage(
                      src_format.isl_format, src_format.swizzle,
                      level, base_layer, layer_count,
                      0, 0, level_width, level_height,
-                     vk_to_isl_color(*pColor), color_write_disable);
+                     vk_to_isl_color(*pColor, src_format.isl_format),
+                     color_write_disable);
       }
    }
 
@@ -955,8 +956,9 @@ clear_color_attachment(struct anv_cmd_buffer *cmd_buffer,
    if (result != VK_SUCCESS)
       return;
 
+   /* We don't know the format, so assume RGBA so we get all the channels */
    union isl_color_value clear_color =
-      vk_to_isl_color(attachment->clearValue.color);
+      vk_to_isl_color(attachment->clearValue.color, ISL_FORMAT_R8G8B8A8_UNORM);
 
    /* If multiview is enabled we ignore baseArrayLayer and layerCount */
    if (subpass->view_mask) {
@@ -1172,7 +1174,8 @@ anv_cmd_buffer_clear_subpass(struct anv_cmd_buffer *cmd_buffer)
                                    att_state->aux_usage, &surf);
 
       if (att_state->fast_clear) {
-         surf.clear_color = vk_to_isl_color(att_state->clear_value.color);
+         surf.clear_color = vk_to_isl_color(att_state->clear_value.color,
+                                            iview->planes[0].isl.format);
 
          /* From the Sky Lake PRM Vol. 7, "Render Target Fast Clear":
           *
@@ -1212,7 +1215,9 @@ anv_cmd_buffer_clear_subpass(struct anv_cmd_buffer *cmd_buffer)
                      render_area.offset.x, render_area.offset.y,
                      render_area.offset.x + render_area.extent.width,
                      render_area.offset.y + render_area.extent.height,
-                     vk_to_isl_color(att_state->clear_value.color), NULL);
+                     vk_to_isl_color(att_state->clear_value.color,
+                                     iview->planes[0].isl.format),
+                     NULL);
       }
 
       att_state->pending_clear_aspects = 0;

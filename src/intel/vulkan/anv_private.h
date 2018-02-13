@@ -177,14 +177,16 @@ anv_clear_mask(uint32_t *inout_mask, uint32_t clear_mask)
 }
 
 static inline union isl_color_value
-vk_to_isl_color(VkClearColorValue color)
+vk_to_isl_color(VkClearColorValue color, enum isl_format format)
 {
+   const struct isl_format_layout *fmtl = isl_format_get_layout(format);
+
    return (union isl_color_value) {
       .u32 = {
-         color.uint32[0],
-         color.uint32[1],
-         color.uint32[2],
-         color.uint32[3],
+         fmtl->channels.r.bits ? color.uint32[0] : 0,
+         fmtl->channels.g.bits ? color.uint32[1] : 0,
+         fmtl->channels.b.bits ? color.uint32[2] : 0,
+         fmtl->channels.a.bits ? color.uint32[3] : 0,
       },
    };
 }
