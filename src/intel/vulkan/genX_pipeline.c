@@ -1847,7 +1847,7 @@ compute_pipeline_create(
       .KernelStartPointer     = cs_bin->kernel.offset,
 
       .SamplerCount           = get_sampler_count(cs_bin),
-      .BindingTableEntryCount = get_binding_table_entry_count(cs_bin),
+      .BindingTableEntryCount = 1 + MIN2(cs_bin->bind_map.surface_count, 30),
       .BarrierEnable          = cs_prog_data->uses_barrier,
       .SharedLocalMemorySize  =
          encode_slm_size(GEN_GEN, cs_prog_data->base.total_shared),
