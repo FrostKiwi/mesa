@@ -1482,13 +1482,14 @@ enum anv_pipe_bits {
    ANV_PIPE_RENDER_TARGET_CACHE_FLUSH_BIT    = (1 << 12),
    ANV_PIPE_DEPTH_STALL_BIT                  = (1 << 13),
    ANV_PIPE_CS_STALL_BIT                     = (1 << 20),
+   ANV_PIPE_END_OF_PIPE_SYNC_BIT             = (1 << 21),
 
    /* This bit does not exist directly in PIPE_CONTROL.  Instead it means that
     * a flush has happened but not a CS stall.  The next time we do any sort
     * of invalidation we need to insert a CS stall at that time.  Otherwise,
     * we would have to CS stall on every flush which could be bad.
     */
-   ANV_PIPE_NEEDS_CS_STALL_BIT               = (1 << 21),
+   ANV_PIPE_NEEDS_END_OF_PIPE_SYNC_BIT       = (1 << 22),
 };
 
 #define ANV_PIPE_FLUSH_BITS ( \
