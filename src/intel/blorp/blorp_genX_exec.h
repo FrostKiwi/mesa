@@ -1240,6 +1240,13 @@ blorp_emit_memcpy(struct blorp_batch *batch,
          store.RegisterAddress = BLORP_TEMP_REG;
          store.MemoryAddress = dst;
       }
+
+      if (dw + 4 >= size) {
+         blorp_emit(batch, GENX(MI_LOAD_REGISTER_MEM), load) {
+            load.RegisterAddress = BLORP_TEMP_REG;
+            load.MemoryAddress = dst;
+         }
+      }
 #undef BLORP_TEMP_REG
 #endif
       dst.offset += 4;

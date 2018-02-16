@@ -85,6 +85,13 @@ genX(cmd_buffer_mi_memcpy)(struct anv_cmd_buffer *cmd_buffer,
          store.RegisterAddress = TEMP_REG;
          store.MemoryAddress = dst_addr;
       }
+
+      if (i + 4 >= size) {
+         anv_batch_emit(&cmd_buffer->batch, GENX(MI_LOAD_REGISTER_MEM), load) {
+            load.RegisterAddress = TEMP_REG;
+            load.MemoryAddress = dst_addr;
+         }
+      }
 #undef TEMP_REG
 #endif
    }
