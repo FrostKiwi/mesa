@@ -1984,6 +1984,26 @@ isl_surf_get_image_offset_B_tile_sa(const struct isl_surf *surf,
                                     uint32_t *y_offset_sa);
 
 /**
+ * Calculate the offset, in bytes and intratile surface elements, to a
+ * subimage in the surface.
+ *
+ * This is equivalent to calling isl_surf_get_image_offset_el, passing the
+ * result to isl_tiling_get_intratile_offset_el.
+ *
+ * @invariant level < surface levels
+ * @invariant logical_array_layer < logical array length of surface
+ * @invariant logical_z_offset_px < logical depth of surface at level
+ */
+void
+isl_surf_get_image_offset_B_tile_el(const struct isl_surf *surf,
+                                    uint32_t level,
+                                    uint32_t logical_array_layer,
+                                    uint32_t logical_z_offset_px,
+                                    uint32_t *offset_B,
+                                    uint32_t *x_offset_el,
+                                    uint32_t *y_offset_el);
+
+/**
  * Create an isl_surf that represents a particular subimage in the surface.
  *
  * The newly created surface will have a single miplevel and array slice.  The
