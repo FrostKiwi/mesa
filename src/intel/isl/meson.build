@@ -98,4 +98,15 @@ if with_tests
       link_with : [libisl, libintel_dev, libmesa_util],
     )
   )
+
+  test(
+    'isl_tile_std_y',
+    executable(
+      'isl_tile_std_y_test',
+      'tests/isl_tile_std_y_test.c',
+      dependencies : dep_m,
+      include_directories : [inc_common, inc_intel],
+      link_with : [libisl, libintel_dev],
+    )
+  )
 endif

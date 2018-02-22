@@ -75,7 +75,9 @@ isl/isl_format_layout.c: isl/gen_format_layout.py \
 #  Tests
 # ----------------------------------------------------------------------------
 
-check_PROGRAMS += isl/tests/isl_surf_get_image_offset_test
+check_PROGRAMS += \
+	isl/tests/isl_surf_get_image_offset_test \
+	isl/tests/isl_tile_std_y_test
 
 TESTS += $(check_PROGRAMS)
 
@@ -83,6 +85,11 @@ isl_tests_isl_surf_get_image_offset_test_LDADD = \
 	dev/libintel_dev.la \
 	isl/libisl.la \
 	$(top_builddir)/src/util/libmesautil.la \
+	-lm
+
+isl_tests_isl_tile_std_y_test_LDADD = \
+	common/libintel_common.la \
+	isl/libisl.la \
 	-lm
 
 # ----------------------------------------------------------------------------

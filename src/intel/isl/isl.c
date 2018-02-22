@@ -223,13 +223,69 @@ isl_tiling_get_info(enum isl_tiling tiling,
    case ISL_TILING_GEN10_Ys: {
       bool is_Ys = tiling == ISL_TILING_GEN9_Ys ||
                    tiling == ISL_TILING_GEN10_Ys;
+      assert(format_bpb >= 8);
 
-      assert(bs > 0);
-      unsigned width = 1 << (6 + (ffs(bs) / 2) + (2 * is_Ys));
-      unsigned height = 1 << (6 - (ffs(bs) / 2) + (2 * is_Ys));
+      switch (dim) {
+      case ISL_SURF_DIM_1D:
+         /* See the SKL PRM under Memory Views > Common Surface Formats >
+          * Surface Layout and Tiling > 1D Surfaces > 1D Alignment
+          * Requirements.
+          *
+          * The BSpec claims that 1D images cannot be tiled.  This is wrong.
+          */
+         logical_el = (struct isl_extent4d) {
+            .w = 1 << (12 - (ffs(format_bpb) - 4) + (4 * is_Ys)),
+            .h = 1,
+            .d = 1,
+            .a = 1,
+         };
+         break;
 
-      logical_el = isl_extent4d(width / bs, height, 1, 1);
-      phys_B = isl_extent2d(width, height);
+      case ISL_SURF_DIM_2D:
+         /* See the BSpec Memory Data Formats » Common Surface Formats »
+          * Surface Layout and Tiling [SKL+] » 2D Surfaces SKL+ » 2D/CUBE
+          * Alignment Requirement [SKL+]
+          *
+          * Or, look in the SKL PRM under Memory Views > Common Surface
+          * Formats > Surface Layout and Tiling > 2D Surfaces > 2D/CUBE
+          * Alignment Requirements.
+          */
+         logical_el = (struct isl_extent4d) {
+            .w = 1 << (6 - ((ffs(format_bpb) - 4) / 2) + (2 * is_Ys)),
+            .h = 1 << (6 - ((ffs(format_bpb) - 3) / 2) + (2 * is_Ys)),
+            .d = 1,
+            .a = 1,
+         };
+
+         if (samples > 1 && tiling != ISL_TILING_GEN9_Yf) {
+            logical_el.w >>= (ffs(samples) - 0) / 2;
+            logical_el.h >>= (ffs(samples) - 1) / 2;
+            logical_el.a = samples;
+         }
+         break;
+
+      case ISL_SURF_DIM_3D:
+         /* See the BSpec Memory Data Formats » Common Surface Formats »
+          * Surface Layout and Tiling [SKL+] » 3D Surfaces SKL+ » 3D Alignment
+          * Requirements [SKL+]
+          *
+          * Or, look in the SKL PRM under Memory Views > Common Surface
+          * Formats > Surface Layout and Tiling > 3D Surfaces > 3D Alignment
+          * Requirements.
+          */
+         logical_el = (struct isl_extent4d) {
+            .w = 1 << (4 - ((ffs(format_bpb) - 2) / 3) + (2 * is_Ys)),
+            .h = 1 << (4 - ((ffs(format_bpb) - 4) / 3) + (1 * is_Ys)),
+            .d = 1 << (4 - ((ffs(format_bpb) - 3) / 3) + (1 * is_Ys)),
+            .a = 1,
+         };
+         break;
+      }
+
+      uint32_t tile_size_B = is_Ys ? (1 << 16) : (1 << 12);
+
+      phys_B.w = logical_el.width * bs;
+      phys_B.h = tile_size_B / phys_B.w;
       break;
    }
 
