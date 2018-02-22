@@ -1126,37 +1126,9 @@ anv_image_fill_surface_state(struct anv_device *device,
          assert(view.levels == 1);
          assert(view.array_len == 1);
 
-         isl_surf_get_image_surf(&device->isl_dev, isl_surf,
-                                 view.base_level,
-                                 surface->isl.dim == ISL_SURF_DIM_3D ?
-                                    0 : view.base_array_layer,
-                                 surface->isl.dim == ISL_SURF_DIM_3D ?
-                                    view.base_array_layer : 0,
-                                 &tmp_surf,
-                                 &offset_B, &tile_x_sa, &tile_y_sa);
-
-         /* The newly created image represents the one subimage we're
-          * referencing with this view so it only has one array slice and
-          * miplevel.
-          */
-         view.base_array_layer = 0;
-         view.base_level = 0;
-
-         /* We're making an uncompressed view here.  The image dimensions need
-          * to be scaled down by the block size.
-          */
-         const struct isl_format_layout *fmtl =
-            isl_format_get_layout(surface->isl.format);
-         tmp_surf.format = view.format;
-         tmp_surf.logical_level0_px.width =
-            DIV_ROUND_UP(tmp_surf.logical_level0_px.width, fmtl->bw);
-         tmp_surf.logical_level0_px.height =
-            DIV_ROUND_UP(tmp_surf.logical_level0_px.height, fmtl->bh);
-         tmp_surf.phys_level0_sa.width /= fmtl->bw;
-         tmp_surf.phys_level0_sa.height /= fmtl->bh;
-         tile_x_sa /= fmtl->bw;
-         tile_y_sa /= fmtl->bh;
-
+         isl_surf_get_uncompressed_surf(&device->isl_dev, isl_surf, &view,
+                                        &tmp_surf, &view,
+                                        &offset_B, &tile_x_sa, &tile_y_sa);
          isl_surf = &tmp_surf;
 
          if (device->info.gen <= 8) {
