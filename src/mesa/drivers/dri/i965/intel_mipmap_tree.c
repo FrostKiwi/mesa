@@ -446,13 +446,10 @@ get_num_phys_layers(const struct isl_surf *surf, unsigned level)
    /* In case of physical dimensions one needs to consider also the layout.
     * See isl_calc_phys_level0_extent_sa().
     */
-   if (surf->dim != ISL_SURF_DIM_3D)
+   if (surf->dim == ISL_SURF_DIM_3D)
+      return minify(surf->phys_level0_sa.depth, level);
+   else
       return surf->phys_level0_sa.array_len;
-
-   if (surf->dim_layout == ISL_DIM_LAYOUT_GEN4_2D)
-      return minify(surf->phys_level0_sa.array_len, level);
-
-   return minify(surf->phys_level0_sa.depth, level);
 }
 
 /** \brief Assert that the level and layer are valid for the miptree. */
