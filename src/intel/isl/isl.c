@@ -1057,14 +1057,24 @@ isl_calc_phys_total_extent_el_gen4_2d(
                                            image_align_sa, phys_level0_sa,
                                            array_pitch_span,
                                            &phys_slice0_sa);
-   uint32_t array_len = MAX(phys_level0_sa->d, phys_level0_sa->a);
-   *phys_total_el = (struct isl_extent4d) {
-      .w = isl_assert_div(phys_slice0_sa.w, fmtl->bw),
-      .h = *array_pitch_el_rows * (array_len - 1) +
-           isl_assert_div(phys_slice0_sa.h, fmtl->bh),
-      .d = 1,
-      .a = 1,
-   };
+
+   if (isl_tiling_is_std_y(tile_info->tiling)) {
+      *phys_total_el = (struct isl_extent4d) {
+         .w = isl_assert_div(phys_slice0_sa.w, fmtl->bw),
+         .h = isl_assert_div(phys_slice0_sa.h, fmtl->bh),
+         .d = isl_assert_div(phys_level0_sa->depth, fmtl->bd),
+         .a = phys_level0_sa->array_len,
+      };
+   } else {
+      uint32_t array_len = MAX(phys_level0_sa->d, phys_level0_sa->a);
+      *phys_total_el = (struct isl_extent4d) {
+         .w = isl_assert_div(phys_slice0_sa.w, fmtl->bw),
+         .h = *array_pitch_el_rows * (array_len - 1) +
+              isl_assert_div(phys_slice0_sa.h, fmtl->bh),
+         .d = 1,
+         .a = 1,
+      };
+   }
 }
 
 /**
@@ -1204,6 +1214,7 @@ static void
 isl_calc_phys_total_extent_el_gen9_1d(
       const struct isl_device *dev,
       const struct isl_surf_init_info *restrict info,
+      const struct isl_tile_info *tile_info,
       const struct isl_extent3d *image_align_sa,
       const struct isl_extent4d *phys_level0_sa,
       uint32_t *array_pitch_el_rows,
@@ -1227,12 +1238,22 @@ isl_calc_phys_total_extent_el_gen9_1d(
    }
 
    *array_pitch_el_rows = 1;
-   *phys_total_el = (struct isl_extent4d) {
-      .w = isl_assert_div(slice_w, fmtl->bw),
-      .h = phys_level0_sa->array_len,
-      .d = 1,
-      .a = 1,
-   };
+   if (tile_info->tiling == ISL_TILING_LINEAR) {
+      *phys_total_el = (struct isl_extent4d) {
+         .w = isl_assert_div(slice_w, fmtl->bw),
+         .h = phys_level0_sa->array_len,
+         .d = 1,
+         .a = 1,
+      };
+   } else {
+      assert(isl_tiling_is_std_y(tile_info->tiling));
+      *phys_total_el = (struct isl_extent4d) {
+         .w = isl_assert_div(slice_w, fmtl->bw),
+         .h = 1,
+         .d = 1,
+         .a = phys_level0_sa->array_len,
+      };
+   }
 }
 
 /**
@@ -1254,7 +1275,7 @@ isl_calc_phys_total_extent_el(const struct isl_device *dev,
    switch (dim_layout) {
    case ISL_DIM_LAYOUT_GEN9_1D:
       assert(array_pitch_span == ISL_ARRAY_PITCH_SPAN_COMPACT);
-      isl_calc_phys_total_extent_el_gen9_1d(dev, info,
+      isl_calc_phys_total_extent_el_gen9_1d(dev, info, tile_info,
                                             image_align_sa, phys_level0_sa,
                                             array_pitch_el_rows,
                                             phys_total_el);
