@@ -575,6 +575,11 @@ make_surface(struct brw_context *brw, GLenum target, mesa_format format,
        num_samples, width0, height0, depth0,
        first_level, last_level, mt);
 
+   /* We don't support Yf or Ys in i965 yet because we use the blitter too
+    * much and it can't handle them.
+    */
+   tiling_flags &= ~ISL_TILING_STD_Y_MASK;
+
    struct isl_surf_init_info init_info = {
       .dim = get_isl_surf_dim(target),
       .format = translate_tex_format(brw, format, false),

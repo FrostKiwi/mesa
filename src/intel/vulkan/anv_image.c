@@ -120,6 +120,9 @@ choose_isl_tiling_flags(const struct anv_image_create_info *anv_info,
    if (isl_mod_info)
       flags &= 1 << isl_mod_info->tiling;
 
+   /* We don't support Yf or Ys tiling yet */
+   flags &= ISL_TILING_STD_Y_MASK;
+
    assert(flags);
 
    return flags;
