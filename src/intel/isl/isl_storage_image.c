@@ -240,6 +240,17 @@ isl_surf_fill_image_param(const struct isl_device *dev,
                     view->array_len :
                     isl_minify(surf->logical_level0_px.d, view->base_level);
 
+   if (isl_tiling_is_std_y(surf->tiling)) {
+      /* The shader code for doing manual tiling calculations doesn't support
+       * Yf or Ys tiling.  Fortunately, we never need it on gen9 where Yf and
+       * Ys were added.
+       */
+      assert(ISL_DEV_GEN(dev) >= 9);
+      assert(isl_has_matching_typed_storage_image_format(dev->info,
+                                                         view->format));
+      return;
+   }
+
    uint32_t tile_z_el, phys_array_layer;
    isl_surf_get_image_offset_el(surf, view->base_level,
                                 surf->dim == ISL_SURF_DIM_3D ?
