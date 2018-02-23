@@ -696,8 +696,10 @@ isl_surf_choose_dim_layout(const struct isl_device *dev,
           *
           * In other words, ISL_DIM_LAYOUT_GEN9_1D is only used for linear
           * surfaces and, for tiled surfaces, ISL_DIM_LAYOUT_GEN4_2D is used.
+          * Yf and Ys tiled surfaces are considered to be linear for the
+          * purposes of handling 1D surfaces.
           */
-         if (tiling == ISL_TILING_LINEAR)
+         if (tiling == ISL_TILING_LINEAR || isl_tiling_is_std_y(tiling))
             return ISL_DIM_LAYOUT_GEN9_1D;
          else
             return ISL_DIM_LAYOUT_GEN4_2D;
