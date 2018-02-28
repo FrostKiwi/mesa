@@ -39,6 +39,7 @@ extern "C" {
  * Binding table indices used by BLORP.
  */
 enum {
+   BLORP_NULL_RT_BT_INDEX,
    BLORP_RENDERBUFFER_BT_INDEX,
    BLORP_TEXTURE_BT_INDEX,
    BLORP_NUM_BT_ENTRIES

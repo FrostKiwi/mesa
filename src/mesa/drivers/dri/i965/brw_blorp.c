@@ -435,6 +435,11 @@ brw_blorp_copy_miptrees(struct brw_context *brw,
               src_x, src_y, dst_x, dst_y, src_width, src_height);
    blorp_batch_finish(&batch);
 
+   if (dst_level == 6) {
+      brw_emit_pipe_control_flush(brw, PIPE_CONTROL_CS_STALL |
+                                       PIPE_CONTROL_TEXTURE_CACHE_INVALIDATE);
+   }
+
    intel_miptree_finish_write(brw, dst_mt, dst_level, dst_layer, 1,
                               dst_aux_usage);
 }
