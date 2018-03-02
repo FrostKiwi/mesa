@@ -863,6 +863,169 @@ isl_calc_phys_level0_extent_sa(const struct isl_device *dev,
    }
 }
 
+static const uint16_t std_y_1d_miptail_offset_el[] = {
+/* 128 bpb */
+   2048,
+   1024,
+   512,
+   256,
+   128,
+   64,
+   48,
+   32,
+   28,
+   24,
+   20,
+   16,
+   12,
+   8,
+   4,
+   0,
+};
+
+static const uint8_t gen9_std_y_2d_miptail_offset_el[][5][2] = {
+/*   128 bpb    64 bpb    32 bpb    16 bpb      8 bpb     */
+   { {32,  0}, {64,  0}, {64,  0}, {128,  0}, {128,  0} },
+   { { 0, 32}, { 0, 32}, { 0, 64}, {  0, 64}, {  0,128} },
+   { {16,  0}, {32,  0}, {32,  0}, { 64,  0}, { 64,  0} },
+   { { 0, 16}, { 0, 16}, { 0, 32}, {  0, 32}, {  0, 64} },
+   { { 8,  0}, {16,  0}, {16,  0}, { 32,  0}, { 32,  0} },
+   { { 4,  8}, { 8,  8}, { 8, 16}, { 16, 16}, { 16, 32} },
+   { { 0, 12}, { 0, 12}, { 0, 24}, {  0, 24}, {  0, 48} },
+   { { 0,  8}, { 0,  8}, { 0, 16}, {  0, 16}, {  0, 32} },
+   { { 4,  4}, { 8,  4}, { 8,  8}, { 16,  8}, { 16, 16} },
+   { { 4,  0}, { 8,  0}, { 8,  0}, { 16,  0}, { 16,  0} },
+   { { 0,  4}, { 0,  4}, { 0,  8}, {  0,  8}, {  0, 16} },
+   { { 3,  0}, { 6,  0}, { 4,  4}, {  8,  4}, {  0, 12} },
+   { { 2,  0}, { 4,  0}, { 4,  0}, {  8,  0}, {  0,  8} },
+   { { 1,  0}, { 2,  0}, { 0,  4}, {  0,  4}, {  0,  4} },
+   { { 0,  0}, { 0,  0}, { 0,  0}, {  0,  0}, {  0,  0} },
+};
+
+static const uint8_t gen10_std_y_2d_miptail_offset_el[][5][2] = {
+/*   128 bpb    64 bpb    32 bpb    16 bpb      8 bpb     */
+   { {32,  0}, {64,  0}, {64,  0}, {128,  0}, {128,   0} },
+   { { 0, 32}, { 0, 32}, { 0, 64}, {  0, 64}, {  0, 128} },
+   { {16,  0}, {32,  0}, {32,  0}, { 64,  0}, { 64,   0} },
+   { { 0, 16}, { 0, 16}, { 0, 32}, {  0, 32}, {  0,  64} },
+   { { 8,  0}, {16,  0}, {16,  0}, { 32,  0}, { 32,   0} },
+   { { 4,  8}, { 8,  8}, { 8, 16}, { 16, 16}, { 16,  32} },
+   { { 0, 12}, { 0, 12}, { 0, 24}, {  0, 24}, {  0,  48} },
+   { { 0,  8}, { 0,  8}, { 0, 16}, {  0, 16}, {  0,  32} },
+   { { 4,  4}, { 8,  4}, { 8,  8}, { 16,  8}, { 16,  16} },
+   { { 4,  0}, { 8,  0}, { 8,  0}, { 16,  0}, { 16,   0} },
+   { { 0,  4}, { 0,  4}, { 0,  8}, {  0,  8}, {  0,  16} },
+   { { 0,  0}, { 0,  0}, { 0,  0}, {  0,  0}, {  0,   0} },
+   { { 1,  0}, { 2,  0}, { 0,  4}, {  0,  4}, {  0,   4} },
+   { { 2,  0}, { 4,  0}, { 4,  0}, {  8,  0}, {  0,   8} },
+   { { 3,  0}, { 6,  0}, { 4,  4}, {  8,  4}, {  0,  12} },
+};
+
+static const uint8_t gen9_std_y_3d_miptail_offset_el[][5][3] = {
+/*    128 bpb     64 bpb      32 bpb        16 bpb        8 bpb      */
+   { {8, 0, 0}, {16, 0, 0}, {16,  0, 0}, {16,  0,  0}, {32,  0,  0} },
+   { {0, 8, 0}, { 0, 8, 0}, { 0, 16, 0}, { 0, 16,  0}, { 0, 16,  0} },
+   { {0, 0, 8}, { 0, 0, 8}, { 0,  0, 8}, { 0,  0, 16}, { 0,  0, 16} },
+   { {4, 0, 0}, { 8, 0, 0}, { 8,  0, 0}, { 8,  0,  0}, {16,  0,  0} },
+   { {0, 4, 0}, { 0, 4, 0}, { 0,  8, 0}, { 0,  8,  0}, { 0,  8,  0} },
+   { {0, 0, 4}, { 0, 0, 4}, { 0,  0, 4}, { 0,  0,  8}, { 0,  0,  8} },
+   { {3, 0, 0}, { 6, 0, 0}, { 4,  4, 0}, { 0,  4,  4}, { 0,  4,  4} },
+   { {2, 0, 0}, { 4, 0, 0}, { 0,  4, 0}, { 0,  4,  0}, { 0,  4,  0} },
+   { {1, 0, 3}, { 2, 0, 3}, { 4,  0, 3}, { 0,  0,  7}, { 0,  0,  7} },
+   { {1, 0, 2}, { 2, 0, 2}, { 4,  0, 2}, { 0,  0,  6}, { 0,  0,  6} },
+   { {1, 0, 1}, { 2, 0, 1}, { 4,  0, 1}, { 0,  0,  5}, { 0,  0,  5} },
+   { {1, 0, 0}, { 2, 0, 0}, { 4,  0, 0}, { 0,  0,  4}, { 0,  0,  4} },
+   { {0, 0, 3}, { 0, 0, 3}, { 0,  0, 3}, { 0,  0,  3}, { 0,  0,  3} },
+   { {0, 0, 2}, { 0, 0, 2}, { 0,  0, 2}, { 0,  0,  2}, { 0,  0,  2} },
+   { {0, 0, 1}, { 0, 0, 1}, { 0,  0, 1}, { 0,  0,  1}, { 0,  0,  1} },
+   { {0, 0, 0}, { 0, 0, 0}, { 0,  0, 0}, { 0,  0,  0}, { 0,  0,  0} },
+};
+
+static const uint8_t gen10_std_y_3d_miptail_offset_el[][5][3] = {
+/*    128 bpb     64 bpb      32 bpb        16 bpb        8 bpb      */
+   { {8, 0, 0}, {16, 0, 0}, {16,  0, 0}, {16,  0,  0}, {32,  0,  0} },
+   { {0, 8, 0}, { 0, 8, 0}, { 0, 16, 0}, { 0, 16,  0}, { 0, 16,  0} },
+   { {0, 0, 8}, { 0, 0, 8}, { 0,  0, 8}, { 0,  0, 16}, { 0,  0, 16} },
+   { {4, 0, 0}, { 8, 0, 0}, { 8,  0, 0}, { 8,  0,  0}, {16,  0,  0} },
+   { {0, 4, 0}, { 0, 4, 0}, { 0,  8, 0}, { 0,  8,  0}, { 0,  8,  0} },
+   { {2, 0, 4}, { 4, 0, 4}, { 4,  0, 4}, { 4,  0,  8}, { 8,  0,  8} },
+   { {0, 2, 4}, { 0, 2, 4}, { 0,  4, 4}, { 0,  4,  8}, { 0,  4,  8} },
+   { {0, 0, 4}, { 0, 0, 4}, { 0,  0, 4}, { 0,  0,  8}, { 0,  0,  8} },
+   { {2, 2, 0}, { 4, 2, 0}, { 4,  4, 0}, { 4,  4,  0}, { 8,  4,  0} },
+   { {2, 0, 0}, { 4, 0, 0}, { 4,  0, 0}, { 4,  0,  0}, { 8,  0,  0} },
+   { {0, 2, 0}, { 0, 2, 0}, { 0,  4, 0}, { 0,  4,  0}, { 0,  4,  0} },
+   { {1, 0, 2}, { 2, 0, 2}, { 2,  0, 2}, { 2,  0,  4}, { 4,  0,  4} },
+   { {0, 0, 2}, { 0, 0, 2}, { 0,  0, 2}, { 0,  0,  4}, { 0,  0,  4} },
+   { {1, 0, 0}, { 2, 0, 0}, { 2,  0, 0}, { 2,  0,  0}, { 4,  0,  0} },
+   { {0, 0, 0}, { 0, 0, 0}, { 0,  0, 0}, { 0,  0,  0}, { 0,  0,  0} },
+
+};
+
+static void
+isl_get_miptail_level_offset_el(enum isl_tiling tiling,
+                                enum isl_surf_dim dim,
+                                uint32_t format_bpb,
+                                uint32_t samples,
+                                uint32_t level,
+                                uint32_t *x_offset_el,
+                                uint32_t *y_offset_el,
+                                uint32_t *z_offset_el)
+{
+   uint32_t row = level;
+   uint32_t col = 8 - ffs(format_bpb);
+
+   if (tiling == ISL_TILING_GEN9_Yf || tiling == ISL_TILING_GEN10_Yf)
+      row += 4;
+
+   switch (dim) {
+   case ISL_SURF_DIM_1D:
+      assert(samples == 1);
+      /* The 1D case is simple and doesn't need a table. */
+      *x_offset_el = std_y_1d_miptail_offset_el[row] << col;
+      *y_offset_el = 0;
+      *z_offset_el = 0;
+      break;
+
+   case ISL_SURF_DIM_2D:
+      assert(isl_is_pow2(samples) && samples <= 16);
+      if (tiling != ISL_TILING_GEN9_Yf)
+         row += ffs(samples) - 1;
+
+      if (tiling == ISL_TILING_GEN10_Yf || tiling == ISL_TILING_GEN10_Ys) {
+         assert(row < ARRAY_SIZE(gen10_std_y_2d_miptail_offset_el));
+         assert(col < ARRAY_SIZE(gen10_std_y_2d_miptail_offset_el[0]));
+         *x_offset_el = gen10_std_y_2d_miptail_offset_el[row][col][0];
+         *y_offset_el = gen10_std_y_2d_miptail_offset_el[row][col][1];
+      } else {
+         assert(tiling == ISL_TILING_GEN9_Yf || tiling == ISL_TILING_GEN9_Ys);
+         assert(row < ARRAY_SIZE(gen9_std_y_2d_miptail_offset_el));
+         assert(col < ARRAY_SIZE(gen9_std_y_2d_miptail_offset_el[0]));
+         *x_offset_el = gen9_std_y_2d_miptail_offset_el[row][col][0];
+         *y_offset_el = gen9_std_y_2d_miptail_offset_el[row][col][1];
+      }
+      *z_offset_el = 0;
+      break;
+
+   case ISL_SURF_DIM_3D:
+      assert(samples == 1);
+      if (tiling == ISL_TILING_GEN10_Yf || tiling == ISL_TILING_GEN10_Ys) {
+         assert(row < ARRAY_SIZE(gen10_std_y_3d_miptail_offset_el));
+         assert(col < ARRAY_SIZE(gen10_std_y_3d_miptail_offset_el[0]));
+         *x_offset_el = gen10_std_y_3d_miptail_offset_el[row][col][0];
+         *y_offset_el = gen10_std_y_3d_miptail_offset_el[row][col][1];
+         *z_offset_el = gen10_std_y_3d_miptail_offset_el[row][col][2];
+      } else {
+         assert(tiling == ISL_TILING_GEN9_Yf || tiling == ISL_TILING_GEN9_Ys);
+         assert(row < ARRAY_SIZE(gen9_std_y_3d_miptail_offset_el));
+         assert(col < ARRAY_SIZE(gen9_std_y_3d_miptail_offset_el[0]));
+         *x_offset_el = gen9_std_y_3d_miptail_offset_el[row][col][0];
+         *y_offset_el = gen9_std_y_3d_miptail_offset_el[row][col][1];
+         *z_offset_el = gen9_std_y_3d_miptail_offset_el[row][col][2];
+      }
+      break;
+   }
+}
+
 /**
  * Calculate the pitch between physical array slices, in units of rows of
  * surface elements.
@@ -2054,7 +2217,7 @@ get_image_offset_sa_gen4_2d(const struct isl_surf *surf,
       *array_offset = 0;
    }
 
-   for (uint32_t l = 0; l < level; ++l) {
+   for (uint32_t l = 0; l < MIN(level, surf->miptail_start_level); ++l) {
       if (l == 1) {
          uint32_t W = isl_minify(W0, l);
          x += isl_align_npot(W, image_align_sa.w);
@@ -2066,6 +2229,22 @@ get_image_offset_sa_gen4_2d(const struct isl_surf *surf,
 
    *x_offset_sa = x;
    *y_offset_sa = y;
+
+   if (level >= surf->miptail_start_level) {
+      const struct isl_format_layout *fmtl =
+         isl_format_get_layout(surf->format);
+
+      uint32_t tail_offset_x_el, tail_offset_y_el, tail_offset_z_el;
+      isl_get_miptail_level_offset_el(surf->tiling, surf->dim,
+                                      fmtl->bpb, surf->samples,
+                                      level - surf->miptail_start_level,
+                                      &tail_offset_x_el,
+                                      &tail_offset_y_el,
+                                      &tail_offset_z_el);
+      *x_offset_sa += tail_offset_x_el * fmtl->bw;
+      *y_offset_sa += tail_offset_y_el * fmtl->bh;
+      *z_offset_sa += tail_offset_z_el * fmtl->bd;
+   }
 }
 
 /**
@@ -2208,7 +2387,7 @@ get_image_offset_sa_gen9_1d(const struct isl_surf *surf,
 
    uint32_t x = 0;
 
-   for (uint32_t l = 0; l < level; ++l) {
+   for (uint32_t l = 0; l < MIN(level, surf->miptail_start_level); ++l) {
       uint32_t W = isl_minify(W0, l);
       uint32_t w = isl_align_npot(W, image_align_sa.w);
 
@@ -2224,6 +2403,21 @@ get_image_offset_sa_gen9_1d(const struct isl_surf *surf,
       assert(isl_tiling_is_std_y(surf->tiling));
       *y_offset_sa = 0;
       *array_offset = layer;
+   }
+
+   if (level >= surf->miptail_start_level) {
+      const struct isl_format_layout *fmtl =
+         isl_format_get_layout(surf->format);
+
+      uint32_t tail_offset_x_el, tail_offset_y_el, tail_offset_z_el;
+      isl_get_miptail_level_offset_el(surf->tiling, surf->dim,
+                                      fmtl->bpb, surf->samples,
+                                      level - surf->miptail_start_level,
+                                      &tail_offset_x_el,
+                                      &tail_offset_y_el,
+                                      &tail_offset_z_el);
+      assert(tail_offset_y_el == 0 && tail_offset_z_el == 0);
+      *x_offset_sa += tail_offset_x_el * fmtl->bw;
    }
 }
 
@@ -2379,8 +2573,23 @@ isl_surf_get_image_offset_B_tile_el(const struct isl_surf *surf,
                                       y_offset_el,
                                       &z_offset_el,
                                       &array_offset);
-   assert(z_offset_el == 0);
-   assert(array_offset == 0);
+   if (level >= surf->miptail_start_level) {
+      /* We can do a byte offset to the first level of a miptail but we cannot
+       * offset into a miptail.
+       */
+      assert(level == surf->miptail_start_level);
+
+      /* The byte offset will get us to the miptail page.  The other offsets
+       * are to the actual level within the miptail.  It is assumed that the
+       * caller will set up a texture with a miptail and use the hardware to
+       * handle offseting inside the miptail.
+       */
+      *x_offset_el = 0;
+      *y_offset_el = 0;
+   } else {
+      assert(z_offset_el == 0);
+      assert(array_offset == 0);
+   }
 }
 
 void
