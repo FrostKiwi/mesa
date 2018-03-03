@@ -423,10 +423,7 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
    }
 
 #if GEN_GEN >= 9
-   /* We don't use miptails yet.  The PRM recommends that you set "Mip Tail
-    * Start LOD" to 15 to prevent the hardware from trying to use them.
-    */
-   s.MipTailStartLOD = 15;
+   s.MipTailStartLOD = info->surf->miptail_start_level;
 #endif
 
 #if GEN_GEN >= 6
