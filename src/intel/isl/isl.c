@@ -2652,13 +2652,13 @@ isl_surf_get_uncompressed_surf(const struct isl_device *dev,
    assert(isl_format_get_layout(view->format)->bpb == fmtl->bpb);
    assert(view->levels == 1);
 
-   const uint32_t view_width =
+   const uint32_t view_width_px =
       isl_minify(surf->logical_level0_px.width, view->base_level);
-   const uint32_t view_height =
+   const uint32_t view_height_px =
       isl_minify(surf->logical_level0_px.height, view->base_level);
 
-   const uint32_t ucompr_width = isl_align_div_npot(view_width, fmtl->bw);
-   const uint32_t ucompr_height = isl_align_div_npot(view_height, fmtl->bh);
+   const uint32_t view_width_el = isl_align_div_npot(view_width_px, fmtl->bw);
+   const uint32_t view_height_el = isl_align_div_npot(view_height_px, fmtl->bh);
 
    if (isl_tiling_is_std_y(surf->tiling)) {
       /* Offset to the given miplevel.  Because we're using standard tilings
@@ -2673,17 +2673,18 @@ isl_surf_get_uncompressed_surf(const struct isl_device *dev,
       /* Save off the array pitch */
       const uint32_t array_pitch_el_rows = surf->array_pitch_el_rows;
 
-      const uint32_t view_depth =
+      const uint32_t view_depth_px =
          isl_minify(surf->logical_level0_px.depth, view->base_level);
-      const uint32_t ucompr_depth = isl_align_div_npot(view_depth, fmtl->bd);
+      const uint32_t view_depth_el =
+         isl_align_div_npot(view_depth_px, fmtl->bd);
 
       bool ok UNUSED;
       ok = isl_surf_init(dev, ucompr_surf,
                          .dim = surf->dim,
                          .format = view->format,
-                         .width = ucompr_width,
-                         .height = ucompr_height,
-                         .depth = ucompr_depth,
+                         .width = view_width_el,
+                         .height = view_height_el,
+                         .depth = view_depth_el,
                          .levels = 1,
                          .array_len = surf->logical_level0_px.array_len,
                          .samples = surf->samples,
@@ -2727,12 +2728,12 @@ isl_surf_get_uncompressed_surf(const struct isl_device *dev,
       /* We're making an uncompressed view here.  The image dimensions
        * need to be scaled down by the block size.
        */
-      assert(ucompr_surf->logical_level0_px.width == view_width);
-      assert(ucompr_surf->logical_level0_px.height == view_height);
+      assert(ucompr_surf->logical_level0_px.width == view_width_px);
+      assert(ucompr_surf->logical_level0_px.height == view_height_px);
       assert(ucompr_surf->logical_level0_px.depth == 1);
       assert(ucompr_surf->logical_level0_px.array_len = 1);
-      ucompr_surf->logical_level0_px.width = ucompr_width;
-      ucompr_surf->logical_level0_px.height = ucompr_height;
+      ucompr_surf->logical_level0_px.width = view_width_el;
+      ucompr_surf->logical_level0_px.height = view_height_el;
 
       assert(ucompr_surf->phys_level0_sa.width % fmtl->bw == 0);
       assert(ucompr_surf->phys_level0_sa.height % fmtl->bh == 0);
