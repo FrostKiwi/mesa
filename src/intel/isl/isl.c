@@ -2010,6 +2010,25 @@ isl_surf_get_ccs_surf(const struct isl_device *dev,
    if (isl_format_is_compressed(surf->format))
       return false;
 
+   /* From the workarounds section in the SKL PRM:
+    *
+    *    "RCC cacheline is composed of X-adjacent 64B fragments instead of
+    *    memory adjacent. This causes a single 128B cacheline to straddle
+    *    multiple LODs inside the TYF MIPtail for 3D surfaces (beyond a
+    *    certain slot number), leading to corruption when CCS is enabled for
+    *    these LODs and RT is later bound as texture.  WA: If
+    *    RENDER_SURFACE_STATE.Surface Type = 3D and
+    *    RENDER_SURFACE_STATE.Auxiliary Surface Mode != AUX_NONE and
+    *    RENDER_SURFACE_STATE.Tiled ResourceMode is TYF or TYS, Set the value
+    *    of RENDER_SURFACE_STATE.Mip Tail Start LOD to a mip that larger than
+    *    those present in the surface (i.e. 15)"
+    *
+    * We simply disallow CCS on 3D surfaces with miptails.
+    */
+   if (surf->dim == ISL_SURF_DIM_3D &&
+       surf->miptail_start_level < surf->levels)
+      return false;
+
    /* TODO: More conditions where it can fail. */
 
    enum isl_format ccs_format;
