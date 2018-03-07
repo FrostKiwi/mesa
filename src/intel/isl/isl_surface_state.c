@@ -72,6 +72,8 @@ static const uint8_t isl_to_gen_tiling[] = {
    [ISL_TILING_Y0]      = YMAJOR,
    [ISL_TILING_GEN9_Yf] = YMAJOR,
    [ISL_TILING_GEN9_Ys] = YMAJOR,
+   [ISL_TILING_GEN10_Yf] = YMAJOR,
+   [ISL_TILING_GEN10_Ys] = YMAJOR,
    [ISL_TILING_W]       = WMAJOR,
 };
 #endif

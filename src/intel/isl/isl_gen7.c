@@ -197,9 +197,13 @@ isl_gen6_filter_tiling(const struct isl_device *dev,
    assert(ISL_DEV_USE_SEPARATE_STENCIL(dev));
 
    /* Clear flags unsupported on this hardware */
-   if (ISL_DEV_GEN(dev) < 9) {
+   if (ISL_DEV_GEN(dev) != 9) {
       *flags &= ~ISL_TILING_GEN9_Yf_BIT;
       *flags &= ~ISL_TILING_GEN9_Ys_BIT;
+   }
+   if (ISL_DEV_GEN(dev) < 10) {
+      *flags &= ~ISL_TILING_GEN10_Yf_BIT;
+      *flags &= ~ISL_TILING_GEN10_Ys_BIT;
    }
 
    /* And... clear the Yf and Ys bits anyway because Anvil doesn't support
@@ -207,6 +211,8 @@ isl_gen6_filter_tiling(const struct isl_device *dev,
     */
    *flags &= ~ISL_TILING_GEN9_Yf_BIT; /* FINISHME[SKL]: Support Yf */
    *flags &= ~ISL_TILING_GEN9_Ys_BIT; /* FINISHME[SKL]: Support Ys */
+   *flags &= ~ISL_TILING_GEN10_Yf_BIT; /* FINISHME[SKL]: Support Yf */
+   *flags &= ~ISL_TILING_GEN10_Ys_BIT; /* FINISHME[SKL]: Support Ys */
 
    if (isl_surf_usage_is_depth(info->usage)) {
       /* Depth requires Y. */
