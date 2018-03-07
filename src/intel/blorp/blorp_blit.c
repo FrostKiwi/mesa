@@ -1008,6 +1008,8 @@ convert_color(struct nir_builder *b, nir_ssa_def *color,
       value = nir_format_linear_to_srgb(b, color);
    } else if (key->dst_format == ISL_FORMAT_R9G9B9E5_SHAREDEXP) {
       value = nir_format_pack_r9g9b9e5(b, color);
+   } else if (key->dst_format == ISL_FORMAT_R11G11B10_FLOAT) {
+      value = nir_format_pack_r11g11b10f(b, color);
    } else {
       unreachable("Unsupported format conversion");
    }
@@ -1998,6 +2000,9 @@ try_blorp_blit(struct blorp_batch *batch,
    } else if (params->dst.view.format == ISL_FORMAT_R9G9B9E5_SHAREDEXP) {
       wm_prog_key->dst_format = params->dst.view.format;
       params->dst.view.format = ISL_FORMAT_R32_UINT;
+   } else if (params->dst.view.format == ISL_FORMAT_R11G11B10_FLOAT) {
+      wm_prog_key->dst_format = params->dst.view.format;
+      params->dst.view.format = ISL_FORMAT_R32_UINT;
    }
 
    if (devinfo->gen <= 7 && !devinfo->is_haswell &&
@@ -2431,6 +2436,9 @@ get_ccs_compatible_uint_format(const struct isl_format_layout *fmtl)
    case ISL_FORMAT_R10G10B10A2_UNORM:
    case ISL_FORMAT_R10G10B10A2_UINT:
       return ISL_FORMAT_R10G10B10A2_UINT;
+
+   case ISL_FORMAT_R11G11B10_FLOAT:
+      return ISL_FORMAT_R11G11B10_FLOAT;
 
    default:
       unreachable("Not a compressible format");
