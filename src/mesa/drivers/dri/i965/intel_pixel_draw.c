@@ -115,7 +115,7 @@ do_blit_drawpixels(struct gl_context * ctx,
    struct intel_mipmap_tree *pbo_mt =
       intel_miptree_create_for_bo(brw,
                                   src_buffer,
-                                  irb->mt->format,
+                                  src_format,
                                   src_offset,
                                   width, height, 1,
                                   src_stride,
