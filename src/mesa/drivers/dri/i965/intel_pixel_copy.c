@@ -144,6 +144,13 @@ do_blit_copypixels(struct gl_context * ctx,
       return false;
    }
 
+   /* No LogicOps in Blorp, by design; LogicOps is esoteric */
+   if (ctx->Color.ColorLogicOpEnabled &&
+       ctx->Color._LogicOp != COLOR_LOGICOP_COPY) {
+      perf_debug("glCopyPixels(): Unsupported color index logic op\n");
+      return false;
+   }
+
    intel_batchbuffer_flush(brw);
 
    /* Clip to destination buffer. */
@@ -174,8 +181,7 @@ do_blit_copypixels(struct gl_context * ctx,
                            draw_irb->mt, draw_irb->mt_level, draw_irb->mt_layer,
                            dstx, dsty, _mesa_is_winsys_fbo(fb),
                            width, height,
-                           (ctx->Color.ColorLogicOpEnabled ?
-                            ctx->Color._LogicOp : COLOR_LOGICOP_COPY))) {
+                           COLOR_LOGICOP_COPY)) {
       DBG("%s: blit failure\n", __func__);
       return false;
    }

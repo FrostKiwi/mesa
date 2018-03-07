@@ -1862,7 +1862,9 @@ _mesa_meta_CopyPixels(struct gl_context *ctx, GLint srcX, GLint srcY,
        ctx->_ImageTransferState ||
        ctx->Fog.Enabled ||
        width > tex->MaxSize ||
-       height > tex->MaxSize) {
+       height > tex->MaxSize ||
+       (ctx->Color.ColorLogicOpEnabled &&
+        ctx->Color._LogicOp != COLOR_LOGICOP_COPY)) {
       /* XXX avoid this fallback */
       _swrast_CopyPixels(ctx, srcX, srcY, width, height, dstX, dstY, type);
       return;
