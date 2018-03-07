@@ -36,6 +36,7 @@
 #include "swrast/swrast.h"
 #include "drivers/common/meta.h"
 
+#include "brw_blorp.h"
 #include "brw_context.h"
 #include "intel_screen.h"
 #include "intel_blit.h"
@@ -123,16 +124,28 @@ do_blit_drawpixels(struct gl_context * ctx,
    if (!pbo_mt)
       return false;
 
-   if (!intel_miptree_blit(brw,
-                           pbo_mt, 0, 0,
-                           0, 0, src_flip,
-                           irb->mt, irb->mt_level, irb->mt_layer,
-                           x, y, _mesa_is_winsys_fbo(ctx->DrawBuffer),
-                           width, height, COLOR_LOGICOP_COPY)) {
-      DBG("%s: blit failed\n", __func__);
-      intel_miptree_release(&pbo_mt);
-      return false;
+   /* Flip code borrowed from intel_miptree_blit */
+   int dst_y = y;
+
+   if (_mesa_is_winsys_fbo(ctx->DrawBuffer)) {
+      const unsigned h0 = irb->mt->surf.phys_level0_sa.height;
+      dst_y = minify(h0, irb->mt_level - irb->mt->first_level) - dst_y - height;
    }
+
+   brw_blorp_blit_miptrees(brw,
+                           pbo_mt,
+                           0, 0,
+                           src_format, SWIZZLE_XYZW,
+                           irb->mt,
+                           irb->mt_level, irb->mt_layer,
+                           dst_format,
+                           0, 0,
+                           width, height,
+                           x, dst_y,
+                           x + width, dst_y + height,
+                           GL_NEAREST, false,
+                           src_flip || _mesa_is_winsys_fbo(ctx->DrawBuffer),
+                           false, false);
 
    intel_miptree_release(&pbo_mt);
 
