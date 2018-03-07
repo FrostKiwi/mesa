@@ -39,7 +39,6 @@
 #include "brw_blorp.h"
 #include "brw_context.h"
 #include "intel_screen.h"
-#include "intel_blit.h"
 #include "intel_buffers.h"
 #include "intel_fbo.h"
 #include "intel_mipmap_tree.h"
@@ -83,11 +82,6 @@ do_blit_drawpixels(struct gl_context * ctx,
    /* We can safely discard sRGB encode/decode for the DrawPixels interface */
    src_format = _mesa_get_srgb_format_linear(src_format);
    dst_format = _mesa_get_srgb_format_linear(dst_format);
-
-   if (!intel_miptree_blit_compatible_formats(src_format, dst_format)) {
-      DBG("%s: bad format for blit\n", __func__);
-      return false;
-   }
 
    if (unpack->SwapBytes || unpack->LsbFirst ||
        unpack->SkipPixels || unpack->SkipRows) {
