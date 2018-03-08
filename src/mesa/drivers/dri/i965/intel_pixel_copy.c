@@ -31,18 +31,18 @@
 #include "main/fbobject.h"
 #include "drivers/common/meta.h"
 
+#include "brw_blorp.h"
 #include "brw_context.h"
 #include "intel_buffers.h"
 #include "intel_mipmap_tree.h"
 #include "intel_pixel.h"
 #include "intel_fbo.h"
-#include "intel_blit.h"
 #include "intel_batchbuffer.h"
 
 #define FILE_DEBUG_FLAG DEBUG_PIXEL
 
 /**
- * CopyPixels with the blitter.  Don't support zooming, pixel transfer, etc.
+ * CopyPixels with Blorp.  Don't support zooming, pixel transfer, etc.
  */
 static bool
 do_blit_copypixels(struct gl_context * ctx,
@@ -175,16 +175,18 @@ do_blit_copypixels(struct gl_context * ctx,
    dstx += srcx - orig_srcx;
    dsty += srcy - orig_srcy;
 
-   if (!intel_miptree_blit(brw,
+   /* Need flipping code? */
+   brw_blorp_blit_miptrees(brw,
                            read_irb->mt, read_irb->mt_level, read_irb->mt_layer,
-                           srcx, srcy, _mesa_is_winsys_fbo(read_fb),
+                           read_irb->mt->format, SWIZZLE_XYZW,
                            draw_irb->mt, draw_irb->mt_level, draw_irb->mt_layer,
-                           dstx, dsty, _mesa_is_winsys_fbo(fb),
-                           width, height,
-                           COLOR_LOGICOP_COPY)) {
-      DBG("%s: blit failure\n", __func__);
-      return false;
-   }
+                           draw_irb->mt->format,
+                           srcx, srcy,
+                           srcx + width, srcy + height,
+                           dstx, dsty,
+                           dstx + width, dsty + height,
+                           GL_NEAREST, false, false /* mirror_y */,
+                           false, false);
 
    if (ctx->Query.CurrentOcclusionObject)
       ctx->Query.CurrentOcclusionObject->Result += width * height;
