@@ -785,6 +785,12 @@ struct brw_context
    struct set *depth_cache;
 
    /**
+    * Hash table keyed on struct brw_bo * that represents the last format used
+    * for sampling from the given BO.
+    */
+   struct hash_table *sampler_cache;
+
+   /**
     * Number of resets observed in the system at context creation.
     *
     * This is tracked in the context so that we can determine that another

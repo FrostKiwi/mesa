@@ -980,6 +980,10 @@ brw_cache_sets_clear(struct brw_context *brw)
    struct set_entry *depth_entry;
    set_foreach(brw->depth_cache, depth_entry)
       _mesa_set_remove(brw->depth_cache, depth_entry);
+
+   struct hash_entry *sampler_entry;
+   hash_table_foreach(brw->sampler_cache, sampler_entry)
+      _mesa_hash_table_remove(brw->sampler_cache, sampler_entry);
 }
 
 /**
@@ -1016,11 +1020,24 @@ flush_depth_and_render_caches(struct brw_context *brw, struct brw_bo *bo)
 }
 
 void
-brw_cache_flush_for_read(struct brw_context *brw, struct brw_bo *bo)
+brw_cache_flush_for_texture(struct brw_context *brw, struct brw_bo *bo,
+                            enum isl_format format)
 {
    if (_mesa_hash_table_search(brw->render_cache, bo) ||
        _mesa_set_search(brw->depth_cache, bo))
       flush_depth_and_render_caches(brw, bo);
+
+   struct hash_entry *entry = _mesa_hash_table_search(brw->sampler_cache, bo);
+   if (entry && entry->data != (void *)(uintptr_t)format) {
+      brw_emit_pipe_control_flush(brw, PIPE_CONTROL_CS_STALL |
+                                       PIPE_CONTROL_TEXTURE_CACHE_INVALIDATE);
+      /* Clear out the sampler cache */
+      hash_table_foreach(brw->sampler_cache, entry)
+         _mesa_hash_table_remove(brw->sampler_cache, entry);
+   }
+
+   _mesa_hash_table_insert(brw->sampler_cache, bo,
+                           (void *)(uintptr_t)format);
 }
 
 static void *
@@ -1124,4 +1141,6 @@ intel_fbo_init(struct brw_context *brw)
                                                _mesa_key_pointer_equal);
    brw->depth_cache = _mesa_set_create(brw, _mesa_hash_pointer,
                                        _mesa_key_pointer_equal);
+   brw->sampler_cache = _mesa_hash_table_create(brw, _mesa_hash_pointer,
+                                                _mesa_key_pointer_equal);
 }

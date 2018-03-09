@@ -248,8 +248,10 @@ genX(blorp_exec)(struct blorp_batch *batch,
     * data with different formats, which blorp does for stencil and depth
     * data.
     */
-   if (params->src.enabled)
-      brw_cache_flush_for_read(brw, params->src.addr.buffer);
+   if (params->src.enabled) {
+      brw_cache_flush_for_texture(brw, params->src.addr.buffer,
+                                  params->src.view.format);
+   }
    if (params->dst.enabled) {
       brw_cache_flush_for_render(brw, params->dst.addr.buffer,
                                  params->dst.view.format,

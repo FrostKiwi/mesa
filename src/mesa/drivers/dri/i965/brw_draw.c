@@ -462,7 +462,7 @@ brw_predraw_resolve_inputs(struct brw_context *brw, bool rendering,
          }
       }
 
-      brw_cache_flush_for_read(brw, tex_obj->mt->bo);
+      brw_cache_flush_for_texture(brw, tex_obj->mt->bo, view_format);
 
       if (tex_obj->base.StencilSampling ||
           tex_obj->mt->format == MESA_FORMAT_S_UINT8) {
@@ -489,7 +489,8 @@ brw_predraw_resolve_inputs(struct brw_context *brw, bool rendering,
 
                intel_miptree_prepare_image(brw, tex_obj->mt);
 
-               brw_cache_flush_for_read(brw, tex_obj->mt->bo);
+               brw_cache_flush_for_texture(brw, tex_obj->mt->bo,
+                                           tex_obj->mt->surf.format);
             }
          }
       }
@@ -644,7 +645,8 @@ intel_renderbuffer_move_temp_back(struct brw_context *brw,
    if (irb->align_wa_mt == NULL)
       return;
 
-   brw_cache_flush_for_read(brw, irb->align_wa_mt->bo);
+   brw_cache_flush_for_texture(brw, irb->align_wa_mt->bo,
+                               irb->align_wa_mt->surf.format);
 
    intel_miptree_copy_slice(brw, irb->align_wa_mt, 0, 0,
                             irb->mt,

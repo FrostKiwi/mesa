@@ -3022,7 +3022,7 @@ intel_update_r8stencil(struct brw_context *brw,
       }
    }
 
-   brw_cache_flush_for_read(brw, dst->bo);
+   brw_cache_flush_for_texture(brw, dst->bo, ISL_FORMAT_R8_UINT);
    src->r8stencil_needs_update = false;
 }
 
