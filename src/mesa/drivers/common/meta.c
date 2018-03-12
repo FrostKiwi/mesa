@@ -2373,7 +2373,9 @@ _mesa_meta_Bitmap(struct gl_context *ctx,
        ctx->Fog.Enabled ||
        ctx->Texture._MaxEnabledTexImageUnit != -1 ||
        width > tex->MaxSize ||
-       height > tex->MaxSize) {
+       height > tex->MaxSize ||
+       (ctx->Color.ColorLogicOpEnabled &&
+        ctx->Color._LogicOp != COLOR_LOGICOP_COPY)) {
       _swrast_Bitmap(ctx, x, y, width, height, unpack, bitmap1);
       return;
    }
