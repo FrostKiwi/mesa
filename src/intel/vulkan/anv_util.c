@@ -112,9 +112,5 @@ __vk_errorf(struct anv_instance *instance, const void *object,
 
    intel_loge("%s", report);
 
-   if (error == VK_ERROR_DEVICE_LOST &&
-       env_var_as_boolean("ANV_ABORT_ON_DEVICE_LOSS", false))
-      abort();
-
    return error;
 }
