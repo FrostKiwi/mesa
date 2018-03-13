@@ -68,6 +68,10 @@ intel_log_v(enum intel_log_level, const char *tag, const char *format,
 #define intel_logd_v(fmt, va) __intel_log_use_args((fmt), (va))
 #endif
 
+void intel_log_backtrace_tag(enum intel_log_level level, const char *tag);
+
+#define intel_log_backtrace(level) intel_log_backtrace_tag(level, (INTEL_LOG_TAG))
+
 
 #ifndef DEBUG
 /* Suppres -Wunused */

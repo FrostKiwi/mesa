@@ -22,6 +22,8 @@
  */
 
 #include <stdarg.h>
+#include <stdlib.h>
+#include <execinfo.h>
 
 #ifdef ANDROID
 #include <android/log.h>
@@ -84,4 +86,36 @@ intel_log_v(enum intel_log_level level, const char *tag, const char *format,
    fprintf(stderr, "\n");
    funlockfile(stderr);
 #endif
+}
+
+#define LOG_BACKTRACE_SIZE 256
+
+void
+intel_log_backtrace_tag(enum intel_log_level level, const char *tag)
+{
+   void *trace[LOG_BACKTRACE_SIZE];
+   int trace_size = backtrace(trace, LOG_BACKTRACE_SIZE);
+   char **strings = backtrace_symbols(trace, trace_size);
+   if (strings == NULL) {
+      intel_log(level, tag, "No Backtrace");
+      return;
+   }
+
+   /* Spit out all the strings with a colon separator.  Ignore the first,
+    * since we don't really care about the call to intel_log_backtrace_tag()
+    * itself.  Skip until the final "/" in the trace to avoid really long
+    * lines.
+    */
+   for (int i = 1; i < trace_size; i++) {
+      char *p = strings[i], *slash = strings[i];
+      while (*p) {
+         if (*p++ == '/') {
+            slash = p;
+         }
+      }
+
+      intel_log(level, tag, "%s", slash);
+   }
+
+   free(strings);
 }
