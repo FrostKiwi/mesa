@@ -177,7 +177,7 @@ do_blit_bitmap( struct gl_context *ctx,
    struct brw_context *brw = brw_context(ctx);
    struct gl_framebuffer *fb = ctx->DrawBuffer;
    struct intel_renderbuffer *irb;
-   GLfloat tmpColor[4];
+   GLfloat rasterColor[4];
    GLubyte ubcolor[4];
    GLuint color;
    GLsizei bitmap_width = width;
@@ -214,16 +214,16 @@ do_blit_bitmap( struct gl_context *ctx,
 	 return true;	/* even though this is an error, we're done */
    }
 
-   COPY_4V(tmpColor, ctx->Current.RasterColor);
+   COPY_4V(rasterColor, ctx->Current.RasterColor);
 
    if (_mesa_need_secondary_color(ctx)) {
-       ADD_3V(tmpColor, tmpColor, ctx->Current.RasterSecondaryColor);
+       ADD_3V(rasterColor, rasterColor, ctx->Current.RasterSecondaryColor);
    }
 
-   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[0], tmpColor[0]);
-   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[1], tmpColor[1]);
-   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[2], tmpColor[2]);
-   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[3], tmpColor[3]);
+   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[0], rasterColor[0]);
+   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[1], rasterColor[1]);
+   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[2], rasterColor[2]);
+   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[3], rasterColor[3]);
 
    switch (_mesa_get_render_format(ctx, intel_rb_format(irb))) {
    case MESA_FORMAT_B8G8R8A8_UNORM:
@@ -239,7 +239,7 @@ do_blit_bitmap( struct gl_context *ctx,
       return false;
    }
 
-   if (!intel_check_blit_fragment_ops(ctx, tmpColor[3] == 1.0F))
+   if (!intel_check_blit_fragment_ops(ctx, rasterColor[3] == 1.0F))
       return false;
 
    /* Clip to buffer bounds and scissor. */
