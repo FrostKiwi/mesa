@@ -234,6 +234,24 @@ copy_prop_instr(nir_instr *instr)
       return progress;
    }
 
+   case nir_instr_type_deref: {
+      nir_deref_instr *deref = nir_instr_as_deref(instr);
+
+      if (deref->deref_type != nir_deref_type_var) {
+         assert(deref->dest.is_ssa);
+         const unsigned comps = deref->dest.ssa.num_components;
+         while (copy_prop_src(&deref->parent, instr, NULL, comps))
+            progress = true;
+      }
+
+      if (deref->deref_type == nir_deref_type_array) {
+         while (copy_prop_src(&deref->arr.index, instr, NULL, 1))
+            progress = true;
+      }
+
+      return progress;
+   }
+
    case nir_instr_type_tex: {
       nir_tex_instr *tex = nir_instr_as_tex(instr);
       for (unsigned i = 0; i < tex->num_srcs; i++) {
