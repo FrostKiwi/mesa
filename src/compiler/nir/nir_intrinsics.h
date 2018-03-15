@@ -49,6 +49,14 @@ INTRINSIC(store_var, 1, ARR(0), false, 0, 1, 1, WRMASK, xx, xx, 0)
 INTRINSIC(copy_var, 0, ARR(0), false, 0, 2, 0, xx, xx, xx, 0)
 
 /*
+ * Pointer versions of the _var intrinsics which take a deref as the first (or
+ * second, in the case of copy) source.
+ */
+INTRINSIC(load_deref, 1, ARR(1), true, 0, 0, 0, xx, xx, xx, NIR_INTRINSIC_CAN_ELIMINATE)
+INTRINSIC(store_deref, 2, ARR(1, 0), false, 0, 0, 1, WRMASK, xx, xx, 0)
+INTRINSIC(copy_deref, 2, ARR(1, 1), false, 0, 0, 0, xx, xx, xx, 0)
+
+/*
  * Interpolation of input.  The interp_var_at* intrinsics are similar to the
  * load_var intrinsic acting on a shader input except that they interpolate
  * the input differently.  The at_sample and at_offset intrinsics take an
@@ -61,6 +69,21 @@ INTRINSIC(interp_var_at_centroid, 0, ARR(0), true, 0, 1, 0, xx, xx, xx,
 INTRINSIC(interp_var_at_sample, 1, ARR(1), true, 0, 1, 0, xx, xx, xx,
           NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
 INTRINSIC(interp_var_at_offset, 1, ARR(2), true, 0, 1, 0, xx, xx, xx,
+          NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
+
+/*
+ * Interpolation of input.  The interp_deref_at* intrinsics are similar to the
+ * load_deref intrinsic acting on a shader input except that they interpolate
+ * the input differently.  The at_sample and at_offset intrinsics take an
+ * additional source that is an integer sample id or a vec2 position offset
+ * respectively.
+ */
+
+INTRINSIC(interp_deref_at_centroid, 1, ARR(1, 0), true, 0, 0, 0, xx, xx, xx,
+          NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
+INTRINSIC(interp_deref_at_sample, 2, ARR(1, 1), true, 0, 0, 0, xx, xx, xx,
+          NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
+INTRINSIC(interp_deref_at_offset, 2, ARR(1, 2), true, 0, 0, 0, xx, xx, xx,
           NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
 
 /*
@@ -217,12 +240,15 @@ INTRINSIC(set_vertex_count, 1, ARR(1), false, 0, 0, 0, xx, xx, xx, 0)
 
 #define ATOMIC(name, flags) \
    INTRINSIC(name##_var, 0, ARR(0), true, 1, 1, 0, xx, xx, xx, flags) \
+   INTRINSIC(name##_deref, 1, ARR(1), true, 1, 0, 0, xx, xx, xx, flags) \
    INTRINSIC(name, 1, ARR(1), true, 1, 0, 1, BASE, xx, xx, flags)
 #define ATOMIC2(name) \
    INTRINSIC(name##_var, 1, ARR(1), true, 1, 1, 0, xx, xx, xx, 0) \
+   INTRINSIC(name##_deref, 2, ARR(1, 1), true, 1, 0, 0, xx, xx, xx, 0) \
    INTRINSIC(name, 2, ARR(1, 1), true, 1, 0, 1, BASE, xx, xx, 0)
 #define ATOMIC3(name) \
    INTRINSIC(name##_var, 2, ARR(1, 1), true, 1, 1, 0, xx, xx, xx, 0) \
+   INTRINSIC(name##_deref, 3, ARR(1, 1, 1), true, 1, 0, 0, xx, xx, xx, 0) \
    INTRINSIC(name, 3, ARR(1, 1, 1), true, 1, 0, 1, BASE, xx, xx, 0)
 
 ATOMIC(atomic_counter_inc, 0)
@@ -266,6 +292,38 @@ INTRINSIC(image_var_atomic_comp_swap, 4, ARR(4, 1, 1, 1), true, 1, 1, 0, xx, xx,
 INTRINSIC(image_var_size, 0, ARR(0), true, 0, 1, 0, xx, xx, xx,
           NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
 INTRINSIC(image_var_samples, 0, ARR(0), true, 1, 1, 0, xx, xx, xx,
+          NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
+
+/*
+ * Image load, store and atomic intrinsics.
+ *
+ * All image intrinsics take an image target passed as a nir_variable.  The
+ * variable is passed in using a chain of nir_deref_instr with as the first
+ * source of the image intrinsic.  Image variables contain a number of memory
+ * and layout qualifiers that influence the semantics of the intrinsic.
+ *
+ * All image intrinsics take a four-coordinate vector and a sample index as
+ * first two sources, determining the location within the image that will be
+ * accessed by the intrinsic.  Components not applicable to the image target
+ * in use are undefined.  Image store takes an additional four-component
+ * argument with the value to be written, and image atomic operations take
+ * either one or two additional scalar arguments with the same meaning as in
+ * the ARB_shader_image_load_store specification.
+ */
+INTRINSIC(image_deref_load, 3, ARR(1, 4, 1), true, 4, 0, 0, xx, xx, xx,
+          NIR_INTRINSIC_CAN_ELIMINATE)
+INTRINSIC(image_deref_store, 4, ARR(1, 4, 1, 4), false, 0, 0, 0, xx, xx, xx, 0)
+INTRINSIC(image_deref_atomic_add, 4, ARR(1, 4, 1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(image_deref_atomic_min, 4, ARR(1, 4, 1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(image_deref_atomic_max, 4, ARR(1, 4, 1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(image_deref_atomic_and, 4, ARR(1, 4, 1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(image_deref_atomic_or, 4, ARR(1, 4, 1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(image_deref_atomic_xor, 4, ARR(1, 4, 1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(image_deref_atomic_exchange, 4, ARR(1, 4, 1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(image_deref_atomic_comp_swap, 5, ARR(1, 4, 1, 1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(image_deref_size, 1, ARR(1), true, 0, 0, 0, xx, xx, xx,
+          NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
+INTRINSIC(image_deref_samples, 1, ARR(1), true, 1, 0, 0, xx, xx, xx,
           NIR_INTRINSIC_CAN_ELIMINATE | NIR_INTRINSIC_CAN_REORDER)
 
 /*
@@ -321,6 +379,32 @@ INTRINSIC(var_atomic_or, 1, ARR(1), true, 1, 1, 0, xx, xx, xx, 0)
 INTRINSIC(var_atomic_xor, 1, ARR(1), true, 1, 1, 0, xx, xx, xx, 0)
 INTRINSIC(var_atomic_exchange, 1, ARR(1), true, 1, 1, 0, xx, xx, xx, 0)
 INTRINSIC(var_atomic_comp_swap, 2, ARR(1, 1), true, 1, 1, 0, xx, xx, xx, 0)
+
+/*
+ * deref atomic intrinsics
+ *
+ * All of these deref atomic memory operations read a value from memory,
+ * compute a new value using one of the operations below, write the new value
+ * to memory, and return the original value read.
+ *
+ * All operations take 2 sources except CompSwap that takes 3. These sources
+ * represent:
+ *
+ * 0: A deref to the memory on which to perform the atomic
+ * 1: The data parameter to the atomic function (i.e. the value to add
+ *    in shared_atomic_add, etc).
+ * 2: For CompSwap only: the second data parameter.
+ */
+INTRINSIC(deref_atomic_add, 2, ARR(1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(deref_atomic_imin, 2, ARR(1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(deref_atomic_umin, 2, ARR(1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(deref_atomic_imax, 2, ARR(1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(deref_atomic_umax, 2, ARR(1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(deref_atomic_and, 2, ARR(1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(deref_atomic_or, 2, ARR(1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(deref_atomic_xor, 2, ARR(1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(deref_atomic_exchange, 2, ARR(1, 1), true, 1, 0, 0, xx, xx, xx, 0)
+INTRINSIC(deref_atomic_comp_swap, 3, ARR(1, 1, 1), true, 1, 0, 0, xx, xx, xx, 0)
 
 /*
  * SSBO atomic intrinsics
