@@ -219,6 +219,18 @@ blorp_mcs_partial_resolve(struct blorp_batch *batch,
                           uint32_t start_layer, uint32_t num_layers);
 
 void
+blorp_bitmap(struct blorp_batch *batch,
+             const struct blorp_surf *src_surf,
+             unsigned src_level, unsigned src_layer,
+             enum isl_format src_format,
+             const struct blorp_surf *dst_surf,
+             unsigned dst_level, unsigned dst_layer,
+             enum isl_format dst_format,
+             unsigned dstx, unsigned dsty,
+             unsigned width, unsigned height,
+             union isl_color_value rasterColor);
+
+void
 blorp_hiz_op(struct blorp_batch *batch, struct blorp_surf *surf,
              uint32_t level, uint32_t start_layer, uint32_t num_layers,
              enum isl_aux_op op);

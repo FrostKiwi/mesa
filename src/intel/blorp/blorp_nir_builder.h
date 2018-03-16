@@ -100,3 +100,28 @@ blorp_nir_mcs_is_clear_color(nir_builder *b,
       unreachable("Invalid sample count");
    }
 }
+
+static inline nir_ssa_def *
+blorp_nir_txf_2d(nir_builder *b, nir_ssa_def *xy_pos)
+{
+   nir_tex_instr *tex = nir_tex_instr_create(b->shader, 1);
+   tex->op = nir_texop_txf;
+   tex->sampler_dim = GLSL_SAMPLER_DIM_2D;
+   tex->dest_type = nir_type_int;
+
+   nir_ssa_def *coord;
+   tex->is_array = false;
+   tex->coord_components = 2;
+   coord = nir_channels(b, xy_pos, 0x3);
+   tex->src[0].src_type = nir_tex_src_coord;
+   tex->src[0].src = nir_src_for_ssa(coord);
+
+   /* Blorp only has one texture and it's bound at unit 0 */
+   tex->texture_index = 0;
+   tex->sampler_index = 0;
+
+   nir_ssa_dest_init(&tex->instr, &tex->dest, 4, 32, NULL);
+   nir_builder_instr_insert(b, &tex->instr);
+
+   return &tex->dest.ssa;
+}

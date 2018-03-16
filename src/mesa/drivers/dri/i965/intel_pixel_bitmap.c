@@ -23,11 +23,13 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include "isl/isl.h"
 #include "main/blend.h"
 #include "main/enums.h"
 #include "main/image.h"
 #include "main/colormac.h"
 #include "main/condrender.h"
+#include "main/glformats.h"
 #include "main/mtypes.h"
 #include "main/macros.h"
 #include "main/pbo.h"
@@ -39,14 +41,15 @@
 #include "swrast/swrast.h"
 #include "drivers/common/meta.h"
 
+#include "brw_blorp.h"
 #include "brw_context.h"
 #include "intel_screen.h"
 #include "intel_batchbuffer.h"
-#include "intel_blit.h"
 #include "intel_fbo.h"
 #include "intel_image.h"
 #include "intel_buffers.h"
 #include "intel_pixel.h"
+#include "intel_buffer_objects.h"
 
 
 #define FILE_DEBUG_FLAG DEBUG_PIXEL
@@ -85,72 +88,6 @@ static const GLubyte *map_pbo( struct gl_context *ctx,
    return ADD_POINTERS(buf, bitmap);
 }
 
-static bool test_bit( const GLubyte *src, GLuint bit )
-{
-   return (src[bit/8] & (1<<(bit % 8))) ? 1 : 0;
-}
-
-static void set_bit( GLubyte *dest, GLuint bit )
-{
-   dest[bit/8] |= 1 << (bit % 8);
-}
-
-/* Extract a rectangle's worth of data from the bitmap.  Called
- * per chunk of HW-sized bitmap.
- */
-static GLuint get_bitmap_rect(GLsizei width, GLsizei height,
-			      const struct gl_pixelstore_attrib *unpack,
-			      const GLubyte *bitmap,
-			      GLuint x, GLuint y,
-			      GLuint w, GLuint h,
-			      GLubyte *dest,
-			      GLuint row_align,
-			      bool invert)
-{
-   GLuint src_offset = (x + unpack->SkipPixels) & 0x7;
-   GLuint mask = unpack->LsbFirst ? 0 : 7;
-   GLuint bit = 0;
-   GLint row, col;
-   GLint first, last;
-   GLint incr;
-   GLuint count = 0;
-
-   DBG("%s %d,%d %dx%d bitmap %dx%d skip %d src_offset %d mask %d\n",
-       __func__, x,y,w,h,width,height,unpack->SkipPixels, src_offset, mask);
-
-   if (invert) {
-      first = h-1;
-      last = 0;
-      incr = -1;
-   }
-   else {
-      first = 0;
-      last = h-1;
-      incr = 1;
-   }
-
-   /* Require that dest be pre-zero'd.
-    */
-   for (row = first; row != (last+incr); row += incr) {
-      const GLubyte *rowsrc = _mesa_image_address2d(unpack, bitmap,
-						    width, height,
-						    GL_COLOR_INDEX, GL_BITMAP,
-						    y + row, x);
-
-      for (col = 0; col < w; col++, bit++) {
-	 if (test_bit(rowsrc, (col + src_offset) ^ mask)) {
-	    set_bit(dest, bit ^ 7);
-	    count++;
-	 }
-      }
-
-      if (row_align)
-	 bit = ALIGN(bit, row_align);
-   }
-
-   return count;
-}
-
 /**
  * Returns the low Y value of the vertical range given, flipped according to
  * whether the framebuffer is or not.
@@ -177,15 +114,7 @@ do_blit_bitmap( struct gl_context *ctx,
    struct brw_context *brw = brw_context(ctx);
    struct gl_framebuffer *fb = ctx->DrawBuffer;
    struct intel_renderbuffer *irb;
-   GLfloat rasterColor[4];
-   GLubyte ubcolor[4];
-   GLuint color;
-   GLsizei bitmap_width = width;
-   GLsizei bitmap_height = height;
-   GLint px, py;
-   GLuint stipple[32];
-   GLint orig_dstx = dstx;
-   GLint orig_dsty = dsty;
+   union isl_color_value rasterColor;
 
    /* Update draw buffer bounds */
    _mesa_update_state(ctx);
@@ -214,32 +143,13 @@ do_blit_bitmap( struct gl_context *ctx,
 	 return true;	/* even though this is an error, we're done */
    }
 
-   COPY_4V(rasterColor, ctx->Current.RasterColor);
+   COPY_4V(rasterColor.f32, ctx->Current.RasterColor);
 
    if (_mesa_need_secondary_color(ctx)) {
-       ADD_3V(rasterColor, rasterColor, ctx->Current.RasterSecondaryColor);
+       ADD_3V(rasterColor.f32, rasterColor.f32, ctx->Current.RasterSecondaryColor);
    }
 
-   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[0], rasterColor[0]);
-   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[1], rasterColor[1]);
-   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[2], rasterColor[2]);
-   UNCLAMPED_FLOAT_TO_UBYTE(ubcolor[3], rasterColor[3]);
-
-   switch (_mesa_get_render_format(ctx, intel_rb_format(irb))) {
-   case MESA_FORMAT_B8G8R8A8_UNORM:
-   case MESA_FORMAT_B8G8R8X8_UNORM:
-      color = PACK_COLOR_8888(ubcolor[3], ubcolor[0], ubcolor[1], ubcolor[2]);
-      break;
-   case MESA_FORMAT_B5G6R5_UNORM:
-      color = PACK_COLOR_565(ubcolor[0], ubcolor[1], ubcolor[2]);
-      break;
-   default:
-      perf_debug("Unsupported format %s in accelerated glBitmap()\n",
-                 _mesa_get_format_name(irb->mt->format));
-      return false;
-   }
-
-   if (!intel_check_blit_fragment_ops(ctx, rasterColor[3] == 1.0F))
+   if (!intel_check_blit_fragment_ops(ctx, rasterColor.f32[3] == 1.0F))
       return false;
 
    /* Clip to buffer bounds and scissor. */
@@ -250,61 +160,68 @@ do_blit_bitmap( struct gl_context *ctx,
 
    dsty = y_flip(fb, dsty, height);
 
-#define DY 32
-#define DX 32
+   mesa_format src_format = MESA_FORMAT_R_UINT8;
+   mesa_format dst_format = irb->mt->format;
 
-   /* The blitter has no idea about fast color clears, so we need to resolve
-    * the miptree before we do anything.
+   /* We can safely discard sRGB encode/decode for the DrawPixels interface */
+   src_format = _mesa_get_srgb_format_linear(src_format);
+   dst_format = _mesa_get_srgb_format_linear(dst_format);
+
+   int src_stride = _mesa_image_row_stride(unpack, width, GL_RED,
+                                           GL_UNSIGNED_BYTE);
+   /* Mesa flips the src_stride for unpack->Invert, but we want our mt to have
+    * a normal src_stride.
     */
-   intel_miptree_access_raw(brw, irb->mt, irb->mt_level, irb->mt_layer, true);
-
-   /* Chop it all into chunks that can be digested by hardware: */
-   for (py = 0; py < height; py += DY) {
-      for (px = 0; px < width; px += DX) {
-	 int h = MIN2(DY, height - py);
-	 int w = MIN2(DX, width - px);
-	 GLuint sz = ALIGN(ALIGN(w,8) * h, 64)/8;
-
-	 assert(sz <= sizeof(stipple));
-	 memset(stipple, 0, sz);
-
-	 /* May need to adjust this when padding has been introduced in
-	  * sz above:
-	  *
-	  * Have to translate destination coordinates back into source
-	  * coordinates.
-	  */
-         int count = get_bitmap_rect(bitmap_width, bitmap_height, unpack,
-                                     bitmap,
-                                     -orig_dstx + (dstx + px),
-                                     -orig_dsty + y_flip(fb, dsty + py, h),
-                                     w, h,
-                                     (GLubyte *)stipple,
-                                     8,
-                                     _mesa_is_winsys_fbo(fb));
-         if (count == 0)
-	    continue;
-
-	 if (!intelEmitImmediateColorExpandBlit(brw,
-						irb->mt->cpp,
-						(GLubyte *)stipple,
-						sz,
-						color,
-						irb->mt->surf.row_pitch,
-						irb->mt->bo,
-						irb->mt->offset,
-						irb->mt->surf.tiling,
-						dstx + px,
-						dsty + py,
-						w, h,
-						COLOR_LOGICOP_COPY)) {
-	    return false;
-	 }
-
-         if (ctx->Query.CurrentOcclusionObject)
-            ctx->Query.CurrentOcclusionObject->Result += count;
-      }
+   if (unpack->Invert) {
+      src_stride = -src_stride;
    }
+
+
+   GLuint src_offset = (GLintptr) bitmap;
+   src_offset += _mesa_image_offset(2, unpack, width, height,
+                                    GL_RED, GL_UNSIGNED_BYTE, 0, 0, 0);
+
+   struct intel_mipmap_tree *pbo_mt =
+                        intel_miptree_create(brw,
+                                             GL_TEXTURE_2D,
+                                             MESA_FORMAT_R_UINT8,
+                                             0, 0,
+                                             width, height, 1,
+                                             1,
+                                             MIPTREE_CREATE_LINEAR);
+
+   if (!pbo_mt)
+      return false;
+
+   void *pbo_ptr;
+   ptrdiff_t pbo_stride;
+   intel_miptree_map(brw, pbo_mt, 0, 0, 0, 0, width, height,
+                     GL_MAP_WRITE_BIT, &pbo_ptr, &pbo_stride);
+
+   memset(pbo_ptr, 0, height * pbo_stride);
+
+   /*
+    * As mentioned state_tracker/st_cb_bitmap.c, this will
+    * produce an upside-down bitmap (thanks to GL, as usual).
+    * So we have to invert it.
+    */
+   pbo_ptr += (height - 1) * pbo_stride;
+   _mesa_expand_bitmap(width, height, unpack,
+                       bitmap, pbo_ptr, -pbo_stride, 0x1);
+   intel_miptree_unmap(brw, pbo_mt, 0, 0);
+
+   /*
+    * float color is fine, use rasterColor for raster color
+    * Don't worry, xmove and ymove are handled in entry point.
+    */
+   brw_blorp_bitmap(brw, irb->mt, irb->mt_level, irb->mt_layer,
+                    dst_format,
+                    dstx, dsty, width, height, rasterColor,
+                    pbo_mt, src_format);
+
+   if (ctx->Query.CurrentOcclusionObject)
+      ctx->Query.CurrentOcclusionObject->Result += width * height;
+
 out:
 
    if (unlikely(INTEL_DEBUG & DEBUG_SYNC))

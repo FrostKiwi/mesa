@@ -1334,6 +1334,71 @@ brw_blorp_clear_color(struct brw_context *brw, struct gl_framebuffer *fb,
 }
 
 void
+brw_blorp_bitmap(struct brw_context *brw, struct intel_mipmap_tree *dst_mt,
+                 unsigned dst_level, unsigned dst_layer,
+                 mesa_format dst_format,
+                 unsigned dstx, unsigned dsty, unsigned width, unsigned height,
+                 union isl_color_value rasterColor,
+                 struct intel_mipmap_tree *src_mt, mesa_format src_format) {
+
+   DBG("to mt %p %d %d %s (%f,%f) (%f,%f) "
+       "in rastercolor %f %f %f %f, bitmap mt %s %p\n",
+       __func__,
+       dst_mt, dst_level, dst_layer, _mesa_get_format_name(dst_mt->format),
+       dstx, dsty, width, height,
+       rasterColor.f32[0], rasterColor.f32[1],
+       rasterColor.f32[2], rasterColor.f32[3],
+       _mesa_get_format_name(src_mt->format), src_mt);
+
+   enum isl_format src_isl_format =
+      brw_blorp_to_isl_format(brw, src_format, false);
+   enum isl_aux_usage src_aux_usage =
+      intel_miptree_texture_aux_usage(brw, src_mt, src_isl_format);
+   /* We do format workarounds for some depth formats so we can't reliably
+    * sample with HiZ.  One of these days, we should fix that.
+    */
+   if (src_aux_usage == ISL_AUX_USAGE_HIZ)
+      src_aux_usage = ISL_AUX_USAGE_NONE;
+   const bool src_clear_supported =
+      src_aux_usage != ISL_AUX_USAGE_NONE && src_mt->format == src_format;
+   intel_miptree_prepare_access(brw, src_mt, 0, 1, 0, 1,
+                                src_aux_usage, src_clear_supported);
+
+   enum isl_format dst_isl_format =
+      brw_blorp_to_isl_format(brw, dst_format, true);
+   enum isl_aux_usage dst_aux_usage =
+      intel_miptree_render_aux_usage(brw, dst_mt, dst_isl_format,
+                                     false, false);
+   const bool dst_clear_supported = dst_aux_usage != ISL_AUX_USAGE_NONE;
+   intel_miptree_prepare_access(brw, dst_mt, dst_level, 1, dst_layer, 1,
+                                dst_aux_usage, dst_clear_supported);
+
+   struct isl_surf tmp_surfs[2];
+   struct blorp_surf src_surf, dst_surf;
+   unsigned src_level = 0;
+   unsigned src_layer = 0;
+
+   blorp_surf_for_miptree(brw, &src_surf, src_mt, src_aux_usage, false,
+                          &src_level, src_layer, 1, &tmp_surfs[0]);
+   blorp_surf_for_miptree(brw, &dst_surf, dst_mt, dst_aux_usage, true,
+                          &dst_level, dst_layer, 1, &tmp_surfs[1]);
+
+   struct blorp_batch batch;
+   blorp_batch_init(&brw->blorp, &batch, brw, 0);
+   blorp_bitmap(&batch, &src_surf, src_level, src_layer,
+                src_isl_format,
+                &dst_surf, dst_level, dst_layer,
+                dst_isl_format,
+                dstx, dsty, width, height, rasterColor);
+   blorp_batch_finish(&batch);
+
+   intel_miptree_finish_write(brw, dst_mt, dst_level, dst_layer, 1,
+                              dst_aux_usage);
+
+   return;
+}
+
+void
 brw_blorp_clear_depth_stencil(struct brw_context *brw,
                               struct gl_framebuffer *fb,
                               GLbitfield mask, bool partial_clear)

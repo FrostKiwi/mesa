@@ -924,6 +924,75 @@ blorp_params_get_mcs_partial_resolve_kernel(struct blorp_context *blorp,
    return result;
 }
 
+struct blorp_bitmap_key
+{
+   enum blorp_shader_type shader_type;
+};
+
+static bool
+blorp_params_get_bitmap_kernel(struct blorp_context *blorp,
+                               struct blorp_params *params)
+{
+   const struct blorp_bitmap_key blorp_key = {
+      .shader_type = BLORP_SHADER_TYPE_BITMAP,
+   };
+
+   if (blorp->lookup_shader(blorp, &blorp_key, sizeof(blorp_key),
+                            &params->wm_prog_kernel, &params->wm_prog_data))
+      return true;
+
+   void *mem_ctx = ralloc_context(NULL);
+
+   nir_builder b;
+   nir_builder_init_simple_shader(&b, mem_ctx, MESA_SHADER_FRAGMENT, NULL);
+   b.shader->info.name = ralloc_strdup(b.shader, "BLORP-bitmap");
+
+   nir_variable *r_color =
+      BLORP_CREATE_NIR_INPUT(b.shader, clear_color, glsl_vec4_type());
+   nir_variable *v_dst_offset =
+      BLORP_CREATE_NIR_INPUT(b.shader, dst_offset,
+                             glsl_vector_type(GLSL_TYPE_UINT, 2));
+
+   nir_variable *frag_color =
+      nir_variable_create(b.shader, nir_var_shader_out,
+                          glsl_vec4_type(), "gl_FragColor");
+   frag_color->data.location = FRAG_RESULT_COLOR;
+
+   nir_ssa_def *src_pos =
+      nir_isub(&b, nir_f2i32(&b, blorp_nir_frag_coord(&b)),
+                   nir_load_var(&b, v_dst_offset));
+
+   /* Do a fetch and check if it should be masked */
+   nir_ssa_def *bitmap = blorp_nir_txf_2d(&b, src_pos);
+   nir_ssa_def *is_masked =
+      nir_ieq(&b, nir_channel(&b, bitmap, 0), nir_imm_int(&b, 0));
+
+   /* If we are masked, discard. */
+   nir_intrinsic_instr *discard =
+      nir_intrinsic_instr_create(b.shader, nir_intrinsic_discard_if);
+   discard->src[0] = nir_src_for_ssa(is_masked);
+   nir_builder_instr_insert(&b, &discard->instr);
+
+   nir_store_var(&b, frag_color, nir_load_var(&b, r_color), 0xf);
+
+   struct brw_wm_prog_key wm_key;
+   brw_blorp_init_wm_prog_key(&wm_key);
+
+   struct brw_wm_prog_data prog_data;
+   const unsigned *program =
+      blorp_compile_fs(blorp, mem_ctx, b.shader, &wm_key, false,
+                       &prog_data);
+
+   bool result =
+      blorp->upload_shader(blorp, &blorp_key, sizeof(blorp_key),
+                           program, prog_data.base.program_size,
+                           &prog_data.base, sizeof(prog_data),
+                           &params->wm_prog_kernel, &params->wm_prog_data);
+
+   ralloc_free(mem_ctx);
+   return result;
+}
+
 void
 blorp_mcs_partial_resolve(struct blorp_batch *batch,
                           struct blorp_surf *surf,
@@ -953,6 +1022,49 @@ blorp_mcs_partial_resolve(struct blorp_batch *batch,
           surf->clear_color.f32, sizeof(float) * 4);
 
    if (!blorp_params_get_mcs_partial_resolve_kernel(batch->blorp, &params))
+      return;
+
+   batch->blorp->exec(batch, &params);
+}
+
+/*
+ * Kind of like a clear, only src is a mask.
+ * Implements glBitmap.
+ */
+void
+blorp_bitmap(struct blorp_batch *batch,
+             const struct blorp_surf *src_surf,
+             unsigned src_level, unsigned src_layer,
+             enum isl_format src_format,
+             const struct blorp_surf *dst_surf,
+             unsigned dst_level, unsigned dst_layer,
+             enum isl_format dst_format,
+             unsigned dstx, unsigned dsty,
+             unsigned width, unsigned height,
+             union isl_color_value rasterColor) {
+
+   struct blorp_params params;
+   blorp_params_init(&params);
+
+   params.x0 = dstx;
+   params.y0 = dsty;
+   params.x1 = dstx + width;
+   params.y1 = dsty + height;
+
+   params.wm_inputs.dst_offset.x = dstx;
+   params.wm_inputs.dst_offset.y = dsty;
+
+   brw_blorp_surface_info_init(batch->blorp, &params.src, src_surf, src_level,
+                               src_layer, src_format, false);
+   brw_blorp_surface_info_init(batch->blorp, &params.dst, dst_surf, dst_level,
+                               dst_layer, dst_format, true);
+
+   params.num_samples = params.dst.surf.samples;
+   params.num_layers = 1;
+   memcpy(&params.wm_inputs.clear_color,
+          rasterColor.f32, sizeof(float) * 4);
+
+   if (!blorp_params_get_bitmap_kernel(batch->blorp, &params))
       return;
 
    batch->blorp->exec(batch, &params);

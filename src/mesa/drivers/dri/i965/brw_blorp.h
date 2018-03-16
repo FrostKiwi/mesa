@@ -26,6 +26,7 @@
 
 #include "blorp/blorp.h"
 #include "intel_mipmap_tree.h"
+#include "isl/isl.h"
 #include "program/prog_instruction.h"
 
 #ifdef __cplusplus
@@ -90,6 +91,15 @@ brw_blorp_download_miptree(struct brw_context *brw,
 void
 brw_blorp_clear_color(struct brw_context *brw, struct gl_framebuffer *fb,
                       GLbitfield mask, bool partial_clear, bool encode_srgb);
+
+void
+brw_blorp_bitmap(struct brw_context *brw, struct intel_mipmap_tree *dst_mt,
+                 unsigned dst_level, unsigned dst_logical_layer,
+                 mesa_format dst_format,
+                 unsigned dstx, unsigned dsty, unsigned width, unsigned height,
+                 union isl_color_value rasterColor,
+                 struct intel_mipmap_tree *bitmap_mt, mesa_format src_format);
+
 void
 brw_blorp_clear_depth_stencil(struct brw_context *brw,
                               struct gl_framebuffer *fb,
