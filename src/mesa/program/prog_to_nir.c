@@ -136,15 +136,8 @@ ptn_get_src(struct ptn_compile *c, const struct prog_src_register *prog_src)
 
       assert(prog_src->Index >= 0 && prog_src->Index < VARYING_SLOT_MAX);
 
-      nir_intrinsic_instr *load =
-         nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_var);
-      load->num_components = 4;
-      load->variables[0] = nir_deref_var_create(load, c->input_vars[prog_src->Index]);
-
-      nir_ssa_dest_init(&load->instr, &load->dest, 4, 32, NULL);
-      nir_builder_instr_insert(b, &load->instr);
-
-      src.src = nir_src_for_ssa(&load->dest.ssa);
+      nir_variable *var = c->input_vars[prog_src->Index];
+      src.src = nir_src_for_ssa(nir_load_var(b, var));
       break;
    }
    case PROGRAM_STATE_VAR:
@@ -861,27 +854,17 @@ ptn_add_output_stores(struct ptn_compile *c)
    nir_builder *b = &c->build;
 
    nir_foreach_variable(var, &b->shader->outputs) {
-      nir_intrinsic_instr *store =
-         nir_intrinsic_instr_create(b->shader, nir_intrinsic_store_var);
-      store->num_components = glsl_get_vector_elements(var->type);
-      nir_intrinsic_set_write_mask(store, (1 << store->num_components) - 1);
-      store->variables[0] =
-         nir_deref_var_create(store, c->output_vars[var->data.location]);
-
+      nir_ssa_def *src = nir_load_reg(b, c->output_regs[var->data.location]);
       if (c->prog->Target == GL_FRAGMENT_PROGRAM_ARB &&
           var->data.location == FRAG_RESULT_DEPTH) {
          /* result.depth has this strange convention of being the .z component of
           * a vec4 with undefined .xyw components.  We resolve it to a scalar, to
           * match GLSL's gl_FragDepth and the expectations of most backends.
           */
-         nir_alu_src alu_src = { NIR_SRC_INIT };
-         alu_src.src = nir_src_for_reg(c->output_regs[FRAG_RESULT_DEPTH]);
-         alu_src.swizzle[0] = SWIZZLE_Z;
-         store->src[0] = nir_src_for_ssa(nir_fmov_alu(b, alu_src, 1));
-      } else {
-         store->src[0].reg.reg = c->output_regs[var->data.location];
+         src = nir_channel(b, src, 2);
       }
-      nir_builder_instr_insert(b, &store->instr);
+      unsigned num_components = glsl_get_vector_elements(var->type);
+      nir_store_var(b, var, src, (1 << num_components) - 1);
    }
 }
 
