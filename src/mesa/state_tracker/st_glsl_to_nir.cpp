@@ -328,7 +328,6 @@ st_glsl_to_nir(struct st_context *st, struct gl_program *prog,
       return prog->nir;
 
    nir_shader *nir = glsl_to_nir(shader_program, stage, options);
-   nir_lower_deref_instrs(nir, (nir_lower_deref_flags)~0);
 
    nir_variable_mode mask =
       (nir_variable_mode) (nir_var_shader_in | nir_var_shader_out);
@@ -526,6 +525,8 @@ st_nir_get_mesa_program(struct gl_context *ctx,
    _mesa_update_shader_textures_used(shader_program, prog);
 
    nir_shader *nir = st_glsl_to_nir(st, prog, shader_program, shader->Stage);
+
+   nir_lower_deref_instrs(nir, (nir_lower_deref_flags)~0);
 
    set_st_program(prog, shader_program, nir);
    prog->nir = nir;
