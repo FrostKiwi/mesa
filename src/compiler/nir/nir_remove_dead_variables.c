@@ -27,6 +27,55 @@
 
 #include "nir.h"
 
+static bool
+deref_used_for_not_store(nir_deref_instr *deref)
+{
+   nir_foreach_use(src, &deref->dest.ssa) {
+      switch (src->parent_instr->type) {
+      case nir_instr_type_deref:
+         if (deref_used_for_not_store(nir_instr_as_deref(src->parent_instr)))
+            return true;
+         break;
+
+      case nir_instr_type_intrinsic: {
+         nir_intrinsic_instr *intrin =
+            nir_instr_as_intrinsic(src->parent_instr);
+         /* The first source of copy and store intrinsics is the deref to
+          * write.  Don't record those.
+          */
+         if ((intrin->intrinsic != nir_intrinsic_store_deref &&
+              intrin->intrinsic != nir_intrinsic_copy_var) ||
+             src != &intrin->src[0])
+            return true;
+         break;
+      }
+
+      default:
+         /* If it's used by any other instruction type (most likely a texture
+          * instruction), consider it used.
+          */
+         return true;
+      }
+   }
+
+   return false;
+}
+
+static void
+add_var_use_deref(nir_deref_instr *deref, struct set *live)
+{
+   if (deref->deref_type != nir_deref_type_var)
+      return;
+
+   /* If it's not a local that never escapes the shader, then any access at
+    * all means we need to keep it alive.
+    */
+   assert(deref->mode == deref->var->data.mode);
+   if (!(deref->mode & (nir_var_local | nir_var_global | nir_var_shared)) ||
+       deref_used_for_not_store(deref))
+      _mesa_set_add(live, deref->var);
+}
+
 static void
 add_var_use_intrinsic(nir_intrinsic_instr *instr, struct set *live,
                       nir_variable_mode modes)
@@ -100,6 +149,10 @@ add_var_use_shader(nir_shader *shader, struct set *live, nir_variable_mode modes
          nir_foreach_block(block, function->impl) {
             nir_foreach_instr(instr, block) {
                switch(instr->type) {
+               case nir_instr_type_deref:
+                  add_var_use_deref(nir_instr_as_deref(instr), live);
+                  break;
+
                case nir_instr_type_intrinsic:
                   add_var_use_intrinsic(nir_instr_as_intrinsic(instr), live,
                                         modes);
@@ -123,6 +176,33 @@ add_var_use_shader(nir_shader *shader, struct set *live, nir_variable_mode modes
 }
 
 static void
+remove_dead_deref(nir_deref_instr *deref)
+{
+   nir_foreach_use(src, &deref->dest.ssa) {
+      switch (src->parent_instr->type) {
+      case nir_instr_type_deref:
+         remove_dead_deref(nir_instr_as_deref(src->parent_instr));
+         break;
+
+      case nir_instr_type_intrinsic: {
+         nir_intrinsic_instr *intrin =
+            nir_instr_as_intrinsic(src->parent_instr);
+
+         assert(intrin->intrinsic == nir_intrinsic_copy_deref ||
+                intrin->intrinsic == nir_intrinsic_store_deref);
+         nir_instr_remove(&intrin->instr);
+         break;
+      }
+
+      default:
+         unreachable("This must have been marked as live!");
+      }
+   }
+
+   nir_instr_remove(&deref->instr);
+}
+
+static void
 remove_dead_var_writes(nir_shader *shader, struct set *live)
 {
    nir_foreach_function(function, shader) {
@@ -142,6 +222,25 @@ remove_dead_var_writes(nir_shader *shader, struct set *live)
             /* Stores to dead variables need to be removed */
             if (intrin->variables[0]->var->data.mode == 0)
                nir_instr_remove(instr);
+         }
+      }
+
+      /* We walk the list of instructions backwards because we're going to
+       * delete a deref and all of it's uses and we don't want to end up
+       * deleting stuff ahead of us.
+       */
+      nir_foreach_block_reverse(block, function->impl) {
+         nir_foreach_instr_reverse_safe(instr, block) {
+            if (instr->type != nir_instr_type_deref)
+               continue;
+
+            nir_deref_instr *deref = nir_instr_as_deref(instr);
+            if (deref->deref_type != nir_deref_type_var)
+               continue;
+
+            /* If it's been marked as dead, delete it */
+            if (deref->var->data.mode == 0)
+               remove_dead_deref(deref);
          }
       }
    }
