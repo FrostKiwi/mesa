@@ -77,7 +77,7 @@ brw_create_nir(struct brw_context *brw,
    /* First, lower the GLSL IR or Mesa IR to NIR */
    if (shader_prog) {
       nir = glsl_to_nir(shader_prog, stage, options);
-      nir_lower_deref_instrs(nir, ~0);
+      nir_lower_deref_instrs(nir, nir_lower_texture_derefs);
       nir_remove_dead_variables(nir, nir_var_shader_in | nir_var_shader_out);
       nir_lower_returns(nir);
       nir_validate_shader(nir);
@@ -85,7 +85,6 @@ brw_create_nir(struct brw_context *brw,
                  nir_shader_get_entrypoint(nir), true, false);
    } else {
       nir = prog_to_nir(prog, options);
-      nir_lower_deref_instrs(nir, ~0);
       NIR_PASS_V(nir, nir_lower_regs_to_ssa); /* turn registers into SSA */
    }
    nir_validate_shader(nir);
