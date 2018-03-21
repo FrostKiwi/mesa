@@ -1018,6 +1018,8 @@ nir_deref_instr_get_variable(nir_deref_instr *instr)
    return instr->var;
 }
 
+void nir_deref_instr_cleanup(nir_deref_instr *instr);
+
 nir_deref_var *
 nir_deref_instr_to_deref(nir_deref_instr *instr, void *mem_ctx);
 
