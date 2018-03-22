@@ -455,7 +455,6 @@ struct vtn_variable {
    bool patch;
 
    nir_variable *var;
-   nir_variable **members;
 
    int shared_location;
 
