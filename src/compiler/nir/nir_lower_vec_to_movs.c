@@ -112,13 +112,25 @@ has_replicated_dest(nir_alu_instr *alu)
           alu->op == nir_op_fdph_replicated;
 }
 
+static bool
+src_does_not_read_reg(nir_src *src, void *void_reg)
+{
+   return src->is_ssa || src->reg.reg != void_reg;
+}
+
+static bool
+dest_does_not_write_reg(nir_dest *dest, void *void_reg)
+{
+   return dest->is_ssa || dest->reg.reg != void_reg;
+}
+
 /* Attempts to coalesce the "move" from the given source of the vec to the
  * destination of the instruction generating the value. If, for whatever
  * reason, we cannot coalesce the mmove, it does nothing and returns 0.  We
  * can then call insert_mov as normal.
  */
 static unsigned
-try_coalesce(nir_alu_instr *vec, unsigned start_idx)
+try_coalesce(nir_alu_instr *vec, unsigned start_idx, bool vec_had_ssa_dest)
 {
    assert(start_idx < nir_op_infos[vec->op].num_inputs);
 
@@ -181,6 +193,57 @@ try_coalesce(nir_alu_instr *vec, unsigned start_idx)
          continue;
 
       write_mask |= 1 << i;
+   }
+
+   if (!vec_had_ssa_dest) {
+      /* If the vec instruction had a register destination, then we need to be
+       * careful about moving writes to the source instruction.  Otherwise, we
+       * may end up trying to coalesce in a case such as this:
+       *
+       *    ssa_1 = fadd r1, r2
+       *    r3.x = fneg(r2);
+       *    r3 = vec4(ssa_1, ssa_1.y, ...)
+       *
+       * To deal with this, we walk the instructions between the vec and the
+       * ALU op we're going to coalesce it into and ensure that there are no
+       * access of the the destination register of the vec.
+       */
+
+      /* If they're not in the same block, there's not much we can do */
+      if (src_alu->instr.block != vec->instr.block)
+         return 0;
+
+      /* Since we know that src_alu dominates vec, we can just walk from
+       * one to the other.
+       */
+      for (nir_instr *instr = nir_instr_next(&src_alu->instr);
+           instr != &vec->instr; instr = nir_instr_next(instr)) {
+         if (instr->type == nir_instr_type_alu) {
+            nir_alu_instr *alu = nir_instr_as_alu(instr);
+            /* Only count this instructions write as a hazard if it's write
+             * mask overlaps with the write mask we are going to give alu_src
+             * if we can coalesce into it.
+             */
+            if (!alu->dest.dest.is_ssa &&
+                alu->dest.dest.reg.reg == vec->dest.dest.reg.reg &&
+                (alu->dest.write_mask & write_mask))
+               return 0;
+
+            for (unsigned j = 0; j < nir_op_infos[alu->op].num_inputs; j++) {
+               if (!alu->src[j].src.is_ssa &&
+                   alu->src[j].src.reg.reg == vec->dest.dest.reg.reg)
+                  return 0;
+            }
+         } else {
+            if (!nir_foreach_dest(instr, dest_does_not_write_reg,
+                                  vec->dest.dest.reg.reg))
+               return 0;
+
+            if (!nir_foreach_src(instr, src_does_not_read_reg,
+                                 vec->dest.dest.reg.reg))
+               return 0;
+         }
+      }
    }
 
    /* Stash off all of the ALU instruction's swizzles. */
@@ -274,8 +337,8 @@ lower_vec_to_movs_block(nir_block *block, nir_function_impl *impl)
           * instruction in the source.  We can only do this if the original
           * vecN had an SSA destination.
           */
-         if (vec_had_ssa_dest && !(finished_write_mask & (1 << i)))
-            finished_write_mask |= try_coalesce(vec, i);
+         if (!(finished_write_mask & (1 << i)))
+            finished_write_mask |= try_coalesce(vec, i, vec_had_ssa_dest);
 
          if (!(finished_write_mask & (1 << i)))
             finished_write_mask |= insert_mov(vec, i, shader);
