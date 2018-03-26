@@ -525,7 +525,8 @@ iris_screen_create(int fd)
    pscreen->query_memory_info = iris_query_memory_info;
 
    /* Put them somewhere non-zero */
-   screen->next_instruction_address = 4096;
+   // XXX: queen brahne was not impressed
+   screen->next_instruction_address = 128 * 1024;
 
    return pscreen;
 }
