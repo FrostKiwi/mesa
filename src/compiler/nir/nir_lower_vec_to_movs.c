@@ -171,12 +171,6 @@ try_coalesce(nir_alu_instr *vec, unsigned start_idx)
             return 0;
    }
 
-   /* Stash off all of the ALU instruction's swizzles. */
-   uint8_t swizzles[4][4];
-   for (unsigned j = 0; j < nir_op_infos[src_alu->op].num_inputs; j++)
-      for (unsigned i = 0; i < 4; i++)
-         swizzles[j][i] = src_alu->src[j].swizzle[i];
-
    unsigned write_mask = 0;
    for (unsigned i = start_idx; i < 4; i++) {
       if (!(vec->dest.write_mask & (1 << i)))
@@ -186,10 +180,22 @@ try_coalesce(nir_alu_instr *vec, unsigned start_idx)
           vec->src[i].src.ssa != &src_alu->dest.dest.ssa)
          continue;
 
+      write_mask |= 1 << i;
+   }
+
+   /* Stash off all of the ALU instruction's swizzles. */
+   uint8_t swizzles[4][4];
+   for (unsigned j = 0; j < nir_op_infos[src_alu->op].num_inputs; j++)
+      for (unsigned i = 0; i < 4; i++)
+         swizzles[j][i] = src_alu->src[j].swizzle[i];
+
+   for (unsigned i = start_idx; i < 4; i++) {
+      if (!(write_mask & (1 << i)))
+         continue;
+
       /* At this point, the give vec source matchese up with the ALU
        * instruction so we can re-swizzle that component to match.
        */
-      write_mask |= 1 << i;
       if (has_replicated_dest(src_alu)) {
          /* Since the destination is a single replicated value, we don't need
           * to do any reswizzling
