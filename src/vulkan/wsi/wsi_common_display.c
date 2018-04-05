@@ -91,6 +91,14 @@ struct wsi_display {
    struct list_head             connectors;
 };
 
+#define wsi_for_each_display_mode(_mode, _conn) \
+   list_for_each_entry_safe(struct wsi_display_mode, _mode, \
+                            &(_conn)->display_modes, list)
+
+#define wsi_for_each_connector(_conn, _dev) \
+   list_for_each_entry_safe(struct wsi_display_connector, _conn, \
+                            &(_dev)->connectors, list)
+
 enum wsi_image_state {
    WSI_IMAGE_IDLE,
    WSI_IMAGE_DRAWING,
@@ -157,9 +165,7 @@ wsi_display_find_drm_mode(struct wsi_device                 *wsi_device,
                           struct wsi_display_connector      *connector,
                           drmModeModeInfoPtr                mode)
 {
-   struct wsi_display_mode      *display_mode;
-
-   LIST_FOR_EACH_ENTRY(display_mode, &connector->display_modes, list) {
+   wsi_for_each_display_mode(display_mode, connector) {
       if (wsi_display_mode_matches_drm(display_mode, mode))
          return display_mode;
    }
@@ -170,28 +176,27 @@ static void
 wsi_display_invalidate_connector_modes(struct wsi_device            *wsi_device,
                                        struct wsi_display_connector *connector)
 {
-   struct wsi_display_mode      *display_mode;
-
-   LIST_FOR_EACH_ENTRY(display_mode, &connector->display_modes, list)
+   wsi_for_each_display_mode(display_mode, connector)
       display_mode->valid = false;
 }
 
 static VkResult
-wsi_display_register_drm_mode(struct wsi_device            *wsi_device,
+wsi_display_register_drm_mode(struct wsi_device *wsi_device,
                               struct wsi_display_connector *connector,
-                              drmModeModeInfoPtr           drm_mode)
+                              drmModeModeInfoPtr drm_mode)
 {
-   struct wsi_display           *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
-   struct wsi_display_mode      *display_mode;
+   struct wsi_display *wsi =
+      (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
 
-   display_mode = wsi_display_find_drm_mode(wsi_device, connector, drm_mode);
-
+   struct wsi_display_mode *display_mode =
+      wsi_display_find_drm_mode(wsi_device, connector, drm_mode);
    if (display_mode) {
       display_mode->valid = true;
       return VK_SUCCESS;
    }
 
-   display_mode = vk_zalloc(wsi->alloc, sizeof (struct wsi_display_mode), 8, VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE);
+   display_mode = vk_zalloc(wsi->alloc, sizeof(struct wsi_display_mode), 8,
+                            VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE);
    if (!display_mode)
       return VK_ERROR_OUT_OF_HOST_MEMORY;
 
@@ -211,7 +216,7 @@ wsi_display_register_drm_mode(struct wsi_device            *wsi_device,
    display_mode->vscan = drm_mode->vscan;
    display_mode->flags = drm_mode->flags;
 
-   LIST_ADDTAIL(&display_mode->list, &connector->display_modes);
+   list_addtail(&display_mode->list, &connector->display_modes);
    return VK_SUCCESS;
 }
 
@@ -224,10 +229,8 @@ wsi_display_find_connector(struct wsi_device    *wsi_device,
                           uint32_t              connector_id)
 {
    struct wsi_display           *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
-   struct wsi_display_connector *connector;
 
-   connector = NULL;
-   LIST_FOR_EACH_ENTRY(connector, &wsi->connectors, list) {
+   wsi_for_each_connector(connector, wsi) {
       if (connector->id == connector_id)
          return connector;
    }
@@ -247,7 +250,7 @@ wsi_display_alloc_connector(struct wsi_display  *wsi,
    connector->active = false;
    /* XXX use EDID name */
    connector->name = "monitor";
-   LIST_INITHEAD(&connector->display_modes);
+   list_inithead(&connector->display_modes);
    return connector;
 }
 
@@ -276,7 +279,7 @@ wsi_display_get_connector(struct wsi_device             *wsi_device,
          drmModeFreeConnector(drm_connector);
          return NULL;
       }
-      LIST_ADDTAIL(&connector->list, &wsi->connectors);
+      list_addtail(&connector->list, &wsi->connectors);
    }
 
    connector->connected = drm_connector->connection != DRM_MODE_DISCONNECTED;
@@ -316,7 +319,7 @@ wsi_display_fill_in_display_properties(struct wsi_device                *wsi_dev
                                        struct wsi_display_connector     *connector,
                                        VkDisplayPropertiesKHR           *properties)
 {
-   struct wsi_display_mode      *display_mode, *preferred_mode = NULL, *largest_mode = NULL;
+   struct wsi_display_mode      *preferred_mode = NULL, *largest_mode = NULL;
 
    properties->display = wsi_display_connector_to_handle(connector);
    properties->displayName = connector->name;
@@ -325,7 +328,7 @@ wsi_display_fill_in_display_properties(struct wsi_device                *wsi_dev
     * there isn't a preferred mode, find the largest mode and use that.
     */
 
-   LIST_FOR_EACH_ENTRY(display_mode, &connector->display_modes, list) {
+   wsi_for_each_display_mode(display_mode, connector) {
       if (display_mode->valid && (largest_mode == NULL || mode_size(display_mode) > mode_size(largest_mode)))
          largest_mode = display_mode;
       if (display_mode->valid && display_mode->preferred) {
@@ -414,11 +417,10 @@ wsi_display_get_physical_device_display_plane_properties(VkPhysicalDevice       
                                                          VkDisplayPlanePropertiesKHR    *properties)
 {
    struct wsi_display           *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
-   struct wsi_display_connector *connector;
 
    VK_OUTARRAY_MAKE(conn, properties, property_count);
 
-   LIST_FOR_EACH_ENTRY(connector, &wsi->connectors, list) {
+   wsi_for_each_connector(connector, wsi) {
       vk_outarray_append(&conn, prop) {
          if (connector && connector->active) {
             prop->currentDisplay = wsi_display_connector_to_handle(connector);
@@ -444,13 +446,11 @@ wsi_display_get_display_plane_supported_displays(VkPhysicalDevice               
                                                  VkDisplayKHR                   *displays)
 {
    struct wsi_display           *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
-   struct wsi_display_connector *connector;
 
    VK_OUTARRAY_MAKE(conn, displays, display_count);
 
    int c = 0;
-
-   LIST_FOR_EACH_ENTRY(connector, &wsi->connectors, list) {
+   wsi_for_each_connector(connector, wsi) {
       if (c == plane_index) {
          vk_outarray_append(&conn, display) {
             *display = wsi_display_connector_to_handle(connector);
@@ -473,11 +473,10 @@ wsi_display_get_display_mode_properties(VkPhysicalDevice               physical_
                                         VkDisplayModePropertiesKHR     *properties)
 {
    struct wsi_display_connector *connector = wsi_display_connector_from_handle(display);
-   struct wsi_display_mode      *display_mode;
 
    VK_OUTARRAY_MAKE(conn, properties, property_count);
 
-   LIST_FOR_EACH_ENTRY(display_mode, &connector->display_modes, list) {
+   wsi_for_each_display_mode(display_mode, connector) {
       if (display_mode->valid) {
          vk_outarray_append(&conn, prop) {
             prop->displayMode = wsi_display_mode_to_handle(display_mode);
@@ -1375,13 +1374,10 @@ wsi_display_finish_wsi(struct wsi_device *wsi_device,
    struct wsi_display *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
 
    if (wsi) {
-
-      struct wsi_display_connector *connector, *connector_storage;
-      LIST_FOR_EACH_ENTRY_SAFE(connector, connector_storage, &wsi->connectors, list) {
-         struct wsi_display_mode *mode, *mode_storage;
-         LIST_FOR_EACH_ENTRY_SAFE(mode, mode_storage, &connector->display_modes, list) {
+      wsi_for_each_connector(connector, wsi) {
+         wsi_for_each_display_mode(mode, connector)
             vk_free(wsi->alloc, mode);
-         }
+
          vk_free(wsi->alloc, connector);
       }
 
