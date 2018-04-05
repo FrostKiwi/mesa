@@ -56,9 +56,9 @@
 typedef struct wsi_display_mode {
    struct list_head             list;
    struct wsi_display_connector *connector;
-   bool                         valid;          /* was found in most recent poll */
+   bool                         valid; /* was found in most recent poll */
    bool                         preferred;
-   uint32_t                     clock;          /* in kHz */
+   uint32_t                     clock; /* in kHz */
    uint16_t                     hdisplay, hsync_start, hsync_end, htotal, hskew;
    uint16_t                     vdisplay, vsync_start, vsync_end, vtotal, vscan;
    uint32_t                     flags;
@@ -133,23 +133,25 @@ wsi_display_mode_matches_drm(wsi_display_mode   *wsi,
                              drmModeModeInfoPtr drm)
 {
    return wsi->clock == drm->clock &&
-      wsi->hdisplay == drm->hdisplay &&
-      wsi->hsync_start == drm->hsync_start &&
-      wsi->hsync_end == drm->hsync_end &&
-      wsi->htotal == drm->htotal &&
-      wsi->hskew == drm->hskew &&
-      wsi->vdisplay == drm->vdisplay &&
-      wsi->vsync_start == drm->vsync_start &&
-      wsi->vsync_end == drm->vsync_end &&
-      wsi->vtotal == drm->vtotal &&
-      wsi->vscan == drm->vscan &&
-      wsi->flags == drm->flags;
+          wsi->hdisplay == drm->hdisplay &&
+          wsi->hsync_start == drm->hsync_start &&
+          wsi->hsync_end == drm->hsync_end &&
+          wsi->htotal == drm->htotal &&
+          wsi->hskew == drm->hskew &&
+          wsi->vdisplay == drm->vdisplay &&
+          wsi->vsync_start == drm->vsync_start &&
+          wsi->vsync_end == drm->vsync_end &&
+          wsi->vtotal == drm->vtotal &&
+          wsi->vscan == drm->vscan &&
+          wsi->flags == drm->flags;
 }
 
 static double
-wsi_display_mode_refresh(struct wsi_display_mode        *wsi)
+wsi_display_mode_refresh(const struct wsi_display_mode *wsi)
 {
-   return (double) wsi->clock * 1000.0 / ((double) wsi->htotal * (double) wsi->vtotal * (double) (wsi->vscan + 1));
+   return (double) wsi->clock * 1000.0 / ((double) wsi->htotal *
+                                          (double) wsi->vtotal *
+                                          (double) (wsi->vscan + 1));
 }
 
 static uint64_t wsi_get_current_monotonic(void)
@@ -161,9 +163,9 @@ static uint64_t wsi_get_current_monotonic(void)
 }
 
 static struct wsi_display_mode *
-wsi_display_find_drm_mode(struct wsi_device                 *wsi_device,
-                          struct wsi_display_connector      *connector,
-                          drmModeModeInfoPtr                mode)
+wsi_display_find_drm_mode(struct wsi_device *wsi_device,
+                          struct wsi_display_connector *connector,
+                          drmModeModeInfoPtr mode)
 {
    wsi_for_each_display_mode(display_mode, connector) {
       if (wsi_display_mode_matches_drm(display_mode, mode))
@@ -225,10 +227,11 @@ wsi_display_register_drm_mode(struct wsi_device *wsi_device,
  */
 
 static struct wsi_display_connector *
-wsi_display_find_connector(struct wsi_device    *wsi_device,
-                          uint32_t              connector_id)
+wsi_display_find_connector(struct wsi_device *wsi_device,
+                           uint32_t connector_id)
 {
-   struct wsi_display           *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
+   struct wsi_display *wsi =
+      (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
 
    wsi_for_each_connector(connector, wsi) {
       if (connector->id == connector_id)
@@ -239,12 +242,13 @@ wsi_display_find_connector(struct wsi_device    *wsi_device,
 }
 
 static struct wsi_display_connector *
-wsi_display_alloc_connector(struct wsi_display  *wsi,
-                            uint32_t            connector_id)
+wsi_display_alloc_connector(struct wsi_display *wsi,
+                            uint32_t connector_id)
 {
-   struct wsi_display_connector *connector;
+   struct wsi_display_connector *connector =
+      vk_zalloc(wsi->alloc, sizeof(struct wsi_display_connector), 8,
+                VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE);
 
-   connector = vk_zalloc(wsi->alloc, sizeof (struct wsi_display_connector), 8, VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE);
    connector->id = connector_id;
    connector->wsi = wsi;
    connector->active = false;
@@ -255,24 +259,22 @@ wsi_display_alloc_connector(struct wsi_display  *wsi,
 }
 
 static struct wsi_display_connector *
-wsi_display_get_connector(struct wsi_device             *wsi_device,
-                          uint32_t                      connector_id)
+wsi_display_get_connector(struct wsi_device *wsi_device,
+                          uint32_t connector_id)
 {
-   struct wsi_display           *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
-   struct wsi_display_connector *connector;
-   drmModeConnectorPtr          drm_connector;
-   VkResult                     result;
-   int                          m;
+   struct wsi_display *wsi =
+      (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
 
    if (wsi->fd < 0)
       return NULL;
 
-   drm_connector = drmModeGetConnector(wsi->fd, connector_id);
+   drmModeConnectorPtr drm_connector =
+      drmModeGetConnector(wsi->fd, connector_id);
    if (!drm_connector)
       return NULL;
 
-   connector = wsi_display_find_connector(wsi_device, connector_id);
-
+   struct wsi_display_connector *connector =
+      wsi_display_find_connector(wsi_device, connector_id);
    if (!connector) {
       connector = wsi_display_alloc_connector(wsi, connector_id);
       if (!connector) {
@@ -291,10 +293,10 @@ wsi_display_get_connector(struct wsi_device             *wsi_device,
     * List current modes, adding new ones and marking existing ones as
     * valid
     */
-   for (m = 0; m < drm_connector->count_modes; m++) {
-      result = wsi_display_register_drm_mode(wsi_device,
-                                             connector,
-                                             &drm_connector->modes[m]);
+   for (int m = 0; m < drm_connector->count_modes; m++) {
+      VkResult result =
+         wsi_display_register_drm_mode(wsi_device, connector,
+                                       &drm_connector->modes[m]);
       if (result != VK_SUCCESS) {
          drmModeFreeConnector(drm_connector);
          return NULL;
@@ -309,18 +311,17 @@ wsi_display_get_connector(struct wsi_device             *wsi_device,
 #define MM_PER_PIXEL     (1.0/96.0 * 25.4)
 
 static uint32_t
-mode_size(struct wsi_display_mode *mode) {
+mode_size(struct wsi_display_mode *mode)
+{
    /* fortunately, these are both uint16_t, so this is easy */
    return (uint32_t) mode->hdisplay * (uint32_t) mode->vdisplay;
 }
 
 static void
-wsi_display_fill_in_display_properties(struct wsi_device                *wsi_device,
-                                       struct wsi_display_connector     *connector,
-                                       VkDisplayPropertiesKHR           *properties)
+wsi_display_fill_in_display_properties(struct wsi_device *wsi_device,
+                                       struct wsi_display_connector *connector,
+                                       VkDisplayPropertiesKHR *properties)
 {
-   struct wsi_display_mode      *preferred_mode = NULL, *largest_mode = NULL;
-
    properties->display = wsi_display_connector_to_handle(connector);
    properties->displayName = connector->name;
 
@@ -328,10 +329,16 @@ wsi_display_fill_in_display_properties(struct wsi_device                *wsi_dev
     * there isn't a preferred mode, find the largest mode and use that.
     */
 
+   struct wsi_display_mode *preferred_mode = NULL, *largest_mode = NULL;
    wsi_for_each_display_mode(display_mode, connector) {
-      if (display_mode->valid && (largest_mode == NULL || mode_size(display_mode) > mode_size(largest_mode)))
+      if (!display_mode->valid)
+         continue;
+
+      if (largest_mode == NULL ||
+          mode_size(display_mode) > mode_size(largest_mode))
          largest_mode = display_mode;
-      if (display_mode->valid && display_mode->preferred) {
+
+      if (display_mode->preferred) {
          preferred_mode = display_mode;
          break;
       }
@@ -349,8 +356,10 @@ wsi_display_fill_in_display_properties(struct wsi_device                *wsi_dev
    }
 
    /* Make up physical size based on 96dpi */
-   properties->physicalDimensions.width = floor(properties->physicalResolution.width * MM_PER_PIXEL + 0.5);
-   properties->physicalDimensions.height = floor(properties->physicalResolution.height * MM_PER_PIXEL + 0.5);
+   properties->physicalDimensions.width =
+      floor(properties->physicalResolution.width * MM_PER_PIXEL + 0.5);
+   properties->physicalDimensions.height =
+      floor(properties->physicalResolution.height * MM_PER_PIXEL + 0.5);
 
    properties->supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
    properties->persistentContent = 0;
@@ -360,19 +369,18 @@ wsi_display_fill_in_display_properties(struct wsi_device                *wsi_dev
  * Implement vkGetPhysicalDeviceDisplayPropertiesKHR (VK_KHR_display)
  */
 VkResult
-wsi_display_get_physical_device_display_properties(VkPhysicalDevice             physical_device,
-                                                   struct wsi_device            *wsi_device,
-                                                   uint32_t                     *property_count,
-                                                   VkDisplayPropertiesKHR       *properties)
+wsi_display_get_physical_device_display_properties(VkPhysicalDevice physical_device,
+                                                   struct wsi_device *wsi_device,
+                                                   uint32_t *property_count,
+                                                   VkDisplayPropertiesKHR *properties)
 {
-   struct wsi_display           *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
-   drmModeResPtr                mode_res;
+   struct wsi_display *wsi =
+      (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
 
    if (wsi->fd < 0)
       goto bail;
 
-   mode_res = drmModeGetResources(wsi->fd);
-
+   drmModeResPtr mode_res = drmModeGetResources(wsi->fd);
    if (!mode_res)
       goto bail;
 
@@ -411,12 +419,13 @@ bail:
  * Implement vkGetPhysicalDeviceDisplayPlanePropertiesKHR (VK_KHR_display
  */
 VkResult
-wsi_display_get_physical_device_display_plane_properties(VkPhysicalDevice               physical_device,
-                                                         struct wsi_device              *wsi_device,
-                                                         uint32_t                       *property_count,
-                                                         VkDisplayPlanePropertiesKHR    *properties)
+wsi_display_get_physical_device_display_plane_properties(VkPhysicalDevice physical_device,
+                                                         struct wsi_device *wsi_device,
+                                                         uint32_t *property_count,
+                                                         VkDisplayPlanePropertiesKHR *properties)
 {
-   struct wsi_display           *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
+   struct wsi_display *wsi =
+      (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
 
    VK_OUTARRAY_MAKE(conn, properties, property_count);
 
@@ -439,13 +448,14 @@ wsi_display_get_physical_device_display_plane_properties(VkPhysicalDevice       
  */
 
 VkResult
-wsi_display_get_display_plane_supported_displays(VkPhysicalDevice               physical_device,
-                                                 struct wsi_device              *wsi_device,
-                                                 uint32_t                       plane_index,
-                                                 uint32_t                       *display_count,
-                                                 VkDisplayKHR                   *displays)
+wsi_display_get_display_plane_supported_displays(VkPhysicalDevice physical_device,
+                                                 struct wsi_device *wsi_device,
+                                                 uint32_t plane_index,
+                                                 uint32_t *display_count,
+                                                 VkDisplayKHR *displays)
 {
-   struct wsi_display           *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
+   struct wsi_display *wsi =
+      (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
 
    VK_OUTARRAY_MAKE(conn, displays, display_count);
 
@@ -466,13 +476,14 @@ wsi_display_get_display_plane_supported_displays(VkPhysicalDevice               
  */
 
 VkResult
-wsi_display_get_display_mode_properties(VkPhysicalDevice               physical_device,
-                                        struct wsi_device              *wsi_device,
-                                        VkDisplayKHR                   display,
-                                        uint32_t                       *property_count,
-                                        VkDisplayModePropertiesKHR     *properties)
+wsi_display_get_display_mode_properties(VkPhysicalDevice physical_device,
+                                        struct wsi_device *wsi_device,
+                                        VkDisplayKHR display,
+                                        uint32_t *property_count,
+                                        VkDisplayModePropertiesKHR *properties)
 {
-   struct wsi_display_connector *connector = wsi_display_connector_from_handle(display);
+   struct wsi_display_connector *connector =
+      wsi_display_connector_from_handle(display);
 
    VK_OUTARRAY_MAKE(conn, properties, property_count);
 
@@ -482,7 +493,8 @@ wsi_display_get_display_mode_properties(VkPhysicalDevice               physical_
             prop->displayMode = wsi_display_mode_to_handle(display_mode);
             prop->parameters.visibleRegion.width = display_mode->hdisplay;
             prop->parameters.visibleRegion.height = display_mode->vdisplay;
-            prop->parameters.refreshRate = (uint32_t) (wsi_display_mode_refresh(display_mode) * 1000 + 0.5);
+            prop->parameters.refreshRate =
+               (uint32_t)(wsi_display_mode_refresh(display_mode) * 1000 + 0.5);
          }
       }
    }
@@ -493,13 +505,13 @@ wsi_display_get_display_mode_properties(VkPhysicalDevice               physical_
  * Implement vkGetDisplayPlaneCapabilities
  */
 VkResult
-wsi_get_display_plane_capabilities(VkPhysicalDevice                     physical_device,
-                                   struct wsi_device                    *wsi_device,
-                                   VkDisplayModeKHR                     mode_khr,
-                                   uint32_t                             plane_index,
-                                   VkDisplayPlaneCapabilitiesKHR        *capabilities)
+wsi_get_display_plane_capabilities(VkPhysicalDevice physical_device,
+                                   struct wsi_device *wsi_device,
+                                   VkDisplayModeKHR mode_khr,
+                                   uint32_t plane_index,
+                                   VkDisplayPlaneCapabilitiesKHR *capabilities)
 {
-   struct wsi_display_mode      *mode = wsi_display_mode_from_handle(mode_khr);
+   struct wsi_display_mode *mode = wsi_display_mode_from_handle(mode_khr);
 
    /* XXX use actual values */
    capabilities->supportedAlpha = VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR;
@@ -524,7 +536,7 @@ wsi_get_display_plane_capabilities(VkPhysicalDevice                     physical
 
 VkResult
 wsi_create_display_surface(VkInstance instance,
-                           const VkAllocationCallbacks   *allocator,
+                           const VkAllocationCallbacks *allocator,
                            const VkDisplaySurfaceCreateInfoKHR *create_info,
                            VkSurfaceKHR *surface_khr)
 {
@@ -599,7 +611,8 @@ wsi_display_surface_get_capabilities2(VkIcdSurfaceBase *icd_surface,
 {
    assert(caps->sType == VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR);
 
-   return wsi_display_surface_get_capabilities(icd_surface, &caps->surfaceCapabilities);
+   return wsi_display_surface_get_capabilities(icd_surface,
+                                               &caps->surfaceCapabilities);
 }
 
 static const struct {
@@ -611,10 +624,10 @@ static const struct {
 };
 
 static VkResult
-wsi_display_surface_get_formats(VkIcdSurfaceBase        *icd_surface,
-                                struct wsi_device       *wsi_device,
-                                uint32_t                *surface_format_count,
-                                VkSurfaceFormatKHR      *surface_formats)
+wsi_display_surface_get_formats(VkIcdSurfaceBase *icd_surface,
+                                struct wsi_device *wsi_device,
+                                uint32_t *surface_format_count,
+                                VkSurfaceFormatKHR *surface_formats)
 {
    VK_OUTARRAY_MAKE(out, surface_formats, surface_format_count);
 
@@ -653,9 +666,9 @@ static const VkPresentModeKHR available_present_modes[] = {
 };
 
 static VkResult
-wsi_display_surface_get_present_modes(VkIcdSurfaceBase  *surface,
-                                      uint32_t          *present_mode_count,
-                                      VkPresentModeKHR  *present_modes)
+wsi_display_surface_get_present_modes(VkIcdSurfaceBase *surface,
+                                      uint32_t *present_mode_count,
+                                      VkPresentModeKHR *present_modes)
 {
    VK_OUTARRAY_MAKE(conn, present_modes, present_mode_count);
 
@@ -677,18 +690,18 @@ wsi_display_destroy_buffer(struct wsi_display *wsi,
 }
 
 static VkResult
-wsi_display_image_init(VkDevice                         device_h,
-                       struct wsi_swapchain             *drv_chain,
-                       const VkSwapchainCreateInfoKHR   *create_info,
-                       const VkAllocationCallbacks      *allocator,
-                       struct wsi_display_image         *image)
+wsi_display_image_init(VkDevice device_h,
+                       struct wsi_swapchain *drv_chain,
+                       const VkSwapchainCreateInfoKHR *create_info,
+                       const VkAllocationCallbacks *allocator,
+                       struct wsi_display_image *image)
 {
-   struct wsi_display_swapchain *chain = (struct wsi_display_swapchain *) drv_chain;
-   struct wsi_display           *wsi = chain->wsi;
-   VkResult                     result;
-   int                          ret;
-   uint32_t                     drm_format = 0;
+   struct wsi_display_swapchain *chain =
+      (struct wsi_display_swapchain *)drv_chain;
+   struct wsi_display *wsi = chain->wsi;
+   int ret;
 
+   uint32_t drm_format = 0;
    for (unsigned i = 0; i < ARRAY_SIZE(available_surface_formats); i++) {
       if (create_info->imageFormat == available_surface_formats[i].format) {
          drm_format = available_surface_formats[i].drm_format;
@@ -700,16 +713,16 @@ wsi_display_image_init(VkDevice                         device_h,
    if (drm_format == 0)
       return VK_ERROR_DEVICE_LOST;
 
-   result = wsi_create_native_image(&chain->base, create_info,
-                                    0, NULL, NULL,
-                                    &image->base);
+   VkResult result = wsi_create_native_image(&chain->base, create_info,
+                                             0, NULL, NULL, &image->base);
    if (result != VK_SUCCESS)
       return result;
 
    memset(image->buffer, 0, sizeof (image->buffer));
 
    for (unsigned int i = 0; i < image->base.num_planes; i++) {
-      ret = drmPrimeFDToHandle(wsi->fd, image->base.fds[i], &image->buffer[i]);
+      ret = drmPrimeFDToHandle(wsi->fd, image->base.fds[i],
+                               &image->buffer[i]);
 
       close(image->base.fds[i]);
       image->base.fds[i] = -1;
@@ -756,8 +769,9 @@ wsi_display_image_finish(struct wsi_swapchain           *drv_chain,
                          const VkAllocationCallbacks    *allocator,
                          struct wsi_display_image       *image)
 {
-   struct wsi_display_swapchain *chain = (struct wsi_display_swapchain *) drv_chain;
-   struct wsi_display           *wsi = chain->wsi;
+   struct wsi_display_swapchain *chain =
+      (struct wsi_display_swapchain *) drv_chain;
+   struct wsi_display *wsi = chain->wsi;
 
    drmModeRmFB(wsi->fd, image->fb_id);
    for (unsigned int i = 0; i < image->base.num_planes; i++)
@@ -766,10 +780,11 @@ wsi_display_image_finish(struct wsi_swapchain           *drv_chain,
 }
 
 static VkResult
-wsi_display_swapchain_destroy(struct wsi_swapchain              *drv_chain,
-                              const VkAllocationCallbacks       *allocator)
+wsi_display_swapchain_destroy(struct wsi_swapchain *drv_chain,
+                              const VkAllocationCallbacks *allocator)
 {
-   struct wsi_display_swapchain *chain = (struct wsi_display_swapchain *) drv_chain;
+   struct wsi_display_swapchain *chain =
+      (struct wsi_display_swapchain *) drv_chain;
 
    for (uint32_t i = 0; i < chain->base.image_count; i++)
       wsi_display_image_finish(drv_chain, allocator, &chain->images[i]);
@@ -778,10 +793,11 @@ wsi_display_swapchain_destroy(struct wsi_swapchain              *drv_chain,
 }
 
 static struct wsi_image *
-wsi_display_get_wsi_image(struct wsi_swapchain  *drv_chain,
-                          uint32_t              image_index)
+wsi_display_get_wsi_image(struct wsi_swapchain *drv_chain,
+                          uint32_t image_index)
 {
-   struct wsi_display_swapchain *chain = (struct wsi_display_swapchain *) drv_chain;
+   struct wsi_display_swapchain *chain =
+      (struct wsi_display_swapchain *) drv_chain;
 
    return &chain->images[image_index].base;
 }
@@ -791,39 +807,47 @@ wsi_display_idle_old_displaying(struct wsi_display_image *active_image)
 {
    struct wsi_display_swapchain *chain = active_image->chain;
 
-   wsi_display_debug("idle everyone but %ld\n", active_image - &(chain->images[0]));
-   for (uint32_t i = 0; i < chain->base.image_count; i++)
-      if (chain->images[i].state == WSI_IMAGE_DISPLAYING && &chain->images[i] != active_image) {
+   wsi_display_debug("idle everyone but %ld\n",
+                     active_image - &(chain->images[0]));
+
+   for (uint32_t i = 0; i < chain->base.image_count; i++) {
+      if (chain->images[i].state == WSI_IMAGE_DISPLAYING &&
+          &chain->images[i] != active_image) {
          wsi_display_debug("idle %d\n", i);
          chain->images[i].state = WSI_IMAGE_IDLE;
       }
+   }
 }
 
 static VkResult
-_wsi_display_queue_next(struct wsi_swapchain     *drv_chain);
+_wsi_display_queue_next(struct wsi_swapchain *drv_chain);
 
 static void
-wsi_display_page_flip_handler2(int              fd,
-                               unsigned int     frame,
-                               unsigned int     sec,
-                               unsigned int     usec,
-                               uint32_t         crtc_id,
-                               void             *data)
+wsi_display_page_flip_handler2(int fd,
+                               unsigned int frame,
+                               unsigned int sec,
+                               unsigned int usec,
+                               uint32_t crtc_id,
+                               void *data)
 {
-   struct wsi_display_image     *image = data;
+   struct wsi_display_image *image = data;
    struct wsi_display_swapchain *chain = image->chain;
-   VkResult                     status;
 
-   wsi_display_debug("image %ld displayed at %d\n", image - &(image->chain->images[0]), frame);
+   wsi_display_debug("image %ld displayed at %d\n",
+                     image - &(image->chain->images[0]), frame);
+
    image->state = WSI_IMAGE_DISPLAYING;
    wsi_display_idle_old_displaying(image);
-   status = _wsi_display_queue_next(&(chain->base));
+
+   VkResult status = _wsi_display_queue_next(&(chain->base));
    if (status != VK_SUCCESS)
       chain->status = status;
 }
 
 static void wsi_display_page_flip_handler(int fd, unsigned int frame,
-                                          unsigned int sec, unsigned int usec, void *data)
+                                          unsigned int sec,
+                                          unsigned int usec,
+                                          void *data)
 {
    wsi_display_page_flip_handler2(fd, frame, sec, usec, 0, data);
 }
@@ -839,16 +863,15 @@ static drmEventContext event_context = {
 static void *
 wsi_display_wait_thread(void *data)
 {
-   struct wsi_display   *wsi = data;
+   struct wsi_display *wsi = data;
    struct pollfd pollfd = {
       .fd = wsi->fd,
       .events = POLLIN
    };
-   int ret;
 
    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
    for (;;) {
-      ret = poll(&pollfd, 1, -1);
+      int ret = poll(&pollfd, 1, -1);
       if (ret > 0) {
          pthread_mutex_lock(&wsi->wait_mutex);
          (void) drmHandleEvent(wsi->fd, &event_context);
@@ -860,10 +883,11 @@ wsi_display_wait_thread(void *data)
 }
 
 static int
-wsi_display_start_wait_thread(struct wsi_display        *wsi)
+wsi_display_start_wait_thread(struct wsi_display *wsi)
 {
    if (!wsi->wait_thread) {
-      int ret = pthread_create(&wsi->wait_thread, NULL, wsi_display_wait_thread, wsi);
+      int ret = pthread_create(&wsi->wait_thread, NULL,
+                               wsi_display_wait_thread, wsi);
       if (ret)
          return ret;
    }
@@ -875,22 +899,22 @@ wsi_display_start_wait_thread(struct wsi_display        *wsi)
  * Call with wait_mutex held
  */
 static int
-wsi_display_wait_for_event(struct wsi_display           *wsi,
-                           uint64_t                     timeout_ns)
+wsi_display_wait_for_event(struct wsi_display *wsi,
+                           uint64_t timeout_ns)
 {
    int ret;
 
    ret = wsi_display_start_wait_thread(wsi);
-
    if (ret)
       return ret;
 
    struct timespec abs_timeout = {
-      .tv_sec = timeout_ns / ((uint64_t) 1000 * (uint64_t) 1000 * (uint64_t) 1000),
-      .tv_nsec = timeout_ns % ((uint64_t) 1000 * (uint64_t) 1000 * (uint64_t) 1000)
+      .tv_sec = timeout_ns / 1000000000ull,
+      .tv_nsec = timeout_ns % 1000000000ull,
    };
 
-   ret = pthread_cond_timedwait(&wsi->wait_cond, &wsi->wait_mutex, &abs_timeout);
+   ret = pthread_cond_timedwait(&wsi->wait_cond, &wsi->wait_mutex,
+                                &abs_timeout);
 
    wsi_display_debug("%9ld done waiting for event %d\n", pthread_self(), ret);
    return ret;
@@ -902,10 +926,10 @@ wsi_display_acquire_next_image(struct wsi_swapchain     *drv_chain,
                                VkSemaphore              semaphore,
                                uint32_t                 *image_index)
 {
-   struct wsi_display_swapchain *chain = (struct wsi_display_swapchain *)drv_chain;
-   struct wsi_display           *wsi = chain->wsi;
-   int                          ret = 0;
-   VkResult                     result = VK_SUCCESS;
+   struct wsi_display_swapchain *chain =
+      (struct wsi_display_swapchain *)drv_chain;
+   struct wsi_display *wsi = chain->wsi;
+   VkResult result = VK_SUCCESS;
 
    /* Bail early if the swapchain is broken */
    if (chain->status != VK_SUCCESS)
@@ -915,6 +939,8 @@ wsi_display_acquire_next_image(struct wsi_swapchain     *drv_chain,
       timeout += wsi_get_current_monotonic();
 
    pthread_mutex_lock(&wsi->wait_mutex);
+
+   int ret = 0;
    for (;;) {
       for (uint32_t i = 0; i < chain->base.image_count; i++) {
          if (chain->images[i].state == WSI_IMAGE_IDLE) {
@@ -952,19 +978,18 @@ done:
  * Check whether there are any other connectors driven by this crtc
  */
 static bool
-wsi_display_crtc_solo(struct wsi_display        *wsi,
-                      drmModeResPtr             mode_res,
-                      drmModeConnectorPtr       connector,
-                      uint32_t                  crtc_id)
+wsi_display_crtc_solo(struct wsi_display *wsi,
+                      drmModeResPtr mode_res,
+                      drmModeConnectorPtr connector,
+                      uint32_t crtc_id)
 {
-   int                  c, e;
-
    /* See if any other connectors share the same encoder */
-   for (c = 0; c < mode_res->count_connectors; c++) {
+   for (int c = 0; c < mode_res->count_connectors; c++) {
       if (mode_res->connectors[c] == connector->connector_id)
          continue;
 
-      drmModeConnectorPtr other_connector = drmModeGetConnector(wsi->fd, mode_res->connectors[c]);
+      drmModeConnectorPtr other_connector =
+         drmModeGetConnector(wsi->fd, mode_res->connectors[c]);
       if (other_connector) {
          bool match = (other_connector->encoder_id == connector->encoder_id);
          drmModeFreeConnector(other_connector);
@@ -974,11 +999,12 @@ wsi_display_crtc_solo(struct wsi_display        *wsi,
    }
 
    /* See if any other encoders share the same crtc */
-   for (e = 0; e < mode_res->count_encoders; e++) {
+   for (int e = 0; e < mode_res->count_encoders; e++) {
       if (mode_res->encoders[e] == connector->encoder_id)
          continue;
 
-      drmModeEncoderPtr other_encoder = drmModeGetEncoder(wsi->fd, mode_res->encoders[e]);
+      drmModeEncoderPtr other_encoder =
+         drmModeGetEncoder(wsi->fd, mode_res->encoders[e]);
       if (other_encoder) {
          bool match = (other_encoder->crtc_id == crtc_id);
          drmModeFreeEncoder(other_encoder);
@@ -986,6 +1012,7 @@ wsi_display_crtc_solo(struct wsi_display        *wsi,
             return false;
       }
    }
+
    return true;
 }
 
@@ -995,19 +1022,18 @@ wsi_display_crtc_solo(struct wsi_display        *wsi,
  * which is currently idle.
  */
 static uint32_t
-wsi_display_select_crtc(struct wsi_display_connector    *connector,
-                        drmModeResPtr                   mode_res,
-                        drmModeConnectorPtr             drm_connector)
+wsi_display_select_crtc(struct wsi_display_connector *connector,
+                        drmModeResPtr mode_res,
+                        drmModeConnectorPtr drm_connector)
 {
-   struct wsi_display   *wsi = connector->wsi;
-   int                  c;
-   uint32_t             crtc_id;
+   struct wsi_display *wsi = connector->wsi;
 
    /* See what CRTC is currently driving this connector */
    if (drm_connector->encoder_id) {
-      drmModeEncoderPtr encoder = drmModeGetEncoder(wsi->fd, drm_connector->encoder_id);
+      drmModeEncoderPtr encoder =
+         drmModeGetEncoder(wsi->fd, drm_connector->encoder_id);
       if (encoder) {
-         crtc_id = encoder->crtc_id;
+         uint32_t crtc_id = encoder->crtc_id;
          drmModeFreeEncoder(encoder);
          if (crtc_id) {
             if (wsi_display_crtc_solo(wsi, mode_res, drm_connector, crtc_id))
@@ -1015,8 +1041,9 @@ wsi_display_select_crtc(struct wsi_display_connector    *connector,
          }
       }
    }
-   crtc_id = 0;
-   for (c = 0; crtc_id == 0 && c < mode_res->count_crtcs; c++) {
+
+   uint32_t crtc_id = 0;
+   for (int c = 0; crtc_id == 0 && c < mode_res->count_crtcs; c++) {
       drmModeCrtcPtr crtc = drmModeGetCrtc(wsi->fd, mode_res->crtcs[c]);
       if (crtc && crtc->buffer_id == 0)
          crtc_id = crtc->crtc_id;
@@ -1026,20 +1053,16 @@ wsi_display_select_crtc(struct wsi_display_connector    *connector,
 }
 
 static VkResult
-wsi_display_setup_connector(wsi_display_connector       *connector,
-                            wsi_display_mode            *display_mode)
+wsi_display_setup_connector(wsi_display_connector *connector,
+                            wsi_display_mode *display_mode)
 {
-   struct wsi_display   *wsi = connector->wsi;
-   drmModeModeInfoPtr   drm_mode;
-   drmModeConnectorPtr  drm_connector;
-   drmModeResPtr        mode_res;
-   VkResult             result;
-   int                  m;
+   struct wsi_display *wsi = connector->wsi;
+   VkResult result = VK_SUCCESS;
 
    if (connector->current_mode == display_mode && connector->crtc_id)
       return VK_SUCCESS;
 
-   mode_res = drmModeGetResources(wsi->fd);
+   drmModeResPtr mode_res = drmModeGetResources(wsi->fd);
    if (!mode_res) {
       if (errno == ENOMEM)
          result = VK_ERROR_OUT_OF_HOST_MEMORY;
@@ -1048,7 +1071,8 @@ wsi_display_setup_connector(wsi_display_connector       *connector,
       goto bail;
    }
 
-   drm_connector = drmModeGetConnectorCurrent(wsi->fd, connector->id);
+   drmModeConnectorPtr drm_connector =
+      drmModeGetConnectorCurrent(wsi->fd, connector->id);
    if (!drm_connector) {
       if (errno == ENOMEM)
          result = VK_ERROR_OUT_OF_HOST_MEMORY;
@@ -1059,7 +1083,8 @@ wsi_display_setup_connector(wsi_display_connector       *connector,
 
    /* Pick a CRTC if we don't have one */
    if (!connector->crtc_id) {
-      connector->crtc_id = wsi_display_select_crtc(connector, mode_res, drm_connector);
+      connector->crtc_id =
+         wsi_display_select_crtc(connector, mode_res, drm_connector);
       if (!connector->crtc_id) {
          result = VK_ERROR_OUT_OF_DATE_KHR;
          goto bail_connector;
@@ -1067,10 +1092,9 @@ wsi_display_setup_connector(wsi_display_connector       *connector,
    }
 
    if (connector->current_mode != display_mode) {
-
       /* Find the drm mode cooresponding to the requested VkDisplayMode */
-      drm_mode = NULL;
-      for (m = 0; m < drm_connector->count_modes; m++) {
+      drmModeModeInfoPtr drm_mode = NULL;
+      for (int m = 0; m < drm_connector->count_modes; m++) {
          drm_mode = &drm_connector->modes[m];
          if (wsi_display_mode_matches_drm(display_mode, drm_mode))
             break;
@@ -1094,7 +1118,6 @@ bail_mode_res:
    drmModeFreeResources(mode_res);
 bail:
    return result;
-
 }
 
 /*
@@ -1102,17 +1125,17 @@ bail:
  * waiting to be displayed.
  */
 static VkResult
-_wsi_display_queue_next(struct wsi_swapchain     *drv_chain)
+_wsi_display_queue_next(struct wsi_swapchain *drv_chain)
 {
-   struct wsi_display_swapchain *chain = (struct wsi_display_swapchain *) drv_chain;
-   struct wsi_display           *wsi = chain->wsi;
-   uint32_t                     i;
-   struct wsi_display_image     *image = NULL;
-   VkIcdSurfaceDisplay          *surface = chain->surface;
-   wsi_display_mode             *display_mode = wsi_display_mode_from_handle(surface->displayMode);
-   wsi_display_connector        *connector = display_mode->connector;
-   int                          ret;
-   VkResult                     result;
+   struct wsi_display_swapchain *chain =
+      (struct wsi_display_swapchain *) drv_chain;
+
+   struct wsi_display *wsi = chain->wsi;
+   VkIcdSurfaceDisplay *surface = chain->surface;
+   wsi_display_mode *display_mode =
+      wsi_display_mode_from_handle(surface->displayMode);
+   wsi_display_connector *connector = display_mode->connector;
+   VkResult result;
 
    if (wsi->fd < 0)
       return VK_ERROR_INITIALIZATION_FAILED;
@@ -1120,11 +1143,12 @@ _wsi_display_queue_next(struct wsi_swapchain     *drv_chain)
    if (display_mode != connector->current_mode)
       connector->active = false;
 
+   struct wsi_display_image *image = NULL;
    for (;;) {
       /* Check to see if there is an image to display, or if some image is already queued */
 
-      for (i = 0; i < chain->base.image_count; i++) {
-         struct wsi_display_image  *tmp_image = &chain->images[i];
+      for (uint32_t i = 0; i < chain->base.image_count; i++) {
+         struct wsi_display_image *tmp_image = &chain->images[i];
 
          switch (tmp_image->state) {
          case WSI_IMAGE_FLIPPING:
@@ -1143,6 +1167,7 @@ _wsi_display_queue_next(struct wsi_swapchain     *drv_chain)
       if (!image)
          return VK_SUCCESS;
 
+      int ret;
       if (connector->active) {
          ret = drmModePageFlip(wsi->fd, connector->crtc_id, image->fb_id,
                                DRM_MODE_PAGE_FLIP_EVENT, image);
@@ -1158,9 +1183,7 @@ _wsi_display_queue_next(struct wsi_swapchain     *drv_chain)
       if (ret) {
          switch(-ret) {
          case EINVAL:
-
             result = wsi_display_setup_connector(connector, display_mode);
-
             if (result != VK_SUCCESS) {
                image->state = WSI_IMAGE_IDLE;
                return result;
@@ -1168,8 +1191,9 @@ _wsi_display_queue_next(struct wsi_swapchain     *drv_chain)
 
             /* XXX allow setting of position */
 
-            ret = drmModeSetCrtc(wsi->fd, connector->crtc_id, image->fb_id, 0, 0,
-                                 &connector->id, 1, &connector->current_drm_mode);
+            ret = drmModeSetCrtc(wsi->fd, connector->crtc_id, image->fb_id,
+                                 0, 0, &connector->id, 1,
+                                 &connector->current_drm_mode);
 
             if (ret == 0) {
                image->state = WSI_IMAGE_DISPLAYING;
@@ -1200,14 +1224,14 @@ _wsi_display_queue_next(struct wsi_swapchain     *drv_chain)
 }
 
 static VkResult
-wsi_display_queue_present(struct wsi_swapchain          *drv_chain,
-                          uint32_t                      image_index,
-                          const VkPresentRegionKHR      *damage)
+wsi_display_queue_present(struct wsi_swapchain *drv_chain,
+                          uint32_t image_index,
+                          const VkPresentRegionKHR *damage)
 {
-   struct wsi_display_swapchain *chain = (struct wsi_display_swapchain *) drv_chain;
-   struct wsi_display           *wsi = chain->wsi;
-   struct wsi_display_image     *image = &chain->images[image_index];
-   VkResult                     result;
+   struct wsi_display_swapchain *chain =
+      (struct wsi_display_swapchain *) drv_chain;
+   struct wsi_display *wsi = chain->wsi;
+   struct wsi_display_image *image = &chain->images[image_index];
 
    /* Bail early if the swapchain is broken */
    if (chain->status != VK_SUCCESS)
@@ -1221,7 +1245,7 @@ wsi_display_queue_present(struct wsi_swapchain          *drv_chain,
    image->flip_sequence = ++chain->flip_sequence;
    image->state = WSI_IMAGE_QUEUED;
 
-   result = _wsi_display_queue_next(drv_chain);
+   VkResult result = _wsi_display_queue_next(drv_chain);
    if (result != VK_SUCCESS)
       chain->status = result;
 
@@ -1234,15 +1258,16 @@ wsi_display_queue_present(struct wsi_swapchain          *drv_chain,
 }
 
 static VkResult
-wsi_display_surface_create_swapchain(VkIcdSurfaceBase                   *icd_surface,
-                                     VkDevice                           device,
-                                     struct wsi_device                  *wsi_device,
-                                     int                                local_fd,
-                                     const VkSwapchainCreateInfoKHR     *create_info,
-                                     const VkAllocationCallbacks        *allocator,
-                                     struct wsi_swapchain               **swapchain_out)
+wsi_display_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
+                                     VkDevice device,
+                                     struct wsi_device *wsi_device,
+                                     int local_fd,
+                                     const VkSwapchainCreateInfoKHR *create_info,
+                                     const VkAllocationCallbacks *allocator,
+                                     struct wsi_swapchain **swapchain_out)
 {
-   struct wsi_display *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
+   struct wsi_display *wsi =
+      (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
    VkResult result;
 
    assert(create_info->sType == VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR);
@@ -1273,12 +1298,13 @@ wsi_display_surface_create_swapchain(VkIcdSurfaceBase                   *icd_sur
    chain->surface = (VkIcdSurfaceDisplay *) icd_surface;
 
    for (uint32_t image = 0; image < chain->base.image_count; image++) {
-      result = wsi_display_image_init(device, &chain->base, create_info, allocator,
-                                      &chain->images[image]);
+      result = wsi_display_image_init(device, &chain->base, create_info,
+                                      allocator, &chain->images[image]);
       if (result != VK_SUCCESS) {
          while (image > 0) {
             --image;
-            wsi_display_image_finish(&chain->base, allocator, &chain->images[image]);
+            wsi_display_image_finish(&chain->base, allocator,
+                                     &chain->images[image]);
          }
          vk_free(allocator, chain);
          goto fail_init_images;
@@ -1371,7 +1397,8 @@ void
 wsi_display_finish_wsi(struct wsi_device *wsi_device,
                        const VkAllocationCallbacks *alloc)
 {
-   struct wsi_display *wsi = (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
+   struct wsi_display *wsi =
+      (struct wsi_display *) wsi_device->wsi[VK_ICD_WSI_PLATFORM_DISPLAY];
 
    if (wsi) {
       wsi_for_each_connector(connector, wsi) {
