@@ -614,11 +614,13 @@ decode_structs(struct iris_batch *batch, struct gen_spec *spec,
       gen_print_group(stderr, group, gtt_offset + offset,
                       &data[(offset + i * struct_size) / 4], 0, color);
    }
+#endif
 }
 
 static void
 decode_batch(struct iris_batch *batch)
 {
+#if 0
    const struct gen_device_info *devinfo = &batch->screen->devinfo;
    struct gen_spec *spec = gen_spec_load(devinfo);
 
