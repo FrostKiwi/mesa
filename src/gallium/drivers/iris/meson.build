@@ -39,6 +39,9 @@ files_libiris = files(
   'iris_resource.h',
   'iris_screen.c',
   'iris_screen.h',
+  '../../../intel/tools/gen_batch_decoder.c',
+  '../../../intel/tools/disasm.c',
+  '../../../intel/tools/gen_disasm.h',
 )
 
 iris_gen_libs = []
