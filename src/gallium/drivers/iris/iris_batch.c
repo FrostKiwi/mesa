@@ -289,6 +289,8 @@ buffer_bytes_used(struct iris_batch_buffer *buf)
  *
  * Note that this is only temporary - each new batch recreates the buffers
  * at their original target size (BATCH_SZ or STATE_SZ).
+ *
+ * XXX: Delete all this garbage and just do batchbuffer chaining
  */
 static void
 grow_buffer(struct iris_batch *batch,
