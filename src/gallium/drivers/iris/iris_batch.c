@@ -79,15 +79,28 @@ decode_get_bo(void *v_batch, uint64_t address)
 
    for (int i = 0; i < batch->exec_count; i++) {
       struct iris_bo *bo = batch->exec_bos[i];
-      if (address >= bo->gtt_offset &&
-          address < bo->gtt_offset + bo->size) {
+      /* The decoder zeroes out the top 16 bits, so we need to as well */
+      uint64_t bo_address = bo->gtt_offset & (~0ull >> 16);
+
+      if (address >= bo_address && address < bo_address + bo->size) {
          return (struct gen_batch_decode_bo) {
             .addr = address,
             .size = bo->size,
             .map = iris_bo_map(batch->dbg, bo, MAP_READ) +
-                   (address - bo->gtt_offset),
+                   (address - bo_address),
          };
       }
+   }
+
+   if (address == IRIS_BINDER_ADDRESS) {
+      /* We want this to exist for base address purposes, even if it isn't
+       * used by this batch's validation list.
+       */
+      return (struct gen_batch_decode_bo) {
+         .addr = address,
+         .size = 0,
+         .map = NULL,
+      };
    }
 
    return (struct gen_batch_decode_bo) { };
