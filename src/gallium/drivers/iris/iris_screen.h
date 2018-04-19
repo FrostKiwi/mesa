@@ -44,6 +44,7 @@ struct iris_screen {
    struct gen_device_info devinfo;
    struct isl_device isl_dev;
    struct iris_bufmgr *bufmgr;
+   struct iris_bo *workaround_bo;
    struct brw_compiler *compiler;
 
    uint32_t next_instruction_address;
