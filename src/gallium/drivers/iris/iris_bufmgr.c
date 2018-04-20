@@ -1546,7 +1546,7 @@ iris_bufmgr_init(struct gen_device_info *devinfo, int fd)
    util_vma_heap_init(&bufmgr->vma_allocator[IRIS_MEMZONE_DYNAMIC],
                       2 * _4GB, _4GB);
    util_vma_heap_init(&bufmgr->vma_allocator[IRIS_MEMZONE_OTHER],
-                      3 * _4GB, (1ull << 48) - 3 * _4GB);
+                      3 * _4GB, (1ull << 47) - 3 * _4GB);
 
    // XXX: driconf
    bufmgr->bo_reuse = env_var_as_boolean("bo_reuse", true);
