@@ -24,6 +24,7 @@
 #define IRIS_RESOURCE_H
 
 #include "pipe/p_state.h"
+#include "util/u_inlines.h"
 #include "intel/isl/isl.h"
 
 struct iris_resource {
@@ -35,5 +36,12 @@ struct iris_resource {
 enum isl_format iris_isl_format_for_pipe_format(enum pipe_format pf);
 
 void iris_init_screen_resource_functions(struct pipe_screen *pscreen);
+
+static inline struct iris_bo *
+iris_resource_bo(struct pipe_resource *p_res)
+{
+   struct iris_resource *res = (void *) p_res;
+   return res->bo;
+}
 
 #endif
