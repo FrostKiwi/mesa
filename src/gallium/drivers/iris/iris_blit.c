@@ -72,8 +72,6 @@ iris_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
 {
    struct iris_context *ice = (void *) ctx;
 
-   fprintf(stderr, "XXX: blits not implemented\n");
-
    struct blorp_surf src_surf, dst_surf;
    blorp_surf_for_resource(&src_surf, info->src.resource, ISL_AUX_USAGE_NONE,
                            false);
