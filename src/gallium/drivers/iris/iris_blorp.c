@@ -279,5 +279,10 @@ iris_blorp_exec(struct blorp_batch *blorp_batch,
 void
 genX(init_blorp)(struct iris_context *ice)
 {
+   struct iris_screen *screen = (struct iris_screen *)ice->ctx.screen;
+
+   blorp_init(&ice->blorp, ice, &screen->isl_dev);
+   ice->blorp.compiler = screen->compiler;
+
    ice->vtbl.blorp_exec = iris_blorp_exec;
 }
