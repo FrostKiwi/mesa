@@ -206,7 +206,7 @@ iris_upload_shader(struct iris_context *ice,
                    uint32_t key_size,
                    const void *key,
                    const void *assembly,
-                   const struct brw_stage_prog_data *prog_data)
+                   struct brw_stage_prog_data *prog_data)
 {
    struct iris_screen *screen = (void *) ice->ctx.screen;
    struct gen_device_info *devinfo = &screen->devinfo;
@@ -233,6 +233,10 @@ iris_upload_shader(struct iris_context *ice,
    }
 
    shader->prog_data = prog_data;
+
+   ralloc_steal(shader, shader->prog_data);
+   ralloc_steal(shader->prog_data, prog_data->param);
+   ralloc_steal(shader->prog_data, prog_data->pull_param);
 
    /* Store the 3DSTATE shader packets and other derived state. */
    ice->vtbl.set_derived_program_state(devinfo, cache_id, shader);
@@ -261,10 +265,6 @@ iris_upload_and_bind_shader(struct iris_context *ice,
       iris_upload_shader(ice, cache_id, key_size_for_cache(cache_id), key,
                          assembly, prog_data);
 
-   ralloc_steal(shader, shader->prog_data);
-   ralloc_steal(shader->prog_data, prog_data->param);
-   ralloc_steal(shader->prog_data, prog_data->pull_param);
-
    ice->shaders.prog[cache_id] = shader;
    ice->state.dirty |= dirty_flag_for_cache(cache_id);
 }
@@ -292,11 +292,14 @@ bool
 iris_blorp_upload_shader(struct blorp_context *blorp,
                          const void *key, uint32_t key_size,
                          const void *kernel, UNUSED uint32_t kernel_size,
-                         const struct brw_stage_prog_data *prog_data,
+                         const struct brw_stage_prog_data *prog_data_templ,
                          UNUSED uint32_t prog_data_size,
                          uint32_t *kernel_out, void *prog_data_out)
 {
    struct iris_context *ice = blorp->driver_ctx;
+
+   void *prog_data = ralloc_size(NULL, prog_data_size);
+   memcpy(prog_data, prog_data_templ, prog_data_size);
 
    struct iris_compiled_shader *shader =
       iris_upload_shader(ice, IRIS_CACHE_BLORP, key_size, key, kernel,
