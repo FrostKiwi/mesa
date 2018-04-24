@@ -47,9 +47,26 @@
 static void *
 blorp_emit_dwords(struct blorp_batch *batch, unsigned n);
 
+#ifdef BLORP_USE_SOFTPIN
+static uint64_t
+blorp_use_pinned_bo(struct blorp_batch *batch, struct blorp_address addr);
+
+/* Wrappers to avoid #ifdefs everywhere */
+#define blorp_emit_reloc _blorp_combine_address
+static inline void
+blorp_surface_reloc(struct blorp_batch *batch, uint32_t ss_offset,
+                    struct blorp_address address, uint32_t delta)
+{
+}
+#else
 static uint64_t
 blorp_emit_reloc(struct blorp_batch *batch,
                  void *location, struct blorp_address address, uint32_t delta);
+
+static void
+blorp_surface_reloc(struct blorp_batch *batch, uint32_t ss_offset,
+                    struct blorp_address address, uint32_t delta);
+#endif
 
 static void *
 blorp_alloc_dynamic_state(struct blorp_batch *batch,
@@ -78,10 +95,6 @@ blorp_alloc_binding_table(struct blorp_batch *batch, unsigned num_entries,
 static void
 blorp_flush_range(struct blorp_batch *batch, void *start, size_t size);
 
-static void
-blorp_surface_reloc(struct blorp_batch *batch, uint32_t ss_offset,
-                    struct blorp_address address, uint32_t delta);
-
 #if GEN_GEN >= 7 && GEN_GEN < 10
 static struct blorp_address
 blorp_get_surface_base_address(struct blorp_batch *batch);
@@ -104,7 +117,11 @@ _blorp_combine_address(struct blorp_batch *batch, void *location,
    if (address.buffer == NULL) {
       return address.offset + delta;
    } else {
+#ifdef BLORP_USE_SOFTPIN
+      return blorp_use_pinned_bo(batch, address) + delta;
+#else
       return blorp_emit_reloc(batch, location, address, delta);
+#endif
    }
 }
 
@@ -1363,6 +1380,13 @@ blorp_emit_surface_state(struct blorp_batch *batch,
    isl_surf_fill_state(batch->blorp->isl_dev, state,
                        .surf = &surf, .view = &surface->view,
                        .aux_surf = &surface->aux_surf, .aux_usage = aux_usage,
+#ifdef BLORP_USE_SOFTPIN
+                       .address = blorp_use_pinned_bo(batch, surface->addr),
+                       .aux_address = aux_usage != ISL_AUX_USAGE_NONE ?
+                          blorp_use_pinned_bo(batch, surface->aux_addr) : 0,
+                       .clear_address = !use_clear_address ? 0 :
+                          blorp_use_pinned_bo(batch, surface->clear_color_addr),
+#endif
                        .mocs = surface->addr.mocs,
                        .clear_color = surface->clear_color,
                        .use_clear_address = use_clear_address,
