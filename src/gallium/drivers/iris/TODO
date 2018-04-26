@@ -1,0 +1,13 @@
+- Make dirty bit tracking a real thing
+- Depth buffers
+- Separate stencil
+- Auxiliary surfaces
+- PMA
+
+- Compute
+
+- u_threaded_context
+- BLORP in a separate render batch...
+
+- PBO upload in Gallium is inefficient
+
