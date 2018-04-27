@@ -478,6 +478,6 @@ iris_is_format_supported(struct pipe_screen *pscreen,
       // XXX:
    }
 
-   return true;
+   return supported;
 }
 
