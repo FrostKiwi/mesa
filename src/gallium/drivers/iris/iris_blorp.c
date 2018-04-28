@@ -26,9 +26,11 @@
 #include "iris_resource.h"
 #include "iris_context.h"
 
-#include "intel/common/gen_l3_config.h"
-#include "blorp/blorp_genX_exec.h"
 #include "util/u_upload_mgr.h"
+#include "intel/common/gen_l3_config.h"
+
+#define BLORP_USE_SOFTPIN
+#include "blorp/blorp_genX_exec.h"
 
 static uint32_t *
 stream_state(struct iris_batch *batch,
@@ -36,8 +38,7 @@ stream_state(struct iris_batch *batch,
              unsigned size,
              unsigned alignment,
              uint32_t *out_offset,
-             struct iris_bo **out_bo,
-             bool relative_to_base)
+             struct iris_bo **out_bo)
 {
    struct pipe_resource *res = NULL;
    void *ptr = NULL;
@@ -47,9 +48,14 @@ stream_state(struct iris_batch *batch,
    struct iris_bo *bo = iris_resource_bo(res);
    iris_use_pinned_bo(batch, bo, false);
 
-   *out_bo = bo;
-   *out_offset += relative_to_base ? iris_bo_offset_from_base_address(bo)
-                                   : bo->gtt_offset;
+   /* If the caller has asked for a BO, we leave them the responsibility of
+    * adding bo->gtt_offset (say, by handing an address to genxml).  If not,
+    * we assume they want the offset from a base address.
+    */
+   if (out_bo)
+      *out_bo = bo;
+   else
+      *out_offset += iris_bo_offset_from_base_address(bo);
 
    pipe_resource_reference(&res, NULL);
 
@@ -64,27 +70,15 @@ blorp_emit_dwords(struct blorp_batch *blorp_batch, unsigned n)
 }
 
 static uint64_t
-blorp_emit_reloc(struct blorp_batch *blorp_batch, UNUSED void *location,
-                 struct blorp_address addr, uint32_t delta)
+blorp_use_pinned_bo(struct blorp_batch *blorp_batch, struct blorp_address addr)
 {
    struct iris_batch *batch = blorp_batch->driver_batch;
    struct iris_bo *bo = addr.buffer;
-   uint64_t result = addr.offset + delta;
 
-   if (bo) {
-      iris_use_pinned_bo(batch, bo, addr.reloc_flags & RELOC_WRITE);
-      /* Assume this is a general address, not relative to a base. */
-      result += bo->gtt_offset;
-   }
+   iris_use_pinned_bo(batch, bo, addr.reloc_flags & RELOC_WRITE);
 
-   return result;
-}
-
-static void
-blorp_surface_reloc(struct blorp_batch *blorp_batch, uint32_t ss_offset,
-                    struct blorp_address addr, uint32_t delta)
-{
-   /* Don't do anything, blorp_alloc_binding_table already added the BO. */
+   /* Assume this is a general address, not relative to a base. */
+   return bo->gtt_offset + addr.offset;
 }
 
 UNUSED static struct blorp_address
@@ -101,10 +95,9 @@ blorp_alloc_dynamic_state(struct blorp_batch *blorp_batch,
 {
    struct iris_context *ice = blorp_batch->blorp->driver_ctx;
    struct iris_batch *batch = blorp_batch->driver_batch;
-   struct iris_bo *bo;
 
    return stream_state(batch, ice->state.dynamic_uploader,
-                       size, alignment, offset, &bo, true);
+                       size, alignment, offset, NULL);
 }
 
 static void
@@ -118,7 +111,6 @@ blorp_alloc_binding_table(struct blorp_batch *blorp_batch,
 {
    struct iris_context *ice = blorp_batch->blorp->driver_ctx;
    struct iris_batch *batch = blorp_batch->driver_batch;
-   struct iris_bo *bo;
 
    uint32_t *bt_map = iris_binder_reserve(&ice->state.binder,
                                           num_entries * sizeof(uint32_t),
@@ -128,7 +120,7 @@ blorp_alloc_binding_table(struct blorp_batch *blorp_batch,
    for (unsigned i = 0; i < num_entries; i++) {
       surface_maps[i] = stream_state(batch, ice->state.surface_uploader,
                                      state_size, state_alignment,
-                                     &surface_offsets[i], &bo, true);
+                                     &surface_offsets[i], NULL);
       bt_map[i] = surface_offsets[i];
    }
 }
@@ -144,7 +136,7 @@ blorp_alloc_vertex_buffer(struct blorp_batch *blorp_batch,
    uint32_t offset;
 
    void *map = stream_state(batch, ice->ctx.stream_uploader, size, 64,
-                            &offset, &bo, false);
+                            &offset, &bo);
 
    *addr = (struct blorp_address) {
       .buffer = bo,
