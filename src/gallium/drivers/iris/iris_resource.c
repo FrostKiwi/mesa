@@ -418,6 +418,7 @@ iris_transfer_flush_region(struct pipe_context *pipe,
                            struct pipe_transfer *transfer,
                            const struct pipe_box *box)
 {
+   fprintf(stderr, "XXX: %s\n", __func__);
 }
 
 static void
@@ -434,6 +435,7 @@ iris_buffer_subdata(struct pipe_context *pipe,
                     unsigned usage, unsigned offset,
                     unsigned size, const void *data)
 {
+   fprintf(stderr, "XXX: %s\n", __func__);
 }
 
 static void
@@ -446,6 +448,7 @@ iris_texture_subdata(struct pipe_context *pipe,
                      unsigned stride,
                      unsigned layer_stride)
 {
+   fprintf(stderr, "XXX: %s\n", __func__);
 }
 
 
@@ -458,11 +461,13 @@ iris_resource_copy_region(struct pipe_context *ctx,
                           unsigned src_level,
                           const struct pipe_box *src_box)
 {
+   fprintf(stderr, "XXX: %s\n", __func__);
 }
 
 static void
 iris_flush_resource(struct pipe_context *ctx, struct pipe_resource *resource)
 {
+   fprintf(stderr, "XXX: %s\n", __func__);
 }
 
 static boolean
@@ -474,6 +479,7 @@ iris_generate_mipmap(struct pipe_context *ctx,
                      unsigned first_layer,
                      unsigned last_layer)
 {
+   fprintf(stderr, "XXX: %s\n", __func__);
    return true;
 }
 
