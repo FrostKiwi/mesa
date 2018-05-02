@@ -168,7 +168,7 @@ iris_init_batch(struct iris_batch *batch,
 
       gen_batch_decode_ctx_init(&batch->decoder, &screen->devinfo,
                                 stderr, decode_flags, NULL,
-                                decode_get_bo, batch);
+                                decode_get_bo, NULL, batch);
    }
 
    iris_batch_reset(batch);
