@@ -201,25 +201,24 @@ add_exec_bo(struct iris_batch *batch, struct iris_bo *bo)
    return batch->exec_count++;
 }
 
-static
+static void
 create_batch(struct iris_batch *batch)
 {
+   struct iris_screen *screen = batch->screen;
+   struct iris_bufmgr *bufmgr = screen->bufmgr;
+
    batch->bo = iris_bo_alloc(bufmgr, "command buffer",
-                             BATCH_SZ + BATCH_RESERVED,
-                             IRIS_MEMZONE_OTHER);
+                             BATCH_SZ + BATCH_RESERVED, IRIS_MEMZONE_OTHER);
    batch->bo->kflags |= EXEC_OBJECT_CAPTURE;
-   batch->map = iris_bo_map(NULL, buf->bo, MAP_READ | MAP_WRITE);
+   batch->map = iris_bo_map(NULL, batch->bo, MAP_READ | MAP_WRITE);
    batch->map_next = batch->map;
 
-   add_exec_bo(batch, batch->cmdbuf.bo);
+   add_exec_bo(batch, batch->bo);
 }
 
 static void
 iris_batch_reset(struct iris_batch *batch)
 {
-   struct iris_screen *screen = batch->screen;
-   struct iris_bufmgr *bufmgr = screen->bufmgr;
-
    if (batch->last_bo != NULL) {
       iris_bo_unreference(batch->last_bo);
       batch->last_bo = NULL;
@@ -275,7 +274,7 @@ iris_batch_maybe_flush(struct iris_batch *batch, unsigned estimate)
 {
    if (batch->bo != batch->exec_bos[0] ||
        batch_bytes_used(batch) + estimate >= BATCH_SZ) {
-      iris_batch_flush();
+      iris_batch_flush(batch);
    }
 }
 
@@ -286,7 +285,7 @@ iris_require_command_space(struct iris_batch *batch, unsigned size)
 
    if (required_bytes >= BATCH_SZ) {
       /* No longer held by batch->bo, still held by validation list */
-      iris_batch_unreference(batch->bo);
+      iris_bo_unreference(batch->bo);
       batch->primary_batch_size = batch_bytes_used(batch);
 
       const uint32_t MI_BATCH_BUFFER_START = (0x31 << 23) | (1 << 8);
@@ -412,11 +411,8 @@ _iris_batch_flush_fence(struct iris_batch *batch,
                         int in_fence_fd, int *out_fence_fd,
                         const char *file, int line)
 {
-   if (batch_bytes_used(&batch) == 0)
+   if (batch_bytes_used(batch) == 0)
       return 0;
-
-   /* Check that we didn't just wrap our batchbuffer at a bad time. */
-   assert(!batch->no_wrap);
 
    iris_finish_batch(batch);
 
