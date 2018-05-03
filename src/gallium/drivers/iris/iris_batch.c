@@ -35,7 +35,7 @@
 
 #define FILE_DEBUG_FLAG DEBUG_BUFMGR
 
-#define BATCH_SZ (1024)
+#define BATCH_SZ (20 * 1024)
 
 /* Terminating the batch takes either 4 bytes for MI_BATCH_BUFFER_END
  * or 12 bytes for MI_BATCH_BUFFER_START (when chaining).  Plus, we may
@@ -330,6 +330,9 @@ iris_batch_emit(struct iris_batch *batch, const void *data, unsigned size)
 static void
 iris_finish_batch(struct iris_batch *batch)
 {
+   if (batch->bo == batch->exec_bos[0])
+      batch->primary_batch_size = batch_bytes_used(batch);
+
    // XXX: ISP DIS
 
    /* Emit MI_BATCH_BUFFER_END to finish our batch.  Note that execbuf2
@@ -366,8 +369,7 @@ submit_batch(struct iris_batch *batch, int in_fence_fd, int *out_fence_fd)
       .buffers_ptr = (uintptr_t) batch->validation_list,
       .buffer_count = batch->exec_count,
       .batch_start_offset = 0,
-      .batch_len = batch->bo == batch->exec_bos[0] ? batch_bytes_used(batch)
-                                                   : batch->primary_batch_size,
+      .batch_len = batch->primary_batch_size,
       .flags = batch->ring |
                I915_EXEC_NO_RELOC |
                I915_EXEC_BATCH_FIRST |
