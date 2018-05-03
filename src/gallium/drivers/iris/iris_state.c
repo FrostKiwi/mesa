@@ -354,7 +354,7 @@ iris_init_render_context(struct iris_screen *screen,
       sba.DynamicStateBufferSize   = 0xfffff;
    }
 
-   uint32_t noops[940] = { 0, };
+   uint32_t noops[200] = { 0, };
    iris_batch_emit(batch, noops, sizeof(noops));
 
    iris_emit_cmd(batch, GENX(3DSTATE_DRAWING_RECTANGLE), rect) {
