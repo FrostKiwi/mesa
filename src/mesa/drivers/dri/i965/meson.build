@@ -87,7 +87,6 @@ files_i965 = files(
   'gen4_blorp_exec.h',
   'gen6_clip_state.c',
   'gen6_constant_state.c',
-  'gen6_depth_state.c',
   'gen6_multisample_state.c',
   'gen6_queryobj.c',
   'gen6_sampler_state.c',
