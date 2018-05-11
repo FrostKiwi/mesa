@@ -209,8 +209,8 @@ intelCopyPixels(struct gl_context * ctx,
    if (!_mesa_check_conditional_render(ctx))
       return;
 
-   if (do_blit_copypixels(ctx, srcx, srcy, width, height, destx, desty, type))
-      return;
+//   if (do_blit_copypixels(ctx, srcx, srcy, width, height, destx, desty, type))
+//      return;
 
    /* this will use swrast if needed */
    _mesa_meta_CopyPixels(ctx, srcx, srcy, width, height, destx, desty, type);

@@ -266,9 +266,9 @@ intelBitmap(struct gl_context * ctx,
    if (!_mesa_check_conditional_render(ctx))
       return;
 
-   if (do_blit_bitmap(ctx, x, y, width, height,
-                          unpack, pixels))
-      return;
+//   if (do_blit_bitmap(ctx, x, y, width, height,
+//                          unpack, pixels))
+//      return;
 
    _mesa_meta_Bitmap(ctx, x, y, width, height, unpack, pixels);
 }
