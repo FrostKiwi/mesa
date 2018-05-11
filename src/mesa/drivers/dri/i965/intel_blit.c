@@ -130,7 +130,7 @@ blt_pitch(struct intel_mipmap_tree *mt)
    return pitch;
 }
 
-bool
+static bool
 intel_miptree_blit_compatible_formats(mesa_format src, mesa_format dst)
 {
    /* The BLT doesn't handle sRGB conversion */
