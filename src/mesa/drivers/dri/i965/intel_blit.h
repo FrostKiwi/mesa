@@ -49,11 +49,4 @@ bool intel_miptree_copy(struct brw_context *brw,
                         uint32_t dst_x, uint32_t dst_y,
                         uint32_t src_width, uint32_t src_height);
 
-void intel_emit_linear_blit(struct brw_context *brw,
-			    struct brw_bo *dst_bo,
-			    unsigned int dst_offset,
-			    struct brw_bo *src_bo,
-			    unsigned int src_offset,
-			    unsigned int size);
-
 #endif
