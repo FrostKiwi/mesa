@@ -49,18 +49,6 @@ bool intel_miptree_copy(struct brw_context *brw,
                         uint32_t dst_x, uint32_t dst_y,
                         uint32_t src_width, uint32_t src_height);
 
-bool
-intelEmitImmediateColorExpandBlit(struct brw_context *brw,
-				  GLuint cpp,
-				  GLubyte *src_bits, GLuint src_size,
-				  GLuint fg_color,
-				  GLshort dst_pitch,
-				  struct brw_bo *dst_buffer,
-				  GLuint dst_offset,
-                                  enum isl_tiling dst_tiling,
-				  GLshort x, GLshort y,
-				  GLshort w, GLshort h,
-				  enum gl_logicop_mode logic_op);
 void intel_emit_linear_blit(struct brw_context *brw,
 			    struct brw_bo *dst_bo,
 			    unsigned int dst_offset,
