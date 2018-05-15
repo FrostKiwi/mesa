@@ -1754,7 +1754,7 @@ intel_miptree_level_enable_hiz(struct brw_context *brw,
    assert(mt->aux_buf);
    assert(mt->surf.size > 0);
 
-   if (devinfo->gen >= 8 || devinfo->is_haswell) {
+   if (devinfo->is_haswell) {
       uint32_t width = minify(mt->surf.phys_level0_sa.width, level);
       uint32_t height = minify(mt->surf.phys_level0_sa.height, level);
 
