@@ -1740,30 +1740,6 @@ intel_alloc_aux_buffer(struct brw_context *brw,
 
 
 /**
- * Helper for intel_miptree_alloc_aux() that sets
- * \c mt->level[level].has_hiz. Return true if and only if
- * \c has_hiz was set.
- */
-static bool
-intel_miptree_level_enable_hiz(struct brw_context *brw,
-                               struct intel_mipmap_tree *mt,
-                               uint32_t level)
-{
-   assert(mt->aux_buf);
-   assert(mt->surf.size > 0);
-
-   if (level >= mt->aux_buf->surf.levels) {
-      DBG("mt %p level %d: HiZ DISABLED\n", mt, level);
-      return false;
-   }
-
-   DBG("mt %p level %d: HiZ enabled\n", mt, level);
-   mt->level[level].has_hiz = true;
-   return true;
-}
-
-
-/**
  * Allocate the initial aux surface for a miptree based on mt->aux_usage
  *
  * Since MCS, HiZ, and CCS_E can compress more than just clear color, we
@@ -1862,12 +1838,6 @@ intel_miptree_alloc_aux(struct brw_context *brw,
       return false;
    }
 
-   /* Perform aux_usage-specific initialization. */
-   if (mt->aux_usage == ISL_AUX_USAGE_HIZ) {
-      for (unsigned level = mt->first_level; level <= mt->last_level; ++level)
-         intel_miptree_level_enable_hiz(brw, mt, level);
-   }
-
    return true;
 }
 
@@ -1922,7 +1892,10 @@ bool
 intel_miptree_level_has_hiz(const struct intel_mipmap_tree *mt, uint32_t level)
 {
    intel_miptree_check_level_layer(mt, level, 0);
-   return mt->level[level].has_hiz;
+   if (mt->aux_usage != ISL_AUX_USAGE_HIZ)
+      return false;
+
+   return level < mt->aux_buf->surf.levels;
 }
 
 static inline uint32_t
@@ -2812,12 +2785,6 @@ intel_miptree_make_shareable(struct brw_context *brw,
    if (mt->aux_buf) {
       intel_miptree_aux_buffer_free(mt->aux_buf);
       mt->aux_buf = NULL;
-
-      /* Make future calls of intel_miptree_level_has_hiz() return false. */
-      for (uint32_t l = mt->first_level; l <= mt->last_level; ++l) {
-         mt->level[l].has_hiz = false;
-      }
-
       free(mt->aux_state);
       mt->aux_state = NULL;
       brw->ctx.NewDriverState |= BRW_NEW_AUX_STATE;
