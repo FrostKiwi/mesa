@@ -1749,26 +1749,12 @@ intel_miptree_level_enable_hiz(struct brw_context *brw,
                                struct intel_mipmap_tree *mt,
                                uint32_t level)
 {
-   const struct gen_device_info *devinfo = &brw->screen->devinfo;
-
    assert(mt->aux_buf);
    assert(mt->surf.size > 0);
 
-   if (devinfo->is_haswell) {
-      uint32_t width = minify(mt->surf.phys_level0_sa.width, level);
-      uint32_t height = minify(mt->surf.phys_level0_sa.height, level);
-
-      /* Disable HiZ for LOD > 0 unless the width is 8 aligned
-       * and the height is 4 aligned. This allows our HiZ support
-       * to fulfill Haswell restrictions for HiZ ops. For LOD == 0,
-       * we can grow the width & height to allow the HiZ op to
-       * force the proper size alignments.
-       */
-      if ((level > 0 && ((width & 7) || (height & 3))) ||
-          level >= mt->aux_buf->surf.levels) {
-         DBG("mt %p level %d: HiZ DISABLED\n", mt, level);
-         return false;
-      }
+   if (level >= mt->aux_buf->surf.levels) {
+      DBG("mt %p level %d: HiZ DISABLED\n", mt, level);
+      return false;
    }
 
    DBG("mt %p level %d: HiZ enabled\n", mt, level);
