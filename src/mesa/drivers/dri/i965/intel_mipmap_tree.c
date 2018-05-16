@@ -1764,7 +1764,8 @@ intel_miptree_level_enable_hiz(struct brw_context *brw,
        * we can grow the width & height to allow the HiZ op to
        * force the proper size alignments.
        */
-      if (level > 0 && ((width & 7) || (height & 3))) {
+      if ((level > 0 && ((width & 7) || (height & 3))) ||
+          level >= mt->aux_buf->surf.levels) {
          DBG("mt %p level %d: HiZ DISABLED\n", mt, level);
          return false;
       }

@@ -1624,6 +1624,27 @@ isl_surf_get_hiz_surf(const struct isl_device *dev,
     */
    const unsigned samples = ISL_DEV_GEN(dev) >= 9 ? 1 : surf->samples;
 
+   unsigned levels = surf->levels;
+   if (ISL_DEV_IS_HASWELL(dev) && surf->levels > 2) {
+      /* On Haswell, HiZ supports miplevels but the HiZ surface is not laied
+       * out independently; it's a direct scale-down of the original.  This
+       * means that, if we're not careful, miplevels are not guaranteed to be
+       * aligned to an 8x4 HiZ block.  This is not a problem for LOD0 because
+       * it starts at the origin.  For LOD1, it's X position is 0 and it's Y
+       * position is guaranteed to be aligned to a VALIGN of 4.
+       *
+       * For LOD2 and above, we are only guaranteed an HALIGN of 4 for D24
+       * formats so the X position may not be a multiple of 8.  This is a
+       * problem because it means we're not properly aligned and because a
+       * fast-clear of LOD1 may overlap into LOD2 and above.
+       */
+      uint32_t x_offset_sa, y_offset_sa;
+      isl_surf_get_image_offset_sa(surf, 2, 0, 0, &x_offset_sa, &y_offset_sa);
+
+      if (x_offset_sa % 8 != 0)
+         levels = 2;
+   }
+
    return isl_surf_init(dev, hiz_surf,
                         .dim = surf->dim,
                         .format = ISL_FORMAT_HIZ,
