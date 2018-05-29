@@ -62,6 +62,15 @@ foreach g : [['40', isl_gen4_files], ['50', []], ['60', isl_gen6_files],
   )
 endforeach
 
+isl_tiled_memcpy = static_library(
+   'isl_tiled_memcpy',
+   ['isl_tiled_memcpy.c'],
+   include_directories : [
+      inc_common, inc_intel,
+   ],
+   c_args : [c_vis_args, no_override_init_args, '-msse2', sse41_args],
+)
+
 isl_format_layout_c = custom_target(
   'isl_format_layout.c',
   input : ['gen_format_layout.py', 'isl_format_layout.csv'],
@@ -83,7 +92,7 @@ libisl = static_library(
   'isl',
   [libisl_files, isl_format_layout_c, genX_bits_h],
   include_directories : [inc_common, inc_intel, inc_drm_uapi],
-  link_with : isl_gen_libs,
+  link_with : [isl_gen_libs, isl_tiled_memcpy],
   c_args : [c_vis_args, no_override_init_args],
 )
 
