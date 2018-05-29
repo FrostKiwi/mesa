@@ -81,6 +81,13 @@ isl_align_npot(uintmax_t n, uintmax_t a)
 }
 
 static inline uintmax_t
+isl_align_down(uintmax_t n, uintmax_t a)
+{
+   assert(a != 0 && isl_is_pow2(a));
+   return n & ~(a - 1);
+}
+
+static inline uintmax_t
 isl_assert_div(uintmax_t n, uintmax_t a)
 {
    assert(n % a == 0);
