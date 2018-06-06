@@ -195,9 +195,8 @@ struct iris_compiled_shader {
 
 struct iris_shader_state {
    struct pipe_constant_buffer constbuf[PIPE_MAX_CONSTANT_BUFFERS];
-   struct pipe_resource *push_resource;
+   struct pipe_resource *const_resources[PIPE_MAX_CONSTANT_BUFFERS];
    unsigned const_offset;
-   unsigned const_size;
 };
 
 struct iris_vtable {
