@@ -4103,11 +4103,12 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
          const unsigned type_size = type_sz(dest.type);
 
          /* See if we've selected this as a push constant candidate */
+         fs_reg push_reg;
+         unsigned push_length = 0;
          if (const_index) {
             const unsigned ubo_block = const_index->u32[0];
             const unsigned offset_256b = const_offset->u32[0] / 32;
 
-            fs_reg push_reg;
             for (int i = 0; i < 4; i++) {
                const struct brw_ubo_range *range = &prog_data->ubo_ranges[i];
                if (range->block == ubo_block &&
@@ -4116,16 +4117,13 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
 
                   push_reg = fs_reg(UNIFORM, UBO_START + i, dest.type);
                   push_reg.offset = const_offset->u32[0] - 32 * range->start;
+
+                  push_length = 32 * range->length - push_reg.offset;
+                  printf("KAYDEN: loading %u comps @ %u, [%u + %u], len = %u\n",
+                         instr->num_components, const_offset->u32[0], 32 * range->start, 32 * range->length, push_length);
+
                   break;
                }
-            }
-
-            if (push_reg.file != BAD_FILE) {
-               for (unsigned i = 0; i < instr->num_components; i++) {
-                  bld.MOV(offset(dest, bld, i),
-                          byte_offset(push_reg, i * type_size));
-               }
-               break;
             }
          }
 
@@ -4133,7 +4131,17 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
          const fs_builder ubld = bld.exec_all().group(block_sz / 4, 0);
          const fs_reg packed_consts = ubld.vgrf(BRW_REGISTER_TYPE_UD);
 
-         for (unsigned c = 0; c < instr->num_components;) {
+         unsigned c = 0;
+
+         if (push_reg.file != BAD_FILE) {
+            while (c < instr->num_components && c * type_size < push_length) {
+               bld.MOV(offset(dest, bld, c),
+                       byte_offset(push_reg, c * type_size));
+               c++;
+            }
+         }
+
+         while (c < instr->num_components) {
             const unsigned base = const_offset->u32[0] + c * type_size;
             /* Number of usable components in the next block-aligned load. */
             const unsigned count = MIN2(instr->num_components - c,
