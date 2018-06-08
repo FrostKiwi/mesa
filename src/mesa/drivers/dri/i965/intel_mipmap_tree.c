@@ -3659,8 +3659,8 @@ intel_miptree_map(struct brw_context *brw,
    } else if (mt->etc_format != MESA_FORMAT_NONE &&
               !(mode & BRW_MAP_DIRECT_BIT)) {
       intel_miptree_map_etc(brw, mt, map, level, slice);
-   } else if (mt->stencil_mt && !(mode & BRW_MAP_DIRECT_BIT)) {
-      intel_miptree_map_depthstencil(brw, mt, map, level, slice);
+//   } else if (mt->stencil_mt && !(mode & BRW_MAP_DIRECT_BIT)) {
+//      intel_miptree_map_depthstencil(brw, mt, map, level, slice);
    } else if (use_intel_mipree_map_blit(brw, mt, mode, level, slice)) {
       intel_miptree_map_blit(brw, mt, map, level, slice);
 #if defined(USE_SSE41)
