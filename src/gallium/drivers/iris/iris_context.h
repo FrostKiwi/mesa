@@ -86,29 +86,6 @@ struct blorp_params;
 #define IRIS_DIRTY_CONSTANTS_FS             (1ull << 39)
 #define IRIS_DIRTY_DEPTH_BUFFER             (1ull << 40)
 
-enum brw_param_domain {
-   BRW_PARAM_DOMAIN_BUILTIN = 0,
-   BRW_PARAM_DOMAIN_PARAMETER,
-   BRW_PARAM_DOMAIN_UNIFORM,
-   BRW_PARAM_DOMAIN_IMAGE,
-};
-
-#define BRW_PARAM(domain, val)   (BRW_PARAM_DOMAIN_##domain << 24 | (val))
-#define BRW_PARAM_DOMAIN(param)  ((uint32_t)(param) >> 24)
-#define BRW_PARAM_VALUE(param)   ((uint32_t)(param) & 0x00ffffff)
-
-#define BRW_PARAM_PARAMETER(idx, comp) \
-   BRW_PARAM(PARAMETER, ((idx) << 2) | (comp))
-#define BRW_PARAM_PARAMETER_IDX(param)    (BRW_PARAM_VALUE(param) >> 2)
-#define BRW_PARAM_PARAMETER_COMP(param)   (BRW_PARAM_VALUE(param) & 0x3)
-
-#define BRW_PARAM_UNIFORM(idx)            BRW_PARAM(UNIFORM, (idx))
-#define BRW_PARAM_UNIFORM_IDX(param)      BRW_PARAM_VALUE(param)
-
-#define BRW_PARAM_IMAGE(idx, offset) BRW_PARAM(IMAGE, ((idx) << 8) | (offset))
-#define BRW_PARAM_IMAGE_IDX(value)        (BRW_PARAM_VALUE(value) >> 8)
-#define BRW_PARAM_IMAGE_OFFSET(value)     (BRW_PARAM_VALUE(value) & 0xf)
-
 struct iris_depth_stencil_alpha_state;
 
 enum iris_program_cache_id {
