@@ -401,6 +401,96 @@ brw_blorp_blit_miptrees(struct brw_context *brw,
                        filter, mirror_x, mirror_y);
 }
 
+static void
+brw_blorp_copy_depthstencil_miptrees(struct brw_context *brw,
+                                     struct intel_mipmap_tree *src_mt,
+                                     unsigned src_level, unsigned src_layer,
+                                     struct intel_mipmap_tree *dst_mt,
+                                     unsigned dst_level, unsigned dst_layer,
+                                     unsigned src_x, unsigned src_y,
+                                     unsigned dst_x, unsigned dst_y,
+                                     unsigned src_width, unsigned src_height)
+{
+   DBG("%s from %dx %s mt %p %d %d (%d,%d) %dx%d"
+       "to %dx %s mt %p %d %d (%d,%d)\n",
+       __func__,
+       src_mt->surf.samples, _mesa_get_format_name(src_mt->format), src_mt,
+       src_level, src_layer, src_x, src_y, src_width, src_height,
+       dst_mt->surf.samples, _mesa_get_format_name(dst_mt->format), dst_mt,
+       dst_level, dst_layer, dst_x, dst_y);
+
+   /* For combined depth stencil blits, we have to be a bit more creative.
+    * BLORP can do it all but we have to do two blits with some masking.
+    */
+   struct intel_mipmap_tree *src_stencil_mt;
+   enum isl_format src_stencil_format;
+   struct isl_swizzle src_stencil_swizzle;
+   if (src_mt->stencil_mt) {
+      src_stencil_mt = src_mt->stencil_mt;
+      src_stencil_format = ISL_FORMAT_R8_UINT;
+      src_stencil_swizzle = ISL_SWIZZLE_IDENTITY;
+   } else {
+      src_stencil_mt = src_mt;
+      src_stencil_format = ISL_FORMAT_R8G8B8A8_UINT;
+      src_stencil_swizzle = ISL_SWIZZLE(ALPHA, ZERO, ZERO, ONE);
+   }
+
+   struct intel_mipmap_tree *dst_stencil_mt;
+   enum isl_format dst_stencil_format, dst_depth_format;
+   struct isl_swizzle dst_stencil_swizzle;
+
+   /* We don't need a depth write mask because we do the depth blit before the
+    * stencil blit.  We have to do it this way because BLORP uses R32_UNORM
+    * as the destination format for D24 blits so those will always stomp the
+    * stencil channel anyway.
+    */
+   uint8_t dst_stencil_channel_mask;
+
+   if (dst_mt->stencil_mt) {
+      dst_stencil_mt = dst_mt->stencil_mt;
+      dst_stencil_format = ISL_FORMAT_R8_UINT;
+      dst_stencil_swizzle = ISL_SWIZZLE_IDENTITY;
+      dst_stencil_channel_mask = 0xf;
+      dst_depth_format = dst_mt->surf.format;
+   } else {
+      dst_stencil_mt = dst_mt;
+      switch (dst_mt->format) {
+      case MESA_FORMAT_Z24_UNORM_S8_UINT:
+         dst_stencil_format = ISL_FORMAT_R8G8B8A8_UINT;
+         dst_stencil_swizzle = ISL_SWIZZLE(ALPHA, RED, GREEN, BLUE);
+         dst_stencil_channel_mask = 0x8;
+         dst_depth_format = dst_mt->surf.format;
+         break;
+      case MESA_FORMAT_Z32_FLOAT_S8X24_UINT:
+         dst_stencil_format = ISL_FORMAT_R32G32_UINT;
+         dst_stencil_swizzle = ISL_SWIZZLE(GREEN, RED, BLUE, ALPHA);
+         dst_stencil_channel_mask = 0x2;
+         dst_depth_format = ISL_FORMAT_R32G32_FLOAT;
+         break;
+      default:
+         unreachable("Invalid combined depth stencil format");
+      }
+   }
+
+   blorp_blit_miptrees(brw, src_mt, src_level, src_layer,
+                       src_mt->surf.format, ISL_SWIZZLE_IDENTITY,
+                       dst_mt, dst_level, dst_layer,
+                       dst_depth_format, ISL_SWIZZLE_IDENTITY,
+                       ~0, /* Write all channels for depth */
+                       src_x, src_y, src_x + src_width, src_y + src_height,
+                       dst_x, dst_y, dst_x + src_width, dst_y + src_height,
+                       GL_NEAREST, false, false);
+
+   blorp_blit_miptrees(brw, src_stencil_mt, src_level, src_layer,
+                       src_stencil_format, src_stencil_swizzle,
+                       dst_stencil_mt, dst_level, dst_layer,
+                       dst_stencil_format, dst_stencil_swizzle,
+                       dst_stencil_channel_mask,
+                       src_x, src_y, src_x + src_width, src_y + src_height,
+                       dst_x, dst_y, dst_x + src_width, dst_y + src_height,
+                       GL_NEAREST, false, false);
+}
+
 void
 brw_blorp_copy_miptrees(struct brw_context *brw,
                         struct intel_mipmap_tree *src_mt,
@@ -412,6 +502,14 @@ brw_blorp_copy_miptrees(struct brw_context *brw,
                         unsigned src_width, unsigned src_height)
 {
    const struct gen_device_info *devinfo = &brw->screen->devinfo;
+
+   if (src_mt->stencil_mt || dst_mt->stencil_mt) {
+      brw_blorp_copy_depthstencil_miptrees(brw, src_mt, src_level, src_layer,
+                                           dst_mt, dst_level, dst_layer,
+                                           src_x, src_y, dst_x, dst_y,
+                                           src_width, src_height);
+      return;
+   }
 
    DBG("%s from %dx %s mt %p %d %d (%d,%d) %dx%d"
        "to %dx %s mt %p %d %d (%d,%d)\n",
