@@ -2205,6 +2205,7 @@ blorp_blit(struct blorp_batch *batch,
            const struct blorp_surf *dst_surf,
            unsigned dst_level, unsigned dst_layer,
            enum isl_format dst_format, struct isl_swizzle dst_swizzle,
+           uint8_t dst_channel_mask,
            float src_x0, float src_y0,
            float src_x1, float src_y1,
            float dst_x0, float dst_y0,
@@ -2233,6 +2234,8 @@ blorp_blit(struct blorp_batch *batch,
                                src_layer, src_format, false);
    brw_blorp_surface_info_init(batch->blorp, &params.dst, dst_surf, dst_level,
                                dst_layer, dst_format, true);
+   for (unsigned i = 0; i < 4; i++)
+      params.color_write_disable[i] = (dst_channel_mask & (1 << i)) == 0;
 
    params.src.view.swizzle = src_swizzle;
    params.dst.view.swizzle = dst_swizzle;

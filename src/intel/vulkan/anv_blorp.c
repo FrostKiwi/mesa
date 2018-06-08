@@ -602,7 +602,7 @@ void anv_CmdBlitImage(
          blorp_blit(&batch, &src, src_res->mipLevel, src_z,
                     src_format.isl_format, src_format.swizzle,
                     &dst, dst_res->mipLevel, dst_z,
-                    dst_format.isl_format, dst_format.swizzle,
+                    dst_format.isl_format, dst_format.swizzle, ~0,
                     src_x0, src_y0, src_x1, src_y1,
                     dst_x0, dst_y0, dst_x1, dst_y1,
                     gl_filter, flip_x, flip_y);
@@ -1178,7 +1178,7 @@ resolve_surface(struct blorp_batch *batch,
               src_surf, src_level, src_layer,
               ISL_FORMAT_UNSUPPORTED, ISL_SWIZZLE_IDENTITY,
               dst_surf, dst_level, dst_layer,
-              ISL_FORMAT_UNSUPPORTED, ISL_SWIZZLE_IDENTITY,
+              ISL_FORMAT_UNSUPPORTED, ISL_SWIZZLE_IDENTITY, ~0,
               src_x, src_y, src_x + width, src_y + height,
               dst_x, dst_y, dst_x + width, dst_y + height,
               0x2600 /* GL_NEAREST */, false, false);
