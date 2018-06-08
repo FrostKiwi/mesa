@@ -275,6 +275,64 @@ swizzle_to_scs(GLenum swizzle)
  * src_mt->surf.samples == 4, then logical layer n corresponds to src_layer ==
  * 4*n.
  */
+static void
+blorp_blit_miptrees(struct brw_context *brw,
+                    struct intel_mipmap_tree *src_mt,
+                    unsigned src_level, unsigned src_layer,
+                    enum isl_format src_format,
+                    struct isl_swizzle src_swizzle,
+                    struct intel_mipmap_tree *dst_mt,
+                    unsigned dst_level, unsigned dst_layer,
+                    enum isl_format dst_format,
+                    struct isl_swizzle dst_swizzle,
+                    uint8_t dst_channel_mask,
+                    float src_x0, float src_y0,
+                    float src_x1, float src_y1,
+                    float dst_x0, float dst_y0,
+                    float dst_x1, float dst_y1,
+                    GLenum filter, bool mirror_x, bool mirror_y)
+{
+   enum isl_aux_usage src_aux_usage =
+      intel_miptree_texture_aux_usage(brw, src_mt, src_format);
+   /* We do format workarounds for some depth formats so we can't reliably
+    * sample with HiZ.  One of these days, we should fix that.
+    */
+   if (src_aux_usage == ISL_AUX_USAGE_HIZ)
+      src_aux_usage = ISL_AUX_USAGE_NONE;
+   const bool src_clear_supported =
+      src_aux_usage != ISL_AUX_USAGE_NONE && src_mt->surf.format == src_format;
+   intel_miptree_prepare_access(brw, src_mt, src_level, 1, src_layer, 1,
+                                src_aux_usage, src_clear_supported);
+
+   enum isl_aux_usage dst_aux_usage =
+      intel_miptree_render_aux_usage(brw, dst_mt, dst_format,
+                                     false, false);
+   const bool dst_clear_supported = dst_aux_usage != ISL_AUX_USAGE_NONE;
+   intel_miptree_prepare_access(brw, dst_mt, dst_level, 1, dst_layer, 1,
+                                dst_aux_usage, dst_clear_supported);
+
+   struct isl_surf tmp_surfs[2];
+   struct blorp_surf src_surf, dst_surf;
+   blorp_surf_for_miptree(brw, &src_surf, src_mt, src_aux_usage, false,
+                          &src_level, src_layer, 1, &tmp_surfs[0]);
+   blorp_surf_for_miptree(brw, &dst_surf, dst_mt, dst_aux_usage, true,
+                          &dst_level, dst_layer, 1, &tmp_surfs[1]);
+
+   struct blorp_batch batch;
+   blorp_batch_init(&brw->blorp, &batch, brw, 0);
+   blorp_blit(&batch, &src_surf, src_level, src_layer,
+              src_format, src_swizzle,
+              &dst_surf, dst_level, dst_layer,
+              dst_format, dst_swizzle, dst_channel_mask,
+              src_x0, src_y0, src_x1, src_y1,
+              dst_x0, dst_y0, dst_x1, dst_y1,
+              filter, mirror_x, mirror_y);
+   blorp_batch_finish(&batch);
+
+   intel_miptree_finish_write(brw, dst_mt, dst_level, dst_layer, 1,
+                              dst_aux_usage);
+}
+
 void
 brw_blorp_blit_miptrees(struct brw_context *brw,
                         struct intel_mipmap_tree *src_mt,
@@ -324,36 +382,6 @@ brw_blorp_blit_miptrees(struct brw_context *brw,
       src_format = dst_format = MESA_FORMAT_R_FLOAT32;
    }
 
-   enum isl_format src_isl_format =
-      brw_blorp_to_isl_format(brw, src_format, false);
-   enum isl_aux_usage src_aux_usage =
-      intel_miptree_texture_aux_usage(brw, src_mt, src_isl_format);
-   /* We do format workarounds for some depth formats so we can't reliably
-    * sample with HiZ.  One of these days, we should fix that.
-    */
-   if (src_aux_usage == ISL_AUX_USAGE_HIZ)
-      src_aux_usage = ISL_AUX_USAGE_NONE;
-   const bool src_clear_supported =
-      src_aux_usage != ISL_AUX_USAGE_NONE && src_mt->format == src_format;
-   intel_miptree_prepare_access(brw, src_mt, src_level, 1, src_layer, 1,
-                                src_aux_usage, src_clear_supported);
-
-   enum isl_format dst_isl_format =
-      brw_blorp_to_isl_format(brw, dst_format, true);
-   enum isl_aux_usage dst_aux_usage =
-      intel_miptree_render_aux_usage(brw, dst_mt, dst_isl_format,
-                                     false, false);
-   const bool dst_clear_supported = dst_aux_usage != ISL_AUX_USAGE_NONE;
-   intel_miptree_prepare_access(brw, dst_mt, dst_level, 1, dst_layer, 1,
-                                dst_aux_usage, dst_clear_supported);
-
-   struct isl_surf tmp_surfs[2];
-   struct blorp_surf src_surf, dst_surf;
-   blorp_surf_for_miptree(brw, &src_surf, src_mt, src_aux_usage, false,
-                          &src_level, src_layer, 1, &tmp_surfs[0]);
-   blorp_surf_for_miptree(brw, &dst_surf, dst_mt, dst_aux_usage, true,
-                          &dst_level, dst_layer, 1, &tmp_surfs[1]);
-
    struct isl_swizzle src_isl_swizzle = {
       .r = swizzle_to_scs(GET_SWZ(src_swizzle, 0)),
       .g = swizzle_to_scs(GET_SWZ(src_swizzle, 1)),
@@ -361,19 +389,16 @@ brw_blorp_blit_miptrees(struct brw_context *brw,
       .a = swizzle_to_scs(GET_SWZ(src_swizzle, 3)),
    };
 
-   struct blorp_batch batch;
-   blorp_batch_init(&brw->blorp, &batch, brw, 0);
-   blorp_blit(&batch, &src_surf, src_level, src_layer,
-              src_isl_format, src_isl_swizzle,
-              &dst_surf, dst_level, dst_layer,
-              dst_isl_format, ISL_SWIZZLE_IDENTITY, ~0,
-              src_x0, src_y0, src_x1, src_y1,
-              dst_x0, dst_y0, dst_x1, dst_y1,
-              filter, mirror_x, mirror_y);
-   blorp_batch_finish(&batch);
-
-   intel_miptree_finish_write(brw, dst_mt, dst_level, dst_layer, 1,
-                              dst_aux_usage);
+   blorp_blit_miptrees(brw,
+                       src_mt, src_level, src_layer,
+                       brw_blorp_to_isl_format(brw, src_format, false),
+                       src_isl_swizzle,
+                       dst_mt, dst_level, dst_layer,
+                       brw_blorp_to_isl_format(brw, dst_format, true),
+                       ISL_SWIZZLE_IDENTITY, ~0,
+                       src_x0, src_y0, src_x1, src_y1,
+                       dst_x0, dst_y0, dst_x1, dst_y1,
+                       filter, mirror_x, mirror_y);
 }
 
 void
