@@ -3119,7 +3119,14 @@ intel_miptree_map_blit(struct brw_context *brw,
 		       unsigned int level, unsigned int slice)
 {
    const struct gen_device_info *devinfo = &brw->screen->devinfo;
-   map->linear_mt = intel_miptree_create(brw, GL_TEXTURE_2D, mt->format,
+
+   mesa_format mt_format = mt->format;
+   if (mt->format == MESA_FORMAT_Z24_UNORM_X8_UINT && mt->stencil_mt)
+      mt_format = MESA_FORMAT_Z24_UNORM_S8_UINT;
+   if (mt->format == MESA_FORMAT_Z_FLOAT32 && mt->stencil_mt)
+      mt_format = MESA_FORMAT_Z32_FLOAT_S8X24_UINT;
+
+   map->linear_mt = intel_miptree_create(brw, GL_TEXTURE_2D, mt_format,
                                          /* first_level */ 0,
                                          /* last_level */ 0,
                                          map->w, map->h, 1,
