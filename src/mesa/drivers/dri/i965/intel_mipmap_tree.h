@@ -361,15 +361,6 @@ enum intel_miptree_create_flags {
    /** No miptree create flags */
    MIPTREE_CREATE_DEFAULT  = 0,
 
-   /** Miptree creation should try to allocate a currently busy BO
-    *
-    * This may be advantageous if we know the next thing to touch the BO will
-    * be the GPU because the BO will likely already be in the GTT and maybe
-    * even in some caches.  If there is a chance that the next thing to touch
-    * the miptree BO will be the CPU, this flag should not be set.
-    */
-   MIPTREE_CREATE_BUSY     = 1 << 0,
-
    /** Create a linear (not tiled) miptree */
    MIPTREE_CREATE_LINEAR   = 1 << 1,
 
