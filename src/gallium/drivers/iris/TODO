@@ -11,3 +11,41 @@
 
 - PBO upload in Gallium is inefficient
 
+Need to restore BOs saved/restored in context and not-reemitted...
+
+These don't reference BOs:
+
+IRIS_DIRTY_URB - NO
+IRIS_DIRTY_MULTISAMPLE - NO
+IRIS_DIRTY_SAMPLE_MASK - NO
+IRIS_DIRTY_CLIP - NO
+IRIS_DIRTY_RASTER - NO
+IRIS_DIRTY_WM - NO
+IRIS_DIRTY_PS_BLEND - NO
+IRIS_DIRTY_WM_DEPTH_STENCIL - NO
+IRIS_DIRTY_VERTEX_ELEMENTS - NO
+IRIS_DIRTY_POLYGON_STIPPLE - NO
+IRIS_DIRTY_LINE_STIPPLE - NO
+VF - NO
+3DPRIMITIVE - no
+
+These do reference BOs:
+
+3DSTATE_CONSTANT_* - yes, no reuploading, just add BOs
+BTP - yes, add binder BO...but also binder will be emptied, so have to anyway
+populate binding table - NO...but YES because ^^^
+samplers - yes, loop over BOs
+IRIS_DIRTY_{VS,TCS,TES,GS,FS} - yes, program cache BOs
+
+IRIS_DIRTY_CC_VIEWPORT - yes, streamed...needlessly...but 2 DWords..so...
+IRIS_DIRTY_SF_CL_VIEWPORT - yes, streamed...needlessly?  or needs fb state?
+IRIS_DIRTY_BLEND_STATE - yes, streamed
+IRIS_DIRTY_COLOR_CALC_STATE - yes, streamed
+IRIS_DIRTY_SCISSOR_RECT - yes, streamed
+IRIS_DIRTY_DEPTH_BUFFER - yes, better to just ref the BOs again
+IRIS_DIRTY_VERTEX_BUFFERS - yes, better to just ref the BOs again
+index buffer - yes
+
+If BLORP is first in batch, may be able to avoid a bunch of this.
+Currently BLORP whacks IRIS_DIRTY_* for packets that it trashes, so
+it will naturally avoid the redundant work with no extra consideration.
