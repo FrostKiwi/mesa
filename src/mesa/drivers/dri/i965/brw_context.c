@@ -1099,6 +1099,14 @@ intelDestroyContext(__DRIcontext * driContextPriv)
       (struct brw_context *) driContextPriv->driverPrivate;
    struct gl_context *ctx = &brw->ctx;
 
+   /* Wait for our any outstanding rendering to be completed before we start
+    * freeing anything.  It's probably safe to destroy the context while stuff
+    * is sill in flight since the kernel will reference count our BOs.  This
+    * just ensures that everything is safe before we start destroying things
+    * in case doing so has any side-effects.
+    */
+   intel_finish(ctx);
+
    _mesa_meta_free(&brw->ctx);
 
    if (INTEL_DEBUG & DEBUG_SHADER_TIME) {
