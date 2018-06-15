@@ -577,7 +577,7 @@ retry:
          }
 
          if (zeroed) {
-            void *map = brw_bo_map(NULL, bo, MAP_WRITE | MAP_RAW);
+            void *map = brw_bo_map(NULL, bo, MAP_WRITE | MAP_RAW | MAP_ASYNC);
             if (!map) {
                bo_free(bo);
                goto retry;
