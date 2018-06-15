@@ -384,7 +384,8 @@ wsi_display_fill_in_display_properties(struct wsi_device *wsi_device,
       floor(properties->physicalResolution.height * MM_PER_PIXEL + 0.5);
 
    properties->supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-   properties->persistentContent = 0;
+   properties->planeReorderPossible = VK_FALSE;
+   properties->persistentContent = VK_FALSE;
 }
 
 /*
@@ -488,7 +489,7 @@ wsi_display_get_display_plane_supported_displays(
    int c = 0;
 
    wsi_for_each_connector(connector, wsi) {
-      if (c == plane_index) {
+      if (c == plane_index && connector->connected) {
          vk_outarray_append(&conn, display) {
             *display = wsi_display_connector_to_handle(connector);
          }
@@ -1387,8 +1388,10 @@ wsi_display_init_wsi(struct wsi_device *wsi_device,
       goto fail_mutex;
    }
 
-   if (!wsi_init_pthread_cond_monotonic(&wsi->wait_cond))
+   if (!wsi_init_pthread_cond_monotonic(&wsi->wait_cond)) {
+      result = VK_ERROR_OUT_OF_HOST_MEMORY;
       goto fail_cond;
+   }
 
    wsi->base.get_support = wsi_display_surface_get_support;
    wsi->base.get_capabilities = wsi_display_surface_get_capabilities;
