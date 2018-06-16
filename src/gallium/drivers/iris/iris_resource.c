@@ -555,7 +555,7 @@ iris_transfer_flush_region(struct pipe_context *pipe,
                            struct pipe_transfer *transfer,
                            const struct pipe_box *box)
 {
-   fprintf(stderr, "XXX: %s\n", __func__);
+   //fprintf(stderr, "XXX: %s\n", __func__);
 }
 
 static void
