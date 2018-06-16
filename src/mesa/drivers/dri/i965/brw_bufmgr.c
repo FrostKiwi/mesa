@@ -143,6 +143,10 @@ struct brw_bufmgr {
 
    mtx_t lock;
 
+   unsigned hits;
+   unsigned misses;
+   unsigned max_bucket_size;
+
    /** Array of lists of cached gem objects of power-of-two sizes */
    struct bo_cache_bucket cache_bucket[14 * 4];
    int num_buckets;
@@ -537,6 +541,9 @@ bo_alloc_internal(struct brw_bufmgr *bufmgr,
        */
       if (list_empty(&bucket->head))
          brw_bufmgr_collect(bufmgr);
+
+      unsigned bucket_size = list_length(&bucket->head);
+      bufmgr->max_bucket_size = MAX2(bufmgr->max_bucket_size, bucket_size);
    }
 
    mtx_lock(&bufmgr->lock);
@@ -575,6 +582,8 @@ retry:
    }
 
    if (alloc_from_cache) {
+      bufmgr->hits++;
+
       /* If the cache BO isn't in the right memory zone, free the old
        * memory and assign it a new address.
        */
@@ -584,6 +593,8 @@ retry:
          bo->gtt_offset = 0ull;
       }
    } else {
+      bufmgr->misses++;
+
       bo = calloc(1, sizeof(*bo));
       if (!bo)
          goto err;
@@ -894,6 +905,9 @@ bo_unreference_final(struct brw_bo *bo, time_t time)
       bo->name = NULL;
 
       list_addtail(&bo->head, &bucket->head);
+
+      unsigned bucket_size = list_length(&bucket->head);
+      bufmgr->max_bucket_size = MAX2(bufmgr->max_bucket_size, bucket_size);
    } else {
       bo_free(bo);
    }
