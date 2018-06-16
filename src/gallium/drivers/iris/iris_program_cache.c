@@ -336,6 +336,12 @@ iris_destroy_program_cache(struct iris_context *ice)
       ice->shaders.prog[i] = NULL;
    }
 
+   struct hash_entry *entry;
+   hash_table_foreach(ice->shaders.cache, entry) {
+      struct iris_compiled_shader *shader = entry->data;
+      pipe_resource_reference(&shader->buffer, NULL);
+   }
+
    u_upload_destroy(ice->shaders.uploader);
 
    ralloc_free(ice->shaders.cache);
