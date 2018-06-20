@@ -326,10 +326,10 @@ iris_resource_from_handle(struct pipe_screen *pscreen,
    }
 
    switch (whandle->type) {
-   case DRM_API_HANDLE_TYPE_FD:
+   case WINSYS_HANDLE_TYPE_FD:
       res->bo = iris_bo_import_dmabuf(bufmgr, whandle->handle);
       break;
-   case DRM_API_HANDLE_TYPE_SHARED:
+   case WINSYS_HANDLE_TYPE_SHARED:
       res->bo = iris_bo_gem_create_from_name(bufmgr, "winsys image",
                                              whandle->handle);
       break;
@@ -385,11 +385,11 @@ iris_resource_get_handle(struct pipe_screen *pscreen,
    whandle->stride = res->surf.row_pitch;
 
    switch (whandle->type) {
-   case DRM_API_HANDLE_TYPE_SHARED:
+   case WINSYS_HANDLE_TYPE_SHARED:
       return iris_bo_flink(res->bo, &whandle->handle) == 0;
-   case DRM_API_HANDLE_TYPE_KMS:
+   case WINSYS_HANDLE_TYPE_KMS:
       return iris_bo_export_gem_handle(res->bo) != 0;
-   case DRM_API_HANDLE_TYPE_FD:
+   case WINSYS_HANDLE_TYPE_FD:
       return iris_bo_export_dmabuf(res->bo, (int *) &whandle->handle) == 0;
    }
 
