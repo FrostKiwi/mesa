@@ -304,11 +304,7 @@ struct brw_blorp_blit_prog_key
     */
    bool dst_rgb;
 
-   /* True if all source samples should be blended together to produce each
-    * destination pixel.  If true, src_tiled_w must be false, tex_samples must
-    * equal src_samples, and tex_samples must be nonzero.
-    */
-   bool blend;
+   enum blorp_filter filter;
 
    /* True if the rectangle being sent through the rendering pipeline might be
     * larger than the destination rectangle, so the WM program should kill any
@@ -321,9 +317,6 @@ struct brw_blorp_blit_prog_key
     * than one sample per pixel.
     */
    bool persample_msaa_dispatch;
-
-   /* True for scaled blitting. */
-   bool blit_scaled;
 
    /* True if this blit operation may involve intratile offsets on the source.
     * In this case, we need to add the offset before texturing.
@@ -340,9 +333,6 @@ struct brw_blorp_blit_prog_key
     */
    float x_scale;
    float y_scale;
-
-   /* True for blits with filter = GL_LINEAR. */
-   bool bilinear_filter;
 };
 
 /**
