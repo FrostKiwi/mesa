@@ -306,7 +306,7 @@ vbo_exec_vtx_map(struct vbo_exec_context *exec)
          exec->vtx.buffer_ptr = exec->vtx.buffer_map;
       }
       else {
-         exec->vtx.buffer_ptr = exec->vtx.buffer_map = NULL;
+         vbo_exec_vtx_unmap(exec);
       }
    }
 
