@@ -146,6 +146,36 @@ blorp_alloc_vertex_buffer(struct blorp_batch *blorp_batch,
    return map;
 }
 
+/**
+ * See vf_invalidate_for_vb_48b_transitions in iris_state.c.
+ * XXX: actually add this
+ */
+static void
+blorp_vf_invalidate_for_vb_48b_transitions(struct blorp_batch *batch,
+                                           const struct blorp_address *addrs,
+                                           unsigned num_vbs)
+{
+#if 0
+   struct iris_context *ice = blorp_batch->blorp->driver_ctx;
+   struct iris_batch *batch = blorp_batch->driver_batch;
+   bool need_invalidate = false;
+
+   for (unsigned i = 0; i < num_vbs; i++) {
+      struct iris_bo *bo = addrs[i].buffer;
+      uint16_t high_bits = bo ? bo->gtt_offset >> 32u : 0;
+
+      if (high_bits != ice->state.last_vbo_high_bits[i]) {
+         need_invalidate = true;
+         ice->state.last_vbo_high_bits[i] = high_bits;
+      }
+   }
+
+   if (need_invalidate) {
+      iris_emit_pipe_control_flush(batch, PIPE_CONTROL_VF_CACHE_INVALIDATE);
+   }
+#endif
+}
+
 static struct blorp_address
 blorp_get_workaround_page(struct blorp_batch *blorp_batch)
 {
