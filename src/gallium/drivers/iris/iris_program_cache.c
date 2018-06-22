@@ -282,7 +282,8 @@ iris_upload_and_bind_shader(struct iris_context *ice,
 bool
 iris_blorp_lookup_shader(struct blorp_context *blorp,
                          const void *key, uint32_t key_size,
-                         uint32_t *kernel_out, void *prog_data_out)
+                         struct blorp_address *kernel_out,
+                         void *prog_data_out)
 {
    struct iris_context *ice = blorp->driver_ctx;
    struct iris_compiled_shader *shader =
@@ -292,7 +293,8 @@ iris_blorp_lookup_shader(struct blorp_context *blorp,
       return false;
 
    struct iris_bo *bo = iris_resource_bo(shader->buffer);
-   *kernel_out = iris_bo_offset_from_base_address(bo) + shader->offset;
+   *kernel_out =
+      (struct blorp_address) { .buffer = bo, .offset = shader->offset };
    *((void **) prog_data_out) = shader->prog_data;
 
    return true;
@@ -304,7 +306,8 @@ iris_blorp_upload_shader(struct blorp_context *blorp,
                          const void *kernel, UNUSED uint32_t kernel_size,
                          const struct brw_stage_prog_data *prog_data_templ,
                          UNUSED uint32_t prog_data_size,
-                         uint32_t *kernel_out, void *prog_data_out)
+                         struct blorp_address *kernel_out,
+                         void *prog_data_out)
 {
    struct iris_context *ice = blorp->driver_ctx;
 
@@ -316,7 +319,8 @@ iris_blorp_upload_shader(struct blorp_context *blorp,
                          prog_data);
 
    struct iris_bo *bo = iris_resource_bo(shader->buffer);
-   *kernel_out = iris_bo_offset_from_base_address(bo) + shader->offset;
+   *kernel_out =
+      (struct blorp_address) { .buffer = bo, .offset = shader->offset };
    *((void **) prog_data_out) = shader->prog_data;
 
    return true;

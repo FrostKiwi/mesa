@@ -1908,7 +1908,7 @@ static uint64_t
 KSP(const struct iris_compiled_shader *shader)
 {
    struct iris_resource *res = (void *) shader->buffer;
-   return res->bo->gtt_offset + shader->offset;
+   return iris_bo_offset_from_base_address(res->bo) + shader->offset;
 }
 
 #define INIT_THREAD_DISPATCH_FIELDS(pkt, prefix)                          \

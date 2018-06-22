@@ -203,11 +203,11 @@ struct blorp_params
    unsigned num_samples;
    unsigned num_draw_buffers;
    unsigned num_layers;
-   uint32_t vs_prog_kernel;
+   struct blorp_address vs_prog_kernel;
    struct brw_vs_prog_data *vs_prog_data;
-   uint32_t sf_prog_kernel;
+   struct blorp_address sf_prog_kernel;
    struct brw_sf_prog_data *sf_prog_data;
-   uint32_t wm_prog_kernel;
+   struct blorp_address wm_prog_kernel;
    struct brw_wm_prog_data *wm_prog_data;
 
    bool use_pre_baked_binding_table;

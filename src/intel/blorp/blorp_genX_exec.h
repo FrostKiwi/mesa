@@ -125,6 +125,16 @@ _blorp_combine_address(struct blorp_batch *batch, void *location,
    }
 }
 
+static uint64_t
+KSP(struct blorp_batch *batch, struct blorp_address address)
+{
+#ifdef BLORP_USE_SOFTPIN
+   return blorp_use_pinned_bo(batch, address);
+#else
+   return address.offset;
+#endif
+}
+
 #define __gen_address_type struct blorp_address
 #define __gen_user_data struct blorp_batch
 #define __gen_combine_address _blorp_combine_address
@@ -632,7 +642,7 @@ blorp_emit_vs_config(struct blorp_batch *batch,
       if (vs_prog_data) {
          vs.Enable = true;
 
-         vs.KernelStartPointer = params->vs_prog_kernel;
+         vs.KernelStartPointer = KSP(batch, params->vs_prog_kernel);
 
          vs.DispatchGRFStartRegisterForURBData =
             vs_prog_data->base.base.dispatch_grf_start_reg;
@@ -812,11 +822,11 @@ blorp_emit_ps_config(struct blorp_batch *batch,
          ps.DispatchGRFStartRegisterForConstantSetupData2 =
             brw_wm_prog_data_dispatch_grf_start_reg(prog_data, ps, 2);
 
-         ps.KernelStartPointer0 = params->wm_prog_kernel +
+         ps.KernelStartPointer0 = KSP(batch, params->wm_prog_kernel) +
                                   brw_wm_prog_data_prog_offset(prog_data, ps, 0);
-         ps.KernelStartPointer1 = params->wm_prog_kernel +
+         ps.KernelStartPointer1 = KSP(batch, params->wm_prog_kernel) +
                                   brw_wm_prog_data_prog_offset(prog_data, ps, 1);
-         ps.KernelStartPointer2 = params->wm_prog_kernel +
+         ps.KernelStartPointer2 = KSP(batch, params->wm_prog_kernel) +
                                   brw_wm_prog_data_prog_offset(prog_data, ps, 2);
       }
 
@@ -922,11 +932,11 @@ blorp_emit_ps_config(struct blorp_batch *batch,
          ps.DispatchGRFStartRegisterForConstantSetupData2 =
             brw_wm_prog_data_dispatch_grf_start_reg(prog_data, ps, 2);
 
-         ps.KernelStartPointer0 = params->wm_prog_kernel +
+         ps.KernelStartPointer0 = KSP(batch, params->wm_prog_kernel) +
                                   brw_wm_prog_data_prog_offset(prog_data, ps, 0);
-         ps.KernelStartPointer1 = params->wm_prog_kernel +
+         ps.KernelStartPointer1 = KSP(batch, params->wm_prog_kernel) +
                                   brw_wm_prog_data_prog_offset(prog_data, ps, 1);
-         ps.KernelStartPointer2 = params->wm_prog_kernel +
+         ps.KernelStartPointer2 = KSP(batch, params->wm_prog_kernel) +
                                   brw_wm_prog_data_prog_offset(prog_data, ps, 2);
 
          ps.AttributeEnable = prog_data->num_varying_inputs > 0;

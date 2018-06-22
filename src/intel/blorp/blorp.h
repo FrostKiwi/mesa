@@ -35,6 +35,7 @@ struct brw_stage_prog_data;
 extern "C" {
 #endif
 
+struct blorp_address;
 struct blorp_batch;
 struct blorp_params;
 
@@ -47,13 +48,15 @@ struct blorp_context {
 
    bool (*lookup_shader)(struct blorp_context *blorp,
                          const void *key, uint32_t key_size,
-                         uint32_t *kernel_out, void *prog_data_out);
+                         struct blorp_address *kernel_out,
+                         void *prog_data_out);
    bool (*upload_shader)(struct blorp_context *blorp,
                          const void *key, uint32_t key_size,
                          const void *kernel, uint32_t kernel_size,
                          const struct brw_stage_prog_data *prog_data,
                          uint32_t prog_data_size,
-                         uint32_t *kernel_out, void *prog_data_out);
+                         struct blorp_address *kernel_out,
+                         void *prog_data_out);
    void (*exec)(struct blorp_batch *batch, const struct blorp_params *params);
 };
 
