@@ -324,6 +324,39 @@ brw_blorp_blit_miptrees(struct brw_context *brw,
       src_format = dst_format = MESA_FORMAT_R_FLOAT32;
    }
 
+   enum blorp_filter blorp_filter;
+   if (filter == GL_SCALED_RESOLVE_FASTEST_EXT ||
+       filter == GL_SCALED_RESOLVE_NICEST_EXT) {
+      blorp_filter = BLORP_FILTER_BILINEAR;
+   } else if (src_mt->surf.samples > 1 && dst_mt->surf.samples <= 1) {
+      /* We are blitting from a multi-sampled surface to a single-sampled
+       * surface.  This means we're doing a multisample resolve.
+       */
+      GLenum base_format = _mesa_get_format_base_format(src_mt->format);
+      if (base_format == GL_DEPTH_COMPONENT ||
+          base_format == GL_STENCIL_INDEX ||
+          base_format == GL_DEPTH_STENCIL ||
+          _mesa_is_format_integer(src_mt->format)) {
+         /* The OpenGL ES 3.2 spec says:
+          *
+          *    "If the source formats are integer types or stencil values, a
+          *    single sample's value is selected for each pixel."
+          *
+          * Just take sample 0 in this case.
+          */
+         blorp_filter = BLORP_FILTER_SAMPLE_0;
+      } else {
+         blorp_filter = BLORP_FILTER_AVERAGE;
+      }
+   } else {
+      if (filter == GL_LINEAR) {
+         blorp_filter = BLORP_FILTER_BILINEAR;
+      } else {
+         assert(filter == GL_NEAREST);
+         blorp_filter = BLORP_FILTER_NEAREST;
+      }
+   }
+
    enum isl_format src_isl_format =
       brw_blorp_to_isl_format(brw, src_format, false);
    enum isl_aux_usage src_aux_usage =
@@ -369,7 +402,7 @@ brw_blorp_blit_miptrees(struct brw_context *brw,
               dst_isl_format, ISL_SWIZZLE_IDENTITY,
               src_x0, src_y0, src_x1, src_y1,
               dst_x0, dst_y0, dst_x1, dst_y1,
-              filter, mirror_x, mirror_y);
+              blorp_filter, mirror_x, mirror_y);
    blorp_batch_finish(&batch);
 
    intel_miptree_finish_write(brw, dst_mt, dst_level, dst_layer, 1,
