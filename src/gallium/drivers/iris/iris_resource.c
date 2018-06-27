@@ -592,7 +592,7 @@ iris_transfer_unmap(struct pipe_context *pipe, struct pipe_transfer *xfer)
 static void
 iris_flush_resource(struct pipe_context *ctx, struct pipe_resource *resource)
 {
-   fprintf(stderr, "XXX: %s\n", __func__);
+   //fprintf(stderr, "XXX: %s\n", __func__);
 }
 
 void
