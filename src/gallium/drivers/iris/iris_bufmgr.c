@@ -239,15 +239,17 @@ memzone_for_address(uint64_t address)
    if (address >= IRIS_MEMZONE_OTHER_START)
       return IRIS_MEMZONE_OTHER;
 
-   if (address >= IRIS_MEMZONE_DYNAMIC_START)
-      return IRIS_MEMZONE_DYNAMIC;
+   if (address == IRIS_MEMZONE_DYNAMIC_START)
+      return IRIS_MEMZONE_BORDER_COLOR_POOL;
 
-   /* Use > to exclude the binder */
-   if (address > IRIS_MEMZONE_SURFACE_START)
-      return IRIS_MEMZONE_SURFACE;
+   if (address > IRIS_MEMZONE_DYNAMIC_START)
+      return IRIS_MEMZONE_DYNAMIC;
 
    if (address == IRIS_BINDER_ADDRESS)
       return IRIS_MEMZONE_BINDER;
+
+   if (address > IRIS_MEMZONE_SURFACE_START)
+      return IRIS_MEMZONE_SURFACE;
 
    return IRIS_MEMZONE_SHADER;
 }
@@ -365,6 +367,8 @@ __vma_alloc(struct iris_bufmgr *bufmgr,
 {
    if (memzone == IRIS_MEMZONE_BINDER)
       return IRIS_BINDER_ADDRESS;
+   else if (memzone == IRIS_MEMZONE_BORDER_COLOR_POOL)
+      return IRIS_BORDER_COLOR_POOL_ADDRESS;
 
    struct bo_cache_bucket *bucket = get_bucket_allocator(bufmgr, size);
    uint64_t addr;
@@ -1551,7 +1555,8 @@ iris_bufmgr_init(struct gen_device_info *devinfo, int fd)
                       IRIS_MEMZONE_SURFACE_START + IRIS_BINDER_SIZE,
                       _4GB - IRIS_BINDER_SIZE);
    util_vma_heap_init(&bufmgr->vma_allocator[IRIS_MEMZONE_DYNAMIC],
-                      IRIS_MEMZONE_DYNAMIC_START, _4GB);
+                      IRIS_MEMZONE_DYNAMIC_START + IRIS_BORDER_COLOR_POOL_SIZE,
+                      _4GB - IRIS_BORDER_COLOR_POOL_SIZE);
    util_vma_heap_init(&bufmgr->vma_allocator[IRIS_MEMZONE_OTHER],
                       IRIS_MEMZONE_OTHER_START,
                       (1ull << 47) - IRIS_MEMZONE_OTHER_START);
