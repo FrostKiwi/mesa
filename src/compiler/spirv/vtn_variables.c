@@ -1790,8 +1790,24 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
       var->var->data.index = var->input_attachment_index;
       var->var->data.offset = var->offset;
 
-      if (glsl_type_is_image(without_array->type))
+      if (glsl_type_is_image(without_array->type)) {
          var->var->data.image.format = without_array->image_format;
+
+         /* The requirement that the NonReadable decoration be set was added
+          * as a clarification to the Vulkan spec in version 1.1.76 and not
+          * all apps respect it.  Setting it implicitly inside spirv_to_nir
+          * fixes rendering issues in Skyrim on DXVK as of June 27, 2018.
+          */
+         if (var->var->data.image.format == 0 &&
+             !var->var->data.image.write_only &&
+             !b->options->caps.image_read_without_format) {
+            vtn_warn("Image variable created an unknown format and without "
+                     "the NonReadable decoration set but the driver does not "
+                     "support shaderStorageImageReadWithoutFormat.  Setting "
+                     "the decoration implicitly to work around the problem.");
+            var->var->data.image.write_only = true;
+         }
+      }
    }
 
    if (var->mode == vtn_variable_mode_local) {
