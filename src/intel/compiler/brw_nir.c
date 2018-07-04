@@ -680,6 +680,9 @@ brw_preprocess_nir(const struct brw_compiler *compiler, nir_shader *nir)
 
    nir = brw_nir_optimize(nir, compiler, is_scalar, true);
 
+   if (nir->info.stage == MESA_SHADER_FRAGMENT)
+      OPT(nir_opt_move_discards_to_top);
+
    /* This needs to be run after the first optimization pass but before we
     * lower indirect derefs away
     */
