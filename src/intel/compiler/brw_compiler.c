@@ -46,7 +46,8 @@
    .native_integers = true,                                                   \
    .use_interpolated_input_intrinsics = true,                                 \
    .vertex_id_zero_based = true,                                              \
-   .lower_base_vertex = true
+   .lower_base_vertex = true,                                                 \
+   .derivatives_safe_after_discard = true
 
 #define COMMON_SCALAR_OPTIONS                                                 \
    .lower_pack_half_2x16 = true,                                              \
