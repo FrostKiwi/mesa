@@ -2022,6 +2022,13 @@ typedef struct nir_shader_compiler_options {
     */
    bool vs_inputs_dual_locations;
 
+   /**
+    * Whether or not derivatives are still a safe operation after a discard
+    * has occurred.  Optimization passes may be able to be a bit more
+    * agressive if this is true.
+    */
+   bool derivatives_safe_after_discard;
+
    unsigned max_unroll_iterations;
 } nir_shader_compiler_options;
 
@@ -2900,6 +2907,9 @@ bool nir_opt_cse(nir_shader *shader);
 bool nir_opt_dce(nir_shader *shader);
 
 bool nir_opt_dead_cf(nir_shader *shader);
+
+bool nir_opt_discard_if(nir_shader *shader);
+bool nir_opt_move_discards_to_top(nir_shader *shader);
 
 bool nir_opt_gcm(nir_shader *shader, bool value_number);
 
