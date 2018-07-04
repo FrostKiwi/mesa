@@ -845,6 +845,21 @@ nir_instr_insert(nir_cursor cursor, nir_instr *instr)
       nir_handle_add_jump(instr->block);
 }
 
+void
+nir_instr_move(nir_cursor cursor, nir_instr *instr)
+{
+   /* If the cursor happens to refer to this instruction (either before or
+    * after), don't do anything.
+    */
+   if ((cursor.option == nir_cursor_before_instr ||
+        cursor.option == nir_cursor_after_instr) &&
+       cursor.instr == instr)
+      return;
+
+   nir_instr_remove(instr);
+   nir_instr_insert(cursor, instr);
+}
+
 static bool
 src_is_valid(const nir_src *src)
 {
