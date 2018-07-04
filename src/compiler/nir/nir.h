@@ -2135,6 +2135,13 @@ typedef struct nir_shader_compiler_options {
     */
    bool use_interpolated_input_intrinsics;
 
+   /**
+    * Whether or not derivatives are still a safe operation after a discard
+    * has occurred.  Optimization passes may be able to be a bit more
+    * aggressive if this is true.
+    */
+   bool derivatives_safe_after_discard;
+
    unsigned max_unroll_iterations;
 } nir_shader_compiler_options;
 
@@ -3077,6 +3084,9 @@ bool nir_opt_dce(nir_shader *shader);
 bool nir_opt_dead_cf(nir_shader *shader);
 
 bool nir_opt_dead_write_vars(nir_shader *shader);
+
+bool nir_opt_discard_if(nir_shader *shader);
+bool nir_opt_move_discards_to_top(nir_shader *shader);
 
 bool nir_opt_find_array_copies(nir_shader *shader);
 
