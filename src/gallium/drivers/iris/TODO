@@ -11,6 +11,13 @@
 
 - PBO upload in Gallium is inefficient
 
+- arb_vertex_attrib_64bit - iris_set_vertex_elements() is getting called
+  with num_inputs == 5 when it should be 3.  The issue is that
+  vs_dual_locations is set in the NirOptions, causing nir_gather_info
+  to count each dual slot value as two bits instead of one in the
+  double_inputs_read bitfield, which then causes st_program.c to
+  quad count those inputs instead of double count them.
+
 Need to restore BOs saved/restored in context and not-reemitted...
 
 These don't reference BOs:
