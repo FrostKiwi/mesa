@@ -282,6 +282,9 @@ lower_io_arrays_to_elements(nir_shader *shader, nir_variable_mode mask,
                nir_variable *var =
                   nir_deref_instr_get_variable(nir_src_as_deref(intr->src[0]));
 
+               if (var->data.compact)
+                  continue;
+
                /* Skip indirects */
                uint64_t loc_mask = ((uint64_t)1) << var->data.location;
                if (var->data.patch) {

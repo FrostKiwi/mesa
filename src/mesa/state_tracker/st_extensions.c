@@ -320,7 +320,7 @@ void st_init_limits(struct pipe_screen *screen,
             screen->get_shader_param(screen, sh,
                                   PIPE_SHADER_CAP_MAX_UNROLL_ITERATIONS_HINT);
 
-      options->LowerCombinedClipCullDistance = true;
+      //options->LowerCombinedClipCullDistance = true;
       options->LowerBufferInterfaceBlocks = true;
    }
 
