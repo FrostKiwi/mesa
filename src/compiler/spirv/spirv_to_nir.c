@@ -2314,6 +2314,79 @@ fill_common_atomic_sources(struct vtn_builder *b, SpvOp opcode,
    }
 }
 
+static void
+vtn_emit_barrier(struct vtn_builder *b, nir_intrinsic_op op)
+{
+   nir_intrinsic_instr *intrin = nir_intrinsic_instr_create(b->shader, op);
+   nir_builder_instr_insert(&b->nb, &intrin->instr);
+}
+
+static void
+vtn_emit_memory_barrier(struct vtn_builder *b, SpvScope scope,
+                        SpvMemorySemanticsMask semantics)
+{
+   static const SpvMemorySemanticsMask all_memory_semantics =
+      SpvMemorySemanticsUniformMemoryMask |
+      SpvMemorySemanticsWorkgroupMemoryMask |
+      SpvMemorySemanticsAtomicCounterMemoryMask |
+      SpvMemorySemanticsImageMemoryMask |
+      SpvMemorySemanticsOutputMemoryKHRMask |
+      SpvMemorySemanticsMakeAvailableKHRMask |
+      SpvMemorySemanticsMakeVisibleKHRMask;
+
+   /* If we're not actually doing a memory barrier, bail */
+   if (!(semantics & all_memory_semantics))
+      return;
+
+   /* GL and Vulkan don't have these */
+   vtn_assert(scope != SpvScopeCrossDevice);
+
+   if (scope == SpvScopeSubgroup)
+      return; /* Nothing to do here */
+
+   if (scope == SpvScopeWorkgroup) {
+      vtn_emit_barrier(b, nir_intrinsic_group_memory_barrier);
+      return;
+   }
+
+   /* There's only three scopes left */
+   vtn_assert(scope == SpvScopeInvocation ||
+              scope == SpvScopeDevice ||
+              scope == SpvScopeQueueFamilyKHR);
+
+   if ((semantics & all_memory_semantics) == all_memory_semantics) {
+      vtn_emit_barrier(b, nir_intrinsic_memory_barrier);
+      return;
+   }
+
+   /* Issue a bunch of more specific barriers */
+   uint32_t bits = semantics;
+   while (bits) {
+      SpvMemorySemanticsMask semantic = 1 << u_bit_scan(&bits);
+      switch (semantic) {
+      case SpvMemorySemanticsUniformMemoryMask:
+         vtn_emit_barrier(b, nir_intrinsic_memory_barrier_buffer);
+         break;
+      case SpvMemorySemanticsWorkgroupMemoryMask:
+         vtn_emit_barrier(b, nir_intrinsic_memory_barrier_shared);
+         break;
+      case SpvMemorySemanticsAtomicCounterMemoryMask:
+         vtn_emit_barrier(b, nir_intrinsic_memory_barrier_atomic_counter);
+         break;
+      case SpvMemorySemanticsImageMemoryMask:
+         vtn_emit_barrier(b, nir_intrinsic_memory_barrier_image);
+         break;
+      case SpvMemorySemanticsOutputMemoryKHRMask:
+      case SpvMemorySemanticsMakeAvailableKHRMask:
+      case SpvMemorySemanticsMakeVisibleKHRMask:
+         vtn_emit_barrier(b, nir_intrinsic_memory_barrier);
+         return;
+      default:
+         break;;
+      }
+   }
+}
+
 static nir_ssa_def *
 get_image_coord(struct vtn_builder *b, uint32_t value)
 {
@@ -2357,6 +2430,8 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    }
 
    struct vtn_image_pointer image;
+   SpvScope scope = SpvScopeInvocation;
+   SpvMemorySemanticsMask semantics = 0;
 
    switch (opcode) {
    case SpvOpAtomicExchange:
@@ -2375,10 +2450,14 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    case SpvOpAtomicOr:
    case SpvOpAtomicXor:
       image = *vtn_value(b, w[3], vtn_value_type_image_pointer)->image;
+      scope = vtn_constant_value(b, w[4])->values[0].u32[0];
+      semantics = vtn_constant_value(b, w[5])->values[0].u32[0];
       break;
 
    case SpvOpAtomicStore:
       image = *vtn_value(b, w[1], vtn_value_type_image_pointer)->image;
+      scope = vtn_constant_value(b, w[2])->values[0].u32[0];
+      semantics = vtn_constant_value(b, w[3])->values[0].u32[0];
       break;
 
    case SpvOpImageQuerySize:
@@ -2416,6 +2495,8 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    default:
       vtn_fail("Invalid image opcode");
    }
+
+   semantics |= SpvMemorySemanticsImageMemoryMask;
 
    nir_intrinsic_op op;
    switch (opcode) {
@@ -2493,6 +2574,9 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
       vtn_fail("Invalid image opcode");
    }
 
+   if (opcode == SpvOpAtomicLoad)
+      vtn_emit_memory_barrier(b, scope, semantics);
+
    if (opcode != SpvOpImageWrite && opcode != SpvOpAtomicStore) {
       struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
       struct vtn_type *type = vtn_value(b, w[1], vtn_value_type_type)->type;
@@ -2516,6 +2600,9 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    } else {
       nir_builder_instr_insert(&b->nb, &intrin->instr);
    }
+
+   if (opcode == SpvOpAtomicStore)
+      vtn_emit_memory_barrier(b, scope, semantics);
 }
 
 static nir_intrinsic_op
@@ -2634,6 +2721,8 @@ vtn_handle_atomics(struct vtn_builder *b, SpvOp opcode,
 {
    struct vtn_pointer *ptr;
    nir_intrinsic_instr *atomic;
+   SpvScope scope;
+   SpvMemorySemanticsMask semantics;
 
    switch (opcode) {
    case SpvOpAtomicLoad:
@@ -2652,20 +2741,27 @@ vtn_handle_atomics(struct vtn_builder *b, SpvOp opcode,
    case SpvOpAtomicOr:
    case SpvOpAtomicXor:
       ptr = vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
+      scope = vtn_constant_value(b, w[4])->values[0].u32[0];
+      semantics = vtn_constant_value(b, w[5])->values[0].u32[0];
       break;
 
    case SpvOpAtomicStore:
       ptr = vtn_value(b, w[1], vtn_value_type_pointer)->pointer;
+      scope = vtn_constant_value(b, w[2])->values[0].u32[0];
+      semantics = vtn_constant_value(b, w[3])->values[0].u32[0];
       break;
 
    default:
       vtn_fail("Invalid SPIR-V atomic");
    }
 
-   /*
-   SpvScope scope = w[4];
-   SpvMemorySemanticsMask semantics = w[5];
-   */
+   if (ptr->mode == vtn_variable_mode_workgroup)
+      semantics |= SpvMemorySemanticsWorkgroupMemoryMask;
+   else
+      semantics |= SpvMemorySemanticsUniformMemoryMask;
+
+   if (opcode == SpvOpAtomicLoad)
+      vtn_emit_memory_barrier(b, scope, semantics);
 
    /* uniform as "atomic counter uniform" */
    if (ptr->mode == vtn_variable_mode_uniform) {
@@ -2825,6 +2921,9 @@ vtn_handle_atomics(struct vtn_builder *b, SpvOp opcode,
    }
 
    nir_builder_instr_insert(&b->nb, &atomic->instr);
+
+   if (opcode != SpvOpAtomicStore)
+      vtn_emit_memory_barrier(b, scope, semantics);
 }
 
 static nir_alu_instr *
@@ -3126,69 +3225,6 @@ vtn_handle_composite(struct vtn_builder *b, SpvOp opcode,
 
    default:
       vtn_fail("unknown composite operation");
-   }
-}
-
-static void
-vtn_emit_barrier(struct vtn_builder *b, nir_intrinsic_op op)
-{
-   nir_intrinsic_instr *intrin = nir_intrinsic_instr_create(b->shader, op);
-   nir_builder_instr_insert(&b->nb, &intrin->instr);
-}
-
-static void
-vtn_emit_memory_barrier(struct vtn_builder *b, SpvScope scope,
-                        SpvMemorySemanticsMask semantics)
-{
-   static const SpvMemorySemanticsMask all_memory_semantics =
-      SpvMemorySemanticsUniformMemoryMask |
-      SpvMemorySemanticsWorkgroupMemoryMask |
-      SpvMemorySemanticsAtomicCounterMemoryMask |
-      SpvMemorySemanticsImageMemoryMask;
-
-   /* If we're not actually doing a memory barrier, bail */
-   if (!(semantics & all_memory_semantics))
-      return;
-
-   /* GL and Vulkan don't have these */
-   vtn_assert(scope != SpvScopeCrossDevice);
-
-   if (scope == SpvScopeSubgroup)
-      return; /* Nothing to do here */
-
-   if (scope == SpvScopeWorkgroup) {
-      vtn_emit_barrier(b, nir_intrinsic_group_memory_barrier);
-      return;
-   }
-
-   /* There's only two scopes thing left */
-   vtn_assert(scope == SpvScopeInvocation || scope == SpvScopeDevice);
-
-   if ((semantics & all_memory_semantics) == all_memory_semantics) {
-      vtn_emit_barrier(b, nir_intrinsic_memory_barrier);
-      return;
-   }
-
-   /* Issue a bunch of more specific barriers */
-   uint32_t bits = semantics;
-   while (bits) {
-      SpvMemorySemanticsMask semantic = 1 << u_bit_scan(&bits);
-      switch (semantic) {
-      case SpvMemorySemanticsUniformMemoryMask:
-         vtn_emit_barrier(b, nir_intrinsic_memory_barrier_buffer);
-         break;
-      case SpvMemorySemanticsWorkgroupMemoryMask:
-         vtn_emit_barrier(b, nir_intrinsic_memory_barrier_shared);
-         break;
-      case SpvMemorySemanticsAtomicCounterMemoryMask:
-         vtn_emit_barrier(b, nir_intrinsic_memory_barrier_atomic_counter);
-         break;
-      case SpvMemorySemanticsImageMemoryMask:
-         vtn_emit_barrier(b, nir_intrinsic_memory_barrier_image);
-         break;
-      default:
-         break;;
-      }
    }
 }
 
