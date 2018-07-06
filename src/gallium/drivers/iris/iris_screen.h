@@ -25,6 +25,7 @@
 
 #include "pipe/p_screen.h"
 #include "state_tracker/drm_driver.h"
+#include "util/slab.h"
 #include "intel/dev/gen_device_info.h"
 #include "intel/isl/isl.h"
 #include "iris_bufmgr.h"
@@ -36,6 +37,9 @@ struct iris_bo;
 
 struct iris_screen {
    struct pipe_screen base;
+
+   struct slab_parent_pool transfer_pool;
+
    int fd;
    int pci_id;
 
