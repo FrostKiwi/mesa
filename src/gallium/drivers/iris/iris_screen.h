@@ -46,8 +46,6 @@ struct iris_screen {
    struct iris_bufmgr *bufmgr;
    struct iris_bo *workaround_bo;
    struct brw_compiler *compiler;
-
-   uint32_t next_instruction_address;
 };
 
 struct pipe_screen *iris_screen_create(int fd);
