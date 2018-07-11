@@ -7453,7 +7453,8 @@ st_translate_stream_output_info2(struct gl_transform_feedback_info *info,
 
    for (i = 0; i < info->NumOutputs; i++) {
       so->output[i].register_index =
-         outputMapping[info->Outputs[i].OutputRegister];
+         info->Outputs[i].OutputRegister;
+         //outputMapping[info->Outputs[i].OutputRegister];
       so->output[i].start_component = info->Outputs[i].ComponentOffset;
       so->output[i].num_components = info->Outputs[i].NumComponents;
       so->output[i].output_buffer = info->Outputs[i].OutputBuffer;
