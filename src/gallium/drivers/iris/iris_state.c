@@ -43,6 +43,7 @@
 #include "util/u_framebuffer.h"
 #include "util/u_transfer.h"
 #include "util/u_upload_mgr.h"
+#include "util/u_viewport.h"
 #include "i915_drm.h"
 #include "nir.h"
 #include "intel/compiler/brw_compiler.h"
@@ -406,14 +407,6 @@ iris_init_render_context(struct iris_screen *screen,
    }
 }
 
-struct iris_viewport_state {
-   uint32_t sf_cl_vp[GENX(SF_CLIP_VIEWPORT_length) * IRIS_MAX_VIEWPORTS];
-   struct {
-      float scale;
-      float translate;
-   } z[IRIS_MAX_VIEWPORTS];
-};
-
 struct iris_vertex_buffer_state {
    uint32_t vertex_buffers[1 + 33 * GENX(VERTEX_BUFFER_STATE_length)];
    struct pipe_resource *resources[33];
@@ -432,7 +425,9 @@ struct iris_depth_buffer_state {
  * layout varies per generation.
  */
 struct iris_genx_state {
-   struct iris_viewport_state viewport;
+   /** SF_CLIP_VIEWPORT */
+   uint32_t sf_cl_vp[GENX(SF_CLIP_VIEWPORT_length) * IRIS_MAX_VIEWPORTS];
+
    struct iris_vertex_buffer_state vertex_buffers;
    struct iris_depth_buffer_state depth_buffer;
 
@@ -1291,12 +1286,13 @@ iris_set_viewport_states(struct pipe_context *ctx,
 {
    struct iris_context *ice = (struct iris_context *) ctx;
    struct iris_genx_state *genx = ice->state.genx;
-   struct iris_viewport_state *cso = &genx->viewport;
-   uint32_t *vp_map = &cso->sf_cl_vp[start_slot];
+   uint32_t *vp_map = &genx->sf_cl_vp[start_slot];
 
-   // XXX: sf_cl_vp is only big enough for one slot, we don't iterate right
    for (unsigned i = 0; i < count; i++) {
-      const struct pipe_viewport_state *state = &states[start_slot + i];
+      const struct pipe_viewport_state *state = &states[i];
+
+      memcpy(&ice->state.viewports[start_slot + i], state, sizeof(*state));
+
       iris_pack_state(GENX(SF_CLIP_VIEWPORT), vp_map, vp) {
          vp.ViewportMatrixElementm00 = state->scale[0];
          vp.ViewportMatrixElementm11 = state->scale[1];
@@ -1318,9 +1314,6 @@ iris_set_viewport_states(struct pipe_context *ctx,
       }
 
       vp_map += GENX(SF_CLIP_VIEWPORT_length);
-
-      cso->z[start_slot + i].scale = state->scale[2];
-      cso->z[start_slot + i].translate = state->translate[2];
    }
 
    ice->state.dirty |= IRIS_DIRTY_SF_CL_VIEWPORT;
@@ -2679,29 +2672,6 @@ iris_restore_context_saved_bos(struct iris_context *ice,
 }
 
 static void
-get_near_far(const struct iris_rasterizer_state *cso_rast,
-             const struct iris_viewport_state *cso_vp,
-             int i, float *near, float *far)
-{
-   float n, f;
-
-   if (cso_rast->depth_clip) {
-      n = 0.0;
-      f = 1.0;
-   } else if (cso_rast->clip_halfz) {
-      n = cso_vp->z[i].translate;
-      f = cso_vp->z[i].scale + cso_vp->z[i].translate;
-   } else {
-      n = -cso_vp->z[i].scale + cso_vp->z[i].translate;
-      f =  cso_vp->z[i].scale + cso_vp->z[i].translate;
-   }
-
-   *near = MIN2(n, f);
-   *far = MAX2(n, f);
-}
-
-
-static void
 iris_upload_render_state(struct iris_context *ice,
                          struct iris_batch *batch,
                          const struct pipe_draw_info *draw)
@@ -2714,7 +2684,6 @@ iris_upload_render_state(struct iris_context *ice,
 
    if (dirty & IRIS_DIRTY_CC_VIEWPORT) {
       const struct iris_rasterizer_state *cso_rast = ice->state.cso_rast;
-      struct iris_viewport_state *cso_vp = &ice->state.genx->viewport;
       uint32_t cc_vp_address;
 
       /* XXX: could avoid streaming for depth_clip [0,1] case. */
@@ -2724,12 +2693,18 @@ iris_upload_render_state(struct iris_context *ice,
                       4 * ice->state.num_viewports *
                       GENX(CC_VIEWPORT_length), 32, &cc_vp_address);
       for (int i = 0; i < ice->state.num_viewports; i++) {
-         float near, far;
-         get_near_far(cso_rast, cso_vp, i, &near, &far);
+         float zmin, zmax;
+         if (cso_rast->depth_clip) {
+            zmin = 0.0;
+            zmax = 1.0;
+         } else {
+            util_viewport_zmin_zmax(&ice->state.viewports[i],
+                                    cso_rast->clip_halfz, &zmin, &zmax);
+         }
 
          iris_pack_state(GENX(CC_VIEWPORT), cc_vp_map, ccv) {
-            ccv.MinimumDepth = near;
-            ccv.MaximumDepth = far;
+            ccv.MinimumDepth = zmin;
+            ccv.MaximumDepth = zmax;
          }
 
          cc_vp_map += GENX(CC_VIEWPORT_length);
@@ -2741,12 +2716,11 @@ iris_upload_render_state(struct iris_context *ice,
    }
 
    if (dirty & IRIS_DIRTY_SF_CL_VIEWPORT) {
-      struct iris_viewport_state *cso = &ice->state.genx->viewport;
       iris_emit_cmd(batch, GENX(3DSTATE_VIEWPORT_STATE_POINTERS_SF_CLIP), ptr) {
          ptr.SFClipViewportPointer =
             emit_state(batch, ice->state.dynamic_uploader,
                        &ice->state.last_res.sf_cl_vp,
-                       cso->sf_cl_vp, 4 * GENX(SF_CLIP_VIEWPORT_length) *
+                       genx->sf_cl_vp, 4 * GENX(SF_CLIP_VIEWPORT_length) *
                        ice->state.num_viewports, 64);
       }
    }
