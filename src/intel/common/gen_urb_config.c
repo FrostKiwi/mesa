@@ -151,6 +151,7 @@ gen_get_urb_config(const struct gen_device_info *devinfo,
 
    assert(total_needs <= urb_chunks);
 
+#if 0
    /* Mete out remaining space (if any) in proportion to "wants". */
    unsigned remaining_space = MIN2(urb_chunks - total_needs, total_wants);
 
@@ -166,6 +167,7 @@ gen_get_urb_config(const struct gen_device_info *devinfo,
 
       chunks[MESA_SHADER_GEOMETRY] += remaining_space;
    }
+#endif
 
    /* Sanity check that we haven't over-allocated. */
    unsigned total_chunks = push_constant_chunks;
@@ -194,9 +196,20 @@ gen_get_urb_config(const struct gen_device_info *devinfo,
       assert(entries[i] >= min_entries[i]);
    }
 
+#if 0
    /* Lay out the URB in pipeline order: push constants, VS, HS, DS, GS. */
    start[0] = push_constant_chunks;
    for (int i = MESA_SHADER_TESS_CTRL; i <= MESA_SHADER_GEOMETRY; i++) {
       start[i] = start[i - 1] + chunks[i - 1];
    }
+#else
+   /* Lay out the URB in pipeline order: push constants, VS, HS, DS, GS, but
+    * packed towards the very top.
+    */
+   unsigned chunks_left = urb_chunks;
+   for (int i = MESA_SHADER_GEOMETRY; i >= MESA_SHADER_VERTEX; i--) {
+      chunks_left -= chunks[i];
+      start[i] = chunks_left;
+   }
+#endif
 }
