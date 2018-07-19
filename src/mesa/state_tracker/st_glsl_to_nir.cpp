@@ -617,6 +617,38 @@ st_nir_link_shaders(nir_shader **producer, nir_shader **consumer, bool scalar)
    }
 }
 
+static void
+st_lower_patch_vertices_in(struct gl_shader_program *shader_prog)
+{
+   static const gl_state_index16 tcs_toks[STATE_LENGTH] =
+      { STATE_INTERNAL, STATE_TCS_PATCH_VERTICES_IN };
+   static const gl_state_index16 tes_toks[STATE_LENGTH] =
+      { STATE_INTERNAL, STATE_TES_PATCH_VERTICES_IN };
+   struct gl_linked_shader *linked_tcs =
+      shader_prog->_LinkedShaders[MESA_SHADER_TESS_CTRL];
+   struct gl_linked_shader *linked_tes =
+      shader_prog->_LinkedShaders[MESA_SHADER_TESS_EVAL];
+   uint32_t tes_patch_verts = 0;
+
+   /* XXX: only do uniform lowering if the driver wants. */
+   /* (constant lowering should be good all the time) */
+
+   if (linked_tcs) {
+      /* Lower the TCS patch vertices to a uniform. */
+      nir_shader *tcs_nir = linked_tcs->Program->nir;
+      NIR_PASS_V(tcs_nir, nir_lower_patch_vertices, 0, tcs_toks);
+
+      /* The TES input vertex count is the TCS output vertex count. */
+      tes_patch_verts = tcs_nir->info.tess.tcs_vertices_out;
+   }
+
+   if (linked_tes) {
+      /* Lower the TES patch vertices to a constant or a uniform. */
+      nir_shader *tes_nir = linked_tes->Program->nir;
+      NIR_PASS_V(tes_nir, nir_lower_patch_vertices, tes_patch_verts, tes_toks);
+   }
+}
+
 extern "C" {
 
 bool
@@ -753,6 +785,8 @@ st_link_nir(struct gl_context *ctx,
       }
       prev = i;
    }
+
+   st_lower_patch_vertices_in(shader_program);
 
    for (unsigned i = 0; i < MESA_SHADER_STAGES; i++) {
       struct gl_linked_shader *shader = shader_program->_LinkedShaders[i];
