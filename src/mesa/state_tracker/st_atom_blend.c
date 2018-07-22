@@ -41,6 +41,7 @@
 
 #include "framebuffer.h"
 #include "main/blend.h"
+#include "main/glformats.h"
 #include "main/macros.h"
 
 /**
@@ -142,6 +143,28 @@ blend_per_rt(const struct gl_context *ctx, unsigned num_cb)
    return GL_FALSE;
 }
 
+/**
+ * Modify blend function to force destination alpha to 1.0
+ *
+ * If \c function specifies a blend function that uses destination alpha,
+ * replace it with a function that hard-wires destination alpha to 1.0.  This
+ * is used when rendering to xRGB targets.
+ */
+static enum pipe_blendfactor
+fix_xrgb_alpha(enum pipe_blendfactor factor)
+{
+   switch (factor) {
+   case PIPE_BLENDFACTOR_DST_ALPHA:
+      return PIPE_BLENDFACTOR_ONE;
+
+   case PIPE_BLENDFACTOR_INV_DST_ALPHA:
+   case PIPE_BLENDFACTOR_SRC_ALPHA_SATURATE:
+      return PIPE_BLENDFACTOR_ZERO;
+   default:
+      return factor;
+   }
+}
+
 void
 st_update_blend( struct st_context *st )
 {
@@ -209,6 +232,18 @@ st_update_blend( struct st_context *st )
                translate_blend(ctx->Color.Blend[j].SrcA);
             blend->rt[i].alpha_dst_factor =
                translate_blend(ctx->Color.Blend[j].DstA);
+         }
+
+         const struct gl_renderbuffer *rb =
+            ctx->DrawBuffer->_ColorDrawBuffers[i];
+
+         if (rb && !_mesa_base_format_has_channel(rb->_BaseFormat,
+                                                  GL_TEXTURE_ALPHA_TYPE)) {
+            struct pipe_rt_blend_state *rt = &blend->rt[i];
+            rt->rgb_src_factor = fix_xrgb_alpha(rt->rgb_src_factor);
+            rt->rgb_dst_factor = fix_xrgb_alpha(rt->rgb_dst_factor);
+            rt->alpha_src_factor = fix_xrgb_alpha(rt->alpha_src_factor);
+            rt->alpha_dst_factor = fix_xrgb_alpha(rt->alpha_dst_factor);
          }
       }
    }
