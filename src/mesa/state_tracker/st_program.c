@@ -383,7 +383,7 @@ st_release_cp_variants(struct st_context *st, struct st_compute_program *stcp)
  */
 static nir_shader *
 st_translate_prog_to_nir(struct st_context *st, struct gl_program *prog,
-                         gl_shader_stage stage)
+                         gl_shader_stage stage, bool is_scalar)
 {
    const struct gl_shader_compiler_options *options =
       &st->ctx->Const.ShaderCompilerOptions[stage];
@@ -394,7 +394,7 @@ st_translate_prog_to_nir(struct st_context *st, struct gl_program *prog,
    nir_validate_shader(nir);
 
    /* Optimise NIR */
-   st_nir_opts(nir);
+   st_nir_opts(nir, is_scalar);
    nir_validate_shader(nir);
 
    return nir;
@@ -483,6 +483,9 @@ st_translate_vertex_program(struct st_context *st,
    enum pipe_shader_ir preferred_ir = (enum pipe_shader_ir)
       st->pipe->screen->get_shader_param(st->pipe->screen, PIPE_SHADER_VERTEX,
                                          PIPE_SHADER_CAP_PREFERRED_IR);
+   const bool is_scalar =
+      st->pipe->screen->get_shader_param(st->pipe->screen, PIPE_SHADER_VERTEX,
+                                         PIPE_SHADER_CAP_SCALAR_ISA);
 
    if (preferred_ir == PIPE_SHADER_IR_NIR) {
       if (stvp->shader_program) {
@@ -496,7 +499,8 @@ st_translate_vertex_program(struct st_context *st,
          st_store_ir_in_disk_cache(st, &stvp->Base, true);
       } else {
          nir_shader *nir = st_translate_prog_to_nir(st, &stvp->Base,
-                                                    MESA_SHADER_VERTEX);
+                                                    MESA_SHADER_VERTEX,
+                                                    is_scalar);
 
          stvp->tgsi.type = PIPE_SHADER_IR_NIR;
          stvp->tgsi.ir.nir = nir;
@@ -745,10 +749,15 @@ st_translate_fragment_program(struct st_context *st,
       st->pipe->screen->get_shader_param(st->pipe->screen,
                                          PIPE_SHADER_FRAGMENT,
                                          PIPE_SHADER_CAP_PREFERRED_IR);
+   const bool is_scalar =
+      st->pipe->screen->get_shader_param(st->pipe->screen,
+                                         PIPE_SHADER_FRAGMENT,
+                                         PIPE_SHADER_CAP_SCALAR_ISA);
 
    if (preferred_ir == PIPE_SHADER_IR_NIR) {
       nir_shader *nir = st_translate_prog_to_nir(st, &stfp->Base,
-                                                 MESA_SHADER_FRAGMENT);
+                                                 MESA_SHADER_FRAGMENT,
+                                                 is_scalar);
 
       stfp->tgsi.type = PIPE_SHADER_IR_NIR;
       stfp->tgsi.ir.nir = nir;
