@@ -260,7 +260,8 @@ iris_setup_uniforms(const struct brw_compiler *compiler,
       }
    }
 
-   brw_nir_analyze_ubo_ranges(compiler, nir, prog_data->ubo_ranges);
+   // XXX: vs clip planes?
+   brw_nir_analyze_ubo_ranges(compiler, nir, NULL, prog_data->ubo_ranges);
 }
 
 static void
@@ -618,7 +619,7 @@ iris_compile_fs(struct iris_context *ice,
    char *error_str = NULL;
    const unsigned *program =
       brw_compile_fs(compiler, &ice->dbg, mem_ctx, key, fs_prog_data,
-                     nir, NULL, -1, -1, true, false, vue_map, &error_str);
+                     nir, NULL, -1, -1, -1, true, false, vue_map, &error_str);
    if (program == NULL) {
       dbg_printf("Failed to compile fragment shader: %s\n", error_str);
       ralloc_free(mem_ctx);

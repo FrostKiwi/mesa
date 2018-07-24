@@ -2377,15 +2377,26 @@ iris_store_fs_state(const struct gen_device_info *devinfo,
        */
       ps.PositionXYOffsetSelect =
          wm_prog_data->uses_pos_offset ? POSOFFSET_SAMPLE : POSOFFSET_NONE;
+
       ps._8PixelDispatchEnable = wm_prog_data->dispatch_8;
       ps._16PixelDispatchEnable = wm_prog_data->dispatch_16;
-      ps.DispatchGRFStartRegisterForConstantSetupData0 =
-         prog_data->dispatch_grf_start_reg;
-      ps.DispatchGRFStartRegisterForConstantSetupData2 =
-         wm_prog_data->dispatch_grf_start_reg_2;
+      ps._32PixelDispatchEnable = wm_prog_data->dispatch_32;
 
-      ps.KernelStartPointer0 = KSP(shader);
-      ps.KernelStartPointer2 = KSP(shader) + wm_prog_data->prog_offset_2;
+      // XXX: Disable SIMD32 with 16x MSAA
+
+      ps.DispatchGRFStartRegisterForConstantSetupData0 =
+         brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 0);
+      ps.DispatchGRFStartRegisterForConstantSetupData1 =
+         brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 1);
+      ps.DispatchGRFStartRegisterForConstantSetupData2 =
+         brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 2);
+
+      ps.KernelStartPointer0 =
+         KSP(shader) + brw_wm_prog_data_prog_offset(wm_prog_data, ps, 0);
+      ps.KernelStartPointer1 =
+         KSP(shader) + brw_wm_prog_data_prog_offset(wm_prog_data, ps, 1);
+      ps.KernelStartPointer2 =
+         KSP(shader) + brw_wm_prog_data_prog_offset(wm_prog_data, ps, 2);
    }
 
    iris_pack_command(GENX(3DSTATE_PS_EXTRA), psx_state, psx) {

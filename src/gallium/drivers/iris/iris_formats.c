@@ -405,9 +405,6 @@ iris_is_format_supported(struct pipe_screen *pscreen,
    if (sample_count > 16 || !util_is_power_of_two_or_zero(sample_count))
       return false;
 
-   if (!util_format_is_supported(pformat, usage))
-      return false;
-
    if (pformat == PIPE_FORMAT_NONE)
       return true;
 
