@@ -384,6 +384,7 @@ iris_resource_get_handle(struct pipe_screen *pscreen,
    struct iris_resource *res = (struct iris_resource *)resource;
 
    whandle->stride = res->surf.row_pitch;
+   whandle->modifier = tiling_to_modifier(res->bo->tiling_mode);
 
    switch (whandle->type) {
    case WINSYS_HANDLE_TYPE_SHARED:
