@@ -1,6 +1,7 @@
 - Compute shaders
 - Separate stencil
-- Multisampling bugs
+- Queries
+- Conditional rendering
 - Auxiliary surfaces
 - PMA
 - Compact binding tables for SSBOs/atomics
@@ -9,6 +10,20 @@
 - BLORP in a separate render batch...
 
 - PBO upload in Gallium is inefficient
+- We seem to get R32G32B32A32_FLOAT temporaries for upload
+- ickle says u_default_texture_subdata does a double copy
+
+- ickle notes that replacing binder on each batch is causing us to recycle
+  active addresses, causing stalls:
+
+  - 2.91% i915_gem_execbuffer2_ioctl
+  - 2.89% i915_gem_do_execbuffer
+  - 2.69% eb_lookup_vmas
+  - 2.66% __i915_vma_do_pin
+  - 2.56% i915_gem_gtt_reserve
+  - 2.56% i915_gem_evict_for_node
+  - 2.51% i915_vma_unbind
+  - 2.42% i915_request_wait
 
 - arb_vertex_attrib_64bit - iris_set_vertex_elements() is getting called
   with num_inputs == 5 when it should be 3.  The issue is that
