@@ -65,7 +65,7 @@
 #include "st_sampler_view.h"
 #include "st_scissor.h"
 #include "st_texture.h"
-
+#include "st_nir.h"
 #include "pipe/p_context.h"
 #include "pipe/p_defines.h"
 #include "tgsi/tgsi_ureg.h"
@@ -75,7 +75,8 @@
 #include "util/u_tile.h"
 #include "cso_cache/cso_context.h"
 
-
+#include "compiler/nir/nir.h"
+#include "compiler/nir/nir_builder.h"
 /**
  * We have a simple glDrawPixels cache to try to optimize the case where the
  * same image is drawn over and over again.  It basically works as follows:
@@ -189,13 +190,14 @@ get_drawpix_z_stencil_program(struct st_context *st,
 }
 
 
+
 /**
  * Create a simple vertex shader that just passes through the
  * vertex position and texcoord (and optionally, color).
  */
 static void *
-make_passthrough_vertex_shader(struct st_context *st, 
-                               GLboolean passColor)
+make_passthrough_vertex_shader_tgsi(struct st_context *st,
+                                    GLboolean passColor)
 {
    const enum tgsi_semantic texcoord_semantic = st->needs_texcoord_semantic ?
       TGSI_SEMANTIC_TEXCOORD : TGSI_SEMANTIC_GENERIC;
@@ -232,6 +234,104 @@ make_passthrough_vertex_shader(struct st_context *st,
    return st->drawpix.vert_shaders[passColor];
 }
 
+static void *
+make_passthrough_vertex_shader_nir(struct st_context *st,
+                                   GLboolean passColor)
+{
+   struct nir_builder b;
+   const nir_shader_compiler_options *options =
+      st->ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].NirOptions;
+   const gl_varying_slot texslot = st->needs_texcoord_semantic ? VARYING_SLOT_TEX0 :
+      VARYING_SLOT_VAR0;
+   if (!st->drawpix.vert_shaders[passColor]) {
+      const struct glsl_type *vec4 = glsl_vec4_type();
+      nir_builder_init_simple_shader(&b, NULL,
+                                     MESA_SHADER_VERTEX,
+                                     options);
+      b.shader->info.name = ralloc_strdup(b.shader, "drawpixels_passthrough_vs");
+      b.shader->num_inputs = passColor ? 3 : 2;
+      b.shader->num_outputs = passColor ? 3 : 2;
+      nir_variable *pos_in = nir_variable_create(b.shader, nir_var_shader_in,
+                                                 vec4, "vpos");
+
+      pos_in->data.location = VERT_ATTRIB_POS;
+
+      nir_variable *pos_out = nir_variable_create(b.shader, nir_var_shader_out,
+                                                  vec4, "gl_Position");
+      pos_out->data.location = VARYING_SLOT_POS;
+      pos_out->data.driver_location = 0;
+
+      nir_copy_var(&b, pos_out, pos_in);
+
+      if (passColor) {
+
+         nir_variable *color_out = nir_variable_create(b.shader, nir_var_shader_out,
+                                                       vec4, "v_color");
+         color_out->data.location = VARYING_SLOT_COL0;
+         color_out->data.interpolation = INTERP_MODE_SMOOTH;
+         nir_variable *color_in = nir_variable_create(b.shader, nir_var_shader_in,
+                                                      vec4, "v_color_in");
+
+         color_in->data.location = VERT_ATTRIB_COLOR0;
+
+         nir_copy_var(&b, color_out, color_in);
+      }
+
+      nir_variable *texcoord_in = nir_variable_create(b.shader, nir_var_shader_in,
+                                                      vec4, "v_texcoord_in");
+      texcoord_in->data.location = VERT_ATTRIB_GENERIC0;
+      texcoord_in->data.driver_location = 1;
+
+      nir_variable *texcoord_out = nir_variable_create(b.shader, nir_var_shader_out,
+                                                       vec4, "v_texcoord");
+      texcoord_out->data.location = texslot;
+      texcoord_out->data.interpolation = INTERP_MODE_SMOOTH;
+      texcoord_out->data.driver_location = 1;
+
+      nir_copy_var(&b, texcoord_out, texcoord_in);
+
+      nir_shader_gather_info(b.shader, nir_shader_get_entrypoint(b.shader));
+
+      b.shader->info.separate_shader = true;
+
+      nir_variable_mode mask =
+         (nir_variable_mode) (nir_var_shader_in | nir_var_shader_out);
+      nir_remove_dead_variables(b.shader, mask);
+      NIR_PASS_V(b.shader, nir_lower_io_to_temporaries,
+                 nir_shader_get_entrypoint(b.shader),
+                 true, true);
+      NIR_PASS_V(b.shader, nir_lower_global_vars_to_local);
+      NIR_PASS_V(b.shader, nir_split_var_copies);
+      NIR_PASS_V(b.shader, nir_lower_var_copies);
+
+      st_nir_opts(b.shader, false);
+      nir_print_shader(b.shader, stderr);
+
+      struct pipe_shader_state state = {
+         .type = PIPE_SHADER_IR_NIR,
+         .ir.nir = b.shader,
+      };
+
+      st->drawpix.vert_shaders[passColor] = st->pipe->create_vs_state(st->pipe, &state);
+   }
+   return st->drawpix.vert_shaders[passColor];
+}
+
+static void *
+make_passthrough_vertex_shader(struct st_context *st,
+                               GLboolean passColor)
+{
+   struct pipe_screen *pscreen = st->pipe->screen;
+   enum pipe_shader_ir preferred_ir = (enum pipe_shader_ir)
+      pscreen->get_shader_param(pscreen, PIPE_SHADER_VERTEX,
+                                PIPE_SHADER_CAP_PREFERRED_IR);
+   bool use_nir = preferred_ir == PIPE_SHADER_IR_NIR;
+
+   if (!use_nir)
+      return make_passthrough_vertex_shader_tgsi(st, passColor);
+   else
+      return make_passthrough_vertex_shader_nir(st, passColor);
+}
 
 /**
  * Return a texture internalFormat for drawing/copying an image
