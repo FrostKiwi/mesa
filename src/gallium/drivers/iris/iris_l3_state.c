@@ -21,6 +21,9 @@
  * IN THE SOFTWARE.
  */
 
+// XXX: this file is not used and is not even compiled.
+// XXX: but it ought to be...
+
 #include "common/gen_l3_config.h"
 
 #include "brw_context.h"
