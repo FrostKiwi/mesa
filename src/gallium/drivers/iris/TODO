@@ -33,3 +33,6 @@ Anywhere // appears in the code base, that is a TODO comment.
 - PBO upload in Gallium may be inefficient
   - We seem to get R32G32B32A32_FLOAT temporaries for upload
   - ickle says u_default_texture_subdata does a double copy
+
+- ReadPixels with GL_STENCIL_INDEX and a GL_DEPTH_STENCIL buffer
+  falls back to software even though we could totally blit
