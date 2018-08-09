@@ -287,7 +287,7 @@ u_transfer_helper_transfer_map(struct pipe_context *pctx,
                                                           trans->trans2->stride,
                                                           width, height);
             break;
-         case PIPE_FORMAT_Z24X8_UNORM:
+         case PIPE_FORMAT_Z24_UNORM_S8_UINT:
             util_format_z24_unorm_s8_uint_pack_separate(trans->staging,
                                                         ptrans->stride,
                                                         trans->ptr,
