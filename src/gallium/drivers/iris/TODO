@@ -1,29 +1,17 @@
-- Compute shaders
-- Separate stencil
-- Queries
-- Conditional rendering
-- Auxiliary surfaces
-- PMA
-- Compact binding tables for SSBOs/atomics
+Anywhere // appears in the code base, that is a TODO comment.
+(Only C style comments should remain!)
 
-- u_threaded_context
-- BLORP in a separate render batch...
+- Unjam DRI3 (glxgears stops, runs out of backbuffers and waits forever)
+- Compute shaders (Kayden has a WIP branch)
+- Separate stencil (Kayden has a WIP branch)
+- Seqno tracking system (ickle has a WIP branch)
+- Fence implementation (not started, may need seqno tracking, or drm syncobjs)
+- Turn binder into a ring buffer (needs seqno, ickle has a WIP branch)
+  (Until this happens we hit stalls recycling active addresses.)
+- Queries (not started - needs seqno tracking?)
+- Conditional rendering (not started - needs queries)
 
-- PBO upload in Gallium is inefficient
-- We seem to get R32G32B32A32_FLOAT temporaries for upload
-- ickle says u_default_texture_subdata does a double copy
-
-- ickle notes that replacing binder on each batch is causing us to recycle
-  active addresses, causing stalls:
-
-  - 2.91% i915_gem_execbuffer2_ioctl
-  - 2.89% i915_gem_do_execbuffer
-  - 2.69% eb_lookup_vmas
-  - 2.66% __i915_vma_do_pin
-  - 2.56% i915_gem_gtt_reserve
-  - 2.56% i915_gem_evict_for_node
-  - 2.51% i915_vma_unbind
-  - 2.42% i915_request_wait
+- Gen8, Gen10, Gen11 support (not started)
 
 - arb_vertex_attrib_64bit - iris_set_vertex_elements() is getting called
   with num_inputs == 5 when it should be 3.  The issue is that
@@ -31,3 +19,17 @@
   to count each dual slot value as two bits instead of one in the
   double_inputs_read bitfield, which then causes st_program.c to
   quad count those inputs instead of double count them.
+
+- Auxiliary surfaces (not started - Nanley has ideas)
+- Do proper pre-draw resolves/flushes (drop PIPE_CONTROLs in iris_draw.c)
+
+- Compact binding tables for SSBOs/atomics (currently wasteful)
+
+- u_threaded_context (not started)
+
+- BLORP in a separate render batch (someday)
+- Stencil PMA (not started)
+
+- PBO upload in Gallium may be inefficient
+  - We seem to get R32G32B32A32_FLOAT temporaries for upload
+  - ickle says u_default_texture_subdata does a double copy
