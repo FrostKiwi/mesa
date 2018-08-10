@@ -412,11 +412,17 @@ flush_region(struct pipe_context *pctx, struct pipe_transfer *ptrans,
                                                       ptrans->stride,
                                                       width, height);
       break;
-   case PIPE_FORMAT_Z24X8_UNORM:
-      /* just do a strided copy for depth, leave s8 bits as garbage x8 */
+   case PIPE_FORMAT_Z24_UNORM_S8_UINT:
+      /* just do a strided 32-bit copy for depth; s8 can become garbage x8 */
       util_format_z32_unorm_unpack_z_32unorm(dst, trans->trans->stride,
                                              src, ptrans->stride,
                                              width, height);
+      /* fallthru */
+   case PIPE_FORMAT_X24S8_UINT:
+      dst = (uint8_t *)trans->ptr2 +
+            (box->y * trans->trans2->stride) +
+            (box->x * util_format_get_blocksize(PIPE_FORMAT_S8_UINT));
+
       util_format_z24_unorm_s8_uint_unpack_s_8uint(dst, trans->trans2->stride,
                                                    src, ptrans->stride,
                                                    width, height);
