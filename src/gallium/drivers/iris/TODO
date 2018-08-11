@@ -36,3 +36,9 @@ Anywhere // appears in the code base, that is a TODO comment.
 
 - ReadPixels with GL_STENCIL_INDEX and a GL_DEPTH_STENCIL buffer
   falls back to software even though we could totally blit
+
+- CopyImage goes through a pile of st code, to eventually land in blit().
+  Don't want this.  Just want it to call blorp_copy right away.  See:
+  https://lists.freedesktop.org/archives/mesa-dev/2015-July/089387.html
+
+- Use util_try_blit_via_copy_region in iris_blit?
