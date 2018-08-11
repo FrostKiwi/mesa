@@ -409,6 +409,7 @@ iris_is_format_supported(struct pipe_screen *pscreen,
                          enum pipe_format pformat,
                          enum pipe_texture_target target,
                          unsigned sample_count,
+                         unsigned storage_sample_count,
                          unsigned usage)
 {
    struct iris_screen *screen = (struct iris_screen *) pscreen;
