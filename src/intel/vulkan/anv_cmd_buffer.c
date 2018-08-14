@@ -1141,6 +1141,10 @@ VkResult anv_CreateCommandPool(
 
    vk_object_base_init(&device->vk, &pool->base, VK_OBJECT_TYPE_COMMAND_POOL);
 
+   assert(pCreateInfo->queueFamilyIndex < device->physical->queue.family_count);
+   pool->queue_family =
+      &device->physical->queue.families[pCreateInfo->queueFamilyIndex];
+
    if (pAllocator)
       pool->alloc = *pAllocator;
    else
