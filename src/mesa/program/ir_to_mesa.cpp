@@ -2495,6 +2495,8 @@ _mesa_generate_parameters_list_for_uniforms(struct gl_context *ctx,
 					    struct gl_program_parameter_list
 					    *params)
 {
+   // XXX: should sort this list by bitsize...
+
    add_uniform_to_shader add(ctx, shader_program, params);
 
    foreach_in_list(ir_instruction, node, sh->ir) {
