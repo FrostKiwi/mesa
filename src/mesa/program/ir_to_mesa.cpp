@@ -2506,6 +2506,36 @@ _mesa_generate_parameters_list_for_uniforms(struct gl_context *ctx,
 	  || var->is_in_buffer_block() || (strncmp(var->name, "gl_", 3) == 0))
 	 continue;
 
+      if (!var->type->without_array()->is_64bit())
+         continue;
+
+      add.process(var);
+   }
+
+   foreach_in_list(ir_instruction, node, sh->ir) {
+      ir_variable *var = node->as_variable();
+
+      if ((var == NULL) || (var->data.mode != ir_var_uniform)
+	  || var->is_in_buffer_block() || (strncmp(var->name, "gl_", 3) == 0))
+	 continue;
+
+      if (var->type->without_array()->is_64bit() ||
+          var->type->without_array()->is_16bit())
+         continue;
+
+      add.process(var);
+   }
+
+   foreach_in_list(ir_instruction, node, sh->ir) {
+      ir_variable *var = node->as_variable();
+
+      if ((var == NULL) || (var->data.mode != ir_var_uniform)
+	  || var->is_in_buffer_block() || (strncmp(var->name, "gl_", 3) == 0))
+	 continue;
+
+      if (!var->type->is_16bit())
+         continue;
+
       add.process(var);
    }
 }
