@@ -25,6 +25,9 @@ Anywhere // appears in the code base, that is a TODO comment.
 
 - Compact binding tables for SSBOs/atomics (currently wasteful)
 
+- Shader Precompiles
+- Shader Disk Cache
+
 - u_threaded_context (not started)
 
 - BLORP in a separate render batch (someday)
