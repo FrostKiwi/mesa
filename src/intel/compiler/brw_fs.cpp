@@ -4946,6 +4946,14 @@ fs_visitor::lower_logical_sends()
          lower_sampler_logical_send(ibld, inst, SHADER_OPCODE_SAMPLEINFO);
          break;
 
+      case SHADER_OPCODE_IMAGE_SIZE_LOGICAL:
+         /* Nothing needs to be done except changing the opcode and setting a
+          * message length.
+          */
+         inst->opcode = SHADER_OPCODE_IMAGE_SIZE;
+         inst->mlen = inst->exec_size / 8;
+         break;
+
       case SHADER_OPCODE_UNTYPED_SURFACE_READ_LOGICAL:
          lower_surface_logical_send(ibld, inst,
                                     SHADER_OPCODE_UNTYPED_SURFACE_READ,

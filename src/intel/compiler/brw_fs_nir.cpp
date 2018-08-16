@@ -3914,6 +3914,32 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       break;
    }
 
+   case nir_intrinsic_image_deref_size: {
+      nir_deref_instr *deref = nir_src_as_deref(instr->src[0]);
+      const fs_reg image = get_nir_image_deref(deref);
+
+      /* The LOD also serves as the message payload */
+      fs_reg lod = bld.vgrf(BRW_REGISTER_TYPE_UD);
+      bld.MOV(lod, brw_imm_ud(0));
+
+      fs_reg tmp = bld.vgrf(BRW_REGISTER_TYPE_UD, 4);
+      fs_inst *inst = bld.emit(SHADER_OPCODE_IMAGE_SIZE_LOGICAL,
+                               tmp, lod, image);
+      inst->size_written = type_sz(tmp.type) * bld.dispatch_width() * 4;
+
+      for (unsigned c = 0; c < instr->dest.ssa.num_components; ++c) {
+         if (c == 2 && glsl_get_sampler_dim(deref->type) == GLSL_SAMPLER_DIM_CUBE) {
+            bld.emit(SHADER_OPCODE_INT_QUOTIENT,
+                     offset(retype(dest, tmp.type), bld, c),
+                     offset(tmp, bld, c), brw_imm_ud(6));
+         } else {
+            bld.MOV(offset(retype(dest, tmp.type), bld, c),
+                    offset(tmp, bld, c));
+         }
+      }
+      break;
+   }
+
    case nir_intrinsic_image_deref_load_param_intel: {
       nir_deref_instr *deref = nir_src_as_deref(instr->src[0]);
       const fs_reg image = get_nir_image_deref(deref);
