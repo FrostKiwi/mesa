@@ -1506,12 +1506,12 @@ init_cache_buckets(struct iris_bufmgr *bufmgr)
     * width/height alignment and rounding of sizes to pages will
     * get us useful cache hit rates anyway)
     */
-   add_bucket(bufmgr, 4096);
-   add_bucket(bufmgr, 4096 * 2);
-   add_bucket(bufmgr, 4096 * 3);
+   add_bucket(bufmgr, PAGE_SIZE);
+   add_bucket(bufmgr, PAGE_SIZE * 2);
+   add_bucket(bufmgr, PAGE_SIZE * 3);
 
    /* Initialize the linked lists for BO reuse cache. */
-   for (size = 4 * 4096; size <= cache_max_size; size *= 2) {
+   for (size = 4 * PAGE_SIZE; size <= cache_max_size; size *= 2) {
       add_bucket(bufmgr, size);
 
       add_bucket(bufmgr, size + size * 1 / 4);
@@ -1609,7 +1609,7 @@ iris_bufmgr_init(struct gen_device_info *devinfo, int fd)
    const uint64_t _4GB = 1ull << 32;
 
    util_vma_heap_init(&bufmgr->vma_allocator[IRIS_MEMZONE_SHADER],
-                      4096,     _4GB);
+                      PAGE_SIZE, _4GB);
    util_vma_heap_init(&bufmgr->vma_allocator[IRIS_MEMZONE_SURFACE],
                       IRIS_MEMZONE_SURFACE_START + IRIS_BINDER_SIZE,
                       _4GB - IRIS_BINDER_SIZE);
