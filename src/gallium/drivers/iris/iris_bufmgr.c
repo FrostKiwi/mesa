@@ -49,6 +49,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <stdbool.h>
+#include <time.h>
 
 #include "errno.h"
 #ifndef ETIME
