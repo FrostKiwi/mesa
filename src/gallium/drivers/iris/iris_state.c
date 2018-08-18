@@ -973,7 +973,7 @@ iris_bind_rasterizer_state(struct pipe_context *ctx, void *state)
       if (cso_changed(depth_clip) || cso_changed(clip_halfz))
          ice->state.dirty |= IRIS_DIRTY_CC_VIEWPORT;
 
-      if (cso_changed(sprite_coord_enable))
+      if (cso_changed(sprite_coord_enable) || cso_changed(light_twoside))
          ice->state.dirty |= IRIS_DIRTY_SBE;
    }
 
@@ -3535,10 +3535,7 @@ iris_upload_render_state(struct iris_context *ice,
       iris_emit_merge(batch, cso->wm, dynamic_wm, ARRAY_SIZE(cso->wm));
    }
 
-   if (1) {
-      // XXX: 3DSTATE_SBE, 3DSTATE_SBE_SWIZ
-      // -> iris_raster_state (point sprite texture coordinate origin)
-      // -> bunch of shader state...
+   if (dirty & IRIS_DIRTY_SBE) {
       iris_emit_sbe(batch, ice);
    }
 
