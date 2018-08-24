@@ -502,6 +502,7 @@ static const struct nir_shader_compiler_options nir_options = {
 	.lower_extract_word = true,
 	.max_unroll_iterations = 32,
 	.native_integers = true,
+	.copy_edgeflag = true,
 };
 
 static const void *

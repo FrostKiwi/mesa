@@ -1929,6 +1929,7 @@ const nir_shader_compiler_options v3d_nir_options = {
         .lower_mul_high = true,
         .lower_wpos_pntc = true,
         .native_integers = true,
+        .copy_edgeflag = true,
 };
 
 

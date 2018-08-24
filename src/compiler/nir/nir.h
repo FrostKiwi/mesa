@@ -2120,6 +2120,11 @@ typedef struct nir_shader_compiler_options {
    bool use_interpolated_input_intrinsics;
 
    unsigned max_unroll_iterations;
+
+   /**
+    * Set to have the VS copy the edgeflag input to a VS output.
+    */
+   bool copy_edgeflag;
 } nir_shader_compiler_options;
 
 typedef struct nir_shader {

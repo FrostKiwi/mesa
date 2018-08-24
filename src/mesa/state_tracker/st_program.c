@@ -592,6 +592,8 @@ st_create_vp_variant(struct st_context *st,
 {
    struct st_vp_variant *vpv = CALLOC_STRUCT(st_vp_variant);
    struct pipe_context *pipe = st->pipe;
+   const nir_shader_compiler_options *nir_options =
+      st->ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].NirOptions;
 
    vpv->key = *key;
    vpv->tgsi.stream_output = stvp->tgsi.stream_output;
@@ -603,7 +605,12 @@ st_create_vp_variant(struct st_context *st,
       if (key->clamp_color)
          NIR_PASS_V(vpv->tgsi.ir.nir, nir_lower_clamp_color_outputs);
       if (key->passthrough_edgeflags) {
-         NIR_PASS_V(vpv->tgsi.ir.nir, nir_lower_passthrough_edgeflags);
+         if (nir_options->copy_edgeflag)
+            NIR_PASS_V(vpv->tgsi.ir.nir, nir_lower_passthrough_edgeflags);
+
+         /* Even if not copying it, mark it as a valid vertex input so that
+          * the vertex element is set up.
+          */
          vpv->num_inputs++;
       }
 

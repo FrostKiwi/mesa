@@ -2006,7 +2006,11 @@ iris_create_vertex_elements(struct pipe_context *ctx,
          ve.Component1Control = comp[1];
          ve.Component2Control = comp[2];
          ve.Component3Control = comp[3];
+         ve.EdgeFlagEnable = state[i].is_edge_flag;
       }
+
+      /* The state tracker must put edge flag at the end for us. */
+      assert(i == count - 1 || !state[i].is_edge_flag);
 
       iris_pack_command(GENX(3DSTATE_VF_INSTANCING), vfi_pack_dest, vi) {
          vi.VertexElementIndex = i;
