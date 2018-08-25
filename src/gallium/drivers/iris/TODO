@@ -35,6 +35,8 @@ Anywhere // appears in the code base, that is a TODO comment.
 - BLORP in a separate render batch (someday)
 - Stencil PMA (not started)
 
+- Transform feedback info from st/nir is crazy (the wrong stage!)
+
 - Gallium doesn't support separate Z and S surfaces...i965 does...
   AMD can't do them, NVIDIA apparently disallows Z24 + S8...
   https://gitlab.freedesktop.org/mesa/mesa/blob/master/src/mesa/state_tracker/st_cb_fbo.c#L703
