@@ -6,7 +6,6 @@ Anywhere // appears in the code base, that is a TODO comment.
 
 - Unjam DRI3 (glxgears stops, runs out of backbuffers and waits forever)
 - Compute shaders (Kayden has a WIP branch)
-- Separate stencil (Kayden has a WIP branch)
 - Seqno tracking system (ickle has a WIP branch)
 - Fence implementation (not started, may need seqno tracking, or drm syncobjs)
 - Turn binder into a ring buffer (needs seqno, ickle has a WIP branch)
