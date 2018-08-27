@@ -170,9 +170,12 @@ st_update_blend( struct st_context *st )
 {
    struct pipe_blend_state *blend = &st->state.blend;
    const struct gl_context *ctx = st->ctx;
+   struct pipe_screen *screen = st->pipe->screen;
    unsigned num_cb = st->state.fb_num_cb;
    unsigned num_state = 1;
    unsigned i, j;
+   bool has_indep_blend_func =
+      screen->get_param(screen, PIPE_CAP_INDEP_BLEND_FUNC);
 
    memset(blend, 0, sizeof(*blend));
 
@@ -237,8 +240,9 @@ st_update_blend( struct st_context *st )
          const struct gl_renderbuffer *rb =
             ctx->DrawBuffer->_ColorDrawBuffers[i];
 
-         if (rb && !_mesa_base_format_has_channel(rb->_BaseFormat,
-                                                  GL_TEXTURE_ALPHA_TYPE)) {
+         if (has_indep_blend_func && rb &&
+             !_mesa_base_format_has_channel(rb->_BaseFormat,
+                                            GL_TEXTURE_ALPHA_TYPE)) {
             struct pipe_rt_blend_state *rt = &blend->rt[i];
             rt->rgb_src_factor = fix_xrgb_alpha(rt->rgb_src_factor);
             rt->rgb_dst_factor = fix_xrgb_alpha(rt->rgb_dst_factor);
