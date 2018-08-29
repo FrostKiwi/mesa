@@ -56,3 +56,6 @@ Anywhere // appears in the code base, that is a TODO comment.
   https://lists.freedesktop.org/archives/mesa-dev/2015-July/089387.html
 
 - Use util_try_blit_via_copy_region in iris_blit?
+
+- Fix isl_tiled_memcpy streaming loads - ickle says it isn't recognizing
+  the proper streaming function, so it's not working.
