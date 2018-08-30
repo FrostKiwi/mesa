@@ -4,7 +4,7 @@ month at XDC 2018, "Reimagining i965"/"Optimizing i965 for the Future"...
 Anywhere // appears in the code base, that is a TODO comment.
 (Only C style comments should remain!)
 
-- Unjam DRI3 (glxgears stops, runs out of backbuffers and waits forever)
+- DRI3 explicit fencing
 - Compute shaders (Kayden has a WIP branch)
 - Seqno tracking system (ickle has a WIP branch)
 - Fence implementation (not started, may need seqno tracking, or drm syncobjs)
