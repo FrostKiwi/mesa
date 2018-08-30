@@ -1372,7 +1372,6 @@ iris_create_surface(struct pipe_context *ctx,
        * hasn't had the opportunity yet.  In the meantime, we need to
        * avoid hitting ISL asserts about unsupported formats below.
        */
-      printf("KAYDEN: NOOOOOOOOOOOO\n");
       free(surf);
       return NULL;
    }
