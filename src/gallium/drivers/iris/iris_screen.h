@@ -26,6 +26,7 @@
 #include "pipe/p_screen.h"
 #include "state_tracker/drm_driver.h"
 #include "util/slab.h"
+#include "util/u_screen.h"
 #include "intel/dev/gen_device_info.h"
 #include "intel/isl/isl.h"
 #include "iris_bufmgr.h"
