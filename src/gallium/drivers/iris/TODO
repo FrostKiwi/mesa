@@ -15,12 +15,7 @@ Anywhere // appears in the code base, that is a TODO comment.
 
 - Gen8, Gen10, Gen11 support (not started)
 
-- arb_vertex_attrib_64bit - iris_set_vertex_elements() is getting called
-  with num_inputs == 5 when it should be 3.  The issue is that
-  vs_dual_locations is set in the NirOptions, causing nir_gather_info
-  to count each dual slot value as two bits instead of one in the
-  double_inputs_read bitfield, which then causes st_program.c to
-  quad count those inputs instead of double count them.
+- Make sure scissoring/viewport extents are getting limited to the FBO
 
 - Auxiliary surfaces (not started - Nanley has ideas)
 - Do proper pre-draw resolves/flushes (drop PIPE_CONTROLs in iris_draw.c)
