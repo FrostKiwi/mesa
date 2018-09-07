@@ -808,7 +808,8 @@ struct iris_rasterizer_state {
    uint32_t line_stipple[GENX(3DSTATE_LINE_STIPPLE_length)];
 
    bool clip_halfz; /* for CC_VIEWPORT */
-   bool depth_clip; /* for CC_VIEWPORT */
+   bool depth_clip_near; /* for CC_VIEWPORT */
+   bool depth_clip_far; /* for CC_VIEWPORT */
    bool flatshade; /* for shader state */
    bool flatshade_first; /* for stream output */
    bool clamp_fragment_color; /* for shader state */
@@ -882,7 +883,8 @@ iris_create_rasterizer_state(struct pipe_context *ctx,
    cso->multisample = state->multisample;
    cso->force_persample_interp = state->force_persample_interp;
    cso->clip_halfz = state->clip_halfz;
-   cso->depth_clip = state->depth_clip;
+   cso->depth_clip_near = state->depth_clip_near;
+   cso->depth_clip_far = state->depth_clip_far;
    cso->flatshade = state->flatshade;
    cso->flatshade_first = state->flatshade_first;
    cso->clamp_fragment_color = state->clamp_fragment_color;
@@ -932,8 +934,8 @@ iris_create_rasterizer_state(struct pipe_context *ctx,
       rr.SmoothPointEnable = state->point_smooth;
       rr.AntialiasingEnable = state->line_smooth;
       rr.ScissorRectangleEnable = state->scissor;
-      rr.ViewportZNearClipTestEnable = state->depth_clip;
-      rr.ViewportZFarClipTestEnable = state->depth_clip;
+      rr.ViewportZNearClipTestEnable = state->depth_clip_near;
+      rr.ViewportZFarClipTestEnable = state->depth_clip_far;
       //rr.ConservativeRasterizationEnable = not yet supported by Gallium...
    }
 
@@ -1012,7 +1014,8 @@ iris_bind_rasterizer_state(struct pipe_context *ctx, void *state)
       if (cso_changed(rasterizer_discard) || cso_changed(flatshade_first))
          ice->state.dirty |= IRIS_DIRTY_STREAMOUT;
 
-      if (cso_changed(depth_clip) || cso_changed(clip_halfz))
+      if (cso_changed(depth_clip_near) || cso_changed(depth_clip_far) ||
+          cso_changed(clip_halfz))
          ice->state.dirty |= IRIS_DIRTY_CC_VIEWPORT;
 
       if (cso_changed(sprite_coord_enable) || cso_changed(light_twoside))
@@ -1651,7 +1654,8 @@ iris_set_viewport_states(struct pipe_context *ctx,
 
    ice->state.dirty |= IRIS_DIRTY_SF_CL_VIEWPORT;
 
-   if (ice->state.cso_rast && !ice->state.cso_rast->depth_clip)
+   if (ice->state.cso_rast && (!ice->state.cso_rast->depth_clip_near ||
+                               !ice->state.cso_rast->depth_clip_far))
       ice->state.dirty |= IRIS_DIRTY_CC_VIEWPORT;
 }
 
@@ -3274,13 +3278,12 @@ iris_upload_render_state(struct iris_context *ice,
                       GENX(CC_VIEWPORT_length), 32, &cc_vp_address);
       for (int i = 0; i < ice->state.num_viewports; i++) {
          float zmin, zmax;
-         if (cso_rast->depth_clip) {
+         util_viewport_zmin_zmax(&ice->state.viewports[i],
+                                 cso_rast->clip_halfz, &zmin, &zmax);
+         if (cso_rast->depth_clip_near)
             zmin = 0.0;
+         if (cso_rast->depth_clip_far)
             zmax = 1.0;
-         } else {
-            util_viewport_zmin_zmax(&ice->state.viewports[i],
-                                    cso_rast->clip_halfz, &zmin, &zmax);
-         }
 
          iris_pack_state(GENX(CC_VIEWPORT), cc_vp_map, ccv) {
             ccv.MinimumDepth = zmin;
