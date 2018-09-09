@@ -107,20 +107,6 @@ decode_get_bo(void *v_batch, uint64_t address)
       }
    }
 
-   switch (address) {
-   case IRIS_MEMZONE_SHADER_START:
-   case IRIS_MEMZONE_SURFACE_START:
-   case IRIS_MEMZONE_DYNAMIC_START:
-      /* We want these to exist for base address purposes, even if there
-       * aren't real buffers pinned there by this batch's validation list.
-       */
-      return (struct gen_batch_decode_bo) {
-         .addr = address,
-         .size = 0xffffffff,
-         .map = NULL,
-      };
-   }
-
    return (struct gen_batch_decode_bo) { };
 }
 
