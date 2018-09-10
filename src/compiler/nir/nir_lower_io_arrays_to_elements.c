@@ -124,6 +124,9 @@ lower_array(nir_builder *b, nir_intrinsic_instr *intr, nir_variable *var,
          element = nir_variable_clone(var, b->shader);
          element->data.location =  var->data.location + io_offset;
 
+         if (var->data.explicit_offset)
+            element->data.offset = var->data.offset + elements_index * 4;
+
          const struct glsl_type *type = glsl_without_array(element->type);
 
          /* This pass also splits matrices so we need give them a new type. */
