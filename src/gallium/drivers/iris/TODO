@@ -1,6 +1,16 @@
 Hello friends!  I see you finally found us. :)  Expect more details next
 month at XDC 2018, "Reimagining i965"/"Optimizing i965 for the Future"...
 
+Piglit details
+--------------
+
+Run with -x timer_query to avoid hardlocks in
+"ext_timer_query-time-elapsed timestamp -auto"
+(hopefully this will go away when we actually, say, implement queries)
+
+To Do
+-----
+
 Anywhere // appears in the code base, that is a TODO comment.
 (Only C style comments should remain!)
 
