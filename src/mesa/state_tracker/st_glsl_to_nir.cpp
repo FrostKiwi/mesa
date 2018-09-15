@@ -651,6 +651,41 @@ st_lower_patch_vertices_in(struct gl_shader_program *shader_prog)
 
 extern "C" {
 
+void
+st_nir_lower_wpos_ytransform(struct nir_shader *nir,
+                             struct gl_program *prog,
+                             struct pipe_screen *pscreen)
+{
+   if (nir->info.stage != MESA_SHADER_FRAGMENT)
+      return;
+
+   static const gl_state_index16 wposTransformState[STATE_LENGTH] = {
+      STATE_INTERNAL, STATE_FB_WPOS_Y_TRANSFORM
+   };
+   nir_lower_wpos_ytransform_options wpos_options = { { 0 } };
+
+   memcpy(wpos_options.state_tokens, wposTransformState,
+          sizeof(wpos_options.state_tokens));
+   wpos_options.fs_coord_origin_upper_left =
+      pscreen->get_param(pscreen,
+                         PIPE_CAP_TGSI_FS_COORD_ORIGIN_UPPER_LEFT);
+   wpos_options.fs_coord_origin_lower_left =
+      pscreen->get_param(pscreen,
+                         PIPE_CAP_TGSI_FS_COORD_ORIGIN_LOWER_LEFT);
+   wpos_options.fs_coord_pixel_center_integer =
+      pscreen->get_param(pscreen,
+                         PIPE_CAP_TGSI_FS_COORD_PIXEL_CENTER_INTEGER);
+   wpos_options.fs_coord_pixel_center_half_integer =
+      pscreen->get_param(pscreen,
+                         PIPE_CAP_TGSI_FS_COORD_PIXEL_CENTER_HALF_INTEGER);
+
+   if (nir_lower_wpos_ytransform(nir, &wpos_options)) {
+      nir_validate_shader(nir);
+      _mesa_add_state_reference(prog->Parameters,
+                                wposTransformState);
+   }
+}
+
 bool
 st_link_nir(struct gl_context *ctx,
             struct gl_shader_program *shader_program)
@@ -726,35 +761,8 @@ st_link_nir(struct gl_context *ctx,
 
       nir_shader *nir = shader->Program->nir;
 
-      /* fragment shaders may need : */
-      if (nir->info.stage == MESA_SHADER_FRAGMENT) {
-         static const gl_state_index16 wposTransformState[STATE_LENGTH] = {
-            STATE_INTERNAL, STATE_FB_WPOS_Y_TRANSFORM
-         };
-         nir_lower_wpos_ytransform_options wpos_options = { { 0 } };
-         struct pipe_screen *pscreen = st->pipe->screen;
-
-         memcpy(wpos_options.state_tokens, wposTransformState,
-                sizeof(wpos_options.state_tokens));
-         wpos_options.fs_coord_origin_upper_left =
-            pscreen->get_param(pscreen,
-                               PIPE_CAP_TGSI_FS_COORD_ORIGIN_UPPER_LEFT);
-         wpos_options.fs_coord_origin_lower_left =
-            pscreen->get_param(pscreen,
-                               PIPE_CAP_TGSI_FS_COORD_ORIGIN_LOWER_LEFT);
-         wpos_options.fs_coord_pixel_center_integer =
-            pscreen->get_param(pscreen,
-                               PIPE_CAP_TGSI_FS_COORD_PIXEL_CENTER_INTEGER);
-         wpos_options.fs_coord_pixel_center_half_integer =
-            pscreen->get_param(pscreen,
-                               PIPE_CAP_TGSI_FS_COORD_PIXEL_CENTER_HALF_INTEGER);
-
-         if (nir_lower_wpos_ytransform(nir, &wpos_options)) {
-            nir_validate_shader(nir);
-            _mesa_add_state_reference(shader->Program->Parameters,
-                                      wposTransformState);
-         }
-      }
+      NIR_PASS_V(nir, st_nir_lower_wpos_ytransform, shader->Program,
+                 st->pipe->screen);
 
       NIR_PASS_V(nir, nir_lower_system_values);
       NIR_PASS_V(nir, nir_lower_clip_cull_distance_arrays);
