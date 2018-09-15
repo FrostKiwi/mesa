@@ -393,6 +393,8 @@ st_translate_prog_to_nir(struct st_context *st, struct gl_program *prog,
    NIR_PASS_V(nir, nir_lower_regs_to_ssa); /* turn registers into SSA */
    nir_validate_shader(nir);
 
+   NIR_PASS_V(nir, st_nir_lower_wpos_ytransform, prog, st->pipe->screen);
+
    /* Optimise NIR */
    st_nir_opts(nir, is_scalar);
    nir_validate_shader(nir);
