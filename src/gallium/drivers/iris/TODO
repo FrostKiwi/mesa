@@ -15,12 +15,9 @@ Anywhere // appears in the code base, that is a TODO comment.
 (Only C style comments should remain!)
 
 - DRI3 explicit fencing
-- Compute shaders (Kayden has a WIP branch)
-- Seqno tracking system (ickle has a WIP branch)
+- Compute shaders (Jordan has a WIP branch)
 - Fence implementation (not started, may need seqno tracking, or drm syncobjs)
-- Turn binder into a ring buffer (needs seqno, ickle has a WIP branch)
-  (Until this happens we hit stalls recycling active addresses.)
-- Queries (not started - needs seqno tracking?)
+- Queries (Kayden has a WIP branch)
 - Conditional rendering (not started - needs queries)
 
 - Gen8, Gen10, Gen11 support (not started)
@@ -28,14 +25,13 @@ Anywhere // appears in the code base, that is a TODO comment.
 - Make sure scissoring/viewport extents are getting limited to the FBO
 
 - Auxiliary surfaces (not started - Nanley has ideas)
-- Do proper pre-draw resolves/flushes (drop PIPE_CONTROLs in iris_draw.c)
 
 - Compact binding tables for SSBOs/atomics (currently wasteful)
 
 - Shader Precompiles
 - Shader Disk Cache
 
-- u_threaded_context (not started)
+- u_threaded_context (Kayden has a WIP branch)
 
 - BLORP in a separate render batch (someday)
 - Stencil PMA (not started)
