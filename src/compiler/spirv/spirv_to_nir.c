@@ -1919,8 +1919,8 @@ vtn_handle_texture(struct vtn_builder *b, SpvOp opcode,
    } else {
       vtn_assert(sampled_val->type->base_type == vtn_base_type_image);
       sampled.type = sampled_val->type;
-      sampled.image = NULL;
-      sampled.sampler = sampled_val->ssa->image;
+      sampled.image = sampled_val->ssa->image;
+      sampled.sampler = NULL;
    }
 
    const struct glsl_type *image_type = sampled.type->type;
@@ -1981,9 +1981,9 @@ vtn_handle_texture(struct vtn_builder *b, SpvOp opcode,
    nir_tex_src srcs[10]; /* 10 should be enough */
    nir_tex_src *p = srcs;
 
-   nir_deref_instr *sampler = vtn_pointer_to_deref(b, sampled.sampler);
-   nir_deref_instr *texture =
-      sampled.image ? vtn_pointer_to_deref(b, sampled.image) : sampler;
+   nir_deref_instr *sampler =
+      sampled.sampler ? vtn_pointer_to_deref(b, sampled.sampler) : NULL;
+   nir_deref_instr *texture = vtn_pointer_to_deref(b, sampled.image);
 
    p->src = nir_src_for_ssa(&texture->dest.ssa);
    p->src_type = nir_tex_src_texture_deref;
