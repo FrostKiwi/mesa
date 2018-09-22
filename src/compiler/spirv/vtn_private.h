@@ -112,7 +112,6 @@ enum vtn_value_type {
    vtn_value_type_ssa,
    vtn_value_type_extension,
    vtn_value_type_image_pointer,
-   vtn_value_type_sampled_image,
 };
 
 enum vtn_branch_type {
@@ -250,9 +249,14 @@ const uint32_t *
 vtn_foreach_instruction(struct vtn_builder *b, const uint32_t *start,
                         const uint32_t *end, vtn_instruction_handler handler);
 
+struct vtn_pointer;
+
 struct vtn_ssa_value {
    union {
       nir_ssa_def *def;
+      struct vtn_sampled_image *sampled_image;
+      struct vtn_pointer *image;
+      struct vtn_pointer *sampler;
       struct vtn_ssa_value **elems;
    };
 
@@ -522,7 +526,6 @@ struct vtn_value {
       nir_constant *constant;
       struct vtn_pointer *pointer;
       struct vtn_image_pointer *image;
-      struct vtn_sampled_image *sampled_image;
       struct vtn_function *func;
       struct vtn_block *block;
       struct vtn_ssa_value *ssa;

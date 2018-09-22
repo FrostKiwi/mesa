@@ -1893,25 +1893,19 @@ vtn_handle_texture(struct vtn_builder *b, SpvOp opcode,
                    const uint32_t *w, unsigned count)
 {
    if (opcode == SpvOpSampledImage) {
-      struct vtn_value *val =
-         vtn_push_value(b, w[2], vtn_value_type_sampled_image);
-      val->sampled_image = ralloc(b, struct vtn_sampled_image);
-      val->sampled_image->type =
-         vtn_value(b, w[1], vtn_value_type_type)->type;
-      val->sampled_image->image =
-         vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
-      val->sampled_image->sampler =
-         vtn_value(b, w[4], vtn_value_type_pointer)->pointer;
+      struct vtn_type *res_type = vtn_value(b, w[1], vtn_value_type_type)->type;
+      struct vtn_ssa_value *ssa = vtn_create_ssa_value(b, res_type->type);
+      ssa->sampled_image = ralloc(b, struct vtn_sampled_image);
+      ssa->sampled_image->type = res_type;
+      ssa->sampled_image->image = vtn_ssa_value(b, w[3])->image;
+      ssa->sampled_image->sampler = vtn_ssa_value(b, w[4])->sampler;
+      vtn_push_ssa(b, w[2], res_type, ssa);
       return;
    } else if (opcode == SpvOpImage) {
-      struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_pointer);
-      struct vtn_value *src_val = vtn_untyped_value(b, w[3]);
-      if (src_val->value_type == vtn_value_type_sampled_image) {
-         val->pointer = src_val->sampled_image->image;
-      } else {
-         vtn_assert(src_val->value_type == vtn_value_type_pointer);
-         val->pointer = src_val->pointer;
-      }
+      struct vtn_type *res_type = vtn_value(b, w[1], vtn_value_type_type)->type;
+      struct vtn_ssa_value *ssa = vtn_create_ssa_value(b, res_type->type);
+      ssa->image = vtn_ssa_value(b, w[3])->sampled_image->image;
+      vtn_push_ssa(b, w[2], res_type, ssa);
       return;
    }
 
@@ -1919,14 +1913,14 @@ vtn_handle_texture(struct vtn_builder *b, SpvOp opcode,
    struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
 
    struct vtn_sampled_image sampled;
-   struct vtn_value *sampled_val = vtn_untyped_value(b, w[3]);
-   if (sampled_val->value_type == vtn_value_type_sampled_image) {
-      sampled = *sampled_val->sampled_image;
+   struct vtn_value *sampled_val = vtn_value(b, w[3], vtn_value_type_ssa);
+   if (sampled_val->type->base_type == vtn_base_type_sampled_image) {
+      sampled = *sampled_val->ssa->sampled_image;
    } else {
-      vtn_assert(sampled_val->value_type == vtn_value_type_pointer);
-      sampled.type = sampled_val->pointer->type;
+      vtn_assert(sampled_val->type->base_type == vtn_base_type_image);
+      sampled.type = sampled_val->type;
       sampled.image = NULL;
-      sampled.sampler = sampled_val->pointer;
+      sampled.sampler = sampled_val->ssa->image;
    }
 
    const struct glsl_type *image_type = sampled.type->type;
@@ -2352,13 +2346,13 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
       break;
 
    case SpvOpImageQuerySize:
-      image.image = vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
+      image.image = vtn_ssa_value(b, w[3])->image;
       image.coord = NULL;
       image.sample = NULL;
       break;
 
    case SpvOpImageRead:
-      image.image = vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
+      image.image = vtn_ssa_value(b, w[3])->image;
       image.coord = get_image_coord(b, w[4]);
 
       if (count > 5 && (w[5] & SpvImageOperandsSampleMask)) {
@@ -2370,7 +2364,7 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
       break;
 
    case SpvOpImageWrite:
-      image.image = vtn_value(b, w[1], vtn_value_type_pointer)->pointer;
+      image.image = vtn_ssa_value(b, w[1])->image;
       image.coord = get_image_coord(b, w[2]);
 
       /* texel = w[3] */
@@ -3873,12 +3867,11 @@ vtn_handle_body_instruction(struct vtn_builder *b, SpvOp opcode,
       break;
 
    case SpvOpImageQuerySize: {
-      struct vtn_pointer *image =
-         vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
-      if (glsl_type_is_image(image->type->type)) {
+      struct vtn_value *val = vtn_value(b, w[3], vtn_value_type_ssa);
+      if (glsl_type_is_image(val->type->type)) {
          vtn_handle_image(b, opcode, w, count);
       } else {
-         vtn_assert(glsl_type_is_sampler(image->type->type));
+         vtn_assert(glsl_type_is_sampler(val->type->type));
          vtn_handle_texture(b, opcode, w, count);
       }
       break;

@@ -892,6 +892,22 @@ _vtn_variable_load_store(struct vtn_builder *b, bool load,
       }
       return;
 
+   case GLSL_TYPE_SAMPLER:
+   case GLSL_TYPE_IMAGE:
+      vtn_fail_if(!load, "Attempted to store to an image or sampler");
+      (*inout) = vtn_create_ssa_value(b, ptr->type->type);
+      if (ptr->type->base_type == vtn_base_type_sampled_image) {
+         (*inout)->sampled_image = ralloc(b, struct vtn_sampled_image);
+         (*inout)->sampled_image->type = ptr->type;
+         (*inout)->sampled_image->image = ptr;
+         (*inout)->sampled_image->sampler = ptr;
+      } else {
+         assert(ptr->type->base_type == vtn_base_type_image ||
+                ptr->type->base_type == vtn_base_type_sampler);
+         (*inout)->image = ptr;
+      }
+      return;
+
    case GLSL_TYPE_ARRAY:
    case GLSL_TYPE_STRUCT: {
       unsigned elems = glsl_get_length(ptr->type->type);
@@ -1939,29 +1955,12 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
       }
 
       struct vtn_type *ptr_type = vtn_value(b, w[1], vtn_value_type_type)->type;
-      struct vtn_value *base_val = vtn_untyped_value(b, w[3]);
-      if (base_val->value_type == vtn_value_type_sampled_image) {
-         /* This is rather insane.  SPIR-V allows you to use OpSampledImage
-          * to combine an array of images with a single sampler to get an
-          * array of sampled images that all share the same sampler.
-          * Fortunately, this means that we can more-or-less ignore the
-          * sampler when crawling the access chain, but it does leave us
-          * with this rather awkward little special-case.
-          */
-         struct vtn_value *val =
-            vtn_push_value(b, w[2], vtn_value_type_sampled_image);
-         val->sampled_image = ralloc(b, struct vtn_sampled_image);
-         val->sampled_image->type = base_val->sampled_image->type;
-         val->sampled_image->image =
-            vtn_pointer_dereference(b, base_val->sampled_image->image, chain);
-         val->sampled_image->sampler = base_val->sampled_image->sampler;
-      } else {
-         vtn_assert(base_val->value_type == vtn_value_type_pointer);
-         struct vtn_value *val =
-            vtn_push_value(b, w[2], vtn_value_type_pointer);
-         val->pointer = vtn_pointer_dereference(b, base_val->pointer, chain);
-         val->pointer->ptr_type = ptr_type;
-      }
+      struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_pointer);
+      struct vtn_pointer *base =
+         vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
+
+      val->pointer = vtn_pointer_dereference(b, base, chain);
+      val->pointer->ptr_type = ptr_type;
       break;
    }
 
@@ -1982,12 +1981,6 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
       struct vtn_pointer *src = src_val->pointer;
 
       vtn_assert_types_equal(b, opcode, res_type, src_val->type->deref);
-
-      if (glsl_type_is_image(res_type->type) ||
-          glsl_type_is_sampler(res_type->type)) {
-         vtn_push_value(b, w[2], vtn_value_type_pointer)->pointer = src;
-         return;
-      }
 
       vtn_push_ssa(b, w[2], res_type, vtn_variable_load(b, src));
       break;
