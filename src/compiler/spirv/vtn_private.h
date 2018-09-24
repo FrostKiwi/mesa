@@ -673,6 +673,8 @@ vtn_constant_value(struct vtn_builder *b, uint32_t value_id)
    return vtn_value(b, value_id, vtn_value_type_constant)->constant;
 }
 
+struct vtn_pointer *vtn_pointer(struct vtn_builder *b, uint32_t value_id);
+
 struct vtn_ssa_value *vtn_ssa_value(struct vtn_builder *b, uint32_t value_id);
 
 struct vtn_ssa_value *vtn_create_ssa_value(struct vtn_builder *b,

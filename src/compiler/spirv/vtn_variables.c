@@ -479,8 +479,7 @@ _vtn_local_load_store(struct vtn_builder *b, bool load, nir_deref_instr *deref,
 nir_deref_instr *
 vtn_nir_deref(struct vtn_builder *b, uint32_t id)
 {
-   struct vtn_pointer *ptr = vtn_value(b, id, vtn_value_type_pointer)->pointer;
-   return vtn_pointer_to_deref(b, ptr);
+   return vtn_pointer_to_deref(b, vtn_pointer(b, id));
 }
 
 /*
@@ -1965,30 +1964,28 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
    }
 
    case SpvOpCopyMemory: {
-      struct vtn_value *dest = vtn_value(b, w[1], vtn_value_type_pointer);
-      struct vtn_value *src = vtn_value(b, w[2], vtn_value_type_pointer);
+      struct vtn_pointer *dest = vtn_pointer(b, w[1]);
+      struct vtn_pointer *src = vtn_pointer(b, w[2]);
 
-      vtn_assert_types_equal(b, opcode, dest->type->deref, src->type->deref);
+      vtn_assert_types_equal(b, opcode, dest->type, src->type);
 
-      vtn_variable_copy(b, dest->pointer, src->pointer);
+      vtn_variable_copy(b, dest, src);
       break;
    }
 
    case SpvOpLoad: {
       struct vtn_type *res_type =
          vtn_value(b, w[1], vtn_value_type_type)->type;
-      struct vtn_value *src_val = vtn_value(b, w[3], vtn_value_type_pointer);
-      struct vtn_pointer *src = src_val->pointer;
+      struct vtn_pointer *src = vtn_pointer(b, w[3]);
 
-      vtn_assert_types_equal(b, opcode, res_type, src_val->type->deref);
+      vtn_assert_types_equal(b, opcode, res_type, src->type);
 
       vtn_push_ssa(b, w[2], res_type, vtn_variable_load(b, src));
       break;
    }
 
    case SpvOpStore: {
-      struct vtn_value *dest_val = vtn_value(b, w[1], vtn_value_type_pointer);
-      struct vtn_pointer *dest = dest_val->pointer;
+      struct vtn_pointer *dest = vtn_pointer(b, w[1]);
       struct vtn_value *src_val = vtn_untyped_value(b, w[2]);
 
       /* OpStore requires us to actually have a storage type */
@@ -2014,14 +2011,13 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
          break;
       }
 
-      vtn_assert_types_equal(b, opcode, dest_val->type->deref, src_val->type);
+      vtn_assert_types_equal(b, opcode, dest->type, src_val->type);
 
       if (glsl_type_is_sampler(dest->type->type)) {
          vtn_warn("OpStore of a sampler detected.  Doing on-the-fly copy "
                   "propagation to workaround the problem.");
          vtn_assert(dest->var->copy_prop_sampler == NULL);
-         dest->var->copy_prop_sampler =
-            vtn_value(b, w[2], vtn_value_type_pointer)->pointer;
+         dest->var->copy_prop_sampler = vtn_pointer(b, w[2]);
          break;
       }
 
@@ -2031,8 +2027,7 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
    }
 
    case SpvOpArrayLength: {
-      struct vtn_pointer *ptr =
-         vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
+      struct vtn_pointer *ptr = vtn_pointer(b, w[3]);
 
       const uint32_t offset = ptr->var->type->offsets[w[4]];
       const uint32_t stride = ptr->var->type->members[w[4]]->stride;

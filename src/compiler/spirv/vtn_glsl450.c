@@ -768,9 +768,7 @@ handle_glsl450_interpolation(struct vtn_builder *b, enum GLSLstd450 opcode,
 
    nir_intrinsic_instr *intrin = nir_intrinsic_instr_create(b->nb.shader, op);
 
-   struct vtn_pointer *ptr =
-      vtn_value(b, w[5], vtn_value_type_pointer)->pointer;
-   nir_deref_instr *deref = vtn_pointer_to_deref(b, ptr);
+   nir_deref_instr *deref = vtn_pointer_to_deref(b, vtn_pointer(b, w[5]));
 
    /* If the value we are interpolating has an index into a vector then
     * interpolate the vector and index the result of that instead. This is

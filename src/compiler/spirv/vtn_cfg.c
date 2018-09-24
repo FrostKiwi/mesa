@@ -233,10 +233,8 @@ vtn_handle_function_call(struct vtn_builder *b, SpvOp opcode,
       unsigned arg_id = w[4 + i];
 
       if (arg_type->base_type == vtn_base_type_pointer) {
-         struct vtn_pointer *pointer =
-            vtn_value(b, arg_id, vtn_value_type_pointer)->pointer;
          call->params[param_idx++] =
-            nir_src_for_ssa(vtn_pointer_to_ssa(b, pointer));
+            nir_src_for_ssa(vtn_pointer_to_ssa(b, vtn_pointer(b, arg_id)));
       } else {
          vtn_ssa_value_add_to_call_params(b, vtn_ssa_value(b, arg_id),
                                           arg_type, call, &param_idx);

@@ -168,6 +168,12 @@ struct spec_constant_value {
    };
 };
 
+struct vtn_pointer *
+vtn_pointer(struct vtn_builder *b, uint32_t value_id)
+{
+   return vtn_value(b, value_id, vtn_value_type_pointer)->pointer;
+}
+
 static struct vtn_ssa_value *
 vtn_undef_ssa_value(struct vtn_builder *b, struct vtn_type *type)
 {
@@ -2293,7 +2299,7 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
          vtn_push_value(b, w[2], vtn_value_type_image_pointer);
       val->image = ralloc(b, struct vtn_image_pointer);
 
-      val->image->image = vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
+      val->image->image = vtn_pointer(b, w[3]);
       val->image->coord = get_image_coord(b, w[4]);
       val->image->sample = vtn_ssa_value(b, w[5])->def;
       return;
@@ -2594,11 +2600,11 @@ vtn_handle_atomics(struct vtn_builder *b, SpvOp opcode,
    case SpvOpAtomicAnd:
    case SpvOpAtomicOr:
    case SpvOpAtomicXor:
-      ptr = vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
+      ptr = vtn_pointer(b, w[3]);
       break;
 
    case SpvOpAtomicStore:
-      ptr = vtn_value(b, w[1], vtn_value_type_pointer)->pointer;
+      ptr = vtn_pointer(b, w[1]);
       break;
 
    default:
