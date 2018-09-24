@@ -253,6 +253,7 @@ struct vtn_pointer;
 struct vtn_ssa_value {
    union {
       nir_ssa_def *def;
+      struct vtn_pointer *pointer;
       struct vtn_sampled_image *sampled_image;
       struct vtn_pointer *image;
       struct vtn_pointer *sampler;

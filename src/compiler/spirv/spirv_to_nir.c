@@ -171,7 +171,9 @@ struct spec_constant_value {
 struct vtn_pointer *
 vtn_pointer(struct vtn_builder *b, uint32_t value_id)
 {
-   return vtn_value(b, value_id, vtn_value_type_pointer)->pointer;
+   struct vtn_value *val = vtn_value(b, value_id, vtn_value_type_ssa);
+   vtn_assert(val->type->base_type == vtn_base_type_pointer);
+   return val->ssa->pointer;
 }
 
 static struct vtn_ssa_value *
@@ -291,13 +293,6 @@ vtn_ssa_value(struct vtn_builder *b, uint32_t value_id)
 
    case vtn_value_type_ssa:
       return val->ssa;
-
-   case vtn_value_type_pointer:
-      vtn_assert(val->pointer->ptr_type && val->pointer->ptr_type->type);
-      struct vtn_ssa_value *ssa =
-         vtn_create_ssa_value(b, val->pointer->ptr_type);
-      ssa->def = vtn_pointer_to_ssa(b, val->pointer);
-      return ssa;
 
    default:
       vtn_fail("Invalid type for an SSA value");
@@ -3890,7 +3885,7 @@ vtn_handle_body_instruction(struct vtn_builder *b, SpvOp opcode,
       if (pointer->value_type == vtn_value_type_image_pointer) {
          vtn_handle_image(b, opcode, w, count);
       } else {
-         vtn_assert(pointer->value_type == vtn_value_type_pointer);
+         vtn_assert(pointer->type->base_type == vtn_base_type_pointer);
          vtn_handle_atomics(b, opcode, w, count);
       }
       break;
@@ -3901,7 +3896,7 @@ vtn_handle_body_instruction(struct vtn_builder *b, SpvOp opcode,
       if (pointer->value_type == vtn_value_type_image_pointer) {
          vtn_handle_image(b, opcode, w, count);
       } else {
-         vtn_assert(pointer->value_type == vtn_value_type_pointer);
+         vtn_assert(pointer->type->base_type == vtn_base_type_pointer);
          vtn_handle_atomics(b, opcode, w, count);
       }
       break;

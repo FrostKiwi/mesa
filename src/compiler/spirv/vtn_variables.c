@@ -1730,8 +1730,8 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
    var->type = type;
    var->mode = mode;
 
-   vtn_assert(val->value_type == vtn_value_type_pointer);
-   val->pointer = vtn_pointer_for_variable(b, var, ptr_type);
+   vtn_assert(val->value_type == vtn_value_type_ssa);
+   val->ssa->pointer = vtn_pointer_for_variable(b, var, ptr_type);
 
    switch (var->mode) {
    case vtn_variable_mode_local:
@@ -1875,7 +1875,7 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
    } else if (var->var) {
       nir_shader_add_variable(b->shader, var->var);
    } else {
-      vtn_assert(vtn_pointer_is_external_block(b, val->pointer));
+      vtn_assert(vtn_pointer_is_external_block(b, val->ssa->pointer));
    }
 }
 
@@ -1922,8 +1922,8 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
 
    case SpvOpVariable: {
       struct vtn_type *ptr_type = vtn_value(b, w[1], vtn_value_type_type)->type;
-
-      struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_pointer);
+      struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
+      val->ssa = vtn_create_ssa_value(b, NULL);
 
       SpvStorageClass storage_class = w[3];
       nir_constant *initializer = NULL;
