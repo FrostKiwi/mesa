@@ -151,6 +151,11 @@ vtn_ssa_value_add_to_call_params(struct vtn_builder *b,
          nir_src_for_ssa(vtn_pointer_to_ssa(b, value->image));
       break;
 
+   case vtn_base_type_pointer:
+      call->params[(*param_idx)++] =
+         nir_src_for_ssa(vtn_pointer_to_ssa(b, value->pointer));
+      break;
+
    default:
       call->params[(*param_idx)++] = nir_src_for_ssa(value->def);
       break;
@@ -198,6 +203,16 @@ vtn_ssa_value_load_function_param(struct vtn_builder *b,
       value->image = vtn_load_param_pointer(b, type, (*param_idx)++);
       break;
 
+   case vtn_base_type_pointer:
+      if (type->type) {
+         /* This is a pointer with an actual storage type */
+         nir_ssa_def *ssa_ptr = nir_load_param(&b->nb, (*param_idx)++);
+         value->pointer = vtn_pointer_from_ssa(b, ssa_ptr, type);
+      } else {
+         value->pointer = vtn_load_param_pointer(b, type, (*param_idx)++);
+      }
+      break;
+
    default:
       value->def = nir_load_param(&b->nb, (*param_idx)++);
       break;
@@ -229,16 +244,9 @@ vtn_handle_function_call(struct vtn_builder *b, SpvOp opcode,
    }
 
    for (unsigned i = 0; i < vtn_callee->type->length; i++) {
-      struct vtn_type *arg_type = vtn_callee->type->params[i];
-      unsigned arg_id = w[4 + i];
-
-      if (arg_type->base_type == vtn_base_type_pointer) {
-         call->params[param_idx++] =
-            nir_src_for_ssa(vtn_pointer_to_ssa(b, vtn_pointer(b, arg_id)));
-      } else {
-         vtn_ssa_value_add_to_call_params(b, vtn_ssa_value(b, arg_id),
-                                          arg_type, call, &param_idx);
-      }
+      vtn_ssa_value_add_to_call_params(b, vtn_ssa_value(b, w[4 + i]),
+                                       vtn_callee->type->params[i],
+                                       call, &param_idx);
    }
    assert(param_idx == call->num_params);
 
@@ -318,26 +326,10 @@ vtn_cfg_handle_prepass_instruction(struct vtn_builder *b, SpvOp opcode,
 
    case SpvOpFunctionParameter: {
       struct vtn_type *type = vtn_value(b, w[1], vtn_value_type_type)->type;
-
       vtn_assert(b->func_param_idx < b->func->impl->function->num_params);
-
-      if (type->base_type == vtn_base_type_pointer && type->type != NULL) {
-         /* This is a pointer with an actual storage type */
-         struct vtn_value *val =
-            vtn_push_value(b, w[2], vtn_value_type_pointer);
-         nir_ssa_def *ssa_ptr = nir_load_param(&b->nb, b->func_param_idx++);
-         val->pointer = vtn_pointer_from_ssa(b, ssa_ptr, type);
-      } else if (type->base_type == vtn_base_type_pointer) {
-         struct vtn_value *val =
-            vtn_push_value(b, w[2], vtn_value_type_pointer);
-         val->pointer =
-            vtn_load_param_pointer(b, type, b->func_param_idx++);
-      } else {
-         /* We're a regular SSA value. */
-         struct vtn_ssa_value *value = vtn_create_ssa_value(b, type->type);
-         vtn_ssa_value_load_function_param(b, value, type, &b->func_param_idx);
-         vtn_push_ssa(b, w[2], type, value);
-      }
+      struct vtn_ssa_value *value = vtn_create_ssa_value(b, type->type);
+      vtn_ssa_value_load_function_param(b, value, type, &b->func_param_idx);
+      vtn_push_ssa(b, w[2], type, value);
       break;
    }
 

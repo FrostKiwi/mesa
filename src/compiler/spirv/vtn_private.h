@@ -106,7 +106,6 @@ enum vtn_value_type {
    vtn_value_type_decoration_group,
    vtn_value_type_type,
    vtn_value_type_constant,
-   vtn_value_type_pointer,
    vtn_value_type_function,
    vtn_value_type_block,
    vtn_value_type_ssa,
@@ -524,7 +523,6 @@ struct vtn_value {
       void *ptr;
       char *str;
       nir_constant *constant;
-      struct vtn_pointer *pointer;
       struct vtn_image_pointer *image;
       struct vtn_function *func;
       struct vtn_block *block;
@@ -642,14 +640,8 @@ static inline struct vtn_value *
 vtn_push_ssa(struct vtn_builder *b, uint32_t value_id,
              struct vtn_type *type, struct vtn_ssa_value *ssa)
 {
-   struct vtn_value *val;
-   if (type->base_type == vtn_base_type_pointer) {
-      val = vtn_push_value(b, value_id, vtn_value_type_pointer);
-      val->pointer = vtn_pointer_from_ssa(b, ssa->def, type);
-   } else {
-      val = vtn_push_value(b, value_id, vtn_value_type_ssa);
-      val->ssa = ssa;
-   }
+   struct vtn_value *val = vtn_push_value(b, value_id, vtn_value_type_ssa);
+   val->ssa = ssa;
    return val;
 }
 

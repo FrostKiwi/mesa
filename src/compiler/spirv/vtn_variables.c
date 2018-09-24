@@ -1451,9 +1451,10 @@ var_decoration_cb(struct vtn_builder *b, struct vtn_value *val, int member,
       break;
    }
 
-   if (val->value_type == vtn_value_type_pointer) {
-      assert(val->pointer->var == void_var);
-      assert(val->pointer->chain == NULL);
+   if (val->value_type == vtn_value_type_ssa) {
+      assert(val->type->base_type == vtn_base_type_pointer);
+      assert(val->ssa->pointer->var == void_var);
+      assert(val->ssa->pointer->chain == NULL);
       assert(member == -1);
    } else {
       assert(val->value_type == vtn_value_type_type);
