@@ -326,6 +326,10 @@ iris_get_query_result_resource(struct pipe_context *ctx,
    struct iris_query *q = (void *) query;
    struct iris_batch *batch = &ice->render_batch;
 
+      if (iris_batch_references(&ice->render_batch, q->bo))
+         iris_batch_flush(&ice->render_batch);
+      iris_bo_wait_rendering(q->bo);
+
    if (!q->ready && q->map->snapshots_landed) {
       /* The final snapshots happen to have landed, so let's just compute
        * the result on the CPU now...
