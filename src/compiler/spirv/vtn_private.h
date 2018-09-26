@@ -266,7 +266,7 @@ struct vtn_ssa_value {
     */
    struct vtn_ssa_value *transposed;
 
-   const struct glsl_type *type;
+   struct vtn_type *type;
 };
 
 enum vtn_base_type {
@@ -676,7 +676,7 @@ vtn_constant_value(struct vtn_builder *b, uint32_t value_id)
 struct vtn_ssa_value *vtn_ssa_value(struct vtn_builder *b, uint32_t value_id);
 
 struct vtn_ssa_value *vtn_create_ssa_value(struct vtn_builder *b,
-                                           const struct glsl_type *type);
+                                           struct vtn_type *type);
 
 struct vtn_ssa_value *vtn_ssa_transpose(struct vtn_builder *b,
                                         struct vtn_ssa_value *src);
