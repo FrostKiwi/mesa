@@ -14,6 +14,8 @@ To Do
 Anywhere // appears in the code base, that is a TODO comment.
 (Only C style comments should remain!)
 
+- Set ctx->Const.QueryCounterBits.Time* to 36 (or change...)
+
 - DRI3 explicit fencing
 - Compute shaders (Jordan has a WIP branch)
 - Fence implementation (not started, may need seqno tracking, or drm syncobjs)
