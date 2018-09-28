@@ -17,8 +17,7 @@ Anywhere // appears in the code base, that is a TODO comment.
 - DRI3 explicit fencing
 - Compute shaders (Jordan has a WIP branch)
 - Fence implementation (not started, may need seqno tracking, or drm syncobjs)
-- Queries (on iris-query branch, will merge after XDC when Kayden can test)
-- Conditional rendering (not started - needs queries)
+- Conditional rendering (not started)
 
 - Gen8, Gen10, Gen11 support (not started)
 
