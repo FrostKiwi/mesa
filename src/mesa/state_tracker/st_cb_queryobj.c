@@ -88,6 +88,40 @@ st_DeleteQuery(struct gl_context *ctx, struct gl_query_object *q)
    free(stq);
 }
 
+static int
+target_to_index(const struct gl_query_object *q)
+{
+   switch (q->Target) {
+   case GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN:
+   case GL_TRANSFORM_FEEDBACK_STREAM_OVERFLOW_ARB:
+   case GL_TRANSFORM_FEEDBACK_OVERFLOW_ARB:
+      return q->Stream;
+   case GL_VERTICES_SUBMITTED_ARB:
+      return 0;
+   case GL_PRIMITIVES_SUBMITTED_ARB:
+      return 1;
+   case GL_VERTEX_SHADER_INVOCATIONS_ARB:
+      return 2;
+   case GL_GEOMETRY_SHADER_INVOCATIONS:
+      return 3;
+   case GL_GEOMETRY_SHADER_PRIMITIVES_EMITTED_ARB:
+      return 4;
+   case GL_CLIPPING_INPUT_PRIMITIVES_ARB:
+      return 5;
+   case GL_CLIPPING_OUTPUT_PRIMITIVES_ARB:
+      return 6;
+   case GL_FRAGMENT_SHADER_INVOCATIONS_ARB:
+      return 7;
+   case GL_TESS_CONTROL_SHADER_PATCHES_ARB:
+      return 8;
+   case GL_TESS_EVALUATION_SHADER_INVOCATIONS_ARB:
+      return 9;
+   case GL_COMPUTE_SHADER_INVOCATIONS_ARB:
+      return 10;
+   default:
+      return 0;
+   }
+}
 
 static void
 st_BeginQuery(struct gl_context *ctx, struct gl_query_object *q)
@@ -164,7 +198,7 @@ st_BeginQuery(struct gl_context *ctx, struct gl_query_object *q)
          ret = pipe->end_query(pipe, stq->pq_begin);
    } else {
       if (!stq->pq) {
-         stq->pq = pipe->create_query(pipe, type, q->Stream);
+         stq->pq = pipe->create_query(pipe, type, target_to_index(q));
          stq->type = type;
       }
       if (stq->pq)
@@ -383,46 +417,8 @@ st_StoreQueryResult(struct gl_context *ctx, struct gl_query_object *q,
 
    if (pname == GL_QUERY_RESULT_AVAILABLE) {
       index = -1;
-   } else if (stq->type == PIPE_QUERY_PIPELINE_STATISTICS) {
-      switch (q->Target) {
-      case GL_VERTICES_SUBMITTED_ARB:
-         index = 0;
-         break;
-      case GL_PRIMITIVES_SUBMITTED_ARB:
-         index = 1;
-         break;
-      case GL_VERTEX_SHADER_INVOCATIONS_ARB:
-         index = 2;
-         break;
-      case GL_GEOMETRY_SHADER_INVOCATIONS:
-         index = 3;
-         break;
-      case GL_GEOMETRY_SHADER_PRIMITIVES_EMITTED_ARB:
-         index = 4;
-         break;
-      case GL_CLIPPING_INPUT_PRIMITIVES_ARB:
-         index = 5;
-         break;
-      case GL_CLIPPING_OUTPUT_PRIMITIVES_ARB:
-         index = 6;
-         break;
-      case GL_FRAGMENT_SHADER_INVOCATIONS_ARB:
-         index = 7;
-         break;
-      case GL_TESS_CONTROL_SHADER_PATCHES_ARB:
-         index = 8;
-         break;
-      case GL_TESS_EVALUATION_SHADER_INVOCATIONS_ARB:
-         index = 9;
-         break;
-      case GL_COMPUTE_SHADER_INVOCATIONS_ARB:
-         index = 10;
-         break;
-      default:
-         unreachable("Unexpected target");
-      }
    } else {
-      index = 0;
+      index = target_to_index(q);
    }
 
    pipe->get_query_result_resource(pipe, stq->pq, wait, result_type, index,
