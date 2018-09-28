@@ -319,7 +319,6 @@ iris_destroy_query(struct pipe_context *ctx, struct pipe_query *p_query)
    free(query);
 }
 
-
 static boolean
 iris_begin_query(struct pipe_context *ctx, struct pipe_query *query)
 {
