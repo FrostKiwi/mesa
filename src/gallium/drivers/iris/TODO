@@ -15,11 +15,13 @@ Anywhere // appears in the code base, that is a TODO comment.
 (Only C style comments should remain!)
 
 - Set ctx->Const.QueryCounterBits.Time* to 36 (or change...)
+- GPU reset detection, flag dirty = ~0ull, etc.
 
 - DRI3 explicit fencing
 - Compute shaders (Jordan has a WIP branch)
 - Fence implementation (not started, may need seqno tracking, or drm syncobjs)
 - Conditional rendering (not started)
+- Compare extensions list for more missing things
 
 - Gen8, Gen10, Gen11 support (not started)
 
