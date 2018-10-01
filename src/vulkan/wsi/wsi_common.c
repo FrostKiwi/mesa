@@ -81,6 +81,7 @@ wsi_device_init(struct wsi_device *wsi,
    WSI_GET_CB(FreeMemory);
    WSI_GET_CB(FreeCommandBuffers);
    WSI_GET_CB(GetBufferMemoryRequirements);
+   WSI_GET_CB(GetImageDrmFormatModifierPropertiesEXT);
    WSI_GET_CB(GetImageMemoryRequirements);
    WSI_GET_CB(GetImageSubresourceLayout);
    WSI_GET_CB(GetMemoryFdKHR);
@@ -260,14 +261,9 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
    for (int i = 0; i < ARRAY_SIZE(image->fds); i++)
       image->fds[i] = -1;
 
-   struct wsi_image_create_info image_wsi_info = {
-      .sType = VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA,
-      .pNext = NULL,
-   };
-
-   const VkImageCreateInfo image_info = {
+   VkImageCreateInfo image_info = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .pNext = &image_wsi_info,
+      .pNext = NULL,
       .flags = 0,
       .imageType = VK_IMAGE_TYPE_2D,
       .format = pCreateInfo->imageFormat,
@@ -287,17 +283,25 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
    };
 
+   struct wsi_image_create_info image_wsi_info;
+   VkImageDrmFormatModifierListCreateInfoEXT image_modifier_list;
+
    uint32_t image_modifier_count = 0, modifier_prop_count = 0;
-   struct wsi_format_modifier_properties *modifier_props = NULL;
+   struct VkDrmFormatModifierPropertiesEXT *modifier_props = NULL;
    uint64_t *image_modifiers = NULL;
    if (num_modifier_lists == 0) {
       /* If we don't have modifiers, fall back to the legacy "scanout" flag */
-      image_wsi_info.scanout = true;
+      image_wsi_info = (struct wsi_image_create_info) {
+         .sType = VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA,
+         .pNext = image_info.pNext,
+         .scanout = true,
+      };
+      image_info.pNext = &image_wsi_info;
    } else {
       /* The winsys can't request modifiers if we don't support them. */
       assert(wsi->supports_modifiers);
-      struct wsi_format_modifier_properties_list modifier_props_list = {
-         .sType = VK_STRUCTURE_TYPE_WSI_FORMAT_MODIFIER_PROPERTIES_LIST_MESA,
+      struct VkDrmFormatModifierPropertiesListEXT modifier_props_list = {
+         .sType = VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT,
          .pNext = NULL,
       };
       VkFormatProperties2KHR format_props = {
@@ -307,10 +311,10 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
       wsi->GetPhysicalDeviceFormatProperties2KHR(wsi->pdevice,
                                                  pCreateInfo->imageFormat,
                                                  &format_props);
-      assert(modifier_props_list.modifier_count > 0);
+      assert(modifier_props_list.drmFormatModifierCount > 0);
       modifier_props = vk_alloc(&chain->alloc,
                                 sizeof(*modifier_props) *
-                                modifier_props_list.modifier_count,
+                                modifier_props_list.drmFormatModifierCount,
                                 8,
                                 VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
       if (!modifier_props) {
@@ -318,11 +322,11 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
          goto fail;
       }
 
-      modifier_props_list.modifier_properties = modifier_props;
+      modifier_props_list.pDrmFormatModifierProperties = modifier_props;
       wsi->GetPhysicalDeviceFormatProperties2KHR(wsi->pdevice,
                                                  pCreateInfo->imageFormat,
                                                  &format_props);
-      modifier_prop_count = modifier_props_list.modifier_count;
+      modifier_prop_count = modifier_props_list.drmFormatModifierCount;
 
       uint32_t max_modifier_count = 0;
       for (uint32_t l = 0; l < num_modifier_lists; l++)
@@ -345,7 +349,7 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
           */
          for (uint32_t i = 0; i < num_modifiers[l]; i++) {
             for (uint32_t j = 0; j < modifier_prop_count; j++) {
-               if (modifier_props[j].modifier == modifiers[l][i])
+               if (modifier_props[j].drmFormatModifier == modifiers[l][i])
                   image_modifiers[image_modifier_count++] = modifiers[l][i];
             }
          }
@@ -356,8 +360,14 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
       }
 
       if (image_modifier_count > 0) {
-         image_wsi_info.modifier_count = image_modifier_count;
-         image_wsi_info.modifiers = image_modifiers;
+         image_modifier_list = (VkImageDrmFormatModifierListCreateInfoEXT) {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT,
+            .pNext = image_info.pNext,
+            .drmFormatModifierCount = image_modifier_count,
+            .pDrmFormatModifiers = image_modifiers,
+         };
+         image_info.pNext = &image_modifier_list;
+         image_info.tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
       } else {
          /* TODO: Add a proper error here */
          assert(!"Failed to find a supported modifier!  This should never "
@@ -420,12 +430,21 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
       goto fail;
 
    if (num_modifier_lists > 0) {
-      image->drm_modifier = wsi->image_get_modifier(image->image);
+      VkImageDrmFormatModifierPropertiesEXT image_mod_props = {
+         .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT,
+         .pNext = NULL,
+      };
+      result = wsi->GetImageDrmFormatModifierPropertiesEXT(chain->device,
+                                                           image->image,
+                                                           &image_mod_props);
+      if (result != VK_SUCCESS)
+         goto fail;
+      image->drm_modifier = image_mod_props.drmFormatModifier;
       assert(image->drm_modifier != DRM_FORMAT_MOD_INVALID);
 
       for (uint32_t j = 0; j < modifier_prop_count; j++) {
-         if (modifier_props[j].modifier == image->drm_modifier) {
-            image->num_planes = modifier_props[j].modifier_plane_count;
+         if (modifier_props[j].drmFormatModifier == image->drm_modifier) {
+            image->num_planes = modifier_props[j].drmFormatModifierPlaneCount;
             break;
          }
       }

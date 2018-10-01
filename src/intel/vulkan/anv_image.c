@@ -109,6 +109,8 @@ choose_isl_tiling_flags(const struct anv_image_create_info *anv_info,
    case VK_IMAGE_TILING_LINEAR:
       flags = ISL_TILING_LINEAR_BIT;
       break;
+   case VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT:
+      flags = 1 << isl_mod_info->tiling;
    }
 
    if (anv_info->isl_tiling_flags)
@@ -116,9 +118,6 @@ choose_isl_tiling_flags(const struct anv_image_create_info *anv_info,
 
    if (legacy_scanout)
       flags &= ISL_TILING_LINEAR_BIT | ISL_TILING_X_BIT;
-
-   if (isl_mod_info)
-      flags &= 1 << isl_mod_info->tiling;
 
    assert(flags);
 
@@ -563,10 +562,13 @@ anv_image_create(VkDevice _device,
 
    const struct wsi_image_create_info *wsi_info =
       vk_find_struct_const(pCreateInfo->pNext, WSI_IMAGE_CREATE_INFO_MESA);
-   if (wsi_info && wsi_info->modifier_count > 0) {
+
+   if (pCreateInfo->tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT) {
+      const VkImageDrmFormatModifierListCreateInfoEXT *mod_info =
+         vk_find_struct_const(pCreateInfo->pNext, IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT);
       isl_mod_info = choose_drm_format_mod(&device->instance->physicalDevice,
-                                           wsi_info->modifier_count,
-                                           wsi_info->modifiers);
+                                           mod_info->drmFormatModifierCount,
+                                           mod_info->pDrmFormatModifiers);
       assert(isl_mod_info);
    }
 
@@ -786,6 +788,21 @@ void anv_GetImageSubresourceLayout(
    } else {
       layout->size = surface->isl.size_B;
    }
+}
+
+VkResult anv_GetImageDrmFormatModifierPropertiesEXT(
+    VkDevice                                    device,
+    VkImage                                     _image,
+    VkImageDrmFormatModifierPropertiesEXT*      pProperties)
+{
+   ANV_FROM_HANDLE(anv_image, image, _image);
+
+   assert(pProperties->sType =
+          VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT);
+
+   pProperties->drmFormatModifier = image->drm_format_mod;
+
+   return VK_SUCCESS;
 }
 
 /**
