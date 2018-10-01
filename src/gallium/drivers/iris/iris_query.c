@@ -327,6 +327,8 @@ calculate_result_on_gpu(struct iris_context *ice, struct iris_query *q)
    if (q->type == PIPE_QUERY_OCCLUSION_PREDICATE ||
        q->type == PIPE_QUERY_OCCLUSION_PREDICATE_CONSERVATIVE)
       gpr0_to_bool(ice);
+
+   // XXX: timestamp delta scaling...!!!
 }
 
 static struct pipe_query *
