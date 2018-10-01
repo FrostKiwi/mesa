@@ -15,6 +15,9 @@ Anywhere // appears in the code base, that is a TODO comment.
 (Only C style comments should remain!)
 
 - Set ctx->Const.QueryCounterBits.Time* to 36 (or change...)
+- Timer query scaling for QBOs
+- Transform feedback overflow queries
+
 - GPU reset detection, flag dirty = ~0ull, etc.
 
 - DRI3 explicit fencing
@@ -22,8 +25,6 @@ Anywhere // appears in the code base, that is a TODO comment.
 - Fence implementation (not started, may need seqno tracking, or drm syncobjs)
 - Conditional rendering (not started)
 - Compare extensions list for more missing things
-
-- Gen8, Gen10, Gen11 support (not started)
 
 - Make sure scissoring/viewport extents are getting limited to the FBO
 
@@ -45,6 +46,7 @@ Anywhere // appears in the code base, that is a TODO comment.
   AMD can't do them, NVIDIA apparently disallows Z24 + S8...
   https://gitlab.freedesktop.org/mesa/mesa/blob/master/src/mesa/state_tracker/st_cb_fbo.c#L703
   https://gitlab.freedesktop.org/mesa/mesa/blob/master/src/gallium/include/pipe/p_state.h#L373
+  This is preventing ext_framebuffer_multisample/accuracy tests from running
 
 - Use R32G32B32 and promote to R32G32B32X32 on first render?
 
