@@ -436,6 +436,10 @@ anv_get_format_plane(const struct gen_device_info *devinfo, VkFormat vk_format,
    const struct isl_format_layout *isl_layout =
       isl_format_get_layout(plane_format.isl_format);
 
+   /* No non-power-of-two fourcc formats exist */
+   if (tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT)
+      assert(util_is_power_of_two_or_zero(isl_layout->bpb));
+
    if (tiling == VK_IMAGE_TILING_OPTIMAL &&
        !util_is_power_of_two_or_zero(isl_layout->bpb)) {
       /* Tiled formats *must* be power-of-two because we need up upload
@@ -508,7 +512,7 @@ get_image_format_features(const struct gen_device_info *devinfo,
       return 0;
 
    struct anv_format_plane base_plane_format = plane_format;
-   if (vk_tiling == VK_IMAGE_TILING_OPTIMAL) {
+   if (vk_tiling != VK_IMAGE_TILING_LINEAR) {
       base_plane_format = anv_get_format_plane(devinfo, vk_format,
                                                VK_IMAGE_ASPECT_COLOR_BIT,
                                                VK_IMAGE_TILING_LINEAR);

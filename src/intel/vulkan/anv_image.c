@@ -334,7 +334,7 @@ make_surface(const struct anv_device *dev,
    bool needs_shadow = false;
    if (dev->info.gen <= 8 &&
        (vk_info->flags & VK_IMAGE_CREATE_BLOCK_TEXEL_VIEW_COMPATIBLE_BIT) &&
-       vk_info->tiling == VK_IMAGE_TILING_OPTIMAL) {
+       vk_info->tiling != VK_IMAGE_TILING_LINEAR) {
       assert(isl_format_is_compressed(plane_format.isl_format));
       tiling_flags = ISL_TILING_LINEAR_BIT;
       needs_shadow = true;
@@ -829,7 +829,7 @@ anv_layout_to_aux_usage(const struct gen_device_info * const devinfo,
       return ISL_AUX_USAGE_NONE;
 
    /* All images that use an auxiliary surface are required to be tiled. */
-   assert(image->tiling == VK_IMAGE_TILING_OPTIMAL);
+   assert(image->planes[plane].surface.isl.tiling != ISL_TILING_LINEAR);
 
    /* Stencil has no aux */
    assert(aspect != VK_IMAGE_ASPECT_STENCIL_BIT);
@@ -956,7 +956,7 @@ anv_layout_to_fast_clear_type(const struct gen_device_info * const devinfo,
       return ANV_FAST_CLEAR_NONE;
 
    /* All images that use an auxiliary surface are required to be tiled. */
-   assert(image->tiling == VK_IMAGE_TILING_OPTIMAL);
+   assert(image->planes[plane].surface.isl.tiling != ISL_TILING_LINEAR);
 
    /* Stencil has no aux */
    assert(aspect != VK_IMAGE_ASPECT_STENCIL_BIT);
