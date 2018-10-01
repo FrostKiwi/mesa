@@ -6,7 +6,7 @@ Piglit details
 
 Run with -x timer_query to avoid hardlocks in
 "ext_timer_query-time-elapsed timestamp -auto"
-(hopefully this will go away when we actually, say, implement queries)
+(nope, still broken, even with timer queries implemented...) :(
 
 To Do
 -----
