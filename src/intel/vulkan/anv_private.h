@@ -1422,6 +1422,9 @@ struct anv_descriptor_set_binding_layout {
    VkDescriptorType type;
 #endif
 
+   /* Flags provided when this binding was created */
+   VkDescriptorBindingFlagsEXT flags;
+
    /* Number of array elements in this binding */
    uint16_t array_size;
 
