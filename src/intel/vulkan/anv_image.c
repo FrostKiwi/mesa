@@ -93,7 +93,8 @@ choose_isl_surf_usage(VkImageCreateFlags vk_create_flags,
 }
 
 static isl_tiling_flags_t
-choose_isl_tiling_flags(const struct anv_image_create_info *anv_info,
+choose_isl_tiling_flags(struct anv_device *device,
+                        const struct anv_image_create_info *anv_info,
                         const struct isl_drm_modifier_info *isl_mod_info,
                         bool legacy_scanout)
 {
@@ -120,8 +121,11 @@ choose_isl_tiling_flags(const struct anv_image_create_info *anv_info,
    if (isl_mod_info)
       flags &= 1 << isl_mod_info->tiling;
 
-   /* We don't support Yf or Ys tiling yet */
-   flags &= ISL_TILING_STD_Y_MASK;
+   /* Ys tiling requires softpin so that we can ensure Ys-tiled images are
+    * aligned to 64K rather than 4K.
+    */
+   if (!device->instance->physicalDevice.use_softpin)
+      flags &= ~(ISL_TILING_GEN9_Ys_BIT | ISL_TILING_GEN10_Ys_BIT);
 
    assert(flags);
 
@@ -603,7 +607,7 @@ anv_image_create(VkDevice _device,
    assert(format != NULL);
 
    const isl_tiling_flags_t isl_tiling_flags =
-      choose_isl_tiling_flags(create_info, isl_mod_info,
+      choose_isl_tiling_flags(device, create_info, isl_mod_info,
                               image->needs_set_tiling);
 
    image->n_planes = format->n_planes;

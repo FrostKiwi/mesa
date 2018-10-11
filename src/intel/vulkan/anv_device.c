@@ -2167,11 +2167,13 @@ anv_vma_alloc(struct anv_device *device, struct anv_bo *bo)
 
    pthread_mutex_lock(&device->vma_mutex);
 
+   uint32_t align = bo->size >= (64 << 10) ? (64 << 10) : (4 << 10);
+
    bo->offset = 0;
 
    if (bo->flags & EXEC_OBJECT_SUPPORTS_48B_ADDRESS &&
        device->vma_hi_available >= bo->size) {
-      uint64_t addr = util_vma_heap_alloc(&device->vma_hi, bo->size, 4096);
+      uint64_t addr = util_vma_heap_alloc(&device->vma_hi, bo->size, align);
       if (addr) {
          bo->offset = gen_canonical_address(addr);
          assert(addr == gen_48b_address(bo->offset));
@@ -2180,7 +2182,7 @@ anv_vma_alloc(struct anv_device *device, struct anv_bo *bo)
    }
 
    if (bo->offset == 0 && device->vma_lo_available >= bo->size) {
-      uint64_t addr = util_vma_heap_alloc(&device->vma_lo, bo->size, 4096);
+      uint64_t addr = util_vma_heap_alloc(&device->vma_lo, bo->size, align);
       if (addr) {
          bo->offset = gen_canonical_address(addr);
          assert(addr == gen_48b_address(bo->offset));
