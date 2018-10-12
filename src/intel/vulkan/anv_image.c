@@ -361,7 +361,7 @@ make_surface(const struct anv_device *dev,
       .tiling_flags = tiling_flags);
 
    if (!ok)
-      return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+      return vk_error(VK_ERROR_OUT_OF_DEVICE_MEMORY);
 
    image->planes[plane].aux_usage = ISL_AUX_USAGE_NONE;
 
