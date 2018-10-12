@@ -217,6 +217,15 @@ isl_gen6_filter_tiling(const struct isl_device *dev,
    if (isl_surf_usage_is_depth(info->usage)) {
       /* Depth requires Y. */
       *flags &= ISL_TILING_ANY_Y_MASK;
+
+      /* The Yf and Ys tilings for 1D can't be easily faked as a 2D surface
+       * because there's no calculable qpitch.
+       *
+       * TODO: In theory, on could fake it with surface offset tricks but
+       * that's currently being left as an exercise to the reader.
+       */
+      if (info->dim == ISL_SURF_DIM_1D)
+         *flags &= ~ISL_TILING_STD_Y_MASK;
    }
 
    /* Separate stencil requires W tiling, and W tiling requires separate
