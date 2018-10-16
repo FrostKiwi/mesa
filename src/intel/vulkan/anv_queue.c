@@ -913,6 +913,211 @@ VkResult anv_GetFenceFdKHR(
 
 // Queue semaphore functions
 
+static void
+anv_bo_timeline_init(struct anv_bo_timeline *timeline,
+                     uint64_t initial_value)
+{
+   timeline->highest_past = initial_value;
+   timeline->highest_pending = initial_value;
+   list_inithead(&timeline->time_points);
+   list_inithead(&timeline->free_time_points);
+}
+
+static void
+anv_bo_timeline_finish(struct anv_device *device,
+                       struct anv_bo_timeline *timeline)
+{
+   list_for_each_entry_safe(struct anv_bo_time_point, tp,
+                            &timeline->time_points, link) {
+      anv_gem_close(device, tp->bo.gem_handle);
+      vk_free(&device->alloc, tp);
+   }
+
+   list_for_each_entry_safe(struct anv_bo_time_point, tp,
+                            &timeline->free_time_points, link) {
+      anv_gem_close(device, tp->bo.gem_handle);
+      vk_free(&device->alloc, tp);
+   }
+}
+
+static VkResult
+anv_bo_timeline_gc_locked(struct anv_device *device,
+                          struct anv_bo_timeline *timeline)
+{
+   list_for_each_entry_safe(struct anv_bo_time_point, time_point,
+                            &timeline->time_points, link) {
+      /* If someone is waiting on this time point, consider it busy and don't
+       * try to recycle it.  There's a slim possibility that it's no longer
+       * busy by the time we look at it but we would be recycling it out from
+       * under a waiter and that can lead to weird races.
+       *
+       * We walk the list in-order so if this time point is still busy so
+       * is every following time point
+       */
+      assert(time_point->waiting >= 0);
+      if (time_point->waiting)
+         return VK_SUCCESS;
+
+      VkResult result = anv_device_bo_busy(device, &time_point->bo);
+      if (result == VK_NOT_READY) {
+         /* We walk the list in-order so if this time point is still busy so
+          * is every following time point
+          */
+         return VK_SUCCESS;
+      } else if (result != VK_SUCCESS) {
+         return result;
+      }
+
+      /* If we got here, the BO isn't busy; recycle it. */
+      assert(timeline->highest_past < time_point->serial);
+      timeline->highest_past = time_point->serial;
+      list_del(&time_point->link);
+      list_addtail(&time_point->link, &timeline->free_time_points);
+   }
+
+   return VK_SUCCESS;
+}
+
+VkResult
+anv_bo_timeline_get_signal_bo_locked(struct anv_device *device,
+                                     struct anv_bo_timeline *timeline,
+                                     uint64_t serial, struct anv_bo **bo_out)
+{
+   /* Garbage collect in case there's an idle BO we can re-use */
+   anv_bo_timeline_gc_locked(device, timeline);
+
+   /* Timelines must always increase */
+   assert(serial > timeline->highest_pending);
+
+   struct anv_bo_time_point *time_point;
+   if (list_empty(&timeline->free_time_points)) {
+      time_point = vk_zalloc(&device->alloc, sizeof(*time_point), 8,
+                    VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
+      if (!time_point)
+         return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+
+      VkResult result = anv_bo_init_new(&time_point->bo, device, 4096);
+      if (result != VK_SUCCESS) {
+         vk_free(&device->alloc, time_point);
+         return result;
+      }
+   } else {
+      time_point = list_first_entry(&timeline->free_time_points,
+                            struct anv_bo_time_point, link);
+      list_del(&time_point->link);
+   }
+
+   assert(!time_point->waiting);
+   time_point->serial = serial;
+   list_addtail(&time_point->link, &timeline->time_points);
+   timeline->highest_pending = serial;
+
+   if (bo_out)
+      *bo_out = &time_point->bo;
+
+   return VK_SUCCESS;
+}
+
+static VkResult
+anv_bo_timeline_wait_locked(struct anv_device *device,
+                            struct anv_bo_timeline *timeline,
+                            uint64_t serial, uint64_t abs_timeout_ns)
+{
+   /* Wait on the queue_submit condition variable until the timeline has a
+    * time point pending that's at least as high as serial.
+    */
+   while (timeline->highest_pending < serial) {
+      struct timespec abstime = {
+         .tv_sec = abs_timeout_ns / NSEC_PER_SEC,
+         .tv_nsec = abs_timeout_ns % NSEC_PER_SEC,
+      };
+
+      int ret = pthread_cond_timedwait(&device->queue_submit,
+                                       &device->mutex, &abstime);
+      assert(ret != EINVAL);
+      if (gettime_ns() >= abs_timeout_ns &&
+          timeline->highest_pending < serial)
+         return VK_TIMEOUT;
+   }
+
+   while (1) {
+      VkResult result = anv_bo_timeline_gc_locked(device, timeline);
+      if (result != VK_SUCCESS)
+         return result;
+
+      if (timeline->highest_past >= serial)
+         return VK_SUCCESS;
+
+      /* If we got here, our earliest time point has a busy BO */
+      struct anv_bo_time_point *time_point =
+         list_first_entry(&timeline->time_points,
+                          struct anv_bo_time_point, link);
+
+      /* Drop the lock while we wait. */
+      time_point->waiting++;
+      pthread_mutex_unlock(&device->mutex);
+
+      result = anv_device_wait(device, &time_point->bo,
+                               anv_get_relative_timeout(abs_timeout_ns));
+
+      /* Pick the mutex back up */
+      pthread_mutex_lock(&device->mutex);
+      time_point->waiting--;
+
+      /* This covers both VK_TIMEOUT and VK_ERROR_DEVICE_LOST */
+      if (result != VK_SUCCESS)
+         return result;
+   }
+}
+
+static VkResult
+anv_bo_timeline_highest_past(struct anv_device *device,
+                             struct anv_bo_timeline *timeline,
+                             uint64_t *serial)
+{
+   pthread_mutex_lock(&device->mutex);
+
+   VkResult result = anv_bo_timeline_gc_locked(device, timeline);
+   uint64_t highest_past = timeline->highest_past;
+
+   pthread_mutex_unlock(&device->mutex);
+
+   if (result == VK_SUCCESS)
+      *serial = highest_past;
+
+   return result;
+}
+
+static VkResult
+anv_bo_timeline_wait(struct anv_device *device,
+                     struct anv_bo_timeline *timeline,
+                     uint64_t serial, uint64_t abs_timeout_ns)
+{
+   pthread_mutex_lock(&device->mutex);
+
+   VkResult result = anv_bo_timeline_wait_locked(device, timeline, serial,
+                                                 abs_timeout_ns);
+
+   pthread_mutex_unlock(&device->mutex);
+
+   return result;
+}
+
+static VkResult
+anv_bo_timeline_signal(struct anv_device *device,
+                       struct anv_bo_timeline *timeline,
+                       uint64_t serial)
+{
+   pthread_mutex_lock(&device->mutex);
+
+   VkResult result = anv_bo_timeline_get_signal_bo_locked(device, timeline,
+                                                          serial, NULL);
+
+   pthread_mutex_unlock(&device->mutex);
+
+   return result;
+}
+
 VkResult anv_CreateSemaphore(
     VkDevice                                    _device,
     const VkSemaphoreCreateInfo*                pCreateInfo,

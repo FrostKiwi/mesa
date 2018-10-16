@@ -2669,6 +2669,29 @@ enum anv_semaphore_type {
    ANV_SEMAPHORE_TYPE_DRM_SYNCOBJ,
 };
 
+struct anv_bo_time_point {
+   struct list_head link;
+
+   /* True if some thread is actively waiting on the BO */
+   int waiting;
+
+   uint64_t serial;
+   struct anv_bo bo;
+};
+
+struct anv_bo_timeline {
+   uint64_t highest_past;
+   uint64_t highest_pending;
+
+   struct list_head time_points;
+   struct list_head free_time_points;
+};
+
+VkResult
+anv_bo_timeline_get_signal_bo_locked(struct anv_device *device,
+                                     struct anv_bo_timeline *timeline,
+                                     uint64_t serial, struct anv_bo **bo_out);
+
 struct anv_semaphore_impl {
    enum anv_semaphore_type type;
 
