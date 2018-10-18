@@ -352,6 +352,8 @@ radv_shader_compile_to_nir(struct radv_device *device,
 	ac_lower_indirect_derefs(nir, device->physical_device->rad_info.chip_class);
 	radv_optimize_nir(nir, flags & VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT, false);
 
+	NIR_PASS_V(nir, nir_lower_bool_to_int32);
+
 	return nir;
 }
 
