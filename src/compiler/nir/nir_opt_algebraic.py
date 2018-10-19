@@ -543,6 +543,10 @@ optimizations = [
    (('ine', ('ineg', ('b2i', 'a@1')), 0), a),
    (('ine', ('ineg', ('b2i', 'a@1')), -1), ('inot', a)),
    (('iand', ('ineg', ('b2i', a)), '1.0@32'), ('b2f', a)),
+#   (('ieq', ('b2f', a), 0), a),
+#   (('ine', ('b2f', a), 0), ('ineg', a)),
+#   (('~fmul', ('b2f', a), b), ('bcsel', a, b, 0)),
+#   (('imul', ('b2i', a), b), ('bcsel', a, b, 0)),
 
    # Conversions
    (('i2b32', ('b2i', 'a@32')), a),
