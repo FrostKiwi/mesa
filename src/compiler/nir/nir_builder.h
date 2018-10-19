@@ -976,13 +976,13 @@ nir_load_param(nir_builder *build, uint32_t param_idx)
 static inline nir_ssa_def *
 nir_f2b(nir_builder *build, nir_ssa_def *f)
 {
-   return nir_f2b32(build, f);
+   return nir_f2b1(build, f);
 }
 
 static inline nir_ssa_def *
 nir_i2b(nir_builder *build, nir_ssa_def *i)
 {
-   return nir_i2b32(build, i);
+   return nir_i2b1(build, i);
 }
 
 static inline nir_ssa_def *
