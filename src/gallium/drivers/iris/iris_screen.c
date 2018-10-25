@@ -461,7 +461,7 @@ iris_get_compute_param(struct pipe_screen *pscreen,
 
    switch (param) {
    case PIPE_COMPUTE_CAP_ADDRESS_BITS:
-      RET((uint32_t []){ 32 });
+      RET((uint32_t []){ 64 });
 
    case PIPE_COMPUTE_CAP_IR_TARGET:
       if (ret)
@@ -495,13 +495,23 @@ iris_get_compute_param(struct pipe_screen *pscreen,
       RET((uint32_t []) { BRW_SUBGROUP_SIZE });
 
    case PIPE_COMPUTE_CAP_MAX_MEM_ALLOC_SIZE:
+      RET((uint64_t []) { 1 << 20 }); /* TODO */
+
    case PIPE_COMPUTE_CAP_MAX_CLOCK_FREQUENCY:
+      RET((uint32_t []) { 400 }); /* TODO */
+
    case PIPE_COMPUTE_CAP_MAX_COMPUTE_UNITS:
+      RET((uint32_t []) { 50 }); /* TODO */
+
    case PIPE_COMPUTE_CAP_MAX_GLOBAL_SIZE:
+      RET((uint64_t []) { 1 << 20 }); /* TODO */
+
    case PIPE_COMPUTE_CAP_MAX_PRIVATE_SIZE:
+      /* MaxComputeSharedMemorySize */
+      RET((uint64_t []) { 64 * 1024 });
+
    case PIPE_COMPUTE_CAP_MAX_INPUT_SIZE:
-      // XXX: I think these are for Clover...
-      return 0;
+      RET((uint64_t []) { 1024 }); /* TODO */
 
    default:
       unreachable("unknown compute param");
