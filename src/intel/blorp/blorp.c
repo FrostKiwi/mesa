@@ -171,6 +171,7 @@ blorp_params_init(struct blorp_params *params)
    params->num_samples = 1;
    params->num_draw_buffers = 1;
    params->num_layers = 1;
+   params->compute_program = false;
 }
 
 void
