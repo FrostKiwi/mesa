@@ -1561,8 +1561,9 @@ genX(upload_clip_state)(struct brw_context *brw)
       clip.MinimumPointWidth = 0.125;
       clip.MaximumPointWidth = 255.875;
       clip.MaximumVPIndex = viewport_count - 1;
-      if (_mesa_geometric_layers(fb) == 0)
-         clip.ForceZeroRTAIndexEnable = true;
+      clip.ForceZeroRTAIndexEnable =
+         _mesa_geometry_layers(fb) == 0 ||
+         !(vue_prog_data->vue_map.slots_valid & VARYING_BIT_LAYER);
    }
 }
 
