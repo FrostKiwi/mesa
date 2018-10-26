@@ -98,6 +98,7 @@ static const struct debug_control debug_control[] = {
                     DEBUG_TES | DEBUG_GS | DEBUG_CS |
                     DEBUG_RT },
    { "rt",          DEBUG_RT },
+   { "blocs",       DEBUG_BLOCS },
    { NULL,    0 }
 };
 

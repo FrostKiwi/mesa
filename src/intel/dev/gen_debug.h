@@ -93,6 +93,7 @@ extern uint64_t intel_debug;
 #define DEBUG_NO_FAST_CLEAR       (1ull << 46)
 #define DEBUG_NO32                (1ull << 47)
 #define DEBUG_RT                  (1ull << 48)
+#define DEBUG_BLOCS               (1ull << 49)
 
 /* These flags are not compatible with the disk shader cache */
 #define DEBUG_DISK_CACHE_DISABLE_MASK DEBUG_SHADER_TIME
