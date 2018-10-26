@@ -1458,6 +1458,17 @@ genX(upload_clip_state)(struct brw_context *brw)
    struct brw_wm_prog_data *wm_prog_data =
       brw_wm_prog_data(brw->wm.base.prog_data);
 
+#if GEN_GEN < 8
+   /* BRW_NEW_VS_PROG_DATA | BRW_NEW_TES_PROG_DATA | BRW_NEW_GS_PROG_DATA */
+   const struct brw_vue_prog_data *vue_prog_data;
+   if (brw->gs.base.prog_data)
+      vue_prog_data = brw_vue_prog_data(brw->gs.base.prog_data);
+   else if (brw->tes.base.prog_data)
+      vue_prog_data = brw_vue_prog_data(brw->tes.base.prog_data);
+   else
+      vue_prog_data = brw_vue_prog_data(brw->vs.base.prog_data);
+#endif
+
    brw_batch_emit(brw, GENX(3DSTATE_CLIP), clip) {
       clip.StatisticsEnable = !brw->meta_in_progress;
 
@@ -1493,7 +1504,7 @@ genX(upload_clip_state)(struct brw_context *brw)
 
 #if GEN_GEN < 8
       clip.UserClipDistanceCullTestEnableBitmask =
-         brw_vue_prog_data(brw->vs.base.prog_data)->cull_distance_mask;
+         vue_prog_data->cull_distance_mask;
 
       clip.ViewportZClipTestEnable = !(ctx->Transform.DepthClampNear &&
                                        ctx->Transform.DepthClampFar);
@@ -1564,6 +1575,7 @@ static const struct brw_tracked_state genX(clip_state) = {
       .brw   = BRW_NEW_BLORP |
                BRW_NEW_CONTEXT |
                BRW_NEW_FS_PROG_DATA |
+               BRW_NEW_TES_PROG_DATA |
                BRW_NEW_GS_PROG_DATA |
                BRW_NEW_VS_PROG_DATA |
                BRW_NEW_META_IN_PROGRESS |
