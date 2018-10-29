@@ -237,6 +237,7 @@ bool
 fs_inst::is_send_from_grf() const
 {
    switch (opcode) {
+   case SHADER_OPCODE_SEND:
    case FS_OPCODE_VARYING_PULL_CONSTANT_LOAD_GEN7:
    case SHADER_OPCODE_SHADER_TIME_ADD:
    case FS_OPCODE_INTERPOLATE_AT_SAMPLE:
@@ -851,6 +852,14 @@ unsigned
 fs_inst::size_read(int arg) const
 {
    switch (opcode) {
+   case SHADER_OPCODE_SEND:
+      if (arg == 2) {
+         return mlen * REG_SIZE;
+      } else if (arg == 3) {
+         return mlen2 * REG_SIZE;
+      }
+      break;
+
    case FS_OPCODE_FB_WRITE:
    case FS_OPCODE_REP_FB_WRITE:
       if (arg == 0) {
