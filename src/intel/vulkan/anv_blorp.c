@@ -361,7 +361,8 @@ copy_image(struct anv_cmd_buffer *cmd_buffer,
                        &dst_surf, dst_level, dst_base_layer + i,
                        srcOffset.x, srcOffset.y,
                        dstOffset.x, dstOffset.y,
-                       extent.width, extent.height);
+                       extent.width, extent.height,
+                       false);
          }
 
          struct blorp_surf dst_shadow_surf;
@@ -374,7 +375,8 @@ copy_image(struct anv_cmd_buffer *cmd_buffer,
                           &dst_shadow_surf, dst_level, dst_base_layer + i,
                           srcOffset.x, srcOffset.y,
                           dstOffset.x, dstOffset.y,
-                          extent.width, extent.height);
+                          extent.width, extent.height,
+                          false);
             }
          }
       }
@@ -397,7 +399,8 @@ copy_image(struct anv_cmd_buffer *cmd_buffer,
                     &dst_surf, dst_level, dst_base_layer + i,
                     srcOffset.x, srcOffset.y,
                     dstOffset.x, dstOffset.y,
-                    extent.width, extent.height);
+                    extent.width, extent.height,
+                    false);
       }
 
       struct blorp_surf dst_shadow_surf;
@@ -409,7 +412,8 @@ copy_image(struct anv_cmd_buffer *cmd_buffer,
                        &dst_shadow_surf, dst_level, dst_base_layer + i,
                        srcOffset.x, srcOffset.y,
                        dstOffset.x, dstOffset.y,
-                       extent.width, extent.height);
+                       extent.width, extent.height,
+                       false);
          }
       }
    }
@@ -608,14 +612,16 @@ copy_buffer_to_image(struct anv_cmd_buffer *cmd_buffer,
       blorp_copy(batch, &src->surf, src->level, src->offset.z,
                  &dst->surf, dst->level, dst->offset.z,
                  src->offset.x, src->offset.y, dst->offset.x, dst->offset.y,
-                 extent.width, extent.height);
+                 extent.width, extent.height,
+                 false);
 
       if (dst_has_shadow) {
          blorp_copy(batch, &src->surf, src->level, src->offset.z,
                     &dst_shadow_surf, dst->level, dst->offset.z,
                     src->offset.x, src->offset.y,
                     dst->offset.x, dst->offset.y,
-                    extent.width, extent.height);
+                    extent.width, extent.height,
+                    false);
       }
 
       image.offset.z++;
@@ -974,7 +980,7 @@ copy_buffer(struct anv_device *device,
                        ISL_SURF_USAGE_RENDER_TARGET_BIT),
    };
 
-   blorp_buffer_copy(batch, src, dst, region->size);
+   blorp_buffer_copy(batch, src, dst, region->size, false);
 }
 
 void anv_CmdCopyBuffer(
@@ -1076,7 +1082,7 @@ void anv_CmdUpdateBuffer(
                           ISL_SURF_USAGE_RENDER_TARGET_BIT),
       };
 
-      blorp_buffer_copy(&batch, src, dst, copy_size);
+      blorp_buffer_copy(&batch, src, dst, copy_size, false);
 
       dataSize -= copy_size;
       dstOffset += copy_size;
@@ -1780,7 +1786,8 @@ anv_image_copy_to_shadow(struct anv_cmd_buffer *cmd_buffer,
 
          blorp_copy(&batch, &surf, level, layer,
                     &shadow_surf, level, layer,
-                    0, 0, 0, 0, extent.width, extent.height);
+                    0, 0, 0, 0, extent.width, extent.height,
+                    false);
       }
    }
 
