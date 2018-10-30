@@ -1185,8 +1185,6 @@ fs_generator::generate_tex(fs_inst *inst, struct brw_reg dst, struct brw_reg src
                  inst->header_size != 0,
                  simd_mode,
                  return_format);
-
-      brw_mark_surface_used(prog_data, surface + base_binding_table_index);
    } else {
       /* Non-const sampler index */
 

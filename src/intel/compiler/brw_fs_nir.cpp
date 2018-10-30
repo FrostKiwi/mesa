@@ -4737,6 +4737,7 @@ void
 fs_visitor::nir_emit_texture(const fs_builder &bld, nir_tex_instr *instr)
 {
    unsigned texture = instr->texture_index;
+   unsigned max_texture = texture;
    unsigned sampler = instr->sampler_index;
 
    fs_reg srcs[TEX_LOGICAL_NUM_SRCS];
@@ -4827,14 +4828,7 @@ fs_visitor::nir_emit_texture(const fs_builder &bld, nir_tex_instr *instr)
 
       case nir_tex_src_texture_offset: {
          /* Figure out the highest possible texture index and mark it as used */
-         uint32_t max_used = texture + instr->texture_array_size - 1;
-         if (instr->op == nir_texop_tg4 && devinfo->gen < 8) {
-            max_used += stage_prog_data->binding_table.gather_texture_start;
-         } else {
-            max_used += stage_prog_data->binding_table.texture_start;
-         }
-         brw_mark_surface_used(prog_data, max_used);
-
+         max_texture = texture + instr->texture_array_size - 1;
          /* Emit code to evaluate the actual indexing expression */
          fs_reg tmp = vgrf(glsl_type::uint_type);
          bld.ADD(tmp, src, brw_imm_ud(texture));
@@ -4863,6 +4857,7 @@ fs_visitor::nir_emit_texture(const fs_builder &bld, nir_tex_instr *instr)
             stage_prog_data->binding_table.texture_start;
 
          srcs[TEX_LOGICAL_SRC_SURFACE] = brw_imm_ud(texture_index);
+         max_texture = texture_index;
          break;
       }
 
@@ -4870,6 +4865,11 @@ fs_visitor::nir_emit_texture(const fs_builder &bld, nir_tex_instr *instr)
          unreachable("unknown texture source");
       }
    }
+
+   unsigned bt_start = instr->op == nir_texop_tg4 && devinfo->gen < 8 ?
+                       stage_prog_data->binding_table.gather_texture_start :
+                       stage_prog_data->binding_table.texture_start;
+   brw_mark_surface_used(prog_data, bt_start + max_texture);
 
    if (srcs[TEX_LOGICAL_SRC_MCS].file == BAD_FILE &&
        (instr->op == nir_texop_txf_ms ||
