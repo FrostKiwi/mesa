@@ -2622,6 +2622,13 @@ blorp_surf_convert_to_uncompressed(const struct isl_device *isl_dev,
    info->surf.format = get_copy_format_for_bpb(isl_dev, fmtl->bpb);
 }
 
+bool
+blorp_copy_supports_compute(struct blorp_context *blorp,
+                            enum isl_aux_usage dst_aux_usage)
+{
+   return false;
+}
+
 void
 blorp_copy(struct blorp_batch *batch,
            const struct blorp_surf *src_surf,
@@ -2641,7 +2648,9 @@ blorp_copy(struct blorp_batch *batch,
 
    blorp_params_init(&params);
 
-   assert(!compute);
+   assert(!compute || blorp_copy_supports_compute(batch->blorp,
+                                                  dst_surf->aux_usage));
+   params.compute_program = compute;
 
    brw_blorp_surface_info_init(batch->blorp, &params.src, src_surf, src_level,
                                src_layer, ISL_FORMAT_UNSUPPORTED, false);
@@ -2844,6 +2853,12 @@ do_buffer_copy(struct blorp_batch *batch,
               0, 0, 0, 0, width, height, compute);
 }
 
+bool
+blorp_buffer_copy_supports_compute(struct blorp_context *blorp)
+{
+   return false;
+}
+
 void
 blorp_buffer_copy(struct blorp_batch *batch,
                   struct blorp_address src,
@@ -2854,7 +2869,7 @@ blorp_buffer_copy(struct blorp_batch *batch,
    const struct gen_device_info *devinfo = batch->blorp->isl_dev->info;
    uint64_t copy_size = size;
 
-   assert(!compute);
+   assert(!compute || blorp_buffer_copy_supports_compute(batch->blorp));
 
    /* This is maximum possible width/height our HW can handle */
    uint64_t max_surface_dim = 1 << (devinfo->gen >= 7 ? 14 : 13);
