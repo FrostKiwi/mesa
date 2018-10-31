@@ -674,7 +674,7 @@ iris_copy_region(struct blorp_context *blorp,
       iris_batch_sync_region_start(batch);
       blorp_batch_init(&ice->blorp, &blorp_batch, batch, 0);
       blorp_buffer_copy(&blorp_batch, src_addr, dst_addr, src_box->width,
-                        false);
+                        batch->name == IRIS_BATCH_COMPUTE);
       blorp_batch_finish(&blorp_batch);
       iris_batch_sync_region_end(batch);
    } else {
@@ -707,7 +707,8 @@ iris_copy_region(struct blorp_context *blorp,
          blorp_copy(&blorp_batch, &src_surf, src_level, src_box->z + slice,
                     &dst_surf, dst_level, dstz + slice,
                     src_box->x, src_box->y, dstx, dsty,
-                    src_box->width, src_box->height, false);
+                    src_box->width, src_box->height,
+                    batch->name == IRIS_BATCH_COMPUTE);
          iris_batch_sync_region_end(batch);
       }
       blorp_batch_finish(&blorp_batch);
@@ -750,7 +751,6 @@ iris_resource_copy_region(struct pipe_context *ctx,
 {
    struct iris_context *ice = (void *) ctx;
    struct iris_screen *screen = (void *) ctx->screen;
-   struct iris_batch *batch = &ice->batches[IRIS_BATCH_RENDER];
    struct iris_resource *src = (void *) p_src;
    struct iris_resource *dst = (void *) p_dst;
 
@@ -758,6 +758,21 @@ iris_resource_copy_region(struct pipe_context *ctx,
       iris_resource_finish_aux_import(ctx->screen, src);
    if (iris_resource_unfinished_aux_import(dst))
       iris_resource_finish_aux_import(ctx->screen, dst);
+
+   enum isl_aux_usage dst_aux_usage;
+   bool b_junk;
+   get_copy_region_aux_settings(ice, dst, &dst_aux_usage, &b_junk, true);
+
+   const bool buffer_to_buffer =
+      p_dst->target == PIPE_BUFFER && p_src->target == PIPE_BUFFER;
+   const bool compute =
+      unlikely(INTEL_DEBUG & DEBUG_BLOCS) &&
+      (buffer_to_buffer ?
+       blorp_buffer_copy_supports_compute(&ice->blorp) :
+       blorp_copy_supports_compute(&ice->blorp, dst_aux_usage));
+
+   struct iris_batch *batch =
+      &ice->batches[compute ? IRIS_BATCH_COMPUTE : IRIS_BATCH_RENDER];
 
    /* Use MI_COPY_MEM_MEM for tiny (<= 16 byte, % 4) buffer copies. */
    if (p_src->target == PIPE_BUFFER && p_dst->target == PIPE_BUFFER &&
