@@ -2790,7 +2790,11 @@ bool
 blorp_copy_supports_compute(struct blorp_context *blorp,
                             enum isl_aux_usage dst_aux_usage)
 {
-   return false;
+   return
+      blorp->isl_dev->info->gen >= 7 &&
+      (dst_aux_usage == ISL_AUX_USAGE_CCS_D ||
+       dst_aux_usage == ISL_AUX_USAGE_CCS_E ||
+       dst_aux_usage == ISL_AUX_USAGE_NONE);
 }
 
 void
@@ -3024,7 +3028,7 @@ do_buffer_copy(struct blorp_batch *batch,
 bool
 blorp_buffer_copy_supports_compute(struct blorp_context *blorp)
 {
-   return false;
+   return blorp->isl_dev->info->gen >= 7;
 }
 
 void
