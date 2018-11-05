@@ -57,6 +57,43 @@ do NOT want to do them):
        definitely be multiple and partial writes somewhere.
 
 
+## Logical Registers
+
+One of the big pain-points of the current IR is in the handling of bit sizes
+and register allocation of non-32-bit things.  One of the key design points of
+SIR (as it currently stands) is the addition of logical registers to attempt to
+address this problem.  A logical register in SIR has a 3-dimensional size in
+terms of bit size, number of vector components, and number of SIMD invocations.
+Each register is also assigned a SIMD group where the register is only allowed
+to be written by instructions executing in that SIMD range.
+
+The inclusion of a SIMD range is a significant divergence from current IRs so
+it deserves a bit of additional explanation.  There are three primary reasons
+for this:
+
+ 1. We need a SIMD width in order to compute the size in bytes or registers of
+    the logical register.
+ 2. By specifying a SIMD range and requiring registers to only be read/written
+    by instructions executing in that range, we can assert in the validator
+    that logical registers are only read/written on the particular channel
+    group and catch bugs that might arise from mixing up our execution groups.
+ 3. A far more subtle issue is that our current model of register interference
+    is not sophisticated enough to do proper range tracking with control flow.
+    In particular, we currently have to base register allocation based on
+    a physical CFG which represents all paths that all SIMD channels may take;
+    for instance, with an if statement, we treat all channels as if they go
+    through both the if and the else.  In order to do a better job, we can use
+    the logical CFG to determine interference between two registers but this is
+    valid to do if and only if both registers have the same bit size and the
+    same SIMD range.  If two registers have different SIMD groups, then they
+    may stomp each other if we only apply the logical CFG so we have to use the physical CFG.
+
+It's unclear exactly what affect this will have on the complexity of register
+allocation and whether or not we can do SSA-based allocation (not sure if we
+can do that to begin with).  However, it does appear to have the possibility of
+decreasing register pressure.
+
+
 ## Language and Style
 
 ### To C++ or not to C++?
