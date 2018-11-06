@@ -949,8 +949,12 @@ transition_color_buffer(struct anv_cmd_buffer *cmd_buffer,
    assert((uint64_t)base_layer + layer_count  <= image_layers);
    assert(last_level_num <= image->levels);
    /* The spec disallows these final layouts. */
-   assert(final_layout != VK_IMAGE_LAYOUT_UNDEFINED &&
-          final_layout != VK_IMAGE_LAYOUT_PREINITIALIZED);
+   //assert(final_layout != VK_IMAGE_LAYOUT_UNDEFINED &&
+   //       final_layout != VK_IMAGE_LAYOUT_PREINITIALIZED);
+   assert(final_layout != VK_IMAGE_LAYOUT_PREINITIALIZED);
+
+   if (final_layout == VK_IMAGE_LAYOUT_UNDEFINED)
+      return;
 
    /* No work is necessary if the layout stays the same or if this subresource
     * range lacks auxiliary data.
