@@ -90,6 +90,82 @@ src_is_type(nir_src src, nir_alu_type type)
 }
 
 static bool
+nir_op_matches_search_op(nir_op nop, uint16_t sop)
+{
+   if (sop <= nir_last_opcode)
+      return nop == sop;
+
+#define MATCH_FCONV_CASE(op) \
+   case nir_search_op_##op: \
+      return nop == nir_op_##op##16 || \
+             nop == nir_op_##op##32 || \
+             nop == nir_op_##op##64;
+
+#define MATCH_ICONV_CASE(op) \
+   case nir_search_op_##op: \
+      return nop == nir_op_##op##8 || \
+             nop == nir_op_##op##16 || \
+             nop == nir_op_##op##32 || \
+             nop == nir_op_##op##64;
+
+   switch (sop) {
+   MATCH_FCONV_CASE(i2f)
+   MATCH_FCONV_CASE(u2f)
+   MATCH_FCONV_CASE(f2f)
+   MATCH_ICONV_CASE(f2u)
+   MATCH_ICONV_CASE(f2i)
+   MATCH_ICONV_CASE(u2u)
+   MATCH_ICONV_CASE(i2i)
+   default:
+      unreachable("Invalid nir_search_op");
+   }
+
+#undef MATCH_FCONV_CASE
+#undef MATCH_ICONV_CASE
+}
+
+static nir_op
+nir_op_for_search_op(uint16_t sop, unsigned bit_size)
+{
+   if (sop <= nir_last_opcode)
+      return sop;
+
+#define RET_FCONV_CASE(op) \
+   case nir_search_op_##op: \
+      switch (bit_size) { \
+      case 16: return nir_op_##op##16; \
+      case 32: return nir_op_##op##32; \
+      case 64: return nir_op_##op##64; \
+      default: unreachable("Invalid bit size"); \
+      }
+
+#define RET_ICONV_CASE(op) \
+   case nir_search_op_##op: \
+      switch (bit_size) { \
+      case 8:  return nir_op_##op##8; \
+      case 16: return nir_op_##op##16; \
+      case 32: return nir_op_##op##32; \
+      case 64: return nir_op_##op##64; \
+      default: unreachable("Invalid bit size"); \
+      }
+
+   switch (sop) {
+   RET_FCONV_CASE(i2f)
+   RET_FCONV_CASE(u2f)
+   RET_FCONV_CASE(f2f)
+   RET_ICONV_CASE(f2u)
+   RET_ICONV_CASE(f2i)
+   RET_ICONV_CASE(u2u)
+   RET_ICONV_CASE(i2i)
+   default:
+      unreachable("Invalid nir_search_op");
+   }
+
+#undef RET_FCONV_CASE
+#undef RET_ICONV_CASE
+}
+
+static bool
 match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
             unsigned num_components, const uint8_t *swizzle,
             struct match_state *state)
@@ -223,7 +299,7 @@ match_expression(const nir_search_expression *expr, nir_alu_instr *instr,
    if (expr->cond && !expr->cond(instr))
       return false;
 
-   if (instr->op != expr->opcode)
+   if (!nir_op_matches_search_op(instr->op, expr->opcode))
       return false;
 
    assert(instr->dest.dest.is_ssa);
@@ -297,6 +373,7 @@ typedef struct bitsize_tree {
    unsigned common_size;
    bool is_src_sized[4];
    bool is_dest_sized;
+   bool is_unsized_conversion;
 
    unsigned dest_size;
    unsigned src_size[4];
@@ -311,18 +388,24 @@ build_bitsize_tree(void *mem_ctx, struct match_state *state,
    switch (value->type) {
    case nir_search_value_expression: {
       nir_search_expression *expr = nir_search_value_as_expression(value);
-      nir_op_info info = nir_op_infos[expr->opcode];
-      tree->num_srcs = info.num_inputs;
-      tree->common_size = 0;
-      for (unsigned i = 0; i < info.num_inputs; i++) {
-         tree->is_src_sized[i] = !!nir_alu_type_get_type_size(info.input_types[i]);
-         if (tree->is_src_sized[i])
-            tree->src_size[i] = nir_alu_type_get_type_size(info.input_types[i]);
-         tree->srcs[i] = build_bitsize_tree(mem_ctx, state, expr->srcs[i]);
+      if (expr->opcode <= nir_last_opcode) {
+         nir_op_info info = nir_op_infos[expr->opcode];
+         tree->num_srcs = info.num_inputs;
+         tree->common_size = 0;
+         for (unsigned i = 0; i < info.num_inputs; i++) {
+            tree->is_src_sized[i] = !!nir_alu_type_get_type_size(info.input_types[i]);
+            if (tree->is_src_sized[i])
+               tree->src_size[i] = nir_alu_type_get_type_size(info.input_types[i]);
+            tree->srcs[i] = build_bitsize_tree(mem_ctx, state, expr->srcs[i]);
+         }
+         tree->is_dest_sized = !!nir_alu_type_get_type_size(info.output_type);
+         if (tree->is_dest_sized)
+            tree->dest_size = nir_alu_type_get_type_size(info.output_type);
+      } else {
+         tree->num_srcs = 1;
+         tree->srcs[0] = build_bitsize_tree(mem_ctx, state, expr->srcs[0]);
+         tree->is_unsized_conversion = true;
       }
-      tree->is_dest_sized = !!nir_alu_type_get_type_size(info.output_type);
-      if (tree->is_dest_sized)
-         tree->dest_size = nir_alu_type_get_type_size(info.output_type);
       break;
    }
 
@@ -360,6 +443,9 @@ bitsize_tree_filter_up(bitsize_tree *tree)
 
       if (tree->is_src_sized[i]) {
          assert(src_size == tree->src_size[i]);
+      } else if (tree->is_unsized_conversion) {
+         assert(src_size);
+         tree->src_size[i] = src_size;
       } else if (tree->common_size != 0) {
          assert(src_size == tree->common_size);
          tree->src_size[i] = src_size;
@@ -369,11 +455,11 @@ bitsize_tree_filter_up(bitsize_tree *tree)
       }
    }
 
-   if (tree->num_srcs && tree->common_size) {
-      if (tree->dest_size == 0)
+   if (tree->common_size) {
+      if (!tree->is_dest_sized && !tree->is_unsized_conversion) {
+         assert(tree->dest_size == 0 || tree->dest_size == tree->common_size);
          tree->dest_size = tree->common_size;
-      else if (!tree->is_dest_sized)
-         assert(tree->dest_size == tree->common_size);
+      }
 
       for (unsigned i = 0; i < tree->num_srcs; i++) {
          if (!tree->src_size[i])
@@ -388,13 +474,13 @@ static void
 bitsize_tree_filter_down(bitsize_tree *tree, unsigned size)
 {
    if (tree->dest_size)
-      assert(tree->dest_size == size);
+      assert(size == 0 || tree->dest_size == size);
    else
       tree->dest_size = size;
 
-   if (!tree->is_dest_sized) {
+   if (!tree->is_dest_sized && !tree->is_unsized_conversion) {
       if (tree->common_size)
-         assert(tree->common_size == size);
+         assert(size == 0 || tree->common_size == size);
       else
          tree->common_size = size;
    }
@@ -418,11 +504,12 @@ construct_value(nir_builder *build,
    switch (value->type) {
    case nir_search_value_expression: {
       const nir_search_expression *expr = nir_search_value_as_expression(value);
+      nir_op op = nir_op_for_search_op(expr->opcode, bitsize->dest_size);
 
-      if (nir_op_infos[expr->opcode].output_size != 0)
-         num_components = nir_op_infos[expr->opcode].output_size;
+      if (nir_op_infos[op].output_size != 0)
+         num_components = nir_op_infos[op].output_size;
 
-      nir_alu_instr *alu = nir_alu_instr_create(build->shader, expr->opcode);
+      nir_alu_instr *alu = nir_alu_instr_create(build->shader, op);
       nir_ssa_dest_init(&alu->instr, &alu->dest.dest, num_components,
                         bitsize->dest_size, NULL);
       alu->dest.write_mask = (1 << num_components) - 1;
@@ -435,7 +522,7 @@ construct_value(nir_builder *build,
        */
       alu->exact = state->has_exact_alu;
 
-      for (unsigned i = 0; i < nir_op_infos[expr->opcode].num_inputs; i++) {
+      for (unsigned i = 0; i < nir_op_infos[op].num_inputs; i++) {
          /* If the source is an explicitly sized source, then we need to reset
           * the number of components to match.
           */

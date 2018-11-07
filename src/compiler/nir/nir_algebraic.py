@@ -33,7 +33,19 @@ import mako.template
 import re
 import traceback
 
-from nir_opcodes import opcodes
+from nir_opcodes import opcodes, type_sizes
+
+# These opcodes are only employed by nir_search.  This provides a mapping from
+# opcode to destination type.
+search_opcode_types = {
+    'i2f' : 'float',
+    'u2f' : 'float',
+    'f2f' : 'float',
+    'f2u' : 'uint',
+    'f2i' : 'int',
+    'u2u' : 'uint',
+    'i2i' : 'int',
+}
 
 if sys.version_info < (3, 0):
     integer_types = (int, long)
@@ -98,7 +110,7 @@ static const ${val.c_type} ${val.name} = {
    ${val.cond if val.cond else 'NULL'},
 % elif isinstance(val, Expression):
    ${'true' if val.inexact else 'false'},
-   nir_op_${val.opcode},
+   ${val.c_opcode()},
    { ${', '.join(src.c_ptr for src in val.sources)} },
    ${val.cond if val.cond else 'NULL'},
 % endif
@@ -226,6 +238,18 @@ class Expression(Value):
       self.cond = m.group('cond')
       self.sources = [ Value.create(src, "{0}_{1}".format(name_base, i), varset)
                        for (i, src) in enumerate(expr[1:]) ]
+
+      if self.opcode in search_opcode_types:
+         assert self.bit_size == 0, \
+                'Expression cannot use an unsized conversion opcode with ' \
+                'an explicit size; that\'s silly.'
+
+
+   def c_opcode(self):
+      if self.opcode in search_opcode_types:
+         return 'nir_search_op_' + self.opcode
+      else:
+         return 'nir_op_' + self.opcode
 
    def render(self):
       srcs = "\n".join(src.render() for src in self.sources)
@@ -393,6 +417,13 @@ class BitSizeValidator(object):
          return val.bit_size
 
       elif isinstance(val, Expression):
+         # These fake opcodes don't require a source size, don't have a
+         # destination size, and don't require the two to match
+         if val.opcode in search_opcode_types:
+            self._propagate_bit_size_up(val.sources[0])
+            val.common_size = 0
+            return 0
+
          nir_op = opcodes[val.opcode]
          val.common_size = 0
          for i in range(nir_op.num_inputs):
@@ -432,14 +463,30 @@ class BitSizeValidator(object):
 
    def _propagate_bit_class_down(self, val, bit_class):
       if isinstance(val, Constant):
-         assert val.bit_size == 0 or val.bit_size == bit_class, \
+         assert bit_class == 0 or val.bit_size == 0 or \
+                val.bit_size == bit_class, \
                 'Constant is {0}-bit but a {1}-bit value is required: {2}' \
                 .format(val.bit_size, bit_class, str(val))
 
       elif isinstance(val, Variable):
-         self._set_var_bit_class(val, bit_class)
+         if bit_class == 0:
+            self._set_var_bit_class(val, self._new_class())
+         else:
+            self._set_var_bit_class(val, bit_class)
 
       elif isinstance(val, Expression):
+         # These fake opcodes don't require a source size, don't have a
+         # destination size, and don't require the two to match
+         if val.opcode in search_opcode_types:
+            assert val.common_size == 0 or val.common_size == bit_class, \
+                   'Variable-width expression produces a {0}-bit result ' \
+                   'based on the source widths but the parent expression ' \
+                   'wants a {1}-bit value: {2}' \
+                   .format(val.common_size, bit_class, str(val))
+            val.common_size = bit_class
+            self._propagate_bit_class_down(val.sources[0], 0)
+            return
+
          nir_op = opcodes[val.opcode]
          dst_type_bits = type_bits(nir_op.output_type)
          if dst_type_bits != 0:
@@ -449,13 +496,15 @@ class BitSizeValidator(object):
                    .format(val.opcode, dst_type_bits,
                            self._bit_class_to_str(bit_class))
          else:
-            assert val.common_size == 0 or val.common_size == bit_class, \
+            assert bit_class == 0 or val.common_size == 0 or \
+                   val.common_size == bit_class, \
                    'Variable-width expression produces a {0}-bit result ' \
                    'based on the source widths but the parent expression ' \
                    'wants a {1} value: {2}' \
                    .format(val.common_size,
                            self._bit_class_to_str(bit_class), str(val))
-            val.common_size = bit_class
+            if val.common_size == 0:
+               val.common_size = bit_class
 
          if val.common_size:
             common_class = val.common_size
@@ -493,6 +542,12 @@ class BitSizeValidator(object):
          return var_class
 
       elif isinstance(val, Expression):
+         # These fake opcodes don't require a source size, don't have a
+         # destination size, and don't require the two to match
+         if val.opcode in search_opcode_types:
+            self._validate_bit_class_up(val.sources[0])
+            return 0
+
          nir_op = opcodes[val.opcode]
          val.common_class = 0
          for i in range(nir_op.num_inputs):
@@ -538,43 +593,56 @@ class BitSizeValidator(object):
             return val.common_class
 
    def _validate_bit_class_down(self, val, bit_class):
-      # At this point, everything *must* have a bit class.  Otherwise, we have
-      # a value we don't know how to define.
-      assert bit_class != 0, \
-             'Value cannot be constructed because no bit-size is implied '\
-             '{}'.format(str(val))
-
       if isinstance(val, Constant):
-         assert val.bit_size == 0 or val.bit_size == bit_class, \
+         assert bit_class != 0 or val.bit_size != 0, \
+                'Constant value {} cannot be constructed because ' \
+                'nothing provides or implies a bit size'.format(val)
+
+         assert bit_class == 0 or val.bit_size == 0 or \
+                val.bit_size == bit_class, \
                 'Constant value {} explicitly requests being {}-bit but ' \
                 'must be {} thanks to its consumer' \
                 .format(str(val), val.bit_size,
                         self._bit_class_to_str(bit_class))
 
       elif isinstance(val, Variable):
-         assert val.bit_size == 0 or val.bit_size == bit_class, \
+         assert bit_class == 0 or val.bit_size == 0 or \
+                val.bit_size == bit_class, \
                 'Variable {} explicitly only matches {}-bit values but ' \
                 'must be {} thanks to its consumer' \
                 .format(str(val), val.bit_size,
                         self._bit_class_to_str(bit_class))
 
       elif isinstance(val, Expression):
+         # These fake opcodes don't require a source size, don't have a
+         # destination size, and don't require the two to match
+         if val.opcode in search_opcode_types:
+            self._validate_bit_class_down(val.sources[0], 0)
+            return
+
          nir_op = opcodes[val.opcode]
          dst_type_bits = type_bits(nir_op.output_type)
          if dst_type_bits != 0:
-            assert bit_class == dst_type_bits, \
+            assert bit_class == 0 or bit_class == dst_type_bits, \
                    'Result of nir_op_{} must be a {}-bit value but the ' \
                    'consumer requires a {} value: {}' \
                    .format(val.opcode, dst_type_bits,
                            self._bit_class_to_str(bit_class), str(val))
          else:
-            assert val.common_class == 0 or val.common_class == bit_class, \
+            assert bit_class != 0 or val.common_class != 0, \
+                   'Expression cannot be constructed because nothing ' \
+                   'provides or implies a result bit size: {}' \
+                   .format(str(val))
+
+            assert bit_class == 0 or val.common_class == 0 or \
+                   val.common_class == bit_class, \
                    'Result of nir_op_{} must be a {} value but based on ' \
                    'the sources but the consumer requires a {} value: {}' \
                    .format(val.opcode,
                            self._bit_class_to_str(val.common_class),
                            self._bit_class_to_str(bit_class), str(val))
-            val.common_class = bit_class
+            if val.common_class == 0:
+               val.common_class = bit_class
 
          for i in range(nir_op.num_inputs):
             src_type_bits = type_bits(nir_op.input_types[i])
@@ -744,7 +812,13 @@ class AlgebraicPass(object):
                continue
 
          self.xforms.append(xform)
-         self.opcode_xforms[xform.search.opcode].append(xform)
+         if xform.search.opcode in search_opcode_types:
+            dst_type = search_opcode_types[xform.search.opcode]
+            for size in type_sizes(dst_type):
+               sized_opcode = xform.search.opcode + str(size)
+               self.opcode_xforms[sized_opcode].append(xform)
+         else:
+            self.opcode_xforms[xform.search.opcode].append(xform)
 
       if error:
          sys.exit(1)
