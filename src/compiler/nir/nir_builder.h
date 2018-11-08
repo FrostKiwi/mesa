@@ -352,8 +352,9 @@ nir_imm_ivec4(nir_builder *build, int x, int y, int z, int w)
 }
 
 static inline nir_ssa_def *
-nir_build_alu(nir_builder *build, nir_op op, nir_ssa_def *src0,
-              nir_ssa_def *src1, nir_ssa_def *src2, nir_ssa_def *src3)
+nir_build_sized_alu(nir_builder *build, nir_op op, unsigned dest_bit_size,
+                    nir_ssa_def *src0, nir_ssa_def *src1,
+                    nir_ssa_def *src2, nir_ssa_def *src3)
 {
    const nir_op_info *op_info = &nir_op_infos[op];
    nir_alu_instr *instr = nir_alu_instr_create(build->shader, op);
@@ -386,7 +387,8 @@ nir_build_alu(nir_builder *build, nir_op op, nir_ssa_def *src0,
    /* Figure out the bitwidth based on the source bitwidth if the instruction
     * is variable-width.
     */
-   unsigned bit_size = nir_alu_type_get_type_size(op_info->output_type);
+   unsigned bit_size = dest_bit_size;
+   nir_alu_type_get_type_size(op_info->output_type);
    if (bit_size == 0) {
       for (unsigned i = 0; i < op_info->num_inputs; i++) {
          unsigned src_bit_size = instr->src[i].src.ssa->bit_size;
@@ -423,6 +425,16 @@ nir_build_alu(nir_builder *build, nir_op op, nir_ssa_def *src0,
    nir_builder_instr_insert(build, &instr->instr);
 
    return &instr->dest.dest.ssa;
+}
+
+static inline nir_ssa_def *
+nir_build_alu(nir_builder *build, nir_op op, nir_ssa_def *src0,
+              nir_ssa_def *src1, nir_ssa_def *src2, nir_ssa_def *src3)
+{
+   const unsigned dest_bit_size =
+      nir_alu_type_get_type_size(nir_op_infos[op].output_type);
+   return nir_build_sized_alu(build, op, dest_bit_size,
+                              src0, src1, src2, src3);
 }
 
 #include "nir_builder_opcodes.h"

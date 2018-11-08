@@ -35,11 +35,22 @@ def src_list(num_srcs):
 %>
 
 % for name, opcode in sorted(opcodes.items()):
+%   if opcode.is_unsized_conversion:
+%     for bit_size in type_sizes(opcode.output_type):
+static inline nir_ssa_def *
+nir_${name}${bit_size}(nir_builder *build, ${src_decl_list(opcode.num_inputs)})
+{
+   return nir_build_sized_alu(build, nir_op_${name}, ${bit_size},
+                              ${src_list(opcode.num_inputs)});
+}
+%     endfor
+%   else:
 static inline nir_ssa_def *
 nir_${name}(nir_builder *build, ${src_decl_list(opcode.num_inputs)})
 {
    return nir_build_alu(build, nir_op_${name}, ${src_list(opcode.num_inputs)});
 }
+%   endif
 % endfor
 
 /* Generic builder for system values. */
@@ -65,8 +76,9 @@ nir_${name}(nir_builder *build)
 
 #endif /* _NIR_BUILDER_OPCODES_ */"""
 
-from nir_opcodes import opcodes
+from nir_opcodes import opcodes, type_sizes
 from nir_intrinsics import INTR_OPCODES
 from mako.template import Template
 
-print(Template(template).render(opcodes=opcodes, INTR_OPCODES=INTR_OPCODES))
+print(Template(template).render(opcodes=opcodes, type_sizes=type_sizes,
+                                INTR_OPCODES=INTR_OPCODES))
