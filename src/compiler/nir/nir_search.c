@@ -297,6 +297,7 @@ typedef struct bitsize_tree {
    unsigned common_size;
    bool is_src_sized[4];
    bool is_dest_sized;
+   bool is_unsized_conversion;
 
    unsigned dest_size;
    unsigned src_size[4];
@@ -323,6 +324,7 @@ build_bitsize_tree(void *mem_ctx, struct match_state *state,
       tree->is_dest_sized = !!nir_alu_type_get_type_size(info.output_type);
       if (tree->is_dest_sized)
          tree->dest_size = nir_alu_type_get_type_size(info.output_type);
+      tree->is_unsized_conversion = info.is_unsized_conversion;
       break;
    }
 
@@ -360,6 +362,9 @@ bitsize_tree_filter_up(bitsize_tree *tree)
 
       if (tree->is_src_sized[i]) {
          assert(src_size == tree->src_size[i]);
+      } else if (tree->is_unsized_conversion) {
+         assert(src_size);
+         tree->src_size[i] = src_size;
       } else if (tree->common_size != 0) {
          assert(src_size == tree->common_size);
          tree->src_size[i] = src_size;
@@ -369,11 +374,11 @@ bitsize_tree_filter_up(bitsize_tree *tree)
       }
    }
 
-   if (tree->num_srcs && tree->common_size) {
-      if (tree->dest_size == 0)
+   if (tree->common_size) {
+      if (!tree->is_dest_sized && !tree->is_unsized_conversion) {
+         assert(tree->dest_size == 0 || tree->dest_size == tree->common_size);
          tree->dest_size = tree->common_size;
-      else if (!tree->is_dest_sized)
-         assert(tree->dest_size == tree->common_size);
+      }
 
       for (unsigned i = 0; i < tree->num_srcs; i++) {
          if (!tree->src_size[i])
@@ -388,13 +393,13 @@ static void
 bitsize_tree_filter_down(bitsize_tree *tree, unsigned size)
 {
    if (tree->dest_size)
-      assert(tree->dest_size == size);
+      assert(size == 0 || tree->dest_size == size);
    else
       tree->dest_size = size;
 
-   if (!tree->is_dest_sized) {
+   if (!tree->is_dest_sized && !tree->is_unsized_conversion) {
       if (tree->common_size)
-         assert(tree->common_size == size);
+         assert(size == 0 || tree->common_size == size);
       else
          tree->common_size = size;
    }
