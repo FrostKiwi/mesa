@@ -56,7 +56,8 @@ constant_fold_alu_instr(nir_alu_instr *instr, void *mem_ctx)
     * (although it still requires to receive a valid bit-size).
     */
    unsigned bit_size = 0;
-   if (!nir_alu_type_get_type_size(nir_op_infos[instr->op].output_type))
+   if (!nir_op_infos[instr->op].is_unsized_conversion &&
+       !nir_alu_type_get_type_size(nir_op_infos[instr->op].output_type))
       bit_size = instr->dest.dest.ssa.bit_size;
 
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
@@ -106,7 +107,7 @@ constant_fold_alu_instr(nir_alu_instr *instr, void *mem_ctx)
 
    nir_const_value dest =
       nir_eval_const_opcode(instr->op, instr->dest.dest.ssa.num_components,
-                            bit_size, src);
+                            bit_size, instr->dest.dest.ssa.bit_size, src);
 
    nir_load_const_instr *new_instr =
       nir_load_const_instr_create(mem_ctx,

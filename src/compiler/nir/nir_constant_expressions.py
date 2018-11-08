@@ -10,6 +10,11 @@ def type_add_size(type_, size):
     return type_ + str(size)
 
 def op_bit_sizes(op):
+    if op.is_unsized_conversion:
+        assert len(op.input_types) == 1
+        assert not type_has_size(op.input_types[0])
+        return type_sizes(op.input_types[0])
+
     sizes = None
     if not type_has_size(op.output_type):
         sizes = set(type_sizes(op.output_type))
@@ -258,9 +263,9 @@ struct bool32_vec {
     bool w;
 };
 
-<%def name="evaluate_op(op, bit_size)">
+<%def name="evaluate_op(op, bit_size, dest_bit_size)">
    <%
-   output_type = type_add_size(op.output_type, bit_size)
+   output_type = type_add_size(op.output_type, dest_bit_size)
    input_types = [type_add_size(type_, bit_size) for type_ in op.input_types]
    %>
 
@@ -372,7 +377,8 @@ struct bool32_vec {
 % for name, op in sorted(opcodes.items()):
 static nir_const_value
 evaluate_${name}(MAYBE_UNUSED unsigned num_components,
-                 ${"UNUSED" if op_bit_sizes(op) is None else ""} unsigned bit_size,
+                 MAYBE_UNUSED unsigned bit_size,
+                 MAYBE_UNUSED unsigned dest_bit_size,
                  MAYBE_UNUSED nir_const_value *_src)
 {
    nir_const_value _dst_val = { {0, } };
@@ -381,7 +387,20 @@ evaluate_${name}(MAYBE_UNUSED unsigned num_components,
       switch (bit_size) {
       % for bit_size in op_bit_sizes(op):
       case ${bit_size}: {
-         ${evaluate_op(op, bit_size)}
+         % if op.is_unsized_conversion:
+            switch (dest_bit_size) {
+            % for dest_bit_size in type_sizes(op.output_type):
+            case ${dest_bit_size}:
+                ${evaluate_op(op, bit_size, dest_bit_size)}
+                break;
+            % endfor
+
+            default:
+               unreachable("unknown bit width");
+            }
+         % else:
+            ${evaluate_op(op, bit_size, bit_size)}
+         % endif
          break;
       }
       % endfor
@@ -390,7 +409,7 @@ evaluate_${name}(MAYBE_UNUSED unsigned num_components,
          unreachable("unknown bit width");
       }
    % else:
-      ${evaluate_op(op, 0)}
+      ${evaluate_op(op, 0, 0)}
    % endif
 
    return _dst_val;
@@ -399,12 +418,13 @@ evaluate_${name}(MAYBE_UNUSED unsigned num_components,
 
 nir_const_value
 nir_eval_const_opcode(nir_op op, unsigned num_components,
-                      unsigned bit_width, nir_const_value *src)
+                      unsigned bit_size, unsigned dest_bit_size,
+                      nir_const_value *src)
 {
    switch (op) {
 % for name in sorted(opcodes.keys()):
    case nir_op_${name}:
-      return evaluate_${name}(num_components, bit_width, src);
+      return evaluate_${name}(num_components, bit_size, dest_bit_size, src);
 % endfor
    default:
       unreachable("shouldn't get here");

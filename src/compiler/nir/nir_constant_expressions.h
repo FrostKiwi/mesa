@@ -31,6 +31,7 @@
 #include "nir.h"
 
 nir_const_value nir_eval_const_opcode(nir_op op, unsigned num_components,
-                                      unsigned bit_size, nir_const_value *src);
+                                      unsigned bit_size, unsigned dest_bit_size,
+                                      nir_const_value *src);
 
 #endif /* NIR_CONSTANT_EXPRESSIONS_H */

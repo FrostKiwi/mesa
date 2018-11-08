@@ -1812,7 +1812,8 @@ vtn_handle_constant(struct vtn_builder *b, SpvOp opcode,
          }
 
          val->constant->values[0] =
-            nir_eval_const_opcode(op, num_components, bit_size, src);
+            nir_eval_const_opcode(op, num_components, bit_size,
+                                  glsl_get_bit_size(val->type->type), src);
          break;
       } /* default */
       }
