@@ -423,7 +423,7 @@ class BitSizeValidator(object):
          else:
             if val.common_size != 0:
                assert val.bit_size == 0 or val.bit_size == val.common_size, \
-                      'Variable width expression musr be {0}-bit based on ' \
+                      'Variable width expression must be {0}-bit based on ' \
                       'the sources but a {1}-bit result was requested: {2}' \
                       .format(val.common_size, val.bit_size, str(val))
             else:
@@ -445,14 +445,16 @@ class BitSizeValidator(object):
          if dst_type_bits != 0:
             assert bit_class == 0 or bit_class == dst_type_bits, \
                    'nir_op_{0} produces a {1}-bit result but the parent ' \
-                   'expression wants a {2}-bit value' \
-                   .format(val.opcode, dst_type_bits, bit_class)
+                   'expression wants a {2} value' \
+                   .format(val.opcode, dst_type_bits,
+                           self._bit_class_to_str(bit_class))
          else:
             assert val.common_size == 0 or val.common_size == bit_class, \
                    'Variable-width expression produces a {0}-bit result ' \
                    'based on the source widths but the parent expression ' \
-                   'wants a {1}-bit value: {2}' \
-                   .format(val.common_size, bit_class, str(val))
+                   'wants a {1} value: {2}' \
+                   .format(val.common_size,
+                           self._bit_class_to_str(bit_class), str(val))
             val.common_size = bit_class
 
          if val.common_size:
@@ -476,11 +478,16 @@ class BitSizeValidator(object):
       elif isinstance(val, Variable):
          var_class = self._get_var_bit_class(val)
          # By the time we get to validation, every variable should have a class
-         assert var_class != 0
+         assert var_class != 0, \
+                'Variable {} appears in the replace expression but not in ' \
+                'the search expression'.format(str(val))
 
          # If we have an explicit size provided by the user, the variable
          # *must* exactly match the search.  It cannot be implicitly sized
          # because otherwise we could end up with a conflict at runtime.
+         # This is guaranteed by the fact that we explicitly initialize bit
+         # classes; the assert should never trigger even for malformed
+         # expressions.
          assert val.bit_size == 0 or val.bit_size == var_class
 
          return var_class
@@ -495,18 +502,37 @@ class BitSizeValidator(object):
 
             src_type_bits = type_bits(nir_op.input_types[i])
             if src_type_bits != 0:
-               assert src_class == src_type_bits
+               assert src_class == src_type_bits, \
+                      'Source {} of nir_op_{} must be a {}-bit value but ' \
+                      'the constructed value would be {}: {}' \
+                      .format(i, val.opcode, src_type_bits,
+                              self._bit_class_to_str(src_class), str(val))
             else:
-               assert val.common_class == 0 or src_class == val.common_class
+               assert val.common_class == 0 or src_class == val.common_class, \
+                      'Source {} of nir_op_{} must be a {} value based ' \
+                      'on other sources but the constructed value would be ' \
+                      '{}: {}' \
+                      .format(i, val.opcode,
+                              self._bit_class_to_str(val.common_class),
+                              self._bit_class_to_str(src_class), str(val))
                val.common_class = src_class
 
          dst_type_bits = type_bits(nir_op.output_type)
          if dst_type_bits != 0:
-            assert val.bit_size == 0 or val.bit_size == dst_type_bits
+            assert val.bit_size == 0 or val.bit_size == dst_type_bits, \
+                   'Result of nir_op_{} must be a {}-bit value but the ' \
+                   'expression explicitly requests a {}-bit value' \
+                   .format(val.opcode, dst_type_bits, val.bit_size)
             return dst_type_bits
          else:
             if val.common_class != 0:
-               assert val.bit_size == 0 or val.bit_size == val.common_class
+               assert val.bit_size == 0 or val.bit_size == val.common_class, \
+                      'Result of nir_op_{} must be a {} value based ' \
+                      'on the sources but the expression explicitly ' \
+                      'requests a {}-bit value: {}' \
+                      .format(val.opcode,
+                              self._bit_class_to_str(val.common_class),
+                              val.bit_size, str(val))
             else:
                val.common_class = val.bit_size
             return val.common_class
@@ -514,21 +540,40 @@ class BitSizeValidator(object):
    def _validate_bit_class_down(self, val, bit_class):
       # At this point, everything *must* have a bit class.  Otherwise, we have
       # a value we don't know how to define.
-      assert bit_class != 0
+      assert bit_class != 0, \
+             'Value cannot be constructed because no bit-size is implied '\
+             '{}'.format(str(val))
 
       if isinstance(val, Constant):
-         assert val.bit_size == 0 or val.bit_size == bit_class
+         assert val.bit_size == 0 or val.bit_size == bit_class, \
+                'Constant value {} explicitly requests being {}-bit but ' \
+                'must be {} thanks to its consumer' \
+                .format(str(val), val.bit_size,
+                        self._bit_class_to_str(bit_class))
 
       elif isinstance(val, Variable):
-         assert val.bit_size == 0 or val.bit_size == bit_class
+         assert val.bit_size == 0 or val.bit_size == bit_class, \
+                'Variable {} explicitly only matches {}-bit values but ' \
+                'must be {} thanks to its consumer' \
+                .format(str(val), val.bit_size,
+                        self._bit_class_to_str(bit_class))
 
       elif isinstance(val, Expression):
          nir_op = opcodes[val.opcode]
          dst_type_bits = type_bits(nir_op.output_type)
          if dst_type_bits != 0:
-            assert bit_class == dst_type_bits
+            assert bit_class == dst_type_bits, \
+                   'Result of nir_op_{} must be a {}-bit value but the ' \
+                   'consumer requires a {} value: {}' \
+                   .format(val.opcode, dst_type_bits,
+                           self._bit_class_to_str(bit_class), str(val))
          else:
-            assert val.common_class == 0 or val.common_class == bit_class
+            assert val.common_class == 0 or val.common_class == bit_class, \
+                   'Result of nir_op_{} must be a {} value but based on ' \
+                   'the sources but the consumer requires a {} value: {}' \
+                   .format(val.opcode,
+                           self._bit_class_to_str(val.common_class),
+                           self._bit_class_to_str(bit_class), str(val))
             val.common_class = bit_class
 
          for i in range(nir_op.num_inputs):
