@@ -654,9 +654,9 @@ emit_find_msb_using_lzd(const fs_builder &bld,
 static brw_rnd_mode
 brw_rnd_mode_from_nir_op (const nir_op op) {
    switch (op) {
-   case nir_op_f2f16_rtz:
+   case nir_op_f2f_rtz:
       return BRW_RND_MODE_RTZ;
-   case nir_op_f2f16_rtne:
+   case nir_op_f2f_rtne:
       return BRW_RND_MODE_RTNE;
    default:
       unreachable("Operation doesn't support rounding mode");
@@ -758,47 +758,33 @@ fs_visitor::nir_emit_alu(const fs_builder &bld, nir_alu_instr *instr)
    }
 
    switch (instr->op) {
-   case nir_op_i2f32:
-   case nir_op_u2f32:
-      if (optimize_extract_to_float(instr, result))
-         return;
-      inst = bld.MOV(result, op[0]);
-      inst->saturate = instr->dest.saturate;
-      break;
-
-   case nir_op_f2f16_rtne:
-   case nir_op_f2f16_rtz:
-      bld.emit(SHADER_OPCODE_RND_MODE, bld.null_reg_ud(),
-               brw_imm_d(brw_rnd_mode_from_nir_op(instr->op)));
-      /* fallthrough */
-
-      /* In theory, it would be better to use BRW_OPCODE_F32TO16. Depending
-       * on the HW gen, it is a special hw opcode or just a MOV, and
-       * brw_F32TO16 (at brw_eu_emit) would do the work to chose.
-       *
-       * But if we want to use that opcode, we need to provide support on
-       * different optimizations and lowerings. As right now HF support is
-       * only for gen8+, it will be better to use directly the MOV, and use
-       * BRW_OPCODE_F32TO16 when/if we work for HF support on gen7.
-       */
-
-   case nir_op_f2f16:
-      inst = bld.MOV(result, op[0]);
-      inst->saturate = instr->dest.saturate;
-      break;
-
-   case nir_op_b2i:
+   case nir_op_i2f:
+   case nir_op_i2i:
+   case nir_op_u2f:
+   case nir_op_u2u:
+   case nir_op_f2i:
+   case nir_op_f2u:
+   case nir_op_f2f:
+   case nir_op_f2f_rtne:
+   case nir_op_f2f_rtz:
    case nir_op_b2f:
-      op[0].type = BRW_REGISTER_TYPE_D;
-      op[0].negate = !op[0].negate;
-      /* fallthrough */
-   case nir_op_f2f64:
-   case nir_op_f2i64:
-   case nir_op_f2u64:
-   case nir_op_i2f64:
-   case nir_op_i2i64:
-   case nir_op_u2f64:
-   case nir_op_u2u64:
+   case nir_op_b2i:
+      if ((instr->op == nir_op_i2f || instr->op == nir_op_u2f) &&
+           nir_dest_bit_size(instr->dest.dest) == 32 &&
+          optimize_extract_to_float(instr, result))
+         return;
+
+      if (instr->op == nir_op_f2f_rtne || instr->op == nir_op_f2f_rtz) {
+         assert(nir_dest_bit_size(instr->dest.dest) == 16);
+         bld.emit(SHADER_OPCODE_RND_MODE, bld.null_reg_ud(),
+                  brw_imm_d(brw_rnd_mode_from_nir_op(instr->op)));
+      }
+
+      if (nir_op_infos[instr->op].input_types[0] == nir_type_bool32) {
+         op[0].type = BRW_REGISTER_TYPE_D;
+         op[0].negate = !op[0].negate;
+      }
+
       /* CHV PRM, vol07, 3D Media GPGPU Engine, Register Region Restrictions:
        *
        *    "When source or destination is 64b (...), regioning in Align1
@@ -822,20 +808,6 @@ fs_visitor::nir_emit_alu(const fs_builder &bld, nir_alu_instr *instr)
          inst->saturate = instr->dest.saturate;
          break;
       }
-      /* fallthrough */
-   case nir_op_f2f32:
-   case nir_op_f2i32:
-   case nir_op_f2u32:
-   case nir_op_f2i16:
-   case nir_op_f2u16:
-   case nir_op_i2i32:
-   case nir_op_u2u32:
-   case nir_op_i2i16:
-   case nir_op_u2u16:
-   case nir_op_i2f16:
-   case nir_op_u2f16:
-   case nir_op_i2i8:
-   case nir_op_u2u8:
       inst = bld.MOV(result, op[0]);
       inst->saturate = instr->dest.saturate;
       break;

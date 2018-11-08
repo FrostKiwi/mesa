@@ -1154,25 +1154,26 @@ vec4_visitor::nir_emit_alu(nir_alu_instr *instr)
    case nir_op_vec4:
       unreachable("not reached: should be handled by lower_vec_to_movs()");
 
-   case nir_op_i2f32:
-   case nir_op_u2f32:
-      inst = emit(MOV(dst, op[0]));
-      inst->saturate = instr->dest.saturate;
-      break;
+   case nir_op_i2f:
+   case nir_op_i2i:
+   case nir_op_u2f:
+   case nir_op_u2u:
+   case nir_op_f2f:
+   case nir_op_f2i:
+   case nir_op_f2u:
+   case nir_op_b2i:
+   case nir_op_b2f:
+      if (nir_op_infos[instr->op].input_types[0] == nir_type_bool32) {
+         assert(op[0].type == BRW_REGISTER_TYPE_D);
+         op[0].negate = true;
+      }
 
-   case nir_op_f2f32:
-   case nir_op_f2i32:
-   case nir_op_f2u32:
       if (nir_src_bit_size(instr->src[0].src) == 64)
          emit_conversion_from_double(dst, op[0], instr->dest.saturate);
+      else if (nir_dest_bit_size(instr->dest.dest) == 64)
+         emit_conversion_to_double(dst, op[0], instr->dest.saturate);
       else
          inst = emit(MOV(dst, op[0]));
-      break;
-
-   case nir_op_f2f64:
-   case nir_op_i2f64:
-   case nir_op_u2f64:
-      emit_conversion_to_double(dst, op[0], instr->dest.saturate);
       break;
 
    case nir_op_iadd:
@@ -1536,16 +1537,6 @@ vec4_visitor::nir_emit_alu(nir_alu_instr *instr)
          op[1] = resolve_source_modifiers(op[1]);
       }
       emit(AND(dst, op[0], op[1]));
-      break;
-
-   case nir_op_b2i:
-   case nir_op_b2f:
-      if (nir_dest_bit_size(instr->dest.dest) > 32) {
-         assert(dst.type == BRW_REGISTER_TYPE_DF);
-         emit_conversion_to_double(dst, negate(op[0]), false);
-      } else {
-         emit(MOV(dst, negate(op[0])));
-      }
       break;
 
    case nir_op_f2b:

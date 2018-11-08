@@ -857,58 +857,44 @@ static void visit_alu(struct ac_nir_context *ctx, const nir_alu_instr *instr)
 			src[i] = ac_to_integer(&ctx->ac, src[i]);
 		result = ac_build_gather_values(&ctx->ac, src, num_components);
 		break;
-	case nir_op_f2i16:
-	case nir_op_f2i32:
-	case nir_op_f2i64:
+	case nir_op_f2i:
 		src[0] = ac_to_float(&ctx->ac, src[0]);
 		result = LLVMBuildFPToSI(ctx->ac.builder, src[0], def_type, "");
 		break;
-	case nir_op_f2u16:
-	case nir_op_f2u32:
-	case nir_op_f2u64:
+	case nir_op_f2u:
 		src[0] = ac_to_float(&ctx->ac, src[0]);
 		result = LLVMBuildFPToUI(ctx->ac.builder, src[0], def_type, "");
 		break;
-	case nir_op_i2f16:
-	case nir_op_i2f32:
-	case nir_op_i2f64:
+	case nir_op_i2f:
 		src[0] = ac_to_integer(&ctx->ac, src[0]);
 		result = LLVMBuildSIToFP(ctx->ac.builder, src[0], ac_to_float_type(&ctx->ac, def_type), "");
 		break;
-	case nir_op_u2f16:
-	case nir_op_u2f32:
-	case nir_op_u2f64:
+	case nir_op_u2f:
 		src[0] = ac_to_integer(&ctx->ac, src[0]);
 		result = LLVMBuildUIToFP(ctx->ac.builder, src[0], ac_to_float_type(&ctx->ac, def_type), "");
 		break;
-	case nir_op_f2f16_rtz:
+	case nir_op_f2f_rtz:
 		src[0] = ac_to_float(&ctx->ac, src[0]);
 		LLVMValueRef param[2] = { src[0], ctx->ac.f32_0 };
 		result = ac_build_cvt_pkrtz_f16(&ctx->ac, param);
 		result = LLVMBuildExtractElement(ctx->ac.builder, result, ctx->ac.i32_0, "");
 		break;
-	case nir_op_f2f16_rtne:
-	case nir_op_f2f16:
-	case nir_op_f2f32:
-	case nir_op_f2f64:
+	case nir_op_f2f_rtne:
+	case nir_op_f2f:
 		src[0] = ac_to_float(&ctx->ac, src[0]);
 		if (ac_get_elem_bits(&ctx->ac, LLVMTypeOf(src[0])) < ac_get_elem_bits(&ctx->ac, def_type))
 			result = LLVMBuildFPExt(ctx->ac.builder, src[0], ac_to_float_type(&ctx->ac, def_type), "");
 		else
 			result = LLVMBuildFPTrunc(ctx->ac.builder, src[0], ac_to_float_type(&ctx->ac, def_type), "");
 		break;
-	case nir_op_u2u16:
-	case nir_op_u2u32:
-	case nir_op_u2u64:
+	case nir_op_u2u:
 		src[0] = ac_to_integer(&ctx->ac, src[0]);
 		if (ac_get_elem_bits(&ctx->ac, LLVMTypeOf(src[0])) < ac_get_elem_bits(&ctx->ac, def_type))
 			result = LLVMBuildZExt(ctx->ac.builder, src[0], def_type, "");
 		else
 			result = LLVMBuildTrunc(ctx->ac.builder, src[0], def_type, "");
 		break;
-	case nir_op_i2i16:
-	case nir_op_i2i32:
-	case nir_op_i2i64:
+	case nir_op_i2i:
 		src[0] = ac_to_integer(&ctx->ac, src[0]);
 		if (ac_get_elem_bits(&ctx->ac, LLVMTypeOf(src[0])) < ac_get_elem_bits(&ctx->ac, def_type))
 			result = LLVMBuildSExt(ctx->ac.builder, src[0], def_type, "");

@@ -881,21 +881,16 @@ ir3_n2b(struct ir3_block *block, struct ir3_instruction *instr)
 
 static struct ir3_instruction *
 create_cov(struct ir3_context *ctx, struct ir3_instruction *src,
-		unsigned src_bitsize, nir_op op)
+		unsigned src_bitsize, unsigned dst_bitsize, nir_op op)
 {
 	type_t src_type, dst_type;
 
 	switch (op) {
-	case nir_op_f2f32:
-	case nir_op_f2f16_rtne:
-	case nir_op_f2f16_rtz:
-	case nir_op_f2f16:
-	case nir_op_f2i32:
-	case nir_op_f2i16:
-	case nir_op_f2i8:
-	case nir_op_f2u32:
-	case nir_op_f2u16:
-	case nir_op_f2u8:
+	case nir_op_f2f:
+	case nir_op_f2f_rtne:
+	case nir_op_f2f_rtz:
+	case nir_op_f2i:
+	case nir_op_f2u:
 		switch (src_bitsize) {
 		case 32:
 			src_type = TYPE_F32;
@@ -908,11 +903,8 @@ create_cov(struct ir3_context *ctx, struct ir3_instruction *src,
 		}
 		break;
 
-	case nir_op_i2f32:
-	case nir_op_i2f16:
-	case nir_op_i2i32:
-	case nir_op_i2i16:
-	case nir_op_i2i8:
+	case nir_op_i2f:
+	case nir_op_i2i:
 		switch (src_bitsize) {
 		case 32:
 			src_type = TYPE_S32;
@@ -928,11 +920,8 @@ create_cov(struct ir3_context *ctx, struct ir3_instruction *src,
 		}
 		break;
 
-	case nir_op_u2f32:
-	case nir_op_u2f16:
-	case nir_op_u2u32:
-	case nir_op_u2u16:
-	case nir_op_u2u8:
+	case nir_op_u2f:
+	case nir_op_u2u:
 		switch (src_bitsize) {
 		case 32:
 			src_type = TYPE_U32;
@@ -953,49 +942,56 @@ create_cov(struct ir3_context *ctx, struct ir3_instruction *src,
 	}
 
 	switch (op) {
-	case nir_op_f2f32:
-	case nir_op_i2f32:
-	case nir_op_u2f32:
-		dst_type = TYPE_F32;
-		break;
-
-	case nir_op_f2f16_rtne:
-	case nir_op_f2f16_rtz:
-	case nir_op_f2f16:
+	case nir_op_f2f:
+	case nir_op_i2f:
+	case nir_op_u2f:
+	case nir_op_f2f_rtne:
+	case nir_op_f2f_rtz:
 		/* TODO how to handle rounding mode? */
-	case nir_op_i2f16:
-	case nir_op_u2f16:
-		dst_type = TYPE_F16;
+		switch (dst_bitsize) {
+		case 32:
+			dst_type = TYPE_F32;
+			break;
+		case 16:
+			dst_type = TYPE_F16;
+			break;
+		default:
+			compile_error(ctx, "invalid dst bit size: %u", dst_bitsize);
+		}
 		break;
 
-	case nir_op_f2i32:
-	case nir_op_i2i32:
-		dst_type = TYPE_S32;
+	case nir_op_f2i:
+	case nir_op_i2i:
+		switch (src_bitsize) {
+		case 32:
+			dst_type = TYPE_S32;
+			break;
+		case 16:
+			dst_type = TYPE_S16;
+			break;
+		case 8:
+			dst_type = TYPE_S8;
+			break;
+		default:
+			compile_error(ctx, "invalid dst bit size: %u", dst_bitsize);
+		}
 		break;
 
-	case nir_op_f2i16:
-	case nir_op_i2i16:
-		dst_type = TYPE_S16;
-		break;
-
-	case nir_op_f2i8:
-	case nir_op_i2i8:
-		dst_type = TYPE_S8;
-		break;
-
-	case nir_op_f2u32:
-	case nir_op_u2u32:
-		dst_type = TYPE_U32;
-		break;
-
-	case nir_op_f2u16:
-	case nir_op_u2u16:
-		dst_type = TYPE_U16;
-		break;
-
-	case nir_op_f2u8:
-	case nir_op_u2u8:
-		dst_type = TYPE_U8;
+	case nir_op_f2u:
+	case nir_op_u2u:
+		switch (src_bitsize) {
+		case 32:
+			dst_type = TYPE_U32;
+			break;
+		case 16:
+			dst_type = TYPE_U16;
+			break;
+		case 8:
+			dst_type = TYPE_U8;
+			break;
+		default:
+			compile_error(ctx, "invalid dst bit size: %u", dst_bitsize);
+		}
 		break;
 
 	default:
@@ -1012,7 +1008,7 @@ emit_alu(struct ir3_context *ctx, nir_alu_instr *alu)
 	struct ir3_instruction **dst, *src[info->num_inputs];
 	unsigned bs[info->num_inputs];     /* bit size */
 	struct ir3_block *b = ctx->block;
-	unsigned dst_sz, wrmask;
+	unsigned dst_sz, dst_bs, wrmask;
 
 	if (alu->dest.dest.is_ssa) {
 		dst_sz = alu->dest.dest.ssa.num_components;
@@ -1081,29 +1077,19 @@ emit_alu(struct ir3_context *ctx, nir_alu_instr *alu)
 
 		compile_assert(ctx, src[i]);
 	}
+        dst_bs = nir_dest_bit_size(alu->dest.dest);
 
 	switch (alu->op) {
-	case nir_op_f2f32:
-	case nir_op_f2f16_rtne:
-	case nir_op_f2f16_rtz:
-	case nir_op_f2f16:
-	case nir_op_f2i32:
-	case nir_op_f2i16:
-	case nir_op_f2i8:
-	case nir_op_f2u32:
-	case nir_op_f2u16:
-	case nir_op_f2u8:
-	case nir_op_i2f32:
-	case nir_op_i2f16:
-	case nir_op_i2i32:
-	case nir_op_i2i16:
-	case nir_op_i2i8:
-	case nir_op_u2f32:
-	case nir_op_u2f16:
-	case nir_op_u2u32:
-	case nir_op_u2u16:
-	case nir_op_u2u8:
-		dst[0] = create_cov(ctx, src[0], bs[0], alu->op);
+	case nir_op_f2f:
+	case nir_op_f2f_rtne:
+	case nir_op_f2f_rtz:
+	case nir_op_f2i:
+	case nir_op_f2u:
+	case nir_op_i2f:
+	case nir_op_i2i:
+	case nir_op_u2f:
+	case nir_op_u2u:
+		dst[0] = create_cov(ctx, src[0], bs[0], dst_bs, alu->op);
 		break;
 	case nir_op_f2b:
 		dst[0] = ir3_CMPS_F(b, src[0], 0, create_immed(b, fui(0.0)), 0);
