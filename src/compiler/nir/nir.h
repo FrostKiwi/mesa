@@ -913,6 +913,13 @@ typedef struct {
     */
    nir_alu_type input_types[NIR_MAX_VEC_COMPONENTS];
 
+   /**
+    * This is an unsized conversion.  It has exactly one source, neither the
+    * source nor destination have a size, and they are not required to match
+    * in the IR.
+    */
+   bool is_unsized_conversion;
+
    nir_op_algebraic_property algebraic_properties;
 } nir_op_info;
 

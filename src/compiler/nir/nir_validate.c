@@ -358,6 +358,8 @@ validate_alu_instr(nir_alu_instr *instr, validate_state *state)
       unsigned src_bit_size = nir_src_bit_size(instr->src[i].src);
       if (nir_alu_type_get_type_size(src_type)) {
          validate_assert(state, src_bit_size == nir_alu_type_get_type_size(src_type));
+      } else if (nir_op_infos[instr->op].is_unsized_conversion) {
+         /* Nothing to do; bit sizes aren't required to match */
       } else if (instr_bit_size) {
          validate_assert(state, src_bit_size == instr_bit_size);
       } else {
@@ -377,6 +379,8 @@ validate_alu_instr(nir_alu_instr *instr, validate_state *state)
    unsigned dest_bit_size = nir_dest_bit_size(instr->dest.dest);
    if (nir_alu_type_get_type_size(dest_type)) {
       validate_assert(state, dest_bit_size == nir_alu_type_get_type_size(dest_type));
+   } else if (nir_op_infos[instr->op].is_unsized_conversion) {
+      /* Nothing to do; bit sizes aren't required to match */
    } else if (instr_bit_size) {
       validate_assert(state, dest_bit_size == instr_bit_size);
    } else {
