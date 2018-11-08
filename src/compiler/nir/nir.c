@@ -1198,6 +1198,73 @@ nir_foreach_src(nir_instr *instr, nir_foreach_src_cb cb, void *state)
    return nir_foreach_dest(instr, visit_dest_indirect, &dest_state);
 }
 
+nir_op
+nir_type_conversion_op(nir_alu_type src, nir_alu_type dst,
+                       nir_rounding_mode rnd)
+{
+   nir_alu_type src_base = (nir_alu_type) nir_alu_type_get_base_type(src);
+   nir_alu_type dst_base = (nir_alu_type) nir_alu_type_get_base_type(dst);
+   unsigned src_bit_size = nir_alu_type_get_type_size(src);
+   unsigned dst_bit_size = nir_alu_type_get_type_size(dst);
+
+   if (src == dst && src_base == nir_type_float) {
+      return nir_op_fmov;
+   } else if ((src_base == nir_type_int || src_base == nir_type_uint) &&
+              (dst_base == nir_type_int || dst_base == nir_type_uint) &&
+              src_bit_size == dst_bit_size) {
+      /* Integer <-> integer conversions with the same bit-size on both
+       * ends are just no-op moves.
+       */
+      return nir_op_imov;
+   }
+
+   switch (src_base) {
+   case nir_type_float:
+      switch (dst_base) {
+      case nir_type_float:
+         switch (rnd) {
+         case nir_rounding_mode_undef: return nir_op_f2f;
+         case nir_rounding_mode_rtne:  return nir_op_f2f_rtne;
+         case nir_rounding_mode_rtz:   return nir_op_f2f_rtz;
+         default: unreachable("Invalid rounding mode");
+         }
+      case nir_type_int:   return nir_op_f2i;
+      case nir_type_uint:  return nir_op_f2u;
+      case nir_type_bool:  return nir_op_f2b;
+      default: unreachable("Invalid base type");
+      }
+
+   case nir_type_int:
+      switch (dst_base) {
+      case nir_type_float: return nir_op_i2f;
+      case nir_type_int:   return nir_op_i2i;
+      case nir_type_uint:  return nir_op_i2i;
+      case nir_type_bool:  return nir_op_i2b;
+      default: unreachable("Invalid base NIR type");
+      }
+
+   case nir_type_uint:
+      switch (dst_base) {
+      case nir_type_float: return nir_op_u2f;
+      case nir_type_int:   return nir_op_u2u;
+      case nir_type_uint:  return nir_op_u2u;
+      case nir_type_bool:  return nir_op_i2b;
+      default: unreachable("Invalid base NIR type");
+      }
+
+   case nir_type_bool:
+      switch (dst_base) {
+      case nir_type_float: return nir_op_b2f;
+      case nir_type_int:   return nir_op_b2i;
+      case nir_type_uint:  return nir_op_b2i;
+      default: unreachable("Invalid base NIR type");
+      }
+
+   default:
+      unreachable("Invalid base type");
+   }
+}
+
 int64_t
 nir_src_comp_as_int(nir_src src, unsigned comp)
 {

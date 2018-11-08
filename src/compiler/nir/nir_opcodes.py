@@ -199,29 +199,23 @@ unop("fsqrt", tfloat, "bit_size == 64 ? sqrt(src0) : sqrtf(src0)")
 unop("fexp2", tfloat, "exp2f(src0)")
 unop("flog2", tfloat, "log2f(src0)")
 
-# Generate all of the numeric conversion opcodes
-for src_t in [tint, tuint, tfloat]:
-   if src_t in (tint, tuint):
-      dst_types = [tfloat, src_t]
-   elif src_t == tfloat:
-      dst_types = [tint, tuint, tfloat]
 
-   for dst_t in dst_types:
-      for bit_size in type_sizes(dst_t):
-          if bit_size == 16 and dst_t == tfloat and src_t == tfloat:
-              rnd_modes = ['_rtne', '_rtz', '']
-              for rnd_mode in rnd_modes:
-                  unop_convert("{0}2{1}{2}{3}".format(src_t[0], dst_t[0],
-                                                       bit_size, rnd_mode),
-                               dst_t + str(bit_size), src_t, "src0")
-          else:
-              unop_convert("{0}2{1}{2}".format(src_t[0], dst_t[0], bit_size),
-                           dst_t + str(bit_size), src_t, "src0")
+def unsized_unop_convert(name, out_type, in_type, const_expr):
+   assert not type_has_size(out_type)
+   assert not type_has_size(in_type)
+   opcode(name, 0, out_type, [0], [in_type], True, "", const_expr)
 
-# We'll hand-code the to/from bool conversion opcodes.  Because bool doesn't
-# have multiple bit-sizes, we can always infer the size from the other type.
-unop_convert("f2b", tbool32, tfloat, "src0 != 0.0")
+unsized_unop_convert("i2f", tfloat, tint, "src0")
+unsized_unop_convert("i2i", tint, tint, "src0")
 unop_convert("i2b", tbool32, tint, "src0 != 0")
+unsized_unop_convert("u2f", tfloat, tuint, "src0")
+unsized_unop_convert("u2u", tuint, tuint, "src0")
+unsized_unop_convert("f2i", tint, tfloat, "src0")
+unsized_unop_convert("f2u", tuint, tfloat, "src0")
+unop_convert("f2b", tbool32, tfloat, "src0 != 0.0")
+unsized_unop_convert("f2f", tfloat, tfloat, "src0")
+unsized_unop_convert("f2f_rtne", tfloat, tfloat, "src0")
+unsized_unop_convert("f2f_rtz", tfloat, tfloat, "src0")
 unop_convert("b2f", tfloat, tbool32, "src0 ? 1.0 : 0.0")
 unop_convert("b2i", tint, tbool32, "src0 ? 1 : 0")
 
