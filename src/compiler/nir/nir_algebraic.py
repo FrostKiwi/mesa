@@ -136,7 +136,6 @@ class Constant(Value):
    def __init__(self, val, name):
       Value.__init__(self, val, name, "constant")
 
-      self.in_val = str(val)
       if isinstance(val, (str)):
          m = _constant_re.match(val)
          self.value = ast.literal_eval(m.group('value'))
@@ -201,9 +200,6 @@ class Variable(Value):
          assert self.required_type in ('float', 'bool', 'int', 'uint')
 
       self.index = varset[self.var_name]
-
-   def __str__(self):
-      return self.in_val
 
    def type(self):
       if self.required_type == 'bool':
