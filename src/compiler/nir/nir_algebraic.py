@@ -339,16 +339,21 @@ class BitSizeValidator(object):
       self._propagate_bit_class_down(search, search_dst_class)
 
       replace_dst_class = self._validate_bit_class_up(replace)
-      if replace_dst_class != 0:
-         assert search_dst_class != 0, \
-                'Search expression matches any bit size but replace ' \
-                'expression can only generate {0}-bit values' \
-                .format(replace_dst_class)
 
-         assert search_dst_class == replace_dst_class, \
-                'Search expression matches any {0}-bit values but replace ' \
-                'expression can only generates {1}-bit values' \
-                .format(search_dst_class, replace_dst_class)
+      # Get canonical classes before we compare anything
+      search_dst_class = self._class_relation.get_canonical(search_dst_class)
+      replace_dst_class = self._class_relation.get_canonical(replace_dst_class)
+      if replace_dst_class != 0 and search_dst_class != replace_dst_class:
+         assert search_dst_class > 0, \
+                'Search expression matches any bit size but replace ' \
+                'expression can only generate {} values' \
+                .format(self._bit_class_to_str(replace_dst_class))
+
+         assert False, \
+                'Search expression matches any {} values but replace ' \
+                'expression can only generate {} values' \
+                .format(self._bit_class_to_str(search_dst_class),
+                        self._bit_class_to_str(replace_dst_class))
 
       self._validate_bit_class_down(replace, search_dst_class)
 
@@ -367,12 +372,19 @@ class BitSizeValidator(object):
          assert canon_var_class < 0 or canon_bit_class < 0 or \
                 canon_var_class == canon_bit_class, \
                 'Variable {0} cannot be both {1}-bit and {2}-bit' \
-                .format(str(var), bit_class, var_class)
+                .format(str(var), canon_bit_class, canon_var_class)
          var_class = self._class_relation.add_equiv(var_class, bit_class)
          self._var_classes[var.index] = var_class
 
    def _get_var_bit_class(self, var):
       return self._class_relation.get_canonical(self._var_classes[var.index])
+
+   def _bit_class_to_str(self, bit_class):
+      bit_class = self._class_relation.get_canonical(bit_class)
+      if bit_class < 0:
+         return 'bit-class {0}'.format(bit_class)
+      else:
+         return '{0}-bit'.format(bit_class)
 
    def _propagate_bit_size_up(self, val):
       if isinstance(val, (Constant, Variable)):
