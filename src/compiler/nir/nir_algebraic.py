@@ -387,7 +387,13 @@ class BitSizeValidator(object):
          return '{0}-bit'.format(bit_class)
 
    def _propagate_bit_size_up(self, val):
-      if isinstance(val, (Constant, Variable)):
+      if isinstance(val, Constant):
+         return val.bit_size
+
+      elif isinstance(val, Variable):
+         # Record this variables bit size (if one is set)
+         if val.bit_size != 0:
+            self._set_var_bit_class(val, val.bit_size)
          return val.bit_size
 
       elif isinstance(val, Expression):
@@ -435,9 +441,6 @@ class BitSizeValidator(object):
                 .format(val.bit_size, bit_class, str(val))
 
       elif isinstance(val, Variable):
-         assert val.bit_size == 0 or val.bit_size == bit_class, \
-                'Variable is {0}-bit but a {1}-bit value is required: {2}' \
-                .format(val.bit_size, bit_class, str(val))
          self._set_var_bit_class(val, bit_class)
 
       elif isinstance(val, Expression):
