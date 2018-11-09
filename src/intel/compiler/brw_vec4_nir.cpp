@@ -1163,7 +1163,7 @@ vec4_visitor::nir_emit_alu(nir_alu_instr *instr)
    case nir_op_f2u:
    case nir_op_b2i:
    case nir_op_b2f:
-      if (nir_op_infos[instr->op].input_types[0] == nir_type_bool32) {
+      if (nir_op_infos[instr->op].input_types[0] == nir_type_bool) {
          assert(op[0].type == BRW_REGISTER_TYPE_D);
          op[0].negate = true;
       }

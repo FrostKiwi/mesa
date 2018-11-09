@@ -780,7 +780,7 @@ fs_visitor::nir_emit_alu(const fs_builder &bld, nir_alu_instr *instr)
                   brw_imm_d(brw_rnd_mode_from_nir_op(instr->op)));
       }
 
-      if (nir_op_infos[instr->op].input_types[0] == nir_type_bool32) {
+      if (nir_op_infos[instr->op].input_types[0] == nir_type_bool) {
          op[0].type = BRW_REGISTER_TYPE_D;
          op[0].negate = !op[0].negate;
       }

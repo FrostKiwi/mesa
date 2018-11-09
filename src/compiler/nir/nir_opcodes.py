@@ -93,6 +93,7 @@ class Opcode(object):
 # helper variables for strings
 tfloat = "float"
 tint = "int"
+tbool = "bool"
 tbool32 = "bool32"
 tuint = "uint"
 tuint16 = "uint16"
@@ -122,6 +123,8 @@ def type_sizes(type_):
         return [type_size(type_)]
     elif type_ == 'float':
         return [16, 32, 64]
+    elif type_ == 'bool':
+        return [32]
     else:
         return [8, 16, 32, 64]
 
@@ -207,17 +210,17 @@ def unsized_unop_convert(name, out_type, in_type, const_expr):
 
 unsized_unop_convert("i2f", tfloat, tint, "src0")
 unsized_unop_convert("i2i", tint, tint, "src0")
-unop_convert("i2b", tbool32, tint, "src0 != 0")
+unsized_unop_convert("i2b", tbool, tint, "src0 != 0")
 unsized_unop_convert("u2f", tfloat, tuint, "src0")
 unsized_unop_convert("u2u", tuint, tuint, "src0")
 unsized_unop_convert("f2i", tint, tfloat, "src0")
 unsized_unop_convert("f2u", tuint, tfloat, "src0")
-unop_convert("f2b", tbool32, tfloat, "src0 != 0.0")
+unsized_unop_convert("f2b", tbool, tfloat, "src0 != 0.0")
 unsized_unop_convert("f2f", tfloat, tfloat, "src0")
 unsized_unop_convert("f2f_rtne", tfloat, tfloat, "src0")
 unsized_unop_convert("f2f_rtz", tfloat, tfloat, "src0")
-unop_convert("b2f", tfloat, tbool32, "src0 ? 1.0 : 0.0")
-unop_convert("b2i", tint, tbool32, "src0 ? 1 : 0")
+unsized_unop_convert("b2f", tfloat, tbool, "src0 ? 1.0 : 0.0")
+unsized_unop_convert("b2i", tint, tbool, "src0 ? 1 : 0")
 
 
 # Unary floating-point rounding operations.
