@@ -4035,6 +4035,33 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       break;
    }
 
+   case nir_intrinsic_load_global: {
+      assert(devinfo->gen >= 8);
+
+      assert(nir_dest_bit_size(instr->dest) == 32);
+      assert(nir_intrinsic_align(instr) >= 4);
+      fs_inst *inst = bld.emit(SHADER_OPCODE_A64_UNTYPED_READ_LOGICAL,
+                               dest,
+                               get_nir_src(instr->src[0]), /* Address */
+                               fs_reg(), /* No source data */
+                               brw_imm_ud(instr->num_components));
+      inst->size_written = instr->num_components *
+                           inst->dst.component_size(inst->exec_size);
+      break;
+   }
+
+   case nir_intrinsic_store_global:
+      assert(devinfo->gen >= 8);
+
+      assert(nir_src_bit_size(instr->src[0]) == 32);
+      assert(nir_intrinsic_align(instr) >= 4);
+      bld.emit(SHADER_OPCODE_A64_UNTYPED_WRITE_LOGICAL,
+               fs_reg(),
+               get_nir_src(instr->src[1]), /* Address */
+               get_nir_src(instr->src[0]), /* Data */
+               brw_imm_ud(instr->num_components));
+      break;
+
    case nir_intrinsic_load_ssbo: {
       assert(devinfo->gen >= 7);
 

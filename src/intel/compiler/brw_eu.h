@@ -687,6 +687,31 @@ brw_dp_byte_scattered_rw_desc(const struct gen_device_info *devinfo,
 }
 
 static inline uint32_t
+brw_dp_a64_untyped_surface_rw_desc(const struct gen_device_info *devinfo,
+                                   unsigned exec_size, /**< 0 for SIMD4x2 */
+                                   unsigned num_channels,
+                                   bool write)
+{
+   assert(exec_size <= 8 || exec_size == 16);
+   assert(devinfo->gen >= 8);
+
+   unsigned msg_type =
+      write ? GEN8_DATAPORT_DC_PORT1_A64_UNTYPED_SURFACE_WRITE :
+              GEN8_DATAPORT_DC_PORT1_A64_UNTYPED_SURFACE_READ;
+
+   /* See also MDC_SM3 in the SKL PRM Vol 2d. */
+   const unsigned simd_mode = exec_size == 0 ? 0 : /* SIMD4x2 */
+                              exec_size <= 8 ? 2 : 1;
+
+   const unsigned msg_control =
+      SET_BITS(brw_mdc_cmask(num_channels), 3, 0) |
+      SET_BITS(simd_mode, 5, 4);
+
+   return BRW_BTI_STATELESS |
+          brw_dp_surface_desc(devinfo, msg_type, msg_control);
+}
+
+static inline uint32_t
 brw_dp_typed_atomic_desc(const struct gen_device_info *devinfo,
                          unsigned exec_size,
                          unsigned exec_group,

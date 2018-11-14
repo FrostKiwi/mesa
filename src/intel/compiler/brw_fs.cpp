@@ -792,6 +792,14 @@ fs_inst::components_read(unsigned i) const
       else
          return 1;
 
+   case SHADER_OPCODE_A64_UNTYPED_READ_LOGICAL:
+      assert(src[2].file == IMM);
+      return 1;
+
+   case SHADER_OPCODE_A64_UNTYPED_WRITE_LOGICAL:
+      assert(src[2].file == IMM);
+      return i == 1 ? src[2].ud : 1;
+
    case SHADER_OPCODE_BYTE_SCATTERED_READ_LOGICAL:
       /* Scattered logical opcodes use the following params:
        * src[0] Surface coordinates
@@ -5141,6 +5149,65 @@ lower_surface_logical_send(const fs_builder &bld, fs_inst *inst)
 }
 
 static void
+lower_a64_logical_send(const fs_builder &bld, fs_inst *inst)
+{
+   const gen_device_info *devinfo = bld.shader->devinfo;
+
+   const fs_reg &addr = inst->src[0];
+   const fs_reg &src = inst->src[1];
+   const unsigned src_comps = inst->components_read(1);
+   assert(inst->src[2].file == IMM);
+   const unsigned arg = inst->src[2].ud;
+   const bool has_side_effects = inst->has_side_effects();
+
+   /* Add two because the address is 64-bit */
+   const unsigned dwords = 2 + src_comps;
+   const unsigned mlen = dwords * (inst->exec_size / 8);
+
+   fs_reg sources[5];
+
+   sources[0] = addr;
+
+   for (unsigned i = 0; i < src_comps; i++)
+      sources[1 + i] = offset(src, bld, i);
+
+   const fs_reg payload = bld.vgrf(BRW_REGISTER_TYPE_UD, dwords);
+   bld.LOAD_PAYLOAD(payload, sources, 1 + src_comps, 0);
+
+   uint32_t desc;
+   switch (inst->opcode) {
+   case SHADER_OPCODE_A64_UNTYPED_READ_LOGICAL:
+      desc = brw_dp_a64_untyped_surface_rw_desc(devinfo, inst->exec_size,
+                                                arg,   /* num_channels */
+                                                false  /* write */);
+      break;
+
+   case SHADER_OPCODE_A64_UNTYPED_WRITE_LOGICAL:
+      desc = brw_dp_a64_untyped_surface_rw_desc(devinfo, inst->exec_size,
+                                                arg,   /* num_channels */
+                                                true   /* write */);
+      break;
+
+   default:
+      unreachable("Unknown A64 logical instruction");
+   }
+
+   /* Update the original instruction. */
+   inst->opcode = SHADER_OPCODE_SEND;
+   inst->mlen = mlen;
+   inst->header_size = 0;
+   inst->send_has_side_effects = has_side_effects;
+
+   /* Set up SFID and descriptors */
+   inst->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+   inst->desc = desc;
+   inst->resize_sources(3);
+   inst->src[0] = brw_imm_ud(0); /* desc */
+   inst->src[1] = brw_imm_ud(0); /* ex_desc */
+   inst->src[2] = payload;
+}
+
+static void
 lower_varying_pull_constant_logical_send(const fs_builder &bld, fs_inst *inst)
 {
    const gen_device_info *devinfo = bld.shader->devinfo;
@@ -5312,6 +5379,11 @@ fs_visitor::lower_logical_sends()
       case SHADER_OPCODE_TYPED_SURFACE_WRITE_LOGICAL:
       case SHADER_OPCODE_TYPED_ATOMIC_LOGICAL:
          lower_surface_logical_send(ibld, inst);
+         break;
+
+      case SHADER_OPCODE_A64_UNTYPED_WRITE_LOGICAL:
+      case SHADER_OPCODE_A64_UNTYPED_READ_LOGICAL:
+         lower_a64_logical_send(ibld, inst);
          break;
 
       case FS_OPCODE_VARYING_PULL_CONSTANT_LOAD_LOGICAL:
@@ -5811,6 +5883,8 @@ get_lowered_simd_width(const struct gen_device_info *devinfo,
    case SHADER_OPCODE_UNTYPED_SURFACE_WRITE_LOGICAL:
    case SHADER_OPCODE_BYTE_SCATTERED_WRITE_LOGICAL:
    case SHADER_OPCODE_BYTE_SCATTERED_READ_LOGICAL:
+   case SHADER_OPCODE_A64_UNTYPED_WRITE_LOGICAL:
+   case SHADER_OPCODE_A64_UNTYPED_READ_LOGICAL:
       return MIN2(16, inst->exec_size);
 
    case SHADER_OPCODE_URB_READ_SIMD8:

@@ -412,6 +412,17 @@ enum opcode {
    SHADER_OPCODE_UNTYPED_SURFACE_WRITE,
    SHADER_OPCODE_UNTYPED_SURFACE_WRITE_LOGICAL,
 
+   /**
+    * Untyped A64 surface access opcodes.
+    *
+    * Source 0: 64-bit address
+    * Source 1: Operational source
+    * Source 2: [required] Opcode-specific control immediate, same as source 2
+    *                      of the matching non-LOGICAL opcode.
+    */
+   SHADER_OPCODE_A64_UNTYPED_READ_LOGICAL,
+   SHADER_OPCODE_A64_UNTYPED_WRITE_LOGICAL,
+
    SHADER_OPCODE_TYPED_ATOMIC,
    SHADER_OPCODE_TYPED_ATOMIC_LOGICAL,
    SHADER_OPCODE_TYPED_SURFACE_READ,
@@ -1172,6 +1183,8 @@ enum brw_message_target {
 #define HSW_DATAPORT_DC_PORT1_ATOMIC_COUNTER_OP                     11
 #define HSW_DATAPORT_DC_PORT1_ATOMIC_COUNTER_OP_SIMD4X2             12
 #define HSW_DATAPORT_DC_PORT1_TYPED_SURFACE_WRITE                   13
+#define GEN8_DATAPORT_DC_PORT1_A64_UNTYPED_SURFACE_READ             0x11
+#define GEN8_DATAPORT_DC_PORT1_A64_UNTYPED_SURFACE_WRITE            0x19
 #define GEN9_DATAPORT_DC_PORT1_UNTYPED_ATOMIC_FLOAT_OP              0x1b
 
 /* GEN9 */
