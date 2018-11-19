@@ -2756,6 +2756,10 @@ isl_surf_get_image_offset_B_tile_el(const struct isl_surf *surf,
        * caller will set up a texture with a miptail and use the hardware to
        * handle offseting inside the miptail.
        */
+      assert(*x_offset_el == 0);
+      assert(*y_offset_el == 0);
+      assert(z_offset_el == 0);
+      assert(array_offset == 0);
       *x_offset_el = 0;
       *y_offset_el = 0;
    } else {
