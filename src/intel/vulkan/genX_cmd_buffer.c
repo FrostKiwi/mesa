@@ -2117,6 +2117,19 @@ emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
          bt_map[bias + s] = surface_state.offset + state_offset;
          add_surface_reloc(cmd_buffer, surface_state, constant_data);
          continue;
+      } else if (binding->set == ANV_DESCRIPTOR_SET_DESCRIPTORS) {
+         /* This is a descriptor set buffer so the set index is actually
+          * given by binding->binding.  (Yes, that's confusing.)
+          */
+         const struct anv_descriptor_set *set =
+            pipe_state->descriptors[binding->binding];
+         bt_map[bias + s] = set->desc_surface_state.offset + state_offset;
+         add_surface_reloc(cmd_buffer, set->desc_surface_state,
+                           (struct anv_address) {
+                              .bo = &set->pool->bo,
+                              .offset = set->desc_mem.offset,
+                           });
+         continue;
       }
 
       const struct anv_descriptor *desc =
@@ -2481,6 +2494,23 @@ cmd_buffer_flush_push_constants(struct anv_cmd_buffer *cmd_buffer,
                   read_len = MIN2(range->length,
                      DIV_ROUND_UP(constant_data_size, 32) - range->start);
                   read_addr = anv_address_add(constant_data,
+                                              range->start * 32);
+               } else if (binding->set == ANV_DESCRIPTOR_SET_DESCRIPTORS) {
+                  /* This is a descriptor set buffer so the set index is
+                   * actually given by binding->binding.  (Yes, that's
+                   * confusing.)
+                   */
+                  const struct anv_descriptor_set *set =
+                     gfx_state->base.descriptors[binding->binding];
+                  struct anv_address desc_buffer_addr = {
+                     .bo = &set->pool->bo,
+                     .offset = set->desc_mem.offset,
+                  };
+                  const unsigned desc_buffer_size = set->desc_mem.alloc_size;
+
+                  read_len = MIN2(range->length,
+                     DIV_ROUND_UP(desc_buffer_size, 32) - range->start);
+                  read_addr = anv_address_add(desc_buffer_addr,
                                               range->start * 32);
                } else {
                   const struct anv_descriptor *desc =

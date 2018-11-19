@@ -1416,6 +1416,9 @@ struct anv_vue_header {
    float PointWidth;
 };
 
+unsigned anv_descriptor_size(const struct anv_physical_device *device,
+                             VkDescriptorType type);
+
 enum anv_descriptor_data {
    ANV_DESCRIPTOR_SURFACE_STATE  = (1 << 0),
    ANV_DESCRIPTOR_SAMPLER_STATE  = (1 << 1),
@@ -1446,6 +1449,9 @@ struct anv_descriptor_set_binding_layout {
    /* Index into the descriptor set buffer views */
    int16_t buffer_index;
 
+   /* Offset into the descriptor buffer where this descriptor lives */
+   uint32_t descriptor_offset;
+
    /* Immutable samplers (or NULL if no immutable samplers) */
    struct anv_sampler **immutable_samplers;
 };
@@ -1468,6 +1474,9 @@ struct anv_descriptor_set_layout {
 
    /* Number of dynamic offsets used by this descriptor set */
    uint16_t dynamic_offset_count;
+
+   /* Size of the descriptor buffer for this descriptor set */
+   uint32_t descriptor_buffer_size;
 
    /* Bindings in this descriptor set */
    struct anv_descriptor_set_binding_layout binding[0];
@@ -1510,8 +1519,15 @@ struct anv_descriptor {
 };
 
 struct anv_descriptor_set {
+   struct anv_descriptor_pool *pool;
    struct anv_descriptor_set_layout *layout;
    uint32_t size;
+
+   /* State relative to anv_descriptor_pool::bo */
+   struct anv_state desc_mem;
+   /* Surface state for the descriptor buffer */
+   struct anv_state desc_surface_state;
+
    uint32_t buffer_count;
    struct anv_buffer_view *buffer_views;
    struct anv_descriptor descriptors[0];
@@ -1543,6 +1559,9 @@ struct anv_descriptor_pool {
    uint32_t size;
    uint32_t next;
    uint32_t free_list;
+
+   struct anv_bo bo;
+   struct util_vma_heap bo_heap;
 
    struct anv_state_stream surface_state_stream;
    void *surface_state_free_list;
@@ -1640,6 +1659,7 @@ anv_descriptor_set_destroy(struct anv_device *device,
                            struct anv_descriptor_pool *pool,
                            struct anv_descriptor_set *set);
 
+#define ANV_DESCRIPTOR_SET_DESCRIPTORS      (UINT8_MAX - 2)
 #define ANV_DESCRIPTOR_SET_SHADER_CONSTANTS (UINT8_MAX - 1)
 #define ANV_DESCRIPTOR_SET_COLOR_ATTACHMENTS UINT8_MAX
 
