@@ -40,7 +40,17 @@ unsigned
 anv_descriptor_size(const struct anv_physical_device *device,
                     VkDescriptorType type)
 {
-   return 0;
+   unsigned size = 0;
+
+   /* Broadwell and earlier need additional data along side each storage image
+    * that provides strides, tiling information, etc.
+    */
+   if (device->info.gen <= 8 &&
+       (type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ||
+        type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER))
+      size += BRW_IMAGE_PARAM_SIZE * 4;
+
+   return size;
 }
 
 
@@ -230,7 +240,11 @@ VkResult anv_CreateDescriptorSetLayout(
       switch (binding->descriptorType) {
       case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
       case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-         set_layout->binding[b].data |= ANV_DESCRIPTOR_IMAGE_PARAM;
+         if (device->info.gen <= 8) {
+            set_layout->binding[b].data |= ANV_DESCRIPTOR_IMAGE_PARAM;
+            descriptor_buffer_size += BRW_IMAGE_PARAM_SIZE * 4 *
+                                      binding->descriptorCount;
+         }
          break;
       default:
          break;
@@ -775,6 +789,39 @@ VkResult anv_FreeDescriptorSets(
    return VK_SUCCESS;
 }
 
+static void
+anv_descriptor_set_write_image_param(struct anv_device *device,
+                                     struct anv_descriptor_set *set,
+                                     const struct brw_image_param *param,
+                                     uint32_t binding,
+                                     uint32_t element)
+{
+   assert(device->info.gen <= 8);
+
+   const struct anv_descriptor_set_binding_layout *bind_layout =
+      &set->layout->binding[binding];
+
+   const unsigned descriptor_size =
+      anv_descriptor_size(&device->instance->physicalDevice,
+                          VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+   uint32_t *desc_map = set->desc_mem.map +
+                        bind_layout->descriptor_offset +
+                        element * descriptor_size;
+
+#define WRITE_PARAM_FIELD(field, FIELD) \
+   for (unsigned i = 0; i < ARRAY_SIZE(param->field); i++) \
+      desc_map[BRW_IMAGE_PARAM_##FIELD##_OFFSET + i] = param->field[i]
+
+   WRITE_PARAM_FIELD(offset, OFFSET);
+   WRITE_PARAM_FIELD(size, SIZE);
+   WRITE_PARAM_FIELD(stride, STRIDE);
+   WRITE_PARAM_FIELD(tiling, TILING);
+   WRITE_PARAM_FIELD(swizzling, SWIZZLING);
+   WRITE_PARAM_FIELD(size, SIZE);
+
+#undef WRITE_PARAM_FIELD
+}
+
 void
 anv_descriptor_set_write_image_view(struct anv_device *device,
                                     struct anv_descriptor_set *set,
@@ -825,6 +872,16 @@ anv_descriptor_set_write_image_view(struct anv_device *device,
       .image_view = image_view,
       .sampler = sampler,
    };
+
+   if (bind_layout->data & ANV_DESCRIPTOR_IMAGE_PARAM) {
+      assert(image_view->n_planes == 1);
+      const struct brw_image_param *image_param =
+         &image_view->planes[0].storage_image_param;
+
+      anv_descriptor_set_write_image_param(device, set,
+                                           image_param,
+                                           binding, element);
+   }
 }
 
 void
@@ -846,6 +903,12 @@ anv_descriptor_set_write_buffer_view(struct anv_device *device,
       .type = type,
       .buffer_view = buffer_view,
    };
+
+   if (bind_layout->data & ANV_DESCRIPTOR_IMAGE_PARAM) {
+      anv_descriptor_set_write_image_param(device, set,
+                                           &buffer_view->storage_image_param,
+                                           binding, element);
+   }
 }
 
 void

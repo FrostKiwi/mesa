@@ -2057,16 +2057,6 @@ emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
    if (map->surface_count == 0)
       goto out;
 
-   if (map->image_count > 0) {
-      VkResult result =
-         anv_cmd_buffer_ensure_push_constant_field(cmd_buffer, stage, images);
-      if (result != VK_SUCCESS)
-         return result;
-
-      cmd_buffer->state.push_constants_dirty |= 1 << stage;
-   }
-
-   uint32_t image = 0;
    for (uint32_t s = 0; s < map->surface_count; s++) {
       struct anv_pipeline_binding *binding = &map->surface_to_descriptor[s];
 
@@ -2183,11 +2173,6 @@ emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
          surface_state = sstate.state;
          assert(surface_state.alloc_size);
          add_surface_state_relocs(cmd_buffer, sstate);
-
-         struct brw_image_param *image_param =
-            &cmd_buffer->state.push_constants[stage]->images[image++];
-
-         *image_param = desc->image_view->planes[binding->plane].storage_image_param;
          break;
       }
 
@@ -2232,11 +2217,6 @@ emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
          assert(surface_state.alloc_size);
          add_surface_reloc(cmd_buffer, surface_state,
                            desc->buffer_view->address);
-
-         struct brw_image_param *image_param =
-            &cmd_buffer->state.push_constants[stage]->images[image++];
-
-         *image_param = desc->buffer_view->storage_image_param;
          break;
 
       default:
@@ -2246,7 +2226,6 @@ emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
 
       bt_map[bias + s] = surface_state.offset + state_offset;
    }
-   assert(image == map->image_count);
 
  out:
    anv_state_flush(cmd_buffer->device, *bt_state);

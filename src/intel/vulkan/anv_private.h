@@ -1881,9 +1881,6 @@ struct anv_push_constants {
 
    /* Used for vkCmdDispatchBase */
    uint32_t base_work_group_id[3];
-
-   /* Image data for image_load_store on pre-SKL */
-   struct brw_image_param images[MAX_IMAGES];
 };
 
 struct anv_dynamic_state {
@@ -2387,7 +2384,6 @@ mesa_to_vk_shader_stage(gl_shader_stage mesa_stage)
 struct anv_pipeline_bind_map {
    uint32_t surface_count;
    uint32_t sampler_count;
-   uint32_t image_count;
 
    struct anv_pipeline_binding *                surface_to_descriptor;
    struct anv_pipeline_binding *                sampler_to_descriptor;
