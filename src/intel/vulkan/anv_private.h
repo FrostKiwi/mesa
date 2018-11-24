@@ -1416,6 +1416,12 @@ struct anv_vue_header {
    float PointWidth;
 };
 
+enum anv_descriptor_data {
+   ANV_DESCRIPTOR_SURFACE_STATE  = (1 << 0),
+   ANV_DESCRIPTOR_SAMPLER_STATE  = (1 << 1),
+   ANV_DESCRIPTOR_IMAGE_PARAM    = (1 << 2),
+};
+
 struct anv_descriptor_set_binding_layout {
 #ifndef NDEBUG
    /* The type of the descriptors in this binding */
@@ -1424,6 +1430,9 @@ struct anv_descriptor_set_binding_layout {
 
    /* Flags provided when this binding was created */
    VkDescriptorBindingFlagsEXT flags;
+
+   /* Bitfield representing the type of data this descriptor contains */
+   enum anv_descriptor_data data;
 
    /* Number of array elements in this binding */
    uint16_t array_size;
@@ -1436,17 +1445,6 @@ struct anv_descriptor_set_binding_layout {
 
    /* Index into the descriptor set buffer views */
    int16_t buffer_index;
-
-   struct {
-      /* Index into the binding table for the associated surface */
-      int16_t surface_index;
-
-      /* Index into the sampler table for the associated sampler */
-      int16_t sampler_index;
-
-      /* Index into the image table for the associated image */
-      int16_t image_index;
-   } stage[MESA_SHADER_STAGES];
 
    /* Immutable samplers (or NULL if no immutable samplers) */
    struct anv_sampler **immutable_samplers;
@@ -1675,10 +1673,6 @@ struct anv_pipeline_layout {
    } set[MAX_SETS];
 
    uint32_t num_sets;
-
-   struct {
-      bool has_dynamic_offsets;
-   } stage[MESA_SHADER_STAGES];
 
    unsigned char sha1[20];
 };

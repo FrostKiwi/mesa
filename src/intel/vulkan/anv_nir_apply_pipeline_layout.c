@@ -452,8 +452,6 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
                               struct brw_stage_prog_data *prog_data,
                               struct anv_pipeline_bind_map *map)
 {
-   gl_shader_stage stage = shader->info.stage;
-
    struct apply_pipeline_layout_state state = {
       .shader = shader,
       .layout = layout,
@@ -495,7 +493,10 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
          struct anv_descriptor_set_binding_layout *binding =
             &set_layout->binding[b];
 
-         if (binding->stage[stage].surface_index >= 0) {
+         if (binding->array_size == 0)
+            continue;
+
+         if (binding->data & ANV_DESCRIPTOR_SURFACE_STATE) {
             state.set[set].surface_offsets[b] = map->surface_count;
             struct anv_sampler **samplers = binding->immutable_samplers;
             for (unsigned i = 0; i < binding->array_size; i++) {
@@ -512,7 +513,7 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
             }
          }
 
-         if (binding->stage[stage].sampler_index >= 0) {
+         if (binding->data & ANV_DESCRIPTOR_SAMPLER_STATE) {
             state.set[set].sampler_offsets[b] = map->sampler_count;
             struct anv_sampler **samplers = binding->immutable_samplers;
             for (unsigned i = 0; i < binding->array_size; i++) {
@@ -529,7 +530,7 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
             }
          }
 
-         if (binding->stage[stage].image_index >= 0) {
+         if (binding->data & ANV_DESCRIPTOR_IMAGE_PARAM) {
             state.set[set].image_offsets[b] = map->image_count;
             map->image_count += binding->array_size;
          }

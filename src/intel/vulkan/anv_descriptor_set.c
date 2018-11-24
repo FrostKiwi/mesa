@@ -125,6 +125,7 @@ VkResult anv_CreateDescriptorSetLayout(
       memset(&set_layout->binding[b], -1, sizeof(set_layout->binding[b]));
 
       set_layout->binding[b].flags = 0;
+      set_layout->binding[b].data = 0;
       set_layout->binding[b].array_size = 0;
       set_layout->binding[b].immutable_samplers = NULL;
    }
@@ -132,9 +133,6 @@ VkResult anv_CreateDescriptorSetLayout(
    /* Initialize all samplers to 0 */
    memset(samplers, 0, immutable_sampler_count * sizeof(*samplers));
 
-   uint32_t sampler_count[MESA_SHADER_STAGES] = { 0, };
-   uint32_t surface_count[MESA_SHADER_STAGES] = { 0, };
-   uint32_t image_count[MESA_SHADER_STAGES] = { 0, };
    uint32_t buffer_count = 0;
    uint32_t dynamic_offset_count = 0;
 
@@ -182,10 +180,7 @@ VkResult anv_CreateDescriptorSetLayout(
       switch (binding->descriptorType) {
       case VK_DESCRIPTOR_TYPE_SAMPLER:
       case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-         anv_foreach_stage(s, binding->stageFlags) {
-            set_layout->binding[b].stage[s].sampler_index = sampler_count[s];
-            sampler_count[s] += binding->descriptorCount;
-         }
+         set_layout->binding[b].data |= ANV_DESCRIPTOR_SAMPLER_STATE;
          break;
       default:
          break;
@@ -206,10 +201,7 @@ VkResult anv_CreateDescriptorSetLayout(
       case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
       case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
       case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-         anv_foreach_stage(s, binding->stageFlags) {
-            set_layout->binding[b].stage[s].surface_index = surface_count[s];
-            surface_count[s] += binding->descriptorCount;
-         }
+         set_layout->binding[b].data |= ANV_DESCRIPTOR_SURFACE_STATE;
          break;
       default:
          break;
@@ -228,10 +220,7 @@ VkResult anv_CreateDescriptorSetLayout(
       switch (binding->descriptorType) {
       case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
       case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-         anv_foreach_stage(s, binding->stageFlags) {
-            set_layout->binding[b].stage[s].image_index = image_count[s];
-            image_count[s] += binding->descriptorCount;
-         }
+         set_layout->binding[b].data |= ANV_DESCRIPTOR_IMAGE_PARAM;
          break;
       default:
          break;
@@ -292,11 +281,11 @@ sha1_update_descriptor_set_binding_layout(struct mesa_sha1 *ctx,
    const struct anv_descriptor_set_binding_layout *layout)
 {
    SHA1_UPDATE_VALUE(ctx, layout->flags);
+   SHA1_UPDATE_VALUE(ctx, layout->data);
    SHA1_UPDATE_VALUE(ctx, layout->array_size);
    SHA1_UPDATE_VALUE(ctx, layout->descriptor_index);
    SHA1_UPDATE_VALUE(ctx, layout->dynamic_offset_index);
    SHA1_UPDATE_VALUE(ctx, layout->buffer_index);
-   _mesa_sha1_update(ctx, layout->stage, sizeof(layout->stage));
 
    if (layout->immutable_samplers) {
       for (uint16_t i = 0; i < layout->array_size; i++)
@@ -343,7 +332,6 @@ VkResult anv_CreatePipelineLayout(
 
    unsigned dynamic_offset_count = 0;
 
-   memset(layout->stage, 0, sizeof(layout->stage));
    for (uint32_t set = 0; set < pCreateInfo->setLayoutCount; set++) {
       ANV_FROM_HANDLE(anv_descriptor_set_layout, set_layout,
                       pCreateInfo->pSetLayouts[set]);
@@ -356,10 +344,6 @@ VkResult anv_CreatePipelineLayout(
             continue;
 
          dynamic_offset_count += set_layout->binding[b].array_size;
-         for (gl_shader_stage s = 0; s < MESA_SHADER_STAGES; s++) {
-            if (set_layout->binding[b].stage[s].surface_index >= 0)
-               layout->stage[s].has_dynamic_offsets = true;
-         }
       }
    }
 
@@ -371,10 +355,6 @@ VkResult anv_CreatePipelineLayout(
                         sizeof(layout->set[s].dynamic_offset_start));
    }
    _mesa_sha1_update(&ctx, &layout->num_sets, sizeof(layout->num_sets));
-   for (unsigned s = 0; s < MESA_SHADER_STAGES; s++) {
-      _mesa_sha1_update(&ctx, &layout->stage[s].has_dynamic_offsets,
-                        sizeof(layout->stage[s].has_dynamic_offsets));
-   }
    _mesa_sha1_final(&ctx, layout->sha1);
 
    *pPipelineLayout = anv_pipeline_layout_to_handle(layout);
