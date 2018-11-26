@@ -800,6 +800,27 @@ fs_inst::components_read(unsigned i) const
       assert(src[2].file == IMM);
       return i == 1 ? src[2].ud : 1;
 
+   case SHADER_OPCODE_A64_UNTYPED_ATOMIC_LOGICAL:
+   case SHADER_OPCODE_A64_UNTYPED_ATOMIC_FLOAT_LOGICAL:
+      assert(src[2].file == IMM);
+      if (i == 1) {
+         /* Data source */
+         const unsigned op = src[2].ud;
+         switch (op) {
+         case BRW_AOP_INC:
+         case BRW_AOP_DEC:
+         case BRW_AOP_PREDEC:
+            return 0;
+         case BRW_AOP_CMPWR:
+         case BRW_AOP_FCMPWR:
+            return 2;
+         default:
+            return 1;
+         }
+      } else {
+         return 1;
+      }
+
    case SHADER_OPCODE_BYTE_SCATTERED_READ_LOGICAL:
       /* Scattered logical opcodes use the following params:
        * src[0] Surface coordinates
@@ -5196,6 +5217,18 @@ lower_a64_logical_send(const fs_builder &bld, fs_inst *inst)
       desc = brw_dp_a64_untyped_surface_rw_desc(devinfo, inst->exec_size,
                                                 arg,   /* num_channels */
                                                 true   /* write */);
+      break;
+
+   case SHADER_OPCODE_A64_UNTYPED_ATOMIC_LOGICAL:
+      desc = brw_dp_a64_untyped_atomic_desc(devinfo, inst->exec_size,
+                                            arg,   /* atomic_op */
+                                            !inst->dst.is_null());
+      break;
+
+   case SHADER_OPCODE_A64_UNTYPED_ATOMIC_FLOAT_LOGICAL:
+      desc = brw_dp_a64_untyped_atomic_float_desc(devinfo, inst->exec_size,
+                                                  arg,   /* atomic_op */
+                                                  !inst->dst.is_null());
       break;
 
    default:

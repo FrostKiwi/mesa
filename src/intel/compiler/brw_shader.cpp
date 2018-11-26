@@ -298,6 +298,10 @@ brw_instruction_name(const struct gen_device_info *devinfo, enum opcode op)
       return "a64_untyped_read_logical";
    case SHADER_OPCODE_A64_UNTYPED_WRITE_LOGICAL:
       return "a64_untyped_write_logical";
+   case SHADER_OPCODE_A64_UNTYPED_ATOMIC_LOGICAL:
+      return "a64_untyped_atomic_logical";
+   case SHADER_OPCODE_A64_UNTYPED_ATOMIC_FLOAT_LOGICAL:
+      return "a64_untyped_atomic_float_logical";
    case SHADER_OPCODE_TYPED_ATOMIC:
       return "typed_atomic";
    case SHADER_OPCODE_TYPED_ATOMIC_LOGICAL:
@@ -1019,6 +1023,8 @@ backend_instruction::has_side_effects() const
    case SHADER_OPCODE_UNTYPED_SURFACE_WRITE:
    case SHADER_OPCODE_UNTYPED_SURFACE_WRITE_LOGICAL:
    case SHADER_OPCODE_A64_UNTYPED_WRITE_LOGICAL:
+   case SHADER_OPCODE_A64_UNTYPED_ATOMIC_LOGICAL:
+   case SHADER_OPCODE_A64_UNTYPED_ATOMIC_FLOAT_LOGICAL:
    case SHADER_OPCODE_BYTE_SCATTERED_WRITE:
    case SHADER_OPCODE_BYTE_SCATTERED_WRITE_LOGICAL:
    case SHADER_OPCODE_TYPED_ATOMIC:
