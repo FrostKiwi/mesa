@@ -218,9 +218,6 @@ anv_shader_compile_to_nir(struct anv_device *device,
    NIR_PASS_V(nir, nir_remove_dead_variables,
               nir_var_shader_in | nir_var_shader_out | nir_var_system_value);
 
-   NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_ubo | nir_var_mem_ssbo,
-              nir_address_format_vk_index_offset);
-
    NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_global,
               nir_address_format_64bit_global);
 
@@ -602,6 +599,14 @@ anv_pipeline_lower_nir(struct anv_pipeline *pipeline,
                                     &stage->bind_map);
       NIR_PASS_V(nir, nir_opt_constant_folding);
    }
+
+   NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_ubo | nir_var_mem_ssbo,
+              nir_address_format_vk_index_offset);
+
+   /* Do a bit of constant folding in the hopes that we get constant offsets
+    * for brw_nir_analyze_ubo_ranges to analyze.
+    */
+   NIR_PASS_V(nir, nir_opt_constant_folding);
 
    if (nir->info.stage != MESA_SHADER_COMPUTE)
       brw_nir_analyze_ubo_ranges(compiler, nir, NULL, prog_data->ubo_ranges);
