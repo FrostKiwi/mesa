@@ -304,6 +304,9 @@ copy_image(struct anv_cmd_buffer *cmd_buffer,
            VkImageLayout dst_image_layout,
            const VkImageCopy2KHR *region)
 {
+   const bool compute_queue =
+      !(cmd_buffer->pool->queue_family->queueFlags & VK_QUEUE_GRAPHICS_BIT);
+
    VkOffset3D srcOffset =
       anv_sanitize_image_offset(src_image->type, region->srcOffset);
    VkOffset3D dstOffset =
@@ -357,9 +360,10 @@ copy_image(struct anv_cmd_buffer *cmd_buffer,
                                            dst_base_layer, layer_count);
 
          const bool compute =
-            unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+            unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                      blorp_copy_supports_compute(&cmd_buffer->device->blorp,
                                                  dst_surf.aux_usage));
+         assert(compute || !compute_queue);
 
          for (unsigned i = 0; i < layer_count; i++) {
             blorp_copy(batch, &src_surf, src_level, src_base_layer + i,
@@ -376,9 +380,10 @@ copy_image(struct anv_cmd_buffer *cmd_buffer,
                                                  1UL << aspect_bit,
                                                  &dst_shadow_surf)) {
             const bool compute =
-               unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+               unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                         blorp_copy_supports_compute(&cmd_buffer->device->blorp,
                                                     dst_shadow_surf.aux_usage));
+            assert(compute || !compute_queue);
 
             for (unsigned i = 0; i < layer_count; i++) {
                blorp_copy(batch, &src_surf, src_level, src_base_layer + i,
@@ -405,7 +410,7 @@ copy_image(struct anv_cmd_buffer *cmd_buffer,
                                         dst_base_layer, layer_count);
 
       const bool compute =
-         unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+         unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                   blorp_copy_supports_compute(&cmd_buffer->device->blorp,
                                                     dst_surf.aux_usage));
 
@@ -423,7 +428,7 @@ copy_image(struct anv_cmd_buffer *cmd_buffer,
                                               dst_image, dst_mask,
                                               &dst_shadow_surf)) {
          const bool compute =
-            unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+            unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                      blorp_copy_supports_compute(&cmd_buffer->device->blorp,
                                                  dst_shadow_surf.aux_usage));
 
@@ -523,6 +528,9 @@ copy_buffer_to_image(struct anv_cmd_buffer *cmd_buffer,
                      const VkBufferImageCopy2KHR* region,
                      bool buffer_to_image)
 {
+   const bool compute_queue =
+      !(cmd_buffer->pool->queue_family->queueFlags & VK_QUEUE_GRAPHICS_BIT);
+
    struct {
       struct blorp_surf surf;
       uint32_t level;
@@ -629,13 +637,13 @@ copy_buffer_to_image(struct anv_cmd_buffer *cmd_buffer,
    }
 
    const bool compute =
-      unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+      unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                blorp_copy_supports_compute(&cmd_buffer->device->blorp,
                                            dst->surf.aux_usage));
 
    const bool shadow_compute =
       dst_has_shadow &&
-      unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+      unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                blorp_copy_supports_compute(&cmd_buffer->device->blorp,
                                            dst_shadow_surf.aux_usage));
 
@@ -992,12 +1000,14 @@ gcd_pow2_u64(uint64_t a, uint64_t b)
 #define MAX_SURFACE_DIM (1ull << 14)
 
 static void
-copy_buffer(struct anv_device *device,
+copy_buffer(struct anv_cmd_buffer *cmd_buffer,
             struct blorp_batch *batch,
             struct anv_buffer *src_buffer,
             struct anv_buffer *dst_buffer,
             const VkBufferCopy2KHR *region)
 {
+   struct anv_device *device = cmd_buffer->device;
+
    struct blorp_address src = {
       .buffer = src_buffer->address.bo,
       .offset = src_buffer->address.offset + region->srcOffset,
@@ -1011,8 +1021,11 @@ copy_buffer(struct anv_device *device,
                        ISL_SURF_USAGE_RENDER_TARGET_BIT),
    };
 
+   const bool compute_queue =
+      !(cmd_buffer->pool->queue_family->queueFlags & VK_QUEUE_GRAPHICS_BIT);
+
    const bool compute =
-      unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+      unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                blorp_buffer_copy_supports_compute(&device->blorp));
 
    blorp_buffer_copy(batch, src, dst, region->size, compute);
@@ -1040,7 +1053,7 @@ void anv_CmdCopyBuffer(
          .size = pRegions[r].size,
       };
 
-      copy_buffer(cmd_buffer->device, &batch, src_buffer, dst_buffer, &copy);
+      copy_buffer(cmd_buffer, &batch, src_buffer, dst_buffer, &copy);
    }
 
    blorp_batch_finish(&batch);
@@ -1060,7 +1073,7 @@ void anv_CmdCopyBuffer2KHR(
    blorp_batch_init(&cmd_buffer->device->blorp, &batch, cmd_buffer, 0);
 
    for (unsigned r = 0; r < pCopyBufferInfo->regionCount; r++) {
-      copy_buffer(cmd_buffer->device, &batch, src_buffer, dst_buffer,
+      copy_buffer(cmd_buffer, &batch, src_buffer, dst_buffer,
                   &pCopyBufferInfo->pRegions[r]);
    }
 
@@ -1096,9 +1109,13 @@ void anv_CmdUpdateBuffer(
     */
    cmd_buffer->state.pending_pipe_bits |= ANV_PIPE_TEXTURE_CACHE_INVALIDATE_BIT;
 
+   const bool compute_queue =
+      !(cmd_buffer->pool->queue_family->queueFlags & VK_QUEUE_GRAPHICS_BIT);
+
    const bool compute =
-      unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+      unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                blorp_buffer_copy_supports_compute(&cmd_buffer->device->blorp));
+   assert(compute || !compute_queue);
 
    while (dataSize) {
       const uint32_t copy_size = MIN2(dataSize, max_update_size);
@@ -1148,6 +1165,9 @@ void anv_CmdFillBuffer(
    struct blorp_batch batch;
    blorp_batch_init(&cmd_buffer->device->blorp, &batch, cmd_buffer, 0);
 
+   const bool compute_queue =
+      !(cmd_buffer->pool->queue_family->queueFlags & VK_QUEUE_GRAPHICS_BIT);
+
    fillSize = anv_buffer_get_range(dst_buffer, dstOffset, fillSize);
 
    /* From the Vulkan spec:
@@ -1181,9 +1201,10 @@ void anv_CmdFillBuffer(
                                     &surf, &isl_surf);
 
       const bool compute =
-         unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+         unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                   blorp_clear_supports_compute(batch.blorp, false, false,
                                                surf.aux_usage));
+      assert(compute || !compute_queue);
 
       blorp_clear(&batch, &surf, isl_format, ISL_SWIZZLE_IDENTITY,
                   0, 0, 1, 0, 0, MAX_SURFACE_DIM, MAX_SURFACE_DIM,
@@ -1203,9 +1224,10 @@ void anv_CmdFillBuffer(
                                     &surf, &isl_surf);
 
       const bool compute =
-         unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+         unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                   blorp_clear_supports_compute(batch.blorp, false, false,
                                                surf.aux_usage));
+      assert(compute || !compute_queue);
 
       blorp_clear(&batch, &surf, isl_format, ISL_SWIZZLE_IDENTITY,
                   0, 0, 1, 0, 0, MAX_SURFACE_DIM, height, color, NULL,
@@ -1223,9 +1245,10 @@ void anv_CmdFillBuffer(
                                     &surf, &isl_surf);
 
       const bool compute =
-         unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+         unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                   blorp_clear_supports_compute(batch.blorp, false, false,
                                                surf.aux_usage));
+      assert(compute || !compute_queue);
 
       blorp_clear(&batch, &surf, isl_format, ISL_SWIZZLE_IDENTITY,
                   0, 0, 1, 0, 0, width, 1, color, NULL, compute);
@@ -1246,6 +1269,9 @@ void anv_CmdClearColorImage(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_image, image, _image);
+
+   const bool compute_queue =
+      !(cmd_buffer->pool->queue_family->queueFlags & VK_QUEUE_GRAPHICS_BIT);
 
    static const bool color_write_disable[4] = { false, false, false, false };
 
@@ -1270,9 +1296,10 @@ void anv_CmdClearColorImage(
                               VK_IMAGE_ASPECT_COLOR_BIT, image->tiling);
 
       const bool compute =
-         unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+         unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                   blorp_clear_supports_compute(batch.blorp, false, false,
                                                surf.aux_usage));
+      assert(compute || !compute_queue);
 
       unsigned base_layer = pRanges[r].baseArrayLayer;
       unsigned layer_count = anv_get_layerCount(image, &pRanges[r]);
@@ -1808,10 +1835,14 @@ anv_image_copy_to_shadow(struct anv_cmd_buffer *cmd_buffer,
    get_blorp_surf_for_anv_shadow_image(cmd_buffer->device,
                                        image, aspect, &shadow_surf);
 
+   const bool compute_queue =
+      !(cmd_buffer->pool->queue_family->queueFlags & VK_QUEUE_GRAPHICS_BIT);
+
    const bool compute =
-      unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+      unlikely((compute_queue || INTEL_DEBUG & DEBUG_BLOCS) &&
                blorp_copy_supports_compute(&cmd_buffer->device->blorp,
                                            surf.aux_usage));
+   assert(compute || !compute_queue);
 
    for (uint32_t l = 0; l < level_count; l++) {
       const uint32_t level = base_level + l;
