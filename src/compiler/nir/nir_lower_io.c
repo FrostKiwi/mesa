@@ -544,6 +544,9 @@ build_addr_iadd(nir_builder *b, nir_ssa_def *addr,
    assert(addr->bit_size == offset->bit_size);
 
    switch (addr_format) {
+   case nir_address_format_64bit_global:
+      assert(addr->num_components == 1);
+      return nir_iadd(b, addr, offset);
    case nir_address_format_vk_index_offset:
       assert(addr->num_components == 2);
       return nir_vec2(b, nir_channel(b, addr, 0),
@@ -578,6 +581,22 @@ addr_to_offset(nir_builder *b, nir_ssa_def *addr,
    return nir_channel(b, addr, 1);
 }
 
+/** Returns true if the given address format resolves to a global address */
+static bool
+addr_format_is_global(nir_address_format addr_format)
+{
+   return addr_format == nir_address_format_64bit_global;
+}
+
+static nir_ssa_def *
+addr_to_global(nir_builder *b, nir_ssa_def *addr,
+               nir_address_format addr_format)
+{
+   assert(addr_format == nir_address_format_64bit_global);
+   assert(addr->num_components == 1);
+   return addr;
+}
+
 static nir_ssa_def *
 build_explicit_io_load(nir_builder *b, nir_intrinsic_instr *intrin,
                        nir_ssa_def *addr, nir_address_format addr_format,
@@ -591,7 +610,10 @@ build_explicit_io_load(nir_builder *b, nir_intrinsic_instr *intrin,
       op = nir_intrinsic_load_ubo;
       break;
    case nir_var_ssbo:
-      op = nir_intrinsic_load_ssbo;
+      if (addr_format_is_global(addr_format))
+         op = nir_intrinsic_load_global;
+      else
+         op = nir_intrinsic_load_ssbo;
       break;
    default:
       unreachable("Unsupported explicit IO variable mode");
@@ -599,8 +621,13 @@ build_explicit_io_load(nir_builder *b, nir_intrinsic_instr *intrin,
 
    nir_intrinsic_instr *load = nir_intrinsic_instr_create(b->shader, op);
 
-   load->src[0] = nir_src_for_ssa(addr_to_index(b, addr, addr_format));
-   load->src[1] = nir_src_for_ssa(addr_to_offset(b, addr, addr_format));
+   if (addr_format_is_global(addr_format)) {
+      assert(op == nir_intrinsic_load_global);
+      load->src[0] = nir_src_for_ssa(addr_to_global(b, addr, addr_format));
+   } else {
+      load->src[0] = nir_src_for_ssa(addr_to_index(b, addr, addr_format));
+      load->src[1] = nir_src_for_ssa(addr_to_offset(b, addr, addr_format));
+   }
 
    if (mode != nir_var_ubo)
       nir_intrinsic_set_access(load, nir_intrinsic_access(intrin));
@@ -629,7 +656,10 @@ build_explicit_io_store(nir_builder *b, nir_intrinsic_instr *intrin,
    nir_intrinsic_op op;
    switch (mode) {
    case nir_var_ssbo:
-      op = nir_intrinsic_store_ssbo;
+      if (addr_format_is_global(addr_format))
+         op = nir_intrinsic_store_global;
+      else
+         op = nir_intrinsic_store_ssbo;
       break;
    default:
       unreachable("Unsupported explicit IO variable mode");
@@ -638,8 +668,12 @@ build_explicit_io_store(nir_builder *b, nir_intrinsic_instr *intrin,
    nir_intrinsic_instr *store = nir_intrinsic_instr_create(b->shader, op);
 
    store->src[0] = nir_src_for_ssa(value);
-   store->src[1] = nir_src_for_ssa(addr_to_index(b, addr, addr_format));
-   store->src[2] = nir_src_for_ssa(addr_to_offset(b, addr, addr_format));
+   if (addr_format_is_global(addr_format)) {
+      store->src[1] = nir_src_for_ssa(addr_to_global(b, addr, addr_format));
+   } else {
+      store->src[1] = nir_src_for_ssa(addr_to_index(b, addr, addr_format));
+      store->src[2] = nir_src_for_ssa(addr_to_offset(b, addr, addr_format));
+   }
 
    nir_intrinsic_set_write_mask(store, write_mask);
 
@@ -667,25 +701,48 @@ build_explicit_io_atomic(nir_builder *b, nir_intrinsic_instr *intrin,
    nir_intrinsic_op op;
    switch (mode) {
    case nir_var_ssbo:
-      switch (intrin->intrinsic) {
-#define OP(O) case nir_intrinsic_deref_##O: op = nir_intrinsic_ssbo_##O; break;
-      OP(atomic_exchange)
-      OP(atomic_comp_swap)
-      OP(atomic_add)
-      OP(atomic_imin)
-      OP(atomic_umin)
-      OP(atomic_imax)
-      OP(atomic_umax)
-      OP(atomic_and)
-      OP(atomic_or)
-      OP(atomic_xor)
-      OP(atomic_fadd)
-      OP(atomic_fmin)
-      OP(atomic_fmax)
-      OP(atomic_fcomp_swap)
+      if (addr_format_is_global(addr_format)) {
+         switch (intrin->intrinsic) {
+#define OP(O) case nir_intrinsic_deref_##O: op = nir_intrinsic_global_##O; break;
+         OP(atomic_exchange)
+         OP(atomic_comp_swap)
+         OP(atomic_add)
+         OP(atomic_imin)
+         OP(atomic_umin)
+         OP(atomic_imax)
+         OP(atomic_umax)
+         OP(atomic_and)
+         OP(atomic_or)
+         OP(atomic_xor)
+         OP(atomic_fadd)
+         OP(atomic_fmin)
+         OP(atomic_fmax)
+         OP(atomic_fcomp_swap)
 #undef OP
-      default:
-         unreachable("Invalid SSBO atomic");
+         default:
+            unreachable("Invalid SSBO atomic");
+         }
+      } else {
+         switch (intrin->intrinsic) {
+#define OP(O) case nir_intrinsic_deref_##O: op = nir_intrinsic_ssbo_##O; break;
+         OP(atomic_exchange)
+         OP(atomic_comp_swap)
+         OP(atomic_add)
+         OP(atomic_imin)
+         OP(atomic_umin)
+         OP(atomic_imax)
+         OP(atomic_umax)
+         OP(atomic_and)
+         OP(atomic_or)
+         OP(atomic_xor)
+         OP(atomic_fadd)
+         OP(atomic_fmin)
+         OP(atomic_fmax)
+         OP(atomic_fcomp_swap)
+#undef OP
+         default:
+            unreachable("Invalid SSBO atomic");
+         }
       }
       break;
    default:
@@ -694,11 +751,15 @@ build_explicit_io_atomic(nir_builder *b, nir_intrinsic_instr *intrin,
 
    nir_intrinsic_instr *atomic = nir_intrinsic_instr_create(b->shader, op);
 
-   atomic->src[0] = nir_src_for_ssa(addr_to_index(b, addr, addr_format));
-   atomic->src[1] = nir_src_for_ssa(addr_to_offset(b, addr, addr_format));
+   unsigned src = 0;
+   if (addr_format_is_global(addr_format)) {
+      atomic->src[src++] = nir_src_for_ssa(addr_to_global(b, addr, addr_format));
+   } else {
+      atomic->src[src++] = nir_src_for_ssa(addr_to_index(b, addr, addr_format));
+      atomic->src[src++] = nir_src_for_ssa(addr_to_offset(b, addr, addr_format));
+   }
    for (unsigned i = 0; i < num_data_srcs; i++) {
-      assert(intrin->src[1 + i].is_ssa);
-      atomic->src[2 + i] = nir_src_for_ssa(intrin->src[1 + i].ssa);
+      atomic->src[src++] = nir_src_for_ssa(intrin->src[1 + i].ssa);
    }
 
    assert(intrin->dest.ssa.num_components == 1);
