@@ -881,30 +881,11 @@ build_explicit_io_atomic(nir_builder *b, nir_intrinsic_instr *intrin,
    }
 }
 
-static void
-lower_explicit_io_deref(nir_builder *b, nir_deref_instr *deref,
-                        nir_address_format addr_format)
+nir_ssa_def *
+nir_explicit_io_address_from_deref(nir_builder *b, nir_deref_instr *deref,
+                                   nir_ssa_def *base_addr,
+                                   nir_address_format addr_format)
 {
-   /* Just delete the deref if it's not used.  We can't use
-    * nir_deref_instr_remove_if_unused here because it may remove more than
-    * one deref which could break our list walking since we walk the list
-    * backwards.
-    */
-   assert(list_empty(&deref->dest.ssa.if_uses));
-   if (list_empty(&deref->dest.ssa.uses)) {
-      nir_instr_remove(&deref->instr);
-      return;
-   }
-
-   b->cursor = nir_after_instr(&deref->instr);
-
-   /* Var derefs must be lowered away by the driver */
-   assert(deref->deref_type != nir_deref_type_var);
-
-   assert(deref->parent.is_ssa);
-   nir_ssa_def *parent_addr = deref->parent.ssa;
-
-   nir_ssa_def *addr = NULL;
    assert(deref->dest.is_ssa);
    switch (deref->deref_type) {
    case nir_deref_type_var:
@@ -923,19 +904,17 @@ lower_explicit_io_deref(nir_builder *b, nir_deref_instr *deref,
       assert(stride > 0);
 
       nir_ssa_def *index = nir_ssa_for_src(b, deref->arr.index, 1);
-      index = nir_i2i(b, index, parent_addr->bit_size);
-      addr = build_addr_iadd(b, parent_addr, addr_format,
+      index = nir_i2i(b, index, base_addr->bit_size);
+      return build_addr_iadd(b, base_addr, addr_format,
                                 nir_imul_imm(b, index, stride));
-      break;
    }
 
    case nir_deref_type_ptr_as_array: {
       nir_ssa_def *index = nir_ssa_for_src(b, deref->arr.index, 1);
-      index = nir_i2i(b, index, parent_addr->bit_size);
+      index = nir_i2i(b, index, base_addr->bit_size);
       unsigned stride = nir_deref_instr_ptr_as_array_stride(deref);
-      addr = build_addr_iadd(b, parent_addr, addr_format,
+      return build_addr_iadd(b, base_addr, addr_format,
                                 nir_imul_imm(b, index, stride));
-      break;
    }
 
    case nir_deref_type_array_wildcard:
@@ -947,23 +926,22 @@ lower_explicit_io_deref(nir_builder *b, nir_deref_instr *deref,
       int offset = glsl_get_struct_field_offset(parent->type,
                                                 deref->strct.index);
       assert(offset >= 0);
-      addr = build_addr_iadd_imm(b, parent_addr, addr_format, offset);
-      break;
+      return build_addr_iadd_imm(b, base_addr, addr_format, offset);
    }
 
    case nir_deref_type_cast:
       /* Nothing to do here */
-      addr = parent_addr;
-      break;
+      return base_addr;
    }
 
-   nir_instr_remove(&deref->instr);
-   nir_ssa_def_rewrite_uses(&deref->dest.ssa, nir_src_for_ssa(addr));
+   unreachable("Invalid NIR deref type");
 }
 
-static void
-lower_explicit_io_access(nir_builder *b, nir_intrinsic_instr *intrin,
-                         nir_address_format addr_format)
+void
+nir_lower_explicit_io_instr(nir_builder *b,
+                            nir_intrinsic_instr *intrin,
+                            nir_ssa_def *addr,
+                            nir_address_format addr_format)
 {
    b->cursor = nir_after_instr(&intrin->instr);
 
@@ -973,7 +951,6 @@ lower_explicit_io_access(nir_builder *b, nir_intrinsic_instr *intrin,
    assert(vec_stride == 0 || glsl_type_is_vector(deref->type));
    assert(vec_stride == 0 || vec_stride >= scalar_size);
 
-   nir_ssa_def *addr = &deref->dest.ssa;
    if (intrin->intrinsic == nir_intrinsic_load_deref) {
       nir_ssa_def *value;
       if (vec_stride > scalar_size) {
@@ -1015,6 +992,43 @@ lower_explicit_io_access(nir_builder *b, nir_intrinsic_instr *intrin,
    }
 
    nir_instr_remove(&intrin->instr);
+}
+
+static void
+lower_explicit_io_deref(nir_builder *b, nir_deref_instr *deref,
+                        nir_address_format addr_format)
+{
+   /* Just delete the deref if it's not used.  We can't use
+    * nir_deref_instr_remove_if_unused here because it may remove more than
+    * one deref which could break our list walking since we walk the list
+    * backwards.
+    */
+   assert(list_empty(&deref->dest.ssa.if_uses));
+   if (list_empty(&deref->dest.ssa.uses)) {
+      nir_instr_remove(&deref->instr);
+      return;
+   }
+
+   b->cursor = nir_after_instr(&deref->instr);
+
+   /* Var derefs must be lowered away by the driver */
+   assert(deref->deref_type != nir_deref_type_var);
+
+   assert(deref->parent.is_ssa);
+   nir_ssa_def *addr = nir_explicit_io_address_from_deref(b, deref,
+                                                          deref->parent.ssa,
+                                                          addr_format);
+
+   nir_instr_remove(&deref->instr);
+   nir_ssa_def_rewrite_uses(&deref->dest.ssa, nir_src_for_ssa(addr));
+}
+
+static void
+lower_explicit_io_access(nir_builder *b, nir_intrinsic_instr *intrin,
+                         nir_address_format addr_format)
+{
+   assert(intrin->src[0].is_ssa);
+   nir_lower_explicit_io_instr(b, intrin, intrin->src[0].ssa, addr_format);
 }
 
 static bool
