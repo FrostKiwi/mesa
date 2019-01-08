@@ -203,6 +203,9 @@ typedef struct shader_info {
           * Size of shared variables accessed by the compute shader.
           */
          unsigned shared_size;
+
+         /** Explicit subgroup size if provided, else zero. */
+         unsigned subgroup_size;
       } cs;
 
       /* Applies to both TCS and TES. */

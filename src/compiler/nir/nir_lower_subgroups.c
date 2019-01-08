@@ -310,6 +310,10 @@ lower_subgroups_intrin(nir_builder *b, nir_intrinsic_instr *intrin,
       break;
 
    case nir_intrinsic_load_subgroup_size:
+      if (b->shader->info.stage == MESA_SHADER_COMPUTE &&
+          b->shader->info.cs.subgroup_size)
+         return nir_imm_int(b, b->shader->info.cs.subgroup_size);
+
       if (options->subgroup_size)
          return nir_imm_int(b, options->subgroup_size);
       break;

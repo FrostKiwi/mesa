@@ -3856,6 +3856,10 @@ vtn_handle_execution_mode(struct vtn_builder *b, struct vtn_value *entry_point,
    case SpvExecutionModeContractionOff:
       break; /* OpenCL */
 
+   case SpvExecutionModeSubgroupSize:
+      b->shader->info.cs.subgroup_size = mode->literals[0];
+      break;
+
    case SpvExecutionModeStencilRefReplacingEXT:
       vtn_assert(b->shader->info.stage == MESA_SHADER_FRAGMENT);
       break;
