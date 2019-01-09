@@ -35,6 +35,8 @@ struct apply_pipeline_layout_state {
    struct anv_pipeline_layout *layout;
    bool add_bounds_checks;
 
+   unsigned dynamic_offset_uniform_start;
+
    bool uses_constants;
    uint8_t constants_offset;
    struct {
@@ -171,22 +173,52 @@ lower_res_index_intrinsic(nir_intrinsic_instr *intrin,
 
    uint32_t set = nir_intrinsic_desc_set(intrin);
    uint32_t binding = nir_intrinsic_binding(intrin);
+   const VkDescriptorType desc_type = nir_intrinsic_desc_type(intrin);
+
+   const struct anv_descriptor_set_binding_layout *bind_layout =
+      &state->layout->set[set].layout->binding[binding];
 
    uint32_t surface_index = state->set[set].surface_offsets[binding];
-   uint32_t array_size =
-      state->layout->set[set].layout->binding[binding].array_size;
+   uint32_t array_size = bind_layout->array_size;
 
    nir_ssa_def *array_index = nir_ssa_for_src(b, intrin->src[0], 1);
    if (nir_src_is_const(intrin->src[0]) || state->add_bounds_checks)
       array_index = nir_umin(b, array_index, nir_imm_int(b, array_size - 1));
 
-   nir_ssa_def *block_index = nir_iadd_imm(b, array_index, surface_index);
+   nir_ssa_def *index;
+   if (desc_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER ||
+       desc_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC) {
+      /* We store the descriptor offset as 24.8 where the top 24 bits are the
+       * offset into the descriptor set and the bottom 8 bits are the offset
+       * (in bytes) into the dynamic offset table.
+       */
+      uint32_t desc_offset = bind_layout->descriptor_offset << 8;
+      if (bind_layout->dynamic_offset_index >= 0) {
+         assert(bind_layout->dynamic_offset_index < MAX_DYNAMIC_BUFFERS);
+         desc_offset |= bind_layout->dynamic_offset_index;
+      }
 
-   /* We're using nir_address_format_vk_index_offset */
-   block_index = nir_vec2(b, block_index, nir_ssa_undef(b, 1, 32));
+      if (state->add_bounds_checks) {
+         /* We're using nir_address_format_64bit_bounded_global */
+         assert(intrin->dest.ssa.num_components == 4);
+         assert(intrin->dest.ssa.bit_size == 32);
+         index = nir_vec4(b, nir_imm_int(b, desc_offset),
+                             nir_ssa_for_src(b, intrin->src[0], 1),
+                             nir_imm_int(b, array_size),
+                             nir_ssa_undef(b, 1, 32));
+      } else {
+         /* We're using nir_address_format_64bit_global */
+         index = nir_pack_64_2x32_split(b, nir_imm_int(b, desc_offset),
+                                           nir_ssa_for_src(b, intrin->src[0], 1));
+      }
+   } else {
+      /* We're using nir_address_format_vk_index_offset */
+      index = nir_vec2(b, nir_iadd_imm(b, array_index, surface_index),
+                          nir_ssa_undef(b, 1, 32));
+   }
 
    assert(intrin->dest.is_ssa);
-   nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(block_index));
+   nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(index));
    nir_instr_remove(&intrin->instr);
 }
 
@@ -198,15 +230,34 @@ lower_res_reindex_intrinsic(nir_intrinsic_instr *intrin,
 
    b->cursor = nir_before_instr(&intrin->instr);
 
+   const VkDescriptorType desc_type = nir_intrinsic_desc_type(intrin);
+
    /* For us, the resource indices are just indices into the binding table and
     * array elements are sequential.  A resource_reindex just turns into an
     * add of the two indices.
     */
    assert(intrin->src[0].is_ssa && intrin->src[1].is_ssa);
-   nir_ssa_def *new_index =
-      nir_vec2(b, nir_iadd(b, nir_channel(b, intrin->src[0].ssa, 0),
-                              intrin->src[1].ssa),
-                  nir_ssa_undef(b, 1, 32));
+   nir_ssa_def *old_index = intrin->src[0].ssa;
+   nir_ssa_def *offset = intrin->src[1].ssa;
+
+   nir_ssa_def *new_index;
+   if (desc_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER ||
+       desc_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC) {
+      if (state->add_bounds_checks) {
+         new_index = nir_vec4(b, nir_channel(b, old_index, 0),
+                                 nir_iadd(b, nir_channel(b, old_index, 1),
+                                             offset),
+                                 nir_channel(b, old_index, 2),
+                                 nir_ssa_undef(b, 1, 32));
+      } else {
+         nir_ssa_def *base = nir_unpack_64_2x32_split_x(b, old_index);
+         nir_ssa_def *arr_idx = nir_unpack_64_2x32_split_y(b, old_index);
+         new_index = nir_pack_64_2x32_split(b, base, nir_iadd(b, arr_idx, offset));
+      }
+   } else {
+      new_index = nir_vec2(b, nir_iadd(b, nir_channel(b, old_index, 0), offset),
+                              nir_ssa_undef(b, 1, 32));
+   }
 
    assert(intrin->dest.is_ssa);
    nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(new_index));
@@ -519,6 +570,8 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
       map->surface_count++;
    }
 
+   bool have_dynamic_buffers = false;
+
    for (uint32_t set = 0; set < layout->num_sets; set++) {
       struct anv_descriptor_set_layout *set_layout = layout->set[set].layout;
 
@@ -530,6 +583,9 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
 
          if (binding->array_size == 0)
             continue;
+
+         if (binding->dynamic_offset_index >= 0)
+            have_dynamic_buffers = true;
 
          if (binding->data & ANV_DESCRIPTOR_SURFACE_STATE) {
             state.set[set].surface_offsets[b] = map->surface_count;
@@ -565,6 +621,16 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
             }
          }
       }
+   }
+
+   if (have_dynamic_buffers) {
+      state.dynamic_offset_uniform_start = shader->num_uniforms;
+      uint32_t *param = brw_stage_prog_data_add_params(prog_data,
+                                                       MAX_DYNAMIC_BUFFERS);
+      for (unsigned i = 0; i < MAX_DYNAMIC_BUFFERS; i++)
+         param[i] = ANV_PARAM_DYN_OFFSET(i);
+      shader->num_uniforms += MAX_DYNAMIC_BUFFERS * 4;
+      assert(shader->num_uniforms == prog_data->nr_params * 4);
    }
 
    nir_foreach_variable(var, &shader->uniforms) {
