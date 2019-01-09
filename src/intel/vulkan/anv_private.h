@@ -1419,10 +1419,17 @@ struct anv_vue_header {
 unsigned anv_descriptor_size(const struct anv_physical_device *device,
                              VkDescriptorType type);
 
+struct anv_address_descriptor {
+   uint64_t address;
+   uint32_t range;
+   uint32_t zero;
+};
+
 enum anv_descriptor_data {
    ANV_DESCRIPTOR_SURFACE_STATE  = (1 << 0),
    ANV_DESCRIPTOR_SAMPLER_STATE  = (1 << 1),
    ANV_DESCRIPTOR_IMAGE_PARAM    = (1 << 2),
+   ANV_DESCRIPTOR_ADDRESS        = (1 << 3),
 };
 
 struct anv_descriptor_set_binding_layout {
@@ -1867,7 +1874,12 @@ struct anv_vertex_binding {
 };
 
 #define ANV_PARAM_PUSH(offset)         ((1 << 16) | (uint32_t)(offset))
+#define ANV_PARAM_IS_PUSH(param)       ((uint32_t)(param) >> 16 == 1)
 #define ANV_PARAM_PUSH_OFFSET(param)   ((param) & 0xffff)
+
+#define ANV_PARAM_DYN_OFFSET(offset)      ((2 << 16) | (uint32_t)(offset))
+#define ANV_PARAM_IS_DYN_OFFSET(param)    ((uint32_t)(param) >> 16 == 2)
+#define ANV_PARAM_DYN_OFFSET_IDX(param)   ((param) & 0xffff)
 
 struct anv_push_constants {
    /* Current allocated size of this push constants data structure.

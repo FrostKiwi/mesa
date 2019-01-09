@@ -82,6 +82,20 @@ set_deref_src_desc_buffer_used(struct apply_pipeline_layout_state *state,
 }
 
 static void
+add_resource_index(struct apply_pipeline_layout_state *state,
+                   nir_intrinsic_instr *intrin)
+{
+   const unsigned set = nir_intrinsic_desc_set(intrin);
+   const unsigned binding = nir_intrinsic_binding(intrin);
+   add_binding(state, set, binding);
+
+   const VkDescriptorType desc_type = nir_intrinsic_desc_type(intrin);
+   if (desc_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER ||
+       desc_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
+      set_desc_buffer_used(state, set);
+}
+
+static void
 add_tex_src_binding(struct apply_pipeline_layout_state *state,
                     nir_tex_instr *tex, nir_tex_src_type deref_src_type)
 {
@@ -102,8 +116,7 @@ get_used_bindings_block(nir_block *block,
          nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
          switch (intrin->intrinsic) {
          case nir_intrinsic_vulkan_resource_index:
-            add_binding(state, nir_intrinsic_desc_set(intrin),
-                        nir_intrinsic_binding(intrin));
+            add_resource_index(state, intrin);
             break;
 
          case nir_intrinsic_image_deref_load:

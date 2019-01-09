@@ -50,6 +50,11 @@ anv_descriptor_size(const struct anv_physical_device *device,
         type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER))
       size += BRW_IMAGE_PARAM_SIZE * 4;
 
+   if (device->info.gen >= 8 && device->use_softpin &&
+       (type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER ||
+        type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC))
+      size += sizeof(struct anv_address_descriptor);
+
    return size;
 }
 
@@ -106,6 +111,7 @@ VkResult anv_CreateDescriptorSetLayout(
     VkDescriptorSetLayout*                      pSetLayout)
 {
    ANV_FROM_HANDLE(anv_device, device, _device);
+   struct anv_physical_device *pdevice = &device->instance->physicalDevice;
 
    assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
 
@@ -243,6 +249,19 @@ VkResult anv_CreateDescriptorSetLayout(
          if (device->info.gen <= 8) {
             set_layout->binding[b].data |= ANV_DESCRIPTOR_IMAGE_PARAM;
             descriptor_buffer_size += BRW_IMAGE_PARAM_SIZE * 4 *
+                                      binding->descriptorCount;
+         }
+         break;
+      default:
+         break;
+      }
+
+      switch (binding->descriptorType) {
+      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+         if (device->info.gen >= 8 && pdevice->use_softpin) {
+            set_layout->binding[b].data |= ANV_DESCRIPTOR_ADDRESS;
+            descriptor_buffer_size += sizeof(struct anv_address_descriptor) *
                                       binding->descriptorCount;
          }
          break;
@@ -929,6 +948,9 @@ anv_descriptor_set_write_buffer(struct anv_device *device,
 
    assert(type == bind_layout->type);
 
+   struct anv_address bind_addr = anv_address_add(buffer->address, offset);
+   uint64_t bind_range = anv_buffer_get_range(buffer, offset, range);
+
    if (type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
        type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC) {
       *desc = (struct anv_descriptor) {
@@ -942,8 +964,8 @@ anv_descriptor_set_write_buffer(struct anv_device *device,
          &set->buffer_views[bind_layout->buffer_index + element];
 
       bview->format = anv_isl_format_for_descriptor_type(type);
-      bview->range = anv_buffer_get_range(buffer, offset, range);
-      bview->address = anv_address_add(buffer->address, offset);
+      bview->range = bind_range;
+      bview->address = bind_addr;
 
       /* If we're writing descriptors through a push command, we need to
        * allocate the surface state from the command buffer. Otherwise it will
@@ -953,13 +975,24 @@ anv_descriptor_set_write_buffer(struct anv_device *device,
          bview->surface_state = anv_state_stream_alloc(alloc_stream, 64, 64);
 
       anv_fill_buffer_surface_state(device, bview->surface_state,
-                                    bview->format,
-                                    bview->address, bview->range, 1);
+                                    bview->format, bind_addr, bind_range, 1);
 
       *desc = (struct anv_descriptor) {
          .type = type,
          .buffer_view = bview,
       };
+   }
+
+   if (bind_layout->data & ANV_DESCRIPTOR_ADDRESS) {
+      const unsigned descriptor_size =
+         anv_descriptor_size(&device->instance->physicalDevice, type);
+      void *desc_map = set->desc_mem.map + bind_layout->descriptor_offset +
+                       element * descriptor_size;
+      struct anv_address_descriptor desc = {
+         .address = anv_address_physical(bind_addr),
+         .range = bind_range,
+      };
+      memcpy(desc_map, &desc, sizeof(desc));
    }
 }
 
