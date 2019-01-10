@@ -97,6 +97,19 @@ vk_desc_type_for_mode(struct vtn_builder *b, enum vtn_variable_mode mode)
    }
 }
 
+static const struct glsl_type *
+vtn_ptr_type_for_mode(struct vtn_builder *b, enum vtn_variable_mode mode)
+{
+   switch (mode) {
+   case vtn_variable_mode_ubo:
+      return b->options->ubo_ptr_type;
+   case vtn_variable_mode_ssbo:
+      return b->options->ssbo_ptr_type;
+   default:
+      vtn_fail("Invalid mode for vulkan_resource_index");
+   }
+}
+
 static nir_ssa_def *
 vtn_variable_resource_index(struct vtn_builder *b, struct vtn_variable *var,
                             nir_ssa_def *desc_array_index)
@@ -114,7 +127,11 @@ vtn_variable_resource_index(struct vtn_builder *b, struct vtn_variable *var,
    nir_intrinsic_set_binding(instr, var->binding);
    nir_intrinsic_set_desc_type(instr, vk_desc_type_for_mode(b, var->mode));
 
-   nir_ssa_dest_init(&instr->instr, &instr->dest, 1, 32, NULL);
+   const struct glsl_type *ptr_type = vtn_ptr_type_for_mode(b, var->mode);
+
+   instr->num_components = glsl_get_vector_elements(ptr_type);
+   nir_ssa_dest_init(&instr->instr, &instr->dest, instr->num_components,
+                     glsl_get_bit_size(ptr_type), NULL);
    nir_builder_instr_insert(&b->nb, &instr->instr);
 
    return &instr->dest.ssa;
@@ -131,7 +148,11 @@ vtn_resource_reindex(struct vtn_builder *b, enum vtn_variable_mode mode,
    instr->src[1] = nir_src_for_ssa(offset_index);
    nir_intrinsic_set_desc_type(instr, vk_desc_type_for_mode(b, mode));
 
-   nir_ssa_dest_init(&instr->instr, &instr->dest, 1, 32, NULL);
+   const struct glsl_type *ptr_type = vtn_ptr_type_for_mode(b, mode);
+
+   instr->num_components = glsl_get_vector_elements(ptr_type);
+   nir_ssa_dest_init(&instr->instr, &instr->dest, instr->num_components,
+                     glsl_get_bit_size(ptr_type), NULL);
    nir_builder_instr_insert(&b->nb, &instr->instr);
 
    return &instr->dest.ssa;
@@ -1748,10 +1769,6 @@ vtn_pointer_to_ssa(struct vtn_builder *b, struct vtn_pointer *ptr)
    } else {
       if (vtn_pointer_is_external_block(b, ptr) &&
           vtn_type_contains_block(b, ptr->type)) {
-         const unsigned bit_size = glsl_get_bit_size(ptr->ptr_type->type);
-         const unsigned num_components =
-            glsl_get_vector_elements(ptr->ptr_type->type);
-
          /* In this case, we're looking for a block index and not an actual
           * deref.
           */
@@ -1767,13 +1784,7 @@ vtn_pointer_to_ssa(struct vtn_builder *b, struct vtn_pointer *ptr)
             ptr = vtn_nir_deref_pointer_dereference(b, ptr, &chain);
          }
 
-         /* A block index is just a 32-bit value but the pointer has some
-          * other dimensionality.  Cram it in there and we'll unpack it later
-          * in vtn_pointer_from_ssa.
-          */
-         const unsigned swiz[4] = { 0, };
-         return nir_swizzle(&b->nb, nir_u2u(&b->nb, ptr->block_index, bit_size),
-                            swiz, num_components, false);
+         return ptr->block_index;
       } else {
          return &vtn_pointer_to_deref(b, ptr)->dest.ssa;
       }
@@ -1819,11 +1830,10 @@ vtn_pointer_from_ssa(struct vtn_builder *b, nir_ssa_def *ssa,
                                            glsl_get_bare_type(deref_type), 0);
       } else if (vtn_type_contains_block(b, ptr->type)) {
          /* This is a pointer to somewhere in an array of blocks, not a
-          * pointer to somewhere inside the block.  We squashed it into a
-          * random vector type before so just pick off the first channel and
-          * cast it back to 32 bits.
+          * pointer to somewhere inside the block.  Set the block index
+          * instead of making a cast.
           */
-         ptr->block_index = nir_u2u32(&b->nb, nir_channel(&b->nb, ssa, 0));
+         ptr->block_index = ssa;
       } else {
          /* This is a pointer to something internal or a pointer inside a
           * block.  It's just a regular cast.
