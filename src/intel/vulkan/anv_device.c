@@ -999,6 +999,14 @@ void anv_GetPhysicalDeviceFeatures2(
          break;
       }
 
+      case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR: {
+         VkPhysicalDeviceShaderAtomicInt64FeaturesKHR *features = (void *)ext;
+         features->shaderBufferInt64Atomics =
+            pdevice->info.gen >= 9 && pdevice->use_softpin;
+         features->shaderSharedInt64Atomics = VK_FALSE;
+         break;
+      }
+
       case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETER_FEATURES: {
          VkPhysicalDeviceShaderDrawParameterFeatures *features = (void *)ext;
          features->shaderDrawParameters = true;
