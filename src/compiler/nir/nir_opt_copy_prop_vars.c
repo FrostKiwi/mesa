@@ -409,25 +409,25 @@ apply_barrier_for_modes(struct util_dynarray *copies,
 }
 
 static void
-store_to_entry(struct copy_prop_var_state *state, struct copy_entry *entry,
-               const struct value *value, unsigned write_mask)
+value_set_from_value(struct value *value, const struct value *from,
+                     unsigned write_mask)
 {
-   if (value->is_ssa) {
-      /* Clear src if it was being used as non-SSA. */
-      if (!entry->src.is_ssa)
-         memset(&entry->src.ssa, 0, sizeof(entry->src.ssa));
-      entry->src.is_ssa = true;
+   if (from->is_ssa) {
+      /* Clear value if it was being used as non-SSA. */
+      if (!value->is_ssa)
+         memset(&value->ssa, 0, sizeof(value->ssa));
+      value->is_ssa = true;
       /* Only overwrite the written components */
       for (unsigned i = 0; i < 4; i++) {
          if (write_mask & (1 << i)) {
-            entry->src.ssa.def[i] = value->ssa.def[i];
-            entry->src.ssa.component[i] = value->ssa.component[i];
+            value->ssa.def[i] = from->ssa.def[i];
+            value->ssa.component[i] = from->ssa.component[i];
          }
       }
    } else {
       /* Non-ssa stores always write everything */
-      entry->src.is_ssa = false;
-      entry->src.deref = value->deref;
+      value->is_ssa = false;
+      value->deref = from->deref;
    }
 }
 
@@ -857,9 +857,8 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
                value_set_one_ssa_component(&value, &intrin->dest.ssa, index);
             }
 
-            struct copy_entry *store_entry =
-               get_entry_for_deref(copies, vector);
-            store_to_entry(state, store_entry, &value, 1 << index);
+            struct copy_entry *entry = get_entry_for_deref(copies, vector);
+            value_set_from_value(&entry->src, &value, 1 << index);
 
          } else {
             struct copy_entry *src_entry =
@@ -900,20 +899,13 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
                                         intrin->num_components);
             }
 
-            /* Now that we have a value, we're going to store it back so that we
-             * have the right value next time we come looking for it.  In order
-             * to do this, we need an exact match, not just something that
-             * contains what we're looking for.
+            /* Now that we have a value, store it back so that we have the
+             * right value next time.  Use an exact match -- creating one if
+             * needed, not just something that contains it.
              */
-            struct copy_entry *store_entry = get_entry_for_deref(copies, src);
-
-            /* Set up a store to this entry with the value of the load.  This way
-             * we can potentially remove subsequent loads.  However, we use a
-             * NULL instruction so we don't try and delete the load on a
-             * subsequent store.
-             */
-            store_to_entry(state, store_entry, &value,
-                           ((1 << intrin->num_components) - 1));
+            struct copy_entry *entry = get_entry_for_deref(copies, src);
+            value_set_from_value(&entry->src, &value,
+                                 (1 << intrin->num_components) - 1);
          }
 
          break;
@@ -955,7 +947,7 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
                unsigned wrmask = 1 << index;
                struct copy_entry *entry =
                   get_entry_and_kill_aliases(copies, vector, wrmask);
-               store_to_entry(state, entry, &value, wrmask);
+               value_set_from_value(&entry->src, &value, wrmask);
             }
 
          } else {
@@ -976,7 +968,7 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
                                         intrin->num_components);
                struct copy_entry *entry =
                   get_entry_and_kill_aliases(copies, dst, wrmask);
-               store_to_entry(state, entry, &value, wrmask);
+               value_set_from_value(&entry->src, &value, wrmask);
             }
          }
 
@@ -1033,7 +1025,7 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
 
          struct copy_entry *dst_entry =
             get_entry_and_kill_aliases(copies, dst, 0xf);
-         store_to_entry(state, dst_entry, &value, 0xf);
+         value_set_from_value(&dst_entry->src, &value, 0xf);
          break;
       }
 
