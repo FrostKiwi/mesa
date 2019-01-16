@@ -2031,7 +2031,8 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
       var->var->data.mode = nir_mode;
       var->var->data.patch = var->patch;
 
-      if (glsl_type_is_struct(interface_type->type)) {
+      if (interface_type->base_type == vtn_base_type_struct &&
+          interface_type->block) {
          /* It's a struct.  Set it up as per-member. */
          var->var->num_members = glsl_get_length(interface_type->type);
          var->var->members = rzalloc_array(var->var, struct nir_variable_data,
