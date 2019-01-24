@@ -4429,6 +4429,9 @@ nir_variable_is_in_block(const nir_variable *var)
    return nir_variable_is_in_ubo(var) || nir_variable_is_in_ssbo(var);
 }
 
+nir_shader *
+nir_shader_from_string(const char *shader, const nir_shader_compiler_options *options);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
