@@ -220,6 +220,7 @@ files_libnir = files(
   'nir_search_helpers.h',
   'nir_serialize.c',
   'nir_serialize.h',
+  'nir_shader_from_string.c',
   'nir_split_per_member_structs.c',
   'nir_split_var_copies.c',
   'nir_split_vars.c',
@@ -297,6 +298,20 @@ if with_tests
     ),
     suite : ['compiler', 'nir'],
   )
+
+  if host_machine.system() != 'windows'
+    test(
+       'nir_shader_from_string_tests',
+       executable(
+         'nir_shader_from_string_test',
+         files('tests/shader_from_string_tests.cpp'),
+         cpp_args : [cpp_vis_args, cpp_msvc_compat_args],
+         include_directories : [inc_common],
+         dependencies : [dep_thread, idep_gtest, idep_nir, idep_mesautil],
+       ),
+       suite : ['compiler', 'nir'],
+    )
+  endif
 
   test(
     'nir_vars',
