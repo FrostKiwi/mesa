@@ -736,8 +736,9 @@ dest(FILE *file, const struct gen_device_info *devinfo, const brw_inst *inst)
       if (brw_inst_dst_address_mode(devinfo, inst) == BRW_ADDRESS_DIRECT) {
          err |= reg(file, brw_inst_send_dst_reg_file(devinfo, inst),
                     brw_inst_dst_da_reg_nr(devinfo, inst));
-         if (brw_inst_dst_da16_subreg_nr(devinfo, inst))
-            format(file, ".1");
+         unsigned subreg_nr = brw_inst_dst_da16_subreg_nr(devinfo, inst);
+         if (subreg_nr)
+            format(file, ".%u", subreg_nr);
          string(file, brw_reg_type_to_letters(type));
       } else {
          string(file, "g[a0");
