@@ -107,7 +107,7 @@ brw_set_dest(struct brw_codegen *p, brw_inst *inst, struct brw_reg dest)
       assert(!dest.negate && !dest.abs);
       brw_inst_set_dst_da_reg_nr(devinfo, inst, dest.nr);
       brw_inst_set_dst_da16_subreg_nr(devinfo, inst, dest.subnr / 16);
-      brw_inst_set_send_dst_reg_file(devinfo, inst, dest.file & 1);
+      brw_inst_set_send_dst_reg_file(devinfo, inst, dest.file);
    } else {
       brw_inst_set_dst_file_type(devinfo, inst, dest.file, dest.type);
       brw_inst_set_dst_address_mode(devinfo, inst, dest.address_mode);
@@ -317,7 +317,7 @@ brw_set_src1(struct brw_codegen *p, brw_inst *inst, struct brw_reg reg)
              reg.vstride == reg.width + 1);
       assert(!reg.negate && !reg.abs);
       brw_inst_set_send_src1_reg_nr(devinfo, inst, reg.nr);
-      brw_inst_set_send_src1_reg_file(devinfo, inst, reg.file & 1);
+      brw_inst_set_send_src1_reg_file(devinfo, inst, reg.file);
    } else {
       /* From the IVB PRM Vol. 4, Pt. 3, Section 3.3.3.5:
        *
