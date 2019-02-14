@@ -512,10 +512,8 @@ nir_replace_instr(nir_builder *build, nir_alu_instr *instr,
                   const nir_search_expression *search,
                   const nir_search_value *replace)
 {
-   uint8_t swizzle[NIR_MAX_VEC_COMPONENTS] = { 0 };
-
-   for (unsigned i = 0; i < instr->dest.dest.ssa.num_components; ++i)
-      swizzle[i] = i;
+   uint8_t swizzle[] = { 0, 1, 2, 3 };
+   STATIC_ASSERT(ARRAY_SIZE(swizzle) == NIR_MAX_VEC_COMPONENTS);
 
    assert(instr->dest.dest.is_ssa);
 
