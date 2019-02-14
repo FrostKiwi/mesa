@@ -220,13 +220,19 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
       return false;
 
    switch (value->type) {
-   case nir_search_value_expression:
+   case nir_search_value_expression: {
       if (instr->src[src].src.ssa->parent_instr->type != nir_instr_type_alu)
          return false;
 
-      return match_expression(nir_search_value_as_expression(value),
-                              nir_instr_as_alu(instr->src[src].src.ssa->parent_instr),
-                              num_components, new_swizzle, state);
+      const nir_search_expression *expr = nir_search_value_as_expression(value);
+      nir_alu_instr *alu =
+         nir_instr_as_alu(instr->src[src].src.ssa->parent_instr);
+
+      if (!nir_op_matches_search_op(alu->op, expr->opcode))
+         return false;
+
+      return match_expression(expr, alu, num_components, new_swizzle, state);
+   }
 
    case nir_search_value_variable: {
       nir_search_variable *var = nir_search_value_as_variable(value);
@@ -317,10 +323,12 @@ match_expression(const nir_search_expression *expr, nir_alu_instr *instr,
                  unsigned num_components, const uint8_t *swizzle,
                  struct match_state *state)
 {
-   if (expr->cond && !expr->cond(instr))
-      return false;
+   /* This function assumes someone has already verified that the opcodes
+    * at least match.
+    */
+   assert(nir_op_matches_search_op(instr->op, expr->opcode));
 
-   if (!nir_op_matches_search_op(instr->op, expr->opcode))
+   if (expr->cond && !expr->cond(instr))
       return false;
 
    assert(instr->dest.dest.is_ssa);
