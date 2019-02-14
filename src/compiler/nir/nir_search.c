@@ -186,6 +186,23 @@ nir_op_for_search_op(uint16_t sop, unsigned bit_size)
 #undef RET_ICONV_CASE
 }
 
+static inline void
+adjust_swizzle_for_alu_src(nir_alu_instr *instr, unsigned src,
+                           const uint8_t *swizzle,
+                           unsigned *num_components, uint8_t *new_swizzle)
+{
+   /* If the source is an explicitly sized source, then we need to reset
+    * both the number of components and the swizzle.
+    */
+   if (nir_op_infos[instr->op].input_sizes[src] != 0) {
+      *num_components = nir_op_infos[instr->op].input_sizes[src];
+      swizzle = identity_swizzle;
+   }
+
+   for (unsigned i = 0; i < *num_components; ++i)
+      new_swizzle[i] = instr->src[src].swizzle[swizzle[i]];
+}
+
 static bool
 match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
             unsigned num_components, const uint8_t *swizzle,
@@ -202,17 +219,6 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
     */
    if (!instr->src[src].src.is_ssa)
       return false;
-
-   /* If the source is an explicitly sized source, then we need to reset
-    * both the number of components and the swizzle.
-    */
-   if (nir_op_infos[instr->op].input_sizes[src] != 0) {
-      num_components = nir_op_infos[instr->op].input_sizes[src];
-      swizzle = identity_swizzle;
-   }
-
-   for (unsigned i = 0; i < num_components; ++i)
-      new_swizzle[i] = instr->src[src].swizzle[swizzle[i]];
 
    /* If the value has a specific bit size and it doesn't match, bail */
    if (value->bit_size > 0 &&
@@ -231,6 +237,9 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
       if (!nir_op_matches_search_op(alu->op, expr->opcode))
          return false;
 
+      adjust_swizzle_for_alu_src(instr, src, swizzle,
+                                 &num_components, new_swizzle);
+
       return match_expression(expr, alu, num_components, new_swizzle, state);
    }
 
@@ -241,6 +250,9 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
       if (state->variables_seen & (1 << var->variable)) {
          if (state->variables[var->variable].src.ssa != instr->src[src].src.ssa)
             return false;
+
+         adjust_swizzle_for_alu_src(instr, src, swizzle,
+                                    &num_components, new_swizzle);
 
          assert(!instr->src[src].abs && !instr->src[src].negate);
 
@@ -254,6 +266,9 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
          if (var->is_constant &&
              instr->src[src].src.ssa->parent_instr->type != nir_instr_type_load_const)
             return false;
+
+         adjust_swizzle_for_alu_src(instr, src, swizzle,
+                                    &num_components, new_swizzle);
 
          if (var->cond && !var->cond(instr, src, num_components, new_swizzle))
             return false;
@@ -283,6 +298,9 @@ match_value(const nir_search_value *value, nir_alu_instr *instr, unsigned src,
 
       if (!nir_src_is_const(instr->src[src].src))
          return false;
+
+      adjust_swizzle_for_alu_src(instr, src, swizzle,
+                                 &num_components, new_swizzle);
 
       switch (const_val->type) {
       case nir_type_float:
