@@ -68,24 +68,23 @@ void brw_shader_gather_info(nir_shader *nir, struct gl_program *prog);
 
 void brw_setup_tex_for_precompile(const struct gen_device_info *devinfo,
                                   struct brw_sampler_prog_key_data *tex,
-                                  struct gl_program *prog);
+                                  const struct gl_program *prog);
 
-void brw_populate_sampler_prog_key_data(struct gl_context *ctx,
-				        const struct gl_program *prog,
-				        struct brw_sampler_prog_key_data *key);
-bool brw_debug_recompile_sampler_key(struct brw_context *brw,
-                                     const struct brw_sampler_prog_key_data *old_key,
-                                     const struct brw_sampler_prog_key_data *key);
+void brw_populate_stage_prog_key(struct gl_context *ctx,
+                                 const struct brw_program *prog,
+                                 struct brw_base_prog_key *key);
+void brw_populate_default_stage_prog_key(const struct gen_device_info *devinfo,
+                                         const struct brw_program *prog,
+                                         struct brw_base_prog_key *key);
+bool brw_debug_recompile_stage_prog_key(struct brw_context *brw,
+                                        const struct brw_base_prog_key *old_key,
+                                        const struct brw_base_prog_key *key);
 
 uint32_t
 brw_assign_common_binding_table_offsets(const struct gen_device_info *devinfo,
                                         const struct gl_program *prog,
                                         struct brw_stage_prog_data *stage_prog_data,
                                         uint32_t next_binding_table_offset);
-
-void
-brw_prog_key_set_id(union brw_any_prog_key *key, gl_shader_stage stage,
-                    unsigned id);
 
 void
 brw_populate_default_key(const struct gen_device_info *devinfo,

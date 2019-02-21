@@ -304,12 +304,19 @@ populate_sampler_prog_key(const struct gen_device_info *devinfo,
 }
 
 static void
+populate_stage_prog_key(const struct gen_device_info *devinfo,
+                        struct brw_base_prog_key *key)
+{
+   populate_sampler_prog_key(devinfo, &key->tex);
+}
+
+static void
 populate_vs_prog_key(const struct gen_device_info *devinfo,
                      struct brw_vs_prog_key *key)
 {
    memset(key, 0, sizeof(*key));
 
-   populate_sampler_prog_key(devinfo, &key->tex);
+   populate_stage_prog_key(devinfo, &key->base);
 
    /* XXX: Handle vertex input work-arounds */
 
@@ -323,7 +330,7 @@ populate_tcs_prog_key(const struct gen_device_info *devinfo,
 {
    memset(key, 0, sizeof(*key));
 
-   populate_sampler_prog_key(devinfo, &key->tex);
+   populate_stage_prog_key(devinfo, &key->base);
 
    key->input_vertices = input_vertices;
 }
@@ -334,7 +341,7 @@ populate_tes_prog_key(const struct gen_device_info *devinfo,
 {
    memset(key, 0, sizeof(*key));
 
-   populate_sampler_prog_key(devinfo, &key->tex);
+   populate_stage_prog_key(devinfo, &key->base);
 }
 
 static void
@@ -343,7 +350,7 @@ populate_gs_prog_key(const struct gen_device_info *devinfo,
 {
    memset(key, 0, sizeof(*key));
 
-   populate_sampler_prog_key(devinfo, &key->tex);
+   populate_stage_prog_key(devinfo, &key->base);
 }
 
 static void
@@ -354,7 +361,7 @@ populate_wm_prog_key(const struct gen_device_info *devinfo,
 {
    memset(key, 0, sizeof(*key));
 
-   populate_sampler_prog_key(devinfo, &key->tex);
+   populate_stage_prog_key(devinfo, &key->base);
 
    /* We set this to 0 here and set to the actual value before we call
     * brw_compile_fs.
@@ -398,7 +405,7 @@ populate_cs_prog_key(const struct gen_device_info *devinfo,
 {
    memset(key, 0, sizeof(*key));
 
-   populate_sampler_prog_key(devinfo, &key->tex);
+   populate_stage_prog_key(devinfo, &key->base);
 }
 
 struct anv_pipeline_stage {

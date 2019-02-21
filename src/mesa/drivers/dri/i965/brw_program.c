@@ -808,7 +808,7 @@ brw_dump_arb_asm(const char *stage, struct gl_program *prog)
 void
 brw_setup_tex_for_precompile(const struct gen_device_info *devinfo,
                              struct brw_sampler_prog_key_data *tex,
-                             struct gl_program *prog)
+                             const struct gl_program *prog)
 {
    const bool has_shader_channel_select = devinfo->is_haswell || devinfo->gen >= 8;
    unsigned sampler_count = util_last_bit(prog->SamplersUsed);
@@ -906,22 +906,6 @@ brw_assign_common_binding_table_offsets(const struct gen_device_info *devinfo,
 
    assert(next_binding_table_offset <= BRW_MAX_SURFACES);
    return next_binding_table_offset;
-}
-
-void
-brw_prog_key_set_id(union brw_any_prog_key *key, gl_shader_stage stage,
-                    unsigned id)
-{
-   static const unsigned stage_offsets[] = {
-      offsetof(struct brw_vs_prog_key, program_string_id),
-      offsetof(struct brw_tcs_prog_key, program_string_id),
-      offsetof(struct brw_tes_prog_key, program_string_id),
-      offsetof(struct brw_gs_prog_key, program_string_id),
-      offsetof(struct brw_wm_prog_key, program_string_id),
-      offsetof(struct brw_cs_prog_key, program_string_id),
-   };
-   assert((int)stage >= 0 && stage < ARRAY_SIZE(stage_offsets));
-   *(unsigned*)((uint8_t*)key + stage_offsets[stage]) = id;
 }
 
 void

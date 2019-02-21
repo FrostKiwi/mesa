@@ -77,12 +77,14 @@ brw_wm_debug_recompile(struct brw_context *brw, struct gl_program *prog,
    bool found = false;
    const struct brw_wm_prog_key *old_key =
       brw_find_previous_compile(&brw->cache, BRW_CACHE_FS_PROG,
-                                key->program_string_id);
+                                key->base.program_string_id);
 
    if (!old_key) {
       perf_debug("  Didn't find previous compile in the shader cache for debug\n");
       return;
    }
+
+   found |= brw_debug_recompile_stage_prog_key(brw, &old_key->base, &key->base);
 
    found |= key_debug(brw, "alphatest, computed depth, depth test, or "
                       "depth write",
@@ -121,8 +123,6 @@ brw_wm_debug_recompile(struct brw_context *brw, struct gl_program *prog,
                       old_key->alpha_test_func, key->alpha_test_func);
    found |= key_debug(brw, "mrt alpha test reference value",
                       old_key->alpha_test_ref, key->alpha_test_ref);
-
-   found |= brw_debug_recompile_sampler_key(brw, &old_key->tex, &key->tex);
 
    if (!found) {
       perf_debug("  Something else\n");
@@ -229,7 +229,7 @@ brw_codegen_wm_prog(struct brw_context *brw,
    return true;
 }
 
-bool
+static bool
 brw_debug_recompile_sampler_key(struct brw_context *brw,
                                 const struct brw_sampler_prog_key_data *old_key,
                                 const struct brw_sampler_prog_key_data *key)
@@ -301,7 +301,7 @@ gen6_gather_workaround(GLenum internalformat)
    }
 }
 
-void
+static void
 brw_populate_sampler_prog_key_data(struct gl_context *ctx,
                                    const struct gl_program *prog,
                                    struct brw_sampler_prog_key_data *key)
@@ -441,6 +441,32 @@ brw_populate_sampler_prog_key_data(struct gl_context *ctx,
    }
 }
 
+void
+brw_populate_stage_prog_key(struct gl_context *ctx,
+                            const struct brw_program *prog,
+                            struct brw_base_prog_key *key)
+{
+   key->program_string_id = prog->id;
+   brw_populate_sampler_prog_key_data(ctx, &prog->program, &key->tex);
+}
+
+void
+brw_populate_default_stage_prog_key(const struct gen_device_info *devinfo,
+                                    const struct brw_program *prog,
+                                    struct brw_base_prog_key *key)
+{
+   key->program_string_id = prog->id;
+   brw_setup_tex_for_precompile(devinfo, &key->tex, &prog->program);
+}
+
+bool
+brw_debug_recompile_stage_prog_key(struct brw_context *brw,
+                                   const struct brw_base_prog_key *old_key,
+                                   const struct brw_base_prog_key *key)
+{
+   return brw_debug_recompile_sampler_key(brw, &old_key->tex, &key->tex);
+}
+
 static bool
 brw_wm_state_dirty(const struct brw_context *brw)
 {
@@ -554,7 +580,7 @@ brw_wm_populate_key(struct brw_context *brw, struct brw_wm_prog_key *key)
    key->clamp_fragment_color = ctx->Color._ClampFragmentColor;
 
    /* _NEW_TEXTURE */
-   brw_populate_sampler_prog_key_data(ctx, prog, &key->tex);
+   brw_populate_stage_prog_key(ctx, fp, &key->base);
 
    /* _NEW_BUFFERS */
    key->nr_color_regions = ctx->DrawBuffer->_NumColorDrawBuffers;
@@ -597,9 +623,6 @@ brw_wm_populate_key(struct brw_context *brw, struct brw_wm_prog_key *key)
       key->alpha_test_ref = ctx->Color.AlphaRef;
    }
 
-   /* The unique fragment program ID */
-   key->program_string_id = fp->id;
-
    /* Whether reads from the framebuffer should behave coherently. */
    key->coherent_fb_fetch = ctx->Extensions.EXT_shader_framebuffer_fetch;
 }
@@ -625,7 +648,7 @@ brw_upload_wm_prog(struct brw_context *brw)
       return;
 
    fp = (struct brw_program *) brw->programs[MESA_SHADER_FRAGMENT];
-   fp->id = key.program_string_id;
+   fp->id = key.base.program_string_id;
 
    MAYBE_UNUSED bool success = brw_codegen_wm_prog(brw, fp, &key,
                                                    &brw->vue_map_geom_out);
@@ -638,6 +661,9 @@ brw_wm_populate_default_key(const struct gen_device_info *devinfo,
                             struct gl_program *prog)
 {
    memset(key, 0, sizeof(*key));
+
+   brw_populate_default_stage_prog_key(devinfo, brw_program(prog),
+                                       &key->base);
 
    uint64_t outputs_written = prog->info.outputs_written;
 
@@ -658,14 +684,10 @@ brw_wm_populate_default_key(const struct gen_device_info *devinfo,
       key->input_slots_valid = prog->info.inputs_read | VARYING_BIT_POS;
    }
 
-   brw_setup_tex_for_precompile(devinfo, &key->tex, prog);
-
    key->nr_color_regions = util_bitcount64(outputs_written &
          ~(BITFIELD64_BIT(FRAG_RESULT_DEPTH) |
            BITFIELD64_BIT(FRAG_RESULT_STENCIL) |
            BITFIELD64_BIT(FRAG_RESULT_SAMPLE_MASK)));
-
-   key->program_string_id = brw_program(prog)->id;
 
    /* Whether reads from the framebuffer should behave coherently. */
    key->coherent_fb_fetch = devinfo->gen >= 9;

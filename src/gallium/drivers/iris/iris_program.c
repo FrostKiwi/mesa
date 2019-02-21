@@ -42,11 +42,11 @@
 #include "intel/compiler/brw_nir.h"
 #include "iris_context.h"
 
-#define KEY_INIT_NO_ID(gen)                       \
-   .tex.swizzles[0 ... MAX_SAMPLERS - 1] = 0x688, \
-   .tex.compressed_multisample_layout_mask = ~0,  \
-   .tex.msaa_16 = (gen >= 9 ? ~0 : 0)
-#define KEY_INIT(gen) .program_string_id = ish->program_id, KEY_INIT_NO_ID(gen)
+#define KEY_INIT_NO_ID(gen)                              \
+   .base.tex.swizzles[0 ... MAX_SAMPLERS - 1] = 0x688,   \
+   .base.tex.compressed_multisample_layout_mask = ~0,    \
+   .base.tex.msaa_16 = (gen >= 9 ? ~0 : 0)
+#define KEY_INIT(gen) .base.program_string_id = ish->program_id, KEY_INIT_NO_ID(gen)
 
 static unsigned
 get_new_program_id(struct iris_screen *screen)
@@ -750,7 +750,7 @@ iris_update_compiled_tcs(struct iris_context *ice)
       iris_get_shader_info(ice, MESA_SHADER_TESS_EVAL);
    struct brw_tcs_prog_key key = {
       KEY_INIT_NO_ID(devinfo->gen),
-      .program_string_id = tcs ? tcs->program_id : 0,
+      .base.program_string_id = tcs ? tcs->program_id : 0,
       .tes_primitive_mode = tes_info->tess.primitive_mode,
       .input_vertices = ice->state.vertices_per_patch,
    };

@@ -201,6 +201,12 @@ struct brw_sampler_prog_key_data {
    float scale_factors[32];
 };
 
+struct brw_base_prog_key {
+   unsigned program_string_id;
+
+   struct brw_sampler_prog_key_data tex;
+};
+
 /**
  * The VF can't natively handle certain types of attributes, such as GL_FIXED
  * or most 10_10_10_2 types.  These flags enable various VS workarounds to
@@ -223,7 +229,7 @@ struct brw_sampler_prog_key_data {
 
 /** The program key for Vertex Shaders. */
 struct brw_vs_prog_key {
-   unsigned program_string_id;
+   struct brw_base_prog_key base;
 
    /**
     * Per-attribute workaround flags
@@ -261,14 +267,12 @@ struct brw_vs_prog_key {
     * the VUE, even if they aren't written by the vertex shader.
     */
    uint8_t point_coord_replace;
-
-   struct brw_sampler_prog_key_data tex;
 };
 
 /** The program key for Tessellation Control Shaders. */
 struct brw_tcs_prog_key
 {
-   unsigned program_string_id;
+   struct brw_base_prog_key base;
 
    GLenum tes_primitive_mode;
 
@@ -281,30 +285,24 @@ struct brw_tcs_prog_key
    uint64_t outputs_written;
 
    bool quads_workaround;
-
-   struct brw_sampler_prog_key_data tex;
 };
 
 /** The program key for Tessellation Evaluation Shaders. */
 struct brw_tes_prog_key
 {
-   unsigned program_string_id;
+   struct brw_base_prog_key base;
 
    /** A bitfield of per-patch inputs read. */
    uint32_t patch_inputs_read;
 
    /** A bitfield of per-vertex inputs read. */
    uint64_t inputs_read;
-
-   struct brw_sampler_prog_key_data tex;
 };
 
 /** The program key for Geometry Shaders. */
 struct brw_gs_prog_key
 {
-   unsigned program_string_id;
-
-   struct brw_sampler_prog_key_data tex;
+   struct brw_base_prog_key base;
 };
 
 enum brw_sf_primitive {
@@ -392,6 +390,8 @@ enum brw_wm_aa_enable {
 
 /** The program key for Fragment/Pixel Shaders. */
 struct brw_wm_prog_key {
+   struct brw_base_prog_key base;
+
    /* Some collection of BRW_WM_IZ_* */
    uint8_t iz_lookup;
    bool stats_wm:1;
@@ -409,20 +409,17 @@ struct brw_wm_prog_key {
 
    uint8_t color_outputs_valid;
    uint64_t input_slots_valid;
-   unsigned program_string_id;
    GLenum alpha_test_func;          /* < For Gen4/5 MRT alpha test */
    float alpha_test_ref;
-
-   struct brw_sampler_prog_key_data tex;
 };
 
 struct brw_cs_prog_key {
-   uint32_t program_string_id;
-   struct brw_sampler_prog_key_data tex;
+   struct brw_base_prog_key base;
 };
 
 /* brw_any_prog_key is any of the keys that map to an API stage */
 union brw_any_prog_key {
+   struct brw_base_prog_key base;
    struct brw_vs_prog_key vs;
    struct brw_tcs_prog_key tcs;
    struct brw_tes_prog_key tes;

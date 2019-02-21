@@ -44,7 +44,7 @@ brw_tcs_debug_recompile(struct brw_context *brw, struct gl_program *prog,
    bool found = false;
    const struct brw_tcs_prog_key *old_key =
       brw_find_previous_compile(&brw->cache, BRW_CACHE_TCS_PROG,
-                                key->program_string_id);
+                                key->base.program_string_id);
 
    if (!old_key) {
       perf_debug("  Didn't find previous compile in the shader cache for "
@@ -52,6 +52,7 @@ brw_tcs_debug_recompile(struct brw_context *brw, struct gl_program *prog,
       return;
    }
 
+   found |= brw_debug_recompile_stage_prog_key(brw, &old_key->base, &key->base);
    found |= key_debug(brw, "input vertices", old_key->input_vertices,
                       key->input_vertices);
    found |= key_debug(brw, "outputs written", old_key->outputs_written,
@@ -62,7 +63,6 @@ brw_tcs_debug_recompile(struct brw_context *brw, struct gl_program *prog,
                       key->tes_primitive_mode);
    found |= key_debug(brw, "quads and equal_spacing workaround",
                       old_key->quads_workaround, key->quads_workaround);
-   found |= brw_debug_recompile_sampler_key(brw, &old_key->tex, &key->tex);
 
    if (!found) {
       perf_debug("  Something else\n");
@@ -225,10 +225,8 @@ brw_tcs_populate_key(struct brw_context *brw,
                            tep->program.info.tess.spacing == TESS_SPACING_EQUAL;
 
    if (tcp) {
-      key->program_string_id = tcp->id;
-
       /* _NEW_TEXTURE */
-      brw_populate_sampler_prog_key_data(&brw->ctx, &tcp->program, &key->tex);
+      brw_populate_stage_prog_key(&brw->ctx, tcp, &key->base);
    }
 }
 
@@ -262,7 +260,7 @@ brw_upload_tcs_prog(struct brw_context *brw)
 
    tcp = (struct brw_program *) brw->programs[MESA_SHADER_TESS_CTRL];
    if (tcp)
-      tcp->id = key.program_string_id;
+      tcp->id = key.base.program_string_id;
 
    MAYBE_UNUSED bool success = brw_codegen_tcs_prog(brw, tcp, tep, &key);
    assert(success);
@@ -280,8 +278,7 @@ brw_tcs_populate_default_key(const struct gen_device_info *devinfo,
 
    memset(key, 0, sizeof(*key));
 
-   key->program_string_id = btcp->id;
-   brw_setup_tex_for_precompile(devinfo, &key->tex, prog);
+   brw_populate_default_stage_prog_key(devinfo, btcp, &key->base);
 
    /* Guess that the input and output patches have the same dimensionality. */
    if (devinfo->gen < 8)
