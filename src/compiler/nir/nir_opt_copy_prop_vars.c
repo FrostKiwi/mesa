@@ -84,19 +84,6 @@ value_set_ssa_components(struct value *value, nir_ssa_def *def,
    }
 }
 
-static void
-value_set_one_ssa_component(struct value *value, nir_ssa_def *def,
-                            unsigned index)
-{
-   assert(def->num_components == 1);
-
-   if (!value->is_ssa)
-      memset(&value->ssa, 0, sizeof(value->ssa));
-   value->is_ssa = true;
-   value->ssa.def[index] = def;
-   value->ssa.component[index] = 0;
-}
-
 struct copy_entry {
    struct value src;
 
@@ -410,8 +397,11 @@ apply_barrier_for_modes(struct util_dynarray *copies,
 
 static void
 value_set_from_value(struct value *value, const struct value *from,
-                     unsigned write_mask)
+                     unsigned base_index, unsigned write_mask)
 {
+   /* We can't have non-zero indexes with non-trivial write masks */
+   assert(base_index == 0 || write_mask == 1);
+
    if (from->is_ssa) {
       /* Clear value if it was being used as non-SSA. */
       if (!value->is_ssa)
@@ -420,8 +410,8 @@ value_set_from_value(struct value *value, const struct value *from,
       /* Only overwrite the written components */
       for (unsigned i = 0; i < NIR_MAX_VEC_COMPONENTS; i++) {
          if (write_mask & (1 << i)) {
-            value->ssa.def[i] = from->ssa.def[i];
-            value->ssa.component[i] = from->ssa.component[i];
+            value->ssa.def[base_index + i] = from->ssa.def[i];
+            value->ssa.component[base_index + i] = from->ssa.component[i];
          }
       }
    } else {
@@ -429,6 +419,51 @@ value_set_from_value(struct value *value, const struct value *from,
       value->is_ssa = false;
       value->deref = from->deref;
    }
+}
+
+static bool
+is_array_deref_of_vector(nir_deref_instr *deref)
+{
+   if (deref->deref_type != nir_deref_type_array)
+      return false;
+   nir_deref_instr *parent = nir_deref_instr_parent(deref);
+   return glsl_type_is_vector(parent->type);
+}
+
+/* Try to load a single element of a vector from the copy_entry.  If the data
+ * isn't available, just let the original intrinsic do the work.
+ */
+static bool
+load_element_from_ssa_entry_value(struct copy_prop_var_state *state,
+                                  struct copy_entry *entry,
+                                  nir_builder *b, nir_intrinsic_instr *intrin,
+                                  struct value *value, unsigned index)
+{
+   const struct glsl_type *type = entry->dst->type;
+   unsigned num_components = glsl_get_vector_elements(type);
+
+   /* We don't have the element available, so let the instruction do the work. */
+   if (!entry->src.ssa.def[index])
+      return false;
+
+   b->cursor = nir_instr_remove(&intrin->instr);
+   intrin->instr.block = NULL;
+
+   assert(index < num_components);
+   assert(entry->src.ssa.component[index] <
+          entry->src.ssa.def[index]->num_components);
+   nir_ssa_def *def = nir_channel(b, entry->src.ssa.def[index],
+                                     entry->src.ssa.component[index]);
+
+   *value = (struct value) {
+      .is_ssa = true,
+      .ssa = {
+         .def = { def },
+         .component = { 0 },
+      },
+   };
+
+   return true;
 }
 
 /* Do a "load" from an SSA-based entry return it in "value" as a value with a
@@ -443,8 +478,16 @@ static bool
 load_from_ssa_entry_value(struct copy_prop_var_state *state,
                           struct copy_entry *entry,
                           nir_builder *b, nir_intrinsic_instr *intrin,
-                          struct value *value)
+                          nir_deref_instr *src, struct value *value)
 {
+   if (is_array_deref_of_vector(src)) {
+      if (!nir_src_is_const(src->arr.index))
+         return false;
+
+      return load_element_from_ssa_entry_value(state, entry, b, intrin, value,
+                                               nir_src_as_uint(src->arr.index));
+   }
+
    *value = entry->src;
    assert(value->is_ssa);
 
@@ -518,33 +561,6 @@ load_from_ssa_entry_value(struct copy_prop_var_state *state,
       intrin->instr.block = NULL;
    }
 
-   return true;
-}
-
-/* Try to load a single element of a vector from the copy_entry.  If the data
- * isn't available, just let the original intrinsic do the work.
- */
-static bool
-load_element_from_ssa_entry_value(struct copy_prop_var_state *state,
-                                  struct copy_entry *entry,
-                                  nir_builder *b, nir_intrinsic_instr *intrin,
-                                  struct value *value, int index)
-{
-   /* We don't have the element available, so let the instruction do the work. */
-   if (!entry->src.ssa.def[index])
-      return false;
-
-   b->cursor = nir_instr_remove(&intrin->instr);
-   intrin->instr.block = NULL;
-
-   *value = entry->src;
-
-   /* Only create the extra vec if needed. */
-   nir_ssa_def *def = entry->src.ssa.def[index];
-   if (def->num_components != 1) {
-      value->ssa.def[index] = nir_channel(b, def, entry->src.ssa.component[index]);
-      value->ssa.component[index] = 0;
-   }
    return true;
 }
 
@@ -656,16 +672,13 @@ load_from_deref_entry_value(struct copy_prop_var_state *state,
 static bool
 try_load_from_entry(struct copy_prop_var_state *state, struct copy_entry *entry,
                     nir_builder *b, nir_intrinsic_instr *intrin,
-                    nir_deref_instr *src, struct value *value, int index)
+                    nir_deref_instr *src, struct value *value)
 {
    if (entry == NULL)
       return false;
 
    if (entry->src.is_ssa) {
-      if (index >= 0)
-         return load_element_from_ssa_entry_value(state, entry, b, intrin, value, index);
-      else
-         return load_from_ssa_entry_value(state, entry, b, intrin, value);
+      return load_from_ssa_entry_value(state, entry, b, intrin, src, value);
    } else {
       return load_from_deref_entry_value(state, entry, b, intrin, src, value);
    }
@@ -691,15 +704,6 @@ invalidate_copies_for_cf_node(struct copy_prop_var_state *state,
       nir_deref_instr *deref_written = (nir_deref_instr *)entry->key;
       kill_aliases(copies, deref_written, (uintptr_t)entry->data);
    }
-}
-
-static bool
-is_array_deref_of_vector(nir_deref_instr *deref)
-{
-   if (deref->deref_type != nir_deref_type_array)
-      return false;
-   nir_deref_instr *parent = nir_deref_instr_parent(deref);
-   return glsl_type_is_vector(parent->type);
 }
 
 static void
@@ -810,104 +814,72 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
 
          nir_deref_instr *src = nir_src_as_deref(intrin->src[0]);
 
+         int vec_index = 0;
+         nir_deref_instr *vec_src = src;
          if (is_array_deref_of_vector(src)) {
-            if (!nir_src_is_const(src->arr.index)) {
-               /* Indirects not handled yet.  This load won't invalidate
-                * existing copies, so just ignore it.
+            vec_src = nir_deref_instr_parent(src);
+            unsigned vec_comps = glsl_get_vector_elements(vec_src->type);
+
+            /* Indirects are not handled yet.  */
+            if (!nir_src_is_const(src->arr.index))
+               break;
+
+            vec_index = nir_src_as_uint(src->arr.index);
+
+            /* Loading from an invalid index yields an undef */
+            if (vec_index >= vec_comps) {
+               b->cursor = nir_instr_remove(instr);
+               nir_ssa_def *u = nir_ssa_undef(b, 1, intrin->dest.ssa.bit_size);
+               nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(u));
+               break;
+            }
+         }
+
+         struct copy_entry *src_entry =
+            lookup_entry_for_deref(copies, src, nir_derefs_a_contains_b_bit);
+         struct value value;
+         if (try_load_from_entry(state, src_entry, b, intrin, src, &value)) {
+            if (value.is_ssa) {
+               /* lookup_load has already ensured that we get a single SSA
+                * value that has all of the channels.  We just have to do the
+                * rewrite operation.  Note for array derefs of vectors, the
+                * channel 0 is used.
                 */
-               break;
-            }
-
-            assert(intrin->num_components == 1);
-
-            uint64_t index = nir_src_as_uint(src->arr.index);
-            nir_deref_instr *vector = nir_deref_instr_parent(src);
-            unsigned vector_components = glsl_get_vector_elements(vector->type);
-
-            /* Loading an invalid index gets replaced with undef. */
-            if (index >= vector_components) {
-               b->cursor = nir_after_instr(instr);
-               nir_ssa_def_rewrite_uses(
-                  &intrin->dest.ssa,
-                  nir_src_for_ssa(nir_ssa_undef(b, 1, intrin->dest.ssa.bit_size)));
-               nir_instr_remove(instr);
-               break;
-            }
-
-            struct copy_entry *src_entry =
-               lookup_entry_for_deref(copies, vector, nir_derefs_a_contains_b_bit);
-
-            struct value value = {};
-            if (try_load_from_entry(state, src_entry, b, intrin, src, &value, index)) {
-               if (value.is_ssa) {
-                  assert(value.ssa.def[index]);
-                  nir_ssa_def_rewrite_uses(&intrin->dest.ssa,
-                                           nir_src_for_ssa(value.ssa.def[index]));
-               } else {
-                  /* We're turning it into a load of a different variable */
-                  intrin->src[0] = nir_src_for_ssa(&value.deref->dest.ssa);
-
-                  /* Put it back in again. */
-                  nir_builder_instr_insert(b, instr);
-
-                  value_set_one_ssa_component(&value, &intrin->dest.ssa, index);
-               }
-               state->progress = true;
-            } else {
-               value_set_one_ssa_component(&value, &intrin->dest.ssa, index);
-            }
-
-            struct copy_entry *entry = get_entry_for_deref(copies, vector);
-            value_set_from_value(&entry->src, &value, 1 << index);
-
-         } else {
-            struct copy_entry *src_entry =
-               lookup_entry_for_deref(copies, src, nir_derefs_a_contains_b_bit);
-            struct value value;
-            if (try_load_from_entry(state, src_entry, b, intrin, src, &value, -1)) {
-               if (value.is_ssa) {
-                  /* lookup_load has already ensured that we get a single SSA
-                   * value that has all of the channels.  We just have to do the
-                   * rewrite operation.  Note for array derefs of vectors, the
-                   * channel 0 is used.
+               if (intrin->instr.block) {
+                  /* The lookup left our instruction in-place.  This means it
+                   * must have used it to vec up a bunch of different sources.
+                   * We need to be careful when rewriting uses so we don't
+                   * rewrite the vecN itself.
                    */
-                  if (intrin->instr.block) {
-                     /* The lookup left our instruction in-place.  This means it
-                      * must have used it to vec up a bunch of different sources.
-                      * We need to be careful when rewriting uses so we don't
-                      * rewrite the vecN itself.
-                      */
-                     nir_ssa_def_rewrite_uses_after(&intrin->dest.ssa,
-                                                    nir_src_for_ssa(value.ssa.def[0]),
-                                                    value.ssa.def[0]->parent_instr);
-                  } else {
-                     nir_ssa_def_rewrite_uses(&intrin->dest.ssa,
-                                              nir_src_for_ssa(value.ssa.def[0]));
-                  }
+                  nir_ssa_def_rewrite_uses_after(&intrin->dest.ssa,
+                                                 nir_src_for_ssa(value.ssa.def[0]),
+                                                 value.ssa.def[0]->parent_instr);
                } else {
-                  /* We're turning it into a load of a different variable */
-                  intrin->src[0] = nir_src_for_ssa(&value.deref->dest.ssa);
-
-                  /* Put it back in again. */
-                  nir_builder_instr_insert(b, instr);
-                  value_set_ssa_components(&value, &intrin->dest.ssa,
-                                           intrin->num_components);
+                  nir_ssa_def_rewrite_uses(&intrin->dest.ssa,
+                                           nir_src_for_ssa(value.ssa.def[0]));
                }
-               state->progress = true;
             } else {
+               /* We're turning it into a load of a different variable */
+               intrin->src[0] = nir_src_for_ssa(&value.deref->dest.ssa);
+
+               /* Put it back in again. */
+               nir_builder_instr_insert(b, instr);
                value_set_ssa_components(&value, &intrin->dest.ssa,
                                         intrin->num_components);
             }
-
-            /* Now that we have a value, store it back so that we have the
-             * right value next time.  Use an exact match -- creating one if
-             * needed, not just something that contains it.
-             */
-            struct copy_entry *entry = get_entry_for_deref(copies, src);
-            value_set_from_value(&entry->src, &value,
-                                 (1 << intrin->num_components) - 1);
+            state->progress = true;
+         } else {
+            value_set_ssa_components(&value, &intrin->dest.ssa,
+                                     intrin->num_components);
          }
 
+         /* Now that we have a value, store it back so that we have the
+          * right value next time.  Use an exact match -- creating one if
+          * needed, not just something that contains it.
+          */
+         struct copy_entry *entry = get_entry_for_deref(copies, vec_src);
+         value_set_from_value(&entry->src, &value, vec_index,
+                              (1 << intrin->num_components) - 1);
          break;
       }
 
@@ -915,63 +887,51 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
          if (debug) dump_instr(instr);
 
          nir_deref_instr *dst = nir_src_as_deref(intrin->src[0]);
+         assert(glsl_type_is_vector_or_scalar(dst->type));
 
+         int vec_index = 0;
+         nir_deref_instr *vec_dst = dst;
          if (is_array_deref_of_vector(dst)) {
-            nir_deref_instr *vector = nir_deref_instr_parent(dst);
-            unsigned vector_components = glsl_get_vector_elements(vector->type);
+            vec_dst = nir_deref_instr_parent(dst);
+            unsigned vec_comps = glsl_get_vector_elements(vec_dst->type);
 
+            /* Indirects are not handled yet.  Kill everything */
             if (!nir_src_is_const(dst->arr.index)) {
-               /* Indirects not handled yet.  Assume any aliases are invalid. */
-               kill_aliases(copies, nir_deref_instr_parent(dst),
-                            (1 << vector_components) - 1);
+               kill_aliases(copies, vec_dst, (1 << vec_comps) - 1);
                break;
             }
 
-            assert(intrin->num_components == 1);
-            assert(nir_intrinsic_write_mask(intrin) == 1);
+            vec_index = nir_src_as_uint(dst->arr.index);
 
             /* Storing to an invalid index is a no-op. */
-            uint64_t index = nir_src_as_uint(dst->arr.index);
-            if (index >= vector_components) {
+            if (vec_index >= vec_comps) {
                nir_instr_remove(instr);
                break;
             }
+         }
 
-            struct copy_entry *entry =
-               lookup_entry_for_deref(copies, vector, nir_derefs_equal_bit);
+         struct copy_entry *entry =
+            lookup_entry_for_deref(copies, dst, nir_derefs_equal_bit);
 
-            if (entry && entry->src.ssa.def[index] == intrin->src[1].ssa) {
-               /* Remove since we know the same value was previously set. */
-               nir_instr_remove(instr);
-            } else {
-               struct value value = {};
-               value_set_one_ssa_component(&value, intrin->src[1].ssa, index);
-               unsigned wrmask = 1 << index;
-               struct copy_entry *entry =
-                  get_entry_and_kill_aliases(copies, vector, wrmask);
-               value_set_from_value(&entry->src, &value, wrmask);
-            }
+         if (entry && value_equals_store_src(&entry->src, intrin)) {
+            /* We don't handle stores to indirect derefs of vectors so we can
+             * never get here in that case.
+             */
+            assert(!is_array_deref_of_vector(dst) ||
+                   nir_src_is_const(dst->arr.index));
 
+            /* If we are storing the value from a load of the same var the
+             * store is redundant so remove it.
+             */
+            nir_instr_remove(instr);
          } else {
-            assert(glsl_type_is_vector_or_scalar(dst->type));
-
+            struct value value = {};
+            unsigned wrmask = nir_intrinsic_write_mask(intrin);
+            value_set_ssa_components(&value, intrin->src[1].ssa,
+                                     intrin->num_components);
             struct copy_entry *entry =
-               lookup_entry_for_deref(copies, dst, nir_derefs_equal_bit);
-
-            if (entry && value_equals_store_src(&entry->src, intrin)) {
-               /* If we are storing the value from a load of the same var the
-                * store is redundant so remove it.
-                */
-               nir_instr_remove(instr);
-            } else {
-               struct value value = {};
-               unsigned wrmask = nir_intrinsic_write_mask(intrin);
-               value_set_ssa_components(&value, intrin->src[1].ssa,
-                                        intrin->num_components);
-               struct copy_entry *entry =
-                  get_entry_and_kill_aliases(copies, dst, wrmask);
-               value_set_from_value(&entry->src, &value, wrmask);
-            }
+               get_entry_and_kill_aliases(copies, vec_dst, wrmask);
+            value_set_from_value(&entry->src, &value, vec_index, wrmask);
          }
 
          break;
@@ -1007,7 +967,7 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
          struct copy_entry *src_entry =
             lookup_entry_for_deref(copies, src, nir_derefs_a_contains_b_bit);
          struct value value;
-         if (try_load_from_entry(state, src_entry, b, intrin, src, &value, -1)) {
+         if (try_load_from_entry(state, src_entry, b, intrin, src, &value)) {
             /* If load works, intrin (the copy_deref) is removed. */
             if (value.is_ssa) {
                nir_store_deref(b, dst, value.ssa.def[0], full_mask);
@@ -1033,7 +993,7 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
 
          struct copy_entry *dst_entry =
             get_entry_and_kill_aliases(copies, dst, full_mask);
-         value_set_from_value(&dst_entry->src, &value, full_mask);
+         value_set_from_value(&dst_entry->src, &value, 0, full_mask);
          break;
       }
 
