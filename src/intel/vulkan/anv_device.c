@@ -1955,6 +1955,8 @@ VkResult anv_CreateDevice(
          physical_device->memory.heaps[0].size;
    }
 
+   list_inithead(&device->memory_objects);
+
    /* As per spec, the driver implementation may deny requests to acquire
     * a priority above the default priority (MEDIUM) if the caller does not
     * have sufficient privileges. In this scenario VK_ERROR_NOT_PERMITTED_EXT
@@ -2068,9 +2070,6 @@ VkResult anv_CreateDevice(
    if (device->info.gen >= 10)
       anv_device_init_hiz_clear_value_bo(device);
 
-   if (physical_device->use_softpin)
-      device->pinned_buffers = _mesa_pointer_set_create(NULL);
-
    anv_scratch_pool_init(device, &device->scratch_pool);
 
    anv_queue_init(device, &device->queue);
@@ -2160,9 +2159,6 @@ void anv_DestroyDevice(
    anv_pipeline_cache_finish(&device->default_pipeline_cache);
 
    anv_queue_finish(&device->queue);
-
-   if (physical_device->use_softpin)
-      _mesa_set_destroy(device->pinned_buffers, NULL);
 
 #ifdef HAVE_VALGRIND
    /* We only need to free these to prevent valgrind errors.  The backing
@@ -2645,6 +2641,10 @@ VkResult anv_AllocateMemory(
    }
 
  success:
+   pthread_mutex_lock(&device->mutex);
+   list_addtail(&mem->link, &device->memory_objects);
+   pthread_mutex_unlock(&device->mutex);
+
    *pMem = anv_device_memory_to_handle(mem);
 
    return VK_SUCCESS;
@@ -2735,6 +2735,10 @@ void anv_FreeMemory(
 
    if (mem == NULL)
       return;
+
+   pthread_mutex_lock(&device->mutex);
+   list_del(&mem->link);
+   pthread_mutex_unlock(&device->mutex);
 
    if (mem->map)
       anv_UnmapMemory(_device, _mem);
@@ -3271,12 +3275,6 @@ VkResult anv_CreateBuffer(
    buffer->usage = pCreateInfo->usage;
    buffer->address = ANV_NULL_ADDRESS;
 
-   if (buffer->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_EXT) {
-      pthread_mutex_lock(&device->mutex);
-      _mesa_set_add(device->pinned_buffers, buffer);
-      pthread_mutex_unlock(&device->mutex);
-   }
-
    *pBuffer = anv_buffer_to_handle(buffer);
 
    return VK_SUCCESS;
@@ -3292,12 +3290,6 @@ void anv_DestroyBuffer(
 
    if (!buffer)
       return;
-
-   if (buffer->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_EXT) {
-      pthread_mutex_lock(&device->mutex);
-      _mesa_set_remove_key(device->pinned_buffers, buffer);
-      pthread_mutex_unlock(&device->mutex);
-   }
 
    vk_free2(&device->alloc, pAllocator, buffer);
 }
