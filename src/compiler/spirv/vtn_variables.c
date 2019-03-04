@@ -2799,7 +2799,26 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
       break;
    }
 
-   case SpvOpCopyMemorySized:
+   case SpvOpCopyMemorySized: {
+      struct vtn_value *size_val = vtn_untyped_value(b, w[3]);
+      nir_deref_instr *src = nir_instr_as_deref(vtn_ssa_value(b, w[2])->def->parent_instr);
+      nir_deref_instr *dst = nir_instr_as_deref(vtn_ssa_value(b, w[1])->def->parent_instr);
+
+      nir_ssa_def *size;
+      if (size_val->value_type == vtn_value_type_constant) {
+         size = nir_imm_intN_t(&b->nb, vtn_constant_uint(b, w[3]),
+                               glsl_get_bit_size(size_val->type->type));
+      } else if (size_val->value_type == vtn_value_type_ssa)
+         size = size_val->ssa->def;
+      else
+         vtn_fail("OpCopyMemorySized size argument must be an SSA or constant integer.");
+
+      nir_memcpy_deref_with_access(&b->nb, dst, src, size,
+                                   vtn_value_access(vtn_untyped_value(b, w[1])),
+                                   vtn_value_access(vtn_untyped_value(b, w[2])));
+      break;
+   }
+
    default:
       vtn_fail_with_opcode("Unhandled opcode", opcode);
    }
