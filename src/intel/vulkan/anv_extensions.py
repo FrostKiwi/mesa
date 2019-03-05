@@ -130,6 +130,7 @@ EXTENSIONS = [
     Extension('VK_EXT_calibrated_timestamps',             1, True),
     Extension('VK_GOOGLE_decorate_string',                1, True),
     Extension('VK_GOOGLE_hlsl_functionality1',            1, True),
+    Extension('VK_MESA_cpu_query_reset',                  1, True),
 ]
 
 class VkVersion:
