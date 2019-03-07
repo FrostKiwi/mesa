@@ -611,6 +611,15 @@ validate_intrinsic_instr(nir_intrinsic_instr *instr, validate_state *state)
       validate_assert(state, nir_src_bit_size(instr->src[0]) >= 8);
       break;
 
+   case nir_intrinsic_memcpy_deref: {
+      nir_deref_instr *dst = nir_src_as_deref(instr->src[0]);
+      nir_deref_instr *src = nir_src_as_deref(instr->src[1]);
+      validate_assert(state, dst->type == src->type);
+      validate_assert(state, (dst->mode & (nir_var_shader_in |
+                                           nir_var_uniform)) == 0);
+      break;
+   }
+
    default:
       break;
    }
