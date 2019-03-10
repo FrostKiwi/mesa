@@ -178,11 +178,11 @@ void st_init_limits(struct pipe_screen *screen,
       options = &c->ShaderCompilerOptions[stage];
       c->ShaderCompilerOptions[stage].NirOptions = nir_options;
 
+      supported_irs =
+         screen->get_shader_param(screen, sh, PIPE_SHADER_CAP_SUPPORTED_IRS);
       if (sh == PIPE_SHADER_COMPUTE) {
          if (!screen->get_param(screen, PIPE_CAP_COMPUTE))
             continue;
-         supported_irs =
-            screen->get_shader_param(screen, sh, PIPE_SHADER_CAP_SUPPORTED_IRS);
          if (!(supported_irs & ((1 << PIPE_SHADER_IR_TGSI) |
                                 (1 << PIPE_SHADER_IR_NIR))))
             continue;
@@ -329,7 +329,11 @@ void st_init_limits(struct pipe_screen *screen,
       if (!screen->get_param(screen, PIPE_CAP_NIR_COMPACT_ARRAYS))
          options->LowerCombinedClipCullDistance = true;
 
-      options->LowerBufferInterfaceBlocks = true;
+      /* NIR can do the lowering on our behalf and we'll get better results
+       * because it can actually optimize SSBO access.
+       */
+      options->LowerBufferInterfaceBlocks =
+         !(supported_irs & (1 << PIPE_SHADER_IR_NIR));
    }
 
    c->MaxUserAssignableUniformLocations =
