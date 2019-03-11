@@ -59,6 +59,16 @@ vector_deref_visitor::visit_enter(ir_assignment *ir)
    if (!deref->array->type->is_vector())
       return ir_rvalue_enter_visitor::visit_enter(ir);
 
+   /* SSBOs and shared variables are backed by memory and may be accessed by
+    * multiple threads simultaneously.  It's not safe to lower a single
+    * component store to a load-vec-store because it may race with writes to
+    * other components.
+    */
+   ir_variable *var = deref->variable_referenced();
+   if (var->data.mode == ir_var_shader_storage ||
+       var->data.mode == ir_var_shader_shared)
+      return ir_rvalue_enter_visitor::visit_enter(ir);
+
    ir_rvalue *const new_lhs = deref->array;
 
    void *mem_ctx = ralloc_parent(ir);
@@ -94,6 +104,15 @@ vector_deref_visitor::handle_rvalue(ir_rvalue **rv)
 
    ir_dereference_array *const deref = (ir_dereference_array *) *rv;
    if (!deref->array->type->is_vector())
+      return;
+
+   /* Back-ends need to be able to handle derefs on vectors for SSBOs and
+    * shared variables.  They have to handle it for writes anyway so we may as
+    * well require it for reads.
+    */
+   ir_variable *var = deref->variable_referenced();
+   if (var && (var->data.mode == ir_var_shader_storage ||
+               var->data.mode == ir_var_shader_shared))
       return;
 
    void *mem_ctx = ralloc_parent(deref);
