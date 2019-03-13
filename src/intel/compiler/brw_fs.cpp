@@ -8417,6 +8417,8 @@ compile_cs_to_nir(const struct brw_compiler *compiler,
    return shader;
 }
 
+#include "sir_compile.h"
+
 const unsigned *
 brw_compile_cs(const struct brw_compiler *compiler, void *log_data,
                void *mem_ctx,
@@ -8442,6 +8444,9 @@ brw_compile_cs(const struct brw_compiler *compiler, void *log_data,
    min_dispatch_width = util_next_power_of_two(min_dispatch_width);
    assert(min_dispatch_width <= 32);
    unsigned max_dispatch_width = 32;
+
+   return sir_compile_cs(compiler, log_data, mem_ctx, key, prog_data,
+                         src_shader, shader_time_index, error_str);
 
    fs_visitor *v8 = NULL, *v16 = NULL, *v32 = NULL;
    fs_visitor *v = NULL;
