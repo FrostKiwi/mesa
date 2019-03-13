@@ -125,8 +125,10 @@ libintel_compiler_files = files(
   'brw_wm_iz.cpp',
   'gen6_gs_visitor.cpp',
   'gen6_gs_visitor.h',
+  'nir_to_sir.c',
   'sir.c',
   'sir.h',
+  'sir_compile.c',
   'sir_validate.c',
 )
 
