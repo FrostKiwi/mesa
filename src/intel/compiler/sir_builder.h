@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Intel Corporation
+ * Copyright © 2019 Intel Corporation
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -21,29 +21,44 @@
  * IN THE SOFTWARE.
  */
 
+#ifndef SIR_BUILDER_H
+#define SIR_BUILDER_H
+
 #include "sir.h"
 
-sir_block *
-sir_block_create(sir_shader *shader)
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct sir_builder {
+   sir_shader *shader;
+   struct list_head *prev;
+
+   unsigned exec_size;
+   unsigned exec_group;
+} sir_builder;
+
+static inline void
+sir_builder_init(sir_builder *b, sir_shader *shader, unsigned exec_size)
 {
-   sir_block *block = rzalloc(shader, sir_block);
+   b->shader = shader;
+   sir_block *first_block =
+      list_first_entry(&shader->blocks, sir_block, link);
+   b->prev = &first_block->instrs;
 
-   list_inithead(&block->instrs);
-
-   return block;
+   b->exec_size = exec_size;
+   b->exec_group = 0;
 }
 
-sir_shader *
-sir_shader_create(void *mem_ctx,
-                  const struct gen_device_info *devinfo)
+static inline void
+sir_builder_insert_instr(sir_builder *b, sir_instr *instr)
 {
-   sir_shader *shader = rzalloc(mem_ctx, sir_shader);
-
-   shader->devinfo = devinfo,
-
-   list_inithead(&shader->blocks);
-   sir_block *first_block = sir_block_create(shader);
-   list_add(&first_block->link, &shader->blocks);
-
-   return shader;
+   list_add(&instr->link, b->prev);
+   b->prev = &instr->link;
 }
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
+#endif /* SIR_BUILDER_H */
