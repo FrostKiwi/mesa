@@ -9122,6 +9122,8 @@ compile_cs_to_nir(const struct brw_compiler *compiler,
    return shader;
 }
 
+#include "sir_compile.h"
+
 const unsigned *
 brw_compile_cs(const struct brw_compiler *compiler, void *log_data,
                void *mem_ctx,
@@ -9160,6 +9162,9 @@ brw_compile_cs(const struct brw_compiler *compiler, void *log_data,
       assert(min_dispatch_width <= 32);
       max_dispatch_width = 32;
    }
+
+   return sir_compile_cs(compiler, log_data, mem_ctx, key, prog_data,
+                         src_shader, shader_time_index, error_str);
 
    if ((int)key->base.subgroup_size_type >= (int)BRW_SUBGROUP_SIZE_REQUIRE_8) {
       /* These enum values are expressly chosen to be equal to the subgroup
