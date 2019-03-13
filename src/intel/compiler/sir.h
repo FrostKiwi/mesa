@@ -29,6 +29,7 @@
 
 #include <util/list.h>
 #include <util/macros.h>
+#include <util/ralloc.h>
 
 #include "brw_eu.h"
 
@@ -57,6 +58,7 @@ name(const in_type *parent)                             \
 struct gen_device_info;
 struct sir_instr;
 struct sir_alu_instr;
+struct sir_shader;
 
 /** An enum representing SIR src and dest data types */
 enum PACKED sir_type {
@@ -328,6 +330,8 @@ typedef struct sir_block {
    struct list_head instrs;
 } sir_block;
 
+sir_block *sir_block_create(struct sir_shader *shader);
+
 #define sir_foreach_instr(instr, block) \
    list_for_each_entry(sir_instr, instr, &(block)->instrs, link)
 
@@ -354,13 +358,29 @@ typedef struct sir_shader {
    sir_flag_reg *flag_regs;
 } sir_shader;
 
+sir_shader *sir_shader_create(void *mem_ctx,
+                              const struct gen_device_info *devinfo);
+
 #define sir_foreach_block(block, shader) \
    list_for_each_entry(sir_block, block, &(shader)->blocks, link)
 
 #define sir_foreach_block_safe(block, shader) \
    list_for_each_entry_safe(sir_block, block, &(shader)->blocks, link)
 
+
 void sir_validate_shader(const sir_shader *shader);
+
+
+/**********************************************************************
+ * SIR optimization and lowering passes
+ *
+ * KEEP IN ALPHABETICAL ORDER!
+ **********************************************************************/
+
+struct nir_shader;
+sir_shader *nir_to_sir(const struct nir_shader *nir, void *mem_ctx,
+                       unsigned dispatch_size,
+                       const struct gen_device_info *devinfo);
 
 #ifdef __cplusplus
 } /* extern "C" */
