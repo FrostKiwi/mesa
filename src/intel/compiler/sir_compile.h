@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Intel Corporation
+ * Copyright © 2019 Intel Corporation
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -21,29 +21,27 @@
  * IN THE SOFTWARE.
  */
 
+#ifndef SIR_COMPILE_H
+#define SIR_COMPILE_H
+
+#include "brw_compiler.h"
 #include "sir.h"
 
-sir_block *
-sir_block_create(sir_shader *shader)
-{
-   sir_block *block = rzalloc(shader, sir_block);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-   list_inithead(&block->instrs);
+const unsigned *
+sir_compile_cs(const struct brw_compiler *compiler, void *log_data,
+               void *mem_ctx,
+               const struct brw_cs_prog_key *key,
+               struct brw_cs_prog_data *prog_data,
+               const struct nir_shader *shader,
+               int shader_time_index,
+               char **error_str);
 
-   return block;
-}
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
-sir_shader *
-sir_shader_create(void *mem_ctx,
-                  const struct gen_device_info *devinfo)
-{
-   sir_shader *shader = rzalloc(mem_ctx, sir_shader);
-
-   shader->devinfo = devinfo,
-
-   list_inithead(&shader->blocks);
-   sir_block *first_block = sir_block_create(shader);
-   list_add(&first_block->link, &shader->blocks);
-
-   return shader;
-}
+#endif /* SIR_COMPILE_H */
