@@ -174,6 +174,28 @@ SIR_BUILDER_DEFINE_ALU2(ADD)
 #undef SIR_BUILDER_DEFINE_ALU2
 #undef SIR_BUILDER_DEFINE_ALU3
 
+static inline sir_reg *
+sir_read_hw_grf(sir_builder *b, uint8_t reg, uint8_t comp,
+                enum sir_type type, uint8_t stride)
+{
+   unsigned type_sz = sir_type_bit_size(type) / 8;
+   assert(comp * type_sz < 32);
+   uint16_t byte = reg * 32 + comp * type_sz;
+   uint8_t size = type_sz + (b->exec_size - 1) * type_sz * stride;
+   uint8_t align = type_sz;
+   sir_reg *hw_reg = sir_hw_grf_reg_create(b->shader, byte, size, align);
+
+   return sir_MOV(b, type, (sir_alu_src) {
+      .file = SIR_REG_FILE_HW_GRF,
+      .type = type,
+      .reg = {
+         .reg = hw_reg,
+         .offset = 0,
+         .stride = type_sz * stride,
+      },
+   });
+}
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

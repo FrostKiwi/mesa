@@ -112,9 +112,37 @@ nts_emit_intrinsic(struct nir_to_sir_state *nts,
 {
    sir_builder *b = &nts->b;
 
+   sir_reg *dest = NULL;
    switch (instr->intrinsic) {
+   case nir_intrinsic_load_subgroup_id:
+      /* Assume that the subgroup ID is in g1.0
+       *
+       * TODO: Make this more dynamic.
+       */
+      dest = sir_read_hw_grf(b, 1, 0, SIR_TYPE_UD, 0);
+      break;
+
+   case nir_intrinsic_load_subgroup_invocation: {
+      assert(b->exec_size == 8);
+      assert(b->exec_group == 0);
+      sir_alu_src imm_src = {
+         .file = SIR_REG_FILE_IMM,
+         .type = SIR_TYPE_V,
+      };
+      *(uint32_t *)imm_src.imm = 0x76543210;
+      dest = sir_MOV(b, SIR_TYPE_UD, imm_src);
+      break;
+   }
+
    default:
       unreachable("Unhandled NIR intrinsic");
+   }
+
+   if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
+      assert(dest != NULL);
+      nts->ssa_to_reg[instr->dest.ssa.index] = dest;
+   } else {
+      assert(dest == NULL);
    }
 }
 
