@@ -167,7 +167,7 @@ sir_validate_alu_instr(struct sir_validate_state *s, const sir_alu_instr *alu)
    sir_validate_alu_dst(s, alu, &alu->dest);
 
    for (unsigned i = 0; i < 3 /* TODO */; i++)
-      sir_validate_alu_src(s, alu, &alu->srcs[i]);
+      sir_validate_alu_src(s, alu, &alu->src[i]);
 }
 
 static void
