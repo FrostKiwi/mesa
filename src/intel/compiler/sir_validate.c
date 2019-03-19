@@ -55,10 +55,7 @@ sir_validate_logical_reg_ref(struct sir_validate_state *s,
                              unsigned src_simd_width,
                              unsigned src_simd_group)
 {
-   if (!sir_assert(s, ref->idx < s->shader->num_logical_regs))
-      return;
-
-   sir_logical_reg *reg = &s->shader->logical_regs[ref->idx];
+   const sir_logical_reg *reg = &ref->reg->logical;
 
    sir_assert(s, reg->bit_size == bit_size);
    sir_assert(s, ref->comp + num_comps <= reg->num_comps);
@@ -73,10 +70,7 @@ sir_validate_flag_reg_ref(struct sir_validate_state *s,
                           unsigned src_simd_width,
                           unsigned src_simd_group)
 {
-   if (!sir_assert(s, ref->idx < s->shader->num_flag_regs))
-      return;
-
-   sir_flag_reg *reg = &s->shader->flag_regs[ref->idx];
+   const sir_flag_reg *reg = &ref->reg->flag;
 
    unsigned reg_simd_group = (reg->subnr % 2) * 16;
    unsigned reg_simd_width = reg->bits;
@@ -90,15 +84,19 @@ static void
 sir_validate_alu_src(struct sir_validate_state *s,
                      const sir_alu_instr *alu, const sir_alu_src *src)
 {
-   switch (src->reg.file) {
-   case SIR_FILE_NONE:
+   switch (src->file) {
+   case SIR_REG_FILE_NONE:
+      sir_assert(s, src->reg.reg == NULL);
       return;
 
-   case SIR_FILE_LOGICAL:
-      sir_validate_logical_reg_ref(s, &src->reg, 1,
-                                   sir_type_bit_size(src->type),
-                                   alu->instr.simd_width,
-                                   alu->instr.simd_group);
+   case SIR_REG_FILE_LOGICAL:
+      if (sir_assert(s, src->reg.reg)) {
+         sir_assert(s, src->reg.reg->file == SIR_REG_FILE_LOGICAL);
+         sir_validate_logical_reg_ref(s, &src->reg, 1,
+                                      sir_type_bit_size(src->type),
+                                      alu->instr.simd_width,
+                                      alu->instr.simd_group);
+      }
       return;
 
    }
@@ -110,23 +108,24 @@ static void
 sir_validate_alu_dst(struct sir_validate_state *s,
                      const sir_alu_instr *alu, const sir_alu_dest *dest)
 {
-   if (!sir_assert(s, dest->reg.file != SIR_FILE_IMM))
+   switch (dest->file) {
+   case SIR_REG_FILE_NONE:
+      sir_assert(s, dest->reg.reg == NULL);
       return;
 
-   switch (dest->reg.file) {
-   case SIR_FILE_NONE:
-      return;
-
-   case SIR_FILE_IMM:
+   case SIR_REG_FILE_IMM:
       sir_assert(s, !"Immediates are not allowed in destinations");
       return;
 
-   case SIR_FILE_LOGICAL:
+   case SIR_REG_FILE_LOGICAL:
       sir_assert(s, !alu->instr.we_all);
-      sir_validate_logical_reg_ref(s, &dest->reg, 1,
-                                   sir_type_bit_size(dest->type),
-                                   alu->instr.simd_width,
-                                   alu->instr.simd_group);
+      if (sir_assert(s, dest->reg.reg)) {
+         sir_assert(s, dest->reg.reg->file == SIR_REG_FILE_LOGICAL);
+         sir_validate_logical_reg_ref(s, &dest->reg, 1,
+                                      sir_type_bit_size(dest->type),
+                                      alu->instr.simd_width,
+                                      alu->instr.simd_group);
+      }
       return;
    }
 

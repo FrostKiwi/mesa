@@ -100,12 +100,12 @@ sir_type_base_type(enum sir_type t)
 }
 
 /** An enum representing the different types of SIR registers */
-enum PACKED sir_file {
-   SIR_FILE_NONE,
-   SIR_FILE_IMM,
-   SIR_FILE_LOGICAL,
-   SIR_FILE_HW_GRF,
-   SIR_FILE_FLAG,
+enum PACKED sir_reg_file {
+   SIR_REG_FILE_NONE,
+   SIR_REG_FILE_IMM,
+   SIR_REG_FILE_LOGICAL,
+   SIR_REG_FILE_HW_GRF,
+   SIR_REG_FILE_FLAG,
 };
 
 
@@ -183,15 +183,35 @@ typedef struct sir_flag_reg {
 } sir_flag_reg;
 
 
+/** A struct representing a register */
+typedef struct sir_reg {
+   /** Register type */
+   enum sir_reg_file file;
+
+   /** Link in sir_shader::regs */
+   struct list_head link;
+
+   union {
+      sir_logical_reg logical;
+      sir_hw_grf_reg hw_grf;
+      sir_flag_reg flag;
+   };
+} sir_reg;
+
+sir_reg *sir_logical_reg_create(struct sir_shader *shader,
+                                uint8_t bit_size, uint8_t num_comps,
+                                uint8_t simd_width, uint8_t simd_group);
+
+sir_reg *sir_hw_grf_reg_create(struct sir_shader *shader,
+                               uint16_t byte, uint8_t size, uint8_t align);
+
+
 /** A structure representing a register reference (source or destination) in
  * an instruction
  */
 typedef struct sir_reg_ref {
-   /** Register file referenced */
-   enum sir_file file;
-
-   /** Index into the per-file table */
-   uint32_t idx;
+   /** Pointer to the register; NULL if immediate */
+   const sir_reg *reg;
 
    union {
       /** Component to reference for logical registers */
@@ -242,6 +262,9 @@ typedef struct sir_instr {
 
 /** A structure representing an ALU instruction source */
 typedef struct sir_alu_src {
+   /** Register file or IMM for immediate or NONE for null */
+   enum sir_reg_file file;
+
    /** Type with which the register or immediate is interpreted */
    enum sir_type type;
 
@@ -259,6 +282,9 @@ typedef struct sir_alu_src {
 
 
 typedef struct sir_alu_dest {
+   /** Register file or NONE for null */
+   enum sir_reg_file file;
+
    /** Type with which the register or immediate is interpreted */
    enum sir_type type;
 
@@ -348,14 +374,11 @@ sir_block *sir_block_create(struct sir_shader *shader);
 typedef struct sir_shader {
    const struct gen_device_info *devinfo;
 
+   /** Blocks */
    struct list_head blocks;
 
-   /* Do we want indexes or pointers?  A list or an array?  Who knows? */
-   unsigned num_logical_regs;
-   sir_logical_reg *logical_regs;
-
-   unsigned num_flag_regs;
-   sir_flag_reg *flag_regs;
+   /** Registers */
+   struct list_head regs;
 } sir_shader;
 
 sir_shader *sir_shader_create(void *mem_ctx,
