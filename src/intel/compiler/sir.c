@@ -23,6 +23,45 @@
 
 #include "sir.h"
 
+static sir_reg *
+sir_reg_create(sir_shader *shader, enum sir_reg_file file)
+{
+   sir_reg *reg = rzalloc(shader, sir_reg);
+
+   reg->file = file;
+   list_addtail(&reg->link, &shader->regs);
+
+   return reg;
+}
+
+sir_reg *
+sir_logical_reg_create(sir_shader *shader,
+                       uint8_t bit_size, uint8_t num_comps,
+                       uint8_t simd_width, uint8_t simd_group)
+{
+   sir_reg *reg = sir_reg_create(shader, SIR_REG_FILE_LOGICAL);
+
+   reg->logical.bit_size = bit_size;
+   reg->logical.num_comps = num_comps;
+   reg->logical.simd_width = simd_width;
+   reg->logical.simd_group = simd_group;
+
+   return reg;
+}
+
+sir_reg *
+sir_hw_grf_reg_create(sir_shader *shader,
+                      uint16_t byte, uint8_t size, uint8_t align)
+{
+   sir_reg *reg = sir_reg_create(shader, SIR_REG_FILE_LOGICAL);
+
+   reg->hw_grf.byte = byte;
+   reg->hw_grf.size = size;
+   reg->hw_grf.align = align;
+
+   return reg;
+}
+
 sir_block *
 sir_block_create(sir_shader *shader)
 {
@@ -44,6 +83,8 @@ sir_shader_create(void *mem_ctx,
    list_inithead(&shader->blocks);
    sir_block *first_block = sir_block_create(shader);
    list_add(&first_block->link, &shader->blocks);
+
+   list_inithead(&shader->regs);
 
    return shader;
 }
