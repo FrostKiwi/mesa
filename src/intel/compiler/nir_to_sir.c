@@ -118,6 +118,42 @@ nts_emit_intrinsic(struct nir_to_sir_state *nts,
    }
 }
 
+static void
+nts_emit_load_const(struct nir_to_sir_state *nts,
+                    const nir_load_const_instr *instr)
+{
+   sir_builder *b = &nts->b;
+
+   /* TODO */
+   assert(instr->def.num_components == 1);
+
+   assert(instr->def.bit_size >= 8);
+   sir_alu_src imm_src = {
+      .file = SIR_REG_FILE_IMM,
+      .type = SIR_TYPE_UINT | instr->def.bit_size,
+   };
+   switch (instr->def.bit_size) {
+   case 8:
+      /* 8-bit immediates aren't a thing */
+      imm_src.type = SIR_TYPE_UW;
+      *(uint16_t *)imm_src.imm = instr->value[0].u8;
+      break;
+   case 16:
+      *(uint16_t *)imm_src.imm = instr->value[0].u16;
+      break;
+   case 32:
+      *(uint32_t *)imm_src.imm = instr->value[0].u32;
+      break;
+   case 64:
+      *(uint64_t *)imm_src.imm = instr->value[0].u64;
+      break;
+   default:
+      unreachable("Invalid bit size");
+   }
+
+   nts->ssa_to_reg[instr->def.index] = sir_MOV(b, imm_src.type, imm_src);
+}
+
 sir_shader *
 nir_to_sir(const nir_shader *nir, void *mem_ctx,
            unsigned dispatch_size,
@@ -139,6 +175,9 @@ nir_to_sir(const nir_shader *nir, void *mem_ctx,
             break;
          case nir_instr_type_intrinsic:
             nts_emit_intrinsic(&nts, nir_instr_as_intrinsic(instr));
+            break;
+         case nir_instr_type_load_const:
+            nts_emit_load_const(&nts, nir_instr_as_load_const(instr));
             break;
          default:
             unreachable("Unsupported instruction type");
