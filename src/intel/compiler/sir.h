@@ -260,6 +260,16 @@ typedef struct sir_instr {
 } sir_instr;
 
 
+/** Enum of SIR ALU opcodes */
+enum sir_alu_op {
+   SIR_ALU_OP_MOV = 1,
+   SIR_ALU_OP_AND = 5,
+   SIR_ALU_OP_SHR = 8,
+   SIR_ALU_OP_SHL = 9,
+   SIR_ALU_OP_ADD = 64,
+};
+
+
 /** A structure representing an ALU instruction source */
 typedef struct sir_alu_src {
    /** Register file or IMM for immediate or NONE for null */
@@ -297,15 +307,23 @@ typedef struct sir_alu_dest {
 typedef struct sir_alu_instr {
    sir_instr instr;
 
+   /** Opcode */
+   enum sir_alu_op op;
+
    enum brw_conditional_mod cmod;
 
    sir_alu_dest dest;
 
-   sir_alu_src srcs[0];
+   sir_alu_src src[0];
 } sir_alu_instr;
 
 SIR_DEFINE_CAST(sir_instr_as_alu, sir_instr, sir_alu_instr, instr,
                 type, SIR_INSTR_TYPE_ALU)
+
+sir_alu_instr *sir_alu_instr_create(struct sir_shader *shader,
+                                    enum sir_alu_op op,
+                                    uint8_t simd_width,
+                                    uint8_t simd_group);
 
 
 typedef struct sir_send_instr {
