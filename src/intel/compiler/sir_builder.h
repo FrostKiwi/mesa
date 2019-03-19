@@ -57,6 +57,14 @@ sir_builder_insert_instr(sir_builder *b, sir_instr *instr)
    b->prev = &instr->link;
 }
 
+static inline sir_reg *
+sir_builder_new_logical_reg(sir_builder *b,
+                            uint8_t bit_size, uint8_t num_comps)
+{
+   return sir_logical_reg_create(b->shader, bit_size, num_comps,
+                                 b->exec_size, b->exec_group);
+}
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
