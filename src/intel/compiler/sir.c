@@ -62,6 +62,43 @@ sir_hw_grf_reg_create(sir_shader *shader,
    return reg;
 }
 
+static void
+sir_reg_ref_init(sir_reg_ref *ref)
+{
+}
+
+static void
+sir_instr_init(sir_instr *instr, enum sir_instr_type type,
+               uint8_t simd_width, uint8_t simd_group)
+{
+   instr->type = type;
+   instr->simd_width = simd_width;
+   instr->simd_group = simd_group;
+
+   sir_reg_ref_init(&instr->flag);
+}
+
+sir_alu_instr *
+sir_alu_instr_create(struct sir_shader *shader, enum sir_alu_op op,
+                     uint8_t simd_width, uint8_t simd_group)
+{
+   const unsigned num_srcs = 3; /* TODO */
+
+   sir_alu_instr *alu = rzalloc_size(shader, sizeof(sir_alu_instr) +
+                                             sizeof(sir_alu_src) * num_srcs);
+
+   sir_instr_init(&alu->instr, SIR_INSTR_TYPE_ALU, simd_width, simd_group);
+
+   alu->op = op;
+
+   sir_reg_ref_init(&alu->dest.reg);
+
+   for (unsigned i = 0; i < num_srcs; i++)
+      sir_reg_ref_init(&alu->src[i].reg);
+
+   return alu;
+}
+
 sir_block *
 sir_block_create(sir_shader *shader)
 {
