@@ -65,6 +65,115 @@ sir_builder_new_logical_reg(sir_builder *b,
                                  b->exec_size, b->exec_group);
 }
 
+static inline sir_alu_src
+sir_alu_isrc(sir_reg *reg)
+{
+   assert(reg->file == SIR_REG_FILE_LOGICAL);
+   return (sir_alu_src) {
+      .file = reg->file,
+      .type = SIR_TYPE_INT | reg->logical.bit_size,
+      .reg = {
+         .reg = reg,
+      },
+   };
+}
+
+static inline sir_alu_src
+sir_alu_usrc(sir_reg *reg)
+{
+   assert(reg->file == SIR_REG_FILE_LOGICAL);
+   return (sir_alu_src) {
+      .file = reg->file,
+      .type = SIR_TYPE_UINT | reg->logical.bit_size,
+      .reg = {
+         .reg = reg,
+      },
+   };
+}
+
+static inline sir_alu_src
+sir_alu_fsrc(sir_reg *reg)
+{
+   assert(reg->file == SIR_REG_FILE_LOGICAL);
+   return (sir_alu_src) {
+      .file = reg->file,
+      .type = SIR_TYPE_FLOAT | reg->logical.bit_size,
+      .reg = {
+         .reg = reg,
+      },
+   };
+}
+
+static inline sir_reg *
+sir_build_ssa_alu(sir_builder *b, enum sir_alu_op op, enum sir_type dest_type,
+                  sir_alu_src *src, unsigned num_srcs)
+{
+   sir_alu_instr *alu = sir_alu_instr_create(b->shader, op,
+                                             b->exec_size, b->exec_group);
+
+   unsigned max_bit_size = 0;
+   for (unsigned i = 0; i < num_srcs; i++) {
+      alu->src[i] = src[i];
+      max_bit_size = MAX2(max_bit_size, sir_type_bit_size(src[i].type));
+   }
+
+   if (sir_type_bit_size(dest_type) == 0)
+      dest_type |= max_bit_size;
+
+   sir_reg *dest_reg =
+      sir_builder_new_logical_reg(b, sir_type_bit_size(dest_type), 1);
+   dest_reg->logical.ssa = &alu->instr;
+
+   alu->dest = (sir_alu_dest) {
+      .file = SIR_REG_FILE_LOGICAL,
+      .type = dest_type,
+      .reg = {
+         .reg = dest_reg,
+      },
+   };
+
+   sir_builder_insert_instr(b, &alu->instr);
+
+   return dest_reg;
+}
+
+#define SIR_BUILDER_DEFINE_ALU1(OP)                                  \
+static inline sir_reg *                                              \
+sir_##OP(sir_builder *b, enum sir_type dest_type,                    \
+         sir_alu_src src0)                                           \
+{                                                                    \
+   sir_alu_src srcs[] = { src0 };                                    \
+   return sir_build_ssa_alu(b, SIR_ALU_OP_##OP, dest_type, srcs, 1); \
+}
+
+#define SIR_BUILDER_DEFINE_ALU2(OP)                                  \
+static inline sir_reg *                                              \
+sir_##OP(sir_builder *b, enum sir_type dest_type,                    \
+         sir_alu_src src0, sir_alu_src src1)                         \
+{                                                                    \
+   sir_alu_src srcs[] = { src0, src1 };                              \
+   return sir_build_ssa_alu(b, SIR_ALU_OP_##OP, dest_type, srcs, 1); \
+}
+
+#define SIR_BUILDER_DEFINE_ALU3(OP)                                  \
+static inline sir_reg *                                              \
+sir_##OP(sir_builder *b, enum sir_type dest_type,                    \
+         sir_alu_src src0, sir_alu_src src1, sir_alu_src src2)       \
+{                                                                    \
+   sir_alu_src srcs[] = { src0, src1, src2 };                        \
+   return sir_build_ssa_alu(b, SIR_ALU_OP_##OP, dest_type, srcs, 1); \
+}
+
+SIR_BUILDER_DEFINE_ALU1(MOV)
+SIR_BUILDER_DEFINE_ALU2(AND)
+SIR_BUILDER_DEFINE_ALU2(SHR)
+SIR_BUILDER_DEFINE_ALU2(SHL)
+SIR_BUILDER_DEFINE_ALU2(ADD)
+
+#undef SIR_BUILDER_DEFINE_ALU1
+#undef SIR_BUILDER_DEFINE_ALU2
+#undef SIR_BUILDER_DEFINE_ALU3
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
