@@ -99,6 +99,49 @@ sir_alu_instr_create(struct sir_shader *shader, enum sir_alu_op op,
    return alu;
 }
 
+sir_send_instr *
+sir_send_instr_create(struct sir_shader *shader,
+                      uint8_t simd_width,
+                      uint8_t simd_group)
+{
+   sir_send_instr *send = rzalloc(shader, sir_send_instr);
+
+   sir_instr_init(&send->instr, SIR_INSTR_TYPE_SEND, simd_width, simd_group);
+
+   sir_reg_ref_init(&send->desc);
+   sir_reg_ref_init(&send->ex_desc);
+
+   sir_reg_ref_init(&send->dest);
+
+   sir_reg_ref_init(&send->payload[0]);
+   sir_reg_ref_init(&send->payload[1]);
+
+   return send;
+}
+
+sir_intrinsic_instr *
+sir_intrinsic_instr_create(struct sir_shader *shader,
+                           enum sir_intrinsic_op op,
+                           uint8_t simd_width, uint8_t simd_group,
+                           unsigned num_srcs)
+{
+   sir_intrinsic_instr *intrin =
+      rzalloc_size(shader, sizeof(sir_intrinsic_instr) +
+                           sizeof(sir_intrinsic_src) * num_srcs);
+
+   sir_instr_init(&intrin->instr, SIR_INSTR_TYPE_INTRINSIC,
+                  simd_width, simd_group);
+
+   intrin->op = op;
+
+   sir_reg_ref_init(&intrin->dest);
+
+   for (unsigned i = 0; i < num_srcs; i++)
+      sir_reg_ref_init(&intrin->src[i].reg);
+
+   return intrin;
+}
+
 sir_block *
 sir_block_create(sir_shader *shader)
 {

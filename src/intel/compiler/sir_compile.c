@@ -54,5 +54,9 @@ sir_compile_cs(const struct brw_compiler *compiler, void *log_data,
 
    sir_shader *sir = nir_to_sir(shader, mem_ctx, 8, compiler->devinfo);
    sir_validate_shader(sir);
+
+   sir_lower_surface_access(sir);
+   sir_validate_shader(sir);
+
    return NULL;
 }
