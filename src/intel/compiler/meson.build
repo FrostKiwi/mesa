@@ -132,13 +132,13 @@ libintel_compiler_files = files(
   'brw_wm_iz.cpp',
   'gen6_gs_visitor.cpp',
   'gen6_gs_visitor.h',
-  'nir_to_sir.c',
-  'sir.c',
-  'sir.h',
-  'sir_compile.c',
-  'sir_lower_surface_access.c',
-  'sir_print.c',
-  'sir_validate.c',
+  'nir_to_ibc.c',
+  'ibc.c',
+  'ibc.h',
+  'ibc_compile.c',
+  'ibc_lower_surface_access.c',
+  'ibc_print.c',
+  'ibc_validate.c',
 )
 
 brw_nir_trig = custom_target(
