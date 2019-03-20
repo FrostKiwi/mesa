@@ -60,5 +60,10 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
 
    ibc_print_shader(ibc, stderr);
 
+   fprintf(stderr, "\n\n");
+
+   ibc_assign_regs(ibc);
+   ibc_print_shader(ibc, stderr);
+
    return NULL;
 }
