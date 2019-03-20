@@ -237,6 +237,7 @@ nts_emit_cs_thread_terminate(struct nir_to_ibc_state *nts)
          .reg = g0,
       },
    };
+   mov->instr.we_all = true;
    ibc_builder_insert_instr(b, &mov->instr);
 
    ibc_send_instr *send = ibc_send_instr_create(b->shader, 8, 0);
