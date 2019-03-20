@@ -21,44 +21,27 @@
  * IN THE SOFTWARE.
  */
 
-#include "brw_nir.h"
+#ifndef IBC_COMPILE_H
+#define IBC_COMPILE_H
 
-#include "sir.h"
-#include "sir_compile.h"
+#include "brw_compiler.h"
+#include "ibc.h"
 
-static nir_shader *
-compile_cs_to_nir(const struct brw_compiler *compiler,
-                  void *mem_ctx,
-                  const struct brw_cs_prog_key *key,
-                  const nir_shader *src_shader,
-                  unsigned dispatch_width)
-{
-   nir_shader *shader = nir_shader_clone(mem_ctx, src_shader);
-   brw_nir_apply_key(shader, compiler, &key->base, dispatch_width, true);
-   brw_nir_lower_cs_intrinsics(shader, dispatch_width);
-   brw_postprocess_nir(shader, compiler, true);
-   return shader;
-}
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 const unsigned *
-sir_compile_cs(const struct brw_compiler *compiler, void *log_data,
+ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                void *mem_ctx,
                const struct brw_cs_prog_key *key,
                struct brw_cs_prog_data *prog_data,
-               const struct nir_shader *src_shader,
+               const struct nir_shader *shader,
                int shader_time_index,
-               char **error_str)
-{
-   nir_shader *shader =
-      compile_cs_to_nir(compiler, mem_ctx, key, src_shader, 8);
+               char **error_str);
 
-   sir_shader *sir = nir_to_sir(shader, mem_ctx, 8, compiler->devinfo);
-   sir_validate_shader(sir);
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
-   sir_lower_surface_access(sir);
-   sir_validate_shader(sir);
-
-   sir_print_shader(sir, stderr);
-
-   return NULL;
-}
+#endif /* IBC_COMPILE_H */

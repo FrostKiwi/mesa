@@ -21,26 +21,26 @@
  * IN THE SOFTWARE.
  */
 
-#include "sir.h"
-#include "sir_builder.h"
+#include "ibc.h"
+#include "ibc_builder.h"
 
 #include "brw_eu.h"
 
 bool
-sir_lower_surface_access(sir_shader *shader)
+ibc_lower_surface_access(ibc_shader *shader)
 {
    bool progress = false;
 
-   sir_foreach_block(block, shader) {
-      sir_foreach_instr_safe(instr, block) {
-         if (instr->type != SIR_INSTR_TYPE_INTRINSIC)
+   ibc_foreach_block(block, shader) {
+      ibc_foreach_instr_safe(instr, block) {
+         if (instr->type != IBC_INSTR_TYPE_INTRINSIC)
             continue;
 
-         sir_intrinsic_instr *intrin = sir_instr_as_intrinsic(instr);
+         ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
 
          uint32_t sfid, desc;
          switch (intrin->op) {
-         case SIR_INTRINSIC_OP_BTI_UNTYPED_WRITE:
+         case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
             sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
             desc = brw_dp_untyped_surface_rw_desc(shader->devinfo,
                                                   instr->simd_width,
@@ -51,14 +51,14 @@ sir_lower_surface_access(sir_shader *shader)
             continue;
          }
 
-         sir_send_instr *send = sir_send_instr_create(shader,
+         ibc_send_instr *send = ibc_send_instr_create(shader,
                                                       instr->simd_width,
                                                       instr->simd_group);
          send->has_side_effects = true;
 
          send->sfid = sfid;
          send->desc_imm = desc;
-         assert(intrin->src[0].file == SIR_REG_FILE_IMM);
+         assert(intrin->src[0].file == IBC_REG_FILE_IMM);
          send->desc_imm |= intrin->src[0].imm;
 
          send->dest = intrin->dest;
