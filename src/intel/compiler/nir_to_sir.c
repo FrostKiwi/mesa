@@ -134,6 +134,37 @@ nts_emit_intrinsic(struct nir_to_sir_state *nts,
       break;
    }
 
+   case nir_intrinsic_store_ssbo: {
+      sir_intrinsic_instr *store =
+         sir_intrinsic_instr_create(b->shader,
+                                    SIR_INTRINSIC_OP_BTI_UNTYPED_WRITE,
+                                    b->exec_size, b->exec_group, 3);
+      store->src[0] = (sir_intrinsic_src) {
+         .file = SIR_REG_FILE_IMM,
+         .imm = 1 + nir_src_as_uint(instr->src[1]),
+      };
+
+      assert(instr->src[2].is_ssa);
+      store->src[1] = (sir_intrinsic_src) {
+         .file = SIR_REG_FILE_LOGICAL,
+         .reg = {
+            .reg = nts->ssa_to_reg[instr->src[2].ssa->index],
+         },
+      };
+
+      assert(instr->src[0].is_ssa);
+      store->src[2] = (sir_intrinsic_src) {
+         .file = SIR_REG_FILE_LOGICAL,
+         .reg = {
+            .reg = nts->ssa_to_reg[instr->src[0].ssa->index],
+         },
+      };
+      store->const_index[0] = instr->src[0].ssa->num_components;
+
+      sir_builder_insert_instr(b, &store->instr);
+      break;
+   }
+
    default:
       unreachable("Unhandled NIR intrinsic");
    }
