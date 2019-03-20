@@ -136,6 +136,7 @@ libintel_compiler_files = files(
   'sir.c',
   'sir.h',
   'sir_compile.c',
+  'sir_lower_surface_access.c',
   'sir_validate.c',
 )
 
