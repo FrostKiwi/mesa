@@ -23,23 +23,23 @@
 
 #include "nir.h"
 
-#include "sir.h"
-#include "sir_builder.h"
+#include "ibc.h"
+#include "ibc_builder.h"
 
-struct nir_to_sir_state {
-   sir_builder b;
+struct nir_to_ibc_state {
+   ibc_builder b;
 
-   const sir_reg **ssa_to_reg;
+   const ibc_reg **ssa_to_reg;
 };
 
-static enum sir_type
-sir_type_for_nir(nir_alu_type ntype)
+static enum ibc_type
+ibc_type_for_nir(nir_alu_type ntype)
 {
-   enum sir_type stype;
+   enum ibc_type stype;
    switch (nir_alu_type_get_base_type(ntype)) {
-   case nir_type_int:   stype = SIR_TYPE_INT;   break;
-   case nir_type_uint:  stype = SIR_TYPE_UINT;  break;
-   case nir_type_float: stype = SIR_TYPE_FLOAT; break;
+   case nir_type_int:   stype = IBC_TYPE_INT;   break;
+   case nir_type_uint:  stype = IBC_TYPE_UINT;  break;
+   case nir_type_float: stype = IBC_TYPE_FLOAT; break;
    default:
       unreachable("Unsupported base type");
    }
@@ -48,12 +48,12 @@ sir_type_for_nir(nir_alu_type ntype)
 }
 
 static void
-nts_emit_alu(struct nir_to_sir_state *nts,
+nts_emit_alu(struct nir_to_ibc_state *nts,
              const nir_alu_instr *instr)
 {
-   sir_builder *b = &nts->b;
+   ibc_builder *b = &nts->b;
 
-   sir_alu_src src[4];
+   ibc_alu_src src[4];
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
       assert(instr->src[i].src.is_ssa);
       nir_ssa_def *ssa_src = instr->src[i].src.ssa;
@@ -61,9 +61,9 @@ nts_emit_alu(struct nir_to_sir_state *nts,
       /* TODO */
       assert(ssa_src->num_components == 1);
 
-      const sir_reg *reg = nts->ssa_to_reg[ssa_src->index];
-      src[i] = (sir_alu_src) {
-         .type = sir_type_for_nir(nir_op_infos[instr->op].input_types[i]) |
+      const ibc_reg *reg = nts->ssa_to_reg[ssa_src->index];
+      src[i] = (ibc_alu_src) {
+         .type = ibc_type_for_nir(nir_op_infos[instr->op].input_types[i]) |
                  ssa_src->bit_size,
          .file = reg->file,
          .reg = {
@@ -77,91 +77,91 @@ nts_emit_alu(struct nir_to_sir_state *nts,
    /* TODO */
    assert(instr->dest.dest.ssa.num_components == 1);
 
-   sir_reg *dest;
-   enum sir_type dest_type =
-      sir_type_for_nir(nir_op_infos[instr->op].output_type) |
+   ibc_reg *dest;
+   enum ibc_type dest_type =
+      ibc_type_for_nir(nir_op_infos[instr->op].output_type) |
       instr->dest.dest.ssa.bit_size;
    switch (instr->op) {
    case nir_op_iadd:
    case nir_op_fadd:
-      dest = sir_ADD(b, dest_type, src[0], src[1]);
+      dest = ibc_ADD(b, dest_type, src[0], src[1]);
       break;
    case nir_op_iand:
-      dest = sir_AND(b, dest_type, src[0], src[1]);
+      dest = ibc_AND(b, dest_type, src[0], src[1]);
       break;
    case nir_op_ishl:
-      dest = sir_SHL(b, dest_type, src[0], src[1]);
+      dest = ibc_SHL(b, dest_type, src[0], src[1]);
       break;
    case nir_op_ishr:
    case nir_op_ushr:
-      dest = sir_SHR(b, dest_type, src[0], src[1]);
+      dest = ibc_SHR(b, dest_type, src[0], src[1]);
       break;
    default:
       unreachable("Unhandled NIR ALU opcode");
    }
 
-   assert(dest->file == SIR_REG_FILE_LOGICAL);
+   assert(dest->file == IBC_REG_FILE_LOGICAL);
    assert(dest->logical.bit_size == instr->dest.dest.ssa.bit_size);
    assert(dest->logical.num_comps == instr->dest.dest.ssa.num_components);
    nts->ssa_to_reg[instr->dest.dest.ssa.index] = dest;
 }
 
 static void
-nts_emit_intrinsic(struct nir_to_sir_state *nts,
+nts_emit_intrinsic(struct nir_to_ibc_state *nts,
                    const nir_intrinsic_instr *instr)
 {
-   sir_builder *b = &nts->b;
+   ibc_builder *b = &nts->b;
 
-   sir_reg *dest = NULL;
+   ibc_reg *dest = NULL;
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_id:
       /* Assume that the subgroup ID is in g1.0
        *
        * TODO: Make this more dynamic.
        */
-      dest = sir_read_hw_grf(b, 1, 0, SIR_TYPE_UD, 0);
+      dest = ibc_read_hw_grf(b, 1, 0, IBC_TYPE_UD, 0);
       break;
 
    case nir_intrinsic_load_subgroup_invocation: {
       assert(b->exec_size == 8);
       assert(b->exec_group == 0);
-      sir_alu_src imm_src = {
-         .file = SIR_REG_FILE_IMM,
-         .type = SIR_TYPE_V,
+      ibc_alu_src imm_src = {
+         .file = IBC_REG_FILE_IMM,
+         .type = IBC_TYPE_V,
       };
       *(uint32_t *)imm_src.imm = 0x76543210;
-      dest = sir_MOV(b, SIR_TYPE_UD, imm_src);
+      dest = ibc_MOV(b, IBC_TYPE_UD, imm_src);
       break;
    }
 
    case nir_intrinsic_store_ssbo: {
-      sir_intrinsic_instr *store =
-         sir_intrinsic_instr_create(b->shader,
-                                    SIR_INTRINSIC_OP_BTI_UNTYPED_WRITE,
+      ibc_intrinsic_instr *store =
+         ibc_intrinsic_instr_create(b->shader,
+                                    IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
                                     b->exec_size, b->exec_group, 3);
-      store->src[0] = (sir_intrinsic_src) {
-         .file = SIR_REG_FILE_IMM,
+      store->src[0] = (ibc_intrinsic_src) {
+         .file = IBC_REG_FILE_IMM,
          .imm = 1 + nir_src_as_uint(instr->src[1]),
       };
 
       assert(instr->src[2].is_ssa);
-      store->src[1] = (sir_intrinsic_src) {
-         .file = SIR_REG_FILE_LOGICAL,
+      store->src[1] = (ibc_intrinsic_src) {
+         .file = IBC_REG_FILE_LOGICAL,
          .reg = {
             .reg = nts->ssa_to_reg[instr->src[2].ssa->index],
          },
       };
 
       assert(instr->src[0].is_ssa);
-      store->src[2] = (sir_intrinsic_src) {
-         .file = SIR_REG_FILE_LOGICAL,
+      store->src[2] = (ibc_intrinsic_src) {
+         .file = IBC_REG_FILE_LOGICAL,
          .reg = {
             .reg = nts->ssa_to_reg[instr->src[0].ssa->index],
          },
       };
       store->const_index[0] = instr->src[0].ssa->num_components;
 
-      sir_builder_insert_instr(b, &store->instr);
+      ibc_builder_insert_instr(b, &store->instr);
       break;
    }
 
@@ -178,23 +178,23 @@ nts_emit_intrinsic(struct nir_to_sir_state *nts,
 }
 
 static void
-nts_emit_load_const(struct nir_to_sir_state *nts,
+nts_emit_load_const(struct nir_to_ibc_state *nts,
                     const nir_load_const_instr *instr)
 {
-   sir_builder *b = &nts->b;
+   ibc_builder *b = &nts->b;
 
    /* TODO */
    assert(instr->def.num_components == 1);
 
    assert(instr->def.bit_size >= 8);
-   sir_alu_src imm_src = {
-      .file = SIR_REG_FILE_IMM,
-      .type = SIR_TYPE_UINT | instr->def.bit_size,
+   ibc_alu_src imm_src = {
+      .file = IBC_REG_FILE_IMM,
+      .type = IBC_TYPE_UINT | instr->def.bit_size,
    };
    switch (instr->def.bit_size) {
    case 8:
       /* 8-bit immediates aren't a thing */
-      imm_src.type = SIR_TYPE_UW;
+      imm_src.type = IBC_TYPE_UW;
       *(uint16_t *)imm_src.imm = instr->value[0].u8;
       break;
    case 16:
@@ -210,59 +210,59 @@ nts_emit_load_const(struct nir_to_sir_state *nts,
       unreachable("Invalid bit size");
    }
 
-   nts->ssa_to_reg[instr->def.index] = sir_MOV(b, imm_src.type, imm_src);
+   nts->ssa_to_reg[instr->def.index] = ibc_MOV(b, imm_src.type, imm_src);
 }
 
 static void
-nts_emit_cs_thread_terminate(struct nir_to_sir_state *nts)
+nts_emit_cs_thread_terminate(struct nir_to_ibc_state *nts)
 {
-   sir_builder *b = &nts->b;
+   ibc_builder *b = &nts->b;
 
-   sir_reg *g0 = sir_hw_grf_reg_create(b->shader, 0, 32, 32);
-   sir_reg *tmp = sir_hw_grf_reg_create(b->shader,
-                                        SIR_HW_REG_UNASSIGNED, 32, 32);
+   ibc_reg *g0 = ibc_hw_grf_reg_create(b->shader, 0, 32, 32);
+   ibc_reg *tmp = ibc_hw_grf_reg_create(b->shader,
+                                        IBC_HW_REG_UNASSIGNED, 32, 32);
 
-   sir_alu_instr *mov = sir_alu_instr_create(b->shader, SIR_ALU_OP_MOV, 8, 0);
-   mov->dest = (sir_alu_dest) {
-      .file = SIR_REG_FILE_HW_GRF,
-      .type = SIR_TYPE_UD,
+   ibc_alu_instr *mov = ibc_alu_instr_create(b->shader, IBC_ALU_OP_MOV, 8, 0);
+   mov->dest = (ibc_alu_dest) {
+      .file = IBC_REG_FILE_HW_GRF,
+      .type = IBC_TYPE_UD,
       .reg = {
          .reg = tmp,
       },
    };
-   mov->src[0] = (sir_alu_src) {
-      .file = SIR_REG_FILE_HW_GRF,
-      .type = SIR_TYPE_UD,
+   mov->src[0] = (ibc_alu_src) {
+      .file = IBC_REG_FILE_HW_GRF,
+      .type = IBC_TYPE_UD,
       .reg = {
          .reg = g0,
       },
    };
-   sir_builder_insert_instr(b, &mov->instr);
+   ibc_builder_insert_instr(b, &mov->instr);
 
-   sir_send_instr *send = sir_send_instr_create(b->shader, 8, 0);
+   ibc_send_instr *send = ibc_send_instr_create(b->shader, 8, 0);
    send->instr.we_all = true;
    send->sfid = BRW_SFID_THREAD_SPAWNER;
    send->desc_imm = brw_ts_eot_desc(b->shader->devinfo);
    send->eot = true;
 
-   send->payload[0] = (sir_reg_ref) { .reg = tmp, };
+   send->payload[0] = (ibc_reg_ref) { .reg = tmp, };
    send->mlen = 1;
 
-   sir_builder_insert_instr(b, &send->instr);
+   ibc_builder_insert_instr(b, &send->instr);
 }
 
-sir_shader *
-nir_to_sir(const nir_shader *nir, void *mem_ctx,
+ibc_shader *
+nir_to_ibc(const nir_shader *nir, void *mem_ctx,
            unsigned dispatch_size,
            const struct gen_device_info *devinfo)
 {
-   struct nir_to_sir_state nts;
-   sir_builder_init(&nts.b, sir_shader_create(mem_ctx, devinfo),
+   struct nir_to_ibc_state nts;
+   ibc_builder_init(&nts.b, ibc_shader_create(mem_ctx, devinfo),
                     dispatch_size);
 
    nir_function_impl *impl = nir_shader_get_entrypoint((nir_shader *)nir);
 
-   nts.ssa_to_reg = ralloc_array(mem_ctx, const sir_reg *, impl->ssa_alloc);
+   nts.ssa_to_reg = ralloc_array(mem_ctx, const ibc_reg *, impl->ssa_alloc);
 
    nir_foreach_block(block, impl) {
       nir_foreach_instr(instr, block) {
