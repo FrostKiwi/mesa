@@ -89,16 +89,23 @@ sir_validate_alu_src(struct sir_validate_state *s,
       sir_assert(s, src->reg.reg == NULL);
       return;
 
+   case SIR_REG_FILE_IMM:
+      /* TODO */
+      return;
+
    case SIR_REG_FILE_LOGICAL:
       if (sir_assert(s, src->reg.reg)) {
          sir_assert(s, src->reg.reg->file == SIR_REG_FILE_LOGICAL);
-         sir_validate_logical_reg_ref(s, &src->reg, 1,
-                                      sir_type_bit_size(src->type),
+         sir_validate_logical_reg_ref(s, &src->reg,
+                                      sir_type_bit_size(src->type), 1,
                                       alu->instr.simd_width,
                                       alu->instr.simd_group);
       }
       return;
 
+   case SIR_REG_FILE_HW_GRF:
+      /* TODO */
+      return;
    }
 
    unreachable("Invalid register file");
@@ -121,11 +128,15 @@ sir_validate_alu_dst(struct sir_validate_state *s,
       sir_assert(s, !alu->instr.we_all);
       if (sir_assert(s, dest->reg.reg)) {
          sir_assert(s, dest->reg.reg->file == SIR_REG_FILE_LOGICAL);
-         sir_validate_logical_reg_ref(s, &dest->reg, 1,
-                                      sir_type_bit_size(dest->type),
+         sir_validate_logical_reg_ref(s, &dest->reg,
+                                      sir_type_bit_size(dest->type), 1,
                                       alu->instr.simd_width,
                                       alu->instr.simd_group);
       }
+      return;
+
+   case SIR_REG_FILE_HW_GRF:
+      /* TODO */
       return;
    }
 
@@ -190,6 +201,14 @@ sir_validate_instr(struct sir_validate_state *s, const sir_instr *instr)
    case SIR_INSTR_TYPE_ALU:
       sir_validate_alu_instr(s, sir_instr_as_alu(instr));
       return;
+
+   case SIR_INSTR_TYPE_SEND:
+      /* TODO */
+      return;
+
+   case SIR_INSTR_TYPE_INTRINSIC:
+      /* TODO */
+      return;
    }
 
    unreachable("Invalid instruction type");
@@ -201,12 +220,14 @@ sir_validate_block(struct sir_validate_state *s, const sir_block *block)
    sir_foreach_instr(instr, block)
       sir_validate_instr(s, instr);
 
+#if 0 /* TODO */
    /* The last instruction in the block must be a jump */
    sir_assert(s, !list_is_empty(&block->instrs));
    sir_foreach_instr_reverse(instr, block) {
       sir_assert(s, instr->type == SIR_INSTR_TYPE_JUMP);
       break;
    }
+#endif
 }
 
 void
