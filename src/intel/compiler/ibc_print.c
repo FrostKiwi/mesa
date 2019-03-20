@@ -93,6 +93,16 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref, unsigned type_sz_B)
 }
 
 static void
+print_instr(FILE *fp, const ibc_instr *instr, const char *name)
+{
+   fprintf(fp, "%s", name);
+   if (instr->we_all)
+      fprintf(fp, "(%u)", instr->simd_width);
+   else
+      fprintf(fp, "(%u:%u)", instr->simd_group, instr->simd_width);
+}
+
+static void
 print_imm(FILE *fp, const char imm[8], enum ibc_type type)
 {
    switch (type) {
@@ -159,8 +169,7 @@ alu_op_name(enum ibc_alu_op op)
 static void
 print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 {
-   fprintf(fp, "%s(%u:%u)", alu_op_name(alu->op),
-           alu->instr.simd_group, alu->instr.simd_width);
+   print_instr(fp, &alu->instr, alu_op_name(alu->op));
 
    fprintf(fp, "   ");
 
@@ -204,6 +213,49 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 static void
 print_send_instr(FILE *fp, const ibc_send_instr *send)
 {
+   print_instr(fp, &send->instr, "send");
+
+   fprintf(fp, "   ");
+
+   if (send->dest.reg) {
+      print_reg_ref(fp, &send->dest, 0);
+   } else {
+      fprintf(fp, "null");
+   }
+
+   fprintf(fp, "   ");
+
+   print_reg_ref(fp, &send->payload[0], 0);
+
+   fprintf(fp, "   ");
+
+   if (send->payload[1].reg) {
+      print_reg_ref(fp, &send->payload[0], 0);
+   } else {
+      fprintf(fp, "null");
+   }
+
+   fprintf(fp, "   ");
+
+   if (send->desc.reg) {
+      fprintf(fp, "(");
+      print_reg_ref(fp, &send->desc, 0);
+      fprintf(fp, " | 0x%08" PRIx32 ")", send->desc_imm);
+   } else {
+      fprintf(fp, "0x%08" PRIx32, send->desc_imm);
+   }
+
+   fprintf(fp, "   ");
+
+   if (send->ex_desc.reg) {
+      fprintf(fp, "(");
+      print_reg_ref(fp, &send->ex_desc, 0);
+      fprintf(fp, " | 0x%08" PRIx32 ")", send->ex_desc_imm);
+   } else {
+      fprintf(fp, "0x%08" PRIx32, send->ex_desc_imm);
+   }
+
+   fprintf(fp, "\n");
 }
 
 void
