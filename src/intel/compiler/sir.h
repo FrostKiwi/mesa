@@ -26,6 +26,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include <util/list.h>
 #include <util/macros.h>
@@ -187,6 +188,9 @@ typedef struct sir_flag_reg {
 typedef struct sir_reg {
    /** Register type */
    enum sir_reg_file file;
+
+   /** Index used for printing shaders */
+   uint32_t index;
 
    /** Link in sir_shader::regs */
    struct list_head link;
@@ -400,6 +404,9 @@ typedef struct sir_block {
    /* Link in the list of blocks */
    struct list_head link;
 
+   /** Index used for printing shaders */
+   uint32_t index;
+
    /* Instructions in this block.  The last instruction is guaranteed to be a
     * jump instruction.
     */
@@ -434,6 +441,12 @@ typedef struct sir_shader {
 sir_shader *sir_shader_create(void *mem_ctx,
                               const struct gen_device_info *devinfo);
 
+#define sir_foreach_reg(reg, shader) \
+   list_for_each_entry(sir_reg, reg, &(shader)->regs, link)
+
+#define sir_foreach_reg_safe(reg, shader) \
+   list_for_each_entry_safe(sir_reg, reg, &(shader)->regs, link)
+
 #define sir_foreach_block(block, shader) \
    list_for_each_entry(sir_block, block, &(shader)->blocks, link)
 
@@ -456,6 +469,8 @@ sir_shader *nir_to_sir(const struct nir_shader *nir, void *mem_ctx,
                        const struct gen_device_info *devinfo);
 
 bool sir_lower_surface_access(sir_shader *shader);
+
+void sir_print_shader(const sir_shader *shader, FILE *fp);
 
 #ifdef __cplusplus
 } /* extern "C" */
