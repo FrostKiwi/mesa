@@ -236,7 +236,7 @@ nts_emit_cs_thread_terminate(struct nir_to_ibc_state *nts)
 
    ibc_reg *g0 = ibc_hw_grf_reg_create(b->shader, 0, 32, 32);
    ibc_reg *tmp = ibc_hw_grf_reg_create(b->shader,
-                                        IBC_HW_REG_UNASSIGNED, 32, 32);
+                                        IBC_HW_GRF_REG_UNASSIGNED, 32, 32);
 
    ibc_alu_instr *mov = ibc_alu_instr_create(b->shader, IBC_ALU_OP_MOV, 8, 0);
    mov->dest = (ibc_alu_dest) {

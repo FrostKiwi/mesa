@@ -69,7 +69,7 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref, unsigned type_sz_B)
       return;
 
    case IBC_REG_FILE_HW_GRF: {
-      if (ref->reg->hw_grf.byte == IBC_HW_REG_UNASSIGNED) {
+      if (ref->reg->hw_grf.byte == IBC_HW_GRF_REG_UNASSIGNED) {
          fprintf(fp, "hw%u", ref->reg->index);
          if (ref->offset) {
             assert(type_sz_B > 0);
