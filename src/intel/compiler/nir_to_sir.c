@@ -182,6 +182,44 @@ nts_emit_load_const(struct nir_to_sir_state *nts,
    nts->ssa_to_reg[instr->def.index] = sir_MOV(b, imm_src.type, imm_src);
 }
 
+static void
+nts_emit_cs_thread_terminate(struct nir_to_sir_state *nts)
+{
+   sir_builder *b = &nts->b;
+
+   sir_reg *g0 = sir_hw_grf_reg_create(b->shader, 0, 32, 32);
+   sir_reg *tmp = sir_hw_grf_reg_create(b->shader,
+                                        SIR_HW_REG_UNASSIGNED, 32, 32);
+
+   sir_alu_instr *mov = sir_alu_instr_create(b->shader, SIR_ALU_OP_MOV, 8, 0);
+   mov->dest = (sir_alu_dest) {
+      .file = SIR_REG_FILE_HW_GRF,
+      .type = SIR_TYPE_UD,
+      .reg = {
+         .reg = tmp,
+      },
+   };
+   mov->src[0] = (sir_alu_src) {
+      .file = SIR_REG_FILE_HW_GRF,
+      .type = SIR_TYPE_UD,
+      .reg = {
+         .reg = g0,
+      },
+   };
+   sir_builder_insert_instr(b, &mov->instr);
+
+   sir_send_instr *send = sir_send_instr_create(b->shader, 8, 0);
+   send->instr.we_all = true;
+   send->sfid = BRW_SFID_THREAD_SPAWNER;
+   send->desc_imm = brw_ts_eot_desc(b->shader->devinfo);
+   send->eot = true;
+
+   send->payload[0] = (sir_reg_ref) { .reg = tmp, };
+   send->mlen = 1;
+
+   sir_builder_insert_instr(b, &send->instr);
+}
+
 sir_shader *
 nir_to_sir(const nir_shader *nir, void *mem_ctx,
            unsigned dispatch_size,
@@ -212,6 +250,9 @@ nir_to_sir(const nir_shader *nir, void *mem_ctx,
          }
       }
    }
+
+   if (nir->info.stage == MESA_SHADER_COMPUTE)
+      nts_emit_cs_thread_terminate(&nts);
 
    return nts.b.shader;
 }
