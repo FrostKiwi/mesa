@@ -210,7 +210,22 @@ nts_emit_load_const(struct nir_to_ibc_state *nts,
       unreachable("Invalid bit size");
    }
 
-   nts->ssa_to_reg[instr->def.index] = ibc_MOV(b, imm_src.type, imm_src);
+   ibc_alu_instr *mov = ibc_alu_instr_create(b->shader, IBC_ALU_OP_MOV, 1, 0);
+   mov->instr.we_all = true;
+   mov->src[0] = imm_src;
+
+   ibc_reg *dest_reg =
+      ibc_logical_reg_create(b->shader, instr->def.bit_size, 1, 1, 0);
+   mov->dest = (ibc_alu_dest) {
+      .file = IBC_REG_FILE_LOGICAL,
+      .type = imm_src.type,
+      .reg = {
+         .reg = dest_reg,
+      },
+   };
+   nts->ssa_to_reg[instr->def.index] = dest_reg;
+
+   ibc_builder_insert_instr(b, &mov->instr);
 }
 
 static void

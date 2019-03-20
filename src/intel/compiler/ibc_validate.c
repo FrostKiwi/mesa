@@ -59,9 +59,11 @@ ibc_validate_logical_reg_ref(struct ibc_validate_state *s,
 
    ibc_assert(s, reg->bit_size == bit_size);
    ibc_assert(s, ref->comp + num_comps <= reg->num_comps);
-   ibc_assert(s, src_simd_group >= reg->simd_group);
-   ibc_assert(s, src_simd_group + src_simd_width <=
-                 reg->simd_group + reg->simd_width);
+   if (reg->simd_width > 1) {
+      ibc_assert(s, src_simd_group >= reg->simd_group);
+      ibc_assert(s, src_simd_group + src_simd_width <=
+                    reg->simd_group + reg->simd_width);
+   }
 }
 
 static void
@@ -125,8 +127,9 @@ ibc_validate_alu_dst(struct ibc_validate_state *s,
       return;
 
    case IBC_REG_FILE_LOGICAL:
-      ibc_assert(s, !alu->instr.we_all);
       if (ibc_assert(s, dest->reg.reg)) {
+         ibc_assert(s, !alu->instr.we_all ||
+                       dest->reg.reg->logical.simd_width == 1);
          ibc_assert(s, dest->reg.reg->file == IBC_REG_FILE_LOGICAL);
          ibc_validate_logical_reg_ref(s, &dest->reg,
                                       ibc_type_bit_size(dest->type), 1,
