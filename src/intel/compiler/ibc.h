@@ -21,8 +21,8 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef SIR_H
-#define SIR_H
+#ifndef IBC_H
+#define IBC_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -47,7 +47,7 @@ extern "C" {
  * Note that you have to be a bit careful as the generated cast function
  * destroys constness.
  */
-#define SIR_DEFINE_CAST(name, in_type, out_type, field, \
+#define IBC_DEFINE_CAST(name, in_type, out_type, field, \
                         type_field, type_value)         \
 static inline out_type *                                \
 name(const in_type *parent)                             \
@@ -57,56 +57,56 @@ name(const in_type *parent)                             \
 }
 
 struct gen_device_info;
-struct sir_instr;
-struct sir_alu_instr;
-struct sir_shader;
+struct ibc_instr;
+struct ibc_alu_instr;
+struct ibc_shader;
 
-/** An enum representing SIR src and dest data types */
-enum PACKED sir_type {
-   SIR_TYPE_INVALID = 0,
-   SIR_TYPE_INT = 1,
-   SIR_TYPE_UINT = 2,
-   SIR_TYPE_FLOAT = 3,
+/** An enum representing IBC src and dest data types */
+enum PACKED ibc_type {
+   IBC_TYPE_INVALID = 0,
+   IBC_TYPE_INT = 1,
+   IBC_TYPE_UINT = 2,
+   IBC_TYPE_FLOAT = 3,
 
-   SIR_TYPE_V  = 4 | 16,
-   SIR_TYPE_UV = 5 | 16,
-   SIR_TYPE_VF = 6 | 32,
+   IBC_TYPE_V  = 4 | 16,
+   IBC_TYPE_UV = 5 | 16,
+   IBC_TYPE_VF = 6 | 32,
 
-   SIR_TYPE_B  = SIR_TYPE_INT | 8,
-   SIR_TYPE_UB = SIR_TYPE_UINT | 8,
-   SIR_TYPE_W  = SIR_TYPE_INT | 16,
-   SIR_TYPE_UW = SIR_TYPE_UINT | 16,
-   SIR_TYPE_HF = SIR_TYPE_FLOAT | 16,
-   SIR_TYPE_D  = SIR_TYPE_INT | 32,
-   SIR_TYPE_UD = SIR_TYPE_UINT | 32,
-   SIR_TYPE_F =  SIR_TYPE_FLOAT | 32,
-   SIR_TYPE_Q  = SIR_TYPE_INT | 64,
-   SIR_TYPE_UQ = SIR_TYPE_UINT | 64,
-   SIR_TYPE_DF = SIR_TYPE_FLOAT | 64,
+   IBC_TYPE_B  = IBC_TYPE_INT | 8,
+   IBC_TYPE_UB = IBC_TYPE_UINT | 8,
+   IBC_TYPE_W  = IBC_TYPE_INT | 16,
+   IBC_TYPE_UW = IBC_TYPE_UINT | 16,
+   IBC_TYPE_HF = IBC_TYPE_FLOAT | 16,
+   IBC_TYPE_D  = IBC_TYPE_INT | 32,
+   IBC_TYPE_UD = IBC_TYPE_UINT | 32,
+   IBC_TYPE_F =  IBC_TYPE_FLOAT | 32,
+   IBC_TYPE_Q  = IBC_TYPE_INT | 64,
+   IBC_TYPE_UQ = IBC_TYPE_UINT | 64,
+   IBC_TYPE_DF = IBC_TYPE_FLOAT | 64,
 };
 
-#define SIR_TYPE_BIT_SIZE_MASK 0x78
-#define SIR_TYPE_BASE_TYPE_MASK 0x07
+#define IBC_TYPE_BIT_SIZE_MASK 0x78
+#define IBC_TYPE_BASE_TYPE_MASK 0x07
 
 static inline unsigned
-sir_type_bit_size(enum sir_type t)
+ibc_type_bit_size(enum ibc_type t)
 {
-   return t & SIR_TYPE_BIT_SIZE_MASK;
+   return t & IBC_TYPE_BIT_SIZE_MASK;
 }
 
 static inline unsigned
-sir_type_base_type(enum sir_type t)
+ibc_type_base_type(enum ibc_type t)
 {
-   return t & SIR_TYPE_BASE_TYPE_MASK;
+   return t & IBC_TYPE_BASE_TYPE_MASK;
 }
 
-/** An enum representing the different types of SIR registers */
-enum PACKED sir_reg_file {
-   SIR_REG_FILE_NONE,
-   SIR_REG_FILE_IMM,
-   SIR_REG_FILE_LOGICAL,
-   SIR_REG_FILE_HW_GRF,
-   SIR_REG_FILE_FLAG,
+/** An enum representing the different types of IBC registers */
+enum PACKED ibc_reg_file {
+   IBC_REG_FILE_NONE,
+   IBC_REG_FILE_IMM,
+   IBC_REG_FILE_LOGICAL,
+   IBC_REG_FILE_HW_GRF,
+   IBC_REG_FILE_FLAG,
 };
 
 
@@ -116,7 +116,7 @@ enum PACKED sir_reg_file {
  * integral number of GEN registers.  Instead, it has a 3-dimensional logical
  * size which later gets translated into bytes for register allocation.
  */
-typedef struct sir_logical_reg {
+typedef struct ibc_logical_reg {
    /** Number of bits per component */
    uint8_t bit_size;
 
@@ -130,11 +130,11 @@ typedef struct sir_logical_reg {
    uint8_t simd_group;
 
    /** Definition if this register is statically assigned once */
-   struct sir_instr *ssa;
-} sir_logical_reg;
+   struct ibc_instr *ssa;
+} ibc_logical_reg;
 
 
-#define SIR_HW_REG_UNASSIGNED UINT16_MAX
+#define IBC_HW_REG_UNASSIGNED UINT16_MAX
 
 /** A struct representing a HW GRF register
  *
@@ -143,10 +143,10 @@ typedef struct sir_logical_reg {
  * do not have a simple 1D size in bytes and have no concept of SIMD width or
  * invocation offset.
  */
-typedef struct sir_hw_grf_reg {
+typedef struct ibc_hw_grf_reg {
    /** Start of this register in bytes
     *
-    * A value of SIR_HW_REG_UNASSIGNED means this HW reg is "virtual" and will
+    * A value of IBC_HW_REG_UNASSIGNED means this HW reg is "virtual" and will
     * have an actual register assigned later.
     */
    uint16_t byte;
@@ -156,10 +156,10 @@ typedef struct sir_hw_grf_reg {
 
    /** Alignment requirement of this register in bytes */
    uint8_t align;
-} sir_hw_grf_reg;
+} ibc_hw_grf_reg;
 
 
-#define SIR_FLAG_REG_UNASSIGNED UINT8_MAX
+#define IBC_FLAG_REG_UNASSIGNED UINT8_MAX
 
 /** A struct representing a flag register
  *
@@ -172,7 +172,7 @@ typedef struct sir_hw_grf_reg {
  *  * When read or written as a regular source, it's viewed as a N-Bit scalar
  *    with only one SIMD invocation.
  */
-typedef struct sir_flag_reg {
+typedef struct ibc_flag_reg {
    /** Flag register subnumber in units of 16-bit chunks */
    uint8_t subnr;
 
@@ -180,42 +180,42 @@ typedef struct sir_flag_reg {
    uint8_t bits;
 
    /** Definition if this register is statically assigned once */
-   struct sir_alu_instr *ssa;
-} sir_flag_reg;
+   struct ibc_alu_instr *ssa;
+} ibc_flag_reg;
 
 
 /** A struct representing a register */
-typedef struct sir_reg {
+typedef struct ibc_reg {
    /** Register type */
-   enum sir_reg_file file;
+   enum ibc_reg_file file;
 
    /** Index used for printing shaders */
    uint32_t index;
 
-   /** Link in sir_shader::regs */
+   /** Link in ibc_shader::regs */
    struct list_head link;
 
    union {
-      sir_logical_reg logical;
-      sir_hw_grf_reg hw_grf;
-      sir_flag_reg flag;
+      ibc_logical_reg logical;
+      ibc_hw_grf_reg hw_grf;
+      ibc_flag_reg flag;
    };
-} sir_reg;
+} ibc_reg;
 
-sir_reg *sir_logical_reg_create(struct sir_shader *shader,
+ibc_reg *ibc_logical_reg_create(struct ibc_shader *shader,
                                 uint8_t bit_size, uint8_t num_comps,
                                 uint8_t simd_width, uint8_t simd_group);
 
-sir_reg *sir_hw_grf_reg_create(struct sir_shader *shader,
+ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
                                uint16_t byte, uint8_t size, uint8_t align);
 
 
 /** A structure representing a register reference (source or destination) in
  * an instruction
  */
-typedef struct sir_reg_ref {
+typedef struct ibc_reg_ref {
    /** Pointer to the register; NULL if immediate */
-   const sir_reg *reg;
+   const ibc_reg *reg;
 
    union {
       /** Component to reference for logical registers */
@@ -229,22 +229,22 @@ typedef struct sir_reg_ref {
          uint8_t stride;
       };
    };
-} sir_reg_ref;
+} ibc_reg_ref;
 
 
-enum sir_instr_type {
-   SIR_INSTR_TYPE_ALU,
-   SIR_INSTR_TYPE_SEND,
-   SIR_INSTR_TYPE_INTRINSIC,
-   SIR_INSTR_TYPE_JUMP,
+enum ibc_instr_type {
+   IBC_INSTR_TYPE_ALU,
+   IBC_INSTR_TYPE_SEND,
+   IBC_INSTR_TYPE_INTRINSIC,
+   IBC_INSTR_TYPE_JUMP,
 };
 
 /** A structure representing an instruction */
-typedef struct sir_instr {
+typedef struct ibc_instr {
    /** The type of this instruction */
-   enum sir_instr_type type;
+   enum ibc_instr_type type;
 
-   /** Link in sir_block::instrs */
+   /** Link in ibc_block::instrs */
    struct list_head link;
 
    uint8_t simd_width;
@@ -252,7 +252,7 @@ typedef struct sir_instr {
    bool we_all;
 
    /** Flag reference for predication or cmod */
-   sir_reg_ref flag;
+   ibc_reg_ref flag;
 
    /** If not BRW_PREDICATE_NONE, this in struction is predicated using the
     * predicate from flag.
@@ -261,77 +261,77 @@ typedef struct sir_instr {
 
    /** True if the predicate is to be inverted */
    bool pred_inverse;
-} sir_instr;
+} ibc_instr;
 
 
-/** Enum of SIR ALU opcodes */
-enum sir_alu_op {
-   SIR_ALU_OP_MOV = 1,
-   SIR_ALU_OP_AND = 5,
-   SIR_ALU_OP_SHR = 8,
-   SIR_ALU_OP_SHL = 9,
-   SIR_ALU_OP_ADD = 64,
+/** Enum of IBC ALU opcodes */
+enum ibc_alu_op {
+   IBC_ALU_OP_MOV = 1,
+   IBC_ALU_OP_AND = 5,
+   IBC_ALU_OP_SHR = 8,
+   IBC_ALU_OP_SHL = 9,
+   IBC_ALU_OP_ADD = 64,
 };
 
 
 /** A structure representing an ALU instruction source */
-typedef struct sir_alu_src {
+typedef struct ibc_alu_src {
    /** Register file or IMM for immediate or NONE for null */
-   enum sir_reg_file file;
+   enum ibc_reg_file file;
 
    /** Type with which the register or immediate is interpreted */
-   enum sir_type type;
+   enum ibc_type type;
 
    bool negate:1;
    bool abs:1;
 
    union {
       /** A register reference for non-immediate sources */
-      sir_reg_ref reg;
+      ibc_reg_ref reg;
 
       /** 64 bits of immediate data for immediate sources */
       char imm[8];
    };
-} sir_alu_src;
+} ibc_alu_src;
 
 
-typedef struct sir_alu_dest {
+typedef struct ibc_alu_dest {
    /** Register file or NONE for null */
-   enum sir_reg_file file;
+   enum ibc_reg_file file;
 
    /** Type with which the register or immediate is interpreted */
-   enum sir_type type;
+   enum ibc_type type;
 
    bool sat;
 
-   sir_reg_ref reg;
-} sir_alu_dest;
+   ibc_reg_ref reg;
+} ibc_alu_dest;
 
 
-typedef struct sir_alu_instr {
-   sir_instr instr;
+typedef struct ibc_alu_instr {
+   ibc_instr instr;
 
    /** Opcode */
-   enum sir_alu_op op;
+   enum ibc_alu_op op;
 
    enum brw_conditional_mod cmod;
 
-   sir_alu_dest dest;
+   ibc_alu_dest dest;
 
-   sir_alu_src src[0];
-} sir_alu_instr;
+   ibc_alu_src src[0];
+} ibc_alu_instr;
 
-SIR_DEFINE_CAST(sir_instr_as_alu, sir_instr, sir_alu_instr, instr,
-                type, SIR_INSTR_TYPE_ALU)
+IBC_DEFINE_CAST(ibc_instr_as_alu, ibc_instr, ibc_alu_instr, instr,
+                type, IBC_INSTR_TYPE_ALU)
 
-sir_alu_instr *sir_alu_instr_create(struct sir_shader *shader,
-                                    enum sir_alu_op op,
+ibc_alu_instr *ibc_alu_instr_create(struct ibc_shader *shader,
+                                    enum ibc_alu_op op,
                                     uint8_t simd_width,
                                     uint8_t simd_group);
 
 
-typedef struct sir_send_instr {
-   sir_instr instr;
+typedef struct ibc_send_instr {
+   ibc_instr instr;
 
    unsigned sfid:4;
    unsigned mlen:4;
@@ -344,63 +344,63 @@ typedef struct sir_send_instr {
 
    uint32_t desc_imm;
    uint32_t ex_desc_imm;
-   sir_reg_ref desc;
-   sir_reg_ref ex_desc;
+   ibc_reg_ref desc;
+   ibc_reg_ref ex_desc;
 
-   sir_reg_ref dest;
+   ibc_reg_ref dest;
 
-   sir_reg_ref payload[2];
-} sir_send_instr;
+   ibc_reg_ref payload[2];
+} ibc_send_instr;
 
-SIR_DEFINE_CAST(sir_instr_as_send, sir_instr, sir_send_instr, instr,
-                type, SIR_INSTR_TYPE_SEND)
+IBC_DEFINE_CAST(ibc_instr_as_send, ibc_instr, ibc_send_instr, instr,
+                type, IBC_INSTR_TYPE_SEND)
 
-sir_send_instr *sir_send_instr_create(struct sir_shader *shader,
+ibc_send_instr *ibc_send_instr_create(struct ibc_shader *shader,
                                       uint8_t simd_width,
                                       uint8_t simd_group);
 
 
-enum sir_intrinsic_op {
-   SIR_INTRINSIC_OP_INVALID,
-   SIR_INTRINSIC_OP_BTI_UNTYPED_WRITE = 1,
+enum ibc_intrinsic_op {
+   IBC_INTRINSIC_OP_INVALID,
+   IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE = 1,
 };
 
 
 typedef struct {
    /** Register file or IMM for immediate or NONE for null */
-   enum sir_reg_file file;
+   enum ibc_reg_file file;
 
    union {
       /** A register reference for non-immediate sources */
-      sir_reg_ref reg;
+      ibc_reg_ref reg;
 
       /** The only kind of immediates intrinsics can consume are uint */
       uint64_t imm;
    };
-} sir_intrinsic_src;
+} ibc_intrinsic_src;
 
 typedef struct {
-   sir_instr instr;
+   ibc_instr instr;
 
-   enum sir_intrinsic_op op;
+   enum ibc_intrinsic_op op;
 
-   sir_reg_ref dest;
+   ibc_reg_ref dest;
 
    uint32_t const_index[4];
 
-   sir_intrinsic_src src[0];
-} sir_intrinsic_instr;
+   ibc_intrinsic_src src[0];
+} ibc_intrinsic_instr;
 
-SIR_DEFINE_CAST(sir_instr_as_intrinsic, sir_instr, sir_intrinsic_instr, instr,
-                type, SIR_INSTR_TYPE_INTRINSIC)
+IBC_DEFINE_CAST(ibc_instr_as_intrinsic, ibc_instr, ibc_intrinsic_instr, instr,
+                type, IBC_INSTR_TYPE_INTRINSIC)
 
-sir_intrinsic_instr *sir_intrinsic_instr_create(struct sir_shader *shader,
-                                                enum sir_intrinsic_op op,
+ibc_intrinsic_instr *ibc_intrinsic_instr_create(struct ibc_shader *shader,
+                                                enum ibc_intrinsic_op op,
                                                 uint8_t simd_width,
                                                 uint8_t simd_group,
                                                 unsigned num_srcs);
 
-typedef struct sir_block {
+typedef struct ibc_block {
    /* Link in the list of blocks */
    struct list_head link;
 
@@ -411,24 +411,24 @@ typedef struct sir_block {
     * jump instruction.
     */
    struct list_head instrs;
-} sir_block;
+} ibc_block;
 
-sir_block *sir_block_create(struct sir_shader *shader);
+ibc_block *ibc_block_create(struct ibc_shader *shader);
 
-#define sir_foreach_instr(instr, block) \
-   list_for_each_entry(sir_instr, instr, &(block)->instrs, link)
+#define ibc_foreach_instr(instr, block) \
+   list_for_each_entry(ibc_instr, instr, &(block)->instrs, link)
 
-#define sir_foreach_instr_safe(instr, block) \
-   list_for_each_entry_safe(sir_instr, instr, &(block)->instrs, link)
+#define ibc_foreach_instr_safe(instr, block) \
+   list_for_each_entry_safe(ibc_instr, instr, &(block)->instrs, link)
 
-#define sir_foreach_instr_reverse(instr, block) \
-   list_for_each_entry_rev(sir_instr, instr, &(block)->instrs, link)
+#define ibc_foreach_instr_reverse(instr, block) \
+   list_for_each_entry_rev(ibc_instr, instr, &(block)->instrs, link)
 
-#define sir_foreach_instr_reverse_safe(instr, block) \
-   list_for_each_entry_safe_rev(sir_instr, instr, &(block)->instrs, link)
+#define ibc_foreach_instr_reverse_safe(instr, block) \
+   list_for_each_entry_safe_rev(ibc_instr, instr, &(block)->instrs, link)
 
 
-typedef struct sir_shader {
+typedef struct ibc_shader {
    const struct gen_device_info *devinfo;
 
    /** Blocks */
@@ -436,44 +436,44 @@ typedef struct sir_shader {
 
    /** Registers */
    struct list_head regs;
-} sir_shader;
+} ibc_shader;
 
-sir_shader *sir_shader_create(void *mem_ctx,
+ibc_shader *ibc_shader_create(void *mem_ctx,
                               const struct gen_device_info *devinfo);
 
-#define sir_foreach_reg(reg, shader) \
-   list_for_each_entry(sir_reg, reg, &(shader)->regs, link)
+#define ibc_foreach_reg(reg, shader) \
+   list_for_each_entry(ibc_reg, reg, &(shader)->regs, link)
 
-#define sir_foreach_reg_safe(reg, shader) \
-   list_for_each_entry_safe(sir_reg, reg, &(shader)->regs, link)
+#define ibc_foreach_reg_safe(reg, shader) \
+   list_for_each_entry_safe(ibc_reg, reg, &(shader)->regs, link)
 
-#define sir_foreach_block(block, shader) \
-   list_for_each_entry(sir_block, block, &(shader)->blocks, link)
+#define ibc_foreach_block(block, shader) \
+   list_for_each_entry(ibc_block, block, &(shader)->blocks, link)
 
-#define sir_foreach_block_safe(block, shader) \
-   list_for_each_entry_safe(sir_block, block, &(shader)->blocks, link)
+#define ibc_foreach_block_safe(block, shader) \
+   list_for_each_entry_safe(ibc_block, block, &(shader)->blocks, link)
 
 
-void sir_validate_shader(const sir_shader *shader);
+void ibc_validate_shader(const ibc_shader *shader);
 
 
 /**********************************************************************
- * SIR optimization and lowering passes
+ * IBC optimization and lowering passes
  *
  * KEEP IN ALPHABETICAL ORDER!
  **********************************************************************/
 
 struct nir_shader;
-sir_shader *nir_to_sir(const struct nir_shader *nir, void *mem_ctx,
+ibc_shader *nir_to_ibc(const struct nir_shader *nir, void *mem_ctx,
                        unsigned dispatch_size,
                        const struct gen_device_info *devinfo);
 
-bool sir_lower_surface_access(sir_shader *shader);
+bool ibc_lower_surface_access(ibc_shader *shader);
 
-void sir_print_shader(const sir_shader *shader, FILE *fp);
+void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
-#endif /* SIR_H */
+#endif /* IBC_H */

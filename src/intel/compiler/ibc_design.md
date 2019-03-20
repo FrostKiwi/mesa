@@ -1,14 +1,14 @@
-SIR Design Principals
+IBC Design Principals
 =====================
 
-SIR (stands for Scalar Intermediate Representation) is a new back-end IR
-for Intel GEN architecture.  This document contains the core design
-principals that guide the design of SIR.
+IBC (stands for Intel Back-end Compiler) is a new back-end IR for Intel GEN
+architecture.  This document contains the core design principals that guide the
+design of IBC.
 
 
 ## Objectives and priorities
 
-The core objectives of SIR (primarily where it differs from the old
+The core objectives of IBC (primarily where it differs from the old
 back-end IRs) are as follows (roughly in order of priority):
 
  1. Forward-looking and designed for next-generation compute workloads:
@@ -44,10 +44,10 @@ do NOT want to do them):
     * If we share nothing, that's fine too
  3. Full expressibility of GEN hardware craziness at all times
  4. Complex optimizations
-     * SIR will be designed to make copy-prop and various folding
+     * IBC will be designed to make copy-prop and various folding
        operations easy but we don't want to re-design nir_opt_algebraic; by
        and large, those types of optimizations should still be done in NIR
-     * Optimizations like cmod propagation will still have to happen in SIR
+     * Optimizations like cmod propagation will still have to happen in IBC
  5. Single Static Assignment form
      * Many people are likely to be shocked to see this on the non-goals
        list.  Even though SSA has proved extremely useful and powerful in
@@ -61,8 +61,8 @@ do NOT want to do them):
 
 One of the big pain-points of the current IR is in the handling of bit sizes
 and register allocation of non-32-bit things.  One of the key design points of
-SIR (as it currently stands) is the addition of logical registers to attempt to
-address this problem.  A logical register in SIR has a 3-dimensional size in
+IBC (as it currently stands) is the addition of logical registers to attempt to
+address this problem.  A logical register in IBC has a 3-dimensional size in
 terms of bit size, number of vector components, and number of SIMD invocations.
 Each register is also assigned a SIMD group where the register is only allowed
 to be written by instructions executing in that SIMD range.
@@ -108,11 +108,11 @@ has been fairly successful with NIR but has some obvious draw-backs.
 We will keep some things from NIR and chuck others that were probably not a
 good idea.  In particular, we'll still typedef structs:
 
-    typedef struct sir_knight {
+    typedef struct ibc_knight {
         /* blah, blah, blah */
-    } sir_knight;
+    } ibc_knight;
 
-Why?  Because it's way easier to type and `sir_knight *knight` has no
+Why?  Because it's way easier to type and `ibc_knight *knight` has no
 ambiguity as to what it is.  It's in a type declaration so it's a type.
 We will not, however, typedef enums and their values will go back to
 `UPPER_SNAKE_CASE`.  This is standard C and C++ convention and the fact

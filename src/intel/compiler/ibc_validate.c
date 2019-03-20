@@ -24,86 +24,86 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "sir.h"
+#include "ibc.h"
 
 #include <util/bitscan.h>
 
-struct sir_validate_state {
-   const sir_shader *shader;
+struct ibc_validate_state {
+   const ibc_shader *shader;
 };
 
 static bool
-_sir_assert(struct sir_validate_state *s, int line,
+_ibc_assert(struct ibc_validate_state *s, int line,
             const char *expr, bool value)
 {
    if (likely(value))
       return true;
 
-   fprintf(stderr, "sir_validate:%d Assertion failed: %s", line, expr);
+   fprintf(stderr, "ibc_validate:%d Assertion failed: %s", line, expr);
    abort();
 
    /* For when this does something more interesting */
    return false;
 }
-#define sir_assert(state, expr) _sir_assert(state, __LINE__, #expr, expr)
+#define ibc_assert(state, expr) _ibc_assert(state, __LINE__, #expr, expr)
 
 static void
-sir_validate_logical_reg_ref(struct sir_validate_state *s,
-                             const sir_reg_ref *ref,
+ibc_validate_logical_reg_ref(struct ibc_validate_state *s,
+                             const ibc_reg_ref *ref,
                              unsigned bit_size,
                              unsigned num_comps,
                              unsigned src_simd_width,
                              unsigned src_simd_group)
 {
-   const sir_logical_reg *reg = &ref->reg->logical;
+   const ibc_logical_reg *reg = &ref->reg->logical;
 
-   sir_assert(s, reg->bit_size == bit_size);
-   sir_assert(s, ref->comp + num_comps <= reg->num_comps);
-   sir_assert(s, src_simd_group >= reg->simd_group);
-   sir_assert(s, src_simd_group + src_simd_width <=
+   ibc_assert(s, reg->bit_size == bit_size);
+   ibc_assert(s, ref->comp + num_comps <= reg->num_comps);
+   ibc_assert(s, src_simd_group >= reg->simd_group);
+   ibc_assert(s, src_simd_group + src_simd_width <=
                  reg->simd_group + reg->simd_width);
 }
 
 static void
-sir_validate_flag_reg_ref(struct sir_validate_state *s,
-                          const sir_reg_ref *ref,
+ibc_validate_flag_reg_ref(struct ibc_validate_state *s,
+                          const ibc_reg_ref *ref,
                           unsigned src_simd_width,
                           unsigned src_simd_group)
 {
-   const sir_flag_reg *reg = &ref->reg->flag;
+   const ibc_flag_reg *reg = &ref->reg->flag;
 
    unsigned reg_simd_group = (reg->subnr % 2) * 16;
    unsigned reg_simd_width = reg->bits;
 
-   sir_assert(s, src_simd_group >= reg_simd_group);
-   sir_assert(s, src_simd_group + src_simd_width <=
+   ibc_assert(s, src_simd_group >= reg_simd_group);
+   ibc_assert(s, src_simd_group + src_simd_width <=
                  reg_simd_group + reg_simd_width);
 }
 
 static void
-sir_validate_alu_src(struct sir_validate_state *s,
-                     const sir_alu_instr *alu, const sir_alu_src *src)
+ibc_validate_alu_src(struct ibc_validate_state *s,
+                     const ibc_alu_instr *alu, const ibc_alu_src *src)
 {
    switch (src->file) {
-   case SIR_REG_FILE_NONE:
-      sir_assert(s, src->reg.reg == NULL);
+   case IBC_REG_FILE_NONE:
+      ibc_assert(s, src->reg.reg == NULL);
       return;
 
-   case SIR_REG_FILE_IMM:
+   case IBC_REG_FILE_IMM:
       /* TODO */
       return;
 
-   case SIR_REG_FILE_LOGICAL:
-      if (sir_assert(s, src->reg.reg)) {
-         sir_assert(s, src->reg.reg->file == SIR_REG_FILE_LOGICAL);
-         sir_validate_logical_reg_ref(s, &src->reg,
-                                      sir_type_bit_size(src->type), 1,
+   case IBC_REG_FILE_LOGICAL:
+      if (ibc_assert(s, src->reg.reg)) {
+         ibc_assert(s, src->reg.reg->file == IBC_REG_FILE_LOGICAL);
+         ibc_validate_logical_reg_ref(s, &src->reg,
+                                      ibc_type_bit_size(src->type), 1,
                                       alu->instr.simd_width,
                                       alu->instr.simd_group);
       }
       return;
 
-   case SIR_REG_FILE_HW_GRF:
+   case IBC_REG_FILE_HW_GRF:
       /* TODO */
       return;
    }
@@ -112,30 +112,30 @@ sir_validate_alu_src(struct sir_validate_state *s,
 }
 
 static void
-sir_validate_alu_dst(struct sir_validate_state *s,
-                     const sir_alu_instr *alu, const sir_alu_dest *dest)
+ibc_validate_alu_dst(struct ibc_validate_state *s,
+                     const ibc_alu_instr *alu, const ibc_alu_dest *dest)
 {
    switch (dest->file) {
-   case SIR_REG_FILE_NONE:
-      sir_assert(s, dest->reg.reg == NULL);
+   case IBC_REG_FILE_NONE:
+      ibc_assert(s, dest->reg.reg == NULL);
       return;
 
-   case SIR_REG_FILE_IMM:
-      sir_assert(s, !"Immediates are not allowed in destinations");
+   case IBC_REG_FILE_IMM:
+      ibc_assert(s, !"Immediates are not allowed in destinations");
       return;
 
-   case SIR_REG_FILE_LOGICAL:
-      sir_assert(s, !alu->instr.we_all);
-      if (sir_assert(s, dest->reg.reg)) {
-         sir_assert(s, dest->reg.reg->file == SIR_REG_FILE_LOGICAL);
-         sir_validate_logical_reg_ref(s, &dest->reg,
-                                      sir_type_bit_size(dest->type), 1,
+   case IBC_REG_FILE_LOGICAL:
+      ibc_assert(s, !alu->instr.we_all);
+      if (ibc_assert(s, dest->reg.reg)) {
+         ibc_assert(s, dest->reg.reg->file == IBC_REG_FILE_LOGICAL);
+         ibc_validate_logical_reg_ref(s, &dest->reg,
+                                      ibc_type_bit_size(dest->type), 1,
                                       alu->instr.simd_width,
                                       alu->instr.simd_group);
       }
       return;
 
-   case SIR_REG_FILE_HW_GRF:
+   case IBC_REG_FILE_HW_GRF:
       /* TODO */
       return;
    }
@@ -167,22 +167,22 @@ brw_predicate_bits(enum brw_predicate pred)
 }
 
 static void
-sir_validate_alu_instr(struct sir_validate_state *s, const sir_alu_instr *alu)
+ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
 {
    if (alu->cmod != BRW_CONDITIONAL_NONE) {
-      sir_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
-      sir_validate_flag_reg_ref(s, &alu->instr.flag, alu->instr.simd_width,
+      ibc_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
+      ibc_validate_flag_reg_ref(s, &alu->instr.flag, alu->instr.simd_width,
                                 alu->instr.simd_group);
    }
 
-   sir_validate_alu_dst(s, alu, &alu->dest);
+   ibc_validate_alu_dst(s, alu, &alu->dest);
 
    for (unsigned i = 0; i < 3 /* TODO */; i++)
-      sir_validate_alu_src(s, alu, &alu->src[i]);
+      ibc_validate_alu_src(s, alu, &alu->src[i]);
 }
 
 static void
-sir_validate_instr(struct sir_validate_state *s, const sir_instr *instr)
+ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 {
    if (instr->predicate != BRW_PREDICATE_NONE) {
       /* The ANY*H or ALL*H predicate group threads into groups so we need to
@@ -192,21 +192,21 @@ sir_validate_instr(struct sir_validate_state *s, const sir_instr *instr)
        */
       unsigned pred_bits = brw_predicate_bits(instr->predicate);
       assert(util_is_power_of_two_nonzero(pred_bits));
-      sir_validate_flag_reg_ref(s, &instr->flag,
+      ibc_validate_flag_reg_ref(s, &instr->flag,
                                 MAX2(instr->simd_width, pred_bits),
                                 instr->simd_group & (pred_bits - 1));
    }
 
    switch (instr->type) {
-   case SIR_INSTR_TYPE_ALU:
-      sir_validate_alu_instr(s, sir_instr_as_alu(instr));
+   case IBC_INSTR_TYPE_ALU:
+      ibc_validate_alu_instr(s, ibc_instr_as_alu(instr));
       return;
 
-   case SIR_INSTR_TYPE_SEND:
+   case IBC_INSTR_TYPE_SEND:
       /* TODO */
       return;
 
-   case SIR_INSTR_TYPE_INTRINSIC:
+   case IBC_INSTR_TYPE_INTRINSIC:
       /* TODO */
       return;
    }
@@ -215,28 +215,28 @@ sir_validate_instr(struct sir_validate_state *s, const sir_instr *instr)
 }
 
 static void
-sir_validate_block(struct sir_validate_state *s, const sir_block *block)
+ibc_validate_block(struct ibc_validate_state *s, const ibc_block *block)
 {
-   sir_foreach_instr(instr, block)
-      sir_validate_instr(s, instr);
+   ibc_foreach_instr(instr, block)
+      ibc_validate_instr(s, instr);
 
 #if 0 /* TODO */
    /* The last instruction in the block must be a jump */
-   sir_assert(s, !list_is_empty(&block->instrs));
-   sir_foreach_instr_reverse(instr, block) {
-      sir_assert(s, instr->type == SIR_INSTR_TYPE_JUMP);
+   ibc_assert(s, !list_is_empty(&block->instrs));
+   ibc_foreach_instr_reverse(instr, block) {
+      ibc_assert(s, instr->type == IBC_INSTR_TYPE_JUMP);
       break;
    }
 #endif
 }
 
 void
-sir_validate_shader(const sir_shader *shader)
+ibc_validate_shader(const ibc_shader *shader)
 {
-   struct sir_validate_state s = {
+   struct ibc_validate_state s = {
       .shader = shader,
    };
 
-   sir_foreach_block(block, shader)
-      sir_validate_block(&s, block);
+   ibc_foreach_block(block, shader)
+      ibc_validate_block(&s, block);
 }

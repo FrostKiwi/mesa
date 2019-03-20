@@ -21,12 +21,12 @@
  * IN THE SOFTWARE.
  */
 
-#include "sir.h"
+#include "ibc.h"
 
-static sir_reg *
-sir_reg_create(sir_shader *shader, enum sir_reg_file file)
+static ibc_reg *
+ibc_reg_create(ibc_shader *shader, enum ibc_reg_file file)
 {
-   sir_reg *reg = rzalloc(shader, sir_reg);
+   ibc_reg *reg = rzalloc(shader, ibc_reg);
 
    reg->file = file;
    list_addtail(&reg->link, &shader->regs);
@@ -34,12 +34,12 @@ sir_reg_create(sir_shader *shader, enum sir_reg_file file)
    return reg;
 }
 
-sir_reg *
-sir_logical_reg_create(sir_shader *shader,
+ibc_reg *
+ibc_logical_reg_create(ibc_shader *shader,
                        uint8_t bit_size, uint8_t num_comps,
                        uint8_t simd_width, uint8_t simd_group)
 {
-   sir_reg *reg = sir_reg_create(shader, SIR_REG_FILE_LOGICAL);
+   ibc_reg *reg = ibc_reg_create(shader, IBC_REG_FILE_LOGICAL);
 
    reg->logical.bit_size = bit_size;
    reg->logical.num_comps = num_comps;
@@ -49,11 +49,11 @@ sir_logical_reg_create(sir_shader *shader,
    return reg;
 }
 
-sir_reg *
-sir_hw_grf_reg_create(sir_shader *shader,
+ibc_reg *
+ibc_hw_grf_reg_create(ibc_shader *shader,
                       uint16_t byte, uint8_t size, uint8_t align)
 {
-   sir_reg *reg = sir_reg_create(shader, SIR_REG_FILE_LOGICAL);
+   ibc_reg *reg = ibc_reg_create(shader, IBC_REG_FILE_LOGICAL);
 
    reg->hw_grf.byte = byte;
    reg->hw_grf.size = size;
@@ -63,105 +63,105 @@ sir_hw_grf_reg_create(sir_shader *shader,
 }
 
 static void
-sir_reg_ref_init(sir_reg_ref *ref)
+ibc_reg_ref_init(ibc_reg_ref *ref)
 {
 }
 
 static void
-sir_instr_init(sir_instr *instr, enum sir_instr_type type,
+ibc_instr_init(ibc_instr *instr, enum ibc_instr_type type,
                uint8_t simd_width, uint8_t simd_group)
 {
    instr->type = type;
    instr->simd_width = simd_width;
    instr->simd_group = simd_group;
 
-   sir_reg_ref_init(&instr->flag);
+   ibc_reg_ref_init(&instr->flag);
 }
 
-sir_alu_instr *
-sir_alu_instr_create(struct sir_shader *shader, enum sir_alu_op op,
+ibc_alu_instr *
+ibc_alu_instr_create(struct ibc_shader *shader, enum ibc_alu_op op,
                      uint8_t simd_width, uint8_t simd_group)
 {
    const unsigned num_srcs = 3; /* TODO */
 
-   sir_alu_instr *alu = rzalloc_size(shader, sizeof(sir_alu_instr) +
-                                             sizeof(sir_alu_src) * num_srcs);
+   ibc_alu_instr *alu = rzalloc_size(shader, sizeof(ibc_alu_instr) +
+                                             sizeof(ibc_alu_src) * num_srcs);
 
-   sir_instr_init(&alu->instr, SIR_INSTR_TYPE_ALU, simd_width, simd_group);
+   ibc_instr_init(&alu->instr, IBC_INSTR_TYPE_ALU, simd_width, simd_group);
 
    alu->op = op;
 
-   sir_reg_ref_init(&alu->dest.reg);
+   ibc_reg_ref_init(&alu->dest.reg);
 
    for (unsigned i = 0; i < num_srcs; i++)
-      sir_reg_ref_init(&alu->src[i].reg);
+      ibc_reg_ref_init(&alu->src[i].reg);
 
    return alu;
 }
 
-sir_send_instr *
-sir_send_instr_create(struct sir_shader *shader,
+ibc_send_instr *
+ibc_send_instr_create(struct ibc_shader *shader,
                       uint8_t simd_width,
                       uint8_t simd_group)
 {
-   sir_send_instr *send = rzalloc(shader, sir_send_instr);
+   ibc_send_instr *send = rzalloc(shader, ibc_send_instr);
 
-   sir_instr_init(&send->instr, SIR_INSTR_TYPE_SEND, simd_width, simd_group);
+   ibc_instr_init(&send->instr, IBC_INSTR_TYPE_SEND, simd_width, simd_group);
 
-   sir_reg_ref_init(&send->desc);
-   sir_reg_ref_init(&send->ex_desc);
+   ibc_reg_ref_init(&send->desc);
+   ibc_reg_ref_init(&send->ex_desc);
 
-   sir_reg_ref_init(&send->dest);
+   ibc_reg_ref_init(&send->dest);
 
-   sir_reg_ref_init(&send->payload[0]);
-   sir_reg_ref_init(&send->payload[1]);
+   ibc_reg_ref_init(&send->payload[0]);
+   ibc_reg_ref_init(&send->payload[1]);
 
    return send;
 }
 
-sir_intrinsic_instr *
-sir_intrinsic_instr_create(struct sir_shader *shader,
-                           enum sir_intrinsic_op op,
+ibc_intrinsic_instr *
+ibc_intrinsic_instr_create(struct ibc_shader *shader,
+                           enum ibc_intrinsic_op op,
                            uint8_t simd_width, uint8_t simd_group,
                            unsigned num_srcs)
 {
-   sir_intrinsic_instr *intrin =
-      rzalloc_size(shader, sizeof(sir_intrinsic_instr) +
-                           sizeof(sir_intrinsic_src) * num_srcs);
+   ibc_intrinsic_instr *intrin =
+      rzalloc_size(shader, sizeof(ibc_intrinsic_instr) +
+                           sizeof(ibc_intrinsic_src) * num_srcs);
 
-   sir_instr_init(&intrin->instr, SIR_INSTR_TYPE_INTRINSIC,
+   ibc_instr_init(&intrin->instr, IBC_INSTR_TYPE_INTRINSIC,
                   simd_width, simd_group);
 
    intrin->op = op;
 
-   sir_reg_ref_init(&intrin->dest);
+   ibc_reg_ref_init(&intrin->dest);
 
    for (unsigned i = 0; i < num_srcs; i++)
-      sir_reg_ref_init(&intrin->src[i].reg);
+      ibc_reg_ref_init(&intrin->src[i].reg);
 
    return intrin;
 }
 
-sir_block *
-sir_block_create(sir_shader *shader)
+ibc_block *
+ibc_block_create(ibc_shader *shader)
 {
-   sir_block *block = rzalloc(shader, sir_block);
+   ibc_block *block = rzalloc(shader, ibc_block);
 
    list_inithead(&block->instrs);
 
    return block;
 }
 
-sir_shader *
-sir_shader_create(void *mem_ctx,
+ibc_shader *
+ibc_shader_create(void *mem_ctx,
                   const struct gen_device_info *devinfo)
 {
-   sir_shader *shader = rzalloc(mem_ctx, sir_shader);
+   ibc_shader *shader = rzalloc(mem_ctx, ibc_shader);
 
    shader->devinfo = devinfo,
 
    list_inithead(&shader->blocks);
-   sir_block *first_block = sir_block_create(shader);
+   ibc_block *first_block = ibc_block_create(shader);
    list_add(&first_block->link, &shader->blocks);
 
    list_inithead(&shader->regs);
