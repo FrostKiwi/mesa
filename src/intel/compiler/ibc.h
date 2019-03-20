@@ -134,7 +134,7 @@ typedef struct ibc_logical_reg {
 } ibc_logical_reg;
 
 
-#define IBC_HW_REG_UNASSIGNED UINT16_MAX
+#define IBC_HW_GRF_REG_UNASSIGNED UINT16_MAX
 
 /** A struct representing a HW GRF register
  *
@@ -146,7 +146,7 @@ typedef struct ibc_logical_reg {
 typedef struct ibc_hw_grf_reg {
    /** Start of this register in bytes
     *
-    * A value of IBC_HW_REG_UNASSIGNED means this HW reg is "virtual" and will
+    * A value of IBC_HW_GRF_UNASSIGNED means this HW reg is "virtual" and will
     * have an actual register assigned later.
     */
    uint16_t byte;
@@ -467,6 +467,8 @@ struct nir_shader;
 ibc_shader *nir_to_ibc(const struct nir_shader *nir, void *mem_ctx,
                        unsigned dispatch_size,
                        const struct gen_device_info *devinfo);
+
+void ibc_assign_regs(ibc_shader *shader);
 
 bool ibc_lower_surface_access(ibc_shader *shader);
 
