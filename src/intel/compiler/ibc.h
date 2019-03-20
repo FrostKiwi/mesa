@@ -335,7 +335,7 @@ typedef struct ibc_send_instr {
 
    unsigned sfid:4;
    unsigned mlen:4;
-   unsigned mlen2:4;
+   unsigned ex_mlen:4;
    unsigned rlen:4;
    bool has_header:1;
    bool has_side_effects:1;
@@ -473,6 +473,9 @@ void ibc_assign_regs(ibc_shader *shader);
 bool ibc_lower_surface_access(ibc_shader *shader);
 
 void ibc_print_shader(const ibc_shader *shader, FILE *fp);
+
+unsigned *ibc_to_binary(const ibc_shader *shader, void *mem_ctx,
+                        unsigned *program_size);
 
 #ifdef __cplusplus
 } /* extern "C" */
