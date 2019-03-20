@@ -329,6 +329,7 @@ sir_alu_instr *sir_alu_instr_create(struct sir_shader *shader,
 typedef struct sir_send_instr {
    sir_instr instr;
 
+   unsigned sfid:4;
    unsigned mlen:4;
    unsigned mlen2:4;
    unsigned rlen:4;
@@ -338,6 +339,7 @@ typedef struct sir_send_instr {
    bool eot:1;
 
    uint32_t desc_imm;
+   uint32_t ex_desc_imm;
    sir_reg_ref desc;
    sir_reg_ref ex_desc;
 
@@ -349,20 +351,50 @@ typedef struct sir_send_instr {
 SIR_DEFINE_CAST(sir_instr_as_send, sir_instr, sir_send_instr, instr,
                 type, SIR_INSTR_TYPE_SEND)
 
+sir_send_instr *sir_send_instr_create(struct sir_shader *shader,
+                                      uint8_t simd_width,
+                                      uint8_t simd_group);
+
+
+enum sir_intrinsic_op {
+   SIR_INTRINSIC_OP_INVALID,
+   SIR_INTRINSIC_OP_BTI_UNTYPED_WRITE = 1,
+};
+
 
 typedef struct {
-   /** A register reference for non-immediate sources */
-   sir_reg_ref reg;
-} sir_intrinsic_reg;
+   /** Register file or IMM for immediate or NONE for null */
+   enum sir_reg_file file;
+
+   union {
+      /** A register reference for non-immediate sources */
+      sir_reg_ref reg;
+
+      /** The only kind of immediates intrinsics can consume are uint */
+      uint64_t imm;
+   };
+} sir_intrinsic_src;
 
 typedef struct {
    sir_instr instr;
 
+   enum sir_intrinsic_op op;
+
    sir_reg_ref dest;
+
+   uint32_t const_index[4];
+
+   sir_intrinsic_src src[0];
 } sir_intrinsic_instr;
 
 SIR_DEFINE_CAST(sir_instr_as_intrinsic, sir_instr, sir_intrinsic_instr, instr,
                 type, SIR_INSTR_TYPE_INTRINSIC)
+
+sir_intrinsic_instr *sir_intrinsic_instr_create(struct sir_shader *shader,
+                                                enum sir_intrinsic_op op,
+                                                uint8_t simd_width,
+                                                uint8_t simd_group,
+                                                unsigned num_srcs);
 
 typedef struct sir_block {
    /* Link in the list of blocks */
@@ -422,6 +454,8 @@ struct nir_shader;
 sir_shader *nir_to_sir(const struct nir_shader *nir, void *mem_ctx,
                        unsigned dispatch_size,
                        const struct gen_device_info *devinfo);
+
+bool sir_lower_surface_access(sir_shader *shader);
 
 #ifdef __cplusplus
 } /* extern "C" */
