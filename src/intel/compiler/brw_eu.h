@@ -1029,6 +1029,12 @@ brw_pixel_interp_desc(UNUSED const struct gen_device_info *devinfo,
            SET_BITS(simd_mode, 16, 16));
 }
 
+static inline uint32_t
+brw_ts_eot_desc(UNUSED const struct gen_device_info *devinfo)
+{
+   return SET_BITS(1, 4, 4);
+}
+
 void brw_urb_WRITE(struct brw_codegen *p,
 		   struct brw_reg dest,
 		   unsigned msg_reg_nr,
