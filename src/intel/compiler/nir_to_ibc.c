@@ -48,10 +48,10 @@ ibc_type_for_nir(nir_alu_type ntype)
 }
 
 static void
-nts_emit_alu(struct nir_to_ibc_state *nts,
+nti_emit_alu(struct nir_to_ibc_state *nti,
              const nir_alu_instr *instr)
 {
-   ibc_builder *b = &nts->b;
+   ibc_builder *b = &nti->b;
 
    ibc_alu_src src[4];
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
@@ -61,7 +61,7 @@ nts_emit_alu(struct nir_to_ibc_state *nts,
       /* TODO */
       assert(ssa_src->num_components == 1);
 
-      const ibc_reg *reg = nts->ssa_to_reg[ssa_src->index];
+      const ibc_reg *reg = nti->ssa_to_reg[ssa_src->index];
       src[i] = (ibc_alu_src) {
          .type = ibc_type_for_nir(nir_op_infos[instr->op].input_types[i]) |
                  ssa_src->bit_size,
@@ -103,14 +103,14 @@ nts_emit_alu(struct nir_to_ibc_state *nts,
    assert(dest->file == IBC_REG_FILE_LOGICAL);
    assert(dest->logical.bit_size == instr->dest.dest.ssa.bit_size);
    assert(dest->logical.num_comps == instr->dest.dest.ssa.num_components);
-   nts->ssa_to_reg[instr->dest.dest.ssa.index] = dest;
+   nti->ssa_to_reg[instr->dest.dest.ssa.index] = dest;
 }
 
 static void
-nts_emit_intrinsic(struct nir_to_ibc_state *nts,
+nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                    const nir_intrinsic_instr *instr)
 {
-   ibc_builder *b = &nts->b;
+   ibc_builder *b = &nti->b;
 
    ibc_reg *dest = NULL;
    switch (instr->intrinsic) {
@@ -149,7 +149,7 @@ nts_emit_intrinsic(struct nir_to_ibc_state *nts,
       store->src[1] = (ibc_intrinsic_src) {
          .file = IBC_REG_FILE_LOGICAL,
          .reg = {
-            .reg = nts->ssa_to_reg[instr->src[2].ssa->index],
+            .reg = nti->ssa_to_reg[instr->src[2].ssa->index],
          },
       };
 
@@ -157,7 +157,7 @@ nts_emit_intrinsic(struct nir_to_ibc_state *nts,
       store->src[2] = (ibc_intrinsic_src) {
          .file = IBC_REG_FILE_LOGICAL,
          .reg = {
-            .reg = nts->ssa_to_reg[instr->src[0].ssa->index],
+            .reg = nti->ssa_to_reg[instr->src[0].ssa->index],
          },
       };
       store->const_index[0] = instr->src[0].ssa->num_components;
@@ -172,17 +172,17 @@ nts_emit_intrinsic(struct nir_to_ibc_state *nts,
 
    if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
       assert(dest != NULL);
-      nts->ssa_to_reg[instr->dest.ssa.index] = dest;
+      nti->ssa_to_reg[instr->dest.ssa.index] = dest;
    } else {
       assert(dest == NULL);
    }
 }
 
 static void
-nts_emit_load_const(struct nir_to_ibc_state *nts,
+nti_emit_load_const(struct nir_to_ibc_state *nti,
                     const nir_load_const_instr *instr)
 {
-   ibc_builder *b = &nts->b;
+   ibc_builder *b = &nti->b;
 
    /* TODO */
    assert(instr->def.num_components == 1);
@@ -224,15 +224,15 @@ nts_emit_load_const(struct nir_to_ibc_state *nts,
          .reg = dest_reg,
       },
    };
-   nts->ssa_to_reg[instr->def.index] = dest_reg;
+   nti->ssa_to_reg[instr->def.index] = dest_reg;
 
    ibc_builder_insert_instr(b, &mov->instr);
 }
 
 static void
-nts_emit_cs_thread_terminate(struct nir_to_ibc_state *nts)
+nti_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
 {
-   ibc_builder *b = &nts->b;
+   ibc_builder *b = &nti->b;
 
    ibc_reg *g0 = ibc_hw_grf_reg_create(b->shader, 0, 32, 32);
    ibc_reg *tmp = ibc_hw_grf_reg_create(b->shader,
@@ -273,25 +273,25 @@ nir_to_ibc(const nir_shader *nir, void *mem_ctx,
            unsigned dispatch_size,
            const struct gen_device_info *devinfo)
 {
-   struct nir_to_ibc_state nts;
-   ibc_builder_init(&nts.b, ibc_shader_create(mem_ctx, devinfo),
+   struct nir_to_ibc_state nti;
+   ibc_builder_init(&nti.b, ibc_shader_create(mem_ctx, devinfo),
                     dispatch_size);
 
    nir_function_impl *impl = nir_shader_get_entrypoint((nir_shader *)nir);
 
-   nts.ssa_to_reg = ralloc_array(mem_ctx, const ibc_reg *, impl->ssa_alloc);
+   nti.ssa_to_reg = ralloc_array(mem_ctx, const ibc_reg *, impl->ssa_alloc);
 
    nir_foreach_block(block, impl) {
       nir_foreach_instr(instr, block) {
          switch (instr->type) {
          case nir_instr_type_alu:
-            nts_emit_alu(&nts, nir_instr_as_alu(instr));
+            nti_emit_alu(&nti, nir_instr_as_alu(instr));
             break;
          case nir_instr_type_intrinsic:
-            nts_emit_intrinsic(&nts, nir_instr_as_intrinsic(instr));
+            nti_emit_intrinsic(&nti, nir_instr_as_intrinsic(instr));
             break;
          case nir_instr_type_load_const:
-            nts_emit_load_const(&nts, nir_instr_as_load_const(instr));
+            nti_emit_load_const(&nti, nir_instr_as_load_const(instr));
             break;
          default:
             unreachable("Unsupported instruction type");
@@ -300,7 +300,7 @@ nir_to_ibc(const nir_shader *nir, void *mem_ctx,
    }
 
    if (nir->info.stage == MESA_SHADER_COMPUTE)
-      nts_emit_cs_thread_terminate(&nts);
+      nti_emit_cs_thread_terminate(&nti);
 
-   return nts.b.shader;
+   return nti.b.shader;
 }
