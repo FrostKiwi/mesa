@@ -68,7 +68,7 @@ ibc_lower_surface_access(ibc_shader *shader)
          send->mlen = instr->simd_width / 8;
 
          send->payload[1] = intrin->src[2].reg;
-         send->mlen = intrin->const_index[0] * instr->simd_width / 8;
+         send->ex_mlen = intrin->const_index[0] * instr->simd_width / 8;
 
          list_add(&send->instr.link, &intrin->instr.link);
          list_del(&intrin->instr.link);
