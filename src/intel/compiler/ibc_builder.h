@@ -125,11 +125,11 @@ ibc_builder_insert_instr(ibc_builder *b, ibc_instr *instr)
 }
 
 static inline ibc_reg *
-ibc_builder_new_logical_reg(ibc_builder *b,
-                            uint8_t bit_size, uint8_t num_comps)
+ibc_builder_new_logical_reg(ibc_builder *b, enum ibc_type type,
+                            uint8_t num_comps)
 {
-   return ibc_logical_reg_create(b->shader, bit_size, num_comps,
-                                 b->simd_width, b->simd_group);
+   return ibc_logical_reg_create(b->shader, ibc_type_bit_size(type),
+                                 num_comps, b->simd_width, b->simd_group);
 }
 
 static inline ibc_reg_ref
@@ -251,8 +251,7 @@ ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
       dest_type |= max_bit_size;
    }
 
-   ibc_reg *dest_reg =
-      ibc_builder_new_logical_reg(b, ibc_type_bit_size(dest_type), 1);
+   ibc_reg *dest_reg = ibc_builder_new_logical_reg(b, dest_type, 1);
    ibc_reg_ref dest_ref = ibc_typed_ref(dest_reg, dest_type);
 
    ibc_build_alu(b, op, dest_ref, src, num_srcs);
