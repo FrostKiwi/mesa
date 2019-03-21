@@ -123,8 +123,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
 
    case nir_intrinsic_load_subgroup_invocation: {
-      assert(b->exec_size == 8);
-      assert(b->exec_group == 0);
+      assert(b->simd_width == 8);
+      assert(b->simd_group == 0);
       ibc_alu_src imm_src = {
          .file = IBC_REG_FILE_IMM,
          .type = IBC_TYPE_V,
@@ -139,7 +139,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       ibc_intrinsic_instr *store =
          ibc_intrinsic_instr_create(b->shader,
                                     IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
-                                    b->exec_size, b->exec_group, 3);
+                                    b->simd_width, b->simd_group, 3);
       store->src[0] = (ibc_intrinsic_src) {
          .file = IBC_REG_FILE_IMM,
          .imm = nir_src_as_uint(instr->src[1]),
