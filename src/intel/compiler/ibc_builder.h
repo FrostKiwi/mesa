@@ -224,6 +224,22 @@ ibc_build_alu(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref dest,
    return alu;
 }
 
+static inline ibc_alu_instr *
+ibc_build_alu1(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref dest,
+               ibc_reg_ref src0)
+{
+   ibc_reg_ref srcs[] = { src0 };
+   return ibc_build_alu(b, op, dest, srcs, 1);
+}
+
+static inline ibc_alu_instr *
+ibc_build_alu2(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref dest,
+               ibc_reg_ref src0, ibc_reg_ref src1)
+{
+   ibc_reg_ref srcs[] = { src0, src1 };
+   return ibc_build_alu(b, op, dest, srcs, 2);
+}
+
 static inline ibc_reg_ref
 ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
                   ibc_reg_ref *src, unsigned num_srcs)

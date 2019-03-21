@@ -119,10 +119,36 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
 
    case nir_intrinsic_load_subgroup_invocation: {
-      assert(b->simd_width == 8);
-      assert(b->simd_group == 0);
-      dest = ibc_MOV(b, IBC_TYPE_UD,
-                     ibc_MOV(b, IBC_TYPE_UW, ibc_imm_v(0x76543210)));
+      ibc_reg_ref w_tmp = {
+         .file = IBC_REG_FILE_HW_GRF,
+         .type = IBC_TYPE_UW,
+         .reg = ibc_hw_grf_reg_create(b->shader, IBC_HW_GRF_REG_UNASSIGNED,
+                                      b->simd_width * 2,
+                                      MIN2(b->simd_width * 2, 32)),
+         .offset = 0,
+         .stride = ibc_type_byte_size(IBC_TYPE_UW),
+      };
+      ibc_builder_push_we_all(b, 8);
+      ibc_build_alu1(b, IBC_ALU_OP_MOV, w_tmp, ibc_imm_v(0x76543210));
+      ibc_builder_pop(b);
+
+      if (b->simd_width > 8) {
+         ibc_reg_ref w_tmp_8 = w_tmp;
+         w_tmp_8.offset = 8 * ibc_type_byte_size(w_tmp.type);
+         ibc_builder_push_we_all(b, 8);
+         ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_8, w_tmp, ibc_imm_uw(8));
+         ibc_builder_pop(b);
+      }
+
+      if (b->simd_width > 8) {
+         ibc_reg_ref w_tmp_16 = w_tmp;
+         w_tmp_16.offset = 16 * ibc_type_byte_size(w_tmp.type);
+         ibc_builder_push_we_all(b, 16);
+         ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_16, w_tmp, ibc_imm_uw(16));
+         ibc_builder_pop(b);
+      }
+
+      dest = ibc_MOV(b, IBC_TYPE_UD, w_tmp);
       break;
    }
 
