@@ -188,9 +188,10 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
    assert(instr->def.num_components == 1);
 
    assert(instr->def.bit_size >= 8);
+   enum ibc_type type = IBC_TYPE_UINT | instr->def.bit_size;
    ibc_alu_src imm_src = {
       .file = IBC_REG_FILE_IMM,
-      .type = IBC_TYPE_UINT | instr->def.bit_size,
+      .type = type,
    };
    switch (instr->def.bit_size) {
    case 8:
@@ -211,22 +212,9 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
       unreachable("Invalid bit size");
    }
 
-   ibc_alu_instr *mov = ibc_alu_instr_create(b->shader, IBC_ALU_OP_MOV, 1, 0);
-   mov->instr.we_all = true;
-   mov->src[0] = imm_src;
-
-   ibc_reg *dest_reg =
-      ibc_logical_reg_create(b->shader, instr->def.bit_size, 1, 1, 0);
-   mov->dest = (ibc_alu_dest) {
-      .file = IBC_REG_FILE_LOGICAL,
-      .type = imm_src.type,
-      .reg = {
-         .reg = dest_reg,
-      },
-   };
-   nti->ssa_to_reg[instr->def.index] = dest_reg;
-
-   ibc_builder_insert_instr(b, &mov->instr);
+   ibc_builder_push_scalar(b);
+   nti->ssa_to_reg[instr->def.index] = ibc_MOV(b, type, imm_src);
+   ibc_builder_pop(b);
 }
 
 static void
@@ -283,6 +271,7 @@ nir_to_ibc(const nir_shader *nir, void *mem_ctx,
 
    nir_foreach_block(block, impl) {
       nir_foreach_instr(instr, block) {
+         assert(nti.b._group_stack_size == 0);
          switch (instr->type) {
          case nir_instr_type_alu:
             nti_emit_alu(&nti, nir_instr_as_alu(instr));
