@@ -26,6 +26,79 @@
 #include "ibc.h"
 #include "ibc_compile.h"
 
+static int
+get_subgroup_id_param_index(const struct brw_stage_prog_data *prog_data)
+{
+   if (prog_data->nr_params == 0)
+      return -1;
+
+   /* The local thread id is always the last parameter in the list */
+   uint32_t last_param = prog_data->param[prog_data->nr_params - 1];
+   if (last_param == BRW_PARAM_BUILTIN_SUBGROUP_ID)
+      return prog_data->nr_params - 1;
+
+   return -1;
+}
+
+static void
+fill_push_const_block_info(struct brw_push_const_block *block, unsigned dwords)
+{
+   block->dwords = dwords;
+   block->regs = DIV_ROUND_UP(dwords, 8);
+   block->size = block->regs * 32;
+}
+
+static void
+cs_fill_push_const_info(const struct gen_device_info *devinfo,
+                        struct brw_cs_prog_data *cs_prog_data)
+{
+   const struct brw_stage_prog_data *prog_data = &cs_prog_data->base;
+   int subgroup_id_index = get_subgroup_id_param_index(prog_data);
+   bool cross_thread_supported = devinfo->gen > 7 || devinfo->is_haswell;
+
+   /* The thread ID should be stored in the last param dword */
+   assert(subgroup_id_index == -1 ||
+          subgroup_id_index == (int)prog_data->nr_params - 1);
+
+   unsigned cross_thread_dwords, per_thread_dwords;
+   if (!cross_thread_supported) {
+      cross_thread_dwords = 0u;
+      per_thread_dwords = prog_data->nr_params;
+   } else if (subgroup_id_index >= 0) {
+      /* Fill all but the last register with cross-thread payload */
+      cross_thread_dwords = 8 * (subgroup_id_index / 8);
+      per_thread_dwords = prog_data->nr_params - cross_thread_dwords;
+      assert(per_thread_dwords > 0 && per_thread_dwords <= 8);
+   } else {
+      /* Fill all data using cross-thread payload */
+      cross_thread_dwords = prog_data->nr_params;
+      per_thread_dwords = 0u;
+   }
+
+   fill_push_const_block_info(&cs_prog_data->push.cross_thread, cross_thread_dwords);
+   fill_push_const_block_info(&cs_prog_data->push.per_thread, per_thread_dwords);
+
+   unsigned total_dwords =
+      (cs_prog_data->push.per_thread.size * cs_prog_data->threads +
+       cs_prog_data->push.cross_thread.size) / 4;
+   fill_push_const_block_info(&cs_prog_data->push.total, total_dwords);
+
+   assert(cs_prog_data->push.cross_thread.dwords % 8 == 0 ||
+          cs_prog_data->push.per_thread.size == 0);
+   assert(cs_prog_data->push.cross_thread.dwords +
+          cs_prog_data->push.per_thread.dwords ==
+             prog_data->nr_params);
+}
+
+static void
+cs_set_simd_size(struct brw_cs_prog_data *cs_prog_data, unsigned size)
+{
+   cs_prog_data->simd_size = size;
+   unsigned group_size = cs_prog_data->local_size[0] *
+      cs_prog_data->local_size[1] * cs_prog_data->local_size[2];
+   cs_prog_data->threads = (group_size + size - 1) / size;
+}
+
 static nir_shader *
 compile_cs_to_nir(const struct brw_compiler *compiler,
                   void *mem_ctx,
@@ -49,6 +122,25 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                int shader_time_index,
                char **error_str)
 {
+   prog_data->local_size[0] = src_shader->info.cs.local_size[0];
+   prog_data->local_size[1] = src_shader->info.cs.local_size[1];
+   prog_data->local_size[2] = src_shader->info.cs.local_size[2];
+   unsigned local_workgroup_size =
+      src_shader->info.cs.local_size[0] * src_shader->info.cs.local_size[1] *
+      src_shader->info.cs.local_size[2];
+
+   unsigned min_dispatch_width =
+      DIV_ROUND_UP(local_workgroup_size, compiler->devinfo->max_cs_threads);
+   min_dispatch_width = MAX2(8, min_dispatch_width);
+   min_dispatch_width = util_next_power_of_two(min_dispatch_width);
+   assert(min_dispatch_width <= 32);
+
+   /* Add a uniform for the thread local id.  It must be the last uniform
+    * on the list.
+    */
+   uint32_t *param = brw_stage_prog_data_add_params(&prog_data->base, 1);
+   *param = BRW_PARAM_BUILTIN_SUBGROUP_ID;
+
    nir_shader *shader =
       compile_cs_to_nir(compiler, mem_ctx, key, src_shader, 8);
 
@@ -65,6 +157,11 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    ibc_assign_regs(ibc);
    ibc_validate_shader(ibc);
    ibc_print_shader(ibc, stderr);
+
+   fprintf(stderr, "\n\n");
+
+   cs_set_simd_size(prog_data, 8);
+   cs_fill_push_const_info(compiler->devinfo, prog_data);
 
    return ibc_to_binary(ibc, mem_ctx, &prog_data->base.program_size);
 }
