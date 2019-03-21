@@ -34,20 +34,20 @@ typedef struct ibc_builder {
    ibc_shader *shader;
    struct list_head *prev;
 
-   unsigned exec_size;
-   unsigned exec_group;
+   unsigned simd_width;
+   unsigned simd_group;
 } ibc_builder;
 
 static inline void
-ibc_builder_init(ibc_builder *b, ibc_shader *shader, unsigned exec_size)
+ibc_builder_init(ibc_builder *b, ibc_shader *shader, unsigned simd_width)
 {
    b->shader = shader;
    ibc_block *first_block =
       list_first_entry(&shader->blocks, ibc_block, link);
    b->prev = &first_block->instrs;
 
-   b->exec_size = exec_size;
-   b->exec_group = 0;
+   b->simd_width = simd_width;
+   b->simd_group = 0;
 }
 
 static inline void
@@ -62,7 +62,7 @@ ibc_builder_new_logical_reg(ibc_builder *b,
                             uint8_t bit_size, uint8_t num_comps)
 {
    return ibc_logical_reg_create(b->shader, bit_size, num_comps,
-                                 b->exec_size, b->exec_group);
+                                 b->simd_width, b->simd_group);
 }
 
 static inline ibc_alu_src
@@ -109,7 +109,7 @@ ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
                   ibc_alu_src *src, unsigned num_srcs)
 {
    ibc_alu_instr *alu = ibc_alu_instr_create(b->shader, op,
-                                             b->exec_size, b->exec_group);
+                                             b->simd_width, b->simd_group);
 
    unsigned max_bit_size = 0;
    for (unsigned i = 0; i < num_srcs; i++) {
@@ -181,7 +181,7 @@ ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,
    unsigned type_sz = ibc_type_bit_size(type) / 8;
    assert(comp * type_sz < 32);
    uint16_t byte = reg * 32 + comp * type_sz;
-   uint8_t size = type_sz + (b->exec_size - 1) * type_sz * stride;
+   uint8_t size = type_sz + (b->simd_width - 1) * type_sz * stride;
    uint8_t align = type_sz;
    ibc_reg *hw_reg = ibc_hw_grf_reg_create(b->shader, byte, size, align);
 
