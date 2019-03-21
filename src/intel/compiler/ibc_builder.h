@@ -30,12 +30,24 @@
 extern "C" {
 #endif
 
+#define IBC_BUILDER_GROUP_STACK_SIZE 4
+
+struct ibc_builder_simd_group {
+   unsigned simd_width;
+   unsigned simd_group;
+   bool we_all;
+};
+
 typedef struct ibc_builder {
    ibc_shader *shader;
    struct list_head *prev;
 
    unsigned simd_width;
    unsigned simd_group;
+   bool we_all;
+
+   unsigned _group_stack_size;
+   struct ibc_builder_simd_group _group_stack[4];
 } ibc_builder;
 
 static inline void
@@ -48,6 +60,59 @@ ibc_builder_init(ibc_builder *b, ibc_shader *shader, unsigned simd_width)
 
    b->simd_width = simd_width;
    b->simd_group = 0;
+   b->we_all = false;
+
+   b->_group_stack_size = 0;
+}
+
+static inline void
+_ibc_builder_push(ibc_builder *b)
+{
+   assert(b->_group_stack_size < IBC_BUILDER_GROUP_STACK_SIZE);
+   b->_group_stack[b->_group_stack_size] =
+      (struct ibc_builder_simd_group) {
+         .simd_width = b->simd_width,
+         .simd_group = b->simd_group,
+         .we_all = b->we_all,
+      };
+   b->_group_stack_size++;
+}
+
+static inline void
+ibc_builder_pop(ibc_builder *b)
+{
+   assert(b->_group_stack_size > 0);
+   b->_group_stack_size--;
+   b->simd_width = b->_group_stack[b->_group_stack_size].simd_width;
+   b->simd_group = b->_group_stack[b->_group_stack_size].simd_group;
+   b->we_all = b->_group_stack[b->_group_stack_size].we_all;
+}
+
+static inline void
+ibc_builder_push_group(ibc_builder *b,
+                       unsigned simd_width, unsigned simd_group)
+{
+   /* We're only allowed to restrict the size */
+   assert(b->simd_group + simd_group + simd_width <= b->simd_width);
+   _ibc_builder_push(b);
+   b->simd_width = simd_width;
+   b->simd_group += simd_group;
+}
+
+static inline void
+ibc_builder_push_we_all(ibc_builder *b, unsigned simd_width)
+{
+   /* We're only allowed to restrict the size */
+   _ibc_builder_push(b);
+   b->simd_width = simd_width;
+   b->simd_group = 0;
+   b->we_all = true;
+}
+
+static inline void
+ibc_builder_push_scalar(ibc_builder *b)
+{
+   ibc_builder_push_we_all(b, 1);
 }
 
 static inline void
@@ -110,6 +175,7 @@ ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
 {
    ibc_alu_instr *alu = ibc_alu_instr_create(b->shader, op,
                                              b->simd_width, b->simd_group);
+   alu->instr.we_all = b->we_all;
 
    unsigned max_bit_size = 0;
    for (unsigned i = 0; i < num_srcs; i++) {
