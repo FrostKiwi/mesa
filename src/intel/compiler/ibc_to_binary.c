@@ -32,6 +32,10 @@ brw_reg_type_for_ibc_type(enum ibc_type type)
    case IBC_TYPE_INT:
    case IBC_TYPE_UINT:
    case IBC_TYPE_FLOAT:
+   case IBC_TYPE_8_BIT:
+   case IBC_TYPE_16_BIT:
+   case IBC_TYPE_32_BIT:
+   case IBC_TYPE_64_BIT:
       unreachable("Partial IBC type");
 
    case IBC_TYPE_V:  return BRW_REGISTER_TYPE_V;
@@ -148,6 +152,10 @@ brw_reg_for_ibc_alu_src(const struct gen_device_info *devinfo,
    case IBC_TYPE_INT:
    case IBC_TYPE_UINT:
    case IBC_TYPE_FLOAT:
+   case IBC_TYPE_8_BIT:
+   case IBC_TYPE_16_BIT:
+   case IBC_TYPE_32_BIT:
+   case IBC_TYPE_64_BIT:
    case IBC_TYPE_B:
    case IBC_TYPE_UB:
       unreachable("Invalid immediate types");
