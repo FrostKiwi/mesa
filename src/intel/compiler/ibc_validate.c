@@ -86,10 +86,16 @@ static void
 ibc_validate_alu_src(struct ibc_validate_state *s,
                      const ibc_alu_instr *alu, const ibc_alu_src *src)
 {
-   switch (src->file) {
-   case IBC_REG_FILE_NONE:
+   if (src->file == IBC_REG_FILE_NONE) {
       ibc_assert(s, src->reg.reg == NULL);
       return;
+   }
+
+   ibc_assert(s, ibc_type_base_type(src->type) != IBC_TYPE_INVALID);
+
+   switch (src->file) {
+   case IBC_REG_FILE_NONE:
+      unreachable("Handled above");
 
    case IBC_REG_FILE_IMM:
       /* TODO */
@@ -117,10 +123,16 @@ static void
 ibc_validate_alu_dst(struct ibc_validate_state *s,
                      const ibc_alu_instr *alu, const ibc_alu_dest *dest)
 {
-   switch (dest->file) {
-   case IBC_REG_FILE_NONE:
+   if (dest->file == IBC_REG_FILE_NONE) {
       ibc_assert(s, dest->reg.reg == NULL);
       return;
+   }
+
+   ibc_assert(s, ibc_type_base_type(dest->type) != IBC_TYPE_INVALID);
+
+   switch (dest->file) {
+   case IBC_REG_FILE_NONE:
+      unreachable("Handled above");
 
    case IBC_REG_FILE_IMM:
       ibc_assert(s, !"Immediates are not allowed in destinations");

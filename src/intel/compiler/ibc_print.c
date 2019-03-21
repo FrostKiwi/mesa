@@ -37,6 +37,11 @@ ibc_type_suffix(enum ibc_type type)
    case IBC_TYPE_FLOAT:
       unreachable("Invalid types when printing");
 
+   case IBC_TYPE_8_BIT:    return "8b";
+   case IBC_TYPE_16_BIT:   return "16b";
+   case IBC_TYPE_32_BIT:   return "32b";
+   case IBC_TYPE_64_BIT:   return "64b";
+
    case IBC_TYPE_V:  return "v";
    case IBC_TYPE_UV: return "uv";
    case IBC_TYPE_VF: return "vf";
@@ -110,10 +115,12 @@ print_imm(FILE *fp, const char imm[8], enum ibc_type type)
    case IBC_TYPE_INT:
    case IBC_TYPE_UINT:
    case IBC_TYPE_FLOAT:
+   case IBC_TYPE_8_BIT:
    case IBC_TYPE_B:
    case IBC_TYPE_UB:
       unreachable("Invalid immediate types");
 
+   case IBC_TYPE_16_BIT:
    case IBC_TYPE_W:
    case IBC_TYPE_UW:
       fprintf(fp, "0x%04" PRIx16 ":%s", *(uint16_t *)imm,
@@ -127,6 +134,7 @@ print_imm(FILE *fp, const char imm[8], enum ibc_type type)
    case IBC_TYPE_VF:
       unreachable("TODO");
 
+   case IBC_TYPE_32_BIT:
    case IBC_TYPE_D:
    case IBC_TYPE_UD:
    case IBC_TYPE_V:
@@ -139,6 +147,7 @@ print_imm(FILE *fp, const char imm[8], enum ibc_type type)
       fprintf(fp, "%f:f", *(float *)imm);
       return;
 
+   case IBC_TYPE_64_BIT:
    case IBC_TYPE_Q:
    case IBC_TYPE_UQ:
       fprintf(fp, "0x%016" PRIx64 ":%s", *(uint64_t *)imm,
