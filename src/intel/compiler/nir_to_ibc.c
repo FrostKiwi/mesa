@@ -130,7 +130,8 @@ nts_emit_intrinsic(struct nir_to_ibc_state *nts,
          .type = IBC_TYPE_V,
       };
       *(uint32_t *)imm_src.imm = 0x76543210;
-      dest = ibc_MOV(b, IBC_TYPE_UD, imm_src);
+      ibc_reg *w_tmp = ibc_MOV(b, IBC_TYPE_UW, imm_src);
+      dest = ibc_MOV(b, IBC_TYPE_UD, ibc_alu_usrc(w_tmp));
       break;
    }
 
