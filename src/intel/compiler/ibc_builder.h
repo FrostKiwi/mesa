@@ -26,6 +26,8 @@
 
 #include "ibc.h"
 
+#include "util/half_float.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -167,6 +169,44 @@ ibc_alu_fsrc(ibc_reg *reg)
          .reg = reg,
       },
    };
+}
+
+static inline ibc_alu_src
+ibc_imm_src(enum ibc_type type, char *imm, unsigned imm_size)
+{
+   ibc_alu_src src = {
+      .file = IBC_REG_FILE_IMM,
+      .type = type,
+   };
+   memcpy(src.imm, imm, imm_size);
+   return src;
+}
+
+#define IBC_BUILDER_DEFINE_IMM_HELPER(tp, TP, c_type)          \
+static inline ibc_alu_src                                      \
+ibc_imm_##tp(c_type x)                                         \
+{                                                              \
+   return ibc_imm_src(IBC_TYPE_##TP, (char *)&x, sizeof(x));   \
+}
+
+IBC_BUILDER_DEFINE_IMM_HELPER(w, W, int16_t)
+IBC_BUILDER_DEFINE_IMM_HELPER(uw, UW, uint16_t)
+IBC_BUILDER_DEFINE_IMM_HELPER(v, V, int32_t)
+IBC_BUILDER_DEFINE_IMM_HELPER(uv, UV, int32_t)
+IBC_BUILDER_DEFINE_IMM_HELPER(d, D, int32_t)
+IBC_BUILDER_DEFINE_IMM_HELPER(ud, UD, uint32_t)
+IBC_BUILDER_DEFINE_IMM_HELPER(f, F, float)
+IBC_BUILDER_DEFINE_IMM_HELPER(q, Q, int64_t)
+IBC_BUILDER_DEFINE_IMM_HELPER(uq, UQ, uint64_t)
+IBC_BUILDER_DEFINE_IMM_HELPER(df, DF, double)
+
+#undef IBC_BUILDER_DEFINE_IMM_HELPER
+
+static inline ibc_alu_src
+ibc_imm_hf(float x)
+{
+   uint16_t hf = _mesa_float_to_half(x);
+   return ibc_imm_src(IBC_TYPE_HF, (char *)&hf, sizeof(hf));
 }
 
 static inline ibc_reg *
