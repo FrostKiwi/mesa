@@ -141,28 +141,35 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    uint32_t *param = brw_stage_prog_data_add_params(&prog_data->base, 1);
    *param = BRW_PARAM_BUILTIN_SUBGROUP_ID;
 
-   nir_shader *shader =
-      compile_cs_to_nir(compiler, mem_ctx, key, src_shader, 8);
+   const unsigned simd_width = 32;
 
-   ibc_shader *ibc = nir_to_ibc(shader, mem_ctx, 8, compiler->devinfo);
+   nir_shader *shader =
+      compile_cs_to_nir(compiler, mem_ctx, key, src_shader, simd_width);
+
+   ibc_shader *ibc = nir_to_ibc(shader, mem_ctx, simd_width,
+                                compiler->devinfo);
+   ibc_validate_shader(ibc);
+   ibc_print_shader(ibc, stderr);
+   fprintf(stderr, "\n\n");
+   ibc_print_shader(ibc, stderr);
+   fprintf(stderr, "\n\n");
+
+   ibc_lower_simd_width(ibc);
    ibc_validate_shader(ibc);
    ibc_print_shader(ibc, stderr);
    fprintf(stderr, "\n\n");
 
    ibc_lower_surface_access(ibc);
    ibc_validate_shader(ibc);
-
    ibc_print_shader(ibc, stderr);
-
    fprintf(stderr, "\n\n");
 
    ibc_assign_regs(ibc);
    ibc_validate_shader(ibc);
    ibc_print_shader(ibc, stderr);
-
    fprintf(stderr, "\n\n");
 
-   cs_set_simd_size(prog_data, 8);
+   cs_set_simd_size(prog_data, simd_width);
    cs_fill_push_const_info(compiler->devinfo, prog_data);
 
    return ibc_to_binary(ibc, mem_ctx, &prog_data->base.program_size);
