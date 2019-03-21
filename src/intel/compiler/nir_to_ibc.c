@@ -142,7 +142,7 @@ nts_emit_intrinsic(struct nir_to_ibc_state *nts,
                                     b->exec_size, b->exec_group, 3);
       store->src[0] = (ibc_intrinsic_src) {
          .file = IBC_REG_FILE_IMM,
-         .imm = 1 + nir_src_as_uint(instr->src[1]),
+         .imm = nir_src_as_uint(instr->src[1]),
       };
 
       assert(instr->src[2].is_ssa);
