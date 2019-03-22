@@ -234,6 +234,39 @@ print_send_instr(FILE *fp, const ibc_send_instr *send)
    fprintf(fp, "\n");
 }
 
+static const char *
+intrinsic_op_name(enum ibc_intrinsic_op op)
+{
+   switch (op) {
+   case IBC_INTRINSIC_OP_INVALID: break;
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:  return "bti_untyped_write";
+   }
+   unreachable("Invalid IBC intrinsic op");
+}
+
+static void
+print_intrinsic_reg_ref(FILE *fp, const ibc_intrinsic_reg_ref *ref)
+{
+   if (ref->num_comps > 1)
+      fprintf(fp, "(vec%u)", ref->num_comps);
+   print_reg_ref(fp, &ref->ref);
+}
+
+static void
+print_intrinsic_instr(FILE *fp, const ibc_intrinsic_instr *intrin)
+{
+   print_instr(fp, &intrin->instr, intrinsic_op_name(intrin->op));
+
+   fprintf(fp, "   ");
+   print_intrinsic_reg_ref(fp, &intrin->dest);
+
+   for (unsigned i = 0; i < intrin->num_srcs; i++) {
+      fprintf(fp, "   ");
+      print_intrinsic_reg_ref(fp, &intrin->src[i]);
+   }
+   fprintf(fp, "\n");
+}
+
 void
 ibc_print_shader(const ibc_shader *shader, FILE *fp)
 {
@@ -249,6 +282,9 @@ ibc_print_shader(const ibc_shader *shader, FILE *fp)
             continue;
          case IBC_INSTR_TYPE_SEND:
             print_send_instr(fp, ibc_instr_as_send(instr));
+            continue;
+         case IBC_INSTR_TYPE_INTRINSIC:
+            print_intrinsic_instr(fp, ibc_instr_as_intrinsic(instr));
             continue;
          }
          unreachable("Invalid instruction type");
