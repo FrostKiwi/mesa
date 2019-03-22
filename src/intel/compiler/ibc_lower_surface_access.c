@@ -44,7 +44,7 @@ ibc_lower_surface_access(ibc_shader *shader)
             sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
             desc = brw_dp_untyped_surface_rw_desc(shader->devinfo,
                                                   instr->simd_width,
-                                                  intrin->const_index[0],
+                                                  intrin->src[2].num_comps,
                                                   true    /* write */);
             break;
          default:
@@ -58,17 +58,18 @@ ibc_lower_surface_access(ibc_shader *shader)
 
          send->sfid = sfid;
          send->desc_imm = desc;
-         assert(intrin->src[0].file == IBC_REG_FILE_IMM);
-         send->desc_imm |= intrin->src[0].imm;
+         assert(intrin->src[0].ref.file == IBC_REG_FILE_IMM);
+         assert(intrin->src[0].ref.type == IBC_TYPE_UD);
+         send->desc_imm |= *(uint32_t *)intrin->src[0].ref.imm;
 
-         send->dest = intrin->dest;
-         send->rlen = 0; /* TODO */
+         send->dest = intrin->dest.ref;
+         send->rlen = intrin->dest.num_comps * instr->simd_width / 8;
 
-         send->payload[0] = intrin->src[1].reg;
+         send->payload[0] = intrin->src[1].ref;
          send->mlen = instr->simd_width / 8;
 
-         send->payload[1] = intrin->src[2].reg;
-         send->ex_mlen = intrin->const_index[0] * instr->simd_width / 8;
+         send->payload[1] = intrin->src[2].ref;
+         send->ex_mlen = intrin->src[2].num_comps * instr->simd_width / 8;
 
          list_add(&send->instr.link, &intrin->instr.link);
          list_del(&intrin->instr.link);
