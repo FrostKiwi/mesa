@@ -48,25 +48,6 @@ _ibc_assert(struct ibc_validate_state *s, int line,
 #define ibc_assert(state, expr) _ibc_assert(state, __LINE__, #expr, expr)
 
 static void
-ibc_validate_logical_reg_ref(struct ibc_validate_state *s,
-                             const ibc_reg_ref *ref,
-                             unsigned bit_size,
-                             unsigned num_comps,
-                             unsigned src_simd_width,
-                             unsigned src_simd_group)
-{
-   const ibc_logical_reg *reg = &ref->reg->logical;
-
-   ibc_assert(s, reg->bit_size == bit_size);
-   ibc_assert(s, ref->comp + num_comps <= reg->num_comps);
-   if (reg->simd_width > 1) {
-      ibc_assert(s, src_simd_group >= reg->simd_group);
-      ibc_assert(s, src_simd_group + src_simd_width <=
-                    reg->simd_group + reg->simd_width);
-   }
-}
-
-static void
 ibc_validate_flag_reg_ref(struct ibc_validate_state *s,
                           const ibc_reg_ref *ref,
                           unsigned src_simd_width,
@@ -83,33 +64,33 @@ ibc_validate_flag_reg_ref(struct ibc_validate_state *s,
 }
 
 static void
-ibc_validate_alu_src(struct ibc_validate_state *s,
-                     const ibc_alu_instr *alu, const ibc_alu_src *src)
+ibc_validate_reg_ref(struct ibc_validate_state *s,
+                     const ibc_reg_ref *ref, unsigned num_comps,
+                     unsigned ref_simd_width, unsigned ref_simd_group)
 {
-   if (src->file == IBC_REG_FILE_NONE) {
-      ibc_assert(s, src->reg.reg == NULL);
-      return;
-   }
-
-   ibc_assert(s, ibc_type_base_type(src->type) != IBC_TYPE_INVALID);
-
-   switch (src->file) {
+   switch (ref->file) {
    case IBC_REG_FILE_NONE:
-      unreachable("Handled above");
+      ibc_assert(s, ref->reg == NULL);
+      return;
 
    case IBC_REG_FILE_IMM:
       /* TODO */
       return;
 
-   case IBC_REG_FILE_LOGICAL:
-      if (ibc_assert(s, src->reg.reg)) {
-         ibc_assert(s, src->reg.reg->file == IBC_REG_FILE_LOGICAL);
-         ibc_validate_logical_reg_ref(s, &src->reg,
-                                      ibc_type_bit_size(src->type), 1,
-                                      alu->instr.simd_width,
-                                      alu->instr.simd_group);
+   case IBC_REG_FILE_LOGICAL: {
+      if (!ibc_assert(s, ref->reg))
+         return;
+
+      const ibc_logical_reg *lreg = &ref->reg->logical;
+      ibc_assert(s, ibc_type_bit_size(ref->type) == lreg->bit_size);
+      ibc_assert(s, ref->comp + num_comps <= lreg->num_comps);
+      if (lreg->simd_width > 1) {
+         ibc_assert(s, ref_simd_group >= lreg->simd_group);
+         ibc_assert(s, ref_simd_group + ref_simd_width <=
+                       lreg->simd_group + lreg->simd_width);
       }
       return;
+   }
 
    case IBC_REG_FILE_HW_GRF:
       /* TODO */
@@ -120,42 +101,21 @@ ibc_validate_alu_src(struct ibc_validate_state *s,
 }
 
 static void
+ibc_validate_alu_src(struct ibc_validate_state *s,
+                     const ibc_alu_instr *alu, const ibc_alu_src *src)
+{
+   ibc_validate_reg_ref(s, &src->ref, 1,
+                        alu->instr.simd_width,
+                        alu->instr.simd_group);
+}
+
+static void
 ibc_validate_alu_dst(struct ibc_validate_state *s,
                      const ibc_alu_instr *alu, const ibc_alu_dest *dest)
 {
-   if (dest->file == IBC_REG_FILE_NONE) {
-      ibc_assert(s, dest->reg.reg == NULL);
-      return;
-   }
-
-   ibc_assert(s, ibc_type_base_type(dest->type) != IBC_TYPE_INVALID);
-
-   switch (dest->file) {
-   case IBC_REG_FILE_NONE:
-      unreachable("Handled above");
-
-   case IBC_REG_FILE_IMM:
-      ibc_assert(s, !"Immediates are not allowed in destinations");
-      return;
-
-   case IBC_REG_FILE_LOGICAL:
-      if (ibc_assert(s, dest->reg.reg)) {
-         ibc_assert(s, !alu->instr.we_all ||
-                       dest->reg.reg->logical.simd_width == 1);
-         ibc_assert(s, dest->reg.reg->file == IBC_REG_FILE_LOGICAL);
-         ibc_validate_logical_reg_ref(s, &dest->reg,
-                                      ibc_type_bit_size(dest->type), 1,
-                                      alu->instr.simd_width,
-                                      alu->instr.simd_group);
-      }
-      return;
-
-   case IBC_REG_FILE_HW_GRF:
-      /* TODO */
-      return;
-   }
-
-   unreachable("Invalid register file");
+   ibc_validate_reg_ref(s, &dest->ref, 1,
+                        alu->instr.simd_width,
+                        alu->instr.simd_group);
 }
 
 static unsigned
