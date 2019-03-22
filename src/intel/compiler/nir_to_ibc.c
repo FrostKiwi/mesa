@@ -131,27 +131,14 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          ibc_intrinsic_instr_create(b->shader,
                                     IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
                                     b->simd_width, b->simd_group, 3);
-      store->src[0] = (ibc_intrinsic_src) {
-         .file = IBC_REG_FILE_IMM,
-         .imm = nir_src_as_uint(instr->src[1]),
-      };
-
+      store->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[1]));
+      store->src[0].num_comps = 1;
       assert(instr->src[2].is_ssa);
-      store->src[1] = (ibc_intrinsic_src) {
-         .file = IBC_REG_FILE_LOGICAL,
-         .reg = {
-            .reg = nti->ssa_to_reg[instr->src[2].ssa->index],
-         },
-      };
-
+      store->src[1].ref = ibc_uref(nti->ssa_to_reg[instr->src[2].ssa->index]);
+      store->src[1].num_comps = 1;
       assert(instr->src[0].is_ssa);
-      store->src[2] = (ibc_intrinsic_src) {
-         .file = IBC_REG_FILE_LOGICAL,
-         .reg = {
-            .reg = nti->ssa_to_reg[instr->src[0].ssa->index],
-         },
-      };
-      store->const_index[0] = instr->src[0].ssa->num_components;
+      store->src[2].ref = ibc_ref(nti->ssa_to_reg[instr->src[0].ssa->index]);
+      store->src[2].num_comps = instr->src[0].ssa->num_components;
 
       ibc_builder_insert_instr(b, &store->instr);
       break;

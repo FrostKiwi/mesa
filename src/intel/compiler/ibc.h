@@ -372,30 +372,22 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE = 1,
 };
 
-
 typedef struct {
-   /** Register file or IMM for immediate or NONE for null */
-   enum ibc_reg_file file;
+   ibc_reg_ref ref;
 
-   union {
-      /** A register reference for non-immediate sources */
-      ibc_reg_ref reg;
-
-      /** The only kind of immediates intrinsics can consume are uint */
-      uint64_t imm;
-   };
-} ibc_intrinsic_src;
+   /** Number of vector components produced or consumed via this ref */
+   unsigned num_comps;
+} ibc_intrinsic_reg_ref;
 
 typedef struct {
    ibc_instr instr;
 
    enum ibc_intrinsic_op op;
 
-   ibc_reg_ref dest;
+   ibc_intrinsic_reg_ref dest;
 
-   uint32_t const_index[4];
-
-   ibc_intrinsic_src src[0];
+   unsigned num_srcs;
+   ibc_intrinsic_reg_ref src[0];
 } ibc_intrinsic_instr;
 
 IBC_DEFINE_CAST(ibc_instr_as_intrinsic, ibc_instr, ibc_intrinsic_instr, instr,
