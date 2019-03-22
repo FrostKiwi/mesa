@@ -49,7 +49,8 @@ reg_align(ibc_reg *reg)
 }
 
 static void
-rewrite_reg_ref(ibc_reg_ref *ref, ibc_hw_grf_reg *logical_grfs, bool is_src)
+rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
+                ibc_hw_grf_reg *logical_grfs, bool is_src)
 {
    if (ref->reg == NULL || ref->reg->file == IBC_REG_FILE_HW_GRF)
       return;
@@ -62,7 +63,8 @@ rewrite_reg_ref(ibc_reg_ref *ref, ibc_hw_grf_reg *logical_grfs, bool is_src)
       ref->stride = 0;
    else
       ref->stride = ref->reg->logical.bit_size / 8;
-   ref->offset = comp * ref->reg->logical.simd_width * ref->stride;
+   ref->offset = ref->stride * ref_simd_group;
+   ref->offset += ref->stride * comp * ref->reg->logical.simd_width;
 }
 
 void
@@ -146,24 +148,33 @@ ibc_assign_regs(ibc_shader *shader)
          case IBC_INSTR_TYPE_ALU: {
             ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
-            if (alu->dest.ref.file == IBC_REG_FILE_LOGICAL)
-               rewrite_reg_ref(&alu->dest.ref, logical_grfs, false);
+            if (alu->dest.ref.file == IBC_REG_FILE_LOGICAL) {
+               rewrite_reg_ref(&alu->dest.ref, alu->instr.simd_group,
+                               logical_grfs, false);
+            }
 
             unsigned num_srcs = 3; /* TODO */
             for (unsigned i = 0; i < num_srcs; i++) {
-               if (alu->src[i].ref.file == IBC_REG_FILE_LOGICAL)
-                  rewrite_reg_ref(&alu->src[i].ref, logical_grfs, true);
+               if (alu->src[i].ref.file == IBC_REG_FILE_LOGICAL) {
+                  rewrite_reg_ref(&alu->src[i].ref, alu->instr.simd_group,
+                                  logical_grfs, true);
+               }
             }
             continue;
          }
 
          case IBC_INSTR_TYPE_SEND: {
             ibc_send_instr *send = ibc_instr_as_send(instr);
-            rewrite_reg_ref(&send->dest, logical_grfs, false);
-            rewrite_reg_ref(&send->payload[0], logical_grfs, false);
-            rewrite_reg_ref(&send->payload[1], logical_grfs, false);
-            rewrite_reg_ref(&send->desc, logical_grfs, false);
-            rewrite_reg_ref(&send->ex_desc, logical_grfs, false);
+            rewrite_reg_ref(&send->dest, send->instr.simd_group,
+                            logical_grfs, false);
+            rewrite_reg_ref(&send->payload[0], send->instr.simd_group,
+                            logical_grfs, false);
+            rewrite_reg_ref(&send->payload[1], send->instr.simd_group,
+                            logical_grfs, false);
+            rewrite_reg_ref(&send->desc, send->instr.simd_group,
+                            logical_grfs, false);
+            rewrite_reg_ref(&send->ex_desc, send->instr.simd_group,
+                            logical_grfs, false);
             continue;
          }
 
