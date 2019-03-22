@@ -62,18 +62,74 @@ ibc_type_suffix(enum ibc_type type)
 }
 
 static void
-print_reg_ref(FILE *fp, const ibc_reg_ref *ref, unsigned type_sz_B)
+print_reg_ref(FILE *fp, const ibc_reg_ref *ref)
 {
-   switch (ref->reg->file) {
+   switch (ref->file) {
    case IBC_REG_FILE_NONE:
+      fprintf(fp, "(null)");
+      if (ref->type != IBC_TYPE_INVALID)
+         fprintf(fp, ":%s", ibc_type_suffix(ref->type));
+      return;
+
    case IBC_REG_FILE_IMM:
-      unreachable("Invalid files for a ibc_reg");
+      switch (ref->type) {
+      case IBC_TYPE_INVALID:
+      case IBC_TYPE_INT:
+      case IBC_TYPE_UINT:
+      case IBC_TYPE_FLOAT:
+      case IBC_TYPE_8_BIT:
+      case IBC_TYPE_B:
+      case IBC_TYPE_UB:
+         unreachable("Invalid immediate types");
+
+      case IBC_TYPE_16_BIT:
+      case IBC_TYPE_W:
+      case IBC_TYPE_UW:
+         fprintf(fp, "0x%04" PRIx16 ":%s", *(uint16_t *)ref->imm,
+                 ibc_type_suffix(ref->type));
+         return;
+
+      case IBC_TYPE_HF:
+         fprintf(fp, "%f:hf", _mesa_half_to_float(*(uint16_t *)ref->imm));
+         return;
+
+      case IBC_TYPE_VF:
+         unreachable("TODO");
+
+      case IBC_TYPE_32_BIT:
+      case IBC_TYPE_D:
+      case IBC_TYPE_UD:
+      case IBC_TYPE_V:
+      case IBC_TYPE_UV:
+         fprintf(fp, "0x%08" PRIx32 ":%s", *(uint32_t *)ref->imm,
+                 ibc_type_suffix(ref->type));
+         return;
+
+      case IBC_TYPE_F:
+         fprintf(fp, "%f:f", *(float *)ref->imm);
+         return;
+
+      case IBC_TYPE_64_BIT:
+      case IBC_TYPE_Q:
+      case IBC_TYPE_UQ:
+         fprintf(fp, "0x%016" PRIx64 ":%s", *(uint64_t *)ref->imm,
+                 ibc_type_suffix(ref->type));
+         return;
+
+      case IBC_TYPE_DF:
+         fprintf(fp, "%f:f", *(double *)ref->imm);
+         return;
+      }
+      unreachable("Invalid IBC type");
+      return;
 
    case IBC_REG_FILE_LOGICAL:
       fprintf(fp, "lg%u.%u", ref->reg->index, ref->comp);
+      fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
 
    case IBC_REG_FILE_HW_GRF: {
+      unsigned type_sz_B = ibc_type_byte_size(ref->type);
       if (ref->reg->hw_grf.byte == IBC_HW_GRF_REG_UNASSIGNED) {
          fprintf(fp, "hw%u", ref->reg->index);
          if (ref->offset) {
@@ -90,6 +146,8 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref, unsigned type_sz_B)
       }
       if (type_sz_B)
          fprintf(fp, "<%u>", ref->stride / type_sz_B);
+      if (ref->type != IBC_TYPE_INVALID)
+         fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
    }
 
@@ -105,61 +163,6 @@ print_instr(FILE *fp, const ibc_instr *instr, const char *name)
       fprintf(fp, "(%u)", instr->simd_width);
    else
       fprintf(fp, "(%u:%u)", instr->simd_group, instr->simd_width);
-}
-
-static void
-print_imm(FILE *fp, const char imm[8], enum ibc_type type)
-{
-   switch (type) {
-   case IBC_TYPE_INVALID:
-   case IBC_TYPE_INT:
-   case IBC_TYPE_UINT:
-   case IBC_TYPE_FLOAT:
-   case IBC_TYPE_8_BIT:
-   case IBC_TYPE_B:
-   case IBC_TYPE_UB:
-      unreachable("Invalid immediate types");
-
-   case IBC_TYPE_16_BIT:
-   case IBC_TYPE_W:
-   case IBC_TYPE_UW:
-      fprintf(fp, "0x%04" PRIx16 ":%s", *(uint16_t *)imm,
-              ibc_type_suffix(type));
-      return;
-
-   case IBC_TYPE_HF:
-      fprintf(fp, "%f:hf", _mesa_half_to_float(*(uint16_t *)imm));
-      return;
-
-   case IBC_TYPE_VF:
-      unreachable("TODO");
-
-   case IBC_TYPE_32_BIT:
-   case IBC_TYPE_D:
-   case IBC_TYPE_UD:
-   case IBC_TYPE_V:
-   case IBC_TYPE_UV:
-      fprintf(fp, "0x%08" PRIx32 ":%s", *(uint32_t *)imm,
-              ibc_type_suffix(type));
-      return;
-
-   case IBC_TYPE_F:
-      fprintf(fp, "%f:f", *(float *)imm);
-      return;
-
-   case IBC_TYPE_64_BIT:
-   case IBC_TYPE_Q:
-   case IBC_TYPE_UQ:
-      fprintf(fp, "0x%016" PRIx64 ":%s", *(uint64_t *)imm,
-              ibc_type_suffix(type));
-      return;
-
-   case IBC_TYPE_DF:
-      fprintf(fp, "%f:f", *(double *)imm);
-      return;
-   }
-
-   unreachable("Invalid type");
 }
 
 static const char *
@@ -182,38 +185,15 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 
    fprintf(fp, "   ");
 
-   if (alu->dest.file == IBC_REG_FILE_NONE) {
-      fprintf(fp, "null");
-   } else {
-      print_reg_ref(fp, &alu->dest.reg, ibc_type_bit_size(alu->dest.type) / 8);
-   }
-   fprintf(fp, ":%s", ibc_type_suffix(alu->dest.type));
+   print_reg_ref(fp, &alu->dest.ref);
 
    const unsigned num_srcs = 3; /* TODO */
    for (unsigned i = 0; i < num_srcs; i++) {
-      if (alu->src[i].file == IBC_REG_FILE_NONE)
+      if (alu->src[i].ref.file == IBC_REG_FILE_NONE)
          break;
 
       fprintf(fp, "   ");
-      switch (alu->src[i].file) {
-      case IBC_REG_FILE_NONE:
-         unreachable("Handled above");
-         break;
-
-      case IBC_REG_FILE_IMM:
-         print_imm(fp, alu->src[i].imm, alu->src[i].type);
-         break;
-
-      case IBC_REG_FILE_LOGICAL:
-      case IBC_REG_FILE_HW_GRF:
-         print_reg_ref(fp, &alu->src[i].reg,
-                       ibc_type_bit_size(alu->src[i].type) / 8);
-         fprintf(fp, ":%s", ibc_type_suffix(alu->src[i].type));
-         break;
-
-      default:
-         unreachable("TODO");
-      }
+      print_reg_ref(fp, &alu->src[i].ref);
    }
 
    fprintf(fp, "\n");
@@ -225,43 +205,30 @@ print_send_instr(FILE *fp, const ibc_send_instr *send)
    print_instr(fp, &send->instr, "send");
 
    fprintf(fp, "   ");
-
-   if (send->dest.reg) {
-      print_reg_ref(fp, &send->dest, 0);
-   } else {
-      fprintf(fp, "null");
-   }
+   print_reg_ref(fp, &send->dest);
 
    fprintf(fp, "   ");
-
-   print_reg_ref(fp, &send->payload[0], 0);
-
-   fprintf(fp, "   ");
-
-   if (send->payload[1].reg) {
-      print_reg_ref(fp, &send->payload[0], 0);
-   } else {
-      fprintf(fp, "null");
-   }
+   print_reg_ref(fp, &send->payload[0]);
 
    fprintf(fp, "   ");
+   print_reg_ref(fp, &send->payload[1]);
 
-   if (send->desc.reg) {
-      fprintf(fp, "(");
-      print_reg_ref(fp, &send->desc, 0);
-      fprintf(fp, " | 0x%08" PRIx32 ")", send->desc_imm);
-   } else {
+   fprintf(fp, "   ");
+   if (send->desc.file == IBC_REG_FILE_NONE) {
       fprintf(fp, "0x%08" PRIx32, send->desc_imm);
+   } else {
+      fprintf(fp, "(");
+      print_reg_ref(fp, &send->desc);
+      fprintf(fp, " | 0x%08" PRIx32 ")", send->desc_imm);
    }
 
    fprintf(fp, "   ");
-
-   if (send->ex_desc.reg) {
-      fprintf(fp, "(");
-      print_reg_ref(fp, &send->ex_desc, 0);
-      fprintf(fp, " | 0x%08" PRIx32 ")", send->ex_desc_imm);
-   } else {
+   if (send->desc.file == IBC_REG_FILE_NONE) {
       fprintf(fp, "0x%08" PRIx32, send->ex_desc_imm);
+   } else {
+      fprintf(fp, "(");
+      print_reg_ref(fp, &send->ex_desc);
+      fprintf(fp, " | 0x%08" PRIx32 ")", send->ex_desc_imm);
    }
 
    fprintf(fp, "\n");

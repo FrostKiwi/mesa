@@ -53,31 +53,27 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 {
    ibc_builder *b = &nti->b;
 
-   ibc_alu_src src[4];
+   ibc_reg_ref src[4];
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
       assert(instr->src[i].src.is_ssa);
       nir_ssa_def *ssa_src = instr->src[i].src.ssa;
 
       /* TODO */
       assert(ssa_src->num_components == 1);
+      assert(!instr->src[i].abs);
+      assert(!instr->src[i].negate);
 
-      const ibc_reg *reg = nti->ssa_to_reg[ssa_src->index];
-      src[i] = (ibc_alu_src) {
-         .type = ibc_type_for_nir(nir_op_infos[instr->op].input_types[i]) |
-                 ssa_src->bit_size,
-         .file = reg->file,
-         .reg = {
-            .reg = reg,
-         },
-      };
+      src[i] = ibc_typed_ref(nti->ssa_to_reg[ssa_src->index],
+                             ibc_type_for_nir(nir_op_infos[instr->op].input_types[i]));
    }
 
    assert(instr->dest.dest.is_ssa);
 
    /* TODO */
    assert(instr->dest.dest.ssa.num_components == 1);
+   assert(!instr->dest.saturate);
 
-   ibc_reg *dest;
+   ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
    enum ibc_type dest_type =
       ibc_type_for_nir(nir_op_infos[instr->op].output_type) |
       instr->dest.dest.ssa.bit_size;
@@ -100,10 +96,10 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       unreachable("Unhandled NIR ALU opcode");
    }
 
-   assert(dest->file == IBC_REG_FILE_LOGICAL);
-   assert(dest->logical.bit_size == instr->dest.dest.ssa.bit_size);
-   assert(dest->logical.num_comps == instr->dest.dest.ssa.num_components);
-   nti->ssa_to_reg[instr->dest.dest.ssa.index] = dest;
+   assert(dest.file == IBC_REG_FILE_LOGICAL);
+   assert(dest.reg->logical.bit_size == instr->dest.dest.ssa.bit_size);
+   assert(dest.reg->logical.num_comps == instr->dest.dest.ssa.num_components);
+   nti->ssa_to_reg[instr->dest.dest.ssa.index] = dest.reg;
 }
 
 static void
@@ -112,7 +108,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 {
    ibc_builder *b = &nti->b;
 
-   ibc_reg *dest = NULL;
+   ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_id:
       /* Assume that the subgroup ID is in g1.0
@@ -125,8 +121,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_load_subgroup_invocation: {
       assert(b->simd_width == 8);
       assert(b->simd_group == 0);
-      ibc_reg *w_tmp = ibc_MOV(b, IBC_TYPE_UW, ibc_imm_v(0x76543210));
-      dest = ibc_MOV(b, IBC_TYPE_UD, ibc_alu_usrc(w_tmp));
+      dest = ibc_MOV(b, IBC_TYPE_UD,
+                     ibc_MOV(b, IBC_TYPE_UW, ibc_imm_v(0x76543210)));
       break;
    }
 
@@ -166,10 +162,10 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
-      assert(dest != NULL);
-      nti->ssa_to_reg[instr->dest.ssa.index] = dest;
+      assert(dest.file == IBC_REG_FILE_LOGICAL);
+      nti->ssa_to_reg[instr->dest.ssa.index] = dest.reg;
    } else {
-      assert(dest == NULL);
+      assert(dest.file == IBC_REG_FILE_NONE);
    }
 }
 
@@ -184,7 +180,7 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
 
    assert(instr->def.bit_size >= 8);
    enum ibc_type type = IBC_TYPE_UINT | instr->def.bit_size;
-   ibc_alu_src imm_src = {
+   ibc_reg_ref imm_src = {
       .file = IBC_REG_FILE_IMM,
       .type = type,
    };
@@ -208,7 +204,7 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
    }
 
    ibc_builder_push_scalar(b);
-   nti->ssa_to_reg[instr->def.index] = ibc_MOV(b, type, imm_src);
+   nti->ssa_to_reg[instr->def.index] = ibc_MOV(b, type, imm_src).reg;
    ibc_builder_pop(b);
 }
 
@@ -217,27 +213,22 @@ nti_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
 {
    ibc_builder *b = &nti->b;
 
-   ibc_reg *g0 = ibc_hw_grf_reg_create(b->shader, 0, 32, 32);
-   ibc_reg *tmp = ibc_hw_grf_reg_create(b->shader,
-                                        IBC_HW_GRF_REG_UNASSIGNED, 32, 32);
+   ibc_reg_ref g0 = {
+      .file = IBC_REG_FILE_HW_GRF,
+      .type = IBC_TYPE_UD,
+      .reg = ibc_hw_grf_reg_create(b->shader, 0, 32, 32),
+      .stride = ibc_type_byte_size(IBC_TYPE_UD),
+   };
+   ibc_reg_ref tmp = {
+      .file = IBC_REG_FILE_HW_GRF,
+      .type = IBC_TYPE_UD,
+      .reg = ibc_hw_grf_reg_create(b->shader, IBC_HW_GRF_REG_UNASSIGNED, 32, 32),
+      .stride = ibc_type_byte_size(IBC_TYPE_UD),
+   };
 
-   ibc_alu_instr *mov = ibc_alu_instr_create(b->shader, IBC_ALU_OP_MOV, 8, 0);
-   mov->dest = (ibc_alu_dest) {
-      .file = IBC_REG_FILE_HW_GRF,
-      .type = IBC_TYPE_UD,
-      .reg = {
-         .reg = tmp,
-      },
-   };
-   mov->src[0] = (ibc_alu_src) {
-      .file = IBC_REG_FILE_HW_GRF,
-      .type = IBC_TYPE_UD,
-      .reg = {
-         .reg = g0,
-      },
-   };
-   mov->instr.we_all = true;
-   ibc_builder_insert_instr(b, &mov->instr);
+   ibc_builder_push_we_all(b, 8);
+   ibc_build_alu(b, IBC_ALU_OP_MOV, tmp, &g0, 1);
+   ibc_builder_pop(b);
 
    ibc_send_instr *send = ibc_send_instr_create(b->shader, 8, 0);
    send->instr.we_all = true;
@@ -245,7 +236,7 @@ nti_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
    send->desc_imm = brw_ts_eot_desc(b->shader->devinfo);
    send->eot = true;
 
-   send->payload[0] = (ibc_reg_ref) { .reg = tmp, };
+   send->payload[0] = tmp;
    send->mlen = 1;
 
    ibc_builder_insert_instr(b, &send->instr);
