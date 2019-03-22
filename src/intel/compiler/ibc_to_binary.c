@@ -59,21 +59,64 @@ brw_reg_type_for_ibc_type(enum ibc_type type)
 
 static struct brw_reg
 brw_reg_for_ibc_reg_ref(const struct gen_device_info *devinfo,
-                        const ibc_reg_ref *ref, enum ibc_type type,
+                        const ibc_reg_ref *ref,
                         unsigned simd_width, bool compressed)
 {
-   if (ref->reg == NULL) {
-      struct brw_reg null_reg = brw_null_reg();
-      if (type != IBC_TYPE_INVALID)
-         null_reg = retype(null_reg, brw_reg_type_for_ibc_type(type));
-      return null_reg;
-   }
+   /* Default the type to UINT if no base type is specified */
+   enum ibc_type type = ref->type;
+   if (type == IBC_TYPE_INVALID)
+      type = IBC_TYPE_UD;
+   else if (ibc_type_base_type(type) == IBC_TYPE_INVALID)
+      type |= IBC_TYPE_UINT;
 
-   switch (ref->reg->file) {
+   switch (ref->file) {
    case IBC_REG_FILE_NONE:
-      unreachable("Handled above");
+      assert(ref->reg == NULL);
+      return retype(brw_null_reg(), brw_reg_type_for_ibc_type(type));
+
+   case IBC_REG_FILE_IMM:
+      /* Immediates had better have a real type */
+      assert(type == ref->type);
+
+      switch (type) {
+      case IBC_TYPE_INVALID:
+      case IBC_TYPE_INT:
+      case IBC_TYPE_UINT:
+      case IBC_TYPE_FLOAT:
+      case IBC_TYPE_8_BIT:
+      case IBC_TYPE_16_BIT:
+      case IBC_TYPE_32_BIT:
+      case IBC_TYPE_64_BIT:
+      case IBC_TYPE_B:
+      case IBC_TYPE_UB:
+         unreachable("Invalid immediate types");
+
+      case IBC_TYPE_W:
+      case IBC_TYPE_UW:
+      case IBC_TYPE_HF:
+         return retype(brw_imm_uw(*(uint16_t *)ref->imm),
+                       brw_reg_type_for_ibc_type(type));
+
+      case IBC_TYPE_D:
+      case IBC_TYPE_UD:
+      case IBC_TYPE_F:
+      case IBC_TYPE_V:
+      case IBC_TYPE_UV:
+      case IBC_TYPE_VF:
+         return retype(brw_imm_ud(*(uint32_t *)ref->imm),
+                       brw_reg_type_for_ibc_type(type));
+
+      case IBC_TYPE_Q:
+      case IBC_TYPE_UQ:
+      case IBC_TYPE_DF:
+         return retype(brw_imm_uq(*(uint64_t *)ref->imm),
+                       brw_reg_type_for_ibc_type(type));
+      }
+      unreachable("Invalid IBC type");
+      break;
 
    case IBC_REG_FILE_HW_GRF: {
+      assert(ref->reg && ref->reg->file == IBC_REG_FILE_HW_GRF);
       unsigned byte = ref->reg->hw_grf.byte + ref->offset;
       unsigned nr = byte / REG_SIZE;
       unsigned subnr = byte % REG_SIZE;
@@ -132,98 +175,38 @@ brw_reg_for_ibc_reg_ref(const struct gen_device_info *devinfo,
    unreachable("Unknown register file");
 }
 
-static struct brw_reg
-brw_reg_for_ibc_alu_src(const struct gen_device_info *devinfo,
-                        const ibc_alu_src *src,
-                        unsigned simd_width, bool compressed)
-{
-   if (src->file != IBC_REG_FILE_IMM) {
-      struct brw_reg brw_reg =
-         brw_reg_for_ibc_reg_ref(devinfo, &src->reg, src->type,
-                                 simd_width, compressed);
-      brw_reg.abs = src->abs;
-      brw_reg.negate = src->negate;
-
-      return brw_reg;
-   }
-
-   switch (src->type) {
-   case IBC_TYPE_INVALID:
-   case IBC_TYPE_INT:
-   case IBC_TYPE_UINT:
-   case IBC_TYPE_FLOAT:
-   case IBC_TYPE_8_BIT:
-   case IBC_TYPE_16_BIT:
-   case IBC_TYPE_32_BIT:
-   case IBC_TYPE_64_BIT:
-   case IBC_TYPE_B:
-   case IBC_TYPE_UB:
-      unreachable("Invalid immediate types");
-
-   case IBC_TYPE_W:
-   case IBC_TYPE_UW:
-   case IBC_TYPE_HF:
-      return retype(brw_imm_uw(*(uint16_t *)src->imm),
-                    brw_reg_type_for_ibc_type(src->type));
-
-   case IBC_TYPE_D:
-   case IBC_TYPE_UD:
-   case IBC_TYPE_F:
-   case IBC_TYPE_V:
-   case IBC_TYPE_UV:
-   case IBC_TYPE_VF:
-      return retype(brw_imm_ud(*(uint32_t *)src->imm),
-                    brw_reg_type_for_ibc_type(src->type));
-
-   case IBC_TYPE_Q:
-   case IBC_TYPE_UQ:
-   case IBC_TYPE_DF:
-      return retype(brw_imm_uq(*(uint64_t *)src->imm),
-                    brw_reg_type_for_ibc_type(src->type));
-   }
-
-   unreachable("Invalid type");
-}
-
-static struct brw_reg
-brw_reg_for_ibc_alu_dest(const struct gen_device_info *devinfo,
-                         const ibc_alu_dest *dest,
-                         unsigned simd_width, bool compressed)
-{
-   return brw_reg_for_ibc_reg_ref(devinfo, &dest->reg, dest->type,
-                                  simd_width, compressed);
-}
-
 static void
 generate_send(struct brw_codegen *p, const ibc_send_instr *send)
 {
    struct brw_reg dst =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &send->dest, IBC_TYPE_UD,
+      brw_reg_for_ibc_reg_ref(p->devinfo, &send->dest,
                               send->instr.simd_width, false);
 
    struct brw_reg payload0 =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &send->payload[0], IBC_TYPE_UD,
+      brw_reg_for_ibc_reg_ref(p->devinfo, &send->payload[0],
                               send->instr.simd_width, false);
    struct brw_reg payload1 =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &send->payload[1], IBC_TYPE_UD,
+      brw_reg_for_ibc_reg_ref(p->devinfo, &send->payload[1],
                               send->instr.simd_width, false);
 
    struct brw_reg desc;
-   if (send->desc.reg) {
-      desc = brw_reg_for_ibc_reg_ref(p->devinfo, &send->desc, IBC_TYPE_UD,
-                                     send->instr.simd_width, false);
-   } else {
+   if (send->desc.file == IBC_REG_FILE_NONE) {
       desc = brw_imm_ud(0);
+   } else {
+      assert(send->desc.type == IBC_TYPE_UD);
+      desc = brw_reg_for_ibc_reg_ref(p->devinfo, &send->desc,
+                                     send->instr.simd_width, false);
    }
    uint32_t desc_imm = send->desc_imm |
       brw_message_desc(p->devinfo, send->mlen, send->rlen, send->has_header);
 
    struct brw_reg ex_desc;
-   if (send->ex_desc.reg) {
-      ex_desc = brw_reg_for_ibc_reg_ref(p->devinfo, &send->ex_desc, IBC_TYPE_UD,
-                                        send->instr.simd_width, false);
-   } else {
+   if (send->ex_desc.file == IBC_REG_FILE_NONE) {
       ex_desc = brw_imm_ud(0);
+   } else {
+      assert(send->ex_desc.type == IBC_TYPE_UD);
+      ex_desc = brw_reg_for_ibc_reg_ref(p->devinfo, &send->ex_desc,
+                                        send->instr.simd_width, false);
    }
    uint32_t ex_desc_imm = send->ex_desc_imm |
       brw_message_ex_desc(p->devinfo, send->ex_mlen);
@@ -292,20 +275,22 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
           *       register of the correct type and regioning so the
           *       instruction is considered compressed or not accordingly.
           */
-         assert(alu->dest.file == IBC_REG_FILE_HW_GRF);
+         assert(alu->dest.ref.file == IBC_REG_FILE_HW_GRF);
          bool compressed =
-            (alu->dest.reg.stride * alu->instr.simd_width) > REG_SIZE;
+            (alu->dest.ref.stride * alu->instr.simd_width) > REG_SIZE;
 
          unsigned num_srcs = 3; /* TODO */
          struct brw_reg src[3], dest;
          for (unsigned int i = 0; i < num_srcs; i++) {
-            src[i] = brw_reg_for_ibc_alu_src(devinfo, &alu->src[i],
+            src[i] = brw_reg_for_ibc_reg_ref(devinfo, &alu->src[i].ref,
                                              alu->instr.simd_width,
                                              compressed);
+            src[i].abs = alu->src[i].abs;
+            src[i].negate = alu->src[i].negate;
          }
-         dest = brw_reg_for_ibc_alu_dest(devinfo, &alu->dest,
-                                         alu->instr.simd_width,
-                                         compressed);
+         dest = brw_reg_for_ibc_reg_ref(devinfo, &alu->dest.ref,
+                                        alu->instr.simd_width,
+                                        compressed);
 
          brw_set_default_saturate(p, alu->dest.sat);
          brw_set_default_acc_write_control(p, false /* TODO */);

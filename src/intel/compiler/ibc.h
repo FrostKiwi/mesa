@@ -100,6 +100,13 @@ ibc_type_bit_size(enum ibc_type t)
 }
 
 static inline unsigned
+ibc_type_byte_size(enum ibc_type t)
+{
+   assert(ibc_type_bit_size(t) % 8 == 0);
+   return ibc_type_bit_size(t) / 8;
+}
+
+static inline unsigned
 ibc_type_base_type(enum ibc_type t)
 {
    return t & IBC_TYPE_BASE_TYPE_MASK;
@@ -219,8 +226,11 @@ ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
  * an instruction
  */
 typedef struct ibc_reg_ref {
-   /** Pointer to the register; NULL if immediate */
-   const ibc_reg *reg;
+   /** Register file or IMM for immediate or NONE for null */
+   enum ibc_reg_file file;
+
+   /** Type with which the register or immediate is interpreted */
+   enum ibc_type type;
 
    union {
       /** Component to reference for logical registers */
@@ -233,6 +243,14 @@ typedef struct ibc_reg_ref {
          /** Stride in bytes for HW regs */
          uint8_t stride;
       };
+   };
+
+   /** Pointer to the register; NULL if immediate */
+   union {
+      const ibc_reg *reg;
+
+      /** 64 bits of immediate data for immediate sources */
+      char imm[8];
    };
 } ibc_reg_ref;
 
@@ -281,35 +299,19 @@ enum ibc_alu_op {
 
 /** A structure representing an ALU instruction source */
 typedef struct ibc_alu_src {
-   /** Register file or IMM for immediate or NONE for null */
-   enum ibc_reg_file file;
-
-   /** Type with which the register or immediate is interpreted */
-   enum ibc_type type;
+   /** A register reference for non-immediate sources */
+   ibc_reg_ref ref;
 
    bool negate:1;
    bool abs:1;
-
-   union {
-      /** A register reference for non-immediate sources */
-      ibc_reg_ref reg;
-
-      /** 64 bits of immediate data for immediate sources */
-      char imm[8];
-   };
 } ibc_alu_src;
 
 
 typedef struct ibc_alu_dest {
-   /** Register file or NONE for null */
-   enum ibc_reg_file file;
-
-   /** Type with which the register or immediate is interpreted */
-   enum ibc_type type;
+   /** A register reference for non-immediate sources */
+   ibc_reg_ref ref;
 
    bool sat;
-
-   ibc_reg_ref reg;
 } ibc_alu_dest;
 
 
