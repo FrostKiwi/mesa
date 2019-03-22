@@ -146,6 +146,8 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
 
    ibc_shader *ibc = nir_to_ibc(shader, mem_ctx, 8, compiler->devinfo);
    ibc_validate_shader(ibc);
+   ibc_print_shader(ibc, stderr);
+   fprintf(stderr, "\n\n");
 
    ibc_lower_surface_access(ibc);
    ibc_validate_shader(ibc);
