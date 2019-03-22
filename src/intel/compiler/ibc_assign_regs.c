@@ -57,6 +57,7 @@ rewrite_reg_ref(ibc_reg_ref *ref, ibc_hw_grf_reg *logical_grfs, bool is_src)
    assert(ref->reg->file == IBC_REG_FILE_LOGICAL);
 
    const uint8_t comp = ref->comp;
+   ref->file = IBC_REG_FILE_HW_GRF;
    if (ref->reg->logical.simd_width == 1 && is_src)
       ref->stride = 0;
    else
@@ -145,17 +146,13 @@ ibc_assign_regs(ibc_shader *shader)
          case IBC_INSTR_TYPE_ALU: {
             ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
-            if (alu->dest.file == IBC_REG_FILE_LOGICAL) {
-               rewrite_reg_ref(&alu->dest.reg, logical_grfs, false);
-               alu->dest.file = IBC_REG_FILE_HW_GRF;
-            }
+            if (alu->dest.ref.file == IBC_REG_FILE_LOGICAL)
+               rewrite_reg_ref(&alu->dest.ref, logical_grfs, false);
 
             unsigned num_srcs = 3; /* TODO */
             for (unsigned i = 0; i < num_srcs; i++) {
-               if (alu->src[i].file == IBC_REG_FILE_LOGICAL) {
-                  rewrite_reg_ref(&alu->src[i].reg, logical_grfs, true);
-                  alu->src[i].file = IBC_REG_FILE_HW_GRF;
-               }
+               if (alu->src[i].ref.file == IBC_REG_FILE_LOGICAL)
+                  rewrite_reg_ref(&alu->src[i].ref, logical_grfs, true);
             }
             continue;
          }

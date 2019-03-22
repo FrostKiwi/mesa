@@ -132,61 +132,59 @@ ibc_builder_new_logical_reg(ibc_builder *b,
                                  b->simd_width, b->simd_group);
 }
 
-static inline ibc_alu_src
-ibc_alu_isrc(ibc_reg *reg)
+static inline ibc_reg_ref
+ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
 {
    assert(reg->file == IBC_REG_FILE_LOGICAL);
-   return (ibc_alu_src) {
+   if (ibc_type_bit_size(type) == 0)
+      type |= reg->logical.bit_size;
+   return (ibc_reg_ref) {
       .file = reg->file,
-      .type = IBC_TYPE_INT | reg->logical.bit_size,
-      .reg = {
-         .reg = reg,
-      },
+      .reg = reg,
+      .type = type,
    };
 }
 
-static inline ibc_alu_src
-ibc_alu_usrc(ibc_reg *reg)
+static inline ibc_reg_ref
+ibc_ref(const ibc_reg *reg)
 {
-   assert(reg->file == IBC_REG_FILE_LOGICAL);
-   return (ibc_alu_src) {
-      .file = reg->file,
-      .type = IBC_TYPE_UINT | reg->logical.bit_size,
-      .reg = {
-         .reg = reg,
-      },
-   };
+   return ibc_typed_ref(reg, IBC_TYPE_INVALID);
 }
 
-static inline ibc_alu_src
-ibc_alu_fsrc(ibc_reg *reg)
+static inline ibc_reg_ref
+ibc_iref(const ibc_reg *reg)
 {
-   assert(reg->file == IBC_REG_FILE_LOGICAL);
-   return (ibc_alu_src) {
-      .file = reg->file,
-      .type = IBC_TYPE_FLOAT | reg->logical.bit_size,
-      .reg = {
-         .reg = reg,
-      },
-   };
+   return ibc_typed_ref(reg, IBC_TYPE_INT);
 }
 
-static inline ibc_alu_src
-ibc_imm_src(enum ibc_type type, char *imm, unsigned imm_size)
+static inline ibc_reg_ref
+ibc_uref(const ibc_reg *reg)
 {
-   ibc_alu_src src = {
+   return ibc_typed_ref(reg, IBC_TYPE_UINT);
+}
+
+static inline ibc_reg_ref
+ibc_fref(const ibc_reg *reg)
+{
+   return ibc_typed_ref(reg, IBC_TYPE_FLOAT);
+}
+
+static inline ibc_reg_ref
+ibc_imm_ref(enum ibc_type type, char *imm, unsigned imm_size)
+{
+   ibc_reg_ref ref = {
       .file = IBC_REG_FILE_IMM,
       .type = type,
    };
-   memcpy(src.imm, imm, imm_size);
-   return src;
+   memcpy(ref.imm, imm, imm_size);
+   return ref;
 }
 
 #define IBC_BUILDER_DEFINE_IMM_HELPER(tp, TP, c_type)          \
-static inline ibc_alu_src                                      \
+static inline ibc_reg_ref                                      \
 ibc_imm_##tp(c_type x)                                         \
 {                                                              \
-   return ibc_imm_src(IBC_TYPE_##TP, (char *)&x, sizeof(x));   \
+   return ibc_imm_ref(IBC_TYPE_##TP, (char *)&x, sizeof(x));   \
 }
 
 IBC_BUILDER_DEFINE_IMM_HELPER(w, W, int16_t)
@@ -202,71 +200,74 @@ IBC_BUILDER_DEFINE_IMM_HELPER(df, DF, double)
 
 #undef IBC_BUILDER_DEFINE_IMM_HELPER
 
-static inline ibc_alu_src
+static inline ibc_reg_ref
 ibc_imm_hf(float x)
 {
    uint16_t hf = _mesa_float_to_half(x);
-   return ibc_imm_src(IBC_TYPE_HF, (char *)&hf, sizeof(hf));
+   return ibc_imm_ref(IBC_TYPE_HF, (char *)&hf, sizeof(hf));
 }
 
-static inline ibc_reg *
-ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
-                  ibc_alu_src *src, unsigned num_srcs)
+static inline ibc_alu_instr *
+ibc_build_alu(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref dest,
+              ibc_reg_ref *src, unsigned num_srcs)
 {
    ibc_alu_instr *alu = ibc_alu_instr_create(b->shader, op,
                                              b->simd_width, b->simd_group);
    alu->instr.we_all = b->we_all;
 
-   unsigned max_bit_size = 0;
-   for (unsigned i = 0; i < num_srcs; i++) {
-      alu->src[i] = src[i];
-      max_bit_size = MAX2(max_bit_size, ibc_type_bit_size(src[i].type));
-   }
-
-   if (ibc_type_bit_size(dest_type) == 0)
-      dest_type |= max_bit_size;
-
-   ibc_reg *dest_reg =
-      ibc_builder_new_logical_reg(b, ibc_type_bit_size(dest_type), 1);
-   dest_reg->logical.ssa = &alu->instr;
-
-   alu->dest = (ibc_alu_dest) {
-      .file = IBC_REG_FILE_LOGICAL,
-      .type = dest_type,
-      .reg = {
-         .reg = dest_reg,
-      },
-   };
+   for (unsigned i = 0; i < num_srcs; i++)
+      alu->src[i].ref = src[i];
+   alu->dest.ref = dest;
 
    ibc_builder_insert_instr(b, &alu->instr);
 
-   return dest_reg;
+   return alu;
+}
+
+static inline ibc_reg_ref
+ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
+                  ibc_reg_ref *src, unsigned num_srcs)
+{
+   if (ibc_type_bit_size(dest_type) == 0) {
+      unsigned max_bit_size = 0;
+      for (unsigned i = 0; i < num_srcs; i++)
+         max_bit_size = MAX2(max_bit_size, ibc_type_bit_size(src[i].type));
+      dest_type |= max_bit_size;
+   }
+
+   ibc_reg *dest_reg =
+      ibc_builder_new_logical_reg(b, ibc_type_bit_size(dest_type), 1);
+   ibc_reg_ref dest_ref = ibc_typed_ref(dest_reg, dest_type);
+
+   ibc_build_alu(b, op, dest_ref, src, num_srcs);
+
+   return dest_ref;
 }
 
 #define IBC_BUILDER_DEFINE_ALU1(OP)                                  \
-static inline ibc_reg *                                              \
+static inline ibc_reg_ref                                            \
 ibc_##OP(ibc_builder *b, enum ibc_type dest_type,                    \
-         ibc_alu_src src0)                                           \
+         ibc_reg_ref src0)                                           \
 {                                                                    \
-   ibc_alu_src srcs[] = { src0 };                                    \
+   ibc_reg_ref srcs[] = { src0 };                                    \
    return ibc_build_ssa_alu(b, IBC_ALU_OP_##OP, dest_type, srcs, 1); \
 }
 
 #define IBC_BUILDER_DEFINE_ALU2(OP)                                  \
-static inline ibc_reg *                                              \
+static inline ibc_reg_ref                                            \
 ibc_##OP(ibc_builder *b, enum ibc_type dest_type,                    \
-         ibc_alu_src src0, ibc_alu_src src1)                         \
+         ibc_reg_ref src0, ibc_reg_ref src1)                         \
 {                                                                    \
-   ibc_alu_src srcs[] = { src0, src1 };                              \
+   ibc_reg_ref srcs[] = { src0, src1 };                              \
    return ibc_build_ssa_alu(b, IBC_ALU_OP_##OP, dest_type, srcs, 2); \
 }
 
 #define IBC_BUILDER_DEFINE_ALU3(OP)                                  \
-static inline ibc_reg *                                              \
+static inline ibc_reg_ref                                            \
 ibc_##OP(ibc_builder *b, enum ibc_type dest_type,                    \
-         ibc_alu_src src0, ibc_alu_src src1, ibc_alu_src src2)       \
+         ibc_reg_ref src0, ibc_reg_ref src1, ibc_reg_ref src2)       \
 {                                                                    \
-   ibc_alu_src srcs[] = { src0, src1, src2 };                        \
+   ibc_reg_ref srcs[] = { src0, src1, src2 };                        \
    return ibc_build_ssa_alu(b, IBC_ALU_OP_##OP, dest_type, srcs, 3); \
 }
 
@@ -280,7 +281,7 @@ IBC_BUILDER_DEFINE_ALU2(ADD)
 #undef IBC_BUILDER_DEFINE_ALU2
 #undef IBC_BUILDER_DEFINE_ALU3
 
-static inline ibc_reg *
+static inline ibc_reg_ref
 ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,
                 enum ibc_type type, uint8_t stride)
 {
@@ -291,14 +292,12 @@ ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,
    uint8_t align = type_sz;
    ibc_reg *hw_reg = ibc_hw_grf_reg_create(b->shader, byte, size, align);
 
-   return ibc_MOV(b, type, (ibc_alu_src) {
+   return ibc_MOV(b, type, (ibc_reg_ref) {
       .file = IBC_REG_FILE_HW_GRF,
       .type = type,
-      .reg = {
-         .reg = hw_reg,
-         .offset = 0,
-         .stride = type_sz * stride,
-      },
+      .reg = hw_reg,
+      .offset = 0,
+      .stride = type_sz * stride,
    });
 }
 

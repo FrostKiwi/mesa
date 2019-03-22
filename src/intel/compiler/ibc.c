@@ -91,10 +91,10 @@ ibc_alu_instr_create(struct ibc_shader *shader, enum ibc_alu_op op,
 
    alu->op = op;
 
-   ibc_reg_ref_init(&alu->dest.reg);
+   ibc_reg_ref_init(&alu->dest.ref);
 
    for (unsigned i = 0; i < num_srcs; i++)
-      ibc_reg_ref_init(&alu->src[i].reg);
+      ibc_reg_ref_init(&alu->src[i].ref);
 
    return alu;
 }
