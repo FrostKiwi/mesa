@@ -40,6 +40,10 @@ ibc_type_for_nir(nir_alu_type ntype)
    case nir_type_int:   stype = IBC_TYPE_INT;   break;
    case nir_type_uint:  stype = IBC_TYPE_UINT;  break;
    case nir_type_float: stype = IBC_TYPE_FLOAT; break;
+   case nir_type_bool:
+      assert(ntype == nir_type_bool32);
+      stype = IBC_TYPE_UINT;
+      break;
    default:
       unreachable("Unsupported base type");
    }
@@ -92,6 +96,31 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_ushr:
       dest = ibc_SHR(b, dest_type, src[0], src[1]);
       break;
+
+   case nir_op_ieq32: {
+      dest = ibc_CMP(b, dest_type, src[0], src[1]);
+      ibc_alu_instr *cmp = ibc_instr_as_alu(dest.reg->logical.ssa);
+      cmp->cmod = BRW_CONDITIONAL_EQ;
+      /* We need a flag register even though the result may never be used */
+      ibc_reg *flag = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
+      cmp->instr.flag = ibc_ref(flag);
+      break;
+   }
+
+   case nir_op_b32csel: {
+      ibc_reg *flag = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
+      ibc_alu_instr *mov = ibc_build_alu(b, IBC_ALU_OP_MOV,
+                                         ibc_null(IBC_TYPE_UD),
+                                         &src[0], 1);
+      mov->instr.flag = ibc_ref(flag);
+      mov->cmod = BRW_CONDITIONAL_NZ;
+      dest = ibc_SEL(b, dest_type, src[1], src[2]);
+      ibc_alu_instr *sel = ibc_instr_as_alu(dest.reg->logical.ssa);
+      sel->instr.flag = ibc_ref(flag);
+      sel->instr.predicate = BRW_PREDICATE_NORMAL;
+      break;
+   }
+
    default:
       unreachable("Unhandled NIR ALU opcode");
    }
