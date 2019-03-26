@@ -42,7 +42,8 @@ struct ibc_builder_simd_group {
 
 typedef struct ibc_builder {
    ibc_shader *shader;
-   struct list_head *prev;
+
+   ibc_cursor cursor;
 
    unsigned simd_width;
    unsigned simd_group;
@@ -58,7 +59,7 @@ ibc_builder_init(ibc_builder *b, ibc_shader *shader, unsigned simd_width)
    b->shader = shader;
    ibc_block *first_block =
       list_first_entry(&shader->blocks, ibc_block, link);
-   b->prev = &first_block->instrs;
+   b->cursor = ibc_before_block(first_block);
 
    b->simd_width = simd_width;
    b->simd_group = 0;
@@ -120,8 +121,8 @@ ibc_builder_push_scalar(ibc_builder *b)
 static inline void
 ibc_builder_insert_instr(ibc_builder *b, ibc_instr *instr)
 {
-   list_add(&instr->link, b->prev);
-   b->prev = &instr->link;
+   ibc_instr_insert(instr, b->cursor);
+   b->cursor = ibc_after_instr(instr);
 }
 
 static inline ibc_reg *

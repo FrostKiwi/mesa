@@ -453,6 +453,38 @@ ibc_shader *ibc_shader_create(void *mem_ctx,
    list_for_each_entry_safe(ibc_block, block, &(shader)->blocks, link)
 
 
+typedef struct {
+   struct list_head *prev;
+} ibc_cursor;
+
+static inline ibc_cursor
+ibc_before_instr(ibc_instr *instr)
+{
+   return (ibc_cursor) { instr->link.prev };
+}
+
+static inline ibc_cursor
+ibc_after_instr(ibc_instr *instr)
+{
+   return (ibc_cursor) { &instr->link };
+}
+
+static inline ibc_cursor
+ibc_before_block(ibc_block *block)
+{
+   return (ibc_cursor) { &block->instrs };
+}
+
+static inline ibc_cursor
+ibc_after_block(ibc_block *block)
+{
+   return (ibc_cursor) { block->instrs.prev };
+}
+
+void ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor);
+void ibc_instr_remove(ibc_instr *instr);
+
+
 /**********************************************************************
  * IBC validation, optimization and lowering passes
  *
