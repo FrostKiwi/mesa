@@ -453,11 +453,8 @@ ibc_shader *ibc_shader_create(void *mem_ctx,
    list_for_each_entry_safe(ibc_block, block, &(shader)->blocks, link)
 
 
-void ibc_validate_shader(const ibc_shader *shader);
-
-
 /**********************************************************************
- * IBC optimization and lowering passes
+ * IBC validation, optimization and lowering passes
  *
  * KEEP IN ALPHABETICAL ORDER!
  **********************************************************************/
@@ -476,6 +473,8 @@ void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 
 unsigned *ibc_to_binary(const ibc_shader *shader, void *mem_ctx,
                         unsigned *program_size);
+
+void ibc_validate_shader(const ibc_shader *shader);
 
 #ifdef __cplusplus
 } /* extern "C" */
