@@ -171,6 +171,15 @@ ibc_fref(const ibc_reg *reg)
 }
 
 static inline ibc_reg_ref
+ibc_null(enum ibc_type type)
+{
+   return (ibc_reg_ref) {
+      .file = IBC_REG_FILE_NONE,
+      .type = type,
+   };
+}
+
+static inline ibc_reg_ref
 ibc_imm_ref(enum ibc_type type, char *imm, unsigned imm_size)
 {
    ibc_reg_ref ref = {
@@ -289,9 +298,11 @@ ibc_##OP(ibc_builder *b, enum ibc_type dest_type,                    \
 }
 
 IBC_BUILDER_DEFINE_ALU1(MOV)
+IBC_BUILDER_DEFINE_ALU2(SEL)
 IBC_BUILDER_DEFINE_ALU2(AND)
 IBC_BUILDER_DEFINE_ALU2(SHR)
 IBC_BUILDER_DEFINE_ALU2(SHL)
+IBC_BUILDER_DEFINE_ALU2(CMP)
 IBC_BUILDER_DEFINE_ALU2(ADD)
 
 #undef IBC_BUILDER_DEFINE_ALU1
