@@ -62,6 +62,18 @@ ibc_hw_grf_reg_create(ibc_shader *shader,
    return reg;
 }
 
+ibc_reg *
+ibc_flag_reg_create(ibc_shader *shader,
+                    uint8_t subnr, uint8_t bits)
+{
+   ibc_reg *reg = ibc_reg_create(shader, IBC_REG_FILE_FLAG);
+
+   reg->flag.subnr = subnr;
+   reg->flag.bits = bits;
+
+   return reg;
+}
+
 static void
 ibc_reg_ref_init(ibc_reg_ref *ref)
 {
