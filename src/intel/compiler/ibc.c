@@ -169,3 +169,15 @@ ibc_shader_create(void *mem_ctx,
 
    return shader;
 }
+
+void
+ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor)
+{
+   list_add(&instr->link, cursor.prev);
+}
+
+void
+ibc_instr_remove(ibc_instr *instr)
+{
+   list_del(&instr->link);
+}

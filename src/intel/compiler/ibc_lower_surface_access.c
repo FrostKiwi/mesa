@@ -71,8 +71,8 @@ ibc_lower_surface_access(ibc_shader *shader)
          send->payload[1] = intrin->src[2].ref;
          send->ex_mlen = intrin->src[2].num_comps * instr->simd_width / 8;
 
-         list_add(&send->instr.link, &intrin->instr.link);
-         list_del(&intrin->instr.link);
+         ibc_instr_insert(&send->instr, ibc_after_instr(&intrin->instr));
+         ibc_instr_remove(&intrin->instr);
          progress = true;
       }
    }
