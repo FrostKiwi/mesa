@@ -256,7 +256,13 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 
          brw_set_default_predicate_control(p, instr->predicate);
          brw_set_default_predicate_inverse(p, instr->pred_inverse);
-         brw_set_default_flag_reg(p, 0, 0); /* TODO */
+         if (instr->flag.file == IBC_REG_FILE_FLAG) {
+            brw_set_default_flag_reg(p, instr->flag.reg->flag.subnr / 2,
+                                        instr->flag.reg->flag.subnr % 2);
+         } else {
+            assert(instr->flag.file == IBC_REG_FILE_NONE);
+            brw_set_default_flag_reg(p, 0, 0); /* TODO */
+         }
          brw_set_default_mask_control(p, instr->we_all);
 
          if (instr->type == IBC_INSTR_TYPE_SEND) {
@@ -279,7 +285,8 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
           *       register of the correct type and regioning so the
           *       instruction is considered compressed or not accordingly.
           */
-         assert(alu->dest.ref.file == IBC_REG_FILE_HW_GRF);
+         assert(alu->dest.ref.file == IBC_REG_FILE_HW_GRF ||
+                alu->dest.ref.file == IBC_REG_FILE_NONE);
          bool compressed =
             (alu->dest.ref.stride * alu->instr.simd_width) > REG_SIZE;
 
@@ -304,6 +311,10 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
             brw_MOV(p, dest, src[0]);
             break;
 
+         case IBC_ALU_OP_SEL:
+            brw_SEL(p, dest, src[0], src[1]);
+            break;
+
          case IBC_ALU_OP_AND:
             brw_AND(p, dest, src[0], src[1]);
             break;
@@ -314,6 +325,10 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 
          case IBC_ALU_OP_SHL:
             brw_SHL(p, dest, src[0], src[1]);
+            break;
+
+         case IBC_ALU_OP_CMP:
+            brw_CMP(p, dest, alu->cmod, src[0], src[1]);
             break;
 
          case IBC_ALU_OP_ADD:

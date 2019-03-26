@@ -57,14 +57,19 @@ rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
 
    assert(ref->reg->file == IBC_REG_FILE_LOGICAL);
 
-   const uint8_t comp = ref->comp;
-   ref->file = IBC_REG_FILE_HW_GRF;
-   if (ref->reg->logical.simd_width == 1 && is_src)
-      ref->stride = 0;
-   else
-      ref->stride = ref->reg->logical.bit_size / 8;
-   ref->offset = ref->stride * ref_simd_group;
-   ref->offset += ref->stride * comp * ref->reg->logical.simd_width;
+   if (ref->reg->logical.bit_size == 1) {
+      assert(ref->comp == 0);
+      ref->file = IBC_REG_FILE_FLAG;
+   } else {
+      const uint8_t comp = ref->comp;
+      ref->file = IBC_REG_FILE_HW_GRF;
+      if (ref->reg->logical.simd_width == 1 && is_src)
+         ref->stride = 0;
+      else
+         ref->stride = ref->reg->logical.bit_size / 8;
+      ref->offset = ref->stride * ref_simd_group;
+      ref->offset += ref->stride * comp * ref->reg->logical.simd_width;
+   }
 }
 
 void
@@ -122,6 +127,10 @@ ibc_assign_regs(ibc_shader *shader)
    }
 
    ibc_foreach_reg(reg, shader) {
+      /* TODO: Properly allocate flag registers */
+      if (reg->file == IBC_REG_FILE_LOGICAL && reg->logical.bit_size == 1)
+         continue;
+
       assert(reg->file == IBC_REG_FILE_LOGICAL ||
              reg->file == IBC_REG_FILE_HW_GRF);
       ibc_hw_grf_reg *grf = reg->file == IBC_REG_FILE_LOGICAL ?
@@ -143,6 +152,10 @@ ibc_assign_regs(ibc_shader *shader)
 
    ibc_foreach_block(block, shader) {
       ibc_foreach_instr(instr, block) {
+         /* Flags are the same for all instruction types */
+         rewrite_reg_ref(&instr->flag, instr->simd_group,
+                         logical_grfs, false);
+
          /* Right now, only ALU instructions use logical regs */
          switch (instr->type) {
          case IBC_INSTR_TYPE_ALU: {
@@ -187,8 +200,16 @@ ibc_assign_regs(ibc_shader *shader)
 
    ibc_foreach_reg(reg, shader) {
       if (reg->file == IBC_REG_FILE_LOGICAL) {
-         reg->file = IBC_REG_FILE_HW_GRF;
-         reg->hw_grf = logical_grfs[reg->index];
+         if (reg->logical.bit_size == 1) {
+            reg->file = IBC_REG_FILE_FLAG;
+            reg->flag = (ibc_flag_reg) {
+               .subnr = 0,
+               .bits = reg->logical.simd_width,
+            };
+         } else {
+            reg->file = IBC_REG_FILE_HW_GRF;
+            reg->hw_grf = logical_grfs[reg->index];
+         }
       }
    }
 
