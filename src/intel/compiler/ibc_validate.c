@@ -48,22 +48,6 @@ _ibc_assert(struct ibc_validate_state *s, int line,
 #define ibc_assert(state, expr) _ibc_assert(state, __LINE__, #expr, expr)
 
 static void
-ibc_validate_flag_reg_ref(struct ibc_validate_state *s,
-                          const ibc_reg_ref *ref,
-                          unsigned src_simd_width,
-                          unsigned src_simd_group)
-{
-   const ibc_flag_reg *reg = &ref->reg->flag;
-
-   unsigned reg_simd_group = (reg->subnr % 2) * 16;
-   unsigned reg_simd_width = reg->bits;
-
-   ibc_assert(s, src_simd_group >= reg_simd_group);
-   ibc_assert(s, src_simd_group + src_simd_width <=
-                 reg_simd_group + reg_simd_width);
-}
-
-static void
 ibc_validate_reg_ref(struct ibc_validate_state *s,
                      const ibc_reg_ref *ref, unsigned num_comps,
                      unsigned ref_simd_width, unsigned ref_simd_group)
@@ -95,6 +79,18 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
    case IBC_REG_FILE_HW_GRF:
       /* TODO */
       return;
+
+   case IBC_REG_FILE_FLAG: {
+      const ibc_flag_reg *reg = &ref->reg->flag;
+
+      unsigned reg_simd_group = (reg->subnr % 2) * 16;
+      unsigned reg_simd_width = reg->bits;
+
+      ibc_assert(s, ref_simd_group >= reg_simd_group);
+      ibc_assert(s, ref_simd_group + ref_simd_width <=
+                    reg_simd_group + reg_simd_width);
+      return;
+   }
    }
 
    unreachable("Invalid register file");
@@ -146,8 +142,10 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
 {
    if (alu->cmod != BRW_CONDITIONAL_NONE) {
       ibc_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
-      ibc_validate_flag_reg_ref(s, &alu->instr.flag, alu->instr.simd_width,
-                                alu->instr.simd_group);
+      ibc_assert(s, alu->instr.flag.file != IBC_REG_FILE_NONE);
+      ibc_validate_reg_ref(s, &alu->instr.flag, 1,
+                           alu->instr.simd_width,
+                           alu->instr.simd_group);
    }
 
    ibc_validate_alu_dst(s, alu, &alu->dest);
@@ -167,9 +165,9 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
        */
       unsigned pred_bits = brw_predicate_bits(instr->predicate);
       assert(util_is_power_of_two_nonzero(pred_bits));
-      ibc_validate_flag_reg_ref(s, &instr->flag,
-                                MAX2(instr->simd_width, pred_bits),
-                                instr->simd_group & (pred_bits - 1));
+      ibc_validate_reg_ref(s, &instr->flag, 1,
+                           MAX2(instr->simd_width, pred_bits),
+                           instr->simd_group & (pred_bits - 1));
    }
 
    switch (instr->type) {

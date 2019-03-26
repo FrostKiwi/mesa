@@ -224,6 +224,9 @@ ibc_reg *ibc_logical_reg_create(struct ibc_shader *shader,
 ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
                                uint16_t byte, uint8_t size, uint8_t align);
 
+ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader,
+                             uint8_t subnr, uint8_t bits);
+
 
 /** A structure representing a register reference (source or destination) in
  * an instruction
@@ -293,9 +296,11 @@ typedef struct ibc_instr {
 /** Enum of IBC ALU opcodes */
 enum ibc_alu_op {
    IBC_ALU_OP_MOV = 1,
+   IBC_ALU_OP_SEL = 2,
    IBC_ALU_OP_AND = 5,
    IBC_ALU_OP_SHR = 8,
    IBC_ALU_OP_SHL = 9,
+   IBC_ALU_OP_CMP = 16,
    IBC_ALU_OP_ADD = 64,
 };
 

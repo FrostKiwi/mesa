@@ -35,8 +35,8 @@ ibc_type_suffix(enum ibc_type type)
    case IBC_TYPE_INT:
    case IBC_TYPE_UINT:
    case IBC_TYPE_FLOAT:
-   case IBC_TYPE_FLAG:
    case IBC_TYPE_VECTOR:
+   case IBC_TYPE_FLAG:
       unreachable("Invalid types when printing");
 
    case IBC_TYPE_8_BIT:    return "8b";
@@ -128,8 +128,12 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref)
       return;
 
    case IBC_REG_FILE_LOGICAL:
-      fprintf(fp, "lg%u.%u", ref->reg->index, ref->comp);
-      fprintf(fp, ":%s", ibc_type_suffix(ref->type));
+      fprintf(fp, "lg%u", ref->reg->index);
+      if (ref->reg->logical.num_comps > 1)
+         fprintf(fp, ".%u", ref->comp);
+      /* TODO: Should we print a type for flags? */
+      if (ref->type != IBC_TYPE_FLAG)
+         fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
 
    case IBC_REG_FILE_HW_GRF: {
@@ -155,18 +159,42 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref)
       return;
    }
 
+   case IBC_REG_FILE_FLAG:
+      /* TODO: Take simd_group into account? */
+      fprintf(fp, "f%u.%u", ref->reg->flag.subnr / 2,
+              ref->reg->flag.subnr % 2);
+      return;
+
    }
    unreachable("Unknown register file");
+}
+
+static void
+print_instr_group(FILE *fp, const ibc_instr *instr)
+{
+   if (instr->we_all)
+      fprintf(fp, "(%u)", instr->simd_width);
+   else
+      fprintf(fp, "(%u:%u)", instr->simd_group, instr->simd_width);
+}
+
+static void
+print_instr_predicate(FILE *fp, const ibc_instr *instr)
+{
+   if (instr->predicate) {
+      assert(instr->predicate == BRW_PREDICATE_NORMAL); /* TODO */
+      fprintf(fp, "(%s", instr->pred_inverse ? "-" : "+");
+      print_reg_ref(fp, &instr->flag);
+      fprintf(fp, ")");
+   }
 }
 
 static void
 print_instr(FILE *fp, const ibc_instr *instr, const char *name)
 {
    fprintf(fp, "%s", name);
-   if (instr->we_all)
-      fprintf(fp, "(%u)", instr->simd_width);
-   else
-      fprintf(fp, "(%u:%u)", instr->simd_group, instr->simd_width);
+   print_instr_predicate(fp, instr);
+   print_instr_group(fp, instr);
 }
 
 static const char *
@@ -174,18 +202,46 @@ alu_op_name(enum ibc_alu_op op)
 {
    switch (op) {
    case IBC_ALU_OP_MOV:  return "mov";
+   case IBC_ALU_OP_SEL:  return "sel";
    case IBC_ALU_OP_AND:  return "and";
    case IBC_ALU_OP_SHR:  return "shr";
    case IBC_ALU_OP_SHL:  return "shl";
+   case IBC_ALU_OP_CMP:  return "cmp";
    case IBC_ALU_OP_ADD:  return "add";
    }
    unreachable("Unknown ALU opcode");
 }
 
+static const char *
+conditional_mod_name(enum brw_conditional_mod cmod)
+{
+   switch (cmod) {
+   case BRW_CONDITIONAL_NONE:
+   case BRW_CONDITIONAL_R:
+   case BRW_CONDITIONAL_O:
+   case BRW_CONDITIONAL_U:
+      unreachable("Invalid conditional modifier for printing");
+
+   case BRW_CONDITIONAL_Z:    return "z";
+   case BRW_CONDITIONAL_NZ:   return "nz";
+   case BRW_CONDITIONAL_G:    return "g";
+   case BRW_CONDITIONAL_GE:   return "ge";
+   case BRW_CONDITIONAL_L:    return "l";
+   case BRW_CONDITIONAL_LE:   return "le";
+   }
+   unreachable("Invalid conditional modifier");
+}
+
 static void
 print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 {
-   print_instr(fp, &alu->instr, alu_op_name(alu->op));
+   fprintf(fp, "%s", alu_op_name(alu->op));
+   if (alu->cmod) {
+      fprintf(fp, ".%s.", conditional_mod_name(alu->cmod));
+      print_reg_ref(fp, &alu->instr.flag);
+   }
+   print_instr_predicate(fp, &alu->instr);
+   print_instr_group(fp, &alu->instr);
 
    fprintf(fp, "   ");
 
