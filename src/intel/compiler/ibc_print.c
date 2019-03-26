@@ -35,6 +35,8 @@ ibc_type_suffix(enum ibc_type type)
    case IBC_TYPE_INT:
    case IBC_TYPE_UINT:
    case IBC_TYPE_FLOAT:
+   case IBC_TYPE_FLAG:
+   case IBC_TYPE_VECTOR:
       unreachable("Invalid types when printing");
 
    case IBC_TYPE_8_BIT:    return "8b";
@@ -77,9 +79,11 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref)
       case IBC_TYPE_INT:
       case IBC_TYPE_UINT:
       case IBC_TYPE_FLOAT:
+      case IBC_TYPE_FLAG:
       case IBC_TYPE_8_BIT:
       case IBC_TYPE_B:
       case IBC_TYPE_UB:
+      case IBC_TYPE_VECTOR:
          unreachable("Invalid immediate types");
 
       case IBC_TYPE_16_BIT:
