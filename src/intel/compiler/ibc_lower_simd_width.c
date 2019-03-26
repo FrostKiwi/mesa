@@ -98,7 +98,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                continue;
 
             /* Insert after this instruction */
-            b.prev = &alu->instr.link;
+            b.cursor = ibc_after_instr(&alu->instr);
             assert(b._group_stack_size == 0);
             ibc_builder_push_group(&b, alu->instr.simd_width,
                                    alu->instr.simd_group);
@@ -132,7 +132,7 @@ ibc_lower_simd_width(ibc_shader *shader)
             build_simd_zip(&b, alu->dest.ref, dests, max_width,
                            alu->instr.simd_width / max_width, 1);
 
-            list_del(&alu->instr.link);
+            ibc_instr_remove(&alu->instr);
 
             ibc_builder_pop(&b);
             progress = true;
@@ -153,7 +153,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                continue;
 
             /* Insert after this instruction */
-            b.prev = &intrin->instr.link;
+            b.cursor = ibc_after_instr(&intrin->instr);
             assert(b._group_stack_size == 0);
             ibc_builder_push_group(&b, intrin->instr.simd_width,
                                    intrin->instr.simd_group);
@@ -194,7 +194,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                               intrin->dest.num_comps);
             }
 
-            list_del(&intrin->instr.link);
+            ibc_instr_remove(&intrin->instr);
 
             ibc_builder_pop(&b);
             progress = true;
