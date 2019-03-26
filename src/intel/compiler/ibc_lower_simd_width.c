@@ -118,19 +118,31 @@ ibc_lower_simd_width(ibc_shader *shader)
                                              alu->src[j].ref, 1);
                }
 
-               ibc_reg *dest_reg =
-                  ibc_builder_new_logical_reg(&b, alu->dest.ref.type, 1);
-               dests[i] = ibc_typed_ref(dest_reg, alu->dest.ref.type);
+               split->cmod = alu->cmod;
+               split->instr.predicate = alu->instr.predicate;
+               split->instr.pred_inverse = alu->instr.pred_inverse;
+               if (alu->instr.flag.file != IBC_REG_FILE_NONE) {
+                  assert(alu->instr.flag.file == IBC_REG_FILE_LOGICAL);
+                  split->instr.flag = alu->instr.flag;
+               }
+
                split->dest = alu->dest;
-               split->dest.ref = dests[i];
+               if (alu->dest.ref.file != IBC_REG_FILE_NONE) {
+                  ibc_reg *dest_reg =
+                     ibc_builder_new_logical_reg(&b, alu->dest.ref.type, 1);
+                  dests[i] = ibc_typed_ref(dest_reg, alu->dest.ref.type);
+                  split->dest.ref = dests[i];
+               }
 
                ibc_builder_insert_instr(&b, &split->instr);
 
                ibc_builder_pop(&b);
             }
 
-            build_simd_zip(&b, alu->dest.ref, dests, max_width,
-                           alu->instr.simd_width / max_width, 1);
+            if (alu->dest.ref.file != IBC_REG_FILE_NONE) {
+               build_simd_zip(&b, alu->dest.ref, dests, max_width,
+                              alu->instr.simd_width / max_width, 1);
+            }
 
             ibc_instr_remove(&alu->instr);
 
@@ -181,6 +193,13 @@ ibc_lower_simd_width(ibc_shader *shader)
                                                  intrin->dest.num_comps);
                   dests[i] = ibc_typed_ref(dest_reg, intrin->dest.ref.type);
                   split->dest.ref = dests[i];
+               }
+
+               split->instr.predicate = intrin->instr.predicate;
+               split->instr.pred_inverse = intrin->instr.pred_inverse;
+               if (intrin->instr.flag.file != IBC_REG_FILE_NONE) {
+                  assert(intrin->instr.flag.file == IBC_REG_FILE_LOGICAL);
+                  split->instr.flag = intrin->instr.flag;
                }
 
                ibc_builder_insert_instr(&b, &split->instr);
