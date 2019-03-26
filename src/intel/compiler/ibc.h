@@ -64,18 +64,16 @@ struct ibc_shader;
 /** An enum representing IBC src and dest data types */
 enum PACKED ibc_type {
    IBC_TYPE_INVALID = 0,
-   IBC_TYPE_INT = 1,
-   IBC_TYPE_UINT = 2,
-   IBC_TYPE_FLOAT = 3,
+   IBC_TYPE_INT = 2,
+   IBC_TYPE_UINT = 4,
+   IBC_TYPE_FLOAT = 6,
+
+   IBC_TYPE_FLAG = 1,
 
    IBC_TYPE_8_BIT = 8,
    IBC_TYPE_16_BIT = 16,
    IBC_TYPE_32_BIT = 32,
    IBC_TYPE_64_BIT = 64,
-
-   IBC_TYPE_V  = 4 | IBC_TYPE_16_BIT,
-   IBC_TYPE_UV = 5 | IBC_TYPE_16_BIT,
-   IBC_TYPE_VF = 6 | IBC_TYPE_32_BIT,
 
    IBC_TYPE_B  = IBC_TYPE_INT    | IBC_TYPE_8_BIT,
    IBC_TYPE_UB = IBC_TYPE_UINT   | IBC_TYPE_8_BIT,
@@ -88,10 +86,15 @@ enum PACKED ibc_type {
    IBC_TYPE_Q  = IBC_TYPE_INT    | IBC_TYPE_64_BIT,
    IBC_TYPE_UQ = IBC_TYPE_UINT   | IBC_TYPE_64_BIT,
    IBC_TYPE_DF = IBC_TYPE_FLOAT  | IBC_TYPE_64_BIT,
+
+   IBC_TYPE_VECTOR = 128,
+   IBC_TYPE_V  = IBC_TYPE_VECTOR | IBC_TYPE_W,
+   IBC_TYPE_UV = IBC_TYPE_VECTOR | IBC_TYPE_UW,
+   IBC_TYPE_VF = IBC_TYPE_VECTOR | IBC_TYPE_F,
 };
 
-#define IBC_TYPE_BIT_SIZE_MASK 0x78
-#define IBC_TYPE_BASE_TYPE_MASK 0x07
+#define IBC_TYPE_BIT_SIZE_MASK 0x79
+#define IBC_TYPE_BASE_TYPE_MASK 0x87
 
 static inline unsigned
 ibc_type_bit_size(enum ibc_type t)
