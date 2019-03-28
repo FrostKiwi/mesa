@@ -23,6 +23,39 @@
 
 #include "ibc.h"
 
+static bool
+ibc_alu_instr_is_raw_mov(const ibc_alu_instr *alu)
+{
+   return alu->op == IBC_ALU_OP_MOV &&
+          alu->dest.ref.type == alu->src[0].ref.type &&
+          !alu->src[0].abs && !alu->src[0].negate &&
+          !alu->dest.sat;
+}
+
+static unsigned
+logical_reg_stride(const ibc_logical_reg *reg)
+{
+   if (!reg->ssa || reg->ssa->type != IBC_INSTR_TYPE_ALU)
+      return reg->bit_size / 8;
+
+   ibc_alu_instr *alu = ibc_instr_as_alu(reg->ssa);
+   assert(&alu->dest.ref.reg->logical == reg);
+
+   unsigned stride = ibc_type_byte_size(alu->dest.ref.type);
+   unsigned num_srcs = 3; /* TODO */
+   for (unsigned i = 0; i < num_srcs; i++) {
+      if (alu->src[i].ref.file == IBC_REG_FILE_NONE)
+         break;
+      stride = MAX2(stride, ibc_type_byte_size(alu->src[i].ref.type));
+   }
+
+   /* Only raw MOV supports a packed-byte destination */
+   if (stride == 1 && !ibc_alu_instr_is_raw_mov(alu))
+      stride = 2;
+
+   return stride;
+}
+
 static unsigned
 reg_size(ibc_reg *reg)
 {
@@ -31,7 +64,7 @@ reg_size(ibc_reg *reg)
       return reg->hw_grf.size;
    case IBC_REG_FILE_LOGICAL:
       return reg->logical.simd_width *
-             reg->logical.num_comps * (reg->logical.bit_size / 8);
+             reg->logical.num_comps * logical_reg_stride(&reg->logical);
    }
    unreachable("Unsupported register file");
 }
@@ -43,7 +76,8 @@ reg_align(ibc_reg *reg)
    case IBC_REG_FILE_HW_GRF:
       return reg->hw_grf.align;
    case IBC_REG_FILE_LOGICAL:
-      return MIN2(reg->logical.simd_width * (reg->logical.bit_size / 8), 32);
+      return MIN2(reg->logical.simd_width *
+                  logical_reg_stride(&reg->logical), 32);
    }
    unreachable("Unsupported register file");
 }
@@ -66,7 +100,7 @@ rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
       if (ref->reg->logical.simd_width == 1 && is_src)
          ref->stride = 0;
       else
-         ref->stride = ref->reg->logical.bit_size / 8;
+         ref->stride = logical_reg_stride(&ref->reg->logical);
       ref->offset = ref->stride * ref_simd_group;
       ref->offset += ref->stride * comp * ref->reg->logical.simd_width;
    }
