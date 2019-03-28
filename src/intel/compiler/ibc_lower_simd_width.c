@@ -63,6 +63,10 @@ build_simd_zip(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref *srcs,
 
    assert(num_comps == 1); /* TODO */
 
+   /* This reg is now written by multiple instructions. */
+   if (dest.file == IBC_REG_FILE_LOGICAL)
+      ((ibc_reg *)dest.reg)->logical.ssa = NULL;
+
    /* TODO: We want an SSA zip instruction */
    for (unsigned i = 0; i < num_srcs; i++) {
       ibc_builder_push_group(b, src_simd_width, i * src_simd_width);
@@ -131,6 +135,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                   ibc_reg *dest_reg =
                      ibc_builder_new_logical_reg(&b, alu->dest.ref.type, 1);
                   dests[i] = ibc_typed_ref(dest_reg, alu->dest.ref.type);
+                  dest_reg->logical.ssa = &split->instr;
                   split->dest.ref = dests[i];
                }
 
