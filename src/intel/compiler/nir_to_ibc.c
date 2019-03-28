@@ -82,6 +82,15 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       ibc_type_for_nir(nir_op_infos[instr->op].output_type) |
       instr->dest.dest.ssa.bit_size;
    switch (instr->op) {
+   case nir_op_u2u8:
+   case nir_op_u2u16:
+   case nir_op_u2u32:
+   case nir_op_i2i8:
+   case nir_op_i2i16:
+   case nir_op_i2i32:
+      dest = ibc_MOV(b, dest_type, src[0]);
+      break;
+
    case nir_op_iadd:
    case nir_op_fadd:
       dest = ibc_ADD(b, dest_type, src[0], src[1]);
