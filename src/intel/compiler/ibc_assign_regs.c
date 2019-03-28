@@ -96,6 +96,7 @@ rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
       ref->file = IBC_REG_FILE_FLAG;
    } else {
       const uint8_t comp = ref->comp;
+      const uint8_t subscript = ref->subscript;
       ref->file = IBC_REG_FILE_HW_GRF;
       if (ref->reg->logical.simd_width == 1 && is_src)
          ref->stride = 0;
@@ -103,6 +104,7 @@ rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
          ref->stride = logical_reg_stride(&ref->reg->logical);
       ref->offset = ref->stride * ref_simd_group;
       ref->offset += ref->stride * comp * ref->reg->logical.simd_width;
+      ref->offset += subscript * ibc_type_byte_size(ref->type);
    }
 }
 
