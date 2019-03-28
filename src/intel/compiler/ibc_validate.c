@@ -66,7 +66,8 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
          return;
 
       const ibc_logical_reg *lreg = &ref->reg->logical;
-      ibc_assert(s, ibc_type_bit_size(ref->type) == lreg->bit_size);
+      ibc_assert(s, (ref->subscript + 1) * ibc_type_bit_size(ref->type)
+                    <= lreg->bit_size);
       ibc_assert(s, ref->comp + num_comps <= lreg->num_comps);
       if (lreg->simd_width > 1) {
          ibc_assert(s, ref_simd_group >= lreg->simd_group);

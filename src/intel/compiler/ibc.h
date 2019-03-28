@@ -239,8 +239,18 @@ typedef struct ibc_reg_ref {
    enum ibc_type type;
 
    union {
-      /** Component to reference for logical registers */
-      uint8_t comp;
+      struct {
+         /** Component to reference for logical registers */
+         uint8_t comp;
+
+         /** Subscripted element to reference for logical registers
+          *
+          * This is used when the referenced register has a bit_size that is
+          * smaller than the reference type.  If the referenced register has a
+          * bit size equal to the reference type, this must be zero.
+          */
+         uint8_t subscript;
+      };
 
       struct {
          /** Byte offset at which the reference starts for HW regs */
