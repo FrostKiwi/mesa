@@ -98,6 +98,13 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
+   case nir_op_unpack_32_2x16_split_x:
+   case nir_op_unpack_32_2x16_split_y:
+      src[0].type = dest_type;
+      src[0].subscript = instr->op == nir_op_unpack_32_2x16_split_y;
+      dest = ibc_MOV(b, dest_type, src[0]);
+      break;
+
    case nir_op_iadd:
    case nir_op_fadd:
       dest = ibc_ADD(b, dest_type, src[0], src[1]);
