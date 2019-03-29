@@ -308,6 +308,7 @@ enum ibc_alu_op {
    IBC_ALU_OP_MOV = 1,
    IBC_ALU_OP_SEL = 2,
    IBC_ALU_OP_AND = 5,
+   IBC_ALU_OP_OR  = 6,
    IBC_ALU_OP_SHR = 8,
    IBC_ALU_OP_SHL = 9,
    IBC_ALU_OP_CMP = 16,
