@@ -204,6 +204,7 @@ alu_op_name(enum ibc_alu_op op)
    case IBC_ALU_OP_MOV:  return "mov";
    case IBC_ALU_OP_SEL:  return "sel";
    case IBC_ALU_OP_AND:  return "and";
+   case IBC_ALU_OP_OR:   return "or";
    case IBC_ALU_OP_SHR:  return "shr";
    case IBC_ALU_OP_SHL:  return "shl";
    case IBC_ALU_OP_CMP:  return "cmp";

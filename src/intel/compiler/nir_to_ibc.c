@@ -105,6 +105,9 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_iand:
       dest = ibc_AND(b, dest_type, src[0], src[1]);
       break;
+   case nir_op_ior:
+      dest = ibc_OR(b, dest_type, src[0], src[1]);
+      break;
    case nir_op_ishl:
       dest = ibc_SHL(b, dest_type, src[0], src[1]);
       break;
