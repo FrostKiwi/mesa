@@ -319,6 +319,10 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
             brw_AND(p, dest, src[0], src[1]);
             break;
 
+         case IBC_ALU_OP_OR:
+            brw_OR(p, dest, src[0], src[1]);
+            break;
+
          case IBC_ALU_OP_SHR:
             brw_SHR(p, dest, src[0], src[1]);
             break;
