@@ -185,15 +185,15 @@ print_instr_predicate(FILE *fp, const ibc_instr *instr)
       assert(instr->predicate == BRW_PREDICATE_NORMAL); /* TODO */
       fprintf(fp, "(%s", instr->pred_inverse ? "-" : "+");
       print_reg_ref(fp, &instr->flag);
-      fprintf(fp, ")");
+      fprintf(fp, ") ");
    }
 }
 
 static void
 print_instr(FILE *fp, const ibc_instr *instr, const char *name)
 {
-   fprintf(fp, "%s", name);
    print_instr_predicate(fp, instr);
+   fprintf(fp, "%s", name);
    print_instr_group(fp, instr);
 }
 
@@ -235,12 +235,12 @@ conditional_mod_name(enum brw_conditional_mod cmod)
 static void
 print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 {
+   print_instr_predicate(fp, &alu->instr);
    fprintf(fp, "%s", alu_op_name(alu->op));
    if (alu->cmod) {
       fprintf(fp, ".%s.", conditional_mod_name(alu->cmod));
       print_reg_ref(fp, &alu->instr.flag);
    }
-   print_instr_predicate(fp, &alu->instr);
    print_instr_group(fp, &alu->instr);
 
    fprintf(fp, "   ");
