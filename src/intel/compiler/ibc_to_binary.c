@@ -247,6 +247,8 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 
    ibc_foreach_block(block, shader) {
       ibc_foreach_instr(instr, block) {
+         unsigned int last_insn_offset = p->next_insn_offset;
+
          brw_set_default_access_mode(p, BRW_ALIGN_1);
 
          assert(instr->we_all || instr->simd_width >= 4);
@@ -341,6 +343,13 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 
          default:
             unreachable("Invalid instruction");
+         }
+
+         if (alu->cmod) {
+            assert(p->next_insn_offset == last_insn_offset + 16 ||
+                   !"conditional_mod set for IR emitting more than 1 "
+                    "instruction");
+            brw_inst_set_cond_modifier(p->devinfo, brw_last_inst, alu->cmod);
          }
       }
    }
