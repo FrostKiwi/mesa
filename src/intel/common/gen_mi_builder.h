@@ -440,6 +440,51 @@ gen_mi_store(gen_mi_builder *b, gen_mi_value dst, gen_mi_value src)
    gen_mi_value_unref(b, dst);
 }
 
+static inline void
+gen_mi_memset(gen_mi_builder *b, __gen_address_type dst,
+              uint32_t value, uint32_t size)
+{
+#if GEN_GEN >= 8 || GEN_IS_HASWELL
+   assert(b->num_math_dwords == 0);
+#endif
+
+   /* This memset operates in units of dwords. */
+   assert(size % 4 == 0);
+
+   for (uint32_t i = 0; i < size; i += 4) {
+      gen_mi_store(b, gen_mi_mem32(__gen_address_offset(dst, i)),
+                      gen_mi_imm(value));
+   }
+}
+
+/* NOTE: On IVB, this function stomps GEN7_3DPRIM_BASE_VERTEX */
+static inline void
+gen_mi_memcpy(gen_mi_builder *b, __gen_address_type dst,
+              __gen_address_type src, uint32_t size)
+{
+#if GEN_GEN >= 8 || GEN_IS_HASWELL
+   assert(b->num_math_dwords == 0);
+#endif
+
+   /* This memcpy operates in units of dwords. */
+   assert(size % 4 == 0);
+
+   for (uint32_t i = 0; i < size; i += 4) {
+      gen_mi_value dst_val = gen_mi_mem32(__gen_address_offset(dst, i));
+      gen_mi_value src_val = gen_mi_mem32(__gen_address_offset(src, i));
+#if GEN_GEN >= 8 || GEN_IS_HASWELL
+      gen_mi_store(b, dst_val, src_val);
+#else
+      /* IVB does not have a general purpose register for command streamer
+       * commands. Therefore, we use an alternate temporary register.
+       */
+      gen_mi_value tmp_reg = gen_mi_reg32(0x2440); /* GEN7_3DPRIM_BASE_VERTEX */
+      gen_mi_store(b, tmp_reg, src_val);
+      gen_mi_store(b, dst_val, tmp_reg);
+#endif
+   }
+}
+
 /*
  * MI_MATH Section.  Only available on Haswell+
  */
