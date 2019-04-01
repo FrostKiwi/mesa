@@ -532,6 +532,8 @@ void ibc_assign_regs(ibc_shader *shader);
 bool ibc_lower_surface_access(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);
 
+bool ibc_opt_copy_prop(ibc_shader *shader);
+
 void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 
 unsigned *ibc_to_binary(const ibc_shader *shader, void *mem_ctx,
