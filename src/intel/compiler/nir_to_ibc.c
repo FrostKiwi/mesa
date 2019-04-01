@@ -89,10 +89,10 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_i2i16:
    case nir_op_i2i32:
       if (ibc_type_bit_size(dest_type) < ibc_type_bit_size(src[0].type)) {
-         /* Integer down-casts can always be treated as subscripts because
-          * there is no extension required.
+         /* Integer down-casts can always be treated as just consuming the
+          * bottom bytes of the register.
           */
-         assert(src[0].subscript == 0);
+         assert(src[0].byte == 0);
          src[0].type = dest_type;
       }
       dest = ibc_MOV(b, dest_type, src[0]);
@@ -101,7 +101,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_unpack_32_2x16_split_x:
    case nir_op_unpack_32_2x16_split_y:
       src[0].type = dest_type;
-      src[0].subscript = instr->op == nir_op_unpack_32_2x16_split_y;
+      src[0].byte = 2 * (instr->op == nir_op_unpack_32_2x16_split_y);
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 

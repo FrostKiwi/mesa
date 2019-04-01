@@ -243,13 +243,13 @@ typedef struct ibc_reg_ref {
          /** Component to reference for logical registers */
          uint8_t comp;
 
-         /** Subscripted element to reference for logical registers
+         /** Byte offset into the logical register component
           *
           * This is used when the referenced register has a bit_size that is
-          * smaller than the reference type.  If the referenced register has a
+          * larger than the reference type.  If the referenced register has a
           * bit size equal to the reference type, this must be zero.
           */
-         uint8_t subscript;
+         uint8_t byte;
       };
 
       struct {
