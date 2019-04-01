@@ -35,8 +35,8 @@ extern "C" {
 #define IBC_BUILDER_GROUP_STACK_SIZE 4
 
 struct ibc_builder_simd_group {
-   unsigned simd_width;
    unsigned simd_group;
+   unsigned simd_width;
    bool we_all;
 };
 
@@ -45,8 +45,8 @@ typedef struct ibc_builder {
 
    ibc_cursor cursor;
 
-   unsigned simd_width;
    unsigned simd_group;
+   unsigned simd_width;
    bool we_all;
 
    unsigned _group_stack_size;
@@ -61,8 +61,8 @@ ibc_builder_init(ibc_builder *b, ibc_shader *shader, unsigned simd_width)
       list_first_entry(&shader->blocks, ibc_block, link);
    b->cursor = ibc_before_block(first_block);
 
-   b->simd_width = simd_width;
    b->simd_group = 0;
+   b->simd_width = simd_width;
    b->we_all = false;
 
    b->_group_stack_size = 0;
@@ -74,8 +74,8 @@ _ibc_builder_push(ibc_builder *b)
    assert(b->_group_stack_size < IBC_BUILDER_GROUP_STACK_SIZE);
    b->_group_stack[b->_group_stack_size] =
       (struct ibc_builder_simd_group) {
-         .simd_width = b->simd_width,
          .simd_group = b->simd_group,
+         .simd_width = b->simd_width,
          .we_all = b->we_all,
       };
    b->_group_stack_size++;
@@ -86,20 +86,21 @@ ibc_builder_pop(ibc_builder *b)
 {
    assert(b->_group_stack_size > 0);
    b->_group_stack_size--;
-   b->simd_width = b->_group_stack[b->_group_stack_size].simd_width;
    b->simd_group = b->_group_stack[b->_group_stack_size].simd_group;
+   b->simd_width = b->_group_stack[b->_group_stack_size].simd_width;
    b->we_all = b->_group_stack[b->_group_stack_size].we_all;
 }
 
 static inline void
 ibc_builder_push_group(ibc_builder *b,
-                       unsigned simd_width, unsigned simd_group)
+                       unsigned simd_group, unsigned simd_width)
 {
    /* We're only allowed to restrict the size */
+   assert(simd_width >= 8);
    assert(b->simd_group + simd_group + simd_width <= b->simd_width);
    _ibc_builder_push(b);
-   b->simd_width = simd_width;
    b->simd_group += simd_group;
+   b->simd_width = simd_width;
 }
 
 static inline void
@@ -107,8 +108,8 @@ ibc_builder_push_we_all(ibc_builder *b, unsigned simd_width)
 {
    /* We're only allowed to restrict the size */
    _ibc_builder_push(b);
-   b->simd_width = simd_width;
    b->simd_group = 0;
+   b->simd_width = simd_width;
    b->we_all = true;
 }
 
@@ -130,7 +131,7 @@ ibc_builder_new_logical_reg(ibc_builder *b, enum ibc_type type,
                             uint8_t num_comps)
 {
    return ibc_logical_reg_create(b->shader, ibc_type_bit_size(type),
-                                 num_comps, b->simd_width, b->simd_group);
+                                 num_comps, b->simd_group, b->simd_width);
 }
 
 static inline ibc_reg_ref
@@ -222,7 +223,7 @@ ibc_build_alu(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref dest,
               ibc_reg_ref *src, unsigned num_srcs)
 {
    ibc_alu_instr *alu = ibc_alu_instr_create(b->shader, op,
-                                             b->simd_width, b->simd_group);
+                                             b->simd_group, b->simd_width);
    alu->instr.we_all = b->we_all;
 
    for (unsigned i = 0; i < num_srcs; i++)

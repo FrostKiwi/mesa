@@ -50,7 +50,7 @@ _ibc_assert(struct ibc_validate_state *s, int line,
 static void
 ibc_validate_reg_ref(struct ibc_validate_state *s,
                      const ibc_reg_ref *ref, unsigned num_comps,
-                     unsigned ref_simd_width, unsigned ref_simd_group)
+                     unsigned ref_simd_group, unsigned ref_simd_width)
 {
    switch (ref->file) {
    case IBC_REG_FILE_NONE:
@@ -104,8 +104,8 @@ ibc_validate_alu_src(struct ibc_validate_state *s,
                      const ibc_alu_instr *alu, const ibc_alu_src *src)
 {
    ibc_validate_reg_ref(s, &src->ref, 1,
-                        alu->instr.simd_width,
-                        alu->instr.simd_group);
+                        alu->instr.simd_group,
+                        alu->instr.simd_width);
 }
 
 static void
@@ -113,8 +113,8 @@ ibc_validate_alu_dst(struct ibc_validate_state *s,
                      const ibc_alu_instr *alu, const ibc_alu_dest *dest)
 {
    ibc_validate_reg_ref(s, &dest->ref, 1,
-                        alu->instr.simd_width,
-                        alu->instr.simd_group);
+                        alu->instr.simd_group,
+                        alu->instr.simd_width);
 }
 
 static unsigned
@@ -147,8 +147,8 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
       ibc_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
       ibc_assert(s, alu->instr.flag.file != IBC_REG_FILE_NONE);
       ibc_validate_reg_ref(s, &alu->instr.flag, 1,
-                           alu->instr.simd_width,
-                           alu->instr.simd_group);
+                           alu->instr.simd_group,
+                           alu->instr.simd_width);
    }
 
    ibc_validate_alu_dst(s, alu, &alu->dest);
@@ -169,8 +169,8 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
       unsigned pred_bits = brw_predicate_bits(instr->predicate);
       assert(util_is_power_of_two_nonzero(pred_bits));
       ibc_validate_reg_ref(s, &instr->flag, 1,
-                           MAX2(instr->simd_width, pred_bits),
-                           instr->simd_group & (pred_bits - 1));
+                           instr->simd_group & (pred_bits - 1),
+                           MAX2(instr->simd_width, pred_bits));
    }
 
    switch (instr->type) {
