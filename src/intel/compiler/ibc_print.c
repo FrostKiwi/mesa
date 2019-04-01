@@ -300,6 +300,7 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
 {
    switch (op) {
    case IBC_INTRINSIC_OP_INVALID: break;
+   case IBC_INTRINSIC_OP_SIMD_ZIP:           return "simd_zip";
    case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:  return "bti_untyped_write";
    }
    unreachable("Invalid IBC intrinsic op");

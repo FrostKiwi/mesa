@@ -58,29 +58,26 @@ static void
 build_simd_zip(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref *srcs,
                unsigned src_simd_width, unsigned num_srcs, unsigned num_comps)
 {
-   /* Record this before we push the builder stack */
-   unsigned zip_simd_group = b->simd_group;
+   ibc_intrinsic_instr *zip =
+      ibc_intrinsic_instr_create(b->shader, IBC_INTRINSIC_OP_SIMD_ZIP,
+                                 b->simd_group, b->simd_width, num_srcs);
 
-   assert(num_comps == 1); /* TODO */
-
-   /* This reg is now written by multiple instructions. */
-   if (dest.file == IBC_REG_FILE_LOGICAL)
-      ((ibc_reg *)dest.reg)->logical.ssa = NULL;
-
-   /* TODO: We want an SSA zip instruction */
    for (unsigned i = 0; i < num_srcs; i++) {
-      ibc_builder_push_group(b, i * src_simd_width, src_simd_width);
-
-      assert(dest.file == IBC_REG_FILE_LOGICAL ||
-             dest.file == IBC_REG_FILE_HW_GRF);
-      ibc_reg_ref mov_dest = dest;
-      if (dest.file == IBC_REG_FILE_HW_GRF)
-         mov_dest.offset += dest.stride * b->simd_group - zip_simd_group;
-
-      ibc_build_alu1(b, IBC_ALU_OP_MOV, mov_dest, srcs[i]);
-
-      ibc_builder_pop(b);
+      zip->src[i].ref = srcs[i];
+      zip->src[i].simd_width = src_simd_width;
+      zip->src[i].simd_group = i * src_simd_width;
+      zip->src[i].num_comps = num_comps;
    }
+
+   zip->dest.ref = dest;
+   zip->dest.num_comps = num_comps;
+
+   /* If the previous def was SSA then the zipped one is */
+   if (zip->dest.ref.file == IBC_REG_FILE_LOGICAL &&
+       zip->dest.ref.reg->logical.ssa)
+      ((ibc_reg *)zip->dest.ref.reg)->logical.ssa = &zip->instr;
+
+   ibc_builder_insert_instr(b, &zip->instr);
 }
 
 bool
