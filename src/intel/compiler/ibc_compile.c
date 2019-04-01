@@ -164,6 +164,11 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    ibc_print_shader(ibc, stderr);
    fprintf(stderr, "\n\n");
 
+   ibc_opt_dead_code(ibc);
+   ibc_validate_shader(ibc);
+   ibc_print_shader(ibc, stderr);
+   fprintf(stderr, "\n\n");
+
    ibc_lower_surface_access(ibc);
    ibc_validate_shader(ibc);
    ibc_print_shader(ibc, stderr);

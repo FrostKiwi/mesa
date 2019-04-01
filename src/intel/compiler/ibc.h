@@ -415,6 +415,8 @@ typedef struct {
 
    enum ibc_intrinsic_op op;
 
+   bool has_side_effects;
+
    ibc_intrinsic_reg_ref dest;
 
    unsigned num_srcs;
@@ -448,6 +450,9 @@ ibc_block *ibc_block_create(struct ibc_shader *shader);
 #define ibc_foreach_instr(instr, block) \
    list_for_each_entry(ibc_instr, instr, &(block)->instrs, link)
 
+#define ibc_foreach_instr_reverse(instr, block) \
+   list_for_each_entry_rev(ibc_instr, instr, &(block)->instrs, link)
+
 #define ibc_foreach_instr_safe(instr, block) \
    list_for_each_entry_safe(ibc_instr, instr, &(block)->instrs, link)
 
@@ -479,6 +484,9 @@ ibc_shader *ibc_shader_create(void *mem_ctx,
 
 #define ibc_foreach_block(block, shader) \
    list_for_each_entry(ibc_block, block, &(shader)->blocks, link)
+
+#define ibc_foreach_block_reverse(block, shader) \
+   list_for_each_entry_rev(ibc_block, block, &(shader)->blocks, link)
 
 #define ibc_foreach_block_safe(block, shader) \
    list_for_each_entry_safe(ibc_block, block, &(shader)->blocks, link)
@@ -533,6 +541,7 @@ bool ibc_lower_surface_access(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);
 
 bool ibc_opt_copy_prop(ibc_shader *shader);
+bool ibc_opt_dead_code(ibc_shader *shader);
 
 void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 
