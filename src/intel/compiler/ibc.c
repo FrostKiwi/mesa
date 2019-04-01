@@ -37,14 +37,14 @@ ibc_reg_create(ibc_shader *shader, enum ibc_reg_file file)
 ibc_reg *
 ibc_logical_reg_create(ibc_shader *shader,
                        uint8_t bit_size, uint8_t num_comps,
-                       uint8_t simd_width, uint8_t simd_group)
+                       uint8_t simd_group, uint8_t simd_width)
 {
    ibc_reg *reg = ibc_reg_create(shader, IBC_REG_FILE_LOGICAL);
 
    reg->logical.bit_size = bit_size;
    reg->logical.num_comps = num_comps;
-   reg->logical.simd_width = simd_width;
    reg->logical.simd_group = simd_group;
+   reg->logical.simd_width = simd_width;
 
    return reg;
 }
@@ -81,25 +81,26 @@ ibc_reg_ref_init(ibc_reg_ref *ref)
 
 static void
 ibc_instr_init(ibc_instr *instr, enum ibc_instr_type type,
-               uint8_t simd_width, uint8_t simd_group)
+               uint8_t simd_group, uint8_t simd_width)
 {
+   assert(simd_width > 0);
    instr->type = type;
-   instr->simd_width = simd_width;
    instr->simd_group = simd_group;
+   instr->simd_width = simd_width;
 
    ibc_reg_ref_init(&instr->flag);
 }
 
 ibc_alu_instr *
 ibc_alu_instr_create(struct ibc_shader *shader, enum ibc_alu_op op,
-                     uint8_t simd_width, uint8_t simd_group)
+                     uint8_t simd_group, uint8_t simd_width)
 {
    const unsigned num_srcs = 3; /* TODO */
 
    ibc_alu_instr *alu = rzalloc_size(shader, sizeof(ibc_alu_instr) +
                                              sizeof(ibc_alu_src) * num_srcs);
 
-   ibc_instr_init(&alu->instr, IBC_INSTR_TYPE_ALU, simd_width, simd_group);
+   ibc_instr_init(&alu->instr, IBC_INSTR_TYPE_ALU, simd_group, simd_width);
 
    alu->op = op;
 
@@ -113,12 +114,12 @@ ibc_alu_instr_create(struct ibc_shader *shader, enum ibc_alu_op op,
 
 ibc_send_instr *
 ibc_send_instr_create(struct ibc_shader *shader,
-                      uint8_t simd_width,
-                      uint8_t simd_group)
+                      uint8_t simd_group,
+                      uint8_t simd_width)
 {
    ibc_send_instr *send = rzalloc(shader, ibc_send_instr);
 
-   ibc_instr_init(&send->instr, IBC_INSTR_TYPE_SEND, simd_width, simd_group);
+   ibc_instr_init(&send->instr, IBC_INSTR_TYPE_SEND, simd_group, simd_width);
 
    ibc_reg_ref_init(&send->desc);
    ibc_reg_ref_init(&send->ex_desc);
@@ -134,7 +135,7 @@ ibc_send_instr_create(struct ibc_shader *shader,
 ibc_intrinsic_instr *
 ibc_intrinsic_instr_create(struct ibc_shader *shader,
                            enum ibc_intrinsic_op op,
-                           uint8_t simd_width, uint8_t simd_group,
+                           uint8_t simd_group, uint8_t simd_width,
                            unsigned num_srcs)
 {
    ibc_intrinsic_instr *intrin =
@@ -142,7 +143,7 @@ ibc_intrinsic_instr_create(struct ibc_shader *shader,
                            sizeof(ibc_intrinsic_reg_ref) * num_srcs);
 
    ibc_instr_init(&intrin->instr, IBC_INSTR_TYPE_INTRINSIC,
-                  simd_width, simd_group);
+                  simd_group, simd_width);
 
    intrin->op = op;
 
