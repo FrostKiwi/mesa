@@ -24,7 +24,8 @@
 #include "ibc.h"
 
 static bool
-try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src)
+try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
+                      uint8_t simd_group, uint8_t simd_width)
 {
    if (ref->file != IBC_REG_FILE_LOGICAL)
       return false;
@@ -64,6 +65,29 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src)
       return true;
    }
 
+   case IBC_INSTR_TYPE_INTRINSIC: {
+      ibc_intrinsic_instr *intrin =
+         ibc_instr_as_intrinsic(ref->reg->logical.ssa);
+      switch (intrin->op) {
+      case IBC_INTRINSIC_OP_SIMD_ZIP:
+         for (unsigned i = 0; i < intrin->num_srcs; i++) {
+            if (simd_group < intrin->src[i].simd_group ||
+                simd_group + simd_width >
+                  intrin->src[i].simd_group + intrin->src[i].simd_width)
+               continue;
+
+            ref->reg = intrin->src[i].ref.reg;
+            ref->comp += intrin->src[i].ref.comp;
+            ref->byte += intrin->src[i].ref.byte;
+            return true;
+         }
+         return false;
+
+      default:
+         return false;
+      }
+   }
+
    default:
       return false;
    }
@@ -85,7 +109,9 @@ ibc_opt_copy_prop(ibc_shader *shader)
 
             unsigned num_srcs = 3; /* TODO */
             for (unsigned i = 0; i < num_srcs; i++) {
-               if (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i]))
+               if (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i],
+                                         alu->instr.simd_group,
+                                         alu->instr.simd_width))
                   progress = true;
             }
          }
@@ -97,7 +123,9 @@ ibc_opt_copy_prop(ibc_shader *shader)
          case IBC_INSTR_TYPE_INTRINSIC: {
             ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
             for (unsigned i = 0; i < intrin->num_srcs; i++) {
-               if (try_copy_prop_reg_ref(&intrin->src[i].ref, NULL))
+               if (try_copy_prop_reg_ref(&intrin->src[i].ref, NULL,
+                                         intrin->src[i].simd_group,
+                                         intrin->src[i].simd_width))
                   progress = true;
             }
          }
