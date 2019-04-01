@@ -140,6 +140,7 @@ libintel_compiler_files = files(
   'ibc_to_binary.c',
   'ibc_lower_surface_access.c',
   'ibc_lower_simd_width.c',
+  'ibc_opt_copy_prop.c',
   'ibc_print.c',
   'ibc_validate.c',
 )
