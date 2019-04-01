@@ -69,7 +69,7 @@ build_simd_zip(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref *srcs,
 
    /* TODO: We want an SSA zip instruction */
    for (unsigned i = 0; i < num_srcs; i++) {
-      ibc_builder_push_group(b, src_simd_width, i * src_simd_width);
+      ibc_builder_push_group(b, i * src_simd_width, src_simd_width);
 
       assert(dest.file == IBC_REG_FILE_LOGICAL ||
              dest.file == IBC_REG_FILE_HW_GRF);
@@ -104,16 +104,16 @@ ibc_lower_simd_width(ibc_shader *shader)
             /* Insert after this instruction */
             b.cursor = ibc_after_instr(&alu->instr);
             assert(b._group_stack_size == 0);
-            ibc_builder_push_group(&b, alu->instr.simd_width,
-                                   alu->instr.simd_group);
+            ibc_builder_push_group(&b, alu->instr.simd_group,
+                                   alu->instr.simd_width);
 
             ibc_reg_ref dests[4];
             for (unsigned i = 0; i < alu->instr.simd_width / max_width; i++) {
-               ibc_builder_push_group(&b, max_width, i * max_width);
+               ibc_builder_push_group(&b, i * max_width, max_width);
 
                ibc_alu_instr *split =
                   ibc_alu_instr_create(shader, alu->op,
-                                       b.simd_width, b.simd_group);
+                                       b.simd_group, b.simd_width);
                unsigned num_srcs = 3; /* TODO */
                for (unsigned j = 0; j < num_srcs; j++) {
                   split->src[j] = alu->src[j];
@@ -172,16 +172,16 @@ ibc_lower_simd_width(ibc_shader *shader)
             /* Insert after this instruction */
             b.cursor = ibc_after_instr(&intrin->instr);
             assert(b._group_stack_size == 0);
-            ibc_builder_push_group(&b, intrin->instr.simd_width,
-                                   intrin->instr.simd_group);
+            ibc_builder_push_group(&b, intrin->instr.simd_group,
+                                   intrin->instr.simd_width);
 
             ibc_reg_ref dests[4];
             for (unsigned i = 0; i < intrin->instr.simd_width / max_width; i++) {
-               ibc_builder_push_group(&b, max_width, i * max_width);
+               ibc_builder_push_group(&b, i * max_width, max_width);
 
                ibc_intrinsic_instr *split =
                   ibc_intrinsic_instr_create(shader, intrin->op,
-                                             b.simd_width, b.simd_group,
+                                             b.simd_group, b.simd_width,
                                              intrin->num_srcs);
                for (unsigned j = 0; j < intrin->num_srcs; j++) {
                   split->src[j] = intrin->src[j];
