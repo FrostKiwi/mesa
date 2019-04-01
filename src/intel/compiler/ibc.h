@@ -400,6 +400,12 @@ enum ibc_intrinsic_op {
 typedef struct {
    ibc_reg_ref ref;
 
+   /** SIMD invocation offset */
+   uint8_t simd_group;
+
+   /** Number of SIMD invocations */
+   uint8_t simd_width;
+
    /** Number of vector components produced or consumed via this ref */
    unsigned num_comps;
 } ibc_intrinsic_reg_ref;
