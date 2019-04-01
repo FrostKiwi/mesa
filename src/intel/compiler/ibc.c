@@ -147,11 +147,16 @@ ibc_intrinsic_instr_create(struct ibc_shader *shader,
 
    intrin->op = op;
 
+   intrin->dest.simd_group = simd_group;
+   intrin->dest.simd_width = simd_width;
    ibc_reg_ref_init(&intrin->dest.ref);
 
    intrin->num_srcs = num_srcs;
-   for (unsigned i = 0; i < num_srcs; i++)
+   for (unsigned i = 0; i < num_srcs; i++) {
+      intrin->src[i].simd_group = simd_group;
+      intrin->src[i].simd_width = simd_width;
       ibc_reg_ref_init(&intrin->src[i].ref);
+   }
 
    return intrin;
 }
