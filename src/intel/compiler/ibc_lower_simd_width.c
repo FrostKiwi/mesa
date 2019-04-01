@@ -189,6 +189,8 @@ ibc_lower_simd_width(ibc_shader *shader)
                      simd_restricted_src(&b, intrin->instr.simd_group,
                                              intrin->src[j].ref,
                                              intrin->src[i].num_comps);
+                  split->src[j].simd_group = b.simd_group;
+                  split->src[j].simd_width = b.simd_width;
                }
 
                split->dest = intrin->dest;
@@ -199,6 +201,8 @@ ibc_lower_simd_width(ibc_shader *shader)
                   dests[i] = ibc_typed_ref(dest_reg, intrin->dest.ref.type);
                   split->dest.ref = dests[i];
                }
+               split->dest.simd_group = b.simd_group;
+               split->dest.simd_width = b.simd_width;
 
                split->instr.predicate = intrin->instr.predicate;
                split->instr.pred_inverse = intrin->instr.pred_inverse;
