@@ -102,7 +102,8 @@ rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
          ref->stride = 0;
       else
          ref->stride = logical_reg_stride(&ref->reg->logical);
-      ref->offset = ref->stride * ref_simd_group;
+      ref->offset = ref->stride *
+                    (ref_simd_group - ref->reg->logical.simd_group);
       ref->offset += ref->stride * comp * ref->reg->logical.simd_width;
       ref->offset += subscript * ibc_type_byte_size(ref->type);
    }
