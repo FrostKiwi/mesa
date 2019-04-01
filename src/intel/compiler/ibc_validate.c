@@ -158,6 +158,28 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
 }
 
 static void
+ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
+                             const ibc_intrinsic_instr *intrin)
+{
+   ibc_assert(s, intrin->dest.simd_group == intrin->instr.simd_group);
+   ibc_assert(s, intrin->dest.simd_width == intrin->instr.simd_width);
+   ibc_validate_reg_ref(s, &intrin->dest.ref,
+                        intrin->dest.num_comps,
+                        intrin->instr.simd_group,
+                        intrin->instr.simd_width);
+
+   for (unsigned i = 0; i < intrin->num_srcs; i++) {
+      ibc_assert(s, intrin->src[i].simd_group >= intrin->instr.simd_group);
+      ibc_assert(s, intrin->src[i].simd_group + intrin->src[i].simd_width <=
+                    intrin->instr.simd_group + intrin->instr.simd_width);
+      ibc_validate_reg_ref(s, &intrin->src[i].ref,
+                           intrin->src[i].num_comps,
+                           intrin->src[i].simd_group,
+                           intrin->src[i].simd_width);
+   }
+}
+
+static void
 ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 {
    if (instr->predicate != BRW_PREDICATE_NONE) {
@@ -183,7 +205,7 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
       return;
 
    case IBC_INSTR_TYPE_INTRINSIC:
-      /* TODO */
+      ibc_validate_intrinsic_instr(s, ibc_instr_as_intrinsic(instr));
       return;
    }
 
