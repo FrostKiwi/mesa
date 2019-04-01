@@ -138,11 +138,11 @@ typedef struct ibc_logical_reg {
    /** Number of vector components */
    uint8_t num_comps;
 
-   /** Number of SIMD invocations */
-   uint8_t simd_width;
-
    /** SIMD invocation offset */
    uint8_t simd_group;
+
+   /** Number of SIMD invocations */
+   uint8_t simd_width;
 
    /** Definition if this register is statically assigned once */
    struct ibc_instr *ssa;
@@ -219,7 +219,7 @@ typedef struct ibc_reg {
 
 ibc_reg *ibc_logical_reg_create(struct ibc_shader *shader,
                                 uint8_t bit_size, uint8_t num_comps,
-                                uint8_t simd_width, uint8_t simd_group);
+                                uint8_t simd_group, uint8_t simd_width);
 
 ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
                                uint16_t byte, uint8_t size, uint8_t align);
@@ -292,8 +292,8 @@ typedef struct ibc_instr {
    /** Link in ibc_block::instrs */
    struct list_head link;
 
-   uint8_t simd_width;
    uint8_t simd_group;
+   uint8_t simd_width;
    bool we_all;
 
    /** Flag reference for predication or cmod */
@@ -358,8 +358,8 @@ IBC_DEFINE_CAST(ibc_instr_as_alu, ibc_instr, ibc_alu_instr, instr,
 
 ibc_alu_instr *ibc_alu_instr_create(struct ibc_shader *shader,
                                     enum ibc_alu_op op,
-                                    uint8_t simd_width,
-                                    uint8_t simd_group);
+                                    uint8_t simd_group,
+                                    uint8_t simd_width);
 
 
 typedef struct ibc_send_instr {
@@ -388,8 +388,8 @@ IBC_DEFINE_CAST(ibc_instr_as_send, ibc_instr, ibc_send_instr, instr,
                 type, IBC_INSTR_TYPE_SEND)
 
 ibc_send_instr *ibc_send_instr_create(struct ibc_shader *shader,
-                                      uint8_t simd_width,
-                                      uint8_t simd_group);
+                                      uint8_t simd_group,
+                                      uint8_t simd_width);
 
 
 enum ibc_intrinsic_op {
@@ -420,8 +420,8 @@ IBC_DEFINE_CAST(ibc_instr_as_intrinsic, ibc_instr, ibc_intrinsic_instr, instr,
 
 ibc_intrinsic_instr *ibc_intrinsic_instr_create(struct ibc_shader *shader,
                                                 enum ibc_intrinsic_op op,
-                                                uint8_t simd_width,
                                                 uint8_t simd_group,
+                                                uint8_t simd_width,
                                                 unsigned num_srcs);
 
 typedef struct ibc_block {

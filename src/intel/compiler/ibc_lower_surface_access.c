@@ -52,8 +52,8 @@ ibc_lower_surface_access(ibc_shader *shader)
          }
 
          ibc_send_instr *send = ibc_send_instr_create(shader,
-                                                      instr->simd_width,
-                                                      instr->simd_group);
+                                                      instr->simd_group,
+                                                      instr->simd_width);
          send->has_side_effects = true;
 
          send->sfid = sfid;
