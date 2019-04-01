@@ -212,6 +212,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          ibc_intrinsic_instr_create(b->shader,
                                     IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
                                     b->simd_group, b->simd_width, 3);
+      store->has_side_effects = true;
       store->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[1]));
       store->src[0].num_comps = 1;
       assert(instr->src[2].is_ssa);
@@ -302,6 +303,7 @@ nti_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
    send->instr.we_all = true;
    send->sfid = BRW_SFID_THREAD_SPAWNER;
    send->desc_imm = brw_ts_eot_desc(b->shader->devinfo);
+   send->has_side_effects = true;
    send->eot = true;
 
    send->payload[0] = tmp;

@@ -183,6 +183,8 @@ ibc_lower_simd_width(ibc_shader *shader)
                   ibc_intrinsic_instr_create(shader, intrin->op,
                                              b.simd_group, b.simd_width,
                                              intrin->num_srcs);
+               split->has_side_effects = intrin->has_side_effects;
+
                for (unsigned j = 0; j < intrin->num_srcs; j++) {
                   split->src[j] = intrin->src[j];
                   split->src[j].ref =
