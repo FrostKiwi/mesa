@@ -165,7 +165,7 @@ typedef struct ibc_logical_reg {
  *
  * A physical HW register representing an actual byte range in the hardware
  * general-purpose register file.  Unlike logical registers HW GRF registers
- * do not have a simple 1D size in bytes and have no concept of SIMD width or
+ * have a simple 1D size in bytes and have no concept of SIMD width or
  * invocation offset.
  */
 typedef struct ibc_hw_grf_reg {
@@ -181,8 +181,8 @@ typedef struct ibc_hw_grf_reg {
 
 /** A struct representing a flag register
  *
- * A flag register is only one-dimensional; it only has a number bits.  It can
- * be viewed in one of two ways:
+ * A flag register is only one-dimensional; it only has a number of bits.
+ * It can be viewed in one of two ways:
  *
  *  * When written with a flag destination or read as a conditional modifier,
  *    it's viewed as a 1-bit scalar with one bit per SIMD invocation.
@@ -194,7 +194,7 @@ typedef struct ibc_flag_reg {
    /** Flag register subnumber in units of 16-bit chunks */
    uint8_t subnr;
 
-   /** Size in bits  */
+   /** Size in bits */
    uint8_t bits;
 
    /** Alignment requirement of this register
@@ -474,7 +474,7 @@ typedef struct ibc_instr {
    /** Flag reference for predication or cmod */
    ibc_reg_ref flag;
 
-   /** If not BRW_PREDICATE_NONE, this in struction is predicated using the
+   /** If not BRW_PREDICATE_NONE, this instruction is predicated using the
     * predicate from flag.
     */
    enum brw_predicate predicate;
