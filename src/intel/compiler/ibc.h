@@ -267,6 +267,12 @@ typedef struct ibc_reg_ref {
 
       /** 64 bits of immediate data for immediate sources */
       char imm[8];
+
+      /* We want to cast the above char array to a uint64_t safely so throw
+       * one in to assure that the union is properly aligned.  This field
+       * should not be accessed directly.
+       */
+      uint64_t _align;
    };
 } ibc_reg_ref;
 
