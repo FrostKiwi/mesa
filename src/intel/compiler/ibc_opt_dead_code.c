@@ -67,7 +67,7 @@ instr_is_alive(ibc_instr *instr) {
    switch (instr->type) {
    case IBC_INSTR_TYPE_ALU: {
       ibc_alu_instr *alu = ibc_instr_as_alu(instr);
-      return reg_ref_is_alive(&alu->dest.ref) ||
+      return reg_ref_is_alive(&alu->dest) ||
              (alu->cmod && reg_ref_is_alive(&alu->instr.flag));
    }
 
@@ -113,7 +113,7 @@ ibc_opt_dead_code(ibc_shader *shader)
                if (alu->cmod)
                   mark_ref(&alu->instr.flag, &progress);
 
-               mark_ref(&alu->dest.ref, &progress);
+               mark_ref(&alu->dest, &progress);
 
                unsigned num_srcs = 3; /* TODO */
                for (unsigned i = 0; i < num_srcs; i++)

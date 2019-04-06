@@ -228,7 +228,7 @@ ibc_build_alu(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref dest,
 
    for (unsigned i = 0; i < num_srcs; i++)
       alu->src[i].ref = src[i];
-   alu->dest.ref = dest;
+   alu->dest = dest;
 
    ibc_builder_insert_instr(b, &alu->instr);
 

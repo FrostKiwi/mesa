@@ -108,15 +108,6 @@ ibc_validate_alu_src(struct ibc_validate_state *s,
                         alu->instr.simd_width);
 }
 
-static void
-ibc_validate_alu_dst(struct ibc_validate_state *s,
-                     const ibc_alu_instr *alu, const ibc_alu_dest *dest)
-{
-   ibc_validate_reg_ref(s, &dest->ref, 1,
-                        alu->instr.simd_group,
-                        alu->instr.simd_width);
-}
-
 static unsigned
 brw_predicate_bits(enum brw_predicate pred)
 {
@@ -151,7 +142,9 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
                            alu->instr.simd_width);
    }
 
-   ibc_validate_alu_dst(s, alu, &alu->dest);
+   ibc_validate_reg_ref(s, &alu->dest, 1,
+                        alu->instr.simd_group,
+                        alu->instr.simd_width);
 
    for (unsigned i = 0; i < 3 /* TODO */; i++)
       ibc_validate_alu_src(s, alu, &alu->src[i]);
