@@ -88,27 +88,25 @@ rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
    assert(ref->reg->file == IBC_REG_FILE_LOGICAL);
 
    if (ref->reg->logical.bit_size == 1) {
-      assert(ref->comp == 0);
+      assert(ref->logical.comp == 0);
       ref->file = IBC_REG_FILE_FLAG;
    } else {
-      const uint8_t comp = ref->comp;
-      const uint8_t byte = ref->byte;
-      const bool broadcast = ref->broadcast;
-      const int8_t simd_channel = ref->simd_channel;
+      ibc_logical_reg_ref logical = ref->logical;
       ref->file = IBC_REG_FILE_HW_GRF;
       if (ref->reg->logical.simd_width == 1 && is_src)
-         ref->stride = 0;
+         ref->hw_grf.stride = 0;
       else
-         ref->stride = logical_reg_stride(&ref->reg->logical);
-      ref->offset = ref->stride * comp * ref->reg->logical.simd_width;
-      if (broadcast) {
-         ref->offset += ref->stride * simd_channel;
-         ref->stride = 0;
+         ref->hw_grf.stride = logical_reg_stride(&ref->reg->logical);
+      ref->hw_grf.offset = ref->hw_grf.stride * logical.comp *
+                           ref->reg->logical.simd_width;
+      if (logical.broadcast) {
+         ref->hw_grf.offset += ref->hw_grf.stride * logical.simd_channel;
+         ref->hw_grf.stride = 0;
       } else {
-         ref->offset += ref->stride *
-                        (ref_simd_group - ref->reg->logical.simd_group);
+         ref->hw_grf.offset += ref->hw_grf.stride *
+                               (ref_simd_group - ref->reg->logical.simd_group);
       }
-      ref->offset += byte;
+      ref->hw_grf.offset += logical.byte;
    }
 }
 
