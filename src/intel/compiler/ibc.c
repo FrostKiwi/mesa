@@ -91,6 +91,19 @@ ibc_instr_init(ibc_instr *instr, enum ibc_instr_type type,
    ibc_reg_ref_init(&instr->flag);
 }
 
+#define IBC_ALU_OP_DECL(OP, _num_srcs, _src_mods)        \
+   {                                                     \
+      .name = #OP,                                       \
+      .num_srcs = _num_srcs,                             \
+      .supported_src_mods = IBC_ALU_SRC_MOD_##_src_mods, \
+   },
+
+const ibc_alu_op_info ibc_alu_op_infos[IBC_ALU_NUM_OPS] = {
+#include "ibc_alu_ops.h"
+};
+
+#undef IBC_ALU_OP_DECL
+
 ibc_alu_instr *
 ibc_alu_instr_create(struct ibc_shader *shader, enum ibc_alu_op op,
                      uint8_t simd_group, uint8_t simd_width)

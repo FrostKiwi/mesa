@@ -311,16 +311,11 @@ typedef struct ibc_instr {
 
 /** Enum of IBC ALU opcodes */
 enum ibc_alu_op {
-   IBC_ALU_OP_MOV = 1,
-   IBC_ALU_OP_SEL = 2,
-   IBC_ALU_OP_AND = 5,
-   IBC_ALU_OP_OR  = 6,
-   IBC_ALU_OP_SHR = 8,
-   IBC_ALU_OP_SHL = 9,
-   IBC_ALU_OP_CMP = 16,
-   IBC_ALU_OP_ADD = 64,
+#define IBC_ALU_OP_DECL(OP, ...) IBC_ALU_OP_##OP,
+#include "ibc_alu_ops.h"
+#undef IBC_ALU_OP_DECL
+   IBC_ALU_NUM_OPS,
 };
-
 
 enum PACKED ibc_alu_src_mod {
    IBC_ALU_SRC_MOD_NONE    = 0x0,
@@ -329,6 +324,16 @@ enum PACKED ibc_alu_src_mod {
    IBC_ALU_SRC_MOD_NEG_ABS = IBC_ALU_SRC_MOD_NEG | IBC_ALU_SRC_MOD_ABS,
    IBC_ALU_SRC_MOD_NOT     = 0x4,
 };
+
+typedef struct ibc_alu_op_info {
+   const char *name;
+
+   unsigned num_srcs:2;
+
+   enum ibc_alu_src_mod supported_src_mods;
+} ibc_alu_op_info;
+
+extern const ibc_alu_op_info ibc_alu_op_infos[IBC_ALU_NUM_OPS];
 
 /** A structure representing an ALU instruction source */
 typedef struct ibc_alu_src {
