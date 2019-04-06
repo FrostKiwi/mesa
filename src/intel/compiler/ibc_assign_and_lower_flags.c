@@ -26,6 +26,9 @@
 
 static bool
 rewrite_logical_flag_refs_to_ud(ibc_reg_ref *ref,
+                                UNUSED int8_t num_comps,
+                                UNUSED uint8_t simd_group,
+                                UNUSED uint8_t simd_width,
                                 UNUSED void *_state)
 {
    if (ref->file == IBC_REG_FILE_LOGICAL &&
