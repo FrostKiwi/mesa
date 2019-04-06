@@ -111,7 +111,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                ibc_alu_instr *split =
                   ibc_alu_instr_create(shader, alu->op,
                                        b.simd_group, b.simd_width);
-               unsigned num_srcs = 3; /* TODO */
+               unsigned num_srcs = ibc_alu_op_infos[alu->op].num_srcs;
                for (unsigned j = 0; j < num_srcs; j++) {
                   split->src[j] = alu->src[j];
                   split->src[j].ref =
