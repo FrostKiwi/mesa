@@ -61,7 +61,7 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
          return false;
 
       /* Cannot saturate or type convert */
-      if (mov->src[0].ref.type != mov->dest.ref.type || mov->dest.sat)
+      if (mov->src[0].ref.type != mov->dest.ref.type || mov->saturate)
          return false;
 
       if (alu_src) {
