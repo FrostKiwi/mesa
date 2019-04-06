@@ -71,11 +71,11 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
       }
 
       ref->reg = mov->src[0].ref.reg;
-      ref->comp += mov->src[0].ref.comp;
-      ref->byte += mov->src[0].ref.byte;
-      if (mov->src[0].ref.broadcast) {
-         ref->broadcast = true;
-         ref->simd_channel = mov->src[0].ref.simd_channel;
+      ref->logical.comp += mov->src[0].ref.logical.comp;
+      ref->logical.byte += mov->src[0].ref.logical.byte;
+      if (mov->src[0].ref.logical.broadcast) {
+         ref->logical.broadcast = true;
+         ref->logical.simd_channel = mov->src[0].ref.logical.simd_channel;
       }
 
       return true;
@@ -87,9 +87,9 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
       switch (intrin->op) {
       case IBC_INTRINSIC_OP_SIMD_ZIP:
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
-            if (ref->broadcast) {
-               if (ref->simd_channel < intrin->src[i].simd_group ||
-                   ref->simd_channel >
+            if (ref->logical.broadcast) {
+               if (ref->logical.simd_channel < intrin->src[i].simd_group ||
+                   ref->logical.simd_channel >
                      intrin->src[i].simd_group + intrin->src[i].simd_width)
                   continue;
             } else {
@@ -100,11 +100,11 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
             }
 
             ref->reg = intrin->src[i].ref.reg;
-            ref->comp += intrin->src[i].ref.comp;
-            ref->byte += intrin->src[i].ref.byte;
-            if (intrin->src[i].ref.broadcast) {
-               ref->broadcast = true;
-               ref->simd_channel = intrin->src[i].ref.simd_channel;
+            ref->logical.comp += intrin->src[i].ref.logical.comp;
+            ref->logical.byte += intrin->src[i].ref.logical.byte;
+            if (intrin->src[i].ref.logical.broadcast) {
+               ref->logical.broadcast = true;
+               ref->logical.simd_channel = intrin->src[i].ref.logical.simd_channel;
             }
             return true;
          }
