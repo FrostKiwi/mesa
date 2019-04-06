@@ -298,8 +298,9 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
             src[i] = brw_reg_for_ibc_reg_ref(devinfo, &alu->src[i].ref,
                                              alu->instr.simd_width,
                                              compressed);
-            src[i].abs = alu->src[i].abs;
-            src[i].negate = alu->src[i].negate;
+            src[i].abs = (alu->src[i].mod & IBC_ALU_SRC_MOD_ABS) != 0;
+            src[i].negate = (alu->src[i].mod & (IBC_ALU_SRC_MOD_NEG |
+                                                IBC_ALU_SRC_MOD_NOT)) != 0;
          }
          dest = brw_reg_for_ibc_reg_ref(devinfo, &alu->dest.ref,
                                         alu->instr.simd_width,
