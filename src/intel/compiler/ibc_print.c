@@ -305,24 +305,18 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
 }
 
 static void
-print_intrinsic_reg_ref(FILE *fp, const ibc_intrinsic_reg_ref *ref)
-{
-   if (ref->num_comps > 1)
-      fprintf(fp, "(vec%u)", ref->num_comps);
-   print_reg_ref(fp, &ref->ref);
-}
-
-static void
 print_intrinsic_instr(FILE *fp, const ibc_intrinsic_instr *intrin)
 {
    print_instr(fp, &intrin->instr, intrinsic_op_name(intrin->op));
 
    fprintf(fp, "   ");
-   print_intrinsic_reg_ref(fp, &intrin->dest);
+   print_reg_ref(fp, &intrin->dest);
 
    for (unsigned i = 0; i < intrin->num_srcs; i++) {
       fprintf(fp, "   ");
-      print_intrinsic_reg_ref(fp, &intrin->src[i]);
+      if (intrin->src[i].num_comps > 1)
+         fprintf(fp, "(vec%u)", intrin->src[i].num_comps);
+      print_reg_ref(fp, &intrin->src[i].ref);
    }
    fprintf(fp, "\n");
 }
