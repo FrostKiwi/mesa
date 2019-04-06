@@ -71,12 +71,7 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
       }
 
       ref->reg = mov->src[0].ref.reg;
-      ref->logical.comp += mov->src[0].ref.logical.comp;
-      ref->logical.byte += mov->src[0].ref.logical.byte;
-      if (mov->src[0].ref.logical.broadcast) {
-         ref->logical.broadcast = true;
-         ref->logical.simd_channel = mov->src[0].ref.logical.simd_channel;
-      }
+      *ref = ibc_reg_ref_compose(*ref, mov->src[0].ref.logical, simd_width);
 
       return true;
    }
@@ -100,12 +95,8 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
             }
 
             ref->reg = intrin->src[i].ref.reg;
-            ref->logical.comp += intrin->src[i].ref.logical.comp;
-            ref->logical.byte += intrin->src[i].ref.logical.byte;
-            if (intrin->src[i].ref.logical.broadcast) {
-               ref->logical.broadcast = true;
-               ref->logical.simd_channel = intrin->src[i].ref.logical.simd_channel;
-            }
+            *ref = ibc_reg_ref_compose(*ref, intrin->src[i].ref.logical,
+                                       simd_width);
             return true;
          }
          return false;
