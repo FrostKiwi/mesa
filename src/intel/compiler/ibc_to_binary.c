@@ -292,9 +292,9 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
          bool compressed =
             (alu->dest.stride * alu->instr.simd_width) > REG_SIZE;
 
-         unsigned num_srcs = 3; /* TODO */
          struct brw_reg src[3], dest;
-         for (unsigned int i = 0; i < num_srcs; i++) {
+         assert(ibc_alu_op_infos[alu->op].num_srcs <= ARRAY_SIZE(src));
+         for (unsigned int i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
             src[i] = brw_reg_for_ibc_reg_ref(devinfo, &alu->src[i].ref,
                                              alu->instr.simd_width,
                                              compressed);

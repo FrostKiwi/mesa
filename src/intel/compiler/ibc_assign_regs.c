@@ -42,12 +42,8 @@ logical_reg_stride(const ibc_logical_reg *reg)
    assert(&alu->dest.reg->logical == reg);
 
    unsigned stride = ibc_type_byte_size(alu->dest.type);
-   unsigned num_srcs = 3; /* TODO */
-   for (unsigned i = 0; i < num_srcs; i++) {
-      if (alu->src[i].ref.file == IBC_REG_FILE_NONE)
-         break;
+   for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++)
       stride = MAX2(stride, ibc_type_byte_size(alu->src[i].ref.type));
-   }
 
    /* Only raw MOV supports a packed-byte destination */
    if (stride == 1 && !ibc_alu_instr_is_raw_mov(alu))
@@ -203,8 +199,7 @@ ibc_assign_regs(ibc_shader *shader)
                                logical_grfs, false);
             }
 
-            unsigned num_srcs = 3; /* TODO */
-            for (unsigned i = 0; i < num_srcs; i++) {
+            for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
                if (alu->src[i].ref.file == IBC_REG_FILE_LOGICAL) {
                   rewrite_reg_ref(&alu->src[i].ref, alu->instr.simd_group,
                                   logical_grfs, true);

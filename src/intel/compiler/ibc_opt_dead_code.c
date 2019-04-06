@@ -115,7 +115,7 @@ ibc_opt_dead_code(ibc_shader *shader)
 
                mark_ref(&alu->dest, &progress);
 
-               unsigned num_srcs = 3; /* TODO */
+               unsigned num_srcs = ibc_alu_op_infos[alu->op].num_srcs;
                for (unsigned i = 0; i < num_srcs; i++)
                   mark_ref(&alu->src[i].ref, &progress);
                continue;

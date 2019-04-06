@@ -248,11 +248,7 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 
    print_reg_ref(fp, &alu->dest);
 
-   const unsigned num_srcs = 3; /* TODO */
-   for (unsigned i = 0; i < num_srcs; i++) {
-      if (alu->src[i].ref.file == IBC_REG_FILE_NONE)
-         break;
-
+   for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
       fprintf(fp, "   ");
       print_reg_ref(fp, &alu->src[i].ref);
    }
