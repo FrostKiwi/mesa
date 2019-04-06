@@ -434,7 +434,9 @@ typedef struct ibc_instr {
    bool pred_inverse;
 } ibc_instr;
 
-typedef bool (*ibc_reg_ref_cb)(ibc_reg_ref *ref, void *state);
+typedef bool (*ibc_reg_ref_cb)(ibc_reg_ref *ref, int8_t num_comps,
+                               uint8_t simd_group, uint8_t simd_width,
+                               void *state);
 bool ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state);
 bool ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state);
 
