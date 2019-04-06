@@ -311,6 +311,47 @@ typedef struct ibc_reg_ref {
    };
 } ibc_reg_ref;
 
+/** Composes an ibc_logical_reg_ref with an ibc_reg_ref
+ *
+ * Specifically, this is the composition outer(ref(reg))
+ */
+static inline ibc_reg_ref
+ibc_reg_ref_compose(ibc_reg_ref ref, ibc_logical_reg_ref outer,
+                    unsigned outer_simd_width)
+{
+   switch (ref.file) {
+   case IBC_REG_FILE_NONE:
+   case IBC_REG_FILE_IMM:
+      return ref;
+
+   case IBC_REG_FILE_LOGICAL:
+      ref.logical.byte += outer.byte;
+      ref.logical.comp += outer.comp;
+      if (outer.broadcast && !ref.logical.broadcast) {
+         /* If the outer ref wants to broadcast and the inner ref is not
+          * already broadcasting, we broadcast based on the outer ref.
+          */
+         ref.logical.broadcast = true;
+         ref.logical.simd_channel = outer.simd_channel;
+      }
+      return ref;
+
+   case IBC_REG_FILE_HW_GRF:
+      ref.hw_grf.offset += outer.byte;
+      ref.hw_grf.offset += ref.hw_grf.stride * outer.comp * outer_simd_width;
+      if (outer.broadcast) {
+         ref.hw_grf.offset += ref.hw_grf.stride * outer.simd_channel;
+         ref.hw_grf.stride = 0;
+      }
+      return ref;
+
+   case IBC_REG_FILE_FLAG:
+      assert(outer.byte == 0 && outer.comp == 0 && !outer.broadcast);
+      return ref;
+   }
+
+   unreachable("Invalid IBC register file");
+}
 
 enum ibc_instr_type {
    IBC_INSTR_TYPE_ALU,
