@@ -339,12 +339,6 @@ typedef struct ibc_alu_src {
 } ibc_alu_src;
 
 
-typedef struct ibc_alu_dest {
-   /** A register reference for non-immediate sources */
-   ibc_reg_ref ref;
-} ibc_alu_dest;
-
-
 typedef struct ibc_alu_instr {
    ibc_instr instr;
 
@@ -355,7 +349,7 @@ typedef struct ibc_alu_instr {
 
    bool saturate;
 
-   ibc_alu_dest dest;
+   ibc_reg_ref dest;
 
    ibc_alu_src src[0];
 } ibc_alu_instr;
