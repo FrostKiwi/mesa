@@ -23,6 +23,20 @@
 
 #include "ibc.h"
 
+static enum ibc_alu_src_mod
+compose_alu_src_mods(enum ibc_alu_src_mod outer, enum ibc_alu_src_mod inner)
+{
+   enum ibc_alu_src_mod mod = outer;
+
+   if (!(mod & IBC_ALU_SRC_MOD_ABS))
+      mod ^= inner & IBC_ALU_SRC_MOD_NEG;
+
+   mod |= inner & IBC_ALU_SRC_MOD_ABS;
+   mod ^= inner & IBC_ALU_SRC_MOD_NOT;
+
+   return mod;
+}
+
 static bool
 try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
                       uint8_t simd_group, uint8_t simd_width)
@@ -51,10 +65,8 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
          return false;
 
       if (alu_src) {
-         if (!alu_src->abs)
-            alu_src->negate = alu_src->negate != mov->src[0].negate;
-         alu_src->abs = alu_src->abs || mov->src[0].abs;
-      } else if (mov->src[0].negate || mov->src[0].abs) {
+         alu_src->mod = compose_alu_src_mods(alu_src->mod, mov->src[0].mod);
+      } else if (mov->src[0].mod != IBC_ALU_SRC_MOD_NONE) {
          return false;
       }
 
