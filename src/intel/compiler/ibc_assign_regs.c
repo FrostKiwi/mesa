@@ -29,7 +29,7 @@ ibc_alu_instr_is_raw_mov(const ibc_alu_instr *alu)
    return alu->op == IBC_ALU_OP_MOV &&
           alu->dest.ref.type == alu->src[0].ref.type &&
           alu->src[0].mod == IBC_ALU_SRC_MOD_NONE &&
-          !alu->dest.sat;
+          !alu->saturate;
 }
 
 static unsigned

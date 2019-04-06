@@ -342,8 +342,6 @@ typedef struct ibc_alu_src {
 typedef struct ibc_alu_dest {
    /** A register reference for non-immediate sources */
    ibc_reg_ref ref;
-
-   bool sat;
 } ibc_alu_dest;
 
 
@@ -354,6 +352,8 @@ typedef struct ibc_alu_instr {
    enum ibc_alu_op op;
 
    enum brw_conditional_mod cmod;
+
+   bool saturate;
 
    ibc_alu_dest dest;
 
