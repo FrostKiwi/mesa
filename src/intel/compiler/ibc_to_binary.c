@@ -287,10 +287,10 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
           *       register of the correct type and regioning so the
           *       instruction is considered compressed or not accordingly.
           */
-         assert(alu->dest.ref.file == IBC_REG_FILE_HW_GRF ||
-                alu->dest.ref.file == IBC_REG_FILE_NONE);
+         assert(alu->dest.file == IBC_REG_FILE_HW_GRF ||
+                alu->dest.file == IBC_REG_FILE_NONE);
          bool compressed =
-            (alu->dest.ref.stride * alu->instr.simd_width) > REG_SIZE;
+            (alu->dest.stride * alu->instr.simd_width) > REG_SIZE;
 
          unsigned num_srcs = 3; /* TODO */
          struct brw_reg src[3], dest;
@@ -302,7 +302,7 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
             src[i].negate = (alu->src[i].mod & (IBC_ALU_SRC_MOD_NEG |
                                                 IBC_ALU_SRC_MOD_NOT)) != 0;
          }
-         dest = brw_reg_for_ibc_reg_ref(devinfo, &alu->dest.ref,
+         dest = brw_reg_for_ibc_reg_ref(devinfo, &alu->dest,
                                         alu->instr.simd_width,
                                         compressed);
 
