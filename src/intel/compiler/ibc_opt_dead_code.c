@@ -78,7 +78,7 @@ instr_is_alive(ibc_instr *instr) {
 
    case IBC_INSTR_TYPE_INTRINSIC: {
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-      return intrin->has_side_effects || reg_ref_is_alive(&intrin->dest.ref);
+      return intrin->has_side_effects || reg_ref_is_alive(&intrin->dest);
    }
 
    case IBC_INSTR_TYPE_JUMP:
@@ -133,7 +133,7 @@ ibc_opt_dead_code(ibc_shader *shader)
 
             case IBC_INSTR_TYPE_INTRINSIC: {
                ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-               mark_ref(&intrin->dest.ref, &progress);
+               mark_ref(&intrin->dest, &progress);
                for (unsigned i = 0; i < intrin->num_srcs; i++)
                   mark_ref(&intrin->src[i].ref, &progress);
                continue;
