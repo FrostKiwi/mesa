@@ -306,7 +306,7 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
                                         alu->instr.simd_width,
                                         compressed);
 
-         brw_set_default_saturate(p, alu->dest.sat);
+         brw_set_default_saturate(p, alu->saturate);
          brw_set_default_acc_write_control(p, false /* TODO */);
 
          switch (alu->op) {
