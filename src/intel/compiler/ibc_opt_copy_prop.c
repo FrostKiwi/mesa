@@ -119,8 +119,7 @@ ibc_opt_copy_prop(ibc_shader *shader)
          case IBC_INSTR_TYPE_ALU: {
             ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
-            unsigned num_srcs = 3; /* TODO */
-            for (unsigned i = 0; i < num_srcs; i++) {
+            for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
                if (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i],
                                          alu->instr.simd_group,
                                          alu->instr.simd_width))
