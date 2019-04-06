@@ -162,10 +162,8 @@ static void
 ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
                              const ibc_intrinsic_instr *intrin)
 {
-   ibc_assert(s, intrin->dest.simd_group == intrin->instr.simd_group);
-   ibc_assert(s, intrin->dest.simd_width == intrin->instr.simd_width);
-   ibc_validate_reg_ref(s, &intrin->dest.ref,
-                        intrin->dest.num_comps,
+   ibc_validate_reg_ref(s, &intrin->dest,
+                        intrin->num_dest_comps,
                         intrin->instr.simd_group,
                         intrin->instr.simd_width);
 

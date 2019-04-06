@@ -153,16 +153,14 @@ ibc_intrinsic_instr_create(struct ibc_shader *shader,
 {
    ibc_intrinsic_instr *intrin =
       rzalloc_size(shader, sizeof(ibc_intrinsic_instr) +
-                           sizeof(ibc_intrinsic_reg_ref) * num_srcs);
+                           sizeof(ibc_intrinsic_src) * num_srcs);
 
    ibc_instr_init(&intrin->instr, IBC_INSTR_TYPE_INTRINSIC,
                   simd_group, simd_width);
 
    intrin->op = op;
 
-   intrin->dest.simd_group = simd_group;
-   intrin->dest.simd_width = simd_width;
-   ibc_reg_ref_init(&intrin->dest.ref);
+   ibc_reg_ref_init(&intrin->dest);
 
    intrin->num_srcs = num_srcs;
    for (unsigned i = 0; i < num_srcs; i++) {
