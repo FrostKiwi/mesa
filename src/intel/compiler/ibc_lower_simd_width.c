@@ -70,13 +70,13 @@ build_simd_zip(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref *srcs,
       zip->src[i].num_comps = num_comps;
    }
 
-   zip->dest.ref = dest;
-   zip->dest.num_comps = num_comps;
+   zip->dest = dest;
+   zip->num_dest_comps = num_comps;
 
    /* If the previous def was SSA then the zipped one is */
-   if (zip->dest.ref.file == IBC_REG_FILE_LOGICAL &&
-       zip->dest.ref.reg->logical.ssa)
-      ((ibc_reg *)zip->dest.ref.reg)->logical.ssa = &zip->instr;
+   if (zip->dest.file == IBC_REG_FILE_LOGICAL &&
+       zip->dest.reg->logical.ssa)
+      ((ibc_reg *)zip->dest.reg)->logical.ssa = &zip->instr;
 
    ibc_builder_insert_instr(b, &zip->instr);
 }
@@ -192,16 +192,13 @@ ibc_lower_simd_width(ibc_shader *shader)
                   split->src[j].simd_width = b.simd_width;
                }
 
-               split->dest = intrin->dest;
-               if (intrin->dest.ref.file != IBC_REG_FILE_NONE) {
+               if (intrin->dest.file != IBC_REG_FILE_NONE) {
                   ibc_reg *dest_reg =
-                     ibc_builder_new_logical_reg(&b, intrin->dest.ref.type,
-                                                 intrin->dest.num_comps);
-                  dests[i] = ibc_typed_ref(dest_reg, intrin->dest.ref.type);
-                  split->dest.ref = dests[i];
+                     ibc_builder_new_logical_reg(&b, intrin->dest.type,
+                                                 intrin->num_dest_comps);
+                  dests[i] = ibc_typed_ref(dest_reg, intrin->dest.type);
+                  split->dest = dests[i];
                }
-               split->dest.simd_group = b.simd_group;
-               split->dest.simd_width = b.simd_width;
 
                split->instr.predicate = intrin->instr.predicate;
                split->instr.pred_inverse = intrin->instr.pred_inverse;
@@ -215,10 +212,10 @@ ibc_lower_simd_width(ibc_shader *shader)
                ibc_builder_pop(&b);
             }
 
-            if (intrin->dest.ref.file != IBC_REG_FILE_NONE) {
-               build_simd_zip(&b, intrin->dest.ref, dests, max_width,
+            if (intrin->dest.file != IBC_REG_FILE_NONE) {
+               build_simd_zip(&b, intrin->dest, dests, max_width,
                               intrin->instr.simd_width / max_width,
-                              intrin->dest.num_comps);
+                              intrin->num_dest_comps);
             }
 
             ibc_instr_remove(&intrin->instr);

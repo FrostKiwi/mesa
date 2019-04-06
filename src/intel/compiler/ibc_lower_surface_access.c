@@ -62,8 +62,8 @@ ibc_lower_surface_access(ibc_shader *shader)
          assert(intrin->src[0].ref.type == IBC_TYPE_UD);
          send->desc_imm |= *(uint32_t *)intrin->src[0].ref.imm;
 
-         send->dest = intrin->dest.ref;
-         send->rlen = intrin->dest.num_comps * instr->simd_width / 8;
+         send->dest = intrin->dest;
+         send->rlen = intrin->num_dest_comps * instr->simd_width / 8;
 
          send->payload[0] = intrin->src[1].ref;
          send->mlen = instr->simd_width / 8;
