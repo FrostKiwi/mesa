@@ -49,17 +49,21 @@ reg_ref_is_alive(ibc_reg_ref *ref)
    unreachable("Invalid register file");
 }
 
-static void
-mark_ref(ibc_reg_ref *ref, bool *progress)
+static bool
+mark_ref(ibc_reg_ref *ref, void *_progress)
 {
+   bool *progress = _progress;
+
    if (ref->file == IBC_REG_FILE_NONE ||
        ref->file == IBC_REG_FILE_IMM)
-      return;
+      return true;
 
    if (ref->reg->index == 0) {
       ((ibc_reg *)ref->reg)->index = 1;
       *progress = true;
    }
+
+   return true;
 }
 
 static bool
@@ -104,46 +108,8 @@ ibc_opt_dead_code(ibc_shader *shader)
             if (!instr_is_alive(instr))
                continue;
 
-            if (instr->predicate)
-               mark_ref(&instr->flag, &progress);
-
-            switch (instr->type) {
-            case IBC_INSTR_TYPE_ALU: {
-               ibc_alu_instr *alu = ibc_instr_as_alu(instr);
-               if (alu->cmod)
-                  mark_ref(&alu->instr.flag, &progress);
-
-               mark_ref(&alu->dest, &progress);
-
-               unsigned num_srcs = ibc_alu_op_infos[alu->op].num_srcs;
-               for (unsigned i = 0; i < num_srcs; i++)
-                  mark_ref(&alu->src[i].ref, &progress);
-               continue;
-            }
-
-            case IBC_INSTR_TYPE_SEND: {
-               ibc_send_instr *send = ibc_instr_as_send(instr);
-               mark_ref(&send->desc, &progress);
-               mark_ref(&send->ex_desc, &progress);
-               mark_ref(&send->dest, &progress);
-               mark_ref(&send->payload[0], &progress);
-               mark_ref(&send->payload[1], &progress);
-               continue;
-            }
-
-            case IBC_INSTR_TYPE_INTRINSIC: {
-               ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-               mark_ref(&intrin->dest, &progress);
-               for (unsigned i = 0; i < intrin->num_srcs; i++)
-                  mark_ref(&intrin->src[i].ref, &progress);
-               continue;
-            }
-
-            case IBC_INSTR_TYPE_JUMP:
-               continue;
-            }
-
-            unreachable("Invalid instruction type");
+            ibc_instr_foreach_read(instr, mark_ref, &progress);
+            ibc_instr_foreach_write(instr, mark_ref, &progress);
          }
       }
    } while (progress);
