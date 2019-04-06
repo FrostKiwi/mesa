@@ -207,6 +207,16 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_read_invocation: {
+      ibc_reg_ref value = ibc_uref(nti->ssa_to_reg[instr->src[0].ssa->index]);
+      value.broadcast = true;
+      value.simd_channel = nir_src_as_uint(instr->src[1]);
+      ibc_builder_push_we_all(b, 1);
+      dest = ibc_MOV(b, IBC_TYPE_UINT, value);
+      ibc_builder_pop(b);
+      break;
+   }
+
    case nir_intrinsic_store_ssbo: {
       ibc_intrinsic_instr *store =
          ibc_intrinsic_instr_create(b->shader,

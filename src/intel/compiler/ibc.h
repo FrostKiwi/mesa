@@ -250,6 +250,16 @@ typedef struct ibc_reg_ref {
           * bit size equal to the reference type, this must be zero.
           */
          uint8_t byte;
+
+         /** If true, broadcast one SIMD channel to all channels */
+         bool broadcast;
+
+         /** SIMD channel to broadcast
+          *
+          * If broadcast is set, this is the SIMD channel to broadcast.  If
+          * broadcast is not set, this must be 0.
+          */
+         uint8_t simd_channel;
       };
 
       struct {
