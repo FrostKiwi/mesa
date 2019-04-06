@@ -108,7 +108,7 @@ ibc_alu_instr *
 ibc_alu_instr_create(struct ibc_shader *shader, enum ibc_alu_op op,
                      uint8_t simd_group, uint8_t simd_width)
 {
-   const unsigned num_srcs = 3; /* TODO */
+   const unsigned num_srcs = ibc_alu_op_infos[op].num_srcs;
 
    ibc_alu_instr *alu = rzalloc_size(shader, sizeof(ibc_alu_instr) +
                                              sizeof(ibc_alu_src) * num_srcs);

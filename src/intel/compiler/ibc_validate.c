@@ -103,6 +103,7 @@ static void
 ibc_validate_alu_src(struct ibc_validate_state *s,
                      const ibc_alu_instr *alu, const ibc_alu_src *src)
 {
+   ibc_assert(s, src->ref.file != IBC_REG_FILE_NONE);
    ibc_validate_reg_ref(s, &src->ref, 1,
                         alu->instr.simd_group,
                         alu->instr.simd_width);
@@ -146,7 +147,7 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
                         alu->instr.simd_group,
                         alu->instr.simd_width);
 
-   for (unsigned i = 0; i < 3 /* TODO */; i++)
+   for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++)
       ibc_validate_alu_src(s, alu, &alu->src[i]);
 }
 
