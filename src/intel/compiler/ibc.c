@@ -126,11 +126,29 @@ ibc_instr_init(ibc_instr *instr, enum ibc_instr_type type,
    ibc_reg_ref_init(&instr->flag);
 }
 
+static int8_t
+num_comps_for_reg_count(ibc_reg_ref ref, unsigned reg_count,
+                        unsigned simd_width)
+{
+   if (ref.file != IBC_REG_FILE_LOGICAL)
+      return -1;
+
+   /* We assume here that the register is tightly packed and works out to a
+    * integer number of registers per component.  If not, we have to bail.
+    */
+   assert(ref.reg->logical.bit_size >= 8);
+   unsigned comp_size_B = (ref.reg->logical.bit_size / 8) * simd_width;
+   assert(comp_size_B % 32 == 0);
+   unsigned comp_size_regs = comp_size_B / 32;
+   assert(reg_count % comp_size_regs == 0);
+   return reg_count / comp_size_regs;
+}
+
 bool
 ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
 {
    if (instr->predicate) {
-      if (!cb(&instr->flag, state))
+      if (!cb(&instr->flag, 1, instr->simd_group, instr->simd_width, state))
          return false;
    }
 
@@ -138,7 +156,8 @@ ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
    case IBC_INSTR_TYPE_ALU: {
       ibc_alu_instr *alu = ibc_instr_as_alu(instr);
       for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-         if (!cb(&alu->src[i].ref, state))
+         if (!cb(&alu->src[i].ref, 1, instr->simd_group, instr->simd_width,
+                 state))
             return false;
       }
       return true;
@@ -147,17 +166,24 @@ ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
    case IBC_INSTR_TYPE_SEND: {
       ibc_send_instr *send = ibc_instr_as_send(instr);
       if (send->desc.file != IBC_REG_FILE_NONE &&
-          !cb(&send->desc, state))
+          !cb(&send->desc, 1, 0, 1, state))
          return false;
 
       if (send->ex_desc.file != IBC_REG_FILE_NONE &&
-          !cb(&send->ex_desc, state))
+          !cb(&send->ex_desc, 1, 0, 1, state))
          return false;
 
-      if (!cb(&send->payload[0], state))
+      if (!cb(&send->payload[0], num_comps_for_reg_count(send->payload[0],
+                                                         send->mlen,
+                                                         instr->simd_width),
+              instr->simd_group, instr->simd_width, state))
          return false;
 
-      if (send->ex_mlen > 0 && !cb(&send->payload[1], state))
+      if (send->ex_mlen > 0 &&
+          !cb(&send->payload[1], num_comps_for_reg_count(send->payload[1],
+                                                         send->ex_mlen,
+                                                         instr->simd_width),
+              instr->simd_group, instr->simd_width, state))
          return false;
 
       return true;
@@ -166,7 +192,8 @@ ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
    case IBC_INSTR_TYPE_INTRINSIC: {
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
       for (unsigned i = 0; i < intrin->num_srcs; i++) {
-         if (!cb(&intrin->src[i].ref, state))
+         if (!cb(&intrin->src[i].ref, intrin->src[i].num_comps,
+                 intrin->src[i].simd_group, intrin->src[i].simd_width, state))
             return false;
       }
       return true;
@@ -185,10 +212,11 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
    switch (instr->type) {
    case IBC_INSTR_TYPE_ALU: {
       ibc_alu_instr *alu = ibc_instr_as_alu(instr);
-      if (alu->cmod && !cb(&instr->flag, state))
+      if (alu->cmod && !cb(&instr->flag, 1, instr->simd_group,
+                           instr->simd_width, state))
          return false;
 
-      if (!cb(&alu->dest, state))
+      if (!cb(&alu->dest, 1, instr->simd_group, instr->simd_width, state))
          return false;
 
       return true;
@@ -196,7 +224,10 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
 
    case IBC_INSTR_TYPE_SEND: {
       ibc_send_instr *send = ibc_instr_as_send(instr);
-      if (send->rlen > 0 && !cb(&send->dest, state))
+      if (send->rlen > 0 &&
+          !cb(&send->dest, num_comps_for_reg_count(send->dest, send->rlen,
+                                                   instr->simd_width),
+              instr->simd_group, instr->simd_width, state))
          return false;
 
       return true;
@@ -205,7 +236,8 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
    case IBC_INSTR_TYPE_INTRINSIC: {
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
       if (intrin->dest.file != IBC_REG_FILE_NONE &&
-          cb(&intrin->dest, state))
+          cb(&intrin->dest, intrin->num_dest_comps,
+             instr->simd_group, instr->simd_width, state))
          return false;
 
       return true;
@@ -347,7 +379,11 @@ ibc_shader_create(void *mem_ctx,
 }
 
 static bool
-link_write_cb(ibc_reg_ref *ref, void *_instr)
+link_write_cb(ibc_reg_ref *ref,
+              UNUSED int8_t num_comps,
+              UNUSED uint8_t simd_group,
+              UNUSED uint8_t simd_width,
+              void *_instr)
 {
    ibc_reg_ref_link_write(ref, _instr);
    return true;
@@ -361,7 +397,11 @@ ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor)
 }
 
 static bool
-unlink_write_cb(ibc_reg_ref *ref, void *_instr)
+unlink_write_cb(ibc_reg_ref *ref,
+                UNUSED int8_t num_comps,
+                UNUSED uint8_t simd_group,
+                UNUSED uint8_t simd_width,
+                void *_instr)
 {
    ibc_reg_ref_unlink_write(ref, _instr);
    return true;

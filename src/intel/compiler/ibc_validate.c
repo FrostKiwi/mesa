@@ -71,7 +71,11 @@ ibc_validate_null_reg_ref(struct ibc_validate_state *s,
 }
 
 static bool
-ref_is_none_or_reg(ibc_reg_ref *ref, void *_reg)
+ref_is_none_or_reg(ibc_reg_ref *ref,
+                   UNUSED int8_t num_comps,
+                   UNUSED uint8_t simd_group,
+                   UNUSED uint8_t simd_width,
+                   void *_reg)
 {
    if (ref->file == IBC_REG_FILE_NONE)
       return true;
