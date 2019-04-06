@@ -255,9 +255,7 @@ read_register(read_ctx *ctx)
       reg->name = NULL;
    }
 
-   list_inithead(&reg->uses);
    list_inithead(&reg->defs);
-   list_inithead(&reg->if_uses);
 
    return reg;
 }

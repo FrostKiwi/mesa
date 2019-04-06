@@ -527,9 +527,6 @@ update_if_uses(nir_cf_node *node)
    if (if_stmt->condition.is_ssa) {
       list_addtail(&if_stmt->condition.use_link,
                    &if_stmt->condition.ssa->if_uses);
-   } else {
-      list_addtail(&if_stmt->condition.use_link,
-                   &if_stmt->condition.reg.reg->if_uses);
    }
 }
 

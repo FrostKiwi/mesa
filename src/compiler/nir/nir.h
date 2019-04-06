@@ -453,14 +453,8 @@ typedef struct nir_register {
    /** only for debug purposes, can be NULL */
    const char *name;
 
-   /** set of nir_srcs where this register is used (read from) */
-   struct list_head uses;
-
    /** set of nir_dests where this register is defined (written to) */
    struct list_head defs;
-
-   /** set of nir_ifs where this register is used as a condition */
-   struct list_head if_uses;
 } nir_register;
 
 #define nir_foreach_register(reg, reg_list) \

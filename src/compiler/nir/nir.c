@@ -74,9 +74,7 @@ reg_create(void *mem_ctx, struct exec_list *list)
 {
    nir_register *reg = ralloc(mem_ctx, nir_register);
 
-   list_inithead(&reg->uses);
    list_inithead(&reg->defs);
-   list_inithead(&reg->if_uses);
 
    reg->num_components = 0;
    reg->bit_size = 32;
@@ -769,8 +767,8 @@ add_use_cb(nir_src *src, void *state)
    nir_instr *instr = state;
 
    src->parent_instr = instr;
-   list_addtail(&src->use_link,
-                src->is_ssa ? &src->ssa->uses : &src->reg.reg->uses);
+   if (src->is_ssa)
+      list_addtail(&src->use_link, &src->ssa->uses);
 
    return true;
 }
@@ -1358,15 +1356,11 @@ src_add_all_uses(nir_src *src, nir_instr *parent_instr, nir_if *parent_if)
          src->parent_instr = parent_instr;
          if (src->is_ssa)
             list_addtail(&src->use_link, &src->ssa->uses);
-         else
-            list_addtail(&src->use_link, &src->reg.reg->uses);
       } else {
          assert(parent_if);
          src->parent_if = parent_if;
          if (src->is_ssa)
             list_addtail(&src->use_link, &src->ssa->if_uses);
-         else
-            list_addtail(&src->use_link, &src->reg.reg->if_uses);
       }
    }
 }

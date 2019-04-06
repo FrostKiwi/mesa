@@ -208,9 +208,7 @@ clone_register(clone_state *state, const nir_register *reg)
    nreg->name = ralloc_strdup(nreg, reg->name);
 
    /* reconstructing uses/defs/if_uses handled by nir_instr_insert() */
-   list_inithead(&nreg->uses);
    list_inithead(&nreg->defs);
-   list_inithead(&nreg->if_uses);
 
    return nreg;
 }
@@ -600,9 +598,6 @@ fixup_phi_srcs(clone_state *state)
       if (src->src.is_ssa) {
          src->src.ssa = remap_local(state, src->src.ssa);
          list_addtail(&src->src.use_link, &src->src.ssa->uses);
-      } else {
-         src->src.reg.reg = remap_reg(state, src->src.reg.reg);
-         list_addtail(&src->src.use_link, &src->src.reg.reg->uses);
       }
    }
    assert(list_empty(&state->phi_srcs));

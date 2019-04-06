@@ -144,13 +144,6 @@ validate_reg_src(nir_src *src, validate_state *state,
 
    reg_validate_state *reg_state = (reg_validate_state *) entry->data;
 
-   if (state->instr) {
-      _mesa_set_add(reg_state->uses, src);
-   } else {
-      validate_assert(state, state->if_stmt);
-      _mesa_set_add(reg_state->if_uses, src);
-   }
-
    validate_assert(state, reg_state->where_defined == state->impl &&
           "using a register declared in a different function");
 
@@ -935,13 +928,9 @@ prevalidate_reg_decl(nir_register *reg, validate_state *state)
    validate_assert(state, !BITSET_TEST(state->regs_found, reg->index));
    BITSET_SET(state->regs_found, reg->index);
 
-   list_validate(&reg->uses);
    list_validate(&reg->defs);
-   list_validate(&reg->if_uses);
 
    reg_validate_state *reg_state = ralloc(state->regs, reg_validate_state);
-   reg_state->uses = _mesa_pointer_set_create(reg_state);
-   reg_state->if_uses = _mesa_pointer_set_create(reg_state);
    reg_state->defs = _mesa_pointer_set_create(reg_state);
 
    reg_state->where_defined = state->impl;
@@ -956,34 +945,6 @@ postvalidate_reg_decl(nir_register *reg, validate_state *state)
 
    assume(entry);
    reg_validate_state *reg_state = (reg_validate_state *) entry->data;
-
-   nir_foreach_use(src, reg) {
-      struct set_entry *entry = _mesa_set_search(reg_state->uses, src);
-      validate_assert(state, entry);
-      _mesa_set_remove(reg_state->uses, entry);
-   }
-
-   if (reg_state->uses->entries != 0) {
-      printf("extra entries in register uses:\n");
-      set_foreach(reg_state->uses, entry)
-         printf("%p\n", entry->key);
-
-      abort();
-   }
-
-   nir_foreach_if_use(src, reg) {
-      struct set_entry *entry = _mesa_set_search(reg_state->if_uses, src);
-      validate_assert(state, entry);
-      _mesa_set_remove(reg_state->if_uses, entry);
-   }
-
-   if (reg_state->if_uses->entries != 0) {
-      printf("extra entries in register if_uses:\n");
-      set_foreach(reg_state->if_uses, entry)
-         printf("%p\n", entry->key);
-
-      abort();
-   }
 
    nir_foreach_def(src, reg) {
       struct set_entry *entry = _mesa_set_search(reg_state->defs, src);
