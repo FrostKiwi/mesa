@@ -131,6 +131,8 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref)
       fprintf(fp, "lg%u", ref->reg->index);
       if (ref->reg->logical.num_comps > 1)
          fprintf(fp, ".%u", ref->comp);
+      if (ref->broadcast)
+         fprintf(fp, "<%u>", ref->simd_channel);
       /* TODO: Should we print a type for flags? */
       if (ref->type != IBC_TYPE_FLAG)
          fprintf(fp, ":%s", ibc_type_suffix(ref->type));
