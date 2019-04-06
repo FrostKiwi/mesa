@@ -27,7 +27,7 @@ static bool
 ibc_alu_instr_is_raw_mov(const ibc_alu_instr *alu)
 {
    return alu->op == IBC_ALU_OP_MOV &&
-          alu->dest.ref.type == alu->src[0].ref.type &&
+          alu->dest.type == alu->src[0].ref.type &&
           alu->src[0].mod == IBC_ALU_SRC_MOD_NONE &&
           !alu->saturate;
 }
@@ -39,9 +39,9 @@ logical_reg_stride(const ibc_logical_reg *reg)
       return reg->bit_size / 8;
 
    ibc_alu_instr *alu = ibc_instr_as_alu(reg->ssa);
-   assert(&alu->dest.ref.reg->logical == reg);
+   assert(&alu->dest.reg->logical == reg);
 
-   unsigned stride = ibc_type_byte_size(alu->dest.ref.type);
+   unsigned stride = ibc_type_byte_size(alu->dest.type);
    unsigned num_srcs = 3; /* TODO */
    for (unsigned i = 0; i < num_srcs; i++) {
       if (alu->src[i].ref.file == IBC_REG_FILE_NONE)
@@ -198,8 +198,8 @@ ibc_assign_regs(ibc_shader *shader)
          case IBC_INSTR_TYPE_ALU: {
             ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
-            if (alu->dest.ref.file == IBC_REG_FILE_LOGICAL) {
-               rewrite_reg_ref(&alu->dest.ref, alu->instr.simd_group,
+            if (alu->dest.file == IBC_REG_FILE_LOGICAL) {
+               rewrite_reg_ref(&alu->dest, alu->instr.simd_group,
                                logical_grfs, false);
             }
 
