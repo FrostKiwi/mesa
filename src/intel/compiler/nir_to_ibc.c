@@ -92,7 +92,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
          /* Integer down-casts can always be treated as just consuming the
           * bottom bytes of the register.
           */
-         assert(src[0].byte == 0);
+         assert(src[0].logical.byte == 0);
          src[0].type = dest_type;
       }
       dest = ibc_MOV(b, dest_type, src[0]);
@@ -101,7 +101,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_unpack_32_2x16_split_x:
    case nir_op_unpack_32_2x16_split_y:
       src[0].type = dest_type;
-      src[0].byte = 2 * (instr->op == nir_op_unpack_32_2x16_split_y);
+      src[0].logical.byte = 2 * (instr->op == nir_op_unpack_32_2x16_split_y);
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
@@ -180,8 +180,10 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          .reg = ibc_hw_grf_reg_create(b->shader, IBC_HW_GRF_REG_UNASSIGNED,
                                       b->simd_width * 2,
                                       MIN2(b->simd_width * 2, 32)),
-         .offset = 0,
-         .stride = ibc_type_byte_size(IBC_TYPE_UW),
+         .hw_grf = {
+            .offset = 0,
+            .stride = ibc_type_byte_size(IBC_TYPE_UW),
+         },
       };
       ibc_builder_push_we_all(b, 8);
       ibc_build_alu1(b, IBC_ALU_OP_MOV, w_tmp, ibc_imm_v(0x76543210));
@@ -189,7 +191,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       if (b->simd_width > 8) {
          ibc_reg_ref w_tmp_8 = w_tmp;
-         w_tmp_8.offset = 8 * ibc_type_byte_size(w_tmp.type);
+         w_tmp_8.hw_grf.offset = 8 * ibc_type_byte_size(w_tmp.type);
          ibc_builder_push_we_all(b, 8);
          ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_8, w_tmp, ibc_imm_uw(8));
          ibc_builder_pop(b);
@@ -197,7 +199,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       if (b->simd_width > 8) {
          ibc_reg_ref w_tmp_16 = w_tmp;
-         w_tmp_16.offset = 16 * ibc_type_byte_size(w_tmp.type);
+         w_tmp_16.hw_grf.offset = 16 * ibc_type_byte_size(w_tmp.type);
          ibc_builder_push_we_all(b, 16);
          ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_16, w_tmp, ibc_imm_uw(16));
          ibc_builder_pop(b);
@@ -209,8 +211,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
    case nir_intrinsic_read_invocation: {
       ibc_reg_ref value = ibc_uref(nti->ssa_to_reg[instr->src[0].ssa->index]);
-      value.broadcast = true;
-      value.simd_channel = nir_src_as_uint(instr->src[1]);
+      value.logical.broadcast = true;
+      value.logical.simd_channel = nir_src_as_uint(instr->src[1]);
       ibc_builder_push_we_all(b, 1);
       dest = ibc_MOV(b, IBC_TYPE_UINT, value);
       ibc_builder_pop(b);
@@ -296,13 +298,17 @@ nti_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
       .file = IBC_REG_FILE_HW_GRF,
       .type = IBC_TYPE_UD,
       .reg = ibc_hw_grf_reg_create(b->shader, 0, 32, 32),
-      .stride = ibc_type_byte_size(IBC_TYPE_UD),
+      .hw_grf = {
+         .stride = ibc_type_byte_size(IBC_TYPE_UD),
+      },
    };
    ibc_reg_ref tmp = {
       .file = IBC_REG_FILE_HW_GRF,
       .type = IBC_TYPE_UD,
       .reg = ibc_hw_grf_reg_create(b->shader, IBC_HW_GRF_REG_UNASSIGNED, 32, 32),
-      .stride = ibc_type_byte_size(IBC_TYPE_UD),
+      .hw_grf = {
+         .stride = ibc_type_byte_size(IBC_TYPE_UD),
+      },
    };
 
    ibc_builder_push_we_all(b, 8);
