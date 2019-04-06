@@ -91,6 +91,98 @@ ibc_instr_init(ibc_instr *instr, enum ibc_instr_type type,
    ibc_reg_ref_init(&instr->flag);
 }
 
+bool
+ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
+{
+   if (instr->predicate) {
+      if (!cb(&instr->flag, state))
+         return false;
+   }
+
+   switch (instr->type) {
+   case IBC_INSTR_TYPE_ALU: {
+      ibc_alu_instr *alu = ibc_instr_as_alu(instr);
+      for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
+         if (!cb(&alu->src[i].ref, state))
+            return false;
+      }
+      return true;
+   }
+
+   case IBC_INSTR_TYPE_SEND: {
+      ibc_send_instr *send = ibc_instr_as_send(instr);
+      if (send->desc.file != IBC_REG_FILE_NONE &&
+          !cb(&send->desc, state))
+         return false;
+
+      if (send->ex_desc.file != IBC_REG_FILE_NONE &&
+          !cb(&send->ex_desc, state))
+         return false;
+
+      if (!cb(&send->payload[0], state))
+         return false;
+
+      if (send->ex_mlen > 0 && !cb(&send->payload[1], state))
+         return false;
+
+      return true;
+   }
+
+   case IBC_INSTR_TYPE_INTRINSIC: {
+      ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
+      for (unsigned i = 0; i < intrin->num_srcs; i++) {
+         if (!cb(&intrin->src[i].ref, state))
+            return false;
+      }
+      return true;
+   }
+
+   case IBC_INSTR_TYPE_JUMP:
+      return true;
+   }
+
+   unreachable("Invalid IBC instruction type");
+}
+
+bool
+ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
+{
+   switch (instr->type) {
+   case IBC_INSTR_TYPE_ALU: {
+      ibc_alu_instr *alu = ibc_instr_as_alu(instr);
+      if (alu->cmod && !cb(&instr->flag, state))
+         return false;
+
+      if (!cb(&alu->dest, state))
+         return false;
+
+      return true;
+   }
+
+   case IBC_INSTR_TYPE_SEND: {
+      ibc_send_instr *send = ibc_instr_as_send(instr);
+      if (send->rlen > 0 && !cb(&send->dest, state))
+         return false;
+
+      return true;
+   }
+
+   case IBC_INSTR_TYPE_INTRINSIC: {
+      ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
+      if (intrin->dest.file != IBC_REG_FILE_NONE &&
+          cb(&intrin->dest, state))
+         return false;
+
+      return true;
+   }
+
+   case IBC_INSTR_TYPE_JUMP:
+      return true;
+   }
+
+   unreachable("Invalid IBC instruction type");
+}
+
 #define IBC_ALU_OP_DECL(OP, _num_srcs, _src_mods)        \
    {                                                     \
       .name = #OP,                                       \
