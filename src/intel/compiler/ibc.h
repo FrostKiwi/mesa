@@ -322,13 +322,20 @@ enum ibc_alu_op {
 };
 
 
+enum PACKED ibc_alu_src_mod {
+   IBC_ALU_SRC_MOD_NONE    = 0x0,
+   IBC_ALU_SRC_MOD_NEG     = 0x1,
+   IBC_ALU_SRC_MOD_ABS     = 0x2,
+   IBC_ALU_SRC_MOD_NEG_ABS = IBC_ALU_SRC_MOD_NEG | IBC_ALU_SRC_MOD_ABS,
+   IBC_ALU_SRC_MOD_NOT     = 0x4,
+};
+
 /** A structure representing an ALU instruction source */
 typedef struct ibc_alu_src {
    /** A register reference for non-immediate sources */
    ibc_reg_ref ref;
 
-   bool negate:1;
-   bool abs:1;
+   enum ibc_alu_src_mod mod;
 } ibc_alu_src;
 
 
