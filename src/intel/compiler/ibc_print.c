@@ -130,9 +130,9 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref)
    case IBC_REG_FILE_LOGICAL:
       fprintf(fp, "lg%u", ref->reg->index);
       if (ref->reg->logical.num_comps > 1)
-         fprintf(fp, ".%u", ref->comp);
-      if (ref->broadcast)
-         fprintf(fp, "<%u>", ref->simd_channel);
+         fprintf(fp, ".%u", ref->logical.comp);
+      if (ref->logical.broadcast)
+         fprintf(fp, "<%u>", ref->logical.simd_channel);
       /* TODO: Should we print a type for flags? */
       if (ref->type != IBC_TYPE_FLAG)
          fprintf(fp, ":%s", ibc_type_suffix(ref->type));
@@ -142,12 +142,12 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref)
       unsigned type_sz_B = ibc_type_byte_size(ref->type);
       if (ref->reg->hw_grf.byte == IBC_HW_GRF_REG_UNASSIGNED) {
          fprintf(fp, "hw%u", ref->reg->index);
-         if (ref->offset) {
+         if (ref->hw_grf.offset) {
             assert(type_sz_B > 0);
-            fprintf(fp, ".%u", ref->offset / type_sz_B);
+            fprintf(fp, ".%u", ref->hw_grf.offset / type_sz_B);
          }
       } else {
-         unsigned byte = ref->reg->hw_grf.byte + ref->offset;
+         unsigned byte = ref->reg->hw_grf.byte + ref->hw_grf.offset;
          fprintf(fp, "g%u", byte / 32);
          if (byte % 32) {
             assert(type_sz_B > 0);
@@ -155,7 +155,7 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref)
          }
       }
       if (type_sz_B)
-         fprintf(fp, "<%u>", ref->stride / type_sz_B);
+         fprintf(fp, "<%u>", ref->hw_grf.stride / type_sz_B);
       if (ref->type != IBC_TYPE_INVALID)
          fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
