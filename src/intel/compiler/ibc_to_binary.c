@@ -121,15 +121,15 @@ brw_reg_for_ibc_reg_ref(const struct gen_device_info *devinfo,
 
    case IBC_REG_FILE_HW_GRF: {
       assert(ref->reg && ref->reg->file == IBC_REG_FILE_HW_GRF);
-      unsigned byte = ref->reg->hw_grf.byte + ref->offset;
+      unsigned byte = ref->reg->hw_grf.byte + ref->hw_grf.offset;
       unsigned nr = byte / REG_SIZE;
       unsigned subnr = byte % REG_SIZE;
       struct brw_reg brw_reg;
-      if (ref->stride == 0) {
+      if (ref->hw_grf.stride == 0) {
          brw_reg = brw_vec1_grf(nr, 0);
       } else {
          const unsigned elem_sz_B = ibc_type_bit_size(type) / 8;
-         const unsigned stride_B = ref->stride;
+         const unsigned stride_B = ref->hw_grf.stride;
          assert(stride_B % elem_sz_B == 0);
          unsigned stride_elem = stride_B / elem_sz_B;
 
@@ -290,7 +290,7 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
          assert(alu->dest.file == IBC_REG_FILE_HW_GRF ||
                 alu->dest.file == IBC_REG_FILE_NONE);
          bool compressed =
-            (alu->dest.stride * alu->instr.simd_width) > REG_SIZE;
+            (alu->dest.hw_grf.stride * alu->instr.simd_width) > REG_SIZE;
 
          struct brw_reg src[3], dest;
          assert(ibc_alu_op_infos[alu->op].num_srcs <= ARRAY_SIZE(src));

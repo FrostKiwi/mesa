@@ -326,8 +326,10 @@ ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,
       .file = IBC_REG_FILE_HW_GRF,
       .type = type,
       .reg = hw_reg,
-      .offset = 0,
-      .stride = type_sz * stride,
+      .hw_grf = {
+         .offset = 0,
+         .stride = type_sz * stride,
+      },
    });
 }
 

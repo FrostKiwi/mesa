@@ -43,11 +43,12 @@ simd_restricted_src(ibc_builder *b, unsigned src_simd_group, ibc_reg_ref src,
          return ibc_MOV(b, src.type, src);
       }
    case IBC_REG_FILE_HW_GRF:
-      if (src.stride == 0) {
+      if (src.hw_grf.stride == 0) {
          return src;
       } else {
          assert(b->simd_group >= src_simd_group);
-         src.offset += src.stride * b->simd_group - src_simd_group;
+         src.hw_grf.offset +=
+            src.hw_grf.stride * b->simd_group - src_simd_group;
          return ibc_MOV(b, src.type, src);
       }
    }

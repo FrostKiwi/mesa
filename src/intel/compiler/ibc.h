@@ -228,6 +228,59 @@ ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader,
                              uint8_t subnr, uint8_t bits);
 
 
+/** A structure representing a reference to a LOGICAL register
+ *
+ * Logical registers have a 3D size in terms of bits, components, and SIMD
+ * channels.  As such, the reference is also 3D with a byte offset, component
+ * offset, and SIMD channel for broadcast reads operations.
+ */
+typedef struct ibc_logical_reg_ref {
+   /** Byte offset into the logical register component
+    *
+    * This is used when the referenced register has a bit_size that is larger
+    * than the reference type.  If the referenced register has a bit size
+    * equal to the reference type, this must be zero.
+    */
+   uint8_t byte;
+
+   /** Component to reference for logical registers */
+   uint8_t comp;
+
+   /** If true, broadcast one SIMD channel to all channels
+    *
+    * In most cases (when broadcast is false), the SIMD channel information is
+    * taken from the instruction itself and each channel in the instruction
+    * automatically reads from the corresponding channel in the logical
+    * register.  However, when broadcast is set, all channels in the
+    * instruction read from one channel specified by the simd_channel field.
+    */
+   bool broadcast;
+
+   /** SIMD channel to broadcast
+    *
+    * If broadcast is set, this is the SIMD channel to broadcast.  If
+    * broadcast is not set, this must be 0.
+    */
+   uint8_t simd_channel;
+} ibc_logical_reg_ref;
+
+
+/** A structure representing a reference to a HW_GRF register */
+typedef struct ibc_hw_grf_reg_ref {
+   /** Byte offset at which the reference starts for HW regs */
+   uint8_t offset;
+
+   /** Stride in bytes for HW regs
+    *
+    * Technically, the hardware has a two-dimensional stride.  However, that
+    * complexity us usually not needed and so we simplify the stride to just a
+    * single stride which then gets turned into an equivalent 2D stride in
+    * ibc_to_binary.
+    */
+   uint8_t stride;
+} ibc_hw_grf_reg_ref;
+
+
 /** A structure representing a register reference (source or destination) in
  * an instruction
  */
@@ -239,36 +292,8 @@ typedef struct ibc_reg_ref {
    enum ibc_type type;
 
    union {
-      struct {
-         /** Component to reference for logical registers */
-         uint8_t comp;
-
-         /** Byte offset into the logical register component
-          *
-          * This is used when the referenced register has a bit_size that is
-          * larger than the reference type.  If the referenced register has a
-          * bit size equal to the reference type, this must be zero.
-          */
-         uint8_t byte;
-
-         /** If true, broadcast one SIMD channel to all channels */
-         bool broadcast;
-
-         /** SIMD channel to broadcast
-          *
-          * If broadcast is set, this is the SIMD channel to broadcast.  If
-          * broadcast is not set, this must be 0.
-          */
-         uint8_t simd_channel;
-      };
-
-      struct {
-         /** Byte offset at which the reference starts for HW regs */
-         uint8_t offset;
-
-         /** Stride in bytes for HW regs */
-         uint8_t stride;
-      };
+      ibc_logical_reg_ref logical;
+      ibc_hw_grf_reg_ref hw_grf;
    };
 
    /** Pointer to the register; NULL if immediate */
