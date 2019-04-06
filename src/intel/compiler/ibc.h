@@ -491,7 +491,7 @@ typedef struct {
 
    /** Number of vector components produced or consumed via this ref */
    unsigned num_comps;
-} ibc_intrinsic_reg_ref;
+} ibc_intrinsic_src;
 
 typedef struct {
    ibc_instr instr;
@@ -500,10 +500,11 @@ typedef struct {
 
    bool has_side_effects;
 
-   ibc_intrinsic_reg_ref dest;
+   ibc_reg_ref dest;
+   unsigned num_dest_comps;
 
    unsigned num_srcs;
-   ibc_intrinsic_reg_ref src[0];
+   ibc_intrinsic_src src[0];
 } ibc_intrinsic_instr;
 
 IBC_DEFINE_CAST(ibc_instr_as_intrinsic, ibc_instr, ibc_intrinsic_instr, instr,
