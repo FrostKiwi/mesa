@@ -66,14 +66,15 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
          return;
 
       const ibc_logical_reg *lreg = &ref->reg->logical;
+      const ibc_logical_reg_ref *lref = &ref->logical;
       if (lreg->bit_size < 8)
-         ibc_assert(s, ref->byte == 0);
+         ibc_assert(s, lref->byte == 0);
       else
-         ibc_assert(s, (ref->byte + 1) * 8 <= lreg->bit_size);
-      ibc_assert(s, ref->comp + num_comps <= lreg->num_comps);
-      if (ref->broadcast) {
-         ibc_assert(s, ref->simd_channel >= lreg->simd_group);
-         ibc_assert(s, ref->simd_channel <=
+         ibc_assert(s, (lref->byte + 1) * 8 <= lreg->bit_size);
+      ibc_assert(s, lref->comp + num_comps <= lreg->num_comps);
+      if (lref->broadcast) {
+         ibc_assert(s, lref->simd_channel >= lreg->simd_group);
+         ibc_assert(s, lref->simd_channel <=
                        lreg->simd_group + lreg->simd_width);
       } else if (lreg->simd_width == 1) {
          /* TODO: Do we want to require broadcast to be set? */
