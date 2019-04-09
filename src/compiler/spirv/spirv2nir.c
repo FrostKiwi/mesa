@@ -78,7 +78,7 @@ int main(int argc, char **argv)
 
    nir_shader *nir = spirv_to_nir(map, word_count, NULL, 0,
                                   MESA_SHADER_FRAGMENT, "main",
-                                  &spirv_opts, NULL);
+                                  &spirv_opts, NULL, true);
    nir_print_shader(nir, stderr);
 
    glsl_type_singleton_decref();

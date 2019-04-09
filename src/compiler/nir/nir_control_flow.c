@@ -316,13 +316,16 @@ block_add_normal_succs(nir_block *block)
          nir_block *first_else_block = nir_if_first_else_block(next_if);
 
          link_blocks(block, first_then_block, first_else_block);
-      } else {
+      } else if (next->type == nir_cf_node_loop) {
          nir_loop *next_loop = nir_cf_node_as_loop(next);
 
          nir_block *first_block = nir_loop_first_block(next_loop);
 
          link_blocks(block, first_block, NULL);
          insert_phi_undef(first_block, block);
+      } else {
+         nir_block *next_block = nir_cf_node_as_block(next);
+         link_blocks(block, next_block, NULL);
       }
    }
 }
@@ -487,6 +490,9 @@ nir_handle_add_jump(nir_block *block)
          nir_block *after_block = nir_cf_node_as_block(after);
          link_blocks(block, after_block, NULL);
       }
+   } else if (jump_instr->type == nir_jump_goto_if) {
+      nir_block *after = nir_block_cf_tree_next(block);
+      link_blocks(block, after, jump_instr->target);
    } else {
       assert(jump_instr->type == nir_jump_return);
       link_blocks(block, impl->end_block, NULL);
