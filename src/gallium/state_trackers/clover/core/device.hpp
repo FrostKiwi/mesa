@@ -28,8 +28,10 @@
 
 #include "core/object.hpp"
 #include "core/format.hpp"
+#include "core/module.hpp"
 #include "pipe-loader/pipe_loader.h"
 
+struct nir_shader;
 namespace clover {
    class platform;
    class root_resource;
@@ -41,6 +43,9 @@ namespace clover {
       ~device();
 
       device(const device &dev) = delete;
+
+      void load_clc();
+
       device &
       operator=(const device &dev) = delete;
 
@@ -99,6 +104,9 @@ namespace clover {
       has_system_svm() const {
          return svm_support() & CL_DEVICE_SVM_FINE_GRAIN_SYSTEM;
       }
+
+      module clc;
+      struct nir_shader *clc_nir;
 
    private:
       pipe_screen *pipe;

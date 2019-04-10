@@ -27,7 +27,9 @@
 #include "pipe/p_state.h"
 #include "util/bitscan.h"
 #include "util/u_debug.h"
-
+#include "spirv/invocation.hpp"
+#include "nir/invocation.hpp"
+#include <fstream>
 using namespace clover;
 
 namespace {
@@ -44,7 +46,7 @@ namespace {
 }
 
 device::device(clover::platform &platform, pipe_loader_device *ldev) :
-   platform(platform), ldev(ldev) {
+   platform(platform), clc_nir(NULL), ldev(ldev) {
    pipe = pipe_loader_create_screen(ldev);
    if (pipe && pipe->get_param(pipe, PIPE_CAP_COMPUTE)) {
       if (supports_ir(PIPE_SHADER_IR_NATIVE))
@@ -60,10 +62,23 @@ device::device(clover::platform &platform, pipe_loader_device *ldev) :
 }
 
 device::~device() {
+   if (clc_nir)
+      ralloc_free(clc_nir);
    if (pipe)
       pipe->destroy(pipe);
    if (ldev)
       pipe_loader_release(&ldev, 1);
+}
+
+void
+device::load_clc() {
+#ifdef HAVE_CLOVER_SPIRV
+   if (supports_ir(PIPE_SHADER_IR_NIR_SERIALIZED)) {
+      std::string log;
+      clc = spirv::load_clc(*this);
+      clc_nir = nir::libclc_spirv_to_nir(clc, *this, log);
+   }
+#endif
 }
 
 bool

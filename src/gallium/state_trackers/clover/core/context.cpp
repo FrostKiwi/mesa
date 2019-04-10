@@ -28,6 +28,13 @@ context::context(const property_list &props,
                  const ref_vector<device> &devs,
                  const notify_action &notify) :
    notify(notify), props(props), devs(devs) {
+
+   /*
+    * Load CLC library for all devices,
+    * this is done here to avoid constructor ordering issues.
+    */
+   for (device &dev : devs)
+      dev.load_clc();
 }
 
 bool
