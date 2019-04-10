@@ -25,9 +25,13 @@
 
 #include "core/module.hpp"
 
+struct nir_shader;
 namespace clover {
    class device;
    namespace nir {
+      // converts libclc spirv into nir
+      nir_shader *libclc_spirv_to_nir(const module &mod, const device &dev,
+                                      std::string &r_log);
       // converts a given spirv module to nir
       module spirv_to_nir(const module &mod, const device &dev, std::string &r_log);
    }

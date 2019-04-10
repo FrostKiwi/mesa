@@ -43,6 +43,9 @@
 #include "LLVMSPIRVLib/LLVMSPIRVLib.h"
 #endif
 
+extern "C" {
+#include "nir_lower_libclc.h"
+}
 using namespace clover;
 
 #ifdef HAVE_CLOVER_SPIRV
@@ -129,6 +132,35 @@ static void clover_mangle(const char *in_name,
 }
 }
 
+nir_shader *clover::nir::libclc_spirv_to_nir(const module &mod, const device &dev,
+                                             std::string &r_log)
+{
+   struct spirv_to_nir_options spirv_options = {};
+   spirv_options.caps.address = true;
+   spirv_options.caps.float64 = true;
+   spirv_options.caps.int8 = true;
+   spirv_options.caps.int16 = true;
+   spirv_options.caps.int64 = true;
+   spirv_options.caps.kernel = true;
+   spirv_options.create_library = true;
+   spirv_options.mangle = clover_mangle;
+
+   auto &section = mod.secs[0];
+   const auto *binary =
+     reinterpret_cast<const pipe_binary_program_header *>(section.data.data());
+   const uint32_t *data = reinterpret_cast<const uint32_t *>(binary->blob);
+   const size_t num_words = binary->num_bytes / 4;
+   auto *compiler_options = dev_get_nir_compiler_options(dev);
+
+   nir_shader *nir = spirv_to_nir(data, num_words, nullptr, 0,
+                                  MESA_SHADER_KERNEL, "clcspirv",
+                                  &spirv_options, compiler_options);
+   nir_validate_shader(nir, "clover-libclc");
+   NIR_PASS_V(nir, nir_lower_constant_initializers, nir_var_function_temp);
+   NIR_PASS_V(nir, nir_lower_returns);
+   return nir;
+}
+
 module clover::nir::spirv_to_nir(const module &mod, const device &dev,
                                  std::string &r_log)
 {
@@ -141,6 +173,7 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
    spirv_options.caps.int64 = true;
    spirv_options.caps.kernel = true;
    spirv_options.constant_as_global = true;
+   spirv_options.clc_shader = dev.clc_nir;
    spirv_options.mangle = clover_mangle;
 
    module m;
@@ -190,7 +223,10 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
       // according to the comment on nir_inline_functions
       NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
       NIR_PASS_V(nir, nir_lower_returns);
+      NIR_PASS_V(nir, nir_lower_libclc, dev.clc_nir);
+
       NIR_PASS_V(nir, nir_inline_functions);
+
       NIR_PASS_V(nir, nir_opt_deref);
 
       // Pick off the single entrypoint that we want.

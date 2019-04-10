@@ -36,6 +36,80 @@ typedef nir_ssa_def *(*nir_handler)(struct vtn_builder *b,
                                     const struct glsl_type **src_types,
                                     const struct glsl_type *dest_type);
 
+static nir_function *mangle_and_find(struct vtn_builder *b,
+                                     const char *name,
+                                     uint32_t ptr_mask,
+                                     uint32_t num_srcs,
+                                     const struct glsl_type **src_types)
+{
+   char *mname;
+   nir_function *found = NULL;
+
+   b->options->mangle(name, ptr_mask, num_srcs, src_types, &mname);
+   /* try and find in current shader first. */
+   nir_foreach_function(funcs, b->shader) {
+      if (!strcmp(funcs->name, mname)) {
+         found = funcs;
+         break;
+      }
+   }
+   /* if not found here find in clc shader and create a decl mirroring it */
+   if (!found && b->options->clc_shader && b->options->clc_shader != b->shader) {
+      nir_foreach_function(funcs, b->options->clc_shader) {
+         if (!strcmp(funcs->name, mname)) {
+            found = funcs;
+            break;
+         }
+      }
+      if (found) {
+         nir_function *decl = nir_function_create(b->shader, mname);
+         decl->num_params = found->num_params;
+         decl->params = ralloc_array(b->shader, nir_parameter, decl->num_params);
+         for (unsigned i = 0; i < decl->num_params; i++) {
+            decl->params[i] = found->params[i];
+         }
+         found = decl;
+      }
+   }
+   if (!found)
+      vtn_fail("Can't find clc function %s\n", mname);
+   free(mname);
+   return found;
+}
+
+static bool call_mangled_function(struct vtn_builder *b,
+                                  const char *name,
+                                  uint32_t ptr_mask,
+                                  uint32_t num_srcs,
+                                  const struct glsl_type **src_types,
+                                  const struct glsl_type *dest_type,
+                                  nir_ssa_def **srcs,
+                                  nir_deref_instr **ret_deref_ptr)
+{
+   nir_function *found = mangle_and_find(b, name, ptr_mask, num_srcs, src_types);
+   if (!found)
+      return false;
+
+   nir_call_instr *call = nir_call_instr_create(b->shader, found);
+
+   nir_deref_instr *ret_deref = NULL;
+   uint32_t param_idx = 0;
+   if (dest_type) {
+      nir_variable *ret_tmp = nir_local_variable_create(b->nb.impl,
+                                                        glsl_get_bare_type(dest_type),
+                                                        "return_tmp");
+      ret_deref = nir_build_deref_var(&b->nb, ret_tmp);
+      call->params[param_idx++] = nir_src_for_ssa(&ret_deref->dest.ssa);
+   }
+
+   for (unsigned i = 0; i < num_srcs; i++)
+      call->params[param_idx++] = nir_src_for_ssa(srcs[i]);
+   nir_builder_instr_insert(&b->nb, &call->instr);
+
+   *ret_deref_ptr = ret_deref;
+   return true;
+}
+
 static void
 handle_instr(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
              const uint32_t *w, unsigned count, nir_handler handler)
@@ -138,6 +212,23 @@ build_round(nir_builder *nb, nir_ssa_def *src)
    nir_ssa_def *neg = nir_fceil(nb, nir_fsub(nb, src, const_half));
 
    return nir_bcsel(nb, sel, pos, neg);
+}
+
+static nir_ssa_def *
+handle_clc_fn(struct vtn_builder *b, const char *name,
+              int num_srcs,
+              nir_ssa_def **srcs,
+              const struct glsl_type **src_types,
+              const struct glsl_type *dest_type)
+{
+   uint32_t ptr_mask = 0;
+   nir_deref_instr *ret_deref = NULL;
+
+   if (!call_mangled_function(b, name, ptr_mask, num_srcs, src_types,
+                              dest_type, srcs, &ret_deref))
+      return NULL;
+
+   return ret_deref ? nir_load_deref(&b->nb, ret_deref) : NULL;
 }
 
 static nir_ssa_def *

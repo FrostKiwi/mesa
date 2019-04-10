@@ -567,10 +567,11 @@ namespace {
 
 module
 clover::spirv::compile_program(const std::vector<char> &binary,
-                               const device &dev, std::string &r_log) {
+                               const device &dev, std::string &r_log,
+                               bool validate) {
    std::vector<char> source = spirv_to_cpu(binary);
 
-   if (!is_valid_spirv(source, dev.device_version(), r_log))
+   if (!is_valid_spirv(source, dev.device_version(), r_log, validate))
       throw build_error();
 
    if (!check_capabilities(dev, source, r_log))
@@ -624,7 +625,6 @@ clover::spirv::link_program(const std::vector<module> &modules,
                                             const char *message) {
       r_log += format_validator_msg(level, source, position, message);
    };
-
    for (const auto &mod : modules) {
       const auto &msec = find([](const module::section &sec) {
                   return sec.type == module::section::text_intermediate ||
@@ -670,7 +670,8 @@ clover::spirv::link_program(const std::vector<module> &modules,
 bool
 clover::spirv::is_valid_spirv(const std::vector<char> &binary,
                               const std::string &opencl_version,
-                              std::string &r_log) {
+                              std::string &r_log,
+                              bool validate) {
    auto const validator_consumer =
       [&r_log](spv_message_level_t level, const char *source,
                const spv_position_t &position, const char *message) {
@@ -682,6 +683,8 @@ clover::spirv::is_valid_spirv(const std::vector<char> &binary,
    spvtools::SpirvTools spvTool(target_env);
    spvTool.SetMessageConsumer(validator_consumer);
 
+   if (!validate)
+      return true;
    return spvTool.Validate(reinterpret_cast<const uint32_t *>(binary.data()),
                            binary.size() / 4u);
 }
@@ -713,13 +716,14 @@ clover::spirv::print_module(const std::vector<char> &binary,
 bool
 clover::spirv::is_valid_spirv(const std::vector<char> &/*binary*/,
                               const std::string &/*opencl_version*/,
-                              std::string &/*r_log*/) {
+                              std::string &/*r_log*/, bool /*validate*/) {
    return false;
 }
 
 module
 clover::spirv::compile_program(const std::vector<char> &binary,
-                               const device &dev, std::string &r_log) {
+                               const device &dev, std::string &r_log,
+                               bool validate) {
    r_log += "SPIR-V support in clover is not enabled.\n";
    throw build_error();
 }
@@ -738,3 +742,29 @@ clover::spirv::print_module(const std::vector<char> &binary,
    return std::string();
 }
 #endif
+
+module
+clover::spirv::load_clc(const device &dev)
+{
+   std::vector<char> ilfile;
+   std::ifstream file;
+   file.exceptions(std::ifstream::badbit
+                   | std::ifstream::failbit
+                   | std::ifstream::eofbit);
+   std::string name32 = "spirv--.spv";
+   std::string name64 = "spirv64--.spv";
+   file.open(LIBCLC_LIBEXECDIR + (dev.address_bits() == 64 ? name64 : name32), std::ifstream::in | std::ifstream::binary);
+   if (!file.good())
+      throw error(CL_COMPILER_NOT_AVAILABLE);
+
+   file.seekg(0, std::ios::end);
+   std::streampos length(file.tellg());
+   if (length) {
+      file.seekg(0, std::ios::beg);
+      ilfile.resize(static_cast<std::size_t>(length));
+      file.read(&ilfile.front(), static_cast<std::size_t>(length));
+   }
+
+   std::string log;
+   return spirv::compile_program(ilfile, dev, log, false);
+}

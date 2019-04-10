@@ -87,6 +87,8 @@ struct spirv_to_nir_options {
     */
    bool constant_as_global;
 
+   nir_shader *clc_shader;
+
    void (*mangle)(const char *in_name,
                   uint32_t ptr_mask,
                   int ntypes, const struct glsl_type **src_types,
