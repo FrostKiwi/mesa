@@ -268,6 +268,55 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
 }
 
 static void
+ibc_validate_send_instr(struct ibc_validate_state *s,
+                        const ibc_send_instr *send)
+{
+   if (send->desc.file != IBC_REG_FILE_NONE) {
+      ibc_assert(s, send->desc.type == IBC_TYPE_UD);
+      ibc_validate_reg_ref(s, &send->desc, false,
+                           ibc_type_byte_size(IBC_TYPE_UD), 0,
+                           send->instr.simd_group,
+                           send->instr.simd_width);
+   } else {
+      ibc_validate_null_reg_ref(s, &send->desc);
+   }
+
+   if (send->ex_desc.file != IBC_REG_FILE_NONE) {
+      ibc_assert(s, send->ex_desc.type == IBC_TYPE_UD);
+      ibc_validate_reg_ref(s, &send->ex_desc, false,
+                           ibc_type_byte_size(IBC_TYPE_UD), 0,
+                           send->instr.simd_group,
+                           send->instr.simd_width);
+   } else {
+      ibc_validate_null_reg_ref(s, &send->ex_desc);
+   }
+
+   if (send->rlen > 0) {
+      ibc_validate_reg_ref(s, &send->dest, true,
+                           send->rlen * 32, 0,
+                           send->instr.simd_group,
+                           send->instr.simd_width);
+   } else {
+      ibc_validate_null_reg_ref(s, &send->dest);
+   }
+
+   ibc_assert(s, send->mlen > 0);
+   ibc_validate_reg_ref(s, &send->payload[0], false,
+                        send->mlen * 32, 0,
+                        send->instr.simd_group,
+                        send->instr.simd_width);
+
+   if (send->ex_mlen > 0) {
+      ibc_validate_reg_ref(s, &send->payload[1], false,
+                           send->ex_mlen * 32, 0,
+                           send->instr.simd_group,
+                           send->instr.simd_width);
+   } else {
+      ibc_validate_null_reg_ref(s, &send->payload[1]);
+   }
+}
+
+static void
 ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
                              const ibc_intrinsic_instr *intrin)
 {
@@ -323,7 +372,7 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
       return;
 
    case IBC_INSTR_TYPE_SEND:
-      /* TODO */
+      ibc_validate_send_instr(s, ibc_instr_as_send(instr));
       return;
 
    case IBC_INSTR_TYPE_INTRINSIC:
