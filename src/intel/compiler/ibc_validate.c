@@ -27,9 +27,21 @@
 #include "ibc.h"
 
 #include <util/bitscan.h>
+#include <util/hash_table.h>
+#include <util/set.h>
 
 struct ibc_validate_state {
+   void *mem_ctx;
+
    const ibc_shader *shader;
+   const ibc_instr *instr;
+
+   /* ibc_reg* -> reg_validate_state* */
+   struct hash_table *reg_state;
+};
+
+struct reg_validate_state {
+   struct set *writes;
 };
 
 static bool
@@ -49,7 +61,8 @@ _ibc_assert(struct ibc_validate_state *s, int line,
 
 static void
 ibc_validate_reg_ref(struct ibc_validate_state *s,
-                     const ibc_reg_ref *ref, unsigned num_comps,
+                     const ibc_reg_ref *ref, bool is_write,
+                     unsigned num_comps,
                      unsigned ref_simd_group, unsigned ref_simd_width)
 {
    switch (ref->file) {
@@ -61,10 +74,37 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       /* TODO */
       return;
 
-   case IBC_REG_FILE_LOGICAL: {
+   case IBC_REG_FILE_LOGICAL:
+   case IBC_REG_FILE_HW_GRF:
+   case IBC_REG_FILE_FLAG:
       if (!ibc_assert(s, ref->reg))
          return;
 
+      ibc_assert(s, ref->file == ref->reg->file);
+      break;
+   }
+
+   struct reg_validate_state *reg_state = NULL;
+   {
+      struct hash_entry *state_entry =
+         _mesa_hash_table_search(s->reg_state, ref->reg);
+      if (ibc_assert(s, state_entry))
+         reg_state = state_entry->data;
+   }
+
+   if (is_write) {
+      ibc_assert(s, ref->write_instr == s->instr);
+      _mesa_set_add(reg_state->writes, ref);
+   } else {
+      ibc_assert(s, ref->write_instr == NULL);
+   }
+
+   switch (ref->file) {
+   case IBC_REG_FILE_NONE:
+   case IBC_REG_FILE_IMM:
+      unreachable("Handled above with an early return");
+
+   case IBC_REG_FILE_LOGICAL: {
       const ibc_logical_reg *lreg = &ref->reg->logical;
       const ibc_logical_reg_ref *lref = &ref->logical;
       if (lreg->bit_size < 8)
@@ -111,7 +151,7 @@ ibc_validate_alu_src(struct ibc_validate_state *s,
                      const ibc_alu_instr *alu, const ibc_alu_src *src)
 {
    ibc_assert(s, src->ref.file != IBC_REG_FILE_NONE);
-   ibc_validate_reg_ref(s, &src->ref, 1,
+   ibc_validate_reg_ref(s, &src->ref, false, 1,
                         alu->instr.simd_group,
                         alu->instr.simd_width);
 }
@@ -145,12 +185,12 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
    if (alu->cmod != BRW_CONDITIONAL_NONE) {
       ibc_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
       ibc_assert(s, alu->instr.flag.file != IBC_REG_FILE_NONE);
-      ibc_validate_reg_ref(s, &alu->instr.flag, 1,
+      ibc_validate_reg_ref(s, &alu->instr.flag, true, 1,
                            alu->instr.simd_group,
                            alu->instr.simd_width);
    }
 
-   ibc_validate_reg_ref(s, &alu->dest, 1,
+   ibc_validate_reg_ref(s, &alu->dest, true, 1,
                         alu->instr.simd_group,
                         alu->instr.simd_width);
 
@@ -162,7 +202,7 @@ static void
 ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
                              const ibc_intrinsic_instr *intrin)
 {
-   ibc_validate_reg_ref(s, &intrin->dest,
+   ibc_validate_reg_ref(s, &intrin->dest, true,
                         intrin->num_dest_comps,
                         intrin->instr.simd_group,
                         intrin->instr.simd_width);
@@ -171,7 +211,7 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
       ibc_assert(s, intrin->src[i].simd_group >= intrin->instr.simd_group);
       ibc_assert(s, intrin->src[i].simd_group + intrin->src[i].simd_width <=
                     intrin->instr.simd_group + intrin->instr.simd_width);
-      ibc_validate_reg_ref(s, &intrin->src[i].ref,
+      ibc_validate_reg_ref(s, &intrin->src[i].ref, false,
                            intrin->src[i].num_comps,
                            intrin->src[i].simd_group,
                            intrin->src[i].simd_width);
@@ -181,6 +221,8 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
 static void
 ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 {
+   s->instr = instr;
+
    if (instr->predicate != BRW_PREDICATE_NONE) {
       /* The ANY*H or ALL*H predicate group threads into groups so we need to
        * align the instruction bits accordingly.
@@ -189,7 +231,7 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
        */
       unsigned pred_bits = brw_predicate_bits(instr->predicate);
       assert(util_is_power_of_two_nonzero(pred_bits));
-      ibc_validate_reg_ref(s, &instr->flag, 1,
+      ibc_validate_reg_ref(s, &instr->flag, false, 1,
                            instr->simd_group & (pred_bits - 1),
                            MAX2(instr->simd_width, pred_bits));
    }
@@ -214,6 +256,7 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 static void
 ibc_validate_block(struct ibc_validate_state *s, const ibc_block *block)
 {
+   list_validate(&block->instrs);
    ibc_foreach_instr(instr, block)
       ibc_validate_instr(s, instr);
 
@@ -227,13 +270,58 @@ ibc_validate_block(struct ibc_validate_state *s, const ibc_block *block)
 #endif
 }
 
+static void
+ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
+{
+   list_validate(&reg->writes);
+
+   struct reg_validate_state *reg_state =
+      ralloc(s->mem_ctx, struct reg_validate_state);
+
+   reg_state->writes = _mesa_pointer_set_create(s->mem_ctx);
+
+   _mesa_hash_table_insert(s->reg_state, reg, reg_state);
+}
+
+static void
+ibc_validate_reg_post(struct ibc_validate_state *s, const ibc_reg *reg)
+{
+   struct reg_validate_state *reg_state =
+      _mesa_hash_table_search(s->reg_state, reg)->data;
+
+   ibc_reg_foreach_write(ref, reg) {
+      struct set_entry *entry = _mesa_set_search(reg_state->writes, ref);
+      ibc_assert(s, entry);
+      _mesa_set_remove(reg_state->writes, entry);
+   }
+
+   if (reg_state->writes->entries != 0) {
+      fprintf(stderr, "extra entries in register writes:\n");
+      set_foreach(reg_state->writes, entry)
+         fprintf(stderr, "%p\n", entry->key);
+
+      abort();
+   }
+}
+
 void
 ibc_validate_shader(const ibc_shader *shader)
 {
    struct ibc_validate_state s = {
+      .mem_ctx = ralloc_context(NULL),
       .shader = shader,
    };
 
+   s.reg_state = _mesa_pointer_hash_table_create(s.mem_ctx);
+   ibc_foreach_reg(reg, shader)
+      ibc_validate_reg_pre(&s, reg);
+
+   list_validate(&shader->blocks);
    ibc_foreach_block(block, shader)
       ibc_validate_block(&s, block);
+
+   ibc_foreach_reg(reg, shader)
+      ibc_validate_reg_post(&s, reg);
+
+   ralloc_free(s.mem_ctx);
 }
