@@ -73,17 +73,18 @@ ibc_validate_null_reg_ref(struct ibc_validate_state *s,
 static void
 ibc_validate_reg_ref(struct ibc_validate_state *s,
                      const ibc_reg_ref *ref, bool is_write,
-                     unsigned num_comps,
+                     unsigned num_bytes, unsigned num_comps,
                      unsigned ref_simd_group, unsigned ref_simd_width)
 {
    switch (ref->file) {
    case IBC_REG_FILE_NONE:
+      ibc_assert(s, num_comps == 0 && num_bytes == 0);
       ibc_validate_null_reg_ref(s, ref);
       return;
 
    case IBC_REG_FILE_IMM:
       ibc_assert(s, !is_write);
-      ibc_assert(s, num_comps == 1);
+      ibc_assert(s, num_comps == 1 && num_bytes == 0);
       return;
 
    case IBC_REG_FILE_LOGICAL:
@@ -128,29 +129,69 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
    case IBC_REG_FILE_LOGICAL: {
       const ibc_logical_reg *lreg = &ref->reg->logical;
       const ibc_logical_reg_ref *lref = &ref->logical;
+
+      if (num_comps == 0) {
+         /* Byte-wise access of logical registers is allowed but it has strict
+          * restrictions and assumes the register is tightly packed.
+          */
+         ibc_assert(s, ref_simd_group == lreg->simd_group);
+         ibc_assert(s, ref_simd_width == lreg->simd_width);
+         ibc_assert(s, ibc_type_bit_size(ref->type) >= 8);
+         ibc_assert(s, ibc_type_bit_size(ref->type) == lreg->bit_size);
+         unsigned comp_size_B = (lreg->bit_size / 8) * lreg->simd_width;
+         ibc_assert(s, num_bytes % comp_size_B == 0);
+         num_comps = num_bytes / comp_size_B;
+      } else {
+         ibc_assert(s, num_bytes == 0);
+      }
+
       if (lreg->bit_size < 8)
          ibc_assert(s, lref->byte == 0);
       else
          ibc_assert(s, (lref->byte + 1) * 8 <= lreg->bit_size);
+
       ibc_assert(s, num_comps > 0);
       ibc_assert(s, lref->comp + num_comps <= lreg->num_comps);
+
       if (lref->broadcast) {
          ibc_assert(s, lref->simd_channel >= lreg->simd_group);
          ibc_assert(s, lref->simd_channel <=
                        lreg->simd_group + lreg->simd_width);
-      } else if (lreg->simd_width == 1) {
-         /* TODO: Do we want to require broadcast to be set? */
       } else {
-         ibc_assert(s, ref_simd_group >= lreg->simd_group);
-         ibc_assert(s, ref_simd_group + ref_simd_width <=
-                       lreg->simd_group + lreg->simd_width);
+         ibc_assert(s, lref->simd_channel == 0);
+         if (lreg->simd_width == 1) {
+            /* If the register is a scalar (only one SIMD channel), the
+             * broadcast is implicit with channel 0.  There's nothing to
+             * validate for SIMD channels in this case.
+             */
+         } else {
+            ibc_assert(s, ref_simd_group >= lreg->simd_group);
+            ibc_assert(s, ref_simd_group + ref_simd_width <=
+                          lreg->simd_group + lreg->simd_width);
+         }
       }
       return;
    }
 
-   case IBC_REG_FILE_HW_GRF:
-      /* TODO */
+   case IBC_REG_FILE_HW_GRF: {
+      const ibc_hw_grf_reg *hw_reg = &ref->reg->hw_grf;
+      const ibc_hw_grf_reg_ref *hw_ref = &ref->hw_grf;
+
+      ibc_assert(s, hw_ref->stride % ibc_type_byte_size(ref->type) == 0);
+      if (is_write)
+         ibc_assert(s, hw_ref->stride > 0);
+
+      if (num_bytes == 0) {
+         ibc_assert(s, num_comps > 0);
+         num_bytes = (ref_simd_width - 1) * hw_ref->stride +
+                     ibc_type_byte_size(ref->type);
+      } else {
+         ibc_assert(s, num_comps == 0);
+      }
+      ibc_assert(s, num_bytes > 0);
+      ibc_assert(s, hw_ref->offset + num_bytes <= hw_reg->size);
       return;
+   }
 
    case IBC_REG_FILE_FLAG: {
       const ibc_flag_reg *reg = &ref->reg->flag;
@@ -158,6 +199,7 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       unsigned reg_simd_group = (reg->subnr % 2) * 16;
       unsigned reg_simd_width = reg->bits;
 
+      ibc_assert(s, num_comps == 1 && num_bytes == 0);
       ibc_assert(s, ref_simd_group >= reg_simd_group);
       ibc_assert(s, ref_simd_group + ref_simd_width <=
                     reg_simd_group + reg_simd_width);
@@ -203,7 +245,7 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
       ibc_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
       ibc_assert(s, alu->instr.flag.file != IBC_REG_FILE_NONE);
       ibc_assert(s, alu->instr.flag.type == IBC_TYPE_FLAG);
-      ibc_validate_reg_ref(s, &alu->instr.flag, true, 1,
+      ibc_validate_reg_ref(s, &alu->instr.flag, true, 0, 1,
                            alu->instr.simd_group,
                            alu->instr.simd_width);
    }
@@ -212,13 +254,13 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
                  ibc_type_base_type(alu->dest.type) == IBC_TYPE_FLOAT);
 
    ibc_validate_reg_ref(s, &alu->dest, true,
-                        alu->dest.file == IBC_REG_FILE_NONE ? 0 : 1,
+                        0, alu->dest.file == IBC_REG_FILE_NONE ? 0 : 1,
                         alu->instr.simd_group,
                         alu->instr.simd_width);
 
    for (unsigned i = 0; i < alu_info->num_srcs; i++) {
       ibc_assert(s, alu->src[i].ref.file != IBC_REG_FILE_NONE);
-      ibc_validate_reg_ref(s, &alu->src[i].ref, false, 1,
+      ibc_validate_reg_ref(s, &alu->src[i].ref, false, 0, 1,
                            alu->instr.simd_group,
                            alu->instr.simd_width);
       ibc_assert(s, (alu->src[i].mod & ~alu_info->supported_src_mods) == 0);
@@ -230,7 +272,7 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
                              const ibc_intrinsic_instr *intrin)
 {
    ibc_validate_reg_ref(s, &intrin->dest, true,
-                        intrin->num_dest_comps,
+                        0, intrin->num_dest_comps,
                         intrin->instr.simd_group,
                         intrin->instr.simd_width);
 
@@ -239,7 +281,7 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
       ibc_assert(s, intrin->src[i].simd_group + intrin->src[i].simd_width <=
                     intrin->instr.simd_group + intrin->instr.simd_width);
       ibc_validate_reg_ref(s, &intrin->src[i].ref, false,
-                           intrin->src[i].num_comps,
+                           0, intrin->src[i].num_comps,
                            intrin->src[i].simd_group,
                            intrin->src[i].simd_width);
    }
@@ -268,7 +310,7 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
       assert(util_is_power_of_two_nonzero(pred_bits));
       unsigned pred_simd_group = instr->simd_group & ~(pred_bits - 1);
       unsigned pred_simd_width = MAX2(instr->simd_width, pred_bits);
-      ibc_validate_reg_ref(s, &instr->flag, false, 1,
+      ibc_validate_reg_ref(s, &instr->flag, false, 0, 1,
                            pred_simd_group, pred_simd_width);
    } else if (instr->type != IBC_INSTR_TYPE_ALU ||
               ibc_instr_as_alu(instr)->cmod == BRW_CONDITIONAL_NONE) {
