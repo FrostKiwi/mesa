@@ -34,6 +34,7 @@ struct ibc_validate_state {
    void *mem_ctx;
 
    const ibc_shader *shader;
+   const ibc_block *block;
    const ibc_instr *instr;
 
    /* ibc_reg* -> reg_validate_state* */
@@ -42,6 +43,8 @@ struct ibc_validate_state {
 
 struct reg_validate_state {
    struct set *writes;
+   const ibc_block *write_block;
+   struct list_head *next_write_link;
 };
 
 static bool
@@ -95,6 +98,15 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
    if (is_write) {
       ibc_assert(s, ref->write_instr == s->instr);
       _mesa_set_add(reg_state->writes, ref);
+      if (ref->reg->is_wlr) {
+         if (reg_state->write_block == NULL) {
+            reg_state->write_block = s->block;
+         } else {
+            ibc_assert(s, reg_state->write_block == s->block);
+         }
+         ibc_assert(s, reg_state->next_write_link == &ref->write_link);
+         reg_state->next_write_link = ref->write_link.next;
+      }
    } else {
       ibc_assert(s, ref->write_instr == NULL);
    }
@@ -256,6 +268,8 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 static void
 ibc_validate_block(struct ibc_validate_state *s, const ibc_block *block)
 {
+   s->block = block;
+
    list_validate(&block->instrs);
    ibc_foreach_instr(instr, block)
       ibc_validate_instr(s, instr);
@@ -276,9 +290,11 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
    list_validate(&reg->writes);
 
    struct reg_validate_state *reg_state =
-      ralloc(s->mem_ctx, struct reg_validate_state);
+      rzalloc(s->mem_ctx, struct reg_validate_state);
 
    reg_state->writes = _mesa_pointer_set_create(s->mem_ctx);
+   if (reg->is_wlr)
+      reg_state->next_write_link = reg->writes.next;
 
    _mesa_hash_table_insert(s->reg_state, reg, reg_state);
 }
@@ -302,6 +318,9 @@ ibc_validate_reg_post(struct ibc_validate_state *s, const ibc_reg *reg)
 
       abort();
    }
+
+   if (reg->is_wlr)
+      ibc_assert(s, reg_state->next_write_link == &reg->writes);
 }
 
 void
