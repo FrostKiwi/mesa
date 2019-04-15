@@ -125,7 +125,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    case nir_op_ieq32: {
       dest = ibc_CMP(b, dest_type, src[0], src[1]);
-      ibc_alu_instr *cmp = ibc_instr_as_alu(dest.reg->logical.ssa);
+      ibc_alu_instr *cmp = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
       cmp->cmod = BRW_CONDITIONAL_EQ;
       /* We need a flag register even though the result may never be used */
       ibc_reg *flag = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
@@ -141,7 +141,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       ibc_instr_set_write_ref(&mov->instr, &mov->instr.flag, ibc_ref(flag));
       mov->cmod = BRW_CONDITIONAL_NZ;
       dest = ibc_SEL(b, dest_type, src[1], src[2]);
-      ibc_alu_instr *sel = ibc_instr_as_alu(dest.reg->logical.ssa);
+      ibc_alu_instr *sel = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
       sel->instr.flag = ibc_ref(flag);
       sel->instr.predicate = BRW_PREDICATE_NORMAL;
       break;

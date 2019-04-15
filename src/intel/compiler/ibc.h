@@ -143,9 +143,6 @@ typedef struct ibc_logical_reg {
 
    /** Number of SIMD invocations */
    uint8_t simd_width;
-
-   /** Definition if this register is statically assigned once */
-   struct ibc_instr *ssa;
 } ibc_logical_reg;
 
 
@@ -204,6 +201,30 @@ typedef struct ibc_reg {
    /** Register type */
    enum ibc_reg_file file;
 
+   /** True if this register is in write-lock-read form.
+    *
+    * Write-lock-read form is a generalization of SSA in which multiple writes
+    * to a value are allowed in a contained way.  For a value to be in WLR
+    * form, both of the following conditions must hold:
+    *
+    *  1. All writes to the value must be in the same block
+    *  2. All instructions which read the value must satisfy one of the
+    *     following:
+    *      a. The instruction's only output is a write to the value (i.e.
+    *         x |= 7 is ok.)
+    *      b. The instruction is dominated by the final write to the value
+    *
+    * With these restrictions, we get most of the same benefits of SSA for the
+    * purposes of RA, copy-prop, CSE (with a bit of work), etc. but can still
+    * support multiple writes for constructing values such as instruction
+    * headers, values requiring predicates, etc.
+    *
+    * When is_wlr is true, the list of writes must be maintained in program
+    * order and ibc_validate asserts this.  Newly created logical registers
+    * default is_wlr to true.
+    */
+   bool is_wlr;
+
    /** Index used for printing shaders */
    uint32_t index;
 
@@ -232,6 +253,8 @@ ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader,
 
 #define ibc_reg_foreach_write(ref, reg) \
    list_for_each_entry(ibc_reg_ref, ref, &(reg)->writes, write_link)
+
+struct ibc_instr *ibc_reg_ssa_instr(const ibc_reg *reg);
 
 /** A structure representing a reference to a LOGICAL register
  *
@@ -324,6 +347,19 @@ typedef struct ibc_reg_ref {
       uint64_t _align;
    };
 } ibc_reg_ref;
+
+/**
+ * Returns true if the given ref reads the same value regardless of where the
+ * read occurs in the program (assuming dominance rules still hold).
+ */
+static inline bool
+ibc_reg_ref_read_is_static(ibc_reg_ref ref)
+{
+   if (ref.file == IBC_REG_FILE_NONE || ref.file == IBC_REG_FILE_IMM)
+      return false;
+
+   return ref.reg->is_wlr;
+}
 
 /** Composes an ibc_logical_reg_ref with an ibc_reg_ref
  *
