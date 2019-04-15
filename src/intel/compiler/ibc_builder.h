@@ -265,8 +265,7 @@ ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
    ibc_reg *dest_reg = ibc_builder_new_logical_reg(b, dest_type, 1);
    ibc_reg_ref dest_ref = ibc_typed_ref(dest_reg, dest_type);
 
-   ibc_alu_instr *alu = ibc_build_alu(b, op, dest_ref, src, num_srcs);
-   dest_reg->logical.ssa = &alu->instr;
+   ibc_build_alu(b, op, dest_ref, src, num_srcs);
 
    return dest_ref;
 }

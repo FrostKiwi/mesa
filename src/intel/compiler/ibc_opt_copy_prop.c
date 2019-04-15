@@ -44,20 +44,26 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
    if (ref->file != IBC_REG_FILE_LOGICAL)
       return false;
 
-   if (ref->reg->logical.ssa == NULL)
+   ibc_instr *ssa_instr = ibc_reg_ssa_instr(ref->reg);
+   if (ssa_instr == NULL)
       return false;
 
-   switch (ref->reg->logical.ssa->type) {
+   switch (ssa_instr->type) {
    case IBC_INSTR_TYPE_ALU: {
-      ibc_alu_instr *mov = ibc_instr_as_alu(ref->reg->logical.ssa);
+      ibc_alu_instr *mov = ibc_instr_as_alu(ssa_instr);
 
       /* Must be a non-saturating MOV */
       if (mov->op != IBC_ALU_OP_MOV)
          return false;
 
-      /* The source must also be SSA */
-      if (mov->src[0].ref.file != IBC_REG_FILE_LOGICAL ||
-          mov->src[0].ref.reg->logical.ssa == NULL)
+      /* Is this even possible? */
+      assert(mov->src[0].ref.file != IBC_REG_FILE_NONE);
+
+      if (mov->src[0].ref.file == IBC_REG_FILE_IMM)
+         return false; /* TODO */
+
+      /* The source must be static */
+      if (!ibc_reg_ref_read_is_static(mov->src[0].ref))
          return false;
 
       /* Cannot saturate or type convert */
@@ -77,8 +83,7 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
    }
 
    case IBC_INSTR_TYPE_INTRINSIC: {
-      ibc_intrinsic_instr *intrin =
-         ibc_instr_as_intrinsic(ref->reg->logical.ssa);
+      ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(ssa_instr);
       switch (intrin->op) {
       case IBC_INTRINSIC_OP_SIMD_ZIP:
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
@@ -93,6 +98,16 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
                      intrin->src[i].simd_group + intrin->src[i].simd_width)
                   continue;
             }
+
+            /* Is this even possible? */
+            assert(intrin->src[i].ref.file != IBC_REG_FILE_NONE);
+
+            if (intrin->src[i].ref.file == IBC_REG_FILE_IMM)
+               return false; /* TODO */
+
+            /* The source must be static */
+            if (!ibc_reg_ref_read_is_static(intrin->src[i].ref))
+               return false;
 
             ref->reg = intrin->src[i].ref.reg;
             *ref = ibc_reg_ref_compose(*ref, intrin->src[i].ref.logical,

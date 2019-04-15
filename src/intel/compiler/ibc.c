@@ -42,6 +42,7 @@ ibc_logical_reg_create(ibc_shader *shader,
 {
    ibc_reg *reg = ibc_reg_create(shader, IBC_REG_FILE_LOGICAL);
 
+   reg->is_wlr = true;
    reg->logical.bit_size = bit_size;
    reg->logical.num_comps = num_comps;
    reg->logical.simd_group = simd_group;
@@ -73,6 +74,18 @@ ibc_flag_reg_create(ibc_shader *shader,
    reg->flag.bits = bits;
 
    return reg;
+}
+
+ibc_instr *
+ibc_reg_ssa_instr(const ibc_reg *reg)
+{
+   if (!reg->is_wlr)
+      return NULL;
+
+   if (!list_is_singular(&reg->writes))
+      return NULL;
+
+   return LIST_ENTRY(ibc_reg_ref, reg->writes.next, write_link)->write_instr;
 }
 
 static void

@@ -33,13 +33,14 @@ ibc_alu_instr_is_raw_mov(const ibc_alu_instr *alu)
 }
 
 static unsigned
-logical_reg_stride(const ibc_logical_reg *reg)
+logical_reg_stride(const ibc_reg *reg)
 {
-   if (!reg->ssa || reg->ssa->type != IBC_INSTR_TYPE_ALU)
-      return reg->bit_size / 8;
+   ibc_instr *ssa_instr = ibc_reg_ssa_instr(reg);
+   if (!ssa_instr || ssa_instr->type != IBC_INSTR_TYPE_ALU)
+      return reg->logical.bit_size / 8;
 
-   ibc_alu_instr *alu = ibc_instr_as_alu(reg->ssa);
-   assert(&alu->dest.reg->logical == reg);
+   ibc_alu_instr *alu = ibc_instr_as_alu(ssa_instr);
+   assert(alu->dest.reg == reg);
 
    unsigned stride = ibc_type_byte_size(alu->dest.type);
    for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++)
@@ -60,7 +61,7 @@ reg_size(ibc_reg *reg)
       return reg->hw_grf.size;
    case IBC_REG_FILE_LOGICAL:
       return reg->logical.simd_width *
-             reg->logical.num_comps * logical_reg_stride(&reg->logical);
+             reg->logical.num_comps * logical_reg_stride(reg);
    }
    unreachable("Unsupported register file");
 }
@@ -73,7 +74,7 @@ reg_align(ibc_reg *reg)
       return reg->hw_grf.align;
    case IBC_REG_FILE_LOGICAL:
       return MIN2(reg->logical.simd_width *
-                  logical_reg_stride(&reg->logical), 32);
+                  logical_reg_stride(reg), 32);
    }
    unreachable("Unsupported register file");
 }
@@ -96,7 +97,7 @@ rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
       if (ref->reg->logical.simd_width == 1 && is_src)
          ref->hw_grf.stride = 0;
       else
-         ref->hw_grf.stride = logical_reg_stride(&ref->reg->logical);
+         ref->hw_grf.stride = logical_reg_stride(ref->reg);
       ref->hw_grf.offset = ref->hw_grf.stride * logical.comp *
                            ref->reg->logical.simd_width;
       if (logical.broadcast) {
