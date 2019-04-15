@@ -73,11 +73,6 @@ build_simd_zip(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref *srcs,
    zip->dest = dest;
    zip->num_dest_comps = num_comps;
 
-   /* If the previous def was SSA then the zipped one is */
-   if (zip->dest.file == IBC_REG_FILE_LOGICAL &&
-       zip->dest.reg->logical.ssa)
-      ((ibc_reg *)zip->dest.reg)->logical.ssa = &zip->instr;
-
    ibc_builder_insert_instr(b, &zip->instr);
 }
 
@@ -132,7 +127,6 @@ ibc_lower_simd_width(ibc_shader *shader)
                   ibc_reg *dest_reg =
                      ibc_builder_new_logical_reg(&b, alu->dest.type, 1);
                   dests[i] = ibc_typed_ref(dest_reg, alu->dest.type);
-                  dest_reg->logical.ssa = &split->instr;
                   split->dest = dests[i];
                }
 
