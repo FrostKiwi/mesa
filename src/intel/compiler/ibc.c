@@ -30,6 +30,7 @@ ibc_reg_create(ibc_shader *shader, enum ibc_reg_file file)
 
    reg->file = file;
    list_addtail(&reg->link, &shader->regs);
+   list_inithead(&reg->writes);
 
    return reg;
 }
@@ -77,6 +78,27 @@ ibc_flag_reg_create(ibc_shader *shader,
 static void
 ibc_reg_ref_init(ibc_reg_ref *ref)
 {
+}
+
+static void
+ibc_reg_ref_link_write(ibc_reg_ref *ref, ibc_instr *instr)
+{
+   if (ref->file == IBC_REG_FILE_NONE || ref->file == IBC_REG_FILE_IMM)
+      return;
+
+   ref->write_instr = instr;
+   list_addtail(&ref->write_link, &((ibc_reg *)ref->reg)->writes);
+}
+
+static void
+ibc_reg_ref_unlink_write(ibc_reg_ref *ref, ibc_instr *instr)
+{
+   if (ref->write_instr) {
+      assert(ref->write_instr == instr);
+      assert(ref->file != IBC_REG_FILE_NONE);
+      assert(ref->file != IBC_REG_FILE_IMM);
+      list_del(&ref->write_link);
+   }
 }
 
 static void
@@ -181,6 +203,15 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
    }
 
    unreachable("Invalid IBC instruction type");
+}
+
+void
+ibc_instr_set_write_ref(ibc_instr *instr, ibc_reg_ref *write_ref,
+                        ibc_reg_ref new_ref)
+{
+   ibc_reg_ref_unlink_write(write_ref, instr);
+   *write_ref = new_ref;
+   ibc_reg_ref_link_write(write_ref, instr);
 }
 
 #define IBC_ALU_OP_DECL(OP, _num_srcs, _src_mods)        \
@@ -291,14 +322,30 @@ ibc_shader_create(void *mem_ctx,
    return shader;
 }
 
+static bool
+link_write_cb(ibc_reg_ref *ref, void *_instr)
+{
+   ibc_reg_ref_link_write(ref, _instr);
+   return true;
+}
+
 void
 ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor)
 {
    list_add(&instr->link, cursor.prev);
+   ibc_instr_foreach_write(instr, link_write_cb, instr);
+}
+
+static bool
+unlink_write_cb(ibc_reg_ref *ref, void *_instr)
+{
+   ibc_reg_ref_unlink_write(ref, _instr);
+   return true;
 }
 
 void
 ibc_instr_remove(ibc_instr *instr)
 {
+   ibc_instr_foreach_write(instr, unlink_write_cb, instr);
    list_del(&instr->link);
 }
