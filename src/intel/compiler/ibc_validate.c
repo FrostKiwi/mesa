@@ -74,7 +74,8 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       return;
 
    case IBC_REG_FILE_IMM:
-      /* TODO */
+      ibc_assert(s, !is_write);
+      ibc_assert(s, num_comps == 1);
       return;
 
    case IBC_REG_FILE_LOGICAL:
@@ -123,6 +124,7 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
          ibc_assert(s, lref->byte == 0);
       else
          ibc_assert(s, (lref->byte + 1) * 8 <= lreg->bit_size);
+      ibc_assert(s, num_comps > 0);
       ibc_assert(s, lref->comp + num_comps <= lreg->num_comps);
       if (lref->broadcast) {
          ibc_assert(s, lref->simd_channel >= lreg->simd_group);
