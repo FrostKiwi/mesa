@@ -63,6 +63,14 @@ _ibc_assert(struct ibc_validate_state *s, int line,
 #define ibc_assert(state, expr) _ibc_assert(state, __LINE__, #expr, expr)
 
 static void
+ibc_validate_null_reg_ref(struct ibc_validate_state *s,
+                          const ibc_reg_ref *ref)
+{
+   ibc_assert(s, ref->file == IBC_REG_FILE_NONE);
+   ibc_assert(s, ref->reg == NULL);
+}
+
+static void
 ibc_validate_reg_ref(struct ibc_validate_state *s,
                      const ibc_reg_ref *ref, bool is_write,
                      unsigned num_comps,
@@ -70,7 +78,7 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
 {
    switch (ref->file) {
    case IBC_REG_FILE_NONE:
-      ibc_assert(s, ref->reg == NULL);
+      ibc_validate_null_reg_ref(s, ref);
       return;
 
    case IBC_REG_FILE_IMM:
@@ -242,17 +250,29 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 {
    s->instr = instr;
 
+   ibc_assert(s, instr->simd_group < 32);
+   ibc_assert(s, instr->simd_width <= 32);
+   ibc_assert(s, instr->simd_group + instr->simd_width <= 32);
+   ibc_assert(s, instr->simd_group % instr->simd_width == 0);
+
+   /* We technically don't need to but we require all WE_all instructions to
+    * have a SIMD group of 0.
+    */
+   ibc_assert(s, !instr->we_all || instr->simd_group == 0);
+
    if (instr->predicate != BRW_PREDICATE_NONE) {
       /* The ANY*H or ALL*H predicate group threads into groups so we need to
        * align the instruction bits accordingly.
-       *
-       * TODO: This should go in a helper somewhere.
        */
       unsigned pred_bits = brw_predicate_bits(instr->predicate);
       assert(util_is_power_of_two_nonzero(pred_bits));
+      unsigned pred_simd_group = instr->simd_group & ~(pred_bits - 1);
+      unsigned pred_simd_width = MAX2(instr->simd_width, pred_bits);
       ibc_validate_reg_ref(s, &instr->flag, false, 1,
-                           instr->simd_group & (pred_bits - 1),
-                           MAX2(instr->simd_width, pred_bits));
+                           pred_simd_group, pred_simd_width);
+   } else if (instr->type != IBC_INSTR_TYPE_ALU ||
+              ibc_instr_as_alu(instr)->cmod == BRW_CONDITIONAL_NONE) {
+      ibc_validate_null_reg_ref(s, &instr->flag);
    }
 
    switch (instr->type) {
