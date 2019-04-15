@@ -160,16 +160,6 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
    unreachable("Invalid register file");
 }
 
-static void
-ibc_validate_alu_src(struct ibc_validate_state *s,
-                     const ibc_alu_instr *alu, const ibc_alu_src *src)
-{
-   ibc_assert(s, src->ref.file != IBC_REG_FILE_NONE);
-   ibc_validate_reg_ref(s, &src->ref, false, 1,
-                        alu->instr.simd_group,
-                        alu->instr.simd_width);
-}
-
 static unsigned
 brw_predicate_bits(enum brw_predicate pred)
 {
@@ -196,20 +186,35 @@ brw_predicate_bits(enum brw_predicate pred)
 static void
 ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
 {
+   if (!ibc_assert(s, alu->op < IBC_ALU_NUM_OPS))
+      return;
+
+   const ibc_alu_op_info *alu_info = &ibc_alu_op_infos[alu->op];
+
    if (alu->cmod != BRW_CONDITIONAL_NONE) {
       ibc_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
       ibc_assert(s, alu->instr.flag.file != IBC_REG_FILE_NONE);
+      ibc_assert(s, alu->instr.flag.type == IBC_TYPE_FLAG);
       ibc_validate_reg_ref(s, &alu->instr.flag, true, 1,
                            alu->instr.simd_group,
                            alu->instr.simd_width);
    }
 
-   ibc_validate_reg_ref(s, &alu->dest, true, 1,
+   ibc_assert(s, !alu->saturate ||
+                 ibc_type_base_type(alu->dest.type) == IBC_TYPE_FLOAT);
+
+   ibc_validate_reg_ref(s, &alu->dest, true,
+                        alu->dest.file == IBC_REG_FILE_NONE ? 0 : 1,
                         alu->instr.simd_group,
                         alu->instr.simd_width);
 
-   for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++)
-      ibc_validate_alu_src(s, alu, &alu->src[i]);
+   for (unsigned i = 0; i < alu_info->num_srcs; i++) {
+      ibc_assert(s, alu->src[i].ref.file != IBC_REG_FILE_NONE);
+      ibc_validate_reg_ref(s, &alu->src[i].ref, false, 1,
+                           alu->instr.simd_group,
+                           alu->instr.simd_width);
+      ibc_assert(s, (alu->src[i].mod & ~alu_info->supported_src_mods) == 0);
+   }
 }
 
 static void
