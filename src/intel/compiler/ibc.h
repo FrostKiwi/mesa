@@ -210,6 +210,9 @@ typedef struct ibc_reg {
    /** Link in ibc_shader::regs */
    struct list_head link;
 
+   /** List of all writes to this register */
+   struct list_head writes;
+
    union {
       ibc_logical_reg logical;
       ibc_hw_grf_reg hw_grf;
@@ -227,6 +230,8 @@ ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
 ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader,
                              uint8_t subnr, uint8_t bits);
 
+#define ibc_reg_foreach_write(ref, reg) \
+   list_for_each_entry(ibc_reg_ref, ref, &(reg)->writes, write_link)
 
 /** A structure representing a reference to a LOGICAL register
  *
@@ -295,6 +300,15 @@ typedef struct ibc_reg_ref {
       ibc_logical_reg_ref logical;
       ibc_hw_grf_reg_ref hw_grf;
    };
+
+   /** Link in the ibc_reg::writes list
+    *
+    * This link will be valid if and only if write_instr != NULL
+    */
+   struct list_head write_link;
+
+   /** A pointer to the instruction if this is a write */
+   struct ibc_instr *write_instr;
 
    /** Pointer to the register; NULL if immediate */
    union {
@@ -387,6 +401,9 @@ typedef struct ibc_instr {
 typedef bool (*ibc_reg_ref_cb)(ibc_reg_ref *ref, void *state);
 bool ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state);
 bool ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state);
+
+void ibc_instr_set_write_ref(ibc_instr *instr, ibc_reg_ref *write_ref,
+                             ibc_reg_ref new_ref);
 
 
 /** Enum of IBC ALU opcodes */
