@@ -102,6 +102,10 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
+   case nir_op_i2f32:
+      dest = ibc_MOV(b, dest_type, src[0]);
+      break;
+
    case nir_op_unpack_32_2x16_split_x:
    case nir_op_unpack_32_2x16_split_y:
       src[0].type = dest_type;
@@ -135,6 +139,30 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_bcsel: {
       assert(src[0].type == IBC_TYPE_FLAG);
       dest = ibc_SEL(b, dest_type, src[0], src[1], src[2]);
+      break;
+   }
+
+   case nir_op_fsign: {
+      /* AND(val, 0x80000000) gives the sign bit.
+       *
+       * Predicated OR ORs 1.0 (0x3f800000) with the sign bit if val is not
+       * zero.
+       */
+      ibc_reg_ref is_not_zero = ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_NZ,
+                                        src[0], ibc_imm_zero(src[0].type));
+
+      ibc_reg_ref uint_src = src[0];
+      uint_src.type = IBC_TYPE_UINT | ibc_type_bit_size(src[0].type);
+
+      /* TODO */
+      assert(ibc_type_bit_size(src[0].type) == 32);
+      ibc_reg_ref high_bit = ibc_imm_ud(0x80000000u);
+      ibc_reg_ref one_f = ibc_imm_ud(0x3f800000u);
+
+      dest = ibc_AND(b, uint_src.type, uint_src, high_bit);
+      ibc_alu_instr *or = ibc_build_alu2(b, IBC_ALU_OP_OR, dest, dest, one_f);
+      ibc_instr_set_predicate(&or->instr, is_not_zero,
+                              BRW_PREDICATE_NORMAL, false);
       break;
    }
 
