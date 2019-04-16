@@ -36,23 +36,34 @@ simd_restricted_src(ibc_builder *b, unsigned src_simd_group, ibc_reg_ref src,
    case IBC_REG_FILE_NONE:
    case IBC_REG_FILE_IMM:
       return src;
+
    case IBC_REG_FILE_LOGICAL:
-      if (src.reg->logical.simd_width == 1) {
+      if (src.reg->logical.simd_width == 1)
          return src;
-      } else {
-         return ibc_MOV(b, src.type, src);
-      }
+      break;
+
    case IBC_REG_FILE_HW_GRF:
-      if (src.hw_grf.stride == 0) {
+      if (src.hw_grf.stride == 0)
          return src;
-      } else {
-         assert(b->simd_group >= src_simd_group);
-         src.hw_grf.offset +=
-            src.hw_grf.stride * b->simd_group - src_simd_group;
-         return ibc_MOV(b, src.type, src);
-      }
+
+      assert(b->simd_group >= src_simd_group);
+      src.hw_grf.offset +=
+         src.hw_grf.stride * b->simd_group - src_simd_group;
+      break;
+
+   default:
+      unreachable("Unknown register file");
    }
-   unreachable("Unknown register file");
+
+   /* When we emit the MOV, we need to use a real type */
+   ibc_reg_ref typed_src = src;
+   if (ibc_type_base_type(typed_src.type) == IBC_TYPE_INVALID)
+      typed_src.type |= IBC_TYPE_UINT;
+
+   ibc_reg_ref dest = ibc_MOV(b, typed_src.type, typed_src);
+   dest.type = src.type;
+
+   return dest;
 }
 
 static void
