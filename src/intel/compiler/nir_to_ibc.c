@@ -35,15 +35,14 @@ struct nir_to_ibc_state {
 static enum ibc_type
 ibc_type_for_nir(nir_alu_type ntype)
 {
+   if (nir_alu_type_get_type_size(ntype) == 1)
+      return IBC_TYPE_FLAG;
+
    enum ibc_type stype;
    switch (nir_alu_type_get_base_type(ntype)) {
    case nir_type_int:   stype = IBC_TYPE_INT;   break;
    case nir_type_uint:  stype = IBC_TYPE_UINT;  break;
    case nir_type_float: stype = IBC_TYPE_FLOAT; break;
-   case nir_type_bool:
-      assert(ntype == nir_type_bool1);
-      stype = IBC_TYPE_FLAG;
-      break;
    default:
       unreachable("Unsupported base type");
    }
@@ -67,8 +66,11 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       assert(!instr->src[i].abs);
       assert(!instr->src[i].negate);
 
+      nir_alu_type nir_src_type = nir_op_infos[instr->op].input_types[i];
+      if (nir_alu_type_get_type_size(nir_src_type) == 0)
+         nir_src_type |= instr->src[i].src.ssa->bit_size;
       src[i] = ibc_typed_ref(nti->ssa_to_reg[ssa_src->index],
-                             ibc_type_for_nir(nir_op_infos[instr->op].input_types[i]));
+                             ibc_type_for_nir(nir_src_type));
    }
 
    assert(instr->dest.dest.is_ssa);
@@ -77,10 +79,12 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    assert(instr->dest.dest.ssa.num_components == 1);
    assert(!instr->dest.saturate);
 
+   nir_alu_type nir_dest_type = nir_op_infos[instr->op].output_type;
+   if (nir_alu_type_get_type_size(nir_dest_type) == 0)
+      nir_dest_type |= instr->dest.dest.ssa.bit_size;
+   enum ibc_type dest_type = ibc_type_for_nir(nir_dest_type);
+
    ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
-   enum ibc_type dest_type =
-      ibc_type_for_nir(nir_op_infos[instr->op].output_type) |
-      instr->dest.dest.ssa.bit_size;
    switch (instr->op) {
    case nir_op_u2u8:
    case nir_op_u2u16:
