@@ -129,6 +129,7 @@ libintel_compiler_files = files(
   'ibc.c',
   'ibc.h',
   'ibc_alu_ops.h',
+  'ibc_assign_and_lower_flags.c',
   'ibc_assign_regs.c',
   'ibc_builder.h',
   'ibc_compile.c',
