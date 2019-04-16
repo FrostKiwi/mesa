@@ -440,6 +440,9 @@ bool ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state);
 
 void ibc_instr_set_write_ref(ibc_instr *instr, ibc_reg_ref *write_ref,
                              ibc_reg_ref new_ref);
+void ibc_instr_set_predicate(ibc_instr *instr, ibc_reg_ref flag,
+                             enum brw_predicate predicate,
+                             bool pred_inverse);
 
 
 /** Enum of IBC ALU opcodes */
