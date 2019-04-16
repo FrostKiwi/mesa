@@ -183,6 +183,15 @@ ibc_imm_ref(enum ibc_type type, char *imm, unsigned imm_size)
    return ref;
 }
 
+static inline ibc_reg_ref
+ibc_imm_zero(enum ibc_type type)
+{
+   return (ibc_reg_ref) {
+      .file = IBC_REG_FILE_IMM,
+      .type = type,
+   };
+}
+
 #define IBC_BUILDER_DEFINE_IMM_HELPER(tp, TP, c_type)          \
 static inline ibc_reg_ref                                      \
 ibc_imm_##tp(c_type x)                                         \
