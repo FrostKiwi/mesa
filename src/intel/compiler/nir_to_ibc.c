@@ -312,7 +312,7 @@ nti_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
    };
 
    ibc_builder_push_we_all(b, 8);
-   ibc_build_alu(b, IBC_ALU_OP_MOV, tmp, &g0, 1);
+   ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp, g0);
    ibc_builder_pop(b);
 
    ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 8);
