@@ -36,8 +36,9 @@ ibc_type_suffix(enum ibc_type type)
    case IBC_TYPE_UINT:
    case IBC_TYPE_FLOAT:
    case IBC_TYPE_VECTOR:
-   case IBC_TYPE_FLAG:
       unreachable("Invalid types when printing");
+
+   case IBC_TYPE_FLAG:     return "1b";
 
    case IBC_TYPE_8_BIT:    return "8b";
    case IBC_TYPE_16_BIT:   return "16b";
@@ -64,7 +65,7 @@ ibc_type_suffix(enum ibc_type type)
 }
 
 static void
-print_reg_ref(FILE *fp, const ibc_reg_ref *ref)
+print_reg_ref(FILE *fp, const ibc_reg_ref *ref, bool print_type)
 {
    switch (ref->file) {
    case IBC_REG_FILE_NONE:
@@ -133,9 +134,7 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref)
          fprintf(fp, ".%u", ref->logical.comp);
       if (ref->logical.broadcast)
          fprintf(fp, "<%u>", ref->logical.simd_channel);
-      /* TODO: Should we print a type for flags? */
-      if (ref->type != IBC_TYPE_FLAG)
-         fprintf(fp, ":%s", ibc_type_suffix(ref->type));
+      fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
 
    case IBC_REG_FILE_HW_GRF: {
@@ -186,7 +185,8 @@ print_instr_predicate(FILE *fp, const ibc_instr *instr)
    if (instr->predicate) {
       assert(instr->predicate == BRW_PREDICATE_NORMAL); /* TODO */
       fprintf(fp, "(%s", instr->pred_inverse ? "-" : "+");
-      print_reg_ref(fp, &instr->flag);
+      assert(instr->flag.type == IBC_TYPE_FLAG);
+      print_reg_ref(fp, &instr->flag, false);
       fprintf(fp, ") ");
    }
 }
@@ -242,17 +242,18 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
    fprintf(fp, "%s", alu_op_name(alu->op));
    if (alu->cmod) {
       fprintf(fp, ".%s.", conditional_mod_name(alu->cmod));
-      print_reg_ref(fp, &alu->instr.flag);
+      assert(alu->instr.flag.type == IBC_TYPE_FLAG);
+      print_reg_ref(fp, &alu->instr.flag, false);
    }
    print_instr_group(fp, &alu->instr);
 
    fprintf(fp, "   ");
 
-   print_reg_ref(fp, &alu->dest);
+   print_reg_ref(fp, &alu->dest, true);
 
    for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
       fprintf(fp, "   ");
-      print_reg_ref(fp, &alu->src[i].ref);
+      print_reg_ref(fp, &alu->src[i].ref, true);
    }
 
    fprintf(fp, "\n");
@@ -264,20 +265,20 @@ print_send_instr(FILE *fp, const ibc_send_instr *send)
    print_instr(fp, &send->instr, "send");
 
    fprintf(fp, "   ");
-   print_reg_ref(fp, &send->dest);
+   print_reg_ref(fp, &send->dest, true);
 
    fprintf(fp, "   ");
-   print_reg_ref(fp, &send->payload[0]);
+   print_reg_ref(fp, &send->payload[0], true);
 
    fprintf(fp, "   ");
-   print_reg_ref(fp, &send->payload[1]);
+   print_reg_ref(fp, &send->payload[1], true);
 
    fprintf(fp, "   ");
    if (send->desc.file == IBC_REG_FILE_NONE) {
       fprintf(fp, "0x%08" PRIx32, send->desc_imm);
    } else {
       fprintf(fp, "(");
-      print_reg_ref(fp, &send->desc);
+      print_reg_ref(fp, &send->desc, true);
       fprintf(fp, " | 0x%08" PRIx32 ")", send->desc_imm);
    }
 
@@ -286,7 +287,7 @@ print_send_instr(FILE *fp, const ibc_send_instr *send)
       fprintf(fp, "0x%08" PRIx32, send->ex_desc_imm);
    } else {
       fprintf(fp, "(");
-      print_reg_ref(fp, &send->ex_desc);
+      print_reg_ref(fp, &send->ex_desc, true);
       fprintf(fp, " | 0x%08" PRIx32 ")", send->ex_desc_imm);
    }
 
@@ -310,13 +311,13 @@ print_intrinsic_instr(FILE *fp, const ibc_intrinsic_instr *intrin)
    print_instr(fp, &intrin->instr, intrinsic_op_name(intrin->op));
 
    fprintf(fp, "   ");
-   print_reg_ref(fp, &intrin->dest);
+   print_reg_ref(fp, &intrin->dest, true);
 
    for (unsigned i = 0; i < intrin->num_srcs; i++) {
       fprintf(fp, "   ");
       if (intrin->src[i].num_comps > 1)
          fprintf(fp, "(vec%u)", intrin->src[i].num_comps);
-      print_reg_ref(fp, &intrin->src[i].ref);
+      print_reg_ref(fp, &intrin->src[i].ref, true);
    }
    fprintf(fp, "\n");
 }

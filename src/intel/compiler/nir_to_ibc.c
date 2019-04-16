@@ -41,8 +41,8 @@ ibc_type_for_nir(nir_alu_type ntype)
    case nir_type_uint:  stype = IBC_TYPE_UINT;  break;
    case nir_type_float: stype = IBC_TYPE_FLOAT; break;
    case nir_type_bool:
-      assert(ntype == nir_type_bool32);
-      stype = IBC_TYPE_UINT;
+      assert(ntype == nir_type_bool1);
+      stype = IBC_TYPE_FLAG;
       break;
    default:
       unreachable("Unsupported base type");
@@ -123,13 +123,14 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_SHR(b, dest_type, src[0], src[1]);
       break;
 
-   case nir_op_ieq32:
+   case nir_op_ieq:
+      assert(dest_type == IBC_TYPE_FLAG);
       dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_EQ, src[0], src[1]);
       break;
 
-   case nir_op_b32csel: {
-      ibc_reg_ref flag = ibc_MOV_to_flag(b, BRW_CONDITIONAL_NZ, src[0]);
-      dest = ibc_SEL(b, dest_type, flag, src[1], src[2]);
+   case nir_op_bcsel: {
+      assert(src[0].type == IBC_TYPE_FLAG);
+      dest = ibc_SEL(b, dest_type, src[0], src[1], src[2]);
       break;
    }
 
