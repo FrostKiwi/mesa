@@ -222,11 +222,15 @@ ibc_builder_new_logical_reg(ibc_builder *b, enum ibc_type type,
 
 static inline ibc_alu_instr *
 ibc_build_alu(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref dest,
+              ibc_reg_ref flag, enum brw_conditional_mod cmod,
               ibc_reg_ref *src, unsigned num_srcs)
 {
    ibc_alu_instr *alu = ibc_alu_instr_create(b->shader, op,
                                              b->simd_group, b->simd_width);
    alu->instr.we_all = b->we_all;
+
+   alu->instr.flag = flag;
+   alu->cmod = cmod;
 
    for (unsigned i = 0; i < num_srcs; i++)
       alu->src[i].ref = src[i];
@@ -242,7 +246,8 @@ ibc_build_alu1(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref dest,
                ibc_reg_ref src0)
 {
    ibc_reg_ref srcs[] = { src0 };
-   return ibc_build_alu(b, op, dest, srcs, 1);
+   return ibc_build_alu(b, op, dest, ibc_null(IBC_TYPE_FLAG),
+                        BRW_CONDITIONAL_NONE, srcs, 1);
 }
 
 static inline ibc_alu_instr *
@@ -250,12 +255,13 @@ ibc_build_alu2(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref dest,
                ibc_reg_ref src0, ibc_reg_ref src1)
 {
    ibc_reg_ref srcs[] = { src0, src1 };
-   return ibc_build_alu(b, op, dest, srcs, 2);
+   return ibc_build_alu(b, op, dest, ibc_null(IBC_TYPE_FLAG),
+                        BRW_CONDITIONAL_NONE, srcs, 2);
 }
 
-static inline ibc_reg_ref
-ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
-                  ibc_reg_ref *src, unsigned num_srcs)
+static inline enum ibc_type
+_ibc_builder_dest_type(enum ibc_type dest_type,
+                       ibc_reg_ref *src, unsigned num_srcs)
 {
    if (ibc_type_bit_size(dest_type) == 0) {
       unsigned max_bit_size = 0;
@@ -263,12 +269,34 @@ ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
          max_bit_size = MAX2(max_bit_size, ibc_type_bit_size(src[i].type));
       dest_type |= max_bit_size;
    }
+   return dest_type;
+}
 
+static inline ibc_reg_ref
+ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
+                  ibc_reg_ref *src, unsigned num_srcs)
+{
+   dest_type = _ibc_builder_dest_type(dest_type, src, num_srcs);
    ibc_reg_ref dest_ref = ibc_builder_new_logical_reg(b, dest_type, 1);
 
-   ibc_build_alu(b, op, dest_ref, src, num_srcs);
+   ibc_build_alu(b, op, dest_ref, ibc_null(IBC_TYPE_FLAG),
+                 BRW_CONDITIONAL_NONE, src, num_srcs);
 
    return dest_ref;
+}
+
+static inline ibc_reg_ref
+ibc_build_ssa_flag_alu(ibc_builder *b, enum ibc_alu_op op,
+                       enum ibc_type dest_type,
+                       enum brw_conditional_mod cmod,
+                       ibc_reg_ref *src, unsigned num_srcs)
+{
+   ibc_reg_ref flag = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
+
+   dest_type = _ibc_builder_dest_type(dest_type, src, num_srcs);
+   ibc_build_alu(b, op, ibc_null(dest_type), flag, cmod, src, num_srcs);
+
+   return flag;
 }
 
 #define IBC_BUILDER_DEFINE_ALU1(OP)                                  \
@@ -299,17 +327,55 @@ ibc_##OP(ibc_builder *b, enum ibc_type dest_type,                    \
 }
 
 IBC_BUILDER_DEFINE_ALU1(MOV)
-IBC_BUILDER_DEFINE_ALU2(SEL)
 IBC_BUILDER_DEFINE_ALU2(AND)
 IBC_BUILDER_DEFINE_ALU2(OR)
 IBC_BUILDER_DEFINE_ALU2(SHR)
 IBC_BUILDER_DEFINE_ALU2(SHL)
-IBC_BUILDER_DEFINE_ALU2(CMP)
 IBC_BUILDER_DEFINE_ALU2(ADD)
 
 #undef IBC_BUILDER_DEFINE_ALU1
 #undef IBC_BUILDER_DEFINE_ALU2
 #undef IBC_BUILDER_DEFINE_ALU3
+
+static inline ibc_reg_ref
+ibc_MOV_to_flag(ibc_builder *b, enum brw_conditional_mod cmod, ibc_reg_ref src)
+{
+   return ibc_build_ssa_flag_alu(b, IBC_ALU_OP_MOV, src.type, cmod, &src, 1);
+}
+
+static inline ibc_reg_ref
+ibc_SEL(ibc_builder *b, enum ibc_type dest_type,
+        ibc_reg_ref flag, ibc_reg_ref src0, ibc_reg_ref src1)
+{
+   ibc_reg_ref srcs[] = { src0, src1 };
+   ibc_reg_ref dest = ibc_build_ssa_alu(b, IBC_ALU_OP_SEL, dest_type, srcs, 2);
+   ibc_alu_instr *sel = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+   ibc_instr_set_predicate(&sel->instr, flag, BRW_PREDICATE_NORMAL, false);
+   return dest;
+}
+
+static inline ibc_reg_ref
+ibc_CMP(ibc_builder *b, enum ibc_type dest_type,
+        enum brw_conditional_mod cmod,
+        ibc_reg_ref src0, ibc_reg_ref src1)
+{
+   ibc_reg_ref srcs[] = { src0, src1 };
+   if (dest_type == IBC_TYPE_FLAG) {
+      return ibc_build_ssa_flag_alu(b, IBC_ALU_OP_CMP, IBC_TYPE_UINT,
+                                    cmod, srcs, ARRAY_SIZE(srcs));
+   } else {
+      dest_type = _ibc_builder_dest_type(dest_type, srcs, ARRAY_SIZE(srcs));
+      ibc_reg_ref dest = ibc_builder_new_logical_reg(b, dest_type, 1);
+
+      /* We need a flag register even though the result may never be used */
+      ibc_reg_ref flag = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
+
+      ibc_build_alu(b, IBC_ALU_OP_CMP, dest, flag, cmod,
+                    srcs, ARRAY_SIZE(srcs));
+
+      return dest;
+   }
+}
 
 static inline ibc_reg_ref
 ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,

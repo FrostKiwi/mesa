@@ -227,6 +227,17 @@ ibc_instr_set_write_ref(ibc_instr *instr, ibc_reg_ref *write_ref,
    ibc_reg_ref_link_write(write_ref, instr);
 }
 
+void
+ibc_instr_set_predicate(ibc_instr *instr, ibc_reg_ref flag,
+                        enum brw_predicate predicate,
+                        bool pred_inverse)
+{
+   /* We don't do any use tracking right now so we can just assign this */
+   instr->flag = flag;
+   instr->predicate = predicate,
+   instr->pred_inverse = pred_inverse;
+}
+
 #define IBC_ALU_OP_DECL(OP, _num_srcs, _src_mods)        \
    {                                                     \
       .name = #OP,                                       \
