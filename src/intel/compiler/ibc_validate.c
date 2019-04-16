@@ -260,6 +260,7 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
 
    for (unsigned i = 0; i < alu_info->num_srcs; i++) {
       ibc_assert(s, alu->src[i].ref.file != IBC_REG_FILE_NONE);
+      ibc_assert(s, ibc_type_base_type(alu->src[i].ref.type) != IBC_TYPE_INVALID);
       ibc_validate_reg_ref(s, &alu->src[i].ref, false, 0, 1,
                            alu->instr.simd_group,
                            alu->instr.simd_width);
