@@ -124,9 +124,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                }
 
                if (alu->dest.file != IBC_REG_FILE_NONE) {
-                  ibc_reg *dest_reg =
-                     ibc_builder_new_logical_reg(&b, alu->dest.type, 1);
-                  dests[i] = ibc_typed_ref(dest_reg, alu->dest.type);
+                  dests[i] = ibc_builder_new_logical_reg(&b, alu->dest.type, 1);
                   split->dest = dests[i];
                }
 
@@ -187,10 +185,8 @@ ibc_lower_simd_width(ibc_shader *shader)
                }
 
                if (intrin->dest.file != IBC_REG_FILE_NONE) {
-                  ibc_reg *dest_reg =
-                     ibc_builder_new_logical_reg(&b, intrin->dest.type,
-                                                 intrin->num_dest_comps);
-                  dests[i] = ibc_typed_ref(dest_reg, intrin->dest.type);
+                  dests[i] = ibc_builder_new_logical_reg(&b, intrin->dest.type,
+                                                         intrin->num_dest_comps);
                   split->dest = dests[i];
                }
 
