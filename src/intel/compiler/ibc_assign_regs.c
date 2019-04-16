@@ -35,6 +35,9 @@ ibc_alu_instr_is_raw_mov(const ibc_alu_instr *alu)
 static unsigned
 logical_reg_stride(const ibc_reg *reg)
 {
+   assert(reg->file == IBC_REG_FILE_LOGICAL);
+   assert(reg->logical.bit_size >= 8);
+
    ibc_instr *ssa_instr = ibc_reg_ssa_instr(reg);
    if (!ssa_instr || ssa_instr->type != IBC_INSTR_TYPE_ALU)
       return reg->logical.bit_size / 8;
@@ -88,27 +91,22 @@ rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
 
    assert(ref->reg->file == IBC_REG_FILE_LOGICAL);
 
-   if (ref->reg->logical.bit_size == 1) {
-      assert(ref->logical.comp == 0);
-      ref->file = IBC_REG_FILE_FLAG;
+   ibc_logical_reg_ref logical = ref->logical;
+   ref->file = IBC_REG_FILE_HW_GRF;
+   if (ref->reg->logical.simd_width == 1 && is_src)
+      ref->hw_grf.stride = 0;
+   else
+      ref->hw_grf.stride = logical_reg_stride(ref->reg);
+   ref->hw_grf.offset = ref->hw_grf.stride * logical.comp *
+                        ref->reg->logical.simd_width;
+   if (logical.broadcast) {
+      ref->hw_grf.offset += ref->hw_grf.stride * logical.simd_channel;
+      ref->hw_grf.stride = 0;
    } else {
-      ibc_logical_reg_ref logical = ref->logical;
-      ref->file = IBC_REG_FILE_HW_GRF;
-      if (ref->reg->logical.simd_width == 1 && is_src)
-         ref->hw_grf.stride = 0;
-      else
-         ref->hw_grf.stride = logical_reg_stride(ref->reg);
-      ref->hw_grf.offset = ref->hw_grf.stride * logical.comp *
-                           ref->reg->logical.simd_width;
-      if (logical.broadcast) {
-         ref->hw_grf.offset += ref->hw_grf.stride * logical.simd_channel;
-         ref->hw_grf.stride = 0;
-      } else {
-         ref->hw_grf.offset += ref->hw_grf.stride *
-                               (ref_simd_group - ref->reg->logical.simd_group);
-      }
-      ref->hw_grf.offset += logical.byte;
+      ref->hw_grf.offset += ref->hw_grf.stride *
+                            (ref_simd_group - ref->reg->logical.simd_group);
    }
+   ref->hw_grf.offset += logical.byte;
 }
 
 void
@@ -166,8 +164,7 @@ ibc_assign_regs(ibc_shader *shader)
    }
 
    ibc_foreach_reg(reg, shader) {
-      /* TODO: Properly allocate flag registers */
-      if (reg->file == IBC_REG_FILE_LOGICAL && reg->logical.bit_size == 1)
+      if (reg->file == IBC_REG_FILE_FLAG)
          continue;
 
       assert(reg->file == IBC_REG_FILE_LOGICAL ||
@@ -191,9 +188,9 @@ ibc_assign_regs(ibc_shader *shader)
 
    ibc_foreach_block(block, shader) {
       ibc_foreach_instr(instr, block) {
-         /* Flags are the same for all instruction types */
-         rewrite_reg_ref(&instr->flag, instr->simd_group,
-                         logical_grfs, false);
+         /* Flags should already have been lowered */
+         assert(instr->flag.file == IBC_REG_FILE_NONE ||
+                instr->flag.file == IBC_REG_FILE_FLAG);
 
          /* Right now, only ALU instructions use logical regs */
          switch (instr->type) {
