@@ -134,7 +134,9 @@ ibc_opt_copy_prop(ibc_shader *shader)
    ibc_foreach_block(block, shader) {
       ibc_foreach_instr_safe(instr, block) {
 
-         /* TODO: Handle predicate flag? */
+         if (try_copy_prop_reg_ref(&instr->flag, NULL,
+                                   instr->simd_group, instr->simd_width))
+            progress = true;
 
          switch (instr->type) {
          case IBC_INSTR_TYPE_ALU: {
