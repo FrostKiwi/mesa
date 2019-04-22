@@ -344,6 +344,20 @@ ibc_MOV_to_flag(ibc_builder *b, enum brw_conditional_mod cmod, ibc_reg_ref src)
 }
 
 static inline ibc_reg_ref
+ibc_MOV_raw(ibc_builder *b, ibc_reg_ref src)
+{
+   ibc_reg_ref typed_src = src;
+   if (ibc_type_base_type(typed_src.type) == IBC_TYPE_INVALID)
+      typed_src.type |= IBC_TYPE_UINT;
+
+   ibc_reg_ref dest = ibc_MOV(b, typed_src.type, typed_src);
+
+   /* Return the same type as src even if it is just a BIT type */
+   dest.type = src.type;
+   return dest;
+}
+
+static inline ibc_reg_ref
 ibc_SEL(ibc_builder *b, enum ibc_type dest_type,
         ibc_reg_ref flag, ibc_reg_ref src0, ibc_reg_ref src1)
 {
