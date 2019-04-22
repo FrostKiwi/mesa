@@ -140,6 +140,7 @@ libintel_compiler_files = files(
   'ibc_opt_copy_prop.c',
   'ibc_opt_dead_code.c',
   'ibc_print.c',
+  'ibc_split_logical_regs.c',
   'ibc_validate.c',
 )
 
