@@ -31,6 +31,9 @@ ibc_lower_surface_access(ibc_shader *shader)
 {
    bool progress = false;
 
+   ibc_builder b;
+   ibc_builder_init(&b, shader, 32);
+
    ibc_foreach_block(block, shader) {
       ibc_foreach_instr_safe(instr, block) {
          if (instr->type != IBC_INSTR_TYPE_INTRINSIC)
@@ -51,6 +54,10 @@ ibc_lower_surface_access(ibc_shader *shader)
             continue;
          }
 
+         b.cursor = ibc_before_instr(instr);
+         assert(b._group_stack_size == 0);
+         ibc_builder_push_group(&b, instr->simd_group, instr->simd_width);
+
          ibc_send_instr *send = ibc_send_instr_create(shader,
                                                       instr->simd_group,
                                                       instr->simd_width);
@@ -65,13 +72,15 @@ ibc_lower_surface_access(ibc_shader *shader)
          send->dest = intrin->dest;
          send->rlen = intrin->num_dest_comps * instr->simd_width / 8;
 
-         send->payload[0] = intrin->src[1].ref;
+         send->payload[0] = ibc_MOV_raw(&b, intrin->src[1].ref);
          send->mlen = instr->simd_width / 8;
 
-         send->payload[1] = intrin->src[2].ref;
+         send->payload[1] = ibc_MOV_raw(&b, intrin->src[2].ref);
          send->ex_mlen = intrin->src[2].num_comps * instr->simd_width / 8;
 
-         ibc_instr_insert(&send->instr, ibc_after_instr(&intrin->instr));
+         ibc_builder_insert_instr(&b, &send->instr);
+         ibc_builder_pop(&b);
+
          ibc_instr_remove(&intrin->instr);
          progress = true;
       }
