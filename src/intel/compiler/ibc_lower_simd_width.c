@@ -27,56 +27,47 @@
 #include "brw_eu.h"
 
 static ibc_reg_ref
+simd_offset_ref(ibc_reg_ref ref, unsigned simd_group_offset)
+{
+   switch (ref.file) {
+   case IBC_REG_FILE_LOGICAL:
+      return ref;
+
+   case IBC_REG_FILE_HW_GRF:
+      if (ref.hw_grf.stride == 0)
+         return ref;
+
+      ref.hw_grf.offset += simd_group_offset * ref.hw_grf.stride;
+      return ref;
+
+   default:
+      unreachable("Unhandled register file");
+   }
+}
+
+static ibc_reg_ref
 simd_restricted_src(ibc_builder *b, unsigned src_simd_group, ibc_reg_ref src,
                     unsigned num_comps)
 {
-   assert(num_comps == 1);
-
-   switch (src.file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   if (src.file == IBC_REG_FILE_NONE || src.file == IBC_REG_FILE_IMM)
       return src;
 
-   case IBC_REG_FILE_LOGICAL:
-      if (src.reg->logical.simd_width == 1)
-         return src;
-      break;
+   src = simd_offset_ref(src, b->simd_group - src_simd_group);
 
-   case IBC_REG_FILE_HW_GRF:
-      if (src.hw_grf.stride == 0)
-         return src;
-
-      assert(b->simd_group >= src_simd_group);
-      src.hw_grf.offset +=
-         src.hw_grf.stride * b->simd_group - src_simd_group;
-      break;
-
-   default:
-      unreachable("Unknown register file");
-   }
+   /* If the source is WLR, then we have two cases:
+    *
+    *  1. This read is dominated by the final write.  In this case, it's
+    *     "locked" and we don't need a MOV instruction.
+    *
+    *  2. This is self-read which contributes to building the WLR value.  In
+    *     this case, we require things to be trivially splittable.
+    *
+    * In either case, the right thing to do is to just return src.
+    */
+   if (src.reg->is_wlr)
+      return src;
 
    return ibc_MOV_raw(b, src);
-}
-
-static void
-build_simd_zip(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref *srcs,
-               unsigned src_simd_width, unsigned num_srcs, unsigned num_comps)
-{
-   ibc_intrinsic_instr *zip =
-      ibc_intrinsic_instr_create(b->shader, IBC_INTRINSIC_OP_SIMD_ZIP,
-                                 b->simd_group, b->simd_width, num_srcs);
-
-   for (unsigned i = 0; i < num_srcs; i++) {
-      zip->src[i].ref = srcs[i];
-      zip->src[i].simd_width = src_simd_width;
-      zip->src[i].simd_group = i * src_simd_width;
-      zip->src[i].num_comps = num_comps;
-   }
-
-   zip->dest = dest;
-   zip->num_dest_comps = num_comps;
-
-   ibc_builder_insert_instr(b, &zip->instr);
 }
 
 bool
@@ -89,23 +80,86 @@ ibc_lower_simd_width(ibc_shader *shader)
 
    ibc_foreach_block(block, shader) {
       ibc_foreach_instr_safe(instr, block) {
-         switch (instr->type) {
-         case IBC_INSTR_TYPE_ALU: {
-            ibc_alu_instr *alu = ibc_instr_as_alu(instr);
+         if (instr->type == IBC_INSTR_TYPE_SEND ||
+             instr->type == IBC_INSTR_TYPE_JUMP)
+            continue;
 
-            unsigned max_width = 16; /* TODO */
-            if (alu->instr.simd_width <= max_width)
-               continue;
+         assert(instr->type == IBC_INSTR_TYPE_ALU ||
+                instr->type == IBC_INSTR_TYPE_INTRINSIC);
 
-            /* Insert after this instruction */
-            b.cursor = ibc_after_instr(&alu->instr);
-            assert(b._group_stack_size == 0);
-            ibc_builder_push_group(&b, alu->instr.simd_group,
-                                   alu->instr.simd_width);
+         const unsigned split_simd_width = 16; /* TODO */
+         if (instr->simd_width <= split_simd_width)
+            continue;
 
-            ibc_reg_ref dests[4];
-            for (unsigned i = 0; i < alu->instr.simd_width / max_width; i++) {
-               ibc_builder_push_group(&b, i * max_width, max_width);
+         const unsigned num_splits = instr->simd_width / split_simd_width;
+
+         /* We've decided to split.  Set up the builder */
+         assert(b._group_stack_size == 0);
+         ibc_builder_push_group(&b, instr->simd_group,
+                                    instr->simd_width);
+         b.cursor = ibc_after_instr(instr);
+
+         ibc_reg_ref *dest = instr->type == IBC_INSTR_TYPE_ALU ?
+                             &ibc_instr_as_alu(instr)->dest :
+                             &ibc_instr_as_intrinsic(instr)->dest;
+         const unsigned num_dest_comps = 1; /* TODO */
+
+         /* 4 == 32 (max simd width) / 8 (min simd width) */
+         ibc_reg_ref split_dests[4];
+         assert(num_splits <= ARRAY_SIZE(split_dests));
+         if (dest->file == IBC_REG_FILE_NONE) {
+            /* If the destination is NONE, just copy it to all the split
+             * instruction destinations.
+             */
+            for (unsigned i = 0; i < num_splits; i++)
+               split_dests[i] = *dest;
+         } else if (dest->reg->is_wlr &&
+                    !list_is_singular(&dest->reg->writes)) {
+            /* WLR multi-writes are expected to be trivially splittable and
+             * we have to naively split them in order to maintain the WLR
+             * properties.
+             */
+            for (unsigned i = 0; i < num_splits; i++)
+               split_dests[i] = simd_offset_ref(*dest, i * split_simd_width);
+         } else if (dest->file != IBC_REG_FILE_NONE) {
+            /* For everything else, we emit a SIMD zip after the instruction
+             * we're splitting.
+             */
+            ibc_intrinsic_instr *zip =
+               ibc_intrinsic_instr_create(b.shader, IBC_INTRINSIC_OP_SIMD_ZIP,
+                                          b.simd_group, b.simd_width,
+                                          num_splits);
+
+            for (unsigned i = 0; i < num_splits; i++) {
+               ibc_reg *split_dest_reg =
+                  ibc_logical_reg_create(b.shader,
+                                         ibc_type_bit_size(dest->type),
+                                         num_dest_comps,
+                                         b.simd_group + i * split_simd_width,
+                                         split_simd_width);
+
+               zip->src[i].ref = ibc_ref(split_dest_reg);
+               zip->src[i].simd_group = split_dest_reg->logical.simd_group;
+               zip->src[i].simd_width = split_dest_reg->logical.simd_width;
+               zip->src[i].num_comps = split_dest_reg->logical.num_comps;
+
+               split_dests[i] = ibc_typed_ref(split_dest_reg, dest->type);
+            }
+
+            zip->dest = *dest;
+            zip->num_dest_comps = num_dest_comps;
+            ibc_builder_insert_instr(&b, &zip->instr);
+
+            /* We want to insert the split instructions before the zip. */
+            b.cursor = ibc_before_instr(&zip->instr);
+         }
+
+         for (unsigned i = 0; i < num_splits; i++) {
+            ibc_builder_push_group(&b, i * split_simd_width, split_simd_width);
+
+            switch (instr->type) {
+            case IBC_INSTR_TYPE_ALU: {
+               ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
                ibc_alu_instr *split =
                   ibc_alu_instr_create(shader, alu->op,
@@ -126,50 +180,14 @@ ibc_lower_simd_width(ibc_shader *shader)
                   split->instr.flag = alu->instr.flag;
                }
 
-               if (alu->dest.file != IBC_REG_FILE_NONE) {
-                  dests[i] = ibc_builder_new_logical_reg(&b, alu->dest.type, 1);
-                  split->dest = dests[i];
-               }
+               split->dest = split_dests[i];
 
                ibc_builder_insert_instr(&b, &split->instr);
-
-               ibc_builder_pop(&b);
+               break;
             }
 
-            if (alu->dest.file != IBC_REG_FILE_NONE) {
-               build_simd_zip(&b, alu->dest, dests, max_width,
-                              alu->instr.simd_width / max_width, 1);
-            }
-
-            ibc_instr_remove(&alu->instr);
-
-            ibc_builder_pop(&b);
-            progress = true;
-            continue;
-         }
-
-         case IBC_INSTR_TYPE_SEND:
-            /* We can't do anything with these.  They had better already be
-             * able to handle the bit size.
-             */
-            continue;
-
-         case IBC_INSTR_TYPE_INTRINSIC: {
-            ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-
-            unsigned max_width = 16; /* TODO */
-            if (intrin->instr.simd_width <= max_width)
-               continue;
-
-            /* Insert after this instruction */
-            b.cursor = ibc_after_instr(&intrin->instr);
-            assert(b._group_stack_size == 0);
-            ibc_builder_push_group(&b, intrin->instr.simd_group,
-                                   intrin->instr.simd_width);
-
-            ibc_reg_ref dests[4];
-            for (unsigned i = 0; i < intrin->instr.simd_width / max_width; i++) {
-               ibc_builder_push_group(&b, i * max_width, max_width);
+            case IBC_INSTR_TYPE_INTRINSIC: {
+               ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
 
                ibc_intrinsic_instr *split =
                   ibc_intrinsic_instr_create(shader, intrin->op,
@@ -187,12 +205,6 @@ ibc_lower_simd_width(ibc_shader *shader)
                   split->src[j].simd_width = b.simd_width;
                }
 
-               if (intrin->dest.file != IBC_REG_FILE_NONE) {
-                  dests[i] = ibc_builder_new_logical_reg(&b, intrin->dest.type,
-                                                         intrin->num_dest_comps);
-                  split->dest = dests[i];
-               }
-
                split->instr.predicate = intrin->instr.predicate;
                split->instr.pred_inverse = intrin->instr.pred_inverse;
                if (intrin->instr.flag.file != IBC_REG_FILE_NONE) {
@@ -200,28 +212,22 @@ ibc_lower_simd_width(ibc_shader *shader)
                   split->instr.flag = intrin->instr.flag;
                }
 
+               split->dest = split_dests[i];
+
                ibc_builder_insert_instr(&b, &split->instr);
-
-               ibc_builder_pop(&b);
+               break;
             }
 
-            if (intrin->dest.file != IBC_REG_FILE_NONE) {
-               build_simd_zip(&b, intrin->dest, dests, max_width,
-                              intrin->instr.simd_width / max_width,
-                              intrin->num_dest_comps);
+            default:
+               unreachable("Unhandled IBC instruction type");
             }
-
-            ibc_instr_remove(&intrin->instr);
 
             ibc_builder_pop(&b);
-            progress = true;
-            continue;
          }
 
-         case IBC_INSTR_TYPE_JUMP:
-            continue;
-         }
-         unreachable("Unsupported IBC instruction type");
+         ibc_instr_remove(instr);
+         ibc_builder_pop(&b);
+         progress = true;
       }
    }
 
