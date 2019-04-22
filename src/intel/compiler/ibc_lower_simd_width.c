@@ -55,15 +55,7 @@ simd_restricted_src(ibc_builder *b, unsigned src_simd_group, ibc_reg_ref src,
       unreachable("Unknown register file");
    }
 
-   /* When we emit the MOV, we need to use a real type */
-   ibc_reg_ref typed_src = src;
-   if (ibc_type_base_type(typed_src.type) == IBC_TYPE_INVALID)
-      typed_src.type |= IBC_TYPE_UINT;
-
-   ibc_reg_ref dest = ibc_MOV(b, typed_src.type, typed_src);
-   dest.type = src.type;
-
-   return dest;
+   return ibc_MOV_raw(b, src);
 }
 
 static void
