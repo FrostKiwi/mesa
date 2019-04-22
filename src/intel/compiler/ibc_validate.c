@@ -70,6 +70,18 @@ ibc_validate_null_reg_ref(struct ibc_validate_state *s,
    ibc_assert(s, ref->reg == NULL);
 }
 
+static bool
+ref_is_none_or_reg(ibc_reg_ref *ref, void *_reg)
+{
+   if (ref->file == IBC_REG_FILE_NONE)
+      return true;
+
+   if (ref->file == IBC_REG_FILE_IMM)
+      return false;
+
+   return ref->reg == _reg;
+}
+
 static void
 ibc_validate_reg_ref(struct ibc_validate_state *s,
                      const ibc_reg_ref *ref, bool is_write,
@@ -119,6 +131,26 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       }
    } else {
       ibc_assert(s, ref->write_instr == NULL);
+      if (ref->reg->is_wlr) {
+         /* All instructions which read the value must satisfy one of the
+          * following:
+          *  a. The instruction's only output is a write to the value (i.e.
+          *     x |= 7 is ok.)
+          *  b. The instruction is dominated by the final write to the value
+          *
+          * The first condition we check directly.  The second is a bit
+          * trickier because we don't actually have dominance information.
+          * However, because we validate destinations after sources in
+          * instructions, we can get a reasonable approximation by asserting
+          * that we've see the final write.  We do this by checking if the
+          * next write is the write list sentinel.
+          */
+         ibc_assert(s, (reg_state &&
+                        reg_state->next_write_link == &ref->reg->writes) ||
+                       ibc_instr_foreach_write((ibc_instr *)s->instr,
+                                               ref_is_none_or_reg,
+                                               (ibc_reg *)ref->reg));
+      }
    }
 
    switch (ref->file) {
@@ -241,6 +273,16 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
 
    const ibc_alu_op_info *alu_info = &ibc_alu_op_infos[alu->op];
 
+   for (unsigned i = 0; i < alu_info->num_srcs; i++) {
+      ibc_assert(s, alu->src[i].ref.file != IBC_REG_FILE_NONE);
+      ibc_assert(s, alu->src[i].ref.type == IBC_TYPE_FLAG ||
+                    ibc_type_base_type(alu->src[i].ref.type) != IBC_TYPE_INVALID);
+      ibc_validate_reg_ref(s, &alu->src[i].ref, false, 0, 1,
+                           alu->instr.simd_group,
+                           alu->instr.simd_width);
+      ibc_assert(s, (alu->src[i].mod & ~alu_info->supported_src_mods) == 0);
+   }
+
    if (alu->cmod != BRW_CONDITIONAL_NONE) {
       ibc_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
       ibc_assert(s, alu->instr.flag.file != IBC_REG_FILE_NONE);
@@ -257,16 +299,6 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
                         0, alu->dest.file == IBC_REG_FILE_NONE ? 0 : 1,
                         alu->instr.simd_group,
                         alu->instr.simd_width);
-
-   for (unsigned i = 0; i < alu_info->num_srcs; i++) {
-      ibc_assert(s, alu->src[i].ref.file != IBC_REG_FILE_NONE);
-      ibc_assert(s, alu->src[i].ref.type == IBC_TYPE_FLAG ||
-                    ibc_type_base_type(alu->src[i].ref.type) != IBC_TYPE_INVALID);
-      ibc_validate_reg_ref(s, &alu->src[i].ref, false, 0, 1,
-                           alu->instr.simd_group,
-                           alu->instr.simd_width);
-      ibc_assert(s, (alu->src[i].mod & ~alu_info->supported_src_mods) == 0);
-   }
 }
 
 static void
@@ -293,15 +325,6 @@ ibc_validate_send_instr(struct ibc_validate_state *s,
       ibc_validate_null_reg_ref(s, &send->ex_desc);
    }
 
-   if (send->rlen > 0) {
-      ibc_validate_reg_ref(s, &send->dest, true,
-                           send->rlen * 32, 0,
-                           send->instr.simd_group,
-                           send->instr.simd_width);
-   } else {
-      ibc_validate_null_reg_ref(s, &send->dest);
-   }
-
    ibc_assert(s, send->mlen > 0);
    ibc_validate_reg_ref(s, &send->payload[0], false,
                         send->mlen * 32, 0,
@@ -316,17 +339,21 @@ ibc_validate_send_instr(struct ibc_validate_state *s,
    } else {
       ibc_validate_null_reg_ref(s, &send->payload[1]);
    }
+
+   if (send->rlen > 0) {
+      ibc_validate_reg_ref(s, &send->dest, true,
+                           send->rlen * 32, 0,
+                           send->instr.simd_group,
+                           send->instr.simd_width);
+   } else {
+      ibc_validate_null_reg_ref(s, &send->dest);
+   }
 }
 
 static void
 ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
                              const ibc_intrinsic_instr *intrin)
 {
-   ibc_validate_reg_ref(s, &intrin->dest, true,
-                        0, intrin->num_dest_comps,
-                        intrin->instr.simd_group,
-                        intrin->instr.simd_width);
-
    for (unsigned i = 0; i < intrin->num_srcs; i++) {
       ibc_assert(s, intrin->src[i].simd_group >= intrin->instr.simd_group);
       ibc_assert(s, intrin->src[i].simd_group + intrin->src[i].simd_width <=
@@ -336,6 +363,11 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
                            intrin->src[i].simd_group,
                            intrin->src[i].simd_width);
    }
+
+   ibc_validate_reg_ref(s, &intrin->dest, true,
+                        0, intrin->num_dest_comps,
+                        intrin->instr.simd_group,
+                        intrin->instr.simd_width);
 }
 
 static void
