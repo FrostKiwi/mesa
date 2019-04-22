@@ -692,6 +692,8 @@ bool ibc_opt_dead_code(ibc_shader *shader);
 
 void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 
+bool ibc_split_logical_regs(ibc_shader *shader);
+
 unsigned *ibc_to_binary(const ibc_shader *shader, void *mem_ctx,
                         unsigned *program_size);
 
