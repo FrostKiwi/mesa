@@ -179,15 +179,12 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 static ibc_reg_ref
 nti_reduction_op_identity(nir_op op, enum ibc_type type)
 {
-   /* Byte immediates aren't a thing.  We can just use words */
-   const unsigned imm_bit_size = MAX2(ibc_type_bit_size(type), 16);
-   enum ibc_type imm_type = ibc_type_base_type(type) | imm_bit_size;
-
-   nir_const_value identity = nir_alu_binop_identity(op, imm_bit_size);
-   switch (imm_bit_size) {
-   case 16: return ibc_imm_ref(imm_type, (char *)&identity.u16, 2);
-   case 32: return ibc_imm_ref(imm_type, (char *)&identity.u16, 4);
-   case 64: return ibc_imm_ref(imm_type, (char *)&identity.u16, 8);
+   const unsigned bit_size = ibc_type_bit_size(type);
+   nir_const_value identity = nir_alu_binop_identity(op, bit_size);
+   switch (bit_size) {
+   case 16: return ibc_imm_ref(type, (char *)&identity.u16, 2);
+   case 32: return ibc_imm_ref(type, (char *)&identity.u16, 4);
+   case 64: return ibc_imm_ref(type, (char *)&identity.u16, 8);
    default:
       unreachable("Invalid type size");
    }
@@ -304,17 +301,19 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
    case nir_intrinsic_inclusive_scan: {
       nir_op redop = nir_intrinsic_reduction_op(instr);
-      enum ibc_type alu_type =
-         ibc_type_for_nir(nir_op_infos[redop].input_types[0] |
-                          instr->src[0].ssa->bit_size);
       ibc_reg_ref src =
-         ibc_typed_ref(nti->ssa_to_reg[instr->src[0].ssa->index], alu_type);
+         ibc_typed_ref(nti->ssa_to_reg[instr->src[0].ssa->index],
+                       ibc_type_for_nir(nir_op_infos[redop].input_types[0]));
 
-      /* For byte types, we want the destination to be strided by 2 so that we
-       * can emit ALU instructions which write directly to it without running
-       * afoul of the "only raw moves can be tightly packed" rule.
+      /* For byte types, we can avoid a whole lot of problems by just doing
+       * the scan with W types instead.  Fortunately, as long as we cast
+       * properly at the end, there should be no difference.
        */
-      unsigned tmp_stride = MAX2(ibc_type_byte_size(alu_type), 2);
+      enum ibc_type scan_type = src.type;
+      if (ibc_type_bit_size(scan_type) == 8)
+         scan_type = ibc_type_base_type(scan_type) | IBC_TYPE_16_BIT;
+
+      unsigned tmp_stride = ibc_type_byte_size(scan_type);
       unsigned tmp_size = b->simd_width * tmp_stride;
       unsigned tmp_align = MIN2(tmp_size, 32);
       ibc_reg *tmp_reg =
@@ -323,7 +322,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       tmp_reg->is_wlr = true;
       ibc_reg_ref tmp = {
          .file = IBC_REG_FILE_HW_GRF,
-         .type = alu_type,
+         .type = scan_type,
          .reg = tmp_reg,
          .hw_grf = {
             .offset = 0,
@@ -333,7 +332,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       ibc_builder_push_we_all(b, b->simd_width);
       ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp,
-                     nti_reduction_op_identity(redop, alu_type));
+                     nti_reduction_op_identity(redop, scan_type));
       ibc_builder_pop(b);
       ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp, src);
 
@@ -341,7 +340,12 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                          nti_cond_mod_for_nir_reduction_op(redop),
                          b->simd_width);
 
-      dest = ibc_MOV(b, alu_type, tmp);
+      /* Only take the bottm bits of the scan result in case it was a B type
+       * which we upgraded to W.
+       */
+      ibc_reg_ref mov_src = tmp;
+      mov_src.type = src.type;
+      dest = ibc_MOV(b, src.type, mov_src);
       break;
    }
 

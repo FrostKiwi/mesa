@@ -443,6 +443,12 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
    if (final_cluster_size >= 4 && ibc_type_bit_size(tmp.type) <= 32) {
       ibc_builder_push_we_all(b, b->simd_width / 4);
 
+      /* This only works if we have a stride of one typed unit.  Otherwise,
+       * we'd end up generating a horizontal stride of 8 or higher in the
+       * destination and that's not allowed.
+       */
+      assert(tmp.hw_grf.stride == ibc_type_byte_size(tmp.type));
+
       ibc_reg_ref left = tmp;
       left.hw_grf.offset += 1 * tmp.hw_grf.stride;
       left.hw_grf.stride *= 4;
