@@ -369,6 +369,7 @@ ibc_reg_ref_read_is_static(ibc_reg_ref ref)
  */
 static inline ibc_reg_ref
 ibc_reg_ref_compose(ibc_reg_ref outer, ibc_reg_ref inner,
+                    unsigned outer_simd_group,
                     unsigned outer_simd_width)
 {
    assert(outer.file == IBC_REG_FILE_LOGICAL);
@@ -396,6 +397,7 @@ ibc_reg_ref_compose(ibc_reg_ref outer, ibc_reg_ref inner,
 
    case IBC_REG_FILE_HW_GRF:
       ref.hw_grf.offset += outer.logical.byte;
+      ref.hw_grf.offset += ref.hw_grf.stride * outer_simd_group;
       ref.hw_grf.offset += ref.hw_grf.stride *
                            outer.logical.comp * outer_simd_width;
       if (outer.logical.broadcast) {
