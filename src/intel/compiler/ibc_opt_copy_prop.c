@@ -76,8 +76,7 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
          return false;
       }
 
-      ref->reg = mov->src[0].ref.reg;
-      *ref = ibc_reg_ref_compose(*ref, mov->src[0].ref.logical, simd_width);
+      *ref = ibc_reg_ref_compose(*ref, mov->src[0].ref, simd_width);
 
       return true;
    }
@@ -109,9 +108,7 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
             if (!ibc_reg_ref_read_is_static(intrin->src[i].ref))
                return false;
 
-            ref->reg = intrin->src[i].ref.reg;
-            *ref = ibc_reg_ref_compose(*ref, intrin->src[i].ref.logical,
-                                       simd_width);
+            *ref = ibc_reg_ref_compose(*ref, intrin->src[i].ref, simd_width);
             return true;
          }
          return false;
