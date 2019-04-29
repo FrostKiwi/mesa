@@ -98,7 +98,7 @@ ibc_builder_push_group(ibc_builder *b,
 {
    /* We're only allowed to restrict the size */
    assert(simd_width >= 8);
-   assert(b->simd_group + simd_group + simd_width <= b->simd_width);
+   assert(simd_group + simd_width <= b->simd_width);
    _ibc_builder_push(b);
    b->simd_group += simd_group;
    b->simd_width = simd_width;
