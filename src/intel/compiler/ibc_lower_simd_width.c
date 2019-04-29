@@ -46,13 +46,13 @@ simd_offset_ref(ibc_reg_ref ref, unsigned simd_group_offset)
 }
 
 static ibc_reg_ref
-simd_restricted_src(ibc_builder *b, unsigned src_simd_group, ibc_reg_ref src,
-                    unsigned num_comps)
+simd_restricted_src(ibc_builder *b, ibc_reg_ref src,
+                    unsigned simd_group_offset, unsigned num_comps)
 {
    if (src.file == IBC_REG_FILE_NONE || src.file == IBC_REG_FILE_IMM)
       return src;
 
-   src = simd_offset_ref(src, b->simd_group - src_simd_group);
+   src = simd_offset_ref(src, simd_group_offset);
 
    /* If the source is WLR, then we have two cases:
     *
@@ -168,7 +168,13 @@ ibc_lower_simd_width(ibc_shader *shader)
          }
 
          for (unsigned i = 0; i < num_splits; i++) {
-            ibc_builder_push_group(&b, i * split_simd_width, split_simd_width);
+            const unsigned split_simd_rel_group = i * split_simd_width;
+            if (instr->we_all) {
+               ibc_builder_push_we_all(&b, split_simd_width);
+            } else {
+               ibc_builder_push_group(&b, split_simd_rel_group,
+                                          split_simd_width);
+            }
 
             switch (instr->type) {
             case IBC_INSTR_TYPE_ALU: {
@@ -181,11 +187,12 @@ ibc_lower_simd_width(ibc_shader *shader)
                for (unsigned j = 0; j < num_srcs; j++) {
                   split->src[j] = alu->src[j];
                   split->src[j].ref =
-                     simd_restricted_src(&b, alu->instr.simd_group,
-                                             alu->src[j].ref, 1);
+                     simd_restricted_src(&b, alu->src[j].ref,
+                                         split_simd_rel_group, 1);
                }
 
                split->cmod = alu->cmod;
+               split->instr.we_all = b.we_all;
                split->instr.predicate = alu->instr.predicate;
                split->instr.pred_inverse = alu->instr.pred_inverse;
                if (alu->instr.flag.file != IBC_REG_FILE_NONE) {
@@ -211,13 +218,14 @@ ibc_lower_simd_width(ibc_shader *shader)
                for (unsigned j = 0; j < intrin->num_srcs; j++) {
                   split->src[j] = intrin->src[j];
                   split->src[j].ref =
-                     simd_restricted_src(&b, intrin->instr.simd_group,
-                                             intrin->src[j].ref,
+                     simd_restricted_src(&b, intrin->src[j].ref,
+                                             split_simd_rel_group,
                                              intrin->src[i].num_comps);
                   split->src[j].simd_group = b.simd_group;
                   split->src[j].simd_width = b.simd_width;
                }
 
+               split->instr.we_all = b.we_all;
                split->instr.predicate = intrin->instr.predicate;
                split->instr.pred_inverse = intrin->instr.pred_inverse;
                if (intrin->instr.flag.file != IBC_REG_FILE_NONE) {
