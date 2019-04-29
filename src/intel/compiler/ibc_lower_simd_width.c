@@ -26,6 +26,31 @@
 
 #include "brw_eu.h"
 
+static unsigned
+reg_ref_stride(const ibc_reg_ref *ref)
+{
+   switch (ref->file) {
+   case IBC_REG_FILE_NONE:
+   case IBC_REG_FILE_IMM:
+      return 0;
+
+   case IBC_REG_FILE_HW_GRF:
+      return ref->hw_grf.stride;
+
+   case IBC_REG_FILE_LOGICAL:
+      /* TODO: Is this correct? */
+      if (ref->reg->logical.bit_size == 1)
+         return 0;
+
+      return ibc_logical_reg_stride(ref->reg);
+
+   case IBC_REG_FILE_FLAG:
+      unreachable("Should not see flags here");
+   }
+
+   unreachable("Unknown register file");
+}
+
 static ibc_reg_ref
 simd_offset_ref(ibc_reg_ref ref, unsigned simd_group_offset)
 {
@@ -93,14 +118,34 @@ ibc_lower_simd_width(ibc_shader *shader)
 
    ibc_foreach_block(block, shader) {
       ibc_foreach_instr_safe(instr, block) {
-         if (instr->type == IBC_INSTR_TYPE_SEND ||
-             instr->type == IBC_INSTR_TYPE_JUMP)
+         unsigned split_simd_width = instr->simd_width;
+         switch (instr->type) {
+         case IBC_INSTR_TYPE_ALU: {
+            ibc_alu_instr *alu = ibc_instr_as_alu(instr);
+            split_simd_width = MIN2(split_simd_width, 32);
+
+            unsigned num_srcs = ibc_alu_op_infos[alu->op].num_srcs;
+            for (unsigned j = 0; j < num_srcs; j++) {
+               /* Can't span more than two registers */
+               const unsigned src_stride = reg_ref_stride(&alu->src[j].ref);
+               if (src_stride > 0)
+                  split_simd_width = MIN2(split_simd_width, 64 / src_stride);
+            }
+
+            /* Can't span more than two registers */
+            const unsigned dest_stride = reg_ref_stride(&alu->dest);
+            if (dest_stride > 0)
+               split_simd_width = MIN2(split_simd_width, 64 / dest_stride);
+            break;
+         }
+
+         case IBC_INSTR_TYPE_INTRINSIC:
+            split_simd_width = MIN2(split_simd_width, 16); /* TODO */
+            break;
+
+         default:
             continue;
-
-         assert(instr->type == IBC_INSTR_TYPE_ALU ||
-                instr->type == IBC_INSTR_TYPE_INTRINSIC);
-
-         const unsigned split_simd_width = 16; /* TODO */
+         }
          if (instr->simd_width <= split_simd_width)
             continue;
 

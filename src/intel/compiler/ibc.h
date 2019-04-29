@@ -256,6 +256,8 @@ ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader,
 
 struct ibc_instr *ibc_reg_ssa_instr(const ibc_reg *reg);
 
+unsigned ibc_logical_reg_stride(const ibc_reg *reg);
+
 /** A structure representing a reference to a LOGICAL register
  *
  * Logical registers have a 3D size in terms of bits, components, and SIMD
