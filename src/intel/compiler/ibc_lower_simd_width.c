@@ -205,6 +205,7 @@ ibc_lower_simd_width(ibc_shader *shader)
             }
 
             zip->dest = *dest;
+            zip->dest.type = ibc_type_bit_type(zip->dest.type);
             zip->num_dest_comps = num_dest_comps;
             ibc_builder_insert_instr(&b, &zip->instr);
 
