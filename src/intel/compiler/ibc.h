@@ -109,10 +109,16 @@ ibc_type_byte_size(enum ibc_type t)
    return ibc_type_bit_size(t) / 8;
 }
 
-static inline unsigned
+static inline enum ibc_type
 ibc_type_base_type(enum ibc_type t)
 {
-   return t & IBC_TYPE_BASE_TYPE_MASK;
+   return (enum ibc_type)(t & IBC_TYPE_BASE_TYPE_MASK);
+}
+
+static inline enum ibc_type
+ibc_type_bit_type(enum ibc_type t)
+{
+   return (enum ibc_type)(t & IBC_TYPE_BIT_SIZE_MASK);
 }
 
 /** An enum representing the different types of IBC registers */
