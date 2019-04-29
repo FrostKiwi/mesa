@@ -254,12 +254,15 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
 
    case nir_intrinsic_load_subgroup_invocation: {
+      ibc_reg *w_tmp_reg =
+         ibc_hw_grf_reg_create(b->shader, IBC_HW_GRF_REG_UNASSIGNED,
+                               b->simd_width * 2,
+                               MIN2(b->simd_width * 2, 32));
+      w_tmp_reg->is_wlr = true;
       ibc_reg_ref w_tmp = {
          .file = IBC_REG_FILE_HW_GRF,
          .type = IBC_TYPE_UW,
-         .reg = ibc_hw_grf_reg_create(b->shader, IBC_HW_GRF_REG_UNASSIGNED,
-                                      b->simd_width * 2,
-                                      MIN2(b->simd_width * 2, 32)),
+         .reg = w_tmp_reg,
          .hw_grf = {
             .offset = 0,
             .stride = ibc_type_byte_size(IBC_TYPE_UW),
