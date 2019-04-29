@@ -26,6 +26,7 @@
 
 #include "ibc.h"
 
+#include "util/bitscan.h"
 #include "util/half_float.h"
 
 #ifdef __cplusplus
@@ -405,6 +406,79 @@ ibc_CMP(ibc_builder *b, enum ibc_type dest_type,
    ibc_reg_ref dest = ibc_builder_new_logical_reg(b, dest_type, 1);
    ibc_build_alu2_cmod(b, IBC_ALU_OP_CMP, dest, cmod, src0, src1);
    return dest;
+}
+
+static inline void
+ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
+                   enum brw_conditional_mod cmod,
+                   unsigned final_cluster_size)
+{
+   assert(b->simd_width >= 8);
+   const uint8_t scan_simd_width = b->simd_width;
+   assert(tmp.file == IBC_REG_FILE_HW_GRF);
+   assert(util_is_power_of_two_nonzero(final_cluster_size));
+
+   if (final_cluster_size >= 2) {
+      ibc_builder_push_we_all(b, b->simd_width / 2);
+
+      ibc_reg_ref left = tmp;
+      left.hw_grf.stride *= 2;
+
+      ibc_reg_ref right = tmp;
+      right.hw_grf.offset += 1 * tmp.hw_grf.stride;
+      right.hw_grf.stride *= 2;
+
+      ibc_build_alu2_cmod(b, op, right, cmod, left, right);
+
+      ibc_builder_pop(b);
+   }
+
+   unsigned cluster_size = 4;
+   /* For 32-bit and smaller types, we can be a bit clever with the second
+    * step and do it in two strided instructions with a stride of four.  For
+    * 64-bit types, we have to fall back to the general case below.
+    * Fortunately, that case works out to the same number of instructions for
+    * 64-bit types so there's no great loss.
+    */
+   if (final_cluster_size >= 4 && ibc_type_bit_size(tmp.type) <= 32) {
+      ibc_builder_push_we_all(b, b->simd_width / 4);
+
+      ibc_reg_ref left = tmp;
+      left.hw_grf.offset += 1 * tmp.hw_grf.stride;
+      left.hw_grf.stride *= 4;
+
+      ibc_reg_ref right = tmp;
+      right.hw_grf.offset += 2 * tmp.hw_grf.stride;
+      right.hw_grf.stride *= 4;
+
+      ibc_build_alu2_cmod(b, op, right, cmod, left, right);
+
+      right.hw_grf.offset += 1 * tmp.hw_grf.stride;
+
+      ibc_build_alu2_cmod(b, op, right, cmod, left, right);
+
+      ibc_builder_pop(b);
+
+      cluster_size *= 2;
+   }
+
+   for (; cluster_size <= final_cluster_size; cluster_size *= 2) {
+      const unsigned half_size = cluster_size / 2;
+      ibc_builder_push_we_all(b, half_size);
+
+      for (unsigned g = 0; g < scan_simd_width; g += cluster_size) {
+         ibc_reg_ref left = tmp;
+         left.hw_grf.offset += (g + half_size - 1) * tmp.hw_grf.stride;
+         left.hw_grf.stride = 0;
+
+         ibc_reg_ref right = tmp;
+         right.hw_grf.offset += (g + half_size) * tmp.hw_grf.stride;
+
+         ibc_build_alu2_cmod(b, op, right, cmod, left, right);
+      }
+
+      ibc_builder_pop(b);
+   }
 }
 
 static inline ibc_reg_ref
