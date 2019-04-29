@@ -176,6 +176,67 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    nti->ssa_to_reg[instr->dest.dest.ssa.index] = dest.reg;
 }
 
+static ibc_reg_ref
+nti_reduction_op_identity(nir_op op, enum ibc_type type)
+{
+   /* Byte immediates aren't a thing.  We can just use words */
+   const unsigned imm_bit_size = MAX2(ibc_type_bit_size(type), 16);
+   enum ibc_type imm_type = ibc_type_base_type(type) | imm_bit_size;
+
+   nir_const_value identity = nir_alu_binop_identity(op, imm_bit_size);
+   switch (imm_bit_size) {
+   case 16: return ibc_imm_ref(imm_type, (char *)&identity.u16, 2);
+   case 32: return ibc_imm_ref(imm_type, (char *)&identity.u16, 4);
+   case 64: return ibc_imm_ref(imm_type, (char *)&identity.u16, 8);
+   default:
+      unreachable("Invalid type size");
+   }
+}
+
+static enum ibc_alu_op
+nti_op_for_nir_reduction_op(nir_op op)
+{
+   switch (op) {
+   case nir_op_iadd: return IBC_ALU_OP_ADD;
+   case nir_op_fadd: return IBC_ALU_OP_ADD;
+//   case nir_op_imul: return IBC_ALU_OP_MUL;
+//   case nir_op_fmul: return IBC_ALU_OP_MUL;
+   case nir_op_imin: return IBC_ALU_OP_SEL;
+   case nir_op_umin: return IBC_ALU_OP_SEL;
+   case nir_op_fmin: return IBC_ALU_OP_SEL;
+   case nir_op_imax: return IBC_ALU_OP_SEL;
+   case nir_op_umax: return IBC_ALU_OP_SEL;
+   case nir_op_fmax: return IBC_ALU_OP_SEL;
+   case nir_op_iand: return IBC_ALU_OP_AND;
+   case nir_op_ior:  return IBC_ALU_OP_OR;
+//   case nir_op_ixor: return IBC_ALU_OP_XOR;
+   default:
+      unreachable("Invalid reduction operation");
+   }
+}
+
+static enum brw_conditional_mod
+nti_cond_mod_for_nir_reduction_op(nir_op op)
+{
+   switch (op) {
+   case nir_op_iadd: return BRW_CONDITIONAL_NONE;
+   case nir_op_fadd: return BRW_CONDITIONAL_NONE;
+   case nir_op_imul: return BRW_CONDITIONAL_NONE;
+   case nir_op_fmul: return BRW_CONDITIONAL_NONE;
+   case nir_op_imin: return BRW_CONDITIONAL_L;
+   case nir_op_umin: return BRW_CONDITIONAL_L;
+   case nir_op_fmin: return BRW_CONDITIONAL_L;
+   case nir_op_imax: return BRW_CONDITIONAL_GE;
+   case nir_op_umax: return BRW_CONDITIONAL_GE;
+   case nir_op_fmax: return BRW_CONDITIONAL_GE;
+   case nir_op_iand: return BRW_CONDITIONAL_NONE;
+   case nir_op_ior:  return BRW_CONDITIONAL_NONE;
+   case nir_op_ixor: return BRW_CONDITIONAL_NONE;
+   default:
+      unreachable("Invalid reduction operation");
+   }
+}
+
 static void
 nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                    const nir_intrinsic_instr *instr)
@@ -235,6 +296,49 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       ibc_builder_push_we_all(b, 1);
       dest = ibc_MOV(b, IBC_TYPE_UINT, value);
       ibc_builder_pop(b);
+      break;
+   }
+
+   case nir_intrinsic_inclusive_scan: {
+      nir_op redop = nir_intrinsic_reduction_op(instr);
+      enum ibc_type alu_type =
+         ibc_type_for_nir(nir_op_infos[redop].input_types[0] |
+                          instr->src[0].ssa->bit_size);
+      ibc_reg_ref src =
+         ibc_typed_ref(nti->ssa_to_reg[instr->src[0].ssa->index], alu_type);
+
+      /* For byte types, we want the destination to be strided by 2 so that we
+       * can emit ALU instructions which write directly to it without running
+       * afoul of the "only raw moves can be tightly packed" rule.
+       */
+      unsigned tmp_stride = MAX2(ibc_type_byte_size(alu_type), 2);
+      unsigned tmp_size = b->simd_width * tmp_stride;
+      unsigned tmp_align = MIN2(tmp_size, 32);
+      ibc_reg *tmp_reg =
+         ibc_hw_grf_reg_create(b->shader, IBC_HW_GRF_REG_UNASSIGNED,
+                               tmp_size, tmp_align);
+      tmp_reg->is_wlr = true;
+      ibc_reg_ref tmp = {
+         .file = IBC_REG_FILE_HW_GRF,
+         .type = alu_type,
+         .reg = tmp_reg,
+         .hw_grf = {
+            .offset = 0,
+            .stride = tmp_stride,
+         },
+      };
+
+      ibc_builder_push_we_all(b, b->simd_width);
+      ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp,
+                     nti_reduction_op_identity(redop, alu_type));
+      ibc_builder_pop(b);
+      ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp, src);
+
+      ibc_build_alu_scan(b, nti_op_for_nir_reduction_op(redop), tmp,
+                         nti_cond_mod_for_nir_reduction_op(redop),
+                         b->simd_width);
+
+      dest = ibc_MOV(b, alu_type, tmp);
       break;
    }
 
