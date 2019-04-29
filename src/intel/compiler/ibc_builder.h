@@ -281,6 +281,26 @@ _ibc_builder_dest_type(enum ibc_type dest_type,
    return dest_type;
 }
 
+static inline ibc_alu_instr *
+ibc_build_alu2_cmod(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref dest,
+                    enum brw_conditional_mod cmod,
+                    ibc_reg_ref src0, ibc_reg_ref src1)
+{
+   ibc_reg_ref srcs[] = { src0, src1 };
+   if (dest.type == IBC_TYPE_FLAG) {
+      enum ibc_type dest_type = _ibc_builder_dest_type(src0.type, srcs,
+                                                       ARRAY_SIZE(srcs));
+      return ibc_build_alu(b, op, ibc_null(dest_type), dest, cmod, srcs, 2);
+   } else if (cmod != BRW_CONDITIONAL_NONE) {
+      /* We need a flag register even though the result may never be used */
+      ibc_reg_ref flag = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
+
+      return ibc_build_alu(b, op, dest, flag, cmod, srcs, ARRAY_SIZE(srcs));
+   } else {
+      return ibc_build_alu2(b, op, dest, src0, src1);
+   }
+}
+
 static inline ibc_reg_ref
 ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
                   ibc_reg_ref *src, unsigned num_srcs)
@@ -382,22 +402,9 @@ ibc_CMP(ibc_builder *b, enum ibc_type dest_type,
         enum brw_conditional_mod cmod,
         ibc_reg_ref src0, ibc_reg_ref src1)
 {
-   ibc_reg_ref srcs[] = { src0, src1 };
-   if (dest_type == IBC_TYPE_FLAG) {
-      return ibc_build_ssa_flag_alu(b, IBC_ALU_OP_CMP, IBC_TYPE_UINT,
-                                    cmod, srcs, ARRAY_SIZE(srcs));
-   } else {
-      dest_type = _ibc_builder_dest_type(dest_type, srcs, ARRAY_SIZE(srcs));
-      ibc_reg_ref dest = ibc_builder_new_logical_reg(b, dest_type, 1);
-
-      /* We need a flag register even though the result may never be used */
-      ibc_reg_ref flag = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
-
-      ibc_build_alu(b, IBC_ALU_OP_CMP, dest, flag, cmod,
-                    srcs, ARRAY_SIZE(srcs));
-
-      return dest;
-   }
+   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, dest_type, 1);
+   ibc_build_alu2_cmod(b, IBC_ALU_OP_CMP, dest, cmod, src0, src1);
+   return dest;
 }
 
 static inline ibc_reg_ref
