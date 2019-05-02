@@ -33,7 +33,7 @@ reg_ref_stride(const ibc_reg_ref *ref)
       return 0;
 
    case IBC_REG_FILE_HW_GRF:
-      return ref->hw_grf.stride;
+      return ref->hw_grf.hstride;
 
    case IBC_REG_FILE_LOGICAL:
       /* TODO: Is this correct? */
