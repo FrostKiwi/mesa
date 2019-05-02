@@ -130,14 +130,36 @@ ibc_builder_insert_instr(ibc_builder *b, ibc_instr *instr)
 static inline ibc_reg_ref
 ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
 {
-   assert(reg->file == IBC_REG_FILE_LOGICAL);
-   if (ibc_type_bit_size(type) == 0)
-      type |= reg->logical.bit_size;
-   return (ibc_reg_ref) {
+   ibc_reg_ref ref = {
       .file = reg->file,
       .reg = reg,
       .type = type,
    };
+   if (ibc_type_bit_size(type) == 0) {
+      assert(reg->file == IBC_REG_FILE_LOGICAL);
+      ref.type |= reg->logical.bit_size;
+   }
+   switch (reg->file) {
+   case IBC_REG_FILE_NONE:
+   case IBC_REG_FILE_IMM:
+      unreachable("Unsupported register file");
+
+   case IBC_REG_FILE_LOGICAL:
+      ref.logical = (ibc_logical_reg_ref) { 0, };
+      return ref;
+
+   case IBC_REG_FILE_HW_GRF:
+      ref.hw_grf = (ibc_hw_grf_reg_ref) {
+         .stride = ibc_type_byte_size(type),
+      };
+      return ref;
+
+   case IBC_REG_FILE_FLAG:
+      assert(type == IBC_TYPE_FLAG);
+      return ref;
+   }
+
+   unreachable("Unknown register file");
 }
 
 static inline ibc_reg_ref
@@ -498,15 +520,10 @@ ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,
    uint8_t align = type_sz;
    ibc_reg *hw_reg = ibc_hw_grf_reg_create(b->shader, byte, size, align);
 
-   return ibc_MOV(b, type, (ibc_reg_ref) {
-      .file = IBC_REG_FILE_HW_GRF,
-      .type = type,
-      .reg = hw_reg,
-      .hw_grf = {
-         .offset = 0,
-         .stride = type_sz * stride,
-      },
-   });
+   ibc_reg_ref hw_ref = ibc_typed_ref(hw_reg, type);
+   ibc_hw_grf_mul_stride(&hw_ref.hw_grf, stride);
+
+   return ibc_MOV(b, type, hw_ref);
 }
 
 #ifdef __cplusplus
