@@ -213,13 +213,15 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       const ibc_hw_grf_reg *hw_reg = &ref->reg->hw_grf;
       const ibc_hw_grf_reg_ref *hw_ref = &ref->hw_grf;
 
-      ibc_assert(s, hw_ref->stride % ibc_type_byte_size(ref->type) == 0);
+      ibc_assert(s, hw_ref->hstride % ibc_type_byte_size(ref->type) == 0);
+      ibc_assert(s, hw_ref->vstride % ibc_type_byte_size(ref->type) == 0);
       if (is_write)
-         ibc_assert(s, hw_ref->stride > 0);
+         ibc_assert(s, hw_ref->hstride > 0);
 
       if (num_bytes == 0) {
-         ibc_assert(s, num_comps > 0);
-         num_bytes = (ref_simd_width - 1) * hw_ref->stride +
+         ibc_assert(s, num_comps == 1);
+         num_bytes = hw_ref->hstride * ((ref_simd_width - 1) % hw_ref->width) +
+                     hw_ref->vstride * ((ref_simd_width - 1) / hw_ref->width) +
                      ibc_type_byte_size(ref->type);
       } else {
          ibc_assert(s, num_comps == 0);

@@ -150,7 +150,9 @@ ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
 
    case IBC_REG_FILE_HW_GRF:
       ref.hw_grf = (ibc_hw_grf_reg_ref) {
-         .stride = ibc_type_byte_size(type),
+         .vstride = 8 * ibc_type_byte_size(type),
+         .width = 8,
+         .hstride = ibc_type_byte_size(type),
       };
       return ref;
 
@@ -438,17 +440,21 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
    assert(b->simd_width >= 8);
    const uint8_t scan_simd_width = b->simd_width;
    assert(tmp.file == IBC_REG_FILE_HW_GRF);
+   assert(tmp.hw_grf.hstride == ibc_type_byte_size(tmp.type));
+   assert(tmp.hw_grf.hstride * tmp.hw_grf.width == tmp.hw_grf.vstride);
    assert(util_is_power_of_two_nonzero(final_cluster_size));
 
    if (final_cluster_size >= 2) {
       ibc_builder_push_we_all(b, b->simd_width / 2);
 
       ibc_reg_ref left = tmp;
-      left.hw_grf.stride *= 2;
+      left.hw_grf.vstride *= 2;
+      left.hw_grf.hstride *= 2;
 
       ibc_reg_ref right = tmp;
-      right.hw_grf.offset += 1 * tmp.hw_grf.stride;
-      right.hw_grf.stride *= 2;
+      right.hw_grf.offset += 1 * tmp.hw_grf.hstride;
+      right.hw_grf.vstride *= 2;
+      right.hw_grf.hstride *= 2;
 
       ibc_build_alu2_cmod(b, op, right, cmod, left, right);
 
@@ -465,23 +471,19 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
    if (final_cluster_size >= 4 && ibc_type_bit_size(tmp.type) <= 32) {
       ibc_builder_push_we_all(b, b->simd_width / 4);
 
-      /* This only works if we have a stride of one typed unit.  Otherwise,
-       * we'd end up generating a horizontal stride of 8 or higher in the
-       * destination and that's not allowed.
-       */
-      assert(tmp.hw_grf.stride == ibc_type_byte_size(tmp.type));
-
       ibc_reg_ref left = tmp;
-      left.hw_grf.offset += 1 * tmp.hw_grf.stride;
-      left.hw_grf.stride *= 4;
+      left.hw_grf.offset += 1 * tmp.hw_grf.hstride;
+      left.hw_grf.vstride *= 4;
+      left.hw_grf.hstride *= 4;
 
       ibc_reg_ref right = tmp;
-      right.hw_grf.offset += 2 * tmp.hw_grf.stride;
-      right.hw_grf.stride *= 4;
+      right.hw_grf.offset += 2 * tmp.hw_grf.hstride;
+      right.hw_grf.vstride *= 4;
+      right.hw_grf.hstride *= 4;
 
       ibc_build_alu2_cmod(b, op, right, cmod, left, right);
 
-      right.hw_grf.offset += 1 * tmp.hw_grf.stride;
+      right.hw_grf.offset += 1 * tmp.hw_grf.hstride;
 
       ibc_build_alu2_cmod(b, op, right, cmod, left, right);
 
@@ -496,11 +498,13 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
 
       for (unsigned g = 0; g < scan_simd_width; g += cluster_size) {
          ibc_reg_ref left = tmp;
-         left.hw_grf.offset += (g + half_size - 1) * tmp.hw_grf.stride;
-         left.hw_grf.stride = 0;
+         left.hw_grf.offset += (g + half_size - 1) * tmp.hw_grf.hstride;
+         left.hw_grf.vstride = 0;
+         left.hw_grf.width = 1;
+         left.hw_grf.hstride = 0;
 
          ibc_reg_ref right = tmp;
-         right.hw_grf.offset += (g + half_size) * tmp.hw_grf.stride;
+         right.hw_grf.offset += (g + half_size) * tmp.hw_grf.hstride;
 
          ibc_build_alu2_cmod(b, op, right, cmod, left, right);
       }
