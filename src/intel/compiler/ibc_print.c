@@ -153,8 +153,14 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref, bool print_type)
             fprintf(fp, ".%u", (byte % 32) / type_sz_B);
          }
       }
-      if (type_sz_B)
-         fprintf(fp, "<%u>", ref->hw_grf.stride / type_sz_B);
+      if (type_sz_B) {
+         if (ref->hw_grf.hstride * ref->hw_grf.width == ref->hw_grf.vstride) {
+            fprintf(fp, "<%u>", ref->hw_grf.hstride / type_sz_B);
+         } else {
+            fprintf(fp, "<%u,%u,%u>", ref->hw_grf.vstride / type_sz_B,
+                    ref->hw_grf.width, ref->hw_grf.hstride / type_sz_B);
+         }
+      }
       if (ref->type != IBC_TYPE_INVALID)
          fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
