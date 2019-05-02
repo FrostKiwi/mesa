@@ -58,23 +58,24 @@ compose_reg_refs(ibc_reg_ref outer, ibc_reg_ref inner,
       return ref;
 
    case IBC_REG_FILE_HW_GRF:
-      ref.hw_grf.offset += inner.hw_grf.stride *
-                           outer.logical.comp * inner_simd_width;
+      /* Components aren't well-defined for HW grfs */
+      assert(outer.logical.comp == 0);
       if (outer.logical.broadcast) {
          assert(outer.logical.simd_channel >= inner_simd_group);
          assert(outer.logical.simd_channel < inner_simd_group +
                                              inner_simd_width);
-         ref.hw_grf.offset += inner.hw_grf.stride *
-                              (outer.logical.simd_channel - inner_simd_group);
-         ref.hw_grf.stride = 0;
+         unsigned rel_channel = outer.logical.simd_channel - inner_simd_group;
+         ibc_hw_grf_slice_simd_group(&ref.hw_grf, rel_channel, 1);
+         ibc_hw_grf_mul_stride(&ref.hw_grf, 0);
       } else {
          assert(outer_simd_group >= inner_simd_group);
          assert(outer_simd_group + outer_simd_width <=
                 inner_simd_group + inner_simd_width);
-         ref.hw_grf.offset += inner.hw_grf.stride *
-                              (outer_simd_group - inner_simd_group);
+         unsigned rel_simd_group = outer_simd_group - inner_simd_group;
+         ibc_hw_grf_slice_simd_group(&ref.hw_grf, rel_simd_group,
+                                     outer_simd_width);
       }
-      ref.hw_grf.offset += outer.logical.byte;
+      ibc_hw_grf_add_byte_offset(&ref.hw_grf, outer.logical.byte);
       return ref;
 
    case IBC_REG_FILE_FLAG:
