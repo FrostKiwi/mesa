@@ -23,6 +23,59 @@
 
 #include "ibc.h"
 
+/** Composes an ibc_logical_reg_ref with an ibc_reg_ref
+ *
+ * Specifically, this is the composition outer(inner(reg))
+ */
+static inline ibc_reg_ref
+compose_reg_refs(ibc_reg_ref outer, ibc_reg_ref inner,
+                 unsigned outer_simd_group,
+                 unsigned outer_simd_width)
+{
+   assert(outer.file == IBC_REG_FILE_LOGICAL);
+   assert(ibc_type_bit_size(outer.type) <= ibc_type_bit_size(inner.type));
+
+   ibc_reg_ref ref = inner;
+   ref.type = outer.type;
+
+   switch (ref.file) {
+   case IBC_REG_FILE_NONE:
+   case IBC_REG_FILE_IMM:
+      return ref;
+
+   case IBC_REG_FILE_LOGICAL:
+      ref.logical.byte += outer.logical.byte;
+      ref.logical.comp += outer.logical.comp;
+      if (outer.logical.broadcast && !inner.logical.broadcast) {
+         /* If the outer ref wants to broadcast and the inner ref is not
+          * already broadcasting, we broadcast based on the outer ref.
+          */
+         ref.logical.broadcast = true;
+         ref.logical.simd_channel = outer.logical.simd_channel;
+      }
+      return ref;
+
+   case IBC_REG_FILE_HW_GRF:
+      ref.hw_grf.offset += outer.logical.byte;
+      ref.hw_grf.offset += inner.hw_grf.stride * outer_simd_group;
+      ref.hw_grf.offset += inner.hw_grf.stride *
+                           outer.logical.comp * outer_simd_width;
+      if (outer.logical.broadcast) {
+         ref.hw_grf.offset += inner.hw_grf.stride * outer.logical.simd_channel;
+         ref.hw_grf.stride = 0;
+      }
+      return ref;
+
+   case IBC_REG_FILE_FLAG:
+      assert(outer.logical.byte == 0 &&
+             outer.logical.comp == 0 &&
+             !outer.logical.broadcast);
+      return ref;
+   }
+
+   unreachable("Invalid IBC register file");
+}
+
 static enum ibc_alu_src_mod
 compose_alu_src_mods(enum ibc_alu_src_mod outer, enum ibc_alu_src_mod inner)
 {
@@ -76,9 +129,9 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
          return false;
       }
 
-      *ref = ibc_reg_ref_compose(*ref, mov->src[0].ref,
-                                 simd_group - mov->instr.simd_group,
-                                 simd_width);
+      *ref = compose_reg_refs(*ref, mov->src[0].ref,
+                              simd_group - mov->instr.simd_group,
+                              simd_width);
 
       return true;
    }
@@ -110,9 +163,9 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
             if (!ibc_reg_ref_read_is_static(intrin->src[i].ref))
                return false;
 
-            *ref = ibc_reg_ref_compose(*ref, intrin->src[i].ref,
-                                       simd_group - intrin->src[i].simd_group,
-                                       simd_width);
+            *ref = compose_reg_refs(*ref, intrin->src[i].ref,
+                                    simd_group - intrin->src[i].simd_group,
+                                    simd_width);
             return true;
          }
          return false;
