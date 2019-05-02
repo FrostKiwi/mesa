@@ -30,7 +30,9 @@
 static inline ibc_reg_ref
 compose_reg_refs(ibc_reg_ref outer, ibc_reg_ref inner,
                  unsigned outer_simd_group,
-                 unsigned outer_simd_width)
+                 unsigned outer_simd_width,
+                 unsigned inner_simd_group,
+                 unsigned inner_simd_width)
 {
    assert(outer.file == IBC_REG_FILE_LOGICAL);
    assert(ibc_type_bit_size(outer.type) <= ibc_type_bit_size(inner.type));
@@ -56,14 +58,23 @@ compose_reg_refs(ibc_reg_ref outer, ibc_reg_ref inner,
       return ref;
 
    case IBC_REG_FILE_HW_GRF:
-      ref.hw_grf.offset += outer.logical.byte;
-      ref.hw_grf.offset += inner.hw_grf.stride * outer_simd_group;
       ref.hw_grf.offset += inner.hw_grf.stride *
-                           outer.logical.comp * outer_simd_width;
+                           outer.logical.comp * inner_simd_width;
       if (outer.logical.broadcast) {
-         ref.hw_grf.offset += inner.hw_grf.stride * outer.logical.simd_channel;
+         assert(outer.logical.simd_channel >= inner_simd_group);
+         assert(outer.logical.simd_channel < inner_simd_group +
+                                             inner_simd_width);
+         ref.hw_grf.offset += inner.hw_grf.stride *
+                              (outer.logical.simd_channel - inner_simd_group);
          ref.hw_grf.stride = 0;
+      } else {
+         assert(outer_simd_group >= inner_simd_group);
+         assert(outer_simd_group + outer_simd_width <=
+                inner_simd_group + inner_simd_width);
+         ref.hw_grf.offset += inner.hw_grf.stride *
+                              (outer_simd_group - inner_simd_group);
       }
+      ref.hw_grf.offset += outer.logical.byte;
       return ref;
 
    case IBC_REG_FILE_FLAG:
@@ -130,8 +141,9 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
       }
 
       *ref = compose_reg_refs(*ref, mov->src[0].ref,
-                              simd_group - mov->instr.simd_group,
-                              simd_width);
+                              simd_group, simd_width,
+                              mov->instr.simd_group,
+                              mov->instr.simd_width);
 
       return true;
    }
@@ -164,8 +176,9 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
                return false;
 
             *ref = compose_reg_refs(*ref, intrin->src[i].ref,
-                                    simd_group - intrin->src[i].simd_group,
-                                    simd_width);
+                                    simd_group, simd_width,
+                                    intrin->src[i].simd_group,
+                                    intrin->src[i].simd_width);
             return true;
          }
          return false;
