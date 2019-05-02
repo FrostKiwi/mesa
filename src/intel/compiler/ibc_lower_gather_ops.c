@@ -50,17 +50,14 @@ reg_ref_stride(const ibc_reg_ref *ref)
 }
 
 static ibc_reg_ref
-simd_offset_ref(ibc_reg_ref ref, unsigned simd_group_offset)
+simd_slice_ref(ibc_reg_ref ref, uint8_t rel_simd_group, uint8_t simd_width)
 {
    switch (ref.file) {
    case IBC_REG_FILE_LOGICAL:
       return ref;
 
    case IBC_REG_FILE_HW_GRF:
-      if (ref.hw_grf.stride == 0)
-         return ref;
-
-      ref.hw_grf.offset += simd_group_offset * ref.hw_grf.stride;
+      ibc_hw_grf_slice_simd_group(&ref.hw_grf, rel_simd_group, simd_width);
       return ref;
 
    default:
@@ -119,10 +116,13 @@ ibc_lower_gather_ops(ibc_shader *shader)
             for (unsigned i = 0; i < intrin->num_srcs; i++) {
                const unsigned rel_group = intrin->src[i].simd_group -
                                           instr->simd_group;
+               const unsigned width = intrin->src[i].simd_width;
                ibc_builder_push_group(&b, rel_group, intrin->src[i].simd_width);
                assert(intrin->src[i].num_comps == 1); /* TODO */
-               build_MOV_raw(&b, simd_offset_ref(intrin->dest, rel_group),
-                             simd_offset_ref(intrin->src[i].ref, rel_group));
+               build_MOV_raw(&b, simd_slice_ref(intrin->dest,
+                                                rel_group, width),
+                             simd_slice_ref(intrin->src[i].ref,
+                                            rel_group, width));
                ibc_builder_pop(&b);
             }
             break;

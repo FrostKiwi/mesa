@@ -316,6 +316,25 @@ typedef struct ibc_hw_grf_reg_ref {
    uint8_t stride;
 } ibc_hw_grf_reg_ref;
 
+static inline void
+ibc_hw_grf_slice_simd_group(ibc_hw_grf_reg_ref *ref,
+                            uint8_t rel_simd_group, uint8_t simd_width)
+{
+   ref->offset += rel_simd_group * ref->stride;
+}
+
+static inline void
+ibc_hw_grf_add_byte_offset(ibc_hw_grf_reg_ref *ref, unsigned byte_offset)
+{
+   ref->offset += byte_offset;
+}
+
+static inline void
+ibc_hw_grf_mul_stride(ibc_hw_grf_reg_ref *ref, unsigned stride_mul)
+{
+   ref->stride *= stride_mul;
+}
+
 
 /** A structure representing a register reference (source or destination) in
  * an instruction
