@@ -306,21 +306,36 @@ typedef struct ibc_hw_grf_reg_ref {
    /** Byte offset at which the reference starts for HW regs */
    uint8_t offset;
 
-   /** Stride in bytes for HW regs
+   /* Vertical stride of the HW register region in bytes
     *
-    * Technically, the hardware has a two-dimensional stride.  However, that
-    * complexity us usually not needed and so we simplify the stride to just a
-    * single stride which then gets turned into an equivalent 2D stride in
-    * ibc_to_binary.
+    * This is different from the HW vstride where it's in units of the type.
     */
-   uint8_t stride;
+   uint8_t vstride;
+
+   /* Width of the HW register region */
+   uint8_t width;
+
+   /** Horizontal stride of the HW register region in bytes
+    *
+    * This is different from the HW stride where it's in units of the type.
+    */
+   uint8_t hstride;
 } ibc_hw_grf_reg_ref;
 
 static inline void
 ibc_hw_grf_slice_simd_group(ibc_hw_grf_reg_ref *ref,
                             uint8_t rel_simd_group, uint8_t simd_width)
 {
-   ref->offset += rel_simd_group * ref->stride;
+   assert(rel_simd_group % simd_width == 0);
+   if (ref->hstride * ref->width == ref->vstride) {
+      ref->offset += rel_simd_group * ref->hstride;
+   } else {
+      /* If we don't have a regular stride, then we can only shift it by a
+       * multiple of the width.  Otherwise, it will mess up the 2D region.
+       */
+      assert(rel_simd_group % ref->width == 0);
+      ref->offset += (rel_simd_group / ref->width) * ref->vstride;
+   }
 }
 
 static inline void
@@ -332,7 +347,15 @@ ibc_hw_grf_add_byte_offset(ibc_hw_grf_reg_ref *ref, unsigned byte_offset)
 static inline void
 ibc_hw_grf_mul_stride(ibc_hw_grf_reg_ref *ref, unsigned stride_mul)
 {
-   ref->stride *= stride_mul;
+   ref->vstride *= stride_mul;
+   ref->hstride *= stride_mul;
+
+   /* If we're making it a scalar, make the width 1.  This doesn't really
+    * matter but it makes things more uniform in the IR and the width doesn't
+    * matter if hstride and vstride are both zero.
+    */
+   if (stride_mul == 0)
+      ref->width = 1;
 }
 
 
