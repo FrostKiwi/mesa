@@ -292,11 +292,17 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_reduce:
    case nir_intrinsic_inclusive_scan: {
       nir_op redop = nir_intrinsic_reduction_op(instr);
       ibc_reg_ref src =
          ibc_typed_ref(nti->ssa_to_reg[instr->src[0].ssa->index],
                        ibc_type_for_nir(nir_op_infos[redop].input_types[0]));
+
+      unsigned cluster_size = instr->intrinsic == nir_intrinsic_reduce ?
+                              nir_intrinsic_cluster_size(instr) : 0;
+      if (cluster_size == 0 || cluster_size > b->simd_width)
+         cluster_size = b->simd_width;
 
       /* For byte types, we can avoid a whole lot of problems by just doing
        * the scan with W types instead.  Fortunately, as long as we cast
@@ -323,14 +329,18 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       ibc_build_alu_scan(b, nti_op_for_nir_reduction_op(redop), tmp,
                          nti_cond_mod_for_nir_reduction_op(redop),
-                         b->simd_width);
+                         cluster_size);
 
-      /* Only take the bottm bits of the scan result in case it was a B type
-       * which we upgraded to W.
-       */
-      ibc_reg_ref mov_src = tmp;
-      mov_src.type = src.type;
-      dest = ibc_MOV(b, src.type, mov_src);
+      if (instr->intrinsic == nir_intrinsic_reduce) {
+         dest = ibc_cluster_broadcast(b, src.type, tmp, cluster_size);
+      } else {
+         /* Only take the bottom bits of the scan result in case it was a B
+          * type which we upgraded to W.
+          */
+         ibc_reg_ref mov_src = tmp;
+         mov_src.type = src.type;
+         dest = ibc_MOV(b, src.type, mov_src);
+      }
       break;
    }
 
