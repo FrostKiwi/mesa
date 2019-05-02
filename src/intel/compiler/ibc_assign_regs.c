@@ -93,18 +93,24 @@ rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
 
    ibc_logical_reg_ref logical = ref->logical;
    ref->file = IBC_REG_FILE_HW_GRF;
-   if (ref->reg->logical.simd_width == 1 && is_src)
-      ref->hw_grf.stride = 0;
-   else
-      ref->hw_grf.stride = ibc_logical_reg_stride(ref->reg);
-   ref->hw_grf.offset = ref->hw_grf.stride * logical.comp *
-                        ref->reg->logical.simd_width;
+
+   unsigned stride = ibc_logical_reg_stride(ref->reg);
+   ref->hw_grf.offset = logical.comp * ref->reg->logical.simd_width * stride;
    if (logical.broadcast) {
-      ref->hw_grf.offset += ref->hw_grf.stride * logical.simd_channel;
-      ref->hw_grf.stride = 0;
+      ref->hw_grf.offset += logical.simd_channel * stride;
+      ref->hw_grf.vstride = 0;
+      ref->hw_grf.width = 1;
+      ref->hw_grf.hstride = 0;
+   } else if (ref->reg->logical.simd_width == 1 && is_src) {
+      ref->hw_grf.vstride = 0;
+      ref->hw_grf.width = 1;
+      ref->hw_grf.hstride = 0;
    } else {
-      ref->hw_grf.offset += ref->hw_grf.stride *
-                            (ref_simd_group - ref->reg->logical.simd_group);
+      ref->hw_grf.offset +=
+         (ref_simd_group - ref->reg->logical.simd_group) * stride;
+      ref->hw_grf.hstride = stride;
+      ref->hw_grf.width = 8;
+      ref->hw_grf.vstride = stride * ref->hw_grf.width;
    }
    ref->hw_grf.offset += logical.byte;
 }

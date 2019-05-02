@@ -124,12 +124,17 @@ brw_reg_for_ibc_reg_ref(const struct gen_device_info *devinfo,
       unsigned byte = ref->reg->hw_grf.byte + ref->hw_grf.offset;
       unsigned nr = byte / REG_SIZE;
       unsigned subnr = byte % REG_SIZE;
+      const unsigned elem_sz_B = ibc_type_byte_size(type);
       struct brw_reg brw_reg;
-      if (ref->hw_grf.stride == 0) {
+      if (ref->hw_grf.hstride == 0 && ref->hw_grf.vstride == 0) {
          brw_reg = brw_vec1_grf(nr, 0);
-      } else {
-         const unsigned elem_sz_B = ibc_type_bit_size(type) / 8;
-         const unsigned stride_B = ref->hw_grf.stride;
+      } else if (ref->hw_grf.hstride * ref->hw_grf.width ==
+                 ref->hw_grf.vstride ) {
+         /* This is a regular stride where the split between vstride and
+          * hstride doesn't matter.  We'll sanitize the stride so that it's
+          * something that will work in the HW.
+          */
+         const unsigned stride_B = ref->hw_grf.hstride;
          assert(stride_B % elem_sz_B == 0);
          unsigned stride_elem = stride_B / elem_sz_B;
 
@@ -164,6 +169,14 @@ brw_reg_for_ibc_reg_ref(const struct gen_device_info *devinfo,
             brw_reg = stride(brw_vecn_grf(width, nr, 0),
                              width * stride_elem, width, stride_elem);
          }
+      } else {
+         /* In this case, we just have to trust that whoever set up the
+          * register region knows what they're doing.
+          */
+         brw_reg = stride(brw_vecn_grf(ref->hw_grf.width, nr, 0),
+                          ref->hw_grf.vstride / elem_sz_B,
+                          ref->hw_grf.width,
+                          ref->hw_grf.hstride / elem_sz_B);
       }
 
       brw_reg = byte_offset(brw_reg, subnr);
@@ -287,10 +300,23 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
           *       register of the correct type and regioning so the
           *       instruction is considered compressed or not accordingly.
           */
-         assert(alu->dest.file == IBC_REG_FILE_HW_GRF ||
-                alu->dest.file == IBC_REG_FILE_NONE);
-         bool compressed =
-            (alu->dest.hw_grf.stride * alu->instr.simd_width) > REG_SIZE;
+         bool compressed;
+         if (alu->dest.file == IBC_REG_FILE_NONE) {
+            /* TODO: Is this correct? */
+            unsigned bytes_written = ibc_type_byte_size(alu->dest.type) *
+                                     alu->instr.simd_width;
+            compressed = bytes_written > REG_SIZE;
+         } else {
+            assert(alu->dest.file == IBC_REG_FILE_HW_GRF);
+            unsigned dest_byte =
+               alu->dest.reg->hw_grf.byte + alu->dest.hw_grf.offset;
+            unsigned bytes_written =
+               alu->dest.hw_grf.hstride * (alu->instr.simd_width %
+                                           alu->dest.hw_grf.width) +
+               alu->dest.hw_grf.vstride * (alu->instr.simd_width /
+                                           alu->dest.hw_grf.width);
+            compressed = (dest_byte % REG_SIZE) + bytes_written > REG_SIZE;
+         }
 
          struct brw_reg src[3], dest;
          assert(ibc_alu_op_infos[alu->op].num_srcs <= ARRAY_SIZE(src));
