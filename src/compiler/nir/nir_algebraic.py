@@ -971,6 +971,11 @@ struct transform {
    unsigned condition_offset;
 };
 
+struct transform_table {
+    const struct transform *transforms;
+    size_t num_transforms;
+};
+
 struct per_op_table {
    const uint16_t *filter;
    unsigned num_filtered_states;
@@ -1063,6 +1068,12 @@ ${pass_name}_pre_block(nir_block *block, uint16_t *states)
    }
 }
 
+static const struct transform_table ${pass_name}_per_state_transforms[] = {
+% for i in range(len(automaton.state_patterns)):
+   { ${pass_name}_state${i}_xforms, ARRAY_SIZE(${pass_name}_state${i}_xforms) },
+% endfor
+};
+
 static bool
 ${pass_name}_block(nir_builder *build, nir_block *block,
                    const uint16_t *states, const bool *condition_flags)
@@ -1077,20 +1088,16 @@ ${pass_name}_block(nir_builder *build, nir_block *block,
       if (!alu->dest.dest.is_ssa)
          continue;
 
-      switch (states[alu->dest.dest.ssa.index]) {
-% for i in range(len(automaton.state_patterns)):
-      case ${i}:
-         for (unsigned i = 0; i < ARRAY_SIZE(${pass_name}_state${i}_xforms); i++) {
-            const struct transform *xform = &${pass_name}_state${i}_xforms[i];
-            if (condition_flags[xform->condition_offset] &&
-                nir_replace_instr(build, alu, xform->search, xform->replace)) {
-               progress = true;
-               break;
-            }
+      uint16_t state = states[alu->dest.dest.ssa.index];
+      assert(state < ARRAY_SIZE(${pass_name}_per_state_transforms));
+      struct transform_table xforms = ${pass_name}_per_state_transforms[state];
+      for (unsigned i = 0; i < xforms.num_transforms; i++) {
+         const struct transform *xform = &xforms.transforms[i];
+         if (condition_flags[xform->condition_offset] &&
+             nir_replace_instr(build, alu, xform->search, xform->replace)) {
+            progress = true;
+            break;
          }
-         break;
-% endfor
-      default: assert(0);
       }
    }
 
