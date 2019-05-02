@@ -514,6 +514,41 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
 }
 
 static inline ibc_reg_ref
+ibc_cluster_broadcast(ibc_builder *b, enum ibc_type dest_type,
+                      ibc_reg_ref src, unsigned cluster_size)
+{
+   if (cluster_size * ibc_type_byte_size(src.type) >= REG_SIZE * 2) {
+      /* In this case, the distance between clusters is at least 2 GRFs so we
+       * don't need to do any weird striding.
+       */
+      ibc_reg_ref dest = ibc_builder_new_logical_reg(b, src.type, 1);
+      const unsigned num_clusters = cluster_size / b->simd_width;
+      for (unsigned cluster = 0; cluster < num_clusters; cluster++) {
+         ibc_builder_push_group(b, cluster * cluster_size,  cluster_size);
+
+         const unsigned comp = cluster * cluster_size +
+                               (cluster_size - 1);
+         ibc_reg_ref comp_src = src;
+         ibc_hw_grf_slice_simd_group(&comp_src.hw_grf, comp, 1);
+         ibc_hw_grf_mul_stride(&comp_src.hw_grf, 0);
+         ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, comp_src);
+
+         ibc_builder_pop(b);
+      }
+      return dest;
+   } else {
+      ibc_reg_ref strided_src = src;
+      strided_src.hw_grf = (ibc_hw_grf_reg_ref) {
+         .offset = (cluster_size - 1) * ibc_type_byte_size(src.type),
+         .vstride = cluster_size * ibc_type_byte_size(src.type),
+         .width = cluster_size,
+         .hstride = 0,
+      };
+      return ibc_MOV(b, dest_type, strided_src);
+   }
+}
+
+static inline ibc_reg_ref
 ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,
                 enum ibc_type type, uint8_t stride)
 {
