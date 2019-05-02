@@ -52,17 +52,14 @@ reg_ref_stride(const ibc_reg_ref *ref)
 }
 
 static ibc_reg_ref
-simd_offset_ref(ibc_reg_ref ref, unsigned simd_group_offset)
+simd_slice_ref(ibc_reg_ref ref, uint8_t rel_simd_group, uint8_t simd_width)
 {
    switch (ref.file) {
    case IBC_REG_FILE_LOGICAL:
       return ref;
 
    case IBC_REG_FILE_HW_GRF:
-      if (ref.hw_grf.stride == 0)
-         return ref;
-
-      ref.hw_grf.offset += simd_group_offset * ref.hw_grf.stride;
+      ibc_hw_grf_slice_simd_group(&ref.hw_grf, rel_simd_group, simd_width);
       return ref;
 
    default:
@@ -72,12 +69,13 @@ simd_offset_ref(ibc_reg_ref ref, unsigned simd_group_offset)
 
 static ibc_reg_ref
 simd_restricted_src(ibc_builder *b, ibc_reg_ref src,
-                    unsigned simd_group_offset, unsigned num_comps)
+                    uint8_t rel_simd_group, uint8_t simd_width,
+                    unsigned num_comps)
 {
    if (src.file == IBC_REG_FILE_NONE || src.file == IBC_REG_FILE_IMM)
       return src;
 
-   src = simd_offset_ref(src, simd_group_offset);
+   src = simd_slice_ref(src, rel_simd_group, simd_width);
 
    /* If the source is WLR, then we have two cases:
     *
@@ -177,8 +175,10 @@ ibc_lower_simd_width(ibc_shader *shader)
              * we have to naively split them in order to maintain the WLR
              * properties.
              */
-            for (unsigned i = 0; i < num_splits; i++)
-               split_dests[i] = simd_offset_ref(*dest, i * split_simd_width);
+            for (unsigned i = 0; i < num_splits; i++) {
+               split_dests[i] = simd_slice_ref(*dest, i * split_simd_width,
+                                               split_simd_width);
+            }
          } else if (dest->file != IBC_REG_FILE_NONE) {
             /* For everything else, we emit a SIMD zip after the instruction
              * we're splitting.
@@ -234,7 +234,8 @@ ibc_lower_simd_width(ibc_shader *shader)
                   split->src[j] = alu->src[j];
                   split->src[j].ref =
                      simd_restricted_src(&b, alu->src[j].ref,
-                                         split_simd_rel_group, 1);
+                                         split_simd_rel_group,
+                                         split_simd_width, 1);
                }
 
                split->cmod = alu->cmod;
@@ -266,6 +267,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                   split->src[j].ref =
                      simd_restricted_src(&b, intrin->src[j].ref,
                                              split_simd_rel_group,
+                                             split_simd_width,
                                              intrin->src[i].num_comps);
                   split->src[j].simd_group = b.simd_group;
                   split->src[j].simd_width = b.simd_width;
