@@ -103,36 +103,34 @@ ibc_lower_gather_ops(ibc_shader *shader)
    ibc_builder b;
    ibc_builder_init(&b, shader, 32);
 
-   ibc_foreach_block(block, shader) {
-      ibc_foreach_instr_safe(instr, block) {
-         if (instr->type != IBC_INSTR_TYPE_INTRINSIC)
-            continue;
+   ibc_foreach_instr_safe(instr, shader) {
+      if (instr->type != IBC_INSTR_TYPE_INTRINSIC)
+         continue;
 
-         b.cursor = ibc_after_instr(instr);
+      b.cursor = ibc_after_instr(instr);
 
-         ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-         switch (intrin->op) {
-         case IBC_INTRINSIC_OP_SIMD_ZIP:
-            for (unsigned i = 0; i < intrin->num_srcs; i++) {
-               const unsigned rel_group = intrin->src[i].simd_group -
-                                          instr->simd_group;
-               const unsigned width = intrin->src[i].simd_width;
-               ibc_builder_push_group(&b, rel_group, intrin->src[i].simd_width);
-               assert(intrin->src[i].num_comps == 1); /* TODO */
-               build_MOV_raw(&b, simd_slice_ref(intrin->dest,
-                                                rel_group, width),
-                             simd_slice_ref(intrin->src[i].ref,
-                                            rel_group, width));
-               ibc_builder_pop(&b);
-            }
-            break;
-         default:
-            continue;
+      ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
+      switch (intrin->op) {
+      case IBC_INTRINSIC_OP_SIMD_ZIP:
+         for (unsigned i = 0; i < intrin->num_srcs; i++) {
+            const unsigned rel_group = intrin->src[i].simd_group -
+                                       instr->simd_group;
+            const unsigned width = intrin->src[i].simd_width;
+            ibc_builder_push_group(&b, rel_group, intrin->src[i].simd_width);
+            assert(intrin->src[i].num_comps == 1); /* TODO */
+            build_MOV_raw(&b, simd_slice_ref(intrin->dest,
+                                             rel_group, width),
+                          simd_slice_ref(intrin->src[i].ref,
+                                         rel_group, width));
+            ibc_builder_pop(&b);
          }
-
-         ibc_instr_remove(instr);
-         progress = true;
+         break;
+      default:
+         continue;
       }
+
+      ibc_instr_remove(instr);
+      progress = true;
    }
 
    return progress;
