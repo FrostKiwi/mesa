@@ -674,6 +674,14 @@ ibc_after_block(ibc_block *block)
    return (ibc_cursor) { block->instrs.prev };
 }
 
+static inline ibc_cursor
+ibc_before_shader(ibc_shader *shader)
+{
+   ibc_block *first_block =
+      list_first_entry(&shader->blocks, ibc_block, link);
+   return ibc_before_block(first_block);
+}
+
 void ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor);
 void ibc_instr_remove(ibc_instr *instr);
 
