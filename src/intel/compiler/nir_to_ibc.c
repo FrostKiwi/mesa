@@ -459,6 +459,7 @@ nir_to_ibc(const nir_shader *nir, void *mem_ctx,
 
    struct nir_to_ibc_state nti;
    ibc_builder_init(&nti.b, shader);
+   ibc_start(&nti.b);
 
    nir_function_impl *impl = nir_shader_get_entrypoint((nir_shader *)nir);
 
@@ -485,6 +486,8 @@ nir_to_ibc(const nir_shader *nir, void *mem_ctx,
 
    if (nir->info.stage == MESA_SHADER_COMPUTE)
       nti_emit_cs_thread_terminate(&nti);
+
+   ibc_end(&nti.b);
 
    return nti.b.shader;
 }

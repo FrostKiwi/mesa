@@ -198,8 +198,11 @@ print_instr_predicate(FILE *fp, const ibc_instr *instr)
 }
 
 static void
-print_instr(FILE *fp, const ibc_instr *instr, const char *name)
+print_instr(FILE *fp, const ibc_instr *instr, const char *name,
+            unsigned indent)
 {
+   for (unsigned i = 0; i < indent; i++)
+      fprintf(fp, "    ");
    print_instr_predicate(fp, instr);
    fprintf(fp, "%s", name);
    print_instr_group(fp, instr);
@@ -244,6 +247,7 @@ conditional_mod_name(enum brw_conditional_mod cmod)
 static void
 print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 {
+   fprintf(fp, "    ");
    print_instr_predicate(fp, &alu->instr);
    fprintf(fp, "%s", alu_op_name(alu->op));
    if (alu->cmod) {
@@ -268,7 +272,7 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 static void
 print_send_instr(FILE *fp, const ibc_send_instr *send)
 {
-   print_instr(fp, &send->instr, "send");
+   print_instr(fp, &send->instr, "send", 1);
 
    fprintf(fp, "   ");
    print_reg_ref(fp, &send->dest, true);
@@ -314,7 +318,7 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
 static void
 print_intrinsic_instr(FILE *fp, const ibc_intrinsic_instr *intrin)
 {
-   print_instr(fp, &intrin->instr, intrinsic_op_name(intrin->op));
+   print_instr(fp, &intrin->instr, intrinsic_op_name(intrin->op), 1);
 
    fprintf(fp, "   ");
    print_reg_ref(fp, &intrin->dest, true);
@@ -328,12 +332,74 @@ print_intrinsic_instr(FILE *fp, const ibc_intrinsic_instr *intrin)
    fprintf(fp, "\n");
 }
 
+static const char *
+merge_op_name(enum ibc_merge_op op)
+{
+   switch (op) {
+   case IBC_MERGE_OP_MERGE:   return "merge";
+   case IBC_MERGE_OP_ENDIF:   return "endif";
+   case IBC_MERGE_OP_DO:      return "do";
+   case IBC_MERGE_OP_START:   return "start";
+   }
+   unreachable("Unknown ALU opcode");
+}
+
+static void
+print_merge_instr(FILE *fp, ibc_merge_instr *merge)
+{
+   fprintf(fp, "/* Block %u, preds: [", merge->block_index);
+   bool first_pred = true;
+   list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
+      fprintf(fp, "%s%u", first_pred ? "" : ", ",
+              pred->branch->block_start->block_index);
+      first_pred = false;
+   }
+   fprintf(fp, "] */\n");
+
+   print_instr(fp, &merge->instr, merge_op_name(merge->op), 0);
+
+   fprintf(fp, "\n");
+}
+
+static const char *
+branch_op_name(enum ibc_branch_op op)
+{
+   switch (op) {
+   case IBC_BRANCH_OP_NEXT:      return "next";
+   case IBC_BRANCH_OP_IF:        return "if";
+   case IBC_BRANCH_OP_ELSE:      return "else";
+   case IBC_BRANCH_OP_WHILE:     return "while";
+   case IBC_BRANCH_OP_BREAK:     return "break";
+   case IBC_BRANCH_OP_CONTINUE:  return "continue";
+   case IBC_BRANCH_OP_END:       return "end";
+   }
+   unreachable("Unknown ALU opcode");
+}
+
+static void
+print_branch_instr(FILE *fp, ibc_branch_instr *branch)
+{
+   print_instr(fp, &branch->instr, branch_op_name(branch->op), 0);
+   if (branch->jump)
+      fprintf(fp, " jump: %u", branch->jump->block_index);
+   if (branch->merge)
+      fprintf(fp, " merge: %u", branch->merge->block_index);
+
+   fprintf(fp, "\n");
+}
+
 void
 ibc_print_shader(const ibc_shader *shader, FILE *fp)
 {
    uint32_t num_regs = 0;
    ibc_foreach_reg(reg, shader)
       reg->index = num_regs++;
+
+   uint32_t num_blocks = 0;
+   ibc_foreach_instr(instr, shader) {
+      if (instr->type == IBC_INSTR_TYPE_MERGE)
+         ibc_instr_as_merge(instr)->block_index = num_blocks++;
+   }
 
    ibc_foreach_instr(instr, shader) {
       switch (instr->type) {
@@ -345,6 +411,12 @@ ibc_print_shader(const ibc_shader *shader, FILE *fp)
          continue;
       case IBC_INSTR_TYPE_INTRINSIC:
          print_intrinsic_instr(fp, ibc_instr_as_intrinsic(instr));
+         continue;
+      case IBC_INSTR_TYPE_MERGE:
+         print_merge_instr(fp, ibc_instr_as_merge(instr));
+         continue;
+      case IBC_INSTR_TYPE_BRANCH:
+         print_branch_instr(fp, ibc_instr_as_branch(instr));
          continue;
       }
       unreachable("Invalid instruction type");

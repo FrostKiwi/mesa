@@ -50,6 +50,8 @@ typedef struct ibc_builder {
    unsigned simd_width;
    bool we_all;
 
+   ibc_merge_instr *block_start;
+
    unsigned _group_stack_size;
    struct ibc_builder_simd_group _group_stack[4];
 } ibc_builder;
@@ -63,6 +65,8 @@ ibc_builder_init(ibc_builder *b, ibc_shader *shader)
    b->simd_group = 0;
    b->simd_width = shader->simd_width;
    b->we_all = false;
+
+   b->block_start = NULL;
 
    b->_group_stack_size = 0;
 }
@@ -561,6 +565,55 @@ ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,
    ibc_hw_grf_mul_stride(&hw_ref.hw_grf, stride);
 
    return ibc_MOV(b, type, hw_ref);
+}
+
+static inline ibc_merge_instr *
+ibc_build_merge(ibc_builder *b, enum ibc_merge_op op,
+                struct list_head *preds)
+{
+   assert(b->simd_group == 0);
+   ibc_merge_instr *merge =
+      ibc_merge_instr_create(b->shader, op, b->simd_width);
+
+   /* This is the merge instruction so it starts a block */
+   assert(b->block_start == NULL);
+   b->block_start = merge;
+
+   if (op != IBC_MERGE_OP_START)
+      list_splicetail(preds, &merge->preds);
+
+   ibc_builder_insert_instr(b, &merge->instr);
+
+   return merge;
+}
+
+static inline ibc_branch_instr *
+ibc_build_branch(ibc_builder *b, enum ibc_branch_op op)
+{
+   assert(b->simd_group == 0);
+   ibc_branch_instr *branch =
+      ibc_branch_instr_create(b->shader, op, b->simd_width);
+
+   /* This is the branch instruction, tie up the loose ends */
+   assert(b->block_start != NULL);
+   branch->block_start = b->block_start;
+   b->block_start->block_end = branch;
+
+   ibc_builder_insert_instr(b, &branch->instr);
+
+   return branch;
+}
+
+static inline ibc_merge_instr *
+ibc_start(ibc_builder *b)
+{
+   return ibc_build_merge(b, IBC_MERGE_OP_START, NULL);
+}
+
+static inline ibc_branch_instr *
+ibc_end(ibc_builder *b)
+{
+   return ibc_build_branch(b, IBC_BRANCH_OP_END);
 }
 
 #ifdef __cplusplus

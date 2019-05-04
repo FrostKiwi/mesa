@@ -343,6 +343,18 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
    }
 }
 
+static void
+generate_merge(struct brw_codegen *p, const ibc_merge_instr *merge)
+{
+   assert(merge->op == IBC_MERGE_OP_START);
+}
+
+static void
+generate_branch(struct brw_codegen *p, const ibc_branch_instr *branch)
+{
+   assert(branch->op == IBC_BRANCH_OP_END);
+}
+
 unsigned *
 ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 {
@@ -375,12 +387,28 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
       }
       brw_set_default_mask_control(p, instr->we_all);
 
-      if (instr->type == IBC_INSTR_TYPE_SEND) {
-         generate_send(p, ibc_instr_as_send(instr));
-      } else {
-         assert(instr->type == IBC_INSTR_TYPE_ALU);
+      switch (instr->type) {
+      case IBC_INSTR_TYPE_ALU:
          generate_alu(p, ibc_instr_as_alu(instr));
+         continue;
+
+      case IBC_INSTR_TYPE_SEND:
+         generate_send(p, ibc_instr_as_send(instr));
+         continue;
+
+      case IBC_INSTR_TYPE_INTRINSIC:
+         unreachable("These should have been lowered by now");
+         continue;
+
+      case IBC_INSTR_TYPE_MERGE:
+         generate_merge(p, ibc_instr_as_merge(instr));
+         continue;
+
+      case IBC_INSTR_TYPE_BRANCH:
+         generate_branch(p, ibc_instr_as_branch(instr));
+         continue;
       }
+      unreachable("Invalid instruction type");
    }
 
    disasm_new_inst_group(disasm_info, p->next_insn_offset);

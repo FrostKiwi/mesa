@@ -415,7 +415,8 @@ enum ibc_instr_type {
    IBC_INSTR_TYPE_ALU,
    IBC_INSTR_TYPE_SEND,
    IBC_INSTR_TYPE_INTRINSIC,
-   IBC_INSTR_TYPE_JUMP,
+   IBC_INSTR_TYPE_BRANCH,
+   IBC_INSTR_TYPE_MERGE,
 };
 
 /** A structure representing an instruction */
@@ -585,6 +586,71 @@ ibc_intrinsic_instr *ibc_intrinsic_instr_create(struct ibc_shader *shader,
                                                 uint8_t simd_group,
                                                 uint8_t simd_width,
                                                 unsigned num_srcs);
+
+typedef struct ibc_merge_instr ibc_merge_instr;
+typedef struct ibc_branch_instr ibc_branch_instr;
+
+enum ibc_merge_op {
+   IBC_MERGE_OP_MERGE, /**< Generic merge */
+   IBC_MERGE_OP_ENDIF,
+   IBC_MERGE_OP_DO,
+   IBC_MERGE_OP_START, /**< Start of program */
+};
+
+typedef struct ibc_merge_pred {
+   /** Link in ibc_merge_instr::preds */
+   struct list_head link;
+
+   ibc_branch_instr *branch;
+} ibc_merge_pred;
+
+struct ibc_merge_instr {
+   ibc_instr instr;
+
+   enum ibc_merge_op op;
+
+   uint32_t block_index;
+
+   ibc_branch_instr *block_end;
+
+   /** List of predecessors */
+   struct list_head preds;
+};
+
+IBC_DEFINE_CAST(ibc_instr_as_merge, ibc_instr, ibc_merge_instr, instr,
+                type, IBC_INSTR_TYPE_MERGE)
+
+ibc_merge_instr *ibc_merge_instr_create(struct ibc_shader *shader,
+                                        enum ibc_merge_op op,
+                                        uint8_t simd_width);
+
+enum ibc_branch_op {
+   IBC_BRANCH_OP_NEXT, /**< Just fall through to the next instruction */
+   IBC_BRANCH_OP_IF,
+   IBC_BRANCH_OP_ELSE,
+   IBC_BRANCH_OP_WHILE,
+   IBC_BRANCH_OP_BREAK,
+   IBC_BRANCH_OP_CONTINUE,
+   IBC_BRANCH_OP_END, /**< End of program */
+};
+
+struct ibc_branch_instr {
+   ibc_instr instr;
+
+   enum ibc_branch_op op;
+
+   ibc_merge_instr *block_start;
+
+   ibc_merge_instr *jump;
+   ibc_merge_instr *merge;
+};
+
+IBC_DEFINE_CAST(ibc_instr_as_branch, ibc_instr, ibc_branch_instr, instr,
+                type, IBC_INSTR_TYPE_BRANCH)
+
+ibc_branch_instr *ibc_branch_instr_create(struct ibc_shader *shader,
+                                          enum ibc_branch_op op,
+                                          uint8_t simd_width);
 
 #define ibc_foreach_instr(instr, shader) \
    list_for_each_entry(ibc_instr, instr, &(shader)->instrs, link)

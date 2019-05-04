@@ -34,6 +34,7 @@ struct ibc_validate_state {
    void *mem_ctx;
 
    const ibc_shader *shader;
+   const ibc_merge_instr *block_start;
    const ibc_instr *instr;
 
    /* ibc_reg* -> reg_validate_state* */
@@ -42,7 +43,7 @@ struct ibc_validate_state {
 
 struct reg_validate_state {
    struct set *writes;
-//   const ibc_block *write_block;
+   const ibc_merge_instr *write_block_start;
    struct list_head *next_write_link;
 };
 
@@ -124,11 +125,11 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       ibc_assert(s, ref->write_instr == s->instr);
       _mesa_set_add(reg_state->writes, ref);
       if (ref->reg->is_wlr) {
-//         if (reg_state->write_block == NULL) {
-//            reg_state->write_block = s->block;
-//         } else {
-//            ibc_assert(s, reg_state->write_block == s->block);
-//         }
+         if (reg_state->write_block_start == NULL) {
+            reg_state->write_block_start = s->block_start;
+         } else {
+            ibc_assert(s, reg_state->write_block_start == s->block_start);
+         }
          ibc_assert(s, reg_state->next_write_link == &ref->write_link);
          reg_state->next_write_link = ref->write_link.next;
       }
@@ -376,6 +377,56 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
 }
 
 static void
+ibc_validate_merge_instr(struct ibc_validate_state *s,
+                         const ibc_merge_instr *merge)
+{
+   ibc_assert(s, s->block_start == NULL);
+   s->block_start = merge;
+
+   ibc_assert(s, merge->instr.simd_width == s->shader->simd_width);
+
+   if (ibc_assert(s, merge->block_end))
+      ibc_assert(s, merge->block_end->block_start == merge);
+
+   switch (merge->op) {
+   case IBC_MERGE_OP_START:
+      ibc_assert(s, list_is_empty(&merge->preds));
+      break;
+
+   default:
+      ibc_assert(s, !"TODO: Finish merge instruction validation");
+   }
+
+   list_validate(&merge->preds);
+   list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
+      ibc_assert(s, pred->branch != NULL);
+   }
+}
+
+static void
+ibc_validate_branch_instr(struct ibc_validate_state *s,
+                          const ibc_branch_instr *branch)
+{
+   ibc_assert(s, branch->instr.simd_width == s->shader->simd_width);
+
+   if (ibc_assert(s, branch->block_start))
+      ibc_assert(s, branch->block_start->block_end == branch);
+
+   switch (branch->op) {
+   case IBC_BRANCH_OP_END:
+      ibc_assert(s, branch->jump == NULL);
+      ibc_assert(s, branch->merge == NULL);
+      break;
+
+   default:
+      ibc_assert(s, !"TODO: Finish branch instruction validation");
+   }
+
+   ibc_assert(s, s->block_start == branch->block_start);
+   s->block_start = NULL;
+}
+
+static void
 ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 {
    s->instr = instr;
@@ -419,6 +470,14 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 
    case IBC_INSTR_TYPE_INTRINSIC:
       ibc_validate_intrinsic_instr(s, ibc_instr_as_intrinsic(instr));
+      return;
+
+   case IBC_INSTR_TYPE_MERGE:
+      ibc_validate_merge_instr(s, ibc_instr_as_merge(instr));
+      return;
+
+   case IBC_INSTR_TYPE_BRANCH:
+      ibc_validate_branch_instr(s, ibc_instr_as_branch(instr));
       return;
    }
 
