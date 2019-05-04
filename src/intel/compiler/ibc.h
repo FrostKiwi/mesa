@@ -602,6 +602,8 @@ ibc_intrinsic_instr *ibc_intrinsic_instr_create(struct ibc_shader *shader,
 typedef struct ibc_shader {
    const struct gen_device_info *devinfo;
 
+   uint8_t simd_width;
+
    /** Instructions */
    struct list_head instrs;
 
@@ -610,7 +612,8 @@ typedef struct ibc_shader {
 } ibc_shader;
 
 ibc_shader *ibc_shader_create(void *mem_ctx,
-                              const struct gen_device_info *devinfo);
+                              const struct gen_device_info *devinfo,
+                              uint8_t simd_width);
 
 #define ibc_foreach_reg(reg, shader) \
    list_for_each_entry(ibc_reg, reg, &(shader)->regs, link)
