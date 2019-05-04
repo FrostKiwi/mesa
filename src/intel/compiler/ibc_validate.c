@@ -380,9 +380,9 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 {
    s->instr = instr;
 
-   ibc_assert(s, instr->simd_group < 32);
-   ibc_assert(s, instr->simd_width <= 32);
-   ibc_assert(s, instr->simd_group + instr->simd_width <= 32);
+   ibc_assert(s, instr->simd_group < s->shader->simd_width);
+   ibc_assert(s, instr->simd_width <= s->shader->simd_width);
+   ibc_assert(s, instr->simd_group + instr->simd_width <= s->shader->simd_width);
    ibc_assert(s, instr->simd_group % instr->simd_width == 0);
 
    /* We technically don't need to but we require all WE_all instructions to
@@ -471,6 +471,8 @@ ibc_validate_shader(const ibc_shader *shader)
       .mem_ctx = ralloc_context(NULL),
       .shader = shader,
    };
+
+   ibc_assert(&s, shader->simd_width <= 32);
 
    s.reg_state = _mesa_pointer_hash_table_create(s.mem_ctx);
    ibc_foreach_reg(reg, shader)

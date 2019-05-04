@@ -455,9 +455,10 @@ nir_to_ibc(const nir_shader *nir, void *mem_ctx,
            unsigned dispatch_size,
            const struct gen_device_info *devinfo)
 {
+   ibc_shader *shader = ibc_shader_create(mem_ctx, devinfo, dispatch_size);
+
    struct nir_to_ibc_state nti;
-   ibc_builder_init(&nti.b, ibc_shader_create(mem_ctx, devinfo),
-                    dispatch_size);
+   ibc_builder_init(&nti.b, shader);
 
    nir_function_impl *impl = nir_shader_get_entrypoint((nir_shader *)nir);
 
