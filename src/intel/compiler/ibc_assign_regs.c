@@ -135,7 +135,8 @@ ibc_assign_regs(ibc_shader *shader)
    {
       ibc_instr *last_instr = list_last_entry(&shader->instrs,
                                               ibc_instr, link);
-      assert(last_instr->type == IBC_INSTR_TYPE_SEND);
+      assert(ibc_instr_as_branch(last_instr)->op == IBC_BRANCH_OP_END);
+      last_instr = LIST_ENTRY(ibc_instr, last_instr->link.prev, link);
       ibc_send_instr *last_send = ibc_instr_as_send(last_instr);
 
       assert(last_send->eot);
@@ -231,6 +232,11 @@ ibc_assign_regs(ibc_shader *shader)
 
       case IBC_INSTR_TYPE_INTRINSIC:
          unreachable("These should no longer exist");
+
+      case IBC_INSTR_TYPE_MERGE:
+      case IBC_INSTR_TYPE_BRANCH:
+         /* Nothing interesting to do here */
+         continue;
       }
       unreachable("Invalid instruction type");
    }
