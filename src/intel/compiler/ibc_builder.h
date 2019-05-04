@@ -58,9 +58,7 @@ static inline void
 ibc_builder_init(ibc_builder *b, ibc_shader *shader, unsigned simd_width)
 {
    b->shader = shader;
-   ibc_block *first_block =
-      list_first_entry(&shader->blocks, ibc_block, link);
-   b->cursor = ibc_before_block(first_block);
+   b->cursor = ibc_before_shader(shader);
 
    b->simd_group = 0;
    b->simd_width = simd_width;
