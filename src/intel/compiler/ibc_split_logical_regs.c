@@ -163,12 +163,10 @@ ibc_split_logical_regs(ibc_shader *shader)
    }
    assert(reg_idx == num_logical);
 
-   ibc_foreach_block(block, shader) {
-      ibc_foreach_instr_safe(instr, block) {
-         state.instr = instr;
-         ibc_instr_foreach_read(instr, mark_splits, &state);
-         ibc_instr_foreach_write(instr, mark_splits, &state);
-      }
+   ibc_foreach_instr_safe(instr, shader) {
+      state.instr = instr;
+      ibc_instr_foreach_read(instr, mark_splits, &state);
+      ibc_instr_foreach_write(instr, mark_splits, &state);
    }
 
    for (unsigned i = 0; i < num_logical; i++) {
@@ -224,12 +222,10 @@ ibc_split_logical_regs(ibc_shader *shader)
       assert(split_idx == split->num_regs);
    }
 
-   ibc_foreach_block(block, shader) {
-      ibc_foreach_instr_safe(instr, block) {
-         state.instr = instr;
-         ibc_instr_foreach_read(instr, rewrite_ref_if_split, &state);
-         ibc_instr_foreach_write(instr, rewrite_ref_if_split, &state);
-      }
+   ibc_foreach_instr_safe(instr, shader) {
+      state.instr = instr;
+      ibc_instr_foreach_read(instr, rewrite_ref_if_split, &state);
+      ibc_instr_foreach_write(instr, rewrite_ref_if_split, &state);
    }
 
    return progress;

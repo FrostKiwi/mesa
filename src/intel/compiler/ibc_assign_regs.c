@@ -190,51 +190,49 @@ ibc_assign_regs(ibc_shader *shader)
       byte = grf->byte + grf->size;
    }
 
-   ibc_foreach_block(block, shader) {
-      ibc_foreach_instr(instr, block) {
-         /* Flags should already have been lowered */
-         assert(instr->flag.file == IBC_REG_FILE_NONE ||
-                instr->flag.file == IBC_REG_FILE_FLAG);
+   ibc_foreach_instr(instr, shader) {
+      /* Flags should already have been lowered */
+      assert(instr->flag.file == IBC_REG_FILE_NONE ||
+             instr->flag.file == IBC_REG_FILE_FLAG);
 
-         /* Right now, only ALU instructions use logical regs */
-         switch (instr->type) {
-         case IBC_INSTR_TYPE_ALU: {
-            ibc_alu_instr *alu = ibc_instr_as_alu(instr);
+      /* Right now, only ALU instructions use logical regs */
+      switch (instr->type) {
+      case IBC_INSTR_TYPE_ALU: {
+         ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
-            if (alu->dest.file == IBC_REG_FILE_LOGICAL) {
-               rewrite_reg_ref(&alu->dest, alu->instr.simd_group,
-                               logical_grfs, false);
+         if (alu->dest.file == IBC_REG_FILE_LOGICAL) {
+            rewrite_reg_ref(&alu->dest, alu->instr.simd_group,
+                            logical_grfs, false);
+         }
+
+         for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
+            if (alu->src[i].ref.file == IBC_REG_FILE_LOGICAL) {
+               rewrite_reg_ref(&alu->src[i].ref, alu->instr.simd_group,
+                               logical_grfs, true);
             }
-
-            for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-               if (alu->src[i].ref.file == IBC_REG_FILE_LOGICAL) {
-                  rewrite_reg_ref(&alu->src[i].ref, alu->instr.simd_group,
-                                  logical_grfs, true);
-               }
-            }
-            continue;
          }
-
-         case IBC_INSTR_TYPE_SEND: {
-            ibc_send_instr *send = ibc_instr_as_send(instr);
-            rewrite_reg_ref(&send->dest, send->instr.simd_group,
-                            logical_grfs, false);
-            rewrite_reg_ref(&send->payload[0], send->instr.simd_group,
-                            logical_grfs, false);
-            rewrite_reg_ref(&send->payload[1], send->instr.simd_group,
-                            logical_grfs, false);
-            rewrite_reg_ref(&send->desc, send->instr.simd_group,
-                            logical_grfs, false);
-            rewrite_reg_ref(&send->ex_desc, send->instr.simd_group,
-                            logical_grfs, false);
-            continue;
-         }
-
-         case IBC_INSTR_TYPE_INTRINSIC:
-            unreachable("These should no longer exist");
-         }
-         unreachable("Invalid instruction type");
+         continue;
       }
+
+      case IBC_INSTR_TYPE_SEND: {
+         ibc_send_instr *send = ibc_instr_as_send(instr);
+         rewrite_reg_ref(&send->dest, send->instr.simd_group,
+                         logical_grfs, false);
+         rewrite_reg_ref(&send->payload[0], send->instr.simd_group,
+                         logical_grfs, false);
+         rewrite_reg_ref(&send->payload[1], send->instr.simd_group,
+                         logical_grfs, false);
+         rewrite_reg_ref(&send->desc, send->instr.simd_group,
+                         logical_grfs, false);
+         rewrite_reg_ref(&send->ex_desc, send->instr.simd_group,
+                         logical_grfs, false);
+         continue;
+      }
+
+      case IBC_INSTR_TYPE_INTRINSIC:
+         unreachable("These should no longer exist");
+      }
+      unreachable("Invalid instruction type");
    }
 
    ibc_foreach_reg(reg, shader) {
