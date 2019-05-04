@@ -52,15 +52,6 @@ typedef struct {
 } reg_validate_state;
 
 typedef struct {
-   /*
-    * equivalent to the uses in nir_ssa_def, but built up by the validator.
-    * At the end, we verify that the sets have the same entries.
-    */
-   struct set *uses, *if_uses;
-   nir_function_impl *where_defined;
-} ssa_def_validate_state;
-
-typedef struct {
    /* map of register -> validation state (struct above) */
    struct hash_table *regs;
 
@@ -87,6 +78,9 @@ typedef struct {
 
    /* the current function implementation being validated */
    nir_function_impl *impl;
+
+   /* index which should be unique to this nir_validate() for this impl */
+   uint32_t impl_validate_index;
 
    /* map of SSA value -> function implementation where it is defined */
    struct hash_table *ssa_defs;
@@ -178,24 +172,10 @@ validate_ssa_src(nir_src *src, validate_state *state,
 {
    validate_assert(state, src->ssa != NULL);
 
-   struct hash_entry *entry = _mesa_hash_table_search(state->ssa_defs, src->ssa);
-
-   validate_assert(state, entry);
-
-   if (!entry)
-      return;
-
-   ssa_def_validate_state *def_state = (ssa_def_validate_state *)entry->data;
-
-   validate_assert(state, def_state->where_defined == state->impl &&
-          "using an SSA value defined in a different function");
-
-   if (state->instr) {
-      _mesa_set_add(def_state->uses, src);
-   } else {
-      validate_assert(state, state->if_stmt);
-      _mesa_set_add(def_state->if_uses, src);
-   }
+   /* This will fail if we've not see the SSA def as a destination yet */
+   validate_assert(state, src->ssa_validate_index == state->impl_validate_index);
+   /* This will let us detect if we've seen the use */
+   src->ssa_validate_index = state->impl_validate_index | (1u << 31);
 
    if (bit_sizes)
       validate_assert(state, src->ssa->bit_size & bit_sizes);
@@ -286,14 +266,20 @@ validate_ssa_def(nir_ssa_def *def, validate_state *state)
                           (def->num_components == 16));
 
    list_validate(&def->uses);
-   list_validate(&def->if_uses);
+   nir_foreach_use(src, def) {
+      validate_assert(state, src->is_ssa);
+      validate_assert(state, src->ssa_validate_index !=
+                             state->impl_validate_index);
+      src->ssa_validate_index = state->impl_validate_index;
+   }
 
-   ssa_def_validate_state *def_state = ralloc(state->ssa_defs,
-                                              ssa_def_validate_state);
-   def_state->where_defined = state->impl;
-   def_state->uses = _mesa_pointer_set_create(def_state);
-   def_state->if_uses = _mesa_pointer_set_create(def_state);
-   _mesa_hash_table_insert(state->ssa_defs, def, def_state);
+   list_validate(&def->if_uses);
+   nir_foreach_if_use(src, def) {
+      validate_assert(state, src->is_ssa);
+      validate_assert(state, src->ssa_validate_index !=
+                             state->impl_validate_index);
+      src->ssa_validate_index = state->impl_validate_index;
+   }
 }
 
 static void
@@ -1081,37 +1067,16 @@ postvalidate_ssa_def(nir_ssa_def *def, void *void_state)
 {
    validate_state *state = void_state;
 
-   struct hash_entry *entry = _mesa_hash_table_search(state->ssa_defs, def);
-
-   assume(entry);
-   ssa_def_validate_state *def_state = (ssa_def_validate_state *)entry->data;
-
    nir_foreach_use(src, def) {
-      struct set_entry *entry = _mesa_set_search(def_state->uses, src);
-      validate_assert(state, entry);
-      _mesa_set_remove(def_state->uses, entry);
-   }
-
-   if (def_state->uses->entries != 0) {
-      printf("extra entries in SSA def uses:\n");
-      set_foreach(def_state->uses, entry)
-         printf("%p\n", entry->key);
-
-      abort();
+      /* This will fail if we've not seen this use */
+      validate_assert(state, src->ssa_validate_index ==
+                             (state->impl_validate_index | (1u << 31)));
    }
 
    nir_foreach_if_use(src, def) {
-      struct set_entry *entry = _mesa_set_search(def_state->if_uses, src);
-      validate_assert(state, entry);
-      _mesa_set_remove(def_state->if_uses, entry);
-   }
-
-   if (def_state->if_uses->entries != 0) {
-      printf("extra entries in SSA def uses:\n");
-      set_foreach(def_state->if_uses, entry)
-         printf("%p\n", entry->key);
-
-      abort();
+      /* This will fail if we've not seen this use */
+      validate_assert(state, src->ssa_validate_index ==
+                             (state->impl_validate_index | (1u << 31)));
    }
 
    return true;
@@ -1279,10 +1244,16 @@ nir_validate_shader(nir_shader *shader, const char *when)
      validate_var_decl(var, true, &state);
    }
 
+   validate_assert(&state, shader->validate_index > 0);
+   state.impl_validate_index = shader->validate_index;
+
    exec_list_validate(&shader->functions);
    foreach_list_typed(nir_function, func, node, &shader->functions) {
       validate_function(func, &state);
+      state.impl_validate_index++;
    }
+
+   shader->validate_index = state.impl_validate_index;
 
    if (_mesa_hash_table_num_entries(state.errors) > 0)
       dump_errors(&state, when);

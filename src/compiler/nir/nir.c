@@ -66,6 +66,11 @@ nir_shader_create(void *mem_ctx,
    shader->num_uniforms = 0;
    shader->num_shared = 0;
 
+   /* It doesn't matter what this number is as long as it's non-zero and not
+    * likely to randomly come up due to memory corruption.
+    */
+   shader->validate_index = 237;
+
    return shader;
 }
 

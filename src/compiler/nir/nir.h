@@ -592,7 +592,10 @@ typedef struct nir_src {
 
    union {
       nir_reg_src reg;
-      nir_ssa_def *ssa;
+      struct {
+         nir_ssa_def *ssa;
+         uint32_t ssa_validate_index;
+      };
    };
 
    bool is_ssa;
@@ -2412,6 +2415,9 @@ typedef struct nir_shader {
     */
    void *constant_data;
    unsigned constant_data_size;
+
+   /* Used only by nir_validate */
+   uint32_t validate_index;
 } nir_shader;
 
 #define nir_foreach_function(func, shader) \
