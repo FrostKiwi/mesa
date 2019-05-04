@@ -423,7 +423,7 @@ typedef struct ibc_instr {
    /** The type of this instruction */
    enum ibc_instr_type type;
 
-   /** Link in ibc_block::instrs */
+   /** Link in ibc_shader::instrs */
    struct list_head link;
 
    uint8_t simd_group;
@@ -586,42 +586,24 @@ ibc_intrinsic_instr *ibc_intrinsic_instr_create(struct ibc_shader *shader,
                                                 uint8_t simd_width,
                                                 unsigned num_srcs);
 
-typedef struct ibc_block {
-   /* Link in the list of blocks */
-   struct list_head link;
+#define ibc_foreach_instr(instr, shader) \
+   list_for_each_entry(ibc_instr, instr, &(shader)->instrs, link)
 
-   /** Index used for printing shaders */
-   uint32_t index;
+#define ibc_foreach_instr_reverse(instr, shader) \
+   list_for_each_entry_rev(ibc_instr, instr, &(shader)->instrs, link)
 
-   /* Instructions in this block.  The last instruction is guaranteed to be a
-    * jump instruction.
-    */
-   struct list_head instrs;
-} ibc_block;
+#define ibc_foreach_instr_safe(instr, shader) \
+   list_for_each_entry_safe(ibc_instr, instr, &(shader)->instrs, link)
 
-ibc_block *ibc_block_create(struct ibc_shader *shader);
-
-#define ibc_foreach_instr(instr, block) \
-   list_for_each_entry(ibc_instr, instr, &(block)->instrs, link)
-
-#define ibc_foreach_instr_reverse(instr, block) \
-   list_for_each_entry_rev(ibc_instr, instr, &(block)->instrs, link)
-
-#define ibc_foreach_instr_safe(instr, block) \
-   list_for_each_entry_safe(ibc_instr, instr, &(block)->instrs, link)
-
-#define ibc_foreach_instr_reverse(instr, block) \
-   list_for_each_entry_rev(ibc_instr, instr, &(block)->instrs, link)
-
-#define ibc_foreach_instr_reverse_safe(instr, block) \
-   list_for_each_entry_safe_rev(ibc_instr, instr, &(block)->instrs, link)
+#define ibc_foreach_instr_reverse_safe(instr, shader) \
+   list_for_each_entry_safe_rev(ibc_instr, instr, &(shader)->instrs, link)
 
 
 typedef struct ibc_shader {
    const struct gen_device_info *devinfo;
 
-   /** Blocks */
-   struct list_head blocks;
+   /** Instructions */
+   struct list_head instrs;
 
    /** Registers */
    struct list_head regs;
@@ -636,15 +618,11 @@ ibc_shader *ibc_shader_create(void *mem_ctx,
 #define ibc_foreach_reg_safe(reg, shader) \
    list_for_each_entry_safe(ibc_reg, reg, &(shader)->regs, link)
 
+/* Temporary hack until we drop the use of the foreach_block macro */
 #define ibc_foreach_block(block, shader) \
-   list_for_each_entry(ibc_block, block, &(shader)->blocks, link)
-
+   for (ibc_shader *block = shader; block; block = NULL)
 #define ibc_foreach_block_reverse(block, shader) \
-   list_for_each_entry_rev(ibc_block, block, &(shader)->blocks, link)
-
-#define ibc_foreach_block_safe(block, shader) \
-   list_for_each_entry_safe(ibc_block, block, &(shader)->blocks, link)
-
+   for (ibc_shader *block = shader; block; block = NULL)
 
 typedef struct {
    struct list_head *prev;
@@ -663,23 +641,9 @@ ibc_after_instr(ibc_instr *instr)
 }
 
 static inline ibc_cursor
-ibc_before_block(ibc_block *block)
-{
-   return (ibc_cursor) { &block->instrs };
-}
-
-static inline ibc_cursor
-ibc_after_block(ibc_block *block)
-{
-   return (ibc_cursor) { block->instrs.prev };
-}
-
-static inline ibc_cursor
 ibc_before_shader(ibc_shader *shader)
 {
-   ibc_block *first_block =
-      list_first_entry(&shader->blocks, ibc_block, link);
-   return ibc_before_block(first_block);
+   return (ibc_cursor) { &shader->instrs };
 }
 
 void ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor);

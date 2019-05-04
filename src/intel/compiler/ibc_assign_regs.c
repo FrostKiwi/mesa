@@ -133,9 +133,7 @@ ibc_assign_regs(ibc_shader *shader)
 
    /* Assign a high register number to the final EOT send */
    {
-      ibc_block *last_block = list_last_entry(&shader->blocks,
-                                              ibc_block, link);
-      ibc_instr *last_instr = list_last_entry(&last_block->instrs,
+      ibc_instr *last_instr = list_last_entry(&shader->instrs,
                                               ibc_instr, link);
       assert(last_instr->type == IBC_INSTR_TYPE_SEND);
       ibc_send_instr *last_send = ibc_instr_as_send(last_instr);
