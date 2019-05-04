@@ -55,7 +55,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
    };
 
    ibc_builder b;
-   ibc_builder_init(&b, shader, 32);
+   ibc_builder_init(&b, shader);
 
    ibc_foreach_instr_safe(instr, shader) {
       ibc_instr_foreach_read(instr, rewrite_logical_flag_refs_to_ud, NULL);
