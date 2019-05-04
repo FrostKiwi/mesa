@@ -55,13 +55,13 @@ typedef struct ibc_builder {
 } ibc_builder;
 
 static inline void
-ibc_builder_init(ibc_builder *b, ibc_shader *shader, unsigned simd_width)
+ibc_builder_init(ibc_builder *b, ibc_shader *shader)
 {
    b->shader = shader;
    b->cursor = ibc_before_shader(shader);
 
    b->simd_group = 0;
-   b->simd_width = simd_width;
+   b->simd_width = shader->simd_width;
    b->we_all = false;
 
    b->_group_stack_size = 0;

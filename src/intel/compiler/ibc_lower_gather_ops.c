@@ -101,7 +101,7 @@ ibc_lower_gather_ops(ibc_shader *shader)
    bool progress = false;
 
    ibc_builder b;
-   ibc_builder_init(&b, shader, 32);
+   ibc_builder_init(&b, shader);
 
    ibc_foreach_instr_safe(instr, shader) {
       if (instr->type != IBC_INSTR_TYPE_INTRINSIC)
