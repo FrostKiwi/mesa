@@ -107,24 +107,20 @@ ibc_opt_dead_code(ibc_shader *shader)
    do {
       progress = false;
 
-      ibc_foreach_block_reverse(block, shader) {
-         ibc_foreach_instr_reverse(instr, block) {
-            if (!instr_is_alive(instr))
-               continue;
+      ibc_foreach_instr_reverse(instr, shader) {
+         if (!instr_is_alive(instr))
+            continue;
 
-            ibc_instr_foreach_read(instr, mark_ref, &progress);
-            ibc_instr_foreach_write(instr, mark_ref, &progress);
-         }
+         ibc_instr_foreach_read(instr, mark_ref, &progress);
+         ibc_instr_foreach_write(instr, mark_ref, &progress);
       }
    } while (progress);
 
-   ibc_foreach_block(block, shader) {
-      ibc_foreach_instr_safe(instr, block) {
-         if (!instr_is_alive(instr)) {
-            ibc_instr_remove(instr);
-            ralloc_free(instr);
-            progress = true;
-         }
+   ibc_foreach_instr_safe(instr, shader) {
+      if (!instr_is_alive(instr)) {
+         ibc_instr_remove(instr);
+         ralloc_free(instr);
+         progress = true;
       }
    }
 

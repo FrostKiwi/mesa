@@ -199,46 +199,44 @@ ibc_opt_copy_prop(ibc_shader *shader)
 {
    bool progress = false;
 
-   ibc_foreach_block(block, shader) {
-      ibc_foreach_instr_safe(instr, block) {
+   ibc_foreach_instr_safe(instr, shader) {
 
-         if (try_copy_prop_reg_ref(&instr->flag, NULL,
-                                   instr->simd_group, instr->simd_width))
-            progress = true;
+      if (try_copy_prop_reg_ref(&instr->flag, NULL,
+                                instr->simd_group, instr->simd_width))
+         progress = true;
 
-         switch (instr->type) {
-         case IBC_INSTR_TYPE_ALU: {
-            ibc_alu_instr *alu = ibc_instr_as_alu(instr);
+      switch (instr->type) {
+      case IBC_INSTR_TYPE_ALU: {
+         ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
-            for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-               if (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i],
-                                         alu->instr.simd_group,
-                                         alu->instr.simd_width))
-                  progress = true;
-            }
-            continue;
+         for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
+            if (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i],
+                                      alu->instr.simd_group,
+                                      alu->instr.simd_width))
+               progress = true;
          }
-
-         case IBC_INSTR_TYPE_SEND:
-            /* TODO */
-            continue;
-
-         case IBC_INSTR_TYPE_INTRINSIC: {
-            ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-            for (unsigned i = 0; i < intrin->num_srcs; i++) {
-               if (try_copy_prop_reg_ref(&intrin->src[i].ref, NULL,
-                                         intrin->src[i].simd_group,
-                                         intrin->src[i].simd_width))
-                  progress = true;
-            }
-            continue;
-         }
-
-         case IBC_INSTR_TYPE_JUMP:
-            continue;
-         }
-         unreachable("Unsupported IBC instruction type");
+         continue;
       }
+
+      case IBC_INSTR_TYPE_SEND:
+         /* TODO */
+         continue;
+
+      case IBC_INSTR_TYPE_INTRINSIC: {
+         ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
+         for (unsigned i = 0; i < intrin->num_srcs; i++) {
+            if (try_copy_prop_reg_ref(&intrin->src[i].ref, NULL,
+                                      intrin->src[i].simd_group,
+                                      intrin->src[i].simd_width))
+               progress = true;
+         }
+         continue;
+      }
+
+      case IBC_INSTR_TYPE_JUMP:
+         continue;
+      }
+      unreachable("Unsupported IBC instruction type");
    }
 
    return progress;
