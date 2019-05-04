@@ -233,7 +233,8 @@ ibc_opt_copy_prop(ibc_shader *shader)
          continue;
       }
 
-      case IBC_INSTR_TYPE_JUMP:
+      case IBC_INSTR_TYPE_BRANCH:
+      case IBC_INSTR_TYPE_MERGE:
          continue;
       }
       unreachable("Unsupported IBC instruction type");
