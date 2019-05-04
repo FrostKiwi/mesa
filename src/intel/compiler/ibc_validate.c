@@ -34,7 +34,6 @@ struct ibc_validate_state {
    void *mem_ctx;
 
    const ibc_shader *shader;
-   const ibc_block *block;
    const ibc_instr *instr;
 
    /* ibc_reg* -> reg_validate_state* */
@@ -43,7 +42,7 @@ struct ibc_validate_state {
 
 struct reg_validate_state {
    struct set *writes;
-   const ibc_block *write_block;
+//   const ibc_block *write_block;
    struct list_head *next_write_link;
 };
 
@@ -125,11 +124,11 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       ibc_assert(s, ref->write_instr == s->instr);
       _mesa_set_add(reg_state->writes, ref);
       if (ref->reg->is_wlr) {
-         if (reg_state->write_block == NULL) {
-            reg_state->write_block = s->block;
-         } else {
-            ibc_assert(s, reg_state->write_block == s->block);
-         }
+//         if (reg_state->write_block == NULL) {
+//            reg_state->write_block = s->block;
+//         } else {
+//            ibc_assert(s, reg_state->write_block == s->block);
+//         }
          ibc_assert(s, reg_state->next_write_link == &ref->write_link);
          reg_state->next_write_link = ref->write_link.next;
       }
@@ -427,25 +426,6 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 }
 
 static void
-ibc_validate_block(struct ibc_validate_state *s, const ibc_block *block)
-{
-   s->block = block;
-
-   list_validate(&block->instrs);
-   ibc_foreach_instr(instr, block)
-      ibc_validate_instr(s, instr);
-
-#if 0 /* TODO */
-   /* The last instruction in the block must be a jump */
-   ibc_assert(s, !list_is_empty(&block->instrs));
-   ibc_foreach_instr_reverse(instr, block) {
-      ibc_assert(s, instr->type == IBC_INSTR_TYPE_JUMP);
-      break;
-   }
-#endif
-}
-
-static void
 ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
 {
    list_validate(&reg->writes);
@@ -496,9 +476,9 @@ ibc_validate_shader(const ibc_shader *shader)
    ibc_foreach_reg(reg, shader)
       ibc_validate_reg_pre(&s, reg);
 
-   list_validate(&shader->blocks);
-   ibc_foreach_block(block, shader)
-      ibc_validate_block(&s, block);
+   list_validate(&shader->instrs);
+   ibc_foreach_instr(instr, shader)
+      ibc_validate_instr(&s, instr);
 
    ibc_foreach_reg(reg, shader)
       ibc_validate_reg_post(&s, reg);
