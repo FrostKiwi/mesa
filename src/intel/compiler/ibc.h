@@ -618,12 +618,6 @@ ibc_shader *ibc_shader_create(void *mem_ctx,
 #define ibc_foreach_reg_safe(reg, shader) \
    list_for_each_entry_safe(ibc_reg, reg, &(shader)->regs, link)
 
-/* Temporary hack until we drop the use of the foreach_block macro */
-#define ibc_foreach_block(block, shader) \
-   for (ibc_shader *block = shader; block; block = NULL)
-#define ibc_foreach_block_reverse(block, shader) \
-   for (ibc_shader *block = shader; block; block = NULL)
-
 typedef struct {
    struct list_head *prev;
 } ibc_cursor;

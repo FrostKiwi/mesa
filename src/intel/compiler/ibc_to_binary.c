@@ -356,32 +356,30 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
    struct disasm_info *disasm_info = disasm_initialize(devinfo, NULL);
    disasm_new_inst_group(disasm_info, 0);
 
-   ibc_foreach_block(block, shader) {
-      ibc_foreach_instr(instr, block) {
-         brw_set_default_access_mode(p, BRW_ALIGN_1);
+   ibc_foreach_instr(instr, shader) {
+      brw_set_default_access_mode(p, BRW_ALIGN_1);
 
-         assert(instr->we_all || instr->simd_width >= 4);
-         assert(instr->we_all || instr->simd_group % instr->simd_width == 0);
-         brw_set_default_exec_size(p, cvt(instr->simd_width) - 1);
-         brw_set_default_group(p, instr->simd_group);
+      assert(instr->we_all || instr->simd_width >= 4);
+      assert(instr->we_all || instr->simd_group % instr->simd_width == 0);
+      brw_set_default_exec_size(p, cvt(instr->simd_width) - 1);
+      brw_set_default_group(p, instr->simd_group);
 
-         brw_set_default_predicate_control(p, instr->predicate);
-         brw_set_default_predicate_inverse(p, instr->pred_inverse);
-         if (instr->flag.file == IBC_REG_FILE_FLAG) {
-            brw_set_default_flag_reg(p, instr->flag.reg->flag.subnr / 2,
-                                        instr->flag.reg->flag.subnr % 2);
-         } else {
-            assert(instr->flag.file == IBC_REG_FILE_NONE);
-            brw_set_default_flag_reg(p, 0, 0); /* TODO */
-         }
-         brw_set_default_mask_control(p, instr->we_all);
+      brw_set_default_predicate_control(p, instr->predicate);
+      brw_set_default_predicate_inverse(p, instr->pred_inverse);
+      if (instr->flag.file == IBC_REG_FILE_FLAG) {
+         brw_set_default_flag_reg(p, instr->flag.reg->flag.subnr / 2,
+                                     instr->flag.reg->flag.subnr % 2);
+      } else {
+         assert(instr->flag.file == IBC_REG_FILE_NONE);
+         brw_set_default_flag_reg(p, 0, 0); /* TODO */
+      }
+      brw_set_default_mask_control(p, instr->we_all);
 
-         if (instr->type == IBC_INSTR_TYPE_SEND) {
-            generate_send(p, ibc_instr_as_send(instr));
-         } else {
-            assert(instr->type == IBC_INSTR_TYPE_ALU);
-            generate_alu(p, ibc_instr_as_alu(instr));
-         }
+      if (instr->type == IBC_INSTR_TYPE_SEND) {
+         generate_send(p, ibc_instr_as_send(instr));
+      } else {
+         assert(instr->type == IBC_INSTR_TYPE_ALU);
+         generate_alu(p, ibc_instr_as_alu(instr));
       }
    }
 
