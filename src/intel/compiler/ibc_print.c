@@ -335,20 +335,18 @@ ibc_print_shader(const ibc_shader *shader, FILE *fp)
    ibc_foreach_reg(reg, shader)
       reg->index = num_regs++;
 
-   ibc_foreach_block(block, shader) {
-      ibc_foreach_instr(instr, block) {
-         switch (instr->type) {
-         case IBC_INSTR_TYPE_ALU:
-            print_alu_instr(fp, ibc_instr_as_alu(instr));
-            continue;
-         case IBC_INSTR_TYPE_SEND:
-            print_send_instr(fp, ibc_instr_as_send(instr));
-            continue;
-         case IBC_INSTR_TYPE_INTRINSIC:
-            print_intrinsic_instr(fp, ibc_instr_as_intrinsic(instr));
-            continue;
-         }
-         unreachable("Invalid instruction type");
+   ibc_foreach_instr(instr, shader) {
+      switch (instr->type) {
+      case IBC_INSTR_TYPE_ALU:
+         print_alu_instr(fp, ibc_instr_as_alu(instr));
+         continue;
+      case IBC_INSTR_TYPE_SEND:
+         print_send_instr(fp, ibc_instr_as_send(instr));
+         continue;
+      case IBC_INSTR_TYPE_INTRINSIC:
+         print_intrinsic_instr(fp, ibc_instr_as_intrinsic(instr));
+         continue;
       }
+      unreachable("Invalid instruction type");
    }
 }
