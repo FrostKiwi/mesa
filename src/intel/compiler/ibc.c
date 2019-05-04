@@ -351,16 +351,6 @@ ibc_intrinsic_instr_create(struct ibc_shader *shader,
    return intrin;
 }
 
-ibc_block *
-ibc_block_create(ibc_shader *shader)
-{
-   ibc_block *block = rzalloc(shader, ibc_block);
-
-   list_inithead(&block->instrs);
-
-   return block;
-}
-
 ibc_shader *
 ibc_shader_create(void *mem_ctx,
                   const struct gen_device_info *devinfo)
@@ -369,10 +359,7 @@ ibc_shader_create(void *mem_ctx,
 
    shader->devinfo = devinfo,
 
-   list_inithead(&shader->blocks);
-   ibc_block *first_block = ibc_block_create(shader);
-   list_add(&first_block->link, &shader->blocks);
-
+   list_inithead(&shader->instrs);
    list_inithead(&shader->regs);
 
    return shader;
