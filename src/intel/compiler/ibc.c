@@ -353,11 +353,13 @@ ibc_intrinsic_instr_create(struct ibc_shader *shader,
 
 ibc_shader *
 ibc_shader_create(void *mem_ctx,
-                  const struct gen_device_info *devinfo)
+                  const struct gen_device_info *devinfo,
+                  uint8_t simd_width)
 {
    ibc_shader *shader = rzalloc(mem_ctx, ibc_shader);
 
    shader->devinfo = devinfo,
+   shader->simd_width = simd_width;
 
    list_inithead(&shader->instrs);
    list_inithead(&shader->regs);
