@@ -193,6 +193,104 @@ brw_reg_for_ibc_reg_ref(const struct gen_device_info *devinfo,
 }
 
 static void
+generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
+{
+   /* If the instruction writes to more than one register, it needs to
+    * be explicitly marked as compressed on Gen <= 5.  On Gen >= 6 the
+    * hardware figures out by itself what the right compression mode is,
+    * but we still need to know whether the instruction is compressed to
+    * set up the source register regions appropriately.
+    *
+    * XXX - This is wrong for instructions that write a single register
+    *       but read more than one which should strictly speaking be
+    *       treated as compressed.  For instructions that don't write
+    *       any registers it relies on the destination being a null
+    *       register of the correct type and regioning so the
+    *       instruction is considered compressed or not accordingly.
+    */
+   bool compressed;
+   if (alu->dest.file == IBC_REG_FILE_NONE) {
+      /* TODO: Is this correct? */
+      unsigned bytes_written = ibc_type_byte_size(alu->dest.type) *
+                               alu->instr.simd_width;
+      compressed = bytes_written > REG_SIZE;
+   } else {
+      assert(alu->dest.file == IBC_REG_FILE_HW_GRF);
+      unsigned dest_byte =
+         alu->dest.reg->hw_grf.byte + alu->dest.hw_grf.offset;
+      unsigned bytes_written =
+         alu->dest.hw_grf.hstride * (alu->instr.simd_width %
+                                     alu->dest.hw_grf.width) +
+         alu->dest.hw_grf.vstride * (alu->instr.simd_width /
+                                     alu->dest.hw_grf.width);
+      compressed = (dest_byte % REG_SIZE) + bytes_written > REG_SIZE;
+   }
+
+   struct brw_reg src[3], dest;
+   assert(ibc_alu_op_infos[alu->op].num_srcs <= ARRAY_SIZE(src));
+   for (unsigned int i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
+      src[i] = brw_reg_for_ibc_reg_ref(p->devinfo, &alu->src[i].ref,
+                                       alu->instr.simd_width,
+                                       compressed);
+      src[i].abs = (alu->src[i].mod & IBC_ALU_SRC_MOD_ABS) != 0;
+      src[i].negate = (alu->src[i].mod & (IBC_ALU_SRC_MOD_NEG |
+                                          IBC_ALU_SRC_MOD_NOT)) != 0;
+   }
+   dest = brw_reg_for_ibc_reg_ref(p->devinfo, &alu->dest,
+                                  alu->instr.simd_width,
+                                  compressed);
+
+   brw_set_default_saturate(p, alu->saturate);
+   brw_set_default_acc_write_control(p, false /* TODO */);
+
+   const unsigned int last_insn_offset = p->next_insn_offset;
+
+   switch (alu->op) {
+   case IBC_ALU_OP_MOV:
+      brw_MOV(p, dest, src[0]);
+      break;
+
+   case IBC_ALU_OP_SEL:
+      brw_SEL(p, dest, src[0], src[1]);
+      break;
+
+   case IBC_ALU_OP_AND:
+      brw_AND(p, dest, src[0], src[1]);
+      break;
+
+   case IBC_ALU_OP_OR:
+      brw_OR(p, dest, src[0], src[1]);
+      break;
+
+   case IBC_ALU_OP_SHR:
+      brw_SHR(p, dest, src[0], src[1]);
+      break;
+
+   case IBC_ALU_OP_SHL:
+      brw_SHL(p, dest, src[0], src[1]);
+      break;
+
+   case IBC_ALU_OP_CMP:
+      brw_CMP(p, dest, alu->cmod, src[0], src[1]);
+      break;
+
+   case IBC_ALU_OP_ADD:
+      brw_ADD(p, dest, src[0], src[1]);
+      break;
+
+   default:
+      unreachable("Invalid instruction");
+   }
+
+   if (alu->cmod) {
+      assert(p->next_insn_offset == last_insn_offset + 16 ||
+             !"conditional_mod set for IR emitting more than 1 "
+              "instruction");
+      brw_inst_set_cond_modifier(p->devinfo, brw_last_inst, alu->cmod);
+   }
+}
+
+static void
 generate_send(struct brw_codegen *p, const ibc_send_instr *send)
 {
    struct brw_reg dst =
@@ -260,8 +358,6 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 
    ibc_foreach_block(block, shader) {
       ibc_foreach_instr(instr, block) {
-         unsigned int last_insn_offset = p->next_insn_offset;
-
          brw_set_default_access_mode(p, BRW_ALIGN_1);
 
          assert(instr->we_all || instr->simd_width >= 4);
@@ -282,101 +378,9 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 
          if (instr->type == IBC_INSTR_TYPE_SEND) {
             generate_send(p, ibc_instr_as_send(instr));
-            continue;
-         }
-         assert(instr->type == IBC_INSTR_TYPE_ALU);
-         const ibc_alu_instr *alu = ibc_instr_as_alu(instr);
-
-         /* If the instruction writes to more than one register, it needs to
-          * be explicitly marked as compressed on Gen <= 5.  On Gen >= 6 the
-          * hardware figures out by itself what the right compression mode is,
-          * but we still need to know whether the instruction is compressed to
-          * set up the source register regions appropriately.
-          *
-          * XXX - This is wrong for instructions that write a single register
-          *       but read more than one which should strictly speaking be
-          *       treated as compressed.  For instructions that don't write
-          *       any registers it relies on the destination being a null
-          *       register of the correct type and regioning so the
-          *       instruction is considered compressed or not accordingly.
-          */
-         bool compressed;
-         if (alu->dest.file == IBC_REG_FILE_NONE) {
-            /* TODO: Is this correct? */
-            unsigned bytes_written = ibc_type_byte_size(alu->dest.type) *
-                                     alu->instr.simd_width;
-            compressed = bytes_written > REG_SIZE;
          } else {
-            assert(alu->dest.file == IBC_REG_FILE_HW_GRF);
-            unsigned dest_byte =
-               alu->dest.reg->hw_grf.byte + alu->dest.hw_grf.offset;
-            unsigned bytes_written =
-               alu->dest.hw_grf.hstride * (alu->instr.simd_width %
-                                           alu->dest.hw_grf.width) +
-               alu->dest.hw_grf.vstride * (alu->instr.simd_width /
-                                           alu->dest.hw_grf.width);
-            compressed = (dest_byte % REG_SIZE) + bytes_written > REG_SIZE;
-         }
-
-         struct brw_reg src[3], dest;
-         assert(ibc_alu_op_infos[alu->op].num_srcs <= ARRAY_SIZE(src));
-         for (unsigned int i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-            src[i] = brw_reg_for_ibc_reg_ref(devinfo, &alu->src[i].ref,
-                                             alu->instr.simd_width,
-                                             compressed);
-            src[i].abs = (alu->src[i].mod & IBC_ALU_SRC_MOD_ABS) != 0;
-            src[i].negate = (alu->src[i].mod & (IBC_ALU_SRC_MOD_NEG |
-                                                IBC_ALU_SRC_MOD_NOT)) != 0;
-         }
-         dest = brw_reg_for_ibc_reg_ref(devinfo, &alu->dest,
-                                        alu->instr.simd_width,
-                                        compressed);
-
-         brw_set_default_saturate(p, alu->saturate);
-         brw_set_default_acc_write_control(p, false /* TODO */);
-
-         switch (alu->op) {
-         case IBC_ALU_OP_MOV:
-            brw_MOV(p, dest, src[0]);
-            break;
-
-         case IBC_ALU_OP_SEL:
-            brw_SEL(p, dest, src[0], src[1]);
-            break;
-
-         case IBC_ALU_OP_AND:
-            brw_AND(p, dest, src[0], src[1]);
-            break;
-
-         case IBC_ALU_OP_OR:
-            brw_OR(p, dest, src[0], src[1]);
-            break;
-
-         case IBC_ALU_OP_SHR:
-            brw_SHR(p, dest, src[0], src[1]);
-            break;
-
-         case IBC_ALU_OP_SHL:
-            brw_SHL(p, dest, src[0], src[1]);
-            break;
-
-         case IBC_ALU_OP_CMP:
-            brw_CMP(p, dest, alu->cmod, src[0], src[1]);
-            break;
-
-         case IBC_ALU_OP_ADD:
-            brw_ADD(p, dest, src[0], src[1]);
-            break;
-
-         default:
-            unreachable("Invalid instruction");
-         }
-
-         if (alu->cmod) {
-            assert(p->next_insn_offset == last_insn_offset + 16 ||
-                   !"conditional_mod set for IR emitting more than 1 "
-                    "instruction");
-            brw_inst_set_cond_modifier(p->devinfo, brw_last_inst, alu->cmod);
+            assert(instr->type == IBC_INSTR_TYPE_ALU);
+            generate_alu(p, ibc_instr_as_alu(instr));
          }
       }
    }
