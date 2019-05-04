@@ -89,7 +89,8 @@ instr_is_alive(ibc_instr *instr) {
       return intrin->has_side_effects || reg_ref_is_alive(&intrin->dest);
    }
 
-   case IBC_INSTR_TYPE_JUMP:
+   case IBC_INSTR_TYPE_BRANCH:
+   case IBC_INSTR_TYPE_MERGE:
       return true;
    }
 
