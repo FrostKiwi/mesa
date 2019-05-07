@@ -521,6 +521,17 @@ ra_set_node_class(struct ra_graph *g,
    g->nodes[n].class = class;
 }
 
+unsigned int
+ra_add_node(struct ra_graph *g, unsigned int class)
+{
+   unsigned int n = g->count;
+   ra_resize_interference_graph(g, g->count + 1);
+
+   ra_set_node_class(g, n, class);
+
+   return n;
+}
+
 void
 ra_add_node_interference(struct ra_graph *g,
                          unsigned int n1, unsigned int n2)
