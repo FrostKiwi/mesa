@@ -78,7 +78,7 @@
 #include "util/bitset.h"
 #include "register_allocate.h"
 
-#define NO_REG ~0U
+#define NO_REG -1
 
 struct ra_reg {
    BITSET_WORD *conflicts;
@@ -135,7 +135,7 @@ struct ra_node {
    unsigned int class;
 
    /* Register, if assigned, or NO_REG. */
-   unsigned int reg;
+   int reg;
 
    /**
     * Set when the node is in the trivially colorable stack.  When
@@ -756,7 +756,8 @@ ra_allocate(struct ra_graph *g)
    return ra_select(g);
 }
 
-unsigned int
+/** Returns the reg assigned to this node or -1 if unassigned */
+int
 ra_get_node_reg(struct ra_graph *g, unsigned int n)
 {
    return g->nodes[n].reg;

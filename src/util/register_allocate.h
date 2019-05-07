@@ -89,7 +89,7 @@ void ra_reset_node_interference(struct ra_graph *g, unsigned int n);
 /** @{ Graph-coloring register allocation */
 bool ra_allocate(struct ra_graph *g);
 
-unsigned int ra_get_node_reg(struct ra_graph *g, unsigned int n);
+int ra_get_node_reg(struct ra_graph *g, unsigned int n);
 void ra_set_node_reg(struct ra_graph * g, unsigned int n, unsigned int reg);
 void ra_set_node_spill_cost(struct ra_graph *g, unsigned int n, float cost);
 int ra_get_best_spill_node(struct ra_graph *g);
