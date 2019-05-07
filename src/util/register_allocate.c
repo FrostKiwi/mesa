@@ -165,6 +165,8 @@ struct ra_graph {
    struct ra_node *nodes;
    unsigned int count; /**< count of nodes. */
 
+   unsigned int alloc; /**< count of nodes allocated. */
+
    unsigned int *stack;
    unsigned int stack_count;
 
@@ -413,23 +415,37 @@ ra_add_node_adjacency(struct ra_graph *g, unsigned int n1, unsigned int n2)
    g->nodes[n1].adjacency_count++;
 }
 
-struct ra_graph *
-ra_alloc_interference_graph(struct ra_regs *regs, unsigned int count)
+static void
+ra_realloc_interference_graph(struct ra_graph *g, unsigned int alloc)
 {
-   struct ra_graph *g;
-   unsigned int i;
+   if (alloc <= g->alloc)
+      return;
 
-   g = rzalloc(NULL, struct ra_graph);
-   g->regs = regs;
-   g->nodes = rzalloc_array(g, struct ra_node, count);
-   g->count = count;
+   /* If we always have a whole number of BITSET_WORDs, it makes it much
+    * easier to memset the top of the growing bitsets.
+    */
+   assert(g->alloc % BITSET_WORDBITS == 0);
+   alloc = ALIGN(alloc, BITSET_WORDBITS);
 
-   g->stack = rzalloc_array(g, unsigned int, count);
+   g->nodes = reralloc(g, g->nodes, struct ra_node, alloc);
+   g->stack = reralloc(g, g->stack, unsigned int, alloc);
 
-   for (i = 0; i < count; i++) {
-      int bitset_count = BITSET_WORDS(count);
-      g->nodes[i].adjacency = rzalloc_array(g, BITSET_WORD, bitset_count);
+   unsigned g_bitwords = BITSET_WORDS(g->alloc);
+   unsigned bitwords = BITSET_WORDS(alloc);
 
+   /* For nodes already in the graph, we just have to grow the adjacency set */
+   for (unsigned i = 0; i < g->alloc; i++) {
+      assert(g->nodes[i].adjacency != NULL);
+      g->nodes[i].adjacency =
+         reralloc(g, g->nodes[i].adjacency, BITSET_WORD, bitwords);
+      memset(g->nodes[i].adjacency + g_bitwords, 0,
+             (bitwords - g_bitwords) * sizeof(BITSET_WORD));
+   }
+
+   /* For new nodes, we have to fully initialize them */
+   for (unsigned i = g->alloc; i < alloc; i++) {
+      memset(&g->nodes[i], 0, sizeof(g->nodes[i]));
+      g->nodes[i].adjacency = rzalloc_array(g, BITSET_WORD, bitwords);
       g->nodes[i].adjacency_list_size = 4;
       g->nodes[i].adjacency_list =
          ralloc_array(g, unsigned int, g->nodes[i].adjacency_list_size);
@@ -439,7 +455,28 @@ ra_alloc_interference_graph(struct ra_regs *regs, unsigned int count)
       g->nodes[i].reg = NO_REG;
    }
 
+   g->alloc = alloc;
+}
+
+struct ra_graph *
+ra_alloc_interference_graph(struct ra_regs *regs, unsigned int count)
+{
+   struct ra_graph *g;
+
+   g = rzalloc(NULL, struct ra_graph);
+   g->regs = regs;
+   g->count = count;
+   ra_realloc_interference_graph(g, count);
+
    return g;
+}
+
+void
+ra_resize_interference_graph(struct ra_graph *g, unsigned int count)
+{
+   g->count = count;
+   if (count > g->alloc)
+      ra_realloc_interference_graph(g, g->alloc * 2);
 }
 
 void ra_set_select_reg_callback(struct ra_graph *g,
