@@ -7292,10 +7292,7 @@ fs_visitor::allocate_registers(unsigned min_dispatch_width, bool allow_spilling)
       /* Since we're out of heuristics, just go spill registers until we
        * get an allocation.
        */
-      while (!assign_regs(true, spill_all)) {
-         if (failed)
-            break;
-      }
+      assign_regs(true, spill_all);
    }
 
    /* This must come after all optimization and register allocation, since
