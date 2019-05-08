@@ -134,16 +134,11 @@ struct ra_node {
 
    unsigned int class;
 
-   /* Register, if assigned, or NO_REG. */
-   int reg;
+   /* Client-assigned register, if assigned, or NO_REG. */
+   int forced_reg;
 
-   /**
-    * Set when the node is in the trivially colorable stack.  When
-    * set, the adjacency to this node is ignored, to implement the
-    * "remove the edge from the graph" in simplification without
-    * having to actually modify the adjacency_list.
-    */
-   bool in_stack;
+   /* Register, if assigned, or NO_REG */
+   int reg;
 
    /**
     * The q total, as defined in the Runeson/Nyström paper, for all the
@@ -155,6 +150,23 @@ struct ra_node {
     * approximate cost of spilling this node.
     */
    float spill_cost;
+
+   /* Temporary data for the algorithm to scratch around in */
+   struct {
+      /**
+       * Set when the node is in the trivially colorable stack.  When
+       * set, the adjacency to this node is ignored, to implement the
+       * "remove the edge from the graph" in simplification without
+       * having to actually modify the adjacency_list.
+       */
+      bool in_stack;
+
+      /**
+       * Temporary version of q_total which we decrement as things are placed
+       * into the stack.
+       */
+      unsigned int q_total;
+   } tmp;
 };
 
 struct ra_graph {
@@ -167,18 +179,21 @@ struct ra_graph {
 
    unsigned int alloc; /**< count of nodes allocated. */
 
-   unsigned int *stack;
-   unsigned int stack_count;
-
-   /**
-    * Tracks the start of the set of optimistically-colored registers in the
-    * stack.
-    */
-   unsigned int stack_optimistic_start;
-
    unsigned int (*select_reg_callback)(struct ra_graph *g, BITSET_WORD *regs,
                                        void *data);
    void *select_reg_callback_data;
+
+   /* Temporary data for the algorithm to scratch around in */
+   struct {
+      unsigned int *stack;
+      unsigned int stack_count;
+
+      /**
+       * Tracks the start of the set of optimistically-colored registers in the
+       * stack.
+       */
+      unsigned int stack_optimistic_start;
+   } tmp;
 };
 
 /**
@@ -453,7 +468,6 @@ ra_realloc_interference_graph(struct ra_graph *g, unsigned int alloc)
    alloc = ALIGN(alloc, BITSET_WORDBITS);
 
    g->nodes = reralloc(g, g->nodes, struct ra_node, alloc);
-   g->stack = reralloc(g, g->stack, unsigned int, alloc);
 
    unsigned g_bitwords = BITSET_WORDS(g->alloc);
    unsigned bitwords = BITSET_WORDS(alloc);
@@ -477,8 +491,11 @@ ra_realloc_interference_graph(struct ra_graph *g, unsigned int alloc)
       g->nodes[i].adjacency_count = 0;
       g->nodes[i].q_total = 0;
 
+      g->nodes[i].forced_reg = NO_REG;
       g->nodes[i].reg = NO_REG;
    }
+
+   g->tmp.stack = reralloc(g, g->tmp.stack, unsigned int, alloc);
 
    g->alloc = alloc;
 }
@@ -558,7 +575,7 @@ pq_test(struct ra_graph *g, unsigned int n)
 {
    int n_class = g->nodes[n].class;
 
-   return g->nodes[n].q_total < g->regs->classes[n_class]->p;
+   return g->nodes[n].tmp.q_total < g->regs->classes[n_class]->p;
 }
 
 static void
@@ -571,11 +588,23 @@ decrement_q(struct ra_graph *g, unsigned int n)
       unsigned int n2 = g->nodes[n].adjacency_list[i];
       unsigned int n2_class = g->nodes[n2].class;
 
-      if (!g->nodes[n2].in_stack) {
-         assert(g->nodes[n2].q_total >= g->regs->classes[n2_class]->q[n_class]);
-         g->nodes[n2].q_total -= g->regs->classes[n2_class]->q[n_class];
+      if (!g->nodes[n2].tmp.in_stack) {
+         unsigned int q = g->regs->classes[n2_class]->q[n_class];
+         assert(g->nodes[n2].tmp.q_total >= q);
+         g->nodes[n2].tmp.q_total -= q;
       }
    }
+}
+
+static void
+ra_prepare(struct ra_graph *g)
+{
+   for (unsigned int i = 0; i < g->count; i++) {
+      g->nodes[i].reg = g->nodes[i].forced_reg;
+      g->nodes[i].tmp.in_stack = false;
+      g->nodes[i].tmp.q_total = g->nodes[i].q_total;
+   }
+   g->tmp.stack_count = 0;
 }
 
 /**
@@ -602,17 +631,17 @@ ra_simplify(struct ra_graph *g)
       progress = false;
 
       for (i = g->count - 1; i >= 0; i--) {
-	 if (g->nodes[i].in_stack || g->nodes[i].reg != NO_REG)
+	 if (g->nodes[i].tmp.in_stack || g->nodes[i].reg != NO_REG)
 	    continue;
 
 	 if (pq_test(g, i)) {
 	    decrement_q(g, i);
-	    g->stack[g->stack_count] = i;
-	    g->stack_count++;
-	    g->nodes[i].in_stack = true;
+	    g->tmp.stack[g->tmp.stack_count] = i;
+	    g->tmp.stack_count++;
+	    g->nodes[i].tmp.in_stack = true;
 	    progress = true;
 	 } else {
-	    unsigned int new_q_total = g->nodes[i].q_total;
+	    unsigned int new_q_total = g->nodes[i].tmp.q_total;
 	    if (new_q_total < lowest_q_total) {
 	       best_optimistic_node = i;
 	       lowest_q_total = new_q_total;
@@ -622,17 +651,17 @@ ra_simplify(struct ra_graph *g)
 
       if (!progress && best_optimistic_node != ~0U) {
          if (stack_optimistic_start == UINT_MAX)
-            stack_optimistic_start = g->stack_count;
+            stack_optimistic_start = g->tmp.stack_count;
 
 	 decrement_q(g, best_optimistic_node);
-	 g->stack[g->stack_count] = best_optimistic_node;
-	 g->stack_count++;
-	 g->nodes[best_optimistic_node].in_stack = true;
+	 g->tmp.stack[g->tmp.stack_count] = best_optimistic_node;
+	 g->tmp.stack_count++;
+	 g->nodes[best_optimistic_node].tmp.in_stack = true;
 	 progress = true;
       }
    }
 
-   g->stack_optimistic_start = stack_optimistic_start;
+   g->tmp.stack_optimistic_start = stack_optimistic_start;
 }
 
 static bool
@@ -643,7 +672,7 @@ ra_any_neighbors_conflict(struct ra_graph *g, unsigned int n, unsigned int r)
    for (i = 0; i < g->nodes[n].adjacency_count; i++) {
       unsigned int n2 = g->nodes[n].adjacency_list[i];
 
-      if (!g->nodes[n2].in_stack &&
+      if (!g->nodes[n2].tmp.in_stack &&
           BITSET_TEST(g->regs->regs[r].conflicts, g->nodes[n2].reg)) {
          return true;
       }
@@ -673,7 +702,7 @@ ra_compute_available_regs(struct ra_graph *g, unsigned int n, BITSET_WORD *regs)
       unsigned int n2 = g->nodes[n].adjacency_list[i];
       unsigned int r = g->nodes[n2].reg;
 
-      if (!g->nodes[n2].in_stack) {
+      if (!g->nodes[n2].tmp.in_stack) {
          for (int j = 0; j < BITSET_WORDS(g->regs->count); j++)
             regs[j] &= ~g->regs->regs[r].conflicts[j];
       }
@@ -703,16 +732,16 @@ ra_select(struct ra_graph *g)
    if (g->select_reg_callback)
       select_regs = malloc(BITSET_WORDS(g->regs->count) * sizeof(BITSET_WORD));
 
-   while (g->stack_count != 0) {
+   while (g->tmp.stack_count != 0) {
       unsigned int ri;
       unsigned int r = -1;
-      int n = g->stack[g->stack_count - 1];
+      int n = g->tmp.stack[g->tmp.stack_count - 1];
       struct ra_class *c = g->regs->classes[g->nodes[n].class];
 
       /* set this to false even if we return here so that
        * ra_get_best_spill_node() considers this node later.
        */
-      g->nodes[n].in_stack = false;
+      g->nodes[n].tmp.in_stack = false;
 
       if (g->select_reg_callback) {
          if (!ra_compute_available_regs(g, n, select_regs)) {
@@ -739,7 +768,7 @@ ra_select(struct ra_graph *g)
       }
 
       g->nodes[n].reg = r;
-      g->stack_count--;
+      g->tmp.stack_count--;
 
       /* Rotate the starting point except for any nodes above the lowest
        * optimistically colorable node.  The likelihood that we will succeed
@@ -751,7 +780,7 @@ ra_select(struct ra_graph *g)
        * dense packing strategy.
        */
       if (g->regs->round_robin &&
-          g->stack_count - 1 <= g->stack_optimistic_start)
+          g->tmp.stack_count - 1 <= g->tmp.stack_optimistic_start)
          start_search_reg = r + 1;
    }
 
@@ -763,6 +792,7 @@ ra_select(struct ra_graph *g)
 bool
 ra_allocate(struct ra_graph *g)
 {
+   ra_prepare(g);
    ra_simplify(g);
    return ra_select(g);
 }
@@ -771,7 +801,10 @@ ra_allocate(struct ra_graph *g)
 int
 ra_get_node_reg(struct ra_graph *g, unsigned int n)
 {
-   return g->nodes[n].reg;
+   if (g->nodes[n].forced_reg != NO_REG)
+      return g->nodes[n].forced_reg;
+   else
+      return g->nodes[n].reg;
 }
 
 /**
@@ -790,8 +823,7 @@ ra_get_node_reg(struct ra_graph *g, unsigned int n)
 void
 ra_set_node_reg(struct ra_graph *g, unsigned int n, unsigned int reg)
 {
-   g->nodes[n].reg = reg;
-   g->nodes[n].in_stack = false;
+   g->nodes[n].forced_reg = reg;
 }
 
 static float
@@ -839,7 +871,7 @@ ra_get_best_spill_node(struct ra_graph *g)
       if (cost <= 0.0f)
 	 continue;
 
-      if (g->nodes[n].in_stack)
+      if (g->nodes[n].tmp.in_stack)
          continue;
 
       benefit = ra_get_spill_benefit(g, n);
