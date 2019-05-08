@@ -1134,6 +1134,8 @@ fs_reg_alloc::assign_regs(bool allow_spilling, bool spill_all)
 
    bool spilled = false;
    while (1) {
+      bool success = ra_allocate(g);
+
       /* Debug of register spilling: Go spill everything. */
       if (unlikely(spill_all)) {
          int reg = choose_spill_reg();
@@ -1143,7 +1145,7 @@ fs_reg_alloc::assign_regs(bool allow_spilling, bool spill_all)
          }
       }
 
-      if (ra_allocate(g))
+      if (success)
          break;
 
       if (!allow_spilling)
