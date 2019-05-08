@@ -957,93 +957,97 @@ fs_reg_alloc::spill_reg(unsigned spill_reg)
     * virtual grf of the same size.  For most instructions, though, we
     * could just spill/unspill the GRF being accessed.
     */
-   foreach_block_and_inst (block, fs_inst, inst, fs->cfg) {
-      const fs_builder ibld = fs_builder(fs, block, inst);
+   foreach_block(block, fs->cfg) {
+      foreach_inst_in_block_safe(fs_inst, inst, block) {
+         const fs_builder ibld = fs_builder(fs, block, inst);
 
-      for (unsigned int i = 0; i < inst->sources; i++) {
-	 if (inst->src[i].file == VGRF &&
-             inst->src[i].nr == spill_reg) {
-            int count = regs_read(inst, i);
+         for (unsigned int i = 0; i < inst->sources; i++) {
+            if (inst->src[i].file == VGRF &&
+                inst->src[i].nr == spill_reg) {
+               int count = regs_read(inst, i);
+               int subset_spill_offset = spill_offset +
+                  ROUND_DOWN_TO(inst->src[i].offset, REG_SIZE);
+               fs_reg unspill_dst(VGRF, fs->alloc.allocate(count));
+
+               inst->src[i].nr = unspill_dst.nr;
+               inst->src[i].offset %= REG_SIZE;
+
+               /* We read the largest power-of-two divisor of the register
+                * count (because only POT scratch read blocks are allowed by
+                * the hardware) up to the maximum supported block size.
+                */
+               const unsigned width =
+                  MIN2(32, 1u << (ffs(MAX2(1, count) * 8) - 1));
+
+               /* Set exec_all() on unspill messages under the (rather
+                * pessimistic) assumption that there is no one-to-one
+                * correspondence between channels of the spilled variable in
+                * scratch space and the scratch read message, which operates
+                * on 32 bit channels.  It shouldn't hurt in any case because
+                * the unspill destination is a block-local temporary.
+                */
+               emit_unspill(ibld.exec_all().group(width, 0),
+                            unspill_dst, subset_spill_offset, count);
+            }
+         }
+
+         if (inst->dst.file == VGRF &&
+             inst->dst.nr == spill_reg) {
             int subset_spill_offset = spill_offset +
-               ROUND_DOWN_TO(inst->src[i].offset, REG_SIZE);
-            fs_reg unspill_dst(VGRF, fs->alloc.allocate(count));
+               ROUND_DOWN_TO(inst->dst.offset, REG_SIZE);
+            fs_reg spill_src(VGRF, fs->alloc.allocate(regs_written(inst)));
 
-            inst->src[i].nr = unspill_dst.nr;
-            inst->src[i].offset %= REG_SIZE;
+            inst->dst.nr = spill_src.nr;
+            inst->dst.offset %= REG_SIZE;
 
-            /* We read the largest power-of-two divisor of the register count
-             * (because only POT scratch read blocks are allowed by the
-             * hardware) up to the maximum supported block size.
+            /* If we're immediately spilling the register, we should not use
+             * destination dependency hints.  Doing so will cause the GPU do
+             * try to read and write the register at the same time and may
+             * hang the GPU.
              */
-            const unsigned width =
-               MIN2(32, 1u << (ffs(MAX2(1, count) * 8) - 1));
+            inst->no_dd_clear = false;
+            inst->no_dd_check = false;
 
-            /* Set exec_all() on unspill messages under the (rather
-             * pessimistic) assumption that there is no one-to-one
-             * correspondence between channels of the spilled variable in
-             * scratch space and the scratch read message, which operates on
-             * 32 bit channels.  It shouldn't hurt in any case because the
-             * unspill destination is a block-local temporary.
+            /* Calculate the execution width of the scratch messages (which
+             * work in terms of 32 bit components so we have a fixed number of
+             * eight channels per spilled register).  We attempt to write one
+             * exec_size-wide component of the variable at a time without
+             * exceeding the maximum number of (fake) MRF registers reserved
+             * for spills.
              */
-            emit_unspill(ibld.exec_all().group(width, 0),
-                         unspill_dst, subset_spill_offset, count);
-	 }
-      }
+            const unsigned width = 8 * MIN2(
+               DIV_ROUND_UP(inst->dst.component_size(inst->exec_size), REG_SIZE),
+               spill_max_size(fs));
 
-      if (inst->dst.file == VGRF &&
-          inst->dst.nr == spill_reg) {
-         int subset_spill_offset = spill_offset +
-            ROUND_DOWN_TO(inst->dst.offset, REG_SIZE);
-         fs_reg spill_src(VGRF, fs->alloc.allocate(regs_written(inst)));
+            /* Spills should only write data initialized by the instruction
+             * for whichever channels are enabled in the excution mask.  If
+             * that's not possible we'll have to emit a matching unspill
+             * before the instruction and set force_writemask_all on the
+             * spill.
+             */
+            const bool per_channel =
+               inst->dst.is_contiguous() && type_sz(inst->dst.type) == 4 &&
+               inst->exec_size == width;
 
-         inst->dst.nr = spill_src.nr;
-         inst->dst.offset %= REG_SIZE;
+            /* Builder used to emit the scratch messages. */
+            const fs_builder ubld = ibld.exec_all(!per_channel).group(width, 0);
 
-         /* If we're immediately spilling the register, we should not use
-          * destination dependency hints.  Doing so will cause the GPU do
-          * try to read and write the register at the same time and may
-          * hang the GPU.
-          */
-         inst->no_dd_clear = false;
-         inst->no_dd_check = false;
+            /* If our write is going to affect just part of the
+             * regs_written(inst), then we need to unspill the destination
+             * since we write back out all of the regs_written().  If the
+             * original instruction had force_writemask_all set and is not a
+             * partial write, there should be no need for the unspill since
+             * the instruction will be overwriting the whole destination in
+             * any case.
+             */
+            if (inst->is_partial_write() ||
+                (!inst->force_writemask_all && !per_channel))
+               emit_unspill(ubld, spill_src, subset_spill_offset,
+                            regs_written(inst));
 
-         /* Calculate the execution width of the scratch messages (which work
-          * in terms of 32 bit components so we have a fixed number of eight
-          * channels per spilled register).  We attempt to write one
-          * exec_size-wide component of the variable at a time without
-          * exceeding the maximum number of (fake) MRF registers reserved for
-          * spills.
-          */
-         const unsigned width = 8 * MIN2(
-            DIV_ROUND_UP(inst->dst.component_size(inst->exec_size), REG_SIZE),
-            spill_max_size(fs));
-
-         /* Spills should only write data initialized by the instruction for
-          * whichever channels are enabled in the excution mask.  If that's
-          * not possible we'll have to emit a matching unspill before the
-          * instruction and set force_writemask_all on the spill.
-          */
-         const bool per_channel =
-            inst->dst.is_contiguous() && type_sz(inst->dst.type) == 4 &&
-            inst->exec_size == width;
-
-         /* Builder used to emit the scratch messages. */
-         const fs_builder ubld = ibld.exec_all(!per_channel).group(width, 0);
-
-	 /* If our write is going to affect just part of the
-          * regs_written(inst), then we need to unspill the destination since
-          * we write back out all of the regs_written().  If the original
-          * instruction had force_writemask_all set and is not a partial
-          * write, there should be no need for the unspill since the
-          * instruction will be overwriting the whole destination in any case.
-	  */
-         if (inst->is_partial_write() ||
-             (!inst->force_writemask_all && !per_channel))
-            emit_unspill(ubld, spill_src, subset_spill_offset,
-                         regs_written(inst));
-
-         emit_spill(ubld.at(block, inst->next), spill_src,
-                    subset_spill_offset, regs_written(inst));
+            emit_spill(ubld.at(block, inst->next), spill_src,
+                       subset_spill_offset, regs_written(inst));
+         }
       }
    }
 
