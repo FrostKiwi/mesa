@@ -33,6 +33,11 @@
 struct ibc_validate_state {
    void *mem_ctx;
 
+   /* Pointer set for various things to use to check for uniqueness.  We just
+    * always keep one around so we can avoid re-allocating it all the time.
+    */
+   struct set *tmp_set;
+
    const ibc_shader *shader;
    const ibc_merge_instr *block_start;
    const ibc_instr *instr;
@@ -388,18 +393,43 @@ ibc_validate_merge_instr(struct ibc_validate_state *s,
    if (ibc_assert(s, merge->block_end))
       ibc_assert(s, merge->block_end->block_start == merge);
 
+   assert(s->tmp_set->entries == 0);
+   list_validate(&merge->preds);
+   list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
+      if (!ibc_assert(s, pred->branch != NULL))
+         continue;
+
+      /* Check for uniqueness of the predecessors */
+      bool already_seen = false;
+      _mesa_set_search_and_add(s->tmp_set, pred->branch, &already_seen);
+      ibc_assert(s, !already_seen);
+
+      ibc_assert(s, merge == pred->branch->jump ||
+                    merge == pred->branch->merge ||
+                    (ibc_branch_instr_falls_through(pred->branch) &&
+                     &merge->instr == ibc_instr_next(&pred->branch->instr)));
+   }
+   _mesa_set_clear(s->tmp_set, NULL);
+
    switch (merge->op) {
+   case IBC_MERGE_OP_MERGE:
+      break;
+
+   case IBC_MERGE_OP_ENDIF:
+      list_for_each_entry(const ibc_merge_pred, pred, &merge->preds, link) {
+         ibc_assert(s, pred->branch &&
+                       (pred->branch->op == IBC_BRANCH_OP_IF ||
+                        pred->branch->op == IBC_BRANCH_OP_ELSE ||
+                        &pred->branch->instr == ibc_instr_prev(&merge->instr)));
+      }
+      break;
+
    case IBC_MERGE_OP_START:
       ibc_assert(s, list_is_empty(&merge->preds));
       break;
 
    default:
       ibc_assert(s, !"TODO: Finish merge instruction validation");
-   }
-
-   list_validate(&merge->preds);
-   list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
-      ibc_assert(s, pred->branch != NULL);
    }
 }
 
@@ -413,6 +443,43 @@ ibc_validate_branch_instr(struct ibc_validate_state *s,
       ibc_assert(s, branch->block_start->block_end == branch);
 
    switch (branch->op) {
+   case IBC_BRANCH_OP_NEXT:
+      ibc_assert(s, branch->jump == NULL);
+      ibc_assert(s, branch->merge == NULL);
+      break;
+
+   case IBC_BRANCH_OP_IF:
+      /* IF instructions must be predicated */
+      ibc_assert(s, branch->instr.predicate != BRW_PREDICATE_NONE);
+
+      /* IF instructions can jump to an ENDIF or an ELSE */
+      if (ibc_assert(s, branch->jump) &&
+          branch->jump->op != IBC_MERGE_OP_ENDIF) {
+         /* The else is actually the branch instruction at the end of the
+          * previous block.
+          */
+         const ibc_branch_instr *jump_prev =
+            ibc_instr_as_branch(ibc_instr_prev(&branch->jump->instr));
+         ibc_assert(s, jump_prev->op == IBC_BRANCH_OP_ELSE);
+      }
+      /* Must merge at an endif */
+      ibc_assert(s, branch->merge && branch->merge->op == IBC_MERGE_OP_ENDIF);
+      break;
+
+   case IBC_BRANCH_OP_ELSE: {
+      ibc_assert(s, branch->jump && branch->jump->op == IBC_MERGE_OP_ENDIF);
+      ibc_assert(s, branch->merge && branch->merge->op == IBC_MERGE_OP_ENDIF);
+      const ibc_merge_instr *next_merge =
+         ibc_instr_as_merge(ibc_instr_next(&branch->instr));
+      ibc_assert(s, next_merge->op == IBC_MERGE_OP_MERGE);
+      list_for_each_entry(ibc_merge_pred, pred, &next_merge->preds, link) {
+         ibc_assert(s, pred->branch &&
+                       (pred->branch == branch ||
+                        pred->branch->op == IBC_BRANCH_OP_IF));
+      }
+      break;
+   }
+
    case IBC_BRANCH_OP_END:
       ibc_assert(s, branch->jump == NULL);
       ibc_assert(s, branch->merge == NULL);
@@ -530,6 +597,7 @@ ibc_validate_shader(const ibc_shader *shader)
       .mem_ctx = ralloc_context(NULL),
       .shader = shader,
    };
+   s.tmp_set = _mesa_pointer_set_create(s.mem_ctx);
 
    ibc_assert(&s, shader->simd_width <= 32);
 
@@ -538,6 +606,17 @@ ibc_validate_shader(const ibc_shader *shader)
       ibc_validate_reg_pre(&s, reg);
 
    list_validate(&shader->instrs);
+
+   const ibc_instr *start_instr =
+      LIST_ENTRY(const ibc_instr, shader->instrs.next, link);
+   ibc_assert(&s, start_instr->type == IBC_INSTR_TYPE_MERGE &&
+                  ibc_instr_as_merge(start_instr)->op == IBC_MERGE_OP_START);
+
+   const ibc_instr *end_instr =
+      LIST_ENTRY(const ibc_instr, shader->instrs.prev, link);
+   ibc_assert(&s, end_instr->type == IBC_INSTR_TYPE_BRANCH &&
+                  ibc_instr_as_branch(end_instr)->op == IBC_BRANCH_OP_END);
+
    ibc_foreach_instr(instr, shader)
       ibc_validate_instr(&s, instr);
 

@@ -346,13 +346,41 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
 static void
 generate_merge(struct brw_codegen *p, const ibc_merge_instr *merge)
 {
-   assert(merge->op == IBC_MERGE_OP_START);
+   switch (merge->op) {
+   case IBC_MERGE_OP_MERGE:
+      return;
+
+   case IBC_MERGE_OP_ENDIF:
+      brw_ENDIF(p);
+      return;
+
+   case IBC_MERGE_OP_START:
+      return;
+   }
+
+   unreachable("Invalid merge op");
 }
 
 static void
 generate_branch(struct brw_codegen *p, const ibc_branch_instr *branch)
 {
-   assert(branch->op == IBC_BRANCH_OP_END);
+   switch (branch->op) {
+   case IBC_BRANCH_OP_NEXT:
+      return;
+
+   case IBC_BRANCH_OP_IF:
+      brw_IF(p, brw_get_default_exec_size(p));
+      return;
+
+   case IBC_BRANCH_OP_ELSE:
+      brw_ELSE(p);
+      return;
+
+   case IBC_BRANCH_OP_END:
+      return;
+   }
+
+   unreachable("Invalid branch op");
 }
 
 unsigned *
