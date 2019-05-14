@@ -567,6 +567,17 @@ ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,
    return ibc_MOV(b, type, hw_ref);
 }
 
+static inline ibc_merge_pred*
+ibc_builder_add_merge_pred(ibc_builder *b, struct list_head *pred_list,
+                           bool logical, ibc_branch_instr *branch)
+{
+   ibc_merge_pred *pred = ralloc(b->shader, ibc_merge_pred);
+   pred->logical = logical;
+   pred->branch = branch;
+   list_addtail(&pred->link, pred_list);
+   return pred;
+}
+
 static inline ibc_merge_instr *
 ibc_build_merge(ibc_builder *b, enum ibc_merge_op op,
                 struct list_head *preds)
@@ -588,16 +599,24 @@ ibc_build_merge(ibc_builder *b, enum ibc_merge_op op,
 }
 
 static inline ibc_branch_instr *
-ibc_build_branch(ibc_builder *b, enum ibc_branch_op op)
+ibc_build_branch(ibc_builder *b, enum ibc_branch_op op, ibc_reg_ref pred,
+                 enum brw_predicate predicate, bool pred_inverse)
 {
    assert(b->simd_group == 0);
    ibc_branch_instr *branch =
       ibc_branch_instr_create(b->shader, op, b->simd_width);
 
+   if (predicate != BRW_PREDICATE_NONE) {
+      branch->instr.flag = pred;
+      branch->instr.predicate = predicate;
+      branch->instr.pred_inverse = pred_inverse;
+   }
+
    /* This is the branch instruction, tie up the loose ends */
    assert(b->block_start != NULL);
    branch->block_start = b->block_start;
    b->block_start->block_end = branch;
+   b->block_start = NULL;
 
    ibc_builder_insert_instr(b, &branch->instr);
 
@@ -613,7 +632,74 @@ ibc_start(ibc_builder *b)
 static inline ibc_branch_instr *
 ibc_end(ibc_builder *b)
 {
-   return ibc_build_branch(b, IBC_BRANCH_OP_END);
+   return ibc_build_branch(b, IBC_BRANCH_OP_END, ibc_null(IBC_TYPE_UD),
+                           BRW_PREDICATE_NONE, false);
+}
+
+static inline ibc_branch_instr *
+ibc_if(ibc_builder *b, ibc_reg_ref pred,
+       enum brw_predicate predicate, bool pred_inverse)
+{
+   ibc_branch_instr *_if =
+      ibc_build_branch(b, IBC_BRANCH_OP_IF, pred, predicate, pred_inverse);
+
+   /* The then block has to start with a merge instruction */
+   struct list_head preds;
+   list_inithead(&preds);
+   ibc_builder_add_merge_pred(b, &preds, true, _if);
+   ibc_build_merge(b, IBC_MERGE_OP_MERGE, &preds);
+
+   return _if;
+}
+
+static inline ibc_branch_instr *
+ibc_else(ibc_builder *b, ibc_branch_instr *_if)
+{
+   ibc_branch_instr *_else =
+      ibc_build_branch(b, IBC_BRANCH_OP_ELSE, ibc_null(IBC_TYPE_UD),
+                       BRW_PREDICATE_NONE, false);
+
+   /* The then block has to start with a merge instruction */
+   struct list_head preds;
+   list_inithead(&preds);
+   ibc_builder_add_merge_pred(b, &preds, true, _if);
+   ibc_builder_add_merge_pred(b, &preds, false, _else);
+   ibc_build_merge(b, IBC_MERGE_OP_MERGE, &preds);
+
+   return _else;
+}
+
+static inline ibc_merge_instr *
+ibc_endif(ibc_builder *b, ibc_branch_instr *_if, ibc_branch_instr *_else)
+{
+   ibc_branch_instr *branch =
+      ibc_build_branch(b, IBC_BRANCH_OP_NEXT, ibc_null(IBC_TYPE_UD),
+                       BRW_PREDICATE_NONE, false);
+
+   /* The then block has to start with a merge instruction */
+   struct list_head preds;
+   list_inithead(&preds);
+   if (_else == NULL) {
+      ibc_builder_add_merge_pred(b, &preds, true, _if);
+   } else {
+      /* The ELSE instruction actually ends the then block */
+      ibc_builder_add_merge_pred(b, &preds, true, _else);
+   }
+   ibc_builder_add_merge_pred(b, &preds, true, branch);
+   ibc_merge_instr *_endif = ibc_build_merge(b, IBC_MERGE_OP_ENDIF, &preds);
+
+   _if->merge = _endif;
+   if (_else) {
+      ibc_merge_instr *after_else =
+         ibc_instr_as_merge(ibc_instr_next(&_else->instr));
+      _if->jump = after_else;
+      _else->jump = _endif;
+      _else->merge = _endif;
+   } else {
+      _if->jump = _endif;
+   }
+
+   return _endif;
 }
 
 #ifdef __cplusplus

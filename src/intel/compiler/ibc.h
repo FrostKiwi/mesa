@@ -601,6 +601,8 @@ typedef struct ibc_merge_pred {
    /** Link in ibc_merge_instr::preds */
    struct list_head link;
 
+   bool logical;
+
    ibc_branch_instr *branch;
 } ibc_merge_pred;
 
@@ -652,6 +654,28 @@ ibc_branch_instr *ibc_branch_instr_create(struct ibc_shader *shader,
                                           enum ibc_branch_op op,
                                           uint8_t simd_width);
 
+/**
+ * Returns true of the immediately following merge instruction is also a
+ * successor of this branch instruction.
+ */
+static inline bool
+ibc_branch_instr_falls_through(ibc_branch_instr *branch)
+{
+   switch (branch->op) {
+   case IBC_BRANCH_OP_NEXT:
+   case IBC_BRANCH_OP_IF:
+   case IBC_BRANCH_OP_ELSE:
+      return true;
+   case IBC_BRANCH_OP_WHILE:
+   case IBC_BRANCH_OP_BREAK:
+   case IBC_BRANCH_OP_CONTINUE:
+      return branch->instr.predicate != BRW_PREDICATE_NONE;
+   case IBC_BRANCH_OP_END:
+      return false;
+   }
+   unreachable("Invalid branch instruction opcode");
+}
+
 #define ibc_foreach_instr(instr, shader) \
    list_for_each_entry(ibc_instr, instr, &(shader)->instrs, link)
 
@@ -663,6 +687,22 @@ ibc_branch_instr *ibc_branch_instr_create(struct ibc_shader *shader,
 
 #define ibc_foreach_instr_reverse_safe(instr, shader) \
    list_for_each_entry_safe_rev(ibc_instr, instr, &(shader)->instrs, link)
+
+static inline ibc_instr *
+ibc_instr_next(const ibc_instr *instr)
+{
+   assert(instr->type != IBC_INSTR_TYPE_BRANCH ||
+          ibc_instr_as_branch(instr)->op != IBC_BRANCH_OP_END);
+   return LIST_ENTRY(ibc_instr, instr->link.next, link);
+}
+
+static inline ibc_instr *
+ibc_instr_prev(const ibc_instr *instr)
+{
+   assert(instr->type != IBC_INSTR_TYPE_MERGE ||
+          ibc_instr_as_merge(instr)->op != IBC_MERGE_OP_START);
+   return LIST_ENTRY(ibc_instr, instr->link.prev, link);
+}
 
 
 typedef struct ibc_shader {
