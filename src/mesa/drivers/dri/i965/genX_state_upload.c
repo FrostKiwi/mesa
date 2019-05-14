@@ -4110,7 +4110,8 @@ genX(upload_hs_state)(struct brw_context *brw)
          hs.InstanceCount = tcs_prog_data->instances - 1;
          hs.IncludeVertexHandles = true;
 
-         hs.MaximumNumberofThreads = devinfo->max_tcs_threads - 1;
+         hs.MaximumNumberofThreads =
+            brw_tcs_max_threads(devinfo, tcs_prog_data) - 1;
 
 #if GEN_GEN >= 9
          hs.DispatchMode = vue_prog_data->dispatch_mode;

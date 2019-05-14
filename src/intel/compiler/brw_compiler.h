@@ -1083,6 +1083,8 @@ struct brw_tcs_prog_data
 
    /** Number vertices in output patch */
    int instances;
+
+   bool uses_barrier;
 };
 
 
@@ -1467,6 +1469,29 @@ brw_compute_first_urb_slot_required(uint64_t inputs_read,
    }
 
    return 0;
+}
+
+static inline unsigned
+brw_tcs_max_threads(const struct gen_device_info *devinfo,
+                    const struct brw_tcs_prog_data *prog_data)
+{
+   if (prog_data->uses_barrier) {
+      /* If the TCS uses barrier(), we have to be careful about the number of
+       * threads we have in flight.  On gen7-10, the Barrier ID field in the
+       * TCS payload is only 4 bits and is increased to 7 on gen11.  This
+       * means that we only 16 barriers available for TCS on gen7-10 and 128
+       * starting with gen11+.  If we have more than instances * max_barriers
+       * threads in flight, we may end up with multiple groups trying to use
+       * the same barrier.  This works in the sense that they will increment
+       * the barrier and eventually release, but you may end up with half of
+       * one group and half of another.
+       */
+      unsigned max_barriers = 1u << (devinfo->gen < 11 ? 4 : 7);
+      return MIN2(devinfo->max_tcs_threads,
+                  prog_data->instances * max_barriers);
+   } else {
+      return devinfo->max_tcs_threads;
+   }
 }
 
 #ifdef __cplusplus

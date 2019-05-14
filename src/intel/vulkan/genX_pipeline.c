@@ -1422,7 +1422,8 @@ emit_3dstate_hs_te_ds(struct anv_pipeline *pipeline,
       hs.SamplerCount = GEN_GEN == 11 ? 0 : get_sampler_count(tcs_bin);
       /* Gen 11 workarounds table #2056 WABTPPrefetchDisable */
       hs.BindingTableEntryCount = GEN_GEN == 11 ? 0 : get_binding_table_entry_count(tcs_bin);
-      hs.MaximumNumberofThreads = devinfo->max_tcs_threads - 1;
+      hs.MaximumNumberofThreads =
+         brw_tcs_max_threads(devinfo, tcs_prog_data) - 1;
       hs.IncludeVertexHandles = true;
       hs.InstanceCount = tcs_prog_data->instances - 1;
 

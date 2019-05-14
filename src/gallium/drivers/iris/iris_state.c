@@ -3649,7 +3649,8 @@ iris_store_tcs_state(struct iris_context *ice,
       INIT_THREAD_DISPATCH_FIELDS(hs, Vertex, MESA_SHADER_TESS_CTRL);
 
       hs.InstanceCount = tcs_prog_data->instances - 1;
-      hs.MaximumNumberofThreads = devinfo->max_tcs_threads - 1;
+      hs.MaximumNumberofThreads =
+         brw_tcs_max_threads(devinfo, tcs_prog_data) - 1;
       hs.IncludeVertexHandles = true;
 
 #if GEN_GEN >= 9

@@ -2705,6 +2705,8 @@ fs_visitor::nir_emit_tcs_intrinsic(const fs_builder &bld,
       if (tcs_prog_data->instances == 1)
          break;
 
+      tcs_prog_data->uses_barrier = true;
+
       fs_reg m0 = bld.vgrf(BRW_REGISTER_TYPE_UD, 1);
       fs_reg m0_2 = component(m0, 2);
 
@@ -2713,6 +2715,7 @@ fs_visitor::nir_emit_tcs_intrinsic(const fs_builder &bld,
       /* Zero the message header */
       bld.exec_all().MOV(m0, brw_imm_ud(0u));
 
+      /* NOTE: This code must be kept in sync with brw_tcs_max_threads() */
       if (devinfo->gen < 11) {
          /* Copy "Barrier ID" from r0.2, bits 16:13 */
          chanbld.AND(m0_2, retype(brw_vec1_grf(0, 2), BRW_REGISTER_TYPE_UD),
