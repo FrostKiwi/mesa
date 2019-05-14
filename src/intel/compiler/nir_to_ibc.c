@@ -450,6 +450,78 @@ nti_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
    ibc_builder_insert_instr(b, &send->instr);
 }
 
+static void
+nti_emit_block(struct nir_to_ibc_state *nti, const nir_block *block)
+{
+   nir_foreach_instr(instr, block) {
+      assert(nti->b._group_stack_size == 0);
+      switch (instr->type) {
+      case nir_instr_type_alu:
+         nti_emit_alu(nti, nir_instr_as_alu(instr));
+         break;
+      case nir_instr_type_intrinsic:
+         nti_emit_intrinsic(nti, nir_instr_as_intrinsic(instr));
+         break;
+      case nir_instr_type_load_const:
+         nti_emit_load_const(nti, nir_instr_as_load_const(instr));
+         break;
+      default:
+         unreachable("Unsupported instruction type");
+      }
+   }
+}
+
+static void
+nti_emit_cf_list(struct nir_to_ibc_state *nti,
+                 const struct exec_list *cf_list);
+
+static void
+nti_emit_if(struct nir_to_ibc_state *nti, nir_if *nif)
+{
+   ibc_builder *b = &nti->b;
+
+   ibc_reg_ref cond = ibc_ref(nti->ssa_to_reg[nif->condition.ssa->index]);
+   ibc_branch_instr *_if = ibc_if(b, cond, BRW_PREDICATE_NORMAL, false);
+
+   nti_emit_cf_list(nti, &nif->then_list);
+
+   ibc_branch_instr *_else = ibc_else(b, _if);
+
+   nti_emit_cf_list(nti, &nif->else_list);
+
+   ibc_endif(b, _if, _else);
+}
+
+static void
+nti_emit_loop(struct nir_to_ibc_state *nti, nir_loop *loop)
+{
+   unreachable("Loops not yet supported");
+}
+
+static void
+nti_emit_cf_list(struct nir_to_ibc_state *nti,
+                 const struct exec_list *cf_list)
+{
+   foreach_list_typed(const nir_cf_node, node, node, cf_list) {
+      switch (node->type) {
+      case nir_cf_node_if:
+         nti_emit_if(nti, nir_cf_node_as_if(node));
+         break;
+
+      case nir_cf_node_loop:
+         nti_emit_loop(nti, nir_cf_node_as_loop(node));
+         break;
+
+      case nir_cf_node_block:
+         nti_emit_block(nti, nir_cf_node_as_block(node));
+         break;
+
+      default:
+         unreachable("Invalid CFG node block");
+      }
+   }
+}
+
 ibc_shader *
 nir_to_ibc(const nir_shader *nir, void *mem_ctx,
            unsigned dispatch_size,
@@ -465,24 +537,7 @@ nir_to_ibc(const nir_shader *nir, void *mem_ctx,
 
    nti.ssa_to_reg = ralloc_array(mem_ctx, const ibc_reg *, impl->ssa_alloc);
 
-   nir_foreach_block(block, impl) {
-      nir_foreach_instr(instr, block) {
-         assert(nti.b._group_stack_size == 0);
-         switch (instr->type) {
-         case nir_instr_type_alu:
-            nti_emit_alu(&nti, nir_instr_as_alu(instr));
-            break;
-         case nir_instr_type_intrinsic:
-            nti_emit_intrinsic(&nti, nir_instr_as_intrinsic(instr));
-            break;
-         case nir_instr_type_load_const:
-            nti_emit_load_const(&nti, nir_instr_as_load_const(instr));
-            break;
-         default:
-            unreachable("Unsupported instruction type");
-         }
-      }
-   }
+   nti_emit_cf_list(&nti, &impl->body);
 
    if (nir->info.stage == MESA_SHADER_COMPUTE)
       nti_emit_cs_thread_terminate(&nti);
