@@ -86,10 +86,15 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
          /* It's a read.  Emit a MOV to copy the value to the flag. */
          b.cursor = ibc_before_instr(instr);
          ibc_builder_push_group(&b, instr->simd_group, instr->simd_width);
-         ibc_build_alu(&b, IBC_ALU_OP_MOV, ibc_null(IBC_TYPE_UD),
-                       flag0, BRW_CONDITIONAL_NZ, &instr->flag, 1);
-         instr->flag = flag0;
+         unsigned lower_width = MIN2(instr->simd_width, 16);
+         for (unsigned g = 0; g < instr->simd_width; g += lower_width) {
+            ibc_builder_push_group(&b, g, lower_width);
+            ibc_build_alu(&b, IBC_ALU_OP_MOV, ibc_null(IBC_TYPE_UD),
+                          flag0, BRW_CONDITIONAL_NZ, &instr->flag, 1);
+            ibc_builder_pop(&b);
+         }
          ibc_builder_pop(&b);
+         instr->flag = flag0;
       }
    }
 }
