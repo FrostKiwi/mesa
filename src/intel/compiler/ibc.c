@@ -202,6 +202,16 @@ ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
    case IBC_INSTR_TYPE_BRANCH:
    case IBC_INSTR_TYPE_MERGE:
       return true;
+
+   case IBC_INSTR_TYPE_PHI: {
+      ibc_phi_instr *phi = ibc_instr_as_phi(instr);
+      ibc_foreach_phi_src(src, phi) {
+         if (!cb(&src->ref, phi->num_comps,
+                 instr->simd_group, instr->simd_width, state))
+            return false;
+      }
+      return true;
+   }
    }
 
    unreachable("Invalid IBC instruction type");
@@ -247,6 +257,15 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
    case IBC_INSTR_TYPE_BRANCH:
    case IBC_INSTR_TYPE_MERGE:
       return true;
+
+   case IBC_INSTR_TYPE_PHI: {
+      ibc_phi_instr *phi = ibc_instr_as_phi(instr);
+      if (!cb(&phi->dest, phi->num_comps,
+              instr->simd_group, instr->simd_width, state))
+         return false;
+
+      return true;
+   }
    }
 
    unreachable("Invalid IBC instruction type");
@@ -380,6 +399,19 @@ ibc_merge_instr_create(struct ibc_shader *shader,
    list_inithead(&merge->preds);
 
    return merge;
+}
+
+ibc_phi_instr *
+ibc_phi_instr_create(struct ibc_shader *shader,
+                     uint8_t simd_group, uint8_t simd_width)
+{
+   ibc_phi_instr *phi = rzalloc(shader, ibc_phi_instr);
+
+   ibc_instr_init(&phi->instr, IBC_INSTR_TYPE_PHI, simd_group, simd_width);
+
+   list_inithead(&phi->srcs);
+
+   return phi;
 }
 
 ibc_shader *
