@@ -388,6 +388,22 @@ print_branch_instr(FILE *fp, ibc_branch_instr *branch)
    fprintf(fp, "\n");
 }
 
+static void
+print_phi_instr(FILE *fp, ibc_phi_instr *phi)
+{
+   print_instr(fp, &phi->instr, "phi", 1);
+
+   fprintf(fp, "   ");
+   print_reg_ref(fp, &phi->dest, true);
+
+   ibc_foreach_phi_src(src, phi) {
+      fprintf(fp, "   %u -> ", src->pred->block_start->block_index);
+      print_reg_ref(fp, &src->ref, true);
+   }
+
+   fprintf(fp, "\n");
+}
+
 void
 ibc_print_shader(const ibc_shader *shader, FILE *fp)
 {
@@ -417,6 +433,9 @@ ibc_print_shader(const ibc_shader *shader, FILE *fp)
          continue;
       case IBC_INSTR_TYPE_BRANCH:
          print_branch_instr(fp, ibc_instr_as_branch(instr));
+         continue;
+      case IBC_INSTR_TYPE_PHI:
+         print_phi_instr(fp, ibc_instr_as_phi(instr));
          continue;
       }
       unreachable("Invalid instruction type");

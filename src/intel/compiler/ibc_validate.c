@@ -494,6 +494,51 @@ ibc_validate_branch_instr(struct ibc_validate_state *s,
 }
 
 static void
+ibc_validate_phi_instr(struct ibc_validate_state *s,
+                       const ibc_phi_instr *phi)
+{
+   ibc_assert(s, phi->instr.predicate == BRW_PREDICATE_NONE);
+   ibc_assert(s, phi->dest.file == IBC_REG_FILE_LOGICAL);
+
+   ibc_validate_reg_ref(s, &phi->dest, true, 0, phi->num_comps,
+                        phi->instr.simd_group, phi->instr.simd_width);
+
+   const ibc_merge_instr *merge = s->block_start;
+
+   assert(s->tmp_set->entries == 0);
+   list_validate(&phi->srcs);
+   ibc_foreach_phi_src(src, phi) {
+      ibc_validate_reg_ref(s, &src->ref, false, 0, phi->num_comps,
+                           phi->instr.simd_group, phi->instr.simd_width);
+
+      /* Check for uniqueness of the predecessors */
+      bool already_seen = false;
+      _mesa_set_search_and_add(s->tmp_set, src->pred, &already_seen);
+      ibc_assert(s, !already_seen);
+
+      /* Check to make sure we're one of the merge's logical predecessors */
+      bool found = false;
+      list_for_each_entry(const ibc_merge_pred, pred, &merge->preds, link) {
+         if (pred->branch == src->pred) {
+            ibc_assert(s, pred->logical);
+            found = true;
+            break;
+         }
+      }
+      ibc_assert(s, found);
+   }
+
+   /* Check that we got all the logical predecessors */
+   list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
+      if (pred->logical)
+         ibc_assert(s, _mesa_set_search(s->tmp_set, pred->branch));
+   }
+
+   /* Clear out the tmp set now that we're done with it */
+   _mesa_set_clear(s->tmp_set, NULL);
+}
+
+static void
 ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 {
    s->instr = instr;
@@ -545,6 +590,10 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 
    case IBC_INSTR_TYPE_BRANCH:
       ibc_validate_branch_instr(s, ibc_instr_as_branch(instr));
+      return;
+
+   case IBC_INSTR_TYPE_PHI:
+      ibc_validate_phi_instr(s, ibc_instr_as_phi(instr));
       return;
    }
 
