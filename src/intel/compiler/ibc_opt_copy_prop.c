@@ -216,6 +216,7 @@ ibc_opt_copy_prop(ibc_shader *shader)
                                          alu->instr.simd_width))
                   progress = true;
             }
+            continue;
          }
 
          case IBC_INSTR_TYPE_SEND:
@@ -230,6 +231,7 @@ ibc_opt_copy_prop(ibc_shader *shader)
                                          intrin->src[i].simd_width))
                   progress = true;
             }
+            continue;
          }
 
          case IBC_INSTR_TYPE_JUMP:
