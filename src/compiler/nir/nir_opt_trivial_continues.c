@@ -125,11 +125,13 @@ nir_opt_trivial_continues(nir_shader *shader)
 
       /* First we run the simple pass to get rid of pesky continues */
       if (lower_trivial_continues_list(&function->impl->body, false, NULL)) {
-         nir_metadata_preserve(function->impl, nir_metadata_none);
+         nir_metadata_preserve(function->impl, true, nir_metadata_none);
 
          /* If that made progress, we're no longer really in SSA form. */
          nir_lower_regs_to_ssa_impl(function->impl);
          progress = true;
+      } else {
+         nir_metadata_preserve(function->impl, false, nir_metadata_none);
       }
    }
 

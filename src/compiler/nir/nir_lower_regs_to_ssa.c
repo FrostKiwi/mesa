@@ -213,8 +213,12 @@ rewrite_alu_instr(nir_alu_instr *alu, struct regs_to_ssa_state *state)
 bool
 nir_lower_regs_to_ssa_impl(nir_function_impl *impl)
 {
-   if (exec_list_is_empty(&impl->registers))
+   if (exec_list_is_empty(&impl->registers)) {
+      nir_metadata_preserve(impl, false,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
       return false;
+   }
 
    nir_metadata_require(impl, nir_metadata_block_index |
                               nir_metadata_dominance);
@@ -277,8 +281,9 @@ nir_lower_regs_to_ssa_impl(nir_function_impl *impl)
 
    free(state.values);
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, true,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
    return true;
 }
 

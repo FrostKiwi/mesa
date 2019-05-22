@@ -105,6 +105,10 @@ opt_intrinsics_impl(nir_function_impl *impl,
       }
    }
 
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
+
    return progress;
 }
 
@@ -117,11 +121,8 @@ nir_opt_intrinsics(nir_shader *shader)
       if (!function->impl)
          continue;
 
-      if (opt_intrinsics_impl(function->impl, shader->options)) {
+      if (opt_intrinsics_impl(function->impl, shader->options))
          progress = true;
-         nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                               nir_metadata_dominance);
-      }
    }
 
    return progress;

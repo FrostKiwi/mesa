@@ -98,10 +98,9 @@ nir_lower_patch_vertices(nir_shader *nir,
             }
          }
 
-         if (progress) {
-            nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                                  nir_metadata_dominance);
-         }
+         nir_metadata_preserve(function->impl, progress,
+                               nir_metadata_block_index |
+                               nir_metadata_dominance);
       }
    }
 

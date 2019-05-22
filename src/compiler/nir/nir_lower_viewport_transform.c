@@ -96,7 +96,8 @@ nir_lower_viewport_transform(nir_shader *shader)
          }
       }
 
-      nir_metadata_preserve(func->impl, nir_metadata_block_index |
+      nir_metadata_preserve(func->impl, true,
+                            nir_metadata_block_index |
                             nir_metadata_dominance);
    }
 }

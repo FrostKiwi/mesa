@@ -1427,15 +1427,19 @@ nir_opt_if(nir_shader *shader, bool aggressive_last_continue)
       nir_builder b;
       nir_builder_init(&b, function->impl);
 
-      nir_metadata_require(function->impl, nir_metadata_block_index |
+      nir_metadata_require(function->impl,
+                           nir_metadata_block_index |
                            nir_metadata_dominance);
+
       progress = opt_if_safe_cf_list(&b, &function->impl->body);
-      nir_metadata_preserve(function->impl, nir_metadata_block_index |
+
+      nir_metadata_preserve(function->impl, progress,
+                            nir_metadata_block_index |
                             nir_metadata_dominance);
 
       if (opt_if_cf_list(&b, &function->impl->body,
                          aggressive_last_continue)) {
-         nir_metadata_preserve(function->impl, nir_metadata_none);
+         nir_metadata_preserve(function->impl, true, nir_metadata_none);
 
          /* If that made progress, we're no longer really in SSA form.  We
           * need to convert registers back into SSA defs and clean up SSA defs
@@ -1444,10 +1448,6 @@ nir_opt_if(nir_shader *shader, bool aggressive_last_continue)
          nir_lower_regs_to_ssa_impl(function->impl);
 
          progress = true;
-      } else {
-   #ifndef NDEBUG
-         function->impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-   #endif
       }
    }
 

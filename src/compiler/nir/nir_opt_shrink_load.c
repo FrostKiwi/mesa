@@ -59,8 +59,9 @@ nir_opt_shrink_load(nir_shader *shader)
          }
       }
 
-      nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                            nir_metadata_dominance);
+      nir_metadata_preserve(function->impl, progress,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
    }
 
    return progress;

@@ -54,9 +54,15 @@ nir_metadata_require(nir_function_impl *impl, nir_metadata required, ...)
 }
 
 void
-nir_metadata_preserve(nir_function_impl *impl, nir_metadata preserved)
+nir_metadata_preserve(nir_function_impl *impl, bool impl_altered,
+                      nir_metadata preserved)
 {
-   impl->valid_metadata &= preserved;
+   assert(!(preserved & nir_metadata_not_properly_reset));
+
+   if (impl_altered)
+      impl->valid_metadata &= preserved;
+   else
+      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
 }
 
 #ifndef NDEBUG

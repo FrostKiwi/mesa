@@ -40,6 +40,7 @@ anv_nir_add_base_work_group_id(nir_shader *shader,
 
       nir_builder_init(&b, function->impl);
 
+      bool impl_progress = false;
       nir_foreach_block(block, function->impl) {
          nir_foreach_instr_safe(instr, block) {
             if (instr->type != nir_instr_type_intrinsic)
@@ -81,12 +82,14 @@ anv_nir_add_base_work_group_id(nir_shader *shader,
             nir_ssa_def_rewrite_uses_after(&load_id->dest.ssa,
                                            nir_src_for_ssa(id),
                                            id->parent_instr);
-            progress = true;
+            impl_progress = true;
          }
       }
 
-      nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                            nir_metadata_dominance);
+      nir_metadata_preserve(function->impl, impl_progress,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
+      progress = progress || impl_progress;
    }
 
    return progress;

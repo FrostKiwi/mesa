@@ -203,7 +203,7 @@ nir_split_per_member_structs(nir_shader *shader)
          }
       }
 
-      nir_metadata_preserve(function->impl,
+      nir_metadata_preserve(function->impl, true,
                             nir_metadata_block_index |
                             nir_metadata_dominance);
    }

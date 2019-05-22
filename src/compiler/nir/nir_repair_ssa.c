@@ -137,9 +137,9 @@ nir_repair_ssa_impl(nir_function_impl *impl)
       }
    }
 
-   if (state.progress)
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
+   nir_metadata_preserve(impl, state.progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    if (state.phi_builder) {
       nir_phi_builder_finish(state.phi_builder);

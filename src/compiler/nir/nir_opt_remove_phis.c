@@ -148,14 +148,9 @@ nir_opt_remove_phis_impl(nir_function_impl *impl)
       progress |= remove_phis_block(block, &bld);
    }
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
-   }
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    return progress;
 }

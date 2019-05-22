@@ -366,8 +366,9 @@ lower_wpos_ytransform_impl(lower_wpos_ytransform_state *state, nir_function_impl
    nir_foreach_block(block, impl) {
       lower_wpos_ytransform_block(state, block);
    }
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, true,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 }
 
 bool

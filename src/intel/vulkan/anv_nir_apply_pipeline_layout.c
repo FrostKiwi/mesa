@@ -1354,8 +1354,9 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
       nir_builder_init(&state.builder, function->impl);
       nir_foreach_block(block, function->impl)
          apply_pipeline_layout_block(block, &state);
-      nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                            nir_metadata_dominance);
+      nir_metadata_preserve(function->impl, true,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
    }
 
    ralloc_free(mem_ctx);

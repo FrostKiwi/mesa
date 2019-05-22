@@ -267,8 +267,9 @@ nir_lower_locals_to_regs_impl(nir_function_impl *impl)
       lower_locals_to_regs_block(block, &state);
    }
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, state.progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    _mesa_hash_table_destroy(state.regs_table, NULL);
 

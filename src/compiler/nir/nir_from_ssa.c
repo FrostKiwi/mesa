@@ -780,8 +780,9 @@ nir_convert_from_ssa_impl(nir_function_impl *impl, bool phi_webs_only)
    }
 
    /* Mark metadata as dirty before we ask for liveness analysis */
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, true,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    nir_metadata_require(impl, nir_metadata_live_ssa_defs |
                               nir_metadata_dominance);
@@ -802,8 +803,9 @@ nir_convert_from_ssa_impl(nir_function_impl *impl, bool phi_webs_only)
       resolve_parallel_copies_block(block, &state);
    }
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, true,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    /* Clean up dead instructions and the hash tables */
    _mesa_hash_table_destroy(state.merge_node_table, NULL);

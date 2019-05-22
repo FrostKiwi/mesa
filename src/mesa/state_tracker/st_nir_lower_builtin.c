@@ -242,8 +242,9 @@ lower_builtin_impl(lower_builtin_state *state, nir_function_impl *impl)
    if (progress)
       nir_remove_dead_derefs_impl(impl);
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 }
 
 void

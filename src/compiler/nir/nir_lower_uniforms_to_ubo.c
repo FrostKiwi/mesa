@@ -94,8 +94,9 @@ nir_lower_uniforms_to_ubo(nir_shader *shader, int multiplier)
             }
          }
 
-         nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                               nir_metadata_dominance);
+         nir_metadata_preserve(function->impl, progress,
+                               nir_metadata_block_index |
+                               nir_metadata_dominance);
       }
    }
 

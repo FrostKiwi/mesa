@@ -221,8 +221,7 @@ nir_lower_non_uniform_access_impl(nir_function_impl *impl,
       }
    }
 
-   if (progress)
-      nir_metadata_preserve(impl, nir_metadata_none);
+   nir_metadata_preserve(impl, progress, nir_metadata_none);
 
    return progress;
 }

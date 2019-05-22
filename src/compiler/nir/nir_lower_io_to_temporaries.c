@@ -189,8 +189,9 @@ nir_lower_io_to_temporaries(nir_shader *shader, nir_function_impl *entrypoint,
       if (outputs)
          emit_output_copies_impl(&state, function->impl);
 
-      nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                            nir_metadata_dominance);
+      nir_metadata_preserve(function->impl, true,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
    }
 
    exec_list_append(&shader->globals, &state.old_inputs);

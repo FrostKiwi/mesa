@@ -267,8 +267,9 @@ lower_drawpixels_impl(lower_drawpixels_state *state, nir_function_impl *impl)
    nir_foreach_block(block, impl) {
       lower_drawpixels_block(state, block);
    }
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, true,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 }
 
 void

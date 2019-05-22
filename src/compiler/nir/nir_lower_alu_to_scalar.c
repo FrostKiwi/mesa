@@ -273,8 +273,9 @@ nir_lower_alu_to_scalar_impl(nir_function_impl *impl, BITSET_WORD *lower_set)
       }
    }
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    return progress;
 }

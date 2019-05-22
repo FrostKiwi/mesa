@@ -146,7 +146,7 @@ v3d_nir_lower_scratch(nir_shader *s)
                         }
                 }
 
-                nir_metadata_preserve(function->impl,
+                nir_metadata_preserve(function->impl, true,
                                       nir_metadata_block_index |
                                       nir_metadata_dominance);
         }

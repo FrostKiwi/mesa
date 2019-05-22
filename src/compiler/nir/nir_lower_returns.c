@@ -271,14 +271,9 @@ nir_lower_returns_impl(nir_function_impl *impl)
    bool progress = lower_returns_in_cf_list(&impl->body, &state);
    progress = progress || state.removed_unreachable_code;
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_none);
+   nir_metadata_preserve(impl, progress, nir_metadata_none);
+   if (progress)
       nir_repair_ssa_impl(impl);
-   } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
-   }
 
    return progress;
 }

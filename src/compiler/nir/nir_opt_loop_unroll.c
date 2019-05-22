@@ -929,6 +929,7 @@ nir_opt_loop_unroll_impl(nir_function_impl *impl,
                                 &has_nested_loop);
    }
 
+   nir_metadata_preserve(impl, progress, nir_metadata_none);
    if (progress)
       nir_lower_regs_to_ssa_impl(impl);
 

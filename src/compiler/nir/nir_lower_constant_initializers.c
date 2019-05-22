@@ -112,16 +112,11 @@ nir_lower_constant_initializers(nir_shader *shader, nir_variable_mode modes)
       if (modes & nir_var_function_temp)
          impl_progress |= lower_const_initializer(&builder, &function->impl->locals);
 
-      if (impl_progress) {
-         progress = true;
-         nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                               nir_metadata_dominance |
-                                               nir_metadata_live_ssa_defs);
-      } else {
-#ifndef NDEBUG
-         function->impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
-      }
+      nir_metadata_preserve(function->impl, impl_progress,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance |
+                            nir_metadata_live_ssa_defs);
+      progress = progress || impl_progress;
    }
 
    return progress;

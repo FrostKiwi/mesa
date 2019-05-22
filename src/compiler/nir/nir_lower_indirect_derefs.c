@@ -188,8 +188,7 @@ lower_indirects_impl(nir_function_impl *impl, nir_variable_mode modes)
       progress |= lower_indirect_derefs_block(block, &builder, modes);
    }
 
-   if (progress)
-      nir_metadata_preserve(impl, nir_metadata_none);
+   nir_metadata_preserve(impl, progress, nir_metadata_none);
 
    return progress;
 }

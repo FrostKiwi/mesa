@@ -75,7 +75,8 @@ nir_lower_fragcoord_wtrans(nir_shader *shader)
             lower_fragcoord_wtrans(&b, intr);
          }
       }
-      nir_metadata_preserve(func->impl, nir_metadata_block_index |
+      nir_metadata_preserve(func->impl, true,
+                            nir_metadata_block_index |
                             nir_metadata_dominance);
    }
 }

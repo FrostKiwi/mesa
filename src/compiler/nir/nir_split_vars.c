@@ -327,11 +327,12 @@ nir_split_struct_vars(nir_shader *shader, nir_variable_mode modes)
       if (has_global_splits || has_local_splits) {
          split_struct_derefs_impl(function->impl, var_field_map,
                                   modes, mem_ctx);
-
-         nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                               nir_metadata_dominance);
          progress = true;
       }
+      nir_metadata_preserve(function->impl,
+                            has_global_splits || has_local_splits,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
    }
 
    ralloc_free(mem_ctx);
@@ -907,11 +908,12 @@ nir_split_array_vars(nir_shader *shader, nir_variable_mode modes)
       if (has_global_splits || has_local_splits) {
          split_array_copies_impl(function->impl, var_info_map, modes, mem_ctx);
          split_array_access_impl(function->impl, var_info_map, modes, mem_ctx);
-
-         nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                               nir_metadata_dominance);
          progress = true;
       }
+      nir_metadata_preserve(function->impl,
+                            has_global_splits || has_local_splits,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
    }
 
    ralloc_free(mem_ctx);
@@ -1649,11 +1651,12 @@ nir_shrink_vec_array_vars(nir_shader *shader, nir_variable_mode modes)
 
       if (globals_shrunk || locals_shrunk) {
          shrink_vec_var_access_impl(function->impl, var_usage_map, modes);
-
-         nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                               nir_metadata_dominance);
          progress = true;
       }
+      nir_metadata_preserve(function->impl,
+                            globals_shrunk || locals_shrunk,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
    }
 
    ralloc_free(mem_ctx);

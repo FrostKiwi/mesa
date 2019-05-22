@@ -634,7 +634,7 @@ vc4_nir_lower_blend(nir_shader *s, struct vc4_compile *c)
                                 vc4_nir_lower_blend_block(block, c);
                         }
 
-                        nir_metadata_preserve(function->impl,
+                        nir_metadata_preserve(function->impl, true,
                                               nir_metadata_block_index |
                                               nir_metadata_dominance);
                 }

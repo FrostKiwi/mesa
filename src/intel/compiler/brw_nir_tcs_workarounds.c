@@ -147,5 +147,5 @@ brw_nir_apply_tcs_quads_workaround(nir_shader *nir)
       emit_quads_workaround(&b, end_preds[i]);
    }
 
-   nir_metadata_preserve(impl, 0);
+   nir_metadata_preserve(impl, true, nir_metadata_none);
 }

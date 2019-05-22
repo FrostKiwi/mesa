@@ -1158,8 +1158,9 @@ nir_lower_tex_impl(nir_function_impl *impl,
       progress |= nir_lower_tex_block(block, &builder, options);
    }
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
    return progress;
 }
 

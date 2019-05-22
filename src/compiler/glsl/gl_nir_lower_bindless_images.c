@@ -92,12 +92,10 @@ gl_nir_lower_bindless_images(nir_shader *shader)
             nir_foreach_instr(instr, block)
                impl_progress |= lower_impl(&b, instr);
 
-         if (impl_progress) {
-            nir_metadata_preserve(function->impl,
-                                  nir_metadata_block_index |
-                                  nir_metadata_dominance);
-            progress = true;
-         }
+         nir_metadata_preserve(function->impl, impl_progress,
+                               nir_metadata_block_index |
+                               nir_metadata_dominance);
+         progress = progress || impl_progress;
       }
    }
 

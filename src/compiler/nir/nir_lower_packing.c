@@ -138,11 +138,13 @@ lower_pack_impl(nir_function_impl *impl)
 
          nir_ssa_def_rewrite_uses(&alu_instr->dest.dest.ssa, nir_src_for_ssa(dest));
          nir_instr_remove(&alu_instr->instr);
-         nir_metadata_preserve(impl, nir_metadata_block_index |
-                                     nir_metadata_dominance);
          progress = true;
       }
    }
+
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    return progress;
 }

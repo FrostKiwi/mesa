@@ -108,7 +108,8 @@ nir_lower_alpha_test(nir_shader *shader, enum compare_func func,
          }
       }
 
-      nir_metadata_preserve(impl, nir_metadata_block_index |
+      nir_metadata_preserve(impl, true,
+                            nir_metadata_block_index |
                             nir_metadata_dominance);
    }
 }

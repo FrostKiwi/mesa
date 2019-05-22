@@ -140,13 +140,9 @@ inline_function_impl(nir_function_impl *impl, struct set *inlined)
       /* SSA and register indices are completely messed up now */
       nir_index_ssa_defs(impl);
       nir_index_local_regs(impl);
-
-      nir_metadata_preserve(impl, nir_metadata_none);
-   } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
    }
+
+   nir_metadata_preserve(impl, progress, nir_metadata_none);
 
    _mesa_set_add(inlined, impl);
 

@@ -368,10 +368,9 @@ combine_stores_impl(struct combine_stores_state *state, nir_function_impl *impl)
    nir_foreach_block(block, impl)
       combine_stores_block(state, block);
 
-   if (state->progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   }
+   nir_metadata_preserve(impl, state->progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    return state->progress;
 }

@@ -121,12 +121,10 @@ nir_opt_conditional_discard(nir_shader *shader)
             impl_progress |= nir_opt_conditional_discard_block(&builder, block);
          }
 
-         if (impl_progress) {
-            nir_metadata_preserve(function->impl,
-                                  nir_metadata_block_index |
-                                  nir_metadata_dominance);
-            progress = true;
-         }
+         nir_metadata_preserve(function->impl, impl_progress,
+                               nir_metadata_block_index |
+                               nir_metadata_dominance);
+         progress = progress || impl_progress;
       }
    }
    return progress;

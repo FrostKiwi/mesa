@@ -181,8 +181,9 @@ ir3_nir_analyze_ubo_ranges(nir_shader *nir, struct ir3_shader *shader)
 				}
 			}
 
-			nir_metadata_preserve(function->impl, nir_metadata_block_index |
-								  nir_metadata_dominance);
+			nir_metadata_preserve(function->impl, true,
+					      nir_metadata_block_index |
+					      nir_metadata_dominance);
 		}
 	}
 

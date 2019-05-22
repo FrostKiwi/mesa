@@ -7860,6 +7860,7 @@ move_interpolation_to_top(nir_shader *nir)
       nir_block *top = nir_start_block(f->impl);
       exec_node *cursor_node = NULL;
 
+      bool impl_progress = false;
       nir_foreach_block(block, f->impl) {
          if (block == top)
             continue;
@@ -7896,14 +7897,15 @@ move_interpolation_to_top(nir_shader *nir)
                      exec_list_push_head(&top->instr_list, &move[i]->node);
                   }
                   cursor_node = &move[i]->node;
-                  progress = true;
+                  impl_progress = true;
                }
             }
          }
       }
-      nir_metadata_preserve(f->impl, (nir_metadata)
+      nir_metadata_preserve(f->impl, impl_progress, (nir_metadata)
                             ((unsigned) nir_metadata_block_index |
                              (unsigned) nir_metadata_dominance));
+      progress = progress || impl_progress;
    }
 
    return progress;
@@ -7926,6 +7928,7 @@ demote_sample_qualifiers(nir_shader *nir)
       nir_builder b;
       nir_builder_init(&b, f->impl);
 
+      bool impl_progress = false;
       nir_foreach_block(block, f->impl) {
          nir_foreach_instr_safe(instr, block) {
             if (instr->type != nir_instr_type_intrinsic)
@@ -7943,13 +7946,14 @@ demote_sample_qualifiers(nir_shader *nir)
             nir_ssa_def_rewrite_uses(&intrin->dest.ssa,
                                      nir_src_for_ssa(centroid));
             nir_instr_remove(instr);
-            progress = true;
+            impl_progress = true;
          }
       }
 
-      nir_metadata_preserve(f->impl, (nir_metadata)
+      nir_metadata_preserve(f->impl, impl_progress, (nir_metadata)
                             ((unsigned) nir_metadata_block_index |
                              (unsigned) nir_metadata_dominance));
+      progress = progress || impl_progress;
    }
 
    return progress;

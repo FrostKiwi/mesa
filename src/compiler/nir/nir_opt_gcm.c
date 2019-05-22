@@ -502,8 +502,9 @@ opt_gcm_impl(nir_function_impl *impl, bool value_number)
 
    ralloc_free(state.blocks);
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    return progress;
 }

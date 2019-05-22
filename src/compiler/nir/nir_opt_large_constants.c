@@ -240,6 +240,9 @@ nir_opt_large_constants(nir_shader *shader,
 
    if (shader->constant_data_size == 0) {
       free(var_infos);
+      nir_metadata_preserve(impl, false,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
       return false;
    }
 
@@ -321,7 +324,8 @@ nir_opt_large_constants(nir_shader *shader,
 
    free(var_infos);
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, true,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
    return true;
 }

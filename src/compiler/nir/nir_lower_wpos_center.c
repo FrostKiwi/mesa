@@ -116,8 +116,9 @@ nir_lower_wpos_center(nir_shader *shader, const bool for_sample_shading)
             progress = lower_wpos_center_block(&b, block, for_sample_shading) ||
                        progress;
          }
-         nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                               nir_metadata_dominance);
+         nir_metadata_preserve(function->impl, progress,
+                               nir_metadata_block_index |
+                               nir_metadata_dominance);
       }
    }
 

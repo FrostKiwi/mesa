@@ -88,7 +88,7 @@ v3d_nir_lower_txf_ms(nir_shader *s, struct v3d_compile *c)
                         }
                 }
 
-                nir_metadata_preserve(function->impl,
+                nir_metadata_preserve(function->impl, true,
                                       nir_metadata_block_index |
                                       nir_metadata_dominance);
         }

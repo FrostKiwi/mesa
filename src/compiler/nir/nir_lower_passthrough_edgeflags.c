@@ -46,8 +46,9 @@ lower_impl(nir_function_impl *impl)
    def = nir_load_var(&b, in);
    nir_store_var(&b, out, def, 0xf);
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, true,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 }
 
 void nir_lower_passthrough_edgeflags(nir_shader *shader)

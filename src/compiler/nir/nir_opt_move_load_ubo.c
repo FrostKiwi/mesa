@@ -103,14 +103,17 @@ nir_opt_move_load_ubo(nir_shader *shader)
       if (!func->impl)
          continue;
 
+      bool impl_progress = false;
       nir_foreach_block(block, func->impl) {
-         if (move_load_ubo(block)) {
-            nir_metadata_preserve(func->impl, nir_metadata_block_index |
-                                              nir_metadata_dominance |
-                                              nir_metadata_live_ssa_defs);
-            progress = true;
-         }
+         if (move_load_ubo(block))
+            impl_progress = true;
       }
+
+      nir_metadata_preserve(func->impl, impl_progress,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance |
+                            nir_metadata_live_ssa_defs);
+      progress = progress || impl_progress;
    }
 
    return progress;

@@ -362,9 +362,9 @@ nir_opt_comparison_pre_impl(nir_function_impl *impl)
 
    block_queue_finish(&bq);
 
-   if (progress)
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    return progress;
 }

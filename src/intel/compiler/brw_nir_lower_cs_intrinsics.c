@@ -183,7 +183,7 @@ lower_cs_intrinsics_convert_impl(struct lower_intrinsics_state *state)
       lower_cs_intrinsics_convert_block(state, block);
    }
 
-   nir_metadata_preserve(state->impl,
+   nir_metadata_preserve(state->impl, true,
                          nir_metadata_block_index | nir_metadata_dominance);
 }
 

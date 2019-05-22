@@ -470,11 +470,9 @@ anv_nir_lower_ycbcr_textures(nir_shader *shader,
          }
       }
 
-      if (function_progress) {
-         nir_metadata_preserve(function->impl,
-                               nir_metadata_block_index |
-                               nir_metadata_dominance);
-      }
+      nir_metadata_preserve(function->impl, function_progress,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
 
       progress |= function_progress;
    }

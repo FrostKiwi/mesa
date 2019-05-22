@@ -150,11 +150,10 @@ brw_nir_apply_attribute_workarounds(nir_shader *shader,
          apply_attr_wa_block(block, &state);
       }
 
-      if (state.impl_progress) {
-         nir_metadata_preserve(func->impl, nir_metadata_block_index |
-                                           nir_metadata_dominance);
-         progress = true;
-      }
+      nir_metadata_preserve(func->impl, state.impl_progress,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
+      progress = progress || state.impl_progress;
    }
 
    return progress;

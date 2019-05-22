@@ -120,10 +120,9 @@ ir3_nir_lower_load_barycentric_at_sample(nir_shader *shader)
 			}
 		}
 
-		if (progress) {
-			nir_metadata_preserve(function->impl,
-				nir_metadata_block_index | nir_metadata_dominance);
-		}
+		nir_metadata_preserve(function->impl, progress,
+				      nir_metadata_block_index |
+				      nir_metadata_dominance);
 	}
 
 	return progress;

@@ -295,8 +295,9 @@ lower_phis_to_scalar_impl(nir_function_impl *impl)
       progress = lower_phis_to_scalar_block(block, &state) || progress;
    }
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    ralloc_free(state.dead_ctx);
    return progress;

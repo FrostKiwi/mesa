@@ -185,8 +185,9 @@ nir_lower_two_sided_color_impl(nir_function_impl *impl,
       nir_lower_two_sided_color_block(block, state);
    }
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_metadata_preserve(impl, true,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 }
 
 void

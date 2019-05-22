@@ -197,10 +197,9 @@ remove_dead_write_vars_impl(void *mem_ctx, nir_function_impl *impl)
    nir_foreach_block(block, impl)
       progress |= remove_dead_write_vars_local(mem_ctx, block);
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   }
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    return progress;
 }

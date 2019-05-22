@@ -256,7 +256,7 @@ nir_lower_clip_vs(nir_shader *shader, unsigned ucp_enables, bool use_vars)
          store_clipdist_output(&b, out[1], &clipdist[4]);
    }
 
-   nir_metadata_preserve(impl, nir_metadata_dominance);
+   nir_metadata_preserve(impl, true, nir_metadata_dominance);
 
    return true;
 }
@@ -296,7 +296,7 @@ lower_clip_fs(nir_function_impl *impl, unsigned ucp_enables,
       }
    }
 
-   nir_metadata_preserve(impl, nir_metadata_dominance);
+   nir_metadata_preserve(impl, true, nir_metadata_dominance);
 }
 
 /* insert conditional kill based on interpolated CLIPDIST

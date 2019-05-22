@@ -339,7 +339,7 @@ v3d_nir_lower_io(nir_shader *s, struct v3d_compile *c)
                         if (s->info.stage == MESA_SHADER_VERTEX)
                                 v3d_nir_emit_ff_vpm_outputs(c, &b, &state);
 
-                        nir_metadata_preserve(function->impl,
+                        nir_metadata_preserve(function->impl, true,
                                               nir_metadata_block_index |
                                               nir_metadata_dominance);
                 }

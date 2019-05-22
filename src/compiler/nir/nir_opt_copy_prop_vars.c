@@ -1122,14 +1122,9 @@ nir_copy_prop_vars_impl(nir_function_impl *impl)
 
    copy_prop_vars_cf_node(&state, NULL, &impl->cf_node);
 
-   if (state.progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
-   }
+   nir_metadata_preserve(impl, state.progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 
    ralloc_free(mem_ctx);
    return state.progress;

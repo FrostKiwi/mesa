@@ -148,13 +148,14 @@ nir_opt_move_comparisons(nir_shader *shader)
          continue;
 
       nir_foreach_block(block, func->impl) {
-         if (move_comparisons(block)) {
-            nir_metadata_preserve(func->impl, nir_metadata_block_index |
-                                              nir_metadata_dominance |
-                                              nir_metadata_live_ssa_defs);
+         if (move_comparisons(block))
             progress = true;
-         }
       }
+
+      nir_metadata_preserve(func->impl, progress,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance |
+                            nir_metadata_live_ssa_defs);
    }
 
    return progress;

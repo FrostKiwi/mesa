@@ -505,6 +505,10 @@ lower_subgroups_impl(nir_function_impl *impl,
       }
    }
 
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
+
    return progress;
 }
 
@@ -518,11 +522,8 @@ nir_lower_subgroups(nir_shader *shader,
       if (!function->impl)
          continue;
 
-      if (lower_subgroups_impl(function->impl, options)) {
+      if (lower_subgroups_impl(function->impl, options))
          progress = true;
-         nir_metadata_preserve(function->impl, nir_metadata_block_index |
-                                               nir_metadata_dominance);
-      }
    }
 
    return progress;

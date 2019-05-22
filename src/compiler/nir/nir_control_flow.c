@@ -469,7 +469,7 @@ nir_handle_add_jump(nir_block *block)
    unlink_block_successors(block);
 
    nir_function_impl *impl = nir_cf_node_get_function(&block->cf_node);
-   nir_metadata_preserve(impl, nir_metadata_none);
+   nir_metadata_preserve(impl, true, nir_metadata_none);
 
    if (jump_instr->type == nir_jump_break ||
        jump_instr->type == nir_jump_continue) {
@@ -512,7 +512,7 @@ nir_handle_remove_jump(nir_block *block, nir_jump_type type)
    unlink_jump(block, type, true);
 
    nir_function_impl *impl = nir_cf_node_get_function(&block->cf_node);
-   nir_metadata_preserve(impl, nir_metadata_none);
+   nir_metadata_preserve(impl, true, nir_metadata_none);
 }
 
 static void
@@ -680,7 +680,7 @@ nir_cf_extract(nir_cf_list *extracted, nir_cursor begin, nir_cursor end)
    exec_list_make_empty(&extracted->list);
 
    /* Dominance and other block-related information is toast. */
-   nir_metadata_preserve(extracted->impl, nir_metadata_none);
+   nir_metadata_preserve(extracted->impl, true, nir_metadata_none);
 
    nir_cf_node *cf_node = &block_begin->cf_node;
    nir_cf_node *cf_node_end = &block_end->cf_node;
