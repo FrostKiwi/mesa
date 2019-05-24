@@ -33,6 +33,9 @@
 void
 nir_metadata_require(nir_function_impl *impl, nir_metadata required, ...)
 {
+   assert(!(required & (nir_metadata_not_properly_reset |
+                        nir_metadata_no_changes)));
+
 #define NEEDS_UPDATE(X) ((required & ~impl->valid_metadata) & (X))
 
    if (NEEDS_UPDATE(nir_metadata_block_index))
@@ -57,7 +60,8 @@ void
 nir_metadata_preserve(nir_function_impl *impl, bool impl_altered,
                       nir_metadata preserved)
 {
-   assert(!(preserved & nir_metadata_not_properly_reset));
+   assert(!(preserved & (nir_metadata_not_properly_reset |
+                         nir_metadata_no_changes)));
 
    if (impl_altered)
       impl->valid_metadata &= preserved;
@@ -80,6 +84,20 @@ nir_shader_preserve_all_metadata(nir_shader *shader)
    }
 }
 
+bool
+nir_shader_metadata_claims_no_changes(nir_shader *shader)
+{
+   nir_foreach_function(function, shader) {
+      if (!function->impl)
+         continue;
+
+      if (!(function->impl->valid_metadata & nir_metadata_no_changes))
+         return false;
+   }
+
+   return true;
+}
+
 #ifndef NDEBUG
 /**
  * Make sure passes properly invalidate metadata (part 1).
@@ -88,11 +106,12 @@ nir_shader_preserve_all_metadata(nir_shader *shader)
  * only be preserved if the pass forgets to call nir_metadata_preserve().
  */
 void
-nir_metadata_set_validation_flag(nir_shader *shader)
+nir_metadata_set_validation_flags(nir_shader *shader)
 {
    nir_foreach_function(function, shader) {
       if (function->impl) {
-         function->impl->valid_metadata |= nir_metadata_not_properly_reset;
+         function->impl->valid_metadata |= nir_metadata_not_properly_reset |
+                                           nir_metadata_no_changes;
       }
    }
 }
@@ -105,7 +124,7 @@ nir_metadata_set_validation_flag(nir_shader *shader)
  * nir_metadata_preserve() if they don't actually make any changes at all.
  */
 void
-nir_metadata_check_validation_flag(nir_shader *shader)
+nir_metadata_check_validation_flags(nir_shader *shader)
 {
    nir_foreach_function(function, shader) {
       if (function->impl) {

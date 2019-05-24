@@ -2041,8 +2041,13 @@ typedef enum {
    nir_metadata_block_index = 0x1,
    nir_metadata_dominance = 0x2,
    nir_metadata_live_ssa_defs = 0x4,
-   nir_metadata_not_properly_reset = 0x8,
-   nir_metadata_loop_analysis = 0x10,
+   nir_metadata_loop_analysis = 0x8,
+
+   /* These two metadata bits are for internal metadata tracking only and must
+    * not be passed into nir_metadata_require or nir_metadata_preserve.
+    */
+   nir_metadata_not_properly_reset = 0x10,
+   nir_metadata_no_changes = 0x20,
 } nir_metadata;
 
 typedef struct {
@@ -2516,6 +2521,7 @@ void nir_metadata_preserve(nir_function_impl *impl, bool impl_altered,
                            nir_metadata preserved);
 void nir_metadata_preserve_all(nir_function_impl *impl);
 void nir_shader_preserve_all_metadata(nir_shader *shader);
+bool nir_shader_metadata_claims_no_changes(nir_shader *shader);
 
 /** creates an instruction with default swizzle/writemask/etc. with NULL registers */
 nir_alu_instr *nir_alu_instr_create(nir_shader *shader, nir_op op);
@@ -2922,11 +2928,12 @@ nir_variable *nir_variable_clone(const nir_variable *c, nir_shader *shader);
 void nir_shader_replace(nir_shader *dest, nir_shader *src);
 
 void nir_shader_serialize_deserialize(nir_shader *s);
+bool nir_shaders_are_identical(const nir_shader *a, const nir_shader *b);
 
 #ifndef NDEBUG
 void nir_validate_shader(nir_shader *shader, const char *when);
-void nir_metadata_set_validation_flag(nir_shader *shader);
-void nir_metadata_check_validation_flag(nir_shader *shader);
+void nir_metadata_set_validation_flags(nir_shader *shader);
+void nir_metadata_check_validation_flags(nir_shader *shader);
 
 static inline bool
 should_skip_nir(const char *name)
@@ -2966,6 +2973,16 @@ should_serialize_deserialize_nir(void)
 }
 
 static inline bool
+should_verify_no_progress_nir(void)
+{
+   static int test_progress = -1;
+   if (test_progress < 0)
+      test_progress = env_var_as_boolean("NIR_TEST_PROGRESS", false);
+
+   return test_progress;
+}
+
+static inline bool
 should_print_nir(void)
 {
    static int should_print = -1;
@@ -2976,11 +2993,12 @@ should_print_nir(void)
 }
 #else
 static inline void nir_validate_shader(nir_shader *shader, const char *when) { (void) shader; (void)when; }
-static inline void nir_metadata_set_validation_flag(nir_shader *shader) { (void) shader; }
-static inline void nir_metadata_check_validation_flag(nir_shader *shader) { (void) shader; }
+static inline void nir_metadata_set_validation_flags(nir_shader *shader) { (void) shader; }
+static inline void nir_metadata_check_validation_flags(nir_shader *shader) { (void) shader; }
 static inline bool should_skip_nir(UNUSED const char *pass_name) { return false; }
 static inline bool should_clone_nir(void) { return false; }
 static inline bool should_serialize_deserialize_nir(void) { return false; }
+static inline bool should_verify_no_progress_nir(void) { return false; }
 static inline bool should_print_nir(void) { return false; }
 #endif /* NDEBUG */
 
@@ -2989,9 +3007,17 @@ static inline bool should_print_nir(void) { return false; }
       printf("skipping %s\n", #pass);                                \
       break;                                                         \
    }                                                                 \
-   nir_metadata_set_validation_flag(nir);                            \
+   nir_metadata_set_validation_flags(nir);                           \
+   nir_shader *old_nir_clone = NULL;                                 \
+   if (should_verify_no_progress_nir())                              \
+      old_nir_clone = nir_shader_clone(ralloc_parent(nir), nir);     \
    do_pass                                                           \
-   nir_metadata_check_validation_flag(nir);                          \
+   if (should_verify_no_progress_nir() &&                            \
+       nir_shader_metadata_claims_no_changes(nir)) {                 \
+      assert(nir_shaders_are_identical(nir, old_nir_clone));         \
+      ralloc_free(old_nir_clone);                                    \
+   }                                                                 \
+   nir_metadata_check_validation_flags(nir);                         \
    nir_validate_shader(nir, "after " #pass);                         \
    if (should_clone_nir()) {                                         \
       nir_shader *clone = nir_shader_clone(ralloc_parent(nir), nir); \

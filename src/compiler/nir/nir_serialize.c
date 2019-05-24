@@ -1227,3 +1227,23 @@ nir_shader_serialize_deserialize(nir_shader *shader)
    nir_shader_replace(shader, copy);
    ralloc_free(dead_ctx);
 }
+
+bool
+nir_shaders_are_identical(const nir_shader *a, const nir_shader *b)
+{
+   struct blob blob_a;
+   blob_init(&blob_a);
+   nir_serialize(&blob_a, a);
+
+   struct blob blob_b;
+   blob_init(&blob_b);
+   nir_serialize(&blob_b, b);
+
+   bool identical = (blob_a.size == blob_b.size) &&
+                    (memcmp(blob_a.data, blob_b.data, blob_a.size) == 0);
+
+   blob_finish(&blob_a);
+   blob_finish(&blob_b);
+
+   return identical;
+}
