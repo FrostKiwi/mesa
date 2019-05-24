@@ -2989,7 +2989,9 @@ static inline bool should_print_nir(void) { return false; }
       printf("skipping %s\n", #pass);                                \
       break;                                                         \
    }                                                                 \
+   nir_metadata_set_validation_flag(nir);                            \
    do_pass                                                           \
+   nir_metadata_check_validation_flag(nir);                          \
    nir_validate_shader(nir, "after " #pass);                         \
    if (should_clone_nir()) {                                         \
       nir_shader *clone = nir_shader_clone(ralloc_parent(nir), nir); \
@@ -3001,14 +3003,12 @@ static inline bool should_print_nir(void) { return false; }
 } while (0)
 
 #define NIR_PASS(progress, nir, pass, ...) _PASS(pass, nir,          \
-   nir_metadata_set_validation_flag(nir);                            \
    if (should_print_nir())                                           \
       printf("%s\n", #pass);                                         \
    if (pass(nir, ##__VA_ARGS__)) {                                   \
       progress = true;                                               \
       if (should_print_nir())                                        \
          nir_print_shader(nir, stdout);                              \
-      nir_metadata_check_validation_flag(nir);                       \
    }                                                                 \
 )
 
