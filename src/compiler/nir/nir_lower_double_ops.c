@@ -697,22 +697,20 @@ nir_lower_doubles_impl(nir_function_impl *impl,
       }
    }
 
-   if (progress) {
-      if (options & nir_lower_fp64_full_software) {
-         /* SSA and register indices are completely messed up now */
-         nir_index_ssa_defs(impl);
-         nir_index_local_regs(impl);
+   if (progress && (options & nir_lower_fp64_full_software)) {
+      /* SSA and register indices are completely messed up now */
+      nir_index_ssa_defs(impl);
+      nir_index_local_regs(impl);
 
-         nir_metadata_preserve(impl, nir_metadata_none);
+      nir_metadata_preserve(impl, nir_metadata_none);
 
-         /* And we have deref casts we need to clean up thanks to function
-          * inlining.
-          */
-         nir_opt_deref_impl(impl);
-      } else {
-         nir_metadata_preserve(impl, nir_metadata_block_index |
-                                     nir_metadata_dominance);
-      }
+      /* And we have deref casts we need to clean up thanks to function
+       * inlining.
+       */
+      nir_opt_deref_impl(impl);
+   } else if (progress) {
+      nir_metadata_preserve(impl, nir_metadata_block_index |
+                                  nir_metadata_dominance);
     } else {
 #ifndef NDEBUG
       impl->valid_metadata &= ~nir_metadata_not_properly_reset;
