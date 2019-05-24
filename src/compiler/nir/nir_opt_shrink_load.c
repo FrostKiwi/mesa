@@ -50,18 +50,20 @@ nir_opt_shrink_load(nir_shader *shader)
       if (!function->impl)
          continue;
 
+      bool impl_progress = false;
       nir_foreach_block(block, function->impl) {
          nir_foreach_instr(instr, block) {
             if (instr->type != nir_instr_type_intrinsic)
                continue;
 
-            progress |= opt_shrink_load(nir_instr_as_intrinsic(instr));
+            impl_progress |= opt_shrink_load(nir_instr_as_intrinsic(instr));
          }
       }
 
-      nir_metadata_preserve(function->impl, progress,
+      nir_metadata_preserve(function->impl, impl_progress,
                             nir_metadata_block_index |
                             nir_metadata_dominance);
+      progress = progress || impl_progress;
    }
 
    return progress;
