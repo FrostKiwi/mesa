@@ -104,6 +104,7 @@ nir_move_load_const(nir_shader *shader)
       if (!function->impl)
          continue;
 
+      bool impl_progress = false;
       nir_foreach_block(block, function->impl) {
          nir_metadata_require(function->impl,
                               nir_metadata_block_index | nir_metadata_dominance);
@@ -129,13 +130,14 @@ nir_move_load_const(nir_shader *shader)
 
             load->instr.block = use_block;
 
-            progress = true;
+            impl_progress = true;
          }
       }
 
-      nir_metadata_preserve(function->impl, progress,
+      nir_metadata_preserve(function->impl, impl_progress,
                             nir_metadata_block_index |
                             nir_metadata_dominance);
+      progress = progress || impl_progress;
    }
 
    return progress;
