@@ -47,7 +47,7 @@ load_frag_coord(nir_builder *b)
    return nir_load_var(b, pos);
 }
 
-static void
+static bool
 try_lower_input_load(nir_function_impl *impl, nir_intrinsic_instr *load)
 {
    nir_deref_instr *deref = nir_src_as_deref(load->src[0]);
@@ -56,7 +56,7 @@ try_lower_input_load(nir_function_impl *impl, nir_intrinsic_instr *load)
    enum glsl_sampler_dim image_dim = glsl_get_sampler_dim(deref->type);
    if (image_dim != GLSL_SAMPLER_DIM_SUBPASS &&
        image_dim != GLSL_SAMPLER_DIM_SUBPASS_MS)
-      return;
+      return false;
 
    const bool multisampled = (image_dim == GLSL_SAMPLER_DIM_SUBPASS_MS);
 
@@ -116,6 +116,8 @@ try_lower_input_load(nir_function_impl *impl, nir_intrinsic_instr *load)
 
    nir_ssa_def_rewrite_uses(&load->dest.ssa,
                             nir_src_for_ssa(&tex->dest.ssa));
+
+   return true;
 }
 
 void
@@ -127,6 +129,7 @@ anv_nir_lower_input_attachments(nir_shader *shader)
       if (!function->impl)
          continue;
 
+      bool progress = false;
       nir_foreach_block(block, function->impl) {
          nir_foreach_instr_safe(instr, block) {
             if (instr->type != nir_instr_type_intrinsic)
@@ -137,8 +140,13 @@ anv_nir_lower_input_attachments(nir_shader *shader)
             if (load->intrinsic != nir_intrinsic_image_deref_load)
                continue;
 
-            try_lower_input_load(function->impl, load);
+            if (try_lower_input_load(function->impl, load))
+               progress = true;
          }
       }
+
+      nir_metadata_preserve(function->impl, progress,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance);
    }
 }

@@ -30,6 +30,7 @@ anv_nir_lower_push_constants(nir_shader *shader)
       if (!function->impl)
          continue;
 
+      bool progress = false;
       nir_foreach_block(block, function->impl) {
          nir_foreach_instr(instr, block) {
             if (instr->type != nir_instr_type_intrinsic)
@@ -43,7 +44,13 @@ anv_nir_lower_push_constants(nir_shader *shader)
 
             /* We just turn them into uniform loads */
             intrin->intrinsic = nir_intrinsic_load_uniform;
+            progress = true;
          }
       }
+
+      nir_metadata_preserve(function->impl, progress,
+                            nir_metadata_block_index |
+                            nir_metadata_dominance |
+                            nir_metadata_live_ssa_defs);
    }
 }

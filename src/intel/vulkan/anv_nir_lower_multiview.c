@@ -151,8 +151,10 @@ anv_nir_lower_multiview(nir_shader *shader, uint32_t view_mask)
    assert(shader->info.stage != MESA_SHADER_COMPUTE);
 
    /* If multiview isn't enabled, we have nothing to do. */
-   if (view_mask == 0)
+   if (view_mask == 0) {
+      nir_shader_preserve_all_metadata(shader);
       return false;
+   }
 
    struct lower_multiview_state state = {
       .view_mask = view_mask,
