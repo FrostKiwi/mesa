@@ -142,6 +142,7 @@ iris_lower_storage_image_derefs(nir_shader *nir)
    nir_builder b;
    nir_builder_init(&b, impl);
 
+   bool progress = false;
    nir_foreach_block(block, impl) {
       nir_foreach_instr_safe(instr, block) {
          if (instr->type != nir_instr_type_intrinsic)
@@ -171,6 +172,7 @@ iris_lower_storage_image_derefs(nir_shader *nir)
                nir_iadd(&b, nir_imm_int(&b, var->data.driver_location),
                             get_aoa_deref_offset(&b, deref, 1));
             nir_rewrite_image_intrinsic(intrin, index, false);
+            progress = true;
             break;
          }
 
@@ -179,6 +181,10 @@ iris_lower_storage_image_derefs(nir_shader *nir)
          }
       }
    }
+
+   nir_metadata_preserve(impl, progress,
+                         nir_metadata_block_index |
+                         nir_metadata_dominance);
 }
 
 // XXX: need unify_interfaces() at link time...
