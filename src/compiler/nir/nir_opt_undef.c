@@ -139,23 +139,26 @@ nir_opt_undef(nir_shader *shader)
    nir_foreach_function(function, shader) {
       if (function->impl) {
          nir_builder_init(&b, function->impl);
+
+         bool impl_progress = false;
          nir_foreach_block(block, function->impl) {
             nir_foreach_instr_safe(instr, block) {
                if (instr->type == nir_instr_type_alu) {
                   nir_alu_instr *alu = nir_instr_as_alu(instr);
 
-                  progress = opt_undef_csel(alu) || progress;
-                  progress = opt_undef_vecN(&b, alu) || progress;
+                  impl_progress = opt_undef_csel(alu) || impl_progress;
+                  impl_progress = opt_undef_vecN(&b, alu) || impl_progress;
                } else if (instr->type == nir_instr_type_intrinsic) {
                   nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
-                  progress = opt_undef_store(intrin) || progress;
+                  impl_progress = opt_undef_store(intrin) || impl_progress;
                }
             }
          }
 
-         nir_metadata_preserve(function->impl, progress,
+         nir_metadata_preserve(function->impl, impl_progress,
                                nir_metadata_block_index |
                                nir_metadata_dominance);
+         progress = progress || impl_progress;
       }
    }
 
