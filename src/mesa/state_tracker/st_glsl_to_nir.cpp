@@ -903,13 +903,13 @@ st_link_nir(struct gl_context *ctx,
 }
 
 void
-st_nir_assign_varying_locations(struct st_context *st, nir_shader *nir)
+st_nir_assign_varying_locations(nir_shader *nir, struct st_context *st)
 {
    if (nir->info.stage == MESA_SHADER_VERTEX) {
       /* Needs special handling so drvloc matches the vbo state: */
       st_nir_assign_vs_in_locations(nir);
       /* Re-lower global vars, to deal with any dead VS inputs. */
-      NIR_PASS_V(nir, nir_lower_global_vars_to_local);
+      nir_lower_global_vars_to_local(nir);
 
       sort_varyings(&nir->outputs);
       st_nir_assign_var_locations(&nir->outputs,
@@ -944,17 +944,26 @@ st_nir_assign_varying_locations(struct st_context *st, nir_shader *nir)
    } else {
       unreachable("invalid shader type");
    }
+
+   nir_foreach_function(function, nir) {
+      if (function->impl) {
+         nir_metadata_preserve(function->impl, true,
+                               (nir_metadata)(nir_metadata_block_index |
+                                              nir_metadata_dominance |
+                                              nir_metadata_live_ssa_defs));
+      }
+   }
 }
 
 void
-st_nir_lower_samplers(struct pipe_screen *screen, nir_shader *nir,
+st_nir_lower_samplers(nir_shader *nir, struct pipe_screen *screen,
                       struct gl_shader_program *shader_program,
                       struct gl_program *prog)
 {
    if (screen->get_param(screen, PIPE_CAP_NIR_SAMPLERS_AS_DEREF))
-      NIR_PASS_V(nir, gl_nir_lower_samplers_as_deref, shader_program);
+      gl_nir_lower_samplers_as_deref(nir, shader_program);
    else
-      NIR_PASS_V(nir, gl_nir_lower_samplers, shader_program);
+      gl_nir_lower_samplers(nir, shader_program);
 
    if (prog) {
       prog->info.textures_used = nir->info.textures_used;
@@ -984,7 +993,7 @@ st_finalize_nir(struct st_context *st, struct gl_program *prog,
       NIR_PASS_V(nir, nir_lower_io_arrays_to_elements_no_indirects, true);
    }
 
-   st_nir_assign_varying_locations(st, nir);
+   NIR_PASS_V(nir, st_nir_assign_varying_locations, st);
 
    NIR_PASS_V(nir, nir_lower_atomics_to_ssbo,
          st->ctx->Const.Program[nir->info.stage].MaxAtomicBuffers);
@@ -1004,7 +1013,7 @@ st_finalize_nir(struct st_context *st, struct gl_program *prog,
                  (nir_lower_io_options)0);
    }
 
-   st_nir_lower_samplers(screen, nir, shader_program, prog);
+   NIR_PASS_V(nir, st_nir_lower_samplers, screen, shader_program, prog);
 }
 
 } /* extern "C" */
