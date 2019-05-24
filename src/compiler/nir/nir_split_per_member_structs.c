@@ -185,6 +185,7 @@ nir_split_per_member_structs(nir_shader *shader)
                                        var_to_member_map, dead_ctx);
    if (!progress) {
       ralloc_free(dead_ctx);
+      nir_shader_preserve_all_metadata(shader);
       return false;
    }
 

@@ -217,8 +217,10 @@ nir_lower_alu(nir_shader *shader)
    bool progress = false;
 
    if (!shader->options->lower_bitfield_reverse &&
-       !shader->options->lower_mul_high)
+       !shader->options->lower_mul_high) {
+      nir_shader_preserve_all_metadata(shader);
       return false;
+   }
 
    nir_foreach_function(function, shader) {
       if (function->impl) {

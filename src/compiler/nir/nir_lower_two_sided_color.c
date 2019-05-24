@@ -199,8 +199,10 @@ nir_lower_two_sided_color(nir_shader *shader)
       .shader = shader,
    };
 
-   if (setup_inputs(&state) != 0)
+   if (setup_inputs(&state) != 0) {
+      nir_shader_preserve_all_metadata(shader);
       return;
+   }
 
    nir_foreach_function(function, shader) {
       if (function->impl)

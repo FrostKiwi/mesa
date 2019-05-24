@@ -168,8 +168,10 @@ nir_lower_clip_vs(nir_shader *shader, unsigned ucp_enables, bool use_vars)
    nir_ssa_def *cv;
    nir_variable *out[2] = { NULL };
 
-   if (!ucp_enables)
+   if (!ucp_enables) {
+      nir_shader_preserve_all_metadata(shader);
       return false;
+   }
 
    nir_builder_init(&b, impl);
 
@@ -307,8 +309,10 @@ nir_lower_clip_fs(nir_shader *shader, unsigned ucp_enables)
    nir_variable *in[2];
    int maxloc = -1;
 
-   if (!ucp_enables)
+   if (!ucp_enables) {
+      nir_shader_preserve_all_metadata(shader);
       return false;
+   }
 
    nir_foreach_variable(var, &shader->inputs) {
       int loc = var->data.driver_location;

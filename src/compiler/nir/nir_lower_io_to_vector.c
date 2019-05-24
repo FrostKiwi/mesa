@@ -228,8 +228,10 @@ nir_lower_io_to_vector_impl(nir_function_impl *impl, nir_variable_mode modes)
          modes &= ~nir_var_shader_out;
    }
 
-   if (!modes)
+   if (!modes) {
+      nir_shader_preserve_all_metadata(shader);
       return false;
+   }
 
    bool progress = false;
 
