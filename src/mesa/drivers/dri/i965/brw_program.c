@@ -62,15 +62,21 @@
 static bool
 brw_nir_lower_uniforms(nir_shader *nir, bool is_scalar)
 {
-   if (is_scalar) {
-      nir_assign_var_locations(&nir->uniforms, &nir->num_uniforms,
-                               type_size_scalar_bytes);
-      return nir_lower_io(nir, nir_var_uniform, type_size_scalar_bytes, 0);
-   } else {
-      nir_assign_var_locations(&nir->uniforms, &nir->num_uniforms,
-                               type_size_vec4_bytes);
-      return nir_lower_io(nir, nir_var_uniform, type_size_vec4_bytes, 0);
+   int (*type_size)(const struct glsl_type *, bool) =
+      is_scalar ? type_size_scalar_bytes : type_size_vec4_bytes;
+
+   nir_assign_var_locations(&nir->uniforms, &nir->num_uniforms, type_size);
+
+   nir_foreach_function(function, nir) {
+      if (function->impl) {
+         nir_metadata_preserve(function->impl, nir->num_uniforms > 0,
+                               nir_metadata_block_index |
+                               nir_metadata_dominance |
+                               nir_metadata_live_ssa_defs);
+      }
    }
+
+   return nir_lower_io(nir, nir_var_uniform, type_size, 0);
 }
 
 static struct gl_program *brwNewProgram(struct gl_context *ctx, GLenum target,

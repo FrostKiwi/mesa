@@ -323,6 +323,7 @@ brw_nir_lower_gl_images(nir_shader *shader,
    nir_builder b;
    nir_builder_init(&b, impl);
 
+   bool progress = true;
    nir_foreach_block(block, impl) {
       nir_foreach_instr_safe(instr, block) {
          if (instr->type != nir_instr_type_intrinsic)
@@ -356,6 +357,7 @@ brw_nir_lower_gl_images(nir_shader *shader,
             nir_ssa_def *index = nir_iadd(&b, nir_imm_int(&b, image_var_idx),
                                           get_aoa_deref_offset(&b, deref, 1));
             nir_rewrite_image_intrinsic(intrin, index, false);
+            progress = true;
             break;
          }
 
@@ -386,6 +388,7 @@ brw_nir_lower_gl_images(nir_shader *shader,
 
             nir_ssa_def_rewrite_uses(&intrin->dest.ssa,
                                      nir_src_for_ssa(&load->dest.ssa));
+            progress = true;
             break;
          }
 
@@ -394,4 +397,8 @@ brw_nir_lower_gl_images(nir_shader *shader,
          }
       }
    }
+
+   nir_metadata_preserve(impl, progress,
+                         (nir_metadata)(nir_metadata_block_index |
+                                        nir_metadata_dominance));
 }
