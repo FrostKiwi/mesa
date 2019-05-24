@@ -2977,7 +2977,7 @@ should_verify_no_progress_nir(void)
 {
    static int test_progress = -1;
    if (test_progress < 0)
-      test_progress = env_var_as_boolean("NIR_TEST_PROGRESS", false);
+      test_progress = env_var_as_boolean("NIR_TEST_PROGRESS", true);
 
    return test_progress;
 }
