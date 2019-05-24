@@ -755,8 +755,10 @@ st_nir_lower_wpos_ytransform(struct nir_shader *nir,
                              struct gl_program *prog,
                              struct pipe_screen *pscreen)
 {
-   if (nir->info.stage != MESA_SHADER_FRAGMENT)
+   if (nir->info.stage != MESA_SHADER_FRAGMENT) {
+      nir_shader_preserve_all_metadata(nir);
       return;
+   }
 
    static const gl_state_index16 wposTransformState[STATE_LENGTH] = {
       STATE_INTERNAL, STATE_FB_WPOS_Y_TRANSFORM
