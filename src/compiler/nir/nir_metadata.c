@@ -65,6 +65,21 @@ nir_metadata_preserve(nir_function_impl *impl, bool impl_altered,
       impl->valid_metadata &= ~nir_metadata_not_properly_reset;
 }
 
+void
+nir_metadata_preserve_all(nir_function_impl *impl)
+{
+   nir_metadata_preserve(impl, false, 0);
+}
+
+void
+nir_shader_preserve_all_metadata(nir_shader *shader)
+{
+   nir_foreach_function(function, shader) {
+      if (function->impl)
+         nir_metadata_preserve_all(function->impl);
+   }
+}
+
 #ifndef NDEBUG
 /**
  * Make sure passes properly invalidate metadata (part 1).
