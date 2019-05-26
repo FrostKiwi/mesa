@@ -558,9 +558,9 @@ struct pipe_resource
     */
    unsigned nr_storage_samples:8;
 
-   unsigned usage:8;         /**< PIPE_USAGE_x (not a bitmask) */
-   unsigned bind;            /**< bitmask of PIPE_BIND_x */
-   unsigned flags;           /**< bitmask of PIPE_RESOURCE_FLAG_x */
+   unsigned usage:8;          /**< PIPE_USAGE_x (not a bitmask) */
+   enum pipe_bind_flags bind; /**< bitmask of PIPE_BIND_x */
+   unsigned flags;            /**< bitmask of PIPE_RESOURCE_FLAG_x */
 
    /**
     * For planar images, ie. YUV EGLImage external, etc, pointer to the

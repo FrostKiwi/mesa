@@ -277,7 +277,7 @@ pipe_surface_equal(struct pipe_surface *s1, struct pipe_surface *s2)
  */
 static inline struct pipe_resource *
 pipe_buffer_create(struct pipe_screen *screen,
-                   unsigned bind,
+                   enum pipe_bind_flags bind,
                    enum pipe_resource_usage usage,
                    unsigned size)
 {
@@ -298,7 +298,7 @@ pipe_buffer_create(struct pipe_screen *screen,
 
 static inline struct pipe_resource *
 pipe_buffer_create_const0(struct pipe_screen *screen,
-                          unsigned bind,
+                          enum pipe_bind_flags bind,
                           enum pipe_resource_usage usage,
                           unsigned size)
 {
@@ -434,7 +434,7 @@ pipe_buffer_write_nooverlap(struct pipe_context *pipe,
  */
 static inline struct pipe_resource *
 pipe_buffer_create_with_data(struct pipe_context *pipe,
-                             unsigned bind,
+                             enum pipe_bind_flags bind,
                              enum pipe_resource_usage usage,
                              unsigned size,
                              const void *ptr)
