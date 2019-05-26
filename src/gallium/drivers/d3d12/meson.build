@@ -1,4 +1,4 @@
-# Copyright © 2018-2019 Intel Corporation
+# Copyright © 2019 Collabora Ltd
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,21 +18,23 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-libgraw_gdi = shared_library(
-  'graw',
-  'graw_gdi.c',
-  c_args : [c_vis_args, c_msvc_compat_args],
-  include_directories : [
-    inc_include, inc_src, inc_gallium, inc_gallium_aux, inc_gallium_drivers,
-    inc_gallium_winsys_sw,
-  ],
-  link_with : [
-    libgraw_util, libgallium, libwsgdi,
-  ],
-  dependencies : [
-    dep_ws2_32, idep_mesautil, driver_swrast, driver_d3d12
-  ],
-  name_prefix : host_machine.system() == 'windows' ? '' : 'lib',  # otherwise mingw will create libgraw.dll
+files_libd3d12 = files(
+  'd3d12_context.cpp',
+  'd3d12_format.c',
+  'd3d12_resource.cpp',
+  'd3d12_screen.cpp',
+  'd3d12_surface.cpp',
 )
 
-libgraw = libgraw_gdi
+libd3d12 = static_library(
+  'd3d12',
+  files_libd3d12,
+  c_args : c_vis_args,
+  include_directories : [inc_include, inc_src, inc_mesa, inc_gallium, inc_gallium_aux],
+  dependencies: idep_nir_headers,
+)
+
+driver_d3d12 = declare_dependency(
+  compile_args : '-DGALLIUM_D3D12',
+  link_with : [libd3d12],
+)
