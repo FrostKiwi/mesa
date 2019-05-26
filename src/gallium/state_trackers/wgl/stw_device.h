@@ -46,9 +46,10 @@ struct stw_framebuffer;
 struct stw_device
 {
    const struct stw_winsys *stw_winsys;
-   
+
+   CRITICAL_SECTION screen_mutex;
    struct pipe_screen *screen;
-   
+
    /* Cache some PIPE_CAP_* */
    unsigned max_2d_length;
 
@@ -87,6 +88,8 @@ struct stw_device
 
 extern struct stw_device *stw_dev;
 
+boolean
+stw_init_screen();
 
 static inline struct stw_context *
 stw_lookup_context_locked( DHGLRC dhglrc )
