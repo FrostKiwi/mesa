@@ -1,0 +1,14 @@
+Import('*')
+
+env = env.Clone()
+
+env.MSVC2013Compat()
+
+d3d12 = env.ConvenienceLibrary(
+	target = 'd3d12',
+	source = env.ParseSourceList('Makefile.sources', 'C_SOURCES')
+	)
+
+env.Alias('d3d12', d3d12)
+
+Export('d3d12')

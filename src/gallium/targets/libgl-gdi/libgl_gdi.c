@@ -55,8 +55,13 @@
 #include "swr/swr_public.h"
 #endif
 
+#ifdef GALLIUM_D3D12
+#include "d3d12/d3d12_public.h"
+#endif
+
 static boolean use_llvmpipe = FALSE;
 static boolean use_swr = FALSE;
+static boolean use_d3d12 = FALSE;
 
 static struct pipe_screen *
 gdi_screen_create(void)
@@ -92,6 +97,13 @@ gdi_screen_create(void)
       screen = swr_create_screen( winsys );
       if (screen)
          use_swr = TRUE;
+   }
+#endif
+#ifdef GALLIUM_D3D12
+   if (strcmp(driver, "d3d12") == 0) {
+      screen = d3d12_create_screen( winsys );
+      if (screen)
+         use_d3d12 = TRUE;
    }
 #endif
    (void) driver;
@@ -142,6 +154,13 @@ gdi_present(struct pipe_screen *screen,
 #ifdef GALLIUM_SWR
    if (use_swr) {
       swr_gdi_swap(screen, res, hDC);
+      return;
+   }
+#endif
+
+#ifdef GALLIUM_D3D12
+   if (use_d3d12) {
+      /* dunno :P */
       return;
    }
 #endif
