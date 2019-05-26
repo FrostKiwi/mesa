@@ -208,6 +208,7 @@ with_gallium_virgl = gallium_drivers.contains('virgl')
 with_gallium_swr = gallium_drivers.contains('swr')
 with_gallium_lima = gallium_drivers.contains('lima')
 with_gallium_zink = gallium_drivers.contains('zink')
+with_gallium_d3d12 = gallium_drivers.contains('d3d12')
 
 if cc.get_id().startswith('intel') and meson.version().version_compare('< 0.49.1')
   error('Meson does not have sufficient support of ICC before 0.49.1 to compile mesa')
