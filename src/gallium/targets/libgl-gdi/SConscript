@@ -39,6 +39,10 @@ if env['llvm']:
         env.Append(CPPDEFINES = 'GALLIUM_SWR')
         drivers += [swr]
 
+if env['platform'] == 'windows':
+    env.Append(CPPDEFINES = 'GALLIUM_D3D12')
+    drivers += [d3d12]
+
 if env['gcc'] and env['machine'] != 'x86_64':
     # DEF parser in certain versions of MinGW is busted, as does not behave as
     # MSVC.  mingw-w64 works fine.
