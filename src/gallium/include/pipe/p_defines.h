@@ -444,48 +444,50 @@ enum pipe_flush_flags
  * Resource binding flags -- state tracker must specify in advance all
  * the ways a resource might be used.
  */
-#define PIPE_BIND_DEPTH_STENCIL        (1 << 0) /* create_surface */
-#define PIPE_BIND_RENDER_TARGET        (1 << 1) /* create_surface */
-#define PIPE_BIND_BLENDABLE            (1 << 2) /* create_surface */
-#define PIPE_BIND_SAMPLER_VIEW         (1 << 3) /* create_sampler_view */
-#define PIPE_BIND_VERTEX_BUFFER        (1 << 4) /* set_vertex_buffers */
-#define PIPE_BIND_INDEX_BUFFER         (1 << 5) /* draw_elements */
-#define PIPE_BIND_CONSTANT_BUFFER      (1 << 6) /* set_constant_buffer */
-#define PIPE_BIND_DISPLAY_TARGET       (1 << 7) /* flush_front_buffer */
-/* gap */
-#define PIPE_BIND_STREAM_OUTPUT        (1 << 10) /* set_stream_output_buffers */
-#define PIPE_BIND_CURSOR               (1 << 11) /* mouse cursor */
-#define PIPE_BIND_CUSTOM               (1 << 12) /* state-tracker/winsys usages */
-#define PIPE_BIND_GLOBAL               (1 << 13) /* set_global_binding */
-#define PIPE_BIND_SHADER_BUFFER        (1 << 14) /* set_shader_buffers */
-#define PIPE_BIND_SHADER_IMAGE         (1 << 15) /* set_shader_images */
-#define PIPE_BIND_COMPUTE_RESOURCE     (1 << 16) /* set_compute_resources */
-#define PIPE_BIND_COMMAND_ARGS_BUFFER  (1 << 17) /* pipe_draw_info.indirect */
-#define PIPE_BIND_QUERY_BUFFER         (1 << 18) /* get_query_result_resource */
+enum pipe_bind_flags
+{
+   PIPE_BIND_DEPTH_STENCIL =        (1 << 0), /* create_surface */
+   PIPE_BIND_RENDER_TARGET =        (1 << 1), /* create_surface */
+   PIPE_BIND_BLENDABLE =            (1 << 2), /* create_surface */
+   PIPE_BIND_SAMPLER_VIEW =         (1 << 3), /* create_sampler_view */
+   PIPE_BIND_VERTEX_BUFFER =        (1 << 4), /* set_vertex_buffers */
+   PIPE_BIND_INDEX_BUFFER =         (1 << 5), /* draw_elements */
+   PIPE_BIND_CONSTANT_BUFFER =      (1 << 6), /* set_constant_buffer */
+   PIPE_BIND_DISPLAY_TARGET =       (1 << 7), /* flush_front_buffer */
+   /* gap */
+   PIPE_BIND_STREAM_OUTPUT =        (1 << 10), /* set_stream_output_buffers */
+   PIPE_BIND_CURSOR =               (1 << 11), /* mouse cursor */
+   PIPE_BIND_CUSTOM =               (1 << 12), /* state-tracker/winsys usages */
+   PIPE_BIND_GLOBAL =               (1 << 13), /* set_global_binding */
+   PIPE_BIND_SHADER_BUFFER =        (1 << 14), /* set_shader_buffers */
+   PIPE_BIND_SHADER_IMAGE =         (1 << 15), /* set_shader_images */
+   PIPE_BIND_COMPUTE_RESOURCE =     (1 << 16), /* set_compute_resources */
+   PIPE_BIND_COMMAND_ARGS_BUFFER =  (1 << 17), /* pipe_draw_info.indirect */
+   PIPE_BIND_QUERY_BUFFER =         (1 << 18), /* get_query_result_resource */
 
-/**
- * The first two flags above were previously part of the amorphous
- * TEXTURE_USAGE, most of which are now descriptions of the ways a
- * particular texture can be bound to the gallium pipeline.  The two flags
- * below do not fit within that and probably need to be migrated to some
- * other place.
- *
- * It seems like scanout is used by the Xorg state tracker to ask for
- * a texture suitable for actual scanout (hence the name), which
- * implies extra layout constraints on some hardware.  It may also
- * have some special meaning regarding mouse cursor images.
- *
- * The shared flag is quite underspecified, but certainly isn't a
- * binding flag - it seems more like a message to the winsys to create
- * a shareable allocation.
- * 
- * The third flag has been added to be able to force textures to be created
- * in linear mode (no tiling).
- */
-#define PIPE_BIND_SCANOUT     (1 << 19) /*  */
-#define PIPE_BIND_SHARED      (1 << 20) /* get_texture_handle ??? */
-#define PIPE_BIND_LINEAR      (1 << 21)
-
+   /**
+    * The first two flags above were previously part of the amorphous
+    * TEXTURE_USAGE, most of which are now descriptions of the ways a
+    * particular texture can be bound to the gallium pipeline.  The two flags
+    * below do not fit within that and probably need to be migrated to some
+    * other place.
+    *
+    * It seems like scanout is used by the Xorg state tracker to ask for
+    * a texture suitable for actual scanout (hence the name), which
+    * implies extra layout constraints on some hardware.  It may also
+    * have some special meaning regarding mouse cursor images.
+    *
+    * The shared flag is quite underspecified, but certainly isn't a
+    * binding flag - it seems more like a message to the winsys to create
+    * a shareable allocation.
+    *
+    * The third flag has been added to be able to force textures to be created
+    * in linear mode (no tiling).
+    */
+   PIPE_BIND_SCANOUT =     (1 << 19), /*  */
+   PIPE_BIND_SHARED =      (1 << 20), /* get_texture_handle ??? */
+   PIPE_BIND_LINEAR =      (1 << 21)
+};
 
 /**
  * Flags for the driver about resource behaviour:
