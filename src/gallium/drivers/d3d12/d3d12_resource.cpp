@@ -120,7 +120,7 @@ d3d12_resource_create(struct pipe_screen *pscreen,
 #endif
 
    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-   if ((templ->bind & (PIPE_BIND_DISPLAY_TARGET | PIPE_BIND_SCANOUT |
+   if ((templ->bind & (PIPE_BIND_SCANOUT |
                       PIPE_BIND_SHARED | PIPE_BIND_LINEAR)) ||
        templ->usage == PIPE_USAGE_STAGING ||
        templ->target == PIPE_BUFFER)
