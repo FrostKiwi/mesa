@@ -69,6 +69,10 @@ struct slab_child_pool {
    struct slab_element_header *migrated;
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void slab_create_parent(struct slab_parent_pool *parent,
                         unsigned item_size,
                         unsigned num_items);
@@ -90,5 +94,9 @@ void slab_create(struct slab_mempool *mempool,
 void slab_destroy(struct slab_mempool *mempool);
 void *slab_alloc_st(struct slab_mempool *mempool);
 void slab_free_st(struct slab_mempool *mempool, void *ptr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
