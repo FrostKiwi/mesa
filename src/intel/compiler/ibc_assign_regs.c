@@ -22,6 +22,7 @@
  */
 
 #include "ibc.h"
+#include "ibc_live_intervals.h"
 
 static bool
 ibc_alu_instr_is_raw_mov(const ibc_alu_instr *alu)

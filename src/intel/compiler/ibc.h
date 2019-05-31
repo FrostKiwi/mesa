@@ -431,6 +431,9 @@ typedef struct ibc_instr {
    /** The type of this instruction */
    enum ibc_instr_type type;
 
+   /** Instruction index used for liveness etc. */
+   uint32_t index;
+
    /** Link in ibc_shader::instrs */
    struct list_head link;
 
