@@ -446,10 +446,8 @@ ibc_print_shader(const ibc_shader *shader, FILE *fp)
       reg->index = num_regs++;
 
    uint32_t num_blocks = 0;
-   ibc_foreach_instr(instr, shader) {
-      if (instr->type == IBC_INSTR_TYPE_MERGE)
-         ibc_instr_as_merge(instr)->block_index = num_blocks++;
-   }
+   ibc_foreach_merge_instr(merge, shader)
+      merge->block_index = num_blocks++;
 
    ibc_foreach_instr(instr, shader) {
       switch (instr->type) {
