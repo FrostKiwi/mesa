@@ -159,6 +159,15 @@ nir_remove_unused_io_vars(nir_shader *shader, struct exec_list *var_list,
    if (progress)
       nir_fixup_deref_modes(shader);
 
+   nir_foreach_function(function, shader) {
+      if (function->impl) {
+         nir_metadata_preserve(function->impl, progress,
+                               nir_metadata_block_index |
+                               nir_metadata_dominance |
+                               nir_metadata_live_ssa_defs);
+      }
+   }
+
    return progress;
 }
 

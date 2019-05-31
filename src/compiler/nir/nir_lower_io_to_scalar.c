@@ -103,6 +103,7 @@ nir_lower_io_to_scalar(nir_shader *shader, nir_variable_mode mask)
          nir_builder b;
          nir_builder_init(&b, function->impl);
 
+         bool impl_progress = false;
          nir_foreach_block(block, function->impl) {
             nir_foreach_instr_safe(instr, block) {
                if (instr->type != nir_instr_type_intrinsic)
@@ -115,18 +116,26 @@ nir_lower_io_to_scalar(nir_shader *shader, nir_variable_mode mask)
 
                switch (intr->intrinsic) {
                case nir_intrinsic_load_input:
-                  if (mask & nir_var_shader_in)
+                  if (mask & nir_var_shader_in) {
                      lower_load_input_to_scalar(&b, intr);
+                     impl_progress = true;
+                  }
                   break;
                case nir_intrinsic_store_output:
-                  if (mask & nir_var_shader_out)
+                  if (mask & nir_var_shader_out) {
                      lower_store_output_to_scalar(&b, intr);
+                     impl_progress = true;
+                  }
                   break;
                default:
                   break;
                }
             }
          }
+
+         nir_metadata_preserve(function->impl, impl_progress,
+                               nir_metadata_block_index |
+                               nir_metadata_dominance);
       }
    }
 }
@@ -384,6 +393,14 @@ nir_lower_io_to_scalar_early(nir_shader *shader, nir_variable_mode mask)
       exec_node_remove(&var->node);
 
       free(entry->data);
+   }
+
+   nir_foreach_function(function, shader) {
+      if (function->impl) {
+         nir_metadata_preserve(function->impl, true,
+                               nir_metadata_block_index |
+                               nir_metadata_dominance);
+      }
    }
 
    _mesa_hash_table_destroy(split_inputs, NULL);

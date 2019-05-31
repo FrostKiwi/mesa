@@ -271,6 +271,7 @@ lower_io_arrays_to_elements(nir_shader *shader, nir_variable_mode mask,
          nir_builder b;
          nir_builder_init(&b, function->impl);
 
+         bool impl_progress = false;
          nir_foreach_block(block, function->impl) {
             nir_foreach_instr_safe(instr, block) {
                if (instr->type != nir_instr_type_intrinsic)
@@ -339,15 +340,23 @@ lower_io_arrays_to_elements(nir_shader *shader, nir_variable_mode mask,
                case nir_intrinsic_interp_deref_at_offset:
                case nir_intrinsic_load_deref:
                case nir_intrinsic_store_deref:
-                  if ((mask & nir_var_shader_in && mode == nir_var_shader_in) ||
-                      (mask & nir_var_shader_out && mode == nir_var_shader_out))
+                  if ((mask & nir_var_shader_in &&
+                       mode == nir_var_shader_in) ||
+                      (mask & nir_var_shader_out &&
+                       mode == nir_var_shader_out)) {
                      lower_array(&b, intr, var, varyings);
+                     impl_progress = true;
+                  }
                   break;
                default:
                   break;
                }
             }
          }
+
+         nir_metadata_preserve(function->impl, impl_progress,
+                               nir_metadata_block_index |
+                               nir_metadata_dominance);
       }
    }
 }
