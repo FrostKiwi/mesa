@@ -628,6 +628,14 @@ ibc_merge_instr *ibc_merge_instr_create(struct ibc_shader *shader,
                                         enum ibc_merge_op op,
                                         uint8_t simd_width);
 
+#define ibc_foreach_merge_instr(merge, shader) \
+   for (ibc_merge_instr *merge = LIST_ENTRY(ibc_merge_instr, \
+           shader->instrs.next, instr.link); \
+        &merge->instr.link != &shader->instrs ? \
+           assert(merge->instr.type == IBC_INSTR_TYPE_MERGE), true : false; \
+        merge = LIST_ENTRY(ibc_merge_instr, \
+           merge->block_end->instr.link.next, instr.link))
+
 enum ibc_branch_op {
    IBC_BRANCH_OP_NEXT, /**< Just fall through to the next instruction */
    IBC_BRANCH_OP_IF,
@@ -655,6 +663,14 @@ IBC_DEFINE_CAST(ibc_instr_as_branch, ibc_instr, ibc_branch_instr, instr,
 ibc_branch_instr *ibc_branch_instr_create(struct ibc_shader *shader,
                                           enum ibc_branch_op op,
                                           uint8_t simd_width);
+
+#define ibc_foreach_branch_instr_reverse(branch, shader) \
+   for (ibc_branch_instr *branch = LIST_ENTRY(ibc_branch_instr, \
+           shader->instrs.prev, instr.link); \
+        &branch->instr.link != &shader->instrs ? \
+           assert(branch->instr.type == IBC_INSTR_TYPE_BRANCH), true : false; \
+        branch = LIST_ENTRY(ibc_branch_instr, \
+           branch->block_start->instr.link.prev, instr.link))
 
 /**
  * Returns true of the immediately following merge instruction is also a
