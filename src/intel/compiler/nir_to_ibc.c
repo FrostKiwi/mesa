@@ -182,9 +182,16 @@ nti_reduction_op_identity(nir_op op, enum ibc_type type)
    const unsigned bit_size = ibc_type_bit_size(type);
    nir_const_value identity = nir_alu_binop_identity(op, bit_size);
    switch (bit_size) {
+   case 8:
+      if (type == IBC_TYPE_UB) {
+         return ibc_imm_uw(identity.u8);
+      } else {
+         assert(type == IBC_TYPE_B);
+         return ibc_imm_w(identity.i8);
+      }
    case 16: return ibc_imm_ref(type, (char *)&identity.u16, 2);
-   case 32: return ibc_imm_ref(type, (char *)&identity.u16, 4);
-   case 64: return ibc_imm_ref(type, (char *)&identity.u16, 8);
+   case 32: return ibc_imm_ref(type, (char *)&identity.u32, 4);
+   case 64: return ibc_imm_ref(type, (char *)&identity.u64, 8);
    default:
       unreachable("Invalid type size");
    }
@@ -323,7 +330,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       ibc_builder_push_we_all(b, b->simd_width);
       ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp,
-                     nti_reduction_op_identity(redop, scan_type));
+                     nti_reduction_op_identity(redop, src.type));
       ibc_builder_pop(b);
       ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp, src);
 
