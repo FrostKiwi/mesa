@@ -822,6 +822,7 @@ ibc_shader *nir_to_ibc(const struct nir_shader *nir, void *mem_ctx,
 void ibc_assign_and_lower_flags(ibc_shader *shader);
 void ibc_assign_logical_reg_strides(ibc_shader *shader);
 void ibc_assign_regs(ibc_shader *shader);
+void ibc_assign_regs_trivial(ibc_shader *shader);
 
 bool ibc_lower_gather_ops(ibc_shader *shader);
 bool ibc_lower_phis(ibc_shader *shader);
