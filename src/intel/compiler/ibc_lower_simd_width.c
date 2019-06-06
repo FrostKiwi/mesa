@@ -281,6 +281,7 @@ ibc_lower_simd_width(ibc_shader *shader)
             }
 
             split->dest = split_dests[i];
+            split->num_dest_comps = intrin->num_dest_comps;
             ibc_builder_insert_instr(&b, &split->instr);
             fixup_split_write_link(dest, &split->dest);
             break;
