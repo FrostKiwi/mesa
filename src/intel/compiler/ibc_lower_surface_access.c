@@ -42,6 +42,13 @@ ibc_lower_surface_access(ibc_shader *shader)
 
       uint32_t sfid, desc;
       switch (intrin->op) {
+      case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
+         sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+         desc = brw_dp_untyped_surface_rw_desc(shader->devinfo,
+                                               instr->simd_width,
+                                               intrin->num_dest_comps,
+                                               false   /* write */);
+         break;
       case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
          sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
          desc = brw_dp_untyped_surface_rw_desc(shader->devinfo,
@@ -74,8 +81,10 @@ ibc_lower_surface_access(ibc_shader *shader)
       send->payload[0] = ibc_MOV_raw(&b, intrin->src[1].ref);
       send->mlen = instr->simd_width / 8;
 
-      send->payload[1] = ibc_MOV_raw(&b, intrin->src[2].ref);
-      send->ex_mlen = intrin->src[2].num_comps * instr->simd_width / 8;
+      if (intrin->op == IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE) {
+         send->payload[1] = ibc_MOV_raw(&b, intrin->src[2].ref);
+         send->ex_mlen = intrin->src[2].num_comps * instr->simd_width / 8;
+      }
 
       ibc_builder_insert_instr(&b, &send->instr);
       ibc_builder_pop(&b);
