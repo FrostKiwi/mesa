@@ -117,6 +117,22 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
+   case nir_op_ineg:
+   case nir_op_fneg: {
+      dest = ibc_MOV(b, dest_type, src[0]);
+      ibc_alu_instr *mov = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+      mov->src[0].mod = IBC_ALU_SRC_MOD_NEG;
+      break;
+   }
+
+   case nir_op_iabs:
+   case nir_op_fabs: {
+      dest = ibc_MOV(b, dest_type, src[0]);
+      ibc_alu_instr *mov = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+      mov->src[0].mod = IBC_ALU_SRC_MOD_ABS;
+      break;
+   }
+
    case nir_op_iadd:
    case nir_op_fadd:
       dest = ibc_ADD(b, dest_type, src[0], src[1]);
@@ -138,6 +154,11 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_ieq:
       assert(dest_type == IBC_TYPE_FLAG);
       dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_EQ, src[0], src[1]);
+      break;
+
+   case nir_op_flt:
+      assert(dest_type == IBC_TYPE_FLAG);
+      dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_L, src[0], src[1]);
       break;
 
    case nir_op_bcsel: {
