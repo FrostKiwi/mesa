@@ -872,7 +872,7 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
 
    if (is_scalar)
       OPT(nir_lower_alu_to_scalar, NULL);
-   OPT(nir_lower_to_source_mods, nir_lower_all_source_mods);
+   //OPT(nir_lower_to_source_mods, nir_lower_all_source_mods);
    OPT(nir_copy_prop);
    OPT(nir_opt_dce);
    OPT(nir_opt_move, nir_move_comparisons);
