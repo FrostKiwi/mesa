@@ -263,7 +263,39 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 
    for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
       fprintf(fp, "   ");
+      switch (alu->src[i].mod) {
+      case IBC_ALU_SRC_MOD_NONE:
+         break;
+      case IBC_ALU_SRC_MOD_NEG:
+         fprintf(fp, "-");
+         break;
+      case IBC_ALU_SRC_MOD_ABS:
+         fprintf(fp, "|");
+         break;
+      case IBC_ALU_SRC_MOD_NEG_ABS:
+         fprintf(fp, "-|");
+         break;
+      case IBC_ALU_SRC_MOD_NOT:
+         fprintf(fp, "~");
+         break;
+      default:
+         unreachable("Invalid source modifier");
+      }
+
       print_reg_ref(fp, &alu->src[i].ref, true);
+
+      switch (alu->src[i].mod) {
+      case IBC_ALU_SRC_MOD_NONE:
+      case IBC_ALU_SRC_MOD_NEG:
+         break;
+      case IBC_ALU_SRC_MOD_NOT:
+      case IBC_ALU_SRC_MOD_ABS:
+      case IBC_ALU_SRC_MOD_NEG_ABS:
+         fprintf(fp, "|");
+         break;
+      default:
+         unreachable("Invalid source modifier");
+      }
    }
 
    fprintf(fp, "\n");
