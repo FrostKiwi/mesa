@@ -26,6 +26,14 @@
 
 #include "brw_eu.h"
 
+static ibc_reg_ref
+move_to_payload(ibc_builder *b, ibc_reg_ref src, unsigned num_comps)
+{
+   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
+   ibc_MOV_raw_vec_to(b, dest, src, num_comps);
+   return dest;
+}
+
 bool
 ibc_lower_surface_access(ibc_shader *shader)
 {
@@ -78,11 +86,12 @@ ibc_lower_surface_access(ibc_shader *shader)
       send->dest = intrin->dest;
       send->rlen = intrin->num_dest_comps * instr->simd_width / 8;
 
-      send->payload[0] = ibc_MOV_raw(&b, intrin->src[1].ref);
+      send->payload[0] = move_to_payload(&b, intrin->src[1].ref, 1);
       send->mlen = instr->simd_width / 8;
 
       if (intrin->op == IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE) {
-         send->payload[1] = ibc_MOV_raw(&b, intrin->src[2].ref);
+         send->payload[1] = move_to_payload(&b, intrin->src[2].ref,
+                                                intrin->src[2].num_comps);
          send->ex_mlen = intrin->src[2].num_comps * instr->simd_width / 8;
       }
 
