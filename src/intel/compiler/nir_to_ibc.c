@@ -66,7 +66,6 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       nir_ssa_def *ssa_src = instr->src[i].src.ssa;
 
       /* TODO */
-      assert(ssa_src->num_components == 1);
       assert(!instr->src[i].abs);
       assert(!instr->src[i].negate);
 
@@ -75,6 +74,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
          nir_src_type |= instr->src[i].src.ssa->bit_size;
       src[i] = ibc_typed_ref(nti->ssa_to_reg[ssa_src->index],
                              ibc_type_for_nir(nir_src_type));
+      assert(src[i].file == IBC_REG_FILE_LOGICAL);
+      src[i].logical.comp = instr->src[i].swizzle[0];
    }
 
    assert(instr->dest.dest.is_ssa);
@@ -409,7 +410,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       store->src[1].num_comps = 1;
       assert(instr->src[0].is_ssa);
       store->src[2].ref = ibc_ref(nti->ssa_to_reg[instr->src[0].ssa->index]);
-      store->src[2].num_comps = instr->src[0].ssa->num_components;
+      store->src[2].num_comps = instr->num_components;
 
       ibc_builder_insert_instr(b, &store->instr);
       break;
@@ -433,36 +434,42 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
 {
    ibc_builder *b = &nti->b;
 
-   /* TODO */
-   assert(instr->def.num_components == 1);
-
    assert(instr->def.bit_size >= 8);
    enum ibc_type type = IBC_TYPE_UINT | instr->def.bit_size;
-   ibc_reg_ref imm_src = {
-      .file = IBC_REG_FILE_IMM,
-      .type = type,
-   };
-   switch (instr->def.bit_size) {
-   case 8:
-      /* 8-bit immediates aren't a thing */
-      imm_src.type = IBC_TYPE_UW;
-      *(uint16_t *)imm_src.imm = instr->value[0].u8;
-      break;
-   case 16:
-      *(uint16_t *)imm_src.imm = instr->value[0].u16;
-      break;
-   case 32:
-      *(uint32_t *)imm_src.imm = instr->value[0].u32;
-      break;
-   case 64:
-      *(uint64_t *)imm_src.imm = instr->value[0].u64;
-      break;
-   default:
-      unreachable("Invalid bit size");
-   }
 
    ibc_builder_push_scalar(b);
-   nti->ssa_to_reg[instr->def.index] = ibc_MOV(b, type, imm_src).reg;
+   ibc_reg_ref dest =
+      ibc_builder_new_logical_reg(b, type, instr->def.num_components);
+   nti->ssa_to_reg[instr->def.index] = dest.reg;
+
+   for (unsigned i = 0; i < instr->def.num_components; i++) {
+      ibc_reg_ref imm_src = {
+         .file = IBC_REG_FILE_IMM,
+         .type = type,
+      };
+      switch (instr->def.bit_size) {
+      case 8:
+         /* 8-bit immediates aren't a thing */
+         imm_src.type = IBC_TYPE_UW;
+         *(uint16_t *)imm_src.imm = instr->value[i].u8;
+         break;
+      case 16:
+         *(uint16_t *)imm_src.imm = instr->value[i].u16;
+         break;
+      case 32:
+         *(uint32_t *)imm_src.imm = instr->value[i].u32;
+         break;
+      case 64:
+         *(uint64_t *)imm_src.imm = instr->value[i].u64;
+         break;
+      default:
+         unreachable("Invalid bit size");
+      }
+
+      ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, imm_src);
+      dest.logical.comp++;
+   }
+
    ibc_builder_pop(b);
 }
 
