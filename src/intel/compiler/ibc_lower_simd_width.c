@@ -157,7 +157,9 @@ ibc_lower_simd_width(ibc_shader *shader)
       ibc_reg_ref *dest = instr->type == IBC_INSTR_TYPE_ALU ?
                           &ibc_instr_as_alu(instr)->dest :
                           &ibc_instr_as_intrinsic(instr)->dest;
-      const unsigned num_dest_comps = 1; /* TODO */
+      const unsigned num_dest_comps =
+         instr->type == IBC_INSTR_TYPE_ALU ? 1 :
+         ibc_instr_as_intrinsic(instr)->num_dest_comps;
 
       /* 4 == 32 (max simd width) / 8 (min simd width) */
       ibc_reg_ref split_dests[4];
