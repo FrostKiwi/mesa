@@ -399,17 +399,39 @@ ibc_MOV_to_flag(ibc_builder *b, enum brw_conditional_mod cmod, ibc_reg_ref src)
    return ibc_build_ssa_flag_alu(b, IBC_ALU_OP_MOV, src.type, cmod, &src, 1);
 }
 
+static inline void
+ibc_MOV_raw_vec_to(ibc_builder *b, ibc_reg_ref dest,
+                   ibc_reg_ref src, unsigned num_comps)
+{
+   assert(ibc_type_bit_size(src.type) == ibc_type_bit_size(dest.type));
+
+   if (ibc_type_base_type(src.type) == IBC_TYPE_INVALID)
+      src.type |= IBC_TYPE_UINT;
+   dest.type = src.type;
+
+   /* TODO: This needs to be adjusted more carefully */
+   const unsigned simd_width = MIN2(b->simd_width, 16);
+   if (num_comps > 1 || simd_width != b->simd_width) {
+      assert(src.file == IBC_REG_FILE_LOGICAL);
+      assert(dest.file == IBC_REG_FILE_LOGICAL);
+   }
+
+   for (unsigned i = 0; i < num_comps; i++) {
+      for (unsigned g = 0; g < b->simd_width; g += simd_width) {
+         ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
+         ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, src);
+         ibc_builder_pop(b);
+      }
+      src.logical.comp++;
+      dest.logical.comp++;
+   }
+}
+
 static inline ibc_reg_ref
 ibc_MOV_raw(ibc_builder *b, ibc_reg_ref src)
 {
-   ibc_reg_ref typed_src = src;
-   if (ibc_type_base_type(typed_src.type) == IBC_TYPE_INVALID)
-      typed_src.type |= IBC_TYPE_UINT;
-
-   ibc_reg_ref dest = ibc_MOV(b, typed_src.type, typed_src);
-
-   /* Return the same type as src even if it is just a BIT type */
-   dest.type = src.type;
+   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, src.type, 1);
+   ibc_MOV_raw_vec_to(b, dest, src, 1);
    return dest;
 }
 
