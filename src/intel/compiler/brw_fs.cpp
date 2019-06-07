@@ -8004,6 +8004,10 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
    prog_data->post_depth_coverage = shader->info.fs.post_depth_coverage;
    prog_data->inner_coverage = shader->info.fs.inner_coverage;
 
+   /* We choose to always enable VMask on Gen < 8. */
+   prog_data->uses_vmask = devinfo->gen < 8 ||
+                           shader->info.fs.needs_helper_invocations;
+
    prog_data->barycentric_interp_modes =
       brw_compute_barycentric_interp_modes(compiler->devinfo, shader);
 
@@ -8393,13 +8397,15 @@ static UNUSED void
 brw_fs_test_dispatch_packing(const fs_builder &bld)
 {
    const gl_shader_stage stage = bld.shader->stage;
+   const bool uses_vmask =
+      stage == MESA_SHADER_FRAGMENT &&
+      brw_wm_prog_data(bld.shader->stage_prog_data)->uses_vmask;
 
    if (brw_stage_has_packed_dispatch(bld.shader->devinfo, stage,
                                      bld.shader->stage_prog_data)) {
       const fs_builder ubld = bld.exec_all().group(1, 0);
       const fs_reg tmp = component(bld.vgrf(BRW_REGISTER_TYPE_UD), 0);
-      const fs_reg mask = (stage == MESA_SHADER_FRAGMENT ? brw_vmask_reg() :
-                           brw_dmask_reg());
+      const fs_reg mask = uses_vmask ? brw_vmask_reg() : brw_dmask_reg();
 
       ubld.ADD(tmp, mask, brw_imm_ud(1));
       ubld.AND(tmp, mask, tmp);

@@ -3667,7 +3667,7 @@ iris_store_fs_state(struct iris_context *ice,
    uint32_t *psx_state = ps_state + GENX(3DSTATE_PS_length);
 
    iris_pack_command(GENX(3DSTATE_PS), ps_state, ps) {
-      ps.VectorMaskEnable = true;
+      ps.VectorMaskEnable = wm_prog_data->uses_vmask;
       // XXX: WABTPPrefetchDisable, see above, drop at C0
       ps.BindingTableEntryCount = GEN_GEN == 11 ? 0 :
          shader->bt.size_bytes / 4;

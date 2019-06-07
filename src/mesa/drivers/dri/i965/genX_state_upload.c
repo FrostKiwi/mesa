@@ -3846,7 +3846,7 @@ genX(upload_ps)(struct brw_context *brw)
        * incorrect for subspans where some of the pixels are unlit.  We believe
        * the bit just didn't take effect in previous generations.
        */
-      ps.VectorMaskEnable = GEN_GEN >= 8;
+      ps.VectorMaskEnable = GEN_GEN >= 8 && prog_data->uses_vmask;
 
       /* WA_1606682166:
        * "Incorrect TDL's SSP address shift in SARB for 16:6 & 18:8 modes.

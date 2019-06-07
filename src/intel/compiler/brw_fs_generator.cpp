@@ -2080,11 +2080,13 @@ fs_generator::generate_code(const cfg_t *cfg, int dispatch_width)
          break;
 
       case SHADER_OPCODE_FIND_LIVE_CHANNEL: {
+         const bool uses_vmask =
+            stage == MESA_SHADER_FRAGMENT &&
+            brw_wm_prog_data(this->prog_data)->uses_vmask;
          const struct brw_reg mask =
             brw_stage_has_packed_dispatch(devinfo, stage,
                                           prog_data) ? brw_imm_ud(~0u) :
-            stage == MESA_SHADER_FRAGMENT ? brw_vmask_reg() :
-            brw_dmask_reg();
+            uses_vmask ? brw_vmask_reg() : brw_dmask_reg();
          brw_find_live_channel(p, dst, mask);
          break;
       }
