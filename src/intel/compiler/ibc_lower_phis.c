@@ -24,24 +24,6 @@
 #include "ibc.h"
 #include "ibc_builder.h"
 
-static void
-MOV_vec_to(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref src,
-           unsigned num_comps)
-{
-   assert(src.file == IBC_REG_FILE_LOGICAL);
-   assert(dest.file == IBC_REG_FILE_LOGICAL);
-
-   for (unsigned i = 0; i < num_comps; i++) {
-      for (unsigned g = 0; g < b->simd_width; g += 16) {
-         ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
-         ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, src);
-         ibc_builder_pop(b);
-      }
-      src.logical.comp++;
-      dest.logical.comp++;
-   }
-}
-
 bool
 ibc_lower_phis(ibc_shader *shader)
 {
@@ -61,11 +43,11 @@ ibc_lower_phis(ibc_shader *shader)
          ibc_builder_new_logical_reg(&b, phi->dest.type, phi->num_comps);
       ((ibc_reg *)tmp.reg)->is_wlr = false;
 
-      MOV_vec_to(&b, phi->dest, tmp, phi->num_comps);
+      ibc_MOV_raw_vec_to(&b, phi->dest, tmp, phi->num_comps);
 
       ibc_foreach_phi_src(phi_src, phi) {
          b.cursor = ibc_before_instr(&phi_src->pred->instr);
-         MOV_vec_to(&b, tmp, phi_src->ref, phi->num_comps);
+         ibc_MOV_raw_vec_to(&b, tmp, phi_src->ref, phi->num_comps);
       }
 
       ibc_instr_remove(&phi->instr);
