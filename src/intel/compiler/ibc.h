@@ -797,6 +797,7 @@ void ibc_assign_and_lower_flags(ibc_shader *shader);
 void ibc_assign_regs(ibc_shader *shader);
 
 bool ibc_lower_gather_ops(ibc_shader *shader);
+bool ibc_lower_phis(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);
 bool ibc_lower_surface_access(ibc_shader *shader);
 
