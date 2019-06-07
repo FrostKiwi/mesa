@@ -126,6 +126,10 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_op_inot:
+      dest = ibc_NOT(b, dest_type, src[0]);
+      break;
+
    case nir_op_iabs:
    case nir_op_fabs: {
       dest = ibc_MOV(b, dest_type, src[0]);
@@ -155,6 +159,11 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_ieq:
       assert(dest_type == IBC_TYPE_FLAG);
       dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_EQ, src[0], src[1]);
+      break;
+
+   case nir_op_ine:
+      assert(dest_type == IBC_TYPE_FLAG);
+      dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_NEQ, src[0], src[1]);
       break;
 
    case nir_op_flt:
