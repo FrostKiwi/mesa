@@ -170,7 +170,7 @@ typedef struct ibc_hw_grf_reg {
    uint16_t byte;
 
    /** Size of this register in bytes */
-   uint8_t size;
+   uint16_t size;
 
    /** Alignment requirement of this register in bytes */
    uint8_t align;
