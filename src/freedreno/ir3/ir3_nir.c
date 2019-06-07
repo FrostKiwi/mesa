@@ -227,9 +227,8 @@ ir3_optimize_nir(struct ir3_shader *shader, nir_shader *s,
 			OPT_V(s, nir_lower_clip_fs, key->ucp_enables);
 			if (key->fclamp_color)
 				OPT_V(s, nir_lower_clamp_color_outputs);
-		}
-		if (key->color_two_side) {
-			OPT_V(s, nir_lower_two_sided_color);
+			if (key->color_two_side)
+				OPT_V(s, nir_lower_two_sided_color);
 		}
 	} else {
 		/* only want to do this the first time (when key is null)

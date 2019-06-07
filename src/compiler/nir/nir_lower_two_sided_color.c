@@ -192,12 +192,11 @@ nir_lower_two_sided_color_impl(nir_function_impl *impl,
 void
 nir_lower_two_sided_color(nir_shader *shader)
 {
+   assert(shader->info.stage == MESA_SHADER_FRAGMENT);
+
    lower_2side_state state = {
       .shader = shader,
    };
-
-   if (shader->info.stage != MESA_SHADER_FRAGMENT)
-      return;
 
    if (setup_inputs(&state) != 0)
       return;
