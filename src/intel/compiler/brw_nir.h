@@ -88,9 +88,15 @@ enum {
 
    /* A mask to mask the boolean status values off of instr->pass_flags */
    BRW_NIR_BOOLEAN_MASK          = 0x3,
+
+   /* Indicates that the given instruction's destination needs to be valid in
+    * helper invocations.
+    */
+   BRW_NIR_NEEDED_IN_HELPERS     = 0x4,
 };
 
 void brw_nir_analyze_boolean_resolves(nir_shader *nir);
+void brw_nir_mark_instrs_needed_in_fs_helpers(nir_shader *nir);
 
 void brw_preprocess_nir(const struct brw_compiler *compiler,
                         nir_shader *nir,

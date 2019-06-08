@@ -968,6 +968,9 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
    if (devinfo->gen <= 5)
       brw_nir_analyze_boolean_resolves(nir);
 
+   if (nir->info.stage == MESA_SHADER_FRAGMENT)
+      brw_nir_mark_instrs_needed_in_fs_helpers(nir);
+
    nir_sweep(nir);
 
    if (unlikely(debug_enabled)) {

@@ -79,6 +79,7 @@ COMPILER_FILES = \
 	compiler/brw_nir.c \
 	compiler/brw_nir_analyze_boolean_resolves.c \
 	compiler/brw_nir_analyze_ubo_ranges.c \
+	compiler/brw_nir_mark_instrs_needed_in_fs_helpers.c \
 	compiler/brw_nir_attribute_workarounds.c \
 	compiler/brw_nir_lower_conversions.c \
 	compiler/brw_nir_lower_cs_intrinsics.c \

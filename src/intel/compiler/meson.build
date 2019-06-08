@@ -74,6 +74,7 @@ libintel_compiler_files = files(
   'brw_nir.c',
   'brw_nir_analyze_boolean_resolves.c',
   'brw_nir_analyze_ubo_ranges.c',
+  'brw_nir_mark_instrs_needed_in_fs_helpers.c',
   'brw_nir_attribute_workarounds.c',
   'brw_nir_lower_conversions.c',
   'brw_nir_lower_cs_intrinsics.c',

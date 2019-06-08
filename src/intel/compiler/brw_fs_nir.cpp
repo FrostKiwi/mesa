@@ -5590,9 +5590,28 @@ fs_visitor::nir_emit_texture(const fs_builder &bld, nir_tex_instr *instr)
       }
    }
 
+   brw_predicate predicate = BRW_PREDICATE_NONE;
+   if (devinfo->gen >= 7 && stage == MESA_SHADER_FRAGMENT &&
+       !(instr->instr.pass_flags & BRW_NIR_NEEDED_IN_HELPERS)) {
+      fs_reg shifted = bld.vgrf(BRW_REGISTER_TYPE_UW);
+      for (unsigned i = 0; i < DIV_ROUND_UP(dispatch_width, 16); i++) {
+         const fs_builder hbld = bld.group(MIN2(16, dispatch_width), i);
+         hbld.SHR(offset(shifted, hbld, i),
+                  stride(retype(brw_vec1_grf(1 + i, 7),
+                                BRW_REGISTER_TYPE_UB),
+                         1, 8, 0),
+                  brw_imm_v(0x76543210));
+      }
+      fs_inst *_and = bld.AND(retype(brw_null_reg(), BRW_REGISTER_TYPE_UW),
+                              shifted, brw_imm_uw(1));
+      _and->conditional_mod = BRW_CONDITIONAL_NZ;
+      predicate = BRW_PREDICATE_NORMAL;
+   }
+
    fs_reg dst = bld.vgrf(brw_type_for_nir_type(devinfo, instr->dest_type), 4);
    fs_inst *inst = bld.emit(opcode, dst, srcs, ARRAY_SIZE(srcs));
    inst->offset = header_bits;
+   inst->predicate = predicate;
 
    const unsigned dest_size = nir_tex_instr_dest_size(instr);
    if (devinfo->gen >= 9 &&
