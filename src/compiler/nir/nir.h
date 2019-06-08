@@ -637,11 +637,11 @@ nir_dest_init(void)
 
 #define NIR_DEST_INIT nir_dest_init()
 
-#define nir_foreach_def(dest, reg) \
-   list_for_each_entry(nir_dest, dest, &(reg)->defs, reg.def_link)
+#define nir_foreach_def(dest, _reg) \
+   list_for_each_entry(nir_dest, dest, &(_reg)->defs, reg.def_link)
 
-#define nir_foreach_def_safe(dest, reg) \
-   list_for_each_entry_safe(nir_dest, dest, &(reg)->defs, reg.def_link)
+#define nir_foreach_def_safe(dest, _reg) \
+   list_for_each_entry_safe(nir_dest, dest, &(_reg)->defs, reg.def_link)
 
 static inline nir_src
 nir_src_for_ssa(nir_ssa_def *def)
