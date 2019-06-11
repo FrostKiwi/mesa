@@ -152,6 +152,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
 
+   ibc_assign_logical_reg_strides(ibc);
    ibc_lower_simd_width(ibc);
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
@@ -177,6 +178,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
 
+   ibc_assign_logical_reg_strides(ibc);
    ibc_lower_gather_ops(ibc);
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
@@ -192,6 +194,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
 
+   ibc_assign_logical_reg_strides(ibc);
    ibc_assign_regs(ibc);
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);

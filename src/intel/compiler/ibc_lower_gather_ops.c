@@ -36,11 +36,7 @@ reg_ref_stride(const ibc_reg_ref *ref)
       return ref->hw_grf.hstride;
 
    case IBC_REG_FILE_LOGICAL:
-      /* TODO: Is this correct? */
-      if (ref->reg->logical.bit_size == 1)
-         return 0;
-
-      return ibc_logical_reg_stride(ref->reg);
+      return ref->reg->logical.stride;
 
    case IBC_REG_FILE_FLAG:
       unreachable("Should not see flags here");

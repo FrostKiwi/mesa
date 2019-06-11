@@ -149,6 +149,14 @@ typedef struct ibc_logical_reg {
 
    /** Number of SIMD invocations */
    uint8_t simd_width;
+
+   /** Stride in bytes
+    *
+    * For logical registers with simd_width > 1, this gives the stride between
+    * SIMD channels in bytes or is 0 indicating the stride is undecided.  For
+    * registers with simd_width == 1, stride is always zero.
+    */
+   uint8_t stride;
 } ibc_logical_reg;
 
 
@@ -261,8 +269,6 @@ ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader,
    list_for_each_entry(ibc_reg_ref, ref, &(reg)->writes, write_link)
 
 struct ibc_instr *ibc_reg_ssa_instr(const ibc_reg *reg);
-
-unsigned ibc_logical_reg_stride(const ibc_reg *reg);
 
 /** A structure representing a reference to a LOGICAL register
  *
@@ -811,6 +817,7 @@ ibc_shader *nir_to_ibc(const struct nir_shader *nir, void *mem_ctx,
                        const struct gen_device_info *devinfo);
 
 void ibc_assign_and_lower_flags(ibc_shader *shader);
+void ibc_assign_logical_reg_strides(ibc_shader *shader);
 void ibc_assign_regs(ibc_shader *shader);
 
 bool ibc_lower_gather_ops(ibc_shader *shader);
