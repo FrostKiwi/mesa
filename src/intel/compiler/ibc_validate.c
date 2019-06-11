@@ -233,6 +233,10 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       }
       ibc_assert(s, num_bytes > 0);
       ibc_assert(s, hw_ref->offset + num_bytes <= hw_reg->size);
+
+      /* TODO: Maybe we can validate more stuff here? */
+      if (hw_reg->byte == IBC_HW_GRF_REG_UNASSIGNED)
+         ibc_assert(s, hw_reg->align >= ibc_type_byte_size(ref->type));
       return;
    }
 
@@ -613,6 +617,51 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
       reg_state->next_write_link = reg->writes.next;
 
    _mesa_hash_table_insert(s->reg_state, reg, reg_state);
+
+   switch (reg->file) {
+   case IBC_REG_FILE_NONE:
+   case IBC_REG_FILE_IMM:
+      ibc_assert(s, !"Invalid register file for an actual register");
+      return;
+
+   case IBC_REG_FILE_LOGICAL:
+      ibc_assert(s, reg->logical.bit_size == 1 ||
+                    reg->logical.bit_size == 8 ||
+                    reg->logical.bit_size == 16 ||
+                    reg->logical.bit_size == 32 ||
+                    reg->logical.bit_size == 64);
+
+      /* TODO: Some texturing instructions might want more than 4 */
+      ibc_assert(s, reg->logical.num_comps >= 1 &&
+                    reg->logical.num_comps <= 4);
+
+      ibc_assert(s, reg->logical.simd_group < 32);
+      ibc_assert(s, reg->logical.simd_width <= 32);
+      ibc_assert(s, util_is_power_of_two_nonzero(reg->logical.simd_width));
+      ibc_assert(s, reg->logical.simd_group % reg->logical.simd_width == 0);
+      return;
+
+   case IBC_REG_FILE_HW_GRF:
+      ibc_assert(s, util_is_power_of_two_or_zero(reg->hw_grf.align));
+      if (reg->hw_grf.byte != IBC_HW_GRF_REG_UNASSIGNED) {
+         ibc_assert(s, reg->hw_grf.byte + reg->hw_grf.size <= 4096);
+      } else {
+         ibc_assert(s, reg->hw_grf.align > 0);
+      }
+      return;
+
+   case IBC_REG_FILE_FLAG:
+      ibc_assert(s, reg->flag.bits <= 32);
+      if (reg->flag.subnr != IBC_FLAG_REG_UNASSIGNED) {
+         ibc_assert(s, reg->flag.subnr <= 4);
+         /* We can't cross the whole flag reg boundary */
+         if (reg->flag.subnr & 1)
+            ibc_assert(s, reg->flag.bits <= 16);
+      }
+      return;
+   }
+
+   unreachable("Invalid register file");
 }
 
 static void
