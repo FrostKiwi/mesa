@@ -32,28 +32,47 @@ ibc_alu_instr_is_raw_mov(const ibc_alu_instr *alu)
           !alu->saturate;
 }
 
-unsigned
-ibc_logical_reg_stride(const ibc_reg *reg)
+void
+ibc_assign_logical_reg_strides(ibc_shader *shader)
 {
-   assert(reg->file == IBC_REG_FILE_LOGICAL);
-   assert(reg->logical.bit_size >= 8);
+   ibc_foreach_reg(reg, shader) {
+      if (reg->file != IBC_REG_FILE_LOGICAL)
+         continue;
 
-   ibc_instr *ssa_instr = ibc_reg_ssa_instr(reg);
-   if (!ssa_instr || ssa_instr->type != IBC_INSTR_TYPE_ALU)
-      return reg->logical.bit_size / 8;
+      if (reg->logical.stride > 0)
+         continue;
 
-   ibc_alu_instr *alu = ibc_instr_as_alu(ssa_instr);
-   assert(alu->dest.reg == reg);
+      /* Scalars and booleans won't be mapped to HW regs so they don't need to
+       * have assigned strides.
+       */
+      if (reg->logical.bit_size == 1)
+         continue;
 
-   unsigned stride = ibc_type_byte_size(alu->dest.type);
-   for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++)
-      stride = MAX2(stride, ibc_type_byte_size(alu->src[i].ref.type));
+      /* At the very least, we want it to be the size of the register */
+      assert(reg->logical.bit_size >= 8);
+      reg->logical.stride = reg->logical.bit_size / 8;
 
-   /* Only raw MOV supports a packed-byte destination */
-   if (stride == 1 && !ibc_alu_instr_is_raw_mov(alu))
-      stride = 2;
+      if (reg->logical.simd_width == 1)
+         continue;
 
-   return stride;
+      ibc_instr *ssa_instr = ibc_reg_ssa_instr(reg);
+      if (!ssa_instr || ssa_instr->type != IBC_INSTR_TYPE_ALU)
+         continue;
+
+      ibc_alu_instr *alu = ibc_instr_as_alu(ssa_instr);
+      assert(alu->dest.reg == reg);
+
+      reg->logical.stride = MAX2(reg->logical.stride,
+                                 ibc_type_byte_size(alu->dest.type));
+      for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
+         reg->logical.stride = MAX2(reg->logical.stride,
+                                    ibc_type_byte_size(alu->src[i].ref.type));
+      }
+
+      /* Only raw MOV supports a packed-byte destination */
+      if (reg->logical.stride == 1 && !ibc_alu_instr_is_raw_mov(alu))
+         reg->logical.stride = 2;
+   }
 }
 
 static unsigned
@@ -63,8 +82,8 @@ reg_size(ibc_reg *reg)
    case IBC_REG_FILE_HW_GRF:
       return reg->hw_grf.size;
    case IBC_REG_FILE_LOGICAL:
-      return reg->logical.simd_width *
-             reg->logical.num_comps * ibc_logical_reg_stride(reg);
+      return reg->logical.num_comps *
+             reg->logical.simd_width * reg->logical.stride;
    }
    unreachable("Unsupported register file");
 }
@@ -76,8 +95,7 @@ reg_align(ibc_reg *reg)
    case IBC_REG_FILE_HW_GRF:
       return reg->hw_grf.align;
    case IBC_REG_FILE_LOGICAL:
-      return MIN2(reg->logical.simd_width *
-                  ibc_logical_reg_stride(reg), 32);
+      return MIN2(reg->logical.simd_width * reg->logical.stride, 32);
    }
    unreachable("Unsupported register file");
 }
@@ -94,7 +112,7 @@ rewrite_reg_ref(ibc_reg_ref *ref, unsigned ref_simd_group,
    ibc_logical_reg_ref logical = ref->logical;
    ref->file = IBC_REG_FILE_HW_GRF;
 
-   unsigned stride = ibc_logical_reg_stride(ref->reg);
+   unsigned stride = ref->reg->logical.stride;
    ref->hw_grf.offset = logical.comp * ref->reg->logical.simd_width * stride;
    if (logical.broadcast) {
       ref->hw_grf.offset += logical.simd_channel * stride;
