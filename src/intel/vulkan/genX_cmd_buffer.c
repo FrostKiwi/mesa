@@ -1687,6 +1687,8 @@ genX(cmd_buffer_config_l3)(struct anv_cmd_buffer *cmd_buffer,
                    .ErrorDetectionBehaviorControl = true,
                    .UseFullWays = true,
 #endif
+                   .GPGPUL3CreditModeEnable =
+                      (cmd_buffer->state.current_pipeline == GPGPU),
                    .URBAllocation = cfg->n[GEN_L3P_URB],
                    .ROAllocation = cfg->n[GEN_L3P_RO],
                    .DCAllocation = cfg->n[GEN_L3P_DC],
@@ -3866,6 +3868,11 @@ genX(flush_pipeline_select)(struct anv_cmd_buffer *cmd_buffer,
 #endif
 
    cmd_buffer->state.current_pipeline = pipeline;
+
+   /* We need to re-emit the L3$ config when we switch pipelines so we can
+    * whack the L3 Credit Mode Enable bit.
+    */
+   cmd_buffer->state.current_l3_config = NULL;
 }
 
 void
