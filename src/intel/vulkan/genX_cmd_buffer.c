@@ -2664,9 +2664,9 @@ genX(cmd_buffer_flush_state)(struct anv_cmd_buffer *cmd_buffer)
 
    assert((pipeline->active_stages & VK_SHADER_STAGE_COMPUTE_BIT) == 0);
 
-   genX(cmd_buffer_config_l3)(cmd_buffer, pipeline->urb.l3_config);
-
    genX(flush_pipeline_select_3d)(cmd_buffer);
+
+   genX(cmd_buffer_config_l3)(cmd_buffer, pipeline->urb.l3_config);
 
    if (vb_emit) {
       const uint32_t num_buffers = __builtin_popcount(vb_emit);
@@ -3530,9 +3530,9 @@ genX(cmd_buffer_flush_compute_state)(struct anv_cmd_buffer *cmd_buffer)
 
    assert(pipeline->active_stages == VK_SHADER_STAGE_COMPUTE_BIT);
 
-   genX(cmd_buffer_config_l3)(cmd_buffer, pipeline->urb.l3_config);
-
    genX(flush_pipeline_select_gpgpu)(cmd_buffer);
+
+   genX(cmd_buffer_config_l3)(cmd_buffer, pipeline->urb.l3_config);
 
    if (cmd_buffer->state.compute.pipeline_dirty) {
       /* From the Sky Lake PRM Vol 2a, MEDIA_VFE_STATE:

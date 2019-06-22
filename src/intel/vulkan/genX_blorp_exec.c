@@ -217,6 +217,8 @@ genX(blorp_exec)(struct blorp_batch *batch,
 {
    struct anv_cmd_buffer *cmd_buffer = batch->driver_batch;
 
+   genX(flush_pipeline_select_3d)(cmd_buffer);
+
    if (!cmd_buffer->state.current_l3_config) {
       const struct gen_l3_config *cfg =
          gen_get_default_l3_config(&cmd_buffer->device->info);
@@ -248,8 +250,6 @@ genX(blorp_exec)(struct blorp_batch *batch,
 #endif
 
    genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
-
-   genX(flush_pipeline_select_3d)(cmd_buffer);
 
    genX(cmd_buffer_emit_gen7_depth_flush)(cmd_buffer);
 
