@@ -58,7 +58,7 @@ record_reg_write_sizes(ibc_reg_ref *ref, int8_t num_comps,
 {
    ibc_live_intervals *live = _state;
 
-   if (!reg_file_is_tracked(ref->file))
+   if (!reg_file_is_tracked(ref->file) || !ref->reg)
       return true;
 
    ibc_reg_live_intervals *rli = &live->regs[ref->reg->index];
@@ -221,12 +221,12 @@ ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
             BITSET_SET(chunks, i);
       } else if (ref->hw_grf.hstride == 0 && ref->hw_grf.vstride == 0) {
          assert(num_comps == 1);
-         const unsigned idx = ref->hw_grf.offset >> byte_shift;
+         const unsigned idx = ref->hw_grf.byte >> byte_shift;
          for (unsigned i = 0; i < ref_chunks; i++)
             BITSET_SET(chunks, idx + i);
       } else {
          assert(num_comps == 1);
-         unsigned offset = ref->hw_grf.offset;
+         unsigned offset = ref->hw_grf.byte;
          unsigned horiz_offset = 0;
          for (unsigned c = 0; c < num_comps; c++) {
             for (unsigned s = 0; s < simd_width;) {
@@ -338,7 +338,7 @@ setup_block_use_def_for_read(ibc_reg_ref *ref, int8_t num_comps,
    BITSET_DECLARE(read, IBC_REG_LIVE_MAX_CHUNKS);
    struct setup_use_def_state *state = _state;
 
-   if (!reg_file_is_tracked(ref->file))
+   if (!reg_file_is_tracked(ref->file) || !ref->reg)
       return true;
 
    ibc_block_live_sets *bls = &state->live->blocks[state->block_index];
@@ -368,7 +368,7 @@ setup_block_use_def_for_write(ibc_reg_ref *ref, int8_t num_comps,
    BITSET_DECLARE(written, IBC_REG_LIVE_MAX_CHUNKS);
    struct setup_use_def_state *state = _state;
 
-   if (!reg_file_is_tracked(ref->file))
+   if (!reg_file_is_tracked(ref->file) || !ref->reg)
       return true;
 
    ibc_block_live_sets *bls = &state->live->blocks[state->block_index];
@@ -493,7 +493,7 @@ extend_live_interval_for_read(ibc_reg_ref *ref, int8_t num_comps,
    BITSET_DECLARE(read, IBC_REG_LIVE_MAX_CHUNKS);
    struct extend_live_interval_state *state = _state;
 
-   if (!reg_file_is_tracked(ref->file))
+   if (!reg_file_is_tracked(ref->file) || !ref->reg)
       return true;
 
    ibc_reg_live_intervals *rli = &state->live->regs[ref->reg->index];
@@ -527,7 +527,7 @@ extend_live_interval_for_write(ibc_reg_ref *ref, int8_t num_comps,
    BITSET_DECLARE(write, IBC_REG_LIVE_MAX_CHUNKS);
    struct extend_live_interval_state *state = _state;
 
-   if (!reg_file_is_tracked(ref->file))
+   if (!reg_file_is_tracked(ref->file) || !ref->reg)
       return true;
 
    ibc_reg_live_intervals *rli = &state->live->regs[ref->reg->index];

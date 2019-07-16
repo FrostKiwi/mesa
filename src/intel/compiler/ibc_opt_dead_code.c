@@ -38,8 +38,7 @@ reg_ref_is_alive(ibc_reg_ref *ref)
 
    case IBC_REG_FILE_HW_GRF:
       /* If it's a fixed HW reg, we consider it live */
-      return ref->reg->hw_grf.byte != IBC_HW_GRF_REG_UNASSIGNED ||
-             ref->reg->index;
+      return ref->reg == NULL || ref->reg->index;
 
    case IBC_REG_FILE_FLAG:
       /* If it's a fixed HW reg, we consider it live */
@@ -62,7 +61,7 @@ mark_ref(ibc_reg_ref *ref,
        ref->file == IBC_REG_FILE_IMM)
       return true;
 
-   if (ref->reg->index == 0) {
+   if (ref->reg && ref->reg->index == 0) {
       ((ibc_reg *)ref->reg)->index = 1;
       *progress = true;
    }
