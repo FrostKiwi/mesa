@@ -52,12 +52,10 @@ ibc_logical_reg_create(ibc_shader *shader,
 }
 
 ibc_reg *
-ibc_hw_grf_reg_create(ibc_shader *shader,
-                      uint16_t byte, uint8_t size, uint8_t align)
+ibc_hw_grf_reg_create(ibc_shader *shader, uint8_t size, uint8_t align)
 {
    ibc_reg *reg = ibc_reg_create(shader, IBC_REG_FILE_HW_GRF);
 
-   reg->hw_grf.byte = byte;
    reg->hw_grf.size = size;
    reg->hw_grf.align = align;
 

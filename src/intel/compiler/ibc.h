@@ -160,8 +160,6 @@ typedef struct ibc_logical_reg {
 } ibc_logical_reg;
 
 
-#define IBC_HW_GRF_REG_UNASSIGNED UINT16_MAX
-
 /** A struct representing a HW GRF register
  *
  * A physical HW register representing an actual byte range in the hardware
@@ -170,13 +168,6 @@ typedef struct ibc_logical_reg {
  * invocation offset.
  */
 typedef struct ibc_hw_grf_reg {
-   /** Start of this register in bytes
-    *
-    * A value of IBC_HW_GRF_UNASSIGNED means this HW reg is "virtual" and will
-    * have an actual register assigned later.
-    */
-   uint16_t byte;
-
    /** Size of this register in bytes */
    uint16_t size;
 
@@ -260,7 +251,7 @@ ibc_reg *ibc_logical_reg_create(struct ibc_shader *shader,
                                 uint8_t simd_group, uint8_t simd_width);
 
 ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
-                               uint16_t byte, uint8_t size, uint8_t align);
+                               uint8_t size, uint8_t align);
 
 ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader,
                              uint8_t subnr, uint8_t bits);
@@ -309,8 +300,13 @@ typedef struct ibc_logical_reg_ref {
 
 /** A structure representing a reference to a HW_GRF register */
 typedef struct ibc_hw_grf_reg_ref {
-   /** Byte offset at which the reference starts for HW regs */
-   uint8_t offset;
+   /** Byte offset at which the reference starts
+    *
+    * If ibc_reg_ref::reg is not NULL, this is relative to the start of the
+    * virtual HW reg.  If ibc_reg_ref::reg is NULL, this is the byte offset
+    * from the start of the register file.
+    */
+   uint16_t byte;
 
    /* Vertical stride of the HW register region in bytes
     *
@@ -334,20 +330,20 @@ ibc_hw_grf_slice_simd_group(ibc_hw_grf_reg_ref *ref,
 {
    assert(rel_simd_group % simd_width == 0);
    if (ref->hstride * ref->width == ref->vstride) {
-      ref->offset += rel_simd_group * ref->hstride;
+      ref->byte += rel_simd_group * ref->hstride;
    } else {
       /* If we don't have a regular stride, then we can only shift it by a
        * multiple of the width.  Otherwise, it will mess up the 2D region.
        */
       assert(rel_simd_group % ref->width == 0);
-      ref->offset += (rel_simd_group / ref->width) * ref->vstride;
+      ref->byte += (rel_simd_group / ref->width) * ref->vstride;
    }
 }
 
 static inline void
 ibc_hw_grf_add_byte_offset(ibc_hw_grf_reg_ref *ref, unsigned byte_offset)
 {
-   ref->offset += byte_offset;
+   ref->byte += byte_offset;
 }
 
 static inline void
@@ -414,7 +410,7 @@ ibc_reg_ref_read_is_static(ibc_reg_ref ref)
    if (ref.file == IBC_REG_FILE_NONE || ref.file == IBC_REG_FILE_IMM)
       return false;
 
-   return ref.reg->is_wlr;
+   return ref.reg && ref.reg->is_wlr;
 }
 
 enum ibc_instr_type {

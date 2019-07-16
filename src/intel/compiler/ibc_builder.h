@@ -130,6 +130,21 @@ ibc_builder_insert_instr(ibc_builder *b, ibc_instr *instr)
 }
 
 static inline ibc_reg_ref
+ibc_hw_grf_ref(uint8_t nr, uint8_t subnr, enum ibc_type type)
+{
+   return (ibc_reg_ref) {
+      .file = IBC_REG_FILE_HW_GRF,
+      .type = IBC_TYPE_UD,
+      .hw_grf = {
+         .byte = (uint16_t)nr * REG_SIZE + subnr * ibc_type_byte_size(type),
+         .vstride = 8 * ibc_type_byte_size(type),
+         .width = 8,
+         .hstride = ibc_type_byte_size(type),
+      },
+   };
+}
+
+static inline ibc_reg_ref
 ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
 {
    ibc_reg_ref ref = {
@@ -477,7 +492,7 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
       left.hw_grf.hstride *= 2;
 
       ibc_reg_ref right = tmp;
-      right.hw_grf.offset += 1 * tmp.hw_grf.hstride;
+      right.hw_grf.byte += 1 * tmp.hw_grf.hstride;
       right.hw_grf.vstride *= 2;
       right.hw_grf.hstride *= 2;
 
@@ -497,18 +512,18 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
       ibc_builder_push_we_all(b, b->simd_width / 4);
 
       ibc_reg_ref left = tmp;
-      left.hw_grf.offset += 1 * tmp.hw_grf.hstride;
+      left.hw_grf.byte += 1 * tmp.hw_grf.hstride;
       left.hw_grf.vstride *= 4;
       left.hw_grf.hstride *= 4;
 
       ibc_reg_ref right = tmp;
-      right.hw_grf.offset += 2 * tmp.hw_grf.hstride;
+      right.hw_grf.byte += 2 * tmp.hw_grf.hstride;
       right.hw_grf.vstride *= 4;
       right.hw_grf.hstride *= 4;
 
       ibc_build_alu2_cmod(b, op, right, cmod, left, right);
 
-      right.hw_grf.offset += 1 * tmp.hw_grf.hstride;
+      right.hw_grf.byte += 1 * tmp.hw_grf.hstride;
 
       ibc_build_alu2_cmod(b, op, right, cmod, left, right);
 
@@ -523,13 +538,13 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
 
       for (unsigned g = 0; g < scan_simd_width; g += cluster_size) {
          ibc_reg_ref left = tmp;
-         left.hw_grf.offset += (g + half_size - 1) * tmp.hw_grf.hstride;
+         left.hw_grf.byte += (g + half_size - 1) * tmp.hw_grf.hstride;
          left.hw_grf.vstride = 0;
          left.hw_grf.width = 1;
          left.hw_grf.hstride = 0;
 
          ibc_reg_ref right = tmp;
-         right.hw_grf.offset += (g + half_size) * tmp.hw_grf.hstride;
+         right.hw_grf.byte += (g + half_size) * tmp.hw_grf.hstride;
 
          ibc_build_alu2_cmod(b, op, right, cmod, left, right);
       }
@@ -564,7 +579,7 @@ ibc_cluster_broadcast(ibc_builder *b, enum ibc_type dest_type,
    } else {
       ibc_reg_ref strided_src = src;
       strided_src.hw_grf = (ibc_hw_grf_reg_ref) {
-         .offset = (cluster_size - 1) * ibc_type_byte_size(src.type),
+         .byte = (cluster_size - 1) * ibc_type_byte_size(src.type),
          .vstride = cluster_size * ibc_type_byte_size(src.type),
          .width = cluster_size,
          .hstride = 0,
@@ -580,11 +595,11 @@ ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,
    unsigned type_sz = ibc_type_bit_size(type) / 8;
    assert(comp * type_sz < 32);
    uint16_t byte = reg * 32 + comp * type_sz;
-   uint8_t size = type_sz + (b->simd_width - 1) * type_sz * stride;
-   uint8_t align = type_sz;
-   ibc_reg *hw_reg = ibc_hw_grf_reg_create(b->shader, byte, size, align);
+   uint8_t nr = byte / REG_SIZE;
+   assert((byte % REG_SIZE) % type_sz == 0);
+   uint8_t subnr = (byte % REG_SIZE) / type_sz;
 
-   ibc_reg_ref hw_ref = ibc_typed_ref(hw_reg, type);
+   ibc_reg_ref hw_ref = ibc_hw_grf_ref(nr, subnr, type);
    ibc_hw_grf_mul_stride(&hw_ref.hw_grf, stride);
 
    return ibc_MOV(b, type, hw_ref);
