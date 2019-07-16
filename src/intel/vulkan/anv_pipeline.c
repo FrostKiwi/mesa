@@ -729,7 +729,8 @@ anv_pipeline_lower_nir(struct anv_pipeline *pipeline,
                  nir_lower_non_uniform_image_access);
    }
 
-   if (nir->info.stage != MESA_SHADER_COMPUTE)
+   if (nir->info.stage != MESA_SHADER_COMPUTE &&
+       nir->info.stage != MESA_SHADER_FRAGMENT)
       brw_nir_analyze_ubo_ranges(compiler, nir, NULL, prog_data->ubo_ranges);
 
    assert(nir->num_uniforms == prog_data->nr_params * 4);
