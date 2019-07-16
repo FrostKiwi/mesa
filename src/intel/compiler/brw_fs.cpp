@@ -8756,6 +8756,8 @@ brw_register_blocks(int reg_count)
    return ALIGN(reg_count, 16) / 16 - 1;
 }
 
+#include "ibc_compile.h"
+
 const unsigned *
 brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
                void *mem_ctx,
@@ -8797,6 +8799,13 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
    brw_postprocess_nir(nir, compiler, true);
 
    brw_nir_populate_wm_prog_data(nir, compiler->devinfo, key, prog_data);
+
+   if (!use_rep_send && allow_spilling) {
+      return ibc_compile_fs(compiler, log_data, mem_ctx, key, prog_data,
+                            shader, shader_time_index8,
+                            shader_time_index16, shader_time_index32,
+                            allow_spilling, use_rep_send, vue_map, error_str);
+   }
 
    fs_visitor *v8 = NULL, *v16 = NULL, *v32 = NULL;
    cfg_t *simd8_cfg = NULL, *simd16_cfg = NULL, *simd32_cfg = NULL;
@@ -9121,8 +9130,6 @@ compile_cs_to_nir(const struct brw_compiler *compiler,
 
    return shader;
 }
-
-#include "ibc_compile.h"
 
 const unsigned *
 brw_compile_cs(const struct brw_compiler *compiler, void *log_data,
