@@ -83,7 +83,7 @@ simd_restricted_src(ibc_builder *b, ibc_reg_ref src,
     *
     * In either case, the right thing to do is to just return src.
     */
-   if (src.reg->is_wlr)
+   if (src.reg && src.reg->is_wlr)
       return src;
 
    return ibc_MOV_raw(b, src);

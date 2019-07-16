@@ -294,8 +294,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
    case nir_intrinsic_load_subgroup_invocation: {
       ibc_reg *w_tmp_reg =
-         ibc_hw_grf_reg_create(b->shader, IBC_HW_GRF_REG_UNASSIGNED,
-                               b->simd_width * 2,
+         ibc_hw_grf_reg_create(b->shader, b->simd_width * 2,
                                MIN2(b->simd_width * 2, 32));
       w_tmp_reg->is_wlr = true;
       ibc_reg_ref w_tmp = ibc_typed_ref(w_tmp_reg, IBC_TYPE_UW);
@@ -358,8 +357,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       unsigned tmp_size = b->simd_width * tmp_stride;
       unsigned tmp_align = MIN2(tmp_size, 32);
       ibc_reg *tmp_reg =
-         ibc_hw_grf_reg_create(b->shader, IBC_HW_GRF_REG_UNASSIGNED,
-                               tmp_size, tmp_align);
+         ibc_hw_grf_reg_create(b->shader, tmp_size, tmp_align);
       tmp_reg->is_wlr = true;
       ibc_reg_ref tmp = ibc_typed_ref(tmp_reg, scan_type);
 
@@ -533,11 +531,9 @@ nti_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
 {
    ibc_builder *b = &nti->b;
 
-   ibc_reg *g0_reg = ibc_hw_grf_reg_create(b->shader, 0, 32, 32);
-   ibc_reg *tmp_reg =
-      ibc_hw_grf_reg_create(b->shader, IBC_HW_GRF_REG_UNASSIGNED, 32, 32);
+   ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
 
-   ibc_reg_ref g0_ud = ibc_typed_ref(g0_reg, IBC_TYPE_UD);
+   ibc_reg_ref g0_ud = ibc_hw_grf_ref(0, 0, IBC_TYPE_UD);
    ibc_reg_ref tmp_ud = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
 
    ibc_builder_push_we_all(b, 8);

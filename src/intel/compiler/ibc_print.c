@@ -139,14 +139,14 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref, bool print_type)
 
    case IBC_REG_FILE_HW_GRF: {
       unsigned type_sz_B = ibc_type_byte_size(ref->type);
-      if (ref->reg->hw_grf.byte == IBC_HW_GRF_REG_UNASSIGNED) {
+      if (ref->reg != NULL) {
          fprintf(fp, "hw%u", ref->reg->index);
-         if (ref->hw_grf.offset) {
+         if (ref->hw_grf.byte) {
             assert(type_sz_B > 0);
-            fprintf(fp, ".%u", ref->hw_grf.offset / type_sz_B);
+            fprintf(fp, ".%u", ref->hw_grf.byte / type_sz_B);
          }
       } else {
-         unsigned byte = ref->reg->hw_grf.byte + ref->hw_grf.offset;
+         unsigned byte = ref->hw_grf.byte;
          fprintf(fp, "g%u", byte / 32);
          if (byte % 32) {
             assert(type_sz_B > 0);

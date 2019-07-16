@@ -120,10 +120,9 @@ brw_reg_for_ibc_reg_ref(const struct gen_device_info *devinfo,
       break;
 
    case IBC_REG_FILE_HW_GRF: {
-      assert(ref->reg && ref->reg->file == IBC_REG_FILE_HW_GRF);
-      unsigned byte = ref->reg->hw_grf.byte + ref->hw_grf.offset;
-      unsigned nr = byte / REG_SIZE;
-      unsigned subnr = byte % REG_SIZE;
+      assert(ref->reg == NULL);
+      unsigned nr = ref->hw_grf.byte / REG_SIZE;
+      unsigned subnr = ref->hw_grf.byte % REG_SIZE;
       const unsigned elem_sz_B = ibc_type_byte_size(type);
       struct brw_reg brw_reg;
       if (ref->hw_grf.hstride == 0 && ref->hw_grf.vstride == 0) {
@@ -216,8 +215,7 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       compressed = bytes_written > REG_SIZE;
    } else {
       assert(alu->dest.file == IBC_REG_FILE_HW_GRF);
-      unsigned dest_byte =
-         alu->dest.reg->hw_grf.byte + alu->dest.hw_grf.offset;
+      unsigned dest_byte = alu->dest.hw_grf.byte;
       unsigned bytes_written =
          alu->dest.hw_grf.hstride * (alu->instr.simd_width %
                                      alu->dest.hw_grf.width) +

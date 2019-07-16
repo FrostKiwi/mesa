@@ -108,8 +108,11 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       ibc_assert(s, num_comps == 1 && num_bytes == 0);
       return;
 
-   case IBC_REG_FILE_LOGICAL:
    case IBC_REG_FILE_HW_GRF:
+      ibc_assert(s, ref->reg == NULL || ref->file == ref->reg->file);
+      break;
+
+   case IBC_REG_FILE_LOGICAL:
    case IBC_REG_FILE_FLAG:
       if (!ibc_assert(s, ref->reg))
          return;
@@ -119,7 +122,7 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
    }
 
    struct reg_validate_state *reg_state = NULL;
-   {
+   if (ref->reg) {
       struct hash_entry *state_entry =
          _mesa_hash_table_search(s->reg_state, ref->reg);
       if (ibc_assert(s, state_entry))
@@ -127,20 +130,22 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
    }
 
    if (is_write) {
-      ibc_assert(s, ref->write_instr == s->instr);
-      _mesa_set_add(reg_state->writes, ref);
-      if (ref->reg->is_wlr) {
-         if (reg_state->write_block_start == NULL) {
-            reg_state->write_block_start = s->block_start;
-         } else {
-            ibc_assert(s, reg_state->write_block_start == s->block_start);
+      if (ref->reg) {
+         ibc_assert(s, ref->write_instr == s->instr);
+         _mesa_set_add(reg_state->writes, ref);
+         if (ref->reg->is_wlr) {
+            if (reg_state->write_block_start == NULL) {
+               reg_state->write_block_start = s->block_start;
+            } else {
+               ibc_assert(s, reg_state->write_block_start == s->block_start);
+            }
+            ibc_assert(s, reg_state->next_write_link == &ref->write_link);
+            reg_state->next_write_link = ref->write_link.next;
          }
-         ibc_assert(s, reg_state->next_write_link == &ref->write_link);
-         reg_state->next_write_link = ref->write_link.next;
       }
    } else {
       ibc_assert(s, ref->write_instr == NULL);
-      if (ref->reg->is_wlr) {
+      if (ref->reg && ref->reg->is_wlr) {
          /* All instructions which read the value must satisfy one of the
           * following:
           *  a. The instruction's only output is a write to the value (i.e.
@@ -215,7 +220,6 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
    }
 
    case IBC_REG_FILE_HW_GRF: {
-      const ibc_hw_grf_reg *hw_reg = &ref->reg->hw_grf;
       const ibc_hw_grf_reg_ref *hw_ref = &ref->hw_grf;
 
       ibc_assert(s, hw_ref->hstride % ibc_type_byte_size(ref->type) == 0);
@@ -232,11 +236,13 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
          ibc_assert(s, num_comps == 0);
       }
       ibc_assert(s, num_bytes > 0);
-      ibc_assert(s, hw_ref->offset + num_bytes <= hw_reg->size);
-
-      /* TODO: Maybe we can validate more stuff here? */
-      if (hw_reg->byte == IBC_HW_GRF_REG_UNASSIGNED)
+      if (ref->reg) {
+         const ibc_hw_grf_reg *hw_reg = &ref->reg->hw_grf;
+         ibc_assert(s, hw_ref->byte + num_bytes <= hw_reg->size);
          ibc_assert(s, hw_reg->align >= ibc_type_byte_size(ref->type));
+      } else {
+         ibc_assert(s, hw_ref->byte + num_bytes <= 4096);
+      }
       return;
    }
 
@@ -643,11 +649,7 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
 
    case IBC_REG_FILE_HW_GRF:
       ibc_assert(s, util_is_power_of_two_or_zero(reg->hw_grf.align));
-      if (reg->hw_grf.byte != IBC_HW_GRF_REG_UNASSIGNED) {
-         ibc_assert(s, reg->hw_grf.byte + reg->hw_grf.size <= 4096);
-      } else {
-         ibc_assert(s, reg->hw_grf.align > 0);
-      }
+      ibc_assert(s, reg->hw_grf.align > 0);
       return;
 
    case IBC_REG_FILE_FLAG:
