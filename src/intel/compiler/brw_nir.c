@@ -494,7 +494,8 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
    nir_variable_mode indirect_mask =
       brw_nir_no_indirect_mask(compiler, nir->info.stage);
 
-   const bool use_ibc = nir->info.stage == MESA_SHADER_COMPUTE;
+   const bool use_ibc = nir->info.stage == MESA_SHADER_COMPUTE ||
+                        nir->info.stage == MESA_SHADER_FRAGMENT;
 
    bool progress;
    unsigned lower_flrp =
@@ -817,7 +818,8 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
    bool debug_enabled =
       (INTEL_DEBUG & intel_debug_flag_for_shader_stage(nir->info.stage));
 
-   const bool use_ibc = nir->info.stage == MESA_SHADER_COMPUTE;
+   const bool use_ibc = nir->info.stage == MESA_SHADER_COMPUTE ||
+                        nir->info.stage == MESA_SHADER_FRAGMENT;
 
    UNUSED bool progress; /* Written by OPT */
 
