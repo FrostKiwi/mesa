@@ -494,6 +494,8 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
    nir_variable_mode indirect_mask =
       brw_nir_no_indirect_mask(compiler, nir->info.stage);
 
+   const bool use_ibc = nir->info.stage == MESA_SHADER_COMPUTE;
+
    bool progress;
    unsigned lower_flrp =
       (nir->options->lower_flrp16 ? 16 : 0) |
@@ -549,12 +551,14 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
        * However, in vec4 tessellation shaders, these loads operate by
        * actually pulling from memory.
        */
-//      const bool is_vec4_tessellation = !is_scalar &&
-//         (nir->info.stage == MESA_SHADER_TESS_CTRL ||
-//          nir->info.stage == MESA_SHADER_TESS_EVAL);
-//      OPT(nir_opt_peephole_select, 0, !is_vec4_tessellation, false);
-//      OPT(nir_opt_peephole_select, 1, !is_vec4_tessellation,
-//          compiler->devinfo->gen >= 6);
+      if (!use_ibc) {
+         const bool is_vec4_tessellation = !is_scalar &&
+            (nir->info.stage == MESA_SHADER_TESS_CTRL ||
+             nir->info.stage == MESA_SHADER_TESS_EVAL);
+         OPT(nir_opt_peephole_select, 0, !is_vec4_tessellation, false);
+         OPT(nir_opt_peephole_select, 1, !is_vec4_tessellation,
+             compiler->devinfo->gen >= 6);
+      }
 
       OPT(nir_opt_intrinsics);
       OPT(nir_opt_idiv_const, 32);
@@ -584,7 +588,8 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
          OPT(nir_copy_prop);
          OPT(nir_opt_dce);
       }
-//      OPT(nir_opt_if, false);
+      if (!use_ibc)
+         OPT(nir_opt_if, false);
       OPT(nir_opt_conditional_discard);
       if (nir->options->max_unroll_iterations != 0) {
          OPT(nir_opt_loop_unroll, indirect_mask);
@@ -812,6 +817,8 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
    bool debug_enabled =
       (INTEL_DEBUG & intel_debug_flag_for_shader_stage(nir->info.stage));
 
+   const bool use_ibc = nir->info.stage == MESA_SHADER_COMPUTE;
+
    UNUSED bool progress; /* Written by OPT */
 
    OPT(brw_nir_lower_mem_access_bit_sizes);
@@ -843,12 +850,14 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
        *
        * See brw_nir_optimize for the explanation of is_vec4_tessellation.
        */
-      const bool is_vec4_tessellation = !is_scalar &&
-         (nir->info.stage == MESA_SHADER_TESS_CTRL ||
-          nir->info.stage == MESA_SHADER_TESS_EVAL);
-//      OPT(nir_opt_peephole_select, 0, is_vec4_tessellation, false);
-//      OPT(nir_opt_peephole_select, 1, is_vec4_tessellation,
-//          compiler->devinfo->gen >= 6);
+      if (!use_ibc) {
+         const bool is_vec4_tessellation = !is_scalar &&
+            (nir->info.stage == MESA_SHADER_TESS_CTRL ||
+             nir->info.stage == MESA_SHADER_TESS_EVAL);
+         OPT(nir_opt_peephole_select, 0, is_vec4_tessellation, false);
+         OPT(nir_opt_peephole_select, 1, is_vec4_tessellation,
+             compiler->devinfo->gen >= 6);
+      }
    }
 
    do {
@@ -872,12 +881,14 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
 
    if (is_scalar)
       OPT(nir_lower_alu_to_scalar, NULL, NULL);
-   //OPT(nir_lower_to_source_mods, nir_lower_all_source_mods);
+   if (!use_ibc)
+      OPT(nir_lower_to_source_mods, nir_lower_all_source_mods);
    OPT(nir_copy_prop);
    OPT(nir_opt_dce);
    OPT(nir_opt_move, nir_move_comparisons);
 
-   //OPT(nir_lower_bool_to_int32);
+   if (!use_ibc)
+      OPT(nir_lower_bool_to_int32);
 
    OPT(nir_lower_locals_to_regs);
 
@@ -893,7 +904,8 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
       nir_print_shader(nir, stderr);
    }
 
-   //OPT(nir_convert_from_ssa, true);
+   if (!use_ibc)
+      OPT(nir_convert_from_ssa, true);
 
    if (!is_scalar) {
       OPT(nir_move_vec_src_uses_to_dest);
