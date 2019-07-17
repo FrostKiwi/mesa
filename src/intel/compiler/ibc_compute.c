@@ -238,53 +238,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
 
-   ibc_assign_logical_reg_strides(ibc);
-   ibc_lower_simd_width(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_split_logical_regs(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_opt_copy_prop(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_opt_dead_code(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_lower_surface_access(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_assign_logical_reg_strides(ibc);
-   ibc_lower_gather_ops(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_lower_phis(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_assign_and_lower_flags(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_assign_logical_reg_strides(ibc);
-   ibc_assign_regs(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
+   ibc_lower_and_optimize(ibc);
 
    cs_set_simd_size(prog_data, simd_width);
    cs_fill_push_const_info(compiler->devinfo, prog_data);
