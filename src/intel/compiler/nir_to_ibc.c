@@ -21,104 +21,15 @@
  * IN THE SOFTWARE.
  */
 
-#include "nir.h"
-
-#include "ibc.h"
-#include "ibc_builder.h"
+#include "ibc_nir.h"
 
 #include "util/hash_table.h"
 
-struct nir_to_ibc_state {
-   ibc_builder b;
-
-   gl_shader_stage stage;
-
-   const ibc_reg **ssa_to_reg;
-
-   struct {
-      ibc_reg_ref g0;
-
-      union {
-         struct {
-            ibc_reg_ref subgroup_id;
-         } cs;
-      };
-   } payload;
-
-   struct hash_table *nir_block_to_ibc_merge;
-};
-
-static enum ibc_type
-ibc_type_for_nir(nir_alu_type ntype)
+void
+ibc_setup_payload_base(ibc_builder *b, struct ibc_payload_base *payload)
 {
-   if (nir_alu_type_get_type_size(ntype) == 1)
-      return IBC_TYPE_FLAG;
-
-   enum ibc_type stype;
-   switch (nir_alu_type_get_base_type(ntype)) {
-   case nir_type_int:   stype = IBC_TYPE_INT;   break;
-   case nir_type_uint:  stype = IBC_TYPE_UINT;  break;
-   case nir_type_float: stype = IBC_TYPE_FLOAT; break;
-   default:
-      unreachable("Unsupported base type");
-   }
-
-   return stype | nir_alu_type_get_type_size(ntype);
-}
-
-static void
-nti_load_payload(ibc_builder *b, ibc_reg_ref dest,
-                 ibc_reg_ref src, unsigned num_comps)
-{
-   ibc_intrinsic_instr *load =
-      ibc_intrinsic_instr_create(b->shader,
-                                 IBC_INTRINSIC_OP_LOAD_PAYLOAD,
-                                 b->simd_group, b->simd_width, 1);
-   load->src[0].ref = src;
-   load->src[0].num_comps = num_comps;
-   load->dest = dest;
-   load->num_dest_comps = num_comps;
-   load->instr.we_all = b->we_all;
-
-   ibc_builder_insert_instr(b, &load->instr);
-}
-
-static inline ibc_reg_ref
-nti_load_payload_reg(ibc_builder *b, uint8_t nr)
-{
-   ibc_reg *dest_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
-   dest_reg->is_wlr = true;
-   ibc_reg_ref dest = ibc_typed_ref(dest_reg, IBC_TYPE_UD);
-   ibc_builder_push_we_all(b, 8);
-   nti_load_payload(b, dest, ibc_hw_grf_ref(nr, 0, IBC_TYPE_UD), 1);
-   ibc_builder_pop(b);
-   return dest;
-}
-
-static void
-nti_setup_payload(struct nir_to_ibc_state *nti)
-{
-   ibc_builder *b = &nti->b;
-
-   nti->payload.g0 = nti_load_payload_reg(b, 0);
-
-   switch (nti->stage) {
-   case MESA_SHADER_COMPUTE:
-      ibc_builder_push_we_all(b, 1);
-      nti->payload.cs.subgroup_id =
-         ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
-      /* Assume that the subgroup ID is in g1.0
-       *
-       * TODO: Make this more dynamic.
-       */
-      nti_load_payload(b, nti->payload.cs.subgroup_id,
-                       ibc_hw_grf_ref(1, 0, IBC_TYPE_UD), 1);
-      ibc_builder_pop(b);
-      break;
-
-   default:
-      unreachable("Unsupported shader stage");
-   }
+   payload->g0 = ibc_load_payload_reg(b, 0);
+   payload->num_ff_regs = 1;
 }
 
 static void
@@ -129,9 +40,6 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    ibc_reg_ref src[4];
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
-      assert(instr->src[i].src.is_ssa);
-      nir_ssa_def *ssa_src = instr->src[i].src.ssa;
-
       /* TODO */
       assert(!instr->src[i].abs);
       assert(!instr->src[i].negate);
@@ -139,8 +47,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       nir_alu_type nir_src_type = nir_op_infos[instr->op].input_types[i];
       if (nir_alu_type_get_type_size(nir_src_type) == 0)
          nir_src_type |= instr->src[i].src.ssa->bit_size;
-      src[i] = ibc_typed_ref(nti->ssa_to_reg[ssa_src->index],
-                             ibc_type_for_nir(nir_src_type));
+      src[i] = ibc_nir_src(nti, instr->src[i].src,
+                           ibc_type_for_nir(nir_src_type));
       assert(src[i].file == IBC_REG_FILE_LOGICAL);
       src[i].logical.comp = instr->src[i].swizzle[0];
    }
@@ -347,15 +255,19 @@ static void
 nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                    const nir_intrinsic_instr *instr)
 {
+   switch (nti->stage) {
+   case MESA_SHADER_COMPUTE:
+      if (ibc_emit_nir_cs_intrinsic(nti, instr))
+         return;
+      break;
+   default:
+      unreachable("Unsupported shader stage");
+   }
+
    ibc_builder *b = &nti->b;
 
    ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
    switch (instr->intrinsic) {
-   case nir_intrinsic_load_subgroup_id:
-      assert(nti->stage == MESA_SHADER_COMPUTE);
-      dest = ibc_MOV(b, IBC_TYPE_UD, nti->payload.cs.subgroup_id);
-      break;
-
    case nir_intrinsic_load_subgroup_invocation: {
       ibc_reg *w_tmp_reg =
          ibc_hw_grf_reg_create(b->shader, b->simd_width * 2,
@@ -388,7 +300,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_read_invocation: {
-      ibc_reg_ref value = ibc_uref(nti->ssa_to_reg[instr->src[0].ssa->index]);
+      ibc_reg_ref value = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
       value.logical.broadcast = true;
       value.logical.simd_channel = nir_src_as_uint(instr->src[1]);
       ibc_builder_push_we_all(b, 1);
@@ -401,8 +313,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_inclusive_scan: {
       nir_op redop = nir_intrinsic_reduction_op(instr);
       ibc_reg_ref src =
-         ibc_typed_ref(nti->ssa_to_reg[instr->src[0].ssa->index],
-                       ibc_type_for_nir(nir_op_infos[redop].input_types[0]));
+         ibc_nir_src(nti, instr->src[0],
+                     ibc_type_for_nir(nir_op_infos[redop].input_types[0]));
 
       unsigned cluster_size = instr->intrinsic == nir_intrinsic_reduce ?
                               nir_intrinsic_cluster_size(instr) : 0;
@@ -456,7 +368,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       store->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[0]));
       store->src[0].num_comps = 1;
       assert(instr->src[1].is_ssa);
-      store->src[1].ref = ibc_uref(nti->ssa_to_reg[instr->src[1].ssa->index]);
+      store->src[1].ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD);
       store->src[1].num_comps = 1;
 
       dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD,
@@ -477,10 +389,10 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       store->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[1]));
       store->src[0].num_comps = 1;
       assert(instr->src[2].is_ssa);
-      store->src[1].ref = ibc_uref(nti->ssa_to_reg[instr->src[2].ssa->index]);
+      store->src[1].ref = ibc_nir_src(nti, instr->src[2], IBC_TYPE_UD);
       store->src[1].num_comps = 1;
       assert(instr->src[0].is_ssa);
-      store->src[2].ref = ibc_ref(nti->ssa_to_reg[instr->src[0].ssa->index]);
+      store->src[2].ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
       store->src[2].num_comps = instr->num_components;
 
       ibc_builder_insert_instr(b, &store->instr);
@@ -591,31 +503,6 @@ nti_add_phi_srcs(struct nir_to_ibc_state *nti, const nir_phi_instr *instr)
 }
 
 static void
-nti_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
-{
-   ibc_builder *b = &nti->b;
-
-   ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
-   ibc_reg_ref tmp_ud = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
-
-   ibc_builder_push_we_all(b, 8);
-   ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp_ud, nti->payload.g0);
-   ibc_builder_pop(b);
-
-   ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 8);
-   send->instr.we_all = true;
-   send->sfid = BRW_SFID_THREAD_SPAWNER;
-   send->desc_imm = brw_ts_eot_desc(b->shader->devinfo);
-   send->has_side_effects = true;
-   send->eot = true;
-
-   send->payload[0] = tmp_ud;
-   send->mlen = 1;
-
-   ibc_builder_insert_instr(b, &send->instr);
-}
-
-static void
 nti_emit_block(struct nir_to_ibc_state *nti, const nir_block *block)
 {
    nir_foreach_instr(instr, block) {
@@ -651,7 +538,7 @@ nti_emit_if(struct nir_to_ibc_state *nti, nir_if *nif)
 {
    ibc_builder *b = &nti->b;
 
-   ibc_reg_ref cond = ibc_ref(nti->ssa_to_reg[nif->condition.ssa->index]);
+   ibc_reg_ref cond = ibc_nir_src(nti, nif->condition, IBC_TYPE_FLAG);
    ibc_branch_instr *_if = ibc_if(b, cond, BRW_PREDICATE_NORMAL, false);
 
    nti_emit_cf_list(nti, &nif->then_list);
@@ -693,27 +580,40 @@ nti_emit_cf_list(struct nir_to_ibc_state *nti,
    }
 }
 
-ibc_shader *
-nir_to_ibc(const nir_shader *nir, void *mem_ctx,
-           unsigned dispatch_size,
-           const struct gen_device_info *devinfo)
+void
+nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
+                      gl_shader_stage stage,
+                      const struct gen_device_info *devinfo,
+                      const struct brw_base_prog_key *key,
+                      struct brw_stage_prog_data *prog_data,
+                      void *stage_state,
+                      unsigned dispatch_size,
+                      void *mem_ctx)
 {
    ibc_shader *shader = ibc_shader_create(mem_ctx, devinfo, dispatch_size);
 
-   struct nir_to_ibc_state nti = {
-      .stage = nir->info.stage,
+   *nti = (struct nir_to_ibc_state) {
+      .mem_ctx = mem_ctx,
+      .stage = stage,
+      .key = key,
+      .prog_data = prog_data,
+      .stage_state = stage_state,
    };
-   ibc_builder_init(&nti.b, shader);
-   ibc_start(&nti.b);
+   ibc_builder_init(&nti->b, shader);
+   ibc_start(&nti->b);
+}
 
+void
+ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
+                    const nir_shader *nir)
+{
    nir_function_impl *impl = nir_shader_get_entrypoint((nir_shader *)nir);
 
-   nti_setup_payload(&nti);
+   nti->ssa_to_reg =
+      ralloc_array(nti->mem_ctx, const ibc_reg *, impl->ssa_alloc);
+   nti->nir_block_to_ibc_merge = _mesa_pointer_hash_table_create(nti->mem_ctx);
 
-   nti.ssa_to_reg = ralloc_array(mem_ctx, const ibc_reg *, impl->ssa_alloc);
-   nti.nir_block_to_ibc_merge = _mesa_pointer_hash_table_create(mem_ctx);
-
-   nti_emit_cf_list(&nti, &impl->body);
+   nti_emit_cf_list(nti, &impl->body);
 
    /* Do a second walk of the IR to fill in the phi sources */
    nir_foreach_block(block, impl) {
@@ -721,14 +621,14 @@ nir_to_ibc(const nir_shader *nir, void *mem_ctx,
          if (instr->type != nir_instr_type_phi)
             break;
 
-         nti_add_phi_srcs(&nti, nir_instr_as_phi(instr));
+         nti_add_phi_srcs(nti, nir_instr_as_phi(instr));
       }
    }
+}
 
-   if (nir->info.stage == MESA_SHADER_COMPUTE)
-      nti_emit_cs_thread_terminate(&nti);
-
-   ibc_end(&nti.b);
-
-   return nti.b.shader;
+ibc_shader *
+nir_to_ibc_state_finish(struct nir_to_ibc_state *nti)
+{
+   ibc_end(&nti->b);
+   return nti->b.shader;
 }

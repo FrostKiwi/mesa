@@ -811,11 +811,6 @@ void ibc_instr_remove(ibc_instr *instr);
  * KEEP IN ALPHABETICAL ORDER!
  **********************************************************************/
 
-struct nir_shader;
-ibc_shader *nir_to_ibc(const struct nir_shader *nir, void *mem_ctx,
-                       unsigned dispatch_size,
-                       const struct gen_device_info *devinfo);
-
 void ibc_assign_and_lower_flags(ibc_shader *shader);
 void ibc_assign_logical_reg_strides(ibc_shader *shader);
 void ibc_assign_regs(ibc_shader *shader);
