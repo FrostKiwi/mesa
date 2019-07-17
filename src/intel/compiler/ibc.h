@@ -816,6 +816,8 @@ void ibc_assign_logical_reg_strides(ibc_shader *shader);
 void ibc_assign_regs(ibc_shader *shader);
 void ibc_assign_regs_trivial(ibc_shader *shader);
 
+void ibc_lower_and_optimize(ibc_shader *ibc);
+
 bool ibc_lower_gather_ops(ibc_shader *shader);
 bool ibc_lower_phis(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);
