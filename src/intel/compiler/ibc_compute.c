@@ -22,9 +22,86 @@
  */
 
 #include "brw_nir.h"
-
-#include "ibc.h"
 #include "ibc_compile.h"
+#include "ibc_nir.h"
+
+struct ibc_cs_payload {
+   struct ibc_payload_base base;
+
+   ibc_reg_ref subgroup_id;
+};
+
+static struct ibc_cs_payload *
+ibc_setup_cs_payload(ibc_builder *b, void *mem_ctx)
+{
+   struct ibc_cs_payload *payload = ralloc(mem_ctx, struct ibc_cs_payload);
+   ibc_setup_payload_base(b, &payload->base);
+
+   ibc_builder_push_we_all(b, 1);
+   payload->subgroup_id = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
+   /* Assume that the subgroup ID is in g1.0
+    *
+    * TODO: Make this more dynamic.
+    */
+   ibc_load_payload(b, payload->subgroup_id,
+                    ibc_hw_grf_ref(1, 0, IBC_TYPE_UD), 1);
+   ibc_builder_pop(b);
+
+   return payload;
+}
+
+bool
+ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
+                          const nir_intrinsic_instr *instr)
+{
+   assert(nti->stage == MESA_SHADER_COMPUTE);
+   struct ibc_cs_payload *payload = (struct ibc_cs_payload *)nti->payload;
+   ibc_builder *b = &nti->b;
+
+   ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
+   switch (instr->intrinsic) {
+   case nir_intrinsic_load_subgroup_id:
+      dest = ibc_MOV(b, IBC_TYPE_UD, payload->subgroup_id);
+      break;
+
+   default:
+      return false;
+   }
+
+   if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
+      assert(dest.file == IBC_REG_FILE_LOGICAL);
+      nti->ssa_to_reg[instr->dest.ssa.index] = dest.reg;
+   } else {
+      assert(dest.file == IBC_REG_FILE_NONE);
+   }
+
+   return true;
+}
+
+static void
+ibc_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
+{
+   ibc_builder *b = &nti->b;
+
+   ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
+   ibc_reg_ref tmp_ud = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
+
+   ibc_builder_push_we_all(b, 8);
+   ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp_ud, nti->payload->g0);
+   ibc_builder_pop(b);
+
+   ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 8);
+   send->instr.we_all = true;
+   send->sfid = BRW_SFID_THREAD_SPAWNER;
+   send->desc_imm = brw_ts_eot_desc(b->shader->devinfo);
+   send->has_side_effects = true;
+   send->eot = true;
+
+   send->payload[0] = tmp_ud;
+   send->mlen = 1;
+
+   ibc_builder_insert_instr(b, &send->instr);
+}
 
 static int
 get_subgroup_id_param_index(const struct brw_stage_prog_data *prog_data)
@@ -122,6 +199,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                int shader_time_index,
                char **error_str)
 {
+   assert(src_shader->info.stage == MESA_SHADER_COMPUTE);
    prog_data->local_size[0] = src_shader->info.cs.local_size[0];
    prog_data->local_size[1] = src_shader->info.cs.local_size[1];
    prog_data->local_size[2] = src_shader->info.cs.local_size[2];
@@ -146,8 +224,16 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    nir_shader *shader =
       compile_cs_to_nir(compiler, mem_ctx, key, src_shader, simd_width);
 
-   ibc_shader *ibc = nir_to_ibc(shader, mem_ctx, simd_width,
-                                compiler->devinfo);
+   struct nir_to_ibc_state nti;
+   nir_to_ibc_state_init(&nti, shader->info.stage, compiler->devinfo,
+                         &key->base, &prog_data->base,
+                         NULL, simd_width, mem_ctx);
+
+   nti.payload = &ibc_setup_cs_payload(&nti.b, mem_ctx)->base;
+   ibc_emit_nir_shader(&nti, shader);
+   ibc_emit_cs_thread_terminate(&nti);
+
+   ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
