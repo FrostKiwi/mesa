@@ -32,6 +32,19 @@ extern "C" {
 #endif
 
 const unsigned *
+ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
+               void *mem_ctx,
+               const struct brw_wm_prog_key *key,
+               struct brw_wm_prog_data *prog_data,
+               struct nir_shader *shader,
+               int shader_time_index8,
+               int shader_time_index16,
+               int shader_time_index32,
+               bool allow_spilling,
+               bool use_rep_send, struct brw_vue_map *vue_map,
+               char **error_str);
+
+const unsigned *
 ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                void *mem_ctx,
                const struct brw_cs_prog_key *key,
