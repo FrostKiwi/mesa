@@ -558,6 +558,7 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
    IBC_INTRINSIC_OP_LOAD_PAYLOAD,
    IBC_INTRINSIC_OP_PLN,
+   IBC_INTRINSIC_OP_FB_WRITE,
 };
 
 typedef struct {
@@ -819,9 +820,11 @@ void ibc_assign_regs_trivial(ibc_shader *shader);
 
 void ibc_lower_and_optimize(ibc_shader *ibc);
 
+bool ibc_lower_fb_writes(ibc_shader *shader);
 bool ibc_lower_gather_ops(ibc_shader *shader);
 bool ibc_lower_phis(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);
+unsigned ibc_lower_simd_width_fb_write_max_width(ibc_intrinsic_instr *write);
 bool ibc_lower_surface_access(ibc_shader *shader);
 
 bool ibc_opt_copy_prop(ibc_shader *shader);

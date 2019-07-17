@@ -132,9 +132,18 @@ ibc_lower_simd_width(ibc_shader *shader)
          break;
       }
 
-      case IBC_INSTR_TYPE_INTRINSIC:
-         split_simd_width = MIN2(split_simd_width, 16); /* TODO */
+      case IBC_INSTR_TYPE_INTRINSIC: {
+         ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
+         switch (intrin->op) {
+         case IBC_INTRINSIC_OP_FB_WRITE:
+            split_simd_width = ibc_lower_simd_width_fb_write_max_width(intrin);
+            break;
+         default:
+            split_simd_width = MIN2(split_simd_width, 16); /* TODO */
+            break;
+         }
          break;
+      }
 
       default:
          continue;

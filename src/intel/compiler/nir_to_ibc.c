@@ -28,8 +28,9 @@
 void
 ibc_setup_payload_base(ibc_builder *b, struct ibc_payload_base *payload)
 {
-   payload->g0 = ibc_load_payload_reg(b, 0);
-   payload->num_ff_regs = 1;
+   unsigned reg = 0;
+   payload->g0 = ibc_load_payload_reg(b, &reg);
+   payload->num_ff_regs = reg;
 }
 
 static void
@@ -296,6 +297,10 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                    const nir_intrinsic_instr *instr)
 {
    switch (nti->stage) {
+   case MESA_SHADER_FRAGMENT:
+      if (ibc_emit_nir_fs_intrinsic(nti, instr))
+         return;
+      break;
    case MESA_SHADER_COMPUTE:
       if (ibc_emit_nir_cs_intrinsic(nti, instr))
          return;
