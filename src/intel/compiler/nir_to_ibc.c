@@ -31,7 +31,19 @@
 struct nir_to_ibc_state {
    ibc_builder b;
 
+   gl_shader_stage stage;
+
    const ibc_reg **ssa_to_reg;
+
+   struct {
+      ibc_reg_ref g0;
+
+      union {
+         struct {
+            ibc_reg_ref subgroup_id;
+         } cs;
+      };
+   } payload;
 
    struct hash_table *nir_block_to_ibc_merge;
 };
@@ -52,6 +64,61 @@ ibc_type_for_nir(nir_alu_type ntype)
    }
 
    return stype | nir_alu_type_get_type_size(ntype);
+}
+
+static void
+nti_load_payload(ibc_builder *b, ibc_reg_ref dest,
+                 ibc_reg_ref src, unsigned num_comps)
+{
+   ibc_intrinsic_instr *load =
+      ibc_intrinsic_instr_create(b->shader,
+                                 IBC_INTRINSIC_OP_LOAD_PAYLOAD,
+                                 b->simd_group, b->simd_width, 1);
+   load->src[0].ref = src;
+   load->src[0].num_comps = num_comps;
+   load->dest = dest;
+   load->num_dest_comps = num_comps;
+   load->instr.we_all = b->we_all;
+
+   ibc_builder_insert_instr(b, &load->instr);
+}
+
+static inline ibc_reg_ref
+nti_load_payload_reg(ibc_builder *b, uint8_t nr)
+{
+   ibc_reg *dest_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
+   dest_reg->is_wlr = true;
+   ibc_reg_ref dest = ibc_typed_ref(dest_reg, IBC_TYPE_UD);
+   ibc_builder_push_we_all(b, 8);
+   nti_load_payload(b, dest, ibc_hw_grf_ref(nr, 0, IBC_TYPE_UD), 1);
+   ibc_builder_pop(b);
+   return dest;
+}
+
+static void
+nti_setup_payload(struct nir_to_ibc_state *nti)
+{
+   ibc_builder *b = &nti->b;
+
+   nti->payload.g0 = nti_load_payload_reg(b, 0);
+
+   switch (nti->stage) {
+   case MESA_SHADER_COMPUTE:
+      ibc_builder_push_we_all(b, 1);
+      nti->payload.cs.subgroup_id =
+         ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
+      /* Assume that the subgroup ID is in g1.0
+       *
+       * TODO: Make this more dynamic.
+       */
+      nti_load_payload(b, nti->payload.cs.subgroup_id,
+                       ibc_hw_grf_ref(1, 0, IBC_TYPE_UD), 1);
+      ibc_builder_pop(b);
+      break;
+
+   default:
+      unreachable("Unsupported shader stage");
+   }
 }
 
 static void
@@ -285,11 +352,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_id:
-      /* Assume that the subgroup ID is in g1.0
-       *
-       * TODO: Make this more dynamic.
-       */
-      dest = ibc_read_hw_grf(b, 1, 0, IBC_TYPE_UD, 0);
+      assert(nti->stage == MESA_SHADER_COMPUTE);
+      dest = ibc_MOV(b, IBC_TYPE_UD, nti->payload.cs.subgroup_id);
       break;
 
    case nir_intrinsic_load_subgroup_invocation: {
@@ -532,12 +596,10 @@ nti_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
    ibc_builder *b = &nti->b;
 
    ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
-
-   ibc_reg_ref g0_ud = ibc_hw_grf_ref(0, 0, IBC_TYPE_UD);
    ibc_reg_ref tmp_ud = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
 
    ibc_builder_push_we_all(b, 8);
-   ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp_ud, g0_ud);
+   ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp_ud, nti->payload.g0);
    ibc_builder_pop(b);
 
    ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 8);
@@ -638,11 +700,15 @@ nir_to_ibc(const nir_shader *nir, void *mem_ctx,
 {
    ibc_shader *shader = ibc_shader_create(mem_ctx, devinfo, dispatch_size);
 
-   struct nir_to_ibc_state nti;
+   struct nir_to_ibc_state nti = {
+      .stage = nir->info.stage,
+   };
    ibc_builder_init(&nti.b, shader);
    ibc_start(&nti.b);
 
    nir_function_impl *impl = nir_shader_get_entrypoint((nir_shader *)nir);
+
+   nti_setup_payload(&nti);
 
    nti.ssa_to_reg = ralloc_array(mem_ctx, const ibc_reg *, impl->ssa_alloc);
    nti.nir_block_to_ibc_merge = _mesa_pointer_hash_table_create(mem_ctx);
