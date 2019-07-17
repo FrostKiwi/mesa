@@ -348,6 +348,7 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:  return "bti_untyped_write";
    case IBC_INTRINSIC_OP_LOAD_PAYLOAD:       return "load_payload";
    case IBC_INTRINSIC_OP_PLN:                return "pln";
+   case IBC_INTRINSIC_OP_FB_WRITE:           return "fb_write";
    }
    unreachable("Invalid IBC intrinsic op");
 }
