@@ -118,17 +118,31 @@ ibc_load_payload(ibc_builder *b, ibc_reg_ref dest,
 }
 
 static inline ibc_reg_ref
-ibc_load_payload_reg(ibc_builder *b, uint8_t nr)
+ibc_load_payload_reg(ibc_builder *b, unsigned *reg)
 {
    ibc_reg *dest_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
    dest_reg->is_wlr = true;
    ibc_reg_ref dest = ibc_typed_ref(dest_reg, IBC_TYPE_UD);
    ibc_builder_push_we_all(b, 8);
-   ibc_load_payload(b, dest, ibc_hw_grf_ref(nr, 0, IBC_TYPE_UD), 1);
+   ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, IBC_TYPE_UD), 1);
    ibc_builder_pop(b);
+   *reg += 1;
    return dest;
 }
 
+static inline ibc_reg_ref
+ibc_load_payload_logical(ibc_builder *b, unsigned *reg, enum ibc_type type,
+                         unsigned num_comps)
+{
+   assert(ibc_type_bit_size(type) == 32);
+   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, type, num_comps);
+   ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, type), 1);
+   *reg += (b->simd_width * ibc_type_byte_size(type) * num_comps) / REG_SIZE;
+   return dest;
+}
+
+bool ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
+                               const nir_intrinsic_instr *instr);
 bool ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
                                const nir_intrinsic_instr *instr);
 
