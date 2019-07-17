@@ -588,23 +588,6 @@ ibc_cluster_broadcast(ibc_builder *b, enum ibc_type dest_type,
    }
 }
 
-static inline ibc_reg_ref
-ibc_read_hw_grf(ibc_builder *b, uint8_t reg, uint8_t comp,
-                enum ibc_type type, uint8_t stride)
-{
-   unsigned type_sz = ibc_type_bit_size(type) / 8;
-   assert(comp * type_sz < 32);
-   uint16_t byte = reg * 32 + comp * type_sz;
-   uint8_t nr = byte / REG_SIZE;
-   assert((byte % REG_SIZE) % type_sz == 0);
-   uint8_t subnr = (byte % REG_SIZE) / type_sz;
-
-   ibc_reg_ref hw_ref = ibc_hw_grf_ref(nr, subnr, type);
-   ibc_hw_grf_mul_stride(&hw_ref.hw_grf, stride);
-
-   return ibc_MOV(b, type, hw_ref);
-}
-
 static inline ibc_merge_pred*
 ibc_builder_add_merge_pred(ibc_builder *b, struct list_head *pred_list,
                            bool logical, ibc_branch_instr *branch)

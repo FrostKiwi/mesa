@@ -136,18 +136,29 @@ ibc_phys_reg_alloc_finish(struct ibc_phys_reg_alloc *alloc)
 
 static bool
 ibc_phys_reg_alloc(struct ibc_phys_reg_alloc *alloc,
+                   int16_t fixed_hw_grf_byte,
                    uint16_t size, uint16_t align,
                    uint32_t start, uint32_t end,
                    struct ibc_phys_reg *reg_out)
 {
-   uint64_t addr = util_vma_heap_alloc(&alloc->heap, size, align);
-   if (addr == 0)
-      return false;
-
-   assert(addr >= 4096 && addr + size <= 8192);
+   uint16_t byte;
+   if (fixed_hw_grf_byte < 0) {
+      uint64_t addr = util_vma_heap_alloc(&alloc->heap, size, align);
+      if (addr == 0)
+         return false;
+      assert(addr >= 4096 && addr + size <= 8192);
+      byte = 8192 - size - addr;
+   } else {
+      assert(byte + size <= 4096);
+      uint64_t addr = 8192 - size - fixed_hw_grf_byte;
+      assert(addr >= 4096 && addr + size <= 8192);
+      if (!util_vma_heap_alloc_addr(&alloc->heap, addr, size))
+         return false;
+      byte = fixed_hw_grf_byte;
+   }
 
    *reg_out = (struct ibc_phys_reg) {
-      .byte = 8192 - size - addr,
+      .byte = byte,
       .size = size,
       .start = start,
       .end = end,
@@ -484,6 +495,7 @@ static struct ibc_strided_reg *
 ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
                       const ibc_live_intervals *live,
                       const ibc_reg *reg,
+                      int16_t fixed_hw_grf_byte,
                       uint8_t *alloc_byte, uint8_t *alloc_comp)
 {
    const ibc_reg_live_intervals *rli = &live->regs[reg->index];
@@ -558,42 +570,46 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
       }
    }
 
-   /* First try searching through the list of free registers and see if we can
-    * re-use one of them.
-    */
-   list_for_each_entry_safe(struct ibc_strided_reg, sreg, &alloc->free, link) {
-      /* If we come across a register whose physical range has already ended,
-       * we can't use it and we'll never be able to use it again.  Just remove
-       * it from the list.
+
+   if (fixed_hw_grf_byte < 0) {
+      /* First try searching through the list of free registers and see if we
+       * can re-use one of them.
        */
-      if (sreg->phys.end <= ip) {
-         list_del(&sreg->link);
-         continue;
-      }
-
-      if (ibc_strided_reg_try_find_hole(sreg, ip,
-                                        byte_size, lreg->num_comps,
-                                        lreg->simd_group,
-                                        lreg->simd_width,
-                                        live_ranges,
-                                        simd_stride, comp_stride,
-                                        alloc_byte, alloc_comp)) {
-
-         /* If the first hole now starts after the current instruction, we
-          * need to move it to the busy list.
+      list_for_each_entry_safe(struct ibc_strided_reg, sreg, &alloc->free, link) {
+         /* If we come across a register whose physical range has already
+          * ended, we can't use it and we'll never be able to use it again.
+          * Just remove it from the list.
           */
-         if (sreg->hole_start > ip) {
+         if (sreg->phys.end <= ip) {
             list_del(&sreg->link);
-            list_addtail(&sreg->link, &alloc->busy);
+            continue;
          }
 
-         /* If this allocation ends up growing the physical register, we need
-          * to update it and move it to its new location in the RB tree.
-          */
-         ibc_phys_reg_extend_live_range(alloc->phys_alloc, &sreg->phys,
-                                        rli->physical_end);
+         if (ibc_strided_reg_try_find_hole(sreg, ip,
+                                           byte_size, lreg->num_comps,
+                                           lreg->simd_group,
+                                           lreg->simd_width,
+                                           live_ranges,
+                                           simd_stride, comp_stride,
+                                           alloc_byte, alloc_comp)) {
 
-         return sreg;
+            /* If the first hole now starts after the current instruction, we
+             * need to move it to the busy list.
+             */
+            if (sreg->hole_start > ip) {
+               list_del(&sreg->link);
+               list_addtail(&sreg->link, &alloc->busy);
+            }
+
+            /* If this allocation ends up growing the physical register, we
+             * need to update it and move it to its new location in the RB
+             * tree.
+             */
+            ibc_phys_reg_extend_live_range(alloc->phys_alloc, &sreg->phys,
+                                           rli->physical_end);
+
+            return sreg;
+         }
       }
    }
 
@@ -608,7 +624,8 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
 
    uint16_t size = alloc->stride * lreg->simd_width * lreg->num_comps;
    uint16_t align = MIN2(alloc->stride * lreg->simd_width, 32);
-   if (!ibc_phys_reg_alloc(alloc->phys_alloc, size, align,
+   if (!ibc_phys_reg_alloc(alloc->phys_alloc,
+                           fixed_hw_grf_byte, size, align,
                            rli->physical_start, rli->physical_end,
                            &sreg->phys)) {
       ralloc_free(sreg);
@@ -834,7 +851,7 @@ ibc_assign_regs(ibc_shader *shader)
                      ibc_reg_assignment_rb_cmp);
    }
 
-   ibc_foreach_instr(instr, shader) {
+   ibc_foreach_instr_safe(instr, shader) {
       state.ip = instr->index;
 
       ibc_phys_reg_alloc_free_regs(&state.phys_alloc, state.ip);
@@ -850,11 +867,23 @@ ibc_assign_regs(ibc_shader *shader)
          ibc_reg *reg = assign->reg;
          const ibc_reg_live_intervals *rli = &state.live->regs[reg->index];
 
+         ibc_instr *ssa_instr = ibc_reg_ssa_instr(reg);
+         int16_t fixed_hw_grf_byte = -1;
+         if (ssa_instr && ssa_instr->type == IBC_INSTR_TYPE_INTRINSIC) {
+            ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(ssa_instr);
+            if (intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD) {
+               assert(intrin->src[0].ref.file == IBC_REG_FILE_HW_GRF);
+               assert(intrin->src[0].ref.reg == NULL);
+               fixed_hw_grf_byte = intrin->src[0].ref.hw_grf.byte;
+            }
+         }
+
          bool success;
          switch (assign->reg->file) {
          case IBC_REG_FILE_HW_GRF:
             assign->preg = rzalloc(state.mem_ctx, struct ibc_phys_reg);
             success = ibc_phys_reg_alloc(&state.phys_alloc,
+                                         fixed_hw_grf_byte,
                                          reg->hw_grf.size,
                                          reg->hw_grf.align,
                                          rli->physical_start,
@@ -871,6 +900,7 @@ ibc_assign_regs(ibc_shader *shader)
                                reg->logical.num_comps;
                uint16_t align = reg->logical.bit_size / 8;
                success = ibc_phys_reg_alloc(&state.phys_alloc,
+                                            fixed_hw_grf_byte,
                                             size, align,
                                             rli->physical_start,
                                             rli->physical_end,
@@ -880,11 +910,17 @@ ibc_assign_regs(ibc_shader *shader)
                assert(reg->logical.bit_size % 8 == 0);
                assert(reg->logical.stride >= reg->logical.bit_size / 8);
                assert(reg->logical.stride > 0 && reg->logical.stride <= 8);
+               /* If we've been provided with a specific HW GRF reg, then it
+                * must be tightly packed.
+                */
+               assert(fixed_hw_grf_byte < 0 ||
+                      reg->logical.stride == reg->logical.bit_size / 8);
                struct ibc_strided_reg_alloc *strided_alloc =
                   &state.strided_alloc[ffs(reg->logical.stride) - 1];
 
                assign->sreg = ibc_strided_reg_alloc(strided_alloc,
                                                     state.live, reg,
+                                                    fixed_hw_grf_byte,
                                                     &assign->sreg_byte,
                                                     &assign->sreg_comp);
                assert(assign->sreg);
@@ -896,6 +932,16 @@ ibc_assign_regs(ibc_shader *shader)
          }
 
          rb_tree_remove(&state.alloc_order, &assign->node);
+      }
+
+      if (instr->type == IBC_INSTR_TYPE_INTRINSIC) {
+         ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
+         if (intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD) {
+            assert(intrin->dest.reg);
+            assert(ibc_reg_ssa_instr(intrin->dest.reg) == instr);
+            ibc_instr_remove(instr);
+            continue;
+         }
       }
 
       state.is_read = true;
