@@ -515,6 +515,22 @@ ibc_lower_and_optimize(ibc_shader *ibc)
    fprintf(stderr, "\n\n");
 
    ibc_assign_logical_reg_strides(ibc);
+   ibc_lower_simd_width(ibc);
+   ibc_print_shader(ibc, stderr);
+   ibc_validate_shader(ibc);
+   fprintf(stderr, "\n\n");
+
+   ibc_opt_copy_prop(ibc);
+   ibc_print_shader(ibc, stderr);
+   ibc_validate_shader(ibc);
+   fprintf(stderr, "\n\n");
+
+   ibc_opt_dead_code(ibc);
+   ibc_print_shader(ibc, stderr);
+   ibc_validate_shader(ibc);
+   fprintf(stderr, "\n\n");
+
+   ibc_assign_logical_reg_strides(ibc);
    ibc_assign_regs(ibc);
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
