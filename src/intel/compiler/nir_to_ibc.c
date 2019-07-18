@@ -55,17 +55,41 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    assert(instr->dest.dest.is_ssa);
 
-   /* TODO */
-   assert(instr->dest.dest.ssa.num_components == 1);
-   assert(!instr->dest.saturate);
-
    nir_alu_type nir_dest_type = nir_op_infos[instr->op].output_type;
    if (nir_alu_type_get_type_size(nir_dest_type) == 0)
       nir_dest_type |= instr->dest.dest.ssa.bit_size;
    enum ibc_type dest_type = ibc_type_for_nir(nir_dest_type);
 
    ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
+
    switch (instr->op) {
+   case nir_op_vec2:
+   case nir_op_vec3:
+   case nir_op_vec4:
+      break;
+   default:
+      assert(instr->dest.dest.ssa.num_components == 1);
+      break;
+   }
+
+   /* TODO */
+   assert(!instr->dest.saturate);
+
+   switch (instr->op) {
+   case nir_op_mov:
+   case nir_op_vec2:
+   case nir_op_vec3:
+   case nir_op_vec4:
+      dest = ibc_builder_new_logical_reg(b, dest_type,
+                                         instr->dest.dest.ssa.num_components);
+
+      for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
+         ibc_reg_ref mov_dest = dest;
+         mov_dest.logical.comp = i;
+         ibc_build_alu1(b, IBC_ALU_OP_MOV, mov_dest, src[i]);
+      }
+      break;
+
    case nir_op_u2u8:
    case nir_op_u2u16:
    case nir_op_u2u32:
@@ -85,6 +109,12 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_i2f32:
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
+
+   case nir_op_b2f32: {
+      ibc_reg_ref one = ibc_MOV(b, IBC_TYPE_F, ibc_imm_f(1.0));
+      dest = ibc_SEL(b, dest_type, src[0], one, ibc_imm_f(0.0));
+      break;
+   }
 
    case nir_op_unpack_32_2x16_split_x:
    case nir_op_unpack_32_2x16_split_y:
@@ -144,6 +174,16 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_flt:
       assert(dest_type == IBC_TYPE_FLAG);
       dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_L, src[0], src[1]);
+      break;
+
+   case nir_op_fge:
+      assert(dest_type == IBC_TYPE_FLAG);
+      dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_GE, src[0], src[1]);
+      break;
+
+   case nir_op_ffma:
+      assert(dest_type == IBC_TYPE_F);
+      dest = ibc_MAD(b, dest_type, src[2], src[1], src[0]);
       break;
 
    case nir_op_bcsel: {

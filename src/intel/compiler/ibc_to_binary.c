@@ -280,6 +280,12 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       brw_ADD(p, dest, src[0], src[1]);
       break;
 
+   case IBC_ALU_OP_MAD:
+      if (p->devinfo->gen < 10)
+         brw_set_default_access_mode(p, BRW_ALIGN_16);
+      brw_MAD(p, dest, src[0], src[1], src[2]);
+      break;
+
    default:
       unreachable("Invalid instruction");
    }
