@@ -346,6 +346,56 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
 }
 
 static void
+generate_pln(struct brw_codegen *p, const ibc_intrinsic_instr *intrin)
+{
+   assert(intrin->instr.simd_width == 8 ||
+          intrin->instr.simd_width == 16);
+   assert(intrin->num_srcs == 1 + (intrin->instr.simd_width / 8));
+
+   const bool compressed = intrin->instr.simd_width > 8;
+
+   /* The interpolant should be a scalar on an oword boundary.  The PLN
+    * instruction reads it as a SIMD1 vec4.
+    */
+   assert(intrin->src[0].ref.file == IBC_REG_FILE_HW_GRF);
+   assert(intrin->src[0].ref.reg == NULL);
+   assert(intrin->src[0].ref.hw_grf.byte % 16 == 0);
+   assert(intrin->src[0].ref.hw_grf.hstride == 0);
+   struct brw_reg interp =
+      brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->src[0].ref,
+                              intrin->src[0].simd_width, compressed);
+
+   /* The first barycentric source should be register-aligned */
+   assert(intrin->src[1].ref.file == IBC_REG_FILE_HW_GRF);
+   assert(intrin->src[1].ref.reg == NULL);
+   assert(intrin->src[1].ref.hw_grf.byte % 32 == 0);
+   assert(intrin->src[1].ref.hw_grf.hstride == 4);
+   struct brw_reg bary_xy =
+      brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->src[1].ref,
+                              intrin->src[1].simd_width, compressed);
+
+   struct brw_reg dest =
+      brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->dest,
+                              intrin->instr.simd_width,
+                              compressed);
+
+   if (intrin->instr.simd_width > 8) {
+      /* If we're a SIMD16 PLN instruction, the second source contains the
+       * second SIMD8 vec2.  Even though we don't have to pass it into the
+       * HW PLN instruction directly, we still verify that it's in the right
+       * spot.  Register allocation and payload placement should take care of
+       * this for us as long as we only use PLN for FS input interpolation.
+       */
+      assert(intrin->src[2].ref.file == IBC_REG_FILE_HW_GRF);
+      assert(intrin->src[2].ref.reg == NULL);
+      assert(intrin->src[2].ref.hw_grf.byte ==
+             intrin->src[1].ref.hw_grf.byte + 64);
+   }
+
+   brw_PLN(p, dest, interp, bary_xy);
+}
+
+static void
 generate_merge(struct brw_codegen *p, const ibc_merge_instr *merge)
 {
    switch (merge->op) {
@@ -427,7 +477,8 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
          continue;
 
       case IBC_INSTR_TYPE_INTRINSIC:
-         unreachable("These should have been lowered by now");
+         assert(ibc_instr_as_intrinsic(instr)->op == IBC_INTRINSIC_OP_PLN);
+         generate_pln(p, ibc_instr_as_intrinsic(instr));
          continue;
 
       case IBC_INSTR_TYPE_MERGE:
