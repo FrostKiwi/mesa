@@ -472,6 +472,46 @@ ibc_CMP(ibc_builder *b, enum ibc_type dest_type,
    return dest;
 }
 
+static inline ibc_reg_ref
+ibc_PLN(ibc_builder *b, ibc_reg_ref vert, ibc_reg_ref bary)
+{
+   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, IBC_TYPE_F, 1);
+
+   assert(vert.file == IBC_REG_FILE_LOGICAL);
+   assert(vert.reg->logical.simd_width == 1);
+
+   for (unsigned g = 0; g < b->simd_width; g += 16) {
+      ibc_builder_push_group(b, g, MIN2(16, b->simd_width));
+
+      ibc_intrinsic_instr *pln =
+         ibc_intrinsic_instr_create(b->shader, IBC_INTRINSIC_OP_PLN,
+                                    b->simd_group, b->simd_width,
+                                    1 + (b->simd_width / 8));
+      pln->src[0] = (ibc_intrinsic_src) {
+         .ref = vert,
+         .simd_group = b->simd_group,
+         .simd_width = b->simd_width,
+         .num_comps = 4,
+      };
+      assert(b->simd_width >= 8);
+      for (unsigned i = 0; i < (b->simd_width / 8); i++) {
+         pln->src[1 + i] = (ibc_intrinsic_src) {
+            .ref = bary,
+            .simd_group = b->simd_group + i * 8,
+            .simd_width = 8,
+            .num_comps = 2,
+         };
+      }
+      pln->dest = dest;
+      pln->num_dest_comps = 1;
+      ibc_builder_insert_instr(b, &pln->instr);
+
+      ibc_builder_pop(b);
+   }
+
+   return dest;
+}
+
 static inline void
 ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
                    enum brw_conditional_mod cmod,
