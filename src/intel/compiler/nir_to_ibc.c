@@ -405,6 +405,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_load_ubo:
    case nir_intrinsic_load_ssbo: {
       ibc_intrinsic_instr *store =
          ibc_intrinsic_instr_create(b->shader,
