@@ -228,10 +228,15 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
          ibc_assert(s, hw_ref->hstride > 0);
 
       if (num_bytes == 0) {
-         ibc_assert(s, num_comps == 1);
          num_bytes = hw_ref->hstride * ((ref_simd_width - 1) % hw_ref->width) +
                      hw_ref->vstride * ((ref_simd_width - 1) / hw_ref->width) +
                      ibc_type_byte_size(ref->type);
+         if (num_comps > 1) {
+            ibc_assert(s, hw_ref->vstride == hw_ref->hstride * hw_ref->width);
+            unsigned arr_stride = MAX2(hw_ref->hstride * ref_simd_width,
+                                       ibc_type_byte_size(ref->type));
+            num_bytes += arr_stride * (num_comps - 1);
+         }
       } else {
          ibc_assert(s, num_comps == 0);
       }
