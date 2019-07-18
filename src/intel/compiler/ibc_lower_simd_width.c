@@ -259,15 +259,49 @@ ibc_lower_simd_width(ibc_shader *shader)
                                           intrin->num_srcs);
             split->has_side_effects = intrin->has_side_effects;
 
-            for (unsigned j = 0; j < intrin->num_srcs; j++) {
-               split->src[j] = intrin->src[j];
-               split->src[j].ref =
-                  simd_restricted_src(&b, intrin->src[j].ref,
-                                          split_simd_rel_group,
-                                          split_simd_width,
-                                          intrin->src[i].num_comps);
-               split->src[j].simd_group = b.simd_group;
-               split->src[j].simd_width = b.simd_width;
+            switch (intrin->op) {
+            case IBC_INTRINSIC_OP_SIMD_ZIP: {
+               unsigned src_idx = 0;
+               for (unsigned j = 0; j < intrin->num_srcs; j++) {
+                  const unsigned src_group = MAX2(intrin->src[j].simd_group,
+                                                  split->instr.simd_group);
+                  const unsigned src_group_end =
+                     MIN2(intrin->src[j].simd_group + intrin->src[j].simd_width,
+                          split->instr.simd_group + split->instr.simd_width);
+                  if (src_group >= src_group_end)
+                     continue;
+
+                  const unsigned src_width = src_group_end - src_group;
+                  const unsigned src_rel_group =
+                     src_group - intrin->src[j].simd_group;
+
+                  split->src[src_idx] = intrin->src[j];
+                  split->src[src_idx].simd_group = src_group;
+                  split->src[src_idx].simd_width = src_width;
+                  split->src[src_idx].ref =
+                     simd_restricted_src(&b, intrin->src[j].ref,
+                                             src_rel_group, src_width,
+                                             intrin->src[i].num_comps);
+                  src_idx++;
+               }
+               split->num_srcs = src_idx;
+               break;
+            }
+            default:
+               for (unsigned j = 0; j < intrin->num_srcs; j++) {
+                  assert(intrin->src[j].simd_group == intrin->instr.simd_group);
+                  assert(intrin->src[j].simd_width == intrin->instr.simd_width);
+
+                  split->src[j] = intrin->src[j];
+                  split->src[j].ref =
+                     simd_restricted_src(&b, intrin->src[j].ref,
+                                             split_simd_rel_group,
+                                             split_simd_width,
+                                             intrin->src[i].num_comps);
+                  split->src[j].simd_group = b.simd_group;
+                  split->src[j].simd_width = b.simd_width;
+               }
+               break;
             }
 
             split->instr.we_all = b.we_all;
