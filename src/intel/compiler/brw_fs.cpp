@@ -8078,7 +8078,10 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
    prog_data->inner_coverage = shader->info.fs.inner_coverage;
 
    prog_data->barycentric_interp_modes =
-      brw_compute_barycentric_interp_modes(compiler->devinfo, shader);
+      brw_nir_compute_barycentric_interp_modes(shader, compiler->devinfo);
+
+   calculate_urb_setup(devinfo, key, prog_data, shader);
+   brw_compute_flat_inputs(prog_data, shader);
 
    calculate_urb_setup(devinfo, key, prog_data, shader);
    brw_compute_flat_inputs(prog_data, shader);
