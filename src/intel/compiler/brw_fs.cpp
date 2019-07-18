@@ -7905,8 +7905,8 @@ computed_depth_mode(const nir_shader *shader)
  *
  * This should be replaced by global value numbering someday.
  */
-static bool
-move_interpolation_to_top(nir_shader *nir)
+bool
+brw_nir_move_interpolation_to_top(nir_shader *nir)
 {
    bool progress = false;
 
@@ -7971,8 +7971,8 @@ move_interpolation_to_top(nir_shader *nir)
  *
  * Useful when rendering to a non-multisampled buffer.
  */
-static bool
-demote_sample_qualifiers(nir_shader *nir)
+bool
+brw_nir_demote_sample_qualifiers(nir_shader *nir)
 {
    bool progress = true;
 
