@@ -201,19 +201,21 @@ ibc_opt_copy_prop(ibc_shader *shader)
 
    ibc_foreach_instr_safe(instr, shader) {
 
-      if (try_copy_prop_reg_ref(&instr->flag, NULL,
-                                instr->simd_group, instr->simd_width))
+      while (try_copy_prop_reg_ref(&instr->flag, NULL,
+                                   instr->simd_group, instr->simd_width)) {
          progress = true;
+      }
 
       switch (instr->type) {
       case IBC_INSTR_TYPE_ALU: {
          ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
          for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-            if (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i],
-                                      alu->instr.simd_group,
-                                      alu->instr.simd_width))
+            while (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i],
+                                         alu->instr.simd_group,
+                                         alu->instr.simd_width)) {
                progress = true;
+            }
          }
          continue;
       }
@@ -225,10 +227,11 @@ ibc_opt_copy_prop(ibc_shader *shader)
       case IBC_INSTR_TYPE_INTRINSIC: {
          ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
-            if (try_copy_prop_reg_ref(&intrin->src[i].ref, NULL,
-                                      intrin->src[i].simd_group,
-                                      intrin->src[i].simd_width))
+            while (try_copy_prop_reg_ref(&intrin->src[i].ref, NULL,
+                                         intrin->src[i].simd_group,
+                                         intrin->src[i].simd_width)) {
                progress = true;
+            }
          }
          continue;
       }
@@ -240,10 +243,11 @@ ibc_opt_copy_prop(ibc_shader *shader)
       case IBC_INSTR_TYPE_PHI: {
          ibc_phi_instr *phi = ibc_instr_as_phi(instr);
          ibc_foreach_phi_src(src, phi) {
-            if (try_copy_prop_reg_ref(&src->ref, NULL,
-                                      phi->instr.simd_group,
-                                      phi->instr.simd_width))
+            while (try_copy_prop_reg_ref(&src->ref, NULL,
+                                         phi->instr.simd_group,
+                                         phi->instr.simd_width)) {
                progress = true;
+            }
          }
          continue;
       }
