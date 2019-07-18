@@ -221,6 +221,7 @@ alu_op_name(enum ibc_alu_op op)
    case IBC_ALU_OP_SHL:  return "shl";
    case IBC_ALU_OP_CMP:  return "cmp";
    case IBC_ALU_OP_ADD:  return "add";
+   case IBC_ALU_OP_MAD:  return "mad";
    }
    unreachable("Unknown ALU opcode");
 }
