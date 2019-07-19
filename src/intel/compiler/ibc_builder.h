@@ -513,6 +513,44 @@ ibc_PLN(ibc_builder *b, ibc_reg_ref vert, ibc_reg_ref bary)
    return dest;
 }
 
+static inline ibc_reg_ref
+ibc_SIMD_ZIP(ibc_builder *b, ibc_reg_ref *srcs, unsigned num_srcs,
+             unsigned num_comps)
+{
+   ibc_intrinsic_instr *zip =
+      ibc_intrinsic_instr_create(b->shader, IBC_INTRINSIC_OP_SIMD_ZIP,
+                                 b->simd_group, b->simd_width, num_srcs);
+
+   assert(num_srcs > 1 && b->simd_width % num_srcs == 0);
+   const unsigned src_width = b->simd_width / num_srcs;
+
+   for (unsigned i = 0; i < num_srcs; i++) {
+      assert(srcs[i].type == srcs[0].type);
+      zip->src[i] = (ibc_intrinsic_src) {
+         .ref = srcs[i],
+         .simd_group = b->simd_group + src_width * i,
+         .simd_width = src_width,
+         .num_comps = 2,
+      };
+   }
+
+   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, srcs[0].type, num_comps);
+   zip->dest = dest;
+   zip->num_dest_comps = num_comps;
+
+   ibc_builder_insert_instr(b, &zip->instr);
+
+   return dest;
+}
+
+static inline ibc_reg_ref
+ibc_SIMD_ZIP2(ibc_builder *b, ibc_reg_ref src0, ibc_reg_ref src1,
+              unsigned num_comps)
+{
+   ibc_reg_ref srcs[2] = { src0, src1 };
+   return ibc_SIMD_ZIP(b, srcs, 2, num_comps);
+}
+
 static inline void
 ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_reg_ref tmp,
                    enum brw_conditional_mod cmod,
