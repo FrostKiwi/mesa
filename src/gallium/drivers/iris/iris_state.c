@@ -1307,6 +1307,7 @@ iris_bind_blend_state(struct pipe_context *ctx, void *state)
    struct iris_blend_state *cso = state;
 
    ice->state.cso_blend = cso;
+   ice->state.color_write_enables = cso ? cso->color_write_enables : 0;
 
    ice->state.dirty |= IRIS_DIRTY_PS_BLEND;
    ice->state.dirty |= IRIS_DIRTY_BLEND_STATE;
