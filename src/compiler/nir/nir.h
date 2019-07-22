@@ -3355,6 +3355,13 @@ bool nir_function_impl_run_pass(nir_function_impl *impl, const nir_pass *pass,
       return nir_shader_run_pass(shader, &name##_pass, NULL); \
    }
 
+#define NIR_DECL_PASS_OPTS(name, opts_type) \
+   const extern nir_pass name##_pass; \
+   static inline bool name(nir_shader *shader, opts_type *options) \
+   { \
+      return nir_shader_run_pass(shader, &name##_pass, (void *)options); \
+   }
+
 void nir_calc_dominance_impl(nir_function_impl *impl);
 void nir_calc_dominance(nir_shader *shader);
 
@@ -3612,9 +3619,7 @@ typedef struct nir_lower_subgroups_options {
    bool lower_shuffle_to_32bit:1;
    bool lower_quad:1;
 } nir_lower_subgroups_options;
-
-bool nir_lower_subgroups(nir_shader *shader,
-                         const nir_lower_subgroups_options *options);
+NIR_DECL_PASS_OPTS(nir_lower_subgroups, const nir_lower_subgroups_options);
 
 bool nir_lower_system_values(nir_shader *shader);
 
