@@ -724,9 +724,9 @@ nir_lower_int64_op_to_options_mask(nir_op opcode)
 }
 
 static nir_ssa_def *
-lower_int64_alu_instr(nir_builder *b, nir_instr *instr, void *_state)
+lower_int64_alu_instr(nir_builder *b, nir_ssa_def *def, void *_state)
 {
-   nir_alu_instr *alu = nir_instr_as_alu(instr);
+   nir_alu_instr *alu = nir_instr_as_alu(def->parent_instr);
 
    nir_ssa_def *src[4];
    for (unsigned i = 0; i < nir_op_infos[alu->op].num_inputs; i++)
@@ -825,15 +825,15 @@ lower_int64_alu_instr(nir_builder *b, nir_instr *instr, void *_state)
 }
 
 static bool
-should_lower_int64_alu_instr(const nir_instr *instr, const void *_options)
+should_lower_int64_alu_instr(const nir_ssa_def *def, const void *_options)
 {
    const nir_lower_int64_options options =
       *(const nir_lower_int64_options *)_options;
 
-   if (instr->type != nir_instr_type_alu)
+   if (def->parent_instr->type != nir_instr_type_alu)
       return false;
 
-   const nir_alu_instr *alu = nir_instr_as_alu(instr);
+   const nir_alu_instr *alu = nir_instr_as_alu(def->parent_instr);
 
    switch (alu->op) {
    case nir_op_i2b1:
@@ -877,8 +877,8 @@ should_lower_int64_alu_instr(const nir_instr *instr, const void *_options)
 bool
 nir_lower_int64(nir_shader *shader, nir_lower_int64_options options)
 {
-   return nir_shader_lower_instructions(shader,
-                                        should_lower_int64_alu_instr,
-                                        lower_int64_alu_instr,
-                                        &options);
+   return nir_shader_lower_ssa_defs(shader,
+                                    should_lower_int64_alu_instr,
+                                    lower_int64_alu_instr,
+                                    &options);
 }

@@ -287,17 +287,17 @@ lower_shuffle(nir_builder *b, nir_intrinsic_instr *intrin,
 }
 
 static bool
-lower_subgroups_filter(const nir_instr *instr, const void *_options)
+lower_subgroups_filter(const nir_ssa_def *def, const void *_options)
 {
-   return instr->type == nir_instr_type_intrinsic;
+   return def->parent_instr->type == nir_instr_type_intrinsic;
 }
 
 static nir_ssa_def *
-lower_subgroups_instr(nir_builder *b, nir_instr *instr, void *_options)
+lower_subgroups_instr(nir_builder *b, nir_ssa_def *def, void *_options)
 {
    const nir_lower_subgroups_options *options = _options;
 
-   nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+   nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(def->parent_instr);
    switch (intrin->intrinsic) {
    case nir_intrinsic_vote_any:
    case nir_intrinsic_vote_all:
@@ -491,8 +491,8 @@ bool
 nir_lower_subgroups(nir_shader *shader,
                     const nir_lower_subgroups_options *options)
 {
-   return nir_shader_lower_instructions(shader,
-                                        lower_subgroups_filter,
-                                        lower_subgroups_instr,
-                                        (void *)options);
+   return nir_shader_lower_ssa_defs(shader,
+                                    lower_subgroups_filter,
+                                    lower_subgroups_instr,
+                                    (void *)options);
 }

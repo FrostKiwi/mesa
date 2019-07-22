@@ -30,9 +30,9 @@
  */
 
 static nir_ssa_def *
-ir3_nir_lower_tg4_to_tex_instr(nir_builder *b, nir_instr *instr, void *data)
+ir3_nir_lower_tg4_to_tex_ssa_def(nir_builder *b, nir_ssa_def *def, void *data)
 {
-	nir_tex_instr *tg4 = nir_instr_as_tex(instr);
+	nir_tex_instr *tg4 = nir_instr_as_tex(def->parent_instr);
 	static const int offsets[3][2] = { {0, 1}, {1, 1}, {1, 0} };
 
 	nir_ssa_def *results[4];
@@ -86,16 +86,16 @@ ir3_nir_lower_tg4_to_tex_instr(nir_builder *b, nir_instr *instr, void *data)
 }
 
 static bool
-ir3_nir_lower_tg4_to_tex_filter(const nir_instr *instr, const void *data)
+ir3_nir_lower_tg4_to_tex_filter(const nir_ssa_def *def, const void *data)
 {
-	return (instr->type == nir_instr_type_tex &&
-			nir_instr_as_tex(instr)->op == nir_texop_tg4);
+	return (def->parent_instr->type == nir_instr_type_tex &&
+			nir_instr_as_tex(def->parent_instr)->op == nir_texop_tg4);
 }
 
 bool
 ir3_nir_lower_tg4_to_tex(nir_shader *shader)
 {
-	return nir_shader_lower_instructions(shader,
+	return nir_shader_lower_ssa_defs(shader,
 			ir3_nir_lower_tg4_to_tex_filter,
-			ir3_nir_lower_tg4_to_tex_instr, NULL);
+			ir3_nir_lower_tg4_to_tex_ssa_def, NULL);
 }

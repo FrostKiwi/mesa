@@ -35,9 +35,9 @@
 #define V3D_MAX_SAMPLES 4
 
 static nir_ssa_def *
-v3d_nir_lower_txf_ms_instr(nir_builder *b, nir_instr *in_instr, void *data)
+v3d_nir_lower_txf_ms_ssa_def(nir_builder *b, nir_ssa_def *in_def, void *data)
 {
-        nir_tex_instr *instr = nir_instr_as_tex(in_instr);
+        nir_tex_instr *instr = nir_instr_as_tex(in_def->parent_instr);
 
         b->cursor = nir_before_instr(&instr->instr);
 
@@ -69,17 +69,17 @@ v3d_nir_lower_txf_ms_instr(nir_builder *b, nir_instr *in_instr, void *data)
 }
 
 static bool
-v3d_nir_lower_txf_ms_filter(const nir_instr *instr, const void *data)
+v3d_nir_lower_txf_ms_filter(const nir_ssa_def *def, const void *data)
 {
-        return (instr->type == nir_instr_type_tex &&
-                nir_instr_as_tex(instr)->op == nir_texop_txf_ms);
+        return (def->parent_instr->type == nir_instr_type_tex &&
+                nir_instr_as_tex(def->parent_instr)->op == nir_texop_txf_ms);
 }
 
 void
 v3d_nir_lower_txf_ms(nir_shader *s, struct v3d_compile *c)
 {
-        nir_shader_lower_instructions(s,
-                                      v3d_nir_lower_txf_ms_filter,
-                                      v3d_nir_lower_txf_ms_instr,
-                                      NULL);
+        nir_shader_lower_ssa_defs(s,
+                                  v3d_nir_lower_txf_ms_filter,
+                                  v3d_nir_lower_txf_ms_ssa_def,
+                                  NULL);
 }

@@ -31,12 +31,12 @@
  */
 
 static bool
-inst_is_vector_alu(const nir_instr *instr, const void *_state)
+ssa_def_is_vector_alu(const nir_ssa_def *def, const void *_state)
 {
-   if (instr->type != nir_instr_type_alu)
+   if (def->parent_instr->type != nir_instr_type_alu)
       return false;
 
-   nir_alu_instr *alu = nir_instr_as_alu(instr);
+   nir_alu_instr *alu = nir_instr_as_alu(def->parent_instr);
 
    /* There is no ALU instruction which has a scalar destination, scalar
     * src[0], and some other vector source.
@@ -89,10 +89,10 @@ lower_reduction(nir_alu_instr *alu, nir_op chan_op, nir_op merge_op,
 }
 
 static nir_ssa_def *
-lower_alu_instr_scalar(nir_builder *b, nir_instr *instr, void *_state)
+lower_alu_ssa_def_scalar(nir_builder *b, nir_ssa_def *def, void *_state)
 {
    BITSET_WORD *lower_set = _state;
-   nir_alu_instr *alu = nir_instr_as_alu(instr);
+   nir_alu_instr *alu = nir_instr_as_alu(def->parent_instr);
    unsigned num_src = nir_op_infos[alu->op].num_inputs;
    unsigned i, chan;
 
@@ -248,8 +248,8 @@ lower_alu_instr_scalar(nir_builder *b, nir_instr *instr, void *_state)
 bool
 nir_lower_alu_to_scalar(nir_shader *shader, BITSET_WORD *lower_set)
 {
-   return nir_shader_lower_instructions(shader,
-                                        inst_is_vector_alu,
-                                        lower_alu_instr_scalar,
-                                        lower_set);
+   return nir_shader_lower_ssa_defs(shader,
+                                    ssa_def_is_vector_alu,
+                                    lower_alu_ssa_def_scalar,
+                                    lower_set);
 }

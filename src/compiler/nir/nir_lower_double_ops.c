@@ -612,15 +612,15 @@ struct lower_doubles_data {
 };
 
 static bool
-should_lower_double_instr(const nir_instr *instr, const void *_data)
+should_lower_double_ssa_def(const nir_ssa_def *def, const void *_data)
 {
    const struct lower_doubles_data *data = _data;
    const nir_lower_doubles_options options = data->options;
 
-   if (instr->type != nir_instr_type_alu)
+   if (def->parent_instr->type != nir_instr_type_alu)
       return false;
 
-   const nir_alu_instr *alu = nir_instr_as_alu(instr);
+   const nir_alu_instr *alu = nir_instr_as_alu(def->parent_instr);
 
    assert(alu->dest.dest.is_ssa);
    bool is_64 = alu->dest.dest.ssa.bit_size == 64;
@@ -640,11 +640,11 @@ should_lower_double_instr(const nir_instr *instr, const void *_data)
 }
 
 static nir_ssa_def *
-lower_doubles_instr(nir_builder *b, nir_instr *instr, void *_data)
+lower_doubles_ssa_def(nir_builder *b, nir_ssa_def *def, void *_data)
 {
    const struct lower_doubles_data *data = _data;
    const nir_lower_doubles_options options = data->options;
-   nir_alu_instr *alu = nir_instr_as_alu(instr);
+   nir_alu_instr *alu = nir_instr_as_alu(def->parent_instr);
 
    nir_ssa_def *soft_def =
       lower_doubles_instr_to_soft(b, alu, data->softfp64, options);
@@ -707,10 +707,10 @@ nir_lower_doubles_impl(nir_function_impl *impl,
    };
 
    bool progress =
-      nir_function_impl_lower_instructions(impl,
-                                           should_lower_double_instr,
-                                           lower_doubles_instr,
-                                           &data);
+      nir_function_impl_lower_ssa_defs(impl,
+                                       should_lower_double_ssa_def,
+                                       lower_doubles_ssa_def,
+                                       &data);
 
    if (progress && (options & nir_lower_fp64_full_software)) {
       /* SSA and register indices are completely messed up now */

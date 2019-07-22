@@ -3281,23 +3281,23 @@ static inline bool should_print_nir(void) { return false; }
 
 /** An instruction filtering callback
  *
- * Returns true if the instruction should be processed and false otherwise.
+ * Returns true if the SSA def should be processed and false otherwise.
  */
-typedef bool (*nir_instr_filter_cb)(const nir_instr *, const void *);
+typedef bool (*nir_ssa_def_filter_cb)(const nir_ssa_def *, const void *);
 
-/** A simple instruction lowering callback
+/** A simple SSA def lowering callback
  *
  * Many instruction lowering passes can be written as a simple function which
- * takes an instruction as its input and returns a sequence of instructions
- * that implement the consumed instruction.  This function type represents
- * such a lowering function.  When called, a function with this prototype
- * should either return NULL indicating that no lowering needs to be done or
- * emit a sequence of instructions using the provided builder (whose cursor
- * will already be placed after the instruction to be lowered) and return the
+ * takes an SSA def as its input and returns a sequence of instructions that
+ * implement the consumed SSA def.  This function type represents such a
+ * lowering function.  When called, a function with this prototype should
+ * either return NULL indicating that no lowering needs to be done or emit a
+ * sequence of instructions using the provided builder (whose cursor will
+ * already be placed after the instruction to be lowered) and return the
  * resulting nir_ssa_def.
  */
-typedef nir_ssa_def *(*nir_lower_instr_cb)(struct nir_builder *,
-                                           nir_instr *, void *);
+typedef nir_ssa_def *(*nir_lower_ssa_def_cb)(struct nir_builder *,
+                                             nir_ssa_def *, void *);
 
 /**
  * Special return value for nir_lower_instr_cb when some progress occurred
@@ -3322,14 +3322,14 @@ typedef nir_ssa_def *(*nir_lower_instr_cb)(struct nir_builder *,
  * are added (they cannot be removed), dominance and block indices will be
  * invalidated.
  */
-bool nir_function_impl_lower_instructions(nir_function_impl *impl,
-                                          nir_instr_filter_cb filter,
-                                          nir_lower_instr_cb lower,
-                                          void *cb_data);
-bool nir_shader_lower_instructions(nir_shader *shader,
-                                   nir_instr_filter_cb filter,
-                                   nir_lower_instr_cb lower,
-                                   void *cb_data);
+bool nir_function_impl_lower_ssa_defs(nir_function_impl *impl,
+                                      nir_ssa_def_filter_cb filter,
+                                      nir_lower_ssa_def_cb lower,
+                                      void *cb_data);
+bool nir_shader_lower_ssa_defs(nir_shader *shader,
+                               nir_ssa_def_filter_cb filter,
+                               nir_lower_ssa_def_cb lower,
+                               void *cb_data);
 
 void nir_calc_dominance_impl(nir_function_impl *impl);
 void nir_calc_dominance(nir_shader *shader);

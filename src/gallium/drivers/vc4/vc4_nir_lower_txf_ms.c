@@ -36,9 +36,9 @@
  */
 
 static nir_ssa_def *
-vc4_nir_lower_txf_ms_instr(nir_builder *b, nir_instr *instr, void *data)
+vc4_nir_lower_txf_ms_ssa_def(nir_builder *b, nir_ssa_def *def, void *data)
 {
-        nir_tex_instr *txf_ms = nir_instr_as_tex(instr);
+        nir_tex_instr *txf_ms = nir_instr_as_tex(def->parent_instr);
         const struct vc4_compile *c = data;
 
         nir_tex_instr *txf = nir_tex_instr_create(c->s, 1);
@@ -125,17 +125,17 @@ vc4_nir_lower_txf_ms_instr(nir_builder *b, nir_instr *instr, void *data)
 }
 
 static bool
-vc4_nir_lower_txf_ms_filter(const nir_instr *instr, const void *data)
+vc4_nir_lower_txf_ms_filter(const nir_ssa_def *def, const void *data)
 {
-        return (instr->type == nir_instr_type_tex &&
-                nir_instr_as_tex(instr)->op == nir_texop_txf_ms);
+        return (def->parent_instr->type == nir_instr_type_tex &&
+                nir_instr_as_tex(def->parent_instr)->op == nir_texop_txf_ms);
 }
 
 void
 vc4_nir_lower_txf_ms(nir_shader *s, struct vc4_compile *c)
 {
-        nir_shader_lower_instructions(s,
-                                      vc4_nir_lower_txf_ms_filter,
-                                      vc4_nir_lower_txf_ms_instr,
-                                      c);
+        nir_shader_lower_ssa_defs(s,
+                                  vc4_nir_lower_txf_ms_filter,
+                                  vc4_nir_lower_txf_ms_ssa_def,
+                                  c);
 }

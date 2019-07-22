@@ -1830,10 +1830,10 @@ dest_is_ssa(nir_dest *dest, void *_state)
 }
 
 bool
-nir_function_impl_lower_instructions(nir_function_impl *impl,
-                                     nir_instr_filter_cb filter,
-                                     nir_lower_instr_cb lower,
-                                     void *cb_data)
+nir_function_impl_lower_ssa_defs(nir_function_impl *impl,
+                                 nir_ssa_def_filter_cb filter,
+                                 nir_lower_ssa_def_cb lower,
+                                 void *cb_data)
 {
    nir_builder b;
    nir_builder_init(&b, impl);
@@ -1845,14 +1845,14 @@ nir_function_impl_lower_instructions(nir_function_impl *impl,
    nir_cursor iter = nir_before_cf_list(&impl->body);
    nir_instr *instr;
    while ((instr = cursor_next_instr(iter)) != NULL) {
-      if (filter && !filter(instr, cb_data)) {
+      assert(nir_foreach_dest(instr, dest_is_ssa, NULL));
+      nir_ssa_def *old_def = nir_instr_ssa_def(instr);
+      if (old_def == NULL) {
          iter = nir_after_instr(instr);
          continue;
       }
 
-      assert(nir_foreach_dest(instr, dest_is_ssa, NULL));
-      nir_ssa_def *old_def = nir_instr_ssa_def(instr);
-      if (old_def == NULL) {
+      if (filter && !filter(old_def, cb_data)) {
          iter = nir_after_instr(instr);
          continue;
       }
@@ -1875,7 +1875,7 @@ nir_function_impl_lower_instructions(nir_function_impl *impl,
       list_inithead(&old_def->if_uses);
 
       b.cursor = nir_after_instr(instr);
-      nir_ssa_def *new_def = lower(&b, instr, cb_data);
+      nir_ssa_def *new_def = lower(&b, old_def, cb_data);
       if (new_def && new_def != NIR_LOWER_INSTR_PROGRESS) {
          assert(old_def != NULL);
          if (new_def->parent_instr->block != instr->block)
@@ -1919,17 +1919,17 @@ nir_function_impl_lower_instructions(nir_function_impl *impl,
 }
 
 bool
-nir_shader_lower_instructions(nir_shader *shader,
-                              nir_instr_filter_cb filter,
-                              nir_lower_instr_cb lower,
-                              void *cb_data)
+nir_shader_lower_ssa_defs(nir_shader *shader,
+                          nir_ssa_def_filter_cb filter,
+                          nir_lower_ssa_def_cb lower,
+                          void *cb_data)
 {
    bool progress = false;
 
    nir_foreach_function(function, shader) {
       if (function->impl &&
-          nir_function_impl_lower_instructions(function->impl,
-                                               filter, lower, cb_data))
+          nir_function_impl_lower_ssa_defs(function->impl,
+                                           filter, lower, cb_data))
          progress = true;
    }
 

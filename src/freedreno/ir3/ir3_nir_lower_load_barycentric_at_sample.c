@@ -78,10 +78,10 @@ lower_load_sample_pos(nir_builder *b, nir_intrinsic_instr *intr)
 }
 
 static nir_ssa_def *
-ir3_nir_lower_load_barycentric_at_sample_instr(nir_builder *b,
-		nir_instr *instr, void *data)
+ir3_nir_lower_load_barycentric_at_sample_ssa_def(nir_builder *b,
+		nir_ssa_def *def, void *data)
 {
-	nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+	nir_intrinsic_instr *intr = nir_instr_as_intrinsic(def->parent_instr);
 
 	if (intr->intrinsic == nir_intrinsic_load_sample_pos)
 		return lower_load_sample_pos(b, intr);
@@ -90,12 +90,12 @@ ir3_nir_lower_load_barycentric_at_sample_instr(nir_builder *b,
 }
 
 static bool
-ir3_nir_lower_load_barycentric_at_sample_filter(const nir_instr *instr,
+ir3_nir_lower_load_barycentric_at_sample_filter(const nir_ssa_def *def,
 		const void *data)
 {
-	if (instr->type != nir_instr_type_intrinsic)
+	if (def->parent_instr->type != nir_instr_type_intrinsic)
 		return false;
-	nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+	nir_intrinsic_instr *intr = nir_instr_as_intrinsic(def->parent_instr);
 	return (intr->intrinsic == nir_intrinsic_load_barycentric_at_sample ||
 			intr->intrinsic == nir_intrinsic_load_sample_pos);
 }
@@ -105,8 +105,8 @@ ir3_nir_lower_load_barycentric_at_sample(nir_shader *shader)
 {
 	debug_assert(shader->info.stage == MESA_SHADER_FRAGMENT);
 
-	return nir_shader_lower_instructions(shader,
+	return nir_shader_lower_ssa_defs(shader,
 			ir3_nir_lower_load_barycentric_at_sample_filter,
-			ir3_nir_lower_load_barycentric_at_sample_instr,
+			ir3_nir_lower_load_barycentric_at_sample_ssa_def,
 			NULL);
 }

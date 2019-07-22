@@ -50,15 +50,15 @@ build_global_group_size(nir_builder *b, unsigned bit_size)
 }
 
 static bool
-lower_system_value_filter(const nir_instr *instr, const void *_state)
+lower_system_value_filter(const nir_ssa_def *def, const void *_state)
 {
-   return instr->type == nir_instr_type_intrinsic;
+   return def->parent_instr->type == nir_instr_type_intrinsic;
 }
 
 static nir_ssa_def *
-lower_system_value_instr(nir_builder *b, nir_instr *instr, void *_state)
+lower_system_value_instr(nir_builder *b, nir_ssa_def *def, void *_state)
 {
-   nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+   nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(def->parent_instr);
 
    /* All the intrinsics we care about are loads */
    if (!nir_intrinsic_infos[intrin->intrinsic].has_dest)
@@ -284,10 +284,10 @@ lower_system_value_instr(nir_builder *b, nir_instr *instr, void *_state)
 bool
 nir_lower_system_values(nir_shader *shader)
 {
-   bool progress = nir_shader_lower_instructions(shader,
-                                                 lower_system_value_filter,
-                                                 lower_system_value_instr,
-                                                 NULL);
+   bool progress = nir_shader_lower_ssa_defs(shader,
+                                             lower_system_value_filter,
+                                             lower_system_value_instr,
+                                             NULL);
 
    /* We're going to delete the variables so we need to clean up all those
     * derefs we left lying around.
