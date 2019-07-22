@@ -25,6 +25,7 @@
  *
  */
 
+#include "nir_builder.h"
 #include "nir_constant_expressions.h"
 #include <math.h>
 
@@ -32,19 +33,10 @@
  * Implements SSA-based constant folding.
  */
 
-struct constant_fold_state {
-   void *mem_ctx;
-   nir_function_impl *impl;
-   bool progress;
-};
-
 static bool
-constant_fold_alu_instr(nir_alu_instr *instr, void *mem_ctx)
+constant_fold_alu(nir_builder *b, nir_alu_instr *instr)
 {
    nir_const_value src[NIR_MAX_VEC_COMPONENTS][NIR_MAX_VEC_COMPONENTS];
-
-   if (!instr->dest.dest.is_ssa)
-      return false;
 
    /* In the case that any outputs/inputs have unsized types, then we need to
     * guess the bit-size. In this case, the validator ensures that all
@@ -60,22 +52,17 @@ constant_fold_alu_instr(nir_alu_instr *instr, void *mem_ctx)
       bit_size = instr->dest.dest.ssa.bit_size;
 
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
-      if (!instr->src[i].src.is_ssa)
-         return false;
+      nir_const_value *src_const = nir_src_as_const_value(instr->src[i].src);
+      if (src_const == NULL)
+         return NULL;
 
       if (bit_size == 0 &&
           !nir_alu_type_get_type_size(nir_op_infos[instr->op].input_types[i]))
          bit_size = instr->src[i].src.ssa->bit_size;
 
-      nir_instr *src_instr = instr->src[i].src.ssa->parent_instr;
-
-      if (src_instr->type != nir_instr_type_load_const)
-         return false;
-      nir_load_const_instr* load_const = nir_instr_as_load_const(src_instr);
-
       for (unsigned j = 0; j < nir_ssa_alu_instr_src_components(instr, i);
            j++) {
-         src[i][j] = load_const->value[instr->src[i].swizzle[j]];
+         src[i][j] = src_const[instr->src[i].swizzle[j]];
       }
 
       /* We shouldn't have any source modifiers in the optimization loop. */
@@ -96,18 +83,11 @@ constant_fold_alu_instr(nir_alu_instr *instr, void *mem_ctx)
    nir_eval_const_opcode(instr->op, dest, instr->dest.dest.ssa.num_components,
                          bit_size, srcs);
 
-   nir_load_const_instr *new_instr =
-      nir_load_const_instr_create(mem_ctx,
-                                  instr->dest.dest.ssa.num_components,
-                                  instr->dest.dest.ssa.bit_size);
+   nir_ssa_def *imm =
+      nir_build_imm(b, instr->dest.dest.ssa.num_components,
+                       instr->dest.dest.ssa.bit_size, dest);
 
-   memcpy(new_instr->value, dest, sizeof(*new_instr->value) * new_instr->def.num_components);
-
-   nir_instr_insert_before(&instr->instr, &new_instr->instr);
-
-   nir_ssa_def_rewrite_uses(&instr->dest.dest.ssa,
-                            nir_src_for_ssa(&new_instr->def));
-
+   nir_ssa_def_rewrite_uses(&instr->dest.dest.ssa, nir_src_for_ssa(imm));
    nir_instr_remove(&instr->instr);
    ralloc_free(instr);
 
@@ -115,91 +95,37 @@ constant_fold_alu_instr(nir_alu_instr *instr, void *mem_ctx)
 }
 
 static bool
-constant_fold_intrinsic_instr(nir_intrinsic_instr *instr)
+constant_fold_intrinsic(nir_builder *b, nir_intrinsic_instr *instr)
 {
-   bool progress = false;
-
    if (instr->intrinsic == nir_intrinsic_discard_if &&
        nir_src_is_const(instr->src[0])) {
       if (nir_src_as_bool(instr->src[0])) {
-         /* This method of getting a nir_shader * from a nir_instr is
-          * admittedly gross, but given the rarity of hitting this case I think
-          * it's preferable to plumbing an otherwise unused nir_shader *
-          * parameter through four functions to get here.
-          */
-         nir_cf_node *cf_node = &instr->instr.block->cf_node;
-         nir_function_impl *impl = nir_cf_node_get_function(cf_node);
-         nir_shader *shader = impl->function->shader;
-
          nir_intrinsic_instr *discard =
-            nir_intrinsic_instr_create(shader, nir_intrinsic_discard);
-         nir_instr_insert_before(&instr->instr, &discard->instr);
-         nir_instr_remove(&instr->instr);
-         progress = true;
-      } else {
-         /* We're not discarding, just delete the instruction */
-         nir_instr_remove(&instr->instr);
-         progress = true;
+            nir_intrinsic_instr_create(b->shader, nir_intrinsic_discard);
+         nir_builder_instr_insert(b, &discard->instr);
       }
+      nir_instr_remove(&instr->instr);
+      return true;
    }
 
-   return progress;
+   return false;
 }
 
 static bool
-constant_fold_block(nir_block *block, void *mem_ctx)
+constant_fold_instr(nir_builder *b, nir_instr *instr,
+                    UNUSED void *data, UNUSED void *mem_ctx)
 {
-   bool progress = false;
-
-   nir_foreach_instr_safe(instr, block) {
-      switch (instr->type) {
-      case nir_instr_type_alu:
-         progress |= constant_fold_alu_instr(nir_instr_as_alu(instr), mem_ctx);
-         break;
-      case nir_instr_type_intrinsic:
-         progress |=
-            constant_fold_intrinsic_instr(nir_instr_as_intrinsic(instr));
-         break;
-      default:
-         /* Don't know how to constant fold */
-         break;
-      }
+   switch (instr->type) {
+   case nir_instr_type_alu:
+      return constant_fold_alu(b, nir_instr_as_alu(instr));
+   case nir_instr_type_intrinsic:
+      return constant_fold_intrinsic(b, nir_instr_as_intrinsic(instr));
+   default:
+      unreachable("Unsupported instruction type");
    }
-
-   return progress;
 }
 
-static bool
-nir_opt_constant_folding_impl(nir_function_impl *impl)
-{
-   void *mem_ctx = ralloc_parent(impl);
-   bool progress = false;
-
-   nir_foreach_block(block, impl) {
-      progress |= constant_fold_block(block, mem_ctx);
-   }
-
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   } else {
-#ifndef NDEBUG
-      impl->valid_metadata &= ~nir_metadata_not_properly_reset;
-#endif
-   }
-
-   return progress;
-}
-
-bool
-nir_opt_constant_folding(nir_shader *shader)
-{
-   bool progress = false;
-
-   nir_foreach_function(function, shader) {
-      if (function->impl)
-         progress |= nir_opt_constant_folding_impl(function->impl);
-   }
-
-   return progress;
-}
+const nir_pass nir_opt_constant_folding_pass = {
+   .instr_pass_func = constant_fold_instr,
+   .metadata_preserved = nir_metadata_block_index | nir_metadata_dominance,
+};
