@@ -113,7 +113,7 @@ ibc_phys_reg_rb_cmp(const struct rb_node *an, const struct rb_node *bn)
 struct ibc_phys_reg_alloc {
    struct util_vma_heap heap;
 
-   /** Node in the red-black tree of ibc_phys_reg
+   /** Red-black tree of ibc_phys_reg
     *
     * This tree is sorted by physical register end so that we can easily
     * return physical registers to the physical allocator.
@@ -149,7 +149,7 @@ ibc_phys_reg_alloc(struct ibc_phys_reg_alloc *alloc,
       assert(addr >= 4096 && addr + size <= 8192);
       byte = 8192 - size - addr;
    } else {
-      assert(byte + size <= 4096);
+      assert(fixed_hw_grf_byte + size <= 4096);
       uint64_t addr = 8192 - size - fixed_hw_grf_byte;
       assert(addr >= 4096 && addr + size <= 8192);
       if (!util_vma_heap_alloc_addr(&alloc->heap, addr, size))
