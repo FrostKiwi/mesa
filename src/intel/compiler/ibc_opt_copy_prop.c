@@ -195,6 +195,30 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
          }
          return false;
 
+      case IBC_INTRINSIC_OP_VEC: {
+         assert(ref->logical.comp < intrin->num_dest_comps);
+         assert(intrin->num_dest_comps == intrin->num_srcs);
+         const unsigned comp = ref->logical.comp;
+         assert(intrin->src[comp].simd_group == intrin->instr.simd_group);
+         assert(intrin->src[comp].simd_width == intrin->instr.simd_width);
+
+         /* Is this even possible? */
+         assert(intrin->src[comp].ref.file != IBC_REG_FILE_NONE);
+
+         /* The source must be static */
+         if (!ibc_reg_ref_read_is_static(intrin->src[comp].ref))
+            return false;
+
+         if (intrin->src[comp].ref.file == IBC_REG_FILE_IMM && !supports_imm)
+            return false;
+
+         *ref = compose_reg_refs(*ref, intrin->src[comp].ref,
+                                 simd_group, simd_width,
+                                 intrin->src[comp].simd_group,
+                                 intrin->src[comp].simd_width);
+         return true;
+      }
+
       default:
          return false;
       }
@@ -309,6 +333,9 @@ ibc_opt_copy_prop(ibc_shader *shader)
       case IBC_INSTR_TYPE_INTRINSIC: {
          ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
+            if (intrin->src[i].num_comps > 1)
+               continue; /* TODO */
+
             while (try_copy_prop_reg_ref(&intrin->src[i].ref, NULL,
                                          intrin->src[i].simd_group,
                                          intrin->src[i].simd_width,
@@ -325,6 +352,9 @@ ibc_opt_copy_prop(ibc_shader *shader)
 
       case IBC_INSTR_TYPE_PHI: {
          ibc_phi_instr *phi = ibc_instr_as_phi(instr);
+         if (phi->num_comps > 1)
+            continue; /* TODO */
+
          ibc_foreach_phi_src(src, phi) {
             while (try_copy_prop_reg_ref(&src->ref, NULL,
                                          phi->instr.simd_group,
