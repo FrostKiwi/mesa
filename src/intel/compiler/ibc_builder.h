@@ -99,8 +99,12 @@ ibc_builder_push_group(ibc_builder *b,
                        unsigned simd_group, unsigned simd_width)
 {
    /* We're only allowed to restrict the size */
-   assert(simd_width >= 8);
    assert(simd_group + simd_width <= b->simd_width);
+   if (b->we_all)
+      assert(simd_group == 0);
+   else
+      assert(simd_width >= 8);
+
    _ibc_builder_push(b);
    b->simd_group += simd_group;
    b->simd_width = simd_width;
@@ -530,7 +534,7 @@ ibc_SIMD_ZIP(ibc_builder *b, ibc_reg_ref *srcs, unsigned num_srcs,
          .ref = srcs[i],
          .simd_group = b->simd_group + src_width * i,
          .simd_width = src_width,
-         .num_comps = 2,
+         .num_comps = num_comps,
       };
    }
 
@@ -549,6 +553,35 @@ ibc_SIMD_ZIP2(ibc_builder *b, ibc_reg_ref src0, ibc_reg_ref src1,
 {
    ibc_reg_ref srcs[2] = { src0, src1 };
    return ibc_SIMD_ZIP(b, srcs, 2, num_comps);
+}
+
+static inline ibc_reg_ref
+ibc_VEC(ibc_builder *b, ibc_reg_ref *srcs, unsigned num_comps)
+{
+   assert(num_comps > 0);
+   if (num_comps == 1)
+      return ibc_MOV(b, srcs[0].type, srcs[0]);
+
+   ibc_intrinsic_instr *vec =
+      ibc_intrinsic_instr_create(b->shader, IBC_INTRINSIC_OP_VEC,
+                                 b->simd_group, b->simd_width, num_comps);
+   vec->instr.we_all = b->we_all;
+
+   enum ibc_type bits_type = ibc_type_bit_size(srcs[0].type);
+   for (unsigned i = 0; i < num_comps; i++) {
+      assert(srcs[i].type == srcs[0].type);
+      vec->src[i].ref = srcs[i];
+      vec->src[i].ref.type = bits_type;
+      vec->src[i].num_comps = 1;
+   }
+
+   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, bits_type, num_comps);
+   vec->dest = dest;
+   vec->num_dest_comps = num_comps;
+
+   ibc_builder_insert_instr(b, &vec->instr);
+
+   return dest;
 }
 
 static inline void

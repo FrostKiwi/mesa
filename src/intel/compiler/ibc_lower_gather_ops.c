@@ -121,6 +121,25 @@ ibc_lower_gather_ops(ibc_shader *shader)
             ibc_builder_pop(&b);
          }
          break;
+
+      case IBC_INTRINSIC_OP_VEC:
+         if (instr->we_all)
+            ibc_builder_push_we_all(&b, instr->simd_width);
+         else
+            ibc_builder_push_group(&b, instr->simd_group, instr->simd_width);
+
+         assert(intrin->dest.file == IBC_REG_FILE_LOGICAL);
+         assert(intrin->num_srcs == intrin->num_dest_comps);
+
+         ibc_reg_ref dest = intrin->dest;
+         for (unsigned i = 0; i < intrin->num_srcs; i++) {
+            build_MOV_raw(&b, dest, intrin->src[i].ref);
+            dest.logical.comp++;
+         }
+
+         ibc_builder_pop(&b);
+         break;
+
       default:
          continue;
       }

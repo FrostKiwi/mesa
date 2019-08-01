@@ -474,16 +474,19 @@ ibc_lower_and_optimize(ibc_shader *ibc)
    fprintf(stderr, "\n\n");
 
    ibc_split_logical_regs(ibc);
+   fprintf(stderr, "After split_logical_regs\n");
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
 
    ibc_opt_copy_prop(ibc);
+   fprintf(stderr, "After opt_copy_prop\n");
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
 
    ibc_opt_dead_code(ibc);
+   fprintf(stderr, "After opt_dead_code\n");
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
@@ -494,6 +497,18 @@ ibc_lower_and_optimize(ibc_shader *ibc)
    fprintf(stderr, "\n\n");
 
    ibc_lower_fb_writes(ibc);
+   ibc_print_shader(ibc, stderr);
+   ibc_validate_shader(ibc);
+   fprintf(stderr, "\n\n");
+
+   ibc_opt_copy_prop(ibc);
+   fprintf(stderr, "After opt_copy_prop\n");
+   ibc_print_shader(ibc, stderr);
+   ibc_validate_shader(ibc);
+   fprintf(stderr, "\n\n");
+
+   ibc_opt_dead_code(ibc);
+   fprintf(stderr, "After opt_dead_code\n");
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
@@ -521,11 +536,13 @@ ibc_lower_and_optimize(ibc_shader *ibc)
    fprintf(stderr, "\n\n");
 
    ibc_opt_copy_prop(ibc);
+   fprintf(stderr, "After opt_copy_prop\n");
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
 
    ibc_opt_dead_code(ibc);
+   fprintf(stderr, "After opt_dead_code\n");
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");

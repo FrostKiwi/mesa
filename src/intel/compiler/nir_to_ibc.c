@@ -81,14 +81,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_vec2:
    case nir_op_vec3:
    case nir_op_vec4:
-      dest = ibc_builder_new_logical_reg(b, dest_type,
-                                         instr->dest.dest.ssa.num_components);
-
-      for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
-         ibc_reg_ref mov_dest = dest;
-         mov_dest.logical.comp = i;
-         ibc_build_alu1(b, IBC_ALU_OP_MOV, mov_dest, src[i]);
-      }
+      dest = ibc_VEC(b, src, instr->dest.dest.ssa.num_components);
       break;
 
    case nir_op_u2u8:
@@ -466,40 +459,39 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
    assert(instr->def.bit_size >= 8);
    enum ibc_type type = IBC_TYPE_UINT | instr->def.bit_size;
 
-   ibc_builder_push_scalar(b);
-   ibc_reg_ref dest =
-      ibc_builder_new_logical_reg(b, type, instr->def.num_components);
-   nti->ssa_to_reg[instr->def.index] = dest.reg;
+   ibc_reg_ref imm_srcs[4];
 
    for (unsigned i = 0; i < instr->def.num_components; i++) {
-      ibc_reg_ref imm_src = {
+      imm_srcs[i] = (ibc_reg_ref) {
          .file = IBC_REG_FILE_IMM,
          .type = type,
       };
       switch (instr->def.bit_size) {
       case 8:
          /* 8-bit immediates aren't a thing */
-         imm_src.type = IBC_TYPE_UW;
-         *(uint16_t *)imm_src.imm = instr->value[i].u8;
+         imm_srcs[i].type = IBC_TYPE_UW;
+         *(uint16_t *)imm_srcs[i].imm = instr->value[i].u8;
+         imm_srcs[i] = ibc_MOV(b, type, imm_srcs[i]);
          break;
       case 16:
-         *(uint16_t *)imm_src.imm = instr->value[i].u16;
+         *(uint16_t *)imm_srcs[i].imm = instr->value[i].u16;
          break;
       case 32:
-         *(uint32_t *)imm_src.imm = instr->value[i].u32;
+         *(uint32_t *)imm_srcs[i].imm = instr->value[i].u32;
          break;
       case 64:
-         *(uint64_t *)imm_src.imm = instr->value[i].u64;
+         *(uint64_t *)imm_srcs[i].imm = instr->value[i].u64;
          break;
       default:
          unreachable("Invalid bit size");
       }
-
-      ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, imm_src);
-      dest.logical.comp++;
    }
 
+   ibc_builder_push_scalar(b);
+   ibc_reg_ref dest = ibc_VEC(b, imm_srcs, instr->def.num_components);
    ibc_builder_pop(b);
+
+   nti->ssa_to_reg[instr->def.index] = dest.reg;
 }
 
 static void

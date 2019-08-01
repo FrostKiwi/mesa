@@ -554,6 +554,7 @@ ibc_send_instr *ibc_send_instr_create(struct ibc_shader *shader,
 enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_INVALID,
    IBC_INTRINSIC_OP_SIMD_ZIP,
+   IBC_INTRINSIC_OP_VEC,
    IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
    IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
    IBC_INTRINSIC_OP_LOAD_PAYLOAD,
