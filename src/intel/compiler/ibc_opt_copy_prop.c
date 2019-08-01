@@ -42,7 +42,14 @@ compose_reg_refs(ibc_reg_ref outer, ibc_reg_ref inner,
 
    switch (ref.file) {
    case IBC_REG_FILE_NONE:
+      return ref;
+
    case IBC_REG_FILE_IMM:
+      assert(ref.logical.comp == 0);
+      if (ref.logical.byte) {
+         memmove(ref.imm, ref.imm + ref.logical.byte,
+                 ibc_type_byte_size(ref.type));
+      }
       return ref;
 
    case IBC_REG_FILE_LOGICAL:
@@ -104,7 +111,8 @@ compose_alu_src_mods(enum ibc_alu_src_mod outer, enum ibc_alu_src_mod inner)
 
 static bool
 try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
-                      uint8_t simd_group, uint8_t simd_width)
+                      uint8_t simd_group, uint8_t simd_width,
+                      bool supports_imm)
 {
    if (ref->file != IBC_REG_FILE_LOGICAL)
       return false;
@@ -124,12 +132,15 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
       /* Is this even possible? */
       assert(mov->src[0].ref.file != IBC_REG_FILE_NONE);
 
-      if (mov->src[0].ref.file == IBC_REG_FILE_IMM)
-         return false; /* TODO */
-
       /* The source must be static */
       if (!ibc_reg_ref_read_is_static(mov->src[0].ref))
          return false;
+
+      if (mov->src[0].ref.file == IBC_REG_FILE_IMM) {
+         assert(mov->src[0].mod == IBC_ALU_SRC_MOD_NONE);
+         if (!supports_imm)
+            return false;
+      }
 
       /* Cannot saturate or type convert */
       if (mov->src[0].ref.type != mov->dest.type || mov->saturate)
@@ -169,11 +180,11 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
             /* Is this even possible? */
             assert(intrin->src[i].ref.file != IBC_REG_FILE_NONE);
 
-            if (intrin->src[i].ref.file == IBC_REG_FILE_IMM)
-               return false; /* TODO */
-
             /* The source must be static */
             if (!ibc_reg_ref_read_is_static(intrin->src[i].ref))
+               return false;
+
+            if (intrin->src[i].ref.file == IBC_REG_FILE_IMM && !supports_imm)
                return false;
 
             *ref = compose_reg_refs(*ref, intrin->src[i].ref,
@@ -194,6 +205,74 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
    }
 }
 
+static bool
+can_flip_alu_instr(const ibc_alu_instr *alu)
+{
+   if (ibc_alu_op_infos[alu->op].num_srcs != 2)
+      return false;
+
+   switch (alu->op) {
+   case IBC_ALU_OP_SEL:
+   case IBC_ALU_OP_AND:
+   case IBC_ALU_OP_OR:
+   case IBC_ALU_OP_CMP:
+   case IBC_ALU_OP_ADD:
+      return true;
+   default:
+      return false;
+   }
+}
+
+static bool
+alu_instr_src_supports_imm(const ibc_alu_instr *alu, unsigned src_idx)
+{
+   assert(src_idx < ibc_alu_op_infos[alu->op].num_srcs);
+
+   switch (ibc_alu_op_infos[alu->op].num_srcs) {
+   case 1:
+      return true;
+   case 2:
+      return src_idx == 1 || (alu->src[1].ref.file != IBC_REG_FILE_IMM &&
+                              can_flip_alu_instr(alu));
+   default:
+      return false;
+   }
+}
+
+static void
+flip_alu_instr_if_needed(ibc_alu_instr *alu)
+{
+   if (ibc_alu_op_infos[alu->op].num_srcs != 2)
+      return;
+
+   if (alu->src[0].ref.file != IBC_REG_FILE_IMM)
+      return;
+
+   assert(can_flip_alu_instr(alu));
+
+   ibc_alu_src tmp = alu->src[0];
+   alu->src[0] = alu->src[1];
+   alu->src[1] = tmp;
+
+   if (alu->op == IBC_ALU_OP_SEL) {
+      /* For SEL, we have to invert the predicate */
+      alu->instr.pred_inverse = !alu->instr.pred_inverse;
+   } else if (alu->op == IBC_ALU_OP_CMP) {
+      /* For CMP, we have to flip the comparison around. */
+      switch (alu->cmod) {
+      case BRW_CONDITIONAL_Z:
+      case BRW_CONDITIONAL_NZ:
+         break;
+      case BRW_CONDITIONAL_G:    alu->cmod = BRW_CONDITIONAL_L;   break;
+      case BRW_CONDITIONAL_GE:   alu->cmod = BRW_CONDITIONAL_LE;  break;
+      case BRW_CONDITIONAL_L:    alu->cmod = BRW_CONDITIONAL_G;   break;
+      case BRW_CONDITIONAL_LE:   alu->cmod = BRW_CONDITIONAL_GE;  break;
+      default:
+         unreachable("Invalid conditional modifier for CMP");
+      }
+   }
+}
+
 bool
 ibc_opt_copy_prop(ibc_shader *shader)
 {
@@ -202,7 +281,8 @@ ibc_opt_copy_prop(ibc_shader *shader)
    ibc_foreach_instr_safe(instr, shader) {
 
       while (try_copy_prop_reg_ref(&instr->flag, NULL,
-                                   instr->simd_group, instr->simd_width)) {
+                                   instr->simd_group, instr->simd_width,
+                                   false)) {
          progress = true;
       }
 
@@ -213,9 +293,11 @@ ibc_opt_copy_prop(ibc_shader *shader)
          for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
             while (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i],
                                          alu->instr.simd_group,
-                                         alu->instr.simd_width)) {
+                                         alu->instr.simd_width,
+                                         alu_instr_src_supports_imm(alu, i))) {
                progress = true;
             }
+            flip_alu_instr_if_needed(alu);
          }
          continue;
       }
@@ -229,7 +311,8 @@ ibc_opt_copy_prop(ibc_shader *shader)
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
             while (try_copy_prop_reg_ref(&intrin->src[i].ref, NULL,
                                          intrin->src[i].simd_group,
-                                         intrin->src[i].simd_width)) {
+                                         intrin->src[i].simd_width,
+                                         true)) {
                progress = true;
             }
          }
@@ -245,7 +328,8 @@ ibc_opt_copy_prop(ibc_shader *shader)
          ibc_foreach_phi_src(src, phi) {
             while (try_copy_prop_reg_ref(&src->ref, NULL,
                                          phi->instr.simd_group,
-                                         phi->instr.simd_width)) {
+                                         phi->instr.simd_width,
+                                         true)) {
                progress = true;
             }
          }
