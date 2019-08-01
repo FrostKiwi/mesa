@@ -408,7 +408,7 @@ static inline bool
 ibc_reg_ref_read_is_static(ibc_reg_ref ref)
 {
    if (ref.file == IBC_REG_FILE_NONE || ref.file == IBC_REG_FILE_IMM)
-      return false;
+      return true;
 
    return ref.reg && ref.reg->is_wlr;
 }
