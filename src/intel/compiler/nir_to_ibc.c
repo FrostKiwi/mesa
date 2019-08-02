@@ -22,6 +22,7 @@
  */
 
 #include "ibc_nir.h"
+#include "brw_nir.h"
 
 #include "util/hash_table.h"
 
@@ -155,24 +156,19 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_SHR(b, dest_type, src[0], src[1]);
       break;
 
+   case nir_op_flt:
+   case nir_op_ilt:
+   case nir_op_ult:
+   case nir_op_fge:
+   case nir_op_ige:
+   case nir_op_uge:
+   case nir_op_feq:
    case nir_op_ieq:
-      assert(dest_type == IBC_TYPE_FLAG);
-      dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_EQ, src[0], src[1]);
-      break;
-
+   case nir_op_fneu:
    case nir_op_ine:
       assert(dest_type == IBC_TYPE_FLAG);
-      dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_NEQ, src[0], src[1]);
-      break;
-
-   case nir_op_flt:
-      assert(dest_type == IBC_TYPE_FLAG);
-      dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_L, src[0], src[1]);
-      break;
-
-   case nir_op_fge:
-      assert(dest_type == IBC_TYPE_FLAG);
-      dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_GE, src[0], src[1]);
+      dest = ibc_CMP(b, dest_type, brw_cmod_for_nir_comparison(instr->op),
+                     src[0], src[1]);
       break;
 
    case nir_op_ffma:
