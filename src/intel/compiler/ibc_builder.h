@@ -157,8 +157,16 @@ ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
       .type = type,
    };
    if (ibc_type_bit_size(type) == 0) {
-      assert(reg->file == IBC_REG_FILE_LOGICAL);
-      ref.type |= reg->logical.bit_size;
+      switch (reg->file) {
+      case IBC_REG_FILE_LOGICAL:
+         ref.type |= reg->logical.bit_size;
+         break;
+      case IBC_REG_FILE_FLAG:
+         ref.type = IBC_TYPE_FLAG;
+         break;
+      default:
+         unreachable("Unsupported register file for automatic types");
+      }
    }
    switch (reg->file) {
    case IBC_REG_FILE_NONE:
@@ -171,14 +179,14 @@ ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
 
    case IBC_REG_FILE_HW_GRF:
       ref.hw_grf = (ibc_hw_grf_reg_ref) {
-         .vstride = 8 * ibc_type_byte_size(type),
+         .vstride = 8 * ibc_type_byte_size(ref.type),
          .width = 8,
-         .hstride = ibc_type_byte_size(type),
+         .hstride = ibc_type_byte_size(ref.type),
       };
       return ref;
 
    case IBC_REG_FILE_FLAG:
-      assert(type == IBC_TYPE_FLAG);
+      assert(ref.type == IBC_TYPE_FLAG);
       return ref;
    }
 
