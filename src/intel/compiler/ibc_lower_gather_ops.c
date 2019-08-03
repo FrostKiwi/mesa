@@ -49,6 +49,7 @@ static ibc_reg_ref
 simd_slice_ref(ibc_reg_ref ref, uint8_t rel_simd_group, uint8_t simd_width)
 {
    switch (ref.file) {
+   case IBC_REG_FILE_IMM:
    case IBC_REG_FILE_LOGICAL:
       return ref;
 
