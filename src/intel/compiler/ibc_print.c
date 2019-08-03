@@ -254,7 +254,8 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
    fprintf(fp, "%s", alu_op_name(alu->op));
    if (alu->cmod) {
       fprintf(fp, ".%s.", conditional_mod_name(alu->cmod));
-      assert(alu->instr.flag.type == IBC_TYPE_FLAG);
+      assert(alu->instr.flag.file == IBC_REG_FILE_NONE ||
+             alu->instr.flag.type == IBC_TYPE_FLAG);
       print_reg_ref(fp, &alu->instr.flag, false);
    }
    print_instr_group(fp, &alu->instr);

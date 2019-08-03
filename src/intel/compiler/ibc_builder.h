@@ -468,6 +468,28 @@ ibc_SEL(ibc_builder *b, enum ibc_type dest_type,
 }
 
 static inline ibc_reg_ref
+ibc_MIN(ibc_builder *b, enum ibc_type dest_type,
+        ibc_reg_ref src0, ibc_reg_ref src1)
+{
+   ibc_reg_ref srcs[] = { src0, src1 };
+   ibc_reg_ref dest = ibc_build_ssa_alu(b, IBC_ALU_OP_SEL, dest_type, srcs, 2);
+   ibc_alu_instr *sel = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+   sel->cmod = BRW_CONDITIONAL_L;
+   return dest;
+}
+
+static inline ibc_reg_ref
+ibc_MAX(ibc_builder *b, enum ibc_type dest_type,
+        ibc_reg_ref src0, ibc_reg_ref src1)
+{
+   ibc_reg_ref srcs[] = { src0, src1 };
+   ibc_reg_ref dest = ibc_build_ssa_alu(b, IBC_ALU_OP_SEL, dest_type, srcs, 2);
+   ibc_alu_instr *sel = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+   sel->cmod = BRW_CONDITIONAL_GE;
+   return dest;
+}
+
+static inline ibc_reg_ref
 ibc_CMP(ibc_builder *b, enum ibc_type dest_type,
         enum brw_conditional_mod cmod,
         ibc_reg_ref src0, ibc_reg_ref src1)
