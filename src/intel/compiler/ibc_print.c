@@ -168,10 +168,13 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref, bool print_type)
 
    case IBC_REG_FILE_FLAG:
       /* TODO: Take simd_group into account? */
-      fprintf(fp, "f%u.%u", ref->reg->flag.subnr / 2,
-              ref->reg->flag.subnr % 2);
+      if (ref->reg != NULL) {
+         fprintf(fp, "flag%u.%u", ref->reg->index,
+                 ref->reg->flag.subnr + ref->flag.subnr);
+      } else {
+         fprintf(fp, "f%u.%u", ref->flag.subnr / 2, ref->flag.subnr % 2);
+      }
       return;
-
    }
    unreachable("Unknown register file");
 }

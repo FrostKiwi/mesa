@@ -149,6 +149,18 @@ ibc_hw_grf_ref(uint8_t nr, uint8_t subnr, enum ibc_type type)
 }
 
 static inline ibc_reg_ref
+ibc_flag_ref(uint8_t subnr)
+{
+   return (ibc_reg_ref) {
+      .file = IBC_REG_FILE_FLAG,
+      .type = IBC_TYPE_FLAG,
+      .flag = {
+         .subnr = subnr,
+      },
+   };
+}
+
+static inline ibc_reg_ref
 ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
 {
    ibc_reg_ref ref = {
