@@ -441,7 +441,7 @@ generate_branch(struct brw_codegen *p, const ibc_branch_instr *branch)
    unreachable("Invalid branch op");
 }
 
-unsigned *
+const unsigned *
 ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 {
    const struct gen_device_info *devinfo = shader->devinfo;
