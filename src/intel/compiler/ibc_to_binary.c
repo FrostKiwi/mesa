@@ -465,8 +465,16 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
       brw_set_default_predicate_control(p, instr->predicate);
       brw_set_default_predicate_inverse(p, instr->pred_inverse);
       if (instr->flag.file == IBC_REG_FILE_FLAG) {
-         brw_set_default_flag_reg(p, instr->flag.reg->flag.subnr / 2,
-                                     instr->flag.reg->flag.subnr % 2);
+         uint8_t subnr = (instr->flag.reg ? instr->flag.reg->flag.subnr : 0) +
+                         instr->flag.flag.subnr;
+         /* The hardware "helpfully" adds simd_group / 16 to the subnr that we
+          * provide so we need to decrement to account for it.
+          */
+         if (instr->simd_group >= 16) {
+            assert(subnr % 2 == 1);
+            subnr--;
+         }
+         brw_set_default_flag_reg(p, subnr / 2, subnr % 2);
       } else {
          assert(instr->flag.file == IBC_REG_FILE_NONE);
          brw_set_default_flag_reg(p, 0, 0); /* TODO */
