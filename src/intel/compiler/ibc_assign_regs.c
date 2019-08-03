@@ -814,6 +814,70 @@ rewrite_ref_and_update_reg(ibc_reg_ref *ref, int8_t num_comps,
    return true;
 }
 
+static void
+assign_reg(struct ibc_reg_assignment *assign,
+           int16_t fixed_hw_grf_byte,
+           struct ibc_assign_regs_state *state)
+{
+   ibc_reg *reg = assign->reg;
+   const ibc_reg_live_intervals *rli = &state->live->regs[reg->index];
+
+   bool success;
+   switch (assign->reg->file) {
+   case IBC_REG_FILE_HW_GRF:
+      assign->preg = rzalloc(state->mem_ctx, struct ibc_phys_reg);
+      success = ibc_phys_reg_alloc(&state->phys_alloc,
+                                   fixed_hw_grf_byte,
+                                   reg->hw_grf.size,
+                                   reg->hw_grf.align,
+                                   rli->physical_start,
+                                   rli->physical_end,
+                                   assign->preg);
+      assert(success);
+      break;
+
+   case IBC_REG_FILE_LOGICAL:
+      if (reg->logical.simd_width == 1) {
+         assert(reg->logical.bit_size % 8 == 0);
+         assign->preg = rzalloc(state->mem_ctx, struct ibc_phys_reg);
+         uint16_t size = (reg->logical.bit_size / 8) *
+                         reg->logical.num_comps;
+         uint16_t align = reg->logical.bit_size / 8;
+         success = ibc_phys_reg_alloc(&state->phys_alloc,
+                                      fixed_hw_grf_byte,
+                                      size, align,
+                                      rli->physical_start,
+                                      rli->physical_end,
+                                      assign->preg);
+         assert(success);
+      } else {
+         assert(reg->logical.bit_size % 8 == 0);
+         assert(reg->logical.stride >= reg->logical.bit_size / 8);
+         assert(reg->logical.stride > 0 && reg->logical.stride <= 8);
+         /* If we've been provided with a specific HW GRF reg, then it
+          * must be tightly packed.
+          */
+         assert(fixed_hw_grf_byte < 0 ||
+                reg->logical.stride == reg->logical.bit_size / 8);
+         struct ibc_strided_reg_alloc *strided_alloc =
+            &state->strided_alloc[ffs(reg->logical.stride) - 1];
+
+         assign->sreg = ibc_strided_reg_alloc(strided_alloc,
+                                              state->live, reg,
+                                              fixed_hw_grf_byte,
+                                              &assign->sreg_byte,
+                                              &assign->sreg_comp);
+         assert(assign->sreg);
+      }
+      break;
+
+   default:
+      unreachable("Unhandled register file");
+   }
+
+   rb_tree_remove(&state->alloc_order, &assign->node);
+}
+
 void
 ibc_assign_regs(ibc_shader *shader)
 {
@@ -851,6 +915,23 @@ ibc_assign_regs(ibc_shader *shader)
                      ibc_reg_assignment_rb_cmp);
    }
 
+   ibc_foreach_instr_reverse(instr, shader) {
+      if (instr->type != IBC_INSTR_TYPE_SEND)
+         continue;
+
+      ibc_send_instr *send = ibc_instr_as_send(instr);
+      assert(send->eot);
+
+      assert(send->payload[0].file == IBC_REG_FILE_LOGICAL ||
+             send->payload[0].file == IBC_REG_FILE_HW_GRF);
+      struct ibc_reg_assignment *assign =
+         &state.assign[send->payload[0].reg->index];
+
+      /* TODO: Be more flexible about the assignment */
+      assign_reg(assign, 112 * REG_SIZE, &state);
+      break;
+   }
+
    ibc_foreach_instr_safe(instr, shader) {
       state.ip = instr->index;
 
@@ -864,10 +945,7 @@ ibc_assign_regs(ibc_shader *shader)
          if (assign->physical_start > state.ip)
             break;
 
-         ibc_reg *reg = assign->reg;
-         const ibc_reg_live_intervals *rli = &state.live->regs[reg->index];
-
-         ibc_instr *ssa_instr = ibc_reg_ssa_instr(reg);
+         ibc_instr *ssa_instr = ibc_reg_ssa_instr(assign->reg);
          int16_t fixed_hw_grf_byte = -1;
          if (ssa_instr && ssa_instr->type == IBC_INSTR_TYPE_INTRINSIC) {
             ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(ssa_instr);
@@ -878,60 +956,7 @@ ibc_assign_regs(ibc_shader *shader)
             }
          }
 
-         bool success;
-         switch (assign->reg->file) {
-         case IBC_REG_FILE_HW_GRF:
-            assign->preg = rzalloc(state.mem_ctx, struct ibc_phys_reg);
-            success = ibc_phys_reg_alloc(&state.phys_alloc,
-                                         fixed_hw_grf_byte,
-                                         reg->hw_grf.size,
-                                         reg->hw_grf.align,
-                                         rli->physical_start,
-                                         rli->physical_end,
-                                         assign->preg);
-            assert(success);
-            break;
-
-         case IBC_REG_FILE_LOGICAL:
-            if (reg->logical.simd_width == 1) {
-               assert(reg->logical.bit_size % 8 == 0);
-               assign->preg = rzalloc(state.mem_ctx, struct ibc_phys_reg);
-               uint16_t size = (reg->logical.bit_size / 8) *
-                               reg->logical.num_comps;
-               uint16_t align = reg->logical.bit_size / 8;
-               success = ibc_phys_reg_alloc(&state.phys_alloc,
-                                            fixed_hw_grf_byte,
-                                            size, align,
-                                            rli->physical_start,
-                                            rli->physical_end,
-                                            assign->preg);
-               assert(success);
-            } else {
-               assert(reg->logical.bit_size % 8 == 0);
-               assert(reg->logical.stride >= reg->logical.bit_size / 8);
-               assert(reg->logical.stride > 0 && reg->logical.stride <= 8);
-               /* If we've been provided with a specific HW GRF reg, then it
-                * must be tightly packed.
-                */
-               assert(fixed_hw_grf_byte < 0 ||
-                      reg->logical.stride == reg->logical.bit_size / 8);
-               struct ibc_strided_reg_alloc *strided_alloc =
-                  &state.strided_alloc[ffs(reg->logical.stride) - 1];
-
-               assign->sreg = ibc_strided_reg_alloc(strided_alloc,
-                                                    state.live, reg,
-                                                    fixed_hw_grf_byte,
-                                                    &assign->sreg_byte,
-                                                    &assign->sreg_comp);
-               assert(assign->sreg);
-            }
-            break;
-
-         default:
-            unreachable("Unhandled register file");
-         }
-
-         rb_tree_remove(&state.alloc_order, &assign->node);
+         assign_reg(assign, fixed_hw_grf_byte, &state);
       }
 
       if (instr->type == IBC_INSTR_TYPE_INTRINSIC) {
@@ -1057,7 +1082,7 @@ ibc_assign_regs_trivial(ibc_shader *shader)
       /* TODO: Support SENDS */
       assert(last_send->payload[1].reg == NULL);
       assert(last_send->payload[0].reg->file == IBC_REG_FILE_HW_GRF);
-      ibc_hw_grf_reg *grf = &last_send->payload[0].reg->hw_grf;
+      const ibc_hw_grf_reg *grf = &last_send->payload[0].reg->hw_grf;
 
       /* Just place it as far up in the file as it will go */
       assert(grf->size % 32 == 0);
