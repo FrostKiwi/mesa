@@ -111,6 +111,7 @@ compose_alu_src_mods(enum ibc_alu_src_mod outer, enum ibc_alu_src_mod inner)
 
 static bool
 try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
+                      uint8_t num_comps,
                       uint8_t simd_group, uint8_t simd_width,
                       bool supports_imm)
 {
@@ -124,6 +125,7 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
    switch (ssa_instr->type) {
    case IBC_INSTR_TYPE_ALU: {
       ibc_alu_instr *mov = ibc_instr_as_alu(ssa_instr);
+      assert(num_comps == 1);
 
       /* Must be a non-saturating MOV */
       if (mov->op != IBC_ALU_OP_MOV)
@@ -164,6 +166,7 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(ssa_instr);
       switch (intrin->op) {
       case IBC_INTRINSIC_OP_SIMD_ZIP:
+         assert(num_comps <= ref->reg->logical.num_comps);
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
             if (ref->logical.broadcast) {
                if (ref->logical.simd_channel < intrin->src[i].simd_group ||
@@ -199,6 +202,9 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
          assert(ref->logical.comp < intrin->num_dest_comps);
          assert(intrin->num_dest_comps == intrin->num_srcs);
          const unsigned comp = ref->logical.comp;
+         if (num_comps > 1)
+            return false;
+
          assert(intrin->src[comp].simd_group == intrin->instr.simd_group);
          assert(intrin->src[comp].simd_width == intrin->instr.simd_width);
 
@@ -212,7 +218,9 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
          if (intrin->src[comp].ref.file == IBC_REG_FILE_IMM && !supports_imm)
             return false;
 
-         *ref = compose_reg_refs(*ref, intrin->src[comp].ref,
+         ibc_reg_ref comp_ref = *ref;
+         comp_ref.logical.comp = 0;
+         *ref = compose_reg_refs(comp_ref, intrin->src[comp].ref,
                                  simd_group, simd_width,
                                  intrin->src[comp].simd_group,
                                  intrin->src[comp].simd_width);
@@ -304,7 +312,7 @@ ibc_opt_copy_prop(ibc_shader *shader)
 
    ibc_foreach_instr_safe(instr, shader) {
 
-      while (try_copy_prop_reg_ref(&instr->flag, NULL,
+      while (try_copy_prop_reg_ref(&instr->flag, NULL, 1,
                                    instr->simd_group, instr->simd_width,
                                    false)) {
          progress = true;
@@ -315,7 +323,7 @@ ibc_opt_copy_prop(ibc_shader *shader)
          ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
          for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-            while (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i],
+            while (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i], 1,
                                          alu->instr.simd_group,
                                          alu->instr.simd_width,
                                          alu_instr_src_supports_imm(alu, i))) {
@@ -333,10 +341,8 @@ ibc_opt_copy_prop(ibc_shader *shader)
       case IBC_INSTR_TYPE_INTRINSIC: {
          ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
-            if (intrin->src[i].num_comps > 1)
-               continue; /* TODO */
-
             while (try_copy_prop_reg_ref(&intrin->src[i].ref, NULL,
+                                         intrin->src[i].num_comps,
                                          intrin->src[i].simd_group,
                                          intrin->src[i].simd_width,
                                          true)) {
@@ -352,11 +358,9 @@ ibc_opt_copy_prop(ibc_shader *shader)
 
       case IBC_INSTR_TYPE_PHI: {
          ibc_phi_instr *phi = ibc_instr_as_phi(instr);
-         if (phi->num_comps > 1)
-            continue; /* TODO */
-
          ibc_foreach_phi_src(src, phi) {
             while (try_copy_prop_reg_ref(&src->ref, NULL,
+                                         phi->num_comps,
                                          phi->instr.simd_group,
                                          phi->instr.simd_width,
                                          true)) {
