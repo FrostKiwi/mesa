@@ -310,12 +310,17 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
    }
 
    if (alu->cmod != BRW_CONDITIONAL_NONE) {
-      ibc_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
-      ibc_assert(s, alu->instr.flag.file != IBC_REG_FILE_NONE);
-      ibc_assert(s, alu->instr.flag.type == IBC_TYPE_FLAG);
-      ibc_validate_reg_ref(s, &alu->instr.flag, true, 0, 1,
-                           alu->instr.simd_group,
-                           alu->instr.simd_width);
+      if (alu->instr.flag.file == IBC_REG_FILE_NONE) {
+         ibc_validate_null_reg_ref(s, &alu->instr.flag);
+         ibc_assert(s, alu->op == IBC_ALU_OP_SEL);
+      } else {
+         ibc_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
+         ibc_assert(s, alu->instr.flag.file != IBC_REG_FILE_NONE);
+         ibc_assert(s, alu->instr.flag.type == IBC_TYPE_FLAG);
+         ibc_validate_reg_ref(s, &alu->instr.flag, true, 0, 1,
+                              alu->instr.simd_group,
+                              alu->instr.simd_width);
+      }
    }
 
    ibc_assert(s, !alu->saturate ||
