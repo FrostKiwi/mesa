@@ -548,6 +548,13 @@ ibc_lower_and_optimize(ibc_shader *ibc)
    fprintf(stderr, "\n\n");
 
    ibc_assign_logical_reg_strides(ibc);
+   ibc_lower_gather_ops(ibc);
+   fprintf(stderr, "After lower_gather_ops\n");
+   ibc_print_shader(ibc, stderr);
+   ibc_validate_shader(ibc);
+   fprintf(stderr, "\n\n");
+
+   ibc_assign_logical_reg_strides(ibc);
    ibc_assign_regs(ibc);
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
