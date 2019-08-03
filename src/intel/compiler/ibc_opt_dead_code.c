@@ -42,8 +42,7 @@ reg_ref_is_alive(ibc_reg_ref *ref)
 
    case IBC_REG_FILE_FLAG:
       /* If it's a fixed HW reg, we consider it live */
-      return ref->reg->flag.subnr != IBC_FLAG_REG_UNASSIGNED ||
-             ref->reg->index;
+      return ref->reg == NULL || ref->reg->index;
    }
    unreachable("Invalid register file");
 }

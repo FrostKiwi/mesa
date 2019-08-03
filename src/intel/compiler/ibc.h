@@ -196,8 +196,18 @@ typedef struct ibc_flag_reg {
    /** Size in bits  */
    uint8_t bits;
 
-   /** Definition if this register is statically assigned once */
-   struct ibc_alu_instr *ssa;
+   /** Alignment requirement of this register
+    *
+    * The flag register is aligned such that the subnr chosen satisfies
+    *
+    *       subnr = k * align_mul + align_offset
+    *
+    * for some integer k.  This allows us to handle the alignment requirements
+    * of flag registers which are allocated for use with second-half execution
+    * groups.
+    */
+   uint8_t align_mul;
+   uint8_t align_offset;
 } ibc_flag_reg;
 
 
@@ -361,6 +371,28 @@ ibc_hw_grf_mul_stride(ibc_hw_grf_reg_ref *ref, unsigned stride_mul)
 }
 
 
+/** A structure representing a reference to a FLAG register */
+typedef struct ibc_flag_reg_ref {
+   /** Subnr at which the reference starts
+    *
+    * If ibc_reg_ref::reg is not NULL, this is relative to the start of the
+    * virtual flag reg.  If ibc_reg_ref::reg is NULL, this is the actual HW
+    * flag register subnr.
+    */
+   uint8_t subnr;
+} ibc_flag_reg_ref;
+
+static inline void
+ibc_flag_slice_simd_group(ibc_flag_reg_ref *ref,
+                          uint8_t old_simd_group,
+                          uint8_t new_simd_group,
+                          uint8_t simd_width)
+{
+   assert(new_simd_group % simd_width == 0);
+   ref->subnr += (new_simd_group / 16) - (old_simd_group / 16);
+}
+
+
 /** A structure representing a register reference (source or destination) in
  * an instruction
  */
@@ -374,6 +406,7 @@ typedef struct ibc_reg_ref {
    union {
       ibc_logical_reg_ref logical;
       ibc_hw_grf_reg_ref hw_grf;
+      ibc_flag_reg_ref flag;
    };
 
    /** Link in the ibc_reg::writes list
