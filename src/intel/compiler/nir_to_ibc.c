@@ -171,6 +171,18 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
                      src[0], src[1]);
       break;
 
+   case nir_op_imin:
+   case nir_op_umin:
+   case nir_op_fmin:
+      dest = ibc_MIN(b, dest_type, src[0], src[1]);
+      break;
+
+   case nir_op_imax:
+   case nir_op_umax:
+   case nir_op_fmax:
+      dest = ibc_MAX(b, dest_type, src[0], src[1]);
+      break;
+
    case nir_op_ffma:
       assert(dest_type == IBC_TYPE_F);
       dest = ibc_MAD(b, dest_type, src[2], src[1], src[0]);
