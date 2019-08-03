@@ -109,11 +109,11 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       return;
 
    case IBC_REG_FILE_HW_GRF:
+   case IBC_REG_FILE_FLAG:
       ibc_assert(s, ref->reg == NULL || ref->file == ref->reg->file);
       break;
 
    case IBC_REG_FILE_LOGICAL:
-   case IBC_REG_FILE_FLAG:
       if (!ibc_assert(s, ref->reg))
          return;
 
@@ -251,18 +251,27 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       return;
    }
 
-   case IBC_REG_FILE_FLAG: {
-      const ibc_flag_reg *reg = &ref->reg->flag;
-
-      unsigned reg_simd_group = (reg->subnr % 2) * 16;
-      unsigned reg_simd_width = reg->bits;
-
+   case IBC_REG_FILE_FLAG:
       ibc_assert(s, num_comps == 1 && num_bytes == 0);
-      ibc_assert(s, ref_simd_group >= reg_simd_group);
-      ibc_assert(s, ref_simd_group + ref_simd_width <=
-                    reg_simd_group + reg_simd_width);
+      if (ref->reg) {
+         const ibc_flag_reg *flag = &ref->reg->flag;
+         ibc_assert(s, ref_simd_group + ref_simd_width <= flag->bits);
+         if (flag->subnr == IBC_FLAG_REG_UNASSIGNED) {
+            ibc_assert(s, ref_simd_group + ref_simd_width <=
+                          flag->align_mul * 16);
+            ibc_assert(s, ref_simd_group / 16 ==
+                          flag->align_offset + ref->flag.subnr);
+         } else {
+            uint8_t subnr = flag->subnr + ref->flag.subnr;
+            if (ref_simd_group + ref_simd_width > 16)
+               ibc_assert(s, ref_simd_group / 16 == subnr % 2);
+         }
+      } else {
+         uint8_t subnr = ref->flag.subnr;
+         if (ref_simd_group + ref_simd_width > 16)
+            ibc_assert(s, ref_simd_group / 16 == subnr % 2);
+      }
       return;
-   }
    }
 
    unreachable("Invalid register file");
@@ -664,7 +673,11 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
 
    case IBC_REG_FILE_FLAG:
       ibc_assert(s, reg->flag.bits <= 32);
-      if (reg->flag.subnr != IBC_FLAG_REG_UNASSIGNED) {
+      if (reg->flag.subnr == IBC_FLAG_REG_UNASSIGNED) {
+         ibc_assert(s, reg->flag.align_mul >= 1 && reg->flag.align_mul <= 2);
+         ibc_assert(s, reg->flag.bits <= reg->flag.align_mul * 16);
+         ibc_assert(s, reg->flag.align_offset < reg->flag.align_mul);
+      } else {
          ibc_assert(s, reg->flag.subnr <= 4);
          /* We can't cross the whole flag reg boundary */
          if (reg->flag.subnr & 1)

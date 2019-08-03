@@ -97,8 +97,10 @@ ibc_reg_ref_link_write(ibc_reg_ref *ref, ibc_instr *instr)
    if (ref->file == IBC_REG_FILE_NONE || ref->file == IBC_REG_FILE_IMM)
       return;
 
-   ref->write_instr = instr;
-   list_addtail(&ref->write_link, &((ibc_reg *)ref->reg)->writes);
+   if (ref->reg) {
+      ref->write_instr = instr;
+      list_addtail(&ref->write_link, &((ibc_reg *)ref->reg)->writes);
+   }
 }
 
 static void
@@ -109,6 +111,7 @@ ibc_reg_ref_unlink_write(ibc_reg_ref *ref, ibc_instr *instr)
       assert(ref->file != IBC_REG_FILE_NONE);
       assert(ref->file != IBC_REG_FILE_IMM);
       list_del(&ref->write_link);
+      ref->write_instr = NULL;
    }
 }
 
