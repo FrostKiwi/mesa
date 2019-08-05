@@ -408,6 +408,23 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
                         0, intrin->num_dest_comps,
                         intrin->instr.simd_group,
                         intrin->instr.simd_width);
+
+   switch (intrin->op) {
+   case IBC_INTRINSIC_OP_SIMD_ZIP: {
+      assert(intrin->instr.simd_width % intrin->num_srcs == 0);
+      const unsigned src_width = intrin->instr.simd_width / intrin->num_srcs;
+      for (unsigned i = 0; i < intrin->num_srcs; i++) {
+         ibc_assert(s, intrin->src[i].simd_group ==
+                       intrin->instr.simd_group + i * src_width);
+         ibc_assert(s, intrin->src[i].simd_width == src_width);
+         ibc_assert(s, intrin->src[i].num_comps == intrin->num_dest_comps);
+      }
+      break;
+   }
+
+   default:
+      break;
+   }
 }
 
 static void

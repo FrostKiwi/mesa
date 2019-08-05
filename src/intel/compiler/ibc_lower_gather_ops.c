@@ -113,7 +113,9 @@ ibc_lower_gather_ops(ibc_shader *shader)
             const unsigned rel_group = intrin->src[i].simd_group -
                                        instr->simd_group;
             const unsigned width = intrin->src[i].simd_width;
-            ibc_builder_push_group(&b, rel_group, intrin->src[i].simd_width);
+            ibc_builder_push_group(&b, intrin->src[i].simd_group,
+                                       intrin->src[i].simd_width);
+            assert(b.simd_group == intrin->src[i].simd_group);
             assert(intrin->src[i].num_comps == 1); /* TODO */
             build_MOV_raw(&b, simd_slice_ref(intrin->dest,
                                              rel_group, width),
