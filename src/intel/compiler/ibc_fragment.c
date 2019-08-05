@@ -457,84 +457,57 @@ ibc_lower_simd_width_fb_write_max_width(ibc_intrinsic_instr *write)
       return 16;
 }
 
-bool
-ibc_lower_fb_writes(ibc_shader *shader)
+void
+ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_send_instr *send,
+                              const ibc_intrinsic_instr *write)
 {
-   bool progress = false;
+   assert(write->op == IBC_INTRINSIC_OP_FB_WRITE);
 
-   ibc_builder b;
-   ibc_builder_init(&b, shader);
+   const ibc_reg_ref color0 = write->src[IBC_FB_WRITE_SRC_COLOR0].ref;
+   const ibc_reg_ref color1 = write->src[IBC_FB_WRITE_SRC_COLOR1].ref;
+   assert(!color1.file);
+   assert(!write->src[IBC_FB_WRITE_SRC_SRC0_ALPHA].ref.file);
+   assert(!write->src[IBC_FB_WRITE_SRC_DEPTH].ref.file);
+   assert(!write->src[IBC_FB_WRITE_SRC_STENCIL].ref.file);
+   assert(!write->src[IBC_FB_WRITE_SRC_OMASK].ref.file);
+   assert(write->src[IBC_FB_WRITE_SRC_TARGET].ref.file == IBC_REG_FILE_IMM);
+   const unsigned target =
+      *(uint32_t *)write->src[IBC_FB_WRITE_SRC_TARGET].ref.imm;
+   assert(write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.file == IBC_REG_FILE_IMM);
+   const bool last_rt =
+      *(uint32_t *)write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.imm;
+   bool has_header = false;
 
-   ibc_foreach_instr_safe(instr, shader) {
-      if (instr->type != IBC_INSTR_TYPE_INTRINSIC)
-         continue;
+   send->payload[0] = color0;
+   send->mlen = 4 * (write->instr.simd_width / 8);
 
-      ibc_intrinsic_instr *write = ibc_instr_as_intrinsic(instr);
-      if (write->op != IBC_INTRINSIC_OP_FB_WRITE)
-         continue;
-
-      b.cursor = ibc_before_instr(instr);
-      assert(b._group_stack_size == 0);
-      ibc_builder_push_group(&b, instr->simd_group, instr->simd_width);
-
-      const ibc_reg_ref color0 = write->src[IBC_FB_WRITE_SRC_COLOR0].ref;
-      const ibc_reg_ref color1 = write->src[IBC_FB_WRITE_SRC_COLOR1].ref;
-      assert(!color1.file);
-      assert(!write->src[IBC_FB_WRITE_SRC_SRC0_ALPHA].ref.file);
-      assert(!write->src[IBC_FB_WRITE_SRC_DEPTH].ref.file);
-      assert(!write->src[IBC_FB_WRITE_SRC_STENCIL].ref.file);
-      assert(!write->src[IBC_FB_WRITE_SRC_OMASK].ref.file);
-      assert(write->src[IBC_FB_WRITE_SRC_TARGET].ref.file == IBC_REG_FILE_IMM);
-      const unsigned target =
-         *(uint32_t *)write->src[IBC_FB_WRITE_SRC_TARGET].ref.imm;
-      assert(write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.file == IBC_REG_FILE_IMM);
-      const bool last_rt =
-         *(uint32_t *)write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.imm;
-      bool has_header = false;
-
-      ibc_send_instr *send = ibc_send_instr_create(shader,
-                                                   instr->simd_group,
-                                                   instr->simd_width);
-
-      send->payload[0] = color0;
-      send->mlen = 4 * (instr->simd_width / 8);
-
-      uint32_t msg_control;
-      if (color1.file != IBC_REG_FILE_NONE) {
-         assert(write->instr.simd_width == 8);
-         msg_control = write->instr.simd_group % 16 == 0 ?
-               BRW_DATAPORT_RENDER_TARGET_WRITE_SIMD8_DUAL_SOURCE_SUBSPAN01 :
-               BRW_DATAPORT_RENDER_TARGET_WRITE_SIMD8_DUAL_SOURCE_SUBSPAN23;
-      } else {
-         assert(write->instr.simd_group == 0 ||
-                (write->instr.simd_group == 16 &&
-                 write->instr.simd_width == 16));
-         msg_control = write->instr.simd_width == 16 ?
-            BRW_DATAPORT_RENDER_TARGET_WRITE_SIMD16_SINGLE_SOURCE :
-            BRW_DATAPORT_RENDER_TARGET_WRITE_SIMD8_SINGLE_SOURCE_SUBSPAN01;
-      }
-      msg_control |= (write->instr.simd_group / 16) << 3;
-
-      send->sfid = GEN6_SFID_DATAPORT_RENDER_CACHE;
-      send->desc_imm =
-         brw_dp_write_desc(shader->devinfo, target, msg_control,
-                           GEN6_DATAPORT_WRITE_MESSAGE_RENDER_TARGET_WRITE,
-                           last_rt, 0 /* send_commit_msg */);
-
-      send->has_header = has_header; /* TODO */
-      send->has_side_effects = true;
-      send->check_tdr = true;
-      send->eot = last_rt &&
-         instr->simd_group + instr->simd_width == shader->simd_width;
-
-      ibc_builder_insert_instr(&b, &send->instr);
-      ibc_instr_remove(&write->instr);
-      progress = true;
-
-      ibc_builder_pop(&b);
+   uint32_t msg_control;
+   if (color1.file != IBC_REG_FILE_NONE) {
+      assert(write->instr.simd_width == 8);
+      msg_control = write->instr.simd_group % 16 == 0 ?
+            BRW_DATAPORT_RENDER_TARGET_WRITE_SIMD8_DUAL_SOURCE_SUBSPAN01 :
+            BRW_DATAPORT_RENDER_TARGET_WRITE_SIMD8_DUAL_SOURCE_SUBSPAN23;
+   } else {
+      assert(write->instr.simd_group == 0 ||
+             (write->instr.simd_group == 16 &&
+              write->instr.simd_width == 16));
+      msg_control = write->instr.simd_width == 16 ?
+         BRW_DATAPORT_RENDER_TARGET_WRITE_SIMD16_SINGLE_SOURCE :
+         BRW_DATAPORT_RENDER_TARGET_WRITE_SIMD8_SINGLE_SOURCE_SUBSPAN01;
    }
+   msg_control |= (write->instr.simd_group / 16) << 3;
 
-   return progress;
+   send->sfid = GEN6_SFID_DATAPORT_RENDER_CACHE;
+   send->desc_imm =
+      brw_dp_write_desc(b->shader->devinfo, target, msg_control,
+                        GEN6_DATAPORT_WRITE_MESSAGE_RENDER_TARGET_WRITE,
+                        last_rt, 0 /* send_commit_msg */);
+
+   send->has_header = has_header; /* TODO */
+   send->has_side_effects = true;
+   send->check_tdr = true;
+   send->eot = last_rt &&
+      write->instr.simd_group + write->instr.simd_width == b->shader->simd_width;
 }
 
 const unsigned *
