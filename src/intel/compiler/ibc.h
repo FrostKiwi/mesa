@@ -613,6 +613,8 @@ typedef struct {
 
    enum ibc_intrinsic_op op;
 
+   /* TODO: Should this be based on the opcode? */
+   bool can_reorder;
    bool has_side_effects;
 
    ibc_reg_ref dest;
@@ -862,6 +864,7 @@ unsigned ibc_lower_simd_width_fb_write_max_width(ibc_intrinsic_instr *write);
 bool ibc_lower_surface_access(ibc_shader *shader);
 
 bool ibc_opt_copy_prop(ibc_shader *shader);
+bool ibc_opt_cse(ibc_shader *shader);
 bool ibc_opt_dead_code(ibc_shader *shader);
 
 void ibc_print_shader(const ibc_shader *shader, FILE *fp);
