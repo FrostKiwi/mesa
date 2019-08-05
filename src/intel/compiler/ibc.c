@@ -502,12 +502,8 @@ ibc_lower_and_optimize(ibc_shader *ibc)
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
 
-   ibc_lower_surface_access(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_lower_fb_writes(ibc);
+   ibc_lower_io_to_sends(ibc);
+   fprintf(stderr, "After lower_io_to_sends\n");
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");
