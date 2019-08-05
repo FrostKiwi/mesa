@@ -34,8 +34,49 @@ move_to_payload(ibc_builder *b, ibc_reg_ref src, unsigned num_comps)
    return dest;
 }
 
+static void
+lower_surface_access(ibc_builder *b, ibc_send_instr *send,
+                     const ibc_intrinsic_instr *intrin)
+{
+   uint32_t desc;
+   switch (intrin->op) {
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_untyped_surface_rw_desc(b->shader->devinfo,
+                                            intrin->instr.simd_width,
+                                            intrin->num_dest_comps,
+                                            false   /* write */);
+      break;
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_untyped_surface_rw_desc(b->shader->devinfo,
+                                            intrin->instr.simd_width,
+                                            intrin->src[2].num_comps,
+                                            true    /* write */);
+      break;
+   default:
+      unreachable("Unhandled surface access intrinsic");
+   }
+
+   assert(intrin->src[0].ref.file == IBC_REG_FILE_IMM);
+   assert(intrin->src[0].ref.type == IBC_TYPE_UD);
+   send->desc_imm = desc | *(uint32_t *)intrin->src[0].ref.imm;
+
+   send->dest = intrin->dest;
+   send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
+
+   send->payload[0] = move_to_payload(b, intrin->src[1].ref, 1);
+   send->mlen = intrin->instr.simd_width / 8;
+
+   if (intrin->op == IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE) {
+      send->payload[1] = move_to_payload(b, intrin->src[2].ref,
+                                            intrin->src[2].num_comps);
+      send->ex_mlen = intrin->src[2].num_comps * intrin->instr.simd_width / 8;
+   }
+}
+
 bool
-ibc_lower_surface_access(ibc_shader *shader)
+ibc_lower_io_to_sends(ibc_shader *shader)
 {
    bool progress = false;
 
@@ -47,25 +88,14 @@ ibc_lower_surface_access(ibc_shader *shader)
          continue;
 
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-
-      uint32_t sfid, desc;
       switch (intrin->op) {
-      case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
-         sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
-         desc = brw_dp_untyped_surface_rw_desc(shader->devinfo,
-                                               instr->simd_width,
-                                               intrin->num_dest_comps,
-                                               false   /* write */);
-         break;
-      case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
-         sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
-         desc = brw_dp_untyped_surface_rw_desc(shader->devinfo,
-                                               instr->simd_width,
-                                               intrin->src[2].num_comps,
-                                               true    /* write */);
-         break;
-      default:
+      case IBC_INTRINSIC_OP_SIMD_ZIP:
+      case IBC_INTRINSIC_OP_VEC:
+      case IBC_INTRINSIC_OP_LOAD_PAYLOAD:
+      case IBC_INTRINSIC_OP_PLN:
          continue;
+      default:
+         break;
       }
 
       b.cursor = ibc_before_instr(instr);
@@ -77,28 +107,24 @@ ibc_lower_surface_access(ibc_shader *shader)
                                                    instr->simd_width);
       send->has_side_effects = intrin->has_side_effects;
 
-      send->sfid = sfid;
-      send->desc_imm = desc;
-      assert(intrin->src[0].ref.file == IBC_REG_FILE_IMM);
-      assert(intrin->src[0].ref.type == IBC_TYPE_UD);
-      send->desc_imm |= *(uint32_t *)intrin->src[0].ref.imm;
+      switch (intrin->op) {
+      case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
+      case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
+         lower_surface_access(&b, send, intrin);
+         break;
 
-      send->dest = intrin->dest;
-      send->rlen = intrin->num_dest_comps * instr->simd_width / 8;
+      case IBC_INTRINSIC_OP_FB_WRITE:
+         ibc_lower_io_fb_write_to_send(&b, send, intrin);
+         break;
 
-      send->payload[0] = move_to_payload(&b, intrin->src[1].ref, 1);
-      send->mlen = instr->simd_width / 8;
-
-      if (intrin->op == IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE) {
-         send->payload[1] = move_to_payload(&b, intrin->src[2].ref,
-                                                intrin->src[2].num_comps);
-         send->ex_mlen = intrin->src[2].num_comps * instr->simd_width / 8;
+      default:
+         unreachable("Unsupported intrinsic");
       }
 
       ibc_builder_insert_instr(&b, &send->instr);
-      ibc_builder_pop(&b);
-
       ibc_instr_remove(&intrin->instr);
+
+      ibc_builder_pop(&b);
       progress = true;
    }
 
