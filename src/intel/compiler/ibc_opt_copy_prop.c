@@ -74,7 +74,7 @@ compose_reg_refs(ibc_reg_ref outer, ibc_reg_ref inner,
          unsigned rel_channel = outer.logical.simd_channel - inner_simd_group;
          ibc_hw_grf_slice_simd_group(&ref.hw_grf, rel_channel, 1);
          ibc_hw_grf_mul_stride(&ref.hw_grf, 0);
-      } else {
+      } else if (ref.hw_grf.vstride > 0 || ref.hw_grf.hstride > 0) {
          assert(outer_simd_group >= inner_simd_group);
          assert(outer_simd_group + outer_simd_width <=
                 inner_simd_group + inner_simd_width);
