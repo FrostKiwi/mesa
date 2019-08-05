@@ -60,6 +60,7 @@ struct gen_device_info;
 struct ibc_instr;
 struct ibc_alu_instr;
 struct ibc_shader;
+struct ibc_builder;
 
 /** An enum representing IBC src and dest data types */
 enum PACKED ibc_type {
@@ -858,10 +859,13 @@ void ibc_lower_and_optimize(ibc_shader *ibc);
 
 bool ibc_lower_fb_writes(ibc_shader *shader);
 bool ibc_lower_gather_ops(ibc_shader *shader);
+bool ibc_lower_io_to_sends(ibc_shader *shader);
+void ibc_lower_io_fb_write_to_send(struct ibc_builder *b,
+                                   ibc_send_instr *send,
+                                   const ibc_intrinsic_instr *intrin);
 bool ibc_lower_phis(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);
 unsigned ibc_lower_simd_width_fb_write_max_width(ibc_intrinsic_instr *write);
-bool ibc_lower_surface_access(ibc_shader *shader);
 
 bool ibc_opt_copy_prop(ibc_shader *shader);
 bool ibc_opt_cse(ibc_shader *shader);
