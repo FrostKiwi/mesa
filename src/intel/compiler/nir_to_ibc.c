@@ -407,6 +407,55 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_load_ubo:
+      if (nir_src_is_const(instr->src[0]) && nir_src_is_const(instr->src[1])) {
+         const unsigned comp_size_B = instr->dest.ssa.bit_size / 8;
+         const uint64_t offset_B = nir_src_as_uint(instr->src[1]);
+         const unsigned block_size_B = 64; /* Fetch one cacheline at a time. */
+
+         /* Block loads are inherently scalar operations.  This will actually
+          * get expanded out to a SIMD16 WE_all send but for the purposes of
+          * the logical instruction, it makes more sense to be scalar.
+          */
+         ibc_builder_push_scalar(b);
+
+         ibc_reg_ref dest_comps[4];
+         for (unsigned c = 0; c < instr->num_components; c++) {
+            const uint64_t comp_offset_B = offset_B + c * comp_size_B;
+            const unsigned comp_offset_in_block_B =
+               comp_offset_B % block_size_B;
+            const uint64_t block_offset_B =
+               comp_offset_B - comp_offset_in_block_B;
+
+            ibc_intrinsic_instr *load =
+               ibc_intrinsic_instr_create(b->shader,
+                                          IBC_INTRINSIC_OP_BTI_CONST_BLOCK_READ,
+                                          b->simd_group, b->simd_width, 2);
+            load->instr.we_all = true;
+            load->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[0]));
+            load->src[0].num_comps = 1;
+            assert(instr->src[1].is_ssa);
+            load->src[1].ref = ibc_imm_ud(block_offset_B);
+            load->src[1].num_comps = 1;
+
+            ibc_reg *data_reg =
+               ibc_hw_grf_reg_create(b->shader, REG_SIZE * 2, REG_SIZE);
+            data_reg->is_wlr = true;
+            load->dest = ibc_typed_ref(data_reg, IBC_TYPE_32_BIT);
+            load->num_dest_comps = block_size_B / 4;
+
+            ibc_builder_insert_instr(b, &load->instr);
+
+            dest_comps[c] = ibc_typed_ref(data_reg, instr->dest.ssa.bit_size);
+            dest_comps[c].hw_grf.byte = comp_offset_in_block_B;
+            ibc_hw_grf_mul_stride(&dest_comps[c].hw_grf, 0);
+         }
+         dest = ibc_VEC(b, dest_comps, instr->num_components);
+
+         ibc_builder_pop(b);
+         break;
+      }
+      /* fall through */
+
    case nir_intrinsic_load_ssbo: {
       ibc_intrinsic_instr *load =
          ibc_intrinsic_instr_create(b->shader,
