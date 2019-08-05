@@ -408,22 +408,22 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
    case nir_intrinsic_load_ubo:
    case nir_intrinsic_load_ssbo: {
-      ibc_intrinsic_instr *store =
+      ibc_intrinsic_instr *load =
          ibc_intrinsic_instr_create(b->shader,
                                     IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
                                     b->simd_group, b->simd_width, 2);
-      store->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[0]));
-      store->src[0].num_comps = 1;
+      load->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[0]));
+      load->src[0].num_comps = 1;
       assert(instr->src[1].is_ssa);
-      store->src[1].ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD);
-      store->src[1].num_comps = 1;
+      load->src[1].ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD);
+      load->src[1].num_comps = 1;
 
       dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD,
                                          instr->num_components);
-      store->dest = dest;
-      store->num_dest_comps = instr->num_components;
+      load->dest = dest;
+      load->num_dest_comps = instr->num_components;
 
-      ibc_builder_insert_instr(b, &store->instr);
+      ibc_builder_insert_instr(b, &load->instr);
       break;
    }
 
