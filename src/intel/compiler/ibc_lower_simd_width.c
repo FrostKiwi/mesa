@@ -277,6 +277,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                ibc_intrinsic_instr_create(shader, intrin->op,
                                           b.simd_group, b.simd_width,
                                           intrin->num_srcs);
+            split->can_reorder = intrin->can_reorder;
             split->has_side_effects = intrin->has_side_effects;
 
             switch (intrin->op) {

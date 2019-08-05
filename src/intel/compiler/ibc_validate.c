@@ -394,6 +394,9 @@ static void
 ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
                              const ibc_intrinsic_instr *intrin)
 {
+   if (intrin->has_side_effects)
+      ibc_assert(s, !intrin->can_reorder);
+
    for (unsigned i = 0; i < intrin->num_srcs; i++) {
       ibc_assert(s, intrin->src[i].simd_group >= intrin->instr.simd_group);
       ibc_assert(s, intrin->src[i].simd_group + intrin->src[i].simd_width <=
