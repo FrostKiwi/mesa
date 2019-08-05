@@ -697,9 +697,8 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
                     reg->logical.bit_size == 32 ||
                     reg->logical.bit_size == 64);
 
-      /* TODO: Some texturing instructions might want more than 4 */
       ibc_assert(s, reg->logical.num_comps >= 1 &&
-                    reg->logical.num_comps <= 4);
+                    reg->logical.num_comps <= 16);
 
       ibc_assert(s, reg->logical.simd_group < 32);
       ibc_assert(s, reg->logical.simd_width <= 32);
