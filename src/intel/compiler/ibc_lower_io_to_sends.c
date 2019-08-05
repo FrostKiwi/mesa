@@ -35,6 +35,54 @@ move_to_payload(ibc_builder *b, ibc_reg_ref src, unsigned num_comps)
 }
 
 static void
+lower_const_block_read(ibc_builder *b, ibc_send_instr *send,
+                       const ibc_intrinsic_instr *read)
+{
+   const unsigned block_size_B =
+      read->num_dest_comps * ibc_type_byte_size(read->dest.type);
+   assert(block_size_B % REG_SIZE == 0);
+   const unsigned block_size_DW = block_size_B / 4;
+
+   /* It's actually going to be a SIMD8 or SIMD16 send */
+   assert(send->instr.we_all);
+   send->instr.simd_width = block_size_DW;
+
+   send->sfid = GEN6_SFID_DATAPORT_CONSTANT_CACHE;
+   send->desc_imm =
+      brw_dp_read_desc(b->shader->devinfo, 0,
+                       BRW_DATAPORT_OWORD_BLOCK_DWORDS(block_size_DW),
+                       GEN7_DATAPORT_DC_OWORD_BLOCK_READ,
+                       BRW_DATAPORT_READ_TARGET_DATA_CACHE);
+   assert(read->src[0].ref.type == IBC_TYPE_UD);
+   send->desc = read->src[0].ref;
+
+   assert(read->src[1].ref.file == IBC_REG_FILE_IMM);
+   assert(read->src[1].ref.type == IBC_TYPE_UD);
+   const uint32_t offset_B = *(uint32_t *)read->src[1].ref.imm;
+
+   ibc_reg *msg = ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
+   msg->is_wlr = true;
+
+   ibc_builder_push_we_all(b, 8);
+   ibc_MOV_to(b, ibc_typed_ref(msg, IBC_TYPE_UD),
+                 ibc_hw_grf_ref(0, 0, IBC_TYPE_UD));
+   ibc_builder_pop(b);
+
+   ibc_builder_push_scalar(b);
+   ibc_reg_ref offset_ref = ibc_typed_ref(msg, IBC_TYPE_UD);
+   offset_ref.hw_grf.byte += 2 * ibc_type_byte_size(IBC_TYPE_UD);
+   ibc_MOV_to(b, offset_ref, ibc_imm_ud(offset_B / 16));
+   ibc_builder_pop(b);
+
+   send->payload[0] = ibc_typed_ref(msg, IBC_TYPE_32_BIT);
+   send->has_header = true;
+   send->mlen = 1;
+
+   send->dest = read->dest;
+   send->rlen = block_size_B / REG_SIZE;
+}
+
+static void
 lower_surface_access(ibc_builder *b, ibc_send_instr *send,
                      const ibc_intrinsic_instr *intrin)
 {
@@ -100,14 +148,22 @@ ibc_lower_io_to_sends(ibc_shader *shader)
 
       b.cursor = ibc_before_instr(instr);
       assert(b._group_stack_size == 0);
-      ibc_builder_push_group(&b, instr->simd_group, instr->simd_width);
+      if (instr->we_all)
+         ibc_builder_push_we_all(&b, instr->simd_width);
+      else
+         ibc_builder_push_group(&b, instr->simd_group, instr->simd_width);
 
       ibc_send_instr *send = ibc_send_instr_create(shader,
                                                    instr->simd_group,
                                                    instr->simd_width);
+      send->instr.we_all = instr->we_all;
       send->has_side_effects = intrin->has_side_effects;
 
       switch (intrin->op) {
+      case IBC_INTRINSIC_OP_BTI_CONST_BLOCK_READ:
+         lower_const_block_read(&b, send, intrin);
+         break;
+
       case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
          lower_surface_access(&b, send, intrin);

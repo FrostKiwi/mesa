@@ -434,6 +434,12 @@ IBC_BUILDER_DEFINE_ALU3(MAD)
 #undef IBC_BUILDER_DEFINE_ALU2
 #undef IBC_BUILDER_DEFINE_ALU3
 
+static inline void
+ibc_MOV_to(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref src)
+{
+   ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, src);
+}
+
 static inline ibc_reg_ref
 ibc_MOV_to_flag(ibc_builder *b, enum brw_conditional_mod cmod, ibc_reg_ref src)
 {
@@ -460,7 +466,7 @@ ibc_MOV_raw_vec_to(ibc_builder *b, ibc_reg_ref dest,
    for (unsigned i = 0; i < num_comps; i++) {
       for (unsigned g = 0; g < b->simd_width; g += simd_width) {
          ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
-         ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, src);
+         ibc_MOV_to(b, dest, src);
          ibc_builder_pop(b);
       }
       src.logical.comp++;
@@ -602,7 +608,7 @@ ibc_VEC(ibc_builder *b, ibc_reg_ref *srcs, unsigned num_comps)
 {
    assert(num_comps > 0);
    if (num_comps == 1)
-      return ibc_MOV(b, srcs[0].type, srcs[0]);
+      return ibc_MOV_raw(b, srcs[0]);
 
    ibc_intrinsic_instr *vec =
       ibc_intrinsic_instr_create(b->shader, IBC_INTRINSIC_OP_VEC,
