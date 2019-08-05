@@ -38,6 +38,8 @@ reg_ref_stride(const ibc_reg_ref *ref)
       return ref->hw_grf.hstride;
 
    case IBC_REG_FILE_LOGICAL:
+      if (ref->logical.broadcast || ref->reg->logical.simd_width == 1)
+         return 0;
       return ref->reg->logical.stride;
 
    case IBC_REG_FILE_FLAG:
