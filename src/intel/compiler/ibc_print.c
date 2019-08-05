@@ -134,7 +134,8 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref, bool print_type)
          fprintf(fp, ".%u", ref->logical.comp);
       if (ref->logical.broadcast)
          fprintf(fp, "<%u>", ref->logical.simd_channel);
-      fprintf(fp, ":%s", ibc_type_suffix(ref->type));
+      if (print_type)
+         fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
 
    case IBC_REG_FILE_HW_GRF: {
@@ -161,7 +162,7 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref, bool print_type)
                     ref->hw_grf.width, ref->hw_grf.hstride / type_sz_B);
          }
       }
-      if (ref->type != IBC_TYPE_INVALID)
+      if (print_type && ref->type != IBC_TYPE_INVALID)
          fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
    }
@@ -256,10 +257,13 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
    print_instr_predicate(fp, &alu->instr);
    fprintf(fp, "%s", alu_op_name(alu->op));
    if (alu->cmod) {
-      fprintf(fp, ".%s.", conditional_mod_name(alu->cmod));
+      fprintf(fp, ".%s", conditional_mod_name(alu->cmod));
       assert(alu->instr.flag.file == IBC_REG_FILE_NONE ||
              alu->instr.flag.type == IBC_TYPE_FLAG);
-      print_reg_ref(fp, &alu->instr.flag, false);
+      if (alu->instr.flag.file != IBC_REG_FILE_NONE) {
+         fprintf(fp, ".");
+         print_reg_ref(fp, &alu->instr.flag, false);
+      }
    }
    print_instr_group(fp, &alu->instr);
 
