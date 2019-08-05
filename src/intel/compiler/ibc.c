@@ -360,6 +360,8 @@ ibc_intrinsic_instr_create(struct ibc_shader *shader,
                   simd_group, simd_width);
 
    intrin->op = op;
+   intrin->can_reorder = true;
+   intrin->has_side_effects = false;
 
    ibc_reg_ref_init(&intrin->dest);
 
@@ -484,6 +486,12 @@ ibc_lower_and_optimize(ibc_shader *ibc)
 
    ibc_opt_copy_prop(ibc);
    fprintf(stderr, "After opt_copy_prop\n");
+   ibc_print_shader(ibc, stderr);
+   ibc_validate_shader(ibc);
+   fprintf(stderr, "\n\n");
+
+   ibc_opt_cse(ibc);
+   fprintf(stderr, "After opt_cse\n");
    ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
    fprintf(stderr, "\n\n");

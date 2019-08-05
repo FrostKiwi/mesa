@@ -412,6 +412,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          ibc_intrinsic_instr_create(b->shader,
                                     IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
                                     b->simd_group, b->simd_width, 2);
+      load->can_reorder = false;
       load->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[0]));
       load->src[0].num_comps = 1;
       assert(instr->src[1].is_ssa);
@@ -432,6 +433,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          ibc_intrinsic_instr_create(b->shader,
                                     IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
                                     b->simd_group, b->simd_width, 3);
+      store->can_reorder = false;
       store->has_side_effects = true;
       store->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[1]));
       store->src[0].num_comps = 1;
