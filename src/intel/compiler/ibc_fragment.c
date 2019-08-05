@@ -380,6 +380,7 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
          write->src[i].num_comps = 0;
    }
 
+   write->can_reorder = false;
    write->has_side_effects = true;
    ibc_builder_insert_instr(b, &write->instr);
 
