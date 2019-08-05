@@ -353,6 +353,7 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_INVALID: break;
    case IBC_INTRINSIC_OP_SIMD_ZIP:           return "simd_zip";
    case IBC_INTRINSIC_OP_VEC:                return "vec";
+   case IBC_INTRINSIC_OP_BTI_CONST_BLOCK_READ:  return "bti_const_block_read";
    case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:   return "bti_untyped_read";
    case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:  return "bti_untyped_write";
    case IBC_INTRINSIC_OP_LOAD_PAYLOAD:       return "load_payload";
