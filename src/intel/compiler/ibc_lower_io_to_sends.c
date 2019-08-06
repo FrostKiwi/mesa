@@ -61,7 +61,6 @@ lower_const_block_read(ibc_builder *b, ibc_send_instr *send,
    const uint32_t offset_B = *(uint32_t *)read->src[1].ref.imm;
 
    ibc_reg *msg = ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
-   msg->is_wlr = true;
 
    ibc_builder_push_we_all(b, 8);
    ibc_MOV_to(b, ibc_typed_ref(msg, IBC_TYPE_UD),
