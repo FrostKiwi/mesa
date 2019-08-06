@@ -443,7 +443,11 @@ ibc_reg_ref_simd_slice(ibc_reg_ref *ref, uint8_t rel_simd_group)
       return;
 
    case IBC_REG_FILE_FLAG:
-      ref->flag.bit += rel_simd_group;
+      if (ref->type == IBC_TYPE_FLAG) {
+         ref->flag.bit += rel_simd_group;
+      } else {
+         assert(ref->flag.bit % ibc_type_bit_size(ref->type) == 0);
+      }
       return;
    }
 

@@ -198,7 +198,10 @@ ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
       return ref;
 
    case IBC_REG_FILE_FLAG:
-      assert(ref.type == IBC_TYPE_FLAG);
+      assert(ibc_type_base_type(ref.type) != IBC_TYPE_FLOAT);
+      assert(ibc_type_bit_size(ref.type) == 1 ||
+             ibc_type_bit_size(ref.type) == 16 ||
+             ibc_type_bit_size(ref.type) == 32);
       return ref;
    }
 

@@ -255,19 +255,31 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
 
    case IBC_REG_FILE_FLAG:
       ibc_assert(s, num_comps == 1 && num_bytes == 0);
-      if (ref->reg) {
-         const ibc_flag_reg *flag = &ref->reg->flag;
-         ibc_assert(s, ref_simd_group + ref_simd_width <= flag->bits);
-         ibc_assert(s, ref->flag.bit == ref_simd_group);
-      } else {
-         ibc_assert(s, ref->flag.bit >= ref_simd_group);
-         ibc_assert(s, ref->flag.bit % ref_simd_width == 0);
-         uint8_t base_bit = ref->flag.bit - ref_simd_group;
+      if (ref->type == IBC_TYPE_FLAG) {
+         if (ref->reg) {
+            const ibc_flag_reg *flag = &ref->reg->flag;
+            ibc_assert(s, ref_simd_group + ref_simd_width <= flag->bits);
+            ibc_assert(s, ref->flag.bit == ref_simd_group);
+         } else {
+            ibc_assert(s, ref->flag.bit >= ref_simd_group);
+            ibc_assert(s, ref->flag.bit % ref_simd_width == 0);
+            uint8_t base_bit = ref->flag.bit - ref_simd_group;
 
-         /* Assert we're properly aligned */
-         ibc_assert(s, base_bit % 8 == 0);
-         ibc_assert(s, ref_simd_group <= 8 || base_bit % 16 == 0);
-         ibc_assert(s, ref_simd_group <= 16 || base_bit % 32 == 0);
+            /* Assert we're properly aligned */
+            ibc_assert(s, base_bit % 8 == 0);
+            ibc_assert(s, ref_simd_group <= 8 || base_bit % 16 == 0);
+            ibc_assert(s, ref_simd_group <= 16 || base_bit % 32 == 0);
+         }
+      } else {
+         ibc_assert(s, ibc_type_bit_size(ref->type) == 16 ||
+                       ibc_type_bit_size(ref->type) == 32);
+         ibc_assert(s, ref->flag.bit % ibc_type_bit_size(ref->type) == 0);
+         if (ref->reg) {
+            ibc_assert(s, ref->flag.bit + ibc_type_bit_size(ref->type) <=
+                          ref->reg->flag.bits);
+         } else {
+            ibc_assert(s, ref->flag.bit + ibc_type_bit_size(ref->type) <= 64);
+         }
       }
       return;
    }
@@ -709,8 +721,10 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
 
    case IBC_REG_FILE_FLAG:
       ibc_assert(s, reg->flag.bits <= 32);
-      ibc_assert(s, reg->flag.align_mul >= 1 && reg->flag.align_mul <= 2);
-      ibc_assert(s, reg->flag.bits <= reg->flag.align_mul * 16);
+      ibc_assert(s, util_is_power_of_two_nonzero(reg->flag.bits));
+      ibc_assert(s, util_is_power_of_two_nonzero(reg->flag.align_mul));
+      ibc_assert(s, reg->flag.align_mul >= 8 && reg->flag.align_mul <= 32);
+      ibc_assert(s, reg->flag.bits <= reg->flag.align_mul);
       ibc_assert(s, reg->flag.align_offset < reg->flag.align_mul);
       return;
    }

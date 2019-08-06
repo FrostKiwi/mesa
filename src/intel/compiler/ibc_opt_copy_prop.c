@@ -98,6 +98,11 @@ try_compose_reg_refs(ibc_reg_ref *ref_out,
       break;
 
    case IBC_REG_FILE_FLAG:
+      assert(ibc_type_bit_size(outer.type) != 64);
+      /* Flags can only be accessed as a flag or as 16 or 32-bit */
+      if (ibc_type_bit_size(outer.type) == 8)
+         return false;
+
       assert(outer.logical.byte == 0 &&
              outer.logical.comp == 0 &&
              !outer.logical.broadcast);

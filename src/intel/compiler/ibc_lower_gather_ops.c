@@ -39,7 +39,7 @@ reg_ref_stride(const ibc_reg_ref *ref)
       return ref->reg->logical.stride;
 
    case IBC_REG_FILE_FLAG:
-      unreachable("Should not see flags here");
+      return 0;
    }
 
    unreachable("Unknown register file");

@@ -175,6 +175,8 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref, bool print_type)
          uint8_t subnr = ref->flag.bit / 16;
          fprintf(fp, "f%u.%u", subnr / 2, subnr % 2);
       }
+      if (ref->type != IBC_TYPE_FLAG)
+         fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
    }
    unreachable("Unknown register file");
