@@ -97,6 +97,8 @@ static inline ibc_reg_ref
 ibc_nir_src(struct nir_to_ibc_state *nti, nir_src src, enum ibc_type type)
 {
    assert(src.is_ssa);
+   if (ibc_type_bit_size(type) == 0)
+      type |= nir_src_bit_size(src);
    return ibc_typed_ref(nti->ssa_to_reg[src.ssa->index], type);
 }
 
