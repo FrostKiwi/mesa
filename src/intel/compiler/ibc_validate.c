@@ -77,6 +77,7 @@ ibc_validate_null_reg_ref(struct ibc_validate_state *s,
 
 static bool
 ref_is_none_or_reg(ibc_reg_ref *ref,
+                   UNUSED int8_t num_bytes,
                    UNUSED int8_t num_comps,
                    UNUSED uint8_t simd_group,
                    UNUSED uint8_t simd_width,
@@ -239,6 +240,7 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
          }
       } else {
          ibc_assert(s, num_comps == 0);
+         ibc_assert(s, hw_ref->vstride == hw_ref->hstride * hw_ref->width);
       }
       ibc_assert(s, num_bytes > 0);
       if (ref->reg) {

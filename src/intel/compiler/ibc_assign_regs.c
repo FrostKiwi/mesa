@@ -539,7 +539,7 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
             const uint8_t ref_simd_group = lreg->simd_group + s;
             const uint8_t ref_simd_width =
                MIN2(lreg->simd_width, STRIDED_REG_SIMD_GRANULARITY);
-            ibc_live_intervals_reg_ref_chunks(live, &ref, 1,
+            ibc_live_intervals_reg_ref_chunks(live, &ref, -1, 1,
                                               ref_simd_group, ref_simd_width,
                                               chunks);
 
@@ -733,7 +733,8 @@ should_assign_reg(const ibc_reg *reg)
 }
 
 static bool
-rewrite_ref_and_update_reg(ibc_reg_ref *ref, int8_t num_comps,
+rewrite_ref_and_update_reg(ibc_reg_ref *ref,
+                           int8_t num_bytes, int8_t num_comps,
                            uint8_t simd_group, uint8_t simd_width,
                            void *_state)
 {
