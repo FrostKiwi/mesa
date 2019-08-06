@@ -45,23 +45,6 @@ reg_ref_stride(const ibc_reg_ref *ref)
    unreachable("Unknown register file");
 }
 
-static ibc_reg_ref
-simd_slice_ref(ibc_reg_ref ref, uint8_t rel_simd_group, uint8_t simd_width)
-{
-   switch (ref.file) {
-   case IBC_REG_FILE_IMM:
-   case IBC_REG_FILE_LOGICAL:
-      return ref;
-
-   case IBC_REG_FILE_HW_GRF:
-      ibc_hw_grf_slice_simd_group(&ref.hw_grf, rel_simd_group, simd_width);
-      return ref;
-
-   default:
-      unreachable("Unhandled register file");
-   }
-}
-
 static void
 build_MOV_raw(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref src)
 {
@@ -117,10 +100,11 @@ ibc_lower_gather_ops(ibc_shader *shader)
                                        intrin->src[i].simd_width);
             assert(b.simd_group == intrin->src[i].simd_group);
             assert(intrin->src[i].num_comps == 1); /* TODO */
-            build_MOV_raw(&b, simd_slice_ref(intrin->dest,
-                                             rel_group, width),
-                          simd_slice_ref(intrin->src[i].ref,
-                                         rel_group, width));
+            ibc_reg_ref mov_dest = intrin->dest;
+            ibc_reg_ref mov_src = intrin->src[i].ref;
+            ibc_reg_ref_simd_slice(&mov_dest, rel_group);
+            ibc_reg_ref_simd_slice(&mov_src, rel_group);
+            build_MOV_raw(&b, mov_dest, mov_src);
             ibc_builder_pop(&b);
          }
          break;
