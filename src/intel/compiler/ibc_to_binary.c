@@ -184,6 +184,13 @@ brw_reg_for_ibc_reg_ref(const struct gen_device_info *devinfo,
       return brw_reg;
    }
 
+   case IBC_REG_FILE_FLAG: {
+      assert(ref->reg == NULL);
+      uint8_t subnr = ref->flag.bit / 16;
+      return retype(brw_flag_reg(subnr / 2, subnr % 2),
+                    brw_reg_type_for_ibc_type(type));
+   }
+
    case IBC_REG_FILE_LOGICAL:
       unreachable("Logical registers should not exist in codegen");
    }
@@ -213,6 +220,9 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       unsigned bytes_written = ibc_type_byte_size(alu->dest.type) *
                                alu->instr.simd_width;
       compressed = bytes_written > REG_SIZE;
+   } else if (alu->dest.file == IBC_REG_FILE_FLAG) {
+      assert(alu->instr.we_all && alu->instr.simd_width == 1);
+      compressed = false;
    } else {
       assert(alu->dest.file == IBC_REG_FILE_HW_GRF);
       unsigned dest_byte = alu->dest.hw_grf.byte;
