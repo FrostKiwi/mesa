@@ -64,13 +64,14 @@ ibc_hw_grf_reg_create(ibc_shader *shader, uint8_t size, uint8_t align)
 }
 
 ibc_reg *
-ibc_flag_reg_create(ibc_shader *shader,
-                    uint8_t subnr, uint8_t bits)
+ibc_flag_reg_create(ibc_shader *shader, uint8_t bits)
 {
    ibc_reg *reg = ibc_reg_create(shader, IBC_REG_FILE_FLAG);
 
-   reg->flag.subnr = subnr;
+   reg->is_wlr = true;
    reg->flag.bits = bits;
+   reg->flag.align_mul = MAX2(bits, 16);
+   reg->flag.align_offset = 0;
 
    return reg;
 }
