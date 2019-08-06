@@ -49,7 +49,7 @@ reg_ref_has_live_data(const ibc_reg_ref *ref, const ibc_live_intervals *live)
 static bool
 record_reg_write_sizes(ibc_reg_ref *ref,
                        UNUSED int8_t num_bytes, UNUSED int8_t num_comps,
-                       uint8_t simd_group, uint8_t simd_width,
+                       UNUSED uint8_t simd_group, uint8_t simd_width,
                        void *_state)
 {
    ibc_live_intervals *live = _state;
@@ -58,7 +58,12 @@ record_reg_write_sizes(ibc_reg_ref *ref,
       return true;
 
    ibc_reg_live_intervals *rli = &live->regs[ref->reg->index];
-   const unsigned byte_size = DIV_ROUND_UP(ibc_type_bit_size(ref->type), 8);
+   unsigned byte_size = DIV_ROUND_UP(ibc_type_bit_size(ref->type), 8);
+
+   if (ref->file == IBC_REG_FILE_FLAG && ref->type != IBC_TYPE_FLAG) {
+      simd_width = ibc_type_bit_size(ref->type);
+      byte_size = 1;
+   }
 
    rli->chunk_simd_width = MIN2(rli->chunk_simd_width, simd_width);
    rli->chunk_byte_size = MIN2(rli->chunk_byte_size, byte_size);
@@ -105,7 +110,8 @@ reg_num_chunks(const ibc_reg *reg, ibc_live_intervals *live)
       assert(reg->hw_grf.size % byte_divisor == 0);
       return reg->hw_grf.size >> byte_shift;
    case IBC_REG_FILE_FLAG:
-      unreachable("TODO");
+      assert(reg->flag.bits % simd_divisor == 0);
+      return reg->flag.bits >> simd_shift;
    }
    unreachable("Invalid register file");
 }
@@ -259,7 +265,20 @@ ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
    }
 
    case IBC_REG_FILE_FLAG:
-      unreachable("TODO");
+      assert(num_comps == 1);
+      if (ref->type != IBC_TYPE_FLAG) {
+         simd_group = ref->flag.bit;
+         simd_width = ibc_type_bit_size(ref->type);
+      }
+
+      const unsigned bit_chunk_start = ref->flag.bit >> simd_shift;
+      const unsigned bit_chunk_end =
+         (ref->flag.bit + simd_width - 1) >> simd_shift;
+      for (unsigned b = bit_chunk_start; b <= bit_chunk_end; b++) {
+         assert(b < rli->num_chunks);
+         BITSET_SET(chunks, b);
+      }
+      break;
    }
 }
 
