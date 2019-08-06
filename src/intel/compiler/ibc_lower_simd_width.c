@@ -65,8 +65,9 @@ simd_slice_ref(ibc_reg_ref ref, uint8_t old_simd_group,
       return ref;
 
    case IBC_REG_FILE_FLAG:
-      ibc_flag_slice_simd_group(&ref.flag, old_simd_group,
-                                new_simd_group, simd_width);
+      ibc_flag_slice_simd_group(&ref.flag,
+                                new_simd_group - old_simd_group,
+                                simd_width);
       return ref;
 
    default:

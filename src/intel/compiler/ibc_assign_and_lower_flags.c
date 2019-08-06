@@ -203,8 +203,7 @@ assigned:
             ibc_builder_push_group(b, g, lower_width);
             ibc_reg_ref src = ibc_typed_ref(reg, logical_flag_reg_type(reg));
             ibc_build_alu(b, IBC_ALU_OP_MOV, ibc_null(IBC_TYPE_W),
-                          ibc_flag_ref(subnr + g / 16),
-                          BRW_CONDITIONAL_NZ, &src, 1);
+                          ibc_flag_ref(subnr, g), BRW_CONDITIONAL_NZ, &src, 1);
             ibc_builder_pop(b);
          }
          ibc_builder_pop(b);
@@ -278,11 +277,9 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
                                                true, /* overwrite */
                                                false, /* opportunistic */
                                                &state);
-
-            ibc_reg_ref flag_ref = ibc_flag_ref(subnr);
-            ibc_flag_slice_simd_group(&flag_ref.flag,
-                                      logical->logical.simd_group,
-                                      instr->simd_group, instr->simd_width);
+            ibc_reg_ref flag_ref =
+               ibc_flag_ref(subnr, instr->simd_group -
+                                   logical->logical.simd_group);
             ibc_instr_set_write_ref(&alu->instr, &alu->instr.flag, flag_ref);
 
             /* We can just make it write to the logical reg as its
@@ -307,10 +304,9 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
                                                &state);
             if (subnr >= 0) {
                alu->cmod = BRW_CONDITIONAL_NZ;
-               ibc_reg_ref flag_ref = ibc_flag_ref(subnr);
-               ibc_flag_slice_simd_group(&flag_ref.flag,
-                                         logical->logical.simd_group,
-                                         instr->simd_group, instr->simd_width);
+               ibc_reg_ref flag_ref =
+                  ibc_flag_ref(subnr, instr->simd_group -
+                                      logical->logical.simd_group);
                ibc_instr_set_write_ref(&alu->instr, &alu->instr.flag, flag_ref);
             }
          }
@@ -322,11 +318,8 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
                                             false, /* overwrite */
                                             false, /* opportunistic */
                                             &state);
-         ibc_reg_ref flag_ref = ibc_flag_ref(subnr);
-         ibc_flag_slice_simd_group(&flag_ref.flag,
-                                   logical->logical.simd_group,
-                                   instr->simd_group, instr->simd_width);
-         instr->flag = flag_ref;
+         instr->flag = ibc_flag_ref(subnr, instr->simd_group -
+                                           logical->logical.simd_group);
       }
 
       ibc_instr_foreach_read(instr, rewrite_logical_flag_refs_to_w, NULL);

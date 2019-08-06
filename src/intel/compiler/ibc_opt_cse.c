@@ -63,7 +63,7 @@ hash_reg_ref(uint32_t hash, const ibc_reg_ref *ref, const ibc_reg *base_reg)
       break;
 
    case IBC_REG_FILE_FLAG:
-      hash = HASH(hash, ref->flag.subnr);
+      hash = HASH(hash, ref->flag.bit);
       break;
    }
 
@@ -115,7 +115,7 @@ reg_refs_equal(const ibc_reg_ref *ref_a, const ibc_reg_ref *ref_b,
       break;
 
    case IBC_REG_FILE_FLAG:
-      if (ref_a->flag.subnr != ref_b->flag.subnr)
+      if (ref_a->flag.bit != ref_b->flag.bit)
          return false;
       break;
    }
@@ -375,7 +375,6 @@ hash_wlr_reg_cb(const void *_reg)
       break;
 
    case IBC_REG_FILE_FLAG:
-      hash = HASH(hash, reg->flag.subnr);
       hash = HASH(hash, reg->flag.bits);
       hash = HASH(hash, reg->flag.align_mul);
       hash = HASH(hash, reg->flag.align_offset);
@@ -435,8 +434,7 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
       break;
 
    case IBC_REG_FILE_FLAG:
-      if (reg_a->flag.subnr != reg_b->flag.subnr ||
-          reg_a->flag.bits != reg_b->flag.bits ||
+      if (reg_a->flag.bits != reg_b->flag.bits ||
           reg_a->flag.align_mul != reg_b->flag.align_mul ||
           reg_a->flag.align_offset != reg_b->flag.align_offset)
          return false;
