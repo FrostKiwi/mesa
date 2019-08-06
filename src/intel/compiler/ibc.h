@@ -177,8 +177,6 @@ typedef struct ibc_hw_grf_reg {
 } ibc_hw_grf_reg;
 
 
-#define IBC_FLAG_REG_UNASSIGNED UINT8_MAX
-
 /** A struct representing a flag register
  *
  * A flag register is only one-dimensional; it only has a number of bits.
@@ -191,9 +189,6 @@ typedef struct ibc_hw_grf_reg {
  *    with only one SIMD invocation.
  */
 typedef struct ibc_flag_reg {
-   /** Flag register subnumber in units of 16-bit chunks */
-   uint8_t subnr;
-
    /** Size in bits */
    uint8_t bits;
 
@@ -264,8 +259,7 @@ ibc_reg *ibc_logical_reg_create(struct ibc_shader *shader,
 ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
                                uint8_t size, uint8_t align);
 
-ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader,
-                             uint8_t subnr, uint8_t bits);
+ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader, uint8_t bits);
 
 #define ibc_reg_foreach_write(ref, reg) \
    list_for_each_entry(ibc_reg_ref, ref, &(reg)->writes, write_link)
@@ -374,23 +368,21 @@ ibc_hw_grf_mul_stride(ibc_hw_grf_reg_ref *ref, unsigned stride_mul)
 
 /** A structure representing a reference to a FLAG register */
 typedef struct ibc_flag_reg_ref {
-   /** Subnr at which the reference starts
+   /** Bit at which the reference starts
     *
     * If ibc_reg_ref::reg is not NULL, this is relative to the start of the
-    * virtual flag reg.  If ibc_reg_ref::reg is NULL, this is the actual HW
-    * flag register subnr.
+    * virtual flag reg.  If ibc_reg_ref::reg is NULL, this is relative to the
+    * hardware flag f0.0 where f1.0 starts at bit 32.
     */
-   uint8_t subnr;
+   uint8_t bit;
 } ibc_flag_reg_ref;
 
 static inline void
 ibc_flag_slice_simd_group(ibc_flag_reg_ref *ref,
-                          uint8_t old_simd_group,
-                          uint8_t new_simd_group,
-                          uint8_t simd_width)
+                          uint8_t rel_simd_group, uint8_t simd_width)
 {
-   assert(new_simd_group % simd_width == 0);
-   ref->subnr += (new_simd_group / 16) - (old_simd_group / 16);
+   assert(rel_simd_group % simd_width == 0);
+   ref->bit += rel_simd_group;
 }
 
 
