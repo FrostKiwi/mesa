@@ -258,20 +258,16 @@ ibc_validate_reg_ref(struct ibc_validate_state *s,
       if (ref->reg) {
          const ibc_flag_reg *flag = &ref->reg->flag;
          ibc_assert(s, ref_simd_group + ref_simd_width <= flag->bits);
-         if (flag->subnr == IBC_FLAG_REG_UNASSIGNED) {
-            ibc_assert(s, ref_simd_group + ref_simd_width <=
-                          flag->align_mul * 16);
-            ibc_assert(s, ref_simd_group / 16 ==
-                          flag->align_offset + ref->flag.subnr);
-         } else {
-            uint8_t subnr = flag->subnr + ref->flag.subnr;
-            if (ref_simd_group + ref_simd_width > 16)
-               ibc_assert(s, ref_simd_group / 16 == subnr % 2);
-         }
+         ibc_assert(s, ref->flag.bit == ref_simd_group);
       } else {
-         uint8_t subnr = ref->flag.subnr;
-         if (ref_simd_group + ref_simd_width > 16)
-            ibc_assert(s, ref_simd_group / 16 == subnr % 2);
+         ibc_assert(s, ref->flag.bit >= ref_simd_group);
+         ibc_assert(s, ref->flag.bit % ref_simd_width == 0);
+         uint8_t base_bit = ref->flag.bit - ref_simd_group;
+
+         /* Assert we're properly aligned */
+         ibc_assert(s, base_bit % 8 == 0);
+         ibc_assert(s, ref_simd_group <= 8 || base_bit % 16 == 0);
+         ibc_assert(s, ref_simd_group <= 16 || base_bit % 32 == 0);
       }
       return;
    }
@@ -713,16 +709,9 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
 
    case IBC_REG_FILE_FLAG:
       ibc_assert(s, reg->flag.bits <= 32);
-      if (reg->flag.subnr == IBC_FLAG_REG_UNASSIGNED) {
-         ibc_assert(s, reg->flag.align_mul >= 1 && reg->flag.align_mul <= 2);
-         ibc_assert(s, reg->flag.bits <= reg->flag.align_mul * 16);
-         ibc_assert(s, reg->flag.align_offset < reg->flag.align_mul);
-      } else {
-         ibc_assert(s, reg->flag.subnr <= 4);
-         /* We can't cross the whole flag reg boundary */
-         if (reg->flag.subnr & 1)
-            ibc_assert(s, reg->flag.bits <= 16);
-      }
+      ibc_assert(s, reg->flag.align_mul >= 1 && reg->flag.align_mul <= 2);
+      ibc_assert(s, reg->flag.bits <= reg->flag.align_mul * 16);
+      ibc_assert(s, reg->flag.align_offset < reg->flag.align_mul);
       return;
    }
 
