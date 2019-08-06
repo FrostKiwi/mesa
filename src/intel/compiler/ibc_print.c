@@ -170,10 +170,10 @@ print_reg_ref(FILE *fp, const ibc_reg_ref *ref, bool print_type)
    case IBC_REG_FILE_FLAG:
       /* TODO: Take simd_group into account? */
       if (ref->reg != NULL) {
-         fprintf(fp, "flag%u.%u", ref->reg->index,
-                 ref->reg->flag.subnr + ref->flag.subnr);
+         fprintf(fp, "flag%u.%u", ref->reg->index, ref->flag.bit / 16);
       } else {
-         fprintf(fp, "f%u.%u", ref->flag.subnr / 2, ref->flag.subnr % 2);
+         uint8_t subnr = ref->flag.bit / 16;
+         fprintf(fp, "f%u.%u", subnr / 2, subnr % 2);
       }
       return;
    }
