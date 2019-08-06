@@ -111,6 +111,24 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_op_extract_u8:
+   case nir_op_extract_i8:
+      assert(src[0].type == dest_type);
+      src[0].type = ibc_type_base_type(src[0].type) | 8;
+      src[0].logical.byte += nir_src_as_uint(instr->src[1].src) %
+                             ibc_type_byte_size(dest_type);
+      dest = ibc_MOV(b, dest_type, src[0]);
+      break;
+
+   case nir_op_extract_u16:
+   case nir_op_extract_i16:
+      assert(src[0].type == dest_type);
+      src[0].type = ibc_type_base_type(src[0].type) | 16;
+      src[0].logical.byte += (nir_src_as_uint(instr->src[1].src) * 2) %
+                             ibc_type_byte_size(dest_type);
+      dest = ibc_MOV(b, dest_type, src[0]);
+      break;
+
    case nir_op_unpack_32_2x16_split_x:
    case nir_op_unpack_32_2x16_split_y:
       src[0].type = dest_type;
