@@ -326,7 +326,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       if (b->simd_width > 8) {
          ibc_reg_ref w_tmp_8 = w_tmp;
-         ibc_hw_grf_slice_simd_group(&w_tmp_8.hw_grf, 8, 8);
+         ibc_hw_grf_simd_slice(&w_tmp_8.hw_grf, 8);
          ibc_builder_push_we_all(b, 8);
          ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_8, w_tmp, ibc_imm_uw(8));
          ibc_builder_pop(b);
@@ -334,7 +334,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       if (b->simd_width > 16) {
          ibc_reg_ref w_tmp_16 = w_tmp;
-         ibc_hw_grf_slice_simd_group(&w_tmp_16.hw_grf, 16, 16);
+         ibc_hw_grf_simd_slice(&w_tmp_16.hw_grf, 16);
          ibc_builder_push_we_all(b, 16);
          ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_16, w_tmp, ibc_imm_uw(16));
          ibc_builder_pop(b);

@@ -729,7 +729,7 @@ ibc_cluster_broadcast(ibc_builder *b, enum ibc_type dest_type,
          const unsigned comp = cluster * cluster_size +
                                (cluster_size - 1);
          ibc_reg_ref comp_src = src;
-         ibc_hw_grf_slice_simd_group(&comp_src.hw_grf, comp, 1);
+         ibc_hw_grf_simd_slice(&comp_src.hw_grf, comp);
          ibc_hw_grf_mul_stride(&comp_src.hw_grf, 0);
          ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, comp_src);
 
