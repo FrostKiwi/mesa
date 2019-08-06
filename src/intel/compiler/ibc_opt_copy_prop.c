@@ -23,26 +23,39 @@
 
 #include "ibc.h"
 
-/** Composes an ibc_logical_reg_ref with an ibc_reg_ref
+/** Tries to compose an ibc_logical_reg_ref with an ibc_reg_ref
  *
- * Specifically, this is the composition outer(inner(reg))
+ * Specifically, this is the composition outer(inner(reg)).
+ * try_copy_prop_reg_ref has already figured out how the SIMD channels map.
+ * This function figures out if the composition is possible and, if it is,
+ * returns the composition in ref_out and returns true.
  */
-static inline ibc_reg_ref
-compose_reg_refs(ibc_reg_ref outer, ibc_reg_ref inner,
-                 unsigned outer_simd_group,
-                 unsigned outer_simd_width,
-                 unsigned inner_simd_group,
-                 unsigned inner_simd_width)
+static inline bool
+try_compose_reg_refs(ibc_reg_ref *ref_out,
+                     ibc_reg_ref outer, ibc_reg_ref inner,
+                     unsigned outer_simd_group,
+                     unsigned outer_simd_width,
+                     unsigned inner_simd_group,
+                     unsigned inner_simd_width,
+                     bool supports_imm)
 {
    assert(outer.file == IBC_REG_FILE_LOGICAL);
+   assert(inner.file != IBC_REG_FILE_NONE);
    assert(ibc_type_bit_size(outer.type) <= ibc_type_bit_size(inner.type));
+
+   /* The source must be static */
+   if (!ibc_reg_ref_read_is_static(inner))
+      return false;
+
+   if (inner.file == IBC_REG_FILE_IMM && !supports_imm)
+      return false;
 
    ibc_reg_ref ref = inner;
    ref.type = outer.type;
 
    switch (ref.file) {
    case IBC_REG_FILE_NONE:
-      return ref;
+      break;
 
    case IBC_REG_FILE_IMM:
       assert(ref.logical.comp == 0);
@@ -50,7 +63,7 @@ compose_reg_refs(ibc_reg_ref outer, ibc_reg_ref inner,
          memmove(ref.imm, ref.imm + ref.logical.byte,
                  ibc_type_byte_size(ref.type));
       }
-      return ref;
+      break;
 
    case IBC_REG_FILE_LOGICAL:
       ref.logical.byte += outer.logical.byte;
@@ -62,7 +75,7 @@ compose_reg_refs(ibc_reg_ref outer, ibc_reg_ref inner,
          ref.logical.broadcast = true;
          ref.logical.simd_channel = outer.logical.simd_channel;
       }
-      return ref;
+      break;
 
    case IBC_REG_FILE_HW_GRF:
       /* Components aren't well-defined for HW grfs */
@@ -82,16 +95,20 @@ compose_reg_refs(ibc_reg_ref outer, ibc_reg_ref inner,
          ibc_hw_grf_simd_slice(&ref.hw_grf, rel_simd_group);
       }
       ibc_hw_grf_add_byte_offset(&ref.hw_grf, outer.logical.byte);
-      return ref;
+      break;
 
    case IBC_REG_FILE_FLAG:
       assert(outer.logical.byte == 0 &&
              outer.logical.comp == 0 &&
              !outer.logical.broadcast);
-      return ref;
+      break;
+
+   default:
+      unreachable("Invalid IBC register file");
    }
 
-   unreachable("Invalid IBC register file");
+   *ref_out = ref;
+   return true;
 }
 
 static enum ibc_alu_src_mod
@@ -130,34 +147,32 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
       if (mov->op != IBC_ALU_OP_MOV)
          return false;
 
-      /* Is this even possible? */
-      assert(mov->src[0].ref.file != IBC_REG_FILE_NONE);
-
-      /* The source must be static */
-      if (!ibc_reg_ref_read_is_static(mov->src[0].ref))
-         return false;
-
-      if (mov->src[0].ref.file == IBC_REG_FILE_IMM) {
+      if (mov->src[0].ref.file == IBC_REG_FILE_IMM)
          assert(mov->src[0].mod == IBC_ALU_SRC_MOD_NONE);
-         if (!supports_imm)
-            return false;
-      }
 
       /* Cannot saturate or type convert */
       if (mov->src[0].ref.type != mov->dest.type || mov->saturate)
          return false;
 
-      if (alu_src) {
-         alu_src->mod = compose_alu_src_mods(alu_src->mod, mov->src[0].mod);
-      } else if (mov->src[0].mod != IBC_ALU_SRC_MOD_NONE) {
+      /* We can only propagate modifiers to ALU sources
+       *
+       * TODO: We probably need to be a bit more careful here.
+       */
+      if (!alu_src && mov->src[0].mod != IBC_ALU_SRC_MOD_NONE)
          return false;
-      }
 
-      *ref = compose_reg_refs(*ref, mov->src[0].ref,
-                              simd_group, simd_width,
-                              mov->instr.simd_group,
-                              mov->instr.simd_width);
+      ibc_reg_ref new_ref;
+      if (!try_compose_reg_refs(&new_ref, *ref, mov->src[0].ref,
+                                simd_group, simd_width,
+                                mov->instr.simd_group,
+                                mov->instr.simd_width,
+                                supports_imm))
+         return false;
 
+      if (alu_src)
+         alu_src->mod = compose_alu_src_mods(alu_src->mod, mov->src[0].mod);
+
+      *ref = new_ref;
       return true;
    }
 
@@ -179,21 +194,11 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
                   continue;
             }
 
-            /* Is this even possible? */
-            assert(intrin->src[i].ref.file != IBC_REG_FILE_NONE);
-
-            /* The source must be static */
-            if (!ibc_reg_ref_read_is_static(intrin->src[i].ref))
-               return false;
-
-            if (intrin->src[i].ref.file == IBC_REG_FILE_IMM && !supports_imm)
-               return false;
-
-            *ref = compose_reg_refs(*ref, intrin->src[i].ref,
-                                    simd_group, simd_width,
-                                    intrin->src[i].simd_group,
-                                    intrin->src[i].simd_width);
-            return true;
+            return try_compose_reg_refs(ref, *ref, intrin->src[i].ref,
+                                        simd_group, simd_width,
+                                        intrin->src[i].simd_group,
+                                        intrin->src[i].simd_width,
+                                        supports_imm);
          }
          return false;
 
@@ -207,23 +212,13 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
          assert(intrin->src[comp].simd_group == intrin->instr.simd_group);
          assert(intrin->src[comp].simd_width == intrin->instr.simd_width);
 
-         /* Is this even possible? */
-         assert(intrin->src[comp].ref.file != IBC_REG_FILE_NONE);
-
-         /* The source must be static */
-         if (!ibc_reg_ref_read_is_static(intrin->src[comp].ref))
-            return false;
-
-         if (intrin->src[comp].ref.file == IBC_REG_FILE_IMM && !supports_imm)
-            return false;
-
          ibc_reg_ref comp_ref = *ref;
          comp_ref.logical.comp = 0;
-         *ref = compose_reg_refs(comp_ref, intrin->src[comp].ref,
-                                 simd_group, simd_width,
-                                 intrin->src[comp].simd_group,
-                                 intrin->src[comp].simd_width);
-         return true;
+         return try_compose_reg_refs(ref, comp_ref, intrin->src[comp].ref,
+                                     simd_group, simd_width,
+                                     intrin->src[comp].simd_group,
+                                     intrin->src[comp].simd_width,
+                                     supports_imm);
       }
 
       default:
