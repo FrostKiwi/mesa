@@ -49,6 +49,7 @@ reg_ref_is_alive(ibc_reg_ref *ref)
 
 static bool
 mark_ref(ibc_reg_ref *ref,
+         UNUSED int8_t num_bytes,
          UNUSED int8_t num_comps,
          UNUSED uint8_t simd_group,
          UNUSED uint8_t simd_width,

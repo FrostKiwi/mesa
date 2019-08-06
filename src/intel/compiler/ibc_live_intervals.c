@@ -52,7 +52,8 @@ reg_file_is_tracked(enum ibc_reg_file file)
 }
 
 static bool
-record_reg_write_sizes(ibc_reg_ref *ref, int8_t num_comps,
+record_reg_write_sizes(ibc_reg_ref *ref,
+                       UNUSED int8_t num_bytes, UNUSED int8_t num_comps,
                        uint8_t simd_group, uint8_t simd_width,
                        void *_state)
 {
@@ -116,7 +117,8 @@ reg_num_chunks(const ibc_reg *reg, ibc_live_intervals *live)
 
 void
 ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
-                                  const ibc_reg_ref *ref, int8_t num_comps,
+                                  const ibc_reg_ref *ref,
+                                  int8_t num_bytes, int8_t num_comps,
                                   uint8_t simd_group, uint8_t simd_width,
                                   BITSET_WORD *chunks)
 {
@@ -153,6 +155,7 @@ ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
       unreachable("Not an allocatable register file");
 
    case IBC_REG_FILE_LOGICAL: {
+      assert(num_comps >= 0);
       assert(ref->logical.byte % ref_byte_size == 0);
       assert(ref->logical.byte + ref_byte_size <= reg_byte_size);
 
@@ -209,14 +212,9 @@ ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
 
    case IBC_REG_FILE_HW_GRF: {
       if (num_comps < 0) {
-         /* If num_comps < 0, that means we don't actually know how many
-          * components are being used.  This only happens for send message
-          * sources.  Since we don't really know how much is read, we have to
-          * assume we read the whole thing.
-          */
          assert(ref->hw_grf.hstride * ref->hw_grf.width == ref->hw_grf.vstride);
-         assert(reg->hw_grf.size % byte_divisor == 0);
-         const unsigned num_chunks = reg->hw_grf.size >> byte_shift;
+         assert(num_bytes % byte_divisor == 0);
+         const unsigned num_chunks = num_bytes >> byte_shift;
          for (unsigned i = 0; i < num_chunks; i++)
             BITSET_SET(chunks, i);
       } else if (ref->hw_grf.hstride == 0 && ref->hw_grf.vstride == 0) {
@@ -331,7 +329,8 @@ struct setup_use_def_state {
 };
 
 static bool
-setup_block_use_def_for_read(ibc_reg_ref *ref, int8_t num_comps,
+setup_block_use_def_for_read(ibc_reg_ref *ref,
+                             int8_t num_bytes, int8_t num_comps,
                              uint8_t simd_group, uint8_t simd_width,
                              void *_state)
 {
@@ -346,7 +345,7 @@ setup_block_use_def_for_read(ibc_reg_ref *ref, int8_t num_comps,
    const unsigned chunk_idx = state->live->regs[ref->reg->index].chunk_idx;
 
    memset(read, 0, BITSET_WORDS(num_chunks) * sizeof(BITSET_WORD));
-   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_comps,
+   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_bytes, num_comps,
                                      simd_group, simd_width, read);
 
    for (unsigned i = 0; i < num_chunks; i++) {
@@ -361,7 +360,8 @@ setup_block_use_def_for_read(ibc_reg_ref *ref, int8_t num_comps,
 }
 
 static bool
-setup_block_use_def_for_write(ibc_reg_ref *ref, int8_t num_comps,
+setup_block_use_def_for_write(ibc_reg_ref *ref,
+                              int8_t num_bytes, int8_t num_comps,
                               uint8_t simd_group, uint8_t simd_width,
                               void *_state)
 {
@@ -376,8 +376,7 @@ setup_block_use_def_for_write(ibc_reg_ref *ref, int8_t num_comps,
    const unsigned chunk_idx = state->live->regs[ref->reg->index].chunk_idx;
 
    memset(written, 0, BITSET_WORDS(num_chunks) * sizeof(BITSET_WORD));
-   assert(num_comps > 0);
-   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_comps,
+   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_bytes, num_comps,
                                      simd_group, simd_width, written);
 
    for (unsigned i = 0; i < num_chunks; i++) {
@@ -486,7 +485,8 @@ struct extend_live_interval_state {
 };
 
 static bool
-extend_live_interval_for_read(ibc_reg_ref *ref, int8_t num_comps,
+extend_live_interval_for_read(ibc_reg_ref *ref,
+                              int8_t num_bytes, int8_t num_comps,
                               uint8_t simd_group, uint8_t simd_width,
                               void *_state)
 {
@@ -501,7 +501,7 @@ extend_live_interval_for_read(ibc_reg_ref *ref, int8_t num_comps,
    const unsigned chunk_idx = rli->chunk_idx;
 
    memset(read, 0, BITSET_WORDS(num_chunks) * sizeof(BITSET_WORD));
-   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_comps,
+   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_bytes, num_comps,
                                      simd_group, simd_width, read);
 
    for (unsigned i = 0; i < num_chunks; i++) {
@@ -520,7 +520,8 @@ extend_live_interval_for_read(ibc_reg_ref *ref, int8_t num_comps,
 }
 
 static bool
-extend_live_interval_for_write(ibc_reg_ref *ref, int8_t num_comps,
+extend_live_interval_for_write(ibc_reg_ref *ref,
+                               int8_t num_bytes, int8_t num_comps,
                                uint8_t simd_group, uint8_t simd_width,
                                void *_state)
 {
@@ -535,8 +536,7 @@ extend_live_interval_for_write(ibc_reg_ref *ref, int8_t num_comps,
    const unsigned chunk_idx = rli->chunk_idx;
 
    memset(write, 0, BITSET_WORDS(num_chunks) * sizeof(BITSET_WORD));
-   assert(num_comps > 0);
-   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_comps,
+   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_bytes, num_comps,
                                      simd_group, simd_width, write);
 
    for (unsigned i = 0; i < num_chunks; i++) {
