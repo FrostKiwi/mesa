@@ -330,10 +330,8 @@ typedef struct ibc_hw_grf_reg_ref {
 } ibc_hw_grf_reg_ref;
 
 static inline void
-ibc_hw_grf_slice_simd_group(ibc_hw_grf_reg_ref *ref,
-                            uint8_t rel_simd_group, uint8_t simd_width)
+ibc_hw_grf_simd_slice(ibc_hw_grf_reg_ref *ref, uint8_t rel_simd_group)
 {
-   assert(rel_simd_group % simd_width == 0);
    if (ref->hstride * ref->width == ref->vstride) {
       ref->byte += rel_simd_group * ref->hstride;
    } else {
@@ -376,14 +374,6 @@ typedef struct ibc_flag_reg_ref {
     */
    uint8_t bit;
 } ibc_flag_reg_ref;
-
-static inline void
-ibc_flag_slice_simd_group(ibc_flag_reg_ref *ref,
-                          uint8_t rel_simd_group, uint8_t simd_width)
-{
-   assert(rel_simd_group % simd_width == 0);
-   ref->bit += rel_simd_group;
-}
 
 
 /** A structure representing a register reference (source or destination) in
@@ -438,6 +428,28 @@ ibc_reg_ref_read_is_static(ibc_reg_ref ref)
 
    return ref.reg && ref.reg->is_wlr;
 }
+
+static inline void
+ibc_reg_ref_simd_slice(ibc_reg_ref *ref, uint8_t rel_simd_group)
+{
+   switch (ref->file) {
+   case IBC_REG_FILE_NONE:
+   case IBC_REG_FILE_IMM:
+   case IBC_REG_FILE_LOGICAL:
+      return;
+
+   case IBC_REG_FILE_HW_GRF:
+      ibc_hw_grf_simd_slice(&ref->hw_grf, rel_simd_group);
+      return;
+
+   case IBC_REG_FILE_FLAG:
+      ref->flag.bit += rel_simd_group;
+      return;
+   }
+
+   unreachable("Unhandled register file");
+}
+
 
 enum ibc_instr_type {
    IBC_INSTR_TYPE_ALU,
