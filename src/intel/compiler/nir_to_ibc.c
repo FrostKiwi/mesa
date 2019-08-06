@@ -229,6 +229,53 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 }
 
 static ibc_reg_ref
+nti_initialize_flag(ibc_builder *b, int32_t flag_val)
+{
+   assert(b->simd_group == 0);
+   ibc_reg *flag_reg = ibc_flag_reg_create(b->shader, b->simd_width);
+
+   ibc_builder_push_scalar(b);
+   if (flag_reg->flag.bits <= 16) {
+      ibc_MOV_to(b, ibc_typed_ref(flag_reg, IBC_TYPE_UW),
+                    ibc_imm_uw(flag_val));
+   } else {
+      ibc_MOV_to(b, ibc_typed_ref(flag_reg, IBC_TYPE_UD),
+                    ibc_imm_ud(flag_val));
+   }
+   ibc_builder_pop(b);
+
+   return ibc_ref(flag_reg);
+}
+
+static enum brw_predicate
+brw_predicate_any(unsigned cluster_size)
+{
+   switch (cluster_size) {
+   case 1:  return BRW_PREDICATE_NORMAL;
+   case 2:  return BRW_PREDICATE_ALIGN1_ANY2H;
+   case 4:  return BRW_PREDICATE_ALIGN1_ANY4H;
+   case 8:  return BRW_PREDICATE_ALIGN1_ANY8H;
+   case 16: return BRW_PREDICATE_ALIGN1_ANY16H;
+   case 32: return BRW_PREDICATE_ALIGN1_ANY32H;
+   default: unreachable("Invalid BRW_PREDICATE_ALIGN1_ANY size");
+   }
+}
+
+static enum brw_predicate
+brw_predicate_all(unsigned cluster_size)
+{
+   switch (cluster_size) {
+   case 1:  return BRW_PREDICATE_NORMAL;
+   case 2:  return BRW_PREDICATE_ALIGN1_ALL2H;
+   case 4:  return BRW_PREDICATE_ALIGN1_ALL4H;
+   case 8:  return BRW_PREDICATE_ALIGN1_ALL8H;
+   case 16: return BRW_PREDICATE_ALIGN1_ALL16H;
+   case 32: return BRW_PREDICATE_ALIGN1_ALL32H;
+   default: unreachable("Invalid BRW_PREDICATE_ALIGN1_ALL size");
+   }
+}
+
+static ibc_reg_ref
 nti_reduction_op_identity(nir_op op, enum ibc_type type)
 {
    const unsigned bit_size = ibc_type_bit_size(type);
@@ -341,6 +388,58 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       }
 
       dest = ibc_MOV(b, IBC_TYPE_UD, w_tmp);
+      break;
+   }
+
+   case nir_intrinsic_vote_any: {
+      ibc_reg_ref flag = nti_initialize_flag(b, 0);
+      ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ,
+                      ibc_nir_src(nti, instr->src[0], IBC_TYPE_FLAG));
+
+      /* For some reason, the any/all predicates don't work properly with
+       * SIMD32.  In particular, it appears that a SEL with a QtrCtrl of 2H
+       * doesn't read the correct subset of the flag register and you end up
+       * getting garbage in the second half.  Work around this by using a pair
+       * of 1-wide MOVs and scattering the result.
+       */
+      ibc_builder_push_scalar(b);
+      ibc_reg_ref tmp = ibc_MOV_from_flag(b, IBC_TYPE_W,
+         brw_predicate_any(b->shader->simd_width), false, flag);
+      ibc_builder_pop(b);
+
+      /* Finally, IBC expects 1-bit booleans */
+      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
+      ibc_MOV_to_flag(b, dest, BRW_CONDITIONAL_NZ, tmp);
+      break;
+   }
+
+   case nir_intrinsic_vote_all: {
+      ibc_reg_ref flag = nti_initialize_flag(b, -1);
+      ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ,
+                      ibc_nir_src(nti, instr->src[0], IBC_TYPE_FLAG));
+
+      /* For some reason, the any/all predicates don't work properly with
+       * SIMD32.  In particular, it appears that a SEL with a QtrCtrl of 2H
+       * doesn't read the correct subset of the flag register and you end up
+       * getting garbage in the second half.  Work around this by using a pair
+       * of 1-wide MOVs and scattering the result.
+       */
+      ibc_builder_push_scalar(b);
+      ibc_reg_ref tmp = ibc_MOV_from_flag(b, IBC_TYPE_W,
+         brw_predicate_all(b->shader->simd_width), false, flag);
+      ibc_builder_pop(b);
+
+      /* Finally, IBC expects 1-bit booleans */
+      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
+      ibc_MOV_to_flag(b, dest, BRW_CONDITIONAL_NZ, tmp);
+      break;
+   }
+
+   case nir_intrinsic_ballot: {
+      ibc_reg_ref flag = nti_initialize_flag(b, 0);
+      ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ, ibc_imm_w(-1));
+      flag.type = flag.reg->flag.bits <= 16 ? IBC_TYPE_UW : IBC_TYPE_UD;
+      dest = ibc_MOV(b, IBC_TYPE_UD, flag);
       break;
    }
 
@@ -512,8 +611,8 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
 {
    ibc_builder *b = &nti->b;
 
-   assert(instr->def.bit_size >= 8);
-   enum ibc_type type = IBC_TYPE_UINT | instr->def.bit_size;
+   enum ibc_type type = instr->def.bit_size >= 8 ?
+      (IBC_TYPE_UINT | instr->def.bit_size) : IBC_TYPE_FLAG;
 
    ibc_reg_ref imm_srcs[4];
 
@@ -523,6 +622,12 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
          .type = type,
       };
       switch (instr->def.bit_size) {
+      case 1:
+         /* 1-bit immediates aren't a thing */
+         imm_srcs[i].type = IBC_TYPE_W;
+         *(int16_t *)imm_srcs[i].imm = -(int)instr->value[i].b;
+         imm_srcs[i] = ibc_MOV(b, type, imm_srcs[i]);
+         break;
       case 8:
          /* 8-bit immediates aren't a thing */
          imm_srcs[i].type = IBC_TYPE_UW;

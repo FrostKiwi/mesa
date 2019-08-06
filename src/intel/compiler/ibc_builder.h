@@ -437,16 +437,38 @@ IBC_BUILDER_DEFINE_ALU3(MAD)
 #undef IBC_BUILDER_DEFINE_ALU2
 #undef IBC_BUILDER_DEFINE_ALU3
 
-static inline void
+static inline ibc_alu_instr *
 ibc_MOV_to(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref src)
 {
-   ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, src);
+   return ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, src);
+}
+
+static inline ibc_alu_instr *
+ibc_MOV_to_flag(ibc_builder *b, ibc_reg_ref flag,
+                enum brw_conditional_mod cmod, ibc_reg_ref src)
+{
+   assert(flag.type == IBC_TYPE_FLAG);
+   assert(ibc_type_base_type(src.type) != IBC_TYPE_FLOAT);
+   return ibc_build_alu(b, IBC_ALU_OP_MOV, ibc_null(IBC_TYPE_W),
+                        flag, cmod, &src, 1);
 }
 
 static inline ibc_reg_ref
-ibc_MOV_to_flag(ibc_builder *b, enum brw_conditional_mod cmod, ibc_reg_ref src)
+ibc_MOV_from_flag(ibc_builder *b, enum ibc_type dest_type,
+                  enum brw_predicate predicate, bool pred_inverse,
+                  ibc_reg_ref flag)
 {
-   return ibc_build_ssa_flag_alu(b, IBC_ALU_OP_MOV, src.type, cmod, &src, 1);
+   assert(ibc_type_base_type(dest_type) == IBC_TYPE_UINT ||
+          ibc_type_base_type(dest_type) == IBC_TYPE_INT);
+   /* Make it signed */
+   dest_type = IBC_TYPE_INT | ibc_type_bit_size(dest_type);
+
+   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, dest_type, 1);
+   ibc_MOV_to(b, dest, ibc_imm_w(0));
+   ibc_alu_instr *mov = ibc_MOV_to(b, dest, ibc_imm_w(-1));
+   ibc_instr_set_predicate(&mov->instr, flag, predicate, pred_inverse);
+
+   return dest;
 }
 
 static inline void
