@@ -318,7 +318,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       ibc_reg *w_tmp_reg =
          ibc_hw_grf_reg_create(b->shader, b->simd_width * 2,
                                MIN2(b->simd_width * 2, 32));
-      w_tmp_reg->is_wlr = true;
       ibc_reg_ref w_tmp = ibc_typed_ref(w_tmp_reg, IBC_TYPE_UW);
 
       ibc_builder_push_we_all(b, 8);
@@ -380,7 +379,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       unsigned tmp_align = MIN2(tmp_size, 32);
       ibc_reg *tmp_reg =
          ibc_hw_grf_reg_create(b->shader, tmp_size, tmp_align);
-      tmp_reg->is_wlr = true;
       ibc_reg_ref tmp = ibc_typed_ref(tmp_reg, scan_type);
 
       ibc_builder_push_we_all(b, b->simd_width);
@@ -439,7 +437,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
             ibc_reg *data_reg =
                ibc_hw_grf_reg_create(b->shader, REG_SIZE * 2, REG_SIZE);
-            data_reg->is_wlr = true;
             load->dest = ibc_typed_ref(data_reg, IBC_TYPE_32_BIT);
             load->num_dest_comps = block_size_B / 4;
 
