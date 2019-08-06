@@ -50,32 +50,6 @@ reg_ref_stride(const ibc_reg_ref *ref)
 }
 
 static ibc_reg_ref
-simd_slice_ref(ibc_reg_ref ref, uint8_t old_simd_group,
-               uint8_t new_simd_group, uint8_t simd_width)
-{
-   switch (ref.file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_LOGICAL:
-      return ref;
-
-   case IBC_REG_FILE_HW_GRF:
-      ibc_hw_grf_slice_simd_group(&ref.hw_grf,
-                                  new_simd_group - old_simd_group,
-                                  simd_width);
-      return ref;
-
-   case IBC_REG_FILE_FLAG:
-      ibc_flag_slice_simd_group(&ref.flag,
-                                new_simd_group - old_simd_group,
-                                simd_width);
-      return ref;
-
-   default:
-      unreachable("Unhandled register file");
-   }
-}
-
-static ibc_reg_ref
 simd_restricted_src(ibc_builder *b, ibc_reg_ref src,
                     uint8_t old_simd_group, uint8_t new_simd_group,
                     uint8_t simd_width, unsigned num_comps)
@@ -83,7 +57,7 @@ simd_restricted_src(ibc_builder *b, ibc_reg_ref src,
    if (src.file == IBC_REG_FILE_NONE || src.file == IBC_REG_FILE_IMM)
       return src;
 
-   src = simd_slice_ref(src, old_simd_group, new_simd_group, simd_width);
+   ibc_reg_ref_simd_slice(&src, new_simd_group - old_simd_group);
 
    /* If the source is WLR, then we have two cases:
     *
@@ -194,9 +168,8 @@ ibc_lower_simd_width(ibc_shader *shader)
           * properties.
           */
          for (unsigned i = 0; i < num_splits; i++) {
-            split_dests[i] = simd_slice_ref(*dest, b.simd_group,
-                                            b.simd_group + i * split_simd_width,
-                                            split_simd_width);
+            split_dests[i] = *dest;
+            ibc_reg_ref_simd_slice(&split_dests[i], i * split_simd_width);
          }
       } else if (dest->file != IBC_REG_FILE_NONE) {
          /* For everything else, we emit a SIMD zip after the instruction
@@ -262,10 +235,8 @@ ibc_lower_simd_width(ibc_shader *shader)
             split->instr.we_all = b.we_all;
             split->instr.predicate = alu->instr.predicate;
             split->instr.pred_inverse = alu->instr.pred_inverse;
-            split->instr.flag = simd_slice_ref(alu->instr.flag,
-                                               alu->instr.simd_group,
-                                               split->instr.simd_group,
-                                               split->instr.simd_width);
+            split->instr.flag = alu->instr.flag;
+            ibc_reg_ref_simd_slice(&split->instr.flag, split_simd_rel_group);
 
             split->dest = split_dests[i];
             ibc_builder_insert_instr(&b, &split->instr);
@@ -332,10 +303,8 @@ ibc_lower_simd_width(ibc_shader *shader)
             split->instr.we_all = b.we_all;
             split->instr.predicate = intrin->instr.predicate;
             split->instr.pred_inverse = intrin->instr.pred_inverse;
-            split->instr.flag = simd_slice_ref(intrin->instr.flag,
-                                               intrin->instr.simd_group,
-                                               split->instr.simd_group,
-                                               split->instr.simd_width);
+            split->instr.flag = intrin->instr.flag;
+            ibc_reg_ref_simd_slice(&split->instr.flag, split_simd_rel_group);
 
             split->dest = split_dests[i];
             split->num_dest_comps = intrin->num_dest_comps;
