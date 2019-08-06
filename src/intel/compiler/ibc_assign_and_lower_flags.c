@@ -216,6 +216,7 @@ assigned:
 
 static bool
 rewrite_logical_flag_refs_to_w(ibc_reg_ref *ref,
+                               UNUSED int8_t num_bytes,
                                UNUSED int8_t num_comps,
                                UNUSED uint8_t simd_group,
                                UNUSED uint8_t simd_width,
