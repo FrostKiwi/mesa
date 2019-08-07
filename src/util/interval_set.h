@@ -66,6 +66,20 @@ interval_set_end(const struct interval_set *set)
    return set->intervals[set->count - 1].end;
 }
 
+static inline bool
+interval_set_contains(const struct interval_set *set, uint32_t value)
+{
+   for (unsigned i = 0; i < set->count; i++) {
+      if (set->intervals[i].end <= value)
+         continue;
+
+      /* This is the first interval with value < end */
+      return set->intervals[i].start <= value;
+   }
+
+   return false;
+}
+
 /** Add an interval at the end of the given set, possibly re-allocating it
  *
  * If the set is NULL a new set will be allocated containing the one interval.
