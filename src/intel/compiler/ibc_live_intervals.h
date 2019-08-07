@@ -109,7 +109,9 @@ ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
                                   BITSET_WORD *chunks);
 
 ibc_live_intervals *
-ibc_compute_live_intervals(ibc_shader *shader, void *mem_ctx);
+ibc_compute_live_intervals(ibc_shader *shader,
+                           bool (*reg_filter)(const ibc_reg *reg),
+                           void *mem_ctx);
 
 #ifdef __cplusplus
 } /* extern "C" */
