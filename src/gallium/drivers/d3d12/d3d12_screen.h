@@ -29,11 +29,13 @@
 #include "util/slab.h"
 
 #include <d3d12.h>
+#include <dxgi1_4.h>
 
 struct d3d12_screen {
    struct pipe_screen base;
    struct sw_winsys *winsys;
 
+   IDXGIAdapter1 *adapter;
    ID3D12Device *dev;
 
    struct slab_parent_pool transfer_pool;

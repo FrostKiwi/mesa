@@ -441,8 +441,26 @@ get_dxgi_factory()
    return factory;
 }
 
+static IDXGIAdapter1 *
+choose_adapter(IDXGIFactory4 *factory)
+{
+  IDXGIAdapter1 *adapter;
+  for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i)
+  {
+     DXGI_ADAPTER_DESC1 desc;
+     adapter->GetDesc1(&desc);
+
+     if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+        continue;
+
+     return adapter;
+  }
+
+  return NULL;
+}
+
 static ID3D12Device *
-create_device(IDXGIFactory4 *factory)
+create_device(IDXGIAdapter1 *adapter)
 {
    typedef HRESULT(WINAPI *PFN_D3D12CREATEDEVICE)(IUnknown*, D3D_FEATURE_LEVEL, REFIID, void**);
    PFN_D3D12CREATEDEVICE D3D12CreateDevice;
@@ -459,22 +477,12 @@ create_device(IDXGIFactory4 *factory)
       return NULL;
    }
 
-   IDXGIAdapter1 *adapter;
-   for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i)
-   {
-      DXGI_ADAPTER_DESC1 desc;
-      adapter->GetDesc1(&desc);
+   ID3D12Device *dev;
+   if (SUCCEEDED(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0,
+                 __uuidof(ID3D12Device), (void **)&dev)))
+      return dev;
 
-      if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-         continue;
-
-      ID3D12Device *dev;
-      if (SUCCEEDED(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0,
-                    __uuidof(ID3D12Device), (void **)&dev)))
-         return dev;
-   }
-
-   debug_printf("D3D12: no suitable adapter\n");
+   debug_printf("D3D12: D3D12CreateDevice failed\n");
    return NULL;
 }
 
@@ -505,7 +513,13 @@ d3d12_create_screen(struct sw_winsys *winsys)
       goto failed;
    }
 
-   screen->dev = create_device(factory);
+   screen->adapter = choose_adapter(factory);
+   if (!screen->adapter) {
+      debug_printf("D3D12: no suitable adapter\n");
+      return NULL;
+   }
+
+   screen->dev = create_device(screen->adapter);
    if (!screen->dev) {
       debug_printf("D3D12: failed to create device\n");
       goto failed;
