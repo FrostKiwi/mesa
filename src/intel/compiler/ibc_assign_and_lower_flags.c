@@ -227,6 +227,12 @@ rewrite_logical_flag_refs_to_w(ibc_reg_ref *ref,
    return true;
 }
 
+static bool
+live_reg_filter_cb(const ibc_reg *reg)
+{
+   return reg->file == IBC_REG_FILE_LOGICAL && reg->logical.bit_size == 1;
+}
+
 void
 ibc_assign_and_lower_flags(ibc_shader *shader)
 {
@@ -234,7 +240,8 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
       .mem_ctx = ralloc_context(NULL),
    };
 
-   state.live = ibc_compute_live_intervals(shader, state.mem_ctx);
+   state.live = ibc_compute_live_intervals(shader, live_reg_filter_cb,
+                                           state.mem_ctx);
 
    /* We don't support unassigned flags yet.  It should actually be very
     * little work to support them but the code would have to be tested.
