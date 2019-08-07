@@ -879,6 +879,13 @@ assign_reg(struct ibc_reg_assignment *assign,
    rb_tree_remove(&state->alloc_order, &assign->node);
 }
 
+static bool
+live_reg_filter_cb(const ibc_reg *reg)
+{
+   return reg->file == IBC_REG_FILE_LOGICAL ||
+          reg->file == IBC_REG_FILE_HW_GRF;
+}
+
 void
 ibc_assign_regs(ibc_shader *shader)
 {
@@ -886,7 +893,8 @@ ibc_assign_regs(ibc_shader *shader)
       .mem_ctx = ralloc_context(NULL),
    };
 
-   state.live = ibc_compute_live_intervals(shader, state.mem_ctx);
+   state.live = ibc_compute_live_intervals(shader, live_reg_filter_cb,
+                                           state.mem_ctx);
 
    ibc_phys_reg_alloc_init(&state.phys_alloc);
    for (unsigned i = 0; i < ARRAY_SIZE(state.strided_alloc); i++) {

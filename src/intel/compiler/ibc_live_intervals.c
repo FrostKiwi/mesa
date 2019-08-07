@@ -37,18 +37,13 @@ instr_is_predicated(ibc_instr *instr)
 }
 
 static bool
-reg_file_is_tracked(enum ibc_reg_file file)
+reg_ref_has_live_data(const ibc_reg_ref *ref, const ibc_live_intervals *live)
 {
-   switch (file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
-   case IBC_REG_FILE_FLAG:
+   if (ref->file == IBC_REG_FILE_NONE ||
+       ref->file == IBC_REG_FILE_IMM)
       return false;
-   case IBC_REG_FILE_LOGICAL:
-   case IBC_REG_FILE_HW_GRF:
-      return true;
-   }
-   unreachable("Invalid register file");
+
+   return ref->reg != NULL && ref->reg->index < live->num_regs;
 }
 
 static bool
@@ -59,7 +54,7 @@ record_reg_write_sizes(ibc_reg_ref *ref,
 {
    ibc_live_intervals *live = _state;
 
-   if (!reg_file_is_tracked(ref->file) || !ref->reg)
+   if (!reg_ref_has_live_data(ref, live))
       return true;
 
    ibc_reg_live_intervals *rli = &live->regs[ref->reg->index];
@@ -74,7 +69,7 @@ record_reg_write_sizes(ibc_reg_ref *ref,
 static unsigned
 reg_num_chunks(const ibc_reg *reg, ibc_live_intervals *live)
 {
-   assert(reg_file_is_tracked(reg->file));
+   assert(reg->index < live->num_regs);
    ibc_reg_live_intervals *rli = &live->regs[reg->index];
 
    if (rli->chunk_simd_width > 32) {
@@ -122,8 +117,8 @@ ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
                                   uint8_t simd_group, uint8_t simd_width,
                                   BITSET_WORD *chunks)
 {
-   assert(reg_file_is_tracked(ref->file));
    const ibc_reg *reg = ref->reg;
+   assert(reg->index < live->num_regs);
    ibc_reg_live_intervals *rli = &live->regs[reg->index];
 
    if (rli->chunk_simd_width > 32) {
@@ -254,13 +249,15 @@ ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
 }
 
 static ibc_live_intervals *
-alloc_live_intervals(ibc_shader *shader, void *mem_ctx)
+alloc_live_intervals(ibc_shader *shader,
+                     bool (*reg_filter)(const ibc_reg *reg),
+                     void *mem_ctx)
 {
    ibc_live_intervals *live = ralloc(mem_ctx, ibc_live_intervals);
 
    live->num_regs = 0;
    ibc_foreach_reg(reg, shader) {
-      if (!reg_file_is_tracked(reg->file)) {
+      if (!reg_filter(reg)) {
          reg->index = UINT32_MAX;
          continue;
       }
@@ -270,7 +267,7 @@ alloc_live_intervals(ibc_shader *shader, void *mem_ctx)
 
    live->regs = ralloc_array(live, ibc_reg_live_intervals, live->num_regs);
    ibc_foreach_reg(reg, shader) {
-      if (!reg_file_is_tracked(reg->file))
+      if (reg->index >= live->num_regs)
          continue;
 
       live->regs[reg->index] = (ibc_reg_live_intervals) {
@@ -293,7 +290,7 @@ alloc_live_intervals(ibc_shader *shader, void *mem_ctx)
 
    live->num_chunks = 0;
    ibc_foreach_reg(reg, shader) {
-      if (!reg_file_is_tracked(reg->file))
+      if (reg->index >= live->num_regs)
          continue;
 
       ibc_reg_live_intervals *rli = &live->regs[reg->index];
@@ -337,7 +334,7 @@ setup_block_use_def_for_read(ibc_reg_ref *ref,
    BITSET_DECLARE(read, IBC_REG_LIVE_MAX_CHUNKS);
    struct setup_use_def_state *state = _state;
 
-   if (!reg_file_is_tracked(ref->file) || !ref->reg)
+   if (!reg_ref_has_live_data(ref, state->live))
       return true;
 
    ibc_block_live_sets *bls = &state->live->blocks[state->block_index];
@@ -368,7 +365,7 @@ setup_block_use_def_for_write(ibc_reg_ref *ref,
    BITSET_DECLARE(written, IBC_REG_LIVE_MAX_CHUNKS);
    struct setup_use_def_state *state = _state;
 
-   if (!reg_file_is_tracked(ref->file) || !ref->reg)
+   if (!reg_ref_has_live_data(ref, state->live))
       return true;
 
    ibc_block_live_sets *bls = &state->live->blocks[state->block_index];
@@ -493,7 +490,7 @@ extend_live_interval_for_read(ibc_reg_ref *ref,
    BITSET_DECLARE(read, IBC_REG_LIVE_MAX_CHUNKS);
    struct extend_live_interval_state *state = _state;
 
-   if (!reg_file_is_tracked(ref->file) || !ref->reg)
+   if (!reg_ref_has_live_data(ref, state->live))
       return true;
 
    ibc_reg_live_intervals *rli = &state->live->regs[ref->reg->index];
@@ -528,7 +525,7 @@ extend_live_interval_for_write(ibc_reg_ref *ref,
    BITSET_DECLARE(write, IBC_REG_LIVE_MAX_CHUNKS);
    struct extend_live_interval_state *state = _state;
 
-   if (!reg_file_is_tracked(ref->file) || !ref->reg)
+   if (!reg_ref_has_live_data(ref, state->live))
       return true;
 
    ibc_reg_live_intervals *rli = &state->live->regs[ref->reg->index];
@@ -681,9 +678,12 @@ compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
 }
 
 ibc_live_intervals *
-ibc_compute_live_intervals(ibc_shader *shader, void *mem_ctx)
+ibc_compute_live_intervals(ibc_shader *shader,
+                           bool (*reg_filter)(const ibc_reg *reg),
+                           void *mem_ctx)
 {
-   ibc_live_intervals *live = alloc_live_intervals(shader, mem_ctx);
+   ibc_live_intervals *live =
+      alloc_live_intervals(shader, reg_filter, mem_ctx);
    compute_live_sets(shader, live);
    compute_live_intervals(shader, live);
 
