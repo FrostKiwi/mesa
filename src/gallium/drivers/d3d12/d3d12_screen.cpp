@@ -49,9 +49,14 @@ d3d12_get_device_vendor(struct pipe_screen *pscreen)
 static const char *
 d3d12_get_name(struct pipe_screen *pscreen)
 {
-   struct d3d12_screen *screen = d3d12_screen(pscreen);
+   struct d3d12_screen* screen = d3d12_screen(pscreen);
+
+   DXGI_ADAPTER_DESC1 desc;
+   if (FAILED(screen->adapter->GetDesc1(&desc)))
+      return "D3D12 (Unknown)";
+
    static char buf[1000];
-   snprintf(buf, sizeof(buf), "d3d12 (%s)", "unknown");
+   snprintf(buf, sizeof(buf), "D3D12 (%S)", desc.Description);
    return buf;
 }
 
