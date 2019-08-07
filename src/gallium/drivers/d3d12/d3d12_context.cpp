@@ -253,6 +253,8 @@ struct pipe_context *
 d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
 {
    struct d3d12_context *ctx = CALLOC_STRUCT(d3d12_context);
+   if (!ctx)
+      return NULL;
 
    ctx->base.screen = pscreen;
    ctx->base.priv = priv;
