@@ -426,13 +426,13 @@ get_dxgi_factory()
 
    HMODULE hDXGIMod = LoadLibrary("DXGI.DLL");
    if (!hDXGIMod) {
-      debug_printf("D3D12: failed to load DXGI.DLL");
+      debug_printf("D3D12: failed to load DXGI.DLL\n");
       return NULL;
    }
 
    CreateDXGIFactory = (PFN_CREATE_DXGI_FACTORY)GetProcAddress(hDXGIMod, "CreateDXGIFactory");
    if (!CreateDXGIFactory) {
-      debug_printf("D3D12: failed to load CreateDXGIFactory from DXGI.DLL");
+      debug_printf("D3D12: failed to load CreateDXGIFactory from DXGI.DLL\n");
       return NULL;
    }
 
@@ -472,13 +472,13 @@ create_device(IDXGIAdapter1 *adapter)
 
    HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
-      debug_printf("D3D12: failed to load D3D12.DLL");
+      debug_printf("D3D12: failed to load D3D12.DLL\n");
       return NULL;
    }
 
    D3D12CreateDevice = (PFN_D3D12CREATEDEVICE)GetProcAddress(hD3D12Mod, "D3D12CreateDevice");
    if (!D3D12CreateDevice) {
-      debug_printf("D3D12: failed to load D3D12CreateDevice from D3D12.DLL");
+      debug_printf("D3D12: failed to load D3D12CreateDevice from D3D12.DLL\n");
       return NULL;
    }
 
