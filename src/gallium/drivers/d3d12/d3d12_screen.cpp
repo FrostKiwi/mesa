@@ -492,13 +492,11 @@ create_device(IDXGIAdapter1 *adapter)
 }
 
 struct pipe_screen *
-d3d12_create_screen(struct sw_winsys *winsys)
+d3d12_create_screen()
 {
    struct d3d12_screen *screen = CALLOC_STRUCT(d3d12_screen);
    if (!screen)
       return NULL;
-
-   screen->winsys = winsys;
 
    screen->base.get_name = d3d12_get_name;
    screen->base.get_vendor = d3d12_get_vendor;
