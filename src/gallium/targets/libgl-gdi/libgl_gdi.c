@@ -103,7 +103,7 @@ gdi_screen_create(void)
 #endif
 #ifdef GALLIUM_D3D12
    if (strcmp(driver, "d3d12") == 0) {
-      screen = d3d12_create_screen( winsys );
+      screen = d3d12_create_screen();
       if (screen)
          use_d3d12 = TRUE;
    }

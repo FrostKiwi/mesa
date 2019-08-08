@@ -33,7 +33,6 @@
 
 struct d3d12_screen {
    struct pipe_screen base;
-   struct sw_winsys *winsys;
 
    IDXGIAdapter1 *adapter;
    ID3D12Device *dev;
