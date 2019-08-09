@@ -447,21 +447,28 @@ get_dxgi_factory()
 }
 
 static IDXGIAdapter1 *
-choose_adapter(IDXGIFactory4 *factory)
+choose_adapter(IDXGIFactory4 *factory, LUID *adapter)
 {
-  IDXGIAdapter1 *adapter;
-  for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i)
-  {
-     DXGI_ADAPTER_DESC1 desc;
-     adapter->GetDesc1(&desc);
+   IDXGIAdapter1 *ret;
+   if (adapter) {
+      if (SUCCEEDED(factory->EnumAdapterByLuid(*adapter,
+                                               __uuidof(IDXGIAdapter1),
+                                               (void**)&ret)))
+         return ret;
+      debug_printf("D3D12: requested adapter missing, falling back to auto-detection...\n");
+   }
 
-     if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-        continue;
+   for (UINT i = 0; factory->EnumAdapters1(i, &ret) != DXGI_ERROR_NOT_FOUND; ++i) {
+      DXGI_ADAPTER_DESC1 desc;
+      ret->GetDesc1(&desc);
 
-     return adapter;
-  }
+      if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+         continue;
 
-  return NULL;
+      return ret;
+   }
+
+   return NULL;
 }
 
 static ID3D12Device *
@@ -516,7 +523,7 @@ d3d12_create_screen()
       goto failed;
    }
 
-   screen->adapter = choose_adapter(factory);
+   screen->adapter = choose_adapter(factory, NULL);
    if (!screen->adapter) {
       debug_printf("D3D12: no suitable adapter\n");
       return NULL;
