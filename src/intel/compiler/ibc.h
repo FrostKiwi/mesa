@@ -498,8 +498,8 @@ typedef bool (*ibc_reg_ref_cb)(ibc_reg_ref *ref,
 bool ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state);
 bool ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state);
 
-void ibc_instr_set_write_ref(ibc_instr *instr, ibc_reg_ref *write_ref,
-                             ibc_reg_ref new_ref);
+void ibc_instr_set_ref(ibc_instr *instr, ibc_reg_ref *ref,
+                       ibc_reg_ref new_ref);
 void ibc_instr_set_predicate(ibc_instr *instr, ibc_reg_ref flag,
                              enum brw_predicate predicate,
                              bool pred_inverse);
@@ -562,6 +562,8 @@ ibc_alu_instr *ibc_alu_instr_create(struct ibc_shader *shader,
                                     enum ibc_alu_op op,
                                     uint8_t simd_group,
                                     uint8_t simd_width);
+void ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_reg_ref flag,
+                            enum brw_conditional_mod cmod);
 
 
 typedef struct ibc_send_instr {
