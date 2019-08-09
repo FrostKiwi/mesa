@@ -28,6 +28,7 @@
 #include "d3d12_public.h"
 #include "d3d12_resource.h"
 
+#include "util/debug.h"
 #include "util/u_math.h"
 #include "util/u_memory.h"
 #include "util/u_screen.h"
@@ -458,15 +459,18 @@ choose_adapter(IDXGIFactory4 *factory, LUID *adapter)
       debug_printf("D3D12: requested adapter missing, falling back to auto-detection...\n");
    }
 
-   for (UINT i = 0; factory->EnumAdapters1(i, &ret) != DXGI_ERROR_NOT_FOUND; ++i) {
-      DXGI_ADAPTER_DESC1 desc;
-      ret->GetDesc1(&desc);
-
-      if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-         continue;
-
-      return ret;
+   bool want_warp = env_var_as_boolean("LIBGL_ALWAYS_SOFTWARE", false);
+   if (want_warp) {
+      if (SUCCEEDED(factory->EnumWarpAdapter(__uuidof(IDXGIAdapter1),
+                                             (void**)&ret)))
+         return ret;
+      debug_printf("D3D12: failed to enum warp adapter\n");
+      return NULL;
    }
+
+   // The first adapter is the default
+   if (SUCCEEDED(factory->EnumAdapters1(0, &ret)))
+      return ret;
 
    return NULL;
 }
