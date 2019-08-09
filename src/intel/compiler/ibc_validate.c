@@ -644,8 +644,7 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
       ibc_assert(s, instr->flag.type == IBC_TYPE_FLAG);
       ibc_validate_reg_ref(s, &instr->flag, false, 0, 1,
                            pred_simd_group, pred_simd_width);
-   } else if (instr->type != IBC_INSTR_TYPE_ALU ||
-              ibc_instr_as_alu(instr)->cmod == BRW_CONDITIONAL_NONE) {
+   } else if (!ibc_instr_writes_flag(instr)) {
       ibc_validate_null_reg_ref(s, &instr->flag);
    }
 

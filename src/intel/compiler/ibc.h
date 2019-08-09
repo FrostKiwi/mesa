@@ -807,6 +807,13 @@ ibc_instr_prev(const ibc_instr *instr)
    return LIST_ENTRY(ibc_instr, instr->link.prev, link);
 }
 
+static inline bool
+ibc_instr_writes_flag(const ibc_instr *instr)
+{
+   return instr->type == IBC_INSTR_TYPE_ALU &&
+          ibc_instr_as_alu(instr)->cmod != BRW_CONDITIONAL_NONE;
+}
+
 
 typedef struct ibc_shader {
    const struct gen_device_info *devinfo;
