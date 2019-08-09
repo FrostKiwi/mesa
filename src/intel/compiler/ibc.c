@@ -276,13 +276,36 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
    unreachable("Invalid IBC instruction type");
 }
 
-void
+static void
 ibc_instr_set_write_ref(ibc_instr *instr, ibc_reg_ref *write_ref,
                         ibc_reg_ref new_ref)
 {
    ibc_reg_ref_unlink_write(write_ref, instr);
    *write_ref = new_ref;
    ibc_reg_ref_link_write(write_ref, instr);
+}
+
+static bool
+refs_not_equal(ibc_reg_ref *ref,
+               UNUSED int8_t num_bytes,
+               UNUSED int8_t num_comps,
+               UNUSED uint8_t simd_group,
+               UNUSED uint8_t simd_width,
+               void *_other_ref)
+{
+   return ref != (ibc_reg_ref *)_other_ref;
+}
+
+void
+ibc_instr_set_ref(ibc_instr *instr, ibc_reg_ref *ref, ibc_reg_ref new_ref)
+{
+   if (instr == NULL || ibc_instr_foreach_write(instr, refs_not_equal, ref)) {
+      assert(ref->write_instr == NULL);
+      *ref = new_ref;
+   } else {
+      assert(instr && (ref->reg == NULL || ref->write_instr == instr));
+      ibc_instr_set_write_ref(instr, ref, new_ref);
+   }
 }
 
 void
@@ -294,6 +317,14 @@ ibc_instr_set_predicate(ibc_instr *instr, ibc_reg_ref flag,
    instr->flag = flag;
    instr->predicate = predicate,
    instr->pred_inverse = pred_inverse;
+}
+
+void
+ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_reg_ref flag,
+                       enum brw_conditional_mod cmod)
+{
+   alu->cmod = cmod;
+   ibc_instr_set_write_ref(&alu->instr, &alu->instr.flag, flag);
 }
 
 #define IBC_ALU_OP_DECL(OP, _num_srcs, _src_mods)        \
