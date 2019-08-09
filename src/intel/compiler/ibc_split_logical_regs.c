@@ -119,10 +119,7 @@ rewrite_ref_if_split(ibc_reg_ref *ref,
          ibc_reg_ref new_ref = *ref;
          new_ref.reg = reg;
          new_ref.logical.comp -= reg_start_comp;
-         if (ref->write_instr)
-            ibc_instr_set_write_ref(state->instr, ref, new_ref);
-         else
-            *ref = new_ref;
+         ibc_instr_set_ref(state->instr, ref, new_ref);
          return true;
       }
    }
