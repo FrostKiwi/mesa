@@ -970,13 +970,19 @@ ibc_assign_regs(ibc_shader *shader)
       ibc_send_instr *send = ibc_instr_as_send(instr);
       assert(send->eot);
 
+      /* Sends with EOT must use high registers (g112..g127) */
+      unsigned src1 = BRW_MAX_GRF * REG_SIZE - send->ex_mlen * REG_SIZE;
+      unsigned src0 = src1 - send->mlen * REG_SIZE;
+
+      if (send->ex_mlen > 0) {
+         assert(send->payload[1].file == IBC_REG_FILE_LOGICAL ||
+                send->payload[1].file == IBC_REG_FILE_HW_GRF);
+         assign_reg(&state.assign[send->payload[1].reg->index], src1, &state);
+      }
+
       assert(send->payload[0].file == IBC_REG_FILE_LOGICAL ||
              send->payload[0].file == IBC_REG_FILE_HW_GRF);
-      struct ibc_reg_assignment *assign =
-         &state.assign[send->payload[0].reg->index];
-
-      /* TODO: Be more flexible about the assignment */
-      assign_reg(assign, 112 * REG_SIZE, &state);
+      assign_reg(&state.assign[send->payload[0].reg->index], src0, &state);
       break;
    }
 
