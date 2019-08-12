@@ -32,6 +32,9 @@ struct pipe_screen;
 struct d3d12_resource {
    struct pipe_resource base;
    ID3D12Resource *res;
+
+   struct sw_displaytarget *dt;
+   unsigned dt_stride;
 };
 
 static inline struct d3d12_resource *
