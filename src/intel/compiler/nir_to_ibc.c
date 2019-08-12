@@ -812,6 +812,10 @@ nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
 {
    ibc_shader *shader = ibc_shader_create(mem_ctx, devinfo, dispatch_size);
 
+   shader->use_vmask = (stage == MESA_SHADER_FRAGMENT);
+   shader->has_packed_dispatch =
+      brw_stage_has_packed_dispatch(devinfo, stage, prog_data);
+
    *nti = (struct nir_to_ibc_state) {
       .mem_ctx = mem_ctx,
       .stage = stage,

@@ -442,6 +442,19 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
                         intrin->instr.simd_width);
 
    switch (intrin->op) {
+   case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL:
+      ibc_assert(s, intrin->instr.simd_width == 1);
+      ibc_assert(s, intrin->num_srcs == 0);
+      break;
+
+   case IBC_INTRINSIC_OP_SIMD_BROADCAST:
+      ibc_assert(s, intrin->instr.simd_width == 1);
+      ibc_assert(s, intrin->num_srcs == 2);
+      ibc_assert(s, intrin->src[0].num_comps == intrin->num_dest_comps);
+      ibc_assert(s, intrin->src[1].simd_width == 1);
+      ibc_assert(s, intrin->src[1].num_comps == intrin->num_dest_comps);
+      break;
+
    case IBC_INTRINSIC_OP_SIMD_ZIP: {
       ibc_assert(s, intrin->instr.simd_width % intrin->num_srcs == 0);
       const unsigned src_width = intrin->instr.simd_width / intrin->num_srcs;

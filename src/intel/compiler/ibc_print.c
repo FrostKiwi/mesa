@@ -354,6 +354,8 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
 {
    switch (op) {
    case IBC_INTRINSIC_OP_INVALID: break;
+   case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL:  return "find_live_channel";
+   case IBC_INTRINSIC_OP_SIMD_BROADCAST:     return "simd_broadcast";
    case IBC_INTRINSIC_OP_SIMD_ZIP:           return "simd_zip";
    case IBC_INTRINSIC_OP_VEC:                return "vec";
    case IBC_INTRINSIC_OP_BTI_CONST_BLOCK_READ:  return "bti_const_block_read";
