@@ -8098,10 +8098,14 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
    brw_compute_flat_inputs(prog_data, shader);
 
    if (!use_rep_send && allow_spilling) {
+      assert(brw_nir_should_use_ibc(shader, compiler, true));
       return ibc_compile_fs(compiler, log_data, mem_ctx, key, prog_data,
                             shader, prog, shader_time_index8,
                             shader_time_index16, shader_time_index32,
                             allow_spilling, use_rep_send, vue_map, error_str);
+   } else {
+      assert(use_rep_send ||
+             !brw_nir_should_use_ibc(shader, compiler, true));
    }
 
    cfg_t *simd8_cfg = NULL, *simd16_cfg = NULL, *simd32_cfg = NULL;
@@ -8361,6 +8365,7 @@ brw_compile_cs(const struct brw_compiler *compiler, void *log_data,
    assert(min_dispatch_width <= 32);
    unsigned max_dispatch_width = 32;
 
+   assert(brw_nir_should_use_ibc(src_shader, compiler, true));
    return ibc_compile_cs(compiler, log_data, mem_ctx, key, prog_data,
                          src_shader, shader_time_index, error_str);
 
