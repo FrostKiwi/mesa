@@ -413,6 +413,32 @@ d3d12_fence_reference(struct pipe_screen *screen,
    *ptr = fence;
 }
 
+static void
+enable_d3d12_debug_layer()
+{
+   typedef HRESULT(WINAPI *PFN_D3D12_GET_DEBUG_INTERFACE)(REFIID riid, void **ppFactory);
+   PFN_D3D12_GET_DEBUG_INTERFACE D3D12GetDebugInterface;
+
+   HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
+   if (!hD3D12Mod) {
+      debug_printf("D3D12: failed to load D3D12.DLL\n");
+      return;
+   }
+
+   D3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(hD3D12Mod, "D3D12GetDebugInterface");
+   if (!D3D12GetDebugInterface) {
+      debug_printf("D3D12: failed to load D3D12GetDebugInterface from D3D12.DLL\n");
+      return;
+   }
+
+   ID3D12Debug *debug;
+   if (FAILED(D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void **)&debug))) {
+      debug_printf("D3D12: D3D12GetDebugInterface failed\n");
+      return;
+   }
+
+   debug->EnableDebugLayer();
+}
 
 static IDXGIFactory4 *
 get_dxgi_factory()
@@ -520,6 +546,9 @@ d3d12_create_screen()
    screen->base.flush_frontbuffer = d3d12_flush_frontbuffer;
    screen->base.fence_reference = d3d12_fence_reference;
    screen->base.destroy = d3d12_destroy_screen;
+
+   if (true)
+      enable_d3d12_debug_layer();
 
    IDXGIFactory4 *factory = get_dxgi_factory();
    if (!factory) {
