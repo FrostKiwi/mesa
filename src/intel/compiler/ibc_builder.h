@@ -550,42 +550,42 @@ ibc_CMP(ibc_builder *b, enum ibc_type dest_type,
    return dest;
 }
 
-static inline ibc_reg_ref
-ibc_PLN(ibc_builder *b, ibc_reg_ref vert, ibc_reg_ref bary)
+static inline ibc_intrinsic_instr *
+ibc_build_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
+                    ibc_reg_ref dest, unsigned num_dest_comps,
+                    ibc_intrinsic_src *srcs, unsigned num_srcs)
 {
-   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, IBC_TYPE_F, 1);
+   ibc_intrinsic_instr *intrin =
+      ibc_intrinsic_instr_create(b->shader, op, b->simd_group, b->simd_width,
+                                 num_srcs);
+   intrin->instr.we_all = b->we_all;
 
-   assert(vert.file == IBC_REG_FILE_LOGICAL);
-   assert(vert.reg->logical.simd_width == 1);
-
-   for (unsigned g = 0; g < b->simd_width; g += 16) {
-      ibc_builder_push_group(b, g, MIN2(16, b->simd_width));
-
-      ibc_intrinsic_instr *pln =
-         ibc_intrinsic_instr_create(b->shader, IBC_INTRINSIC_OP_PLN,
-                                    b->simd_group, b->simd_width,
-                                    1 + (b->simd_width / 8));
-      pln->src[0] = (ibc_intrinsic_src) {
-         .ref = vert,
-         .simd_group = b->simd_group,
-         .simd_width = b->simd_width,
-         .num_comps = 4,
-      };
-      assert(b->simd_width >= 8);
-      for (unsigned i = 0; i < (b->simd_width / 8); i++) {
-         pln->src[1 + i] = (ibc_intrinsic_src) {
-            .ref = bary,
-            .simd_group = b->simd_group + i * 8,
-            .simd_width = 8,
-            .num_comps = 2,
-         };
+   for (unsigned i = 0; i < num_srcs; i++) {
+      intrin->src[i].ref = srcs[i].ref;
+      if (srcs[i].simd_width > 0) {
+         intrin->src[i].simd_group = srcs[i].simd_group;
+         intrin->src[i].simd_width = srcs[i].simd_width;
       }
-      pln->dest = dest;
-      pln->num_dest_comps = 1;
-      ibc_builder_insert_instr(b, &pln->instr);
-
-      ibc_builder_pop(b);
+      intrin->src[i].num_comps =
+         srcs[i].num_comps > 0 ? srcs[i].num_comps : num_dest_comps;
    }
+
+   intrin->dest = dest;
+   intrin->num_dest_comps = num_dest_comps;
+   ibc_builder_insert_instr(b, &intrin->instr);
+
+   return intrin;
+}
+
+static inline ibc_reg_ref
+ibc_build_ssa_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
+                        enum ibc_type dest_type, unsigned num_dest_comps,
+                        ibc_intrinsic_src *srcs, unsigned num_srcs)
+{
+   ibc_reg_ref dest =
+      ibc_builder_new_logical_reg(b, dest_type, num_dest_comps);
+
+   ibc_build_intrinsic(b, op, dest, num_dest_comps, srcs, num_srcs);
 
    return dest;
 }
@@ -594,29 +594,26 @@ static inline ibc_reg_ref
 ibc_SIMD_ZIP(ibc_builder *b, ibc_reg_ref *srcs, unsigned num_srcs,
              unsigned num_comps)
 {
-   ibc_intrinsic_instr *zip =
-      ibc_intrinsic_instr_create(b->shader, IBC_INTRINSIC_OP_SIMD_ZIP,
-                                 b->simd_group, b->simd_width, num_srcs);
-
    assert(num_srcs > 1 && b->simd_width % num_srcs == 0);
    const unsigned src_width = b->simd_width / num_srcs;
 
+   ibc_intrinsic_src zip_srcs[8];
+   assert(num_srcs <= ARRAY_SIZE(zip_srcs));
+
    for (unsigned i = 0; i < num_srcs; i++) {
       assert(srcs[i].type == srcs[0].type);
-      zip->src[i] = (ibc_intrinsic_src) {
+      zip_srcs[i] = (ibc_intrinsic_src) {
          .ref = srcs[i],
          .simd_group = b->simd_group + src_width * i,
          .simd_width = src_width,
-         .num_comps = num_comps,
       };
+      zip_srcs[i].ref.type = ibc_type_bit_size(srcs[0].type);
    }
 
-   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, srcs[0].type, num_comps);
-   zip->dest = dest;
-   zip->num_dest_comps = num_comps;
-
-   ibc_builder_insert_instr(b, &zip->instr);
-
+   ibc_reg_ref dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_SIMD_ZIP,
+                                              zip_srcs[0].ref.type, num_comps,
+                                              zip_srcs, num_srcs);
+   dest.type = srcs[0].type;
    return dest;
 }
 
@@ -635,26 +632,62 @@ ibc_VEC(ibc_builder *b, ibc_reg_ref *srcs, unsigned num_comps)
    if (num_comps == 1)
       return ibc_MOV_raw(b, srcs[0]);
 
-   ibc_intrinsic_instr *vec =
-      ibc_intrinsic_instr_create(b->shader, IBC_INTRINSIC_OP_VEC,
-                                 b->simd_group, b->simd_width, num_comps);
-   vec->instr.we_all = b->we_all;
+   ibc_intrinsic_src vec_srcs[4];
+   assert(num_comps <= ARRAY_SIZE(vec_srcs));
 
-   enum ibc_type bits_type = ibc_type_bit_size(srcs[0].type);
    for (unsigned i = 0; i < num_comps; i++) {
       assert(srcs[i].type == srcs[0].type);
-      vec->src[i].ref = srcs[i];
-      vec->src[i].ref.type = bits_type;
-      vec->src[i].num_comps = 1;
+      vec_srcs[i] = (ibc_intrinsic_src) {
+         .ref = srcs[i],
+         .num_comps = 1,
+      };
+      vec_srcs[i].ref.type = ibc_type_bit_size(srcs[0].type);
    }
 
-   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, bits_type, num_comps);
-   vec->dest = dest;
-   vec->num_dest_comps = num_comps;
-
-   ibc_builder_insert_instr(b, &vec->instr);
-
+   ibc_reg_ref dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_VEC,
+                                              vec_srcs[0].ref.type, num_comps,
+                                              vec_srcs, num_comps);
+   dest.type = srcs[0].type;
    return dest;
+}
+
+static inline ibc_reg_ref
+ibc_PLN(ibc_builder *b, ibc_reg_ref vert, ibc_reg_ref bary)
+{
+   assert(vert.file == IBC_REG_FILE_LOGICAL);
+   assert(vert.reg->logical.simd_width == 1);
+
+   ibc_reg_ref comps[2];
+   for (unsigned g = 0; g < b->simd_width; g += 16) {
+      assert(b->simd_width >= 8);
+      ibc_builder_push_group(b, g, MIN2(16, b->simd_width));
+
+      ibc_intrinsic_src pln_srcs[3];
+      pln_srcs[0] = (ibc_intrinsic_src) {
+         .ref = vert,
+         .num_comps = 4,
+      };
+      for (unsigned i = 0; i < (b->simd_width / 8); i++) {
+         pln_srcs[1 + i] = (ibc_intrinsic_src) {
+            .ref = bary,
+            .simd_group = b->simd_group + i * 8,
+            .simd_width = 8,
+            .num_comps = 2,
+         };
+      }
+
+      comps[g / 16] = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_PLN,
+                                              IBC_TYPE_F, 1, pln_srcs,
+                                              1 + (b->simd_width / 8));
+      ibc_builder_pop(b);
+   }
+
+   if (b->simd_width <= 16) {
+      return comps[0];
+   } else {
+      assert(b->simd_width % 16 == 0);
+      return ibc_SIMD_ZIP(b, comps, b->simd_width / 16, 1);
+   }
 }
 
 static inline void

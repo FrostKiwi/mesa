@@ -443,7 +443,7 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
 
    switch (intrin->op) {
    case IBC_INTRINSIC_OP_SIMD_ZIP: {
-      assert(intrin->instr.simd_width % intrin->num_srcs == 0);
+      ibc_assert(s, intrin->instr.simd_width % intrin->num_srcs == 0);
       const unsigned src_width = intrin->instr.simd_width / intrin->num_srcs;
       for (unsigned i = 0; i < intrin->num_srcs; i++) {
          ibc_assert(s, intrin->src[i].simd_group ==
@@ -630,6 +630,7 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
     * have a SIMD group of 0.
     */
    ibc_assert(s, !instr->we_all || instr->simd_group == 0);
+   ibc_assert(s, instr->simd_width >= 8 || instr->we_all);
 
    if (instr->predicate != BRW_PREDICATE_NONE) {
       /* The ANY*H or ALL*H predicate group threads into groups so we need to
