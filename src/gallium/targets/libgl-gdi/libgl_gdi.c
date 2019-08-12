@@ -103,7 +103,7 @@ gdi_screen_create(void)
 #endif
 #ifdef GALLIUM_D3D12
    if (strcmp(driver, "d3d12") == 0) {
-      screen = d3d12_create_screen();
+      screen = d3d12_create_screen( winsys );
       if (screen)
          use_d3d12 = TRUE;
    }
@@ -162,7 +162,7 @@ gdi_present(struct pipe_screen *screen,
 
 #ifdef GALLIUM_D3D12
    if (use_d3d12) {
-      /* dunno :P */
+      screen->flush_frontbuffer(screen, res, 0, 0, hDC, NULL);
       return;
    }
 #endif

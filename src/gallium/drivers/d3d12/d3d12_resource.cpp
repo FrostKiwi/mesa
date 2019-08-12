@@ -32,6 +32,8 @@
 #include "util/u_inlines.h"
 #include "util/u_memory.h"
 
+#include "state_tracker/sw_winsys.h"
+
 #include <d3d12.h>
 
 static void
@@ -143,6 +145,19 @@ d3d12_resource_create(struct pipe_screen *pscreen,
    if (FAILED(hres)) {
       FREE(res);
       return NULL;
+   }
+
+   if (screen->winsys && (templ->bind & (PIPE_BIND_DISPLAY_TARGET |
+                                         PIPE_BIND_SCANOUT |
+                                         PIPE_BIND_SHARED))) {
+      struct sw_winsys *winsys = screen->winsys;
+      res->dt = winsys->displaytarget_create(screen->winsys,
+                                             res->base.bind,
+                                             res->base.format,
+                                             templ->width0,
+                                             templ->height0,
+                                             64, NULL,
+                                             &res->dt_stride);
    }
 
    return &res->base;

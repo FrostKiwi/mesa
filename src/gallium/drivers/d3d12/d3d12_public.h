@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 struct pipe_screen *
-d3d12_create_screen();
+d3d12_create_screen(struct sw_winsys *winsys);
 
 #ifdef __cplusplus
 }
