@@ -562,9 +562,6 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
    nir_variable_mode loop_indirect_mask =
       brw_nir_no_indirect_mask(compiler, nir->info.stage);
 
-   const bool use_ibc = nir->info.stage == MESA_SHADER_COMPUTE ||
-                        nir->info.stage == MESA_SHADER_FRAGMENT;
-
    /* We can handle indirects via scratch messages.  However, they are
     * expensive so we'd rather not if we can avoid it.  Have loop unrolling
     * try to get rid of them.
@@ -629,7 +626,7 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
        * However, in vec4 tessellation shaders, these loads operate by
        * actually pulling from memory.
        */
-      if (!use_ibc) {
+      if (!brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
          const bool is_vec4_tessellation = !is_scalar &&
             (nir->info.stage == MESA_SHADER_TESS_CTRL ||
              nir->info.stage == MESA_SHADER_TESS_EVAL);
@@ -665,7 +662,7 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
          OPT(nir_copy_prop);
          OPT(nir_opt_dce);
       }
-      if (!use_ibc)
+      if (!brw_nir_should_use_ibc(nir, compiler, is_scalar))
          OPT(nir_opt_if, false);
       OPT(nir_opt_conditional_discard);
       if (nir->options->max_unroll_iterations != 0) {
@@ -1053,6 +1050,7 @@ brw_vectorize_lower_mem_access(nir_shader *nir,
    }
 }
 
+
 static bool
 nir_shader_has_local_variables(const nir_shader *nir)
 {
@@ -1062,6 +1060,26 @@ nir_shader_has_local_variables(const nir_shader *nir)
    }
 
    return false;
+}
+
+bool
+brw_nir_should_use_ibc(const nir_shader *nir,
+                       const struct brw_compiler *compiler,
+                       bool is_scalar)
+{
+   if (!is_scalar)
+      return false;
+
+   switch (nir->info.stage) {
+   case MESA_SHADER_COMPUTE:
+      return true;
+
+   case MESA_SHADER_FRAGMENT:
+      return nir->info.name == NULL || strncmp(nir->info.name, "BLORP", 5);
+
+   default:
+      return false;
+   }
 }
 
 /* Prepare the given shader for codegen
@@ -1078,9 +1096,6 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
    const struct gen_device_info *devinfo = compiler->devinfo;
    bool debug_enabled =
       (INTEL_DEBUG & intel_debug_flag_for_shader_stage(nir->info.stage));
-
-   const bool use_ibc = nir->info.stage == MESA_SHADER_COMPUTE ||
-                        nir->info.stage == MESA_SHADER_FRAGMENT;
 
    UNUSED bool progress; /* Written by OPT */
 
@@ -1124,7 +1139,7 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
        *
        * See brw_nir_optimize for the explanation of is_vec4_tessellation.
        */
-      if (!use_ibc) {
+      if (!brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
          const bool is_vec4_tessellation = !is_scalar &&
             (nir->info.stage == MESA_SHADER_TESS_CTRL ||
              nir->info.stage == MESA_SHADER_TESS_EVAL);
@@ -1166,7 +1181,7 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
    OPT(nir_opt_dce);
    OPT(nir_opt_move, nir_move_comparisons);
 
-   if (!use_ibc) {
+   if (!brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
       OPT(nir_lower_bool_to_int32);
       OPT(nir_copy_prop);
       OPT(nir_opt_dce);
@@ -1188,7 +1203,7 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
 
    nir_validate_ssa_dominance(nir, "before nir_convert_from_ssa");
 
-   if (!use_ibc)
+   if (!brw_nir_should_use_ibc(nir, compiler, is_scalar))
       OPT(nir_convert_from_ssa, true);
 
    if (!is_scalar) {
