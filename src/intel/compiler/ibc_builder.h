@@ -444,6 +444,15 @@ ibc_MOV_to(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref src)
    return ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, src);
 }
 
+static inline ibc_reg_ref
+ibc_MOV_scalar(ibc_builder *b, enum ibc_type dest_type, ibc_reg_ref src)
+{
+   ibc_builder_push_scalar(b);
+   ibc_reg_ref dest = ibc_MOV(b, dest_type, src);
+   ibc_builder_pop(b);
+   return dest;
+}
+
 static inline ibc_alu_instr *
 ibc_MOV_to_flag(ibc_builder *b, ibc_reg_ref flag,
                 enum brw_conditional_mod cmod, ibc_reg_ref src)
@@ -592,6 +601,67 @@ ibc_build_ssa_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
    ibc_build_intrinsic(b, op, dest, num_dest_comps, srcs, num_srcs);
 
    return dest;
+}
+
+static inline ibc_reg_ref
+ibc_FIND_LIVE_CHANNEL(ibc_builder *b)
+{
+   ibc_builder_push_scalar(b);
+   ibc_reg_ref dest =
+      ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL,
+                                 IBC_TYPE_UD, 1, NULL, 0);
+   ibc_builder_pop(b);
+
+   return dest;
+}
+
+static inline ibc_reg_ref
+ibc_SIMD_BROADCAST(ibc_builder *b, ibc_reg_ref val, ibc_reg_ref chan,
+                   unsigned num_comps)
+{
+   assert(ibc_reg_ref_read_is_uniform(chan));
+
+   if (ibc_reg_ref_read_is_uniform(val))
+      return ibc_MOV_scalar(b, val.type, val);
+
+   if (val.file == IBC_REG_FILE_LOGICAL &&
+       chan.file == IBC_REG_FILE_IMM) {
+      uint64_t chan_imm = 0;
+      memcpy(&chan_imm, chan.imm, ibc_type_byte_size(chan.type));
+      assert(!val.logical.broadcast);
+      val.logical.broadcast = true;
+      val.logical.simd_channel = chan_imm;
+      return ibc_MOV_scalar(b, val.type, val);
+   }
+
+   ibc_intrinsic_src srcs[2] = {
+      {
+         .ref = val,
+         .simd_group = b->simd_group,
+         .simd_width = b->simd_width,
+      },
+      {
+         .ref = chan,
+         .simd_width = 1,
+      },
+   };
+
+   ibc_builder_push_scalar(b);
+   ibc_reg_ref dest =
+      ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_SIMD_BROADCAST,
+                              IBC_TYPE_UD, num_comps, srcs, 2);
+   ibc_builder_pop(b);
+
+   return dest;
+}
+
+static inline ibc_reg_ref
+ibc_uniformize(ibc_builder *b, ibc_reg_ref val)
+{
+   if (ibc_reg_ref_read_is_uniform(val))
+      ibc_MOV_scalar(b, val.type, val);
+
+   return ibc_SIMD_BROADCAST(b, val, ibc_FIND_LIVE_CHANNEL(b), 1);
 }
 
 static inline ibc_reg_ref

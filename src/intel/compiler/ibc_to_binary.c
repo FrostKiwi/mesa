@@ -366,13 +366,13 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
 }
 
 static void
-generate_pln(struct brw_codegen *p, const ibc_intrinsic_instr *intrin)
+generate_pln(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
+             struct brw_reg dest,
+             struct brw_reg interp, struct brw_reg bary_xy)
 {
    assert(intrin->instr.simd_width == 8 ||
           intrin->instr.simd_width == 16);
    assert(intrin->num_srcs == 1 + (intrin->instr.simd_width / 8));
-
-   const bool compressed = intrin->instr.simd_width > 8;
 
    /* The interpolant should be a scalar on an oword boundary.  The PLN
     * instruction reads it as a SIMD1 vec4.
@@ -381,23 +381,12 @@ generate_pln(struct brw_codegen *p, const ibc_intrinsic_instr *intrin)
    assert(intrin->src[0].ref.reg == NULL);
    assert(intrin->src[0].ref.hw_grf.byte % 16 == 0);
    assert(intrin->src[0].ref.hw_grf.hstride == 0);
-   struct brw_reg interp =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->src[0].ref,
-                              intrin->src[0].simd_width, compressed);
 
    /* The first barycentric source should be register-aligned */
    assert(intrin->src[1].ref.file == IBC_REG_FILE_HW_GRF);
    assert(intrin->src[1].ref.reg == NULL);
    assert(intrin->src[1].ref.hw_grf.byte % 32 == 0);
    assert(intrin->src[1].ref.hw_grf.hstride == 4);
-   struct brw_reg bary_xy =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->src[1].ref,
-                              intrin->src[1].simd_width, compressed);
-
-   struct brw_reg dest =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->dest,
-                              intrin->instr.simd_width,
-                              compressed);
 
    if (intrin->instr.simd_width > 8) {
       /* If we're a SIMD16 PLN instruction, the second source contains the
@@ -413,6 +402,47 @@ generate_pln(struct brw_codegen *p, const ibc_intrinsic_instr *intrin)
    }
 
    brw_PLN(p, dest, interp, bary_xy);
+}
+
+static void
+generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
+                   const ibc_intrinsic_instr *intrin)
+{
+   /* We use a very simple heuristic for intrinsics */
+   const bool compressed = intrin->instr.simd_width > 8;
+
+   struct brw_reg src[3], dest;
+   for (unsigned int i = 0; i < intrin->num_srcs; i++) {
+      src[i] = brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->src[i].ref,
+                                       intrin->src[i].simd_width,
+                                       compressed);
+   }
+   dest = brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->dest,
+                                  intrin->instr.simd_width,
+                                  compressed);
+
+   switch (intrin->op) {
+   case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL: {
+      const struct brw_reg mask =
+         shader->has_packed_dispatch ? brw_imm_ud(~0u) :
+         shader->use_vmask ? brw_vmask_reg() : brw_dmask_reg();
+      brw_find_live_channel(p, dest, mask);
+      break;
+   }
+
+   case IBC_INTRINSIC_OP_SIMD_BROADCAST:
+      assert(intrin->instr.simd_width == 1);
+      assert(intrin->instr.we_all);
+      brw_broadcast(p, dest, src[0], src[1]);
+      break;
+
+   case IBC_INTRINSIC_OP_PLN:
+      generate_pln(p, intrin, dest, src[0], src[1]);
+      break;
+
+   default:
+      unreachable("Intrinsic should have been lowered");
+   }
 }
 
 static void
@@ -501,8 +531,7 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
          continue;
 
       case IBC_INSTR_TYPE_INTRINSIC:
-         assert(ibc_instr_as_intrinsic(instr)->op == IBC_INTRINSIC_OP_PLN);
-         generate_pln(p, ibc_instr_as_intrinsic(instr));
+         generate_intrinsic(p, shader, ibc_instr_as_intrinsic(instr));
          continue;
 
       case IBC_INSTR_TYPE_MERGE:
