@@ -429,6 +429,30 @@ ibc_reg_ref_read_is_static(ibc_reg_ref ref)
    return ref.reg && ref.reg->is_wlr;
 }
 
+/**
+ * Returns true if the given ref reads the same value in all SIMD channels.
+ */
+static inline bool
+ibc_reg_ref_read_is_uniform(ibc_reg_ref ref)
+{
+   switch (ref.file) {
+   case IBC_REG_FILE_NONE:
+   case IBC_REG_FILE_IMM:
+      return true;
+
+   case IBC_REG_FILE_LOGICAL:
+      return ref.logical.broadcast || ref.reg->logical.simd_width == 1;
+
+   case IBC_REG_FILE_HW_GRF:
+      return ref.hw_grf.vstride == 0 && ref.hw_grf.hstride == 0;
+
+   case IBC_REG_FILE_FLAG:
+      return ibc_type_bit_size(ref.type) > 1;
+   }
+
+   unreachable("Invalid IBC reg file");
+}
+
 static inline void
 ibc_reg_ref_simd_slice(ibc_reg_ref *ref, uint8_t rel_simd_group)
 {
@@ -598,6 +622,8 @@ ibc_send_instr *ibc_send_instr_create(struct ibc_shader *shader,
 
 enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_INVALID,
+   IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL,
+   IBC_INTRINSIC_OP_SIMD_BROADCAST,
    IBC_INTRINSIC_OP_SIMD_ZIP,
    IBC_INTRINSIC_OP_VEC,
    IBC_INTRINSIC_OP_BTI_CONST_BLOCK_READ,
@@ -819,6 +845,8 @@ typedef struct ibc_shader {
    const struct gen_device_info *devinfo;
 
    uint8_t simd_width;
+   bool use_vmask:1;
+   bool has_packed_dispatch:1;
 
    /** Instructions */
    struct list_head instrs;
