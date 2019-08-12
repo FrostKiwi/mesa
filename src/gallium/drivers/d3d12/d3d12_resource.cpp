@@ -126,29 +126,26 @@ d3d12_resource_create(struct pipe_screen *pscreen,
        templ->target == PIPE_BUFFER)
       desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-   D3D12_HEAP_PROPERTIES heap_pris;
-   heap_pris.Type = D3D12_HEAP_TYPE_DEFAULT;
-   heap_pris.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-   heap_pris.CreationNodeMask = 1;
-   heap_pris.VisibleNodeMask = 1;
-   heap_pris.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+   D3D12_HEAP_TYPE heap_type = D3D12_HEAP_TYPE_DEFAULT;
 
-#if 0
-   if (templ->usage == PIPE_USAGE_STAGING) {
-      if ()
-      heap_pris.Type = D3D12_HEAP_TYPE_UPLOAD;
-      heap_pris.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE;
-   } else
-      heap_pris.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
-#endif
+   if (templ->bind & (PIPE_BIND_DISPLAY_TARGET |
+                      PIPE_BIND_SCANOUT |
+                      PIPE_BIND_SHARED))
+      heap_type = D3D12_HEAP_TYPE_READBACK;
+   else if (templ->target == PIPE_BUFFER ||
+       templ->usage == PIPE_USAGE_STAGING)
+      heap_type = D3D12_HEAP_TYPE_UPLOAD;
 
-   if (FAILED(screen->dev->CreateCommittedResource(&heap_pris,
+   D3D12_HEAP_PROPERTIES heap_pris = screen->dev->GetCustomHeapProperties(0, heap_type);
+
+   HRESULT hres = screen->dev->CreateCommittedResource(&heap_pris,
                                                    D3D12_HEAP_FLAG_NONE,
                                                    &desc,
                                                    D3D12_RESOURCE_STATE_COMMON,
                                                    NULL,
                                                    __uuidof(ID3D12Resource),
-                                                   (void **)&res->res))) {
+                                                   (void **)&res->res);
+   if (FAILED(hres)) {
       FREE(res);
       return NULL;
    }
