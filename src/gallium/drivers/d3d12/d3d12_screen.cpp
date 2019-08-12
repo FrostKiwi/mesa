@@ -33,6 +33,8 @@
 #include "util/u_memory.h"
 #include "util/u_screen.h"
 
+#include "state_tracker/sw_winsys.h"
+
 #include <dxgi1_4.h>
 
 static const char *
@@ -395,12 +397,28 @@ d3d12_destroy_screen(struct pipe_screen *pscreen)
 }
 
 static void
-d3d12_flush_frontbuffer(struct pipe_screen *screen,
-                        struct pipe_resource *res,
+d3d12_flush_frontbuffer(struct pipe_screen * pscreen,
+                        struct pipe_resource *pres,
                         unsigned level, unsigned layer,
                         void *winsys_drawable_handle,
                         struct pipe_box *sub_box)
 {
+   struct d3d12_screen *screen = d3d12_screen(pscreen);
+   struct sw_winsys *winsys = screen->winsys;
+   struct d3d12_resource *res = d3d12_resource(pres);
+
+   if (!winsys)
+     return;
+
+   assert(res->dt);
+   void *map = winsys->displaytarget_map(winsys, res->dt, 0);
+
+   if (map) {
+      res->res->ReadFromSubresource(map, res->dt_stride, 0, 0, NULL);
+      winsys->displaytarget_unmap(winsys, res->dt);
+   }
+
+   winsys->displaytarget_display(winsys, res->dt, winsys_drawable_handle, sub_box);
 }
 
 static void
@@ -533,11 +551,13 @@ create_device(IDXGIAdapter1 *adapter)
 }
 
 struct pipe_screen *
-d3d12_create_screen()
+d3d12_create_screen(struct sw_winsys *winsys)
 {
    struct d3d12_screen *screen = CALLOC_STRUCT(d3d12_screen);
    if (!screen)
       return NULL;
+
+   screen->winsys = winsys;
 
    screen->base.get_name = d3d12_get_name;
    screen->base.get_vendor = d3d12_get_vendor;
