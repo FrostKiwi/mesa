@@ -108,6 +108,47 @@ logical_flag_reg_bit_size(const ibc_reg *reg)
    return bit_size;
 }
 
+static bool
+logical_reg_has_unique_alu_writes(const ibc_reg *reg,
+                                  const ibc_live_intervals *live)
+{
+   if (!reg->is_wlr)
+      return false;
+
+   if (list_is_singular(&reg->writes))
+      return true;
+
+   assert(reg->index < live->num_regs);
+   const ibc_reg_live_intervals *rli = &live->regs[reg->index];
+
+   BITSET_DECLARE(written, IBC_REG_LIVE_MAX_CHUNKS);
+   const unsigned chunks_words = BITSET_WORDS(rli->num_chunks);
+   memset(written, 0, chunks_words * sizeof(BITSET_WORD));
+
+   ibc_reg_foreach_write(ref, reg) {
+      if (ref->write_instr->type != IBC_INSTR_TYPE_ALU)
+         return false;
+
+      ibc_alu_instr *write_alu = ibc_instr_as_alu(ref->write_instr);
+
+      BITSET_DECLARE(ref_written, IBC_REG_LIVE_MAX_CHUNKS);
+      memset(ref_written, 0, chunks_words * sizeof(BITSET_WORD));
+
+      ibc_live_intervals_reg_ref_chunks(live, ref, -1, 1,
+                                        write_alu->instr.simd_group,
+                                        write_alu->instr.simd_width,
+                                        ref_written);
+
+      for (unsigned w = 0; w < chunks_words; w++) {
+         if (written[w] & ref_written[w])
+            return false;
+         written[w] |= ref_written[w];
+      }
+   }
+
+   return true;
+}
+
 static void
 free_dead_flags(uint32_t ip, struct ibc_assign_flags_state *state)
 {
@@ -491,11 +532,12 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
       assert(reg->logical.num_comps == 1);
 
       if (!reg->is_wlr) {
-         ibc_builder_push_group(b, reg->logical.simd_group,
-                                   reg->logical.simd_width);
-         state.regs[reg->index].vector =
-            ibc_builder_new_logical_reg(b, IBC_TYPE_W, 1);
-         ibc_builder_pop(b);
+         ibc_reg *vec_reg = ibc_logical_reg_create(b->shader, 16, 1,
+                                                   reg->logical.simd_group,
+                                                   reg->logical.simd_width);
+         vec_reg->is_wlr = false;
+         state.regs[reg->index].vector = ibc_typed_ref(vec_reg, IBC_TYPE_W);
+         continue;
       }
 
       int8_t bit_size = logical_flag_reg_bit_size(reg);
@@ -550,7 +592,8 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
             instr_set_flag_ref(instr, &instr->flag, subnr, preserved, &state);
          } else if (alu->dest.file == IBC_REG_FILE_LOGICAL &&
                     alu->dest.reg->logical.bit_size == 1 &&
-                    ibc_reg_ssa_instr(alu->dest.reg) == instr &&
+                    logical_reg_has_unique_alu_writes(alu->dest.reg,
+                                                      state.live) &&
                     state.regs[alu->dest.reg->index].read_as_flag) {
             /* In this case, we're some ALU instruction which is producing a
              * 1-bit destination.  This is something like an AND or OR which
