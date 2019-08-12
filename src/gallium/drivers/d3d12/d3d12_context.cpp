@@ -27,6 +27,7 @@
 #include "d3d12_screen.h"
 #include "d3d12_surface.h"
 
+#include "util/u_framebuffer.h"
 #include "util/u_memory.h"
 
 static void
@@ -226,6 +227,7 @@ static void
 d3d12_set_framebuffer_state(struct pipe_context *pctx,
                             const struct pipe_framebuffer_state *state)
 {
+   util_copy_framebuffer_state(&d3d12_context(pctx)->fb, state);
 }
 
 static void
@@ -234,6 +236,50 @@ d3d12_clear(struct pipe_context *pctx,
             const union pipe_color_union *color,
             double depth, unsigned stencil)
 {
+   struct d3d12_context *ctx = d3d12_context(pctx);
+
+   if (buffers & PIPE_CLEAR_COLOR) {
+      for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
+         struct d3d12_surface* surf = d3d12_surface(ctx->fb.cbufs[i]);
+         ctx->cmdlist->ClearRenderTargetView(surf->desc_handle, color->f,
+                                             0, NULL);
+      }
+   }
+
+   if (buffers & PIPE_CLEAR_DEPTHSTENCIL && ctx->fb.zsbuf) {
+      struct d3d12_surface* surf = d3d12_surface(ctx->fb.zsbuf);
+
+      D3D12_CLEAR_FLAGS flags = (D3D12_CLEAR_FLAGS)0;
+      if (buffers & PIPE_CLEAR_DEPTH)
+         flags |= D3D12_CLEAR_FLAG_DEPTH;
+      if (buffers & PIPE_CLEAR_STENCIL)
+         flags |= D3D12_CLEAR_FLAG_STENCIL;
+
+      ctx->cmdlist->ClearDepthStencilView(surf->desc_handle, flags,
+                                          depth, stencil, 0, NULL);
+   }
+
+   if (FAILED(ctx->cmdlist->Close())) {
+      debug_printf("D3D12: closing ID3D12GraphicsCommandList failed\n");
+      return;
+   }
+
+   ID3D12CommandList* cmdlists[] = { ctx->cmdlist };
+   ctx->cmdqueue->ExecuteCommandLists(1, cmdlists);
+   int value = ++ctx->fence_value;
+   ctx->cmdqueue_fence->SetEventOnCompletion(value, ctx->event);
+   ctx->cmdqueue->Signal(ctx->cmdqueue_fence, value);
+   WaitForSingleObject(ctx->event, INFINITE);
+
+   if (FAILED(ctx->cmdalloc->Reset())) {
+      debug_printf("D3D12: resetting ID3D12CommandAllocator failed\n");
+      return;
+   }
+
+   if (FAILED(ctx->cmdlist->Reset(ctx->cmdalloc, NULL))) {
+      debug_printf("D3D12: resetting ID3D12GraphicsCommandList failed\n");
+      return;
+   }
 }
 
 static void
@@ -252,6 +298,8 @@ d3d12_flush(struct pipe_context *pipe,
 struct pipe_context *
 d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
 {
+   struct d3d12_screen *screen = d3d12_screen(pscreen);
+
    struct d3d12_context *ctx = CALLOC_STRUCT(d3d12_context);
    if (!ctx)
       return NULL;
@@ -307,6 +355,69 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    d3d12_context_resource_init(&ctx->base);
 
    slab_create_child(&ctx->transfer_pool, &d3d12_screen(pscreen)->transfer_pool);
+
+   ctx->event = CreateEvent(NULL, FALSE, FALSE, NULL);
+   if (FAILED(screen->dev->CreateFence(0, D3D12_FENCE_FLAG_NONE,
+                                       __uuidof(ctx->cmdqueue_fence),
+                                       (void **)&ctx->cmdqueue_fence))) {
+      FREE(ctx);
+      return NULL;
+   }
+
+   D3D12_COMMAND_QUEUE_DESC queue_desc;
+   queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+   queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+   queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+   queue_desc.NodeMask = 0;
+   if (FAILED(screen->dev->CreateCommandQueue(&queue_desc,
+                                              __uuidof(ctx->cmdqueue),
+                                              (void **)&ctx->cmdqueue))) {
+      FREE(ctx);
+      return NULL;
+   }
+
+
+   if (FAILED(screen->dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                                  __uuidof(ctx->cmdalloc),
+                                                  (void **)&ctx->cmdalloc))) {
+      FREE(ctx);
+      return NULL;
+   }
+
+   if (FAILED(screen->dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                             ctx->cmdalloc, NULL,
+                                             __uuidof(ctx->cmdlist),
+                                             (void **)&ctx->cmdlist))) {
+      FREE(ctx);
+      return NULL;
+   }
+
+   D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
+
+   heap_desc.NumDescriptors = 100000;
+   heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+   heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+   if (FAILED(screen->dev->CreateDescriptorHeap(&heap_desc,
+                                                __uuidof(ctx->rtv_heap),
+                                                (void **)&ctx->rtv_heap))) {
+      FREE(ctx);
+      return NULL;
+   }
+
+   heap_desc.NumDescriptors = 10;
+   heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+   heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+   if (FAILED(screen->dev->CreateDescriptorHeap(&heap_desc,
+                                                __uuidof(ctx->dsv_heap),
+                                                (void **)&ctx->dsv_heap))) {
+      FREE(ctx);
+      return NULL;
+   }
+
+   ctx->rtv_increment = screen->dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+   ctx->dsv_increment = screen->dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
+   ctx->rtv_index = ctx->dsv_index = 0;
 
    return &ctx->base;
 }
