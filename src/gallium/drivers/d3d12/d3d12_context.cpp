@@ -231,6 +231,32 @@ d3d12_set_framebuffer_state(struct pipe_context *pctx,
 }
 
 static void
+flush_cmdlist(struct d3d12_context *ctx)
+{
+   if (FAILED(ctx->cmdlist->Close())) {
+      debug_printf("D3D12: closing ID3D12GraphicsCommandList failed\n");
+      return;
+   }
+
+   ID3D12CommandList* cmdlists[] = { ctx->cmdlist };
+   ctx->cmdqueue->ExecuteCommandLists(1, cmdlists);
+   int value = ++ctx->fence_value;
+   ctx->cmdqueue_fence->SetEventOnCompletion(value, ctx->event);
+   ctx->cmdqueue->Signal(ctx->cmdqueue_fence, value);
+   WaitForSingleObject(ctx->event, INFINITE);
+
+   if (FAILED(ctx->cmdalloc->Reset())) {
+      debug_printf("D3D12: resetting ID3D12CommandAllocator failed\n");
+      return;
+   }
+
+   if (FAILED(ctx->cmdlist->Reset(ctx->cmdalloc, NULL))) {
+      debug_printf("D3D12: resetting ID3D12GraphicsCommandList failed\n");
+      return;
+   }
+}
+
+static void
 d3d12_clear(struct pipe_context *pctx,
             unsigned buffers,
             const union pipe_color_union *color,
@@ -259,27 +285,7 @@ d3d12_clear(struct pipe_context *pctx,
                                           depth, stencil, 0, NULL);
    }
 
-   if (FAILED(ctx->cmdlist->Close())) {
-      debug_printf("D3D12: closing ID3D12GraphicsCommandList failed\n");
-      return;
-   }
-
-   ID3D12CommandList* cmdlists[] = { ctx->cmdlist };
-   ctx->cmdqueue->ExecuteCommandLists(1, cmdlists);
-   int value = ++ctx->fence_value;
-   ctx->cmdqueue_fence->SetEventOnCompletion(value, ctx->event);
-   ctx->cmdqueue->Signal(ctx->cmdqueue_fence, value);
-   WaitForSingleObject(ctx->event, INFINITE);
-
-   if (FAILED(ctx->cmdalloc->Reset())) {
-      debug_printf("D3D12: resetting ID3D12CommandAllocator failed\n");
-      return;
-   }
-
-   if (FAILED(ctx->cmdlist->Reset(ctx->cmdalloc, NULL))) {
-      debug_printf("D3D12: resetting ID3D12GraphicsCommandList failed\n");
-      return;
-   }
+   flush_cmdlist(ctx);
 }
 
 static void
