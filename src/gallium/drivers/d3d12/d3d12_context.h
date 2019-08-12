@@ -25,7 +25,10 @@
 #define D3D12_CONTEXT_H
 
 #include "pipe/p_context.h"
+#include "pipe/p_state.h"
 #include "util/slab.h"
+
+#include <d3d12.h>
 
 #define D3D12_DEBUG_VERBOSE 1
 extern int d3d12_debug;
@@ -33,6 +36,20 @@ extern int d3d12_debug;
 struct d3d12_context {
    struct pipe_context base;
    struct slab_child_pool transfer_pool;
+
+   struct pipe_framebuffer_state fb;
+
+   HANDLE event;
+   ID3D12CommandQueue *cmdqueue;
+   ID3D12Fence *cmdqueue_fence;
+   int fence_value;
+   ID3D12CommandAllocator *cmdalloc;
+   ID3D12GraphicsCommandList *cmdlist;
+
+   ID3D12DescriptorHeap *rtv_heap;
+   ID3D12DescriptorHeap *dsv_heap;
+   UINT rtv_increment, dsv_increment;
+   int rtv_index, dsv_index;
 };
 
 static inline struct d3d12_context *

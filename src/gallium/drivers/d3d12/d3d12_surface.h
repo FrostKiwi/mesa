@@ -26,12 +26,21 @@
 
 #include "pipe/p_state.h"
 
+#include <d3d12.h>
+
 struct pipe_context;
 
 struct d3d12_surface {
    struct pipe_surface base;
+
+   D3D12_CPU_DESCRIPTOR_HANDLE desc_handle;
 };
 
+static inline struct d3d12_surface *
+d3d12_surface(struct pipe_surface *psurf)
+{
+   return (struct d3d12_surface *)psurf;
+}
 void
 d3d12_context_surface_init(struct pipe_context *context);
 
