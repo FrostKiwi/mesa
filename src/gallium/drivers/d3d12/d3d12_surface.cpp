@@ -22,6 +22,7 @@
  */
 
 #include "d3d12_context.h"
+#include "d3d12_format.h"
 #include "d3d12_resource.h"
 #include "d3d12_screen.h"
 #include "d3d12_surface.h"
@@ -38,7 +39,6 @@ d3d12_create_surface(struct pipe_context *pctx,
    struct d3d12_resource *res = d3d12_resource(pres);
    struct d3d12_context *ctx = d3d12_context(pctx);
    struct d3d12_screen *screen = d3d12_screen(pctx->screen);
-   unsigned int level = tpl->u.tex.level;
 
    struct d3d12_surface *surface = CALLOC_STRUCT(d3d12_surface);
    if (!surface)
@@ -48,9 +48,9 @@ d3d12_create_surface(struct pipe_context *pctx,
    pipe_reference_init(&surface->base.reference, 1);
    surface->base.context = pctx;
    surface->base.format = tpl->format;
-   surface->base.width = u_minify(pres->width0, level);
-   surface->base.height = u_minify(pres->height0, level);
-   surface->base.u.tex.level = level;
+   surface->base.width = u_minify(pres->width0, tpl->u.tex.level);
+   surface->base.height = u_minify(pres->height0, tpl->u.tex.level);
+   surface->base.u.tex.level = tpl->u.tex.level;
    surface->base.u.tex.first_layer = tpl->u.tex.first_layer;
    surface->base.u.tex.last_layer = tpl->u.tex.last_layer;
 
@@ -63,7 +63,45 @@ d3d12_create_surface(struct pipe_context *pctx,
    } else {
       surface->desc_handle = ctx->rtv_heap->GetCPUDescriptorHandleForHeapStart();
       surface->desc_handle.ptr += (size_t)ctx->rtv_increment * ctx->rtv_index;
-      screen->dev->CreateRenderTargetView(res->res, NULL,
+
+      D3D12_RENDER_TARGET_VIEW_DESC desc;
+      desc.Format = d3d12_get_format(tpl->format);
+
+      switch (pres->target) {
+      case PIPE_TEXTURE_1D:
+         desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
+         desc.Texture1D.MipSlice = tpl->u.tex.level;
+         break;
+
+      case PIPE_TEXTURE_1D_ARRAY:
+         desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+         desc.Texture1DArray.MipSlice = tpl->u.tex.level;
+         desc.Texture1DArray.FirstArraySlice = tpl->u.tex.first_layer;
+         desc.Texture1DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
+         break;
+
+      case PIPE_TEXTURE_2D:
+      case PIPE_TEXTURE_RECT:
+         desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+         desc.Texture2D.MipSlice = tpl->u.tex.level;
+         desc.Texture2D.PlaneSlice = tpl->u.tex.first_layer;
+         break;
+
+      case PIPE_TEXTURE_2D_ARRAY:
+      case PIPE_TEXTURE_CUBE:
+         desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+         desc.Texture2DArray.MipSlice = tpl->u.tex.level;
+         desc.Texture2DArray.FirstArraySlice = tpl->u.tex.first_layer;
+         desc.Texture2DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
+         desc.Texture2DArray.PlaneSlice = 0; // ???
+         break;
+
+      default:
+         unreachable("unsupported target"); // dunno how to support, if needed
+         break;
+      }
+
+      screen->dev->CreateRenderTargetView(res->res, &desc,
                                           surface->desc_handle);
       ctx->rtv_index++;
    }
