@@ -128,12 +128,8 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    pso_desc.DepthStencilState.BackFace;
 #endif
 
-   D3D12_INPUT_ELEMENT_DESC input_elements[] = {
-       { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-       { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-   };
-   pso_desc.InputLayout.pInputElementDescs = input_elements;
-   pso_desc.InputLayout.NumElements = ARRAY_SIZE(input_elements);
+   pso_desc.InputLayout.pInputElementDescs = ctx->ves->elements;
+   pso_desc.InputLayout.NumElements = ctx->ves->num_elements;
 
    pso_desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED; // TODO
 
