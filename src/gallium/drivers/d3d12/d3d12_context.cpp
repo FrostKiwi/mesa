@@ -64,7 +64,23 @@ d3d12_create_vertex_elements_state(struct pipe_context *pctx,
          cso->elements[i].InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
          cso->elements[i].InstanceDataStepRate = 0;
       }
+
+      // HACK THE PLANET!
+      if (i == 0) {
+         cso->elements[i].SemanticName = "POSITION";
+         cso->elements[i].SemanticIndex = 0;
+      } else if (i == 1) {
+         cso->elements[i].SemanticName = "COLOR";
+         cso->elements[i].SemanticIndex = 0;
+      }
    }
+   // HACK THE PLANET 2.0!
+   if (num_elements == 1) {
+      cso->elements[1] = cso->elements[0];
+      cso->elements[1].SemanticName = "COLOR";
+      num_elements++;
+   }
+
    cso->num_elements = num_elements;
    return cso;
 }
