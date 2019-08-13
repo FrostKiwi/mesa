@@ -114,11 +114,6 @@ d3d12_resource_create(struct pipe_screen *pscreen,
    if (templ->bind & PIPE_BIND_DEPTH_STENCIL)
       desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-#if 0
-   if (templ->flags & PIPE_RESOURCE_FLAG_SPARSE)
-      desc.Flags |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-#endif
-
    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
    if ((templ->bind & (PIPE_BIND_SCANOUT |
                       PIPE_BIND_SHARED | PIPE_BIND_LINEAR)) ||
