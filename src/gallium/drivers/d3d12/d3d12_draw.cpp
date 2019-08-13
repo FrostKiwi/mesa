@@ -85,6 +85,8 @@ topology_type(enum pipe_prim_type prim_type)
    }
 }
 
+#include "vertex_shader.h"
+
 static ID3D12PipelineState *
 get_gfx_pipeline_state(struct d3d12_context *ctx,
                        ID3D12RootSignature *root_sig,
@@ -95,7 +97,9 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = { 0 };
    pso_desc.pRootSignature = root_sig;
 
-   // pso_desc.VS = TODO
+   pso_desc.VS.BytecodeLength = ARRAY_SIZE(vertex_shader);
+   pso_desc.VS.pShaderBytecode = vertex_shader;
+
    // pso_desc.PS = TODO
    // pso_desc.BlendState = TODO
 
@@ -124,8 +128,12 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    pso_desc.DepthStencilState.BackFace;
 #endif
 
-   pso_desc.InputLayout.pInputElementDescs; // TODO
-   pso_desc.InputLayout.NumElements = 0; // TODO
+   D3D12_INPUT_ELEMENT_DESC input_elements[] = {
+       { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+       { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+   };
+   pso_desc.InputLayout.pInputElementDescs = input_elements;
+   pso_desc.InputLayout.NumElements = ARRAY_SIZE(input_elements);
 
    pso_desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED; // TODO
 
