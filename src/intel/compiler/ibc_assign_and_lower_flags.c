@@ -60,7 +60,7 @@ struct ibc_assign_flags_state {
 
 static bool
 update_reg_last_write_ip(ibc_reg_ref *ref,
-                         UNUSED int8_t num_bytes, UNUSED int8_t num_comps,
+                         UNUSED int num_bytes, UNUSED int num_comps,
                          UNUSED uint8_t simd_group, UNUSED uint8_t simd_width,
                          void *_state)
 {
@@ -437,8 +437,8 @@ instr_set_flag_ref(const ibc_instr *instr, ibc_reg_ref *ref, uint8_t subnr,
 
 static bool
 rewrite_flag_refs(ibc_reg_ref *ref,
-                  UNUSED int8_t num_bytes,
-                  UNUSED int8_t num_comps,
+                  UNUSED int num_bytes,
+                  UNUSED int num_comps,
                   UNUSED uint8_t simd_group,
                   UNUSED uint8_t simd_width,
                   void *_state)
