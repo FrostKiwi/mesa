@@ -50,6 +50,8 @@ struct d3d12_context {
    ID3D12DescriptorHeap *dsv_heap;
    UINT rtv_increment, dsv_increment;
    int rtv_index, dsv_index;
+
+   PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature;
 };
 
 static inline struct d3d12_context *
