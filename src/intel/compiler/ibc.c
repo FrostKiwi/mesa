@@ -287,8 +287,8 @@ ibc_instr_set_write_ref(ibc_instr *instr, ibc_reg_ref *write_ref,
 
 static bool
 refs_not_equal(ibc_reg_ref *ref,
-               UNUSED int8_t num_bytes,
-               UNUSED int8_t num_comps,
+               UNUSED int num_bytes,
+               UNUSED int num_comps,
                UNUSED uint8_t simd_group,
                UNUSED uint8_t simd_width,
                void *_other_ref)
@@ -470,8 +470,8 @@ ibc_shader_create(void *mem_ctx,
 
 static bool
 link_write_cb(ibc_reg_ref *ref,
-              UNUSED int8_t num_bytes,
-              UNUSED int8_t num_comps,
+              UNUSED int num_bytes,
+              UNUSED int num_comps,
               UNUSED uint8_t simd_group,
               UNUSED uint8_t simd_width,
               void *_instr)
@@ -489,8 +489,8 @@ ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor)
 
 static bool
 unlink_write_cb(ibc_reg_ref *ref,
-                UNUSED int8_t num_bytes,
-                UNUSED int8_t num_comps,
+                UNUSED int num_bytes,
+                UNUSED int num_comps,
                 UNUSED uint8_t simd_group,
                 UNUSED uint8_t simd_width,
                 void *_instr)

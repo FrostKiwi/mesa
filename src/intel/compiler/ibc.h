@@ -516,7 +516,7 @@ typedef struct ibc_instr {
 } ibc_instr;
 
 typedef bool (*ibc_reg_ref_cb)(ibc_reg_ref *ref,
-                               int8_t num_bytes, int8_t num_comps,
+                               int num_bytes, int num_comps,
                                uint8_t simd_group, uint8_t simd_width,
                                void *state);
 bool ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state);
