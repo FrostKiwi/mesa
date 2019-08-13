@@ -632,6 +632,39 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_LOAD_PAYLOAD,
    IBC_INTRINSIC_OP_PLN,
    IBC_INTRINSIC_OP_FB_WRITE,
+
+   /* Texture opcodes.  See ibc_tex_src */
+   IBC_INTRINSIC_OP_TEX,
+   IBC_INTRINSIC_OP_TXB,
+   IBC_INTRINSIC_OP_TXL,
+   IBC_INTRINSIC_OP_TXD,
+   IBC_INTRINSIC_OP_TXF,
+   IBC_INTRINSIC_OP_TXF_MS,
+   IBC_INTRINSIC_OP_TXF_MCS,
+   IBC_INTRINSIC_OP_TXS,
+   IBC_INTRINSIC_OP_LOD,
+   IBC_INTRINSIC_OP_TG4,
+   IBC_INTRINSIC_OP_TG4_OFFSET,
+   IBC_INTRINSIC_OP_SAMPLEINFO,
+};
+
+/* Sources for texturing intrinsics */
+enum ibc_tex_src {
+   IBC_TEX_SRC_SURFACE_BTI,      /**< Surface BTI */
+   IBC_TEX_SRC_SAMPLER_BTI,      /**< Sampler BTI */
+   IBC_TEX_SRC_SURFACE_HANDLE,   /**< Surface bindless handle */
+   IBC_TEX_SRC_SAMPLER_HANDLE,   /**< Sampler bindless handle */
+   IBC_TEX_SRC_COORD,            /**< Texture coordinates */
+   IBC_TEX_SRC_SHADOW_C,         /**< Shadow comparator */
+   IBC_TEX_SRC_LOD,              /**< Texture LOD */
+   IBC_TEX_SRC_MIN_LOD,          /**< Min LOD */
+   IBC_TEX_SRC_DDX,              /**< dPdx */
+   IBC_TEX_SRC_DDY,              /**< dPdy */
+   IBC_TEX_SRC_SAMPLE_INDEX,     /**< Sample index */
+   IBC_TEX_SRC_MCS,              /**< MCS data */
+   IBC_TEX_SRC_TG4_OFFSET,       /**< TG4 offset */
+   IBC_TEX_SRC_HEADER_BITS,      /**< Bits to OR into the SEND header */
+   IBC_TEX_NUM_SRCS,
 };
 
 typedef struct {
