@@ -214,25 +214,12 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    ctx->cmdlist->SetGraphicsRootSignature(root_sig);
 
-   D3D12_VIEWPORT viewport;
-   viewport.TopLeftX = 0;
-   viewport.TopLeftY = 0;
-   viewport.Width = 100;
-   viewport.Height = 100;
-   viewport.MinDepth = 0;
-   viewport.MaxDepth = 0;
-   ctx->cmdlist->RSSetViewports(1, &viewport);
-
-   D3D12_RECT scissor;
-   scissor.left = 0;
-   scissor.top = 0;
-   scissor.right = 100;
-   scissor.bottom = 100;
-   ctx->cmdlist->RSSetScissorRects(1, &scissor);
+   ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);
+   ctx->cmdlist->RSSetScissorRects(ctx->num_scissors, ctx->scissors);
 
    ctx->cmdlist->SetPipelineState(pipeline_state);
 
-   D3D12_CPU_DESCRIPTOR_HANDLE render_targets[PIPE_MAX_COLOR_BUFS];
+   D3D12_CPU_DESCRIPTOR_HANDLE render_targets[PIPE_MAX_COLOR_BUFS] = {};
    D3D12_CPU_DESCRIPTOR_HANDLE *depth_desc = NULL, tmp_desc;
    for (int i = 0; i < ctx->fb.nr_cbufs; ++i)
       render_targets[i] = d3d12_surface(ctx->fb.cbufs[i])->desc_handle;
