@@ -568,6 +568,27 @@ d3d12_create_screen()
       goto failed;
    }
 
+   ID3D12InfoQueue *info_queue;
+   if (SUCCEEDED(screen->dev->QueryInterface(__uuidof(info_queue),
+                                             (void **)&info_queue))) {
+      D3D12_MESSAGE_SEVERITY severities[] = {
+         D3D12_MESSAGE_SEVERITY_INFO,
+         D3D12_MESSAGE_SEVERITY_WARNING,
+      };
+
+      D3D12_MESSAGE_ID msg_ids[] = {
+         D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+      };
+
+      D3D12_INFO_QUEUE_FILTER NewFilter = {};
+      NewFilter.DenyList.NumSeverities = ARRAY_SIZE(severities);
+      NewFilter.DenyList.pSeverityList = severities;
+      NewFilter.DenyList.NumIDs = ARRAY_SIZE(msg_ids);
+      NewFilter.DenyList.pIDList = msg_ids;
+
+      info_queue->PushStorageFilter(&NewFilter);
+   }
+
    screen->architecture.NodeIndex = 0;
    if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE,
                                                &screen->architecture,
