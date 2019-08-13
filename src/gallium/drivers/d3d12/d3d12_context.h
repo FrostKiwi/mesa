@@ -82,6 +82,12 @@ void
 d3d12_flush_cmdlist(struct d3d12_context *ctx);
 
 void
+d3d12_resource_barrier(struct d3d12_context *ctx,
+                       struct d3d12_resource *res,
+                       D3D12_RESOURCE_STATES before,
+                       D3D12_RESOURCE_STATES after);
+
+void
 d3d12_draw_vbo(struct pipe_context *pctx,
                const struct pipe_draw_info *dinfo);
 
