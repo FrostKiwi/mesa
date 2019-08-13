@@ -266,6 +266,36 @@ d3d12_set_viewport_states(struct pipe_context *pctx,
                           unsigned num_viewports,
                           const struct pipe_viewport_state *state)
 {
+   struct d3d12_context *ctx = d3d12_context(pctx);
+
+   for (unsigned i = 0; i < num_viewports; ++i) {
+      ctx->viewports[start_slot + i].TopLeftX = state[i].translate[0] - state[i].scale[0];
+      ctx->viewports[start_slot + i].TopLeftY = state[i].translate[1] - state[i].scale[1];
+      ctx->viewports[start_slot + i].Width = state[i].scale[0] * 2;
+      ctx->viewports[start_slot + i].Height = state[i].scale[1] * 2;
+      ctx->viewports[start_slot + i].MinDepth = state[i].translate[2] - state[i].scale[2];
+      ctx->viewports[start_slot + i].MaxDepth = state[i].translate[2] + state[i].scale[2];
+      ctx->viewport_states[start_slot + i] = state[i];
+   }
+   ctx->num_viewports = start_slot + num_viewports;
+}
+
+
+static void
+d3d12_set_scissor_states(struct pipe_context *pctx,
+                         unsigned start_slot, unsigned num_scissors,
+                         const struct pipe_scissor_state *states)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+
+   for (unsigned i = 0; i < num_scissors; i++) {
+      ctx->scissors[start_slot + i].left = states[i].minx;
+      ctx->scissors[start_slot + i].top = states[i].miny;
+      ctx->scissors[start_slot + i].right = states[i].maxx;
+      ctx->scissors[start_slot + i].bottom = states[i].maxy;
+      ctx->scissor_states[start_slot + i] = states[i];
+   }
+   ctx->num_scissors = start_slot + num_scissors;
 }
 
 static void
@@ -396,6 +426,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.set_polygon_stipple = d3d12_set_polygon_stipple;
    ctx->base.set_vertex_buffers = d3d12_set_vertex_buffers;
    ctx->base.set_viewport_states = d3d12_set_viewport_states;
+   ctx->base.set_scissor_states = d3d12_set_scissor_states;
    ctx->base.set_constant_buffer = d3d12_set_constant_buffer;
    ctx->base.set_framebuffer_state = d3d12_set_framebuffer_state;
 
