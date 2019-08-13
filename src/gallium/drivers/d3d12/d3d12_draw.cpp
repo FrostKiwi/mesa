@@ -159,7 +159,7 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    pso_desc.RasterizerState.DepthBias = 0; // TODO
    pso_desc.RasterizerState.DepthBiasClamp = 0; // TODO
    pso_desc.RasterizerState.SlopeScaledDepthBias = 0; // TODO
-   pso_desc.RasterizerState.DepthClipEnable = TRUE; // TODO
+   pso_desc.RasterizerState.DepthClipEnable = FALSE; // TODO
    pso_desc.RasterizerState.MultisampleEnable = FALSE; // TODO
    pso_desc.RasterizerState.AntialiasedLineEnable = FALSE; // TODO
    pso_desc.RasterizerState.ForcedSampleCount = 0; // TODO
