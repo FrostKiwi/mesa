@@ -364,6 +364,18 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_LOAD_PAYLOAD:       return "load_payload";
    case IBC_INTRINSIC_OP_PLN:                return "pln";
    case IBC_INTRINSIC_OP_FB_WRITE:           return "fb_write";
+   case IBC_INTRINSIC_OP_TEX:                return "tex";
+   case IBC_INTRINSIC_OP_TXB:                return "txb";
+   case IBC_INTRINSIC_OP_TXL:                return "txl";
+   case IBC_INTRINSIC_OP_TXD:                return "txd";
+   case IBC_INTRINSIC_OP_TXF:                return "txf";
+   case IBC_INTRINSIC_OP_TXF_MS:             return "txf_ms";
+   case IBC_INTRINSIC_OP_TXF_MCS:            return "txf_mcs";
+   case IBC_INTRINSIC_OP_TXS:                return "txs";
+   case IBC_INTRINSIC_OP_LOD:                return "lod";
+   case IBC_INTRINSIC_OP_TG4_OFFSET:         return "tg4_offset";
+   case IBC_INTRINSIC_OP_TG4:                return "tg4";
+   case IBC_INTRINSIC_OP_SAMPLEINFO:         return "sampleinfo";
    }
    unreachable("Invalid IBC intrinsic op");
 }
