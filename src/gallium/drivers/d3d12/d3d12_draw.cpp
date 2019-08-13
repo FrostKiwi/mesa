@@ -266,7 +266,11 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                              D3D12_RESOURCE_STATE_DEPTH_WRITE);
    }
 
-   ctx->cmdlist->DrawInstanced(3, 1, 0, 0);
+   if (dinfo->index_size > 0)
+      unreachable("no indexed rendering yet");
+   else
+      ctx->cmdlist->DrawInstanced(dinfo->count, dinfo->instance_count,
+                                  dinfo->start, dinfo->start_instance);
 
    for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
       struct pipe_surface *psurf = ctx->fb.cbufs[i];
