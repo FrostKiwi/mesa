@@ -122,6 +122,434 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
    }
 }
 
+static bool
+is_high_sampler(const ibc_reg_ref sampler_bti)
+{
+   if (sampler_bti.file != IBC_REG_FILE_IMM)
+      return true;
+
+   assert(sampler_bti.type == IBC_TYPE_UD);
+   return *(uint32_t *)sampler_bti.imm >= 16;
+}
+
+static unsigned
+sampler_msg_type(const struct gen_device_info *devinfo,
+                 enum ibc_intrinsic_op op,
+                 bool shadow_compare, bool lod_zero)
+{
+   assert(devinfo->gen >= 5);
+   switch (op) {
+   case IBC_INTRINSIC_OP_TEX:
+      return shadow_compare ? GEN5_SAMPLER_MESSAGE_SAMPLE_COMPARE :
+                              GEN5_SAMPLER_MESSAGE_SAMPLE;
+   case IBC_INTRINSIC_OP_TXB:
+      return shadow_compare ? GEN5_SAMPLER_MESSAGE_SAMPLE_BIAS_COMPARE :
+                              GEN5_SAMPLER_MESSAGE_SAMPLE_BIAS;
+   case IBC_INTRINSIC_OP_TXL:
+      if (lod_zero) {
+         assert(devinfo->gen >= 9);
+         return shadow_compare ? GEN9_SAMPLER_MESSAGE_SAMPLE_C_LZ :
+                                 GEN9_SAMPLER_MESSAGE_SAMPLE_LZ;
+      } else {
+         return shadow_compare ? GEN5_SAMPLER_MESSAGE_SAMPLE_LOD_COMPARE :
+                                 GEN5_SAMPLER_MESSAGE_SAMPLE_LOD;
+      }
+   case IBC_INTRINSIC_OP_TXS:
+      return GEN5_SAMPLER_MESSAGE_SAMPLE_RESINFO;
+   case IBC_INTRINSIC_OP_TXD:
+      return shadow_compare ? HSW_SAMPLER_MESSAGE_SAMPLE_DERIV_COMPARE :
+                              GEN5_SAMPLER_MESSAGE_SAMPLE_DERIVS;
+   case IBC_INTRINSIC_OP_TXF:
+      if (lod_zero) {
+         assert(devinfo->gen >= 9);
+         return GEN9_SAMPLER_MESSAGE_SAMPLE_LD_LZ;
+      } else {
+         return GEN5_SAMPLER_MESSAGE_SAMPLE_LD;
+      }
+   case IBC_INTRINSIC_OP_TXF_MS:
+      return devinfo->gen >= 9 ? GEN9_SAMPLER_MESSAGE_SAMPLE_LD2DMS_W :
+                                 GEN7_SAMPLER_MESSAGE_SAMPLE_LD2DMS;
+   case IBC_INTRINSIC_OP_TXF_MCS:
+      return GEN7_SAMPLER_MESSAGE_SAMPLE_LD_MCS;
+   case IBC_INTRINSIC_OP_LOD:
+      return GEN5_SAMPLER_MESSAGE_LOD;
+   case IBC_INTRINSIC_OP_TG4:
+      return shadow_compare ? GEN7_SAMPLER_MESSAGE_SAMPLE_GATHER4_C :
+                              GEN7_SAMPLER_MESSAGE_SAMPLE_GATHER4;
+      break;
+   case IBC_INTRINSIC_OP_TG4_OFFSET:
+      return shadow_compare ? GEN7_SAMPLER_MESSAGE_SAMPLE_GATHER4_PO_C :
+                              GEN7_SAMPLER_MESSAGE_SAMPLE_GATHER4_PO;
+   case IBC_INTRINSIC_OP_SAMPLEINFO:
+      return GEN6_SAMPLER_MESSAGE_SAMPLE_SAMPLEINFO;
+   default:
+      unreachable("not reached");
+   }
+}
+
+static bool
+ref_is_null_or_zero(ibc_reg_ref ref)
+{
+   if (ref.file == IBC_REG_FILE_NONE)
+      return true;
+
+   if (ref.file != IBC_REG_FILE_IMM)
+      return false;
+
+   for (unsigned i = 0; i < ibc_type_byte_size(ref.type); i++) {
+      if (ref.imm[i] != 0)
+         return false;
+   }
+
+   return true;
+}
+
+static ibc_reg_ref
+ibc_comp_ref(ibc_reg_ref ref, unsigned comp)
+{
+   if (ref.file == IBC_REG_FILE_IMM) {
+      assert(comp == 0);
+      return ref;
+   }
+
+   assert(ref.file == IBC_REG_FILE_LOGICAL);
+   ref.logical.comp += comp;
+   return ref;
+}
+
+#define MAX_SAMPLER_MESSAGE_SIZE 11
+
+static void
+lower_tex(ibc_builder *b, ibc_send_instr *send,
+          const ibc_intrinsic_instr *intrin)
+{
+   const struct gen_device_info *devinfo = b->shader->devinfo;
+
+   const ibc_reg_ref surface_bti = intrin->src[IBC_TEX_SRC_SURFACE_BTI].ref;
+   const ibc_reg_ref surface_handle = intrin->src[IBC_TEX_SRC_SURFACE_HANDLE].ref;
+   uint32_t surface_bti_imm = 0;
+   if (surface_bti.file == IBC_REG_FILE_IMM) {
+      assert(surface_bti.type == IBC_TYPE_UD);
+      surface_bti_imm = *(uint32_t *)surface_bti.imm;
+   }
+   assert((surface_bti.file == IBC_REG_FILE_NONE) !=
+          (surface_handle.file == IBC_REG_FILE_NONE));
+
+   const ibc_reg_ref sampler_bti = intrin->src[IBC_TEX_SRC_SAMPLER_BTI].ref;
+   const ibc_reg_ref sampler_handle = intrin->src[IBC_TEX_SRC_SAMPLER_HANDLE].ref;
+   uint32_t sampler_bti_imm = 0;
+   if (sampler_bti.file == IBC_REG_FILE_IMM) {
+      assert(sampler_bti.type == IBC_TYPE_UD);
+      sampler_bti_imm = *(uint32_t *)sampler_bti.imm;
+   }
+   assert((sampler_bti.file == IBC_REG_FILE_NONE) ||
+          (sampler_handle.file == IBC_REG_FILE_NONE));
+
+   const ibc_reg_ref coord = intrin->src[IBC_TEX_SRC_COORD].ref;
+   const unsigned num_coord_comps = intrin->src[IBC_TEX_SRC_COORD].num_comps;
+   const ibc_reg_ref shadow_c = intrin->src[IBC_TEX_SRC_SHADOW_C].ref;
+   const ibc_reg_ref lod = intrin->src[IBC_TEX_SRC_LOD].ref;
+   const ibc_reg_ref min_lod = intrin->src[IBC_TEX_SRC_MIN_LOD].ref;
+   const ibc_reg_ref ddx = intrin->src[IBC_TEX_SRC_DDX].ref;
+   const ibc_reg_ref ddy = intrin->src[IBC_TEX_SRC_DDY].ref;
+   assert(intrin->src[IBC_TEX_SRC_DDY].num_comps ==
+          intrin->src[IBC_TEX_SRC_DDY].num_comps);
+   const unsigned num_grad_comps = intrin->src[IBC_TEX_SRC_DDY].num_comps;
+   const ibc_reg_ref sample_index = intrin->src[IBC_TEX_SRC_SAMPLE_INDEX].ref;
+   const ibc_reg_ref mcs = intrin->src[IBC_TEX_SRC_MCS].ref;
+   const ibc_reg_ref tg4_offset = intrin->src[IBC_TEX_SRC_TG4_OFFSET].ref;
+
+   uint32_t header_bits = 0;
+   const ibc_reg_ref header_bits_r = intrin->src[IBC_TEX_SRC_HEADER_BITS].ref;
+   if (header_bits_r.file != IBC_REG_FILE_NONE) {
+      assert(header_bits_r.file == IBC_REG_FILE_IMM);
+      assert(header_bits_r.type == IBC_TYPE_UD);
+      header_bits = *(uint32_t *)header_bits_r.imm;
+   }
+
+   ibc_reg_ref srcs[MAX_SAMPLER_MESSAGE_SIZE] = {};
+   unsigned num_srcs = 0;
+
+   if (intrin->op == IBC_INTRINSIC_OP_TG4 ||
+       intrin->op == IBC_INTRINSIC_OP_TG4_OFFSET ||
+       intrin->op == IBC_INTRINSIC_OP_SAMPLEINFO ||
+       header_bits != 0 || sampler_handle.file != IBC_REG_FILE_NONE ||
+       is_high_sampler(sampler_bti)) {
+
+      ibc_reg *header_reg =
+         ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
+      ibc_reg_ref header = ibc_typed_ref(header_reg, IBC_TYPE_UD);
+
+      /* If we're requesting fewer than four channels worth of response,
+       * and we have an explicit header, we need to set up the sampler
+       * writemask.  It's reversed from normal: 1 means "don't write".
+       */
+      if (intrin->num_dest_comps < 4) {
+         unsigned mask = ~((1 << intrin->num_dest_comps) - 1) & 0xf;
+         header_bits |= mask << 12;
+      }
+
+      ibc_builder_push_we_all(b, 8);
+      ibc_MOV_to(b, header, ibc_hw_grf_ref(0, 0, IBC_TYPE_UD));
+      ibc_builder_pop(b);
+
+      /* Everything else just sets up components */
+      ibc_builder_push_scalar(b);
+
+      /* TODO: On vertex and fragment stages this is zero by default so we can
+       * avoid the MOV.
+       */
+      ibc_reg_ref header_2 = header;
+      header_2.hw_grf.byte += 2 * ibc_type_byte_size(IBC_TYPE_UD);
+      ibc_MOV_to(b, header_2, ibc_imm_ud(header_bits));
+
+      ibc_reg_ref header_3 = header;
+      header_3.hw_grf.byte += 3 * ibc_type_byte_size(IBC_TYPE_UD);
+      if (sampler_handle.file != IBC_REG_FILE_NONE) {
+         /* Bindless sampler handles aren't relative to the sampler state
+          * pointer passed into the shader through SAMPLER_STATE_POINTERS_*.
+          * Instead, it's an absolute pointer relative to dynamic state base
+          * address.
+          *
+          * Sampler states are 16 bytes each and the pointer we give here has
+          * to be 32-byte aligned.  In order to avoid more indirect messages
+          * than required, we assume that all bindless sampler states are
+          * 32-byte aligned.  This sacrifices a bit of general state base
+          * address space but means we can do something more efficient in the
+          * shader.
+          */
+         ibc_MOV_to(b, header_3, sampler_handle);
+      } else if (is_high_sampler(sampler_bti)) {
+         ibc_reg_ref sampler_base_ptr;
+         if (sampler_bti.file == IBC_REG_FILE_IMM) {
+            assert(sampler_bti_imm >= 16);
+            const unsigned sampler_state_size = 16; /* 16 bytes */
+            const uint32_t sampler_offset_B =
+               16 * (sampler_bti_imm / 16) * sampler_state_size;
+
+            sampler_base_ptr =
+               ibc_ADD(b, IBC_TYPE_UD, ibc_hw_grf_ref(0, 3, IBC_TYPE_UD),
+                          ibc_imm_ud(sampler_offset_B));
+         } else {
+            sampler_base_ptr =
+               ibc_ADD(b, IBC_TYPE_UD, ibc_hw_grf_ref(0, 3, IBC_TYPE_UD),
+                          ibc_SHL(b, IBC_TYPE_UD,
+                                     ibc_AND(b, IBC_TYPE_UD, sampler_bti,
+                                                ibc_imm_ud(0xf0)),
+                                    ibc_imm_ud(4)));
+         }
+         ibc_MOV_to(b, header_3, sampler_base_ptr);
+      }
+      ibc_builder_pop(b);
+
+      srcs[num_srcs++] = header;
+      send->has_header = true;
+   }
+
+   if (shadow_c.file != IBC_REG_FILE_NONE)
+      srcs[num_srcs++] = shadow_c;
+
+   bool coord_done = false;
+   bool zero_lod = false;
+
+   switch (intrin->op) {
+   case IBC_INTRINSIC_OP_TXB:
+      srcs[num_srcs++] = lod;
+      break;
+
+   case IBC_INTRINSIC_OP_TXL:
+      if (devinfo->gen >= 9 && ref_is_null_or_zero(lod)) {
+         zero_lod = true;
+      } else {
+         srcs[num_srcs++] = lod;
+      }
+      break;
+
+   case IBC_INTRINSIC_OP_TXD:
+      assert(b->simd_width == 8);
+
+      /* Load dPdx and the coordinate together:
+       * [hdr], [ref], x, dPdx.x, dPdy.x, y, dPdx.y, dPdy.y, z, dPdx.z, dPdy.z
+       */
+      for (unsigned i = 0; i < num_coord_comps; i++) {
+         srcs[num_srcs++] = ibc_comp_ref(coord, i);
+
+         /* For cube map array, the coordinate is (u,v,r,ai) but there are
+          * only derivatives for (u, v, r).
+          */
+         if (i < num_grad_comps) {
+            srcs[num_srcs++] = ibc_comp_ref(ddx, i);
+            srcs[num_srcs++] = ibc_comp_ref(ddy, i);
+         }
+      }
+      coord_done = true;
+      break;
+
+   case IBC_INTRINSIC_OP_TXS:
+      srcs[num_srcs++] = lod;
+      break;
+
+   case IBC_INTRINSIC_OP_TXF:
+      /* Unfortunately, the parameters for LD are intermixed: u, lod, v, r.
+       * On Gen9 they are u, v, lod, r
+       */
+      srcs[num_srcs++] = ibc_comp_ref(coord, 0);
+
+      if (devinfo->gen >= 9) {
+         srcs[num_srcs++] = num_coord_comps >= 2 ? ibc_comp_ref(coord, 1) :
+                                                  ibc_imm_ud(0);
+      }
+
+      if (devinfo->gen >= 9 && ref_is_null_or_zero(lod)) {
+         zero_lod = true;
+      } else {
+         srcs[num_srcs++] = lod;
+      }
+
+      for (unsigned i = devinfo->gen >= 9 ? 2 : 1; i < num_coord_comps; i++)
+         srcs[num_srcs++] = ibc_comp_ref(coord, i);
+
+      coord_done = true;
+      break;
+
+   case IBC_INTRINSIC_OP_TXF_MS:
+      srcs[num_srcs++] = sample_index;
+      srcs[num_srcs++] = ibc_comp_ref(mcs, 0);
+      if (devinfo->gen >= 9)
+         srcs[num_srcs++] = ibc_comp_ref(mcs, 1);
+      break;
+
+   case IBC_INTRINSIC_OP_TG4_OFFSET:
+      /* More crazy intermixing */
+      for (unsigned i = 0; i < 2; i++) /* u, v */
+         srcs[num_srcs++] = ibc_comp_ref(coord, i);
+
+      for (unsigned i = 0; i < 2; i++) /* offu, offv */
+         srcs[num_srcs++] = ibc_comp_ref(tg4_offset, i);
+
+      if (num_coord_comps == 3) /* r if present */
+         srcs[num_srcs++] = ibc_comp_ref(coord, 2);
+
+      coord_done = true;
+      break;
+   default:
+      break;
+   }
+
+   /* Set up the coordinate (except for cases where it was done above) */
+   if (!coord_done) {
+      for (unsigned i = 0; i < num_coord_comps; i++)
+         srcs[num_srcs++] = ibc_comp_ref(coord, i);
+   }
+
+   if (min_lod.file != IBC_REG_FILE_NONE) {
+      /* Account for all of the missing coordinate sources */
+      num_srcs += 4 - num_coord_comps;
+      if (intrin->op == IBC_INTRINSIC_OP_TXD)
+         num_srcs += (3 - num_grad_comps) * 2;
+
+      srcs[num_srcs++] = min_lod;
+   }
+
+   for (unsigned i = 0; i < num_srcs; i++) {
+      if (i == 0 && send->has_header) {
+         assert(srcs[i].file == IBC_REG_FILE_HW_GRF);
+         send->mlen++;
+      } else {
+         send->mlen += b->simd_width / 8;
+      }
+   }
+
+   ibc_reg *message =
+      ibc_hw_grf_reg_create(b->shader, send->mlen * REG_SIZE, REG_SIZE);
+   ibc_reg_ref msg_dest = ibc_typed_ref(message, IBC_TYPE_UD);
+   for (unsigned i = 0; i < num_srcs; i++) {
+      msg_dest.type = srcs[i].type;
+      if (i == 0 && send->has_header) {
+         ibc_builder_push_we_all(b, 8);
+         ibc_MOV_to(b, msg_dest, srcs[i]);
+         ibc_builder_pop(b);
+         msg_dest.hw_grf.byte += REG_SIZE;
+      } else if (srcs[i].file == IBC_REG_FILE_NONE) {
+         /* Just advance it */
+         msg_dest.hw_grf.byte += b->simd_width * sizeof(uint32_t);
+      } else {
+         ibc_MOV_to(b, msg_dest, srcs[i]);
+         msg_dest.hw_grf.byte += b->simd_width * sizeof(uint32_t);
+      }
+   }
+   send->payload[0] = ibc_typed_ref(message, IBC_TYPE_32_BIT);
+
+   send->dest = intrin->dest;
+   send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
+
+   const unsigned msg_type =
+      sampler_msg_type(devinfo, intrin->op,
+                       shadow_c.file != IBC_REG_FILE_NONE, zero_lod);
+   const unsigned simd_mode =
+      intrin->instr.simd_width <= 8 ? BRW_SAMPLER_SIMD_MODE_SIMD8 :
+                                      BRW_SAMPLER_SIMD_MODE_SIMD16;
+
+   send->sfid = BRW_SFID_SAMPLER;
+   if (surface_bti.file == IBC_REG_FILE_IMM &&
+       (sampler_bti.file == IBC_REG_FILE_IMM ||
+        sampler_handle.file != IBC_REG_FILE_NONE)) {
+      send->desc_imm = brw_sampler_desc(devinfo,
+                                        surface_bti_imm,
+                                        sampler_bti_imm % 16,
+                                        msg_type, simd_mode,
+                                        0 /* return_format unused on gen7+ */);
+   } else if (surface_handle.file != IBC_REG_FILE_NONE) {
+      /* Bindless surface */
+      assert(devinfo->gen >= 9);
+      send->desc_imm = brw_sampler_desc(devinfo,
+                                        GEN9_BTI_BINDLESS,
+                                        sampler_bti_imm % 16,
+                                        msg_type, simd_mode,
+                                        0 /* return_format unused on gen7+ */);
+
+      /* For bindless samplers, the entire address is included in the message
+       * header so we can leave the portion in the message descriptor 0.
+       */
+      if (sampler_bti.file != IBC_REG_FILE_NONE &&
+          sampler_bti.file != IBC_REG_FILE_IMM) {
+         ibc_builder_push_scalar(b);
+         send->desc = ibc_SHL(b, IBC_TYPE_UD, sampler_bti, ibc_imm_ud(8));
+         ibc_builder_pop(b);
+      }
+
+      /* We assume that the driver provided the handle in the top 20 bits so
+       * we can use the surface handle directly as the extended descriptor.
+       */
+      send->ex_desc = surface_handle;
+   } else {
+      /* Immediate portion of the descriptor */
+      send->desc_imm = brw_sampler_desc(devinfo,
+                                        0, /* surface */
+                                        0, /* sampler */
+                                        msg_type, simd_mode,
+                                        0 /* return_format unused on gen7+ */);
+      ibc_builder_push_scalar(b);
+      if (0 /* TODO: ibc_reg_refs_equal(surface_bti, sampler_bti) */) {
+         /* This case is common in GL */
+         send->desc = ibc_MUL(b, IBC_TYPE_UD, surface_bti, ibc_imm_ud(0x101));
+      } else {
+         if (sampler_handle.file != IBC_REG_FILE_NONE) {
+            send->desc = ibc_MOV(b, IBC_TYPE_UD, surface_bti);
+         } else if (sampler_bti.file == IBC_REG_FILE_IMM) {
+            send->desc = ibc_OR(b, IBC_TYPE_UD, surface_bti,
+                                   ibc_imm_ud(sampler_bti_imm << 8));
+         } else {
+            send->desc = ibc_OR(b, IBC_TYPE_UD, surface_bti,
+                                   ibc_SHL(b, IBC_TYPE_UD, sampler_bti,
+                                              ibc_imm_ud(8)));
+         }
+         /* Mask off bits to be sure */
+         send->desc = ibc_AND(b, IBC_TYPE_UD, send->desc, ibc_imm_ud(0xfff));
+      }
+   }
+}
+
 bool
 ibc_lower_io_to_sends(ibc_shader *shader)
 {
@@ -170,6 +598,21 @@ ibc_lower_io_to_sends(ibc_shader *shader)
 
       case IBC_INTRINSIC_OP_FB_WRITE:
          ibc_lower_io_fb_write_to_send(&b, send, intrin);
+         break;
+
+      case IBC_INTRINSIC_OP_TEX:
+      case IBC_INTRINSIC_OP_TXB:
+      case IBC_INTRINSIC_OP_TXL:
+      case IBC_INTRINSIC_OP_TXD:
+      case IBC_INTRINSIC_OP_TXF:
+      case IBC_INTRINSIC_OP_TXF_MS:
+      case IBC_INTRINSIC_OP_TXF_MCS:
+      case IBC_INTRINSIC_OP_TXS:
+      case IBC_INTRINSIC_OP_LOD:
+      case IBC_INTRINSIC_OP_TG4:
+      case IBC_INTRINSIC_OP_TG4_OFFSET:
+      case IBC_INTRINSIC_OP_SAMPLEINFO:
+         lower_tex(&b, send, intrin);
          break;
 
       default:
