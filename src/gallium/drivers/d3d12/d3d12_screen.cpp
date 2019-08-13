@@ -418,6 +418,11 @@ d3d12_flush_frontbuffer(struct pipe_screen * pscreen,
       winsys->displaytarget_unmap(winsys, res->dt);
    }
 
+   ID3D12SharingContract *sharing_contract;
+   if (SUCCEEDED(screen->cmdqueue->QueryInterface(__uuidof(sharing_contract),
+                                                  (void **)&sharing_contract)))
+      sharing_contract->Present(res->res, 0, WindowFromDC((HDC)winsys_drawable_handle));
+
    winsys->displaytarget_display(winsys, res->dt, winsys_drawable_handle, sub_box);
 }
 
