@@ -20,6 +20,7 @@
 
 files_libd3d12 = files(
   'd3d12_context.cpp',
+  'd3d12_draw.cpp',
   'd3d12_format.c',
   'd3d12_resource.cpp',
   'd3d12_screen.cpp',
