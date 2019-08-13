@@ -21,6 +21,7 @@
 C_SOURCES := \
 	d3d12_context.cpp \
 	d3d12_context.h \
+	d3d12_draw.cpp \
 	d3d12_format.c \
 	d3d12_format.h \
 	d3d12_public.h \

@@ -63,4 +63,11 @@ d3d12_context(struct pipe_context *context)
 struct pipe_context *
 d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags);
 
+void
+d3d12_flush_cmdlist(struct d3d12_context *ctx);
+
+void
+d3d12_draw_vbo(struct pipe_context *pctx,
+               const struct pipe_draw_info *dinfo);
+
 #endif
