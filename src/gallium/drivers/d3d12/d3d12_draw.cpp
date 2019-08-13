@@ -138,7 +138,18 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    pso_desc.PS.BytecodeLength = ARRAY_SIZE(pixel_shader);
    pso_desc.PS.pShaderBytecode = pixel_shader;
 
-   // pso_desc.BlendState = TODO
+   pso_desc.BlendState.AlphaToCoverageEnable = FALSE; // TODO
+   pso_desc.BlendState.IndependentBlendEnable = FALSE; // TODO
+   pso_desc.BlendState.RenderTarget[0].BlendEnable = FALSE; // TODO
+   pso_desc.BlendState.RenderTarget[0].LogicOpEnable = FALSE; // TODO
+   pso_desc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE; // TODO
+   pso_desc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO; // TODO
+   pso_desc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD; // TODO
+   pso_desc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE; // TODO
+   pso_desc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO; // TODO
+   pso_desc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD; // TODO
+   pso_desc.BlendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP; // TODO
+   pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL; // TODO
 
    pso_desc.SampleMask = UINT_MAX;
 
