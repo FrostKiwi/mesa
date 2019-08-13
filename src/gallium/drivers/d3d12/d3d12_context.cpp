@@ -315,16 +315,17 @@ d3d12_set_framebuffer_state(struct pipe_context *pctx,
 void
 d3d12_flush_cmdlist(struct d3d12_context *ctx)
 {
+   struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
    if (FAILED(ctx->cmdlist->Close())) {
       debug_printf("D3D12: closing ID3D12GraphicsCommandList failed\n");
       return;
    }
 
    ID3D12CommandList* cmdlists[] = { ctx->cmdlist };
-   ctx->cmdqueue->ExecuteCommandLists(1, cmdlists);
+   screen->cmdqueue->ExecuteCommandLists(1, cmdlists);
    int value = ++ctx->fence_value;
    ctx->cmdqueue_fence->SetEventOnCompletion(value, ctx->event);
-   ctx->cmdqueue->Signal(ctx->cmdqueue_fence, value);
+   screen->cmdqueue->Signal(ctx->cmdqueue_fence, value);
    WaitForSingleObject(ctx->event, INFINITE);
 
    if (FAILED(ctx->cmdalloc->Reset())) {
@@ -482,19 +483,6 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
       FREE(ctx);
       return NULL;
    }
-
-   D3D12_COMMAND_QUEUE_DESC queue_desc;
-   queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-   queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-   queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-   queue_desc.NodeMask = 0;
-   if (FAILED(screen->dev->CreateCommandQueue(&queue_desc,
-                                              __uuidof(ctx->cmdqueue),
-                                              (void **)&ctx->cmdqueue))) {
-      FREE(ctx);
-      return NULL;
-   }
-
 
    if (FAILED(screen->dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                                                   __uuidof(ctx->cmdalloc),

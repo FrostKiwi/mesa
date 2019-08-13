@@ -55,7 +55,6 @@ struct d3d12_context {
    unsigned num_scissors;
 
    HANDLE event;
-   ID3D12CommandQueue *cmdqueue;
    ID3D12Fence *cmdqueue_fence;
    int fence_value;
    ID3D12CommandAllocator *cmdalloc;
