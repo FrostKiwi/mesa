@@ -120,6 +120,7 @@ topology(enum pipe_prim_type prim_type)
 }
 
 #include "vertex_shader.h"
+#include "pixel_shader.h"
 
 static ID3D12PipelineState *
 get_gfx_pipeline_state(struct d3d12_context *ctx,
@@ -134,7 +135,9 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    pso_desc.VS.BytecodeLength = ARRAY_SIZE(vertex_shader);
    pso_desc.VS.pShaderBytecode = vertex_shader;
 
-   // pso_desc.PS = TODO
+   pso_desc.PS.BytecodeLength = ARRAY_SIZE(pixel_shader);
+   pso_desc.PS.pShaderBytecode = pixel_shader;
+
    // pso_desc.BlendState = TODO
 
    pso_desc.SampleMask = UINT_MAX;
