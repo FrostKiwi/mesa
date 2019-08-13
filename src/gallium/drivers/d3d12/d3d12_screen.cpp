@@ -614,6 +614,16 @@ d3d12_create_screen()
    }
    screen->max_feature_level = feature_levels.MaxSupportedFeatureLevel;
 
+   D3D12_COMMAND_QUEUE_DESC queue_desc;
+   queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+   queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+   queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+   queue_desc.NodeMask = 0;
+   if (FAILED(screen->dev->CreateCommandQueue(&queue_desc,
+                                              __uuidof(screen->cmdqueue),
+                                              (void **)&screen->cmdqueue)))
+      goto failed;
+
    d3d12_screen_resource_init(&screen->base);
    slab_create_parent(&screen->transfer_pool, sizeof(struct pipe_transfer), 16);
 
