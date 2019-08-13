@@ -44,6 +44,8 @@ struct d3d12_context {
 
    struct pipe_framebuffer_state fb;
    struct d3d12_vertex_elements_state *ves;
+   struct pipe_vertex_buffer vbs[PIPE_MAX_ATTRIBS];
+   unsigned num_vbs;
 
    HANDLE event;
    ID3D12CommandQueue *cmdqueue;
