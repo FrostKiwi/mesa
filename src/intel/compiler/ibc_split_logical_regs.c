@@ -50,8 +50,8 @@ struct split_regs_state {
 
 static bool
 mark_splits(ibc_reg_ref *ref,
-            UNUSED int8_t num_bytes,
-            int8_t num_comps,
+            UNUSED int num_bytes,
+            int num_comps,
             uint8_t simd_group,
             uint8_t simd_width,
             void *_state)
@@ -84,8 +84,8 @@ mark_splits(ibc_reg_ref *ref,
 
 static bool
 rewrite_ref_if_split(ibc_reg_ref *ref,
-                     UNUSED int8_t num_bytes,
-                     int8_t num_comps,
+                     UNUSED int num_bytes,
+                     int num_comps,
                      uint8_t simd_group,
                      uint8_t simd_width,
                      void *_state)
