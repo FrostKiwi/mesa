@@ -338,6 +338,22 @@ d3d12_flush_cmdlist(struct d3d12_context *ctx)
    }
 }
 
+void
+d3d12_resource_barrier(struct d3d12_context *ctx,
+                       struct d3d12_resource *res,
+                       D3D12_RESOURCE_STATES before,
+                       D3D12_RESOURCE_STATES after)
+{
+   D3D12_RESOURCE_BARRIER barrier;
+   barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+   barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+   barrier.Transition.pResource = res->res;
+   barrier.Transition.Subresource = 0;
+   barrier.Transition.StateBefore = before;
+   barrier.Transition.StateAfter = after;
+   ctx->cmdlist->ResourceBarrier(1, &barrier);
+}
+
 static void
 d3d12_clear(struct pipe_context *pctx,
             unsigned buffers,
@@ -348,9 +364,16 @@ d3d12_clear(struct pipe_context *pctx,
 
    if (buffers & PIPE_CLEAR_COLOR) {
       for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
-         struct d3d12_surface* surf = d3d12_surface(ctx->fb.cbufs[i]);
+         struct pipe_surface *psurf = ctx->fb.cbufs[i];
+         struct d3d12_surface *surf = d3d12_surface(psurf);
+         d3d12_resource_barrier(ctx, d3d12_resource(psurf->texture),
+                                D3D12_RESOURCE_STATE_COMMON,
+                                D3D12_RESOURCE_STATE_RENDER_TARGET);
          ctx->cmdlist->ClearRenderTargetView(surf->desc_handle, color->f,
                                              0, NULL);
+         d3d12_resource_barrier(ctx, d3d12_resource(psurf->texture),
+                                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                D3D12_RESOURCE_STATE_COMMON);
       }
    }
 
@@ -363,8 +386,14 @@ d3d12_clear(struct pipe_context *pctx,
       if (buffers & PIPE_CLEAR_STENCIL)
          flags |= D3D12_CLEAR_FLAG_STENCIL;
 
+      d3d12_resource_barrier(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
+                             D3D12_RESOURCE_STATE_COMMON,
+                             D3D12_RESOURCE_STATE_DEPTH_WRITE);
       ctx->cmdlist->ClearDepthStencilView(surf->desc_handle, flags,
                                           depth, stencil, 0, NULL);
+      d3d12_resource_barrier(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
+                             D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                             D3D12_RESOURCE_STATE_COMMON);
    }
 
    d3d12_flush_cmdlist(ctx);
