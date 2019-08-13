@@ -24,6 +24,7 @@
 #include "d3d12_context.h"
 #include "d3d12_format.h"
 #include "d3d12_screen.h"
+#include "d3d12_surface.h"
 
 #include "util/u_debug.h"
 #include "util/u_prim.h"
@@ -78,6 +79,39 @@ topology_type(enum pipe_prim_type prim_type)
 
    case PIPE_PRIM_PATCHES:
       return D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+
+   default:
+      debug_printf("pipe_prim_type: %s\n", u_prim_name(prim_type));
+      unreachable("unexpected enum pipe_prim_type");
+   }
+}
+static D3D_PRIMITIVE_TOPOLOGY
+topology(enum pipe_prim_type prim_type)
+{
+   switch (prim_type) {
+   case PIPE_PRIM_POINTS:
+      return D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
+
+   case PIPE_PRIM_LINES:
+      return D3D_PRIMITIVE_TOPOLOGY_LINELIST;
+
+   case PIPE_PRIM_LINE_STRIP:
+      return D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
+
+   case PIPE_PRIM_TRIANGLES:
+      return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+   case PIPE_PRIM_TRIANGLE_STRIP:
+      return D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+
+/*
+   case PIPE_PRIM_PATCHES:
+      return D3D_PRIMITIVE_TOPOLOGY_PATCHLIST;
+*/
+
+   case PIPE_PRIM_QUADS:
+   case PIPE_PRIM_QUAD_STRIP:
+      return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST; /* HACK: this is just wrong! */
 
    default:
       debug_printf("pipe_prim_type: %s\n", u_prim_name(prim_type));
@@ -174,6 +208,40 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    ID3D12RootSignature *root_sig = get_root_signature(ctx);
    ID3D12PipelineState *pipeline_state = get_gfx_pipeline_state(ctx, root_sig,
                                                                 u_reduced_prim(dinfo->mode));
+
+   ctx->cmdlist->SetGraphicsRootSignature(root_sig);
+
+   D3D12_VIEWPORT viewport;
+   viewport.TopLeftX = 0;
+   viewport.TopLeftY = 0;
+   viewport.Width = 100;
+   viewport.Height = 100;
+   viewport.MinDepth = 0;
+   viewport.MaxDepth = 0;
+   ctx->cmdlist->RSSetViewports(1, &viewport);
+
+   D3D12_RECT scissor;
+   scissor.left = 0;
+   scissor.top = 0;
+   scissor.right = 100;
+   scissor.bottom = 100;
+   ctx->cmdlist->RSSetScissorRects(1, &scissor);
+
+   ctx->cmdlist->SetPipelineState(pipeline_state);
+
+   D3D12_CPU_DESCRIPTOR_HANDLE render_targets[PIPE_MAX_COLOR_BUFS];
+   D3D12_CPU_DESCRIPTOR_HANDLE *depth_desc = NULL, tmp_desc;
+   for (int i = 0; i < ctx->fb.nr_cbufs; ++i)
+      render_targets[i] = d3d12_surface(ctx->fb.cbufs[i])->desc_handle;
+   if (ctx->fb.zsbuf) {
+      tmp_desc = d3d12_surface(ctx->fb.zsbuf)->desc_handle;
+      depth_desc = &tmp_desc;
+   }
+   ctx->cmdlist->OMSetRenderTargets(ctx->fb.nr_cbufs, render_targets, FALSE, depth_desc);
+
+   ctx->cmdlist->IASetPrimitiveTopology(topology(dinfo->mode));
+   ctx->cmdlist->IASetVertexBuffers(0, ctx->num_vbs, ctx->vbvs);
+   ctx->cmdlist->DrawInstanced(3, 1, 0, 0);
 
    d3d12_flush_cmdlist(ctx);
 }
