@@ -71,12 +71,9 @@ topology_type(enum pipe_prim_type prim_type)
       return D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
 
    case PIPE_PRIM_LINES:
-   case PIPE_PRIM_LINE_STRIP:
       return D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
 
    case PIPE_PRIM_TRIANGLES:
-   case PIPE_PRIM_TRIANGLE_STRIP:
-   case PIPE_PRIM_TRIANGLE_FAN:
       return D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
    case PIPE_PRIM_PATCHES:
@@ -172,7 +169,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    ID3D12RootSignature *root_sig = get_root_signature(ctx);
    ID3D12PipelineState *pipeline_state = get_gfx_pipeline_state(ctx, root_sig,
-                                                                dinfo->mode);
+                                                                u_reduced_prim(dinfo->mode));
 
    d3d12_flush_cmdlist(ctx);
 }
