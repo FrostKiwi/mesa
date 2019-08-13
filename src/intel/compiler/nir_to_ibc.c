@@ -24,6 +24,9 @@
 #include "ibc_nir.h"
 #include "brw_nir.h"
 
+/* Needed for brw_texture_offset */
+#include "brw_shader.h"
+
 #include "util/hash_table.h"
 
 void
@@ -357,6 +360,215 @@ nti_cond_mod_for_nir_reduction_op(nir_op op)
    default:
       unreachable("Invalid reduction operation");
    }
+}
+
+static void
+nti_emit_tex(struct nir_to_ibc_state *nti,
+             const nir_tex_instr *ntex)
+{
+   ibc_builder *b = &nti->b;
+
+   ibc_intrinsic_src srcs[IBC_TEX_NUM_SRCS] = {};
+
+   srcs[IBC_TEX_SRC_SURFACE_BTI] = (ibc_intrinsic_src) {
+      .ref = ibc_imm_ud(ntex->texture_index),
+      .num_comps = 1,
+   };
+   srcs[IBC_TEX_SRC_SAMPLER_BTI] = (ibc_intrinsic_src) {
+      .ref = ibc_imm_ud(ntex->sampler_index),
+      .num_comps = 1,
+   };
+
+   uint32_t header_bits = 0;
+   for (unsigned i = 0; i < ntex->num_srcs; i++) {
+      const enum ibc_type src_type =
+         ibc_type_for_nir(nir_tex_instr_src_type(ntex, i)) |
+         nir_src_bit_size(ntex->src[i].src);
+      ibc_intrinsic_src src = {
+         .ref = ibc_nir_src(nti, ntex->src[i].src, src_type),
+         .num_comps = nir_tex_instr_src_size(ntex, i),
+      };
+
+      switch (ntex->src[i].src_type) {
+      case nir_tex_src_bias:
+         srcs[IBC_TEX_SRC_LOD] = src;
+         break;
+      case nir_tex_src_comparator:
+         srcs[IBC_TEX_SRC_SHADOW_C] = src;
+         break;
+      case nir_tex_src_coord:
+         srcs[IBC_TEX_SRC_COORD] = src;
+         break;
+      case nir_tex_src_ddx:
+         srcs[IBC_TEX_SRC_DDX] = src;
+         break;
+      case nir_tex_src_ddy:
+         srcs[IBC_TEX_SRC_DDY] = src;
+         break;
+      case nir_tex_src_lod:
+         srcs[IBC_TEX_SRC_LOD] = src;
+         break;
+      case nir_tex_src_min_lod:
+         srcs[IBC_TEX_SRC_MIN_LOD] = src;
+         break;
+      case nir_tex_src_ms_index:
+         srcs[IBC_TEX_SRC_SAMPLE_INDEX] = src;
+         break;
+
+      case nir_tex_src_offset: {
+         uint32_t offset_bits = 0;
+         if (brw_texture_offset(ntex, i, &offset_bits)) {
+            header_bits |= offset_bits;
+         } else {
+            srcs[IBC_TEX_SRC_TG4_OFFSET] = src;
+            srcs[IBC_TEX_SRC_TG4_OFFSET].num_comps = 2;
+         }
+         break;
+      }
+
+      case nir_tex_src_projector:
+         unreachable("should be lowered");
+
+      case nir_tex_src_texture_offset: {
+         /* Emit code to evaluate the actual indexing expression */
+         src.ref = ibc_uniformize(b, src.ref);
+         ibc_builder_push_scalar(b);
+         src.ref = ibc_ADD(b, IBC_TYPE_D, src.ref,
+                              ibc_imm_d(ntex->texture_index));
+         ibc_builder_pop(b);
+         srcs[IBC_TEX_SRC_SURFACE_BTI] = src;
+         break;
+      }
+
+      case nir_tex_src_sampler_offset: {
+         /* Emit code to evaluate the actual indexing expression */
+         src.ref = ibc_uniformize(b, src.ref);
+         ibc_builder_push_scalar(b);
+         src.ref = ibc_ADD(b, IBC_TYPE_D, src.ref,
+                              ibc_imm_d(ntex->sampler_index));
+         ibc_builder_pop(b);
+         srcs[IBC_TEX_SRC_SAMPLER_BTI] = src;
+         break;
+      }
+
+      case nir_tex_src_texture_handle:
+         assert(nir_tex_instr_src_index(ntex, nir_tex_src_texture_offset) == -1);
+         src.ref = ibc_uniformize(b, src.ref);
+         srcs[IBC_TEX_SRC_SURFACE_HANDLE] = src;
+         srcs[IBC_TEX_SRC_SURFACE_BTI] = (ibc_intrinsic_src) { };
+         break;
+
+      case nir_tex_src_sampler_handle:
+         assert(nir_tex_instr_src_index(ntex, nir_tex_src_sampler_offset) == -1);
+         src.ref = ibc_uniformize(b, src.ref);
+         srcs[IBC_TEX_SRC_SAMPLER_HANDLE] = src;
+         srcs[IBC_TEX_SRC_SAMPLER_BTI] = (ibc_intrinsic_src) { };
+         break;
+
+      case nir_tex_src_ms_mcs:
+         assert(ntex->op == nir_texop_txf_ms);
+         srcs[IBC_TEX_SRC_MCS] = src;
+         /* The NIR src says it takes 4 components but we only care about the
+          * first on gen8 and the first two on gen9+.
+          */
+         srcs[IBC_TEX_SRC_MCS].num_comps =
+            b->shader->devinfo->gen >= 9 ? 2 : 1;
+         break;
+
+      default:
+         unreachable("unknown texture source");
+      }
+   }
+
+   assert(nti->key->tex.gather_channel_quirk_mask == 0);
+   if (ntex->op == nir_texop_tg4)
+      header_bits |= ntex->component << 16;
+
+   if (header_bits) {
+      srcs[IBC_TEX_SRC_HEADER_BITS] = (ibc_intrinsic_src) {
+         .ref = ibc_imm_ud(header_bits),
+         .num_comps = 1,
+      };
+   }
+
+   nir_intrinsic_op op;
+   switch (ntex->op) {
+   case nir_texop_tex:
+      op = IBC_INTRINSIC_OP_TEX;
+      break;
+   case nir_texop_txb:
+      op = IBC_INTRINSIC_OP_TXB;
+      break;
+   case nir_texop_txl:
+      op = IBC_INTRINSIC_OP_TXL;
+      break;
+   case nir_texop_txd:
+      op = IBC_INTRINSIC_OP_TXD;
+      break;
+   case nir_texop_txf:
+      op = IBC_INTRINSIC_OP_TXF;
+      break;
+   case nir_texop_txf_ms:
+      op = IBC_INTRINSIC_OP_TXF_MS;
+      break;
+   case nir_texop_txf_ms_mcs:
+      op = IBC_INTRINSIC_OP_TXF_MCS;
+      break;
+   case nir_texop_query_levels:
+   case nir_texop_txs:
+      op = IBC_INTRINSIC_OP_TXS;
+      break;
+   case nir_texop_lod:
+      op = IBC_INTRINSIC_OP_LOD;
+      break;
+   case nir_texop_tg4:
+      if (srcs[IBC_TEX_SRC_TG4_OFFSET].num_comps > 0)
+         op = IBC_INTRINSIC_OP_TG4_OFFSET;
+      else
+         op = IBC_INTRINSIC_OP_TG4;
+      break;
+   case nir_texop_texture_samples:
+      op = IBC_INTRINSIC_OP_SAMPLEINFO;
+      break;
+   default:
+      unreachable("unknown texture op");
+   }
+
+   unsigned num_dest_comps = 4;
+   const unsigned nir_num_dest_comps = nir_tex_instr_dest_size(ntex);
+   if (b->shader->devinfo->gen >= 9 &&
+       ntex->op != nir_texop_tg4 && ntex->op != nir_texop_query_levels) {
+      unsigned write_mask = ntex->dest.is_ssa ?
+                            nir_ssa_def_components_read(&ntex->dest.ssa):
+                            (1 << nir_num_dest_comps) - 1;
+      assert(write_mask != 0); /* dead code should have been eliminated */
+      num_dest_comps = util_last_bit(write_mask);
+   }
+
+   const enum ibc_type dest_type = ibc_type_for_nir(ntex->dest_type) |
+                                   nir_dest_bit_size(ntex->dest);
+   ibc_reg_ref dest =
+      ibc_build_ssa_intrinsic(b, op, dest_type, num_dest_comps,
+                              srcs, IBC_TEX_NUM_SRCS);
+
+   if (ntex->op == nir_texop_query_levels) {
+      /* # levels is in .w */
+      dest.logical.comp = 3;
+      dest = ibc_MOV(b, dest.type, dest);
+   }
+
+   if (num_dest_comps != nir_num_dest_comps) {
+      ibc_reg_ref comp[4];
+      assert(nir_num_dest_comps < ARRAY_SIZE(comp));
+      for (unsigned i = 0; i < nir_num_dest_comps; i++) {
+         comp[i] = dest;
+         comp[i].logical.comp = i;
+      }
+      dest = ibc_VEC(b, comp, nir_num_dest_comps);
+   }
+
+   assert(dest.file == IBC_REG_FILE_LOGICAL);
+   nti->ssa_to_reg[ntex->dest.ssa.index] = dest.reg;
 }
 
 static void
@@ -728,6 +940,9 @@ nti_emit_block(struct nir_to_ibc_state *nti, const nir_block *block)
       switch (instr->type) {
       case nir_instr_type_alu:
          nti_emit_alu(nti, nir_instr_as_alu(instr));
+         break;
+      case nir_instr_type_tex:
+         nti_emit_tex(nti, nir_instr_as_tex(instr));
          break;
       case nir_instr_type_intrinsic:
          nti_emit_intrinsic(nti, nir_instr_as_intrinsic(instr));
