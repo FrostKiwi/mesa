@@ -36,6 +36,7 @@ struct d3d12_screen {
 
    IDXGIAdapter1 *adapter;
    ID3D12Device *dev;
+   ID3D12CommandQueue *cmdqueue;
 
    struct slab_parent_pool transfer_pool;
 
