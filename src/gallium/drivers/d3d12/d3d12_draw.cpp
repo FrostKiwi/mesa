@@ -23,6 +23,7 @@
 
 #include "d3d12_context.h"
 #include "d3d12_format.h"
+#include "d3d12_resource.h"
 #include "d3d12_screen.h"
 #include "d3d12_surface.h"
 
@@ -251,7 +252,33 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    ctx->cmdlist->IASetPrimitiveTopology(topology(dinfo->mode));
    ctx->cmdlist->IASetVertexBuffers(0, ctx->num_vbs, ctx->vbvs);
+
+
+   for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
+      struct pipe_surface *psurf = ctx->fb.cbufs[i];
+      d3d12_resource_barrier(ctx, d3d12_resource(psurf->texture),
+                             D3D12_RESOURCE_STATE_COMMON,
+                             D3D12_RESOURCE_STATE_RENDER_TARGET);
+   }
+   if (ctx->fb.zsbuf) {
+      d3d12_resource_barrier(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
+                             D3D12_RESOURCE_STATE_COMMON,
+                             D3D12_RESOURCE_STATE_DEPTH_WRITE);
+   }
+
    ctx->cmdlist->DrawInstanced(3, 1, 0, 0);
+
+   for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
+      struct pipe_surface *psurf = ctx->fb.cbufs[i];
+      d3d12_resource_barrier(ctx, d3d12_resource(psurf->texture),
+                             D3D12_RESOURCE_STATE_RENDER_TARGET,
+                             D3D12_RESOURCE_STATE_COMMON);
+   }
+   if (ctx->fb.zsbuf) {
+      d3d12_resource_barrier(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
+                             D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                             D3D12_RESOURCE_STATE_COMMON);
+   }
 
    d3d12_flush_cmdlist(ctx);
 }
