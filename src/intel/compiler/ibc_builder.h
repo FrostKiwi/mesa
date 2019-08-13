@@ -484,7 +484,8 @@ ibc_MOV_raw_vec_to(ibc_builder *b, ibc_reg_ref dest,
    /* TODO: This needs to be adjusted more carefully */
    const unsigned simd_width = MIN2(b->simd_width, 16);
    if (num_comps > 1 || simd_width != b->simd_width) {
-      assert(src.file == IBC_REG_FILE_LOGICAL);
+      assert(src.file == IBC_REG_FILE_IMM ||
+             src.file == IBC_REG_FILE_LOGICAL);
       assert(dest.file == IBC_REG_FILE_LOGICAL);
    }
 
@@ -494,8 +495,10 @@ ibc_MOV_raw_vec_to(ibc_builder *b, ibc_reg_ref dest,
          ibc_MOV_to(b, dest, src);
          ibc_builder_pop(b);
       }
-      src.logical.comp++;
-      dest.logical.comp++;
+      if (src.file == IBC_REG_FILE_LOGICAL) {
+         src.logical.comp++;
+         dest.logical.comp++;
+      }
    }
 }
 
