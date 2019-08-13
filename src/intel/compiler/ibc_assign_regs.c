@@ -734,7 +734,7 @@ should_assign_reg(const ibc_reg *reg)
 
 static bool
 rewrite_ref_and_update_reg(ibc_reg_ref *ref,
-                           int8_t num_bytes, int8_t num_comps,
+                           int num_bytes, int num_comps,
                            uint8_t simd_group, uint8_t simd_width,
                            void *_state)
 {
