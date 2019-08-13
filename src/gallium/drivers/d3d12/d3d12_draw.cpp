@@ -226,7 +226,16 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    ctx->cmdlist->SetGraphicsRootSignature(root_sig);
 
    ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);
-   ctx->cmdlist->RSSetScissorRects(ctx->num_scissors, ctx->scissors);
+   if (ctx->num_scissors > 0)
+      ctx->cmdlist->RSSetScissorRects(ctx->num_scissors, ctx->scissors);
+   else {
+      D3D12_RECT fb_scissor;
+      fb_scissor.left = 0;
+      fb_scissor.top = 0;
+      fb_scissor.right = ctx->fb.width;
+      fb_scissor.bottom = ctx->fb.height;
+      ctx->cmdlist->RSSetScissorRects(1, &fb_scissor);
+   }
 
    ctx->cmdlist->SetPipelineState(pipeline_state);
 
