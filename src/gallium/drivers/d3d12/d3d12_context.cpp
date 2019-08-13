@@ -44,19 +44,42 @@ d3d12_create_vertex_elements_state(struct pipe_context *pctx,
                                    unsigned num_elements,
                                    const struct pipe_vertex_element *elements)
 {
-   return NULL;
+   struct d3d12_vertex_elements_state *cso = CALLOC_STRUCT(d3d12_vertex_elements_state);
+   if (!cso)
+      return NULL;
+
+   for (unsigned i = 0; i < num_elements; ++i) {
+      cso->elements[i].SemanticName = "TEXCOORD";
+      cso->elements[i].SemanticIndex = i;
+      cso->elements[i].Format = d3d12_get_format(elements[i].src_format);
+      assert(cso->elements[i].Format != DXGI_FORMAT_UNKNOWN);
+      cso->elements[i].InputSlot = elements[i].vertex_buffer_index;
+      cso->elements[i].AlignedByteOffset = elements[i].src_offset;
+
+      if (elements[i].instance_divisor) {
+         cso->elements[i].InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
+         cso->elements[i].InstanceDataStepRate = elements[i].instance_divisor;
+      } else {
+         cso->elements[i].InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+         cso->elements[i].InstanceDataStepRate = 0;
+      }
+   }
+   cso->num_elements = num_elements;
+   return cso;
 }
 
 static void
 d3d12_bind_vertex_elements_state(struct pipe_context *pctx,
                                  void *ve)
 {
+   d3d12_context(pctx)->ves = (struct d3d12_vertex_elements_state *)ve;
 }
 
 static void
 d3d12_delete_vertex_elements_state(struct pipe_context *pctx,
                                    void *ve)
 {
+   FREE(ve);
 }
 
 static void *

@@ -33,11 +33,17 @@
 #define D3D12_DEBUG_VERBOSE 1
 extern int d3d12_debug;
 
+struct d3d12_vertex_elements_state {
+   D3D12_INPUT_ELEMENT_DESC elements[PIPE_MAX_ATTRIBS];
+   unsigned num_elements;
+};
+
 struct d3d12_context {
    struct pipe_context base;
    struct slab_child_pool transfer_pool;
 
    struct pipe_framebuffer_state fb;
+   struct d3d12_vertex_elements_state *ves;
 
    HANDLE event;
    ID3D12CommandQueue *cmdqueue;
