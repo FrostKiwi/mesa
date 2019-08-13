@@ -580,7 +580,8 @@ ibc_build_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
          intrin->src[i].simd_width = srcs[i].simd_width;
       }
       intrin->src[i].num_comps =
-         srcs[i].num_comps > 0 ? srcs[i].num_comps : num_dest_comps;
+         srcs[i].num_comps > 0 ? srcs[i].num_comps :
+         srcs[i].ref.file == IBC_REG_FILE_NONE ? 0 : num_dest_comps;
    }
 
    intrin->dest = dest;
