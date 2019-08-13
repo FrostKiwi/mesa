@@ -499,7 +499,7 @@ remap_reg(const struct ibc_reg *reg, struct opt_cse_state *state)
 
 static bool
 rewrite_read(struct ibc_reg_ref *ref,
-             UNUSED int8_t num_bytes, UNUSED int8_t num_comps,
+             UNUSED int num_bytes, UNUSED int num_comps,
              UNUSED uint8_t simd_group, UNUSED uint8_t simd_width,
              void *_state)
 {
