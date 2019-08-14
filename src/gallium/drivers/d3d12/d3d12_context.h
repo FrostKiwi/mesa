@@ -38,6 +38,11 @@ struct d3d12_vertex_elements_state {
    unsigned num_elements;
 };
 
+struct d3d12_rasterizer_state {
+   struct pipe_rasterizer_state base;
+   D3D12_RASTERIZER_DESC desc;
+};
+
 struct primconvert_context;
 
 struct d3d12_context {
@@ -56,6 +61,7 @@ struct d3d12_context {
    struct pipe_scissor_state scissor_states[PIPE_MAX_VIEWPORTS];
    D3D12_RECT scissors[PIPE_MAX_VIEWPORTS];
    unsigned num_scissors;
+   struct d3d12_rasterizer_state *rast;
 
    HANDLE event;
    ID3D12Fence *cmdqueue_fence;
