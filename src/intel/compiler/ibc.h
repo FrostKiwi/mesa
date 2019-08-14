@@ -257,7 +257,7 @@ ibc_reg *ibc_logical_reg_create(struct ibc_shader *shader,
                                 uint8_t simd_group, uint8_t simd_width);
 
 ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
-                               uint8_t size, uint8_t align);
+                               uint16_t size, uint8_t align);
 
 ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader, uint8_t bits);
 
