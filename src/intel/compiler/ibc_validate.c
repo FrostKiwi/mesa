@@ -362,16 +362,14 @@ ibc_validate_send_instr(struct ibc_validate_state *s,
 
    case IBC_REG_FILE_IMM:
       ibc_validate_reg_ref(s, &send->desc, false, 0, 1,
-                           send->instr.simd_group,
-                           send->instr.simd_width);
+                           0 /* simd_group */, 1 /* simd_width */);
       break;
 
    default:
       ibc_assert(s, send->desc.type == IBC_TYPE_UD);
       ibc_validate_reg_ref(s, &send->desc, false,
                            ibc_type_byte_size(IBC_TYPE_UD), 0,
-                           send->instr.simd_group,
-                           send->instr.simd_width);
+                           0 /* simd_group */, 1 /* simd_width */);
       break;
    }
 
@@ -382,16 +380,14 @@ ibc_validate_send_instr(struct ibc_validate_state *s,
 
    case IBC_REG_FILE_IMM:
       ibc_validate_reg_ref(s, &send->ex_desc, false, 0, 1,
-                           send->instr.simd_group,
-                           send->instr.simd_width);
+                           0 /* simd_group */, 1 /* simd_width */);
       break;
 
    default:
       ibc_assert(s, send->ex_desc.type == IBC_TYPE_UD);
       ibc_validate_reg_ref(s, &send->ex_desc, false,
                            ibc_type_byte_size(IBC_TYPE_UD), 0,
-                           send->instr.simd_group,
-                           send->instr.simd_width);
+                           0 /* simd_group */, 1 /* simd_width */);
    }
 
    ibc_assert(s, send->mlen > 0);
@@ -427,9 +423,6 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
       ibc_assert(s, !intrin->can_reorder);
 
    for (unsigned i = 0; i < intrin->num_srcs; i++) {
-      ibc_assert(s, intrin->src[i].simd_group >= intrin->instr.simd_group);
-      ibc_assert(s, intrin->src[i].simd_group + intrin->src[i].simd_width <=
-                    intrin->instr.simd_group + intrin->instr.simd_width);
       ibc_validate_reg_ref(s, &intrin->src[i].ref, false,
                            0, intrin->src[i].num_comps,
                            intrin->src[i].simd_group,
