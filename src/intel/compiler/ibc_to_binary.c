@@ -300,6 +300,38 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       brw_MAD(p, dest, src[0], src[1], src[2]);
       break;
 
+   case IBC_ALU_OP_RCP:
+      gen6_math(p, dest, BRW_MATH_FUNCTION_INV, src[0], brw_null_reg());
+      break;
+
+   case IBC_ALU_OP_LOG2:
+      gen6_math(p, dest, BRW_MATH_FUNCTION_LOG, src[0], brw_null_reg());
+      break;
+
+   case IBC_ALU_OP_EXP2:
+      gen6_math(p, dest, BRW_MATH_FUNCTION_EXP, src[0], brw_null_reg());
+      break;
+
+   case IBC_ALU_OP_SQRT:
+      gen6_math(p, dest, BRW_MATH_FUNCTION_SQRT, src[0], brw_null_reg());
+      break;
+
+   case IBC_ALU_OP_RSQ:
+      gen6_math(p, dest, BRW_MATH_FUNCTION_RSQ, src[0], brw_null_reg());
+      break;
+
+   case IBC_ALU_OP_SIN:
+      gen6_math(p, dest, BRW_MATH_FUNCTION_SIN, src[0], brw_null_reg());
+      break;
+
+   case IBC_ALU_OP_COS:
+      gen6_math(p, dest, BRW_MATH_FUNCTION_COS, src[0], brw_null_reg());
+      break;
+
+   case IBC_ALU_OP_POW:
+      gen6_math(p, dest, BRW_MATH_FUNCTION_POW, src[0], src[1]);
+      break;
+
    default:
       unreachable("Invalid instruction");
    }
