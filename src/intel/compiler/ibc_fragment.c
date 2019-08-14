@@ -420,6 +420,7 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
        nti_fs->out.color[0].file != IBC_REG_FILE_NONE)
       ibc_emit_alhpa_to_coverage_workaround(nti);
 
+   bool fb_written = false;
    if (key->nr_color_regions > 0) {
       for (unsigned target = 0; target < key->nr_color_regions; target++) {
          /* Skip over outputs that weren't written. */
@@ -435,8 +436,11 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
          ibc_emit_fb_write(nti, target, nti_fs->out.color[target],
                            nti_fs->out.dual_src_color, src0_alpha,
                            target == key->nr_color_regions - 1);
+         fb_written = true;
       }
-   } else {
+   }
+
+   if (!fb_written) {
       /* Even if there's no color buffers enabled, we still need to send
        * alpha out the pipeline to our null renderbuffer to support
        * alpha-testing, alpha-to-coverage, and so on.
@@ -455,6 +459,18 @@ ibc_lower_simd_width_fb_write_max_width(ibc_intrinsic_instr *write)
       return 8; /* Dual-source FB writes are unsupported in SIMD16 mode. */
    else
       return 16;
+}
+
+static ibc_reg_ref
+move_to_payload(ibc_builder *b, ibc_reg_ref src, unsigned num_comps)
+{
+   if (src.file == IBC_REG_FILE_NONE) {
+      return ibc_builder_new_logical_reg(b, IBC_TYPE_F, num_comps);
+   } else {
+      ibc_reg_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
+      ibc_MOV_raw_vec_to(b, dest, src, num_comps);
+      return dest;
+   }
 }
 
 void
@@ -478,7 +494,7 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_send_instr *send,
       *(uint32_t *)write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.imm;
    bool has_header = false;
 
-   send->payload[0] = color0;
+   send->payload[0] = move_to_payload(b, color0, 4);
    send->mlen = 4 * (write->instr.simd_width / 8);
 
    uint32_t msg_control;
