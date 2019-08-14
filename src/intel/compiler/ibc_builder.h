@@ -947,20 +947,20 @@ ibc_build_branch(ibc_builder *b, enum ibc_branch_op op, ibc_reg_ref pred,
 }
 
 static inline ibc_merge_instr *
-ibc_start(ibc_builder *b)
+ibc_START(ibc_builder *b)
 {
    return ibc_build_merge(b, IBC_MERGE_OP_START, NULL);
 }
 
 static inline ibc_branch_instr *
-ibc_end(ibc_builder *b)
+ibc_END(ibc_builder *b)
 {
    return ibc_build_branch(b, IBC_BRANCH_OP_END, ibc_null(IBC_TYPE_UD),
                            BRW_PREDICATE_NONE, false);
 }
 
 static inline ibc_branch_instr *
-ibc_if(ibc_builder *b, ibc_reg_ref pred,
+ibc_IF(ibc_builder *b, ibc_reg_ref pred,
        enum brw_predicate predicate, bool pred_inverse)
 {
    ibc_branch_instr *_if =
@@ -976,7 +976,7 @@ ibc_if(ibc_builder *b, ibc_reg_ref pred,
 }
 
 static inline ibc_branch_instr *
-ibc_else(ibc_builder *b, ibc_branch_instr *_if)
+ibc_ELSE(ibc_builder *b, ibc_branch_instr *_if)
 {
    ibc_branch_instr *_else =
       ibc_build_branch(b, IBC_BRANCH_OP_ELSE, ibc_null(IBC_TYPE_UD),
@@ -993,7 +993,7 @@ ibc_else(ibc_builder *b, ibc_branch_instr *_if)
 }
 
 static inline ibc_merge_instr *
-ibc_endif(ibc_builder *b, ibc_branch_instr *_if, ibc_branch_instr *_else)
+ibc_ENDIF(ibc_builder *b, ibc_branch_instr *_if, ibc_branch_instr *_else)
 {
    ibc_branch_instr *branch =
       ibc_build_branch(b, IBC_BRANCH_OP_NEXT, ibc_null(IBC_TYPE_UD),
