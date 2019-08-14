@@ -28,6 +28,7 @@
 #include "d3d12_surface.h"
 
 #include "util/u_debug.h"
+#include "util/u_helpers.h"
 #include "util/u_prim.h"
 
 
@@ -214,6 +215,19 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    return ret;
 }
 
+static DXGI_FORMAT
+ib_format(unsigned index_size)
+{
+   switch (index_size) {
+   case 1: return DXGI_FORMAT_R8_UINT;
+   case 2: return DXGI_FORMAT_R16_UINT;
+   case 4: return DXGI_FORMAT_R32_UINT;
+
+   default:
+      unreachable("unexpected index-buffer size");
+   }
+}
+
 void
 d3d12_draw_vbo(struct pipe_context *pctx,
                const struct pipe_draw_info *dinfo)
@@ -223,6 +237,19 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    ID3D12RootSignature *root_sig = get_root_signature(ctx);
    ID3D12PipelineState *pipeline_state = get_gfx_pipeline_state(ctx, root_sig,
                                                                 u_reduced_prim(dinfo->mode));
+
+   unsigned index_offset = 0;
+   struct pipe_resource *index_buffer = NULL;
+   if (dinfo->index_size > 0) {
+      if (dinfo->has_user_indices) {
+         if (!util_upload_index_buffer(pctx, dinfo, &index_buffer,
+             &index_offset, 4)) {
+            debug_printf("util_upload_index_buffer() failed\n");
+            return;
+         }
+      } else
+         index_buffer = dinfo->index.resource;
+   }
 
    ctx->cmdlist->SetGraphicsRootSignature(root_sig);
 
@@ -266,9 +293,18 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                              D3D12_RESOURCE_STATE_DEPTH_WRITE);
    }
 
-   if (dinfo->index_size > 0)
-      unreachable("no indexed rendering yet");
-   else
+   if (dinfo->index_size > 0) {
+      struct d3d12_resource *res = d3d12_resource(index_buffer);
+      D3D12_INDEX_BUFFER_VIEW ibv;
+      ibv.BufferLocation = res->res->GetGPUVirtualAddress() + index_offset;
+      ibv.SizeInBytes = res->base.width0 - index_offset;
+      ibv.Format = ib_format(dinfo->index_size);
+
+      ctx->cmdlist->IASetIndexBuffer(&ibv);
+      ctx->cmdlist->DrawIndexedInstanced(dinfo->count, dinfo->instance_count,
+                                         dinfo->start, dinfo->index_bias,
+                                         dinfo->start_instance);
+   } else
       ctx->cmdlist->DrawInstanced(dinfo->count, dinfo->instance_count,
                                   dinfo->start, dinfo->start_instance);
 
