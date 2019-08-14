@@ -1033,6 +1033,9 @@ brw_nir_should_use_ibc(const nir_shader *nir,
       return false; /* No image support yet */
 
    switch (nir->info.stage) {
+   case MESA_SHADER_VERTEX:
+      return true;
+
    case MESA_SHADER_COMPUTE:
       return true;
 

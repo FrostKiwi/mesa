@@ -149,6 +149,7 @@ libintel_compiler_files = files(
   'ibc_print.c',
   'ibc_split_logical_regs.c',
   'ibc_validate.c',
+  'ibc_vertex.c',
 )
 
 brw_nir_trig = custom_target(
