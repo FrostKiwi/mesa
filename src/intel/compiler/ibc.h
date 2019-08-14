@@ -631,6 +631,7 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_LOAD_PAYLOAD,
    IBC_INTRINSIC_OP_PLN,
    IBC_INTRINSIC_OP_FB_WRITE,
+   IBC_INTRINSIC_OP_URB_WRITE,
 
    /* Texture opcodes.  See ibc_tex_src */
    IBC_INTRINSIC_OP_TEX,
@@ -993,6 +994,9 @@ void ibc_lower_and_optimize(ibc_shader *ibc, bool print);
 bool ibc_lower_fb_writes(ibc_shader *shader);
 bool ibc_lower_gather_ops(ibc_shader *shader);
 bool ibc_lower_io_to_sends(ibc_shader *shader);
+void ibc_lower_io_urb_write_to_send(struct ibc_builder *b,
+                                    ibc_send_instr *send,
+                                    const ibc_intrinsic_instr *intrin);
 void ibc_lower_io_fb_write_to_send(struct ibc_builder *b,
                                    ibc_send_instr *send,
                                    const ibc_intrinsic_instr *intrin);

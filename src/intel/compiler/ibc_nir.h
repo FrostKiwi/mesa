@@ -136,6 +136,8 @@ ibc_load_payload_logical(ibc_builder *b, unsigned *reg, enum ibc_type type,
    return dest;
 }
 
+bool ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
+                               const nir_intrinsic_instr *instr);
 bool ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
                                const nir_intrinsic_instr *instr);
 bool ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
