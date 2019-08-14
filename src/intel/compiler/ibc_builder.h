@@ -1025,6 +1025,97 @@ ibc_ENDIF(ibc_builder *b, ibc_branch_instr *_if, ibc_branch_instr *_else)
    return _endif;
 }
 
+static inline ibc_merge_instr *
+ibc_DO(ibc_builder *b)
+{
+   ibc_branch_instr *branch =
+      ibc_build_branch(b, IBC_BRANCH_OP_NEXT, ibc_null(IBC_TYPE_UD),
+                       BRW_PREDICATE_NONE, false);
+
+   struct list_head preds;
+   list_inithead(&preds);
+   ibc_builder_add_merge_pred(b, &preds, true, branch);
+   return ibc_build_merge(b, IBC_MERGE_OP_DO, &preds);
+}
+
+static inline ibc_branch_instr *
+ibc_BREAK(ibc_builder *b, ibc_reg_ref pred,
+          enum brw_predicate predicate, bool pred_inverse,
+          struct list_head *break_preds)
+{
+   ibc_branch_instr *_break = ibc_build_branch(b, IBC_BRANCH_OP_BREAK,
+                                               pred, predicate, pred_inverse);
+   ibc_builder_add_merge_pred(b, break_preds, true, _break);
+
+   struct list_head merge_preds;
+   list_inithead(&merge_preds);
+   ibc_builder_add_merge_pred(b, &merge_preds, predicate, _break);
+   ibc_build_merge(b, IBC_MERGE_OP_MERGE, &merge_preds);
+
+   return _break;
+}
+
+static inline ibc_branch_instr *
+ibc_CONTINUE(ibc_builder *b, ibc_reg_ref pred,
+             enum brw_predicate predicate, bool pred_inverse,
+             ibc_merge_instr *_do)
+
+{
+   assert(_do->op == IBC_MERGE_OP_DO);
+   ibc_branch_instr *_cont = ibc_build_branch(b, IBC_BRANCH_OP_CONTINUE,
+                                              pred, predicate, pred_inverse);
+   _cont->jump = _do;
+   ibc_builder_add_merge_pred(b, &_do->preds, true, _cont);
+
+   struct list_head merge_preds;
+   list_inithead(&merge_preds);
+   ibc_builder_add_merge_pred(b, &merge_preds, predicate, _cont);
+   ibc_build_merge(b, IBC_MERGE_OP_MERGE, &merge_preds);
+
+   return _cont;
+}
+
+static inline ibc_branch_instr *
+ibc_WHILE(ibc_builder *b, ibc_reg_ref pred,
+          enum brw_predicate predicate, bool pred_inverse,
+          ibc_merge_instr *_do,
+          struct list_head *break_preds)
+{
+   ibc_branch_instr *_while = ibc_build_branch(b, IBC_BRANCH_OP_WHILE,
+                                               pred, predicate, pred_inverse);
+   _while->jump = _do;
+   ibc_builder_add_merge_pred(b, &_do->preds, true, _while);
+
+   ibc_builder_add_merge_pred(b, break_preds, predicate, _while);
+   ibc_merge_instr *merge =
+      ibc_build_merge(b, IBC_MERGE_OP_MERGE, break_preds);
+
+   /* Link up all the jumps for continus */
+   list_for_each_entry(ibc_merge_pred, pred, &_do->preds, link) {
+      if (pred->branch == _while)
+         continue;
+
+      if (ibc_instr_next(&pred->branch->instr) == &_do->instr)
+         continue;
+
+      assert(pred->branch->op == IBC_BRANCH_OP_CONTINUE);
+      pred->branch->jump = _do;
+      pred->branch->merge = merge;
+   }
+
+   /* Link up all the jumps for breaks */
+   list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
+      if (pred->branch == _while)
+         continue;
+
+      assert(pred->branch->op == IBC_BRANCH_OP_BREAK);
+      pred->branch->jump = merge;
+      pred->branch->merge = merge;
+   }
+
+   return _while;
+}
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

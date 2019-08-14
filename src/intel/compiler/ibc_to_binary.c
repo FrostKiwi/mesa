@@ -488,6 +488,10 @@ generate_merge(struct brw_codegen *p, const ibc_merge_instr *merge)
       brw_ENDIF(p);
       return;
 
+   case IBC_MERGE_OP_DO:
+      brw_DO(p, brw_get_default_exec_size(p));
+      return;
+
    case IBC_MERGE_OP_START:
       return;
    }
@@ -508,6 +512,18 @@ generate_branch(struct brw_codegen *p, const ibc_branch_instr *branch)
 
    case IBC_BRANCH_OP_ELSE:
       brw_ELSE(p);
+      return;
+
+   case IBC_BRANCH_OP_WHILE:
+      brw_WHILE(p);
+      return;
+
+   case IBC_BRANCH_OP_BREAK:
+      brw_BREAK(p);
+      return;
+
+   case IBC_BRANCH_OP_CONTINUE:
+      brw_CONT(p);
       return;
 
    case IBC_BRANCH_OP_END:
@@ -576,6 +592,8 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
       }
       unreachable("Invalid instruction type");
    }
+
+   brw_set_uip_jip(p, start_offset);
 
    disasm_new_inst_group(disasm_info, p->next_insn_offset);
 
