@@ -920,6 +920,28 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
 }
 
 static void
+nti_emit_jump(struct nir_to_ibc_state *nti,
+              const nir_jump_instr *njump)
+{
+   ibc_builder *b = &nti->b;
+
+   switch (njump->type) {
+   case nir_jump_break:
+      ibc_BREAK(b, ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false,
+                &nti->break_preds);
+      break;
+
+   case nir_jump_continue:
+      ibc_CONTINUE(b, ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false,
+                   nti->_do);
+      break;
+
+   default:
+      unreachable("Unsupported jump instruction type");
+   }
+}
+
+static void
 nti_emit_ssa_undef(struct nir_to_ibc_state *nti,
                    const nir_ssa_undef_instr *nundef)
 {
@@ -994,6 +1016,9 @@ nti_emit_block(struct nir_to_ibc_state *nti, const nir_block *block)
       case nir_instr_type_load_const:
          nti_emit_load_const(nti, nir_instr_as_load_const(instr));
          break;
+      case nir_instr_type_jump:
+         nti_emit_jump(nti, nir_instr_as_jump(instr));
+         break;
       case nir_instr_type_ssa_undef:
          nti_emit_ssa_undef(nti, nir_instr_as_ssa_undef(instr));
          break;
@@ -1031,9 +1056,26 @@ nti_emit_if(struct nir_to_ibc_state *nti, nir_if *nif)
 }
 
 static void
-nti_emit_loop(struct nir_to_ibc_state *nti, nir_loop *loop)
+nti_emit_loop(struct nir_to_ibc_state *nti, nir_loop *nloop)
 {
-   unreachable("Loops not yet supported");
+   ibc_builder *b = &nti->b;
+
+   /* Save off the state of the outer loop */
+   ibc_merge_instr *old_do = nti->_do;
+   struct list_head old_break_preds;
+   list_replace(&nti->break_preds, &old_break_preds);
+
+   nti->_do = ibc_DO(b);
+   list_inithead(&nti->break_preds);
+
+   nti_emit_cf_list(nti, &nloop->body);
+
+   ibc_WHILE(b, ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false,
+             nti->_do, &nti->break_preds);
+
+   /* Restore off the state of the outer loop */
+   nti->_do = old_do;
+   list_replace(&old_break_preds, &nti->break_preds);
 }
 
 static void
@@ -1083,6 +1125,8 @@ nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
       .prog_data = prog_data,
       .stage_state = stage_state,
    };
+   list_inithead(&nti->break_preds);
+
    ibc_builder_init(&nti->b, shader);
    ibc_START(&nti->b);
 }

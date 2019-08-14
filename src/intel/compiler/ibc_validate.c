@@ -488,10 +488,14 @@ ibc_validate_merge_instr(struct ibc_validate_state *s,
       _mesa_set_search_and_add(s->tmp_set, pred->branch, &already_seen);
       ibc_assert(s, !already_seen);
 
-      ibc_assert(s, merge == pred->branch->jump ||
-                    merge == pred->branch->merge ||
-                    (ibc_branch_instr_falls_through(pred->branch) &&
-                     &merge->instr == ibc_instr_next(&pred->branch->instr)));
+      if (pred->logical) {
+         ibc_assert(s, merge == pred->branch->jump ||
+                       merge == pred->branch->merge ||
+                       (ibc_branch_instr_falls_through(pred->branch) &&
+                        &merge->instr == ibc_instr_next(&pred->branch->instr)));
+      } else {
+         ibc_assert(s, &merge->instr == ibc_instr_next(&pred->branch->instr));
+      }
    }
    _mesa_set_clear(s->tmp_set, NULL);
 
@@ -514,6 +518,28 @@ ibc_validate_merge_instr(struct ibc_validate_state *s,
 
    default:
       ibc_assert(s, !"TODO: Finish merge instruction validation");
+   }
+}
+
+static void
+ibc_validate_phi_src_refs(struct ibc_validate_state *s,
+                          const ibc_merge_instr *block_start,
+                          const ibc_branch_instr *pred)
+{
+   ibc_foreach_instr_from(instr, s->shader,
+                          ibc_instr_next(&block_start->instr)) {
+      if (instr->type != IBC_INSTR_TYPE_PHI)
+         break;
+
+      ibc_phi_instr *phi = ibc_instr_as_phi(instr);
+      ibc_foreach_phi_src(src, phi) {
+         if (src->pred != pred)
+            continue;
+
+         ibc_validate_reg_ref(s, &src->ref, false, 0, phi->num_comps,
+                              phi->instr.simd_group, phi->instr.simd_width);
+         break;
+      }
    }
 }
 
@@ -575,6 +601,18 @@ ibc_validate_branch_instr(struct ibc_validate_state *s,
 
    ibc_assert(s, s->block_start == branch->block_start);
    s->block_start = NULL;
+
+   if (branch->jump)
+      ibc_validate_phi_src_refs(s, branch->jump, branch);
+
+   if (branch->merge)
+      ibc_validate_phi_src_refs(s, branch->merge, branch);
+
+   if (ibc_branch_instr_falls_through(branch)) {
+      const ibc_merge_instr *next_merge =
+         ibc_instr_as_merge(ibc_instr_next(&branch->instr));
+      ibc_validate_phi_src_refs(s, next_merge, branch);
+   }
 }
 
 static void
@@ -592,8 +630,9 @@ ibc_validate_phi_instr(struct ibc_validate_state *s,
    assert(s->tmp_set->entries == 0);
    list_validate(&phi->srcs);
    ibc_foreach_phi_src(src, phi) {
-      ibc_validate_reg_ref(s, &src->ref, false, 0, phi->num_comps,
-                           phi->instr.simd_group, phi->instr.simd_width);
+      /* ibc_validate_reg_ref is called in ibc_validate_branch_instr in the
+       * predecessor of each src.
+       */
 
       /* Check for uniqueness of the predecessors */
       bool already_seen = false;
