@@ -38,9 +38,12 @@ struct d3d12_vertex_elements_state {
    unsigned num_elements;
 };
 
+struct primconvert_context;
+
 struct d3d12_context {
    struct pipe_context base;
    struct slab_child_pool transfer_pool;
+   struct primconvert_context *primconvert;
 
    struct pipe_framebuffer_state fb;
    struct d3d12_vertex_elements_state *ves;

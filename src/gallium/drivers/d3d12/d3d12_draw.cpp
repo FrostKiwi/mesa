@@ -31,6 +31,9 @@
 #include "util/u_helpers.h"
 #include "util/u_prim.h"
 
+extern "C" {
+#include "indices/u_primconvert.h"
+}
 
 static ID3D12RootSignature *
 get_root_signature(struct d3d12_context *ctx)
@@ -233,6 +236,17 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                const struct pipe_draw_info *dinfo)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
+
+   if (dinfo->mode >= PIPE_PRIM_QUADS ||
+       dinfo->mode == PIPE_PRIM_LINE_LOOP ||
+       dinfo->mode == PIPE_PRIM_TRIANGLE_FAN) {
+      if (!u_trim_pipe_prim(dinfo->mode, (unsigned *)&dinfo->count))
+         return;
+
+      // util_primconvert_save_rasterizer_state(ctx->primconvert, &rast_state->base);
+      util_primconvert_draw_vbo(ctx->primconvert, dinfo);
+      return;
+   }
 
    ID3D12RootSignature *root_sig = get_root_signature(ctx);
    ID3D12PipelineState *pipeline_state = get_gfx_pipeline_state(ctx, root_sig,
