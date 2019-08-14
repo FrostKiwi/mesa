@@ -446,6 +446,29 @@ print_phi_instr(FILE *fp, ibc_phi_instr *phi)
    fprintf(fp, "\n");
 }
 
+static void
+ibc_print_instr(FILE *fp, const ibc_instr *instr)
+{
+   switch (instr->type) {
+   case IBC_INSTR_TYPE_ALU:
+      print_alu_instr(fp, ibc_instr_as_alu(instr));
+      return;
+   case IBC_INSTR_TYPE_SEND:
+      print_send_instr(fp, ibc_instr_as_send(instr));
+      return;
+   case IBC_INSTR_TYPE_INTRINSIC:
+      print_intrinsic_instr(fp, ibc_instr_as_intrinsic(instr));
+      return;
+   case IBC_INSTR_TYPE_FLOW:
+      print_flow_instr(fp, ibc_instr_as_flow(instr));
+      return;
+   case IBC_INSTR_TYPE_PHI:
+      print_phi_instr(fp, ibc_instr_as_phi(instr));
+      return;
+   }
+   unreachable("Invalid instruction type");
+}
+
 void
 ibc_print_shader(const ibc_shader *shader, FILE *fp)
 {
@@ -458,23 +481,6 @@ ibc_print_shader(const ibc_shader *shader, FILE *fp)
       flow->block_index = num_blocks++;
 
    ibc_foreach_instr(instr, shader) {
-      switch (instr->type) {
-      case IBC_INSTR_TYPE_ALU:
-         print_alu_instr(fp, ibc_instr_as_alu(instr));
-         continue;
-      case IBC_INSTR_TYPE_SEND:
-         print_send_instr(fp, ibc_instr_as_send(instr));
-         continue;
-      case IBC_INSTR_TYPE_INTRINSIC:
-         print_intrinsic_instr(fp, ibc_instr_as_intrinsic(instr));
-         continue;
-      case IBC_INSTR_TYPE_FLOW:
-         print_flow_instr(fp, ibc_instr_as_flow(instr));
-         continue;
-      case IBC_INSTR_TYPE_PHI:
-         print_phi_instr(fp, ibc_instr_as_phi(instr));
-         continue;
-      }
-      unreachable("Invalid instruction type");
+      ibc_print_instr(fp, instr);
    }
 }
