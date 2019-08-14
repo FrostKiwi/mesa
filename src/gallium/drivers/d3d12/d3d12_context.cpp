@@ -31,11 +31,17 @@
 #include "util/u_framebuffer.h"
 #include "util/u_helpers.h"
 #include "util/u_memory.h"
+#include "util/u_upload_mgr.h"
+
+extern "C" {
+#include "indices/u_primconvert.h"
+}
 
 static void
 d3d12_context_destroy(struct pipe_context *pctx)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
+   util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
    FREE(ctx);
 }
@@ -468,6 +474,21 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    d3d12_context_resource_init(&ctx->base);
 
    slab_create_child(&ctx->transfer_pool, &d3d12_screen(pscreen)->transfer_pool);
+
+   ctx->base.stream_uploader = u_upload_create_default(&ctx->base);
+   ctx->base.const_uploader = ctx->base.stream_uploader;
+
+   int prim_hwsupport = 1 << PIPE_PRIM_POINTS |
+                        1 << PIPE_PRIM_LINES |
+                        1 << PIPE_PRIM_LINE_STRIP |
+                        1 << PIPE_PRIM_TRIANGLES |
+                        1 << PIPE_PRIM_TRIANGLE_STRIP;
+
+   ctx->primconvert = util_primconvert_create(&ctx->base, prim_hwsupport);
+   if (!ctx->primconvert) {
+      debug_printf("D3D12: failed to create primconvert\n");
+      return NULL;
+   }
 
    HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
