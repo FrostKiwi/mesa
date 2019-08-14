@@ -29,9 +29,7 @@
 void
 ibc_setup_payload_base(ibc_builder *b, struct ibc_payload_base *payload)
 {
-   unsigned reg = 0;
-   payload->g0 = ibc_load_payload_reg(b, &reg);
-   payload->num_ff_regs = reg;
+   payload->num_ff_regs = 1; /* g0 */
 }
 
 static void
