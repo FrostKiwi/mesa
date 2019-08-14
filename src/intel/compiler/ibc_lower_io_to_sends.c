@@ -547,6 +547,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
          /* Mask off bits to be sure */
          send->desc = ibc_AND(b, IBC_TYPE_UD, send->desc, ibc_imm_ud(0xfff));
       }
+      ibc_builder_pop(b);
    }
 }
 
@@ -564,6 +565,8 @@ ibc_lower_io_to_sends(ibc_shader *shader)
 
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
       switch (intrin->op) {
+      case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL:
+      case IBC_INTRINSIC_OP_SIMD_BROADCAST:
       case IBC_INTRINSIC_OP_SIMD_ZIP:
       case IBC_INTRINSIC_OP_VEC:
       case IBC_INTRINSIC_OP_LOAD_PAYLOAD:
