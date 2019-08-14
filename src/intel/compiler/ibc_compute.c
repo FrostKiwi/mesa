@@ -87,7 +87,8 @@ ibc_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
    ibc_reg_ref tmp_ud = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
 
    ibc_builder_push_we_all(b, 8);
-   ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp_ud, nti->payload->g0);
+   ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp_ud,
+                  ibc_hw_grf_ref(0, 0, IBC_TYPE_UD));
    ibc_builder_pop(b);
 
    ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 8);

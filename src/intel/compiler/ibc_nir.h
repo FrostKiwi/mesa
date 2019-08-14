@@ -36,8 +36,6 @@ extern "C" {
 struct hash_table;
 
 struct ibc_payload_base {
-   ibc_reg_ref g0;
-
    /** Number of registers used for fixed-function thread payload */
    unsigned num_ff_regs;
 
