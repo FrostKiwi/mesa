@@ -141,21 +141,76 @@ d3d12_delete_depth_stencil_alpha_state(struct pipe_context *pctx,
 {
 }
 
+static D3D12_FILL_MODE
+fill_mode(unsigned mode)
+{
+   switch (mode) {
+   case PIPE_POLYGON_MODE_FILL:
+      return D3D12_FILL_MODE_SOLID;
+   case PIPE_POLYGON_MODE_LINE:
+      return D3D12_FILL_MODE_WIREFRAME;
+
+   default:
+      unreachable("unsupported fill-mode");
+   }
+}
+
+static D3D12_CULL_MODE
+cull_mode(unsigned mode)
+{
+   switch (mode) {
+   case PIPE_FACE_NONE:
+      return D3D12_CULL_MODE_NONE;
+   case PIPE_FACE_FRONT:
+      return D3D12_CULL_MODE_FRONT;
+   case PIPE_FACE_BACK:
+      return D3D12_CULL_MODE_BACK;
+
+   default:
+      unreachable("unsupported cull-mode");
+   }
+}
+
 static void *
 d3d12_create_rasterizer_state(struct pipe_context *pctx,
                               const struct pipe_rasterizer_state *rs_state)
 {
-   return NULL;
+   struct d3d12_rasterizer_state *cso = CALLOC_STRUCT(d3d12_rasterizer_state);
+   if (!cso)
+      return NULL;
+
+   cso->base = *rs_state;
+
+   if (rs_state->fill_front != rs_state->fill_back)
+      debug_printf("D3D12: unsupported fill-mode combination\n");
+
+   assert(rs_state->depth_clip_near == rs_state->depth_clip_far);
+
+   cso->desc.FillMode = fill_mode(rs_state->fill_front);
+   cso->desc.CullMode = cull_mode(rs_state->cull_face);
+   cso->desc.FrontCounterClockwise = rs_state->front_ccw;
+   cso->desc.DepthBias = 0; // TODO
+   cso->desc.DepthBiasClamp = 0; // TODO
+   cso->desc.SlopeScaledDepthBias = 0; // TODO
+   cso->desc.DepthClipEnable = rs_state->depth_clip_near;
+   cso->desc.MultisampleEnable = rs_state->multisample;
+   cso->desc.AntialiasedLineEnable = rs_state->line_smooth;
+   cso->desc.ForcedSampleCount = 0; // TODO
+   cso->desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF; // TODO
+
+   return cso;
 }
 
 static void
 d3d12_bind_rasterizer_state(struct pipe_context *pctx, void *rs_state)
 {
+   d3d12_context(pctx)->rast = (struct d3d12_rasterizer_state *)rs_state;
 }
 
 static void
 d3d12_delete_rasterizer_state(struct pipe_context *pctx, void *rs_state)
 {
+   FREE(rs_state);
 }
 
 static void *

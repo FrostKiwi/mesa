@@ -158,17 +158,7 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
 
    pso_desc.SampleMask = UINT_MAX;
 
-   pso_desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID; // TODO
-   pso_desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // TODO
-   pso_desc.RasterizerState.FrontCounterClockwise = TRUE; // TODO
-   pso_desc.RasterizerState.DepthBias = 0; // TODO
-   pso_desc.RasterizerState.DepthBiasClamp = 0; // TODO
-   pso_desc.RasterizerState.SlopeScaledDepthBias = 0; // TODO
-   pso_desc.RasterizerState.DepthClipEnable = FALSE; // TODO
-   pso_desc.RasterizerState.MultisampleEnable = FALSE; // TODO
-   pso_desc.RasterizerState.AntialiasedLineEnable = FALSE; // TODO
-   pso_desc.RasterizerState.ForcedSampleCount = 0; // TODO
-   pso_desc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF; // TODO
+   pso_desc.RasterizerState = ctx->rast->desc;
 
    pso_desc.DepthStencilState.DepthEnable = TRUE; // TODO
    pso_desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL; // TODO
@@ -243,7 +233,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       if (!u_trim_pipe_prim(dinfo->mode, (unsigned *)&dinfo->count))
          return;
 
-      // util_primconvert_save_rasterizer_state(ctx->primconvert, &rast_state->base);
+      util_primconvert_save_rasterizer_state(ctx->primconvert, &ctx->rast->base);
       util_primconvert_draw_vbo(ctx->primconvert, dinfo);
       return;
    }
