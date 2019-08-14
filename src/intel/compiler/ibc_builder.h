@@ -659,7 +659,7 @@ ibc_SIMD_BROADCAST(ibc_builder *b, ibc_reg_ref val, ibc_reg_ref chan,
    ibc_builder_push_scalar(b);
    ibc_reg_ref dest =
       ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_SIMD_BROADCAST,
-                              IBC_TYPE_UD, num_comps, srcs, 2);
+                              val.type, num_comps, srcs, 2);
    ibc_builder_pop(b);
 
    return dest;
