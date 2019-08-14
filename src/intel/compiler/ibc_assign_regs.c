@@ -745,6 +745,10 @@ rewrite_ref_and_update_reg(ibc_reg_ref *ref,
 
    if (ref->reg == NULL) {
       assert(ref->file == IBC_REG_FILE_HW_GRF);
+      /* We reserve g0 universally but everything else has to go into an
+       * allocated HW GRF.
+       */
+      assert(ref->hw_grf.byte < 32);
       return true;
    }
 
@@ -904,6 +908,18 @@ ibc_assign_regs(ibc_shader *shader)
                                  1 << i, /* stride in bytes */
                                  state.mem_ctx);
    }
+
+   /* Allocate g0 for all of time.  This both ensures that we can always
+    * access g0 in lowering passes (because it's reserved) and that we never
+    * stomp it which always looks funny in assembly dumps.  Also, rumor has
+    * it that the simulator does strange things if you stomp g0.
+    */
+   struct ibc_phys_reg g0;
+   UNUSED bool success =
+      ibc_phys_reg_alloc(&state.phys_alloc, 0, REG_SIZE, REG_SIZE,
+                         0, UINT32_MAX, &g0);
+   assert(success);
+
 
    state.assign = ralloc_array(state.mem_ctx,
                                struct ibc_reg_assignment,
