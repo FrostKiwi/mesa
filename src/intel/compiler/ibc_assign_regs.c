@@ -911,6 +911,20 @@ live_reg_filter_cb(const ibc_reg *reg)
           reg->file == IBC_REG_FILE_HW_GRF;
 }
 
+static void
+rewrite_instr_reg_reads(ibc_instr *instr, struct ibc_assign_regs_state *state)
+{
+   state->is_read = true;
+   ibc_instr_foreach_read(instr, rewrite_ref_and_update_reg, state);
+}
+
+static void
+rewrite_instr_reg_writes(ibc_instr *instr, struct ibc_assign_regs_state *state)
+{
+   state->is_read = false;
+   ibc_instr_foreach_write(instr, rewrite_ref_and_update_reg, state);
+}
+
 bool
 ibc_assign_regs(ibc_shader *shader)
 {
@@ -1023,10 +1037,8 @@ ibc_assign_regs(ibc_shader *shader)
          }
       }
 
-      state.is_read = true;
-      ibc_instr_foreach_read(instr, rewrite_ref_and_update_reg, &state);
-      state.is_read = false;
-      ibc_instr_foreach_write(instr, rewrite_ref_and_update_reg, &state);
+      rewrite_instr_reg_reads(instr, &state);
+      rewrite_instr_reg_writes(instr, &state);
 
       if (instr->type == IBC_INSTR_TYPE_FLOW) {
          /* The flow instruction doesn't actually have any non-flag sources
