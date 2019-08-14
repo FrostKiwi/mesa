@@ -106,17 +106,9 @@ static inline void
 ibc_load_payload(ibc_builder *b, ibc_reg_ref dest,
                  ibc_reg_ref src, unsigned num_comps)
 {
-   ibc_intrinsic_instr *load =
-      ibc_intrinsic_instr_create(b->shader,
-                                 IBC_INTRINSIC_OP_LOAD_PAYLOAD,
-                                 b->simd_group, b->simd_width, 1);
-   load->src[0].ref = src;
-   load->src[0].num_comps = num_comps;
-   load->dest = dest;
-   load->num_dest_comps = num_comps;
-   load->instr.we_all = b->we_all;
-
-   ibc_builder_insert_instr(b, &load->instr);
+   ibc_build_intrinsic(b, IBC_INTRINSIC_OP_LOAD_PAYLOAD,
+                       dest, num_comps,
+                       &(ibc_intrinsic_src) { .ref = src }, 1);
 }
 
 static inline ibc_reg_ref
