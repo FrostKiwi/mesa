@@ -143,8 +143,6 @@ ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
    const unsigned byte_shift = ffs(byte_divisor) - 1;
    const unsigned simd_shift = ffs(simd_divisor) - 1;
 
-   const unsigned reg_byte_size = DIV_ROUND_UP(reg->logical.bit_size, 8);
-   assert(util_is_power_of_two_nonzero(reg_byte_size));
    const unsigned ref_byte_size =
       DIV_ROUND_UP(ibc_type_bit_size(ref->type), 8);
 
@@ -155,6 +153,9 @@ ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
 
    case IBC_REG_FILE_LOGICAL: {
       assert(num_comps >= 0);
+
+      const unsigned reg_byte_size = DIV_ROUND_UP(reg->logical.bit_size, 8);
+      assert(util_is_power_of_two_nonzero(reg_byte_size));
       assert(ref->logical.byte % ref_byte_size == 0);
       assert(ref->logical.byte + ref_byte_size <= reg_byte_size);
 
