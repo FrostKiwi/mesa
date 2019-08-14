@@ -155,6 +155,14 @@ d3d12_screen_resource_init(struct pipe_screen *pscreen)
    pscreen->resource_destroy = d3d12_resource_destroy;
 }
 
+static unsigned
+linear_offset(int x, int y, int z, unsigned stride, unsigned layer_stride)
+{
+   return x +
+          y * stride +
+          z * layer_stride;
+}
+
 static void *
 d3d12_transfer_map(struct pipe_context *pctx,
                    struct pipe_resource *pres,
@@ -170,16 +178,46 @@ d3d12_transfer_map(struct pipe_context *pctx,
    if (usage & PIPE_TRANSFER_MAP_DIRECTLY)
       return NULL;
 
-   void *ptr;
-   if (FAILED(res->res->Map(0, NULL, &ptr)))
-      return NULL;
-
    struct pipe_transfer *ptrans = (struct pipe_transfer *)slab_alloc(&ctx->transfer_pool);
    if (!ptrans)
       return NULL;
 
    memset(ptrans, 0, sizeof(*ptrans));
    pipe_resource_reference(&ptrans->resource, pres);
+
+   D3D12_RANGE range;
+   void *ptr;
+   if (pres->target == PIPE_BUFFER) {
+      range.Begin = box->x;
+      range.End = box->x + box->width;
+
+      if (FAILED(res->res->Map(0, &range, &ptr)))
+         return NULL;
+
+      ptrans->stride = 0;
+      ptrans->layer_stride = 0;
+
+      ptr = ((uint8_t *)ptr) + box->x;
+   } else {
+      assert(res->res->GetDesc().Layout == D3D12_TEXTURE_LAYOUT_ROW_MAJOR);
+
+      ptrans->stride = util_format_get_stride(pres->format, box->width);
+      ptrans->layer_stride = util_format_get_2d_size(pres->format,
+                                                     ptrans->stride,
+                                                     box->height);
+
+      range.Begin = linear_offset(box->x, box->y, box->z,
+                                  ptrans->stride, ptrans->layer_stride);
+      range.End = linear_offset(box->x + box->width,
+                                box->y + box->height,
+                                box->z + box->depth,
+                                ptrans->stride, ptrans->layer_stride);
+
+      if (FAILED(res->res->Map(0, &range, &ptr)))
+         return NULL;
+
+      ptr = ((uint8_t *)ptr) + range.Begin;
+   }
 
    ptrans->resource = pres;
    ptrans->level = level;
