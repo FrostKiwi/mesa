@@ -364,6 +364,10 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
       if (bind & PIPE_BIND_VERTEX_BUFFER &&
           !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER))
          return FALSE;
+
+      if (bind & PIPE_BIND_INDEX_BUFFER &&
+          !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_IA_INDEX_BUFFER))
+         return FALSE;
    } else {
       /* all other targets are texture-targets */
       if (bind & PIPE_BIND_RENDER_TARGET &&
