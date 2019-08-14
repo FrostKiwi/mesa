@@ -888,6 +888,17 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
 }
 
 static void
+nti_emit_ssa_undef(struct nir_to_ibc_state *nti,
+                   const nir_ssa_undef_instr *nundef)
+{
+   nti->ssa_to_reg[nundef->def.index] =
+      ibc_logical_reg_create(nti->b.shader,
+                             nundef->def.bit_size,
+                             nundef->def.num_components,
+                             0, 1);
+}
+
+static void
 nti_emit_phi(struct nir_to_ibc_state *nti, const nir_phi_instr *instr)
 {
    ibc_builder *b = &nti->b;
@@ -950,6 +961,9 @@ nti_emit_block(struct nir_to_ibc_state *nti, const nir_block *block)
          break;
       case nir_instr_type_load_const:
          nti_emit_load_const(nti, nir_instr_as_load_const(instr));
+         break;
+      case nir_instr_type_ssa_undef:
+         nti_emit_ssa_undef(nti, nir_instr_as_ssa_undef(instr));
          break;
       case nir_instr_type_phi:
          nti_emit_phi(nti, nir_instr_as_phi(instr));
