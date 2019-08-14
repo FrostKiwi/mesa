@@ -599,6 +599,10 @@ ibc_lower_io_to_sends(ibc_shader *shader)
          lower_surface_access(&b, send, intrin);
          break;
 
+      case IBC_INTRINSIC_OP_URB_WRITE:
+         ibc_lower_io_urb_write_to_send(&b, send, intrin);
+         break;
+
       case IBC_INTRINSIC_OP_FB_WRITE:
          ibc_lower_io_fb_write_to_send(&b, send, intrin);
          break;

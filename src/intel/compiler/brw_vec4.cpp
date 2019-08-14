@@ -28,6 +28,7 @@
 #include "brw_vec4_builder.h"
 #include "brw_vec4_vs.h"
 #include "brw_dead_control_flow.h"
+#include "ibc_compile.h"
 #include "dev/gen_debug.h"
 #include "program/prog_parameter.h"
 #include "util/u_math.h"
@@ -2944,6 +2945,11 @@ brw_compile_vs(const struct brw_compiler *compiler, void *log_data,
    if (INTEL_DEBUG & DEBUG_VS) {
       fprintf(stderr, "VS Output ");
       brw_print_vue_map(stderr, &prog_data->base.vue_map);
+   }
+
+   if (brw_nir_should_use_ibc(shader, compiler, true)) {
+      return ibc_compile_vs(compiler, log_data, mem_ctx, key, prog_data,
+                            shader, error_str);
    }
 
    if (is_scalar) {
