@@ -300,8 +300,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    if (dinfo->index_size > 0) {
       struct d3d12_resource *res = d3d12_resource(index_buffer);
       D3D12_INDEX_BUFFER_VIEW ibv;
-      ibv.BufferLocation = res->res->GetGPUVirtualAddress();
-      ibv.SizeInBytes = res->base.width0;
+      ibv.BufferLocation = res->res->GetGPUVirtualAddress() + index_offset;
+      ibv.SizeInBytes = res->base.width0 - index_offset;
       ibv.Format = ib_format(dinfo->index_size);
 
       ctx->cmdlist->IASetIndexBuffer(&ibv);
