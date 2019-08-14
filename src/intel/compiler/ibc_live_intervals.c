@@ -642,7 +642,7 @@ compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
          if (merge->op == IBC_MERGE_OP_DO) {
             ibc_merge_instr *_do = merge;
             ibc_branch_instr *branch_to_loop =
-               ibc_instr_as_branch(ibc_instr_next(&merge->instr));
+               ibc_instr_as_branch(ibc_instr_prev(&merge->instr));
             assert(branch_to_loop->op == IBC_BRANCH_OP_NEXT);
             ibc_merge_instr *loop_merge = branch_to_loop->merge;
             ibc_branch_instr *_while =

@@ -793,17 +793,17 @@ ibc_branch_instr *ibc_branch_instr_create(struct ibc_shader *shader,
  * successor of this branch instruction.
  */
 static inline bool
-ibc_branch_instr_falls_through(ibc_branch_instr *branch)
+ibc_branch_instr_falls_through(const ibc_branch_instr *branch)
 {
    switch (branch->op) {
    case IBC_BRANCH_OP_NEXT:
    case IBC_BRANCH_OP_IF:
-   case IBC_BRANCH_OP_ELSE:
       return true;
    case IBC_BRANCH_OP_WHILE:
    case IBC_BRANCH_OP_BREAK:
    case IBC_BRANCH_OP_CONTINUE:
       return branch->instr.predicate != BRW_PREDICATE_NONE;
+   case IBC_BRANCH_OP_ELSE:
    case IBC_BRANCH_OP_END:
       return false;
    }
@@ -849,6 +849,9 @@ ibc_phi_instr *ibc_phi_instr_create(struct ibc_shader *shader,
 
 #define ibc_foreach_instr_reverse_safe(instr, shader) \
    list_for_each_entry_safe_rev(ibc_instr, instr, &(shader)->instrs, link)
+
+#define ibc_foreach_instr_from(instr, shader, start) \
+   list_for_each_entry_from(ibc_instr, instr, start, &(shader)->instrs, link)
 
 static inline ibc_instr *
 ibc_instr_next(const ibc_instr *instr)
