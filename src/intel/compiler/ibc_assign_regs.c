@@ -22,6 +22,7 @@
  */
 
 #include "ibc.h"
+#include "ibc_builder.h"
 #include "ibc_live_intervals.h"
 
 #include "util/rb_tree.h"
@@ -928,6 +929,9 @@ rewrite_instr_reg_writes(ibc_instr *instr, struct ibc_assign_regs_state *state)
 bool
 ibc_assign_regs(ibc_shader *shader)
 {
+   struct ibc_builder b;
+   ibc_builder_init(&b, shader);
+
    struct ibc_assign_regs_state state = {
       .mem_ctx = ralloc_context(NULL),
    };
@@ -1005,6 +1009,39 @@ ibc_assign_regs(ibc_shader *shader)
 
       ibc_phys_reg_alloc_free_regs(&state.phys_alloc, state.ip);
 
+      if (instr->type == IBC_INSTR_TYPE_INTRINSIC) {
+         ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
+         if (intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD) {
+            assert(intrin->dest.reg);
+            assert(ibc_reg_ssa_instr(intrin->dest.reg) == instr);
+            assert(intrin->src[0].ref.file == IBC_REG_FILE_HW_GRF);
+            assert(intrin->src[0].ref.reg == NULL);
+
+            struct ibc_reg_assignment *assign =
+               &state.assign[intrin->dest.reg->index];
+
+            if (assign->preg || assign->sreg) {
+               rewrite_instr_reg_writes(instr, &state);
+
+               /* Some constraint (such as high GRFs for sends with EOT)
+                * has already caused our load_payload destination to be
+                * allocated.  So we can't just allocate our destination
+                * to the payload register.  Emit a MOV to copy it.
+                */
+               b.cursor = ibc_before_instr(instr);
+
+               ibc_MOV_raw_vec_to(&b, intrin->dest, intrin->src[0].ref,
+                                  intrin->num_dest_comps);
+
+            } else {
+               assign_reg(assign, intrin->src[0].ref.hw_grf.byte, &state);
+            }
+
+            ibc_instr_remove(instr);
+            continue;
+         }
+      }
+
       while (!rb_tree_is_empty(&state.alloc_order)) {
          struct rb_node *assign_node = rb_tree_first(&state.alloc_order);
          struct ibc_reg_assignment *assign =
@@ -1013,28 +1050,7 @@ ibc_assign_regs(ibc_shader *shader)
          if (assign->physical_start > state.ip)
             break;
 
-         ibc_instr *ssa_instr = ibc_reg_ssa_instr(assign->reg);
-         int16_t fixed_hw_grf_byte = -1;
-         if (ssa_instr && ssa_instr->type == IBC_INSTR_TYPE_INTRINSIC) {
-            ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(ssa_instr);
-            if (intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD) {
-               assert(intrin->src[0].ref.file == IBC_REG_FILE_HW_GRF);
-               assert(intrin->src[0].ref.reg == NULL);
-               fixed_hw_grf_byte = intrin->src[0].ref.hw_grf.byte;
-            }
-         }
-
-         assign_reg(assign, fixed_hw_grf_byte, &state);
-      }
-
-      if (instr->type == IBC_INSTR_TYPE_INTRINSIC) {
-         ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-         if (intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD) {
-            assert(intrin->dest.reg);
-            assert(ibc_reg_ssa_instr(intrin->dest.reg) == instr);
-            ibc_instr_remove(instr);
-            continue;
-         }
+         assign_reg(assign, -1, &state);
       }
 
       rewrite_instr_reg_reads(instr, &state);
