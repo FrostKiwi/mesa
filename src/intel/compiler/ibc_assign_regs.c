@@ -268,6 +268,15 @@ ibc_strided_reg_update_holes(struct ibc_strided_reg *reg,
        */
       if (ip >= reg->chunks[c].hole_end) {
          struct interval_set *chunk_live = reg->chunks[c].live_range;
+         if (chunk_live == NULL) {
+            /* We should only get here if this chunk of the register is never
+             * written.
+             */
+            reg->chunks[c].hole_start = 0;
+            reg->chunks[c].hole_end = UINT32_MAX;
+            goto found_hole;
+         }
+
          for (uint32_t i = 0; i < chunk_live->count; i++) {
             if (ip < chunk_live->intervals[i].end) {
                reg->chunks[c].hole_start =
