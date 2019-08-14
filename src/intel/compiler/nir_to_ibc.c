@@ -1019,15 +1019,15 @@ nti_emit_if(struct nir_to_ibc_state *nti, nir_if *nif)
    ibc_builder *b = &nti->b;
 
    ibc_reg_ref cond = ibc_nir_src(nti, nif->condition, IBC_TYPE_FLAG);
-   ibc_branch_instr *_if = ibc_if(b, cond, BRW_PREDICATE_NORMAL, false);
+   ibc_branch_instr *_if = ibc_IF(b, cond, BRW_PREDICATE_NORMAL, false);
 
    nti_emit_cf_list(nti, &nif->then_list);
 
-   ibc_branch_instr *_else = ibc_else(b, _if);
+   ibc_branch_instr *_else = ibc_ELSE(b, _if);
 
    nti_emit_cf_list(nti, &nif->else_list);
 
-   ibc_endif(b, _if, _else);
+   ibc_ENDIF(b, _if, _else);
 }
 
 static void
@@ -1084,7 +1084,7 @@ nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
       .stage_state = stage_state,
    };
    ibc_builder_init(&nti->b, shader);
-   ibc_start(&nti->b);
+   ibc_START(&nti->b);
 }
 
 void
@@ -1113,6 +1113,6 @@ ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
 ibc_shader *
 nir_to_ibc_state_finish(struct nir_to_ibc_state *nti)
 {
-   ibc_end(&nti->b);
+   ibc_END(&nti->b);
    return nti->b.shader;
 }
