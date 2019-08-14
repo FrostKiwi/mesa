@@ -215,25 +215,6 @@ print_instr(FILE *fp, const ibc_instr *instr, const char *name,
 }
 
 static const char *
-alu_op_name(enum ibc_alu_op op)
-{
-   switch (op) {
-   case IBC_ALU_OP_MOV:  return "mov";
-   case IBC_ALU_OP_SEL:  return "sel";
-   case IBC_ALU_OP_NOT:  return "not";
-   case IBC_ALU_OP_AND:  return "and";
-   case IBC_ALU_OP_OR:   return "or";
-   case IBC_ALU_OP_SHR:  return "shr";
-   case IBC_ALU_OP_SHL:  return "shl";
-   case IBC_ALU_OP_CMP:  return "cmp";
-   case IBC_ALU_OP_ADD:  return "add";
-   case IBC_ALU_OP_MUL:  return "mul";
-   case IBC_ALU_OP_MAD:  return "mad";
-   }
-   unreachable("Unknown ALU opcode");
-}
-
-static const char *
 conditional_mod_name(enum brw_conditional_mod cmod)
 {
    switch (cmod) {
@@ -258,7 +239,14 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 {
    fprintf(fp, "    ");
    print_instr_predicate(fp, &alu->instr);
-   fprintf(fp, "%s", alu_op_name(alu->op));
+
+   char alu_op_name[16];
+   strncpy(alu_op_name, ibc_alu_op_infos[alu->op].name, sizeof(alu_op_name));
+   for (char *c = alu_op_name; *c; c++)
+      if (*c >= 'A' && *c <= 'Z')
+         *c += 'a' - 'A';
+   fprintf(fp, "%s", alu_op_name);
+
    if (alu->cmod) {
       fprintf(fp, ".%s", conditional_mod_name(alu->cmod));
       assert(alu->instr.flag.file == IBC_REG_FILE_NONE ||
