@@ -211,6 +211,38 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_MAD(b, dest_type, src[2], src[1], src[0]);
       break;
 
+   case nir_op_frcp:
+      dest = ibc_RCP(b, dest_type, src[0]);
+      break;
+
+   case nir_op_flog2:
+      dest = ibc_LOG2(b, dest_type, src[0]);
+      break;
+
+   case nir_op_fexp2:
+      dest = ibc_EXP2(b, dest_type, src[0]);
+      break;
+
+   case nir_op_fsqrt:
+      dest = ibc_SQRT(b, dest_type, src[0]);
+      break;
+
+   case nir_op_frsq:
+      dest = ibc_RSQ(b, dest_type, src[0]);
+      break;
+
+   case nir_op_fsin:
+      dest = ibc_SIN(b, dest_type, src[0]);
+      break;
+
+   case nir_op_fcos:
+      dest = ibc_COS(b, dest_type, src[0]);
+      break;
+
+   case nir_op_fpow:
+      dest = ibc_POW(b, dest_type, src[0], src[1]);
+      break;
+
    case nir_op_bcsel: {
       assert(src[0].type == IBC_TYPE_FLAG);
       dest = ibc_SEL(b, dest_type, src[0], src[1], src[2]);
