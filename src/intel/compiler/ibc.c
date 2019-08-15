@@ -203,8 +203,7 @@ ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
       return true;
    }
 
-   case IBC_INSTR_TYPE_BRANCH:
-   case IBC_INSTR_TYPE_MERGE:
+   case IBC_INSTR_TYPE_FLOW:
       return true;
 
    case IBC_INSTR_TYPE_PHI: {
@@ -259,8 +258,7 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
       return true;
    }
 
-   case IBC_INSTR_TYPE_BRANCH:
-   case IBC_INSTR_TYPE_MERGE:
+   case IBC_INSTR_TYPE_FLOW:
       return true;
 
    case IBC_INSTR_TYPE_PHI: {
@@ -410,33 +408,28 @@ ibc_intrinsic_instr_create(struct ibc_shader *shader,
    return intrin;
 }
 
-ibc_branch_instr *
-ibc_branch_instr_create(struct ibc_shader *shader,
-                        enum ibc_branch_op op,
-                        uint8_t simd_width)
+ibc_flow_instr *
+ibc_flow_instr_create(struct ibc_shader *shader,
+                      enum ibc_flow_op op,
+                      uint8_t simd_width)
 {
-   ibc_branch_instr *branch = rzalloc(shader, ibc_branch_instr);
+   ibc_flow_instr *flow = rzalloc(shader, ibc_flow_instr);
 
-   ibc_instr_init(&branch->instr, IBC_INSTR_TYPE_BRANCH, 0, simd_width);
+   ibc_instr_init(&flow->instr, IBC_INSTR_TYPE_FLOW, 0, simd_width);
 
-   branch->op = op;
+   flow->op = op;
+   list_inithead(&flow->preds);
 
-   return branch;
+   return flow;
 }
 
-ibc_merge_instr *
-ibc_merge_instr_create(struct ibc_shader *shader,
-                       enum ibc_merge_op op,
-                       uint8_t simd_width)
+void
+ibc_flow_instr_add_pred(struct ibc_flow_instr *flow,
+                        struct ibc_flow_instr *pred_instr)
 {
-   ibc_merge_instr *merge = rzalloc(shader, ibc_merge_instr);
-
-   ibc_instr_init(&merge->instr, IBC_INSTR_TYPE_MERGE, 0, simd_width);
-
-   merge->op = op;
-   list_inithead(&merge->preds);
-
-   return merge;
+   ibc_flow_pred *pred = rzalloc(flow, ibc_flow_pred);
+   pred->instr = pred_instr;
+   list_addtail(&pred->link, &flow->preds);
 }
 
 ibc_phi_instr *
@@ -463,6 +456,7 @@ ibc_shader_create(void *mem_ctx,
    shader->simd_width = simd_width;
 
    list_inithead(&shader->instrs);
+   list_inithead(&shader->flow_instrs);
    list_inithead(&shader->regs);
 
    return shader;
