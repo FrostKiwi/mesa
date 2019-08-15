@@ -628,7 +628,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
       ibc_instr_foreach_write(instr, rewrite_flag_refs, &state);
 
       /* When we cross block boundaries, reset the allocator */
-      if (instr->type == IBC_INSTR_TYPE_BRANCH)
+      if (instr->type == IBC_INSTR_TYPE_FLOW)
          evict_all_flags(instr->index, &state);
    }
 

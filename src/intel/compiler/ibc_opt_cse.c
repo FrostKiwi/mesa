@@ -395,8 +395,7 @@ hash_wlr_reg_cb(const void *_reg)
       case IBC_INSTR_TYPE_PHI:
          hash = hash_phi_instr(hash, ibc_instr_as_phi(instr));
          break;
-      case IBC_INSTR_TYPE_BRANCH:
-      case IBC_INSTR_TYPE_MERGE:
+      case IBC_INSTR_TYPE_FLOW:
          unreachable("Branch and merge instructions don't write anything");
       }
    }
@@ -468,8 +467,7 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
                                ibc_instr_as_phi(instr_b)))
             return false;
          break;
-      case IBC_INSTR_TYPE_BRANCH:
-      case IBC_INSTR_TYPE_MERGE:
+      case IBC_INSTR_TYPE_FLOW:
          unreachable("Branch and merge instructions don't write anything");
       }
    }
@@ -555,7 +553,7 @@ ibc_opt_cse(ibc_shader *shader)
        * from CSEing two regs in different blocks.  We leave the remap set
        * around so that we can still do remaps.
        */
-      if (instr->type == IBC_INSTR_TYPE_BRANCH)
+      if (instr->type == IBC_INSTR_TYPE_FLOW)
          _mesa_set_clear(state.reg_set, NULL);
    }
 
