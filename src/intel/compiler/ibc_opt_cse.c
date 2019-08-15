@@ -484,19 +484,6 @@ struct opt_cse_state {
    bool progress;
 };
 
-static const ibc_reg *
-remap_reg(const struct ibc_reg *reg, struct opt_cse_state *state)
-{
-   struct hash_entry *he = _mesa_hash_table_search(state->reg_remap, reg);
-   if (he != NULL)
-      return he->data;
-
-   struct set_entry *se = _mesa_set_search_or_add(state->reg_set, reg);
-   _mesa_hash_table_insert(state->reg_remap, reg, (void *)se->key);
-
-   return se->key;
-}
-
 static bool
 rewrite_read(struct ibc_reg_ref *ref,
              UNUSED int num_bytes, UNUSED int num_comps,
@@ -512,11 +499,41 @@ rewrite_read(struct ibc_reg_ref *ref,
    if (ref->reg == NULL || !ref->reg->is_wlr)
       return true;
 
-   const struct ibc_reg *reg = remap_reg(ref->reg, state);
-   if (ref->reg != reg) {
-      ref->reg = reg;
+   struct hash_entry *entry =
+      _mesa_hash_table_search(state->reg_remap, ref->reg);
+   if (entry && ref->reg != entry->data) {
+      ref->reg = entry->data;
       state->progress = true;
    }
+
+   return true;
+}
+
+static bool
+try_cse_write(struct ibc_reg_ref *ref,
+              UNUSED int num_bytes, UNUSED int num_comps,
+              UNUSED uint8_t simd_group, UNUSED uint8_t simd_width,
+              void *_state)
+{
+   struct opt_cse_state *state = _state;
+
+   assert(ref->file != IBC_REG_FILE_IMM);
+   if (ref->file == IBC_REG_FILE_NONE)
+      return true;
+
+   if (ref->reg == NULL || !ref->reg->is_wlr)
+      return true;
+
+   /* Only bother on the last write instruction */
+   if (ref->write_link.next != &ref->reg->writes)
+      return true;
+
+   if (_mesa_hash_table_search(state->reg_remap, ref->reg))
+      return true;
+
+   struct set_entry *entry =
+      _mesa_set_search_or_add(state->reg_set, ref->reg);
+   _mesa_hash_table_insert(state->reg_remap, ref->reg, (void *)entry->key);
 
    return true;
 }
@@ -532,12 +549,14 @@ ibc_opt_cse(ibc_shader *shader)
 
    ibc_foreach_instr_safe(instr, shader) {
       ibc_instr_foreach_read(instr, rewrite_read, &state);
+      ibc_instr_foreach_write(instr, try_cse_write, &state);
 
-      /* When we cross block boundaries, reset the remap sets */
-      if (instr->type == IBC_INSTR_TYPE_BRANCH) {
+      /* When we cross block boundaries, reset the reg set.  This prevents us
+       * from CSEing two regs in different blocks.  We leave the remap set
+       * around so that we can still do remaps.
+       */
+      if (instr->type == IBC_INSTR_TYPE_BRANCH)
          _mesa_set_clear(state.reg_set, NULL);
-         _mesa_hash_table_clear(state.reg_remap, NULL);
-      }
    }
 
    _mesa_set_destroy(state.reg_set, NULL);
