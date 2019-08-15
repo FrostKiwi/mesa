@@ -39,7 +39,7 @@ struct ibc_validate_state {
    struct set *tmp_set;
 
    const ibc_shader *shader;
-   const ibc_merge_instr *block_start;
+   const ibc_flow_instr *block_start;
    const ibc_instr *instr;
 
    /* ibc_reg* -> reg_validate_state* */
@@ -48,7 +48,7 @@ struct ibc_validate_state {
 
 struct reg_validate_state {
    struct set *writes;
-   const ibc_merge_instr *write_block_start;
+   const ibc_flow_instr *write_block_start;
    struct list_head *next_write_link;
 };
 
@@ -466,74 +466,27 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
 }
 
 static void
-ibc_validate_merge_instr(struct ibc_validate_state *s,
-                         const ibc_merge_instr *merge)
+ibc_validate_flow_successor(struct ibc_validate_state *s,
+                            const ibc_flow_instr *flow,
+                            const ibc_flow_instr *successor)
 {
-   ibc_assert(s, s->block_start == NULL);
-   s->block_start = merge;
-
-   ibc_assert(s, merge->instr.simd_width == s->shader->simd_width);
-
-   if (ibc_assert(s, merge->block_end))
-      ibc_assert(s, merge->block_end->block_start == merge);
-
-   assert(s->tmp_set->entries == 0);
-   list_validate(&merge->preds);
-   list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
-      if (!ibc_assert(s, pred->branch != NULL))
-         continue;
-
-      /* Check for uniqueness of the predecessors */
-      bool already_seen = false;
-      _mesa_set_search_and_add(s->tmp_set, pred->branch, &already_seen);
-      ibc_assert(s, !already_seen);
-
-      if (pred->logical) {
-         ibc_assert(s, merge == pred->branch->jump ||
-                       merge == pred->branch->merge ||
-                       (ibc_branch_instr_falls_through(pred->branch) &&
-                        &merge->instr == ibc_instr_next(&pred->branch->instr)));
-      } else {
-         ibc_assert(s, &merge->instr == ibc_instr_next(&pred->branch->instr));
-      }
-   }
-   _mesa_set_clear(s->tmp_set, NULL);
-
-   switch (merge->op) {
-   case IBC_MERGE_OP_MERGE:
-      break;
-
-   case IBC_MERGE_OP_ENDIF:
-      list_for_each_entry(const ibc_merge_pred, pred, &merge->preds, link) {
-         ibc_assert(s, pred->branch &&
-                       (pred->branch->op == IBC_BRANCH_OP_IF ||
-                        pred->branch->op == IBC_BRANCH_OP_ELSE ||
-                        &pred->branch->instr == ibc_instr_prev(&merge->instr)));
-      }
-      break;
-
-   case IBC_MERGE_OP_START:
-      ibc_assert(s, list_is_empty(&merge->preds));
-      break;
-
-   default:
-      ibc_assert(s, !"TODO: Finish merge instruction validation");
-   }
-}
-
-static void
-ibc_validate_phi_src_refs(struct ibc_validate_state *s,
-                          const ibc_merge_instr *block_start,
-                          const ibc_branch_instr *pred)
-{
-   ibc_foreach_instr_from(instr, s->shader,
-                          ibc_instr_next(&block_start->instr)) {
-      if (instr->type != IBC_INSTR_TYPE_PHI)
+   bool found_in_preds = false;
+   ibc_foreach_flow_pred(pred, successor) {
+      if (pred->instr == flow) {
+         found_in_preds = true;
          break;
+      }
+   }
+   ibc_assert(s, found_in_preds);
+
+   ibc_foreach_instr_from(instr, s->shader,
+                          ibc_instr_next(&successor->instr)) {
+      if (instr->type != IBC_INSTR_TYPE_PHI)
+         continue;
 
       ibc_phi_instr *phi = ibc_instr_as_phi(instr);
       ibc_foreach_phi_src(src, phi) {
-         if (src->pred != pred)
+         if (src->pred != flow)
             continue;
 
          ibc_validate_reg_ref(s, &src->ref, false, 0, phi->num_comps,
@@ -544,75 +497,167 @@ ibc_validate_phi_src_refs(struct ibc_validate_state *s,
 }
 
 static void
-ibc_validate_branch_instr(struct ibc_validate_state *s,
-                          const ibc_branch_instr *branch)
+ibc_validate_flow_instr(struct ibc_validate_state *s,
+                        const ibc_flow_instr *flow)
 {
-   ibc_assert(s, branch->instr.simd_width == s->shader->simd_width);
+   if (flow->op == IBC_FLOW_OP_START)
+      ibc_assert(s, s->block_start == NULL);
+   else
+      ibc_assert(s, s->block_start == ibc_flow_instr_prev(flow));
+   s->block_start = flow;
 
-   if (ibc_assert(s, branch->block_start))
-      ibc_assert(s, branch->block_start->block_end == branch);
+   ibc_assert(s, flow->instr.simd_width == s->shader->simd_width);
 
-   switch (branch->op) {
-   case IBC_BRANCH_OP_NEXT:
-      ibc_assert(s, branch->jump == NULL);
-      ibc_assert(s, branch->merge == NULL);
-      break;
+   assert(s->tmp_set->entries == 0);
+   list_validate(&flow->preds);
+   ibc_foreach_flow_pred(pred, flow) {
+      if (!ibc_assert(s, pred->instr != NULL))
+         continue;
 
-   case IBC_BRANCH_OP_IF:
+      /* Check for uniqueness of the predecessors */
+      bool already_seen = false;
+      _mesa_set_search_and_add(s->tmp_set, pred->instr, &already_seen);
+      ibc_assert(s, !already_seen);
+
+      ibc_assert(s, flow == pred->instr->jump ||
+                    (ibc_flow_instr_falls_through(pred->instr) &&
+                     flow == pred->instr));
+   }
+   _mesa_set_clear(s->tmp_set, NULL);
+
+   if (ibc_flow_instr_falls_through(flow))
+      ibc_validate_flow_successor(s, flow, flow);
+   if (flow->jump)
+      ibc_validate_flow_successor(s, flow, flow->jump);
+
+   switch (flow->op) {
+   case IBC_FLOW_OP_START:
+   case IBC_FLOW_OP_END:
+      /* START and END instructions must not be predicated */
+      ibc_assert(s, flow->instr.predicate == BRW_PREDICATE_NONE);
+
+      ibc_assert(s, flow->jump == NULL);
+      ibc_assert(s, flow->merge == NULL);
+
+      ibc_assert(s, list_is_empty(&flow->preds));
+      return;
+
+   case IBC_FLOW_OP_IF:
       /* IF instructions must be predicated */
-      ibc_assert(s, branch->instr.predicate != BRW_PREDICATE_NONE);
+      ibc_assert(s, flow->instr.predicate != BRW_PREDICATE_NONE);
 
       /* IF instructions can jump to an ENDIF or an ELSE */
-      if (ibc_assert(s, branch->jump) &&
-          branch->jump->op != IBC_MERGE_OP_ENDIF) {
-         /* The else is actually the branch instruction at the end of the
-          * previous block.
-          */
-         const ibc_branch_instr *jump_prev =
-            ibc_instr_as_branch(ibc_instr_prev(&branch->jump->instr));
-         ibc_assert(s, jump_prev->op == IBC_BRANCH_OP_ELSE);
+      if (ibc_assert(s, flow->jump)) {
+         ibc_assert(s, flow->jump->op == IBC_FLOW_OP_ELSE ||
+                       flow->jump->op == IBC_FLOW_OP_ENDIF);
       }
       /* Must merge at an endif */
-      ibc_assert(s, branch->merge && branch->merge->op == IBC_MERGE_OP_ENDIF);
-      break;
+      ibc_assert(s, flow->merge && flow->merge->op == IBC_FLOW_OP_ENDIF);
 
-   case IBC_BRANCH_OP_ELSE: {
-      ibc_assert(s, branch->jump && branch->jump->op == IBC_MERGE_OP_ENDIF);
-      ibc_assert(s, branch->merge && branch->merge->op == IBC_MERGE_OP_ENDIF);
-      const ibc_merge_instr *next_merge =
-         ibc_instr_as_merge(ibc_instr_next(&branch->instr));
-      ibc_assert(s, next_merge->op == IBC_MERGE_OP_MERGE);
-      list_for_each_entry(ibc_merge_pred, pred, &next_merge->preds, link) {
-         ibc_assert(s, pred->branch &&
-                       (pred->branch == branch ||
-                        pred->branch->op == IBC_BRANCH_OP_IF));
+      /* We can only have one predecessor and its the IF itself */
+      ibc_foreach_flow_pred(pred, flow)
+         ibc_assert(s, pred->instr == flow);
+      return;
+
+   case IBC_FLOW_OP_ELSE:
+      /* ELSE instructions must not be predicated */
+      ibc_assert(s, flow->instr.predicate == BRW_PREDICATE_NONE);
+
+      ibc_assert(s, flow->jump && flow->jump->op == IBC_FLOW_OP_ENDIF);
+      ibc_assert(s, flow->merge && flow->merge->op == IBC_FLOW_OP_ENDIF);
+
+      ibc_foreach_flow_pred(pred, flow) {
+         if (pred->instr == NULL)
+            continue;
+
+         ibc_assert(s, pred->instr->op == IBC_FLOW_OP_IF &&
+                       pred->instr->jump == flow);
       }
-      break;
+      return;
+
+   case IBC_FLOW_OP_ENDIF:
+      /* ENDIF instructions must not be predicated */
+      ibc_assert(s, flow->instr.predicate == BRW_PREDICATE_NONE);
+
+      ibc_assert(s, flow->jump == NULL);
+      ibc_assert(s, flow->merge == NULL);
+
+      ibc_foreach_flow_pred(pred, flow) {
+         if (pred->instr == NULL)
+            continue;
+
+         switch (pred->instr->op) {
+         case IBC_FLOW_OP_IF:
+            ibc_assert(s, pred->instr->jump == flow);
+            ibc_assert(s, pred->instr->merge == flow);
+            break;
+
+         case IBC_FLOW_OP_ELSE:
+            ibc_assert(s, pred->instr->jump == flow);
+            ibc_assert(s, pred->instr->merge == flow);
+            break;
+
+         case IBC_FLOW_OP_ENDIF:
+            ibc_assert(s, pred->instr == flow);
+            break;
+
+         default:
+            ibc_assert(s, !"Invalid ENDIF predecessor");
+         }
+      }
+      return;
+
+   case IBC_FLOW_OP_DO:
+      /* DO instructions must not be predicated */
+      ibc_assert(s, flow->instr.predicate == BRW_PREDICATE_NONE);
+
+      ibc_assert(s, flow->jump == NULL);
+      ibc_assert(s, flow->merge && flow->merge->op == IBC_FLOW_OP_WHILE);
+
+      ibc_foreach_flow_pred(pred, flow) {
+         if (pred->instr == NULL)
+            continue;
+
+         ibc_assert(s, pred->instr == flow ||
+                       (pred->instr->op == IBC_FLOW_OP_CONT &&
+                        pred->instr->jump == flow) ||
+                       (pred->instr->op == IBC_FLOW_OP_WHILE &&
+                        pred->instr->jump == flow));
+      }
+      return;
+
+   case IBC_FLOW_OP_BREAK:
+      ibc_assert(s, flow->jump == flow->merge);
+      ibc_assert(s, flow->jump && flow->jump->op == IBC_FLOW_OP_WHILE);
+
+      ibc_foreach_flow_pred(pred, flow)
+         ibc_assert(s, pred->instr == flow);
+      return;
+
+   case IBC_FLOW_OP_CONT:
+      ibc_assert(s, flow->jump && flow->jump->op == IBC_FLOW_OP_DO);
+      ibc_assert(s, flow->merge && flow->merge->op == IBC_FLOW_OP_WHILE);
+
+      ibc_foreach_flow_pred(pred, flow)
+         ibc_assert(s, pred->instr == flow);
+      return;
+
+   case IBC_FLOW_OP_WHILE:
+      ibc_assert(s, flow->jump && flow->jump->op == IBC_FLOW_OP_DO);
+      ibc_assert(s, flow->merge == NULL);
+
+      ibc_foreach_flow_pred(pred, flow) {
+         if (pred->instr == NULL)
+            continue;
+
+         ibc_assert(s, pred->instr == flow ||
+                       (pred->instr->op == IBC_FLOW_OP_BREAK &&
+                        pred->instr->jump == flow));
+      }
+      return;
    }
 
-   case IBC_BRANCH_OP_END:
-      ibc_assert(s, branch->jump == NULL);
-      ibc_assert(s, branch->merge == NULL);
-      break;
-
-   default:
-      ibc_assert(s, !"TODO: Finish branch instruction validation");
-   }
-
-   ibc_assert(s, s->block_start == branch->block_start);
-   s->block_start = NULL;
-
-   if (branch->jump)
-      ibc_validate_phi_src_refs(s, branch->jump, branch);
-
-   if (branch->merge)
-      ibc_validate_phi_src_refs(s, branch->merge, branch);
-
-   if (ibc_branch_instr_falls_through(branch)) {
-      const ibc_merge_instr *next_merge =
-         ibc_instr_as_merge(ibc_instr_next(&branch->instr));
-      ibc_validate_phi_src_refs(s, next_merge, branch);
-   }
+   unreachable("Invalid flow instruction opcode");
 }
 
 static void
@@ -624,8 +669,6 @@ ibc_validate_phi_instr(struct ibc_validate_state *s,
 
    ibc_validate_reg_ref(s, &phi->dest, true, 0, phi->num_comps,
                         phi->instr.simd_group, phi->instr.simd_width);
-
-   const ibc_merge_instr *merge = s->block_start;
 
    assert(s->tmp_set->entries == 0);
    list_validate(&phi->srcs);
@@ -639,11 +682,10 @@ ibc_validate_phi_instr(struct ibc_validate_state *s,
       _mesa_set_search_and_add(s->tmp_set, src->pred, &already_seen);
       ibc_assert(s, !already_seen);
 
-      /* Check to make sure we're one of the merge's logical predecessors */
+      /* Check to make sure we're one of the block's logical predecessors */
       bool found = false;
-      list_for_each_entry(const ibc_merge_pred, pred, &merge->preds, link) {
-         if (pred->branch == src->pred) {
-            ibc_assert(s, pred->logical);
+      ibc_foreach_flow_pred(pred, s->block_start) {
+         if (pred->instr == src->pred) {
             found = true;
             break;
          }
@@ -652,10 +694,8 @@ ibc_validate_phi_instr(struct ibc_validate_state *s,
    }
 
    /* Check that we got all the logical predecessors */
-   list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
-      if (pred->logical)
-         ibc_assert(s, _mesa_set_search(s->tmp_set, pred->branch));
-   }
+   ibc_foreach_flow_pred(pred, s->block_start)
+      ibc_assert(s, _mesa_set_search(s->tmp_set, pred->instr));
 
    /* Clear out the tmp set now that we're done with it */
    _mesa_set_clear(s->tmp_set, NULL);
@@ -710,12 +750,8 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
       ibc_validate_intrinsic_instr(s, ibc_instr_as_intrinsic(instr));
       return;
 
-   case IBC_INSTR_TYPE_MERGE:
-      ibc_validate_merge_instr(s, ibc_instr_as_merge(instr));
-      return;
-
-   case IBC_INSTR_TYPE_BRANCH:
-      ibc_validate_branch_instr(s, ibc_instr_as_branch(instr));
+   case IBC_INSTR_TYPE_FLOW:
+      ibc_validate_flow_instr(s, ibc_instr_as_flow(instr));
       return;
 
    case IBC_INSTR_TYPE_PHI:
@@ -820,16 +856,20 @@ ibc_validate_shader(const ibc_shader *shader)
       ibc_validate_reg_pre(&s, reg);
 
    list_validate(&shader->instrs);
+   list_validate(&shader->flow_instrs);
+
+   ibc_foreach_flow_instr(flow, shader)
+      ibc_assert(&s, flow->instr.type == IBC_INSTR_TYPE_FLOW);
 
    const ibc_instr *start_instr =
       LIST_ENTRY(const ibc_instr, shader->instrs.next, link);
-   ibc_assert(&s, start_instr->type == IBC_INSTR_TYPE_MERGE &&
-                  ibc_instr_as_merge(start_instr)->op == IBC_MERGE_OP_START);
+   ibc_assert(&s, start_instr->type == IBC_INSTR_TYPE_FLOW &&
+                  ibc_instr_as_flow(start_instr)->op == IBC_FLOW_OP_START);
 
    const ibc_instr *end_instr =
       LIST_ENTRY(const ibc_instr, shader->instrs.prev, link);
-   ibc_assert(&s, end_instr->type == IBC_INSTR_TYPE_BRANCH &&
-                  ibc_instr_as_branch(end_instr)->op == IBC_BRANCH_OP_END);
+   ibc_assert(&s, end_instr->type == IBC_INSTR_TYPE_FLOW &&
+                  ibc_instr_as_flow(end_instr)->op == IBC_FLOW_OP_END);
 
    ibc_foreach_instr(instr, shader)
       ibc_validate_instr(&s, instr);

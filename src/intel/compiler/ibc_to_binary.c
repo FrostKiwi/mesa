@@ -478,55 +478,39 @@ generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
 }
 
 static void
-generate_merge(struct brw_codegen *p, const ibc_merge_instr *merge)
+generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
 {
-   switch (merge->op) {
-   case IBC_MERGE_OP_MERGE:
-      return;
+   switch (flow->op) {
+   case IBC_FLOW_OP_START:
+   case IBC_FLOW_OP_END:
+      return; /* Nothing to do */
 
-   case IBC_MERGE_OP_ENDIF:
-      brw_ENDIF(p);
-      return;
-
-   case IBC_MERGE_OP_DO:
-      brw_DO(p, brw_get_default_exec_size(p));
-      return;
-
-   case IBC_MERGE_OP_START:
-      return;
-   }
-
-   unreachable("Invalid merge op");
-}
-
-static void
-generate_branch(struct brw_codegen *p, const ibc_branch_instr *branch)
-{
-   switch (branch->op) {
-   case IBC_BRANCH_OP_NEXT:
-      return;
-
-   case IBC_BRANCH_OP_IF:
+   case IBC_FLOW_OP_IF:
       brw_IF(p, brw_get_default_exec_size(p));
       return;
 
-   case IBC_BRANCH_OP_ELSE:
+   case IBC_FLOW_OP_ELSE:
       brw_ELSE(p);
       return;
 
-   case IBC_BRANCH_OP_WHILE:
-      brw_WHILE(p);
+   case IBC_FLOW_OP_ENDIF:
+      brw_ENDIF(p);
       return;
 
-   case IBC_BRANCH_OP_BREAK:
+   case IBC_FLOW_OP_DO:
+      brw_DO(p, brw_get_default_exec_size(p));
+      return;
+
+   case IBC_FLOW_OP_BREAK:
       brw_BREAK(p);
       return;
 
-   case IBC_BRANCH_OP_CONTINUE:
+   case IBC_FLOW_OP_CONT:
       brw_CONT(p);
       return;
 
-   case IBC_BRANCH_OP_END:
+   case IBC_FLOW_OP_WHILE:
+      brw_WHILE(p);
       return;
    }
 
@@ -582,12 +566,8 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
          generate_intrinsic(p, shader, ibc_instr_as_intrinsic(instr));
          continue;
 
-      case IBC_INSTR_TYPE_MERGE:
-         generate_merge(p, ibc_instr_as_merge(instr));
-         continue;
-
-      case IBC_INSTR_TYPE_BRANCH:
-         generate_branch(p, ibc_instr_as_branch(instr));
+      case IBC_INSTR_TYPE_FLOW:
+         generate_flow(p, ibc_instr_as_flow(instr));
          continue;
       }
       unreachable("Invalid instruction type");

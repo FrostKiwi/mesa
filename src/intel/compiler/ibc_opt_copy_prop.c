@@ -351,8 +351,7 @@ ibc_opt_copy_prop(ibc_shader *shader)
          continue;
       }
 
-      case IBC_INSTR_TYPE_BRANCH:
-      case IBC_INSTR_TYPE_MERGE:
+      case IBC_INSTR_TYPE_FLOW:
          continue;
 
       case IBC_INSTR_TYPE_PHI: {

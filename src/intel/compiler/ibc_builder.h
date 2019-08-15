@@ -4,7 +4,7 @@
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * the rights to use, copy, modify, flow, publish, distribute, sublicense,
  * and/or sell copies of the Software, and to permit persons to whom the
  * Software is furnished to do so, subject to the following conditions:
  *
@@ -50,7 +50,7 @@ typedef struct ibc_builder {
    unsigned simd_width;
    bool we_all;
 
-   ibc_merge_instr *block_start;
+   ibc_flow_instr *block_start;
 
    unsigned _group_stack_size;
    struct ibc_builder_simd_group _group_stack[4];
@@ -890,227 +890,164 @@ ibc_cluster_broadcast(ibc_builder *b, enum ibc_type dest_type,
    }
 }
 
-static inline ibc_merge_pred*
-ibc_builder_add_merge_pred(ibc_builder *b, struct list_head *pred_list,
-                           bool logical, ibc_branch_instr *branch)
-{
-   ibc_merge_pred *pred = ralloc(b->shader, ibc_merge_pred);
-   pred->logical = logical;
-   pred->branch = branch;
-   list_addtail(&pred->link, pred_list);
-   return pred;
-}
-
-static inline ibc_merge_instr *
-ibc_build_merge(ibc_builder *b, enum ibc_merge_op op,
-                struct list_head *preds)
+static inline ibc_flow_instr *
+ibc_build_flow(ibc_builder *b, enum ibc_flow_op op, ibc_reg_ref pred,
+               enum brw_predicate predicate, bool pred_inverse)
 {
    assert(b->simd_group == 0);
-   ibc_merge_instr *merge =
-      ibc_merge_instr_create(b->shader, op, b->simd_width);
-
-   /* This is the merge instruction so it starts a block */
-   assert(b->block_start == NULL);
-   b->block_start = merge;
-
-   if (op != IBC_MERGE_OP_START)
-      list_splicetail(preds, &merge->preds);
-
-   ibc_builder_insert_instr(b, &merge->instr);
-
-   return merge;
-}
-
-static inline ibc_branch_instr *
-ibc_build_branch(ibc_builder *b, enum ibc_branch_op op, ibc_reg_ref pred,
-                 enum brw_predicate predicate, bool pred_inverse)
-{
-   assert(b->simd_group == 0);
-   ibc_branch_instr *branch =
-      ibc_branch_instr_create(b->shader, op, b->simd_width);
+   ibc_flow_instr *flow =
+      ibc_flow_instr_create(b->shader, op, b->simd_width);
 
    if (predicate != BRW_PREDICATE_NONE) {
-      branch->instr.flag = pred;
-      branch->instr.predicate = predicate;
-      branch->instr.pred_inverse = pred_inverse;
+      flow->instr.flag = pred;
+      flow->instr.predicate = predicate;
+      flow->instr.pred_inverse = pred_inverse;
    }
 
-   /* This is the branch instruction, tie up the loose ends */
-   assert(b->block_start != NULL);
-   branch->block_start = b->block_start;
-   b->block_start->block_end = branch;
-   b->block_start = NULL;
+   /* If a flow instruction falls through, it is its own predecessor */
+   if (ibc_flow_instr_falls_through(flow))
+      ibc_flow_instr_add_pred(flow, flow);
 
-   ibc_builder_insert_instr(b, &branch->instr);
+   ibc_builder_insert_instr(b, &flow->instr);
 
-   return branch;
+   if (b->block_start == NULL) {
+      assert(op == IBC_FLOW_OP_START);
+      assert(list_is_empty(&b->shader->flow_instrs));
+      list_addtail(&flow->flow_link, &b->shader->flow_instrs);
+   } else {
+      assert(op != IBC_FLOW_OP_START);
+      list_add(&flow->flow_link, &b->block_start->flow_link);
+   }
+   b->block_start = flow;
+
+   return flow;
 }
 
-static inline ibc_merge_instr *
+static inline ibc_flow_instr *
 ibc_START(ibc_builder *b)
 {
-   return ibc_build_merge(b, IBC_MERGE_OP_START, NULL);
+   return ibc_build_flow(b, IBC_FLOW_OP_START, ibc_null(IBC_TYPE_FLAG),
+                            BRW_PREDICATE_NONE, false);
 }
 
-static inline ibc_branch_instr *
+static inline ibc_flow_instr *
 ibc_END(ibc_builder *b)
 {
-   return ibc_build_branch(b, IBC_BRANCH_OP_END, ibc_null(IBC_TYPE_UD),
-                           BRW_PREDICATE_NONE, false);
+   return ibc_build_flow(b, IBC_FLOW_OP_END, ibc_null(IBC_TYPE_FLAG),
+                            BRW_PREDICATE_NONE, false);
 }
 
-static inline ibc_branch_instr *
+static inline ibc_flow_instr *
 ibc_IF(ibc_builder *b, ibc_reg_ref pred,
        enum brw_predicate predicate, bool pred_inverse)
 {
-   ibc_branch_instr *_if =
-      ibc_build_branch(b, IBC_BRANCH_OP_IF, pred, predicate, pred_inverse);
-
-   /* The then block has to start with a merge instruction */
-   struct list_head preds;
-   list_inithead(&preds);
-   ibc_builder_add_merge_pred(b, &preds, true, _if);
-   ibc_build_merge(b, IBC_MERGE_OP_MERGE, &preds);
-
-   return _if;
+   return ibc_build_flow(b, IBC_FLOW_OP_IF, pred, predicate, pred_inverse);
 }
 
-static inline ibc_branch_instr *
-ibc_ELSE(ibc_builder *b, ibc_branch_instr *_if)
+static inline ibc_flow_instr *
+ibc_ELSE(ibc_builder *b, ibc_flow_instr *_if)
 {
-   ibc_branch_instr *_else =
-      ibc_build_branch(b, IBC_BRANCH_OP_ELSE, ibc_null(IBC_TYPE_UD),
-                       BRW_PREDICATE_NONE, false);
+   ibc_flow_instr *_else =
+      ibc_build_flow(b, IBC_FLOW_OP_ELSE, ibc_null(IBC_TYPE_FLAG),
+                        BRW_PREDICATE_NONE, false);
 
-   /* The then block has to start with a merge instruction */
-   struct list_head preds;
-   list_inithead(&preds);
-   ibc_builder_add_merge_pred(b, &preds, true, _if);
-   ibc_builder_add_merge_pred(b, &preds, false, _else);
-   ibc_build_merge(b, IBC_MERGE_OP_MERGE, &preds);
+   assert(_if->op == IBC_FLOW_OP_IF);
+   ibc_flow_instr_set_jump(_if, _else);
 
    return _else;
 }
 
-static inline ibc_merge_instr *
-ibc_ENDIF(ibc_builder *b, ibc_branch_instr *_if, ibc_branch_instr *_else)
+static inline ibc_flow_instr *
+ibc_ENDIF(ibc_builder *b, ibc_flow_instr *_if, ibc_flow_instr *_else)
 {
-   ibc_branch_instr *branch =
-      ibc_build_branch(b, IBC_BRANCH_OP_NEXT, ibc_null(IBC_TYPE_UD),
-                       BRW_PREDICATE_NONE, false);
+   ibc_flow_instr *_endif =
+      ibc_build_flow(b, IBC_FLOW_OP_ENDIF, ibc_null(IBC_TYPE_FLAG),
+                        BRW_PREDICATE_NONE, false);
 
-   /* The then block has to start with a merge instruction */
-   struct list_head preds;
-   list_inithead(&preds);
+   assert(_if->op == IBC_FLOW_OP_IF);
    if (_else == NULL) {
-      ibc_builder_add_merge_pred(b, &preds, true, _if);
+      ibc_flow_instr_set_jump(_if, _endif);
    } else {
-      /* The ELSE instruction actually ends the then block */
-      ibc_builder_add_merge_pred(b, &preds, true, _else);
-   }
-   ibc_builder_add_merge_pred(b, &preds, true, branch);
-   ibc_merge_instr *_endif = ibc_build_merge(b, IBC_MERGE_OP_ENDIF, &preds);
-
-   _if->merge = _endif;
-   if (_else) {
-      ibc_merge_instr *after_else =
-         ibc_instr_as_merge(ibc_instr_next(&_else->instr));
-      _if->jump = after_else;
-      _else->jump = _endif;
+      assert(_else->op == IBC_FLOW_OP_ELSE);
+      ibc_flow_instr_set_jump(_else, _endif);
       _else->merge = _endif;
-   } else {
-      _if->jump = _endif;
    }
+   _if->merge = _endif;
 
    return _endif;
 }
 
-static inline ibc_merge_instr *
+static inline ibc_flow_instr *
 ibc_DO(ibc_builder *b)
 {
-   ibc_branch_instr *branch =
-      ibc_build_branch(b, IBC_BRANCH_OP_NEXT, ibc_null(IBC_TYPE_UD),
-                       BRW_PREDICATE_NONE, false);
-
-   struct list_head preds;
-   list_inithead(&preds);
-   ibc_builder_add_merge_pred(b, &preds, true, branch);
-   return ibc_build_merge(b, IBC_MERGE_OP_DO, &preds);
+   return ibc_build_flow(b, IBC_FLOW_OP_DO, ibc_null(IBC_TYPE_FLAG),
+                            BRW_PREDICATE_NONE, false);
 }
 
-static inline ibc_branch_instr *
+static inline ibc_flow_instr *
 ibc_BREAK(ibc_builder *b, ibc_reg_ref pred,
           enum brw_predicate predicate, bool pred_inverse,
-          struct list_head *break_preds)
+          struct list_head *breaks)
 {
-   ibc_branch_instr *_break = ibc_build_branch(b, IBC_BRANCH_OP_BREAK,
-                                               pred, predicate, pred_inverse);
-   ibc_builder_add_merge_pred(b, break_preds, true, _break);
+   ibc_flow_instr *_break =
+      ibc_build_flow(b, IBC_FLOW_OP_BREAK, pred, predicate, pred_inverse);
 
-   struct list_head merge_preds;
-   list_inithead(&merge_preds);
-   ibc_builder_add_merge_pred(b, &merge_preds, predicate, _break);
-   ibc_build_merge(b, IBC_MERGE_OP_MERGE, &merge_preds);
+   /* Stash the break on the list of breaks.  We override preds which is
+    * kind-of terrible but since breaks don't have any predecessors it's
+    * sort-of ok as long as people use the builder interface properly.
+    */
+   list_addtail(&_break->preds, breaks);
 
    return _break;
 }
 
-static inline ibc_branch_instr *
-ibc_CONTINUE(ibc_builder *b, ibc_reg_ref pred,
-             enum brw_predicate predicate, bool pred_inverse,
-             ibc_merge_instr *_do)
+static inline ibc_flow_instr *
+ibc_CONT(ibc_builder *b, ibc_reg_ref pred,
+         enum brw_predicate predicate, bool pred_inverse,
+         ibc_flow_instr *_do)
 
 {
-   assert(_do->op == IBC_MERGE_OP_DO);
-   ibc_branch_instr *_cont = ibc_build_branch(b, IBC_BRANCH_OP_CONTINUE,
-                                              pred, predicate, pred_inverse);
-   _cont->jump = _do;
-   ibc_builder_add_merge_pred(b, &_do->preds, true, _cont);
+   ibc_flow_instr *_cont =
+      ibc_build_flow(b, IBC_FLOW_OP_CONT, pred, predicate, pred_inverse);
 
-   struct list_head merge_preds;
-   list_inithead(&merge_preds);
-   ibc_builder_add_merge_pred(b, &merge_preds, predicate, _cont);
-   ibc_build_merge(b, IBC_MERGE_OP_MERGE, &merge_preds);
+   assert(_do->op == IBC_FLOW_OP_DO);
+   ibc_flow_instr_set_jump(_cont, _do);
 
    return _cont;
 }
 
-static inline ibc_branch_instr *
+static inline ibc_flow_instr *
 ibc_WHILE(ibc_builder *b, ibc_reg_ref pred,
           enum brw_predicate predicate, bool pred_inverse,
-          ibc_merge_instr *_do,
-          struct list_head *break_preds)
+          ibc_flow_instr *_do, struct list_head *breaks)
 {
-   ibc_branch_instr *_while = ibc_build_branch(b, IBC_BRANCH_OP_WHILE,
-                                               pred, predicate, pred_inverse);
-   _while->jump = _do;
-   ibc_builder_add_merge_pred(b, &_do->preds, true, _while);
+   ibc_flow_instr *_while =
+      ibc_build_flow(b, IBC_FLOW_OP_WHILE, pred, predicate, pred_inverse);
 
-   ibc_builder_add_merge_pred(b, break_preds, predicate, _while);
-   ibc_merge_instr *merge =
-      ibc_build_merge(b, IBC_MERGE_OP_MERGE, break_preds);
+   assert(_do->op == IBC_FLOW_OP_DO);
+   ibc_flow_instr_set_jump(_while, _do);
+   _do->merge = _while;
 
    /* Link up all the jumps for continus */
-   list_for_each_entry(ibc_merge_pred, pred, &_do->preds, link) {
-      if (pred->branch == _while)
+   ibc_foreach_flow_pred(pred, _do) {
+      if (pred->instr == _while || pred->instr == _do)
          continue;
 
-      if (ibc_instr_next(&pred->branch->instr) == &_do->instr)
-         continue;
-
-      assert(pred->branch->op == IBC_BRANCH_OP_CONTINUE);
-      pred->branch->jump = _do;
-      pred->branch->merge = merge;
+      ibc_flow_instr *_cont = pred->instr;
+      assert(_cont->op == IBC_FLOW_OP_CONT);
+      _cont->merge = _while;
    }
 
-   /* Link up all the jumps for breaks */
-   list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
-      if (pred->branch == _while)
-         continue;
+   /* Link up all the jumps for breaks.  We stashed them in a list in
+    * ibc_BREAK using preds as the link.
+    */
+   list_for_each_entry_safe(ibc_flow_instr, _break, breaks, preds) {
+      assert(_break->op == IBC_FLOW_OP_BREAK);
+      list_del(&_break->preds);
+      list_inithead(&_break->preds);
 
-      assert(pred->branch->op == IBC_BRANCH_OP_BREAK);
-      pred->branch->jump = merge;
-      pred->branch->merge = merge;
+      ibc_flow_instr_set_jump(_break, _while);
+      _break->merge = _while;
    }
 
    return _while;

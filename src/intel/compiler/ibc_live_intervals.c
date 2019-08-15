@@ -317,8 +317,8 @@ alloc_live_intervals(ibc_shader *shader,
    uint32_t num_blocks = 0;
    ibc_foreach_instr(instr, shader) {
       instr->index = num_instrs++;
-      if (instr->type == IBC_INSTR_TYPE_MERGE)
-         ibc_instr_as_merge(instr)->block_index = num_blocks++;
+      if (instr->type == IBC_INSTR_TYPE_FLOW)
+         ibc_instr_as_flow(instr)->block_index = num_blocks++;
 
       ibc_instr_foreach_write(instr, record_reg_write_sizes, live);
    }
@@ -433,12 +433,15 @@ compute_live_sets(ibc_shader *shader, ibc_live_intervals *live)
    };
 
    ibc_foreach_instr(instr, shader) {
-      if (instr->type == IBC_INSTR_TYPE_MERGE)
-         state.block_index = ibc_instr_as_merge(instr)->block_index;
-
       state.instr = instr;
       ibc_instr_foreach_read(instr, setup_block_use_def_for_read, &state);
       ibc_instr_foreach_write(instr, setup_block_use_def_for_write, &state);
+
+      /* Flow instructions can have predicates in which case the predicate
+       * read counts as if it comes from the block before the instruction.
+       */
+      if (instr->type == IBC_INSTR_TYPE_FLOW)
+         state.block_index = ibc_instr_as_flow(instr)->block_index;
    }
 
    const unsigned bitset_words = BITSET_WORDS(live->num_chunks);
@@ -447,9 +450,12 @@ compute_live_sets(ibc_shader *shader, ibc_live_intervals *live)
    do {
       progress = false;
 
-      ibc_foreach_branch_instr_reverse(branch, shader) {
-         ibc_merge_instr *merge = branch->block_start;
-         ibc_block_live_sets *bls = &live->blocks[merge->block_index];
+      ibc_foreach_flow_instr_reverse(block_start, shader) {
+         if (block_start->op == IBC_FLOW_OP_END)
+            continue;
+
+         /* Blocks are indexed by the start instruction */
+         ibc_block_live_sets *bls = &live->blocks[block_start->block_index];
 
          /* Update livein */
          for (int i = 0; i < bitset_words; i++) {
@@ -463,12 +469,14 @@ compute_live_sets(ibc_shader *shader, ibc_live_intervals *live)
          }
 
          /* Update the liveout of our predecessors */
-         list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
-            if (!pred->logical)
-               continue;
-
+         ibc_foreach_flow_pred(pred, block_start) {
+            /* The pred points to the flow instruction at the end of the
+             * predecessor block but blocks are indexed based on the flow at
+             * the start of the block.
+             */
+            assert(pred->instr->block_index > 0);
             ibc_block_live_sets *pred_bls =
-               &live->blocks[pred->branch->block_start->block_index];
+               &live->blocks[pred->instr->block_index - 1];
 
 	    for (int i = 0; i < bitset_words; i++) {
                BITSET_WORD new_liveout = (bls->livein[i] &
@@ -487,15 +495,20 @@ compute_live_sets(ibc_shader *shader, ibc_live_intervals *live)
     */
    do {
       progress = false;
-      ibc_foreach_merge_instr(merge, shader) {
-         ibc_block_live_sets *bls = &live->blocks[merge->block_index];
+      ibc_foreach_flow_instr(block_start, shader) {
+         if (block_start->op == IBC_FLOW_OP_END)
+            continue;
 
-         list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
-            if (!pred->logical)
-               continue;
+         ibc_block_live_sets *bls = &live->blocks[block_start->block_index];
 
+         ibc_foreach_flow_pred(pred, block_start) {
+            /* The pred points to the flow instruction at the end of the
+             * predecessor block but blocks are indexed based on the flow at
+             * the start of the block.
+             */
+            assert(pred->instr->block_index > 0);
             ibc_block_live_sets *pred_bls =
-               &live->blocks[pred->branch->block_start->block_index];
+               &live->blocks[pred->instr->block_index - 1];
 
 	    for (int i = 0; i < bitset_words; i++) {
                BITSET_WORD new_def = pred_bls->defout[i] & ~bls->defin[i];
@@ -614,46 +627,51 @@ compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
    };
 
    ibc_foreach_instr(instr, shader) {
-      if (instr->type == IBC_INSTR_TYPE_MERGE) {
-         ibc_merge_instr *merge = ibc_instr_as_merge(instr);
-         ibc_block_live_sets *bls = &live->blocks[merge->block_index];
+      state.instr = instr;
+      ibc_instr_foreach_read(instr, extend_live_interval_for_read, &state);
+      ibc_instr_foreach_write(instr, extend_live_interval_for_write, &state);
 
-         for (uint32_t w = 0; w < bitset_words; w++) {
-            /* Set up def for this block */
-            state.def[w] = bls->defin[w];
+      if (instr->type == IBC_INSTR_TYPE_FLOW) {
+         ibc_flow_instr *flow = ibc_instr_as_flow(instr);
 
-            /* We consider all defined and live-in instructions to be defined
-             * by the merge instruction.
-             */
-            BITSET_WORD in = bls->livein[w] & bls->defin[w];
-            while (in) {
-               int b = u_bit_scan(&in);
-               const uint32_t chunk_idx = w * BITSET_WORDBITS + b;
-               live->chunk_live[chunk_idx] =
-                  interval_set_add_end(live, live->chunk_live[chunk_idx],
-                                       instr->index, instr->index + 1);
+         if (flow->op != IBC_FLOW_OP_START && flow->op != IBC_FLOW_OP_END) {
+            assert(flow->block_index > 0);
+            ibc_block_live_sets *bls = &live->blocks[flow->block_index - 1];
+
+            for (uint32_t w = 0; w < bitset_words; w++) {
+               /* We consider all defined and live-out instructions to be used
+                * by the merge instruction.
+                */
+               BITSET_WORD in = bls->liveout[w] & state.def[w];
+               while (in) {
+                  int b = u_bit_scan(&in);
+                  const uint32_t chunk_idx = w * BITSET_WORDBITS + b;
+                  interval_set_extend_to(live->chunk_live[chunk_idx],
+                                         instr->index + 1);
+               }
             }
          }
 
-         /* If this merge is a DO instruction, we consider anything live-out
-          * from the branch to the loop or anything live-in to the loop's
-          * merge block to be physically live for the entire loop.
+         /* If this is a DO instruction, we consider anything live-out from
+          * the branch to the loop or anything live-in to the loop's merge
+          * block to be physically live for the entire loop.
           */
-         if (merge->op == IBC_MERGE_OP_DO) {
-            ibc_merge_instr *_do = merge;
-            ibc_branch_instr *branch_to_loop =
-               ibc_instr_as_branch(ibc_instr_prev(&merge->instr));
-            assert(branch_to_loop->op == IBC_BRANCH_OP_NEXT);
-            ibc_merge_instr *loop_merge = branch_to_loop->merge;
-            ibc_branch_instr *_while =
-               ibc_instr_as_branch(ibc_instr_prev(&loop_merge->instr));
-            assert(_while->op == IBC_BRANCH_OP_WHILE);
+         if (flow->op == IBC_FLOW_OP_DO) {
+            ibc_flow_instr *_do = flow;
+            ibc_flow_instr *_while = NULL;
+            ibc_foreach_flow_pred(pred, _do) {
+               if (pred->instr->op == IBC_FLOW_OP_WHILE) {
+                  _while = pred->instr;
+                  break;
+               }
+            }
             assert(_do->instr.index < _while->instr.index);
 
+            assert(_do->block_index > 0);
             ibc_block_live_sets *enter_bls =
-               &live->blocks[branch_to_loop->block_start->block_index];
+               &live->blocks[_do->block_index - 1];
             ibc_block_live_sets *merge_bls =
-               &live->blocks[loop_merge->block_index];
+               &live->blocks[_while->block_index];
 
             for (uint32_t r = 0; r < live->num_regs; r++) {
                ibc_reg_live_intervals *rli = &live->regs[r];
@@ -685,27 +703,25 @@ compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
                }
             }
          }
-      }
 
-      state.instr = instr;
-      ibc_instr_foreach_read(instr, extend_live_interval_for_read, &state);
-      ibc_instr_foreach_write(instr, extend_live_interval_for_write, &state);
+         if (flow->op != IBC_FLOW_OP_START && flow->op != IBC_FLOW_OP_END) {
+            ibc_block_live_sets *bls = &live->blocks[flow->block_index];
 
-      if (instr->type == IBC_INSTR_TYPE_BRANCH) {
-         ibc_branch_instr *branch = ibc_instr_as_branch(instr);
-         ibc_merge_instr *merge = branch->block_start;
-         ibc_block_live_sets *bls = &live->blocks[merge->block_index];
+            for (uint32_t w = 0; w < bitset_words; w++) {
+               /* Set up def for this block */
+               state.def[w] = bls->defin[w];
 
-         for (uint32_t w = 0; w < bitset_words; w++) {
-            /* We consider all defined and live-out instructions to be used
-             * by the merge instruction.
-             */
-            BITSET_WORD in = bls->liveout[w] & state.def[w];
-            while (in) {
-               int b = u_bit_scan(&in);
-               const uint32_t chunk_idx = w * BITSET_WORDBITS + b;
-               interval_set_extend_to(live->chunk_live[chunk_idx],
-                                      instr->index + 1);
+               /* We consider all defined and live-in instructions to be
+                * defined by the flow instruction.
+                */
+               BITSET_WORD in = bls->livein[w] & bls->defin[w];
+               while (in) {
+                  int b = u_bit_scan(&in);
+                  const uint32_t chunk_idx = w * BITSET_WORDBITS + b;
+                  live->chunk_live[chunk_idx] =
+                     interval_set_add_end(live, live->chunk_live[chunk_idx],
+                                          instr->index, instr->index + 1);
+               }
             }
          }
       }

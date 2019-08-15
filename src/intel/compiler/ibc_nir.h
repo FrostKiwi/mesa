@@ -56,12 +56,12 @@ struct nir_to_ibc_state {
    struct ibc_payload_base *payload;
    void *stage_state;
 
-   ibc_merge_instr *_do;
-   struct list_head break_preds;
+   ibc_flow_instr *_do;
+   struct list_head breaks;
 
    const ibc_reg **ssa_to_reg;
 
-   struct hash_table *nir_block_to_ibc_merge;
+   struct hash_table *nir_block_to_ibc;
 };
 
 void nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
