@@ -928,12 +928,12 @@ nti_emit_jump(struct nir_to_ibc_state *nti,
    switch (njump->type) {
    case nir_jump_break:
       ibc_BREAK(b, ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false,
-                &nti->break_preds);
+                   &nti->breaks);
       break;
 
    case nir_jump_continue:
-      ibc_CONTINUE(b, ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false,
-                   nti->_do);
+      ibc_CONT(b, ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false,
+                  nti->_do);
       break;
 
    default:
@@ -986,13 +986,15 @@ nti_add_phi_srcs(struct nir_to_ibc_state *nti, const nir_phi_instr *instr)
 
    nir_foreach_phi_src(nir_src, instr) {
       struct hash_entry *entry =
-         _mesa_hash_table_search(nti->nir_block_to_ibc_merge, nir_src->pred);
+         _mesa_hash_table_search(nti->nir_block_to_ibc, nir_src->pred);
       assert(entry);
-      ibc_merge_instr *pred_merge = entry->data;
-      ibc_branch_instr *pred_branch = pred_merge->block_end;
+      /* The nir_block_to_ibc table stores the flow instruction which starts
+       * each block whereas we want the flow instruction which ends the block.
+       */
+      ibc_flow_instr *pred_flow = ibc_flow_instr_next(entry->data);
 
       ibc_phi_src *phi_src = ralloc(b->shader, ibc_phi_src);
-      phi_src->pred = pred_branch;
+      phi_src->pred = pred_flow;
       phi_src->ref = ibc_ref(nti->ssa_to_reg[nir_src->src.ssa->index]);
       list_addtail(&phi_src->link, &phi->srcs);
    }
@@ -1030,7 +1032,7 @@ nti_emit_block(struct nir_to_ibc_state *nti, const nir_block *block)
       }
    }
 
-   _mesa_hash_table_insert(nti->nir_block_to_ibc_merge,
+   _mesa_hash_table_insert(nti->nir_block_to_ibc,
                            block, nti->b.block_start);
 }
 
@@ -1044,11 +1046,11 @@ nti_emit_if(struct nir_to_ibc_state *nti, nir_if *nif)
    ibc_builder *b = &nti->b;
 
    ibc_reg_ref cond = ibc_nir_src(nti, nif->condition, IBC_TYPE_FLAG);
-   ibc_branch_instr *_if = ibc_IF(b, cond, BRW_PREDICATE_NORMAL, false);
+   ibc_flow_instr *_if = ibc_IF(b, cond, BRW_PREDICATE_NORMAL, false);
 
    nti_emit_cf_list(nti, &nif->then_list);
 
-   ibc_branch_instr *_else = ibc_ELSE(b, _if);
+   ibc_flow_instr *_else = ibc_ELSE(b, _if);
 
    nti_emit_cf_list(nti, &nif->else_list);
 
@@ -1061,21 +1063,22 @@ nti_emit_loop(struct nir_to_ibc_state *nti, nir_loop *nloop)
    ibc_builder *b = &nti->b;
 
    /* Save off the state of the outer loop */
-   ibc_merge_instr *old_do = nti->_do;
-   struct list_head old_break_preds;
-   list_replace(&nti->break_preds, &old_break_preds);
+   ibc_flow_instr *old_do = nti->_do;
+   struct list_head old_breaks;
+   list_replace(&nti->breaks, &old_breaks);
+   list_inithead(&nti->breaks);
 
    nti->_do = ibc_DO(b);
-   list_inithead(&nti->break_preds);
 
    nti_emit_cf_list(nti, &nloop->body);
 
    ibc_WHILE(b, ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false,
-             nti->_do, &nti->break_preds);
+             nti->_do, &nti->breaks);
 
    /* Restore off the state of the outer loop */
    nti->_do = old_do;
-   list_replace(&old_break_preds, &nti->break_preds);
+   assert(list_is_empty(&nti->breaks));
+   list_replace(&old_breaks, &nti->breaks);
 }
 
 static void
@@ -1125,7 +1128,7 @@ nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
       .prog_data = prog_data,
       .stage_state = stage_state,
    };
-   list_inithead(&nti->break_preds);
+   list_inithead(&nti->breaks);
 
    ibc_builder_init(&nti->b, shader);
    ibc_START(&nti->b);
@@ -1139,7 +1142,7 @@ ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
 
    nti->ssa_to_reg =
       ralloc_array(nti->mem_ctx, const ibc_reg *, impl->ssa_alloc);
-   nti->nir_block_to_ibc_merge = _mesa_pointer_hash_table_create(nti->mem_ctx);
+   nti->nir_block_to_ibc = _mesa_pointer_hash_table_create(nti->mem_ctx);
 
    nti_emit_cf_list(nti, &impl->body);
 

@@ -1008,10 +1008,10 @@ ibc_assign_regs(ibc_shader *shader)
       state.is_read = false;
       ibc_instr_foreach_write(instr, rewrite_ref_and_update_reg, &state);
 
-      if (instr->type == IBC_INSTR_TYPE_MERGE) {
-         /* The merge instruction doesn't actually have any sources but it's
-          * none-the-less a transition point for register live ranges and we
-          * need to update strided register holes.
+      if (instr->type == IBC_INSTR_TYPE_FLOW) {
+         /* The flow instruction doesn't actually have any non-flag sources
+          * but it's none-the-less a transition point for register live ranges
+          * and we need to update strided register holes.
           */
          for (unsigned i = 0; i < ARRAY_SIZE(state.strided_alloc); i++) {
             ibc_strided_reg_alloc_update_reg_holes(&state.strided_alloc[i],
@@ -1108,7 +1108,7 @@ ibc_assign_regs_trivial(ibc_shader *shader)
    {
       ibc_instr *last_instr = list_last_entry(&shader->instrs,
                                               ibc_instr, link);
-      assert(ibc_instr_as_branch(last_instr)->op == IBC_BRANCH_OP_END);
+      assert(ibc_instr_as_flow(last_instr)->op == IBC_FLOW_OP_END);
       last_instr = LIST_ENTRY(ibc_instr, last_instr->link.prev, link);
       ibc_send_instr *last_send = ibc_instr_as_send(last_instr);
 
@@ -1195,8 +1195,7 @@ ibc_assign_regs_trivial(ibc_shader *shader)
       case IBC_INSTR_TYPE_INTRINSIC:
          unreachable("These should no longer exist");
 
-      case IBC_INSTR_TYPE_MERGE:
-      case IBC_INSTR_TYPE_BRANCH:
+      case IBC_INSTR_TYPE_FLOW:
          /* Nothing interesting to do here */
          continue;
       }

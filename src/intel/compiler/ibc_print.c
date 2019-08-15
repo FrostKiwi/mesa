@@ -386,59 +386,48 @@ print_intrinsic_instr(FILE *fp, const ibc_intrinsic_instr *intrin)
 }
 
 static const char *
-merge_op_name(enum ibc_merge_op op)
+flow_op_name(enum ibc_flow_op op)
 {
    switch (op) {
-   case IBC_MERGE_OP_MERGE:   return "merge";
-   case IBC_MERGE_OP_ENDIF:   return "endif";
-   case IBC_MERGE_OP_DO:      return "do";
-   case IBC_MERGE_OP_START:   return "start";
+   case IBC_FLOW_OP_START: return "start";
+   case IBC_FLOW_OP_END:   return "end";
+   case IBC_FLOW_OP_IF:    return "if";
+   case IBC_FLOW_OP_ELSE:  return "else";
+   case IBC_FLOW_OP_ENDIF: return "endif";
+   case IBC_FLOW_OP_DO:    return "do";
+   case IBC_FLOW_OP_BREAK: return "break";
+   case IBC_FLOW_OP_CONT:  return "cont";
+   case IBC_FLOW_OP_WHILE: return "while";
    }
    unreachable("Unknown ALU opcode");
 }
 
 static void
-print_merge_instr(FILE *fp, ibc_merge_instr *merge)
+print_flow_instr(FILE *fp, ibc_flow_instr *flow)
 {
-   fprintf(fp, "/* Block %u, preds: [", merge->block_index);
-   bool first_pred = true;
-   list_for_each_entry(ibc_merge_pred, pred, &merge->preds, link) {
-      fprintf(fp, "%s%u", first_pred ? "" : ", ",
-              pred->branch->block_start->block_index);
-      first_pred = false;
+   if (flow->op != IBC_FLOW_OP_START) {
+      fprintf(fp, "/* BLOCK %u END:", flow->block_index - 1);
+      if (flow->jump)
+         fprintf(fp, " jump: %u", flow->jump->block_index);
+      if (flow->merge)
+         fprintf(fp, " merge: %u", flow->merge->block_index);
+      fprintf(fp, " */\n");
    }
-   fprintf(fp, "] */\n");
 
-   print_instr(fp, &merge->instr, merge_op_name(merge->op), 0);
-
+   print_instr(fp, &flow->instr, flow_op_name(flow->op), 0);
    fprintf(fp, "\n");
-}
 
-static const char *
-branch_op_name(enum ibc_branch_op op)
-{
-   switch (op) {
-   case IBC_BRANCH_OP_NEXT:      return "next";
-   case IBC_BRANCH_OP_IF:        return "if";
-   case IBC_BRANCH_OP_ELSE:      return "else";
-   case IBC_BRANCH_OP_WHILE:     return "while";
-   case IBC_BRANCH_OP_BREAK:     return "break";
-   case IBC_BRANCH_OP_CONTINUE:  return "continue";
-   case IBC_BRANCH_OP_END:       return "end";
+   if (flow->op != IBC_FLOW_OP_END) {
+      fprintf(fp, "/* BLOCK %u START: preds: [", flow->block_index);
+
+      bool first_pred = true;
+      ibc_foreach_flow_pred(pred, flow) {
+         fprintf(fp, "%s%u", first_pred ? "" : ", ",
+                 pred->instr->block_index - 1);
+         first_pred = false;
+      }
+      fprintf(fp, "] */\n");
    }
-   unreachable("Unknown ALU opcode");
-}
-
-static void
-print_branch_instr(FILE *fp, ibc_branch_instr *branch)
-{
-   print_instr(fp, &branch->instr, branch_op_name(branch->op), 0);
-   if (branch->jump)
-      fprintf(fp, " jump: %u", branch->jump->block_index);
-   if (branch->merge)
-      fprintf(fp, " merge: %u", branch->merge->block_index);
-
-   fprintf(fp, "\n");
 }
 
 static void
@@ -450,7 +439,7 @@ print_phi_instr(FILE *fp, ibc_phi_instr *phi)
    print_reg_ref(fp, &phi->dest, true);
 
    ibc_foreach_phi_src(src, phi) {
-      fprintf(fp, "   %u -> ", src->pred->block_start->block_index);
+      fprintf(fp, "   %u -> ", src->pred->block_index - 1);
       print_reg_ref(fp, &src->ref, true);
    }
 
@@ -465,8 +454,8 @@ ibc_print_shader(const ibc_shader *shader, FILE *fp)
       reg->index = num_regs++;
 
    uint32_t num_blocks = 0;
-   ibc_foreach_merge_instr(merge, shader)
-      merge->block_index = num_blocks++;
+   ibc_foreach_flow_instr(flow, shader)
+      flow->block_index = num_blocks++;
 
    ibc_foreach_instr(instr, shader) {
       switch (instr->type) {
@@ -479,11 +468,8 @@ ibc_print_shader(const ibc_shader *shader, FILE *fp)
       case IBC_INSTR_TYPE_INTRINSIC:
          print_intrinsic_instr(fp, ibc_instr_as_intrinsic(instr));
          continue;
-      case IBC_INSTR_TYPE_MERGE:
-         print_merge_instr(fp, ibc_instr_as_merge(instr));
-         continue;
-      case IBC_INSTR_TYPE_BRANCH:
-         print_branch_instr(fp, ibc_instr_as_branch(instr));
+      case IBC_INSTR_TYPE_FLOW:
+         print_flow_instr(fp, ibc_instr_as_flow(instr));
          continue;
       case IBC_INSTR_TYPE_PHI:
          print_phi_instr(fp, ibc_instr_as_phi(instr));
