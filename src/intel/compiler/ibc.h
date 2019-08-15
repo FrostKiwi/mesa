@@ -484,8 +484,7 @@ enum ibc_instr_type {
    IBC_INSTR_TYPE_SEND,
    IBC_INSTR_TYPE_INTRINSIC,
    IBC_INSTR_TYPE_PHI,
-   IBC_INSTR_TYPE_BRANCH,
-   IBC_INSTR_TYPE_MERGE,
+   IBC_INSTR_TYPE_FLOW,
 };
 
 /** A structure representing an instruction */
@@ -705,107 +704,155 @@ ibc_intrinsic_instr *ibc_intrinsic_instr_create(struct ibc_shader *shader,
                                                 uint8_t simd_width,
                                                 unsigned num_srcs);
 
-typedef struct ibc_merge_instr ibc_merge_instr;
-typedef struct ibc_branch_instr ibc_branch_instr;
-
-enum ibc_merge_op {
-   IBC_MERGE_OP_MERGE, /**< Generic merge */
-   IBC_MERGE_OP_ENDIF,
-   IBC_MERGE_OP_DO,
-   IBC_MERGE_OP_START, /**< Start of program */
+enum ibc_flow_op {
+   IBC_FLOW_OP_START, /**< Start of program */
+   IBC_FLOW_OP_END,   /**< End of program */
+   IBC_FLOW_OP_IF,
+   IBC_FLOW_OP_ELSE,
+   IBC_FLOW_OP_ENDIF,
+   IBC_FLOW_OP_DO,
+   IBC_FLOW_OP_BREAK,
+   IBC_FLOW_OP_CONT,
+   IBC_FLOW_OP_WHILE,
 };
 
-typedef struct ibc_merge_pred {
-   /** Link in ibc_merge_instr::preds */
+typedef struct ibc_flow_instr ibc_flow_instr;
+
+typedef struct ibc_flow_pred {
+   /** Link in ibc_flow_instr::preds */
    struct list_head link;
 
-   bool logical;
+   /** Control-flow instruction ending the predecessor block */
+   ibc_flow_instr *instr;
+} ibc_flow_pred;
 
-   ibc_branch_instr *branch;
-} ibc_merge_pred;
-
-struct ibc_merge_instr {
+/** A structure representing a control-flow instruction
+ *
+ * Semantically, control-flow instructions sit between blocks.  If the
+ * control-flow instruction is predicated, the predicate evaluation is
+ * considered to happen in the block before it.  Semantically, IBC
+ * control-flow instructions are like portals (as in the game Portal.)
+ * Execution flows in one control-flow instruction from the instructions
+ * before it and out another control-flow instruction to the instructions
+ * after it.  In some cases (when ibc_flow_instr_falls_through() returns
+ * true), the in and out control flow instructions may be the same (the
+ * logical jump goes nowhere).
+ *
+ * All control-flow paths fall into one of two categories: logical and
+ * physical.  Logical control-flow paths are those which follow the normal
+ * logic of NIR or the source language.  Physical control-flow paths are
+ * those which the EU may take with the current set of channels disabled.
+ * For instance, there is a physical path from the block before an ELSE to
+ * the block after the ELSE.  This is because the ELSE is executed by
+ * disabling all the channels from the then and going through the ELSE.
+ * Another example is that there is a physical path from every continue
+ * instruction to the WHILE of a loop even though the logical flow jumps
+ * to the do at the top of the loop.
+ *
+ * Each control-flow instruction contains a list of predecessors.  When
+ * execution logicall exits a control-flow instruction it will have come
+ * from one of the control-flow instructions in the predecessors list with
+ * ibc_flow_pred::logical == true.  A control-flow instruction's logical
+ * predecessors are the block that follows the instruction (if
+ * ibc_flow_instr_falls_through() returns true) and the block that follows
+ * ibc_flow_instr::jump if non-NULL.  One must be careful when reasoning
+ * about control-flow instructions because the list of predecessors is for
+ * the block after the instruction and the successors are those of the block
+ * before the instruction.  The WHILE instruction is particularly tricky to
+ * think about in this regard.  For more details on the exact rules for each
+ * instruction, see ibc_validate_flow_instr().
+ */
+struct ibc_flow_instr {
    ibc_instr instr;
 
-   enum ibc_merge_op op;
+   enum ibc_flow_op op;
 
    uint32_t block_index;
 
-   ibc_branch_instr *block_end;
+   /** Link in ibc_shader::flow_instrs */
+   struct list_head flow_link;
 
    /** List of predecessors */
    struct list_head preds;
+
+   /** The instruction to which this instruction logically jumps
+    *
+    * This is the path taken if the instruction does not fall through.
+    */
+   ibc_flow_instr *jump;
+
+   /** The instruction where all paths from this instruction re-converge */
+   ibc_flow_instr *merge;
 };
 
-IBC_DEFINE_CAST(ibc_instr_as_merge, ibc_instr, ibc_merge_instr, instr,
-                type, IBC_INSTR_TYPE_MERGE)
+IBC_DEFINE_CAST(ibc_instr_as_flow, ibc_instr, ibc_flow_instr, instr,
+                type, IBC_INSTR_TYPE_FLOW)
 
-ibc_merge_instr *ibc_merge_instr_create(struct ibc_shader *shader,
-                                        enum ibc_merge_op op,
-                                        uint8_t simd_width);
+ibc_flow_instr *ibc_flow_instr_create(struct ibc_shader *shader,
+                                      enum ibc_flow_op op,
+                                      uint8_t simd_width);
+void ibc_flow_instr_add_pred(struct ibc_flow_instr *flow,
+                             struct ibc_flow_instr *pred);
 
-#define ibc_foreach_merge_instr(merge, shader) \
-   for (ibc_merge_instr *merge = LIST_ENTRY(ibc_merge_instr, \
-           shader->instrs.next, instr.link); \
-        &merge->instr.link != &shader->instrs ? \
-           assert(merge->instr.type == IBC_INSTR_TYPE_MERGE), true : false; \
-        merge = LIST_ENTRY(ibc_merge_instr, \
-           merge->block_end->instr.link.next, instr.link))
+static inline void
+ibc_flow_instr_set_jump(struct ibc_flow_instr *flow,
+                        struct ibc_flow_instr *jump)
+{
+   flow->jump = jump;
+   ibc_flow_instr_add_pred(jump, flow);
+}
 
-enum ibc_branch_op {
-   IBC_BRANCH_OP_NEXT, /**< Just fall through to the next instruction */
-   IBC_BRANCH_OP_IF,
-   IBC_BRANCH_OP_ELSE,
-   IBC_BRANCH_OP_WHILE,
-   IBC_BRANCH_OP_BREAK,
-   IBC_BRANCH_OP_CONTINUE,
-   IBC_BRANCH_OP_END, /**< End of program */
-};
+#define ibc_foreach_flow_instr(flow, shader) \
+   list_for_each_entry(ibc_flow_instr, flow, &(shader)->flow_instrs, flow_link)
 
-struct ibc_branch_instr {
-   ibc_instr instr;
+#define ibc_foreach_flow_instr_reverse(flow, shader) \
+   list_for_each_entry_rev(ibc_flow_instr, flow, &(shader)->flow_instrs, flow_link)
 
-   enum ibc_branch_op op;
+static inline ibc_flow_instr *
+ibc_flow_instr_next(const ibc_flow_instr *flow)
+{
+   assert(flow->op != IBC_FLOW_OP_END);
+   return LIST_ENTRY(ibc_flow_instr, flow->flow_link.next, flow_link);
+}
 
-   ibc_merge_instr *block_start;
+static inline ibc_flow_instr *
+ibc_flow_instr_prev(const ibc_flow_instr *flow)
+{
+   assert(flow->op != IBC_FLOW_OP_START);
+   return LIST_ENTRY(ibc_flow_instr, flow->flow_link.prev, flow_link);
+}
 
-   ibc_merge_instr *jump;
-   ibc_merge_instr *merge;
-};
-
-IBC_DEFINE_CAST(ibc_instr_as_branch, ibc_instr, ibc_branch_instr, instr,
-                type, IBC_INSTR_TYPE_BRANCH)
-
-ibc_branch_instr *ibc_branch_instr_create(struct ibc_shader *shader,
-                                          enum ibc_branch_op op,
-                                          uint8_t simd_width);
-
-#define ibc_foreach_branch_instr_reverse(branch, shader) \
-   for (ibc_branch_instr *branch = LIST_ENTRY(ibc_branch_instr, \
-           shader->instrs.prev, instr.link); \
-        &branch->instr.link != &shader->instrs ? \
-           assert(branch->instr.type == IBC_INSTR_TYPE_BRANCH), true : false; \
-        branch = LIST_ENTRY(ibc_branch_instr, \
-           branch->block_start->instr.link.prev, instr.link))
+#define ibc_foreach_flow_pred(pred, flow) \
+   list_for_each_entry(ibc_flow_pred, pred, &(flow)->preds, link)
 
 /**
- * Returns true of the immediately following merge instruction is also a
- * successor of this branch instruction.
+ * Returns true of the flow instruction logically falls through to the
+ * subsequent block of non-flow instructions.  All instructions may
+ * physically fall through.
  */
 static inline bool
-ibc_branch_instr_falls_through(const ibc_branch_instr *branch)
+ibc_flow_instr_falls_through(const ibc_flow_instr *flow)
 {
-   switch (branch->op) {
-   case IBC_BRANCH_OP_NEXT:
-   case IBC_BRANCH_OP_IF:
-      return true;
-   case IBC_BRANCH_OP_WHILE:
-   case IBC_BRANCH_OP_BREAK:
-   case IBC_BRANCH_OP_CONTINUE:
-      return branch->instr.predicate != BRW_PREDICATE_NONE;
-   case IBC_BRANCH_OP_ELSE:
-   case IBC_BRANCH_OP_END:
+   switch (flow->op) {
+   case IBC_FLOW_OP_START:
+   case IBC_FLOW_OP_END:
       return false;
+
+   case IBC_FLOW_OP_IF:
+      assert(flow->instr.predicate != BRW_PREDICATE_NONE);
+      return true;
+
+   case IBC_FLOW_OP_ELSE:
+      return false;
+
+   case IBC_FLOW_OP_ENDIF:
+   case IBC_FLOW_OP_DO:
+      return true;
+
+   case IBC_FLOW_OP_BREAK:
+   case IBC_FLOW_OP_CONT:
+   case IBC_FLOW_OP_WHILE:
+      return flow->instr.predicate != BRW_PREDICATE_NONE;
    }
    unreachable("Invalid branch instruction opcode");
 }
@@ -814,7 +861,7 @@ typedef struct ibc_phi_src {
    /* Link in ibc_phi_instr::srcs */
    struct list_head link;
 
-   ibc_branch_instr *pred;
+   ibc_flow_instr *pred;
    ibc_reg_ref ref;
 } ibc_phi_src;
 
@@ -856,16 +903,16 @@ ibc_phi_instr *ibc_phi_instr_create(struct ibc_shader *shader,
 static inline ibc_instr *
 ibc_instr_next(const ibc_instr *instr)
 {
-   assert(instr->type != IBC_INSTR_TYPE_BRANCH ||
-          ibc_instr_as_branch(instr)->op != IBC_BRANCH_OP_END);
+   assert(instr->type != IBC_INSTR_TYPE_FLOW ||
+          ibc_instr_as_flow(instr)->op != IBC_FLOW_OP_END);
    return LIST_ENTRY(ibc_instr, instr->link.next, link);
 }
 
 static inline ibc_instr *
 ibc_instr_prev(const ibc_instr *instr)
 {
-   assert(instr->type != IBC_INSTR_TYPE_MERGE ||
-          ibc_instr_as_merge(instr)->op != IBC_MERGE_OP_START);
+   assert(instr->type != IBC_INSTR_TYPE_FLOW ||
+          ibc_instr_as_flow(instr)->op != IBC_FLOW_OP_START);
    return LIST_ENTRY(ibc_instr, instr->link.prev, link);
 }
 
@@ -886,6 +933,9 @@ typedef struct ibc_shader {
 
    /** Instructions */
    struct list_head instrs;
+
+   /** Control flow instructions */
+   struct list_head flow_instrs;
 
    /** Registers */
    struct list_head regs;
