@@ -104,6 +104,30 @@ ibc_nir_src(struct nir_to_ibc_state *nti, nir_src src, enum ibc_type type)
 }
 
 static inline void
+ibc_write_nir_ssa_def(struct nir_to_ibc_state *nti,
+                      const nir_ssa_def *def,
+                      ibc_reg_ref ref)
+{
+   assert(ref.file == IBC_REG_FILE_LOGICAL);
+   assert(ref.logical.byte == 0);
+   assert(ref.logical.comp == 0);
+   assert(!ref.logical.broadcast);
+
+   assert(ref.reg->logical.num_comps == def->num_components);
+   assert(ref.reg->logical.bit_size == def->bit_size);
+
+   nti->ssa_to_reg[def->index] = ref.reg;
+}
+
+static inline void
+ibc_write_nir_dest(struct nir_to_ibc_state *nti, const nir_dest *dest,
+                   ibc_reg_ref ref)
+{
+   assert(dest->is_ssa);
+   ibc_write_nir_ssa_def(nti, &dest->ssa, ref);
+}
+
+static inline void
 ibc_load_payload(ibc_builder *b, ibc_reg_ref dest,
                  ibc_reg_ref src, unsigned num_comps)
 {

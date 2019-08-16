@@ -69,12 +69,10 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
       return false;
    }
 
-   if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
-      assert(dest.file == IBC_REG_FILE_LOGICAL);
-      nti->ssa_to_reg[instr->dest.ssa.index] = dest.reg;
-   } else {
+   if (nir_intrinsic_infos[instr->intrinsic].has_dest)
+      ibc_write_nir_dest(nti, &instr->dest, dest);
+   else
       assert(dest.file == IBC_REG_FILE_NONE);
-   }
 
    return true;
 }
