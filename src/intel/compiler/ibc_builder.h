@@ -716,7 +716,7 @@ ibc_VEC(ibc_builder *b, ibc_reg_ref *srcs, unsigned num_comps)
    if (num_comps == 1)
       return ibc_MOV_raw(b, srcs[0]);
 
-   ibc_intrinsic_src vec_srcs[4];
+   ibc_intrinsic_src vec_srcs[8];
    assert(num_comps <= ARRAY_SIZE(vec_srcs));
 
    for (unsigned i = 0; i < num_comps; i++) {

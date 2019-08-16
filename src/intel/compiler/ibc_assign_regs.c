@@ -531,11 +531,11 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
       DIV_ROUND_UP(lreg->simd_width, STRIDED_REG_SIMD_GRANULARITY);
 
    assert(byte_size <= 8);
-   assert(lreg->num_comps <= 4);
+   assert(lreg->num_comps <= 8);
    assert(num_simd_groups <= 4);
    const uint8_t simd_stride = byte_size;
    const uint8_t comp_stride = simd_stride * num_simd_groups;
-   struct interval_set *live_ranges[8 * 4 * 4];
+   struct interval_set *live_ranges[8 * 8 * 4];
 #ifndef NDEBUG
    memset(live_ranges, 137, sizeof(live_ranges));
 #endif
