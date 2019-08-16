@@ -166,6 +166,15 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
       if (!alu_src && mov->src[0].mod != IBC_ALU_SRC_MOD_NONE)
          return false;
 
+      /* We can't propagate modifiers if the types don't match.
+       *
+       * TODO: In i965 we have a concept of opcodes which can have their
+       * types rewritten.  We should do something similar here.
+       */
+      if (mov->src[0].mod != IBC_ALU_SRC_MOD_NONE &&
+          ref->type != mov->src[0].ref.type)
+         return false;
+
       ibc_reg_ref new_ref;
       if (!try_compose_reg_refs(&new_ref, *ref, mov->src[0].ref,
                                 simd_group, simd_width,
