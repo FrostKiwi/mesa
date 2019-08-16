@@ -678,7 +678,6 @@ anv_isl_format_for_descriptor_type(VkDescriptorType type)
    switch (type) {
    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-      return ISL_FORMAT_RAW;
       return ISL_FORMAT_R32G32B32A32_FLOAT;
 
    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
