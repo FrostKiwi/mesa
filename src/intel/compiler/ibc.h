@@ -503,7 +503,6 @@ enum ibc_instr_type {
    IBC_INSTR_TYPE_ALU,
    IBC_INSTR_TYPE_SEND,
    IBC_INSTR_TYPE_INTRINSIC,
-   IBC_INSTR_TYPE_PHI,
    IBC_INSTR_TYPE_FLOW,
 };
 
@@ -878,33 +877,6 @@ ibc_flow_instr_falls_through(const ibc_flow_instr *flow)
    unreachable("Invalid branch instruction opcode");
 }
 
-typedef struct ibc_phi_src {
-   /* Link in ibc_phi_instr::srcs */
-   struct list_head link;
-
-   ibc_flow_instr *pred;
-   ibc_reg_ref ref;
-} ibc_phi_src;
-
-typedef struct ibc_phi_instr {
-   ibc_instr instr;
-
-   /** Number of vector components produced or consumed via this ref */
-   unsigned num_comps;
-
-   ibc_reg_ref dest;
-
-   struct list_head srcs;
-} ibc_phi_instr;
-
-IBC_DEFINE_CAST(ibc_instr_as_phi, ibc_instr, ibc_phi_instr, instr,
-                type, IBC_INSTR_TYPE_PHI)
-
-#define ibc_foreach_phi_src(phi_src, phi) \
-   list_for_each_entry(ibc_phi_src, phi_src, &(phi)->srcs, link)
-
-ibc_phi_instr *ibc_phi_instr_create(struct ibc_shader *shader,
-                                    uint8_t simd_group, uint8_t simd_width);
 
 #define ibc_foreach_instr(instr, shader) \
    list_for_each_entry(ibc_instr, instr, &(shader)->instrs, link)

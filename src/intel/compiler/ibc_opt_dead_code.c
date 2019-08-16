@@ -90,9 +90,6 @@ instr_is_alive(ibc_instr *instr) {
 
    case IBC_INSTR_TYPE_FLOW:
       return true;
-
-   case IBC_INSTR_TYPE_PHI:
-      return reg_ref_is_alive(&ibc_instr_as_phi(instr)->dest);
    }
 
    unreachable("Invalid instruction type");

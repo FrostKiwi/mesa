@@ -290,61 +290,6 @@ intrinsic_instrs_equal(const ibc_intrinsic_instr *intrin_a,
 }
 
 static uint32_t
-hash_phi_instr(uint32_t hash, const ibc_phi_instr *phi)
-{
-   hash = hash_instr(hash, &phi->instr, NULL);
-
-   hash = HASH(hash, phi->num_comps);
-   hash = hash_reg_ref(hash, &phi->dest, NULL);
-
-   ibc_foreach_phi_src(phi_src, phi) {
-      hash = HASH(hash, phi_src->pred);
-      hash = hash_reg_ref(hash, &phi_src->ref, NULL);
-   }
-
-   return hash;
-}
-
-static bool
-phi_instrs_equal(const ibc_phi_instr *phi_a, const ibc_phi_instr *phi_b)
-{
-   if (!instrs_equal(&phi_a->instr, &phi_b->instr, NULL, NULL))
-      return false;
-
-   if (phi_a->num_comps != phi_b->num_comps)
-      return false;
-
-   ibc_foreach_phi_src(phi_src_a, phi_a) {
-      bool found = false;
-      ibc_foreach_phi_src(phi_src_b, phi_b) {
-         if (phi_src_a->pred == phi_src_b->pred) {
-            if (!reg_refs_equal(&phi_src_a->ref, &phi_src_b->ref, NULL, NULL))
-               return false;
-            found = true;
-            break;
-         }
-      }
-      if (!found)
-         return false;
-   }
-
-   /* Now make sure all of the preds in b exist in a */
-   ibc_foreach_phi_src(phi_src_b, phi_b) {
-      bool found = false;
-      ibc_foreach_phi_src(phi_src_a, phi_a) {
-         if (phi_src_b->pred == phi_src_a->pred) {
-            found = true;
-            break;
-         }
-      if (!found)
-         return false;
-      }
-   }
-
-   return true;
-}
-
-static uint32_t
 hash_wlr_reg_cb(const void *_reg)
 {
    const struct ibc_reg *reg = _reg;
@@ -391,9 +336,6 @@ hash_wlr_reg_cb(const void *_reg)
          unreachable("TODO: We should be able to CSE sends");
       case IBC_INSTR_TYPE_INTRINSIC:
          hash = hash_intrinsic_instr(hash, ibc_instr_as_intrinsic(instr), reg);
-         break;
-      case IBC_INSTR_TYPE_PHI:
-         hash = hash_phi_instr(hash, ibc_instr_as_phi(instr));
          break;
       case IBC_INSTR_TYPE_FLOW:
          unreachable("Branch and merge instructions don't write anything");
@@ -460,11 +402,6 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
          if (!intrinsic_instrs_equal(ibc_instr_as_intrinsic(instr_a),
                                      ibc_instr_as_intrinsic(instr_b),
                                      reg_a, reg_b))
-            return false;
-         break;
-      case IBC_INSTR_TYPE_PHI:
-         if (!phi_instrs_equal(ibc_instr_as_phi(instr_a),
-                               ibc_instr_as_phi(instr_b)))
             return false;
          break;
       case IBC_INSTR_TYPE_FLOW:

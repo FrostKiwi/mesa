@@ -971,54 +971,6 @@ nti_emit_ssa_undef(struct nir_to_ibc_state *nti,
 }
 
 static void
-nti_emit_phi(struct nir_to_ibc_state *nti, const nir_phi_instr *instr)
-{
-   ibc_builder *b = &nti->b;
-
-   assert(b->simd_group == 0);
-   assert(b->simd_width == b->shader->simd_width);
-
-   ibc_reg_ref dest =
-      ibc_builder_new_logical_reg(b, instr->dest.ssa.bit_size,
-                                  instr->dest.ssa.num_components);
-
-   /* Just emit the bare phi for now.  We'll come in and fill in the sources
-    * later.
-    */
-   ibc_phi_instr *phi = ibc_phi_instr_create(b->shader, b->simd_group,
-                                             b->simd_width);
-   phi->dest = dest;
-   phi->num_comps = instr->dest.ssa.num_components;
-   ibc_builder_insert_instr(b, &phi->instr);
-
-   ibc_write_nir_dest(nti, &instr->dest, dest);
-}
-
-static void
-nti_add_phi_srcs(struct nir_to_ibc_state *nti, const nir_phi_instr *instr)
-{
-   ibc_builder *b = &nti->b;
-
-   const ibc_reg *dest_reg = nti->ssa_to_reg[instr->dest.ssa.index];
-   ibc_phi_instr *phi = ibc_instr_as_phi(ibc_reg_ssa_instr(dest_reg));
-
-   nir_foreach_phi_src(nir_src, instr) {
-      struct hash_entry *entry =
-         _mesa_hash_table_search(nti->nir_block_to_ibc, nir_src->pred);
-      assert(entry);
-      /* The nir_block_to_ibc table stores the flow instruction which starts
-       * each block whereas we want the flow instruction which ends the block.
-       */
-      ibc_flow_instr *pred_flow = ibc_flow_instr_next(entry->data);
-
-      ibc_phi_src *phi_src = ralloc(b->shader, ibc_phi_src);
-      phi_src->pred = pred_flow;
-      phi_src->ref = ibc_ref(nti->ssa_to_reg[nir_src->src.ssa->index]);
-      list_addtail(&phi_src->link, &phi->srcs);
-   }
-}
-
-static void
 nti_emit_block(struct nir_to_ibc_state *nti, const nir_block *block)
 {
    nir_foreach_instr(instr, block) {
@@ -1041,9 +993,6 @@ nti_emit_block(struct nir_to_ibc_state *nti, const nir_block *block)
          break;
       case nir_instr_type_ssa_undef:
          nti_emit_ssa_undef(nti, nir_instr_as_ssa_undef(instr));
-         break;
-      case nir_instr_type_phi:
-         nti_emit_phi(nti, nir_instr_as_phi(instr));
          break;
       default:
          unreachable("Unsupported instruction type");
@@ -1177,16 +1126,6 @@ ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
    nti->nir_block_to_ibc = _mesa_pointer_hash_table_create(nti->mem_ctx);
 
    nti_emit_cf_list(nti, &impl->body);
-
-   /* Do a second walk of the IR to fill in the phi sources */
-   nir_foreach_block(block, impl) {
-      nir_foreach_instr(instr, block) {
-         if (instr->type != nir_instr_type_phi)
-            break;
-
-         nti_add_phi_srcs(nti, nir_instr_as_phi(instr));
-      }
-   }
 }
 
 ibc_shader *
