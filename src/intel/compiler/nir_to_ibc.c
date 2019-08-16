@@ -813,8 +813,10 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
          ibc_builder_pop(b);
          break;
+      } else {
+         unreachable("Non-constant UBO loads not supported");
       }
-      /* fall through */
+      break;
 
    case nir_intrinsic_load_ssbo: {
       ibc_intrinsic_instr *load =
