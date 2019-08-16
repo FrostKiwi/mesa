@@ -60,6 +60,7 @@ struct nir_to_ibc_state {
    struct list_head breaks;
 
    const ibc_reg **ssa_to_reg;
+   const ibc_reg **reg_to_reg;
 
    struct hash_table *nir_block_to_ibc;
 };
@@ -97,34 +98,107 @@ ibc_type_for_nir(nir_alu_type ntype)
 static inline ibc_reg_ref
 ibc_nir_src(struct nir_to_ibc_state *nti, nir_src src, enum ibc_type type)
 {
-   assert(src.is_ssa);
    if (ibc_type_bit_size(type) == 0)
       type |= nir_src_bit_size(src);
-   return ibc_typed_ref(nti->ssa_to_reg[src.ssa->index], type);
+
+   if (src.is_ssa) {
+      assert(ibc_type_bit_size(type) <= src.ssa->bit_size);
+      return ibc_typed_ref(nti->ssa_to_reg[src.ssa->index], type);
+   } else {
+      assert(ibc_type_bit_size(type) <= src.reg.reg->bit_size);
+      assert(src.reg.indirect == NULL);
+      assert(src.reg.base_offset == 0);
+      return ibc_typed_ref(nti->reg_to_reg[src.reg.reg->index], type);
+   }
 }
 
 static inline void
 ibc_write_nir_ssa_def(struct nir_to_ibc_state *nti,
-                      const nir_ssa_def *def,
-                      ibc_reg_ref ref)
+                      const nir_ssa_def *ndef,
+                      ibc_reg_ref src)
 {
-   assert(ref.file == IBC_REG_FILE_LOGICAL);
-   assert(ref.logical.byte == 0);
-   assert(ref.logical.comp == 0);
-   assert(!ref.logical.broadcast);
+   assert(src.file == IBC_REG_FILE_LOGICAL);
+   assert(src.reg->is_wlr);
 
-   assert(ref.reg->logical.num_comps == def->num_components);
-   assert(ref.reg->logical.bit_size == def->bit_size);
+   /* If we get handed something that isn't a "simple" src, we need to insert
+    * a MOV.  We assume this only happens for scalars.
+    */
+   if (src.logical.byte > 0 || src.logical.comp > 0 || src.logical.broadcast) {
+      assert(ndef->num_components == 1);
+      src = ibc_MOV(&nti->b, src.type, src);
+   }
 
-   nti->ssa_to_reg[def->index] = ref.reg;
+   /* IBC's handling of partial writes is such that we can harmlessly grow
+    * the register to fit what we need for the NIR SSA ndef.  If the
+    * destination is too big for the NIR SSA ndef, that's harmless as reads
+    * will simply take the bottom components or bytes.
+    */
+   ibc_reg *src_reg = (ibc_reg *)src.reg;
+   if (src_reg->logical.num_comps < ndef->num_components)
+      src_reg->logical.num_comps = ndef->num_components;
+   if (src_reg->logical.bit_size < ndef->bit_size)
+      src_reg->logical.bit_size = ndef->bit_size;
+
+   nti->ssa_to_reg[ndef->index] = src.reg;
 }
 
 static inline void
-ibc_write_nir_dest(struct nir_to_ibc_state *nti, const nir_dest *dest,
+ibc_write_nir_reg(struct nir_to_ibc_state *nti,
+                  const nir_register *nreg,
+                  ibc_reg_ref src)
+{
+   assert(src.file == IBC_REG_FILE_LOGICAL);
+   assert(src.reg->is_wlr);
+
+   /* If we get handed something that isn't a "simple" src, we need to insert
+    * a MOV.  We assume this only happens for scalars.
+    */
+   if (src.logical.byte > 0 || src.logical.comp > 0 || src.logical.broadcast) {
+      assert(nreg->num_components == 1);
+      src = ibc_MOV(&nti->b, src.type, src);
+   }
+
+   ibc_reg *dest_reg = (ibc_reg *)nti->reg_to_reg[nreg->index];
+   assert(dest_reg->file == IBC_REG_FILE_LOGICAL);
+
+   /* IBC's handling of partial writes is such that we can harmlessly grow
+    * the register to fit what we need for any writes.  Liveness and register
+    * splitting will trim things off as needed.
+    */
+   if (dest_reg->logical.num_comps < src.reg->logical.num_comps)
+      dest_reg->logical.num_comps = src.reg->logical.num_comps;
+   if (dest_reg->logical.bit_size < src.reg->logical.bit_size)
+      dest_reg->logical.bit_size = src.reg->logical.bit_size;
+
+   /* Instead of emitting a MOV into the register, just rewrite all
+    * instructions that wrote the old destination to write to the register
+    * mapping to the nir_register.  This is safe as long as all such
+    * instructions occur nicely packed together within the logical NIR
+    * instruction we're emitting.  This is a safe assumption in ibc_to_nir.
+    */
+   ibc_reg_foreach_write_safe(write, src.reg) {
+      assert(write->write_instr != NULL);
+      ibc_reg_ref new_write = *write;
+      new_write.reg = dest_reg;
+      ibc_instr_set_ref(write->write_instr, write, new_write);
+   }
+
+   /* Delete the register so it doesn't clutter things */
+   ibc_reg *src_reg = (ibc_reg *)src.reg;
+   list_del(&src_reg->link);
+}
+
+static inline void
+ibc_write_nir_dest(struct nir_to_ibc_state *nti, const nir_dest *ndest,
                    ibc_reg_ref ref)
 {
-   assert(dest->is_ssa);
-   ibc_write_nir_ssa_def(nti, &dest->ssa, ref);
+   if (ndest->is_ssa) {
+      ibc_write_nir_ssa_def(nti, &ndest->ssa, ref);
+   } else {
+      assert(ndest->reg.indirect == NULL);
+      assert(ndest->reg.base_offset == 0);
+      ibc_write_nir_reg(nti, ndest->reg.reg, ref);
+   }
 }
 
 static inline void

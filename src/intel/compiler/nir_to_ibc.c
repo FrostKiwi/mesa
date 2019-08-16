@@ -56,8 +56,6 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       src[i].logical.comp = instr->src[i].swizzle[0];
    }
 
-   assert(instr->dest.dest.is_ssa);
-
    nir_alu_type nir_dest_type = nir_op_infos[instr->op].output_type;
    if (nir_alu_type_get_type_size(nir_dest_type) == 0)
       nir_dest_type |= nir_dest_bit_size(instr->dest.dest);
@@ -1162,6 +1160,20 @@ ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
 
    nti->ssa_to_reg =
       ralloc_array(nti->mem_ctx, const ibc_reg *, impl->ssa_alloc);
+
+   nir_index_local_regs(impl);
+   nti->reg_to_reg =
+      ralloc_array(nti->mem_ctx, const ibc_reg *, impl->reg_alloc);
+   nir_foreach_register(nreg, &impl->registers) {
+      ibc_reg *ireg = ibc_logical_reg_create(nti->b.shader,
+                                             nreg->bit_size,
+                                             nreg->num_components,
+                                             nti->b.simd_group,
+                                             nti->b.simd_width);
+      ireg->is_wlr = false;
+      nti->reg_to_reg[nreg->index] = ireg;
+   }
+
    nti->nir_block_to_ibc = _mesa_pointer_hash_table_create(nti->mem_ctx);
 
    nti_emit_cf_list(nti, &impl->body);

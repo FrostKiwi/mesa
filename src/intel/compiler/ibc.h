@@ -264,6 +264,9 @@ ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader, uint8_t bits);
 #define ibc_reg_foreach_write(ref, reg) \
    list_for_each_entry(ibc_reg_ref, ref, &(reg)->writes, write_link)
 
+#define ibc_reg_foreach_write_safe(ref, reg) \
+   list_for_each_entry_safe(ibc_reg_ref, ref, &(reg)->writes, write_link)
+
 struct ibc_instr *ibc_reg_ssa_instr(const ibc_reg *reg);
 
 /** A structure representing a reference to a LOGICAL register
