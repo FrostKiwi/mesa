@@ -496,6 +496,11 @@ unlink_write_cb(ibc_reg_ref *ref,
 void
 ibc_instr_remove(ibc_instr *instr)
 {
+   /* Flow instructions are complex to delete because of the way they're
+    * linked together.  Just disallow control-flow manipulation for now.
+    */
+   assert(instr->type != IBC_INSTR_TYPE_FLOW);
+
    ibc_instr_foreach_write(instr, unlink_write_cb, instr);
    list_del(&instr->link);
 }
