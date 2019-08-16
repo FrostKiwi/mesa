@@ -930,8 +930,7 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
       nir_print_shader(nir, stderr);
    }
 
-   if (!brw_nir_should_use_ibc(nir, compiler, is_scalar))
-      OPT(nir_convert_from_ssa, true);
+   OPT(nir_convert_from_ssa, true);
 
    if (!is_scalar) {
       OPT(nir_move_vec_src_uses_to_dest);
