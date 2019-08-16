@@ -277,10 +277,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       unreachable("Unhandled NIR ALU opcode");
    }
 
-   assert(dest.file == IBC_REG_FILE_LOGICAL);
-   assert(dest.reg->logical.bit_size == instr->dest.dest.ssa.bit_size);
-   assert(dest.reg->logical.num_comps == instr->dest.dest.ssa.num_components);
-   nti->ssa_to_reg[instr->dest.dest.ssa.index] = dest.reg;
+   ibc_write_nir_dest(nti, &instr->dest.dest, dest);
 }
 
 static ibc_reg_ref
@@ -600,8 +597,7 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
       dest = ibc_VEC(b, comp, nir_num_dest_comps);
    }
 
-   assert(dest.file == IBC_REG_FILE_LOGICAL);
-   nti->ssa_to_reg[ntex->dest.ssa.index] = dest.reg;
+   ibc_write_nir_dest(nti, &ntex->dest, dest);
 }
 
 static void
@@ -867,12 +863,10 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       unreachable("Unhandled NIR intrinsic");
    }
 
-   if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
-      assert(dest.file == IBC_REG_FILE_LOGICAL);
-      nti->ssa_to_reg[instr->dest.ssa.index] = dest.reg;
-   } else {
+   if (nir_intrinsic_infos[instr->intrinsic].has_dest)
+      ibc_write_nir_dest(nti, &instr->dest, dest);
+   else
       assert(dest.file == IBC_REG_FILE_NONE);
-   }
 }
 
 static void
@@ -922,7 +916,7 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
    ibc_reg_ref dest = ibc_VEC(b, imm_srcs, instr->def.num_components);
    ibc_builder_pop(b);
 
-   nti->ssa_to_reg[instr->def.index] = dest.reg;
+   ibc_write_nir_ssa_def(nti, &instr->def, dest);
 }
 
 static void
@@ -951,11 +945,11 @@ static void
 nti_emit_ssa_undef(struct nir_to_ibc_state *nti,
                    const nir_ssa_undef_instr *nundef)
 {
-   nti->ssa_to_reg[nundef->def.index] =
-      ibc_logical_reg_create(nti->b.shader,
-                             nundef->def.bit_size,
-                             nundef->def.num_components,
-                             0, 1);
+   ibc_builder *b = &nti->b;
+
+   ibc_write_nir_ssa_def(nti, &nundef->def,
+      ibc_builder_new_logical_reg(b, nundef->def.bit_size,
+                                  nundef->def.num_components));
 }
 
 static void
@@ -979,7 +973,7 @@ nti_emit_phi(struct nir_to_ibc_state *nti, const nir_phi_instr *instr)
    phi->num_comps = instr->dest.ssa.num_components;
    ibc_builder_insert_instr(b, &phi->instr);
 
-   nti->ssa_to_reg[instr->dest.ssa.index] = dest.reg;
+   ibc_write_nir_dest(nti, &instr->dest, dest);
 }
 
 static void
