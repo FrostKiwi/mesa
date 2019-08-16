@@ -228,7 +228,7 @@ evict_flag(uint8_t subnr, struct ibc_assign_flags_state *state)
                                 vector.reg->logical.simd_width);
       ibc_alu_instr *sel =
          ibc_build_alu2(b, IBC_ALU_OP_SEL, vector, zero, ibc_imm_w(-1));
-      ibc_instr_set_predicate(&sel->instr, ibc_ref(flag),
+      ibc_instr_set_predicate(&sel->instr, ibc_flag_ref(subnr, 0),
                               BRW_PREDICATE_NORMAL, true);
       ibc_builder_pop(b);
    }
