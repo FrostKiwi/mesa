@@ -206,11 +206,14 @@ ibc_split_logical_regs(ibc_shader *shader)
          while (simd_split_tmp) {
             const unsigned next_simd_group = u_bit_scan(&simd_split_tmp) + 1;
             const unsigned simd_width = next_simd_group - simd_group;
+            ibc_reg *split_reg =
+               ibc_logical_reg_create(shader,
+                                      reg->logical.bit_size, num_comps,
+                                      simd_group, simd_width);
+            split_reg->is_wlr = reg->is_wlr;
 
             split->split_regs[split_idx++] = (struct split_reg) {
-               .reg = ibc_logical_reg_create(shader,
-                                             reg->logical.bit_size, num_comps,
-                                             simd_group, simd_width),
+               .reg = split_reg,
                .start_comp = start_comp,
             };
 
