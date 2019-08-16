@@ -8181,6 +8181,14 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
 {
    const struct gen_device_info *devinfo = compiler->devinfo;
 
+   if (!use_rep_send && allow_spilling &&
+       brw_nir_should_use_ibc(shader, compiler, true)) {
+      return ibc_compile_fs(compiler, log_data, mem_ctx, key, prog_data,
+                            shader, shader_time_index8,
+                            shader_time_index16, shader_time_index32,
+                            allow_spilling, use_rep_send, vue_map, error_str);
+   }
+
    unsigned max_subgroup_size = unlikely(INTEL_DEBUG & DEBUG_DO32) ? 32 : 16;
 
    brw_nir_apply_key(shader, compiler, &key->base, max_subgroup_size, true);
@@ -8196,14 +8204,6 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
    brw_postprocess_nir(shader, compiler, true);
 
    brw_nir_populate_wm_prog_data(shader, compiler->devinfo, key, prog_data);
-
-   if (!use_rep_send && allow_spilling &&
-       brw_nir_should_use_ibc(shader, compiler, true)) {
-      return ibc_compile_fs(compiler, log_data, mem_ctx, key, prog_data,
-                            shader, shader_time_index8,
-                            shader_time_index16, shader_time_index32,
-                            allow_spilling, use_rep_send, vue_map, error_str);
-   }
 
    cfg_t *simd8_cfg = NULL, *simd16_cfg = NULL, *simd32_cfg = NULL;
 
