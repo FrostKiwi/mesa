@@ -416,6 +416,23 @@ typedef struct ibc_reg_ref {
    };
 } ibc_reg_ref;
 
+static inline uint64_t
+ibc_reg_ref_as_uint(ibc_reg_ref ref)
+{
+   assert(ibc_type_base_type(ref.type) != IBC_TYPE_FLOAT);
+   uint64_t data = 0;
+   memcpy(&data, ref.imm, ibc_type_byte_size(ref.type));
+   return data;
+}
+
+static inline int64_t
+ibc_reg_ref_as_int(ibc_reg_ref ref)
+{
+   int64_t data = ibc_reg_ref_as_uint(ref);
+   unsigned shift = 8 - ibc_type_byte_size(ref.type);
+   return (data << shift) >> shift;
+}
+
 /**
  * Returns true if the given ref reads the same value regardless of where the
  * read occurs in the program (assuming dominance rules still hold).
