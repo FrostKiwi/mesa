@@ -279,13 +279,6 @@ ibc_emit_urb_writes(struct nir_to_ibc_state *nti)
    }
 }
 
-static uint32_t
-ibc_ref_as_u32(const ibc_reg_ref *ref)
-{
-   assert(ref->file == IBC_REG_FILE_IMM);
-   return *(uint32_t *) ref->imm;
-}
-
 void
 ibc_lower_io_urb_write_to_send(ibc_builder *b, ibc_send_instr *send,
                                const ibc_intrinsic_instr *write)
@@ -294,8 +287,8 @@ ibc_lower_io_urb_write_to_send(ibc_builder *b, ibc_send_instr *send,
    const ibc_reg_ref data = write->src[IBC_URB_WRITE_SRC_DATA].ref;
    assert(data.file == IBC_REG_FILE_LOGICAL);
    const uint32_t global_offset =
-      ibc_ref_as_u32(&write->src[IBC_URB_WRITE_SRC_GLOBAL_OFFSET].ref);
-   const bool eot = ibc_ref_as_u32(&write->src[IBC_URB_WRITE_SRC_EOT].ref);
+      ibc_reg_ref_as_uint(write->src[IBC_URB_WRITE_SRC_GLOBAL_OFFSET].ref);
+   const bool eot = ibc_reg_ref_as_uint(write->src[IBC_URB_WRITE_SRC_EOT].ref);
    const bool per_slot_offset_present = false;
    const bool channel_mask_present = false;
 
