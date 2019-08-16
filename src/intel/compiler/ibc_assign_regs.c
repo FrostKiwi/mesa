@@ -36,9 +36,11 @@ ibc_alu_instr_is_raw_mov(const ibc_alu_instr *alu)
           !alu->saturate;
 }
 
-void
+bool
 ibc_assign_logical_reg_strides(ibc_shader *shader)
 {
+   bool progress = false;
+
    ibc_foreach_reg(reg, shader) {
       if (reg->file != IBC_REG_FILE_LOGICAL)
          continue;
@@ -55,6 +57,7 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
       /* At the very least, we want it to be the size of the register */
       assert(reg->logical.bit_size >= 8);
       reg->logical.stride = reg->logical.bit_size / 8;
+      progress = true;
 
       if (reg->logical.simd_width == 1)
          continue;
@@ -77,6 +80,8 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
       if (reg->logical.stride == 1 && !ibc_alu_instr_is_raw_mov(alu))
          reg->logical.stride = 2;
    }
+
+   return progress;
 }
 
 struct ibc_phys_reg {
@@ -906,12 +911,14 @@ live_reg_filter_cb(const ibc_reg *reg)
           reg->file == IBC_REG_FILE_HW_GRF;
 }
 
-void
+bool
 ibc_assign_regs(ibc_shader *shader)
 {
    struct ibc_assign_regs_state state = {
       .mem_ctx = ralloc_context(NULL),
    };
+
+   ibc_assign_logical_reg_strides(shader);
 
    state.live = ibc_compute_live_intervals(shader, live_reg_filter_cb,
                                            state.mem_ctx);
@@ -1030,6 +1037,8 @@ ibc_assign_regs(ibc_shader *shader)
    ibc_phys_reg_alloc_finish(&state.phys_alloc);
    for (unsigned i = 0; i < ARRAY_SIZE(state.strided_alloc); i++)
       ibc_strided_reg_alloc_finish(&state.strided_alloc[i]);
+
+   return true;
 }
 
 static unsigned

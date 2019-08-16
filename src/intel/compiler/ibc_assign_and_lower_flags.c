@@ -496,7 +496,7 @@ is_flag_reg(const ibc_reg *reg)
           reg->file == IBC_REG_FILE_FLAG;
 }
 
-void
+bool
 ibc_assign_and_lower_flags(ibc_shader *shader)
 {
    struct ibc_assign_flags_state state = {
@@ -504,6 +504,10 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
    };
 
    state.live = ibc_compute_live_intervals(shader, is_flag_reg, state.mem_ctx);
+   if (state.live->num_regs == 0) {
+      ralloc_free(state.mem_ctx);
+      return false;
+   }
 
    ibc_builder_init(&state.builder, shader);
    ibc_builder *b = &state.builder;
@@ -638,4 +642,6 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
    }
 
    ralloc_free(state.mem_ctx);
+
+   return true;
 }

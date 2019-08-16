@@ -24,6 +24,7 @@
 #include "brw_nir.h"
 #include "ibc_compile.h"
 #include "ibc_nir.h"
+#include "dev/gen_debug.h"
 
 struct ibc_cs_payload {
    struct ibc_payload_base base;
@@ -235,14 +236,17 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    ibc_emit_cs_thread_terminate(&nti);
 
    ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
-   ibc_print_shader(ibc, stderr);
+   if (INTEL_DEBUG & DEBUG_CS) {
+      ibc_print_shader(ibc, stderr);
+      fprintf(stderr, "\n\n");
+   }
    ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
 
-   ibc_lower_and_optimize(ibc);
+   ibc_lower_and_optimize(ibc, INTEL_DEBUG & DEBUG_CS);
 
    cs_set_simd_size(prog_data, simd_width);
    cs_fill_push_const_info(compiler->devinfo, prog_data);
 
-   return ibc_to_binary(ibc, mem_ctx, &prog_data->base.program_size);
+   return ibc_to_binary(ibc, mem_ctx, &prog_data->base.program_size,
+                        INTEL_DEBUG & DEBUG_CS);
 }
