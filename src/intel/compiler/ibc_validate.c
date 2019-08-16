@@ -627,16 +627,19 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 {
    s->instr = instr;
 
-   ibc_assert(s, instr->simd_group < s->shader->simd_width);
-   ibc_assert(s, instr->simd_width <= s->shader->simd_width);
-   ibc_assert(s, instr->simd_group + instr->simd_width <= s->shader->simd_width);
-   ibc_assert(s, instr->simd_group % instr->simd_width == 0);
-
-   /* We technically don't need to but we require all WE_all instructions to
-    * have a SIMD group of 0.
-    */
-   ibc_assert(s, !instr->we_all || instr->simd_group == 0);
-   ibc_assert(s, instr->simd_width >= 8 || instr->we_all);
+   if (instr->we_all) {
+      /* We technically don't need to but we require all WE_all instructions
+       * to have a SIMD group of 0.
+       */
+      ibc_assert(s, !instr->we_all || instr->simd_group == 0);
+   } else {
+      ibc_assert(s, instr->simd_width >= 4);
+      ibc_assert(s, instr->simd_group < s->shader->simd_width);
+      ibc_assert(s, instr->simd_width <= s->shader->simd_width);
+      ibc_assert(s, instr->simd_group + instr->simd_width <=
+                    s->shader->simd_width);
+      ibc_assert(s, instr->simd_group % instr->simd_width == 0);
+   }
 
    if (instr->predicate != BRW_PREDICATE_NONE) {
       /* The ANY*H or ALL*H predicate group threads into groups so we need to
