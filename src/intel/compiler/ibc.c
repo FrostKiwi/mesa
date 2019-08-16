@@ -205,16 +205,6 @@ ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
 
    case IBC_INSTR_TYPE_FLOW:
       return true;
-
-   case IBC_INSTR_TYPE_PHI: {
-      ibc_phi_instr *phi = ibc_instr_as_phi(instr);
-      ibc_foreach_phi_src(src, phi) {
-         if (!cb(&src->ref, -1, phi->num_comps,
-                 instr->simd_group, instr->simd_width, state))
-            return false;
-      }
-      return true;
-   }
    }
 
    unreachable("Invalid IBC instruction type");
@@ -260,15 +250,6 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
 
    case IBC_INSTR_TYPE_FLOW:
       return true;
-
-   case IBC_INSTR_TYPE_PHI: {
-      ibc_phi_instr *phi = ibc_instr_as_phi(instr);
-      if (!cb(&phi->dest, -1, phi->num_comps,
-              instr->simd_group, instr->simd_width, state))
-         return false;
-
-      return true;
-   }
    }
 
    unreachable("Invalid IBC instruction type");
@@ -432,19 +413,6 @@ ibc_flow_instr_add_pred(struct ibc_flow_instr *flow,
    list_addtail(&pred->link, &flow->preds);
 }
 
-ibc_phi_instr *
-ibc_phi_instr_create(struct ibc_shader *shader,
-                     uint8_t simd_group, uint8_t simd_width)
-{
-   ibc_phi_instr *phi = rzalloc(shader, ibc_phi_instr);
-
-   ibc_instr_init(&phi->instr, IBC_INSTR_TYPE_PHI, simd_group, simd_width);
-
-   list_inithead(&phi->srcs);
-
-   return phi;
-}
-
 ibc_shader *
 ibc_shader_create(void *mem_ctx,
                   const struct gen_device_info *devinfo,
@@ -529,7 +497,6 @@ ibc_lower_and_optimize(ibc_shader *ibc, bool print)
    OPT(ibc_opt_copy_prop);
    OPT(ibc_opt_dead_code);
    OPT(ibc_lower_gather_ops);
-   OPT(ibc_lower_phis);
    OPT(ibc_assign_and_lower_flags);
    OPT(ibc_lower_simd_width);
    OPT(ibc_opt_copy_prop);

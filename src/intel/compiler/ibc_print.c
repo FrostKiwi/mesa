@@ -432,22 +432,6 @@ print_flow_instr(FILE *fp, ibc_flow_instr *flow)
 }
 
 static void
-print_phi_instr(FILE *fp, ibc_phi_instr *phi)
-{
-   print_instr(fp, &phi->instr, "phi", 1);
-
-   fprintf(fp, "   ");
-   print_reg_ref(fp, &phi->dest, true);
-
-   ibc_foreach_phi_src(src, phi) {
-      fprintf(fp, "   %u -> ", src->pred->block_index - 1);
-      print_reg_ref(fp, &src->ref, true);
-   }
-
-   fprintf(fp, "\n");
-}
-
-static void
 ibc_print_instr(FILE *fp, const ibc_instr *instr)
 {
    switch (instr->type) {
@@ -462,9 +446,6 @@ ibc_print_instr(FILE *fp, const ibc_instr *instr)
       return;
    case IBC_INSTR_TYPE_FLOW:
       print_flow_instr(fp, ibc_instr_as_flow(instr));
-      return;
-   case IBC_INSTR_TYPE_PHI:
-      print_phi_instr(fp, ibc_instr_as_phi(instr));
       return;
    }
    unreachable("Invalid instruction type");

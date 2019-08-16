@@ -434,20 +434,6 @@ ibc_opt_copy_prop(ibc_shader *shader)
 
       case IBC_INSTR_TYPE_FLOW:
          continue;
-
-      case IBC_INSTR_TYPE_PHI: {
-         ibc_phi_instr *phi = ibc_instr_as_phi(instr);
-         ibc_foreach_phi_src(src, phi) {
-            while (try_copy_prop_reg_ref(&src->ref, NULL,
-                                         phi->num_comps,
-                                         phi->instr.simd_group,
-                                         phi->instr.simd_width,
-                                         true)) {
-               progress = true;
-            }
-         }
-         continue;
-      }
       }
       unreachable("Unsupported IBC instruction type");
    }
