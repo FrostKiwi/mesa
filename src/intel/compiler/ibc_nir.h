@@ -131,7 +131,7 @@ ibc_load_payload_logical(ibc_builder *b, unsigned *reg, enum ibc_type type,
 {
    assert(ibc_type_bit_size(type) == 32);
    ibc_reg_ref dest = ibc_builder_new_logical_reg(b, type, num_comps);
-   ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, type), 1);
+   ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, type), num_comps);
    *reg += (b->simd_width * ibc_type_byte_size(type) * num_comps) / REG_SIZE;
    return dest;
 }
