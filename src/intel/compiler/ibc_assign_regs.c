@@ -314,8 +314,8 @@ ibc_strided_reg_is_busy(struct ibc_strided_reg *reg,
 
 static struct ibc_strided_reg *
 ibc_strided_reg_create(void *mem_ctx,
-                       uint32_t ip,
-                       uint8_t byte_size, uint8_t num_comps,
+                       uint32_t ip, uint8_t byte_size,
+                       uint8_t num_bytes, uint8_t num_comps,
                        uint8_t simd_group, uint8_t simd_width,
                        struct interval_set **live,
                        uint8_t simd_stride, uint8_t comp_stride)
@@ -340,7 +340,7 @@ ibc_strided_reg_create(void *mem_ctx,
 
    for (unsigned c = 0; c < num_comps; c++) {
       for (unsigned s = 0; s < simd_width; s += STRIDED_REG_SIMD_GRANULARITY) {
-         for (unsigned b = 0; b < byte_size; b++) {
+         for (unsigned b = 0; b < num_bytes; b++) {
             struct ibc_strided_reg_chunk *chunk =
                ibc_strided_reg_chunk(reg, b, c, simd_group + s);
             chunk->live_range =
@@ -445,8 +445,12 @@ found:
             /* Union the live intervals and flag the hole as ending at 0 so
              * that it gets reset when we call ibc_strided_reg_update_holes.
              */
-            chunk->live_range =
-               interval_set_from_union(reg, chunk->live_range, byte_live);
+            if (chunk->live_range) {
+               chunk->live_range =
+                  interval_set_from_union(reg, chunk->live_range, byte_live);
+            } else {
+               chunk->live_range = byte_live;
+            }
             chunk->hole_end = 0;
          }
       }
@@ -523,6 +527,9 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
    const uint8_t simd_stride = byte_size;
    const uint8_t comp_stride = simd_stride * num_simd_groups;
    struct interval_set *live_ranges[8 * 4 * 4];
+#ifndef NDEBUG
+   memset(live_ranges, 137, sizeof(live_ranges));
+#endif
 
    /* Compute the RA liveness sets from the ones given by liveness analysis.
     * They may be at different granularities and this lets us keep the two
@@ -627,7 +634,7 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
     */
    struct ibc_strided_reg *sreg =
       ibc_strided_reg_create(alloc->mem_ctx, ip,
-                             alloc->stride, lreg->num_comps,
+                             alloc->stride, byte_size, lreg->num_comps,
                              lreg->simd_group, lreg->simd_width,
                              live_ranges, simd_stride, comp_stride);
 
