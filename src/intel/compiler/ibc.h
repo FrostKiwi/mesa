@@ -983,12 +983,12 @@ void ibc_instr_remove(ibc_instr *instr);
  * KEEP IN ALPHABETICAL ORDER!
  **********************************************************************/
 
-void ibc_assign_and_lower_flags(ibc_shader *shader);
-void ibc_assign_logical_reg_strides(ibc_shader *shader);
-void ibc_assign_regs(ibc_shader *shader);
+bool ibc_assign_and_lower_flags(ibc_shader *shader);
+bool ibc_assign_logical_reg_strides(ibc_shader *shader);
+bool ibc_assign_regs(ibc_shader *shader);
 void ibc_assign_regs_trivial(ibc_shader *shader);
 
-void ibc_lower_and_optimize(ibc_shader *ibc);
+void ibc_lower_and_optimize(ibc_shader *ibc, bool print);
 
 bool ibc_lower_fb_writes(ibc_shader *shader);
 bool ibc_lower_gather_ops(ibc_shader *shader);
@@ -1009,7 +1009,7 @@ void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 bool ibc_split_logical_regs(ibc_shader *shader);
 
 const unsigned *ibc_to_binary(const ibc_shader *shader, void *mem_ctx,
-                              unsigned *program_size);
+                              unsigned *program_size, bool print);
 
 void ibc_validate_shader(const ibc_shader *shader);
 

@@ -738,6 +738,7 @@ ibc_compute_live_intervals(ibc_shader *shader,
    compute_live_sets(shader, live);
    compute_live_intervals(shader, live);
 
+#if 0
    for (uint32_t r = 0; r < live->num_regs; r++) {
       fprintf(stderr, "Reg %u (%u chunks), physical: [%u, %u)\n", r,
               live->regs[r].num_chunks,
@@ -756,6 +757,7 @@ ibc_compute_live_intervals(ibc_shader *shader,
          fprintf(stderr, "\n");
       }
    }
+#endif
 
    return live;
 }

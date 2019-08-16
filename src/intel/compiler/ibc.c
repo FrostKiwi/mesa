@@ -500,101 +500,35 @@ ibc_instr_remove(ibc_instr *instr)
    list_del(&instr->link);
 }
 
+#define OPT(pass)                            \
+   do {                                      \
+      if (pass(ibc)) {                       \
+         if (print) {                        \
+            fprintf(stderr, "%s\n", #pass);  \
+            ibc_print_shader(ibc, stderr);   \
+            fprintf(stderr, "\n\n");         \
+         }                                   \
+         ibc_validate_shader(ibc);           \
+      }                                      \
+   } while(0)
+
 void
-ibc_lower_and_optimize(ibc_shader *ibc)
+ibc_lower_and_optimize(ibc_shader *ibc, bool print)
 {
-   ibc_assign_logical_reg_strides(ibc);
-   ibc_lower_simd_width(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_split_logical_regs(ibc);
-   fprintf(stderr, "After split_logical_regs\n");
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_opt_copy_prop(ibc);
-   fprintf(stderr, "After opt_copy_prop\n");
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_opt_cse(ibc);
-   fprintf(stderr, "After opt_cse\n");
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_opt_dead_code(ibc);
-   fprintf(stderr, "After opt_dead_code\n");
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_lower_io_to_sends(ibc);
-   fprintf(stderr, "After lower_io_to_sends\n");
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_opt_copy_prop(ibc);
-   fprintf(stderr, "After opt_copy_prop\n");
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_opt_dead_code(ibc);
-   fprintf(stderr, "After opt_dead_code\n");
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_assign_logical_reg_strides(ibc);
-   ibc_lower_gather_ops(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_lower_phis(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_assign_and_lower_flags(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_assign_logical_reg_strides(ibc);
-   ibc_lower_simd_width(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_opt_copy_prop(ibc);
-   fprintf(stderr, "After opt_copy_prop\n");
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_opt_dead_code(ibc);
-   fprintf(stderr, "After opt_dead_code\n");
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_assign_logical_reg_strides(ibc);
-   ibc_lower_gather_ops(ibc);
-   fprintf(stderr, "After lower_gather_ops\n");
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
-
-   ibc_assign_logical_reg_strides(ibc);
-   ibc_assign_regs(ibc);
-   ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
+   OPT(ibc_lower_simd_width);
+   OPT(ibc_split_logical_regs);
+   OPT(ibc_opt_copy_prop);
+   OPT(ibc_opt_cse);
+   OPT(ibc_opt_dead_code);
+   OPT(ibc_lower_io_to_sends);
+   OPT(ibc_opt_copy_prop);
+   OPT(ibc_opt_dead_code);
+   OPT(ibc_lower_gather_ops);
+   OPT(ibc_lower_phis);
+   OPT(ibc_assign_and_lower_flags);
+   OPT(ibc_lower_simd_width);
+   OPT(ibc_opt_copy_prop);
+   OPT(ibc_opt_dead_code);
+   OPT(ibc_lower_gather_ops);
+   OPT(ibc_assign_regs);
 }
