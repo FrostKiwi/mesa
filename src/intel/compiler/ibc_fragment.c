@@ -24,6 +24,7 @@
 #include "brw_nir.h"
 #include "ibc_compile.h"
 #include "ibc_nir.h"
+#include "dev/gen_debug.h"
 
 struct ibc_fs_payload {
    struct ibc_payload_base base;
@@ -568,11 +569,13 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
    ibc_emit_fb_writes(&nti);
 
    ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
-   ibc_print_shader(ibc, stderr);
+   if (INTEL_DEBUG & DEBUG_WM) {
+      ibc_print_shader(ibc, stderr);
+      fprintf(stderr, "\n\n");
+   }
    ibc_validate_shader(ibc);
-   fprintf(stderr, "\n\n");
 
-   ibc_lower_and_optimize(ibc);
+   ibc_lower_and_optimize(ibc, INTEL_DEBUG & DEBUG_WM);
 
    switch (simd_width) {
    case 8:
@@ -591,5 +594,6 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
       unreachable("Invalid dispatch width");
    }
 
-   return ibc_to_binary(ibc, mem_ctx, &prog_data->base.program_size);
+   return ibc_to_binary(ibc, mem_ctx, &prog_data->base.program_size,
+                        INTEL_DEBUG & DEBUG_WM);
 }

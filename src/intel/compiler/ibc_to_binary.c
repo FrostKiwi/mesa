@@ -518,7 +518,8 @@ generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
 }
 
 const unsigned *
-ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
+ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size,
+              bool print)
 {
    const struct gen_device_info *devinfo = shader->devinfo;
 
@@ -584,7 +585,8 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 
    brw_compact_instructions(p, start_offset, disasm_info);
 
-   dump_assembly(p->store, disasm_info);
+   if (print)
+      dump_assembly(p->store, disasm_info);
    ralloc_free(disasm_info);
 
    return brw_get_program(p, program_size);
