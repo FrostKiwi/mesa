@@ -80,6 +80,8 @@ ibc_lower_gather_ops(ibc_shader *shader)
 {
    bool progress = false;
 
+   ibc_assign_logical_reg_strides(shader);
+
    ibc_builder b;
    ibc_builder_init(&b, shader);
 
