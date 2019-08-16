@@ -96,7 +96,8 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
 
    case nir_intrinsic_store_output: {
       ibc_reg_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
-      const unsigned varying = nir_src_as_uint(instr->src[1]);
+      const unsigned varying = nir_intrinsic_base(instr) +
+                               nir_src_as_uint(instr->src[1]);
 
       ibc_reg_ref *output = &nti_vs->out.outputs[varying];
 
