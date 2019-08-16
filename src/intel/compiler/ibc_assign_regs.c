@@ -421,6 +421,9 @@ ibc_strided_reg_try_find_hole(struct ibc_strided_reg *reg,
                      live[b +
                           (s / STRIDED_REG_SIMD_GRANULARITY) * simd_stride +
                           c * comp_stride];
+                  if (byte_live == NULL)
+                     continue;
+
                   if (chunk->hole_start > interval_set_start(byte_live) ||
                       interval_set_end(byte_live) > chunk->hole_end)
                      goto next_byte;
@@ -451,10 +454,10 @@ found:
             /* Union the live intervals and flag the hole as ending at 0 so
              * that it gets reset when we call ibc_strided_reg_update_holes.
              */
-            if (chunk->live_range) {
+            if (chunk->live_range && byte_live) {
                chunk->live_range =
                   interval_set_from_union(reg, chunk->live_range, byte_live);
-            } else {
+            } else if (byte_live) {
                chunk->live_range = byte_live;
             }
             chunk->hole_end = 0;
@@ -574,14 +577,12 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
                   struct interval_set *chunk_live =
                      rli->chunk_live[w * BITSET_WORDBITS + b];
 
-                  if (chunk_live) {
-                     if (byte_live) {
-                        byte_live = interval_set_from_union(alloc->mem_ctx,
-                                                            chunk_live,
-                                                            byte_live);
-                     } else {
-                        byte_live = chunk_live;
-                     }
+                  if (chunk_live && byte_live) {
+                     byte_live = interval_set_from_union(alloc->mem_ctx,
+                                                         chunk_live,
+                                                         byte_live);
+                  } else if (chunk_live) {
+                     byte_live = chunk_live;
                   }
                }
             }
