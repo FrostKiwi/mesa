@@ -985,18 +985,24 @@ void anv_GetPhysicalDeviceFeatures2(
       case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES_KHR: {
          VkPhysicalDevice8BitStorageFeaturesKHR *features =
             (VkPhysicalDevice8BitStorageFeaturesKHR *)ext;
-         features->storageBuffer8BitAccess = pdevice->info.gen >= 8;
-         features->uniformAndStorageBuffer8BitAccess = pdevice->info.gen >= 8;
-         features->storagePushConstant8 = pdevice->info.gen >= 8;
+         //features->storageBuffer8BitAccess = pdevice->info.gen >= 8;
+         //features->uniformAndStorageBuffer8BitAccess = pdevice->info.gen >= 8;
+         //features->storagePushConstant8 = pdevice->info.gen >= 8;
+         features->storageBuffer8BitAccess = false;
+         features->uniformAndStorageBuffer8BitAccess = false;
+         features->storagePushConstant8 = false;
          break;
       }
 
       case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES: {
          VkPhysicalDevice16BitStorageFeatures *features =
             (VkPhysicalDevice16BitStorageFeatures *)ext;
-         features->storageBuffer16BitAccess = pdevice->info.gen >= 8;
-         features->uniformAndStorageBuffer16BitAccess = pdevice->info.gen >= 8;
-         features->storagePushConstant16 = pdevice->info.gen >= 8;
+         //features->storageBuffer16BitAccess = pdevice->info.gen >= 8;
+         //features->uniformAndStorageBuffer16BitAccess = pdevice->info.gen >= 8;
+         //features->storagePushConstant16 = pdevice->info.gen >= 8;
+         features->storageBuffer16BitAccess = false;
+         features->uniformAndStorageBuffer16BitAccess = false;
+         features->storagePushConstant16 = false;
          features->storageInputOutput16 = false;
          break;
       }
