@@ -478,22 +478,6 @@ ibc_validate_flow_successor(struct ibc_validate_state *s,
       }
    }
    ibc_assert(s, found_in_preds);
-
-   ibc_foreach_instr_from(instr, s->shader,
-                          ibc_instr_next(&successor->instr)) {
-      if (instr->type != IBC_INSTR_TYPE_PHI)
-         continue;
-
-      ibc_phi_instr *phi = ibc_instr_as_phi(instr);
-      ibc_foreach_phi_src(src, phi) {
-         if (src->pred != flow)
-            continue;
-
-         ibc_validate_reg_ref(s, &src->ref, false, 0, phi->num_comps,
-                              phi->instr.simd_group, phi->instr.simd_width);
-         break;
-      }
-   }
 }
 
 static void
@@ -661,47 +645,6 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
 }
 
 static void
-ibc_validate_phi_instr(struct ibc_validate_state *s,
-                       const ibc_phi_instr *phi)
-{
-   ibc_assert(s, phi->instr.predicate == BRW_PREDICATE_NONE);
-   ibc_assert(s, phi->dest.file == IBC_REG_FILE_LOGICAL);
-
-   ibc_validate_reg_ref(s, &phi->dest, true, 0, phi->num_comps,
-                        phi->instr.simd_group, phi->instr.simd_width);
-
-   assert(s->tmp_set->entries == 0);
-   list_validate(&phi->srcs);
-   ibc_foreach_phi_src(src, phi) {
-      /* ibc_validate_reg_ref is called in ibc_validate_branch_instr in the
-       * predecessor of each src.
-       */
-
-      /* Check for uniqueness of the predecessors */
-      bool already_seen = false;
-      _mesa_set_search_and_add(s->tmp_set, src->pred, &already_seen);
-      ibc_assert(s, !already_seen);
-
-      /* Check to make sure we're one of the block's logical predecessors */
-      bool found = false;
-      ibc_foreach_flow_pred(pred, s->block_start) {
-         if (pred->instr == src->pred) {
-            found = true;
-            break;
-         }
-      }
-      ibc_assert(s, found);
-   }
-
-   /* Check that we got all the logical predecessors */
-   ibc_foreach_flow_pred(pred, s->block_start)
-      ibc_assert(s, _mesa_set_search(s->tmp_set, pred->instr));
-
-   /* Clear out the tmp set now that we're done with it */
-   _mesa_set_clear(s->tmp_set, NULL);
-}
-
-static void
 ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 {
    s->instr = instr;
@@ -752,10 +695,6 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 
    case IBC_INSTR_TYPE_FLOW:
       ibc_validate_flow_instr(s, ibc_instr_as_flow(instr));
-      return;
-
-   case IBC_INSTR_TYPE_PHI:
-      ibc_validate_phi_instr(s, ibc_instr_as_phi(instr));
       return;
    }
 
