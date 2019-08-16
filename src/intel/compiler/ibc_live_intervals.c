@@ -553,12 +553,8 @@ extend_live_interval_for_read(ibc_reg_ref *ref,
       if (!BITSET_TEST(read, i))
          continue;
 
-      if (BITSET_TEST(state->def, chunk_idx + i)) {
+      if (BITSET_TEST(state->def, chunk_idx + i))
          interval_set_extend_to(rli->chunk_live[i], state->instr->index + 1);
-
-         assert(rli->physical_end > 0);
-         rli->physical_end = MAX2(rli->physical_end, state->instr->index + 1);
-      }
    }
 
    return true;
@@ -605,13 +601,6 @@ extend_live_interval_for_write(ibc_reg_ref *ref,
       }
 
       BITSET_SET(state->def, chunk_idx + i);
-   }
-
-   if (rli->physical_end == 0) {
-      rli->physical_start = state->instr->index;
-      rli->physical_end = state->instr->index + 1;
-   } else {
-      rli->physical_end = MAX2(rli->physical_end, state->instr->index + 1);
    }
 
    return true;
@@ -723,6 +712,26 @@ compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
                                           instr->index, instr->index + 1);
                }
             }
+
+            memcpy(state.def, bls->defin, bitset_words * sizeof(BITSET_WORD));
+         }
+      }
+   }
+
+   for (uint32_t r = 0; r < live->num_regs; r++) {
+      ibc_reg_live_intervals *rli = &live->regs[r];
+      for (uint32_t i = 0; i < rli->num_chunks; i++) {
+         if (rli->chunk_live[i] == NULL)
+            continue;
+
+         if (rli->physical_end == 0) {
+            rli->physical_start = interval_set_start(rli->chunk_live[i]);
+            rli->physical_end = interval_set_end(rli->chunk_live[i]);
+         } else {
+            rli->physical_start = MIN2(rli->physical_start,
+                                       interval_set_start(rli->chunk_live[i]));
+            rli->physical_end = MAX2(rli->physical_end,
+                                     interval_set_end(rli->chunk_live[i]));
          }
       }
    }
