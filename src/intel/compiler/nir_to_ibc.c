@@ -252,6 +252,17 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_POW(b, dest_type, src[0], src[1]);
       break;
 
+   case nir_op_idiv:
+      dest = ibc_IDIV(b, dest_type, src[0], src[1]);
+      break;
+
+   case nir_op_umod:
+   case nir_op_irem:
+   case nir_op_imod:
+      /* TODO: This isn't quite right for imod */
+      dest = ibc_IREM(b, dest_type, src[0], src[1]);
+      break;
+
    case nir_op_bcsel: {
       assert(src[0].type == IBC_TYPE_FLAG);
       dest = ibc_SEL(b, dest_type, src[0], src[1], src[2]);
