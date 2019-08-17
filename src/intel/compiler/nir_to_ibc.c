@@ -102,6 +102,15 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
+   case nir_op_f2u8:
+   case nir_op_f2u16:
+   case nir_op_f2u32:
+   case nir_op_f2i8:
+   case nir_op_f2i16:
+   case nir_op_f2i32:
+      dest = ibc_MOV(b, dest_type, src[0]);
+      break;
+
    case nir_op_i2f32:
    case nir_op_u2f32:
       dest = ibc_MOV(b, dest_type, src[0]);
