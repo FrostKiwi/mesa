@@ -77,15 +77,16 @@ simd_restricted_src(ibc_builder *b, ibc_ref src,
 }
 
 static void
-fixup_split_write_link(ibc_ref *dest, ibc_ref *split_dest)
+fixup_split_write_link(ibc_reg_write *write, ibc_ref *dest,
+                       ibc_reg_write *split_write, ibc_ref *split_dest)
 {
    if (dest->file != IBC_REG_FILE_NONE && dest->reg == split_dest->reg) {
       /* For WLR multi-writes, we need to ensure that the write list is
        * in the correct order and it may have gotten out-of-order thanks
        * to this lowering.
        */
-      list_del(&split_dest->write_link);
-      list_addtail(&split_dest->write_link, &dest->write_link);
+      list_del(&split_write->link);
+      list_addtail(&split_write->link, &write->link);
    }
 }
 
@@ -243,7 +244,8 @@ ibc_lower_simd_width(ibc_shader *shader)
 
             split->dest = split_dests[i];
             ibc_builder_insert_instr(&b, &split->instr);
-            fixup_split_write_link(dest, &split->dest);
+            fixup_split_write_link(&alu->dest_write, &alu->dest,
+                                   &split->dest_write, &split->dest);
             break;
          }
 
@@ -312,7 +314,8 @@ ibc_lower_simd_width(ibc_shader *shader)
             split->dest = split_dests[i];
             split->num_dest_comps = intrin->num_dest_comps;
             ibc_builder_insert_instr(&b, &split->instr);
-            fixup_split_write_link(dest, &split->dest);
+            fixup_split_write_link(&intrin->dest_write, &intrin->dest,
+                                   &split->dest_write, &split->dest);
             break;
          }
 
