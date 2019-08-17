@@ -167,6 +167,13 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_op_fsat: {
+      dest = ibc_MOV(b, dest_type, src[0]);
+      ibc_alu_instr *mov = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+      mov->saturate = true;
+      break;
+   }
+
    case nir_op_iadd:
    case nir_op_fadd:
       dest = ibc_ADD(b, dest_type, src[0], src[1]);
