@@ -611,17 +611,6 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
    if (ntex->op == nir_texop_query_levels) {
       /* # levels is in .w */
       dest.logical.comp = 3;
-      dest = ibc_MOV(b, dest.type, dest);
-   }
-
-   if (num_dest_comps != nir_num_dest_comps) {
-      ibc_reg_ref comp[4];
-      assert(nir_num_dest_comps < ARRAY_SIZE(comp));
-      for (unsigned i = 0; i < nir_num_dest_comps; i++) {
-         comp[i] = dest;
-         comp[i].logical.comp = i;
-      }
-      dest = ibc_VEC(b, comp, nir_num_dest_comps);
    }
 
    ibc_write_nir_dest(nti, &ntex->dest, dest);
