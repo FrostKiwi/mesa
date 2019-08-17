@@ -37,7 +37,7 @@ instr_is_predicated(ibc_instr *instr)
 }
 
 static bool
-reg_ref_has_live_data(const ibc_reg_ref *ref, const ibc_live_intervals *live)
+reg_ref_has_live_data(const ibc_ref *ref, const ibc_live_intervals *live)
 {
    if (ref->file == IBC_REG_FILE_NONE ||
        ref->file == IBC_REG_FILE_IMM)
@@ -47,7 +47,7 @@ reg_ref_has_live_data(const ibc_reg_ref *ref, const ibc_live_intervals *live)
 }
 
 static bool
-record_reg_write_sizes(ibc_reg_ref *ref,
+record_reg_write_sizes(ibc_ref *ref,
                        UNUSED int num_bytes, UNUSED int num_comps,
                        UNUSED uint8_t simd_group, uint8_t simd_width,
                        void *_state)
@@ -118,7 +118,7 @@ reg_num_chunks(const ibc_reg *reg, ibc_live_intervals *live)
 
 void
 ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
-                                  const ibc_reg_ref *ref,
+                                  const ibc_ref *ref,
                                   int num_bytes, int num_comps,
                                   uint8_t simd_group, uint8_t simd_width,
                                   BITSET_WORD *chunks)
@@ -361,7 +361,7 @@ struct setup_use_def_state {
 };
 
 static bool
-setup_block_use_def_for_read(ibc_reg_ref *ref,
+setup_block_use_def_for_read(ibc_ref *ref,
                              int num_bytes, int num_comps,
                              uint8_t simd_group, uint8_t simd_width,
                              void *_state)
@@ -392,7 +392,7 @@ setup_block_use_def_for_read(ibc_reg_ref *ref,
 }
 
 static bool
-setup_block_use_def_for_write(ibc_reg_ref *ref,
+setup_block_use_def_for_write(ibc_ref *ref,
                               int num_bytes, int num_comps,
                               uint8_t simd_group, uint8_t simd_width,
                               void *_state)
@@ -530,7 +530,7 @@ struct extend_live_interval_state {
 };
 
 static bool
-extend_live_interval_for_read(ibc_reg_ref *ref,
+extend_live_interval_for_read(ibc_ref *ref,
                               int num_bytes, int num_comps,
                               uint8_t simd_group, uint8_t simd_width,
                               void *_state)
@@ -561,7 +561,7 @@ extend_live_interval_for_read(ibc_reg_ref *ref,
 }
 
 static bool
-extend_live_interval_for_write(ibc_reg_ref *ref,
+extend_live_interval_for_write(ibc_ref *ref,
                                int num_bytes, int num_comps,
                                uint8_t simd_group, uint8_t simd_width,
                                void *_state)

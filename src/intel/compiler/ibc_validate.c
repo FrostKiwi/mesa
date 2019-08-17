@@ -69,14 +69,14 @@ _ibc_assert(struct ibc_validate_state *s, int line,
 
 static void
 ibc_validate_null_reg_ref(struct ibc_validate_state *s,
-                          const ibc_reg_ref *ref)
+                          const ibc_ref *ref)
 {
    ibc_assert(s, ref->file == IBC_REG_FILE_NONE);
    ibc_assert(s, ref->reg == NULL);
 }
 
 static bool
-ref_is_none_or_reg(ibc_reg_ref *ref,
+ref_is_none_or_reg(ibc_ref *ref,
                    UNUSED int num_bytes,
                    UNUSED int num_comps,
                    UNUSED uint8_t simd_group,
@@ -94,7 +94,7 @@ ref_is_none_or_reg(ibc_reg_ref *ref,
 
 static void
 ibc_validate_reg_ref(struct ibc_validate_state *s,
-                     const ibc_reg_ref *ref, bool is_write,
+                     const ibc_ref *ref, bool is_write,
                      unsigned num_bytes, unsigned num_comps,
                      unsigned ref_simd_group, unsigned ref_simd_width)
 {

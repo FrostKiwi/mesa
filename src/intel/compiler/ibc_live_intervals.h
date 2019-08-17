@@ -103,7 +103,7 @@ typedef struct {
 
 void
 ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
-                                  const ibc_reg_ref *ref,
+                                  const ibc_ref *ref,
                                   int num_bytes, int num_comps,
                                   uint8_t simd_group, uint8_t simd_width,
                                   BITSET_WORD *chunks);

@@ -262,10 +262,10 @@ ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
 ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader, uint8_t bits);
 
 #define ibc_reg_foreach_write(ref, reg) \
-   list_for_each_entry(ibc_reg_ref, ref, &(reg)->writes, write_link)
+   list_for_each_entry(ibc_ref, ref, &(reg)->writes, write_link)
 
 #define ibc_reg_foreach_write_safe(ref, reg) \
-   list_for_each_entry_safe(ibc_reg_ref, ref, &(reg)->writes, write_link)
+   list_for_each_entry_safe(ibc_ref, ref, &(reg)->writes, write_link)
 
 struct ibc_instr *ibc_reg_ssa_instr(const ibc_reg *reg);
 
@@ -310,8 +310,8 @@ typedef struct ibc_logical_reg_ref {
 typedef struct ibc_hw_grf_reg_ref {
    /** Byte offset at which the reference starts
     *
-    * If ibc_reg_ref::reg is not NULL, this is relative to the start of the
-    * virtual HW reg.  If ibc_reg_ref::reg is NULL, this is the byte offset
+    * If ibc_ref::reg is not NULL, this is relative to the start of the
+    * virtual HW reg.  If ibc_ref::reg is NULL, this is the byte offset
     * from the start of the register file.
     */
    uint16_t byte;
@@ -371,8 +371,8 @@ ibc_hw_grf_mul_stride(ibc_hw_grf_reg_ref *ref, unsigned stride_mul)
 typedef struct ibc_flag_reg_ref {
    /** Bit at which the reference starts
     *
-    * If ibc_reg_ref::reg is not NULL, this is relative to the start of the
-    * virtual flag reg.  If ibc_reg_ref::reg is NULL, this is relative to the
+    * If ibc_ref::reg is not NULL, this is relative to the start of the
+    * virtual flag reg.  If ibc_ref::reg is NULL, this is relative to the
     * hardware flag f0.0 where f1.0 starts at bit 32.
     */
    uint8_t bit;
@@ -382,7 +382,7 @@ typedef struct ibc_flag_reg_ref {
 /** A structure representing a register reference (source or destination) in
  * an instruction
  */
-typedef struct ibc_reg_ref {
+typedef struct ibc_ref {
    /** Register file or IMM for immediate or NONE for null */
    enum ibc_reg_file file;
 
@@ -417,10 +417,10 @@ typedef struct ibc_reg_ref {
        */
       uint64_t _align;
    };
-} ibc_reg_ref;
+} ibc_ref;
 
 static inline uint64_t
-ibc_reg_ref_as_uint(ibc_reg_ref ref)
+ibc_ref_as_uint(ibc_ref ref)
 {
    assert(ibc_type_base_type(ref.type) != IBC_TYPE_FLOAT);
    uint64_t data = 0;
@@ -429,9 +429,9 @@ ibc_reg_ref_as_uint(ibc_reg_ref ref)
 }
 
 static inline int64_t
-ibc_reg_ref_as_int(ibc_reg_ref ref)
+ibc_ref_as_int(ibc_ref ref)
 {
-   int64_t data = ibc_reg_ref_as_uint(ref);
+   int64_t data = ibc_ref_as_uint(ref);
    unsigned shift = 8 - ibc_type_byte_size(ref.type);
    return (data << shift) >> shift;
 }
@@ -441,7 +441,7 @@ ibc_reg_ref_as_int(ibc_reg_ref ref)
  * read occurs in the program (assuming dominance rules still hold).
  */
 static inline bool
-ibc_reg_ref_read_is_static(ibc_reg_ref ref)
+ibc_ref_read_is_static(ibc_ref ref)
 {
    if (ref.file == IBC_REG_FILE_NONE || ref.file == IBC_REG_FILE_IMM)
       return true;
@@ -453,7 +453,7 @@ ibc_reg_ref_read_is_static(ibc_reg_ref ref)
  * Returns true if the given ref reads the same value in all SIMD channels.
  */
 static inline bool
-ibc_reg_ref_read_is_uniform(ibc_reg_ref ref)
+ibc_ref_read_is_uniform(ibc_ref ref)
 {
    switch (ref.file) {
    case IBC_REG_FILE_NONE:
@@ -474,7 +474,7 @@ ibc_reg_ref_read_is_uniform(ibc_reg_ref ref)
 }
 
 static inline void
-ibc_reg_ref_simd_slice(ibc_reg_ref *ref, uint8_t rel_simd_group)
+ibc_ref_simd_slice(ibc_ref *ref, uint8_t rel_simd_group)
 {
    switch (ref->file) {
    case IBC_REG_FILE_NONE:
@@ -522,7 +522,7 @@ typedef struct ibc_instr {
    bool we_all;
 
    /** Flag reference for predication or cmod */
-   ibc_reg_ref flag;
+   ibc_ref flag;
 
    /** If not BRW_PREDICATE_NONE, this instruction is predicated using the
     * predicate from flag.
@@ -533,16 +533,16 @@ typedef struct ibc_instr {
    bool pred_inverse;
 } ibc_instr;
 
-typedef bool (*ibc_reg_ref_cb)(ibc_reg_ref *ref,
-                               int num_bytes, int num_comps,
-                               uint8_t simd_group, uint8_t simd_width,
-                               void *state);
-bool ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state);
-bool ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state);
+typedef bool (*ibc_ref_cb)(ibc_ref *ref,
+                           int num_bytes, int num_comps,
+                           uint8_t simd_group, uint8_t simd_width,
+                           void *state);
+bool ibc_instr_foreach_read(ibc_instr *instr, ibc_ref_cb cb, void *state);
+bool ibc_instr_foreach_write(ibc_instr *instr, ibc_ref_cb cb, void *state);
 
-void ibc_instr_set_ref(ibc_instr *instr, ibc_reg_ref *ref,
-                       ibc_reg_ref new_ref);
-void ibc_instr_set_predicate(ibc_instr *instr, ibc_reg_ref flag,
+void ibc_instr_set_ref(ibc_instr *instr, ibc_ref *ref,
+                       ibc_ref new_ref);
+void ibc_instr_set_predicate(ibc_instr *instr, ibc_ref flag,
                              enum brw_predicate predicate,
                              bool pred_inverse);
 
@@ -576,7 +576,7 @@ extern const ibc_alu_op_info ibc_alu_op_infos[IBC_ALU_NUM_OPS];
 /** A structure representing an ALU instruction source */
 typedef struct ibc_alu_src {
    /** A register reference for non-immediate sources */
-   ibc_reg_ref ref;
+   ibc_ref ref;
 
    enum ibc_alu_src_mod mod;
 } ibc_alu_src;
@@ -592,7 +592,7 @@ typedef struct ibc_alu_instr {
 
    bool saturate;
 
-   ibc_reg_ref dest;
+   ibc_ref dest;
 
    ibc_alu_src src[0];
 } ibc_alu_instr;
@@ -604,7 +604,7 @@ ibc_alu_instr *ibc_alu_instr_create(struct ibc_shader *shader,
                                     enum ibc_alu_op op,
                                     uint8_t simd_group,
                                     uint8_t simd_width);
-void ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_reg_ref flag,
+void ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_ref flag,
                             enum brw_conditional_mod cmod);
 
 
@@ -622,12 +622,12 @@ typedef struct ibc_send_instr {
 
    uint32_t desc_imm;
    uint32_t ex_desc_imm;
-   ibc_reg_ref desc;
-   ibc_reg_ref ex_desc;
+   ibc_ref desc;
+   ibc_ref ex_desc;
 
-   ibc_reg_ref dest;
+   ibc_ref dest;
 
-   ibc_reg_ref payload[2];
+   ibc_ref payload[2];
 } ibc_send_instr;
 
 IBC_DEFINE_CAST(ibc_instr_as_send, ibc_instr, ibc_send_instr, instr,
@@ -687,7 +687,7 @@ enum ibc_tex_src {
 };
 
 typedef struct {
-   ibc_reg_ref ref;
+   ibc_ref ref;
 
    /** SIMD invocation offset */
    uint8_t simd_group;
@@ -708,7 +708,7 @@ typedef struct {
    bool can_reorder;
    bool has_side_effects;
 
-   ibc_reg_ref dest;
+   ibc_ref dest;
    unsigned num_dest_comps;
 
    unsigned num_srcs;

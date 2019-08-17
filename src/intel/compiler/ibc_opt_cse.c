@@ -29,7 +29,7 @@
 #define HASH(hash, data) _mesa_fnv32_1a_accumulate((hash), (data))
 
 static uint32_t
-hash_reg_ref(uint32_t hash, const ibc_reg_ref *ref, const ibc_reg *base_reg)
+hash_reg_ref(uint32_t hash, const ibc_ref *ref, const ibc_reg *base_reg)
 {
    hash = HASH(hash, ref->file);
    hash = HASH(hash, ref->type);
@@ -73,7 +73,7 @@ hash_reg_ref(uint32_t hash, const ibc_reg_ref *ref, const ibc_reg *base_reg)
 }
 
 static bool
-reg_refs_equal(const ibc_reg_ref *ref_a, const ibc_reg_ref *ref_b,
+reg_refs_equal(const ibc_ref *ref_a, const ibc_ref *ref_b,
                const ibc_reg *base_reg_a, const ibc_reg *base_reg_b)
 {
    if (ref_a->file != ref_b->file ||
@@ -380,7 +380,7 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
       break;
    }
 
-   list_pair_for_each_entry(const ibc_reg_ref, ref_a, ref_b,
+   list_pair_for_each_entry(const ibc_ref, ref_a, ref_b,
                             &reg_a->writes, &reg_b->writes, write_link) {
       const ibc_instr *instr_a = ref_a->write_instr;
       const ibc_instr *instr_b = ref_b->write_instr;
@@ -418,7 +418,7 @@ struct opt_cse_state {
 };
 
 static bool
-rewrite_read(struct ibc_reg_ref *ref,
+rewrite_read(struct ibc_ref *ref,
              UNUSED int num_bytes, UNUSED int num_comps,
              UNUSED uint8_t simd_group, UNUSED uint8_t simd_width,
              void *_state)
@@ -443,7 +443,7 @@ rewrite_read(struct ibc_reg_ref *ref,
 }
 
 static bool
-try_cse_write(struct ibc_reg_ref *ref,
+try_cse_write(struct ibc_ref *ref,
               UNUSED int num_bytes, UNUSED int num_comps,
               UNUSED uint8_t simd_group, UNUSED uint8_t simd_width,
               void *_state)

@@ -65,7 +65,7 @@ ibc_type_suffix(enum ibc_type type)
 }
 
 static void
-print_reg_ref(FILE *fp, const ibc_reg_ref *ref, bool print_type)
+print_reg_ref(FILE *fp, const ibc_ref *ref, bool print_type)
 {
    switch (ref->file) {
    case IBC_REG_FILE_NONE:

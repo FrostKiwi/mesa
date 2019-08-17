@@ -60,8 +60,8 @@ brw_reg_type_for_ibc_type(enum ibc_type type)
 }
 
 static struct brw_reg
-brw_reg_for_ibc_reg_ref(const struct gen_device_info *devinfo,
-                        const ibc_reg_ref *ref,
+brw_reg_for_ibc_ref(const struct gen_device_info *devinfo,
+                        const ibc_ref *ref,
                         unsigned simd_width, bool compressed)
 {
    /* Default the type to UINT if no base type is specified */
@@ -237,14 +237,14 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    struct brw_reg src[3], dest;
    assert(ibc_alu_op_infos[alu->op].num_srcs <= ARRAY_SIZE(src));
    for (unsigned int i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-      src[i] = brw_reg_for_ibc_reg_ref(p->devinfo, &alu->src[i].ref,
+      src[i] = brw_reg_for_ibc_ref(p->devinfo, &alu->src[i].ref,
                                        alu->instr.simd_width,
                                        compressed);
       src[i].abs = (alu->src[i].mod & IBC_ALU_SRC_MOD_ABS) != 0;
       src[i].negate = (alu->src[i].mod & (IBC_ALU_SRC_MOD_NEG |
                                           IBC_ALU_SRC_MOD_NOT)) != 0;
    }
-   dest = brw_reg_for_ibc_reg_ref(p->devinfo, &alu->dest,
+   dest = brw_reg_for_ibc_ref(p->devinfo, &alu->dest,
                                   alu->instr.simd_width,
                                   compressed);
 
@@ -356,14 +356,14 @@ static void
 generate_send(struct brw_codegen *p, const ibc_send_instr *send)
 {
    struct brw_reg dst =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &send->dest,
+      brw_reg_for_ibc_ref(p->devinfo, &send->dest,
                               send->instr.simd_width, false);
 
    struct brw_reg payload0 =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &send->payload[0],
+      brw_reg_for_ibc_ref(p->devinfo, &send->payload[0],
                               send->instr.simd_width, false);
    struct brw_reg payload1 =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &send->payload[1],
+      brw_reg_for_ibc_ref(p->devinfo, &send->payload[1],
                               send->instr.simd_width, false);
 
    struct brw_reg desc;
@@ -371,7 +371,7 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
       desc = brw_imm_ud(0);
    } else {
       assert(send->desc.type == IBC_TYPE_UD);
-      desc = brw_reg_for_ibc_reg_ref(p->devinfo, &send->desc,
+      desc = brw_reg_for_ibc_ref(p->devinfo, &send->desc,
                                      send->instr.simd_width, false);
    }
    uint32_t desc_imm = send->desc_imm |
@@ -382,7 +382,7 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
       ex_desc = brw_imm_ud(0);
    } else {
       assert(send->ex_desc.type == IBC_TYPE_UD);
-      ex_desc = brw_reg_for_ibc_reg_ref(p->devinfo, &send->ex_desc,
+      ex_desc = brw_reg_for_ibc_ref(p->devinfo, &send->ex_desc,
                                         send->instr.simd_width, false);
    }
    uint32_t ex_desc_imm = send->ex_desc_imm |
@@ -453,11 +453,11 @@ generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
 
    struct brw_reg src[3], dest;
    for (unsigned int i = 0; i < intrin->num_srcs; i++) {
-      src[i] = brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->src[i].ref,
+      src[i] = brw_reg_for_ibc_ref(p->devinfo, &intrin->src[i].ref,
                                        intrin->src[i].simd_width,
                                        compressed);
    }
-   dest = brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->dest,
+   dest = brw_reg_for_ibc_ref(p->devinfo, &intrin->dest,
                                   intrin->instr.simd_width,
                                   compressed);
 

@@ -23,7 +23,7 @@
 
 #include "ibc.h"
 
-/** Tries to compose an ibc_logical_reg_ref with an ibc_reg_ref
+/** Tries to compose an ibc_logical_reg_ref with an ibc_ref
  *
  * Specifically, this is the composition outer(inner(reg)).
  * try_copy_prop_reg_ref has already figured out how the SIMD channels map.
@@ -31,8 +31,8 @@
  * returns the composition in ref_out and returns true.
  */
 static inline bool
-try_compose_reg_refs(ibc_reg_ref *ref_out,
-                     ibc_reg_ref outer, ibc_reg_ref inner,
+try_compose_reg_refs(ibc_ref *ref_out,
+                     ibc_ref outer, ibc_ref inner,
                      unsigned outer_simd_group,
                      unsigned outer_simd_width,
                      unsigned inner_simd_group,
@@ -44,13 +44,13 @@ try_compose_reg_refs(ibc_reg_ref *ref_out,
    assert(ibc_type_bit_size(outer.type) <= ibc_type_bit_size(inner.type));
 
    /* The source must be static */
-   if (!ibc_reg_ref_read_is_static(inner))
+   if (!ibc_ref_read_is_static(inner))
       return false;
 
    if (inner.file == IBC_REG_FILE_IMM && !supports_imm)
       return false;
 
-   ibc_reg_ref ref = inner;
+   ibc_ref ref = inner;
    ref.type = outer.type;
 
    switch (ref.file) {
@@ -117,7 +117,7 @@ try_compose_reg_refs(ibc_reg_ref *ref_out,
 }
 
 static void
-ibc_imm_neg(ibc_reg_ref *imm)
+ibc_imm_neg(ibc_ref *imm)
 {
    switch (ibc_type_base_type(imm->type)) {
    case IBC_TYPE_INT:
@@ -137,7 +137,7 @@ ibc_imm_neg(ibc_reg_ref *imm)
 }
 
 static void
-ibc_imm_not(ibc_reg_ref *imm)
+ibc_imm_not(ibc_ref *imm)
 {
    *(int64_t *)imm->imm = ~*(int64_t *)imm->imm;
    memset(imm->imm + ibc_type_byte_size(imm->type), 0,
@@ -145,14 +145,14 @@ ibc_imm_not(ibc_reg_ref *imm)
 }
 
 static void
-ibc_imm_abs(ibc_reg_ref *imm)
+ibc_imm_abs(ibc_ref *imm)
 {
    if (imm->imm[ibc_type_byte_size(imm->type) - 1] & 0x80)
       ibc_imm_neg(imm);
 }
 
 static void
-ibc_imm_apply_mod(ibc_reg_ref *imm, enum ibc_alu_src_mod mod)
+ibc_imm_apply_mod(ibc_ref *imm, enum ibc_alu_src_mod mod)
 {
    if (mod & IBC_ALU_SRC_MOD_ABS)
       ibc_imm_abs(imm);
@@ -179,7 +179,7 @@ compose_alu_src_mods(enum ibc_alu_src_mod outer, enum ibc_alu_src_mod inner)
 }
 
 static bool
-ref_fills_reg(ibc_reg_ref *ref,
+ref_fills_reg(ibc_ref *ref,
               UNUSED int num_bytes, int num_comps,
               uint8_t simd_group, uint8_t simd_width,
               UNUSED void *_state)
@@ -195,7 +195,7 @@ ref_fills_reg(ibc_reg_ref *ref,
 }
 
 static bool
-try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
+try_copy_prop_reg_ref(ibc_ref *ref, ibc_alu_src *alu_src,
                       uint8_t num_comps,
                       uint8_t simd_group, uint8_t simd_width,
                       bool supports_imm)
@@ -242,7 +242,7 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
           ref->type != mov->src[0].ref.type)
          return false;
 
-      ibc_reg_ref new_ref;
+      ibc_ref new_ref;
       if (!try_compose_reg_refs(&new_ref, *ref, mov->src[0].ref,
                                 simd_group, simd_width,
                                 mov->instr.simd_group,
@@ -298,7 +298,7 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
          assert(intrin->src[comp].simd_group == intrin->instr.simd_group);
          assert(intrin->src[comp].simd_width == intrin->instr.simd_width);
 
-         ibc_reg_ref comp_ref = *ref;
+         ibc_ref comp_ref = *ref;
          comp_ref.logical.comp = 0;
          return try_compose_reg_refs(ref, comp_ref, intrin->src[comp].ref,
                                      simd_group, simd_width,

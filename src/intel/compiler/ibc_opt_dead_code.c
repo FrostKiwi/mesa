@@ -24,7 +24,7 @@
 #include "ibc.h"
 
 static bool
-reg_ref_is_alive(ibc_reg_ref *ref)
+reg_ref_is_alive(ibc_ref *ref)
 {
    switch (ref->file) {
    case IBC_REG_FILE_NONE:
@@ -48,7 +48,7 @@ reg_ref_is_alive(ibc_reg_ref *ref)
 }
 
 static bool
-mark_ref(ibc_reg_ref *ref,
+mark_ref(ibc_ref *ref,
          UNUSED int num_bytes,
          UNUSED int num_comps,
          UNUSED uint8_t simd_group,
