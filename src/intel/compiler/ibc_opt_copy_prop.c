@@ -131,6 +131,22 @@ compose_alu_src_mods(enum ibc_alu_src_mod outer, enum ibc_alu_src_mod inner)
 }
 
 static bool
+ref_fills_reg(ibc_reg_ref *ref,
+              UNUSED int num_bytes, int num_comps,
+              uint8_t simd_group, uint8_t simd_width,
+              UNUSED void *_state)
+{
+   if (ref->file != IBC_REG_FILE_LOGICAL || num_comps < 0)
+      return false;
+
+   assert(!ref->logical.broadcast);
+   return ref->reg->logical.bit_size == ibc_type_bit_size(ref->type) &&
+          ref->reg->logical.num_comps == num_comps &&
+          ref->reg->logical.simd_group == simd_group &&
+          ref->reg->logical.simd_width == simd_width;
+}
+
+static bool
 try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
                       uint8_t num_comps,
                       uint8_t simd_group, uint8_t simd_width,
@@ -141,6 +157,9 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
 
    ibc_instr *ssa_instr = ibc_reg_ssa_instr(ref->reg);
    if (ssa_instr == NULL)
+      return false;
+
+   if (!ibc_instr_foreach_write(ssa_instr, ref_fills_reg, NULL))
       return false;
 
    switch (ssa_instr->type) {
