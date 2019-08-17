@@ -26,10 +26,10 @@
 
 #include "brw_eu.h"
 
-static ibc_reg_ref
-move_to_payload(ibc_builder *b, ibc_reg_ref src, unsigned num_comps)
+static ibc_ref
+move_to_payload(ibc_builder *b, ibc_ref src, unsigned num_comps)
 {
-   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
+   ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
    ibc_MOV_raw_vec_to(b, dest, src, num_comps);
    return dest;
 }
@@ -58,7 +58,7 @@ lower_const_block_read(ibc_builder *b, ibc_send_instr *send,
 
    assert(read->src[1].ref.file == IBC_REG_FILE_IMM);
    assert(read->src[1].ref.type == IBC_TYPE_UD);
-   const uint32_t offset_B = ibc_reg_ref_as_uint(read->src[1].ref);
+   const uint32_t offset_B = ibc_ref_as_uint(read->src[1].ref);
 
    ibc_reg *msg = ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
 
@@ -68,7 +68,7 @@ lower_const_block_read(ibc_builder *b, ibc_send_instr *send,
    ibc_builder_pop(b);
 
    ibc_builder_push_scalar(b);
-   ibc_reg_ref offset_ref = ibc_typed_ref(msg, IBC_TYPE_UD);
+   ibc_ref offset_ref = ibc_typed_ref(msg, IBC_TYPE_UD);
    offset_ref.hw_grf.byte += 2 * ibc_type_byte_size(IBC_TYPE_UD);
    ibc_MOV_to(b, offset_ref, ibc_imm_ud(offset_B / 16));
    ibc_builder_pop(b);
@@ -107,7 +107,7 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
 
    assert(intrin->src[0].ref.file == IBC_REG_FILE_IMM);
    assert(intrin->src[0].ref.type == IBC_TYPE_UD);
-   send->desc_imm = desc | ibc_reg_ref_as_uint(intrin->src[0].ref);
+   send->desc_imm = desc | ibc_ref_as_uint(intrin->src[0].ref);
 
    send->dest = intrin->dest;
    send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
@@ -123,13 +123,13 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
 }
 
 static bool
-is_high_sampler(const ibc_reg_ref sampler_bti)
+is_high_sampler(const ibc_ref sampler_bti)
 {
    if (sampler_bti.file != IBC_REG_FILE_IMM)
       return true;
 
    assert(sampler_bti.type == IBC_TYPE_UD);
-   return ibc_reg_ref_as_uint(sampler_bti) >= 16;
+   return ibc_ref_as_uint(sampler_bti) >= 16;
 }
 
 static unsigned
@@ -188,7 +188,7 @@ sampler_msg_type(const struct gen_device_info *devinfo,
 }
 
 static bool
-ref_is_null_or_zero(ibc_reg_ref ref)
+ref_is_null_or_zero(ibc_ref ref)
 {
    if (ref.file == IBC_REG_FILE_NONE)
       return true;
@@ -204,8 +204,8 @@ ref_is_null_or_zero(ibc_reg_ref ref)
    return true;
 }
 
-static ibc_reg_ref
-ibc_comp_ref(ibc_reg_ref ref, unsigned comp)
+static ibc_ref
+ibc_comp_ref(ibc_ref ref, unsigned comp)
 {
    if (ref.file == IBC_REG_FILE_IMM) {
       assert(comp == 0);
@@ -225,42 +225,42 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
 {
    const struct gen_device_info *devinfo = b->shader->devinfo;
 
-   const ibc_reg_ref surface_bti = intrin->src[IBC_TEX_SRC_SURFACE_BTI].ref;
-   const ibc_reg_ref surface_handle = intrin->src[IBC_TEX_SRC_SURFACE_HANDLE].ref;
+   const ibc_ref surface_bti = intrin->src[IBC_TEX_SRC_SURFACE_BTI].ref;
+   const ibc_ref surface_handle = intrin->src[IBC_TEX_SRC_SURFACE_HANDLE].ref;
    uint32_t surface_bti_imm = 0;
    if (surface_bti.file == IBC_REG_FILE_IMM)
-      surface_bti_imm = ibc_reg_ref_as_uint(surface_bti);
+      surface_bti_imm = ibc_ref_as_uint(surface_bti);
    assert((surface_bti.file == IBC_REG_FILE_NONE) !=
           (surface_handle.file == IBC_REG_FILE_NONE));
 
-   const ibc_reg_ref sampler_bti = intrin->src[IBC_TEX_SRC_SAMPLER_BTI].ref;
-   const ibc_reg_ref sampler_handle = intrin->src[IBC_TEX_SRC_SAMPLER_HANDLE].ref;
+   const ibc_ref sampler_bti = intrin->src[IBC_TEX_SRC_SAMPLER_BTI].ref;
+   const ibc_ref sampler_handle = intrin->src[IBC_TEX_SRC_SAMPLER_HANDLE].ref;
    uint32_t sampler_bti_imm = 0;
    if (sampler_bti.file == IBC_REG_FILE_IMM)
-      sampler_bti_imm = ibc_reg_ref_as_uint(sampler_bti);
+      sampler_bti_imm = ibc_ref_as_uint(sampler_bti);
    assert((sampler_bti.file == IBC_REG_FILE_NONE) ||
           (sampler_handle.file == IBC_REG_FILE_NONE));
 
-   const ibc_reg_ref coord = intrin->src[IBC_TEX_SRC_COORD].ref;
+   const ibc_ref coord = intrin->src[IBC_TEX_SRC_COORD].ref;
    const unsigned num_coord_comps = intrin->src[IBC_TEX_SRC_COORD].num_comps;
-   const ibc_reg_ref shadow_c = intrin->src[IBC_TEX_SRC_SHADOW_C].ref;
-   const ibc_reg_ref lod = intrin->src[IBC_TEX_SRC_LOD].ref;
-   const ibc_reg_ref min_lod = intrin->src[IBC_TEX_SRC_MIN_LOD].ref;
-   const ibc_reg_ref ddx = intrin->src[IBC_TEX_SRC_DDX].ref;
-   const ibc_reg_ref ddy = intrin->src[IBC_TEX_SRC_DDY].ref;
+   const ibc_ref shadow_c = intrin->src[IBC_TEX_SRC_SHADOW_C].ref;
+   const ibc_ref lod = intrin->src[IBC_TEX_SRC_LOD].ref;
+   const ibc_ref min_lod = intrin->src[IBC_TEX_SRC_MIN_LOD].ref;
+   const ibc_ref ddx = intrin->src[IBC_TEX_SRC_DDX].ref;
+   const ibc_ref ddy = intrin->src[IBC_TEX_SRC_DDY].ref;
    assert(intrin->src[IBC_TEX_SRC_DDY].num_comps ==
           intrin->src[IBC_TEX_SRC_DDY].num_comps);
    const unsigned num_grad_comps = intrin->src[IBC_TEX_SRC_DDY].num_comps;
-   const ibc_reg_ref sample_index = intrin->src[IBC_TEX_SRC_SAMPLE_INDEX].ref;
-   const ibc_reg_ref mcs = intrin->src[IBC_TEX_SRC_MCS].ref;
-   const ibc_reg_ref tg4_offset = intrin->src[IBC_TEX_SRC_TG4_OFFSET].ref;
+   const ibc_ref sample_index = intrin->src[IBC_TEX_SRC_SAMPLE_INDEX].ref;
+   const ibc_ref mcs = intrin->src[IBC_TEX_SRC_MCS].ref;
+   const ibc_ref tg4_offset = intrin->src[IBC_TEX_SRC_TG4_OFFSET].ref;
 
    uint32_t header_bits = 0;
-   const ibc_reg_ref header_bits_r = intrin->src[IBC_TEX_SRC_HEADER_BITS].ref;
+   const ibc_ref header_bits_r = intrin->src[IBC_TEX_SRC_HEADER_BITS].ref;
    if (header_bits_r.file != IBC_REG_FILE_NONE)
-      header_bits = ibc_reg_ref_as_uint(header_bits_r);
+      header_bits = ibc_ref_as_uint(header_bits_r);
 
-   ibc_reg_ref srcs[MAX_SAMPLER_MESSAGE_SIZE] = {};
+   ibc_ref srcs[MAX_SAMPLER_MESSAGE_SIZE] = {};
    unsigned num_srcs = 0;
 
    if (intrin->op == IBC_INTRINSIC_OP_TG4 ||
@@ -271,7 +271,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
 
       ibc_reg *header_reg =
          ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
-      ibc_reg_ref header = ibc_typed_ref(header_reg, IBC_TYPE_UD);
+      ibc_ref header = ibc_typed_ref(header_reg, IBC_TYPE_UD);
 
       /* If we're requesting fewer than four channels worth of response,
        * and we have an explicit header, we need to set up the sampler
@@ -292,11 +292,11 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
       /* TODO: On vertex and fragment stages this is zero by default so we can
        * avoid the MOV.
        */
-      ibc_reg_ref header_2 = header;
+      ibc_ref header_2 = header;
       header_2.hw_grf.byte += 2 * ibc_type_byte_size(IBC_TYPE_UD);
       ibc_MOV_to(b, header_2, ibc_imm_ud(header_bits));
 
-      ibc_reg_ref header_3 = header;
+      ibc_ref header_3 = header;
       header_3.hw_grf.byte += 3 * ibc_type_byte_size(IBC_TYPE_UD);
       if (sampler_handle.file != IBC_REG_FILE_NONE) {
          /* Bindless sampler handles aren't relative to the sampler state
@@ -313,7 +313,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
           */
          ibc_MOV_to(b, header_3, sampler_handle);
       } else if (is_high_sampler(sampler_bti)) {
-         ibc_reg_ref sampler_base_ptr;
+         ibc_ref sampler_base_ptr;
          if (sampler_bti.file == IBC_REG_FILE_IMM) {
             assert(sampler_bti_imm >= 16);
             const unsigned sampler_state_size = 16; /* 16 bytes */
@@ -455,7 +455,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
 
    ibc_reg *message =
       ibc_hw_grf_reg_create(b->shader, send->mlen * REG_SIZE, REG_SIZE);
-   ibc_reg_ref msg_dest = ibc_typed_ref(message, IBC_TYPE_UD);
+   ibc_ref msg_dest = ibc_typed_ref(message, IBC_TYPE_UD);
    for (unsigned i = 0; i < num_srcs; i++) {
       msg_dest.type = srcs[i].type;
       if (i == 0 && send->has_header) {
@@ -523,7 +523,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
                                         msg_type, simd_mode,
                                         0 /* return_format unused on gen7+ */);
       ibc_builder_push_scalar(b);
-      if (0 /* TODO: ibc_reg_refs_equal(surface_bti, sampler_bti) */) {
+      if (0 /* TODO: ibc_refs_equal(surface_bti, sampler_bti) */) {
          /* This case is common in GL */
          send->desc = ibc_MUL(b, IBC_TYPE_UD, surface_bti, ibc_imm_ud(0x101));
       } else {
