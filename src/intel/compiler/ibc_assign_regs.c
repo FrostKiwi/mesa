@@ -720,6 +720,9 @@ struct ibc_assign_regs_state {
 
    const ibc_live_intervals *live;
 
+   /** Current instruction */
+   ibc_instr *instr;
+
    /** Current instruction index */
    uint32_t ip;
 
@@ -756,11 +759,12 @@ should_assign_reg(const ibc_reg *reg)
 }
 
 static bool
-rewrite_ref_and_update_reg(ibc_reg_ref *ref,
+rewrite_ref_and_update_reg(ibc_reg_ref *_ref,
                            int num_bytes, int num_comps,
                            uint8_t simd_group, uint8_t simd_width,
                            void *_state)
 {
+   const ibc_reg_ref *ref = _ref;
    struct ibc_assign_regs_state *state = _state;
    if (ref->file != IBC_REG_FILE_LOGICAL &&
        ref->file != IBC_REG_FILE_HW_GRF)
@@ -779,51 +783,54 @@ rewrite_ref_and_update_reg(ibc_reg_ref *ref,
    assert(reg->index < state->live->num_regs);
    struct ibc_reg_assignment *assign = &state->assign[reg->index];
 
+   ibc_reg_ref new_ref = {
+      .file = IBC_REG_FILE_HW_GRF,
+      .type = ref->type,
+   };
    switch (ref->file) {
    case IBC_REG_FILE_HW_GRF:
-      ref->hw_grf.byte += assign->preg->byte;
+      new_ref.hw_grf = ref->hw_grf;
+      new_ref.hw_grf.byte += assign->preg->byte;
       break;
 
    case IBC_REG_FILE_LOGICAL: {
       assert(reg->logical.bit_size % 8 == 0);
       assert(reg->logical.stride >= reg->logical.bit_size / 8);
-      unsigned stride = ref->reg->logical.stride;
+      unsigned stride = reg->logical.stride;
 
       /* Stash this so we can access it unchanged */
-      const ibc_logical_reg_ref logical = ref->logical;
-
-      ref->file = IBC_REG_FILE_HW_GRF;
       if (assign->sreg) {
          ibc_strided_reg_update_holes(assign->sreg, state->ip);
 
-         ref->hw_grf.byte = assign->sreg->phys.byte;
-         ref->hw_grf.byte += (assign->sreg_comp + logical.comp) *
-                             ref->reg->logical.simd_width * stride;
-         ref->hw_grf.byte += assign->sreg_byte + logical.byte;
+         new_ref.hw_grf.byte = assign->sreg->phys.byte;
+         new_ref.hw_grf.byte += (assign->sreg_comp + ref->logical.comp) *
+                                 reg->logical.simd_width * stride;
+         new_ref.hw_grf.byte += assign->sreg_byte + ref->logical.byte;
       } else {
          assert(reg->logical.simd_width == 1);
          assert(reg->logical.stride == reg->logical.bit_size / 8);
-         ref->hw_grf.byte = assign->preg->byte;
-         ref->hw_grf.byte += logical.comp * (reg->logical.bit_size / 8);
-         ref->hw_grf.byte += logical.byte;
+         new_ref.hw_grf.byte = assign->preg->byte;
+         new_ref.hw_grf.byte += ref->logical.comp *
+                                (reg->logical.bit_size / 8);
+         new_ref.hw_grf.byte += ref->logical.byte;
       }
 
-      if (logical.broadcast) {
-         ref->hw_grf.byte += logical.simd_channel * stride;
-      } else if (ref->reg->logical.simd_width > 1) {
-         ref->hw_grf.byte +=
+      if (ref->logical.broadcast) {
+         new_ref.hw_grf.byte += ref->logical.simd_channel * stride;
+      } else if (reg->logical.simd_width > 1) {
+         new_ref.hw_grf.byte +=
             (simd_group - assign->sreg->simd_group) * stride;
       }
 
-      if (logical.broadcast ||
-          (ref->reg->logical.simd_width == 1 && state->is_read)) {
-         ref->hw_grf.vstride = 0;
-         ref->hw_grf.width = 1;
-         ref->hw_grf.hstride = 0;
+      if (ref->logical.broadcast ||
+          (reg->logical.simd_width == 1 && state->is_read)) {
+         new_ref.hw_grf.vstride = 0;
+         new_ref.hw_grf.width = 1;
+         new_ref.hw_grf.hstride = 0;
       } else {
-         ref->hw_grf.hstride = stride;
-         ref->hw_grf.width = 8;
-         ref->hw_grf.vstride = stride * ref->hw_grf.width;
+         new_ref.hw_grf.hstride = stride;
+         new_ref.hw_grf.width = 8;
+         new_ref.hw_grf.vstride = stride * new_ref.hw_grf.width;
       }
       break;
    }
@@ -832,12 +839,7 @@ rewrite_ref_and_update_reg(ibc_reg_ref *ref,
       unreachable("Unhandled register file");
    }
 
-   if (ref->write_instr) {
-      list_del(&ref->write_link);
-      ref->write_instr = NULL;
-   }
-
-   ref->reg = NULL;
+   ibc_instr_set_ref(state->instr, _ref, new_ref);
 
    return true;
 }
@@ -1006,6 +1008,7 @@ ibc_assign_regs(ibc_shader *shader)
    }
 
    ibc_foreach_instr_safe(instr, shader) {
+      state.instr = instr;
       state.ip = instr->index;
 
       ibc_phys_reg_alloc_free_regs(&state.phys_alloc, state.ip);
