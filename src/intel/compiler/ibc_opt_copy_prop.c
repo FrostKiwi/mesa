@@ -116,6 +116,54 @@ try_compose_reg_refs(ibc_reg_ref *ref_out,
    return true;
 }
 
+static void
+ibc_imm_neg(ibc_reg_ref *imm)
+{
+   switch (ibc_type_base_type(imm->type)) {
+   case IBC_TYPE_INT:
+   case IBC_TYPE_UINT:
+      *(int64_t *)imm->imm = -*(int64_t *)imm->imm;
+      memset(imm->imm + ibc_type_byte_size(imm->type), 0,
+             sizeof(imm->imm) - ibc_type_byte_size(imm->type));
+      break;
+
+   case IBC_TYPE_FLOAT:
+      imm->imm[ibc_type_byte_size(imm->type) - 1] ^= 0x80;
+      break;
+
+   default:
+      unreachable("Invalid immediate type");
+   }
+}
+
+static void
+ibc_imm_not(ibc_reg_ref *imm)
+{
+   *(int64_t *)imm->imm = ~*(int64_t *)imm->imm;
+   memset(imm->imm + ibc_type_byte_size(imm->type), 0,
+          sizeof(imm->imm) - ibc_type_byte_size(imm->type));
+}
+
+static void
+ibc_imm_abs(ibc_reg_ref *imm)
+{
+   if (imm->imm[ibc_type_byte_size(imm->type) - 1] & 0x80)
+      ibc_imm_neg(imm);
+}
+
+static void
+ibc_imm_apply_mod(ibc_reg_ref *imm, enum ibc_alu_src_mod mod)
+{
+   if (mod & IBC_ALU_SRC_MOD_ABS)
+      ibc_imm_abs(imm);
+
+   if (mod & IBC_ALU_SRC_MOD_NEG)
+      ibc_imm_neg(imm);
+
+   if (mod & IBC_ALU_SRC_MOD_NOT)
+      ibc_imm_not(imm);
+}
+
 static enum ibc_alu_src_mod
 compose_alu_src_mods(enum ibc_alu_src_mod outer, enum ibc_alu_src_mod inner)
 {
@@ -202,8 +250,13 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
                                 supports_imm))
          return false;
 
-      if (alu_src)
+      if (alu_src) {
          alu_src->mod = compose_alu_src_mods(alu_src->mod, mov->src[0].mod);
+         if (new_ref.file == IBC_REG_FILE_IMM) {
+            ibc_imm_apply_mod(&new_ref, alu_src->mod);
+            alu_src->mod = IBC_ALU_SRC_MOD_NONE;
+         }
+      }
 
       *ref = new_ref;
       return true;
