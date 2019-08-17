@@ -1004,7 +1004,6 @@ void ibc_instr_remove(ibc_instr *instr);
 bool ibc_assign_and_lower_flags(ibc_shader *shader);
 bool ibc_assign_logical_reg_strides(ibc_shader *shader);
 bool ibc_assign_regs(ibc_shader *shader);
-void ibc_assign_regs_trivial(ibc_shader *shader);
 
 void ibc_lower_and_optimize(ibc_shader *ibc, bool print);
 
