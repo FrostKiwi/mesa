@@ -27,7 +27,7 @@
 #include "brw_eu.h"
 
 static unsigned
-reg_ref_stride(const ibc_reg_ref *ref)
+ref_stride(const ibc_ref *ref)
 {
    switch (ref->file) {
    case IBC_REG_FILE_NONE:
@@ -50,15 +50,15 @@ reg_ref_stride(const ibc_reg_ref *ref)
    unreachable("Unknown register file");
 }
 
-static ibc_reg_ref
-simd_restricted_src(ibc_builder *b, ibc_reg_ref src,
+static ibc_ref
+simd_restricted_src(ibc_builder *b, ibc_ref src,
                     uint8_t old_simd_group, uint8_t new_simd_group,
                     uint8_t simd_width, unsigned num_comps)
 {
    if (src.file == IBC_REG_FILE_NONE || src.file == IBC_REG_FILE_IMM)
       return src;
 
-   ibc_reg_ref_simd_slice(&src, new_simd_group - old_simd_group);
+   ibc_ref_simd_slice(&src, new_simd_group - old_simd_group);
 
    /* If the source is WLR, then we have two cases:
     *
@@ -77,7 +77,7 @@ simd_restricted_src(ibc_builder *b, ibc_reg_ref src,
 }
 
 static void
-fixup_split_write_link(ibc_reg_ref *dest, ibc_reg_ref *split_dest)
+fixup_split_write_link(ibc_ref *dest, ibc_ref *split_dest)
 {
    if (dest->file != IBC_REG_FILE_NONE && dest->reg == split_dest->reg) {
       /* For WLR multi-writes, we need to ensure that the write list is
@@ -109,13 +109,13 @@ ibc_lower_simd_width(ibc_shader *shader)
          unsigned num_srcs = ibc_alu_op_infos[alu->op].num_srcs;
          for (unsigned j = 0; j < num_srcs; j++) {
             /* Can't span more than two registers */
-            const unsigned src_stride = reg_ref_stride(&alu->src[j].ref);
+            const unsigned src_stride = ref_stride(&alu->src[j].ref);
             if (src_stride > 0)
                split_simd_width = MIN2(split_simd_width, 64 / src_stride);
          }
 
          /* Can't span more than two registers */
-         const unsigned dest_stride = reg_ref_stride(&alu->dest);
+         const unsigned dest_stride = ref_stride(&alu->dest);
          if (dest_stride > 0)
             split_simd_width = MIN2(split_simd_width, 64 / dest_stride);
          break;
@@ -148,15 +148,15 @@ ibc_lower_simd_width(ibc_shader *shader)
                                  instr->simd_width);
       b.cursor = ibc_after_instr(instr);
 
-      ibc_reg_ref *dest = instr->type == IBC_INSTR_TYPE_ALU ?
-                          &ibc_instr_as_alu(instr)->dest :
-                          &ibc_instr_as_intrinsic(instr)->dest;
+      ibc_ref *dest = instr->type == IBC_INSTR_TYPE_ALU ?
+                      &ibc_instr_as_alu(instr)->dest :
+                      &ibc_instr_as_intrinsic(instr)->dest;
       const unsigned num_dest_comps =
          instr->type == IBC_INSTR_TYPE_ALU ? 1 :
          ibc_instr_as_intrinsic(instr)->num_dest_comps;
 
       /* 4 == 32 (max simd width) / 8 (min simd width) */
-      ibc_reg_ref split_dests[4];
+      ibc_ref split_dests[4];
       assert(num_splits <= ARRAY_SIZE(split_dests));
       if (dest->file == IBC_REG_FILE_NONE) {
          /* If the destination is NONE, just copy it to all the split
@@ -172,7 +172,7 @@ ibc_lower_simd_width(ibc_shader *shader)
           */
          for (unsigned i = 0; i < num_splits; i++) {
             split_dests[i] = *dest;
-            ibc_reg_ref_simd_slice(&split_dests[i], i * split_simd_width);
+            ibc_ref_simd_slice(&split_dests[i], i * split_simd_width);
          }
       } else if (dest->file != IBC_REG_FILE_NONE) {
          /* For everything else, we emit a SIMD zip after the instruction
@@ -191,7 +191,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                                       b.simd_group + i * split_simd_width,
                                       split_simd_width);
 
-            zip->src[i].ref = ibc_ref(split_dest_reg);
+            zip->src[i].ref = ibc_typed_ref(split_dest_reg, IBC_TYPE_INVALID);
             zip->src[i].simd_group = split_dest_reg->logical.simd_group;
             zip->src[i].simd_width = split_dest_reg->logical.simd_width;
             zip->src[i].num_comps = split_dest_reg->logical.num_comps;
@@ -239,7 +239,7 @@ ibc_lower_simd_width(ibc_shader *shader)
             split->instr.predicate = alu->instr.predicate;
             split->instr.pred_inverse = alu->instr.pred_inverse;
             split->instr.flag = alu->instr.flag;
-            ibc_reg_ref_simd_slice(&split->instr.flag, split_simd_rel_group);
+            ibc_ref_simd_slice(&split->instr.flag, split_simd_rel_group);
 
             split->dest = split_dests[i];
             ibc_builder_insert_instr(&b, &split->instr);
@@ -307,7 +307,7 @@ ibc_lower_simd_width(ibc_shader *shader)
             split->instr.predicate = intrin->instr.predicate;
             split->instr.pred_inverse = intrin->instr.pred_inverse;
             split->instr.flag = intrin->instr.flag;
-            ibc_reg_ref_simd_slice(&split->instr.flag, split_simd_rel_group);
+            ibc_ref_simd_slice(&split->instr.flag, split_simd_rel_group);
 
             split->dest = split_dests[i];
             split->num_dest_comps = intrin->num_dest_comps;

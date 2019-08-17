@@ -29,13 +29,13 @@
 struct ibc_vs_payload {
    struct ibc_payload_base base;
 
-   ibc_reg_ref urb_return_handles;
-   ibc_reg_ref inputs[32];
+   ibc_ref urb_return_handles;
+   ibc_ref inputs[32];
 };
 
 struct nir_vs_to_ibc_state {
    struct {
-      ibc_reg_ref outputs[VARYING_SLOT_MAX];
+      ibc_ref outputs[VARYING_SLOT_MAX];
    } out;
 };
 
@@ -79,12 +79,12 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
    struct nir_vs_to_ibc_state *nti_vs = nti->stage_state;
    ibc_builder *b = &nti->b;
 
-   ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
+   ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_input: {
       const unsigned input = nir_intrinsic_base(instr) +
                              nir_src_as_uint(instr->src[0]);
-      ibc_reg_ref srcs[4];
+      ibc_ref srcs[4];
 
       for (unsigned i = 0; i < instr->num_components; i++) {
          srcs[i] = payload->inputs[input];
@@ -96,11 +96,11 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_store_output: {
-      ibc_reg_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
+      ibc_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
       const unsigned varying = nir_intrinsic_base(instr) +
                                nir_src_as_uint(instr->src[1]);
 
-      ibc_reg_ref *output = &nti_vs->out.outputs[varying];
+      ibc_ref *output = &nti_vs->out.outputs[varying];
 
       if (output->file == IBC_REG_FILE_NONE) {
          const unsigned num_comps = (varying == VARYING_SLOT_PSIZ ||
@@ -109,7 +109,7 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
          *output = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, num_comps);
       }
 
-      ibc_reg_ref dest = *output;
+      ibc_ref dest = *output;
       dest.logical.comp += nir_intrinsic_component(instr);
       for (unsigned j = 0; j < instr->num_components; j++) {
          ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, src);
@@ -143,15 +143,15 @@ enum ibc_urb_write_src {
 
 static void
 ibc_emit_urb_write(struct nir_to_ibc_state *nti,
-                   ibc_reg_ref handle,
-                   ibc_reg_ref *sources,
+                   ibc_ref handle,
+                   ibc_ref *sources,
                    unsigned global_offset,
                    unsigned length,
                    bool eot)
 {
    ibc_builder *b = &nti->b;
 
-   ibc_reg_ref data = ibc_VEC(b, sources, length);
+   ibc_ref data = ibc_VEC(b, sources, length);
 
    ibc_intrinsic_src srcs[IBC_URB_WRITE_NUM_SRCS] = {
       [IBC_URB_WRITE_SRC_HANDLE] = { .ref = handle, .num_comps = 1 },
@@ -188,12 +188,12 @@ ibc_emit_urb_writes(struct nir_to_ibc_state *nti)
    const struct brw_vue_map *vue_map = &vue_prog_data->vue_map;
    struct nir_vs_to_ibc_state *nti_vs = nti->stage_state;
    struct ibc_vs_payload *payload = (struct ibc_vs_payload *)nti->payload;
-   ibc_reg_ref *outputs = nti_vs->out.outputs;
+   ibc_ref *outputs = nti_vs->out.outputs;
    ibc_builder *b = &nti->b;
    const uint64_t vue_header_mask =
       VARYING_BIT_LAYER | VARYING_BIT_VIEWPORT | VARYING_BIT_PSIZ;
 
-   ibc_reg_ref handle = payload->urb_return_handles;
+   ibc_ref handle = payload->urb_return_handles;
 
    /* SSO shaders can have VUE slots allocated which are never actually
     * written to, so ignore them when looking for the last (written) slot.
@@ -207,7 +207,7 @@ ibc_emit_urb_writes(struct nir_to_ibc_state *nti)
    unsigned length = 0;
    bool flush = false;
    bool urb_written = false;
-   ibc_reg_ref sources[8];
+   ibc_ref sources[8];
 
    for (int slot = 0; slot < vue_map->num_slots; slot++) {
       int varying = vue_map->slot_to_varying[slot];
@@ -222,7 +222,7 @@ ibc_emit_urb_writes(struct nir_to_ibc_state *nti)
             assert(length == 0);
             urb_offset++;
          } else {
-            ibc_reg_ref zero = ibc_imm_zero(IBC_TYPE_UD);
+            ibc_ref zero = ibc_imm_zero(IBC_TYPE_UD);
 
             sources[length++] = zero;
             sources[length++] = (vue_map->slots_valid & VARYING_BIT_LAYER) ?
@@ -283,12 +283,12 @@ void
 ibc_lower_io_urb_write_to_send(ibc_builder *b, ibc_send_instr *send,
                                const ibc_intrinsic_instr *write)
 {
-   const ibc_reg_ref handle = write->src[IBC_URB_WRITE_SRC_HANDLE].ref;
-   const ibc_reg_ref data = write->src[IBC_URB_WRITE_SRC_DATA].ref;
+   const ibc_ref handle = write->src[IBC_URB_WRITE_SRC_HANDLE].ref;
+   const ibc_ref data = write->src[IBC_URB_WRITE_SRC_DATA].ref;
    assert(data.file == IBC_REG_FILE_LOGICAL);
    const uint32_t global_offset =
-      ibc_reg_ref_as_uint(write->src[IBC_URB_WRITE_SRC_GLOBAL_OFFSET].ref);
-   const bool eot = ibc_reg_ref_as_uint(write->src[IBC_URB_WRITE_SRC_EOT].ref);
+      ibc_ref_as_uint(write->src[IBC_URB_WRITE_SRC_GLOBAL_OFFSET].ref);
+   const bool eot = ibc_ref_as_uint(write->src[IBC_URB_WRITE_SRC_EOT].ref);
    const bool per_slot_offset_present = false;
    const bool channel_mask_present = false;
 

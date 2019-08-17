@@ -85,16 +85,16 @@ ibc_reg_ssa_instr(const ibc_reg *reg)
    if (!list_is_singular(&reg->writes))
       return NULL;
 
-   return LIST_ENTRY(ibc_reg_ref, reg->writes.next, write_link)->write_instr;
+   return LIST_ENTRY(ibc_ref, reg->writes.next, write_link)->write_instr;
 }
 
 static void
-ibc_reg_ref_init(ibc_reg_ref *ref)
+ibc_ref_init(ibc_ref *ref)
 {
 }
 
 static void
-ibc_reg_ref_link_write(ibc_reg_ref *ref, ibc_instr *instr)
+ibc_ref_link_write(ibc_ref *ref, ibc_instr *instr)
 {
    if (ref->file == IBC_REG_FILE_NONE || ref->file == IBC_REG_FILE_IMM)
       return;
@@ -106,7 +106,7 @@ ibc_reg_ref_link_write(ibc_reg_ref *ref, ibc_instr *instr)
 }
 
 static void
-ibc_reg_ref_unlink_write(ibc_reg_ref *ref, ibc_instr *instr)
+ibc_ref_unlink_write(ibc_ref *ref, ibc_instr *instr)
 {
    if (ref->write_instr) {
       assert(ref->write_instr == instr);
@@ -126,11 +126,11 @@ ibc_instr_init(ibc_instr *instr, enum ibc_instr_type type,
    instr->simd_group = simd_group;
    instr->simd_width = simd_width;
 
-   ibc_reg_ref_init(&instr->flag);
+   ibc_ref_init(&instr->flag);
 }
 
 static int8_t
-num_comps_for_reg_count(ibc_reg_ref ref, unsigned reg_count,
+num_comps_for_reg_count(ibc_ref ref, unsigned reg_count,
                         unsigned simd_width)
 {
    if (ref.file != IBC_REG_FILE_LOGICAL)
@@ -148,7 +148,7 @@ num_comps_for_reg_count(ibc_reg_ref ref, unsigned reg_count,
 }
 
 bool
-ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
+ibc_instr_foreach_read(ibc_instr *instr, ibc_ref_cb cb, void *state)
 {
    if (instr->predicate) {
       if (!cb(&instr->flag, -1, 1,
@@ -211,7 +211,7 @@ ibc_instr_foreach_read(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
 }
 
 bool
-ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
+ibc_instr_foreach_write(ibc_instr *instr, ibc_ref_cb cb, void *state)
 {
    switch (instr->type) {
    case IBC_INSTR_TYPE_ALU: {
@@ -256,27 +256,27 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_reg_ref_cb cb, void *state)
 }
 
 static void
-ibc_instr_set_write_ref(ibc_instr *instr, ibc_reg_ref *write_ref,
-                        ibc_reg_ref new_ref)
+ibc_instr_set_write_ref(ibc_instr *instr, ibc_ref *write_ref,
+                        ibc_ref new_ref)
 {
-   ibc_reg_ref_unlink_write(write_ref, instr);
+   ibc_ref_unlink_write(write_ref, instr);
    *write_ref = new_ref;
-   ibc_reg_ref_link_write(write_ref, instr);
+   ibc_ref_link_write(write_ref, instr);
 }
 
 static bool
-refs_not_equal(ibc_reg_ref *ref,
+refs_not_equal(ibc_ref *ref,
                UNUSED int num_bytes,
                UNUSED int num_comps,
                UNUSED uint8_t simd_group,
                UNUSED uint8_t simd_width,
                void *_other_ref)
 {
-   return ref != (ibc_reg_ref *)_other_ref;
+   return ref != (ibc_ref *)_other_ref;
 }
 
 void
-ibc_instr_set_ref(ibc_instr *instr, ibc_reg_ref *ref, ibc_reg_ref new_ref)
+ibc_instr_set_ref(ibc_instr *instr, ibc_ref *ref, ibc_ref new_ref)
 {
    if (instr == NULL || ibc_instr_foreach_write(instr, refs_not_equal, ref)) {
       assert(ref->write_instr == NULL);
@@ -288,7 +288,7 @@ ibc_instr_set_ref(ibc_instr *instr, ibc_reg_ref *ref, ibc_reg_ref new_ref)
 }
 
 void
-ibc_instr_set_predicate(ibc_instr *instr, ibc_reg_ref flag,
+ibc_instr_set_predicate(ibc_instr *instr, ibc_ref flag,
                         enum brw_predicate predicate,
                         bool pred_inverse)
 {
@@ -299,7 +299,7 @@ ibc_instr_set_predicate(ibc_instr *instr, ibc_reg_ref flag,
 }
 
 void
-ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_reg_ref flag,
+ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_ref flag,
                        enum brw_conditional_mod cmod)
 {
    alu->cmod = cmod;
@@ -332,10 +332,10 @@ ibc_alu_instr_create(struct ibc_shader *shader, enum ibc_alu_op op,
 
    alu->op = op;
 
-   ibc_reg_ref_init(&alu->dest);
+   ibc_ref_init(&alu->dest);
 
    for (unsigned i = 0; i < num_srcs; i++)
-      ibc_reg_ref_init(&alu->src[i].ref);
+      ibc_ref_init(&alu->src[i].ref);
 
    return alu;
 }
@@ -349,13 +349,13 @@ ibc_send_instr_create(struct ibc_shader *shader,
 
    ibc_instr_init(&send->instr, IBC_INSTR_TYPE_SEND, simd_group, simd_width);
 
-   ibc_reg_ref_init(&send->desc);
-   ibc_reg_ref_init(&send->ex_desc);
+   ibc_ref_init(&send->desc);
+   ibc_ref_init(&send->ex_desc);
 
-   ibc_reg_ref_init(&send->dest);
+   ibc_ref_init(&send->dest);
 
-   ibc_reg_ref_init(&send->payload[0]);
-   ibc_reg_ref_init(&send->payload[1]);
+   ibc_ref_init(&send->payload[0]);
+   ibc_ref_init(&send->payload[1]);
 
    return send;
 }
@@ -377,13 +377,13 @@ ibc_intrinsic_instr_create(struct ibc_shader *shader,
    intrin->can_reorder = true;
    intrin->has_side_effects = false;
 
-   ibc_reg_ref_init(&intrin->dest);
+   ibc_ref_init(&intrin->dest);
 
    intrin->num_srcs = num_srcs;
    for (unsigned i = 0; i < num_srcs; i++) {
       intrin->src[i].simd_group = simd_group;
       intrin->src[i].simd_width = simd_width;
-      ibc_reg_ref_init(&intrin->src[i].ref);
+      ibc_ref_init(&intrin->src[i].ref);
    }
 
    return intrin;
@@ -431,14 +431,14 @@ ibc_shader_create(void *mem_ctx,
 }
 
 static bool
-link_write_cb(ibc_reg_ref *ref,
+link_write_cb(ibc_ref *ref,
               UNUSED int num_bytes,
               UNUSED int num_comps,
               UNUSED uint8_t simd_group,
               UNUSED uint8_t simd_width,
               void *_instr)
 {
-   ibc_reg_ref_link_write(ref, _instr);
+   ibc_ref_link_write(ref, _instr);
    return true;
 }
 
@@ -450,14 +450,14 @@ ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor)
 }
 
 static bool
-unlink_write_cb(ibc_reg_ref *ref,
+unlink_write_cb(ibc_ref *ref,
                 UNUSED int num_bytes,
                 UNUSED int num_comps,
                 UNUSED uint8_t simd_group,
                 UNUSED uint8_t simd_width,
                 void *_instr)
 {
-   ibc_reg_ref_unlink_write(ref, _instr);
+   ibc_ref_unlink_write(ref, _instr);
    return true;
 }
 

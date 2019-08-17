@@ -40,10 +40,10 @@ struct flag_reg_state {
    uint32_t last_write_ip;
 
    /** Scalar form of the register.  This is a scalar with UW or UD type. */
-   struct ibc_reg_ref scalar;
+   struct ibc_ref scalar;
 
    /** Vector form of the register.  This is a SIMD vector with W type. */
-   struct ibc_reg_ref vector;
+   struct ibc_ref vector;
 };
 
 struct ibc_assign_flags_state {
@@ -59,7 +59,7 @@ struct ibc_assign_flags_state {
 };
 
 static bool
-update_reg_last_write_ip(ibc_reg_ref *ref,
+update_reg_last_write_ip(ibc_ref *ref,
                          UNUSED int num_bytes, UNUSED int num_comps,
                          UNUSED uint8_t simd_group, UNUSED uint8_t simd_width,
                          void *_state)
@@ -134,10 +134,10 @@ logical_reg_has_unique_alu_writes(const ibc_reg *reg,
       BITSET_DECLARE(ref_written, IBC_REG_LIVE_MAX_CHUNKS);
       memset(ref_written, 0, chunks_words * sizeof(BITSET_WORD));
 
-      ibc_live_intervals_reg_ref_chunks(live, ref, -1, 1,
-                                        write_alu->instr.simd_group,
-                                        write_alu->instr.simd_width,
-                                        ref_written);
+      ibc_live_intervals_ref_chunks(live, ref, -1, 1,
+                                    write_alu->instr.simd_group,
+                                    write_alu->instr.simd_width,
+                                    ref_written);
 
       for (unsigned w = 0; w < chunks_words; w++) {
          if (written[w] & ref_written[w])
@@ -217,11 +217,11 @@ evict_flag(uint8_t subnr, struct ibc_assign_flags_state *state)
        !(state->valid[subnr] & FLAG_REP_VECTOR)) {
       assert(flag->file == IBC_REG_FILE_LOGICAL);
 
-      ibc_reg_ref vector = state->regs[flag->index].vector;
+      ibc_ref vector = state->regs[flag->index].vector;
       assert(vector.file == IBC_REG_FILE_LOGICAL);
 
       ibc_builder_push_scalar(b);
-      ibc_reg_ref zero = ibc_MOV(b, IBC_TYPE_W, ibc_imm_w(0));
+      ibc_ref zero = ibc_MOV(b, IBC_TYPE_W, ibc_imm_w(0));
       ibc_builder_pop(b);
 
       ibc_builder_push_group(b, vector.reg->logical.simd_group,
@@ -235,9 +235,9 @@ evict_flag(uint8_t subnr, struct ibc_assign_flags_state *state)
 
    if (state->regs[flag->index].scalar.file != IBC_REG_FILE_NONE &&
        !(state->valid[subnr] & FLAG_REP_SCALAR)) {
-      ibc_reg_ref scalar = state->regs[flag->index].scalar;
+      ibc_ref scalar = state->regs[flag->index].scalar;
       ibc_builder_push_scalar(b);
-      ibc_reg_ref flag_ref = ibc_flag_ref(subnr, 0);
+      ibc_ref flag_ref = ibc_flag_ref(subnr, 0);
       flag_ref.type = scalar.type;
       ibc_MOV_to(b, scalar, flag_ref);
       ibc_builder_pop(b);
@@ -290,9 +290,9 @@ load_flag_if_needed(uint8_t subnr, uint32_t ip,
     * costs less.
     */
    if (state->regs[flag->index].scalar.file != IBC_REG_FILE_NONE) {
-      ibc_reg_ref scalar = state->regs[flag->index].scalar;
+      ibc_ref scalar = state->regs[flag->index].scalar;
       ibc_builder_push_scalar(b);
-      ibc_reg_ref flag_ref = ibc_flag_ref(subnr, 0);
+      ibc_ref flag_ref = ibc_flag_ref(subnr, 0);
       flag_ref.type = scalar.type;
       ibc_MOV_to(b, flag_ref, scalar);
       ibc_builder_pop(b);
@@ -300,7 +300,7 @@ load_flag_if_needed(uint8_t subnr, uint32_t ip,
    }
 
    if (state->regs[flag->index].vector.file != IBC_REG_FILE_NONE) {
-      ibc_reg_ref vector = state->regs[flag->index].vector;
+      ibc_ref vector = state->regs[flag->index].vector;
       assert(vector.file == IBC_REG_FILE_LOGICAL);
 
       ibc_builder_push_group(b, vector.reg->logical.simd_group,
@@ -409,7 +409,7 @@ assigned:
 }
 
 static void
-instr_set_flag_ref(const ibc_instr *instr, ibc_reg_ref *ref, uint8_t subnr,
+instr_set_flag_ref(const ibc_instr *instr, ibc_ref *ref, uint8_t subnr,
                    enum flag_rep preserved,
                    struct ibc_assign_flags_state *state)
 {
@@ -417,7 +417,7 @@ instr_set_flag_ref(const ibc_instr *instr, ibc_reg_ref *ref, uint8_t subnr,
    const ibc_reg *reg = state->assign[subnr];
 
    uint8_t num_subnrs;
-   ibc_reg_ref flag_ref = ibc_flag_ref(subnr, 0);
+   ibc_ref flag_ref = ibc_flag_ref(subnr, 0);
    if (reg->file == IBC_REG_FILE_LOGICAL) {
       assert(ref->type == IBC_TYPE_FLAG);
       assert(reg->logical.bit_size == 1);
@@ -436,7 +436,7 @@ instr_set_flag_ref(const ibc_instr *instr, ibc_reg_ref *ref, uint8_t subnr,
 }
 
 static bool
-rewrite_flag_refs(ibc_reg_ref *ref,
+rewrite_flag_refs(ibc_ref *ref,
                   UNUSED int num_bytes,
                   UNUSED int num_comps,
                   UNUSED uint8_t simd_group,
@@ -447,7 +447,7 @@ rewrite_flag_refs(ibc_reg_ref *ref,
 
    if (ref->file == IBC_REG_FILE_LOGICAL && ref->type == IBC_TYPE_FLAG) {
       assert(ref->reg->index < state->live->num_regs);
-      ibc_reg_ref vector = state->regs[ref->reg->index].vector;
+      ibc_ref vector = state->regs[ref->reg->index].vector;
       vector.logical = ref->logical;
       ibc_instr_set_ref(ref->write_instr, ref, vector);
    } else if (ref->file == IBC_REG_FILE_FLAG && ref->reg) {
@@ -478,7 +478,7 @@ rewrite_flag_refs(ibc_reg_ref *ref,
             /* If we're a read and it's not currently in a flag, pull from the
              * scalar GRF.  We should have one.
              */
-            ibc_reg_ref scalar = state->regs[ref->reg->index].scalar;
+            ibc_ref scalar = state->regs[ref->reg->index].scalar;
             assert(scalar.file != IBC_REG_FILE_NONE);
             scalar.type = ref->type;
             *ref = scalar;
@@ -584,7 +584,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
             /* If the vector version matches, we can write to it directly and
              * avoid getting it out-of-sync.
              */
-            ibc_reg_ref vector = state.regs[logical->index].vector;
+            ibc_ref vector = state.regs[logical->index].vector;
             if (vector.file == IBC_REG_FILE_LOGICAL &&
                 vector.reg->logical.bit_size == cmp_bit_size(alu)) {
                vector.type = ibc_type_base_type(alu->src[0].ref.type) |
