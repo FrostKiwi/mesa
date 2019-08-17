@@ -803,22 +803,23 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
             const uint64_t block_offset_B =
                comp_offset_B - comp_offset_in_block_B;
 
-            ibc_intrinsic_instr *load =
-               ibc_intrinsic_instr_create(b->shader,
-                                          IBC_INTRINSIC_OP_BTI_CONST_BLOCK_READ,
-                                          b->simd_group, b->simd_width, 2);
-            load->instr.we_all = true;
-            load->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[0]));
-            load->src[0].num_comps = 1;
-            load->src[1].ref = ibc_imm_ud(block_offset_B);
-            load->src[1].num_comps = 1;
+            ibc_intrinsic_src srcs[2] = {
+               {
+                  .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
+                  .num_comps = 1,
+               },
+               {
+                  .ref = ibc_imm_ud(block_offset_B),
+                  .num_comps = 1,
+               },
+            };
 
             ibc_reg *data_reg =
                ibc_hw_grf_reg_create(b->shader, REG_SIZE * 2, REG_SIZE);
-            load->dest = ibc_typed_ref(data_reg, IBC_TYPE_32_BIT);
-            load->num_dest_comps = block_size_B / 4;
 
-            ibc_builder_insert_instr(b, &load->instr);
+            ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_CONST_BLOCK_READ,
+                                ibc_typed_ref(data_reg, IBC_TYPE_32_BIT),
+                                block_size_B / 4, srcs, 2);
 
             dest_comps[c] = ibc_typed_ref(data_reg, instr->dest.ssa.bit_size);
             dest_comps[c].hw_grf.byte = comp_offset_in_block_B;
@@ -834,40 +835,47 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
 
    case nir_intrinsic_load_ssbo: {
-      ibc_intrinsic_instr *load =
-         ibc_intrinsic_instr_create(b->shader,
-                                    IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
-                                    b->simd_group, b->simd_width, 2);
-      load->can_reorder = false;
-      load->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[0]));
-      load->src[0].num_comps = 1;
-      load->src[1].ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD);
-      load->src[1].num_comps = 1;
+      ibc_intrinsic_src srcs[2] = {
+         {
+            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
+            .num_comps = 1,
+         },
+         {
+            .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+            .num_comps = 1,
+         },
+      };
 
       dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD,
                                          instr->num_components);
-      load->dest = dest;
-      load->num_dest_comps = instr->num_components;
-
-      ibc_builder_insert_instr(b, &load->instr);
+      ibc_intrinsic_instr *load =
+         ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
+                             dest, instr->num_components, srcs, 2);
+      load->can_reorder = false;
       break;
    }
 
    case nir_intrinsic_store_ssbo: {
+      ibc_intrinsic_src srcs[3] = {
+         {
+            .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+            .num_comps = 1,
+         },
+         {
+            .ref = ibc_nir_src(nti, instr->src[2], IBC_TYPE_UD),
+            .num_comps = 1,
+         },
+         {
+            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
+            .num_comps = instr->num_components,
+         },
+      };
+
       ibc_intrinsic_instr *store =
-         ibc_intrinsic_instr_create(b->shader,
-                                    IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
-                                    b->simd_group, b->simd_width, 3);
+         ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
+                             ibc_null(IBC_TYPE_UD), 0, srcs, 3);
       store->can_reorder = false;
       store->has_side_effects = true;
-      store->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[1]));
-      store->src[0].num_comps = 1;
-      store->src[1].ref = ibc_nir_src(nti, instr->src[2], IBC_TYPE_UD);
-      store->src[1].num_comps = 1;
-      store->src[2].ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
-      store->src[2].num_comps = instr->num_components;
-
-      ibc_builder_insert_instr(b, &store->instr);
       break;
    }
 
