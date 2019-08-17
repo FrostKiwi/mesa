@@ -326,8 +326,8 @@ hash_wlr_reg_cb(const void *_reg)
       break;
    }
 
-   ibc_reg_foreach_write(ref, reg) {
-      const ibc_instr *instr = ref->write_instr;
+   ibc_reg_foreach_write(write, reg) {
+      const ibc_instr *instr = write->instr;
       switch (instr->type) {
       case IBC_INSTR_TYPE_ALU:
          hash = hash_alu_instr(hash, ibc_instr_as_alu(instr), reg);
@@ -382,10 +382,10 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
       break;
    }
 
-   list_pair_for_each_entry(const ibc_ref, ref_a, ref_b,
-                            &reg_a->writes, &reg_b->writes, write_link) {
-      const ibc_instr *instr_a = ref_a->write_instr;
-      const ibc_instr *instr_b = ref_b->write_instr;
+   list_pair_for_each_entry(const ibc_reg_write, write_a, write_b,
+                            &reg_a->writes, &reg_b->writes, link) {
+      const ibc_instr *instr_a = write_a->instr;
+      const ibc_instr *instr_b = write_b->instr;
       if (instr_a->type != instr_b->type)
          return false;
 
@@ -445,10 +445,7 @@ rewrite_read(struct ibc_ref *ref,
 }
 
 static bool
-try_cse_write(struct ibc_ref *ref,
-              UNUSED int num_bytes, UNUSED int num_comps,
-              UNUSED uint8_t simd_group, UNUSED uint8_t simd_width,
-              void *_state)
+try_cse_write(ibc_reg_write *write, ibc_ref *ref, void *_state)
 {
    struct opt_cse_state *state = _state;
 
@@ -460,7 +457,7 @@ try_cse_write(struct ibc_ref *ref,
       return true;
 
    /* Only bother on the last write instruction */
-   if (ref->write_link.next != &ref->reg->writes)
+   if (write->link.next != &ref->reg->writes)
       return true;
 
    if (_mesa_hash_table_search(state->reg_remap, ref->reg))
@@ -484,7 +481,7 @@ ibc_opt_cse(ibc_shader *shader)
 
    ibc_foreach_instr_safe(instr, shader) {
       ibc_instr_foreach_read(instr, rewrite_read, &state);
-      ibc_instr_foreach_write(instr, try_cse_write, &state);
+      ibc_instr_foreach_reg_write(instr, try_cse_write, &state);
 
       /* When we cross block boundaries, reset the reg set.  This prevents us
        * from CSEing two regs in different blocks.  We leave the remap set

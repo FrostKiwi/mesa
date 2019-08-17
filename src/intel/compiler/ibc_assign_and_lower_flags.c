@@ -59,17 +59,14 @@ struct ibc_assign_flags_state {
 };
 
 static bool
-update_reg_last_write_ip(ibc_ref *ref,
-                         UNUSED int num_bytes, UNUSED int num_comps,
-                         UNUSED uint8_t simd_group, UNUSED uint8_t simd_width,
-                         void *_state)
+update_reg_last_write_ip(ibc_reg_write *write, ibc_ref *ref, void *_state)
 {
    struct ibc_assign_flags_state *state = _state;
    if (ref->reg == NULL || ref->reg->index >= state->live->num_regs)
       return true;
 
-   if (state->regs[ref->reg->index].last_write_ip < ref->write_instr->index)
-      state->regs[ref->reg->index].last_write_ip = ref->write_instr->index;
+   if (state->regs[ref->reg->index].last_write_ip < write->instr->index)
+      state->regs[ref->reg->index].last_write_ip = write->instr->index;
 
    return true;
 }
@@ -90,11 +87,11 @@ logical_flag_reg_bit_size(const ibc_reg *reg)
    assert(reg->is_wlr);
 
    int8_t bit_size = -1;
-   ibc_reg_foreach_write(ref, reg) {
-      if (ref->write_instr->type != IBC_INSTR_TYPE_ALU)
+   ibc_reg_foreach_write(write, reg) {
+      if (write->instr->type != IBC_INSTR_TYPE_ALU)
          return -1;
 
-      ibc_alu_instr *cmp = ibc_instr_as_alu(ref->write_instr);
+      ibc_alu_instr *cmp = ibc_instr_as_alu(write->instr);
       if (cmp->op != IBC_ALU_OP_CMP)
          return -1;
 
@@ -125,16 +122,16 @@ logical_reg_has_unique_alu_writes(const ibc_reg *reg,
    const unsigned chunks_words = BITSET_WORDS(rli->num_chunks);
    memset(written, 0, chunks_words * sizeof(BITSET_WORD));
 
-   ibc_reg_foreach_write(ref, reg) {
-      if (ref->write_instr->type != IBC_INSTR_TYPE_ALU)
+   ibc_reg_foreach_write(write, reg) {
+      if (write->instr->type != IBC_INSTR_TYPE_ALU)
          return false;
 
-      ibc_alu_instr *write_alu = ibc_instr_as_alu(ref->write_instr);
+      ibc_alu_instr *write_alu = ibc_instr_as_alu(write->instr);
 
       BITSET_DECLARE(ref_written, IBC_REG_LIVE_MAX_CHUNKS);
       memset(ref_written, 0, chunks_words * sizeof(BITSET_WORD));
 
-      ibc_live_intervals_ref_chunks(live, ref, -1, 1,
+      ibc_live_intervals_ref_chunks(live, ibc_reg_write_get_ref(write), -1, 1,
                                     write_alu->instr.simd_group,
                                     write_alu->instr.simd_width,
                                     ref_written);
@@ -173,8 +170,8 @@ free_dead_flags(uint32_t ip, struct ibc_assign_flags_state *state)
           * significantly shorten its live range.
           */
          end = 0;
-         ibc_reg_foreach_write(ref, reg)
-            end = MAX2(end, ref->write_instr->index);
+         ibc_reg_foreach_write(write, reg)
+            end = MAX2(end, write->instr->index);
       }
 
       if (end <= ip)
@@ -409,7 +406,7 @@ assigned:
 }
 
 static void
-instr_set_flag_ref(const ibc_instr *instr, ibc_ref *ref, uint8_t subnr,
+instr_set_flag_ref(ibc_instr *instr, ibc_ref *ref, uint8_t subnr,
                    enum flag_rep preserved,
                    struct ibc_assign_flags_state *state)
 {
@@ -429,34 +426,28 @@ instr_set_flag_ref(const ibc_instr *instr, ibc_ref *ref, uint8_t subnr,
       num_subnrs = DIV_ROUND_UP(reg->flag.bits, 16);
    }
 
-   ibc_instr_set_ref(ref->write_instr, ref, flag_ref);
+   ibc_instr_set_ref(instr, ref, flag_ref);
 
    for (unsigned i = 0; i < num_subnrs; i++)
       state->valid[subnr] &= preserved;
 }
 
-static bool
-rewrite_flag_refs(ibc_ref *ref,
-                  UNUSED int num_bytes,
-                  UNUSED int num_comps,
-                  UNUSED uint8_t simd_group,
-                  UNUSED uint8_t simd_width,
-                  void *_state)
+static void
+rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
+                 struct ibc_assign_flags_state *state)
 {
-   struct ibc_assign_flags_state *state = _state;
-
    if (ref->file == IBC_REG_FILE_LOGICAL && ref->type == IBC_TYPE_FLAG) {
       assert(ref->reg->index < state->live->num_regs);
       ibc_ref vector = state->regs[ref->reg->index].vector;
       vector.logical = ref->logical;
-      ibc_instr_set_ref(ref->write_instr, ref, vector);
+      ibc_instr_set_ref(write_instr, ref, vector);
    } else if (ref->file == IBC_REG_FILE_FLAG && ref->reg) {
       /* We should only get here for regular sources and destinations that
        * access flags.
        */
       assert(ref->type == IBC_TYPE_W || ref->type == IBC_TYPE_UW ||
              ref->type == IBC_TYPE_D || ref->type == IBC_TYPE_UD);
-      if (ref->write_instr) {
+      if (write_instr) {
          /* We assume that if someone is writing to a flag directly, they
           * probably intend to immediately follow that by another instruction
           * which accesses the flag so go ahead and allocate a flag reg for
@@ -464,11 +455,11 @@ rewrite_flag_refs(ibc_ref *ref,
           */
          assert(ibc_type_bit_size(ref->type) == ref->reg->flag.bits);
          int8_t subnr = find_or_assign_flag((ibc_reg *)ref->reg,
-                                            ref->write_instr->index,
+                                            write_instr->index,
                                             false, /* load_from_grf */
                                             true, /* opportunistic */
                                             state);
-         instr_set_flag_ref(ref->write_instr, ref, subnr,
+         instr_set_flag_ref(write_instr, ref, subnr,
                             FLAG_REP_FLAG, state);
       } else {
          int8_t subnr = find_flag(ref->reg, state);
@@ -485,7 +476,24 @@ rewrite_flag_refs(ibc_ref *ref,
          }
       }
    }
+}
 
+static bool
+rewrite_flag_read_cb(ibc_ref *ref,
+                     UNUSED int num_bytes,
+                     UNUSED int num_comps,
+                     UNUSED uint8_t simd_group,
+                     UNUSED uint8_t simd_width,
+                     void *_state)
+{
+   rewrite_flag_ref(ref, NULL, _state);
+   return true;
+}
+
+static bool
+rewrite_flag_write_cb(ibc_reg_write *write, ibc_ref *ref, void *_state)
+{
+   rewrite_flag_ref(ref, write->instr, _state);
    return true;
 }
 
@@ -520,7 +528,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
          assert(instr->flag.reg->index < state.live->num_regs);
          state.regs[instr->flag.reg->index].read_as_flag = true;
       }
-      ibc_instr_foreach_write(instr, update_reg_last_write_ip, &state);
+      ibc_instr_foreach_reg_write(instr, update_reg_last_write_ip, &state);
    }
 
    ibc_foreach_reg(reg, shader) {
@@ -628,8 +636,8 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
          instr_set_flag_ref(instr, &instr->flag, subnr, preserved, &state);
       }
 
-      ibc_instr_foreach_read(instr, rewrite_flag_refs, &state);
-      ibc_instr_foreach_write(instr, rewrite_flag_refs, &state);
+      ibc_instr_foreach_read(instr, rewrite_flag_read_cb, &state);
+      ibc_instr_foreach_reg_write(instr, rewrite_flag_write_cb, &state);
 
       /* When we cross block boundaries, reset the allocator */
       if (instr->type == IBC_INSTR_TYPE_FLOW)

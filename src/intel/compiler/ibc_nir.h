@@ -177,10 +177,11 @@ ibc_write_nir_reg(struct nir_to_ibc_state *nti,
     * instruction we're emitting.  This is a safe assumption in ibc_to_nir.
     */
    ibc_reg_foreach_write_safe(write, src.reg) {
-      assert(write->write_instr != NULL);
-      ibc_ref new_write = *write;
-      new_write.reg = dest_reg;
-      ibc_instr_set_ref(write->write_instr, write, new_write);
+      assert(write->instr != NULL);
+      ibc_ref *write_ref = ibc_reg_write_get_ref(write);
+      ibc_ref new_ref = *write_ref;
+      new_ref.reg = dest_reg;
+      ibc_instr_set_ref(write->instr, write_ref, new_ref);
    }
 
    /* Delete the register so it doesn't clutter things */
