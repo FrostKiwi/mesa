@@ -332,6 +332,14 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       gen6_math(p, dest, BRW_MATH_FUNCTION_POW, src[0], src[1]);
       break;
 
+   case IBC_ALU_OP_IDIV:
+      gen6_math(p, dest, BRW_MATH_FUNCTION_INT_DIV_QUOTIENT, src[0], src[1]);
+      break;
+
+   case IBC_ALU_OP_IREM:
+      gen6_math(p, dest, BRW_MATH_FUNCTION_INT_DIV_REMAINDER, src[0], src[1]);
+      break;
+
    default:
       unreachable("Invalid instruction");
    }
