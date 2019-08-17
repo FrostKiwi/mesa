@@ -262,10 +262,10 @@ ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
 ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader, uint8_t bits);
 
 #define ibc_reg_foreach_write(ref, reg) \
-   list_for_each_entry(ibc_ref, ref, &(reg)->writes, write_link)
+   list_for_each_entry(ibc_reg_write, ref, &(reg)->writes, link)
 
 #define ibc_reg_foreach_write_safe(ref, reg) \
-   list_for_each_entry_safe(ibc_ref, ref, &(reg)->writes, write_link)
+   list_for_each_entry_safe(ibc_reg_write, ref, &(reg)->writes, link)
 
 struct ibc_instr *ibc_reg_ssa_instr(const ibc_reg *reg);
 
@@ -403,15 +403,6 @@ typedef struct ibc_ref {
       struct ibc_ref_flag flag;
    };
 
-   /** Link in the ibc_reg::writes list
-    *
-    * This link will be valid if and only if write_instr != NULL
-    */
-   struct list_head write_link;
-
-   /** A pointer to the instruction if this is a write */
-   struct ibc_instr *write_instr;
-
    /** Pointer to the register; NULL if immediate */
    union {
       const ibc_reg *reg;
@@ -507,6 +498,20 @@ ibc_ref_simd_slice(ibc_ref *ref, uint8_t rel_simd_group)
 }
 
 
+typedef struct ibc_reg_write {
+   /** Link in ibc_reg::writes
+    *
+    * This link will be valid if and only if instr != NULL
+    */
+   struct list_head link;
+
+   /** Instruction performing the write */
+   struct ibc_instr *instr;
+} ibc_reg_write;
+
+ibc_ref *ibc_reg_write_get_ref(ibc_reg_write *write);
+
+
 enum ibc_instr_type {
    IBC_INSTR_TYPE_ALU,
    IBC_INSTR_TYPE_SEND,
@@ -547,6 +552,11 @@ typedef bool (*ibc_ref_cb)(ibc_ref *ref,
                            void *state);
 bool ibc_instr_foreach_read(ibc_instr *instr, ibc_ref_cb cb, void *state);
 bool ibc_instr_foreach_write(ibc_instr *instr, ibc_ref_cb cb, void *state);
+
+typedef bool (*ibc_reg_write_cb)(ibc_reg_write *write,
+                                 ibc_ref *ref, void *state);
+bool ibc_instr_foreach_reg_write(ibc_instr *instr,
+                                 ibc_reg_write_cb cb, void *state);
 
 void ibc_instr_set_ref(ibc_instr *instr, ibc_ref *ref,
                        ibc_ref new_ref);
@@ -597,10 +607,12 @@ typedef struct ibc_alu_instr {
    enum ibc_alu_op op;
 
    enum brw_conditional_mod cmod;
+   ibc_reg_write cmod_write;
 
    bool saturate;
 
    ibc_ref dest;
+   ibc_reg_write dest_write;
 
    ibc_alu_src src[0];
 } ibc_alu_instr;
@@ -634,6 +646,7 @@ typedef struct ibc_send_instr {
    ibc_ref ex_desc;
 
    ibc_ref dest;
+   ibc_reg_write dest_write;
 
    ibc_ref payload[2];
 } ibc_send_instr;
@@ -717,6 +730,7 @@ typedef struct {
    bool has_side_effects;
 
    ibc_ref dest;
+   ibc_reg_write dest_write;
    unsigned num_dest_comps;
 
    unsigned num_srcs;
