@@ -41,7 +41,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 {
    ibc_builder *b = &nti->b;
 
-   ibc_reg_ref src[4];
+   ibc_ref src[4];
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
       /* TODO */
       assert(!instr->src[i].abs);
@@ -61,7 +61,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       nir_dest_type |= nir_dest_bit_size(instr->dest.dest);
    enum ibc_type dest_type = ibc_type_for_nir(nir_dest_type);
 
-   ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
+   ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
 
    switch (instr->op) {
    case nir_op_vec2:
@@ -115,7 +115,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
 
    case nir_op_b2f32: {
-      ibc_reg_ref one = ibc_MOV(b, IBC_TYPE_F, ibc_imm_f(1.0));
+      ibc_ref one = ibc_MOV(b, IBC_TYPE_F, ibc_imm_f(1.0));
       dest = ibc_SEL(b, dest_type, src[0], one, ibc_imm_f(0.0));
       break;
    }
@@ -280,16 +280,16 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
        * Predicated OR ORs 1.0 (0x3f800000) with the sign bit if val is not
        * zero.
        */
-      ibc_reg_ref is_not_zero = ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_NZ,
-                                        src[0], ibc_imm_zero(src[0].type));
+      ibc_ref is_not_zero = ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_NZ,
+                                    src[0], ibc_imm_zero(src[0].type));
 
-      ibc_reg_ref uint_src = src[0];
+      ibc_ref uint_src = src[0];
       uint_src.type = IBC_TYPE_UINT | ibc_type_bit_size(src[0].type);
 
       /* TODO */
       assert(ibc_type_bit_size(src[0].type) == 32);
-      ibc_reg_ref high_bit = ibc_imm_ud(0x80000000u);
-      ibc_reg_ref one_f = ibc_imm_ud(0x3f800000u);
+      ibc_ref high_bit = ibc_imm_ud(0x80000000u);
+      ibc_ref one_f = ibc_imm_ud(0x3f800000u);
 
       dest = ibc_AND(b, uint_src.type, uint_src, high_bit);
       ibc_alu_instr *or = ibc_build_alu2(b, IBC_ALU_OP_OR, dest, dest, one_f);
@@ -305,7 +305,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    ibc_write_nir_dest(nti, &instr->dest.dest, dest);
 }
 
-static ibc_reg_ref
+static ibc_ref
 nti_initialize_flag(ibc_builder *b, int32_t flag_val)
 {
    assert(b->simd_group == 0);
@@ -321,7 +321,7 @@ nti_initialize_flag(ibc_builder *b, int32_t flag_val)
    }
    ibc_builder_pop(b);
 
-   return ibc_ref(flag_reg);
+   return ibc_typed_ref(flag_reg, IBC_TYPE_FLAG);
 }
 
 static enum brw_predicate
@@ -352,7 +352,7 @@ brw_predicate_all(unsigned cluster_size)
    }
 }
 
-static ibc_reg_ref
+static ibc_ref
 nti_reduction_op_identity(nir_op op, enum ibc_type type)
 {
    const unsigned bit_size = ibc_type_bit_size(type);
@@ -602,7 +602,7 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
 
    const enum ibc_type dest_type = ibc_type_for_nir(ntex->dest_type) |
                                    nir_dest_bit_size(ntex->dest);
-   ibc_reg_ref dest =
+   ibc_ref dest =
       ibc_build_ssa_intrinsic(b, op, dest_type, num_dest_comps,
                               srcs, IBC_TEX_NUM_SRCS);
 
@@ -637,20 +637,20 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
    ibc_builder *b = &nti->b;
 
-   ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
+   ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_invocation: {
       ibc_reg *w_tmp_reg =
          ibc_hw_grf_reg_create(b->shader, b->simd_width * 2,
                                MIN2(b->simd_width * 2, 32));
-      ibc_reg_ref w_tmp = ibc_typed_ref(w_tmp_reg, IBC_TYPE_UW);
+      ibc_ref w_tmp = ibc_typed_ref(w_tmp_reg, IBC_TYPE_UW);
 
       ibc_builder_push_we_all(b, 8);
       ibc_build_alu1(b, IBC_ALU_OP_MOV, w_tmp, ibc_imm_v(0x76543210));
       ibc_builder_pop(b);
 
       if (b->simd_width > 8) {
-         ibc_reg_ref w_tmp_8 = w_tmp;
+         ibc_ref w_tmp_8 = w_tmp;
          ibc_hw_grf_simd_slice(&w_tmp_8.hw_grf, 8);
          ibc_builder_push_we_all(b, 8);
          ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_8, w_tmp, ibc_imm_uw(8));
@@ -658,7 +658,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       }
 
       if (b->simd_width > 16) {
-         ibc_reg_ref w_tmp_16 = w_tmp;
+         ibc_ref w_tmp_16 = w_tmp;
          ibc_hw_grf_simd_slice(&w_tmp_16.hw_grf, 16);
          ibc_builder_push_we_all(b, 16);
          ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_16, w_tmp, ibc_imm_uw(16));
@@ -670,7 +670,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_vote_any: {
-      ibc_reg_ref flag = nti_initialize_flag(b, 0);
+      ibc_ref flag = nti_initialize_flag(b, 0);
       ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ,
                       ibc_nir_src(nti, instr->src[0], IBC_TYPE_FLAG));
 
@@ -681,7 +681,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
        * of 1-wide MOVs and scattering the result.
        */
       ibc_builder_push_scalar(b);
-      ibc_reg_ref tmp = ibc_MOV_from_flag(b, IBC_TYPE_W,
+      ibc_ref tmp = ibc_MOV_from_flag(b, IBC_TYPE_W,
          brw_predicate_any(b->shader->simd_width), false, flag);
       ibc_builder_pop(b);
 
@@ -692,7 +692,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_vote_all: {
-      ibc_reg_ref flag = nti_initialize_flag(b, -1);
+      ibc_ref flag = nti_initialize_flag(b, -1);
       ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ,
                       ibc_nir_src(nti, instr->src[0], IBC_TYPE_FLAG));
 
@@ -703,7 +703,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
        * of 1-wide MOVs and scattering the result.
        */
       ibc_builder_push_scalar(b);
-      ibc_reg_ref tmp = ibc_MOV_from_flag(b, IBC_TYPE_W,
+      ibc_ref tmp = ibc_MOV_from_flag(b, IBC_TYPE_W,
          brw_predicate_all(b->shader->simd_width), false, flag);
       ibc_builder_pop(b);
 
@@ -714,7 +714,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_ballot: {
-      ibc_reg_ref flag = nti_initialize_flag(b, 0);
+      ibc_ref flag = nti_initialize_flag(b, 0);
       ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ, ibc_imm_w(-1));
       flag.type = flag.reg->flag.bits <= 16 ? IBC_TYPE_UW : IBC_TYPE_UD;
       dest = ibc_MOV(b, IBC_TYPE_UD, flag);
@@ -722,7 +722,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_read_invocation: {
-      ibc_reg_ref value = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
+      ibc_ref value = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
       value.logical.broadcast = true;
       value.logical.simd_channel = nir_src_as_uint(instr->src[1]);
       ibc_builder_push_we_all(b, 1);
@@ -734,7 +734,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_reduce:
    case nir_intrinsic_inclusive_scan: {
       nir_op redop = nir_intrinsic_reduction_op(instr);
-      ibc_reg_ref src =
+      ibc_ref src =
          ibc_nir_src(nti, instr->src[0],
                      ibc_type_for_nir(nir_op_infos[redop].input_types[0]));
 
@@ -756,7 +756,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       unsigned tmp_align = MIN2(tmp_size, 32);
       ibc_reg *tmp_reg =
          ibc_hw_grf_reg_create(b->shader, tmp_size, tmp_align);
-      ibc_reg_ref tmp = ibc_typed_ref(tmp_reg, scan_type);
+      ibc_ref tmp = ibc_typed_ref(tmp_reg, scan_type);
 
       ibc_builder_push_we_all(b, b->simd_width);
       ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp,
@@ -774,7 +774,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          /* Only take the bottom bits of the scan result in case it was a B
           * type which we upgraded to W.
           */
-         ibc_reg_ref mov_src = tmp;
+         ibc_ref mov_src = tmp;
          mov_src.type = src.type;
          dest = ibc_MOV(b, src.type, mov_src);
       }
@@ -793,7 +793,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
           */
          ibc_builder_push_scalar(b);
 
-         ibc_reg_ref dest_comps[4];
+         ibc_ref dest_comps[4];
          for (unsigned c = 0; c < instr->num_components; c++) {
             const uint64_t comp_offset_B = offset_B + c * comp_size_B;
             const unsigned comp_offset_in_block_B =
@@ -896,10 +896,10 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
    enum ibc_type type = instr->def.bit_size >= 8 ?
       (IBC_TYPE_UINT | instr->def.bit_size) : IBC_TYPE_FLAG;
 
-   ibc_reg_ref imm_srcs[4];
+   ibc_ref imm_srcs[4];
 
    for (unsigned i = 0; i < instr->def.num_components; i++) {
-      imm_srcs[i] = (ibc_reg_ref) {
+      imm_srcs[i] = (ibc_ref) {
          .file = IBC_REG_FILE_IMM,
          .type = type,
       };
@@ -931,7 +931,7 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
    }
 
    ibc_builder_push_scalar(b);
-   ibc_reg_ref dest = ibc_VEC(b, imm_srcs, instr->def.num_components);
+   ibc_ref dest = ibc_VEC(b, imm_srcs, instr->def.num_components);
    ibc_builder_pop(b);
 
    ibc_write_nir_ssa_def(nti, &instr->def, dest);
@@ -1012,7 +1012,7 @@ nti_emit_if(struct nir_to_ibc_state *nti, nir_if *nif)
 {
    ibc_builder *b = &nti->b;
 
-   ibc_reg_ref cond = ibc_nir_src(nti, nif->condition, IBC_TYPE_FLAG);
+   ibc_ref cond = ibc_nir_src(nti, nif->condition, IBC_TYPE_FLAG);
    ibc_flow_instr *_if = ibc_IF(b, cond, BRW_PREDICATE_NORMAL, false);
 
    nti_emit_cf_list(nti, &nif->then_list);

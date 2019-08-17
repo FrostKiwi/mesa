@@ -95,7 +95,7 @@ ibc_type_for_nir(nir_alu_type ntype)
    return stype | nir_alu_type_get_type_size(ntype);
 }
 
-static inline ibc_reg_ref
+static inline ibc_ref
 ibc_nir_src(struct nir_to_ibc_state *nti, nir_src src, enum ibc_type type)
 {
    if (ibc_type_bit_size(type) == 0)
@@ -115,7 +115,7 @@ ibc_nir_src(struct nir_to_ibc_state *nti, nir_src src, enum ibc_type type)
 static inline void
 ibc_write_nir_ssa_def(struct nir_to_ibc_state *nti,
                       const nir_ssa_def *ndef,
-                      ibc_reg_ref src)
+                      ibc_ref src)
 {
    assert(src.file == IBC_REG_FILE_LOGICAL);
    assert(src.reg->is_wlr);
@@ -145,7 +145,7 @@ ibc_write_nir_ssa_def(struct nir_to_ibc_state *nti,
 static inline void
 ibc_write_nir_reg(struct nir_to_ibc_state *nti,
                   const nir_register *nreg,
-                  ibc_reg_ref src)
+                  ibc_ref src)
 {
    assert(src.file == IBC_REG_FILE_LOGICAL);
    assert(src.reg->is_wlr);
@@ -178,7 +178,7 @@ ibc_write_nir_reg(struct nir_to_ibc_state *nti,
     */
    ibc_reg_foreach_write_safe(write, src.reg) {
       assert(write->write_instr != NULL);
-      ibc_reg_ref new_write = *write;
+      ibc_ref new_write = *write;
       new_write.reg = dest_reg;
       ibc_instr_set_ref(write->write_instr, write, new_write);
    }
@@ -190,7 +190,7 @@ ibc_write_nir_reg(struct nir_to_ibc_state *nti,
 
 static inline void
 ibc_write_nir_dest(struct nir_to_ibc_state *nti, const nir_dest *ndest,
-                   ibc_reg_ref ref)
+                   ibc_ref ref)
 {
    if (ndest->is_ssa) {
       ibc_write_nir_ssa_def(nti, &ndest->ssa, ref);
@@ -202,20 +202,20 @@ ibc_write_nir_dest(struct nir_to_ibc_state *nti, const nir_dest *ndest,
 }
 
 static inline void
-ibc_load_payload(ibc_builder *b, ibc_reg_ref dest,
-                 ibc_reg_ref src, unsigned num_comps)
+ibc_load_payload(ibc_builder *b, ibc_ref dest,
+                 ibc_ref src, unsigned num_comps)
 {
    ibc_build_intrinsic(b, IBC_INTRINSIC_OP_LOAD_PAYLOAD,
                        dest, num_comps,
                        &(ibc_intrinsic_src) { .ref = src }, 1);
 }
 
-static inline ibc_reg_ref
+static inline ibc_ref
 ibc_load_payload_reg(ibc_builder *b, unsigned *reg)
 {
    ibc_reg *dest_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
    dest_reg->is_wlr = true;
-   ibc_reg_ref dest = ibc_typed_ref(dest_reg, IBC_TYPE_UD);
+   ibc_ref dest = ibc_typed_ref(dest_reg, IBC_TYPE_UD);
    ibc_builder_push_we_all(b, 8);
    ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, IBC_TYPE_UD), 1);
    ibc_builder_pop(b);
@@ -223,12 +223,12 @@ ibc_load_payload_reg(ibc_builder *b, unsigned *reg)
    return dest;
 }
 
-static inline ibc_reg_ref
+static inline ibc_ref
 ibc_load_payload_logical(ibc_builder *b, unsigned *reg, enum ibc_type type,
                          unsigned num_comps)
 {
    assert(ibc_type_bit_size(type) == 32);
-   ibc_reg_ref dest = ibc_builder_new_logical_reg(b, type, num_comps);
+   ibc_ref dest = ibc_builder_new_logical_reg(b, type, num_comps);
    ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, type), num_comps);
    *reg += (b->simd_width * ibc_type_byte_size(type) * num_comps) / REG_SIZE;
    return dest;

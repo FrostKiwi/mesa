@@ -49,7 +49,7 @@ struct split_regs_state {
 };
 
 static bool
-mark_splits(ibc_reg_ref *ref,
+mark_splits(ibc_ref *ref,
             UNUSED int num_bytes,
             int num_comps,
             uint8_t simd_group,
@@ -83,7 +83,7 @@ mark_splits(ibc_reg_ref *ref,
 }
 
 static bool
-rewrite_ref_if_split(ibc_reg_ref *ref,
+rewrite_ref_if_split(ibc_ref *ref,
                      UNUSED int num_bytes,
                      int num_comps,
                      uint8_t simd_group,
@@ -116,7 +116,7 @@ rewrite_ref_if_split(ibc_reg_ref *ref,
           reg_start_comp <= ref->logical.comp &&
           ref->logical.comp + num_comps <= reg_start_comp +
                                            reg->logical.num_comps) {
-         ibc_reg_ref new_ref = *ref;
+         ibc_ref new_ref = *ref;
          new_ref.reg = reg;
          new_ref.logical.comp -= reg_start_comp;
          ibc_instr_set_ref(state->instr, ref, new_ref);

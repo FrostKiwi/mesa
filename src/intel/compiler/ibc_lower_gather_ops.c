@@ -25,7 +25,7 @@
 #include "ibc_builder.h"
 
 static unsigned
-reg_ref_stride(const ibc_reg_ref *ref)
+ref_stride(const ibc_ref *ref)
 {
    switch (ref->file) {
    case IBC_REG_FILE_NONE:
@@ -46,7 +46,7 @@ reg_ref_stride(const ibc_reg_ref *ref)
 }
 
 static void
-build_MOV_raw(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref src)
+build_MOV_raw(ibc_builder *b, ibc_ref dest, ibc_ref src)
 {
    const unsigned total_simd_width = b->simd_width;
    unsigned split_simd_width = total_simd_width;
@@ -55,10 +55,10 @@ build_MOV_raw(ibc_builder *b, ibc_reg_ref dest, ibc_reg_ref src)
     *
     * TODO: Unify with lower_simd_width
     */
-   const unsigned src_stride = reg_ref_stride(&src);
+   const unsigned src_stride = ref_stride(&src);
    if (src_stride > 0)
       split_simd_width = MIN2(split_simd_width, 64 / src_stride);
-   const unsigned dest_stride = reg_ref_stride(&dest);
+   const unsigned dest_stride = ref_stride(&dest);
    if (dest_stride > 0)
       split_simd_width = MIN2(split_simd_width, 64 / dest_stride);
 
@@ -102,10 +102,10 @@ ibc_lower_gather_ops(ibc_shader *shader)
                                        intrin->src[i].simd_width);
             assert(b.simd_group == intrin->src[i].simd_group);
             assert(intrin->src[i].num_comps == 1); /* TODO */
-            ibc_reg_ref mov_dest = intrin->dest;
-            ibc_reg_ref mov_src = intrin->src[i].ref;
-            ibc_reg_ref_simd_slice(&mov_dest, rel_group);
-            ibc_reg_ref_simd_slice(&mov_src, rel_group);
+            ibc_ref mov_dest = intrin->dest;
+            ibc_ref mov_src = intrin->src[i].ref;
+            ibc_ref_simd_slice(&mov_dest, rel_group);
+            ibc_ref_simd_slice(&mov_src, rel_group);
             build_MOV_raw(&b, mov_dest, mov_src);
             ibc_builder_pop(&b);
          }
@@ -120,7 +120,7 @@ ibc_lower_gather_ops(ibc_shader *shader)
          assert(intrin->dest.file == IBC_REG_FILE_LOGICAL);
          assert(intrin->num_srcs == intrin->num_dest_comps);
 
-         ibc_reg_ref dest = intrin->dest;
+         ibc_ref dest = intrin->dest;
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
             build_MOV_raw(&b, dest, intrin->src[i].ref);
             dest.logical.comp++;

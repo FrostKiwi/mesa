@@ -31,7 +31,7 @@
 #define HASH(hash, data) XXH32(&(data), sizeof(data), (hash))
 
 static uint32_t
-hash_reg_ref(uint32_t hash, const ibc_reg_ref *ref, const ibc_reg *base_reg)
+hash_ref(uint32_t hash, const ibc_ref *ref, const ibc_reg *base_reg)
 {
    hash = HASH(hash, ref->file);
    hash = HASH(hash, ref->type);
@@ -67,7 +67,7 @@ hash_reg_ref(uint32_t hash, const ibc_reg_ref *ref, const ibc_reg *base_reg)
       break;
    }
 
-   /* See also reg_refs_equal */
+   /* See also refs_equal */
    if (ref->reg && ref->reg != base_reg)
       hash = HASH(hash, ref->reg);
 
@@ -75,8 +75,8 @@ hash_reg_ref(uint32_t hash, const ibc_reg_ref *ref, const ibc_reg *base_reg)
 }
 
 static bool
-reg_refs_equal(const ibc_reg_ref *ref_a, const ibc_reg_ref *ref_b,
-               const ibc_reg *base_reg_a, const ibc_reg *base_reg_b)
+refs_equal(const ibc_ref *ref_a, const ibc_ref *ref_b,
+           const ibc_reg *base_reg_a, const ibc_reg *base_reg_b)
 {
    if (ref_a->file != ref_b->file ||
        ref_a->type != ref_b->type)
@@ -147,7 +147,7 @@ hash_instr(uint32_t hash, const ibc_instr *instr,
    hash = HASH(hash, instr->simd_width);
    hash = HASH(hash, instr->we_all);
 
-   hash = hash_reg_ref(hash, &instr->flag, base_reg);
+   hash = hash_ref(hash, &instr->flag, base_reg);
 
    hash = HASH(hash, instr->predicate);
    hash = HASH(hash, instr->pred_inverse);
@@ -169,7 +169,7 @@ instrs_equal(const ibc_instr *instr_a, const ibc_instr *instr_b,
        instr_a->we_all != instr_b->we_all)
       return false;
 
-   if (!reg_refs_equal(&instr_a->flag, &instr_b->flag, base_reg_a, base_reg_b))
+   if (!refs_equal(&instr_a->flag, &instr_b->flag, base_reg_a, base_reg_b))
       return false;
 
    if (instr_a->predicate != instr_b->predicate ||
@@ -189,10 +189,10 @@ hash_alu_instr(uint32_t hash, const ibc_alu_instr *alu,
    hash = HASH(hash, alu->cmod);
    hash = HASH(hash, alu->saturate);
 
-   hash = hash_reg_ref(hash, &alu->dest, base_reg);
+   hash = hash_ref(hash, &alu->dest, base_reg);
 
    for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-      hash = hash_reg_ref(hash, &alu->src[i].ref, base_reg);
+      hash = hash_ref(hash, &alu->src[i].ref, base_reg);
       hash = HASH(hash, alu->src[i].mod);
    }
 
@@ -211,11 +211,11 @@ alu_instrs_equal(const ibc_alu_instr *alu_a, const ibc_alu_instr *alu_b,
        alu_a->saturate != alu_b->saturate)
       return false;
 
-   if (!reg_refs_equal(&alu_a->dest, &alu_b->dest, base_reg_a, base_reg_b))
+   if (!refs_equal(&alu_a->dest, &alu_b->dest, base_reg_a, base_reg_b))
       return false;
 
    for (unsigned i = 0; i < ibc_alu_op_infos[alu_a->op].num_srcs; i++) {
-      if (!reg_refs_equal(&alu_a->src[i].ref, &alu_b->src[i].ref,
+      if (!refs_equal(&alu_a->src[i].ref, &alu_b->src[i].ref,
                           base_reg_a, base_reg_b))
          return false;
       if (alu_a->src[i].mod != alu_b->src[i].mod)
@@ -235,12 +235,12 @@ hash_intrinsic_instr(uint32_t hash, const ibc_intrinsic_instr *intrin,
 
    /* Ignore can_reorder and has_side_effects */
 
-   hash = hash_reg_ref(hash, &intrin->dest, base_reg);
+   hash = hash_ref(hash, &intrin->dest, base_reg);
    hash = HASH(hash, intrin->num_dest_comps);
 
    hash = HASH(hash, intrin->num_srcs);
    for (unsigned i = 0; i < intrin->num_srcs; i++) {
-      hash = hash_reg_ref(hash, &intrin->src[i].ref, base_reg);
+      hash = hash_ref(hash, &intrin->src[i].ref, base_reg);
       hash = HASH(hash, intrin->src[i].simd_group);
       hash = HASH(hash, intrin->src[i].simd_width);
       hash = HASH(hash, intrin->src[i].num_comps);
@@ -269,16 +269,16 @@ intrinsic_instrs_equal(const ibc_intrinsic_instr *intrin_a,
        intrin_b->has_side_effects)
       return false;
 
-   if (!reg_refs_equal(&intrin_a->dest, &intrin_b->dest,
-                       base_reg_a, base_reg_b) ||
+   if (!refs_equal(&intrin_a->dest, &intrin_b->dest,
+                   base_reg_a, base_reg_b) ||
        intrin_a->num_dest_comps != intrin_b->num_dest_comps)
       return false;
 
    if (intrin_a->num_srcs != intrin_b->num_srcs)
       return false;
    for (unsigned i = 0; i < intrin_a->num_srcs; i++) {
-      if (!reg_refs_equal(&intrin_a->src[i].ref, &intrin_b->src[i].ref,
-                          base_reg_a, base_reg_b))
+      if (!refs_equal(&intrin_a->src[i].ref, &intrin_b->src[i].ref,
+                      base_reg_a, base_reg_b))
          return false;
       if (intrin_a->src[i].simd_group != intrin_b->src[i].simd_group ||
           intrin_a->src[i].simd_width != intrin_b->src[i].simd_width ||
@@ -382,7 +382,7 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
       break;
    }
 
-   list_pair_for_each_entry(const ibc_reg_ref, ref_a, ref_b,
+   list_pair_for_each_entry(const ibc_ref, ref_a, ref_b,
                             &reg_a->writes, &reg_b->writes, write_link) {
       const ibc_instr *instr_a = ref_a->write_instr;
       const ibc_instr *instr_b = ref_b->write_instr;
@@ -420,7 +420,7 @@ struct opt_cse_state {
 };
 
 static bool
-rewrite_read(struct ibc_reg_ref *ref,
+rewrite_read(struct ibc_ref *ref,
              UNUSED int num_bytes, UNUSED int num_comps,
              UNUSED uint8_t simd_group, UNUSED uint8_t simd_width,
              void *_state)
@@ -445,7 +445,7 @@ rewrite_read(struct ibc_reg_ref *ref,
 }
 
 static bool
-try_cse_write(struct ibc_reg_ref *ref,
+try_cse_write(struct ibc_ref *ref,
               UNUSED int num_bytes, UNUSED int num_comps,
               UNUSED uint8_t simd_group, UNUSED uint8_t simd_width,
               void *_state)

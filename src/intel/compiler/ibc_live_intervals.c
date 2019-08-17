@@ -37,7 +37,7 @@ instr_is_predicated(ibc_instr *instr)
 }
 
 static bool
-reg_ref_has_live_data(const ibc_reg_ref *ref, const ibc_live_intervals *live)
+ref_has_live_data(const ibc_ref *ref, const ibc_live_intervals *live)
 {
    if (ref->file == IBC_REG_FILE_NONE ||
        ref->file == IBC_REG_FILE_IMM)
@@ -47,14 +47,14 @@ reg_ref_has_live_data(const ibc_reg_ref *ref, const ibc_live_intervals *live)
 }
 
 static bool
-record_reg_write_sizes(ibc_reg_ref *ref,
+record_reg_write_sizes(ibc_ref *ref,
                        UNUSED int num_bytes, UNUSED int num_comps,
                        UNUSED uint8_t simd_group, uint8_t simd_width,
                        void *_state)
 {
    ibc_live_intervals *live = _state;
 
-   if (!reg_ref_has_live_data(ref, live))
+   if (!ref_has_live_data(ref, live))
       return true;
 
    ibc_reg_live_intervals *rli = &live->regs[ref->reg->index];
@@ -117,11 +117,11 @@ reg_num_chunks(const ibc_reg *reg, ibc_live_intervals *live)
 }
 
 void
-ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
-                                  const ibc_reg_ref *ref,
-                                  int num_bytes, int num_comps,
-                                  uint8_t simd_group, uint8_t simd_width,
-                                  BITSET_WORD *chunks)
+ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
+                              const ibc_ref *ref,
+                              int num_bytes, int num_comps,
+                              uint8_t simd_group, uint8_t simd_width,
+                              BITSET_WORD *chunks)
 {
    const ibc_reg *reg = ref->reg;
    assert(reg->index < live->num_regs);
@@ -361,7 +361,7 @@ struct setup_use_def_state {
 };
 
 static bool
-setup_block_use_def_for_read(ibc_reg_ref *ref,
+setup_block_use_def_for_read(ibc_ref *ref,
                              int num_bytes, int num_comps,
                              uint8_t simd_group, uint8_t simd_width,
                              void *_state)
@@ -369,7 +369,7 @@ setup_block_use_def_for_read(ibc_reg_ref *ref,
    BITSET_DECLARE(read, IBC_REG_LIVE_MAX_CHUNKS);
    struct setup_use_def_state *state = _state;
 
-   if (!reg_ref_has_live_data(ref, state->live))
+   if (!ref_has_live_data(ref, state->live))
       return true;
 
    ibc_block_live_sets *bls = &state->live->blocks[state->block_index];
@@ -377,7 +377,7 @@ setup_block_use_def_for_read(ibc_reg_ref *ref,
    const unsigned chunk_idx = state->live->regs[ref->reg->index].chunk_idx;
 
    memset(read, 0, BITSET_WORDS(num_chunks) * sizeof(BITSET_WORD));
-   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_bytes, num_comps,
+   ibc_live_intervals_ref_chunks(state->live, ref, num_bytes, num_comps,
                                      simd_group, simd_width, read);
 
    for (unsigned i = 0; i < num_chunks; i++) {
@@ -392,7 +392,7 @@ setup_block_use_def_for_read(ibc_reg_ref *ref,
 }
 
 static bool
-setup_block_use_def_for_write(ibc_reg_ref *ref,
+setup_block_use_def_for_write(ibc_ref *ref,
                               int num_bytes, int num_comps,
                               uint8_t simd_group, uint8_t simd_width,
                               void *_state)
@@ -400,7 +400,7 @@ setup_block_use_def_for_write(ibc_reg_ref *ref,
    BITSET_DECLARE(written, IBC_REG_LIVE_MAX_CHUNKS);
    struct setup_use_def_state *state = _state;
 
-   if (!reg_ref_has_live_data(ref, state->live))
+   if (!ref_has_live_data(ref, state->live))
       return true;
 
    ibc_block_live_sets *bls = &state->live->blocks[state->block_index];
@@ -408,7 +408,7 @@ setup_block_use_def_for_write(ibc_reg_ref *ref,
    const unsigned chunk_idx = state->live->regs[ref->reg->index].chunk_idx;
 
    memset(written, 0, BITSET_WORDS(num_chunks) * sizeof(BITSET_WORD));
-   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_bytes, num_comps,
+   ibc_live_intervals_ref_chunks(state->live, ref, num_bytes, num_comps,
                                      simd_group, simd_width, written);
 
    for (unsigned i = 0; i < num_chunks; i++) {
@@ -530,7 +530,7 @@ struct extend_live_interval_state {
 };
 
 static bool
-extend_live_interval_for_read(ibc_reg_ref *ref,
+extend_live_interval_for_read(ibc_ref *ref,
                               int num_bytes, int num_comps,
                               uint8_t simd_group, uint8_t simd_width,
                               void *_state)
@@ -538,7 +538,7 @@ extend_live_interval_for_read(ibc_reg_ref *ref,
    BITSET_DECLARE(read, IBC_REG_LIVE_MAX_CHUNKS);
    struct extend_live_interval_state *state = _state;
 
-   if (!reg_ref_has_live_data(ref, state->live))
+   if (!ref_has_live_data(ref, state->live))
       return true;
 
    ibc_reg_live_intervals *rli = &state->live->regs[ref->reg->index];
@@ -546,8 +546,8 @@ extend_live_interval_for_read(ibc_reg_ref *ref,
    const unsigned chunk_idx = rli->chunk_idx;
 
    memset(read, 0, BITSET_WORDS(num_chunks) * sizeof(BITSET_WORD));
-   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_bytes, num_comps,
-                                     simd_group, simd_width, read);
+   ibc_live_intervals_ref_chunks(state->live, ref, num_bytes, num_comps,
+                                 simd_group, simd_width, read);
 
    for (unsigned i = 0; i < num_chunks; i++) {
       if (!BITSET_TEST(read, i))
@@ -561,7 +561,7 @@ extend_live_interval_for_read(ibc_reg_ref *ref,
 }
 
 static bool
-extend_live_interval_for_write(ibc_reg_ref *ref,
+extend_live_interval_for_write(ibc_ref *ref,
                                int num_bytes, int num_comps,
                                uint8_t simd_group, uint8_t simd_width,
                                void *_state)
@@ -569,7 +569,7 @@ extend_live_interval_for_write(ibc_reg_ref *ref,
    BITSET_DECLARE(write, IBC_REG_LIVE_MAX_CHUNKS);
    struct extend_live_interval_state *state = _state;
 
-   if (!reg_ref_has_live_data(ref, state->live))
+   if (!ref_has_live_data(ref, state->live))
       return true;
 
    ibc_reg_live_intervals *rli = &state->live->regs[ref->reg->index];
@@ -577,8 +577,8 @@ extend_live_interval_for_write(ibc_reg_ref *ref,
    const unsigned chunk_idx = rli->chunk_idx;
 
    memset(write, 0, BITSET_WORDS(num_chunks) * sizeof(BITSET_WORD));
-   ibc_live_intervals_reg_ref_chunks(state->live, ref, num_bytes, num_comps,
-                                     simd_group, simd_width, write);
+   ibc_live_intervals_ref_chunks(state->live, ref, num_bytes, num_comps,
+                                 simd_group, simd_width, write);
 
    for (unsigned i = 0; i < num_chunks; i++) {
       if (!BITSET_TEST(write, i))

@@ -29,7 +29,7 @@
 struct ibc_cs_payload {
    struct ibc_payload_base base;
 
-   ibc_reg_ref subgroup_id;
+   ibc_ref subgroup_id;
 };
 
 static struct ibc_cs_payload *
@@ -59,7 +59,7 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
    struct ibc_cs_payload *payload = (struct ibc_cs_payload *)nti->payload;
    ibc_builder *b = &nti->b;
 
-   ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
+   ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_id:
       dest = ibc_MOV(b, IBC_TYPE_UD, payload->subgroup_id);
@@ -83,7 +83,7 @@ ibc_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
    ibc_builder *b = &nti->b;
 
    ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
-   ibc_reg_ref tmp_ud = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
+   ibc_ref tmp_ud = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
 
    ibc_builder_push_we_all(b, 8);
    ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp_ud,

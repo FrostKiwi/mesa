@@ -552,7 +552,7 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
             const unsigned chunks_words = BITSET_WORDS(rli->num_chunks);
             memset(chunks, 0, chunks_words * sizeof(BITSET_WORD));
 
-            const ibc_reg_ref ref = {
+            const ibc_ref ref = {
                .file = IBC_REG_FILE_LOGICAL,
                .type = IBC_TYPE_8_BIT,
                .logical = {
@@ -564,7 +564,7 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
             const uint8_t ref_simd_group = lreg->simd_group + s;
             const uint8_t ref_simd_width =
                MIN2(lreg->simd_width, STRIDED_REG_SIMD_GRANULARITY);
-            ibc_live_intervals_reg_ref_chunks(live, &ref, -1, 1,
+            ibc_live_intervals_ref_chunks(live, &ref, -1, 1,
                                               ref_simd_group, ref_simd_width,
                                               chunks);
 
@@ -759,12 +759,12 @@ should_assign_reg(const ibc_reg *reg)
 }
 
 static bool
-rewrite_ref_and_update_reg(ibc_reg_ref *_ref,
+rewrite_ref_and_update_reg(ibc_ref *_ref,
                            int num_bytes, int num_comps,
                            uint8_t simd_group, uint8_t simd_width,
                            void *_state)
 {
-   const ibc_reg_ref *ref = _ref;
+   const ibc_ref *ref = _ref;
    struct ibc_assign_regs_state *state = _state;
    if (ref->file != IBC_REG_FILE_LOGICAL &&
        ref->file != IBC_REG_FILE_HW_GRF)
@@ -783,7 +783,7 @@ rewrite_ref_and_update_reg(ibc_reg_ref *_ref,
    assert(reg->index < state->live->num_regs);
    struct ibc_reg_assignment *assign = &state->assign[reg->index];
 
-   ibc_reg_ref new_ref = {
+   ibc_ref new_ref = {
       .file = IBC_REG_FILE_HW_GRF,
       .type = ref->type,
    };
