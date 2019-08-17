@@ -49,7 +49,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
       nir_alu_type nir_src_type = nir_op_infos[instr->op].input_types[i];
       if (nir_alu_type_get_type_size(nir_src_type) == 0)
-         nir_src_type |= instr->src[i].src.ssa->bit_size;
+         nir_src_type |= nir_src_bit_size(instr->src[i].src);
       src[i] = ibc_nir_src(nti, instr->src[i].src,
                            ibc_type_for_nir(nir_src_type));
       assert(src[i].file == IBC_REG_FILE_LOGICAL);
@@ -60,7 +60,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    nir_alu_type nir_dest_type = nir_op_infos[instr->op].output_type;
    if (nir_alu_type_get_type_size(nir_dest_type) == 0)
-      nir_dest_type |= instr->dest.dest.ssa.bit_size;
+      nir_dest_type |= nir_dest_bit_size(instr->dest.dest);
    enum ibc_type dest_type = ibc_type_for_nir(nir_dest_type);
 
    ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
@@ -71,7 +71,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_vec4:
       break;
    default:
-      assert(instr->dest.dest.ssa.num_components == 1);
+      assert(nir_dest_num_components(instr->dest.dest) == 1);
       break;
    }
 
@@ -83,7 +83,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_vec2:
    case nir_op_vec3:
    case nir_op_vec4:
-      dest = ibc_VEC(b, src, instr->dest.dest.ssa.num_components);
+      dest = ibc_VEC(b, src, nir_dest_num_components(instr->dest.dest));
       break;
 
    case nir_op_u2u8:
@@ -778,7 +778,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
    case nir_intrinsic_load_ubo:
       if (nir_src_is_const(instr->src[0]) && nir_src_is_const(instr->src[1])) {
-         const unsigned comp_size_B = instr->dest.ssa.bit_size / 8;
+         const unsigned comp_size_B = nir_dest_bit_size(instr->dest) / 8;
          const uint64_t offset_B = nir_src_as_uint(instr->src[1]);
          const unsigned block_size_B = 64; /* Fetch one cacheline at a time. */
 
@@ -803,7 +803,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
             load->instr.we_all = true;
             load->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[0]));
             load->src[0].num_comps = 1;
-            assert(instr->src[1].is_ssa);
             load->src[1].ref = ibc_imm_ud(block_offset_B);
             load->src[1].num_comps = 1;
 
@@ -835,7 +834,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       load->can_reorder = false;
       load->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[0]));
       load->src[0].num_comps = 1;
-      assert(instr->src[1].is_ssa);
       load->src[1].ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD);
       load->src[1].num_comps = 1;
 
@@ -857,10 +855,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       store->has_side_effects = true;
       store->src[0].ref = ibc_imm_ud(nir_src_as_uint(instr->src[1]));
       store->src[0].num_comps = 1;
-      assert(instr->src[2].is_ssa);
       store->src[1].ref = ibc_nir_src(nti, instr->src[2], IBC_TYPE_UD);
       store->src[1].num_comps = 1;
-      assert(instr->src[0].is_ssa);
       store->src[2].ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
       store->src[2].num_comps = instr->num_components;
 
