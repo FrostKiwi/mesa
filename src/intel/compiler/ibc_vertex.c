@@ -82,7 +82,8 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
    ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_input: {
-      const unsigned input = nir_src_as_uint(instr->src[0]);
+      const unsigned input = nir_intrinsic_base(instr) +
+                             nir_src_as_uint(instr->src[0]);
       ibc_reg_ref srcs[4];
 
       for (unsigned i = 0; i < instr->num_components; i++) {
