@@ -23,34 +23,34 @@
 
 #include "ibc.h"
 
-/** Tries to compose an ibc_logical_reg_ref with an ibc_reg_ref
+/** Tries to compose an ibc_logical_ref with an ibc_ref
  *
  * Specifically, this is the composition outer(inner(reg)).
- * try_copy_prop_reg_ref has already figured out how the SIMD channels map.
+ * try_copy_prop_ref has already figured out how the SIMD channels map.
  * This function figures out if the composition is possible and, if it is,
  * returns the composition in ref_out and returns true.
  */
 static inline bool
-try_compose_reg_refs(ibc_reg_ref *ref_out,
-                     ibc_reg_ref outer, ibc_reg_ref inner,
-                     unsigned outer_simd_group,
-                     unsigned outer_simd_width,
-                     unsigned inner_simd_group,
-                     unsigned inner_simd_width,
-                     bool supports_imm)
+try_compose_refs(ibc_ref *ref_out,
+                 ibc_ref outer, ibc_ref inner,
+                 unsigned outer_simd_group,
+                 unsigned outer_simd_width,
+                 unsigned inner_simd_group,
+                 unsigned inner_simd_width,
+                 bool supports_imm)
 {
    assert(outer.file == IBC_REG_FILE_LOGICAL);
    assert(inner.file != IBC_REG_FILE_NONE);
    assert(ibc_type_bit_size(outer.type) <= ibc_type_bit_size(inner.type));
 
    /* The source must be static */
-   if (!ibc_reg_ref_read_is_static(inner))
+   if (!ibc_ref_read_is_static(inner))
       return false;
 
    if (inner.file == IBC_REG_FILE_IMM && !supports_imm)
       return false;
 
-   ibc_reg_ref ref = inner;
+   ibc_ref ref = inner;
    ref.type = outer.type;
 
    switch (ref.file) {
@@ -117,7 +117,7 @@ try_compose_reg_refs(ibc_reg_ref *ref_out,
 }
 
 static void
-ibc_imm_neg(ibc_reg_ref *imm)
+ibc_imm_neg(ibc_ref *imm)
 {
    switch (ibc_type_base_type(imm->type)) {
    case IBC_TYPE_INT:
@@ -137,7 +137,7 @@ ibc_imm_neg(ibc_reg_ref *imm)
 }
 
 static void
-ibc_imm_not(ibc_reg_ref *imm)
+ibc_imm_not(ibc_ref *imm)
 {
    *(int64_t *)imm->imm = ~*(int64_t *)imm->imm;
    memset(imm->imm + ibc_type_byte_size(imm->type), 0,
@@ -145,14 +145,14 @@ ibc_imm_not(ibc_reg_ref *imm)
 }
 
 static void
-ibc_imm_abs(ibc_reg_ref *imm)
+ibc_imm_abs(ibc_ref *imm)
 {
    if (imm->imm[ibc_type_byte_size(imm->type) - 1] & 0x80)
       ibc_imm_neg(imm);
 }
 
 static void
-ibc_imm_apply_mod(ibc_reg_ref *imm, enum ibc_alu_src_mod mod)
+ibc_imm_apply_mod(ibc_ref *imm, enum ibc_alu_src_mod mod)
 {
    if (mod & IBC_ALU_SRC_MOD_ABS)
       ibc_imm_abs(imm);
@@ -179,7 +179,7 @@ compose_alu_src_mods(enum ibc_alu_src_mod outer, enum ibc_alu_src_mod inner)
 }
 
 static bool
-ref_fills_reg(ibc_reg_ref *ref,
+ref_fills_reg(ibc_ref *ref,
               UNUSED int num_bytes, int num_comps,
               uint8_t simd_group, uint8_t simd_width,
               UNUSED void *_state)
@@ -195,10 +195,10 @@ ref_fills_reg(ibc_reg_ref *ref,
 }
 
 static bool
-try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
-                      uint8_t num_comps,
-                      uint8_t simd_group, uint8_t simd_width,
-                      bool supports_imm)
+try_copy_prop_ref(ibc_ref *ref, ibc_alu_src *alu_src,
+                  uint8_t num_comps,
+                  uint8_t simd_group, uint8_t simd_width,
+                  bool supports_imm)
 {
    if (ref->file != IBC_REG_FILE_LOGICAL)
       return false;
@@ -242,12 +242,12 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
           ref->type != mov->src[0].ref.type)
          return false;
 
-      ibc_reg_ref new_ref;
-      if (!try_compose_reg_refs(&new_ref, *ref, mov->src[0].ref,
-                                simd_group, simd_width,
-                                mov->instr.simd_group,
-                                mov->instr.simd_width,
-                                supports_imm))
+      ibc_ref new_ref;
+      if (!try_compose_refs(&new_ref, *ref, mov->src[0].ref,
+                            simd_group, simd_width,
+                            mov->instr.simd_group,
+                            mov->instr.simd_width,
+                            supports_imm))
          return false;
 
       if (alu_src) {
@@ -280,11 +280,11 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
                   continue;
             }
 
-            return try_compose_reg_refs(ref, *ref, intrin->src[i].ref,
-                                        simd_group, simd_width,
-                                        intrin->src[i].simd_group,
-                                        intrin->src[i].simd_width,
-                                        supports_imm);
+            return try_compose_refs(ref, *ref, intrin->src[i].ref,
+                                    simd_group, simd_width,
+                                    intrin->src[i].simd_group,
+                                    intrin->src[i].simd_width,
+                                    supports_imm);
          }
          return false;
 
@@ -298,13 +298,13 @@ try_copy_prop_reg_ref(ibc_reg_ref *ref, ibc_alu_src *alu_src,
          assert(intrin->src[comp].simd_group == intrin->instr.simd_group);
          assert(intrin->src[comp].simd_width == intrin->instr.simd_width);
 
-         ibc_reg_ref comp_ref = *ref;
+         ibc_ref comp_ref = *ref;
          comp_ref.logical.comp = 0;
-         return try_compose_reg_refs(ref, comp_ref, intrin->src[comp].ref,
-                                     simd_group, simd_width,
-                                     intrin->src[comp].simd_group,
-                                     intrin->src[comp].simd_width,
-                                     supports_imm);
+         return try_compose_refs(ref, comp_ref, intrin->src[comp].ref,
+                                 simd_group, simd_width,
+                                 intrin->src[comp].simd_group,
+                                 intrin->src[comp].simd_width,
+                                 supports_imm);
       }
 
       default:
@@ -392,9 +392,9 @@ ibc_opt_copy_prop(ibc_shader *shader)
 
    ibc_foreach_instr_safe(instr, shader) {
 
-      while (try_copy_prop_reg_ref(&instr->flag, NULL, 1,
-                                   instr->simd_group, instr->simd_width,
-                                   false)) {
+      while (try_copy_prop_ref(&instr->flag, NULL, 1,
+                               instr->simd_group, instr->simd_width,
+                               false)) {
          progress = true;
       }
 
@@ -403,10 +403,10 @@ ibc_opt_copy_prop(ibc_shader *shader)
          ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
          for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-            while (try_copy_prop_reg_ref(&alu->src[i].ref, &alu->src[i], 1,
-                                         alu->instr.simd_group,
-                                         alu->instr.simd_width,
-                                         alu_instr_src_supports_imm(alu, i))) {
+            while (try_copy_prop_ref(&alu->src[i].ref, &alu->src[i], 1,
+                                     alu->instr.simd_group,
+                                     alu->instr.simd_width,
+                                     alu_instr_src_supports_imm(alu, i))) {
                progress = true;
             }
             flip_alu_instr_if_needed(alu);
@@ -421,11 +421,11 @@ ibc_opt_copy_prop(ibc_shader *shader)
       case IBC_INSTR_TYPE_INTRINSIC: {
          ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
-            while (try_copy_prop_reg_ref(&intrin->src[i].ref, NULL,
-                                         intrin->src[i].num_comps,
-                                         intrin->src[i].simd_group,
-                                         intrin->src[i].simd_width,
-                                         true)) {
+            while (try_copy_prop_ref(&intrin->src[i].ref, NULL,
+                                     intrin->src[i].num_comps,
+                                     intrin->src[i].simd_group,
+                                     intrin->src[i].simd_width,
+                                     true)) {
                progress = true;
             }
          }

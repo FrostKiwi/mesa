@@ -29,23 +29,23 @@
 struct ibc_fs_payload {
    struct ibc_payload_base base;
 
-   ibc_reg_ref pixel[2];
-   ibc_reg_ref barycentric[BRW_BARYCENTRIC_MODE_COUNT];
-   ibc_reg_ref src_z;
-   ibc_reg_ref src_w;
-   ibc_reg_ref sample_pos[2];
-   ibc_reg_ref sample_mask_in;
+   ibc_ref pixel[2];
+   ibc_ref barycentric[BRW_BARYCENTRIC_MODE_COUNT];
+   ibc_ref src_z;
+   ibc_ref src_w;
+   ibc_ref sample_pos[2];
+   ibc_ref sample_mask_in;
 
-   ibc_reg_ref inputs[32][4];
+   ibc_ref inputs[32][4];
 };
 
 struct nir_fs_to_ibc_state {
    struct {
-      ibc_reg_ref color[BRW_MAX_DRAW_BUFFERS];
-      ibc_reg_ref dual_src_color;
-      ibc_reg_ref depth;
-      ibc_reg_ref stencil;
-      ibc_reg_ref sample_mask;
+      ibc_ref color[BRW_MAX_DRAW_BUFFERS];
+      ibc_ref dual_src_color;
+      ibc_ref depth;
+      ibc_ref stencil;
+      ibc_ref sample_mask;
    } out;
 
    unsigned max_simd_width;
@@ -64,7 +64,7 @@ ibc_fs_limit_dispatch_width(struct nir_to_ibc_state *nti,
 }
 
 static void
-set_reg_ref_or_zip(ibc_builder *b, ibc_reg_ref *dest, ibc_reg_ref src,
+set_ref_or_zip(ibc_builder *b, ibc_ref *dest, ibc_ref src,
                    unsigned num_comps)
 {
    if (dest->file == IBC_REG_FILE_NONE) {
@@ -75,18 +75,18 @@ set_reg_ref_or_zip(ibc_builder *b, ibc_reg_ref *dest, ibc_reg_ref src,
 }
 
 static void
-ibc_load_fs_payload_reg(ibc_builder *b, ibc_reg_ref *dest,
+ibc_load_fs_payload_reg(ibc_builder *b, ibc_ref *dest,
                         unsigned simd_group, unsigned *reg,
                         enum ibc_type type)
 {
    ibc_builder_push_group(b, simd_group, MIN2(16, b->simd_width));
-   ibc_reg_ref tmp = ibc_load_payload_logical(b, reg, type, 1);
+   ibc_ref tmp = ibc_load_payload_logical(b, reg, type, 1);
    ibc_builder_pop(b);
-   set_reg_ref_or_zip(b, dest, tmp, 1);
+   set_ref_or_zip(b, dest, tmp, 1);
 }
 
 static void
-ibc_load_fs_barycentric(ibc_builder *b, ibc_reg_ref *dest,
+ibc_load_fs_barycentric(ibc_builder *b, ibc_ref *dest,
                         unsigned simd_group, unsigned *reg)
 {
    /* The PLN instruction is silly.  In SIMD16 mode, it doesn't act on a
@@ -95,16 +95,16 @@ ibc_load_fs_barycentric(ibc_builder *b, ibc_reg_ref *dest,
     * way that makes them convenient for plane but it means we actually get
     * the one SIMD8 vec2 at a time.
     */
-   ibc_reg_ref bary = {};
+   ibc_ref bary = {};
    ibc_builder_push_group(b, simd_group, MIN2(16, b->simd_width));
    for (unsigned int g = 0; g < b->simd_width; g += 8) {
       ibc_builder_push_group(b, g, 8);
-      ibc_reg_ref bary8 = ibc_load_payload_logical(b, reg, IBC_TYPE_F, 2);
+      ibc_ref bary8 = ibc_load_payload_logical(b, reg, IBC_TYPE_F, 2);
       ibc_builder_pop(b);
-      set_reg_ref_or_zip(b, &bary, bary8, 2);
+      set_ref_or_zip(b, &bary, bary8, 2);
    }
    ibc_builder_pop(b);
-   set_reg_ref_or_zip(b, dest, bary, 2);
+   set_ref_or_zip(b, dest, bary, 2);
 }
 
 static struct ibc_fs_payload *
@@ -152,8 +152,7 @@ ibc_setup_fs_payload(ibc_builder *b, struct brw_wm_prog_data *prog_data,
    ibc_builder_push_we_all(b, 1);
    for (unsigned i = 0; i < prog_data->num_varying_inputs; i++) {
       for (unsigned c = 0; c < 4; c++) {
-         ibc_reg_ref grf =
-            ibc_hw_grf_ref(reg + (c / 2), (c % 2) * 4, IBC_TYPE_UD);
+         ibc_ref grf = ibc_hw_grf_ref(reg + (c / 2), (c % 2) * 4, IBC_TYPE_UD);
          payload->inputs[i][c] =
             ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 4);
          ibc_load_payload(b, payload->inputs[i][c], grf, 4);
@@ -205,7 +204,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    struct nir_fs_to_ibc_state *nti_fs = nti->stage_state;
    ibc_builder *b = &nti->b;
 
-   ibc_reg_ref dest = { .file = IBC_REG_FILE_NONE, };
+   ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_barycentric_pixel:
    case nir_intrinsic_load_barycentric_centroid:
@@ -220,18 +219,18 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_load_interpolated_input: {
-      ibc_reg_ref bary = ibc_nir_src(nti, instr->src[0], IBC_TYPE_F);
+      ibc_ref bary = ibc_nir_src(nti, instr->src[0], IBC_TYPE_F);
       dest = ibc_builder_new_logical_reg(b, IBC_TYPE_F, instr->num_components);
 
       for (unsigned int i = 0; i < instr->num_components; i++) {
          assert(prog_data->urb_setup[nir_intrinsic_base(instr)] >= 0);
          const unsigned l = prog_data->urb_setup[nir_intrinsic_base(instr)];
          const unsigned c = nir_intrinsic_component(instr) + i;
-         ibc_reg_ref per_vert = payload->inputs[l][c];
+         ibc_ref per_vert = payload->inputs[l][c];
          per_vert.type = IBC_TYPE_F;
-         ibc_reg_ref comp = ibc_PLN(b, per_vert, bary);
+         ibc_ref comp = ibc_PLN(b, per_vert, bary);
 
-         ibc_reg_ref mov_dest = dest;
+         ibc_ref mov_dest = dest;
          mov_dest.logical.comp = i;
          ibc_build_alu1(b, IBC_ALU_OP_MOV, mov_dest, comp);
       }
@@ -245,10 +244,10 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
          assert(prog_data->urb_setup[nir_intrinsic_base(instr)] >= 0);
          const unsigned l = prog_data->urb_setup[nir_intrinsic_base(instr)];
          const unsigned c = nir_intrinsic_component(instr) + i;
-         ibc_reg_ref comp = payload->inputs[l][c];
+         ibc_ref comp = payload->inputs[l][c];
          comp.logical.comp = 3;
 
-         ibc_reg_ref mov_dest = dest;
+         ibc_ref mov_dest = dest;
          mov_dest.logical.comp = i;
          ibc_build_alu1(b, IBC_ALU_OP_MOV, mov_dest, comp);
       }
@@ -256,14 +255,14 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_store_output: {
-      ibc_reg_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
+      ibc_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
       const unsigned store_offset = nir_src_as_uint(instr->src[1]);
       const unsigned location = nir_intrinsic_base(instr) +
          SET_FIELD(store_offset, BRW_NIR_FRAG_OUTPUT_LOCATION);
       const unsigned l = GET_FIELD(location, BRW_NIR_FRAG_OUTPUT_LOCATION);
       const unsigned i = GET_FIELD(location, BRW_NIR_FRAG_OUTPUT_INDEX);
 
-      ibc_reg_ref *output;
+      ibc_ref *output;
       if (i > 0 || (key->force_dual_color_blend && l == FRAG_RESULT_DATA1))
          output = &nti_fs->out.dual_src_color;
       else if (l == FRAG_RESULT_COLOR)
@@ -294,7 +293,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
          }
       }
 
-      ibc_reg_ref dest = *output;
+      ibc_ref dest = *output;
       dest.logical.comp += nir_intrinsic_component(instr);
       for (unsigned j = 0; j < instr->num_components; j++) {
          ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, src);
@@ -337,8 +336,8 @@ enum ibc_fb_write_src {
 static void
 ibc_emit_fb_write(struct nir_to_ibc_state *nti,
                   unsigned target,
-                  ibc_reg_ref color0, ibc_reg_ref color1,
-                  ibc_reg_ref src0_alpha,
+                  ibc_ref color0, ibc_ref color1,
+                  ibc_ref src0_alpha,
                   bool last_rt)
 {
    struct brw_wm_prog_data *prog_data = (void *)nti->prog_data;
@@ -426,7 +425,7 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
          if (nti_fs->out.color[target].file == IBC_REG_FILE_NONE)
             continue;
 
-         ibc_reg_ref src0_alpha = {};
+         ibc_ref src0_alpha = {};
          if (prog_data->replicate_alpha && target != 0) {
             src0_alpha = nti_fs->out.color[0];
             src0_alpha.logical.comp = 3;
@@ -460,13 +459,13 @@ ibc_lower_simd_width_fb_write_max_width(ibc_intrinsic_instr *write)
       return 16;
 }
 
-static ibc_reg_ref
-move_to_payload(ibc_builder *b, ibc_reg_ref src, unsigned num_comps)
+static ibc_ref
+move_to_payload(ibc_builder *b, ibc_ref src, unsigned num_comps)
 {
    if (src.file == IBC_REG_FILE_NONE) {
       return ibc_builder_new_logical_reg(b, IBC_TYPE_F, num_comps);
    } else {
-      ibc_reg_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
+      ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
       ibc_MOV_raw_vec_to(b, dest, src, num_comps);
       return dest;
    }
@@ -478,8 +477,8 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_send_instr *send,
 {
    assert(write->op == IBC_INTRINSIC_OP_FB_WRITE);
 
-   const ibc_reg_ref color0 = write->src[IBC_FB_WRITE_SRC_COLOR0].ref;
-   const ibc_reg_ref color1 = write->src[IBC_FB_WRITE_SRC_COLOR1].ref;
+   const ibc_ref color0 = write->src[IBC_FB_WRITE_SRC_COLOR0].ref;
+   const ibc_ref color1 = write->src[IBC_FB_WRITE_SRC_COLOR1].ref;
    assert(!color1.file);
    assert(!write->src[IBC_FB_WRITE_SRC_SRC0_ALPHA].ref.file);
    assert(!write->src[IBC_FB_WRITE_SRC_DEPTH].ref.file);

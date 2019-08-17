@@ -60,9 +60,9 @@ brw_reg_type_for_ibc_type(enum ibc_type type)
 }
 
 static struct brw_reg
-brw_reg_for_ibc_reg_ref(const struct gen_device_info *devinfo,
-                        const ibc_reg_ref *ref,
-                        unsigned simd_width, bool compressed)
+brw_reg_for_ibc_ref(const struct gen_device_info *devinfo,
+                    const ibc_ref *ref,
+                    unsigned simd_width, bool compressed)
 {
    /* Default the type to UINT if no base type is specified */
    enum ibc_type type = ref->type;
@@ -237,16 +237,16 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    struct brw_reg src[3], dest;
    assert(ibc_alu_op_infos[alu->op].num_srcs <= ARRAY_SIZE(src));
    for (unsigned int i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-      src[i] = brw_reg_for_ibc_reg_ref(p->devinfo, &alu->src[i].ref,
-                                       alu->instr.simd_width,
-                                       compressed);
+      src[i] = brw_reg_for_ibc_ref(p->devinfo, &alu->src[i].ref,
+                                   alu->instr.simd_width,
+                                   compressed);
       src[i].abs = (alu->src[i].mod & IBC_ALU_SRC_MOD_ABS) != 0;
       src[i].negate = (alu->src[i].mod & (IBC_ALU_SRC_MOD_NEG |
                                           IBC_ALU_SRC_MOD_NOT)) != 0;
    }
-   dest = brw_reg_for_ibc_reg_ref(p->devinfo, &alu->dest,
-                                  alu->instr.simd_width,
-                                  compressed);
+   dest = brw_reg_for_ibc_ref(p->devinfo, &alu->dest,
+                              alu->instr.simd_width,
+                              compressed);
 
    brw_set_default_saturate(p, alu->saturate);
    brw_set_default_acc_write_control(p, false /* TODO */);
@@ -356,23 +356,23 @@ static void
 generate_send(struct brw_codegen *p, const ibc_send_instr *send)
 {
    struct brw_reg dst =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &send->dest,
-                              send->instr.simd_width, false);
+      brw_reg_for_ibc_ref(p->devinfo, &send->dest,
+                          send->instr.simd_width, false);
 
    struct brw_reg payload0 =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &send->payload[0],
-                              send->instr.simd_width, false);
+      brw_reg_for_ibc_ref(p->devinfo, &send->payload[0],
+                          send->instr.simd_width, false);
    struct brw_reg payload1 =
-      brw_reg_for_ibc_reg_ref(p->devinfo, &send->payload[1],
-                              send->instr.simd_width, false);
+      brw_reg_for_ibc_ref(p->devinfo, &send->payload[1],
+                          send->instr.simd_width, false);
 
    struct brw_reg desc;
    if (send->desc.file == IBC_REG_FILE_NONE) {
       desc = brw_imm_ud(0);
    } else {
       assert(send->desc.type == IBC_TYPE_UD);
-      desc = brw_reg_for_ibc_reg_ref(p->devinfo, &send->desc,
-                                     send->instr.simd_width, false);
+      desc = brw_reg_for_ibc_ref(p->devinfo, &send->desc,
+                                 send->instr.simd_width, false);
    }
    uint32_t desc_imm = send->desc_imm |
       brw_message_desc(p->devinfo, send->mlen, send->rlen, send->has_header);
@@ -382,8 +382,8 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
       ex_desc = brw_imm_ud(0);
    } else {
       assert(send->ex_desc.type == IBC_TYPE_UD);
-      ex_desc = brw_reg_for_ibc_reg_ref(p->devinfo, &send->ex_desc,
-                                        send->instr.simd_width, false);
+      ex_desc = brw_reg_for_ibc_ref(p->devinfo, &send->ex_desc,
+                                    send->instr.simd_width, false);
    }
    uint32_t ex_desc_imm = send->ex_desc_imm |
       brw_message_ex_desc(p->devinfo, send->ex_mlen);
@@ -453,13 +453,13 @@ generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
 
    struct brw_reg src[3], dest;
    for (unsigned int i = 0; i < intrin->num_srcs; i++) {
-      src[i] = brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->src[i].ref,
-                                       intrin->src[i].simd_width,
-                                       compressed);
+      src[i] = brw_reg_for_ibc_ref(p->devinfo, &intrin->src[i].ref,
+                                   intrin->src[i].simd_width,
+                                   compressed);
    }
-   dest = brw_reg_for_ibc_reg_ref(p->devinfo, &intrin->dest,
-                                  intrin->instr.simd_width,
-                                  compressed);
+   dest = brw_reg_for_ibc_ref(p->devinfo, &intrin->dest,
+                              intrin->instr.simd_width,
+                              compressed);
 
    switch (intrin->op) {
    case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL: {

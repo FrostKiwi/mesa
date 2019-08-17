@@ -102,11 +102,11 @@ typedef struct {
 } ibc_live_intervals;
 
 void
-ibc_live_intervals_reg_ref_chunks(const ibc_live_intervals *live,
-                                  const ibc_reg_ref *ref,
-                                  int num_bytes, int num_comps,
-                                  uint8_t simd_group, uint8_t simd_width,
-                                  BITSET_WORD *chunks);
+ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
+                              const ibc_ref *ref,
+                              int num_bytes, int num_comps,
+                              uint8_t simd_group, uint8_t simd_width,
+                              BITSET_WORD *chunks);
 
 ibc_live_intervals *
 ibc_compute_live_intervals(ibc_shader *shader,

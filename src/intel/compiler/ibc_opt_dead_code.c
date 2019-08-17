@@ -24,7 +24,7 @@
 #include "ibc.h"
 
 static bool
-reg_ref_is_alive(ibc_reg_ref *ref)
+ref_is_alive(ibc_ref *ref)
 {
    switch (ref->file) {
    case IBC_REG_FILE_NONE:
@@ -48,7 +48,7 @@ reg_ref_is_alive(ibc_reg_ref *ref)
 }
 
 static bool
-mark_ref(ibc_reg_ref *ref,
+mark_ref(ibc_ref *ref,
          UNUSED int num_bytes,
          UNUSED int num_comps,
          UNUSED uint8_t simd_group,
@@ -74,18 +74,18 @@ instr_is_alive(ibc_instr *instr) {
    switch (instr->type) {
    case IBC_INSTR_TYPE_ALU: {
       ibc_alu_instr *alu = ibc_instr_as_alu(instr);
-      return reg_ref_is_alive(&alu->dest) ||
-             (alu->cmod && reg_ref_is_alive(&alu->instr.flag));
+      return ref_is_alive(&alu->dest) ||
+             (alu->cmod && ref_is_alive(&alu->instr.flag));
    }
 
    case IBC_INSTR_TYPE_SEND: {
       ibc_send_instr *send = ibc_instr_as_send(instr);
-      return send->has_side_effects || reg_ref_is_alive(&send->dest);
+      return send->has_side_effects || ref_is_alive(&send->dest);
    }
 
    case IBC_INSTR_TYPE_INTRINSIC: {
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-      return intrin->has_side_effects || reg_ref_is_alive(&intrin->dest);
+      return intrin->has_side_effects || ref_is_alive(&intrin->dest);
    }
 
    case IBC_INSTR_TYPE_FLOW:
