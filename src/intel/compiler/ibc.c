@@ -85,7 +85,7 @@ ibc_reg_ssa_instr(const ibc_reg *reg)
    if (!list_is_singular(&reg->writes))
       return NULL;
 
-   return LIST_ENTRY(ibc_ref, reg->writes.next, write_link)->write_instr;
+   return LIST_ENTRY(ibc_reg_write, reg->writes.next, link)->instr;
 }
 
 static void
@@ -93,28 +93,39 @@ ibc_ref_init(ibc_ref *ref)
 {
 }
 
-static void
-ibc_ref_link_write(ibc_ref *ref, ibc_instr *instr)
+static bool
+ibc_reg_write_link(ibc_reg_write *write, ibc_ref *ref, void *_instr)
 {
+   ibc_instr *instr = _instr;
+   assert(write->instr == NULL);
+
    if (ref->file == IBC_REG_FILE_NONE || ref->file == IBC_REG_FILE_IMM)
-      return;
+      return true;
 
    if (ref->reg) {
-      ref->write_instr = instr;
-      list_addtail(&ref->write_link, &((ibc_reg *)ref->reg)->writes);
+      write->instr = instr;
+      list_addtail(&write->link, &((ibc_reg *)ref->reg)->writes);
    }
+
+   return true;
 }
 
-static void
-ibc_ref_unlink_write(ibc_ref *ref, ibc_instr *instr)
+static bool
+ibc_reg_write_unlink(ibc_reg_write *write, UNUSED ibc_ref *ref, void *_instr)
 {
-   if (ref->write_instr) {
-      assert(ref->write_instr == instr);
+   ibc_instr *instr = _instr;
+   if (write->instr) {
+      assert(write->instr == instr);
       assert(ref->file != IBC_REG_FILE_NONE);
       assert(ref->file != IBC_REG_FILE_IMM);
-      list_del(&ref->write_link);
-      ref->write_instr = NULL;
+      assert(ref->reg != NULL);
+      list_del(&write->link);
+      write->instr = NULL;
+   } else {
+      assert(ref->reg == NULL);
+      assert(write->instr == NULL);
    }
+   return true;
 }
 
 static void
@@ -240,7 +251,7 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_ref_cb cb, void *state)
 
    case IBC_INSTR_TYPE_INTRINSIC: {
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-      if (intrin->dest.file != IBC_REG_FILE_NONE &&
+      if (intrin->num_dest_comps > 0 &&
           !cb(&intrin->dest, -1, intrin->num_dest_comps,
               instr->simd_group, instr->simd_width, state))
          return false;
@@ -255,13 +266,92 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_ref_cb cb, void *state)
    unreachable("Invalid IBC instruction type");
 }
 
-static void
-ibc_instr_set_write_ref(ibc_instr *instr, ibc_ref *write_ref,
-                        ibc_ref new_ref)
+bool
+ibc_instr_foreach_reg_write(ibc_instr *instr, ibc_reg_write_cb cb, void *_data)
 {
-   ibc_ref_unlink_write(write_ref, instr);
-   *write_ref = new_ref;
-   ibc_ref_link_write(write_ref, instr);
+   switch (instr->type) {
+   case IBC_INSTR_TYPE_ALU: {
+      ibc_alu_instr *alu = ibc_instr_as_alu(instr);
+      if (alu->cmod && !cb(&alu->cmod_write, &instr->flag, _data))
+         return false;
+      if (!cb(&alu->dest_write, &alu->dest, _data))
+         return false;
+      return true;
+   }
+
+   case IBC_INSTR_TYPE_SEND: {
+      ibc_send_instr *send = ibc_instr_as_send(instr);
+      return send->rlen == 0 ||
+             cb(&send->dest_write, &send->dest, _data);
+   }
+
+   case IBC_INSTR_TYPE_INTRINSIC: {
+      ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
+      return intrin->num_dest_comps == 0 ||
+              cb(&intrin->dest_write, &intrin->dest, _data);
+   }
+
+   case IBC_INSTR_TYPE_FLOW:
+      return true;
+   }
+
+   unreachable("Invalid IBC instruction type");
+}
+
+ibc_ref *
+ibc_reg_write_get_ref(ibc_reg_write *write)
+{
+   switch (write->instr->type) {
+   case IBC_INSTR_TYPE_ALU: {
+      ibc_alu_instr *alu = ibc_instr_as_alu(write->instr);
+      if (write == &alu->cmod_write) {
+         assert(alu->cmod != BRW_CONDITIONAL_NONE);
+         return &alu->instr.flag;
+      }
+      assert(write == &alu->dest_write);
+      return &alu->dest;
+   }
+
+   case IBC_INSTR_TYPE_SEND:
+      assert(write == &ibc_instr_as_send(write->instr)->dest_write);
+      return &ibc_instr_as_send(write->instr)->dest;
+
+   case IBC_INSTR_TYPE_INTRINSIC:
+      assert(write == &ibc_instr_as_intrinsic(write->instr)->dest_write);
+      return &ibc_instr_as_intrinsic(write->instr)->dest;
+
+   case IBC_INSTR_TYPE_FLOW:
+      unreachable("Flow instructions never have writes");
+   }
+
+   unreachable("Invalid IBC instruction type");
+}
+
+static void
+ibc_instr_set_write_ref(ibc_instr *instr, ibc_ref *ref,
+                        ibc_reg_write *write, ibc_ref new_ref)
+{
+   ibc_reg_write_unlink(write, ref, instr);
+   *ref = new_ref;
+   ibc_reg_write_link(write, ref, instr);
+}
+
+struct set_write_ref_cb_data {
+   ibc_instr *instr;
+   ibc_ref *ref;
+   const ibc_ref *new_ref;
+};
+
+static bool
+set_write_ref_cb(ibc_reg_write *write, ibc_ref *ref, void *_data)
+{
+   struct set_write_ref_cb_data *data = _data;
+   if (ref == data->ref) {
+      ibc_instr_set_write_ref(data->instr, ref, write, *data->new_ref);
+      return false;
+   } else {
+      return true;
+   }
 }
 
 static bool
@@ -278,12 +368,20 @@ refs_not_equal(ibc_ref *ref,
 void
 ibc_instr_set_ref(ibc_instr *instr, ibc_ref *ref, ibc_ref new_ref)
 {
-   if (instr == NULL || ibc_instr_foreach_write(instr, refs_not_equal, ref)) {
-      assert(ref->write_instr == NULL);
+   if (instr == NULL) {
       *ref = new_ref;
-   } else {
-      assert(instr && (ref->reg == NULL || ref->write_instr == instr));
-      ibc_instr_set_write_ref(instr, ref, new_ref);
+      return;
+   }
+
+   struct set_write_ref_cb_data cbd = {
+      .instr = instr,
+      .ref = ref,
+      .new_ref = &new_ref,
+   };
+   bool not_found = ibc_instr_foreach_reg_write(instr, set_write_ref_cb, &cbd);
+   if (not_found) {
+      assert(!ibc_instr_foreach_read(instr, refs_not_equal, ref));
+      *ref = new_ref;
    }
 }
 
@@ -303,7 +401,8 @@ ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_ref flag,
                        enum brw_conditional_mod cmod)
 {
    alu->cmod = cmod;
-   ibc_instr_set_write_ref(&alu->instr, &alu->instr.flag, flag);
+   ibc_instr_set_write_ref(&alu->instr, &alu->instr.flag,
+                           &alu->cmod_write, flag);
 }
 
 #define IBC_ALU_OP_DECL(OP, _num_srcs, _src_mods)        \
@@ -430,35 +529,12 @@ ibc_shader_create(void *mem_ctx,
    return shader;
 }
 
-static bool
-link_write_cb(ibc_ref *ref,
-              UNUSED int num_bytes,
-              UNUSED int num_comps,
-              UNUSED uint8_t simd_group,
-              UNUSED uint8_t simd_width,
-              void *_instr)
-{
-   ibc_ref_link_write(ref, _instr);
-   return true;
-}
-
 void
 ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor)
 {
    list_add(&instr->link, cursor.prev);
-   ibc_instr_foreach_write(instr, link_write_cb, instr);
-}
 
-static bool
-unlink_write_cb(ibc_ref *ref,
-                UNUSED int num_bytes,
-                UNUSED int num_comps,
-                UNUSED uint8_t simd_group,
-                UNUSED uint8_t simd_width,
-                void *_instr)
-{
-   ibc_ref_unlink_write(ref, _instr);
-   return true;
+   ibc_instr_foreach_reg_write(instr, ibc_reg_write_link, instr);
 }
 
 void
@@ -469,7 +545,8 @@ ibc_instr_remove(ibc_instr *instr)
     */
    assert(instr->type != IBC_INSTR_TYPE_FLOW);
 
-   ibc_instr_foreach_write(instr, unlink_write_cb, instr);
+   ibc_instr_foreach_reg_write(instr, ibc_reg_write_unlink, instr);
+
    list_del(&instr->link);
 }
 
