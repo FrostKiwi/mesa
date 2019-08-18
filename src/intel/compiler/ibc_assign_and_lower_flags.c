@@ -604,6 +604,8 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
             instr_set_flag_ref(instr, &instr->flag, subnr, preserved, &state);
          } else if (alu->dest.file == IBC_REG_FILE_LOGICAL &&
                     alu->dest.reg->logical.bit_size == 1 &&
+                    alu->op != IBC_ALU_OP_SEL &&
+                    alu->instr.predicate == BRW_PREDICATE_NONE &&
                     logical_reg_has_unique_alu_writes(alu->dest.reg,
                                                       state.live) &&
                     state.regs[alu->dest.reg->index].read_as_flag) {
