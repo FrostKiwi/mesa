@@ -149,13 +149,13 @@ ibc_hw_grf_ref(uint8_t nr, uint8_t subnr, enum ibc_type type)
 }
 
 static inline ibc_ref
-ibc_flag_ref(uint8_t subnr, uint8_t bit)
+ibc_flag_ref(uint8_t bit)
 {
    return (ibc_ref) {
       .file = IBC_REG_FILE_FLAG,
       .type = IBC_TYPE_FLAG,
       .flag = {
-         .bit = subnr * 16 + bit,
+         .bit = bit,
       },
    };
 }

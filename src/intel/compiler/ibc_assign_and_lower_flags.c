@@ -25,9 +25,14 @@
 #include "ibc_builder.h"
 #include "ibc_live_intervals.h"
 
-#define TOTAL_FLAG_SUBNRS 4
+#define TOTAL_FLAG_BITS 64
+
+/* We allocate at the nibble granularity */
+#define FLAG_CHUNK_BITS 4
+#define TOTAL_FLAG_CHUNKS (TOTAL_FLAG_BITS / FLAG_CHUNK_BITS)
 
 enum flag_rep {
+   FLAG_REP_NONE   = 0x0,
    FLAG_REP_FLAG   = 0x1,
    FLAG_REP_VECTOR = 0x2,
    FLAG_REP_SCALAR = 0x4,
@@ -54,8 +59,8 @@ struct ibc_assign_flags_state {
    const ibc_live_intervals *live;
    struct flag_reg_state *regs;
 
-   const ibc_reg *assign[TOTAL_FLAG_SUBNRS];
-   enum flag_rep valid[TOTAL_FLAG_SUBNRS];
+   const ibc_reg *assign[TOTAL_FLAG_CHUNKS];
+   enum flag_rep valid[TOTAL_FLAG_CHUNKS];
 };
 
 static bool
@@ -102,6 +107,10 @@ logical_flag_reg_bit_size(const ibc_reg *reg)
       }
    }
 
+   /* This can happen when we have a CMP of booleans */
+   if (bit_size == 1)
+      bit_size = 16;
+
    return bit_size;
 }
 
@@ -146,22 +155,42 @@ logical_reg_has_unique_alu_writes(const ibc_reg *reg,
    return true;
 }
 
+static unsigned
+flag_reg_num_bits(const ibc_reg *reg)
+{
+   switch (reg->file) {
+   case IBC_REG_FILE_LOGICAL:
+      assert(reg->logical.bit_size == 1);
+      return reg->logical.simd_width;
+   case IBC_REG_FILE_FLAG:
+      return reg->flag.bits;
+   default:
+      unreachable("Invalid flag register type");
+   }
+}
+
+static unsigned
+flag_reg_num_chunks(const ibc_reg *reg)
+{
+   return DIV_ROUND_UP(flag_reg_num_bits(reg), FLAG_CHUNK_BITS);
+}
+
 static void
 free_dead_flags(uint32_t ip, struct ibc_assign_flags_state *state)
 {
-   for (uint8_t subnr = 0; subnr < TOTAL_FLAG_SUBNRS; subnr++) {
-      if (state->assign[subnr] == NULL)
+   for (unsigned chunk = 0; chunk < TOTAL_FLAG_CHUNKS; chunk++) {
+      if (state->assign[chunk] == NULL)
          continue;
 
-      const ibc_reg *reg = state->assign[subnr];
+      const ibc_reg *reg = state->assign[chunk];
       const ibc_reg_live_intervals *rli = &state->live->regs[reg->index];
 
       if (rli->physical_end <= ip) {
-         state->assign[subnr] = NULL;
+         state->assign[chunk] = NULL;
          continue;
       }
 
-      if (!(state->valid[subnr] & (FLAG_REP_VECTOR | FLAG_REP_SCALAR)))
+      if (!(state->valid[chunk] & (FLAG_REP_VECTOR | FLAG_REP_SCALAR)))
          continue;
 
       uint32_t end = rli->physical_end;
@@ -174,8 +203,14 @@ free_dead_flags(uint32_t ip, struct ibc_assign_flags_state *state)
             end = MAX2(end, write->instr->index);
       }
 
-      if (end <= ip)
-         state->assign[subnr] = NULL;
+      if (end <= ip) {
+         const unsigned num_chunks = flag_reg_num_chunks(reg);
+         for (unsigned c = 0; c < num_chunks; c++)
+            state->assign[chunk + c] = NULL;
+
+         for (unsigned c = 0; c < TOTAL_FLAG_CHUNKS; c++)
+            assert(state->assign[c] != reg);
+      }
    }
 }
 
@@ -199,100 +234,206 @@ ensure_flag_spill_grf(const ibc_reg *flag,
    state->regs[flag->index].scalar = ibc_typed_ref(scalar, IBC_TYPE_UINT);
 }
 
-static void
-evict_flag(uint8_t subnr, struct ibc_assign_flags_state *state)
+static unsigned
+max_pow2_divisor(unsigned x)
 {
-   if (state->assign[subnr] == NULL)
+   /* Anything divides 0 */
+   if (x == 0)
+      return 1u << 31;
+
+   const unsigned pow2_divisor = 1 << (ffs(x) - 1);
+   assert(x % pow2_divisor == 0);
+   assert(x % (pow2_divisor * 2) != 0);
+   return pow2_divisor;
+}
+
+static void
+load_scalar_if_needed(unsigned chunk, struct ibc_assign_flags_state *state)
+{
+   if (state->assign[chunk] == NULL)
       return;
 
-   ibc_builder *b = &state->builder;
+   for (unsigned c = 0; c < chunk; c++)
+      assert(state->assign[c] != state->assign[chunk]);
 
-   const ibc_reg *flag = state->assign[subnr];
+   const ibc_reg *flag = state->assign[chunk];
+   const unsigned num_chunks = flag_reg_num_chunks(flag);
+
+   ibc_builder *b = &state->builder;
    ensure_flag_spill_grf(flag, state);
 
-   if (state->regs[flag->index].vector.file != IBC_REG_FILE_NONE &&
-       !(state->valid[subnr] & FLAG_REP_VECTOR)) {
-      assert(flag->file == IBC_REG_FILE_LOGICAL);
+   ibc_ref scalar = state->regs[flag->index].scalar;
+   if (scalar.file == IBC_REG_FILE_NONE)
+      return;
 
-      ibc_ref vector = state->regs[flag->index].vector;
-      assert(vector.file == IBC_REG_FILE_LOGICAL);
+   enum flag_rep all_valid = FLAG_REP_ALL;
+   for (unsigned c = 0; c < num_chunks; c++)
+      all_valid &= state->valid[chunk + c];
 
-      ibc_builder_push_scalar(b);
-      ibc_ref zero = ibc_MOV(b, IBC_TYPE_W, ibc_imm_w(0));
-      ibc_builder_pop(b);
+   if (all_valid & FLAG_REP_VECTOR)
+      return;
 
-      ibc_builder_push_group(b, vector.reg->logical.simd_group,
-                                vector.reg->logical.simd_width);
-      ibc_alu_instr *sel =
-         ibc_build_alu2(b, IBC_ALU_OP_SEL, vector, zero, ibc_imm_w(-1));
-      ibc_instr_set_predicate(&sel->instr, ibc_flag_ref(subnr, 0),
-                              BRW_PREDICATE_NORMAL, true);
-      ibc_builder_pop(b);
-   }
-
-   if (state->regs[flag->index].scalar.file != IBC_REG_FILE_NONE &&
-       !(state->valid[subnr] & FLAG_REP_SCALAR)) {
-      ibc_ref scalar = state->regs[flag->index].scalar;
-      ibc_builder_push_scalar(b);
-      ibc_ref flag_ref = ibc_flag_ref(subnr, 0);
-      flag_ref.type = scalar.type;
-      ibc_MOV_to(b, scalar, flag_ref);
-      ibc_builder_pop(b);
-   }
-
-   /* If subnr is even, it's possible that the same register occupies two
-    * subnumbers.  Clear both if this is the case.
-    */
-   if (subnr % 2 == 0 && state->assign[subnr] == state->assign[subnr + 1])
-      state->assign[subnr + 1] = NULL;
-   state->assign[subnr] = NULL;
+   ibc_builder_push_scalar(b);
+   ibc_ref flag_ref = ibc_flag_ref(chunk * FLAG_CHUNK_BITS);
+   flag_ref.type = scalar.type;
+   ibc_MOV_to(b, scalar, flag_ref);
+   ibc_builder_pop(b);
 }
 
 static void
-evict_all_flags(uint32_t ip, struct ibc_assign_flags_state *state)
+load_vector_if_needed(unsigned chunk,
+                      unsigned start_chunk, unsigned num_chunks,
+                      struct ibc_assign_flags_state *state)
 {
-   free_dead_flags(ip, state);
+   if (state->assign[chunk] == NULL)
+      return;
 
-   for (uint8_t subnr = 0; subnr < TOTAL_FLAG_SUBNRS; subnr++)
-      evict_flag(subnr, state);
-}
+   for (unsigned c = 0; c < chunk; c++)
+      assert(state->assign[c] != state->assign[chunk]);
 
-static void
-load_flag_if_needed(uint8_t subnr, uint32_t ip,
-                    struct ibc_assign_flags_state *state)
-{
-   assert(state->assign[subnr] != NULL);
-   const ibc_reg *flag = state->assign[subnr];
-   const ibc_reg_live_intervals *rli = &state->live->regs[flag->index];
+   const ibc_reg *flag = state->assign[chunk];
 
-   /* Detect if this flag register is live right before the current
-    * instruction.  ip = 0 should only be true for the START instruction
-    */
-   assert(ip > 0);
-   bool live = false;
-   for (unsigned i= 0; i < rli->num_chunks; i++) {
-      if (interval_set_contains(rli->chunk_live[i], ip - 1)) {
-         live = true;
-         break;
+   ibc_builder *b = &state->builder;
+   ensure_flag_spill_grf(flag, state);
+
+   ibc_ref vector = state->regs[flag->index].vector;
+   if (vector.file == IBC_REG_FILE_NONE)
+      return;
+
+   assert(vector.file == IBC_REG_FILE_LOGICAL);
+   if (flag->logical.simd_width < FLAG_CHUNK_BITS) {
+      assert(start_chunk == 0 && num_chunks == 1);
+      if (!(state->valid[chunk] & FLAG_REP_VECTOR)) {
+         ibc_builder_push_we_all(b, flag->logical.simd_width);
+         ibc_build_alu(b, IBC_ALU_OP_MOV, ibc_null(vector.type),
+                       ibc_flag_ref(chunk * FLAG_CHUNK_BITS),
+                       BRW_CONDITIONAL_NZ, &vector, 1);
+         ibc_builder_pop(b);
+      }
+   } else {
+      const unsigned max_width =
+         (2 * REG_SIZE) / ibc_type_byte_size(vector.type);
+      assert(max_width % FLAG_CHUNK_BITS == 0);
+      const unsigned max_width_chunks = max_width / FLAG_CHUNK_BITS;
+         const unsigned end_chunk = start_chunk + num_chunks - 1;
+
+      int copy_start = -1;
+      for (unsigned c = start_chunk; c <= end_chunk; c++) {
+         if (copy_start < 0 && !(state->valid[chunk + c] & FLAG_REP_VECTOR))
+            copy_start = c;
+
+         if (copy_start < 0)
+            continue;
+
+         if (c == end_chunk ||
+             (state->valid[chunk + c] & FLAG_REP_VECTOR) ||
+             (c - copy_start) == max_width_chunks ||
+             (c - copy_start) == max_pow2_divisor(copy_start)) {
+            unsigned copy_bit = copy_start * FLAG_CHUNK_BITS;
+            unsigned copy_width = (c - copy_start) * FLAG_CHUNK_BITS;
+            if (c == end_chunk)
+               copy_width += FLAG_CHUNK_BITS;
+
+            ibc_builder_push_scalar(b);
+            ibc_ref zero = ibc_MOV(b, IBC_TYPE_W, ibc_imm_w(0));
+            ibc_builder_pop(b);
+
+            ibc_builder_push_group(b, flag->logical.simd_group + copy_bit,
+                                      copy_width);
+            ibc_alu_instr *sel =
+               ibc_build_alu2(b, IBC_ALU_OP_SEL, vector, zero, ibc_imm_w(-1));
+            ibc_instr_set_predicate(&sel->instr,
+               ibc_flag_ref(chunk * FLAG_CHUNK_BITS + copy_bit),
+               BRW_PREDICATE_NORMAL, true);
+            ibc_builder_pop(b);
+         }
       }
    }
-   if (!live)
+}
+
+static void
+evict_flag(unsigned chunk, struct ibc_assign_flags_state *state)
+{
+   if (state->assign[chunk] == NULL)
       return;
+
+   UNUSED const ibc_reg *flag = state->assign[chunk];
+
+   const unsigned num_chunks = flag_reg_num_chunks(state->assign[chunk]);
+   load_vector_if_needed(chunk, 0, num_chunks, state);
+   load_scalar_if_needed(chunk, state);
+
+   for (unsigned c = 0; c < num_chunks; c++)
+      state->assign[chunk + c] = NULL;
+
+   for (unsigned c = 0; c < TOTAL_FLAG_CHUNKS; c++)
+      assert(state->assign[c] != flag);
+}
+
+static void
+load_from_scalar(unsigned chunk, struct ibc_assign_flags_state *state)
+{
+   ibc_builder *b = &state->builder;
+   const ibc_reg *flag = state->assign[chunk];
+   ibc_ref scalar = state->regs[flag->index].scalar;
+   assert(scalar.file == IBC_REG_FILE_LOGICAL);
+
+   const unsigned num_chunks = flag_reg_num_chunks(flag);
+   for (unsigned c = 0; c < num_chunks; c++) {
+      assert(state->assign[chunk + c] == flag);
+      assert(state->valid[chunk + c] & FLAG_REP_SCALAR);
+   }
+
+   ibc_builder_push_scalar(b);
+   ibc_ref flag_ref = ibc_flag_ref(chunk * FLAG_CHUNK_BITS);
+   flag_ref.type = scalar.type;
+   ibc_MOV_to(b, flag_ref, scalar);
+   ibc_builder_pop(b);
+
+   for (unsigned c = 0; c < num_chunks; c++)
+      state->valid[chunk + c] |= FLAG_REP_FLAG;
+}
+
+static void
+load_flag_if_needed(unsigned chunk, unsigned start_chunk, unsigned num_chunks,
+                    bool is_write, struct ibc_assign_flags_state *state)
+{
+   assert(state->assign[chunk] != NULL);
+   for (unsigned c = 0; c < chunk; c++)
+      assert(state->assign[c] != state->assign[chunk]);
+
+   const ibc_reg *flag = state->assign[chunk];
+   assert(start_chunk + num_chunks <= flag_reg_num_chunks(flag));
 
    ibc_builder *b = &state->builder;
    ensure_flag_spill_grf(flag, state);
+
+   enum flag_rep all_valid = FLAG_REP_ALL;
+   for (unsigned c = 0; c < flag_reg_num_chunks(flag); c++)
+      all_valid &= state->valid[chunk + c];
+
+   if (is_write) {
+      if ((start_chunk > 0 ||
+           start_chunk + num_chunks < flag_reg_num_chunks(flag)) &&
+          state->regs[flag->index].scalar.file != IBC_REG_FILE_NONE &&
+          !(all_valid & FLAG_REP_FLAG)) {
+         /* If we're a partial write and we don't have a scalar representation
+          * and not all of the flag values are valid then we have to do a load
+          * because we can't easily do a partial load from a scalar later.
+          */
+         load_from_scalar(chunk, state);
+      }
+      /* No other flag writes require a load. */
+      return;
+   }
 
    /* Prefer the scalar if we have it as the load is only one instruction and
     * it contributes less to register pressure so extending its live range
     * costs less.
     */
-   if (state->regs[flag->index].scalar.file != IBC_REG_FILE_NONE) {
-      ibc_ref scalar = state->regs[flag->index].scalar;
-      ibc_builder_push_scalar(b);
-      ibc_ref flag_ref = ibc_flag_ref(subnr, 0);
-      flag_ref.type = scalar.type;
-      ibc_MOV_to(b, flag_ref, scalar);
-      ibc_builder_pop(b);
+   if (state->regs[flag->index].scalar.file != IBC_REG_FILE_NONE &&
+       (all_valid & FLAG_REP_SCALAR)) {
+      load_from_scalar(chunk, state);
       return;
    }
 
@@ -300,61 +441,125 @@ load_flag_if_needed(uint8_t subnr, uint32_t ip,
       ibc_ref vector = state->regs[flag->index].vector;
       assert(vector.file == IBC_REG_FILE_LOGICAL);
 
-      ibc_builder_push_group(b, vector.reg->logical.simd_group,
-                                vector.reg->logical.simd_width);
+      if (flag_reg_num_bits(flag) < FLAG_CHUNK_BITS) {
+         assert(start_chunk == 0 && num_chunks == 1);
+         assert(flag_reg_num_chunks(flag) == 1);
+         if (!(state->valid[chunk] & FLAG_REP_FLAG)) {
+            ibc_builder_push_we_all(b, flag_reg_num_bits(flag));
+            ibc_build_alu(b, IBC_ALU_OP_MOV, ibc_null(vector.type),
+                          ibc_flag_ref(chunk * FLAG_CHUNK_BITS),
+                          BRW_CONDITIONAL_NZ, &vector, 1);
+            ibc_builder_pop(b);
+            state->valid[chunk] |= FLAG_REP_FLAG;
+         }
+      } else {
+         const unsigned max_width =
+            (2 * REG_SIZE) / ibc_type_byte_size(vector.type);
+         assert(max_width % FLAG_CHUNK_BITS == 0);
+         const unsigned max_width_chunks = max_width / FLAG_CHUNK_BITS;
+         const unsigned end_chunk = start_chunk + num_chunks - 1;
 
-      ibc_build_alu(b, IBC_ALU_OP_MOV, ibc_null(vector.type),
-                    ibc_flag_ref(subnr, 0), BRW_CONDITIONAL_NZ, &vector, 1);
-      ibc_builder_pop(b);
+         int copy_start = -1;
+         for (unsigned c = start_chunk; c <= end_chunk; c++) {
+            if (copy_start < 0 && !(state->valid[chunk + c] & FLAG_REP_FLAG))
+               copy_start = c;
+
+            if (copy_start < 0)
+               continue;
+
+            if (c == end_chunk ||
+                (state->valid[chunk + c] & FLAG_REP_FLAG) ||
+                (c - copy_start) == max_width_chunks ||
+                (c - copy_start) == max_pow2_divisor(copy_start)) {
+               unsigned copy_bit = copy_start * FLAG_CHUNK_BITS;
+               unsigned copy_width = (c - copy_start) * FLAG_CHUNK_BITS;
+               if (c == end_chunk)
+                  copy_width += FLAG_CHUNK_BITS;
+               ibc_builder_push_group(b, flag->logical.simd_group + copy_bit,
+                                         copy_width);
+               ibc_build_alu(b, IBC_ALU_OP_MOV, ibc_null(vector.type),
+                             ibc_flag_ref(chunk * FLAG_CHUNK_BITS + copy_bit),
+                             BRW_CONDITIONAL_NZ, &vector, 1);
+               ibc_builder_pop(b);
+            }
+
+            /* We've either done a copy or set copy_group to ensure this chunk
+             * gets copied.
+             */
+            state->valid[chunk + c] |= FLAG_REP_FLAG;
+         }
+      }
+      return;
+   }
+
+   if (state->regs[flag->index].scalar.file != IBC_REG_FILE_NONE) {
+      load_from_scalar(chunk, state);
       return;
    }
 
    unreachable("Must have some sort of GRF");
 }
 
-static int8_t
+static void
+evict_all_flags(uint32_t ip, struct ibc_assign_flags_state *state)
+{
+   free_dead_flags(ip, state);
+
+   for (unsigned chunk = 0; chunk < TOTAL_FLAG_CHUNKS; chunk++)
+      evict_flag(chunk, state);
+}
+
+static int
 find_flag(const ibc_reg *reg, struct ibc_assign_flags_state *state)
 {
-   for (uint8_t subnr = 0; subnr < TOTAL_FLAG_SUBNRS; subnr++) {
-      if (state->assign[subnr] == reg)
-         return subnr;
+   for (unsigned chunk = 0; chunk < TOTAL_FLAG_CHUNKS; chunk++) {
+      if (state->assign[chunk] == reg)
+         return chunk;
    }
 
    return -1;
 }
 
-static int8_t
-find_or_assign_flag(const ibc_reg *reg, uint32_t ip,
-                    bool load_from_grf,
-                    bool opportunistic,
+static int
+find_or_assign_flag(const ibc_reg *reg, uint32_t ip, bool opportunistic,
                     struct ibc_assign_flags_state *state)
 {
    /* First, try and look it up */
-   int8_t subnr = find_flag(reg, state);
-   if (subnr >= 0)
-      return subnr;
+   int chunk = find_flag(reg, state);
+   if (chunk >= 0)
+      return chunk;
 
-   uint8_t align_mul, align_offset, num_subnrs;
+   const unsigned num_chunks = flag_reg_num_chunks(reg);
+   unsigned align_mul, align_offset;
    if (reg->file == IBC_REG_FILE_LOGICAL) {
-      align_mul =
-         DIV_ROUND_UP(reg->logical.simd_group + reg->logical.simd_width, 16);
-      align_offset = reg->logical.simd_group >= 16;
-      num_subnrs = DIV_ROUND_UP(reg->logical.simd_width, 16);
+      unsigned align_mul_bits =
+         MAX2(16, reg->logical.simd_group + reg->logical.simd_width);
+      assert(align_mul_bits % FLAG_CHUNK_BITS == 0);
+      assert(reg->logical.simd_group % FLAG_CHUNK_BITS == 0);
+      align_mul = align_mul_bits / FLAG_CHUNK_BITS;
+      align_offset = (reg->logical.simd_group / FLAG_CHUNK_BITS) % align_mul;
    } else {
       assert(reg->file == IBC_REG_FILE_FLAG);
-      align_mul = DIV_ROUND_UP(reg->flag.align_mul, 16);
-      align_offset = reg->flag.align_offset / 16;
-      num_subnrs = DIV_ROUND_UP(reg->flag.bits, 16);
+      assert(reg->flag.align_mul >= 16);
+      assert(reg->flag.align_offset % FLAG_CHUNK_BITS == 0);
+      align_mul = reg->flag.align_mul / FLAG_CHUNK_BITS;
+      align_offset = reg->flag.align_offset / FLAG_CHUNK_BITS;
    }
 
    /* Next, try and find a free slot */
-   for (uint8_t s = align_offset; s < TOTAL_FLAG_SUBNRS; s += align_mul) {
-      assert(num_subnrs == 1 || num_subnrs == 2);
-      if (state->assign[s] == NULL &&
-          (num_subnrs == 1 || state->assign[s + 1] == NULL)) {
-         subnr = s;
-         goto assigned;
+   for (chunk = align_offset; chunk < TOTAL_FLAG_CHUNKS; chunk += align_mul) {
+      if (state->assign[chunk] != NULL)
+         continue;
+
+      bool all_chunks_free = true;
+      for (unsigned c = 1; c < num_chunks; c++) {
+         if (state->assign[chunk + c] != NULL) {
+            all_chunks_free = false;
+            break;
+         }
       }
+      if (all_chunks_free)
+         goto assigned;
    }
 
    /* If we don't have any free slots, get rid of the register with the
@@ -363,18 +568,21 @@ find_or_assign_flag(const ibc_reg *reg, uint32_t ip,
     * It's a heuristic.
     */
    uint32_t max_end = 0;
-   for (uint8_t s = align_offset; s < TOTAL_FLAG_SUBNRS; s += align_mul) {
-      for (unsigned i = 0; i < num_subnrs; i++) {
-         if (state->assign[s + i]) {
+   int max_end_chunk = -1;
+   for (chunk = align_offset; chunk < TOTAL_FLAG_CHUNKS; chunk += align_mul) {
+      for (unsigned c = 1; c < num_chunks; c++) {
+         if (state->assign[chunk + c]) {
             const ibc_reg_live_intervals *iter_rli =
-               &state->live->regs[state->assign[s + i]->index];
+               &state->live->regs[state->assign[chunk + c]->index];
             if (iter_rli->physical_end > max_end) {
-               subnr = s;
                max_end = iter_rli->physical_end;
+               max_end_chunk = chunk;
             }
          }
       }
    }
+   assert(max_end_chunk >= 0);
+   chunk = max_end_chunk;
 
    /* If this is an opportunistic allocation, we only want to evict a register
     * if its live range is shorter than the register we're opportunistically
@@ -385,62 +593,135 @@ find_or_assign_flag(const ibc_reg *reg, uint32_t ip,
    if (opportunistic && max_end < state->live->regs[reg->index].physical_end)
       return -1;
 
-   /* If we got here, we should have found a register to use */
-   assert(subnr >= 0);
-
-   for (unsigned i = 0; i < num_subnrs; i++)
-      evict_flag(subnr + i, state);
+   for (unsigned c = 0; c < num_chunks; c++)
+      evict_flag(chunk + c, state);
 
 assigned:
 
-   for (unsigned i = 0; i < num_subnrs; i++)
-      state->assign[subnr + i] = reg;
+   {
+      enum flag_rep valid = FLAG_REP_ALL;
 
-   if (load_from_grf)
-      load_flag_if_needed(subnr, ip, state);
+      /* Detect if this flag register is live right before the current
+       * instruction.  If it's not then we can assume the flag register starts
+       * off valid.  If it is even somewhat live, we assume the whole thing is
+       * valid.  In theory, we could use a finer granularity for this but it
+       * doesn't seem worth the bother.
+       *
+       * ip = 0 should only be true for the START instruction.
+       */
+      assert(ip > 0);
+      const ibc_reg_live_intervals *rli = &state->live->regs[reg->index];
+      for (unsigned i= 0; i < rli->num_chunks; i++) {
+         if (interval_set_contains(rli->chunk_live[i], ip - 1)) {
+            valid &= FLAG_REP_FLAG;
+            break;
+         }
+      }
 
-   for (unsigned i = 0; i < num_subnrs; i++)
-      state->valid[subnr + i] = FLAG_REP_ALL;
+      for (unsigned c = 0; c < num_chunks; c++) {
+         state->assign[chunk + c] = reg;
+         state->valid[chunk + c] = FLAG_REP_VECTOR | FLAG_REP_SCALAR;
+      }
+   }
 
-   return subnr;
+   return chunk;
 }
 
 static void
-instr_set_flag_ref(ibc_instr *instr, ibc_ref *ref, uint8_t subnr,
-                   enum flag_rep preserved,
-                   struct ibc_assign_flags_state *state)
+flag_ref_chunk_range(const ibc_ref *ref,
+                     uint8_t simd_group, uint8_t simd_width,
+                     unsigned *start_chunk, unsigned *num_chunks)
 {
-   assert(subnr < TOTAL_FLAG_SUBNRS);
-   const ibc_reg *reg = state->assign[subnr];
-
-   uint8_t num_subnrs;
-   ibc_ref flag_ref = ibc_flag_ref(subnr, 0);
-   if (reg->file == IBC_REG_FILE_LOGICAL) {
-      assert(ref->type == IBC_TYPE_FLAG);
-      assert(reg->logical.bit_size == 1);
-      assert(reg->logical.simd_group <= instr->simd_group);
-      flag_ref.flag.bit += instr->simd_group - reg->logical.simd_group;
-      num_subnrs = DIV_ROUND_UP(reg->logical.simd_width, 16);
+   if (ref->type == IBC_TYPE_FLAG) {
+      if (flag_reg_num_bits(ref->reg) < FLAG_CHUNK_BITS) {
+         assert(flag_reg_num_bits(ref->reg) == 1);
+         if (ref->file == IBC_REG_FILE_LOGICAL)
+            assert(ref->reg->logical.simd_group == 0);
+         assert(simd_group == 0 && simd_width == 1);
+         *start_chunk = 0;
+         *num_chunks = 1;
+      } else {
+         unsigned start_bit;
+         if (ref->file == IBC_REG_FILE_LOGICAL) {
+            start_bit = simd_group - ref->reg->logical.simd_group;
+         } else {
+            assert(ref->file == IBC_REG_FILE_FLAG);
+            start_bit = ref->flag.bit;
+         }
+         assert(start_bit % FLAG_CHUNK_BITS == 0);
+         assert(simd_width % FLAG_CHUNK_BITS == 0);
+         *start_chunk = start_bit / FLAG_CHUNK_BITS;
+         *num_chunks = simd_width / FLAG_CHUNK_BITS;
+      }
    } else {
-      flag_ref.type = ref->type;
-      num_subnrs = DIV_ROUND_UP(reg->flag.bits, 16);
+      assert(ref->file == IBC_REG_FILE_FLAG);
+      assert(ref->flag.bit % FLAG_CHUNK_BITS == 0);
+      *start_chunk = ref->flag.bit / FLAG_CHUNK_BITS;
+      *num_chunks = ibc_type_bit_size(ref->type) / FLAG_CHUNK_BITS;
+   }
+}
+
+static bool
+flag_ref_valid(const ibc_instr *instr, const ibc_ref *ref, unsigned chunk,
+               struct ibc_assign_flags_state *state)
+{
+   unsigned start_chunk, num_chunks;
+   flag_ref_chunk_range(ref, instr->simd_group, instr->simd_width,
+                        &start_chunk, &num_chunks);
+
+   enum flag_rep valid = FLAG_REP_ALL;
+   for (unsigned c = 0; c < num_chunks; c++) {
+      assert(state->assign[chunk + start_chunk + c] == ref->reg);
+      valid &= state->valid[chunk + start_chunk + c];
    }
 
+   return valid & FLAG_REP_FLAG;
+}
+
+static void
+instr_set_flag_ref(ibc_instr *instr, ibc_ref *ref, unsigned chunk,
+                   enum flag_rep written,
+                   struct ibc_assign_flags_state *state)
+{
+   unsigned start_chunk, num_chunks;
+   flag_ref_chunk_range(ref, instr->simd_group, instr->simd_width,
+                        &start_chunk, &num_chunks);
+
+   load_flag_if_needed(chunk, start_chunk, num_chunks, written, state);
+
+   ibc_ref flag_ref = ibc_flag_ref((chunk + start_chunk) * FLAG_CHUNK_BITS);
    ibc_instr_set_ref(instr, ref, flag_ref);
 
-   for (unsigned i = 0; i < num_subnrs; i++)
-      state->valid[subnr] &= preserved;
+   if (written) {
+      for (unsigned c = 0; c < num_chunks; c++)
+         state->valid[chunk + start_chunk + c] = written;
+   }
 }
 
 static void
 rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
+                 uint8_t simd_group, uint8_t simd_width,
                  struct ibc_assign_flags_state *state)
 {
    if (ref->file == IBC_REG_FILE_LOGICAL && ref->type == IBC_TYPE_FLAG) {
       assert(ref->reg->index < state->live->num_regs);
+
+      unsigned start_chunk, num_chunks;
+      flag_ref_chunk_range(ref, simd_group, simd_width,
+                           &start_chunk, &num_chunks);
+
+      int chunk = find_flag(ref->reg, state);
+      if (chunk >= 0 && !write_instr)
+         load_vector_if_needed(chunk, start_chunk, num_chunks, state);
+
       ibc_ref vector = state->regs[ref->reg->index].vector;
       vector.logical = ref->logical;
       ibc_instr_set_ref(write_instr, ref, vector);
+
+      if (chunk >= 0 && write_instr) {
+         for (unsigned c = 0; c < num_chunks; c++)
+            state->valid[chunk + start_chunk + c] = FLAG_REP_VECTOR;
+      }
    } else if (ref->file == IBC_REG_FILE_FLAG && ref->reg) {
       /* We should only get here for regular sources and destinations that
        * access flags.
@@ -454,21 +735,20 @@ rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
           * real.
           */
          assert(ibc_type_bit_size(ref->type) == ref->reg->flag.bits);
-         int8_t subnr = find_or_assign_flag((ibc_reg *)ref->reg,
-                                            write_instr->index,
-                                            false, /* load_from_grf */
-                                            true, /* opportunistic */
-                                            state);
-         instr_set_flag_ref(write_instr, ref, subnr,
-                            FLAG_REP_FLAG, state);
+         int chunk = find_or_assign_flag((ibc_reg *)ref->reg,
+                                         write_instr->index,
+                                         true, /* opportunistic */
+                                         state);
+         instr_set_flag_ref(write_instr, ref, chunk, FLAG_REP_FLAG, state);
       } else {
-         int8_t subnr = find_flag(ref->reg, state);
-         if (subnr >= 0) {
-            instr_set_flag_ref(NULL, ref, subnr, FLAG_REP_ALL, state);
+         int chunk = find_flag(ref->reg, state);
+         if (chunk >= 0 && flag_ref_valid(NULL, ref, chunk, state)) {
+            instr_set_flag_ref(NULL, ref, chunk, FLAG_REP_NONE, state);
          } else {
             /* If we're a read and it's not currently in a flag, pull from the
              * scalar GRF.  We should have one.
              */
+            load_scalar_if_needed(chunk, state);
             ibc_ref scalar = state->regs[ref->reg->index].scalar;
             assert(scalar.file != IBC_REG_FILE_NONE);
             scalar.type = ref->type;
@@ -486,14 +766,17 @@ rewrite_flag_read_cb(ibc_ref *ref,
                      UNUSED uint8_t simd_width,
                      void *_state)
 {
-   rewrite_flag_ref(ref, NULL, _state);
+   rewrite_flag_ref(ref, NULL, simd_group, simd_width, _state);
    return true;
 }
 
 static bool
 rewrite_flag_write_cb(ibc_reg_write *write, ibc_ref *ref, void *_state)
 {
-   rewrite_flag_ref(ref, write->instr, _state);
+   if (write->instr) {
+      rewrite_flag_ref(ref, write->instr, write->instr->simd_group,
+                       write->instr->simd_width, _state);
+   }
    return true;
 }
 
@@ -572,22 +855,19 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
        */
       b->cursor = ibc_before_instr(instr);
 
+      /* TODO: Implement simultaneous flag read/write. */
+      assert(instr->predicate == BRW_PREDICATE_NONE ||
+             !ibc_instr_writes_flag(instr));
+
       if (instr->type == IBC_INSTR_TYPE_ALU) {
          ibc_alu_instr *alu = ibc_instr_as_alu(instr);
          if (alu->op == IBC_ALU_OP_CMP) {
             ibc_reg *logical = (ibc_reg *)instr->flag.reg;
-            /* CMP destinations that are never read as flags are forever used
-             * as vectors and the flag value is discarded.  There's no need
-             * for us to load from the GRF to ensure the flag is consistent.
-             */
-            const bool load_from_grf =
-               state.regs[logical->index].read_as_flag;
-            int8_t subnr = find_or_assign_flag(logical, instr->index,
-                                               load_from_grf,
-                                               false, /* opportunistic */
-                                               &state);
+            int chunk = find_or_assign_flag(logical, instr->index,
+                                            false, /* opportunistic */
+                                            &state);
 
-            enum flag_rep preserved = FLAG_REP_FLAG;
+            enum flag_rep written = FLAG_REP_FLAG;
 
             /* If the vector version matches, we can write to it directly and
              * avoid getting it out-of-sync.
@@ -598,10 +878,10 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
                vector.type = ibc_type_base_type(alu->src[0].ref.type) |
                              ibc_type_bit_size(vector.type);
                ibc_instr_set_ref(&alu->instr, &alu->dest, vector);
-               preserved |= FLAG_REP_VECTOR;
+               written |= FLAG_REP_VECTOR;
             }
 
-            instr_set_flag_ref(instr, &instr->flag, subnr, preserved, &state);
+            instr_set_flag_ref(instr, &instr->flag, chunk, written, &state);
          } else if (alu->dest.file == IBC_REG_FILE_LOGICAL &&
                     alu->dest.reg->logical.bit_size == 1 &&
                     alu->op != IBC_ALU_OP_SEL &&
@@ -616,30 +896,35 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
              * reg, get a flag write for free.
              */
             ibc_reg *logical = (ibc_reg *)alu->dest.reg;
-            int8_t subnr = find_or_assign_flag(logical, instr->index,
-                                               true, /* load_from_grf */
-                                               true, /* opportunistic */
-                                               &state);
-            if (subnr >= 0) {
-               alu->cmod = BRW_CONDITIONAL_NZ;
-               instr_set_flag_ref(instr, &instr->flag, subnr,
+            int chunk = find_or_assign_flag(logical, instr->index,
+                                            true, /* opportunistic */
+                                            &state);
+            if (chunk >= 0) {
+               ibc_alu_instr_set_cmod(alu, alu->dest, BRW_CONDITIONAL_NZ);
+               instr_set_flag_ref(instr, &instr->flag, chunk,
                                   FLAG_REP_FLAG | FLAG_REP_VECTOR, &state);
             }
          }
       }
 
       if (instr->flag.file != IBC_REG_FILE_NONE && instr->flag.reg) {
-         int8_t subnr = find_or_assign_flag(instr->flag.reg, instr->index,
-                                            true, /* load_from_grf */
-                                            false, /* opportunistic */
-                                            &state);
-         enum flag_rep preserved =
-            ibc_instr_writes_flag(instr) ? FLAG_REP_FLAG : FLAG_REP_ALL;
-         instr_set_flag_ref(instr, &instr->flag, subnr, preserved, &state);
+         int chunk = find_or_assign_flag(instr->flag.reg, instr->index,
+                                         false, /* opportunistic */
+                                         &state);
+         enum flag_rep written =
+            ibc_instr_writes_flag(instr) ? FLAG_REP_FLAG : FLAG_REP_NONE;
+         instr_set_flag_ref(instr, &instr->flag, chunk, written, &state);
       }
 
       ibc_instr_foreach_read(instr, rewrite_flag_read_cb, &state);
       ibc_instr_foreach_reg_write(instr, rewrite_flag_write_cb, &state);
+
+      if (instr->type == IBC_INSTR_TYPE_ALU) {
+         ibc_alu_instr *alu = ibc_instr_as_alu(instr);
+         if (alu->dest.file == IBC_REG_FILE_NONE &&
+             alu->dest.type == IBC_TYPE_FLAG)
+            alu->dest.type = alu->src[0].ref.type;
+      }
 
       /* When we cross block boundaries, reset the allocator */
       if (instr->type == IBC_INSTR_TYPE_FLOW)
