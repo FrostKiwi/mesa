@@ -344,43 +344,31 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
    struct nir_fs_to_ibc_state *nti_fs = nti->stage_state;
    ibc_builder *b = &nti->b;
 
-   ibc_intrinsic_instr *write =
-      ibc_intrinsic_instr_create(b->shader, IBC_INTRINSIC_OP_FB_WRITE,
-                                 b->simd_group, b->simd_width,
-                                 IBC_FB_WRITE_NUM_SRCS);
-
-   write->src[IBC_FB_WRITE_SRC_COLOR0].ref = color0;
-   write->src[IBC_FB_WRITE_SRC_COLOR0].num_comps = 4;
-
-   write->src[IBC_FB_WRITE_SRC_COLOR1].ref = color1;
-   write->src[IBC_FB_WRITE_SRC_COLOR1].num_comps = 4;
-
-   write->src[IBC_FB_WRITE_SRC_SRC0_ALPHA].ref = src0_alpha;
-   write->src[IBC_FB_WRITE_SRC_SRC0_ALPHA].num_comps = 1;
-
-   write->src[IBC_FB_WRITE_SRC_DEPTH].ref = nti_fs->out.depth;
-   write->src[IBC_FB_WRITE_SRC_DEPTH].num_comps = 1;
-
-   write->src[IBC_FB_WRITE_SRC_STENCIL].ref = nti_fs->out.stencil;
-   write->src[IBC_FB_WRITE_SRC_STENCIL].num_comps = 1;
-
-   write->src[IBC_FB_WRITE_SRC_OMASK].ref = nti_fs->out.sample_mask;
-   write->src[IBC_FB_WRITE_SRC_OMASK].num_comps = 1;
-
-   write->src[IBC_FB_WRITE_SRC_TARGET].ref = ibc_imm_ud(target);
-   write->src[IBC_FB_WRITE_SRC_TARGET].num_comps = 1;
-
-   write->src[IBC_FB_WRITE_SRC_LAST_RT].ref = ibc_imm_ud(last_rt);
-   write->src[IBC_FB_WRITE_SRC_LAST_RT].num_comps = 1;
+   ibc_intrinsic_src srcs[IBC_FB_WRITE_NUM_SRCS] = {
+      [IBC_FB_WRITE_SRC_COLOR0] = { .ref = color0, .num_comps = 4 },
+      [IBC_FB_WRITE_SRC_COLOR1] = { .ref = color1, .num_comps = 4 },
+      [IBC_FB_WRITE_SRC_SRC0_ALPHA] = { .ref = src0_alpha, .num_comps = 1 },
+      [IBC_FB_WRITE_SRC_DEPTH] = { .ref = nti_fs->out.depth, .num_comps = 1 },
+      [IBC_FB_WRITE_SRC_STENCIL] =
+         { .ref = nti_fs->out.stencil, .num_comps = 1},
+      [IBC_FB_WRITE_SRC_OMASK] =
+         { .ref = nti_fs->out.sample_mask, .num_comps  = 1},
+      [IBC_FB_WRITE_SRC_TARGET] = { ibc_imm_ud(target), .num_comps = 1 },
+      [IBC_FB_WRITE_SRC_LAST_RT] =
+         { .ref = ibc_imm_ud(last_rt), .num_comps = 1},
+   };
 
    for (unsigned i = 0; i < IBC_FB_WRITE_NUM_SRCS; i++) {
-      if (write->src[i].ref.file == IBC_REG_FILE_NONE)
-         write->src[i].num_comps = 0;
+      if (srcs[i].ref.file == IBC_REG_FILE_NONE)
+         srcs[i].num_comps = 0;
    }
 
+   ibc_intrinsic_instr *write =
+      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_FB_WRITE,
+                          ibc_null(IBC_TYPE_UD), 0,
+                          srcs, IBC_FB_WRITE_NUM_SRCS);
    write->can_reorder = false;
    write->has_side_effects = true;
-   ibc_builder_insert_instr(b, &write->instr);
 
    assert(!prog_data->uses_kill);
 }
