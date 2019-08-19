@@ -418,6 +418,8 @@ typedef struct ibc_ref {
    };
 } ibc_ref;
 
+bool ibc_refs_equal(ibc_ref a, ibc_ref b);
+
 static inline uint64_t
 ibc_ref_as_uint(ibc_ref ref)
 {

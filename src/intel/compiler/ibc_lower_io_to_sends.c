@@ -523,7 +523,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
                                         msg_type, simd_mode,
                                         0 /* return_format unused on gen7+ */);
       ibc_builder_push_scalar(b);
-      if (0 /* TODO: ibc_refs_equal(surface_bti, sampler_bti) */) {
+      if (ibc_refs_equal(surface_bti, sampler_bti)) {
          /* This case is common in GL */
          send->desc = ibc_MUL(b, IBC_TYPE_UD, surface_bti, ibc_imm_ud(0x101));
       } else {
