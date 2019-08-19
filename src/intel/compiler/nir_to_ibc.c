@@ -179,6 +179,17 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_fmul:
       dest = ibc_MUL(b, dest_type, src[0], src[1]);
       break;
+   case nir_op_imul:
+      if (nir_src_is_const(instr->src[0].src) &&
+          nir_src_as_uint(instr->src[0].src) < INT16_MAX) {
+         dest = ibc_MUL(b, dest_type, src[1], src[0]);
+      } else if (nir_src_is_const(instr->src[1].src) &&
+                 nir_src_as_uint(instr->src[1].src) < INT16_MAX) {
+         dest = ibc_MUL(b, dest_type, src[0], src[1]);
+      } else {
+         unreachable("Full integer multiplication not supported");
+      }
+      break;
    case nir_op_iand:
       dest = ibc_AND(b, dest_type, src[0], src[1]);
       break;
