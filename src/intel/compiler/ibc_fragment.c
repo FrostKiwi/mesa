@@ -333,12 +333,11 @@ enum ibc_fb_write_src {
    IBC_FB_WRITE_NUM_SRCS
 };
 
-static void
+static ibc_intrinsic_instr *
 ibc_emit_fb_write(struct nir_to_ibc_state *nti,
                   unsigned target,
                   ibc_ref color0, ibc_ref color1,
-                  ibc_ref src0_alpha,
-                  bool last_rt)
+                  ibc_ref src0_alpha)
 {
    struct brw_wm_prog_data *prog_data = (void *)nti->prog_data;
    struct nir_fs_to_ibc_state *nti_fs = nti->stage_state;
@@ -354,8 +353,8 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
       [IBC_FB_WRITE_SRC_OMASK] =
          { .ref = nti_fs->out.sample_mask, .num_comps  = 1},
       [IBC_FB_WRITE_SRC_TARGET] = { ibc_imm_ud(target), .num_comps = 1 },
-      [IBC_FB_WRITE_SRC_LAST_RT] =
-         { .ref = ibc_imm_ud(last_rt), .num_comps = 1},
+      /* LAST_RT will be filled with the real value later */
+      [IBC_FB_WRITE_SRC_LAST_RT] = { .ref = ibc_imm_ud(0), .num_comps = 1},
    };
 
    for (unsigned i = 0; i < IBC_FB_WRITE_NUM_SRCS; i++) {
@@ -371,6 +370,8 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
    write->has_side_effects = true;
 
    assert(!prog_data->uses_kill);
+
+   return write;
 }
 
 static void
@@ -406,7 +407,7 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
        nti_fs->out.color[0].file != IBC_REG_FILE_NONE)
       ibc_emit_alhpa_to_coverage_workaround(nti);
 
-   bool fb_written = false;
+   ibc_intrinsic_instr *last_fb_write = NULL;
    if (key->nr_color_regions > 0) {
       for (unsigned target = 0; target < key->nr_color_regions; target++) {
          /* Skip over outputs that weren't written. */
@@ -419,22 +420,23 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
             src0_alpha.logical.comp = 3;
          }
 
-         ibc_emit_fb_write(nti, target, nti_fs->out.color[target],
-                           nti_fs->out.dual_src_color, src0_alpha,
-                           target == key->nr_color_regions - 1);
-         fb_written = true;
+         last_fb_write =
+            ibc_emit_fb_write(nti, target, nti_fs->out.color[target],
+                              nti_fs->out.dual_src_color, src0_alpha);
       }
    }
 
-   if (!fb_written) {
+   if (last_fb_write == NULL) {
       /* Even if there's no color buffers enabled, we still need to send
        * alpha out the pipeline to our null renderbuffer to support
        * alpha-testing, alpha-to-coverage, and so on.
        */
-      ibc_emit_fb_write(nti, 0 /* target */, nti_fs->out.color[0],
-                        ibc_null(IBC_TYPE_UD), ibc_null(IBC_TYPE_UD),
-                        true /* last_rt */);
+      last_fb_write =
+         ibc_emit_fb_write(nti, 0 /* target */, nti_fs->out.color[0],
+                           ibc_null(IBC_TYPE_UD), ibc_null(IBC_TYPE_UD));
    }
+
+   last_fb_write->src[IBC_FB_WRITE_SRC_LAST_RT].ref = ibc_imm_ud(1);
 }
 
 unsigned
