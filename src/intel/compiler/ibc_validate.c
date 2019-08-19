@@ -200,6 +200,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
       ibc_assert(s, lref->comp + num_comps <= lreg->num_comps);
 
       if (lref->broadcast) {
+         ibc_assert(s, !write);
          ibc_assert(s, lref->simd_channel >= lreg->simd_group);
          ibc_assert(s, lref->simd_channel <=
                        lreg->simd_group + lreg->simd_width);
@@ -208,12 +209,19 @@ ibc_validate_ref(struct ibc_validate_state *s,
          if (lreg->simd_width == 1) {
             /* If the register is a scalar (only one SIMD channel), the
              * broadcast is implicit with channel 0.  There's nothing to
-             * validate for SIMD channels in this case.
+             * validate for reads for SIMD channels in this case.
              */
+            if (write) {
+               ibc_assert(s, ref_simd_group == 0);
+               ibc_assert(s, ref_simd_width == 1);
+               ibc_assert(s, s->instr->we_all);
+            }
          } else {
             ibc_assert(s, ref_simd_group >= lreg->simd_group);
             ibc_assert(s, ref_simd_group + ref_simd_width <=
                           lreg->simd_group + lreg->simd_width);
+            if (write)
+               ibc_assert(s, !s->instr->we_all);
          }
       }
       return;
