@@ -1102,7 +1102,8 @@ nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
                       unsigned dispatch_size,
                       void *mem_ctx)
 {
-   ibc_shader *shader = ibc_shader_create(mem_ctx, devinfo, dispatch_size);
+   ibc_shader *shader = ibc_shader_create(mem_ctx, devinfo, stage,
+                                          dispatch_size);
 
    shader->use_vmask = (stage == MESA_SHADER_FRAGMENT);
    shader->has_packed_dispatch =

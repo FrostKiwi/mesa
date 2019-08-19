@@ -338,11 +338,10 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
    }
    ibc_validate_shader(ibc);
 
-   ibc_lower_and_optimize(ibc, INTEL_DEBUG & DEBUG_VS);
+   ibc_lower_and_optimize(ibc);
 
    prog_data->base.base.dispatch_grf_start_reg = nti.payload->num_ff_regs;
    prog_data->base.dispatch_mode = DISPATCH_MODE_SIMD8;
 
-   return ibc_to_binary(ibc, mem_ctx, &prog_data->base.base.program_size,
-                        INTEL_DEBUG & DEBUG_VS);
+   return ibc_to_binary(ibc, mem_ctx, &prog_data->base.base.program_size);
 }
