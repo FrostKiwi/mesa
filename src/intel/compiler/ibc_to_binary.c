@@ -550,6 +550,9 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
    struct disasm_info *disasm_info = disasm_initialize(devinfo, NULL);
    disasm_new_inst_group(disasm_info, 0);
 
+   unsigned spill_count = 0, fill_count = 0;
+   unsigned loop_count = 0;
+
    ibc_foreach_instr(instr, shader) {
       brw_set_default_access_mode(p, BRW_ALIGN_1);
 
@@ -588,6 +591,8 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 
       case IBC_INSTR_TYPE_FLOW:
          generate_flow(p, ibc_instr_as_flow(instr));
+         if (ibc_instr_as_flow(instr)->op == IBC_FLOW_OP_WHILE)
+            loop_count++;
          continue;
       }
       unreachable("Invalid instruction type");
@@ -602,9 +607,21 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
                              p->next_insn_offset,
                              disasm_info);
 
+   unsigned before_size = p->next_insn_offset - start_offset;
    brw_compact_instructions(p, start_offset, disasm_info);
 
+   unsigned after_size = p->next_insn_offset - start_offset;
+
    if (INTEL_DEBUG & intel_debug_flag_for_shader_stage(shader->stage)) {
+      fprintf(stderr,
+              "SIMD%d shader: %u instructions. %u loops. "
+              "%u:%u spills:fills. "
+              "Compacted %u to %u bytes (%.0f%%)\n",
+              shader->simd_width, before_size / 16,
+              loop_count,
+              spill_count, fill_count,
+              before_size, after_size,
+              100.0f * (before_size - after_size) / before_size);
       dump_assembly(p->store, start_offset, p->next_insn_offset,
                     disasm_info, NULL);
    }
