@@ -32,6 +32,8 @@
 #include <util/macros.h>
 #include <util/ralloc.h>
 
+#include <compiler/shader_enums.h>
+
 #include "brw_eu.h"
 
 #ifdef __cplusplus
@@ -944,6 +946,7 @@ ibc_instr_writes_flag(const ibc_instr *instr)
 typedef struct ibc_shader {
    const struct gen_device_info *devinfo;
 
+   gl_shader_stage stage;
    uint8_t simd_width;
    bool use_vmask:1;
    bool has_packed_dispatch:1;
@@ -960,6 +963,7 @@ typedef struct ibc_shader {
 
 ibc_shader *ibc_shader_create(void *mem_ctx,
                               const struct gen_device_info *devinfo,
+                              gl_shader_stage stage,
                               uint8_t simd_width);
 
 #define ibc_foreach_reg(reg, shader) \
@@ -1004,7 +1008,7 @@ bool ibc_assign_and_lower_flags(ibc_shader *shader);
 bool ibc_assign_logical_reg_strides(ibc_shader *shader);
 bool ibc_assign_regs(ibc_shader *shader);
 
-void ibc_lower_and_optimize(ibc_shader *ibc, bool print);
+void ibc_lower_and_optimize(ibc_shader *ibc);
 
 bool ibc_lower_fb_writes(ibc_shader *shader);
 bool ibc_lower_gather_ops(ibc_shader *shader);
@@ -1028,7 +1032,7 @@ void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 bool ibc_split_logical_regs(ibc_shader *shader);
 
 const unsigned *ibc_to_binary(const ibc_shader *shader, void *mem_ctx,
-                              unsigned *program_size, bool print);
+                              unsigned *program_size);
 
 void ibc_validate_shader(const ibc_shader *shader);
 
