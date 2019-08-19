@@ -23,6 +23,8 @@
 
 #include "ibc.h"
 
+#include "dev/gen_debug.h"
+
 static ibc_reg *
 ibc_reg_create(ibc_shader *shader, enum ibc_reg_file file)
 {
@@ -515,11 +517,13 @@ ibc_flow_instr_add_pred(struct ibc_flow_instr *flow,
 ibc_shader *
 ibc_shader_create(void *mem_ctx,
                   const struct gen_device_info *devinfo,
+                  gl_shader_stage stage,
                   uint8_t simd_width)
 {
    ibc_shader *shader = rzalloc(mem_ctx, ibc_shader);
 
-   shader->devinfo = devinfo,
+   shader->devinfo = devinfo;
+   shader->stage = stage;
    shader->simd_width = simd_width;
 
    list_inithead(&shader->instrs);
@@ -563,8 +567,10 @@ ibc_instr_remove(ibc_instr *instr)
    } while(0)
 
 void
-ibc_lower_and_optimize(ibc_shader *ibc, bool print)
+ibc_lower_and_optimize(ibc_shader *ibc)
 {
+   bool print = INTEL_DEBUG & intel_debug_flag_for_shader_stage(ibc->stage);
+
    OPT(ibc_lower_simd_width);
    OPT(ibc_split_logical_regs);
    OPT(ibc_opt_copy_prop);
