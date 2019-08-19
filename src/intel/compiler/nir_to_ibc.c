@@ -328,8 +328,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 static ibc_ref
 nti_initialize_flag(ibc_builder *b, int32_t flag_val)
 {
-   assert(b->simd_group == 0);
-   ibc_reg *flag_reg = ibc_flag_reg_create(b->shader, b->simd_width);
+   assert(b->simd.group == 0);
+   ibc_reg *flag_reg = ibc_flag_reg_create(b->shader, b->simd.width);
 
    ibc_builder_push_scalar(b);
    if (flag_reg->flag.bits <= 16) {
@@ -661,15 +661,15 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_invocation: {
       ibc_reg *w_tmp_reg =
-         ibc_hw_grf_reg_create(b->shader, b->simd_width * 2,
-                               MIN2(b->simd_width * 2, 32));
+         ibc_hw_grf_reg_create(b->shader, b->simd.width * 2,
+                               MIN2(b->simd.width * 2, 32));
       ibc_ref w_tmp = ibc_typed_ref(w_tmp_reg, IBC_TYPE_UW);
 
       ibc_builder_push_we_all(b, 8);
       ibc_build_alu1(b, IBC_ALU_OP_MOV, w_tmp, ibc_imm_v(0x76543210));
       ibc_builder_pop(b);
 
-      if (b->simd_width > 8) {
+      if (b->simd.width > 8) {
          ibc_ref w_tmp_8 = w_tmp;
          ibc_hw_grf_simd_slice(&w_tmp_8.hw_grf, 8);
          ibc_builder_push_we_all(b, 8);
@@ -677,7 +677,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          ibc_builder_pop(b);
       }
 
-      if (b->simd_width > 16) {
+      if (b->simd.width > 16) {
          ibc_ref w_tmp_16 = w_tmp;
          ibc_hw_grf_simd_slice(&w_tmp_16.hw_grf, 16);
          ibc_builder_push_we_all(b, 16);
@@ -760,8 +760,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       unsigned cluster_size = instr->intrinsic == nir_intrinsic_reduce ?
                               nir_intrinsic_cluster_size(instr) : 0;
-      if (cluster_size == 0 || cluster_size > b->simd_width)
-         cluster_size = b->simd_width;
+      if (cluster_size == 0 || cluster_size > b->simd.width)
+         cluster_size = b->simd.width;
 
       /* For byte types, we can avoid a whole lot of problems by just doing
        * the scan with W types instead.  Fortunately, as long as we cast
@@ -772,13 +772,13 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          scan_type = ibc_type_base_type(scan_type) | IBC_TYPE_16_BIT;
 
       unsigned tmp_stride = ibc_type_byte_size(scan_type);
-      unsigned tmp_size = b->simd_width * tmp_stride;
+      unsigned tmp_size = b->simd.width * tmp_stride;
       unsigned tmp_align = MIN2(tmp_size, 32);
       ibc_reg *tmp_reg =
          ibc_hw_grf_reg_create(b->shader, tmp_size, tmp_align);
       ibc_ref tmp = ibc_typed_ref(tmp_reg, scan_type);
 
-      ibc_builder_push_we_all(b, b->simd_width);
+      ibc_builder_push_we_all(b, b->simd.width);
       ibc_build_alu1(b, IBC_ALU_OP_MOV, tmp,
                      nti_reduction_op_identity(redop, src.type));
       ibc_builder_pop(b);
@@ -994,7 +994,7 @@ static void
 nti_emit_block(struct nir_to_ibc_state *nti, const nir_block *block)
 {
    nir_foreach_instr(instr, block) {
-      assert(nti->b._group_stack_size == 0);
+      assert(nti->b._simd_stack_size == 0);
       switch (instr->type) {
       case nir_instr_type_alu:
          nti_emit_alu(nti, nir_instr_as_alu(instr));
@@ -1138,8 +1138,7 @@ ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
       ibc_reg *ireg = ibc_logical_reg_create(nti->b.shader,
                                              nreg->bit_size,
                                              nreg->num_components,
-                                             nti->b.simd_group,
-                                             nti->b.simd_width);
+                                             nti->b.simd);
       ireg->is_wlr = false;
       nti->reg_to_reg[nreg->index] = ireg;
    }

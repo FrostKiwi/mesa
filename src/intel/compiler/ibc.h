@@ -134,6 +134,66 @@ enum PACKED ibc_reg_file {
 };
 
 
+/** A struct representing a SIMD channel group
+ *
+ * On Intel hardware, there are up to 32 SIMD channels and each instruction
+ * executes on some subset of them.  Also, there is a bit in the instruction
+ * to disable the channel mask and run with a particular width but otherwise
+ * ignore any execution masking.
+ */
+typedef struct ibc_simd_group {
+   /** Start channel for the group
+    *
+    * This must be a multiple of width.
+    */
+   unsigned group:4;
+
+   /** Execution width
+    *
+    * This must be a power of two.
+    */
+   unsigned width:5;
+
+   /** If true, execution masks are disabled */
+   bool we_all:1;
+} ibc_simd_group;
+
+static inline bool
+ibc_simd_group_is_valid(ibc_simd_group simd)
+{
+   return (simd.width & (simd.width - 1)) == 0 &&
+          simd.group + simd.width <= 32 &&
+          simd.group % simd.width == 0 &&
+          (!simd.we_all || simd.group == 0);
+}
+
+/** Returns true if a and b represent the same group */
+static inline bool
+ibc_simd_groups_equal(ibc_simd_group a, ibc_simd_group b)
+{
+   return a.group == b.group &&
+          a.width == b.width &&
+          a.we_all == b.we_all;
+}
+
+/** Returns true if a contains b */
+static inline bool
+ibc_simd_group_contains(ibc_simd_group a, ibc_simd_group b)
+{
+   return a.group <= b.group &&
+          b.group + b.width <= a.group + a.width &&
+          (!b.we_all || a.we_all);
+}
+
+/** Returns true if group contains channel */
+static inline bool
+ibc_simd_group_contains_channel(ibc_simd_group group, unsigned channel)
+{
+   return group.group <= channel &&
+          channel < (unsigned)group.group + group.width;
+}
+
+
 /** A struct representing a logical register
  *
  * A logical register is not represented as a linear number of bytes or
@@ -147,17 +207,13 @@ typedef struct ibc_logical_reg {
    /** Number of vector components */
    uint8_t num_comps;
 
-   /** SIMD invocation offset */
-   uint8_t simd_group;
-
-   /** Number of SIMD invocations */
-   uint8_t simd_width;
+   ibc_simd_group simd;
 
    /** Stride in bytes
     *
-    * For logical registers with simd_width > 1, this gives the stride between
+    * For logical registers with simd.width > 1, this gives the stride between
     * SIMD channels in bytes or is 0 indicating the stride is undecided.  For
-    * registers with simd_width == 1, stride is always zero.
+    * registers with simd.width == 1, stride is always zero.
     */
    uint8_t stride;
 } ibc_logical_reg;
@@ -256,7 +312,7 @@ typedef struct ibc_reg {
 
 ibc_reg *ibc_logical_reg_create(struct ibc_shader *shader,
                                 uint8_t bit_size, uint8_t num_comps,
-                                uint8_t simd_group, uint8_t simd_width);
+                                ibc_simd_group simd);
 
 ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
                                uint16_t size, uint8_t align);
@@ -464,7 +520,7 @@ ibc_ref_read_is_uniform(ibc_ref ref)
       return true;
 
    case IBC_REG_FILE_LOGICAL:
-      return ref.logical.broadcast || ref.reg->logical.simd_width == 1;
+      return ref.logical.broadcast || ref.reg->logical.simd.width == 1;
 
    case IBC_REG_FILE_HW_GRF:
       return ref.hw_grf.vstride == 0 && ref.hw_grf.hstride == 0;
@@ -534,9 +590,8 @@ typedef struct ibc_instr {
    /** Link in ibc_shader::instrs */
    struct list_head link;
 
-   uint8_t simd_group;
-   uint8_t simd_width;
-   bool we_all;
+   /** Simd group in which this instruction executes */
+   ibc_simd_group simd;
 
    /** Flag reference for predication or cmod */
    ibc_ref flag;
@@ -552,8 +607,7 @@ typedef struct ibc_instr {
 
 typedef bool (*ibc_ref_cb)(ibc_ref *ref,
                            int num_bytes, int num_comps,
-                           uint8_t simd_group, uint8_t simd_width,
-                           void *state);
+                           ibc_simd_group simd, void *state);
 bool ibc_instr_foreach_read(ibc_instr *instr, ibc_ref_cb cb, void *state);
 bool ibc_instr_foreach_write(ibc_instr *instr, ibc_ref_cb cb, void *state);
 
@@ -626,8 +680,7 @@ IBC_DEFINE_CAST(ibc_instr_as_alu, ibc_instr, ibc_alu_instr, instr,
 
 ibc_alu_instr *ibc_alu_instr_create(struct ibc_shader *shader,
                                     enum ibc_alu_op op,
-                                    uint8_t simd_group,
-                                    uint8_t simd_width);
+                                    ibc_simd_group simd);
 void ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_ref flag,
                             enum brw_conditional_mod cmod);
 
@@ -659,8 +712,7 @@ IBC_DEFINE_CAST(ibc_instr_as_send, ibc_instr, ibc_send_instr, instr,
                 type, IBC_INSTR_TYPE_SEND)
 
 ibc_send_instr *ibc_send_instr_create(struct ibc_shader *shader,
-                                      uint8_t simd_group,
-                                      uint8_t simd_width);
+                                      ibc_simd_group simd);
 
 
 enum ibc_intrinsic_op {
@@ -714,11 +766,8 @@ enum ibc_tex_src {
 typedef struct {
    ibc_ref ref;
 
-   /** SIMD invocation offset */
-   uint8_t simd_group;
-
-   /** Number of SIMD invocations */
-   uint8_t simd_width;
+   /** SIMD group for this source */
+   ibc_simd_group simd;
 
    /** Number of vector components produced or consumed via this ref */
    unsigned num_comps;
@@ -746,8 +795,7 @@ IBC_DEFINE_CAST(ibc_instr_as_intrinsic, ibc_instr, ibc_intrinsic_instr, instr,
 
 ibc_intrinsic_instr *ibc_intrinsic_instr_create(struct ibc_shader *shader,
                                                 enum ibc_intrinsic_op op,
-                                                uint8_t simd_group,
-                                                uint8_t simd_width,
+                                                ibc_simd_group simd,
                                                 unsigned num_srcs);
 
 enum ibc_flow_op {

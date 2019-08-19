@@ -105,7 +105,7 @@ void
 ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
                               const ibc_ref *ref,
                               int num_bytes, int num_comps,
-                              uint8_t simd_group, uint8_t simd_width,
+                              ibc_simd_group simd,
                               BITSET_WORD *chunks);
 
 ibc_live_intervals *

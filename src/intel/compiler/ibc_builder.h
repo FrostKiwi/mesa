@@ -46,14 +46,12 @@ typedef struct ibc_builder {
 
    ibc_cursor cursor;
 
-   unsigned simd_group;
-   unsigned simd_width;
-   bool we_all;
+   ibc_simd_group simd;
 
    ibc_flow_instr *block_start;
 
-   unsigned _group_stack_size;
-   struct ibc_builder_simd_group _group_stack[4];
+   unsigned _simd_stack_size;
+   ibc_simd_group _simd_stack[4];
 } ibc_builder;
 
 static inline void
@@ -62,52 +60,40 @@ ibc_builder_init(ibc_builder *b, ibc_shader *shader)
    b->shader = shader;
    b->cursor = ibc_before_shader(shader);
 
-   b->simd_group = 0;
-   b->simd_width = shader->simd_width;
-   b->we_all = false;
+   b->simd = (ibc_simd_group) { .width = shader->simd_width };
 
    b->block_start = NULL;
 
-   b->_group_stack_size = 0;
+   b->_simd_stack_size = 0;
 }
 
 static inline void
 _ibc_builder_push(ibc_builder *b)
 {
-   assert(b->_group_stack_size < IBC_BUILDER_GROUP_STACK_SIZE);
-   b->_group_stack[b->_group_stack_size] =
-      (struct ibc_builder_simd_group) {
-         .simd_group = b->simd_group,
-         .simd_width = b->simd_width,
-         .we_all = b->we_all,
-      };
-   b->_group_stack_size++;
+   assert(b->_simd_stack_size < IBC_BUILDER_GROUP_STACK_SIZE);
+   b->_simd_stack[b->_simd_stack_size++] = b->simd;
 }
 
 static inline void
 ibc_builder_pop(ibc_builder *b)
 {
-   assert(b->_group_stack_size > 0);
-   b->_group_stack_size--;
-   b->simd_group = b->_group_stack[b->_group_stack_size].simd_group;
-   b->simd_width = b->_group_stack[b->_group_stack_size].simd_width;
-   b->we_all = b->_group_stack[b->_group_stack_size].we_all;
+   assert(b->_simd_stack_size > 0);
+   b->simd = b->_simd_stack[--(b->_simd_stack_size)];
 }
 
 static inline void
 ibc_builder_push_group(ibc_builder *b,
                        unsigned simd_group, unsigned simd_width)
 {
-   /* We're only allowed to restrict the size */
-   assert(simd_group + simd_width <= b->simd_width);
-   if (b->we_all)
-      assert(simd_group == 0);
-   else
-      assert(simd_width >= 8);
+   ibc_simd_group new_simd = b->simd;
+   new_simd.group += simd_group;
+   new_simd.width = simd_width;
+
+   assert(ibc_simd_group_is_valid(new_simd));
+   assert(new_simd.we_all || ibc_simd_group_contains(b->simd, new_simd));
 
    _ibc_builder_push(b);
-   b->simd_group += simd_group;
-   b->simd_width = simd_width;
+   b->simd = new_simd;
 }
 
 static inline void
@@ -115,9 +101,10 @@ ibc_builder_push_we_all(ibc_builder *b, unsigned simd_width)
 {
    /* We're only allowed to restrict the size */
    _ibc_builder_push(b);
-   b->simd_group = 0;
-   b->simd_width = simd_width;
-   b->we_all = true;
+   b->simd = (ibc_simd_group) {
+      .width = simd_width,
+      .we_all = true,
+   };
 }
 
 static inline void
@@ -288,7 +275,7 @@ ibc_builder_new_logical_reg(ibc_builder *b, enum ibc_type type,
 {
    ibc_reg *reg = ibc_logical_reg_create(b->shader,
                                          ibc_type_bit_size(type), num_comps,
-                                         b->simd_group, b->simd_width);
+                                         b->simd);
    return ibc_typed_ref(reg, type);
 }
 
@@ -297,9 +284,7 @@ ibc_build_alu(ibc_builder *b, enum ibc_alu_op op, ibc_ref dest,
               ibc_ref flag, enum brw_conditional_mod cmod,
               ibc_ref *src, unsigned num_srcs)
 {
-   ibc_alu_instr *alu = ibc_alu_instr_create(b->shader, op,
-                                             b->simd_group, b->simd_width);
-   alu->instr.we_all = b->we_all;
+   ibc_alu_instr *alu = ibc_alu_instr_create(b->shader, op, b->simd);
 
    alu->instr.flag = flag;
    alu->cmod = cmod;
@@ -499,16 +484,16 @@ ibc_MOV_raw_vec_to(ibc_builder *b, ibc_ref dest,
    dest.type = src.type;
 
    /* TODO: This needs to be adjusted more carefully */
-   const unsigned simd_width = MIN2(b->simd_width, 16);
-   if (num_comps > 1 || simd_width != b->simd_width) {
+   const unsigned simd_width = MIN2(b->simd.width, 16);
+   if (num_comps > 1 || simd_width != b->simd.width) {
       assert(src.file == IBC_REG_FILE_IMM ||
              src.file == IBC_REG_FILE_LOGICAL);
       assert(dest.file == IBC_REG_FILE_LOGICAL);
    }
 
    for (unsigned i = 0; i < num_comps; i++) {
-      for (unsigned g = 0; g < b->simd_width; g += simd_width) {
-         ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
+      for (unsigned g = 0; g < b->simd.width; g += simd_width) {
+         ibc_builder_push_group(b, g, simd_width);
          ibc_MOV_to(b, dest, src);
          ibc_builder_pop(b);
       }
@@ -573,16 +558,12 @@ ibc_build_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
                     ibc_intrinsic_src *srcs, unsigned num_srcs)
 {
    ibc_intrinsic_instr *intrin =
-      ibc_intrinsic_instr_create(b->shader, op, b->simd_group, b->simd_width,
-                                 num_srcs);
-   intrin->instr.we_all = b->we_all;
+      ibc_intrinsic_instr_create(b->shader, op, b->simd, num_srcs);
 
    for (unsigned i = 0; i < num_srcs; i++) {
       intrin->src[i].ref = srcs[i].ref;
-      if (srcs[i].simd_width > 0) {
-         intrin->src[i].simd_group = srcs[i].simd_group;
-         intrin->src[i].simd_width = srcs[i].simd_width;
-      }
+      if (srcs[i].simd.width > 0)
+         intrin->src[i].simd = srcs[i].simd;
       intrin->src[i].num_comps =
          srcs[i].num_comps > 0 ? srcs[i].num_comps :
          srcs[i].ref.file == IBC_REG_FILE_NONE ? 0 : num_dest_comps;
@@ -642,12 +623,11 @@ ibc_SIMD_BROADCAST(ibc_builder *b, ibc_ref val, ibc_ref chan,
    ibc_intrinsic_src srcs[2] = {
       {
          .ref = val,
-         .simd_group = b->simd_group,
-         .simd_width = b->simd_width,
+         .simd = b->simd,
       },
       {
          .ref = chan,
-         .simd_width = 1,
+         .simd.width = 1,
       },
    };
 
@@ -673,8 +653,8 @@ static inline ibc_ref
 ibc_SIMD_ZIP(ibc_builder *b, ibc_ref *srcs, unsigned num_srcs,
              unsigned num_comps)
 {
-   assert(num_srcs > 1 && b->simd_width % num_srcs == 0);
-   const unsigned src_width = b->simd_width / num_srcs;
+   assert(num_srcs > 1 && b->simd.width % num_srcs == 0);
+   const unsigned src_width = b->simd.width / num_srcs;
 
    ibc_intrinsic_src zip_srcs[8];
    assert(num_srcs <= ARRAY_SIZE(zip_srcs));
@@ -683,8 +663,10 @@ ibc_SIMD_ZIP(ibc_builder *b, ibc_ref *srcs, unsigned num_srcs,
       assert(srcs[i].type == srcs[0].type);
       zip_srcs[i] = (ibc_intrinsic_src) {
          .ref = srcs[i],
-         .simd_group = b->simd_group + src_width * i,
-         .simd_width = src_width,
+         .simd = {
+            .group = b->simd.group + src_width * i,
+            .width = src_width,
+         },
       };
       zip_srcs[i].ref.type = ibc_type_bit_size(srcs[0].type);
    }
@@ -734,38 +716,40 @@ static inline ibc_ref
 ibc_PLN(ibc_builder *b, ibc_ref vert, ibc_ref bary)
 {
    assert(vert.file == IBC_REG_FILE_LOGICAL);
-   assert(vert.reg->logical.simd_width == 1);
+   assert(vert.reg->logical.simd.width == 1);
 
    ibc_ref comps[2];
-   for (unsigned g = 0; g < b->simd_width; g += 16) {
-      assert(b->simd_width >= 8);
-      ibc_builder_push_group(b, g, MIN2(16, b->simd_width));
+   for (unsigned g = 0; g < b->simd.width; g += 16) {
+      assert(b->simd.width >= 8);
+      ibc_builder_push_group(b, g, MIN2(16, b->simd.width));
 
       ibc_intrinsic_src pln_srcs[3];
       pln_srcs[0] = (ibc_intrinsic_src) {
          .ref = vert,
          .num_comps = 4,
       };
-      for (unsigned i = 0; i < (b->simd_width / 8); i++) {
+      for (unsigned i = 0; i < (b->simd.width / 8); i++) {
          pln_srcs[1 + i] = (ibc_intrinsic_src) {
             .ref = bary,
-            .simd_group = b->simd_group + i * 8,
-            .simd_width = 8,
+            .simd = {
+               .group = b->simd.group + i * 8,
+               .width = 8,
+            },
             .num_comps = 2,
          };
       }
 
       comps[g / 16] = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_PLN,
                                               IBC_TYPE_F, 1, pln_srcs,
-                                              1 + (b->simd_width / 8));
+                                              1 + (b->simd.width / 8));
       ibc_builder_pop(b);
    }
 
-   if (b->simd_width <= 16) {
+   if (b->simd.width <= 16) {
       return comps[0];
    } else {
-      assert(b->simd_width % 16 == 0);
-      return ibc_SIMD_ZIP(b, comps, b->simd_width / 16, 1);
+      assert(b->simd.width % 16 == 0);
+      return ibc_SIMD_ZIP(b, comps, b->simd.width / 16, 1);
    }
 }
 
@@ -774,15 +758,15 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_ref tmp,
                    enum brw_conditional_mod cmod,
                    unsigned final_cluster_size)
 {
-   assert(b->simd_width >= 8);
-   const uint8_t scan_simd_width = b->simd_width;
+   assert(b->simd.width >= 8);
+   const uint8_t scan_simd_width = b->simd.width;
    assert(tmp.file == IBC_REG_FILE_HW_GRF);
    assert(tmp.hw_grf.hstride == ibc_type_byte_size(tmp.type));
    assert(tmp.hw_grf.hstride * tmp.hw_grf.width == tmp.hw_grf.vstride);
    assert(util_is_power_of_two_nonzero(final_cluster_size));
 
    if (final_cluster_size >= 2) {
-      ibc_builder_push_we_all(b, b->simd_width / 2);
+      ibc_builder_push_we_all(b, b->simd.width / 2);
 
       ibc_ref left = tmp;
       left.hw_grf.vstride *= 2;
@@ -806,7 +790,7 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_ref tmp,
     * 64-bit types so there's no great loss.
     */
    if (final_cluster_size >= 4 && ibc_type_bit_size(tmp.type) <= 32) {
-      ibc_builder_push_we_all(b, b->simd_width / 4);
+      ibc_builder_push_we_all(b, b->simd.width / 4);
 
       ibc_ref left = tmp;
       left.hw_grf.byte += 1 * tmp.hw_grf.hstride;
@@ -859,7 +843,7 @@ ibc_cluster_broadcast(ibc_builder *b, enum ibc_type dest_type,
        * don't need to do any weird striding.
        */
       ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, 1);
-      const unsigned num_clusters = cluster_size / b->simd_width;
+      const unsigned num_clusters = cluster_size / b->simd.width;
       for (unsigned cluster = 0; cluster < num_clusters; cluster++) {
          ibc_builder_push_group(b, cluster * cluster_size,  cluster_size);
 
@@ -889,9 +873,9 @@ static inline ibc_flow_instr *
 ibc_build_flow(ibc_builder *b, enum ibc_flow_op op, ibc_ref pred,
                enum brw_predicate predicate, bool pred_inverse)
 {
-   assert(b->simd_group == 0);
+   assert(b->simd.group == 0 && !b->simd.we_all);
    ibc_flow_instr *flow =
-      ibc_flow_instr_create(b->shader, op, b->simd_width);
+      ibc_flow_instr_create(b->shader, op, b->simd.width);
 
    if (predicate != BRW_PREDICATE_NONE) {
       flow->instr.flag = pred;

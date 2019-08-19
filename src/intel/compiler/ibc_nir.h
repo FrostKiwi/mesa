@@ -154,7 +154,7 @@ ibc_write_nir_reg(struct nir_to_ibc_state *nti,
     * a MOV.  We assume this only happens for scalars.
     */
    if (src.logical.byte > 0 || src.logical.comp > 0 || src.logical.broadcast ||
-       src.reg->logical.simd_width != nti->b.simd_width) {
+       src.reg->logical.simd.width != nti->b.simd.width) {
       assert(nreg->num_components == 1);
       src = ibc_MOV_raw(&nti->b, src);
    }
@@ -232,7 +232,7 @@ ibc_load_payload_logical(ibc_builder *b, unsigned *reg, enum ibc_type type,
    assert(ibc_type_bit_size(type) == 32);
    ibc_ref dest = ibc_builder_new_logical_reg(b, type, num_comps);
    ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, type), num_comps);
-   *reg += (b->simd_width * ibc_type_byte_size(type) * num_comps) / REG_SIZE;
+   *reg += (b->simd.width * ibc_type_byte_size(type) * num_comps) / REG_SIZE;
    return dest;
 }
 
