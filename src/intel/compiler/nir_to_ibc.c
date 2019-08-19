@@ -185,6 +185,9 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_ior:
       dest = ibc_OR(b, dest_type, src[0], src[1]);
       break;
+   case nir_op_ixor:
+      dest = ibc_XOR(b, dest_type, src[0], src[1]);
+      break;
    case nir_op_ishl:
       dest = ibc_SHL(b, dest_type, src[0], src[1]);
       break;
@@ -258,6 +261,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
 
    case nir_op_idiv:
+   case nir_op_udiv:
       dest = ibc_IDIV(b, dest_type, src[0], src[1]);
       break;
 
@@ -389,7 +393,7 @@ nti_op_for_nir_reduction_op(nir_op op)
    case nir_op_fmax: return IBC_ALU_OP_SEL;
    case nir_op_iand: return IBC_ALU_OP_AND;
    case nir_op_ior:  return IBC_ALU_OP_OR;
-//   case nir_op_ixor: return IBC_ALU_OP_XOR;
+   case nir_op_ixor: return IBC_ALU_OP_XOR;
    default:
       unreachable("Invalid reduction operation");
    }

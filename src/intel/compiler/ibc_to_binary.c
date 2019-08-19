@@ -274,6 +274,10 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       brw_OR(p, dest, src[0], src[1]);
       break;
 
+   case IBC_ALU_OP_XOR:
+      brw_XOR(p, dest, src[0], src[1]);
+      break;
+
    case IBC_ALU_OP_SHR:
       brw_SHR(p, dest, src[0], src[1]);
       break;
