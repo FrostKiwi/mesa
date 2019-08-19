@@ -274,6 +274,10 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       brw_OR(p, dest, src[0], src[1]);
       break;
 
+   case IBC_ALU_OP_XOR:
+      brw_XOR(p, dest, src[0], src[1]);
+      break;
+
    case IBC_ALU_OP_SHR:
       brw_SHR(p, dest, src[0], src[1]);
       break;
@@ -298,6 +302,12 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       if (p->devinfo->gen < 10)
          brw_set_default_access_mode(p, BRW_ALIGN_16);
       brw_MAD(p, dest, src[0], src[1], src[2]);
+      break;
+
+   case IBC_ALU_OP_LRP:
+      assert(p->devinfo->gen <= 9);
+      brw_set_default_access_mode(p, BRW_ALIGN_16);
+      brw_LRP(p, dest, src[0], src[1], src[2]);
       break;
 
    case IBC_ALU_OP_RCP:
