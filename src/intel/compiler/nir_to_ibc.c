@@ -344,99 +344,6 @@ nti_initialize_flag(ibc_builder *b, int32_t flag_val)
    return ibc_typed_ref(flag_reg, IBC_TYPE_FLAG);
 }
 
-static enum brw_predicate
-brw_predicate_any(unsigned cluster_size)
-{
-   switch (cluster_size) {
-   case 1:  return BRW_PREDICATE_NORMAL;
-   case 2:  return BRW_PREDICATE_ALIGN1_ANY2H;
-   case 4:  return BRW_PREDICATE_ALIGN1_ANY4H;
-   case 8:  return BRW_PREDICATE_ALIGN1_ANY8H;
-   case 16: return BRW_PREDICATE_ALIGN1_ANY16H;
-   case 32: return BRW_PREDICATE_ALIGN1_ANY32H;
-   default: unreachable("Invalid BRW_PREDICATE_ALIGN1_ANY size");
-   }
-}
-
-static enum brw_predicate
-brw_predicate_all(unsigned cluster_size)
-{
-   switch (cluster_size) {
-   case 1:  return BRW_PREDICATE_NORMAL;
-   case 2:  return BRW_PREDICATE_ALIGN1_ALL2H;
-   case 4:  return BRW_PREDICATE_ALIGN1_ALL4H;
-   case 8:  return BRW_PREDICATE_ALIGN1_ALL8H;
-   case 16: return BRW_PREDICATE_ALIGN1_ALL16H;
-   case 32: return BRW_PREDICATE_ALIGN1_ALL32H;
-   default: unreachable("Invalid BRW_PREDICATE_ALIGN1_ALL size");
-   }
-}
-
-static ibc_ref
-nti_reduction_op_identity(nir_op op, enum ibc_type type)
-{
-   const unsigned bit_size = ibc_type_bit_size(type);
-   nir_const_value identity = nir_alu_binop_identity(op, bit_size);
-   switch (bit_size) {
-   case 8:
-      if (type == IBC_TYPE_UB) {
-         return ibc_imm_uw(identity.u8);
-      } else {
-         assert(type == IBC_TYPE_B);
-         return ibc_imm_w(identity.i8);
-      }
-   case 16: return ibc_imm_ref(type, (char *)&identity.u16, 2);
-   case 32: return ibc_imm_ref(type, (char *)&identity.u32, 4);
-   case 64: return ibc_imm_ref(type, (char *)&identity.u64, 8);
-   default:
-      unreachable("Invalid type size");
-   }
-}
-
-static enum ibc_alu_op
-nti_op_for_nir_reduction_op(nir_op op)
-{
-   switch (op) {
-   case nir_op_iadd: return IBC_ALU_OP_ADD;
-   case nir_op_fadd: return IBC_ALU_OP_ADD;
-//   case nir_op_imul: return IBC_ALU_OP_MUL;
-   case nir_op_fmul: return IBC_ALU_OP_MUL;
-   case nir_op_imin: return IBC_ALU_OP_SEL;
-   case nir_op_umin: return IBC_ALU_OP_SEL;
-   case nir_op_fmin: return IBC_ALU_OP_SEL;
-   case nir_op_imax: return IBC_ALU_OP_SEL;
-   case nir_op_umax: return IBC_ALU_OP_SEL;
-   case nir_op_fmax: return IBC_ALU_OP_SEL;
-   case nir_op_iand: return IBC_ALU_OP_AND;
-   case nir_op_ior:  return IBC_ALU_OP_OR;
-   case nir_op_ixor: return IBC_ALU_OP_XOR;
-   default:
-      unreachable("Invalid reduction operation");
-   }
-}
-
-static enum brw_conditional_mod
-nti_cond_mod_for_nir_reduction_op(nir_op op)
-{
-   switch (op) {
-   case nir_op_iadd: return BRW_CONDITIONAL_NONE;
-   case nir_op_fadd: return BRW_CONDITIONAL_NONE;
-   case nir_op_imul: return BRW_CONDITIONAL_NONE;
-   case nir_op_fmul: return BRW_CONDITIONAL_NONE;
-   case nir_op_imin: return BRW_CONDITIONAL_L;
-   case nir_op_umin: return BRW_CONDITIONAL_L;
-   case nir_op_fmin: return BRW_CONDITIONAL_L;
-   case nir_op_imax: return BRW_CONDITIONAL_GE;
-   case nir_op_umax: return BRW_CONDITIONAL_GE;
-   case nir_op_fmax: return BRW_CONDITIONAL_GE;
-   case nir_op_iand: return BRW_CONDITIONAL_NONE;
-   case nir_op_ior:  return BRW_CONDITIONAL_NONE;
-   case nir_op_ixor: return BRW_CONDITIONAL_NONE;
-   default:
-      unreachable("Invalid reduction operation");
-   }
-}
-
 static void
 nti_emit_tex(struct nir_to_ibc_state *nti,
              const nir_tex_instr *ntex)
@@ -632,6 +539,99 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
    }
 
    ibc_write_nir_dest(nti, &ntex->dest, dest);
+}
+
+static enum brw_predicate
+brw_predicate_any(unsigned cluster_size)
+{
+   switch (cluster_size) {
+   case 1:  return BRW_PREDICATE_NORMAL;
+   case 2:  return BRW_PREDICATE_ALIGN1_ANY2H;
+   case 4:  return BRW_PREDICATE_ALIGN1_ANY4H;
+   case 8:  return BRW_PREDICATE_ALIGN1_ANY8H;
+   case 16: return BRW_PREDICATE_ALIGN1_ANY16H;
+   case 32: return BRW_PREDICATE_ALIGN1_ANY32H;
+   default: unreachable("Invalid BRW_PREDICATE_ALIGN1_ANY size");
+   }
+}
+
+static enum brw_predicate
+brw_predicate_all(unsigned cluster_size)
+{
+   switch (cluster_size) {
+   case 1:  return BRW_PREDICATE_NORMAL;
+   case 2:  return BRW_PREDICATE_ALIGN1_ALL2H;
+   case 4:  return BRW_PREDICATE_ALIGN1_ALL4H;
+   case 8:  return BRW_PREDICATE_ALIGN1_ALL8H;
+   case 16: return BRW_PREDICATE_ALIGN1_ALL16H;
+   case 32: return BRW_PREDICATE_ALIGN1_ALL32H;
+   default: unreachable("Invalid BRW_PREDICATE_ALIGN1_ALL size");
+   }
+}
+
+static ibc_ref
+nti_reduction_op_identity(nir_op op, enum ibc_type type)
+{
+   const unsigned bit_size = ibc_type_bit_size(type);
+   nir_const_value identity = nir_alu_binop_identity(op, bit_size);
+   switch (bit_size) {
+   case 8:
+      if (type == IBC_TYPE_UB) {
+         return ibc_imm_uw(identity.u8);
+      } else {
+         assert(type == IBC_TYPE_B);
+         return ibc_imm_w(identity.i8);
+      }
+   case 16: return ibc_imm_ref(type, (char *)&identity.u16, 2);
+   case 32: return ibc_imm_ref(type, (char *)&identity.u32, 4);
+   case 64: return ibc_imm_ref(type, (char *)&identity.u64, 8);
+   default:
+      unreachable("Invalid type size");
+   }
+}
+
+static enum ibc_alu_op
+nti_op_for_nir_reduction_op(nir_op op)
+{
+   switch (op) {
+   case nir_op_iadd: return IBC_ALU_OP_ADD;
+   case nir_op_fadd: return IBC_ALU_OP_ADD;
+//   case nir_op_imul: return IBC_ALU_OP_MUL;
+   case nir_op_fmul: return IBC_ALU_OP_MUL;
+   case nir_op_imin: return IBC_ALU_OP_SEL;
+   case nir_op_umin: return IBC_ALU_OP_SEL;
+   case nir_op_fmin: return IBC_ALU_OP_SEL;
+   case nir_op_imax: return IBC_ALU_OP_SEL;
+   case nir_op_umax: return IBC_ALU_OP_SEL;
+   case nir_op_fmax: return IBC_ALU_OP_SEL;
+   case nir_op_iand: return IBC_ALU_OP_AND;
+   case nir_op_ior:  return IBC_ALU_OP_OR;
+   case nir_op_ixor: return IBC_ALU_OP_XOR;
+   default:
+      unreachable("Invalid reduction operation");
+   }
+}
+
+static enum brw_conditional_mod
+nti_cond_mod_for_nir_reduction_op(nir_op op)
+{
+   switch (op) {
+   case nir_op_iadd: return BRW_CONDITIONAL_NONE;
+   case nir_op_fadd: return BRW_CONDITIONAL_NONE;
+   case nir_op_imul: return BRW_CONDITIONAL_NONE;
+   case nir_op_fmul: return BRW_CONDITIONAL_NONE;
+   case nir_op_imin: return BRW_CONDITIONAL_L;
+   case nir_op_umin: return BRW_CONDITIONAL_L;
+   case nir_op_fmin: return BRW_CONDITIONAL_L;
+   case nir_op_imax: return BRW_CONDITIONAL_GE;
+   case nir_op_umax: return BRW_CONDITIONAL_GE;
+   case nir_op_fmax: return BRW_CONDITIONAL_GE;
+   case nir_op_iand: return BRW_CONDITIONAL_NONE;
+   case nir_op_ior:  return BRW_CONDITIONAL_NONE;
+   case nir_op_ixor: return BRW_CONDITIONAL_NONE;
+   default:
+      unreachable("Invalid reduction operation");
+   }
 }
 
 static void
