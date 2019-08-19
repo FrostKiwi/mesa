@@ -153,9 +153,10 @@ ibc_write_nir_reg(struct nir_to_ibc_state *nti,
    /* If we get handed something that isn't a "simple" src, we need to insert
     * a MOV.  We assume this only happens for scalars.
     */
-   if (src.logical.byte > 0 || src.logical.comp > 0 || src.logical.broadcast) {
+   if (src.logical.byte > 0 || src.logical.comp > 0 || src.logical.broadcast ||
+       src.reg->logical.simd_width != nti->b.simd_width) {
       assert(nreg->num_components == 1);
-      src = ibc_MOV(&nti->b, src.type, src);
+      src = ibc_MOV_raw(&nti->b, src);
    }
 
    ibc_reg *dest_reg = (ibc_reg *)nti->reg_to_reg[nreg->index];
