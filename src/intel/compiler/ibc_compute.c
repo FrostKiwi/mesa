@@ -240,11 +240,10 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    }
    ibc_validate_shader(ibc);
 
-   ibc_lower_and_optimize(ibc, INTEL_DEBUG & DEBUG_CS);
+   ibc_lower_and_optimize(ibc);
 
    cs_set_simd_size(prog_data, simd_width);
    cs_fill_push_const_info(compiler->devinfo, prog_data);
 
-   return ibc_to_binary(ibc, mem_ctx, &prog_data->base.program_size,
-                        INTEL_DEBUG & DEBUG_CS);
+   return ibc_to_binary(ibc, mem_ctx, &prog_data->base.program_size);
 }
