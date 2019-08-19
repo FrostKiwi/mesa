@@ -203,13 +203,13 @@ ibc_write_nir_dest(struct nir_to_ibc_state *nti, const nir_dest *ndest,
    }
 }
 
-static inline void
+static inline ibc_intrinsic_instr *
 ibc_load_payload(ibc_builder *b, ibc_ref dest,
                  ibc_ref src, unsigned num_comps)
 {
-   ibc_build_intrinsic(b, IBC_INTRINSIC_OP_LOAD_PAYLOAD,
-                       dest, num_comps,
-                       &(ibc_intrinsic_src) { .ref = src }, 1);
+   return ibc_build_intrinsic(b, IBC_INTRINSIC_OP_LOAD_PAYLOAD,
+                              dest, num_comps,
+                              &(ibc_intrinsic_src) { .ref = src }, 1);
 }
 
 static inline ibc_ref

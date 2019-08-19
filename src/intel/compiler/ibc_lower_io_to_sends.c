@@ -64,7 +64,7 @@ lower_const_block_read(ibc_builder *b, ibc_send_instr *send,
 
    ibc_builder_push_we_all(b, 8);
    ibc_MOV_to(b, ibc_typed_ref(msg, IBC_TYPE_UD),
-                 ibc_hw_grf_ref(0, 0, IBC_TYPE_UD));
+                 ibc_typed_ref(b->shader->g0, IBC_TYPE_UD));
    ibc_builder_pop(b);
 
    ibc_builder_push_scalar(b);
@@ -283,7 +283,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
       }
 
       ibc_builder_push_we_all(b, 8);
-      ibc_MOV_to(b, header, ibc_hw_grf_ref(0, 0, IBC_TYPE_UD));
+      ibc_MOV_to(b, header, ibc_typed_ref(b->shader->g0, IBC_TYPE_UD));
       ibc_builder_pop(b);
 
       /* Everything else just sets up components */
@@ -314,6 +314,8 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
          ibc_MOV_to(b, header_3, sampler_handle);
       } else if (is_high_sampler(sampler_bti)) {
          ibc_ref sampler_base_ptr;
+         ibc_ref g0_3 = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
+         g0_3.hw_grf.byte += 3 * sizeof(uint32_t);
          if (sampler_bti.file == IBC_REG_FILE_IMM) {
             assert(sampler_bti_imm >= 16);
             const unsigned sampler_state_size = 16; /* 16 bytes */
@@ -321,11 +323,10 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
                16 * (sampler_bti_imm / 16) * sampler_state_size;
 
             sampler_base_ptr =
-               ibc_ADD(b, IBC_TYPE_UD, ibc_hw_grf_ref(0, 3, IBC_TYPE_UD),
-                          ibc_imm_ud(sampler_offset_B));
+               ibc_ADD(b, IBC_TYPE_UD, g0_3, ibc_imm_ud(sampler_offset_B));
          } else {
             sampler_base_ptr =
-               ibc_ADD(b, IBC_TYPE_UD, ibc_hw_grf_ref(0, 3, IBC_TYPE_UD),
+               ibc_ADD(b, IBC_TYPE_UD, g0_3,
                           ibc_SHL(b, IBC_TYPE_UD,
                                      ibc_AND(b, IBC_TYPE_UD, sampler_bti,
                                                 ibc_imm_ud(0xf0)),

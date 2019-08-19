@@ -959,6 +959,13 @@ typedef struct ibc_shader {
 
    /** Registers */
    struct list_head regs;
+
+   /** HW_GRF reg representing g0
+    *
+    * Used for constructing message headers when lowering intrinsic to SEND
+    * instructions.
+    */
+   ibc_reg *g0;
 } ibc_shader;
 
 ibc_shader *ibc_shader_create(void *mem_ctx,
