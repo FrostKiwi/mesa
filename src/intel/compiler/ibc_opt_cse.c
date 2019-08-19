@@ -75,8 +75,7 @@ hash_ref(uint32_t hash, const ibc_ref *ref, const ibc_reg *base_reg)
 }
 
 static bool
-refs_equal(const ibc_ref *ref_a, const ibc_ref *ref_b,
-           const ibc_reg *base_reg_a, const ibc_reg *base_reg_b)
+refs_equal_except_reg(const ibc_ref *ref_a, const ibc_ref *ref_b)
 {
    if (ref_a->file != ref_b->file ||
        ref_a->type != ref_b->type)
@@ -120,6 +119,16 @@ refs_equal(const ibc_ref *ref_a, const ibc_ref *ref_b,
       break;
    }
 
+   return true;
+}
+
+static bool
+refs_equal(const ibc_ref *ref_a, const ibc_ref *ref_b,
+           const ibc_reg *base_reg_a, const ibc_reg *base_reg_b)
+{
+   if (!refs_equal_except_reg(ref_a, ref_b))
+      return false;
+
    /* Reads from non-WLR registers constitute different values and we can't
     * CSE them.
     */
@@ -133,6 +142,12 @@ refs_equal(const ibc_ref *ref_a, const ibc_ref *ref_b,
     */
    return (ref_a->reg == base_reg_a && ref_b->reg == base_reg_b) ||
           ref_a->reg == ref_b->reg;
+}
+
+bool
+ibc_refs_equal(ibc_ref a, ibc_ref b)
+{
+   return refs_equal_except_reg(&a, &b) && a.reg == b.reg;
 }
 
 static uint32_t
