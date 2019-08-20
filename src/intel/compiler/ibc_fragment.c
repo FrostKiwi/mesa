@@ -720,5 +720,6 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
       unreachable("Invalid dispatch width");
    }
 
-   return ibc_to_binary(ibc, mem_ctx, &prog_data->base.program_size);
+   return ibc_to_binary(ibc, &shader->info, mem_ctx,
+                        &prog_data->base.program_size);
 }

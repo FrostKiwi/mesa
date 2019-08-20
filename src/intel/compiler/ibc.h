@@ -59,6 +59,7 @@ name(const in_type *parent)                             \
 }
 
 struct gen_device_info;
+struct shader_info;
 struct ibc_instr;
 struct ibc_alu_instr;
 struct ibc_shader;
@@ -1058,7 +1059,9 @@ void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 
 bool ibc_split_logical_regs(ibc_shader *shader);
 
-const unsigned *ibc_to_binary(const ibc_shader *shader, void *mem_ctx,
+const unsigned *ibc_to_binary(const ibc_shader *shader,
+                              const struct shader_info *info,
+                              void *mem_ctx,
                               unsigned *program_size);
 
 void ibc_validate_shader(const ibc_shader *shader);
