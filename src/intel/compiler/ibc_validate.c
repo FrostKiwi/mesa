@@ -646,6 +646,29 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
                         pred->instr->jump == flow));
       }
       return;
+
+   case IBC_FLOW_OP_HALT_JUMP:
+      ibc_assert(s, flow->jump && flow->jump->op == IBC_FLOW_OP_HALT_MERGE);
+      ibc_assert(s, flow->merge == NULL);
+
+      ibc_assert(s, list_is_singular(&flow->preds));
+      ibc_foreach_flow_pred(pred, flow)
+         ibc_assert(s, pred->instr == flow);
+      return;
+
+   case IBC_FLOW_OP_HALT_MERGE:
+      ibc_assert(s, flow->jump == NULL);
+      ibc_assert(s, flow->merge == NULL);
+
+      ibc_foreach_flow_pred(pred, flow) {
+         if (!ibc_assert(s, pred->instr != NULL))
+            continue;
+
+         ibc_assert(s, pred->instr == flow ||
+                       (pred->instr->op == IBC_FLOW_OP_HALT_JUMP &&
+                        pred->instr->jump == flow));
+      }
+      return;
    }
 
    unreachable("Invalid flow instruction opcode");

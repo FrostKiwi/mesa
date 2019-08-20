@@ -532,6 +532,52 @@ generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
    case IBC_FLOW_OP_WHILE:
       brw_WHILE(p);
       return;
+
+   case IBC_FLOW_OP_HALT_JUMP:
+      brw_HALT(p);
+      return;
+
+   case IBC_FLOW_OP_HALT_MERGE:
+      if (!list_is_singular(&flow->preds)) {
+         int scale = brw_jump_scale(p->devinfo);
+
+         /* There is a somewhat strange undocumented requirement of using
+          * HALT, according to the simulator.  If some channel has HALTed to
+          * a particular UIP, then by the end of the program, every channel
+          * must have HALTed to that UIP.  Furthermore, the tracking is a
+          * stack, so you can't do the final halt of a UIP after starting
+          * halting to a new UIP.
+          *
+          * Symptoms of not emitting this instruction on actual hardware
+          * included GPU hangs and sparkly rendering on the piglit discard
+          * tests.
+          */
+         brw_inst *merge = brw_HALT(p);
+         brw_inst_set_uip(p->devinfo, merge, 1 * scale);
+         brw_inst_set_jip(p->devinfo, merge, 1 * scale);
+
+         int merge_ip = p->nr_insn;
+
+         ibc_foreach_flow_pred(pred, flow) {
+            /* FLOW_MERGE instructions are their own predecessors */
+            if (pred->instr == flow)
+               continue;
+
+            assert(pred->instr->op == IBC_FLOW_OP_HALT_JUMP);
+            int jump_ip = pred->instr->instr.index;
+            brw_inst *jump = &p->store[jump_ip];
+            assert(brw_inst_opcode(p->devinfo, jump) == BRW_OPCODE_HALT);
+
+            /* HALT takes a half-instruction distance from the
+             * pre-incremented IP.
+             */
+            brw_inst_set_uip(p->devinfo, jump, (merge_ip - jump_ip) * scale);
+         }
+      } else {
+         ibc_foreach_flow_pred(pred, flow)
+            assert(pred->instr == flow);
+      }
+      return;
    }
 
    unreachable("Invalid branch op");
@@ -579,23 +625,28 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
       switch (instr->type) {
       case IBC_INSTR_TYPE_ALU:
          generate_alu(p, ibc_instr_as_alu(instr));
-         continue;
+         break;
 
       case IBC_INSTR_TYPE_SEND:
          generate_send(p, ibc_instr_as_send(instr));
-         continue;
+         break;
 
       case IBC_INSTR_TYPE_INTRINSIC:
          generate_intrinsic(p, shader, ibc_instr_as_intrinsic(instr));
-         continue;
+         break;
 
       case IBC_INSTR_TYPE_FLOW:
          generate_flow(p, ibc_instr_as_flow(instr));
          if (ibc_instr_as_flow(instr)->op == IBC_FLOW_OP_WHILE)
             loop_count++;
-         continue;
+         break;
+
+      default:
+         unreachable("Invalid instruction type");
       }
-      unreachable("Invalid instruction type");
+
+      /* Stash the physical IP of the last instruction in the index */
+      instr->index = p->nr_insn - 1;
    }
 
    brw_set_uip_jip(p, start_offset);
