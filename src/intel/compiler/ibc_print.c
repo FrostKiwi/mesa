@@ -390,15 +390,17 @@ static const char *
 flow_op_name(enum ibc_flow_op op)
 {
    switch (op) {
-   case IBC_FLOW_OP_START: return "start";
-   case IBC_FLOW_OP_END:   return "end";
-   case IBC_FLOW_OP_IF:    return "if";
-   case IBC_FLOW_OP_ELSE:  return "else";
-   case IBC_FLOW_OP_ENDIF: return "endif";
-   case IBC_FLOW_OP_DO:    return "do";
-   case IBC_FLOW_OP_BREAK: return "break";
-   case IBC_FLOW_OP_CONT:  return "cont";
-   case IBC_FLOW_OP_WHILE: return "while";
+   case IBC_FLOW_OP_START:       return "start";
+   case IBC_FLOW_OP_END:         return "end";
+   case IBC_FLOW_OP_IF:          return "if";
+   case IBC_FLOW_OP_ELSE:        return "else";
+   case IBC_FLOW_OP_ENDIF:       return "endif";
+   case IBC_FLOW_OP_DO:          return "do";
+   case IBC_FLOW_OP_BREAK:       return "break";
+   case IBC_FLOW_OP_CONT:        return "cont";
+   case IBC_FLOW_OP_WHILE:       return "while";
+   case IBC_FLOW_OP_HALT_JUMP:   return "halt_jump";
+   case IBC_FLOW_OP_HALT_MERGE:  return "halt_merge";
    }
    unreachable("Unknown ALU opcode");
 }

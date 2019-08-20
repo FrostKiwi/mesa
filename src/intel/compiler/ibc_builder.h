@@ -987,11 +987,7 @@ ibc_BREAK(ibc_builder *b, ibc_ref pred,
    ibc_flow_instr *_break =
       ibc_build_flow(b, IBC_FLOW_OP_BREAK, pred, predicate, pred_inverse);
 
-   /* Stash the break on the list of breaks.  We override preds which is
-    * kind-of terrible but since breaks don't have any predecessors it's
-    * sort-of ok as long as people use the builder interface properly.
-    */
-   list_addtail(&_break->preds, breaks);
+   list_addtail(&_break->builder_link, breaks);
 
    return _break;
 }
@@ -1034,18 +1030,47 @@ ibc_WHILE(ibc_builder *b, ibc_ref pred,
    }
 
    /* Link up all the jumps for breaks.  We stashed them in a list in
-    * ibc_BREAK using preds as the link.
+    * ibc_BREAK.
     */
-   list_for_each_entry_safe(ibc_flow_instr, _break, breaks, preds) {
-      assert(_break->op == IBC_FLOW_OP_BREAK);
-      list_del(&_break->preds);
-      list_inithead(&_break->preds);
-
+   list_for_each_entry(ibc_flow_instr, _break, breaks, builder_link) {
       ibc_flow_instr_set_jump(_break, _while);
       _break->merge = _while;
    }
+   list_inithead(breaks);
 
    return _while;
+}
+
+static inline ibc_flow_instr *
+ibc_HALT_JUMP(ibc_builder *b, ibc_ref pred,
+              enum brw_predicate predicate, bool pred_inverse,
+              struct list_head *halt_jumps)
+{
+   ibc_flow_instr *_halt_jump =
+      ibc_build_flow(b, IBC_FLOW_OP_HALT_JUMP, pred, predicate, pred_inverse);
+
+   list_addtail(&_halt_jump->builder_link, halt_jumps);
+
+   return _halt_jump;
+}
+
+static inline ibc_flow_instr *
+ibc_HALT_MERGE(ibc_builder *b, struct list_head *halt_jumps)
+{
+   ibc_flow_instr *_halt_merge =
+      ibc_build_flow(b, IBC_FLOW_OP_HALT_MERGE,
+                     ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false);
+
+   /* Link up all the jumps for halt jumps.  We stashed them in a list in
+    * ibc_HALT_JUMP.
+    */
+   list_for_each_entry(ibc_flow_instr, _halt_jump, halt_jumps, builder_link) {
+      assert(_halt_jump->op == IBC_FLOW_OP_HALT_JUMP);
+      ibc_flow_instr_set_jump(_halt_jump, _halt_merge);
+   }
+   list_inithead(halt_jumps);
+
+   return _halt_merge;
 }
 
 #ifdef __cplusplus
