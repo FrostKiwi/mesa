@@ -558,7 +558,7 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
       ibc_assert(s, flow->merge && flow->merge->op == IBC_FLOW_OP_ENDIF);
 
       ibc_foreach_flow_pred(pred, flow) {
-         if (pred->instr == NULL)
+         if (!ibc_assert(s, pred->instr != NULL))
             continue;
 
          ibc_assert(s, pred->instr->op == IBC_FLOW_OP_IF &&
@@ -574,7 +574,7 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
       ibc_assert(s, flow->merge == NULL);
 
       ibc_foreach_flow_pred(pred, flow) {
-         if (pred->instr == NULL)
+         if (!ibc_assert(s, pred->instr != NULL))
             continue;
 
          switch (pred->instr->op) {
@@ -606,7 +606,7 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
       ibc_assert(s, flow->merge && flow->merge->op == IBC_FLOW_OP_WHILE);
 
       ibc_foreach_flow_pred(pred, flow) {
-         if (pred->instr == NULL)
+         if (!ibc_assert(s, pred->instr != NULL))
             continue;
 
          ibc_assert(s, pred->instr == flow ||
@@ -638,7 +638,7 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
       ibc_assert(s, flow->merge == NULL);
 
       ibc_foreach_flow_pred(pred, flow) {
-         if (pred->instr == NULL)
+         if (!ibc_assert(s, pred->instr != NULL))
             continue;
 
          ibc_assert(s, pred->instr == flow ||
