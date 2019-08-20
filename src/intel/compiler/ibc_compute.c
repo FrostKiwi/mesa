@@ -288,5 +288,6 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    cs_set_simd_size(prog_data, simd_width);
    cs_fill_push_const_info(compiler->devinfo, prog_data);
 
-   return ibc_to_binary(ibc, mem_ctx, &prog_data->base.program_size);
+   return ibc_to_binary(ibc, &src_shader->info, mem_ctx,
+                        &prog_data->base.program_size);
 }
