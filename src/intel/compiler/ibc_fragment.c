@@ -149,7 +149,7 @@ ibc_setup_fs_payload(ibc_builder *b, struct brw_wm_prog_data *prog_data,
    /* We represent per-vertex attributes in the payload as a SIMD1 vec4 for
     * each component coming out of the geometry pipeline.
     */
-   ibc_builder_push_we_all(b, 1);
+   ibc_builder_push_scalar(b);
    for (unsigned i = 0; i < prog_data->num_varying_inputs; i++) {
       for (unsigned c = 0; c < 4; c++) {
          ibc_ref grf = ibc_hw_grf_ref(reg + (c / 2), (c % 2) * 4, IBC_TYPE_UD);
