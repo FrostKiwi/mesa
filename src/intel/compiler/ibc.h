@@ -760,6 +760,8 @@ enum ibc_flow_op {
    IBC_FLOW_OP_BREAK,
    IBC_FLOW_OP_CONT,
    IBC_FLOW_OP_WHILE,
+   IBC_FLOW_OP_HALT_JUMP,
+   IBC_FLOW_OP_HALT_MERGE,
 };
 
 typedef struct ibc_flow_instr ibc_flow_instr;
@@ -820,6 +822,14 @@ struct ibc_flow_instr {
 
    /** List of predecessors */
    struct list_head preds;
+
+   /** Link for use in builder lists
+    *
+    * For some types of flow instructions such as loop breaks, the builder
+    * needs to hold on to lists of previously emitted instructions so it can
+    * link up CF edges after the fact.  This provides a link for that purpose.
+    */
+   struct list_head builder_link;
 
    /** The instruction to which this instruction logically jumps
     *
@@ -898,7 +908,11 @@ ibc_flow_instr_falls_through(const ibc_flow_instr *flow)
    case IBC_FLOW_OP_BREAK:
    case IBC_FLOW_OP_CONT:
    case IBC_FLOW_OP_WHILE:
+   case IBC_FLOW_OP_HALT_JUMP:
       return flow->instr.predicate != BRW_PREDICATE_NONE;
+
+   case IBC_FLOW_OP_HALT_MERGE:
+      return true;
    }
    unreachable("Invalid branch instruction opcode");
 }
