@@ -25,6 +25,7 @@
 #include "brw_eu.h"
 
 #include "dev/gen_debug.h"
+#include "compiler/shader_info.h"
 
 static enum brw_reg_type
 brw_reg_type_for_ibc_type(enum ibc_type type)
@@ -560,7 +561,8 @@ generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
 }
 
 const unsigned *
-ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
+ibc_to_binary(const ibc_shader *shader, const shader_info *info,
+              void *mem_ctx, unsigned *program_size)
 {
    const struct gen_device_info *devinfo = shader->devinfo;
 
@@ -641,9 +643,12 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
 
    if (INTEL_DEBUG & intel_debug_flag_for_shader_stage(shader->stage)) {
       fprintf(stderr,
+              "Native code for %s %s shader %s\n"
               "SIMD%d shader: %u instructions. %u loops. "
               "%u:%u spills:fills. "
               "Compacted %u to %u bytes (%.0f%%)\n",
+               info->label ? info->label : "unnamed",
+               _mesa_shader_stage_to_string(shader->stage), info->name,
               shader->simd_width, before_size / 16,
               loop_count,
               spill_count, fill_count,
