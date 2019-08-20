@@ -50,6 +50,10 @@ struct nir_fs_to_ibc_state {
 
    unsigned max_simd_width;
    const char *simd_restrict_reason;
+
+   /* Mask of which pixels are live.  Used for discard */
+   ibc_ref live_pix;
+   struct list_head halt_jumps;
 };
 
 static void
@@ -162,6 +166,32 @@ ibc_setup_fs_payload(ibc_builder *b, struct brw_wm_prog_data *prog_data,
    ibc_builder_pop(b);
 
    return payload;
+}
+
+static ibc_ref
+ibc_pixel_mask_as_flag(struct nir_to_ibc_state *nti)
+{
+   struct ibc_fs_payload *payload = (struct ibc_fs_payload *)nti->payload;
+   ibc_builder *b = &nti->b;
+
+   ibc_reg *live_pix_reg =
+      ibc_flag_reg_create(b->shader, MAX2(b->shader->simd_width, 16));
+   live_pix_reg->is_wlr = false;
+   ibc_builder_push_scalar(b);
+   for (unsigned g = 0; g < b->shader->simd_width; g += 16) {
+      ibc_ref pix_mask = payload->pixel[g / 16];
+      assert(pix_mask.file == IBC_REG_FILE_HW_GRF);
+      pix_mask.hw_grf.byte += 7 * sizeof(uint32_t);
+      pix_mask.type = IBC_TYPE_UW;
+
+      ibc_ref flag_w = ibc_typed_ref(live_pix_reg, IBC_TYPE_UW);
+      flag_w.flag.bit += g;
+
+      ibc_MOV_to(b, flag_w, pix_mask);
+   }
+   ibc_builder_pop(b);
+
+   return ibc_typed_ref(live_pix_reg, IBC_TYPE_FLAG);
 }
 
 static enum brw_barycentric_mode
@@ -303,6 +333,27 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_demote:
+   case nir_intrinsic_discard:
+   case nir_intrinsic_demote_if:
+   case nir_intrinsic_discard_if: {
+      assert(prog_data->uses_kill);
+
+      ibc_ref cond = ibc_imm_w(1);
+      if (instr->intrinsic == nir_intrinsic_demote_if ||
+          instr->intrinsic == nir_intrinsic_discard_if)
+         cond = ibc_nir_src(nti, instr->src[0], IBC_TYPE_FLAG);
+
+      ibc_alu_instr *mov =
+         ibc_build_alu(b, IBC_ALU_OP_MOV, ibc_null(cond.type),
+                       nti_fs->live_pix, BRW_CONDITIONAL_Z, &cond, 1);
+      mov->instr.predicate = BRW_PREDICATE_NORMAL;
+
+      ibc_HALT_JUMP(b, nti_fs->live_pix, BRW_PREDICATE_ALIGN1_ANY4H, true,
+                    &nti_fs->halt_jumps);
+      break;
+   }
+
    default:
       return false;
    }
@@ -369,7 +420,10 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
    write->can_reorder = false;
    write->has_side_effects = true;
 
-   assert(!prog_data->uses_kill);
+   if (prog_data->uses_kill) {
+      ibc_instr_set_predicate(&write->instr, nti_fs->live_pix,
+                              BRW_PREDICATE_NORMAL, false);
+   }
 
    return write;
 }
@@ -512,6 +566,12 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_send_instr *send,
    send->check_tdr = true;
    send->eot = last_rt &&
       write->instr.simd_group + write->instr.simd_width == b->shader->simd_width;
+
+   if (write->instr.predicate != BRW_PREDICATE_NONE) {
+      send->instr.flag = write->instr.flag;
+      send->instr.predicate = write->instr.predicate;
+      send->instr.pred_inverse = write->instr.pred_inverse;
+   }
 }
 
 const unsigned *
@@ -552,7 +612,17 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
                          &fs_state, simd_width, mem_ctx);
 
    nti.payload = &ibc_setup_fs_payload(&nti.b, prog_data, mem_ctx)->base;
+
+   if (prog_data->uses_kill) {
+      fs_state.live_pix = ibc_pixel_mask_as_flag(&nti);
+      list_inithead(&fs_state.halt_jumps);
+   }
+
    ibc_emit_nir_shader(&nti, shader);
+
+   if (prog_data->uses_kill)
+      ibc_HALT_MERGE(&nti.b, &fs_state.halt_jumps);
+
    ibc_emit_fb_writes(&nti);
 
    ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
