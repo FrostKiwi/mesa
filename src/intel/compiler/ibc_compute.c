@@ -56,6 +56,7 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
                           const nir_intrinsic_instr *instr)
 {
    assert(nti->stage == MESA_SHADER_COMPUTE);
+   struct brw_cs_prog_data *prog_data = (void *)nti->prog_data;
    struct ibc_cs_payload *payload = (struct ibc_cs_payload *)nti->payload;
    ibc_builder *b = &nti->b;
 
@@ -64,6 +65,49 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_load_subgroup_id:
       dest = ibc_MOV(b, IBC_TYPE_UD, payload->subgroup_id);
       break;
+
+   case nir_intrinsic_load_work_group_id: {
+      ibc_ref group_id[3];
+
+      group_id[0] = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
+      group_id[0].hw_grf.byte += 1 * ibc_type_byte_size(IBC_TYPE_UD);
+      ibc_hw_grf_mul_stride(&group_id[0].hw_grf, 0);
+
+      group_id[1] = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
+      group_id[1].hw_grf.byte += 6 * ibc_type_byte_size(IBC_TYPE_UD);
+      ibc_hw_grf_mul_stride(&group_id[1].hw_grf, 0);
+
+      group_id[2] = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
+      group_id[2].hw_grf.byte += 7 * ibc_type_byte_size(IBC_TYPE_UD);
+      ibc_hw_grf_mul_stride(&group_id[2].hw_grf, 0);
+
+      ibc_builder_push_scalar(b);
+      dest = ibc_VEC(b, group_id, 3);
+      ibc_builder_pop(b);
+      break;
+   }
+
+   case nir_intrinsic_load_num_work_groups: {
+      /* This is fixed as part of the shader interface */
+      const unsigned num_work_groups_bti = 0;
+
+      prog_data->uses_num_work_groups = true;
+
+      ibc_intrinsic_src srcs[2] = {
+         {
+            .ref = ibc_imm_ud(num_work_groups_bti),
+            .num_comps = 1,
+         },
+         {
+            .ref = ibc_imm_ud(0), /* Offset */
+            .num_comps = 1,
+         },
+      };
+
+      dest =  ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
+                                      IBC_TYPE_UD, 3, srcs, 2);
+      break;
+   }
 
    default:
       return false;
