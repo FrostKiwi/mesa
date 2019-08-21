@@ -988,12 +988,12 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
 
    case nir_intrinsic_load_ssbo: {
-      ibc_intrinsic_src srcs[2] = {
-         {
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_SURFACE_BTI] = {
             .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
             .num_comps = 1,
          },
-         {
+         [IBC_SURFACE_SRC_ADDRESS] = {
             .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
             .num_comps = 1,
          },
@@ -1003,7 +1003,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                                          instr->num_components);
       ibc_intrinsic_instr *load =
          ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
-                             dest, instr->num_components, srcs, 2);
+                             dest, instr->num_components,
+                             srcs, IBC_SURFACE_NUM_SRCS);
       load->can_reorder = false;
       break;
    }
@@ -1012,16 +1013,16 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       if (b->shader->stage == MESA_SHADER_FRAGMENT)
          brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
 
-      ibc_intrinsic_src srcs[3] = {
-         {
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_SURFACE_BTI] = {
             .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
             .num_comps = 1,
          },
-         {
+         [IBC_SURFACE_SRC_ADDRESS] = {
             .ref = ibc_nir_src(nti, instr->src[2], IBC_TYPE_UD),
             .num_comps = 1,
          },
-         {
+         [IBC_SURFACE_SRC_DATA0] = {
             .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
             .num_comps = instr->num_components,
          },
@@ -1029,7 +1030,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       ibc_intrinsic_instr *store =
          ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
-                             ibc_null(IBC_TYPE_UD), 0, srcs, 3);
+                             ibc_null(IBC_TYPE_UD), 0,
+                             srcs, IBC_SURFACE_NUM_SRCS);
       store->can_reorder = false;
       store->has_side_effects = true;
       break;
