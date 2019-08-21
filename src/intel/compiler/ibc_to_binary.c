@@ -663,8 +663,6 @@ ibc_to_binary(const ibc_shader *shader, void *mem_ctx, unsigned *program_size)
    unsigned after_size = p->next_insn_offset - start_offset;
 
    if (INTEL_DEBUG & intel_debug_flag_for_shader_stage(shader->stage)) {
-      dump_assembly(p->store, disasm_info);
-
       fprintf(stderr,
               "SIMD%d shader: %u instructions. %u loops. "
               "%u:%u spills:fills. "
