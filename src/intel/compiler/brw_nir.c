@@ -1071,9 +1071,6 @@ brw_nir_should_use_ibc(const nir_shader *nir,
    if (!is_scalar)
       return false;
 
-   if (nir->info.num_images > 0)
-      return false; /* No image support yet */
-
    switch (nir->info.stage) {
    case MESA_SHADER_VERTEX:
       return true;
