@@ -742,8 +742,7 @@ anv_pipeline_lower_nir(struct anv_pipeline *pipeline,
    anv_nir_shrink_num_uniforms(nir);
    prog_data->nr_params = DIV_ROUND_UP(nir->num_uniforms, 4);
 
-   if (nir->info.stage != MESA_SHADER_COMPUTE &&
-       !brw_nir_should_use_ibc(nir, compiler, true))
+   if (nir->info.stage != MESA_SHADER_COMPUTE)
       brw_nir_analyze_ubo_ranges(compiler, nir, NULL, prog_data->ubo_ranges);
 
    stage->nir = nir;
