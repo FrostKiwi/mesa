@@ -90,19 +90,20 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
 
       prog_data->uses_num_work_groups = true;
 
-      ibc_intrinsic_src srcs[2] = {
-         {
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_SURFACE_BTI] = {
             .ref = ibc_imm_ud(num_work_groups_bti),
             .num_comps = 1,
          },
-         {
-            .ref = ibc_imm_ud(0), /* Offset */
+         [IBC_SURFACE_SRC_ADDRESS] = {
+            .ref = ibc_imm_ud(0),
             .num_comps = 1,
          },
       };
 
       dest =  ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
-                                      IBC_TYPE_UD, 3, srcs, 2);
+                                      IBC_TYPE_UD, 3,
+                                      srcs, IBC_SURFACE_NUM_SRCS);
       break;
    }
 

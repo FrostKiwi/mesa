@@ -85,6 +85,12 @@ static void
 lower_surface_access(ibc_builder *b, ibc_send_instr *send,
                      const ibc_intrinsic_instr *intrin)
 {
+   const ibc_ref surface_bti = intrin->src[IBC_SURFACE_SRC_SURFACE_BTI].ref;
+   const ibc_ref address = intrin->src[IBC_SURFACE_SRC_ADDRESS].ref;
+   const ibc_ref data0 = intrin->src[IBC_SURFACE_SRC_DATA0].ref;
+   const unsigned num_data_comps =
+      intrin->src[IBC_SURFACE_SRC_DATA0].num_comps;
+
    uint32_t desc;
    switch (intrin->op) {
    case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
@@ -98,27 +104,24 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
       send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
       desc = brw_dp_untyped_surface_rw_desc(b->shader->devinfo,
                                             intrin->instr.simd_width,
-                                            intrin->src[2].num_comps,
+                                            num_data_comps,
                                             true    /* write */);
       break;
    default:
       unreachable("Unhandled surface access intrinsic");
    }
 
-   assert(intrin->src[0].ref.file == IBC_REG_FILE_IMM);
-   assert(intrin->src[0].ref.type == IBC_TYPE_UD);
-   send->desc_imm = desc | ibc_ref_as_uint(intrin->src[0].ref);
+   send->desc_imm = desc | ibc_ref_as_uint(surface_bti);
 
    send->dest = intrin->dest;
    send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
 
-   send->payload[0] = move_to_payload(b, intrin->src[1].ref, 1);
+   send->payload[0] = move_to_payload(b, address, 1);
    send->mlen = intrin->instr.simd_width / 8;
 
    if (intrin->op == IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE) {
-      send->payload[1] = move_to_payload(b, intrin->src[2].ref,
-                                            intrin->src[2].num_comps);
-      send->ex_mlen = intrin->src[2].num_comps * intrin->instr.simd_width / 8;
+      send->payload[1] = move_to_payload(b, data0, num_data_comps);
+      send->ex_mlen = num_data_comps * intrin->instr.simd_width / 8;
    }
 }
 
