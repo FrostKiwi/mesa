@@ -153,6 +153,11 @@ ibc_lower_simd_width(ibc_shader *shader)
          case IBC_INTRINSIC_OP_FB_WRITE:
             split_simd_width = ibc_lower_simd_width_fb_write_max_width(intrin);
             break;
+         case IBC_INTRINSIC_OP_BTI_TYPED_READ:
+         case IBC_INTRINSIC_OP_BTI_TYPED_WRITE:
+         case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:
+            split_simd_width = MIN2(split_simd_width, 8);
+            break;
          default:
             split_simd_width = MIN2(split_simd_width, 16); /* TODO */
             break;
