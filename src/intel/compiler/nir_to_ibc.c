@@ -692,6 +692,27 @@ nti_cond_mod_for_nir_reduction_op(nir_op op)
    }
 }
 
+static unsigned
+image_intrinsic_coord_components(const nir_intrinsic_instr *instr)
+{
+   switch (nir_intrinsic_image_dim(instr)) {
+   case GLSL_SAMPLER_DIM_1D:
+      return 1 + nir_intrinsic_image_array(instr);
+   case GLSL_SAMPLER_DIM_2D:
+   case GLSL_SAMPLER_DIM_RECT:
+      return 2 + nir_intrinsic_image_array(instr);
+   case GLSL_SAMPLER_DIM_3D:
+   case GLSL_SAMPLER_DIM_CUBE:
+      return 3;
+   case GLSL_SAMPLER_DIM_BUF:
+      return 1;
+   case GLSL_SAMPLER_DIM_MS:
+      return 2 + nir_intrinsic_image_array(instr);
+   default:
+      unreachable("Invalid image dimension");
+   }
+}
+
 static void
 nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                    const nir_intrinsic_instr *instr)
@@ -1042,6 +1063,160 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       if (pred.file != IBC_REG_FILE_NONE) {
          ibc_instr_set_predicate(&store->instr, pred,
+                                 BRW_PREDICATE_NORMAL, false);
+      }
+      break;
+   }
+
+   case nir_intrinsic_image_load:
+   case nir_intrinsic_image_store:
+   case nir_intrinsic_image_atomic_add:
+   case nir_intrinsic_image_atomic_imin:
+   case nir_intrinsic_image_atomic_umin:
+   case nir_intrinsic_image_atomic_imax:
+   case nir_intrinsic_image_atomic_umax:
+   case nir_intrinsic_image_atomic_and:
+   case nir_intrinsic_image_atomic_or:
+   case nir_intrinsic_image_atomic_xor:
+   case nir_intrinsic_image_atomic_exchange:
+   case nir_intrinsic_image_atomic_comp_swap:
+   case nir_intrinsic_bindless_image_load:
+   case nir_intrinsic_bindless_image_store:
+   case nir_intrinsic_bindless_image_atomic_add:
+   case nir_intrinsic_bindless_image_atomic_imin:
+   case nir_intrinsic_bindless_image_atomic_umin:
+   case nir_intrinsic_bindless_image_atomic_imax:
+   case nir_intrinsic_bindless_image_atomic_umax:
+   case nir_intrinsic_bindless_image_atomic_and:
+   case nir_intrinsic_bindless_image_atomic_or:
+   case nir_intrinsic_bindless_image_atomic_xor:
+   case nir_intrinsic_bindless_image_atomic_exchange:
+   case nir_intrinsic_bindless_image_atomic_comp_swap: {
+      /* Figure out the IBC intrinsic op */
+      bool is_bindless;
+      enum ibc_intrinsic_op op;
+      switch (instr->intrinsic) {
+      case nir_intrinsic_image_load:
+         op = IBC_INTRINSIC_OP_BTI_TYPED_READ;
+         is_bindless = false;
+         break;
+      case nir_intrinsic_bindless_image_load:
+         op = IBC_INTRINSIC_OP_BTI_TYPED_READ;
+         is_bindless = true;
+         break;
+      case nir_intrinsic_image_store:
+         op = IBC_INTRINSIC_OP_BTI_TYPED_WRITE;
+         is_bindless = false;
+         break;
+      case nir_intrinsic_bindless_image_store:
+         op = IBC_INTRINSIC_OP_BTI_TYPED_WRITE;
+         is_bindless = true;
+         break;
+      case nir_intrinsic_image_atomic_add:
+      case nir_intrinsic_image_atomic_imin:
+      case nir_intrinsic_image_atomic_umin:
+      case nir_intrinsic_image_atomic_imax:
+      case nir_intrinsic_image_atomic_umax:
+      case nir_intrinsic_image_atomic_and:
+      case nir_intrinsic_image_atomic_or:
+      case nir_intrinsic_image_atomic_xor:
+      case nir_intrinsic_image_atomic_exchange:
+      case nir_intrinsic_image_atomic_comp_swap:
+         op = IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC;
+         is_bindless = false;
+         break;
+      case nir_intrinsic_bindless_image_atomic_add:
+      case nir_intrinsic_bindless_image_atomic_imin:
+      case nir_intrinsic_bindless_image_atomic_umin:
+      case nir_intrinsic_bindless_image_atomic_imax:
+      case nir_intrinsic_bindless_image_atomic_umax:
+      case nir_intrinsic_bindless_image_atomic_and:
+      case nir_intrinsic_bindless_image_atomic_or:
+      case nir_intrinsic_bindless_image_atomic_xor:
+      case nir_intrinsic_bindless_image_atomic_exchange:
+      case nir_intrinsic_bindless_image_atomic_comp_swap:
+         op = IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC;
+         is_bindless = true;
+         break;
+      default:
+         unreachable("Invalid image intrinsic");
+      }
+
+      ibc_ref pred = {};
+      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
+         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
+         if (op != IBC_INTRINSIC_OP_BTI_TYPED_READ)
+            pred = ibc_emit_fs_sample_live_predicate(nti);
+      }
+
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {};
+
+      /* Set up the BTI or handle */
+      if (is_bindless) {
+         srcs[IBC_SURFACE_SRC_SURFACE_HANDLE] = (ibc_intrinsic_src) {
+            .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
+                                                 IBC_TYPE_UD)),
+            .num_comps = 1,
+         };
+      } else {
+         srcs[IBC_SURFACE_SRC_SURFACE_BTI] = (ibc_intrinsic_src) {
+            .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
+                                                 IBC_TYPE_UD)),
+            .num_comps = 1,
+         };
+      }
+
+      srcs[IBC_SURFACE_SRC_ADDRESS] = (ibc_intrinsic_src) {
+         .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+         .num_comps = image_intrinsic_coord_components(instr),
+      };
+
+      int aop = -1;
+      if (op == IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC) {
+         aop = brw_aop_for_nir_intrinsic(instr);
+         srcs[IBC_SURFACE_SRC_ATOMIC_OP] = (ibc_intrinsic_src) {
+            .ref = ibc_imm_ud(aop),
+            .num_comps = 1,
+         };
+      }
+
+      /* If we're not an atomic aop == -1 so the last two conditions are true
+       * vacuously.
+       */
+      if (op != IBC_INTRINSIC_OP_BTI_TYPED_READ &&
+          aop != BRW_AOP_INC && aop != BRW_AOP_DEC) {
+         srcs[IBC_SURFACE_SRC_DATA0] = (ibc_intrinsic_src) {
+            .ref = ibc_nir_src(nti, instr->src[3], IBC_TYPE_UD),
+            .num_comps = nir_intrinsic_src_components(instr, 3),
+         };
+      }
+
+      if (aop == BRW_AOP_CMPWR) {
+         srcs[IBC_SURFACE_SRC_DATA1] = (ibc_intrinsic_src) {
+            .ref = ibc_nir_src(nti, instr->src[4], IBC_TYPE_UD),
+            .num_comps = 1,
+         };
+      }
+
+      dest = ibc_null(IBC_TYPE_UD);
+      unsigned num_dest_comps = 0;
+      if (op != IBC_INTRINSIC_OP_BTI_TYPED_WRITE) {
+         num_dest_comps = nir_dest_num_components(instr->dest);
+         if (pred.file != IBC_REG_FILE_NONE) {
+            dest = ibc_UNDEF(b, IBC_TYPE_UD, num_dest_comps);
+         } else {
+            dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, num_dest_comps);
+         }
+      }
+
+      ibc_intrinsic_instr *image_op =
+         ibc_build_intrinsic(b, op, dest, num_dest_comps,
+                             srcs, IBC_SURFACE_NUM_SRCS);
+      image_op->can_reorder = false;
+      image_op->has_side_effects = (op != IBC_INTRINSIC_OP_BTI_TYPED_READ);
+
+      if (pred.file != IBC_REG_FILE_NONE) {
+         ibc_instr_set_predicate(&image_op->instr, pred,
                                  BRW_PREDICATE_NORMAL, false);
       }
       break;
