@@ -29,6 +29,46 @@
 
 #include "util/hash_table.h"
 
+static ibc_ref
+ibc_BTI_BLOCK_LOAD_UBO(ibc_builder *b, ibc_ref hw_grf, ibc_ref bti,
+                       ibc_ref offset, uint32_t block_size)
+{
+   assert(block_size % REG_SIZE == 0);
+   ibc_reg *data_reg = ibc_hw_grf_reg_create(b->shader, block_size, REG_SIZE);
+
+   hw_grf.type = IBC_TYPE_UD;
+   ibc_ref data = ibc_typed_ref(data_reg, IBC_TYPE_UD);
+   unsigned block_num_comps = block_size / ibc_type_byte_size(IBC_TYPE_UD);
+
+   ibc_intrinsic_src srcs[3] = { };
+
+   if (hw_grf.file != IBC_REG_FILE_NONE) {
+      srcs[0] = (ibc_intrinsic_src) {
+         .ref = hw_grf,
+         .num_comps = block_num_comps,
+      };
+   }
+
+   if (bti.file != IBC_REG_FILE_NONE) {
+      srcs[1] = (ibc_intrinsic_src) {
+         .ref = ibc_uniformize(b, bti),
+         .num_comps = 1,
+      };
+   }
+
+   srcs[2] = (ibc_intrinsic_src) {
+      .ref = offset,
+      .num_comps = 1,
+   };
+
+   ibc_builder_push_scalar(b);
+   ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO,
+                       data, block_num_comps, srcs, 3);
+   ibc_builder_pop(b);
+
+   return data;
+}
+
 void
 ibc_setup_payload_base(ibc_builder *b, struct ibc_payload_base *payload)
 {
@@ -42,6 +82,45 @@ ibc_setup_payload_base(ibc_builder *b, struct ibc_payload_base *payload)
    ibc_builder_pop(b);
 
    payload->num_ff_regs = 1; /* g0 */
+}
+
+/* Allow at most 16 registers worth of push constants */
+#define IBC_MAX_PUSH_REGS 16
+
+void
+ibc_setup_curb_payload(ibc_builder *b, struct ibc_payload_base *payload,
+                       struct brw_stage_prog_data *prog_data)
+{
+   assert(payload->num_curb_regs == 0);
+   if (prog_data->nr_params) {
+      assert(prog_data->nr_params * 4 < IBC_MAX_PUSH_REGS * REG_SIZE);
+      const unsigned reg = payload->num_ff_regs + payload->num_curb_regs;
+      const unsigned length = DIV_ROUND_UP(prog_data->nr_params * 4, REG_SIZE);
+      payload->push =
+         ibc_BTI_BLOCK_LOAD_UBO(b, ibc_hw_grf_ref(reg, 0, IBC_TYPE_UD),
+                                   ibc_null(IBC_TYPE_UD), ibc_imm_ud(0),
+                                   length * REG_SIZE);
+      payload->num_curb_regs += length;
+   }
+
+   for (unsigned i = 0; i < ARRAY_SIZE(prog_data->ubo_ranges); i++) {
+      struct brw_ubo_range *range = &prog_data->ubo_ranges[i];
+      assert(payload->num_curb_regs <= IBC_MAX_PUSH_REGS);
+      range->length = MIN2(range->length,
+                           IBC_MAX_PUSH_REGS - payload->num_curb_regs);
+      if (range->length == 0)
+         continue;
+
+      const unsigned reg = payload->num_ff_regs + payload->num_curb_regs;
+      payload->ubo_push[i] =
+         ibc_BTI_BLOCK_LOAD_UBO(b, ibc_hw_grf_ref(reg, 0, IBC_TYPE_UD),
+                                   ibc_imm_ud(range->block),
+                                   ibc_imm_ud(range->start * REG_SIZE),
+                                   range->length * REG_SIZE);
+      payload->num_curb_regs += range->length;
+   }
+
+   assert(payload->num_curb_regs <= IBC_MAX_PUSH_REGS);
 }
 
 static void
@@ -810,50 +889,101 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
-   case nir_intrinsic_load_ubo:
-      if (nir_src_is_const(instr->src[0]) && nir_src_is_const(instr->src[1])) {
+   case nir_intrinsic_load_uniform:
+      if (nir_src_is_const(instr->src[0])) {
+         const uint64_t offset_B = nir_intrinsic_base(instr) +
+                                   nir_src_as_uint(instr->src[0]);
          const unsigned comp_size_B = nir_dest_bit_size(instr->dest) / 8;
-         const uint64_t offset_B = nir_src_as_uint(instr->src[1]);
-         const unsigned block_size_B = 64; /* Fetch one cacheline at a time. */
 
-         /* Block loads are inherently scalar operations.  This will actually
-          * get expanded out to a SIMD16 WE_all send but for the purposes of
-          * the logical instruction, it makes more sense to be scalar.
-          */
-         ibc_builder_push_scalar(b);
-
-         ibc_ref dest_comps[4];
+         ibc_ref dest_comps[4] = { };
          for (unsigned c = 0; c < instr->num_components; c++) {
             const uint64_t comp_offset_B = offset_B + c * comp_size_B;
+
+            assert(nti->payload->push.file == IBC_REG_FILE_HW_GRF);
+            if (comp_offset_B + comp_size_B >=
+                nti->payload->push.reg->hw_grf.size)
+               continue;
+
+            dest_comps[c] = nti->payload->push;
+            dest_comps[c].type = instr->dest.ssa.bit_size;
+            dest_comps[c].hw_grf.byte += comp_offset_B;
+            ibc_hw_grf_mul_stride(&dest_comps[c].hw_grf, 0);
+         }
+
+         ibc_builder_push_scalar(b);
+         dest = ibc_VEC(b, dest_comps, instr->num_components);
+         ibc_builder_pop(b);
+      } else {
+         unreachable("Indirect push constants not yet supported");
+      }
+      break;
+
+   case nir_intrinsic_load_ubo:
+      if (nir_src_is_const(instr->src[0]) && nir_src_is_const(instr->src[1])) {
+         const unsigned bti = nir_src_as_uint(instr->src[0]);
+         const uint64_t offset_B = nir_src_as_uint(instr->src[1]);
+         const unsigned comp_size_B = nir_dest_bit_size(instr->dest) / 8;
+
+         ibc_ref dest_comps[4] = { };
+         for (unsigned c = 0; c < instr->num_components; c++) {
+            const uint64_t comp_offset_B = offset_B + c * comp_size_B;
+
+            /* First, try to look it up in one of the push ranges */
+            for (unsigned i = 0; i < ARRAY_SIZE(nti->payload->ubo_push); i++) {
+               ibc_ref block = nti->payload->ubo_push[i];
+               if (block.file == IBC_REG_FILE_NONE)
+                  continue;
+
+               ibc_intrinsic_instr *l =
+                  ibc_instr_as_intrinsic(ibc_reg_ssa_instr(block.reg));
+               assert(l->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO);
+               assert(l->instr.simd_width == 1);
+
+               const unsigned block_bti = ibc_ref_as_uint(l->src[1].ref);
+               const unsigned block_offset_B = ibc_ref_as_uint(l->src[2].ref);
+               const unsigned block_size_B =
+                  ibc_type_byte_size(l->dest.type) * l->num_dest_comps;
+
+               if (bti != block_bti ||
+                   comp_offset_B < block_offset_B ||
+                   comp_offset_B + comp_size_B > block_offset_B + block_size_B)
+                  continue;
+
+               dest_comps[c] = block;
+               dest_comps[c].type = instr->dest.ssa.bit_size;
+               dest_comps[c].hw_grf.byte += comp_offset_B - block_offset_B;
+               ibc_hw_grf_mul_stride(&dest_comps[c].hw_grf, 0);
+               break;
+            }
+
+            /* If we found it as a push constant, we're done. */
+            if (dest_comps[c].file != IBC_REG_FILE_NONE)
+               continue;
+
+            /* Fetch one cacheline at a time. */
+            const unsigned block_size_B = 64;
+
             const unsigned comp_offset_in_block_B =
                comp_offset_B % block_size_B;
             const uint64_t block_offset_B =
                comp_offset_B - comp_offset_in_block_B;
 
-            ibc_intrinsic_src srcs[2] = {
-               {
-                  .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
-                  .num_comps = 1,
-               },
-               {
-                  .ref = ibc_imm_ud(block_offset_B),
-                  .num_comps = 1,
-               },
-            };
+            ibc_ref block =
+               ibc_BTI_BLOCK_LOAD_UBO(b, ibc_null(IBC_TYPE_UD),
+                                      ibc_nir_src(nti, instr->src[0],
+                                                  IBC_TYPE_UD),
+                                      ibc_imm_ud(block_offset_B),
+                                      block_size_B);
 
-            ibc_reg *data_reg =
-               ibc_hw_grf_reg_create(b->shader, REG_SIZE * 2, REG_SIZE);
-
-            ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_CONST_BLOCK_READ,
-                                ibc_typed_ref(data_reg, IBC_TYPE_32_BIT),
-                                block_size_B / 4, srcs, 2);
-
-            dest_comps[c] = ibc_typed_ref(data_reg, instr->dest.ssa.bit_size);
-            dest_comps[c].hw_grf.byte = comp_offset_in_block_B;
+            assert(block.file == IBC_REG_FILE_HW_GRF);
+            dest_comps[c] = block;
+            dest_comps[c].type = instr->dest.ssa.bit_size;
+            dest_comps[c].hw_grf.byte += comp_offset_in_block_B;
             ibc_hw_grf_mul_stride(&dest_comps[c].hw_grf, 0);
          }
-         dest = ibc_VEC(b, dest_comps, instr->num_components);
 
+         ibc_builder_push_scalar(b);
+         dest = ibc_VEC(b, dest_comps, instr->num_components);
          ibc_builder_pop(b);
          break;
       } else {
