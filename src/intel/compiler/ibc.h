@@ -669,13 +669,19 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_SIMD_BROADCAST,
    IBC_INTRINSIC_OP_SIMD_ZIP,
    IBC_INTRINSIC_OP_VEC,
-   IBC_INTRINSIC_OP_BTI_CONST_BLOCK_READ,
    IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
    IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
    IBC_INTRINSIC_OP_LOAD_PAYLOAD,
    IBC_INTRINSIC_OP_PLN,
    IBC_INTRINSIC_OP_FB_WRITE,
    IBC_INTRINSIC_OP_URB_WRITE,
+
+   /* Sources:
+    *  [0] = HW_GRF if it's an initial push constant load
+    *  [1] = BTI or NONE for push constant only
+    *  [2] = Offset in bytes
+    */
+   IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO,
 
    /* Texture opcodes.  See ibc_tex_src */
    IBC_INTRINSIC_OP_TEX,

@@ -34,16 +34,22 @@ extern "C" {
 #endif
 
 struct hash_table;
+struct brw_stage_prog_data;
 
 struct ibc_payload_base {
    /** Number of registers used for fixed-function thread payload */
    unsigned num_ff_regs;
+
+   ibc_ref push;
+   ibc_ref ubo_push[4];
 
    /** Number of registers used for push constants */
    unsigned num_curb_regs;
 };
 
 void ibc_setup_payload_base(ibc_builder *b, struct ibc_payload_base *payload);
+void ibc_setup_curb_payload(ibc_builder *b, struct ibc_payload_base *payload,
+                            struct brw_stage_prog_data *prog_data);
 
 struct nir_to_ibc_state {
    void *mem_ctx;

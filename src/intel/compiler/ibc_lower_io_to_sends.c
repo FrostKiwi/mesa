@@ -35,8 +35,8 @@ move_to_payload(ibc_builder *b, ibc_ref src, unsigned num_comps)
 }
 
 static void
-lower_const_block_read(ibc_builder *b, ibc_send_instr *send,
-                       const ibc_intrinsic_instr *read)
+lower_bti_block_load_ubo(ibc_builder *b, ibc_send_instr *send,
+                         const ibc_intrinsic_instr *read)
 {
    const unsigned block_size_B =
       read->num_dest_comps * ibc_type_byte_size(read->dest.type);
@@ -53,12 +53,12 @@ lower_const_block_read(ibc_builder *b, ibc_send_instr *send,
                        BRW_DATAPORT_OWORD_BLOCK_DWORDS(block_size_DW),
                        GEN7_DATAPORT_DC_OWORD_BLOCK_READ,
                        BRW_DATAPORT_READ_TARGET_DATA_CACHE);
-   assert(read->src[0].ref.type == IBC_TYPE_UD);
-   send->desc = read->src[0].ref;
-
-   assert(read->src[1].ref.file == IBC_REG_FILE_IMM);
    assert(read->src[1].ref.type == IBC_TYPE_UD);
-   const uint32_t offset_B = ibc_ref_as_uint(read->src[1].ref);
+   send->desc = read->src[1].ref;
+
+   assert(read->src[2].ref.file == IBC_REG_FILE_IMM);
+   assert(read->src[2].ref.type == IBC_TYPE_UD);
+   const uint32_t offset_B = ibc_ref_as_uint(read->src[2].ref);
 
    ibc_reg *msg = ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
 
@@ -566,6 +566,12 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       case IBC_INTRINSIC_OP_LOAD_PAYLOAD:
       case IBC_INTRINSIC_OP_PLN:
          continue;
+
+      case IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO:
+         /* Only lower BLOCK_LOAD_UBO if it doesn't have a push GRF */
+         if (intrin->src[0].ref.file == IBC_REG_FILE_HW_GRF)
+            continue;
+         break;
       default:
          break;
       }
@@ -584,8 +590,8 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       send->has_side_effects = intrin->has_side_effects;
 
       switch (intrin->op) {
-      case IBC_INTRINSIC_OP_BTI_CONST_BLOCK_READ:
-         lower_const_block_read(&b, send, intrin);
+      case IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO:
+         lower_bti_block_load_ubo(&b, send, intrin);
          break;
 
       case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
