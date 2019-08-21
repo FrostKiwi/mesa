@@ -119,6 +119,31 @@ ibc_lower_simd_width(ibc_shader *shader)
          const unsigned dest_stride = ref_stride(&alu->dest);
          if (dest_stride > 0)
             split_simd_width = MIN2(split_simd_width, 64 / dest_stride);
+
+         switch (alu->op) {
+         case IBC_ALU_OP_RCP:
+         case IBC_ALU_OP_LOG2:
+         case IBC_ALU_OP_EXP2:
+         case IBC_ALU_OP_SQRT:
+         case IBC_ALU_OP_RSQ:
+         case IBC_ALU_OP_SIN:
+         case IBC_ALU_OP_COS:
+         case IBC_ALU_OP_POW:
+            /* Extended math functions are limited to SIMD8 with half-float */
+            if (alu->dest.type == IBC_TYPE_HF)
+               split_simd_width = MIN2(split_simd_width, 8);
+            split_simd_width = MIN2(split_simd_width, 16);
+            break;
+
+         case IBC_ALU_OP_IDIV:
+         case IBC_ALU_OP_IREM:
+            /* Integer division is limited to SIMD8 on all generations. */
+            split_simd_width = MIN2(split_simd_width, 8);
+            break;
+
+         default:
+            break;
+         }
          break;
       }
 
