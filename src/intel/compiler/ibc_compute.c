@@ -33,20 +33,17 @@ struct ibc_cs_payload {
 };
 
 static struct ibc_cs_payload *
-ibc_setup_cs_payload(ibc_builder *b, void *mem_ctx)
+ibc_setup_cs_payload(ibc_builder *b, unsigned subgroup_id_offset,
+                     struct brw_cs_prog_data *prog_data, void *mem_ctx)
 {
-   struct ibc_cs_payload *payload = ralloc(mem_ctx, struct ibc_cs_payload);
+   struct ibc_cs_payload *payload = rzalloc(mem_ctx, struct ibc_cs_payload);
    ibc_setup_payload_base(b, &payload->base);
+   ibc_setup_curb_payload(b, &payload->base, &prog_data->base);
 
-   ibc_builder_push_we_all(b, 1);
-   payload->subgroup_id = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
-   /* Assume that the subgroup ID is in g1.0
-    *
-    * TODO: Make this more dynamic.
-    */
-   ibc_load_payload(b, payload->subgroup_id,
-                    ibc_hw_grf_ref(1, 0, IBC_TYPE_UD), 1);
-   ibc_builder_pop(b);
+   payload->subgroup_id = payload->base.push;
+   payload->subgroup_id.type = IBC_TYPE_UD;
+   payload->subgroup_id.hw_grf.byte += subgroup_id_offset;
+   ibc_hw_grf_mul_stride(&payload->subgroup_id.hw_grf, 0);
 
    return payload;
 }
@@ -259,6 +256,8 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    /* Add a uniform for the thread local id.  It must be the last uniform
     * on the list.
     */
+   assert(src_shader->num_uniforms == prog_data->base.nr_params * 4);
+   const unsigned subgroup_id_offset = src_shader->num_uniforms;
    uint32_t *param = brw_stage_prog_data_add_params(&prog_data->base, 1);
    *param = BRW_PARAM_BUILTIN_SUBGROUP_ID;
 
@@ -272,7 +271,8 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                          &key->base, &prog_data->base,
                          NULL, simd_width, mem_ctx);
 
-   nti.payload = &ibc_setup_cs_payload(&nti.b, mem_ctx)->base;
+   nti.payload = &ibc_setup_cs_payload(&nti.b, subgroup_id_offset,
+                                       prog_data, mem_ctx)->base;
    ibc_emit_nir_shader(&nti, shader);
    ibc_emit_cs_thread_terminate(&nti);
 
