@@ -684,8 +684,12 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO,
 
    /* Surface opcodes.  See ibc_surface_src */
+   IBC_INTRINSIC_OP_BTI_TYPED_READ,
+   IBC_INTRINSIC_OP_BTI_TYPED_WRITE,
+   IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC,
    IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
    IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
+   IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC,
 
    /* Texture opcodes.  See ibc_tex_src */
    IBC_INTRINSIC_OP_TEX,
@@ -705,8 +709,11 @@ enum ibc_intrinsic_op {
 /* Sources for [un]typed surface intrinsics */
 enum ibc_surface_src {
    IBC_SURFACE_SRC_SURFACE_BTI,     /**< Surface BTI */
+   IBC_SURFACE_SRC_SURFACE_HANDLE,  /**< Surface bindless handle */
    IBC_SURFACE_SRC_ADDRESS,         /**< Surface offset or coordinate */
    IBC_SURFACE_SRC_DATA0,           /**< Surface write/atomic data */
+   IBC_SURFACE_SRC_DATA1,           /**< Surface write/atomic data */
+   IBC_SURFACE_SRC_ATOMIC_OP,       /**< Surface atomic opcode */
    IBC_SURFACE_NUM_SRCS,
 };
 

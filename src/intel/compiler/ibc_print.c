@@ -370,12 +370,16 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_SIMD_ZIP:           return "simd_zip";
    case IBC_INTRINSIC_OP_VEC:                return "vec";
    case IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO: return "bti_block_load_ubo";
-   case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:   return "bti_untyped_read";
-   case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:  return "bti_untyped_write";
    case IBC_INTRINSIC_OP_LOAD_PAYLOAD:       return "load_payload";
    case IBC_INTRINSIC_OP_PLN:                return "pln";
    case IBC_INTRINSIC_OP_FB_WRITE:           return "fb_write";
    case IBC_INTRINSIC_OP_URB_WRITE:          return "urb_write";
+   case IBC_INTRINSIC_OP_BTI_TYPED_READ:     return "bti_typed_read";
+   case IBC_INTRINSIC_OP_BTI_TYPED_WRITE:    return "bti_typed_write";
+   case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:   return "bti_typed_atomic";
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:   return "bti_untyped_read";
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:  return "bti_untyped_write";
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC: return "bti_untyped_atomic";
    case IBC_INTRINSIC_OP_TEX:                return "tex";
    case IBC_INTRINSIC_OP_TXB:                return "txb";
    case IBC_INTRINSIC_OP_TXL:                return "txl";
