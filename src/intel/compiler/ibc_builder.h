@@ -740,6 +740,13 @@ ibc_VEC(ibc_builder *b, ibc_ref *srcs, unsigned num_comps)
 }
 
 static inline ibc_ref
+ibc_VEC2(ibc_builder *b, ibc_ref src0, ibc_ref src1)
+{
+   ibc_ref srcs[2] = { src0, src1 };
+   return ibc_VEC(b, srcs, 2);
+}
+
+static inline ibc_ref
 ibc_PLN(ibc_builder *b, ibc_ref vert, ibc_ref bary)
 {
    assert(vert.file == IBC_REG_FILE_LOGICAL);

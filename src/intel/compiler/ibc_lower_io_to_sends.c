@@ -85,14 +85,66 @@ static void
 lower_surface_access(ibc_builder *b, ibc_send_instr *send,
                      const ibc_intrinsic_instr *intrin)
 {
+   const struct gen_device_info *devinfo = b->shader->devinfo;
+
    const ibc_ref surface_bti = intrin->src[IBC_SURFACE_SRC_SURFACE_BTI].ref;
+   const ibc_ref surface_handle =
+      intrin->src[IBC_SURFACE_SRC_SURFACE_HANDLE].ref;
+   assert((surface_bti.file == IBC_REG_FILE_NONE) !=
+          (surface_handle.file == IBC_REG_FILE_NONE));
+
    const ibc_ref address = intrin->src[IBC_SURFACE_SRC_ADDRESS].ref;
    const ibc_ref data0 = intrin->src[IBC_SURFACE_SRC_DATA0].ref;
+   const ibc_ref data1 = intrin->src[IBC_SURFACE_SRC_DATA1].ref;
+   const ibc_ref atomic_op = intrin->src[IBC_SURFACE_SRC_ATOMIC_OP].ref;
+
+   const unsigned num_address_comps =
+      intrin->src[IBC_SURFACE_SRC_ADDRESS].num_comps;
    const unsigned num_data_comps =
       intrin->src[IBC_SURFACE_SRC_DATA0].num_comps;
+   assert(intrin->src[IBC_SURFACE_SRC_DATA1].num_comps == 0 ||
+          intrin->src[IBC_SURFACE_SRC_DATA1].num_comps == num_data_comps);
+
+   /* Gen8 and earlier require headers for typed surface opcodes */
+   assert(devinfo->gen >= 9);
+
+   send->payload[0] = move_to_payload(b, address, num_address_comps);
+   send->mlen = num_address_comps * intrin->instr.simd_width / 8;
+   if (data1.file != IBC_REG_FILE_NONE) {
+      assert(num_data_comps == 1);
+      send->payload[1] = ibc_VEC2(b, data0, data1);
+      send->ex_mlen = 2 * (intrin->instr.simd_width / 8);
+   } else if (data0.file != IBC_REG_FILE_NONE) {
+      send->payload[1] = move_to_payload(b, data0, num_data_comps);
+      send->ex_mlen = num_data_comps * (intrin->instr.simd_width / 8);
+   }
 
    uint32_t desc;
    switch (intrin->op) {
+   case IBC_INTRINSIC_OP_BTI_TYPED_READ:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_typed_surface_rw_desc(b->shader->devinfo,
+                                          intrin->instr.simd_width,
+                                          intrin->instr.simd_group,
+                                          intrin->num_dest_comps,
+                                          false   /* write */);
+      break;
+   case IBC_INTRINSIC_OP_BTI_TYPED_WRITE:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_typed_surface_rw_desc(b->shader->devinfo,
+                                          intrin->instr.simd_width,
+                                          intrin->instr.simd_group,
+                                          num_data_comps,
+                                          true   /* write */);
+      break;
+   case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_typed_atomic_desc(b->shader->devinfo,
+                                      intrin->instr.simd_width,
+                                      intrin->instr.simd_group,
+                                      ibc_ref_as_uint(atomic_op),
+                                      intrin->num_dest_comps > 0);
+      break;
    case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
       send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
       desc = brw_dp_untyped_surface_rw_desc(b->shader->devinfo,
@@ -107,22 +159,41 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
                                             num_data_comps,
                                             true    /* write */);
       break;
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_untyped_atomic_desc(b->shader->devinfo,
+                                        intrin->instr.simd_width,
+                                        ibc_ref_as_uint(atomic_op),
+                                        intrin->num_dest_comps > 0);
+      break;
    default:
       unreachable("Unhandled surface access intrinsic");
    }
 
-   send->desc_imm = desc | ibc_ref_as_uint(surface_bti);
+   send->desc_imm = desc;
+   if (surface_bti.file == IBC_REG_FILE_IMM) {
+      send->desc_imm |= ibc_ref_as_uint(surface_bti) & 0xff;
+   } else if (surface_handle.file != IBC_REG_FILE_NONE) {
+      /* Bindless surface */
+      assert(devinfo->gen >= 9);
+      send->desc_imm |= GEN9_BTI_BINDLESS;
+
+      /* We assume that the driver provided the handle in the top 20 bits so
+       * we can use the surface handle directly as the extended descriptor.
+       */
+      ibc_builder_push_scalar(b);
+      assert(surface_handle.type == IBC_TYPE_UD);
+      send->ex_desc = ibc_MOV(b, IBC_TYPE_UD, surface_handle);
+      ibc_builder_pop(b);
+   } else {
+      ibc_builder_push_scalar(b);
+      assert(surface_bti.type == IBC_TYPE_UD);
+      send->desc = ibc_AND(b, IBC_TYPE_UD, surface_bti, ibc_imm_uw(0xff));
+      ibc_builder_pop(b);
+   }
 
    send->dest = intrin->dest;
    send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
-
-   send->payload[0] = move_to_payload(b, address, 1);
-   send->mlen = intrin->instr.simd_width / 8;
-
-   if (intrin->op == IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE) {
-      send->payload[1] = move_to_payload(b, data0, num_data_comps);
-      send->ex_mlen = num_data_comps * intrin->instr.simd_width / 8;
-   }
 }
 
 static bool
@@ -603,8 +674,12 @@ ibc_lower_io_to_sends(ibc_shader *shader)
          lower_bti_block_load_ubo(&b, send, intrin);
          break;
 
+      case IBC_INTRINSIC_OP_BTI_TYPED_READ:
+      case IBC_INTRINSIC_OP_BTI_TYPED_WRITE:
+      case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
+      case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
          lower_surface_access(&b, send, intrin);
          break;
 
