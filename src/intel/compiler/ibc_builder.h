@@ -663,8 +663,12 @@ ibc_SIMD_BROADCAST(ibc_builder *b, ibc_ref val, ibc_ref chan,
 static inline ibc_ref
 ibc_uniformize(ibc_builder *b, ibc_ref val)
 {
-   if (ibc_ref_read_is_uniform(val))
-      ibc_MOV_scalar(b, val.type, val);
+   if (ibc_ref_read_is_uniform(val)) {
+      if (ibc_ref_read_is_static(val))
+         return val;
+      else
+         ibc_MOV_scalar(b, val.type, val);
+   }
 
    return ibc_SIMD_BROADCAST(b, val, ibc_FIND_LIVE_CHANNEL(b), 1);
 }

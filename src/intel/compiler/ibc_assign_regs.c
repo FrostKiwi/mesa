@@ -1022,6 +1022,23 @@ ibc_assign_regs(ibc_shader *shader)
 
             ibc_instr_remove(instr);
             continue;
+         } else if (intrin->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO &&
+                    intrin->src[0].ref.file != IBC_REG_FILE_NONE) {
+            /* This is a LOAD_UBO that actually just represents a push
+             * constant block.  Assign it the right GRF.
+             */
+            assert(intrin->dest.reg);
+            assert(ibc_reg_ssa_instr(intrin->dest.reg) == instr);
+            assert(intrin->src[0].ref.file == IBC_REG_FILE_HW_GRF);
+            assert(intrin->src[0].ref.reg == NULL);
+
+            UNUSED struct ibc_reg_assignment *assign =
+               &state.assign[intrin->dest.reg->index];
+            assert(assign->preg == NULL && assign->sreg == NULL);
+
+            assign_reg(assign, intrin->src[0].ref.hw_grf.byte, &state);
+            ibc_instr_remove(instr);
+            continue;
          }
       }
 
