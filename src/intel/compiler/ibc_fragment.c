@@ -148,7 +148,9 @@ ibc_setup_fs_payload(ibc_builder *b, struct brw_wm_prog_data *prog_data,
 
    payload->base.num_ff_regs = reg;
 
-   assert(prog_data->base.nr_params == 0);
+   /* Set up push constants */
+   ibc_setup_curb_payload(b, &payload->base, &prog_data->base);
+   reg = payload->base.num_ff_regs + payload->base.num_curb_regs;
 
    /* We represent per-vertex attributes in the payload as a SIMD1 vec4 for
     * each component coming out of the geometry pipeline.

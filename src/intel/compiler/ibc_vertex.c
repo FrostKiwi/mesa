@@ -54,7 +54,9 @@ ibc_setup_vs_payload(ibc_builder *b,
 
    payload->base.num_ff_regs = reg;
 
-   assert(prog_data->base.base.nr_params == 0);
+   /* Set up push constants */
+   ibc_setup_curb_payload(b, &payload->base, &prog_data->base.base);
+   reg = payload->base.num_ff_regs + payload->base.num_curb_regs;
 
    assert(prog_data->base.urb_read_length <= 15);
 
