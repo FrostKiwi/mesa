@@ -227,16 +227,20 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
             BITSET_SET(chunks, i);
          }
       } else if (ref->hw_grf.hstride == 0 && ref->hw_grf.vstride == 0) {
-         assert(num_comps == 1);
-         const unsigned byte_chunk_start = ref->hw_grf.byte >> byte_shift;
-         const unsigned byte_end_chunk =
-            (ref->hw_grf.byte + ref_byte_size - 1) >> byte_shift;
-         for (unsigned b = byte_chunk_start; b <= byte_end_chunk; b++) {
-            assert(b < rli->num_chunks);
-            BITSET_SET(chunks, b);
+         unsigned offset = ref->hw_grf.byte;
+         for (unsigned c = 0; c < num_comps; c++) {
+            const unsigned byte_chunk_start = ref->hw_grf.byte >> byte_shift;
+            const unsigned byte_end_chunk =
+               (offset + ref_byte_size - 1) >> byte_shift;
+            for (unsigned b = byte_chunk_start; b <= byte_end_chunk; b++) {
+               assert(b < rli->num_chunks);
+               BITSET_SET(chunks, b);
+            }
+            offset += ref_byte_size;
          }
       } else {
-         assert(num_comps == 1);
+         assert(simd_width % ref->hw_grf.width == 0 ||
+                ref->hw_grf.hstride * ref->hw_grf.width == ref->hw_grf.vstride);
          unsigned offset = ref->hw_grf.byte;
          unsigned horiz_offset = 0;
          for (unsigned c = 0; c < num_comps; c++) {
@@ -253,12 +257,25 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
 
                s++;
                assert(util_is_power_of_two_nonzero(ref->hw_grf.width));
-               if (s == simd_width || (s & (ref->hw_grf.width - 1)) == 0) {
+               if ((s & (ref->hw_grf.width - 1)) == 0) {
                   offset += ref->hw_grf.vstride;
                   horiz_offset = 0;
                } else {
                   horiz_offset += ref->hw_grf.hstride;
                }
+            }
+
+            if (simd_width >= ref->hw_grf.width && ref->hw_grf.vstride > 0) {
+               /* The loop above handled any component offsetting needed */
+               assert(horiz_offset == 0);
+            } else if (num_comps > 1) {
+               assert(ref->hw_grf.hstride * ref->hw_grf.width ==
+                      ref->hw_grf.vstride);
+               /* If it's a replicated scalar, use the component size,
+                * otherwise use the hstride.
+                */
+               offset += simd_width * MAX2(ref->hw_grf.hstride, ref_byte_size);
+               horiz_offset = 0;
             }
          }
       }
