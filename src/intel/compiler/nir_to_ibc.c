@@ -164,6 +164,16 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    /* TODO */
    assert(!instr->dest.saturate);
 
+#define UNOP_CASE(nop, IOP)                           \
+   case nir_op_##nop:                                 \
+      dest = ibc_##IOP(b, dest_type, src[0]);         \
+      break;
+
+#define BINOP_CASE(nop, IOP)                          \
+   case nir_op_##nop:                                 \
+      dest = ibc_##IOP(b, dest_type, src[0], src[1]); \
+      break;
+
    switch (instr->op) {
    case nir_op_mov:
    case nir_op_vec2:
@@ -208,21 +218,11 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
    }
 
-   case nir_op_ftrunc:
-      dest = ibc_RNDZ(b, dest_type, src[0]);
-      break;
-   case nir_op_fceil:
-      dest = ibc_RNDU(b, dest_type, src[0]);
-      break;
-   case nir_op_ffloor:
-      dest = ibc_RNDD(b, dest_type, src[0]);
-      break;
-   case nir_op_ffract:
-      dest = ibc_FRC(b, dest_type, src[0]);
-      break;
-   case nir_op_fround_even:
-      dest = ibc_RNDE(b, dest_type, src[0]);
-      break;
+   UNOP_CASE(ftrunc,       RNDZ)
+   UNOP_CASE(fceil,        RNDU)
+   UNOP_CASE(ffloor,       RNDD)
+   UNOP_CASE(ffract,       FRC)
+   UNOP_CASE(fround_even,  RNDE)
 
    case nir_op_extract_u8:
    case nir_op_extract_i8:
@@ -276,13 +276,10 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
    }
 
-   case nir_op_iadd:
-   case nir_op_fadd:
-      dest = ibc_ADD(b, dest_type, src[0], src[1]);
-      break;
-   case nir_op_fmul:
-      dest = ibc_MUL(b, dest_type, src[0], src[1]);
-      break;
+   BINOP_CASE(iadd, ADD)
+   BINOP_CASE(fadd, ADD)
+   BINOP_CASE(fmul, MUL)
+
    case nir_op_imul:
       if (nir_src_is_const(instr->src[0].src) &&
           nir_src_as_uint(instr->src[0].src) < INT16_MAX) {
@@ -294,22 +291,13 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
          unreachable("Full integer multiplication not supported");
       }
       break;
-   case nir_op_iand:
-      dest = ibc_AND(b, dest_type, src[0], src[1]);
-      break;
-   case nir_op_ior:
-      dest = ibc_OR(b, dest_type, src[0], src[1]);
-      break;
-   case nir_op_ixor:
-      dest = ibc_XOR(b, dest_type, src[0], src[1]);
-      break;
-   case nir_op_ishl:
-      dest = ibc_SHL(b, dest_type, src[0], src[1]);
-      break;
-   case nir_op_ishr:
-   case nir_op_ushr:
-      dest = ibc_SHR(b, dest_type, src[0], src[1]);
-      break;
+
+   BINOP_CASE(iand, AND)
+   BINOP_CASE(ior,  OR)
+   BINOP_CASE(ixor, XOR)
+   BINOP_CASE(ishl, SHL)
+   BINOP_CASE(ishr, SHR)
+   BINOP_CASE(ushr, SHR)
 
    case nir_op_flt:
    case nir_op_ilt:
@@ -326,17 +314,12 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
                      src[0], src[1]);
       break;
 
-   case nir_op_imin:
-   case nir_op_umin:
-   case nir_op_fmin:
-      dest = ibc_MIN(b, dest_type, src[0], src[1]);
-      break;
-
-   case nir_op_imax:
-   case nir_op_umax:
-   case nir_op_fmax:
-      dest = ibc_MAX(b, dest_type, src[0], src[1]);
-      break;
+   BINOP_CASE(imin, MIN)
+   BINOP_CASE(umin, MIN)
+   BINOP_CASE(fmin, MIN)
+   BINOP_CASE(imax, MAX)
+   BINOP_CASE(umax, MAX)
+   BINOP_CASE(fmax, MAX)
 
    case nir_op_ffma:
       assert(dest_type == IBC_TYPE_F);
@@ -348,49 +331,20 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_LRP(b, dest_type, src[2], src[1], src[0]);
       break;
 
-   case nir_op_frcp:
-      dest = ibc_RCP(b, dest_type, src[0]);
-      break;
-
-   case nir_op_flog2:
-      dest = ibc_LOG2(b, dest_type, src[0]);
-      break;
-
-   case nir_op_fexp2:
-      dest = ibc_EXP2(b, dest_type, src[0]);
-      break;
-
-   case nir_op_fsqrt:
-      dest = ibc_SQRT(b, dest_type, src[0]);
-      break;
-
-   case nir_op_frsq:
-      dest = ibc_RSQ(b, dest_type, src[0]);
-      break;
-
-   case nir_op_fsin:
-      dest = ibc_SIN(b, dest_type, src[0]);
-      break;
-
-   case nir_op_fcos:
-      dest = ibc_COS(b, dest_type, src[0]);
-      break;
-
-   case nir_op_fpow:
-      dest = ibc_POW(b, dest_type, src[0], src[1]);
-      break;
-
-   case nir_op_idiv:
-   case nir_op_udiv:
-      dest = ibc_IDIV(b, dest_type, src[0], src[1]);
-      break;
-
-   case nir_op_umod:
-   case nir_op_irem:
-   case nir_op_imod:
-      /* TODO: This isn't quite right for imod */
-      dest = ibc_IREM(b, dest_type, src[0], src[1]);
-      break;
+   UNOP_CASE(frcp,   RCP)
+   UNOP_CASE(flog2,  LOG2)
+   UNOP_CASE(fexp2,  EXP2)
+   UNOP_CASE(fsqrt,  SQRT)
+   UNOP_CASE(frsq,   RSQ)
+   UNOP_CASE(fsin,   SIN)
+   UNOP_CASE(fcos,   COS)
+   BINOP_CASE(fpow,  POW)
+   BINOP_CASE(idiv,  IDIV)
+   BINOP_CASE(udiv,  IDIV)
+   BINOP_CASE(umod,  IREM)
+   BINOP_CASE(irem,  IREM)
+   /* TODO: This isn't right for imod */
+   BINOP_CASE(imod,  IREM)
 
    case nir_op_bcsel: {
       assert(src[0].type == IBC_TYPE_FLAG);
