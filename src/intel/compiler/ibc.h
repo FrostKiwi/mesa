@@ -59,6 +59,7 @@ name(const in_type *parent)                             \
 }
 
 struct gen_device_info;
+struct brw_compiler;
 struct shader_info;
 struct ibc_instr;
 struct ibc_alu_instr;
@@ -1061,6 +1062,8 @@ bool ibc_split_logical_regs(ibc_shader *shader);
 
 const unsigned *ibc_to_binary(const ibc_shader *shader,
                               const struct shader_info *info,
+                              const struct brw_compiler *compiler,
+                              void *log_data,
                               void *mem_ctx,
                               unsigned *program_size);
 
