@@ -238,7 +238,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
    uint32_t sampler_bti_imm = 0;
    if (sampler_bti.file == IBC_REG_FILE_IMM)
       sampler_bti_imm = ibc_ref_as_uint(sampler_bti);
-   assert((sampler_bti.file == IBC_REG_FILE_NONE) ||
+   assert((sampler_bti.file == IBC_REG_FILE_NONE) !=
           (sampler_handle.file == IBC_REG_FILE_NONE));
 
    const ibc_ref coord = intrin->src[IBC_TEX_SRC_COORD].ref;
