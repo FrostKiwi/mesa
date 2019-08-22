@@ -22,6 +22,7 @@
  */
 
 #include "ibc.h"
+#include "brw_compiler.h"
 #include "brw_eu.h"
 
 #include "dev/gen_debug.h"
@@ -562,6 +563,7 @@ generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
 
 const unsigned *
 ibc_to_binary(const ibc_shader *shader, const shader_info *info,
+              const struct brw_compiler *compiler, void *log_data,
               void *mem_ctx, unsigned *program_size)
 {
    const struct gen_device_info *devinfo = shader->devinfo;
@@ -657,6 +659,21 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
       dump_assembly(p->store, start_offset, p->next_insn_offset,
                     disasm_info, NULL);
    }
+
+
+   compiler->shader_debug_log(log_data,
+                              "%s SIMD%d shader: %d inst, %d loops, %u cycles, "
+                              "%d:%d spills:fills, "
+                              "scheduled with mode %s, "
+                              "Promoted %u constants, "
+                              "compacted %d to %d bytes.",
+                              _mesa_shader_stage_to_abbrev(shader->stage),
+                              shader->simd_width, before_size / 16,
+                              loop_count, 0,
+                              spill_count, fill_count,
+                              "unknown",
+                              0,
+                              before_size, after_size);
 
    ralloc_free(disasm_info);
 
