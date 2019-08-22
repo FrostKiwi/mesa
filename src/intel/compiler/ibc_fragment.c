@@ -69,7 +69,7 @@ ibc_fs_limit_dispatch_width(struct nir_to_ibc_state *nti,
 
 static void
 set_ref_or_zip(ibc_builder *b, ibc_ref *dest, ibc_ref src,
-                   unsigned num_comps)
+               unsigned num_comps)
 {
    if (dest->file == IBC_REG_FILE_NONE) {
       *dest = src;
@@ -171,6 +171,65 @@ ibc_setup_fs_payload(ibc_builder *b, struct brw_wm_prog_data *prog_data,
 }
 
 static ibc_ref
+ibc_frag_coord(struct nir_to_ibc_state *nti)
+{
+   struct ibc_fs_payload *payload = (struct ibc_fs_payload *)nti->payload;
+   ibc_builder *b = &nti->b;
+
+   ibc_ref frag_coord[4] = {};
+   for (unsigned g = 0; g < b->simd_width; g += 16) {
+      ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
+
+      /* The "Register Region Restrictions" page says for BDW (and newer,
+       * presumably):
+       *
+       *     "When destination spans two registers, the source may be one or
+       *      two registers. The destination elements must be evenly split
+       *      between the two registers."
+       *
+       * Thus we can do a single add(16) in SIMD8 or an add(32) in SIMD16
+       * to compute our pixel centers.
+       */
+      ibc_reg *tmp_grf =
+         ibc_hw_grf_reg_create(b->shader, b->simd_width * 4, REG_SIZE);
+
+      ibc_ref add_src = payload->pixel[b->simd_group / 16];
+      assert(add_src.file == IBC_REG_FILE_HW_GRF);
+      add_src.type = IBC_TYPE_UW;
+      add_src.hw_grf.byte += 8;
+      add_src.hw_grf.vstride = 1 * ibc_type_byte_size(IBC_TYPE_UW);
+      add_src.hw_grf.width = 4;
+      add_src.hw_grf.hstride = 0 * ibc_type_byte_size(IBC_TYPE_UW);
+
+      ibc_builder_push_we_all(b, b->simd_width * 2);
+      ibc_build_alu2(b, IBC_ALU_OP_ADD, ibc_typed_ref(tmp_grf, IBC_TYPE_UW),
+                     add_src, ibc_imm_v(0x11001010));
+      ibc_builder_pop(b);
+
+      /* Now we carefully move the X and Y bits into their proper channels */
+      ibc_ref pix_src = ibc_typed_ref(tmp_grf, IBC_TYPE_UW);
+      pix_src.hw_grf.vstride = 8 * ibc_type_byte_size(IBC_TYPE_UW);
+      pix_src.hw_grf.width = 4;
+      pix_src.hw_grf.hstride = 1 * ibc_type_byte_size(IBC_TYPE_UW);
+
+      assert(pix_src.hw_grf.byte == 0);
+      ibc_ref x = ibc_MOV(b, IBC_TYPE_F, pix_src);
+      pix_src.hw_grf.byte += 4 * ibc_type_byte_size(pix_src.type);
+      ibc_ref y = ibc_MOV(b, IBC_TYPE_F, pix_src);
+
+      ibc_builder_pop(b);
+
+      set_ref_or_zip(b, &frag_coord[0], x, 1);
+      set_ref_or_zip(b, &frag_coord[1], y, 1);
+   }
+
+   frag_coord[2] = payload->src_z;
+   frag_coord[3] = ibc_RCP(b, IBC_TYPE_F, payload->src_w);
+
+   return ibc_VEC(b, frag_coord, 4);
+}
+
+static ibc_ref
 ibc_pixel_mask_as_flag(struct nir_to_ibc_state *nti)
 {
    struct ibc_fs_payload *payload = (struct ibc_fs_payload *)nti->payload;
@@ -238,6 +297,10 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
 
    ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
    switch (instr->intrinsic) {
+   case nir_intrinsic_load_frag_coord:
+      dest = ibc_frag_coord(nti);
+      break;
+
    case nir_intrinsic_load_barycentric_pixel:
    case nir_intrinsic_load_barycentric_centroid:
    case nir_intrinsic_load_barycentric_sample: {
@@ -603,6 +666,10 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
    brw_postprocess_nir(shader, compiler, true);
 
    brw_nir_populate_wm_prog_data(shader, compiler->devinfo, key, prog_data);
+
+   /* TODO: Should this go in populate_wm_prog_data? */
+   prog_data->uses_src_depth = prog_data->uses_src_w =
+      (shader->info.system_values_read & (1ull << SYSTEM_VALUE_FRAG_COORD)) != 0;
 
    struct nir_fs_to_ibc_state fs_state = {
       .max_simd_width = 32,
