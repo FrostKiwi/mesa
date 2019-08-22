@@ -674,6 +674,8 @@ anv_pipeline_lower_nir(struct anv_pipeline *pipeline,
 
    nir_shader_gather_info(nir, nir_shader_get_entrypoint(nir));
 
+   anv_nir_shrink_num_uniforms(nir);
+
    if (nir->num_uniforms > 0) {
       assert(prog_data->nr_params == 0);
 
@@ -729,11 +731,19 @@ anv_pipeline_lower_nir(struct anv_pipeline *pipeline,
                  nir_lower_non_uniform_image_access);
    }
 
+   /* Some of the code above can add uniforms to NIR shaders that are never
+    * actually used.  Before we go into analyze_ubo_ranges, shrink
+    * num_uniforms to the actual amount used.  This doesn't re-pack anything
+    * or shuffle params around; it just shrinks num_uniforms.  If no uniforms
+    * are used, num_uniforms will go to zero.
+    */
+   assert(nir->num_uniforms == prog_data->nr_params * 4);
+   anv_nir_shrink_num_uniforms(nir);
+   prog_data->nr_params = DIV_ROUND_UP(nir->num_uniforms, 4);
+
    if (nir->info.stage != MESA_SHADER_COMPUTE &&
        !brw_nir_should_use_ibc(nir, compiler, true))
       brw_nir_analyze_ubo_ranges(compiler, nir, NULL, prog_data->ubo_ranges);
-
-   assert(nir->num_uniforms == prog_data->nr_params * 4);
 
    stage->nir = nir;
 }

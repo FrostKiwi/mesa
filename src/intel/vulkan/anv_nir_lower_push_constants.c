@@ -47,3 +47,30 @@ anv_nir_lower_push_constants(nir_shader *shader)
       }
    }
 }
+
+void
+anv_nir_shrink_num_uniforms(nir_shader *shader)
+{
+   shader->num_uniforms = 0;
+   nir_foreach_function(function, shader) {
+      if (!function->impl)
+         continue;
+
+      nir_foreach_block(block, function->impl) {
+         nir_foreach_instr(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
+
+            nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+
+            /* TODO: Handle indirect push constants */
+            if (intrin->intrinsic != nir_intrinsic_load_uniform)
+               continue;
+
+            unsigned range = nir_intrinsic_base(intrin) +
+                             nir_intrinsic_range(intrin);
+            shader->num_uniforms = MAX2(shader->num_uniforms, range);
+         }
+      }
+   }
+}
