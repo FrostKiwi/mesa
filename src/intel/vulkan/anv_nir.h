@@ -32,6 +32,7 @@ extern "C" {
 #endif
 
 void anv_nir_lower_push_constants(nir_shader *shader);
+void anv_nir_shrink_num_uniforms(nir_shader *shader);
 
 bool anv_nir_lower_multiview(nir_shader *shader, uint32_t view_mask);
 
