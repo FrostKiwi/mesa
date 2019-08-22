@@ -478,8 +478,7 @@ iris_setup_uniforms(const struct brw_compiler *compiler,
     * about it for compute shaders, so go ahead and make some fake ones
     * which the backend will dead code eliminate.
     */
-   prog_data->nr_params = nir->num_uniforms / 4;
-   prog_data->param = rzalloc_array(mem_ctx, uint32_t, prog_data->nr_params);
+   nir->num_uniforms = 0;
 
    /* Constant loads (if any) need to go at the end of the constant buffers so
     * we need to know num_cbufs before we can lower to them.
