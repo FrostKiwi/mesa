@@ -255,50 +255,37 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
 
    const unsigned int last_insn_offset = p->next_insn_offset;
 
+#define UNOP_CASE(OP)            \
+   case IBC_ALU_OP_##OP:         \
+      brw_##OP(p, dest, src[0]); \
+      break;
+
+#define BINOP_CASE(OP)                    \
+   case IBC_ALU_OP_##OP:                  \
+      brw_##OP(p, dest, src[0], src[1]);  \
+      break;
+
+#define UNOP_MATH_CASE(OP, MATH)                                           \
+   case IBC_ALU_OP_##OP:                                                   \
+      gen6_math(p, dest, BRW_MATH_FUNCTION_##MATH, src[0], brw_null_reg());\
+      break;
+
    switch (alu->op) {
-   case IBC_ALU_OP_MOV:
-      brw_MOV(p, dest, src[0]);
-      break;
-
-   case IBC_ALU_OP_SEL:
-      brw_SEL(p, dest, src[0], src[1]);
-      break;
-
-   case IBC_ALU_OP_NOT:
-      brw_NOT(p, dest, src[0]);
-      break;
-
-   case IBC_ALU_OP_AND:
-      brw_AND(p, dest, src[0], src[1]);
-      break;
-
-   case IBC_ALU_OP_OR:
-      brw_OR(p, dest, src[0], src[1]);
-      break;
-
-   case IBC_ALU_OP_XOR:
-      brw_XOR(p, dest, src[0], src[1]);
-      break;
-
-   case IBC_ALU_OP_SHR:
-      brw_SHR(p, dest, src[0], src[1]);
-      break;
-
-   case IBC_ALU_OP_SHL:
-      brw_SHL(p, dest, src[0], src[1]);
-      break;
+   UNOP_CASE(MOV)
+   BINOP_CASE(SEL)
+   UNOP_CASE(NOT)
+   BINOP_CASE(AND)
+   BINOP_CASE(OR)
+   BINOP_CASE(XOR)
+   BINOP_CASE(SHR)
+   BINOP_CASE(SHL)
 
    case IBC_ALU_OP_CMP:
       brw_CMP(p, dest, alu->cmod, src[0], src[1]);
       break;
 
-   case IBC_ALU_OP_ADD:
-      brw_ADD(p, dest, src[0], src[1]);
-      break;
-
-   case IBC_ALU_OP_MUL:
-      brw_MUL(p, dest, src[0], src[1]);
-      break;
+   BINOP_CASE(ADD)
+   BINOP_CASE(MUL)
 
    case IBC_ALU_OP_MAD:
       if (p->devinfo->gen < 10)
@@ -312,33 +299,13 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       brw_LRP(p, dest, src[0], src[1], src[2]);
       break;
 
-   case IBC_ALU_OP_RCP:
-      gen6_math(p, dest, BRW_MATH_FUNCTION_INV, src[0], brw_null_reg());
-      break;
-
-   case IBC_ALU_OP_LOG2:
-      gen6_math(p, dest, BRW_MATH_FUNCTION_LOG, src[0], brw_null_reg());
-      break;
-
-   case IBC_ALU_OP_EXP2:
-      gen6_math(p, dest, BRW_MATH_FUNCTION_EXP, src[0], brw_null_reg());
-      break;
-
-   case IBC_ALU_OP_SQRT:
-      gen6_math(p, dest, BRW_MATH_FUNCTION_SQRT, src[0], brw_null_reg());
-      break;
-
-   case IBC_ALU_OP_RSQ:
-      gen6_math(p, dest, BRW_MATH_FUNCTION_RSQ, src[0], brw_null_reg());
-      break;
-
-   case IBC_ALU_OP_SIN:
-      gen6_math(p, dest, BRW_MATH_FUNCTION_SIN, src[0], brw_null_reg());
-      break;
-
-   case IBC_ALU_OP_COS:
-      gen6_math(p, dest, BRW_MATH_FUNCTION_COS, src[0], brw_null_reg());
-      break;
+   UNOP_MATH_CASE(RCP, INV)
+   UNOP_MATH_CASE(LOG2, LOG)
+   UNOP_MATH_CASE(EXP2, EXP)
+   UNOP_MATH_CASE(SQRT, SQRT)
+   UNOP_MATH_CASE(RSQ, RSQ)
+   UNOP_MATH_CASE(SIN, SIN)
+   UNOP_MATH_CASE(COS, COS)
 
    case IBC_ALU_OP_POW:
       gen6_math(p, dest, BRW_MATH_FUNCTION_POW, src[0], src[1]);
@@ -355,6 +322,10 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    default:
       unreachable("Invalid instruction");
    }
+
+#undef UNOP_CASE
+#undef BINOP_CASE
+#undef UNOP_MATH_CASE
 
    if (alu->cmod) {
       assert(p->next_insn_offset == last_insn_offset + 16 ||
