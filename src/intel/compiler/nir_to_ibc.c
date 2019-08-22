@@ -208,6 +208,22 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_op_ftrunc:
+      dest = ibc_RNDZ(b, dest_type, src[0]);
+      break;
+   case nir_op_fceil:
+      dest = ibc_RNDU(b, dest_type, src[0]);
+      break;
+   case nir_op_ffloor:
+      dest = ibc_RNDD(b, dest_type, src[0]);
+      break;
+   case nir_op_ffract:
+      dest = ibc_FRC(b, dest_type, src[0]);
+      break;
+   case nir_op_fround_even:
+      dest = ibc_RNDE(b, dest_type, src[0]);
+      break;
+
    case nir_op_extract_u8:
    case nir_op_extract_i8:
       assert(src[0].type == dest_type);
