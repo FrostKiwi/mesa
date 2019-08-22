@@ -987,7 +987,33 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          ibc_builder_pop(b);
          break;
       } else {
-         unreachable("Non-constant UBO loads not supported");
+         ibc_intrinsic_src srcs[IBC_TEX_NUM_SRCS] = {
+            [IBC_TEX_SRC_SURFACE_BTI] = {
+               .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
+                                                    IBC_TYPE_UD)),
+               .num_comps = 1,
+            },
+            [IBC_TEX_SRC_SAMPLER_BTI] = {
+               .ref = ibc_imm_ud(0),
+               .num_comps = 1,
+            },
+            [IBC_TEX_SRC_COORD] = {
+               .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+               .num_comps = 1,
+            },
+            [IBC_TEX_SRC_LOD] = {
+               .ref = ibc_imm_ud(0),
+               .num_comps = 1,
+            },
+         };
+
+         /* We only have headerless rlen shortening on gen9+ */
+         unsigned num_dest_comps =
+            b->shader->devinfo->gen >= 9 ? instr->num_components : 4;
+         assert(nir_dest_bit_size(instr->dest) == 32);
+         dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_TXF,
+                                        IBC_TYPE_UD, num_dest_comps,
+                                        srcs, IBC_TEX_NUM_SRCS);
       }
       break;
 
