@@ -286,6 +286,11 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
 
    BINOP_CASE(ADD)
    BINOP_CASE(MUL)
+   UNOP_CASE(FRC)
+   UNOP_CASE(RNDU)
+   UNOP_CASE(RNDD)
+   UNOP_CASE(RNDE)
+   UNOP_CASE(RNDZ)
 
    case IBC_ALU_OP_MAD:
       if (p->devinfo->gen < 10)
