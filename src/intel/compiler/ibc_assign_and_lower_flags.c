@@ -722,6 +722,15 @@ rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
          load_vector_if_needed(chunk, start_chunk, num_chunks, state);
 
       ibc_ref vector = state->regs[ref->reg->index].vector;
+      /* All writes from boolean ALUs are to W types and, for reads, we always
+       * want to use a W or B type as B will sign-extend properly and using a
+       * smaller type means we can avoid register regioning issues when
+       * writing to W.
+       */
+      assert(!write_instr || vector.type == IBC_TYPE_W);
+      assert(ibc_type_base_type(vector.type) == IBC_TYPE_INT);
+      if (!write_instr && ibc_type_bit_size(vector.type) > 16)
+         vector.type = IBC_TYPE_W;
       vector.logical = ref->logical;
       ibc_instr_set_ref(write_instr, ref, vector);
 
