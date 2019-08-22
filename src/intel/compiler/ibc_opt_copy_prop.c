@@ -195,7 +195,7 @@ ref_fills_reg(ibc_ref *ref,
 }
 
 static bool
-try_copy_prop_ref(ibc_ref *ref, ibc_alu_src *alu_src,
+try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
                   uint8_t num_comps,
                   uint8_t simd_group, uint8_t simd_width,
                   bool supports_imm)
@@ -230,7 +230,7 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_src *alu_src,
        *
        * TODO: We probably need to be a bit more careful here.
        */
-      if (!alu_src && mov->src[0].mod != IBC_ALU_SRC_MOD_NONE)
+      if (!alu && mov->src[0].mod != IBC_ALU_SRC_MOD_NONE)
          return false;
 
       /* We can't propagate modifiers if the types don't match.
@@ -250,11 +250,17 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_src *alu_src,
                             supports_imm))
          return false;
 
-      if (alu_src) {
-         alu_src->mod = compose_alu_src_mods(alu_src->mod, mov->src[0].mod);
+      if (alu) {
+         enum ibc_alu_src_mod new_mods =
+            compose_alu_src_mods(alu->src[alu_src_idx].mod, mov->src[0].mod);
+         if (new_mods & ~ibc_alu_op_infos[alu->op].supported_src_mods)
+            return false;
+
          if (new_ref.file == IBC_REG_FILE_IMM) {
-            ibc_imm_apply_mod(&new_ref, alu_src->mod);
-            alu_src->mod = IBC_ALU_SRC_MOD_NONE;
+            ibc_imm_apply_mod(&new_ref, new_mods);
+            alu->src[alu_src_idx].mod = IBC_ALU_SRC_MOD_NONE;
+         } else {
+            alu->src[alu_src_idx].mod = new_mods;
          }
       }
 
@@ -392,7 +398,7 @@ ibc_opt_copy_prop(ibc_shader *shader)
 
    ibc_foreach_instr_safe(instr, shader) {
 
-      while (try_copy_prop_ref(&instr->flag, NULL, 1,
+      while (try_copy_prop_ref(&instr->flag, NULL, -1, 1,
                                instr->simd_group, instr->simd_width,
                                false)) {
          progress = true;
@@ -403,7 +409,7 @@ ibc_opt_copy_prop(ibc_shader *shader)
          ibc_alu_instr *alu = ibc_instr_as_alu(instr);
 
          for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-            while (try_copy_prop_ref(&alu->src[i].ref, &alu->src[i], 1,
+            while (try_copy_prop_ref(&alu->src[i].ref, alu, i, 1,
                                      alu->instr.simd_group,
                                      alu->instr.simd_width,
                                      alu_instr_src_supports_imm(alu, i))) {
@@ -421,7 +427,7 @@ ibc_opt_copy_prop(ibc_shader *shader)
       case IBC_INSTR_TYPE_INTRINSIC: {
          ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
-            while (try_copy_prop_ref(&intrin->src[i].ref, NULL,
+            while (try_copy_prop_ref(&intrin->src[i].ref, NULL, -1,
                                      intrin->src[i].num_comps,
                                      intrin->src[i].simd_group,
                                      intrin->src[i].simd_width,
