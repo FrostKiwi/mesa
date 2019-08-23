@@ -867,6 +867,13 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
       /* Start by freeing any newly dead flag registers */
       free_dead_flags(instr->index, &state);
 
+      if (instr->type == IBC_INSTR_TYPE_INTRINSIC &&
+          ibc_instr_as_intrinsic(instr)->op == IBC_INTRINSIC_OP_UNDEF &&
+          ibc_instr_as_intrinsic(instr)->dest.type == IBC_TYPE_FLAG) {
+         ibc_instr_remove(instr);
+         continue;
+      }
+
       /* Set the cursor to before the current instruction in case
        * find_or_assign_flag needs to load a flag value.
        */
