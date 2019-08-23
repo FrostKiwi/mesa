@@ -278,10 +278,8 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    ibc_emit_cs_thread_terminate(&nti);
 
    ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
-   if (INTEL_DEBUG & DEBUG_CS) {
+   if (INTEL_DEBUG & DEBUG_CS)
       ibc_print_shader(ibc, stderr);
-      fprintf(stderr, "\n\n");
-   }
    ibc_validate_shader(ibc);
 
    ibc_lower_and_optimize(ibc);
