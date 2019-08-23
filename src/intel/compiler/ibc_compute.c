@@ -284,6 +284,8 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
 
    ibc_lower_and_optimize(ibc);
 
+   IBC_PASS_V(ibc, ibc_assign_regs, true);
+
    cs_set_simd_size(prog_data, simd_width);
    cs_fill_push_const_info(compiler->devinfo, prog_data);
 
