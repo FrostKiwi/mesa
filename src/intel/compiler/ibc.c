@@ -577,5 +577,4 @@ ibc_lower_and_optimize(ibc_shader *ibc)
    IBC_PASS_V(ibc, ibc_opt_copy_prop);
    IBC_PASS_V(ibc, ibc_opt_dead_code);
    IBC_PASS_V(ibc, ibc_lower_gather_ops);
-   IBC_PASS_V(ibc, ibc_assign_regs);
 }
