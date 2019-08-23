@@ -726,6 +726,8 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
 
    ibc_lower_and_optimize(ibc);
 
+   IBC_PASS_V(ibc, ibc_assign_regs, true);
+
    switch (simd_width) {
    case 8:
       prog_data->dispatch_8 = true;
