@@ -674,14 +674,15 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
                int shader_time_index16,
                int shader_time_index32,
                bool allow_spilling,
-               bool use_rep_send, struct brw_vue_map *vue_map,
-               char **error_str)
+               bool use_rep_send,
+               struct brw_vue_map *vue_map,
+               char **error_str_out)
 {
    assert(shader->info.stage == MESA_SHADER_FRAGMENT);
 
-   const unsigned simd_width = 32;
+   unsigned max_subgroup_size = unlikely(INTEL_DEBUG & DEBUG_DO32) ? 32 : 16;
 
-   brw_nir_apply_key(shader, compiler, &key->base, simd_width, true);
+   brw_nir_apply_key(shader, compiler, &key->base, max_subgroup_size, true);
    brw_nir_lower_fs_inputs(shader, compiler->devinfo, key);
    brw_nir_lower_fs_outputs(shader);
 
@@ -696,55 +697,159 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
    prog_data->uses_src_depth = prog_data->uses_src_w =
       (shader->info.system_values_read & (1ull << SYSTEM_VALUE_FRAG_COORD)) != 0;
 
-   struct nir_fs_to_ibc_state fs_state = {
-      .max_simd_width = 32,
+   struct {
+      bool enabled;
+      const unsigned *data;
+      unsigned size;
+      unsigned num_ff_regs;
+   } bin[3] = {
+      { .enabled = !(INTEL_DEBUG & DEBUG_NO8), },
+      { .enabled = !(INTEL_DEBUG & DEBUG_NO16), },
+      { .enabled = (INTEL_DEBUG & DEBUG_DO32), },
    };
 
-   struct nir_to_ibc_state nti;
-   nir_to_ibc_state_init(&nti, MESA_SHADER_FRAGMENT, compiler->devinfo,
-                         &key->base, &prog_data->base,
-                         &fs_state, simd_width, mem_ctx);
+   bool first_bin = true;
+   unsigned max_simd_width = 32;
+   for (unsigned i = 0; i < 3; i++) {
+      const unsigned bin_simd_width = 8 << i;
+      if (bin_simd_width > max_simd_width)
+         break;
 
-   nti.payload = &ibc_setup_fs_payload(&nti.b, prog_data, mem_ctx)->base;
+      if (!bin[i].enabled)
+         continue;
 
-   if (prog_data->uses_kill) {
-      fs_state.live_pix = ibc_pixel_mask_as_flag(&nti);
-      list_inithead(&fs_state.halt_jumps);
+      /* Per-binary context */
+      void *bin_ctx = ralloc_context(mem_ctx);
+
+      struct nir_fs_to_ibc_state fs_state = {
+         .max_simd_width = 32,
+      };
+      struct nir_to_ibc_state nti;
+      nir_to_ibc_state_init(&nti, MESA_SHADER_FRAGMENT, compiler->devinfo,
+                            &key->base, &prog_data->base,
+                            &fs_state, bin_simd_width, bin_ctx);
+
+      nti.payload = &ibc_setup_fs_payload(&nti.b, prog_data, bin_ctx)->base;
+
+      if (prog_data->uses_kill) {
+         fs_state.live_pix = ibc_pixel_mask_as_flag(&nti);
+         list_inithead(&fs_state.halt_jumps);
+      }
+
+      ibc_emit_nir_shader(&nti, shader);
+
+      if (prog_data->uses_kill)
+         ibc_HALT_MERGE(&nti.b, &fs_state.halt_jumps);
+
+      ibc_emit_fb_writes(&nti);
+
+      /* It's possible if SIMD8 is disabled for the minimum size to not be
+       * valid.  In that case, we go ahead and build the IBC but bail here so
+       * we don't try to go further with an invalid shader.
+       */
+      if (bin_simd_width > fs_state.max_simd_width) {
+         ralloc_free(bin_ctx);
+         break;
+      }
+      max_simd_width = MIN2(max_simd_width, fs_state.max_simd_width);
+
+      ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
+      if (INTEL_DEBUG & DEBUG_WM)
+         ibc_print_shader(ibc, stderr);
+      ibc_validate_shader(ibc);
+
+      ibc_lower_and_optimize(ibc);
+
+      bool assigned = ibc_assign_regs(ibc, first_bin);
+
+      if (INTEL_DEBUG & DEBUG_WM)
+         ibc_print_shader(ibc, stderr);
+
+      if (assigned) {
+         bin[i].data = ibc_to_binary(ibc, &shader->info, compiler, log_data,
+                                     mem_ctx, &bin[i].size);
+         bin[i].num_ff_regs = nti.payload->num_ff_regs;
+      }
+
+      ralloc_free(bin_ctx);
+
+      if (!assigned) {
+         if (first_bin) {
+            *error_str_out = ralloc_strdup(mem_ctx,
+                                           "Failed to allocate register");
+            return NULL;
+         }
+         compiler->shader_perf_log(log_data,
+                                   "SIMD%u shader failed to compile: "
+                                   "Failed to allocate registers",
+                                   bin_simd_width);
+         /* We assume that if one shader fails to allocate, all wider shaders
+          * will also fail.
+          */
+         break;
+      }
+
+      first_bin = false;
    }
 
-   ibc_emit_nir_shader(&nti, shader);
-
-   if (prog_data->uses_kill)
-      ibc_HALT_MERGE(&nti.b, &fs_state.halt_jumps);
-
-   ibc_emit_fb_writes(&nti);
-
-   ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
-   if (INTEL_DEBUG & DEBUG_WM)
-      ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
-
-   ibc_lower_and_optimize(ibc);
-
-   IBC_PASS_V(ibc, ibc_assign_regs, true);
-
-   switch (simd_width) {
-   case 8:
-      prog_data->dispatch_8 = true;
-      prog_data->base.dispatch_grf_start_reg = nti.payload->num_ff_regs;
-      break;
-   case 16:
-      prog_data->dispatch_16 = true;
-      prog_data->dispatch_grf_start_reg_16 = nti.payload->num_ff_regs;
-      break;
-   case 32:
-      prog_data->dispatch_32 = true;
-      prog_data->dispatch_grf_start_reg_32 = nti.payload->num_ff_regs;
-      break;
-   default:
-      unreachable("Invalid dispatch width");
+   if (prog_data->persample_dispatch) {
+      /* Starting with SandyBridge (where we first get MSAA), the different
+       * pixel dispatch combinations are grouped into classifications A
+       * through F (SNB PRM Vol. 2 Part 1 Section 7.7.1).  On all hardware
+       * generations, the only configurations supporting persample dispatch
+       * are are this in which only one dispatch width is enabled.
+       */
+      if (bin[2].data || bin[1].data)
+         bin[0].data = NULL;
+      if (bin[2].data)
+         bin[1].data = NULL;
    }
 
-   return ibc_to_binary(ibc, &shader->info, compiler, log_data, mem_ctx,
-                        &prog_data->base.program_size);
+   unsigned final_size = 0;
+   void *final_bin = NULL;
+
+   for (unsigned i = 0; i < 3; i++) {
+      const unsigned bin_simd_width = 8 << i;
+      if (bin[i].data == NULL)
+         continue;
+
+      unsigned offset = final_size;
+
+      /* The start has to be aligned to 64B */
+      const unsigned pad = ALIGN(offset, 64) - offset;
+
+      final_size = final_size + pad + bin[i].size;
+      final_bin = reralloc_size(mem_ctx, final_bin, final_size);
+
+      if (pad > 0) {
+         memset(final_bin + offset, 0, pad);
+         offset += pad;
+      }
+
+      assert(offset == ALIGN(offset, 64));
+      memcpy(final_bin + offset, bin[i].data, bin[i].size);
+
+      switch (bin_simd_width) {
+      case 8:
+         assert(offset == 0);
+         prog_data->dispatch_8 = true;
+         prog_data->base.dispatch_grf_start_reg = bin[i].num_ff_regs;
+         break;
+      case 16:
+         prog_data->dispatch_16 = true;
+         prog_data->prog_offset_16 = offset;
+         prog_data->dispatch_grf_start_reg_16 = bin[i].num_ff_regs;
+         break;
+      case 32:
+         prog_data->dispatch_32 = true;
+         prog_data->prog_offset_32 = offset;
+         prog_data->dispatch_grf_start_reg_32 = bin[i].num_ff_regs;
+         break;
+      default:
+         unreachable("Invalid dispatch width");
+      }
+   }
+
+   prog_data->base.program_size = final_size;
+   return final_bin;
 }
