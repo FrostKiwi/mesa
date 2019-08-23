@@ -592,6 +592,12 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       send->instr.we_all = instr->we_all;
       send->has_side_effects = intrin->has_side_effects;
 
+      if (instr->predicate != BRW_PREDICATE_NONE) {
+         send->instr.flag = instr->flag;
+         send->instr.predicate = instr->predicate;
+         send->instr.pred_inverse = instr->pred_inverse;
+      }
+
       switch (intrin->op) {
       case IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO:
          lower_bti_block_load_ubo(&b, send, intrin);
