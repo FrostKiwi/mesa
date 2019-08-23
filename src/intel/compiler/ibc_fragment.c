@@ -442,9 +442,9 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       ibc_alu_instr *mov =
          ibc_build_alu(b, IBC_ALU_OP_MOV, ibc_null(cond.type),
                        nti_fs->live_pix, BRW_CONDITIONAL_Z, &cond, 1);
-      mov->instr.predicate = BRW_PREDICATE_NORMAL;
+      mov->instr.predicate = IBC_PREDICATE_NORMAL;
 
-      ibc_HALT_JUMP(b, nti_fs->live_pix, BRW_PREDICATE_ALIGN1_ANY4H, true,
+      ibc_HALT_JUMP(b, nti_fs->live_pix, IBC_PREDICATE_NOT_ANY4H,
                     &nti_fs->halt_jumps);
       break;
    }
@@ -517,7 +517,7 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
 
    if (prog_data->uses_kill) {
       ibc_instr_set_predicate(&write->instr, nti_fs->live_pix,
-                              BRW_PREDICATE_NORMAL, false);
+                              IBC_PREDICATE_NORMAL);
    }
 
    return write;

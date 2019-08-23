@@ -361,7 +361,7 @@ load_vector_if_needed(unsigned chunk,
                ibc_build_alu2(b, IBC_ALU_OP_SEL, vector, zero, ibc_imm_w(-1));
             ibc_instr_set_predicate(&sel->instr,
                ibc_flag_ref(chunk * FLAG_CHUNK_BITS + copy_bit),
-               BRW_PREDICATE_NORMAL, true);
+               IBC_PREDICATE_NOT);
             ibc_builder_pop(b);
          }
       }
@@ -841,7 +841,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
    state.regs = rzalloc_array(state.mem_ctx, struct flag_reg_state,
                               state.live->num_regs);
    ibc_foreach_instr(instr, shader) {
-      if (instr->predicate != BRW_PREDICATE_NONE && instr->flag.reg != NULL) {
+      if (instr->predicate != IBC_PREDICATE_NONE && instr->flag.reg != NULL) {
          assert(instr->flag.reg->index < state.live->num_regs);
          state.regs[instr->flag.reg->index].read_as_flag = true;
       }
@@ -905,7 +905,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
          chunk = find_or_assign_flag(instr->flag.reg, instr->index,
                                      false, /* opportunistic */
                                      &state);
-         enum flag_rep read = instr->predicate != BRW_PREDICATE_NONE ?
+         enum flag_rep read = instr->predicate != IBC_PREDICATE_NONE ?
                               FLAG_REP_FLAG : FLAG_REP_NONE;
          enum flag_rep written = ibc_instr_writes_flag(instr) ?
                                  FLAG_REP_FLAG : FLAG_REP_NONE;
@@ -943,7 +943,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
          } else if (alu->dest.file == IBC_REG_FILE_LOGICAL &&
                     alu->dest.reg->logical.bit_size == 1 &&
                     alu->op != IBC_ALU_OP_SEL &&
-                    alu->instr.predicate == BRW_PREDICATE_NONE &&
+                    alu->instr.predicate == IBC_PREDICATE_NONE &&
                     logical_reg_has_unique_alu_writes(alu->dest.reg,
                                                       state.live) &&
                     state.regs[alu->dest.reg->index].read_as_flag) {

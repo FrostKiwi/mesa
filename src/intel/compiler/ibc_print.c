@@ -192,35 +192,35 @@ print_instr_group(FILE *fp, const ibc_instr *instr)
 }
 
 static const char *
-predicate_name(enum brw_predicate predicate)
+predicate_name(enum ibc_predicate predicate)
 {
-   switch (predicate) {
-   case BRW_PREDICATE_NONE:            return "none";
-   case BRW_PREDICATE_NORMAL:          return "normal";
-   case BRW_PREDICATE_ALIGN1_ANYV:     return "anyV";
-   case BRW_PREDICATE_ALIGN1_ALLV:     return "allV";
-   case BRW_PREDICATE_ALIGN1_ANY2H:    return "any2h";
-   case BRW_PREDICATE_ALIGN1_ALL2H:    return "all2h";
-   case BRW_PREDICATE_ALIGN1_ANY4H:    return "any4h";
-   case BRW_PREDICATE_ALIGN1_ALL4H:    return "all4h";
-   case BRW_PREDICATE_ALIGN1_ANY8H:    return "any8h";
-   case BRW_PREDICATE_ALIGN1_ALL8H:    return "all8h";
-   case BRW_PREDICATE_ALIGN1_ANY16H:   return "any16h";
-   case BRW_PREDICATE_ALIGN1_ALL16H:   return "all16h";
-   case BRW_PREDICATE_ALIGN1_ANY32H:   return "any32h";
-   case BRW_PREDICATE_ALIGN1_ALL32H:   return "all32h";
+   switch (ibc_predicate_control(predicate)) {
+   case IBC_PREDICATE_NONE:     return "none";
+   case IBC_PREDICATE_NORMAL:   return "normal";
+   case IBC_PREDICATE_ANY2H:    return "any2h";
+   case IBC_PREDICATE_ALL2H:    return "all2h";
+   case IBC_PREDICATE_ANY4H:    return "any4h";
+   case IBC_PREDICATE_ALL4H:    return "all4h";
+   case IBC_PREDICATE_ANY8H:    return "any8h";
+   case IBC_PREDICATE_ALL8H:    return "all8h";
+   case IBC_PREDICATE_ANY16H:   return "any16h";
+   case IBC_PREDICATE_ALL16H:   return "all16h";
+   case IBC_PREDICATE_ANY32H:   return "any32h";
+   case IBC_PREDICATE_ALL32H:   return "all32h";
+   default:
+      unreachable("Invalid control predicate");
    }
-   unreachable("Invalid predicate");
 }
 
 static void
 print_instr_predicate(FILE *fp, const ibc_instr *instr)
 {
-   if (instr->predicate != BRW_PREDICATE_NONE) {
-      fprintf(fp, "(%s", instr->pred_inverse ? "-" : "+");
+   if (instr->predicate != IBC_PREDICATE_NONE) {
+      const bool pred_inverse = ibc_predicate_is_inverted(instr->predicate);
+      fprintf(fp, "(%s", pred_inverse ? "-" : "+");
       assert(instr->flag.type == IBC_TYPE_FLAG);
       print_ref(fp, &instr->flag, false);
-      if (instr->predicate != BRW_PREDICATE_NORMAL)
+      if (ibc_predicate_control(instr->predicate) != IBC_PREDICATE_NORMAL)
          fprintf(fp, ".%s", predicate_name(instr->predicate));
       fprintf(fp, ") ");
    }

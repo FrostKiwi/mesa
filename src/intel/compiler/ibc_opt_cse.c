@@ -165,7 +165,6 @@ hash_instr(uint32_t hash, const ibc_instr *instr,
    hash = hash_ref(hash, &instr->flag, base_reg);
 
    hash = HASH(hash, instr->predicate);
-   hash = HASH(hash, instr->pred_inverse);
 
    return hash;
 }
@@ -187,8 +186,7 @@ instrs_equal(const ibc_instr *instr_a, const ibc_instr *instr_b,
    if (!refs_equal(&instr_a->flag, &instr_b->flag, base_reg_a, base_reg_b))
       return false;
 
-   if (instr_a->predicate != instr_b->predicate ||
-       instr_a->pred_inverse != instr_b->pred_inverse)
+   if (instr_a->predicate != instr_b->predicate)
       return false;
 
    return true;
