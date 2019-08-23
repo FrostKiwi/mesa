@@ -316,6 +316,17 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       dest = ibc_frag_coord(nti);
       break;
 
+   case nir_intrinsic_load_layer_id: {
+      /* The render target array index is provided in the thread payload as
+       * bits 26:16 of r0.0.
+       */
+      ibc_ref rtai = ibc_typed_ref(b->shader->g0, IBC_TYPE_UW);
+      rtai.hw_grf.byte = 2;
+      ibc_hw_grf_mul_stride(&rtai.hw_grf, 0);
+      dest = ibc_MOV(b, IBC_TYPE_UD, rtai);
+      break;
+   }
+
    case nir_intrinsic_load_barycentric_pixel:
    case nir_intrinsic_load_barycentric_centroid:
    case nir_intrinsic_load_barycentric_sample: {
