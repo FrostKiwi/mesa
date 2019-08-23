@@ -340,38 +340,36 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_load_interpolated_input: {
+      const unsigned base = nir_intrinsic_base(instr);
+      assert(prog_data->urb_setup[base] >= 0);
+      const unsigned slot = prog_data->urb_setup[base];
+      const unsigned comp = nir_intrinsic_component(instr);
+
       ibc_ref bary = ibc_nir_src(nti, instr->src[0], IBC_TYPE_F);
-      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_F, instr->num_components);
 
+      ibc_ref dest_comps[4];
       for (unsigned int i = 0; i < instr->num_components; i++) {
-         assert(prog_data->urb_setup[nir_intrinsic_base(instr)] >= 0);
-         const unsigned l = prog_data->urb_setup[nir_intrinsic_base(instr)];
-         const unsigned c = nir_intrinsic_component(instr) + i;
-         ibc_ref per_vert = payload->inputs[l][c];
+         ibc_ref per_vert = payload->inputs[slot][comp + i];
          per_vert.type = IBC_TYPE_F;
-         ibc_ref comp = ibc_PLN(b, per_vert, bary);
-
-         ibc_ref mov_dest = dest;
-         mov_dest.logical.comp = i;
-         ibc_build_alu1(b, IBC_ALU_OP_MOV, mov_dest, comp);
+         dest_comps[i] = ibc_PLN(b, per_vert, bary);
       }
+      dest = ibc_VEC(b, dest_comps, instr->num_components);
       break;
    }
 
    case nir_intrinsic_load_input: {
-      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, instr->num_components);
+      const unsigned base = nir_intrinsic_base(instr);
+      assert(prog_data->urb_setup[base] >= 0);
+      const unsigned slot = prog_data->urb_setup[base];
+      const unsigned comp = nir_intrinsic_component(instr);
 
+      ibc_ref dest_comps[4];
       for (unsigned int i = 0; i < instr->num_components; i++) {
-         assert(prog_data->urb_setup[nir_intrinsic_base(instr)] >= 0);
-         const unsigned l = prog_data->urb_setup[nir_intrinsic_base(instr)];
-         const unsigned c = nir_intrinsic_component(instr) + i;
-         ibc_ref comp = payload->inputs[l][c];
-         comp.logical.comp = 3;
-
-         ibc_ref mov_dest = dest;
-         mov_dest.logical.comp = i;
-         ibc_build_alu1(b, IBC_ALU_OP_MOV, mov_dest, comp);
+         dest_comps[i] = payload->inputs[slot][comp + i];
+         assert(dest_comps[i].file == IBC_REG_FILE_LOGICAL);
+         dest_comps[i].logical.comp = 3;
       }
+      dest = ibc_VEC(b, dest_comps, instr->num_components);
       break;
    }
 
