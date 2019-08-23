@@ -334,10 +334,8 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
    ibc_emit_urb_writes(&nti);
 
    ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
-   if (INTEL_DEBUG & DEBUG_VS) {
+   if (INTEL_DEBUG & DEBUG_VS)
       ibc_print_shader(ibc, stderr);
-      fprintf(stderr, "\n\n");
-   }
    ibc_validate_shader(ibc);
 
    ibc_lower_and_optimize(ibc);
