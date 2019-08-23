@@ -340,6 +340,8 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
 
    ibc_lower_and_optimize(ibc);
 
+   IBC_PASS_V(ibc, ibc_assign_regs, true);
+
    prog_data->base.base.dispatch_grf_start_reg = nti.payload->num_ff_regs;
    prog_data->base.dispatch_mode = DISPATCH_MODE_SIMD8;
 
