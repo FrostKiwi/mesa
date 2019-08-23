@@ -631,12 +631,6 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_send_instr *send,
    send->check_tdr = true;
    send->eot = last_rt &&
       write->instr.simd_group + write->instr.simd_width == b->shader->simd_width;
-
-   if (write->instr.predicate != BRW_PREDICATE_NONE) {
-      send->instr.flag = write->instr.flag;
-      send->instr.predicate = write->instr.predicate;
-      send->instr.pred_inverse = write->instr.pred_inverse;
-   }
 }
 
 const unsigned *
