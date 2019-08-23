@@ -1009,6 +1009,9 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_store_ssbo: {
+      if (b->shader->stage == MESA_SHADER_FRAGMENT)
+         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
+
       ibc_intrinsic_src srcs[3] = {
          {
             .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
