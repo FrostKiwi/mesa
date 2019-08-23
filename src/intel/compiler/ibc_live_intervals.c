@@ -33,7 +33,7 @@ instr_is_predicated(ibc_instr *instr)
        ibc_instr_as_alu(instr)->op == IBC_ALU_OP_SEL)
       return false;
 
-   return instr->predicate != BRW_PREDICATE_NONE;
+   return instr->predicate != IBC_PREDICATE_NONE;
 }
 
 static bool
