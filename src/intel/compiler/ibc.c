@@ -389,13 +389,11 @@ ibc_instr_set_ref(ibc_instr *instr, ibc_ref *ref, ibc_ref new_ref)
 
 void
 ibc_instr_set_predicate(ibc_instr *instr, ibc_ref flag,
-                        enum brw_predicate predicate,
-                        bool pred_inverse)
+                        enum ibc_predicate predicate)
 {
    /* We don't do any use tracking right now so we can just assign this */
    instr->flag = flag;
-   instr->predicate = predicate,
-   instr->pred_inverse = pred_inverse;
+   instr->predicate = predicate;
 }
 
 void

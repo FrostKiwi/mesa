@@ -587,8 +587,8 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
       brw_set_default_exec_size(p, cvt(instr->simd_width) - 1);
       brw_set_default_group(p, instr->simd_group);
 
-      brw_set_default_predicate_control(p, instr->predicate);
-      brw_set_default_predicate_inverse(p, instr->pred_inverse);
+      brw_set_default_predicate_control(p, ibc_predicate_control(instr->predicate));
+      brw_set_default_predicate_inverse(p, ibc_predicate_is_inverted(instr->predicate));
       if (instr->flag.file == IBC_REG_FILE_FLAG) {
          assert(instr->flag.reg == NULL);
          /* The hardware "helpfully" adds our simd_group to the subnr that we
