@@ -248,6 +248,7 @@ bool ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
                                const nir_intrinsic_instr *instr);
 bool ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
                                const nir_intrinsic_instr *instr);
+ibc_ref ibc_emit_fs_sample_live_predicate(struct nir_to_ibc_state *nti);
 
 #ifdef __cplusplus
 } /* extern "C" */
