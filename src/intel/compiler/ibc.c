@@ -554,36 +554,28 @@ ibc_instr_remove(ibc_instr *instr)
    list_del(&instr->link);
 }
 
-#define OPT(pass)                            \
-   do {                                      \
-      if (pass(ibc)) {                       \
-         if (print) {                        \
-            fprintf(stderr, "%s\n", #pass);  \
-            ibc_print_shader(ibc, stderr);   \
-            fprintf(stderr, "\n\n");         \
-         }                                   \
-         ibc_validate_shader(ibc);           \
-      }                                      \
-   } while(0)
+bool
+ibc_should_print_shader(const ibc_shader *ibc)
+{
+   return INTEL_DEBUG & intel_debug_flag_for_shader_stage(ibc->stage);
+}
 
 void
 ibc_lower_and_optimize(ibc_shader *ibc)
 {
-   bool print = INTEL_DEBUG & intel_debug_flag_for_shader_stage(ibc->stage);
-
-   OPT(ibc_lower_simd_width);
-   OPT(ibc_split_logical_regs);
-   OPT(ibc_opt_copy_prop);
-   OPT(ibc_opt_cse);
-   OPT(ibc_opt_dead_code);
-   OPT(ibc_lower_io_to_sends);
-   OPT(ibc_opt_copy_prop);
-   OPT(ibc_opt_dead_code);
-   OPT(ibc_lower_gather_ops);
-   OPT(ibc_assign_and_lower_flags);
-   OPT(ibc_lower_simd_width);
-   OPT(ibc_opt_copy_prop);
-   OPT(ibc_opt_dead_code);
-   OPT(ibc_lower_gather_ops);
-   OPT(ibc_assign_regs);
+   IBC_PASS_V(ibc, ibc_lower_simd_width);
+   IBC_PASS_V(ibc, ibc_split_logical_regs);
+   IBC_PASS_V(ibc, ibc_opt_copy_prop);
+   IBC_PASS_V(ibc, ibc_opt_cse);
+   IBC_PASS_V(ibc, ibc_opt_dead_code);
+   IBC_PASS_V(ibc, ibc_lower_io_to_sends);
+   IBC_PASS_V(ibc, ibc_opt_copy_prop);
+   IBC_PASS_V(ibc, ibc_opt_dead_code);
+   IBC_PASS_V(ibc, ibc_lower_gather_ops);
+   IBC_PASS_V(ibc, ibc_assign_and_lower_flags);
+   IBC_PASS_V(ibc, ibc_lower_simd_width);
+   IBC_PASS_V(ibc, ibc_opt_copy_prop);
+   IBC_PASS_V(ibc, ibc_opt_dead_code);
+   IBC_PASS_V(ibc, ibc_lower_gather_ops);
+   IBC_PASS_V(ibc, ibc_assign_regs);
 }
