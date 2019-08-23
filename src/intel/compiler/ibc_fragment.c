@@ -255,6 +255,21 @@ ibc_pixel_mask_as_flag(struct nir_to_ibc_state *nti)
    return ibc_typed_ref(live_pix_reg, IBC_TYPE_FLAG);
 }
 
+ibc_ref
+ibc_emit_fs_sample_live_predicate(struct nir_to_ibc_state *nti)
+{
+   struct brw_wm_prog_data *prog_data = (void *)nti->prog_data;
+   struct nir_fs_to_ibc_state *nti_fs = nti->stage_state;
+
+   if (prog_data->uses_kill) {
+      assert(nti_fs->live_pix.file == IBC_REG_FILE_FLAG);
+      assert(nti_fs->live_pix.type == IBC_TYPE_FLAG);
+      return nti_fs->live_pix;
+   } else {
+      return ibc_pixel_mask_as_flag(nti);
+   }
+}
+
 static enum brw_barycentric_mode
 brw_barycentric_mode(enum glsl_interp_mode mode, nir_intrinsic_op op)
 {
