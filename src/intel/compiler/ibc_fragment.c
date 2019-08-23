@@ -361,7 +361,13 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       const unsigned base = nir_intrinsic_base(instr);
       assert(prog_data->urb_setup[base] >= 0);
       const unsigned slot = prog_data->urb_setup[base];
-      const unsigned comp = nir_intrinsic_component(instr);
+      unsigned comp = nir_intrinsic_component(instr);
+
+      /* Special case fields in the VUE header */
+      if (base == VARYING_SLOT_LAYER)
+         comp = 1;
+      else if (base == VARYING_SLOT_VIEWPORT)
+         comp = 2;
 
       ibc_ref dest_comps[4];
       for (unsigned int i = 0; i < instr->num_components; i++) {
