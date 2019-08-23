@@ -990,7 +990,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_load_ssbo: {
       ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
          [IBC_SURFACE_SRC_SURFACE_BTI] = {
-            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
+            .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
+                                                 IBC_TYPE_UD)),
             .num_comps = 1,
          },
          [IBC_SURFACE_SRC_ADDRESS] = {
@@ -1015,7 +1016,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
          [IBC_SURFACE_SRC_SURFACE_BTI] = {
-            .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+            .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[1],
+                                                 IBC_TYPE_UD)),
             .num_comps = 1,
          },
          [IBC_SURFACE_SRC_ADDRESS] = {
