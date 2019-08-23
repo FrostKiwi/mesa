@@ -495,4 +495,6 @@ ibc_print_shader(const ibc_shader *shader, FILE *fp)
    ibc_foreach_instr(instr, shader) {
       ibc_print_instr(fp, instr);
    }
+
+   fprintf(fp, "\n\n");
 }

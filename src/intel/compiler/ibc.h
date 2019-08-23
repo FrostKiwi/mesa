@@ -1057,9 +1057,8 @@ bool ibc_should_print_shader(const ibc_shader *ibc);
    do {                                                  \
       if (pass((ibc), ##__VA_ARGS__)) {                  \
          if (unlikely(ibc_should_print_shader(ibc))) {   \
-            fprintf(stderr, "%s\n", #pass);              \
+            fprintf(stderr, "IBC after %s\n", #pass);    \
             ibc_print_shader(ibc, stderr);               \
-            fprintf(stderr, "\n\n");                     \
          }                                               \
          ibc_validate_shader(ibc);                       \
          progress = true;                                \
@@ -1070,9 +1069,8 @@ bool ibc_should_print_shader(const ibc_shader *ibc);
    do {                                               \
       pass((ibc), ##__VA_ARGS__);                     \
       if (unlikely(ibc_should_print_shader(ibc))) {   \
-         fprintf(stderr, "%s\n", #pass);              \
+         fprintf(stderr, "IBC after %s\n", #pass);    \
          ibc_print_shader(ibc, stderr);               \
-         fprintf(stderr, "\n\n");                     \
       }                                               \
       ibc_validate_shader(ibc);                       \
    } while(0)
