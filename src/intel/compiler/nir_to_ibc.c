@@ -372,7 +372,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_AND(b, uint_src.type, uint_src, high_bit);
       ibc_alu_instr *or = ibc_build_alu2(b, IBC_ALU_OP_OR, dest, dest, one_f);
       ibc_instr_set_predicate(&or->instr, is_not_zero,
-                              BRW_PREDICATE_NORMAL, false);
+                              IBC_PREDICATE_NORMAL);
       break;
    }
 
@@ -599,31 +599,31 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
    ibc_write_nir_dest(nti, &ntex->dest, dest);
 }
 
-static enum brw_predicate
-brw_predicate_any(unsigned cluster_size)
+static enum ibc_predicate
+ibc_predicate_any(unsigned cluster_size)
 {
    switch (cluster_size) {
-   case 1:  return BRW_PREDICATE_NORMAL;
-   case 2:  return BRW_PREDICATE_ALIGN1_ANY2H;
-   case 4:  return BRW_PREDICATE_ALIGN1_ANY4H;
-   case 8:  return BRW_PREDICATE_ALIGN1_ANY8H;
-   case 16: return BRW_PREDICATE_ALIGN1_ANY16H;
-   case 32: return BRW_PREDICATE_ALIGN1_ANY32H;
-   default: unreachable("Invalid BRW_PREDICATE_ALIGN1_ANY size");
+   case 1:  return IBC_PREDICATE_NORMAL;
+   case 2:  return IBC_PREDICATE_ANY2H;
+   case 4:  return IBC_PREDICATE_ANY4H;
+   case 8:  return IBC_PREDICATE_ANY8H;
+   case 16: return IBC_PREDICATE_ANY16H;
+   case 32: return IBC_PREDICATE_ANY32H;
+   default: unreachable("Invalid IBC_PREDICATE_ANY size");
    }
 }
 
-static enum brw_predicate
-brw_predicate_all(unsigned cluster_size)
+static enum ibc_predicate
+ibc_predicate_all(unsigned cluster_size)
 {
    switch (cluster_size) {
-   case 1:  return BRW_PREDICATE_NORMAL;
-   case 2:  return BRW_PREDICATE_ALIGN1_ALL2H;
-   case 4:  return BRW_PREDICATE_ALIGN1_ALL4H;
-   case 8:  return BRW_PREDICATE_ALIGN1_ALL8H;
-   case 16: return BRW_PREDICATE_ALIGN1_ALL16H;
-   case 32: return BRW_PREDICATE_ALIGN1_ALL32H;
-   default: unreachable("Invalid BRW_PREDICATE_ALIGN1_ALL size");
+   case 1:  return IBC_PREDICATE_NORMAL;
+   case 2:  return IBC_PREDICATE_ALL2H;
+   case 4:  return IBC_PREDICATE_ALL4H;
+   case 8:  return IBC_PREDICATE_ALL8H;
+   case 16: return IBC_PREDICATE_ALL16H;
+   case 32: return IBC_PREDICATE_ALL32H;
+   default: unreachable("Invalid IBC_PREDICATE_ALL size");
    }
 }
 
@@ -781,7 +781,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
        */
       ibc_builder_push_scalar(b);
       ibc_ref tmp = ibc_MOV_from_flag(b, IBC_TYPE_W,
-         brw_predicate_any(b->shader->simd_width), false, flag);
+         ibc_predicate_any(b->shader->simd_width), flag);
       ibc_builder_pop(b);
 
       /* Finally, IBC expects 1-bit booleans */
@@ -803,7 +803,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
        */
       ibc_builder_push_scalar(b);
       ibc_ref tmp = ibc_MOV_from_flag(b, IBC_TYPE_W,
-         brw_predicate_all(b->shader->simd_width), false, flag);
+         ibc_predicate_all(b->shader->simd_width), flag);
       ibc_builder_pop(b);
 
       /* Finally, IBC expects 1-bit booleans */
@@ -1063,7 +1063,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       if (pred.file != IBC_REG_FILE_NONE) {
          ibc_instr_set_predicate(&store->instr, pred,
-                                 BRW_PREDICATE_NORMAL, false);
+                                 IBC_PREDICATE_NORMAL);
       }
       break;
    }
@@ -1217,7 +1217,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       if (pred.file != IBC_REG_FILE_NONE) {
          ibc_instr_set_predicate(&image_op->instr, pred,
-                                 BRW_PREDICATE_NORMAL, false);
+                                 IBC_PREDICATE_NORMAL);
       }
       break;
    }
@@ -1290,12 +1290,12 @@ nti_emit_jump(struct nir_to_ibc_state *nti,
 
    switch (njump->type) {
    case nir_jump_break:
-      ibc_BREAK(b, ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false,
+      ibc_BREAK(b, ibc_null(IBC_TYPE_FLAG), IBC_PREDICATE_NONE,
                    &nti->breaks);
       break;
 
    case nir_jump_continue:
-      ibc_CONT(b, ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false,
+      ibc_CONT(b, ibc_null(IBC_TYPE_FLAG), IBC_PREDICATE_NONE,
                   nti->_do);
       break;
 
@@ -1358,7 +1358,7 @@ nti_emit_if(struct nir_to_ibc_state *nti, nir_if *nif)
    ibc_builder *b = &nti->b;
 
    ibc_ref cond = ibc_nir_src(nti, nif->condition, IBC_TYPE_FLAG);
-   ibc_flow_instr *_if = ibc_IF(b, cond, BRW_PREDICATE_NORMAL, false);
+   ibc_flow_instr *_if = ibc_IF(b, cond, IBC_PREDICATE_NORMAL);
 
    nti_emit_cf_list(nti, &nif->then_list);
 
@@ -1384,7 +1384,7 @@ nti_emit_loop(struct nir_to_ibc_state *nti, nir_loop *nloop)
 
    nti_emit_cf_list(nti, &nloop->body);
 
-   ibc_WHILE(b, ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false,
+   ibc_WHILE(b, ibc_null(IBC_TYPE_FLAG), IBC_PREDICATE_NONE,
              nti->_do, &nti->breaks);
 
    /* Restore off the state of the outer loop */

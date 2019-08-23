@@ -526,6 +526,57 @@ typedef struct ibc_reg_write {
 ibc_ref *ibc_reg_write_get_ref(ibc_reg_write *write);
 
 
+#define IBC_PREDICATE_INVERSE 0x10
+
+enum PACKED ibc_predicate {
+   /** Corresponds to the PredCtrl bits. ANYV and ALLV are not used. */
+   IBC_PREDICATE_NONE   =  0,
+   IBC_PREDICATE_NORMAL =  1,
+   IBC_PREDICATE_ANY2H  =  4,
+   IBC_PREDICATE_ALL2H  =  5,
+   IBC_PREDICATE_ANY4H  =  6,
+   IBC_PREDICATE_ALL4H  =  7,
+   IBC_PREDICATE_ANY8H  =  8,
+   IBC_PREDICATE_ALL8H  =  9,
+   IBC_PREDICATE_ANY16H = 10,
+   IBC_PREDICATE_ALL16H = 11,
+   IBC_PREDICATE_ANY32H = 12,
+   IBC_PREDICATE_ALL32H = 13,
+
+   IBC_PREDICATE_NOT        = IBC_PREDICATE_NORMAL | IBC_PREDICATE_INVERSE,
+   IBC_PREDICATE_NOT_ANY2H  = IBC_PREDICATE_ANY2H  | IBC_PREDICATE_INVERSE,
+   IBC_PREDICATE_NOT_ALL2H  = IBC_PREDICATE_ALL2H  | IBC_PREDICATE_INVERSE,
+   IBC_PREDICATE_NOT_ANY4H  = IBC_PREDICATE_ANY4H  | IBC_PREDICATE_INVERSE,
+   IBC_PREDICATE_NOT_ALL4H  = IBC_PREDICATE_ALL4H  | IBC_PREDICATE_INVERSE,
+   IBC_PREDICATE_NOT_ANY8H  = IBC_PREDICATE_ANY8H  | IBC_PREDICATE_INVERSE,
+   IBC_PREDICATE_NOT_ALL8H  = IBC_PREDICATE_ALL8H  | IBC_PREDICATE_INVERSE,
+   IBC_PREDICATE_NOT_ANY16H = IBC_PREDICATE_ANY16H | IBC_PREDICATE_INVERSE,
+   IBC_PREDICATE_NOT_ALL16H = IBC_PREDICATE_ALL16H | IBC_PREDICATE_INVERSE,
+   IBC_PREDICATE_NOT_ANY32H = IBC_PREDICATE_ANY32H | IBC_PREDICATE_INVERSE,
+   IBC_PREDICATE_NOT_ALL32H = IBC_PREDICATE_ALL32H | IBC_PREDICATE_INVERSE,
+};
+
+static inline enum ibc_predicate
+ibc_predicate_control(enum ibc_predicate pred)
+{
+   return (enum ibc_predicate)((int)pred & ~IBC_PREDICATE_INVERSE);
+}
+
+static inline bool
+ibc_predicate_is_inverted(enum ibc_predicate pred)
+{
+   return pred & IBC_PREDICATE_INVERSE;
+}
+
+static inline enum ibc_predicate
+ibc_predicate_invert(enum ibc_predicate pred)
+{
+   if (pred == IBC_PREDICATE_NONE)
+      return pred;
+   else
+      return (enum ibc_predicate)((int)pred ^ IBC_PREDICATE_INVERSE);
+}
+
 enum ibc_instr_type {
    IBC_INSTR_TYPE_ALU,
    IBC_INSTR_TYPE_SEND,
@@ -551,13 +602,10 @@ typedef struct ibc_instr {
    /** Flag reference for predication or cmod */
    ibc_ref flag;
 
-   /** If not BRW_PREDICATE_NONE, this instruction is predicated using the
+   /** If not IBC_PREDICATE_NONE, this instruction is predicated using the
     * predicate from flag.
     */
-   enum brw_predicate predicate;
-
-   /** True if the predicate is to be inverted */
-   bool pred_inverse;
+   enum ibc_predicate predicate;
 } ibc_instr;
 
 typedef bool (*ibc_ref_cb)(ibc_ref *ref,
@@ -575,8 +623,7 @@ bool ibc_instr_foreach_reg_write(ibc_instr *instr,
 void ibc_instr_set_ref(ibc_instr *instr, ibc_ref *ref,
                        ibc_ref new_ref);
 void ibc_instr_set_predicate(ibc_instr *instr, ibc_ref flag,
-                             enum brw_predicate predicate,
-                             bool pred_inverse);
+                             enum ibc_predicate predicate);
 
 
 /** Enum of IBC ALU opcodes */
@@ -929,7 +976,7 @@ ibc_flow_instr_falls_through(const ibc_flow_instr *flow)
       return false;
 
    case IBC_FLOW_OP_IF:
-      assert(flow->instr.predicate != BRW_PREDICATE_NONE);
+      assert(flow->instr.predicate != IBC_PREDICATE_NONE);
       return true;
 
    case IBC_FLOW_OP_ELSE:
@@ -943,7 +990,7 @@ ibc_flow_instr_falls_through(const ibc_flow_instr *flow)
    case IBC_FLOW_OP_CONT:
    case IBC_FLOW_OP_WHILE:
    case IBC_FLOW_OP_HALT_JUMP:
-      return flow->instr.predicate != BRW_PREDICATE_NONE;
+      return flow->instr.predicate != IBC_PREDICATE_NONE;
 
    case IBC_FLOW_OP_HALT_MERGE:
       return true;

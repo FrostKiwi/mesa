@@ -477,7 +477,7 @@ ibc_MOV_to_flag(ibc_builder *b, ibc_ref flag,
 
 static inline ibc_ref
 ibc_MOV_from_flag(ibc_builder *b, enum ibc_type dest_type,
-                  enum brw_predicate predicate, bool pred_inverse,
+                  enum ibc_predicate predicate,
                   ibc_ref flag)
 {
    assert(ibc_type_base_type(dest_type) == IBC_TYPE_UINT ||
@@ -488,7 +488,7 @@ ibc_MOV_from_flag(ibc_builder *b, enum ibc_type dest_type,
    ibc_ref dest = ibc_builder_new_logical_reg(b, dest_type, 1);
    ibc_MOV_to(b, dest, ibc_imm_w(0));
    ibc_alu_instr *mov = ibc_MOV_to(b, dest, ibc_imm_w(-1));
-   ibc_instr_set_predicate(&mov->instr, flag, predicate, pred_inverse);
+   ibc_instr_set_predicate(&mov->instr, flag, predicate);
 
    return dest;
 }
@@ -539,7 +539,7 @@ ibc_SEL(ibc_builder *b, enum ibc_type dest_type,
    ibc_ref srcs[] = { src0, src1 };
    ibc_ref dest = ibc_build_ssa_alu(b, IBC_ALU_OP_SEL, dest_type, srcs, 2);
    ibc_alu_instr *sel = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
-   ibc_instr_set_predicate(&sel->instr, flag, BRW_PREDICATE_NORMAL, false);
+   ibc_instr_set_predicate(&sel->instr, flag, IBC_PREDICATE_NORMAL);
    return dest;
 }
 
@@ -910,16 +910,15 @@ ibc_cluster_broadcast(ibc_builder *b, enum ibc_type dest_type,
 
 static inline ibc_flow_instr *
 ibc_build_flow(ibc_builder *b, enum ibc_flow_op op, ibc_ref pred,
-               enum brw_predicate predicate, bool pred_inverse)
+               enum ibc_predicate predicate)
 {
    assert(b->simd_group == 0);
    ibc_flow_instr *flow =
       ibc_flow_instr_create(b->shader, op, b->simd_width);
 
-   if (predicate != BRW_PREDICATE_NONE) {
+   if (predicate != IBC_PREDICATE_NONE) {
       flow->instr.flag = pred;
       flow->instr.predicate = predicate;
-      flow->instr.pred_inverse = pred_inverse;
    }
 
    /* If a flow instruction falls through, it is its own predecessor */
@@ -945,21 +944,21 @@ static inline ibc_flow_instr *
 ibc_START(ibc_builder *b)
 {
    return ibc_build_flow(b, IBC_FLOW_OP_START, ibc_null(IBC_TYPE_FLAG),
-                            BRW_PREDICATE_NONE, false);
+                            IBC_PREDICATE_NONE);
 }
 
 static inline ibc_flow_instr *
 ibc_END(ibc_builder *b)
 {
    return ibc_build_flow(b, IBC_FLOW_OP_END, ibc_null(IBC_TYPE_FLAG),
-                            BRW_PREDICATE_NONE, false);
+                            IBC_PREDICATE_NONE);
 }
 
 static inline ibc_flow_instr *
 ibc_IF(ibc_builder *b, ibc_ref pred,
-       enum brw_predicate predicate, bool pred_inverse)
+       enum ibc_predicate predicate)
 {
-   return ibc_build_flow(b, IBC_FLOW_OP_IF, pred, predicate, pred_inverse);
+   return ibc_build_flow(b, IBC_FLOW_OP_IF, pred, predicate);
 }
 
 static inline ibc_flow_instr *
@@ -967,7 +966,7 @@ ibc_ELSE(ibc_builder *b, ibc_flow_instr *_if)
 {
    ibc_flow_instr *_else =
       ibc_build_flow(b, IBC_FLOW_OP_ELSE, ibc_null(IBC_TYPE_FLAG),
-                        BRW_PREDICATE_NONE, false);
+                        IBC_PREDICATE_NONE);
 
    assert(_if->op == IBC_FLOW_OP_IF);
    ibc_flow_instr_set_jump(_if, _else);
@@ -980,7 +979,7 @@ ibc_ENDIF(ibc_builder *b, ibc_flow_instr *_if, ibc_flow_instr *_else)
 {
    ibc_flow_instr *_endif =
       ibc_build_flow(b, IBC_FLOW_OP_ENDIF, ibc_null(IBC_TYPE_FLAG),
-                        BRW_PREDICATE_NONE, false);
+                        IBC_PREDICATE_NONE);
 
    assert(_if->op == IBC_FLOW_OP_IF);
    if (_else == NULL) {
@@ -999,16 +998,16 @@ static inline ibc_flow_instr *
 ibc_DO(ibc_builder *b)
 {
    return ibc_build_flow(b, IBC_FLOW_OP_DO, ibc_null(IBC_TYPE_FLAG),
-                            BRW_PREDICATE_NONE, false);
+                            IBC_PREDICATE_NONE);
 }
 
 static inline ibc_flow_instr *
 ibc_BREAK(ibc_builder *b, ibc_ref pred,
-          enum brw_predicate predicate, bool pred_inverse,
+          enum ibc_predicate predicate,
           struct list_head *breaks)
 {
    ibc_flow_instr *_break =
-      ibc_build_flow(b, IBC_FLOW_OP_BREAK, pred, predicate, pred_inverse);
+      ibc_build_flow(b, IBC_FLOW_OP_BREAK, pred, predicate);
 
    list_addtail(&_break->builder_link, breaks);
 
@@ -1017,12 +1016,12 @@ ibc_BREAK(ibc_builder *b, ibc_ref pred,
 
 static inline ibc_flow_instr *
 ibc_CONT(ibc_builder *b, ibc_ref pred,
-         enum brw_predicate predicate, bool pred_inverse,
+         enum ibc_predicate predicate,
          ibc_flow_instr *_do)
 
 {
    ibc_flow_instr *_cont =
-      ibc_build_flow(b, IBC_FLOW_OP_CONT, pred, predicate, pred_inverse);
+      ibc_build_flow(b, IBC_FLOW_OP_CONT, pred, predicate);
 
    assert(_do->op == IBC_FLOW_OP_DO);
    ibc_flow_instr_set_jump(_cont, _do);
@@ -1032,11 +1031,11 @@ ibc_CONT(ibc_builder *b, ibc_ref pred,
 
 static inline ibc_flow_instr *
 ibc_WHILE(ibc_builder *b, ibc_ref pred,
-          enum brw_predicate predicate, bool pred_inverse,
+          enum ibc_predicate predicate,
           ibc_flow_instr *_do, struct list_head *breaks)
 {
    ibc_flow_instr *_while =
-      ibc_build_flow(b, IBC_FLOW_OP_WHILE, pred, predicate, pred_inverse);
+      ibc_build_flow(b, IBC_FLOW_OP_WHILE, pred, predicate);
 
    assert(_do->op == IBC_FLOW_OP_DO);
    ibc_flow_instr_set_jump(_while, _do);
@@ -1066,11 +1065,11 @@ ibc_WHILE(ibc_builder *b, ibc_ref pred,
 
 static inline ibc_flow_instr *
 ibc_HALT_JUMP(ibc_builder *b, ibc_ref pred,
-              enum brw_predicate predicate, bool pred_inverse,
+              enum ibc_predicate predicate,
               struct list_head *halt_jumps)
 {
    ibc_flow_instr *_halt_jump =
-      ibc_build_flow(b, IBC_FLOW_OP_HALT_JUMP, pred, predicate, pred_inverse);
+      ibc_build_flow(b, IBC_FLOW_OP_HALT_JUMP, pred, predicate);
 
    list_addtail(&_halt_jump->builder_link, halt_jumps);
 
@@ -1082,7 +1081,7 @@ ibc_HALT_MERGE(ibc_builder *b, struct list_head *halt_jumps)
 {
    ibc_flow_instr *_halt_merge =
       ibc_build_flow(b, IBC_FLOW_OP_HALT_MERGE,
-                     ibc_null(IBC_TYPE_FLAG), BRW_PREDICATE_NONE, false);
+                     ibc_null(IBC_TYPE_FLAG), IBC_PREDICATE_NONE);
 
    /* Link up all the jumps for halt jumps.  We stashed them in a list in
     * ibc_HALT_JUMP.

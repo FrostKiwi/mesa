@@ -307,7 +307,6 @@ ibc_lower_simd_width(ibc_shader *shader)
             split->cmod = alu->cmod;
             split->instr.we_all = b.we_all;
             split->instr.predicate = alu->instr.predicate;
-            split->instr.pred_inverse = alu->instr.pred_inverse;
             split->instr.flag = alu->instr.flag;
             ibc_ref_simd_slice(&split->instr.flag, split_simd_rel_group);
 
@@ -376,7 +375,6 @@ ibc_lower_simd_width(ibc_shader *shader)
 
             split->instr.we_all = b.we_all;
             split->instr.predicate = intrin->instr.predicate;
-            split->instr.pred_inverse = intrin->instr.pred_inverse;
             split->instr.flag = intrin->instr.flag;
             ibc_ref_simd_slice(&split->instr.flag, split_simd_rel_group);
 

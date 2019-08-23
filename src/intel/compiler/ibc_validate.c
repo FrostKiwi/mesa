@@ -295,26 +295,24 @@ ibc_validate_ref(struct ibc_validate_state *s,
 }
 
 static unsigned
-brw_predicate_bits(enum brw_predicate pred)
+ibc_predicate_bits(enum ibc_predicate pred)
 {
-   switch (pred) {
-   case BRW_PREDICATE_NONE:            return 1;
-   case BRW_PREDICATE_NORMAL:          return 1;
-   case BRW_PREDICATE_ALIGN1_ANYV:     return 1;
-   case BRW_PREDICATE_ALIGN1_ALLV:     return 1;
-   case BRW_PREDICATE_ALIGN1_ANY2H:    return 2;
-   case BRW_PREDICATE_ALIGN1_ALL2H:    return 2;
-   case BRW_PREDICATE_ALIGN1_ANY4H:    return 4;
-   case BRW_PREDICATE_ALIGN1_ALL4H:    return 4;
-   case BRW_PREDICATE_ALIGN1_ANY8H:    return 8;
-   case BRW_PREDICATE_ALIGN1_ALL8H:    return 8;
-   case BRW_PREDICATE_ALIGN1_ANY16H:   return 16;
-   case BRW_PREDICATE_ALIGN1_ALL16H:   return 16;
-   case BRW_PREDICATE_ALIGN1_ANY32H:   return 32;
-   case BRW_PREDICATE_ALIGN1_ALL32H:   return 32;
+   switch (ibc_predicate_control(pred)) {
+   case IBC_PREDICATE_NONE:     return 1;
+   case IBC_PREDICATE_NORMAL:   return 1;
+   case IBC_PREDICATE_ANY2H:    return 2;
+   case IBC_PREDICATE_ALL2H:    return 2;
+   case IBC_PREDICATE_ANY4H:    return 4;
+   case IBC_PREDICATE_ALL4H:    return 4;
+   case IBC_PREDICATE_ANY8H:    return 8;
+   case IBC_PREDICATE_ALL8H:    return 8;
+   case IBC_PREDICATE_ANY16H:   return 16;
+   case IBC_PREDICATE_ALL16H:   return 16;
+   case IBC_PREDICATE_ANY32H:   return 32;
+   case IBC_PREDICATE_ALL32H:   return 32;
+   default:
+      unreachable("Invalid control predicate");
    }
-
-   unreachable("Invalid predicate");
 }
 
 static void
@@ -340,7 +338,7 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
          ibc_validate_null_ref(s, &alu->instr.flag);
          ibc_assert(s, alu->op == IBC_ALU_OP_SEL);
       } else {
-         ibc_assert(s, brw_predicate_bits(alu->instr.predicate) == 1);
+         ibc_assert(s, ibc_predicate_bits(alu->instr.predicate) == 1);
          ibc_assert(s, alu->instr.flag.file != IBC_REG_FILE_NONE);
          ibc_assert(s, alu->instr.flag.type == IBC_TYPE_FLAG);
          ibc_validate_ref(s, &alu->instr.flag, &alu->cmod_write, 0, 1,
@@ -525,7 +523,7 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
    case IBC_FLOW_OP_START:
    case IBC_FLOW_OP_END:
       /* START and END instructions must not be predicated */
-      ibc_assert(s, flow->instr.predicate == BRW_PREDICATE_NONE);
+      ibc_assert(s, flow->instr.predicate == IBC_PREDICATE_NONE);
 
       ibc_assert(s, flow->jump == NULL);
       ibc_assert(s, flow->merge == NULL);
@@ -535,7 +533,7 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
 
    case IBC_FLOW_OP_IF:
       /* IF instructions must be predicated */
-      ibc_assert(s, flow->instr.predicate != BRW_PREDICATE_NONE);
+      ibc_assert(s, flow->instr.predicate != IBC_PREDICATE_NONE);
 
       /* IF instructions can jump to an ENDIF or an ELSE */
       if (ibc_assert(s, flow->jump)) {
@@ -552,7 +550,7 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
 
    case IBC_FLOW_OP_ELSE:
       /* ELSE instructions must not be predicated */
-      ibc_assert(s, flow->instr.predicate == BRW_PREDICATE_NONE);
+      ibc_assert(s, flow->instr.predicate == IBC_PREDICATE_NONE);
 
       ibc_assert(s, flow->jump && flow->jump->op == IBC_FLOW_OP_ENDIF);
       ibc_assert(s, flow->merge && flow->merge->op == IBC_FLOW_OP_ENDIF);
@@ -568,7 +566,7 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
 
    case IBC_FLOW_OP_ENDIF:
       /* ENDIF instructions must not be predicated */
-      ibc_assert(s, flow->instr.predicate == BRW_PREDICATE_NONE);
+      ibc_assert(s, flow->instr.predicate == IBC_PREDICATE_NONE);
 
       ibc_assert(s, flow->jump == NULL);
       ibc_assert(s, flow->merge == NULL);
@@ -600,7 +598,7 @@ ibc_validate_flow_instr(struct ibc_validate_state *s,
 
    case IBC_FLOW_OP_DO:
       /* DO instructions must not be predicated */
-      ibc_assert(s, flow->instr.predicate == BRW_PREDICATE_NONE);
+      ibc_assert(s, flow->instr.predicate == IBC_PREDICATE_NONE);
 
       ibc_assert(s, flow->jump == NULL);
       ibc_assert(s, flow->merge && flow->merge->op == IBC_FLOW_OP_WHILE);
@@ -693,11 +691,11 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
       ibc_assert(s, instr->simd_group % instr->simd_width == 0);
    }
 
-   if (instr->predicate != BRW_PREDICATE_NONE) {
+   if (instr->predicate != IBC_PREDICATE_NONE) {
       /* The ANY*H or ALL*H predicate group threads into groups so we need to
        * align the instruction bits accordingly.
        */
-      unsigned pred_bits = brw_predicate_bits(instr->predicate);
+      unsigned pred_bits = ibc_predicate_bits(instr->predicate);
       assert(util_is_power_of_two_nonzero(pred_bits));
       unsigned pred_simd_group = instr->simd_group & ~(pred_bits - 1);
       unsigned pred_simd_width = MAX2(instr->simd_width, pred_bits);

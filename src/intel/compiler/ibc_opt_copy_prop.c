@@ -373,8 +373,7 @@ flip_alu_instr_if_needed(ibc_alu_instr *alu)
    alu->src[1] = tmp;
 
    if (alu->op == IBC_ALU_OP_SEL) {
-      /* For SEL, we have to invert the predicate */
-      alu->instr.pred_inverse = !alu->instr.pred_inverse;
+      alu->instr.predicate = ibc_predicate_invert(alu->instr.predicate);
    } else if (alu->op == IBC_ALU_OP_CMP) {
       /* For CMP, we have to flip the comparison around. */
       switch (alu->cmod) {
