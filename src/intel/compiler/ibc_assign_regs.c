@@ -763,6 +763,8 @@ ibc_reg_assignment_rb_cmp(const struct rb_node *an, const struct rb_node *bn)
 struct ibc_assign_regs_state {
    void *mem_ctx;
 
+   bool allow_spilling;
+
    const ibc_live_intervals *live;
 
    /** Current instruction */
@@ -880,7 +882,7 @@ rewrite_ref_and_update_reg(ibc_ref *_ref,
    return true;
 }
 
-static void
+static bool
 assign_reg(struct ibc_reg_assignment *assign,
            int16_t fixed_hw_grf_byte,
            struct ibc_assign_regs_state *state)
@@ -899,6 +901,8 @@ assign_reg(struct ibc_reg_assignment *assign,
                                    rli->physical_start,
                                    rli->physical_end,
                                    assign->preg);
+      if (!success && !state->allow_spilling)
+         return false;
       assert(success);
       break;
 
@@ -915,6 +919,8 @@ assign_reg(struct ibc_reg_assignment *assign,
                                       rli->physical_start,
                                       rli->physical_end,
                                       assign->preg);
+         if (!success && !state->allow_spilling)
+            return false;
          assert(success);
       } else {
          assert(reg->logical.bit_size % 8 == 0);
@@ -933,6 +939,8 @@ assign_reg(struct ibc_reg_assignment *assign,
                                               fixed_hw_grf_byte,
                                               &assign->sreg_byte,
                                               &assign->sreg_comp);
+         if (!assign->sreg && !state->allow_spilling)
+            return false;
          assert(assign->sreg);
       }
       break;
@@ -942,6 +950,7 @@ assign_reg(struct ibc_reg_assignment *assign,
    }
 
    rb_tree_remove(&state->alloc_order, &assign->node);
+   return true;
 }
 
 static bool
@@ -966,13 +975,14 @@ rewrite_instr_reg_writes(ibc_instr *instr, struct ibc_assign_regs_state *state)
 }
 
 bool
-ibc_assign_regs(ibc_shader *shader)
+ibc_assign_regs(ibc_shader *shader, bool allow_spilling)
 {
    struct ibc_builder b;
    ibc_builder_init(&b, shader);
 
    struct ibc_assign_regs_state state = {
       .mem_ctx = ralloc_context(NULL),
+      .allow_spilling = allow_spilling,
    };
 
    ibc_assign_logical_reg_strides(shader);
@@ -1008,6 +1018,8 @@ ibc_assign_regs(ibc_shader *shader)
                      ibc_reg_assignment_rb_cmp);
    }
 
+   bool allocated = false;
+
    ibc_foreach_instr_reverse(instr, shader) {
       if (instr->type != IBC_INSTR_TYPE_SEND)
          continue;
@@ -1022,12 +1034,16 @@ ibc_assign_regs(ibc_shader *shader)
       if (send->ex_mlen > 0) {
          assert(send->payload[1].file == IBC_REG_FILE_LOGICAL ||
                 send->payload[1].file == IBC_REG_FILE_HW_GRF);
-         assign_reg(&state.assign[send->payload[1].reg->index], src1, &state);
+         if (!assign_reg(&state.assign[send->payload[1].reg->index],
+                         src1, &state))
+            goto fail;
       }
 
       assert(send->payload[0].file == IBC_REG_FILE_LOGICAL ||
              send->payload[0].file == IBC_REG_FILE_HW_GRF);
-      assign_reg(&state.assign[send->payload[0].reg->index], src0, &state);
+      if (!assign_reg(&state.assign[send->payload[0].reg->index],
+                      src0, &state))
+         goto fail;
       break;
    }
 
@@ -1062,7 +1078,8 @@ ibc_assign_regs(ibc_shader *shader)
                                   intrin->num_dest_comps);
 
             } else {
-               assign_reg(assign, intrin->src[0].ref.hw_grf.byte, &state);
+               if (!assign_reg(assign, intrin->src[0].ref.hw_grf.byte, &state))
+                  goto fail;
             }
 
             ibc_instr_remove(instr);
@@ -1081,7 +1098,8 @@ ibc_assign_regs(ibc_shader *shader)
                &state.assign[intrin->dest.reg->index];
             assert(assign->preg == NULL && assign->sreg == NULL);
 
-            assign_reg(assign, intrin->src[0].ref.hw_grf.byte, &state);
+            if (!assign_reg(assign, intrin->src[0].ref.hw_grf.byte, &state))
+               goto fail;
             ibc_instr_remove(instr);
             continue;
          } else if (intrin->op == IBC_INTRINSIC_OP_UNDEF) {
@@ -1098,7 +1116,8 @@ ibc_assign_regs(ibc_shader *shader)
          if (assign->physical_start > state.ip)
             break;
 
-         assign_reg(assign, -1, &state);
+         if (!assign_reg(assign, -1, &state))
+            goto fail;
       }
 
       rewrite_instr_reg_reads(instr, &state);
@@ -1116,9 +1135,14 @@ ibc_assign_regs(ibc_shader *shader)
       }
    }
 
+   /* If we got here, we were successful at allocating */
+   allocated = true;
+
+fail:
+
    ibc_phys_reg_alloc_finish(&state.phys_alloc);
    for (unsigned i = 0; i < ARRAY_SIZE(state.strided_alloc); i++)
       ibc_strided_reg_alloc_finish(&state.strided_alloc[i]);
 
-   return true;
+   return allocated;
 }
