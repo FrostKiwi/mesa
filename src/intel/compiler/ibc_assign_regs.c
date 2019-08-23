@@ -1039,6 +1039,9 @@ ibc_assign_regs(ibc_shader *shader)
             assign_reg(assign, intrin->src[0].ref.hw_grf.byte, &state);
             ibc_instr_remove(instr);
             continue;
+         } else if (intrin->op == IBC_INTRINSIC_OP_UNDEF) {
+            ibc_instr_remove(instr);
+            continue;
          }
       }
 

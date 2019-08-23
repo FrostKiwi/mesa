@@ -633,6 +633,7 @@ ibc_lower_io_to_sends(ibc_shader *shader)
 
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
       switch (intrin->op) {
+      case IBC_INTRINSIC_OP_UNDEF:
       case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL:
       case IBC_INTRINSIC_OP_SIMD_BROADCAST:
       case IBC_INTRINSIC_OP_SIMD_ZIP:
