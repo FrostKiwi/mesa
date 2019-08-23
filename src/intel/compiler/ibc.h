@@ -1051,6 +1051,32 @@ void ibc_instr_remove(ibc_instr *instr);
  * KEEP IN ALPHABETICAL ORDER!
  **********************************************************************/
 
+bool ibc_should_print_shader(const ibc_shader *ibc);
+
+#define IBC_PASS(progress, ibc, pass, ...)               \
+   do {                                                  \
+      if (pass((ibc), ##__VA_ARGS__)) {                  \
+         if (unlikely(ibc_should_print_shader(ibc))) {   \
+            fprintf(stderr, "%s\n", #pass);              \
+            ibc_print_shader(ibc, stderr);               \
+            fprintf(stderr, "\n\n");                     \
+         }                                               \
+         ibc_validate_shader(ibc);                       \
+         progress = true;                                \
+      }                                                  \
+   } while(0)
+
+#define IBC_PASS_V(ibc, pass, ...)                    \
+   do {                                               \
+      pass((ibc), ##__VA_ARGS__);                     \
+      if (unlikely(ibc_should_print_shader(ibc))) {   \
+         fprintf(stderr, "%s\n", #pass);              \
+         ibc_print_shader(ibc, stderr);               \
+         fprintf(stderr, "\n\n");                     \
+      }                                               \
+      ibc_validate_shader(ibc);                       \
+   } while(0)
+
 bool ibc_assign_and_lower_flags(ibc_shader *shader);
 bool ibc_assign_logical_reg_strides(ibc_shader *shader);
 bool ibc_assign_regs(ibc_shader *shader);
