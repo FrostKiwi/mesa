@@ -238,7 +238,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                struct brw_cs_prog_data *prog_data,
                const struct nir_shader *src_shader,
                int shader_time_index,
-               char **error_str)
+               char **error_str_out)
 {
    assert(src_shader->info.stage == MESA_SHADER_COMPUTE);
    prog_data->local_size[0] = src_shader->info.cs.local_size[0];
@@ -248,11 +248,11 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
       src_shader->info.cs.local_size[0] * src_shader->info.cs.local_size[1] *
       src_shader->info.cs.local_size[2];
 
-   unsigned min_dispatch_width =
+   unsigned min_simd_width =
       DIV_ROUND_UP(local_workgroup_size, compiler->devinfo->max_cs_threads);
-   min_dispatch_width = MAX2(8, min_dispatch_width);
-   min_dispatch_width = util_next_power_of_two(min_dispatch_width);
-   assert(min_dispatch_width <= 32);
+   min_simd_width = MAX2(8, min_simd_width);
+   min_simd_width = util_next_power_of_two(min_simd_width);
+   assert(min_simd_width <= 32);
 
    /* Add a uniform for the thread local id.  It must be the last uniform
     * on the list.
@@ -262,33 +262,94 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    uint32_t *param = brw_stage_prog_data_add_params(&prog_data->base, 1);
    *param = BRW_PARAM_BUILTIN_SUBGROUP_ID;
 
-   const unsigned simd_width = 32;
+   struct {
+      bool enabled;
+      const unsigned *data;
+      unsigned size;
+      unsigned num_ff_regs;
+   } bin[3] = {
+      { .enabled = !(INTEL_DEBUG & DEBUG_NO8), },
+      { .enabled = !(INTEL_DEBUG & DEBUG_NO16), },
+      { .enabled = (INTEL_DEBUG & DEBUG_DO32) || min_simd_width == 32, },
+   };
 
-   nir_shader *shader =
-      compile_cs_to_nir(compiler, mem_ctx, key, src_shader, simd_width);
+   bool first_bin = true;
+   for (unsigned i = 0; i < 3; i++) {
+      const unsigned bin_simd_width = 8 << i;
+      if (bin_simd_width < min_simd_width)
+         continue;
 
-   struct nir_to_ibc_state nti;
-   nir_to_ibc_state_init(&nti, shader->info.stage, compiler->devinfo,
-                         &key->base, &prog_data->base,
-                         NULL, simd_width, mem_ctx);
+      if (!bin[i].enabled)
+         continue;
 
-   nti.payload = &ibc_setup_cs_payload(&nti.b, subgroup_id_offset,
-                                       prog_data, mem_ctx)->base;
-   ibc_emit_nir_shader(&nti, shader);
-   ibc_emit_cs_thread_terminate(&nti);
+      /* Per-binary context */
+      void *bin_ctx = ralloc_context(mem_ctx);
 
-   ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
-   if (INTEL_DEBUG & DEBUG_CS)
-      ibc_print_shader(ibc, stderr);
-   ibc_validate_shader(ibc);
+      nir_shader *shader =
+         compile_cs_to_nir(compiler, mem_ctx, key, src_shader, bin_simd_width);
 
-   ibc_lower_and_optimize(ibc);
+      struct nir_to_ibc_state nti;
+      nir_to_ibc_state_init(&nti, shader->info.stage, compiler->devinfo,
+                            &key->base, &prog_data->base,
+                            NULL, bin_simd_width, mem_ctx);
 
-   IBC_PASS_V(ibc, ibc_assign_regs, true);
+      nti.payload = &ibc_setup_cs_payload(&nti.b, subgroup_id_offset,
+                                          prog_data, mem_ctx)->base;
+      ibc_emit_nir_shader(&nti, shader);
+      ibc_emit_cs_thread_terminate(&nti);
 
-   cs_set_simd_size(prog_data, simd_width);
-   cs_fill_push_const_info(compiler->devinfo, prog_data);
+      ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
+      if (INTEL_DEBUG & DEBUG_CS)
+         ibc_print_shader(ibc, stderr);
+      ibc_validate_shader(ibc);
 
-   return ibc_to_binary(ibc, &src_shader->info, compiler, log_data, mem_ctx,
-                        &prog_data->base.program_size);
+      ibc_lower_and_optimize(ibc);
+
+      bool assigned = ibc_assign_regs(ibc, first_bin);
+
+      if (INTEL_DEBUG & DEBUG_CS)
+         ibc_print_shader(ibc, stderr);
+
+      if (assigned) {
+         bin[i].data = ibc_to_binary(ibc, &shader->info, compiler, log_data,
+                                     mem_ctx, &bin[i].size);
+         bin[i].num_ff_regs = nti.payload->num_ff_regs;
+      }
+
+      ralloc_free(bin_ctx);
+
+      if (!assigned) {
+         if (first_bin) {
+            *error_str_out = ralloc_strdup(mem_ctx,
+                                           "Failed to allocate register");
+            return NULL;
+         }
+         compiler->shader_perf_log(log_data,
+                                   "SIMD%u shader failed to compile: "
+                                   "Failed to allocate registers",
+                                   bin_simd_width);
+         /* We assume that if one shader fails to allocate, all wider shaders
+          * will also fail.
+          */
+         break;
+      }
+
+      first_bin = false;
+   }
+
+   for (int i = 2; i >= 0; i--) {
+      const unsigned bin_simd_width = 8 << i;
+      if (bin[i].data == NULL)
+         continue;
+
+      /* Grab the widest shader we find */
+      cs_set_simd_size(prog_data, bin_simd_width);
+      cs_fill_push_const_info(compiler->devinfo, prog_data);
+      prog_data->base.dispatch_grf_start_reg = bin[i].num_ff_regs;
+      prog_data->base.program_size = bin[i].size;
+
+      return bin[i].data;
+   }
+
+   return NULL;
 }
