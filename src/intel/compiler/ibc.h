@@ -1102,6 +1102,8 @@ bool ibc_lower_phis(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);
 unsigned ibc_fb_write_instr_max_simd_width(const ibc_intrinsic_instr *write,
                                            const struct gen_device_info *devinfo);
+unsigned ibc_tex_instr_max_simd_width(const ibc_intrinsic_instr *write,
+                                      const struct gen_device_info *devinfo);
 
 bool ibc_opt_copy_prop(ibc_shader *shader);
 bool ibc_opt_cse(ibc_shader *shader);
