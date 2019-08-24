@@ -293,6 +293,46 @@ ibc_comp_ref(ibc_ref ref, unsigned comp)
 
 #define MAX_SAMPLER_MESSAGE_SIZE 11
 
+unsigned
+ibc_tex_instr_max_simd_width(const ibc_intrinsic_instr *intrin,
+                             const struct gen_device_info *devinfo)
+{
+   /* TXD is only supported on SIMD8 */
+   if (intrin->op == IBC_INTRINSIC_OP_TXD)
+      return 8;
+
+   /* If we have a min_lod parameter on anything other than a simple sample
+    * message, it will push it over 5 arguments and we have to fall back to
+    * SIMD8.
+    */
+   if (intrin->op != IBC_INTRINSIC_OP_TEX &&
+       intrin->src[IBC_TEX_SRC_MIN_LOD].num_comps > 0)
+      return 8;
+
+   const ibc_ref lod = intrin->src[IBC_TEX_SRC_LOD].ref;
+   const bool implicit_lod = devinfo->gen >= 9 &&
+                             (intrin->op == IBC_INTRINSIC_OP_TXL ||
+                              intrin->op == IBC_INTRINSIC_OP_TXF) &&
+                             ref_is_null_or_zero(lod);
+
+   const unsigned num_payload_components =
+      intrin->src[IBC_TEX_SRC_COORD].num_comps +
+      intrin->src[IBC_TEX_SRC_SHADOW_C].num_comps +
+      (implicit_lod ? 0 : intrin->src[IBC_TEX_SRC_LOD].num_comps) +
+      intrin->src[IBC_TEX_SRC_MIN_LOD].num_comps +
+      intrin->src[IBC_TEX_SRC_DDX].num_comps +
+      intrin->src[IBC_TEX_SRC_DDY].num_comps +
+      intrin->src[IBC_TEX_SRC_SAMPLE_INDEX].num_comps +
+      intrin->src[IBC_TEX_SRC_MCS].num_comps +
+      (intrin->op == IBC_INTRINSIC_OP_TG4_OFFSET ?
+         intrin->src[IBC_TEX_SRC_TG4_OFFSET].num_comps : 0);
+
+   if (num_payload_components > MAX_SAMPLER_MESSAGE_SIZE / 2)
+      return 8;
+   else
+      return 16;
+}
+
 static void
 lower_tex(ibc_builder *b, ibc_send_instr *send,
           const ibc_intrinsic_instr *intrin)
