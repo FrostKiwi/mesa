@@ -37,10 +37,47 @@ ibc_alu_instr_is_raw_mov(const ibc_alu_instr *alu)
           !alu->saturate;
 }
 
+static void
+ref_set_reg_packed(ibc_ref ref)
+{
+   if (ref.file == IBC_REG_FILE_HW_GRF) {
+      assert(ref.hw_grf.hstride == ibc_type_byte_size(ref.type));
+      assert(ref.hw_grf.vstride == ref.hw_grf.hstride * ref.hw_grf.width);
+      return;
+   }
+
+   assert(ref.file == IBC_REG_FILE_LOGICAL);
+
+   ibc_reg *reg = (ibc_reg *)ref.reg;
+   if (reg->logical.packed)
+      return;
+
+   if (reg->logical.stride == 0)
+      reg->logical.stride = ibc_type_byte_size(ref.type);
+   assert(reg->logical.stride == ibc_type_byte_size(ref.type));
+   reg->logical.packed = true;
+}
+
 bool
 ibc_assign_logical_reg_strides(ibc_shader *shader)
 {
    bool progress = false;
+
+   ibc_foreach_instr(instr, shader) {
+      if (instr->type != IBC_INSTR_TYPE_SEND)
+         continue;
+
+      ibc_send_instr *send = ibc_instr_as_send(instr);
+
+      if (send->rlen > 0)
+         ref_set_reg_packed(send->dest);
+
+      if (send->mlen > 0)
+         ref_set_reg_packed(send->payload[0]);
+
+      if (send->ex_mlen > 0)
+         ref_set_reg_packed(send->payload[1]);
+   }
 
    ibc_foreach_reg(reg, shader) {
       if (reg->file != IBC_REG_FILE_LOGICAL)
@@ -607,6 +644,14 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
             list_del(&sreg->link);
             continue;
          }
+
+         /* If we have a packed vector, then it has to have exactly the same
+          * SIMD group as the strided reg from which it's being allocated.
+          */
+         if (lreg->packed && lreg->num_comps > 1 &&
+             (lreg->simd_group != sreg->simd_group ||
+              lreg->simd_width != sreg->simd_width))
+            continue;
 
          if (ibc_strided_reg_try_find_hole(sreg, ip,
                                            byte_size, lreg->num_comps,
