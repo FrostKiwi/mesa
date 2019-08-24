@@ -178,20 +178,40 @@ flag_reg_num_chunks(const ibc_reg *reg)
 static void
 free_dead_flags(uint32_t ip, struct ibc_assign_flags_state *state)
 {
-   for (unsigned chunk = 0; chunk < TOTAL_FLAG_CHUNKS; chunk++) {
-      if (state->assign[chunk] == NULL)
-         continue;
-
-      const ibc_reg *reg = state->assign[chunk];
-      const ibc_reg_live_intervals *rli = &state->live->regs[reg->index];
-
-      if (rli->physical_end <= ip) {
-         state->assign[chunk] = NULL;
+   for (unsigned chunk = 0; chunk < TOTAL_FLAG_CHUNKS;) {
+      if (state->assign[chunk] == NULL) {
+         chunk++;
          continue;
       }
 
-      if (!(state->valid[chunk] & (FLAG_REP_VECTOR | FLAG_REP_SCALAR)))
+      const ibc_reg *reg = state->assign[chunk];
+      const unsigned num_chunks = flag_reg_num_chunks(reg);
+
+      /* Assert that exactly [c, c + num_chunks) is our register */
+      for (unsigned c = 0; c < TOTAL_FLAG_CHUNKS; c++) {
+         if (c >= chunk && c < chunk + num_chunks)
+            assert(state->assign[c] == reg);
+         else
+            assert(state->assign[c] != reg);
+      }
+
+      const ibc_reg_live_intervals *rli = &state->live->regs[reg->index];
+      if (rli->physical_end <= ip) {
+         for (unsigned c = 0; c < num_chunks; c++)
+            state->assign[chunk + c] = NULL;
+
+         chunk += num_chunks;
          continue;
+      }
+
+      enum flag_rep all_valid = FLAG_REP_ALL;
+      for (unsigned c = 0; c < num_chunks; c++)
+         all_valid &= state->valid[chunk + c];
+
+      if (!(all_valid & (FLAG_REP_VECTOR | FLAG_REP_SCALAR))) {
+         chunk += num_chunks;
+         continue;
+      }
 
       uint32_t end = rli->physical_end;
       if (!state->regs[reg->index].read_as_flag) {
@@ -204,13 +224,10 @@ free_dead_flags(uint32_t ip, struct ibc_assign_flags_state *state)
       }
 
       if (end <= ip) {
-         const unsigned num_chunks = flag_reg_num_chunks(reg);
          for (unsigned c = 0; c < num_chunks; c++)
             state->assign[chunk + c] = NULL;
-
-         for (unsigned c = 0; c < TOTAL_FLAG_CHUNKS; c++)
-            assert(state->assign[c] != reg);
       }
+      chunk += num_chunks;
    }
 }
 
