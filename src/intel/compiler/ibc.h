@@ -162,6 +162,14 @@ typedef struct ibc_logical_reg {
     * registers with simd_width == 1, stride is always zero.
     */
    uint8_t stride;
+
+   /** True if this register must be packed for a SEND
+    *
+    * Packed requires that stride == bit_size / 8 and requires that the
+    * register be allocated in such a way that that the register consumes a
+    * contiguous region of the register file.
+    */
+   bool packed;
 } ibc_logical_reg;
 
 

@@ -765,6 +765,10 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
       ibc_assert(s, reg->logical.simd_width <= 32);
       ibc_assert(s, util_is_power_of_two_nonzero(reg->logical.simd_width));
       ibc_assert(s, reg->logical.simd_group % reg->logical.simd_width == 0);
+      if (reg->logical.packed) {
+         assert(reg->logical.bit_size >= 8);
+         assert(reg->logical.stride == reg->logical.bit_size / 8);
+      }
       return;
 
    case IBC_REG_FILE_HW_GRF:
