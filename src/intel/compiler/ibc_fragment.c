@@ -680,7 +680,8 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
 {
    assert(shader->info.stage == MESA_SHADER_FRAGMENT);
 
-   unsigned max_subgroup_size = unlikely(INTEL_DEBUG & DEBUG_DO32) ? 32 : 16;
+//   unsigned max_subgroup_size = unlikely(INTEL_DEBUG & DEBUG_DO32) ? 32 : 16;
+   unsigned max_subgroup_size = 32;
 
    brw_nir_apply_key(shader, compiler, &key->base, max_subgroup_size, true);
    brw_nir_lower_fs_inputs(shader, compiler->devinfo, key);
@@ -705,7 +706,8 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
    } bin[3] = {
       { .enabled = !(INTEL_DEBUG & DEBUG_NO8), },
       { .enabled = !(INTEL_DEBUG & DEBUG_NO16), },
-      { .enabled = (INTEL_DEBUG & DEBUG_DO32), },
+//      { .enabled = (INTEL_DEBUG & DEBUG_DO32), },
+      { .enabled = true, },
    };
 
    bool first_bin = true;
