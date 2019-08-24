@@ -109,6 +109,20 @@ ibc_intrinsic_instr_max_simd_width(const ibc_intrinsic_instr *intrin,
    case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
       return 16;
 
+   case IBC_INTRINSIC_OP_TEX:
+   case IBC_INTRINSIC_OP_TXB:
+   case IBC_INTRINSIC_OP_TXL:
+   case IBC_INTRINSIC_OP_TXD:
+   case IBC_INTRINSIC_OP_TXF:
+   case IBC_INTRINSIC_OP_TXF_MS:
+   case IBC_INTRINSIC_OP_TXF_MCS:
+   case IBC_INTRINSIC_OP_TXS:
+   case IBC_INTRINSIC_OP_LOD:
+   case IBC_INTRINSIC_OP_TG4:
+   case IBC_INTRINSIC_OP_TG4_OFFSET:
+   case IBC_INTRINSIC_OP_SAMPLEINFO:
+      return ibc_tex_instr_max_simd_width(intrin, devinfo);
+
    default:
       return intrin->instr.simd_width;
    }
