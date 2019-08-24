@@ -50,6 +50,90 @@ ref_stride(const ibc_ref *ref)
    unreachable("Unknown register file");
 }
 
+static unsigned
+ibc_alu_instr_max_simd_width(const ibc_alu_instr *alu,
+                             const struct gen_device_info *devinfo)
+{
+   unsigned max_simd_width = 32;
+   for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
+      /* Can't span more than two registers */
+      const unsigned src_stride = ref_stride(&alu->src[i].ref);
+      if (src_stride > 0)
+         max_simd_width = MIN2(max_simd_width, 64 / src_stride);
+   }
+
+   /* Can't span more than two registers */
+   const unsigned dest_stride = ref_stride(&alu->dest);
+   if (dest_stride > 0)
+      max_simd_width = MIN2(max_simd_width, 64 / dest_stride);
+
+   switch (alu->op) {
+   case IBC_ALU_OP_RCP:
+   case IBC_ALU_OP_LOG2:
+   case IBC_ALU_OP_EXP2:
+   case IBC_ALU_OP_SQRT:
+   case IBC_ALU_OP_RSQ:
+   case IBC_ALU_OP_SIN:
+   case IBC_ALU_OP_COS:
+   case IBC_ALU_OP_POW:
+      /* Extended math functions are limited to SIMD8 with half-float */
+      if (alu->dest.type == IBC_TYPE_HF)
+         return MIN2(max_simd_width, 8);
+      return MIN2(max_simd_width, 16);
+
+   case IBC_ALU_OP_IDIV:
+   case IBC_ALU_OP_IREM:
+      /* Integer division is limited to SIMD8 on all generations. */
+      return MIN2(max_simd_width, 8);
+
+   default:
+      return max_simd_width;
+   }
+}
+
+static unsigned
+ibc_intrinsic_instr_max_simd_width(const ibc_intrinsic_instr *intrin,
+                                   const struct gen_device_info *devinfo)
+{
+   switch (intrin->op) {
+   case IBC_INTRINSIC_OP_FB_WRITE:
+      return ibc_fb_write_instr_max_simd_width(intrin, devinfo);
+
+   case IBC_INTRINSIC_OP_BTI_TYPED_READ:
+   case IBC_INTRINSIC_OP_BTI_TYPED_WRITE:
+   case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:
+      return 8;
+
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
+      return 16;
+
+   default:
+      return intrin->instr.simd_width;
+   }
+}
+
+static unsigned
+ibc_instr_max_simd_width(const ibc_instr *instr,
+                         const struct gen_device_info *devinfo)
+{
+   unsigned max;
+   switch (instr->type) {
+   case IBC_INSTR_TYPE_ALU:
+      max = ibc_alu_instr_max_simd_width(ibc_instr_as_alu(instr), devinfo);
+      return MIN2(max, instr->simd_width);
+
+   case IBC_INSTR_TYPE_INTRINSIC:
+      max = ibc_intrinsic_instr_max_simd_width(ibc_instr_as_intrinsic(instr),
+                                               devinfo);
+      return MIN2(max, instr->simd_width);
+
+   default:
+      return instr->simd_width;
+   }
+}
+
 static ibc_ref
 simd_restricted_src(ibc_builder *b, ibc_ref src,
                     uint8_t old_simd_group, uint8_t new_simd_group,
@@ -101,74 +185,9 @@ ibc_lower_simd_width(ibc_shader *shader)
    ibc_builder_init(&b, shader);
 
    ibc_foreach_instr_safe(instr, shader) {
-      unsigned split_simd_width = instr->simd_width;
-      switch (instr->type) {
-      case IBC_INSTR_TYPE_ALU: {
-         ibc_alu_instr *alu = ibc_instr_as_alu(instr);
-         split_simd_width = MIN2(split_simd_width, 32);
-
-         unsigned num_srcs = ibc_alu_op_infos[alu->op].num_srcs;
-         for (unsigned j = 0; j < num_srcs; j++) {
-            /* Can't span more than two registers */
-            const unsigned src_stride = ref_stride(&alu->src[j].ref);
-            if (src_stride > 0)
-               split_simd_width = MIN2(split_simd_width, 64 / src_stride);
-         }
-
-         /* Can't span more than two registers */
-         const unsigned dest_stride = ref_stride(&alu->dest);
-         if (dest_stride > 0)
-            split_simd_width = MIN2(split_simd_width, 64 / dest_stride);
-
-         switch (alu->op) {
-         case IBC_ALU_OP_RCP:
-         case IBC_ALU_OP_LOG2:
-         case IBC_ALU_OP_EXP2:
-         case IBC_ALU_OP_SQRT:
-         case IBC_ALU_OP_RSQ:
-         case IBC_ALU_OP_SIN:
-         case IBC_ALU_OP_COS:
-         case IBC_ALU_OP_POW:
-            /* Extended math functions are limited to SIMD8 with half-float */
-            if (alu->dest.type == IBC_TYPE_HF)
-               split_simd_width = MIN2(split_simd_width, 8);
-            split_simd_width = MIN2(split_simd_width, 16);
-            break;
-
-         case IBC_ALU_OP_IDIV:
-         case IBC_ALU_OP_IREM:
-            /* Integer division is limited to SIMD8 on all generations. */
-            split_simd_width = MIN2(split_simd_width, 8);
-            break;
-
-         default:
-            break;
-         }
-         break;
-      }
-
-      case IBC_INSTR_TYPE_INTRINSIC: {
-         ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-         switch (intrin->op) {
-         case IBC_INTRINSIC_OP_FB_WRITE:
-            split_simd_width = ibc_lower_simd_width_fb_write_max_width(intrin);
-            break;
-         case IBC_INTRINSIC_OP_BTI_TYPED_READ:
-         case IBC_INTRINSIC_OP_BTI_TYPED_WRITE:
-         case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:
-            split_simd_width = MIN2(split_simd_width, 8);
-            break;
-         default:
-            split_simd_width = MIN2(split_simd_width, 16); /* TODO */
-            break;
-         }
-         break;
-      }
-
-      default:
-         continue;
-      }
-      if (instr->simd_width <= split_simd_width)
+      unsigned split_simd_width =
+         ibc_instr_max_simd_width(instr, shader->devinfo);
+      if (split_simd_width >= instr->simd_width)
          continue;
 
       const unsigned num_splits = instr->simd_width / split_simd_width;

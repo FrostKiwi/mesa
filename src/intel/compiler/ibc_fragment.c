@@ -589,7 +589,8 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
 }
 
 unsigned
-ibc_lower_simd_width_fb_write_max_width(ibc_intrinsic_instr *write)
+ibc_fb_write_instr_max_simd_width(const ibc_intrinsic_instr *write,
+                                  const struct gen_device_info *devinfo)
 {
    assert(write->op == IBC_INTRINSIC_OP_FB_WRITE);
    if (write->src[IBC_FB_WRITE_SRC_COLOR1].ref.file != IBC_REG_FILE_NONE)
