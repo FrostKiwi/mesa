@@ -55,15 +55,21 @@ ibc_alu_instr_max_simd_width(const ibc_alu_instr *alu,
                              const struct gen_device_info *devinfo)
 {
    unsigned max_simd_width = 32;
+   unsigned exec_bit_size = 16;
    for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
       /* Can't span more than two registers */
       const unsigned src_stride = ref_stride(&alu->src[i].ref);
       if (src_stride > 0)
          max_simd_width = MIN2(max_simd_width, 64 / src_stride);
+
+      exec_bit_size = MAX2(exec_bit_size,
+                           ibc_type_bit_size(alu->src[i].ref.type));
    }
 
    /* Can't span more than two registers */
-   const unsigned dest_stride = ref_stride(&alu->dest);
+   unsigned dest_stride = ref_stride(&alu->dest);
+   if (alu->dest.file == IBC_REG_FILE_NONE)
+      dest_stride = exec_bit_size / 8;
    if (dest_stride > 0)
       max_simd_width = MIN2(max_simd_width, 64 / dest_stride);
 
