@@ -1100,7 +1100,8 @@ void ibc_lower_io_fb_write_to_send(struct ibc_builder *b,
                                    const ibc_intrinsic_instr *intrin);
 bool ibc_lower_phis(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);
-unsigned ibc_lower_simd_width_fb_write_max_width(ibc_intrinsic_instr *write);
+unsigned ibc_fb_write_instr_max_simd_width(const ibc_intrinsic_instr *write,
+                                           const struct gen_device_info *devinfo);
 
 bool ibc_opt_copy_prop(ibc_shader *shader);
 bool ibc_opt_cse(ibc_shader *shader);
