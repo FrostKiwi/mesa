@@ -795,7 +795,7 @@ rewrite_ref_and_update_reg(ibc_ref *_ref,
 
          new_ref.hw_grf.byte = assign->sreg->phys.byte;
          new_ref.hw_grf.byte += (assign->sreg_comp + ref->logical.comp) *
-                                 reg->logical.simd_width * stride;
+                                 assign->sreg->simd_width * stride;
          new_ref.hw_grf.byte += assign->sreg_byte + ref->logical.byte;
       } else {
          assert(reg->logical.simd_width == 1);
