@@ -92,13 +92,14 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
       if (reg->logical.bit_size == 1)
          continue;
 
+      /* Uniform values don't have a stride across SIMD channels */
+      if (reg->logical.simd_width == 1)
+         continue;
+
       /* At the very least, we want it to be the size of the register */
       assert(reg->logical.bit_size >= 8);
       reg->logical.stride = reg->logical.bit_size / 8;
       progress = true;
-
-      if (reg->logical.simd_width == 1)
-         continue;
 
       ibc_instr *ssa_instr = ibc_reg_ssa_instr(reg);
       if (!ssa_instr || ssa_instr->type != IBC_INSTR_TYPE_ALU)
@@ -833,24 +834,30 @@ rewrite_ref_and_update_reg(ibc_ref *_ref,
 
    case IBC_REG_FILE_LOGICAL: {
       assert(reg->logical.bit_size % 8 == 0);
-      assert(reg->logical.stride >= reg->logical.bit_size / 8);
-      unsigned stride = reg->logical.stride;
 
       /* Stash this so we can access it unchanged */
+      unsigned stride;
       if (assign->sreg) {
+         assert(reg->logical.simd_width > 1);
+         assert(reg->logical.stride >= reg->logical.bit_size / 8);
+         assert(reg->logical.stride == assign->sreg->byte_size);
          ibc_strided_reg_update_holes(assign->sreg, state->ip);
 
          new_ref.hw_grf.byte = assign->sreg->phys.byte;
          new_ref.hw_grf.byte += (assign->sreg_comp + ref->logical.comp) *
-                                 assign->sreg->simd_width * stride;
+                                 assign->sreg->simd_width *
+                                 assign->sreg->byte_size;
          new_ref.hw_grf.byte += assign->sreg_byte + ref->logical.byte;
+         stride = assign->sreg->byte_size;
       } else {
          assert(reg->logical.simd_width == 1);
-         assert(reg->logical.stride == reg->logical.bit_size / 8);
+         assert(reg->logical.stride == 0);
          new_ref.hw_grf.byte = assign->preg->byte;
          new_ref.hw_grf.byte += ref->logical.comp *
                                 (reg->logical.bit_size / 8);
          new_ref.hw_grf.byte += ref->logical.byte;
+         /* This is needed for the !state->is_read case below */
+         stride = reg->logical.bit_size / 8;
       }
 
       if (ref->logical.broadcast) {
