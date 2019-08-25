@@ -98,26 +98,27 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
 
       /* At the very least, we want it to be the size of the register */
       assert(reg->logical.bit_size >= 8);
-      reg->logical.stride = reg->logical.bit_size / 8;
-      progress = true;
+      unsigned stride = reg->logical.bit_size / 8;
 
-      ibc_instr *ssa_instr = ibc_reg_ssa_instr(reg);
-      if (!ssa_instr || ssa_instr->type != IBC_INSTR_TYPE_ALU)
-         continue;
+      ibc_reg_foreach_write(write, reg) {
+         if (write->instr->type != IBC_INSTR_TYPE_ALU)
+            continue;
 
-      ibc_alu_instr *alu = ibc_instr_as_alu(ssa_instr);
-      assert(alu->dest.reg == reg);
+         ibc_alu_instr *alu = ibc_instr_as_alu(write->instr);
 
-      reg->logical.stride = MAX2(reg->logical.stride,
-                                 ibc_type_byte_size(alu->dest.type));
-      for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-         reg->logical.stride = MAX2(reg->logical.stride,
-                                    ibc_type_byte_size(alu->src[i].ref.type));
+         /* This can't be a flag write */
+         assert(write == &alu->dest_write);
+
+         for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++)
+            stride = MAX2(stride, ibc_type_byte_size(alu->src[i].ref.type));
+
+         /* Only raw MOV supports a packed-byte destination */
+         if (stride == 1 && !ibc_alu_instr_is_raw_mov(alu))
+            stride = 2;
       }
 
-      /* Only raw MOV supports a packed-byte destination */
-      if (reg->logical.stride == 1 && !ibc_alu_instr_is_raw_mov(alu))
-         reg->logical.stride = 2;
+      reg->logical.stride = stride;
+      progress = true;
    }
 
    return progress;
