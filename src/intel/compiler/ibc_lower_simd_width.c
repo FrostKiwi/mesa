@@ -102,6 +102,10 @@ ibc_intrinsic_instr_max_simd_width(const ibc_intrinsic_instr *intrin,
                                    const struct gen_device_info *devinfo)
 {
    switch (intrin->op) {
+   case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE:
+      assert(intrin->src[0].ref.type == IBC_TYPE_F);
+      return 16;
+
    case IBC_INTRINSIC_OP_FB_WRITE:
       return ibc_fb_write_instr_max_simd_width(intrin, devinfo);
 
