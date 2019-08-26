@@ -1381,26 +1381,31 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
    ibc_write_nir_ssa_def(nti, &instr->def, dest);
 }
 
-static void
-nti_emit_jump(struct nir_to_ibc_state *nti,
-              const nir_jump_instr *njump)
+static inline ibc_flow_instr *
+emit_flow_for_nir_jump_type(struct nir_to_ibc_state *nti, nir_jump_type ntype,
+                            ibc_ref cond, enum ibc_predicate predicate)
 {
    ibc_builder *b = &nti->b;
 
-   switch (njump->type) {
+   switch (ntype) {
    case nir_jump_break:
-      ibc_BREAK(b, ibc_null(IBC_TYPE_FLAG), IBC_PREDICATE_NONE,
-                   &nti->breaks);
-      break;
+      return ibc_BREAK(b, cond, predicate, &nti->breaks);
 
    case nir_jump_continue:
-      ibc_CONT(b, ibc_null(IBC_TYPE_FLAG), IBC_PREDICATE_NONE,
-                  nti->_do);
-      break;
+      return ibc_CONT(b, cond, predicate, nti->_do);
 
    default:
       unreachable("Unsupported jump instruction type");
    }
+}
+
+static void
+nti_emit_jump(struct nir_to_ibc_state *nti,
+              const nir_jump_instr *njump)
+{
+   emit_flow_for_nir_jump_type(nti, njump->type,
+                               ibc_null(IBC_TYPE_FLAG),
+                               IBC_PREDICATE_NONE);
 }
 
 static void
@@ -1451,12 +1456,58 @@ static void
 nti_emit_cf_list(struct nir_to_ibc_state *nti,
                  const struct exec_list *cf_list);
 
+static inline bool
+nir_cf_list_is_simple_jump(struct exec_list *cf_list, nir_jump_type *type)
+{
+   if (!exec_list_is_singular(cf_list))
+      return false;
+
+   struct exec_node *head = exec_list_get_head(cf_list);
+   nir_block *block =
+      nir_cf_node_as_block(exec_node_data(nir_cf_node, head, node));
+   if (!exec_list_is_singular(&block->instr_list))
+      return false;
+
+   nir_instr *last_instr = nir_block_last_instr(block);
+   if (last_instr->type != nir_instr_type_jump)
+      return false;
+
+   *type = nir_instr_as_jump(last_instr)->type;
+   return true;
+}
+
 static void
 nti_emit_if(struct nir_to_ibc_state *nti, nir_if *nif)
 {
    ibc_builder *b = &nti->b;
 
+   /* This really should never happen but it's theoretically possible. */
+   if (nir_cf_list_is_empty_block(&nif->then_list) &&
+       nir_cf_list_is_empty_block(&nif->else_list))
+      return;
+
    ibc_ref cond = ibc_nir_src(nti, nif->condition, IBC_TYPE_FLAG);
+
+   nir_jump_type ntype;
+   if (nir_cf_list_is_simple_jump(&nif->then_list, &ntype)) {
+      emit_flow_for_nir_jump_type(nti, ntype, cond, IBC_PREDICATE_NORMAL);
+      nti_emit_cf_list(nti, &nif->else_list);
+      return;
+   }
+
+   if (nir_cf_list_is_simple_jump(&nif->else_list, &ntype)) {
+      emit_flow_for_nir_jump_type(nti, ntype, cond, IBC_PREDICATE_NOT);
+      nti_emit_cf_list(nti, &nif->else_list);
+      return;
+   }
+
+   if (nir_cf_list_is_empty_block(&nif->then_list)) {
+      ibc_flow_instr *_if = ibc_IF(b, cond, IBC_PREDICATE_NOT);
+      nti_emit_cf_list(nti, &nif->else_list);
+      ibc_ENDIF(b, _if, NULL);
+      return;
+   }
+
    ibc_flow_instr *_if = ibc_IF(b, cond, IBC_PREDICATE_NORMAL);
    nti_emit_cf_list(nti, &nif->then_list);
 
