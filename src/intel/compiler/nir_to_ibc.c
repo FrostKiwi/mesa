@@ -42,14 +42,14 @@ ibc_BTI_BLOCK_LOAD_UBO(ibc_builder *b, ibc_ref hw_grf, ibc_ref bti,
 
    ibc_intrinsic_src srcs[3] = { };
 
-   if (hw_grf.file != IBC_REG_FILE_NONE) {
+   if (hw_grf.file != IBC_FILE_NONE) {
       srcs[0] = (ibc_intrinsic_src) {
          .ref = hw_grf,
          .num_comps = block_num_comps,
       };
    }
 
-   if (bti.file != IBC_REG_FILE_NONE) {
+   if (bti.file != IBC_FILE_NONE) {
       srcs[1] = (ibc_intrinsic_src) {
          .ref = ibc_uniformize(b, bti),
          .num_comps = 1,
@@ -140,7 +140,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
          nir_src_type |= nir_src_bit_size(instr->src[i].src);
       src[i] = ibc_nir_src(nti, instr->src[i].src,
                            ibc_type_for_nir(nir_src_type));
-      assert(src[i].file == IBC_REG_FILE_LOGICAL);
+      assert(src[i].file == IBC_FILE_LOGICAL);
       src[i].logical.comp = instr->src[i].swizzle[0];
    }
 
@@ -149,7 +149,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       nir_dest_type |= nir_dest_bit_size(instr->dest.dest);
    enum ibc_type dest_type = ibc_type_for_nir(nir_dest_type);
 
-   ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
+   ibc_ref dest = { .file = IBC_FILE_NONE, };
 
    switch (instr->op) {
    case nir_op_vec2:
@@ -835,7 +835,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
    ibc_builder *b = &nti->b;
 
-   ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
+   ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_invocation: {
       ibc_reg *w_tmp_reg =
@@ -989,7 +989,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          for (unsigned c = 0; c < instr->num_components; c++) {
             const uint64_t comp_offset_B = offset_B + c * comp_size_B;
 
-            assert(nti->payload->push.file == IBC_REG_FILE_HW_GRF);
+            assert(nti->payload->push.file == IBC_FILE_HW_GRF);
             if (comp_offset_B + comp_size_B >=
                 nti->payload->push.reg->hw_grf.size)
                continue;
@@ -1021,7 +1021,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
             /* First, try to look it up in one of the push ranges */
             for (unsigned i = 0; i < ARRAY_SIZE(nti->payload->ubo_push); i++) {
                ibc_ref block = nti->payload->ubo_push[i];
-               if (block.file == IBC_REG_FILE_NONE)
+               if (block.file == IBC_FILE_NONE)
                   continue;
 
                ibc_intrinsic_instr *l =
@@ -1047,7 +1047,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
             }
 
             /* If we found it as a push constant, we're done. */
-            if (dest_comps[c].file != IBC_REG_FILE_NONE)
+            if (dest_comps[c].file != IBC_FILE_NONE)
                continue;
 
             /* Fetch one cacheline at a time. */
@@ -1065,7 +1065,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                                       ibc_imm_ud(block_offset_B),
                                       block_size_B);
 
-            assert(block.file == IBC_REG_FILE_HW_GRF);
+            assert(block.file == IBC_FILE_HW_GRF);
             dest_comps[c] = block;
             dest_comps[c].type = instr->dest.ssa.bit_size;
             dest_comps[c].hw_grf.byte += comp_offset_in_block_B;
@@ -1160,7 +1160,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       store->can_reorder = false;
       store->has_side_effects = true;
 
-      if (pred.file != IBC_REG_FILE_NONE) {
+      if (pred.file != IBC_FILE_NONE) {
          ibc_instr_set_predicate(&store->instr, pred,
                                  IBC_PREDICATE_NORMAL);
       }
@@ -1301,7 +1301,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       unsigned num_dest_comps = 0;
       if (op != IBC_INTRINSIC_OP_BTI_TYPED_WRITE) {
          num_dest_comps = nir_dest_num_components(instr->dest);
-         if (pred.file != IBC_REG_FILE_NONE) {
+         if (pred.file != IBC_FILE_NONE) {
             dest = ibc_UNDEF(b, IBC_TYPE_UD, num_dest_comps);
          } else {
             dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, num_dest_comps);
@@ -1314,7 +1314,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       image_op->can_reorder = false;
       image_op->has_side_effects = (op != IBC_INTRINSIC_OP_BTI_TYPED_READ);
 
-      if (pred.file != IBC_REG_FILE_NONE) {
+      if (pred.file != IBC_FILE_NONE) {
          ibc_instr_set_predicate(&image_op->instr, pred,
                                  IBC_PREDICATE_NORMAL);
       }
@@ -1328,7 +1328,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    if (nir_intrinsic_infos[instr->intrinsic].has_dest)
       ibc_write_nir_dest(nti, &instr->dest, dest);
    else
-      assert(dest.file == IBC_REG_FILE_NONE);
+      assert(dest.file == IBC_FILE_NONE);
 }
 
 static void
@@ -1344,7 +1344,7 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
 
    for (unsigned i = 0; i < instr->def.num_components; i++) {
       imm_srcs[i] = (ibc_ref) {
-         .file = IBC_REG_FILE_IMM,
+         .file = IBC_FILE_IMM,
          .type = type,
       };
       switch (instr->def.bit_size) {

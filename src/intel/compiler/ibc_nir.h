@@ -123,7 +123,7 @@ ibc_write_nir_ssa_def(struct nir_to_ibc_state *nti,
                       const nir_ssa_def *ndef,
                       ibc_ref src)
 {
-   assert(src.file == IBC_REG_FILE_LOGICAL);
+   assert(src.file == IBC_FILE_LOGICAL);
    assert(src.reg->is_wlr);
 
    /* If we get handed something that isn't a "simple" src, we need to insert
@@ -153,7 +153,7 @@ ibc_write_nir_reg(struct nir_to_ibc_state *nti,
                   const nir_register *nreg,
                   ibc_ref src)
 {
-   assert(src.file == IBC_REG_FILE_LOGICAL);
+   assert(src.file == IBC_FILE_LOGICAL);
    assert(src.reg->is_wlr);
 
    /* If we get handed something that isn't a "simple" src, we need to insert
@@ -166,7 +166,7 @@ ibc_write_nir_reg(struct nir_to_ibc_state *nti,
    }
 
    ibc_reg *dest_reg = (ibc_reg *)nti->reg_to_reg[nreg->index];
-   assert(dest_reg->file == IBC_REG_FILE_LOGICAL);
+   assert(dest_reg->file == IBC_FILE_LOGICAL);
 
    /* IBC's handling of partial writes is such that we can harmlessly grow
     * the register to fit what we need for any writes.  Liveness and register

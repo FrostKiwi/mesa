@@ -39,8 +39,7 @@ instr_is_predicated(ibc_instr *instr)
 static bool
 ref_has_live_data(const ibc_ref *ref, const ibc_live_intervals *live)
 {
-   if (ref->file == IBC_REG_FILE_NONE ||
-       ref->file == IBC_REG_FILE_IMM)
+   if (ref->file == IBC_FILE_NONE || ref->file == IBC_FILE_IMM)
       return false;
 
    return ref->reg != NULL && ref->reg->index < live->num_regs;
@@ -60,7 +59,7 @@ record_reg_write_sizes(ibc_ref *ref,
    ibc_reg_live_intervals *rli = &live->regs[ref->reg->index];
    unsigned byte_size = DIV_ROUND_UP(ibc_type_bit_size(ref->type), 8);
 
-   if (ref->file == IBC_REG_FILE_FLAG && ref->type != IBC_TYPE_FLAG) {
+   if (ref->file == IBC_FILE_FLAG && ref->type != IBC_TYPE_FLAG) {
       simd_width = ibc_type_bit_size(ref->type);
       byte_size = 1;
    }
@@ -92,10 +91,10 @@ reg_num_chunks(const ibc_reg *reg, ibc_live_intervals *live)
    const unsigned simd_shift = ffs(simd_divisor) - 1;
 
    switch (reg->file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
       unreachable("Not an allocatable register file");
-   case IBC_REG_FILE_LOGICAL: {
+   case IBC_FILE_LOGICAL: {
       const unsigned reg_byte_size = DIV_ROUND_UP(reg->logical.bit_size, 8);
       assert(reg_byte_size % byte_divisor == 0);
       const unsigned chunk_stride = reg_byte_size >> byte_shift;
@@ -106,10 +105,10 @@ reg_num_chunks(const ibc_reg *reg, ibc_live_intervals *live)
 
       return chunk_stride * reg_simd_width_chunks * reg->logical.num_comps;
    }
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       assert(reg->hw_grf.size % byte_divisor == 0);
       return reg->hw_grf.size >> byte_shift;
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       assert(reg->flag.bits % simd_divisor == 0);
       return reg->flag.bits >> simd_shift;
    }
@@ -147,11 +146,11 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
       DIV_ROUND_UP(ibc_type_bit_size(ref->type), 8);
 
    switch (ref->file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
       unreachable("Not an allocatable register file");
 
-   case IBC_REG_FILE_LOGICAL: {
+   case IBC_FILE_LOGICAL: {
       assert(num_comps >= 0);
 
       const unsigned reg_byte_size = DIV_ROUND_UP(reg->logical.bit_size, 8);
@@ -217,7 +216,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
       break;
    }
 
-   case IBC_REG_FILE_HW_GRF: {
+   case IBC_FILE_HW_GRF: {
       if (num_comps < 0) {
          assert(ref->hw_grf.hstride * ref->hw_grf.width == ref->hw_grf.vstride);
          assert(num_bytes % byte_divisor == 0);
@@ -282,7 +281,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
       break;
    }
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       assert(num_comps == 1);
       if (ref->type != IBC_TYPE_FLAG) {
          simd_group = ref->flag.bit;
