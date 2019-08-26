@@ -582,14 +582,12 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
        * However, in vec4 tessellation shaders, these loads operate by
        * actually pulling from memory.
        */
-      if (!brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
-         const bool is_vec4_tessellation = !is_scalar &&
-            (nir->info.stage == MESA_SHADER_TESS_CTRL ||
-             nir->info.stage == MESA_SHADER_TESS_EVAL);
-         OPT(nir_opt_peephole_select, 0, !is_vec4_tessellation, false);
-         OPT(nir_opt_peephole_select, 8, !is_vec4_tessellation,
-             compiler->devinfo->gen >= 6);
-      }
+      const bool is_vec4_tessellation = !is_scalar &&
+         (nir->info.stage == MESA_SHADER_TESS_CTRL ||
+          nir->info.stage == MESA_SHADER_TESS_EVAL);
+      OPT(nir_opt_peephole_select, 0, !is_vec4_tessellation, false);
+      OPT(nir_opt_peephole_select, 8, !is_vec4_tessellation,
+          compiler->devinfo->gen >= 6);
 
       OPT(nir_opt_intrinsics);
       if (!brw_nir_should_use_ibc(nir, compiler, is_scalar))
@@ -619,8 +617,7 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
          OPT(nir_copy_prop);
          OPT(nir_opt_dce);
       }
-      if (!brw_nir_should_use_ibc(nir, compiler, is_scalar))
-         OPT(nir_opt_if, false);
+      OPT(nir_opt_if, false);
       OPT(nir_opt_conditional_discard);
       if (nir->options->max_unroll_iterations != 0) {
          OPT(nir_opt_loop_unroll, loop_indirect_mask);
@@ -1099,14 +1096,12 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
        *
        * See brw_nir_optimize for the explanation of is_vec4_tessellation.
        */
-      if (!brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
-         const bool is_vec4_tessellation = !is_scalar &&
-            (nir->info.stage == MESA_SHADER_TESS_CTRL ||
-             nir->info.stage == MESA_SHADER_TESS_EVAL);
-         OPT(nir_opt_peephole_select, 0, is_vec4_tessellation, false);
-         OPT(nir_opt_peephole_select, 1, is_vec4_tessellation,
-             compiler->devinfo->gen >= 6);
-      }
+      const bool is_vec4_tessellation = !is_scalar &&
+         (nir->info.stage == MESA_SHADER_TESS_CTRL ||
+          nir->info.stage == MESA_SHADER_TESS_EVAL);
+      OPT(nir_opt_peephole_select, 0, is_vec4_tessellation, false);
+      OPT(nir_opt_peephole_select, 1, is_vec4_tessellation,
+          compiler->devinfo->gen >= 6);
    }
 
    do {
