@@ -281,10 +281,8 @@ ref_is_null_or_zero(ibc_ref ref)
 static ibc_ref
 ibc_comp_ref(ibc_ref ref, unsigned comp)
 {
-   if (ref.file == IBC_REG_FILE_IMM) {
-      assert(comp == 0);
+   if (comp == 0)
       return ref;
-   }
 
    assert(ref.file == IBC_REG_FILE_LOGICAL);
    ref.logical.comp += comp;
