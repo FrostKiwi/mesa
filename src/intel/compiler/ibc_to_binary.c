@@ -470,6 +470,22 @@ generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
       generate_pln(p, intrin, dest, src[0], src[1]);
       break;
 
+   case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE: {
+      assert(src[0].type == BRW_REGISTER_TYPE_F);
+      assert(dest.type == BRW_REGISTER_TYPE_F);
+
+      struct brw_reg src0 = stride(src[0], 4, 4, 1);
+      struct brw_reg src1 = stride(src[0], 4, 4, 1);
+      src0.swizzle = BRW_SWIZZLE_XYXY;
+      src1.swizzle = BRW_SWIZZLE_ZWZW;
+
+      brw_push_insn_state(p);
+      brw_set_default_access_mode(p, BRW_ALIGN_16);
+      brw_ADD(p, dest, negate(src0), src1);
+      brw_pop_insn_state(p);
+      break;
+   }
+
    default:
       unreachable("Intrinsic should have been lowered");
    }
