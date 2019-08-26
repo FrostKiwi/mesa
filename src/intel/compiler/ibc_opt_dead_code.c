@@ -27,20 +27,20 @@ static bool
 ref_is_alive(ibc_ref *ref)
 {
    switch (ref->file) {
-   case IBC_REG_FILE_NONE:
+   case IBC_FILE_NONE:
       return false;
 
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_IMM:
       unreachable("Invalid destination register file");
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       return ref->reg->index;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       /* If it's a fixed HW reg, we consider it live */
       return ref->reg == NULL || ref->reg->index;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       /* If it's a fixed HW reg, we consider it live */
       return ref->reg == NULL || ref->reg->index;
    }
@@ -57,8 +57,7 @@ mark_ref(ibc_ref *ref,
 {
    bool *progress = _progress;
 
-   if (ref->file == IBC_REG_FILE_NONE ||
-       ref->file == IBC_REG_FILE_IMM)
+   if (ref->file == IBC_FILE_NONE || ref->file == IBC_FILE_IMM)
       return true;
 
    if (ref->reg && ref->reg->index == 0) {

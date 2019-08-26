@@ -57,7 +57,7 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
    struct ibc_cs_payload *payload = (struct ibc_cs_payload *)nti->payload;
    ibc_builder *b = &nti->b;
 
-   ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
+   ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_id:
       dest = ibc_MOV(b, IBC_TYPE_UD, payload->subgroup_id);
@@ -114,7 +114,7 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
    if (nir_intrinsic_infos[instr->intrinsic].has_dest)
       ibc_write_nir_dest(nti, &instr->dest, dest);
    else
-      assert(dest.file == IBC_REG_FILE_NONE);
+      assert(dest.file == IBC_FILE_NONE);
 
    return true;
 }

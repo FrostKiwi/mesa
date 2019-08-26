@@ -127,12 +127,12 @@ ibc_type_bit_type(enum ibc_type t)
 }
 
 /** An enum representing the different types of IBC registers */
-enum PACKED ibc_reg_file {
-   IBC_REG_FILE_NONE,
-   IBC_REG_FILE_IMM,
-   IBC_REG_FILE_LOGICAL,
-   IBC_REG_FILE_HW_GRF,
-   IBC_REG_FILE_FLAG,
+enum PACKED ibc_file {
+   IBC_FILE_NONE,
+   IBC_FILE_IMM,
+   IBC_FILE_LOGICAL,
+   IBC_FILE_HW_GRF,
+   IBC_FILE_FLAG,
 };
 
 
@@ -222,7 +222,7 @@ typedef struct ibc_flag_reg {
 /** A struct representing a register */
 typedef struct ibc_reg {
    /** Register type */
-   enum ibc_reg_file file;
+   enum ibc_file file;
 
    /** True if this register is in write-lock-read form.
     *
@@ -404,7 +404,7 @@ struct ibc_ref_flag {
  */
 typedef struct ibc_ref {
    /** Register file or IMM for immediate or NONE for null */
-   enum ibc_reg_file file;
+   enum ibc_file file;
 
    /** Type with which the register or immediate is interpreted */
    enum ibc_type type;
@@ -456,7 +456,7 @@ ibc_ref_as_int(ibc_ref ref)
 static inline bool
 ibc_ref_read_is_static(ibc_ref ref)
 {
-   if (ref.file == IBC_REG_FILE_NONE || ref.file == IBC_REG_FILE_IMM)
+   if (ref.file == IBC_FILE_NONE || ref.file == IBC_FILE_IMM)
       return true;
 
    return ref.reg && ref.reg->is_wlr;
@@ -469,17 +469,17 @@ static inline bool
 ibc_ref_read_is_uniform(ibc_ref ref)
 {
    switch (ref.file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
       return true;
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       return ref.logical.broadcast || ref.reg->logical.simd_width == 1;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       return ref.hw_grf.vstride == 0 && ref.hw_grf.hstride == 0;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       return ibc_type_bit_size(ref.type) > 1;
    }
 
@@ -490,16 +490,16 @@ static inline void
 ibc_ref_simd_slice(ibc_ref *ref, uint8_t rel_simd_group)
 {
    switch (ref->file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
+   case IBC_FILE_LOGICAL:
       return;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       ibc_hw_grf_simd_slice(&ref->hw_grf, rel_simd_group);
       return;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       if (ref->type == IBC_TYPE_FLAG) {
          ref->flag.bit += rel_simd_group;
       } else {

@@ -56,7 +56,7 @@ mark_splits(ibc_ref *ref,
             uint8_t simd_width,
             void *_state)
 {
-   if (ref->file != IBC_REG_FILE_LOGICAL)
+   if (ref->file != IBC_FILE_LOGICAL)
       return true;
 
    struct split_regs_state *state = _state;
@@ -90,7 +90,7 @@ rewrite_ref_if_split(ibc_ref *ref,
                      uint8_t simd_width,
                      void *_state)
 {
-   if (ref->file != IBC_REG_FILE_LOGICAL)
+   if (ref->file != IBC_FILE_LOGICAL)
       return true;
 
    struct split_regs_state *state = _state;
@@ -147,7 +147,7 @@ ibc_split_logical_regs(ibc_shader *shader)
 
    unsigned num_logical = 0;
    ibc_foreach_reg(reg, shader) {
-      if (reg->file == IBC_REG_FILE_LOGICAL)
+      if (reg->file == IBC_FILE_LOGICAL)
          reg->index = num_logical++;
    }
 
@@ -155,7 +155,7 @@ ibc_split_logical_regs(ibc_shader *shader)
 
    unsigned reg_idx = 0;
    ibc_foreach_reg(reg, shader) {
-      if (reg->file == IBC_REG_FILE_LOGICAL) {
+      if (reg->file == IBC_FILE_LOGICAL) {
          assert(reg_idx == reg->index);
          state.splits[reg_idx++].reg = reg;
       }

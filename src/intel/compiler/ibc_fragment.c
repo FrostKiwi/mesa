@@ -71,7 +71,7 @@ static void
 set_ref_or_zip(ibc_builder *b, ibc_ref *dest, ibc_ref src,
                unsigned num_comps)
 {
-   if (dest->file == IBC_REG_FILE_NONE) {
+   if (dest->file == IBC_FILE_NONE) {
       *dest = src;
    } else {
       *dest = ibc_SIMD_ZIP2(b, *dest, src, num_comps);
@@ -194,7 +194,7 @@ ibc_frag_coord(struct nir_to_ibc_state *nti)
          ibc_hw_grf_reg_create(b->shader, b->simd_width * 4, REG_SIZE);
 
       ibc_ref add_src = payload->pixel[b->simd_group / 16];
-      assert(add_src.file == IBC_REG_FILE_HW_GRF);
+      assert(add_src.file == IBC_FILE_HW_GRF);
       add_src.type = IBC_TYPE_UW;
       add_src.hw_grf.byte += 8;
       add_src.hw_grf.vstride = 1 * ibc_type_byte_size(IBC_TYPE_UW);
@@ -241,7 +241,7 @@ ibc_pixel_mask_as_flag(struct nir_to_ibc_state *nti)
    ibc_builder_push_scalar(b);
    for (unsigned g = 0; g < b->shader->simd_width; g += 16) {
       ibc_ref pix_mask = payload->pixel[g / 16];
-      assert(pix_mask.file == IBC_REG_FILE_HW_GRF);
+      assert(pix_mask.file == IBC_FILE_HW_GRF);
       pix_mask.hw_grf.byte += 7 * sizeof(uint32_t);
       pix_mask.type = IBC_TYPE_UW;
 
@@ -262,7 +262,7 @@ ibc_emit_fs_sample_live_predicate(struct nir_to_ibc_state *nti)
    struct nir_fs_to_ibc_state *nti_fs = nti->stage_state;
 
    if (prog_data->uses_kill) {
-      assert(nti_fs->live_pix.file == IBC_REG_FILE_FLAG);
+      assert(nti_fs->live_pix.file == IBC_FILE_FLAG);
       assert(nti_fs->live_pix.type == IBC_TYPE_FLAG);
       return nti_fs->live_pix;
    } else {
@@ -310,7 +310,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    struct nir_fs_to_ibc_state *nti_fs = nti->stage_state;
    ibc_builder *b = &nti->b;
 
-   ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
+   ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_frag_coord:
       dest = ibc_frag_coord(nti);
@@ -384,7 +384,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       ibc_ref dest_comps[4];
       for (unsigned int i = 0; i < instr->num_components; i++) {
          dest_comps[i] = payload->inputs[slot][comp + i];
-         assert(dest_comps[i].file == IBC_REG_FILE_LOGICAL);
+         assert(dest_comps[i].file == IBC_FILE_LOGICAL);
          dest_comps[i].logical.comp = 3;
       }
       dest = ibc_VEC(b, dest_comps, instr->num_components);
@@ -416,7 +416,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       else
          unreachable("Invalid location");
 
-      if (output->file == IBC_REG_FILE_NONE) {
+      if (output->file == IBC_FILE_NONE) {
          const unsigned num_comps = (l == FRAG_RESULT_DEPTH ||
                                      l == FRAG_RESULT_STENCIL ||
                                      l == FRAG_RESULT_SAMPLE_MASK) ? 1 : 4;
@@ -468,7 +468,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    if (nir_intrinsic_infos[instr->intrinsic].has_dest)
       ibc_write_nir_dest(nti, &instr->dest, dest);
    else
-      assert(dest.file == IBC_REG_FILE_NONE);
+      assert(dest.file == IBC_FILE_NONE);
 
    return true;
 }
@@ -516,7 +516,7 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
    };
 
    for (unsigned i = 0; i < IBC_FB_WRITE_NUM_SRCS; i++) {
-      if (srcs[i].ref.file == IBC_REG_FILE_NONE)
+      if (srcs[i].ref.file == IBC_FILE_NONE)
          srcs[i].num_comps = 0;
    }
 
@@ -542,7 +542,7 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
    struct brw_wm_prog_data *prog_data = (void *)nti->prog_data;
    struct nir_fs_to_ibc_state *nti_fs = nti->stage_state;
 
-   if (nti_fs->out.stencil.file != IBC_REG_FILE_NONE) {
+   if (nti_fs->out.stencil.file != IBC_FILE_NONE) {
       /* From the 'Render Target Write message' section of the docs:
        * "Output Stencil is not supported with SIMD16 Render Target Write
        * Messages."
@@ -557,22 +557,22 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
     */
    prog_data->replicate_alpha = key->alpha_test_replicate_alpha ||
       (key->nr_color_regions > 1 && key->alpha_to_coverage &&
-       nti_fs->out.sample_mask.file == IBC_REG_FILE_NONE);
+       nti_fs->out.sample_mask.file == IBC_FILE_NONE);
 
    /* From the SKL PRM, Volume 7, "Alpha Coverage":
     *  "If Pixel Shader outputs oMask, AlphaToCoverage is disabled in
     *   hardware, regardless of the state setting for this feature."
     */
    if (key->alpha_to_coverage &&
-       nti_fs->out.sample_mask.file != IBC_REG_FILE_NONE &&
-       nti_fs->out.color[0].file != IBC_REG_FILE_NONE)
+       nti_fs->out.sample_mask.file != IBC_FILE_NONE &&
+       nti_fs->out.color[0].file != IBC_FILE_NONE)
       ibc_emit_alhpa_to_coverage_workaround(nti);
 
    ibc_intrinsic_instr *last_fb_write = NULL;
    if (key->nr_color_regions > 0) {
       for (unsigned target = 0; target < key->nr_color_regions; target++) {
          /* Skip over outputs that weren't written. */
-         if (nti_fs->out.color[target].file == IBC_REG_FILE_NONE)
+         if (nti_fs->out.color[target].file == IBC_FILE_NONE)
             continue;
 
          ibc_ref src0_alpha = {};
@@ -605,7 +605,7 @@ ibc_fb_write_instr_max_simd_width(const ibc_intrinsic_instr *write,
                                   const struct gen_device_info *devinfo)
 {
    assert(write->op == IBC_INTRINSIC_OP_FB_WRITE);
-   if (write->src[IBC_FB_WRITE_SRC_COLOR1].ref.file != IBC_REG_FILE_NONE)
+   if (write->src[IBC_FB_WRITE_SRC_COLOR1].ref.file != IBC_FILE_NONE)
       return 8; /* Dual-source FB writes are unsupported in SIMD16 mode. */
    else
       return 16;
@@ -614,7 +614,7 @@ ibc_fb_write_instr_max_simd_width(const ibc_intrinsic_instr *write,
 static ibc_ref
 move_to_payload(ibc_builder *b, ibc_ref src, unsigned num_comps)
 {
-   if (src.file == IBC_REG_FILE_NONE) {
+   if (src.file == IBC_FILE_NONE) {
       return ibc_builder_new_logical_reg(b, IBC_TYPE_F, num_comps);
    } else {
       ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
@@ -636,10 +636,10 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_send_instr *send,
    assert(!write->src[IBC_FB_WRITE_SRC_DEPTH].ref.file);
    assert(!write->src[IBC_FB_WRITE_SRC_STENCIL].ref.file);
    assert(!write->src[IBC_FB_WRITE_SRC_OMASK].ref.file);
-   assert(write->src[IBC_FB_WRITE_SRC_TARGET].ref.file == IBC_REG_FILE_IMM);
+   assert(write->src[IBC_FB_WRITE_SRC_TARGET].ref.file == IBC_FILE_IMM);
    const unsigned target =
       *(uint32_t *)write->src[IBC_FB_WRITE_SRC_TARGET].ref.imm;
-   assert(write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.file == IBC_REG_FILE_IMM);
+   assert(write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.file == IBC_FILE_IMM);
    const bool last_rt =
       *(uint32_t *)write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.imm;
    bool has_header = false;
@@ -648,7 +648,7 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_send_instr *send,
    send->mlen = 4 * (write->instr.simd_width / 8);
 
    uint32_t msg_control;
-   if (color1.file != IBC_REG_FILE_NONE) {
+   if (color1.file != IBC_FILE_NONE) {
       assert(write->instr.simd_width == 8);
       msg_control = write->instr.simd_group % 16 == 0 ?
             BRW_DATAPORT_RENDER_TARGET_WRITE_SIMD8_DUAL_SOURCE_SUBSPAN01 :

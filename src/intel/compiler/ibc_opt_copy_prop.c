@@ -39,25 +39,25 @@ try_compose_refs(ibc_ref *ref_out,
                  unsigned inner_simd_width,
                  bool supports_imm)
 {
-   assert(outer.file == IBC_REG_FILE_LOGICAL);
-   assert(inner.file != IBC_REG_FILE_NONE);
+   assert(outer.file == IBC_FILE_LOGICAL);
+   assert(inner.file != IBC_FILE_NONE);
    assert(ibc_type_bit_size(outer.type) <= ibc_type_bit_size(inner.type));
 
    /* The source must be static */
    if (!ibc_ref_read_is_static(inner))
       return false;
 
-   if (inner.file == IBC_REG_FILE_IMM && !supports_imm)
+   if (inner.file == IBC_FILE_IMM && !supports_imm)
       return false;
 
    ibc_ref ref = inner;
    ref.type = outer.type;
 
    switch (ref.file) {
-   case IBC_REG_FILE_NONE:
+   case IBC_FILE_NONE:
       break;
 
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_IMM:
       assert(ref.logical.comp == 0);
       if (ref.logical.byte) {
          memmove(ref.imm, ref.imm + ref.logical.byte,
@@ -65,7 +65,7 @@ try_compose_refs(ibc_ref *ref_out,
       }
       break;
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       ref.logical.byte += outer.logical.byte;
       ref.logical.comp += outer.logical.comp;
       if (outer.logical.broadcast && !inner.logical.broadcast) {
@@ -77,7 +77,7 @@ try_compose_refs(ibc_ref *ref_out,
       }
       break;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       /* Components aren't well-defined for HW grfs */
       assert(outer.logical.comp == 0);
       if (outer.logical.broadcast) {
@@ -97,7 +97,7 @@ try_compose_refs(ibc_ref *ref_out,
       ibc_hw_grf_add_byte_offset(&ref.hw_grf, outer.logical.byte);
       break;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       assert(ibc_type_bit_size(outer.type) != 64);
       /* Flags can only be accessed as a flag or as 16 or 32-bit */
       if (ibc_type_bit_size(outer.type) == 8)
@@ -184,7 +184,7 @@ ref_fills_reg(ibc_ref *ref,
               uint8_t simd_group, uint8_t simd_width,
               UNUSED void *_state)
 {
-   if (ref->file != IBC_REG_FILE_LOGICAL || num_comps < 0)
+   if (ref->file != IBC_FILE_LOGICAL || num_comps < 0)
       return false;
 
    assert(!ref->logical.broadcast);
@@ -200,7 +200,7 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
                   uint8_t simd_group, uint8_t simd_width,
                   bool supports_imm)
 {
-   if (ref->file != IBC_REG_FILE_LOGICAL)
+   if (ref->file != IBC_FILE_LOGICAL)
       return false;
 
    ibc_instr *ssa_instr = ibc_reg_ssa_instr(ref->reg);
@@ -219,7 +219,7 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
       if (mov->op != IBC_ALU_OP_MOV)
          return false;
 
-      if (mov->src[0].ref.file == IBC_REG_FILE_IMM)
+      if (mov->src[0].ref.file == IBC_FILE_IMM)
          assert(mov->src[0].mod == IBC_ALU_SRC_MOD_NONE);
 
       /* Cannot saturate or type convert */
@@ -256,7 +256,7 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
          if (new_mods & ~ibc_alu_op_infos[alu->op].supported_src_mods)
             return false;
 
-         if (new_ref.file == IBC_REG_FILE_IMM) {
+         if (new_ref.file == IBC_FILE_IMM) {
             ibc_imm_apply_mod(&new_ref, new_mods);
             alu->src[alu_src_idx].mod = IBC_ALU_SRC_MOD_NONE;
          } else {
@@ -350,7 +350,7 @@ alu_instr_src_supports_imm(const ibc_alu_instr *alu, unsigned src_idx)
    case 1:
       return true;
    case 2:
-      return src_idx == 1 || (alu->src[1].ref.file != IBC_REG_FILE_IMM &&
+      return src_idx == 1 || (alu->src[1].ref.file != IBC_FILE_IMM &&
                               can_flip_alu_instr(alu));
    default:
       return false;
@@ -363,7 +363,7 @@ flip_alu_instr_if_needed(ibc_alu_instr *alu)
    if (ibc_alu_op_infos[alu->op].num_srcs != 2)
       return;
 
-   if (alu->src[0].ref.file != IBC_REG_FILE_IMM)
+   if (alu->src[0].ref.file != IBC_FILE_IMM)
       return;
 
    assert(can_flip_alu_instr(alu));
