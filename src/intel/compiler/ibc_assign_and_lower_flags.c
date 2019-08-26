@@ -87,7 +87,7 @@ cmp_bit_size(ibc_alu_instr *cmp)
 static int8_t
 logical_flag_reg_bit_size(const ibc_reg *reg)
 {
-   assert(reg->file == IBC_REG_FILE_LOGICAL);
+   assert(reg->file == IBC_FILE_LOGICAL);
    assert(reg->logical.bit_size == 1);
    assert(reg->is_wlr);
 
@@ -159,10 +159,10 @@ static unsigned
 flag_reg_num_bits(const ibc_reg *reg)
 {
    switch (reg->file) {
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       assert(reg->logical.bit_size == 1);
       return reg->logical.simd_width;
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       return reg->flag.bits;
    default:
       unreachable("Invalid flag register type");
@@ -235,12 +235,12 @@ static void
 ensure_flag_spill_grf(const ibc_reg *flag,
                       struct ibc_assign_flags_state *state)
 {
-   if (state->regs[flag->index].vector.file != IBC_REG_FILE_NONE ||
-       state->regs[flag->index].scalar.file != IBC_REG_FILE_NONE)
+   if (state->regs[flag->index].vector.file != IBC_FILE_NONE ||
+       state->regs[flag->index].scalar.file != IBC_FILE_NONE)
       return;
 
-   assert(flag->file == IBC_REG_FILE_LOGICAL ||
-          flag->file == IBC_REG_FILE_FLAG);
+   assert(flag->file == IBC_FILE_LOGICAL ||
+          flag->file == IBC_FILE_FLAG);
 
    const unsigned bits = flag_reg_num_bits(flag);
    ibc_reg *scalar = ibc_logical_reg_create(state->builder.shader,
@@ -280,7 +280,7 @@ load_scalar_if_needed(unsigned chunk, struct ibc_assign_flags_state *state)
    ensure_flag_spill_grf(flag, state);
 
    ibc_ref scalar = state->regs[flag->index].scalar;
-   if (scalar.file == IBC_REG_FILE_NONE)
+   if (scalar.file == IBC_FILE_NONE)
       return;
 
    enum flag_rep all_valid = FLAG_REP_ALL;
@@ -314,10 +314,10 @@ load_vector_if_needed(unsigned chunk,
    ensure_flag_spill_grf(flag, state);
 
    ibc_ref vector = state->regs[flag->index].vector;
-   if (vector.file == IBC_REG_FILE_NONE)
+   if (vector.file == IBC_FILE_NONE)
       return;
 
-   assert(vector.file == IBC_REG_FILE_LOGICAL);
+   assert(vector.file == IBC_FILE_LOGICAL);
    if (flag->logical.simd_width < FLAG_CHUNK_BITS) {
       assert(start_chunk == 0 && num_chunks == 1);
       if (!(state->valid[chunk] & FLAG_REP_VECTOR)) {
@@ -393,7 +393,7 @@ load_from_scalar(unsigned chunk, struct ibc_assign_flags_state *state)
    ibc_builder *b = &state->builder;
    const ibc_reg *flag = state->assign[chunk];
    ibc_ref scalar = state->regs[flag->index].scalar;
-   assert(scalar.file == IBC_REG_FILE_LOGICAL);
+   assert(scalar.file == IBC_FILE_LOGICAL);
 
    const unsigned num_chunks = flag_reg_num_chunks(flag);
    for (unsigned c = 0; c < num_chunks; c++) {
@@ -432,7 +432,7 @@ load_flag_if_needed(unsigned chunk, unsigned start_chunk, unsigned num_chunks,
    if (is_write) {
       if ((start_chunk > 0 ||
            start_chunk + num_chunks < flag_reg_num_chunks(flag)) &&
-          state->regs[flag->index].vector.file == IBC_REG_FILE_NONE &&
+          state->regs[flag->index].vector.file == IBC_FILE_NONE &&
           !(all_valid & FLAG_REP_FLAG)) {
          /* If we're a partial write and we don't have a scalar representation
           * and not all of the flag values are valid then we have to do a load
@@ -451,15 +451,15 @@ load_flag_if_needed(unsigned chunk, unsigned start_chunk, unsigned num_chunks,
     * it contributes less to register pressure so extending its live range
     * costs less.
     */
-   if (state->regs[flag->index].scalar.file != IBC_REG_FILE_NONE &&
+   if (state->regs[flag->index].scalar.file != IBC_FILE_NONE &&
        (all_valid & FLAG_REP_SCALAR)) {
       load_from_scalar(chunk, state);
       return;
    }
 
-   if (state->regs[flag->index].vector.file != IBC_REG_FILE_NONE) {
+   if (state->regs[flag->index].vector.file != IBC_FILE_NONE) {
       ibc_ref vector = state->regs[flag->index].vector;
-      assert(vector.file == IBC_REG_FILE_LOGICAL);
+      assert(vector.file == IBC_FILE_LOGICAL);
 
       if (flag_reg_num_bits(flag) < FLAG_CHUNK_BITS) {
          assert(start_chunk == 0 && num_chunks == 1);
@@ -512,7 +512,7 @@ load_flag_if_needed(unsigned chunk, unsigned start_chunk, unsigned num_chunks,
       return;
    }
 
-   if (state->regs[flag->index].scalar.file != IBC_REG_FILE_NONE) {
+   if (state->regs[flag->index].scalar.file != IBC_FILE_NONE) {
       load_from_scalar(chunk, state);
       return;
    }
@@ -551,7 +551,7 @@ find_or_assign_flag(const ibc_reg *reg, uint32_t ip, bool opportunistic,
 
    const unsigned num_chunks = flag_reg_num_chunks(reg);
    unsigned align_mul, align_offset;
-   if (reg->file == IBC_REG_FILE_LOGICAL) {
+   if (reg->file == IBC_FILE_LOGICAL) {
       unsigned align_mul_bits =
          MAX2(16, reg->logical.simd_group + reg->logical.simd_width);
       assert(align_mul_bits % FLAG_CHUNK_BITS == 0);
@@ -559,7 +559,7 @@ find_or_assign_flag(const ibc_reg *reg, uint32_t ip, bool opportunistic,
       align_mul = align_mul_bits / FLAG_CHUNK_BITS;
       align_offset = (reg->logical.simd_group / FLAG_CHUNK_BITS) % align_mul;
    } else {
-      assert(reg->file == IBC_REG_FILE_FLAG);
+      assert(reg->file == IBC_FILE_FLAG);
       assert(reg->flag.align_mul >= 16);
       assert(reg->flag.align_offset % FLAG_CHUNK_BITS == 0);
       align_mul = reg->flag.align_mul / FLAG_CHUNK_BITS;
@@ -656,17 +656,17 @@ flag_ref_chunk_range(const ibc_ref *ref,
    if (ref->type == IBC_TYPE_FLAG) {
       if (flag_reg_num_bits(ref->reg) < FLAG_CHUNK_BITS) {
          assert(flag_reg_num_bits(ref->reg) == 1);
-         if (ref->file == IBC_REG_FILE_LOGICAL)
+         if (ref->file == IBC_FILE_LOGICAL)
             assert(ref->reg->logical.simd_group == 0);
          assert(simd_group == 0 && simd_width == 1);
          *start_chunk = 0;
          *num_chunks = 1;
       } else {
          unsigned start_bit;
-         if (ref->file == IBC_REG_FILE_LOGICAL) {
+         if (ref->file == IBC_FILE_LOGICAL) {
             start_bit = simd_group - ref->reg->logical.simd_group;
          } else {
-            assert(ref->file == IBC_REG_FILE_FLAG);
+            assert(ref->file == IBC_FILE_FLAG);
             start_bit = ref->flag.bit;
          }
          assert(start_bit % FLAG_CHUNK_BITS == 0);
@@ -675,7 +675,7 @@ flag_ref_chunk_range(const ibc_ref *ref,
          *num_chunks = simd_width / FLAG_CHUNK_BITS;
       }
    } else {
-      assert(ref->file == IBC_REG_FILE_FLAG);
+      assert(ref->file == IBC_FILE_FLAG);
       assert(ref->flag.bit % FLAG_CHUNK_BITS == 0);
       *start_chunk = ref->flag.bit / FLAG_CHUNK_BITS;
       *num_chunks = ibc_type_bit_size(ref->type) / FLAG_CHUNK_BITS;
@@ -728,7 +728,7 @@ rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
                  uint8_t simd_group, uint8_t simd_width,
                  struct ibc_assign_flags_state *state)
 {
-   if (ref->file == IBC_REG_FILE_LOGICAL && ref->type == IBC_TYPE_FLAG) {
+   if (ref->file == IBC_FILE_LOGICAL && ref->type == IBC_TYPE_FLAG) {
       assert(ref->reg->index < state->live->num_regs);
 
       unsigned start_chunk, num_chunks;
@@ -756,7 +756,7 @@ rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
          for (unsigned c = 0; c < num_chunks; c++)
             state->valid[chunk + start_chunk + c] = FLAG_REP_VECTOR;
       }
-   } else if (ref->file == IBC_REG_FILE_FLAG && ref->reg) {
+   } else if (ref->file == IBC_FILE_FLAG && ref->reg) {
       /* We should only get here for regular sources and destinations that
        * access flags.
        */
@@ -785,7 +785,7 @@ rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
              */
             load_scalar_if_needed(chunk, state);
             ibc_ref scalar = state->regs[ref->reg->index].scalar;
-            assert(scalar.file != IBC_REG_FILE_NONE);
+            assert(scalar.file != IBC_FILE_NONE);
             scalar.type = ref->type;
             *ref = scalar;
          }
@@ -818,8 +818,8 @@ rewrite_flag_write_cb(ibc_reg_write *write, ibc_ref *ref, void *_state)
 static bool
 is_flag_reg(const ibc_reg *reg)
 {
-   return (reg->file == IBC_REG_FILE_LOGICAL && reg->logical.bit_size == 1) ||
-          reg->file == IBC_REG_FILE_FLAG;
+   return (reg->file == IBC_FILE_LOGICAL && reg->logical.bit_size == 1) ||
+          reg->file == IBC_FILE_FLAG;
 }
 
 bool
@@ -853,12 +853,12 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
       if (!is_flag_reg(reg))
          continue;
 
-      if (reg->file == IBC_REG_FILE_FLAG) {
+      if (reg->file == IBC_FILE_FLAG) {
          state.regs[reg->index].read_as_flag = true;
          continue;
       }
 
-      assert(reg->file == IBC_REG_FILE_LOGICAL);
+      assert(reg->file == IBC_FILE_LOGICAL);
       assert(reg->logical.num_comps == 1);
 
       if (!reg->is_wlr) {
@@ -901,7 +901,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
       ibc_ref instr_flag = instr->flag;
       int chunk = -1;
 
-      if (instr->flag.file != IBC_REG_FILE_NONE) {
+      if (instr->flag.file != IBC_FILE_NONE) {
          assert(instr->flag.reg != NULL);
          chunk = find_or_assign_flag(instr->flag.reg, instr->index,
                                      false, /* opportunistic */
@@ -920,15 +920,15 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
          ibc_alu_instr *alu = ibc_instr_as_alu(instr);
          if (alu->op == IBC_ALU_OP_CMP) {
             /* We assume CMP always writes the flag as flag */
-            assert(alu->dest.file == IBC_REG_FILE_NONE);
-            assert(instr_flag.file != IBC_REG_FILE_NONE);
+            assert(alu->dest.file == IBC_FILE_NONE);
+            assert(instr_flag.file != IBC_FILE_NONE);
             assert(chunk >= 0 && state.assign[chunk] == instr_flag.reg);
 
             /* If the vector version matches, we can write to it directly and
              * avoid getting it out-of-sync.
              */
             ibc_ref vector = state.regs[instr_flag.reg->index].vector;
-            if (vector.file == IBC_REG_FILE_LOGICAL &&
+            if (vector.file == IBC_FILE_LOGICAL &&
                 vector.reg->logical.bit_size == cmp_bit_size(alu)) {
                vector.type = ibc_type_base_type(alu->src[0].ref.type) |
                              ibc_type_bit_size(vector.type);
@@ -941,7 +941,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
                for (unsigned c = 0; c < num_chunks; c++)
                   state.valid[chunk + start_chunk + c] |= FLAG_REP_VECTOR;
             }
-         } else if (alu->dest.file == IBC_REG_FILE_LOGICAL &&
+         } else if (alu->dest.file == IBC_FILE_LOGICAL &&
                     alu->dest.reg->logical.bit_size == 1 &&
                     alu->op != IBC_ALU_OP_SEL &&
                     alu->instr.predicate == IBC_PREDICATE_NONE &&
@@ -970,7 +970,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
 
       if (instr->type == IBC_INSTR_TYPE_ALU) {
          ibc_alu_instr *alu = ibc_instr_as_alu(instr);
-         if (alu->dest.file == IBC_REG_FILE_NONE &&
+         if (alu->dest.file == IBC_FILE_NONE &&
              alu->dest.type == IBC_TYPE_FLAG)
             alu->dest.type = alu->src[0].ref.type;
       }

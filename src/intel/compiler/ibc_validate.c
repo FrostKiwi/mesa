@@ -71,7 +71,7 @@ static void
 ibc_validate_null_ref(struct ibc_validate_state *s,
                       const ibc_ref *ref)
 {
-   ibc_assert(s, ref->file == IBC_REG_FILE_NONE);
+   ibc_assert(s, ref->file == IBC_FILE_NONE);
    ibc_assert(s, ref->reg == NULL);
 }
 
@@ -83,10 +83,10 @@ ref_is_none_or_reg(ibc_ref *ref,
                    UNUSED uint8_t simd_width,
                    void *_reg)
 {
-   if (ref->file == IBC_REG_FILE_NONE)
+   if (ref->file == IBC_FILE_NONE)
       return true;
 
-   if (ref->file == IBC_REG_FILE_IMM)
+   if (ref->file == IBC_FILE_IMM)
       return false;
 
    return ref->reg == _reg;
@@ -99,22 +99,22 @@ ibc_validate_ref(struct ibc_validate_state *s,
                  unsigned ref_simd_group, unsigned ref_simd_width)
 {
    switch (ref->file) {
-   case IBC_REG_FILE_NONE:
+   case IBC_FILE_NONE:
       ibc_assert(s, num_comps == 0 && num_bytes == 0);
       ibc_validate_null_ref(s, ref);
       return;
 
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_IMM:
       ibc_assert(s, write == NULL);
       ibc_assert(s, num_comps == 1 && num_bytes == 0);
       return;
 
-   case IBC_REG_FILE_HW_GRF:
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_HW_GRF:
+   case IBC_FILE_FLAG:
       ibc_assert(s, ref->reg == NULL || ref->file == ref->reg->file);
       break;
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       if (!ibc_assert(s, ref->reg))
          return;
 
@@ -168,11 +168,11 @@ ibc_validate_ref(struct ibc_validate_state *s,
    }
 
    switch (ref->file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
       unreachable("Handled above with an early return");
 
-   case IBC_REG_FILE_LOGICAL: {
+   case IBC_FILE_LOGICAL: {
       const ibc_logical_reg *lreg = &ref->reg->logical;
       const struct ibc_ref_logical *lref = &ref->logical;
 
@@ -227,7 +227,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
       return;
    }
 
-   case IBC_REG_FILE_HW_GRF: {
+   case IBC_FILE_HW_GRF: {
       const struct ibc_ref_hw_grf *hw_ref = &ref->hw_grf;
 
       ibc_assert(s, hw_ref->hstride % ibc_type_byte_size(ref->type) == 0);
@@ -260,7 +260,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
       return;
    }
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       ibc_assert(s, num_comps == 1 && num_bytes == 0);
       if (ref->type == IBC_TYPE_FLAG) {
          if (ref->reg) {
@@ -324,7 +324,7 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
    const ibc_alu_op_info *alu_info = &ibc_alu_op_infos[alu->op];
 
    for (unsigned i = 0; i < alu_info->num_srcs; i++) {
-      ibc_assert(s, alu->src[i].ref.file != IBC_REG_FILE_NONE);
+      ibc_assert(s, alu->src[i].ref.file != IBC_FILE_NONE);
       ibc_assert(s, alu->src[i].ref.type == IBC_TYPE_FLAG ||
                     ibc_type_base_type(alu->src[i].ref.type) != IBC_TYPE_INVALID);
       ibc_validate_ref(s, &alu->src[i].ref, false, 0, 1,
@@ -334,12 +334,12 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
    }
 
    if (alu->cmod != BRW_CONDITIONAL_NONE) {
-      if (alu->instr.flag.file == IBC_REG_FILE_NONE) {
+      if (alu->instr.flag.file == IBC_FILE_NONE) {
          ibc_validate_null_ref(s, &alu->instr.flag);
          ibc_assert(s, alu->op == IBC_ALU_OP_SEL);
       } else {
          ibc_assert(s, ibc_predicate_bits(alu->instr.predicate) == 1);
-         ibc_assert(s, alu->instr.flag.file != IBC_REG_FILE_NONE);
+         ibc_assert(s, alu->instr.flag.file != IBC_FILE_NONE);
          ibc_assert(s, alu->instr.flag.type == IBC_TYPE_FLAG);
          ibc_validate_ref(s, &alu->instr.flag, &alu->cmod_write, 0, 1,
                           alu->instr.simd_group,
@@ -351,7 +351,7 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
                  ibc_type_base_type(alu->dest.type) == IBC_TYPE_FLOAT);
 
    ibc_validate_ref(s, &alu->dest, &alu->dest_write,
-                    0, alu->dest.file == IBC_REG_FILE_NONE ? 0 : 1,
+                    0, alu->dest.file == IBC_FILE_NONE ? 0 : 1,
                     alu->instr.simd_group,
                     alu->instr.simd_width);
 }
@@ -361,11 +361,11 @@ ibc_validate_send_instr(struct ibc_validate_state *s,
                         const ibc_send_instr *send)
 {
    switch (send->desc.file) {
-   case IBC_REG_FILE_NONE:
+   case IBC_FILE_NONE:
       ibc_validate_null_ref(s, &send->desc);
       break;
 
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_IMM:
       ibc_validate_ref(s, &send->desc, NULL, 0, 1,
                        0 /* simd_group */, 1 /* simd_width */);
       break;
@@ -379,11 +379,11 @@ ibc_validate_send_instr(struct ibc_validate_state *s,
    }
 
    switch (send->ex_desc.file) {
-   case IBC_REG_FILE_NONE:
+   case IBC_FILE_NONE:
       ibc_validate_null_ref(s, &send->ex_desc);
       break;
 
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_IMM:
       ibc_validate_ref(s, &send->ex_desc, NULL, 0, 1,
                        0 /* simd_group */, 1 /* simd_width */);
       break;
@@ -700,7 +700,7 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
       unsigned pred_simd_group = instr->simd_group & ~(pred_bits - 1);
       unsigned pred_simd_width = MAX2(instr->simd_width, pred_bits);
 
-      ibc_assert(s, instr->flag.file != IBC_REG_FILE_NONE);
+      ibc_assert(s, instr->flag.file != IBC_FILE_NONE);
       ibc_assert(s, instr->flag.type == IBC_TYPE_FLAG);
       ibc_validate_ref(s, &instr->flag, NULL, 0, 1,
                        pred_simd_group, pred_simd_width);
@@ -744,12 +744,12 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
    _mesa_hash_table_insert(s->reg_state, reg, reg_state);
 
    switch (reg->file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
       ibc_assert(s, !"Invalid register file for an actual register");
       return;
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       ibc_assert(s, reg->logical.bit_size == 1 ||
                     reg->logical.bit_size == 8 ||
                     reg->logical.bit_size == 16 ||
@@ -775,12 +775,12 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
       }
       return;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       ibc_assert(s, util_is_power_of_two_or_zero(reg->hw_grf.align));
       ibc_assert(s, reg->hw_grf.align > 0);
       return;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       ibc_assert(s, reg->flag.bits <= 32);
       ibc_assert(s, util_is_power_of_two_nonzero(reg->flag.bits));
       ibc_assert(s, util_is_power_of_two_nonzero(reg->flag.align_mul));

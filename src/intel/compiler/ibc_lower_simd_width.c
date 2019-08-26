@@ -30,19 +30,19 @@ static unsigned
 ref_stride(const ibc_ref *ref)
 {
    switch (ref->file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
       return 0;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       return ref->hw_grf.hstride;
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       if (ref->logical.broadcast || ref->reg->logical.simd_width == 1)
          return 0;
       return ref->reg->logical.stride;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       assert(ref->type != IBC_TYPE_FLAG);
       return 0;
    }
@@ -68,7 +68,7 @@ ibc_alu_instr_max_simd_width(const ibc_alu_instr *alu,
 
    /* Can't span more than two registers */
    unsigned dest_stride = ref_stride(&alu->dest);
-   if (alu->dest.file == IBC_REG_FILE_NONE)
+   if (alu->dest.file == IBC_FILE_NONE)
       dest_stride = exec_bit_size / 8;
    if (dest_stride > 0)
       max_simd_width = MIN2(max_simd_width, 64 / dest_stride);
@@ -163,7 +163,7 @@ simd_restricted_src(ibc_builder *b, ibc_ref src,
                     uint8_t old_simd_group, uint8_t new_simd_group,
                     uint8_t simd_width, unsigned num_comps)
 {
-   if (src.file == IBC_REG_FILE_NONE || src.file == IBC_REG_FILE_IMM)
+   if (src.file == IBC_FILE_NONE || src.file == IBC_FILE_IMM)
       return src;
 
    ibc_ref_simd_slice(&src, new_simd_group - old_simd_group);
@@ -188,7 +188,7 @@ static void
 fixup_split_write_link(ibc_reg_write *write, ibc_ref *dest,
                        ibc_reg_write *split_write, ibc_ref *split_dest)
 {
-   if (dest->file != IBC_REG_FILE_NONE && dest->reg == split_dest->reg) {
+   if (dest->file != IBC_FILE_NONE && dest->reg == split_dest->reg) {
       /* For WLR multi-writes, we need to ensure that the write list is
        * in the correct order and it may have gotten out-of-order thanks
        * to this lowering.
@@ -232,7 +232,7 @@ ibc_lower_simd_width(ibc_shader *shader)
       /* 4 == 32 (max simd width) / 8 (min simd width) */
       ibc_ref split_dests[4];
       assert(num_splits <= ARRAY_SIZE(split_dests));
-      if (dest->file == IBC_REG_FILE_NONE) {
+      if (dest->file == IBC_FILE_NONE) {
          /* If the destination is NONE, just copy it to all the split
           * instruction destinations.
           */
@@ -248,7 +248,7 @@ ibc_lower_simd_width(ibc_shader *shader)
             split_dests[i] = *dest;
             ibc_ref_simd_slice(&split_dests[i], i * split_simd_width);
          }
-      } else if (dest->file != IBC_REG_FILE_NONE) {
+      } else if (dest->file != IBC_FILE_NONE) {
          /* For everything else, we emit a SIMD zip after the instruction
           * we're splitting.
           */
