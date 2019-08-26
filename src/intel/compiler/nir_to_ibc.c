@@ -1458,12 +1458,13 @@ nti_emit_if(struct nir_to_ibc_state *nti, nir_if *nif)
 
    ibc_ref cond = ibc_nir_src(nti, nif->condition, IBC_TYPE_FLAG);
    ibc_flow_instr *_if = ibc_IF(b, cond, IBC_PREDICATE_NORMAL);
-
    nti_emit_cf_list(nti, &nif->then_list);
 
-   ibc_flow_instr *_else = ibc_ELSE(b, _if);
-
-   nti_emit_cf_list(nti, &nif->else_list);
+   ibc_flow_instr *_else = NULL;
+   if (!nir_cf_list_is_empty_block(&nif->else_list)) {
+      _else = ibc_ELSE(b, _if);
+      nti_emit_cf_list(nti, &nif->else_list);
+   }
 
    ibc_ENDIF(b, _if, _else);
 }
