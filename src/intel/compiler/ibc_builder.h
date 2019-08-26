@@ -544,6 +544,24 @@ ibc_SEL(ibc_builder *b, enum ibc_type dest_type,
 }
 
 static inline ibc_ref
+ibc_NEG(ibc_builder *b, enum ibc_type dest_type, ibc_ref src)
+{
+   ibc_ref dest = ibc_MOV(b, dest_type, src);
+   ibc_alu_instr *mov = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+   mov->src[0].mod = IBC_ALU_SRC_MOD_NEG;
+   return dest;
+}
+
+static inline ibc_ref
+ibc_ABS(ibc_builder *b, enum ibc_type dest_type, ibc_ref src)
+{
+   ibc_ref dest = ibc_MOV(b, dest_type, src);
+   ibc_alu_instr *mov = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+   mov->src[0].mod = IBC_ALU_SRC_MOD_ABS;
+   return dest;
+}
+
+static inline ibc_ref
 ibc_MIN(ibc_builder *b, enum ibc_type dest_type, ibc_ref src0, ibc_ref src1)
 {
    ibc_ref srcs[] = { src0, src1 };
