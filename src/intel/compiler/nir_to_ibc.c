@@ -250,24 +250,18 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
 
    case nir_op_ineg:
-   case nir_op_fneg: {
-      dest = ibc_MOV(b, dest_type, src[0]);
-      ibc_alu_instr *mov = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
-      mov->src[0].mod = IBC_ALU_SRC_MOD_NEG;
+   case nir_op_fneg:
+      dest = ibc_NEG(b, dest_type, src[0]);
       break;
-   }
 
    case nir_op_inot:
       dest = ibc_NOT(b, dest_type, src[0]);
       break;
 
    case nir_op_iabs:
-   case nir_op_fabs: {
-      dest = ibc_MOV(b, dest_type, src[0]);
-      ibc_alu_instr *mov = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
-      mov->src[0].mod = IBC_ALU_SRC_MOD_ABS;
+   case nir_op_fabs:
+      dest = ibc_ABS(b, dest_type, src[0]);
       break;
-   }
 
    case nir_op_fsat: {
       dest = ibc_MOV(b, dest_type, src[0]);
