@@ -346,7 +346,8 @@ hash_wlr_reg_cb(const void *_reg)
          hash = hash_alu_instr(hash, ibc_instr_as_alu(instr), reg);
          break;
       case IBC_INSTR_TYPE_SEND:
-         unreachable("TODO: We should be able to CSE sends");
+         /* TODO: We should be able to CSE sends */
+         break;
       case IBC_INSTR_TYPE_INTRINSIC:
          hash = hash_intrinsic_instr(hash, ibc_instr_as_intrinsic(instr), reg);
          break;
@@ -410,7 +411,8 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
             return false;
          break;
       case IBC_INSTR_TYPE_SEND:
-         unreachable("TODO: We should be able to CSE sends");
+         /* TODO: We should be able to CSE sends */
+         return false;
       case IBC_INSTR_TYPE_INTRINSIC:
          if (!intrinsic_instrs_equal(ibc_instr_as_intrinsic(instr_a),
                                      ibc_instr_as_intrinsic(instr_b),
