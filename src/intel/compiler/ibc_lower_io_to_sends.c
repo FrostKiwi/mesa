@@ -680,6 +680,7 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       case IBC_INTRINSIC_OP_VEC:
       case IBC_INTRINSIC_OP_LOAD_PAYLOAD:
       case IBC_INTRINSIC_OP_PLN:
+      case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE:
          continue;
 
       case IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO:

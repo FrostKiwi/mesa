@@ -270,6 +270,87 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_op_fddx:
+   case nir_op_fddx_coarse: {
+      /* First, we have to move it to a GRF so we can stride */
+      assert(src[0].type == IBC_TYPE_F);
+      const unsigned grf_size = b->simd_width * ibc_type_byte_size(src[0].type);
+      ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size, 32);
+      ibc_MOV_to(b, ibc_typed_ref(grf, src[0].type), src[0]);
+
+      ibc_ref add_src0 = ibc_typed_ref(grf, src[0].type);
+      add_src0.hw_grf.vstride = 4 * ibc_type_byte_size(src[0].type);
+      add_src0.hw_grf.width = 4;
+      add_src0.hw_grf.hstride = 0;
+
+      ibc_ref add_src1 = add_src0;
+      add_src1.hw_grf.byte += ibc_type_byte_size(src[0].type);
+
+      dest = ibc_ADD(b, src[0].type,
+                     ibc_NEG(b, src[0].type, add_src0), add_src1);
+      break;
+   }
+
+   case nir_op_fddx_fine: {
+      /* First, we have to move it to a GRF so we can stride */
+      assert(src[0].type == IBC_TYPE_F);
+      const unsigned grf_size = b->simd_width * ibc_type_byte_size(src[0].type);
+      ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size, 32);
+      ibc_MOV_to(b, ibc_typed_ref(grf, src[0].type), src[0]);
+
+      ibc_ref add_src0 = ibc_typed_ref(grf, src[0].type);
+      add_src0.hw_grf.vstride = 2 * ibc_type_byte_size(src[0].type);
+      add_src0.hw_grf.width = 2;
+      add_src0.hw_grf.hstride = 0;
+
+      ibc_ref add_src1 = add_src0;
+      add_src1.hw_grf.byte += ibc_type_byte_size(src[0].type);
+
+      dest = ibc_ADD(b, src[0].type,
+                     ibc_NEG(b, src[0].type, add_src0), add_src1);
+      break;
+   }
+
+   case nir_op_fddy:
+   case nir_op_fddy_coarse: {
+      /* First, we have to move it to a GRF so we can stride */
+      assert(src[0].type == IBC_TYPE_F);
+      const unsigned grf_size = b->simd_width * ibc_type_byte_size(src[0].type);
+      ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size, 32);
+      ibc_MOV_to(b, ibc_typed_ref(grf, src[0].type), src[0]);
+
+      ibc_ref add_src0 = ibc_typed_ref(grf, src[0].type);
+      add_src0.hw_grf.vstride = 4 * ibc_type_byte_size(src[0].type);
+      add_src0.hw_grf.width = 4;
+      add_src0.hw_grf.hstride = 0;
+
+      ibc_ref add_src1 = add_src0;
+      add_src1.hw_grf.byte += 2 * ibc_type_byte_size(src[0].type);
+
+      dest = ibc_ADD(b, src[0].type,
+                     ibc_NEG(b, src[0].type, add_src0), add_src1);
+      break;
+   }
+
+   case nir_op_fddy_fine: {
+      /* First, we have to move it to a GRF so we can stride */
+      assert(src[0].type == IBC_TYPE_F);
+      const unsigned grf_size = b->simd_width * ibc_type_byte_size(src[0].type);
+      ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size, 32);
+      ibc_MOV_to(b, ibc_typed_ref(grf, src[0].type), src[0]);
+
+      /* This requires an ALIGN16 instruction with a swizzle so we punt to an
+       * intrinsic which gets turned into the ALIGN16 in ibc_to_binary.
+       */
+      ibc_intrinsic_src intrin_src = {
+         .ref = ibc_typed_ref(grf, src[0].type),
+         .num_comps = 1,
+      };
+      dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_ALIGN16_DDX_FINE,
+                                     src[0].type, 1, &intrin_src, 1);
+      break;
+   }
+
    BINOP_CASE(iadd, ADD)
    BINOP_CASE(fadd, ADD)
    BINOP_CASE(fmul, MUL)
