@@ -76,11 +76,11 @@ brw_reg_for_ibc_ref(const struct gen_device_info *devinfo,
       type |= IBC_TYPE_UINT;
 
    switch (ref->file) {
-   case IBC_REG_FILE_NONE:
+   case IBC_FILE_NONE:
       assert(ref->reg == NULL);
       return retype(brw_null_reg(), brw_reg_type_for_ibc_type(type));
 
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_IMM:
       /* Immediates had better have a real type */
       assert(type == ref->type);
 
@@ -123,7 +123,7 @@ brw_reg_for_ibc_ref(const struct gen_device_info *devinfo,
       unreachable("Invalid IBC type");
       break;
 
-   case IBC_REG_FILE_HW_GRF: {
+   case IBC_FILE_HW_GRF: {
       assert(ref->reg == NULL);
       unsigned nr = ref->hw_grf.byte / REG_SIZE;
       unsigned subnr = ref->hw_grf.byte % REG_SIZE;
@@ -188,14 +188,14 @@ brw_reg_for_ibc_ref(const struct gen_device_info *devinfo,
       return brw_reg;
    }
 
-   case IBC_REG_FILE_FLAG: {
+   case IBC_FILE_FLAG: {
       assert(ref->reg == NULL);
       uint8_t subnr = ref->flag.bit / 16;
       return retype(brw_flag_reg(subnr / 2, subnr % 2),
                     brw_reg_type_for_ibc_type(type));
    }
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       unreachable("Logical registers should not exist in codegen");
    }
 
@@ -219,16 +219,16 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
     *       instruction is considered compressed or not accordingly.
     */
    bool compressed;
-   if (alu->dest.file == IBC_REG_FILE_NONE) {
+   if (alu->dest.file == IBC_FILE_NONE) {
       /* TODO: Is this correct? */
       unsigned bytes_written = ibc_type_byte_size(alu->dest.type) *
                                alu->instr.simd_width;
       compressed = bytes_written > REG_SIZE;
-   } else if (alu->dest.file == IBC_REG_FILE_FLAG) {
+   } else if (alu->dest.file == IBC_FILE_FLAG) {
       assert(alu->instr.we_all && alu->instr.simd_width == 1);
       compressed = false;
    } else {
-      assert(alu->dest.file == IBC_REG_FILE_HW_GRF);
+      assert(alu->dest.file == IBC_FILE_HW_GRF);
       unsigned dest_byte = alu->dest.hw_grf.byte;
       unsigned bytes_written =
          alu->dest.hw_grf.hstride * (alu->instr.simd_width %
@@ -360,7 +360,7 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
                           send->instr.simd_width, false);
 
    struct brw_reg desc;
-   if (send->desc.file == IBC_REG_FILE_NONE) {
+   if (send->desc.file == IBC_FILE_NONE) {
       desc = brw_imm_ud(0);
    } else {
       assert(send->desc.type == IBC_TYPE_UD);
@@ -371,7 +371,7 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
       brw_message_desc(p->devinfo, send->mlen, send->rlen, send->has_header);
 
    struct brw_reg ex_desc;
-   if (send->ex_desc.file == IBC_REG_FILE_NONE) {
+   if (send->ex_desc.file == IBC_FILE_NONE) {
       ex_desc = brw_imm_ud(0);
    } else {
       assert(send->ex_desc.type == IBC_TYPE_UD);
@@ -410,13 +410,13 @@ generate_pln(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
    /* The interpolant should be a scalar on an oword boundary.  The PLN
     * instruction reads it as a SIMD1 vec4.
     */
-   assert(intrin->src[0].ref.file == IBC_REG_FILE_HW_GRF);
+   assert(intrin->src[0].ref.file == IBC_FILE_HW_GRF);
    assert(intrin->src[0].ref.reg == NULL);
    assert(intrin->src[0].ref.hw_grf.byte % 16 == 0);
    assert(intrin->src[0].ref.hw_grf.hstride == 0);
 
    /* The first barycentric source should be register-aligned */
-   assert(intrin->src[1].ref.file == IBC_REG_FILE_HW_GRF);
+   assert(intrin->src[1].ref.file == IBC_FILE_HW_GRF);
    assert(intrin->src[1].ref.reg == NULL);
    assert(intrin->src[1].ref.hw_grf.byte % 32 == 0);
    assert(intrin->src[1].ref.hw_grf.hstride == 4);
@@ -428,7 +428,7 @@ generate_pln(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
        * spot.  Register allocation and payload placement should take care of
        * this for us as long as we only use PLN for FS input interpolation.
        */
-      assert(intrin->src[2].ref.file == IBC_REG_FILE_HW_GRF);
+      assert(intrin->src[2].ref.file == IBC_FILE_HW_GRF);
       assert(intrin->src[2].ref.reg == NULL);
       assert(intrin->src[2].ref.hw_grf.byte ==
              intrin->src[1].ref.hw_grf.byte + 64);
@@ -608,7 +608,7 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
 
       brw_set_default_predicate_control(p, ibc_predicate_control(instr->predicate));
       brw_set_default_predicate_inverse(p, ibc_predicate_is_inverted(instr->predicate));
-      if (instr->flag.file == IBC_REG_FILE_FLAG) {
+      if (instr->flag.file == IBC_FILE_FLAG) {
          assert(instr->flag.reg == NULL);
          /* The hardware "helpfully" adds our simd_group to the subnr that we
           * provide so we need to decrement to account for it.
@@ -616,7 +616,7 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
          int subnr = (instr->flag.flag.bit - instr->simd_group) / 16;
          brw_set_default_flag_reg(p, subnr / 2, subnr % 2);
       } else {
-         assert(instr->flag.file == IBC_REG_FILE_NONE);
+         assert(instr->flag.file == IBC_FILE_NONE);
          brw_set_default_flag_reg(p, 0, 0); /* TODO */
       }
       brw_set_default_mask_control(p, instr->we_all);

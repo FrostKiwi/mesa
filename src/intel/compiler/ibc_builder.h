@@ -137,7 +137,7 @@ static inline ibc_ref
 ibc_hw_grf_ref(uint8_t nr, uint8_t subnr, enum ibc_type type)
 {
    return (ibc_ref) {
-      .file = IBC_REG_FILE_HW_GRF,
+      .file = IBC_FILE_HW_GRF,
       .type = IBC_TYPE_UD,
       .hw_grf = {
          .byte = (uint16_t)nr * REG_SIZE + subnr * ibc_type_byte_size(type),
@@ -152,7 +152,7 @@ static inline ibc_ref
 ibc_flag_ref(uint8_t bit)
 {
    return (ibc_ref) {
-      .file = IBC_REG_FILE_FLAG,
+      .file = IBC_FILE_FLAG,
       .type = IBC_TYPE_FLAG,
       .flag = {
          .bit = bit,
@@ -170,10 +170,10 @@ ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
    };
    if (ibc_type_bit_size(type) == 0) {
       switch (reg->file) {
-      case IBC_REG_FILE_LOGICAL:
+      case IBC_FILE_LOGICAL:
          ref.type |= reg->logical.bit_size;
          break;
-      case IBC_REG_FILE_FLAG:
+      case IBC_FILE_FLAG:
          ref.type = IBC_TYPE_FLAG;
          break;
       default:
@@ -181,15 +181,15 @@ ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
       }
    }
    switch (reg->file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
       unreachable("Unsupported register file");
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       ref.logical = (struct ibc_ref_logical) { 0, };
       return ref;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       ref.hw_grf = (struct ibc_ref_hw_grf) {
          .vstride = 8 * ibc_type_byte_size(ref.type),
          .width = 8,
@@ -197,7 +197,7 @@ ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
       };
       return ref;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       assert(ibc_type_base_type(ref.type) != IBC_TYPE_FLOAT);
       assert(ibc_type_bit_size(ref.type) == 1 ||
              ibc_type_bit_size(ref.type) == 16 ||
@@ -230,7 +230,7 @@ static inline ibc_ref
 ibc_null(enum ibc_type type)
 {
    return (ibc_ref) {
-      .file = IBC_REG_FILE_NONE,
+      .file = IBC_FILE_NONE,
       .type = type,
    };
 }
@@ -239,7 +239,7 @@ static inline ibc_ref
 ibc_imm_ref(enum ibc_type type, char *imm, unsigned imm_size)
 {
    ibc_ref ref = {
-      .file = IBC_REG_FILE_IMM,
+      .file = IBC_FILE_IMM,
       .type = type,
    };
    memcpy(ref.imm, imm, imm_size);
@@ -250,7 +250,7 @@ static inline ibc_ref
 ibc_imm_zero(enum ibc_type type)
 {
    return (ibc_ref) {
-      .file = IBC_REG_FILE_IMM,
+      .file = IBC_FILE_IMM,
       .type = type,
    };
 }
@@ -509,9 +509,9 @@ ibc_MOV_raw_vec_to(ibc_builder *b, ibc_ref dest,
    /* TODO: This needs to be adjusted more carefully */
    const unsigned simd_width = MIN2(b->simd_width, 16);
    if (num_comps > 1 || simd_width != b->simd_width) {
-      assert(src.file == IBC_REG_FILE_IMM ||
-             src.file == IBC_REG_FILE_LOGICAL);
-      assert(dest.file == IBC_REG_FILE_LOGICAL);
+      assert(src.file == IBC_FILE_IMM ||
+             src.file == IBC_FILE_LOGICAL);
+      assert(dest.file == IBC_FILE_LOGICAL);
    }
 
    for (unsigned i = 0; i < num_comps; i++) {
@@ -520,7 +520,7 @@ ibc_MOV_raw_vec_to(ibc_builder *b, ibc_ref dest,
          ibc_MOV_to(b, dest, src);
          ibc_builder_pop(b);
       }
-      if (src.file == IBC_REG_FILE_LOGICAL) {
+      if (src.file == IBC_FILE_LOGICAL) {
          src.logical.comp++;
          dest.logical.comp++;
       }
@@ -611,7 +611,7 @@ ibc_build_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
       }
       intrin->src[i].num_comps =
          srcs[i].num_comps > 0 ? srcs[i].num_comps :
-         srcs[i].ref.file == IBC_REG_FILE_NONE ? 0 : num_dest_comps;
+         srcs[i].ref.file == IBC_FILE_NONE ? 0 : num_dest_comps;
    }
 
    intrin->dest = dest;
@@ -662,8 +662,7 @@ ibc_SIMD_BROADCAST(ibc_builder *b, ibc_ref val, ibc_ref chan,
    if (ibc_ref_read_is_uniform(val))
       return ibc_MOV_scalar(b, val.type, val);
 
-   if (val.file == IBC_REG_FILE_LOGICAL &&
-       chan.file == IBC_REG_FILE_IMM) {
+   if (val.file == IBC_FILE_LOGICAL && chan.file == IBC_FILE_IMM) {
       uint64_t chan_imm = 0;
       memcpy(&chan_imm, chan.imm, ibc_type_byte_size(chan.type));
       assert(!val.logical.broadcast);
@@ -777,7 +776,7 @@ ibc_VEC2(ibc_builder *b, ibc_ref src0, ibc_ref src1)
 static inline ibc_ref
 ibc_PLN(ibc_builder *b, ibc_ref vert, ibc_ref bary)
 {
-   assert(vert.file == IBC_REG_FILE_LOGICAL);
+   assert(vert.file == IBC_FILE_LOGICAL);
    assert(vert.reg->logical.simd_width == 1);
 
    ibc_ref comps[2];
@@ -820,7 +819,7 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_ref tmp,
 {
    assert(b->simd_width >= 8);
    const uint8_t scan_simd_width = b->simd_width;
-   assert(tmp.file == IBC_REG_FILE_HW_GRF);
+   assert(tmp.file == IBC_FILE_HW_GRF);
    assert(tmp.hw_grf.hstride == ibc_type_byte_size(tmp.type));
    assert(tmp.hw_grf.hstride * tmp.hw_grf.width == tmp.hw_grf.vstride);
    assert(util_is_power_of_two_nonzero(final_cluster_size));

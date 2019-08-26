@@ -81,7 +81,7 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
    struct nir_vs_to_ibc_state *nti_vs = nti->stage_state;
    ibc_builder *b = &nti->b;
 
-   ibc_ref dest = { .file = IBC_REG_FILE_NONE, };
+   ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_input: {
       const unsigned input = nir_intrinsic_base(instr) +
@@ -104,7 +104,7 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
 
       ibc_ref *output = &nti_vs->out.outputs[varying];
 
-      if (output->file == IBC_REG_FILE_NONE) {
+      if (output->file == IBC_FILE_NONE) {
          const unsigned num_comps = (varying == VARYING_SLOT_PSIZ ||
                                      varying == VARYING_SLOT_VIEWPORT ||
                                      varying == VARYING_SLOT_LAYER) ? 1 : 4;
@@ -128,7 +128,7 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
    if (nir_intrinsic_infos[instr->intrinsic].has_dest)
       ibc_write_nir_dest(nti, &instr->dest, dest);
    else
-      assert(dest.file == IBC_REG_FILE_NONE);
+      assert(dest.file == IBC_FILE_NONE);
 
    return true;
 }
@@ -179,7 +179,7 @@ output_slot_unwritten(const struct nir_vs_to_ibc_state *nti_vs,
    gl_varying_slot varying = vue_map->slot_to_varying[slot];
 
    return (int)varying == BRW_VARYING_SLOT_PAD ||
-          nti_vs->out.outputs[varying].file == IBC_REG_FILE_NONE;
+          nti_vs->out.outputs[varying].file == IBC_FILE_NONE;
 }
 
 static void
@@ -287,7 +287,7 @@ ibc_lower_io_urb_write_to_send(ibc_builder *b, ibc_send_instr *send,
 {
    const ibc_ref handle = write->src[IBC_URB_WRITE_SRC_HANDLE].ref;
    const ibc_ref data = write->src[IBC_URB_WRITE_SRC_DATA].ref;
-   assert(data.file == IBC_REG_FILE_LOGICAL);
+   assert(data.file == IBC_FILE_LOGICAL);
    const uint32_t global_offset =
       ibc_ref_as_uint(write->src[IBC_URB_WRITE_SRC_GLOBAL_OFFSET].ref);
    const bool eot = ibc_ref_as_uint(write->src[IBC_URB_WRITE_SRC_EOT].ref);

@@ -68,13 +68,13 @@ static void
 print_ref(FILE *fp, const ibc_ref *ref, bool print_type)
 {
    switch (ref->file) {
-   case IBC_REG_FILE_NONE:
+   case IBC_FILE_NONE:
       fprintf(fp, "(null)");
       if (ref->type != IBC_TYPE_INVALID)
          fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
 
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_IMM:
       switch (ref->type) {
       case IBC_TYPE_INVALID:
       case IBC_TYPE_INT:
@@ -128,7 +128,7 @@ print_ref(FILE *fp, const ibc_ref *ref, bool print_type)
       unreachable("Invalid IBC type");
       return;
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       fprintf(fp, "lg%u", ref->reg->index);
       if (ref->reg->logical.num_comps > 1)
          fprintf(fp, ".%u", ref->logical.comp);
@@ -138,7 +138,7 @@ print_ref(FILE *fp, const ibc_ref *ref, bool print_type)
          fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
 
-   case IBC_REG_FILE_HW_GRF: {
+   case IBC_FILE_HW_GRF: {
       unsigned type_sz_B = ibc_type_byte_size(ref->type);
       if (ref->reg != NULL) {
          fprintf(fp, "hw%u", ref->reg->index);
@@ -167,7 +167,7 @@ print_ref(FILE *fp, const ibc_ref *ref, bool print_type)
       return;
    }
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       /* TODO: Take simd_group into account? */
       if (ref->reg != NULL) {
          fprintf(fp, "flag%u.%u", ref->reg->index, ref->flag.bit / 16);
@@ -272,9 +272,9 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 
    if (alu->cmod) {
       fprintf(fp, ".%s", conditional_mod_name(alu->cmod));
-      assert(alu->instr.flag.file == IBC_REG_FILE_NONE ||
+      assert(alu->instr.flag.file == IBC_FILE_NONE ||
              alu->instr.flag.type == IBC_TYPE_FLAG);
-      if (alu->instr.flag.file != IBC_REG_FILE_NONE) {
+      if (alu->instr.flag.file != IBC_FILE_NONE) {
          fprintf(fp, ".");
          print_ref(fp, &alu->instr.flag, false);
       }
@@ -340,7 +340,7 @@ print_send_instr(FILE *fp, const ibc_send_instr *send)
    print_ref(fp, &send->payload[1], true);
 
    fprintf(fp, "   ");
-   if (send->desc.file == IBC_REG_FILE_NONE) {
+   if (send->desc.file == IBC_FILE_NONE) {
       fprintf(fp, "0x%08" PRIx32, send->desc_imm);
    } else {
       fprintf(fp, "(");
@@ -349,7 +349,7 @@ print_send_instr(FILE *fp, const ibc_send_instr *send)
    }
 
    fprintf(fp, "   ");
-   if (send->desc.file == IBC_REG_FILE_NONE) {
+   if (send->desc.file == IBC_FILE_NONE) {
       fprintf(fp, "0x%08" PRIx32, send->ex_desc_imm);
    } else {
       fprintf(fp, "(");

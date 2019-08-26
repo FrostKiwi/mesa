@@ -40,13 +40,13 @@ ibc_alu_instr_is_raw_mov(const ibc_alu_instr *alu)
 static void
 ref_set_reg_packed(ibc_ref ref)
 {
-   if (ref.file == IBC_REG_FILE_HW_GRF) {
+   if (ref.file == IBC_FILE_HW_GRF) {
       assert(ref.hw_grf.hstride == ibc_type_byte_size(ref.type));
       assert(ref.hw_grf.vstride == ref.hw_grf.hstride * ref.hw_grf.width);
       return;
    }
 
-   assert(ref.file == IBC_REG_FILE_LOGICAL);
+   assert(ref.file == IBC_FILE_LOGICAL);
 
    ibc_reg *reg = (ibc_reg *)ref.reg;
    if (reg->logical.packed)
@@ -80,7 +80,7 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
    }
 
    ibc_foreach_reg(reg, shader) {
-      if (reg->file != IBC_REG_FILE_LOGICAL)
+      if (reg->file != IBC_FILE_LOGICAL)
          continue;
 
       if (reg->logical.stride > 0)
@@ -562,7 +562,7 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
    const ibc_reg_live_intervals *rli = &live->regs[reg->index];
    const uint32_t ip = rli->physical_start;
 
-   assert(reg->file == IBC_REG_FILE_LOGICAL);
+   assert(reg->file == IBC_FILE_LOGICAL);
    const ibc_logical_reg *lreg = &reg->logical;
    assert(lreg->bit_size % 8 == 0);
    unsigned byte_size = lreg->bit_size / 8;
@@ -592,7 +592,7 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
             memset(chunks, 0, chunks_words * sizeof(BITSET_WORD));
 
             const ibc_ref ref = {
-               .file = IBC_REG_FILE_LOGICAL,
+               .file = IBC_FILE_LOGICAL,
                .type = IBC_TYPE_8_BIT,
                .logical = {
                   .byte = b,
@@ -798,9 +798,9 @@ static bool
 should_assign_reg(const ibc_reg *reg)
 {
    switch (reg->file) {
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       return reg != NULL;
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       return true;
    default:
       return false;
@@ -815,8 +815,8 @@ rewrite_ref_and_update_reg(ibc_ref *_ref,
 {
    const ibc_ref *ref = _ref;
    struct ibc_assign_regs_state *state = _state;
-   if (ref->file != IBC_REG_FILE_LOGICAL &&
-       ref->file != IBC_REG_FILE_HW_GRF)
+   if (ref->file != IBC_FILE_LOGICAL &&
+       ref->file != IBC_FILE_HW_GRF)
       return true;
 
    const ibc_reg *reg = ref->reg;
@@ -824,16 +824,16 @@ rewrite_ref_and_update_reg(ibc_ref *_ref,
    struct ibc_reg_assignment *assign = &state->assign[reg->index];
 
    ibc_ref new_ref = {
-      .file = IBC_REG_FILE_HW_GRF,
+      .file = IBC_FILE_HW_GRF,
       .type = ref->type,
    };
    switch (ref->file) {
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       new_ref.hw_grf = ref->hw_grf;
       new_ref.hw_grf.byte += assign->preg->byte;
       break;
 
-   case IBC_REG_FILE_LOGICAL: {
+   case IBC_FILE_LOGICAL: {
       assert(reg->logical.bit_size % 8 == 0);
 
       /* Stash this so we can access it unchanged */
@@ -900,7 +900,7 @@ assign_reg(struct ibc_reg_assignment *assign,
 
    bool success;
    switch (assign->reg->file) {
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       assign->preg = rzalloc(state->mem_ctx, struct ibc_phys_reg);
       success = ibc_phys_reg_alloc(&state->phys_alloc,
                                    fixed_hw_grf_byte,
@@ -914,7 +914,7 @@ assign_reg(struct ibc_reg_assignment *assign,
       assert(success);
       break;
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       if (reg->logical.simd_width == 1) {
          assert(reg->logical.bit_size % 8 == 0);
          assign->preg = rzalloc(state->mem_ctx, struct ibc_phys_reg);
@@ -964,8 +964,8 @@ assign_reg(struct ibc_reg_assignment *assign,
 static bool
 live_reg_filter_cb(const ibc_reg *reg)
 {
-   return reg->file == IBC_REG_FILE_LOGICAL ||
-          reg->file == IBC_REG_FILE_HW_GRF;
+   return reg->file == IBC_FILE_LOGICAL ||
+          reg->file == IBC_FILE_HW_GRF;
 }
 
 static void
@@ -1040,15 +1040,15 @@ ibc_assign_regs(ibc_shader *shader, bool allow_spilling)
       unsigned src0 = src1 - send->mlen * REG_SIZE;
 
       if (send->ex_mlen > 0) {
-         assert(send->payload[1].file == IBC_REG_FILE_LOGICAL ||
-                send->payload[1].file == IBC_REG_FILE_HW_GRF);
+         assert(send->payload[1].file == IBC_FILE_LOGICAL ||
+                send->payload[1].file == IBC_FILE_HW_GRF);
          if (!assign_reg(&state.assign[send->payload[1].reg->index],
                          src1, &state))
             goto fail;
       }
 
-      assert(send->payload[0].file == IBC_REG_FILE_LOGICAL ||
-             send->payload[0].file == IBC_REG_FILE_HW_GRF);
+      assert(send->payload[0].file == IBC_FILE_LOGICAL ||
+             send->payload[0].file == IBC_FILE_HW_GRF);
       if (!assign_reg(&state.assign[send->payload[0].reg->index],
                       src0, &state))
          goto fail;
@@ -1066,7 +1066,7 @@ ibc_assign_regs(ibc_shader *shader, bool allow_spilling)
          if (intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD) {
             assert(intrin->dest.reg);
             assert(ibc_reg_ssa_instr(intrin->dest.reg) == instr);
-            assert(intrin->src[0].ref.file == IBC_REG_FILE_HW_GRF);
+            assert(intrin->src[0].ref.file == IBC_FILE_HW_GRF);
             assert(intrin->src[0].ref.reg == NULL);
 
             struct ibc_reg_assignment *assign =
@@ -1093,13 +1093,13 @@ ibc_assign_regs(ibc_shader *shader, bool allow_spilling)
             ibc_instr_remove(instr);
             continue;
          } else if (intrin->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO &&
-                    intrin->src[0].ref.file != IBC_REG_FILE_NONE) {
+                    intrin->src[0].ref.file != IBC_FILE_NONE) {
             /* This is a LOAD_UBO that actually just represents a push
              * constant block.  Assign it the right GRF.
              */
             assert(intrin->dest.reg);
             assert(ibc_reg_ssa_instr(intrin->dest.reg) == instr);
-            assert(intrin->src[0].ref.file == IBC_REG_FILE_HW_GRF);
+            assert(intrin->src[0].ref.file == IBC_FILE_HW_GRF);
             assert(intrin->src[0].ref.reg == NULL);
 
             UNUSED struct ibc_reg_assignment *assign =

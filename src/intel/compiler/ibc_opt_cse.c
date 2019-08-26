@@ -37,15 +37,15 @@ hash_ref(uint32_t hash, const ibc_ref *ref, const ibc_reg *base_reg)
    hash = HASH(hash, ref->type);
 
    switch (ref->file) {
-   case IBC_REG_FILE_NONE:
+   case IBC_FILE_NONE:
       assert(ref->reg == NULL);
       return hash;
 
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_IMM:
       hash = XXH32(ref->imm, ibc_type_byte_size(ref->type), hash);
       return hash;
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       hash = HASH(hash, ref->logical.byte);
       hash = HASH(hash, ref->logical.comp);
       hash = HASH(hash, ref->logical.broadcast);
@@ -53,7 +53,7 @@ hash_ref(uint32_t hash, const ibc_ref *ref, const ibc_reg *base_reg)
          hash = HASH(hash, ref->logical.simd_channel);
       break;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       hash = HASH(hash, ref->hw_grf.byte);
       hash = HASH(hash, ref->hw_grf.hstride);
       if (ref->hw_grf.vstride != ref->hw_grf.width * ref->hw_grf.hstride) {
@@ -62,7 +62,7 @@ hash_ref(uint32_t hash, const ibc_ref *ref, const ibc_reg *base_reg)
       }
       break;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       hash = HASH(hash, ref->flag.bit);
       break;
    }
@@ -82,14 +82,14 @@ refs_equal_except_reg(const ibc_ref *ref_a, const ibc_ref *ref_b)
       return false;
 
    switch (ref_a->file) {
-   case IBC_REG_FILE_NONE:
+   case IBC_FILE_NONE:
       assert(ref_a->reg == NULL && ref_b->reg == NULL);
       return true;
 
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_IMM:
       return !memcmp(ref_a->imm, ref_b->imm, ibc_type_byte_size(ref_a->type));
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       if (ref_a->logical.byte != ref_b->logical.byte ||
           ref_a->logical.comp != ref_b->logical.comp ||
           ref_a->logical.broadcast != ref_b->logical.broadcast)
@@ -99,7 +99,7 @@ refs_equal_except_reg(const ibc_ref *ref_a, const ibc_ref *ref_b)
          return false;
       break;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       if (ref_a->hw_grf.byte != ref_b->hw_grf.byte ||
           ref_a->hw_grf.hstride != ref_b->hw_grf.hstride)
          return false;
@@ -113,7 +113,7 @@ refs_equal_except_reg(const ibc_ref *ref_a, const ibc_ref *ref_b)
       }
       break;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       if (ref_a->flag.bit != ref_b->flag.bit)
          return false;
       break;
@@ -315,11 +315,11 @@ hash_wlr_reg_cb(const void *_reg)
    /* Ignore index and link */
 
    switch (reg->file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
       unreachable("Invalid register file ibc_reg");
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       hash = HASH(hash, reg->logical.bit_size);
       hash = HASH(hash, reg->logical.num_comps);
       hash = HASH(hash, reg->logical.simd_group);
@@ -327,12 +327,12 @@ hash_wlr_reg_cb(const void *_reg)
       /* Ignore stride because it's a derived parameter */
       break;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       hash = HASH(hash, reg->hw_grf.size);
       hash = HASH(hash, reg->hw_grf.align);
       break;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       hash = HASH(hash, reg->flag.bits);
       hash = HASH(hash, reg->flag.align_mul);
       hash = HASH(hash, reg->flag.align_offset);
@@ -369,11 +369,11 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
       return false;
 
    switch (reg_a->file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
       unreachable("Invalid register file ibc_reg");
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       if (reg_a->logical.bit_size != reg_b->logical.bit_size ||
           reg_a->logical.num_comps != reg_b->logical.num_comps ||
           reg_a->logical.simd_group != reg_b->logical.simd_group ||
@@ -382,13 +382,13 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
       /* Ignore stride because it's a derived parameter */
       break;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       if (reg_a->hw_grf.size != reg_b->hw_grf.size ||
           reg_a->hw_grf.align != reg_b->hw_grf.align)
          return false;
       break;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       if (reg_a->flag.bits != reg_b->flag.bits ||
           reg_a->flag.align_mul != reg_b->flag.align_mul ||
           reg_a->flag.align_offset != reg_b->flag.align_offset)
@@ -442,8 +442,7 @@ rewrite_read(struct ibc_ref *ref,
 {
    struct opt_cse_state *state = _state;
 
-   if (ref->file == IBC_REG_FILE_NONE ||
-       ref->file == IBC_REG_FILE_IMM)
+   if (ref->file == IBC_FILE_NONE || ref->file == IBC_FILE_IMM)
       return true;
 
    if (ref->reg == NULL || !ref->reg->is_wlr)
@@ -464,8 +463,8 @@ try_cse_write(ibc_reg_write *write, ibc_ref *ref, void *_state)
 {
    struct opt_cse_state *state = _state;
 
-   assert(ref->file != IBC_REG_FILE_IMM);
-   if (ref->file == IBC_REG_FILE_NONE)
+   assert(ref->file != IBC_FILE_IMM);
+   if (ref->file == IBC_FILE_NONE)
       return true;
 
    if (ref->reg == NULL || !ref->reg->is_wlr)
