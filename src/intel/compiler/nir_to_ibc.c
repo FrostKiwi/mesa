@@ -212,6 +212,16 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
+   case nir_op_b2i8:
+   case nir_op_b2i16:
+   case nir_op_b2i32:
+   case nir_op_b2i64:
+      /* ibc_assign_and_lower_flags will turn src[0] into a W type 0/-1
+       * boolean and all we have to do is negate it.
+       */
+      dest = ibc_NEG(b, dest_type, src[0]);
+      break;
+
    case nir_op_b2f32: {
       ibc_ref one = ibc_MOV(b, IBC_TYPE_F, ibc_imm_f(1.0));
       dest = ibc_SEL(b, dest_type, src[0], one, ibc_imm_f(0.0));
@@ -373,6 +383,20 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    BINOP_CASE(ishl, SHL)
    BINOP_CASE(ishr, SHR)
    BINOP_CASE(ushr, SHR)
+
+   case nir_op_ubfe:
+   case nir_op_ibfe:
+      assert(ibc_type_bit_size(dest_type) < 64);
+      dest = ibc_BFE(b, dest_type, src[2], src[1], src[0]);
+      break;
+   case nir_op_bfm:
+      assert(ibc_type_bit_size(dest_type) < 64);
+      dest = ibc_BFI1(b, dest_type, src[0], src[1]);
+      break;
+   case nir_op_bfi:
+      assert(ibc_type_bit_size(dest_type) < 64);
+      dest = ibc_BFI2(b, dest_type, src[0], src[1], src[2]);
+      break;
 
    case nir_op_flt:
    case nir_op_ilt:
