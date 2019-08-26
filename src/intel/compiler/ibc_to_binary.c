@@ -267,6 +267,13 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       brw_##OP(p, dest, src[0], src[1]);  \
       break;
 
+#define TRIOP_CASE(OP)                                   \
+   case IBC_ALU_OP_##OP:                                 \
+      if (p->devinfo->gen < 10)                          \
+         brw_set_default_access_mode(p, BRW_ALIGN_16);   \
+      brw_##OP(p, dest, src[0], src[1], src[2]);         \
+      break;
+
 #define UNOP_MATH_CASE(OP, MATH)                                           \
    case IBC_ALU_OP_##OP:                                                   \
       gen6_math(p, dest, BRW_MATH_FUNCTION_##MATH, src[0], brw_null_reg());\
@@ -294,17 +301,8 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    UNOP_CASE(RNDE)
    UNOP_CASE(RNDZ)
 
-   case IBC_ALU_OP_MAD:
-      if (p->devinfo->gen < 10)
-         brw_set_default_access_mode(p, BRW_ALIGN_16);
-      brw_MAD(p, dest, src[0], src[1], src[2]);
-      break;
-
-   case IBC_ALU_OP_LRP:
-      assert(p->devinfo->gen <= 9);
-      brw_set_default_access_mode(p, BRW_ALIGN_16);
-      brw_LRP(p, dest, src[0], src[1], src[2]);
-      break;
+   TRIOP_CASE(MAD)
+   TRIOP_CASE(LRP)
 
    UNOP_MATH_CASE(RCP, INV)
    UNOP_MATH_CASE(LOG2, LOG)
@@ -332,6 +330,7 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
 
 #undef UNOP_CASE
 #undef BINOP_CASE
+#undef TRIOP_CASE
 #undef UNOP_MATH_CASE
 
    if (alu->cmod) {
