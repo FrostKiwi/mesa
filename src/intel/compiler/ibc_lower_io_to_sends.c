@@ -56,7 +56,7 @@ lower_bti_block_load_ubo(ibc_builder *b, ibc_send_instr *send,
    assert(read->src[1].ref.type == IBC_TYPE_UD);
    send->desc = read->src[1].ref;
 
-   assert(read->src[2].ref.file == IBC_REG_FILE_IMM);
+   assert(read->src[2].ref.file == IBC_FILE_IMM);
    assert(read->src[2].ref.type == IBC_TYPE_UD);
    const uint32_t offset_B = ibc_ref_as_uint(read->src[2].ref);
 
@@ -90,8 +90,8 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
    const ibc_ref surface_bti = intrin->src[IBC_SURFACE_SRC_SURFACE_BTI].ref;
    const ibc_ref surface_handle =
       intrin->src[IBC_SURFACE_SRC_SURFACE_HANDLE].ref;
-   assert((surface_bti.file == IBC_REG_FILE_NONE) !=
-          (surface_handle.file == IBC_REG_FILE_NONE));
+   assert((surface_bti.file == IBC_FILE_NONE) !=
+          (surface_handle.file == IBC_FILE_NONE));
 
    const ibc_ref address = intrin->src[IBC_SURFACE_SRC_ADDRESS].ref;
    const ibc_ref data0 = intrin->src[IBC_SURFACE_SRC_DATA0].ref;
@@ -110,11 +110,11 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
 
    send->payload[0] = move_to_payload(b, address, num_address_comps);
    send->mlen = num_address_comps * intrin->instr.simd_width / 8;
-   if (data1.file != IBC_REG_FILE_NONE) {
+   if (data1.file != IBC_FILE_NONE) {
       assert(num_data_comps == 1);
       send->payload[1] = ibc_VEC2(b, data0, data1);
       send->ex_mlen = 2 * (intrin->instr.simd_width / 8);
-   } else if (data0.file != IBC_REG_FILE_NONE) {
+   } else if (data0.file != IBC_FILE_NONE) {
       send->payload[1] = move_to_payload(b, data0, num_data_comps);
       send->ex_mlen = num_data_comps * (intrin->instr.simd_width / 8);
    }
@@ -171,9 +171,9 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
    }
 
    send->desc_imm = desc;
-   if (surface_bti.file == IBC_REG_FILE_IMM) {
+   if (surface_bti.file == IBC_FILE_IMM) {
       send->desc_imm |= ibc_ref_as_uint(surface_bti) & 0xff;
-   } else if (surface_handle.file != IBC_REG_FILE_NONE) {
+   } else if (surface_handle.file != IBC_FILE_NONE) {
       /* Bindless surface */
       assert(devinfo->gen >= 9);
       send->desc_imm |= GEN9_BTI_BINDLESS;
@@ -199,7 +199,7 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
 static bool
 is_high_sampler(const ibc_ref sampler_bti)
 {
-   if (sampler_bti.file != IBC_REG_FILE_IMM)
+   if (sampler_bti.file != IBC_FILE_IMM)
       return true;
 
    assert(sampler_bti.type == IBC_TYPE_UD);
@@ -264,10 +264,10 @@ sampler_msg_type(const struct gen_device_info *devinfo,
 static bool
 ref_is_null_or_zero(ibc_ref ref)
 {
-   if (ref.file == IBC_REG_FILE_NONE)
+   if (ref.file == IBC_FILE_NONE)
       return true;
 
-   if (ref.file != IBC_REG_FILE_IMM)
+   if (ref.file != IBC_FILE_IMM)
       return false;
 
    for (unsigned i = 0; i < ibc_type_byte_size(ref.type); i++) {
@@ -284,7 +284,7 @@ ibc_comp_ref(ibc_ref ref, unsigned comp)
    if (comp == 0)
       return ref;
 
-   assert(ref.file == IBC_REG_FILE_LOGICAL);
+   assert(ref.file == IBC_FILE_LOGICAL);
    ref.logical.comp += comp;
    return ref;
 }
@@ -340,18 +340,18 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
    const ibc_ref surface_bti = intrin->src[IBC_TEX_SRC_SURFACE_BTI].ref;
    const ibc_ref surface_handle = intrin->src[IBC_TEX_SRC_SURFACE_HANDLE].ref;
    uint32_t surface_bti_imm = 0;
-   if (surface_bti.file == IBC_REG_FILE_IMM)
+   if (surface_bti.file == IBC_FILE_IMM)
       surface_bti_imm = ibc_ref_as_uint(surface_bti);
-   assert((surface_bti.file == IBC_REG_FILE_NONE) !=
-          (surface_handle.file == IBC_REG_FILE_NONE));
+   assert((surface_bti.file == IBC_FILE_NONE) !=
+          (surface_handle.file == IBC_FILE_NONE));
 
    const ibc_ref sampler_bti = intrin->src[IBC_TEX_SRC_SAMPLER_BTI].ref;
    const ibc_ref sampler_handle = intrin->src[IBC_TEX_SRC_SAMPLER_HANDLE].ref;
    uint32_t sampler_bti_imm = 0;
-   if (sampler_bti.file == IBC_REG_FILE_IMM)
+   if (sampler_bti.file == IBC_FILE_IMM)
       sampler_bti_imm = ibc_ref_as_uint(sampler_bti);
-   assert((sampler_bti.file == IBC_REG_FILE_NONE) !=
-          (sampler_handle.file == IBC_REG_FILE_NONE));
+   assert((sampler_bti.file == IBC_FILE_NONE) !=
+          (sampler_handle.file == IBC_FILE_NONE));
 
    const ibc_ref coord = intrin->src[IBC_TEX_SRC_COORD].ref;
    const unsigned num_coord_comps = intrin->src[IBC_TEX_SRC_COORD].num_comps;
@@ -369,7 +369,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
 
    uint32_t header_bits = 0;
    const ibc_ref header_bits_r = intrin->src[IBC_TEX_SRC_HEADER_BITS].ref;
-   if (header_bits_r.file != IBC_REG_FILE_NONE)
+   if (header_bits_r.file != IBC_FILE_NONE)
       header_bits = ibc_ref_as_uint(header_bits_r);
 
    ibc_ref srcs[MAX_SAMPLER_MESSAGE_SIZE] = {};
@@ -378,7 +378,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
    if (intrin->op == IBC_INTRINSIC_OP_TG4 ||
        intrin->op == IBC_INTRINSIC_OP_TG4_OFFSET ||
        intrin->op == IBC_INTRINSIC_OP_SAMPLEINFO ||
-       header_bits != 0 || sampler_handle.file != IBC_REG_FILE_NONE ||
+       header_bits != 0 || sampler_handle.file != IBC_FILE_NONE ||
        is_high_sampler(sampler_bti)) {
 
       ibc_reg *header_reg =
@@ -410,7 +410,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
 
       ibc_ref header_3 = header;
       header_3.hw_grf.byte += 3 * ibc_type_byte_size(IBC_TYPE_UD);
-      if (sampler_handle.file != IBC_REG_FILE_NONE) {
+      if (sampler_handle.file != IBC_FILE_NONE) {
          /* Bindless sampler handles aren't relative to the sampler state
           * pointer passed into the shader through SAMPLER_STATE_POINTERS_*.
           * Instead, it's an absolute pointer relative to dynamic state base
@@ -428,7 +428,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
          ibc_ref sampler_base_ptr;
          ibc_ref g0_3 = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
          g0_3.hw_grf.byte += 3 * sizeof(uint32_t);
-         if (sampler_bti.file == IBC_REG_FILE_IMM) {
+         if (sampler_bti.file == IBC_FILE_IMM) {
             assert(sampler_bti_imm >= 16);
             const unsigned sampler_state_size = 16; /* 16 bytes */
             const uint32_t sampler_offset_B =
@@ -452,7 +452,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
       send->has_header = true;
    }
 
-   if (shadow_c.file != IBC_REG_FILE_NONE)
+   if (shadow_c.file != IBC_FILE_NONE)
       srcs[num_srcs++] = shadow_c;
 
    bool coord_done = false;
@@ -548,7 +548,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
          srcs[num_srcs++] = ibc_comp_ref(coord, i);
    }
 
-   if (min_lod.file != IBC_REG_FILE_NONE) {
+   if (min_lod.file != IBC_FILE_NONE) {
       /* Account for all of the missing coordinate sources */
       num_srcs += 4 - num_coord_comps;
       if (intrin->op == IBC_INTRINSIC_OP_TXD)
@@ -559,7 +559,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
 
    for (unsigned i = 0; i < num_srcs; i++) {
       if (i == 0 && send->has_header) {
-         assert(srcs[i].file == IBC_REG_FILE_HW_GRF);
+         assert(srcs[i].file == IBC_FILE_HW_GRF);
          send->mlen++;
       } else {
          send->mlen += b->simd_width / 8;
@@ -576,7 +576,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
          ibc_MOV_to(b, msg_dest, srcs[i]);
          ibc_builder_pop(b);
          msg_dest.hw_grf.byte += REG_SIZE;
-      } else if (srcs[i].file == IBC_REG_FILE_NONE) {
+      } else if (srcs[i].file == IBC_FILE_NONE) {
          /* Just advance it */
          msg_dest.hw_grf.byte += b->simd_width * sizeof(uint32_t);
       } else {
@@ -591,21 +591,21 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
 
    const unsigned msg_type =
       sampler_msg_type(devinfo, intrin->op,
-                       shadow_c.file != IBC_REG_FILE_NONE, zero_lod);
+                       shadow_c.file != IBC_FILE_NONE, zero_lod);
    const unsigned simd_mode =
       intrin->instr.simd_width <= 8 ? BRW_SAMPLER_SIMD_MODE_SIMD8 :
                                       BRW_SAMPLER_SIMD_MODE_SIMD16;
 
    send->sfid = BRW_SFID_SAMPLER;
-   if (surface_bti.file == IBC_REG_FILE_IMM &&
-       (sampler_bti.file == IBC_REG_FILE_IMM ||
-        sampler_handle.file != IBC_REG_FILE_NONE)) {
+   if (surface_bti.file == IBC_FILE_IMM &&
+       (sampler_bti.file == IBC_FILE_IMM ||
+        sampler_handle.file != IBC_FILE_NONE)) {
       send->desc_imm = brw_sampler_desc(devinfo,
                                         surface_bti_imm,
                                         sampler_bti_imm % 16,
                                         msg_type, simd_mode,
                                         0 /* return_format unused on gen7+ */);
-   } else if (surface_handle.file != IBC_REG_FILE_NONE) {
+   } else if (surface_handle.file != IBC_FILE_NONE) {
       /* Bindless surface */
       assert(devinfo->gen >= 9);
       send->desc_imm = brw_sampler_desc(devinfo,
@@ -617,8 +617,8 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
       /* For bindless samplers, the entire address is included in the message
        * header so we can leave the portion in the message descriptor 0.
        */
-      if (sampler_bti.file != IBC_REG_FILE_NONE &&
-          sampler_bti.file != IBC_REG_FILE_IMM) {
+      if (sampler_bti.file != IBC_FILE_NONE &&
+          sampler_bti.file != IBC_FILE_IMM) {
          ibc_builder_push_scalar(b);
          send->desc = ibc_SHL(b, IBC_TYPE_UD, sampler_bti, ibc_imm_ud(8));
          ibc_builder_pop(b);
@@ -640,9 +640,9 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
          /* This case is common in GL */
          send->desc = ibc_MUL(b, IBC_TYPE_UD, surface_bti, ibc_imm_ud(0x101));
       } else {
-         if (sampler_handle.file != IBC_REG_FILE_NONE) {
+         if (sampler_handle.file != IBC_FILE_NONE) {
             send->desc = ibc_MOV(b, IBC_TYPE_UD, surface_bti);
-         } else if (sampler_bti.file == IBC_REG_FILE_IMM) {
+         } else if (sampler_bti.file == IBC_FILE_IMM) {
             send->desc = ibc_OR(b, IBC_TYPE_UD, surface_bti,
                                    ibc_imm_ud(sampler_bti_imm << 8));
          } else {
@@ -683,7 +683,7 @@ ibc_lower_io_to_sends(ibc_shader *shader)
 
       case IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO:
          /* Only lower BLOCK_LOAD_UBO if it doesn't have a push GRF */
-         if (intrin->src[0].ref.file == IBC_REG_FILE_HW_GRF)
+         if (intrin->src[0].ref.file == IBC_FILE_HW_GRF)
             continue;
          break;
       default:

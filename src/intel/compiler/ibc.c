@@ -26,7 +26,7 @@
 #include "dev/gen_debug.h"
 
 static ibc_reg *
-ibc_reg_create(ibc_shader *shader, enum ibc_reg_file file)
+ibc_reg_create(ibc_shader *shader, enum ibc_file file)
 {
    ibc_reg *reg = rzalloc(shader, ibc_reg);
 
@@ -42,7 +42,7 @@ ibc_logical_reg_create(ibc_shader *shader,
                        uint8_t bit_size, uint8_t num_comps,
                        uint8_t simd_group, uint8_t simd_width)
 {
-   ibc_reg *reg = ibc_reg_create(shader, IBC_REG_FILE_LOGICAL);
+   ibc_reg *reg = ibc_reg_create(shader, IBC_FILE_LOGICAL);
 
    reg->is_wlr = true;
    reg->logical.bit_size = bit_size;
@@ -56,7 +56,7 @@ ibc_logical_reg_create(ibc_shader *shader,
 ibc_reg *
 ibc_hw_grf_reg_create(ibc_shader *shader, uint16_t size, uint8_t align)
 {
-   ibc_reg *reg = ibc_reg_create(shader, IBC_REG_FILE_HW_GRF);
+   ibc_reg *reg = ibc_reg_create(shader, IBC_FILE_HW_GRF);
 
    reg->is_wlr = true;
    reg->hw_grf.size = size;
@@ -68,7 +68,7 @@ ibc_hw_grf_reg_create(ibc_shader *shader, uint16_t size, uint8_t align)
 ibc_reg *
 ibc_flag_reg_create(ibc_shader *shader, uint8_t bits)
 {
-   ibc_reg *reg = ibc_reg_create(shader, IBC_REG_FILE_FLAG);
+   ibc_reg *reg = ibc_reg_create(shader, IBC_FILE_FLAG);
 
    reg->is_wlr = true;
    reg->flag.bits = bits;
@@ -101,7 +101,7 @@ ibc_reg_write_link(ibc_reg_write *write, ibc_ref *ref, void *_instr)
    ibc_instr *instr = _instr;
    assert(write->instr == NULL);
 
-   if (ref->file == IBC_REG_FILE_NONE || ref->file == IBC_REG_FILE_IMM)
+   if (ref->file == IBC_FILE_NONE || ref->file == IBC_FILE_IMM)
       return true;
 
    if (ref->reg) {
@@ -118,8 +118,8 @@ ibc_reg_write_unlink(ibc_reg_write *write, UNUSED ibc_ref *ref, void *_instr)
    ibc_instr *instr = _instr;
    if (write->instr) {
       assert(write->instr == instr);
-      assert(ref->file != IBC_REG_FILE_NONE);
-      assert(ref->file != IBC_REG_FILE_IMM);
+      assert(ref->file != IBC_FILE_NONE);
+      assert(ref->file != IBC_FILE_IMM);
       assert(ref->reg != NULL);
       list_del(&write->link);
       write->instr = NULL;
@@ -146,7 +146,7 @@ static int8_t
 num_comps_for_reg_count(ibc_ref ref, unsigned reg_count,
                         unsigned simd_width)
 {
-   if (ref.file != IBC_REG_FILE_LOGICAL)
+   if (ref.file != IBC_FILE_LOGICAL)
       return -1;
 
    /* We assume here that the register is tightly packed and works out to a
@@ -182,11 +182,11 @@ ibc_instr_foreach_read(ibc_instr *instr, ibc_ref_cb cb, void *state)
 
    case IBC_INSTR_TYPE_SEND: {
       ibc_send_instr *send = ibc_instr_as_send(instr);
-      if (send->desc.file != IBC_REG_FILE_NONE &&
+      if (send->desc.file != IBC_FILE_NONE &&
           !cb(&send->desc, sizeof(uint32_t), 1, 0, 1, state))
          return false;
 
-      if (send->ex_desc.file != IBC_REG_FILE_NONE &&
+      if (send->ex_desc.file != IBC_FILE_NONE &&
           !cb(&send->ex_desc, sizeof(uint32_t), 1, 0, 1, state))
          return false;
 
