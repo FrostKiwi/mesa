@@ -28,17 +28,17 @@ static unsigned
 ref_stride(const ibc_ref *ref)
 {
    switch (ref->file) {
-   case IBC_REG_FILE_NONE:
-   case IBC_REG_FILE_IMM:
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
       return 0;
 
-   case IBC_REG_FILE_HW_GRF:
+   case IBC_FILE_HW_GRF:
       return ref->hw_grf.hstride;
 
-   case IBC_REG_FILE_LOGICAL:
+   case IBC_FILE_LOGICAL:
       return ref->reg->logical.stride;
 
-   case IBC_REG_FILE_FLAG:
+   case IBC_FILE_FLAG:
       return 0;
    }
 
@@ -102,9 +102,9 @@ ibc_lower_gather_ops(ibc_shader *shader)
             assert(b.simd_group == intrin->src[i].simd_group);
             assert(intrin->src[i].num_comps == intrin->num_dest_comps);
             if (intrin->src[0].num_comps > 1) {
-               assert(intrin->src[i].ref.file == IBC_REG_FILE_IMM ||
-                      intrin->src[i].ref.file == IBC_REG_FILE_LOGICAL);
-               assert(intrin->dest.file == IBC_REG_FILE_LOGICAL);
+               assert(intrin->src[i].ref.file == IBC_FILE_IMM ||
+                      intrin->src[i].ref.file == IBC_FILE_LOGICAL);
+               assert(intrin->dest.file == IBC_FILE_LOGICAL);
             }
             ibc_ref mov_dest = intrin->dest;
             ibc_ref mov_src = intrin->src[i].ref;
@@ -112,7 +112,7 @@ ibc_lower_gather_ops(ibc_shader *shader)
             ibc_ref_simd_slice(&mov_src, rel_group);
             for (unsigned j = 0; j < intrin->src[i].num_comps; j++) {
                build_MOV_raw(&b, mov_dest, mov_src);
-               if (mov_src.file == IBC_REG_FILE_LOGICAL)
+               if (mov_src.file == IBC_FILE_LOGICAL)
                   mov_src.logical.comp++;
                mov_dest.logical.comp++;
             }
@@ -126,7 +126,7 @@ ibc_lower_gather_ops(ibc_shader *shader)
          else
             ibc_builder_push_group(&b, instr->simd_group, instr->simd_width);
 
-         assert(intrin->dest.file == IBC_REG_FILE_LOGICAL);
+         assert(intrin->dest.file == IBC_FILE_LOGICAL);
          assert(intrin->num_srcs == intrin->num_dest_comps);
 
          ibc_ref dest = intrin->dest;
