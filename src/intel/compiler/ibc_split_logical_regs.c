@@ -230,5 +230,7 @@ ibc_split_logical_regs(ibc_shader *shader)
       ibc_instr_foreach_write(instr, rewrite_ref_if_split, &state);
    }
 
+   ralloc_free(state.splits);
+
    return progress;
 }

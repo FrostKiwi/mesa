@@ -1156,5 +1156,7 @@ fail:
    for (unsigned i = 0; i < ARRAY_SIZE(state.strided_alloc); i++)
       ibc_strided_reg_alloc_finish(&state.strided_alloc[i]);
 
+   ralloc_free(state.mem_ctx);
+
    return allocated;
 }
