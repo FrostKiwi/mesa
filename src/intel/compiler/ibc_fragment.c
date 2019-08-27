@@ -339,6 +339,62 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_load_sample_id: {
+      assert(nir_dest_bit_size(instr->dest) == 32);
+      if (!key->multisample_fbo) {
+         /* As per GL_ARB_sample_shading specification:
+          * "When rendering to a non-multisample buffer, or if multisample
+          *  rasterization is disabled, gl_SampleID will always be zero."
+          */
+         dest = ibc_MOV(b, IBC_TYPE_UD, ibc_imm_uw(0));
+      } else {
+         /* Sample ID comes in as 4-bit numbers in g1.0:
+          *
+          *    15:12 Slot 3 SampleID (only used in SIMD16)
+          *     11:8 Slot 2 SampleID (only used in SIMD16)
+          *      7:4 Slot 1 SampleID
+          *      3:0 Slot 0 SampleID
+          *
+          * Each slot corresponds to four channels, so we want to replicate
+          * each half-byte value to 4 channels in a row:
+          *
+          *    dst+0:    .7    .6    .5    .4    .3    .2    .1    .0
+          *             7:4   7:4   7:4   7:4   3:0   3:0   3:0   3:0
+          *
+          *    dst+1:    .7    .6    .5    .4    .3    .2    .1    .0  (if SIMD16)
+          *           15:12 15:12 15:12 15:12  11:8  11:8  11:8  11:8
+          *
+          * First, we read g1.0 with a <1,8,0>UB region, causing the first 8
+          * channels to read the first byte (7:0), and the second group of 8
+          * channels to read the second byte (15:8).  Then, we shift right by
+          * a vector immediate of <4, 4, 4, 4, 0, 0, 0, 0>, moving the slot
+          * 1 / 3 values into place.  Finally, we AND with 0xf to keep the low
+          * nibble.
+          *
+          *    shr(16) tmp<1>W g1.0<1,8,0>B 0x44440000:V
+          *    and(16) dst<1>D tmp<8,8,1>W  0xf:W
+          *
+          * TODO: These payload bits exist on Gen7 too, but they appear to
+          *       always be zero, so this code fails to work.  We should find
+          *       out why.
+          */
+         for (unsigned g = 0; g < b->simd_width; g += 16) {
+            ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
+            ibc_ref src0 = payload->pixel[g / 16];
+            src0.type = IBC_TYPE_UB;
+            src0.hw_grf.vstride = ibc_type_byte_size(IBC_TYPE_UB);
+            src0.hw_grf.width = 8;
+            src0.hw_grf.hstride = 0;
+            ibc_ref sample_id = ibc_SHR(b, IBC_TYPE_UW,
+                                        src0, ibc_imm_v(0x44440000));
+            ibc_builder_pop(b);
+            set_ref_or_zip(b, &dest, sample_id, 1);
+         }
+         dest = ibc_AND(b, IBC_TYPE_UD, dest, ibc_imm_uw(0xf));
+      }
+      break;
+   }
+
    case nir_intrinsic_load_barycentric_pixel:
    case nir_intrinsic_load_barycentric_centroid:
    case nir_intrinsic_load_barycentric_sample: {
