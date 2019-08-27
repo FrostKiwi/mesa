@@ -129,6 +129,9 @@ refs_equal(const ibc_ref *ref_a, const ibc_ref *ref_b,
    if (!refs_equal_except_reg(ref_a, ref_b))
       return false;
 
+   if (ref_a->file == IBC_FILE_NONE || ref_a->file == IBC_FILE_IMM)
+      return true;
+
    /* Reads from non-WLR registers constitute different values and we can't
     * CSE them.
     */
@@ -147,7 +150,13 @@ refs_equal(const ibc_ref *ref_a, const ibc_ref *ref_b,
 bool
 ibc_refs_equal(ibc_ref a, ibc_ref b)
 {
-   return refs_equal_except_reg(&a, &b) && a.reg == b.reg;
+   if (!refs_equal_except_reg(&a, &b))
+      return false;
+
+   if (a.file == IBC_FILE_NONE || a.file == IBC_FILE_IMM)
+      return true;
+
+   return a.reg == b.reg;
 }
 
 static uint32_t
