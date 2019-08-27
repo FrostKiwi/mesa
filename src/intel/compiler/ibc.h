@@ -1146,6 +1146,7 @@ void ibc_lower_io_urb_write_to_send(struct ibc_builder *b,
 void ibc_lower_io_fb_write_to_send(struct ibc_builder *b,
                                    ibc_send_instr *send,
                                    const ibc_intrinsic_instr *intrin);
+bool ibc_lower_overlapping_send_payloads(ibc_shader *shader);
 bool ibc_lower_phis(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);
 unsigned ibc_fb_write_instr_max_simd_width(const ibc_intrinsic_instr *write,
