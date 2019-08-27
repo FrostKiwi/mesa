@@ -209,6 +209,49 @@ ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
 }
 
 static inline ibc_ref
+ibc_ref_retype(ibc_ref ref, enum ibc_type type, unsigned byte)
+{
+   if (ref.type == IBC_TYPE_FLAG) {
+      assert(ref.file == IBC_FILE_FLAG);
+      assert(ref.flag.bit + byte * 8 + ibc_type_bit_size(type) <=
+             ref.reg->flag.bits);
+      ref.type = type;
+      ref.flag.bit += byte * 8;
+   } else {
+      /* The hard limit is against the register size but this functions should
+       * really only be used for restricting types.  Set the type manually if
+       * you want to use it for something more generic.
+       */
+      assert(byte + ibc_type_byte_size(type) <= ibc_type_byte_size(ref.type));
+      ref.type = type;
+      switch (ref.file) {
+      case IBC_FILE_NONE:
+         return ref;
+
+      case IBC_FILE_IMM: {
+         uint64_t *data = (uint64_t *)ref.imm;
+         *data >>= byte * 8;
+         if (ibc_type_bit_size(type) < 64)
+            *data &= (1 << ibc_type_bit_size(type)) - 1;
+         return ref;
+      }
+
+      case IBC_FILE_LOGICAL:
+         ref.logical.byte += byte;
+         return ref;
+
+      case IBC_FILE_HW_GRF:
+         ref.hw_grf.byte += byte;
+         return ref;
+
+      case IBC_FILE_FLAG:
+         unreachable("Unsupported file");
+      }
+      unreachable("Invalid register file");
+   }
+}
+
+static inline ibc_ref
 ibc_iref(const ibc_reg *reg)
 {
    return ibc_typed_ref(reg, IBC_TYPE_INT);
