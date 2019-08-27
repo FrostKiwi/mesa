@@ -176,6 +176,8 @@ ibc_frag_coord(struct nir_to_ibc_state *nti)
    struct ibc_fs_payload *payload = (struct ibc_fs_payload *)nti->payload;
    ibc_builder *b = &nti->b;
 
+   assert(b->simd_group == 0);
+
    ibc_ref frag_coord[4] = {};
    for (unsigned g = 0; g < b->simd_width; g += 16) {
       ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
@@ -193,29 +195,20 @@ ibc_frag_coord(struct nir_to_ibc_state *nti)
       ibc_reg *tmp_grf =
          ibc_hw_grf_reg_create(b->shader, b->simd_width * 4, REG_SIZE);
 
-      ibc_ref add_src = payload->pixel[b->simd_group / 16];
-      assert(add_src.file == IBC_FILE_HW_GRF);
-      add_src.type = IBC_TYPE_UW;
-      add_src.hw_grf.byte += 8;
-      add_src.hw_grf.vstride = 1 * ibc_type_byte_size(IBC_TYPE_UW);
-      add_src.hw_grf.width = 4;
-      add_src.hw_grf.hstride = 0 * ibc_type_byte_size(IBC_TYPE_UW);
-
       ibc_builder_push_we_all(b, b->simd_width * 2);
+      ibc_ref add_src = ibc_restride(b, payload->pixel[g / 16],
+                                     IBC_TYPE_UW, 4, 1, 4, 0);
       ibc_build_alu2(b, IBC_ALU_OP_ADD, ibc_typed_ref(tmp_grf, IBC_TYPE_UW),
                      add_src, ibc_imm_v(0x11001010));
       ibc_builder_pop(b);
 
       /* Now we carefully move the X and Y bits into their proper channels */
-      ibc_ref pix_src = ibc_typed_ref(tmp_grf, IBC_TYPE_UW);
-      pix_src.hw_grf.vstride = 8 * ibc_type_byte_size(IBC_TYPE_UW);
-      pix_src.hw_grf.width = 4;
-      pix_src.hw_grf.hstride = 1 * ibc_type_byte_size(IBC_TYPE_UW);
-
-      assert(pix_src.hw_grf.byte == 0);
-      ibc_ref x = ibc_MOV(b, IBC_TYPE_F, pix_src);
-      pix_src.hw_grf.byte += 4 * ibc_type_byte_size(pix_src.type);
-      ibc_ref y = ibc_MOV(b, IBC_TYPE_F, pix_src);
+      ibc_ref x = ibc_MOV(b, IBC_TYPE_F,
+                          ibc_restride(b, ibc_typed_ref(tmp_grf, IBC_TYPE_UW),
+                                       IBC_TYPE_UW, 0, 8, 4, 1));
+      ibc_ref y = ibc_MOV(b, IBC_TYPE_F,
+                          ibc_restride(b, ibc_typed_ref(tmp_grf, IBC_TYPE_UW),
+                                       IBC_TYPE_UW, 4, 8, 4, 1));
 
       ibc_builder_pop(b);
 
@@ -378,15 +371,13 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
           *       always be zero, so this code fails to work.  We should find
           *       out why.
           */
+         assert(b->simd_group == 0);
          for (unsigned g = 0; g < b->simd_width; g += 16) {
             ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
-            ibc_ref src0 = payload->pixel[g / 16];
-            src0.type = IBC_TYPE_UB;
-            src0.hw_grf.vstride = ibc_type_byte_size(IBC_TYPE_UB);
-            src0.hw_grf.width = 8;
-            src0.hw_grf.hstride = 0;
+            ibc_ref strided = ibc_restride(b, payload->pixel[g / 16],
+                                           IBC_TYPE_UB, 0, 1, 8, 0);
             ibc_ref sample_id = ibc_SHR(b, IBC_TYPE_UW,
-                                        src0, ibc_imm_v(0x44440000));
+                                        strided, ibc_imm_v(0x44440000));
             ibc_builder_pop(b);
             set_ref_or_zip(b, &dest, sample_id, 1);
          }
