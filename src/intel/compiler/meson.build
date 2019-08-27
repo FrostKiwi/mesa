@@ -147,6 +147,7 @@ libintel_compiler_files = files(
   'ibc_live_intervals.h',
   'ibc_lower_gather_ops.c',
   'ibc_lower_io_to_sends.c',
+  'ibc_lower_overlapping_send_payloads.c',
   'ibc_lower_simd_width.c',
   'ibc_nir.h',
   'ibc_opt_copy_prop.c',
