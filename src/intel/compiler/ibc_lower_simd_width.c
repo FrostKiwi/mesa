@@ -238,11 +238,11 @@ ibc_lower_simd_width(ibc_shader *shader)
           */
          for (unsigned i = 0; i < num_splits; i++)
             split_dests[i] = *dest;
-      } else if (dest->reg->is_wlr &&
-                 !list_is_singular(&dest->reg->writes)) {
-         /* WLR multi-writes are expected to be trivially splittable and
-          * we have to naively split them in order to maintain the WLR
-          * properties.
+      } else if (instr->we_all ||
+                 (dest->reg->is_wlr && !list_is_singular(&dest->reg->writes))) {
+         /* WLR multi-writes and we_all writes are expected to be trivially
+          * splittable and we have to naively split them in order to maintain
+          * the WLR properties.
           */
          for (unsigned i = 0; i < num_splits; i++) {
             split_dests[i] = *dest;
