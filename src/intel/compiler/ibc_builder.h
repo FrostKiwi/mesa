@@ -536,6 +536,43 @@ ibc_MOV_raw(ibc_builder *b, ibc_ref src)
 }
 
 static inline ibc_ref
+ibc_restride(ibc_builder *b, ibc_ref src, enum ibc_type type, unsigned offset,
+             unsigned vstride, unsigned width, unsigned hstride)
+{
+   /* To make things easy on the caller, we take offset, vstride and hstride
+    * in units of the type size.
+    */
+   offset *= ibc_type_byte_size(type);
+   vstride *= ibc_type_byte_size(type);
+   hstride *= ibc_type_byte_size(type);
+
+   ibc_ref ref = src;
+   if (src.file != IBC_FILE_HW_GRF) {
+      unsigned grf_size = offset;
+      if (b->simd_width >= width) {
+         assert(b->simd_width % width == 0);
+         grf_size += vstride * ((b->simd_width / width) - 1);
+      }
+      grf_size += hstride * (width - 1);
+      grf_size += ibc_type_byte_size(type);
+      grf_size = util_next_power_of_two(grf_size);
+
+      ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size,
+                                           MIN2(grf_size, REG_SIZE));
+      ref = ibc_typed_ref(grf, src.type);
+
+      ibc_MOV_to(b, ref, src);
+   }
+
+   ref.type = type;
+   ref.hw_grf.byte += offset;
+   ref.hw_grf.vstride = vstride;
+   ref.hw_grf.width = width;
+   ref.hw_grf.hstride = hstride;
+   return ref;
+}
+
+static inline ibc_ref
 ibc_SEL(ibc_builder *b, enum ibc_type dest_type,
         ibc_ref flag, ibc_ref src0, ibc_ref src1)
 {

@@ -282,63 +282,24 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    case nir_op_fddx:
    case nir_op_fddx_coarse: {
-      /* First, we have to move it to a GRF so we can stride */
-      assert(src[0].type == IBC_TYPE_F);
-      const unsigned grf_size = b->simd_width * ibc_type_byte_size(src[0].type);
-      ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size, 32);
-      ibc_MOV_to(b, ibc_typed_ref(grf, src[0].type), src[0]);
-
-      ibc_ref add_src0 = ibc_typed_ref(grf, src[0].type);
-      add_src0.hw_grf.vstride = 4 * ibc_type_byte_size(src[0].type);
-      add_src0.hw_grf.width = 4;
-      add_src0.hw_grf.hstride = 0;
-
-      ibc_ref add_src1 = add_src0;
-      add_src1.hw_grf.byte += ibc_type_byte_size(src[0].type);
-
-      dest = ibc_ADD(b, src[0].type,
-                     ibc_NEG(b, src[0].type, add_src0), add_src1);
+      ibc_ref left = ibc_restride(b, src[0], IBC_TYPE_F, 0, 4, 4, 0);
+      ibc_ref right = ibc_restride(b, src[0], IBC_TYPE_F, 1, 4, 4, 0);
+      dest = ibc_ADD(b, IBC_TYPE_F, ibc_NEG(b, IBC_TYPE_F, left), right);
       break;
    }
 
    case nir_op_fddx_fine: {
-      /* First, we have to move it to a GRF so we can stride */
-      assert(src[0].type == IBC_TYPE_F);
-      const unsigned grf_size = b->simd_width * ibc_type_byte_size(src[0].type);
-      ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size, 32);
-      ibc_MOV_to(b, ibc_typed_ref(grf, src[0].type), src[0]);
-
-      ibc_ref add_src0 = ibc_typed_ref(grf, src[0].type);
-      add_src0.hw_grf.vstride = 2 * ibc_type_byte_size(src[0].type);
-      add_src0.hw_grf.width = 2;
-      add_src0.hw_grf.hstride = 0;
-
-      ibc_ref add_src1 = add_src0;
-      add_src1.hw_grf.byte += ibc_type_byte_size(src[0].type);
-
-      dest = ibc_ADD(b, src[0].type,
-                     ibc_NEG(b, src[0].type, add_src0), add_src1);
+      ibc_ref left = ibc_restride(b, src[0], IBC_TYPE_F, 0, 2, 2, 0);
+      ibc_ref right = ibc_restride(b, src[0], IBC_TYPE_F, 1, 2, 2, 0);
+      dest = ibc_ADD(b, IBC_TYPE_F, ibc_NEG(b, IBC_TYPE_F, left), right);
       break;
    }
 
    case nir_op_fddy:
    case nir_op_fddy_coarse: {
-      /* First, we have to move it to a GRF so we can stride */
-      assert(src[0].type == IBC_TYPE_F);
-      const unsigned grf_size = b->simd_width * ibc_type_byte_size(src[0].type);
-      ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size, 32);
-      ibc_MOV_to(b, ibc_typed_ref(grf, src[0].type), src[0]);
-
-      ibc_ref add_src0 = ibc_typed_ref(grf, src[0].type);
-      add_src0.hw_grf.vstride = 4 * ibc_type_byte_size(src[0].type);
-      add_src0.hw_grf.width = 4;
-      add_src0.hw_grf.hstride = 0;
-
-      ibc_ref add_src1 = add_src0;
-      add_src1.hw_grf.byte += 2 * ibc_type_byte_size(src[0].type);
-
-      dest = ibc_ADD(b, src[0].type,
-                     ibc_NEG(b, src[0].type, add_src0), add_src1);
+      ibc_ref top = ibc_restride(b, src[0], IBC_TYPE_F, 0, 4, 4, 0);
+      ibc_ref bottom = ibc_restride(b, src[0], IBC_TYPE_F, 2, 4, 4, 0);
+      dest = ibc_ADD(b, IBC_TYPE_F, ibc_NEG(b, IBC_TYPE_F, top), bottom);
       break;
    }
 
