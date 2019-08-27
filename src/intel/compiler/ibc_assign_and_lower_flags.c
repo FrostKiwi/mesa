@@ -632,7 +632,8 @@ assigned:
       assert(ip > 0);
       const ibc_reg_live_intervals *rli = &state->live->regs[reg->index];
       for (unsigned i= 0; i < rli->num_chunks; i++) {
-         if (interval_set_contains(rli->chunk_live[i], ip - 1)) {
+         if (rli->chunk_live[i] &&
+             interval_set_contains(rli->chunk_live[i], ip - 1)) {
             valid &= ~FLAG_REP_FLAG;
             break;
          }
