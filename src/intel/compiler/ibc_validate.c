@@ -180,13 +180,19 @@ ibc_validate_ref(struct ibc_validate_state *s,
          /* Byte-wise access of logical registers is allowed but it has strict
           * restrictions and assumes the register is tightly packed.
           */
-         ibc_assert(s, ref_simd_group == lreg->simd_group);
-         ibc_assert(s, ref_simd_width == lreg->simd_width);
          ibc_assert(s, ibc_type_bit_size(ref->type) >= 8);
          ibc_assert(s, ibc_type_bit_size(ref->type) == lreg->bit_size);
+         ibc_assert(s, !lref->broadcast);
          unsigned comp_size_B = (lreg->bit_size / 8) * lreg->simd_width;
          ibc_assert(s, num_bytes % comp_size_B == 0);
          num_comps = num_bytes / comp_size_B;
+         if (num_comps > 1) {
+            /* If we are reading more than one component, we have to be packed
+             * and have an exactly matching SIMD group.
+             */
+            ibc_assert(s, ref_simd_group == lreg->simd_group);
+            ibc_assert(s, ref_simd_width == lreg->simd_width);
+         }
       } else {
          ibc_assert(s, num_bytes == 0);
       }
