@@ -447,7 +447,7 @@ static ibc_ref
 nti_initialize_flag(ibc_builder *b, int32_t flag_val)
 {
    assert(b->simd_group == 0);
-   ibc_reg *flag_reg = ibc_flag_reg_create(b->shader, b->simd_width);
+   ibc_reg *flag_reg = ibc_flag_reg_create(b->shader, MAX2(b->simd_width, 16));
 
    ibc_builder_push_scalar(b);
    if (flag_reg->flag.bits <= 16) {
