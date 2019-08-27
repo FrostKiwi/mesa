@@ -1065,6 +1065,20 @@ ibc_assign_regs(ibc_shader *shader, bool allow_spilling)
 
       ibc_phys_reg_alloc_free_regs(&state.phys_alloc, state.ip);
 
+      if (instr->type == IBC_INSTR_TYPE_SEND) {
+         /* We can't validate this in ibc_validate because .packed gets set as
+          * a late-binding thing.  However, before we RA, we should assert
+          * that things are packed.
+          */
+         ibc_send_instr *send = ibc_instr_as_send(instr);
+         if (send->rlen > 0 && send->dest.file == IBC_FILE_LOGICAL)
+            assert(send->dest.reg->logical.packed);
+         if (send->payload[0].file == IBC_FILE_LOGICAL)
+            assert(send->payload[0].reg->logical.packed);
+         if (send->ex_mlen > 0 && send->payload[1].file == IBC_FILE_LOGICAL)
+            assert(send->payload[1].reg->logical.packed);
+      }
+
       if (instr->type == IBC_INSTR_TYPE_INTRINSIC) {
          ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
          if (intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD) {
