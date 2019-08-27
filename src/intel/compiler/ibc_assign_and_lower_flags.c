@@ -682,13 +682,22 @@ flag_ref_chunk_range(const ibc_ref *ref,
    }
 }
 
+static void
+instr_flag_ref_chunk_range(const ibc_instr *instr, const ibc_ref *ref,
+                           unsigned *start_chunk, unsigned *num_chunks)
+{
+   assert(instr || ref->type != IBC_TYPE_FLAG);
+   flag_ref_chunk_range(ref, instr ? instr->simd_group : 0,
+                             instr ? instr->simd_width : 1,
+                             start_chunk, num_chunks);
+}
+
 static bool
 flag_ref_valid(const ibc_instr *instr, const ibc_ref *ref, unsigned chunk,
                struct ibc_assign_flags_state *state)
 {
    unsigned start_chunk, num_chunks;
-   flag_ref_chunk_range(ref, instr->simd_group, instr->simd_width,
-                        &start_chunk, &num_chunks);
+   instr_flag_ref_chunk_range(instr, ref, &start_chunk, &num_chunks);
 
    enum flag_rep valid = FLAG_REP_ALL;
    for (unsigned c = 0; c < num_chunks; c++) {
@@ -705,8 +714,7 @@ instr_set_flag_ref(ibc_instr *instr, ibc_ref *ref, unsigned chunk,
                    struct ibc_assign_flags_state *state)
 {
    unsigned start_chunk, num_chunks;
-   flag_ref_chunk_range(ref, instr->simd_group, instr->simd_width,
-                        &start_chunk, &num_chunks);
+   instr_flag_ref_chunk_range(instr, ref, &start_chunk, &num_chunks);
 
    if (read)
       load_flag_if_needed(chunk, start_chunk, num_chunks, false, state);
