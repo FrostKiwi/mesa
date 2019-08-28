@@ -85,6 +85,20 @@ ibc_flag_reg_create(ibc_shader *shader, uint8_t bits)
    return reg;
 }
 
+ibc_reg *
+ibc_accum_reg_create(ibc_shader *shader, enum ibc_type type, uint8_t channels)
+{
+   ibc_reg *reg = ibc_reg_create(shader, IBC_FILE_ACCUM);
+
+   reg->is_wlr = true;
+   reg->accum.type = type;
+   reg->accum.channels = channels;
+   reg->accum.align_mul = channels;
+   reg->accum.align_offset = 0;
+
+   return reg;
+}
+
 ibc_instr *
 ibc_reg_ssa_instr(const ibc_reg *reg)
 {

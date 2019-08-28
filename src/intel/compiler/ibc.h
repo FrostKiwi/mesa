@@ -133,6 +133,7 @@ enum PACKED ibc_file {
    IBC_FILE_LOGICAL,
    IBC_FILE_HW_GRF,
    IBC_FILE_FLAG,
+   IBC_FILE_ACCUM,
 };
 
 
@@ -219,6 +220,58 @@ typedef struct ibc_flag_reg {
 } ibc_flag_reg;
 
 
+/** A struct representing an accumulator register
+ *
+ */
+typedef struct ibc_accum_reg {
+   /** Type of this register
+    *
+    * Accumulators, unlike other register types, have weird behavior if you
+    * mix and match types.  From the Skylake PRM:
+    *
+    *    "Reading accumulator content with a datatype different from the
+    *    previous write will result in undeterministic values."
+    *
+    * To protect against this, we assign each virtual accumulator a type and
+    * validate that only that type is used to access it.
+    */
+   enum ibc_type type;
+
+   /** Size of this register in type-sized channels */
+   uint8_t channels;
+
+   /** Alignment requirement of this register
+    *
+    * The accumulator register is aligned such that the number and subnr
+    * chosen satisfies
+    *
+    *       chan = k * align_mul + align_offset
+    *
+    * for some integer k.  This allows us to handle the alignment requirements
+    * of accumulator registers which are allocated for use with second-half
+    * execution groups.
+    */
+   uint8_t align_mul;
+   uint8_t align_offset;
+} ibc_accum_reg;
+
+/** Returns the number of accumulator channels available for the given type */
+static inline unsigned
+ibc_hw_accum_reg_width(enum ibc_type type)
+{
+   switch (type) {
+   case IBC_TYPE_DF: return 4;
+   case IBC_TYPE_F:  return 16;
+   case IBC_TYPE_HF: return 32;
+   case IBC_TYPE_D:
+   case IBC_TYPE_UD: return 8;
+   case IBC_TYPE_W:
+   case IBC_TYPE_UW: return 16;
+   default:          return 0;
+   }
+}
+
+
 /** A struct representing a register */
 typedef struct ibc_reg {
    /** Register type */
@@ -261,6 +314,7 @@ typedef struct ibc_reg {
       ibc_logical_reg logical;
       ibc_hw_grf_reg hw_grf;
       ibc_flag_reg flag;
+      ibc_accum_reg accum;
    };
 } ibc_reg;
 
@@ -272,6 +326,9 @@ ibc_reg *ibc_hw_grf_reg_create(struct ibc_shader *shader,
                                uint16_t size, uint8_t align);
 
 ibc_reg *ibc_flag_reg_create(struct ibc_shader *shader, uint8_t bits);
+
+ibc_reg *ibc_accum_reg_create(struct ibc_shader *shader,
+                              enum ibc_type type, uint8_t channels);
 
 #define ibc_reg_foreach_write(ref, reg) \
    list_for_each_entry(ibc_reg_write, ref, &(reg)->writes, link)
@@ -417,6 +474,22 @@ struct ibc_ref_flag {
 };
 
 
+/** A structure representing ACCUM register access region
+ *
+ * This is a sub-struct of ibc_ref
+ */
+struct ibc_ref_accum {
+   /** Accumulator channel at which the reference starts
+    *
+    * If ibc_ref::reg is not NULL, this is relative to the start of the
+    * virtual accum reg.  If ibc_ref::reg is NULL, this is relative to the
+    * hardware accumulator acc0.0 where it overflows into acc1 whenever chan
+    * is larger than the number of typed channels in acc0.
+    */
+   uint8_t chan;
+};
+
+
 /** A structure representing a register reference (source or destination) in
  * an instruction
  */
@@ -431,6 +504,7 @@ typedef struct ibc_ref {
       struct ibc_ref_logical logical;
       struct ibc_ref_hw_grf hw_grf;
       struct ibc_ref_flag flag;
+      struct ibc_ref_accum accum;
    };
 
    /** Pointer to the register; NULL if immediate */
@@ -499,6 +573,9 @@ ibc_ref_read_is_uniform(ibc_ref ref)
 
    case IBC_FILE_FLAG:
       return ibc_type_bit_size(ref.type) > 1;
+
+   case IBC_FILE_ACCUM:
+      return false;
    }
 
    unreachable("Invalid IBC reg file");
@@ -523,6 +600,10 @@ ibc_ref_simd_slice(ibc_ref *ref, uint8_t rel_simd_group)
       } else {
          assert(ref->flag.bit % ibc_type_bit_size(ref->type) == 0);
       }
+      return;
+
+   case IBC_FILE_ACCUM:
+      ref->accum.chan += rel_simd_group;
       return;
    }
 

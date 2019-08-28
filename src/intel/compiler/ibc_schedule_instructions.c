@@ -76,6 +76,13 @@ ibc_alu_instr_is_compressed(const ibc_alu_instr *alu)
 
    case IBC_FILE_FLAG:
       return false;
+
+   case IBC_FILE_ACCUM: {
+      /* TODO: Is this correct? */
+      unsigned bytes_written = ibc_type_byte_size(alu->dest.type) *
+                               alu->instr.simd_width;
+      return bytes_written > REG_SIZE;
+   }
    }
 
    unreachable("Invalid register file");
@@ -616,6 +623,7 @@ struct ibc_sched_graph_builder {
    ibc_sched_node **chunk_last_write;
    ibc_sched_node **grf_last_write;
    ibc_sched_node *flag_last_write[TOTAL_FLAG_CHUNKS];
+   ibc_sched_node *accum_last_write;
 };
 
 static void
@@ -733,6 +741,8 @@ set_dep_node(ibc_ref *ref, ibc_sched_node *node,
 
       for (unsigned i = 0; i < num_chunks; i++)
          b->flag_last_write[chunk_idx + i] = node;
+   } else if (ref->file == IBC_FILE_ACCUM) {
+      b->accum_last_write = node;
    } else {
       unreachable("Invalid register file for NULL reg");
    }
@@ -841,6 +851,15 @@ foreach_dep_node(ibc_ref *ref,
          last = b->flag_last_write[chunk_idx + i];
          cb(ref, 1, last, b);
       }
+   } else if (ref->file == IBC_FILE_ACCUM) {
+      /* In theory, we could probably track HW flags at a finer granularity so
+       * that flag writes can move past each other in post-RA scheduling.
+       * However, doing so is really tricky and would require tracking which
+       * types are used because a write to acc1 as IBC_TYPE_F might interfere
+       * with access of acc0 as IBC_TYPE_D.
+       */
+      if (b->accum_last_write != NULL)
+         cb(ref, 1, b->accum_last_write, b);
    } else {
       unreachable("Invalid register file for NULL reg");
    }
@@ -1077,6 +1096,9 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
             flag_bits = rli->chunk_simd_width;
             break;
 
+         case IBC_FILE_ACCUM:
+            break;
+
          default:
             unreachable("Unsupported register file");
          }
@@ -1193,6 +1215,7 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
              TOTAL_GRF_BYTES * sizeof(*b.grf_last_write));
    }
    memset(b.flag_last_write, 0, sizeof(b.flag_last_write));
+   b.accum_last_write = NULL;
 
    /* Walk bottom-up to fill out WaR dependencies */
    for (int i = g->num_nodes - 1; i >= 0; i--) {

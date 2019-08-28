@@ -178,6 +178,16 @@ print_ref(FILE *fp, const ibc_ref *ref, bool print_type)
       if (ref->type != IBC_TYPE_FLAG)
          fprintf(fp, ":%s", ibc_type_suffix(ref->type));
       return;
+   case IBC_FILE_ACCUM:
+      if (ref->reg != NULL) {
+         fprintf(fp, "accum%u.%u", ref->reg->index, ref->accum.chan);
+      } else {
+         unsigned acc0_channels = 32 / ibc_type_byte_size(ref->type);
+         fprintf(fp, "acc%u.%u", ref->accum.chan / acc0_channels,
+                                 ref->accum.chan % acc0_channels);
+      }
+      fprintf(fp, ":%s", ibc_type_suffix(ref->type));
+      return;
    }
    unreachable("Unknown register file");
 }
