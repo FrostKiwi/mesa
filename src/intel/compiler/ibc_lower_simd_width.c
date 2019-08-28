@@ -45,6 +45,9 @@ ref_stride(const ibc_ref *ref)
    case IBC_FILE_FLAG:
       assert(ref->type != IBC_TYPE_FLAG);
       return 0;
+
+   case IBC_FILE_ACCUM:
+      return ibc_type_byte_size(ref->type);
    }
 
    unreachable("Unknown register file");

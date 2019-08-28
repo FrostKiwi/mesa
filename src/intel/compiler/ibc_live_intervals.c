@@ -111,6 +111,10 @@ reg_num_chunks(const ibc_reg *reg, ibc_live_intervals *live)
    case IBC_FILE_FLAG:
       assert(reg->flag.bits % simd_divisor == 0);
       return reg->flag.bits >> simd_shift;
+   case IBC_FILE_ACCUM:
+      assert(rli->chunk_byte_size == ibc_type_byte_size(reg->accum.type));
+      assert(reg->accum.channels % simd_divisor == 0);
+      return reg->accum.channels >> simd_shift;
    }
    unreachable("Invalid register file");
 }
@@ -262,6 +266,19 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
       for (unsigned b = bit_chunk_start; b <= bit_chunk_end; b++) {
          assert(b < rli->num_chunks);
          BITSET_SET(chunks, b);
+      }
+      break;
+   }
+
+   case IBC_FILE_ACCUM: {
+      assert(num_comps == 1);
+      assert(ref_byte_size == byte_divisor);
+      assert(ref_byte_size == ibc_type_byte_size(reg->accum.type));
+      unsigned chunk_start = ref->accum.chan >> simd_shift;
+      unsigned chunk_end = (ref->accum.chan + simd_width - 1) >> simd_shift;
+      for (unsigned c = chunk_start; c <= chunk_end; c++) {
+         assert(c < rli->num_chunks);
+         BITSET_SET(chunks, c);
       }
       break;
    }

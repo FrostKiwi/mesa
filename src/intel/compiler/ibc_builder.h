@@ -203,6 +203,10 @@ ibc_typed_ref(const ibc_reg *reg, enum ibc_type type)
              ibc_type_bit_size(ref.type) == 16 ||
              ibc_type_bit_size(ref.type) == 32);
       return ref;
+
+   case IBC_FILE_ACCUM:
+      assert(ref.type == reg->accum.type);
+      return ref;
    }
 
    unreachable("Unknown register file");

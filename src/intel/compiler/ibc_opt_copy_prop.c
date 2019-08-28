@@ -108,6 +108,10 @@ try_compose_refs(ibc_ref *ref_out,
              !outer.logical.broadcast);
       break;
 
+   case IBC_FILE_ACCUM:
+      /* TODO: Figure out how to copy-prop accumulators */
+      return false;
+
    default:
       unreachable("Invalid IBC register file");
    }
