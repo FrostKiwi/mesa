@@ -1307,6 +1307,7 @@ void ibc_lower_and_optimize(ibc_shader *ibc);
 
 bool ibc_lower_fb_writes(ibc_shader *shader);
 bool ibc_lower_gather_ops(ibc_shader *shader);
+bool ibc_lower_integer_multiplication(ibc_shader *shader);
 bool ibc_lower_io_to_sends(ibc_shader *shader);
 void ibc_lower_io_urb_write_to_send(struct ibc_builder *b,
                                     ibc_send_instr *send,
