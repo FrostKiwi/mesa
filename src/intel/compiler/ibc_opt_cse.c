@@ -65,6 +65,10 @@ hash_ref(uint32_t hash, const ibc_ref *ref, const ibc_reg *base_reg)
    case IBC_FILE_FLAG:
       hash = HASH(hash, ref->flag.bit);
       break;
+
+   case IBC_FILE_ACCUM:
+      hash = HASH(hash, ref->accum.chan);
+      break;
    }
 
    /* See also refs_equal */
@@ -115,6 +119,11 @@ refs_equal_except_reg(const ibc_ref *ref_a, const ibc_ref *ref_b)
 
    case IBC_FILE_FLAG:
       if (ref_a->flag.bit != ref_b->flag.bit)
+         return false;
+      break;
+
+   case IBC_FILE_ACCUM:
+      if (ref_a->accum.chan != ref_b->accum.chan)
          return false;
       break;
    }
@@ -346,6 +355,9 @@ hash_wlr_reg_cb(const void *_reg)
       hash = HASH(hash, reg->flag.align_mul);
       hash = HASH(hash, reg->flag.align_offset);
       break;
+
+   case IBC_FILE_ACCUM:
+      unreachable("Unsupported register file");
    }
 
    ibc_reg_foreach_write(write, reg) {
@@ -403,6 +415,9 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
           reg_a->flag.align_offset != reg_b->flag.align_offset)
          return false;
       break;
+
+   case IBC_FILE_ACCUM:
+      unreachable("Unsupported register file");
    }
 
    list_pair_for_each_entry(const ibc_reg_write, write_a, write_b,
@@ -478,6 +493,12 @@ try_cse_write(ibc_reg_write *write, ibc_ref *ref, void *_state)
 
    if (ref->reg == NULL || !ref->reg->is_wlr)
       return true;
+
+   /* We can't CSE accumulators because there's no way to guarantee once we
+    * start CSEing them that we can actually allocate them.
+    */
+   if (ref->file == IBC_FILE_ACCUM)
+      return false;
 
    /* Only bother on the last write instruction */
    if (write->link.next != &ref->reg->writes)
