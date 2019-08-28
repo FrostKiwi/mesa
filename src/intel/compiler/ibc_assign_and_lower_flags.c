@@ -960,6 +960,15 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
                                             &state);
             if (chunk >= 0) {
                ibc_alu_instr_set_cmod(alu, alu->dest, BRW_CONDITIONAL_NZ);
+
+               /* We have to rewrite the destination manually here as it will
+                * stomp valid to FLAG_REP_VECTOR only and we want it to also
+                * in clude FLAG_REP_FLAG.
+                */
+               rewrite_flag_ref(&alu->dest, &alu->instr,
+                                alu->instr.simd_group, alu->instr.simd_width,
+                                &state);
+
                instr_set_flag_ref(instr, &instr->flag, chunk, FLAG_REP_NONE,
                                   FLAG_REP_FLAG | FLAG_REP_VECTOR, &state);
             }
