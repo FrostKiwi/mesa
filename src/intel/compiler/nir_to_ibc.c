@@ -325,19 +325,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    BINOP_CASE(iadd, ADD)
    BINOP_CASE(fadd, ADD)
    BINOP_CASE(fmul, MUL)
-
-   case nir_op_imul:
-      if (nir_src_is_const(instr->src[0].src) &&
-          nir_src_as_uint(instr->src[0].src) < INT16_MAX) {
-         dest = ibc_MUL(b, dest_type, src[1], src[0]);
-      } else if (nir_src_is_const(instr->src[1].src) &&
-                 nir_src_as_uint(instr->src[1].src) < INT16_MAX) {
-         dest = ibc_MUL(b, dest_type, src[0], src[1]);
-      } else {
-         unreachable("Full integer multiplication not supported");
-      }
-      break;
-
+   BINOP_CASE(imul, MUL)
    BINOP_CASE(iand, AND)
    BINOP_CASE(ior,  OR)
    BINOP_CASE(ixor, XOR)
