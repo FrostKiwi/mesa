@@ -117,6 +117,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
 
    case IBC_FILE_HW_GRF:
    case IBC_FILE_FLAG:
+   case IBC_FILE_ACCUM:
       ibc_assert(s, ref->reg == NULL || ref->file == ref->reg->file);
       break;
 
@@ -299,6 +300,26 @@ ibc_validate_ref(struct ibc_validate_state *s,
          } else {
             ibc_assert(s, ref->flag.bit + ibc_type_bit_size(ref->type) <= 64);
          }
+      }
+      return;
+
+   case IBC_FILE_ACCUM:
+      ibc_assert(s, num_comps == 1 && num_bytes == 0);
+      if (ref->reg) {
+         ibc_assert(s, ref->type == ref->reg->accum.type);
+         ibc_assert(s, ref->accum.chan % ref_simd_width == 0);
+         ibc_assert(s, ref->accum.chan + ref_simd_width <=
+                       ref->reg->accum.channels);
+
+         /* Any given accumulator can only be accessed from one block */
+         if (reg_state->write_block_start == NULL) {
+            reg_state->write_block_start = s->block_start;
+         } else {
+            ibc_assert(s, reg_state->write_block_start == s->block_start);
+         }
+      } else {
+         ibc_assert(s, ref->accum.chan + ref_simd_width <=
+                       ibc_hw_accum_reg_width(ref->type));
       }
       return;
    }
@@ -805,6 +826,12 @@ ibc_validate_reg_pre(struct ibc_validate_state *s, const ibc_reg *reg)
       ibc_assert(s, reg->flag.align_mul >= 8 && reg->flag.align_mul <= 32);
       ibc_assert(s, reg->flag.bits <= reg->flag.align_mul);
       ibc_assert(s, reg->flag.align_offset < reg->flag.align_mul);
+      return;
+
+   case IBC_FILE_ACCUM:
+      ibc_assert(s, ibc_hw_accum_reg_width(reg->accum.type) > 0);
+      ibc_assert(s, reg->accum.align_offset + reg->accum.channels <=
+                    ibc_hw_accum_reg_width(reg->accum.type));
       return;
    }
 
