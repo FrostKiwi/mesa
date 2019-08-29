@@ -617,15 +617,15 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
                while (mask) {
                   int b = u_bit_scan(&mask);
                   assert(b >= 0 && b < BITSET_WORDBITS);
-                  struct interval_set *chunk_live =
-                     rli->chunk_live[w * BITSET_WORDBITS + b];
+                  ibc_reg_chunk_live_interval *chunk =
+                     &rli->chunks[w * BITSET_WORDBITS + b];
 
-                  if (chunk_live && byte_live) {
+                  if (chunk->logical && byte_live) {
                      byte_live = interval_set_from_union(alloc->mem_ctx,
-                                                         chunk_live,
+                                                         chunk->logical,
                                                          byte_live);
-                  } else if (chunk_live) {
-                     byte_live = chunk_live;
+                  } else if (chunk->logical) {
+                     byte_live = chunk->logical;
                   }
                }
             }
