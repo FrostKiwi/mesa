@@ -800,8 +800,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_invocation: {
       ibc_reg *w_tmp_reg =
-         ibc_hw_grf_reg_create(b->shader, b->simd_width * 2,
-                               MIN2(b->simd_width * 2, 32));
+         ibc_hw_grf_reg_create(b->shader, b->simd_width * 2, 32);
       ibc_ref w_tmp = ibc_typed_ref(w_tmp_reg, IBC_TYPE_UW);
 
       ibc_builder_push_we_all(b, 8);
