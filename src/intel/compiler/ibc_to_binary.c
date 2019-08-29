@@ -319,7 +319,7 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    UNOP_CASE(RNDD)
    UNOP_CASE(RNDE)
    UNOP_CASE(RNDZ)
-
+   BINOP_CASE(MACH)
    TRIOP_CASE(MAD)
    TRIOP_CASE(LRP)
 
