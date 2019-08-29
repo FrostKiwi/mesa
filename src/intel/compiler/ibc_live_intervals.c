@@ -325,8 +325,6 @@ alloc_live_intervals(ibc_shader *shader,
       live->regs[reg->index] = (ibc_reg_live_intervals) {
          .chunk_simd_width = UINT8_MAX,
          .chunk_byte_size = UINT8_MAX,
-         .physical_start = 0,
-         .physical_end = 0,
       };
    }
 
@@ -352,10 +350,10 @@ alloc_live_intervals(ibc_shader *shader,
       live->num_chunks += rli->num_chunks;
    }
 
-   live->chunk_live =
-      rzalloc_array(live, struct interval_set *, live->num_chunks);
+   live->chunks =
+      rzalloc_array(live, ibc_reg_chunk_live_interval, live->num_chunks);
    for (uint32_t i = 0; i < live->num_regs; i++)
-      live->regs[i].chunk_live = live->chunk_live + live->regs[i].chunk_idx;
+      live->regs[i].chunks = live->chunks + live->regs[i].chunk_idx;
 
    live->blocks = ralloc_array(live, ibc_block_live_sets, num_blocks);
    const uint32_t bitset_words = BITSET_WORDS(live->num_chunks);
@@ -570,8 +568,10 @@ extend_live_interval_for_read(ibc_ref *ref,
       if (!BITSET_TEST(read, i))
          continue;
 
-      if (BITSET_TEST(state->def, chunk_idx + i))
-         interval_set_extend_to(rli->chunk_live[i], state->instr->index + 1);
+      if (BITSET_TEST(state->def, chunk_idx + i)) {
+         interval_set_extend_to(rli->chunks[i].logical,
+                                state->instr->index + 1);
+      }
    }
 
    return true;
@@ -606,15 +606,15 @@ extend_live_interval_for_write(ibc_ref *ref,
          /* This is a predicated re-definition of something that's already
           * defined, just extend liveness.
           */
-         interval_set_extend_to(rli->chunk_live[i], state->instr->index + 1);
+         interval_set_extend_to(rli->chunks[i].logical,
+                                state->instr->index + 1);
       } else {
          /* This is a (possibly predicated) brand new definition.  Start a new
           * live interval here.
           */
-         rli->chunk_live[i] = interval_set_add_end(state->live,
-                                                   rli->chunk_live[i],
-                                                   state->instr->index,
-                                                   state->instr->index + 1);
+         rli->chunks[i].logical =
+            interval_set_add_end(state->live, rli->chunks[i].logical,
+                                 state->instr->index, state->instr->index + 1);
       }
 
       BITSET_SET(state->def, chunk_idx + i);
@@ -651,9 +651,10 @@ compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
                BITSET_WORD in = bls->liveout[w] & state.def[w];
                while (in) {
                   int b = u_bit_scan(&in);
-                  const uint32_t chunk_idx = w * BITSET_WORDBITS + b;
-                  interval_set_extend_to(live->chunk_live[chunk_idx],
-                                         instr->index + 1);
+                  ibc_reg_chunk_live_interval *chunk =
+                     &live->chunks[w * BITSET_WORDBITS + b];
+
+                  interval_set_extend_to(chunk->logical, instr->index + 1);
                }
             }
          }
@@ -679,32 +680,23 @@ compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
             ibc_block_live_sets *merge_bls =
                &live->blocks[_while->block_index];
 
-            for (uint32_t r = 0; r < live->num_regs; r++) {
-               ibc_reg_live_intervals *rli = &live->regs[r];
+            for (uint32_t w = 0; w < bitset_words; w++) {
+               BITSET_WORD loop_live =
+                  (enter_bls->liveout[w] & enter_bls->defout[w]) |
+                  (merge_bls->livein[w] & merge_bls->defin[w]);
 
-               bool loop_live = false;
-               for (uint32_t i = 0; i < rli->num_chunks; i++) {
-                  if (BITSET_TEST(enter_bls->liveout, rli->chunk_idx + i) &&
-                      BITSET_TEST(enter_bls->defout, rli->chunk_idx + i)) {
-                     loop_live = true;
-                     break;
-                  }
+               while (loop_live) {
+                  int b = u_bit_scan(&loop_live);
+                  ibc_reg_chunk_live_interval *chunk =
+                     &live->chunks[w * BITSET_WORDBITS + b];
 
-                  if (BITSET_TEST(merge_bls->livein, rli->chunk_idx + i) &&
-                      BITSET_TEST(merge_bls->defin, rli->chunk_idx + i)) {
-                     loop_live = true;
-                     break;
-                  }
-               }
-
-               if (loop_live) {
-                  if (rli->physical_end == 0) {
-                     rli->physical_start = _do->instr.index;
-                     rli->physical_end = _while->instr.index + 1;
+                  if (chunk->physical_end == 0) {
+                     chunk->physical_start = _do->instr.index;
+                     chunk->physical_end = _while->instr.index + 1;
                   } else {
-                     assert(rli->physical_start < _do->instr.index);
-                     rli->physical_end = MAX2(rli->physical_end,
-                                              _while->instr.index + 1);
+                     assert(chunk->physical_start < _do->instr.index);
+                     chunk->physical_end = MAX2(chunk->physical_end,
+                                                _while->instr.index + 1);
                   }
                }
             }
@@ -723,10 +715,12 @@ compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
                BITSET_WORD in = bls->livein[w] & bls->defin[w];
                while (in) {
                   int b = u_bit_scan(&in);
-                  const uint32_t chunk_idx = w * BITSET_WORDBITS + b;
-                  live->chunk_live[chunk_idx] =
-                     interval_set_add_end(live, live->chunk_live[chunk_idx],
-                                          instr->index, instr->index + 1);
+                  ibc_reg_chunk_live_interval *chunk =
+                     &live->chunks[w * BITSET_WORDBITS + b];
+
+                  chunk->logical = interval_set_add_end(live, chunk->logical,
+                                                        instr->index,
+                                                        instr->index + 1);
                }
             }
 
@@ -738,17 +732,31 @@ compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
    for (uint32_t r = 0; r < live->num_regs; r++) {
       ibc_reg_live_intervals *rli = &live->regs[r];
       for (uint32_t i = 0; i < rli->num_chunks; i++) {
-         if (rli->chunk_live[i] == NULL)
+         ibc_reg_chunk_live_interval *chunk = &rli->chunks[i];
+         if (chunk->logical == NULL) {
+            assert(chunk->physical_start == 0);
+            assert(chunk->physical_end == 0);
             continue;
+         }
+
+         if (chunk->physical_end == 0) {
+            chunk->physical_start = interval_set_start(chunk->logical);
+            chunk->physical_end = interval_set_end(chunk->logical);
+         } else {
+            chunk->physical_start = MIN2(chunk->physical_start,
+                                         interval_set_start(chunk->logical));
+            chunk->physical_end = MAX2(chunk->physical_end,
+                                       interval_set_end(chunk->logical));
+         }
 
          if (rli->physical_end == 0) {
-            rli->physical_start = interval_set_start(rli->chunk_live[i]);
-            rli->physical_end = interval_set_end(rli->chunk_live[i]);
+            rli->physical_start = chunk->physical_start;
+            rli->physical_end = chunk->physical_end;
          } else {
             rli->physical_start = MIN2(rli->physical_start,
-                                       interval_set_start(rli->chunk_live[i]));
+                                       chunk->physical_start);
             rli->physical_end = MAX2(rli->physical_end,
-                                     interval_set_end(rli->chunk_live[i]));
+                                     chunk->physical_end);
          }
       }
    }
@@ -771,14 +779,16 @@ ibc_compute_live_intervals(ibc_shader *shader,
               live->regs[r].physical_start,
               live->regs[r].physical_end);
       for (uint32_t c = 0; c < live->regs[r].num_chunks; c++) {
-         if (live->regs[r].chunk_live[c] == NULL)
+         ibc_reg_chunk_live_interval *chunk = &live->regs[r].chunks[c];
+         if (chunk->logical == NULL)
             continue;
 
-         fprintf(stderr, "    chunk %u:", c);
-         for (uint32_t i = 0; i < live->regs[r].chunk_live[c]->count; i++) {
+         fprintf(stderr, "    chunk %u, physical: [%u, %u), logical:", c,
+                 chunk->physical_start, chunk->physical_end);
+         for (uint32_t i = 0; i < chunk->logical->count; i++) {
             fprintf(stderr, " [%u, %u)",
-                    live->regs[r].chunk_live[c]->intervals[i].start,
-                    live->regs[r].chunk_live[c]->intervals[i].end);
+                    chunk->logical->intervals[i].start,
+                    chunk->logical->intervals[i].end);
          }
          fprintf(stderr, "\n");
       }
