@@ -174,6 +174,7 @@ static void
 ibc_phys_reg_alloc_init(struct ibc_phys_reg_alloc *alloc)
 {
    util_vma_heap_init(&alloc->heap, 4096, 4096);
+   alloc->heap.alloc_high = false;
    rb_tree_init(&alloc->regs);
 }
 
@@ -196,11 +197,10 @@ ibc_phys_reg_alloc(struct ibc_phys_reg_alloc *alloc,
       if (addr == 0)
          return false;
       assert(addr >= 4096 && addr + size <= 8192);
-      byte = 8192 - size - addr;
+      byte = addr - 4096;
    } else {
       assert(fixed_hw_grf_byte + size <= 4096);
-      uint64_t addr = 8192 - size - fixed_hw_grf_byte;
-      assert(addr >= 4096 && addr + size <= 8192);
+      uint64_t addr = fixed_hw_grf_byte + 4096;
       if (!util_vma_heap_alloc_addr(&alloc->heap, addr, size))
          return false;
       byte = fixed_hw_grf_byte;
@@ -241,7 +241,7 @@ ibc_phys_reg_alloc_free_regs(struct ibc_phys_reg_alloc *alloc,
       if (reg->end > ip)
          break;
 
-      util_vma_heap_free(&alloc->heap, 8192 - reg->size - reg->byte, reg->size);
+      util_vma_heap_free(&alloc->heap, reg->byte + 4096, reg->size);
       rb_tree_remove(&alloc->regs, &reg->node);
    }
 }
