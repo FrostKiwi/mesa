@@ -135,14 +135,26 @@ struct ibc_phys_reg {
    /** Size (in bytes) of this register */
    uint16_t size;
 
-   /** Start (inclusive) of the live range of this register */
-   uint32_t start;
-
    /** End (exclusive) of the live range of this register */
-   uint32_t end;
+   uint32_t reg_live_end;
 
    /** Node in ibc_phys_reg_alloc::regs */
    struct rb_node node;
+
+   /** True if this this register has per-byte live end data */
+   bool has_byte_live_end;
+
+   /** First per-byte live_end for a live byte
+    *
+    * This must equal reg_live_end if has_byte_live_end is false.  For any
+    * given byte b, it's still allocated if and only if
+    *
+    *       byte_live_end[b] >= first_live_byte_end.
+    */
+   uint32_t first_live_byte_end;
+
+   /** Per-byte live end of the given byte is already free */
+   uint32_t byte_live_end[0];
 };
 
 static int
@@ -152,15 +164,22 @@ ibc_phys_reg_rb_cmp(const struct rb_node *an, const struct rb_node *bn)
    a = rb_node_data(struct ibc_phys_reg, an, node);
    b = rb_node_data(struct ibc_phys_reg, bn, node);
 
-   if (a->end > b->end)
+   if (!a->has_byte_live_end)
+      assert(a->first_live_byte_end == a->reg_live_end);
+   if (!b->has_byte_live_end)
+      assert(b->first_live_byte_end == b->reg_live_end);
+
+   if (a->first_live_byte_end > b->first_live_byte_end)
       return -1;
-   if (a->end < b->end)
+   if (a->first_live_byte_end < b->first_live_byte_end)
       return 1;
    return 0;
 }
 
 struct ibc_phys_reg_alloc {
    struct util_vma_heap heap;
+
+   void *mem_ctx;
 
    /** Red-black tree of ibc_phys_reg
     *
@@ -171,10 +190,11 @@ struct ibc_phys_reg_alloc {
 };
 
 static void
-ibc_phys_reg_alloc_init(struct ibc_phys_reg_alloc *alloc)
+ibc_phys_reg_alloc_init(struct ibc_phys_reg_alloc *alloc, void *mem_ctx)
 {
    util_vma_heap_init(&alloc->heap, 4096, 4096);
    alloc->heap.alloc_high = false;
+   alloc->mem_ctx = mem_ctx;
    rb_tree_init(&alloc->regs);
 }
 
@@ -185,11 +205,11 @@ ibc_phys_reg_alloc_finish(struct ibc_phys_reg_alloc *alloc)
 }
 
 static bool
-ibc_phys_reg_alloc(struct ibc_phys_reg_alloc *alloc,
-                   int16_t fixed_hw_grf_byte,
-                   uint16_t size, uint16_t align,
-                   uint32_t start, uint32_t end,
-                   struct ibc_phys_reg *reg_out)
+ibc_phys_reg_alloc_raw(struct ibc_phys_reg_alloc *alloc,
+                       int16_t fixed_hw_grf_byte,
+                       uint16_t size, uint16_t align,
+                       uint32_t reg_end, uint32_t *per_byte_end,
+                       struct ibc_phys_reg *reg_out)
 {
    uint16_t byte;
    if (fixed_hw_grf_byte < 0) {
@@ -206,12 +226,25 @@ ibc_phys_reg_alloc(struct ibc_phys_reg_alloc *alloc,
       byte = fixed_hw_grf_byte;
    }
 
-   *reg_out = (struct ibc_phys_reg) {
-      .byte = byte,
-      .size = size,
-      .start = start,
-      .end = end,
-   };
+   reg_out->byte = byte;
+   reg_out->size = size;
+   reg_out->reg_live_end = reg_end;
+   if (per_byte_end) {
+      reg_out->has_byte_live_end = true;
+      reg_out->first_live_byte_end = UINT32_MAX;
+
+      /* The one caller that gets here just passes in our byte_live_end so we
+       * don't have to do anything to fill it out.
+       */
+      assert(per_byte_end == reg_out->byte_live_end);
+      for (unsigned b = 0; b < size; b++) {
+         reg_out->first_live_byte_end = MIN2(reg_out->first_live_byte_end,
+                                             reg_out->byte_live_end[b]);
+      }
+   } else {
+      reg_out->has_byte_live_end = false;
+      reg_out->first_live_byte_end = reg_end;
+   }
    rb_tree_insert(&alloc->regs, &reg_out->node, ibc_phys_reg_rb_cmp);
 
    return true;
@@ -222,12 +255,79 @@ ibc_phys_reg_extend_live_range(struct ibc_phys_reg_alloc *alloc,
                                struct ibc_phys_reg *reg,
                                uint32_t new_end)
 {
-   if (new_end <= reg->end)
+   assert(!reg->has_byte_live_end);
+   if (new_end <= reg->reg_live_end)
       return;
 
-   reg->end = new_end;
+   reg->reg_live_end = new_end;
+   reg->first_live_byte_end = new_end;
    rb_tree_remove(&alloc->regs, &reg->node);
    rb_tree_insert(&alloc->regs, &reg->node, ibc_phys_reg_rb_cmp);
+}
+
+static bool
+ibc_phys_reg_free_bytes(struct ibc_phys_reg_alloc *alloc,
+                        struct ibc_phys_reg *reg,
+                        uint32_t ip)
+{
+   if (reg->first_live_byte_end > ip)
+      return false;
+
+   if (!reg->has_byte_live_end) {
+      /* If it doesn't have per-byte liveness and we got here, it's dead. */
+      util_vma_heap_free(&alloc->heap, reg->byte + 4096, reg->size);
+      rb_tree_remove(&alloc->regs, &reg->node);
+      return true;
+   }
+
+   int first_dead_byte = -1;
+   uint32_t first_end_gt_ip = UINT32_MAX;
+   for (unsigned b = 0 ; b < reg->size; b++) {
+      if (reg->byte_live_end[b] > ip) {
+         assert(reg->byte_live_end[b] < UINT32_MAX);
+         first_end_gt_ip = MIN2(first_end_gt_ip, reg->byte_live_end[b]);
+      }
+
+      /* If byte_live_end[b] < first_live_byte_end then the register has
+       * already been freed and if byte_live_end[b] then the register is
+       * still live.  If either of these is true, this byte is not free so
+       * we should free everything before it.
+       */
+      if (reg->byte_live_end[b] < reg->first_live_byte_end ||
+          reg->byte_live_end[b] > ip) {
+         /* If first_dead is non-negative, we have something to free */
+         if (first_dead_byte >= 0) {
+            assert(b > first_dead_byte);
+            util_vma_heap_free(&alloc->heap,
+                               reg->byte + first_dead_byte + 4096,
+                               b - first_dead_byte);
+            first_dead_byte = -1;
+         }
+      } else {
+         if (first_dead_byte < 0)
+            first_dead_byte = b;
+      }
+   }
+
+   if (first_dead_byte >= 0) {
+      assert(reg->size > first_dead_byte);
+      util_vma_heap_free(&alloc->heap,
+                         reg->byte + first_dead_byte + 4096,
+                         reg->size - first_dead_byte);
+   }
+
+   if (first_end_gt_ip == UINT32_MAX) {
+      /* Nothing is still live.  Delete it */
+      rb_tree_remove(&alloc->regs, &reg->node);
+   } else {
+      /* Something is still live, adjust and re-sort */
+      assert(first_end_gt_ip > reg->first_live_byte_end);
+      reg->first_live_byte_end = first_end_gt_ip;
+      rb_tree_remove(&alloc->regs, &reg->node);
+      rb_tree_insert(&alloc->regs, &reg->node, ibc_phys_reg_rb_cmp);
+   }
+
+   return true;
 }
 
 /** Frees all registers that end at or before the given ip */
@@ -238,12 +338,46 @@ ibc_phys_reg_alloc_free_regs(struct ibc_phys_reg_alloc *alloc,
    while (!rb_tree_is_empty(&alloc->regs)) {
       struct rb_node *n = rb_tree_first(&alloc->regs);
       struct ibc_phys_reg *reg = rb_node_data(struct ibc_phys_reg, n, node);
-      if (reg->end > ip)
-         break;
 
-      util_vma_heap_free(&alloc->heap, reg->byte + 4096, reg->size);
-      rb_tree_remove(&alloc->regs, &reg->node);
+      /* Registers in the red-black tree are sorted by first live byte end.
+       * The moment one of them fails to free, they all will.
+       */
+      if (!ibc_phys_reg_free_bytes(alloc, reg, ip))
+         break;
    }
+}
+
+static struct ibc_phys_reg *
+ibc_phys_reg_alloc(struct ibc_phys_reg_alloc *alloc,
+                   int16_t fixed_hw_grf_byte,
+                   uint16_t size, uint16_t align,
+                   const ibc_reg_live_intervals *rli)
+{
+   assert(size == rli->num_chunks * rli->chunk_byte_size);
+
+   const size_t struct_size = sizeof(struct ibc_phys_reg) +
+                              sizeof(uint32_t) * size;
+   struct ibc_phys_reg *reg = rzalloc_size(alloc->mem_ctx, struct_size);
+
+   for (unsigned c = 0; c < rli->num_chunks; c++) {
+      for (unsigned b = 0; b < rli->chunk_byte_size; b++) {
+         reg->byte_live_end[c * rli->chunk_byte_size + b] =
+            rli->chunks[c].physical_end;
+      }
+   }
+
+   bool success = ibc_phys_reg_alloc_raw(alloc, fixed_hw_grf_byte, size, align,
+                                         rli->physical_end, reg->byte_live_end,
+                                         reg);
+   if (!success) {
+      ralloc_free(reg);
+      return NULL;
+   }
+
+   /* Immediately clean up any 100% dead bytes */
+   ibc_phys_reg_free_bytes(alloc, reg, 0);
+
+   return reg;
 }
 
 struct ibc_strided_reg_chunk {
@@ -646,7 +780,7 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
           * ended, we can't use it and we'll never be able to use it again.
           * Just remove it from the list.
           */
-         if (sreg->phys.end <= ip) {
+         if (sreg->phys.reg_live_end <= ip) {
             list_del(&sreg->link);
             continue;
          }
@@ -698,10 +832,9 @@ ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
 
    uint16_t size = alloc->stride * lreg->simd_width * lreg->num_comps;
    uint16_t align = MIN2(alloc->stride * lreg->simd_width, 32);
-   if (!ibc_phys_reg_alloc(alloc->phys_alloc,
-                           fixed_hw_grf_byte, size, align,
-                           rli->physical_start, rli->physical_end,
-                           &sreg->phys)) {
+   if (!ibc_phys_reg_alloc_raw(alloc->phys_alloc,
+                               fixed_hw_grf_byte, size, align,
+                               rli->physical_end, NULL, &sreg->phys)) {
       ralloc_free(sreg);
       return NULL;
    }
@@ -725,7 +858,7 @@ ibc_strided_reg_alloc_update_reg_holes(struct ibc_strided_reg_alloc *alloc,
       /* If we come across a register whose physical range has already ended,
        * we'll never be able to use it again.  Might as well clean it up.
        */
-      if (reg->phys.end <= ip) {
+      if (reg->phys.reg_live_end <= ip) {
          list_del(&reg->link);
          continue;
       }
@@ -902,38 +1035,29 @@ assign_reg(struct ibc_reg_assignment *assign,
    ibc_reg *reg = assign->reg;
    const ibc_reg_live_intervals *rli = &state->live->regs[reg->index];
 
-   bool success;
    switch (assign->reg->file) {
    case IBC_FILE_HW_GRF:
-      assign->preg = rzalloc(state->mem_ctx, struct ibc_phys_reg);
-      success = ibc_phys_reg_alloc(&state->phys_alloc,
-                                   fixed_hw_grf_byte,
-                                   reg->hw_grf.size,
-                                   reg->hw_grf.align,
-                                   rli->physical_start,
-                                   rli->physical_end,
-                                   assign->preg);
-      if (!success && !state->allow_spilling)
+      assign->preg = ibc_phys_reg_alloc(&state->phys_alloc,
+                                        fixed_hw_grf_byte,
+                                        reg->hw_grf.size,
+                                        reg->hw_grf.align,
+                                        rli);
+      if (!assign->preg && !state->allow_spilling)
          return false;
-      assert(success);
+      assert(assign->preg);
       break;
 
    case IBC_FILE_LOGICAL:
       if (reg->logical.simd_width == 1) {
-         assert(reg->logical.bit_size % 8 == 0);
-         assign->preg = rzalloc(state->mem_ctx, struct ibc_phys_reg);
          uint16_t size = (reg->logical.bit_size / 8) *
                          reg->logical.num_comps;
          uint16_t align = reg->logical.bit_size / 8;
-         success = ibc_phys_reg_alloc(&state->phys_alloc,
-                                      fixed_hw_grf_byte,
-                                      size, align,
-                                      rli->physical_start,
-                                      rli->physical_end,
-                                      assign->preg);
-         if (!success && !state->allow_spilling)
+         assign->preg = ibc_phys_reg_alloc(&state->phys_alloc,
+                                           fixed_hw_grf_byte,
+                                           size, align, rli);
+         if (!assign->preg && !state->allow_spilling)
             return false;
-         assert(success);
+         assert(assign->preg);
       } else {
          assert(reg->logical.bit_size % 8 == 0);
          assert(reg->logical.stride >= reg->logical.bit_size / 8);
@@ -1002,7 +1126,7 @@ ibc_assign_regs(ibc_shader *shader, bool allow_spilling)
    state.live = ibc_compute_live_intervals(shader, live_reg_filter_cb,
                                            state.mem_ctx);
 
-   ibc_phys_reg_alloc_init(&state.phys_alloc);
+   ibc_phys_reg_alloc_init(&state.phys_alloc, state.mem_ctx);
    for (unsigned i = 0; i < ARRAY_SIZE(state.strided_alloc); i++) {
       ibc_strided_reg_alloc_init(&state.strided_alloc[i],
                                  state.live,
