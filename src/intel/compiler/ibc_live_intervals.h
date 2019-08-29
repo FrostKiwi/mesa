@@ -66,6 +66,17 @@ typedef struct {
    BITSET_WORD *defout;
 } ibc_block_live_sets;
 
+typedef struct {
+   /** Start IP of the chunk's physical live interval */
+   uint32_t physical_start;
+
+   /** End IP of the chunk's physical live interval */
+   uint32_t physical_end;
+
+   /** Interval set representing the chunk's logical live interval */
+   struct interval_set *logical;
+} ibc_reg_chunk_live_interval;
+
 /* A SIMD32 dvec4 is 16 registers and the maximum message size is 11 */
 #define IBC_REG_LIVE_MAX_CHUNKS (4 * 8 * 32)
 
@@ -86,7 +97,7 @@ typedef struct {
    uint32_t physical_start;
    uint32_t physical_end;
 
-   struct interval_set **chunk_live;
+   ibc_reg_chunk_live_interval *chunks;
 } ibc_reg_live_intervals;
 
 typedef struct {
@@ -98,7 +109,7 @@ typedef struct {
 
    ibc_block_live_sets *blocks;
    ibc_reg_live_intervals *regs;
-   struct interval_set **chunk_live;
+   ibc_reg_chunk_live_interval *chunks;
 } ibc_live_intervals;
 
 void
