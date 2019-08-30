@@ -159,7 +159,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
       assert(ref->logical.byte + ref_byte_size <= reg_byte_size);
 
       const unsigned byte_chunk_start = ref->logical.byte >> byte_shift;
-      const unsigned byte_end_chunk =
+      const unsigned byte_chunk_end =
          (ref->logical.byte + ref_byte_size - 1) >> byte_shift;
 
       assert(reg_byte_size % byte_divisor == 0);
@@ -168,7 +168,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
       if (reg->logical.simd_width == 1) {
          for (unsigned c = 0; c < num_comps; c++) {
             const unsigned idx = c * chunk_stride;
-            for (unsigned b = byte_chunk_start; b <= byte_end_chunk; b++) {
+            for (unsigned b = byte_chunk_start; b <= byte_chunk_end; b++) {
                assert(idx + b < rli->num_chunks);
                BITSET_SET(chunks, idx + b);
             }
@@ -183,7 +183,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
 
          assert(num_comps == 1);
          const unsigned idx = simd_chunk * chunk_stride;
-         for (unsigned b = byte_chunk_start; b <= byte_end_chunk; b++) {
+         for (unsigned b = byte_chunk_start; b <= byte_chunk_end; b++) {
             assert(idx + b < rli->num_chunks);
             BITSET_SET(chunks, idx + b);
          }
@@ -206,7 +206,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
             for (unsigned s = simd_chunk_start; s <= simd_chunk_end; s++) {
                const unsigned idx = c * reg_simd_width_chunks * chunk_stride +
                                     s * chunk_stride;
-               for (unsigned b = byte_chunk_start; b <= byte_end_chunk; b++) {
+               for (unsigned b = byte_chunk_start; b <= byte_chunk_end; b++) {
                   assert(idx + b < rli->num_chunks);
                   BITSET_SET(chunks, idx + b);
                }
@@ -229,9 +229,9 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
          unsigned offset = ref->hw_grf.byte;
          for (unsigned c = 0; c < num_comps; c++) {
             const unsigned byte_chunk_start = ref->hw_grf.byte >> byte_shift;
-            const unsigned byte_end_chunk =
+            const unsigned byte_chunk_end =
                (offset + ref_byte_size - 1) >> byte_shift;
-            for (unsigned b = byte_chunk_start; b <= byte_end_chunk; b++) {
+            for (unsigned b = byte_chunk_start; b <= byte_chunk_end; b++) {
                assert(b < rli->num_chunks);
                BITSET_SET(chunks, b);
             }
