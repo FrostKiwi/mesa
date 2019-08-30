@@ -167,7 +167,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
 
       if (reg->logical.simd_width == 1) {
          for (unsigned c = 0; c < num_comps; c++) {
-            const unsigned idx = c * chunk_stride;
+            const unsigned idx = (ref->logical.comp + c) * chunk_stride;
             for (unsigned b = byte_chunk_start; b <= byte_chunk_end; b++) {
                assert(idx + b < rli->num_chunks);
                BITSET_SET(chunks, idx + b);
@@ -204,7 +204,8 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
          assert(num_comps <= reg->logical.num_comps);
          for (unsigned c = 0; c < num_comps; c++) {
             for (unsigned s = simd_chunk_start; s <= simd_chunk_end; s++) {
-               const unsigned idx = c * reg_simd_width_chunks * chunk_stride +
+               const unsigned idx = (ref->logical.comp + c) *
+                                       reg_simd_width_chunks * chunk_stride +
                                     s * chunk_stride;
                for (unsigned b = byte_chunk_start; b <= byte_chunk_end; b++) {
                   assert(idx + b < rli->num_chunks);
