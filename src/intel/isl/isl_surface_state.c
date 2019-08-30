@@ -389,7 +389,7 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
    }
 
 #if GEN_GEN >= 7
-   s.SurfaceArray = info->surf->dim != ISL_SURF_DIM_3D;
+   s.SurfaceArray = info->surf->dim != ISL_SURF_DIM_3D && s.Depth > 0;
 #endif
 
    if (info->view->usage & ISL_SURF_USAGE_RENDER_TARGET_BIT) {
@@ -415,7 +415,7 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
     * Start LOD" to 15 to prevent the hardware from trying to use them.
     */
    s.TiledResourceMode = NONE;
-   s.MipTailStartLOD = 15;
+   s.MipTailStartLOD = info->view->levels > 1 ? 15 : 0;
 #endif
 
 #if GEN_GEN >= 6
@@ -434,7 +434,7 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
    }
 
 #if GEN_GEN >= 8
-   s.SurfaceQPitch = get_qpitch(info->surf) >> 2;
+   s.SurfaceQPitch = s.Depth > 0 ? get_qpitch(info->surf) >> 2 : 0;
 #elif GEN_GEN == 7
    s.SurfaceArraySpacing = info->surf->array_pitch_span ==
                            ISL_ARRAY_PITCH_SPAN_COMPACT;
@@ -458,12 +458,12 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
    s.EnableUnormPathInColorPipe = true;
 #endif
 
-   s.CubeFaceEnablePositiveZ = 1;
-   s.CubeFaceEnableNegativeZ = 1;
-   s.CubeFaceEnablePositiveY = 1;
-   s.CubeFaceEnableNegativeY = 1;
-   s.CubeFaceEnablePositiveX = 1;
-   s.CubeFaceEnableNegativeX = 1;
+   s.CubeFaceEnablePositiveZ = s.SurfaceType == SURFTYPE_CUBE;
+   s.CubeFaceEnableNegativeZ = s.SurfaceType == SURFTYPE_CUBE;
+   s.CubeFaceEnablePositiveY = s.SurfaceType == SURFTYPE_CUBE;
+   s.CubeFaceEnableNegativeY = s.SurfaceType == SURFTYPE_CUBE;
+   s.CubeFaceEnablePositiveX = s.SurfaceType == SURFTYPE_CUBE;
+   s.CubeFaceEnableNegativeX = s.SurfaceType == SURFTYPE_CUBE;
 
 #if GEN_GEN >= 6
    s.NumberofMultisamples = ffs(info->surf->samples) - 1;
