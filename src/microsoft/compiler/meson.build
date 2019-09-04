@@ -18,5 +18,19 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-subdir('compiler')
-subdir('clc')
+files_libdxil_compiler = files(
+  'dxil_container.c',
+  'dxil_module.c',
+)
+
+libdxil_compiler = static_library(
+  'dxil_compiler',
+  files_libdxil_compiler,
+  include_directories : inc_common,
+  c_args : c_vis_args,
+)
+
+idep_libdxil_compiler = declare_dependency(
+  link_with : libdxil_compiler,
+  dependencies : [idep_mesautil],
+)

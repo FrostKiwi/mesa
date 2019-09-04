@@ -317,6 +317,13 @@ int main()
       return -1;
    }
 
+   FILE *fp = fopen("unsigned.cso", "wb");
+   if (fp) {
+      fwrite(blob, 1, blob_size, fp);
+      fclose(fp);
+      debug_printf("D3D12: wrote 'unsigned.cso'...\n");
+   }
+
    ID3D12RootSignature *root_sig = create_root_signature(dev);
 
    D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = { root_sig };
