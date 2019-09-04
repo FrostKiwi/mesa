@@ -18,19 +18,19 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-libclc_compiler = static_library(
-  'clc_compiler',
-  'clc_compiler.c',
+files_libdxil_compiler = files(
+  'dxil_container.c',
+  'dxil_module.c',
+)
+
+libdxil_compiler = static_library(
+  'dxil_compiler',
+  files_libdxil_compiler,
   include_directories : [ inc_include, inc_src, inc_mapi, inc_mesa ],
   c_args : c_vis_args,
 )
 
-idep_libclc_compiler = declare_dependency(
-  link_with : libclc_compiler,
-  dependencies : [idep_libdxil_compiler],
+idep_libdxil_compiler = declare_dependency(
+  link_with : libdxil_compiler,
+  dependencies : [idep_mesautil],
 )
-
-clc_compiler_test = executable('clc_compiler_test', 'clc_compiler_test.cpp',
-  dependencies : [idep_libclc_compiler])
-
-test('clc_compiler test', clc_compiler_test)
