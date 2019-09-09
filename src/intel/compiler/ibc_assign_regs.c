@@ -1285,6 +1285,11 @@ ibc_assign_regs(ibc_shader *shader, bool allow_spilling)
       }
    }
 
+   ibc_foreach_reg_safe(reg, shader) {
+      if (should_assign_reg(reg))
+         list_del(&reg->link);
+   }
+
    /* If we got here, we were successful at allocating */
    allocated = true;
 
