@@ -827,6 +827,7 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
          ibc_print_shader(ibc, stderr);
 
       if (assigned) {
+         IBC_PASS_V(ibc, ibc_schedule_instructions_post_ra);
          bin[i].data = ibc_to_binary(ibc, &shader->info, compiler, log_data,
                                      mem_ctx, &bin[i].size);
          bin[i].num_ff_regs = nti.payload->num_ff_regs;
