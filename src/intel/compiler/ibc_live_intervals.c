@@ -303,6 +303,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
 static ibc_live_intervals *
 alloc_live_intervals(const ibc_shader *shader,
                      bool (*reg_filter)(const ibc_reg *reg),
+                     bool alloc_chunk_live_intervals,
                      void *mem_ctx)
 {
    ibc_live_intervals *live = ralloc(mem_ctx, ibc_live_intervals);
@@ -350,10 +351,12 @@ alloc_live_intervals(const ibc_shader *shader,
       live->num_chunks += rli->num_chunks;
    }
 
-   live->chunks =
-      rzalloc_array(live, ibc_reg_chunk_live_interval, live->num_chunks);
-   for (uint32_t i = 0; i < live->num_regs; i++)
-      live->regs[i].chunks = live->chunks + live->regs[i].chunk_idx;
+   if (alloc_chunk_live_intervals) {
+      live->chunks =
+         rzalloc_array(live, ibc_reg_chunk_live_interval, live->num_chunks);
+      for (uint32_t i = 0; i < live->num_regs; i++)
+         live->regs[i].chunks = live->chunks + live->regs[i].chunk_idx;
+   }
 
    live->blocks = ralloc_array(live, ibc_block_live_sets, num_blocks);
    const uint32_t bitset_words = BITSET_WORDS(live->num_chunks);
@@ -763,12 +766,23 @@ compute_live_intervals(const ibc_shader *shader, ibc_live_intervals *live)
 }
 
 ibc_live_intervals *
+ibc_compute_live_sets(const ibc_shader *shader,
+                      bool (*reg_filter)(const ibc_reg *reg),
+                      void *mem_ctx)
+{
+   ibc_live_intervals *live =
+      alloc_live_intervals(shader, reg_filter, false, mem_ctx);
+   compute_live_sets(shader, live);
+   return live;
+}
+
+ibc_live_intervals *
 ibc_compute_live_intervals(const ibc_shader *shader,
                            bool (*reg_filter)(const ibc_reg *reg),
                            void *mem_ctx)
 {
    ibc_live_intervals *live =
-      alloc_live_intervals(shader, reg_filter, mem_ctx);
+      alloc_live_intervals(shader, reg_filter, true, mem_ctx);
    compute_live_sets(shader, live);
    compute_live_intervals(shader, live);
 
