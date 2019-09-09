@@ -345,6 +345,7 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
    prog_data->base.base.dispatch_grf_start_reg = nti.payload->num_ff_regs;
    prog_data->base.dispatch_mode = DISPATCH_MODE_SIMD8;
 
+   IBC_PASS_V(ibc, ibc_schedule_instructions_post_ra);
    return ibc_to_binary(ibc, &nir->info, compiler, log_data, mem_ctx,
                         &prog_data->base.base.program_size);
 }
