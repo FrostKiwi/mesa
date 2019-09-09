@@ -665,13 +665,13 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
    if (INTEL_DEBUG & intel_debug_flag_for_shader_stage(shader->stage)) {
       fprintf(stderr,
               "Native code for %s %s shader %s\n"
-              "SIMD%d shader: %u instructions. %u loops. "
+              "SIMD%d shader: %u instructions. %u loops. %u cycles. "
               "%u:%u spills:fills. "
               "Compacted %u to %u bytes (%.0f%%)\n",
                info->label ? info->label : "unnamed",
                _mesa_shader_stage_to_string(shader->stage), info->name,
               shader->simd_width, before_size / 16,
-              loop_count,
+              loop_count, shader->cycles,
               spill_count, fill_count,
               before_size, after_size,
               100.0f * (before_size - after_size) / before_size);
@@ -688,7 +688,7 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
                               "compacted %d to %d bytes.",
                               _mesa_shader_stage_to_abbrev(shader->stage),
                               shader->simd_width, before_size / 16,
-                              loop_count, 0,
+                              loop_count, shader->cycles,
                               spill_count, fill_count,
                               "unknown",
                               0,
