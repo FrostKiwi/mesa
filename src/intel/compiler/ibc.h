@@ -1125,6 +1125,9 @@ typedef struct ibc_shader {
     * instructions.
     */
    ibc_reg *g0;
+
+   /** Estimated cycle count from the scheduler */
+   uint32_t cycles;
 } ibc_shader;
 
 ibc_shader *ibc_shader_create(void *mem_ctx,
@@ -1225,6 +1228,7 @@ void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 
 void ibc_repair_wlr_order(ibc_shader *shader);
 
+uint32_t ibc_schedule_instructions(ibc_shader *shader);
 bool ibc_split_logical_regs(ibc_shader *shader);
 
 const unsigned *ibc_to_binary(const ibc_shader *shader,
