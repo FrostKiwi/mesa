@@ -383,6 +383,68 @@ ibc_hw_grf_mul_stride(struct ibc_ref_hw_grf *ref, unsigned stride_mul)
       ref->width = 1;
 }
 
+static inline int
+ibc_hw_grf_comp_stride(struct ibc_ref_hw_grf ref, unsigned num_bytes,
+                       unsigned simd_width)
+{
+   /* If it's a replicated scalar, use the component size */
+   if (ref.vstride == 0)
+      return num_bytes;
+
+   if (simd_width >= ref.width) {
+      assert(simd_width % ref.width == 0);
+      return ref.vstride * (simd_width / ref.width);
+   }
+
+   assert(ref.hstride * ref.width == ref.vstride);
+   assert(ref.hstride >= num_bytes);
+   return ref.hstride * simd_width;
+}
+
+static inline uint64_t
+ibc_hw_grf_access_mask(struct ibc_ref_hw_grf ref,
+                       unsigned num_bytes, unsigned simd_width)
+{
+   assert(ref.vstride % num_bytes == 0);
+   assert(ref.hstride % num_bytes == 0);
+
+   if (ref.hstride == 0 && ref.vstride == 0)
+      return BITFIELD64_MASK(num_bytes);
+
+   if (ref.vstride == ref.hstride * ref.width) {
+      /* In this case, things are nicely strided out and computing the access
+       * mask is easy and fairly efficient.
+       */
+      uint64_t mask = 0;
+      for (unsigned i = 0; i < simd_width; i++) {
+         assert(i * ref.hstride < 64);
+         mask |= BITFIELD64_MASK(num_bytes) << (i * ref.hstride);
+      }
+      return mask;
+   }
+
+   assert(simd_width % ref.width == 0);
+
+   uint64_t mask = 0;
+   unsigned offset = 0;
+   unsigned horiz_offset = 0;
+   for (unsigned s = 0; s < simd_width;) {
+      assert(offset + horiz_offset + num_bytes <= 64);
+      mask |= BITFIELD64_MASK(num_bytes) << (offset + horiz_offset);
+
+      s++;
+      assert(util_is_power_of_two_nonzero(ref.width));
+      if ((s & (ref.width - 1)) == 0) {
+         offset += ref.vstride;
+         horiz_offset = 0;
+      } else {
+         horiz_offset += ref.hstride;
+      }
+   }
+
+   return mask;
+}
+
 
 /** A structure representing FLAG register access region
  *
