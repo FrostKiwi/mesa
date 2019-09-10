@@ -383,6 +383,24 @@ ibc_hw_grf_mul_stride(struct ibc_ref_hw_grf *ref, unsigned stride_mul)
       ref->width = 1;
 }
 
+static inline int
+ibc_hw_grf_comp_stride(struct ibc_ref_hw_grf ref, unsigned num_bytes,
+                       uint8_t simd_width)
+{
+   /* If it's a replicated scalar, use the component size */
+   if (ref.vstride == 0)
+      return num_bytes;
+
+   if (simd_width >= ref.width) {
+      assert(simd_width % ref.width == 0);
+      return ref.vstride * (simd_width / ref.width);
+   }
+
+   assert(ref.hstride * ref.width == ref.vstride);
+   assert(ref.hstride >= num_bytes);
+   return ref.hstride * simd_width;
+}
+
 
 /** A structure representing FLAG register access region
  *
@@ -511,6 +529,55 @@ ibc_ref_simd_slice(ibc_ref *ref, uint8_t rel_simd_group)
    unreachable("Unhandled register file");
 }
 
+static inline void
+ibc_hw_grf_ref_foreach_byte(ibc_ref ref,
+                            unsigned num_comps,
+                            uint8_t simd_width,
+                            void (*cb)(unsigned byte, void *data),
+                            void *data)
+{
+   assert(ref.file == IBC_FILE_HW_GRF);
+
+   unsigned ref_byte_size = ibc_type_byte_size(ref.type);
+   assert(ref.hw_grf.vstride % ref_byte_size == 0);
+   assert(ref.hw_grf.hstride % ref_byte_size == 0);
+
+   if (ref.hw_grf.hstride == 0 && ref.hw_grf.vstride == 0) {
+      for (unsigned b = 0; b < ref_byte_size * num_comps; b++)
+         cb(ref.hw_grf.byte + b, data);
+   } else if (ref.hw_grf.vstride == ref.hw_grf.hstride * ref.hw_grf.width) {
+      /* In this case, things are nicely strided out and computing the access
+       * mask is easy and fairly efficient.
+       */
+      unsigned offset = ref.hw_grf.byte;
+      for (unsigned i = 0; i < simd_width * num_comps; i++) {
+         for (unsigned b = 0; b < ref_byte_size; b++)
+            cb(offset + b, data);
+         offset += ref.hw_grf.hstride;
+      }
+   } else {
+      unsigned offset = ref.hw_grf.byte;
+      for (unsigned c = 0; c < num_comps; c++) {
+         unsigned voffset = 0;
+         unsigned hoffset = 0;
+         for (unsigned s = 0; s < simd_width;) {
+            for (unsigned b = 0; b < ref_byte_size; b++)
+               cb(offset + voffset + hoffset + b, data);
+
+            s++;
+            assert(util_is_power_of_two_nonzero(ref.hw_grf.width));
+            if ((s & (ref.hw_grf.width - 1)) == 0) {
+               voffset += ref.hw_grf.vstride;
+               hoffset = 0;
+            } else {
+               hoffset += ref.hw_grf.hstride;
+            }
+         }
+         offset += ibc_hw_grf_comp_stride(ref.hw_grf, ref_byte_size,
+                                          simd_width);
+      }
+   }
+}
 
 typedef struct ibc_reg_write {
    /** Link in ibc_reg::writes
