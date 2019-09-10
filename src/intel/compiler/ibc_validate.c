@@ -366,6 +366,12 @@ static void
 ibc_validate_send_instr(struct ibc_validate_state *s,
                         const ibc_send_instr *send)
 {
+   if (send->has_side_effects)
+      ibc_assert(s, !send->can_reorder);
+
+   if (send->eot)
+      ibc_assert(s, send->has_side_effects);
+
    switch (send->desc.file) {
    case IBC_FILE_NONE:
       ibc_validate_null_ref(s, &send->desc);
