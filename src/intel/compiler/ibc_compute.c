@@ -135,6 +135,7 @@ ibc_emit_cs_thread_terminate(struct nir_to_ibc_state *nti)
    send->instr.we_all = true;
    send->sfid = BRW_SFID_THREAD_SPAWNER;
    send->desc_imm = brw_ts_eot_desc(b->shader->devinfo);
+   send->can_reorder = false;
    send->has_side_effects = true;
    send->eot = true;
 
