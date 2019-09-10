@@ -697,6 +697,7 @@ typedef struct ibc_send_instr {
    unsigned ex_mlen:4;
    unsigned rlen:4;
    bool has_header:1;
+   bool can_reorder:1;
    bool has_side_effects:1;
    bool check_tdr:1;
    bool eot:1;
