@@ -701,6 +701,7 @@ ibc_lower_io_to_sends(ibc_shader *shader)
                                                    instr->simd_group,
                                                    instr->simd_width);
       send->instr.we_all = instr->we_all;
+      send->can_reorder = intrin->can_reorder;
       send->has_side_effects = intrin->has_side_effects;
 
       if (instr->predicate != IBC_PREDICATE_NONE) {
