@@ -448,6 +448,9 @@ ibc_send_instr_create(struct ibc_shader *shader,
 
    ibc_instr_init(&send->instr, IBC_INSTR_TYPE_SEND, simd_group, simd_width);
 
+   send->can_reorder = true;
+   send->has_side_effects = false;
+
    ibc_ref_init(&send->desc);
    ibc_ref_init(&send->ex_desc);
 
