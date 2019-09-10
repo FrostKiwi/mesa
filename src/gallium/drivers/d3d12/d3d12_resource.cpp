@@ -190,7 +190,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
    struct d3d12_screen *screen = d3d12_screen(pctx->screen);
    struct d3d12_resource *res = d3d12_resource(pres);
 
-   if (usage == PIPE_TRANSFER_MAP_DIRECTLY)
+   if (usage & PIPE_TRANSFER_MAP_DIRECTLY)
       return NULL;
 
    struct pipe_transfer *ptrans = (struct pipe_transfer *)slab_alloc(&ctx->transfer_pool);
