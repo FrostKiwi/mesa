@@ -115,6 +115,18 @@ reg_num_chunks(const ibc_reg *reg, ibc_live_intervals *live)
    unreachable("Invalid register file");
 }
 
+struct mark_hw_grf_chunks_cb_state {
+   BITSET_WORD *chunks;
+   unsigned byte_shift;
+};
+
+static void
+mark_hw_grf_chunks_cb(unsigned byte, void *_state)
+{
+   struct mark_hw_grf_chunks_cb_state *state = _state;
+   BITSET_SET(state->chunks, byte >> state->byte_shift);
+}
+
 void
 ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
                               const ibc_ref *ref,
@@ -217,70 +229,25 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
       break;
    }
 
-   case IBC_FILE_HW_GRF: {
+   case IBC_FILE_HW_GRF:
       if (num_comps < 0) {
          assert(ref->hw_grf.hstride * ref->hw_grf.width == ref->hw_grf.vstride);
+         assert(ref->hw_grf.hstride == ref_byte_size);
          assert(num_bytes % byte_divisor == 0);
          const unsigned num_chunks = num_bytes >> byte_shift;
          for (unsigned i = 0; i < num_chunks; i++) {
             assert(i < rli->num_chunks);
             BITSET_SET(chunks, i);
          }
-      } else if (ref->hw_grf.hstride == 0 && ref->hw_grf.vstride == 0) {
-         unsigned offset = ref->hw_grf.byte;
-         for (unsigned c = 0; c < num_comps; c++) {
-            const unsigned byte_chunk_start = ref->hw_grf.byte >> byte_shift;
-            const unsigned byte_chunk_end =
-               (offset + ref_byte_size - 1) >> byte_shift;
-            for (unsigned b = byte_chunk_start; b <= byte_chunk_end; b++) {
-               assert(b < rli->num_chunks);
-               BITSET_SET(chunks, b);
-            }
-            offset += ref_byte_size;
-         }
       } else {
-         assert(simd_width % ref->hw_grf.width == 0 ||
-                ref->hw_grf.hstride * ref->hw_grf.width == ref->hw_grf.vstride);
-         unsigned offset = ref->hw_grf.byte;
-         unsigned horiz_offset = 0;
-         for (unsigned c = 0; c < num_comps; c++) {
-            for (unsigned s = 0; s < simd_width;) {
-               assert(offset + horiz_offset + ref_byte_size <= reg->hw_grf.size);
-               const unsigned byte_chunk_start =
-                  (offset + horiz_offset) >> byte_shift;
-               const unsigned byte_chunk_end =
-                  (offset + horiz_offset + ref_byte_size - 1) >> byte_shift;
-               for (unsigned b = byte_chunk_start; b <= byte_chunk_end; b++) {
-                  assert(b < rli->num_chunks);
-                  BITSET_SET(chunks, b);
-               }
-
-               s++;
-               assert(util_is_power_of_two_nonzero(ref->hw_grf.width));
-               if ((s & (ref->hw_grf.width - 1)) == 0) {
-                  offset += ref->hw_grf.vstride;
-                  horiz_offset = 0;
-               } else {
-                  horiz_offset += ref->hw_grf.hstride;
-               }
-            }
-
-            if (simd_width >= ref->hw_grf.width && ref->hw_grf.vstride > 0) {
-               /* The loop above handled any component offsetting needed */
-               assert(horiz_offset == 0);
-            } else if (num_comps > 1) {
-               assert(ref->hw_grf.hstride * ref->hw_grf.width ==
-                      ref->hw_grf.vstride);
-               /* If it's a replicated scalar, use the component size,
-                * otherwise use the hstride.
-                */
-               offset += simd_width * MAX2(ref->hw_grf.hstride, ref_byte_size);
-               horiz_offset = 0;
-            }
-         }
+         ibc_hw_grf_ref_foreach_byte(*ref, num_comps, simd_width,
+                                     mark_hw_grf_chunks_cb,
+                                     &(struct mark_hw_grf_chunks_cb_state) {
+                                        .chunks = chunks,
+                                        .byte_shift = byte_shift,
+                                     });
       }
       break;
-   }
 
    case IBC_FILE_FLAG:
       assert(num_comps == 1);
