@@ -101,6 +101,9 @@ typedef struct {
 } ibc_reg_live_intervals;
 
 typedef struct {
+   /** Number of blocks in the shader */
+   uint32_t num_blocks;
+
    /** Number of registers for which we have live intervals */
    uint32_t num_regs;
 
