@@ -562,6 +562,28 @@ ibc_should_print_shader(const ibc_shader *ibc)
 }
 
 static bool
+repair_wlr_write_cb(ibc_reg_write *write, ibc_ref *ref,
+                    UNUSED void *_state)
+{
+   assert(ref->file != IBC_FILE_IMM);
+   if (ref->file == IBC_FILE_NONE || ref->reg == NULL)
+      return true;
+
+   assert(write->instr != NULL);
+   list_del(&write->link);
+   list_addtail(&write->link, &ref->reg->writes);
+
+   return true;
+}
+
+void
+ibc_repair_wlr_order(ibc_shader *shader)
+{
+   ibc_foreach_instr(instr, shader)
+      ibc_instr_foreach_reg_write(instr, repair_wlr_write_cb, NULL);
+}
+
+static bool
 ibc_optimize(ibc_shader *ibc)
 {
    bool progress, any_progress = false;
