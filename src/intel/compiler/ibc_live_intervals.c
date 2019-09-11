@@ -330,14 +330,16 @@ alloc_live_intervals(const ibc_shader *shader,
    }
 
    uint32_t num_instrs = 0;
-   uint32_t num_blocks = 0;
+   live->num_blocks = 0;
    ibc_foreach_instr(instr, shader) {
       instr->index = num_instrs++;
       if (instr->type == IBC_INSTR_TYPE_FLOW)
-         ibc_instr_as_flow(instr)->block_index = num_blocks++;
+         ibc_instr_as_flow(instr)->block_index = live->num_blocks++;
 
       ibc_instr_foreach_write(instr, record_reg_write_sizes, live);
    }
+   /* Thanks to the END instruction, we over-counted by 1 */
+   live->num_blocks--;
 
    live->num_chunks = 0;
    ibc_foreach_reg(reg, shader) {
@@ -358,9 +360,9 @@ alloc_live_intervals(const ibc_shader *shader,
          live->regs[i].chunks = live->chunks + live->regs[i].chunk_idx;
    }
 
-   live->blocks = ralloc_array(live, ibc_block_live_sets, num_blocks);
+   live->blocks = ralloc_array(live, ibc_block_live_sets, live->num_blocks);
    const uint32_t bitset_words = BITSET_WORDS(live->num_chunks);
-   for (unsigned i = 0; i < num_blocks; i++) {
+   for (unsigned i = 0; i < live->num_blocks; i++) {
       live->blocks[i].def = rzalloc_array(live, BITSET_WORD, bitset_words);
       live->blocks[i].use = rzalloc_array(live, BITSET_WORD, bitset_words);
       live->blocks[i].livein = rzalloc_array(live, BITSET_WORD, bitset_words);
