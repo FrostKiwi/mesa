@@ -1228,6 +1228,8 @@ bool ibc_opt_dead_code(ibc_shader *shader);
 
 void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 
+void ibc_repair_wlr_order(ibc_shader *shader);
+
 bool ibc_split_logical_regs(ibc_shader *shader);
 
 const unsigned *ibc_to_binary(const ibc_shader *shader,
