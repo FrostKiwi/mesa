@@ -204,6 +204,13 @@ ibc_phys_reg_alloc_finish(struct ibc_phys_reg_alloc *alloc)
    util_vma_heap_finish(&alloc->heap);
 }
 
+static inline void
+ibc_phys_reg_alloc_print(FILE *fp, struct ibc_phys_reg_alloc *alloc)
+{
+   fprintf(fp, "ibc_phys_reg_alloc:\n");
+   util_vma_heap_print(&alloc->heap, fp, "    ", 4096);
+}
+
 static bool
 ibc_phys_reg_alloc_raw(struct ibc_phys_reg_alloc *alloc,
                        int16_t fixed_hw_grf_byte,
@@ -685,6 +692,60 @@ ibc_strided_reg_alloc_finish(struct ibc_strided_reg_alloc *alloc)
 {
 }
 
+static inline void
+ibc_strided_reg_print(FILE *fp, struct ibc_strided_reg *sreg, uint32_t ip)
+{
+   fprintf(fp, "(%u B, %u comps, %u:%u): ",
+           sreg->byte_size, sreg->num_comps,
+           sreg->simd_group, sreg->simd_width);
+
+   unsigned num_chunks = ibc_strided_reg_num_chunks(sreg);
+   unsigned chunks_free = 0;
+   for (unsigned i = 0; i < num_chunks; i++) {
+      if (sreg->chunks[i].hole_start > ip ||
+          sreg->chunks[i].hole_end <= ip)
+         chunks_free++;
+   }
+
+   fprintf(fp, "%.2f%% used", ((float)chunks_free / (float)num_chunks) * 100);
+}
+
+static inline void
+ibc_strided_reg_alloc_print(FILE *fp, struct ibc_strided_reg_alloc *alloc,
+                            uint32_t ip)
+{
+   fprintf(fp, "ibc_strided_reg_alloc(stride = %u):\n", alloc->stride);
+
+   fprintf(fp, "    Free registers:\n");
+   if (list_is_empty(&alloc->free))
+      fprintf(fp, "        None\n");
+   uint32_t total_bytes = 0;
+   list_for_each_entry(struct ibc_strided_reg, sreg, &alloc->free, link) {
+      fprintf(fp, "        ");
+      ibc_strided_reg_print(fp, sreg, ip);
+      fprintf(fp, "\n");
+      total_bytes += (uint32_t)sreg->byte_size *
+                     (uint32_t)sreg->num_comps *
+                     (uint32_t)sreg->simd_width;
+   }
+   fprintf(fp, "    %u B total in free registers\n", total_bytes);
+   fprintf(fp, "\n");
+
+   fprintf(fp, "    Busy registers:\n");
+   if (list_is_empty(&alloc->busy))
+      fprintf(fp, "        None\n");
+   total_bytes = 0;
+   list_for_each_entry(struct ibc_strided_reg, sreg, &alloc->busy, link) {
+      fprintf(fp, "        ");
+      ibc_strided_reg_print(fp, sreg, ip);
+      fprintf(fp, "\n");
+      total_bytes += (uint32_t)sreg->byte_size *
+                     (uint32_t)sreg->num_comps *
+                     (uint32_t)sreg->simd_width;
+   }
+   fprintf(fp, "    %u B total in busy registers\n", total_bytes);
+}
+
 static struct ibc_strided_reg *
 ibc_strided_reg_alloc(struct ibc_strided_reg_alloc *alloc,
                       const ibc_live_intervals *live,
@@ -1039,7 +1100,13 @@ assign_reg(struct ibc_reg_assignment *assign,
                                         rli);
       if (!assign->preg && !state->allow_spilling)
          return false;
+#ifndef NDEBUG
+      if (!assign->preg) {
+         ibc_phys_reg_alloc_print(stderr, &state->phys_alloc);
+         fprintf(stderr, "\n");
+      }
       assert(assign->preg);
+#endif
       break;
 
    case IBC_FILE_LOGICAL:
@@ -1052,7 +1119,13 @@ assign_reg(struct ibc_reg_assignment *assign,
                                            size, align, rli);
          if (!assign->preg && !state->allow_spilling)
             return false;
+#ifndef NDEBUG
+         if (!assign->preg) {
+            ibc_phys_reg_alloc_print(stderr, &state->phys_alloc);
+            fprintf(stderr, "\n");
+         }
          assert(assign->preg);
+#endif
       } else {
          assert(reg->logical.bit_size % 8 == 0);
          assert(reg->logical.stride >= reg->logical.bit_size / 8);
@@ -1072,7 +1145,18 @@ assign_reg(struct ibc_reg_assignment *assign,
                                               &assign->sreg_comp);
          if (!assign->sreg && !state->allow_spilling)
             return false;
+#ifndef NDEBUG
+         if (!assign->sreg) {
+            ibc_phys_reg_alloc_print(stderr, &state->phys_alloc);
+            fprintf(stderr, "\n");
+            for (unsigned i = 0; i < ARRAY_SIZE(state->strided_alloc); i++) {
+               ibc_strided_reg_alloc_print(stderr, &state->strided_alloc[i],
+                                           rli->physical_start);
+               fprintf(stderr, "\n");
+            }
+         }
          assert(assign->sreg);
+#endif
       }
       break;
 
