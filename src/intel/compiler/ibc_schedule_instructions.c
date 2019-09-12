@@ -26,6 +26,9 @@
 
 #include "util/rb_tree.h"
 
+#include <math.h>
+#include <string.h>
+
 static unsigned
 ibc_logical_reg_byte_size(const ibc_reg *reg)
 {
@@ -1356,6 +1359,134 @@ noop_schedule(const ibc_shader *shader, ibc_sched_graph *g, void *mem_ctx)
    return sched;
 }
 
+static int
+rb_cmp_nodes_by_cycle(const struct rb_node *_a, const struct rb_node *_b)
+{
+   ibc_sched_node *a = rb_node_data(ibc_sched_node, _a, rb_node);
+   ibc_sched_node *b = rb_node_data(ibc_sched_node, _b, rb_node);
+   return (int)b->data.cycle - (int)a->data.cycle;
+}
+
+static ibc_schedule *
+rubber_band_schedule(const ibc_shader *shader, ibc_sched_graph *g,
+                     ibc_schedule *old_sched, void *mem_ctx)
+{
+   static const uint32_t grf_byte_threshold = 3200;
+   static const unsigned max_iterations = 10;
+   static const float push_factor = 1.0;
+   static const float pull_factor = 0.2;
+
+   if (old_sched->max_grf_bytes >= grf_byte_threshold)
+      return old_sched;
+
+   float *cycle_target = ralloc_array(mem_ctx, float, g->num_nodes);
+   uint32_t *grf_bytes = ralloc_array(mem_ctx, uint32_t, g->num_nodes);
+
+   for (unsigned iter = 0; iter < max_iterations; iter++) {
+      ibc_sched_pressure_estimate pe = { };
+
+      uint32_t cycles = 0;
+      for (unsigned i = 0; i < g->num_nodes; i++) {
+         uint32_t node_idx = old_sched->order[i];
+         ibc_sched_node *node = &g->nodes[node_idx];
+         const ibc_instr *instr = node->instr;
+
+         /* Stash the original cycle for this node assuming no stalls */
+         node->data.cycle = cycles;
+         cycle_target[node_idx] = cycles;
+         cycles += node->latency.fe_time;
+
+         if (iter == 0) {
+            grf_bytes[node_idx] = pe.grf_bytes.current;
+            ibc_sched_pressure_estimate_adjust_for_instr(&pe, g, instr);
+            if (instr->type == IBC_INSTR_TYPE_FLOW) {
+               ibc_sched_pressure_estimate_start_block(&pe,
+                  g, ibc_instr_as_flow(instr), IBC_SCHED_DIRECTION_TOP_DOWN);
+            }
+         }
+      }
+
+      for (unsigned i = 0; i < g->num_nodes; i++) {
+         uint32_t node_idx = old_sched->order[i];
+         ibc_sched_node *node = &g->nodes[node_idx];
+
+         for (unsigned j = 0; j < node->num_src_deps; j++) {
+            if (node->src_deps[j].latency == 0)
+               continue;
+
+            float cycle_delta = node->data.cycle -
+                                node->src_deps[j].node->data.cycle;
+            float stall = (float)node->src_deps[j].latency - cycle_delta;
+            if (stall >= 0)
+               cycle_target[node_idx] += sqrtf(stall) * push_factor;
+            else
+               cycle_target[node_idx] -= sqrtf(-stall) * pull_factor;
+         }
+      }
+
+      for (unsigned i = 0; i < g->num_nodes; i++) {
+         g->nodes[i].data.cycle = lroundf(cycle_target[i]);
+
+         /* Reset source reference counts while we're here */
+         g->nodes[i].src_ref_count = g->nodes[i].num_src_deps;
+      }
+
+      /* Ready to create a new schedule */
+      ibc_schedule *new_sched = ibc_schedule_create(g, mem_ctx);
+      memset(&pe, 0, sizeof(pe));
+
+      struct rb_tree ready;
+      rb_tree_init(&ready);
+      rb_tree_insert(&ready, &g->nodes[0].rb_node, rb_cmp_nodes_by_cycle);
+
+      uint32_t idx = 0;
+      while (!rb_tree_is_empty(&ready)) {
+         ibc_sched_node *node =
+            rb_node_data(ibc_sched_node, rb_tree_last(&ready), rb_node);
+         const ibc_instr *instr = node->instr;
+
+         rb_tree_remove(&ready, &node->rb_node);
+         new_sched->order[idx++] = node - g->nodes;
+
+         for (unsigned i = 0; i < node->num_dest_deps; i++) {
+            ibc_sched_node *dep = node->dest_deps[i].node;
+            assert(dep->src_ref_count > 0);
+            dep->src_ref_count--;
+            if (dep->src_ref_count == 0)
+               rb_tree_insert(&ready, &dep->rb_node, rb_cmp_nodes_by_cycle);
+         }
+
+         node->data.cycle = new_sched->cycles;
+         for (unsigned i = 0; i < node->num_src_deps; i++) {
+            uint32_t dep_end_cycle = node->src_deps[i].node->data.cycle +
+                                     node->src_deps[i].latency;
+            node->data.cycle = MAX2(node->data.cycle, dep_end_cycle);
+         }
+         new_sched->cycles = node->data.cycle + node->latency.fe_time;
+
+         ibc_sched_pressure_estimate_adjust_for_instr(&pe, g, instr);
+         if (instr->type == IBC_INSTR_TYPE_FLOW) {
+            ibc_sched_pressure_estimate_start_block(&pe,
+               g, ibc_instr_as_flow(instr), IBC_SCHED_DIRECTION_TOP_DOWN);
+         }
+      }
+      assert(idx == g->num_nodes);
+
+      new_sched->max_grf_bytes = pe.grf_bytes.max;
+      new_sched->max_flag_bits = pe.flag_bits.max;
+
+      if (new_sched->max_grf_bytes >= grf_byte_threshold)
+         break;
+
+      old_sched = new_sched;
+   }
+
+   ralloc_free(cycle_target);
+   ralloc_free(grf_bytes);
+
+   return old_sched;
+}
+
 uint32_t
 ibc_schedule_instructions(ibc_shader *shader)
 {
@@ -1363,6 +1494,7 @@ ibc_schedule_instructions(ibc_shader *shader)
    ibc_sched_graph *graph = ibc_sched_graph_create(shader, mem_ctx);
 
    ibc_schedule *noop = noop_schedule(shader, graph, mem_ctx);
+   noop = rubber_band_schedule(shader, graph, noop, mem_ctx);
 
    ibc_shader_apply_schedule(shader, graph, noop);
    uint32_t cycles = noop->cycles;
