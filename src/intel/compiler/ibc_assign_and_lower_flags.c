@@ -374,6 +374,12 @@ evict_flag(unsigned chunk, struct ibc_assign_flags_state *state)
    if (state->assign[chunk] == NULL)
       return;
 
+   /* This can get called somewhere other than the base of the flag register.
+    * Scan down until we find the first chunk associated with the given reg.
+    */
+   while (chunk > 0 && state->assign[chunk - 1] == state->assign[chunk])
+      chunk--;
+
    UNUSED const ibc_reg *flag = state->assign[chunk];
 
    const unsigned num_chunks = flag_reg_num_chunks(state->assign[chunk]);
