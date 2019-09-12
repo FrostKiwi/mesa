@@ -37,7 +37,7 @@ struct reg_split_info {
     * must remain together.
     */
    uint32_t simd_joint;
-   uint8_t comp_joint;
+   uint16_t comp_joint;
 
    uint8_t num_regs;
    struct split_reg *split_regs;
@@ -74,6 +74,8 @@ mark_splits(ibc_ref *ref,
           simd_group + simd_width <= ref->reg->logical.simd_group +
                                      ref->reg->logical.simd_width);
 
+   assert(simd_group + simd_width <= sizeof(split->simd_joint) * 8);
+   assert(ref->logical.comp + num_comps <= sizeof(split->comp_joint) * 8);
    if (simd_width > 1)
       split->simd_joint |= ((1 << (simd_width - 1)) - 1) << simd_group;
    if (num_comps > 1)
