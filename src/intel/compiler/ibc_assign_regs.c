@@ -656,8 +656,6 @@ struct ibc_strided_reg_alloc {
 
    void *mem_ctx;
 
-   struct ibc_strided_reg *regs;
-
    /** List of registers which are at lest partially free at the current ip */
    struct list_head free;
 
@@ -677,9 +675,6 @@ ibc_strided_reg_alloc_init(struct ibc_strided_reg_alloc *alloc,
       .stride = stride,
       .mem_ctx = mem_ctx,
    };
-
-   alloc->regs = rzalloc_array(mem_ctx, struct ibc_strided_reg,
-                               live->num_regs);
 
    list_inithead(&alloc->free);
    list_inithead(&alloc->busy);
