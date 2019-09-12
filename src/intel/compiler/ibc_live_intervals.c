@@ -27,7 +27,7 @@
 #include "util/bitscan.h"
 
 static bool
-instr_is_predicated(ibc_instr *instr)
+instr_is_predicated(const ibc_instr *instr)
 {
    if (instr->type == IBC_INSTR_TYPE_ALU &&
        ibc_instr_as_alu(instr)->op == IBC_ALU_OP_SEL)
@@ -301,7 +301,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
 }
 
 static ibc_live_intervals *
-alloc_live_intervals(ibc_shader *shader,
+alloc_live_intervals(const ibc_shader *shader,
                      bool (*reg_filter)(const ibc_reg *reg),
                      void *mem_ctx)
 {
@@ -441,7 +441,7 @@ setup_block_use_def_for_write(ibc_ref *ref,
 }
 
 static void
-compute_live_sets(ibc_shader *shader, ibc_live_intervals *live)
+compute_live_sets(const ibc_shader *shader, ibc_live_intervals *live)
 {
    struct setup_use_def_state state = {
       .live = live,
@@ -624,7 +624,7 @@ extend_live_interval_for_write(ibc_ref *ref,
 }
 
 static void
-compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
+compute_live_intervals(const ibc_shader *shader, ibc_live_intervals *live)
 {
    const unsigned bitset_words = BITSET_WORDS(live->num_chunks);
    struct extend_live_interval_state state = {
@@ -763,7 +763,7 @@ compute_live_intervals(ibc_shader *shader, ibc_live_intervals *live)
 }
 
 ibc_live_intervals *
-ibc_compute_live_intervals(ibc_shader *shader,
+ibc_compute_live_intervals(const ibc_shader *shader,
                            bool (*reg_filter)(const ibc_reg *reg),
                            void *mem_ctx)
 {
