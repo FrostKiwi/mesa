@@ -557,31 +557,45 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
       srcs[num_srcs++] = min_lod;
    }
 
-   for (unsigned i = 0; i < num_srcs; i++) {
-      if (i == 0 && send->has_header) {
-         assert(srcs[i].file == IBC_FILE_HW_GRF);
-         send->mlen++;
-      } else {
-         send->mlen += b->simd_width / 8;
+   ibc_reg *message;
+   if (send->has_header) {
+      for (unsigned i = 0; i < num_srcs; i++) {
+         if (i == 0 && send->has_header) {
+            assert(srcs[i].file == IBC_FILE_HW_GRF);
+            send->mlen++;
+         } else {
+            send->mlen += b->simd_width / 8;
+         }
       }
-   }
 
-   ibc_reg *message =
-      ibc_hw_grf_reg_create(b->shader, send->mlen * REG_SIZE, REG_SIZE);
-   ibc_ref msg_dest = ibc_typed_ref(message, IBC_TYPE_UD);
-   for (unsigned i = 0; i < num_srcs; i++) {
-      msg_dest.type = srcs[i].type;
-      if (i == 0 && send->has_header) {
-         ibc_builder_push_we_all(b, 8);
-         ibc_MOV_to(b, msg_dest, srcs[i]);
-         ibc_builder_pop(b);
-         msg_dest.hw_grf.byte += REG_SIZE;
-      } else if (srcs[i].file == IBC_FILE_NONE) {
-         /* Just advance it */
-         msg_dest.hw_grf.byte += b->simd_width * sizeof(uint32_t);
-      } else {
-         ibc_MOV_to(b, msg_dest, srcs[i]);
-         msg_dest.hw_grf.byte += b->simd_width * sizeof(uint32_t);
+      message =
+         ibc_hw_grf_reg_create(b->shader, send->mlen * REG_SIZE, REG_SIZE);
+      ibc_ref msg_dest = ibc_typed_ref(message, IBC_TYPE_UD);
+      for (unsigned i = 0; i < num_srcs; i++) {
+         msg_dest.type = srcs[i].type;
+         if (i == 0 && send->has_header) {
+            ibc_builder_push_we_all(b, 8);
+            ibc_MOV_to(b, msg_dest, srcs[i]);
+            ibc_builder_pop(b);
+            msg_dest.hw_grf.byte += REG_SIZE;
+         } else if (srcs[i].file == IBC_FILE_NONE) {
+            /* Just advance it */
+            msg_dest.hw_grf.byte += b->simd_width * sizeof(uint32_t);
+         } else {
+            ibc_MOV_to(b, msg_dest, srcs[i]);
+            msg_dest.hw_grf.byte += b->simd_width * sizeof(uint32_t);
+         }
+      }
+   } else {
+      message = ibc_logical_reg_create(b->shader, 32, num_srcs,
+                                       b->simd_group, b->simd_width);
+      ibc_ref msg_dest = ibc_typed_ref(message, IBC_TYPE_UD);
+      for (unsigned i = 0; i < num_srcs; i++) {
+         msg_dest.type = srcs[i].type;
+         if (srcs[i].file != IBC_FILE_NONE)
+            ibc_MOV_to(b, msg_dest, srcs[i]);
+         send->mlen += b->simd_width / 8;
+         msg_dest.logical.comp++;
       }
    }
    send->payload[0] = ibc_typed_ref(message, IBC_TYPE_32_BIT);
