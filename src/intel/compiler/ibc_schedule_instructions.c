@@ -963,7 +963,14 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
          uint32_t grf_bytes, flag_bits;
          switch (reg->file) {
          case IBC_FILE_LOGICAL:
-            if (reg->logical.bit_size == 1) {
+            if (rli->chunk_simd_width > 32) {
+               /* This only happens for registers that are never written.  We
+                * assume they don't contribute to register pressure.
+                */
+               assert(rli->num_chunks == 1);
+               grf_bytes = 0;
+               flag_bits = 0;
+            } else if (reg->logical.bit_size == 1) {
                /* Assume a W type vector representation */
                grf_bytes = 2 * rli->chunk_simd_width;
                flag_bits = rli->chunk_simd_width;
