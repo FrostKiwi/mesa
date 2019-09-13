@@ -24,6 +24,8 @@
 #include "ibc.h"
 #include "ibc_live_intervals.h"
 
+#include "util/rb_tree.h"
+
 #include <stdio.h>
 
 static unsigned
@@ -1517,6 +1519,164 @@ noop_schedule(const ibc_shader *shader, ibc_sched_graph *g, void *mem_ctx)
    return b.sched;
 }
 
+static int
+rb_cmp_nodes_by_cycle(const struct rb_node *_a, const struct rb_node *_b)
+{
+   ibc_sched_node *a = rb_node_data(ibc_sched_node, _a, rb_node);
+   ibc_sched_node *b = rb_node_data(ibc_sched_node, _b, rb_node);
+   return (int)b->data.cycle - (int)a->data.cycle;
+}
+
+static int
+rb_cmp_nodes_by_min_to_start(const struct rb_node *_a,
+                             const struct rb_node *_b)
+{
+   ibc_sched_node *a = rb_node_data(ibc_sched_node, _a, rb_node);
+   ibc_sched_node *b = rb_node_data(ibc_sched_node, _b, rb_node);
+   return(int)b->latency.min_to_start - (int)a->latency.min_to_start;
+}
+
+static int
+rb_cmp_nodes_by_min_to_end(const struct rb_node *_a,
+                           const struct rb_node *_b)
+{
+   ibc_sched_node *a = rb_node_data(ibc_sched_node, _a, rb_node);
+   ibc_sched_node *b = rb_node_data(ibc_sched_node, _b, rb_node);
+   return (int)b->latency.min_to_end - (int)a->latency.min_to_end;
+}
+
+static ibc_schedule *
+bottom_up_latency_schedule(const ibc_shader *shader, ibc_sched_graph *g,
+                           void *mem_ctx)
+{
+   ibc_schedule_builder b;
+   ibc_schedule_builder_init_new(&b, g, IBC_SCHED_DIRECTION_BOTTOM_UP, mem_ctx);
+
+   /* Reset reference counts and set cycles to 0 */
+   for (unsigned i = 0; i < g->num_nodes; i++) {
+      ibc_sched_node *node = &g->nodes[i];
+      node->dest_ref_count = node->num_dest_deps;
+      node->data.cycle = 0;
+   }
+
+   struct rb_tree ready, leader;
+   rb_tree_init(&ready);
+   rb_tree_init(&leader);
+
+   rb_tree_insert(&ready, &g->nodes[g->num_nodes - 1].rb_node,
+                  rb_cmp_nodes_by_min_to_start);
+
+   while (!rb_tree_is_empty(&ready) || !rb_tree_is_empty(&leader)) {
+      ibc_sched_node *node;
+      if (!rb_tree_is_empty(&ready)) {
+         node = rb_node_data(ibc_sched_node, rb_tree_last(&ready), rb_node);
+         rb_tree_remove(&ready, &node->rb_node);
+      } else {
+         assert(!rb_tree_is_empty(&leader));
+         node = rb_node_data(ibc_sched_node, rb_tree_first(&leader), rb_node);
+         rb_tree_remove(&leader, &node->rb_node);
+      }
+
+      ibc_schedule_add_node(&b, node);
+
+      for (unsigned i = 0; i < node->num_src_deps; i++) {
+         ibc_sched_node *dep = node->src_deps[i].node;
+
+         uint32_t dep_cycles = node->data.cycle + node->src_deps[i].latency;
+         dep->data.cycle = MAX2(dep->data.cycle, dep_cycles);
+
+         assert(dep->dest_ref_count > 0);
+         dep->dest_ref_count--;
+
+         /* A node's cycle count won't be altered between the time that its
+          * last destination reference is gone and the time it gets put in the
+          * schedule.  Therefore, it's safe to use it as a keep in the leaders
+          * red-black tree.
+          */
+         if (dep->dest_ref_count == 0)
+            rb_tree_insert(&leader, &dep->rb_node, rb_cmp_nodes_by_cycle);
+      }
+
+      while (!rb_tree_is_empty(&leader)) {
+         ibc_sched_node *node =
+            rb_node_data(ibc_sched_node, rb_tree_first(&leader), rb_node);
+         if (node->data.cycle > b.sched->cycles)
+            break;
+
+         rb_tree_remove(&leader, &node->rb_node);
+         rb_tree_insert(&ready, &node->rb_node, rb_cmp_nodes_by_min_to_start);
+      }
+   }
+
+   return b.sched;
+}
+
+static ibc_schedule *
+top_down_latency_schedule(const ibc_shader *shader, ibc_sched_graph *g,
+                          void *mem_ctx)
+{
+   ibc_schedule_builder b;
+   ibc_schedule_builder_init_new(&b, g, IBC_SCHED_DIRECTION_TOP_DOWN, mem_ctx);
+
+   /* Reset reference counts and set cycles to 0 */
+   for (unsigned i = 0; i < g->num_nodes; i++) {
+      ibc_sched_node *node = &g->nodes[i];
+      node->src_ref_count = node->num_src_deps;
+      node->data.cycle = 0;
+   }
+
+   struct rb_tree ready, leader;
+   rb_tree_init(&ready);
+   rb_tree_init(&leader);
+
+   rb_tree_insert(&ready, &g->nodes[0].rb_node,
+                  rb_cmp_nodes_by_min_to_end);
+
+   while (!rb_tree_is_empty(&ready) || !rb_tree_is_empty(&leader)) {
+      ibc_sched_node *node;
+      if (!rb_tree_is_empty(&ready)) {
+         node = rb_node_data(ibc_sched_node, rb_tree_last(&ready), rb_node);
+         rb_tree_remove(&ready, &node->rb_node);
+      } else {
+         assert(!rb_tree_is_empty(&leader));
+         node = rb_node_data(ibc_sched_node, rb_tree_first(&leader), rb_node);
+         rb_tree_remove(&leader, &node->rb_node);
+      }
+
+      ibc_schedule_add_node(&b, node);
+
+      for (unsigned i = 0; i < node->num_dest_deps; i++) {
+         ibc_sched_node *dep = node->dest_deps[i].node;
+
+         uint32_t dep_cycles = node->data.cycle + node->dest_deps[i].latency;
+         dep->data.cycle = MAX2(dep->data.cycle, dep_cycles);
+
+         assert(dep->src_ref_count > 0);
+         dep->src_ref_count--;
+
+         /* A node's cycle count won't be altered between the time that its
+          * last destination reference is gone and the time it gets put in the
+          * schedule.  Therefore, it's safe to use it as a keep in the leaders
+          * red-black tree.
+          */
+         if (dep->src_ref_count == 0)
+            rb_tree_insert(&leader, &dep->rb_node, rb_cmp_nodes_by_cycle);
+      }
+
+      while (!rb_tree_is_empty(&leader)) {
+         ibc_sched_node *node =
+            rb_node_data(ibc_sched_node, rb_tree_first(&leader), rb_node);
+         if (node->data.cycle > b.sched->cycles)
+            break;
+
+         rb_tree_remove(&leader, &node->rb_node);
+         rb_tree_insert(&ready, &node->rb_node, rb_cmp_nodes_by_min_to_end);
+      }
+   }
+
+   return b.sched;
+}
+
 void
 ibc_schedule_instructions(ibc_shader *shader)
 {
@@ -1536,9 +1696,20 @@ ibc_schedule_instructions_post_ra(ibc_shader *shader)
    void *mem_ctx = ralloc_context(shader);
 
    ibc_sched_graph *graph = ibc_sched_graph_create(shader, mem_ctx);
-   ibc_schedule *sched = noop_schedule(shader, graph, mem_ctx);
 
-   ibc_shader_apply_schedule(shader, graph, sched);
+   ibc_schedule *sched[] = {
+      noop_schedule(shader, graph, mem_ctx),
+      bottom_up_latency_schedule(shader, graph, mem_ctx),
+      top_down_latency_schedule(shader, graph, mem_ctx),
+   };
+
+   ibc_schedule *best = NULL;
+   for (unsigned i = 0; i < ARRAY_SIZE(sched); i++) {
+      if (best == NULL || best->cycles > sched[i]->cycles)
+         best = sched[i];
+   }
+
+   ibc_shader_apply_schedule(shader, graph, best);
 
    ralloc_free(mem_ctx);
 }
