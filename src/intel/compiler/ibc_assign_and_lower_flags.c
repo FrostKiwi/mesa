@@ -786,8 +786,16 @@ rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
                                          write_instr->index,
                                          true, /* opportunistic */
                                          state);
-         instr_set_flag_ref(write_instr, ref, chunk,
-                            FLAG_REP_NONE, FLAG_REP_FLAG, state);
+         if (chunk >= 0) {
+            instr_set_flag_ref(write_instr, ref, chunk,
+                               FLAG_REP_NONE, FLAG_REP_FLAG, state);
+         } else {
+            ensure_flag_spill_grf(ref->reg, state);
+            ibc_ref scalar = state->regs[ref->reg->index].scalar;
+            assert(scalar.file != IBC_FILE_NONE);
+            scalar.type = ref->type;
+            ibc_instr_set_ref(write_instr, ref, scalar);
+         }
       } else {
          int chunk = find_flag(ref->reg, state);
          if (chunk >= 0 && flag_ref_valid(NULL, ref, chunk, state)) {
