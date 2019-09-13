@@ -888,11 +888,11 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
       if (bit_size < 0)
          bit_size = 16;
 
-      ibc_builder_push_group(b, reg->logical.simd_group,
-                                reg->logical.simd_width);
-      state.regs[reg->index].vector =
-         ibc_builder_new_logical_reg(b, IBC_TYPE_INT | bit_size, 1);
-      ibc_builder_pop(b);
+      ibc_reg *vec_reg = ibc_logical_reg_create(b->shader, bit_size, 1,
+                                                reg->logical.simd_group,
+                                                reg->logical.simd_width);
+      vec_reg->is_wlr = false;
+      state.regs[reg->index].vector = ibc_typed_ref(vec_reg, IBC_TYPE_INT);
    }
 
    ibc_foreach_instr_safe(instr, shader) {
