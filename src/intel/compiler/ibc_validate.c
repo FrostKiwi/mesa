@@ -27,8 +27,14 @@
 #include "ibc.h"
 
 #include <util/bitscan.h>
+#include <util/debug.h>
 #include <util/hash_table.h>
 #include <util/set.h>
+
+/* Since this file is just a pile of asserts, don't bother compiling it if
+ * we're not building a debug build.
+ */
+#ifndef NDEBUG
 
 struct ibc_validate_state {
    void *mem_ctx;
@@ -832,6 +838,12 @@ ibc_validate_reg_post(struct ibc_validate_state *s, const ibc_reg *reg)
 void
 ibc_validate_shader(const ibc_shader *shader)
 {
+   static int should_validate = -1;
+   if (should_validate < 0)
+      should_validate = env_var_as_boolean("IBC_VALIDATE", true);
+   if (!should_validate)
+      return;
+
    struct ibc_validate_state s = {
       .mem_ctx = ralloc_context(NULL),
       .shader = shader,
@@ -868,3 +880,5 @@ ibc_validate_shader(const ibc_shader *shader)
 
    ralloc_free(s.mem_ctx);
 }
+
+#endif /* NDEBUG */
