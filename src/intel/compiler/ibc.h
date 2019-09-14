@@ -1244,7 +1244,14 @@ const unsigned *ibc_to_binary(const ibc_shader *shader,
                               void *mem_ctx,
                               unsigned *program_size);
 
+#ifdef NDEBUG
+static inline void
+ibc_validate_shader(const ibc_shader *shader)
+{
+}
+#else
 void ibc_validate_shader(const ibc_shader *shader);
+#endif
 
 #ifdef __cplusplus
 } /* extern "C" */
