@@ -659,29 +659,23 @@ ibc_sched_graph_add_dep(ibc_sched_graph *graph,
                               &def->dest_deps, use, num_bytes, latency, graph);
 }
 
-struct foreach_hw_grf_dep_state {
-   const ibc_ref *ref;
-   void (*cb)(const ibc_ref *, uint16_t num_bytes,
-              ibc_sched_node **,
-              struct ibc_sched_graph_builder *);
+struct set_hw_grf_dep_state {
    struct ibc_sched_graph_builder *b;
+   ibc_sched_node *node;
 };
 
 static void
-foreach_hw_grf_dep(unsigned byte, void *_state)
+set_hw_grf_dep(unsigned byte, void *_state)
 {
-   struct foreach_hw_grf_dep_state *state = _state;
-   state->cb(state->ref, 1, &state->b->grf_last_write[byte], state->b);
+   struct set_hw_grf_dep_state *state = _state;
+   state->b->grf_last_write[byte] = state->node;
 }
 
 static void
-foreach_dep_node(ibc_ref *ref,
-                 int num_bytes, int num_comps,
-                 uint8_t simd_group, uint8_t simd_width,
-                 void (*cb)(const ibc_ref *, uint16_t num_bytes,
-                            ibc_sched_node **,
-                            struct ibc_sched_graph_builder *),
-                 struct ibc_sched_graph_builder *b)
+set_dep_node(ibc_ref *ref, ibc_sched_node *node,
+             int num_bytes, int num_comps,
+             uint8_t simd_group, uint8_t simd_width,
+             struct ibc_sched_graph_builder *b)
 {
    assert(ref->file != IBC_FILE_NONE && ref->file != IBC_FILE_IMM);
    ibc_sched_graph *g = b->graph;
@@ -703,8 +697,7 @@ foreach_dep_node(ibc_ref *ref,
 
       for (unsigned i = 0; i < num_chunks; i++) {
          if (BITSET_TEST(chunks, i))
-            cb(ref, g->reg_chunks[chunk_idx + i].grf_bytes,
-               &b->chunk_last_write[chunk_idx + i], b);
+            b->chunk_last_write[chunk_idx + i] = node;
       }
    } else if (ref->file == IBC_FILE_HW_GRF) {
       if (b->grf_last_write == NULL) {
@@ -716,7 +709,107 @@ foreach_dep_node(ibc_ref *ref,
          /* This is a send */
          for (unsigned i = 0; i < num_bytes; i++) {
             assert(ref->hw_grf.byte + i < 4096);
-            cb(ref, 1, &b->grf_last_write[ref->hw_grf.byte + i], b);
+            b->grf_last_write[ref->hw_grf.byte + i] = node;
+         }
+      } else {
+         ibc_hw_grf_ref_foreach_byte(*ref, num_comps, simd_width,
+                                     set_hw_grf_dep,
+                                     &(struct set_hw_grf_dep_state) {
+                                        .b = b,
+                                        .node = node,
+                                     });
+      }
+   } else if (ref->file == IBC_FILE_FLAG) {
+      if (ref->type != IBC_TYPE_FLAG) {
+         assert(ref->flag.bit % ibc_type_bit_size(ref->type) == 0);
+         simd_width = ibc_type_bit_size(ref->type);
+      }
+
+      assert(simd_width % FLAG_CHUNK_BITS == 0);
+      assert(ref->flag.bit % FLAG_CHUNK_BITS == 0);
+      const unsigned num_chunks = simd_width / FLAG_CHUNK_BITS;
+      const unsigned chunk_idx = ref->flag.bit / FLAG_CHUNK_BITS;
+
+      for (unsigned i = 0; i < num_chunks; i++)
+         b->flag_last_write[chunk_idx + i] = node;
+   } else {
+      unreachable("Invalid register file for NULL reg");
+   }
+}
+
+struct foreach_hw_grf_dep_state {
+   const ibc_ref *ref;
+   ibc_sched_node *last;
+   void (*cb)(const ibc_ref *, uint16_t num_bytes,
+              ibc_sched_node *,
+              struct ibc_sched_graph_builder *);
+   struct ibc_sched_graph_builder *b;
+};
+
+static void
+foreach_hw_grf_dep(unsigned byte, void *_state)
+{
+   struct foreach_hw_grf_dep_state *state = _state;
+   if (state->b->grf_last_write[byte] == NULL ||
+       state->b->grf_last_write[byte] == state->last)
+      return;
+
+   state->last = state->b->grf_last_write[byte];
+   state->cb(state->ref, 1, state->last, state->b);
+}
+
+static void
+foreach_dep_node(ibc_ref *ref,
+                 int num_bytes, int num_comps,
+                 uint8_t simd_group, uint8_t simd_width,
+                 void (*cb)(const ibc_ref *, uint16_t num_bytes,
+                            ibc_sched_node *,
+                            struct ibc_sched_graph_builder *),
+                 struct ibc_sched_graph_builder *b)
+{
+   assert(ref->file != IBC_FILE_NONE && ref->file != IBC_FILE_IMM);
+   ibc_sched_graph *g = b->graph;
+
+   if (ref->reg != NULL) {
+      if (b->chunk_last_write == NULL)
+         return;
+
+      assert(ref->reg->index < b->graph->live->num_regs);
+      const unsigned num_chunks = g->live->regs[ref->reg->index].num_chunks;
+      const unsigned chunk_idx = g->live->regs[ref->reg->index].chunk_idx;
+
+      BITSET_DECLARE(chunks, IBC_REG_LIVE_MAX_CHUNKS);
+      memset(chunks, 0, BITSET_WORDS(num_chunks) * sizeof(BITSET_WORD));
+      ibc_live_intervals_ref_chunks(g->live, ref, num_bytes, num_comps,
+                                    simd_group, simd_width, chunks);
+
+      ibc_sched_node *last = NULL;
+      for (unsigned i = 0; i < num_chunks; i++) {
+         if (!BITSET_TEST(chunks, i))
+            continue;
+
+         if (b->chunk_last_write[chunk_idx + i] == NULL ||
+             b->chunk_last_write[chunk_idx + i] == last)
+            continue;
+
+         last = b->chunk_last_write[chunk_idx + i];
+         cb(ref, g->reg_chunks[chunk_idx + i].grf_bytes, last, b);
+      }
+   } else if (ref->file == IBC_FILE_HW_GRF) {
+      if (b->grf_last_write == NULL)
+         return;
+
+      if (num_bytes > 0) {
+         /* This is a send */
+         ibc_sched_node *last = NULL;
+         for (unsigned i = 0; i < num_bytes; i++) {
+            assert(ref->hw_grf.byte + i < 4096);
+            if (b->grf_last_write[ref->hw_grf.byte + i] == NULL ||
+                b->grf_last_write[ref->hw_grf.byte + i] == last)
+               continue;
+
+            last = b->grf_last_write[ref->hw_grf.byte + i];
+            cb(ref, 1, last, b);
          }
       } else {
          ibc_hw_grf_ref_foreach_byte(*ref, num_comps, simd_width,
@@ -738,8 +831,15 @@ foreach_dep_node(ibc_ref *ref,
       const unsigned num_chunks = simd_width / FLAG_CHUNK_BITS;
       const unsigned chunk_idx = ref->flag.bit / FLAG_CHUNK_BITS;
 
-      for (unsigned i = 0; i < num_chunks; i++)
-         cb(ref, 1, &b->flag_last_write[chunk_idx + i], b);
+      ibc_sched_node *last = NULL;
+      for (unsigned i = 0; i < num_chunks; i++) {
+         if (b->flag_last_write[chunk_idx + i] == NULL ||
+             b->flag_last_write[chunk_idx + i] == last)
+            continue;
+
+         last = b->flag_last_write[chunk_idx + i];
+         cb(ref, 1, last, b);
+      }
    } else {
       unreachable("Invalid register file for NULL reg");
    }
@@ -747,17 +847,14 @@ foreach_dep_node(ibc_ref *ref,
 
 static void
 add_raw_dep_cb(const ibc_ref *ref, uint16_t num_bytes,
-               ibc_sched_node **dep_node,
+               ibc_sched_node *dep_node,
                struct ibc_sched_graph_builder *b)
 {
-   if (*dep_node == NULL)
-      return;
-
    /* We record the node latency as being from the start of one instruction
     * to the start of the other so we need both FE time and latency.
     */
-   unsigned raw_latency = (*dep_node)->latency.fe_time +
-                          (*dep_node)->latency.fe_to_dest;
+   unsigned raw_latency = dep_node->latency.fe_time +
+                          dep_node->latency.fe_to_dest;
 
    /* If it's getting read as a flag, assume that the write wrote it as a
     * flag and so there's an extra four cycles of latency for the cmod
@@ -766,7 +863,7 @@ add_raw_dep_cb(const ibc_ref *ref, uint16_t num_bytes,
    if (ref->type == IBC_TYPE_FLAG)
       raw_latency += 4;
 
-   ibc_sched_graph_add_dep(b->graph, b->iter_node, *dep_node,
+   ibc_sched_graph_add_dep(b->graph, b->iter_node, dep_node,
                            num_bytes, raw_latency);
 }
 
@@ -807,19 +904,16 @@ add_raw_ref_dep(ibc_ref *ref,
 
 static void
 add_waw_dep_cb(const ibc_ref *ref, uint16_t num_bytes,
-               ibc_sched_node **dep_node,
+               ibc_sched_node *dep_node,
                struct ibc_sched_graph_builder *b)
 {
-   if (*dep_node == NULL)
-      return;
-
    /* We record the node latency as being from the start of one instruction
     * to the start of the other so we need both FE time and latency.  Write
     * stalls happen after FE has finished firing off register loads so we
     * don't have quite as much latency for RaW hazards.
     */
-   unsigned waw_latency = (*dep_node)->latency.fe_time +
-                          (*dep_node)->latency.fe_to_dest -
+   unsigned waw_latency = dep_node->latency.fe_time +
+                          dep_node->latency.fe_to_dest -
                           b->iter_node->latency.fe_time;
 
    /* If it's getting written as a flag, assume that the previous write
@@ -829,7 +923,7 @@ add_waw_dep_cb(const ibc_ref *ref, uint16_t num_bytes,
    if (ref->type == IBC_TYPE_FLAG)
       waw_latency += 4;
 
-   ibc_sched_graph_add_dep(b->graph, b->iter_node, *dep_node,
+   ibc_sched_graph_add_dep(b->graph, b->iter_node, dep_node,
                            num_bytes, waw_latency);
 }
 
@@ -850,14 +944,6 @@ add_waw_ref_dep(ibc_ref *ref,
    return true;
 }
 
-static void
-record_write_cb(UNUSED const ibc_ref *ref, UNUSED uint16_t num_bytes,
-                ibc_sched_node **node,
-                UNUSED struct ibc_sched_graph_builder *b)
-{
-   *node = b->iter_node;
-}
-
 static bool
 record_ref_write(ibc_ref *ref,
                  int num_bytes, int num_comps,
@@ -871,8 +957,8 @@ record_ref_write(ibc_ref *ref,
    if (ref->file == IBC_FILE_NONE)
       return true;
 
-   foreach_dep_node(ref, num_bytes, num_comps, simd_group, simd_width,
-                    record_write_cb, b);
+   set_dep_node(ref, b->iter_node, num_bytes, num_comps,
+                simd_group, simd_width, b);
 
    if (ref->reg == NULL)
       return true;
@@ -900,16 +986,13 @@ record_ref_write(ibc_ref *ref,
 
 static void
 add_war_dep_cb(const ibc_ref *ref, UNUSED uint16_t num_bytes,
-               ibc_sched_node **dep_node,
+               ibc_sched_node *dep_node,
                struct ibc_sched_graph_builder *b)
 {
-   if (*dep_node == NULL)
+   if (b->iter_node == dep_node)
       return;
 
-   if (b->iter_node == *dep_node)
-      return;
-
-   ibc_sched_graph_add_dep(b->graph, *dep_node, b->iter_node,
+   ibc_sched_graph_add_dep(b->graph, dep_node, b->iter_node,
                            0 /* num_bytes */, 0 /* latency */);
 }
 
