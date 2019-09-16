@@ -201,6 +201,47 @@ idep_mesautil = declare_dependency(
   dependencies : [dep_zlib, dep_clock, dep_thread, dep_atomic, dep_m],
 )
 
+if meson.is_cross_build() and (with_intel_vk or with_gallium_iris or with_dri_i965)
+  # Currently this is only needed if cross compilng Intel's IBC,
+  # For a runtime generator. In every other case we want to skip this.
+  # If we're not cross compiling then we can use the host version
+  cc_b = meson.get_compiler('c', native : true)
+  _deps = []
+  _deps += dependency('zlib', native : true)
+  if dep_clock.found()
+    _deps += dependency('rt', native : true)
+  endif
+  _deps += dependency('threads', native : true)
+  if dep_atomic.found()
+    _deps += cc_b.find_library('atomic')
+  endif
+  if dep_m.found()
+    _deps += cc_b.find_library('m')
+  endif
+  # Not going to worry about valgrind for a library used by a uility
+
+  _libmesa_util_build = static_library(
+    'mesa_util_build',
+    [files_mesa_util, format_srgb],
+    include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_gallium_aux],
+    dependencies : [_deps],
+    c_args : [c_msvc_compat_args, pre_args],
+    gnu_symbol_visibility : 'hidden',
+    build_by_default : false,
+    native : true,
+  )
+
+  idep_mesautil_build = declare_dependency(
+    link_with : _libmesa_util_build,
+    include_directories : inc_util,
+    dependencies : [_deps],
+  )
+else
+  # This will cause a warning, but we know it's safe because we're only doing
+  # using the host binary in the case that host == build.
+  idep_mesautil_build = idep_mesautil
+endif
+
 xmlconfig_deps = []
 if not (with_platform_android or with_platform_windows)
   xmlconfig_deps += dep_expat
