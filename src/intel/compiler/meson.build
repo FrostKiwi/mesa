@@ -154,6 +154,8 @@ libintel_compiler_files = files(
   'ibc_opt_cse.c',
   'ibc_opt_dead_code.c',
   'ibc_print.c',
+  'ibc_ra_reg_sets.c',
+  'ibc_ra_reg_sets.h',
   'ibc_schedule_instructions.c',
   'ibc_split_regs.c',
   'ibc_validate.c',
@@ -172,11 +174,33 @@ brw_nir_trig = custom_target(
   capture : true,
 )
 
+exe_ibc_build_ra_reg_sets = executable(
+  'ibc_build_ra_reg_sets',
+  [
+    'ibc_build_ra_reg_sets.c',
+    'ibc_ra_reg_sets.c',
+    'ibc_ra_reg_sets.h',
+  ],
+  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_intel],
+  c_args : [pre_args],
+  dependencies : [idep_mesautil_build],
+  native : true,
+)
+
+ibc_ra_reg_sets_prebuilt_h = custom_target(
+  'ibc_ra_reg_sets_prebuilt.h',
+  output : 'ibc_ra_reg_sets_prebuilt.h',
+  command : [
+    exe_ibc_build_ra_reg_sets, '@OUTPUT@',
+  ],
+)
+
 libintel_compiler = static_library(
   'intel_compiler',
-  [libintel_compiler_files, brw_nir_trig, ir_expression_operation_h],
+  [libintel_compiler_files, brw_nir_trig,  ibc_ra_reg_sets_prebuilt_h,
+   ir_expression_operation_h],
   include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_intel],
-  c_args : [no_override_init_args],
+  c_args : [no_override_init_args, '-DIBC_HAVE_PREBUILT_REG_SETS'],
   gnu_symbol_visibility : 'hidden',
   dependencies : [idep_nir_headers, idep_mesautil],
   build_by_default : false,
