@@ -25,6 +25,8 @@
 #include "ibc_builder.h"
 #include "ibc_live_intervals.h"
 
+#include "brw_compiler.h"
+
 #include "util/rb_tree.h"
 #include "util/vma.h"
 
@@ -1189,8 +1191,8 @@ rewrite_instr_reg_writes(ibc_instr *instr, struct ibc_assign_regs_state *state)
    ibc_instr_foreach_write(instr, rewrite_ref_and_update_reg, state);
 }
 
-bool
-ibc_assign_regs(ibc_shader *shader, bool allow_spilling)
+static bool
+ibc_assign_regs_linear_scan(ibc_shader *shader, bool allow_spilling)
 {
    struct ibc_builder b;
    ibc_builder_init(&b, shader);
@@ -1381,4 +1383,16 @@ fail:
    ralloc_free(state.mem_ctx);
 
    return allocated;
+}
+
+void
+ibc_assign_regs_init(struct brw_compiler *compiler)
+{
+}
+
+bool
+ibc_assign_regs(ibc_shader *shader, const struct brw_compiler *compiler,
+                bool allow_spilling)
+{
+   return ibc_assign_regs_linear_scan(shader, allow_spilling);
 }

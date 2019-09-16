@@ -1204,7 +1204,10 @@ bool ibc_should_print_shader(const ibc_shader *ibc);
 
 bool ibc_assign_and_lower_flags(ibc_shader *shader);
 bool ibc_assign_logical_reg_strides(ibc_shader *shader);
-bool ibc_assign_regs(ibc_shader *shader, bool allow_spilling);
+void ibc_assign_regs_init(struct brw_compiler *compiler);
+bool ibc_assign_regs(ibc_shader *shader,
+                     const struct brw_compiler *compiler,
+                     bool allow_spilling);
 
 void ibc_lower_and_optimize(ibc_shader *ibc);
 
