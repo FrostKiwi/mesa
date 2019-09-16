@@ -22,8 +22,15 @@
  */
 
 #include "ibc.h"
+#include "ibc_compile.h"
 
 #include "dev/gen_debug.h"
+
+void
+ibc_init_compiler(struct brw_compiler *compiler)
+{
+   ibc_assign_regs_init(compiler);
+}
 
 static ibc_reg *
 ibc_reg_create(ibc_shader *shader, enum ibc_file file)
