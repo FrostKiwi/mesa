@@ -463,7 +463,8 @@ ibc_instr_is_load_payload(const ibc_instr *instr)
 
    ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
    return intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD ||
-          intrin->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO;
+          (intrin->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO &&
+           intrin->src[0].ref.file != IBC_FILE_NONE);
 }
 
 static bool
