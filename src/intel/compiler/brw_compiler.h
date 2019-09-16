@@ -91,6 +91,8 @@ struct brw_compiler {
       int aligned_bary_class;
    } fs_reg_sets[3];
 
+   void *ibc_data;
+
    void (*shader_debug_log)(void *, const char *str, ...) PRINTFLIKE(2, 3);
    void (*shader_perf_log)(void *, const char *str, ...) PRINTFLIKE(2, 3);
 
