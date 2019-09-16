@@ -31,6 +31,9 @@
 extern "C" {
 #endif
 
+void
+ibc_init_compiler(struct brw_compiler *compiler);
+
 const unsigned *
 ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
                void *mem_ctx,

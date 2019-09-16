@@ -307,7 +307,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
 
       ibc_lower_and_optimize(ibc);
 
-      bool assigned = ibc_assign_regs(ibc, first_bin);
+      bool assigned = ibc_assign_regs(ibc, compiler, first_bin);
 
       if (INTEL_DEBUG & DEBUG_CS)
          ibc_print_shader(ibc, stderr);
