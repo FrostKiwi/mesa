@@ -157,9 +157,22 @@ brw_nir_trig = custom_target(
   capture : true,
 )
 
+isl_reg_sets = custom_target(
+  'ibc_reg_sets.c',
+  input : 'ibc_reg_sets.py',
+  output : 'ibc_reg_sets.c',
+  command : [
+    prog_python, '@INPUT@',
+    '-p', join_paths(meson.source_root(), 'src/util/'),
+  ],
+  depend_files : util_register_allocate_py,
+  capture : true,
+)
+
 libintel_compiler = static_library(
   'intel_compiler',
-  [libintel_compiler_files, brw_nir_trig, ir_expression_operation_h],
+  [libintel_compiler_files, brw_nir_trig, ir_expression_operation_h,
+   isl_reg_sets],
   include_directories : [inc_common, inc_intel],
   c_args : [c_vis_args, no_override_init_args],
   cpp_args : [cpp_vis_args],
