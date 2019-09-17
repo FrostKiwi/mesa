@@ -134,9 +134,14 @@ def ibc_render_reg_set(simd_width):
             reg_set.class_add_reg(c.nr, reg)
             ra_reg_to_grf[reg] = grf
             ra_reg_to_grf_end[reg] = grf + c.reg_size
+            for i in range(c.reg_size):
+                reg_set.add_reg_conflict(reg, grf + i)
             reg += 1
         assert reg == c.reg_start + c.num_regs
     assert reg == ra_reg_count
+
+    for base in range(TOTAL_GRF_BYTES):
+        reg_set.make_reg_conflicts_transitive(base)
 
     for b in classes:
         for c in classes:
@@ -148,11 +153,11 @@ def ibc_render_reg_set(simd_width):
                 # always maps to one register in B.
                 reg_set.class_set_q(b.nr, c.nr, 1)
 
-                c_per_b = c.reg_size // b.reg_size
-                for i in range(c.num_regs):
-                    c_reg = c.reg_start + i
-                    b_reg = b.reg_start + i // c_per_b
-                    reg_set.add_reg_conflict_non_reflexive(c_reg, b_reg)
+#                c_per_b = c.reg_size // b.reg_size
+#                for i in range(c.num_regs):
+#                    c_reg = c.reg_start + i
+#                    b_reg = b.reg_start + i // c_per_b
+#                    reg_set.add_reg_conflict_non_reflexive(c_reg, b_reg)
 
             elif b.reg_align == b.reg_size and \
                  c.reg_align >= b.reg_align and \
@@ -162,13 +167,13 @@ def ibc_render_reg_set(simd_width):
                 # number of registers in B and there's no weird overlap.
                 reg_set.class_set_q(b.nr, c.nr, c.reg_size // b.reg_size)
 
-                b_per_c = c.reg_size // b.reg_size
-                c_stride_b = c.reg_align // b.reg_size
-                for i in range(c.num_regs):
-                    c_reg = c.reg_start + i
-                    for j in range(b_per_c):
-                        b_reg = b.reg_start + i * c_stride_b + j
-                        reg_set.add_reg_conflict_non_reflexive(c_reg, b_reg)
+#                b_per_c = c.reg_size // b.reg_size
+#                c_stride_b = c.reg_align // b.reg_size
+#                for i in range(c.num_regs):
+#                    c_reg = c.reg_start + i
+#                    for j in range(b_per_c):
+#                        b_reg = b.reg_start + i * c_stride_b + j
+#                        reg_set.add_reg_conflict_non_reflexive(c_reg, b_reg)
 
             else:
                 # View the register from C as fixed starting at GRF n somwhere
@@ -188,13 +193,13 @@ def ibc_render_reg_set(simd_width):
                 #             +-+-+-+-+-+
                 reg_set.class_set_q(b.nr, c.nr, c.reg_size + b.reg_size - 1)
 
-                for i in range(c.num_regs):
-                    for j in range(b.num_regs):
-                        c_reg = c.reg_start + i
-                        b_reg = b.reg_start + j
-                        if ra_reg_to_grf_end[c_reg] > ra_reg_to_grf[b_reg] and \
-                           ra_reg_to_grf_end[b_reg] > ra_reg_to_grf[c_reg]:
-                            reg_set.add_reg_conflict_non_reflexive(c_reg, b_reg)
+#                for i in range(c.num_regs):
+#                    for j in range(b.num_regs):
+#                        c_reg = c.reg_start + i
+#                        b_reg = b.reg_start + j
+#                        if ra_reg_to_grf_end[c_reg] > ra_reg_to_grf[b_reg] and \
+#                           ra_reg_to_grf_end[b_reg] > ra_reg_to_grf[c_reg]:
+#                            reg_set.add_reg_conflict_non_reflexive(c_reg, b_reg)
 
     try:
         return TEMPLATE.render(simd_width=simd_width,
