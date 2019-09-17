@@ -108,6 +108,7 @@ files_mesa_util = files(
 )
 
 files_drirc = files('00-mesa-defaults.conf')
+util_register_allocate_py = files('register_allocate.py')
 
 install_data(files_drirc, install_dir : join_paths(get_option('datadir'), 'drirc.d'))
 

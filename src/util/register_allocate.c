@@ -77,48 +77,9 @@
 #include "main/macros.h"
 #include "util/bitset.h"
 #include "register_allocate.h"
+#include "register_allocate_priv.h"
 
 #define NO_REG ~0U
-
-struct ra_reg {
-   BITSET_WORD *conflicts;
-   unsigned int *conflict_list;
-   unsigned int conflict_list_size;
-   unsigned int num_conflicts;
-};
-
-struct ra_regs {
-   struct ra_reg *regs;
-   unsigned int count;
-
-   struct ra_class **classes;
-   unsigned int class_count;
-
-   bool round_robin;
-};
-
-struct ra_class {
-   /**
-    * Bitset indicating which registers belong to this class.
-    *
-    * (If bit N is set, then register N belongs to this class.)
-    */
-   BITSET_WORD *regs;
-
-   /**
-    * p(B) in Runeson/Nyström paper.
-    *
-    * This is "how many regs are in the set."
-    */
-   unsigned int p;
-
-   /**
-    * q(B,C) (indexed by C, B is this register class) in
-    * Runeson/Nyström paper.  This is "how many registers of B could
-    * the worst choice register from C conflict with".
-    */
-   unsigned int *q;
-};
 
 struct ra_node {
    /** @{
