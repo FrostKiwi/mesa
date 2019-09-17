@@ -162,7 +162,7 @@ struct ra_node {
 };
 
 struct ra_graph {
-   struct ra_regs *regs;
+   const struct ra_regs *regs;
    /**
     * the variables that need register allocation.
     */
@@ -527,7 +527,7 @@ ra_realloc_interference_graph(struct ra_graph *g, unsigned int alloc)
 }
 
 struct ra_graph *
-ra_alloc_interference_graph(struct ra_regs *regs, unsigned int count)
+ra_alloc_interference_graph(const struct ra_regs *regs, unsigned int count)
 {
    struct ra_graph *g;
 
