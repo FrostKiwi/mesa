@@ -275,6 +275,13 @@ ra_add_conflict_list(struct ra_regs *regs, unsigned int r1, unsigned int r2)
 }
 
 void
+ra_add_reg_conflict_non_reflexive(struct ra_regs *regs, unsigned int r1,
+                                  unsigned int r2)
+{
+   BITSET_SET(regs->regs[r1].conflicts, r2);
+}
+
+void
 ra_add_reg_conflict(struct ra_regs *regs, unsigned int r1, unsigned int r2)
 {
    if (!BITSET_TEST(regs->regs[r1].conflicts, r2)) {
