@@ -1324,6 +1324,23 @@ bool ibc_assign_regs(ibc_shader *shader,
                      const struct brw_compiler *compiler,
                      bool allow_spilling);
 
+typedef struct ibc_dominance_block {
+   /** Flow instruction right before the block. */
+   ibc_flow_instr *flow;
+
+   struct ibc_dominance_block *imm_dom;
+
+   unsigned num_dom_children;
+   struct ibc_dominance_block **dom_children;
+} ibc_dominance_block;
+
+typedef struct {
+   uint32_t num_blocks;
+   ibc_dominance_block *blocks;
+} ibc_dominance;
+
+ibc_dominance *ibc_compute_dominance(ibc_shader *shader, void *mem_ctx);
+
 void ibc_lower_and_optimize(ibc_shader *ibc);
 
 bool ibc_lower_fb_writes(ibc_shader *shader);

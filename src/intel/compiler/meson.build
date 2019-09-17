@@ -142,6 +142,7 @@ libintel_compiler_files = files(
   'ibc_builder.h',
   'ibc_compute.c',
   'ibc_compile.h',
+  'ibc_dominance.c',
   'ibc_fragment.c',
   'ibc_to_binary.c',
   'ibc_live_intervals.c',
