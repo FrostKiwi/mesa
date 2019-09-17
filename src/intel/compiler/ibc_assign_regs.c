@@ -1523,6 +1523,7 @@ ibc_reg_set_init(struct ibc_reg_set *set, unsigned simd_width,
    assert(class_count <= ARRAY_SIZE(classes));
 
    set->ra_reg_to_grf = ralloc_array(mem_ctx, uint16_t, ra_reg_count);
+   uint16_t *ra_reg_to_grf_end = ralloc_array(mem_ctx, uint16_t, ra_reg_count);
    set->regs = ra_alloc_reg_set(mem_ctx, ra_reg_count, false);
    ra_set_allocate_round_robin(set->regs);
 
@@ -1544,28 +1545,12 @@ ibc_reg_set_init(struct ibc_reg_set *set, unsigned simd_width,
            grf += grf_stride) {
          ra_class_add_reg(set->regs, classes[i]->nr, reg);
          set->ra_reg_to_grf[reg] = grf;
-
-         /* We don't need to add conflicts for 1B regs because they are,
-          * themselves, the base register.
-          */
-         if (i == 0) {
-            /* We don't need to add conflicts for 1B regs because they are,
-             * themselves, the base register.
-             */
-            assert(classes[i]->reg_size == 1);
-            assert(reg == grf);
-         } else {
-            for (unsigned b = 0; b < classes[i]->reg_size; b++)
-               ra_add_reg_conflict(set->regs, grf + b, reg);
-         }
+         ra_reg_to_grf_end[reg] = grf + classes[i]->reg_size;
          reg++;
       }
       assert(classes[i]->reg_end == reg);
    }
    assert(reg == ra_reg_count);
-
-   for (int reg = 0; reg < TOTAL_GRF_BYTES; reg++)
-      ra_make_reg_conflicts_transitive(set->regs, reg);
 
    /* From register_allocate.c:
     *
@@ -1585,14 +1570,33 @@ ibc_reg_set_init(struct ibc_reg_set *set, unsigned simd_width,
       for (unsigned c = 0; c < class_count; c++) {
          assert(util_is_power_of_two_nonzero(classes[b]->reg_align));
          assert(util_is_power_of_two_nonzero(classes[c]->reg_align));
+
+         /* Save these off for later */
+         const unsigned b_start = classes[b]->reg_start;
+         const unsigned c_start = classes[c]->reg_start;
+         const unsigned b_num_regs = classes[b]->reg_end -
+                                     classes[b]->reg_start;
+         const unsigned c_num_regs = classes[c]->reg_end -
+                                     classes[c]->reg_start;
+
          if (classes[c]->reg_align == classes[c]->reg_size &&
-             classes[b]->reg_align >= classes[c]->reg_align &&
+             classes[b]->reg_align == classes[b]->reg_size &&
              classes[b]->reg_size >= classes[c]->reg_size) {
-            /* If C's registers are aligned to a register and fit inside B's
-             * size and alignment then one register in C always maps to one
-             * register in B.
+            /* If B's and C's registers are both aligned to a register and C's
+             * fit inside B's size and alignment then one register in C always
+             * maps to one register in B.
              */
             q_values[b][c] = 1;
+
+            const unsigned c_per_b = classes[b]->reg_size /
+                                     classes[c]->reg_size;
+            assert(c_num_regs == b_num_regs * c_per_b);
+            for (unsigned i = 0; i < c_num_regs; i++) {
+               unsigned c_reg = c_start + i;
+               unsigned b_reg = b_start + i / c_per_b;
+               assert(i / c_per_b < b_num_regs);
+               ra_add_reg_conflict_non_reflexive(set->regs, c_reg, b_reg);
+            }
          } else if (classes[b]->reg_align == classes[b]->reg_size &&
                     classes[c]->reg_align >= classes[b]->reg_align &&
                     classes[c]->reg_size >= classes[b]->reg_size) {
@@ -1601,6 +1605,19 @@ ibc_reg_set_init(struct ibc_reg_set *set, unsigned simd_width,
              * number of registers in B and there's no weird overlap.
              */
             q_values[b][c] = classes[c]->reg_size / classes[b]->reg_size;
+
+            const unsigned b_per_c = classes[c]->reg_size /
+                                     classes[b]->reg_size;
+            const unsigned c_stride_b = classes[c]->reg_align /
+                                        classes[b]->reg_size;
+            for (unsigned i = 0; i < c_num_regs; i++) {
+               unsigned c_reg = c_start + i;
+               for (unsigned j = 0; j < b_per_c; j++) {
+                  unsigned b_reg = b_start + i * c_stride_b + j;
+                  assert(i * c_stride_b + j < b_num_regs);
+                  ra_add_reg_conflict_non_reflexive(set->regs, c_reg, b_reg);
+               }
+            }
          } else {
             /*
              * View the register from C as fixed starting at GRF n somwhere in
@@ -1620,12 +1637,23 @@ ibc_reg_set_init(struct ibc_reg_set *set, unsigned simd_width,
              *             +-+-+-+-+-+
              */
             q_values[b][c] = classes[b]->reg_size + classes[c]->reg_size - 1;
+
+            for (unsigned i = 0; i < c_num_regs; i++) {
+               for (unsigned j = 0; j < b_num_regs; j++) {
+                  unsigned c_reg = c_start + i;
+                  unsigned b_reg = b_start + j;
+                  if (!(ra_reg_to_grf_end[b_reg] <= set->ra_reg_to_grf[c_reg] ||
+                        ra_reg_to_grf_end[c_reg] <= set->ra_reg_to_grf[b_reg]))
+                     ra_add_reg_conflict_non_reflexive(set->regs, c_reg, b_reg);
+               }
+            }
          }
       }
    }
 
    ra_set_finalize(set->regs, q_values);
 
+   ralloc_free(ra_reg_to_grf_end);
    ralloc_free(q_values);
 }
 
