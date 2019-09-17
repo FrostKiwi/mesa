@@ -461,8 +461,12 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
 }
 
 struct opt_cse_state {
+   void *mem_ctx;
+
    struct set *reg_set;
    struct hash_table *reg_remap;
+
+   ibc_dominance *dominance;
 
    bool progress;
 };
@@ -523,29 +527,49 @@ try_cse_write(ibc_reg_write *write, ibc_ref *ref, void *_state)
    return true;
 }
 
+static void
+ibc_opt_cse_block(ibc_shader *shader, struct opt_cse_state *state,
+                  ibc_dominance_block *block)
+{
+   ibc_instr *first_after_flow = ibc_instr_next(&block->flow->instr);
+   if (!first_after_flow)
+      return;
+
+   /* Clone the parent set, so our entries don't leak to siblings. */
+   struct set *parent_set = state->reg_set;
+   state->reg_set = _mesa_set_clone(parent_set, state->mem_ctx);
+
+   ibc_foreach_instr_from_safe(instr, shader, first_after_flow) {
+      ibc_instr_foreach_read(instr, rewrite_read, state);
+      ibc_instr_foreach_reg_write(instr, try_cse_write, state);
+
+      if (instr->type == IBC_INSTR_TYPE_FLOW)
+         break;
+   }
+
+   for (int i = 0; i < block->num_dom_children; i++)
+      ibc_opt_cse_block(shader, state, block->dom_children[i]);
+
+   state->reg_set = parent_set;
+}
+
 bool
 ibc_opt_cse(ibc_shader *shader)
 {
+   void *mem_ctx = ralloc_context(NULL);
+
    struct opt_cse_state state = {
-      .reg_set = _mesa_set_create(NULL, hash_wlr_reg_cb, wlr_regs_equal_cb),
-      .reg_remap = _mesa_pointer_hash_table_create(NULL),
+      .mem_ctx = mem_ctx,
+      .reg_set = _mesa_set_create(mem_ctx, hash_wlr_reg_cb, wlr_regs_equal_cb),
+      .reg_remap = _mesa_pointer_hash_table_create(mem_ctx),
       .progress = false,
    };
 
-   ibc_foreach_instr_safe(instr, shader) {
-      ibc_instr_foreach_read(instr, rewrite_read, &state);
-      ibc_instr_foreach_reg_write(instr, try_cse_write, &state);
+   ibc_dominance *dominance = ibc_compute_dominance(shader, mem_ctx);
 
-      /* When we cross block boundaries, reset the reg set.  This prevents us
-       * from CSEing two regs in different blocks.  We leave the remap set
-       * around so that we can still do remaps.
-       */
-      if (instr->type == IBC_INSTR_TYPE_FLOW)
-         _mesa_set_clear(state.reg_set, NULL);
-   }
+   ibc_opt_cse_block(shader, &state, &dominance->blocks[0]);
 
-   _mesa_set_destroy(state.reg_set, NULL);
-   _mesa_hash_table_destroy(state.reg_remap, NULL);
+   ralloc_free(mem_ctx);
 
    return state.progress;
 }
