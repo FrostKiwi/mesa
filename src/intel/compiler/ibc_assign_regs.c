@@ -1639,11 +1639,13 @@ ibc_reg_set_init(struct ibc_reg_set *set, unsigned simd_width,
             q_values[b][c] = classes[b]->reg_size + classes[c]->reg_size - 1;
 
             for (unsigned i = 0; i < c_num_regs; i++) {
+               unsigned c_reg = c_start + i;
+               unsigned c_grf = set->ra_reg_to_grf[c_reg];
+               unsigned c_grf_end = ra_reg_to_grf_end[c_reg];
                for (unsigned j = 0; j < b_num_regs; j++) {
-                  unsigned c_reg = c_start + i;
                   unsigned b_reg = b_start + j;
-                  if (!(ra_reg_to_grf_end[b_reg] <= set->ra_reg_to_grf[c_reg] ||
-                        ra_reg_to_grf_end[c_reg] <= set->ra_reg_to_grf[b_reg]))
+                  if (!(ra_reg_to_grf_end[b_reg] <= c_grf ||
+                        c_grf_end <= set->ra_reg_to_grf[b_reg]))
                      ra_add_reg_conflict_non_reflexive(set->regs, c_reg, b_reg);
                }
             }
