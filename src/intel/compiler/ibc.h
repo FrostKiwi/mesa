@@ -1195,7 +1195,7 @@ ibc_flow_instr_falls_through(const ibc_flow_instr *flow)
    list_for_each_entry_safe_rev(ibc_instr, instr, &(shader)->instrs, link)
 
 #define ibc_foreach_instr_from(instr, shader, start) \
-   list_for_each_entry_from(ibc_instr, instr, start, &(shader)->instrs, link)
+   list_for_each_entry_from(ibc_instr, instr, &(start)->link, &(shader)->instrs, link)
 
 static inline ibc_instr *
 ibc_instr_next(const ibc_instr *instr)
