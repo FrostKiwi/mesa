@@ -159,9 +159,31 @@ brw_nir_trig = custom_target(
   capture : true,
 )
 
+exe_ibc_build_ra_reg_sets = executable(
+  'ibc_build_ra_reg_sets',
+  [
+    'ibc_build_ra_reg_sets.c',
+    'ibc_ra_reg_sets.c',
+    'ibc_ra_reg_sets.h',
+  ],
+  include_directories : [inc_common, inc_intel],
+  c_args : [c_vis_args],
+  dependencies : [idep_mesautil],
+  native : true,
+)
+
+ibc_ra_reg_sets_prebuilt_h = custom_target(
+  'ibc_ra_reg_sets_prebuilt.h',
+  output : 'ibc_ra_reg_sets_prebuilt.h',
+  command : [
+    exe_ibc_build_ra_reg_sets, '@OUTPUT@',
+  ],
+)
+
 libintel_compiler = static_library(
   'intel_compiler',
-  [libintel_compiler_files, brw_nir_trig, ir_expression_operation_h],
+  [libintel_compiler_files, brw_nir_trig,  ibc_ra_reg_sets_prebuilt_h,
+   ir_expression_operation_h],
   include_directories : [inc_common, inc_intel],
   c_args : [c_vis_args, no_override_init_args],
   cpp_args : [cpp_vis_args],

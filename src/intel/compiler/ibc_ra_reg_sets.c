@@ -210,3 +210,33 @@ ibc_ra_reg_set_build(ibc_ra_reg_set *set, unsigned simd_width, void *mem_ctx)
 
    ralloc_free(q_values);
 }
+
+#include "ibc_ra_reg_sets_prebuilt.h"
+
+void
+ibc_ra_reg_set_load(ibc_ra_reg_set *set, unsigned simd_width,
+                    void *data, void *mem_ctx)
+{
+   unsigned class_count = 0;
+   ibc_ra_reg_class *classes[MAX_NUM_CLASSES];
+
+   ibc_ra_reg_set_init(set, simd_width, &class_count, classes, mem_ctx);
+
+   struct blob_reader blob;
+   switch (simd_width) {
+   case 8:
+      blob_reader_init(&blob, ibc_ra_reg_set_simd8,
+                       sizeof(ibc_ra_reg_set_simd8));
+      break;
+   case 16:
+      blob_reader_init(&blob, ibc_ra_reg_set_simd16,
+                       sizeof(ibc_ra_reg_set_simd16));
+      break;
+   case 16:
+      blob_reader_init(&blob, ibc_ra_reg_set_simd32,
+                       sizeof(ibc_ra_reg_set_simd32));
+      break;
+   }
+
+   set->reg_set = ra_set_deserialize(mem_ctx, &blob);
+}
