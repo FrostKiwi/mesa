@@ -1235,7 +1235,7 @@ void ibc_repair_wlr_order(ibc_shader *shader);
 
 void ibc_schedule_instructions(ibc_shader *shader);
 void ibc_schedule_instructions_post_ra(ibc_shader *shader);
-bool ibc_split_logical_regs(ibc_shader *shader);
+bool ibc_split_regs(ibc_shader *shader);
 
 const unsigned *ibc_to_binary(const ibc_shader *shader,
                               const struct shader_info *info,
