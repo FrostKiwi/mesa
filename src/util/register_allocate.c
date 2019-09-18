@@ -72,6 +72,7 @@
 
 #include <stdbool.h>
 
+#include "blob.h"
 #include "ralloc.h"
 #include "main/imports.h"
 #include "main/macros.h"
@@ -422,6 +423,61 @@ ra_set_finalize(struct ra_regs *regs, unsigned int **q_values)
       ralloc_free(regs->regs[b].conflict_list);
       regs->regs[b].conflict_list = NULL;
    }
+}
+
+void
+ra_set_serialize(const struct ra_regs *regs, struct blob *blob)
+{
+   blob_write_uint32(blob, regs->count);
+   blob_write_uint32(blob, regs->class_count);
+
+   for (unsigned r = 0; r < regs->count; r++) {
+      blob_write_bytes(blob, regs->regs[r].conflicts,
+                       BITSET_WORDS(regs->count) * sizeof(BITSET_WORD));
+      assert(regs->regs[r].conflict_list == NULL);
+      blob_write_uint32(blob, regs->regs[r].num_conflicts);
+   }
+
+   for (unsigned c = 0; c < regs->class_count; c++) {
+      blob_write_bytes(blob, regs->classes[c]->regs,
+                       BITSET_WORDS(regs->count) * sizeof(BITSET_WORD));
+      blob_write_uint32(blob, regs->classes[c]->p);
+      blob_write_bytes(blob, regs->classes[c]->q,
+                       regs->class_count * sizeof(*regs->classes[c]->q));
+   }
+
+   blob_write_uint32(blob, regs->round_robin);
+}
+
+struct ra_regs *
+ra_set_deserialize(void *mem_ctx, struct blob_reader *blob)
+{
+   unsigned reg_count = blob_read_uint32(blob);
+   unsigned class_count = blob_read_uint32(blob);
+
+   struct ra_regs *regs = ra_alloc_reg_set(mem_ctx, reg_count, false);
+   assert(regs->count == reg_count);
+
+   for (unsigned r = 0; r < reg_count; r++) {
+      blob_copy_bytes(blob, regs->regs[r].conflicts,
+                      BITSET_WORDS(reg_count) * sizeof(BITSET_WORD));
+      regs->regs[r].num_conflicts = blob_read_uint32(blob);
+   }
+
+   for (unsigned c = 0; c < class_count; c++) {
+      unsigned i = ra_alloc_reg_class(regs);
+      assert(i == c);
+
+      blob_copy_bytes(blob, regs->classes[c]->regs,
+                      BITSET_WORDS(reg_count) * sizeof(BITSET_WORD));
+      regs->classes[c]->p = blob_read_uint32(blob);
+      blob_copy_bytes(blob, regs->classes[c]->q,
+                      class_count * sizeof(*regs->classes[c]->q));
+   }
+
+   regs->round_robin = blob_read_uint32(blob);
+
+   return regs;
 }
 
 static void
