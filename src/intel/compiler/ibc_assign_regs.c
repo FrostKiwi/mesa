@@ -24,6 +24,7 @@
 #include "ibc.h"
 #include "ibc_builder.h"
 #include "ibc_live_intervals.h"
+#include "ibc_ra_reg_sets.h"
 
 #include "brw_compiler.h"
 
@@ -1386,282 +1387,9 @@ fail:
    return allocated;
 }
 
-#define MAX_HW_GRF_SIZE (16 * 32)
-#define TOTAL_GRF_BYTES 4096
-
-struct ibc_reg_class {
-   uint8_t nr;
-   union {
-      uint8_t reg_align;
-      uint8_t grf_stride;
-   };
-   uint16_t reg_size;
-   int reg_start;
-   int reg_end;
-};
-
-struct ibc_reg_set {
-   struct ra_regs *regs;
-
-   unsigned simd_width;
-
-   /** Classes for sub-32-byte physical registers */
-   struct ibc_reg_class phys_small[5];
-
-   /** Classes for 32-byte and larger physical registers */
-   struct ibc_reg_class phys_large[MAX_HW_GRF_SIZE / 32];
-
-   /** Classes for strided registers
-    *
-    * Strided registers are handled as a bit of a special case.  We only
-    * bother for logical registers whose SIMD width is equal to the dispatch
-    * width of the shader and only when the whole register SIMD width fits
-    * inside of two registers.  We do this for up to a vec4 size register.
-    */
-   struct ibc_reg_class strided[4][4];
-
-   uint16_t *ra_reg_to_grf;
-};
-
-static const struct ibc_reg_class *
-ibc_reg_set_get_physical_class(const struct ibc_reg_set *set, uint16_t size)
-{
-   if (size < 32) {
-      /* This is a scalar */
-      int idx = ffs(size) - 1;
-      assert(idx >= 0 && idx < ARRAY_SIZE(set->phys_small));
-      return &set->phys_small[idx];
-   } else {
-      assert(size < MAX_HW_GRF_SIZE);
-      return &set->phys_large[(size / 32) - 1];
-   }
-}
-
-static struct ibc_reg_class *
-ibc_reg_set_get_strided_class_mut(struct ibc_reg_set *set,
-                                  unsigned stride, unsigned num_comps,
-                                  UNUSED unsigned simd_width)
-{
-   assert(simd_width == set->simd_width);
-   assert(stride * simd_width <= 64);
-
-   int stride_idx = ffs(stride) - 1;
-   assert(stride_idx >= 0 && stride_idx < ARRAY_SIZE(set->strided));
-   assert(num_comps > 0 && num_comps <= ARRAY_SIZE(set->strided[0]));
-   return &set->strided[stride_idx][num_comps - 1];
-}
-
-static const struct ibc_reg_class *
-ibc_reg_set_get_strided_class(const struct ibc_reg_set *set,
-                              unsigned stride, unsigned num_comps,
-                              unsigned simd_width)
-{
-   return ibc_reg_set_get_strided_class_mut((struct ibc_reg_set *)set,
-                                            stride, num_comps, simd_width);
-}
-
-static int
-ibc_reg_set_grf_to_reg(const struct ibc_reg_set *set,
-                       uint16_t grf_byte, uint16_t size)
-{
-   const struct ibc_reg_class *c = ibc_reg_set_get_physical_class(set, size);
-   unsigned grf_stride = c->reg_align;
-   assert(grf_byte % grf_stride == 0);
-   return c->reg_start + (grf_byte / grf_stride);
-}
-
-static void
-ibc_reg_set_init(struct ibc_reg_set *set, unsigned simd_width,
-                 void *mem_ctx)
-{
-   set->simd_width = simd_width;
-
-   unsigned class_count = 0;
-   struct ibc_reg_class *classes[37];
-
-   unsigned ra_reg_count = 0;
-
-   /* Start with scalars.  This way 1B regs and HW regs line up. */
-   for (unsigned i = 0; i < ARRAY_SIZE(set->phys_small); i++) {
-      set->phys_small[i].reg_align = (1 << i);
-      set->phys_small[i].reg_size = (1 << i);
-      set->phys_small[i].reg_start = ra_reg_count;
-      ra_reg_count += TOTAL_GRF_BYTES >> i;
-      set->phys_small[i].reg_end = ra_reg_count;
-
-      classes[class_count++] = &set->phys_small[i];
-   }
-
-   for (unsigned i = 0; i < ARRAY_SIZE(set->phys_large); i++) {
-      set->phys_large[i].reg_align = 32;
-      set->phys_large[i].reg_size = (i + 1) * 32;
-      set->phys_large[i].reg_start = ra_reg_count;
-      ra_reg_count += (TOTAL_GRF_BYTES / 32) - i;
-      set->phys_large[i].reg_end = ra_reg_count;
-
-      classes[class_count++] = &set->phys_large[i];
-   }
-
-   for (unsigned stride = 1; stride <= 8; stride *= 2) {
-      if (stride * simd_width > 64)
-         continue;
-
-      for (unsigned num_comps = 1; num_comps <= 4; num_comps++) {
-         struct ibc_reg_class *class =
-            ibc_reg_set_get_strided_class_mut(set, stride, num_comps,
-                                              simd_width);
-         class->reg_align = stride * simd_width;
-         class->reg_size = stride * simd_width * num_comps;
-         class->reg_start = ra_reg_count;
-         ra_reg_count +=
-            (TOTAL_GRF_BYTES / (stride * simd_width)) - (num_comps - 1);
-         class->reg_end = ra_reg_count;
-
-         classes[class_count++] = class;
-      }
-   }
-   assert(class_count <= ARRAY_SIZE(classes));
-
-   set->ra_reg_to_grf = ralloc_array(mem_ctx, uint16_t, ra_reg_count);
-   uint16_t *ra_reg_to_grf_end = ralloc_array(mem_ctx, uint16_t, ra_reg_count);
-   set->regs = ra_alloc_reg_set(mem_ctx, ra_reg_count, false);
-   ra_set_allocate_round_robin(set->regs);
-
-   for (unsigned i = 0; i < class_count; i++) {
-      classes[i]->nr = ra_alloc_reg_class(set->regs);
-      assert(classes[i]->nr == i);
-   }
-
-   int reg = 0;
-   for (unsigned i = 0; i < class_count; i++) {
-      assert(classes[i]->nr == i);
-      assert(classes[i]->reg_start == reg);
-
-      /* Assume that every class strides by its alignment */
-      const unsigned grf_stride = classes[i]->grf_stride;
-      const unsigned reg_size = classes[i]->reg_size;
-      assert(reg_size < TOTAL_GRF_BYTES);
-      for (unsigned grf = 0; grf <= TOTAL_GRF_BYTES - reg_size;
-           grf += grf_stride) {
-         ra_class_add_reg(set->regs, classes[i]->nr, reg);
-         set->ra_reg_to_grf[reg] = grf;
-         ra_reg_to_grf_end[reg] = grf + classes[i]->reg_size;
-         reg++;
-      }
-      assert(classes[i]->reg_end == reg);
-   }
-   assert(reg == ra_reg_count);
-
-   /* From register_allocate.c:
-    *
-    * q(B,C) (indexed by C, B is this register class) in Runeson/Nyström
-    * paper.  This is "how many registers of B could the worst choice
-    * register from C conflict with".
-    *
-    * If we just let the register allocation algorithm compute these values,
-    * it's extremely expensive.  However, since all of our registers are laid
-    * out fairly explicitly, we can very easily compute them ourselves.
-    */
-   unsigned **q_values = ralloc_array(mem_ctx, unsigned *, class_count);
-   for (unsigned c = 0; c < class_count; c++)
-      q_values[c] = ralloc_array(q_values, unsigned, class_count);
-
-   for (unsigned b = 0; b < class_count; b++) {
-      for (unsigned c = 0; c < class_count; c++) {
-         assert(util_is_power_of_two_nonzero(classes[b]->reg_align));
-         assert(util_is_power_of_two_nonzero(classes[c]->reg_align));
-
-         /* Save these off for later */
-         const unsigned b_start = classes[b]->reg_start;
-         const unsigned c_start = classes[c]->reg_start;
-         const unsigned b_num_regs = classes[b]->reg_end -
-                                     classes[b]->reg_start;
-         const unsigned c_num_regs = classes[c]->reg_end -
-                                     classes[c]->reg_start;
-
-         if (classes[c]->reg_align == classes[c]->reg_size &&
-             classes[b]->reg_align == classes[b]->reg_size &&
-             classes[b]->reg_size >= classes[c]->reg_size) {
-            /* If B's and C's registers are both aligned to a register and C's
-             * fit inside B's size and alignment then one register in C always
-             * maps to one register in B.
-             */
-            q_values[b][c] = 1;
-
-            const unsigned c_per_b = classes[b]->reg_size /
-                                     classes[c]->reg_size;
-            assert(c_num_regs == b_num_regs * c_per_b);
-            for (unsigned i = 0; i < c_num_regs; i++) {
-               unsigned c_reg = c_start + i;
-               unsigned b_reg = b_start + i / c_per_b;
-               assert(i / c_per_b < b_num_regs);
-               ra_add_reg_conflict_non_reflexive(set->regs, c_reg, b_reg);
-            }
-         } else if (classes[b]->reg_align == classes[b]->reg_size &&
-                    classes[c]->reg_align >= classes[b]->reg_align &&
-                    classes[c]->reg_size >= classes[b]->reg_size) {
-            /* IF B's registers are aligned to a register and fit inside C's
-             * alignment then one register in C always maps to an integer
-             * number of registers in B and there's no weird overlap.
-             */
-            q_values[b][c] = classes[c]->reg_size / classes[b]->reg_size;
-
-            const unsigned b_per_c = classes[c]->reg_size /
-                                     classes[b]->reg_size;
-            const unsigned c_stride_b = classes[c]->reg_align /
-                                        classes[b]->reg_size;
-            for (unsigned i = 0; i < c_num_regs; i++) {
-               unsigned c_reg = c_start + i;
-               for (unsigned j = 0; j < b_per_c; j++) {
-                  unsigned b_reg = b_start + i * c_stride_b + j;
-                  assert(i * c_stride_b + j < b_num_regs);
-                  ra_add_reg_conflict_non_reflexive(set->regs, c_reg, b_reg);
-               }
-            }
-         } else {
-            /*
-             * View the register from C as fixed starting at GRF n somwhere in
-             * the middle, and the register from B as sliding back and forth.
-             * Then the first register to conflict from B is the one starting
-             * at n - classes[b].reg_size + 1 and the last register to
-             * conflict will start at n + class[b].reg_size - 1.  Therefore,
-             * the number of conflicts from B is
-             *
-             *    classes[b].reg_size + classes[c].reg_size - 1.
-             *
-             *   +-+-+-+-+-+-+     +-+-+-+-+-+-+
-             * B | | | | | |n| --> | | | | | | |
-             *   +-+-+-+-+-+-+     +-+-+-+-+-+-+
-             *             +-+-+-+-+-+
-             * C           |n| | | | |
-             *             +-+-+-+-+-+
-             */
-            q_values[b][c] = classes[b]->reg_size + classes[c]->reg_size - 1;
-
-            for (unsigned i = 0; i < c_num_regs; i++) {
-               unsigned c_reg = c_start + i;
-               unsigned c_grf = set->ra_reg_to_grf[c_reg];
-               unsigned c_grf_end = ra_reg_to_grf_end[c_reg];
-               for (unsigned j = 0; j < b_num_regs; j++) {
-                  unsigned b_reg = b_start + j;
-                  if (!(ra_reg_to_grf_end[b_reg] <= c_grf ||
-                        c_grf_end <= set->ra_reg_to_grf[b_reg]))
-                     ra_add_reg_conflict_non_reflexive(set->regs, c_reg, b_reg);
-               }
-            }
-         }
-      }
-   }
-
-   ra_set_finalize(set->regs, q_values);
-
-   ralloc_free(ra_reg_to_grf_end);
-   ralloc_free(q_values);
-}
-
 struct ibc_ra_singleton {
    /* One for each SIMD width */
-   struct ibc_reg_set reg_sets[3];
+   ibc_ra_reg_set reg_sets[3];
 };
 
 void
@@ -1669,11 +1397,11 @@ ibc_assign_regs_init(struct brw_compiler *compiler)
 {
    struct ibc_ra_singleton *ra = rzalloc(compiler, struct ibc_ra_singleton);
    for (unsigned i = 0; i < 3; i++)
-      ibc_reg_set_init(&ra->reg_sets[i], 8 << i, ra);
+      ibc_ra_reg_set_build(&ra->reg_sets[i], 8 << i, ra);
    compiler->ibc_data = ra;
 }
 
-static const struct ibc_reg_set *
+static const ibc_ra_reg_set *
 brw_compiler_get_ibc_reg_set(const struct brw_compiler *compiler,
                              uint8_t simd_width)
 {
@@ -1686,7 +1414,7 @@ brw_compiler_get_ibc_reg_set(const struct brw_compiler *compiler,
 }
 
 static bool
-ibc_reg_has_strided_class(const ibc_reg *reg, const struct ibc_reg_set *set)
+ibc_reg_has_strided_class(const ibc_reg *reg, const ibc_ra_reg_set *set)
 {
    if (reg->file != IBC_FILE_LOGICAL)
       return false;
@@ -1703,8 +1431,8 @@ ibc_reg_has_strided_class(const ibc_reg *reg, const struct ibc_reg_set *set)
    return reg->logical.simd_width == set->simd_width && comp_size <= 64;
 }
 
-static const struct ibc_reg_class *
-ibc_reg_to_class(const ibc_reg *reg, const struct ibc_reg_set *set)
+static const ibc_ra_reg_class *
+ibc_reg_to_class(const ibc_reg *reg, const ibc_ra_reg_set *set)
 {
    switch (reg->file) {
    case IBC_FILE_LOGICAL:
@@ -1713,26 +1441,26 @@ ibc_reg_to_class(const ibc_reg *reg, const struct ibc_reg_set *set)
          assert(reg->logical.simd_width == 1);
          uint16_t phys_size = (reg->logical.bit_size / 8) *
                               reg->logical.num_comps;
-         return ibc_reg_set_get_physical_class(set, phys_size);
+         return ibc_ra_reg_set_get_physical_class(set, phys_size);
       } else {
          assert(reg->logical.simd_width >= 8);
          assert(reg->logical.stride > 0);
          if (ibc_reg_has_strided_class(reg, set)) {
-            return ibc_reg_set_get_strided_class(set, reg->logical.stride,
-                                                 reg->logical.num_comps,
-                                                 reg->logical.simd_width);
+            return ibc_ra_reg_set_get_strided_class(set, reg->logical.stride,
+                                                    reg->logical.num_comps,
+                                                    reg->logical.simd_width);
          } else {
             uint16_t phys_size = (uint16_t)reg->logical.stride *
                                  (uint16_t)reg->logical.simd_width *
                                  (uint16_t)reg->logical.num_comps;
-            return ibc_reg_set_get_physical_class(set, phys_size);
+            return ibc_ra_reg_set_get_physical_class(set, phys_size);
          }
       }
 
    case IBC_FILE_HW_GRF:
       assert(reg->hw_grf.align <= 32);
-      return ibc_reg_set_get_physical_class(set, ALIGN(reg->hw_grf.size,
-                                                       reg->hw_grf.align));
+      return ibc_ra_reg_set_get_physical_class(set, ALIGN(reg->hw_grf.size,
+                                                          reg->hw_grf.align));
 
    default:
       unreachable("Unsupported register fil");
@@ -1748,7 +1476,7 @@ struct ibc_assign_regs_gc_state {
    /* True if we're currently walking instruction reads */
    bool is_read;
 
-   const struct ibc_reg_set *reg_set;
+   const ibc_ra_reg_set *reg_set;
    const ibc_live_intervals *live;
 
    struct ra_graph *g;
@@ -1864,7 +1592,7 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
    ralloc_steal(state.mem_ctx, state.g);
 
    ra_set_node_reg(g, state.grf127_send_hack_node,
-                   ibc_reg_set_grf_to_reg(state.reg_set, 127 * 32, 32));
+                   ibc_ra_reg_set_grf_to_reg(state.reg_set, 127 * 32, 32));
 
    /* Liveness analysis gives us one live set per chunk.  We need a live set
     * per reg because graph coloring doesn't have any finer granularity.
@@ -1890,7 +1618,7 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
       if (!should_assign_reg(reg))
          continue;
 
-      const struct ibc_reg_class *c = ibc_reg_to_class(reg, state.reg_set);
+      const ibc_ra_reg_class *c = ibc_reg_to_class(reg, state.reg_set);
       ra_set_node_class(g, state.num_hack_nodes + reg->index, c->nr);
 
       bool reg_has_strided_class =
@@ -1954,20 +1682,20 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
                assert(send->payload[1].file == IBC_FILE_LOGICAL ||
                       send->payload[1].file == IBC_FILE_HW_GRF);
 
-               const struct ibc_reg_class *c =
+               const ibc_ra_reg_class *c =
                   ibc_reg_to_class(send->payload[1].reg, state.reg_set);
                byte -= c->reg_size;
                ra_set_node_reg(g, state.num_hack_nodes +
                                   send->payload[1].reg->index,
-                               c->reg_start + (byte / c->grf_stride));
+                               ibc_ra_reg_class_grf_to_reg(c, byte));
             }
 
-            const struct ibc_reg_class *c =
+            const ibc_ra_reg_class *c =
                ibc_reg_to_class(send->payload[0].reg, state.reg_set);
             byte -= c->reg_size;
             ra_set_node_reg(g, state.num_hack_nodes +
                                send->payload[0].reg->index,
-                            c->reg_start + (byte / c->grf_stride));
+                            ibc_ra_reg_class_grf_to_reg(c, byte));
          }
          break;
       }
@@ -1982,12 +1710,12 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
             assert(intrin->src[0].ref.file == IBC_FILE_HW_GRF);
             assert(intrin->src[0].ref.reg == NULL);
 
-            const struct ibc_reg_class *c =
+            const ibc_ra_reg_class *c =
                ibc_reg_to_class(intrin->dest.reg, state.reg_set);
             unsigned byte = intrin->src[0].ref.hw_grf.byte;
             unsigned node = state.num_hack_nodes + intrin->dest.reg->index;
             if (ra_get_node_reg(g, node) == ~0U)
-               ra_set_node_reg(g, node, c->reg_start + (byte / c->grf_stride));
+               ra_set_node_reg(g, node, ibc_ra_reg_class_grf_to_reg(c, byte));
          }
          break;
       }
