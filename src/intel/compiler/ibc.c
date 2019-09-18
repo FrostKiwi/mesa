@@ -591,7 +591,7 @@ ibc_optimize(ibc_shader *ibc)
       progress = false;
 
       IBC_PASS(progress, ibc, ibc_lower_simd_width);
-      IBC_PASS(progress, ibc, ibc_split_logical_regs);
+      IBC_PASS(progress, ibc, ibc_split_regs);
       IBC_PASS(progress, ibc, ibc_opt_copy_prop);
       IBC_PASS(progress, ibc, ibc_opt_cse);
       IBC_PASS(progress, ibc, ibc_opt_dead_code);
