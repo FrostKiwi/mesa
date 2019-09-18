@@ -29,6 +29,8 @@ files_mesa_util = files(
   'bitscan.c',
   'bitscan.h',
   'bitset.h',
+  'blob.c',
+  'blob.h',
   'build_id.c',
   'build_id.h',
   'crc32.c',
@@ -140,7 +142,7 @@ _libmesa_util = static_library(
   'mesa_util',
   [files_mesa_util, format_srgb],
   include_directories : inc_common,
-  dependencies : [dep_zlib, dep_clock, dep_thread, dep_atomic, dep_m],
+  dependencies : [dep_zlib, dep_clock, dep_thread, dep_atomic, dep_m, dep_valgrind],
   c_args : [c_msvc_compat_args, c_vis_args],
   build_by_default : false
 )
@@ -148,7 +150,7 @@ _libmesa_util = static_library(
 idep_mesautil = declare_dependency(
   link_with : _libmesa_util,
   include_directories : inc_util,
-  dependencies : [dep_zlib, dep_clock, dep_thread, dep_atomic, dep_m],
+  dependencies : [dep_zlib, dep_clock, dep_thread, dep_atomic, dep_m, dep_valgrind],
 )
 
 _libxmlconfig = static_library(
@@ -181,6 +183,18 @@ if with_tests
     executable(
       'u_atomic_test',
       files('u_atomic_test.c'),
+      include_directories : inc_common,
+      dependencies : idep_mesautil,
+      c_args : [c_msvc_compat_args],
+    ),
+    suite : ['util'],
+  )
+
+  test(
+    'blob',
+    executable(
+      'blob_test',
+      files('blob_test.c'),
       include_directories : inc_common,
       dependencies : idep_mesautil,
       c_args : [c_msvc_compat_args],
