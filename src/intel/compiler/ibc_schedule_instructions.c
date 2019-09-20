@@ -1111,19 +1111,6 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
       node->latency.fe_time = ibc_instr_fe_cycles(instr, shader->devinfo);
       node->latency.fe_to_dest = ibc_instr_dest_latency(instr, shader->devinfo);
 
-      /* START instructions are a special case.  They're just a barrier and
-       * nothing else.
-       */
-      if (instr->type == IBC_INSTR_TYPE_FLOW &&
-          ibc_instr_as_flow(instr)->op == IBC_FLOW_OP_START) {
-         assert(ibc_instr_as_flow(instr)->block_index == 0);
-         block_start = ibc_instr_as_flow(instr);
-         last_cant_reorder = node;
-         node->needs_barrier_dep = true;
-         list_addtail(&node->barrier_dep_link, &next_barrier_deps);
-         continue;
-      }
-
       /* First, record all the dependencies of this instruction.
        *
        * Don't bother to register source dependencies for LOAD_PAYLOAD
@@ -1135,7 +1122,7 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
 
       ibc_instr_foreach_write(instr, add_waw_ref_dep, &b);
 
-      if (!ibc_instr_can_reorder(instr)) {
+      if (last_cant_reorder != NULL && !ibc_instr_can_reorder(instr)) {
          ibc_sched_graph_add_dep(g, node, last_cant_reorder,
                                  0 /* num_bytes */, 0 /* latency */);
       }
