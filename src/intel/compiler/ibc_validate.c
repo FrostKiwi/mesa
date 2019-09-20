@@ -366,6 +366,35 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
       ibc_assert(s, (alu->src[i].mod & ~alu_info->supported_src_mods) == 0);
    }
 
+   if ((ibc_alu_op_infos[alu->op].props & IBC_ALU_OP_PROP_READS_ACCUM) ||
+       alu->accum_wr_en) {
+      unsigned hw_accum_reg_width = ibc_hw_accum_reg_width(alu->accum.type);
+      unsigned offset = alu->accum.reg ?
+                        alu->accum.reg->accum.align_offset : 0;
+      /* The actual accumulator used by implicit accumulator access is
+       * entirely determined by the SIMD group of the instruction combined
+       * with the size of the hardware accumulator.
+       */
+      ibc_assert(s, offset + alu->accum.accum.chan ==
+                    alu->instr.simd_group % hw_accum_reg_width);
+   } else {
+      ibc_validate_null_ref(s, &alu->accum);
+   }
+
+   if (ibc_alu_op_infos[alu->op].props & IBC_ALU_OP_PROP_READS_ACCUM) {
+      ibc_assert(s, alu->accum.file == IBC_FILE_ACCUM);
+      ibc_validate_ref(s, &alu->accum, NULL, 0, 1,
+                       alu->instr.simd_group,
+                       alu->instr.simd_width);
+   }
+
+   if (alu->accum_wr_en) {
+      ibc_assert(s, alu->accum.file == IBC_FILE_ACCUM);
+      ibc_validate_ref(s, &alu->accum, &alu->accum_write, 0, 1,
+                       alu->instr.simd_group,
+                       alu->instr.simd_width);
+   }
+
    if (alu->cmod != BRW_CONDITIONAL_NONE) {
       if (alu->instr.flag.file == IBC_FILE_NONE) {
          ibc_validate_null_ref(s, &alu->instr.flag);
