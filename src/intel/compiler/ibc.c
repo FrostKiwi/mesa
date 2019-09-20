@@ -198,6 +198,12 @@ ibc_instr_foreach_read(ibc_instr *instr, ibc_ref_cb cb, void *state)
                  instr->simd_group, instr->simd_width, state))
             return false;
       }
+
+      if ((ibc_alu_op_infos[alu->op].props & IBC_ALU_OP_PROP_READS_ACCUM) &&
+          !cb(&alu->accum, -1, 1,
+              instr->simd_group, instr->simd_width, state))
+         return false;
+
       return true;
    }
 
@@ -254,6 +260,10 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_ref_cb cb, void *state)
                            instr->simd_width, state))
          return false;
 
+      if (alu->accum_wr_en && !cb(&alu->accum, -1, 1, instr->simd_group,
+                                  instr->simd_width, state))
+         return false;
+
       if (!cb(&alu->dest, -1, 1, instr->simd_group, instr->simd_width, state))
          return false;
 
@@ -296,6 +306,8 @@ ibc_instr_foreach_reg_write(ibc_instr *instr, ibc_reg_write_cb cb, void *_data)
    case IBC_INSTR_TYPE_ALU: {
       ibc_alu_instr *alu = ibc_instr_as_alu(instr);
       if (alu->cmod && !cb(&alu->cmod_write, &instr->flag, _data))
+         return false;
+      if (alu->accum_wr_en && !cb(&alu->accum_write, &alu->accum, _data))
          return false;
       if (!cb(&alu->dest_write, &alu->dest, _data))
          return false;
@@ -426,6 +438,18 @@ ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_ref flag,
                            &alu->cmod_write, flag);
 }
 
+void
+ibc_alu_instr_set_accum(ibc_alu_instr *alu, ibc_ref accum,
+                        bool accum_wr_en)
+{
+   if (alu->accum_wr_en)
+      ibc_reg_write_unlink(&alu->accum_write, &alu->accum, &alu->instr);
+   alu->accum_wr_en = accum_wr_en;
+   alu->accum = accum;
+   if (alu->accum_wr_en)
+      ibc_reg_write_link(&alu->accum_write, &alu->accum, &alu->instr);
+}
+
 #define IBC_ALU_OP_DECL(OP, _num_srcs, _src_mods, _props)\
    {                                                     \
       .name = #OP,                                       \
@@ -433,11 +457,13 @@ ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_ref flag,
       .supported_src_mods = IBC_ALU_SRC_MOD_##_src_mods, \
       .props = _props,                                   \
    },
+#define READS_ACCUM IBC_ALU_OP_PROP_READS_ACCUM
 
 const ibc_alu_op_info ibc_alu_op_infos[IBC_ALU_NUM_OPS] = {
 #include "ibc_alu_ops.h"
 };
 
+#undef READS_ACCUM
 #undef IBC_ALU_OP_DECL
 
 ibc_alu_instr *
@@ -453,6 +479,7 @@ ibc_alu_instr_create(struct ibc_shader *shader, enum ibc_alu_op op,
 
    alu->op = op;
 
+   ibc_ref_init(&alu->accum);
    ibc_ref_init(&alu->dest);
 
    for (unsigned i = 0; i < num_srcs; i++)

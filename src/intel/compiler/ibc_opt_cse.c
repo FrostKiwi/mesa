@@ -218,6 +218,10 @@ hash_alu_instr(uint32_t hash, const ibc_alu_instr *alu,
 
    hash = HASH(hash, alu->op);
    hash = HASH(hash, alu->cmod);
+
+   hash = HASH(hash, alu->accum_wr_en);
+   hash = hash_ref(hash, &alu->accum, base_reg);
+
    hash = HASH(hash, alu->saturate);
 
    hash = hash_ref(hash, &alu->dest, base_reg);
@@ -238,8 +242,13 @@ alu_instrs_equal(const ibc_alu_instr *alu_a, const ibc_alu_instr *alu_b,
       return false;
 
    if (alu_a->op != alu_b->op ||
-       alu_a->cmod != alu_b->cmod ||
-       alu_a->saturate != alu_b->saturate)
+       alu_a->cmod != alu_b->cmod)
+
+   if (alu_a->accum_wr_en != alu_b->accum_wr_en ||
+       !refs_equal(&alu_a->accum, &alu_b->accum, base_reg_a, base_reg_b))
+      return false;
+
+   if (alu_a->saturate != alu_b->saturate)
       return false;
 
    if (!refs_equal(&alu_a->dest, &alu_b->dest, base_reg_a, base_reg_b))
