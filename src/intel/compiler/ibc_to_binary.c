@@ -599,6 +599,8 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
    unsigned loop_count = 0;
 
    ibc_foreach_instr(instr, shader) {
+      brw_push_insn_state(p);
+
       brw_set_default_access_mode(p, BRW_ALIGN_1);
 
       assert(instr->we_all || instr->simd_width >= 4);
@@ -646,6 +648,8 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
 
       /* Stash the physical IP of the last instruction in the index */
       instr->index = p->nr_insn - 1;
+
+      brw_pop_insn_state(p);
    }
 
    brw_set_uip_jip(p, start_offset);
