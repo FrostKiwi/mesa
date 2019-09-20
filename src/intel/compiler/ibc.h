@@ -709,12 +709,17 @@ enum PACKED ibc_alu_src_mod {
    IBC_ALU_SRC_MOD_NOT     = 0x4,
 };
 
+enum PACKED ibc_alu_op_prop {
+   IBC_ALU_OP_PROP_NONE          = 0x0,
+};
+
 typedef struct ibc_alu_op_info {
    const char *name;
 
    unsigned num_srcs:2;
 
    enum ibc_alu_src_mod supported_src_mods;
+   enum ibc_alu_op_prop props;
 } ibc_alu_op_info;
 
 extern const ibc_alu_op_info ibc_alu_op_infos[IBC_ALU_NUM_OPS];
