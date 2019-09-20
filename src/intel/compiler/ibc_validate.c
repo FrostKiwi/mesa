@@ -339,7 +339,7 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
       ibc_assert(s, alu->src[i].ref.file != IBC_FILE_NONE);
       ibc_assert(s, alu->src[i].ref.type == IBC_TYPE_FLAG ||
                     ibc_type_base_type(alu->src[i].ref.type) != IBC_TYPE_INVALID);
-      ibc_validate_ref(s, &alu->src[i].ref, false, 0, 1,
+      ibc_validate_ref(s, &alu->src[i].ref, NULL, 0, 1,
                        alu->instr.simd_group,
                        alu->instr.simd_width);
       ibc_assert(s, (alu->src[i].mod & ~alu_info->supported_src_mods) == 0);
