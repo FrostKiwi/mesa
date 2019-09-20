@@ -412,11 +412,12 @@ ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_ref flag,
                            &alu->cmod_write, flag);
 }
 
-#define IBC_ALU_OP_DECL(OP, _num_srcs, _src_mods)        \
+#define IBC_ALU_OP_DECL(OP, _num_srcs, _src_mods, _props)\
    {                                                     \
       .name = #OP,                                       \
       .num_srcs = _num_srcs,                             \
       .supported_src_mods = IBC_ALU_SRC_MOD_##_src_mods, \
+      .props = _props,                                   \
    },
 
 const ibc_alu_op_info ibc_alu_op_infos[IBC_ALU_NUM_OPS] = {
