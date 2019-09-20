@@ -268,7 +268,7 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
                               compressed);
 
    brw_set_default_saturate(p, alu->saturate);
-   brw_set_default_acc_write_control(p, false /* TODO */);
+   brw_set_default_acc_write_control(p, alu->accum_wr_en);
 
    const unsigned int last_insn_offset = p->next_insn_offset;
 

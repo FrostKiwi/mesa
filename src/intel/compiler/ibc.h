@@ -792,6 +792,7 @@ enum PACKED ibc_alu_src_mod {
 
 enum PACKED ibc_alu_op_prop {
    IBC_ALU_OP_PROP_NONE          = 0x0,
+   IBC_ALU_OP_PROP_READS_ACCUM   = 0x1,
 };
 
 typedef struct ibc_alu_op_info {
@@ -823,6 +824,10 @@ typedef struct ibc_alu_instr {
    enum brw_conditional_mod cmod;
    ibc_reg_write cmod_write;
 
+   bool accum_wr_en;
+   ibc_ref accum;
+   ibc_reg_write accum_write;
+
    bool saturate;
 
    ibc_ref dest;
@@ -841,6 +846,8 @@ ibc_alu_instr *ibc_alu_instr_create(struct ibc_shader *shader,
 void ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_ref flag,
                             enum brw_conditional_mod cmod);
 
+void ibc_alu_instr_set_accum(ibc_alu_instr *alu, ibc_ref accum,
+                             bool accum_wr_en);
 
 typedef struct ibc_send_instr {
    ibc_instr instr;
