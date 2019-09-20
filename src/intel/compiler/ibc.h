@@ -1288,6 +1288,7 @@ bool ibc_should_print_shader(const ibc_shader *ibc);
       ibc_validate_shader(ibc);                       \
    } while(0)
 
+bool ibc_assign_and_lower_accums(ibc_shader *shader);
 bool ibc_assign_and_lower_flags(ibc_shader *shader);
 bool ibc_assign_logical_reg_strides(ibc_shader *shader);
 void ibc_assign_regs_init(struct brw_compiler *compiler);
