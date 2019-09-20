@@ -249,7 +249,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
       }
       break;
 
-   case IBC_FILE_FLAG:
+   case IBC_FILE_FLAG: {
       assert(num_comps == 1);
       if (ref->type != IBC_TYPE_FLAG) {
          simd_group = ref->flag.bit;
@@ -264,6 +264,7 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
          BITSET_SET(chunks, b);
       }
       break;
+   }
    }
 }
 
