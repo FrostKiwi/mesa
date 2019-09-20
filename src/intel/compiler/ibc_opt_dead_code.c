@@ -24,30 +24,6 @@
 #include "ibc.h"
 
 static bool
-ref_is_alive(ibc_ref *ref)
-{
-   switch (ref->file) {
-   case IBC_FILE_NONE:
-      return false;
-
-   case IBC_FILE_IMM:
-      unreachable("Invalid destination register file");
-
-   case IBC_FILE_LOGICAL:
-      return ref->reg->index;
-
-   case IBC_FILE_HW_GRF:
-      /* If it's a fixed HW reg, we consider it live */
-      return ref->reg == NULL || ref->reg->index;
-
-   case IBC_FILE_FLAG:
-      /* If it's a fixed HW reg, we consider it live */
-      return ref->reg == NULL || ref->reg->index;
-   }
-   unreachable("Invalid register file");
-}
-
-static bool
 mark_ref(ibc_ref *ref,
          UNUSED int num_bytes,
          UNUSED int num_comps,
@@ -69,23 +45,40 @@ mark_ref(ibc_ref *ref,
 }
 
 static bool
-instr_is_alive(ibc_instr *instr) {
+ref_is_dead(ibc_ref *ref,
+            UNUSED int num_bytes,
+            UNUSED int num_comps,
+            UNUSED uint8_t simd_group,
+            UNUSED uint8_t simd_width,
+            UNUSED void *_state)
+{
+   switch (ref->file) {
+   case IBC_FILE_NONE:
+      return true;
+
+   case IBC_FILE_IMM:
+      unreachable("Invalid destination register file");
+
+   default:
+      return ref->reg != NULL && ref->reg->index == 0;
+   }
+}
+
+static bool
+instr_is_alive(ibc_instr *instr)
+{
+   if (!ibc_instr_foreach_write(instr, ref_is_dead, NULL))
+      return true;
+
    switch (instr->type) {
-   case IBC_INSTR_TYPE_ALU: {
-      ibc_alu_instr *alu = ibc_instr_as_alu(instr);
-      return ref_is_alive(&alu->dest) ||
-             (alu->cmod && ref_is_alive(&alu->instr.flag));
-   }
+   case IBC_INSTR_TYPE_ALU:
+      return false;
 
-   case IBC_INSTR_TYPE_SEND: {
-      ibc_send_instr *send = ibc_instr_as_send(instr);
-      return send->has_side_effects || ref_is_alive(&send->dest);
-   }
+   case IBC_INSTR_TYPE_SEND:
+      return ibc_instr_as_send(instr)->has_side_effects;
 
-   case IBC_INSTR_TYPE_INTRINSIC: {
-      ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-      return intrin->has_side_effects || ref_is_alive(&intrin->dest);
-   }
+   case IBC_INSTR_TYPE_INTRINSIC:
+      return ibc_instr_as_intrinsic(instr)->has_side_effects;
 
    case IBC_INSTR_TYPE_FLOW:
       return true;
