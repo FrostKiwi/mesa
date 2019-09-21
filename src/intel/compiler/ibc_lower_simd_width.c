@@ -312,6 +312,7 @@ ibc_lower_simd_width(ibc_shader *shader)
             split->instr.we_all = b.we_all;
             split->instr.predicate = alu->instr.predicate;
             split->instr.flag = alu->instr.flag;
+            split->saturate = alu->saturate;
             ibc_ref_simd_slice(&split->instr.flag, split_simd_rel_group);
 
             split->dest = split_dests[i];
