@@ -191,6 +191,10 @@ exe_ibc_build_ra_reg_sets = executable(
   native : true,
 )
 
+if build_machine.system() == 'big'
+  error('Building IBC RA reg sets on big-endian is not supported.')
+endif
+
 ibc_ra_reg_sets_prebuilt_h = custom_target(
   'ibc_ra_reg_sets_prebuilt.h',
   output : 'ibc_ra_reg_sets_prebuilt.h',
