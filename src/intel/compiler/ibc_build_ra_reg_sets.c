@@ -29,13 +29,6 @@
 
 int main(int arc, char **argv)
 {
-   char v[] = { 0, 1, 2, 3 };
-   if (*(uint32_t *)v != 0x03020100) {
-      fprintf(stderr, "Building IBC RA reg sets on big-endian is not "
-                      "supported.\n");
-      abort();
-   }
-
    FILE *fp = fopen(argv[1], "w");
    if (fp == NULL)
       abort();
