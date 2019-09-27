@@ -327,27 +327,6 @@ ibc_validate_ref(struct ibc_validate_state *s,
    unreachable("Invalid register file");
 }
 
-static unsigned
-ibc_predicate_bits(enum ibc_predicate pred)
-{
-   switch (ibc_predicate_control(pred)) {
-   case IBC_PREDICATE_NONE:     return 1;
-   case IBC_PREDICATE_NORMAL:   return 1;
-   case IBC_PREDICATE_ANY2H:    return 2;
-   case IBC_PREDICATE_ALL2H:    return 2;
-   case IBC_PREDICATE_ANY4H:    return 4;
-   case IBC_PREDICATE_ALL4H:    return 4;
-   case IBC_PREDICATE_ANY8H:    return 8;
-   case IBC_PREDICATE_ALL8H:    return 8;
-   case IBC_PREDICATE_ANY16H:   return 16;
-   case IBC_PREDICATE_ALL16H:   return 16;
-   case IBC_PREDICATE_ANY32H:   return 32;
-   case IBC_PREDICATE_ALL32H:   return 32;
-   default:
-      unreachable("Invalid control predicate");
-   }
-}
-
 static void
 ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
 {
@@ -400,7 +379,7 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
          ibc_validate_null_ref(s, &alu->instr.flag);
          ibc_assert(s, alu->op == IBC_ALU_OP_SEL);
       } else {
-         ibc_assert(s, ibc_predicate_bits(alu->instr.predicate) == 1);
+         ibc_assert(s, ibc_predicate_simd_width(alu->instr.predicate) == 1);
          ibc_assert(s, alu->instr.flag.file != IBC_FILE_NONE);
          ibc_assert(s, alu->instr.flag.type == IBC_TYPE_FLAG);
          ibc_validate_ref(s, &alu->instr.flag, &alu->cmod_write, 0, 1,
@@ -763,15 +742,15 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
       /* The ANY*H or ALL*H predicate group threads into groups so we need to
        * align the instruction bits accordingly.
        */
-      unsigned pred_bits = ibc_predicate_bits(instr->predicate);
-      assert(util_is_power_of_two_nonzero(pred_bits));
-      unsigned pred_simd_group = instr->simd_group & ~(pred_bits - 1);
-      unsigned pred_simd_width = MAX2(instr->simd_width, pred_bits);
+      unsigned pred_simd_width = ibc_predicate_simd_width(instr->predicate);
+      assert(util_is_power_of_two_nonzero(pred_simd_width));
+      unsigned ref_simd_group = instr->simd_group & ~(pred_simd_width - 1);
+      unsigned ref_simd_width = MAX2(instr->simd_width, pred_simd_width);
 
       ibc_assert(s, instr->flag.file != IBC_FILE_NONE);
       ibc_assert(s, instr->flag.type == IBC_TYPE_FLAG);
       ibc_validate_ref(s, &instr->flag, NULL, 0, 1,
-                       pred_simd_group, pred_simd_width);
+                       ref_simd_group, ref_simd_width);
    } else if (!ibc_instr_writes_flag(instr)) {
       ibc_validate_null_ref(s, &instr->flag);
    }

@@ -185,8 +185,12 @@ bool
 ibc_instr_foreach_read(ibc_instr *instr, ibc_ref_cb cb, void *state)
 {
    if (instr->predicate) {
-      if (!cb(&instr->flag, -1, 1,
-              instr->simd_group, instr->simd_width, state))
+      unsigned pred_simd_width = ibc_predicate_simd_width(instr->predicate);
+      assert(util_is_power_of_two_nonzero(pred_simd_width));
+      unsigned ref_simd_group = instr->simd_group & ~(pred_simd_width - 1);
+      unsigned ref_simd_width = MAX2(instr->simd_width, pred_simd_width);
+
+      if (!cb(&instr->flag, -1, 1, ref_simd_group, ref_simd_width, state))
          return false;
    }
 
