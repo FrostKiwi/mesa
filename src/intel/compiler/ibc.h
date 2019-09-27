@@ -725,6 +725,27 @@ ibc_predicate_invert(enum ibc_predicate pred)
       return (enum ibc_predicate)((int)pred ^ IBC_PREDICATE_INVERSE);
 }
 
+static inline unsigned
+ibc_predicate_simd_width(enum ibc_predicate pred)
+{
+   switch (ibc_predicate_control(pred)) {
+   case IBC_PREDICATE_NONE:     return 1;
+   case IBC_PREDICATE_NORMAL:   return 1;
+   case IBC_PREDICATE_ANY2H:    return 2;
+   case IBC_PREDICATE_ALL2H:    return 2;
+   case IBC_PREDICATE_ANY4H:    return 4;
+   case IBC_PREDICATE_ALL4H:    return 4;
+   case IBC_PREDICATE_ANY8H:    return 8;
+   case IBC_PREDICATE_ALL8H:    return 8;
+   case IBC_PREDICATE_ANY16H:   return 16;
+   case IBC_PREDICATE_ALL16H:   return 16;
+   case IBC_PREDICATE_ANY32H:   return 32;
+   case IBC_PREDICATE_ALL32H:   return 32;
+   default:
+      unreachable("Invalid control predicate");
+   }
+}
+
 enum ibc_instr_type {
    IBC_INSTR_TYPE_ALU,
    IBC_INSTR_TYPE_SEND,
