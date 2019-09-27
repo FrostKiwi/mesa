@@ -892,7 +892,7 @@ general_restrictions_on_region_parameters(const struct gen_device_info *devinfo,
    }
 
    for (unsigned i = 0; i < num_sources; i++) {
-      unsigned vstride, width, hstride, element_size, subreg;
+      unsigned vstride_raw, vstride, width, hstride, element_size, subreg;
       enum brw_reg_type type;
 
 #define DO_SRC(n)                                                              \
@@ -900,6 +900,7 @@ general_restrictions_on_region_parameters(const struct gen_device_info *devinfo,
           BRW_IMMEDIATE_VALUE)                                                 \
          continue;                                                             \
                                                                                \
+      vstride_raw = brw_inst_src ## n ## _vstride(devinfo, inst);              \
       vstride = STRIDE(brw_inst_src ## n ## _vstride(devinfo, inst));          \
       width = WIDTH(brw_inst_src ## n ## _width(devinfo, inst));               \
       hstride = STRIDE(brw_inst_src ## n ## _hstride(devinfo, inst));          \
@@ -960,6 +961,19 @@ general_restrictions_on_region_parameters(const struct gen_device_info *devinfo,
                   "1 regardless of the value of ExecSize");
       }
 
+      /* For VxH indirects, we can't compute the actual access mask because
+       * access is determined by the individual address register values.
+       */
+      if (vstride_raw == BRW_VERTICAL_STRIDE_ONE_DIMENSIONAL)
+         continue;
+
+      /* For send instructions, any real striding isn't allowed and the amount
+       * of data read isn't determined by the stride, it's determined by mlen
+       * and ex_mlen.
+       */
+      if (inst_is_send(devinfo, inst))
+         continue;
+
       /* VertStride must be used to cross GRF register boundaries. This rule
        * implies that elements within a 'Width' cannot cross GRF boundaries.
        */
@@ -971,6 +985,7 @@ general_restrictions_on_region_parameters(const struct gen_device_info *devinfo,
          unsigned offset = rowbase;
 
          for (int x = 0; x < width; x++) {
+            assert(offset + element_size <= sizeof(mask) * 8);
             access_mask |= mask << offset;
             offset += hstride * element_size;
          }
@@ -1241,6 +1256,7 @@ align1_access_mask(uint64_t access_mask[static 32],
       unsigned offset = rowbase;
 
       for (int x = 0; x < width; x++) {
+         assert(offset + element_size <= sizeof(mask) * 8);
          access_mask[element++] = mask << offset;
          offset += hstride * element_size;
       }
