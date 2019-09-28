@@ -549,6 +549,9 @@ struct ibc_sched_node {
 
       /** Estimated number of FLAG bits potentially written by this node */
       uint16_t flag_bits;
+
+      /** True if this node writes an accumulator */
+      bool accum;
    } writes;
 
    struct {
@@ -971,6 +974,9 @@ record_ref_write(ibc_ref *ref,
 
    set_dep_node(ref, b->iter_node, num_bytes, num_comps,
                 simd_group, simd_width, b);
+
+   if (ref->file == IBC_FILE_ACCUM)
+      b->iter_node->writes.accum = true;
 
    if (ref->reg == NULL)
       return true;
