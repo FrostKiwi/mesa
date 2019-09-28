@@ -527,10 +527,7 @@ struct ibc_sched_node {
    uint32_t dest_deps_array_len;
 
    /** Mutable count of yet-to-be-scheduled nodes with this as a dependency */
-   uint32_t src_ref_count;
-
-   /** Mutable count of yet-to-be-scheduled nodes with this as a dependency */
-   uint32_t dest_ref_count;
+   uint32_t ref_count;
 
    struct {
       /** Time spent in the front-end */
@@ -1176,8 +1173,6 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
             node->latency.min_to_start = latency_to_start;
       }
 
-      node->src_ref_count = node->num_src_deps;
-
       /* Now that we've added all this node's dependencies, set up the state
        * so that things which depend on this node can find it.
        */
@@ -1247,8 +1242,6 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
             node->latency.min_to_end = latency_to_end;
       }
 
-      node->dest_ref_count = node->num_dest_deps;
-
       list_addtail(&node->link, &next_barrier_deps);
    }
 
@@ -1281,16 +1274,6 @@ ibc_sched_graph_print(ibc_sched_graph *g, FILE *fp)
    }
 }
 
-static void
-ibc_sched_graph_reset_ref_counts(ibc_sched_graph *g)
-{
-   for (unsigned i = 0; i < g->num_nodes; i++) {
-      ibc_sched_node *node = &g->nodes[i];
-      node->src_ref_count = node->num_src_deps;
-      node->dest_ref_count = node->num_dest_deps;
-   }
-}
-
 static ibc_schedule *
 ibc_schedule_create(ibc_sched_graph *graph, void *mem_ctx)
 {
@@ -1310,7 +1293,7 @@ ibc_shader_apply_schedule(ibc_shader *shader,
    /* Reset reference counts and set cycles to 0 */
    for (unsigned i = 0; i < g->num_nodes; i++) {
       ibc_sched_node *node = &g->nodes[i];
-      node->src_ref_count = node->num_src_deps;
+      node->ref_count = node->num_src_deps;
    }
 #endif
 
@@ -1329,12 +1312,12 @@ ibc_shader_apply_schedule(ibc_shader *shader,
       shader->cycles = node->data.cycle + node->latency.fe_time;
 
 #ifndef NDEBUG
-      assert(node->src_ref_count == 0);
+      assert(node->ref_count == 0);
 
       for (unsigned i = 0; i < node->num_dest_deps; i++) {
          ibc_sched_node *dep = node->dest_deps[i].node;
-         assert(dep->src_ref_count > 0);
-         dep->src_ref_count--;
+         assert(dep->ref_count > 0);
+         dep->ref_count--;
       }
 #endif
    }
@@ -1661,7 +1644,7 @@ bottom_up_latency_schedule(const ibc_shader *shader, ibc_sched_graph *g,
    /* Reset reference counts and set cycles to 0 */
    for (unsigned i = 0; i < g->num_nodes; i++) {
       ibc_sched_node *node = &g->nodes[i];
-      node->dest_ref_count = node->num_dest_deps;
+      node->ref_count = node->num_dest_deps;
       node->data.cycle = 0;
    }
 
@@ -1691,15 +1674,15 @@ bottom_up_latency_schedule(const ibc_shader *shader, ibc_sched_graph *g,
          uint32_t dep_cycles = node->data.cycle + node->src_deps[i].latency;
          dep->data.cycle = MAX2(dep->data.cycle, dep_cycles);
 
-         assert(dep->dest_ref_count > 0);
-         dep->dest_ref_count--;
+         assert(dep->ref_count > 0);
+         dep->ref_count--;
 
          /* A node's cycle count won't be altered between the time that its
           * last destination reference is gone and the time it gets put in the
           * schedule.  Therefore, it's safe to use it as a keep in the leaders
           * red-black tree.
           */
-         if (dep->dest_ref_count == 0)
+         if (dep->ref_count == 0)
             rb_tree_insert(&leader, &dep->rb_node, rb_cmp_nodes_by_cycle);
       }
 
@@ -1727,7 +1710,7 @@ top_down_latency_schedule(const ibc_shader *shader, ibc_sched_graph *g,
    /* Reset reference counts and set cycles to 0 */
    for (unsigned i = 0; i < g->num_nodes; i++) {
       ibc_sched_node *node = &g->nodes[i];
-      node->src_ref_count = node->num_src_deps;
+      node->ref_count = node->num_src_deps;
       node->data.cycle = 0;
    }
 
@@ -1757,15 +1740,15 @@ top_down_latency_schedule(const ibc_shader *shader, ibc_sched_graph *g,
          uint32_t dep_cycles = node->data.cycle + node->dest_deps[i].latency;
          dep->data.cycle = MAX2(dep->data.cycle, dep_cycles);
 
-         assert(dep->src_ref_count > 0);
-         dep->src_ref_count--;
+         assert(dep->ref_count > 0);
+         dep->ref_count--;
 
          /* A node's cycle count won't be altered between the time that its
           * last destination reference is gone and the time it gets put in the
           * schedule.  Therefore, it's safe to use it as a keep in the leaders
           * red-black tree.
           */
-         if (dep->src_ref_count == 0)
+         if (dep->ref_count == 0)
             rb_tree_insert(&leader, &dep->rb_node, rb_cmp_nodes_by_cycle);
       }
 
