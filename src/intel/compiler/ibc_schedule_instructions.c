@@ -559,16 +559,11 @@ struct ibc_sched_node {
       uint32_t cycle;
    } data;
 
-   union {
-      /* This is only used when building the dependency graph */
-      struct {
-         bool needs_barrier_dep;
-         struct list_head barrier_dep_link;
-      };
+   /** Link for storing an ibc_sched_node in a list */
+   struct list_head link;
 
-      /* Used while actually scheduling */
-      struct rb_node rb_node;
-   };
+   /** Node for storing an ibc_sched_node in a red-black tree */
+   struct rb_node rb_node;
 };
 
 struct ibc_sched_reg_chunk {
@@ -1155,24 +1150,21 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
        */
       for (unsigned i = 0; i < node->num_src_deps; i++) {
          ibc_sched_node *dep_node = node->src_deps[i].node;
-         if (dep_node->needs_barrier_dep) {
-            dep_node->needs_barrier_dep = false;
-            list_del(&dep_node->barrier_dep_link);
-         }
+         if (dep_node->link.next)
+            list_del(&dep_node->link);
       }
 
       if (ibc_instr_is_full_barrier(instr)) {
          /* Add all previous instructions which don't have anything which
           * depends on them yet.
           */
-         list_for_each_entry(ibc_sched_node, dep_node,
-                             &next_barrier_deps, barrier_dep_link) {
-            assert(dep_node->needs_barrier_dep);
+         list_for_each_entry_safe(ibc_sched_node, dep_node,
+                                  &next_barrier_deps, link) {
             ibc_sched_graph_add_dep(g, node, dep_node,
                                     0 /* num_bytes */, 0 /* latency */);
-            dep_node->needs_barrier_dep = false;
+            list_del(&dep_node->link);
          }
-         list_inithead(&next_barrier_deps);
+         assert(list_is_empty(&next_barrier_deps));
       }
 
       /* Figure out our top-down longest-path latency */
@@ -1194,8 +1186,7 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
       if (!ibc_instr_can_reorder(instr))
          last_cant_reorder = node;
 
-      node->needs_barrier_dep = true;
-      list_addtail(&node->barrier_dep_link, &next_barrier_deps);
+      list_addtail(&node->link, &next_barrier_deps);
 
       /* Flow instructions are considered to live in the previous block */
       if (instr->type == IBC_INSTR_TYPE_FLOW)
@@ -1230,24 +1221,21 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
        */
       for (unsigned i = 0; i < node->num_dest_deps; i++) {
          ibc_sched_node *dep_node = node->dest_deps[i].node;
-         if (dep_node->needs_barrier_dep) {
-            dep_node->needs_barrier_dep = false;
-            list_del(&dep_node->barrier_dep_link);
-         }
+         if (dep_node->link.next)
+            list_del(&dep_node->link);
       }
 
       if (ibc_instr_is_full_barrier(node->instr)) {
          /* Add all previous instructions which don't have anything which
           * depends on them yet.
           */
-         list_for_each_entry(ibc_sched_node, dep_node,
-                             &next_barrier_deps, barrier_dep_link) {
-            assert(dep_node->needs_barrier_dep);
+         list_for_each_entry_safe(ibc_sched_node, dep_node,
+                                  &next_barrier_deps, link) {
             ibc_sched_graph_add_dep(g, dep_node, node,
                                     0 /* num_bytes */, 0 /* latency */);
-            dep_node->needs_barrier_dep = false;
+            list_del(&dep_node->link);
          }
-         list_inithead(&next_barrier_deps);
+         assert(list_is_empty(&next_barrier_deps));
       }
 
       /* Figure out our bottom-up longest-path latency */
@@ -1261,8 +1249,7 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
 
       node->dest_ref_count = node->num_dest_deps;
 
-      node->needs_barrier_dep = true;
-      list_addtail(&node->barrier_dep_link, &next_barrier_deps);
+      list_addtail(&node->link, &next_barrier_deps);
    }
 
    ralloc_free(b.chunk_last_write);
