@@ -271,4 +271,5 @@ if with_tests
   subdir('tests/timespec')
   subdir('tests/vma')
   subdir('tests/set')
+  subdir('tests/sparse_array')
 endif
