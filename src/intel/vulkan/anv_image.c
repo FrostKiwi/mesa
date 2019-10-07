@@ -1776,9 +1776,13 @@ anv_CreateBufferView(VkDevice _device,
    if (buffer->usage & VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT) {
       view->surface_state = alloc_surface_state(device);
 
-      anv_fill_buffer_surface_state(device, view->surface_state,
-                                    view->format,
-                                    view->address, view->range, format_bs);
+      isl_buffer_fill_state(&device->isl_dev, view->surface_state.map,
+                            .address = anv_address_physical(view->address),
+                            .mocs = device->default_mocs,
+                            .size_B = view->range,
+                            .format = view->format,
+                            .swizzle = ISL_SWIZZLE_IDENTITY,
+                            .stride_B = format_bs);
    } else {
       view->surface_state = (struct anv_state){ 0 };
    }
@@ -1793,17 +1797,24 @@ anv_CreateBufferView(VkDevice _device,
          isl_lower_storage_image_format(&device->info, view->format) :
          ISL_FORMAT_RAW;
 
-      anv_fill_buffer_surface_state(device, view->storage_surface_state,
-                                    storage_format,
-                                    view->address, view->range,
-                                    (storage_format == ISL_FORMAT_RAW ? 1 :
-                                     isl_format_get_layout(storage_format)->bpb / 8));
+      isl_buffer_fill_state(&device->isl_dev, view->storage_surface_state.map,
+                            .address = anv_address_physical(view->address),
+                            .mocs = device->default_mocs,
+                            .size_B = view->range,
+                            .format = storage_format,
+                            .swizzle = ISL_SWIZZLE_IDENTITY,
+                            .stride_B = (storage_format == ISL_FORMAT_RAW ?
+                                         1 : format_bs));
 
       /* Write-only accesses should use the original format. */
-      anv_fill_buffer_surface_state(device, view->writeonly_storage_surface_state,
-                                    view->format,
-                                    view->address, view->range,
-                                    isl_format_get_layout(view->format)->bpb / 8);
+      isl_buffer_fill_state(&device->isl_dev,
+                            view->writeonly_storage_surface_state.map,
+                            .address = anv_address_physical(view->address),
+                            .mocs = device->default_mocs,
+                            .size_B = view->range,
+                            .format = view->format,
+                            .swizzle = ISL_SWIZZLE_IDENTITY,
+                            .stride_B = format_bs);
 
       isl_buffer_fill_image_param(&device->isl_dev,
                                   &view->storage_image_param,
