@@ -35,6 +35,7 @@ __gen_combine_address(__attribute__((unused)) void *data,
 }
 
 #include "genxml/gen_macros.h"
+#include "genxml/genX_bits.h"
 #include "genxml/genX_pack.h"
 
 #include "isl_priv.h"
@@ -730,7 +731,6 @@ isl_genX(buffer_fill_state_s)(void *state,
 
    struct GENX(RENDER_SURFACE_STATE) s = { 0, };
 
-   s.SurfaceType = SURFTYPE_BUFFER;
    s.SurfaceFormat = info->format;
 
 #if GEN_GEN >= 6
@@ -741,17 +741,56 @@ isl_genX(buffer_fill_state_s)(void *state,
 #endif
 #endif
 
+   if (info->use_2d_array) {
+      s.SurfaceType = SURFTYPE_2D;
+      assert(isl_format_get_layout(info->format)->bpb >= 8);
+      const uint32_t format_Bpp = isl_format_get_layout(info->format)->bpb / 8;
+      assert(info->stride_B == format_Bpp);
+
+      const uint32_t max_width = 1 << GENX(RENDER_SURFACE_STATE_Width_bits);
+      const uint32_t max_height = 1 << GENX(RENDER_SURFACE_STATE_Height_bits);
+
+      /* We can't actually get a tight size here but we'll use the smallest
+       * surface such that a simple constant bit-extract on the index yields
+       * the correct (u, v, w) coordinates.  This way we get at least some
+       * overflow protection from the hardware.
+       */
+      const uint32_t width = MIN(num_elements, max_width);
+      const uint32_t height =
+         MIN(DIV_ROUND_UP(num_elements, max_width), max_height);
+      const uint32_t array_len =
+         DIV_ROUND_UP(num_elements, max_width * max_height);
+
+      s.Width = width - 1;
+      s.Height = height - 1;
+      s.Depth = array_len - 1;
+
+      s.SurfacePitch = width * format_Bpp - 1;
+
 #if GEN_GEN >= 7
-   s.Height = ((num_elements - 1) >> 7) & 0x3fff;
-   s.Width = (num_elements - 1) & 0x7f;
-   s.Depth = ((num_elements - 1) >> 21) & 0x3ff;
-#else
-   s.Height = ((num_elements - 1) >> 7) & 0x1fff;
-   s.Width = (num_elements - 1) & 0x7f;
-   s.Depth = ((num_elements - 1) >> 20) & 0x7f;
+      s.SurfaceArray = array_len > 1;
 #endif
 
-   s.SurfacePitch = info->stride_B - 1;
+#if GEN_GEN >= 8
+      s.SurfaceQPitch = array_len > 1 ? max_height : 0;
+#elif GEN_GEN == 7
+      s.SurfaceArraySpacing = ARYSPC_LOD0;
+#endif
+   } else {
+      s.SurfaceType = SURFTYPE_BUFFER;
+
+#if GEN_GEN >= 7
+      s.Height = ((num_elements - 1) >> 7) & 0x3fff;
+      s.Width = (num_elements - 1) & 0x7f;
+      s.Depth = ((num_elements - 1) >> 21) & 0x3ff;
+#else
+      s.Height = ((num_elements - 1) >> 7) & 0x1fff;
+      s.Width = (num_elements - 1) & 0x7f;
+      s.Depth = ((num_elements - 1) >> 20) & 0x7f;
+#endif
+
+      s.SurfacePitch = info->stride_B - 1;
+   }
 
 #if GEN_GEN >= 6
    s.NumberofMultisamples = MULTISAMPLECOUNT_1;

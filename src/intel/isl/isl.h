@@ -1362,6 +1362,13 @@ struct isl_buffer_fill_state_info {
    enum isl_format format;
 
    /**
+    * True if the surface state should use SURFTYPE_2D and SurfaceArray = true
+    * rather than SURFTYPE_BUFFER.  If this is set, it is the responsibility
+    * of the driver to properly lower the shader code.
+    */
+   bool use_2d_array;
+
+   /**
     * The swizzle to use in the surface state
     */
    struct isl_swizzle swizzle;
