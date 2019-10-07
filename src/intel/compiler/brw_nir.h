@@ -100,6 +100,8 @@ void
 brw_nir_link_shaders(const struct brw_compiler *compiler,
                      nir_shader *producer, nir_shader *consumer);
 
+bool brw_nir_lower_buffer_tex_to_2d_array(nir_shader *shader,
+                                          const struct gen_device_info *devinfo);
 bool brw_nir_lower_cs_intrinsics(nir_shader *nir,
                                  unsigned dispatch_width);
 void brw_nir_lower_legacy_clipping(nir_shader *nir,

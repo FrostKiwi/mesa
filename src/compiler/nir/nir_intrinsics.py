@@ -392,6 +392,12 @@ image("load_raw_intel", src_comp=[1], dest_comp=0,
       flags=[CAN_ELIMINATE])
 image("store_raw_intel", src_comp=[1, 0])
 
+# Intel-specific query for the size of a buffer texture in elements.  This is
+# different from nir_texop_txs because it pulls from descriptor storage
+# rather than using the texture query message.
+intrinsic("texture_buffer_size_deref_intel", src_comp=[-1], dest_comp=1,
+          flags=[CAN_ELIMINATE, CAN_REORDER])
+
 # Vulkan descriptor set intrinsics
 #
 # The Vulkan API uses a different binding model from GL.  In the Vulkan
