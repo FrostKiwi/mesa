@@ -1782,6 +1782,7 @@ anv_CreateBufferView(VkDevice _device,
                             .size_B = view->range,
                             .format = view->format,
                             .swizzle = ISL_SWIZZLE_IDENTITY,
+                            .use_2d_array = true,
                             .stride_B = format_bs);
    } else {
       view->surface_state = (struct anv_state){ 0 };

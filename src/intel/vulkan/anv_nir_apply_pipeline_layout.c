@@ -802,6 +802,22 @@ lower_load_constant(nir_intrinsic_instr *intrin,
 }
 
 static void
+lower_texture_buffer_size(nir_intrinsic_instr *intrin,
+                          struct apply_pipeline_layout_state *state)
+{
+   nir_builder *b = &state->builder;
+
+   b->cursor = nir_before_instr(&intrin->instr);
+
+   nir_ssa_def *desc = build_descriptor_load(nir_src_as_deref(intrin->src[0]),
+                                             0, 2, 32, state);
+   nir_ssa_def *size = nir_channel(b, desc, 1);
+
+   nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(size));
+   nir_instr_remove(&intrin->instr);
+}
+
+static void
 lower_tex_deref(nir_tex_instr *tex, nir_tex_src_type deref_src_type,
                 unsigned *base_index, unsigned plane,
                 struct apply_pipeline_layout_state *state)
@@ -1064,6 +1080,8 @@ apply_pipeline_layout_block(nir_block *block,
          case nir_intrinsic_load_constant:
             lower_load_constant(intrin, state);
             break;
+         case nir_intrinsic_texture_buffer_size_deref_intel:
+            lower_texture_buffer_size(intrin, state);
          default:
             break;
          }

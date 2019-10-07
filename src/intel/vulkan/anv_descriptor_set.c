@@ -57,10 +57,14 @@ anv_descriptor_data_for_type(const struct anv_physical_device *device,
       break;
 
    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-   case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
       data = ANV_DESCRIPTOR_SURFACE_STATE;
       if (device->has_bindless_images)
          data |= ANV_DESCRIPTOR_SAMPLED_IMAGE;
+      break;
+
+   case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+      data = ANV_DESCRIPTOR_SURFACE_STATE |
+             ANV_DESCRIPTOR_TEXEL_BUFFER;
       break;
 
    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
@@ -123,6 +127,9 @@ anv_descriptor_data_size(enum anv_descriptor_data data)
 
    if (data & ANV_DESCRIPTOR_SAMPLED_IMAGE)
       size += sizeof(struct anv_sampled_image_descriptor);
+
+   if (data & ANV_DESCRIPTOR_TEXEL_BUFFER)
+      size += sizeof(struct anv_texel_buffer_descriptor);
 
    if (data & ANV_DESCRIPTOR_STORAGE_IMAGE)
       size += sizeof(struct anv_storage_image_descriptor);
@@ -204,6 +211,10 @@ anv_descriptor_data_supports_bindless(const struct anv_physical_device *pdevice,
       assert(pdevice->has_bindless_images || pdevice->has_bindless_samplers);
       return sampler ? pdevice->has_bindless_samplers :
                        pdevice->has_bindless_images;
+   }
+
+   if (data & ANV_DESCRIPTOR_TEXEL_BUFFER) {
+      return pdevice->has_bindless_images;
    }
 
    if (data & ANV_DESCRIPTOR_STORAGE_IMAGE) {
@@ -1265,9 +1276,11 @@ anv_descriptor_set_write_buffer_view(struct anv_device *device,
    void *desc_map = set->desc_mem.map + bind_layout->descriptor_offset +
                     element * anv_descriptor_size(bind_layout);
 
-   if (bind_layout->data & ANV_DESCRIPTOR_SAMPLED_IMAGE) {
-      struct anv_sampled_image_descriptor desc_data = {
+   if (bind_layout->data & ANV_DESCRIPTOR_TEXEL_BUFFER) {
+      struct anv_texel_buffer_descriptor desc_data = {
          .image = anv_surface_state_to_handle(buffer_view->surface_state),
+         .num_texels = buffer_view->range /
+                       (isl_format_get_layout(buffer_view->format)->bpb / 8),
       };
       memcpy(desc_map, &desc_data, sizeof(desc_data));
    }

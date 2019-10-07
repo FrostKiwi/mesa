@@ -1570,6 +1570,26 @@ struct anv_sampled_image_descriptor {
    uint32_t sampler;
 };
 
+/** Struct representing a uniform texel buffer
+ *
+ * This descriptor layout is used for uniform texel buffers.
+ */
+struct anv_texel_buffer_descriptor {
+   /** Bindless image handle
+    *
+    * This is expected to already be shifted such that the 20-bit
+    * SURFACE_STATE table index is in the top 20 bits.
+    *
+    * NOTE: This needs to be in the same place in the descriptor as for
+    * sampled images so we don't have to write different code in
+    * anv_nir_apply_pipeline_layout for the two cases.
+    */
+   uint32_t image;
+
+   /** Number of texels in the bound buffer */
+   uint32_t num_texels;
+};
+
 struct anv_texture_swizzle_descriptor {
    /** Texture swizzle
     *
@@ -1624,6 +1644,8 @@ enum anv_descriptor_data {
    ANV_DESCRIPTOR_STORAGE_IMAGE  = (1 << 7),
    /** Storage image handles */
    ANV_DESCRIPTOR_TEXTURE_SWIZZLE  = (1 << 8),
+   /** Bindless buffer handle and size */
+   ANV_DESCRIPTOR_TEXEL_BUFFER   = (1 << 9),
 };
 
 struct anv_descriptor_set_binding_layout {

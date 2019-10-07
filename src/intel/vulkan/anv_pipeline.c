@@ -710,6 +710,8 @@ anv_pipeline_lower_nir(struct anv_pipeline *pipeline,
 
    /* Apply the actual pipeline layout to UBOs, SSBOs, and textures */
    if (layout) {
+      NIR_PASS_V(nir, brw_nir_lower_buffer_tex_to_2d_array,
+                 compiler->devinfo);
       anv_nir_apply_pipeline_layout(pdevice,
                                     pipeline->device->robust_buffer_access,
                                     layout, nir, prog_data,
