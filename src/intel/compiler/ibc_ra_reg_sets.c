@@ -213,30 +213,88 @@ ibc_ra_reg_set_build_regs(ibc_ra_reg_set *set, unsigned simd_width,
 }
 
 #ifdef IBC_HAVE_PREBUILT_REG_SETS
-#include "ibc_ra_reg_sets_prebuilt.h"
+#include "ibc_generated_ra_reg_sets.h"
 #include "util/blob.h"
+#include <zlib.h>
+#define CHUNK 16384
+
+static void
+ibc_ra_regsets_inflate_prebuild_regs(unsigned simd_width, struct blob *blob)
+{
+   unsigned char * data_start;
+   size_t data_size;
+
+   switch (simd_width) {
+   case 8:
+      data_start = ra_reg_sets8;
+      data_size  = sizeof(ra_reg_sets8);
+      break;
+   case 16:
+      data_start = ra_reg_sets16;
+      data_size  = sizeof(ra_reg_sets16);
+      break;
+   case 32:
+      data_start = ra_reg_sets32;
+      data_size  = sizeof(ra_reg_sets32);
+      break;
+   default:
+      unreachable("unknown simd size");
+   }
+
+   int ret;
+   unsigned have;
+   z_stream stream;
+   unsigned char out[CHUNK];
+
+   stream.zalloc = Z_NULL;
+   stream.zfree = Z_NULL;
+   stream.opaque = Z_NULL;
+   stream.avail_in = data_size;
+   stream.next_in = data_start;
+   ret = inflateInit(&stream);
+   if (ret != Z_OK) {
+      abort();
+   }
+
+   do {
+      stream.avail_out = CHUNK;
+      stream.next_out = out;
+
+      ret = inflate(&stream, stream.avail_in < CHUNK ? Z_FINISH : Z_NO_FLUSH);
+      assert(ret != Z_STREAM_ERROR);
+      switch (ret) {
+      case Z_NEED_DICT:
+         ret = Z_DATA_ERROR;
+         /* fallthrough */
+      case Z_DATA_ERROR:
+      case Z_MEM_ERROR:
+         (void)inflateEnd(&stream);
+         abort();
+      }
+
+      have = CHUNK - stream.avail_out;
+      if (!blob_write_bytes(blob, out, have)) {
+         abort();
+      }
+   } while (stream.avail_in != 0 && stream.avail_out == 0);
+
+   (void)inflateEnd(&stream);
+}
 
 static void
 ibc_ra_reg_set_load_prebuilt_regs(ibc_ra_reg_set *set, unsigned simd_width,
                                   void *mem_ctx)
 {
-   struct blob_reader blob;
-   switch (simd_width) {
-   case 8:
-      blob_reader_init(&blob, ibc_ra_reg_set_simd8,
-                       sizeof(ibc_ra_reg_set_simd8));
-      break;
-   case 16:
-      blob_reader_init(&blob, ibc_ra_reg_set_simd16,
-                       sizeof(ibc_ra_reg_set_simd16));
-      break;
-   case 32:
-      blob_reader_init(&blob, ibc_ra_reg_set_simd32,
-                       sizeof(ibc_ra_reg_set_simd32));
-      break;
-   }
+   struct blob blob;
+   blob_init(&blob);
+   ibc_ra_regsets_inflate_prebuild_regs(simd_width, &blob);
 
-   set->regs = ra_set_deserialize(mem_ctx, &blob);
+   struct blob_reader reader;
+   blob_reader_init(&reader, blob.data, blob.size);
+
+   set->regs = ra_set_deserialize(mem_ctx, &reader);
+
+   blob_finish(&blob);
 }
 #endif
 
