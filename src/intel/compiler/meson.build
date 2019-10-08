@@ -178,6 +178,8 @@ brw_nir_trig = custom_target(
   capture : true,
 )
 
+dep_zlib_build = dependency('zlib', version : '>= 1.2.3', fallback : ['zlib', 'zlib_dep'], native : true)
+
 exe_ibc_build_ra_reg_sets = executable(
   'ibc_build_ra_reg_sets',
   [
@@ -185,9 +187,9 @@ exe_ibc_build_ra_reg_sets = executable(
     'ibc_ra_reg_sets.c',
     'ibc_ra_reg_sets.h',
   ],
+  c_args : [pre_args],  # needed even though this is a build machine target
   include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_intel],
-  c_args : [pre_args],
-  dependencies : [idep_mesautil_build],
+  dependencies : [idep_mesautil_build, dep_zlib_build],
   native : true,
 )
 
@@ -195,22 +197,45 @@ if build_machine.system() == 'big'
   error('Building IBC RA reg sets on big-endian is not supported.')
 endif
 
-ibc_ra_reg_sets_prebuilt_h = custom_target(
-  'ibc_ra_reg_sets_prebuilt.h',
-  output : 'ibc_ra_reg_sets_prebuilt.h',
+if not host_machine.cpu_family().startswith('x86')
+  error('Unsupported on non-x86 platforms')
+endif
+ra_sets_ext = '.zlib'
+_generated_regsets = []
+foreach s : ['8', '16', '32']
+  _n = 'ibc_ra_reg_sets_prebuilt' + s
+  _generated_regsets += custom_target(
+    _n + ra_sets_ext,
+    output : [_n + ra_sets_ext],
+    command : [
+      exe_ibc_build_ra_reg_sets, '@OUTPUT@', s,
+    ],
+  )
+endforeach
+
+reg_sets = custom_target(
+  'ibc_generated_ra_reg_sets.h',
   command : [
-    exe_ibc_build_ra_reg_sets, '@OUTPUT@',
+    prog_python, files_xxd, '@OUTPUT@', '@INPUT@', '-b',
+   '-n', 'ra_reg_sets8',
+   '-n', 'ra_reg_sets16',
+   '-n', 'ra_reg_sets32',
   ],
+  input : _generated_regsets,
+  output : 'ibc_generated_ra_reg_sets.h',
+  depend_files : files_xxd,
 )
 
 libintel_compiler = static_library(
   'intel_compiler',
-  [libintel_compiler_files, brw_nir_trig,  ibc_ra_reg_sets_prebuilt_h,
-   ir_expression_operation_h],
+  [
+    libintel_compiler_files, brw_nir_trig, ir_expression_operation_h,
+    reg_sets,
+  ],
   include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_intel],
   c_args : [no_override_init_args, '-DIBC_HAVE_PREBUILT_REG_SETS'],
   gnu_symbol_visibility : 'hidden',
-  dependencies : idep_nir_headers,
+  dependencies : [idep_nir_headers, dep_zlib],
   build_by_default : false,
 )
 
