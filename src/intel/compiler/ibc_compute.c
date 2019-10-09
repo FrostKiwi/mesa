@@ -109,6 +109,55 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_load_shared: {
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_SURFACE_BTI] = {
+            .ref = ibc_imm_ud(GEN7_BTI_SLM),
+            .num_comps = 1,
+         },
+         [IBC_SURFACE_SRC_ADDRESS] = {
+            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
+            .num_comps = 1,
+         },
+      };
+
+      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD,
+                                         instr->num_components);
+
+      ibc_intrinsic_instr *load =
+         ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
+                             dest, -1, instr->num_components,
+                             srcs, IBC_SURFACE_NUM_SRCS);
+      load->can_reorder = false;
+      break;
+   }
+
+   case nir_intrinsic_store_shared: {
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_SURFACE_BTI] = {
+            .ref = ibc_imm_ud(GEN7_BTI_SLM),
+            .num_comps = 1,
+         },
+         [IBC_SURFACE_SRC_ADDRESS] = {
+            .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+            .num_comps = 1,
+         },
+         [IBC_SURFACE_SRC_DATA0] = {
+            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
+            .num_comps = instr->num_components,
+         },
+      };
+
+      ibc_intrinsic_instr *store =
+         ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
+                             ibc_null(IBC_TYPE_UD), 0, 0,
+                             srcs, IBC_SURFACE_NUM_SRCS);
+
+      store->can_reorder = false,
+      store->has_side_effects = true;
+      break;
+   }
+
    default:
       return false;
    }
