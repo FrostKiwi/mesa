@@ -615,6 +615,8 @@ struct ibc_sched_graph_builder {
    /* Context for chunk_last_write and grf_last_write arrays */
    void *mem_ctx;
 
+   bool top_down;
+
    ibc_sched_node **chunk_last_write;
    ibc_sched_node **grf_last_write;
    ibc_sched_node *flag_last_write[TOTAL_FLAG_CHUNKS];
@@ -939,7 +941,7 @@ add_waw_dep_cb(const ibc_ref *ref, uint16_t num_bytes,
       waw_latency += 4;
 
    ibc_sched_graph_add_dep(b->graph, b->iter_node, dep_node,
-                           num_bytes, waw_latency);
+                           0 /* num_bytes */, waw_latency);
 }
 
 static bool
@@ -978,7 +980,10 @@ record_ref_write(ibc_ref *ref,
    if (ref->file == IBC_FILE_ACCUM)
       b->iter_node->writes.accum = true;
 
-   if (ref->reg == NULL)
+   /* Only record the number of bytes written by the node if we're going
+    * top-down so we don't double-count.
+    */
+   if (ref->reg == NULL || !b->top_down)
       return true;
 
    assert(ref->reg->index < g->live->num_regs);
@@ -1042,6 +1047,7 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
 {
    struct ibc_sched_graph_builder b = {
       .mem_ctx = mem_ctx,
+      .top_down = true,
    };
 
    ibc_sched_graph *g = rzalloc(mem_ctx, ibc_sched_graph);
@@ -1192,6 +1198,8 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
 
    assert(list_is_singular(&next_barrier_deps));
    list_inithead(&next_barrier_deps);
+
+   b.top_down = false;
 
    /* Reset the register sets to NULL for the bottom-up pass */
    if (b.chunk_last_write) {
