@@ -1055,7 +1055,7 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
          assert(reg->index < g->live->num_regs);
          const ibc_reg_live_intervals *rli = &g->live->regs[reg->index];
 
-         uint32_t grf_bytes, flag_bits;
+         uint32_t grf_bytes = 0, flag_bits = 0;
          switch (reg->file) {
          case IBC_FILE_LOGICAL:
             if (rli->chunk_simd_width > 32) {
@@ -1063,21 +1063,17 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
                 * assume they don't contribute to register pressure.
                 */
                assert(rli->num_chunks == 1);
-               grf_bytes = 0;
-               flag_bits = 0;
             } else if (reg->logical.bit_size == 1) {
                /* Assume a W type vector representation */
                grf_bytes = 2 * rli->chunk_simd_width;
                flag_bits = rli->chunk_simd_width;
             } else {
                grf_bytes = rli->chunk_simd_width * rli->chunk_byte_size;
-               flag_bits = 0;
             }
             break;
 
          case IBC_FILE_HW_GRF:
             grf_bytes = rli->chunk_byte_size;
-            flag_bits = 0;
             break;
 
          case IBC_FILE_FLAG:
