@@ -1314,9 +1314,9 @@ ibc_shader_apply_schedule(ibc_shader *shader,
       list_addtail(&instr->link, &shader->instrs);
 
       node->data.cycle = shader->cycles;
-      for (unsigned i = 0; i < node->num_src_deps; i++) {
-         uint32_t dep_end_cycle = node->src_deps[i].node->data.cycle +
-                                  node->src_deps[i].latency;
+      for (unsigned j = 0; j < node->num_src_deps; j++) {
+         uint32_t dep_end_cycle = node->src_deps[j].node->data.cycle +
+                                  node->src_deps[j].latency;
          node->data.cycle = MAX2(node->data.cycle, dep_end_cycle);
       }
       shader->cycles = node->data.cycle + node->latency.fe_time;
@@ -1324,8 +1324,8 @@ ibc_shader_apply_schedule(ibc_shader *shader,
 #ifndef NDEBUG
       assert(node->ref_count == 0);
 
-      for (unsigned i = 0; i < node->num_dest_deps; i++) {
-         ibc_sched_node *dep = node->dest_deps[i].node;
+      for (unsigned j = 0; j < node->num_dest_deps; j++) {
+         ibc_sched_node *dep = node->dest_deps[j].node;
          assert(dep->ref_count > 0);
          dep->ref_count--;
       }
