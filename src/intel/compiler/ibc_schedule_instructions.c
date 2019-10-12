@@ -557,6 +557,9 @@ struct ibc_sched_node {
    struct {
       /** Cycle at which this node was scheduled */
       uint32_t cycle;
+
+      /** Count of yet-to-be-scheduled nodes with this as a data dependency */
+      uint32_t data_ref_count;
    } data;
 
    /** Link for storing an ibc_sched_node in a list */
@@ -1776,15 +1779,195 @@ top_down_latency_schedule(const ibc_shader *shader, ibc_sched_graph *g,
    return b.sched;
 }
 
+static int
+hsu_grf_bytes_freed(struct ibc_sched_node *node, bool statistical)
+{
+   int grf_bytes_freed = -(int)node->writes.grf_bytes;
+
+   for (unsigned i = 0; i < node->num_src_deps; i++) {
+      if (node->src_deps[i].num_bytes > 0) {
+         assert(node->src_deps[i].node->data.data_ref_count > 0);
+         /* If we're the last remaining data use then we will free the data
+          * written by this node.
+          */
+         if (node->src_deps[i].node->data.data_ref_count == 1) {
+            grf_bytes_freed += node->src_deps[i].node->writes.grf_bytes;
+         } else if (statistical) {
+            grf_bytes_freed += node->src_deps[i].node->writes.grf_bytes /
+                               node->src_deps[i].node->data.data_ref_count;
+         }
+      }
+   }
+
+   return grf_bytes_freed;
+}
+
+static ibc_sched_node *
+dynamic_ra_sensitive_choose_node(ibc_schedule_builder *b,
+                                 struct rb_tree *ready,
+                                 struct rb_tree *leader,
+                                 uint32_t threshold)
+{
+   if (b->grf_bytes < threshold) {
+      /* If we're within the threshold, choose the node with the best schedule
+       * as per one of the latency sensitive schedulers.
+       */
+      rb_tree_foreach_rev(ibc_sched_node, node, ready, rb_node) {
+         rb_tree_remove(ready, &node->rb_node);
+         return node;
+      }
+      rb_tree_foreach(ibc_sched_node, node, leader, rb_node) {
+         rb_tree_remove(leader, &node->rb_node);
+         return node;
+      }
+
+      unreachable("One of ready or leader must have a node");
+   } else {
+      /* First, try to find a node that frees registers or, at the very least
+       * doesn't hurt our register pressure.
+       */
+      rb_tree_foreach_rev(ibc_sched_node, node, ready, rb_node) {
+         if (hsu_grf_bytes_freed(node, false /* statistical */) >= 0) {
+            rb_tree_remove(ready, &node->rb_node);
+            return node;
+         }
+      }
+      rb_tree_foreach(ibc_sched_node, node, leader, rb_node) {
+         if (hsu_grf_bytes_freed(node, false /* statistical */) >= 0) {
+            rb_tree_remove(leader, &node->rb_node);
+            return node;
+         }
+      }
+
+      int highest_grf_bytes_stat_freed = INT_MIN;
+      ibc_sched_node *highest_grf_bytes_stat_freed_node = NULL;
+      struct rb_tree *highest_grf_bytes_stat_freed_tree = NULL;
+
+      rb_tree_foreach_rev(ibc_sched_node, node, ready, rb_node) {
+         int grf_bytes_stat_freed =
+            hsu_grf_bytes_freed(node, true /* statistical */);
+         if (highest_grf_bytes_stat_freed < grf_bytes_stat_freed) {
+            highest_grf_bytes_stat_freed = grf_bytes_stat_freed;
+            highest_grf_bytes_stat_freed_node = node;
+            highest_grf_bytes_stat_freed_tree = ready;
+         }
+      }
+
+      rb_tree_foreach(ibc_sched_node, node, leader, rb_node) {
+         int grf_bytes_stat_freed =
+            hsu_grf_bytes_freed(node, true /* statistical */);
+         if (highest_grf_bytes_stat_freed < grf_bytes_stat_freed) {
+            highest_grf_bytes_stat_freed = grf_bytes_stat_freed;
+            highest_grf_bytes_stat_freed_node = node;
+            highest_grf_bytes_stat_freed_tree = leader;
+         }
+      }
+
+      rb_tree_remove(highest_grf_bytes_stat_freed_tree,
+                     &highest_grf_bytes_stat_freed_node->rb_node);
+      return highest_grf_bytes_stat_freed_node;
+   }
+}
+
+static ibc_schedule *
+dynamic_ra_sensitive_schedule(const ibc_shader *shader, ibc_sched_graph *g,
+                              uint32_t threshold, void *mem_ctx)
+{
+   ibc_schedule_builder b;
+   ibc_schedule_builder_init_new(&b, g, IBC_SCHED_DIRECTION_TOP_DOWN, mem_ctx);
+
+   /* Reset reference counts and set cycles to 0 */
+   for (unsigned i = 0; i < g->num_nodes; i++) {
+      ibc_sched_node *node = &g->nodes[i];
+      node->ref_count = node->num_src_deps;
+      node->data.cycle = 0;
+
+      /* Because we're walking top-down, this will be initial before we see
+       * anything which has this as a source dependency to increment it in the
+       * loop below.
+       */
+      node->data.data_ref_count = 0;
+      for (unsigned j = 0; j < node->num_src_deps; j++) {
+         if (node->src_deps[j].num_bytes > 0)
+            node->src_deps[j].node->data.data_ref_count++;
+      }
+   }
+
+   struct rb_tree ready, leader;
+   rb_tree_init(&ready);
+   rb_tree_init(&leader);
+
+   rb_tree_insert(&ready, &g->nodes[0].rb_node,
+                  rb_cmp_nodes_by_min_to_end);
+
+   while (!rb_tree_is_empty(&ready) || !rb_tree_is_empty(&leader)) {
+      ibc_sched_node *node =
+         dynamic_ra_sensitive_choose_node(&b, &ready, &leader, threshold);
+
+      ibc_schedule_add_node(&b, node);
+
+      for (unsigned i = 0; i < node->num_dest_deps; i++) {
+         ibc_sched_node *dep = node->dest_deps[i].node;
+
+         uint32_t dep_cycles = node->data.cycle + node->dest_deps[i].latency;
+         dep->data.cycle = MAX2(dep->data.cycle, dep_cycles);
+
+         assert(dep->ref_count > 0);
+         dep->ref_count--;
+
+         /* A node's cycle count won't be altered between the time that its
+          * last destination reference is gone and the time it gets put in the
+          * schedule.  Therefore, it's safe to use it as a keep in the leaders
+          * red-black tree.
+          */
+         if (dep->ref_count == 0)
+            rb_tree_insert(&leader, &dep->rb_node, rb_cmp_nodes_by_cycle);
+      }
+
+      for (unsigned i = 0; i < node->num_src_deps; i++) {
+         if (node->src_deps[i].num_bytes > 0)
+            node->src_deps[i].node->data.data_ref_count--;
+      }
+
+      while (!rb_tree_is_empty(&leader)) {
+         ibc_sched_node *node =
+            rb_node_data(ibc_sched_node, rb_tree_first(&leader), rb_node);
+         if (node->data.cycle > b.sched->cycles)
+            break;
+
+         rb_tree_remove(&leader, &node->rb_node);
+         rb_tree_insert(&ready, &node->rb_node, rb_cmp_nodes_by_min_to_end);
+      }
+   }
+
+   return b.sched;
+}
+
 void
 ibc_schedule_instructions(ibc_shader *shader)
 {
    void *mem_ctx = ralloc_context(shader);
    ibc_sched_graph *graph = ibc_sched_graph_create(shader, mem_ctx);
 
-   ibc_schedule *noop = noop_schedule(shader, graph, mem_ctx);
+   ibc_schedule *sched[] = {
+      noop_schedule(shader, graph, mem_ctx),
+      dynamic_ra_sensitive_schedule(shader, graph, 2048, mem_ctx),
+   };
 
-   ibc_shader_apply_schedule(shader, graph, noop);
+   /* Use the noop schedule as the base-line */
+   ibc_schedule *best = sched[0];
+   for (unsigned i = 1; i < ARRAY_SIZE(sched); i++) {
+      /* Only pick non-noop schedules which have a reasonable register
+       * pressure where reasonable is defined as 3/4 of the GRF.
+       */
+      if (sched[i]->max_grf_bytes > (4096 * 3) / 4)
+         continue;
+
+      if (best->cycles > sched[i]->cycles)
+         best = sched[i];
+   }
+
+   ibc_shader_apply_schedule(shader, graph, best);
 
    ralloc_free(mem_ctx);
 }
