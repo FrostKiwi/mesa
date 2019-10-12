@@ -568,7 +568,7 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
    }
 
    if (!ra_allocate(g)) {
-      assert(!allow_spilling);
+      //assert(!allow_spilling);
       ralloc_free(state.mem_ctx);
       return false;
    }
