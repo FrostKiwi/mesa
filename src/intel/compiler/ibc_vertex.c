@@ -318,7 +318,7 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
                const struct brw_vs_prog_key *key,
                struct brw_vs_prog_data *prog_data,
                struct nir_shader *nir,
-               char **error_str)
+               char **error_str_out)
 {
    assert(nir->info.stage == MESA_SHADER_VERTEX);
 
@@ -340,7 +340,12 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
 
    ibc_lower_and_optimize(ibc);
 
-   IBC_PASS_V(ibc, ibc_assign_regs, compiler, true);
+   bool assigned = ibc_assign_regs(ibc, compiler, true);
+   if (!assigned) {
+      *error_str_out = ralloc_strdup(mem_ctx,
+                                     "Failed to allocate register");
+      return NULL;
+   }
 
    prog_data->base.base.dispatch_grf_start_reg = nti.payload->num_ff_regs;
    prog_data->base.dispatch_mode = DISPATCH_MODE_SIMD8;
