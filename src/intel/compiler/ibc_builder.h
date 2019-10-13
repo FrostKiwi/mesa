@@ -98,6 +98,9 @@ static inline void
 ibc_builder_push_group(ibc_builder *b,
                        unsigned simd_group, unsigned simd_width)
 {
+   assert(util_is_power_of_two_nonzero(simd_width));
+   assert(simd_group % simd_width == 0);
+
    /* We're only allowed to restrict the size */
    assert(simd_group + simd_width <= b->simd_width);
    if (b->we_all)
