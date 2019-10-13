@@ -363,6 +363,14 @@ load_vector_if_needed(unsigned chunk,
                ibc_flag_ref(chunk * FLAG_CHUNK_BITS + copy_bit),
                IBC_PREDICATE_NOT);
             ibc_builder_pop(b);
+
+            /* Reset copy_start to either this chunk if we still have data
+             * to copy or -1 if we stopped because this chunk isn't valid.
+             */
+            if (!(state->valid[chunk + c] & FLAG_REP_VECTOR))
+               copy_start = c;
+            else
+               copy_start = -1;
          }
       }
    }
@@ -507,6 +515,14 @@ load_flag_if_needed(unsigned chunk, unsigned start_chunk, unsigned num_chunks,
                              ibc_flag_ref(chunk * FLAG_CHUNK_BITS + copy_bit),
                              BRW_CONDITIONAL_NZ, &vector, 1);
                ibc_builder_pop(b);
+
+               /* Reset copy_start to either this chunk if we still have data
+                * to copy or -1 if we stopped because this chunk isn't valid.
+                */
+               if (!(state->valid[chunk + c] & FLAG_REP_FLAG))
+                  copy_start = c;
+               else
+                  copy_start = -1;
             }
 
             /* We've either done a copy or set copy_group to ensure this chunk
