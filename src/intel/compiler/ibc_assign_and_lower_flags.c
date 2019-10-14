@@ -821,7 +821,8 @@ rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
             /* If we're a read and it's not currently in a flag, pull from the
              * scalar GRF.  We should have one.
              */
-            load_scalar_if_needed(chunk, state);
+            if (chunk >= 0)
+               load_scalar_if_needed(chunk, state);
             ibc_ref scalar = state->regs[ref->reg->index].scalar;
             assert(scalar.file != IBC_FILE_NONE);
             scalar.type = ref->type;
