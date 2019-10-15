@@ -734,9 +734,8 @@ set_dep_node(ibc_ref *ref, ibc_sched_node *node,
          simd_width = ibc_type_bit_size(ref->type);
       }
 
-      assert(simd_width % FLAG_CHUNK_BITS == 0);
+      const unsigned num_chunks = DIV_ROUND_UP(simd_width, FLAG_CHUNK_BITS);
       assert(ref->flag.bit % FLAG_CHUNK_BITS == 0);
-      const unsigned num_chunks = simd_width / FLAG_CHUNK_BITS;
       const unsigned chunk_idx = ref->flag.bit / FLAG_CHUNK_BITS;
 
       for (unsigned i = 0; i < num_chunks; i++)
@@ -837,9 +836,8 @@ foreach_dep_node(ibc_ref *ref,
          simd_width = ibc_type_bit_size(ref->type);
       }
 
-      assert(simd_width % FLAG_CHUNK_BITS == 0);
+      const unsigned num_chunks = DIV_ROUND_UP(simd_width, FLAG_CHUNK_BITS);
       assert(ref->flag.bit % FLAG_CHUNK_BITS == 0);
-      const unsigned num_chunks = simd_width / FLAG_CHUNK_BITS;
       const unsigned chunk_idx = ref->flag.bit / FLAG_CHUNK_BITS;
 
       ibc_sched_node *last = NULL;
