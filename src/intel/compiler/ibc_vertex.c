@@ -84,6 +84,7 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
    ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_input: {
+      assert(nir_dest_is_divergent(instr->dest));
       const unsigned input = nir_intrinsic_base(instr) +
                              nir_src_as_uint(instr->src[0]);
       ibc_ref srcs[4];
@@ -125,10 +126,13 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
       return false;
    }
 
-   if (nir_intrinsic_infos[instr->intrinsic].has_dest)
+   if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
+      ibc_builder_push_nir_dest_group(b, instr->dest);
       ibc_write_nir_dest(nti, &instr->dest, dest);
-   else
+      ibc_builder_pop(b);
+   } else {
       assert(dest.file == IBC_FILE_NONE);
+   }
 
    return true;
 }

@@ -101,9 +101,11 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
          },
       };
 
-      dest =  ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
-                                      IBC_TYPE_UD, 3,
-                                      srcs, IBC_SURFACE_NUM_SRCS);
+      ibc_builder_push_scalar(b);
+      dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
+                                     IBC_TYPE_UD, 3,
+                                     srcs, IBC_SURFACE_NUM_SRCS);
+      ibc_builder_pop(b);
       break;
    }
 
@@ -111,10 +113,13 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
       return false;
    }
 
-   if (nir_intrinsic_infos[instr->intrinsic].has_dest)
+   if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
+      ibc_builder_push_nir_dest_group(b, instr->dest);
       ibc_write_nir_dest(nti, &instr->dest, dest);
-   else
+      ibc_builder_pop(b);
+   } else {
       assert(dest.file == IBC_FILE_NONE);
+   }
 
    return true;
 }
