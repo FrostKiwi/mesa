@@ -1018,6 +1018,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
             dest_comps[c].type = instr->dest.ssa.bit_size;
             dest_comps[c].hw_grf.byte += comp_offset_in_block_B;
             ibc_hw_grf_mul_stride(&dest_comps[c].hw_grf, 0);
+
+            nti->prog_data->has_ubo_pull = true;
          }
 
          ibc_builder_push_scalar(b);
@@ -1052,6 +1054,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_TXF,
                                         IBC_TYPE_UD, num_dest_comps,
                                         srcs, IBC_TEX_NUM_SRCS);
+
+         nti->prog_data->has_ubo_pull = true;
       }
       break;
 
