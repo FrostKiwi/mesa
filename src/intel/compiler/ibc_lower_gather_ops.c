@@ -124,10 +124,7 @@ ibc_lower_gather_ops(ibc_shader *shader)
          break;
 
       case IBC_INTRINSIC_OP_VEC:
-         if (instr->we_all)
-            ibc_builder_push_we_all(&b, instr->simd_width);
-         else
-            ibc_builder_push_group(&b, instr->simd_group, instr->simd_width);
+         ibc_builder_push_instr_group(&b, instr);
 
          assert(intrin->dest.file == IBC_FILE_LOGICAL);
          assert(intrin->num_srcs == intrin->num_dest_comps);
