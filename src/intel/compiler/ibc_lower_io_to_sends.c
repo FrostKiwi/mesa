@@ -26,18 +26,23 @@
 
 #include "brw_eu.h"
 
-static void
-lower_bti_block_load_ubo(ibc_builder *b, ibc_send_instr *send,
-                         const ibc_intrinsic_instr *read)
+static bool
+lower_bti_block_load_ubo(ibc_builder *b, ibc_intrinsic_instr *read)
 {
+   /* Only lower BLOCK_LOAD_UBO if it doesn't have a push GRF */
+   if (read->src[0].ref.file == IBC_FILE_HW_GRF)
+      return false;
+
    const unsigned block_size_B =
       read->num_dest_comps * ibc_type_byte_size(read->dest.type);
    assert(block_size_B % REG_SIZE == 0);
    const unsigned block_size_DW = block_size_B / 4;
 
    /* It's actually going to be a SIMD8 or SIMD16 send */
-   assert(send->instr.we_all);
-   send->instr.simd_width = block_size_DW;
+   assert(read->instr.we_all);
+   assert(read->instr.predicate == IBC_PREDICATE_NONE);
+   ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, block_size_DW);
+   send->instr.we_all = true;
 
    send->sfid = GEN6_SFID_DATAPORT_CONSTANT_CACHE;
    send->desc_imm =
@@ -71,11 +76,15 @@ lower_bti_block_load_ubo(ibc_builder *b, ibc_send_instr *send,
 
    send->dest = read->dest;
    send->rlen = block_size_B / REG_SIZE;
+
+   ibc_builder_insert_instr(b, &send->instr);
+   ibc_instr_remove(&read->instr);
+
+   return true;
 }
 
-static void
-lower_surface_access(ibc_builder *b, ibc_send_instr *send,
-                     const ibc_intrinsic_instr *intrin)
+static bool
+lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
 {
    const struct gen_device_info *devinfo = b->shader->devinfo;
 
@@ -96,6 +105,20 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
       intrin->src[IBC_SURFACE_SRC_DATA0].num_comps;
    assert(intrin->src[IBC_SURFACE_SRC_DATA1].num_comps == 0 ||
           intrin->src[IBC_SURFACE_SRC_DATA1].num_comps == num_data_comps);
+
+   ibc_builder_push_instr_group(b, &intrin->instr);
+
+   ibc_send_instr *send = ibc_send_instr_create(b->shader,
+                                                intrin->instr.simd_group,
+                                                intrin->instr.simd_width);
+   send->instr.we_all = intrin->instr.we_all;
+   send->can_reorder = intrin->can_reorder;
+   send->has_side_effects = intrin->has_side_effects;
+
+   if (intrin->instr.predicate != IBC_PREDICATE_NONE) {
+      send->instr.flag = intrin->instr.flag;
+      send->instr.predicate = intrin->instr.predicate;
+   }
 
    ibc_intrinsic_src src[8] = {};
    unsigned num_srcs = 0;
@@ -197,6 +220,13 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
 
    send->dest = intrin->dest;
    send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
+
+   ibc_builder_insert_instr(b, &send->instr);
+   ibc_instr_remove(&intrin->instr);
+
+   ibc_builder_pop(b);
+
+   return true;
 }
 
 static bool
@@ -323,9 +353,8 @@ ibc_tex_instr_max_simd_width(const ibc_intrinsic_instr *intrin,
       return 16;
 }
 
-static void
-lower_tex(ibc_builder *b, ibc_send_instr *send,
-          const ibc_intrinsic_instr *intrin)
+static bool
+lower_tex(ibc_builder *b, ibc_intrinsic_instr *intrin)
 {
    const struct gen_device_info *devinfo = b->shader->devinfo;
 
@@ -363,6 +392,15 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
    const ibc_ref header_bits_r = intrin->src[IBC_TEX_SRC_HEADER_BITS].ref;
    if (header_bits_r.file != IBC_FILE_NONE)
       header_bits = ibc_ref_as_uint(header_bits_r);
+
+   ibc_builder_push_instr_group(b, &intrin->instr);
+
+   assert(intrin->can_reorder && !intrin->has_side_effects);
+   assert(intrin->instr.predicate == IBC_PREDICATE_NONE);
+   ibc_send_instr *send = ibc_send_instr_create(b->shader,
+                                                intrin->instr.simd_group,
+                                                intrin->instr.simd_width);
+   send->instr.we_all = intrin->instr.we_all;
 
    ibc_intrinsic_src src[MAX_SAMPLER_MESSAGE_SIZE] = {};
    unsigned num_srcs = 0;
@@ -632,6 +670,13 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
       }
       ibc_builder_pop(b);
    }
+
+   ibc_builder_insert_instr(b, &send->instr);
+   ibc_instr_remove(&intrin->instr);
+
+   ibc_builder_pop(b);
+
+   return true;
 }
 
 bool
@@ -646,46 +691,12 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       if (instr->type != IBC_INSTR_TYPE_INTRINSIC)
          continue;
 
+      b.cursor = ibc_before_instr(instr);
+
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
       switch (intrin->op) {
-      case IBC_INTRINSIC_OP_UNDEF:
-      case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL:
-      case IBC_INTRINSIC_OP_SIMD_BROADCAST:
-      case IBC_INTRINSIC_OP_SIMD_ZIP:
-      case IBC_INTRINSIC_OP_VEC:
-      case IBC_INTRINSIC_OP_LOAD_PAYLOAD:
-      case IBC_INTRINSIC_OP_PLN:
-      case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE:
-         continue;
-
       case IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO:
-         /* Only lower BLOCK_LOAD_UBO if it doesn't have a push GRF */
-         if (intrin->src[0].ref.file == IBC_FILE_HW_GRF)
-            continue;
-         break;
-      default:
-         break;
-      }
-
-      b.cursor = ibc_before_instr(instr);
-      assert(b._group_stack_size == 0);
-      ibc_builder_push_instr_group(&b, instr);
-
-      ibc_send_instr *send = ibc_send_instr_create(shader,
-                                                   instr->simd_group,
-                                                   instr->simd_width);
-      send->instr.we_all = instr->we_all;
-      send->can_reorder = intrin->can_reorder;
-      send->has_side_effects = intrin->has_side_effects;
-
-      if (instr->predicate != IBC_PREDICATE_NONE) {
-         send->instr.flag = instr->flag;
-         send->instr.predicate = instr->predicate;
-      }
-
-      switch (intrin->op) {
-      case IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO:
-         lower_bti_block_load_ubo(&b, send, intrin);
+         progress |= lower_bti_block_load_ubo(&b, intrin);
          break;
 
       case IBC_INTRINSIC_OP_BTI_TYPED_READ:
@@ -694,15 +705,15 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
-         lower_surface_access(&b, send, intrin);
+         progress |= lower_surface_access(&b, intrin);
          break;
 
       case IBC_INTRINSIC_OP_URB_WRITE:
-         ibc_lower_io_urb_write_to_send(&b, send, intrin);
+         progress |= ibc_lower_io_urb_write_to_send(&b, intrin);
          break;
 
       case IBC_INTRINSIC_OP_FB_WRITE:
-         ibc_lower_io_fb_write_to_send(&b, send, intrin);
+         progress |= ibc_lower_io_fb_write_to_send(&b, intrin);
          break;
 
       case IBC_INTRINSIC_OP_TEX:
@@ -717,18 +728,12 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       case IBC_INTRINSIC_OP_TG4:
       case IBC_INTRINSIC_OP_TG4_OFFSET:
       case IBC_INTRINSIC_OP_SAMPLEINFO:
-         lower_tex(&b, send, intrin);
+         progress |= lower_tex(&b, intrin);
          break;
 
       default:
-         unreachable("Unsupported intrinsic");
+         break;
       }
-
-      ibc_builder_insert_instr(&b, &send->instr);
-      ibc_instr_remove(&intrin->instr);
-
-      ibc_builder_pop(&b);
-      progress = true;
    }
 
    return progress;

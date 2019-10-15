@@ -281,9 +281,8 @@ ibc_emit_urb_writes(struct nir_to_ibc_state *nti)
    }
 }
 
-void
-ibc_lower_io_urb_write_to_send(ibc_builder *b, ibc_send_instr *send,
-                               const ibc_intrinsic_instr *write)
+bool
+ibc_lower_io_urb_write_to_send(ibc_builder *b, ibc_intrinsic_instr *write)
 {
    const ibc_ref handle = write->src[IBC_URB_WRITE_SRC_HANDLE].ref;
    const ibc_ref data = write->src[IBC_URB_WRITE_SRC_DATA].ref;
@@ -293,6 +292,17 @@ ibc_lower_io_urb_write_to_send(ibc_builder *b, ibc_send_instr *send,
    const bool eot = ibc_ref_as_uint(write->src[IBC_URB_WRITE_SRC_EOT].ref);
    const bool per_slot_offset_present = false;
    const bool channel_mask_present = false;
+
+   ibc_builder_push_instr_group(b, &write->instr);
+
+   assert(!write->instr.we_all);
+   assert(!write->can_reorder && write->has_side_effects);
+   assert(write->instr.predicate == IBC_PREDICATE_NONE);
+   ibc_send_instr *send = ibc_send_instr_create(b->shader,
+                                                write->instr.simd_group,
+                                                write->instr.simd_width);
+   send->can_reorder = false;
+   send->has_side_effects = true;
 
    assert(write->src[IBC_URB_WRITE_SRC_DATA].num_comps <= 8);
 
@@ -310,6 +320,14 @@ ibc_lower_io_urb_write_to_send(ibc_builder *b, ibc_send_instr *send,
    send->has_header = true;
    send->has_side_effects = true;
    send->eot = eot;
+
+   ibc_builder_insert_instr(b, &send->instr);
+
+   ibc_builder_pop(b);
+
+   ibc_instr_remove(&write->instr);
+
+   return true;
 }
 
 const unsigned *

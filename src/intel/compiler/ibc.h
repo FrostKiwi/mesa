@@ -1352,12 +1352,10 @@ bool ibc_lower_fb_writes(ibc_shader *shader);
 bool ibc_lower_gather_ops(ibc_shader *shader);
 bool ibc_lower_integer_multiplication(ibc_shader *shader);
 bool ibc_lower_io_to_sends(ibc_shader *shader);
-void ibc_lower_io_urb_write_to_send(struct ibc_builder *b,
-                                    ibc_send_instr *send,
-                                    const ibc_intrinsic_instr *intrin);
-void ibc_lower_io_fb_write_to_send(struct ibc_builder *b,
-                                   ibc_send_instr *send,
-                                   const ibc_intrinsic_instr *intrin);
+bool ibc_lower_io_urb_write_to_send(struct ibc_builder *b,
+                                    ibc_intrinsic_instr *intrin);
+bool ibc_lower_io_fb_write_to_send(struct ibc_builder *b,
+                                   ibc_intrinsic_instr *intrin);
 bool ibc_lower_overlapping_send_payloads(ibc_shader *shader);
 bool ibc_lower_phis(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);
