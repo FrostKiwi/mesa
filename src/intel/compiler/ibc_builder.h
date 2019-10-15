@@ -130,6 +130,17 @@ ibc_builder_push_scalar(ibc_builder *b)
 }
 
 static inline void
+ibc_builder_push_instr_group(ibc_builder *b, const ibc_instr *instr)
+{
+   if (instr->we_all) {
+      assert(instr->simd_group == 0);
+      ibc_builder_push_we_all(b, instr->simd_width);
+   } else {
+      ibc_builder_push_group(b, instr->simd_group, instr->simd_width);
+   }
+}
+
+static inline void
 ibc_builder_insert_instr(ibc_builder *b, ibc_instr *instr)
 {
    ibc_instr_insert(instr, b->cursor);
