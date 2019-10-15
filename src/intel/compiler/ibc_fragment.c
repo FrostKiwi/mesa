@@ -670,9 +670,8 @@ move_to_payload(ibc_builder *b, ibc_ref src, unsigned num_comps)
    }
 }
 
-void
-ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_send_instr *send,
-                              const ibc_intrinsic_instr *write)
+bool
+ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_intrinsic_instr *write)
 {
    assert(write->op == IBC_INTRINSIC_OP_FB_WRITE);
 
@@ -690,6 +689,20 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_send_instr *send,
    const bool last_rt =
       *(uint32_t *)write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.imm;
    bool has_header = false;
+
+   ibc_builder_push_instr_group(b, &write->instr);
+
+   ibc_send_instr *send = ibc_send_instr_create(b->shader,
+                                                write->instr.simd_group,
+                                                write->instr.simd_width);
+   send->instr.we_all = write->instr.we_all;
+   send->can_reorder = write->can_reorder;
+   send->has_side_effects = write->has_side_effects;
+
+   if (write->instr.predicate != IBC_PREDICATE_NONE) {
+      send->instr.flag = write->instr.flag;
+      send->instr.predicate = write->instr.predicate;
+   }
 
    send->payload[0] = move_to_payload(b, color0, 4);
    send->mlen = 4 * (write->instr.simd_width / 8);
@@ -721,6 +734,13 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_send_instr *send,
    send->check_tdr = true;
    send->eot = last_rt &&
       write->instr.simd_group + write->instr.simd_width == b->shader->simd_width;
+
+   ibc_builder_insert_instr(b, &send->instr);
+   ibc_instr_remove(&write->instr);
+
+   ibc_builder_pop(b);
+
+   return true;
 }
 
 const unsigned *
