@@ -706,10 +706,7 @@ ibc_lower_io_to_sends(ibc_shader *shader)
 
       b.cursor = ibc_before_instr(instr);
       assert(b._group_stack_size == 0);
-      if (instr->we_all)
-         ibc_builder_push_we_all(&b, instr->simd_width);
-      else
-         ibc_builder_push_group(&b, instr->simd_group, instr->simd_width);
+      ibc_builder_push_instr_group(&b, instr);
 
       ibc_send_instr *send = ibc_send_instr_create(shader,
                                                    instr->simd_group,
