@@ -242,6 +242,27 @@ ibc_load_payload_logical(ibc_builder *b, unsigned *reg, enum ibc_type type,
    return dest;
 }
 
+static inline void
+ibc_builder_push_nir_dest_group(ibc_builder *b, nir_dest dest)
+{
+   if (nir_dest_is_divergent(dest)) {
+      ibc_builder_push_group(b, 0, b->shader->simd_width);
+   } else {
+      ibc_builder_push_scalar(b);
+   }
+}
+
+static inline void
+ibc_builder_push_nir_intrinsic_dest_group(ibc_builder *b,
+                                          const nir_intrinsic_instr *instr)
+{
+   if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
+      ibc_builder_push_nir_dest_group(b, instr->dest);
+   } else {
+      ibc_builder_push_group(b, 0, b->shader->simd_width);
+   }
+}
+
 bool ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
                                const nir_intrinsic_instr *instr);
 bool ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,

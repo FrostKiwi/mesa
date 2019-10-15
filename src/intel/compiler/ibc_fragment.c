@@ -306,6 +306,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_frag_coord:
+      assert(nir_dest_is_divergent(instr->dest));
       dest = ibc_frag_coord(nti);
       break;
 
@@ -337,6 +338,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_load_sample_id: {
+      assert(nir_dest_is_divergent(instr->dest));
       assert(nir_dest_bit_size(instr->dest) == 32);
       if (!key->multisample_fbo) {
          /* As per GL_ARB_sample_shading specification:
@@ -394,6 +396,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_load_barycentric_centroid:
    case nir_intrinsic_load_barycentric_sample: {
       /* Use the delta_xy values computed from the payload */
+      assert(nir_dest_is_divergent(instr->dest));
       const enum glsl_interp_mode interp_mode =
          (enum glsl_interp_mode) nir_intrinsic_interp_mode(instr);
       enum brw_barycentric_mode bary =
@@ -403,6 +406,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_load_interpolated_input: {
+      assert(nir_dest_is_divergent(instr->dest));
       const unsigned base = nir_intrinsic_base(instr);
       assert(prog_data->urb_setup[base] >= 0);
       const unsigned slot = prog_data->urb_setup[base];
@@ -518,10 +522,13 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       return false;
    }
 
-   if (nir_intrinsic_infos[instr->intrinsic].has_dest)
+   if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
+      ibc_builder_push_nir_dest_group(b, instr->dest);
       ibc_write_nir_dest(nti, &instr->dest, dest);
-   else
+      ibc_builder_pop(b);
+   } else {
       assert(dest.file == IBC_FILE_NONE);
+   }
 
    return true;
 }
