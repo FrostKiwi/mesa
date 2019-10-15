@@ -46,12 +46,7 @@ lower_mul(ibc_builder *b, ibc_alu_instr *alu)
    b->cursor = ibc_after_instr(&alu->instr);
    bool progress = false;
 
-   if (alu->instr.we_all) {
-      ibc_builder_push_we_all(b, alu->instr.simd_width);
-   } else {
-      ibc_builder_push_group(b, alu->instr.simd_group,
-                                alu->instr.simd_width);
-   }
+   ibc_builder_push_instr_group(b, &alu->instr);
 
    if ((alu->dest.type == IBC_TYPE_Q ||
         alu->dest.type == IBC_TYPE_UQ) &&
