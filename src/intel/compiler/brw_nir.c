@@ -1167,8 +1167,8 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
 
    OPT(nir_opt_dce);
 
-   if (OPT(nir_opt_rematerialize_compares))
-      OPT(nir_opt_dce);
+//   if (OPT(nir_opt_rematerialize_compares))
+//      OPT(nir_opt_dce);
 
    /* This is the last pass we run before we start emitting stuff.  It
     * determines when we need to insert boolean resolves on Gen <= 5.  We
