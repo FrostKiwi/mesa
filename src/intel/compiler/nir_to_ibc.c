@@ -151,6 +151,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    ibc_ref dest = { .file = IBC_FILE_NONE, };
 
+   ibc_builder_push_nir_dest_group(b, instr->dest.dest);
+
    switch (instr->op) {
    case nir_op_mov:
    case nir_op_vec2:
@@ -435,6 +437,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    }
 
    ibc_write_nir_dest(nti, &instr->dest.dest, dest);
+
+   ibc_builder_pop(b);
 }
 
 static ibc_ref
@@ -472,6 +476,8 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
       .ref = ibc_imm_ud(ntex->sampler_index),
       .num_comps = 1,
    };
+
+   ibc_builder_push_nir_dest_group(b, ntex->dest);
 
    uint32_t header_bits = 0;
    for (unsigned i = 0; i < ntex->num_srcs; i++) {
@@ -651,6 +657,8 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
    }
 
    ibc_write_nir_dest(nti, &ntex->dest, dest);
+
+   ibc_builder_pop(b);
 }
 
 static enum ibc_predicate
@@ -793,6 +801,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_invocation: {
+      assert(nir_dest_is_divergent(instr->dest));
       ibc_reg *w_tmp_reg =
          ibc_hw_grf_reg_create(b->shader, b->simd_width * 2, 32);
       ibc_ref w_tmp = ibc_typed_ref(w_tmp_reg, IBC_TYPE_UW);
@@ -822,6 +831,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_vote_any: {
+      assert(!nir_dest_is_divergent(instr->dest));
       ibc_ref flag = nti_initialize_flag(b, 0);
       ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ,
                       ibc_nir_src(nti, instr->src[0], IBC_TYPE_FLAG));
@@ -838,12 +848,15 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       ibc_builder_pop(b);
 
       /* Finally, IBC expects 1-bit booleans */
+      ibc_builder_push_scalar(b);
       dest = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
       ibc_MOV_to_flag(b, dest, BRW_CONDITIONAL_NZ, tmp);
+      ibc_builder_pop(b);
       break;
    }
 
    case nir_intrinsic_vote_all: {
+      assert(!nir_dest_is_divergent(instr->dest));
       ibc_ref flag = nti_initialize_flag(b, -1);
       ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ,
                       ibc_nir_src(nti, instr->src[0], IBC_TYPE_FLAG));
@@ -1040,6 +1053,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          ibc_builder_pop(b);
          break;
       } else {
+         ibc_builder_push_nir_dest_group(b, instr->dest);
+
          ibc_intrinsic_src srcs[IBC_TEX_NUM_SRCS] = {
             [IBC_TEX_SRC_SURFACE_BTI] = {
                .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
@@ -1068,11 +1083,15 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                                         IBC_TYPE_UD, num_dest_comps,
                                         srcs, IBC_TEX_NUM_SRCS);
 
+         ibc_builder_pop(b);
+
          nti->prog_data->has_ubo_pull = true;
       }
       break;
 
    case nir_intrinsic_load_ssbo: {
+      ibc_builder_push_nir_dest_group(b, instr->dest);
+
       ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
          [IBC_SURFACE_SRC_SURFACE_BTI] = {
             .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
@@ -1092,6 +1111,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                              dest, -1, instr->num_components,
                              srcs, IBC_SURFACE_NUM_SRCS);
       load->can_reorder = false;
+
+      ibc_builder_pop(b);
       break;
    }
 
@@ -1156,6 +1177,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_bindless_image_atomic_xor:
    case nir_intrinsic_bindless_image_atomic_exchange:
    case nir_intrinsic_bindless_image_atomic_comp_swap: {
+      ibc_builder_push_nir_intrinsic_dest_group(b, instr);
+
       /* Figure out the IBC intrinsic op */
       bool is_bindless;
       enum ibc_intrinsic_op op;
@@ -1280,9 +1303,12 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       image_op->has_side_effects = (op != IBC_INTRINSIC_OP_BTI_TYPED_READ);
 
       if (pred.file != IBC_FILE_NONE) {
+         assert(b->simd_width > 0);
          ibc_instr_set_predicate(&image_op->instr, pred,
                                  IBC_PREDICATE_NORMAL);
       }
+
+      ibc_builder_pop(b);
       break;
    }
 
@@ -1290,10 +1316,13 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       unreachable("Unhandled NIR intrinsic");
    }
 
-   if (nir_intrinsic_infos[instr->intrinsic].has_dest)
+   if (nir_intrinsic_infos[instr->intrinsic].has_dest) {
+      ibc_builder_push_nir_dest_group(b, instr->dest);
       ibc_write_nir_dest(nti, &instr->dest, dest);
-   else
+      ibc_builder_pop(b);
+   } else {
       assert(dest.file == IBC_FILE_NONE);
+   }
 }
 
 static void
@@ -1380,9 +1409,11 @@ nti_emit_ssa_undef(struct nir_to_ibc_state *nti,
 {
    ibc_builder *b = &nti->b;
 
+   ibc_builder_push_scalar(b);
    ibc_write_nir_ssa_def(nti, &nundef->def,
       ibc_builder_new_logical_reg(b, nundef->def.bit_size,
                                   nundef->def.num_components));
+   ibc_builder_pop(b);
 }
 
 static void
@@ -1577,11 +1608,12 @@ ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
    nti->reg_to_reg =
       ralloc_array(nti->mem_ctx, const ibc_reg *, impl->reg_alloc);
    nir_foreach_register(nreg, &impl->registers) {
+      const uint8_t simd_group = nreg->divergent ? nti->b.simd_group : 0;
+      const uint8_t simd_width = nreg->divergent ? nti->b.simd_width : 1;
       ibc_reg *ireg = ibc_logical_reg_create(nti->b.shader,
                                              nreg->bit_size,
                                              nreg->num_components,
-                                             nti->b.simd_group,
-                                             nti->b.simd_width);
+                                             simd_group, simd_width);
       ireg->is_wlr = false;
       nti->reg_to_reg[nreg->index] = ireg;
    }
