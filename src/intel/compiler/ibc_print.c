@@ -380,6 +380,7 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_SIMD_BROADCAST:     return "simd_broadcast";
    case IBC_INTRINSIC_OP_SIMD_ZIP:           return "simd_zip";
    case IBC_INTRINSIC_OP_VEC:                return "vec";
+   case IBC_INTRINSIC_OP_MESSAGE:            return "message";
    case IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO: return "bti_block_load_ubo";
    case IBC_INTRINSIC_OP_LOAD_PAYLOAD:       return "load_payload";
    case IBC_INTRINSIC_OP_PLN:                return "pln";
