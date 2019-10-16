@@ -662,7 +662,7 @@ ibc_CMP(ibc_builder *b, enum ibc_type dest_type,
 static inline ibc_intrinsic_instr *
 ibc_build_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
                     ibc_ref dest, int num_dest_bytes, int num_dest_comps,
-                    ibc_intrinsic_src *srcs, unsigned num_srcs)
+                    const ibc_intrinsic_src *srcs, unsigned num_srcs)
 {
    ibc_intrinsic_instr *intrin =
       ibc_intrinsic_instr_create(b->shader, op, b->simd_group, b->simd_width,
@@ -691,7 +691,7 @@ ibc_build_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
 static inline ibc_ref
 ibc_build_ssa_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
                         enum ibc_type dest_type, unsigned num_dest_comps,
-                        ibc_intrinsic_src *srcs, unsigned num_srcs)
+                        const ibc_intrinsic_src *srcs, unsigned num_srcs)
 {
    ibc_ref dest =
       ibc_builder_new_logical_reg(b, dest_type, num_dest_comps);
