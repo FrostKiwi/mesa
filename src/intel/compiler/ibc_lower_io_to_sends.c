@@ -278,17 +278,6 @@ ref_is_null_or_zero(ibc_ref ref)
    return true;
 }
 
-static ibc_ref
-ibc_comp_ref(ibc_ref ref, unsigned comp)
-{
-   if (comp == 0)
-      return ref;
-
-   assert(ref.file == IBC_FILE_LOGICAL);
-   ref.logical.comp += comp;
-   return ref;
-}
-
 #define MAX_SAMPLER_MESSAGE_SIZE 11
 
 unsigned
