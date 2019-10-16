@@ -101,7 +101,7 @@ ref_is_none_or_reg(ibc_ref *ref,
 static void
 ibc_validate_ref(struct ibc_validate_state *s,
                  const ibc_ref *ref, const ibc_reg_write *write,
-                 unsigned num_bytes, unsigned num_comps,
+                 int num_bytes, int num_comps,
                  unsigned ref_simd_group, unsigned ref_simd_width)
 {
    switch (ref->file) {
@@ -112,7 +112,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
 
    case IBC_FILE_IMM:
       ibc_assert(s, write == NULL);
-      ibc_assert(s, num_comps == 1 && num_bytes == 0);
+      ibc_assert(s, num_comps == 1 && num_bytes == -1);
       return;
 
    case IBC_FILE_HW_GRF:
@@ -183,7 +183,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
       const ibc_logical_reg *lreg = &ref->reg->logical;
       const struct ibc_ref_logical *lref = &ref->logical;
 
-      if (num_comps == 0) {
+      if (num_comps == -1) {
          /* Byte-wise access of logical registers is allowed but it has strict
           * restrictions and assumes the register is tightly packed.
           */
@@ -201,7 +201,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
             ibc_assert(s, ref_simd_width == lreg->simd_width);
          }
       } else {
-         ibc_assert(s, num_bytes == 0);
+         ibc_assert(s, num_bytes == -1);
       }
 
       if (lreg->bit_size < 8)
@@ -248,7 +248,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
       if (write)
          ibc_assert(s, hw_ref->hstride > 0);
 
-      if (num_bytes == 0) {
+      if (num_bytes == -1) {
          num_bytes = hw_ref->hstride * ((ref_simd_width - 1) % hw_ref->width) +
                      hw_ref->vstride * ((ref_simd_width - 1) / hw_ref->width) +
                      ibc_type_byte_size(ref->type);
@@ -259,7 +259,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
             num_bytes += arr_stride * (num_comps - 1);
          }
       } else {
-         ibc_assert(s, num_comps == 0);
+         ibc_assert(s, num_comps == -1);
          ibc_assert(s, hw_ref->vstride == hw_ref->hstride * hw_ref->width);
       }
       ibc_assert(s, num_bytes > 0);
@@ -274,7 +274,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
    }
 
    case IBC_FILE_FLAG:
-      ibc_assert(s, num_comps == 1 && num_bytes == 0);
+      ibc_assert(s, num_comps == 1 && num_bytes == -1);
       if (ref->type == IBC_TYPE_FLAG) {
          if (ref->reg) {
             const ibc_flag_reg *flag = &ref->reg->flag;
@@ -304,7 +304,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
       return;
 
    case IBC_FILE_ACCUM:
-      ibc_assert(s, num_comps == 1 && num_bytes == 0);
+      ibc_assert(s, num_comps == 1 && num_bytes == -1);
       if (ref->reg) {
          ibc_assert(s, ref->type == ref->reg->accum.type);
          ibc_assert(s, ref->accum.chan % ref_simd_width == 0);
@@ -339,7 +339,7 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
       ibc_assert(s, alu->src[i].ref.file != IBC_FILE_NONE);
       ibc_assert(s, alu->src[i].ref.type == IBC_TYPE_FLAG ||
                     ibc_type_base_type(alu->src[i].ref.type) != IBC_TYPE_INVALID);
-      ibc_validate_ref(s, &alu->src[i].ref, NULL, 0, 1,
+      ibc_validate_ref(s, &alu->src[i].ref, NULL, -1, 1,
                        alu->instr.simd_group,
                        alu->instr.simd_width);
       ibc_assert(s, (alu->src[i].mod & ~alu_info->supported_src_mods) == 0);
@@ -362,14 +362,14 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
 
    if (ibc_alu_op_infos[alu->op].props & IBC_ALU_OP_PROP_READS_ACCUM) {
       ibc_assert(s, alu->accum.file == IBC_FILE_ACCUM);
-      ibc_validate_ref(s, &alu->accum, NULL, 0, 1,
+      ibc_validate_ref(s, &alu->accum, NULL, -1, 1,
                        alu->instr.simd_group,
                        alu->instr.simd_width);
    }
 
    if (alu->accum_wr_en) {
       ibc_assert(s, alu->accum.file == IBC_FILE_ACCUM);
-      ibc_validate_ref(s, &alu->accum, &alu->accum_write, 0, 1,
+      ibc_validate_ref(s, &alu->accum, &alu->accum_write, -1, 1,
                        alu->instr.simd_group,
                        alu->instr.simd_width);
    }
@@ -382,7 +382,7 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
          ibc_assert(s, ibc_predicate_simd_width(alu->instr.predicate) == 1);
          ibc_assert(s, alu->instr.flag.file != IBC_FILE_NONE);
          ibc_assert(s, alu->instr.flag.type == IBC_TYPE_FLAG);
-         ibc_validate_ref(s, &alu->instr.flag, &alu->cmod_write, 0, 1,
+         ibc_validate_ref(s, &alu->instr.flag, &alu->cmod_write, -1, 1,
                           alu->instr.simd_group,
                           alu->instr.simd_width);
       }
@@ -391,10 +391,14 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
    ibc_assert(s, !alu->saturate ||
                  ibc_type_base_type(alu->dest.type) == IBC_TYPE_FLOAT);
 
-   ibc_validate_ref(s, &alu->dest, &alu->dest_write,
-                    0, alu->dest.file == IBC_FILE_NONE ? 0 : 1,
-                    alu->instr.simd_group,
-                    alu->instr.simd_width);
+   if (alu->dest.file == IBC_FILE_NONE) {
+      ibc_validate_null_ref(s, &alu->dest);
+   } else {
+      ibc_validate_ref(s, &alu->dest, &alu->dest_write,
+                       -1, 1,
+                       alu->instr.simd_group,
+                       alu->instr.simd_width);
+   }
 }
 
 static void
@@ -413,14 +417,14 @@ ibc_validate_send_instr(struct ibc_validate_state *s,
       break;
 
    case IBC_FILE_IMM:
-      ibc_validate_ref(s, &send->desc, NULL, 0, 1,
+      ibc_validate_ref(s, &send->desc, NULL, -1, 1,
                        0 /* simd_group */, 1 /* simd_width */);
       break;
 
    default:
       ibc_assert(s, send->desc.type == IBC_TYPE_UD);
       ibc_validate_ref(s, &send->desc, NULL,
-                       ibc_type_byte_size(IBC_TYPE_UD), 0,
+                       ibc_type_byte_size(IBC_TYPE_UD), -1,
                        0 /* simd_group */, 1 /* simd_width */);
       break;
    }
@@ -431,26 +435,26 @@ ibc_validate_send_instr(struct ibc_validate_state *s,
       break;
 
    case IBC_FILE_IMM:
-      ibc_validate_ref(s, &send->ex_desc, NULL, 0, 1,
+      ibc_validate_ref(s, &send->ex_desc, NULL, -1, 1,
                        0 /* simd_group */, 1 /* simd_width */);
       break;
 
    default:
       ibc_assert(s, send->ex_desc.type == IBC_TYPE_UD);
       ibc_validate_ref(s, &send->ex_desc, NULL,
-                       ibc_type_byte_size(IBC_TYPE_UD), 0,
+                       ibc_type_byte_size(IBC_TYPE_UD), -1,
                        0 /* simd_group */, 1 /* simd_width */);
    }
 
    ibc_assert(s, send->mlen > 0);
    ibc_validate_ref(s, &send->payload[0], NULL,
-                    send->mlen * 32, 0,
+                    send->mlen * 32, -1,
                     send->instr.simd_group,
                     send->instr.simd_width);
 
    if (send->ex_mlen > 0) {
       ibc_validate_ref(s, &send->payload[1], NULL,
-                       send->ex_mlen * 32, 0,
+                       send->ex_mlen * 32, -1,
                        send->instr.simd_group,
                        send->instr.simd_width);
    } else {
@@ -459,7 +463,7 @@ ibc_validate_send_instr(struct ibc_validate_state *s,
 
    if (send->rlen > 0) {
       ibc_validate_ref(s, &send->dest, &send->dest_write,
-                       send->rlen * 32, 0,
+                       send->rlen * 32, -1,
                        send->instr.simd_group,
                        send->instr.simd_width);
    } else {
@@ -475,16 +479,24 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
       ibc_assert(s, !intrin->can_reorder);
 
    for (unsigned i = 0; i < intrin->num_srcs; i++) {
-      ibc_validate_ref(s, &intrin->src[i].ref, NULL,
-                       0, intrin->src[i].num_comps,
-                       intrin->src[i].simd_group,
-                       intrin->src[i].simd_width);
+      if (intrin->src[i].ref.file == IBC_FILE_NONE) {
+         ibc_validate_null_ref(s, &intrin->src[i].ref);
+      } else {
+         ibc_validate_ref(s, &intrin->src[i].ref, NULL,
+                          -1, intrin->src[i].num_comps,
+                          intrin->src[i].simd_group,
+                          intrin->src[i].simd_width);
+      }
    }
 
-   ibc_validate_ref(s, &intrin->dest, &intrin->dest_write,
-                    0, intrin->num_dest_comps,
-                    intrin->instr.simd_group,
-                    intrin->instr.simd_width);
+   if (intrin->dest.file == IBC_FILE_NONE) {
+      ibc_validate_null_ref(s, &intrin->dest);
+   } else {
+      ibc_validate_ref(s, &intrin->dest, &intrin->dest_write,
+                       -1, intrin->num_dest_comps,
+                       intrin->instr.simd_group,
+                       intrin->instr.simd_width);
+   }
 
    switch (intrin->op) {
    case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL:
@@ -749,7 +761,7 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
 
       ibc_assert(s, instr->flag.file != IBC_FILE_NONE);
       ibc_assert(s, instr->flag.type == IBC_TYPE_FLAG);
-      ibc_validate_ref(s, &instr->flag, NULL, 0, 1,
+      ibc_validate_ref(s, &instr->flag, NULL, -1, 1,
                        ref_simd_group, ref_simd_width);
    } else if (!ibc_instr_writes_flag(instr)) {
       ibc_validate_null_ref(s, &instr->flag);
