@@ -319,12 +319,16 @@ load_vector_if_needed(unsigned chunk,
 
    assert(vector.file == IBC_FILE_LOGICAL);
    if (flag->logical.simd_width < FLAG_CHUNK_BITS) {
+      assert(flag->logical.simd_width == 1);
       assert(start_chunk == 0 && num_chunks == 1);
       if (!(state->valid[chunk] & FLAG_REP_VECTOR)) {
-         ibc_builder_push_we_all(b, flag->logical.simd_width);
-         ibc_build_alu(b, IBC_ALU_OP_MOV, ibc_null(vector.type),
-                       ibc_flag_ref(chunk * FLAG_CHUNK_BITS),
-                       BRW_CONDITIONAL_NZ, &vector, 1);
+         ibc_builder_push_scalar(b);
+         ibc_ref zero = ibc_MOV(b, IBC_TYPE_W, ibc_imm_w(0));
+         ibc_alu_instr *sel =
+            ibc_build_alu2(b, IBC_ALU_OP_SEL, vector, zero, ibc_imm_w(-1));
+         ibc_instr_set_predicate(&sel->instr,
+                                 ibc_flag_ref(chunk * FLAG_CHUNK_BITS),
+                                 IBC_PREDICATE_NOT);
          ibc_builder_pop(b);
       }
    } else {
@@ -477,9 +481,9 @@ load_flag_if_needed(unsigned chunk, unsigned start_chunk, unsigned num_chunks,
 
       if (flag_reg_num_bits(flag) < FLAG_CHUNK_BITS) {
          assert(start_chunk == 0 && num_chunks == 1);
-         assert(flag_reg_num_chunks(flag) == 1);
+         assert(flag_reg_num_bits(flag) == 1);
          if (!(state->valid[chunk] & FLAG_REP_FLAG)) {
-            ibc_builder_push_we_all(b, flag_reg_num_bits(flag));
+            ibc_builder_push_scalar(b);
             ibc_build_alu(b, IBC_ALU_OP_MOV, ibc_null(vector.type),
                           ibc_flag_ref(chunk * FLAG_CHUNK_BITS),
                           BRW_CONDITIONAL_NZ, &vector, 1);
@@ -680,7 +684,6 @@ flag_ref_chunk_range(const ibc_ref *ref,
          assert(flag_reg_num_bits(ref->reg) == 1);
          if (ref->file == IBC_FILE_LOGICAL)
             assert(ref->reg->logical.simd_group == 0);
-         assert(simd_group == 0 && simd_width == 1);
          *start_chunk = 0;
          *num_chunks = 1;
       } else {
@@ -691,10 +694,9 @@ flag_ref_chunk_range(const ibc_ref *ref,
             assert(ref->file == IBC_FILE_FLAG);
             start_bit = ref->flag.bit;
          }
-         assert(start_bit % FLAG_CHUNK_BITS == 0);
-         assert(simd_width % FLAG_CHUNK_BITS == 0);
          *start_chunk = start_bit / FLAG_CHUNK_BITS;
-         *num_chunks = simd_width / FLAG_CHUNK_BITS;
+         unsigned end_chunk = (start_bit + simd_width - 1) / FLAG_CHUNK_BITS;
+         *num_chunks = end_chunk - *start_chunk + 1;
       }
    } else {
       assert(ref->file == IBC_FILE_FLAG);
@@ -868,14 +870,31 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
       .mem_ctx = ralloc_context(NULL),
    };
 
+   ibc_builder_init(&state.builder, shader);
+   ibc_builder *b = &state.builder;
+
+   ibc_foreach_instr(instr, shader) {
+      if (instr->predicate != IBC_PREDICATE_NONE &&
+          instr->flag.file == IBC_FILE_LOGICAL &&
+          instr->flag.reg->logical.simd_width == 1 &&
+          instr->simd_width > 1) {
+         /* In this case, we have to splat the flag value out */
+         b->cursor = ibc_before_instr(instr);
+         ibc_builder_push_instr_group(b, instr);
+
+         ibc_ref splat = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
+         ibc_MOV_to_flag(b, splat, BRW_CONDITIONAL_NZ, instr->flag);
+         ibc_instr_set_ref(instr, &instr->flag, splat);
+
+         ibc_builder_pop(b);
+      }
+   }
+
    state.live = ibc_compute_live_intervals(shader, is_flag_reg, state.mem_ctx);
    if (state.live->num_regs == 0) {
       ralloc_free(state.mem_ctx);
       return false;
    }
-
-   ibc_builder_init(&state.builder, shader);
-   ibc_builder *b = &state.builder;
 
    /* Figure out what registers are read as a flag register */
    state.regs = rzalloc_array(state.mem_ctx, struct flag_reg_state,
