@@ -63,7 +63,7 @@ ibc_BTI_BLOCK_LOAD_UBO(ibc_builder *b, ibc_ref hw_grf, ibc_ref bti,
 
    ibc_builder_push_scalar(b);
    ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO,
-                       data, block_num_comps, srcs, 3);
+                       data, -1, block_num_comps, srcs, 3);
    ibc_builder_pop(b);
 
    return data;
@@ -1076,7 +1076,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                                          instr->num_components);
       ibc_intrinsic_instr *load =
          ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
-                             dest, instr->num_components,
+                             dest, -1, instr->num_components,
                              srcs, IBC_SURFACE_NUM_SRCS);
       load->can_reorder = false;
       break;
@@ -1107,7 +1107,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       ibc_intrinsic_instr *store =
          ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
-                             ibc_null(IBC_TYPE_UD), 0,
+                             ibc_null(IBC_TYPE_UD), 0, 0,
                              srcs, IBC_SURFACE_NUM_SRCS);
       store->can_reorder = false;
       store->has_side_effects = true;
@@ -1261,7 +1261,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       }
 
       ibc_intrinsic_instr *image_op =
-         ibc_build_intrinsic(b, op, dest, num_dest_comps,
+         ibc_build_intrinsic(b, op, dest, -1, num_dest_comps,
                              srcs, IBC_SURFACE_NUM_SRCS);
       image_op->can_reorder = false;
       image_op->has_side_effects = (op != IBC_INTRINSIC_OP_BTI_TYPED_READ);

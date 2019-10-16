@@ -276,6 +276,7 @@ hash_intrinsic_instr(uint32_t hash, const ibc_intrinsic_instr *intrin,
    /* Ignore can_reorder and has_side_effects */
 
    hash = hash_ref(hash, &intrin->dest, base_reg);
+   hash = HASH(hash, intrin->num_dest_bytes);
    hash = HASH(hash, intrin->num_dest_comps);
 
    hash = HASH(hash, intrin->num_srcs);
@@ -310,9 +311,10 @@ intrinsic_instrs_equal(const ibc_intrinsic_instr *intrin_a,
        intrin_b->has_side_effects)
       return false;
 
-   if (!refs_equal(&intrin_a->dest, &intrin_b->dest,
-                   base_reg_a, base_reg_b) ||
-       intrin_a->num_dest_comps != intrin_b->num_dest_comps)
+   if (intrin_a->num_dest_bytes != intrin_b->num_dest_bytes ||
+       intrin_a->num_dest_comps != intrin_b->num_dest_comps ||
+       !refs_equal(&intrin_a->dest, &intrin_b->dest,
+                   base_reg_a, base_reg_b))
       return false;
 
    if (intrin_a->num_srcs != intrin_b->num_srcs)

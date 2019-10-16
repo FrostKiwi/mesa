@@ -290,7 +290,7 @@ split_load_payloads(ibc_shader *shader)
             num_comps = intrin->num_dest_comps - c;
 
          split_srcs[0].num_comps = num_comps;
-         ibc_build_intrinsic(&b, intrin->op, split_dest, num_comps,
+         ibc_build_intrinsic(&b, intrin->op, split_dest, -1, num_comps,
                              split_srcs, intrin->num_srcs);
 
          split_dest.hw_grf.byte += 32;
