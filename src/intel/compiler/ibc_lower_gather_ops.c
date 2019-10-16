@@ -139,6 +139,40 @@ ibc_lower_gather_ops(ibc_shader *shader)
          break;
       }
 
+      case IBC_INTRINSIC_OP_MESSAGE: {
+         assert(intrin->dest.file == IBC_FILE_HW_GRF);
+
+         ibc_ref dest = intrin->dest;
+         for (unsigned i = 0; i < intrin->num_srcs; i++) {
+            assert(intrin->src[i].simd_width == 1 ||
+                   intrin->src[i].num_comps == 1);
+            if (intrin->src[i].simd_width == 1) {
+               ibc_builder_push_we_all(&b, intrin->src[i].num_comps);
+            } else {
+               assert(instr->simd_group == intrin->src[i].simd_group);
+               assert(instr->simd_width == intrin->src[i].simd_width);
+               ibc_builder_push_instr_group(&b, instr);
+            }
+
+            dest.type = intrin->src[i].ref.type;
+            dest.hw_grf.vstride = 8 * ibc_type_byte_size(dest.type);
+            dest.hw_grf.width = 8;
+            dest.hw_grf.hstride = ibc_type_byte_size(dest.type);
+
+            if (intrin->src[i].ref.file != IBC_FILE_NONE)
+               ibc_MOV_raw_vec_to(&b, dest, intrin->src[i].ref, 1);
+
+            unsigned src_bytes = ibc_type_byte_size(intrin->src[i].ref.type) *
+                                 intrin->src[i].simd_width *
+                                 intrin->src[i].num_comps;
+            dest.hw_grf.byte += ALIGN(src_bytes, REG_SIZE);
+
+            ibc_builder_pop(&b);
+         }
+         assert(dest.hw_grf.byte == intrin->num_dest_bytes);
+         break;
+      }
+
       default:
          continue;
       }
