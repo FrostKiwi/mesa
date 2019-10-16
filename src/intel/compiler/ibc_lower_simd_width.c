@@ -243,6 +243,8 @@ ibc_lower_simd_width(ibc_shader *shader)
       const unsigned num_dest_comps =
          instr->type == IBC_INSTR_TYPE_ALU ? 1 :
          ibc_instr_as_intrinsic(instr)->num_dest_comps;
+      if (instr->type == IBC_INSTR_TYPE_INTRINSIC)
+         assert(ibc_instr_as_intrinsic(instr)->num_dest_bytes <= 0);
 
       /* 4 == 32 (max simd width) / 8 (min simd width) */
       ibc_ref split_dests[4];
@@ -290,6 +292,7 @@ ibc_lower_simd_width(ibc_shader *shader)
 
          zip->dest = *dest;
          zip->dest.type = ibc_type_bit_type(zip->dest.type);
+         zip->num_dest_bytes = -1;
          zip->num_dest_comps = num_dest_comps;
          ibc_builder_insert_instr(&b, &zip->instr);
 
@@ -400,6 +403,7 @@ ibc_lower_simd_width(ibc_shader *shader)
             ibc_ref_simd_slice(&split->instr.flag, split_simd_rel_group);
 
             split->dest = split_dests[i];
+            split->num_dest_bytes = intrin->num_dest_bytes;
             split->num_dest_comps = intrin->num_dest_comps;
             ibc_builder_insert_instr(&b, &split->instr);
             fixup_split_write_link(&intrin->dest_write, &intrin->dest,
