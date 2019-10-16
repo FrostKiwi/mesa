@@ -841,6 +841,45 @@ ibc_VEC2(ibc_builder *b, ibc_ref src0, ibc_ref src1)
 }
 
 static inline ibc_ref
+ibc_MESSAGE(ibc_builder *b, const ibc_intrinsic_src *src_in,
+            unsigned num_srcs, unsigned *mlen_out)
+{
+   ibc_intrinsic_src src[11];
+   assert(num_srcs <= ARRAY_SIZE(src));
+
+   unsigned num_bytes = 0;
+   for (unsigned i = 0; i < num_srcs; i++) {
+      src[i] = src_in[i];
+
+      if (src[i].simd_width == 0) {
+         src[i].simd_group = b->simd_group;
+         src[i].simd_width = b->simd_width;
+      }
+
+      if (src[i].num_comps == 0)
+         src[i].num_comps = 1;
+
+      assert(src[i].simd_width == b->simd_width || src[i].simd_width == 1);
+      assert(src[i].simd_width == 1 || src[i].num_comps == 1);
+      unsigned src_bytes = ibc_type_byte_size(src[i].ref.type) *
+                           src[i].simd_width * src[i].num_comps;
+      num_bytes += ALIGN(src_bytes, REG_SIZE);
+   }
+
+   ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, num_bytes, REG_SIZE);
+
+   ibc_build_intrinsic(b, IBC_INTRINSIC_OP_MESSAGE,
+                       ibc_typed_ref(grf, IBC_TYPE_32_BIT),
+                       num_bytes, -1, src, num_srcs);
+
+   assert(num_bytes % REG_SIZE == 0);
+   if (mlen_out)
+      *mlen_out = num_bytes / REG_SIZE;
+
+   return ibc_typed_ref(grf, IBC_TYPE_32_BIT);
+}
+
+static inline ibc_ref
 ibc_PLN(ibc_builder *b, ibc_ref vert, ibc_ref bary)
 {
    assert(vert.file == IBC_FILE_LOGICAL);
