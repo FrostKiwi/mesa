@@ -288,8 +288,8 @@ ibc_instr_foreach_write(ibc_instr *instr, ibc_ref_cb cb, void *state)
 
    case IBC_INSTR_TYPE_INTRINSIC: {
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-      if (intrin->num_dest_comps > 0 &&
-          !cb(&intrin->dest, -1, intrin->num_dest_comps,
+      if ((intrin->num_dest_comps > 0 || intrin->num_dest_bytes > 0) &&
+          !cb(&intrin->dest, intrin->num_dest_bytes, intrin->num_dest_comps,
               instr->simd_group, instr->simd_width, state))
          return false;
 

@@ -650,7 +650,7 @@ ibc_CMP(ibc_builder *b, enum ibc_type dest_type,
 
 static inline ibc_intrinsic_instr *
 ibc_build_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
-                    ibc_ref dest, unsigned num_dest_comps,
+                    ibc_ref dest, int num_dest_bytes, int num_dest_comps,
                     ibc_intrinsic_src *srcs, unsigned num_srcs)
 {
    ibc_intrinsic_instr *intrin =
@@ -670,6 +670,7 @@ ibc_build_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
    }
 
    intrin->dest = dest;
+   intrin->num_dest_bytes = num_dest_bytes;
    intrin->num_dest_comps = num_dest_comps;
    ibc_builder_insert_instr(b, &intrin->instr);
 
@@ -684,7 +685,7 @@ ibc_build_ssa_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
    ibc_ref dest =
       ibc_builder_new_logical_reg(b, dest_type, num_dest_comps);
 
-   ibc_build_intrinsic(b, op, dest, num_dest_comps, srcs, num_srcs);
+   ibc_build_intrinsic(b, op, dest, -1, num_dest_comps, srcs, num_srcs);
 
    return dest;
 }
