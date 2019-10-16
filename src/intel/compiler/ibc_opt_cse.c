@@ -299,6 +299,7 @@ intrinsic_instrs_equal(const ibc_intrinsic_instr *intrin_a,
       return false;
 
    if (intrin_a->op != intrin_b->op)
+      return false;
 
    /* If one of the instructions can't be re-ordered or has side-effects, we
     * can't combine them so compare unequal.
