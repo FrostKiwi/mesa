@@ -123,7 +123,7 @@ ibc_lower_gather_ops(ibc_shader *shader)
          }
          break;
 
-      case IBC_INTRINSIC_OP_VEC:
+      case IBC_INTRINSIC_OP_VEC: {
          ibc_builder_push_instr_group(&b, instr);
 
          assert(intrin->dest.file == IBC_FILE_LOGICAL);
@@ -137,6 +137,7 @@ ibc_lower_gather_ops(ibc_shader *shader)
 
          ibc_builder_pop(&b);
          break;
+      }
 
       default:
          continue;
