@@ -807,29 +807,37 @@ ibc_SIMD_ZIP2(ibc_builder *b, ibc_ref src0, ibc_ref src1,
    return ibc_SIMD_ZIP(b, srcs, 2, num_comps);
 }
 
-static inline ibc_ref
-ibc_VEC(ibc_builder *b, ibc_ref *srcs, unsigned num_comps)
+static inline void
+ibc_VEC_to(ibc_builder *b, ibc_ref dest, ibc_ref *srcs, unsigned num_comps)
 {
    assert(num_comps > 0);
-   if (num_comps == 1)
-      return ibc_MOV_raw(b, srcs[0]);
+   if (num_comps == 1) {
+      ibc_MOV_raw_vec_to(b, dest, srcs[0], 1);
+      return;
+   }
 
    ibc_intrinsic_src vec_srcs[8];
    assert(num_comps <= ARRAY_SIZE(vec_srcs));
 
    for (unsigned i = 0; i < num_comps; i++) {
-      assert(srcs[i].type == srcs[0].type);
+      assert(srcs[i].type == dest.type);
       vec_srcs[i] = (ibc_intrinsic_src) {
          .ref = srcs[i],
          .num_comps = 1,
       };
       vec_srcs[i].ref.type = ibc_type_bit_size(srcs[0].type);
    }
+   dest.type = ibc_type_bit_size(dest.type);
 
-   ibc_ref dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_VEC,
-                                          vec_srcs[0].ref.type, num_comps,
-                                          vec_srcs, num_comps);
-   dest.type = srcs[0].type;
+   ibc_build_intrinsic(b, IBC_INTRINSIC_OP_VEC, dest,
+                       -1, num_comps, vec_srcs, num_comps);
+}
+
+static inline ibc_ref
+ibc_VEC(ibc_builder *b, ibc_ref *srcs, unsigned num_comps)
+{
+   ibc_ref dest = ibc_builder_new_logical_reg(b, srcs[0].type, num_comps);
+   ibc_VEC_to(b, dest, srcs, num_comps);
    return dest;
 }
 
