@@ -26,14 +26,6 @@
 
 #include "brw_eu.h"
 
-static ibc_ref
-move_to_payload(ibc_builder *b, ibc_ref src, unsigned num_comps)
-{
-   ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
-   ibc_MOV_raw_vec_to(b, dest, src, num_comps);
-   return dest;
-}
-
 static void
 lower_bti_block_load_ubo(ibc_builder *b, ibc_send_instr *send,
                          const ibc_intrinsic_instr *read)
@@ -105,19 +97,30 @@ lower_surface_access(ibc_builder *b, ibc_send_instr *send,
    assert(intrin->src[IBC_SURFACE_SRC_DATA1].num_comps == 0 ||
           intrin->src[IBC_SURFACE_SRC_DATA1].num_comps == num_data_comps);
 
+   ibc_intrinsic_src src[8] = {};
+   unsigned num_srcs = 0;
+
    /* Gen8 and earlier require headers for typed surface opcodes */
    assert(devinfo->gen >= 9);
 
-   send->payload[0] = move_to_payload(b, address, num_address_comps);
-   send->mlen = num_address_comps * intrin->instr.simd_width / 8;
+   for (unsigned i = 0; i < num_address_comps; i++)
+      src[num_srcs++].ref = ibc_comp_ref(address, i);
+
+   if (data0.file != IBC_FILE_NONE) {
+      for (unsigned i = 0; i < num_data_comps; i++)
+         src[num_srcs++].ref = ibc_comp_ref(data0, i);
+   }
+
    if (data1.file != IBC_FILE_NONE) {
       assert(num_data_comps == 1);
-      send->payload[1] = ibc_VEC2(b, data0, data1);
-      send->ex_mlen = 2 * (intrin->instr.simd_width / 8);
-   } else if (data0.file != IBC_FILE_NONE) {
-      send->payload[1] = move_to_payload(b, data0, num_data_comps);
-      send->ex_mlen = num_data_comps * (intrin->instr.simd_width / 8);
+      src[num_srcs++].ref = data1;
    }
+
+   assert(num_srcs < ARRAY_SIZE(src));
+
+   unsigned mlen;
+   send->payload[0] = ibc_MESSAGE(b, src, num_srcs, &mlen);
+   send->mlen = mlen;
 
    uint32_t desc;
    switch (intrin->op) {
@@ -361,7 +364,7 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
    if (header_bits_r.file != IBC_FILE_NONE)
       header_bits = ibc_ref_as_uint(header_bits_r);
 
-   ibc_ref srcs[MAX_SAMPLER_MESSAGE_SIZE] = {};
+   ibc_intrinsic_src src[MAX_SAMPLER_MESSAGE_SIZE] = {};
    unsigned num_srcs = 0;
 
    if (intrin->op == IBC_INTRINSIC_OP_TG4 ||
@@ -437,26 +440,30 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
       }
       ibc_builder_pop(b);
 
-      srcs[num_srcs++] = header;
+      src[num_srcs++] = (ibc_intrinsic_src) {
+         .ref = ibc_typed_ref(header_reg, IBC_TYPE_UD),
+         .simd_width = 1,
+         .num_comps = 8,
+      };
       send->has_header = true;
    }
 
    if (shadow_c.file != IBC_FILE_NONE)
-      srcs[num_srcs++] = shadow_c;
+      src[num_srcs++].ref = shadow_c;
 
    bool coord_done = false;
    bool zero_lod = false;
 
    switch (intrin->op) {
    case IBC_INTRINSIC_OP_TXB:
-      srcs[num_srcs++] = lod;
+      src[num_srcs++].ref = lod;
       break;
 
    case IBC_INTRINSIC_OP_TXL:
       if (devinfo->gen >= 9 && ref_is_null_or_zero(lod)) {
          zero_lod = true;
       } else {
-         srcs[num_srcs++] = lod;
+         src[num_srcs++].ref = lod;
       }
       break;
 
@@ -467,63 +474,63 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
        * [hdr], [ref], x, dPdx.x, dPdy.x, y, dPdx.y, dPdy.y, z, dPdx.z, dPdy.z
        */
       for (unsigned i = 0; i < num_coord_comps; i++) {
-         srcs[num_srcs++] = ibc_comp_ref(coord, i);
+         src[num_srcs++].ref = ibc_comp_ref(coord, i);
 
          /* For cube map array, the coordinate is (u,v,r,ai) but there are
           * only derivatives for (u, v, r).
           */
          if (i < num_grad_comps) {
-            srcs[num_srcs++] = ibc_comp_ref(ddx, i);
-            srcs[num_srcs++] = ibc_comp_ref(ddy, i);
+            src[num_srcs++].ref = ibc_comp_ref(ddx, i);
+            src[num_srcs++].ref = ibc_comp_ref(ddy, i);
          }
       }
       coord_done = true;
       break;
 
    case IBC_INTRINSIC_OP_TXS:
-      srcs[num_srcs++] = lod;
+      src[num_srcs++].ref = lod;
       break;
 
    case IBC_INTRINSIC_OP_TXF:
       /* Unfortunately, the parameters for LD are intermixed: u, lod, v, r.
        * On Gen9 they are u, v, lod, r
        */
-      srcs[num_srcs++] = ibc_comp_ref(coord, 0);
+      src[num_srcs++].ref = ibc_comp_ref(coord, 0);
 
       if (devinfo->gen >= 9) {
-         srcs[num_srcs++] = num_coord_comps >= 2 ? ibc_comp_ref(coord, 1) :
+         src[num_srcs++].ref = num_coord_comps >= 2 ? ibc_comp_ref(coord, 1) :
                                                   ibc_imm_ud(0);
       }
 
       if (devinfo->gen >= 9 && ref_is_null_or_zero(lod)) {
          zero_lod = true;
       } else {
-         srcs[num_srcs++] = lod;
+         src[num_srcs++].ref = lod;
       }
 
       for (unsigned i = devinfo->gen >= 9 ? 2 : 1; i < num_coord_comps; i++)
-         srcs[num_srcs++] = ibc_comp_ref(coord, i);
+         src[num_srcs++].ref = ibc_comp_ref(coord, i);
 
       coord_done = true;
       break;
 
    case IBC_INTRINSIC_OP_TXF_MS:
-      srcs[num_srcs++] = sample_index;
-      srcs[num_srcs++] = ibc_comp_ref(mcs, 0);
+      src[num_srcs++].ref = sample_index;
+      src[num_srcs++].ref = ibc_comp_ref(mcs, 0);
       if (devinfo->gen >= 9)
-         srcs[num_srcs++] = ibc_comp_ref(mcs, 1);
+         src[num_srcs++].ref = ibc_comp_ref(mcs, 1);
       break;
 
    case IBC_INTRINSIC_OP_TG4_OFFSET:
       /* More crazy intermixing */
       for (unsigned i = 0; i < 2; i++) /* u, v */
-         srcs[num_srcs++] = ibc_comp_ref(coord, i);
+         src[num_srcs++].ref = ibc_comp_ref(coord, i);
 
       for (unsigned i = 0; i < 2; i++) /* offu, offv */
-         srcs[num_srcs++] = ibc_comp_ref(tg4_offset, i);
+         src[num_srcs++].ref = ibc_comp_ref(tg4_offset, i);
 
       if (num_coord_comps == 3) /* r if present */
-         srcs[num_srcs++] = ibc_comp_ref(coord, 2);
+         src[num_srcs++].ref = ibc_comp_ref(coord, 2);
 
       coord_done = true;
       break;
@@ -534,60 +541,27 @@ lower_tex(ibc_builder *b, ibc_send_instr *send,
    /* Set up the coordinate (except for cases where it was done above) */
    if (!coord_done) {
       for (unsigned i = 0; i < num_coord_comps; i++)
-         srcs[num_srcs++] = ibc_comp_ref(coord, i);
+         src[num_srcs++].ref = ibc_comp_ref(coord, i);
    }
 
    if (min_lod.file != IBC_FILE_NONE) {
       /* Account for all of the missing coordinate sources */
-      num_srcs += 4 - num_coord_comps;
-      if (intrin->op == IBC_INTRINSIC_OP_TXD)
-         num_srcs += (3 - num_grad_comps) * 2;
+      for (unsigned i = 0; i < 4 - num_coord_comps; i++)
+         src[num_srcs++].ref = ibc_null(coord.type);
 
-      srcs[num_srcs++] = min_lod;
-   }
-
-   ibc_reg *message;
-   if (send->has_header) {
-      for (unsigned i = 0; i < num_srcs; i++) {
-         if (i == 0 && send->has_header) {
-            assert(srcs[i].file == IBC_FILE_HW_GRF);
-            send->mlen++;
-         } else {
-            send->mlen += b->simd_width / 8;
+      if (intrin->op == IBC_INTRINSIC_OP_TXD) {
+         for (unsigned i = 0; i < (3 - num_grad_comps); i++) {
+            src[num_srcs++].ref = ibc_null(ddx.type);
+            src[num_srcs++].ref = ibc_null(ddy.type);
          }
       }
 
-      message =
-         ibc_hw_grf_reg_create(b->shader, send->mlen * REG_SIZE, REG_SIZE);
-      ibc_ref msg_dest = ibc_typed_ref(message, IBC_TYPE_UD);
-      for (unsigned i = 0; i < num_srcs; i++) {
-         msg_dest.type = srcs[i].type;
-         if (i == 0 && send->has_header) {
-            ibc_builder_push_we_all(b, 8);
-            ibc_MOV_to(b, msg_dest, srcs[i]);
-            ibc_builder_pop(b);
-            msg_dest.hw_grf.byte += REG_SIZE;
-         } else if (srcs[i].file == IBC_FILE_NONE) {
-            /* Just advance it */
-            msg_dest.hw_grf.byte += b->simd_width * sizeof(uint32_t);
-         } else {
-            ibc_MOV_to(b, msg_dest, srcs[i]);
-            msg_dest.hw_grf.byte += b->simd_width * sizeof(uint32_t);
-         }
-      }
-   } else {
-      message = ibc_logical_reg_create(b->shader, 32, num_srcs,
-                                       b->simd_group, b->simd_width);
-      ibc_ref msg_dest = ibc_typed_ref(message, IBC_TYPE_UD);
-      for (unsigned i = 0; i < num_srcs; i++) {
-         msg_dest.type = srcs[i].type;
-         if (srcs[i].file != IBC_FILE_NONE)
-            ibc_MOV_to(b, msg_dest, srcs[i]);
-         send->mlen += b->simd_width / 8;
-         msg_dest.logical.comp++;
-      }
+      src[num_srcs++].ref = min_lod;
    }
-   send->payload[0] = ibc_typed_ref(message, IBC_TYPE_32_BIT);
+
+   unsigned mlen;
+   send->payload[0] = ibc_MESSAGE(b, src, num_srcs, &mlen);
+   send->mlen = mlen;
 
    send->dest = intrin->dest;
    send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
