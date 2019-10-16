@@ -999,7 +999,8 @@ typedef struct {
 
    ibc_ref dest;
    ibc_reg_write dest_write;
-   unsigned num_dest_comps;
+   int num_dest_bytes;
+   int num_dest_comps;
 
    unsigned num_srcs;
    ibc_intrinsic_src src[0];

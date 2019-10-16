@@ -493,7 +493,8 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
       ibc_validate_null_ref(s, &intrin->dest);
    } else {
       ibc_validate_ref(s, &intrin->dest, &intrin->dest_write,
-                       -1, intrin->num_dest_comps,
+                       intrin->num_dest_bytes,
+                       intrin->num_dest_comps,
                        intrin->instr.simd_group,
                        intrin->instr.simd_width);
    }

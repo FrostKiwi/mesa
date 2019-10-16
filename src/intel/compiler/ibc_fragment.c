@@ -569,7 +569,7 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
 
    ibc_intrinsic_instr *write =
       ibc_build_intrinsic(b, IBC_INTRINSIC_OP_FB_WRITE,
-                          ibc_null(IBC_TYPE_UD), 0,
+                          ibc_null(IBC_TYPE_UD), 0, 0,
                           srcs, IBC_FB_WRITE_NUM_SRCS);
    write->can_reorder = false;
    write->has_side_effects = true;

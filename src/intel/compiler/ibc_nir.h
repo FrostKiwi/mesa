@@ -214,7 +214,7 @@ ibc_load_payload(ibc_builder *b, ibc_ref dest,
                  ibc_ref src, unsigned num_comps)
 {
    return ibc_build_intrinsic(b, IBC_INTRINSIC_OP_LOAD_PAYLOAD,
-                              dest, num_comps,
+                              dest, -1, num_comps,
                               &(ibc_intrinsic_src) { .ref = src }, 1);
 }
 
