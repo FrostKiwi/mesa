@@ -254,6 +254,17 @@ ibc_null(enum ibc_type type)
 }
 
 static inline ibc_ref
+ibc_comp_ref(ibc_ref ref, unsigned comp)
+{
+   if (comp == 0)
+      return ref;
+
+   assert(ref.file == IBC_FILE_LOGICAL);
+   ref.logical.comp += comp;
+   return ref;
+}
+
+static inline ibc_ref
 ibc_imm_ref(enum ibc_type type, char *imm, unsigned imm_size)
 {
    ibc_ref ref = {
