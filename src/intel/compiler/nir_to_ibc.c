@@ -1289,6 +1289,8 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
 {
    ibc_builder *b = &nti->b;
 
+   ibc_builder_push_scalar(b);
+
    enum ibc_type type = instr->def.bit_size >= 8 ?
       (IBC_TYPE_UINT | instr->def.bit_size) : IBC_TYPE_FLAG;
 
@@ -1326,11 +1328,10 @@ nti_emit_load_const(struct nir_to_ibc_state *nti,
       }
    }
 
-   ibc_builder_push_scalar(b);
    ibc_ref dest = ibc_VEC(b, imm_srcs, instr->def.num_components);
-   ibc_builder_pop(b);
-
    ibc_write_nir_ssa_def(nti, &instr->def, dest);
+
+   ibc_builder_pop(b);
 }
 
 static inline ibc_flow_instr *
