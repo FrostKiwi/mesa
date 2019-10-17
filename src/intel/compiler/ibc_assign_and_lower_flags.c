@@ -612,7 +612,7 @@ find_or_assign_flag(const ibc_reg *reg, uint32_t ip, bool opportunistic,
    uint32_t max_end = 0;
    int max_end_chunk = -1;
    for (chunk = align_offset; chunk < TOTAL_FLAG_CHUNKS; chunk += align_mul) {
-      for (unsigned c = 1; c < num_chunks; c++) {
+      for (unsigned c = 0; c < num_chunks; c++) {
          if (state->assign[chunk + c]) {
             const ibc_reg_live_intervals *iter_rli =
                &state->live->regs[state->assign[chunk + c]->index];
