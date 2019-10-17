@@ -1011,7 +1011,19 @@ static inline ibc_ref
 ibc_cluster_broadcast(ibc_builder *b, enum ibc_type dest_type,
                       ibc_ref src, unsigned cluster_size)
 {
-   if (cluster_size * ibc_type_byte_size(src.type) >= REG_SIZE * 2) {
+   if (cluster_size == 0 || cluster_size == b->simd_width) {
+      ibc_ref scalar_src = src;
+      scalar_src.hw_grf = (struct ibc_ref_hw_grf) {
+         .byte = (b->simd_width - 1) * ibc_type_byte_size(src.type),
+         .vstride = 0,
+         .width = 1,
+         .hstride = 0,
+      };
+      ibc_builder_push_scalar(b);
+      ibc_ref dest = ibc_MOV(b, dest_type, scalar_src);
+      ibc_builder_pop(b);
+      return dest;
+   } else if (cluster_size * ibc_type_byte_size(src.type) >= REG_SIZE * 2) {
       /* In this case, the distance between clusters is at least 2 GRFs so we
        * don't need to do any weird striding.
        */
