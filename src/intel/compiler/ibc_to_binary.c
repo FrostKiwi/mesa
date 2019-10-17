@@ -282,11 +282,18 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       brw_##OP(p, dest, src[0], src[1]);  \
       break;
 
-#define TRIOP_CASE(OP)                                   \
-   case IBC_ALU_OP_##OP:                                 \
-      if (p->devinfo->gen < 10)                          \
-         brw_set_default_access_mode(p, BRW_ALIGN_16);   \
-      brw_##OP(p, dest, src[0], src[1], src[2]);         \
+#define TRIOP_CASE(OP)                                      \
+   case IBC_ALU_OP_##OP:                                    \
+      if (p->devinfo->gen < 10) {                           \
+         brw_set_default_access_mode(p, BRW_ALIGN_16);      \
+         if (alu->instr.simd_width == 1) {                  \
+            assert(type_sz(dest.type) == 4);                \
+            brw_set_default_exec_size(p, BRW_EXECUTE_4);    \
+            dest.writemask = 1 << ((dest.subnr % 16) / 4);  \
+            dest.subnr = (dest.subnr / 16) * 16;            \
+         }                                                  \
+      }                                                     \
+      brw_##OP(p, dest, src[0], src[1], src[2]);            \
       break;
 
 #define UNOP_MATH_CASE(OP, MATH)                                           \
