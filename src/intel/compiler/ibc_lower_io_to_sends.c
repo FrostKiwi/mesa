@@ -107,6 +107,14 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
           intrin->src[IBC_SURFACE_SRC_DATA1].num_comps == num_data_comps);
 
    ibc_builder_push_instr_group(b, &intrin->instr);
+   if (b->simd_width < 8) {
+      /* For a SIMD1 surface instruction, set the builder to SIMD8 so that we
+       * build the payload in SIMD8.  We create the actual SEND instruction
+       * SIMD1 in the hopes that it will make the HW fetch less data.
+       */
+      assert(b->simd_width == 1);
+      b->simd_width = 8;
+   }
 
    ibc_send_instr *send = ibc_send_instr_create(b->shader,
                                                 intrin->instr.simd_group,
@@ -218,13 +226,40 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       ibc_builder_pop(b);
    }
 
-   send->dest = intrin->dest;
-   send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
+   assert(ibc_type_bit_size(intrin->dest.type) == 32);
+   if (intrin->instr.simd_width == 1) {
+      send->rlen = intrin->num_dest_comps;
+      ibc_reg *tmp_reg =
+         ibc_hw_grf_reg_create(b->shader, send->rlen * REG_SIZE, REG_SIZE);
+      send->dest = ibc_typed_ref(tmp_reg, intrin->dest.type);
+   } else {
+      assert(intrin->instr.simd_width >= 8);
+      send->dest = intrin->dest;
+      send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
+   }
 
    ibc_builder_insert_instr(b, &send->instr);
-   ibc_instr_remove(&intrin->instr);
 
    ibc_builder_pop(b);
+
+   if (intrin->instr.simd_width == 1) {
+      ibc_builder_push_scalar(b);
+      assert(ibc_type_bit_size(intrin->dest.type) == 32);
+      assert(send->dest.type == intrin->dest.type);
+
+      ibc_ref vec_src[4];
+      assert(intrin->num_dest_comps <= ARRAY_SIZE(vec_src));
+      for (unsigned i = 0; i < intrin->num_dest_comps; i++) {
+         vec_src[i] = send->dest;
+         vec_src[i].hw_grf.byte += i * REG_SIZE;
+         ibc_hw_grf_mul_stride(&vec_src[i].hw_grf, 0);
+      }
+      ibc_VEC_to(b, intrin->dest, vec_src, intrin->num_dest_comps);
+
+      ibc_builder_pop(b);
+   }
+
+   ibc_instr_remove(&intrin->instr);
 
    return true;
 }
