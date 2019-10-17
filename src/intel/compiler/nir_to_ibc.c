@@ -152,6 +152,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    ibc_ref dest = { .file = IBC_FILE_NONE, };
 
    switch (instr->op) {
+   case nir_op_mov:
    case nir_op_vec2:
    case nir_op_vec3:
    case nir_op_vec4:
@@ -176,6 +177,11 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    switch (instr->op) {
    case nir_op_mov:
+      for (unsigned i = 1; i < nir_dest_num_components(instr->dest.dest); i++)
+         src[i] = ibc_comp_ref(src[0], i);
+      dest = ibc_VEC(b, src, nir_dest_num_components(instr->dest.dest));
+      break;
+
    case nir_op_vec2:
    case nir_op_vec3:
    case nir_op_vec4:
