@@ -314,10 +314,12 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       ibc_ref g00 = ibc_typed_ref(b->shader->g0, IBC_TYPE_UW);
       ibc_hw_grf_mul_stride(&g00.hw_grf, 0);
 
+      ibc_builder_push_scalar(b);
       ibc_ref and_srcs[2] = { g00, ibc_imm_uw(0x8000), };
       dest = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
       ibc_build_alu(b, IBC_ALU_OP_AND, ibc_null(IBC_TYPE_UW),
                     dest, BRW_CONDITIONAL_Z, and_srcs, 2);
+      ibc_builder_pop(b);
       break;
    }
 
@@ -325,10 +327,12 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       /* The render target array index is provided in the thread payload as
        * bits 26:16 of r0.0.
        */
+      ibc_builder_push_scalar(b);
       ibc_ref rtai = ibc_typed_ref(b->shader->g0, IBC_TYPE_UW);
       rtai.hw_grf.byte = 2;
       ibc_hw_grf_mul_stride(&rtai.hw_grf, 0);
       dest = ibc_MOV(b, IBC_TYPE_UD, rtai);
+      ibc_builder_pop(b);
       break;
    }
 
@@ -434,7 +438,9 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
          assert(dest_comps[i].file == IBC_FILE_LOGICAL);
          dest_comps[i].logical.comp = 3;
       }
+      ibc_builder_push_scalar(b);
       dest = ibc_VEC(b, dest_comps, instr->num_components);
+      ibc_builder_pop(b);
       break;
    }
 
