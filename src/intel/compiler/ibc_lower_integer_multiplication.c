@@ -58,11 +58,18 @@ lower_mul(ibc_builder *b, ibc_alu_instr *alu)
    } else if ((alu->dest.type == IBC_TYPE_D ||
                alu->dest.type == IBC_TYPE_UD) &&
               b->shader->devinfo->has_integer_dword_mul) {
-      ibc_ref acc = ibc_builder_new_accum_reg(b, alu->dest.type);
       ibc_ref src1_uw = ibc_MOV(b, IBC_TYPE_UW, alu->src[1].ref);
 
+      if (alu->instr.simd_width == 1)
+         ibc_builder_push_we_all(b, 8);
+
+      ibc_ref acc = ibc_builder_new_accum_reg(b, alu->dest.type);
       ibc_build_alu2(b, IBC_ALU_OP_MUL, acc, alu->src[0].ref, src1_uw);
       build_MACH(b, alu->dest.type, acc, alu->src[0].ref, alu->src[1].ref);
+
+      if (alu->instr.simd_width == 1)
+         ibc_builder_pop(b);
+
       ibc_MOV_to(b, alu->dest, acc);
 
       ibc_instr_remove(&alu->instr);
