@@ -860,24 +860,31 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       ibc_builder_pop(b);
 
       /* Finally, IBC expects 1-bit booleans */
+      ibc_builder_push_scalar(b);
       dest = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
       ibc_MOV_to_flag(b, dest, BRW_CONDITIONAL_NZ, tmp);
+      ibc_builder_pop(b);
       break;
    }
 
    case nir_intrinsic_ballot: {
+      assert(!nir_dest_is_divergent(instr->dest));
       ibc_ref flag = nti_initialize_flag(b, 0);
       ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ, ibc_imm_w(-1));
       flag.type = flag.reg->flag.bits <= 16 ? IBC_TYPE_UW : IBC_TYPE_UD;
+
+      ibc_builder_push_scalar(b);
       dest = ibc_MOV(b, IBC_TYPE_UD, flag);
+      ibc_builder_pop(b);
       break;
    }
 
    case nir_intrinsic_read_invocation: {
+      assert(!nir_dest_is_divergent(instr->dest));
       ibc_ref value = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
       value.logical.broadcast = true;
       value.logical.simd_channel = nir_src_as_uint(instr->src[1]);
-      ibc_builder_push_we_all(b, 1);
+      ibc_builder_push_scalar(b);
       dest = ibc_MOV(b, IBC_TYPE_UINT, value);
       ibc_builder_pop(b);
       break;
