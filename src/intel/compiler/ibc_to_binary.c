@@ -611,7 +611,7 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
    disasm_new_inst_group(disasm_info, 0);
 
    unsigned spill_count = 0, fill_count = 0;
-   unsigned loop_count = 0;
+   unsigned loop_count = 0, send_count = 0;
 
    ibc_foreach_instr(instr, shader) {
       brw_push_insn_state(p);
@@ -645,6 +645,7 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
 
       case IBC_INSTR_TYPE_SEND:
          generate_send(p, ibc_instr_as_send(instr));
+         send_count++;
          break;
 
       case IBC_INSTR_TYPE_INTRINSIC:
@@ -685,13 +686,13 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
       fprintf(stderr,
               "Native code for %s %s shader %s\n"
               "SIMD%d shader: %u instructions. %u loops. %u cycles. "
-              "%u:%u spills:fills. "
+              "%u:%u spills:fills. %u sends. "
               "Compacted %u to %u bytes (%.0f%%)\n",
                info->label ? info->label : "unnamed",
                _mesa_shader_stage_to_string(shader->stage), info->name,
               shader->simd_width, before_size / 16,
               loop_count, shader->cycles,
-              spill_count, fill_count,
+              spill_count, fill_count, send_count,
               before_size, after_size,
               100.0f * (before_size - after_size) / before_size);
       dump_assembly(p->store, start_offset, p->next_insn_offset,
@@ -701,14 +702,14 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
 
    compiler->shader_debug_log(log_data,
                               "%s SIMD%d shader: %d inst, %d loops, %u cycles, "
-                              "%d:%d spills:fills, "
+                              "%d:%d spills:fills, %u sends, "
                               "scheduled with mode %s, "
                               "Promoted %u constants, "
                               "compacted %d to %d bytes.",
                               _mesa_shader_stage_to_abbrev(shader->stage),
                               shader->simd_width, before_size / 16,
                               loop_count, shader->cycles,
-                              spill_count, fill_count,
+                              spill_count, fill_count, send_count,
                               "unknown",
                               0,
                               before_size, after_size);
