@@ -654,8 +654,10 @@ ibc_hw_grf_ref_foreach_byte(ibc_ref ref,
                hoffset += ref.hw_grf.hstride;
             }
          }
-         offset += ibc_hw_grf_comp_stride(ref.hw_grf, ref_byte_size,
-                                          simd_width);
+         if (num_comps > 1) {
+            offset += ibc_hw_grf_comp_stride(ref.hw_grf, ref_byte_size,
+                                             simd_width);
+         }
       }
    }
 }
