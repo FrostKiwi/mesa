@@ -810,8 +810,10 @@ rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
          } else {
             ensure_flag_spill_grf(ref->reg, state);
             ibc_ref scalar = state->regs[ref->reg->index].scalar;
-            assert(scalar.file != IBC_FILE_NONE);
+            assert(scalar.file == IBC_FILE_LOGICAL);
             scalar.type = ref->type;
+            assert(ref->flag.bit % 16 == 0);
+            scalar.logical.byte += ref->flag.bit / 8;
             ibc_instr_set_ref(write_instr, ref, scalar);
          }
       } else {
@@ -826,8 +828,10 @@ rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
             if (chunk >= 0)
                load_scalar_if_needed(chunk, state);
             ibc_ref scalar = state->regs[ref->reg->index].scalar;
-            assert(scalar.file != IBC_FILE_NONE);
+            assert(scalar.file == IBC_FILE_LOGICAL);
             scalar.type = ref->type;
+            assert(ref->flag.bit % 16 == 0);
+            scalar.logical.byte += ref->flag.bit / 8;
             *ref = scalar;
          }
       }
