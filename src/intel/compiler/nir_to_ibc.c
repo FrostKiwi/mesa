@@ -695,6 +695,8 @@ nti_reduction_op_identity(nir_op op, enum ibc_type type)
    const unsigned bit_size = ibc_type_bit_size(type);
    nir_const_value identity = nir_alu_binop_identity(op, bit_size);
    switch (bit_size) {
+   case 1:
+      return ibc_imm_w(-(int)identity.b);
    case 8:
       if (type == IBC_TYPE_UB) {
          return ibc_imm_uw(identity.u8);
@@ -920,8 +922,14 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
        * properly at the end, there should be no difference.
        */
       enum ibc_type scan_type = src.type;
-      if (ibc_type_bit_size(scan_type) == 8)
+      if (scan_type == IBC_TYPE_FLAG) {
+         /* TODO: Many scan ops can probably be better handled with bitfield
+          * ops on the channel mask.
+          */
+         scan_type = IBC_TYPE_W;
+      } else if (ibc_type_bit_size(scan_type) == 8) {
          scan_type = ibc_type_base_type(scan_type) | IBC_TYPE_16_BIT;
+      }
 
       unsigned tmp_stride = ibc_type_byte_size(scan_type);
       unsigned tmp_size = b->simd_width * tmp_stride;
@@ -943,11 +951,13 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       if (instr->intrinsic == nir_intrinsic_reduce) {
          dest = ibc_cluster_broadcast(b, src.type, tmp, cluster_size);
       } else {
-         /* Only take the bottom bits of the scan result in case it was a B
-          * type which we upgraded to W.
-          */
          ibc_ref mov_src = tmp;
-         mov_src.type = src.type;
+         if (ibc_type_bit_size(scan_type) == 8) {
+            /* Only take the bottom bits of the scan result in case it was a B
+             * type which we upgraded to W.
+             */
+            mov_src.type = src.type;
+         }
          dest = ibc_MOV(b, src.type, mov_src);
       }
       break;
