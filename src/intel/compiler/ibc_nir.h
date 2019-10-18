@@ -104,7 +104,9 @@ ibc_type_for_nir(nir_alu_type ntype)
 static inline ibc_ref
 ibc_nir_src(struct nir_to_ibc_state *nti, nir_src src, enum ibc_type type)
 {
-   if (ibc_type_bit_size(type) == 0)
+   if (nir_src_bit_size(src) == 1)
+      type = IBC_TYPE_FLAG;
+   else if (ibc_type_bit_size(type) == 0)
       type |= nir_src_bit_size(src);
 
    if (src.is_ssa) {
