@@ -169,8 +169,10 @@ brw_reg_for_ibc_ref(const struct gen_device_info *devinfo,
             brw_reg = stride(brw_vecn_grf(1, nr, 0), stride_elem, 1, 0);
          } else {
             const unsigned width = MIN2(reg_width, phys_width);
+            const unsigned hstride = width == 1 ? 0 : stride_elem;
+            const unsigned vstride = width * stride_elem;
             brw_reg = stride(brw_vecn_grf(width, nr, 0),
-                             width * stride_elem, width, stride_elem);
+                             vstride, width, hstride);
          }
       } else {
          /* In this case, we just have to trust that whoever set up the
