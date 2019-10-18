@@ -164,6 +164,9 @@ typedef struct ibc_logical_reg {
     */
    uint8_t stride;
 
+   /** Required alignment in bytes */
+   uint8_t align;
+
    /** True if this register must be packed for a SEND
     *
     * Packed requires that stride == bit_size / 8 and requires that the
