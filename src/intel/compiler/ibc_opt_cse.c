@@ -387,6 +387,14 @@ hash_wlr_reg_cb(const void *_reg)
       case IBC_INSTR_TYPE_FLOW:
          unreachable("Branch and merge instructions don't write anything");
       }
+
+      /* If a non-logical reg is written without WE_all, we have to take the
+       * block into account because cross-channel access may be happening.
+       * We've helpfully stashed the block index in the instruction index for
+       * this purpose.
+       */
+      if (reg->file != IBC_FILE_LOGICAL && !instr->we_all)
+         hash = HASH(hash, instr->index);
    }
 
    return hash;
@@ -458,6 +466,15 @@ wlr_regs_equal_cb(const void *_reg_a, const void *_reg_b)
       case IBC_INSTR_TYPE_FLOW:
          unreachable("Branch and merge instructions don't write anything");
       }
+
+      /* If a non-logical reg is written without WE_all, we have to take the
+       * block into account because cross-channel access may be happening.
+       * We've helpfully stashed the block index in the instruction index for
+       * this purpose.
+       */
+      if (reg_a->file != IBC_FILE_LOGICAL && !instr_a->we_all &&
+          instr_a->index != instr_b->index)
+         return false;
    }
 
    return true;
@@ -543,6 +560,13 @@ ibc_opt_cse_block(ibc_shader *shader, struct opt_cse_state *state,
    state->reg_set = _mesa_set_clone(parent_set, state->mem_ctx);
 
    ibc_foreach_instr_from_safe(instr, shader, first_after_flow) {
+      /* Stash the block index in the instruction index.  This is a bit odd
+       * but it lets us look at blocks when trying to CSE non-logical regs.
+       * Because try_cse_write does nothing until it sees the last write, we
+       * know that all indices will be set at that time.
+       */
+      instr->index = block - state->dominance->blocks;
+
       ibc_instr_foreach_read(instr, rewrite_read, state);
       ibc_instr_foreach_reg_write(instr, try_cse_write, state);
 
@@ -568,9 +592,9 @@ ibc_opt_cse(ibc_shader *shader)
       .progress = false,
    };
 
-   ibc_dominance *dominance = ibc_compute_dominance(shader, mem_ctx);
+   state.dominance = ibc_compute_dominance(shader, mem_ctx);
 
-   ibc_opt_cse_block(shader, &state, &dominance->blocks[0]);
+   ibc_opt_cse_block(shader, &state, &state.dominance->blocks[0]);
 
    ralloc_free(mem_ctx);
 
