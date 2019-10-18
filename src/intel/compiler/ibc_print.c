@@ -130,6 +130,8 @@ print_ref(FILE *fp, const ibc_ref *ref, bool print_type)
 
    case IBC_FILE_LOGICAL:
       fprintf(fp, "lg%u", ref->reg->index);
+      if (ref->reg->logical.bit_size != ibc_type_bit_size(ref->type))
+         fprintf(fp, "+%uB", ref->logical.byte);
       if (ref->reg->logical.num_comps > 1)
          fprintf(fp, ".%u", ref->logical.comp);
       if (ref->logical.broadcast)
