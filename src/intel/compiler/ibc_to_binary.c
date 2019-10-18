@@ -301,6 +301,11 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       gen6_math(p, dest, BRW_MATH_FUNCTION_##MATH, src[0], brw_null_reg());\
       break;
 
+#define BINOP_MATH_CASE(OP, MATH)                                    \
+   case IBC_ALU_OP_##OP:                                             \
+      gen6_math(p, dest, BRW_MATH_FUNCTION_##MATH, src[0], src[1]);  \
+      break;
+
    switch (alu->op) {
    UNOP_CASE(MOV)
    BINOP_CASE(SEL)
@@ -338,17 +343,9 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    UNOP_MATH_CASE(SIN, SIN)
    UNOP_MATH_CASE(COS, COS)
 
-   case IBC_ALU_OP_POW:
-      gen6_math(p, dest, BRW_MATH_FUNCTION_POW, src[0], src[1]);
-      break;
-
-   case IBC_ALU_OP_IDIV:
-      gen6_math(p, dest, BRW_MATH_FUNCTION_INT_DIV_QUOTIENT, src[0], src[1]);
-      break;
-
-   case IBC_ALU_OP_IREM:
-      gen6_math(p, dest, BRW_MATH_FUNCTION_INT_DIV_REMAINDER, src[0], src[1]);
-      break;
+   BINOP_MATH_CASE(POW, POW);
+   BINOP_MATH_CASE(IDIV, INT_DIV_QUOTIENT);
+   BINOP_MATH_CASE(IREM, INT_DIV_REMAINDER);
 
    default:
       unreachable("Invalid instruction");
