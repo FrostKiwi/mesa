@@ -94,62 +94,6 @@ ibc_alu_instr_num_chunks(const ibc_alu_instr *alu)
    return 1 + ibc_alu_instr_is_compressed(alu);
 }
 
-static enum ibc_type
-ibc_type_exec_type(enum ibc_type type)
-{
-   switch (type) {
-   case IBC_TYPE_B:
-   case IBC_TYPE_V:
-      return IBC_TYPE_W;
-   case IBC_TYPE_UB:
-   case IBC_TYPE_UV:
-      return IBC_TYPE_UW;
-   case IBC_TYPE_VF:
-      return IBC_TYPE_F;
-   default:
-      return type;
-   }
-}
-
-static enum ibc_type
-ibc_alu_instr_exec_type(ibc_alu_instr *alu)
-{
-   enum ibc_type exec_type = IBC_TYPE_INVALID;
-   for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-      enum ibc_type t = ibc_type_exec_type(alu->src[i].ref.type);
-      if (ibc_type_bit_size(t) > ibc_type_bit_size(exec_type) ||
-          (ibc_type_bit_size(t) == ibc_type_bit_size(exec_type) &&
-           ibc_type_base_type(t) == IBC_TYPE_FLOAT))
-         exec_type = t;
-   }
-
-   if (exec_type == IBC_TYPE_INVALID)
-      exec_type = alu->dest.type;
-
-   /* Promotion of the execution type to 32-bit for conversions from or to
-    * half-float seems to be consistent with the following text from the
-    * Cherryview PRM Vol. 7, "Execution Data Type":
-    *
-    * "When single precision and half precision floats are mixed between
-    *  source operands or between source and destination operand [..] single
-    *  precision float is the execution datatype."
-    *
-    * and from "Register Region Restrictions":
-    *
-    * "Conversion between Integer and HF (Half Float) must be DWord aligned
-    *  and strided by a DWord on the destination."
-    */
-   if (ibc_type_bit_size(exec_type) == 16 &&
-       alu->dest.type != exec_type) {
-      if (exec_type == IBC_TYPE_HF)
-         exec_type = IBC_TYPE_F;
-      else if (alu->dest.type == IBC_TYPE_HF)
-         exec_type = IBC_TYPE_D;
-   }
-
-   return exec_type;
-}
-
 static unsigned
 ibc_alu_latency(enum ibc_type exec_type,
                 const struct gen_device_info *devinfo)
