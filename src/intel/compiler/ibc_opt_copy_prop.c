@@ -98,14 +98,33 @@ try_compose_refs(ibc_ref *ref_out,
       break;
 
    case IBC_FILE_FLAG:
-      assert(ibc_type_bit_size(outer.type) != 64);
-      /* Flags can only be accessed as a flag or as 16 or 32-bit */
-      if (ibc_type_bit_size(outer.type) == 8)
-         return false;
+      /* Registers in IBC_FILE_FLAG do not have components */
+      assert(outer.logical.comp == 0);
 
-      assert(outer.logical.byte == 0 &&
-             outer.logical.comp == 0 &&
-             !outer.logical.broadcast);
+      if (inner.type == IBC_TYPE_FLAG) {
+         if (outer.type != IBC_TYPE_FLAG)
+            return false;
+
+         if (outer.logical.broadcast)
+            return false;
+
+         unsigned rel_channel = outer.logical.simd_channel - inner_simd_group;
+         ref.flag.bit += rel_channel;
+      } else {
+         /* Flags can only be accessed as a flag or as 16 or 32-bit */
+         assert(ibc_type_bit_size(inner.type) == 16 ||
+                ibc_type_bit_size(inner.type) == 32);
+         assert(ibc_type_bit_size(outer.type) != 64);
+         if (ibc_type_bit_size(outer.type) == 8)
+            return false;
+
+         assert(!outer.logical.broadcast);
+
+         if (outer.logical.byte % 2)
+            return false;
+
+         ref.flag.bit += outer.logical.byte * 8;
+      }
       break;
 
    case IBC_FILE_ACCUM:
