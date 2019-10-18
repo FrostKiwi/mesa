@@ -85,23 +85,13 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
       if (reg->file != IBC_FILE_LOGICAL)
          continue;
 
-      if (reg->logical.stride > 0)
-         continue;
-
       /* Scalars and booleans won't be mapped to HW regs so they don't need to
        * have assigned strides.
        */
       if (reg->logical.bit_size == 1)
          continue;
 
-      /* Uniform values don't have a stride across SIMD channels */
-      if (reg->logical.simd_width == 1)
-         continue;
-
-      /* At the very least, we want it to be the size of the register */
-      assert(reg->logical.bit_size >= 8);
-      unsigned stride = reg->logical.bit_size / 8;
-
+      unsigned max_exec_width = reg->logical.bit_size / 8;
       ibc_reg_foreach_write(write, reg) {
          if (write->instr->type != IBC_INSTR_TYPE_ALU)
             continue;
@@ -112,15 +102,28 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
          /* We don't use ibc_type_byte_size here because we want to gracefully
           * ignore the source if it's IBC_TYPE_FLAG.
           */
-         stride = MAX2(stride, ibc_type_bit_size(exec_type) / 8);
+         max_exec_width = MAX2(max_exec_width,
+                               ibc_type_bit_size(exec_type) / 8);
 
          /* Only raw MOV supports a packed-byte destination */
          if (!ibc_alu_instr_is_raw_mov(alu))
-            stride = MAX2(stride, 2);
+            max_exec_width = MAX2(max_exec_width, 2);
       }
 
-      reg->logical.stride = stride;
-      progress = true;
+      if (reg->logical.align < max_exec_width) {
+         reg->logical.align = max_exec_width;
+         progress = true;
+      }
+
+      /* Uniform values don't have a stride across SIMD channels */
+      if (reg->logical.simd_width > 1) {
+         if (reg->logical.stride == 0) {
+            reg->logical.stride = max_exec_width;
+            progress = true;
+         } else {
+            assert(reg->logical.stride <= max_exec_width);
+         }
+      }
    }
 
    return progress;
@@ -187,6 +190,8 @@ ibc_reg_to_class(const ibc_reg *reg, const ibc_ra_reg_set *set)
          assert(reg->logical.simd_width == 1);
          uint16_t phys_size = (reg->logical.bit_size / 8) *
                               reg->logical.num_comps;
+         /* TODO: We can probably do something better than this */
+         phys_size = MAX2(phys_size, reg->logical.align);
          return ibc_ra_reg_set_get_physical_class(set, phys_size);
       } else {
          assert(reg->logical.simd_width >= 8);
