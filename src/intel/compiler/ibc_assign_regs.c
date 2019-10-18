@@ -107,20 +107,12 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
             continue;
 
          ibc_alu_instr *alu = ibc_instr_as_alu(write->instr);
-
-         /* This can't be a flag write */
-         assert(write == &alu->dest_write);
-
-         for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-            if (alu->src[i].ref.type == IBC_TYPE_FLAG)
-               stride = MAX2(stride, ibc_type_byte_size(IBC_TYPE_W));
-            else
-               stride = MAX2(stride, ibc_type_byte_size(alu->src[i].ref.type));
-         }
+         enum ibc_type exec_type = ibc_alu_instr_exec_type(alu);
+         stride = MAX2(stride, ibc_type_byte_size(exec_type));
 
          /* Only raw MOV supports a packed-byte destination */
-         if (stride == 1 && !ibc_alu_instr_is_raw_mov(alu))
-            stride = 2;
+         if (!ibc_alu_instr_is_raw_mov(alu))
+            stride = MAX2(stride, 2);
       }
 
       reg->logical.stride = stride;
