@@ -213,6 +213,13 @@ brw_reg_for_ibc_ref(const struct gen_device_info *devinfo,
 }
 
 static void
+set_byte_mask(unsigned byte, void *_data)
+{
+   uint64_t *mask = _data;
+   *mask |= (1u << byte);
+}
+
+static void
 generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
 {
    /* If the instruction writes to more than one register, it needs to
@@ -244,13 +251,12 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       compressed = bytes_written > REG_SIZE;
    } else {
       assert(alu->dest.file == IBC_FILE_HW_GRF);
-      unsigned dest_byte = alu->dest.hw_grf.byte;
-      unsigned bytes_written =
-         alu->dest.hw_grf.hstride * (alu->instr.simd_width %
-                                     alu->dest.hw_grf.width) +
-         alu->dest.hw_grf.vstride * (alu->instr.simd_width /
-                                     alu->dest.hw_grf.width);
-      compressed = (dest_byte % REG_SIZE) + bytes_written > REG_SIZE;
+      ibc_ref dest_rebased = alu->dest;
+      dest_rebased.hw_grf.byte = dest_rebased.hw_grf.byte % 32;
+      uint64_t byte_mask = 0;
+      ibc_hw_grf_ref_foreach_byte(dest_rebased, 1, alu->instr.simd_width,
+                                  set_byte_mask, &byte_mask);
+      compressed = (byte_mask >> 32) != 0;
    }
 
    struct brw_reg src[3], dest;
