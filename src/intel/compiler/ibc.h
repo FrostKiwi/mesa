@@ -1257,6 +1257,12 @@ typedef struct ibc_shader {
     */
    ibc_reg *g0;
 
+   /** Per-stage data
+    *
+    * This is opaque to most of IBC.
+    */
+   void *stage_data;
+
    /** Estimated cycle count from the scheduler */
    uint32_t cycles;
 } ibc_shader;
