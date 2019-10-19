@@ -60,7 +60,19 @@ struct ibc_assign_flags_state {
    struct flag_reg_state *regs;
 
    const ibc_reg *assign[TOTAL_FLAG_CHUNKS];
+
+   /**
+    * Tracks which flag values (as per assign) are valid before the currently
+    * processed instruction.
+    */
    enum flag_rep valid[TOTAL_FLAG_CHUNKS];
+
+   /**
+    * Tracks which flag values (as per assign) are written by the current
+    * instruction.  This is used to update valid after the instruction has
+    * been fully processed.
+    */
+   enum flag_rep written[TOTAL_FLAG_CHUNKS];
 };
 
 static bool
@@ -751,7 +763,7 @@ instr_set_flag_ref(ibc_instr *instr, ibc_ref *ref, unsigned chunk,
 
    if (written) {
       for (unsigned c = 0; c < num_chunks; c++)
-         state->valid[chunk + start_chunk + c] = written;
+         state->written[chunk + start_chunk + c] = written;
    }
 }
 
@@ -786,7 +798,7 @@ rewrite_flag_ref(ibc_ref *ref, ibc_instr *write_instr,
 
       if (chunk >= 0 && write_instr) {
          for (unsigned c = 0; c < num_chunks; c++)
-            state->valid[chunk + start_chunk + c] = FLAG_REP_VECTOR;
+            state->written[chunk + start_chunk + c] = FLAG_REP_VECTOR;
       }
    } else if (ref->file == IBC_FILE_FLAG && ref->reg) {
       /* We should only get here for regular sources and destinations that
@@ -842,8 +854,8 @@ static bool
 rewrite_flag_read_cb(ibc_ref *ref,
                      UNUSED int num_bytes,
                      UNUSED int num_comps,
-                     UNUSED uint8_t simd_group,
-                     UNUSED uint8_t simd_width,
+                     uint8_t simd_group,
+                     uint8_t simd_width,
                      void *_state)
 {
    rewrite_flag_ref(ref, NULL, simd_group, simd_width, _state);
@@ -1001,7 +1013,7 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
                                     instr->simd_group, instr->simd_width,
                                     &start_chunk, &num_chunks);
                for (unsigned c = 0; c < num_chunks; c++)
-                  state.valid[chunk + start_chunk + c] |= FLAG_REP_VECTOR;
+                  state.written[chunk + start_chunk + c] |= FLAG_REP_VECTOR;
             }
          } else if (alu->dest.file == IBC_FILE_LOGICAL &&
                     alu->dest.reg->logical.bit_size == 1 &&
@@ -1044,6 +1056,13 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
          if (alu->dest.file == IBC_FILE_NONE &&
              alu->dest.type == IBC_TYPE_FLAG)
             alu->dest.type = alu->src[0].ref.type;
+      }
+
+      for (unsigned i = 0; i < TOTAL_FLAG_CHUNKS; i++) {
+         if (state.written[i]) {
+            state.valid[i] = state.written[i];
+            state.written[i] = 0;
+         }
       }
 
       /* When we cross block boundaries, reset the allocator */
