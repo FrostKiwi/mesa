@@ -687,10 +687,10 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
 
    disasm_new_inst_group(disasm_info, p->next_insn_offset);
 
-   brw_validate_instructions(devinfo, p->store,
-                             start_offset,
-                             p->next_insn_offset,
-                             disasm_info);
+   ASSERTED bool validated = brw_validate_instructions(devinfo, p->store,
+                                                       start_offset,
+                                                       p->next_insn_offset,
+                                                       disasm_info);
 
    unsigned before_size = p->next_insn_offset - start_offset;
    brw_compact_instructions(p, start_offset, disasm_info);
@@ -714,6 +714,7 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
                     disasm_info, NULL);
    }
 
+   assert(validated);
 
    compiler->shader_debug_log(log_data,
                               "%s SIMD%d shader: %d inst, %d loops, %u cycles, "
