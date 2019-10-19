@@ -547,15 +547,24 @@ enum ibc_fb_write_src {
    IBC_FB_WRITE_SRC_STENCIL,     /* gl_FragStencilRefARB */
    IBC_FB_WRITE_SRC_OMASK,       /* Sample Mask (gl_SampleMask) */
    IBC_FB_WRITE_SRC_TARGET,
-   IBC_FB_WRITE_SRC_LAST_RT,
+   IBC_FB_WRITE_SRC_FLAGS,
    IBC_FB_WRITE_NUM_SRCS
+};
+
+enum ibc_fb_write_flags {
+   IBC_FB_WRITE_FLAGS_NONE =              0,
+   IBC_FB_WRITE_FLAG_LAST_RT =            (1 << 0),
+   IBC_FB_WRITE_FLAG_NULL_RT =            (1 << 1),
+   IBC_FB_WRITE_FLAG_REPLICATE_ALPHA =    (1 << 2),
+   IBC_FB_WRITE_FLAG_COMPUTED_STENCIL =   (1 << 3),
 };
 
 static ibc_intrinsic_instr *
 ibc_emit_fb_write(struct nir_to_ibc_state *nti,
                   unsigned target,
                   ibc_ref color0, ibc_ref color1,
-                  ibc_ref src0_alpha)
+                  ibc_ref src0_alpha,
+                  enum ibc_fb_write_flags flags)
 {
    struct brw_wm_prog_data *prog_data = (void *)nti->prog_data;
    struct nir_fs_to_ibc_state *nti_fs = nti->stage_state;
@@ -572,7 +581,7 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
          { .ref = nti_fs->out.sample_mask, .num_comps  = 1},
       [IBC_FB_WRITE_SRC_TARGET] = { ibc_imm_ud(target), .num_comps = 1 },
       /* LAST_RT will be filled with the real value later */
-      [IBC_FB_WRITE_SRC_LAST_RT] = { .ref = ibc_imm_ud(0), .num_comps = 1},
+      [IBC_FB_WRITE_SRC_FLAGS] = { .ref = ibc_imm_ud(flags), .num_comps = 1},
    };
 
    for (unsigned i = 0; i < IBC_FB_WRITE_NUM_SRCS; i++) {
@@ -593,6 +602,16 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
    }
 
    return write;
+}
+
+static void
+fb_write_instr_add_flags(ibc_intrinsic_instr *instr,
+                         enum ibc_fb_write_flags new_flags)
+{
+   enum ibc_fb_write_flags flags =
+      ibc_ref_as_uint(instr->src[IBC_FB_WRITE_SRC_FLAGS].ref);
+   flags |= new_flags;
+   instr->src[IBC_FB_WRITE_SRC_FLAGS].ref = ibc_imm_ud(flags);
 }
 
 static void
@@ -628,23 +647,30 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
        nti_fs->out.color[0].file != IBC_FILE_NONE)
       ibc_emit_alhpa_to_coverage_workaround(nti);
 
+   assert(!key->clamp_fragment_color);
+
+   enum ibc_fb_write_flags flags = IBC_FB_WRITE_FLAGS_NONE;
+   if (prog_data->replicate_alpha)
+      flags |= IBC_FB_WRITE_FLAG_REPLICATE_ALPHA;
+
+   if (prog_data->computed_stencil)
+      flags |= IBC_FB_WRITE_FLAG_COMPUTED_STENCIL;
+
    ibc_intrinsic_instr *last_fb_write = NULL;
-   if (key->nr_color_regions > 0) {
-      for (unsigned target = 0; target < key->nr_color_regions; target++) {
-         /* Skip over outputs that weren't written. */
-         if (nti_fs->out.color[target].file == IBC_FILE_NONE)
-            continue;
+   for (unsigned target = 0; target < key->nr_color_regions; target++) {
+      /* Skip over outputs that weren't written. */
+      if (nti_fs->out.color[target].file == IBC_FILE_NONE)
+         continue;
 
-         ibc_ref src0_alpha = {};
-         if (prog_data->replicate_alpha && target != 0) {
-            src0_alpha = nti_fs->out.color[0];
-            src0_alpha.logical.comp = 3;
-         }
-
-         last_fb_write =
-            ibc_emit_fb_write(nti, target, nti_fs->out.color[target],
-                              nti_fs->out.dual_src_color, src0_alpha);
+      ibc_ref src0_alpha = {};
+      if (prog_data->replicate_alpha && target != 0) {
+         src0_alpha = nti_fs->out.color[0];
+         src0_alpha.logical.comp = 3;
       }
+
+      last_fb_write =
+         ibc_emit_fb_write(nti, target, nti_fs->out.color[target],
+                           nti_fs->out.dual_src_color, src0_alpha, flags);
    }
 
    if (last_fb_write == NULL) {
@@ -654,10 +680,11 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
        */
       last_fb_write =
          ibc_emit_fb_write(nti, 0 /* target */, nti_fs->out.color[0],
-                           ibc_null(IBC_TYPE_UD), ibc_null(IBC_TYPE_UD));
+                           ibc_null(IBC_TYPE_UD), ibc_null(IBC_TYPE_UD),
+                           flags | IBC_FB_WRITE_FLAG_NULL_RT);
    }
 
-   last_fb_write->src[IBC_FB_WRITE_SRC_LAST_RT].ref = ibc_imm_ud(1);
+   fb_write_instr_add_flags(last_fb_write, IBC_FB_WRITE_FLAG_LAST_RT);
 }
 
 unsigned
@@ -671,37 +698,23 @@ ibc_fb_write_instr_max_simd_width(const ibc_intrinsic_instr *write,
       return 16;
 }
 
-static ibc_ref
-move_to_payload(ibc_builder *b, ibc_ref src, unsigned num_comps)
-{
-   if (src.file == IBC_FILE_NONE) {
-      return ibc_builder_new_logical_reg(b, IBC_TYPE_F, num_comps);
-   } else {
-      ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
-      ibc_MOV_raw_vec_to(b, dest, src, num_comps);
-      return dest;
-   }
-}
-
 bool
 ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_intrinsic_instr *write)
 {
+   const struct gen_device_info *devinfo = b->shader->devinfo;
+   struct ibc_fs_payload *payload = b->shader->stage_data;
    assert(write->op == IBC_INTRINSIC_OP_FB_WRITE);
 
    const ibc_ref color0 = write->src[IBC_FB_WRITE_SRC_COLOR0].ref;
    const ibc_ref color1 = write->src[IBC_FB_WRITE_SRC_COLOR1].ref;
-   assert(!color1.file);
-   assert(!write->src[IBC_FB_WRITE_SRC_SRC0_ALPHA].ref.file);
-   assert(!write->src[IBC_FB_WRITE_SRC_DEPTH].ref.file);
-   assert(!write->src[IBC_FB_WRITE_SRC_STENCIL].ref.file);
-   assert(!write->src[IBC_FB_WRITE_SRC_OMASK].ref.file);
-   assert(write->src[IBC_FB_WRITE_SRC_TARGET].ref.file == IBC_FILE_IMM);
+   const ibc_ref src0_alpha = write->src[IBC_FB_WRITE_SRC_SRC0_ALPHA].ref;
+   const ibc_ref src_depth = write->src[IBC_FB_WRITE_SRC_DEPTH].ref;
+   const ibc_ref src_stencil = write->src[IBC_FB_WRITE_SRC_STENCIL].ref;
+   const ibc_ref src_omask = write->src[IBC_FB_WRITE_SRC_OMASK].ref;
    const unsigned target =
-      *(uint32_t *)write->src[IBC_FB_WRITE_SRC_TARGET].ref.imm;
-   assert(write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.file == IBC_FILE_IMM);
-   const bool last_rt =
-      *(uint32_t *)write->src[IBC_FB_WRITE_SRC_LAST_RT].ref.imm;
-   bool has_header = false;
+      ibc_ref_as_uint(write->src[IBC_FB_WRITE_SRC_TARGET].ref);
+   const enum ibc_fb_write_flags flags =
+      ibc_ref_as_uint(write->src[IBC_FB_WRITE_SRC_FLAGS].ref);
 
    ibc_builder_push_instr_group(b, &write->instr);
 
@@ -717,8 +730,121 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_intrinsic_instr *write)
       send->instr.predicate = write->instr.predicate;
    }
 
-   send->payload[0] = move_to_payload(b, color0, 4);
-   send->mlen = 4 * (write->instr.simd_width / 8);
+   ibc_intrinsic_src src[16] = {};
+   unsigned num_srcs = 0;
+   bool has_header = false;
+
+   if (devinfo->gen < 11 && (color1.file != IBC_FILE_NONE || target > 0)) {
+      has_header = true;
+      ibc_reg *header_reg =
+         ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
+      ibc_ref header = ibc_typed_ref(header_reg, IBC_TYPE_UD);
+
+      ibc_builder_push_we_all(b, 8);
+      ibc_MOV_to(b, header, ibc_typed_ref(b->shader->g0, IBC_TYPE_UD));
+      ibc_builder_pop(b);
+
+      uint32_t g00_bits = 0;
+
+      /* Set "Source0 Alpha Present to RenderTarget" bit in message
+       * header.
+       */
+      if (target > 0 && (flags & IBC_FB_WRITE_FLAG_REPLICATE_ALPHA))
+         g00_bits |= 1 << 11;
+
+      if (flags & IBC_FB_WRITE_FLAG_COMPUTED_STENCIL)
+         g00_bits |= 1 << 14;
+
+      if (g00_bits) {
+         ibc_builder_push_scalar(b);
+         ibc_build_alu2(b, IBC_ALU_OP_OR, header,
+                        ibc_typed_ref(b->shader->g0, IBC_TYPE_UD),
+                        ibc_imm_ud(g00_bits));
+         ibc_builder_pop(b);
+      }
+
+      /* TODO: uses_kill? */
+
+      ibc_ref header_2 = header;
+      header_2.hw_grf.byte += 2 * ibc_type_byte_size(IBC_TYPE_UD);
+      if (target > 0) {
+         ibc_builder_push_scalar(b);
+         ibc_MOV_to(b, header_2, ibc_imm_ud(target));
+         ibc_builder_pop(b);
+      }
+
+      src[num_srcs++] = (ibc_intrinsic_src) {
+         .ref = header,
+         .simd_width = 1,
+         .num_comps = 8,
+      };
+
+      src[num_srcs++] = (ibc_intrinsic_src) {
+         .ref = payload->pixel[write->instr.simd_group / 16],
+         .simd_width = 1,
+         .num_comps = 8,
+      };
+   }
+   assert(num_srcs == 2 * has_header);
+
+   bool src0_alpha_present = false;
+   if (src0_alpha.file != IBC_FILE_NONE) {
+      assert(ibc_type_bit_size(src0_alpha.type) == 32);
+      src[num_srcs++].ref = src0_alpha;
+      src0_alpha_present = true;
+   } else if ((flags & IBC_FB_WRITE_FLAG_REPLICATE_ALPHA) && target != 0) {
+      /* Handle the case when fragment shader doesn't write to draw buffer
+       * zero. No need to to provide real data for src0_alpha because the
+       * alpha value will be undefined.
+       */
+      src[num_srcs++].ref = ibc_null(IBC_TYPE_F);
+   }
+
+   if (src_omask.file != IBC_FILE_NONE) {
+      /* Unlike most payload sources, the hardware actually consumes the
+       * sample mask as a UW type.
+       */
+      assert(ibc_type_bit_size(src_omask.type) == 32);
+      ibc_ref mask_ref = src_omask;
+      mask_ref.type = IBC_TYPE_UW;
+      src[num_srcs++].ref = mask_ref;
+   }
+
+
+   if (color0.file == IBC_FILE_NONE) {
+      for (unsigned i = 0; i < 4; i++)
+         src[num_srcs++].ref = ibc_null(IBC_TYPE_F);
+   } else {
+      assert(ibc_type_bit_size(color0.type) == 32);
+      for (unsigned i = 0; i < 4; i++)
+         src[num_srcs++].ref = ibc_comp_ref(color0, i);
+   }
+
+   if (color1.file != IBC_FILE_NONE) {
+      assert(ibc_type_bit_size(color1.type) == 32);
+      for (unsigned i = 0; i < 4; i++)
+         src[num_srcs++].ref = ibc_comp_ref(color1, i);
+   }
+
+   if (src_depth.file != IBC_FILE_NONE) {
+      assert(ibc_type_bit_size(src_depth.type) == 32);
+      src[num_srcs++].ref = src_depth;
+   }
+
+   if (src_stencil.file != IBC_FILE_NONE) {
+      assert(devinfo->gen >= 9);
+      assert(write->instr.simd_group == 0 && write->instr.simd_width == 8);
+
+      /* Stencil is a packed byte value */
+      assert(ibc_type_bit_size(src_stencil.type) == 32);
+      ibc_ref stencil = src_stencil;
+      stencil.type = IBC_TYPE_UB;
+      src[num_srcs++].ref = stencil;
+   }
+
+   unsigned mlen;
+   send->payload[0] = ibc_MESSAGE(b, src, num_srcs, &mlen);
+   send->mlen = mlen;
 
    uint32_t msg_control;
    if (color1.file != IBC_FILE_NONE) {
@@ -740,12 +866,23 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_intrinsic_instr *write)
    send->desc_imm =
       brw_dp_write_desc(b->shader->devinfo, target, msg_control,
                         GEN6_DATAPORT_WRITE_MESSAGE_RENDER_TARGET_WRITE,
-                        last_rt, 0 /* send_commit_msg */);
+                        (flags & IBC_FB_WRITE_FLAG_LAST_RT) != 0,
+                        0 /* send_commit_msg */);
 
-   send->has_header = has_header; /* TODO */
+   if (devinfo->gen >= 11) {
+      /* Set the "Render Target Index" and "Src0 Alpha Present" fields
+       * in the extended message descriptor, in lieu of using a header.
+       */
+      send->ex_desc_imm = target << 12 | src0_alpha_present << 15;
+
+      if (flags & IBC_FB_WRITE_FLAG_NULL_RT)
+         send->ex_desc_imm |= 1 << 20;
+   }
+
+   send->has_header = has_header;
    send->has_side_effects = true;
    send->check_tdr = true;
-   send->eot = last_rt &&
+   send->eot = (flags & IBC_FB_WRITE_FLAG_LAST_RT) &&
       write->instr.simd_group + write->instr.simd_width == b->shader->simd_width;
 
    ibc_builder_insert_instr(b, &send->instr);
@@ -851,6 +988,9 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
       if (INTEL_DEBUG & DEBUG_WM)
          ibc_print_shader(ibc, stderr);
       ibc_validate_shader(ibc);
+
+      /* We need this for FB write lowering */
+      ibc->stage_data = nti.payload;
 
       ibc_lower_and_optimize(ibc);
 
