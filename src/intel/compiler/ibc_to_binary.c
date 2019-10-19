@@ -200,9 +200,14 @@ brw_reg_for_ibc_ref(const struct gen_device_info *devinfo,
       unsigned acc0_channels = 32 / ibc_type_byte_size(ref->type);
       uint8_t nr = ref->accum.chan / acc0_channels;
       uint8_t subnr = ref->accum.chan % acc0_channels;
-      return retype(brw_vecn_reg(8, BRW_ARCHITECTURE_REGISTER_FILE,
-                                 BRW_ARF_ACCUMULATOR + nr, subnr),
-                    brw_reg_type_for_ibc_type(type));
+      struct brw_reg brw_reg = brw_vecn_reg(8, BRW_ARCHITECTURE_REGISTER_FILE,
+                                            BRW_ARF_ACCUMULATOR + nr, subnr);
+
+      brw_reg = retype(brw_reg, brw_reg_type_for_ibc_type(type));
+      if (simd_width == 1)
+         brw_reg = stride(brw_reg, 0, 1, 0);
+
+      return brw_reg;
    }
 
    case IBC_FILE_LOGICAL:
