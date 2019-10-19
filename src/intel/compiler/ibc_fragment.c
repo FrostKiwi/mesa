@@ -223,6 +223,54 @@ ibc_frag_coord(struct nir_to_ibc_state *nti)
 }
 
 static ibc_ref
+ibc_sample_pos(struct nir_to_ibc_state *nti)
+{
+   struct brw_wm_prog_data *prog_data = (void *)nti->prog_data;
+   struct ibc_fs_payload *payload = (struct ibc_fs_payload *)nti->payload;
+   ibc_builder *b = &nti->b;
+
+   if (!prog_data->persample_dispatch) {
+      /* From ARB_sample_shading specification:
+       * "When rendering to a non-multisample buffer, or if multisample
+       *  rasterization is disabled, gl_SamplePosition will always be
+       *  (0.5, 0.5).
+       */
+      return ibc_VEC2(b, ibc_imm_f(0.5), ibc_imm_f(0.5));
+   }
+
+   ibc_ref sample_pos[2];
+   for (unsigned g = 0; g < b->simd_width; g += 16) {
+      ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
+      for (unsigned i = 0; i < 2; i++) {
+         /* From the Ivy Bridge PRM, volume 2 part 1, page 344:
+          * R31.1:0         Position Offset X/Y for Slot[3:0]
+          * R31.3:2         Position Offset X/Y for Slot[7:4]
+          * .....
+          *
+          * The X, Y sample positions come in as bytes in  thread payload. So,
+          * read the positions using vstride=16, width=8, hstride=2.
+          */
+         ibc_ref pos_fixed = payload->sample_pos[g / 16];
+         assert(pos_fixed.file == IBC_FILE_HW_GRF);
+         pos_fixed.type = IBC_TYPE_B;
+         pos_fixed.hw_grf.byte += i;
+         pos_fixed.hw_grf.vstride = 16;
+         pos_fixed.hw_grf.width = 8;
+         pos_fixed.hw_grf.hstride = 2;
+
+         ibc_ref pos_float =
+            ibc_MUL(b, IBC_TYPE_F, ibc_MOV(b, IBC_TYPE_F, pos_fixed),
+                                   ibc_imm_f(1 / 16.0f));
+
+         set_ref_or_zip(b, &sample_pos[i], pos_float, 1);
+      }
+      ibc_builder_pop(b);
+   }
+
+   return ibc_VEC(b, sample_pos, 2);
+}
+
+static ibc_ref
 ibc_pixel_mask_as_flag(struct nir_to_ibc_state *nti)
 {
    struct ibc_fs_payload *payload = (struct ibc_fs_payload *)nti->payload;
@@ -308,6 +356,11 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_load_frag_coord:
       assert(nir_dest_is_divergent(instr->dest));
       dest = ibc_frag_coord(nti);
+      break;
+
+   case nir_intrinsic_load_sample_pos:
+      assert(nir_dest_is_divergent(instr->dest));
+      dest = ibc_sample_pos(nti);
       break;
 
    case nir_intrinsic_load_front_face: {
