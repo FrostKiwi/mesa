@@ -72,16 +72,8 @@ ibc_BTI_BLOCK_LOAD_UBO(ibc_builder *b, ibc_ref hw_grf, ibc_ref bti,
 void
 ibc_setup_payload_base(ibc_builder *b, struct ibc_payload_base *payload)
 {
-   b->shader->g0 = ibc_hw_grf_reg_create(b->shader, 32, 32);
-   ibc_builder_push_we_all(b, 8);
-   ibc_intrinsic_instr *load_g0 =
-      ibc_load_payload(b, ibc_typed_ref(b->shader->g0, IBC_TYPE_UD),
-                          ibc_hw_grf_ref(0, 0, IBC_TYPE_UD), 1);
-   load_g0->can_reorder = false;
-   load_g0->has_side_effects = true;
-   ibc_builder_pop(b);
-
-   payload->num_ff_regs = 1; /* g0 */
+   payload->num_ff_regs = 0;
+   b->shader->g0 = ibc_load_payload_reg(b, &payload->num_ff_regs).reg;
 }
 
 /* Allow at most 16 registers worth of push constants */

@@ -215,9 +215,13 @@ static inline ibc_intrinsic_instr *
 ibc_load_payload(ibc_builder *b, ibc_ref dest,
                  ibc_ref src, unsigned num_comps)
 {
-   return ibc_build_intrinsic(b, IBC_INTRINSIC_OP_LOAD_PAYLOAD,
-                              dest, -1, num_comps,
-                              &(ibc_intrinsic_src) { .ref = src }, 1);
+   ibc_intrinsic_instr *load =
+      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_LOAD_PAYLOAD,
+                          dest, -1, num_comps,
+                          &(ibc_intrinsic_src) { .ref = src }, 1);
+   load->can_reorder = false;
+   load->has_side_effects = true;
+   return load;
 }
 
 static inline ibc_ref
