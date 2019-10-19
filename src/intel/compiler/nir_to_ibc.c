@@ -572,6 +572,24 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
       }
    }
 
+   if (ntex->op == nir_texop_txf_ms &&
+       srcs[IBC_TEX_SRC_MCS].ref.file == IBC_FILE_NONE) {
+      ibc_intrinsic_src mcs_srcs[IBC_TEX_NUM_SRCS] = {
+         [IBC_TEX_SRC_SURFACE_BTI] = srcs[IBC_TEX_SRC_SURFACE_BTI],
+         [IBC_TEX_SRC_SURFACE_HANDLE] = srcs[IBC_TEX_SRC_SURFACE_HANDLE],
+         [IBC_TEX_SRC_SAMPLER_BTI] = { .ref = ibc_imm_ud(0), .num_comps = 1 },
+         [IBC_TEX_SRC_COORD] = srcs[IBC_TEX_SRC_COORD],
+      };
+
+      ibc_ref mcs_data =
+         ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_TXF_MCS,
+                                 IBC_TYPE_UD, 4, mcs_srcs, IBC_TEX_NUM_SRCS);
+      srcs[IBC_TEX_SRC_MCS] = (ibc_intrinsic_src) {
+         .ref = mcs_data,
+         .num_comps = b->shader->devinfo->gen < 9 ? 1 : 2,
+      };
+   }
+
    assert(nti->key->tex.gather_channel_quirk_mask == 0);
    if (ntex->op == nir_texop_tg4)
       header_bits |= ntex->component << 16;
