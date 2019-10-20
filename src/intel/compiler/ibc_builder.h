@@ -1032,7 +1032,7 @@ ibc_cluster_broadcast(ibc_builder *b, enum ibc_type dest_type,
        * don't need to do any weird striding.
        */
       ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, 1);
-      const unsigned num_clusters = cluster_size / b->simd_width;
+      const unsigned num_clusters = b->simd_width / cluster_size;
       for (unsigned cluster = 0; cluster < num_clusters; cluster++) {
          ibc_builder_push_group(b, cluster * cluster_size,  cluster_size);
 
