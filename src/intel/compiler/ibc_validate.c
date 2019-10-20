@@ -376,9 +376,11 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
 
    if (alu->cmod != BRW_CONDITIONAL_NONE) {
       if (alu->instr.flag.file == IBC_FILE_NONE) {
-         ibc_validate_null_ref(s, &alu->instr.flag);
+         /* SEL never writes the flag */
          ibc_assert(s, alu->op == IBC_ALU_OP_SEL);
+         ibc_validate_null_ref(s, &alu->instr.flag);
       } else {
+         ibc_assert(s, alu->op != IBC_ALU_OP_SEL);
          ibc_assert(s, ibc_predicate_simd_width(alu->instr.predicate) == 1);
          ibc_assert(s, alu->instr.flag.file != IBC_FILE_NONE);
          ibc_assert(s, alu->instr.flag.type == IBC_TYPE_FLAG);
