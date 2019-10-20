@@ -380,12 +380,16 @@ ibc_build_alu2_cmod(ibc_builder *b, enum ibc_alu_op op, ibc_ref dest,
 {
    ibc_ref srcs[] = { src0, src1 };
    if (dest.type == IBC_TYPE_FLAG) {
+      assert(op != IBC_ALU_OP_SEL);
       enum ibc_type dest_type = _ibc_builder_dest_type(src0.type, srcs,
                                                        ARRAY_SIZE(srcs));
       return ibc_build_alu(b, op, ibc_null(dest_type), dest, cmod, srcs, 2);
    } else if (cmod != BRW_CONDITIONAL_NONE) {
-      /* We need a flag register even though the result may never be used */
-      ibc_ref flag = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
+      /* We need a flag register even though the result may never be used.
+       * This is not true for SEL, however.
+       */
+      ibc_ref flag = op == IBC_ALU_OP_SEL ? ibc_null(IBC_TYPE_FLAG) :
+                     ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
 
       return ibc_build_alu(b, op, dest, flag, cmod, srcs, ARRAY_SIZE(srcs));
    } else {

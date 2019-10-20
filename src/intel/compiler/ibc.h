@@ -1229,6 +1229,7 @@ static inline bool
 ibc_instr_writes_flag(const ibc_instr *instr)
 {
    return instr->type == IBC_INSTR_TYPE_ALU &&
+          ibc_instr_as_alu(instr)->op != IBC_ALU_OP_SEL &&
           ibc_instr_as_alu(instr)->cmod != BRW_CONDITIONAL_NONE;
 }
 
