@@ -557,6 +557,12 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
       break;
    }
 
+   case IBC_INTRINSIC_OP_WAIT: {
+      ibc_assert(s, intrin->instr.simd_width == 1);
+      ibc_assert(s, intrin->num_srcs == 0);
+      ibc_assert(s, intrin->dest.file == IBC_FILE_NONE);
+   }
+
    default:
       break;
    }

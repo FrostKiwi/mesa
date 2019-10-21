@@ -84,6 +84,54 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_barrier: {
+      prog_data->uses_barrier = true;
+
+      uint32_t barrier_id_mask;
+      switch (b->shader->devinfo->gen) {
+      case 7:
+      case 8:
+         barrier_id_mask = 0x0f000000u; break;
+      case 9:
+      case 10:
+         barrier_id_mask = 0x8f000000u; break;
+      case 11:
+         barrier_id_mask = 0x7f000000u; break;
+      default:
+         unreachable("barrier is only available on gen >= 7");
+      }
+
+      ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
+      ibc_ref tmp = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
+
+      ibc_builder_push_we_all(b, 8);
+      ibc_MOV_to(b, tmp, ibc_imm_ud(0));
+      ibc_builder_pop(b);
+
+      ibc_ref tmp_2 = tmp;
+      tmp_2.hw_grf.byte += 2 * ibc_type_byte_size(IBC_TYPE_UD);
+      ibc_ref g0_2 = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
+      g0_2.hw_grf.byte += 2 * ibc_type_byte_size(IBC_TYPE_UD);
+      ibc_builder_push_scalar(b);
+      ibc_build_alu2(b, IBC_ALU_OP_AND, tmp_2, g0_2,
+                     ibc_imm_ud(barrier_id_mask));
+      ibc_builder_pop(b);
+
+      ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 1);
+      send->instr.we_all = true;
+      send->sfid = BRW_SFID_MESSAGE_GATEWAY;
+      send->payload[0] = tmp;
+      send->mlen = 1;
+      send->has_header = true;
+      send->can_reorder = false;
+      send->has_side_effects = true;
+      send->desc_imm = BRW_MESSAGE_GATEWAY_SFID_BARRIER_MSG;
+      ibc_builder_insert_instr(b, &send->instr);
+
+      ibc_WAIT(b);
+      break;
+   }
+
    case nir_intrinsic_load_num_work_groups: {
       /* This is fixed as part of the shader interface */
       const unsigned num_work_groups_bti = 0;

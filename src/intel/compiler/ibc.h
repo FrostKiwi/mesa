@@ -952,6 +952,9 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_TG4,
    IBC_INTRINSIC_OP_TG4_OFFSET,
    IBC_INTRINSIC_OP_SAMPLEINFO,
+
+   /* Wait for a notificaiton */
+   IBC_INTRINSIC_OP_WAIT,
 };
 
 /* Sources for [un]typed surface intrinsics */
