@@ -112,7 +112,6 @@ ibc_lower_gather_ops(ibc_shader *shader)
             ibc_ref mov_dest = intrin->dest;
             ibc_ref mov_src = intrin->src[i].ref;
             ibc_ref_simd_slice(&mov_dest, rel_group);
-            ibc_ref_simd_slice(&mov_src, rel_group);
             for (unsigned j = 0; j < intrin->src[i].num_comps; j++) {
                build_MOV_raw(&b, mov_dest, mov_src);
                if (mov_src.file == IBC_FILE_LOGICAL)
