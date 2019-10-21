@@ -373,6 +373,9 @@ alu_instr_src_supports_imm(const ibc_alu_instr *alu, unsigned src_idx)
    case 1:
       return true;
    case 2:
+      if (ibc_type_bit_size(alu->src[src_idx].ref.type) > 32)
+         return false;
+
       return src_idx == 1 || (alu->src[1].ref.file != IBC_FILE_IMM &&
                               can_flip_alu_instr(alu));
    default:
