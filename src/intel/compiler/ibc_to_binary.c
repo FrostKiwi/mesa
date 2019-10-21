@@ -331,6 +331,7 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       brw_CMP(p, dest, alu->cmod, src[0], src[1]);
       break;
 
+   UNOP_CASE(BFREV)
    TRIOP_CASE(BFE)
    BINOP_CASE(BFI1)
    TRIOP_CASE(BFI2)
@@ -343,6 +344,9 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    UNOP_CASE(RNDE)
    UNOP_CASE(RNDZ)
    BINOP_CASE(MACH)
+   UNOP_CASE(FBH)
+   UNOP_CASE(FBL)
+   UNOP_CASE(CBIT)
    TRIOP_CASE(MAD)
    TRIOP_CASE(LRP)
 
