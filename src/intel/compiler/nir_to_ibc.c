@@ -947,7 +947,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_reduce:
-   case nir_intrinsic_inclusive_scan: {
+   case nir_intrinsic_inclusive_scan:
+   case nir_intrinsic_exclusive_scan: {
       nir_op redop = nir_intrinsic_reduction_op(instr);
       ibc_ref src =
          ibc_nir_src(nti, instr->src[0],
@@ -989,9 +990,12 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                          nti_cond_mod_for_nir_reduction_op(redop),
                          cluster_size);
 
-      if (instr->intrinsic == nir_intrinsic_reduce) {
+      switch (instr->intrinsic) {
+      case nir_intrinsic_reduce:
          dest = ibc_cluster_broadcast(b, src.type, tmp, cluster_size);
-      } else {
+         break;
+
+      case nir_intrinsic_inclusive_scan: {
          ibc_ref mov_src = tmp;
          if (ibc_type_bit_size(scan_type) == 8) {
             /* Only take the bottom bits of the scan result in case it was a B
@@ -1000,7 +1004,37 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
             mov_src.type = src.type;
          }
          dest = ibc_MOV(b, src.type, mov_src);
+         break;
       }
+
+      case nir_intrinsic_exclusive_scan: {
+         ibc_ref scan_src = tmp;
+         if (ibc_type_bit_size(scan_type) == 8) {
+            /* Only take the bottom bits of the scan result in case it was a B
+             * type which we upgraded to W.
+             */
+            scan_src.type = src.type;
+         }
+
+         switch (redop) {
+         case nir_op_iadd:
+            dest = ibc_ADD(b, src.type, scan_src, ibc_NEG(b, src.type, src));
+            break;
+
+         case nir_op_ixor:
+            dest = ibc_XOR(b, src.type, scan_src, src);
+            break;
+
+         default:
+            unreachable("TODO: Use a shuffle");
+         }
+         break;
+      }
+
+      default:
+         unreachable("Unsupported intrinsic");
+      }
+
       break;
    }
 
