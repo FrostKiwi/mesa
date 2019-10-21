@@ -356,6 +356,25 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    min_simd_width = MAX2(8, min_simd_width);
    min_simd_width = util_next_power_of_two(min_simd_width);
    assert(min_simd_width <= 32);
+   unsigned max_simd_width = 32;
+
+   if (key->base.subgroup_size_type >= BRW_SUBGROUP_SIZE_REQUIRE_8) {
+      /* These enum values are expressly chosen to be equal to the subgroup
+       * size that they require.
+       */
+      const unsigned required_simd_width = key->base.subgroup_size_type;
+      assert(required_simd_width == 8 ||
+             required_simd_width == 16 ||
+             required_simd_width == 32);
+      if (required_simd_width < min_simd_width ||
+          required_simd_width > max_simd_width) {
+         if (error_str_out)
+            *error_str_out = "Cannot satisfy explicit subgroup size";
+         return NULL;
+      } else {
+         min_simd_width = max_simd_width = required_simd_width;
+      }
+   }
 
    /* Add a uniform for the thread local id.  It must be the last uniform
     * on the list.
@@ -382,6 +401,9 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
       const unsigned bin_simd_width = 8 << i;
       if (bin_simd_width < min_simd_width)
          continue;
+
+      if (bin_simd_width > max_simd_width)
+         break;
 
       if (!bin[i].enabled)
          continue;
