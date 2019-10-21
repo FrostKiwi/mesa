@@ -1255,6 +1255,73 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_ssbo_atomic_add:
+   case nir_intrinsic_ssbo_atomic_imin:
+   case nir_intrinsic_ssbo_atomic_umin:
+   case nir_intrinsic_ssbo_atomic_imax:
+   case nir_intrinsic_ssbo_atomic_umax:
+   case nir_intrinsic_ssbo_atomic_and:
+   case nir_intrinsic_ssbo_atomic_or:
+   case nir_intrinsic_ssbo_atomic_xor:
+   case nir_intrinsic_ssbo_atomic_exchange:
+   case nir_intrinsic_ssbo_atomic_comp_swap: {
+      ibc_ref pred = {};
+      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
+         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
+         pred = ibc_emit_fs_sample_live_predicate(nti);
+      }
+
+      unsigned aop = brw_aop_for_nir_intrinsic(instr);
+
+      /* Set up the BTI or handle */
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_SURFACE_BTI] = (ibc_intrinsic_src) {
+            .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
+                                                 IBC_TYPE_UD)),
+         },
+         [IBC_SURFACE_SRC_ADDRESS] = (ibc_intrinsic_src) {
+            .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+         },
+         [IBC_SURFACE_SRC_ATOMIC_OP] = (ibc_intrinsic_src) {
+            .ref = ibc_imm_ud(aop),
+         },
+      };
+
+      /* If we're not an atomic aop == -1 so the last two conditions are true
+       * vacuously.
+       */
+      if (aop != BRW_AOP_INC && aop != BRW_AOP_DEC) {
+         srcs[IBC_SURFACE_SRC_DATA0] = (ibc_intrinsic_src) {
+            .ref = ibc_nir_src(nti, instr->src[2], IBC_TYPE_UD),
+         };
+      }
+
+      if (aop == BRW_AOP_CMPWR) {
+         srcs[IBC_SURFACE_SRC_DATA1] = (ibc_intrinsic_src) {
+            .ref = ibc_nir_src(nti, instr->src[3], IBC_TYPE_UD),
+         };
+      }
+
+      if (pred.file != IBC_FILE_NONE) {
+         dest = ibc_UNDEF(b, IBC_TYPE_UD, 1);
+      } else {
+         dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
+      }
+
+      ibc_intrinsic_instr *image_op =
+         ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC,
+                             dest, -1, 1, srcs, IBC_SURFACE_NUM_SRCS);
+      image_op->can_reorder = false;
+      image_op->has_side_effects = true;
+
+      if (pred.file != IBC_FILE_NONE) {
+         assert(b->simd_width > 0);
+         ibc_instr_set_predicate(&image_op->instr, pred,
+                                 IBC_PREDICATE_NORMAL);
+      }
+      break;
+   }
+
    case nir_intrinsic_image_load:
    case nir_intrinsic_image_store:
    case nir_intrinsic_image_atomic_add:
