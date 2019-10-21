@@ -429,6 +429,45 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    /* TODO: This isn't right for imod */
    BINOP_CASE(imod,  IREM)
 
+   case nir_op_bitfield_reverse:
+      assert(nir_dest_bit_size(instr->dest.dest) < 64);
+      dest = ibc_BFREV(b, dest_type, src[0]);
+      break;
+
+   case nir_op_bit_count:
+      assert(nir_dest_bit_size(instr->dest.dest) < 64);
+      dest = ibc_CBIT(b, dest_type, src[0]);
+      break;
+
+   case nir_op_ufind_msb:
+   case nir_op_ifind_msb: {
+      ibc_ref tmp = ibc_FBH(b, IBC_TYPE_D, src[0]);
+
+      /* The predicate makes this not write-lock-read */
+      ((ibc_reg *)tmp.reg)->is_wlr = false;
+
+      /* FBH counts from the MSB side, while GLSL's findMSB() wants the
+       * count from the LSB side. If FBH didn't return an error (-1), then
+       * subtract the result from 31 to convert the MSB count into an LSB
+       * count.
+       */
+      ibc_ref is_not_err = ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_NZ,
+                                   tmp, ibc_imm_d(-1));
+      ibc_alu_instr *add =
+         ibc_build_alu2(b, IBC_ALU_OP_ADD, tmp, tmp, ibc_imm_d(31));
+      add->src[0].mod = IBC_ALU_SRC_MOD_NEG;
+      ibc_instr_set_predicate(&add->instr, is_not_err,
+                              IBC_PREDICATE_NORMAL);
+
+      dest = ibc_MOV(b, IBC_TYPE_D, tmp);
+      break;
+   }
+
+   case nir_op_find_lsb:
+      assert(nir_dest_bit_size(instr->dest.dest) < 64);
+      dest = ibc_FBL(b, dest_type, src[0]);
+      break;
+
    case nir_op_bcsel: {
       assert(src[0].type == IBC_TYPE_FLAG);
       dest = ibc_SEL(b, dest_type, src[0], src[1], src[2]);
