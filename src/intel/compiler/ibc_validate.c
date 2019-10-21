@@ -527,6 +527,21 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
       break;
    }
 
+   case IBC_INTRINSIC_OP_PACK:
+      ibc_assert(s, ibc_type_bit_size(intrin->dest.type) %
+                 intrin->num_srcs == 0);
+      for (unsigned i = 0; i < intrin->num_srcs; i++) {
+         ibc_assert(s, intrin->src[i].simd_group ==
+                       intrin->instr.simd_group);
+         ibc_assert(s, intrin->src[i].simd_width ==
+                       intrin->instr.simd_width);
+         ibc_assert(s, intrin->src[i].num_comps == intrin->num_dest_comps);
+         ibc_assert(s, ibc_type_bit_size(intrin->src[i].ref.type) >= 8);
+         ibc_assert(s, ibc_type_bit_size(intrin->src[i].ref.type) ==
+                       ibc_type_bit_size(intrin->dest.type) / intrin->num_srcs);
+      }
+      break;
+
    case IBC_INTRINSIC_OP_MESSAGE: {
       unsigned num_bytes = 0;
       for (unsigned i = 0; i < intrin->num_srcs; i++) {
