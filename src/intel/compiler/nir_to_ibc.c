@@ -216,6 +216,12 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
+   case nir_op_i2b1:
+   case nir_op_f2b1:
+      dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_NZ,
+                     src[0], ibc_imm_zero(src[0].type));
+      break;
+
    case nir_op_b2i8:
    case nir_op_b2i16:
    case nir_op_b2i32:

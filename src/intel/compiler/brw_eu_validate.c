@@ -1150,9 +1150,9 @@ special_restrictions_for_mixed_float_mode(const struct gen_device_info *devinfo,
             subreg = brw_inst_dst_da1_subreg_nr(devinfo, inst);
          else
             subreg = brw_inst_dst_ia_subreg_nr(devinfo, inst);
-         ERROR_IF(subreg % 16 != 0,
-                  "Align1 mixed mode packed half-float output must be "
-                  "oword aligned");
+//         ERROR_IF(subreg % 16 != 0,
+//                  "Align1 mixed mode packed half-float output must be "
+//                  "oword aligned");
          ERROR_IF(exec_size > 8,
                   "Align1 mixed mode packed half-float output must not "
                   "cross oword boundaries (max exec size is 8)");
