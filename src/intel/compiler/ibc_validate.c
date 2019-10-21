@@ -507,11 +507,9 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
       ibc_assert(s, intrin->num_srcs == 0);
       break;
 
-   case IBC_INTRINSIC_OP_SIMD_BROADCAST:
-      ibc_assert(s, intrin->instr.simd_width == 1);
+   case IBC_INTRINSIC_OP_SIMD_SHUFFLE:
       ibc_assert(s, intrin->num_srcs == 2);
       ibc_assert(s, intrin->src[0].num_comps == intrin->num_dest_comps);
-      ibc_assert(s, intrin->src[1].simd_width == 1);
       ibc_assert(s, intrin->src[1].num_comps == intrin->num_dest_comps);
       break;
 
