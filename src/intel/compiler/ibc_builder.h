@@ -982,6 +982,18 @@ ibc_PLN(ibc_builder *b, ibc_ref vert, ibc_ref bary)
 }
 
 static inline void
+ibc_WAIT(ibc_builder *b)
+{
+   ibc_builder_push_scalar(b);
+   ibc_intrinsic_instr *wait =
+      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_WAIT,
+                          ibc_null(IBC_TYPE_UD), 0, 0, NULL, 0);
+   wait->can_reorder = false;
+   wait->has_side_effects = true;
+   ibc_builder_pop(b);
+}
+
+static inline void
 ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_ref tmp,
                    enum brw_conditional_mod cmod,
                    unsigned final_cluster_size)
