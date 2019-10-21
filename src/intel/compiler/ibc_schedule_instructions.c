@@ -148,6 +148,9 @@ ibc_instr_fe_cycles(const ibc_instr *instr,
       case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE:
          return 2 * (1 + instr->simd_width > 8);
 
+      case IBC_INTRINSIC_OP_WAIT:
+         return 2; /* TODO */
+
       default:
          unreachable("Invalid intrinsic this late in compilation");
       }
@@ -374,6 +377,9 @@ ibc_instr_dest_latency(const ibc_instr *instr,
       case IBC_INTRINSIC_OP_PLN:
       case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE:
          return ibc_alu_latency(IBC_TYPE_F, devinfo);
+
+      case IBC_INTRINSIC_OP_WAIT:
+         return 0; /* TODO */
 
       default:
          unreachable("Invalid intrinsic this late in compilation");
