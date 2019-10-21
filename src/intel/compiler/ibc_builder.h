@@ -813,6 +813,46 @@ ibc_SIMD_ZIP2(ibc_builder *b, ibc_ref src0, ibc_ref src1,
    return ibc_SIMD_ZIP(b, srcs, 2, num_comps);
 }
 
+static inline ibc_ref
+ibc_PACK(ibc_builder *b, ibc_ref *srcs, unsigned num_srcs, unsigned num_comps)
+{
+   assert(num_srcs > 1);
+   unsigned dest_bits = ibc_type_bit_size(srcs[0].type) * num_srcs;
+   assert(dest_bits <= 64);
+
+   ibc_intrinsic_src pack_srcs[8];
+   assert(num_srcs <= ARRAY_SIZE(pack_srcs));
+
+   for (unsigned i = 0; i < num_srcs; i++) {
+      assert(srcs[i].type == srcs[0].type);
+      pack_srcs[i] = (ibc_intrinsic_src) {
+         .ref = srcs[i],
+         .num_comps = num_comps,
+      };
+      pack_srcs[i].ref.type = ibc_type_bit_size(srcs[0].type);
+   }
+
+   return ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_PACK, dest_bits,
+                                  num_comps, pack_srcs, num_srcs);
+}
+
+static inline ibc_ref
+ibc_PACK2(ibc_builder *b, ibc_ref src0, ibc_ref src1)
+{
+   ibc_ref srcs[2] = { src0, src1 };
+   return ibc_PACK(b, srcs, 2, 1);
+}
+
+static inline ibc_ref
+ibc_UNPACK(ibc_builder *b, enum ibc_type dest_type,
+           ibc_ref src, unsigned elem)
+{
+   assert(src.file == IBC_FILE_LOGICAL);
+   src.type = dest_type;
+   src.logical.byte += elem * ibc_type_byte_size(dest_type);
+   return ibc_MOV(b, dest_type, src);
+}
+
 static inline void
 ibc_VEC_to(ibc_builder *b, ibc_ref dest, ibc_ref *srcs, unsigned num_comps)
 {
