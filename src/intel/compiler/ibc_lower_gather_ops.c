@@ -122,6 +122,23 @@ ibc_lower_gather_ops(ibc_shader *shader)
          }
          break;
 
+      case IBC_INTRINSIC_OP_PACK: {
+         ibc_builder_push_instr_group(&b, instr);
+
+         assert(intrin->dest.file == IBC_FILE_LOGICAL);
+
+         ibc_ref dest = intrin->dest;
+         for (unsigned i = 0; i < intrin->num_srcs; i++) {
+            dest.type = intrin->src[i].ref.type;
+            ibc_MOV_raw_vec_to(&b, dest, intrin->src[i].ref,
+                               intrin->num_dest_comps);
+            dest.logical.byte += ibc_type_byte_size(intrin->src[i].ref.type);
+         }
+
+         ibc_builder_pop(&b);
+         break;
+      }
+
       case IBC_INTRINSIC_OP_VEC: {
          ibc_builder_push_instr_group(&b, instr);
 
