@@ -939,13 +939,26 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
-   case nir_intrinsic_read_invocation: {
-      assert(!nir_dest_is_divergent(instr->dest));
-      ibc_ref value = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
-      value.logical.broadcast = true;
-      value.logical.simd_channel = nir_src_as_uint(instr->src[1]);
-      ibc_builder_push_scalar(b);
-      dest = ibc_MOV(b, IBC_TYPE_UINT, value);
+   case nir_intrinsic_first_invocation:
+      dest = ibc_FIND_LIVE_CHANNEL(b);
+      break;
+
+   case nir_intrinsic_read_invocation:
+   case nir_intrinsic_read_first_invocation:
+   case nir_intrinsic_shuffle: {
+      ibc_ref val = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
+      ibc_ref chan;
+      if (instr->intrinsic == nir_intrinsic_read_first_invocation) {
+         chan = ibc_FIND_LIVE_CHANNEL(b);
+      } else {
+         chan = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UINT);
+      }
+
+      uint8_t val_simd_group = b->simd_group;
+      uint8_t val_simd_width = b->simd_width;
+
+      ibc_builder_push_nir_intrinsic_dest_group(b, instr);
+      dest = ibc_SIMD_SHUFFLE(b, val, val_simd_group, val_simd_width, chan);
       ibc_builder_pop(b);
       break;
    }
