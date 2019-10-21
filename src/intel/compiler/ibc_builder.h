@@ -727,40 +727,41 @@ ibc_FIND_LIVE_CHANNEL(ibc_builder *b)
 }
 
 static inline ibc_ref
-ibc_SIMD_BROADCAST(ibc_builder *b, ibc_ref val, ibc_ref chan,
-                   unsigned num_comps)
+ibc_SIMD_SHUFFLE(ibc_builder *b, ibc_ref val,
+                 uint8_t val_simd_group, uint8_t val_simd_width,
+                 ibc_ref chan)
 {
-   assert(ibc_ref_read_is_uniform(chan));
-
    if (ibc_ref_read_is_uniform(val))
-      return ibc_MOV_scalar(b, val.type, val);
+      return ibc_MOV(b, val.type, val);
 
-   if (val.file == IBC_FILE_LOGICAL && chan.file == IBC_FILE_IMM) {
-      uint64_t chan_imm = 0;
-      memcpy(&chan_imm, chan.imm, ibc_type_byte_size(chan.type));
-      assert(!val.logical.broadcast);
-      val.logical.broadcast = true;
-      val.logical.simd_channel = chan_imm;
-      return ibc_MOV_scalar(b, val.type, val);
+   if (chan.file == IBC_FILE_IMM) {
+      if (val.file == IBC_FILE_LOGICAL) {
+         assert(!val.logical.broadcast);
+         val.logical.broadcast = true;
+         val.logical.simd_channel = ibc_ref_as_uint(chan);
+      } else {
+         assert(val.file == IBC_FILE_HW_GRF);
+         assert(val.hw_grf.vstride == val.hw_grf.width * val.hw_grf.hstride);
+         val.hw_grf.byte += val.hw_grf.hstride * ibc_ref_as_uint(chan);
+         ibc_hw_grf_mul_stride(&val.hw_grf, 0);
+      }
+      return ibc_MOV(b, val.type, val);
    }
 
    ibc_intrinsic_src srcs[2] = {
       {
          .ref = val,
-         .simd_group = b->simd_group,
-         .simd_width = b->simd_width,
+         .simd_group = val_simd_group,
+         .simd_width = val_simd_width,
       },
       {
          .ref = chan,
-         .simd_width = 1,
       },
    };
 
-   ibc_builder_push_scalar(b);
    ibc_ref dest =
-      ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_SIMD_BROADCAST,
-                              val.type, num_comps, srcs, 2);
-   ibc_builder_pop(b);
+      ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_SIMD_SHUFFLE,
+                              val.type, 1, srcs, 2);
 
    return dest;
 }
@@ -772,10 +773,18 @@ ibc_uniformize(ibc_builder *b, ibc_ref val)
       if (ibc_ref_read_is_static(val))
          return val;
       else
-         ibc_MOV_scalar(b, val.type, val);
+         return ibc_MOV_scalar(b, val.type, val);
    }
 
-   return ibc_SIMD_BROADCAST(b, val, ibc_FIND_LIVE_CHANNEL(b), 1);
+   uint8_t val_simd_group = b->simd_group;
+   uint8_t val_simd_width = b->simd_width;
+
+   ibc_builder_push_scalar(b);
+   ibc_ref dest = ibc_SIMD_SHUFFLE(b, val, val_simd_group, val_simd_width,
+                                   ibc_FIND_LIVE_CHANNEL(b));
+   ibc_builder_pop(b);
+
+   return dest;
 }
 
 static inline ibc_ref
