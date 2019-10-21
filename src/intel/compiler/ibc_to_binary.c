@@ -468,6 +468,97 @@ generate_pln(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
 }
 
 static void
+generate_shuffle(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
+                 struct brw_reg dest, struct brw_reg val, struct brw_reg chan)
+{
+   /* Because we're using the address register, we're limited to 16-wide
+    * exection and 8-wide for 64-bit types.  We could try and make this
+    * instruction splittable higher up in the compiler but that gets weird
+    * because it reads all of the channels regardless of execution size.  It's
+    * easier just to split it here.
+    */
+   const unsigned max_width = type_sz(val.type) > 4 ? 8 : 16;
+   const unsigned lower_width = MIN2(max_width, intrin->instr.simd_width);
+
+   brw_set_default_exec_size(p, cvt(lower_width) - 1);
+   for (unsigned g = 0; g < intrin->instr.simd_width; g += lower_width) {
+      brw_set_default_group(p, intrin->instr.simd_group + g);
+
+      if ((val.vstride == 0 && val.hstride == 0) ||
+          chan.file == BRW_IMMEDIATE_VALUE) {
+         /* Trivial, the source is already uniform or the index is a constant.
+          * We will typically not get here if the optimizer is doing its job,
+          * but asserting would be mean.
+          */
+         const unsigned i = chan.file == BRW_IMMEDIATE_VALUE ? chan.ud : 0;
+         brw_MOV(p, suboffset(dest, g), stride(suboffset(val, i), 0, 1, 0));
+      } else {
+         /* We use VxH indirect addressing, clobbering a0.0 through a0.7. */
+         struct brw_reg addr = vec8(brw_address_reg(0));
+         if (intrin->instr.simd_width == 1)
+            addr = vec1(addr);
+
+         struct brw_reg group_chan = suboffset(chan, g);
+
+         if (lower_width == 8 && group_chan.width == BRW_WIDTH_16) {
+            /* Things get grumpy if the register is too wide. */
+            group_chan.width--;
+            group_chan.vstride--;
+         }
+
+         assert(type_sz(group_chan.type) <= 4);
+         if (type_sz(group_chan.type) == 4) {
+            /* The destination stride of an instruction (in bytes) must be
+             * greater than or equal to the size of the rest of the
+             * instruction.  Since the address register is of type UW, we
+             * can't use a D-type instruction.  In order to get around this,
+             * re retype to UW and use a stride.
+             */
+            group_chan = retype(spread(group_chan, 2), BRW_REGISTER_TYPE_W);
+         }
+
+         /* Take into account the component size and horizontal stride. */
+         assert(val.vstride == val.hstride + val.width);
+         brw_SHL(p, addr, group_chan,
+                 brw_imm_uw(util_logbase2(type_sz(val.type)) +
+                            val.hstride - 1));
+
+         /* Add on the register start offset */
+         brw_ADD(p, addr, addr, brw_imm_uw(val.nr * REG_SIZE + val.subnr));
+
+         if (type_sz(val.type) > 4 &&
+             (p->devinfo->is_cherryview ||
+              gen_device_info_is_9lp(p->devinfo))) {
+            /* From the Cherryview PRM Vol 7. "Register Region Restrictions":
+             *
+             *    "When source or destination datatype is 64b or operation is
+             *    integer DWord multiply, indirect addressing must not be
+             *    used."
+             *
+             * To work around both of these, we do two integer MOVs insead of
+             * one 64-bit MOV.  Because no double value should ever cross a
+             * register boundary, it's safe to use the immediate offset in the
+             * indirect here to handle adding 4 bytes to the offset and avoid
+             * the extra ADD to the register file.
+             */
+            struct brw_reg gdest = suboffset(dest, g * dest.hstride);
+            struct brw_reg dest_d = retype(spread(gdest, 2),
+                                           BRW_REGISTER_TYPE_D);
+            assert(dest.hstride == 1);
+            brw_MOV(p, dest_d,
+                    retype(brw_VxH_indirect(0, 0), BRW_REGISTER_TYPE_D));
+            brw_MOV(p, byte_offset(dest_d, 4),
+                    retype(brw_VxH_indirect(0, 4), BRW_REGISTER_TYPE_D));
+         } else {
+            brw_MOV(p, suboffset(dest, g * dest.hstride),
+                    retype(brw_VxH_indirect(0, 0), val.type));
+         }
+      }
+   }
+
+}
+
+static void
 generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
                    const ibc_intrinsic_instr *intrin)
 {
@@ -493,10 +584,8 @@ generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
       break;
    }
 
-   case IBC_INTRINSIC_OP_SIMD_BROADCAST:
-      assert(intrin->instr.simd_width == 1);
-      assert(intrin->instr.we_all);
-      brw_broadcast(p, dest, src[0], src[1]);
+   case IBC_INTRINSIC_OP_SIMD_SHUFFLE:
+      generate_shuffle(p, intrin, dest, src[0], src[1]);
       break;
 
    case IBC_INTRINSIC_OP_PLN:
