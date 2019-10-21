@@ -252,12 +252,43 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
-   case nir_op_unpack_32_2x16_split_x:
-   case nir_op_unpack_32_2x16_split_y:
-      src[0].type = dest_type;
-      src[0].logical.byte = 2 * (instr->op == nir_op_unpack_32_2x16_split_y);
-      dest = ibc_MOV(b, dest_type, src[0]);
+   case nir_op_pack_32_2x16_split:
+   case nir_op_pack_64_2x32_split:
+      dest = ibc_PACK2(b, src[0], src[1]);
       break;
+
+   case nir_op_unpack_32_2x16_split_x:
+   case nir_op_unpack_64_2x32_split_x:
+      dest = ibc_UNPACK(b, dest_type, src[0], 0);
+      break;
+
+   case nir_op_unpack_32_2x16_split_y:
+   case nir_op_unpack_64_2x32_split_y:
+      dest = ibc_UNPACK(b, dest_type, src[0], 1);
+      break;
+
+   case nir_op_pack_half_2x16_split:
+      dest = ibc_PACK2(b, ibc_MOV(b, IBC_TYPE_HF, src[0]),
+                          ibc_MOV(b, IBC_TYPE_HF, src[1]));
+      break;
+
+   case nir_op_unpack_half_2x16_split_x: {
+      assert(src[0].file == IBC_FILE_LOGICAL);
+      ibc_ref unpack_src = src[0];
+      unpack_src.type = IBC_TYPE_HF;
+      unpack_src.logical.byte += 0;
+      dest = ibc_MOV(b, IBC_TYPE_F, unpack_src);
+      break;
+   }
+
+   case nir_op_unpack_half_2x16_split_y: {
+      assert(src[0].file == IBC_FILE_LOGICAL);
+      ibc_ref unpack_src = src[0];
+      unpack_src.type = IBC_TYPE_HF;
+      unpack_src.logical.byte += 2;
+      dest = ibc_MOV(b, IBC_TYPE_F, unpack_src);
+      break;
+   }
 
    case nir_op_ineg:
    case nir_op_fneg:
