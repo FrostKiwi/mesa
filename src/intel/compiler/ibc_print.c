@@ -379,7 +379,7 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_INVALID: break;
    case IBC_INTRINSIC_OP_UNDEF:              return "undef";
    case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL:  return "find_live_channel";
-   case IBC_INTRINSIC_OP_SIMD_BROADCAST:     return "simd_broadcast";
+   case IBC_INTRINSIC_OP_SIMD_SHUFFLE:       return "simd_shuffle";
    case IBC_INTRINSIC_OP_SIMD_ZIP:           return "simd_zip";
    case IBC_INTRINSIC_OP_PACK:               return "pack";
    case IBC_INTRINSIC_OP_VEC:                return "vec";
