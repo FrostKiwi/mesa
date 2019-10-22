@@ -196,7 +196,9 @@ simd_restricted_src(ibc_builder *b, ibc_ref src,
    if (src.reg && src.reg->is_wlr)
       return src;
 
-   return ibc_MOV_raw(b, src);
+   ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
+   ibc_MOV_raw_vec_to(b, dest, src, num_comps);
+   return dest;
 }
 
 static void
@@ -374,7 +376,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                                              src_group,
                                              intrin->src[j].simd_group,
                                              src_width,
-                                             intrin->src[i].num_comps);
+                                             intrin->src[j].num_comps);
                   src_idx++;
                }
                split->num_srcs = src_idx;
@@ -393,7 +395,7 @@ ibc_lower_simd_width(ibc_shader *shader)
                                              intrin->src[j].simd_group,
                                              split->src[j].simd_group,
                                              split_simd_width,
-                                             intrin->src[i].num_comps);
+                                             intrin->src[j].num_comps);
                }
                break;
             }
