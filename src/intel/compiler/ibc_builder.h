@@ -954,6 +954,21 @@ ibc_MESSAGE(ibc_builder *b, const ibc_intrinsic_src *src_in,
 }
 
 static inline ibc_ref
+ibc_MOV_INDIRECT(ibc_builder *b, ibc_ref base, unsigned num_bytes,
+                 ibc_ref offset)
+{
+   assert(base.file == IBC_FILE_HW_GRF);
+
+   ibc_intrinsic_src src[] = {
+      { .ref = base, .num_bytes = num_bytes },
+      { .ref = offset, .num_comps = 1 },
+   };
+
+   return ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_MOV_INDIRECT,
+                                  base.type, 1, src, 2);
+}
+
+static inline ibc_ref
 ibc_PLN(ibc_builder *b, ibc_ref vert, ibc_ref bary)
 {
    assert(vert.file == IBC_FILE_LOGICAL);
