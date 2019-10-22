@@ -683,9 +683,16 @@ ibc_build_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
          intrin->src[i].simd_group = srcs[i].simd_group;
          intrin->src[i].simd_width = srcs[i].simd_width;
       }
-      intrin->src[i].num_comps =
-         srcs[i].num_comps > 0 ? srcs[i].num_comps :
-         srcs[i].ref.file == IBC_FILE_NONE ? 0 : num_dest_comps;
+      if (srcs[i].num_bytes == 0 && srcs[i].num_comps == 0) {
+         intrin->src[i].num_comps = srcs[i].ref.file == IBC_FILE_NONE ?
+                                    0 : num_dest_comps;
+         intrin->src[i].num_bytes = -1;
+      } else {
+         intrin->src[i].num_bytes = srcs[i].num_bytes > 0 ?
+                                    srcs[i].num_bytes : -1;
+         intrin->src[i].num_comps = srcs[i].num_comps > 0 ?
+                                    srcs[i].num_comps : -1;
+      }
    }
 
    intrin->dest = dest;

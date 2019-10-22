@@ -999,8 +999,11 @@ typedef struct {
    /** Number of SIMD invocations */
    uint8_t simd_width;
 
+   /** Number of bytes consumed via this ref */
+   int16_t num_bytes;
+
    /** Number of vector components produced or consumed via this ref */
-   unsigned num_comps;
+   int16_t num_comps;
 } ibc_intrinsic_src;
 
 typedef struct {

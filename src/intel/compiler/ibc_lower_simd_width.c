@@ -285,6 +285,7 @@ ibc_lower_simd_width(ibc_shader *shader)
             zip->src[i].ref = ibc_typed_ref(split_dest_reg, IBC_TYPE_INVALID);
             zip->src[i].simd_group = split_dest_reg->logical.simd_group;
             zip->src[i].simd_width = split_dest_reg->logical.simd_width;
+            zip->src[i].num_bytes = -1;
             zip->src[i].num_comps = split_dest_reg->logical.num_comps;
 
             split_dests[i] = ibc_typed_ref(split_dest_reg, dest->type);

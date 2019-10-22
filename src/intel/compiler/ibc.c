@@ -240,7 +240,8 @@ ibc_instr_foreach_read(ibc_instr *instr, ibc_ref_cb cb, void *state)
    case IBC_INSTR_TYPE_INTRINSIC: {
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
       for (unsigned i = 0; i < intrin->num_srcs; i++) {
-         if (!cb(&intrin->src[i].ref, -1, intrin->src[i].num_comps,
+         if (!cb(&intrin->src[i].ref,
+                 intrin->src[i].num_bytes, intrin->src[i].num_comps,
                  intrin->src[i].simd_group, intrin->src[i].simd_width, state))
             return false;
       }
