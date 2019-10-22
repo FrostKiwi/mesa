@@ -549,13 +549,13 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
              (intrin->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO &&
               intrin->src[0].ref.file != IBC_FILE_NONE)) {
             assert(intrin->dest.reg);
-            assert(ibc_reg_ssa_instr(intrin->dest.reg) == instr);
             assert(intrin->src[0].ref.file == IBC_FILE_HW_GRF);
             assert(intrin->src[0].ref.reg == NULL);
 
             const ibc_ra_reg_class *c =
                ibc_reg_to_class(intrin->dest.reg, state.reg_set);
-            unsigned byte = intrin->src[0].ref.hw_grf.byte;
+            unsigned byte = intrin->src[0].ref.hw_grf.byte -
+                            intrin->dest.hw_grf.byte;
             unsigned node = state.num_hack_nodes + intrin->dest.reg->index;
             if (ra_get_node_reg(g, node) == ~0U)
                ra_set_node_reg(g, node, ibc_ra_reg_class_grf_to_reg(c, byte));

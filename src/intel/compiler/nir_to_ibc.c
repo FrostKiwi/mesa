@@ -1094,34 +1094,36 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
-   case nir_intrinsic_load_uniform:
-      if (nir_src_is_const(instr->src[0])) {
-         const uint64_t offset_B = nir_intrinsic_base(instr) +
-                                   nir_src_as_uint(instr->src[0]);
-         const unsigned comp_size_B = nir_dest_bit_size(instr->dest) / 8;
+   case nir_intrinsic_load_uniform: {
+      const uint32_t base_offset_B = nir_intrinsic_base(instr);
+      const uint32_t range_B = nir_intrinsic_range(instr);
+      const uint32_t comp_size_B = nir_dest_bit_size(instr->dest) / 8;
+      const uint32_t comp_range_B =
+         range_B - ((instr->num_components - 1) * comp_size_B);
 
-         ibc_ref dest_comps[4] = { };
-         for (unsigned c = 0; c < instr->num_components; c++) {
-            const uint64_t comp_offset_B = offset_B + c * comp_size_B;
+      ibc_ref dest_comps[4] = { };
+      for (unsigned c = 0; c < instr->num_components; c++) {
+         assert(nti->payload->push.file == IBC_FILE_HW_GRF);
+         ibc_ref push_comp = nti->payload->push;
+         push_comp.type = instr->dest.ssa.bit_size;
+         push_comp.hw_grf.byte += base_offset_B + c * comp_size_B;
 
-            assert(nti->payload->push.file == IBC_FILE_HW_GRF);
-            if (comp_offset_B + comp_size_B >=
-                nti->payload->push.reg->hw_grf.size)
-               continue;
-
-            dest_comps[c] = nti->payload->push;
-            dest_comps[c].type = instr->dest.ssa.bit_size;
-            dest_comps[c].hw_grf.byte += comp_offset_B;
-            ibc_hw_grf_mul_stride(&dest_comps[c].hw_grf, 0);
+         if (nir_src_is_const(instr->src[0])) {
+            push_comp.hw_grf.byte += nir_src_as_uint(instr->src[0]);
+            ibc_hw_grf_mul_stride(&push_comp.hw_grf, 0);
+            dest_comps[c] = push_comp;
+         } else {
+            dest_comps[c] = ibc_MOV_INDIRECT(b, push_comp, comp_range_B,
+                                             ibc_nir_src(nti, instr->src[0],
+                                                         IBC_TYPE_UD));
          }
-
-         ibc_builder_push_scalar(b);
-         dest = ibc_VEC(b, dest_comps, instr->num_components);
-         ibc_builder_pop(b);
-      } else {
-         unreachable("Indirect push constants not yet supported");
       }
+
+      ibc_builder_push_nir_dest_group(b, instr->dest);
+      dest = ibc_VEC(b, dest_comps, instr->num_components);
+      ibc_builder_pop(b);
       break;
+   }
 
    case nir_intrinsic_load_ubo:
       if (nir_src_is_const(instr->src[0]) && nir_src_is_const(instr->src[1])) {
