@@ -206,6 +206,55 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_shared_atomic_add:
+   case nir_intrinsic_shared_atomic_imin:
+   case nir_intrinsic_shared_atomic_umin:
+   case nir_intrinsic_shared_atomic_imax:
+   case nir_intrinsic_shared_atomic_umax:
+   case nir_intrinsic_shared_atomic_and:
+   case nir_intrinsic_shared_atomic_or:
+   case nir_intrinsic_shared_atomic_xor:
+   case nir_intrinsic_shared_atomic_exchange:
+   case nir_intrinsic_shared_atomic_comp_swap: {
+      unsigned aop = brw_aop_for_nir_intrinsic(instr);
+
+      /* Set up the BTI or handle */
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_SURFACE_BTI] = (ibc_intrinsic_src) {
+            .ref = ibc_imm_ud(GEN7_BTI_SLM),
+         },
+         [IBC_SURFACE_SRC_ADDRESS] = (ibc_intrinsic_src) {
+            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
+         },
+         [IBC_SURFACE_SRC_ATOMIC_OP] = (ibc_intrinsic_src) {
+            .ref = ibc_imm_ud(aop),
+         },
+      };
+
+      /* If we're not an atomic aop == -1 so the last two conditions are true
+       * vacuously.
+       */
+      if (aop != BRW_AOP_INC && aop != BRW_AOP_DEC) {
+         srcs[IBC_SURFACE_SRC_DATA0] = (ibc_intrinsic_src) {
+            .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+         };
+      }
+
+      if (aop == BRW_AOP_CMPWR) {
+         srcs[IBC_SURFACE_SRC_DATA1] = (ibc_intrinsic_src) {
+            .ref = ibc_nir_src(nti, instr->src[2], IBC_TYPE_UD),
+         };
+      }
+
+      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
+      ibc_intrinsic_instr *image_op =
+         ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC,
+                             dest, -1, 1, srcs, IBC_SURFACE_NUM_SRCS);
+      image_op->can_reorder = false;
+      image_op->has_side_effects = true;
+      break;
+   }
+
    default:
       return false;
    }
