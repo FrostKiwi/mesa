@@ -716,9 +716,11 @@ static inline ibc_ref
 ibc_FIND_LIVE_CHANNEL(ibc_builder *b)
 {
    ibc_builder_push_scalar(b);
-   ibc_ref dest =
-      ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL,
-                                 IBC_TYPE_UD, 1, NULL, 0);
+   ibc_ref dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
+   ibc_intrinsic_instr *intrin =
+      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL,
+                          dest, -1, 1, NULL, 0);
+   intrin->can_reorder = false;
    ibc_builder_pop(b);
 
    return dest;
