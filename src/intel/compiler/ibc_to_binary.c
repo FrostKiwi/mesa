@@ -616,6 +616,10 @@ generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
       brw_WAIT(p);
       break;
 
+   case IBC_INTRINSIC_OP_STALL_REG:
+      brw_MOV(p, retype(brw_null_reg(), src[0].type), src[0]);
+      break;
+
    default:
       unreachable("Intrinsic should have been lowered");
    }
