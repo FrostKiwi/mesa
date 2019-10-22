@@ -472,8 +472,9 @@ generate_pln(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
 }
 
 static void
-generate_shuffle(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
-                 struct brw_reg dest, struct brw_reg val, struct brw_reg chan)
+generate_mov_indirect(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
+                      struct brw_reg dest, struct brw_reg val,
+                      struct brw_reg offset, unsigned offset_mul)
 {
    /* Because we're using the address register, we're limited to 16-wide
     * exection and 8-wide for 64-bit types.  We could try and make this
@@ -484,51 +485,59 @@ generate_shuffle(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
    const unsigned max_width = type_sz(val.type) > 4 ? 8 : 16;
    const unsigned lower_width = MIN2(max_width, intrin->instr.simd_width);
 
+   const unsigned dest_stride = (1u << dest.hstride) >> 1;
+   const unsigned offset_stride = (1u << offset.hstride) >> 1;
+
    brw_set_default_exec_size(p, cvt(lower_width) - 1);
    for (unsigned g = 0; g < intrin->instr.simd_width; g += lower_width) {
       brw_set_default_group(p, intrin->instr.simd_group + g);
 
-      if ((val.vstride == 0 && val.hstride == 0) ||
-          chan.file == BRW_IMMEDIATE_VALUE) {
+      struct brw_reg gdest = suboffset(dest, g * dest_stride);
+
+      if (offset_mul == 0 || offset.file == BRW_IMMEDIATE_VALUE) {
          /* Trivial, the source is already uniform or the index is a constant.
           * We will typically not get here if the optimizer is doing its job,
           * but asserting would be mean.
           */
-         const unsigned i = chan.file == BRW_IMMEDIATE_VALUE ? chan.ud : 0;
-         brw_MOV(p, suboffset(dest, g), stride(suboffset(val, i), 0, 1, 0));
+         unsigned offset_B = offset.ud * offset_mul;
+         brw_MOV(p, gdest, stride(byte_offset(val, offset_B), 0, 1, 0));
       } else {
          /* We use VxH indirect addressing, clobbering a0.0 through a0.7. */
          struct brw_reg addr = vec8(brw_address_reg(0));
          if (intrin->instr.simd_width == 1)
             addr = vec1(addr);
 
-         struct brw_reg group_chan = suboffset(chan, g);
+         struct brw_reg goffset = suboffset(offset, g * offset_stride);
 
-         if (lower_width == 8 && group_chan.width == BRW_WIDTH_16) {
+         if (lower_width == 8 && goffset.width == BRW_WIDTH_16) {
             /* Things get grumpy if the register is too wide. */
-            group_chan.width--;
-            group_chan.vstride--;
+            goffset.width--;
+            goffset.vstride--;
          }
 
-         assert(type_sz(group_chan.type) <= 4);
-         if (type_sz(group_chan.type) == 4) {
+         assert(type_sz(goffset.type) <= 4);
+         if (type_sz(goffset.type) == 4) {
             /* The destination stride of an instruction (in bytes) must be
              * greater than or equal to the size of the rest of the
              * instruction.  Since the address register is of type UW, we
              * can't use a D-type instruction.  In order to get around this,
              * re retype to UW and use a stride.
              */
-            group_chan = retype(spread(group_chan, 2), BRW_REGISTER_TYPE_W);
+            goffset = retype(spread(goffset, 2), BRW_REGISTER_TYPE_W);
          }
 
          /* Take into account the component size and horizontal stride. */
-         assert(val.vstride == val.hstride + val.width);
-         brw_SHL(p, addr, group_chan,
-                 brw_imm_uw(util_logbase2(type_sz(val.type)) +
-                            val.hstride - 1));
+         if (offset_mul > 1) {
+            brw_SHL(p, addr, goffset, brw_imm_uw(util_logbase2(offset_mul)));
 
-         /* Add on the register start offset */
-         brw_ADD(p, addr, addr, brw_imm_uw(val.nr * REG_SIZE + val.subnr));
+            /* Add on the register start offset */
+            brw_ADD(p, addr, addr, brw_imm_uw(val.nr * REG_SIZE + val.subnr));
+         } else {
+            assert(offset_mul == 1);
+            /* Add on the register start offset */
+            brw_ADD(p, addr, goffset,
+                    brw_imm_uw(val.nr * REG_SIZE + val.subnr));
+         }
 
          if (type_sz(val.type) > 4 &&
              (p->devinfo->is_cherryview ||
@@ -545,7 +554,6 @@ generate_shuffle(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
              * indirect here to handle adding 4 bytes to the offset and avoid
              * the extra ADD to the register file.
              */
-            struct brw_reg gdest = suboffset(dest, g * dest.hstride);
             struct brw_reg dest_d = retype(spread(gdest, 2),
                                            BRW_REGISTER_TYPE_D);
             assert(dest.hstride == 1);
@@ -554,8 +562,7 @@ generate_shuffle(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
             brw_MOV(p, byte_offset(dest_d, 4),
                     retype(brw_VxH_indirect(0, 4), BRW_REGISTER_TYPE_D));
          } else {
-            brw_MOV(p, suboffset(dest, g * dest.hstride),
-                    retype(brw_VxH_indirect(0, 0), val.type));
+            brw_MOV(p, gdest, retype(brw_VxH_indirect(0, 0), val.type));
          }
       }
    }
@@ -589,7 +596,17 @@ generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
    }
 
    case IBC_INTRINSIC_OP_SIMD_SHUFFLE:
-      generate_shuffle(p, intrin, dest, src[0], src[1]);
+      assert(intrin->src[0].ref.file == IBC_FILE_HW_GRF);
+      assert(intrin->src[0].ref.hw_grf.hstride *
+             intrin->src[0].ref.hw_grf.width ==
+             intrin->src[0].ref.hw_grf.vstride);
+      generate_mov_indirect(p, intrin, dest, src[0], src[1],
+                            intrin->src[0].ref.hw_grf.hstride);
+      break;
+
+   case IBC_INTRINSIC_OP_MOV_INDIRECT:
+      assert(intrin->src[0].ref.file == IBC_FILE_HW_GRF);
+      generate_mov_indirect(p, intrin, dest, src[0], src[1], 1);
       break;
 
    case IBC_INTRINSIC_OP_PLN:
