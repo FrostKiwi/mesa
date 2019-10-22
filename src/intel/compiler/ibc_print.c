@@ -386,6 +386,7 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_MESSAGE:            return "message";
    case IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO: return "bti_block_load_ubo";
    case IBC_INTRINSIC_OP_LOAD_PAYLOAD:       return "load_payload";
+   case IBC_INTRINSIC_OP_MOV_INDIRECT:       return "mov_indirect";
    case IBC_INTRINSIC_OP_PLN:                return "pln";
    case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE:   return "align16_ddx_fine";
    case IBC_INTRINSIC_OP_FB_WRITE:           return "fb_write";
