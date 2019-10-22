@@ -485,7 +485,8 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
          ibc_validate_null_ref(s, &intrin->src[i].ref);
       } else {
          ibc_validate_ref(s, &intrin->src[i].ref, NULL,
-                          -1, intrin->src[i].num_comps,
+                          intrin->src[i].num_bytes,
+                          intrin->src[i].num_comps,
                           intrin->src[i].simd_group,
                           intrin->src[i].simd_width);
       }
