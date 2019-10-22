@@ -138,6 +138,7 @@ ibc_instr_fe_cycles(const ibc_instr *instr,
          return 2;
 
       case IBC_INTRINSIC_OP_SIMD_SHUFFLE:
+      case IBC_INTRINSIC_OP_MOV_INDIRECT:
          /* This does an ALU op to fill out the indirect register file plus an
           * indirect fetch.  This is 100% an approximation.
           */
@@ -384,6 +385,7 @@ ibc_instr_dest_latency(const ibc_instr *instr,
 
       case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL:
       case IBC_INTRINSIC_OP_SIMD_SHUFFLE:
+      case IBC_INTRINSIC_OP_MOV_INDIRECT:
       case IBC_INTRINSIC_OP_PLN:
       case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE:
       case IBC_INTRINSIC_OP_STALL_REG:
