@@ -998,6 +998,19 @@ ibc_WAIT(ibc_builder *b)
 }
 
 static inline void
+ibc_STALL_REG(ibc_builder *b, ibc_ref reg)
+{
+   ibc_intrinsic_src src = { .ref = reg, .num_comps = 1, };
+   ibc_builder_push_scalar(b);
+   ibc_intrinsic_instr *wait =
+      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_STALL_REG,
+                          ibc_null(IBC_TYPE_UD), 0, 0, &src, 1);
+   wait->can_reorder = false;
+   wait->has_side_effects = true;
+   ibc_builder_pop(b);
+}
+
+static inline void
 ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_ref tmp,
                    enum brw_conditional_mod cmod,
                    unsigned final_cluster_size)
