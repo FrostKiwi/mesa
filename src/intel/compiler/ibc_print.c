@@ -409,6 +409,7 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_TG4:                return "tg4";
    case IBC_INTRINSIC_OP_SAMPLEINFO:         return "sampleinfo";
    case IBC_INTRINSIC_OP_WAIT:               return "wait";
+   case IBC_INTRINSIC_OP_STALL_REG:          return "stall_reg";
    }
    unreachable("Invalid IBC intrinsic op");
 }
