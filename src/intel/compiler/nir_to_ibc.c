@@ -1520,6 +1520,64 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_group_memory_barrier:
+   case nir_intrinsic_memory_barrier_shared:
+   case nir_intrinsic_memory_barrier_atomic_counter:
+   case nir_intrinsic_memory_barrier_buffer:
+   case nir_intrinsic_memory_barrier_image:
+   case nir_intrinsic_memory_barrier: {
+      uint32_t fence_bti[2];
+      unsigned num_fences = 0;
+
+      if (b->shader->devinfo->gen >= 11) {
+         if (instr->intrinsic == nir_intrinsic_group_memory_barrier ||
+             instr->intrinsic == nir_intrinsic_memory_barrier ||
+             instr->intrinsic == nir_intrinsic_memory_barrier_shared)
+            fence_bti[num_fences++] = 0;
+
+         if (instr->intrinsic != nir_intrinsic_memory_barrier_shared)
+            fence_bti[num_fences++] = GEN7_BTI_SLM;
+      } else {
+         /* Prior to gen11, we only have one kind of fence. */
+         fence_bti[num_fences++] = 0;
+      }
+
+      ibc_ref fence_stall_reg[2];
+      for (unsigned i = 0; i < num_fences; i++) {
+         const bool commit_enable = num_fences > 1 ||
+            b->shader->devinfo->gen >= 10 /* HSD ES # 1404612949 */;
+
+         ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 1);
+         send->instr.we_all = true;
+         send->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
+         send->desc_imm = brw_dp_desc(b->shader->devinfo, fence_bti[i],
+                                      GEN7_DATAPORT_DC_MEMORY_FENCE,
+                                      (int)commit_enable << 5);
+         send->has_header = true;
+         send->can_reorder = false;
+         send->has_side_effects = true;
+
+         /* We need something */
+         send->payload[0] = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
+         send->mlen = 1;
+
+         if (num_fences > 1) {
+            ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
+            fence_stall_reg[i] = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
+            send->dest = fence_stall_reg[i];
+            send->rlen = 1;
+         }
+
+         ibc_builder_insert_instr(b, &send->instr);
+      }
+
+      if (num_fences > 1) {
+         for (unsigned i = 0; i < num_fences; i++)
+            ibc_STALL_REG(b, fence_stall_reg[i]);
+      }
+      break;
+   }
+
    default:
       unreachable("Unhandled NIR intrinsic");
    }

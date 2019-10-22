@@ -151,6 +151,9 @@ ibc_instr_fe_cycles(const ibc_instr *instr,
       case IBC_INTRINSIC_OP_WAIT:
          return 2; /* TODO */
 
+      case IBC_INTRINSIC_OP_STALL_REG:
+         return 2;
+
       default:
          unreachable("Invalid intrinsic this late in compilation");
       }
@@ -266,6 +269,10 @@ ibc_instr_dest_latency(const ibc_instr *instr,
          }
          break;
 
+      case BRW_SFID_MESSAGE_GATEWAY:
+         assert(send->desc_imm == BRW_MESSAGE_GATEWAY_SFID_BARRIER_MSG);
+         return 200; /* TODO */
+
       case BRW_SFID_URB:
          switch (brw_urb_desc_msg_type(devinfo, send->desc_imm)) {
          case GEN8_URB_OPCODE_SIMD8_WRITE:
@@ -296,6 +303,9 @@ ibc_instr_dest_latency(const ibc_instr *instr,
              * untyped surface read/write.
              */
             return 600;
+
+         case GEN7_DATAPORT_DC_MEMORY_FENCE:
+            return 100; /* TODO */
 
          default:
             unreachable("Unknown data cache message");
@@ -376,6 +386,7 @@ ibc_instr_dest_latency(const ibc_instr *instr,
       case IBC_INTRINSIC_OP_SIMD_SHUFFLE:
       case IBC_INTRINSIC_OP_PLN:
       case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE:
+      case IBC_INTRINSIC_OP_STALL_REG:
          return ibc_alu_latency(IBC_TYPE_F, devinfo);
 
       case IBC_INTRINSIC_OP_WAIT:

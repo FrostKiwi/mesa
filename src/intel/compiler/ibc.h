@@ -955,6 +955,9 @@ enum ibc_intrinsic_op {
 
    /* Wait for a notificaiton */
    IBC_INTRINSIC_OP_WAIT,
+
+   /* Stall on a register */
+   IBC_INTRINSIC_OP_STALL_REG,
 };
 
 /* Sources for [un]typed surface intrinsics */
