@@ -3046,6 +3046,12 @@ typedef struct nir_shader {
     */
    void *constant_data;
    unsigned constant_data_size;
+
+   /** is the nir_shader structured?
+    *
+    * mainly there for validation, as a structured nir_shader has stronger validation rules.
+    */
+   bool structured;
 } nir_shader;
 
 #define nir_foreach_function(func, shader) \

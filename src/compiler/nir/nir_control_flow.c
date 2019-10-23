@@ -147,12 +147,16 @@ link_block_to_non_block(nir_block *block, nir_cf_node *node)
        * any predecessors that need to be unlinked.
        */
 
+      nir_block *other_successor = NULL;
+      if (nir_block_ends_in_jump(block))
+         other_successor = nir_instr_as_jump(nir_block_last_instr(block))->target;
+
       nir_loop *loop = nir_cf_node_as_loop(node);
 
       nir_block *loop_header_block = nir_loop_first_block(loop);
 
       unlink_block_successors(block);
-      link_blocks(block, loop_header_block, NULL);
+      link_blocks(block, loop_header_block, other_successor);
    }
 
 }
