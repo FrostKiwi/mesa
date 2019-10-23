@@ -281,6 +281,56 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    brw_set_default_saturate(p, alu->saturate);
    brw_set_default_acc_write_control(p, alu->accum_wr_en);
 
+   if (p->devinfo->gen < 10 && ibc_alu_op_infos[alu->op].num_srcs == 3) {
+      /* On gen9 and earlier, we don't have 3-src ALIGN1 instructions so they
+       * have to be implemented using ALIGN16.
+       */
+      brw_set_default_access_mode(p, BRW_ALIGN_16);
+      if (alu->instr.simd_width == 1) {
+         /* If we're SIMD1 things get interesting because we can't just use a
+          * SIMD1 instruction and expect the destination to work properly.
+          * Instead, we have to use a higher SIMD width and an ALIGN16
+          * write-mask.
+          */
+         assert(type_sz(dest.type) >= 4);
+         const unsigned width = 16 / type_sz(dest.type);
+         brw_set_default_exec_size(p, cvt(width) - 1);
+         const unsigned dest_comp =
+            (dest.subnr % 16) / type_sz(dest.type);
+
+         switch (type_sz(dest.type)) {
+         case 2:
+            unreachable("TODO");
+            break;
+         case 4:
+            dest.writemask = 1 << dest_comp;
+            dest.subnr = (dest.subnr / 16) * 16;
+            break;
+         case 8:
+            /* Writemasks act on 32-bit components in ALIGN16 */
+            dest.writemask = 3 << (dest_comp * 2);
+            dest.subnr = (dest.subnr / 16) * 16;
+
+            /* We have even more fun with DF instructions because <0;1,0>
+             * regions turn into SWIZZLE_XXXX which replicates 32-bit
+             * components, not 64-bit components.  In order for things to work
+             * properly, we need to use SWIZZLE_XYXY or SWIZZLE_ZWZW.
+             */
+            for (unsigned i = 0; i < 3; i++) {
+               assert(type_sz(src[i].type) == 8);
+               const unsigned src_comp =  (src[i].subnr % 16) / 8;
+               src[i].subnr = (src[i].subnr / 16) * 16;
+               src[i] = vec8(src[i]);
+               src[i].swizzle = src_comp == 0 ?
+                                BRW_SWIZZLE_XYXY : BRW_SWIZZLE_ZWZW;
+            }
+            break;
+         default:
+            unreachable("Invalid type size for a 3-src instruction");
+         }
+      }
+   }
+
    const unsigned int last_insn_offset = p->next_insn_offset;
 
 #define UNOP_CASE(OP)            \
@@ -293,18 +343,9 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       brw_##OP(p, dest, src[0], src[1]);  \
       break;
 
-#define TRIOP_CASE(OP)                                      \
-   case IBC_ALU_OP_##OP:                                    \
-      if (p->devinfo->gen < 10) {                           \
-         brw_set_default_access_mode(p, BRW_ALIGN_16);      \
-         if (alu->instr.simd_width == 1) {                  \
-            assert(type_sz(dest.type) == 4);                \
-            brw_set_default_exec_size(p, BRW_EXECUTE_4);    \
-            dest.writemask = 1 << ((dest.subnr % 16) / 4);  \
-            dest.subnr = (dest.subnr / 16) * 16;            \
-         }                                                  \
-      }                                                     \
-      brw_##OP(p, dest, src[0], src[1], src[2]);            \
+#define TRIOP_CASE(OP)                             \
+   case IBC_ALU_OP_##OP:                           \
+      brw_##OP(p, dest, src[0], src[1], src[2]);   \
       break;
 
 #define UNOP_MATH_CASE(OP, MATH)                                           \
