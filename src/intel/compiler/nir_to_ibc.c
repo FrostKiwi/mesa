@@ -405,7 +405,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    BINOP_CASE(fmax, MAX)
 
    case nir_op_ffma:
-      assert(dest_type == IBC_TYPE_F);
+      assert(ibc_type_base_type(dest_type) == IBC_TYPE_FLOAT);
       dest = ibc_MAD(b, dest_type, src[2], src[1], src[0]);
       break;
 
