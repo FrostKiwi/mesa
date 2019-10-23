@@ -966,6 +966,7 @@ enum ibc_surface_src {
    IBC_SURFACE_SRC_SURFACE_BTI,     /**< Surface BTI */
    IBC_SURFACE_SRC_SURFACE_HANDLE,  /**< Surface bindless handle */
    IBC_SURFACE_SRC_ADDRESS,         /**< Surface offset or coordinate */
+   IBC_SURFACE_SRC_PIXEL_MASK,      /**< Pixel mask if in a fragment shader */
    IBC_SURFACE_SRC_DATA0,           /**< Surface write/atomic data */
    IBC_SURFACE_SRC_DATA1,           /**< Surface write/atomic data */
    IBC_SURFACE_SRC_ATOMIC_OP,       /**< Surface atomic opcode */
