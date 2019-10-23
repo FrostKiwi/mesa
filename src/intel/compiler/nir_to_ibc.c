@@ -185,9 +185,11 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_u2u8:
    case nir_op_u2u16:
    case nir_op_u2u32:
+   case nir_op_u2u64:
    case nir_op_i2i8:
    case nir_op_i2i16:
    case nir_op_i2i32:
+   case nir_op_i2i64:
       if (ibc_type_bit_size(dest_type) < ibc_type_bit_size(src[0].type)) {
          /* Integer down-casts can always be treated as just consuming the
           * bottom bytes of the register.
@@ -201,9 +203,11 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_f2u8:
    case nir_op_f2u16:
    case nir_op_f2u32:
+   case nir_op_f2u64:
    case nir_op_f2i8:
    case nir_op_f2i16:
    case nir_op_f2i32:
+   case nir_op_f2i64:
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
@@ -213,24 +217,30 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_i2f32:
    case nir_op_u2f32:
    case nir_op_f2f32:
+   case nir_op_i2f64:
+   case nir_op_u2f64:
+   case nir_op_f2f64:
       dest = ibc_MOV(b, dest_type, src[0]);
+      break;
+
+   case nir_op_i2b1:
+   case nir_op_f2b1:
+      dest = ibc_CMP(b, dest_type, BRW_CONDITIONAL_NZ,
+                     src[0], ibc_imm_zero(src[0].type));
       break;
 
    case nir_op_b2i8:
    case nir_op_b2i16:
    case nir_op_b2i32:
    case nir_op_b2i64:
+   case nir_op_b2f16:
+   case nir_op_b2f32:
+   case nir_op_b2f64:
       /* ibc_assign_and_lower_flags will turn src[0] into a W type 0/-1
        * boolean and all we have to do is negate it.
        */
       dest = ibc_NEG(b, dest_type, src[0]);
       break;
-
-   case nir_op_b2f32: {
-      ibc_ref one = ibc_MOV(b, IBC_TYPE_F, ibc_imm_f(1.0));
-      dest = ibc_SEL(b, dest_type, src[0], one, ibc_imm_f(0.0));
-      break;
-   }
 
    UNOP_CASE(ftrunc,       RNDZ)
    UNOP_CASE(fceil,        RNDU)
