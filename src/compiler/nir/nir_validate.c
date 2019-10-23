@@ -896,6 +896,13 @@ validate_block(nir_block *block, validate_state *state)
          validate_assert(state, block->successors[0] == state->impl->end_block);
          break;
 
+      case nir_jump_goto_if: {
+         validate_assert(state, !state->shader->structured);
+         validate_assert(state, block->successors[0] != jump->target);
+         validate_assert(state, block->successors[1] == jump->target);
+         break;
+      }
+
       default:
          unreachable("bad jump type");
       }
@@ -921,7 +928,8 @@ validate_block(nir_block *block, validate_state *state)
          }
 
          case nir_cf_node_function:
-            validate_assert(state, block->successors[0] == state->impl->end_block);
+            if (state->shader->structured)
+               validate_assert(state, block->successors[0] == state->impl->end_block);
             validate_assert(state, block->successors[1] == NULL);
             break;
 
