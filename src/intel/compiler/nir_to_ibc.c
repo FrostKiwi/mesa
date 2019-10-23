@@ -490,21 +490,56 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
        * Predicated OR ORs 1.0 (0x3f800000) with the sign bit if val is not
        * zero.
        */
-      ibc_ref is_not_zero = ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_NZ,
-                                    src[0], ibc_imm_zero(src[0].type));
+      ibc_ref is_not_zero =
+         ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_NZ, src[0],
+                 ibc_MOV(b, src[0].type, ibc_imm_zero(src[0].type)));
 
       ibc_ref uint_src = src[0];
       uint_src.type = IBC_TYPE_UINT | ibc_type_bit_size(src[0].type);
 
-      /* TODO */
-      assert(ibc_type_bit_size(src[0].type) == 32);
-      ibc_ref high_bit = ibc_imm_ud(0x80000000u);
-      ibc_ref one_f = ibc_imm_ud(0x3f800000u);
+      ibc_ref high_bit, one_f;
+      switch (ibc_type_bit_size(src[0].type)) {
+      case 16:
+         high_bit = ibc_imm_ud(0x8000u);
+         one_f = ibc_imm_ud(0x3c00u);
+         break;
 
-      dest = ibc_AND(b, uint_src.type, uint_src, high_bit);
-      ibc_alu_instr *or = ibc_build_alu2(b, IBC_ALU_OP_OR, dest, dest, one_f);
-      ibc_instr_set_predicate(&or->instr, is_not_zero,
-                              IBC_PREDICATE_NORMAL);
+      case 32:
+         high_bit = ibc_imm_ud(0x80000000u);
+         one_f = ibc_imm_ud(0x3f800000u);
+         break;
+
+      case 64:
+         high_bit = ibc_imm_ud(0x80000000u);
+         one_f = ibc_imm_ud(0x3ff00000u);
+         break;
+
+      default:
+         unreachable("Invalid floating-point bit size");
+      }
+
+      if (ibc_type_bit_size(src[0].type) <= 32) {
+         dest = ibc_AND(b, uint_src.type, uint_src, high_bit);
+         ibc_alu_instr *or =
+            ibc_build_alu2(b, IBC_ALU_OP_OR, dest, dest, one_f);
+         ibc_instr_set_predicate(&or->instr, is_not_zero,
+                                 IBC_PREDICATE_NORMAL);
+      } else {
+         assert(uint_src.type == IBC_TYPE_UQ);
+
+         /* For doubles, we want to work only on the high bits */
+         assert(uint_src.file == IBC_FILE_LOGICAL);
+         uint_src.type = IBC_TYPE_UD;
+         uint_src.logical.byte = 4;
+
+         dest = ibc_AND(b, uint_src.type, uint_src, high_bit);
+         ibc_alu_instr *or =
+            ibc_build_alu2(b, IBC_ALU_OP_OR, dest, dest, one_f);
+         ibc_instr_set_predicate(&or->instr, is_not_zero,
+                                 IBC_PREDICATE_NORMAL);
+
+         dest = ibc_PACK2(b, ibc_imm_ud(0), dest);
+      }
       break;
    }
 
