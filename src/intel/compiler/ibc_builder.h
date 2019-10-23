@@ -717,13 +717,6 @@ ibc_build_ssa_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
 }
 
 static inline ibc_ref
-ibc_UNDEF(ibc_builder *b, enum ibc_type type, unsigned num_comps)
-{
-   return ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_UNDEF,
-                                 type, num_comps, NULL, 0);
-}
-
-static inline ibc_ref
 ibc_FIND_LIVE_CHANNEL(ibc_builder *b)
 {
    ibc_builder_push_scalar(b);

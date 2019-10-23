@@ -1307,12 +1307,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_store_ssbo: {
-      ibc_ref pred = {};
-      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
-         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
-         pred = ibc_emit_fs_sample_live_predicate(nti);
-      }
-
       ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
          [IBC_SURFACE_SRC_SURFACE_BTI] = {
             .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[1],
@@ -1329,17 +1323,20 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          },
       };
 
+      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
+         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
+         srcs[IBC_SURFACE_SRC_PIXEL_MASK] = (ibc_intrinsic_src) {
+            .ref = ibc_emit_fs_sample_live_predicate(nti),
+            .num_comps = 1,
+         };
+      }
+
       ibc_intrinsic_instr *store =
          ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
                              ibc_null(IBC_TYPE_UD), 0, 0,
                              srcs, IBC_SURFACE_NUM_SRCS);
       store->can_reorder = false;
       store->has_side_effects = true;
-
-      if (pred.file != IBC_FILE_NONE) {
-         ibc_instr_set_predicate(&store->instr, pred,
-                                 IBC_PREDICATE_NORMAL);
-      }
       break;
    }
 
@@ -1354,12 +1351,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_ssbo_atomic_exchange:
    case nir_intrinsic_ssbo_atomic_comp_swap: {
       assert(nir_dest_is_divergent(instr->dest));
-
-      ibc_ref pred = {};
-      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
-         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
-         pred = ibc_emit_fs_sample_live_predicate(nti);
-      }
 
       unsigned aop = brw_aop_for_nir_intrinsic(instr);
 
@@ -1377,6 +1368,13 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          },
       };
 
+      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
+         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
+         srcs[IBC_SURFACE_SRC_PIXEL_MASK] = (ibc_intrinsic_src) {
+            .ref = ibc_emit_fs_sample_live_predicate(nti),
+         };
+      }
+
       /* If we're not an atomic aop == -1 so the last two conditions are true
        * vacuously.
        */
@@ -1392,23 +1390,12 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          };
       }
 
-      if (pred.file != IBC_FILE_NONE) {
-         dest = ibc_UNDEF(b, IBC_TYPE_UD, 1);
-      } else {
-         dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
-      }
-
+      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
       ibc_intrinsic_instr *image_op =
          ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC,
                              dest, -1, 1, srcs, IBC_SURFACE_NUM_SRCS);
       image_op->can_reorder = false;
       image_op->has_side_effects = true;
-
-      if (pred.file != IBC_FILE_NONE) {
-         assert(b->simd_width > 0);
-         ibc_instr_set_predicate(&image_op->instr, pred,
-                                 IBC_PREDICATE_NORMAL);
-      }
       break;
    }
 
@@ -1540,13 +1527,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          unreachable("Invalid image intrinsic");
       }
 
-      ibc_ref pred = {};
-      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
-         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
-         if (op != IBC_INTRINSIC_OP_BTI_TYPED_READ)
-            pred = ibc_emit_fs_sample_live_predicate(nti);
-      }
-
       ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {};
 
       /* Set up the BTI or handle */
@@ -1568,6 +1548,15 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
          .num_comps = image_intrinsic_coord_components(instr),
       };
+
+      if (b->shader->stage == MESA_SHADER_FRAGMENT &&
+          op != IBC_INTRINSIC_OP_BTI_TYPED_READ) {
+         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
+         srcs[IBC_SURFACE_SRC_PIXEL_MASK] = (ibc_intrinsic_src) {
+            .ref = ibc_emit_fs_sample_live_predicate(nti),
+            .num_comps = 1,
+         };
+      }
 
       int aop = -1;
       if (op == IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC) {
@@ -1596,15 +1585,11 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          };
       }
 
-      dest = ibc_null(IBC_TYPE_UD);
       unsigned num_dest_comps = 0;
+      dest = ibc_null(IBC_TYPE_UD);
       if (op != IBC_INTRINSIC_OP_BTI_TYPED_WRITE) {
          num_dest_comps = nir_dest_num_components(instr->dest);
-         if (pred.file != IBC_FILE_NONE) {
-            dest = ibc_UNDEF(b, IBC_TYPE_UD, num_dest_comps);
-         } else {
-            dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, num_dest_comps);
-         }
+         dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, num_dest_comps);
       }
 
       ibc_intrinsic_instr *image_op =
@@ -1612,12 +1597,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                              srcs, IBC_SURFACE_NUM_SRCS);
       image_op->can_reorder = false;
       image_op->has_side_effects = (op != IBC_INTRINSIC_OP_BTI_TYPED_READ);
-
-      if (pred.file != IBC_FILE_NONE) {
-         assert(b->simd_width > 0);
-         ibc_instr_set_predicate(&image_op->instr, pred,
-                                 IBC_PREDICATE_NORMAL);
-      }
 
       ibc_builder_pop(b);
       break;

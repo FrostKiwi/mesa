@@ -95,6 +95,7 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
           (surface_handle.file == IBC_FILE_NONE));
 
    const ibc_ref address = intrin->src[IBC_SURFACE_SRC_ADDRESS].ref;
+   const ibc_ref pixel_mask = intrin->src[IBC_SURFACE_SRC_PIXEL_MASK].ref;
    const ibc_ref data0 = intrin->src[IBC_SURFACE_SRC_DATA0].ref;
    const ibc_ref data1 = intrin->src[IBC_SURFACE_SRC_DATA1].ref;
    const ibc_ref atomic_op = intrin->src[IBC_SURFACE_SRC_ATOMIC_OP].ref;
@@ -123,9 +124,16 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
    send->can_reorder = intrin->can_reorder;
    send->has_side_effects = intrin->has_side_effects;
 
-   if (intrin->instr.predicate != IBC_PREDICATE_NONE) {
-      send->instr.flag = intrin->instr.flag;
-      send->instr.predicate = intrin->instr.predicate;
+   if (pixel_mask.file != IBC_FILE_NONE) {
+      /* Add an UNDEF so that liveness analysis doesn't extend our live range
+       * too far up and add extra interference.
+       */
+      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_UNDEF, intrin->dest,
+                          -1, intrin->num_dest_comps, NULL, 0);
+
+      assert(pixel_mask.type == IBC_TYPE_FLAG);
+      send->instr.flag = pixel_mask;
+      send->instr.predicate = IBC_PREDICATE_NORMAL;
    }
 
    ibc_intrinsic_src src[8] = {};
