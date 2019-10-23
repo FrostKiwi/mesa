@@ -630,12 +630,15 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
       [IBC_FB_WRITE_SRC_DEPTH] = { .ref = nti_fs->out.depth, .num_comps = 1 },
       [IBC_FB_WRITE_SRC_STENCIL] =
          { .ref = nti_fs->out.stencil, .num_comps = 1},
-      [IBC_FB_WRITE_SRC_OMASK] =
-         { .ref = nti_fs->out.sample_mask, .num_comps  = 1},
       [IBC_FB_WRITE_SRC_TARGET] = { ibc_imm_ud(target), .num_comps = 1 },
       /* LAST_RT will be filled with the real value later */
       [IBC_FB_WRITE_SRC_FLAGS] = { .ref = ibc_imm_ud(flags), .num_comps = 1},
    };
+
+   if (prog_data->uses_omask) {
+      srcs[IBC_FB_WRITE_SRC_OMASK].ref = nti_fs->out.sample_mask;
+      srcs[IBC_FB_WRITE_SRC_OMASK].num_comps = 1;
+   }
 
    for (unsigned i = 0; i < IBC_FB_WRITE_NUM_SRCS; i++) {
       if (srcs[i].ref.file == IBC_FILE_NONE)
