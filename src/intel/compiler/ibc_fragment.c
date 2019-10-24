@@ -238,9 +238,8 @@ ibc_sample_pos(struct nir_to_ibc_state *nti)
       return ibc_VEC2(b, ibc_imm_f(0.5), ibc_imm_f(0.5));
    }
 
-   ibc_ref sample_pos[2];
+   ibc_ref sample_pos[2] = { };
    for (unsigned g = 0; g < b->simd_width; g += 16) {
-      ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
       for (unsigned i = 0; i < 2; i++) {
          /* From the Ivy Bridge PRM, volume 2 part 1, page 344:
           * R31.1:0         Position Offset X/Y for Slot[3:0]
@@ -258,13 +257,14 @@ ibc_sample_pos(struct nir_to_ibc_state *nti)
          pos_fixed.hw_grf.width = 8;
          pos_fixed.hw_grf.hstride = 2;
 
+         ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
          ibc_ref pos_float =
             ibc_MUL(b, IBC_TYPE_F, ibc_MOV(b, IBC_TYPE_F, pos_fixed),
                                    ibc_imm_f(1 / 16.0f));
+         ibc_builder_pop(b);
 
          set_ref_or_zip(b, &sample_pos[i], pos_float, 1);
       }
-      ibc_builder_pop(b);
    }
 
    return ibc_VEC(b, sample_pos, 2);
