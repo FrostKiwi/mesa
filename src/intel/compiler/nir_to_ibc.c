@@ -1408,6 +1408,58 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_get_buffer_size: {
+      ibc_builder_push_scalar(b);
+
+      ibc_intrinsic_src srcs[IBC_TEX_NUM_SRCS] = {
+         [IBC_TEX_SRC_SURFACE_BTI] = {
+            .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
+                                                 IBC_TYPE_UD)),
+            .num_comps = 1,
+         },
+         [IBC_TEX_SRC_SAMPLER_BTI] = {
+            .ref = ibc_imm_ud(0),
+            .num_comps = 1,
+         },
+         [IBC_TEX_SRC_LOD] = {
+            .ref = ibc_imm_ud(0),
+            .num_comps = 1,
+         },
+      };
+
+      /* We only have headerless rlen shortening on gen9+ */
+      unsigned num_dest_comps = b->shader->devinfo->gen >= 9 ? 1 : 4;
+      ibc_ref size = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_TXS,
+                                             IBC_TYPE_UD, num_dest_comps,
+                                             srcs, IBC_TEX_NUM_SRCS);
+
+      /* SKL PRM, vol07, 3D Media GPGPU Engine, Bounds Checking and Faulting:
+       *
+       * "Out-of-bounds checking is always performed at a DWord granularity. If
+       * any part of the DWord is out-of-bounds then the whole DWord is
+       * considered out-of-bounds."
+       *
+       * This implies that types with size smaller than 4-bytes need to be
+       * padded if they don't complete the last dword of the buffer. But as we
+       * need to maintain the original size we need to reverse the padding
+       * calculation to return the correct size to know the number of elements
+       * of an unsized array. As we stored in the last two bits of the surface
+       * size the needed padding for the buffer, we calculate here the
+       * original buffer_size reversing the surface_size calculation:
+       *
+       * surface_size = isl_align(buffer_size, 4) +
+       *                (isl_align(buffer_size) - buffer_size)
+       *
+       * buffer_size = surface_size & ~3 - surface_size & 3
+       */
+      ibc_ref size_pad = ibc_AND(b, IBC_TYPE_UD, size, ibc_imm_ud(3));
+      ibc_ref size_align4 = ibc_AND(b, IBC_TYPE_UD, size, ibc_imm_ud(~3));
+      dest = ibc_ADD(b, IBC_TYPE_UD, size_align4,
+                        ibc_NEG(b, IBC_TYPE_UD, size_pad));
+      ibc_builder_pop(b);
+      break;
+   }
+
    case nir_intrinsic_image_load:
    case nir_intrinsic_image_store:
    case nir_intrinsic_image_atomic_add:
