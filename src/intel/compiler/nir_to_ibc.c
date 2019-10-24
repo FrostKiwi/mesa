@@ -1619,6 +1619,50 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_image_size:
+   case nir_intrinsic_bindless_image_size: {
+      ibc_builder_push_scalar(b);
+
+      ibc_intrinsic_src srcs[IBC_TEX_NUM_SRCS] = {
+         [IBC_TEX_SRC_SAMPLER_BTI] = {
+            .ref = ibc_imm_ud(0),
+            .num_comps = 1,
+         },
+         [IBC_TEX_SRC_LOD] = {
+            .ref = ibc_imm_ud(0),
+            .num_comps = 1,
+         },
+      };
+
+      ibc_intrinsic_src surface = {
+         .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
+                                              IBC_TYPE_UD)),
+         .num_comps = 1,
+      };
+      if (instr->intrinsic == nir_intrinsic_image_size)
+         srcs[IBC_TEX_SRC_SURFACE_BTI] = surface;
+      else
+         srcs[IBC_TEX_SRC_SURFACE_HANDLE] = surface;
+
+      /* We only have headerless rlen shortening on gen9+ */
+      unsigned num_dest_comps =
+         b->shader->devinfo->gen >= 9 ? instr->num_components : 4;
+      ibc_ref size = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_TXS,
+                                             IBC_TYPE_UD, num_dest_comps,
+                                             srcs, IBC_TEX_NUM_SRCS);
+
+      ibc_ref vec[4];
+      for (unsigned c = 0; c < instr->num_components; ++c) {
+         vec[c] = ibc_comp_ref(size, c);
+         if (c == 2 && nir_intrinsic_image_dim(instr) == GLSL_SAMPLER_DIM_CUBE)
+            vec[c] = ibc_IDIV(b, IBC_TYPE_UD, vec[c], ibc_imm_ud(6));
+      }
+      dest = ibc_VEC(b, vec, instr->num_components);
+
+      ibc_builder_pop(b);
+      break;
+   }
+
    case nir_intrinsic_group_memory_barrier:
    case nir_intrinsic_memory_barrier_shared:
    case nir_intrinsic_memory_barrier_atomic_counter:
