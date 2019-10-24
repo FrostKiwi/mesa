@@ -69,6 +69,21 @@ ibc_alu_instr_max_simd_width(const ibc_alu_instr *alu,
                            ibc_type_bit_size(alu->src[i].ref.type));
    }
 
+   /* From the SKL PRM Vol. 7 "Special Requirements for Handling Mixed Mode
+    * Float Operations":
+    *
+    *    "No SIMD16 in mixed mode when destination is f32. Instruction
+    *    Execution size must be no more than 8."
+    */
+   if (alu->dest.type == IBC_TYPE_F) {
+      for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
+         if (alu->src[i].ref.type == IBC_TYPE_HF) {
+            max_simd_width = MIN2(max_simd_width, 8);
+            break;
+         }
+      }
+   }
+
    /* Can't span more than two registers */
    unsigned dest_stride = ref_stride(&alu->dest);
    if (alu->dest.file == IBC_FILE_NONE)
