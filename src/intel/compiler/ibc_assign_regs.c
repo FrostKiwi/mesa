@@ -121,7 +121,7 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
             reg->logical.stride = max_exec_width;
             progress = true;
          } else {
-            assert(reg->logical.stride <= max_exec_width);
+            assert(reg->logical.stride >= max_exec_width);
          }
       }
    }
