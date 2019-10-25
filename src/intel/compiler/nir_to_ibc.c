@@ -1140,6 +1140,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_load_uniform: {
+      ibc_builder_push_nir_dest_group(b, instr->dest);
+
       const uint32_t base_offset_B = nir_intrinsic_base(instr);
       const uint32_t range_B = nir_intrinsic_range(instr);
       const uint32_t comp_size_B = nir_dest_bit_size(instr->dest) / 8;
@@ -1164,8 +1166,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          }
       }
 
-      ibc_builder_push_nir_dest_group(b, instr->dest);
       dest = ibc_VEC(b, dest_comps, instr->num_components);
+
       ibc_builder_pop(b);
       break;
    }
@@ -1351,6 +1353,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_ssbo_atomic_xor:
    case nir_intrinsic_ssbo_atomic_exchange:
    case nir_intrinsic_ssbo_atomic_comp_swap: {
+      assert(nir_dest_is_divergent(instr->dest));
+
       ibc_ref pred = {};
       if (b->shader->stage == MESA_SHADER_FRAGMENT) {
          brw_wm_prog_data(nti->prog_data)->has_side_effects = true;

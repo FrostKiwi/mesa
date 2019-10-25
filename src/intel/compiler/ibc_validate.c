@@ -230,6 +230,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
                ibc_assert(s, s->instr->we_all);
             }
          } else {
+            ibc_assert(s, ref_simd_width > 1);
             ibc_assert(s, ref_simd_group >= lreg->simd_group);
             ibc_assert(s, ref_simd_group + ref_simd_width <=
                           lreg->simd_group + lreg->simd_width);
