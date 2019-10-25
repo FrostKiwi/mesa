@@ -188,8 +188,18 @@ ibc_instr_max_simd_width(const ibc_instr *instr,
    }
 }
 
+static bool
+does_not_write_reg(ibc_reg_write *write,
+                   ibc_ref *ref, void *_reg)
+{
+   if (ref->file == IBC_FILE_NONE || ref->file == IBC_FILE_IMM)
+      return true;
+
+   return ref->reg != _reg;
+}
+
 static ibc_ref
-simd_restricted_src(ibc_builder *b, ibc_ref src,
+simd_restricted_src(ibc_builder *b, ibc_instr *instr, ibc_ref src,
                     uint8_t old_simd_group, uint8_t new_simd_group,
                     uint8_t simd_width, unsigned num_comps)
 {
@@ -209,6 +219,12 @@ simd_restricted_src(ibc_builder *b, ibc_ref src,
     * In either case, the right thing to do is to just return src.
     */
    if (src.reg && src.reg->is_wlr)
+      return src;
+
+   /* If this source is never written by the register we are splitting, we
+    * don't need to emit a copy and can read it directly.
+    */
+   if (ibc_instr_foreach_reg_write(instr, does_not_write_reg, src.reg))
       return src;
 
    ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
@@ -338,7 +354,8 @@ ibc_lower_simd_width(ibc_shader *shader)
             for (unsigned j = 0; j < num_srcs; j++) {
                split->src[j] = alu->src[j];
                split->src[j].ref =
-                  simd_restricted_src(&b, alu->src[j].ref,
+                  simd_restricted_src(&b, instr,
+                                      alu->src[j].ref,
                                       instr->simd_group,
                                       instr->simd_group + split_simd_rel_group,
                                       split_simd_width, 1);
@@ -387,7 +404,8 @@ ibc_lower_simd_width(ibc_shader *shader)
                   split->src[src_idx].simd_group = src_group;
                   split->src[src_idx].simd_width = src_width;
                   split->src[src_idx].ref =
-                     simd_restricted_src(&b, intrin->src[j].ref,
+                     simd_restricted_src(&b, instr,
+                                             intrin->src[j].ref,
                                              src_group,
                                              intrin->src[j].simd_group,
                                              src_width,
@@ -406,7 +424,8 @@ ibc_lower_simd_width(ibc_shader *shader)
                   split->src[j].simd_group = b.simd_group;
                   split->src[j].simd_width = b.simd_width;
                   split->src[j].ref =
-                     simd_restricted_src(&b, intrin->src[j].ref,
+                     simd_restricted_src(&b, instr,
+                                             intrin->src[j].ref,
                                              intrin->src[j].simd_group,
                                              split->src[j].simd_group,
                                              split_simd_width,
