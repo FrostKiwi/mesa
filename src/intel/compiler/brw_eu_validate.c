@@ -1228,13 +1228,21 @@ special_restrictions_for_mixed_float_mode(const struct gen_device_info *devinfo,
           *
           * The requirement of not crossing oword boundaries for 16-bit oword
           * aligned data means that execution size is limited to 8.
+          *
+          * It's unclear what the above text means in the case when the
+          * execution size of the instruction is less than 8.  It's possible
+          * that the real rule here is "no oword crossing" in which case the
+          * oword alignment isn't strictly required as long as you don't cross
+          * an oword.  Empirical evidence suggests that the restriction is not
+          * required when the execution size is 1 so long as other region
+          * restrictions are followed.  We relax our check in this one case.
           */
          unsigned subreg;
          if (brw_inst_dst_address_mode(devinfo, inst) == BRW_ADDRESS_DIRECT)
             subreg = brw_inst_dst_da1_subreg_nr(devinfo, inst);
          else
             subreg = brw_inst_dst_ia_subreg_nr(devinfo, inst);
-         ERROR_IF(subreg % 16 != 0,
+         ERROR_IF(exec_size > 1 && subreg % 16 != 0,
                   "Align1 mixed mode packed half-float output must be "
                   "oword aligned");
          ERROR_IF(exec_size > 8,
