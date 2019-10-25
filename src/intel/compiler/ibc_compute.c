@@ -60,7 +60,9 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
    ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_id:
+      ibc_builder_push_scalar(b);
       dest = ibc_MOV(b, IBC_TYPE_UD, payload->subgroup_id);
+      ibc_builder_pop(b);
       break;
 
    case nir_intrinsic_load_work_group_id: {
@@ -158,6 +160,8 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_load_shared: {
+      ibc_builder_push_nir_dest_group(b, instr->dest);
+
       ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
          [IBC_SURFACE_SRC_SURFACE_BTI] = {
             .ref = ibc_imm_ud(GEN7_BTI_SLM),
@@ -177,6 +181,8 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
                              dest, -1, instr->num_components,
                              srcs, IBC_SURFACE_NUM_SRCS);
       load->can_reorder = false;
+
+      ibc_builder_pop(b);
       break;
    }
 
@@ -216,6 +222,8 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_shared_atomic_xor:
    case nir_intrinsic_shared_atomic_exchange:
    case nir_intrinsic_shared_atomic_comp_swap: {
+      assert(nir_dest_is_divergent(instr->dest));
+
       unsigned aop = brw_aop_for_nir_intrinsic(instr);
 
       /* Set up the BTI or handle */
