@@ -609,6 +609,9 @@ anv_get_image_format_features(const struct gen_device_info *devinfo,
    if (isl_is_storage_image_format(base_isl_format))
       flags |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
 
+   if (base_isl_format == ISL_FORMAT_B8G8R8A8_UNORM)
+      flags |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
+
    if (base_isl_format == ISL_FORMAT_R32_SINT ||
        base_isl_format == ISL_FORMAT_R32_UINT)
       flags |= VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT;

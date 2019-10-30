@@ -1601,6 +1601,12 @@ anv_image_fill_surface_state(struct anv_device *device,
    } else {
       if (view_usage == ISL_SURF_USAGE_STORAGE_BIT &&
           !(flags & ANV_IMAGE_VIEW_STATE_STORAGE_WRITE_ONLY)) {
+         /* We can get here with B8G8R8A8_UNORM even though this surface state
+          * will never be used.  Call it RGBA just to let us create the image.
+          */
+         if (view.format == ISL_FORMAT_B8G8R8A8_UNORM)
+             view.format = ISL_FORMAT_R8G8B8A8_UNORM;
+
          /* Typed surface reads support a very limited subset of the shader
           * image formats.  Translate it into the closest format the hardware
           * supports.
