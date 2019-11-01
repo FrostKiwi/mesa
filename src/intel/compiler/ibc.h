@@ -1016,6 +1016,11 @@ enum ibc_intrinsic_op {
 
    /* Stall on a register */
    IBC_INTRINSIC_OP_STALL_REG,
+
+   IBC_INTRINSIC_OP_A64_UNTYPED_READ,
+   IBC_INTRINSIC_OP_A64_UNTYPED_WRITE,
+   IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ,
+   IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE,
 };
 
 /* Sources for [un]typed surface intrinsics */
