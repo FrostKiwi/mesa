@@ -1279,6 +1279,84 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       }
       break;
 
+   case nir_intrinsic_load_global:
+   case nir_intrinsic_load_global_constant: {
+      ibc_builder_push_nir_dest_group(b, instr->dest);
+
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_ADDRESS] = {
+            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UQ),
+            .num_comps = 1,
+         },
+      };
+
+      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD,
+                                         instr->num_components);
+      ibc_intrinsic_instr *load;
+      if (nir_intrinsic_align(instr) >= 4) {
+         assert(nir_dest_bit_size(instr->dest) == 32);
+         load = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_A64_UNTYPED_READ,
+                                    dest, -1, instr->num_components,
+                                    srcs, IBC_SURFACE_NUM_SRCS);
+      } else {
+         assert(nir_dest_bit_size(instr->dest) <= 32);
+         assert(nir_dest_num_components(instr->dest) == 1);
+         load = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ,
+                                    dest, -1, instr->num_components,
+                                    srcs, IBC_SURFACE_NUM_SRCS);
+      }
+      load->can_reorder = false;
+      ibc_builder_pop(b);
+      break;
+   }
+
+   case nir_intrinsic_store_global: {
+      ibc_ref pred = {};
+      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
+         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
+         pred = ibc_emit_fs_sample_live_predicate(nti);
+      }
+
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_ADDRESS] = {
+            .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UQ),
+            .num_comps = 1,
+         },
+         [IBC_SURFACE_SRC_DATA0] = {
+            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT),
+            .num_comps = instr->num_components,
+         },
+      };
+
+      ibc_intrinsic_instr *store;
+      if (nir_intrinsic_align(instr) >= 4) {
+         assert(nir_src_bit_size(instr->src[0]) == 32);
+         store = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_A64_UNTYPED_WRITE,
+                                     ibc_null(IBC_TYPE_UD), 0, 0, srcs,
+                                     IBC_SURFACE_NUM_SRCS);
+      } else {
+         assert(nir_src_bit_size(instr->src[0]) <= 32);
+         assert(nir_src_num_components(instr->src[0]) == 1);
+         /* The byte scattered messages consume 32-bit data and just ignore the
+          * unused bits at the top.  Insert a MOV to ensure we have the right
+          * data size.
+          */
+         srcs[IBC_SURFACE_SRC_DATA0].ref =
+            ibc_MOV(b, IBC_TYPE_UD, srcs[IBC_SURFACE_SRC_DATA0].ref);
+         store = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE,
+                                     ibc_null(IBC_TYPE_UD), 0, 0, srcs,
+                                     IBC_SURFACE_NUM_SRCS);
+      }
+      store->can_reorder = false;
+      store->has_side_effects = true;
+
+      if (pred.file != IBC_FILE_NONE) {
+         ibc_instr_set_predicate(&store->instr, pred,
+                                 IBC_PREDICATE_NORMAL);
+      }
+      break;
+   }
+
    case nir_intrinsic_load_ssbo: {
       ibc_builder_push_nir_dest_group(b, instr->dest);
 

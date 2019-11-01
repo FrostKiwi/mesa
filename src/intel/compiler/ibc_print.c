@@ -411,6 +411,10 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_SAMPLEINFO:         return "sampleinfo";
    case IBC_INTRINSIC_OP_WAIT:               return "wait";
    case IBC_INTRINSIC_OP_STALL_REG:          return "stall_reg";
+   case IBC_INTRINSIC_OP_A64_UNTYPED_READ:   return "a64_untyped_read";
+   case IBC_INTRINSIC_OP_A64_UNTYPED_WRITE:  return "a64_untyped_write";
+   case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ:  return "a64_byte_scattered_read";
+   case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE: return "a64_byte_scattered_write";
    }
    unreachable("Invalid IBC intrinsic op");
 }
