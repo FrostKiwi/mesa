@@ -155,6 +155,10 @@ ibc_instr_fe_cycles(const ibc_instr *instr,
       case IBC_INTRINSIC_OP_STALL_REG:
          return 2;
 
+      case IBC_INTRINSIC_OP_SIMD_ZIP:
+         /* TODO: Should these really get here? */
+         return 2;
+
       default:
          unreachable("Invalid intrinsic this late in compilation");
       }
@@ -393,6 +397,10 @@ ibc_instr_dest_latency(const ibc_instr *instr,
 
       case IBC_INTRINSIC_OP_WAIT:
          return 0; /* TODO */
+
+      case IBC_INTRINSIC_OP_SIMD_ZIP:
+         /* TODO: Should these really get here? */
+         return 0;
 
       default:
          unreachable("Invalid intrinsic this late in compilation");
