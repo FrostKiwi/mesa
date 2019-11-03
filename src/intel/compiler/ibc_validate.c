@@ -190,7 +190,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
          ibc_assert(s, ibc_type_bit_size(ref->type) >= 8);
          ibc_assert(s, ibc_type_bit_size(ref->type) == lreg->bit_size);
          ibc_assert(s, !lref->broadcast);
-         unsigned comp_size_B = (lreg->bit_size / 8) * lreg->simd_width;
+         unsigned comp_size_B = (lreg->bit_size / 8) * ref_simd_width;
          ibc_assert(s, num_bytes % comp_size_B == 0);
          num_comps = num_bytes / comp_size_B;
          if (num_comps > 1) {
