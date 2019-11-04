@@ -565,14 +565,6 @@ ibc_MOV_raw_vec_to(ibc_builder *b, ibc_ref dest,
 }
 
 static inline ibc_ref
-ibc_MOV_raw(ibc_builder *b, ibc_ref src)
-{
-   ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, 1);
-   ibc_MOV_raw_vec_to(b, dest, src, 1);
-   return dest;
-}
-
-static inline ibc_ref
 ibc_restride(ibc_builder *b, ibc_ref src, enum ibc_type type, unsigned offset,
              unsigned vstride, unsigned width, unsigned hstride)
 {
@@ -869,14 +861,8 @@ ibc_UNPACK(ibc_builder *b, enum ibc_type dest_type,
 static inline void
 ibc_VEC_to(ibc_builder *b, ibc_ref dest, ibc_ref *srcs, unsigned num_comps)
 {
-   assert(num_comps > 0);
-   if (num_comps == 1) {
-      ibc_MOV_raw_vec_to(b, dest, srcs[0], 1);
-      return;
-   }
-
    ibc_intrinsic_src vec_srcs[8];
-   assert(num_comps <= ARRAY_SIZE(vec_srcs));
+   assert(num_comps > 0 && num_comps <= ARRAY_SIZE(vec_srcs));
 
    for (unsigned i = 0; i < num_comps; i++) {
       assert(srcs[i].type == dest.type);
