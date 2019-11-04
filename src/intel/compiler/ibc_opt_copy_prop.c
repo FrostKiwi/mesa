@@ -94,7 +94,7 @@ try_compose_refs(ibc_ref *ref_out,
          unsigned rel_simd_group = outer_simd_group - inner_simd_group;
          ibc_hw_grf_simd_slice(&ref.hw_grf, rel_simd_group);
       }
-      ibc_hw_grf_add_byte_offset(&ref.hw_grf, outer.logical.byte);
+      ibc_ref_byte_offset(&ref, outer.logical.byte);
       break;
 
    case IBC_FILE_FLAG:
