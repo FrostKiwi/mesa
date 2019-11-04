@@ -424,12 +424,6 @@ ibc_hw_grf_simd_slice(struct ibc_ref_hw_grf *ref, uint8_t rel_simd_group)
 }
 
 static inline void
-ibc_hw_grf_add_byte_offset(struct ibc_ref_hw_grf *ref, unsigned byte_offset)
-{
-   ref->byte += byte_offset;
-}
-
-static inline void
 ibc_hw_grf_mul_stride(struct ibc_ref_hw_grf *ref, unsigned stride_mul)
 {
    ref->vstride *= stride_mul;
@@ -585,6 +579,37 @@ ibc_ref_read_is_uniform(ibc_ref ref)
 }
 
 static inline void
+ibc_ref_byte_offset(ibc_ref *ref, uint8_t byte)
+{
+   if (byte == 0)
+      return;
+
+   switch (ref->file) {
+   case IBC_FILE_NONE:
+      return;
+
+   case IBC_FILE_IMM:
+      unreachable("Cannot take a byte offset of an immediate");
+
+   case IBC_FILE_LOGICAL:
+      ref->logical.byte += byte;
+      return;
+
+   case IBC_FILE_HW_GRF:
+      ref->hw_grf.byte += byte;
+      return;
+
+   case IBC_FILE_FLAG:
+      unreachable("Cannot take a byte offset of a flag reference");
+
+   case IBC_FILE_ACCUM:
+      unreachable("Cannot take a byte offset of an accumulator reference");
+   }
+
+   unreachable("Unhandled register file");
+}
+
+static inline void
 ibc_ref_simd_slice(ibc_ref *ref, uint8_t rel_simd_group)
 {
    switch (ref->file) {
@@ -607,6 +632,38 @@ ibc_ref_simd_slice(ibc_ref *ref, uint8_t rel_simd_group)
 
    case IBC_FILE_ACCUM:
       ref->accum.chan += rel_simd_group;
+      return;
+   }
+
+   unreachable("Unhandled register file");
+}
+
+static inline void
+ibc_ref_comp_offset(ibc_ref *ref, uint8_t comp, uint8_t simd_width)
+{
+   if (comp == 0)
+      return;
+
+   switch (ref->file) {
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
+      return;
+
+   case IBC_FILE_LOGICAL:
+      ref->logical.comp += comp;
+      return;
+
+   case IBC_FILE_HW_GRF: {
+      unsigned byte_size = ibc_type_byte_size(ref->type);
+      unsigned comp_stride = ibc_hw_grf_comp_stride(ref->hw_grf, byte_size,
+                                                    simd_width);
+      ref->hw_grf.byte += comp * comp_stride;
+      return;
+   }
+
+   case IBC_FILE_FLAG:
+   case IBC_FILE_ACCUM:
+      assert(comp == 0);
       return;
    }
 
