@@ -533,33 +533,63 @@ ibc_MOV_from_flag(ibc_builder *b, enum ibc_type dest_type,
    return dest;
 }
 
-static inline void
-ibc_MOV_raw_vec_to(ibc_builder *b, ibc_ref dest,
-                   ibc_ref src, unsigned num_comps)
+static inline unsigned
+_ibc_builder_ref_stride(ibc_ref ref)
 {
-   assert(ibc_type_bit_size(src.type) == ibc_type_bit_size(dest.type));
+   switch (ref.file) {
+   case IBC_FILE_NONE:
+   case IBC_FILE_IMM:
+      return 0;
 
+   case IBC_FILE_HW_GRF:
+      return ref.hw_grf.hstride;
+
+   case IBC_FILE_LOGICAL:
+      return ref.reg->logical.stride;
+
+   case IBC_FILE_FLAG:
+      return 0;
+
+   case IBC_FILE_ACCUM:
+      return ibc_type_byte_size(ref.type);
+   }
+
+   unreachable("Unknown register file");
+}
+
+static inline void
+ibc_MOV_raw(ibc_builder *b, ibc_ref dest,
+            ibc_ref src, unsigned num_comps)
+{
+   const unsigned total_simd_width = b->simd_width;
+   unsigned split_simd_width = total_simd_width;
+
+   /* Can't span more than two registers */
+   const unsigned src_stride = _ibc_builder_ref_stride(src);
+   if (src_stride > 0)
+      split_simd_width = MIN2(split_simd_width, 64 / src_stride);
+   const unsigned dest_stride = _ibc_builder_ref_stride(dest);
+   if (dest_stride > 0)
+      split_simd_width = MIN2(split_simd_width, 64 / dest_stride);
+
+   assert(src.type == dest.type);
    if (ibc_type_base_type(src.type) == IBC_TYPE_INVALID)
       src.type |= IBC_TYPE_UINT;
    dest.type = src.type;
 
-   /* TODO: This needs to be adjusted more carefully */
-   const unsigned simd_width = MIN2(b->simd_width, 16);
-   if (num_comps > 1 || simd_width != b->simd_width) {
-      assert(src.file == IBC_FILE_IMM ||
-             src.file == IBC_FILE_LOGICAL);
-      assert(dest.file == IBC_FILE_LOGICAL);
-   }
+   for (unsigned c = 0; c < num_comps; c++) {
+      ibc_ref comp_dest = dest, comp_src = src;
+      ibc_ref_comp_offset(&comp_dest, c, b->simd_width);
+      ibc_ref_comp_offset(&comp_src, c, b->simd_width);
 
-   for (unsigned i = 0; i < num_comps; i++) {
-      for (unsigned g = 0; g < b->simd_width; g += simd_width) {
-         ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
-         ibc_MOV_to(b, dest, src);
+      for (unsigned g = 0; g < total_simd_width; g += split_simd_width) {
+         ibc_ref simd_dest = comp_dest, simd_src = comp_src;
+         ibc_ref_simd_slice(&simd_dest, g);
+         ibc_ref_simd_slice(&simd_src, g);
+
+         ibc_builder_push_group(b, g, split_simd_width);
+         ibc_build_alu1(b, IBC_ALU_OP_MOV, simd_dest, simd_src);
          ibc_builder_pop(b);
-      }
-      if (src.file == IBC_FILE_LOGICAL) {
-         src.logical.comp++;
-         dest.logical.comp++;
       }
    }
 }
