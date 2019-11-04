@@ -228,7 +228,7 @@ simd_restricted_src(ibc_builder *b, ibc_instr *instr, ibc_ref src,
       return src;
 
    ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
-   ibc_MOV_raw_vec_to(b, dest, src, num_comps);
+   ibc_MOV_raw(b, dest, src, num_comps);
    return dest;
 }
 
