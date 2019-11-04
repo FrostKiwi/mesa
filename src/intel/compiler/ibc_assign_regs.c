@@ -611,8 +611,8 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
              * with a MOV.
              */
             b.cursor = ibc_before_instr(instr);
-            ibc_MOV_raw_vec_to(&b, intrin->dest, intrin->src[0].ref,
-                               intrin->num_dest_comps);
+            ibc_MOV_raw(&b, intrin->dest, intrin->src[0].ref,
+                        intrin->num_dest_comps);
          }
          ibc_instr_remove(instr);
          break;
