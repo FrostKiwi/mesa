@@ -323,22 +323,24 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
          return false;
 
       case IBC_INTRINSIC_OP_VEC: {
-         assert(ref->logical.comp < intrin->num_dest_comps);
-         assert(intrin->num_dest_comps == intrin->num_srcs);
-         const unsigned comp = ref->logical.comp;
-         if (num_comps > 1)
-            return false;
+         unsigned comp = intrin->dest.logical.comp;
+         for (unsigned i = 0; i < intrin->num_srcs; i++) {
+            if (comp <= ref->logical.comp &&
+                (ref->logical.comp + num_comps <=
+                 comp + intrin->src[i].num_comps)) {
+               assert(intrin->src[i].simd_group == intrin->instr.simd_group);
+               assert(intrin->src[i].simd_width == intrin->instr.simd_width);
 
-         assert(intrin->src[comp].simd_group == intrin->instr.simd_group);
-         assert(intrin->src[comp].simd_width == intrin->instr.simd_width);
-
-         ibc_ref comp_ref = *ref;
-         comp_ref.logical.comp = 0;
-         return try_compose_refs(ref, comp_ref, intrin->src[comp].ref,
-                                 num_comps, simd_group, simd_width,
-                                 intrin->src[comp].simd_group,
-                                 intrin->src[comp].simd_width,
-                                 supports_imm);
+               ibc_ref comp_ref = *ref;
+               comp_ref.logical.comp -= comp;
+               return try_compose_refs(ref, comp_ref, intrin->src[i].ref,
+                                       num_comps, simd_group, simd_width,
+                                       intrin->src[i].simd_group,
+                                       intrin->src[i].simd_width,
+                                       supports_imm);
+            }
+            comp += intrin->src[i].num_comps;
+         }
       }
 
       default:

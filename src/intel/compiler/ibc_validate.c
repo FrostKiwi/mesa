@@ -544,13 +544,25 @@ ibc_validate_intrinsic_instr(struct ibc_validate_state *s,
       }
       break;
 
+   case IBC_INTRINSIC_OP_VEC: {
+      unsigned num_comps = 0;
+      for (unsigned i = 0; i < intrin->num_srcs; i++) {
+         ibc_assert(s, intrin->src[i].ref.type == intrin->dest.type);
+         ibc_assert(s, intrin->src[i].simd_group ==
+                       intrin->instr.simd_group);
+         ibc_assert(s, intrin->src[i].simd_width ==
+                       intrin->instr.simd_width);
+         num_comps += intrin->src[i].num_comps;
+      }
+      ibc_assert(s, num_comps == intrin->num_dest_comps);
+      break;
+   }
+
    case IBC_INTRINSIC_OP_MESSAGE: {
       unsigned num_bytes = 0;
       for (unsigned i = 0; i < intrin->num_srcs; i++) {
          ibc_assert(s, intrin->src[i].simd_width == intrin->instr.simd_width ||
                        intrin->src[i].simd_width == 1);
-         ibc_assert(s, intrin->src[i].simd_width == 1 ||
-                       intrin->src[i].num_comps == 1);
          unsigned src_bytes = ibc_type_byte_size(intrin->src[i].ref.type) *
                               intrin->src[i].simd_width *
                               intrin->src[i].num_comps;

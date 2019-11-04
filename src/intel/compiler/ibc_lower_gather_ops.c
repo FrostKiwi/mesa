@@ -336,16 +336,15 @@ ibc_lower_gather_ops(ibc_shader *shader)
          ibc_builder_push_instr_group(&b, instr);
 
          assert(intrin->dest.file == IBC_FILE_LOGICAL);
-         assert(intrin->num_srcs == intrin->num_dest_comps);
 
          ibc_ref dest = intrin->dest;
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
-            assert(intrin->src[i].num_comps == 1);
             if (!can_try_coalesce ||
                 !try_coalesce(dest, intrin->src[i], &state)) {
-               ibc_MOV_raw(&b, dest, intrin->src[i].ref, 1);
+               ibc_MOV_raw(&b, dest, intrin->src[i].ref,
+                           intrin->src[i].num_comps);
             }
-            dest.logical.comp++;
+            dest.logical.comp += intrin->src[i].num_comps;
          }
 
          ibc_builder_pop(&b);
@@ -357,14 +356,15 @@ ibc_lower_gather_ops(ibc_shader *shader)
 
          ibc_ref dest = intrin->dest;
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
-            assert(intrin->src[i].simd_width == 1 ||
-                   intrin->src[i].num_comps == 1);
+            unsigned num_comps;
             if (intrin->src[i].simd_width == 1) {
                ibc_builder_push_we_all(&b, intrin->src[i].num_comps);
+               num_comps = 1;
             } else {
                assert(instr->simd_group == intrin->src[i].simd_group);
                assert(instr->simd_width == intrin->src[i].simd_width);
                ibc_builder_push_instr_group(&b, instr);
+               num_comps = intrin->src[i].num_comps;
             }
 
             dest.type = intrin->src[i].ref.type;
@@ -374,8 +374,9 @@ ibc_lower_gather_ops(ibc_shader *shader)
 
             if (intrin->src[i].ref.file != IBC_FILE_NONE &&
                 (!can_try_coalesce ||
-                 !try_coalesce(dest, intrin->src[i], &state)))
-               ibc_MOV_raw(&b, dest, intrin->src[i].ref, 1);
+                 !try_coalesce(dest, intrin->src[i], &state))) {
+               ibc_MOV_raw(&b, dest, intrin->src[i].ref, num_comps);
+            }
 
             unsigned src_bytes = ibc_type_byte_size(intrin->src[i].ref.type) *
                                  intrin->src[i].simd_width *
