@@ -438,6 +438,14 @@ ibc_opt_copy_prop(ibc_shader *shader)
                                      alu->instr.simd_group,
                                      alu->instr.simd_width,
                                      alu_instr_src_supports_imm(alu, i))) {
+               /* Immediates may come from things that aren't MOV instructions
+                * so we need to handle them here.
+                */
+               if (alu->src[i].ref.file == IBC_FILE_IMM &&
+                   alu->src[i].mod != IBC_ALU_SRC_MOD_NONE) {
+                  ibc_imm_apply_mod(&alu->src[i].ref, alu->src[i].mod);
+                  alu->src[i].mod = IBC_ALU_SRC_MOD_NONE;
+               }
                progress = true;
             }
             flip_alu_instr_if_needed(alu);

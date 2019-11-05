@@ -344,6 +344,8 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
                        alu->instr.simd_group,
                        alu->instr.simd_width);
       ibc_assert(s, (alu->src[i].mod & ~alu_info->supported_src_mods) == 0);
+      if (alu->src[i].ref.file == IBC_FILE_IMM)
+         ibc_assert(s, alu->src[i].mod == IBC_ALU_SRC_MOD_NONE);
    }
 
    if ((ibc_alu_op_infos[alu->op].props & IBC_ALU_OP_PROP_READS_ACCUM) ||
