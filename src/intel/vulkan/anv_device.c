@@ -1083,25 +1083,19 @@ void anv_GetPhysicalDeviceFeatures2(
       case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES_KHR: {
          VkPhysicalDevice8BitStorageFeaturesKHR *features =
             (VkPhysicalDevice8BitStorageFeaturesKHR *)ext;
-         //CORE_FEATURE(1, 2, storageBuffer8BitAccess);
-         //CORE_FEATURE(1, 2, uniformAndStorageBuffer8BitAccess);
-         //CORE_FEATURE(1, 2, storagePushConstant8);
-         features->storageBuffer8BitAccess = false;
-         features->uniformAndStorageBuffer8BitAccess = false;
-         features->storagePushConstant8 = false;
+         CORE_FEATURE(1, 2, storageBuffer8BitAccess);
+         CORE_FEATURE(1, 2, uniformAndStorageBuffer8BitAccess);
+         CORE_FEATURE(1, 2, storagePushConstant8);
          break;
       }
 
       case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES: {
          VkPhysicalDevice16BitStorageFeatures *features =
             (VkPhysicalDevice16BitStorageFeatures *)ext;
-         //CORE_FEATURE(1, 1, storageBuffer16BitAccess);
-         //CORE_FEATURE(1, 1, uniformAndStorageBuffer16BitAccess);
-         //CORE_FEATURE(1, 1, storagePushConstant16);
-         //CORE_FEATURE(1, 1, storageInputOutput16);
-         features->storageBuffer16BitAccess = false;
-         features->uniformAndStorageBuffer16BitAccess = false;
-         features->storagePushConstant16 = false;
+         CORE_FEATURE(1, 1, storageBuffer16BitAccess);
+         CORE_FEATURE(1, 1, uniformAndStorageBuffer16BitAccess);
+         CORE_FEATURE(1, 1, storagePushConstant16);
+         CORE_FEATURE(1, 1, storageInputOutput16);
          features->storageInputOutput16 = false;
          break;
       }
