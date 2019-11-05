@@ -423,10 +423,104 @@ flip_alu_instr_if_needed(ibc_alu_instr *alu)
    }
 }
 
+static bool
+try_copy_prop_message(ibc_ref *ref, ibc_send_instr *send, uint16_t num_bytes)
+{
+   ibc_ref new_ref = *ref;
+   unsigned num_comps;
+   switch (ref->file) {
+   case IBC_FILE_LOGICAL: {
+      if (ref->reg->logical.stride == 0)
+         return false;
+
+      assert(ref->reg->logical.bit_size >= 8);
+      assert(ref->reg->logical.stride == ref->reg->logical.bit_size / 8);
+      unsigned comp_size_B = (ref->reg->logical.bit_size / 8) *
+                             send->instr.simd_width;
+      assert(num_bytes % comp_size_B == 0);
+      num_comps = num_bytes / comp_size_B;
+
+      if (!try_copy_prop_ref(&new_ref, NULL, 0, num_comps,
+                             send->instr.simd_group,
+                             send->instr.simd_width,
+                             false /* supports_imm */))
+         return false;
+      break;
+   }
+
+   case IBC_FILE_HW_GRF: {
+      if (ref->reg == NULL)
+         return false;
+
+      ibc_instr *ssa_instr = ibc_reg_ssa_instr(ref->reg);
+      if (ssa_instr == NULL)
+         return false;
+
+      if (ssa_instr->type != IBC_INSTR_TYPE_INTRINSIC)
+         return false;
+
+      ibc_intrinsic_instr *msg = ibc_instr_as_intrinsic(ssa_instr);
+      if (msg->op != IBC_INTRINSIC_OP_MESSAGE)
+         return false;
+
+      if (ref->hw_grf.byte > 0 || num_bytes != msg->num_dest_bytes)
+         return false;
+
+      if (msg->num_srcs != 1)
+         return false;
+
+      if (msg->src[0].simd_group != send->instr.simd_group ||
+          msg->src[0].simd_width != send->instr.simd_width)
+         return false;
+
+      /* There's no interesting composition to do here */
+      new_ref = msg->src[0].ref;
+      num_comps = msg->src[0].num_comps;
+      break;
+   }
+
+   default:
+      unreachable("Invalid file for SEND message");
+   }
+
+   if (ibc_type_bit_size(new_ref.type) < 8)
+      return false;
+
+   switch (new_ref.file) {
+   case IBC_FILE_LOGICAL:
+      if (new_ref.logical.broadcast ||
+          new_ref.reg->logical.simd_width == 1 ||
+          new_ref.reg->logical.stride != ibc_type_byte_size(new_ref.type) ||
+          new_ref.reg->logical.stride != new_ref.reg->logical.bit_size / 8)
+         return false;
+
+      if (num_comps > 1 &&
+          (new_ref.reg->logical.simd_group != send->instr.simd_group ||
+           new_ref.reg->logical.simd_width != send->instr.simd_width))
+         return false;
+      break;
+
+   case IBC_FILE_HW_GRF:
+      if (new_ref.hw_grf.hstride != ibc_type_byte_size(new_ref.type) ||
+          new_ref.hw_grf.vstride != new_ref.hw_grf.hstride *
+                                    new_ref.hw_grf.width)
+         return false;
+      break;
+
+   default:
+      return false;
+   }
+
+   *ref = new_ref;
+   return true;
+}
+
 bool
 ibc_opt_copy_prop(ibc_shader *shader)
 {
    bool progress = false;
+
+   ibc_assign_logical_reg_strides(shader);
 
    ibc_foreach_instr_safe(instr, shader) {
 
@@ -460,9 +554,21 @@ ibc_opt_copy_prop(ibc_shader *shader)
          continue;
       }
 
-      case IBC_INSTR_TYPE_SEND:
-         /* TODO */
+      case IBC_INSTR_TYPE_SEND: {
+         ibc_send_instr *send = ibc_instr_as_send(instr);
+         while (try_copy_prop_message(&send->payload[0], send,
+                                      send->mlen * 32)) {
+            progress = true;
+         }
+
+         if (send->ex_mlen > 0) {
+            while (try_copy_prop_message(&send->payload[1], send,
+                                         send->ex_mlen * 32)) {
+               progress = true;
+            }
+         }
          continue;
+      }
 
       case IBC_INSTR_TYPE_INTRINSIC: {
          ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);

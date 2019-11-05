@@ -245,6 +245,7 @@ ibc_validate_ref(struct ibc_validate_state *s,
       const struct ibc_ref_hw_grf *hw_ref = &ref->hw_grf;
 
       ibc_assert(s, hw_ref->hstride % ibc_type_byte_size(ref->type) == 0);
+      ibc_assert(s, util_is_power_of_two_nonzero(hw_ref->width));
       ibc_assert(s, hw_ref->vstride % ibc_type_byte_size(ref->type) == 0);
       if (write)
          ibc_assert(s, hw_ref->hstride > 0);
