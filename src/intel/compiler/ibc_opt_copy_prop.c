@@ -33,6 +33,7 @@
 static inline bool
 try_compose_refs(ibc_ref *ref_out,
                  ibc_ref outer, ibc_ref inner,
+                 uint8_t num_comps,
                  unsigned outer_simd_group,
                  unsigned outer_simd_width,
                  unsigned inner_simd_group,
@@ -78,8 +79,12 @@ try_compose_refs(ibc_ref *ref_out,
       break;
 
    case IBC_FILE_HW_GRF:
-      /* Components aren't well-defined for HW grfs */
-      assert(outer.logical.comp == 0);
+      /* TODO: We could probably do this in a well-defined way in some cases
+       * but it's easier to just avoid for now.
+       */
+      if (outer.logical.comp > 0 || num_comps > 1)
+         return false;
+
       if (outer.logical.broadcast) {
          assert(outer.logical.simd_channel >= inner_simd_group);
          assert(outer.logical.simd_channel < inner_simd_group +
@@ -267,7 +272,7 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
 
       ibc_ref new_ref;
       if (!try_compose_refs(&new_ref, *ref, mov->src[0].ref,
-                            simd_group, simd_width,
+                            num_comps, simd_group, simd_width,
                             mov->instr.simd_group,
                             mov->instr.simd_width,
                             supports_imm))
@@ -310,7 +315,7 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
             }
 
             return try_compose_refs(ref, *ref, intrin->src[i].ref,
-                                    simd_group, simd_width,
+                                    num_comps, simd_group, simd_width,
                                     intrin->src[i].simd_group,
                                     intrin->src[i].simd_width,
                                     supports_imm);
@@ -330,7 +335,7 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
          ibc_ref comp_ref = *ref;
          comp_ref.logical.comp = 0;
          return try_compose_refs(ref, comp_ref, intrin->src[comp].ref,
-                                 simd_group, simd_width,
+                                 num_comps, simd_group, simd_width,
                                  intrin->src[comp].simd_group,
                                  intrin->src[comp].simd_width,
                                  supports_imm);
