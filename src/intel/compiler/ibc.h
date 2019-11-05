@@ -1451,6 +1451,7 @@ bool ibc_opt_copy_prop(ibc_shader *shader);
 bool ibc_opt_cse(ibc_shader *shader);
 bool ibc_opt_dead_code(ibc_shader *shader);
 bool ibc_opt_gather(ibc_shader *shader);
+bool ibc_opt_halt(ibc_shader *shader);
 
 void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 

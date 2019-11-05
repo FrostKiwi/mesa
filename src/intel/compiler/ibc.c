@@ -719,6 +719,7 @@ ibc_lower_and_optimize(ibc_shader *ibc)
    ibc_optimize(ibc);
    IBC_PASS_V(ibc, ibc_lower_io_to_sends);
    ibc_optimize(ibc);
+   IBC_PASS_V(ibc, ibc_opt_halt);
    IBC_PASS_V(ibc, ibc_lower_gather_ops);
    ibc_optimize(ibc);
    IBC_PASS_V(ibc, ibc_schedule_instructions);
