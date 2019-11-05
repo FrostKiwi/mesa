@@ -157,6 +157,7 @@ libintel_compiler_files = files(
   'ibc_opt_cse.c',
   'ibc_opt_dead_code.c',
   'ibc_opt_gather.c',
+  'ibc_opt_halt.c',
   'ibc_print.c',
   'ibc_ra_reg_sets.c',
   'ibc_ra_reg_sets.h',
