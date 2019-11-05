@@ -170,15 +170,6 @@ try_coalesce(ibc_ref dest, ibc_intrinsic_src src,
    if (src_info->num_reads != 1)
       return false;
 
-   /* For now, we want to ensure that the instructions are in the same block.
-    * We could, in theory, handle cross-block coalescing but that shouldn't be
-    * common, will wreak havoc on RA, and breaks WLR.
-    */
-   assert(dest_info->write_block_start != INVALID_BLOCK_START);
-   assert(src_info->write_block_start != INVALID_BLOCK_START);
-   if (dest_info->write_block_start != src_info->write_block_start)
-      return false;
-
    /* Our source has to read the whole register */
    if (src.ref.logical.byte > 0 ||
        src.ref.logical.comp > 0 ||
@@ -241,6 +232,16 @@ try_coalesce(ibc_ref dest, ibc_intrinsic_src src,
                                   .src_reg = src.ref.reg,
                                   .dest = dest,
                                });
+
+   /* For now, we want to ensure that the instructions are in the same block.
+    * We could, in theory, handle cross-block coalescing but that shouldn't be
+    * common, will wreak havoc on RA, and breaks WLR.
+    */
+   assert(dest_info->write_block_start != INVALID_BLOCK_START);
+   assert(src_info->write_block_start != INVALID_BLOCK_START);
+   if (dest_info->write_block_start != src_info->write_block_start)
+      ((ibc_reg *)dest.reg)->is_wlr = false;
+
    return true;
 }
 
