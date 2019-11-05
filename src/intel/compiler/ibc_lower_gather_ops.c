@@ -270,7 +270,7 @@ ibc_lower_gather_ops(ibc_shader *shader)
    ibc_builder b;
    ibc_builder_init(&b, shader);
 
-   ibc_foreach_instr_safe(instr, shader) {
+   ibc_foreach_instr_reverse_safe(instr, shader) {
       if (instr->type == IBC_INSTR_TYPE_FLOW) {
          state.block_start = ibc_instr_as_flow(instr);
          continue;
@@ -288,34 +288,38 @@ ibc_lower_gather_ops(ibc_shader *shader)
       case IBC_INTRINSIC_OP_SIMD_ZIP:
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
             assert(intrin->src[i].num_comps == intrin->num_dest_comps);
-            if (intrin->src[0].num_comps > 1) {
-               assert(intrin->src[i].ref.file == IBC_FILE_IMM ||
-                      intrin->src[i].ref.file == IBC_FILE_LOGICAL);
-               assert(intrin->dest.file == IBC_FILE_LOGICAL);
-            }
 
             const unsigned rel_group = intrin->src[i].simd_group -
                                        instr->simd_group;
             ibc_ref dest = intrin->dest;
             ibc_ref_simd_slice(&dest, rel_group);
 
-            if (can_try_coalesce &&
+            if (can_try_coalesce && intrin->src[i].num_comps == 1 &&
                 try_coalesce(dest, intrin->src[i], &state))
                continue;
+
 
             ibc_builder_push_group(&b, intrin->src[i].simd_group,
                                        intrin->src[i].simd_width);
             assert(b.simd_group == intrin->src[i].simd_group);
-            ibc_MOV_raw(&b, dest, intrin->src[i].ref,
-                        intrin->src[i].num_comps);
+
+            /* We have to do our own loop here because we the SIMD width is
+             * used by the builder to offset the source and destination and it
+             * assumes the same SIMD width on both sides.
+             */
+            for (unsigned c = 0; c < intrin->src[i].num_comps; c++) {
+               ibc_ref comp_dest = dest, comp_src = intrin->src[i].ref;
+               ibc_ref_comp_offset(&comp_dest, c, intrin->instr.simd_width);
+               ibc_ref_comp_offset(&comp_src, c, intrin->src[i].simd_width);
+               ibc_MOV_raw(&b, comp_dest, comp_src, 1);
+            }
+
             ibc_builder_pop(&b);
          }
          break;
 
       case IBC_INTRINSIC_OP_PACK: {
          ibc_builder_push_instr_group(&b, instr);
-
-         assert(intrin->dest.file == IBC_FILE_LOGICAL);
 
          ibc_ref dest = intrin->dest;
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
@@ -325,7 +329,8 @@ ibc_lower_gather_ops(ibc_shader *shader)
                ibc_MOV_raw(&b, dest, intrin->src[i].ref,
                            intrin->num_dest_comps);
             }
-            dest.logical.byte += ibc_type_byte_size(intrin->src[i].ref.type);
+            ibc_ref_byte_offset(&dest,
+                                ibc_type_byte_size(intrin->src[i].ref.type));
          }
 
          ibc_builder_pop(&b);
@@ -335,8 +340,6 @@ ibc_lower_gather_ops(ibc_shader *shader)
       case IBC_INTRINSIC_OP_VEC: {
          ibc_builder_push_instr_group(&b, instr);
 
-         assert(intrin->dest.file == IBC_FILE_LOGICAL);
-
          ibc_ref dest = intrin->dest;
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
             if (!can_try_coalesce ||
@@ -344,7 +347,8 @@ ibc_lower_gather_ops(ibc_shader *shader)
                ibc_MOV_raw(&b, dest, intrin->src[i].ref,
                            intrin->src[i].num_comps);
             }
-            dest.logical.comp += intrin->src[i].num_comps;
+            ibc_ref_comp_offset(&dest, intrin->src[i].num_comps,
+                                intrin->instr.simd_width);
          }
 
          ibc_builder_pop(&b);
