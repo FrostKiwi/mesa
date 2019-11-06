@@ -875,8 +875,35 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_intrinsic_instr *write)
          .num_comps = 8,
       };
 
+      ibc_ref pix = payload->pixel[write->instr.simd_group / 16];
+      if (write->instr.predicate != IBC_PREDICATE_NONE) {
+         /* Make a copy of pix */
+         ibc_reg *tmp_pix_reg =
+            ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
+
+         ibc_builder_push_we_all(b, 8);
+         ibc_MOV_to(b, ibc_typed_ref(tmp_pix_reg, pix.type), pix);
+         ibc_builder_pop(b);
+
+         pix = ibc_typed_ref(tmp_pix_reg, IBC_TYPE_UD);
+
+         /* Write the flag value to the bottom 16 bits of pix.7 */
+         ibc_ref pix_7 = pix;
+         pix_7.hw_grf.byte += 7 * ibc_type_byte_size(IBC_TYPE_UD);
+         pix_7.type = IBC_TYPE_UW;
+
+         assert(write->instr.flag.file == IBC_FILE_FLAG);
+         ibc_ref flag_uw = write->instr.flag;
+         flag_uw.type = IBC_TYPE_UW;
+         flag_uw.flag.bit = (write->instr.simd_group / 16) * 16;
+
+         ibc_builder_push_scalar(b);
+         ibc_MOV_to(b, pix_7, flag_uw);
+         ibc_builder_pop(b);
+      }
+
       src[num_srcs++] = (ibc_intrinsic_src) {
-         .ref = payload->pixel[write->instr.simd_group / 16],
+         .ref = pix,
          .simd_width = 1,
          .num_comps = 8,
       };
