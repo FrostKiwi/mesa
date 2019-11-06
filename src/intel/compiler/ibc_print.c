@@ -396,6 +396,8 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:   return "bti_typed_atomic";
    case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:   return "bti_untyped_read";
    case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:  return "bti_untyped_write";
+   case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ:  return "bti_byte_scattered_read";
+   case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE: return "bti_byte_scattered_write";
    case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC: return "bti_untyped_atomic";
    case IBC_INTRINSIC_OP_TEX:                return "tex";
    case IBC_INTRINSIC_OP_TXB:                return "txb";

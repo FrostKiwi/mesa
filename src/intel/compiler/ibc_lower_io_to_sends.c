@@ -322,6 +322,20 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
                                             num_data_comps,
                                             true    /* write */);
       break;
+   case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ:
+      send->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
+      desc = brw_dp_byte_scattered_rw_desc(devinfo,
+                                           intrin->instr.simd_width,
+                                           ibc_type_bit_size(intrin->dest.type),
+                                           false   /* write */);
+      break;
+   case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE:
+      send->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
+      desc = brw_dp_byte_scattered_rw_desc(devinfo,
+                                           intrin->instr.simd_width,
+                                           ibc_type_bit_size(data0.type),
+                                           true    /* write */);
+      break;
    case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
       send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
       desc = brw_dp_untyped_atomic_desc(b->shader->devinfo,
@@ -903,6 +917,8 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
+      case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ:
+      case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
          progress |= lower_surface_access(&b, intrin);
          break;
