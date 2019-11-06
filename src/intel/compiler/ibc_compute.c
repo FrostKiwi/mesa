@@ -176,10 +176,19 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
       dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD,
                                          instr->num_components);
 
-      ibc_intrinsic_instr *load =
-         ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
-                             dest, -1, instr->num_components,
-                             srcs, IBC_SURFACE_NUM_SRCS);
+      ibc_intrinsic_instr *load;
+      if (nir_intrinsic_align(instr) >= 4) {
+         assert(nir_dest_bit_size(instr->dest) == 32);
+         load = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
+                                    dest, -1, instr->num_components,
+                                    srcs, IBC_SURFACE_NUM_SRCS);
+      } else {
+         assert(nir_dest_bit_size(instr->dest) == 32);
+         assert(nir_dest_num_components(instr->dest) == 1);
+         load = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ,
+                                    dest, -1, instr->num_components,
+                                    srcs, IBC_SURFACE_NUM_SRCS);
+      }
       load->can_reorder = false;
 
       ibc_builder_pop(b);
@@ -197,15 +206,31 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
             .num_comps = 1,
          },
          [IBC_SURFACE_SRC_DATA0] = {
-            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD),
+            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT),
             .num_comps = instr->num_components,
          },
       };
 
-      ibc_intrinsic_instr *store =
-         ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
-                             ibc_null(IBC_TYPE_UD), 0, 0,
-                             srcs, IBC_SURFACE_NUM_SRCS);
+      ibc_intrinsic_instr *store;
+      if (nir_intrinsic_align(instr) >= 4) {
+         assert(nir_src_bit_size(instr->src[0]) == 32);
+         assert(nir_src_num_components(instr->src[0]) <= 4);
+         store = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE,
+                                     ibc_null(IBC_TYPE_UD), 0, 0,
+                                     srcs, IBC_SURFACE_NUM_SRCS);
+      } else {
+         assert(nir_src_bit_size(instr->src[0]) <= 32);
+         assert(nir_src_num_components(instr->src[0]) == 1);
+         /* The byte scattered messages consume 32-bit data and just ignore the
+          * unused bits at the top. Insert a MOV to ensure we have the right
+          * data size.
+          */
+         srcs[IBC_SURFACE_SRC_DATA0].ref =
+            ibc_MOV(b, IBC_TYPE_UD, srcs[IBC_SURFACE_SRC_DATA0].ref);
+         store = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE,
+                                     ibc_null(IBC_TYPE_UD), 0, 0,
+                                     srcs, IBC_SURFACE_NUM_SRCS);
+      }
 
       store->can_reorder = false,
       store->has_side_effects = true;
