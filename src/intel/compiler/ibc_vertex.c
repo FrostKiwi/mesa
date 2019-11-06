@@ -290,6 +290,7 @@ ibc_lower_io_urb_write_to_send(ibc_builder *b, ibc_intrinsic_instr *write)
 {
    const ibc_ref handle = write->src[IBC_URB_WRITE_SRC_HANDLE].ref;
    const ibc_ref data = write->src[IBC_URB_WRITE_SRC_DATA].ref;
+   const unsigned num_data_comps = write->src[IBC_URB_WRITE_SRC_DATA].num_comps;
    assert(data.file == IBC_FILE_LOGICAL);
    const uint32_t global_offset =
       ibc_ref_as_uint(write->src[IBC_URB_WRITE_SRC_GLOBAL_OFFSET].ref);
@@ -310,10 +311,26 @@ ibc_lower_io_urb_write_to_send(ibc_builder *b, ibc_intrinsic_instr *write)
 
    assert(write->src[IBC_URB_WRITE_SRC_DATA].num_comps <= 8);
 
-   send->payload[0] = handle;
-   send->payload[1] = data;
-   send->mlen = 1 + per_slot_offset_present + channel_mask_present;
-   send->ex_mlen = write->src[IBC_URB_WRITE_SRC_DATA].num_comps;
+   ibc_intrinsic_src msg_srcs[9];
+   unsigned num_msg_srcs = 0;
+
+   msg_srcs[num_msg_srcs++] = (ibc_intrinsic_src) {
+      .ref = handle,
+   };
+
+   assert(1 + num_data_comps <= ARRAY_SIZE(msg_srcs));
+   for (unsigned i = 0; i < num_data_comps; i++) {
+      msg_srcs[num_msg_srcs++] = (ibc_intrinsic_src) {
+         .ref = ibc_comp_ref(data, i),
+      };
+   }
+   assert(num_msg_srcs <= ARRAY_SIZE(msg_srcs));
+
+   unsigned mlen;
+   ibc_ref msg = ibc_MESSAGE(b, msg_srcs, num_msg_srcs, &mlen);
+
+   send->payload[0] = msg;
+   send->mlen = mlen;
 
    send->sfid = BRW_SFID_URB;
    send->desc_imm =
