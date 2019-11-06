@@ -104,5 +104,8 @@ ibc_lower_integer_multiplication(ibc_shader *shader)
       }
    }
 
+   if (progress)
+      ibc_repair_wlr_order(shader);
+
    return progress;
 }
