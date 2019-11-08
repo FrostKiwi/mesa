@@ -384,15 +384,22 @@ rewrite_ref_from_gc_graph(ibc_ref *_ref,
             (simd_group - reg->logical.simd_group) * stride;
       }
 
-      if (ref->logical.broadcast ||
-          (reg->logical.simd_width == 1 && state->is_read)) {
-         new_ref.hw_grf.vstride = 0;
-         new_ref.hw_grf.width = 1;
-         new_ref.hw_grf.hstride = 0;
+      if (ref->logical.broadcast || reg->logical.simd_width == 1) {
+         if (state->is_read) {
+            new_ref.hw_grf.vstride = 0;
+            new_ref.hw_grf.width = 1;
+            new_ref.hw_grf.hstride = 0;
+         } else {
+            new_ref.hw_grf.hstride = ibc_type_byte_size(ref->type);
+            new_ref.hw_grf.width = 8;
+            new_ref.hw_grf.vstride = new_ref.hw_grf.hstride *
+                                     new_ref.hw_grf.width;
+         }
       } else {
          new_ref.hw_grf.hstride = stride;
          new_ref.hw_grf.width = 8;
-         new_ref.hw_grf.vstride = stride * new_ref.hw_grf.width;
+         new_ref.hw_grf.vstride = new_ref.hw_grf.hstride *
+                                  new_ref.hw_grf.width;
       }
       break;
    }
