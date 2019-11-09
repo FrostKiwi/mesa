@@ -1394,6 +1394,12 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_store_ssbo: {
+      ibc_ref pred = {};
+      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
+         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
+         pred = ibc_emit_fs_sample_live_predicate(nti);
+      }
+
       ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
          [IBC_SURFACE_SRC_SURFACE_BTI] = {
             .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[1],
@@ -1440,6 +1446,11 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       }
       store->can_reorder = false;
       store->has_side_effects = true;
+
+      if (pred.file != IBC_FILE_NONE) {
+         ibc_instr_set_predicate(&store->instr, pred,
+                                 IBC_PREDICATE_NORMAL);
+      }
       break;
    }
 
