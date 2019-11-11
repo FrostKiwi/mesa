@@ -29,7 +29,13 @@
 #include <zlib.h>
 #include <assert.h>
 
+#ifdef HAVE_ZSTD_BUILD
+#include "zstd.h"
+#endif
+
 #define CHUNK 16384
+
+#define ZSTD_COMPRESSION_LEVEL 3
 
 int main(int arc, char **argv)
 {
@@ -39,17 +45,6 @@ int main(int arc, char **argv)
 
    unsigned simd_width = atoi(argv[2]);
    assert(simd_width == 8 || simd_width == 16 || simd_width == 32);
-   unsigned char out[CHUNK];
-
-   z_stream stream;
-   stream.zalloc = Z_NULL;
-   stream.zfree = Z_NULL;
-   stream.opaque = Z_NULL;
-
-   int ret = deflateInit(&stream, 9);  // XXX: pick a sensible level
-   if (ret != Z_OK) {
-      return ret;
-   }
 
    void *mem_ctx = ralloc_context(NULL);
    ibc_ra_reg_set set;
@@ -61,6 +56,40 @@ int main(int arc, char **argv)
    ra_set_serialize(set.regs, &blob);
 
    assert(blob.size % sizeof(uint32_t) == 0);
+
+#if defined(HAVE_ZSTD_BUILD) && defined(HAVE_ZSTD)
+   size_t out_size = ZSTD_compressBound(blob.size);
+   void * out = malloc(out_size);
+
+   size_t ret = ZSTD_compress(out, out_size, blob.data, blob.size,
+                              ZSTD_COMPRESSION_LEVEL);
+   if (ZSTD_isError(ret)) {
+      free(out);
+      fclose(fp);
+      return ret;
+   }
+
+   if (fwrite(out, 1, ret, fp) != ret) {
+      free(out);
+      fclose(fp);
+      return 1;
+   }
+
+   free(out);
+   fclose(fp);
+   return 0;
+#else
+   unsigned char out[CHUNK];
+
+   z_stream stream;
+   stream.zalloc = Z_NULL;
+   stream.zfree = Z_NULL;
+   stream.opaque = Z_NULL;
+
+   int ret = deflateInit(&stream, 9);  // XXX: pick a sensible level
+   if (ret != Z_OK) {
+      return ret;
+   }
 
    stream.avail_in = blob.size;
    stream.next_in = blob.data;
@@ -84,4 +113,5 @@ int main(int arc, char **argv)
    fclose(fp);
 
    return Z_OK;
+#endif
 }
