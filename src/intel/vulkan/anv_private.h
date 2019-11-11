@@ -1722,19 +1722,19 @@ struct anv_descriptor_set_binding_layout {
    /* Maximum number of YCbCr texture/sampler planes */
    uint8_t max_plane_count;
 
+   /* Index into the dynamic state array for a dynamic buffer */
+   int8_t dynamic_offset_index;
+
    /* Number of array elements in this binding (or size in bytes for inline
     * uniform data)
     */
-   uint16_t array_size;
+   uint32_t array_size;
 
    /* Index into the flattend descriptor set */
-   uint16_t descriptor_index;
-
-   /* Index into the dynamic state array for a dynamic buffer */
-   int16_t dynamic_offset_index;
+   uint32_t descriptor_index;
 
    /* Index into the descriptor set buffer views */
-   int16_t buffer_view_index;
+   int32_t buffer_view_index;
 
    /* Offset into the descriptor buffer where this descriptor lives */
    uint32_t descriptor_offset;
@@ -1761,16 +1761,16 @@ struct anv_descriptor_set_layout {
    uint32_t ref_cnt;
 
    /* Number of bindings in this descriptor set */
-   uint16_t binding_count;
+   uint32_t binding_count;
 
    /* Total size of the descriptor set with room for all array entries */
-   uint16_t size;
+   uint32_t size;
+
+   /* Number of buffer views in this descriptor set */
+   uint32_t buffer_view_count;
 
    /* Shader stages affected by this descriptor set */
    uint16_t shader_stages;
-
-   /* Number of buffer views in this descriptor set */
-   uint16_t buffer_view_count;
 
    /* Number of dynamic offsets used by this descriptor set */
    uint16_t dynamic_offset_count;

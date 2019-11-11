@@ -544,7 +544,7 @@ sha1_update_descriptor_set_binding_layout(struct mesa_sha1 *ctx,
    SHA1_UPDATE_VALUE(ctx, layout->descriptor_offset);
 
    if (layout->immutable_samplers) {
-      for (uint16_t i = 0; i < layout->array_size; i++)
+      for (uint32_t i = 0; i < layout->array_size; i++)
          sha1_update_immutable_sampler(ctx, layout->immutable_samplers[i]);
    }
 }
@@ -560,7 +560,7 @@ sha1_update_descriptor_set_layout(struct mesa_sha1 *ctx,
    SHA1_UPDATE_VALUE(ctx, layout->dynamic_offset_count);
    SHA1_UPDATE_VALUE(ctx, layout->descriptor_buffer_size);
 
-   for (uint16_t i = 0; i < layout->binding_count; i++)
+   for (uint32_t i = 0; i < layout->binding_count; i++)
       sha1_update_descriptor_set_binding_layout(ctx, &layout->binding[i]);
 }
 
