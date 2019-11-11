@@ -87,6 +87,9 @@ endif
 if with_dri_i965 or with_intel_vk or with_gallium_iris
   subdir('intel')
 endif
+if with_microsoft_clc
+  subdir('microsoft')
+endif
 subdir('mesa')
 subdir('loader')
 if with_platform_haiku

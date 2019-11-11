@@ -433,6 +433,13 @@ if with_glvnd
   endif
 endif
 
+_microsoft_clc = get_option('microsoft-clc')
+if _microsoft_clc == 'auto'
+  with_microsoft_clc = host_machine.system() == 'windows'
+else
+  with_microsoft_clc = _microsoft_clc == 'true'
+endif
+
 if with_vulkan_icd_dir == ''
   with_vulkan_icd_dir = join_paths(get_option('datadir'), 'vulkan/icd.d')
 endif
