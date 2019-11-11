@@ -185,7 +185,25 @@ brw_nir_trig = custom_target(
   capture : true,
 )
 
-dep_zlib_build = dependency('zlib', version : '>= 1.2.3', fallback : ['zlib', 'zlib_dep'], native : true)
+ra_sets_build_args = []
+dep_zstd_build = null_dep
+dep_zlib_build = null_dep
+if _zstd != 'disabled' and dep_zstd.found()
+  dep_zstd_build = dependency('libzstd', required : _zstd == 'enabled', native : true)
+  if dep_zstd_build.found()
+    ra_sets_build_args += '-DHAVE_ZSTD_BUILD'
+    ra_sets_ext = '.zstd'
+  endif
+endif
+
+if _zstd == 'enabled' and not (dep_zstd.found() and dep_zstd_build.found())
+  error('ZSTD required, but could not find both a build and host system version for IBC.')
+endif
+
+if not (dep_zstd_build.found() and dep_zstd.found())
+  dep_zlib_build = dependency('zlib', version : '>= 1.2.3', fallback : ['zlib', 'zlib_dep'], native : true)
+  ra_sets_ext = '.zlib'
+endif
 
 exe_ibc_build_ra_reg_sets = executable(
   'ibc_build_ra_reg_sets',
@@ -196,7 +214,9 @@ exe_ibc_build_ra_reg_sets = executable(
   ],
   c_args : [pre_args],  # needed even though this is a build machine target
   include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_intel],
-  dependencies : [idep_mesautil_build, dep_zlib_build],
+  # because this is a build machine target we need pre_args here
+  c_args : [pre_args, ra_sets_build_args],
+  dependencies : [idep_mesautil_build, dep_zlib_build, dep_zstd_build],
   native : true,
 )
 
@@ -207,7 +227,6 @@ endif
 if not host_machine.cpu_family().startswith('x86')
   error('Unsupported on non-x86 platforms')
 endif
-ra_sets_ext = '.zlib'
 _generated_regsets = []
 foreach s : ['8', '16', '32']
   _n = 'ibc_ra_reg_sets_prebuilt' + s
@@ -240,9 +259,9 @@ libintel_compiler = static_library(
     reg_sets,
   ],
   include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_intel],
-  c_args : [no_override_init_args, '-DIBC_HAVE_PREBUILT_REG_SETS'],
+  c_args : [no_override_init_args, ra_sets_build_args, '-DIBC_HAVE_PREBUILT_REG_SETS'],
   gnu_symbol_visibility : 'hidden',
-  dependencies : [idep_nir_headers, idep_mesautil, dep_zlib],
+  dependencies : [idep_nir_headers, idep_mesautil, dep_zlib, dep_zstd],
   build_by_default : false,
 )
 

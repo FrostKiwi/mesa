@@ -215,13 +215,11 @@ ibc_ra_reg_set_build_regs(ibc_ra_reg_set *set, unsigned simd_width,
 #ifdef IBC_HAVE_PREBUILT_REG_SETS
 #include "ibc_generated_ra_reg_sets.h"
 #include "util/blob.h"
-#include <zlib.h>
-#define CHUNK 16384
 
 static void
 ibc_ra_regsets_inflate_prebuild_regs(unsigned simd_width, struct blob *blob)
 {
-   unsigned char * data_start;
+   const char * data_start;
    size_t data_size;
 
    switch (simd_width) {
@@ -240,6 +238,38 @@ ibc_ra_regsets_inflate_prebuild_regs(unsigned simd_width, struct blob *blob)
    default:
       unreachable("unknown simd size");
    }
+
+#if defined(HAVE_ZSTD_BUILD) && defined(HAVE_ZSTD)
+   #include <zstd.h>
+   # if !defined(ZSTD_FRAMEHEADERSIZE_MAX)
+   /* They tell you to use this, but then hide it behind the static linking only API... */
+   #  define ZSTD_FRAMEHEADERSIZE_MAX 18
+   # endif
+   unsigned long long decompressed_size = ZSTD_getFrameContentSize(data_start, ZSTD_FRAMEHEADERSIZE_MAX);
+
+
+   if (decompressed_size == ZSTD_CONTENTSIZE_UNKNOWN || decompressed_size == ZSTD_CONTENTSIZE_ERROR) {
+      fprintf(stderr, "Could not get size of compressed zstd ra sets\n");
+      abort();
+   }
+
+   void * dst = malloc(decompressed_size + 1);
+
+   size_t out = ZSTD_decompress(dst, decompressed_size, data_start, data_size);
+   if (ZSTD_isError(out)) {
+      fprintf(stderr, "Error decompressing the ra sets: %s\n", ZSTD_getErrorName(out));
+      free(dst);
+      abort();
+   }
+   if (!blob_write_bytes(blob, dst, out)) {
+      fprintf(stderr, "error writing data to the blob\n");
+      free(dst);
+      abort();
+   }
+   free(dst);
+#else
+   #include <zlib.h>
+   #define CHUNK 16384
 
    int ret;
    unsigned have;
@@ -279,6 +309,7 @@ ibc_ra_regsets_inflate_prebuild_regs(unsigned simd_width, struct blob *blob)
    } while (stream.avail_in != 0 && stream.avail_out == 0);
 
    (void)inflateEnd(&stream);
+#endif
 }
 
 static void
