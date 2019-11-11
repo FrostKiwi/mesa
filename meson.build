@@ -262,6 +262,13 @@ if with_gallium_tegra and not with_gallium_nouveau
   error('tegra driver requires nouveau driver')
 endif
 
+_microsoft_clc = get_option('microsoft-clc')
+if _microsoft_clc == 'auto'
+  with_microsoft_clc = false
+else
+  with_microsoft_clc = _microsoft_clc == 'true'
+endif
+
 if host_machine.system() == 'darwin'
   with_dri_platform = 'apple'
   pre_args += '-DBUILDING_MESA'
