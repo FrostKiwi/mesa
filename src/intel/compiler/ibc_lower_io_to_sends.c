@@ -84,127 +84,6 @@ lower_bti_block_load_ubo(ibc_builder *b, ibc_intrinsic_instr *read)
 }
 
 static bool
-ibc_lower_a64_send(ibc_builder *b, ibc_intrinsic_instr *intrin)
-{
-   const struct gen_device_info *devinfo = b->shader->devinfo;
-
-   const ibc_ref address = intrin->src[IBC_SURFACE_SRC_ADDRESS].ref;
-   const ibc_ref data0 = intrin->src[IBC_SURFACE_SRC_DATA0].ref;
-
-   assert(intrin->src[IBC_SURFACE_SRC_ADDRESS].num_comps == 1);
-   const unsigned num_data_comps =
-      intrin->src[IBC_SURFACE_SRC_DATA0].num_comps;
-   assert(intrin->src[IBC_SURFACE_SRC_DATA0].num_comps == 0 ||
-          intrin->src[IBC_SURFACE_SRC_DATA0].num_comps == num_data_comps);
-
-   ibc_builder_push_instr_group(b, &intrin->instr);
-   if (b->simd_width < 8) {
-      assert(b->simd_width == 1);
-      b->simd_width = 8;
-   }
-
-   ibc_send_instr *send = ibc_send_instr_create(b->shader,
-                                                intrin->instr.simd_group,
-                                                intrin->instr.simd_width);
-   send->instr.we_all = intrin->instr.we_all;
-   send->can_reorder = intrin->can_reorder;
-   send->has_side_effects = intrin->has_side_effects;
-
-   if (intrin->instr.predicate != IBC_PREDICATE_NONE) {
-      send->instr.flag = intrin->instr.flag;
-      send->instr.predicate = intrin->instr.predicate;
-   }
-
-   ibc_intrinsic_src srcs[8] = {};
-   unsigned num_srcs = 0;
-
-   assert(devinfo->gen >= 9);
-
-   srcs[num_srcs++].ref = address;
-
-   if (data0.file != IBC_FILE_NONE) {
-      for (unsigned i = 0; i < num_data_comps; i++) {
-         srcs[num_srcs++].ref = ibc_comp_ref(data0, i);
-      }
-   }
-
-   assert(num_srcs < ARRAY_SIZE(srcs));
-
-   unsigned mlen;
-   send->payload[0] = ibc_MESSAGE(b, srcs, num_srcs, &mlen);
-   send->mlen = mlen;
-
-   uint32_t desc;
-   switch (intrin->op) {
-   case IBC_INTRINSIC_OP_A64_UNTYPED_READ:
-      desc = brw_dp_a64_untyped_surface_rw_desc(devinfo,
-                                                intrin->instr.simd_width,
-                                                intrin->num_dest_comps,
-                                                false    /*write */);
-      break;
-   case IBC_INTRINSIC_OP_A64_UNTYPED_WRITE:
-      desc = brw_dp_a64_untyped_surface_rw_desc(devinfo,
-                                                intrin->instr.simd_width,
-                                                num_data_comps,
-                                                true  /*write */);
-      break;
-   case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ:
-      desc = brw_dp_a64_byte_scattered_rw_desc(devinfo,
-                                               intrin->instr.simd_width,
-                                               ibc_type_bit_size(intrin->dest.type),
-                                               false  /*write */);
-      break;
-   case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE:
-      desc = brw_dp_a64_byte_scattered_rw_desc(devinfo,
-                                               intrin->instr.simd_width,
-                                               ibc_type_bit_size(data0.type),
-                                               true   /*write */);
-      break;
-   default:
-      unreachable("Unknow A64 instruction");
-   }
-
-   send->desc_imm = desc;
-   send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
-
-   assert(ibc_type_bit_size(intrin->dest.type) == 32);
-   if (intrin->instr.simd_width == 1) {
-      send->rlen = intrin->num_dest_comps;
-      ibc_reg *tmp_reg =
-         ibc_hw_grf_reg_create(b->shader, send->rlen * REG_SIZE, REG_SIZE);
-      send->dest = ibc_typed_ref(tmp_reg, intrin->dest.type);
-   } else {
-      assert(intrin->instr.simd_width >= 8);
-      send->dest = intrin->dest;
-      send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
-   }
-
-   ibc_builder_insert_instr(b, &send->instr);
-   ibc_builder_pop(b);
-
-   if (intrin->instr.simd_width == 1) {
-      ibc_builder_push_scalar(b);
-      assert(ibc_type_bit_size(intrin->dest.type) == 32);
-      assert(send->dest.type == intrin->dest.type);
-
-      ibc_ref vec_src[4];
-      assert(intrin->num_dest_comps <= ARRAY_SIZE(vec_src));
-      for (unsigned i = 0; i < intrin->num_dest_comps; i++) {
-         vec_src[i] = send->dest;
-         vec_src[i].hw_grf.byte += i * REG_SIZE;
-         ibc_hw_grf_mul_stride(&vec_src[i].hw_grf, 0);
-      }
-      ibc_VEC_to(b, intrin->dest, vec_src, intrin->num_dest_comps);
-
-      ibc_builder_pop(b);
-   }
-
-   ibc_instr_remove(&intrin->instr);
-
-   return true;
-}
-
-static bool
 lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
 {
    const struct gen_device_info *devinfo = b->shader->devinfo;
@@ -212,8 +91,6 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
    const ibc_ref surface_bti = intrin->src[IBC_SURFACE_SRC_SURFACE_BTI].ref;
    const ibc_ref surface_handle =
       intrin->src[IBC_SURFACE_SRC_SURFACE_HANDLE].ref;
-   assert((surface_bti.file == IBC_FILE_NONE) !=
-          (surface_handle.file == IBC_FILE_NONE));
 
    const ibc_ref address = intrin->src[IBC_SURFACE_SRC_ADDRESS].ref;
    const ibc_ref pixel_mask = intrin->src[IBC_SURFACE_SRC_PIXEL_MASK].ref;
@@ -227,6 +104,33 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       intrin->src[IBC_SURFACE_SRC_DATA0].num_comps;
    assert(intrin->src[IBC_SURFACE_SRC_DATA1].num_comps == 0 ||
           intrin->src[IBC_SURFACE_SRC_DATA1].num_comps == num_data_comps);
+
+   switch (intrin->op) {
+   case IBC_INTRINSIC_OP_BTI_TYPED_READ:
+   case IBC_INTRINSIC_OP_BTI_TYPED_WRITE:
+   case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
+   case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ:
+   case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE:
+   case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
+      assert(ibc_type_bit_size(address.type) == 32);
+      assert((surface_bti.file == IBC_FILE_NONE) !=
+             (surface_handle.file == IBC_FILE_NONE));
+      break;
+
+   case IBC_INTRINSIC_OP_A64_UNTYPED_READ:
+   case IBC_INTRINSIC_OP_A64_UNTYPED_WRITE:
+   case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ:
+   case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE:
+      assert(ibc_type_bit_size(address.type) == 64);
+      assert(surface_bti.file == IBC_FILE_NONE &&
+             surface_handle.file == IBC_FILE_NONE);
+      break;
+
+   default:
+      unreachable("Unhandled surface access intrinsic");
+   }
 
    ibc_builder_push_instr_group(b, &intrin->instr);
    if (b->simd_width < 8) {
@@ -343,6 +247,34 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
                                         ibc_ref_as_uint(atomic_op),
                                         intrin->num_dest_comps > 0);
       break;
+   case IBC_INTRINSIC_OP_A64_UNTYPED_READ:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_a64_untyped_surface_rw_desc(devinfo,
+                                                intrin->instr.simd_width,
+                                                intrin->num_dest_comps,
+                                                false    /*write */);
+      break;
+   case IBC_INTRINSIC_OP_A64_UNTYPED_WRITE:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_a64_untyped_surface_rw_desc(devinfo,
+                                                intrin->instr.simd_width,
+                                                num_data_comps,
+                                                true  /*write */);
+      break;
+   case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_a64_byte_scattered_rw_desc(devinfo,
+                                               intrin->instr.simd_width,
+                                               ibc_type_bit_size(intrin->dest.type),
+                                               false  /*write */);
+      break;
+   case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_a64_byte_scattered_rw_desc(devinfo,
+                                               intrin->instr.simd_width,
+                                               ibc_type_bit_size(data0.type),
+                                               true   /*write */);
+      break;
    default:
       unreachable("Unhandled surface access intrinsic");
    }
@@ -350,6 +282,11 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
    send->desc_imm = desc;
    if (surface_bti.file == IBC_FILE_IMM) {
       send->desc_imm |= ibc_ref_as_uint(surface_bti) & 0xff;
+   } else if (surface_bti.file != IBC_FILE_NONE) {
+      ibc_builder_push_scalar(b);
+      assert(surface_bti.type == IBC_TYPE_UD);
+      send->desc = ibc_AND(b, IBC_TYPE_UD, surface_bti, ibc_imm_uw(0xff));
+      ibc_builder_pop(b);
    } else if (surface_handle.file != IBC_FILE_NONE) {
       /* Bindless surface */
       assert(devinfo->gen >= 9);
@@ -363,10 +300,7 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       send->ex_desc = ibc_MOV(b, IBC_TYPE_UD, surface_handle);
       ibc_builder_pop(b);
    } else {
-      ibc_builder_push_scalar(b);
-      assert(surface_bti.type == IBC_TYPE_UD);
-      send->desc = ibc_AND(b, IBC_TYPE_UD, surface_bti, ibc_imm_uw(0xff));
-      ibc_builder_pop(b);
+      assert(ibc_type_bit_size(address.type) == 64);
    }
 
    assert(ibc_type_bit_size(intrin->dest.type) == 32);
@@ -920,6 +854,10 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ:
       case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
+      case IBC_INTRINSIC_OP_A64_UNTYPED_READ:
+      case IBC_INTRINSIC_OP_A64_UNTYPED_WRITE:
+      case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ:
+      case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE:
          progress |= lower_surface_access(&b, intrin);
          break;
 
@@ -929,13 +867,6 @@ ibc_lower_io_to_sends(ibc_shader *shader)
 
       case IBC_INTRINSIC_OP_FB_WRITE:
          progress |= ibc_lower_io_fb_write_to_send(&b, intrin);
-         break;
-
-      case IBC_INTRINSIC_OP_A64_UNTYPED_READ:
-      case IBC_INTRINSIC_OP_A64_UNTYPED_WRITE:
-      case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ:
-      case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE:
-         progress |= ibc_lower_a64_send(&b, intrin);
          break;
 
       case IBC_INTRINSIC_OP_TEX:
