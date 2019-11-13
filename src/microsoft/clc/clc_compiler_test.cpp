@@ -77,29 +77,13 @@ get_dxgi_factory()
 }
 
 static IDXGIAdapter1 *
-choose_adapter(IDXGIFactory4 *factory, LUID *adapter, bool want_warp)
+choose_adapter(IDXGIFactory4 *factory)
 {
    IDXGIAdapter1 *ret;
-   if (adapter) {
-      if (SUCCEEDED(factory->EnumAdapterByLuid(*adapter,
-         __uuidof(IDXGIAdapter1),
-         (void **)&ret)))
-         return ret;
-      debug_printf("D3D12: requested adapter missing, falling back to auto-detection...\n");
-   }
-
-   if (want_warp) {
-      if (SUCCEEDED(factory->EnumWarpAdapter(__uuidof(IDXGIAdapter1),
-         (void **)& ret)))
-         return ret;
-      debug_printf("D3D12: failed to enum warp adapter\n");
-      return NULL;
-   }
-
-   // The first adapter is the default
-   if (SUCCEEDED(factory->EnumAdapters1(0, &ret)))
+   if (SUCCEEDED(factory->EnumWarpAdapter(__uuidof(IDXGIAdapter1),
+      (void **)& ret)))
       return ret;
-
+   debug_printf("D3D12: failed to enum warp adapter\n");
    return NULL;
 }
 
@@ -265,8 +249,7 @@ int main()
       return -1;
    }
 
-   // bool want_warp = env_var_as_boolean("LIBGL_ALWAYS_SOFTWARE", false);
-   IDXGIAdapter1 *adapter = choose_adapter(factory, NULL, false);
+   IDXGIAdapter1 *adapter = choose_adapter(factory);
    if (!adapter) {
       debug_printf("D3D12: failed to choose adapter\n");
       return -1;
