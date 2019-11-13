@@ -59,9 +59,9 @@ try_compose_refs(ibc_ref *ref_out,
       break;
 
    case IBC_FILE_IMM:
-      assert(ref.logical.comp == 0);
-      if (ref.logical.byte) {
-         memmove(ref.imm, ref.imm + ref.logical.byte,
+      assert(outer.logical.comp == 0);
+      if (outer.logical.byte) {
+         memmove(ref.imm, ref.imm + outer.logical.byte,
                  ibc_type_byte_size(ref.type));
       }
       break;
