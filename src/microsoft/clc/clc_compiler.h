@@ -1,6 +1,3 @@
-#ifndef CLC_COMPILER_H
-#define CLC_COMPILER_H
-
 /*
  * Copyright 2019 Collabora Ltd.
  *
@@ -23,6 +20,13 @@
  * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+
+#ifndef CLC_COMPILER_H
+#define CLC_COMPILER_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stddef.h>
 
@@ -84,5 +88,9 @@ int clc_compile_from_source(
    struct clc_metadata *metadata,
    void **blob,
    size_t *blob_size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
