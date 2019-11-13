@@ -896,13 +896,16 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
           instr->simd_width > 1) {
          /* In this case, we have to splat the flag value out */
          b->cursor = ibc_before_instr(instr);
-         ibc_builder_push_instr_group(b, instr);
 
-         ibc_ref splat = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
-         ibc_MOV_to_flag(b, splat, BRW_CONDITIONAL_NZ, instr->flag);
-         ibc_instr_set_ref(instr, &instr->flag, splat);
-
+         ibc_reg *splat = ibc_flag_reg_create(b->shader, 32);
+         ibc_builder_push_scalar(b);
+         ibc_MOV_to(b, ibc_typed_ref(splat, IBC_TYPE_D), instr->flag);
          ibc_builder_pop(b);
+
+         ibc_ref splat_flag = ibc_typed_ref(splat, IBC_TYPE_FLAG);
+         splat_flag.flag.bit = instr->simd_group;
+
+         ibc_instr_set_ref(instr, &instr->flag, splat_flag);
       }
    }
 
