@@ -312,7 +312,9 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
    } else {
       assert(intrin->instr.simd_width >= 8);
       send->dest = intrin->dest;
-      send->rlen = intrin->num_dest_comps * intrin->instr.simd_width / 8;
+      send->rlen = (intrin->num_dest_comps *
+                    intrin->instr.simd_width *
+                    ibc_type_byte_size(intrin->dest.type)) / REG_SIZE;
    }
 
    ibc_builder_insert_instr(b, &send->instr);
