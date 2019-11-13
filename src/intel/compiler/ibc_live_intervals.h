@@ -123,6 +123,11 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
                               BITSET_WORD *chunks);
 
 ibc_live_intervals *
+ibc_compute_reg_chunks(const ibc_shader *shader,
+                       bool (*reg_filter)(const ibc_reg *reg),
+                       void *mem_ctx);
+
+ibc_live_intervals *
 ibc_compute_live_sets(const ibc_shader *shader,
                       bool (*reg_filter)(const ibc_reg *reg),
                       void *mem_ctx);
