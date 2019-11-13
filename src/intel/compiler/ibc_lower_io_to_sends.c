@@ -123,6 +123,8 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
    case IBC_INTRINSIC_OP_A64_UNTYPED_WRITE:
    case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ:
    case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE:
+   case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC_INT64:
+   case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC:
       assert(ibc_type_bit_size(address.type) == 64);
       assert(surface_bti.file == IBC_FILE_NONE &&
              surface_handle.file == IBC_FILE_NONE);
@@ -275,6 +277,20 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
                                                ibc_type_bit_size(data0.type),
                                                true   /*write */);
       break;
+   case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_a64_untyped_atomic_desc(devinfo,
+                                            intrin->instr.simd_width, 32,
+                                            ibc_ref_as_uint(atomic_op),
+                                            intrin->num_dest_comps > 0);
+      break;
+   case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC_INT64:
+      send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
+      desc = brw_dp_a64_untyped_atomic_desc(devinfo,
+                                            intrin->instr.simd_width, 64,
+                                            ibc_ref_as_uint(atomic_op),
+                                            intrin->num_dest_comps > 0);
+      break;
    default:
       unreachable("Unhandled surface access intrinsic");
    }
@@ -303,7 +319,8 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       assert(ibc_type_bit_size(address.type) == 64);
    }
 
-   assert(ibc_type_bit_size(intrin->dest.type) == 32);
+   assert(ibc_type_bit_size(intrin->dest.type) == 32 ||
+          ibc_type_bit_size(intrin->dest.type) == 64);
    if (intrin->instr.simd_width == 1) {
       send->rlen = intrin->num_dest_comps;
       ibc_reg *tmp_reg =
@@ -860,6 +877,8 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       case IBC_INTRINSIC_OP_A64_UNTYPED_WRITE:
       case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ:
       case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE:
+      case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC_INT64:
+      case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC:
          progress |= lower_surface_access(&b, intrin);
          break;
 

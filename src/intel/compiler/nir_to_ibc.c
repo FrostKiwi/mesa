@@ -1357,6 +1357,64 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_global_atomic_add:
+   case nir_intrinsic_global_atomic_imin:
+   case nir_intrinsic_global_atomic_umin:
+   case nir_intrinsic_global_atomic_imax:
+   case nir_intrinsic_global_atomic_umax:
+   case nir_intrinsic_global_atomic_and:
+   case nir_intrinsic_global_atomic_or:
+   case nir_intrinsic_global_atomic_xor:
+   case nir_intrinsic_global_atomic_exchange:
+   case nir_intrinsic_global_atomic_comp_swap: {
+      unsigned aop = brw_aop_for_nir_intrinsic(instr);
+
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_ADDRESS] = {
+            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT),
+         },
+         [IBC_SURFACE_SRC_ATOMIC_OP] = {
+            .ref = ibc_imm_ud(aop),
+         },
+      };
+
+      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
+         brw_wm_prog_data(nti->prog_data)->has_side_effects = true;
+         srcs[IBC_SURFACE_SRC_PIXEL_MASK] = (ibc_intrinsic_src) {
+            .ref = ibc_emit_fs_sample_live_predicate(nti),
+            .num_comps = 1,
+         };
+      }
+
+      if (aop != BRW_AOP_INC && aop != BRW_AOP_DEC && aop != BRW_AOP_PREDEC) {
+         srcs[IBC_SURFACE_SRC_DATA0] = (ibc_intrinsic_src) {
+            .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UINT),
+         };
+      }
+
+      if (aop == BRW_AOP_CMPWR) {
+         srcs[IBC_SURFACE_SRC_DATA1] = (ibc_intrinsic_src) {
+            .ref = ibc_nir_src(nti, instr->src[2], IBC_TYPE_UINT),
+         };
+      }
+
+      ibc_intrinsic_instr *image_op;
+      if (nir_dest_bit_size(instr->dest) == 64) {
+         dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UQ, 1);
+         image_op = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC_INT64,
+                                        dest, -1, 1, srcs, IBC_SURFACE_NUM_SRCS);
+      } else {
+         assert(nir_dest_bit_size(instr->dest) == 32);
+         dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
+         image_op = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC,
+                                        dest, -1, 1, srcs, IBC_SURFACE_NUM_SRCS);
+      }
+      image_op->can_reorder = false;
+      image_op->has_side_effects = true;
+
+      break;
+   }
+
    case nir_intrinsic_load_ssbo: {
       ibc_builder_push_nir_dest_group(b, instr->dest);
 

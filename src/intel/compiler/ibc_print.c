@@ -438,6 +438,8 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_A64_UNTYPED_WRITE:  return "a64_untyped_write";
    case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_READ:  return "a64_byte_scattered_read";
    case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE: return "a64_byte_scattered_write";
+   case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC_INT64: return "a64_untyped_atomic_int64";
+   case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC:       return "a64_untyped_atomic";
    }
    unreachable("Invalid IBC intrinsic op");
 }
