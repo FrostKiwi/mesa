@@ -670,6 +670,80 @@ ibc_ref_comp_offset(ibc_ref *ref, uint8_t comp, uint8_t simd_width)
    unreachable("Unhandled register file");
 }
 
+/** Tries to compose two ibc_refs
+ *
+ * Specifically, this computes the composition outer(ref(reg)) and stores it
+ * in ref.  The outer ref must be logical.
+ */
+static inline void
+ibc_ref_compose_ref(ibc_ref *ref,
+                    uint8_t ref_simd_group,
+                    uint8_t ref_simd_width,
+                    ibc_ref outer,
+                    uint8_t outer_simd_group,
+                    uint8_t outer_simd_width)
+{
+   assert(outer.file == IBC_FILE_LOGICAL);
+   assert(ibc_type_bit_size(outer.type) <= ibc_type_bit_size(ref->type));
+
+   ref->type = outer.type;
+
+   switch (ref->file) {
+   case IBC_FILE_NONE:
+      return;
+
+   case IBC_FILE_IMM:
+      assert(outer.logical.comp == 0);
+      if (outer.logical.byte) {
+         assert(ibc_type_byte_size(ref->type) < sizeof(ref->imm));
+         memmove(ref->imm, ref->imm + outer.logical.byte,
+                 ibc_type_byte_size(outer.type));
+         memset(ref->imm + ibc_type_byte_size(ref->type),
+                0, sizeof(ref->imm) - ibc_type_byte_size(ref->type));
+      }
+      return;
+
+   case IBC_FILE_LOGICAL:
+      ref->logical.byte += outer.logical.byte;
+      ref->logical.comp += outer.logical.comp;
+      if (outer.logical.broadcast && !ref->logical.broadcast) {
+         /* If the outer ref wants to broadcast and the inner ref is not
+          * already broadcasting, we broadcast based on the outer ref.
+          */
+         ref->logical.broadcast = true;
+         ref->logical.simd_channel = outer.logical.simd_channel;
+      }
+      return;
+
+   case IBC_FILE_HW_GRF:
+      if (outer.logical.comp > 0)
+         ibc_ref_comp_offset(ref, outer.logical.comp, ref_simd_width);
+
+      if (outer.logical.broadcast) {
+         assert(outer.logical.simd_channel >= ref_simd_group);
+         assert(outer.logical.simd_channel < ref_simd_group +
+                                             ref_simd_width);
+         unsigned rel_channel = outer.logical.simd_channel - ref_simd_group;
+         ibc_hw_grf_simd_slice(&ref->hw_grf, rel_channel);
+         ibc_hw_grf_mul_stride(&ref->hw_grf, 0);
+      } else if (ref->hw_grf.vstride > 0 || ref->hw_grf.hstride > 0) {
+         assert(outer_simd_group >= ref_simd_group);
+         assert(outer_simd_group + outer_simd_width <=
+                ref_simd_group + ref_simd_width);
+         unsigned rel_simd_group = outer_simd_group - ref_simd_group;
+         ibc_hw_grf_simd_slice(&ref->hw_grf, rel_simd_group);
+      }
+      ibc_ref_byte_offset(ref, outer.logical.byte);
+      return;
+
+   case IBC_FILE_FLAG:
+   case IBC_FILE_ACCUM:
+      unreachable("Unsupported register file for composition");
+   }
+
+   unreachable("Invalid register file");
+}
+
 static inline void
 ibc_hw_grf_ref_foreach_byte(ibc_ref ref,
                             unsigned num_comps,
