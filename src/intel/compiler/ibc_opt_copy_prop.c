@@ -52,30 +52,13 @@ try_compose_refs(ibc_ref *ref_out,
       return false;
 
    ibc_ref ref = inner;
-   ref.type = outer.type;
 
    switch (ref.file) {
    case IBC_FILE_NONE:
-      break;
-
    case IBC_FILE_IMM:
-      assert(outer.logical.comp == 0);
-      if (outer.logical.byte) {
-         memmove(ref.imm, ref.imm + outer.logical.byte,
-                 ibc_type_byte_size(ref.type));
-      }
-      break;
-
    case IBC_FILE_LOGICAL:
-      ref.logical.byte += outer.logical.byte;
-      ref.logical.comp += outer.logical.comp;
-      if (outer.logical.broadcast && !inner.logical.broadcast) {
-         /* If the outer ref wants to broadcast and the inner ref is not
-          * already broadcasting, we broadcast based on the outer ref.
-          */
-         ref.logical.broadcast = true;
-         ref.logical.simd_channel = outer.logical.simd_channel;
-      }
+      ibc_ref_compose_ref(&ref, inner_simd_group, inner_simd_width,
+                          outer, outer_simd_group, outer_simd_width);
       break;
 
    case IBC_FILE_HW_GRF:
@@ -84,28 +67,18 @@ try_compose_refs(ibc_ref *ref_out,
        */
       if (outer.logical.comp > 0 || num_comps > 1)
          return false;
-
-      if (outer.logical.broadcast) {
-         assert(outer.logical.simd_channel >= inner_simd_group);
-         assert(outer.logical.simd_channel < inner_simd_group +
-                                             inner_simd_width);
-         unsigned rel_channel = outer.logical.simd_channel - inner_simd_group;
-         ibc_hw_grf_simd_slice(&ref.hw_grf, rel_channel);
-         ibc_hw_grf_mul_stride(&ref.hw_grf, 0);
-      } else if (ref.hw_grf.vstride > 0 || ref.hw_grf.hstride > 0) {
-         assert(outer_simd_group >= inner_simd_group);
-         assert(outer_simd_group + outer_simd_width <=
-                inner_simd_group + inner_simd_width);
-         unsigned rel_simd_group = outer_simd_group - inner_simd_group;
-         ibc_hw_grf_simd_slice(&ref.hw_grf, rel_simd_group);
-      }
-      ibc_ref_byte_offset(&ref, outer.logical.byte);
+      ibc_ref_compose_ref(&ref, inner_simd_group, inner_simd_width,
+                          outer, outer_simd_group, outer_simd_width);
       break;
 
    case IBC_FILE_FLAG:
       /* Registers in IBC_FILE_FLAG do not have components */
       assert(outer.logical.comp == 0);
 
+      /* ibc_ref_compose_ref doesn't currently handle flags so we have to do
+       * it manually here.
+       */
+      ref.type = outer.type;
       if (inner.type == IBC_TYPE_FLAG) {
          if (outer.type != IBC_TYPE_FLAG)
             return false;
