@@ -325,11 +325,21 @@ emit_load(struct lower_io_state *state,
       load->src[0] = nir_src_for_ssa(offset);
    }
 
+   unsigned load_bit_size = bit_size;
+   if (bit_size == 1) {
+      /* TODO: Make the native bool bit_size an option. */
+      load_bit_size = 32;
+   }
+
    nir_ssa_dest_init(&load->instr, &load->dest,
-                     num_components, bit_size, NULL);
+                     num_components, load_bit_size, NULL);
    nir_builder_instr_insert(b, &load->instr);
 
-   return &load->dest.ssa;
+   nir_ssa_def *result = &load->dest.ssa;
+   if (bit_size == 1)
+      result = nir_i2b(b, result);
+
+   return result;
 }
 
 static nir_ssa_def *
