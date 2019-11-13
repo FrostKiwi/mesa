@@ -157,6 +157,10 @@ ibc_intrinsic_instr_max_simd_width(const ibc_intrinsic_instr *intrin,
    case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE:
       return devinfo->gen <= 8 ? 8 : 16;
 
+   case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC:
+   case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC_INT64:
+      return 8;
+
    case IBC_INTRINSIC_OP_TEX:
    case IBC_INTRINSIC_OP_TXB:
    case IBC_INTRINSIC_OP_TXL:
