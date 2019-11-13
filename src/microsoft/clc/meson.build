@@ -27,3 +27,7 @@ libclc_compiler = static_library(
   files_libclc_compiler,
   c_args : c_vis_args,
 )
+
+clc_compiler_test = executable('clc_compiler-test', 'clc_compiler_test.cpp',
+  link_with: libclc_compiler)
+test('clc_compiler test', clc_compiler_test)
