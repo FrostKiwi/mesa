@@ -1531,6 +1531,7 @@ unsigned ibc_tex_instr_max_simd_width(const ibc_intrinsic_instr *write,
 
 bool ibc_opt_copy_prop(ibc_shader *shader);
 bool ibc_opt_cse(ibc_shader *shader);
+bool ibc_opt_coalesce(ibc_shader *shader);
 bool ibc_opt_dead_code(ibc_shader *shader);
 bool ibc_opt_gather(ibc_shader *shader);
 bool ibc_opt_halt(ibc_shader *shader);
