@@ -155,6 +155,7 @@ libintel_compiler_files = files(
   'ibc_nir.h',
   'ibc_opt_copy_prop.c',
   'ibc_opt_cse.c',
+  'ibc_opt_coalesce.c',
   'ibc_opt_dead_code.c',
   'ibc_opt_gather.c',
   'ibc_opt_halt.c',
