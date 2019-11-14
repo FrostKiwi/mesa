@@ -28,6 +28,7 @@
 
 struct reg_info {
    unsigned num_reads;
+   bool can_coalesce_to;
    ibc_flow_instr *write_block_start;
 };
 
@@ -122,14 +123,13 @@ rewrite_write(ibc_reg_write *write,
  * makes the destination register not SSA.
  */
 static bool
-dest_can_try_coalesce(ibc_ref dest)
+dest_can_try_coalesce(ibc_ref dest, struct lower_gather_ops_state *state)
 {
    /* For now, coalesce only works on logical and HW_GRF */
    if (dest.file != IBC_FILE_LOGICAL && dest.file != IBC_FILE_HW_GRF)
       return false;
 
-   /* Destination needs to be SSA */
-   if (dest.reg == NULL || ibc_reg_ssa_instr(dest.reg) == NULL)
+   if (dest.reg == NULL || !state->reg_info[dest.reg->index].can_coalesce_to)
       return false;
 
    return true;
@@ -260,6 +260,29 @@ ibc_lower_gather_ops(ibc_shader *shader)
 
    state.reg_info = rzalloc_array(shader, struct reg_info, state.num_regs);
 
+   ibc_foreach_reg(reg, shader) {
+      /* For now, coalesce only works on logical and HW_GRF */
+      if (reg->file != IBC_FILE_LOGICAL && reg->file != IBC_FILE_HW_GRF)
+         continue;
+
+      /* In order to coalesce into a register, we require two properties:
+       *
+       *    1. The writes to that register do not overlap.
+       *
+       *    2. Each write to the register dominates all reads of any data
+       *       written by that write
+       *
+       * If these two properties both hold, then we can move the writes past
+       * each other and we can freely move them up a block or into any
+       * dominator of that block.  Because we gather this once at the start of
+       * the pass and then use them even after we've modified the IR, it's
+       * important that these two properties are invariant under the lowering
+       * and coalescing done by this pass.
+       */
+      if (ibc_reg_ssa_instr(reg) != NULL)
+         state.reg_info[reg->index].can_coalesce_to = true;
+   }
+
    ibc_foreach_instr(instr, shader) {
       ibc_instr_foreach_read(instr, count_refs, &state);
       ibc_instr_foreach_write(instr, record_write, &state);
@@ -283,7 +306,7 @@ ibc_lower_gather_ops(ibc_shader *shader)
       b.cursor = ibc_after_instr(instr);
 
       ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-      bool can_try_coalesce = dest_can_try_coalesce(intrin->dest);
+      bool can_try_coalesce = dest_can_try_coalesce(intrin->dest, &state);
 
       switch (intrin->op) {
       case IBC_INTRINSIC_OP_SIMD_ZIP:
