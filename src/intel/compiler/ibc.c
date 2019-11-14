@@ -721,6 +721,7 @@ ibc_lower_and_optimize(ibc_shader *ibc)
    ibc_optimize(ibc);
    IBC_PASS_V(ibc, ibc_opt_halt);
    IBC_PASS_V(ibc, ibc_lower_gather_ops);
+   IBC_PASS_V(ibc, ibc_opt_coalesce);
    ibc_optimize(ibc);
    IBC_PASS_V(ibc, ibc_schedule_instructions);
    IBC_PASS_V(ibc, ibc_lower_integer_multiplication);
