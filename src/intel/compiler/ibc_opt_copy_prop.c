@@ -65,7 +65,7 @@ try_compose_refs(ibc_ref *ref_out,
       /* TODO: We could probably do this in a well-defined way in some cases
        * but it's easier to just avoid for now.
        */
-      if (outer.logical.comp > 0 || num_comps > 1)
+      if (num_comps > 1)
          return false;
       ibc_ref_compose_ref(&ref, inner_simd_group, inner_simd_width,
                           outer, outer_simd_group, outer_simd_width);
