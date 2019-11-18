@@ -5404,7 +5404,7 @@ spirv_to_nir(const uint32_t *words, size_t word_count,
    words = vtn_foreach_instruction(b, words, word_end,
                                    vtn_handle_preamble_instruction);
 
-   if (b->entry_point == NULL) {
+   if (!options->create_library && b->entry_point == NULL) {
       vtn_fail("Entry point not found");
       ralloc_free(b);
       return NULL;
@@ -5418,8 +5418,9 @@ spirv_to_nir(const uint32_t *words, size_t word_count,
     * other changes in the execution modes since they can affect, for example,
     * the result of the floating point constants.
     */
-   vtn_foreach_execution_mode(b, b->entry_point,
-                              vtn_handle_rounding_mode_in_execution_mode, NULL);
+   if (!options->create_library)
+      vtn_foreach_execution_mode(b, b->entry_point,
+                                 vtn_handle_rounding_mode_in_execution_mode, NULL);
 
    b->specializations = spec;
    b->num_specializations = num_spec;
@@ -5429,8 +5430,9 @@ spirv_to_nir(const uint32_t *words, size_t word_count,
                                    vtn_handle_variable_or_type_instruction);
 
    /* Parse execution modes */
-   vtn_foreach_execution_mode(b, b->entry_point,
-                              vtn_handle_execution_mode, NULL);
+   if (!options->create_library)
+      vtn_foreach_execution_mode(b, b->entry_point,
+                                 vtn_handle_execution_mode, NULL);
 
    if (b->workgroup_size_builtin) {
       vtn_assert(b->workgroup_size_builtin->type->type ==
@@ -5449,15 +5451,17 @@ spirv_to_nir(const uint32_t *words, size_t word_count,
 
    vtn_build_cfg(b, words, word_end, structured_cf);
 
-   assert(b->entry_point->value_type == vtn_value_type_function);
-   b->entry_point->func->referenced = true;
+   if (!options->create_library) {
+      assert(b->entry_point->value_type == vtn_value_type_function);
+      b->entry_point->func->referenced = true;
+   }
 
    bool progress;
    do {
       progress = false;
       vtn_foreach_cf_node(node, &b->functions) {
          struct vtn_function *func = vtn_cf_node_as_function(node);
-         if (func->referenced && !func->emitted) {
+         if ((options->create_library || func->referenced) && !func->emitted) {
             b->const_table = _mesa_pointer_hash_table_create(b);
 
             vtn_function_emit(b, func, structured_cf,
@@ -5467,15 +5471,17 @@ spirv_to_nir(const uint32_t *words, size_t word_count,
       }
    } while (progress);
 
-   vtn_assert(b->entry_point->value_type == vtn_value_type_function);
-   nir_function *entry_point = b->entry_point->func->impl->function;
-   vtn_assert(entry_point);
+   if (!options->create_library) {
+      vtn_assert(b->entry_point->value_type == vtn_value_type_function);
+      nir_function *entry_point = b->entry_point->func->impl->function;
+      vtn_assert(entry_point);
 
-   /* post process entry_points with input params */
-   if (entry_point->num_params && b->shader->info.stage == MESA_SHADER_KERNEL)
-      entry_point = vtn_emit_kernel_entry_point_wrapper(b, entry_point);
+      /* post process entry_points with input params */
+      if (entry_point->num_params && b->shader->info.stage == MESA_SHADER_KERNEL)
+         entry_point = vtn_emit_kernel_entry_point_wrapper(b, entry_point);
 
-   entry_point->is_entrypoint = true;
+      entry_point->is_entrypoint = true;
+   }
 
    /* When multiple shader stages exist in the same SPIR-V module, we
     * generate input and output variables for every stage, in the same
