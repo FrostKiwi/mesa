@@ -67,6 +67,9 @@ struct spirv_to_nir_options {
     */
    bool frag_coord_is_sysval;
 
+   /* Create a nir library. */
+   bool create_library;
+
    struct spirv_supported_capabilities caps;
 
    /* Address format for various kinds of pointers. */
