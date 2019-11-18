@@ -146,9 +146,6 @@ nir_alu_op_for_opencl_opcode(struct vtn_builder *b,
    case OpenCLstd_SAdd_sat: return nir_op_iadd_sat;
    case OpenCLstd_UAdd_sat: return nir_op_uadd_sat;
    case OpenCLstd_Ceil: return nir_op_fceil;
-   case OpenCLstd_Cos: return nir_op_fcos;
-   case OpenCLstd_Exp2: return nir_op_fexp2;
-   case OpenCLstd_Log2: return nir_op_flog2;
    case OpenCLstd_Floor: return nir_op_ffloor;
    case OpenCLstd_SHadd: return nir_op_ihadd;
    case OpenCLstd_UHadd: return nir_op_uhadd;
@@ -173,13 +170,10 @@ nir_alu_op_for_opencl_opcode(struct vtn_builder *b,
    case OpenCLstd_SMul_hi: return nir_op_imul_high;
    case OpenCLstd_UMul_hi: return nir_op_umul_high;
    case OpenCLstd_Popcount: return nir_op_bit_count;
-   case OpenCLstd_Pow: return nir_op_fpow;
-   case OpenCLstd_Remainder: return nir_op_frem;
    case OpenCLstd_SRhadd: return nir_op_irhadd;
    case OpenCLstd_URhadd: return nir_op_urhadd;
    case OpenCLstd_Rsqrt: return nir_op_frsq;
    case OpenCLstd_Sign: return nir_op_fsign;
-   case OpenCLstd_Sin: return nir_op_fsin;
    case OpenCLstd_Sqrt: return nir_op_fsqrt;
    case OpenCLstd_SSub_sat: return nir_op_isub_sat;
    case OpenCLstd_USub_sat: return nir_op_usub_sat;
@@ -202,6 +196,92 @@ handle_alu(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
                         srcs[0], srcs[1], srcs[2], NULL);
 }
 
+#define REMAP(op, str) [OpenCLstd_##op] = { str }
+static const struct {
+   const char *fn;
+} remap_table[] = {
+   REMAP(Distance, "distance"),
+   REMAP(Fast_distance, "fast_distance"),
+   REMAP(Fast_length, "fast_length"),
+   REMAP(Fast_normalize, "fast_normalize"),
+   REMAP(Half_rsqrt, "half_rsqrt"),
+   REMAP(Half_sqrt, "half_sqrt"),
+   REMAP(Length, "length"),
+   REMAP(Normalize, "normalize"),
+   REMAP(Degrees, "degrees"),
+   REMAP(Radians, "radians"),
+   REMAP(Rotate, "rotate"),
+   REMAP(Smoothstep, "smoothstep"),
+   REMAP(Step, "step"),
+
+   REMAP(Pow, "pow"),
+   REMAP(Pown, "pown"),
+   REMAP(Powr, "powr"),
+   REMAP(Rootn, "rootn"),
+   REMAP(Modf, "modf"),
+
+   REMAP(Acos, "acos"),
+   REMAP(Acosh, "acosh"),
+   REMAP(Acospi, "acospi"),
+   REMAP(Asin, "asin"),
+   REMAP(Asinh, "asinh"),
+   REMAP(Asinpi, "asinpi"),
+   REMAP(Atan, "atan"),
+   REMAP(Atan2, "atan2"),
+   REMAP(Atanh, "atanh"),
+   REMAP(Atanpi, "atanpi"),
+   REMAP(Atan2pi, "atan2pi"),
+   REMAP(Cos, "cos"),
+   REMAP(Cosh, "cosh"),
+   REMAP(Cospi, "cospi"),
+   REMAP(Sin, "sin"),
+   REMAP(Sinh, "sinh"),
+   REMAP(Sinpi, "sinpi"),
+   REMAP(Tan, "tan"),
+   REMAP(Tanh, "tanh"),
+   REMAP(Tanpi, "tanpi"),
+   REMAP(Sincos, "sincos"),
+   REMAP(Fract, "fract"),
+   REMAP(Frexp, "frexp"),
+
+   REMAP(Remainder, "remainder"),
+   REMAP(Remquo, "remquo"),
+   REMAP(Hypot, "hypot"),
+   REMAP(Exp, "exp"),
+   REMAP(Exp2, "exp2"),
+   REMAP(Exp10, "exp10"),
+   REMAP(Expm1, "expm1"),
+
+   REMAP(Ilogb, "ilogb"),
+   REMAP(Log, "log"),
+   REMAP(Log2, "log2"),
+   REMAP(Log10, "log10"),
+   REMAP(Log1p, "log1p"),
+   REMAP(Logb, "logb"),
+
+   REMAP(Cbrt, "cbrt"),
+   REMAP(Erfc, "erfc"),
+   REMAP(Erf, "erf"),
+
+   REMAP(Lgamma, "lgamma"),
+   REMAP(Lgamma_r, "lgamma_r"),
+   REMAP(Tgamma, "tgamma"),
+
+   REMAP(UMad_sat, "mad_sat"),
+   REMAP(SMad_sat, "mad_sat"),
+
+   REMAP(Shuffle, "shuffle"),
+   REMAP(Shuffle2, "shuffle2"),
+};
+#undef REMAP
+
+static const char *remap_clc_opcode(enum OpenCLstd_Entrypoints opcode)
+{
+   if (opcode >= (sizeof(remap_table) / sizeof(const char *)))
+      return NULL;
+   return remap_table[opcode].fn;
+}
+
 static nir_ssa_def *
 build_round(nir_builder *nb, nir_ssa_def *src)
 {
@@ -215,13 +295,55 @@ build_round(nir_builder *nb, nir_ssa_def *src)
 }
 
 static nir_ssa_def *
-handle_clc_fn(struct vtn_builder *b, const char *name,
+handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
               int num_srcs,
               nir_ssa_def **srcs,
               const struct glsl_type **src_types,
               const struct glsl_type *dest_type)
 {
    uint32_t ptr_mask = 0;
+
+   const char *name = remap_clc_opcode(opcode);
+   if (!name)
+       return NULL;
+
+   if (opcode == OpenCLstd_Fract) {
+      ptr_mask = (1u << 1);
+      src_types[1] = src_types[0];
+   }
+   if (opcode == OpenCLstd_Frexp) {
+      ptr_mask = (1u << 1);
+      int elem = glsl_get_vector_elements(src_types[0]);
+      if (elem > 1)
+         src_types[1] = glsl_vector_type(GLSL_TYPE_INT, elem);
+      else
+         src_types[1] = glsl_int_type();
+   }
+   if (opcode == OpenCLstd_Lgamma_r) {
+      ptr_mask = (1u << 1);
+      int elem = glsl_get_vector_elements(src_types[0]);
+      if (elem > 1)
+         src_types[1] = glsl_vector_type(GLSL_TYPE_INT, elem);
+      else
+         src_types[1] = glsl_int_type();
+   }
+   if (opcode == OpenCLstd_Remquo) {
+      ptr_mask = (1u << 2);
+      int elem = glsl_get_vector_elements(src_types[0]);
+      if (elem > 1)
+         src_types[2] = glsl_vector_type(GLSL_TYPE_INT, elem);
+      else
+         src_types[2] = glsl_int_type();
+   }
+   if (opcode == OpenCLstd_Sincos) {
+      ptr_mask = (1u << 1);
+      src_types[1] = src_types[0];
+   }
+   if (opcode == OpenCLstd_Modf) {
+      ptr_mask = (1u << 1);
+      src_types[1] = src_types[0];
+   }
+
    nir_deref_instr *ret_deref = NULL;
 
    if (!call_mangled_function(b, name, ptr_mask, num_srcs, src_types,
@@ -238,8 +360,13 @@ handle_special(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
 {
    nir_builder *nb = &b->nb;
 
+   nir_ssa_def *ret = handle_clc_fn(b, opcode, num_srcs, srcs, src_types, dest_type);
+   if (ret)
+      return ret;
+
    switch (opcode) {
    case OpenCLstd_SAbs_diff:
+     /* these works easier in direct NIR */
       return nir_iabs_diff(nb, srcs[0], srcs[1]);
    case OpenCLstd_UAbs_diff:
       return nir_uabs_diff(nb, srcs[0], srcs[1]);
@@ -269,20 +396,8 @@ handle_special(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
       if (glsl_get_components(dest_type) == 4)
          return nir_cross4(nb, srcs[0], srcs[1]);
       return nir_cross3(nb, srcs[0], srcs[1]);
-   case OpenCLstd_Degrees:
-      return nir_degrees(nb, srcs[0]);
    case OpenCLstd_Fdim:
       return nir_fdim(nb, srcs[0], srcs[1]);
-   case OpenCLstd_Distance:
-      return nir_distance(nb, srcs[0], srcs[1]);
-   case OpenCLstd_Fast_distance:
-      return nir_fast_distance(nb, srcs[0], srcs[1]);
-   case OpenCLstd_Fast_length:
-      return nir_fast_length(nb, srcs[0]);
-   case OpenCLstd_Fast_normalize:
-      return nir_fast_normalize(nb, srcs[0]);
-   case OpenCLstd_Length:
-      return nir_length(nb, srcs[0]);
    case OpenCLstd_Mad:
       return nir_fmad(nb, srcs[0], srcs[1], srcs[2]);
    case OpenCLstd_Maxmag:
@@ -299,16 +414,13 @@ handle_special(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
       return nir_radians(nb, srcs[0]);
    case OpenCLstd_Rotate:
       return nir_rotate(nb, srcs[0], srcs[1]);
-   case OpenCLstd_Smoothstep:
-      return nir_smoothstep(nb, srcs[0], srcs[1], srcs[2]);
    case OpenCLstd_Clz:
       return nir_clz_u(nb, srcs[0]);
    case OpenCLstd_Select:
       return nir_select(nb, srcs[0], srcs[1], srcs[2]);
-   case OpenCLstd_Step:
-      return nir_sge(nb, srcs[1], srcs[0]);
    case OpenCLstd_S_Upsample:
    case OpenCLstd_U_Upsample:
+      /* SPIR-V and CL have different defs for upsample, just implement in nir */
       return nir_upsample(nb, srcs[0], srcs[1]);
    case OpenCLstd_Native_exp:
       return nir_fexp(nb, srcs[0]);
@@ -386,29 +498,6 @@ vtn_handle_opencl_vstore(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcod
    _handle_v_load_store(b, opcode, w, count, false);
 }
 
-static void
-vtn_handle_opencl_frexp(struct vtn_builder *b, const uint32_t *w,
-                        unsigned count)
-{
-   vtn_assert(count == 7);
-   const struct glsl_type *dest_type =
-      vtn_value(b, w[1], vtn_value_type_type)->type->type;
-
-   nir_ssa_def *src = vtn_ssa_value(b, w[5])->def;
-   struct vtn_value *exp_ptr = vtn_value(b, w[6], vtn_value_type_pointer);
-
-   struct vtn_ssa_value *exp_val = vtn_create_ssa_value(b, exp_ptr->pointer->type->type);
-   exp_val->def = nir_frexp_exp(&b->nb, src);
-
-   vtn_variable_store(b, exp_val, exp_ptr->pointer);
-
-   nir_ssa_def *result = nir_frexp_sig(&b->nb, src);
-
-   struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
-   val->ssa = vtn_create_ssa_value(b, dest_type);
-   val->ssa->def = result;
-}
-
 static nir_ssa_def *
 handle_printf(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
               unsigned num_srcs, nir_ssa_def **srcs, const struct glsl_type **src_types,
@@ -477,9 +566,6 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_SAdd_sat:
    case OpenCLstd_UAdd_sat:
    case OpenCLstd_Ceil:
-   case OpenCLstd_Cos:
-   case OpenCLstd_Exp2:
-   case OpenCLstd_Log2:
    case OpenCLstd_Floor:
    case OpenCLstd_Fma:
    case OpenCLstd_Fmax:
@@ -504,13 +590,10 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_SMul_hi:
    case OpenCLstd_UMul_hi:
    case OpenCLstd_Popcount:
-   case OpenCLstd_Pow:
-   case OpenCLstd_Remainder:
    case OpenCLstd_SRhadd:
    case OpenCLstd_URhadd:
    case OpenCLstd_Rsqrt:
    case OpenCLstd_Sign:
-   case OpenCLstd_Sin:
    case OpenCLstd_Sqrt:
    case OpenCLstd_SSub_sat:
    case OpenCLstd_USub_sat:
@@ -528,6 +611,7 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_SMul24:
    case OpenCLstd_UMul24:
    case OpenCLstd_Bitselect:
+   case OpenCLstd_Clz:
    case OpenCLstd_FClamp:
    case OpenCLstd_SClamp:
    case OpenCLstd_UClamp:
@@ -539,6 +623,8 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_Fast_distance:
    case OpenCLstd_Fast_length:
    case OpenCLstd_Fast_normalize:
+   case OpenCLstd_Half_rsqrt:
+   case OpenCLstd_Half_sqrt:
    case OpenCLstd_Length:
    case OpenCLstd_Mad:
    case OpenCLstd_Maxmag:
@@ -553,11 +639,59 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_Smoothstep:
    case OpenCLstd_S_Upsample:
    case OpenCLstd_U_Upsample:
-   case OpenCLstd_Clz:
    case OpenCLstd_Native_exp:
    case OpenCLstd_Native_exp10:
    case OpenCLstd_Native_log:
    case OpenCLstd_Native_log10:
+   case OpenCLstd_Acos:
+   case OpenCLstd_Acosh:
+   case OpenCLstd_Acospi:
+   case OpenCLstd_Asin:
+   case OpenCLstd_Asinh:
+   case OpenCLstd_Asinpi:
+   case OpenCLstd_Atan:
+   case OpenCLstd_Atan2:
+   case OpenCLstd_Atanh:
+   case OpenCLstd_Atanpi:
+   case OpenCLstd_Atan2pi:
+   case OpenCLstd_Fract:
+   case OpenCLstd_Frexp:
+   case OpenCLstd_Exp:
+   case OpenCLstd_Exp2:
+   case OpenCLstd_Expm1:
+   case OpenCLstd_Exp10:
+   case OpenCLstd_Ilogb:
+   case OpenCLstd_Log:
+   case OpenCLstd_Log2:
+   case OpenCLstd_Log10:
+   case OpenCLstd_Log1p:
+   case OpenCLstd_Logb:
+   case OpenCLstd_Cos:
+   case OpenCLstd_Cosh:
+   case OpenCLstd_Cospi:
+   case OpenCLstd_Sin:
+   case OpenCLstd_Sinh:
+   case OpenCLstd_Sinpi:
+   case OpenCLstd_Tan:
+   case OpenCLstd_Tanh:
+   case OpenCLstd_Tanpi:
+   case OpenCLstd_Cbrt:
+   case OpenCLstd_Erfc:
+   case OpenCLstd_Erf:
+   case OpenCLstd_Lgamma:
+   case OpenCLstd_Lgamma_r:
+   case OpenCLstd_Tgamma:
+   case OpenCLstd_Pow:
+   case OpenCLstd_Powr:
+   case OpenCLstd_Pown:
+   case OpenCLstd_Rootn:
+   case OpenCLstd_Remainder:
+   case OpenCLstd_Remquo:
+   case OpenCLstd_Hypot:
+   case OpenCLstd_Sincos:
+   case OpenCLstd_Modf:
+   case OpenCLstd_UMad_sat:
+   case OpenCLstd_SMad_sat:
    case OpenCLstd_Round:
    case OpenCLstd_Native_tan:
       handle_instr(b, cl_opcode, w, count, handle_special);
@@ -579,9 +713,6 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
       return true;
    case OpenCLstd_Prefetch:
       /* TODO maybe add a nir instruction for this? */
-      return true;
-   case OpenCLstd_Frexp:
-      vtn_handle_opencl_frexp(b, w, count);
       return true;
    default:
       vtn_fail("unhandled opencl opc: %u\n", ext_opcode);
