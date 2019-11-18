@@ -425,6 +425,12 @@ int clc_compile_from_source(
       return -1;
    }
 
+   if (!dxil_container_add_input_signature(&container) ||
+       !dxil_container_add_output_signature(&container)) {
+      debug_printf("D3D12: failed to write input/output signature\n");
+      return -1;
+   }
+
    struct dxil_module mod;
    dxil_module_init(&mod);
    mod.shader_kind = DXIL_COMPUTE_SHADER;

@@ -47,6 +47,12 @@ dxil_container_add_features(struct dxil_container *c,
                             const struct dxil_features *features);
 
 bool
+dxil_container_add_input_signature(struct dxil_container *c);
+
+bool
+dxil_container_add_output_signature(struct dxil_container *c);
+
+bool
 dxil_container_add_module(struct dxil_container *c,
                           const struct dxil_module *m);
 
