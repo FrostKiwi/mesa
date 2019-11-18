@@ -87,6 +87,11 @@ struct spirv_to_nir_options {
     */
    bool constant_as_global;
 
+   void (*mangle)(const char *in_name,
+                  uint32_t ptr_mask,
+                  int ntypes, const struct glsl_type **src_types,
+                  char **outstring);
+
    struct {
       void (*func)(void *private_data,
                    enum nir_spirv_debug_level level,
