@@ -431,6 +431,15 @@ int clc_compile_from_source(
       return -1;
    }
 
+   const struct dxil_resource resources[] = {
+      { DXIL_RES_UAV_TYPED, 0, 0, 0 }
+   };
+   if (!dxil_container_add_state_validation(&container, resources,
+                                            ARRAY_SIZE(resources))) {
+      debug_printf("D3D12: failed to write state-validation\n");
+      return -1;
+   }
+
    struct dxil_module mod;
    dxil_module_init(&mod);
    mod.shader_kind = DXIL_COMPUTE_SHADER;

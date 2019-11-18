@@ -39,6 +39,27 @@ struct dxil_container {
    unsigned num_parts;
 };
 
+enum dxil_resource_type {
+  DXIL_RES_INVALID = 0,
+  DXIL_RES_SAMPLER = 1,
+  DXIL_RES_CBV = 2,
+  DXIL_RES_SRV_TYPED = 3,
+  DXIL_RES_SRV_RAW = 4,
+  DXIL_RES_SRC_STRUCTURED = 5,
+  DXIL_RES_UAV_TYPED = 6,
+  DXIL_RES_UAV_RAW = 7,
+  DXIL_RES_UAV_STRUCTURED,
+  DXIL_RES_UAV_STRUCTURED_WITH_COUNTER,
+  DXIL_RES_NUM_ENTRIES /* should always be last */
+};
+
+struct dxil_resource {
+   uint32_t resource_type;
+   uint32_t space;
+   uint32_t lower_bound;
+   uint32_t upper_bound;
+};
+
 void
 dxil_container_init(struct dxil_container *c);
 
@@ -51,6 +72,11 @@ dxil_container_add_input_signature(struct dxil_container *c);
 
 bool
 dxil_container_add_output_signature(struct dxil_container *c);
+
+bool
+dxil_container_add_state_validation(struct dxil_container *c,
+                                    const struct dxil_resource *resources,
+                                    size_t num_resources);
 
 bool
 dxil_container_add_module(struct dxil_container *c,
