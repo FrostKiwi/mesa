@@ -95,6 +95,20 @@ dxil_container_add_features(struct dxil_container *c,
 }
 
 bool
+dxil_container_add_input_signature(struct dxil_container *c)
+{
+   uint32_t data[2] = { 0, sizeof(uint32_t) * 2 };
+   return add_part(c, DXIL_ISG1, data, sizeof(data));
+}
+
+bool
+dxil_container_add_output_signature(struct dxil_container *c)
+{
+   uint32_t data[2] = { 0, sizeof(uint32_t) * 2 };
+   return add_part(c, DXIL_OSG1, data, sizeof(data));
+}
+
+bool
 dxil_container_add_module(struct dxil_container *c,
                           const struct dxil_module *m)
 {
