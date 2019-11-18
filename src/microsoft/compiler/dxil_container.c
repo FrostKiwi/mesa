@@ -109,6 +109,69 @@ dxil_container_add_output_signature(struct dxil_container *c)
 }
 
 bool
+dxil_container_add_state_validation(struct dxil_container *c,
+                                    const struct dxil_resource *resources,
+                                    size_t num_resources)
+{
+   struct {
+      struct {
+         union {
+            uint32_t data[4]; /* actual size */
+         };
+         uint32_t expected_wave_lane_range[2];
+      } psv0;
+      struct {
+         uint8_t shader_stage;
+         uint8_t uses_view_id;
+         union {
+           uint16_t data; /* actual size */
+         };
+         uint8_t sig_input_elements;
+         uint8_t sig_output_elements;
+         uint8_t sig_patch_const_or_prim_elements;
+         uint8_t sig_input_vectors;
+         uint8_t sig_output_vectors[4];
+      } psv1;
+   } psv1_data = {
+      { /* psv0 */
+         { 0, 0, 0, 0 },
+         { 0, UINT_MAX },
+      }, { /* psv1 */
+         DXIL_COMPUTE_SHADER, 0, 0, 0, 0, 0, 0,
+         { 0, 0, 0, 0 }
+      }
+   };
+
+   uint32_t psv1_size = sizeof(psv1_data);
+   uint32_t resource_count = num_resources;
+   size_t size = sizeof(psv1_size) + sizeof(psv1_data) +
+                 sizeof(resource_count);
+   uint32_t bind_info_size = sizeof(uint32_t) * 4;
+   uint8_t string_table[4] = { 0, 0, 0, 0 };
+   uint32_t string_table_size = ARRAY_SIZE(string_table);
+   uint32_t semantic_index_table_size = 0;
+   if (num_resources > 0)
+      size += sizeof(uint32_t) + bind_info_size * num_resources;
+   size += sizeof(uint32_t) * 2 + string_table_size + semantic_index_table_size;
+
+   if (!add_part_header(c, DXIL_PSV0, size) ||
+       !blob_write_bytes(&c->parts, &psv1_size, sizeof(psv1_size)) ||
+       !blob_write_bytes(&c->parts, &psv1_data, sizeof(psv1_data)) ||
+       !blob_write_bytes(&c->parts, &resource_count, sizeof(resource_count)))
+      return false;
+
+   if (num_resources > 0) {
+      if (!blob_write_bytes(&c->parts, &bind_info_size, sizeof(bind_info_size)) ||
+          !blob_write_bytes(&c->parts, resources, bind_info_size * num_resources))
+         return false;
+   }
+
+   return blob_write_bytes(&c->parts, &string_table_size, sizeof(string_table_size)) &&
+          blob_write_bytes(&c->parts, string_table, sizeof(string_table)) &&
+          blob_write_bytes(&c->parts, &semantic_index_table_size, sizeof(semantic_index_table_size));
+}
+
+bool
 dxil_container_add_module(struct dxil_container *c,
                           const struct dxil_module *m)
 {
