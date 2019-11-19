@@ -3686,12 +3686,14 @@ enum isl_aux_usage
 anv_layout_to_aux_usage(const struct gen_device_info * const devinfo,
                         const struct anv_image *image,
                         const VkImageAspectFlagBits aspect,
+                        const VkImageUsageFlagBits usage,
                         const VkImageLayout layout);
 
 enum anv_fast_clear_type
 anv_layout_to_fast_clear_type(const struct gen_device_info * const devinfo,
                               const struct anv_image * const image,
                               const VkImageAspectFlagBits aspect,
+                              const VkImageUsageFlagBits usage,
                               const VkImageLayout layout);
 
 /* This is defined as a macro so that it works for both
