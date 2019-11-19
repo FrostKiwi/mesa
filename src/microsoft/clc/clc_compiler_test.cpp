@@ -228,9 +228,74 @@ void error_callback(const char *src, int line, const char *str)
    fprintf(stderr, "%s(%d): ERROR: %s\n", src, line, str);
 }
 
-const int width = 4;
+#include "dxcapi.h"
 
-int main()
+bool
+validate_module(void *data, size_t size)
+{
+   static HMODULE hmod = LoadLibrary("DXIL.DLL");
+   if (!hmod) {
+      debug_printf("D3D12: failed to load DXIL.DLL");
+      return false;
+   }
+
+   DxcCreateInstanceProc pfnDxcCreateInstance = (DxcCreateInstanceProc)GetProcAddress(hmod, "DxcCreateInstance");
+   if (!pfnDxcCreateInstance) {
+      debug_printf("D3D12: failed to load DxcCreateInstance");
+      return false;
+   }
+
+   struct shader_blob : public IDxcBlob {
+      shader_blob(void *data, size_t size) : data(data), size(size) {}
+      LPVOID STDMETHODCALLTYPE GetBufferPointer() override { return data; }
+      SIZE_T STDMETHODCALLTYPE GetBufferSize() override { return size; }
+      HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void **) override { return E_NOINTERFACE; }
+      ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
+      ULONG STDMETHODCALLTYPE Release() override { return 0; }
+      void *data;
+      size_t size;
+   } blob(data, size);
+
+   IDxcValidator *validator;
+   if (FAILED(pfnDxcCreateInstance(CLSID_DxcValidator, __uuidof(IDxcValidator),
+                                   (void **)&validator))) {
+      debug_printf("D3D12: failed to create IDxcValidator");
+      return false;
+   }
+
+   IDxcOperationResult *result;
+   if (FAILED(validator->Validate(&blob, DxcValidatorFlags_InPlaceEdit,
+                                  &result))) {
+      // TODO: print error message!
+      debug_printf("D3D12: failed to validate");
+      validator->Release();
+      return false;
+   }
+
+   HRESULT hr;
+   if (FAILED(result->GetStatus(&hr)) ||
+       FAILED(hr)) {
+      IDxcBlobEncoding *message;
+      result->GetErrorBuffer(&message);
+      debug_printf("D3D12: validation failed: %*s\n",
+                   (int)message->GetBufferSize(),
+                   (char *)message->GetBufferPointer());
+      message->Release();
+      validator->Release();
+      result->Release();
+      return false;
+   }
+
+   validator->Release();
+   result->Release();
+   return true;
+}
+
+const int
+width = 4;
+
+int
+main()
 {
    if (true)
       enable_d3d12_debug_layer();
@@ -322,6 +387,16 @@ int main()
       fwrite(blob, 1, blob_size, fp);
       fclose(fp);
       debug_printf("D3D12: wrote 'unsigned.cso'...\n");
+   }
+
+   if (!validate_module(blob, blob_size))
+      return -1;
+
+   fp = fopen("signed.cso", "wb");
+   if (fp) {
+      fwrite(blob, 1, blob_size, fp);
+      fclose(fp);
+      debug_printf("D3D12: wrote 'signed.cso'...\n");
    }
 
    ID3D12RootSignature *root_sig = create_root_signature(dev);
