@@ -67,10 +67,48 @@ struct dxil_module {
    enum dxil_shader_kind shader_kind;
    unsigned major_version, minor_version;
    struct blob module;
+
+   unsigned abbrev_width;
+
+   struct {
+      unsigned abbrev_width;
+      intptr_t offset;
+   } blocks[16];
+   size_t num_blocks;
+
+   uint64_t buf;
+   unsigned buf_bits;
 };
 
 void
 dxil_module_init(struct dxil_module *m);
+
+bool
+dxil_module_emit_bits(struct dxil_module *m, uint32_t data, unsigned width);
+
+bool
+dxil_module_emit_vbr_bits(struct dxil_module *m, uint64_t data,
+                          unsigned width);
+
+bool
+dxil_module_align(struct dxil_module *m);
+
+static bool
+dxil_module_emit_abbrev_id(struct dxil_module *m, uint32_t id)
+{
+   return dxil_module_emit_bits(m, id, m->abbrev_width);
+}
+
+bool
+dxil_module_enter_subblock(struct dxil_module *m, unsigned id,
+                           unsigned abbrev_width);
+
+bool
+dxil_module_exit_block(struct dxil_module *m);
+
+bool
+dxil_module_emit_record(struct dxil_module *m, unsigned code,
+                        const uint64_t *data, size_t size);
 
 #ifdef __cplusplus
 }

@@ -34,3 +34,9 @@ idep_libdxil_compiler = declare_dependency(
   link_with : libdxil_compiler,
   dependencies : [idep_mesautil],
 )
+
+dxil_module_test = executable('dxil_module_test', 'dxil_module_test.c',
+  include_directories : inc_common,
+  dependencies : [idep_libdxil_compiler])
+
+test('dxil_module test', dxil_module_test)
