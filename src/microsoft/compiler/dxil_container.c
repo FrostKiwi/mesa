@@ -175,6 +175,7 @@ bool
 dxil_container_add_module(struct dxil_container *c,
                           const struct dxil_module *m)
 {
+   assert(m->buf_bits == 0); // make sure the module is fully flushed
    uint32_t version = (m->shader_kind << 16) |
                       (m->major_version << 4) |
                       m->minor_version;
