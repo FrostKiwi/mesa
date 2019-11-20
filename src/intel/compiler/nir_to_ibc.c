@@ -1760,26 +1760,58 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_scoped_barrier:
+      assert(nir_intrinsic_execution_scope(instr) == NIR_SCOPE_NONE);
+      /* fallthrough */
    case nir_intrinsic_group_memory_barrier:
    case nir_intrinsic_memory_barrier_shared:
    case nir_intrinsic_memory_barrier_atomic_counter:
    case nir_intrinsic_memory_barrier_buffer:
    case nir_intrinsic_memory_barrier_image:
    case nir_intrinsic_memory_barrier: {
+      nir_variable_mode modes;
+      switch (instr->intrinsic) {
+      case nir_intrinsic_scoped_barrier:
+         modes = nir_intrinsic_memory_modes(instr);
+         break;
+
+      case nir_intrinsic_memory_barrier_shared:
+         modes = nir_var_mem_shared;
+         break;
+
+      case nir_intrinsic_memory_barrier_atomic_counter:
+      case nir_intrinsic_memory_barrier_buffer:
+      case nir_intrinsic_memory_barrier_image:
+         modes = nir_var_mem_ssbo | nir_var_mem_global;
+         break;
+
+      case nir_intrinsic_group_memory_barrier:
+      case nir_intrinsic_memory_barrier:
+         modes = nir_var_shader_out | nir_var_mem_ssbo |
+                 nir_var_mem_global | nir_var_mem_shared;
+         break;
+
+      default:
+         unreachable("Unsupported barrier intrinsic");
+      }
+
       uint32_t fence_bti[2];
       unsigned num_fences = 0;
-
       if (b->shader->devinfo->gen >= 11) {
-         if (instr->intrinsic == nir_intrinsic_group_memory_barrier ||
-             instr->intrinsic == nir_intrinsic_memory_barrier ||
-             instr->intrinsic == nir_intrinsic_memory_barrier_shared)
+         if (modes & (nir_var_shader_out |
+                      nir_var_mem_ssbo |
+                      nir_var_mem_global))
             fence_bti[num_fences++] = 0;
 
-         if (instr->intrinsic != nir_intrinsic_memory_barrier_shared)
+         if (modes & nir_var_mem_shared)
             fence_bti[num_fences++] = GEN7_BTI_SLM;
       } else {
          /* Prior to gen11, we only have one kind of fence. */
-         fence_bti[num_fences++] = 0;
+         if (modes & (nir_var_shader_out |
+                      nir_var_mem_ssbo |
+                      nir_var_mem_global |
+                      nir_var_mem_shared))
+            fence_bti[num_fences++] = 0;
       }
 
       ibc_ref fence_stall_reg[2];
