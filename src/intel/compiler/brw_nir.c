@@ -777,6 +777,29 @@ lower_bit_size_callback(const nir_instr *instr, UNUSED void *data)
    }
 }
 
+bool
+brw_nir_should_use_ibc(const nir_shader *nir,
+                       const struct brw_compiler *compiler,
+                       bool is_scalar)
+{
+   if (!is_scalar)
+      return false;
+
+   switch (nir->info.stage) {
+   case MESA_SHADER_VERTEX:
+      return true;
+
+   case MESA_SHADER_COMPUTE:
+      return true;
+
+   case MESA_SHADER_FRAGMENT:
+      return nir->info.name == NULL || strncmp(nir->info.name, "BLORP", 5);
+
+   default:
+      return false;
+   }
+}
+
 /* Does some simple lowering and runs the standard suite of optimizations
  *
  * This is intended to be called more-or-less directly after you get the
@@ -1048,7 +1071,6 @@ brw_vectorize_lower_mem_access(nir_shader *nir,
    }
 }
 
-
 static bool
 nir_shader_has_local_variables(const nir_shader *nir)
 {
@@ -1058,29 +1080,6 @@ nir_shader_has_local_variables(const nir_shader *nir)
    }
 
    return false;
-}
-
-bool
-brw_nir_should_use_ibc(const nir_shader *nir,
-                       const struct brw_compiler *compiler,
-                       bool is_scalar)
-{
-   if (!is_scalar)
-      return false;
-
-   switch (nir->info.stage) {
-   case MESA_SHADER_VERTEX:
-      return true;
-
-   case MESA_SHADER_COMPUTE:
-      return true;
-
-   case MESA_SHADER_FRAGMENT:
-      return nir->info.name == NULL || strncmp(nir->info.name, "BLORP", 5);
-
-   default:
-      return false;
-   }
 }
 
 /* Prepare the given shader for codegen
@@ -1110,7 +1109,8 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
 
    brw_nir_optimize(nir, compiler, is_scalar, false);
 
-   if (is_scalar && nir_shader_has_local_variables(nir)) {
+   if (is_scalar && nir_shader_has_local_variables(nir) &&
+       !brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
       OPT(nir_lower_vars_to_explicit_types, nir_var_function_temp,
           glsl_get_natural_size_align_bytes);
       OPT(nir_lower_explicit_io, nir_var_function_temp,
