@@ -338,18 +338,39 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
 }
 
 static void
+print_payload_ref(FILE *fp, const ibc_send_instr *send,
+                  const ibc_ref *ref, unsigned reg_count)
+{
+   print_ref(fp, ref, true);
+   if (reg_count == 0)
+      return;
+
+   if (ref->file == IBC_FILE_HW_GRF) {
+      fprintf(fp, "(%uB)", reg_count * 32);
+   } else {
+      /* TODO: We should stop hand-rolling this everywhere */
+      unsigned comp_size_B = (ref->reg->logical.bit_size / 8) *
+                             send->instr.simd_width;
+      assert(comp_size_B % 32 == 0);
+      unsigned comp_size_regs = comp_size_B / 32;
+      assert(reg_count % comp_size_regs == 0);
+      fprintf(fp, "(vec%u)", reg_count / comp_size_regs);
+   }
+}
+
+static void
 print_send_instr(FILE *fp, const ibc_send_instr *send)
 {
    print_instr(fp, &send->instr, "send", 1);
 
    fprintf(fp, "   ");
-   print_ref(fp, &send->dest, true);
+   print_payload_ref(fp, send, &send->dest, send->rlen);
 
    fprintf(fp, "   ");
-   print_ref(fp, &send->payload[0], true);
+   print_payload_ref(fp, send, &send->payload[0], send->mlen);
 
    fprintf(fp, "   ");
-   print_ref(fp, &send->payload[1], true);
+   print_payload_ref(fp, send, &send->payload[1], send->ex_mlen);
 
    fprintf(fp, "   ");
    if (send->desc.file == IBC_FILE_NONE) {
