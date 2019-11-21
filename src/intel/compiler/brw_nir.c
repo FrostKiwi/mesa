@@ -636,6 +636,29 @@ lower_bit_size_callback(const nir_alu_instr *alu, UNUSED void *data)
    }
 }
 
+bool
+brw_nir_should_use_ibc(const nir_shader *nir,
+                       const struct brw_compiler *compiler,
+                       bool is_scalar)
+{
+   if (!is_scalar)
+      return false;
+
+   switch (nir->info.stage) {
+   case MESA_SHADER_VERTEX:
+      return true;
+
+   case MESA_SHADER_COMPUTE:
+      return true;
+
+   case MESA_SHADER_FRAGMENT:
+      return nir->info.name == NULL || strncmp(nir->info.name, "BLORP", 5);
+
+   default:
+      return false;
+   }
+}
+
 /* Does some simple lowering and runs the standard suite of optimizations
  *
  * This is intended to be called more-or-less directly after you get the
@@ -719,7 +742,8 @@ brw_preprocess_nir(const struct brw_compiler *compiler, nir_shader *nir,
 
    OPT(nir_lower_clip_cull_distance_arrays);
 
-   if ((devinfo->gen >= 8 || devinfo->is_haswell) && is_scalar) {
+   if ((devinfo->gen >= 8 || devinfo->is_haswell) && is_scalar &&
+       !brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
       /* TODO: Yes, we could in theory do this on gen6 and earlier.  However,
        * that would require plumbing through support for these indirect
        * scratch read/write messages with message registers and that's just a
@@ -818,29 +842,6 @@ brw_nir_link_shaders(const struct brw_compiler *compiler,
       NIR_PASS_V(producer, nir_lower_global_vars_to_local);
       NIR_PASS_V(producer, nir_split_var_copies);
       NIR_PASS_V(producer, nir_lower_var_copies);
-   }
-}
-
-bool
-brw_nir_should_use_ibc(const nir_shader *nir,
-                       const struct brw_compiler *compiler,
-                       bool is_scalar)
-{
-   if (!is_scalar)
-      return false;
-
-   switch (nir->info.stage) {
-   case MESA_SHADER_VERTEX:
-      return true;
-
-   case MESA_SHADER_COMPUTE:
-      return true;
-
-   case MESA_SHADER_FRAGMENT:
-      return nir->info.name == NULL || strncmp(nir->info.name, "BLORP", 5);
-
-   default:
-      return false;
    }
 }
 
