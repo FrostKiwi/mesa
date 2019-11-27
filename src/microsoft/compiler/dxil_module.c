@@ -377,3 +377,44 @@ dxil_module_emit_blockinfo(struct dxil_module *m, int type_index_bits)
           emit_function_abbrevs(m, type_index_bits) &&
           dxil_module_exit_block(m);
 }
+
+static bool
+emit_attrib_group(struct dxil_module *m, int id, uint32_t slot,
+                  const struct dxil_attrib *attrs, size_t num_attrs)
+{
+   uint64_t record[64];
+   record[0] = id;
+   record[1] = slot;
+   size_t size = 2;
+
+   for (int i = 0; i < num_attrs; ++i) {
+      uint64_t kind;
+      switch (attrs[i].type) {
+      case DXIL_ATTR_ENUM:
+         assert(size < ARRAY_SIZE(record) - 2);
+         record[size++] = 0;
+         record[size++] = attrs[i].kind;
+         break;
+
+      default:
+         unreachable("unsupported attrib type");
+      }
+   }
+
+   return dxil_module_emit_record(m, PARAMATTR_GRP_CODE_ENTRY, record, size);
+}
+
+bool
+dxil_emit_attrib_group_table(struct dxil_module *m,
+                             const struct dxil_attrib **attrs,
+                             const size_t *sizes, size_t num_attrs)
+{
+   if (!dxil_module_enter_subblock(m, DXIL_PARAMATTR_GROUP, 3))
+      return false;
+
+   for (int i = 0; i < num_attrs; ++i)
+      if (!emit_attrib_group(m, 1 + i, UINT32_MAX, attrs[i], sizes[i]))
+         return false;
+
+   return dxil_module_exit_block(m);
+}
