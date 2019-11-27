@@ -39,6 +39,7 @@ enum dxil_standard_block {
 
 enum dxil_llvm_block {
    DXIL_MODULE = DXIL_FIRST_APPLICATION_BLOCK,
+   DXIL_PARAMATTR_GROUP = DXIL_FIRST_APPLICATION_BLOCK + 2,
    DXIL_CONST_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 3,
    DXIL_FUNCTION_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 4,
    DXIL_VALUE_SYMTAB_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 6,
@@ -71,6 +72,26 @@ enum dxil_blockinfo_code {
    DXIL_BLOCKINFO_CODE_SETBID = 1,
    DXIL_BLOCKINFO_CODE_BLOCKNAME = 2,
    DXIL_BLOCKINFO_CODE_SETRECORDNAME = 3
+};
+
+enum attribute_codes {
+  PARAMATTR_GRP_CODE_ENTRY = 3
+};
+
+enum dxil_attr_kind {
+   DXIL_ATTR_KIND_NO_UNWIND = 18,
+   DXIL_ATTR_KIND_READ_NONE = 20,
+   DXIL_ATTR_KIND_READ_ONLY = 21,
+};
+
+struct dxil_attrib {
+   enum {
+      DXIL_ATTR_ENUM
+   } type;
+
+   union {
+      enum dxil_attr_kind kind;
+   };
 };
 
 struct dxil_abbrev {
@@ -143,6 +164,11 @@ dxil_module_emit_record(struct dxil_module *m, unsigned code,
 
 bool
 dxil_module_emit_blockinfo(struct dxil_module *m, int type_index_bits);
+
+bool
+dxil_emit_attrib_group_table(struct dxil_module *m,
+                             const struct dxil_attrib **attrs,
+                             const size_t *sizes, size_t num_attrs);
 
 #ifdef __cplusplus
 }
