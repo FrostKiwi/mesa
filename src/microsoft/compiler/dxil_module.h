@@ -39,6 +39,7 @@ enum dxil_standard_block {
 
 enum dxil_llvm_block {
    DXIL_MODULE = DXIL_FIRST_APPLICATION_BLOCK,
+   DXIL_PARAMATTR = DXIL_FIRST_APPLICATION_BLOCK + 1,
    DXIL_PARAMATTR_GROUP = DXIL_FIRST_APPLICATION_BLOCK + 2,
    DXIL_CONST_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 3,
    DXIL_FUNCTION_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 4,
@@ -72,10 +73,6 @@ enum dxil_blockinfo_code {
    DXIL_BLOCKINFO_CODE_SETBID = 1,
    DXIL_BLOCKINFO_CODE_BLOCKNAME = 2,
    DXIL_BLOCKINFO_CODE_SETRECORDNAME = 3
-};
-
-enum attribute_codes {
-  PARAMATTR_GRP_CODE_ENTRY = 3
 };
 
 enum dxil_attr_kind {
@@ -169,6 +166,10 @@ bool
 dxil_emit_attrib_group_table(struct dxil_module *m,
                              const struct dxil_attrib **attrs,
                              const size_t *sizes, size_t num_attrs);
+
+bool
+dxil_emit_attribute_table(struct dxil_module *m,
+                          const unsigned *attrs, size_t num_attrs);
 
 #ifdef __cplusplus
 }

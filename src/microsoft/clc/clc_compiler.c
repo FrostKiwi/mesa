@@ -31,25 +31,6 @@
 #include <stdint.h>
 
 static bool
-emit_attribute_table(struct dxil_module *m)
-{
-   return dxil_module_enter_subblock(m, 9, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_exit_block(m);
-}
-
-static bool
 emit_type_table(struct dxil_module *m)
 {
    return dxil_module_enter_subblock(m, 17, 4) &&
@@ -1752,10 +1733,14 @@ emit_module(struct dxil_module *m)
    };
    assert(ARRAY_SIZE(attrs) == ARRAY_SIZE(attr_sizes));
 
+   unsigned attr_data[] = {
+      1, 2, 3
+   };
+
    if (!dxil_module_emit_blockinfo(m, 5) ||
        !dxil_emit_attrib_group_table(m, attrs, attr_sizes,
                                      ARRAY_SIZE(attrs)) ||
-       !emit_attribute_table(m) ||
+       !dxil_emit_attribute_table(m, attr_data, ARRAY_SIZE(attr_data)) ||
        !emit_type_table(m) ||
        !emit_type_comdats(m) ||
        !emit_module_info(m) ||
