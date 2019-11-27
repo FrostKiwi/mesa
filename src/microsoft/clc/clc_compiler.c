@@ -31,56 +31,6 @@
 #include <stdint.h>
 
 static bool
-emit_attrib_group_table(struct dxil_module *m)
-{
-   return dxil_module_enter_subblock(m, 10, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000006, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000012, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000014, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000012, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000006, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x0000003f, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000012, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000015, 6) &&
-          dxil_module_exit_block(m);
-}
-
-static bool
 emit_attribute_table(struct dxil_module *m)
 {
    return dxil_module_enter_subblock(m, 9, 3) &&
@@ -1782,8 +1732,29 @@ emit_module(struct dxil_module *m)
        !dxil_module_emit_record(m, DXIL_MODULE_CODE_VERSION, &version, 1))
       return false;
 
+   struct dxil_attrib attrs1[] = {
+      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_NO_UNWIND },
+      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_READ_NONE },
+   };
+   struct dxil_attrib attrs2[] = {
+      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_NO_UNWIND },
+   };
+   struct dxil_attrib attrs3[] = {
+      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_NO_UNWIND },
+      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_READ_ONLY },
+   };
+
+   struct dxil_attrib *attrs[] = {
+      attrs1, attrs2, attrs3
+   };
+   size_t attr_sizes[] = {
+      ARRAY_SIZE(attrs1), ARRAY_SIZE(attrs2), ARRAY_SIZE(attrs3)
+   };
+   assert(ARRAY_SIZE(attrs) == ARRAY_SIZE(attr_sizes));
+
    if (!dxil_module_emit_blockinfo(m, 5) ||
-       !emit_attrib_group_table(m) ||
+       !dxil_emit_attrib_group_table(m, attrs, attr_sizes,
+                                     ARRAY_SIZE(attrs)) ||
        !emit_attribute_table(m) ||
        !emit_type_table(m) ||
        !emit_type_comdats(m) ||
