@@ -378,6 +378,11 @@ dxil_module_emit_blockinfo(struct dxil_module *m, int type_index_bits)
           dxil_module_exit_block(m);
 }
 
+enum attribute_codes {
+   PARAMATTR_GRP_CODE_ENTRY = 3,
+   PARAMATTR_CODE_ENTRY = 2
+};
+
 static bool
 emit_attrib_group(struct dxil_module *m, int id, uint32_t slot,
                   const struct dxil_attrib *attrs, size_t num_attrs)
@@ -415,6 +420,22 @@ dxil_emit_attrib_group_table(struct dxil_module *m,
    for (int i = 0; i < num_attrs; ++i)
       if (!emit_attrib_group(m, 1 + i, UINT32_MAX, attrs[i], sizes[i]))
          return false;
+
+   return dxil_module_exit_block(m);
+}
+
+bool
+dxil_emit_attribute_table(struct dxil_module *m,
+                          const unsigned *attrs, size_t num_attrs)
+{
+   if (!dxil_module_enter_subblock(m, DXIL_PARAMATTR, 3))
+      return false;
+
+   for (int i = 0; i < num_attrs; ++i) {
+      uint64_t data = attrs[i];
+      if (!dxil_module_emit_record(m, PARAMATTR_CODE_ENTRY, &data, 1))
+         return false;
+   }
 
    return dxil_module_exit_block(m);
 }
