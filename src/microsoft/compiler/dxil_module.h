@@ -31,6 +31,7 @@ extern "C" {
 #include "dxil.h"
 
 #include "util/blob.h"
+#include "util/list.h"
 
 enum dxil_standard_block {
    DXIL_BLOCKINFO = 0,
@@ -44,6 +45,7 @@ enum dxil_llvm_block {
    DXIL_CONST_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 3,
    DXIL_FUNCTION_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 4,
    DXIL_VALUE_SYMTAB_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 6,
+   DXIL_TYPE_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 9,
 };
 
 enum dxil_fixed_abbrev {
@@ -109,6 +111,8 @@ struct dxil_abbrev {
    size_t num_operands;
 };
 
+struct dxil_type;
+
 struct dxil_module {
    enum dxil_shader_kind shader_kind;
    unsigned major_version, minor_version;
@@ -127,6 +131,10 @@ struct dxil_module {
 
    struct dxil_abbrev const_abbrevs[4];
    struct dxil_abbrev func_abbrevs[8];
+   struct dxil_abbrev type_table_abbrevs[6];
+
+   struct list_head type_list;
+   unsigned next_type_id;
 };
 
 void
@@ -159,6 +167,13 @@ bool
 dxil_module_emit_record(struct dxil_module *m, unsigned code,
                         const uint64_t *data, size_t size);
 
+static inline bool
+dxil_module_emit_record_int(struct dxil_module *m, unsigned code, int value)
+{
+   uint64_t data = value;
+   return dxil_module_emit_record(m, code, &data, 1);
+}
+
 bool
 dxil_module_emit_blockinfo(struct dxil_module *m, int type_index_bits);
 
@@ -170,6 +185,31 @@ dxil_emit_attrib_group_table(struct dxil_module *m,
 bool
 dxil_emit_attribute_table(struct dxil_module *m,
                           const unsigned *attrs, size_t num_attrs);
+
+bool
+dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits);
+
+struct dxil_type *
+dxil_module_add_void_type(struct dxil_module *m);
+
+struct dxil_type *
+dxil_module_add_int_type(struct dxil_module *m, unsigned bit_size);
+
+struct dxil_type *
+dxil_module_add_pointer_type(struct dxil_module *m,
+                             const struct dxil_type *target);
+
+struct dxil_type *
+dxil_module_add_struct_type(struct dxil_module *m,
+                            const char *name,
+                            const struct dxil_type **elem_types,
+                            size_t num_elem_types);
+
+struct dxil_type *
+dxil_module_add_function_type(struct dxil_module *m,
+                              const struct dxil_type *ret_type,
+                              const struct dxil_type **arg_types,
+                              size_t num_arg_types);
 
 #ifdef __cplusplus
 }
