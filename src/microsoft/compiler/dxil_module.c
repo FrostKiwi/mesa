@@ -24,6 +24,7 @@
 #include "dxil_module.h"
 
 #include "util/macros.h"
+#include "util/u_memory.h"
 
 #include <assert.h>
 
@@ -38,6 +39,9 @@ dxil_module_init(struct dxil_module *m)
 
    m->buf = 0;
    m->buf_bits = 0;
+
+   list_inithead(&m->type_list);
+   m->next_type_id = 0;
 }
 
 static bool
@@ -180,6 +184,34 @@ dxil_module_emit_record(struct dxil_module *m, unsigned code,
    return emit_record_no_abbrev(m, code, data, size);
 }
 
+static bool
+is_char6(char ch)
+{
+   if ((ch >= 'a' && ch <= 'z') ||
+       (ch >= 'A' && ch <= 'Z') ||
+       (ch >= '0' && ch <= '9'))
+     return true;
+
+   switch (ch) {
+   case '.':
+   case '_':
+      return true;
+
+   default:
+      return false;
+   }
+}
+
+static bool
+is_char6_string(const char *str)
+{
+   while (*str != '\0') {
+      if (!is_char6(*str++))
+         return false;
+   }
+   return true;
+}
+
 static unsigned
 encode_char6(char ch)
 {
@@ -302,6 +334,132 @@ emit_record_abbrev(struct dxil_module *m,
    return true;
 }
 
+struct dxil_type {
+   enum type_type {
+      TYPE_VOID,
+      TYPE_INTEGER,
+      TYPE_POINTER,
+      TYPE_STRUCT,
+      TYPE_FUNCTION
+   } type;
+
+   union {
+      unsigned int_bits;
+      const struct dxil_type *ptr_target_type;
+      struct {
+         const char *name;
+         struct dxil_type **elem_types;
+         size_t num_elem_types;
+      } struct_def;
+      struct {
+         const struct dxil_type *ret_type;
+         struct dxil_type **arg_types;
+         size_t num_arg_types;
+      } function_def;
+   };
+
+   struct list_head head;
+   unsigned id;
+};
+
+static struct dxil_type *
+create_type(struct dxil_module *m, enum type_type type)
+{
+   struct dxil_type *ret = CALLOC_STRUCT(dxil_type);
+   if (ret) {
+      ret->type = type;
+      ret->id = m->next_type_id++;
+      list_addtail(&ret->head, &m->type_list);
+   }
+   return ret;
+}
+
+struct dxil_type *
+dxil_module_add_void_type(struct dxil_module *m)
+{
+   return create_type(m, TYPE_VOID);
+}
+
+struct dxil_type *
+dxil_module_add_int_type(struct dxil_module *m, unsigned bit_size)
+{
+   struct dxil_type *type = create_type(m, TYPE_INTEGER);
+   if (type)
+      type->int_bits = bit_size;
+   return type;
+}
+
+struct dxil_type *
+dxil_module_add_pointer_type(struct dxil_module *m,
+                             const struct dxil_type *target)
+{
+   struct dxil_type *type = create_type(m, TYPE_POINTER);
+   if (type)
+      type->ptr_target_type = target;
+   return type;
+}
+
+struct dxil_type *
+dxil_module_add_struct_type(struct dxil_module *m,
+                            const char *name,
+                            const struct dxil_type **elem_types,
+                            size_t num_elem_types)
+{
+   struct dxil_type *type = create_type(m, TYPE_STRUCT);
+   if (type) {
+      type->struct_def.name = strdup(name);
+      if (!type->struct_def.name) {
+         FREE(type);
+         return NULL;
+      }
+      type->struct_def.elem_types = CALLOC(sizeof(struct dxil_type *),
+                                           num_elem_types);
+      if (!type->struct_def.elem_types) {
+         free((void *)type->struct_def.name);
+         FREE(type);
+         return NULL;
+      }
+      memcpy(type->struct_def.elem_types, elem_types,
+             sizeof(struct dxil_type *) * num_elem_types);
+      type->struct_def.num_elem_types = num_elem_types;
+   }
+   return type;
+}
+
+struct dxil_type *
+dxil_module_add_function_type(struct dxil_module *m,
+                              const struct dxil_type *ret_type,
+                              const struct dxil_type **arg_types,
+                              size_t num_arg_types)
+{
+   struct dxil_type *type = create_type(m, TYPE_FUNCTION);
+   if (type) {
+      type->function_def.arg_types = CALLOC(sizeof(struct dxil_type *),
+                                            num_arg_types);
+      if (!type->function_def.arg_types) {
+         FREE(type);
+         return NULL;
+      }
+      memcpy(type->function_def.arg_types, arg_types,
+             sizeof(struct dxil_type *) * num_arg_types);
+      type->function_def.num_arg_types = num_arg_types;
+      type->function_def.ret_type = ret_type;
+   }
+   return type;
+}
+
+static bool
+emit_type_table_abbrev_record(struct dxil_module *m, unsigned abbrev,
+                              const uint64_t *data, size_t size)
+{
+   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
+   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
+   assert(index < ARRAY_SIZE(m->type_table_abbrevs));
+
+   return emit_record_abbrev(m, abbrev, m->type_table_abbrevs + index,
+                             data, size);
+}
+
 enum value_symtab_code {
   VST_CODE_ENTRY = 1,
   VST_CODE_BBENTRY = 2
@@ -379,6 +537,30 @@ enum function_code {
   FUNC_CODE_INST_STOREATOMIC = 45,
   FUNC_CODE_INST_CMPXCHG = 46,
   FUNC_CODE_INST_LANDINGPAD = 47,
+};
+
+enum type_codes {
+  TYPE_CODE_NUMENTRY = 1,
+  TYPE_CODE_VOID = 2,
+  TYPE_CODE_FLOAT = 3,
+  TYPE_CODE_DOUBLE = 4,
+  TYPE_CODE_LABEL = 5,
+  TYPE_CODE_OPAQUE = 6,
+  TYPE_CODE_INTEGER = 7,
+  TYPE_CODE_POINTER = 8,
+  TYPE_CODE_FUNCTION_OLD = 9,
+  TYPE_CODE_HALF = 10,
+  TYPE_CODE_ARRAY = 11,
+  TYPE_CODE_VECTOR = 12,
+  TYPE_CODE_X86_FP80 = 13,
+  TYPE_CODE_FP128 = 14,
+  TYPE_CODE_PPC_FP128 = 15,
+  TYPE_CODE_METADATA = 16,
+  TYPE_CODE_X86_MMX = 17,
+  TYPE_CODE_STRUCT_ANON = 18,
+  TYPE_CODE_STRUCT_NAME = 19,
+  TYPE_CODE_STRUCT_NAMED = 20,
+  TYPE_CODE_FUNCTION = 21
 };
 
 #define LITERAL(x) { DXIL_OP_LITERAL, (x) }
@@ -571,4 +753,163 @@ dxil_emit_attribute_table(struct dxil_module *m,
    }
 
    return dxil_module_exit_block(m);
+}
+
+static bool
+emit_type_table_abbrevs(struct dxil_module *m, int type_index_bits)
+{
+   struct dxil_abbrev type_table_abbrevs[] = {
+      { { LITERAL(TYPE_CODE_POINTER), FIXED(type_index_bits),
+          LITERAL(0) }, 3 },
+      { { LITERAL(TYPE_CODE_FUNCTION), FIXED(1), ARRAY(),
+          FIXED(type_index_bits) }, 4 },
+      { { LITERAL(TYPE_CODE_STRUCT_ANON), FIXED(1), ARRAY(),
+          FIXED(type_index_bits) }, 4 },
+      { { LITERAL(TYPE_CODE_STRUCT_NAME), ARRAY(), CHAR6() }, 3 },
+      { { LITERAL(TYPE_CODE_STRUCT_NAMED), FIXED(1), ARRAY(),
+          FIXED(type_index_bits) }, 4 },
+      { { LITERAL(TYPE_CODE_ARRAY), VBR(8), FIXED(type_index_bits) }, 3 }
+   };
+
+   for (int i = 0; i < ARRAY_SIZE(type_table_abbrevs); ++i) {
+      if (!define_abbrev(m, type_table_abbrevs + i))
+         return false;
+   }
+
+   assert(sizeof(type_table_abbrevs) == sizeof(m->type_table_abbrevs));
+   memcpy(m->type_table_abbrevs, type_table_abbrevs, sizeof(type_table_abbrevs));
+
+   return true;
+}
+
+static bool
+emit_void_type(struct dxil_module *m)
+{
+   return dxil_module_emit_record(m, TYPE_CODE_VOID, NULL, 0);
+}
+
+static bool
+emit_integer_type(struct dxil_module *m, int bit_size)
+{
+   return dxil_module_emit_record_int(m, TYPE_CODE_INTEGER, bit_size);
+}
+
+static bool
+emit_pointer_type(struct dxil_module *m, int type_index)
+{
+   uint64_t data[] = { TYPE_CODE_POINTER, type_index, 0 };
+   return emit_type_table_abbrev_record(m, 4, data, ARRAY_SIZE(data));
+}
+
+static bool
+emit_struct_name(struct dxil_module *m, const char *name)
+{
+   uint64_t temp[256];
+   assert(strlen(name) < ARRAY_SIZE(temp));
+
+   for (int i = 0; i < strlen(name); ++i)
+      temp[i] = name[i];
+
+   return dxil_module_emit_record(m, TYPE_CODE_STRUCT_NAME, temp, strlen(name));
+}
+
+static bool
+emit_struct_name_char6(struct dxil_module *m, const char *name)
+{
+   uint64_t temp[256];
+   assert(strlen(name) < ARRAY_SIZE(temp) - 1);
+
+   temp[0] = TYPE_CODE_STRUCT_NAME;
+   for (int i = 0; i < strlen(name); ++i)
+      temp[i + 1] = name[i];
+
+   return emit_type_table_abbrev_record(m, 7, temp, 1 + strlen(name));
+}
+
+static bool
+emit_struct_type(struct dxil_module *m, const struct dxil_type *type)
+{
+   assert(type->struct_def.name);
+   if (is_char6_string(type->struct_def.name)) {
+      if (!emit_struct_name_char6(m, type->struct_def.name))
+         return false;
+   } else {
+      if (!emit_struct_name(m, type->struct_def.name))
+         return false;
+   }
+
+   uint64_t temp[256];
+   assert(type->struct_def.num_elem_types < ARRAY_SIZE(temp) - 2);
+   temp[0] = TYPE_CODE_STRUCT_NAMED;
+   temp[1] = 0; /* packed */
+   for (int i = 0; i < type->struct_def.num_elem_types; ++i)
+      temp[2 + i] = type->struct_def.elem_types[i]->id;
+
+   return emit_type_table_abbrev_record(m, 8, temp, 2 + type->struct_def.num_elem_types);
+}
+
+static bool
+emit_function_type(struct dxil_module *m, const struct dxil_type *type)
+{
+   uint64_t temp[256];
+   assert(type->function_def.num_arg_types < ARRAY_SIZE(temp) - 3);
+
+   temp[0] = TYPE_CODE_FUNCTION;
+   temp[1] = 0; // vararg
+   temp[2] = type->function_def.ret_type->id;
+   for (int i = 0; i < type->function_def.num_arg_types; ++i)
+      temp[3 + i] = type->function_def.arg_types[i]->id;
+
+   return emit_type_table_abbrev_record(m, 5, temp, 3 + type->function_def.num_arg_types);
+}
+
+static bool
+emit_metadata_type(struct dxil_module *m)
+{
+   return dxil_module_emit_record(m, TYPE_CODE_METADATA, NULL, 0);
+}
+
+bool
+dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits)
+{
+   if (!dxil_module_enter_subblock(m, DXIL_TYPE_BLOCK, 4) ||
+       !emit_type_table_abbrevs(m, type_index_bits) ||
+       !dxil_module_emit_record_int(m, 1, 1 + list_length(&m->type_list)))
+      return false;
+
+   struct dxil_type *type;
+   LIST_FOR_EACH_ENTRY(type, &m->type_list, head) {
+      switch (type->type) {
+      case TYPE_VOID:
+         if (!emit_void_type(m))
+            return false;
+         break;
+
+      case TYPE_INTEGER:
+         if (!emit_integer_type(m, type->int_bits))
+            return false;
+         break;
+
+      case TYPE_POINTER:
+         if (!emit_pointer_type(m, type->ptr_target_type->id))
+            return false;
+         break;
+
+      case TYPE_STRUCT:
+         if (!emit_struct_type(m, type))
+            return false;
+         break;
+
+      case TYPE_FUNCTION:
+         if (!emit_function_type(m, type))
+            return false;
+         break;
+
+      default:
+         unreachable("unexpected type->type");
+      }
+   }
+
+   return emit_metadata_type(m) &&
+          dxil_module_exit_block(m);
 }
