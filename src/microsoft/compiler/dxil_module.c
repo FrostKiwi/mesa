@@ -72,6 +72,17 @@ dxil_module_emit_bits(struct dxil_module *m, uint32_t data, unsigned width)
 }
 
 bool
+emit_bits64(struct dxil_module *m, uint64_t data, unsigned width)
+{
+   if (data > UINT32_MAX) {
+      assert(width > 32);
+      return dxil_module_emit_bits(m, (uint32_t)(data & UINT32_MAX), width) &&
+             dxil_module_emit_bits(m, (uint32_t)(data >> 32), width - 32);
+   } else
+      return dxil_module_emit_bits(m, (uint32_t)data, width);
+}
+
+bool
 dxil_module_emit_vbr_bits(struct dxil_module *m, uint64_t data,
                           unsigned width)
 {
@@ -167,6 +178,128 @@ dxil_module_emit_record(struct dxil_module *m, unsigned code,
                         const uint64_t *data, size_t size)
 {
    return emit_record_no_abbrev(m, code, data, size);
+}
+
+static unsigned
+encode_char6(char ch)
+{
+   const int letters = 'z' - 'a' + 1;
+
+   if (ch >= 'a' && ch <= 'z')
+      return ch - 'a';
+   else if (ch >= 'A' && ch <= 'Z')
+      return letters + ch - 'A';
+   else if (ch >= '0' && ch <= '9')
+      return 2 * letters + ch - '0';
+
+   switch (ch) {
+   case '.': return 62;
+   case '_': return 63;
+   default:
+      unreachable("invalid char6-character");
+   }
+}
+
+static bool
+emit_fixed(struct dxil_module *m, uint64_t data, unsigned width)
+{
+   if (!width)
+      return true;
+
+   return emit_bits64(m, data, width);
+}
+
+static bool
+emit_vbr(struct dxil_module *m, uint64_t data, unsigned width)
+{
+   if (!width)
+      return true;
+
+   return dxil_module_emit_vbr_bits(m, data, width);
+}
+
+static bool
+emit_char6(struct dxil_module *m, uint64_t data)
+{
+   return dxil_module_emit_bits(m, encode_char6((char)data), 6);
+}
+
+static bool
+emit_record_abbrev(struct dxil_module *m,
+                   unsigned abbrev, const struct dxil_abbrev *a,
+                   const uint64_t *data, size_t size)
+{
+   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
+
+   if (!dxil_module_emit_abbrev_id(m, abbrev))
+      return false;
+
+   size_t curr_data = 0;
+   for (int i = 0; i < a->num_operands; ++i) {
+      assert(curr_data < size);
+      switch (a->operands[i].type) {
+      case DXIL_OP_LITERAL:
+         assert(data[curr_data] == a->operands[i].value);
+         curr_data++;
+         /* literals are no-ops, because their value is defined in the
+            abbrev-definition already */
+         break;
+
+      case DXIL_OP_FIXED:
+         if (!emit_fixed(m, data[curr_data++], a->operands[i].encoding_data))
+            return false;
+         break;
+
+      case DXIL_OP_VBR:
+         if (!emit_vbr(m, data[curr_data++], a->operands[i].encoding_data))
+            return false;
+         break;
+
+      case DXIL_OP_ARRAY:
+         assert(i == a->num_operands - 2); /* arrays should always be second to last */
+
+         if (!dxil_module_emit_vbr_bits(m, size - curr_data, 6))
+            return false;
+
+         switch (a->operands[i + 1].type) {
+         case DXIL_OP_FIXED:
+            while (curr_data < size)
+               if (!emit_fixed(m, data[curr_data++], a->operands[i + 1].encoding_data))
+                  return false;
+            break;
+
+         case DXIL_OP_VBR:
+            while (curr_data < size)
+               if (!emit_vbr(m, data[curr_data++], a->operands[i + 1].encoding_data))
+                  return false;
+            break;
+
+         case DXIL_OP_CHAR6:
+            while (curr_data < size)
+               if (!emit_char6(m, data[curr_data++]))
+                  return false;
+            break;
+
+         default:
+            unreachable("unexpected operand type");
+         }
+         return true; /* we're done */
+
+      case DXIL_OP_CHAR6:
+         if (!emit_char6(m, data[curr_data++]))
+            return false;
+         break;
+
+      case DXIL_OP_BLOB:
+         unreachable("HALP, unplement!");
+
+      default:
+         unreachable("unexpected operand type");
+      }
+   }
+
+   assert(curr_data == size);
+   return true;
 }
 
 enum value_symtab_code {
