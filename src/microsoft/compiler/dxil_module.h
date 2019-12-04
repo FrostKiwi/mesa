@@ -107,11 +107,17 @@ struct dxil_abbrev {
          uint64_t value;
          uint64_t encoding_data;
       };
-   } operands[5];
+   } operands[7];
    size_t num_operands;
 };
 
 struct dxil_type;
+
+struct dxil_function_module_info {
+   int type_id;
+   bool decl;
+   int attr_set;
+};
 
 struct dxil_module {
    enum dxil_shader_kind shader_kind;
@@ -185,6 +191,11 @@ dxil_emit_attrib_group_table(struct dxil_module *m,
 bool
 dxil_emit_attribute_table(struct dxil_module *m,
                           const unsigned *attrs, size_t num_attrs);
+
+bool
+dxil_emit_module_info(struct dxil_module *m,
+                      const struct dxil_function_module_info *funcs,
+                      size_t num_funcs);
 
 bool
 dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits);

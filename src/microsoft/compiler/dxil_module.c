@@ -913,3 +913,84 @@ dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits)
    return emit_metadata_type(m) &&
           dxil_module_exit_block(m);
 }
+
+static bool
+emit_target_triple(struct dxil_module *m, const char *triple)
+{
+   uint64_t temp[256];
+   assert(strlen(triple) < ARRAY_SIZE(temp));
+
+   for (int i = 0; i < strlen(triple); ++i)
+      temp[i] = triple[i];
+
+   return dxil_module_emit_record(m, DXIL_MODULE_CODE_TRIPLE,
+                                  temp, strlen(triple));
+}
+
+static bool
+emit_datalayout(struct dxil_module *m, const char *datalayout)
+{
+   uint64_t temp[256];
+   assert(strlen(datalayout) < ARRAY_SIZE(temp));
+
+   for (int i = 0; i < strlen(datalayout); ++i)
+      temp[i] = datalayout[i];
+
+   return dxil_module_emit_record(m, DXIL_MODULE_CODE_DATALAYOUT,
+                                  temp, strlen(datalayout));
+}
+
+static bool
+emit_module_info_function(struct dxil_module *m, int type, bool declaration,
+                          int attr_set_index)
+{
+   uint64_t data[] = {
+      type, 0/* address space */, declaration, 0/* linkage */,
+      attr_set_index, 0/* alignment */, 0 /* section */, 0 /* visibility */,
+      0 /* GC */, 0 /* unnamed addr */, 0 /* prologue data */,
+      0 /* storage class */, 0 /* comdat */, 0 /* prefix-data */,
+      0 /* personality */
+   };
+   return dxil_module_emit_record(m, DXIL_MODULE_CODE_FUNCTION,
+                                  data, ARRAY_SIZE(data));
+}
+
+static bool
+emit_module_info_global(struct dxil_module *m, int type_id, bool constant,
+                        int alignment, const struct dxil_abbrev *simple_gvar_abbr)
+{
+   uint64_t data[] = {
+      DXIL_MODULE_CODE_GLOBALVAR,
+      type_id,
+      2 | constant,
+      0, // initializer
+      0, // linkage
+      alignment,
+      0
+   };
+   return emit_record_abbrev(m, 4, simple_gvar_abbr, data, ARRAY_SIZE(data));
+}
+
+bool
+dxil_emit_module_info(struct dxil_module *m,
+                      const struct dxil_function_module_info *funcs,
+                      size_t num_funcs)
+{
+   struct dxil_abbrev simple_gvar_abbr = {
+      { LITERAL(DXIL_MODULE_CODE_GLOBALVAR), FIXED(1), VBR(6), VBR(6),
+          FIXED(5), FIXED(2), LITERAL(0) }, 7
+   };
+
+   if (!emit_target_triple(m, "dxil-ms-dx") ||
+       !emit_datalayout(m, "e-m:e-p:32:32-i1:32-i8:32-i16:32-i32:32-i64:64-f16:32-f32:32-f64:64-n8:16:32:64") ||
+       !define_abbrev(m, &simple_gvar_abbr) ||
+       !emit_module_info_global(m, 1, true, 3, &simple_gvar_abbr))
+      return false;
+
+   for (int i = 0; i < num_funcs; ++i)
+      if (!emit_module_info_function(m, funcs[i].type_id, funcs[i].decl,
+                                     funcs[i].attr_set))
+         return false;
+
+   return true;
+}
