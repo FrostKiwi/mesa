@@ -38,14 +38,18 @@ enum dxil_standard_block {
 };
 
 enum dxil_llvm_block {
-   DXIL_MODULE = DXIL_FIRST_APPLICATION_BLOCK
+   DXIL_MODULE = DXIL_FIRST_APPLICATION_BLOCK,
+   DXIL_CONST_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 3,
+   DXIL_FUNCTION_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 4,
+   DXIL_VALUE_SYMTAB_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 6,
 };
 
 enum dxil_fixed_abbrev {
    DXIL_END_BLOCK = 0,
    DXIL_ENTER_SUBBLOCK = 1,
    DXIL_DEFINE_ABBREV = 2,
-   DXIL_UNABBREV_RECORD = 3
+   DXIL_UNABBREV_RECORD = 3,
+   DXIL_FIRST_APPLICATION_ABBREV = 4
 };
 
 enum dxil_module_code {
@@ -63,6 +67,30 @@ enum dxil_module_code {
    DXIL_MODULE_CODE_COMDAT = 12,
 };
 
+enum dxil_blockinfo_code {
+   DXIL_BLOCKINFO_CODE_SETBID = 1,
+   DXIL_BLOCKINFO_CODE_BLOCKNAME = 2,
+   DXIL_BLOCKINFO_CODE_SETRECORDNAME = 3
+};
+
+struct dxil_abbrev {
+   struct {
+      enum {
+         DXIL_OP_LITERAL = 0,
+         DXIL_OP_FIXED = 1,
+         DXIL_OP_VBR = 2,
+         DXIL_OP_ARRAY = 3,
+         DXIL_OP_CHAR6 = 4,
+         DXIL_OP_BLOB = 5
+      } type;
+      union {
+         uint64_t value;
+         uint64_t encoding_data;
+      };
+   } operands[5];
+   size_t num_operands;
+};
+
 struct dxil_module {
    enum dxil_shader_kind shader_kind;
    unsigned major_version, minor_version;
@@ -78,6 +106,9 @@ struct dxil_module {
 
    uint64_t buf;
    unsigned buf_bits;
+
+   struct dxil_abbrev const_abbrevs[4];
+   struct dxil_abbrev func_abbrevs[8];
 };
 
 void
@@ -109,6 +140,9 @@ dxil_module_exit_block(struct dxil_module *m);
 bool
 dxil_module_emit_record(struct dxil_module *m, unsigned code,
                         const uint64_t *data, size_t size);
+
+bool
+dxil_module_emit_blockinfo(struct dxil_module *m, int type_index_bits);
 
 #ifdef __cplusplus
 }
