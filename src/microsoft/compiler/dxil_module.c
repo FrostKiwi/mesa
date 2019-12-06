@@ -168,3 +168,212 @@ dxil_module_emit_record(struct dxil_module *m, unsigned code,
 {
    return emit_record_no_abbrev(m, code, data, size);
 }
+
+enum value_symtab_code {
+  VST_CODE_ENTRY = 1,
+  VST_CODE_BBENTRY = 2
+};
+
+enum constant_code {
+  CST_CODE_SETTYPE = 1,
+  CST_CODE_NULL = 2,
+  CST_CODE_UNDEF = 3,
+  CST_CODE_INTEGER = 4,
+  CST_CODE_WIDE_INTEGER = 5,
+  CST_CODE_FLOAT = 6,
+  CST_CODE_AGGREGATE = 7,
+  CST_CODE_STRING = 8,
+  CST_CODE_CSTRING = 9,
+  CST_CODE_CE_BINOP = 10,
+  CST_CODE_CE_CAST = 11,
+  CST_CODE_CE_GEP = 12,
+  CST_CODE_CE_SELECT = 13,
+  CST_CODE_CE_EXTRACTELT = 14,
+  CST_CODE_CE_INSERTELT = 15,
+  CST_CODE_CE_SHUFFLEVEC = 16,
+  CST_CODE_CE_CMP = 17,
+  CST_CODE_INLINEASM_OLD = 18,
+  CST_CODE_CE_SHUFVEC_EX = 19,
+  CST_CODE_CE_INBOUNDS_GEP = 20,
+  CST_CODE_BLOCKADDRESS = 21,
+  CST_CODE_DATA = 22,
+  CST_CODE_INLINEASM = 23
+};
+
+enum function_code {
+  FUNC_CODE_DECLAREBLOCKS = 1,
+  FUNC_CODE_INST_BINOP = 2,
+  FUNC_CODE_INST_CAST = 3,
+  FUNC_CODE_INST_GEP_OLD = 4,
+  FUNC_CODE_INST_SELECT = 5,
+  FUNC_CODE_INST_EXTRACTELT = 6,
+  FUNC_CODE_INST_INSERTELT = 7,
+  FUNC_CODE_INST_SHUFFLEVEC = 8,
+  FUNC_CODE_INST_CMP = 9,
+  FUNC_CODE_INST_RET = 10,
+  FUNC_CODE_INST_BR = 11,
+  FUNC_CODE_INST_SWITCH = 12,
+  FUNC_CODE_INST_INVOKE = 13,
+  /* 14: unused */
+  FUNC_CODE_INST_UNREACHABLE = 15,
+  FUNC_CODE_INST_PHI = 16,
+  /* 17-18: unused */
+  FUNC_CODE_INST_ALLOCA = 19,
+  FUNC_CODE_INST_LOAD = 20,
+  /* 21-22: unused */
+  FUNC_CODE_INST_VAARG = 23,
+  FUNC_CODE_INST_STORE_OLD = 24,
+  /* 25: unused */
+  FUNC_CODE_INST_EXTRACTVAL = 26,
+  FUNC_CODE_INST_INSERTVAL = 27,
+  FUNC_CODE_INST_CMP2 = 28,
+  FUNC_CODE_INST_VSELECT = 29,
+  FUNC_CODE_INST_INBOUNDS_GEP_OLD = 30,
+  FUNC_CODE_INST_INDIRECTBR = 31,
+  /* 32: unused */
+  FUNC_CODE_DEBUG_LOC_AGAIN = 33,
+  FUNC_CODE_INST_CALL = 34,
+  FUNC_CODE_DEBUG_LOC = 35,
+  FUNC_CODE_INST_FENCE = 36,
+  FUNC_CODE_INST_CMPXCHG_OLD = 37,
+  FUNC_CODE_INST_ATOMICRMW = 38,
+  FUNC_CODE_INST_RESUME = 39,
+  FUNC_CODE_INST_LANDINGPAD_OLD = 40,
+  FUNC_CODE_INST_LOADATOMIC = 41,
+  FUNC_CODE_INST_STOREATOMIC_OLD = 42,
+  FUNC_CODE_INST_GEP = 43,
+  FUNC_CODE_INST_STORE = 44,
+  FUNC_CODE_INST_STOREATOMIC = 45,
+  FUNC_CODE_INST_CMPXCHG = 46,
+  FUNC_CODE_INST_LANDINGPAD = 47,
+};
+
+#define LITERAL(x) { DXIL_OP_LITERAL, (x) }
+#define FIXED(x) { DXIL_OP_FIXED, (x) }
+#define VBR(x) { DXIL_OP_VBR, (x) }
+#define ARRAY() { DXIL_OP_ARRAY, 0 }
+#define CHAR6() { DXIL_OP_CHAR6, 0 }
+#define BLOB() { DXIL_OP_BLOB, 0 }
+
+static bool
+define_abbrev(struct dxil_module *m, const struct dxil_abbrev *a)
+{
+   if (!dxil_module_emit_abbrev_id(m, DXIL_DEFINE_ABBREV) ||
+       !dxil_module_emit_vbr_bits(m, a->num_operands, 5))
+      return false;
+
+   for (int i = 0; i < a->num_operands; ++i) {
+      if (!dxil_module_emit_bits(m, a->operands[i].type == DXIL_OP_LITERAL, 1))
+         return false;
+      if (a->operands[i].type == DXIL_OP_LITERAL) {
+         if (!dxil_module_emit_vbr_bits(m, a->operands[i].value, 8))
+            return false;
+      } else {
+         if (!dxil_module_emit_bits(m, a->operands[i].type, 3))
+            return false;
+         if (a->operands[i].type == DXIL_OP_FIXED ||
+             a->operands[i].type == DXIL_OP_VBR) {
+            if (!dxil_module_emit_vbr_bits(m, a->operands[i].encoding_data, 5))
+               return false;
+         }
+      }
+   }
+
+   return true;
+}
+
+static bool
+switch_to_block(struct dxil_module *m, uint32_t block)
+{
+   uint64_t data = block;
+   return dxil_module_emit_record(m, DXIL_BLOCKINFO_CODE_SETBID, &data, 1);
+}
+
+static struct dxil_abbrev value_symtab_abbrevs[] = {
+   { { FIXED(3), VBR(8), ARRAY(), FIXED(8) }, 4 },
+   { { LITERAL(VST_CODE_ENTRY), VBR(8), ARRAY(), FIXED(7), }, 4 },
+   { { LITERAL(VST_CODE_ENTRY), VBR(8), ARRAY(), CHAR6(), }, 4 },
+   { { LITERAL(VST_CODE_BBENTRY), VBR(8), ARRAY(), CHAR6(), }, 4 },
+};
+
+static bool
+emit_value_symtab_abbrevs(struct dxil_module *m)
+{
+   if (!switch_to_block(m, DXIL_VALUE_SYMTAB_BLOCK))
+      return false;
+
+   for (int i = 0; i < ARRAY_SIZE(value_symtab_abbrevs); ++i) {
+      if (!define_abbrev(m, value_symtab_abbrevs + i))
+         return false;
+   }
+
+   return true;
+}
+
+static bool
+emit_const_abbrevs(struct dxil_module *m, int type_index_bits)
+{
+   if (!switch_to_block(m, DXIL_CONST_BLOCK))
+      return false;
+
+   struct dxil_abbrev const_abbrevs[] = {
+      { { LITERAL(CST_CODE_SETTYPE), FIXED(type_index_bits) }, 2 },
+      { { LITERAL(CST_CODE_INTEGER), VBR(8) }, 2 },
+      { { LITERAL(CST_CODE_CE_CAST), FIXED(4), FIXED(type_index_bits),
+          VBR(8) }, 4 },
+      { { LITERAL(CST_CODE_NULL) }, 1 },
+   };
+
+   assert(sizeof(const_abbrevs) == sizeof(m->const_abbrevs));
+   memcpy(m->const_abbrevs, const_abbrevs, sizeof(const_abbrevs));
+
+   for (int i = 0; i < ARRAY_SIZE(const_abbrevs); ++i) {
+      if (!define_abbrev(m, const_abbrevs + i))
+         return false;
+   }
+
+   return true;
+}
+
+static bool
+emit_function_abbrevs(struct dxil_module *m, int type_index_bits)
+{
+   if (!switch_to_block(m, DXIL_FUNCTION_BLOCK))
+      return false;
+
+   struct dxil_abbrev func_abbrevs[] = {
+      { { LITERAL(FUNC_CODE_INST_LOAD), VBR(6), FIXED(type_index_bits),
+          VBR(4), FIXED(1) }, 5 },
+      { { LITERAL(FUNC_CODE_INST_BINOP), VBR(6), VBR(6), FIXED(4) }, 4 },
+      { { LITERAL(FUNC_CODE_INST_BINOP), VBR(6), VBR(6), FIXED(4),
+          FIXED(7) }, 5 },
+      { { LITERAL(FUNC_CODE_INST_CAST), VBR(6), FIXED(type_index_bits),
+          FIXED(4) }, 4 },
+      { { LITERAL(FUNC_CODE_INST_RET) }, 1 },
+      { { LITERAL(FUNC_CODE_INST_RET), VBR(6) }, 2 },
+      { { LITERAL(FUNC_CODE_INST_UNREACHABLE) }, 1 },
+
+      { { LITERAL(FUNC_CODE_INST_GEP), FIXED(1), FIXED(type_index_bits),
+          ARRAY(), VBR(6) }, 5 },
+   };
+
+   assert(sizeof(func_abbrevs) == sizeof(m->func_abbrevs));
+   memcpy(m->func_abbrevs, func_abbrevs, sizeof(func_abbrevs));
+
+   for (int i = 0; i < ARRAY_SIZE(func_abbrevs); ++i) {
+      if (!define_abbrev(m, func_abbrevs + i))
+         return false;
+   }
+
+   return true;
+}
+
+bool
+dxil_module_emit_blockinfo(struct dxil_module *m, int type_index_bits)
+{
+   return dxil_module_enter_subblock(m, DXIL_BLOCKINFO, 2) &&
+          emit_value_symtab_abbrevs(m) &&
+          emit_const_abbrevs(m, type_index_bits) &&
+          emit_function_abbrevs(m, type_index_bits) &&
+          dxil_module_exit_block(m);
+}
