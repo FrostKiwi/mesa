@@ -988,7 +988,7 @@ dxil_emit_module_info(struct dxil_module *m,
       return false;
 
    for (int i = 0; i < num_funcs; ++i)
-      if (!emit_module_info_function(m, funcs[i].type_id, funcs[i].decl,
+      if (!emit_module_info_function(m, funcs[i].type->id, funcs[i].decl,
                                      funcs[i].attr_set))
          return false;
 
