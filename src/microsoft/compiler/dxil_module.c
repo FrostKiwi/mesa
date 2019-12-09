@@ -460,6 +460,18 @@ emit_type_table_abbrev_record(struct dxil_module *m, unsigned abbrev,
                              data, size);
 }
 
+static bool
+emit_const_abbrev_record(struct dxil_module *m, unsigned abbrev,
+                         const uint64_t *data, size_t size)
+{
+   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
+   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
+   assert(index < ARRAY_SIZE(m->const_abbrevs));
+
+   return emit_record_abbrev(m, abbrev, m->const_abbrevs + index,
+                             data, size);
+}
+
 enum value_symtab_code {
   VST_CODE_ENTRY = 1,
   VST_CODE_BBENTRY = 2
@@ -993,4 +1005,95 @@ dxil_emit_module_info(struct dxil_module *m,
          return false;
 
    return true;
+}
+
+static bool
+emit_module_const_abbrevs(struct dxil_module *m)
+{
+   /* these are unused for now, so let's not even record them */
+   struct dxil_abbrev abbrevs[] = {
+      { { LITERAL(CST_CODE_AGGREGATE), ARRAY(), FIXED(5) }, 3 },
+      { { LITERAL(CST_CODE_STRING), ARRAY(), FIXED(8) }, 3 },
+      { { LITERAL(CST_CODE_CSTRING), ARRAY(), FIXED(7) }, 3 },
+      { { LITERAL(CST_CODE_CSTRING), ARRAY(), CHAR6() }, 3 },
+   };
+
+   for (int i = 0; i < ARRAY_SIZE(abbrevs); ++i) {
+      if (!define_abbrev(m, abbrevs + i))
+         return false;
+   }
+
+   return true;
+}
+
+static bool
+emit_set_type(struct dxil_module *m, unsigned type_index)
+{
+   uint64_t data[] = { CST_CODE_SETTYPE, type_index };
+   return emit_const_abbrev_record(m, 4, data, ARRAY_SIZE(data));
+}
+
+static bool
+emit_null_value(struct dxil_module *m)
+{
+   return emit_record_no_abbrev(m, CST_CODE_NULL, NULL, 0);
+}
+
+static bool
+emit_undef_value(struct dxil_module *m)
+{
+   return emit_record_no_abbrev(m, CST_CODE_UNDEF, NULL, 0);
+}
+
+static bool
+emit_int_value(struct dxil_module *m, int64_t value)
+{
+   if (!value)
+      return emit_null_value(m);
+
+   assert(value > 0); /* no support for signed constants yet */
+
+   uint64_t data[] = { CST_CODE_INTEGER, value << 1 };
+   return emit_const_abbrev_record(m, 5, data, ARRAY_SIZE(data));
+}
+
+bool
+emit_consts(struct dxil_module *m,
+            const struct dxil_const *consts, size_t num_consts)
+{
+   const struct dxil_type *curr_type = NULL;
+   for (size_t i = 0; i < num_consts; ++i) {
+      assert(consts[i].type != NULL);
+      if (curr_type != consts[i].type) {
+         if (!emit_set_type(m, consts[i].type->id))
+            return false;
+         curr_type = consts[i].type;
+      }
+
+      if (consts[i].undef) {
+         emit_undef_value(m);
+         continue;
+      }
+
+      switch (curr_type->type) {
+      case TYPE_INTEGER:
+         emit_int_value(m, consts[i].int_value);
+         break;
+
+      default:
+         unreachable("unsupported constant type");
+      }
+   }
+
+   return true;
+}
+
+bool
+dxil_emit_module_consts(struct dxil_module *m,
+                        const struct dxil_const *consts, size_t num_consts)
+{
+   return dxil_module_enter_subblock(m, DXIL_CONST_BLOCK, 4) &&
+          emit_module_const_abbrevs(m) &&
+          emit_consts(m, consts, num_consts) &&
+          dxil_module_exit_block(m);
 }
