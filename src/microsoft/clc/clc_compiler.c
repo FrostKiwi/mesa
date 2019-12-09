@@ -37,82 +37,6 @@ emit_type_comdats(struct dxil_module *m)
 }
 
 static bool
-emit_module_consts(struct dxil_module *m)
-{
-   return dxil_module_enter_subblock(m, 11, 4) &&
-          dxil_module_emit_bits(m, 0x00000002, 4) &&
-          dxil_module_emit_bits(m, 0x00000003, 5) &&
-          dxil_module_emit_bits(m, 0x00000001, 1) &&
-          dxil_module_emit_bits(m, 0x00000007, 8) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000001, 3) &&
-          dxil_module_emit_bits(m, 0x00000005, 5) &&
-          dxil_module_emit_bits(m, 0x00000002, 4) &&
-          dxil_module_emit_bits(m, 0x00000003, 5) &&
-          dxil_module_emit_bits(m, 0x00000001, 1) &&
-          dxil_module_emit_bits(m, 0x00000008, 8) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000001, 3) &&
-          dxil_module_emit_bits(m, 0x00000008, 5) &&
-          dxil_module_emit_bits(m, 0x00000002, 4) &&
-          dxil_module_emit_bits(m, 0x00000003, 5) &&
-          dxil_module_emit_bits(m, 0x00000001, 1) &&
-          dxil_module_emit_bits(m, 0x00000009, 8) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000001, 3) &&
-          dxil_module_emit_bits(m, 0x00000007, 5) &&
-          dxil_module_emit_bits(m, 0x00000002, 4) &&
-          dxil_module_emit_bits(m, 0x00000003, 5) &&
-          dxil_module_emit_bits(m, 0x00000001, 1) &&
-          dxil_module_emit_bits(m, 0x00000009, 8) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000004, 3) &&
-          dxil_module_emit_bits(m, 0x00000004, 4) &&
-          dxil_module_emit_bits(m, 0x00000000, 5) &&
-          dxil_module_emit_bits(m, 0x00000005, 4) &&
-          dxil_module_emit_bits(m, 0x00000002, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 4) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 4) &&
-          dxil_module_emit_bits(m, 0x0000000c, 8) &&
-          dxil_module_emit_bits(m, 0x00000005, 4) &&
-          dxil_module_emit_bits(m, 0x00000014, 8) &&
-          dxil_module_emit_bits(m, 0x00000005, 4) &&
-          dxil_module_emit_bits(m, 0x0000000a, 8) &&
-          dxil_module_emit_bits(m, 0x00000005, 4) &&
-          dxil_module_emit_bits(m, 0x00000008, 8) &&
-          dxil_module_emit_bits(m, 0x00000005, 4) &&
-          dxil_module_emit_bits(m, 0x00000006, 8) &&
-          dxil_module_emit_bits(m, 0x00000005, 4) &&
-          dxil_module_emit_bits(m, 0x0000000e, 8) &&
-          dxil_module_emit_bits(m, 0x00000004, 4) &&
-          dxil_module_emit_bits(m, 0x0000000d, 5) &&
-          dxil_module_emit_bits(m, 0x00000003, 4) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 4) &&
-          dxil_module_emit_bits(m, 0x00000002, 5) &&
-          dxil_module_emit_bits(m, 0x00000003, 4) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 4) &&
-          dxil_module_emit_bits(m, 0x00000001, 5) &&
-          dxil_module_emit_bits(m, 0x00000003, 4) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_exit_block(m);
-}
-
-static bool
 emit_metadata(struct dxil_module *m)
 {
    // metadata
@@ -1260,6 +1184,20 @@ emit_module(struct dxil_module *m)
       { createhandle_func_type, true, 3 }
    };
 
+   struct dxil_const consts[] = {
+      { int32_type, .int_value = 1 },
+      { int32_type, .int_value = 0 },
+      { int32_type, .int_value = 6 },
+      { int32_type, .int_value = 10 },
+      { int32_type, .int_value = 5 },
+      { int32_type, .int_value = 4 },
+      { int32_type, .int_value = 3 },
+      { int32_type, .int_value = 7 },
+      { bool_type, .int_value = 0 },
+      { rwbuffer_pointer_type, .undef = true },
+      { rwbuffer_struct_type, .undef = true },
+   };
+
    const int num_type_bits = 5;
    if (!dxil_module_emit_blockinfo(m, num_type_bits) ||
        !dxil_emit_attrib_group_table(m, attrs, attr_sizes,
@@ -1268,7 +1206,7 @@ emit_module(struct dxil_module *m)
        !dxil_module_emit_type_table(m, num_type_bits) ||
        !emit_type_comdats(m) ||
        !dxil_emit_module_info(m, funcs, ARRAY_SIZE(funcs)) ||
-       !emit_module_consts(m) ||
+       !dxil_emit_module_consts(m, consts, ARRAY_SIZE(consts)) ||
        !emit_metadata(m) ||
        !emit_metadata_store(m) ||
        !emit_value_symbol_table(m) ||
