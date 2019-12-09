@@ -114,7 +114,7 @@ struct dxil_abbrev {
 struct dxil_type;
 
 struct dxil_function_module_info {
-   int type_id;
+   const struct dxil_type *type;
    bool decl;
    int attr_set;
 };
