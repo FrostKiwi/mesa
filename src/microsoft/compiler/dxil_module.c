@@ -212,6 +212,16 @@ is_char6_string(const char *str)
    return true;
 }
 
+static bool
+is_char7_string(const char *str)
+{
+   while (*str != '\0') {
+      if (*str++ >= 128)
+         return false;
+   }
+   return true;
+}
+
 static unsigned
 encode_char6(char ch)
 {
@@ -1096,4 +1106,37 @@ dxil_emit_module_consts(struct dxil_module *m,
           emit_module_const_abbrevs(m) &&
           emit_consts(m, consts, num_consts) &&
           dxil_module_exit_block(m);
+}
+
+static bool
+emit_value_symtab_abbrev_record(struct dxil_module *m, unsigned abbrev,
+                                const uint64_t *data, size_t size)
+{
+   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
+   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
+   assert(index < ARRAY_SIZE(value_symtab_abbrevs));
+
+   return emit_record_abbrev(m, abbrev, value_symtab_abbrevs + index,
+                             data, size);
+}
+
+bool
+dxil_module_emit_symtab_entry(struct dxil_module *m, unsigned value,
+                              const char *name)
+{
+   uint64_t temp[256];
+   assert(strlen(name) < ARRAY_SIZE(temp) - 2);
+
+   temp[0] = VST_CODE_ENTRY;
+   temp[1] = value;
+   for (int i = 0; i < strlen(name); ++i)
+      temp[i + 2] = name[i];
+
+   int abbrev = 4;
+   if (is_char6_string(name))
+      abbrev = 6;
+   else if (is_char7_string(name))
+      abbrev = 5;
+
+   return emit_value_symtab_abbrev_record(m, abbrev, temp, 2 + strlen(name));
 }
