@@ -900,112 +900,11 @@ emit_use_list_block(struct dxil_module *m)
 }
 
 static bool
-emit_function_bodies(struct dxil_module *m)
+emit_function_value_symtab(struct dxil_module *m)
 {
-   dxil_module_enter_subblock(m, 12, 4);
-      dxil_module_emit_bits(m, 0x00000003, 4);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_enter_subblock(m, 11, 4);
-         dxil_module_emit_bits(m, 0x00000004, 4);
-         dxil_module_emit_bits(m, 0x00000000, 5);
-         dxil_module_emit_bits(m, 0x00000005, 4);
-         dxil_module_emit_bits(m, 0x00000072, 8);
-         dxil_module_emit_bits(m, 0x00000005, 4);
-         dxil_module_emit_bits(m, 0x000000ba, 8);
-         dxil_module_emit_bits(m, 0x00000001, 8);
-         dxil_module_emit_bits(m, 0x00000005, 4);
-         dxil_module_emit_bits(m, 0x0000008a, 8);
-         dxil_module_emit_bits(m, 0x00000001, 8);
-         dxil_module_emit_bits(m, 0x00000003, 4);
-         dxil_module_emit_bits(m, 0x00000003, 6);
-         dxil_module_emit_bits(m, 0x00000000, 6);
-         dxil_module_emit_bits(m, 0x00000004, 4);
-         dxil_module_emit_bits(m, 0x00000008, 5);
-         dxil_module_emit_bits(m, 0x00000005, 4);
-         dxil_module_emit_bits(m, 0x00000002, 8);
-         dxil_module_emit_bits(m, 0x00000005, 4);
-         dxil_module_emit_bits(m, 0x0000001e, 8);
-      dxil_module_exit_block(m);
-      dxil_module_emit_bits(m, 0x00000003, 4);
-      dxil_module_emit_bits(m, 0x00000022, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x00000009, 6);
-      dxil_module_emit_bits(m, 0x00000000, 6);
-      dxil_module_emit_bits(m, 0x00000020, 6);
-      dxil_module_emit_bits(m, 0x00000020, 6);
-      dxil_module_emit_bits(m, 0x00000020, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x0000000e, 6);
-      dxil_module_emit_bits(m, 0x00000012, 6);
-      dxil_module_emit_bits(m, 0x00000006, 6);
-      dxil_module_emit_bits(m, 0x00000002, 6);
-      dxil_module_emit_bits(m, 0x00000010, 6);
-      dxil_module_emit_bits(m, 0x00000010, 6);
-      dxil_module_emit_bits(m, 0x00000009, 6);
-      dxil_module_emit_bits(m, 0x00000003, 4);
-      dxil_module_emit_bits(m, 0x00000022, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x00000006, 6);
-      dxil_module_emit_bits(m, 0x00000000, 6);
-      dxil_module_emit_bits(m, 0x00000020, 6);
-      dxil_module_emit_bits(m, 0x00000020, 6);
-      dxil_module_emit_bits(m, 0x00000020, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x00000006, 6);
-      dxil_module_emit_bits(m, 0x00000015, 6);
-      dxil_module_emit_bits(m, 0x00000006, 6);
-      dxil_module_emit_bits(m, 0x00000011, 6);
-      dxil_module_emit_bits(m, 0x00000003, 4);
-      dxil_module_emit_bits(m, 0x00000022, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x0000000d, 6);
-      dxil_module_emit_bits(m, 0x00000000, 6);
-      dxil_module_emit_bits(m, 0x00000020, 6);
-      dxil_module_emit_bits(m, 0x00000020, 6);
-      dxil_module_emit_bits(m, 0x00000020, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x0000000b, 6);
-      dxil_module_emit_bits(m, 0x00000015, 6);
-      dxil_module_emit_bits(m, 0x00000006, 6);
-      dxil_module_emit_bits(m, 0x00000002, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x00000005, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x00000001, 6);
-      dxil_module_emit_bits(m, 0x00000003, 6);
-      dxil_module_emit_bits(m, 0x00000008, 4);
-      dxil_module_enter_subblock(m, 14, 4);
-         dxil_module_emit_bits(m, 0x00000006, 4);
-         dxil_module_emit_bits(m, 0x00000016, 8);
-         dxil_module_emit_bits(m, 0x00000014, 6);
-         dxil_module_emit_bits(m, 0x00000028, 6);
-         dxil_module_emit_bits(m, 0x00000014, 6);
-         dxil_module_emit_bits(m, 0x00000013, 6);
-         dxil_module_emit_bits(m, 0x0000000f, 6);
-         dxil_module_emit_bits(m, 0x00000014, 6);
-         dxil_module_emit_bits(m, 0x00000013, 6);
-         dxil_module_emit_bits(m, 0x0000001b, 6);
-         dxil_module_emit_bits(m, 0x00000014, 6);
-         dxil_module_emit_bits(m, 0x00000005, 6);
-         dxil_module_emit_bits(m, 0x00000005, 6);
-         dxil_module_emit_bits(m, 0x00000004, 6);
-         dxil_module_emit_bits(m, 0x00000011, 6);
-         dxil_module_emit_bits(m, 0x0000003f, 6);
-         dxil_module_emit_bits(m, 0x0000002e, 6);
-         dxil_module_emit_bits(m, 0x0000001a, 6);
-         dxil_module_emit_bits(m, 0x0000002f, 6);
-         dxil_module_emit_bits(m, 0x0000003f, 6);
-         dxil_module_emit_bits(m, 0x00000001, 6);
-         dxil_module_emit_bits(m, 0x00000014, 6);
-         dxil_module_emit_bits(m, 0x00000005, 6);
-      dxil_module_exit_block(m);
-   dxil_module_exit_block(m);
-
-   return true;
+   return dxil_module_enter_subblock(m, DXIL_VALUE_SYMTAB_BLOCK, 4) &&
+          dxil_module_emit_symtab_entry(m, 22, "OutputBuffer_UAV_buf") &&
+          dxil_module_exit_block(m);
 }
 
 static bool
@@ -1054,22 +953,22 @@ emit_module(struct dxil_module *m)
    struct dxil_type *main_func_type = dxil_module_add_function_type(m, void_type, NULL, 0);
    struct dxil_type *main_func_pointer_type = dxil_module_add_pointer_type(m, main_func_type);
 
-   struct dxil_type *threadid_args[] = { int32_type, int32_type };
-   struct dxil_type *threadid_func_type = dxil_module_add_function_type(m, int32_type, threadid_args, ARRAY_SIZE(threadid_args));
+   struct dxil_type *threadid_arg_types[] = { int32_type, int32_type };
+   struct dxil_type *threadid_func_type = dxil_module_add_function_type(m, int32_type, threadid_arg_types, ARRAY_SIZE(threadid_arg_types));
    struct dxil_type *threadid_func_pointer_type = dxil_module_add_pointer_type(m, threadid_func_type);
 
    struct dxil_type *int8_type = dxil_module_add_int_type(m, 8);
    struct dxil_type *int8_pointer_type = dxil_module_add_pointer_type(m, int8_type);
    struct dxil_type *handle_type = dxil_module_add_struct_type(m, "dx.types.Handle", &int8_pointer_type, 1);
 
-   struct dxil_type *bufferstore_args[] = { int32_type, handle_type, int32_type, int32_type, int32_type, int32_type, int32_type, int32_type, int8_type };
-   struct dxil_type *bufferstore_func_type = dxil_module_add_function_type(m, void_type, bufferstore_args, ARRAY_SIZE(bufferstore_args));
+   struct dxil_type *bufferstore_arg_types[] = { int32_type, handle_type, int32_type, int32_type, int32_type, int32_type, int32_type, int32_type, int8_type };
+   struct dxil_type *bufferstore_func_type = dxil_module_add_function_type(m, void_type, bufferstore_arg_types, ARRAY_SIZE(bufferstore_arg_types));
    struct dxil_type *bufferstore_func_pointer_type = dxil_module_add_pointer_type(m, bufferstore_func_type);
 
    struct dxil_type *bool_type = dxil_module_add_int_type(m, 1);
 
-   struct dxil_type *createhandle_args[] = { int32_type, int8_type, int32_type, int32_type, bool_type };
-   struct dxil_type *createhandle_func_type = dxil_module_add_function_type(m, handle_type, createhandle_args, ARRAY_SIZE(createhandle_args));
+   struct dxil_type *createhandle_arg_types[] = { int32_type, int8_type, int32_type, int32_type, bool_type };
+   struct dxil_type *createhandle_func_type = dxil_module_add_function_type(m, handle_type, createhandle_arg_types, ARRAY_SIZE(createhandle_arg_types));
    struct dxil_type *createhandle_func_pointer_type = dxil_module_add_pointer_type(m, createhandle_func_type);
 
    struct dxil_function_module_info funcs[] = {
@@ -1079,7 +978,7 @@ emit_module(struct dxil_module *m)
       { createhandle_func_type, true, 3 }
    };
 
-   struct dxil_const consts[] = {
+   struct dxil_const global_consts[] = {
       { int32_type, .int_value = 1 },
       { int32_type, .int_value = 0 },
       { int32_type, .int_value = 6 },
@@ -1093,6 +992,27 @@ emit_module(struct dxil_module *m)
       { rwbuffer_struct_type, .undef = true },
    };
 
+   struct dxil_const function_consts[] = {
+      { int32_type, .int_value = 57 },
+      { int32_type, .int_value = 93 },
+      { int32_type, .int_value = 69 },
+      { int32_type, .undef = true },
+      { int8_type, .int_value = 1 },
+      { int8_type, .int_value = 15 },
+   };
+
+   const unsigned createhandle_args[] = {
+      15, 19, 5, 5, 12
+   };
+   const unsigned threadid_args[] = {
+     16, 5
+   };
+   const unsigned bufferstore_args[] = {
+     17, 21, 22, 18, 22, 22, 22, 22, 20
+   };
+
+
+   const int FUNC_CODE_DECLAREBLOCKS = 1; // TODO: remove
    const int num_type_bits = 5;
    if (!dxil_module_emit_blockinfo(m, num_type_bits) ||
        !dxil_emit_attrib_group_table(m, attrs, attr_sizes,
@@ -1101,12 +1021,25 @@ emit_module(struct dxil_module *m)
        !dxil_module_emit_type_table(m, num_type_bits) ||
        !emit_type_comdats(m) ||
        !dxil_emit_module_info(m, funcs, ARRAY_SIZE(funcs)) ||
-       !dxil_emit_module_consts(m, consts, ARRAY_SIZE(consts)) ||
+       !dxil_emit_module_consts(m, global_consts,
+                                ARRAY_SIZE(global_consts)) ||
        !emit_metadata(m) ||
        !emit_metadata_store(m) ||
        !emit_value_symbol_table(m) ||
        !emit_use_list_block(m) ||
-       !emit_function_bodies(m))
+       !dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
+       !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1) ||
+       !dxil_emit_function_consts(m, function_consts,
+                                  ARRAY_SIZE(function_consts)) ||
+       !dxil_emit_call(m, createhandle_func_type, 3, createhandle_args,
+                       ARRAY_SIZE(createhandle_args)) ||
+       !dxil_emit_call(m, threadid_func_type, 1, threadid_args,
+                       ARRAY_SIZE(threadid_args)) ||
+       !dxil_emit_call(m, bufferstore_func_type, 2, bufferstore_args,
+                       ARRAY_SIZE(bufferstore_args)) ||
+       !dxil_emit_ret_void(m) ||
+       !emit_function_value_symtab(m) ||
+       !dxil_module_exit_block(m))
       return false;
 
    return dxil_module_exit_block(m);

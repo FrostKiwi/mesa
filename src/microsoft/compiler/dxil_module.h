@@ -149,6 +149,7 @@ struct dxil_module {
 
    struct list_head type_list;
    unsigned next_type_id;
+   unsigned next_value_id;
 };
 
 void
@@ -216,6 +217,11 @@ bool
 dxil_module_emit_symtab_entry(struct dxil_module *m, unsigned value,
                               const char *name);
 
+bool
+dxil_emit_function_consts(struct dxil_module *m,
+                          const struct dxil_const *consts,
+                          size_t num_consts);
+
 struct dxil_type *
 dxil_module_add_void_type(struct dxil_module *m);
 
@@ -237,6 +243,15 @@ dxil_module_add_function_type(struct dxil_module *m,
                               const struct dxil_type *ret_type,
                               const struct dxil_type **arg_types,
                               size_t num_arg_types);
+
+bool
+dxil_emit_call(struct dxil_module *m,
+               const struct dxil_type *func_type,
+               unsigned value_id,
+               const unsigned *args, const size_t num_args);
+
+bool
+dxil_emit_ret_void(struct dxil_module *m);
 
 #ifdef __cplusplus
 }
