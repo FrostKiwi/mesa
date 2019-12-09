@@ -485,6 +485,25 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       dest = ibc_sample_mask_in(nti);
       break;
 
+   case nir_intrinsic_load_fs_input_interp_deltas: {
+      assert(!nir_dest_is_divergent(instr->dest));
+      const unsigned base = nir_intrinsic_base(instr);
+      assert(prog_data->urb_setup[base] >= 0);
+      const unsigned slot = prog_data->urb_setup[base];
+      const unsigned comp = nir_intrinsic_component(instr);
+
+      ibc_ref per_vert = payload->inputs[slot][comp];
+      ibc_ref dest_comps[] = {
+         ibc_comp_ref(per_vert, 3),
+         ibc_comp_ref(per_vert, 1),
+         ibc_comp_ref(per_vert, 0),
+      };
+      ibc_builder_push_scalar(b);
+      dest = ibc_VEC(b, dest_comps, 3);
+      ibc_builder_pop(b);
+      break;
+   }
+
    case nir_intrinsic_load_barycentric_pixel:
    case nir_intrinsic_load_barycentric_centroid:
    case nir_intrinsic_load_barycentric_sample: {
