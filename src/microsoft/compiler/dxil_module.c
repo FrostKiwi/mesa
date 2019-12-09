@@ -42,6 +42,7 @@ dxil_module_init(struct dxil_module *m)
 
    list_inithead(&m->type_list);
    m->next_type_id = 0;
+   m->next_value_id = 0;
 }
 
 static bool
@@ -479,6 +480,18 @@ emit_const_abbrev_record(struct dxil_module *m, unsigned abbrev,
    assert(index < ARRAY_SIZE(m->const_abbrevs));
 
    return emit_record_abbrev(m, abbrev, m->const_abbrevs + index,
+                             data, size);
+}
+
+static bool
+emit_func_abbrev_record(struct dxil_module *m, unsigned abbrev,
+                        const uint64_t *data, size_t size)
+{
+   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
+   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
+   assert(index < ARRAY_SIZE(m->func_abbrevs));
+
+   return emit_record_abbrev(m, abbrev, m->func_abbrevs + index,
                              data, size);
 }
 
@@ -973,6 +986,7 @@ emit_module_info_function(struct dxil_module *m, int type, bool declaration,
       0 /* storage class */, 0 /* comdat */, 0 /* prefix-data */,
       0 /* personality */
    };
+   m->next_value_id++;
    return dxil_module_emit_record(m, DXIL_MODULE_CODE_FUNCTION,
                                   data, ARRAY_SIZE(data));
 }
@@ -1072,7 +1086,7 @@ emit_consts(struct dxil_module *m,
             const struct dxil_const *consts, size_t num_consts)
 {
    const struct dxil_type *curr_type = NULL;
-   for (size_t i = 0; i < num_consts; ++i) {
+   for (size_t i = 0; i < num_consts; ++i, ++m->next_value_id) {
       assert(consts[i].type != NULL);
       if (curr_type != consts[i].type) {
          if (!emit_set_type(m, consts[i].type->id))
@@ -1139,4 +1153,48 @@ dxil_module_emit_symtab_entry(struct dxil_module *m, unsigned value,
       abbrev = 5;
 
    return emit_value_symtab_abbrev_record(m, abbrev, temp, 2 + strlen(name));
+}
+
+bool
+dxil_emit_function_consts(struct dxil_module *m,
+                          const struct dxil_const *consts,
+                          size_t num_consts)
+{
+   return dxil_module_enter_subblock(m, DXIL_CONST_BLOCK, 4) &&
+              emit_consts(m, consts, num_consts) &&
+              dxil_module_exit_block(m);
+}
+
+bool
+dxil_emit_call(struct dxil_module *m,
+               const struct dxil_type *func_type,
+               unsigned value_id,
+               const unsigned *args, const size_t num_args)
+{
+   uint64_t data[256];
+   assert(func_type->type == TYPE_FUNCTION);
+
+   int value_id_delta = m->next_value_id - value_id;
+   assert(value_id <= m->next_value_id);
+
+   data[0] = 0; // attribute id
+   data[1] = 1 << 15; // calling convention etc
+   data[2] = func_type->id;
+   data[3] = value_id_delta;
+
+   assert(num_args < ARRAY_SIZE(data) - 4);
+   for (size_t i = 0; i < num_args; ++i)
+      data[4 + i] = m->next_value_id - args[i];
+
+   if (func_type->function_def.ret_type->type != TYPE_VOID)
+      m->next_value_id++;
+
+   return dxil_module_emit_record(m, FUNC_CODE_INST_CALL, data, 4 + num_args);
+}
+
+bool
+dxil_emit_ret_void(struct dxil_module *m)
+{
+   uint64_t data[] = { FUNC_CODE_INST_RET };
+   return emit_func_abbrev_record(m, 8, data, ARRAY_SIZE(data));
 }
