@@ -55,9 +55,8 @@ lower_mul(ibc_builder *b, ibc_alu_instr *alu)
        (alu->src[1].ref.type == IBC_TYPE_Q ||
         alu->src[1].ref.type == IBC_TYPE_UQ)) {
       assert(!"unimplemented");
-   } else if ((alu->dest.type == IBC_TYPE_D ||
-               alu->dest.type == IBC_TYPE_UD) &&
-              b->shader->devinfo->has_integer_dword_mul) {
+   } else if (alu->dest.type == IBC_TYPE_D ||
+              alu->dest.type == IBC_TYPE_UD) {
       ibc_ref src1_uw = ibc_MOV(b, IBC_TYPE_UW, alu->src[1].ref);
 
       if (alu->instr.simd_width == 1)
