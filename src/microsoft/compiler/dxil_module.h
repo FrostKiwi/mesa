@@ -119,6 +119,14 @@ struct dxil_function_module_info {
    int attr_set;
 };
 
+struct dxil_const {
+   const struct dxil_type *type;
+   bool undef;
+   union {
+      int64_t int_value;
+   };
+};
+
 struct dxil_module {
    enum dxil_shader_kind shader_kind;
    unsigned major_version, minor_version;
@@ -199,6 +207,10 @@ dxil_emit_module_info(struct dxil_module *m,
 
 bool
 dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits);
+
+bool
+dxil_emit_module_consts(struct dxil_module *m,
+                        const struct dxil_const *consts, size_t num_consts);
 
 struct dxil_type *
 dxil_module_add_void_type(struct dxil_module *m);
