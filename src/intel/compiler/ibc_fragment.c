@@ -609,6 +609,10 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_load_helper_invocation:
+      dest = ibc_NOT(b, IBC_TYPE_FLAG, ibc_pixel_mask_as_flag(nti));
+      break;
+
    case nir_intrinsic_begin_invocation_interlock: {
       /* For beginInvocationInterlock(), we issue a memory fence using SENDC
        * which waits on other FS invocations on the same pixel to complete
