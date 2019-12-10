@@ -43,7 +43,6 @@ ref_stride(const ibc_ref *ref)
       return ref->reg->logical.stride;
 
    case IBC_FILE_FLAG:
-      assert(ref->type != IBC_TYPE_FLAG);
       return 0;
 
    case IBC_FILE_ACCUM:
