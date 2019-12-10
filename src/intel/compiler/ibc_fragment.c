@@ -609,6 +609,34 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_begin_invocation_interlock: {
+      /* For beginInvocationInterlock(), we issue a memory fence using SENDC
+       * which waits on other FS invocations on the same pixel to complete
+       * before applying the fence.
+       */
+      ibc_send_instr *send = ibc_MEMORY_FENCE(b, ibc_null(IBC_TYPE_UD), 0);
+      send->check_tdr = true;;
+      break;
+   }
+
+   case nir_intrinsic_end_invocation_interlock: {
+      /* For endInvocationInterlock(), we need to insert a memory fence which
+       * stalls in the shader until the memory transactions prior to that
+       * fence are complete.  This ensures that the shader does not end before
+       * any writes from its critical section have landed.  Otherwise, you can
+       * end up with a case where the next invocation on that pixel properly
+       * stalls for previous FS invocation on its pixel to complete but
+       * doesn't actually wait for the dataport memory transactions from that
+       * thread to land before submitting its own.
+       */
+      ibc_reg *stall_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
+      ibc_ref stall_ref = ibc_typed_ref(stall_reg, IBC_TYPE_UD);
+
+      ibc_MEMORY_FENCE(b, stall_ref, 0);
+      ibc_STALL_REG(b, stall_ref);
+      break;
+   }
+
    case nir_intrinsic_demote:
    case nir_intrinsic_discard:
    case nir_intrinsic_demote_if:
