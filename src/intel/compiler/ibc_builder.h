@@ -1051,6 +1051,41 @@ ibc_STALL_REG(ibc_builder *b, ibc_ref reg)
    ibc_builder_pop(b);
 }
 
+static inline ibc_send_instr *
+ibc_MEMORY_FENCE(ibc_builder *b, ibc_ref dest, unsigned fence_bti)
+{
+   if (dest.file == IBC_FILE_NONE && b->shader->devinfo->gen >= 10) {
+      /* HSD ES # 1404612949 */
+      ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
+      dest = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
+   }
+
+   const bool commit_enable = dest.file != IBC_FILE_NONE;
+
+   ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 1);
+   send->instr.we_all = true;
+   send->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
+   send->desc_imm = brw_dp_desc(b->shader->devinfo, fence_bti,
+                                GEN7_DATAPORT_DC_MEMORY_FENCE,
+                                (int)commit_enable << 5);
+   send->has_header = true;
+   send->can_reorder = false;
+   send->has_side_effects = true;
+
+   /* We need something */
+   send->payload[0] = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
+   send->mlen = 1;
+
+   if (dest.file != IBC_FILE_NONE) {
+      send->dest = dest;
+      send->rlen = 1;
+   }
+
+   ibc_builder_insert_instr(b, &send->instr);
+
+   return send;
+}
+
 static inline void
 ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_ref tmp,
                    enum brw_conditional_mod cmod,
