@@ -1879,7 +1879,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          send->payload[0] = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
          send->mlen = 1;
 
-         if (num_fences > 1) {
+         if (commit_enable || num_fences > 1) {
             ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
             fence_stall_reg[i] = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
             send->dest = fence_stall_reg[i];
