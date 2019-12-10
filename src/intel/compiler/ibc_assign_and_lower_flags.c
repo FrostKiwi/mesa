@@ -907,6 +907,32 @@ ibc_assign_and_lower_flags(ibc_shader *shader)
 
          ibc_instr_set_ref(instr, &instr->flag, splat_flag);
       }
+
+      if (instr->type == IBC_INSTR_TYPE_ALU) {
+         ibc_alu_instr *alu = ibc_instr_as_alu(instr);
+
+         /* We can't really reference a FLAG register as a source of an ALU op
+          * with IBC_TYPE_FLAG because it doesn't have a vector
+          * representation.  Instead, we have to MOV it to a logical flag.
+          *
+          * TODO: We could probably do something more optimal here but this
+          * gets us off the ground.
+          */
+         assert(alu->dest.file != IBC_FILE_FLAG ||
+                alu->dest.type != IBC_TYPE_FLAG);
+
+         b->cursor = ibc_before_instr(instr);
+
+         for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
+            if (alu->src[i].ref.file == IBC_FILE_FLAG &&
+                alu->src[i].ref.type == IBC_TYPE_FLAG) {
+               ibc_ref w = ibc_MOV_from_flag(b, IBC_TYPE_W,
+                                             IBC_PREDICATE_NORMAL,
+                                             alu->src[i].ref);
+               ibc_instr_set_ref(&alu->instr, &alu->src[i].ref, w);
+            }
+         }
+      }
    }
 
    state.live = ibc_compute_live_intervals(shader, is_flag_reg, state.mem_ctx);
