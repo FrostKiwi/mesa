@@ -588,7 +588,17 @@ ibc_MOV_raw(ibc_builder *b, ibc_ref dest,
          ibc_ref_simd_slice(&simd_src, g);
 
          ibc_builder_push_group(b, g, split_simd_width);
-         ibc_build_alu1(b, IBC_ALU_OP_MOV, simd_dest, simd_src);
+         if (ibc_type_bit_size(simd_src.type) == 64 &&
+             !b->shader->devinfo->has_64bit_types) {
+            simd_dest.type = IBC_TYPE_UD;
+            simd_src.type = IBC_TYPE_UD;
+            ibc_build_alu1(b, IBC_ALU_OP_MOV, simd_dest, simd_src);
+            ibc_ref_byte_offset(&simd_dest, 4);
+            ibc_ref_byte_offset(&simd_src, 4);
+            ibc_build_alu1(b, IBC_ALU_OP_MOV, simd_dest, simd_src);
+         } else {
+            ibc_build_alu1(b, IBC_ALU_OP_MOV, simd_dest, simd_src);
+         }
          ibc_builder_pop(b);
       }
    }
