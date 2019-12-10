@@ -1860,33 +1860,14 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
             fence_bti[num_fences++] = 0;
       }
 
-      ibc_ref fence_stall_reg[2];
+      ibc_ref fence_stall_reg[2] = { };
       for (unsigned i = 0; i < num_fences; i++) {
-         const bool commit_enable = num_fences > 1 ||
-            b->shader->devinfo->gen >= 10 /* HSD ES # 1404612949 */;
-
-         ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 1);
-         send->instr.we_all = true;
-         send->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
-         send->desc_imm = brw_dp_desc(b->shader->devinfo, fence_bti[i],
-                                      GEN7_DATAPORT_DC_MEMORY_FENCE,
-                                      (int)commit_enable << 5);
-         send->has_header = true;
-         send->can_reorder = false;
-         send->has_side_effects = true;
-
-         /* We need something */
-         send->payload[0] = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
-         send->mlen = 1;
-
-         if (commit_enable || num_fences > 1) {
+         if (num_fences > 1) {
             ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
             fence_stall_reg[i] = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
-            send->dest = fence_stall_reg[i];
-            send->rlen = 1;
          }
 
-         ibc_builder_insert_instr(b, &send->instr);
+         ibc_MEMORY_FENCE(b, fence_stall_reg[i], fence_bti[i]);
       }
 
       if (num_fences > 1) {
