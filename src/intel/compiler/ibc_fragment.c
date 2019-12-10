@@ -365,7 +365,6 @@ ibc_pixel_mask_as_flag(struct nir_to_ibc_state *nti)
 
    ibc_reg *live_pix_reg =
       ibc_flag_reg_create(b->shader, MAX2(b->shader->simd_width, 16));
-   live_pix_reg->is_wlr = false;
    ibc_builder_push_scalar(b);
    for (unsigned g = 0; g < b->shader->simd_width; g += 16) {
       ibc_ref pix_mask = payload->pixel[g / 16];
@@ -1138,6 +1137,8 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
 
       if (prog_data->uses_kill) {
          fs_state.live_pix = ibc_pixel_mask_as_flag(&nti);
+         assert(fs_state.live_pix.file == IBC_FILE_FLAG);
+         ((ibc_reg *)fs_state.live_pix.reg)->is_wlr = false;
          list_inithead(&fs_state.halt_jumps);
       }
 
