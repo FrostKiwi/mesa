@@ -1537,6 +1537,7 @@ bool ibc_opt_coalesce(ibc_shader *shader);
 bool ibc_opt_dead_code(ibc_shader *shader);
 bool ibc_opt_gather(ibc_shader *shader);
 bool ibc_opt_halt(ibc_shader *shader);
+bool ibc_opt_predicate(ibc_shader *shader);
 
 void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 

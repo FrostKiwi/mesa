@@ -146,6 +146,7 @@ libintel_compiler_files = files(
   'ibc_opt_dead_code.c',
   'ibc_opt_gather.c',
   'ibc_opt_halt.c',
+  'ibc_opt_predicate.c',
   'ibc_ra_reg_sets.c',
   'ibc_ra_reg_sets.h',
   'ibc_schedule_instructions.c',
