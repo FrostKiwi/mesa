@@ -108,6 +108,14 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
          /* Only raw MOV supports a packed-byte destination */
          if (!ibc_alu_instr_is_raw_mov(alu))
             max_exec_width = MAX2(max_exec_width, 2);
+
+         /* ALIGN1 3src instructions on gen10+ only have bits [4:3] of the
+          * subnr so we have to align to 8 bytes.
+          */
+         if (shader->devinfo->gen >= 10 && reg->logical.align < 8) {
+            reg->logical.align = 8;
+            progress = true;
+         }
       }
 
       if (reg->logical.align < max_exec_width) {
