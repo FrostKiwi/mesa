@@ -45,6 +45,7 @@ enum dxil_llvm_block {
    DXIL_CONST_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 3,
    DXIL_FUNCTION_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 4,
    DXIL_VALUE_SYMTAB_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 6,
+   DXIL_METADATA_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 7,
    DXIL_TYPE_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 9,
 };
 
@@ -243,6 +244,24 @@ dxil_module_add_function_type(struct dxil_module *m,
                               const struct dxil_type *ret_type,
                               const struct dxil_type **arg_types,
                               size_t num_arg_types);
+
+bool
+dxil_emit_metadata_abbrevs(struct dxil_module *m);
+
+bool
+dxil_emit_metadata_node(struct dxil_module *m, const unsigned subnodes[],
+                        size_t num_subnodes);
+
+bool
+dxil_emit_metadata_value(struct dxil_module *m, int type_id, int value_id);
+
+bool
+dxil_emit_metadata_string(struct dxil_module *m, const char *str);
+
+bool
+dxil_emit_metadata_named_node(struct dxil_module *m, const char *name,
+                              const unsigned subnodes[],
+                              size_t num_subnodes);
 
 bool
 dxil_emit_call(struct dxil_module *m,
