@@ -1158,6 +1158,7 @@ enum ibc_surface_src {
    IBC_SURFACE_SRC_DATA0,           /**< Surface write/atomic data */
    IBC_SURFACE_SRC_DATA1,           /**< Surface write/atomic data */
    IBC_SURFACE_SRC_ATOMIC_OP,       /**< Surface atomic opcode */
+   IBC_SURFACE_SRC_BIT_SIZE,        /**< dst bit size for byte scattered reads */
    IBC_SURFACE_NUM_SRCS,
 };
 
