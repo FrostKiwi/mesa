@@ -1155,6 +1155,99 @@ dxil_module_emit_symtab_entry(struct dxil_module *m, unsigned value,
    return emit_value_symtab_abbrev_record(m, abbrev, temp, 2 + strlen(name));
 }
 
+enum metadata_codes {
+  METADATA_STRING = 1,
+  METADATA_VALUE = 2,
+  METADATA_NODE = 3,
+  METADATA_NAME = 4,
+  METADATA_NAMED_NODE = 10
+};
+
+static const struct dxil_abbrev metadata_abbrevs[] = {
+   { { LITERAL(METADATA_STRING), ARRAY(), FIXED(8) }, 3 },
+   { { LITERAL(METADATA_NAME), ARRAY(), FIXED(8) }, 3 },
+};
+
+bool
+dxil_emit_metadata_abbrevs(struct dxil_module *m)
+{
+   for (int i = 0; i < ARRAY_SIZE(metadata_abbrevs); ++i) {
+      if (!define_abbrev(m, metadata_abbrevs + i))
+         return false;
+   }
+   return true;
+}
+
+bool
+dxil_emit_metadata_value(struct dxil_module *m, int type_id, int value_id)
+{
+   uint64_t data[2] = { type_id, value_id };
+   return dxil_module_emit_record(m, METADATA_VALUE, data, ARRAY_SIZE(data));
+}
+
+static bool
+emit_metadata_abbrev_record(struct dxil_module *m, unsigned abbrev,
+                            const uint64_t *data, size_t size)
+{
+   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
+   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
+   assert(index < ARRAY_SIZE(metadata_abbrevs));
+
+   return emit_record_abbrev(m, abbrev, metadata_abbrevs + index,
+                             data, size);
+}
+
+bool
+dxil_emit_metadata_string(struct dxil_module *m, const char *str)
+{
+   uint64_t data[256];
+   assert(strlen(str) < ARRAY_SIZE(data) - 1);
+   data[0] = METADATA_STRING;
+   for (size_t i = 0; i < strlen(str); ++i)
+      data[i + 1] = str[i];
+
+   return emit_metadata_abbrev_record(m, 4, data, strlen(str) + 1);
+}
+
+bool
+dxil_emit_metadata_node(struct dxil_module *m, const unsigned subnodes[],
+                        size_t num_subnodes)
+{
+   uint64_t data[256];
+   assert(num_subnodes < ARRAY_SIZE(data));
+   for (size_t i = 0; i < num_subnodes; ++i)
+      data[i] = subnodes[i];
+
+   return dxil_module_emit_record(m, METADATA_NODE, data, num_subnodes);
+}
+
+static bool
+emit_metadata_name(struct dxil_module *m, const char *name)
+{
+   uint64_t data[256];
+   assert(strlen(name) < ARRAY_SIZE(data) - 1);
+   data[0] = METADATA_NAME;
+   for (size_t i = 0; i < strlen(name); ++i)
+      data[i + 1] = name[i];
+
+   return emit_metadata_abbrev_record(m, 5, data, strlen(name) + 1);
+}
+
+bool
+dxil_emit_metadata_named_node(struct dxil_module *m, const char *name,
+                              const unsigned subnodes[],
+                              size_t num_subnodes)
+{
+   uint64_t data[256];
+   assert(num_subnodes < ARRAY_SIZE(data));
+   for (size_t i = 0; i < num_subnodes; ++i)
+      data[i] = subnodes[i];
+
+   return emit_metadata_name(m, name) &&
+          dxil_module_emit_record(m, METADATA_NAMED_NODE,
+                                  data, num_subnodes);
+}
+
 bool
 dxil_emit_function_consts(struct dxil_module *m,
                           const struct dxil_const *consts,

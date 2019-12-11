@@ -39,395 +39,94 @@ emit_type_comdats(struct dxil_module *m)
 static bool
 emit_metadata(struct dxil_module *m)
 {
-   // metadata
-   return dxil_module_enter_subblock(m, 15, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 5) &&
-          dxil_module_emit_bits(m, 0x00000001, 1) &&
-          dxil_module_emit_bits(m, 0x00000001, 8) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000001, 3) &&
-          dxil_module_emit_bits(m, 0x00000008, 5) &&
-          dxil_module_emit_bits(m, 0x00000002, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 5) &&
-          dxil_module_emit_bits(m, 0x00000001, 1) &&
-          dxil_module_emit_bits(m, 0x00000004, 8) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000000, 1) &&
-          dxil_module_emit_bits(m, 0x00000001, 3) &&
-          dxil_module_emit_bits(m, 0x00000008, 5) &&
-          dxil_module_emit_bits(m, 0x00000004, 3) &&
-          dxil_module_emit_bits(m, 0x0000002a, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000063, 8) &&
-          dxil_module_emit_bits(m, 0x0000006c, 8) &&
-          dxil_module_emit_bits(m, 0x00000061, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x00000067, 8) &&
-          dxil_module_emit_bits(m, 0x00000020, 8) &&
-          dxil_module_emit_bits(m, 0x00000076, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x00000072, 8) &&
-          dxil_module_emit_bits(m, 0x00000073, 8) &&
-          dxil_module_emit_bits(m, 0x00000069, 8) &&
-          dxil_module_emit_bits(m, 0x0000006f, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x00000020, 8) &&
-          dxil_module_emit_bits(m, 0x00000033, 8) &&
-          dxil_module_emit_bits(m, 0x0000002e, 8) &&
-          dxil_module_emit_bits(m, 0x00000037, 8) &&
-          dxil_module_emit_bits(m, 0x00000020, 8) &&
-          dxil_module_emit_bits(m, 0x00000028, 8) &&
-          dxil_module_emit_bits(m, 0x00000074, 8) &&
-          dxil_module_emit_bits(m, 0x00000061, 8) &&
-          dxil_module_emit_bits(m, 0x00000067, 8) &&
-          dxil_module_emit_bits(m, 0x00000073, 8) &&
-          dxil_module_emit_bits(m, 0x0000002f, 8) &&
-          dxil_module_emit_bits(m, 0x00000052, 8) &&
-          dxil_module_emit_bits(m, 0x00000045, 8) &&
-          dxil_module_emit_bits(m, 0x0000004c, 8) &&
-          dxil_module_emit_bits(m, 0x00000045, 8) &&
-          dxil_module_emit_bits(m, 0x00000041, 8) &&
-          dxil_module_emit_bits(m, 0x00000053, 8) &&
-          dxil_module_emit_bits(m, 0x00000045, 8) &&
-          dxil_module_emit_bits(m, 0x0000005f, 8) &&
-          dxil_module_emit_bits(m, 0x00000033, 8) &&
-          dxil_module_emit_bits(m, 0x00000037, 8) &&
-          dxil_module_emit_bits(m, 0x00000030, 8) &&
-          dxil_module_emit_bits(m, 0x0000002f, 8) &&
-          dxil_module_emit_bits(m, 0x00000066, 8) &&
-          dxil_module_emit_bits(m, 0x00000069, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x00000061, 8) &&
-          dxil_module_emit_bits(m, 0x0000006c, 8) &&
-          dxil_module_emit_bits(m, 0x00000029, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000006, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000063, 8) &&
-          dxil_module_emit_bits(m, 0x00000073, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000007, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000006, 6) &&
-          dxil_module_emit_bits(m, 0x00000007, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x0000000e, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 3) &&
-          dxil_module_emit_bits(m, 0x0000000c, 6) &&
-          dxil_module_emit_bits(m, 0x0000004f, 8) &&
-          dxil_module_emit_bits(m, 0x00000075, 8) &&
-          dxil_module_emit_bits(m, 0x00000074, 8) &&
-          dxil_module_emit_bits(m, 0x00000070, 8) &&
-          dxil_module_emit_bits(m, 0x00000075, 8) &&
-          dxil_module_emit_bits(m, 0x00000074, 8) &&
-          dxil_module_emit_bits(m, 0x00000042, 8) &&
-          dxil_module_emit_bits(m, 0x00000075, 8) &&
-          dxil_module_emit_bits(m, 0x00000066, 8) &&
-          dxil_module_emit_bits(m, 0x00000066, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x00000072, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000008, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x0000000d, 6) &&
-          dxil_module_emit_bits(m, 0x0000000d, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000009, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x0000000d, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x0000000b, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000009, 6) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x0000000b, 6) &&
-          dxil_module_emit_bits(m, 0x0000000c, 6) &&
-          dxil_module_emit_bits(m, 0x0000000c, 6) &&
-          dxil_module_emit_bits(m, 0x0000000c, 6) &&
-          dxil_module_emit_bits(m, 0x0000000e, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x0000000f, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000010, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x0000000f, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 3) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000068, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x0000000b, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x0000000c, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000006, 6) &&
-          dxil_module_emit_bits(m, 0x00000007, 6) &&
-          dxil_module_emit_bits(m, 0x00000014, 6) &&
-          dxil_module_emit_bits(m, 0x00000015, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000016, 6) &&
-          dxil_module_emit_bits(m, 0x0000000d, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000013, 6) &&
-          dxil_module_emit_bits(m, 0x00000017, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000012, 6) &&
-          dxil_module_emit_bits(m, 0x00000018, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x0000001b, 6) &&
-          dxil_module_emit_bits(m, 0x0000001b, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x0000001c, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x0000001a, 6) &&
-          dxil_module_emit_bits(m, 0x0000001d, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 3) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x0000006d, 8) &&
-          dxil_module_emit_bits(m, 0x00000061, 8) &&
-          dxil_module_emit_bits(m, 0x00000069, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000013, 6) &&
-          dxil_module_emit_bits(m, 0x00000020, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x00000003, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 6) &&
-          dxil_module_emit_bits(m, 0x0000001a, 6) &&
-          dxil_module_emit_bits(m, 0x0000001f, 6) &&
-          dxil_module_emit_bits(m, 0x00000000, 6) &&
-          dxil_module_emit_bits(m, 0x00000011, 6) &&
-          dxil_module_emit_bits(m, 0x00000021, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 3) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x0000006c, 8) &&
-          dxil_module_emit_bits(m, 0x0000006c, 8) &&
-          dxil_module_emit_bits(m, 0x00000076, 8) &&
-          dxil_module_emit_bits(m, 0x0000006d, 8) &&
-          dxil_module_emit_bits(m, 0x0000002e, 8) &&
-          dxil_module_emit_bits(m, 0x00000069, 8) &&
-          dxil_module_emit_bits(m, 0x00000064, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x00000074, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 3) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x00000064, 8) &&
-          dxil_module_emit_bits(m, 0x00000078, 8) &&
-          dxil_module_emit_bits(m, 0x0000002e, 8) &&
-          dxil_module_emit_bits(m, 0x00000076, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x00000072, 8) &&
-          dxil_module_emit_bits(m, 0x00000073, 8) &&
-          dxil_module_emit_bits(m, 0x00000069, 8) &&
-          dxil_module_emit_bits(m, 0x0000006f, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 3) &&
-          dxil_module_emit_bits(m, 0x00000009, 6) &&
-          dxil_module_emit_bits(m, 0x00000064, 8) &&
-          dxil_module_emit_bits(m, 0x00000078, 8) &&
-          dxil_module_emit_bits(m, 0x0000002e, 8) &&
-          dxil_module_emit_bits(m, 0x00000076, 8) &&
-          dxil_module_emit_bits(m, 0x00000061, 8) &&
-          dxil_module_emit_bits(m, 0x0000006c, 8) &&
-          dxil_module_emit_bits(m, 0x00000076, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x00000072, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000004, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 3) &&
-          dxil_module_emit_bits(m, 0x0000000e, 6) &&
-          dxil_module_emit_bits(m, 0x00000064, 8) &&
-          dxil_module_emit_bits(m, 0x00000078, 8) &&
-          dxil_module_emit_bits(m, 0x0000002e, 8) &&
-          dxil_module_emit_bits(m, 0x00000073, 8) &&
-          dxil_module_emit_bits(m, 0x00000068, 8) &&
-          dxil_module_emit_bits(m, 0x00000061, 8) &&
-          dxil_module_emit_bits(m, 0x00000064, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x00000072, 8) &&
-          dxil_module_emit_bits(m, 0x0000004d, 8) &&
-          dxil_module_emit_bits(m, 0x0000006f, 8) &&
-          dxil_module_emit_bits(m, 0x00000064, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x0000006c, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000007, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 3) &&
-          dxil_module_emit_bits(m, 0x0000000c, 6) &&
-          dxil_module_emit_bits(m, 0x00000064, 8) &&
-          dxil_module_emit_bits(m, 0x00000078, 8) &&
-          dxil_module_emit_bits(m, 0x0000002e, 8) &&
-          dxil_module_emit_bits(m, 0x00000072, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x00000073, 8) &&
-          dxil_module_emit_bits(m, 0x0000006f, 8) &&
-          dxil_module_emit_bits(m, 0x00000075, 8) &&
-          dxil_module_emit_bits(m, 0x00000072, 8) &&
-          dxil_module_emit_bits(m, 0x00000063, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x00000073, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000010, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 3) &&
-          dxil_module_emit_bits(m, 0x00000012, 6) &&
-          dxil_module_emit_bits(m, 0x00000064, 8) &&
-          dxil_module_emit_bits(m, 0x00000078, 8) &&
-          dxil_module_emit_bits(m, 0x0000002e, 8) &&
-          dxil_module_emit_bits(m, 0x00000074, 8) &&
-          dxil_module_emit_bits(m, 0x00000079, 8) &&
-          dxil_module_emit_bits(m, 0x00000070, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x00000041, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x0000006f, 8) &&
-          dxil_module_emit_bits(m, 0x00000074, 8) &&
-          dxil_module_emit_bits(m, 0x00000061, 8) &&
-          dxil_module_emit_bits(m, 0x00000074, 8) &&
-          dxil_module_emit_bits(m, 0x00000069, 8) &&
-          dxil_module_emit_bits(m, 0x0000006f, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x00000073, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x00000002, 6) &&
-          dxil_module_emit_bits(m, 0x00000018, 6) &&
-          dxil_module_emit_bits(m, 0x0000001d, 6) &&
-          dxil_module_emit_bits(m, 0x00000005, 3) &&
-          dxil_module_emit_bits(m, 0x0000000e, 6) &&
-          dxil_module_emit_bits(m, 0x00000064, 8) &&
-          dxil_module_emit_bits(m, 0x00000078, 8) &&
-          dxil_module_emit_bits(m, 0x0000002e, 8) &&
-          dxil_module_emit_bits(m, 0x00000065, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x00000074, 8) &&
-          dxil_module_emit_bits(m, 0x00000072, 8) &&
-          dxil_module_emit_bits(m, 0x00000079, 8) &&
-          dxil_module_emit_bits(m, 0x00000050, 8) &&
-          dxil_module_emit_bits(m, 0x0000006f, 8) &&
-          dxil_module_emit_bits(m, 0x00000069, 8) &&
-          dxil_module_emit_bits(m, 0x0000006e, 8) &&
-          dxil_module_emit_bits(m, 0x00000074, 8) &&
-          dxil_module_emit_bits(m, 0x00000073, 8) &&
-          dxil_module_emit_bits(m, 0x00000003, 3) &&
-          dxil_module_emit_bits(m, 0x0000000a, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_emit_bits(m, 0x00000021, 6) &&
-          dxil_module_emit_bits(m, 0x00000001, 6) &&
-          dxil_module_exit_block(m);
+   const unsigned root_subnode = 1,
+                  subnodes_3_4[] = { 3, 4 },
+                  subnodes_6_7_4[] = { 6, 7, 4 },
+                  subnodes_4_13[] = { 4, 13 },
+                  subnodes_many[] = { 4, 9, 10, 4, 4, 3, 11, 12, 12, 12, 14 },
+                  subnode_15 = 15,
+                  subnodes_0_16_0_0[] = { 0, 16, 0, 0 },
+                  subnodes_7_20_21_4_22_13[] = { 7, 20, 21, 4, 22, 13 },
+                  subnodes_19_23[] = { 19, 23 },
+                  subnodes_4_18_24[] = { 4, 18, 24 },
+                  subnodes_4_27_27[] = { 4, 27, 27 },
+                  subnode_28 = 28,
+                  subnodes_3_26_29[] = { 3, 26, 29 },
+                  subnodes_3_3_3[] = { 3, 3, 3 },
+                  subnodes_19_32[] = { 19, 32 },
+                  subnodes_26_31_0_17_33[] = { 26, 31, 0, 17, 33 };
+
+   if (!dxil_module_enter_subblock(m, DXIL_METADATA_BLOCK, 3) ||
+       !dxil_emit_metadata_abbrevs(m))
+      return false;
+
+   if (!dxil_emit_metadata_string(m, "clang version 3.7 (tags/RELEASE_370/final)") ||
+       !dxil_emit_metadata_node(m, &root_subnode, 1) ||
+       !dxil_emit_metadata_value(m, 0, 5) ||
+       !dxil_emit_metadata_value(m, 0, 6) ||
+       !dxil_emit_metadata_node(m, subnodes_3_4,
+                                ARRAY_SIZE(subnodes_3_4)) ||
+       !dxil_emit_metadata_string(m, "cs") ||
+       !dxil_emit_metadata_value(m, 0, 7) ||
+       !dxil_emit_metadata_node(m, subnodes_6_7_4,
+                                ARRAY_SIZE(subnodes_6_7_4)) ||
+       !dxil_emit_metadata_value(m, 2, 14) ||
+       !dxil_emit_metadata_string(m, "OutputBuffer") ||
+       !dxil_emit_metadata_value(m, 0, 8) ||
+       !dxil_emit_metadata_value(m, 13, 13) ||
+       !dxil_emit_metadata_value(m, 0, 9) ||
+       !dxil_emit_metadata_node(m, subnodes_4_13,
+                                ARRAY_SIZE(subnodes_4_13)) ||
+       !dxil_emit_metadata_node(m, subnodes_many,
+                                ARRAY_SIZE(subnodes_many)) ||
+       !dxil_emit_metadata_node(m, &subnode_15, 1) ||
+       !dxil_emit_metadata_node(m, subnodes_0_16_0_0,
+                           ARRAY_SIZE(subnodes_0_16_0_0)) ||
+       !dxil_emit_metadata_value(m, 1, 15) ||
+       !dxil_emit_metadata_value(m, 0, 10) ||
+       !dxil_emit_metadata_string(m, "h") ||
+       !dxil_emit_metadata_value(m, 0, 11) ||
+       !dxil_emit_metadata_value(m, 0, 12) ||
+       !dxil_emit_metadata_node(m, subnodes_7_20_21_4_22_13,
+                           ARRAY_SIZE(subnodes_7_20_21_4_22_13)) ||
+       !dxil_emit_metadata_node(m, subnodes_19_23,
+                                ARRAY_SIZE(subnodes_19_23)) ||
+       !dxil_emit_metadata_node(m, subnodes_4_18_24,
+                           ARRAY_SIZE(subnodes_4_18_24)) ||
+       !dxil_emit_metadata_value(m, 5, 1) ||
+       !dxil_emit_metadata_node(m, NULL, 0) ||
+       !dxil_emit_metadata_node(m, subnodes_4_27_27,
+                           ARRAY_SIZE(subnodes_4_27_27)) ||
+       !dxil_emit_metadata_node(m, &subnode_28, 1) ||
+       !dxil_emit_metadata_node(m, subnodes_3_26_29,
+                           ARRAY_SIZE(subnodes_3_26_29)) ||
+       !dxil_emit_metadata_string(m, "main") ||
+       !dxil_emit_metadata_node(m, subnodes_3_3_3,
+                           ARRAY_SIZE(subnodes_3_3_3)) ||
+       !dxil_emit_metadata_node(m, subnodes_19_32,
+                           ARRAY_SIZE(subnodes_19_32)) ||
+       !dxil_emit_metadata_node(m, subnodes_26_31_0_17_33,
+                           ARRAY_SIZE(subnodes_26_31_0_17_33)))
+      return false;
+
+   unsigned llvm_ident = 1, dx_version = 4, dx_valver = 4,
+            dx_shader_model = 7, dx_resources = 16,
+            dx_type_annotations[] = { 24, 29 }, dx_entry_points = 33;
+   if (!dxil_emit_metadata_named_node(m, "llvm.ident", &llvm_ident, 1) ||
+       !dxil_emit_metadata_named_node(m, "dx.version", &dx_version, 1) ||
+       !dxil_emit_metadata_named_node(m, "dx.valver", &dx_valver, 1) ||
+       !dxil_emit_metadata_named_node(m, "dx.shaderModel",
+                                      &dx_shader_model, 1) ||
+       !dxil_emit_metadata_named_node(m, "dx.resources",
+                                      &dx_resources, 1) ||
+       !dxil_emit_metadata_named_node(m, "dx.typeAnnotations",
+                                 dx_type_annotations,
+                                 ARRAY_SIZE(dx_type_annotations)) ||
+       !dxil_emit_metadata_named_node(m, "dx.entryPoints",
+                                      &dx_entry_points, 1))
+      return false;
+
+   return dxil_module_exit_block(m);
 }
 
 static bool
