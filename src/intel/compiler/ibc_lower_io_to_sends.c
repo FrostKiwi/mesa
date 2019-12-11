@@ -97,6 +97,7 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
    const ibc_ref data0 = intrin->src[IBC_SURFACE_SRC_DATA0].ref;
    const ibc_ref data1 = intrin->src[IBC_SURFACE_SRC_DATA1].ref;
    const ibc_ref atomic_op = intrin->src[IBC_SURFACE_SRC_ATOMIC_OP].ref;
+   const ibc_ref src_bit_size = intrin->src[IBC_SURFACE_SRC_BIT_SIZE].ref;
 
    const unsigned num_address_comps =
       intrin->src[IBC_SURFACE_SRC_ADDRESS].num_comps;
@@ -306,7 +307,7 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       send->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
       desc = brw_dp_byte_scattered_rw_desc(devinfo,
                                            intrin->instr.simd_width,
-                                           ibc_type_bit_size(intrin->dest.type),
+                                           ibc_ref_as_uint(src_bit_size),
                                            false   /* write */);
       break;
    case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE:
@@ -348,7 +349,7 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
       desc = brw_dp_a64_byte_scattered_rw_desc(devinfo,
                                                intrin->instr.simd_width,
-                                               ibc_type_bit_size(intrin->dest.type),
+                                               ibc_ref_as_uint(src_bit_size),
                                                false  /*write */);
       break;
    case IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE:
