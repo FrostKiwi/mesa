@@ -348,9 +348,10 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       brw_##OP(p, dest, src[0], src[1], src[2]);   \
       break;
 
-#define UNOP_MATH_CASE(OP, MATH)                                           \
-   case IBC_ALU_OP_##OP:                                                   \
-      gen6_math(p, dest, BRW_MATH_FUNCTION_##MATH, src[0], brw_null_reg());\
+#define UNOP_MATH_CASE(OP, MATH)                            \
+   case IBC_ALU_OP_##OP:                                    \
+      gen6_math(p, dest, BRW_MATH_FUNCTION_##MATH, src[0],  \
+                retype(brw_null_reg(), src[0].type));       \
       break;
 
 #define BINOP_MATH_CASE(OP, MATH)                                    \
