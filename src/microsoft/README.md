@@ -11,3 +11,6 @@ _Note_: Both of these are experimental and under heavy development. Do not
 In order to compile this, you build the normal way you would otherwise do,
 except you might want to set the `microsoft-clc` Meson-option. See
 the general Mesa and Meson documentation for how to do that.
+
+This include unit tests as well, which can be run using `ninja test`. In the
+future, we might want to hide these behind the `build-tests` meson-option.
