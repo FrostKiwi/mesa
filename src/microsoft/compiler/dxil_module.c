@@ -1250,16 +1250,6 @@ dxil_emit_metadata_named_node(struct dxil_module *m, const char *name,
 }
 
 bool
-dxil_emit_function_consts(struct dxil_module *m,
-                          const struct dxil_const *consts,
-                          size_t num_consts)
-{
-   return dxil_module_enter_subblock(m, DXIL_CONST_BLOCK, 4) &&
-              emit_consts(m, consts, num_consts) &&
-              dxil_module_exit_block(m);
-}
-
-bool
 dxil_emit_call(struct dxil_module *m,
                const struct dxil_type *func_type,
                unsigned value_id,

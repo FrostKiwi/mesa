@@ -218,11 +218,6 @@ bool
 dxil_module_emit_symtab_entry(struct dxil_module *m, unsigned value,
                               const char *name);
 
-bool
-dxil_emit_function_consts(struct dxil_module *m,
-                          const struct dxil_const *consts,
-                          size_t num_consts);
-
 const struct dxil_type *
 dxil_module_add_void_type(struct dxil_module *m);
 
