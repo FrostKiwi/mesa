@@ -238,9 +238,6 @@ emit_module(struct dxil_module *m)
       { bool_type, .int_value = 0 },
       { rwbuffer_pointer_type, .undef = true },
       { rwbuffer_struct_type, .undef = true },
-   };
-
-   struct dxil_const function_consts[] = {
       { int32_type, .int_value = 57 },
       { int32_type, .int_value = 93 },
       { int32_type, .int_value = 69 },
@@ -286,8 +283,6 @@ emit_module(struct dxil_module *m)
        !emit_use_list_block(m) ||
        !dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
        !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1) ||
-       !dxil_emit_function_consts(m, function_consts,
-                                  ARRAY_SIZE(function_consts)) ||
        !dxil_emit_call(m, createhandle_func_type, 3, createhandle_args,
                        ARRAY_SIZE(createhandle_args)) ||
        !dxil_emit_call(m, threadid_func_type, 1, threadid_args,
