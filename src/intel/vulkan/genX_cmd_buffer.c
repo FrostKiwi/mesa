@@ -2974,6 +2974,7 @@ genX(cmd_buffer_flush_state)(struct anv_cmd_buffer *cmd_buffer)
    genX(cmd_buffer_flush_dynamic_state)(cmd_buffer);
 }
 
+#if GEN_GEN < 11
 static void
 emit_vertex_bo(struct anv_cmd_buffer *cmd_buffer,
                struct anv_address addr,
@@ -3046,6 +3047,7 @@ emit_draw_index(struct anv_cmd_buffer *cmd_buffer, uint32_t draw_index)
 
    emit_vertex_bo(cmd_buffer, addr, 4, ANV_DRAWID_VB_INDEX);
 }
+#endif /* GEN_GEN <= 11 */
 
 static void
 update_dirty_vbs_for_gen8_vb_flush(struct anv_cmd_buffer *cmd_buffer,
@@ -3075,7 +3077,6 @@ void genX(CmdDraw)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    struct anv_pipeline *pipeline = cmd_buffer->state.gfx.base.pipeline;
-   const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
    if (anv_batch_has_error(&cmd_buffer->batch))
       return;
@@ -3085,11 +3086,14 @@ void genX(CmdDraw)(
    if (cmd_buffer->state.conditional_render_enabled)
       genX(cmd_emit_conditional_render_predicate)(cmd_buffer);
 
+#if GEN_GEN < 11
+   const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
    if (vs_prog_data->uses_firstvertex ||
        vs_prog_data->uses_baseinstance)
       emit_base_vertex_instance(cmd_buffer, firstVertex, firstInstance);
    if (vs_prog_data->uses_drawid)
       emit_draw_index(cmd_buffer, 0);
+#endif
 
    /* Emitting draw index or vertex index BOs may result in needing
     * additional VF cache flushes.
@@ -3101,7 +3105,11 @@ void genX(CmdDraw)(
     */
    instanceCount *= anv_subpass_view_count(cmd_buffer->state.subpass);
 
+#if GEN_GEN >= 11
+   anv_batch_emit(&cmd_buffer->batch, GENX(3DPRIMITIVE_EXTENDED), prim) {
+#else
    anv_batch_emit(&cmd_buffer->batch, GENX(3DPRIMITIVE), prim) {
+#endif
       prim.PredicateEnable          = cmd_buffer->state.conditional_render_enabled;
       prim.VertexAccessType         = SEQUENTIAL;
       prim.PrimitiveTopologyType    = pipeline->topology;
@@ -3110,6 +3118,11 @@ void genX(CmdDraw)(
       prim.InstanceCount            = instanceCount;
       prim.StartInstanceLocation    = firstInstance;
       prim.BaseVertexLocation       = 0;
+#if GEN_GEN >= 11
+      prim.ExtendedParameter0       = firstVertex;
+      prim.ExtendedParameter1       = firstInstance;
+      prim.ExtendedParameter2       = 0;
+#endif
    }
 
    update_dirty_vbs_for_gen8_vb_flush(cmd_buffer, SEQUENTIAL);
@@ -3125,7 +3138,6 @@ void genX(CmdDrawIndexed)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    struct anv_pipeline *pipeline = cmd_buffer->state.gfx.base.pipeline;
-   const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
    if (anv_batch_has_error(&cmd_buffer->batch))
       return;
@@ -3135,11 +3147,14 @@ void genX(CmdDrawIndexed)(
    if (cmd_buffer->state.conditional_render_enabled)
       genX(cmd_emit_conditional_render_predicate)(cmd_buffer);
 
+#if GEN_GEN < 11
+   const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
    if (vs_prog_data->uses_firstvertex ||
        vs_prog_data->uses_baseinstance)
       emit_base_vertex_instance(cmd_buffer, vertexOffset, firstInstance);
    if (vs_prog_data->uses_drawid)
       emit_draw_index(cmd_buffer, 0);
+#endif
 
    /* Emitting draw index or vertex index BOs may result in needing
     * additional VF cache flushes.
@@ -3151,7 +3166,11 @@ void genX(CmdDrawIndexed)(
     */
    instanceCount *= anv_subpass_view_count(cmd_buffer->state.subpass);
 
+#if GEN_GEN >= 11
+   anv_batch_emit(&cmd_buffer->batch, GENX(3DPRIMITIVE_EXTENDED), prim) {
+#else
    anv_batch_emit(&cmd_buffer->batch, GENX(3DPRIMITIVE), prim) {
+#endif
       prim.PredicateEnable          = cmd_buffer->state.conditional_render_enabled;
       prim.VertexAccessType         = RANDOM;
       prim.PrimitiveTopologyType    = pipeline->topology;
@@ -3160,6 +3179,11 @@ void genX(CmdDrawIndexed)(
       prim.InstanceCount            = instanceCount;
       prim.StartInstanceLocation    = firstInstance;
       prim.BaseVertexLocation       = vertexOffset;
+#if GEN_GEN >= 11
+      prim.ExtendedParameter0       = 0;
+      prim.ExtendedParameter1       = firstInstance;
+      prim.ExtendedParameter2       = 0;
+#endif
    }
 
    update_dirty_vbs_for_gen8_vb_flush(cmd_buffer, RANDOM);
@@ -3172,6 +3196,25 @@ void genX(CmdDrawIndexed)(
 #define GEN7_3DPRIM_INSTANCE_COUNT      0x2438
 #define GEN7_3DPRIM_START_INSTANCE      0x243C
 #define GEN7_3DPRIM_BASE_VERTEX         0x2440
+
+/* On Gen11+, we have three custom "extended parameters" which we can use to
+ * provide extra system-generated values to shaders.  Our assignment of these
+ * is arbitrary; we choose to assign them as follows:
+ *
+ *    gl_BaseVertex = XP0
+ *    gl_BaseInstance = XP1
+ *    gl_DrawID = XP2
+ *
+ * For gl_BaseInstance, we never actually have to set up the value because we
+ * can just program 3DSTATE_VF_SGVS_2 to load it implicitly.  We can also do
+ * that for gl_BaseVertex but it does the wrong thing for indexed draws.
+ */
+#define GEN11_3DPRIM_XP0                0x2690
+#define GEN11_3DPRIM_XP1                0x2694
+#define GEN11_3DPRIM_XP2                0x2698
+#define GEN11_3DPRIM_XP_BASE_VERTEX     GEN11_3DPRIM_XP0
+#define GEN11_3DPRIM_XP_BASE_INSTANCE   GEN11_3DPRIM_XP1
+#define GEN11_3DPRIM_XP_DRAW_ID         GEN11_3DPRIM_XP2
 
 void genX(CmdDrawIndirectByteCountEXT)(
     VkCommandBuffer                             commandBuffer,
@@ -3186,7 +3229,6 @@ void genX(CmdDrawIndirectByteCountEXT)(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, counter_buffer, counterBuffer);
    struct anv_pipeline *pipeline = cmd_buffer->state.gfx.base.pipeline;
-   const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
    /* firstVertex is always zero for this draw function */
    const uint32_t firstVertex = 0;
@@ -3196,11 +3238,14 @@ void genX(CmdDrawIndirectByteCountEXT)(
 
    genX(cmd_buffer_flush_state)(cmd_buffer);
 
+#if GEN_GEN < 11
+   const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
    if (vs_prog_data->uses_firstvertex ||
        vs_prog_data->uses_baseinstance)
       emit_base_vertex_instance(cmd_buffer, firstVertex, firstInstance);
    if (vs_prog_data->uses_drawid)
       emit_draw_index(cmd_buffer, 0);
+#endif
 
    /* Emitting draw index or vertex index BOs may result in needing
     * additional VF cache flushes.
@@ -3230,10 +3275,20 @@ void genX(CmdDrawIndirectByteCountEXT)(
                     gen_mi_imm(firstInstance));
    gen_mi_store(&b, gen_mi_reg32(GEN7_3DPRIM_BASE_VERTEX), gen_mi_imm(0));
 
+#if GEN_GEN >= 11
+   gen_mi_store(&b, gen_mi_reg32(GEN11_3DPRIM_XP_BASE_VERTEX),
+                    gen_mi_imm(firstVertex));
+   /* GEN11_3DPRIM_XP_BASE_INSTANCE is implicit */
+   gen_mi_store(&b, gen_mi_reg32(GEN11_3DPRIM_XP_DRAW_ID), gen_mi_imm(0));
+#endif
+
    anv_batch_emit(&cmd_buffer->batch, GENX(3DPRIMITIVE), prim) {
       prim.IndirectParameterEnable  = true;
       prim.VertexAccessType         = SEQUENTIAL;
       prim.PrimitiveTopologyType    = pipeline->topology;
+#if GEN_GEN >= 11
+      prim.ExtendedParametersPresent = true;
+#endif
    }
 
    update_dirty_vbs_for_gen8_vb_flush(cmd_buffer, SEQUENTIAL);
@@ -3243,7 +3298,8 @@ void genX(CmdDrawIndirectByteCountEXT)(
 static void
 load_indirect_parameters(struct anv_cmd_buffer *cmd_buffer,
                          struct anv_address addr,
-                         bool indexed)
+                         bool indexed,
+                         uint32_t draw_id)
 {
    struct gen_mi_builder b;
    gen_mi_builder_init(&b, &cmd_buffer->batch);
@@ -3271,11 +3327,25 @@ load_indirect_parameters(struct anv_cmd_buffer *cmd_buffer,
                        gen_mi_mem32(anv_address_add(addr, 12)));
       gen_mi_store(&b, gen_mi_reg32(GEN7_3DPRIM_START_INSTANCE),
                        gen_mi_mem32(anv_address_add(addr, 16)));
+#if GEN_GEN >= 11
+      gen_mi_store(&b, gen_mi_reg32(GEN11_3DPRIM_XP_BASE_VERTEX),
+                       gen_mi_mem32(anv_address_add(addr, 12)));
+      /* GEN11_3DPRIM_XP_BASE_INSTANCE is implicit */
+#endif
    } else {
       gen_mi_store(&b, gen_mi_reg32(GEN7_3DPRIM_START_INSTANCE),
                        gen_mi_mem32(anv_address_add(addr, 12)));
       gen_mi_store(&b, gen_mi_reg32(GEN7_3DPRIM_BASE_VERTEX), gen_mi_imm(0));
+#if GEN_GEN >= 11
+      gen_mi_store(&b, gen_mi_reg32(GEN11_3DPRIM_XP_BASE_VERTEX), gen_mi_imm(0));
+      /* GEN11_3DPRIM_XP_BASE_INSTANCE is implicit */
+#endif
    }
+
+#if GEN_GEN >= 11
+   gen_mi_store(&b, gen_mi_reg32(GEN11_3DPRIM_XP_DRAW_ID),
+                gen_mi_imm(draw_id));
+#endif
 }
 
 void genX(CmdDrawIndirect)(
@@ -3288,7 +3358,6 @@ void genX(CmdDrawIndirect)(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, buffer, _buffer);
    struct anv_pipeline *pipeline = cmd_buffer->state.gfx.base.pipeline;
-   const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
    if (anv_batch_has_error(&cmd_buffer->batch))
       return;
@@ -3301,24 +3370,30 @@ void genX(CmdDrawIndirect)(
    for (uint32_t i = 0; i < drawCount; i++) {
       struct anv_address draw = anv_address_add(buffer->address, offset);
 
+#if GEN_GEN < 11
+      const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
       if (vs_prog_data->uses_firstvertex ||
           vs_prog_data->uses_baseinstance)
          emit_base_vertex_instance_bo(cmd_buffer, anv_address_add(draw, 8));
       if (vs_prog_data->uses_drawid)
          emit_draw_index(cmd_buffer, i);
+# endif
 
       /* Emitting draw index or vertex index BOs may result in needing
        * additional VF cache flushes.
        */
       genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
 
-      load_indirect_parameters(cmd_buffer, draw, false);
+      load_indirect_parameters(cmd_buffer, draw, false, i);
 
       anv_batch_emit(&cmd_buffer->batch, GENX(3DPRIMITIVE), prim) {
          prim.IndirectParameterEnable  = true;
          prim.PredicateEnable          = cmd_buffer->state.conditional_render_enabled;
          prim.VertexAccessType         = SEQUENTIAL;
          prim.PrimitiveTopologyType    = pipeline->topology;
+#if GEN_GEN >= 11
+         prim.ExtendedParametersPresent = true;
+#endif
       }
 
       update_dirty_vbs_for_gen8_vb_flush(cmd_buffer, SEQUENTIAL);
@@ -3337,7 +3412,6 @@ void genX(CmdDrawIndexedIndirect)(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, buffer, _buffer);
    struct anv_pipeline *pipeline = cmd_buffer->state.gfx.base.pipeline;
-   const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
    if (anv_batch_has_error(&cmd_buffer->batch))
       return;
@@ -3350,25 +3424,31 @@ void genX(CmdDrawIndexedIndirect)(
    for (uint32_t i = 0; i < drawCount; i++) {
       struct anv_address draw = anv_address_add(buffer->address, offset);
 
+#if GEN_GEN < 11
+      const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
       /* TODO: We need to stomp base vertex to 0 somehow */
       if (vs_prog_data->uses_firstvertex ||
           vs_prog_data->uses_baseinstance)
          emit_base_vertex_instance_bo(cmd_buffer, anv_address_add(draw, 12));
       if (vs_prog_data->uses_drawid)
          emit_draw_index(cmd_buffer, i);
+#endif
 
       /* Emitting draw index or vertex index BOs may result in needing
        * additional VF cache flushes.
        */
       genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
 
-      load_indirect_parameters(cmd_buffer, draw, true);
+      load_indirect_parameters(cmd_buffer, draw, true, i);
 
       anv_batch_emit(&cmd_buffer->batch, GENX(3DPRIMITIVE), prim) {
          prim.IndirectParameterEnable  = true;
          prim.PredicateEnable          = cmd_buffer->state.conditional_render_enabled;
          prim.VertexAccessType         = RANDOM;
          prim.PrimitiveTopologyType    = pipeline->topology;
+#if GEN_GEN >= 11
+         prim.ExtendedParametersPresent = true;
+#endif
       }
 
       update_dirty_vbs_for_gen8_vb_flush(cmd_buffer, RANDOM);
@@ -3481,7 +3561,6 @@ void genX(CmdDrawIndirectCountKHR)(
    ANV_FROM_HANDLE(anv_buffer, count_buffer, _countBuffer);
    struct anv_cmd_state *cmd_state = &cmd_buffer->state;
    struct anv_pipeline *pipeline = cmd_state->gfx.base.pipeline;
-   const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
    if (anv_batch_has_error(&cmd_buffer->batch))
       return;
@@ -3507,24 +3586,30 @@ void genX(CmdDrawIndirectCountKHR)(
       emit_draw_count_predicate(cmd_buffer, i);
 #endif
 
+#if GEN_GEN < 11
+      const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
       if (vs_prog_data->uses_firstvertex ||
           vs_prog_data->uses_baseinstance)
          emit_base_vertex_instance_bo(cmd_buffer, anv_address_add(draw, 8));
       if (vs_prog_data->uses_drawid)
          emit_draw_index(cmd_buffer, i);
+#endif
 
       /* Emitting draw index or vertex index BOs may result in needing
        * additional VF cache flushes.
        */
       genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
 
-      load_indirect_parameters(cmd_buffer, draw, false);
+      load_indirect_parameters(cmd_buffer, draw, false, i);
 
       anv_batch_emit(&cmd_buffer->batch, GENX(3DPRIMITIVE), prim) {
          prim.IndirectParameterEnable  = true;
          prim.PredicateEnable          = true;
          prim.VertexAccessType         = SEQUENTIAL;
          prim.PrimitiveTopologyType    = pipeline->topology;
+#if GEN_GEN >= 11
+         prim.ExtendedParametersPresent = true;
+#endif
       }
 
       update_dirty_vbs_for_gen8_vb_flush(cmd_buffer, SEQUENTIAL);
@@ -3547,7 +3632,6 @@ void genX(CmdDrawIndexedIndirectCountKHR)(
    ANV_FROM_HANDLE(anv_buffer, count_buffer, _countBuffer);
    struct anv_cmd_state *cmd_state = &cmd_buffer->state;
    struct anv_pipeline *pipeline = cmd_state->gfx.base.pipeline;
-   const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
    if (anv_batch_has_error(&cmd_buffer->batch))
       return;
@@ -3573,25 +3657,31 @@ void genX(CmdDrawIndexedIndirectCountKHR)(
       emit_draw_count_predicate(cmd_buffer, i);
 #endif
 
+#if GEN_GEN < 11
+      const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
       /* TODO: We need to stomp base vertex to 0 somehow */
       if (vs_prog_data->uses_firstvertex ||
           vs_prog_data->uses_baseinstance)
          emit_base_vertex_instance_bo(cmd_buffer, anv_address_add(draw, 12));
       if (vs_prog_data->uses_drawid)
          emit_draw_index(cmd_buffer, i);
+#endif
 
       /* Emitting draw index or vertex index BOs may result in needing
        * additional VF cache flushes.
        */
       genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
 
-      load_indirect_parameters(cmd_buffer, draw, true);
+      load_indirect_parameters(cmd_buffer, draw, true, i);
 
       anv_batch_emit(&cmd_buffer->batch, GENX(3DPRIMITIVE), prim) {
          prim.IndirectParameterEnable  = true;
          prim.PredicateEnable          = true;
          prim.VertexAccessType         = RANDOM;
          prim.PrimitiveTopologyType    = pipeline->topology;
+#if GEN_GEN >= 11
+         prim.ExtendedParametersPresent = true;
+#endif
       }
 
       update_dirty_vbs_for_gen8_vb_flush(cmd_buffer, RANDOM);
