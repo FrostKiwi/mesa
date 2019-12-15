@@ -529,6 +529,10 @@ blorp_emit_vertex_elements(struct blorp_batch *batch,
       sgvs.InstanceIDElementOffset = 0;
    }
 
+#if GEN_GEN >= 11
+   blorp_emit(batch, GENX(3DSTATE_VF_SGVS_2), sgvs);
+#endif
+
    for (unsigned i = 0; i < num_elements; i++) {
       blorp_emit(batch, GENX(3DSTATE_VF_INSTANCING), vf) {
          vf.VertexElementIndex = i;
