@@ -1395,13 +1395,12 @@ dxil_emit_metadata_named_node(struct dxil_module *m, const char *name,
 }
 
 bool
-dxil_emit_call(struct dxil_module *m,
-               const struct dxil_type *func_type,
-               unsigned value_id,
-               const unsigned *args, const size_t num_args)
+emit_call(struct dxil_module *m,
+          const struct dxil_type *func_type,
+          unsigned value_id,
+          const unsigned *args, const size_t num_args)
 {
    uint64_t data[256];
-   assert(func_type->type == TYPE_FUNCTION);
 
    int value_id_delta = m->next_value_id - value_id;
    assert(value_id <= m->next_value_id);
@@ -1415,10 +1414,33 @@ dxil_emit_call(struct dxil_module *m,
    for (size_t i = 0; i < num_args; ++i)
       data[4 + i] = m->next_value_id - args[i];
 
-   if (func_type->function_def.ret_type->type != TYPE_VOID)
-      m->next_value_id++;
-
    return dxil_module_emit_record(m, FUNC_CODE_INST_CALL, data, 4 + num_args);
+}
+
+const dxil_value
+dxil_emit_call(struct dxil_module *m,
+               const struct dxil_type *func_type,
+               unsigned value_id,
+               const unsigned *args, const size_t num_args)
+{
+   assert(func_type->type == TYPE_FUNCTION &&
+          func_type->function_def.ret_type->type != TYPE_VOID);
+
+   if (!emit_call(m, func_type, value_id, args, num_args))
+      return DXIL_VALUE_INVALID;
+
+   return m->next_value_id++;
+}
+
+bool
+dxil_emit_call_void(struct dxil_module *m,
+                    const struct dxil_type *func_type,
+                    unsigned value_id,
+                    const unsigned *args, const size_t num_args)
+{
+   assert(func_type->type == TYPE_FUNCTION &&
+          func_type->function_def.ret_type->type == TYPE_VOID);
+   return emit_call(m, func_type, value_id, args, num_args);
 }
 
 bool
