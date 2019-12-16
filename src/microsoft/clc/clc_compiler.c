@@ -127,10 +127,10 @@ static bool
 emit_value_symbol_table(struct dxil_module *m)
 {
    return dxil_module_enter_subblock(m, DXIL_VALUE_SYMTAB_BLOCK, 4) &&
+          dxil_module_emit_symtab_entry(m, 1, "main") &&
+          dxil_module_emit_symtab_entry(m, 2, "dx.op.threadId.i32") &&
           dxil_module_emit_symtab_entry(m, 3, "dx.op.bufferStore.i32") &&
           dxil_module_emit_symtab_entry(m, 4, "dx.op.createHandle") &&
-          dxil_module_emit_symtab_entry(m, 2, "dx.op.threadId.i32") &&
-          dxil_module_emit_symtab_entry(m, 1, "main") &&
           dxil_module_exit_block(m);
 }
 
