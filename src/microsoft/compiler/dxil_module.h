@@ -113,7 +113,8 @@ struct dxil_abbrev {
 };
 
 struct dxil_type;
-struct dxil_value;
+typedef int dxil_value;
+#define DXIL_VALUE_INVALID ((dxil_value) -1)
 
 struct dxil_module {
    enum dxil_shader_kind shader_kind;
@@ -197,11 +198,11 @@ bool
 dxil_emit_attribute_table(struct dxil_module *m,
                           const unsigned *attrs, size_t num_attrs);
 
-const struct dxil_value *
+const dxil_value
 dxil_add_function_def(struct dxil_module *m, const struct dxil_type *type,
                       unsigned attr_set);
 
-const struct dxil_value *
+const dxil_value
 dxil_add_function_decl(struct dxil_module *m, const struct dxil_type *type,
                        unsigned attr_set);
 
@@ -243,16 +244,16 @@ dxil_module_add_function_type(struct dxil_module *m,
                               const struct dxil_type **arg_types,
                               size_t num_arg_types);
 
-const struct dxil_value *
+const dxil_value
 dxil_module_add_bool_const(struct dxil_module *m, bool value);
 
-const struct dxil_value *
+const dxil_value
 dxil_module_add_int8_const(struct dxil_module *m, int8_t value);
 
-const struct dxil_value *
+const dxil_value
 dxil_module_add_int32_const(struct dxil_module *m, int32_t value);
 
-const struct dxil_value *
+const dxil_value
 dxil_module_add_undef(struct dxil_module *m, const struct dxil_type *type);
 
 bool

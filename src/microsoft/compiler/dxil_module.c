@@ -979,13 +979,9 @@ dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits)
           dxil_module_exit_block(m);
 }
 
-struct dxil_value {
-   unsigned id;
-};
-
 struct dxil_const {
    const struct dxil_type *type;
-   struct dxil_value value;
+   dxil_value value;
 
    bool undef;
    union {
@@ -1001,63 +997,63 @@ create_const(struct dxil_module *m, const struct dxil_type *type, bool undef)
    struct dxil_const *ret = CALLOC_STRUCT(dxil_const);
    if (ret) {
       ret->type = type;
-      ret->value.id = m->next_value_id++;
+      ret->value = m->next_value_id++;
       ret->undef = undef;
       list_addtail(&ret->head, &m->const_list);
    }
    return ret;
 }
 
-const struct dxil_value *
+const dxil_value
 dxil_module_add_bool_const(struct dxil_module *m, bool value)
 {
    const struct dxil_type *type = dxil_module_get_bool_type(m);
    if (!type)
-      return NULL;
+      return DXIL_VALUE_INVALID;
 
    struct dxil_const *c = create_const(m, type, false);
    if (!c)
-      return NULL;
+      return DXIL_VALUE_INVALID;
 
    c->int_value = value;
-   return &c->value;
+   return c->value;
 }
 
-const struct dxil_value *
+const dxil_value
 dxil_module_add_int8_const(struct dxil_module *m, int8_t value)
 {
    const struct dxil_type *type = dxil_module_get_int_type(m, 8);
    if (!type)
-      return NULL;
+      return DXIL_VALUE_INVALID;
 
    struct dxil_const *c = create_const(m, type, false);
    if (!c)
-      return NULL;
+      return DXIL_VALUE_INVALID;
 
    c->int_value = value;
-   return &c->value;
+   return c->value;
 }
 
-const struct dxil_value *
+const dxil_value
 dxil_module_add_int32_const(struct dxil_module *m, int32_t value)
 {
    const struct dxil_type *type = dxil_module_get_int_type(m, 32);
    if (!type)
-      return NULL;
+      return DXIL_VALUE_INVALID;
 
    struct dxil_const *c = create_const(m, type, false);
    if (!c)
-      return NULL;
+      return DXIL_VALUE_INVALID;
 
    c->int_value = value;
-   return &c->value;
+   return c->value;
 }
 
-const struct dxil_value *
+const dxil_value
 dxil_module_add_undef(struct dxil_module *m, const struct dxil_type *type)
 {
    struct dxil_const *c = create_const(m, type, true);
-   return c ? &c->value : NULL;
+   return c ? c->value : DXIL_VALUE_INVALID;
 }
 
 static bool
@@ -1091,35 +1087,35 @@ struct dxil_func {
    bool decl;
    unsigned attr_set;
 
-   struct dxil_value value;
+   dxil_value value;
    struct list_head head;
 };
 
-const struct dxil_value *
+const dxil_value
 add_function(struct dxil_module *m, const struct dxil_type *type,
              bool decl, unsigned attr_set)
 {
    struct dxil_func *func = CALLOC_STRUCT(dxil_func);
    if (!func)
-      return NULL;
+      return DXIL_VALUE_INVALID;
 
    func->type = type;
    func->decl = decl;
    func->attr_set = attr_set;
 
-   func->value.id = m->next_value_id++;
+   func->value = m->next_value_id++;
    list_addtail(&func->head, &m->func_list);
-   return &func->value;
+   return func->value;
 }
 
-const struct dxil_value *
+const dxil_value
 dxil_add_function_def(struct dxil_module *m, const struct dxil_type *type,
                       unsigned attr_set)
 {
    return add_function(m, type, false, attr_set);
 }
 
-const struct dxil_value *
+const dxil_value
 dxil_add_function_decl(struct dxil_module *m, const struct dxil_type *type,
                        unsigned attr_set)
 {
