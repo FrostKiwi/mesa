@@ -136,14 +136,6 @@ emit_value_symbol_table(struct dxil_module *m)
 }
 
 static bool
-emit_function_value_symtab(struct dxil_module *m)
-{
-   return dxil_module_enter_subblock(m, DXIL_VALUE_SYMTAB_BLOCK, 4) &&
-          dxil_module_emit_symtab_entry(m, 22, "OutputBuffer_UAV_buf") &&
-          dxil_module_exit_block(m);
-}
-
-static bool
 emit_module(struct dxil_module *m)
 {
    if (!dxil_module_emit_bits(m, 'B', 8) ||
@@ -276,7 +268,6 @@ emit_module(struct dxil_module *m)
        !dxil_emit_call(m, bufferstore_func_type, 2, bufferstore_args,
                        ARRAY_SIZE(bufferstore_args)) ||
        !dxil_emit_ret_void(m) ||
-       !emit_function_value_symtab(m) ||
        !dxil_module_exit_block(m))
       return false;
 
