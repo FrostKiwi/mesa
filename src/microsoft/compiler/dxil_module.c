@@ -665,8 +665,7 @@ define_abbrev(struct dxil_module *m, const struct dxil_abbrev *a)
 static bool
 switch_to_block(struct dxil_module *m, uint32_t block)
 {
-   uint64_t data = block;
-   return dxil_module_emit_record(m, DXIL_BLOCKINFO_CODE_SETBID, &data, 1);
+   return dxil_module_emit_record_int(m, DXIL_BLOCKINFO_CODE_SETBID, block);
 }
 
 static struct dxil_abbrev value_symtab_abbrevs[] = {
@@ -812,8 +811,7 @@ dxil_emit_attribute_table(struct dxil_module *m,
       return false;
 
    for (int i = 0; i < num_attrs; ++i) {
-      uint64_t data = attrs[i];
-      if (!dxil_module_emit_record(m, PARAMATTR_CODE_ENTRY, &data, 1))
+      if (!dxil_module_emit_record_int(m, PARAMATTR_CODE_ENTRY, attrs[i]))
          return false;
    }
 
