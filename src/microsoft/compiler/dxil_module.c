@@ -44,6 +44,7 @@ dxil_module_init(struct dxil_module *m)
    m->next_type_id = 0;
 
    list_inithead(&m->func_list);
+   list_inithead(&m->const_list);
    m->next_value_id = 0;
 
    m->void_type = m->bool_type = m->int8_type = m->int32_type = NULL;
@@ -978,6 +979,87 @@ dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits)
           dxil_module_exit_block(m);
 }
 
+struct dxil_value {
+   unsigned id;
+};
+
+struct dxil_const {
+   const struct dxil_type *type;
+   struct dxil_value value;
+
+   bool undef;
+   union {
+      int64_t int_value;
+   };
+
+   struct list_head head;
+};
+
+static struct dxil_const *
+create_const(struct dxil_module *m, const struct dxil_type *type, bool undef)
+{
+   struct dxil_const *ret = CALLOC_STRUCT(dxil_const);
+   if (ret) {
+      ret->type = type;
+      ret->value.id = m->next_value_id++;
+      ret->undef = undef;
+      list_addtail(&ret->head, &m->const_list);
+   }
+   return ret;
+}
+
+const struct dxil_value *
+dxil_module_add_bool_const(struct dxil_module *m, bool value)
+{
+   const struct dxil_type *type = dxil_module_get_bool_type(m);
+   if (!type)
+      return NULL;
+
+   struct dxil_const *c = create_const(m, type, false);
+   if (!c)
+      return NULL;
+
+   c->int_value = value;
+   return &c->value;
+}
+
+const struct dxil_value *
+dxil_module_add_int8_const(struct dxil_module *m, int8_t value)
+{
+   const struct dxil_type *type = dxil_module_get_int_type(m, 8);
+   if (!type)
+      return NULL;
+
+   struct dxil_const *c = create_const(m, type, false);
+   if (!c)
+      return NULL;
+
+   c->int_value = value;
+   return &c->value;
+}
+
+const struct dxil_value *
+dxil_module_add_int32_const(struct dxil_module *m, int32_t value)
+{
+   const struct dxil_type *type = dxil_module_get_int_type(m, 32);
+   if (!type)
+      return NULL;
+
+   struct dxil_const *c = create_const(m, type, false);
+   if (!c)
+      return NULL;
+
+   c->int_value = value;
+   return &c->value;
+}
+
+const struct dxil_value *
+dxil_module_add_undef(struct dxil_module *m, const struct dxil_type *type)
+{
+   struct dxil_const *c = create_const(m, type, true);
+   return c ? &c->value : NULL;
+}
+
 static bool
 emit_target_triple(struct dxil_module *m, const char *triple)
 {
@@ -1003,10 +1085,6 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
    return dxil_module_emit_record(m, DXIL_MODULE_CODE_DATALAYOUT,
                                   temp, strlen(datalayout));
 }
-
-struct dxil_value {
-   unsigned id;
-};
 
 struct dxil_func {
    const struct dxil_type *type;
@@ -1154,26 +1232,26 @@ emit_int_value(struct dxil_module *m, int64_t value)
 }
 
 bool
-emit_consts(struct dxil_module *m,
-            const struct dxil_const *consts, size_t num_consts)
+emit_consts(struct dxil_module *m)
 {
    const struct dxil_type *curr_type = NULL;
-   for (size_t i = 0; i < num_consts; ++i, ++m->next_value_id) {
-      assert(consts[i].type != NULL);
-      if (curr_type != consts[i].type) {
-         if (!emit_set_type(m, consts[i].type->id))
+   struct dxil_const *c;
+   LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
+      assert(c->type != NULL);
+      if (curr_type != c->type) {
+         if (!emit_set_type(m, c->type->id))
             return false;
-         curr_type = consts[i].type;
+         curr_type = c->type;
       }
 
-      if (consts[i].undef) {
+      if (c->undef) {
          emit_undef_value(m);
          continue;
       }
 
       switch (curr_type->type) {
       case TYPE_INTEGER:
-         emit_int_value(m, consts[i].int_value);
+         emit_int_value(m, c->int_value);
          break;
 
       default:
@@ -1185,12 +1263,11 @@ emit_consts(struct dxil_module *m,
 }
 
 bool
-dxil_emit_module_consts(struct dxil_module *m,
-                        const struct dxil_const *consts, size_t num_consts)
+dxil_emit_module_consts(struct dxil_module *m)
 {
    return dxil_module_enter_subblock(m, DXIL_CONST_BLOCK, 4) &&
           emit_module_const_abbrevs(m) &&
-          emit_consts(m, consts, num_consts) &&
+          emit_consts(m) &&
           dxil_module_exit_block(m);
 }
 
