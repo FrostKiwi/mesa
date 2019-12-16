@@ -143,9 +143,8 @@ emit_module(struct dxil_module *m)
        !dxil_module_emit_bits(m, 0xDE, 8))
       return false;
 
-   uint64_t version = 1;
    if (!dxil_module_enter_subblock(m, DXIL_MODULE, 3) ||
-       !dxil_module_emit_record(m, DXIL_MODULE_CODE_VERSION, &version, 1))
+       !dxil_module_emit_record_int(m, DXIL_MODULE_CODE_VERSION, 1))
       return false;
 
    struct dxil_attrib attrs1[] = {
