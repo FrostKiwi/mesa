@@ -1397,7 +1397,7 @@ dxil_emit_metadata_named_node(struct dxil_module *m, const char *name,
 bool
 emit_call(struct dxil_module *m,
           const struct dxil_type *func_type,
-          unsigned value_id,
+          dxil_value value_id,
           const dxil_value *args, const size_t num_args)
 {
    uint64_t data[256];
@@ -1420,7 +1420,7 @@ emit_call(struct dxil_module *m,
 const dxil_value
 dxil_emit_call(struct dxil_module *m,
                const struct dxil_type *func_type,
-               unsigned value_id,
+               dxil_value value_id,
                const dxil_value *args, const size_t num_args)
 {
    assert(func_type->type == TYPE_FUNCTION &&
@@ -1435,7 +1435,7 @@ dxil_emit_call(struct dxil_module *m,
 bool
 dxil_emit_call_void(struct dxil_module *m,
                     const struct dxil_type *func_type,
-                    unsigned value_id,
+                    dxil_value value_id,
                     const dxil_value *args, const size_t num_args)
 {
    assert(func_type->type == TYPE_FUNCTION &&
