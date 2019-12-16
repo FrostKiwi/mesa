@@ -31,12 +31,6 @@
 #include <stdint.h>
 
 static bool
-emit_type_comdats(struct dxil_module *m)
-{
-   return true; /* nothing for now */
-}
-
-static bool
 emit_metadata(struct dxil_module *m)
 {
    const unsigned root_subnode = 1,
@@ -139,12 +133,6 @@ emit_value_symbol_table(struct dxil_module *m)
           dxil_module_emit_symtab_entry(m, 2, "dx.op.threadId.i32") &&
           dxil_module_emit_symtab_entry(m, 1, "main") &&
           dxil_module_exit_block(m);
-}
-
-static bool
-emit_use_list_block(struct dxil_module *m)
-{
-   return true; /* nothing for now */
 }
 
 static bool
@@ -273,14 +261,12 @@ emit_module(struct dxil_module *m)
                                      ARRAY_SIZE(attrs)) ||
        !dxil_emit_attribute_table(m, attr_data, ARRAY_SIZE(attr_data)) ||
        !dxil_module_emit_type_table(m, num_type_bits) ||
-       !emit_type_comdats(m) ||
        !dxil_emit_module_info(m, funcs, ARRAY_SIZE(funcs)) ||
        !dxil_emit_module_consts(m, global_consts,
                                 ARRAY_SIZE(global_consts)) ||
        !emit_metadata(m) ||
        !dxil_emit_metadata_store(m, names, ARRAY_SIZE(names)) ||
        !emit_value_symbol_table(m) ||
-       !emit_use_list_block(m) ||
        !dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
        !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1) ||
        !dxil_emit_call(m, createhandle_func_type, 3, createhandle_args,
