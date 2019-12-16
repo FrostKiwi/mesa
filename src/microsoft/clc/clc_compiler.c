@@ -204,25 +204,23 @@ emit_module(struct dxil_module *m)
        !dxil_add_function_decl(m, createhandle_func_type, 3))
       return false;
 
-   struct dxil_const global_consts[] = {
-      { int32_type, .int_value = 1 },
-      { int32_type, .int_value = 0 },
-      { int32_type, .int_value = 6 },
-      { int32_type, .int_value = 10 },
-      { int32_type, .int_value = 5 },
-      { int32_type, .int_value = 4 },
-      { int32_type, .int_value = 3 },
-      { int32_type, .int_value = 7 },
-      { bool_type, .int_value = 0 },
-      { rwbuffer_pointer_type, .undef = true },
-      { rwbuffer_struct_type, .undef = true },
-      { int32_type, .int_value = 57 },
-      { int32_type, .int_value = 93 },
-      { int32_type, .int_value = 69 },
-      { int32_type, .undef = true },
-      { int8_type, .int_value = 1 },
-      { int8_type, .int_value = 15 },
-   };
+   const struct dxil_value *int32_1 = dxil_module_add_int32_const(m, 1);
+   const struct dxil_value *int32_0 = dxil_module_add_int32_const(m, 0);
+   const struct dxil_value *int32_6 = dxil_module_add_int32_const(m, 6);
+   const struct dxil_value *int32_10 = dxil_module_add_int32_const(m, 10);
+   const struct dxil_value *int32_5 = dxil_module_add_int32_const(m, 5);
+   const struct dxil_value *int32_4 = dxil_module_add_int32_const(m, 4);
+   const struct dxil_value *int32_3 = dxil_module_add_int32_const(m, 3);
+   const struct dxil_value *int32_7 = dxil_module_add_int32_const(m, 7);
+   const struct dxil_value *bool_false = dxil_module_add_bool_const(m, false);
+   const struct dxil_value *rwbuffer_pointer_undef = dxil_module_add_undef(m, rwbuffer_pointer_type);
+   const struct dxil_value *rwbuffer_struct_undef = dxil_module_add_undef(m, rwbuffer_struct_type);
+   const struct dxil_value *int32_57 = dxil_module_add_int32_const(m, 57);
+   const struct dxil_value *int32_93 = dxil_module_add_int32_const(m, 93);
+   const struct dxil_value *int32_69 = dxil_module_add_int32_const(m, 69);
+   const struct dxil_value *int32_undef = dxil_module_add_undef(m, int32_type);
+   const struct dxil_value *int8_1 = dxil_module_add_int8_const(m, 1);
+   const struct dxil_value *int8_15 = dxil_module_add_int8_const(m, 15);
 
    const unsigned createhandle_args[] = {
       15, 19, 5, 5, 12
@@ -252,8 +250,7 @@ emit_module(struct dxil_module *m)
        !dxil_emit_attribute_table(m, attr_data, ARRAY_SIZE(attr_data)) ||
        !dxil_module_emit_type_table(m, num_type_bits) ||
        !dxil_emit_module_info(m) ||
-       !dxil_emit_module_consts(m, global_consts,
-                                ARRAY_SIZE(global_consts)) ||
+       !dxil_emit_module_consts(m) ||
        !emit_metadata(m) ||
        !dxil_emit_metadata_store(m, names, ARRAY_SIZE(names)) ||
        !emit_value_symbol_table(m) ||
