@@ -392,8 +392,18 @@ dxil_module_add_void_type(struct dxil_module *m)
 }
 
 const struct dxil_type *
+dxil_module_add_bool_type(struct dxil_module *m)
+{
+   struct dxil_type *type = create_type(m, TYPE_INTEGER);
+   if (type)
+      type->int_bits = 1;
+   return type;
+}
+
+const struct dxil_type *
 dxil_module_add_int_type(struct dxil_module *m, unsigned bit_size)
 {
+   assert(bit_size == 8 || bit_size == 32);
    struct dxil_type *type = create_type(m, TYPE_INTEGER);
    if (type)
       type->int_bits = bit_size;
