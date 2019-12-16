@@ -193,31 +193,31 @@ emit_module(struct dxil_module *m)
       1, 2, 3
    };
 
-   struct dxil_type *int32_type = dxil_module_add_int_type(m, 32);
-   struct dxil_type *rwbuffer_struct_type = dxil_module_add_struct_type(m, "class.RWBuffer<unsigned int>", &int32_type, 1);
-   struct dxil_type *rwbuffer_pointer_type = dxil_module_add_pointer_type(m, rwbuffer_struct_type);
+   const struct dxil_type *int32_type = dxil_module_add_int_type(m, 32);
+   const struct dxil_type *rwbuffer_struct_type = dxil_module_add_struct_type(m, "class.RWBuffer<unsigned int>", &int32_type, 1);
+   const struct dxil_type *rwbuffer_pointer_type = dxil_module_add_pointer_type(m, rwbuffer_struct_type);
 
-   struct dxil_type *void_type = dxil_module_add_void_type(m);
-   struct dxil_type *main_func_type = dxil_module_add_function_type(m, void_type, NULL, 0);
-   struct dxil_type *main_func_pointer_type = dxil_module_add_pointer_type(m, main_func_type);
+   const struct dxil_type *void_type = dxil_module_add_void_type(m);
+   const struct dxil_type *main_func_type = dxil_module_add_function_type(m, void_type, NULL, 0);
+   const struct dxil_type *main_func_pointer_type = dxil_module_add_pointer_type(m, main_func_type);
 
-   struct dxil_type *threadid_arg_types[] = { int32_type, int32_type };
-   struct dxil_type *threadid_func_type = dxil_module_add_function_type(m, int32_type, threadid_arg_types, ARRAY_SIZE(threadid_arg_types));
-   struct dxil_type *threadid_func_pointer_type = dxil_module_add_pointer_type(m, threadid_func_type);
+   const struct dxil_type *threadid_arg_types[] = { int32_type, int32_type };
+   const struct dxil_type *threadid_func_type = dxil_module_add_function_type(m, int32_type, threadid_arg_types, ARRAY_SIZE(threadid_arg_types));
+   const struct dxil_type *threadid_func_pointer_type = dxil_module_add_pointer_type(m, threadid_func_type);
 
-   struct dxil_type *int8_type = dxil_module_add_int_type(m, 8);
-   struct dxil_type *int8_pointer_type = dxil_module_add_pointer_type(m, int8_type);
-   struct dxil_type *handle_type = dxil_module_add_struct_type(m, "dx.types.Handle", &int8_pointer_type, 1);
+   const struct dxil_type *int8_type = dxil_module_add_int_type(m, 8);
+   const struct dxil_type *int8_pointer_type = dxil_module_add_pointer_type(m, int8_type);
+   const struct dxil_type *handle_type = dxil_module_add_struct_type(m, "dx.types.Handle", &int8_pointer_type, 1);
 
-   struct dxil_type *bufferstore_arg_types[] = { int32_type, handle_type, int32_type, int32_type, int32_type, int32_type, int32_type, int32_type, int8_type };
-   struct dxil_type *bufferstore_func_type = dxil_module_add_function_type(m, void_type, bufferstore_arg_types, ARRAY_SIZE(bufferstore_arg_types));
-   struct dxil_type *bufferstore_func_pointer_type = dxil_module_add_pointer_type(m, bufferstore_func_type);
+   const struct dxil_type *bufferstore_arg_types[] = { int32_type, handle_type, int32_type, int32_type, int32_type, int32_type, int32_type, int32_type, int8_type };
+   const struct dxil_type *bufferstore_func_type = dxil_module_add_function_type(m, void_type, bufferstore_arg_types, ARRAY_SIZE(bufferstore_arg_types));
+   const struct dxil_type *bufferstore_func_pointer_type = dxil_module_add_pointer_type(m, bufferstore_func_type);
 
-   struct dxil_type *bool_type = dxil_module_add_int_type(m, 1);
+   const struct dxil_type *bool_type = dxil_module_add_int_type(m, 1);
 
-   struct dxil_type *createhandle_arg_types[] = { int32_type, int8_type, int32_type, int32_type, bool_type };
-   struct dxil_type *createhandle_func_type = dxil_module_add_function_type(m, handle_type, createhandle_arg_types, ARRAY_SIZE(createhandle_arg_types));
-   struct dxil_type *createhandle_func_pointer_type = dxil_module_add_pointer_type(m, createhandle_func_type);
+   const struct dxil_type *createhandle_arg_types[] = { int32_type, int8_type, int32_type, int32_type, bool_type };
+   const struct dxil_type *createhandle_func_type = dxil_module_add_function_type(m, handle_type, createhandle_arg_types, ARRAY_SIZE(createhandle_arg_types));
+   const struct dxil_type *createhandle_func_pointer_type = dxil_module_add_pointer_type(m, createhandle_func_type);
 
    struct dxil_function_module_info funcs[] = {
       { main_func_type, false, 0 },
