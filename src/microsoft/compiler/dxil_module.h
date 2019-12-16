@@ -278,13 +278,13 @@ const dxil_value
 dxil_emit_call(struct dxil_module *m,
                const struct dxil_type *func_type,
                unsigned value_id,
-               const unsigned *args, const size_t num_args);
+               const dxil_value *args, const size_t num_args);
 
 bool
 dxil_emit_call_void(struct dxil_module *m,
                     const struct dxil_type *func_type,
                     unsigned value_id,
-                    const unsigned *args, const size_t num_args);
+                    const dxil_value *args, const size_t num_args);
 
 bool
 dxil_emit_ret_void(struct dxil_module *m);
