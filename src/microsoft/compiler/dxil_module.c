@@ -43,6 +43,8 @@ dxil_module_init(struct dxil_module *m)
    list_inithead(&m->type_list);
    m->next_type_id = 0;
    m->next_value_id = 0;
+
+   m->void_type = m->bool_type = m->int8_type = m->int32_type = NULL;
 }
 
 static bool
@@ -386,28 +388,43 @@ create_type(struct dxil_module *m, enum type_type type)
 }
 
 const struct dxil_type *
-dxil_module_add_void_type(struct dxil_module *m)
+dxil_module_get_void_type(struct dxil_module *m)
 {
-   return create_type(m, TYPE_VOID);
+   if (!m->void_type)
+      m->void_type = create_type(m, TYPE_VOID);
+   return m->void_type;
 }
 
-const struct dxil_type *
-dxil_module_add_bool_type(struct dxil_module *m)
+static const struct dxil_type *
+create_int_type(struct dxil_module *m, unsigned bit_size)
 {
-   struct dxil_type *type = create_type(m, TYPE_INTEGER);
-   if (type)
-      type->int_bits = 1;
-   return type;
-}
-
-const struct dxil_type *
-dxil_module_add_int_type(struct dxil_module *m, unsigned bit_size)
-{
-   assert(bit_size == 8 || bit_size == 32);
    struct dxil_type *type = create_type(m, TYPE_INTEGER);
    if (type)
       type->int_bits = bit_size;
    return type;
+}
+
+const struct dxil_type *
+dxil_module_get_bool_type(struct dxil_module *m)
+{
+   if (!m->bool_type)
+      m->bool_type = create_int_type(m, 1);
+   return m->bool_type;
+}
+
+const struct dxil_type *
+dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size)
+{
+   assert(bit_size == 8 || bit_size == 32);
+   if (bit_size == 8) {
+      if (!m->int8_type)
+         m->int8_type = create_int_type(m, 8);
+      return m->int8_type;
+   } else {
+      if (!m->int32_type)
+         m->int32_type = create_int_type(m, 32);
+      return m->int32_type;
+   }
 }
 
 const struct dxil_type *
