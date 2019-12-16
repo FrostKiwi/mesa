@@ -127,7 +127,6 @@ static bool
 emit_value_symbol_table(struct dxil_module *m)
 {
    return dxil_module_enter_subblock(m, DXIL_VALUE_SYMTAB_BLOCK, 4) &&
-          dxil_module_emit_symtab_entry(m, 0, "\01?OutputBuffer@@3V?$RWBuffer@I@@A") &&
           dxil_module_emit_symtab_entry(m, 3, "dx.op.bufferStore.i32") &&
           dxil_module_emit_symtab_entry(m, 4, "dx.op.createHandle") &&
           dxil_module_emit_symtab_entry(m, 2, "dx.op.threadId.i32") &&
