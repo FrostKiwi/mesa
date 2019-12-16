@@ -284,9 +284,9 @@ emit_record_abbrev(struct dxil_module *m,
 
    size_t curr_data = 0;
    for (int i = 0; i < a->num_operands; ++i) {
-      assert(curr_data < size);
       switch (a->operands[i].type) {
       case DXIL_OP_LITERAL:
+         assert(curr_data < size);
          assert(data[curr_data] == a->operands[i].value);
          curr_data++;
          /* literals are no-ops, because their value is defined in the
@@ -294,11 +294,13 @@ emit_record_abbrev(struct dxil_module *m,
          break;
 
       case DXIL_OP_FIXED:
+         assert(curr_data < size);
          if (!emit_fixed(m, data[curr_data++], a->operands[i].encoding_data))
             return false;
          break;
 
       case DXIL_OP_VBR:
+         assert(curr_data < size);
          if (!emit_vbr(m, data[curr_data++], a->operands[i].encoding_data))
             return false;
          break;
@@ -334,6 +336,7 @@ emit_record_abbrev(struct dxil_module *m,
          return true; /* we're done */
 
       case DXIL_OP_CHAR6:
+         assert(curr_data < size);
          if (!emit_char6(m, data[curr_data++]))
             return false;
          break;
