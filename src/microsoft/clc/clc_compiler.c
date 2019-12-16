@@ -198,10 +198,14 @@ emit_module(struct dxil_module *m)
    const struct dxil_type *createhandle_func_type = dxil_module_add_function_type(m, handle_type, createhandle_arg_types, ARRAY_SIZE(createhandle_arg_types));
    const struct dxil_type *createhandle_func_pointer_type = dxil_module_add_pointer_type(m, createhandle_func_type);
 
-   if (dxil_add_function_def(m, main_func_type, 0) == DXIL_VALUE_INVALID ||
-       dxil_add_function_decl(m, threadid_func_type, 1) == DXIL_VALUE_INVALID ||
-       dxil_add_function_decl(m, bufferstore_func_type, 2) == DXIL_VALUE_INVALID ||
-       dxil_add_function_decl(m, createhandle_func_type, 3) == DXIL_VALUE_INVALID)
+   const dxil_value main_func = dxil_add_function_def(m, main_func_type, 0);
+   const dxil_value threadid_func = dxil_add_function_decl(m, threadid_func_type, 1);
+   const dxil_value bufferstore_func = dxil_add_function_decl(m, bufferstore_func_type, 2);
+   const dxil_value createhandle_func = dxil_add_function_decl(m, createhandle_func_type, 3);
+   if (main_func == DXIL_VALUE_INVALID ||
+       threadid_func == DXIL_VALUE_INVALID ||
+       bufferstore_func == DXIL_VALUE_INVALID ||
+       createhandle_func == DXIL_VALUE_INVALID)
       return false;
 
    const dxil_value int32_1 = dxil_module_add_int32_const(m, 1);
@@ -254,13 +258,15 @@ emit_module(struct dxil_module *m)
        !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
       return false;
 
-   const dxil_value handle = dxil_emit_call(m, createhandle_func_type, 3,
+   const dxil_value handle = dxil_emit_call(m, createhandle_func_type,
+                                            createhandle_func,
                                             createhandle_args,
                                             ARRAY_SIZE(createhandle_args));
    if (handle == DXIL_VALUE_INVALID)
       return false;
 
-   const dxil_value threadid = dxil_emit_call(m, threadid_func_type, 1,
+   const dxil_value threadid = dxil_emit_call(m, threadid_func_type,
+                                              threadid_func,
                                               threadid_args,
                                               ARRAY_SIZE(threadid_args));
    if (threadid == DXIL_VALUE_INVALID)
@@ -271,7 +277,8 @@ emit_module(struct dxil_module *m)
      threadid, threadid, threadid, threadid, int8_15
    };
 
-   if (!dxil_emit_call_void(m, bufferstore_func_type, 2, bufferstore_args,
+   if (!dxil_emit_call_void(m, bufferstore_func_type, bufferstore_func,
+                            bufferstore_args,
                             ARRAY_SIZE(bufferstore_args)) ||
        !dxil_emit_ret_void(m) ||
        !dxil_module_exit_block(m))
