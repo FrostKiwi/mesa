@@ -255,13 +255,23 @@ emit_module(struct dxil_module *m)
        !dxil_emit_metadata_store(m, names, ARRAY_SIZE(names)) ||
        !emit_value_symbol_table(m) ||
        !dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
-       !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1) ||
-       !dxil_emit_call(m, createhandle_func_type, 3, createhandle_args,
-                       ARRAY_SIZE(createhandle_args)) ||
-       !dxil_emit_call(m, threadid_func_type, 1, threadid_args,
-                       ARRAY_SIZE(threadid_args)) ||
-       !dxil_emit_call(m, bufferstore_func_type, 2, bufferstore_args,
-                       ARRAY_SIZE(bufferstore_args)) ||
+       !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
+      return false;
+
+   const dxil_value handle = dxil_emit_call(m, createhandle_func_type, 3,
+                                            createhandle_args,
+                                            ARRAY_SIZE(createhandle_args));
+   if (handle == DXIL_VALUE_INVALID)
+      return false;
+
+   const dxil_value threadid = dxil_emit_call(m, threadid_func_type, 1,
+                                              threadid_args,
+                                              ARRAY_SIZE(threadid_args));
+   if (threadid == DXIL_VALUE_INVALID)
+      return false;
+
+   if (!dxil_emit_call_void(m, bufferstore_func_type, 2, bufferstore_args,
+                            ARRAY_SIZE(bufferstore_args)) ||
        !dxil_emit_ret_void(m) ||
        !dxil_module_exit_block(m))
       return false;
