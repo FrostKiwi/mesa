@@ -385,13 +385,13 @@ create_type(struct dxil_module *m, enum type_type type)
    return ret;
 }
 
-struct dxil_type *
+const struct dxil_type *
 dxil_module_add_void_type(struct dxil_module *m)
 {
    return create_type(m, TYPE_VOID);
 }
 
-struct dxil_type *
+const struct dxil_type *
 dxil_module_add_int_type(struct dxil_module *m, unsigned bit_size)
 {
    struct dxil_type *type = create_type(m, TYPE_INTEGER);
@@ -400,7 +400,7 @@ dxil_module_add_int_type(struct dxil_module *m, unsigned bit_size)
    return type;
 }
 
-struct dxil_type *
+const struct dxil_type *
 dxil_module_add_pointer_type(struct dxil_module *m,
                              const struct dxil_type *target)
 {
@@ -410,7 +410,7 @@ dxil_module_add_pointer_type(struct dxil_module *m,
    return type;
 }
 
-struct dxil_type *
+const struct dxil_type *
 dxil_module_add_struct_type(struct dxil_module *m,
                             const char *name,
                             const struct dxil_type **elem_types,
@@ -437,7 +437,7 @@ dxil_module_add_struct_type(struct dxil_module *m,
    return type;
 }
 
-struct dxil_type *
+const struct dxil_type *
 dxil_module_add_function_type(struct dxil_module *m,
                               const struct dxil_type *ret_type,
                               const struct dxil_type **arg_types,

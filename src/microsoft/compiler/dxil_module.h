@@ -223,23 +223,23 @@ dxil_emit_function_consts(struct dxil_module *m,
                           const struct dxil_const *consts,
                           size_t num_consts);
 
-struct dxil_type *
+const struct dxil_type *
 dxil_module_add_void_type(struct dxil_module *m);
 
-struct dxil_type *
+const struct dxil_type *
 dxil_module_add_int_type(struct dxil_module *m, unsigned bit_size);
 
-struct dxil_type *
+const struct dxil_type *
 dxil_module_add_pointer_type(struct dxil_module *m,
                              const struct dxil_type *target);
 
-struct dxil_type *
+const struct dxil_type *
 dxil_module_add_struct_type(struct dxil_module *m,
                             const char *name,
                             const struct dxil_type **elem_types,
                             size_t num_elem_types);
 
-struct dxil_type *
+const struct dxil_type *
 dxil_module_add_function_type(struct dxil_module *m,
                               const struct dxil_type *ret_type,
                               const struct dxil_type **arg_types,
