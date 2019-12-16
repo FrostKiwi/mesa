@@ -115,14 +115,6 @@ struct dxil_abbrev {
 struct dxil_type;
 struct dxil_value;
 
-struct dxil_const {
-   const struct dxil_type *type;
-   bool undef;
-   union {
-      int64_t int_value;
-   };
-};
-
 struct dxil_module {
    enum dxil_shader_kind shader_kind;
    unsigned major_version, minor_version;
@@ -146,6 +138,8 @@ struct dxil_module {
    struct list_head type_list;
    struct list_head func_list;
    unsigned next_type_id;
+
+   struct list_head const_list;
    unsigned next_value_id;
 
    const struct dxil_type *void_type;
@@ -218,8 +212,7 @@ bool
 dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits);
 
 bool
-dxil_emit_module_consts(struct dxil_module *m,
-                        const struct dxil_const *consts, size_t num_consts);
+dxil_emit_module_consts(struct dxil_module *m);
 
 bool
 dxil_module_emit_symtab_entry(struct dxil_module *m, unsigned value,
@@ -249,6 +242,18 @@ dxil_module_add_function_type(struct dxil_module *m,
                               const struct dxil_type *ret_type,
                               const struct dxil_type **arg_types,
                               size_t num_arg_types);
+
+const struct dxil_value *
+dxil_module_add_bool_const(struct dxil_module *m, bool value);
+
+const struct dxil_value *
+dxil_module_add_int8_const(struct dxil_module *m, int8_t value);
+
+const struct dxil_value *
+dxil_module_add_int32_const(struct dxil_module *m, int32_t value);
+
+const struct dxil_value *
+dxil_module_add_undef(struct dxil_module *m, const struct dxil_type *type);
 
 bool
 dxil_emit_metadata_abbrevs(struct dxil_module *m);
