@@ -151,6 +151,11 @@ struct dxil_module {
    struct list_head type_list;
    unsigned next_type_id;
    unsigned next_value_id;
+
+   const struct dxil_type *void_type;
+   const struct dxil_type *bool_type;
+   const struct dxil_type *int8_type;
+   const struct dxil_type *int32_type;
 };
 
 void
@@ -219,13 +224,13 @@ dxil_module_emit_symtab_entry(struct dxil_module *m, unsigned value,
                               const char *name);
 
 const struct dxil_type *
-dxil_module_add_void_type(struct dxil_module *m);
+dxil_module_get_void_type(struct dxil_module *m);
 
 const struct dxil_type *
-dxil_module_add_bool_type(struct dxil_module *m);
+dxil_module_get_bool_type(struct dxil_module *m);
 
 const struct dxil_type *
-dxil_module_add_int_type(struct dxil_module *m, unsigned bit_size);
+dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size);
 
 const struct dxil_type *
 dxil_module_add_pointer_type(struct dxil_module *m,
