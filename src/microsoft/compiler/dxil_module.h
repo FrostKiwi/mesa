@@ -113,12 +113,7 @@ struct dxil_abbrev {
 };
 
 struct dxil_type;
-
-struct dxil_function_module_info {
-   const struct dxil_type *type;
-   bool decl;
-   int attr_set;
-};
+struct dxil_value;
 
 struct dxil_const {
    const struct dxil_type *type;
@@ -149,6 +144,7 @@ struct dxil_module {
    struct dxil_abbrev type_table_abbrevs[6];
 
    struct list_head type_list;
+   struct list_head func_list;
    unsigned next_type_id;
    unsigned next_value_id;
 
@@ -207,10 +203,16 @@ bool
 dxil_emit_attribute_table(struct dxil_module *m,
                           const unsigned *attrs, size_t num_attrs);
 
+const struct dxil_value *
+dxil_add_function_def(struct dxil_module *m, const struct dxil_type *type,
+                      unsigned attr_set);
+
+const struct dxil_value *
+dxil_add_function_decl(struct dxil_module *m, const struct dxil_type *type,
+                       unsigned attr_set);
+
 bool
-dxil_emit_module_info(struct dxil_module *m,
-                      const struct dxil_function_module_info *funcs,
-                      size_t num_funcs);
+dxil_emit_module_info(struct dxil_module *m);
 
 bool
 dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits);

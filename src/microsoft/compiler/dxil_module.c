@@ -42,6 +42,8 @@ dxil_module_init(struct dxil_module *m)
 
    list_inithead(&m->type_list);
    m->next_type_id = 0;
+
+   list_inithead(&m->func_list);
    m->next_value_id = 0;
 
    m->void_type = m->bool_type = m->int8_type = m->int32_type = NULL;
@@ -1002,6 +1004,50 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
                                   temp, strlen(datalayout));
 }
 
+struct dxil_value {
+   unsigned id;
+};
+
+struct dxil_func {
+   const struct dxil_type *type;
+   bool decl;
+   unsigned attr_set;
+
+   struct dxil_value value;
+   struct list_head head;
+};
+
+const struct dxil_value *
+add_function(struct dxil_module *m, const struct dxil_type *type,
+             bool decl, unsigned attr_set)
+{
+   struct dxil_func *func = CALLOC_STRUCT(dxil_func);
+   if (!func)
+      return NULL;
+
+   func->type = type;
+   func->decl = decl;
+   func->attr_set = attr_set;
+
+   func->value.id = m->next_value_id++;
+   list_addtail(&func->head, &m->func_list);
+   return &func->value;
+}
+
+const struct dxil_value *
+dxil_add_function_def(struct dxil_module *m, const struct dxil_type *type,
+                      unsigned attr_set)
+{
+   return add_function(m, type, false, attr_set);
+}
+
+const struct dxil_value *
+dxil_add_function_decl(struct dxil_module *m, const struct dxil_type *type,
+                       unsigned attr_set)
+{
+   return add_function(m, type, true, attr_set);
+}
+
 static bool
 emit_module_info_function(struct dxil_module *m, int type, bool declaration,
                           int attr_set_index)
@@ -1013,7 +1059,6 @@ emit_module_info_function(struct dxil_module *m, int type, bool declaration,
       0 /* storage class */, 0 /* comdat */, 0 /* prefix-data */,
       0 /* personality */
    };
-   m->next_value_id++;
    return dxil_module_emit_record(m, DXIL_MODULE_CODE_FUNCTION,
                                   data, ARRAY_SIZE(data));
 }
@@ -1035,9 +1080,7 @@ emit_module_info_global(struct dxil_module *m, int type_id, bool constant,
 }
 
 bool
-dxil_emit_module_info(struct dxil_module *m,
-                      const struct dxil_function_module_info *funcs,
-                      size_t num_funcs)
+dxil_emit_module_info(struct dxil_module *m)
 {
    struct dxil_abbrev simple_gvar_abbr = {
       { LITERAL(DXIL_MODULE_CODE_GLOBALVAR), FIXED(1), VBR(6), VBR(6),
@@ -1050,10 +1093,12 @@ dxil_emit_module_info(struct dxil_module *m,
        !emit_module_info_global(m, 1, true, 3, &simple_gvar_abbr))
       return false;
 
-   for (int i = 0; i < num_funcs; ++i)
-      if (!emit_module_info_function(m, funcs[i].type->id, funcs[i].decl,
-                                     funcs[i].attr_set))
+   struct dxil_func *func;
+   LIST_FOR_EACH_ENTRY(func, &m->func_list, head) {
+      if (!emit_module_info_function(m, func->type->id, func->decl,
+                                     func->attr_set))
          return false;
+   }
 
    return true;
 }

@@ -198,12 +198,11 @@ emit_module(struct dxil_module *m)
    const struct dxil_type *createhandle_func_type = dxil_module_add_function_type(m, handle_type, createhandle_arg_types, ARRAY_SIZE(createhandle_arg_types));
    const struct dxil_type *createhandle_func_pointer_type = dxil_module_add_pointer_type(m, createhandle_func_type);
 
-   struct dxil_function_module_info funcs[] = {
-      { main_func_type, false, 0 },
-      { threadid_func_type, true, 1 },
-      { bufferstore_func_type, true, 2 },
-      { createhandle_func_type, true, 3 }
-   };
+   if (!dxil_add_function_def(m, main_func_type, 0) ||
+       !dxil_add_function_decl(m, threadid_func_type, 1) ||
+       !dxil_add_function_decl(m, bufferstore_func_type, 2) ||
+       !dxil_add_function_decl(m, createhandle_func_type, 3))
+      return false;
 
    struct dxil_const global_consts[] = {
       { int32_type, .int_value = 1 },
@@ -252,7 +251,7 @@ emit_module(struct dxil_module *m)
                                      ARRAY_SIZE(attrs)) ||
        !dxil_emit_attribute_table(m, attr_data, ARRAY_SIZE(attr_data)) ||
        !dxil_module_emit_type_table(m, num_type_bits) ||
-       !dxil_emit_module_info(m, funcs, ARRAY_SIZE(funcs)) ||
+       !dxil_emit_module_info(m) ||
        !dxil_emit_module_consts(m, global_consts,
                                 ARRAY_SIZE(global_consts)) ||
        !emit_metadata(m) ||
