@@ -1398,7 +1398,7 @@ bool
 emit_call(struct dxil_module *m,
           const struct dxil_type *func_type,
           unsigned value_id,
-          const unsigned *args, const size_t num_args)
+          const dxil_value *args, const size_t num_args)
 {
    uint64_t data[256];
 
@@ -1421,7 +1421,7 @@ const dxil_value
 dxil_emit_call(struct dxil_module *m,
                const struct dxil_type *func_type,
                unsigned value_id,
-               const unsigned *args, const size_t num_args)
+               const dxil_value *args, const size_t num_args)
 {
    assert(func_type->type == TYPE_FUNCTION &&
           func_type->function_def.ret_type->type != TYPE_VOID);
@@ -1436,7 +1436,7 @@ bool
 dxil_emit_call_void(struct dxil_module *m,
                     const struct dxil_type *func_type,
                     unsigned value_id,
-                    const unsigned *args, const size_t num_args)
+                    const dxil_value *args, const size_t num_args)
 {
    assert(func_type->type == TYPE_FUNCTION &&
           func_type->function_def.ret_type->type == TYPE_VOID);
