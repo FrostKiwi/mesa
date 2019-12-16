@@ -222,6 +222,9 @@ const struct dxil_type *
 dxil_module_add_void_type(struct dxil_module *m);
 
 const struct dxil_type *
+dxil_module_add_bool_type(struct dxil_module *m);
+
+const struct dxil_type *
 dxil_module_add_int_type(struct dxil_module *m, unsigned bit_size);
 
 const struct dxil_type *
