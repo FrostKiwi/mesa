@@ -24,6 +24,7 @@
 #include "dxil_module.h"
 
 #include "util/macros.h"
+#include "util/u_math.h"
 #include "util/u_memory.h"
 
 #include <assert.h>
@@ -1186,9 +1187,16 @@ emit_module_info_global(struct dxil_module *m, int type_id, bool constant,
 bool
 dxil_emit_module_info(struct dxil_module *m)
 {
+   struct dxil_gvar *gvar;
+   int max_global_type = 0;
+   LIST_FOR_EACH_ENTRY(gvar, &m->gvar_list, head) {
+      max_global_type = MAX2(max_global_type, gvar->type->id);
+   }
+
    struct dxil_abbrev simple_gvar_abbr = {
-      { LITERAL(DXIL_MODULE_CODE_GLOBALVAR), FIXED(1), VBR(6), VBR(6),
-          FIXED(5), FIXED(2), LITERAL(0) }, 7
+      { LITERAL(DXIL_MODULE_CODE_GLOBALVAR),
+        FIXED(util_logbase2(max_global_type) + 1),
+        VBR(6), VBR(6), FIXED(5), FIXED(2), LITERAL(0) }, 7
    };
 
    if (!emit_target_triple(m, "dxil-ms-dx") ||
@@ -1196,13 +1204,11 @@ dxil_emit_module_info(struct dxil_module *m)
        !define_abbrev(m, &simple_gvar_abbr))
       return false;
 
-   struct dxil_gvar *gvar;
    LIST_FOR_EACH_ENTRY(gvar, &m->gvar_list, head) {
       if (!emit_module_info_global(m, gvar->type->id, gvar->constant,
                                    gvar->align, &simple_gvar_abbr))
          return false;
    }
-
 
    struct dxil_func *func;
    LIST_FOR_EACH_ENTRY(func, &m->func_list, head) {
