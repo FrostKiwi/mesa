@@ -47,6 +47,8 @@ dxil_module_init(struct dxil_module *m)
    list_inithead(&m->const_list);
    m->next_value_id = 0;
 
+   m->next_mdnode_id = 1; /* zero is reserved for NULL nodes */
+
    m->void_type = m->bool_type = m->int8_type = m->int32_type = NULL;
 }
 
@@ -1325,11 +1327,14 @@ dxil_emit_metadata_abbrevs(struct dxil_module *m)
    return true;
 }
 
-bool
+const dxil_mdnode
 dxil_emit_metadata_value(struct dxil_module *m, int type_id, int value_id)
 {
    uint64_t data[2] = { type_id, value_id };
-   return dxil_module_emit_record(m, METADATA_VALUE, data, ARRAY_SIZE(data));
+   if (!dxil_module_emit_record(m, METADATA_VALUE, data, ARRAY_SIZE(data)))
+      return DXIL_MDNODE_NULL;
+
+   return m->next_mdnode_id++;
 }
 
 static bool
@@ -1344,7 +1349,7 @@ emit_metadata_abbrev_record(struct dxil_module *m, unsigned abbrev,
                              data, size);
 }
 
-bool
+const dxil_mdnode
 dxil_emit_metadata_string(struct dxil_module *m, const char *str)
 {
    uint64_t data[256];
@@ -1353,10 +1358,13 @@ dxil_emit_metadata_string(struct dxil_module *m, const char *str)
    for (size_t i = 0; i < strlen(str); ++i)
       data[i + 1] = str[i];
 
-   return emit_metadata_abbrev_record(m, 4, data, strlen(str) + 1);
+   if (!emit_metadata_abbrev_record(m, 4, data, strlen(str) + 1))
+      return DXIL_MDNODE_NULL;
+
+   return m->next_mdnode_id++;
 }
 
-bool
+const dxil_mdnode
 dxil_emit_metadata_node(struct dxil_module *m, const unsigned subnodes[],
                         size_t num_subnodes)
 {
@@ -1365,7 +1373,10 @@ dxil_emit_metadata_node(struct dxil_module *m, const unsigned subnodes[],
    for (size_t i = 0; i < num_subnodes; ++i)
       data[i] = subnodes[i];
 
-   return dxil_module_emit_record(m, METADATA_NODE, data, num_subnodes);
+   if (!dxil_module_emit_record(m, METADATA_NODE, data, num_subnodes))
+      return DXIL_MDNODE_NULL;
+
+   return m->next_mdnode_id++;
 }
 
 static bool
@@ -1382,13 +1393,15 @@ emit_metadata_name(struct dxil_module *m, const char *name)
 
 bool
 dxil_emit_metadata_named_node(struct dxil_module *m, const char *name,
-                              const unsigned subnodes[],
+                              const dxil_mdnode subnodes[],
                               size_t num_subnodes)
 {
    uint64_t data[256];
    assert(num_subnodes < ARRAY_SIZE(data));
-   for (size_t i = 0; i < num_subnodes; ++i)
-      data[i] = subnodes[i];
+   for (size_t i = 0; i < num_subnodes; ++i) {
+      assert(subnodes[i] > 0); /* NULL nodes not allowed */
+      data[i] = subnodes[i] - 1;
+   }
 
    return emit_metadata_name(m, name) &&
           dxil_module_emit_record(m, METADATA_NAMED_NODE,
