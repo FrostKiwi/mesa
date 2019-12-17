@@ -218,6 +218,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_type *createhandle_func_type = dxil_module_add_function_type(m, handle_type, createhandle_arg_types, ARRAY_SIZE(createhandle_arg_types));
    const struct dxil_type *createhandle_func_pointer_type = dxil_module_add_pointer_type(m, createhandle_func_type);
 
+   dxil_add_global_var(m, rwbuffer_struct_type, true, 3);
    const dxil_value main_func = dxil_add_function_def(m, main_func_type, 0);
    const dxil_value threadid_func = dxil_add_function_decl(m, threadid_func_type, 1);
    const dxil_value bufferstore_func = dxil_add_function_decl(m, bufferstore_func_type, 2);
