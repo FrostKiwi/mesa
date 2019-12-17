@@ -1463,35 +1463,3 @@ dxil_emit_ret_void(struct dxil_module *m)
    uint64_t data[] = { FUNC_CODE_INST_RET };
    return emit_func_abbrev_record(m, 8, data, ARRAY_SIZE(data));
 }
-
-bool
-emit_metadata_kind(struct dxil_module *m,
-                   const char *name, unsigned id)
-{
-   // Write id
-   uint64_t temp[256];
-   assert((strlen(name) + 1) < ARRAY_SIZE(temp));
-
-   temp[0] = id;
-   for (int i = 0; i < strlen(name); ++i)
-      temp[i + 1] = name[i];
-
-   return dxil_module_emit_record(m, METADATA_KIND, temp, 1 + strlen(name));
-}
-
-bool
-dxil_emit_metadata_store(struct dxil_module *m,
-                         const char **names,
-                         const size_t num_attrs)
-{
-   // Write metadata kinds
-   // METADATA_KIND - [n x [id, name]]
-   if (!dxil_module_enter_subblock(m, DXIL_METADATA_BLOCK, 3))
-      return false;
-
-   for(size_t i = 0; i < num_attrs; ++i)
-      if (!emit_metadata_kind(m, names[i], i))
-         return false;
-
-   return dxil_module_exit_block(m);
-}
