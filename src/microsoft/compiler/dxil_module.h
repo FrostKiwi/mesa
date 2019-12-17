@@ -294,11 +294,6 @@ dxil_emit_call_void(struct dxil_module *m,
 bool
 dxil_emit_ret_void(struct dxil_module *m);
 
-bool
-dxil_emit_metadata_store(struct dxil_module *m,
-                         const char **names,
-                         const size_t num_attrs);
-
 #ifdef __cplusplus
 }
 #endif
