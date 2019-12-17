@@ -116,6 +116,9 @@ struct dxil_type;
 typedef int dxil_value;
 #define DXIL_VALUE_INVALID ((dxil_value) -1)
 
+typedef int dxil_mdnode;
+#define DXIL_MDNODE_NULL ((dxil_mdnode) 0)
+
 struct dxil_module {
    enum dxil_shader_kind shader_kind;
    unsigned major_version, minor_version;
@@ -142,6 +145,8 @@ struct dxil_module {
 
    struct list_head const_list;
    unsigned next_value_id;
+
+   unsigned next_mdnode_id;
 
    const struct dxil_type *void_type;
    const struct dxil_type *bool_type;
@@ -259,19 +264,19 @@ dxil_module_add_undef(struct dxil_module *m, const struct dxil_type *type);
 bool
 dxil_emit_metadata_abbrevs(struct dxil_module *m);
 
-bool
+const dxil_mdnode
 dxil_emit_metadata_node(struct dxil_module *m, const unsigned subnodes[],
                         size_t num_subnodes);
 
-bool
+const dxil_mdnode
 dxil_emit_metadata_value(struct dxil_module *m, int type_id, int value_id);
 
-bool
+const dxil_mdnode
 dxil_emit_metadata_string(struct dxil_module *m, const char *str);
 
 bool
 dxil_emit_metadata_named_node(struct dxil_module *m, const char *name,
-                              const unsigned subnodes[],
+                              const dxil_mdnode subnodes[],
                               size_t num_subnodes);
 
 const dxil_value
