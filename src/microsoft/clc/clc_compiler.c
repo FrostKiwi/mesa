@@ -31,120 +31,6 @@
 #include <stdint.h>
 
 static bool
-emit_metadata(struct dxil_module *m)
-{
-   if (!dxil_module_enter_subblock(m, DXIL_METADATA_BLOCK, 3) ||
-       !dxil_emit_metadata_abbrevs(m))
-      return false;
-
-   const dxil_mdnode compiler = dxil_emit_metadata_string(m, "clang version 3.7 (tags/RELEASE_370/final)");
-   const dxil_mdnode llvm_ident = dxil_emit_metadata_node(m, &compiler, 1);
-   if (!compiler || !llvm_ident)
-      return false;
-
-   int int32_type = 0;
-   int rwbuffer_struct_type = 1;
-   int rwbuffer_pointer_type = 2;
-   int main_func_pointer_type = 5;
-   int bool_type = 13;
-
-   const dxil_mdnode node3 = dxil_emit_metadata_value(m, int32_type, 5);
-   const dxil_mdnode node4 = dxil_emit_metadata_value(m, int32_type, 6);
-   const dxil_mdnode nodes_3_4[] = { node3, node4 };
-   const dxil_mdnode node5 = dxil_emit_metadata_node(m, nodes_3_4,
-                                                     ARRAY_SIZE(nodes_3_4));
-   const dxil_mdnode node6 = dxil_emit_metadata_string(m, "cs");
-   const dxil_mdnode node7 = dxil_emit_metadata_value(m, int32_type, 7);
-   const dxil_mdnode nodes_6_7_4[] = { node6, node7, node4 };
-   const dxil_mdnode dx_shader_model = dxil_emit_metadata_node(m, nodes_6_7_4,
-                                                     ARRAY_SIZE(nodes_6_7_4));
-   const dxil_mdnode node9 = dxil_emit_metadata_value(m, rwbuffer_pointer_type, 14);
-   const dxil_mdnode node10 = dxil_emit_metadata_string(m, "OutputBuffer");
-   const dxil_mdnode node11 = dxil_emit_metadata_value(m, int32_type, 8);
-   const dxil_mdnode node12 = dxil_emit_metadata_value(m, bool_type, 13);
-   const dxil_mdnode node13 = dxil_emit_metadata_value(m, int32_type, 9);
-   const dxil_mdnode nodes_4_13[] = { node4, node13 };
-   const dxil_mdnode node14 = dxil_emit_metadata_node(m, nodes_4_13, ARRAY_SIZE(nodes_4_13));
-
-   const dxil_mdnode nodes_many[] = { node4, node9, node10, node4, node4, node3, node11, node12, node12, node12, node14 };
-   const dxil_mdnode node15 = dxil_emit_metadata_node(m, nodes_many, ARRAY_SIZE(nodes_many));
-   const dxil_mdnode node16 = dxil_emit_metadata_node(m, &node15, 1);
-
-   const dxil_mdnode nodes_0_16_0_0[] = { DXIL_MDNODE_NULL, node16, DXIL_MDNODE_NULL, DXIL_MDNODE_NULL };
-   const dxil_mdnode main_resources = dxil_emit_metadata_node(m, nodes_0_16_0_0,
-                                                      ARRAY_SIZE(nodes_0_16_0_0));
-
-   const dxil_mdnode node18 = dxil_emit_metadata_value(m, rwbuffer_struct_type, 15);
-   const dxil_mdnode node19 = dxil_emit_metadata_value(m, int32_type, 10);
-   const dxil_mdnode node20 = dxil_emit_metadata_string(m, "h");
-   const dxil_mdnode node21 = dxil_emit_metadata_value(m, int32_type, 11);
-   const dxil_mdnode node22 = dxil_emit_metadata_value(m, int32_type, 12);
-
-   const dxil_mdnode nodes_7_20_21_4_22_13[] = { node7, node20, node21, node4, node22, node13 };
-   const dxil_mdnode node23 = dxil_emit_metadata_node(m, nodes_7_20_21_4_22_13,
-                                                      ARRAY_SIZE(nodes_7_20_21_4_22_13));
-
-   const dxil_mdnode nodes_19_23[] = { node19, node23 };
-   const dxil_mdnode node24 = dxil_emit_metadata_node(m, nodes_19_23,
-                                                      ARRAY_SIZE(nodes_19_23));
-
-   const dxil_mdnode nodes_4_18_24[] = { node4, node18, node24 };
-   const dxil_mdnode node25 = dxil_emit_metadata_node(m, nodes_4_18_24,
-                                                      ARRAY_SIZE(nodes_4_18_24));
-
-   const dxil_mdnode main_entrypoint = dxil_emit_metadata_value(m, main_func_pointer_type, 1);
-   const dxil_mdnode node27 = dxil_emit_metadata_node(m, NULL, 0);
-
-   const dxil_mdnode nodes_4_27_27[] = { node4, node27, node27 };
-   const dxil_mdnode node28 = dxil_emit_metadata_node(m, nodes_4_27_27,
-                                                      ARRAY_SIZE(nodes_4_27_27));
-
-   const dxil_mdnode node29 = dxil_emit_metadata_node(m, &node28, 1);
-
-   const dxil_mdnode nodes_3_26_29[] = { node3, main_entrypoint, node29 };
-   const dxil_mdnode node30 = dxil_emit_metadata_node(m, nodes_3_26_29,
-                                                      ARRAY_SIZE(nodes_3_26_29));
-
-   const dxil_mdnode main_name = dxil_emit_metadata_string(m, "main");
-
-   const dxil_mdnode nodes_3_3_3[] = { node3, node3, node3 };
-   const dxil_mdnode node32 = dxil_emit_metadata_node(m, nodes_3_3_3,
-                                                      ARRAY_SIZE(nodes_3_3_3));
-
-   const dxil_mdnode nodes_19_32[] = { node19, node32 };
-   const dxil_mdnode node33 = dxil_emit_metadata_node(m, nodes_19_32,
-                                                      ARRAY_SIZE(nodes_19_32));
-   const dxil_mdnode main_entrypoint_metadata[] = {
-      main_entrypoint,
-      main_name,
-      DXIL_MDNODE_NULL, /* list of signatures */
-      main_resources, /* list of resources */
-      node33 /* list of caps and other properties */
-   };
-   const dxil_mdnode dx_entry_point = dxil_emit_metadata_node(m, main_entrypoint_metadata,
-                                                      ARRAY_SIZE(main_entrypoint_metadata));
-
-   const dxil_mdnode dx_version = node5, dx_valver = node5,
-                     dx_resources = main_resources,
-                     dx_type_annotations[] = { node25, node30 };
-   if (!dxil_emit_metadata_named_node(m, "llvm.ident", &llvm_ident, 1) ||
-       !dxil_emit_metadata_named_node(m, "dx.version", &dx_version, 1) ||
-       !dxil_emit_metadata_named_node(m, "dx.valver", &dx_valver, 1) ||
-       !dxil_emit_metadata_named_node(m, "dx.shaderModel",
-                                      &dx_shader_model, 1) ||
-       !dxil_emit_metadata_named_node(m, "dx.resources",
-                                      &dx_resources, 1) ||
-       !dxil_emit_metadata_named_node(m, "dx.typeAnnotations",
-                                 dx_type_annotations,
-                                 ARRAY_SIZE(dx_type_annotations)) ||
-       !dxil_emit_metadata_named_node(m, "dx.entryPoints",
-                                      &dx_entry_point, 1))
-      return false;
-
-   return dxil_module_exit_block(m);
-}
-
-static bool
 emit_value_symbol_table(struct dxil_module *m)
 {
    return dxil_module_enter_subblock(m, DXIL_VALUE_SYMTAB_BLOCK, 4) &&
@@ -263,8 +149,112 @@ emit_module(struct dxil_module *m)
        !dxil_emit_attribute_table(m, attr_data, ARRAY_SIZE(attr_data)) ||
        !dxil_module_emit_type_table(m, num_type_bits) ||
        !dxil_emit_module_info(m) ||
-       !dxil_emit_module_consts(m) ||
-       !emit_metadata(m) ||
+       !dxil_emit_module_consts(m))
+      return false;
+
+   if (!dxil_module_enter_subblock(m, DXIL_METADATA_BLOCK, 3) ||
+       !dxil_emit_metadata_abbrevs(m))
+      return false;
+
+   const dxil_mdnode compiler = dxil_emit_metadata_string(m, "clang version 3.7 (tags/RELEASE_370/final)");
+   const dxil_mdnode llvm_ident = dxil_emit_metadata_node(m, &compiler, 1);
+   if (!compiler || !llvm_ident)
+      return false;
+
+   const dxil_mdnode node3 = dxil_emit_metadata_value(m, int32_type, int32_1);
+   const dxil_mdnode node4 = dxil_emit_metadata_value(m, int32_type, int32_0); // 0
+   const dxil_mdnode nodes_3_4[] = { node3, node4 };
+   const dxil_mdnode node5 = dxil_emit_metadata_node(m, nodes_3_4,
+                                                     ARRAY_SIZE(nodes_3_4));
+   const dxil_mdnode node6 = dxil_emit_metadata_string(m, "cs");
+   const dxil_mdnode node7 = dxil_emit_metadata_value(m, int32_type, int32_6); // 6
+   const dxil_mdnode nodes_6_7_4[] = { node6, node7, node4 };
+   const dxil_mdnode dx_shader_model = dxil_emit_metadata_node(m, nodes_6_7_4,
+                                                               ARRAY_SIZE(nodes_6_7_4));
+   const dxil_mdnode node9 = dxil_emit_metadata_value(m, rwbuffer_pointer_type, rwbuffer_pointer_undef);
+   const dxil_mdnode node10 = dxil_emit_metadata_string(m, "OutputBuffer");
+   const dxil_mdnode node11 = dxil_emit_metadata_value(m, int32_type, int32_10);
+   const dxil_mdnode node12 = dxil_emit_metadata_value(m, bool_type, bool_false);
+   const dxil_mdnode node13 = dxil_emit_metadata_value(m, int32_type, int32_5);
+   const dxil_mdnode nodes_4_13[] = { node4, node13 };
+   const dxil_mdnode node14 = dxil_emit_metadata_node(m, nodes_4_13, ARRAY_SIZE(nodes_4_13));
+
+   const dxil_mdnode nodes_many[] = { node4, node9, node10, node4, node4, node3, node11, node12, node12, node12, node14 };
+   const dxil_mdnode node15 = dxil_emit_metadata_node(m, nodes_many, ARRAY_SIZE(nodes_many));
+   const dxil_mdnode node16 = dxil_emit_metadata_node(m, &node15, 1);
+
+   const dxil_mdnode nodes_0_16_0_0[] = { DXIL_MDNODE_NULL, node16, DXIL_MDNODE_NULL, DXIL_MDNODE_NULL };
+   const dxil_mdnode main_resources = dxil_emit_metadata_node(m, nodes_0_16_0_0,
+                                                      ARRAY_SIZE(nodes_0_16_0_0));
+
+   const dxil_mdnode node18 = dxil_emit_metadata_value(m, rwbuffer_struct_type, rwbuffer_struct_undef);
+   const dxil_mdnode node19 = dxil_emit_metadata_value(m, int32_type, int32_4);
+   const dxil_mdnode node20 = dxil_emit_metadata_string(m, "h");
+   const dxil_mdnode node21 = dxil_emit_metadata_value(m, int32_type, int32_3);
+   const dxil_mdnode node22 = dxil_emit_metadata_value(m, int32_type, int32_7);
+
+   const dxil_mdnode nodes_7_20_21_4_22_13[] = { node7, node20, node21, node4, node22, node13 };
+   const dxil_mdnode node23 = dxil_emit_metadata_node(m, nodes_7_20_21_4_22_13,
+                                                      ARRAY_SIZE(nodes_7_20_21_4_22_13));
+
+   const dxil_mdnode nodes_19_23[] = { node19, node23 };
+   const dxil_mdnode node24 = dxil_emit_metadata_node(m, nodes_19_23,
+                                                      ARRAY_SIZE(nodes_19_23));
+
+   const dxil_mdnode nodes_4_18_24[] = { node4, node18, node24 };
+   const dxil_mdnode node25 = dxil_emit_metadata_node(m, nodes_4_18_24,
+                                                      ARRAY_SIZE(nodes_4_18_24));
+
+   const dxil_mdnode main_entrypoint = dxil_emit_metadata_value(m, main_func_pointer_type, 1);
+   const dxil_mdnode node27 = dxil_emit_metadata_node(m, NULL, 0);
+
+   const dxil_mdnode nodes_4_27_27[] = { node4, node27, node27 };
+   const dxil_mdnode node28 = dxil_emit_metadata_node(m, nodes_4_27_27,
+                                                      ARRAY_SIZE(nodes_4_27_27));
+
+   const dxil_mdnode node29 = dxil_emit_metadata_node(m, &node28, 1);
+
+   const dxil_mdnode nodes_3_26_29[] = { node3, main_entrypoint, node29 };
+   const dxil_mdnode node30 = dxil_emit_metadata_node(m, nodes_3_26_29,
+                                                      ARRAY_SIZE(nodes_3_26_29));
+
+   const dxil_mdnode main_name = dxil_emit_metadata_string(m, "main");
+
+   const dxil_mdnode nodes_3_3_3[] = { node3, node3, node3 };
+   const dxil_mdnode node32 = dxil_emit_metadata_node(m, nodes_3_3_3,
+                                                      ARRAY_SIZE(nodes_3_3_3));
+
+   const dxil_mdnode nodes_19_32[] = { node19, node32 };
+   const dxil_mdnode node33 = dxil_emit_metadata_node(m, nodes_19_32,
+                                                      ARRAY_SIZE(nodes_19_32));
+   const dxil_mdnode main_entrypoint_metadata[] = {
+      main_entrypoint,
+      main_name,
+      DXIL_MDNODE_NULL, /* list of signatures */
+      main_resources, /* list of resources */
+      node33 /* list of caps and other properties */
+   };
+   const dxil_mdnode dx_entry_point = dxil_emit_metadata_node(m, main_entrypoint_metadata,
+                                                      ARRAY_SIZE(main_entrypoint_metadata));
+
+   const dxil_mdnode dx_version = node5, dx_valver = node5,
+                     dx_resources = main_resources,
+                     dx_type_annotations[] = { node25, node30 };
+   if (!dxil_emit_metadata_named_node(m, "llvm.ident", &llvm_ident, 1) ||
+       !dxil_emit_metadata_named_node(m, "dx.version", &dx_version, 1) ||
+       !dxil_emit_metadata_named_node(m, "dx.valver", &dx_valver, 1) ||
+       !dxil_emit_metadata_named_node(m, "dx.shaderModel",
+                                      &dx_shader_model, 1) ||
+       !dxil_emit_metadata_named_node(m, "dx.resources",
+                                      &dx_resources, 1) ||
+       !dxil_emit_metadata_named_node(m, "dx.typeAnnotations",
+                                 dx_type_annotations,
+                                 ARRAY_SIZE(dx_type_annotations)) ||
+       !dxil_emit_metadata_named_node(m, "dx.entryPoints",
+                                      &dx_entry_point, 1))
+      return false;
+
+   if (!dxil_module_exit_block(m) ||
        !emit_value_symbol_table(m) ||
        !dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
        !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
