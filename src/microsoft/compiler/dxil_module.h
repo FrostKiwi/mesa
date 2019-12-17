@@ -140,6 +140,7 @@ struct dxil_module {
    struct dxil_abbrev type_table_abbrevs[6];
 
    struct list_head type_list;
+   struct list_head gvar_list;
    struct list_head func_list;
    unsigned next_type_id;
 
@@ -202,6 +203,10 @@ dxil_emit_attrib_group_table(struct dxil_module *m,
 bool
 dxil_emit_attribute_table(struct dxil_module *m,
                           const unsigned *attrs, size_t num_attrs);
+
+const dxil_value
+dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
+                    bool constant, int align);
 
 const dxil_value
 dxil_add_function_def(struct dxil_module *m, const struct dxil_type *type,
