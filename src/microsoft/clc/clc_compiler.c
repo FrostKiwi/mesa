@@ -256,14 +256,6 @@ emit_module(struct dxil_module *m)
    const int FUNC_CODE_DECLAREBLOCKS = 1; // TODO: remove
    const int num_type_bits = 5;
 
-   const char *names[] = {
-      "dbg", "tbaa", "prof", "fpmath", "range", "tbaa.struct",
-      "invariant.load", "alias.scope", "noalias", "nontemporal",
-      "llvm.mem.parallel_loop_access", "nonnull",
-      "dereferenceable", "dereferenceable_or_null",
-      "dx.hl.resource.attribute", "dx.dbg.varlayout"
-   };
-
    if (!dxil_module_emit_blockinfo(m, num_type_bits) ||
        !dxil_emit_attrib_group_table(m, attrs, attr_sizes,
                                      ARRAY_SIZE(attrs)) ||
@@ -272,7 +264,6 @@ emit_module(struct dxil_module *m)
        !dxil_emit_module_info(m) ||
        !dxil_emit_module_consts(m) ||
        !emit_metadata(m) ||
-       !dxil_emit_metadata_store(m, names, ARRAY_SIZE(names)) ||
        !emit_value_symbol_table(m) ||
        !dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
        !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
