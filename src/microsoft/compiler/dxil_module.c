@@ -44,6 +44,7 @@ dxil_module_init(struct dxil_module *m)
    m->next_type_id = 0;
 
    list_inithead(&m->func_list);
+   list_inithead(&m->gvar_list);
    list_inithead(&m->const_list);
    m->next_value_id = 0;
 
@@ -1094,7 +1095,7 @@ struct dxil_func {
    struct list_head head;
 };
 
-const dxil_value
+static const dxil_value
 add_function(struct dxil_module *m, const struct dxil_type *type,
              bool decl, unsigned attr_set)
 {
@@ -1109,6 +1110,32 @@ add_function(struct dxil_module *m, const struct dxil_type *type,
    func->value = m->next_value_id++;
    list_addtail(&func->head, &m->func_list);
    return func->value;
+}
+
+struct dxil_gvar {
+   const struct dxil_type *type;
+   bool constant;
+   int align;
+
+   dxil_value value;
+   struct list_head head;
+};
+
+const dxil_value
+dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
+                    bool constant, int align)
+{
+   struct dxil_gvar *gvar = CALLOC_STRUCT(dxil_gvar);
+   if (!gvar)
+      return DXIL_VALUE_INVALID;
+
+   gvar->type = type;
+   gvar->constant = constant;
+   gvar->align = align;
+
+   gvar->value = m->next_value_id++;
+   list_addtail(&gvar->head, &m->gvar_list);
+   return gvar->value;
 }
 
 const dxil_value
@@ -1166,9 +1193,16 @@ dxil_emit_module_info(struct dxil_module *m)
 
    if (!emit_target_triple(m, "dxil-ms-dx") ||
        !emit_datalayout(m, "e-m:e-p:32:32-i1:32-i8:32-i16:32-i32:32-i64:64-f16:32-f32:32-f64:64-n8:16:32:64") ||
-       !define_abbrev(m, &simple_gvar_abbr) ||
-       !emit_module_info_global(m, 1, true, 3, &simple_gvar_abbr))
+       !define_abbrev(m, &simple_gvar_abbr))
       return false;
+
+   struct dxil_gvar *gvar;
+   LIST_FOR_EACH_ENTRY(gvar, &m->gvar_list, head) {
+      if (!emit_module_info_global(m, gvar->type->id, gvar->constant,
+                                   gvar->align, &simple_gvar_abbr))
+         return false;
+   }
+
 
    struct dxil_func *func;
    LIST_FOR_EACH_ENTRY(func, &m->func_list, head) {
