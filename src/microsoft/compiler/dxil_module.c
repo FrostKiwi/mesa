@@ -1362,9 +1362,10 @@ dxil_emit_metadata_abbrevs(struct dxil_module *m)
 }
 
 const dxil_mdnode
-dxil_emit_metadata_value(struct dxil_module *m, int type_id, int value_id)
+dxil_emit_metadata_value(struct dxil_module *m, const struct dxil_type *type,
+                         const dxil_value value)
 {
-   uint64_t data[2] = { type_id, value_id };
+   uint64_t data[2] = { type->id, value };
    if (!dxil_module_emit_record(m, METADATA_VALUE, data, ARRAY_SIZE(data)))
       return DXIL_MDNODE_NULL;
 
@@ -1399,7 +1400,7 @@ dxil_emit_metadata_string(struct dxil_module *m, const char *str)
 }
 
 const dxil_mdnode
-dxil_emit_metadata_node(struct dxil_module *m, const unsigned subnodes[],
+dxil_emit_metadata_node(struct dxil_module *m, const dxil_mdnode subnodes[],
                         size_t num_subnodes)
 {
    uint64_t data[256];

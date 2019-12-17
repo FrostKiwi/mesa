@@ -270,11 +270,12 @@ bool
 dxil_emit_metadata_abbrevs(struct dxil_module *m);
 
 const dxil_mdnode
-dxil_emit_metadata_node(struct dxil_module *m, const unsigned subnodes[],
+dxil_emit_metadata_node(struct dxil_module *m, const dxil_mdnode subnodes[],
                         size_t num_subnodes);
 
 const dxil_mdnode
-dxil_emit_metadata_value(struct dxil_module *m, int type_id, int value_id);
+dxil_emit_metadata_value(struct dxil_module *m, const struct dxil_type *type,
+                         const dxil_value value);
 
 const dxil_mdnode
 dxil_emit_metadata_string(struct dxil_module *m, const char *str);
