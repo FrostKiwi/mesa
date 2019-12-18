@@ -28,6 +28,8 @@
 
 #include "util/u_debug.h"
 
+#include "git_sha1.h"
+
 #include <stdint.h>
 
 static bool
@@ -156,7 +158,7 @@ emit_module(struct dxil_module *m)
        !dxil_emit_metadata_abbrevs(m))
       return false;
 
-   const dxil_mdnode compiler = dxil_emit_metadata_string(m, "clang version 3.7 (tags/RELEASE_370/final)");
+   const dxil_mdnode compiler = dxil_emit_metadata_string(m, "Mesa version " PACKAGE_VERSION MESA_GIT_SHA1);
    const dxil_mdnode llvm_ident = dxil_emit_metadata_node(m, &compiler, 1);
    if (!compiler || !llvm_ident)
       return false;
