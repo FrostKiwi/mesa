@@ -1011,11 +1011,10 @@ create_const(struct dxil_module *m, const struct dxil_type *type, bool undef)
 }
 
 static const dxil_value
-get_int_const(struct dxil_module *m, int32_t value, int bit_size)
+get_int_const(struct dxil_module *m, const struct dxil_type *type,
+              intmax_t value)
 {
-   const struct dxil_type *type = dxil_module_get_int_type(m, bit_size);
-   if (!type)
-      return DXIL_VALUE_INVALID;
+   assert(type && type->type == TYPE_INTEGER);
 
    struct dxil_const *c;
    LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
@@ -1037,19 +1036,31 @@ get_int_const(struct dxil_module *m, int32_t value, int bit_size)
 const dxil_value
 dxil_module_get_int1_const(struct dxil_module *m, bool value)
 {
-   return get_int_const(m, value, 1);
+   const struct dxil_type *type = dxil_module_get_int_type(m, 1);
+   if (!type)
+      return DXIL_VALUE_INVALID;
+
+   return get_int_const(m, type, value);
 }
 
 const dxil_value
 dxil_module_get_int8_const(struct dxil_module *m, int8_t value)
 {
-   return get_int_const(m, value, 8);
+   const struct dxil_type *type = dxil_module_get_int_type(m, 8);
+   if (!type)
+      return DXIL_VALUE_INVALID;
+
+   return get_int_const(m, type, value);
 }
 
 const dxil_value
 dxil_module_get_int32_const(struct dxil_module *m, int32_t value)
 {
-   return get_int_const(m, value, 32);
+   const struct dxil_type *type = dxil_module_get_int_type(m, 32);
+   if (!type)
+      return DXIL_VALUE_INVALID;
+
+   return get_int_const(m, type, value);
 }
 
 const dxil_value
