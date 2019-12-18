@@ -135,13 +135,6 @@ emit_module(struct dxil_module *m)
    const dxil_value int8_1 = dxil_module_get_int8_const(m, 1);
    const dxil_value int8_15 = dxil_module_get_int8_const(m, 15);
 
-   const dxil_value createhandle_args[] = {
-      int32_57, int8_1, int32_0, int32_0, int1_0
-   };
-   const dxil_value threadid_args[] = {
-     int32_93, int32_0
-   };
-
    const int FUNC_CODE_DECLAREBLOCKS = 1; // TODO: remove
    const int num_type_bits = 5;
 
@@ -262,6 +255,9 @@ emit_module(struct dxil_module *m)
        !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
       return false;
 
+   const dxil_value createhandle_args[] = {
+      int32_57, int8_1, int32_0, int32_0, int1_0
+   };
    const dxil_value handle = dxil_emit_call(m, createhandle_func_type,
                                             createhandle_func,
                                             createhandle_args,
@@ -269,6 +265,9 @@ emit_module(struct dxil_module *m)
    if (handle == DXIL_VALUE_INVALID)
       return false;
 
+   const dxil_value threadid_args[] = {
+     int32_93, int32_0
+   };
    const dxil_value threadid = dxil_emit_call(m, threadid_func_type,
                                               threadid_func,
                                               threadid_args,
