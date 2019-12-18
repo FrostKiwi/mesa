@@ -148,6 +148,7 @@ struct dxil_module {
 
    struct list_head mdnode_list;
    unsigned next_mdnode_id;
+   struct list_head md_named_node_list;
 
    const struct dxil_type *void_type;
    const struct dxil_type *int1_type;
@@ -282,12 +283,15 @@ dxil_add_metadata_node(struct dxil_module *m,
                        size_t num_subnodes);
 
 bool
+dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
+                             const struct dxil_mdnode *subnodes[],
+                             size_t num_subnodes);
+
+bool
 dxil_emit_metadata_nodes(struct dxil_module *m);
 
 bool
-dxil_emit_metadata_named_node(struct dxil_module *m, const char *name,
-                              const struct dxil_mdnode *subnodes[],
-                              size_t num_subnodes);
+dxil_emit_metadata_named_nodes(struct dxil_module *m);
 
 const dxil_value
 dxil_emit_call(struct dxil_module *m,
