@@ -150,7 +150,7 @@ struct dxil_module {
    unsigned next_mdnode_id;
 
    const struct dxil_type *void_type;
-   const struct dxil_type *bool_type;
+   const struct dxil_type *int1_type;
    const struct dxil_type *int8_type;
    const struct dxil_type *int32_type;
 };
@@ -233,9 +233,6 @@ const struct dxil_type *
 dxil_module_get_void_type(struct dxil_module *m);
 
 const struct dxil_type *
-dxil_module_get_bool_type(struct dxil_module *m);
-
-const struct dxil_type *
 dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size);
 
 const struct dxil_type *
@@ -255,7 +252,7 @@ dxil_module_add_function_type(struct dxil_module *m,
                               size_t num_arg_types);
 
 const dxil_value
-dxil_module_add_bool_const(struct dxil_module *m, bool value);
+dxil_module_add_int1_const(struct dxil_module *m, bool value);
 
 const dxil_value
 dxil_module_add_int8_const(struct dxil_module *m, int8_t value);

@@ -98,9 +98,9 @@ emit_module(struct dxil_module *m)
    const struct dxil_type *bufferstore_func_type = dxil_module_add_function_type(m, void_type, bufferstore_arg_types, ARRAY_SIZE(bufferstore_arg_types));
    const struct dxil_type *bufferstore_func_pointer_type = dxil_module_add_pointer_type(m, bufferstore_func_type);
 
-   const struct dxil_type *bool_type = dxil_module_get_bool_type(m);
+   const struct dxil_type *int1_type = dxil_module_get_int_type(m, 1);
 
-   const struct dxil_type *createhandle_arg_types[] = { int32_type, int8_type, int32_type, int32_type, bool_type };
+   const struct dxil_type *createhandle_arg_types[] = { int32_type, int8_type, int32_type, int32_type, int1_type };
    const struct dxil_type *createhandle_func_type = dxil_module_add_function_type(m, handle_type, createhandle_arg_types, ARRAY_SIZE(createhandle_arg_types));
    const struct dxil_type *createhandle_func_pointer_type = dxil_module_add_pointer_type(m, createhandle_func_type);
 
@@ -123,7 +123,7 @@ emit_module(struct dxil_module *m)
    const dxil_value int32_4 = dxil_module_add_int32_const(m, 4);
    const dxil_value int32_3 = dxil_module_add_int32_const(m, 3);
    const dxil_value int32_7 = dxil_module_add_int32_const(m, 7);
-   const dxil_value bool_false = dxil_module_add_bool_const(m, false);
+   const dxil_value int1_0 = dxil_module_add_int1_const(m, false);
    const dxil_value rwbuffer_pointer_undef = dxil_module_add_undef(m, rwbuffer_pointer_type);
    const dxil_value rwbuffer_struct_undef = dxil_module_add_undef(m, rwbuffer_struct_type);
    const dxil_value int32_57 = dxil_module_add_int32_const(m, 57);
@@ -134,7 +134,7 @@ emit_module(struct dxil_module *m)
    const dxil_value int8_15 = dxil_module_add_int8_const(m, 15);
 
    const dxil_value createhandle_args[] = {
-      int32_57, int8_1, int32_0, int32_0, bool_false
+      int32_57, int8_1, int32_0, int32_0, int1_0
    };
    const dxil_value threadid_args[] = {
      int32_93, int32_0
@@ -174,7 +174,7 @@ emit_module(struct dxil_module *m)
    const dxil_mdnode node9 = dxil_emit_metadata_value(m, rwbuffer_pointer_type, rwbuffer_pointer_undef);
    const dxil_mdnode node10 = dxil_emit_metadata_string(m, "OutputBuffer");
    const dxil_mdnode node11 = dxil_emit_metadata_value(m, int32_type, int32_10);
-   const dxil_mdnode node12 = dxil_emit_metadata_value(m, bool_type, bool_false);
+   const dxil_mdnode node12 = dxil_emit_metadata_value(m, int1_type, int1_0);
    const dxil_mdnode node13 = dxil_emit_metadata_value(m, int32_type, int32_5);
    const dxil_mdnode nodes_4_13[] = { node4, node13 };
    const dxil_mdnode node14 = dxil_emit_metadata_node(m, nodes_4_13, ARRAY_SIZE(nodes_4_13));
