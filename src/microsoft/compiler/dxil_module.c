@@ -1304,7 +1304,7 @@ emit_int_value(struct dxil_module *m, int64_t value)
    return emit_const_abbrev_record(m, 5, data, ARRAY_SIZE(data));
 }
 
-bool
+static bool
 emit_consts(struct dxil_module *m)
 {
    const struct dxil_type *curr_type = NULL;
@@ -1657,7 +1657,7 @@ dxil_emit_metadata(struct dxil_module *m)
           dxil_module_exit_block(m);
 }
 
-bool
+static bool
 emit_call(struct dxil_module *m,
           const struct dxil_type *func_type,
           dxil_value value_id,
