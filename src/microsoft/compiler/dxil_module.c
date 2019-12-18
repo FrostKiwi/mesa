@@ -51,7 +51,7 @@ dxil_module_init(struct dxil_module *m)
 
    m->next_mdnode_id = 1; /* zero is reserved for NULL nodes */
 
-   m->void_type = m->bool_type = m->int8_type = m->int32_type = NULL;
+   m->void_type = m->int1_type = m->int8_type = m->int32_type = NULL;
 }
 
 static bool
@@ -415,25 +415,26 @@ create_int_type(struct dxil_module *m, unsigned bit_size)
 }
 
 const struct dxil_type *
-dxil_module_get_bool_type(struct dxil_module *m)
-{
-   if (!m->bool_type)
-      m->bool_type = create_int_type(m, 1);
-   return m->bool_type;
-}
-
-const struct dxil_type *
 dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size)
 {
-   assert(bit_size == 8 || bit_size == 32);
-   if (bit_size == 8) {
+   switch (bit_size) {
+   case 1:
+      if (!m->int1_type)
+         m->int1_type = create_int_type(m, 1);
+      return m->int1_type;
+
+   case 8:
       if (!m->int8_type)
          m->int8_type = create_int_type(m, 8);
       return m->int8_type;
-   } else {
+
+   case 32:
       if (!m->int32_type)
          m->int32_type = create_int_type(m, 32);
       return m->int32_type;
+
+   default:
+      unreachable("unsupported bit-width");
    }
 }
 
@@ -990,7 +991,7 @@ struct dxil_const {
 
    bool undef;
    union {
-      int64_t int_value;
+      intmax_t int_value;
    };
 
    struct list_head head;
@@ -1009,10 +1010,10 @@ create_const(struct dxil_module *m, const struct dxil_type *type, bool undef)
    return ret;
 }
 
-const dxil_value
-dxil_module_add_bool_const(struct dxil_module *m, bool value)
+static const dxil_value
+add_int_const(struct dxil_module *m, intmax_t value, unsigned bit_size)
 {
-   const struct dxil_type *type = dxil_module_get_bool_type(m);
+   const struct dxil_type *type = dxil_module_get_int_type(m, bit_size);
    if (!type)
       return DXIL_VALUE_INVALID;
 
@@ -1022,36 +1023,24 @@ dxil_module_add_bool_const(struct dxil_module *m, bool value)
 
    c->int_value = value;
    return c->value;
+}
+
+const dxil_value
+dxil_module_add_int1_const(struct dxil_module *m, bool value)
+{
+   return add_int_const(m, value, 1);
 }
 
 const dxil_value
 dxil_module_add_int8_const(struct dxil_module *m, int8_t value)
 {
-   const struct dxil_type *type = dxil_module_get_int_type(m, 8);
-   if (!type)
-      return DXIL_VALUE_INVALID;
-
-   struct dxil_const *c = create_const(m, type, false);
-   if (!c)
-      return DXIL_VALUE_INVALID;
-
-   c->int_value = value;
-   return c->value;
+   return add_int_const(m, value, 8);
 }
 
 const dxil_value
 dxil_module_add_int32_const(struct dxil_module *m, int32_t value)
 {
-   const struct dxil_type *type = dxil_module_get_int_type(m, 32);
-   if (!type)
-      return DXIL_VALUE_INVALID;
-
-   struct dxil_const *c = create_const(m, type, false);
-   if (!c)
-      return DXIL_VALUE_INVALID;
-
-   c->int_value = value;
-   return c->value;
+   return add_int_const(m, value, 32);
 }
 
 const dxil_value
