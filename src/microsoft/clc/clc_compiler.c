@@ -117,24 +117,6 @@ emit_module(struct dxil_module *m)
        createhandle_func == DXIL_VALUE_INVALID)
       return false;
 
-   const dxil_value int32_1 = dxil_module_get_int32_const(m, 1);
-   const dxil_value int32_0 = dxil_module_get_int32_const(m, 0);
-   const dxil_value int32_6 = dxil_module_get_int32_const(m, 6);
-   const dxil_value int32_10 = dxil_module_get_int32_const(m, 10);
-   const dxil_value int32_5 = dxil_module_get_int32_const(m, 5);
-   const dxil_value int32_4 = dxil_module_get_int32_const(m, 4);
-   const dxil_value int32_3 = dxil_module_get_int32_const(m, 3);
-   const dxil_value int32_7 = dxil_module_get_int32_const(m, 7);
-   const dxil_value int1_0 = dxil_module_get_int1_const(m, false);
-   const dxil_value rwbuffer_pointer_undef = dxil_module_get_undef(m, rwbuffer_pointer_type);
-   const dxil_value rwbuffer_struct_undef = dxil_module_get_undef(m, rwbuffer_struct_type);
-   const dxil_value int32_57 = dxil_module_get_int32_const(m, 57);
-   const dxil_value int32_93 = dxil_module_get_int32_const(m, 93);
-   const dxil_value int32_69 = dxil_module_get_int32_const(m, 69);
-   const dxil_value int32_undef = dxil_module_get_undef(m, int32_type);
-   const dxil_value int8_1 = dxil_module_get_int8_const(m, 1);
-   const dxil_value int8_15 = dxil_module_get_int8_const(m, 15);
-
    const struct dxil_mdnode *compiler = dxil_add_metadata_string(m, "Mesa version " PACKAGE_VERSION MESA_GIT_SHA1);
    const struct dxil_mdnode *llvm_ident = dxil_add_metadata_node(m, &compiler, 1);
    if (!compiler || !llvm_ident)
@@ -150,9 +132,13 @@ emit_module(struct dxil_module *m)
    const struct dxil_mdnode *nodes_6_7_4[] = { node6, node7, node4 };
    const struct dxil_mdnode *dx_shader_model = dxil_add_metadata_node(m, nodes_6_7_4,
                                                                ARRAY_SIZE(nodes_6_7_4));
+
+   const dxil_value rwbuffer_pointer_undef = dxil_module_get_undef(m, rwbuffer_pointer_type);
    const struct dxil_mdnode *node9 = dxil_add_metadata_value(m, rwbuffer_pointer_type, rwbuffer_pointer_undef);
    const struct dxil_mdnode *node10 = dxil_add_metadata_string(m, "OutputBuffer");
    const struct dxil_mdnode *node11 = dxil_add_metadata_int32(m, 10);
+
+   const dxil_value int1_0 = dxil_module_get_int1_const(m, false);
    const struct dxil_mdnode *node12 = dxil_add_metadata_value(m, int1_type, int1_0);
    const struct dxil_mdnode *node13 = dxil_add_metadata_int32(m, 5);
    const struct dxil_mdnode *nodes_4_13[] = { node4, node13 };
@@ -166,6 +152,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_mdnode *main_resources = dxil_add_metadata_node(m, nodes_0_16_0_0,
                                                       ARRAY_SIZE(nodes_0_16_0_0));
 
+   const dxil_value rwbuffer_struct_undef = dxil_module_get_undef(m, rwbuffer_struct_type);
    const struct dxil_mdnode *node18 = dxil_add_metadata_value(m, rwbuffer_struct_type, rwbuffer_struct_undef);
    const struct dxil_mdnode *node19 = dxil_add_metadata_int32(m, 4);
    const struct dxil_mdnode *node20 = dxil_add_metadata_string(m, "h");
@@ -233,6 +220,13 @@ emit_module(struct dxil_module *m)
                                       &dx_entry_point, 1))
       return false;
 
+   const dxil_value int32_57 = dxil_module_get_int32_const(m, 57);
+   const dxil_value int8_1 = dxil_module_get_int8_const(m, 1);
+   const dxil_value int32_0 = dxil_module_get_int32_const(m, 0);
+   const dxil_value int32_93 = dxil_module_get_int32_const(m, 93);
+   const dxil_value int32_69 = dxil_module_get_int32_const(m, 69);
+   const dxil_value int32_undef = dxil_module_get_undef(m, int32_type);
+   const dxil_value int8_15 = dxil_module_get_int8_const(m, 15);
 
    const int FUNC_CODE_DECLAREBLOCKS = 1; // TODO: remove
    const int num_type_bits = 5;
