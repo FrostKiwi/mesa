@@ -414,25 +414,37 @@ create_int_type(struct dxil_module *m, unsigned bit_size)
    return type;
 }
 
+static const struct dxil_type *
+get_int1_type(struct dxil_module *m)
+{
+   if (!m->int1_type)
+      m->int1_type = create_int_type(m, 1);
+   return m->int1_type;
+}
+
+static const struct dxil_type *
+get_int8_type(struct dxil_module *m)
+{
+   if (!m->int8_type)
+      m->int8_type = create_int_type(m, 8);
+   return m->int8_type;
+}
+
+static const struct dxil_type *
+get_int32_type(struct dxil_module *m)
+{
+   if (!m->int32_type)
+      m->int32_type = create_int_type(m, 32);
+   return m->int32_type;
+}
+
 const struct dxil_type *
 dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size)
 {
    switch (bit_size) {
-   case 1:
-      if (!m->int1_type)
-         m->int1_type = create_int_type(m, 1);
-      return m->int1_type;
-
-   case 8:
-      if (!m->int8_type)
-         m->int8_type = create_int_type(m, 8);
-      return m->int8_type;
-
-   case 32:
-      if (!m->int32_type)
-         m->int32_type = create_int_type(m, 32);
-      return m->int32_type;
-
+   case 1: return get_int1_type(m);
+   case 8: return get_int8_type(m);
+   case 32: return get_int32_type(m);
    default:
       unreachable("unsupported bit-width");
    }
@@ -1036,7 +1048,7 @@ get_int_const(struct dxil_module *m, const struct dxil_type *type,
 const dxil_value
 dxil_module_get_int1_const(struct dxil_module *m, bool value)
 {
-   const struct dxil_type *type = dxil_module_get_int_type(m, 1);
+   const struct dxil_type *type = get_int1_type(m);
    if (!type)
       return DXIL_VALUE_INVALID;
 
@@ -1046,7 +1058,7 @@ dxil_module_get_int1_const(struct dxil_module *m, bool value)
 const dxil_value
 dxil_module_get_int8_const(struct dxil_module *m, int8_t value)
 {
-   const struct dxil_type *type = dxil_module_get_int_type(m, 8);
+   const struct dxil_type *type = get_int8_type(m);
    if (!type)
       return DXIL_VALUE_INVALID;
 
@@ -1056,7 +1068,7 @@ dxil_module_get_int8_const(struct dxil_module *m, int8_t value)
 const dxil_value
 dxil_module_get_int32_const(struct dxil_module *m, int32_t value)
 {
-   const struct dxil_type *type = dxil_module_get_int_type(m, 32);
+   const struct dxil_type *type = get_int32_type(m);
    if (!type)
       return DXIL_VALUE_INVALID;
 
