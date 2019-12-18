@@ -44,6 +44,30 @@ emit_value_symbol_table(struct dxil_module *m)
 }
 
 static bool
+emit_llvm_ident(struct dxil_module *m)
+{
+   const struct dxil_mdnode *compiler = dxil_add_metadata_string(m, "Mesa version " PACKAGE_VERSION MESA_GIT_SHA1);
+   if (!compiler)
+      return false;
+
+   const struct dxil_mdnode *llvm_ident = dxil_add_metadata_node(m, &compiler, 1);
+   return llvm_ident &&
+          dxil_add_metadata_named_node(m, "llvm.ident", &llvm_ident, 1);
+}
+
+static bool
+emit_dx_versions(struct dxil_module *m, int major, int minor)
+{
+   const struct dxil_mdnode *major_node = dxil_add_metadata_int32(m, major);
+   const struct dxil_mdnode *minor_node = dxil_add_metadata_int32(m, minor);
+   const struct dxil_mdnode *version_nodes[] = { major_node, minor_node };
+   const struct dxil_mdnode *version = dxil_add_metadata_node(m, version_nodes,
+                                                     ARRAY_SIZE(version_nodes));
+   return dxil_add_metadata_named_node(m, "dx.version", &version, 1) &&
+          dxil_add_metadata_named_node(m, "dx.valver", &version, 1);
+}
+
+static bool
 emit_module(struct dxil_module *m)
 {
    if (!dxil_module_emit_bits(m, 'B', 8) ||
@@ -117,21 +141,21 @@ emit_module(struct dxil_module *m)
        createhandle_func == DXIL_VALUE_INVALID)
       return false;
 
-   const struct dxil_mdnode *compiler = dxil_add_metadata_string(m, "Mesa version " PACKAGE_VERSION MESA_GIT_SHA1);
-   const struct dxil_mdnode *llvm_ident = dxil_add_metadata_node(m, &compiler, 1);
-   if (!compiler || !llvm_ident)
+   if (!emit_llvm_ident(m) ||
+       !emit_dx_versions(m, 1, 0))
       return false;
 
    const struct dxil_mdnode *node3 = dxil_add_metadata_int32(m, 1);
    const struct dxil_mdnode *node4 = dxil_add_metadata_int32(m, 0);
-   const struct dxil_mdnode *nodes_3_4[] = { node3, node4 };
-   const struct dxil_mdnode *node5 = dxil_add_metadata_node(m, nodes_3_4,
-                                                     ARRAY_SIZE(nodes_3_4));
    const struct dxil_mdnode *node6 = dxil_add_metadata_string(m, "cs");
    const struct dxil_mdnode *node7 = dxil_add_metadata_int32(m, 6);
    const struct dxil_mdnode *nodes_6_7_4[] = { node6, node7, node4 };
    const struct dxil_mdnode *dx_shader_model = dxil_add_metadata_node(m, nodes_6_7_4,
                                                                ARRAY_SIZE(nodes_6_7_4));
+   if (!dxil_add_metadata_named_node(m, "dx.shaderModel",
+                                      &dx_shader_model, 1))
+      return false;
+
 
    const dxil_value rwbuffer_pointer_undef = dxil_module_get_undef(m, rwbuffer_pointer_type);
    const struct dxil_mdnode *node9 = dxil_add_metadata_value(m, rwbuffer_pointer_type, rwbuffer_pointer_undef);
@@ -200,18 +224,12 @@ emit_module(struct dxil_module *m)
       main_resources, /* list of resources */
       node33 /* list of caps and other properties */
    };
-   const struct dxil_mdnode *dx_entry_point = dxil_add_metadata_node(m, main_entrypoint_metadata,
-                                                      ARRAY_SIZE(main_entrypoint_metadata));
-   const struct dxil_mdnode *dx_version = node5, *dx_valver = node5,
-                     *dx_resources = main_resources,
-                     *dx_type_annotations[] = { node25, node30 };
+   const struct dxil_mdnode *dx_resources = main_resources,
+                     *dx_type_annotations[] = { node25, node30 },
+                     *dx_entry_point = dxil_add_metadata_node(m, main_entrypoint_metadata,
+                                                              ARRAY_SIZE(main_entrypoint_metadata));
 
-   if (!dxil_add_metadata_named_node(m, "llvm.ident", &llvm_ident, 1) ||
-       !dxil_add_metadata_named_node(m, "dx.version", &dx_version, 1) ||
-       !dxil_add_metadata_named_node(m, "dx.valver", &dx_valver, 1) ||
-       !dxil_add_metadata_named_node(m, "dx.shaderModel",
-                                      &dx_shader_model, 1) ||
-       !dxil_add_metadata_named_node(m, "dx.resources",
+   if (!dxil_add_metadata_named_node(m, "dx.resources",
                                       &dx_resources, 1) ||
        !dxil_add_metadata_named_node(m, "dx.typeAnnotations",
                                  dx_type_annotations,
