@@ -115,23 +115,23 @@ emit_module(struct dxil_module *m)
        createhandle_func == DXIL_VALUE_INVALID)
       return false;
 
-   const dxil_value int32_1 = dxil_module_add_int32_const(m, 1);
-   const dxil_value int32_0 = dxil_module_add_int32_const(m, 0);
-   const dxil_value int32_6 = dxil_module_add_int32_const(m, 6);
-   const dxil_value int32_10 = dxil_module_add_int32_const(m, 10);
-   const dxil_value int32_5 = dxil_module_add_int32_const(m, 5);
-   const dxil_value int32_4 = dxil_module_add_int32_const(m, 4);
-   const dxil_value int32_3 = dxil_module_add_int32_const(m, 3);
-   const dxil_value int32_7 = dxil_module_add_int32_const(m, 7);
-   const dxil_value int1_0 = dxil_module_add_int1_const(m, false);
-   const dxil_value rwbuffer_pointer_undef = dxil_module_add_undef(m, rwbuffer_pointer_type);
-   const dxil_value rwbuffer_struct_undef = dxil_module_add_undef(m, rwbuffer_struct_type);
-   const dxil_value int32_57 = dxil_module_add_int32_const(m, 57);
-   const dxil_value int32_93 = dxil_module_add_int32_const(m, 93);
-   const dxil_value int32_69 = dxil_module_add_int32_const(m, 69);
-   const dxil_value int32_undef = dxil_module_add_undef(m, int32_type);
-   const dxil_value int8_1 = dxil_module_add_int8_const(m, 1);
-   const dxil_value int8_15 = dxil_module_add_int8_const(m, 15);
+   const dxil_value int32_1 = dxil_module_get_int32_const(m, 1);
+   const dxil_value int32_0 = dxil_module_get_int32_const(m, 0);
+   const dxil_value int32_6 = dxil_module_get_int32_const(m, 6);
+   const dxil_value int32_10 = dxil_module_get_int32_const(m, 10);
+   const dxil_value int32_5 = dxil_module_get_int32_const(m, 5);
+   const dxil_value int32_4 = dxil_module_get_int32_const(m, 4);
+   const dxil_value int32_3 = dxil_module_get_int32_const(m, 3);
+   const dxil_value int32_7 = dxil_module_get_int32_const(m, 7);
+   const dxil_value int1_0 = dxil_module_get_int1_const(m, false);
+   const dxil_value rwbuffer_pointer_undef = dxil_module_get_undef(m, rwbuffer_pointer_type);
+   const dxil_value rwbuffer_struct_undef = dxil_module_get_undef(m, rwbuffer_struct_type);
+   const dxil_value int32_57 = dxil_module_get_int32_const(m, 57);
+   const dxil_value int32_93 = dxil_module_get_int32_const(m, 93);
+   const dxil_value int32_69 = dxil_module_get_int32_const(m, 69);
+   const dxil_value int32_undef = dxil_module_get_undef(m, int32_type);
+   const dxil_value int8_1 = dxil_module_get_int8_const(m, 1);
+   const dxil_value int8_15 = dxil_module_get_int8_const(m, 15);
 
    const dxil_value createhandle_args[] = {
       int32_57, int8_1, int32_0, int32_0, int1_0

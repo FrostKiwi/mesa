@@ -252,16 +252,16 @@ dxil_module_add_function_type(struct dxil_module *m,
                               size_t num_arg_types);
 
 const dxil_value
-dxil_module_add_int1_const(struct dxil_module *m, bool value);
+dxil_module_get_int1_const(struct dxil_module *m, bool value);
 
 const dxil_value
-dxil_module_add_int8_const(struct dxil_module *m, int8_t value);
+dxil_module_get_int8_const(struct dxil_module *m, int8_t value);
 
 const dxil_value
-dxil_module_add_int32_const(struct dxil_module *m, int32_t value);
+dxil_module_get_int32_const(struct dxil_module *m, int32_t value);
 
 const dxil_value
-dxil_module_add_undef(struct dxil_module *m, const struct dxil_type *type);
+dxil_module_get_undef(struct dxil_module *m, const struct dxil_type *type);
 
 bool
 dxil_emit_metadata_abbrevs(struct dxil_module *m);
