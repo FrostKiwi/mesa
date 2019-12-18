@@ -49,6 +49,7 @@ dxil_module_init(struct dxil_module *m)
    list_inithead(&m->const_list);
    m->next_value_id = 0;
 
+   list_inithead(&m->mdnode_list);
    m->next_mdnode_id = 1; /* zero is reserved for NULL nodes */
 
    m->void_type = m->int1_type = m->int8_type = m->int32_type = NULL;
@@ -1399,15 +1400,110 @@ dxil_emit_metadata_abbrevs(struct dxil_module *m)
    return true;
 }
 
-const dxil_mdnode
-dxil_emit_metadata_value(struct dxil_module *m, const struct dxil_type *type,
-                         const dxil_value value)
+struct dxil_mdnode {
+   enum mdnode_type {
+      MD_STRING,
+      MD_VALUE,
+      MD_NODE
+   } type;
+
+   union {
+      char *string;
+
+      struct {
+         const struct dxil_type *type;
+         dxil_value value;
+      } value;
+
+      struct {
+         struct dxil_mdnode **subnodes;
+         size_t num_subnodes;
+      } node;
+   };
+
+   struct list_head head;
+   unsigned id;
+};
+
+static struct dxil_mdnode *
+create_mdnode(struct dxil_module *m, enum mdnode_type type)
+{
+   struct dxil_mdnode *ret = CALLOC_STRUCT(dxil_mdnode);
+   if (ret) {
+      ret->type = type;
+      ret->id = m->next_mdnode_id++;
+      list_addtail(&ret->head, &m->mdnode_list);
+   }
+   return ret;
+}
+
+const struct dxil_mdnode *
+dxil_add_metadata_string(struct dxil_module *m, const char *str)
+{
+   struct dxil_mdnode *n = create_mdnode(m, MD_STRING);
+   if (n) {
+      n->string = strdup(str);
+      if (!n->string) {
+         FREE(n);
+         return NULL;
+      }
+   }
+   return n;
+}
+
+const struct dxil_mdnode *
+dxil_add_metadata_value(struct dxil_module *m, const struct dxil_type *type,
+                        const dxil_value value)
+{
+   struct dxil_mdnode *n = create_mdnode(m, MD_VALUE);
+   if (n) {
+      n->value.type = type;
+      n->value.value = value;
+   }
+   return n;
+}
+
+const struct dxil_mdnode *
+dxil_add_metadata_node(struct dxil_module *m,
+                       const struct dxil_mdnode *subnodes[],
+                       size_t num_subnodes)
+{
+   struct dxil_mdnode *n = create_mdnode(m, MD_NODE);
+   if (n) {
+      n->node.subnodes = CALLOC(num_subnodes, sizeof(struct dxil_mdnode *));
+      if (!n->node.subnodes) {
+         FREE(n);
+         return NULL;
+      }
+
+      memcpy(n->node.subnodes, subnodes, sizeof(struct dxil_mdnode *) *
+             num_subnodes);
+      n->node.num_subnodes = num_subnodes;
+   }
+   return n;
+}
+
+const struct dxil_mdnode *
+dxil_add_metadata_int32(struct dxil_module *m, int32_t value)
+{
+   const struct dxil_type *type = get_int32_type(m);
+   if (!type)
+      return NULL;
+
+   const dxil_value const_value = get_int_const(m, type, value);
+   if (!const_value)
+      return NULL;
+
+   return dxil_add_metadata_value(m, type, const_value);
+}
+
+static bool
+emit_metadata_value(struct dxil_module *m, const struct dxil_type *type,
+                    const dxil_value value)
 {
    uint64_t data[2] = { type->id, value };
-   if (!dxil_module_emit_record(m, METADATA_VALUE, data, ARRAY_SIZE(data)))
-      return DXIL_MDNODE_NULL;
-
-   return m->next_mdnode_id++;
+   return dxil_module_emit_record(m, METADATA_VALUE, data,
+                                  ARRAY_SIZE(data));
 }
 
 static bool
@@ -1422,8 +1518,8 @@ emit_metadata_abbrev_record(struct dxil_module *m, unsigned abbrev,
                              data, size);
 }
 
-const dxil_mdnode
-dxil_emit_metadata_string(struct dxil_module *m, const char *str)
+static bool
+emit_metadata_string(struct dxil_module *m, const char *str)
 {
    uint64_t data[256];
    assert(strlen(str) < ARRAY_SIZE(data) - 1);
@@ -1431,25 +1527,45 @@ dxil_emit_metadata_string(struct dxil_module *m, const char *str)
    for (size_t i = 0; i < strlen(str); ++i)
       data[i + 1] = str[i];
 
-   if (!emit_metadata_abbrev_record(m, 4, data, strlen(str) + 1))
-      return DXIL_MDNODE_NULL;
-
-   return m->next_mdnode_id++;
+   return emit_metadata_abbrev_record(m, 4, data, strlen(str) + 1);
 }
 
-const dxil_mdnode
-dxil_emit_metadata_node(struct dxil_module *m, const dxil_mdnode subnodes[],
-                        size_t num_subnodes)
+static bool
+emit_metadata_node(struct dxil_module *m,
+                   const struct dxil_mdnode *subnodes[],
+                   size_t num_subnodes)
 {
    uint64_t data[256];
    assert(num_subnodes < ARRAY_SIZE(data));
    for (size_t i = 0; i < num_subnodes; ++i)
-      data[i] = subnodes[i];
+      data[i] = subnodes[i] ? subnodes[i]->id : 0;
 
-   if (!dxil_module_emit_record(m, METADATA_NODE, data, num_subnodes))
-      return DXIL_MDNODE_NULL;
+   return dxil_module_emit_record(m, METADATA_NODE, data, num_subnodes);
+}
 
-   return m->next_mdnode_id++;
+bool
+dxil_emit_metadata_nodes(struct dxil_module *m)
+{
+   struct dxil_mdnode *n;
+   LIST_FOR_EACH_ENTRY(n, &m->mdnode_list, head) {
+      switch (n->type) {
+      case MD_STRING:
+         if (!emit_metadata_string(m, n->string))
+            return false;
+         break;
+
+      case MD_VALUE:
+         if (!emit_metadata_value(m, n->value.type, n->value.value))
+            return false;
+         break;
+
+      case MD_NODE:
+         if (!emit_metadata_node(m, n->node.subnodes, n->node.num_subnodes))
+            return false;
+         break;
+      }
+   }
+   return true;
 }
 
 static bool
@@ -1466,14 +1582,14 @@ emit_metadata_name(struct dxil_module *m, const char *name)
 
 bool
 dxil_emit_metadata_named_node(struct dxil_module *m, const char *name,
-                              const dxil_mdnode subnodes[],
+                              const struct dxil_mdnode *subnodes[],
                               size_t num_subnodes)
 {
    uint64_t data[256];
    assert(num_subnodes < ARRAY_SIZE(data));
    for (size_t i = 0; i < num_subnodes; ++i) {
-      assert(subnodes[i] > 0); /* NULL nodes not allowed */
-      data[i] = subnodes[i] - 1;
+      assert(subnodes[i]->id > 0); /* NULL nodes not allowed */
+      data[i] = subnodes[i]->id - 1;
    }
 
    return emit_metadata_name(m, name) &&
