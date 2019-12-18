@@ -215,6 +215,23 @@ emit_module(struct dxil_module *m)
    };
    const struct dxil_mdnode *dx_entry_point = dxil_add_metadata_node(m, main_entrypoint_metadata,
                                                       ARRAY_SIZE(main_entrypoint_metadata));
+   const struct dxil_mdnode *dx_version = node5, *dx_valver = node5,
+                     *dx_resources = main_resources,
+                     *dx_type_annotations[] = { node25, node30 };
+
+   if (!dxil_add_metadata_named_node(m, "llvm.ident", &llvm_ident, 1) ||
+       !dxil_add_metadata_named_node(m, "dx.version", &dx_version, 1) ||
+       !dxil_add_metadata_named_node(m, "dx.valver", &dx_valver, 1) ||
+       !dxil_add_metadata_named_node(m, "dx.shaderModel",
+                                      &dx_shader_model, 1) ||
+       !dxil_add_metadata_named_node(m, "dx.resources",
+                                      &dx_resources, 1) ||
+       !dxil_add_metadata_named_node(m, "dx.typeAnnotations",
+                                 dx_type_annotations,
+                                 ARRAY_SIZE(dx_type_annotations)) ||
+       !dxil_add_metadata_named_node(m, "dx.entryPoints",
+                                      &dx_entry_point, 1))
+      return false;
 
 
    const int FUNC_CODE_DECLAREBLOCKS = 1; // TODO: remove
@@ -231,28 +248,9 @@ emit_module(struct dxil_module *m)
 
    if (!dxil_module_enter_subblock(m, DXIL_METADATA_BLOCK, 3) ||
        !dxil_emit_metadata_abbrevs(m) ||
-       !dxil_emit_metadata_nodes(m))
-      return false;
-
-
-   const struct dxil_mdnode *dx_version = node5, *dx_valver = node5,
-                     *dx_resources = main_resources,
-                     *dx_type_annotations[] = { node25, node30 };
-   if (!dxil_emit_metadata_named_node(m, "llvm.ident", &llvm_ident, 1) ||
-       !dxil_emit_metadata_named_node(m, "dx.version", &dx_version, 1) ||
-       !dxil_emit_metadata_named_node(m, "dx.valver", &dx_valver, 1) ||
-       !dxil_emit_metadata_named_node(m, "dx.shaderModel",
-                                      &dx_shader_model, 1) ||
-       !dxil_emit_metadata_named_node(m, "dx.resources",
-                                      &dx_resources, 1) ||
-       !dxil_emit_metadata_named_node(m, "dx.typeAnnotations",
-                                 dx_type_annotations,
-                                 ARRAY_SIZE(dx_type_annotations)) ||
-       !dxil_emit_metadata_named_node(m, "dx.entryPoints",
-                                      &dx_entry_point, 1))
-      return false;
-
-   if (!dxil_module_exit_block(m) ||
+       !dxil_emit_metadata_nodes(m) ||
+       !dxil_emit_metadata_named_nodes(m) ||
+       !dxil_module_exit_block(m) ||
        !emit_value_symbol_table(m) ||
        !dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
        !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
