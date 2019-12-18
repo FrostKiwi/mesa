@@ -246,11 +246,7 @@ emit_module(struct dxil_module *m)
        !dxil_emit_module_consts(m))
       return false;
 
-   if (!dxil_module_enter_subblock(m, DXIL_METADATA_BLOCK, 3) ||
-       !dxil_emit_metadata_abbrevs(m) ||
-       !dxil_emit_metadata_nodes(m) ||
-       !dxil_emit_metadata_named_nodes(m) ||
-       !dxil_module_exit_block(m) ||
+   if (!dxil_emit_metadata(m) ||
        !emit_value_symbol_table(m) ||
        !dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
        !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
