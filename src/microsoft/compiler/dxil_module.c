@@ -1011,13 +1011,22 @@ create_const(struct dxil_module *m, const struct dxil_type *type, bool undef)
 }
 
 static const dxil_value
-add_int_const(struct dxil_module *m, intmax_t value, unsigned bit_size)
+get_int_const(struct dxil_module *m, int32_t value, int bit_size)
 {
    const struct dxil_type *type = dxil_module_get_int_type(m, bit_size);
    if (!type)
       return DXIL_VALUE_INVALID;
 
-   struct dxil_const *c = create_const(m, type, false);
+   struct dxil_const *c;
+   LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
+      if (c->type != type)
+         continue;
+
+      if (c->int_value == value)
+         return c->value;
+   }
+
+   c = create_const(m, type, false);
    if (!c)
       return DXIL_VALUE_INVALID;
 
@@ -1026,27 +1035,38 @@ add_int_const(struct dxil_module *m, intmax_t value, unsigned bit_size)
 }
 
 const dxil_value
-dxil_module_add_int1_const(struct dxil_module *m, bool value)
+dxil_module_get_int1_const(struct dxil_module *m, bool value)
 {
-   return add_int_const(m, value, 1);
+   return get_int_const(m, value, 1);
 }
 
 const dxil_value
-dxil_module_add_int8_const(struct dxil_module *m, int8_t value)
+dxil_module_get_int8_const(struct dxil_module *m, int8_t value)
 {
-   return add_int_const(m, value, 8);
+   return get_int_const(m, value, 8);
 }
 
 const dxil_value
-dxil_module_add_int32_const(struct dxil_module *m, int32_t value)
+dxil_module_get_int32_const(struct dxil_module *m, int32_t value)
 {
-   return add_int_const(m, value, 32);
+   return get_int_const(m, value, 32);
 }
 
 const dxil_value
-dxil_module_add_undef(struct dxil_module *m, const struct dxil_type *type)
+dxil_module_get_undef(struct dxil_module *m, const struct dxil_type *type)
 {
-   struct dxil_const *c = create_const(m, type, true);
+   assert(type != NULL);
+
+   struct dxil_const *c;
+   LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
+      if (c->type != type)
+         continue;
+
+      if (c->undef)
+         return c->value;
+   }
+
+   c = create_const(m, type, true);
    return c ? c->value : DXIL_VALUE_INVALID;
 }
 
