@@ -1391,8 +1391,8 @@ static const struct dxil_abbrev metadata_abbrevs[] = {
    { { LITERAL(METADATA_NAME), ARRAY(), FIXED(8) }, 3 },
 };
 
-bool
-dxil_emit_metadata_abbrevs(struct dxil_module *m)
+static bool
+emit_metadata_abbrevs(struct dxil_module *m)
 {
    for (int i = 0; i < ARRAY_SIZE(metadata_abbrevs); ++i) {
       if (!define_abbrev(m, metadata_abbrevs + i))
@@ -1581,8 +1581,8 @@ emit_metadata_node(struct dxil_module *m,
    return dxil_module_emit_record(m, METADATA_NODE, data, num_subnodes);
 }
 
-bool
-dxil_emit_metadata_nodes(struct dxil_module *m)
+static bool
+emit_metadata_nodes(struct dxil_module *m)
 {
    struct dxil_mdnode *n;
    LIST_FOR_EACH_ENTRY(n, &m->mdnode_list, head) {
@@ -1635,8 +1635,8 @@ emit_metadata_named_node(struct dxil_module *m, const char *name,
                                   data, num_subnodes);
 }
 
-bool
-dxil_emit_metadata_named_nodes(struct dxil_module *m)
+static bool
+emit_metadata_named_nodes(struct dxil_module *m)
 {
    struct dxil_named_node *n;
    LIST_FOR_EACH_ENTRY(n, &m->md_named_node_list, head) {
@@ -1645,6 +1645,16 @@ dxil_emit_metadata_named_nodes(struct dxil_module *m)
          return false;
    }
    return true;
+}
+
+bool
+dxil_emit_metadata(struct dxil_module *m)
+{
+   return dxil_module_enter_subblock(m, DXIL_METADATA_BLOCK, 3) &&
+          emit_metadata_abbrevs(m) &&
+          emit_metadata_nodes(m) &&
+          emit_metadata_named_nodes(m) &&
+          dxil_module_exit_block(m);
 }
 
 bool
