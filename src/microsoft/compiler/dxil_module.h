@@ -288,10 +288,7 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
                              size_t num_subnodes);
 
 bool
-dxil_emit_metadata_nodes(struct dxil_module *m);
-
-bool
-dxil_emit_metadata_named_nodes(struct dxil_module *m);
+dxil_emit_metadata(struct dxil_module *m);
 
 const dxil_value
 dxil_emit_call(struct dxil_module *m,
