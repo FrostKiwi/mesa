@@ -175,17 +175,17 @@ bool
 dxil_container_add_module(struct dxil_container *c,
                           const struct dxil_module *m)
 {
-   assert(m->buf_bits == 0); // make sure the module is fully flushed
+   assert(m->buf.buf_bits == 0); // make sure the module is fully flushed
    uint32_t version = (m->shader_kind << 16) |
                       (m->major_version << 4) |
                       m->minor_version;
-   uint32_t size = 6 * sizeof(uint32_t) + m->module.size;
+   uint32_t size = 6 * sizeof(uint32_t) + m->buf.blob.size;
    assert(size % sizeof(uint32_t) == 0);
    uint32_t uint32_size = size / sizeof(uint32_t);
    uint32_t magic = 0x4C495844;
    uint32_t dxil_version = 1 << 8; // I have no idea...
    uint32_t bitcode_offset = 16;
-   uint32_t bitcode_size = m->module.size;
+   uint32_t bitcode_size = m->buf.blob.size;
 
    return add_part_header(c, DXIL_DXIL, size) &&
           blob_write_bytes(&c->parts, &version, sizeof(version)) &&
@@ -194,7 +194,7 @@ dxil_container_add_module(struct dxil_container *c,
           blob_write_bytes(&c->parts, &dxil_version, sizeof(dxil_version)) &&
           blob_write_bytes(&c->parts, &bitcode_offset, sizeof(bitcode_offset)) &&
           blob_write_bytes(&c->parts, &bitcode_size, sizeof(bitcode_size)) &&
-          blob_write_bytes(&c->parts, m->module.data, m->module.size);
+          blob_write_bytes(&c->parts, m->buf.blob.data, m->buf.blob.size);
 }
 
 bool

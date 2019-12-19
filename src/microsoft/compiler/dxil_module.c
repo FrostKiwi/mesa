@@ -32,14 +32,9 @@
 void
 dxil_module_init(struct dxil_module *m)
 {
-   blob_init(&m->module);
-
-   m->abbrev_width = 2;
+   dxil_buffer_init(&m->buf, 2);
 
    m->num_blocks = 0;
-
-   m->buf = 0;
-   m->buf_bits = 0;
 
    list_inithead(&m->type_list);
    m->next_type_id = 0;
@@ -56,37 +51,6 @@ dxil_module_init(struct dxil_module *m)
    m->void_type = m->int1_type = m->int8_type = m->int32_type = NULL;
 }
 
-static bool
-flush_dword(struct dxil_module *m)
-{
-   assert(m->buf_bits >= 32 && m->buf_bits < 64);
-
-   uint32_t lower_bits = m->buf & UINT32_MAX;
-   if (!blob_write_bytes(&m->module, &lower_bits, sizeof(lower_bits)))
-      return false;
-
-   m->buf >>= 32;
-   m->buf_bits -= 32;
-
-   return true;
-}
-
-bool
-dxil_module_emit_bits(struct dxil_module *m, uint32_t data, unsigned width)
-{
-   assert(m->buf_bits < 32);
-   assert(width > 0 && width <= 32);
-   assert((data & ~((UINT64_C(1) << width) - 1)) == 0);
-
-   m->buf |= ((uint64_t)data) << m->buf_bits;
-   m->buf_bits += width;
-
-   if (m->buf_bits >= 32)
-      return flush_dword(m);
-
-   return true;
-}
-
 bool
 emit_bits64(struct dxil_module *m, uint64_t data, unsigned width)
 {
@@ -96,38 +60,6 @@ emit_bits64(struct dxil_module *m, uint64_t data, unsigned width)
              dxil_module_emit_bits(m, (uint32_t)(data >> 32), width - 32);
    } else
       return dxil_module_emit_bits(m, (uint32_t)data, width);
-}
-
-bool
-dxil_module_emit_vbr_bits(struct dxil_module *m, uint64_t data,
-                          unsigned width)
-{
-   assert(width > 1 && width <= 32);
-
-   uint32_t tag = UINT32_C(1) << (width - 1);
-   uint32_t max = tag - 1;
-   while (data > max) {
-      uint32_t value = (data & max) | tag;
-      data >>= width - 1;
-
-      if (!dxil_module_emit_bits(m, value, width))
-         return false;
-   }
-
-   return dxil_module_emit_bits(m, data, width);
-}
-
-bool
-dxil_module_align(struct dxil_module *m)
-{
-   assert(m->buf_bits < 32);
-
-   if (m->buf_bits) {
-      m->buf_bits = 32;
-      return flush_dword(m);
-   }
-
-   return true;
 }
 
 bool
@@ -141,11 +73,11 @@ dxil_module_enter_subblock(struct dxil_module *m, unsigned id,
       return false;
 
    assert(m->num_blocks < ARRAY_SIZE(m->blocks));
-   m->blocks[m->num_blocks].abbrev_width = m->abbrev_width;
-   m->blocks[m->num_blocks].offset = blob_reserve_uint32(&m->module);
+   m->blocks[m->num_blocks].abbrev_width = m->buf.abbrev_width;
+   m->blocks[m->num_blocks].offset = blob_reserve_uint32(&m->buf.blob);
    m->num_blocks++;
 
-   m->abbrev_width = abbrev_width;
+   m->buf.abbrev_width = abbrev_width;
 
    return true;
 }
@@ -161,13 +93,13 @@ dxil_module_exit_block(struct dxil_module *m)
       return false;
 
    m->num_blocks--;
-   m->abbrev_width = m->blocks[m->num_blocks].abbrev_width;
+   m->buf.abbrev_width = m->blocks[m->num_blocks].abbrev_width;
 
    // patch block-length
    intptr_t offset = m->blocks[m->num_blocks].offset;
-   assert(m->module.size >= offset + sizeof(uint32_t));
-   uint32_t size = (m->module.size - offset - 1) / sizeof(uint32_t);
-   if (!blob_overwrite_uint32(&m->module, offset, size))
+   assert(m->buf.blob.size >= offset + sizeof(uint32_t));
+   uint32_t size = (m->buf.blob.size - offset - 1) / sizeof(uint32_t);
+   if (!blob_overwrite_uint32(&m->buf.blob, offset, size))
       return false;
 
    return true;

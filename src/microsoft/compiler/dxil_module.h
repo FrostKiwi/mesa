@@ -29,8 +29,8 @@ extern "C" {
 #endif
 
 #include "dxil.h"
+#include "dxil_buffer.h"
 
-#include "util/blob.h"
 #include "util/list.h"
 
 enum dxil_standard_block {
@@ -121,18 +121,14 @@ typedef int dxil_value;
 struct dxil_module {
    enum dxil_shader_kind shader_kind;
    unsigned major_version, minor_version;
-   struct blob module;
 
-   unsigned abbrev_width;
+   struct dxil_buffer buf;
 
    struct {
       unsigned abbrev_width;
       intptr_t offset;
    } blocks[16];
    size_t num_blocks;
-
-   uint64_t buf;
-   unsigned buf_bits;
 
    struct dxil_abbrev const_abbrevs[4];
    struct dxil_abbrev func_abbrevs[8];
@@ -159,20 +155,28 @@ struct dxil_module {
 void
 dxil_module_init(struct dxil_module *m);
 
-bool
-dxil_module_emit_bits(struct dxil_module *m, uint32_t data, unsigned width);
+static bool
+dxil_module_emit_bits(struct dxil_module *m, uint32_t data, unsigned width)
+{
+   return dxil_buffer_emit_bits(&m->buf, data, width);
+}
 
-bool
-dxil_module_emit_vbr_bits(struct dxil_module *m, uint64_t data,
-                          unsigned width);
+static bool
+dxil_module_emit_vbr_bits(struct dxil_module *m, uint32_t data, unsigned width)
+{
+   return dxil_buffer_emit_vbr_bits(&m->buf, data, width);
+}
 
-bool
-dxil_module_align(struct dxil_module *m);
+static bool
+dxil_module_align(struct dxil_module *m)
+{
+   return dxil_buffer_align(&m->buf);
+}
 
 static bool
 dxil_module_emit_abbrev_id(struct dxil_module *m, uint32_t id)
 {
-   return dxil_module_emit_bits(m, id, m->abbrev_width);
+   return dxil_buffer_emit_abbrev_id(&m->buf, id);
 }
 
 bool
