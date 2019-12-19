@@ -161,24 +161,6 @@ dxil_module_emit_bits(struct dxil_module *m, uint32_t data, unsigned width)
    return dxil_buffer_emit_bits(&m->buf, data, width);
 }
 
-static bool
-dxil_module_emit_vbr_bits(struct dxil_module *m, uint32_t data, unsigned width)
-{
-   return dxil_buffer_emit_vbr_bits(&m->buf, data, width);
-}
-
-static bool
-dxil_module_align(struct dxil_module *m)
-{
-   return dxil_buffer_align(&m->buf);
-}
-
-static bool
-dxil_module_emit_abbrev_id(struct dxil_module *m, uint32_t id)
-{
-   return dxil_buffer_emit_abbrev_id(&m->buf, id);
-}
-
 bool
 dxil_module_enter_subblock(struct dxil_module *m, unsigned id,
                            unsigned abbrev_width);

@@ -52,24 +52,24 @@ dxil_module_init(struct dxil_module *m)
 }
 
 bool
-emit_bits64(struct dxil_module *m, uint64_t data, unsigned width)
+emit_bits64(struct dxil_buffer *b, uint64_t data, unsigned width)
 {
    if (data > UINT32_MAX) {
       assert(width > 32);
-      return dxil_module_emit_bits(m, (uint32_t)(data & UINT32_MAX), width) &&
-             dxil_module_emit_bits(m, (uint32_t)(data >> 32), width - 32);
+      return dxil_buffer_emit_bits(b, (uint32_t)(data & UINT32_MAX), width) &&
+             dxil_buffer_emit_bits(b, (uint32_t)(data >> 32), width - 32);
    } else
-      return dxil_module_emit_bits(m, (uint32_t)data, width);
+      return dxil_buffer_emit_bits(b, (uint32_t)data, width);
 }
 
 bool
 dxil_module_enter_subblock(struct dxil_module *m, unsigned id,
                            unsigned abbrev_width)
 {
-   if (!dxil_module_emit_abbrev_id(m, DXIL_ENTER_SUBBLOCK) ||
-       !dxil_module_emit_vbr_bits(m, id, 8) ||
-       !dxil_module_emit_vbr_bits(m, abbrev_width, 4) ||
-       !dxil_module_align(m))
+   if (!dxil_buffer_emit_abbrev_id(&m->buf, DXIL_ENTER_SUBBLOCK) ||
+       !dxil_buffer_emit_vbr_bits(&m->buf, id, 8) ||
+       !dxil_buffer_emit_vbr_bits(&m->buf, abbrev_width, 4) ||
+       !dxil_buffer_align(&m->buf))
       return false;
 
    assert(m->num_blocks < ARRAY_SIZE(m->blocks));
@@ -88,8 +88,8 @@ dxil_module_exit_block(struct dxil_module *m)
    assert(m->num_blocks > 0);
    assert(m->num_blocks < ARRAY_SIZE(m->blocks));
 
-   if (!dxil_module_emit_abbrev_id(m, DXIL_END_BLOCK) ||
-       !dxil_module_align(m))
+   if (!dxil_buffer_emit_abbrev_id(&m->buf, DXIL_END_BLOCK) ||
+       !dxil_buffer_align(&m->buf))
       return false;
 
    m->num_blocks--;
@@ -106,16 +106,16 @@ dxil_module_exit_block(struct dxil_module *m)
 }
 
 static bool
-emit_record_no_abbrev(struct dxil_module *m, unsigned code,
+emit_record_no_abbrev(struct dxil_buffer *b, unsigned code,
                       const uint64_t *data, size_t size)
 {
-   if (!dxil_module_emit_abbrev_id(m, DXIL_UNABBREV_RECORD) ||
-       !dxil_module_emit_vbr_bits(m, code, 6) ||
-       !dxil_module_emit_vbr_bits(m, size, 6))
+   if (!dxil_buffer_emit_abbrev_id(b, DXIL_UNABBREV_RECORD) ||
+       !dxil_buffer_emit_vbr_bits(b, code, 6) ||
+       !dxil_buffer_emit_vbr_bits(b, size, 6))
       return false;
 
    for (size_t i = 0; i < size; ++i)
-      if (!dxil_module_emit_vbr_bits(m, data[i], 6))
+      if (!dxil_buffer_emit_vbr_bits(b, data[i], 6))
          return false;
 
    return true;
@@ -125,7 +125,7 @@ bool
 dxil_module_emit_record(struct dxil_module *m, unsigned code,
                         const uint64_t *data, size_t size)
 {
-   return emit_record_no_abbrev(m, code, data, size);
+   return emit_record_no_abbrev(&m->buf, code, data, size);
 }
 
 static bool
@@ -187,37 +187,37 @@ encode_char6(char ch)
 }
 
 static bool
-emit_fixed(struct dxil_module *m, uint64_t data, unsigned width)
+emit_fixed(struct dxil_buffer *b, uint64_t data, unsigned width)
 {
    if (!width)
       return true;
 
-   return emit_bits64(m, data, width);
+   return emit_bits64(b, data, width);
 }
 
 static bool
-emit_vbr(struct dxil_module *m, uint64_t data, unsigned width)
+emit_vbr(struct dxil_buffer *b, uint64_t data, unsigned width)
 {
    if (!width)
       return true;
 
-   return dxil_module_emit_vbr_bits(m, data, width);
+   return dxil_buffer_emit_vbr_bits(b, data, width);
 }
 
 static bool
-emit_char6(struct dxil_module *m, uint64_t data)
+emit_char6(struct dxil_buffer *b, uint64_t data)
 {
-   return dxil_module_emit_bits(m, encode_char6((char)data), 6);
+   return dxil_buffer_emit_bits(b, encode_char6((char)data), 6);
 }
 
 static bool
-emit_record_abbrev(struct dxil_module *m,
+emit_record_abbrev(struct dxil_buffer *b,
                    unsigned abbrev, const struct dxil_abbrev *a,
                    const uint64_t *data, size_t size)
 {
    assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
 
-   if (!dxil_module_emit_abbrev_id(m, abbrev))
+   if (!dxil_buffer_emit_abbrev_id(b, abbrev))
       return false;
 
    size_t curr_data = 0;
@@ -233,38 +233,38 @@ emit_record_abbrev(struct dxil_module *m,
 
       case DXIL_OP_FIXED:
          assert(curr_data < size);
-         if (!emit_fixed(m, data[curr_data++], a->operands[i].encoding_data))
+         if (!emit_fixed(b, data[curr_data++], a->operands[i].encoding_data))
             return false;
          break;
 
       case DXIL_OP_VBR:
          assert(curr_data < size);
-         if (!emit_vbr(m, data[curr_data++], a->operands[i].encoding_data))
+         if (!emit_vbr(b, data[curr_data++], a->operands[i].encoding_data))
             return false;
          break;
 
       case DXIL_OP_ARRAY:
          assert(i == a->num_operands - 2); /* arrays should always be second to last */
 
-         if (!dxil_module_emit_vbr_bits(m, size - curr_data, 6))
+         if (!dxil_buffer_emit_vbr_bits(b, size - curr_data, 6))
             return false;
 
          switch (a->operands[i + 1].type) {
          case DXIL_OP_FIXED:
             while (curr_data < size)
-               if (!emit_fixed(m, data[curr_data++], a->operands[i + 1].encoding_data))
+               if (!emit_fixed(b, data[curr_data++], a->operands[i + 1].encoding_data))
                   return false;
             break;
 
          case DXIL_OP_VBR:
             while (curr_data < size)
-               if (!emit_vbr(m, data[curr_data++], a->operands[i + 1].encoding_data))
+               if (!emit_vbr(b, data[curr_data++], a->operands[i + 1].encoding_data))
                   return false;
             break;
 
          case DXIL_OP_CHAR6:
             while (curr_data < size)
-               if (!emit_char6(m, data[curr_data++]))
+               if (!emit_char6(b, data[curr_data++]))
                   return false;
             break;
 
@@ -275,7 +275,7 @@ emit_record_abbrev(struct dxil_module *m,
 
       case DXIL_OP_CHAR6:
          assert(curr_data < size);
-         if (!emit_char6(m, data[curr_data++]))
+         if (!emit_char6(b, data[curr_data++]))
             return false;
          break;
 
@@ -451,7 +451,7 @@ emit_type_table_abbrev_record(struct dxil_module *m, unsigned abbrev,
    unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
    assert(index < ARRAY_SIZE(m->type_table_abbrevs));
 
-   return emit_record_abbrev(m, abbrev, m->type_table_abbrevs + index,
+   return emit_record_abbrev(&m->buf, abbrev, m->type_table_abbrevs + index,
                              data, size);
 }
 
@@ -463,7 +463,7 @@ emit_const_abbrev_record(struct dxil_module *m, unsigned abbrev,
    unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
    assert(index < ARRAY_SIZE(m->const_abbrevs));
 
-   return emit_record_abbrev(m, abbrev, m->const_abbrevs + index,
+   return emit_record_abbrev(&m->buf, abbrev, m->const_abbrevs + index,
                              data, size);
 }
 
@@ -475,7 +475,7 @@ emit_func_abbrev_record(struct dxil_module *m, unsigned abbrev,
    unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
    assert(index < ARRAY_SIZE(m->func_abbrevs));
 
-   return emit_record_abbrev(m, abbrev, m->func_abbrevs + index,
+   return emit_record_abbrev(&m->buf, abbrev, m->func_abbrevs + index,
                              data, size);
 }
 
@@ -592,22 +592,24 @@ enum type_codes {
 static bool
 define_abbrev(struct dxil_module *m, const struct dxil_abbrev *a)
 {
-   if (!dxil_module_emit_abbrev_id(m, DXIL_DEFINE_ABBREV) ||
-       !dxil_module_emit_vbr_bits(m, a->num_operands, 5))
+   if (!dxil_buffer_emit_abbrev_id(&m->buf, DXIL_DEFINE_ABBREV) ||
+       !dxil_buffer_emit_vbr_bits(&m->buf, a->num_operands, 5))
       return false;
 
    for (int i = 0; i < a->num_operands; ++i) {
-      if (!dxil_module_emit_bits(m, a->operands[i].type == DXIL_OP_LITERAL, 1))
+      unsigned is_literal = a->operands[i].type == DXIL_OP_LITERAL;
+      if (!dxil_buffer_emit_bits(&m->buf, is_literal, 1))
          return false;
       if (a->operands[i].type == DXIL_OP_LITERAL) {
-         if (!dxil_module_emit_vbr_bits(m, a->operands[i].value, 8))
+         if (!dxil_buffer_emit_vbr_bits(&m->buf, a->operands[i].value, 8))
             return false;
       } else {
          if (!dxil_module_emit_bits(m, a->operands[i].type, 3))
             return false;
          if (a->operands[i].type == DXIL_OP_FIXED ||
              a->operands[i].type == DXIL_OP_VBR) {
-            if (!dxil_module_emit_vbr_bits(m, a->operands[i].encoding_data, 5))
+            if (!dxil_buffer_emit_vbr_bits(&m->buf,
+                                           a->operands[i].encoding_data, 5))
                return false;
          }
       }
@@ -1147,7 +1149,8 @@ emit_module_info_global(struct dxil_module *m, int type_id, bool constant,
       alignment,
       0
    };
-   return emit_record_abbrev(m, 4, simple_gvar_abbr, data, ARRAY_SIZE(data));
+   return emit_record_abbrev(&m->buf, 4, simple_gvar_abbr,
+                             data, ARRAY_SIZE(data));
 }
 
 bool
@@ -1215,13 +1218,13 @@ emit_set_type(struct dxil_module *m, unsigned type_index)
 static bool
 emit_null_value(struct dxil_module *m)
 {
-   return emit_record_no_abbrev(m, CST_CODE_NULL, NULL, 0);
+   return emit_record_no_abbrev(&m->buf, CST_CODE_NULL, NULL, 0);
 }
 
 static bool
 emit_undef_value(struct dxil_module *m)
 {
-   return emit_record_no_abbrev(m, CST_CODE_UNDEF, NULL, 0);
+   return emit_record_no_abbrev(&m->buf, CST_CODE_UNDEF, NULL, 0);
 }
 
 static bool
@@ -1284,7 +1287,7 @@ emit_value_symtab_abbrev_record(struct dxil_module *m, unsigned abbrev,
    unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
    assert(index < ARRAY_SIZE(value_symtab_abbrevs));
 
-   return emit_record_abbrev(m, abbrev, value_symtab_abbrevs + index,
+   return emit_record_abbrev(&m->buf, abbrev, value_symtab_abbrevs + index,
                              data, size);
 }
 
@@ -1484,7 +1487,7 @@ emit_metadata_abbrev_record(struct dxil_module *m, unsigned abbrev,
    unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
    assert(index < ARRAY_SIZE(metadata_abbrevs));
 
-   return emit_record_abbrev(m, abbrev, metadata_abbrevs + index,
+   return emit_record_abbrev(&m->buf, abbrev, metadata_abbrevs + index,
                              data, size);
 }
 
@@ -1590,15 +1593,16 @@ dxil_emit_metadata(struct dxil_module *m)
 }
 
 static bool
-emit_call(struct dxil_module *m,
+emit_call(struct dxil_buffer *b,
+          const unsigned next_value_id,
           const struct dxil_type *func_type,
           dxil_value value_id,
           const dxil_value *args, const size_t num_args)
 {
    uint64_t data[256];
 
-   int value_id_delta = m->next_value_id - value_id;
-   assert(value_id <= m->next_value_id);
+   int value_id_delta = next_value_id - value_id;
+   assert(value_id <= next_value_id);
 
    data[0] = 0; // attribute id
    data[1] = 1 << 15; // calling convention etc
@@ -1607,9 +1611,9 @@ emit_call(struct dxil_module *m,
 
    assert(num_args < ARRAY_SIZE(data) - 4);
    for (size_t i = 0; i < num_args; ++i)
-      data[4 + i] = m->next_value_id - args[i];
+      data[4 + i] = next_value_id - args[i];
 
-   return dxil_module_emit_record(m, FUNC_CODE_INST_CALL, data, 4 + num_args);
+   return emit_record_no_abbrev(b, FUNC_CODE_INST_CALL, data, 4 + num_args);
 }
 
 const dxil_value
@@ -1621,7 +1625,8 @@ dxil_emit_call(struct dxil_module *m,
    assert(func_type->type == TYPE_FUNCTION &&
           func_type->function_def.ret_type->type != TYPE_VOID);
 
-   if (!emit_call(m, func_type, value_id, args, num_args))
+   if (!emit_call(&m->buf, m->next_value_id, func_type, value_id,
+                  args, num_args))
       return DXIL_VALUE_INVALID;
 
    return m->next_value_id++;
@@ -1635,7 +1640,8 @@ dxil_emit_call_void(struct dxil_module *m,
 {
    assert(func_type->type == TYPE_FUNCTION &&
           func_type->function_def.ret_type->type == TYPE_VOID);
-   return emit_call(m, func_type, value_id, args, num_args);
+   return emit_call(&m->buf, m->next_value_id, func_type, value_id,
+                    args, num_args);
 }
 
 bool
