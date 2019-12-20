@@ -33,17 +33,6 @@
 #include <stdint.h>
 
 static bool
-emit_value_symbol_table(struct dxil_module *m)
-{
-   return dxil_module_enter_subblock(m, DXIL_VALUE_SYMTAB_BLOCK, 4) &&
-          dxil_module_emit_symtab_entry(m, 1, "main") &&
-          dxil_module_emit_symtab_entry(m, 2, "dx.op.threadId.i32") &&
-          dxil_module_emit_symtab_entry(m, 3, "dx.op.bufferStore.i32") &&
-          dxil_module_emit_symtab_entry(m, 4, "dx.op.createHandle") &&
-          dxil_module_exit_block(m);
-}
-
-static bool
 emit_llvm_ident(struct dxil_module *m)
 {
    const struct dxil_mdnode *compiler = dxil_add_metadata_string(m, "Mesa version " PACKAGE_VERSION MESA_GIT_SHA1);
@@ -131,10 +120,10 @@ emit_module(struct dxil_module *m)
    const struct dxil_type *createhandle_func_pointer_type = dxil_module_add_pointer_type(m, createhandle_func_type);
 
    dxil_add_global_var(m, rwbuffer_struct_type, true, 3);
-   const dxil_value main_func = dxil_add_function_def(m, main_func_type, 0);
-   const dxil_value threadid_func = dxil_add_function_decl(m, threadid_func_type, 1);
-   const dxil_value bufferstore_func = dxil_add_function_decl(m, bufferstore_func_type, 2);
-   const dxil_value createhandle_func = dxil_add_function_decl(m, createhandle_func_type, 3);
+   const dxil_value main_func = dxil_add_function_def(m, "main", main_func_type, 0);
+   const dxil_value threadid_func = dxil_add_function_decl(m, "dx.op.threadId.i32", threadid_func_type, 1);
+   const dxil_value bufferstore_func = dxil_add_function_decl(m, "dx.op.bufferStore.i32", bufferstore_func_type, 2);
+   const dxil_value createhandle_func = dxil_add_function_decl(m, "dx.op.createHandle", createhandle_func_type, 3);
    if (main_func == DXIL_VALUE_INVALID ||
        threadid_func == DXIL_VALUE_INVALID ||
        bufferstore_func == DXIL_VALUE_INVALID ||
@@ -287,7 +276,7 @@ emit_module(struct dxil_module *m)
       return false;
 
    return dxil_emit_metadata(m) &&
-          emit_value_symbol_table(m) &&
+          dxil_emit_value_symbol_table(m) &&
           dxil_emit_function(m) &&
           dxil_module_exit_block(m);
 }
