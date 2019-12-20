@@ -150,7 +150,6 @@ emit_module(struct dxil_module *m)
       return false;
 
    const struct dxil_mdnode *node4 = dxil_add_metadata_int32(m, 0);
-   const struct dxil_mdnode *node7 = dxil_add_metadata_int32(m, 6);
 
    const dxil_value rwbuffer_pointer_undef = dxil_module_get_undef(m, rwbuffer_pointer_type);
    const struct dxil_mdnode *node9 = dxil_add_metadata_value(m, rwbuffer_pointer_type, rwbuffer_pointer_undef);
@@ -172,26 +171,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_mdnode *main_resources = dxil_add_metadata_node(m, nodes_0_16_0_0,
                                                       ARRAY_SIZE(nodes_0_16_0_0));
 
-   const dxil_value rwbuffer_struct_undef = dxil_module_get_undef(m, rwbuffer_struct_type);
-   const struct dxil_mdnode *node18 = dxil_add_metadata_value(m, rwbuffer_struct_type, rwbuffer_struct_undef);
-   const struct dxil_mdnode *node19 = dxil_add_metadata_int32(m, 4);
-   const struct dxil_mdnode *node20 = dxil_add_metadata_string(m, "h");
-   const struct dxil_mdnode *node21 = dxil_add_metadata_int32(m, 3);
-   const struct dxil_mdnode *node22 = dxil_add_metadata_int32(m, 7);
-
-   const struct dxil_mdnode *nodes_7_20_21_4_22_13[] = { node7, node20, node21, node4, node22, node13 };
-   const struct dxil_mdnode *node23 = dxil_add_metadata_node(m, nodes_7_20_21_4_22_13,
-                                                      ARRAY_SIZE(nodes_7_20_21_4_22_13));
-
-   const struct dxil_mdnode *nodes_19_23[] = { node19, node23 };
-   const struct dxil_mdnode *node24 = dxil_add_metadata_node(m, nodes_19_23,
-                                                      ARRAY_SIZE(nodes_19_23));
-
-   const struct dxil_mdnode *nodes_4_18_24[] = { node4, node18, node24 };
-   const struct dxil_mdnode *node25 = dxil_add_metadata_node(m, nodes_4_18_24,
-                                                      ARRAY_SIZE(nodes_4_18_24));
-
-   const struct dxil_mdnode *main_entrypoint = dxil_get_metadata_value(m, main_func_pointer_type, main_func);
+   const struct dxil_mdnode *main_entrypoint = dxil_add_metadata_value(m, main_func_pointer_type, main_func);
    const struct dxil_mdnode *node27 = dxil_add_metadata_node(m, NULL, 0);
 
    const struct dxil_mdnode *nodes_4_27_27[] = { node4, node27, node27 };
@@ -210,6 +190,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_mdnode *node32 = dxil_add_metadata_node(m, nodes_3_3_3,
                                                       ARRAY_SIZE(nodes_3_3_3));
 
+   const struct dxil_mdnode *node19 = dxil_add_metadata_int32(m, 4);
    const struct dxil_mdnode *nodes_19_32[] = { node19, node32 };
    const struct dxil_mdnode *node33 = dxil_add_metadata_node(m, nodes_19_32,
                                                       ARRAY_SIZE(nodes_19_32));
@@ -221,7 +202,7 @@ emit_module(struct dxil_module *m)
       node33 /* list of caps and other properties */
    };
    const struct dxil_mdnode *dx_resources = main_resources,
-                     *dx_type_annotations[] = { node25, node30 },
+                     *dx_type_annotations[] = { node30 },
                      *dx_entry_point = dxil_add_metadata_node(m, main_entrypoint_metadata,
                                                               ARRAY_SIZE(main_entrypoint_metadata));
 
