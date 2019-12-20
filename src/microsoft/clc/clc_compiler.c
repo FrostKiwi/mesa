@@ -165,11 +165,11 @@ emit_module(struct dxil_module *m)
 
    const struct dxil_mdnode *nodes_many[] = { node4, node9, node10, node4, node4, node3, node11, node12, node12, node12, node14 };
    const struct dxil_mdnode *node15 = dxil_add_metadata_node(m, nodes_many, ARRAY_SIZE(nodes_many));
-   const struct dxil_mdnode *node16 = dxil_add_metadata_node(m, &node15, 1);
+   const struct dxil_mdnode *uav_metadata = dxil_add_metadata_node(m, &node15, 1);
 
-   const struct dxil_mdnode *nodes_0_16_0_0[] = { NULL, node16, NULL, NULL };
-   const struct dxil_mdnode *main_resources = dxil_add_metadata_node(m, nodes_0_16_0_0,
-                                                      ARRAY_SIZE(nodes_0_16_0_0));
+   const struct dxil_mdnode *resources_nodes[] = { NULL, uav_metadata, NULL, NULL };
+   const struct dxil_mdnode *resources_node = dxil_add_metadata_node(m, resources_nodes,
+                                                      ARRAY_SIZE(resources_nodes));
 
    const struct dxil_mdnode *main_entrypoint = dxil_add_metadata_value(m, main_func_pointer_type, main_func);
    const struct dxil_mdnode *node27 = dxil_add_metadata_node(m, NULL, 0);
@@ -181,8 +181,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_mdnode *node29 = dxil_add_metadata_node(m, &node28, 1);
 
    const struct dxil_mdnode *nodes_3_26_29[] = { node3, main_entrypoint, node29 };
-   const struct dxil_mdnode *node30 = dxil_add_metadata_node(m, nodes_3_26_29,
-                                                      ARRAY_SIZE(nodes_3_26_29));
+   const struct dxil_mdnode *main_type_annotation = dxil_add_metadata_node(m, nodes_3_26_29, ARRAY_SIZE(nodes_3_26_29));
 
    const struct dxil_mdnode *main_name = dxil_add_metadata_string(m, "main");
 
@@ -198,11 +197,11 @@ emit_module(struct dxil_module *m)
       main_entrypoint,
       main_name,
       NULL, /* list of signatures */
-      main_resources, /* list of resources */
+      resources_node, /* list of resources */
       node33 /* list of caps and other properties */
    };
-   const struct dxil_mdnode *dx_resources = main_resources,
-                     *dx_type_annotations[] = { node30 },
+   const struct dxil_mdnode *dx_resources = resources_node,
+                     *dx_type_annotations[] = { main_type_annotation },
                      *dx_entry_point = dxil_add_metadata_node(m, main_entrypoint_metadata,
                                                               ARRAY_SIZE(main_entrypoint_metadata));
 
