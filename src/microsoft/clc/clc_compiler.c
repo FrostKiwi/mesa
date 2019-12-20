@@ -57,6 +57,20 @@ emit_dx_versions(struct dxil_module *m, int major, int minor)
 }
 
 static bool
+emit_dx_shader_model(struct dxil_module *m, const char *type, int major, int minor)
+{
+   const struct dxil_mdnode *type_node = dxil_add_metadata_string(m, type);
+   const struct dxil_mdnode *major_node = dxil_add_metadata_int32(m, major);
+   const struct dxil_mdnode *minor_node = dxil_add_metadata_int32(m, minor);
+   const struct dxil_mdnode *shader_model[] = { type_node, major_node,
+                                                minor_node };
+   const struct dxil_mdnode *dx_shader_model = dxil_add_metadata_node(m, shader_model, ARRAY_SIZE(shader_model));
+
+   return dxil_add_metadata_named_node(m, "dx.shaderModel",
+                                       &dx_shader_model, 1);
+}
+
+static bool
 emit_module(struct dxil_module *m)
 {
    if (!dxil_module_emit_bits(m, 'B', 8) ||
@@ -131,20 +145,12 @@ emit_module(struct dxil_module *m)
       return false;
 
    if (!emit_llvm_ident(m) ||
-       !emit_dx_versions(m, 1, 0))
+       !emit_dx_versions(m, 1, 0) ||
+       !emit_dx_shader_model(m, "cs", 6, 0))
       return false;
 
-   const struct dxil_mdnode *node3 = dxil_add_metadata_int32(m, 1);
    const struct dxil_mdnode *node4 = dxil_add_metadata_int32(m, 0);
-   const struct dxil_mdnode *node6 = dxil_add_metadata_string(m, "cs");
    const struct dxil_mdnode *node7 = dxil_add_metadata_int32(m, 6);
-   const struct dxil_mdnode *nodes_6_7_4[] = { node6, node7, node4 };
-   const struct dxil_mdnode *dx_shader_model = dxil_add_metadata_node(m, nodes_6_7_4,
-                                                               ARRAY_SIZE(nodes_6_7_4));
-   if (!dxil_add_metadata_named_node(m, "dx.shaderModel",
-                                      &dx_shader_model, 1))
-      return false;
-
 
    const dxil_value rwbuffer_pointer_undef = dxil_module_get_undef(m, rwbuffer_pointer_type);
    const struct dxil_mdnode *node9 = dxil_add_metadata_value(m, rwbuffer_pointer_type, rwbuffer_pointer_undef);
@@ -156,6 +162,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_mdnode *node13 = dxil_add_metadata_int32(m, 5);
    const struct dxil_mdnode *nodes_4_13[] = { node4, node13 };
    const struct dxil_mdnode *node14 = dxil_add_metadata_node(m, nodes_4_13, ARRAY_SIZE(nodes_4_13));
+   const struct dxil_mdnode *node3 = dxil_add_metadata_int32(m, 1);
 
    const struct dxil_mdnode *nodes_many[] = { node4, node9, node10, node4, node4, node3, node11, node12, node12, node12, node14 };
    const struct dxil_mdnode *node15 = dxil_add_metadata_node(m, nodes_many, ARRAY_SIZE(nodes_many));
