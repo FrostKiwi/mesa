@@ -193,11 +193,13 @@ dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
                     bool constant, int align);
 
 const dxil_value
-dxil_add_function_def(struct dxil_module *m, const struct dxil_type *type,
+dxil_add_function_def(struct dxil_module *m, const char *name,
+                      const struct dxil_type *type,
                       unsigned attr_set);
 
 const dxil_value
-dxil_add_function_decl(struct dxil_module *m, const struct dxil_type *type,
+dxil_add_function_decl(struct dxil_module *m, const char *name,
+                       const struct dxil_type *type,
                        unsigned attr_set);
 
 bool
@@ -210,8 +212,7 @@ bool
 dxil_emit_module_consts(struct dxil_module *m);
 
 bool
-dxil_module_emit_symtab_entry(struct dxil_module *m, unsigned value,
-                              const char *name);
+dxil_emit_value_symbol_table(struct dxil_module *m);
 
 const struct dxil_type *
 dxil_module_get_void_type(struct dxil_module *m);
