@@ -131,10 +131,6 @@ struct dxil_module {
    } blocks[16];
    size_t num_blocks;
 
-   struct dxil_abbrev const_abbrevs[4];
-   struct dxil_abbrev func_abbrevs[8];
-   struct dxil_abbrev type_table_abbrevs[6];
-
    struct list_head type_list;
    struct list_head gvar_list;
    struct list_head func_list;
@@ -181,7 +177,7 @@ dxil_module_emit_record_int(struct dxil_module *m, unsigned code, int value)
 }
 
 bool
-dxil_module_emit_blockinfo(struct dxil_module *m, int type_index_bits);
+dxil_module_emit_blockinfo(struct dxil_module *m);
 
 bool
 dxil_emit_attrib_group_table(struct dxil_module *m,
@@ -208,7 +204,7 @@ bool
 dxil_emit_module_info(struct dxil_module *m);
 
 bool
-dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits);
+dxil_module_emit_type_table(struct dxil_module *m);
 
 bool
 dxil_emit_module_consts(struct dxil_module *m);

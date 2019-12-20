@@ -459,46 +459,61 @@ dxil_module_add_function_type(struct dxil_module *m,
    return type;
 }
 
+
+enum type_codes {
+  TYPE_CODE_NUMENTRY = 1,
+  TYPE_CODE_VOID = 2,
+  TYPE_CODE_FLOAT = 3,
+  TYPE_CODE_DOUBLE = 4,
+  TYPE_CODE_LABEL = 5,
+  TYPE_CODE_OPAQUE = 6,
+  TYPE_CODE_INTEGER = 7,
+  TYPE_CODE_POINTER = 8,
+  TYPE_CODE_FUNCTION_OLD = 9,
+  TYPE_CODE_HALF = 10,
+  TYPE_CODE_ARRAY = 11,
+  TYPE_CODE_VECTOR = 12,
+  TYPE_CODE_X86_FP80 = 13,
+  TYPE_CODE_FP128 = 14,
+  TYPE_CODE_PPC_FP128 = 15,
+  TYPE_CODE_METADATA = 16,
+  TYPE_CODE_X86_MMX = 17,
+  TYPE_CODE_STRUCT_ANON = 18,
+  TYPE_CODE_STRUCT_NAME = 19,
+  TYPE_CODE_STRUCT_NAMED = 20,
+  TYPE_CODE_FUNCTION = 21
+};
+
+#define LITERAL(x) { DXIL_OP_LITERAL, (x) }
+#define FIXED(x) { DXIL_OP_FIXED, (x) }
+#define VBR(x) { DXIL_OP_VBR, (x) }
+#define ARRAY { DXIL_OP_ARRAY, 0 }
+#define CHAR6 { DXIL_OP_CHAR6, 0 }
+#define BLOB { DXIL_OP_BLOB, 0 }
+
+#define TYPE_INDEX FIXED(32)
+
+static const struct dxil_abbrev
+type_table_abbrevs[] = {
+   { { LITERAL(TYPE_CODE_POINTER), TYPE_INDEX, LITERAL(0) }, 3 },
+   { { LITERAL(TYPE_CODE_FUNCTION), FIXED(1), ARRAY, TYPE_INDEX }, 4 },
+   { { LITERAL(TYPE_CODE_STRUCT_ANON), FIXED(1), ARRAY, TYPE_INDEX }, 4 },
+   { { LITERAL(TYPE_CODE_STRUCT_NAME), ARRAY, CHAR6 }, 3 },
+   { { LITERAL(TYPE_CODE_STRUCT_NAMED), FIXED(1), ARRAY, TYPE_INDEX }, 4 },
+   { { LITERAL(TYPE_CODE_ARRAY), VBR(8), TYPE_INDEX }, 3 }
+};
+
 static bool
 emit_type_table_abbrev_record(struct dxil_module *m, unsigned abbrev,
                               const uint64_t *data, size_t size)
 {
    assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
    unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
-   assert(index < ARRAY_SIZE(m->type_table_abbrevs));
+   assert(index < ARRAY_SIZE(type_table_abbrevs));
 
-   return emit_record_abbrev(&m->buf, abbrev, m->type_table_abbrevs + index,
+   return emit_record_abbrev(&m->buf, abbrev, type_table_abbrevs + index,
                              data, size);
 }
-
-static bool
-emit_const_abbrev_record(struct dxil_module *m, unsigned abbrev,
-                         const uint64_t *data, size_t size)
-{
-   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
-   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
-   assert(index < ARRAY_SIZE(m->const_abbrevs));
-
-   return emit_record_abbrev(&m->buf, abbrev, m->const_abbrevs + index,
-                             data, size);
-}
-
-static bool
-emit_func_abbrev_record(struct dxil_module *m, unsigned abbrev,
-                        const uint64_t *data, size_t size)
-{
-   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
-   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
-   assert(index < ARRAY_SIZE(m->func_abbrevs));
-
-   return emit_record_abbrev(&m->code, abbrev, m->func_abbrevs + index,
-                             data, size);
-}
-
-enum value_symtab_code {
-  VST_CODE_ENTRY = 1,
-  VST_CODE_BBENTRY = 2
-};
 
 enum constant_code {
   CST_CODE_SETTYPE = 1,
@@ -525,6 +540,26 @@ enum constant_code {
   CST_CODE_DATA = 22,
   CST_CODE_INLINEASM = 23
 };
+
+static const struct dxil_abbrev
+const_abbrevs[] = {
+   { { LITERAL(CST_CODE_SETTYPE), TYPE_INDEX }, 2 },
+   { { LITERAL(CST_CODE_INTEGER), VBR(8) }, 2 },
+   { { LITERAL(CST_CODE_CE_CAST), FIXED(4), TYPE_INDEX, VBR(8) }, 4 },
+   { { LITERAL(CST_CODE_NULL) }, 1 },
+};
+
+static bool
+emit_const_abbrev_record(struct dxil_module *m, unsigned abbrev,
+                         const uint64_t *data, size_t size)
+{
+   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
+   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
+   assert(index < ARRAY_SIZE(const_abbrevs));
+
+   return emit_record_abbrev(&m->buf, abbrev, const_abbrevs + index,
+                             data, size);
+}
 
 enum function_code {
   FUNC_CODE_DECLAREBLOCKS = 1,
@@ -574,36 +609,32 @@ enum function_code {
   FUNC_CODE_INST_LANDINGPAD = 47,
 };
 
-enum type_codes {
-  TYPE_CODE_NUMENTRY = 1,
-  TYPE_CODE_VOID = 2,
-  TYPE_CODE_FLOAT = 3,
-  TYPE_CODE_DOUBLE = 4,
-  TYPE_CODE_LABEL = 5,
-  TYPE_CODE_OPAQUE = 6,
-  TYPE_CODE_INTEGER = 7,
-  TYPE_CODE_POINTER = 8,
-  TYPE_CODE_FUNCTION_OLD = 9,
-  TYPE_CODE_HALF = 10,
-  TYPE_CODE_ARRAY = 11,
-  TYPE_CODE_VECTOR = 12,
-  TYPE_CODE_X86_FP80 = 13,
-  TYPE_CODE_FP128 = 14,
-  TYPE_CODE_PPC_FP128 = 15,
-  TYPE_CODE_METADATA = 16,
-  TYPE_CODE_X86_MMX = 17,
-  TYPE_CODE_STRUCT_ANON = 18,
-  TYPE_CODE_STRUCT_NAME = 19,
-  TYPE_CODE_STRUCT_NAMED = 20,
-  TYPE_CODE_FUNCTION = 21
+static const struct dxil_abbrev
+func_abbrevs[] = {
+   { { LITERAL(FUNC_CODE_INST_LOAD), VBR(6), TYPE_INDEX, VBR(4),
+       FIXED(1) }, 5 },
+   { { LITERAL(FUNC_CODE_INST_BINOP), VBR(6), VBR(6), FIXED(4) }, 4 },
+   { { LITERAL(FUNC_CODE_INST_BINOP), VBR(6), VBR(6), FIXED(4),
+       FIXED(7) }, 5 },
+   { { LITERAL(FUNC_CODE_INST_CAST), VBR(6), TYPE_INDEX, FIXED(4) }, 4 },
+   { { LITERAL(FUNC_CODE_INST_RET) }, 1 },
+   { { LITERAL(FUNC_CODE_INST_RET), VBR(6) }, 2 },
+   { { LITERAL(FUNC_CODE_INST_UNREACHABLE) }, 1 },
+   { { LITERAL(FUNC_CODE_INST_GEP), FIXED(1), TYPE_INDEX, ARRAY,
+       VBR(6) }, 5 },
 };
 
-#define LITERAL(x) { DXIL_OP_LITERAL, (x) }
-#define FIXED(x) { DXIL_OP_FIXED, (x) }
-#define VBR(x) { DXIL_OP_VBR, (x) }
-#define ARRAY { DXIL_OP_ARRAY, 0 }
-#define CHAR6 { DXIL_OP_CHAR6, 0 }
-#define BLOB { DXIL_OP_BLOB, 0 }
+static bool
+emit_func_abbrev_record(struct dxil_module *m, unsigned abbrev,
+                        const uint64_t *data, size_t size)
+{
+   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
+   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
+   assert(index < ARRAY_SIZE(func_abbrevs));
+
+   return emit_record_abbrev(&m->code, abbrev, func_abbrevs + index,
+                             data, size);
+}
 
 static bool
 define_abbrev(struct dxil_module *m, const struct dxil_abbrev *a)
@@ -622,8 +653,11 @@ define_abbrev(struct dxil_module *m, const struct dxil_abbrev *a)
       } else {
          if (!dxil_module_emit_bits(m, a->operands[i].type, 3))
             return false;
-         if (a->operands[i].type == DXIL_OP_FIXED ||
-             a->operands[i].type == DXIL_OP_VBR) {
+         if (a->operands[i].type == DXIL_OP_FIXED) {
+            if (!dxil_buffer_emit_vbr_bits(&m->buf,
+                                           a->operands[i].encoding_data, 5))
+               return false;
+         } else if (a->operands[i].type == DXIL_OP_VBR) {
             if (!dxil_buffer_emit_vbr_bits(&m->buf,
                                            a->operands[i].encoding_data, 5))
                return false;
@@ -639,6 +673,11 @@ switch_to_block(struct dxil_module *m, uint32_t block)
 {
    return dxil_module_emit_record_int(m, DXIL_BLOCKINFO_CODE_SETBID, block);
 }
+
+enum value_symtab_code {
+  VST_CODE_ENTRY = 1,
+  VST_CODE_BBENTRY = 2
+};
 
 static struct dxil_abbrev value_symtab_abbrevs[] = {
    { { FIXED(3), VBR(8), ARRAY, FIXED(8) }, 4 },
@@ -662,21 +701,10 @@ emit_value_symtab_abbrevs(struct dxil_module *m)
 }
 
 static bool
-emit_const_abbrevs(struct dxil_module *m, int type_index_bits)
+emit_const_abbrevs(struct dxil_module *m)
 {
    if (!switch_to_block(m, DXIL_CONST_BLOCK))
       return false;
-
-   struct dxil_abbrev const_abbrevs[] = {
-      { { LITERAL(CST_CODE_SETTYPE), FIXED(type_index_bits) }, 2 },
-      { { LITERAL(CST_CODE_INTEGER), VBR(8) }, 2 },
-      { { LITERAL(CST_CODE_CE_CAST), FIXED(4), FIXED(type_index_bits),
-          VBR(8) }, 4 },
-      { { LITERAL(CST_CODE_NULL) }, 1 },
-   };
-
-   assert(sizeof(const_abbrevs) == sizeof(m->const_abbrevs));
-   memcpy(m->const_abbrevs, const_abbrevs, sizeof(const_abbrevs));
 
    for (int i = 0; i < ARRAY_SIZE(const_abbrevs); ++i) {
       if (!define_abbrev(m, const_abbrevs + i))
@@ -687,29 +715,10 @@ emit_const_abbrevs(struct dxil_module *m, int type_index_bits)
 }
 
 static bool
-emit_function_abbrevs(struct dxil_module *m, int type_index_bits)
+emit_function_abbrevs(struct dxil_module *m)
 {
    if (!switch_to_block(m, DXIL_FUNCTION_BLOCK))
       return false;
-
-   struct dxil_abbrev func_abbrevs[] = {
-      { { LITERAL(FUNC_CODE_INST_LOAD), VBR(6), FIXED(type_index_bits),
-          VBR(4), FIXED(1) }, 5 },
-      { { LITERAL(FUNC_CODE_INST_BINOP), VBR(6), VBR(6), FIXED(4) }, 4 },
-      { { LITERAL(FUNC_CODE_INST_BINOP), VBR(6), VBR(6), FIXED(4),
-          FIXED(7) }, 5 },
-      { { LITERAL(FUNC_CODE_INST_CAST), VBR(6), FIXED(type_index_bits),
-          FIXED(4) }, 4 },
-      { { LITERAL(FUNC_CODE_INST_RET) }, 1 },
-      { { LITERAL(FUNC_CODE_INST_RET), VBR(6) }, 2 },
-      { { LITERAL(FUNC_CODE_INST_UNREACHABLE) }, 1 },
-
-      { { LITERAL(FUNC_CODE_INST_GEP), FIXED(1), FIXED(type_index_bits),
-          ARRAY, VBR(6) }, 5 },
-   };
-
-   assert(sizeof(func_abbrevs) == sizeof(m->func_abbrevs));
-   memcpy(m->func_abbrevs, func_abbrevs, sizeof(func_abbrevs));
 
    for (int i = 0; i < ARRAY_SIZE(func_abbrevs); ++i) {
       if (!define_abbrev(m, func_abbrevs + i))
@@ -720,12 +729,12 @@ emit_function_abbrevs(struct dxil_module *m, int type_index_bits)
 }
 
 bool
-dxil_module_emit_blockinfo(struct dxil_module *m, int type_index_bits)
+dxil_module_emit_blockinfo(struct dxil_module *m)
 {
    return dxil_module_enter_subblock(m, DXIL_BLOCKINFO, 2) &&
           emit_value_symtab_abbrevs(m) &&
-          emit_const_abbrevs(m, type_index_bits) &&
-          emit_function_abbrevs(m, type_index_bits) &&
+          emit_const_abbrevs(m) &&
+          emit_function_abbrevs(m) &&
           dxil_module_exit_block(m);
 }
 
@@ -791,28 +800,12 @@ dxil_emit_attribute_table(struct dxil_module *m,
 }
 
 static bool
-emit_type_table_abbrevs(struct dxil_module *m, int type_index_bits)
+emit_type_table_abbrevs(struct dxil_module *m)
 {
-   struct dxil_abbrev type_table_abbrevs[] = {
-      { { LITERAL(TYPE_CODE_POINTER), FIXED(type_index_bits),
-          LITERAL(0) }, 3 },
-      { { LITERAL(TYPE_CODE_FUNCTION), FIXED(1), ARRAY,
-          FIXED(type_index_bits) }, 4 },
-      { { LITERAL(TYPE_CODE_STRUCT_ANON), FIXED(1), ARRAY,
-          FIXED(type_index_bits) }, 4 },
-      { { LITERAL(TYPE_CODE_STRUCT_NAME), ARRAY, CHAR6 }, 3 },
-      { { LITERAL(TYPE_CODE_STRUCT_NAMED), FIXED(1), ARRAY,
-          FIXED(type_index_bits) }, 4 },
-      { { LITERAL(TYPE_CODE_ARRAY), VBR(8), FIXED(type_index_bits) }, 3 }
-   };
-
    for (int i = 0; i < ARRAY_SIZE(type_table_abbrevs); ++i) {
       if (!define_abbrev(m, type_table_abbrevs + i))
          return false;
    }
-
-   assert(sizeof(type_table_abbrevs) == sizeof(m->type_table_abbrevs));
-   memcpy(m->type_table_abbrevs, type_table_abbrevs, sizeof(type_table_abbrevs));
 
    return true;
 }
@@ -905,10 +898,10 @@ emit_metadata_type(struct dxil_module *m)
 }
 
 bool
-dxil_module_emit_type_table(struct dxil_module *m, int type_index_bits)
+dxil_module_emit_type_table(struct dxil_module *m)
 {
    if (!dxil_module_enter_subblock(m, DXIL_TYPE_BLOCK, 4) ||
-       !emit_type_table_abbrevs(m, type_index_bits) ||
+       !emit_type_table_abbrevs(m) ||
        !dxil_module_emit_record_int(m, 1, 1 + list_length(&m->type_list)))
       return false;
 
