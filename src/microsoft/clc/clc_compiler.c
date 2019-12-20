@@ -246,22 +246,9 @@ emit_module(struct dxil_module *m)
    const dxil_value int32_undef = dxil_module_get_undef(m, int32_type);
    const dxil_value int8_15 = dxil_module_get_int8_const(m, 15);
 
-   const int FUNC_CODE_DECLAREBLOCKS = 1; // TODO: remove
    const int num_type_bits = 5;
 
-   if (!dxil_module_emit_blockinfo(m, num_type_bits) ||
-       !dxil_emit_attrib_group_table(m, attrs, attr_sizes,
-                                     ARRAY_SIZE(attrs)) ||
-       !dxil_emit_attribute_table(m, attr_data, ARRAY_SIZE(attr_data)) ||
-       !dxil_module_emit_type_table(m, num_type_bits) ||
-       !dxil_emit_module_info(m) ||
-       !dxil_emit_module_consts(m))
-      return false;
-
-   if (!dxil_emit_metadata(m) ||
-       !emit_value_symbol_table(m) ||
-       !dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
-       !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
+   if (!dxil_module_emit_blockinfo(m, num_type_bits))
       return false;
 
    const dxil_value createhandle_args[] = {
@@ -292,10 +279,21 @@ emit_module(struct dxil_module *m)
    if (!dxil_emit_call_void(m, bufferstore_func_type, bufferstore_func,
                             bufferstore_args,
                             ARRAY_SIZE(bufferstore_args)) ||
-       !dxil_emit_ret_void(m) ||
-       !dxil_module_exit_block(m))
+       !dxil_emit_ret_void(m))
       return false;
 
+   if (!dxil_emit_attrib_group_table(m, attrs, attr_sizes,
+                                     ARRAY_SIZE(attrs)) ||
+       !dxil_emit_attribute_table(m, attr_data, ARRAY_SIZE(attr_data)) ||
+       !dxil_module_emit_type_table(m, num_type_bits) ||
+       !dxil_emit_module_info(m) ||
+       !dxil_emit_module_consts(m))
+      return false;
+
+   if (!dxil_emit_metadata(m) ||
+       !emit_value_symbol_table(m) ||
+       !dxil_emit_function(m))
+      return false;
    return dxil_module_exit_block(m);
 }
 

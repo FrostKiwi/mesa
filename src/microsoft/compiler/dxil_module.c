@@ -33,6 +33,7 @@ void
 dxil_module_init(struct dxil_module *m)
 {
    dxil_buffer_init(&m->buf, 2);
+   dxil_buffer_init(&m->code, 4);
 
    m->num_blocks = 0;
 
@@ -490,7 +491,7 @@ emit_func_abbrev_record(struct dxil_module *m, unsigned abbrev,
    unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
    assert(index < ARRAY_SIZE(m->func_abbrevs));
 
-   return emit_record_abbrev(&m->buf, abbrev, m->func_abbrevs + index,
+   return emit_record_abbrev(&m->code, abbrev, m->func_abbrevs + index,
                              data, size);
 }
 
@@ -1640,7 +1641,7 @@ dxil_emit_call(struct dxil_module *m,
    assert(func_type->type == TYPE_FUNCTION &&
           func_type->function_def.ret_type->type != TYPE_VOID);
 
-   if (!emit_call(&m->buf, m->next_value_id, func_type, value_id,
+   if (!emit_call(&m->code, m->next_value_id, func_type, value_id,
                   args, num_args))
       return DXIL_VALUE_INVALID;
 
@@ -1655,7 +1656,7 @@ dxil_emit_call_void(struct dxil_module *m,
 {
    assert(func_type->type == TYPE_FUNCTION &&
           func_type->function_def.ret_type->type == TYPE_VOID);
-   return emit_call(&m->buf, m->next_value_id, func_type, value_id,
+   return emit_call(&m->code, m->next_value_id, func_type, value_id,
                     args, num_args);
 }
 
@@ -1664,4 +1665,24 @@ dxil_emit_ret_void(struct dxil_module *m)
 {
    uint64_t data[] = { FUNC_CODE_INST_RET };
    return emit_func_abbrev_record(m, 8, data, ARRAY_SIZE(data));
+}
+
+bool
+dxil_emit_function(struct dxil_module *m)
+{
+   if (!dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
+       !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
+      return false;
+
+   for (int i = 0; i < m->code.blob.size; ++i) {
+      if (!dxil_buffer_emit_bits(&m->buf, m->code.blob.data[i], 8))
+         return false;
+   }
+   blob_finish(&m->code.blob);
+
+   if (m->code.buf_bits > 0)
+      if (!dxil_buffer_emit_bits(&m->buf, m->code.buf, m->code.buf_bits))
+         return false;
+
+   return dxil_module_exit_block(m);
 }
