@@ -1065,6 +1065,7 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
 }
 
 struct dxil_func {
+   char *name;
    const struct dxil_type *type;
    bool decl;
    unsigned attr_set;
@@ -1074,12 +1075,19 @@ struct dxil_func {
 };
 
 static const dxil_value
-add_function(struct dxil_module *m, const struct dxil_type *type,
+add_function(struct dxil_module *m, const char *name,
+             const struct dxil_type *type,
              bool decl, unsigned attr_set)
 {
    struct dxil_func *func = CALLOC_STRUCT(dxil_func);
    if (!func)
       return DXIL_VALUE_INVALID;
+
+   func->name = strdup(name);
+   if (!func->name) {
+      FREE(func);
+      return DXIL_VALUE_INVALID;
+   }
 
    func->type = type;
    func->decl = decl;
@@ -1117,17 +1125,19 @@ dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
 }
 
 const dxil_value
-dxil_add_function_def(struct dxil_module *m, const struct dxil_type *type,
+dxil_add_function_def(struct dxil_module *m, const char *name,
+                      const struct dxil_type *type,
                       unsigned attr_set)
 {
-   return add_function(m, type, false, attr_set);
+   return add_function(m, name, type, false, attr_set);
 }
 
 const dxil_value
-dxil_add_function_decl(struct dxil_module *m, const struct dxil_type *type,
+dxil_add_function_decl(struct dxil_module *m, const char *name,
+                       const struct dxil_type *type,
                        unsigned attr_set)
 {
-   return add_function(m, type, true, attr_set);
+   return add_function(m, name, type, true, attr_set);
 }
 
 static bool
@@ -1300,9 +1310,8 @@ emit_value_symtab_abbrev_record(struct dxil_module *m, unsigned abbrev,
                              data, size);
 }
 
-bool
-dxil_module_emit_symtab_entry(struct dxil_module *m, unsigned value,
-                              const char *name)
+static bool
+emit_symtab_entry(struct dxil_module *m, unsigned value, const char *name)
 {
    uint64_t temp[256];
    assert(strlen(name) < ARRAY_SIZE(temp) - 2);
@@ -1319,6 +1328,20 @@ dxil_module_emit_symtab_entry(struct dxil_module *m, unsigned value,
       abbrev = 5;
 
    return emit_value_symtab_abbrev_record(m, abbrev, temp, 2 + strlen(name));
+}
+
+bool
+dxil_emit_value_symbol_table(struct dxil_module *m)
+{
+   if (!dxil_module_enter_subblock(m, DXIL_VALUE_SYMTAB_BLOCK, 4))
+      return false;
+
+   struct dxil_func *func;
+   LIST_FOR_EACH_ENTRY(func, &m->func_list, head) {
+      if (!emit_symtab_entry(m, func->value, func->name))
+         return false;
+   }
+   return dxil_module_exit_block(m);
 }
 
 enum metadata_codes {
