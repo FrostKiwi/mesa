@@ -601,9 +601,9 @@ enum type_codes {
 #define LITERAL(x) { DXIL_OP_LITERAL, (x) }
 #define FIXED(x) { DXIL_OP_FIXED, (x) }
 #define VBR(x) { DXIL_OP_VBR, (x) }
-#define ARRAY() { DXIL_OP_ARRAY, 0 }
-#define CHAR6() { DXIL_OP_CHAR6, 0 }
-#define BLOB() { DXIL_OP_BLOB, 0 }
+#define ARRAY { DXIL_OP_ARRAY, 0 }
+#define CHAR6 { DXIL_OP_CHAR6, 0 }
+#define BLOB { DXIL_OP_BLOB, 0 }
 
 static bool
 define_abbrev(struct dxil_module *m, const struct dxil_abbrev *a)
@@ -641,10 +641,10 @@ switch_to_block(struct dxil_module *m, uint32_t block)
 }
 
 static struct dxil_abbrev value_symtab_abbrevs[] = {
-   { { FIXED(3), VBR(8), ARRAY(), FIXED(8) }, 4 },
-   { { LITERAL(VST_CODE_ENTRY), VBR(8), ARRAY(), FIXED(7), }, 4 },
-   { { LITERAL(VST_CODE_ENTRY), VBR(8), ARRAY(), CHAR6(), }, 4 },
-   { { LITERAL(VST_CODE_BBENTRY), VBR(8), ARRAY(), CHAR6(), }, 4 },
+   { { FIXED(3), VBR(8), ARRAY, FIXED(8) }, 4 },
+   { { LITERAL(VST_CODE_ENTRY), VBR(8), ARRAY, FIXED(7), }, 4 },
+   { { LITERAL(VST_CODE_ENTRY), VBR(8), ARRAY, CHAR6, }, 4 },
+   { { LITERAL(VST_CODE_BBENTRY), VBR(8), ARRAY, CHAR6, }, 4 },
 };
 
 static bool
@@ -705,7 +705,7 @@ emit_function_abbrevs(struct dxil_module *m, int type_index_bits)
       { { LITERAL(FUNC_CODE_INST_UNREACHABLE) }, 1 },
 
       { { LITERAL(FUNC_CODE_INST_GEP), FIXED(1), FIXED(type_index_bits),
-          ARRAY(), VBR(6) }, 5 },
+          ARRAY, VBR(6) }, 5 },
    };
 
    assert(sizeof(func_abbrevs) == sizeof(m->func_abbrevs));
@@ -796,12 +796,12 @@ emit_type_table_abbrevs(struct dxil_module *m, int type_index_bits)
    struct dxil_abbrev type_table_abbrevs[] = {
       { { LITERAL(TYPE_CODE_POINTER), FIXED(type_index_bits),
           LITERAL(0) }, 3 },
-      { { LITERAL(TYPE_CODE_FUNCTION), FIXED(1), ARRAY(),
+      { { LITERAL(TYPE_CODE_FUNCTION), FIXED(1), ARRAY,
           FIXED(type_index_bits) }, 4 },
-      { { LITERAL(TYPE_CODE_STRUCT_ANON), FIXED(1), ARRAY(),
+      { { LITERAL(TYPE_CODE_STRUCT_ANON), FIXED(1), ARRAY,
           FIXED(type_index_bits) }, 4 },
-      { { LITERAL(TYPE_CODE_STRUCT_NAME), ARRAY(), CHAR6() }, 3 },
-      { { LITERAL(TYPE_CODE_STRUCT_NAMED), FIXED(1), ARRAY(),
+      { { LITERAL(TYPE_CODE_STRUCT_NAME), ARRAY, CHAR6 }, 3 },
+      { { LITERAL(TYPE_CODE_STRUCT_NAMED), FIXED(1), ARRAY,
           FIXED(type_index_bits) }, 4 },
       { { LITERAL(TYPE_CODE_ARRAY), VBR(8), FIXED(type_index_bits) }, 3 }
    };
@@ -1210,10 +1210,10 @@ emit_module_const_abbrevs(struct dxil_module *m)
 {
    /* these are unused for now, so let's not even record them */
    struct dxil_abbrev abbrevs[] = {
-      { { LITERAL(CST_CODE_AGGREGATE), ARRAY(), FIXED(5) }, 3 },
-      { { LITERAL(CST_CODE_STRING), ARRAY(), FIXED(8) }, 3 },
-      { { LITERAL(CST_CODE_CSTRING), ARRAY(), FIXED(7) }, 3 },
-      { { LITERAL(CST_CODE_CSTRING), ARRAY(), CHAR6() }, 3 },
+      { { LITERAL(CST_CODE_AGGREGATE), ARRAY, FIXED(5) }, 3 },
+      { { LITERAL(CST_CODE_STRING), ARRAY, FIXED(8) }, 3 },
+      { { LITERAL(CST_CODE_CSTRING), ARRAY, FIXED(7) }, 3 },
+      { { LITERAL(CST_CODE_CSTRING), ARRAY, CHAR6 }, 3 },
    };
 
    for (int i = 0; i < ARRAY_SIZE(abbrevs); ++i) {
@@ -1338,8 +1338,8 @@ enum metadata_codes {
 };
 
 static const struct dxil_abbrev metadata_abbrevs[] = {
-   { { LITERAL(METADATA_STRING), ARRAY(), FIXED(8) }, 3 },
-   { { LITERAL(METADATA_NAME), ARRAY(), FIXED(8) }, 3 },
+   { { LITERAL(METADATA_STRING), ARRAY, FIXED(8) }, 3 },
+   { { LITERAL(METADATA_NAME), ARRAY, FIXED(8) }, 3 },
 };
 
 static bool
