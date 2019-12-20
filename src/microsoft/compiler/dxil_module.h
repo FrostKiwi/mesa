@@ -123,6 +123,7 @@ struct dxil_module {
    unsigned major_version, minor_version;
 
    struct dxil_buffer buf;
+   struct dxil_buffer code;
 
    struct {
       unsigned abbrev_width;
@@ -290,6 +291,9 @@ dxil_emit_call_void(struct dxil_module *m,
 
 bool
 dxil_emit_ret_void(struct dxil_module *m);
+
+bool
+dxil_emit_function(struct dxil_module *m);
 
 #ifdef __cplusplus
 }
