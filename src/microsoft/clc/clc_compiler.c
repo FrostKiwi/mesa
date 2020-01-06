@@ -56,12 +56,33 @@ emit_dx_versions(struct dxil_module *m, int major, int minor)
           dxil_add_metadata_named_node(m, "dx.valver", &version, 1);
 }
 
-static bool
-emit_dx_shader_model(struct dxil_module *m, const char *type, int major, int minor)
+static const char *
+get_shader_kind_str(enum dxil_shader_kind kind)
 {
-   const struct dxil_mdnode *type_node = dxil_get_metadata_string(m, type);
-   const struct dxil_mdnode *major_node = dxil_get_metadata_int32(m, major);
-   const struct dxil_mdnode *minor_node = dxil_get_metadata_int32(m, minor);
+   switch (kind) {
+   case DXIL_PIXEL_SHADER:
+      return "ps";
+   case DXIL_VERTEX_SHADER:
+      return "vs";
+   case DXIL_GEOMETRY_SHADER:
+      return "gs";
+   case DXIL_HULL_SHADER:
+      return "hs";
+   case DXIL_DOMAIN_SHADER:
+      return "ds";
+   case DXIL_COMPUTE_SHADER:
+      return "cs";
+   default:
+      unreachable("invalid shader kind");
+   }
+}
+
+static bool
+emit_dx_shader_model(struct dxil_module *m)
+{
+   const struct dxil_mdnode *type_node = dxil_get_metadata_string(m, get_shader_kind_str(m->shader_kind));
+   const struct dxil_mdnode *major_node = dxil_get_metadata_int32(m, m->major_version);
+   const struct dxil_mdnode *minor_node = dxil_get_metadata_int32(m, m->minor_version);
    const struct dxil_mdnode *shader_model[] = { type_node, major_node,
                                                 minor_node };
    const struct dxil_mdnode *dx_shader_model = dxil_get_metadata_node(m, shader_model, ARRAY_SIZE(shader_model));
@@ -171,7 +192,7 @@ emit_module(struct dxil_module *m)
 
    if (!emit_llvm_ident(m) ||
        !emit_dx_versions(m, 1, 0) ||
-       !emit_dx_shader_model(m, "cs", 6, 0))
+       !emit_dx_shader_model(m))
       return false;
 
    const dxil_value rwbuffer_pointer_undef = dxil_module_get_undef(m, rwbuffer_pointer_type);
