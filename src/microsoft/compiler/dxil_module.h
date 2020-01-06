@@ -252,17 +252,17 @@ bool
 dxil_emit_metadata_abbrevs(struct dxil_module *m);
 
 const struct dxil_mdnode *
-dxil_add_metadata_string(struct dxil_module *m, const char *str);
+dxil_get_metadata_string(struct dxil_module *m, const char *str);
 
 const struct dxil_mdnode *
-dxil_add_metadata_value(struct dxil_module *m, const struct dxil_type *type,
+dxil_get_metadata_value(struct dxil_module *m, const struct dxil_type *type,
                         const dxil_value value);
 
 const struct dxil_mdnode *
-dxil_add_metadata_int32(struct dxil_module *m, int32_t value);
+dxil_get_metadata_int32(struct dxil_module *m, int32_t value);
 
 const struct dxil_mdnode *
-dxil_add_metadata_node(struct dxil_module *m,
+dxil_get_metadata_node(struct dxil_module *m,
                        const struct dxil_mdnode *subnodes[],
                        size_t num_subnodes);
 
