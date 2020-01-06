@@ -156,6 +156,20 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
    return dxil_get_metadata_node(m, fields, ARRAY_SIZE(fields));
 }
 
+static const struct dxil_type *
+get_dx_handle_type(struct dxil_module *m)
+{
+   const struct dxil_type *int8_type = dxil_module_get_int_type(m, 8);
+   if (!int8_type)
+      return NULL;
+
+   const struct dxil_type *ptr_type = dxil_module_get_pointer_type(m, int8_type);
+   if (!ptr_type)
+      return NULL;
+
+   return dxil_module_get_struct_type(m, "dx.types.Handle", &ptr_type, 1);
+}
+
 static bool
 emit_module(struct dxil_module *m)
 {
@@ -205,9 +219,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_type *threadid_func_pointer_type = dxil_module_get_pointer_type(m, threadid_func_type);
 
    const struct dxil_type *int8_type = dxil_module_get_int_type(m, 8);
-   const struct dxil_type *int8_pointer_type = dxil_module_get_pointer_type(m, int8_type);
-   const struct dxil_type *handle_type = dxil_module_add_struct_type(m, "dx.types.Handle", &int8_pointer_type, 1);
-
+   const struct dxil_type *handle_type = get_dx_handle_type(m);
    const struct dxil_type *bufferstore_arg_types[] = { int32_type, handle_type, int32_type, int32_type, int32_type, int32_type, int32_type, int32_type, int8_type };
    const struct dxil_type *bufferstore_func_type = dxil_module_add_function_type(m, void_type, bufferstore_arg_types, ARRAY_SIZE(bufferstore_arg_types));
    const struct dxil_type *bufferstore_func_pointer_type = dxil_module_get_pointer_type(m, bufferstore_func_type);
