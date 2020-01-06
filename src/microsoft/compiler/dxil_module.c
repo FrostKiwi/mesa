@@ -1406,9 +1406,16 @@ create_mdnode(struct dxil_module *m, enum mdnode_type type)
 }
 
 const struct dxil_mdnode *
-dxil_add_metadata_string(struct dxil_module *m, const char *str)
+dxil_get_metadata_string(struct dxil_module *m, const char *str)
 {
-   struct dxil_mdnode *n = create_mdnode(m, MD_STRING);
+   struct dxil_mdnode *n;
+   LIST_FOR_EACH_ENTRY(n, &m->mdnode_list, head) {
+      if (n->type == MD_STRING &&
+          !strcmp(n->string, str))
+         return n;
+   }
+
+   n = create_mdnode(m, MD_STRING);
    if (n) {
       n->string = strdup(str);
       if (!n->string) {
@@ -1420,10 +1427,18 @@ dxil_add_metadata_string(struct dxil_module *m, const char *str)
 }
 
 const struct dxil_mdnode *
-dxil_add_metadata_value(struct dxil_module *m, const struct dxil_type *type,
+dxil_get_metadata_value(struct dxil_module *m, const struct dxil_type *type,
                         const dxil_value value)
 {
-   struct dxil_mdnode *n = create_mdnode(m, MD_VALUE);
+   struct dxil_mdnode *n;
+   LIST_FOR_EACH_ENTRY(n, &m->mdnode_list, head) {
+      if (n->type == MD_VALUE &&
+          n->value.type == type &&
+          n->value.value == value)
+         return n;
+   }
+
+   n = create_mdnode(m, MD_VALUE);
    if (n) {
       n->value.type = type;
       n->value.value = value;
@@ -1432,11 +1447,20 @@ dxil_add_metadata_value(struct dxil_module *m, const struct dxil_type *type,
 }
 
 const struct dxil_mdnode *
-dxil_add_metadata_node(struct dxil_module *m,
+dxil_get_metadata_node(struct dxil_module *m,
                        const struct dxil_mdnode *subnodes[],
                        size_t num_subnodes)
 {
-   struct dxil_mdnode *n = create_mdnode(m, MD_NODE);
+   struct dxil_mdnode *n;
+   LIST_FOR_EACH_ENTRY(n, &m->mdnode_list, head) {
+      if (n->type == MD_NODE &&
+          n->node.num_subnodes == num_subnodes &&
+          !memcmp(n->node.subnodes, subnodes, sizeof(struct dxil_mdnode *) *
+                  num_subnodes))
+         return n;
+   }
+
+   n = create_mdnode(m, MD_NODE);
    if (n) {
       n->node.subnodes = CALLOC(num_subnodes, sizeof(struct dxil_mdnode *));
       if (!n->node.subnodes) {
@@ -1452,7 +1476,7 @@ dxil_add_metadata_node(struct dxil_module *m,
 }
 
 const struct dxil_mdnode *
-dxil_add_metadata_int32(struct dxil_module *m, int32_t value)
+dxil_get_metadata_int32(struct dxil_module *m, int32_t value)
 {
    const struct dxil_type *type = get_int32_type(m);
    if (!type)
@@ -1462,7 +1486,7 @@ dxil_add_metadata_int32(struct dxil_module *m, int32_t value)
    if (!const_value)
       return NULL;
 
-   return dxil_add_metadata_value(m, type, const_value);
+   return dxil_get_metadata_value(m, type, const_value);
 }
 
 struct dxil_named_node {
