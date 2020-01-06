@@ -90,6 +90,11 @@ enum dxil_component_type {
    DXIL_COMP_TYPE_UNORMF64 = 16
 };
 
+enum {
+   DXIL_TYPED_BUFFER_ELEMENT_TYPE_TAG = 0,
+   DXIL_STRUCTURED_BUFFER_ELEMENT_STRIDE_TAG = 1
+};
+
 static bool
 emit_module(struct dxil_module *m)
 {
@@ -174,14 +179,17 @@ emit_module(struct dxil_module *m)
    const struct dxil_mdnode *node11 = dxil_add_metadata_int32(m, 10);
 
    const dxil_value int1_0 = dxil_module_get_int1_const(m, false);
-   const struct dxil_mdnode *node4 = dxil_add_metadata_int32(m, 0);
-   const struct dxil_mdnode *node13 = dxil_add_metadata_int32(m, 5);
-   const struct dxil_mdnode *nodes_4_13[] = { node4, node13 }; // kDxilTypedBufferElementTypeTag -> DXIL_COMP_TYPE_U32
-   const struct dxil_mdnode *node14 = dxil_add_metadata_node(m, nodes_4_13, ARRAY_SIZE(nodes_4_13)); // list
+   const struct dxil_mdnode *buffer_element_type_tag = dxil_add_metadata_int32(m, DXIL_TYPED_BUFFER_ELEMENT_TYPE_TAG);
+   const struct dxil_mdnode *output_buffer_element_type = dxil_add_metadata_int32(m, DXIL_COMP_TYPE_U32);
+   const struct dxil_mdnode *output_buffer_metadata_tag_nodes[] = {
+      buffer_element_type_tag, output_buffer_element_type
+   };
+   const struct dxil_mdnode *output_buffer_metadata_tags = dxil_add_metadata_node(m, output_buffer_metadata_tag_nodes, ARRAY_SIZE(output_buffer_metadata_tag_nodes));
 
    const struct dxil_mdnode *output_buffer_name = dxil_add_metadata_string(m, "OutputBuffer");
    const struct dxil_mdnode *node12 = dxil_add_metadata_value(m, int1_type, int1_0);
    const struct dxil_mdnode *node3 = dxil_add_metadata_int32(m, 1);
+   const struct dxil_mdnode *node4 = dxil_add_metadata_int32(m, 0);
    const struct dxil_mdnode *output_buffer_fields[] = {
       node4, // resource id: 0 (for createHandle)
       node9, // pointer to a global constant symbol
@@ -193,7 +201,7 @@ emit_module(struct dxil_module *m)
       node12, // globally coherent
       node12, // UAV has counter
       node12, // UAV is ROV
-      node14 // list of additional tag-value pairs
+      output_buffer_metadata_tags // list of additional tag-value pairs
    };
    const struct dxil_mdnode *output_buffer_node = dxil_add_metadata_node(m, output_buffer_fields, ARRAY_SIZE(output_buffer_fields));
    const struct dxil_mdnode *uav_metadata = dxil_add_metadata_node(m, &output_buffer_node, 1);
