@@ -401,10 +401,17 @@ dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size)
 }
 
 const struct dxil_type *
-dxil_module_add_pointer_type(struct dxil_module *m,
+dxil_module_get_pointer_type(struct dxil_module *m,
                              const struct dxil_type *target)
 {
-   struct dxil_type *type = create_type(m, TYPE_POINTER);
+   struct dxil_type *type;
+   LIST_FOR_EACH_ENTRY(type, &m->type_list, head) {
+      if (type->type == TYPE_POINTER &&
+          type->ptr_target_type == target)
+         return type;
+   }
+
+   type = create_type(m, TYPE_POINTER);
    if (type)
       type->ptr_target_type = target;
    return type;

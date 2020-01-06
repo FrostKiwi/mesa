@@ -221,7 +221,7 @@ const struct dxil_type *
 dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size);
 
 const struct dxil_type *
-dxil_module_add_pointer_type(struct dxil_module *m,
+dxil_module_get_pointer_type(struct dxil_module *m,
                              const struct dxil_type *target);
 
 const struct dxil_type *
