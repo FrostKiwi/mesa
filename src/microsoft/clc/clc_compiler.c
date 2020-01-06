@@ -209,15 +209,17 @@ emit_module(struct dxil_module *m)
 
    const struct dxil_mdnode *output_buffer_name = dxil_get_metadata_string(m, "OutputBuffer");
    const struct dxil_mdnode *node12 = dxil_get_metadata_value(m, int1_type, int1_0);
-   const struct dxil_mdnode *node3 = dxil_get_metadata_int32(m, 1);
-   const struct dxil_mdnode *node4 = dxil_get_metadata_int32(m, 0);
+   const struct dxil_mdnode *output_buffer_resource_id = dxil_get_metadata_int32(m, 0);
+   const struct dxil_mdnode *output_buffer_bind_id = dxil_get_metadata_int32(m, 0);
+   const struct dxil_mdnode *output_buffer_bind_lower_bound = dxil_get_metadata_int32(m, 0);
+   const struct dxil_mdnode *output_buffer_bind_range = dxil_get_metadata_int32(m, 1);
    const struct dxil_mdnode *output_buffer_fields[] = {
-      node4, // resource id: 0 (for createHandle)
+      output_buffer_resource_id, // resource id: 0 (for createHandle)
       node9, // pointer to a global constant symbol
       output_buffer_name, // name of resource variable
-      node4, // bind space id: 0
-      node4, // bind lower bound: 0
-      node3, // range: 1
+      output_buffer_bind_id, // bind space id: 0
+      output_buffer_bind_lower_bound, // bind lower bound: 0
+      output_buffer_bind_range, // range: 1
       node11, // UAV resource shape
       node12, // globally coherent
       node12, // UAV has counter
@@ -236,6 +238,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_mdnode *main_entrypoint = dxil_get_metadata_value(m, main_func_pointer_type, main_func);
    const struct dxil_mdnode *node27 = dxil_get_metadata_node(m, NULL, 0);
 
+   const struct dxil_mdnode *node4 = dxil_get_metadata_int32(m, 0);
    const struct dxil_mdnode *nodes_4_27_27[] = {
       node4, node27, node27
    };
@@ -244,6 +247,7 @@ emit_module(struct dxil_module *m)
 
    const struct dxil_mdnode *node29 = dxil_get_metadata_node(m, &node28, 1);
 
+   const struct dxil_mdnode *node3 = dxil_get_metadata_int32(m, 1);
    const struct dxil_mdnode *main_type_annotation_nodes[] = {
       node3, main_entrypoint, node29
    };
