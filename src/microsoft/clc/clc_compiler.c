@@ -117,9 +117,10 @@ enum {
 };
 
 static const struct dxil_mdnode *
-emit_uav_metadata(struct dxil_module *m, const struct dxil_type *pointer_type,
+emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
                   const char *name, enum dxil_component_type comp_type)
 {
+   const struct dxil_type *pointer_type = dxil_module_get_pointer_type(m, struct_type);
    const dxil_value pointer_undef = dxil_module_get_undef(m, pointer_type);
 
    const struct dxil_mdnode *buffer_element_type_tag = dxil_get_metadata_int32(m, DXIL_TYPED_BUFFER_ELEMENT_TYPE_TAG);
@@ -194,7 +195,6 @@ emit_module(struct dxil_module *m)
 
    const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
    const struct dxil_type *rwbuffer_struct_type = dxil_module_add_struct_type(m, "class.RWBuffer<unsigned int>", &int32_type, 1);
-   const struct dxil_type *rwbuffer_pointer_type = dxil_module_get_pointer_type(m, rwbuffer_struct_type);
 
    const struct dxil_type *void_type = dxil_module_get_void_type(m);
    const struct dxil_type *main_func_type = dxil_module_add_function_type(m, void_type, NULL, 0);
@@ -233,7 +233,7 @@ emit_module(struct dxil_module *m)
        !emit_dx_shader_model(m))
       return false;
 
-   const struct dxil_mdnode *output_buffer_node = emit_uav_metadata(m, rwbuffer_pointer_type,
+   const struct dxil_mdnode *output_buffer_node = emit_uav_metadata(m, rwbuffer_struct_type,
                                                                     "OutputBuffer",
                                                                     DXIL_COMP_TYPE_U32);
 
