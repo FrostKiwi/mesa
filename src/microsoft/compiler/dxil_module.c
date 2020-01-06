@@ -418,12 +418,22 @@ dxil_module_get_pointer_type(struct dxil_module *m,
 }
 
 const struct dxil_type *
-dxil_module_add_struct_type(struct dxil_module *m,
+dxil_module_get_struct_type(struct dxil_module *m,
                             const char *name,
                             const struct dxil_type **elem_types,
                             size_t num_elem_types)
 {
-   struct dxil_type *type = create_type(m, TYPE_STRUCT);
+   struct dxil_type *type;
+   LIST_FOR_EACH_ENTRY(type, &m->type_list, head) {
+      if (type->type == TYPE_STRUCT &&
+          !strcmp(type->struct_def.name, name) &&
+          type->struct_def.num_elem_types == num_elem_types &&
+          !memcmp(type->struct_def.elem_types, elem_types,
+                  sizeof(struct dxil_type *) * num_elem_types))
+         return type;
+   }
+
+   type = create_type(m, TYPE_STRUCT);
    if (type) {
       type->struct_def.name = strdup(name);
       if (!type->struct_def.name) {

@@ -194,7 +194,7 @@ emit_module(struct dxil_module *m)
    };
 
    const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
-   const struct dxil_type *rwbuffer_struct_type = dxil_module_add_struct_type(m, "class.RWBuffer<unsigned int>", &int32_type, 1);
+   const struct dxil_type *rwbuffer_struct_type = dxil_module_get_struct_type(m, "class.RWBuffer<unsigned int>", &int32_type, 1);
 
    const struct dxil_type *void_type = dxil_module_get_void_type(m);
    const struct dxil_type *main_func_type = dxil_module_add_function_type(m, void_type, NULL, 0);
