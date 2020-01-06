@@ -227,21 +227,28 @@ emit_module(struct dxil_module *m)
    const struct dxil_mdnode *output_buffer_node = dxil_get_metadata_node(m, output_buffer_fields, ARRAY_SIZE(output_buffer_fields));
    const struct dxil_mdnode *uav_metadata = dxil_get_metadata_node(m, &output_buffer_node, 1);
 
-   const struct dxil_mdnode *resources_nodes[] = { NULL, uav_metadata, NULL, NULL };
+   const struct dxil_mdnode *resources_nodes[] = {
+      NULL, uav_metadata, NULL, NULL
+   };
    const struct dxil_mdnode *resources_node = dxil_get_metadata_node(m, resources_nodes,
                                                       ARRAY_SIZE(resources_nodes));
 
    const struct dxil_mdnode *main_entrypoint = dxil_get_metadata_value(m, main_func_pointer_type, main_func);
    const struct dxil_mdnode *node27 = dxil_get_metadata_node(m, NULL, 0);
 
-   const struct dxil_mdnode *nodes_4_27_27[] = { node4, node27, node27 };
+   const struct dxil_mdnode *nodes_4_27_27[] = {
+      node4, node27, node27
+   };
    const struct dxil_mdnode *node28 = dxil_get_metadata_node(m, nodes_4_27_27,
                                                       ARRAY_SIZE(nodes_4_27_27));
 
    const struct dxil_mdnode *node29 = dxil_get_metadata_node(m, &node28, 1);
 
-   const struct dxil_mdnode *nodes_3_26_29[] = { node3, main_entrypoint, node29 };
-   const struct dxil_mdnode *main_type_annotation = dxil_get_metadata_node(m, nodes_3_26_29, ARRAY_SIZE(nodes_3_26_29));
+   const struct dxil_mdnode *main_type_annotation_nodes[] = {
+      node3, main_entrypoint, node29
+   };
+   const struct dxil_mdnode *main_type_annotation = dxil_get_metadata_node(m, main_type_annotation_nodes,
+                                                                           ARRAY_SIZE(main_type_annotation_nodes));
 
    const struct dxil_mdnode *main_name = dxil_get_metadata_string(m, "main");
 
