@@ -174,7 +174,6 @@ emit_module(struct dxil_module *m)
    const struct dxil_type *bufferstore_func_pointer_type = dxil_module_add_pointer_type(m, bufferstore_func_type);
 
    const struct dxil_type *int1_type = dxil_module_get_int_type(m, 1);
-
    const struct dxil_type *createhandle_arg_types[] = { int32_type, int8_type, int32_type, int32_type, int1_type };
    const struct dxil_type *createhandle_func_type = dxil_module_add_function_type(m, handle_type, createhandle_arg_types, ARRAY_SIZE(createhandle_arg_types));
    const struct dxil_type *createhandle_func_pointer_type = dxil_module_add_pointer_type(m, createhandle_func_type);
@@ -196,10 +195,7 @@ emit_module(struct dxil_module *m)
       return false;
 
    const dxil_value rwbuffer_pointer_undef = dxil_module_get_undef(m, rwbuffer_pointer_type);
-   const struct dxil_mdnode *node9 = dxil_get_metadata_value(m, rwbuffer_pointer_type, rwbuffer_pointer_undef);
-   const struct dxil_mdnode *node11 = dxil_get_metadata_int32(m, 10);
 
-   const dxil_value int1_0 = dxil_module_get_int1_const(m, false);
    const struct dxil_mdnode *buffer_element_type_tag = dxil_get_metadata_int32(m, DXIL_TYPED_BUFFER_ELEMENT_TYPE_TAG);
    const struct dxil_mdnode *output_buffer_element_type = dxil_get_metadata_int32(m, DXIL_COMP_TYPE_U32);
    const struct dxil_mdnode *output_buffer_metadata_tag_nodes[] = {
@@ -207,23 +203,27 @@ emit_module(struct dxil_module *m)
    };
    const struct dxil_mdnode *output_buffer_metadata_tags = dxil_get_metadata_node(m, output_buffer_metadata_tag_nodes, ARRAY_SIZE(output_buffer_metadata_tag_nodes));
 
+   const struct dxil_mdnode *output_buffer_global_constant_symbol = dxil_get_metadata_value(m, rwbuffer_pointer_type, rwbuffer_pointer_undef);
    const struct dxil_mdnode *output_buffer_name = dxil_get_metadata_string(m, "OutputBuffer");
-   const struct dxil_mdnode *node12 = dxil_get_metadata_value(m, int1_type, int1_0);
    const struct dxil_mdnode *output_buffer_resource_id = dxil_get_metadata_int32(m, 0);
    const struct dxil_mdnode *output_buffer_bind_id = dxil_get_metadata_int32(m, 0);
    const struct dxil_mdnode *output_buffer_bind_lower_bound = dxil_get_metadata_int32(m, 0);
    const struct dxil_mdnode *output_buffer_bind_range = dxil_get_metadata_int32(m, 1);
+   const struct dxil_mdnode *output_buffer_uav_resource_shape = dxil_get_metadata_int32(m, 10);
+   const struct dxil_mdnode *output_buffer_globally_coherent = dxil_get_metadata_int1(m, false);
+   const struct dxil_mdnode *output_buffer_has_counter = dxil_get_metadata_int1(m, false);
+   const struct dxil_mdnode *output_buffer_is_rov = dxil_get_metadata_int1(m, false);
    const struct dxil_mdnode *output_buffer_fields[] = {
       output_buffer_resource_id, // resource id: 0 (for createHandle)
-      node9, // pointer to a global constant symbol
-      output_buffer_name, // name of resource variable
-      output_buffer_bind_id, // bind space id: 0
-      output_buffer_bind_lower_bound, // bind lower bound: 0
-      output_buffer_bind_range, // range: 1
-      node11, // UAV resource shape
-      node12, // globally coherent
-      node12, // UAV has counter
-      node12, // UAV is ROV
+      output_buffer_global_constant_symbol,
+      output_buffer_name,
+      output_buffer_bind_id,
+      output_buffer_bind_lower_bound,
+      output_buffer_bind_range,
+      output_buffer_uav_resource_shape,
+      output_buffer_globally_coherent,
+      output_buffer_has_counter,
+      output_buffer_is_rov,
       output_buffer_metadata_tags // list of additional tag-value pairs
    };
    const struct dxil_mdnode *output_buffer_node = dxil_get_metadata_node(m, output_buffer_fields, ARRAY_SIZE(output_buffer_fields));
@@ -292,6 +292,7 @@ emit_module(struct dxil_module *m)
    const dxil_value int32_69 = dxil_module_get_int32_const(m, 69);
    const dxil_value int32_undef = dxil_module_get_undef(m, int32_type);
    const dxil_value int8_15 = dxil_module_get_int8_const(m, 15);
+   const dxil_value int1_0 = dxil_module_get_int1_const(m, false);
 
    const dxil_value createhandle_args[] = {
       int32_57, int8_1, int32_0, int32_0, int1_0
