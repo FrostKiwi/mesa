@@ -21,13 +21,14 @@
 libclc_compiler = static_library(
   'clc_compiler',
   'clc_compiler.c',
-  include_directories : [ inc_include, inc_src, inc_mapi, inc_mesa ],
+  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_compiler, inc_gallium],
+  dependencies: [idep_nir_headers],
   c_args : c_vis_args,
 )
 
 idep_libclc_compiler = declare_dependency(
   link_with : libclc_compiler,
-  dependencies : [idep_libdxil_compiler],
+  dependencies : [idep_libdxil_compiler, idep_nir],
 )
 
 clc_compiler_test = executable('clc_compiler_test', 'clc_compiler_test.cpp',
