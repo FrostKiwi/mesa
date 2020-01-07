@@ -4277,6 +4277,7 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
    case nir_intrinsic_memory_barrier_atomic_counter:
    case nir_intrinsic_memory_barrier_buffer:
    case nir_intrinsic_memory_barrier_image:
+   case nir_intrinsic_memory_barrier_tcs_patch:
    case nir_intrinsic_memory_barrier: {
       bool l3_fence, slm_fence;
       if (instr->intrinsic == nir_intrinsic_scoped_memory_barrier) {
@@ -4331,9 +4332,6 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
 
       break;
    }
-
-   case nir_intrinsic_memory_barrier_tcs_patch:
-      break;
 
    case nir_intrinsic_shader_clock: {
       /* We cannot do anything if there is an event, so ignore it for now */
