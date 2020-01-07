@@ -27,6 +27,7 @@
 #include "../compiler/dxil.h"
 
 #include "util/u_debug.h"
+#include "nir/nir_builder.h"
 
 #include "git_sha1.h"
 
@@ -171,7 +172,7 @@ get_dx_handle_type(struct dxil_module *m)
 }
 
 static bool
-emit_module(struct dxil_module *m)
+emit_module(struct dxil_module *m, nir_shader *s)
 {
    const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
    const struct dxil_type *rwbuffer_struct_type = dxil_module_get_struct_type(m, NULL, &int32_type, 1);
@@ -349,12 +350,47 @@ int clc_compile_from_source(
       return -1;
    }
 
+   nir_builder b;
+   nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_KERNEL, NULL);
+   b.shader->info.name = ralloc_strdup(b.shader, "dummy_kernel");
+
+   nir_variable *output_buffer = nir_variable_create(b.shader,
+                                                     nir_var_mem_ssbo,
+                                                     glsl_uint_type(),
+                                                     "OutputBuffer");
+
+   nir_intrinsic_instr *local_invocation_id =
+      nir_intrinsic_instr_create(b.shader,
+                                 nir_intrinsic_load_local_invocation_id);
+   nir_ssa_dest_init(&local_invocation_id->instr,
+                     &local_invocation_id->dest,
+                     3,
+                     32,
+                     "local_invocation_id");
+   nir_builder_instr_insert(&b, &local_invocation_id->instr);
+
+   nir_ssa_def *index = nir_channel(&b, &local_invocation_id->dest.ssa, 0);
+   nir_ssa_def *value = nir_vec4(&b, index, index, index, index);
+
+   nir_intrinsic_instr *store_ssbo =
+      nir_intrinsic_instr_create(b.shader,
+                                 nir_intrinsic_store_ssbo);
+   store_ssbo->num_components = 4;
+   nir_intrinsic_set_write_mask(store_ssbo, 0xf);
+
+   store_ssbo->src[0] = nir_src_for_ssa(value);
+   store_ssbo->src[1] = nir_src_for_ssa(nir_imm_int(&b, 0));
+   store_ssbo->src[2] = nir_src_for_ssa(index);
+   nir_builder_instr_insert(&b, &store_ssbo->instr);
+
+   NIR_PASS_V(b.shader, nir_lower_alu_to_scalar, NULL, NULL);
+
    struct dxil_module mod;
    dxil_module_init(&mod);
    mod.shader_kind = DXIL_COMPUTE_SHADER;
    mod.major_version = 6;
    mod.minor_version = 0;
-   if (!emit_module(&mod)) {
+   if (!emit_module(&mod, b.shader)) {
       debug_printf("D3D12: dxil_container_add_module failed\n");
       return -1;
    }
