@@ -41,6 +41,7 @@ dxil_module_init(struct dxil_module *m)
    m->next_type_id = 0;
 
    list_inithead(&m->func_list);
+   list_inithead(&m->attr_set_list);
    list_inithead(&m->gvar_list);
    list_inithead(&m->const_list);
    m->next_value_id = 0;
@@ -786,30 +787,39 @@ emit_attrib_group(struct dxil_module *m, int id, uint32_t slot,
    return dxil_module_emit_record(m, PARAMATTR_GRP_CODE_ENTRY, record, size);
 }
 
+struct attrib_set {
+   struct dxil_attrib attrs[2];
+   unsigned num_attrs;
+   struct list_head head;
+};
+
 bool
-dxil_emit_attrib_group_table(struct dxil_module *m,
-                             const struct dxil_attrib **attrs,
-                             const size_t *sizes, size_t num_attrs)
+dxil_emit_attrib_group_table(struct dxil_module *m)
 {
    if (!dxil_module_enter_subblock(m, DXIL_PARAMATTR_GROUP, 3))
       return false;
 
-   for (int i = 0; i < num_attrs; ++i)
-      if (!emit_attrib_group(m, 1 + i, UINT32_MAX, attrs[i], sizes[i]))
+   struct attrib_set *as;
+   int id = 1;
+   LIST_FOR_EACH_ENTRY(as, &m->attr_set_list, head) {
+      if (!emit_attrib_group(m, id, UINT32_MAX, as->attrs, as->num_attrs))
          return false;
+      id++;
+   }
 
    return dxil_module_exit_block(m);
 }
 
 bool
-dxil_emit_attribute_table(struct dxil_module *m,
-                          const unsigned *attrs, size_t num_attrs)
+dxil_emit_attribute_table(struct dxil_module *m)
 {
    if (!dxil_module_enter_subblock(m, DXIL_PARAMATTR, 3))
       return false;
 
-   for (int i = 0; i < num_attrs; ++i) {
-      if (!dxil_module_emit_record_int(m, PARAMATTR_CODE_ENTRY, attrs[i]))
+   struct attrib_set *as;
+   int id = 1;
+   LIST_FOR_EACH_ENTRY(as, &m->attr_set_list, head) {
+      if (!dxil_module_emit_record_int(m, PARAMATTR_CODE_ENTRY, id))
          return false;
    }
 
@@ -1148,11 +1158,45 @@ dxil_add_function_def(struct dxil_module *m, const char *name,
    return add_function(m, name, type, false, 0);
 }
 
+static unsigned
+get_attr_set(struct dxil_module *m, enum dxil_attr_kind attr)
+{
+   struct dxil_attrib attrs[2] = {
+      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_NO_UNWIND },
+      { DXIL_ATTR_ENUM, attr }
+   };
+
+   int index = 1;
+   struct attrib_set *as;
+   LIST_FOR_EACH_ENTRY(as, &m->attr_set_list, head) {
+      if (!memcmp(as->attrs, attrs, sizeof(attrs)))
+         return index;
+      index++;
+   }
+
+   as = CALLOC_STRUCT(attrib_set);
+   if (!as)
+      return 0;
+
+   memcpy(as->attrs, attrs, sizeof(attrs));
+   as->num_attrs = 1;
+   if (attr != DXIL_ATTR_KIND_NONE)
+      as->num_attrs++;
+
+   list_addtail(&as->head, &m->attr_set_list);
+   assert(list_length(&m->attr_set_list) == index);
+   return index;
+}
+
 const dxil_value
 dxil_add_function_decl(struct dxil_module *m, const char *name,
                        const struct dxil_type *type,
-                       unsigned attr_set)
+                       enum dxil_attr_kind attr)
 {
+   unsigned attr_set = get_attr_set(m, attr);
+   if (!attr_set)
+      return DXIL_VALUE_INVALID;
+
    return add_function(m, name, type, true, attr_set);
 }
 

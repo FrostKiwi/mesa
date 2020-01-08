@@ -183,30 +183,6 @@ emit_module(struct dxil_module *m)
        !dxil_module_emit_record_int(m, DXIL_MODULE_CODE_VERSION, 1))
       return false;
 
-   struct dxil_attrib attrs1[] = {
-      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_NO_UNWIND },
-      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_READ_NONE },
-   };
-   struct dxil_attrib attrs2[] = {
-      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_NO_UNWIND },
-   };
-   struct dxil_attrib attrs3[] = {
-      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_NO_UNWIND },
-      { DXIL_ATTR_ENUM, DXIL_ATTR_KIND_READ_ONLY },
-   };
-
-   struct dxil_attrib *attrs[] = {
-      attrs1, attrs2, attrs3
-   };
-   size_t attr_sizes[] = {
-      ARRAY_SIZE(attrs1), ARRAY_SIZE(attrs2), ARRAY_SIZE(attrs3)
-   };
-   assert(ARRAY_SIZE(attrs) == ARRAY_SIZE(attr_sizes));
-
-   unsigned attr_data[] = {
-      1, 2, 3
-   };
-
    const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
    const struct dxil_type *rwbuffer_struct_type = dxil_module_get_struct_type(m, "class.RWBuffer<unsigned int>", &int32_type, 1);
 
@@ -231,9 +207,9 @@ emit_module(struct dxil_module *m)
       return false;
 
    const dxil_value main_func = dxil_add_function_def(m, "main", main_func_type);
-   const dxil_value threadid_func = dxil_add_function_decl(m, "dx.op.threadId.i32", threadid_func_type, 1);
-   const dxil_value bufferstore_func = dxil_add_function_decl(m, "dx.op.bufferStore.i32", bufferstore_func_type, 2);
-   const dxil_value createhandle_func = dxil_add_function_decl(m, "dx.op.createHandle", createhandle_func_type, 3);
+   const dxil_value threadid_func = dxil_add_function_decl(m, "dx.op.threadId.i32", threadid_func_type, DXIL_ATTR_KIND_READ_NONE);
+   const dxil_value bufferstore_func = dxil_add_function_decl(m, "dx.op.bufferStore.i32", bufferstore_func_type, DXIL_ATTR_KIND_NONE);
+   const dxil_value createhandle_func = dxil_add_function_decl(m, "dx.op.createHandle", createhandle_func_type, DXIL_ATTR_KIND_READ_ONLY);
    if (main_func == DXIL_VALUE_INVALID ||
        threadid_func == DXIL_VALUE_INVALID ||
        bufferstore_func == DXIL_VALUE_INVALID ||
@@ -348,9 +324,8 @@ emit_module(struct dxil_module *m)
       return false;
 
    if (!dxil_module_emit_blockinfo(m) ||
-       !dxil_emit_attrib_group_table(m, attrs, attr_sizes,
-                                     ARRAY_SIZE(attrs)) ||
-       !dxil_emit_attribute_table(m, attr_data, ARRAY_SIZE(attr_data)) ||
+       !dxil_emit_attrib_group_table(m) ||
+       !dxil_emit_attribute_table(m) ||
        !dxil_module_emit_type_table(m) ||
        !dxil_emit_module_info(m) ||
        !dxil_emit_module_consts(m))
