@@ -1229,13 +1229,13 @@ struct dxil_gvar {
    struct list_head head;
 };
 
-const dxil_value
+const struct dxil_gvar *
 dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
                     bool constant, int align)
 {
    struct dxil_gvar *gvar = CALLOC_STRUCT(dxil_gvar);
    if (!gvar)
-      return DXIL_VALUE_INVALID;
+      return NULL;
 
    gvar->type = type;
    gvar->constant = constant;
@@ -1243,7 +1243,7 @@ dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
 
    gvar->value = m->next_value_id++;
    list_addtail(&gvar->head, &m->gvar_list);
-   return gvar->value;
+   return gvar;
 }
 
 const dxil_value
