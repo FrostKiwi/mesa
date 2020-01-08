@@ -1186,6 +1186,32 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
                       temp, strlen(datalayout));
 }
 
+struct dxil_gvar {
+   const struct dxil_type *type;
+   bool constant;
+   int align;
+
+   dxil_value value;
+   struct list_head head;
+};
+
+const struct dxil_gvar *
+dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
+                    bool constant, int align)
+{
+   struct dxil_gvar *gvar = CALLOC_STRUCT(dxil_gvar);
+   if (!gvar)
+      return NULL;
+
+   gvar->type = type;
+   gvar->constant = constant;
+   gvar->align = align;
+
+   gvar->value = m->next_value_id++;
+   list_addtail(&gvar->head, &m->gvar_list);
+   return gvar;
+}
+
 struct dxil_func {
    char *name;
    const struct dxil_type *type;
@@ -1218,32 +1244,6 @@ add_function(struct dxil_module *m, const char *name,
    func->value = m->next_value_id++;
    list_addtail(&func->head, &m->func_list);
    return func->value;
-}
-
-struct dxil_gvar {
-   const struct dxil_type *type;
-   bool constant;
-   int align;
-
-   dxil_value value;
-   struct list_head head;
-};
-
-const struct dxil_gvar *
-dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
-                    bool constant, int align)
-{
-   struct dxil_gvar *gvar = CALLOC_STRUCT(dxil_gvar);
-   if (!gvar)
-      return NULL;
-
-   gvar->type = type;
-   gvar->constant = constant;
-   gvar->align = align;
-
-   gvar->value = m->next_value_id++;
-   list_addtail(&gvar->head, &m->gvar_list);
-   return gvar;
 }
 
 const dxil_value
