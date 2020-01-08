@@ -194,8 +194,7 @@ dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
 
 const dxil_value
 dxil_add_function_def(struct dxil_module *m, const char *name,
-                      const struct dxil_type *type,
-                      unsigned attr_set);
+                      const struct dxil_type *type);
 
 const dxil_value
 dxil_add_function_decl(struct dxil_module *m, const char *name,
