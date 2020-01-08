@@ -192,8 +192,8 @@ emit_module(struct dxil_module *m)
    const struct dxil_type *createhandle_arg_types[] = { int32_type, int8_type, int32_type, int32_type, int1_type };
    const struct dxil_type *createhandle_func_type = dxil_module_add_function_type(m, handle_type, createhandle_arg_types, ARRAY_SIZE(createhandle_arg_types));
 
-   const dxil_value output_buffer_gvar = dxil_add_global_var(m, rwbuffer_struct_type, true, 3);
-   if (output_buffer_gvar == DXIL_VALUE_INVALID)
+   const struct dxil_gvar *output_buffer_gvar = dxil_add_global_var(m, rwbuffer_struct_type, true, 3);
+   if (!output_buffer_gvar)
       return false;
 
    const dxil_value main_func = dxil_add_function_def(m, "main", main_func_type);
