@@ -79,6 +79,7 @@ enum dxil_blockinfo_code {
 };
 
 enum dxil_attr_kind {
+   DXIL_ATTR_KIND_NONE = 0,
    DXIL_ATTR_KIND_NO_UNWIND = 18,
    DXIL_ATTR_KIND_READ_NONE = 20,
    DXIL_ATTR_KIND_READ_ONLY = 21,
@@ -134,6 +135,7 @@ struct dxil_module {
    struct list_head type_list;
    struct list_head gvar_list;
    struct list_head func_list;
+   struct list_head attr_set_list;
    unsigned next_type_id;
 
    struct list_head const_list;
@@ -180,13 +182,10 @@ bool
 dxil_module_emit_blockinfo(struct dxil_module *m);
 
 bool
-dxil_emit_attrib_group_table(struct dxil_module *m,
-                             const struct dxil_attrib **attrs,
-                             const size_t *sizes, size_t num_attrs);
+dxil_emit_attrib_group_table(struct dxil_module *m);
 
 bool
-dxil_emit_attribute_table(struct dxil_module *m,
-                          const unsigned *attrs, size_t num_attrs);
+dxil_emit_attribute_table(struct dxil_module *m);
 
 const dxil_value
 dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
@@ -199,7 +198,7 @@ dxil_add_function_def(struct dxil_module *m, const char *name,
 const dxil_value
 dxil_add_function_decl(struct dxil_module *m, const char *name,
                        const struct dxil_type *type,
-                       unsigned attr_set);
+                       enum dxil_attr_kind attr);
 
 bool
 dxil_emit_module_info(struct dxil_module *m);
