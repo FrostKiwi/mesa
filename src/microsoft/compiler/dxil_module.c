@@ -456,11 +456,20 @@ dxil_module_get_struct_type(struct dxil_module *m,
                             const struct dxil_type **elem_types,
                             size_t num_elem_types)
 {
+   assert(!name || strlen(name) > 0);
+
    struct dxil_type *type;
    LIST_FOR_EACH_ENTRY(type, &m->type_list, head) {
-      if (type->type == TYPE_STRUCT &&
-          !strcmp(type->struct_def.name, name) &&
-          type->struct_def.num_elem_types == num_elem_types &&
+      if (type->type != TYPE_STRUCT)
+         continue;
+
+      if ((name == NULL) != (type->struct_def.name == NULL))
+         continue;
+
+      if (name && !strcmp(type->struct_def.name, name))
+         continue;
+
+      if (type->struct_def.num_elem_types == num_elem_types &&
           !memcmp(type->struct_def.elem_types, elem_types,
                   sizeof(struct dxil_type *) * num_elem_types))
          return type;
@@ -468,11 +477,15 @@ dxil_module_get_struct_type(struct dxil_module *m,
 
    type = create_type(m, TYPE_STRUCT);
    if (type) {
-      type->struct_def.name = strdup(name);
-      if (!type->struct_def.name) {
-         FREE(type);
-         return NULL;
-      }
+      if (name) {
+         type->struct_def.name = strdup(name);
+         if (!type->struct_def.name) {
+            FREE(type);
+            return NULL;
+         }
+      } else
+         type->struct_def.name = NULL;
+
       type->struct_def.elem_types = CALLOC(sizeof(struct dxil_type *),
                                            num_elem_types);
       if (!type->struct_def.elem_types) {
@@ -948,23 +961,27 @@ emit_struct_name_char6(struct dxil_module *m, const char *name)
 static bool
 emit_struct_type(struct dxil_module *m, const struct dxil_type *type)
 {
-   assert(type->struct_def.name);
-   if (is_char6_string(type->struct_def.name)) {
-      if (!emit_struct_name_char6(m, type->struct_def.name))
-         return false;
-   } else {
-      if (!emit_struct_name(m, type->struct_def.name))
-         return false;
+   int abbrev = 6;
+   if (type->struct_def.name) {
+      abbrev = 8;
+      if (is_char6_string(type->struct_def.name)) {
+         if (!emit_struct_name_char6(m, type->struct_def.name))
+            return false;
+      } else {
+         if (!emit_struct_name(m, type->struct_def.name))
+            return false;
+      }
    }
 
    uint64_t temp[256];
    assert(type->struct_def.num_elem_types < ARRAY_SIZE(temp) - 2);
-   temp[0] = TYPE_CODE_STRUCT_NAMED;
+   temp[0] = type->struct_def.name ? TYPE_CODE_STRUCT_NAMED : TYPE_CODE_STRUCT_ANON;
    temp[1] = 0; /* packed */
    for (int i = 0; i < type->struct_def.num_elem_types; ++i)
       temp[2 + i] = type->struct_def.elem_types[i]->id;
 
-   return emit_type_table_abbrev_record(m, 8, temp, 2 + type->struct_def.num_elem_types);
+   return emit_type_table_abbrev_record(m, abbrev, temp,
+                                        2 + type->struct_def.num_elem_types);
 }
 
 static bool
