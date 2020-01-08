@@ -230,7 +230,7 @@ emit_module(struct dxil_module *m)
    if (output_buffer_gvar == DXIL_VALUE_INVALID)
       return false;
 
-   const dxil_value main_func = dxil_add_function_def(m, "main", main_func_type, 0);
+   const dxil_value main_func = dxil_add_function_def(m, "main", main_func_type);
    const dxil_value threadid_func = dxil_add_function_decl(m, "dx.op.threadId.i32", threadid_func_type, 1);
    const dxil_value bufferstore_func = dxil_add_function_decl(m, "dx.op.bufferStore.i32", bufferstore_func_type, 2);
    const dxil_value createhandle_func = dxil_add_function_decl(m, "dx.op.createHandle", createhandle_func_type, 3);
