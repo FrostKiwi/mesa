@@ -64,6 +64,14 @@ emit_bits64(struct dxil_buffer *b, uint64_t data, unsigned width)
       return dxil_buffer_emit_bits(b, (uint32_t)data, width);
 }
 
+enum dxil_fixed_abbrev {
+   DXIL_END_BLOCK = 0,
+   DXIL_ENTER_SUBBLOCK = 1,
+   DXIL_DEFINE_ABBREV = 2,
+   DXIL_UNABBREV_RECORD = 3,
+   DXIL_FIRST_APPLICATION_ABBREV = 4
+};
+
 static bool
 emit_enter_subblock(struct dxil_buffer *b, unsigned id,
                     unsigned abbrev_width, intptr_t *size_offset)
@@ -80,9 +88,8 @@ emit_enter_subblock(struct dxil_buffer *b, unsigned id,
    return true;
 }
 
-bool
-dxil_module_enter_subblock(struct dxil_module *m, unsigned id,
-                           unsigned abbrev_width)
+static bool
+enter_subblock(struct dxil_module *m, unsigned id, unsigned abbrev_width)
 {
    assert(m->num_blocks < ARRAY_SIZE(m->blocks));
    m->blocks[m->num_blocks].abbrev_width = m->buf.abbrev_width;
@@ -109,8 +116,8 @@ emit_exit_block(struct dxil_buffer *b, intptr_t size_offset)
    return true;
 }
 
-bool
-dxil_module_exit_block(struct dxil_module *m)
+static bool
+exit_block(struct dxil_module *m)
 {
    assert(m->num_blocks > 0);
    assert(m->num_blocks < ARRAY_SIZE(m->blocks));
@@ -138,11 +145,18 @@ emit_record_no_abbrev(struct dxil_buffer *b, unsigned code,
    return true;
 }
 
-bool
-dxil_module_emit_record(struct dxil_module *m, unsigned code,
-                        const uint64_t *data, size_t size)
+static bool
+emit_record(struct dxil_module *m, unsigned code,
+            const uint64_t *data, size_t size)
 {
    return emit_record_no_abbrev(&m->buf, code, data, size);
+}
+
+static bool
+emit_record_int(struct dxil_module *m, unsigned code, int value)
+{
+   uint64_t data = value;
+   return emit_record(m, code, &data, 1);
 }
 
 static bool
@@ -226,6 +240,24 @@ emit_char6(struct dxil_buffer *b, uint64_t data)
 {
    return dxil_buffer_emit_bits(b, encode_char6((char)data), 6);
 }
+
+struct dxil_abbrev {
+   struct {
+      enum {
+         DXIL_OP_LITERAL = 0,
+         DXIL_OP_FIXED = 1,
+         DXIL_OP_VBR = 2,
+         DXIL_OP_ARRAY = 3,
+         DXIL_OP_CHAR6 = 4,
+         DXIL_OP_BLOB = 5
+      } type;
+      union {
+         uint64_t value;
+         uint64_t encoding_data;
+      };
+   } operands[7];
+   size_t num_operands;
+};
 
 static bool
 emit_record_abbrev(struct dxil_buffer *b,
@@ -669,7 +701,7 @@ define_abbrev(struct dxil_module *m, const struct dxil_abbrev *a)
          if (!dxil_buffer_emit_vbr_bits(&m->buf, a->operands[i].value, 8))
             return false;
       } else {
-         if (!dxil_module_emit_bits(m, a->operands[i].type, 3))
+         if (!dxil_buffer_emit_bits(&m->buf, a->operands[i].type, 3))
             return false;
          if (a->operands[i].type == DXIL_OP_FIXED) {
             if (!dxil_buffer_emit_vbr_bits(&m->buf,
@@ -686,11 +718,33 @@ define_abbrev(struct dxil_module *m, const struct dxil_abbrev *a)
    return true;
 }
 
+enum dxil_blockinfo_code {
+   DXIL_BLOCKINFO_CODE_SETBID = 1,
+   DXIL_BLOCKINFO_CODE_BLOCKNAME = 2,
+   DXIL_BLOCKINFO_CODE_SETRECORDNAME = 3
+};
+
 static bool
 switch_to_block(struct dxil_module *m, uint32_t block)
 {
-   return dxil_module_emit_record_int(m, DXIL_BLOCKINFO_CODE_SETBID, block);
+   return emit_record_int(m, DXIL_BLOCKINFO_CODE_SETBID, block);
 }
+
+enum dxil_standard_block {
+   DXIL_BLOCKINFO = 0,
+   DXIL_FIRST_APPLICATION_BLOCK = 8
+};
+
+enum dxil_llvm_block {
+   DXIL_MODULE = DXIL_FIRST_APPLICATION_BLOCK,
+   DXIL_PARAMATTR = DXIL_FIRST_APPLICATION_BLOCK + 1,
+   DXIL_PARAMATTR_GROUP = DXIL_FIRST_APPLICATION_BLOCK + 2,
+   DXIL_CONST_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 3,
+   DXIL_FUNCTION_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 4,
+   DXIL_VALUE_SYMTAB_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 6,
+   DXIL_METADATA_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 7,
+   DXIL_TYPE_BLOCK = DXIL_FIRST_APPLICATION_BLOCK + 9,
+};
 
 enum value_symtab_code {
   VST_CODE_ENTRY = 1,
@@ -746,19 +800,29 @@ emit_function_abbrevs(struct dxil_module *m)
    return true;
 }
 
-bool
-dxil_module_emit_blockinfo(struct dxil_module *m)
+static bool
+emit_blockinfo(struct dxil_module *m)
 {
-   return dxil_module_enter_subblock(m, DXIL_BLOCKINFO, 2) &&
+   return enter_subblock(m, DXIL_BLOCKINFO, 2) &&
           emit_value_symtab_abbrevs(m) &&
           emit_const_abbrevs(m) &&
           emit_function_abbrevs(m) &&
-          dxil_module_exit_block(m);
+          exit_block(m);
 }
 
 enum attribute_codes {
    PARAMATTR_GRP_CODE_ENTRY = 3,
    PARAMATTR_CODE_ENTRY = 2
+};
+
+struct dxil_attrib {
+   enum {
+      DXIL_ATTR_ENUM
+   } type;
+
+   union {
+      enum dxil_attr_kind kind;
+   };
 };
 
 static bool
@@ -784,7 +848,7 @@ emit_attrib_group(struct dxil_module *m, int id, uint32_t slot,
       }
    }
 
-   return dxil_module_emit_record(m, PARAMATTR_GRP_CODE_ENTRY, record, size);
+   return emit_record(m, PARAMATTR_GRP_CODE_ENTRY, record, size);
 }
 
 struct attrib_set {
@@ -793,10 +857,10 @@ struct attrib_set {
    struct list_head head;
 };
 
-bool
-dxil_emit_attrib_group_table(struct dxil_module *m)
+static bool
+emit_attrib_group_table(struct dxil_module *m)
 {
-   if (!dxil_module_enter_subblock(m, DXIL_PARAMATTR_GROUP, 3))
+   if (!enter_subblock(m, DXIL_PARAMATTR_GROUP, 3))
       return false;
 
    struct attrib_set *as;
@@ -807,23 +871,23 @@ dxil_emit_attrib_group_table(struct dxil_module *m)
       id++;
    }
 
-   return dxil_module_exit_block(m);
+   return exit_block(m);
 }
 
-bool
-dxil_emit_attribute_table(struct dxil_module *m)
+static bool
+emit_attribute_table(struct dxil_module *m)
 {
-   if (!dxil_module_enter_subblock(m, DXIL_PARAMATTR, 3))
+   if (!enter_subblock(m, DXIL_PARAMATTR, 3))
       return false;
 
    struct attrib_set *as;
    int id = 1;
    LIST_FOR_EACH_ENTRY(as, &m->attr_set_list, head) {
-      if (!dxil_module_emit_record_int(m, PARAMATTR_CODE_ENTRY, id))
+      if (!emit_record_int(m, PARAMATTR_CODE_ENTRY, id))
          return false;
    }
 
-   return dxil_module_exit_block(m);
+   return exit_block(m);
 }
 
 static bool
@@ -840,13 +904,13 @@ emit_type_table_abbrevs(struct dxil_module *m)
 static bool
 emit_void_type(struct dxil_module *m)
 {
-   return dxil_module_emit_record(m, TYPE_CODE_VOID, NULL, 0);
+   return emit_record(m, TYPE_CODE_VOID, NULL, 0);
 }
 
 static bool
 emit_integer_type(struct dxil_module *m, int bit_size)
 {
-   return dxil_module_emit_record_int(m, TYPE_CODE_INTEGER, bit_size);
+   return emit_record_int(m, TYPE_CODE_INTEGER, bit_size);
 }
 
 static bool
@@ -865,7 +929,7 @@ emit_struct_name(struct dxil_module *m, const char *name)
    for (int i = 0; i < strlen(name); ++i)
       temp[i] = name[i];
 
-   return dxil_module_emit_record(m, TYPE_CODE_STRUCT_NAME, temp, strlen(name));
+   return emit_record(m, TYPE_CODE_STRUCT_NAME, temp, strlen(name));
 }
 
 static bool
@@ -921,15 +985,15 @@ emit_function_type(struct dxil_module *m, const struct dxil_type *type)
 static bool
 emit_metadata_type(struct dxil_module *m)
 {
-   return dxil_module_emit_record(m, TYPE_CODE_METADATA, NULL, 0);
+   return emit_record(m, TYPE_CODE_METADATA, NULL, 0);
 }
 
-bool
-dxil_module_emit_type_table(struct dxil_module *m)
+static bool
+emit_type_table(struct dxil_module *m)
 {
-   if (!dxil_module_enter_subblock(m, DXIL_TYPE_BLOCK, 4) ||
+   if (!enter_subblock(m, DXIL_TYPE_BLOCK, 4) ||
        !emit_type_table_abbrevs(m) ||
-       !dxil_module_emit_record_int(m, 1, 1 + list_length(&m->type_list)))
+       !emit_record_int(m, 1, 1 + list_length(&m->type_list)))
       return false;
 
    struct dxil_type *type;
@@ -966,7 +1030,7 @@ dxil_module_emit_type_table(struct dxil_module *m)
    }
 
    return emit_metadata_type(m) &&
-          dxil_module_exit_block(m);
+          exit_block(m);
 }
 
 struct dxil_const {
@@ -1065,6 +1129,21 @@ dxil_module_get_undef(struct dxil_module *m, const struct dxil_type *type)
    return c ? c->value : DXIL_VALUE_INVALID;
 }
 
+enum dxil_module_code {
+   DXIL_MODULE_CODE_VERSION = 1,
+   DXIL_MODULE_CODE_TRIPLE = 2,
+   DXIL_MODULE_CODE_DATALAYOUT = 3,
+   DXIL_MODULE_CODE_ASM = 4,
+   DXIL_MODULE_CODE_SECTIONNAME = 5,
+   DXIL_MODULE_CODE_DEPLIB = 6,
+   DXIL_MODULE_CODE_GLOBALVAR = 7,
+   DXIL_MODULE_CODE_FUNCTION = 8,
+   DXIL_MODULE_CODE_ALIAS = 9,
+   DXIL_MODULE_CODE_PURGEVALS = 10,
+   DXIL_MODULE_CODE_GCNAME = 11,
+   DXIL_MODULE_CODE_COMDAT = 12,
+};
+
 static bool
 emit_target_triple(struct dxil_module *m, const char *triple)
 {
@@ -1074,8 +1153,7 @@ emit_target_triple(struct dxil_module *m, const char *triple)
    for (int i = 0; i < strlen(triple); ++i)
       temp[i] = triple[i];
 
-   return dxil_module_emit_record(m, DXIL_MODULE_CODE_TRIPLE,
-                                  temp, strlen(triple));
+   return emit_record(m, DXIL_MODULE_CODE_TRIPLE, temp, strlen(triple));
 }
 
 static bool
@@ -1087,8 +1165,8 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
    for (int i = 0; i < strlen(datalayout); ++i)
       temp[i] = datalayout[i];
 
-   return dxil_module_emit_record(m, DXIL_MODULE_CODE_DATALAYOUT,
-                                  temp, strlen(datalayout));
+   return emit_record(m, DXIL_MODULE_CODE_DATALAYOUT,
+                      temp, strlen(datalayout));
 }
 
 struct dxil_func {
@@ -1211,8 +1289,7 @@ emit_module_info_function(struct dxil_module *m, int type, bool declaration,
       0 /* storage class */, 0 /* comdat */, 0 /* prefix-data */,
       0 /* personality */
    };
-   return dxil_module_emit_record(m, DXIL_MODULE_CODE_FUNCTION,
-                                  data, ARRAY_SIZE(data));
+   return emit_record(m, DXIL_MODULE_CODE_FUNCTION, data, ARRAY_SIZE(data));
 }
 
 static bool
@@ -1232,8 +1309,8 @@ emit_module_info_global(struct dxil_module *m, int type_id, bool constant,
                              data, ARRAY_SIZE(data));
 }
 
-bool
-dxil_emit_module_info(struct dxil_module *m)
+static bool
+emit_module_info(struct dxil_module *m)
 {
    struct dxil_gvar *gvar;
    int max_global_type = 0;
@@ -1350,12 +1427,12 @@ emit_consts(struct dxil_module *m)
 }
 
 bool
-dxil_emit_module_consts(struct dxil_module *m)
+emit_module_consts(struct dxil_module *m)
 {
-   return dxil_module_enter_subblock(m, DXIL_CONST_BLOCK, 4) &&
+   return enter_subblock(m, DXIL_CONST_BLOCK, 4) &&
           emit_module_const_abbrevs(m) &&
           emit_consts(m) &&
-          dxil_module_exit_block(m);
+          exit_block(m);
 }
 
 static bool
@@ -1390,10 +1467,10 @@ emit_symtab_entry(struct dxil_module *m, unsigned value, const char *name)
    return emit_value_symtab_abbrev_record(m, abbrev, temp, 2 + strlen(name));
 }
 
-bool
-dxil_emit_value_symbol_table(struct dxil_module *m)
+static bool
+emit_value_symbol_table(struct dxil_module *m)
 {
-   if (!dxil_module_enter_subblock(m, DXIL_VALUE_SYMTAB_BLOCK, 4))
+   if (!enter_subblock(m, DXIL_VALUE_SYMTAB_BLOCK, 4))
       return false;
 
    struct dxil_func *func;
@@ -1401,7 +1478,7 @@ dxil_emit_value_symbol_table(struct dxil_module *m)
       if (!emit_symtab_entry(m, func->value, func->name))
          return false;
    }
-   return dxil_module_exit_block(m);
+   return exit_block(m);
 }
 
 enum metadata_codes {
@@ -1605,8 +1682,7 @@ emit_metadata_value(struct dxil_module *m, const struct dxil_type *type,
                     const dxil_value value)
 {
    uint64_t data[2] = { type->id, value };
-   return dxil_module_emit_record(m, METADATA_VALUE, data,
-                                  ARRAY_SIZE(data));
+   return emit_record(m, METADATA_VALUE, data, ARRAY_SIZE(data));
 }
 
 static bool
@@ -1643,7 +1719,7 @@ emit_metadata_node(struct dxil_module *m,
    for (size_t i = 0; i < num_subnodes; ++i)
       data[i] = subnodes[i] ? subnodes[i]->id : 0;
 
-   return dxil_module_emit_record(m, METADATA_NODE, data, num_subnodes);
+   return emit_record(m, METADATA_NODE, data, num_subnodes);
 }
 
 static bool
@@ -1696,8 +1772,7 @@ emit_metadata_named_node(struct dxil_module *m, const char *name,
    }
 
    return emit_metadata_name(m, name) &&
-          dxil_module_emit_record(m, METADATA_NAMED_NODE,
-                                  data, num_subnodes);
+          emit_record(m, METADATA_NAMED_NODE, data, num_subnodes);
 }
 
 static bool
@@ -1712,14 +1787,14 @@ emit_metadata_named_nodes(struct dxil_module *m)
    return true;
 }
 
-bool
-dxil_emit_metadata(struct dxil_module *m)
+static bool
+emit_metadata(struct dxil_module *m)
 {
-   return dxil_module_enter_subblock(m, DXIL_METADATA_BLOCK, 3) &&
+   return enter_subblock(m, DXIL_METADATA_BLOCK, 3) &&
           emit_metadata_abbrevs(m) &&
           emit_metadata_nodes(m) &&
           emit_metadata_named_nodes(m) &&
-          dxil_module_exit_block(m);
+          exit_block(m);
 }
 
 static bool
@@ -1781,11 +1856,11 @@ dxil_emit_ret_void(struct dxil_module *m)
    return emit_func_abbrev_record(m, 8, data, ARRAY_SIZE(data));
 }
 
-bool
-dxil_emit_function(struct dxil_module *m)
+static bool
+emit_function(struct dxil_module *m)
 {
-   if (!dxil_module_enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
-       !dxil_module_emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
+   if (!enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
+       !emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
       return false;
 
    for (int i = 0; i < m->code.blob.size; ++i) {
@@ -1798,5 +1873,26 @@ dxil_emit_function(struct dxil_module *m)
       if (!dxil_buffer_emit_bits(&m->buf, m->code.buf, m->code.buf_bits))
          return false;
 
-   return dxil_module_exit_block(m);
+   return exit_block(m);
+}
+
+bool
+dxil_emit_module(struct dxil_module *m)
+{
+   return dxil_buffer_emit_bits(&m->buf, 'B', 8) &&
+          dxil_buffer_emit_bits(&m->buf, 'C', 8) &&
+          dxil_buffer_emit_bits(&m->buf, 0xC0, 8) &&
+          dxil_buffer_emit_bits(&m->buf, 0xDE, 8) &&
+          enter_subblock(m, DXIL_MODULE, 3) &&
+          emit_record_int(m, DXIL_MODULE_CODE_VERSION, 1) &&
+          emit_blockinfo(m) &&
+          emit_attrib_group_table(m) &&
+          emit_attribute_table(m) &&
+          emit_type_table(m) &&
+          emit_module_info(m) &&
+          emit_module_consts(m) &&
+          emit_metadata(m) &&
+          emit_value_symbol_table(m) &&
+          emit_function(m) &&
+          exit_block(m);
 }

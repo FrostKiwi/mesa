@@ -173,16 +173,6 @@ get_dx_handle_type(struct dxil_module *m)
 static bool
 emit_module(struct dxil_module *m)
 {
-   if (!dxil_module_emit_bits(m, 'B', 8) ||
-       !dxil_module_emit_bits(m, 'C', 8) ||
-       !dxil_module_emit_bits(m, 0xC0, 8) ||
-       !dxil_module_emit_bits(m, 0xDE, 8))
-      return false;
-
-   if (!dxil_module_enter_subblock(m, DXIL_MODULE, 3) ||
-       !dxil_module_emit_record_int(m, DXIL_MODULE_CODE_VERSION, 1))
-      return false;
-
    const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
    const struct dxil_type *rwbuffer_struct_type = dxil_module_get_struct_type(m, "class.RWBuffer<unsigned int>", &int32_type, 1);
 
@@ -323,18 +313,7 @@ emit_module(struct dxil_module *m)
        !dxil_emit_ret_void(m))
       return false;
 
-   if (!dxil_module_emit_blockinfo(m) ||
-       !dxil_emit_attrib_group_table(m) ||
-       !dxil_emit_attribute_table(m) ||
-       !dxil_module_emit_type_table(m) ||
-       !dxil_emit_module_info(m) ||
-       !dxil_emit_module_consts(m))
-      return false;
-
-   return dxil_emit_metadata(m) &&
-          dxil_emit_value_symbol_table(m) &&
-          dxil_emit_function(m) &&
-          dxil_module_exit_block(m);
+   return dxil_emit_module(m);
 }
 
 int clc_compile_from_source(
