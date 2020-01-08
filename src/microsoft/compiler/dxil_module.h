@@ -41,11 +41,9 @@ enum dxil_attr_kind {
 };
 
 struct dxil_type;
+struct dxil_value;
 struct dxil_gvar;
 struct dxil_mdnode;
-
-typedef int dxil_value;
-#define DXIL_VALUE_INVALID ((dxil_value) -1)
 
 struct dxil_module {
    enum dxil_shader_kind shader_kind;
@@ -64,6 +62,7 @@ struct dxil_module {
    struct list_head gvar_list;
    struct list_head func_list;
    struct list_head attr_set_list;
+   struct list_head instr_list;
    unsigned next_type_id;
 
    struct list_head const_list;
@@ -86,11 +85,11 @@ const struct dxil_gvar *
 dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
                     bool constant, int align);
 
-const dxil_value
+const struct dxil_value *
 dxil_add_function_def(struct dxil_module *m, const char *name,
                       const struct dxil_type *type);
 
-const dxil_value
+const struct dxil_value *
 dxil_add_function_decl(struct dxil_module *m, const char *name,
                        const struct dxil_type *type,
                        enum dxil_attr_kind attr);
@@ -117,16 +116,16 @@ dxil_module_add_function_type(struct dxil_module *m,
                               const struct dxil_type **arg_types,
                               size_t num_arg_types);
 
-const dxil_value
+const struct dxil_value *
 dxil_module_get_int1_const(struct dxil_module *m, bool value);
 
-const dxil_value
+const struct dxil_value *
 dxil_module_get_int8_const(struct dxil_module *m, int8_t value);
 
-const dxil_value
+const struct dxil_value *
 dxil_module_get_int32_const(struct dxil_module *m, int32_t value);
 
-const dxil_value
+const struct dxil_value *
 dxil_module_get_undef(struct dxil_module *m, const struct dxil_type *type);
 
 const struct dxil_mdnode *
@@ -134,7 +133,7 @@ dxil_get_metadata_string(struct dxil_module *m, const char *str);
 
 const struct dxil_mdnode *
 dxil_get_metadata_value(struct dxil_module *m, const struct dxil_type *type,
-                        const dxil_value value);
+                        const struct dxil_value *value);
 
 const struct dxil_mdnode *
 dxil_get_metadata_int1(struct dxil_module *m, bool value);
@@ -152,17 +151,17 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
                              const struct dxil_mdnode *subnodes[],
                              size_t num_subnodes);
 
-const dxil_value
+const struct dxil_value *
 dxil_emit_call(struct dxil_module *m,
                const struct dxil_type *func_type,
-               dxil_value value_id,
-               const dxil_value *args, const size_t num_args);
+               const struct dxil_value *func,
+               const struct dxil_value **args, size_t num_args);
 
 bool
 dxil_emit_call_void(struct dxil_module *m,
                     const struct dxil_type *func_type,
-                    dxil_value value_id,
-                    const dxil_value *args, const size_t num_args);
+                    const struct dxil_value *func,
+                    const struct dxil_value **args, size_t num_args);
 
 bool
 dxil_emit_ret_void(struct dxil_module *m);

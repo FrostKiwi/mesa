@@ -121,7 +121,7 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
                   const char *name, enum dxil_component_type comp_type)
 {
    const struct dxil_type *pointer_type = dxil_module_get_pointer_type(m, struct_type);
-   const dxil_value pointer_undef = dxil_module_get_undef(m, pointer_type);
+   const struct dxil_value *pointer_undef = dxil_module_get_undef(m, pointer_type);
 
    const struct dxil_mdnode *buffer_element_type_tag = dxil_get_metadata_int32(m, DXIL_TYPED_BUFFER_ELEMENT_TYPE_TAG);
    const struct dxil_mdnode *element_type = dxil_get_metadata_int32(m, comp_type);
@@ -196,14 +196,12 @@ emit_module(struct dxil_module *m)
    if (!output_buffer_gvar)
       return false;
 
-   const dxil_value main_func = dxil_add_function_def(m, "main", main_func_type);
-   const dxil_value threadid_func = dxil_add_function_decl(m, "dx.op.threadId.i32", threadid_func_type, DXIL_ATTR_KIND_READ_NONE);
-   const dxil_value bufferstore_func = dxil_add_function_decl(m, "dx.op.bufferStore.i32", bufferstore_func_type, DXIL_ATTR_KIND_NONE);
-   const dxil_value createhandle_func = dxil_add_function_decl(m, "dx.op.createHandle", createhandle_func_type, DXIL_ATTR_KIND_READ_ONLY);
-   if (main_func == DXIL_VALUE_INVALID ||
-       threadid_func == DXIL_VALUE_INVALID ||
-       bufferstore_func == DXIL_VALUE_INVALID ||
-       createhandle_func == DXIL_VALUE_INVALID)
+   const struct dxil_value *main_func = dxil_add_function_def(m, "main", main_func_type);
+   const struct dxil_value *threadid_func = dxil_add_function_decl(m, "dx.op.threadId.i32", threadid_func_type, DXIL_ATTR_KIND_READ_NONE);
+   const struct dxil_value *bufferstore_func = dxil_add_function_decl(m, "dx.op.bufferStore.i32", bufferstore_func_type, DXIL_ATTR_KIND_NONE);
+   const struct dxil_value *createhandle_func = dxil_add_function_decl(m, "dx.op.createHandle", createhandle_func_type, DXIL_ATTR_KIND_READ_ONLY);
+   if (!main_func || !threadid_func || !bufferstore_func ||
+       !createhandle_func)
       return false;
 
    if (!emit_llvm_ident(m) ||
@@ -273,36 +271,36 @@ emit_module(struct dxil_module *m)
                                       &dx_entry_point, 1))
       return false;
 
-   const dxil_value int32_57 = dxil_module_get_int32_const(m, 57);
-   const dxil_value int8_1 = dxil_module_get_int8_const(m, 1);
-   const dxil_value int32_0 = dxil_module_get_int32_const(m, 0);
-   const dxil_value int32_93 = dxil_module_get_int32_const(m, 93);
-   const dxil_value int32_69 = dxil_module_get_int32_const(m, 69);
-   const dxil_value int32_undef = dxil_module_get_undef(m, int32_type);
-   const dxil_value int8_15 = dxil_module_get_int8_const(m, 15);
-   const dxil_value int1_0 = dxil_module_get_int1_const(m, false);
+   const struct dxil_value *int32_57 = dxil_module_get_int32_const(m, 57);
+   const struct dxil_value *int8_1 = dxil_module_get_int8_const(m, 1);
+   const struct dxil_value *int32_0 = dxil_module_get_int32_const(m, 0);
+   const struct dxil_value *int32_93 = dxil_module_get_int32_const(m, 93);
+   const struct dxil_value *int32_69 = dxil_module_get_int32_const(m, 69);
+   const struct dxil_value *int32_undef = dxil_module_get_undef(m, int32_type);
+   const struct dxil_value *int8_15 = dxil_module_get_int8_const(m, 15);
+   const struct dxil_value *int1_0 = dxil_module_get_int1_const(m, false);
 
-   const dxil_value createhandle_args[] = {
+   const struct dxil_value *createhandle_args[] = {
       int32_57, int8_1, int32_0, int32_0, int1_0
    };
-   const dxil_value handle = dxil_emit_call(m, createhandle_func_type,
-                                            createhandle_func,
-                                            createhandle_args,
-                                            ARRAY_SIZE(createhandle_args));
-   if (handle == DXIL_VALUE_INVALID)
+   const struct dxil_value *handle = dxil_emit_call(m, createhandle_func_type,
+                                                    createhandle_func,
+                                                    createhandle_args,
+                                                    ARRAY_SIZE(createhandle_args));
+   if (!handle)
       return false;
 
-   const dxil_value threadid_args[] = {
+   const struct dxil_value *threadid_args[] = {
      int32_93, int32_0
    };
-   const dxil_value threadid = dxil_emit_call(m, threadid_func_type,
-                                              threadid_func,
-                                              threadid_args,
-                                              ARRAY_SIZE(threadid_args));
-   if (threadid == DXIL_VALUE_INVALID)
+   const struct dxil_value *threadid = dxil_emit_call(m, threadid_func_type,
+                                                      threadid_func,
+                                                      threadid_args,
+                                                      ARRAY_SIZE(threadid_args));
+   if (!threadid)
       return false;
 
-   const dxil_value bufferstore_args[] = {
+   const struct dxil_value *bufferstore_args[] = {
      int32_69, handle, threadid, int32_undef,
      threadid, threadid, threadid, threadid, int8_15
    };
