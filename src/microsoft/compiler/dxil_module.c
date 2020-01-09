@@ -44,7 +44,6 @@ dxil_module_init(struct dxil_module *m)
    list_inithead(&m->gvar_list);
    list_inithead(&m->const_list);
    list_inithead(&m->instr_list);
-   m->next_value_id = 0;
 
    list_inithead(&m->mdnode_list);
    m->next_mdnode_id = 1; /* zero is reserved for NULL nodes */
@@ -977,8 +976,10 @@ emit_struct_type(struct dxil_module *m, const struct dxil_type *type)
    assert(type->struct_def.num_elem_types < ARRAY_SIZE(temp) - 2);
    temp[0] = type->struct_def.name ? TYPE_CODE_STRUCT_NAMED : TYPE_CODE_STRUCT_ANON;
    temp[1] = 0; /* packed */
-   for (int i = 0; i < type->struct_def.num_elem_types; ++i)
+   for (int i = 0; i < type->struct_def.num_elem_types; ++i) {
+      assert(type->struct_def.elem_types[i]->id >= 0);
       temp[2 + i] = type->struct_def.elem_types[i]->id;
+   }
 
    return emit_type_table_abbrev_record(m, abbrev, temp,
                                         2 + type->struct_def.num_elem_types);
@@ -989,12 +990,15 @@ emit_function_type(struct dxil_module *m, const struct dxil_type *type)
 {
    uint64_t temp[256];
    assert(type->function_def.num_arg_types < ARRAY_SIZE(temp) - 3);
+   assert(type->function_def.ret_type->id >= 0);
 
    temp[0] = TYPE_CODE_FUNCTION;
    temp[1] = 0; // vararg
    temp[2] = type->function_def.ret_type->id;
-   for (int i = 0; i < type->function_def.num_arg_types; ++i)
+   for (int i = 0; i < type->function_def.num_arg_types; ++i) {
+      assert(type->function_def.arg_types[i]->id >= 0);
       temp[3 + i] = type->function_def.arg_types[i]->id;
+   }
 
    return emit_type_table_abbrev_record(m, 5, temp, 3 + type->function_def.num_arg_types);
 }
@@ -1027,6 +1031,7 @@ emit_type_table(struct dxil_module *m)
          break;
 
       case TYPE_POINTER:
+         assert(type->ptr_target_type->id > 0);
          if (!emit_pointer_type(m, type->ptr_target_type->id))
             return false;
          break;
@@ -1072,7 +1077,7 @@ create_const(struct dxil_module *m, const struct dxil_type *type, bool undef)
    struct dxil_const *ret = CALLOC_STRUCT(dxil_const);
    if (ret) {
       ret->type = type;
-      ret->value.id = m->next_value_id++;
+      ret->value.id = -1;
       ret->undef = undef;
       list_addtail(&ret->head, &m->const_list);
    }
@@ -1211,7 +1216,7 @@ dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
    gvar->constant = constant;
    gvar->align = align;
 
-   gvar->value.id = m->next_value_id++;
+   gvar->value.id = -1;
    list_addtail(&gvar->head, &m->gvar_list);
    return gvar;
 }
@@ -1245,7 +1250,7 @@ add_function(struct dxil_module *m, const char *name,
    func->decl = decl;
    func->attr_set = attr_set;
 
-   func->value.id = m->next_value_id++;
+   func->value.id = -1;
    list_addtail(&func->head, &m->func_list);
    return &func->value;
 }
@@ -1336,6 +1341,7 @@ emit_module_info(struct dxil_module *m)
    struct dxil_gvar *gvar;
    int max_global_type = 0;
    LIST_FOR_EACH_ENTRY(gvar, &m->gvar_list, head) {
+      assert(gvar->type->id >= 0);
       max_global_type = MAX2(max_global_type, gvar->type->id);
    }
 
@@ -1351,6 +1357,7 @@ emit_module_info(struct dxil_module *m)
       return false;
 
    LIST_FOR_EACH_ENTRY(gvar, &m->gvar_list, head) {
+      assert(gvar->type->id >= 0);
       if (!emit_module_info_global(m, gvar->type->id, gvar->constant,
                                    gvar->align, &simple_gvar_abbr))
          return false;
@@ -1358,6 +1365,7 @@ emit_module_info(struct dxil_module *m)
 
    struct dxil_func *func;
    LIST_FOR_EACH_ENTRY(func, &m->func_list, head) {
+      assert(func->type->id >= 0);
       if (!emit_module_info_function(m, func->type->id, func->decl,
                                      func->attr_set))
          return false;
@@ -1422,8 +1430,10 @@ emit_consts(struct dxil_module *m)
    const struct dxil_type *curr_type = NULL;
    struct dxil_const *c;
    LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
+      assert(c->value.id >= 0);
       assert(c->type != NULL);
       if (curr_type != c->type) {
+         assert(c->type->id >= 0);
          if (!emit_set_type(m, c->type->id))
             return false;
          curr_type = c->type;
@@ -1702,6 +1712,7 @@ static bool
 emit_metadata_value(struct dxil_module *m, const struct dxil_type *type,
                     const struct dxil_value *value)
 {
+   assert(type->id >= 0 && value->id >= 0);
    uint64_t data[2] = { type->id, value->id };
    return emit_record(m, METADATA_VALUE, data, ARRAY_SIZE(data));
 }
@@ -1830,15 +1841,15 @@ struct dxil_instr {
          const struct dxil_value *func;
          struct dxil_value **args;
          size_t num_args;
-
-         bool has_value;
-         struct dxil_value value;
       } call;
 
       struct {
          struct dxil_value *value;
       } ret;
    };
+
+   bool has_value;
+   struct dxil_value value;
 
    struct list_head head;
 };
@@ -1849,6 +1860,8 @@ create_instr(struct dxil_module *m, enum instr_type type)
    struct dxil_instr *ret = CALLOC_STRUCT(dxil_instr);
    if (ret) {
       ret->type = type;
+      ret->value.id = -1;
+      ret->has_value = false;
       list_addtail(&ret->head, &m->instr_list);
    }
    return ret;
@@ -1887,9 +1900,8 @@ dxil_emit_call(struct dxil_module *m,
    if (!instr)
       return NULL;
 
-   instr->call.has_value = true;
-   instr->call.value.id = m->next_value_id++;
-   return &instr->call.value;
+   instr->has_value = true;
+   return &instr->value;
 }
 
 bool
@@ -1906,8 +1918,6 @@ dxil_emit_call_void(struct dxil_module *m,
    if (!instr)
       return false;
 
-   instr->call.has_value = false;
-   instr->call.value.id = m->next_value_id;
    return true;
 }
 
@@ -1926,8 +1936,10 @@ static bool
 emit_call(struct dxil_module *m, struct dxil_instr *instr)
 {
    assert(instr->type == INSTR_CALL);
-   assert(instr->call.func->id <= instr->call.value.id);
-   int value_id_delta = instr->call.value.id - instr->call.func->id;
+   assert(instr->call.func->id >= 0 && instr->value.id >= 0);
+   assert(instr->call.func_type->id >= 0);
+   assert(instr->call.func->id <= instr->value.id);
+   int value_id_delta = instr->value.id - instr->call.func->id;
 
    uint64_t data[256];
    data[0] = 0; // attribute id
@@ -1936,8 +1948,10 @@ emit_call(struct dxil_module *m, struct dxil_instr *instr)
    data[3] = value_id_delta;
 
    assert(instr->call.num_args < ARRAY_SIZE(data) - 4);
-   for (size_t i = 0; i < instr->call.num_args; ++i)
-      data[4 + i] = instr->call.value.id - instr->call.args[i]->id;
+   for (size_t i = 0; i < instr->call.num_args; ++i) {
+      assert(instr->call.args[i]->id >= 0);
+      data[4 + i] = instr->value.id - instr->call.args[i]->id;
+   }
 
    return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_CALL,
                                 data, 4 + instr->call.num_args);
@@ -1949,6 +1963,7 @@ emit_ret(struct dxil_module *m, struct dxil_instr *instr)
    assert(instr->type == INSTR_RET);
 
    if (instr->ret.value) {
+      assert(instr->ret.value->id >= 0);
       uint64_t data[] = { FUNC_CODE_INST_RET, instr->ret.value->id };
       return emit_func_abbrev_record(m, 9, data, ARRAY_SIZE(data));
    }
@@ -1982,9 +1997,38 @@ emit_function(struct dxil_module *m)
    return exit_block(m);
 }
 
+static void
+assign_values(struct dxil_module *m)
+{
+   int next_value_id = 0;
+
+   struct dxil_gvar *gvar;
+   LIST_FOR_EACH_ENTRY(gvar, &m->gvar_list, head) {
+      gvar->value.id = next_value_id++;
+   }
+
+   struct dxil_func *func;
+   LIST_FOR_EACH_ENTRY(func, &m->func_list, head) {
+      func->value.id = next_value_id++;
+   }
+
+   struct dxil_const *c;
+   LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
+      c->value.id = next_value_id++;
+   }
+
+   struct dxil_instr *instr;
+   LIST_FOR_EACH_ENTRY(instr, &m->instr_list, head) {
+      instr->value.id = next_value_id;
+      if (instr->has_value)
+         next_value_id++;
+   }
+}
+
 bool
 dxil_emit_module(struct dxil_module *m)
 {
+   assign_values(m);
    return dxil_buffer_emit_bits(&m->buf, 'B', 8) &&
           dxil_buffer_emit_bits(&m->buf, 'C', 8) &&
           dxil_buffer_emit_bits(&m->buf, 0xC0, 8) &&
