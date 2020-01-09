@@ -8396,6 +8396,8 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
    if (simd16_cfg) {
       prog_data->dispatch_16 = true;
       prog_data->prog_offset_16 = g.generate_code(simd16_cfg, 16, stats);
+      if (stats && stats->cycles > stats[-1].cycles * 4)
+         prog_data->dispatch_16 = false;
       stats = stats ? stats + 1 : NULL;
    }
 
