@@ -33,7 +33,6 @@ void
 dxil_module_init(struct dxil_module *m)
 {
    dxil_buffer_init(&m->buf, 2);
-   dxil_buffer_init(&m->code, 4);
 
    m->num_blocks = 0;
 
@@ -696,7 +695,7 @@ emit_func_abbrev_record(struct dxil_module *m, unsigned abbrev,
    unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
    assert(index < ARRAY_SIZE(func_abbrevs));
 
-   return emit_record_abbrev(&m->code, abbrev, func_abbrevs + index,
+   return emit_record_abbrev(&m->buf, abbrev, func_abbrevs + index,
                              data, size);
 }
 
@@ -1819,43 +1818,59 @@ emit_metadata(struct dxil_module *m)
           exit_block(m);
 }
 
-static bool
-emit_call(struct dxil_buffer *b,
-          const unsigned next_value_id,
-          const struct dxil_type *func_type,
-          const struct dxil_value *func,
-          const struct dxil_value **args,
-          size_t num_args)
-{
-   uint64_t data[256];
-
-   int value_id_delta = next_value_id - func->id;
-   assert(func->id <= next_value_id);
-
-   data[0] = 0; // attribute id
-   data[1] = 1 << 15; // calling convention etc
-   data[2] = func_type->id;
-   data[3] = value_id_delta;
-
-   assert(num_args < ARRAY_SIZE(data) - 4);
-   for (size_t i = 0; i < num_args; ++i)
-      data[4 + i] = next_value_id - args[i]->id;
-
-   return emit_record_no_abbrev(b, FUNC_CODE_INST_CALL, data, 4 + num_args);
-}
-
 struct dxil_instr {
-   struct dxil_value value;
+   enum instr_type {
+      INSTR_CALL,
+      INSTR_RET
+   } type;
+
+   union {
+      struct {
+         const struct dxil_type *func_type;
+         const struct dxil_value *func;
+         struct dxil_value **args;
+         size_t num_args;
+
+         bool has_value;
+         struct dxil_value value;
+      } call;
+
+      struct {
+         struct dxil_value *value;
+      } ret;
+   };
+
    struct list_head head;
 };
 
 static struct dxil_instr *
-create_instr(struct dxil_module *m)
+create_instr(struct dxil_module *m, enum instr_type type)
 {
    struct dxil_instr *ret = CALLOC_STRUCT(dxil_instr);
-   if (ret)
+   if (ret) {
+      ret->type = type;
       list_addtail(&ret->head, &m->instr_list);
+   }
    return ret;
+}
+
+static struct dxil_instr *
+create_call_instr(struct dxil_module *m,
+                  const struct dxil_type *func_type,
+                  const struct dxil_value *func,
+                  const struct dxil_value **args, size_t num_args)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_CALL);
+   if (instr) {
+      instr->call.func_type = func_type;
+      instr->call.func = func;
+      instr->call.args = CALLOC(sizeof(struct dxil_value *), num_args);
+      if (!args)
+         return false;
+      memcpy(instr->call.args, args, sizeof(struct dxil_value *) * num_args);
+      instr->call.num_args = num_args;
+   }
+   return instr;
 }
 
 const struct dxil_value *
@@ -1867,16 +1882,14 @@ dxil_emit_call(struct dxil_module *m,
    assert(func_type->type == TYPE_FUNCTION &&
           func_type->function_def.ret_type->type != TYPE_VOID);
 
-   if (!emit_call(&m->code, m->next_value_id, func_type, func,
-                  args, num_args))
-      return NULL;
-
-   struct dxil_instr *instr = create_instr(m);
+   struct dxil_instr *instr = create_call_instr(m, func_type, func,
+                                                args, num_args);
    if (!instr)
       return NULL;
 
-   instr->value.id = m->next_value_id++;
-   return &instr->value;
+   instr->call.has_value = true;
+   instr->call.value.id = m->next_value_id++;
+   return &instr->call.value;
 }
 
 bool
@@ -1887,13 +1900,59 @@ dxil_emit_call_void(struct dxil_module *m,
 {
    assert(func_type->type == TYPE_FUNCTION &&
           func_type->function_def.ret_type->type == TYPE_VOID);
-   return emit_call(&m->code, m->next_value_id, func_type, func,
-                    args, num_args);
+
+   struct dxil_instr *instr = create_call_instr(m, func_type, func,
+                                                args, num_args);
+   if (!instr)
+      return false;
+
+   instr->call.has_value = false;
+   instr->call.value.id = m->next_value_id;
+   return true;
 }
 
 bool
 dxil_emit_ret_void(struct dxil_module *m)
 {
+   struct dxil_instr *instr = create_instr(m, INSTR_RET);
+   if (!instr)
+      return false;
+
+   instr->ret.value = NULL;
+   return true;
+}
+
+static bool
+emit_call(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_CALL);
+   assert(instr->call.func->id <= instr->call.value.id);
+   int value_id_delta = instr->call.value.id - instr->call.func->id;
+
+   uint64_t data[256];
+   data[0] = 0; // attribute id
+   data[1] = 1 << 15; // calling convention etc
+   data[2] = instr->call.func_type->id;
+   data[3] = value_id_delta;
+
+   assert(instr->call.num_args < ARRAY_SIZE(data) - 4);
+   for (size_t i = 0; i < instr->call.num_args; ++i)
+      data[4 + i] = instr->call.value.id - instr->call.args[i]->id;
+
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_CALL,
+                                data, 4 + instr->call.num_args);
+}
+
+static bool
+emit_ret(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_RET);
+
+   if (instr->ret.value) {
+      uint64_t data[] = { FUNC_CODE_INST_RET, instr->ret.value->id };
+      return emit_func_abbrev_record(m, 9, data, ARRAY_SIZE(data));
+   }
+
    uint64_t data[] = { FUNC_CODE_INST_RET };
    return emit_func_abbrev_record(m, 8, data, ARRAY_SIZE(data));
 }
@@ -1905,15 +1964,20 @@ emit_function(struct dxil_module *m)
        !emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
       return false;
 
-   for (int i = 0; i < m->code.blob.size; ++i) {
-      if (!dxil_buffer_emit_bits(&m->buf, m->code.blob.data[i], 8))
-         return false;
-   }
-   blob_finish(&m->code.blob);
+   struct dxil_instr *instr;
+   LIST_FOR_EACH_ENTRY(instr, &m->instr_list, head) {
+      switch (instr->type) {
+      case INSTR_CALL:
+         if (!emit_call(m, instr))
+            return false;
+         break;
 
-   if (m->code.buf_bits > 0)
-      if (!dxil_buffer_emit_bits(&m->buf, m->code.buf, m->code.buf_bits))
-         return false;
+      case INSTR_RET:
+         if (!emit_ret(m, instr))
+            return false;
+         break;
+      }
+   }
 
    return exit_block(m);
 }
