@@ -22,12 +22,14 @@ files_libdxil_compiler = files(
   'dxil_buffer.c',
   'dxil_container.c',
   'dxil_module.c',
+  'nir_to_dxil.c'
 )
 
 libdxil_compiler = static_library(
   'dxil_compiler',
   files_libdxil_compiler,
-  include_directories : [ inc_include, inc_src, inc_mapi, inc_mesa ],
+  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_compiler, inc_gallium],
+  dependencies: [idep_nir_headers],
   c_args : c_vis_args,
 )
 
