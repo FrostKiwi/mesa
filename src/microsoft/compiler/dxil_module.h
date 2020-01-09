@@ -65,7 +65,6 @@ struct dxil_module {
    unsigned next_type_id;
 
    struct list_head const_list;
-   unsigned next_value_id;
 
    struct list_head mdnode_list;
    unsigned next_mdnode_id;
