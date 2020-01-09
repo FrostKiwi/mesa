@@ -50,7 +50,6 @@ struct dxil_module {
    unsigned major_version, minor_version;
 
    struct dxil_buffer buf;
-   struct dxil_buffer code;
 
    struct {
       unsigned abbrev_width;
