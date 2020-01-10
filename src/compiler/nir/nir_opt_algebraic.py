@@ -493,7 +493,6 @@ optimizations.extend([
    (('fmax', a, ('fabs', a)), ('fabs', a)),
    (('imax', a, ('iabs', a)), ('iabs', a)),
    (('fmax', a, ('fneg', a)), ('fabs', a)),
-   (('imax', a, ('ineg', a)), ('iabs', a)),
    (('~fmax', ('fabs', a), 0.0), ('fabs', a)),
    (('~fmin', ('fmax', a, 0.0), 1.0), ('fsat', a), '!options->lower_fsat'),
    (('~fmax', ('fmin', a, 1.0), 0.0), ('fsat', a), '!options->lower_fsat'),
