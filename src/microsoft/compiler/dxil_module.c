@@ -1841,11 +1841,17 @@ emit_metadata(struct dxil_module *m)
 
 struct dxil_instr {
    enum instr_type {
+      INSTR_BINOP,
       INSTR_CALL,
       INSTR_RET
    } type;
 
    union {
+      struct {
+         enum dxil_bin_opcode opcode;
+         const struct dxil_value *operands[2];
+      } binop;
+
       struct {
          const struct dxil_func *func;
          struct dxil_value **args;
@@ -1874,6 +1880,21 @@ create_instr(struct dxil_module *m, enum instr_type type)
       list_addtail(&ret->head, &m->instr_list);
    }
    return ret;
+}
+
+const struct dxil_value *
+dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
+                const struct dxil_value *op0, const struct dxil_value *op1)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_BINOP);
+   if (!instr)
+      return NULL;
+
+   instr->binop.opcode = opcode;
+   instr->binop.operands[0] = op0;
+   instr->binop.operands[1] = op1;
+   instr->has_value = true;
+   return &instr->value;
 }
 
 static struct dxil_instr *
@@ -1934,6 +1955,21 @@ dxil_emit_ret_void(struct dxil_module *m)
 }
 
 static bool
+emit_binop(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_BINOP);
+   assert(instr->value.id > instr->binop.operands[0]->id);
+   assert(instr->value.id > instr->binop.operands[1]->id);
+   uint64_t data[] = {
+      FUNC_CODE_INST_BINOP,
+      instr->value.id - instr->binop.operands[0]->id,
+      instr->value.id - instr->binop.operands[1]->id,
+      instr->binop.opcode
+   };
+   return emit_func_abbrev_record(m, 5, data, ARRAY_SIZE(data));
+}
+
+static bool
 emit_call(struct dxil_module *m, struct dxil_instr *instr)
 {
    assert(instr->type == INSTR_CALL);
@@ -1983,6 +2019,11 @@ emit_function(struct dxil_module *m)
    struct dxil_instr *instr;
    LIST_FOR_EACH_ENTRY(instr, &m->instr_list, head) {
       switch (instr->type) {
+      case INSTR_BINOP:
+         if (!emit_binop(m, instr))
+            return false;
+         break;
+
       case INSTR_CALL:
          if (!emit_call(m, instr))
             return false;
@@ -1992,6 +2033,9 @@ emit_function(struct dxil_module *m)
          if (!emit_ret(m, instr))
             return false;
          break;
+
+      default:
+         unreachable("unexpected instruction type");
       }
    }
 
