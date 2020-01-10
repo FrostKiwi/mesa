@@ -569,6 +569,15 @@ get_alu_src(struct ntd_context *ctx, nir_alu_instr *alu, unsigned src)
 }
 
 static void
+emit_binop(struct ntd_context *ctx, nir_alu_instr *alu,
+           enum dxil_bin_opcode opcode,
+           const struct dxil_value *op0, const struct dxil_value *op1)
+{
+   const struct dxil_value *v = dxil_emit_binop(&ctx->mod, opcode, op0, op1);
+   store_alu_dest(ctx, alu, 0, v);
+}
+
+static void
 emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 {
    /* handle vec-instructions first; they are the only ones that can have
@@ -591,6 +600,10 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_mov:
       assert(nir_dest_num_components(alu->dest.dest) == 1);
       store_alu_dest(ctx, alu, 0, src[0]);
+      break;
+
+   case nir_op_iadd:
+      emit_binop(ctx, alu, DXIL_BINOP_ADD, src[0], src[1]);
       break;
 
    default:
