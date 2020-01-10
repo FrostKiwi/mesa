@@ -1729,6 +1729,7 @@ late_optimizations = [
    (('iadd', 'a', ('ineg', 'b')), ('isub', 'a', 'b'), '!options->lower_sub'),
    (('fneg', a), ('fsub', 0.0, a), 'options->lower_negate'),
    (('ineg', a), ('isub', 0, a), 'options->lower_negate'),
+   (('inot', a), ('ixor', a, -1), 'options->lower_inot'),
 
    # These are duplicated from the main optimizations table.  The late
    # patterns that rearrange expressions like x - .5 < 0 to x < .5 can create
