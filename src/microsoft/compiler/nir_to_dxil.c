@@ -237,6 +237,9 @@ struct ntd_context {
    const struct dxil_value *uav_handles[MAX_UAVS];
    unsigned num_uavs;
 
+   struct dxil_resource resources[MAX_UAVS];
+   unsigned num_resources;
+
    struct dxil_def *defs;
    unsigned num_defs;
 
@@ -390,7 +393,9 @@ emit_createhandle_call(struct ntd_context *ctx,
 static bool
 emit_uav(struct ntd_context *ctx, nir_variable *var)
 {
-   assert(ctx->num_uavs < MAX_UAVS);
+   assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_metadata_nodes));
+   assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_handles));
+   assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
 
    const struct dxil_type *ssbo_type = get_glsl_type(&ctx->mod, var->type);
    if (!ssbo_type)
@@ -413,13 +418,23 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
 
    ctx->uav_metadata_nodes[ctx->num_uavs] = uav_meta;
 
-   const struct dxil_value *int8_1 = dxil_module_get_int8_const(&ctx->mod, 1);
-   const struct dxil_value *int32_0 = dxil_module_get_int32_const(&ctx->mod, 0);
-   const struct dxil_value *int1_0 = dxil_module_get_int1_const(&ctx->mod, false);
-   if (!int8_1 || !int32_0 || !int1_0)
+   ctx->resources[ctx->num_resources].resource_type = DXIL_RES_UAV_TYPED;
+   ctx->resources[ctx->num_resources].space = 0;
+   ctx->resources[ctx->num_resources].lower_bound = 0;
+   ctx->resources[ctx->num_resources].upper_bound = 0;
+   ctx->num_resources++;
+
+   const struct dxil_value *resource_class_value = dxil_module_get_int8_const(&ctx->mod, 1);
+   const struct dxil_value *resource_range_id_value = dxil_module_get_int32_const(&ctx->mod, 0);
+   const struct dxil_value *resource_range_index_value = dxil_module_get_int32_const(&ctx->mod, 0);
+   const struct dxil_value *non_uniform_resource_index_value = dxil_module_get_int1_const(&ctx->mod, false);
+   if (!resource_class_value || !resource_range_id_value ||
+       !resource_range_id_value || !non_uniform_resource_index_value)
       return false;
 
-   const struct dxil_value *handle = emit_createhandle_call(ctx, int8_1, int32_0, int32_0, int1_0);
+   const struct dxil_value *handle = emit_createhandle_call(ctx,
+      resource_class_value, resource_range_id_value,
+      resource_range_index_value, non_uniform_resource_index_value);
    if (!handle)
       return false;
 
@@ -754,15 +769,6 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
       return false;
    }
 
-   const struct dxil_resource resources[] = {
-      { DXIL_RES_UAV_TYPED, 0, 0, 0 }
-   };
-   if (!dxil_container_add_state_validation(&container, resources,
-                                            ARRAY_SIZE(resources))) {
-      debug_printf("D3D12: failed to write state-validation\n");
-      return false;
-   }
-
    struct ntd_context ctx = { 0 };
    dxil_module_init(&ctx.mod);
    ctx.mod.shader_kind = DXIL_COMPUTE_SHADER;
@@ -770,6 +776,12 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    ctx.mod.minor_version = 0;
    if (!emit_module(&ctx, s)) {
       debug_printf("D3D12: dxil_container_add_module failed\n");
+      return false;
+   }
+
+   if (!dxil_container_add_state_validation(&container, ctx.resources,
+                                            ctx.num_resources)) {
+      debug_printf("D3D12: failed to write state-validation\n");
       return false;
    }
 
