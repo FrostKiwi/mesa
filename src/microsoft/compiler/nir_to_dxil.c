@@ -118,6 +118,19 @@ enum {
    DXIL_STRUCTURED_BUFFER_ELEMENT_STRIDE_TAG = 1
 };
 
+enum dxil_intr {
+   DXIL_INTR_IMAX = 37,
+   DXIL_INTR_IMIN = 38,
+
+   DXIL_INTR_BUFFER_STORE = 69,
+
+   DXIL_INTR_CREATE_HANDLE = 57,
+
+   DXIL_INTR_THREAD_ID = 93,
+   DXIL_INTR_GROUP_ID = 94,
+   DXIL_INTR_THREAD_IN_GROUP = 95,
+};
+
 static const struct dxil_mdnode *
 emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
                   const char *name, enum dxil_component_type comp_type)
@@ -242,10 +255,51 @@ struct ntd_context {
    struct dxil_def *defs;
    unsigned num_defs;
 
-   const struct dxil_func *threadid_func,
+   const struct dxil_func *binary_func,
+                          *threadid_func,
                           *bufferstore_func,
                           *createhandle_func;
 };
+
+static const struct dxil_value *
+emit_binary_call(struct ntd_context *ctx, enum dxil_intr intr,
+                 const struct dxil_value *op0, const struct dxil_value *op1)
+{
+   if (!ctx->binary_func) {
+      const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
+      if (!int32_type)
+         return NULL;
+
+      const struct dxil_type *arg_types[] = {
+         int32_type,
+         int32_type,
+         int32_type
+      };
+
+      const struct dxil_type *func_type =
+         dxil_module_add_function_type(&ctx->mod, int32_type,
+                                       arg_types, ARRAY_SIZE(arg_types));
+      if (!func_type)
+         return NULL;
+
+      ctx->binary_func = dxil_add_function_decl(&ctx->mod,
+         "dx.op.binary.i32", func_type, DXIL_ATTR_KIND_READ_NONE);
+      if (!ctx->binary_func)
+         return NULL;
+   }
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, intr);
+   if (!opcode)
+      return NULL;
+
+   const struct dxil_value *args[] = {
+     opcode,
+     op0,
+     op1
+   };
+
+   return dxil_emit_call(&ctx->mod, ctx->binary_func, args, ARRAY_SIZE(args));
+}
 
 static const struct dxil_value *
 emit_threadid_call(struct ntd_context *ctx, const struct dxil_value *comp)
@@ -272,7 +326,8 @@ emit_threadid_call(struct ntd_context *ctx, const struct dxil_value *comp)
          return NULL;
    }
 
-   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, 93);
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
+       DXIL_INTR_THREAD_ID);
    if (!opcode)
       return NULL;
 
@@ -325,7 +380,8 @@ emit_bufferstore_call(struct ntd_context *ctx,
          return false;
    }
 
-   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, 69);
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
+      DXIL_INTR_BUFFER_STORE);
    const struct dxil_value *args[] = {
       opcode, handle, coord[0], coord[1],
       value[0], value[1], value[2], value[3],
@@ -373,7 +429,8 @@ emit_createhandle_call(struct ntd_context *ctx,
          return NULL;
    }
 
-   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, 57);
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
+      DXIL_INTR_CREATE_HANDLE);
    if (!opcode)
       return NULL;
 
@@ -577,6 +634,15 @@ emit_binop(struct ntd_context *ctx, nir_alu_instr *alu,
 }
 
 static void
+emit_binary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
+                  enum dxil_intr intr,
+                  const struct dxil_value *op0, const struct dxil_value *op1)
+{
+   const struct dxil_value *v = emit_binary_call(ctx, intr, op0, op1);
+   store_alu_dest(ctx, alu, 0, v);
+}
+
+static void
 emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 {
    /* handle vec-instructions first; they are the only ones that can have
@@ -651,6 +717,14 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 
    case nir_op_ixor:
       emit_binop(ctx, alu, DXIL_BINOP_XOR, src[0], src[1]);
+      break;
+
+   case nir_op_imax:
+      emit_binary_intin(ctx, alu, DXIL_INTR_IMAX, src[0], src[1]);
+      break;
+
+   case nir_op_imin:
+      emit_binary_intin(ctx, alu, DXIL_INTR_IMIN, src[0], src[1]);
       break;
 
    default:
