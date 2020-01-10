@@ -32,6 +32,7 @@ nir_options = {
    .lower_negate = true,
    .lower_inot = true,
    .lower_isign = true,
+   .lower_iabs = true,
 };
 
 static void
