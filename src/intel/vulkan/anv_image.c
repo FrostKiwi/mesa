@@ -1087,6 +1087,197 @@ VkResult anv_GetImageDrmFormatModifierPropertiesEXT(
    return VK_SUCCESS;
 }
 
+static enum isl_aux_state
+anv_layout_to_color_aux_state(const struct gen_device_info * const devinfo,
+                              const struct anv_image * const image,
+                              uint32_t plane,
+                              const VkImageLayout layout)
+{
+   switch (layout) {
+   /* Invalid layouts */
+   case VK_IMAGE_LAYOUT_RANGE_SIZE:
+   case VK_IMAGE_LAYOUT_MAX_ENUM:
+      unreachable("Invalid image layout.");
+
+   /* Undefined layouts
+    *
+    * The pre-initialized layout is equivalent to the undefined layout for
+    * optimally-tiled images.  We can only do color compression (CCS or HiZ)
+    * on tiled images.
+    */
+   case VK_IMAGE_LAYOUT_UNDEFINED:
+   case VK_IMAGE_LAYOUT_PREINITIALIZED:
+      return ISL_AUX_STATE_AUX_INVALID;
+
+   /* General and sampling layouts */
+   case VK_IMAGE_LAYOUT_GENERAL:
+   case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+   case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+   case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+      if (image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_D) {
+         return ISL_AUX_STATE_PASS_THROUGH;
+      } else {
+         return ISL_AUX_STATE_COMPRESSED_CLEAR;
+      }
+
+   case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
+      /* When handing the image off to the presentation engine, we need to
+       * ensure that things are properly resolved.  For images with no
+       * modifier, we assume that they follow the old rules and always need
+       * a full resolve because the PE doesn't understand any form of
+       * compression.  For images with modifiers, we use the aux usage from
+       * the modifier.
+       */
+      const struct isl_drm_modifier_info *mod_info =
+         isl_drm_modifier_get_info(image->drm_format_mod);
+      if (mod_info && mod_info->aux_usage != ISL_AUX_USAGE_NONE) {
+         assert(mod_info->aux_usage == ISL_AUX_USAGE_CCS_E);
+         assert(image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_E);
+         /* We do not yet support any modifiers which support clear color so
+          * we just always return COMPRESSED_NO_CLEAR.  One day, this will
+          * change.
+          */
+         assert(!mod_info->supports_clear_color);
+         return ISL_AUX_STATE_COMPRESSED_NO_CLEAR;
+      } else {
+         return ISL_AUX_STATE_PASS_THROUGH;
+      }
+   }
+
+   /* Rendering layout */
+   case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+      if (image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_D) {
+         return ISL_AUX_STATE_PARTIAL_CLEAR;
+      } else {
+         return ISL_AUX_STATE_COMPRESSED_CLEAR;
+      }
+
+   case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+   case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL:
+   case VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+   case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL:
+      unreachable("Unsupported for color images");
+
+   case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR:
+      unreachable("VK_KHR_shared_presentable_image is unsupported");
+
+   case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT:
+      unreachable("VK_EXT_fragment_density_map is unsupported");
+
+   case VK_IMAGE_LAYOUT_SHADING_RATE_OPTIMAL_NV:
+      unreachable("VK_NV_shading_rate_image is unsupported");
+   }
+   unreachable("layout is not a VkImageLayout enumeration member.");
+}
+
+static enum isl_aux_state
+anv_layout_to_depth_aux_state(const struct gen_device_info * const devinfo,
+                              const struct anv_image * const image,
+                              uint32_t plane,
+                              const VkImageLayout layout)
+{
+   switch (layout) {
+   /* Invalid layouts */
+   case VK_IMAGE_LAYOUT_RANGE_SIZE:
+   case VK_IMAGE_LAYOUT_MAX_ENUM:
+      unreachable("Invalid image layout.");
+
+   /* Undefined layouts
+    *
+    * The pre-initialized layout is equivalent to the undefined layout for
+    * optimally-tiled images.  We can only do color compression (CCS or HiZ)
+    * on tiled images.
+    */
+   case VK_IMAGE_LAYOUT_UNDEFINED:
+   case VK_IMAGE_LAYOUT_PREINITIALIZED:
+      return ISL_AUX_STATE_AUX_INVALID;
+
+   /* General write-capable layouts */
+   case VK_IMAGE_LAYOUT_GENERAL:
+   case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+      /* This buffer could be a depth buffer used in a transfer operation.
+       * BLORP currently doesn't use HiZ for transfer operations so we must
+       * use the main buffer for this layout. TODO: Enable HiZ in BLORP.
+       */
+      assert(image->planes[plane].aux_usage == ISL_AUX_USAGE_HIZ);
+      return ISL_AUX_STATE_AUX_INVALID;
+
+   /* Sampling layouts */
+   case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+   case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL:
+   case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+   case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+      if (anv_can_sample_with_hiz(devinfo, image))
+         return ISL_AUX_STATE_COMPRESSED_CLEAR;
+      else
+         return ISL_AUX_STATE_RESOLVED;
+
+   case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+   case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL:
+      return ISL_AUX_STATE_COMPRESSED_CLEAR;
+
+   case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+   case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+   case VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR:
+   case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT:
+   case VK_IMAGE_LAYOUT_SHADING_RATE_OPTIMAL_NV:
+      unreachable("Invalid layout for depth");
+   }
+   unreachable("layout is not a VkImageLayout enumeration member.");
+}
+
+static enum isl_aux_state
+anv_layout_to_stencil_aux_state(const VkImageLayout layout)
+{
+   switch (layout) {
+   /* Invalid layouts */
+   case VK_IMAGE_LAYOUT_RANGE_SIZE:
+   case VK_IMAGE_LAYOUT_MAX_ENUM:
+      unreachable("Invalid image layout.");
+
+   /* Undefined layouts
+    *
+    * The pre-initialized layout is equivalent to the undefined layout for
+    * optimally-tiled images.  We can only do color compression (CCS or HiZ)
+    * on tiled images.
+    */
+   case VK_IMAGE_LAYOUT_UNDEFINED:
+   case VK_IMAGE_LAYOUT_PREINITIALIZED:
+      return ISL_AUX_STATE_AUX_INVALID;
+
+   /* Read-write layouts */
+   case VK_IMAGE_LAYOUT_GENERAL:
+   case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+   case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+   case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL:
+   case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+   case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+   case VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+   case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL:
+      return ISL_AUX_STATE_COMPRESSED_NO_CLEAR;
+
+   case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+   case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+   case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL_KHR:
+   case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR:
+   case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT:
+   case VK_IMAGE_LAYOUT_SHADING_RATE_OPTIMAL_NV:
+      unreachable("Invalid layout for stencil");
+   }
+   unreachable("layout is not a VkImageLayout enumeration member.");
+}
+
 /**
  * This function returns the assumed isl_aux_state for a given VkImageLayout.
  * Because Vulkan image layouts don't map directly to isl_aux_state enums, the
@@ -1129,114 +1320,19 @@ anv_layout_to_aux_state(const struct gen_device_info * const devinfo,
    /* Stencil has no aux */
    assert(aspect != VK_IMAGE_ASPECT_STENCIL_BIT);
 
-   switch (layout) {
-   /* Invalid layouts */
-   case VK_IMAGE_LAYOUT_RANGE_SIZE:
-   case VK_IMAGE_LAYOUT_MAX_ENUM:
-      unreachable("Invalid image layout.");
-
-   /* Undefined layouts
-    *
-    * The pre-initialized layout is equivalent to the undefined layout for
-    * optimally-tiled images.  We can only do color compression (CCS or HiZ)
-    * on tiled images.
-    */
-   case VK_IMAGE_LAYOUT_UNDEFINED:
-   case VK_IMAGE_LAYOUT_PREINITIALIZED:
-      return ISL_AUX_STATE_AUX_INVALID;
-
-   /* Transfer layouts */
-   case VK_IMAGE_LAYOUT_GENERAL:
-   case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-      if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
-         /* This buffer could be a depth buffer used in a transfer operation.
-          * BLORP currently doesn't use HiZ for transfer operations so we must
-          * use the main buffer for this layout. TODO: Enable HiZ in BLORP.
-          */
-         assert(image->planes[plane].aux_usage == ISL_AUX_USAGE_HIZ);
-         return ISL_AUX_STATE_AUX_INVALID;
-      } else if (image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_D) {
-         return ISL_AUX_STATE_PASS_THROUGH;
-      } else {
-         return ISL_AUX_STATE_COMPRESSED_CLEAR;
-      }
-
-   /* Sampling layouts */
-   case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL_KHR:
-   case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
-   case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL:
-      assert((image->aspects & VK_IMAGE_ASPECT_ANY_COLOR_BIT_ANV) == 0);
-      /* Fall-through */
-   case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-   case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-      if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
-         if (anv_can_sample_with_hiz(devinfo, image))
-            return ISL_AUX_STATE_COMPRESSED_CLEAR;
-         else
-            return ISL_AUX_STATE_RESOLVED;
-      } else if (image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_D) {
-         return ISL_AUX_STATE_PASS_THROUGH;
-      } else {
-         return ISL_AUX_STATE_COMPRESSED_CLEAR;
-      }
-
-   case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL_KHR:
-      return ISL_AUX_STATE_RESOLVED;
-
-   case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
-      assert(image->aspects == VK_IMAGE_ASPECT_COLOR_BIT);
-
-      /* When handing the image off to the presentation engine, we need to
-       * ensure that things are properly resolved.  For images with no
-       * modifier, we assume that they follow the old rules and always need
-       * a full resolve because the PE doesn't understand any form of
-       * compression.  For images with modifiers, we use the aux usage from
-       * the modifier.
-       */
-      const struct isl_drm_modifier_info *mod_info =
-         isl_drm_modifier_get_info(image->drm_format_mod);
-      if (mod_info && mod_info->aux_usage != ISL_AUX_USAGE_NONE) {
-         assert(mod_info->aux_usage == ISL_AUX_USAGE_CCS_E);
-         assert(image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_E);
-         /* We do not yet support any modifiers which support clear color so
-          * we just always return COMPRESSED_NO_CLEAR.  One day, this will
-          * change.
-          */
-         assert(!mod_info->supports_clear_color);
-         return ISL_AUX_STATE_COMPRESSED_NO_CLEAR;
-      } else {
-         return ISL_AUX_STATE_PASS_THROUGH;
-      }
-   }
-
-   /* Rendering layouts */
-   case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+   switch (aspect) {
+   default:
       assert(aspect & VK_IMAGE_ASPECT_ANY_COLOR_BIT_ANV);
-      /* fall-through */
-   case VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL_KHR:
-      if (image->planes[plane].aux_usage == ISL_AUX_USAGE_CCS_D) {
-         return ISL_AUX_STATE_PARTIAL_CLEAR;
-      } else {
-         return ISL_AUX_STATE_COMPRESSED_CLEAR;
-      }
+      return anv_layout_to_color_aux_state(devinfo, image, plane, layout);
 
-   case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL_KHR:
-   case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-   case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL:
-      assert(aspect == VK_IMAGE_ASPECT_DEPTH_BIT);
-      return ISL_AUX_STATE_COMPRESSED_CLEAR;
+   case VK_IMAGE_ASPECT_DEPTH_BIT:
+      return anv_layout_to_depth_aux_state(devinfo, image, plane, layout);
 
-   case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR:
-      unreachable("VK_KHR_shared_presentable_image is unsupported");
-
-   case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT:
-      unreachable("VK_EXT_fragment_density_map is unsupported");
-
-   case VK_IMAGE_LAYOUT_SHADING_RATE_OPTIMAL_NV:
-      unreachable("VK_NV_shading_rate_image is unsupported");
+   case VK_IMAGE_ASPECT_STENCIL_BIT:
+      /* Stencil compression is new on Gen12 */
+      assert(devinfo->gen >= 12);
+      return anv_layout_to_stencil_aux_state(layout);
    }
-
-   unreachable("layout is not a VkImageLayout enumeration member.");
 }
 
 ASSERTED static bool
