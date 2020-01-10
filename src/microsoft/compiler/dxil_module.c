@@ -1231,11 +1231,13 @@ struct dxil_func {
    struct list_head head;
 };
 
-static const struct dxil_value *
+static struct dxil_func *
 add_function(struct dxil_module *m, const char *name,
              const struct dxil_type *type,
              bool decl, unsigned attr_set)
 {
+   assert(type->type == TYPE_FUNCTION);
+
    struct dxil_func *func = CALLOC_STRUCT(dxil_func);
    if (!func)
       return NULL;
@@ -1252,10 +1254,10 @@ add_function(struct dxil_module *m, const char *name,
 
    func->value.id = -1;
    list_addtail(&func->head, &m->func_list);
-   return &func->value;
+   return func;
 }
 
-const struct dxil_value *
+const struct dxil_func *
 dxil_add_function_def(struct dxil_module *m, const char *name,
                       const struct dxil_type *type)
 {
@@ -1292,7 +1294,7 @@ get_attr_set(struct dxil_module *m, enum dxil_attr_kind attr)
    return index;
 }
 
-const struct dxil_value *
+const struct dxil_func *
 dxil_add_function_decl(struct dxil_module *m, const char *name,
                        const struct dxil_type *type,
                        enum dxil_attr_kind attr)
@@ -1615,6 +1617,14 @@ dxil_get_metadata_value(struct dxil_module *m, const struct dxil_type *type,
 }
 
 const struct dxil_mdnode *
+dxil_get_metadata_func(struct dxil_module *m, const struct dxil_func *func)
+{
+   const struct dxil_type *ptr_type =
+      dxil_module_get_pointer_type(m, func->type);
+   return dxil_get_metadata_value(m, ptr_type, &func->value);
+}
+
+const struct dxil_mdnode *
 dxil_get_metadata_node(struct dxil_module *m,
                        const struct dxil_mdnode *subnodes[],
                        size_t num_subnodes)
@@ -1837,8 +1847,7 @@ struct dxil_instr {
 
    union {
       struct {
-         const struct dxil_type *func_type;
-         const struct dxil_value *func;
+         const struct dxil_func *func;
          struct dxil_value **args;
          size_t num_args;
       } call;
@@ -1869,13 +1878,11 @@ create_instr(struct dxil_module *m, enum instr_type type)
 
 static struct dxil_instr *
 create_call_instr(struct dxil_module *m,
-                  const struct dxil_type *func_type,
-                  const struct dxil_value *func,
+                  const struct dxil_func *func,
                   const struct dxil_value **args, size_t num_args)
 {
    struct dxil_instr *instr = create_instr(m, INSTR_CALL);
    if (instr) {
-      instr->call.func_type = func_type;
       instr->call.func = func;
       instr->call.args = CALLOC(sizeof(struct dxil_value *), num_args);
       if (!args)
@@ -1888,15 +1895,12 @@ create_call_instr(struct dxil_module *m,
 
 const struct dxil_value *
 dxil_emit_call(struct dxil_module *m,
-               const struct dxil_type *func_type,
-               const struct dxil_value *func,
+               const struct dxil_func *func,
                const struct dxil_value **args, size_t num_args)
 {
-   assert(func_type->type == TYPE_FUNCTION &&
-          func_type->function_def.ret_type->type != TYPE_VOID);
+   assert(func->type->function_def.ret_type->type != TYPE_VOID);
 
-   struct dxil_instr *instr = create_call_instr(m, func_type, func,
-                                                args, num_args);
+   struct dxil_instr *instr = create_call_instr(m, func, args, num_args);
    if (!instr)
       return NULL;
 
@@ -1906,15 +1910,12 @@ dxil_emit_call(struct dxil_module *m,
 
 bool
 dxil_emit_call_void(struct dxil_module *m,
-                    const struct dxil_type *func_type,
-                    const struct dxil_value *func,
+                    const struct dxil_func *func,
                     const struct dxil_value **args, size_t num_args)
 {
-   assert(func_type->type == TYPE_FUNCTION &&
-          func_type->function_def.ret_type->type == TYPE_VOID);
+   assert(func->type->function_def.ret_type->type == TYPE_VOID);
 
-   struct dxil_instr *instr = create_call_instr(m, func_type, func,
-                                                args, num_args);
+   struct dxil_instr *instr = create_call_instr(m, func, args, num_args);
    if (!instr)
       return false;
 
@@ -1936,15 +1937,15 @@ static bool
 emit_call(struct dxil_module *m, struct dxil_instr *instr)
 {
    assert(instr->type == INSTR_CALL);
-   assert(instr->call.func->id >= 0 && instr->value.id >= 0);
-   assert(instr->call.func_type->id >= 0);
-   assert(instr->call.func->id <= instr->value.id);
-   int value_id_delta = instr->value.id - instr->call.func->id;
+   assert(instr->call.func->value.id >= 0 && instr->value.id >= 0);
+   assert(instr->call.func->type->id >= 0);
+   assert(instr->call.func->value.id <= instr->value.id);
+   int value_id_delta = instr->value.id - instr->call.func->value.id;
 
    uint64_t data[256];
    data[0] = 0; // attribute id
    data[1] = 1 << 15; // calling convention etc
-   data[2] = instr->call.func_type->id;
+   data[2] = instr->call.func->type->id;
    data[3] = value_id_delta;
 
    assert(instr->call.num_args < ARRAY_SIZE(data) - 4);
