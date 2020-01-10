@@ -121,6 +121,8 @@ enum {
 enum dxil_intr {
    DXIL_INTR_IMAX = 37,
    DXIL_INTR_IMIN = 38,
+   DXIL_INTR_UMAX = 39,
+   DXIL_INTR_UMIN = 40,
 
    DXIL_INTR_BUFFER_STORE = 69,
 
@@ -727,6 +729,14 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 
    case nir_op_imin:
       emit_binary_intin(ctx, alu, DXIL_INTR_IMIN, src[0], src[1]);
+      break;
+
+   case nir_op_umax:
+      emit_binary_intin(ctx, alu, DXIL_INTR_UMAX, src[0], src[1]);
+      break;
+
+   case nir_op_umin:
+      emit_binary_intin(ctx, alu, DXIL_INTR_UMIN, src[0], src[1]);
       break;
 
    default:
