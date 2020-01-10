@@ -27,6 +27,33 @@
 #include "util/u_debug.h"
 #include "nir/nir_builder.h"
 
+static const nir_shader_compiler_options
+nir_options = {
+   .lower_negate = true,
+};
+
+static void
+optimize_nir(struct nir_shader *s)
+{
+   bool progress;
+   do {
+      progress = false;
+      NIR_PASS_V(s, nir_lower_vars_to_ssa);
+      NIR_PASS(progress, s, nir_lower_alu_to_scalar, NULL, NULL);
+      NIR_PASS(progress, s, nir_copy_prop);
+      NIR_PASS(progress, s, nir_opt_remove_phis);
+      NIR_PASS(progress, s, nir_opt_dce);
+      NIR_PASS(progress, s, nir_opt_dead_cf);
+      NIR_PASS(progress, s, nir_opt_cse);
+      NIR_PASS(progress, s, nir_opt_peephole_select, 8, true, true);
+      NIR_PASS(progress, s, nir_opt_algebraic);
+      NIR_PASS(progress, s, nir_opt_constant_folding);
+      NIR_PASS(progress, s, nir_opt_undef);
+   } while (progress);
+
+   NIR_PASS_V(s, nir_opt_algebraic_late);
+}
+
 int clc_compile_from_source(
    const char *source,
    const char *source_name,
@@ -41,7 +68,7 @@ int clc_compile_from_source(
    size_t *blob_size)
 {
    nir_builder b;
-   nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_KERNEL, NULL);
+   nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_KERNEL, &nir_options);
    b.shader->info.name = ralloc_strdup(b.shader, "dummy_kernel");
 
    nir_variable *output_buffer = nir_variable_create(b.shader,
@@ -73,7 +100,7 @@ int clc_compile_from_source(
    store_ssbo->src[2] = nir_src_for_ssa(index);
    nir_builder_instr_insert(&b, &store_ssbo->instr);
 
-   NIR_PASS_V(b.shader, nir_lower_alu_to_scalar, NULL, NULL);
+   optimize_nir(b.shader);
 
    struct blob tmp;
    if (!nir_to_dxil(b.shader, &tmp)) {
