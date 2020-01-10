@@ -40,6 +40,22 @@ enum dxil_attr_kind {
    DXIL_ATTR_KIND_READ_ONLY = 21,
 };
 
+enum dxil_bin_opcode {
+   DXIL_BINOP_ADD = 0,
+   DXIL_BINOP_SUB = 1,
+   DXIL_BINOP_MUL = 2,
+   DXIL_BINOP_UDIV = 3,
+   DXIL_BINOP_SDIV = 4,
+   DXIL_BINOP_UREM = 5,
+   DXIL_BINOP_SREM = 6,
+   DXIL_BINOP_SHL = 7,
+   DXIL_BINOP_LSHR = 8,
+   DXIL_BINOP_ASHR = 9,
+   DXIL_BINOP_AND = 10,
+   DXIL_BINOP_OR = 11,
+   DXIL_BINOP_XOR = 12
+};
+
 struct dxil_type;
 struct dxil_value;
 struct dxil_gvar;
@@ -153,6 +169,10 @@ bool
 dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
                              const struct dxil_mdnode *subnodes[],
                              size_t num_subnodes);
+
+const struct dxil_value *
+dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
+                const struct dxil_value *op0, const struct dxil_value *op1);
 
 const struct dxil_value *
 dxil_emit_call(struct dxil_module *m,
