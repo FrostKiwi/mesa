@@ -1421,9 +1421,11 @@ emit_int_value(struct dxil_module *m, int64_t value)
    if (!value)
       return emit_null_value(m);
 
-   assert(value > 0); /* no support for signed constants yet */
+   uint64_t v = value >= 0 ?
+      (value << 1) :
+      ((-value << 1) | 1);
 
-   uint64_t data[] = { CST_CODE_INTEGER, value << 1 };
+   uint64_t data[] = { CST_CODE_INTEGER, v };
    return emit_const_abbrev_record(m, 5, data, ARRAY_SIZE(data));
 }
 
