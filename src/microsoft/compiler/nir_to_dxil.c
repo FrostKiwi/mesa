@@ -593,11 +593,6 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
       store_alu_dest(ctx, alu, 0, src[0]);
       break;
 
-   case nir_op_vec4:
-      for (int i = 0; i < nir_op_infos[alu->op].num_inputs; i++)
-         store_alu_dest(ctx, alu, i, src[i]);
-      break;
-
    default:
       fprintf(stderr, "emit_alu: not implemented (%s)\n",
               nir_op_infos[alu->op].name);
