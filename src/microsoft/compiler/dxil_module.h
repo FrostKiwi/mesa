@@ -43,6 +43,7 @@ enum dxil_attr_kind {
 struct dxil_type;
 struct dxil_value;
 struct dxil_gvar;
+struct dxil_func;
 struct dxil_mdnode;
 
 struct dxil_module {
@@ -84,11 +85,11 @@ const struct dxil_gvar *
 dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
                     bool constant, int align);
 
-const struct dxil_value *
+const struct dxil_func *
 dxil_add_function_def(struct dxil_module *m, const char *name,
                       const struct dxil_type *type);
 
-const struct dxil_value *
+const struct dxil_func *
 dxil_add_function_decl(struct dxil_module *m, const char *name,
                        const struct dxil_type *type,
                        enum dxil_attr_kind attr);
@@ -135,6 +136,9 @@ dxil_get_metadata_value(struct dxil_module *m, const struct dxil_type *type,
                         const struct dxil_value *value);
 
 const struct dxil_mdnode *
+dxil_get_metadata_func(struct dxil_module *m, const struct dxil_func *func);
+
+const struct dxil_mdnode *
 dxil_get_metadata_int1(struct dxil_module *m, bool value);
 
 const struct dxil_mdnode *
@@ -152,14 +156,12 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
 
 const struct dxil_value *
 dxil_emit_call(struct dxil_module *m,
-               const struct dxil_type *func_type,
-               const struct dxil_value *func,
+               const struct dxil_func *func,
                const struct dxil_value **args, size_t num_args);
 
 bool
 dxil_emit_call_void(struct dxil_module *m,
-                    const struct dxil_type *func_type,
-                    const struct dxil_value *func,
+                    const struct dxil_func *func,
                     const struct dxil_value **args, size_t num_args);
 
 bool
