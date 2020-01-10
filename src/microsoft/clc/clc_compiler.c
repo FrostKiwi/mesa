@@ -178,7 +178,6 @@ emit_module(struct dxil_module *m)
 
    const struct dxil_type *void_type = dxil_module_get_void_type(m);
    const struct dxil_type *main_func_type = dxil_module_add_function_type(m, void_type, NULL, 0);
-   const struct dxil_type *main_func_pointer_type = dxil_module_get_pointer_type(m, main_func_type);
 
    const struct dxil_type *threadid_arg_types[] = { int32_type, int32_type };
    const struct dxil_type *threadid_func_type = dxil_module_add_function_type(m, int32_type, threadid_arg_types, ARRAY_SIZE(threadid_arg_types));
@@ -196,10 +195,10 @@ emit_module(struct dxil_module *m)
    if (!output_buffer_gvar)
       return false;
 
-   const struct dxil_value *main_func = dxil_add_function_def(m, "main", main_func_type);
-   const struct dxil_value *threadid_func = dxil_add_function_decl(m, "dx.op.threadId.i32", threadid_func_type, DXIL_ATTR_KIND_READ_NONE);
-   const struct dxil_value *bufferstore_func = dxil_add_function_decl(m, "dx.op.bufferStore.i32", bufferstore_func_type, DXIL_ATTR_KIND_NONE);
-   const struct dxil_value *createhandle_func = dxil_add_function_decl(m, "dx.op.createHandle", createhandle_func_type, DXIL_ATTR_KIND_READ_ONLY);
+   const struct dxil_func *main_func = dxil_add_function_def(m, "main", main_func_type);
+   const struct dxil_func *threadid_func = dxil_add_function_decl(m, "dx.op.threadId.i32", threadid_func_type, DXIL_ATTR_KIND_READ_NONE);
+   const struct dxil_func *bufferstore_func = dxil_add_function_decl(m, "dx.op.bufferStore.i32", bufferstore_func_type, DXIL_ATTR_KIND_NONE);
+   const struct dxil_func *createhandle_func = dxil_add_function_decl(m, "dx.op.createHandle", createhandle_func_type, DXIL_ATTR_KIND_READ_ONLY);
    if (!main_func || !threadid_func || !bufferstore_func ||
        !createhandle_func)
       return false;
@@ -221,7 +220,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_mdnode *resources_node = dxil_get_metadata_node(m, resources_nodes,
                                                       ARRAY_SIZE(resources_nodes));
 
-   const struct dxil_mdnode *main_entrypoint = dxil_get_metadata_value(m, main_func_pointer_type, main_func);
+   const struct dxil_mdnode *main_entrypoint = dxil_get_metadata_func(m, main_func);
    const struct dxil_mdnode *node27 = dxil_get_metadata_node(m, NULL, 0);
 
    const struct dxil_mdnode *node4 = dxil_get_metadata_int32(m, 0);
@@ -283,8 +282,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_value *createhandle_args[] = {
       int32_57, int8_1, int32_0, int32_0, int1_0
    };
-   const struct dxil_value *handle = dxil_emit_call(m, createhandle_func_type,
-                                                    createhandle_func,
+   const struct dxil_value *handle = dxil_emit_call(m, createhandle_func,
                                                     createhandle_args,
                                                     ARRAY_SIZE(createhandle_args));
    if (!handle)
@@ -293,8 +291,7 @@ emit_module(struct dxil_module *m)
    const struct dxil_value *threadid_args[] = {
      int32_93, int32_0
    };
-   const struct dxil_value *threadid = dxil_emit_call(m, threadid_func_type,
-                                                      threadid_func,
+   const struct dxil_value *threadid = dxil_emit_call(m, threadid_func,
                                                       threadid_args,
                                                       ARRAY_SIZE(threadid_args));
    if (!threadid)
@@ -305,7 +302,7 @@ emit_module(struct dxil_module *m)
      threadid, threadid, threadid, threadid, int8_15
    };
 
-   if (!dxil_emit_call_void(m, bufferstore_func_type, bufferstore_func,
+   if (!dxil_emit_call_void(m, bufferstore_func,
                             bufferstore_args,
                             ARRAY_SIZE(bufferstore_args)) ||
        !dxil_emit_ret_void(m))
