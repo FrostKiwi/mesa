@@ -606,6 +606,54 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
       emit_binop(ctx, alu, DXIL_BINOP_ADD, src[0], src[1]);
       break;
 
+   case nir_op_isub:
+      emit_binop(ctx, alu, DXIL_BINOP_SUB, src[0], src[1]);
+      break;
+
+   case nir_op_imul:
+      emit_binop(ctx, alu, DXIL_BINOP_MUL, src[0], src[1]);
+      break;
+
+   case nir_op_idiv:
+      emit_binop(ctx, alu, DXIL_BINOP_SDIV, src[0], src[1]);
+      break;
+
+   case nir_op_udiv:
+      emit_binop(ctx, alu, DXIL_BINOP_UDIV, src[0], src[1]);
+      break;
+
+   case nir_op_irem:
+      emit_binop(ctx, alu, DXIL_BINOP_SREM, src[0], src[1]);
+      break;
+
+   case nir_op_imod:
+      emit_binop(ctx, alu, DXIL_BINOP_UREM, src[0], src[1]);
+      break;
+
+   case nir_op_ishl:
+      emit_binop(ctx, alu, DXIL_BINOP_SHL, src[0], src[1]);
+      break;
+
+   case nir_op_ishr:
+      emit_binop(ctx, alu, DXIL_BINOP_ASHR, src[0], src[1]);
+      break;
+
+   case nir_op_ushr:
+      emit_binop(ctx, alu, DXIL_BINOP_LSHR, src[0], src[1]);
+      break;
+
+   case nir_op_iand:
+      emit_binop(ctx, alu, DXIL_BINOP_AND, src[0], src[1]);
+      break;
+
+   case nir_op_ior:
+      emit_binop(ctx, alu, DXIL_BINOP_OR, src[0], src[1]);
+      break;
+
+   case nir_op_ixor:
+      emit_binop(ctx, alu, DXIL_BINOP_XOR, src[0], src[1]);
+      break;
+
    default:
       fprintf(stderr, "emit_alu: not implemented (%s)\n",
               nir_op_infos[alu->op].name);
