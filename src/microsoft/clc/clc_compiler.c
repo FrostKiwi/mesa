@@ -31,6 +31,7 @@ static const nir_shader_compiler_options
 nir_options = {
    .lower_negate = true,
    .lower_inot = true,
+   .lower_isign = true,
 };
 
 static void
