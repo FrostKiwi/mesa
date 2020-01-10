@@ -53,7 +53,10 @@ optimize_nir(struct nir_shader *s)
       NIR_PASS(progress, s, nir_opt_undef);
    } while (progress);
 
-   NIR_PASS_V(s, nir_opt_algebraic_late);
+   do {
+      progress = false;
+      NIR_PASS(progress, s, nir_opt_algebraic_late);
+   } while (progress);
 }
 
 int clc_compile_from_source(
