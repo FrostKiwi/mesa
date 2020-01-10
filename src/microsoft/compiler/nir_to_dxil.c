@@ -751,11 +751,16 @@ static void
 emit_load_local_invocation_id(struct ntd_context *ctx,
                               nir_intrinsic_instr *intr)
 {
+   assert(intr->dest.is_ssa);
+   nir_component_mask_t comps = nir_ssa_def_components_read(&intr->dest.ssa);
+
    for (int i = 0; i < nir_intrinsic_dest_components(intr); i++) {
-      const struct dxil_value
-         *idx = dxil_module_get_int32_const(&ctx->mod, i),
-         *threadid = emit_threadid_call(ctx, idx);
-      store_dest(ctx, &intr->dest, i, threadid);
+      if (comps & (1 << i)) {
+         const struct dxil_value
+            *idx = dxil_module_get_int32_const(&ctx->mod, i),
+            *threadid = emit_threadid_call(ctx, idx);
+         store_dest(ctx, &intr->dest, i, threadid);
+      }
    }
 }
 
