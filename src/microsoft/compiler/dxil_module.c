@@ -49,7 +49,8 @@ dxil_module_init(struct dxil_module *m)
    m->next_mdnode_id = 1; /* zero is reserved for NULL nodes */
    list_inithead(&m->md_named_node_list);
 
-   m->void_type = m->int1_type = m->int8_type = m->int32_type = NULL;
+   m->void_type = m->int1_type = m->int8_type = m->int32_type =
+   m->float_type = NULL;
 }
 
 bool
@@ -343,6 +344,7 @@ struct dxil_type {
    enum type_type {
       TYPE_VOID,
       TYPE_INTEGER,
+      TYPE_FLOAT,
       TYPE_POINTER,
       TYPE_STRUCT,
       TYPE_FUNCTION
@@ -420,6 +422,12 @@ get_int32_type(struct dxil_module *m)
    return m->int32_type;
 }
 
+static const struct dxil_type *
+create_float_type(struct dxil_module *m)
+{
+   return create_type(m, TYPE_FLOAT);
+}
+
 const struct dxil_type *
 dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size)
 {
@@ -430,6 +438,14 @@ dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size)
    default:
       unreachable("unsupported bit-width");
    }
+}
+
+const struct dxil_type *
+dxil_module_get_float_type(struct dxil_module *m)
+{
+   if (!m->float_type)
+      m->float_type = create_float_type(m);
+   return m->float_type;
 }
 
 const struct dxil_type *
@@ -926,6 +942,12 @@ emit_integer_type(struct dxil_module *m, int bit_size)
 }
 
 static bool
+emit_float_type(struct dxil_module *m)
+{
+   return emit_record(m, TYPE_CODE_FLOAT, NULL, 0);
+}
+
+static bool
 emit_pointer_type(struct dxil_module *m, int type_index)
 {
    uint64_t data[] = { TYPE_CODE_POINTER, type_index, 0 };
@@ -1027,6 +1049,11 @@ emit_type_table(struct dxil_module *m)
 
       case TYPE_INTEGER:
          if (!emit_integer_type(m, type->int_bits))
+            return false;
+         break;
+
+      case TYPE_FLOAT:
+         if (!emit_float_type(m))
             return false;
          break;
 
