@@ -1845,6 +1845,7 @@ emit_metadata(struct dxil_module *m)
 struct dxil_instr {
    enum instr_type {
       INSTR_BINOP,
+      INSTR_CAST,
       INSTR_CALL,
       INSTR_RET
    } type;
@@ -1854,6 +1855,12 @@ struct dxil_instr {
          enum dxil_bin_opcode opcode;
          const struct dxil_value *operands[2];
       } binop;
+
+      struct {
+         enum dxil_cast_opcode opcode;
+         const struct dxil_type *type;
+         const struct dxil_value *value;
+      } cast;
 
       struct {
          const struct dxil_func *func;
@@ -1896,6 +1903,22 @@ dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
    instr->binop.opcode = opcode;
    instr->binop.operands[0] = op0;
    instr->binop.operands[1] = op1;
+   instr->has_value = true;
+   return &instr->value;
+}
+
+const struct dxil_value *
+dxil_emit_cast(struct dxil_module *m, enum dxil_cast_opcode opcode,
+               const struct dxil_type *type,
+               const struct dxil_value *value)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_CAST);
+   if (!instr)
+      return NULL;
+
+   instr->cast.opcode = opcode;
+   instr->cast.type = type;
+   instr->cast.value = value;
    instr->has_value = true;
    return &instr->value;
 }
@@ -1973,6 +1996,20 @@ emit_binop(struct dxil_module *m, struct dxil_instr *instr)
 }
 
 static bool
+emit_cast(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_CAST);
+   assert(instr->value.id > instr->cast.value->id);
+   uint64_t data[] = {
+      FUNC_CODE_INST_CAST,
+      instr->value.id - instr->cast.value->id,
+      instr->cast.type->id,
+      instr->cast.opcode
+   };
+   return emit_func_abbrev_record(m, 7, data, ARRAY_SIZE(data));
+}
+
+static bool
 emit_call(struct dxil_module *m, struct dxil_instr *instr)
 {
    assert(instr->type == INSTR_CALL);
@@ -2024,6 +2061,11 @@ emit_function(struct dxil_module *m)
       switch (instr->type) {
       case INSTR_BINOP:
          if (!emit_binop(m, instr))
+            return false;
+         break;
+
+      case INSTR_CAST:
+         if (!emit_cast(m, instr))
             return false;
          break;
 
