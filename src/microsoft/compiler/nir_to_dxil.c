@@ -715,6 +715,16 @@ emit_binop(struct ntd_context *ctx, nir_alu_instr *alu,
 }
 
 static void
+emit_cast(struct ntd_context *ctx, nir_alu_instr *alu,
+          enum dxil_cast_opcode opcode,
+          const struct dxil_type *type, const struct dxil_value *value)
+{
+   const struct dxil_value *v = dxil_emit_cast(&ctx->mod, opcode, type,
+                                               value);
+   store_alu_dest(ctx, alu, 0, v);
+}
+
+static void
 emit_binary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
                   enum dxil_intr intr,
                   const struct dxil_value *op0, const struct dxil_value *op1)
@@ -814,6 +824,20 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 
    case nir_op_umin:
       emit_binary_intin(ctx, alu, DXIL_INTR_UMIN, src[0], src[1]);
+      break;
+
+   case nir_op_i2f32: {
+         const struct dxil_type *float_type =
+            dxil_module_get_float_type(&ctx->mod);
+         emit_cast(ctx, alu, DXIL_CAST_SITOFP, float_type, src[0]);
+      }
+      break;
+
+   case nir_op_f2i32: {
+         const struct dxil_type *int32_type =
+            dxil_module_get_int_type(&ctx->mod, 32);
+         emit_cast(ctx, alu, DXIL_CAST_FPTOSI, int32_type, src[0]);
+      }
       break;
 
    default:
