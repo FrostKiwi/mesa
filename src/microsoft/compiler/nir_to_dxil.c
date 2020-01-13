@@ -215,7 +215,6 @@ get_glsl_type(struct dxil_module *m, const struct glsl_type *type)
    }
 
    return get_glsl_basetype(m, glsl_get_base_type(type));
-
 }
 
 static enum dxil_component_type
