@@ -82,17 +82,17 @@ int clc_compile_from_source(
                                                      glsl_uint_type(),
                                                      "OutputBuffer");
 
-   nir_intrinsic_instr *local_invocation_id =
+   nir_intrinsic_instr *global_invocation_id =
       nir_intrinsic_instr_create(b.shader,
-                                 nir_intrinsic_load_local_invocation_id);
-   nir_ssa_dest_init(&local_invocation_id->instr,
-                     &local_invocation_id->dest,
+                                 nir_intrinsic_load_global_invocation_id);
+   nir_ssa_dest_init(&global_invocation_id->instr,
+                     &global_invocation_id->dest,
                      3,
                      32,
-                     "local_invocation_id");
-   nir_builder_instr_insert(&b, &local_invocation_id->instr);
+                     "global_invocation_id");
+   nir_builder_instr_insert(&b, &global_invocation_id->instr);
 
-   nir_ssa_def *index = nir_channel(&b, &local_invocation_id->dest.ssa, 0);
+   nir_ssa_def *index = nir_channel(&b, &global_invocation_id->dest.ssa, 0);
    nir_ssa_def *value = nir_vec4(&b, index, index, index, index);
 
    nir_intrinsic_instr *store_ssbo =
