@@ -76,6 +76,9 @@ int clc_compile_from_source(
    nir_builder b;
    nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_KERNEL, &nir_options);
    b.shader->info.name = ralloc_strdup(b.shader, "dummy_kernel");
+   b.shader->info.cs.local_size[0] = 1;
+   b.shader->info.cs.local_size[1] = 1;
+   b.shader->info.cs.local_size[2] = 1;
 
    nir_variable *output_buffer = nir_variable_create(b.shader,
                                                      nir_var_mem_ssbo,
@@ -105,6 +108,8 @@ int clc_compile_from_source(
    store_ssbo->src[1] = nir_src_for_ssa(nir_imm_int(&b, 0));
    store_ssbo->src[2] = nir_src_for_ssa(index);
    nir_builder_instr_insert(&b, &store_ssbo->instr);
+
+   NIR_PASS_V(b.shader, nir_lower_system_values);
 
    optimize_nir(b.shader);
 
