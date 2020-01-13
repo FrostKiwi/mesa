@@ -1093,6 +1093,7 @@ struct dxil_const {
    bool undef;
    union {
       intmax_t int_value;
+      float float_value;
    };
 
    struct list_head head;
@@ -1162,6 +1163,30 @@ dxil_module_get_int32_const(struct dxil_module *m, int32_t value)
       return NULL;
 
    return get_int_const(m, type, value);
+}
+
+const struct dxil_value *
+dxil_module_get_float_const(struct dxil_module *m, float value)
+{
+   const struct dxil_type *type = dxil_module_get_float_type(m);
+   if (!type)
+      return NULL;
+
+   struct dxil_const *c;
+   LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
+      if (c->type != type)
+         continue;
+
+      if (c->float_value == value)
+         return &c->value;
+   }
+
+   c = create_const(m, type, false);
+   if (!c)
+      return NULL;
+
+   c->float_value = value;
+   return &c->value;
 }
 
 const struct dxil_value *
@@ -1456,6 +1481,15 @@ emit_int_value(struct dxil_module *m, int64_t value)
 }
 
 static bool
+emit_float_value(struct dxil_module *m, float value)
+{
+   if (!value)
+      return emit_null_value(m);
+   uint64_t data = fui(value);
+   return emit_record_no_abbrev(&m->buf, CST_CODE_FLOAT, &data, 1);
+}
+
+static bool
 emit_consts(struct dxil_module *m)
 {
    const struct dxil_type *curr_type = NULL;
@@ -1478,6 +1512,10 @@ emit_consts(struct dxil_module *m)
       switch (curr_type->type) {
       case TYPE_INTEGER:
          emit_int_value(m, c->int_value);
+         break;
+
+      case TYPE_FLOAT:
+         emit_float_value(m, c->float_value);
          break;
 
       default:
