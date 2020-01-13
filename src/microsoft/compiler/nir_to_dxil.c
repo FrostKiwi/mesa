@@ -304,7 +304,6 @@ emit_binary_call(struct ntd_context *ctx, enum dxil_intr intr,
    return dxil_emit_call(&ctx->mod, ctx->binary_func, args, ARRAY_SIZE(args));
 }
 
-
 static const struct dxil_value *
 emit_threadid_call(struct ntd_context *ctx, const struct dxil_value *comp)
 {
