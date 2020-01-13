@@ -78,6 +78,7 @@ static const struct nir_shader_compiler_options nir_options_llvm = {
 	.lower_rotate = true,
 	.max_unroll_iterations = 32,
 	.use_interpolated_input_intrinsics = true,
+	.lower_cs_global_id_from_local = true,
 	/* nir_lower_int64() isn't actually called for the LLVM backend, but
 	 * this helps the loop unrolling heuristics. */
 	.lower_int64_options = nir_lower_imul64 |
@@ -120,6 +121,7 @@ static const struct nir_shader_compiler_options nir_options_aco = {
 	.lower_rotate = true,
 	.max_unroll_iterations = 32,
 	.use_interpolated_input_intrinsics = true,
+	.lower_cs_global_id_from_local = true,
 	.lower_int64_options = nir_lower_imul64 |
                                nir_lower_imul_high64 |
                                nir_lower_imul_2x32_64 |
