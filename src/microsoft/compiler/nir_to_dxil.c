@@ -260,6 +260,7 @@ struct ntd_context {
 
    const struct dxil_func *binary_func,
                           *threadid_func,
+                          *groupid_func,
                           *bufferstore_func,
                           *createhandle_func;
 };
@@ -340,6 +341,44 @@ emit_threadid_call(struct ntd_context *ctx, const struct dxil_value *comp)
    };
 
    return dxil_emit_call(&ctx->mod, ctx->threadid_func, args, ARRAY_SIZE(args));
+}
+
+static const struct dxil_value *
+emit_groupid_call(struct ntd_context *ctx, const struct dxil_value *comp)
+{
+   if (!ctx->groupid_func) {
+      const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
+      if (!int32_type)
+         return NULL;
+
+      const struct dxil_type *arg_types[] = {
+         int32_type,
+         int32_type
+      };
+
+      const struct dxil_type *func_type =
+         dxil_module_add_function_type(&ctx->mod, int32_type,
+                                       arg_types, ARRAY_SIZE(arg_types));
+      if (!func_type)
+         return NULL;
+
+      ctx->groupid_func = dxil_add_function_decl(&ctx->mod,
+         "dx.op.groupId.i32", func_type, DXIL_ATTR_KIND_READ_NONE);
+      if (!ctx->groupid_func)
+         return NULL;
+   }
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
+       DXIL_INTR_GROUP_ID);
+   if (!opcode)
+      return NULL;
+
+   const struct dxil_value *args[] = {
+     opcode,
+     comp
+   };
+
+   return dxil_emit_call(&ctx->mod, ctx->groupid_func, args, ARRAY_SIZE(args));
 }
 
 static bool
@@ -764,6 +803,23 @@ emit_load_local_invocation_id(struct ntd_context *ctx,
 }
 
 static void
+emit_load_local_work_group_id(struct ntd_context *ctx,
+                              nir_intrinsic_instr *intr)
+{
+   assert(intr->dest.is_ssa);
+   nir_component_mask_t comps = nir_ssa_def_components_read(&intr->dest.ssa);
+
+   for (int i = 0; i < nir_intrinsic_dest_components(intr); i++) {
+      if (comps & (1 << i)) {
+         const struct dxil_value
+            *idx = dxil_module_get_int32_const(&ctx->mod, i),
+            *groupid = emit_groupid_call(ctx, idx);
+         store_dest(ctx, &intr->dest, i, groupid);
+      }
+   }
+}
+
+static void
 emit_store_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    const struct dxil_type *int32_type =
@@ -801,6 +857,10 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    case nir_intrinsic_load_local_invocation_id:
       emit_load_local_invocation_id(ctx, intr);
       // unreachable("nir_intrinsic_load_local_invocation_id not implemented");
+      break;
+
+   case nir_intrinsic_load_work_group_id:
+      emit_load_local_work_group_id(ctx, intr);
       break;
 
    case nir_intrinsic_store_ssbo:
