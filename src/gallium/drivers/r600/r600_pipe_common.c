@@ -1195,7 +1195,8 @@ const struct nir_shader_compiler_options r600_nir_options = {
 	.lower_extract_word = true,
 	.max_unroll_iterations = 32,
 	.lower_all_io_to_temps = true,
-	.vectorize_io = true
+	.vectorize_io = true,
+	.lower_cs_global_id_from_local = true,
 };
 
 static const void *
