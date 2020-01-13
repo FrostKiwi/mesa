@@ -73,6 +73,7 @@ static const nir_shader_compiler_options options = {
 		.lower_rotate = true,
 		.lower_to_scalar = true,
 		.has_imul24 = true,
+		.lower_cs_global_id_from_local = true,
 };
 
 /* we don't want to lower vertex_id to _zero_based on newer gpus: */
@@ -116,6 +117,7 @@ static const nir_shader_compiler_options options_a6xx = {
 		.vectorize_io = true,
 		.lower_to_scalar = true,
 		.has_imul24 = true,
+		.lower_cs_global_id_from_local = true,
 };
 
 const nir_shader_compiler_options *
