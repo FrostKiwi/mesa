@@ -927,6 +927,10 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       emit_store_ssbo(ctx, intr);
       break;
 
+   case nir_intrinsic_load_num_work_groups:
+   case nir_intrinsic_load_local_group_size:
+      unreachable("TODO: implement!");
+
    default:
       fprintf(stderr, "emit_intrinsic: not implemented (%s)\n",
               nir_intrinsic_infos[intr->intrinsic].name);
