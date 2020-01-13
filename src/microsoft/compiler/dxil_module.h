@@ -56,6 +56,22 @@ enum dxil_bin_opcode {
    DXIL_BINOP_XOR = 12
 };
 
+enum dxil_cast_opcode {
+   DXIL_CAST_TRUNC = 0,
+   DXIL_CAST_ZEXT = 1,
+   DXIL_CAST_SEXT = 2,
+   DXIL_CAST_FPTOUI = 3,
+   DXIL_CAST_FPTOSI = 4,
+   DXIL_CAST_UITOFP = 5,
+   DXIL_CAST_SITOFP = 6,
+   DXIL_CAST_FPTRUNC = 7,
+   DXIL_CAST_FPEXT = 8,
+   DXIL_CAST_PTRTOINT = 9,
+   DXIL_CAST_INTTOPTR = 10,
+   DXIL_CAST_BITCAST = 11,
+   DXIL_CAST_ADDRSPACECAST = 12
+};
+
 struct dxil_type;
 struct dxil_value;
 struct dxil_gvar;
@@ -172,6 +188,11 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
 const struct dxil_value *
 dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
                 const struct dxil_value *op0, const struct dxil_value *op1);
+
+const struct dxil_value *
+dxil_emit_cast(struct dxil_module *m, enum dxil_cast_opcode opcode,
+               const struct dxil_type *type,
+               const struct dxil_value *value);
 
 const struct dxil_value *
 dxil_emit_call(struct dxil_module *m,
