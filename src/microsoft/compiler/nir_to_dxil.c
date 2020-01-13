@@ -786,8 +786,8 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 }
 
 static void
-emit_load_local_invocation_id(struct ntd_context *ctx,
-                              nir_intrinsic_instr *intr)
+emit_load_global_invocation_id(struct ntd_context *ctx,
+                                    nir_intrinsic_instr *intr)
 {
    assert(intr->dest.is_ssa);
    nir_component_mask_t comps = nir_ssa_def_components_read(&intr->dest.ssa);
@@ -854,9 +854,8 @@ static void
 emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    switch (intr->intrinsic) {
-   case nir_intrinsic_load_local_invocation_id:
-      emit_load_local_invocation_id(ctx, intr);
-      // unreachable("nir_intrinsic_load_local_invocation_id not implemented");
+   case nir_intrinsic_load_global_invocation_id:
+      emit_load_global_invocation_id(ctx, intr);
       break;
 
    case nir_intrinsic_load_work_group_id:
