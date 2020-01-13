@@ -48,7 +48,8 @@
    .use_interpolated_input_intrinsics = true,                                 \
    .vertex_id_zero_based = true,                                              \
    .lower_base_vertex = true,                                                 \
-   .use_scoped_memory_barrier = true
+   .use_scoped_memory_barrier = true,                                         \
+   .lower_cs_global_id_from_local = true
 
 #define COMMON_SCALAR_OPTIONS                                                 \
    .lower_to_scalar = true,                                                   \
