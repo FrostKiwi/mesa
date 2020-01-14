@@ -796,6 +796,15 @@ enum isl_aux_state {
 enum isl_aux_op {
    ISL_AUX_OP_NONE,
 
+   /** Draw
+    *
+    * This is a normal draw operation in which the surface is written with
+    * whatever compression enabled.  If compression is enabled via something
+    * like CCS_E or HiZ, this transitions the state into a compressed state.
+    * If the surface has been fast-cleared, it is now only partially clear.
+    */
+   ISL_AUX_OP_DRAW,
+
    /** Fast Clear
     *
     * This operation writes the magic "clear" value to the auxiliary surface.
@@ -1701,6 +1710,40 @@ isl_aux_usage_has_ccs(enum isl_aux_usage usage)
           usage == ISL_AUX_USAGE_HIZ_CCS ||
           usage == ISL_AUX_USAGE_MCS_CCS;
 }
+
+static inline bool
+isl_aux_usage_supports_fast_clear(enum isl_aux_usage usage)
+{
+   return usage != ISL_AUX_USAGE_NONE &&
+          usage != ISL_AUX_USAGE_MC;
+}
+
+static inline bool
+isl_aux_usage_supports_compression(enum isl_aux_usage usage)
+{
+   return usage != ISL_AUX_USAGE_NONE &&
+          usage != ISL_AUX_USAGE_CCS_D;
+}
+
+/**
+ * Compute a state transition from one isl_aux_state to another
+ *
+ * The isl_aux_state enum describes a complex state machine with 7 states and
+ * a set of defined transitions between those states.  This function
+ * implements that state machine.  Given an initial isl_aux_state, an
+ * isl_aux_usage and an isl_aux_op, it returns the resulting isl_aux_state in
+ * the state machine.  See the comment on isl_aux_state for a description of
+ * the state machine.  Any invalid combinations of initial state, usage, and
+ * op will result in hitting an unreachable() inside of ISL.
+ *
+ * @invariant initial_state is a valid state for usage
+ * @invariant op is a valid isl_aux_op for the given initial_state and usage
+ */
+enum isl_aux_state
+isl_aux_state_transition(enum isl_aux_state initial_state,
+                         enum isl_aux_usage usage,
+                         enum isl_aux_op op,
+                         bool full_surface);
 
 const struct isl_drm_modifier_info * ATTRIBUTE_CONST
 isl_drm_modifier_get_info(uint64_t modifier);
