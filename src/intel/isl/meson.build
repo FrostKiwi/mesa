@@ -111,6 +111,7 @@ endif
 libisl_files = files(
   'isl.c',
   'isl.h',
+  'isl_aux.c',
   'isl_drm.c',
   'isl_genX_priv.h',
   'isl_format.c',
