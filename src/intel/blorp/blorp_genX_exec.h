@@ -1121,6 +1121,7 @@ blorp_emit_depth_stencil_state(struct blorp_batch *batch,
          ds.DepthTestEnable = false;
          break;
       case ISL_AUX_OP_PARTIAL_RESOLVE:
+      case ISL_AUX_OP_DRAW:
          unreachable("Invalid HIZ op");
       }
    }
@@ -1739,6 +1740,7 @@ blorp_emit_gen8_hiz_op(struct blorp_batch *batch,
          break;
       case ISL_AUX_OP_PARTIAL_RESOLVE:
       case ISL_AUX_OP_NONE:
+      case ISL_AUX_OP_DRAW:
          unreachable("Invalid HIZ op");
       }
 

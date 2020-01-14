@@ -1590,6 +1590,7 @@ intel_hiz_exec(struct brw_context *brw, struct intel_mipmap_tree *mt,
       break;
    case ISL_AUX_OP_PARTIAL_RESOLVE:
    case ISL_AUX_OP_NONE:
+   case ISL_AUX_OP_DRAW:
       unreachable("Invalid HiZ op");
    }
 
