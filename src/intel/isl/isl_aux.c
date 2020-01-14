@@ -206,3 +206,48 @@ isl_aux_state_transition(enum isl_aux_state initial_state,
 
    unreachable("Invalid isl_aux_op");
 }
+
+enum isl_aux_op
+isl_aux_state_get_resolve_op(enum isl_aux_state initial_state,
+                             enum isl_aux_usage usage,
+                             bool fast_clear_supported)
+{
+   if (usage == ISL_AUX_USAGE_NONE)
+      fast_clear_supported = false;
+
+   switch (initial_state) {
+   case ISL_AUX_STATE_CLEAR:
+   case ISL_AUX_STATE_PARTIAL_CLEAR:
+   case ISL_AUX_STATE_COMPRESSED_CLEAR:
+   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
+      /* First, see if we have to resolve compression */
+      if (isl_aux_state_has_compression(initial_state) &&
+          !isl_aux_usage_supports_compression(usage))
+         return ISL_AUX_OP_FULL_RESOLVE;
+
+      /* If we only have to resolve fast-clear, we may be able to get away
+       * with a partial resolve.
+       */
+      if (isl_aux_state_has_fast_clear(initial_state) &&
+          !fast_clear_supported) {
+         if (isl_aux_usage_has_partial_resolve(usage))
+            return ISL_AUX_OP_PARTIAL_RESOLVE;
+         else
+            return ISL_AUX_OP_FULL_RESOLVE;
+      }
+
+      return ISL_AUX_OP_NONE;
+
+   case ISL_AUX_STATE_RESOLVED:
+   case ISL_AUX_STATE_PASS_THROUGH:
+      return ISL_AUX_OP_NONE;
+
+   case ISL_AUX_STATE_AUX_INVALID:
+      if (usage == ISL_AUX_USAGE_NONE)
+         return ISL_AUX_OP_NONE;
+      else
+         return ISL_AUX_OP_AMBIGUATE;
+   }
+
+   unreachable("Invalid isl_aux_state");
+}

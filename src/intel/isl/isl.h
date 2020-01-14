@@ -1712,6 +1712,15 @@ isl_aux_usage_has_ccs(enum isl_aux_usage usage)
 }
 
 static inline bool
+isl_aux_usage_has_partial_resolve(enum isl_aux_usage usage)
+{
+   return usage == ISL_AUX_USAGE_MCS ||
+          usage == ISL_AUX_USAGE_CCS_E ||
+          usage == ISL_AUX_USAGE_MC ||
+          usage == ISL_AUX_USAGE_MCS_CCS;
+}
+
+static inline bool
 isl_aux_usage_supports_fast_clear(enum isl_aux_usage usage)
 {
    return usage != ISL_AUX_USAGE_NONE &&
@@ -1739,6 +1748,21 @@ isl_aux_state_has_valid_aux(enum isl_aux_state state)
    return state != ISL_AUX_STATE_AUX_INVALID;
 }
 
+static inline bool
+isl_aux_state_has_fast_clear(enum isl_aux_state state)
+{
+   return state == ISL_AUX_STATE_CLEAR ||
+          state == ISL_AUX_STATE_PARTIAL_CLEAR ||
+          state == ISL_AUX_STATE_COMPRESSED_CLEAR;
+}
+
+static inline bool
+isl_aux_state_has_compression(enum isl_aux_state state)
+{
+   return state == ISL_AUX_STATE_COMPRESSED_CLEAR ||
+          state == ISL_AUX_STATE_COMPRESSED_NO_CLEAR;
+}
+
 /**
  * Compute a state transition from one isl_aux_state to another
  *
@@ -1758,6 +1782,20 @@ isl_aux_state_transition(enum isl_aux_state initial_state,
                          enum isl_aux_usage usage,
                          enum isl_aux_op op,
                          bool full_surface);
+
+/** Determine the required resolve op for a given state and usage
+ *
+ * This function computes resolve ops for CPU-side state tracking.  It takes
+ * an isl_aux_state which is the current state of the image slice (single
+ * layer and LOD) along with the aux_usage of the next operation and whether
+ * or not it supports fast clears.  Based on this, it computes an isl_aux_op
+ * which is the required resolve before the surface can be used with the
+ * requested usage and fast_clear_supported.
+ */
+enum isl_aux_op
+isl_aux_state_get_resolve_op(enum isl_aux_state initial_state,
+                             enum isl_aux_usage usage,
+                             bool fast_clear_supported);
 
 const struct isl_drm_modifier_info * ATTRIBUTE_CONST
 isl_drm_modifier_get_info(uint64_t modifier);
