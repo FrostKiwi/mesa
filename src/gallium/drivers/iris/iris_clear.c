@@ -241,9 +241,7 @@ fast_clear_color(struct iris_context *ice,
             enum isl_aux_state aux_state =
                iris_resource_get_aux_state(res, res_lvl, layer);
 
-            if (aux_state != ISL_AUX_STATE_CLEAR &&
-                aux_state != ISL_AUX_STATE_PARTIAL_CLEAR &&
-                aux_state != ISL_AUX_STATE_COMPRESSED_CLEAR) {
+            if (!isl_aux_state_has_fast_clear(aux_state)) {
                /* This slice doesn't have any fast-cleared bits. */
                continue;
             }
