@@ -635,6 +635,7 @@ iris_hiz_exec(struct iris_context *ice,
       break;
    case ISL_AUX_OP_PARTIAL_RESOLVE:
    case ISL_AUX_OP_NONE:
+   case ISL_AUX_OP_DRAW:
       unreachable("Invalid HiZ op");
    }
 
