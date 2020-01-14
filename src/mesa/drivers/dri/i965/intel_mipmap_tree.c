@@ -1805,86 +1805,6 @@ intel_miptree_check_color_resolve(const struct brw_context *brw,
    (void)layer;
 }
 
-static enum isl_aux_op
-get_ccs_d_resolve_op(enum isl_aux_state aux_state,
-                     enum isl_aux_usage aux_usage,
-                     bool fast_clear_supported)
-{
-   assert(aux_usage == ISL_AUX_USAGE_NONE || aux_usage == ISL_AUX_USAGE_CCS_D);
-
-   const bool ccs_supported = aux_usage == ISL_AUX_USAGE_CCS_D;
-
-   assert(ccs_supported == fast_clear_supported);
-
-   switch (aux_state) {
-   case ISL_AUX_STATE_CLEAR:
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      if (!ccs_supported)
-         return ISL_AUX_OP_FULL_RESOLVE;
-      else
-         return ISL_AUX_OP_NONE;
-
-   case ISL_AUX_STATE_PASS_THROUGH:
-      return ISL_AUX_OP_NONE;
-
-   case ISL_AUX_STATE_RESOLVED:
-   case ISL_AUX_STATE_AUX_INVALID:
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      break;
-   }
-
-   unreachable("Invalid aux state for CCS_D");
-}
-
-static enum isl_aux_op
-get_ccs_e_resolve_op(enum isl_aux_state aux_state,
-                     enum isl_aux_usage aux_usage,
-                     bool fast_clear_supported)
-{
-   /* CCS_E surfaces can be accessed as CCS_D if we're careful. */
-   assert(aux_usage == ISL_AUX_USAGE_NONE ||
-          aux_usage == ISL_AUX_USAGE_CCS_D ||
-          aux_usage == ISL_AUX_USAGE_CCS_E);
-
-   if (aux_usage == ISL_AUX_USAGE_CCS_D)
-      assert(fast_clear_supported);
-
-   switch (aux_state) {
-   case ISL_AUX_STATE_CLEAR:
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      if (fast_clear_supported)
-         return ISL_AUX_OP_NONE;
-      else if (aux_usage == ISL_AUX_USAGE_CCS_E)
-         return ISL_AUX_OP_PARTIAL_RESOLVE;
-      else
-         return ISL_AUX_OP_FULL_RESOLVE;
-
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      if (aux_usage != ISL_AUX_USAGE_CCS_E)
-         return ISL_AUX_OP_FULL_RESOLVE;
-      else if (!fast_clear_supported)
-         return ISL_AUX_OP_PARTIAL_RESOLVE;
-      else
-         return ISL_AUX_OP_NONE;
-
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      if (aux_usage != ISL_AUX_USAGE_CCS_E)
-         return ISL_AUX_OP_FULL_RESOLVE;
-      else
-         return ISL_AUX_OP_NONE;
-
-   case ISL_AUX_STATE_PASS_THROUGH:
-      return ISL_AUX_OP_NONE;
-
-   case ISL_AUX_STATE_RESOLVED:
-   case ISL_AUX_STATE_AUX_INVALID:
-      break;
-   }
-
-   unreachable("Invalid aux state for CCS_E");
-}
-
 static void
 intel_miptree_prepare_ccs_access(struct brw_context *brw,
                                  struct intel_mipmap_tree *mt,
@@ -1892,113 +1812,24 @@ intel_miptree_prepare_ccs_access(struct brw_context *brw,
                                  enum isl_aux_usage aux_usage,
                                  bool fast_clear_supported)
 {
-   enum isl_aux_state aux_state = intel_miptree_get_aux_state(mt, level, layer);
+   assert(aux_usage == ISL_AUX_USAGE_NONE ||
+          aux_usage == ISL_AUX_USAGE_CCS_D ||
+          aux_usage == ISL_AUX_USAGE_CCS_E);
 
-   enum isl_aux_op resolve_op;
-   if (mt->aux_usage == ISL_AUX_USAGE_CCS_E) {
-      resolve_op = get_ccs_e_resolve_op(aux_state, aux_usage,
-                                        fast_clear_supported);
-   } else {
-      assert(mt->aux_usage == ISL_AUX_USAGE_CCS_D);
-      resolve_op = get_ccs_d_resolve_op(aux_state, aux_usage,
-                                        fast_clear_supported);
-   }
+   enum isl_aux_state initial_state =
+      intel_miptree_get_aux_state(mt, level, layer);
+   enum isl_aux_op resolve_op =
+      isl_aux_state_get_resolve_op(initial_state, aux_usage,
+                                   fast_clear_supported);
 
    if (resolve_op != ISL_AUX_OP_NONE) {
       intel_miptree_check_color_resolve(brw, mt, level, layer);
       brw_blorp_resolve_color(brw, mt, level, layer, resolve_op);
 
-      switch (resolve_op) {
-      case ISL_AUX_OP_FULL_RESOLVE:
-         /* The CCS full resolve operation destroys the CCS and sets it to the
-          * pass-through state.  (You can also think of this as being both a
-          * resolve and an ambiguate in one operation.)
-          */
-         intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                     ISL_AUX_STATE_PASS_THROUGH);
-         break;
-
-      case ISL_AUX_OP_PARTIAL_RESOLVE:
-         intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                     ISL_AUX_STATE_COMPRESSED_NO_CLEAR);
-         break;
-
-      default:
-         unreachable("Invalid resolve op");
-      }
-   }
-}
-
-static void
-intel_miptree_finish_ccs_write(struct brw_context *brw,
-                               struct intel_mipmap_tree *mt,
-                               uint32_t level, uint32_t layer,
-                               enum isl_aux_usage aux_usage)
-{
-   assert(aux_usage == ISL_AUX_USAGE_NONE ||
-          aux_usage == ISL_AUX_USAGE_CCS_D ||
-          aux_usage == ISL_AUX_USAGE_CCS_E);
-
-   enum isl_aux_state aux_state = intel_miptree_get_aux_state(mt, level, layer);
-
-   if (mt->aux_usage == ISL_AUX_USAGE_CCS_E) {
-      switch (aux_state) {
-      case ISL_AUX_STATE_CLEAR:
-      case ISL_AUX_STATE_PARTIAL_CLEAR:
-         assert(aux_usage == ISL_AUX_USAGE_CCS_E ||
-                aux_usage == ISL_AUX_USAGE_CCS_D);
-
-         if (aux_usage == ISL_AUX_USAGE_CCS_E) {
-            intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                        ISL_AUX_STATE_COMPRESSED_CLEAR);
-         } else if (aux_state != ISL_AUX_STATE_PARTIAL_CLEAR) {
-            intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                        ISL_AUX_STATE_PARTIAL_CLEAR);
-         }
-         break;
-
-      case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-         assert(aux_usage == ISL_AUX_USAGE_CCS_E);
-         break; /* Nothing to do */
-
-      case ISL_AUX_STATE_PASS_THROUGH:
-         if (aux_usage == ISL_AUX_USAGE_CCS_E) {
-            intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                        ISL_AUX_STATE_COMPRESSED_NO_CLEAR);
-         } else {
-            /* Nothing to do */
-         }
-         break;
-
-      case ISL_AUX_STATE_RESOLVED:
-      case ISL_AUX_STATE_AUX_INVALID:
-         unreachable("Invalid aux state for CCS_E");
-      }
-   } else {
-      assert(mt->aux_usage == ISL_AUX_USAGE_CCS_D);
-      /* CCS_D is a bit simpler */
-      switch (aux_state) {
-      case ISL_AUX_STATE_CLEAR:
-         assert(aux_usage == ISL_AUX_USAGE_CCS_D);
-         intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                     ISL_AUX_STATE_PARTIAL_CLEAR);
-         break;
-
-      case ISL_AUX_STATE_PARTIAL_CLEAR:
-         assert(aux_usage == ISL_AUX_USAGE_CCS_D);
-         break; /* Nothing to do */
-
-      case ISL_AUX_STATE_PASS_THROUGH:
-         /* Nothing to do */
-         break;
-
-      case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      case ISL_AUX_STATE_RESOLVED:
-      case ISL_AUX_STATE_AUX_INVALID:
-         unreachable("Invalid aux state for CCS_D");
-      }
+      enum isl_aux_state final_state =
+         isl_aux_state_transition(initial_state, ISL_AUX_USAGE_CCS_E,
+                                  resolve_op, true /* full_surface */);
+      intel_miptree_set_aux_state(brw, mt, level, layer, 1, final_state);
    }
 }
 
@@ -2011,50 +1842,21 @@ intel_miptree_prepare_mcs_access(struct brw_context *brw,
 {
    assert(aux_usage == ISL_AUX_USAGE_MCS);
 
-   switch (intel_miptree_get_aux_state(mt, 0, layer)) {
-   case ISL_AUX_STATE_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      if (!fast_clear_supported) {
-         brw_blorp_mcs_partial_resolve(brw, mt, layer, 1);
-         intel_miptree_set_aux_state(brw, mt, 0, layer, 1,
-                                     ISL_AUX_STATE_COMPRESSED_NO_CLEAR);
-      }
-      break;
+   enum isl_aux_state initial_state =
+      intel_miptree_get_aux_state(mt, 0, layer);
+   enum isl_aux_op resolve_op =
+      isl_aux_state_get_resolve_op(initial_state, aux_usage,
+                                   fast_clear_supported);
 
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      break; /* Nothing to do */
+   if (resolve_op == ISL_AUX_OP_PARTIAL_RESOLVE) {
+      brw_blorp_mcs_partial_resolve(brw, mt, layer, 1);
 
-   case ISL_AUX_STATE_RESOLVED:
-   case ISL_AUX_STATE_PASS_THROUGH:
-   case ISL_AUX_STATE_AUX_INVALID:
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      unreachable("Invalid aux state for MCS");
-   }
-}
-
-static void
-intel_miptree_finish_mcs_write(struct brw_context *brw,
-                               struct intel_mipmap_tree *mt,
-                               uint32_t layer,
-                               enum isl_aux_usage aux_usage)
-{
-   assert(aux_usage == ISL_AUX_USAGE_MCS);
-
-   switch (intel_miptree_get_aux_state(mt, 0, layer)) {
-   case ISL_AUX_STATE_CLEAR:
-      intel_miptree_set_aux_state(brw, mt, 0, layer, 1,
-                                  ISL_AUX_STATE_COMPRESSED_CLEAR);
-      break;
-
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      break; /* Nothing to do */
-
-   case ISL_AUX_STATE_RESOLVED:
-   case ISL_AUX_STATE_PASS_THROUGH:
-   case ISL_AUX_STATE_AUX_INVALID:
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      unreachable("Invalid aux state for MCS");
+      enum isl_aux_state final_state =
+         isl_aux_state_transition(initial_state, ISL_AUX_USAGE_MCS,
+                                  resolve_op, true /* full_surface */);
+      intel_miptree_set_aux_state(brw, mt, 0, layer, 1, final_state);
+   } else {
+      assert(resolve_op == ISL_AUX_OP_NONE);
    }
 }
 
@@ -2067,96 +1869,19 @@ intel_miptree_prepare_hiz_access(struct brw_context *brw,
 {
    assert(aux_usage == ISL_AUX_USAGE_NONE || aux_usage == ISL_AUX_USAGE_HIZ);
 
-   enum isl_aux_op hiz_op = ISL_AUX_OP_NONE;
-   switch (intel_miptree_get_aux_state(mt, level, layer)) {
-   case ISL_AUX_STATE_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      if (aux_usage != ISL_AUX_USAGE_HIZ || !fast_clear_supported)
-         hiz_op = ISL_AUX_OP_FULL_RESOLVE;
-      break;
-
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      if (aux_usage != ISL_AUX_USAGE_HIZ)
-         hiz_op = ISL_AUX_OP_FULL_RESOLVE;
-      break;
-
-   case ISL_AUX_STATE_PASS_THROUGH:
-   case ISL_AUX_STATE_RESOLVED:
-      break;
-
-   case ISL_AUX_STATE_AUX_INVALID:
-      if (aux_usage == ISL_AUX_USAGE_HIZ)
-         hiz_op = ISL_AUX_OP_AMBIGUATE;
-      break;
-
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      unreachable("Invalid HiZ state");
-   }
+   enum isl_aux_state initial_state =
+      intel_miptree_get_aux_state(mt, level, layer);
+   enum isl_aux_op hiz_op =
+      isl_aux_state_get_resolve_op(initial_state, aux_usage,
+                                   fast_clear_supported);
 
    if (hiz_op != ISL_AUX_OP_NONE) {
       intel_hiz_exec(brw, mt, level, layer, 1, hiz_op);
 
-      switch (hiz_op) {
-      case ISL_AUX_OP_FULL_RESOLVE:
-         intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                     ISL_AUX_STATE_RESOLVED);
-         break;
-
-      case ISL_AUX_OP_AMBIGUATE:
-         /* The HiZ resolve operation is actually an ambiguate */
-         intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                     ISL_AUX_STATE_PASS_THROUGH);
-         break;
-
-      default:
-         unreachable("Invalid HiZ op");
-      }
-   }
-}
-
-static void
-intel_miptree_finish_hiz_write(struct brw_context *brw,
-                               struct intel_mipmap_tree *mt,
-                               uint32_t level, uint32_t layer,
-                               enum isl_aux_usage aux_usage)
-{
-   assert(aux_usage == ISL_AUX_USAGE_NONE || aux_usage == ISL_AUX_USAGE_HIZ);
-
-   switch (intel_miptree_get_aux_state(mt, level, layer)) {
-   case ISL_AUX_STATE_CLEAR:
-      assert(aux_usage == ISL_AUX_USAGE_HIZ);
-      intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                  ISL_AUX_STATE_COMPRESSED_CLEAR);
-      break;
-
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      assert(aux_usage == ISL_AUX_USAGE_HIZ);
-      break; /* Nothing to do */
-
-   case ISL_AUX_STATE_RESOLVED:
-      if (aux_usage == ISL_AUX_USAGE_HIZ) {
-         intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                     ISL_AUX_STATE_COMPRESSED_NO_CLEAR);
-      } else {
-         intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                     ISL_AUX_STATE_AUX_INVALID);
-      }
-      break;
-
-   case ISL_AUX_STATE_PASS_THROUGH:
-      if (aux_usage == ISL_AUX_USAGE_HIZ) {
-         intel_miptree_set_aux_state(brw, mt, level, layer, 1,
-                                     ISL_AUX_STATE_COMPRESSED_NO_CLEAR);
-      }
-      break;
-
-   case ISL_AUX_STATE_AUX_INVALID:
-      assert(aux_usage != ISL_AUX_USAGE_HIZ);
-      break;
-
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      unreachable("Invalid HiZ state");
+      enum isl_aux_state final_state =
+         isl_aux_state_transition(initial_state, ISL_AUX_USAGE_HIZ,
+                                  hiz_op, true /* full_surface */);
+      intel_miptree_set_aux_state(brw, mt, level, layer, 1, final_state);
    }
 }
 
@@ -2240,39 +1965,39 @@ intel_miptree_finish_write(struct brw_context *brw,
       } else if (intel_miptree_has_etc_shadow(brw, mt)) {
          mt->shadow_needs_update = true;
       }
-      break;
+      return;
 
    case ISL_AUX_USAGE_MCS:
       assert(mt->aux_buf);
-      for (uint32_t a = 0; a < num_layers; a++) {
-         intel_miptree_finish_mcs_write(brw, mt, start_layer + a,
-                                        aux_usage);
-      }
+      assert(level == 0);
       break;
 
    case ISL_AUX_USAGE_CCS_D:
    case ISL_AUX_USAGE_CCS_E:
       if (!mt->aux_buf)
          return;
-
-      for (uint32_t a = 0; a < num_layers; a++) {
-         intel_miptree_finish_ccs_write(brw, mt, level, start_layer + a,
-                                        aux_usage);
-      }
       break;
 
    case ISL_AUX_USAGE_HIZ:
       if (!intel_miptree_level_has_hiz(mt, level))
          return;
-
-      for (uint32_t a = 0; a < num_layers; a++) {
-         intel_miptree_finish_hiz_write(brw, mt, level, start_layer + a,
-                                        aux_usage);
-      }
       break;
 
    default:
       unreachable("Invavlid aux usage");
+   }
+
+   for (uint32_t a = 0; a < num_layers; a++) {
+      enum isl_aux_state initial_state =
+         intel_miptree_get_aux_state(mt, level, start_layer + a);
+      enum isl_aux_state final_state =
+         isl_aux_state_transition(initial_state, aux_usage, ISL_AUX_OP_DRAW,
+                                  false /* full_surface */);
+
+      if (final_state != initial_state) {
+         intel_miptree_set_aux_state(brw, mt, level, start_layer + a, 1,
+                                     final_state);
+      }
    }
 }
 
