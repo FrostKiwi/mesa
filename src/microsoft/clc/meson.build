@@ -18,12 +18,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
 libclc_compiler = static_library(
   'clc_compiler',
   'clc_compiler.c',
-  include_directories : [inc_common, inc_compiler],
-  dependencies: [idep_nir_headers],
+  'clc_to_spirv.cpp',
+  include_directories : [inc_common, inc_compiler, inc_spirv],
+  dependencies: [idep_nir_headers, dep_clang, dep_llvm,
+    dep_llvmspirvlib, idep_mesautil],
   c_args : c_vis_args,
+  cpp_args : [
+    cpp_vis_args,
+    '-DCLANG_RESOURCE_DIR="@0@"'.format(join_paths(
+      meson.source_root(), 'subprojects\llvm\lib\clang', dep_llvm.version(), 'include'
+    )),
+  ],
 )
 
 idep_libclc_compiler = declare_dependency(
