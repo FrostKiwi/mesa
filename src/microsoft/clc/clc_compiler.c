@@ -22,10 +22,12 @@
  */
 
 #include "clc_compiler.h"
+#include "clc_to_spirv.h"
 #include "../compiler/nir_to_dxil.h"
 
 #include "util/u_debug.h"
 #include "nir/nir_builder.h"
+#include "spirv/nir_spirv.h"
 
 static const nir_shader_compiler_options
 nir_options = {
@@ -73,49 +75,57 @@ int clc_compile_from_source(
    void **blob,
    size_t *blob_size)
 {
-   nir_builder b;
-   nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_KERNEL, &nir_options);
-   b.shader->info.name = ralloc_strdup(b.shader, "dummy_kernel");
-   b.shader->info.cs.local_size[0] = 1;
-   b.shader->info.cs.local_size[1] = 1;
-   b.shader->info.cs.local_size[2] = 1;
+   uint32_t *spv_src;
+   size_t spv_size;
+   const char *err_log;
+   struct nir_shader *nir;
+   int ret;
 
-   nir_variable *output_buffer = nir_variable_create(b.shader,
-                                                     nir_var_mem_ssbo,
-                                                     glsl_uint_type(),
-                                                     "OutputBuffer");
 
-   nir_intrinsic_instr *global_invocation_id =
-      nir_intrinsic_instr_create(b.shader,
-                                 nir_intrinsic_load_global_invocation_id);
-   nir_ssa_dest_init(&global_invocation_id->instr,
-                     &global_invocation_id->dest,
-                     3,
-                     32,
-                     "global_invocation_id");
-   nir_builder_instr_insert(&b, &global_invocation_id->instr);
+   const struct spirv_to_nir_options spirv_options = {
+      .environment = NIR_SPIRV_OPENCL,
+      .constant_as_global = true,
+      .caps = {
+         .address = true,
+	 .float64 = true,
+	 .int8 = true,
+	 .int16 = true,
+	 .int64 = true,
+	 .kernel = true,
+      },
+   };
 
-   nir_ssa_def *index = nir_channel(&b, &global_invocation_id->dest.ssa, 0);
-   nir_ssa_def *value = nir_vec4(&b, index, index, index, index);
+   ret = clc_to_spirv(source, source_name,
+                      defines, num_defines,
+                      headers, num_headers,
+                     /* TODO: callbacks ... */
+                     &spv_src, &spv_size,
+                     &err_log);
 
-   nir_intrinsic_instr *store_ssbo =
-      nir_intrinsic_instr_create(b.shader,
-                                 nir_intrinsic_store_ssbo);
-   store_ssbo->num_components = 4;
-   nir_intrinsic_set_write_mask(store_ssbo, 0xf);
-   nir_intrinsic_set_align(store_ssbo, 4, 0);
+   if (ret < 0) {
+      debug_printf("D3D12: clc_to_spirv failed: %s\n", err_log);
+      return -1;
+   } else {
+      debug_printf("D3D12: clc_to_spirv succeeded: %s\n", err_log);
+   }
 
-   store_ssbo->src[0] = nir_src_for_ssa(value);
-   store_ssbo->src[1] = nir_src_for_ssa(nir_imm_int(&b, 0));
-   store_ssbo->src[2] = nir_src_for_ssa(index);
-   nir_builder_instr_insert(&b, &store_ssbo->instr);
+   nir = spirv_to_nir(spv_src, spv_size / 4,
+                      NULL, 0,
+                      MESA_SHADER_KERNEL, "main_test",
+                      &spirv_options, &nir_options, false);
+   if (!nir) {
+      fprintf(stderr, "D3D12: spirv_to_nir failed\n");
+      return -1;
+   }
 
-   NIR_PASS_V(b.shader, nir_lower_system_values);
+   nir_print_shader(nir, stderr);
 
-   optimize_nir(b.shader);
+   NIR_PASS_V(nir, nir_lower_system_values);
+
+   optimize_nir(nir);
 
    struct blob tmp;
-   if (!nir_to_dxil(b.shader, &tmp)) {
+   if (!nir_to_dxil(nir, &tmp)) {
       debug_printf("D3D12: nir_to_dxil failed\n");
       return -1;
    }
