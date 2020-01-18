@@ -24,6 +24,7 @@
 #include "d3d12_screen.h"
 
 #include "d3d12_context.h"
+#include "d3d12_debug.h"
 #include "d3d12_format.h"
 #include "d3d12_public.h"
 #include "d3d12_resource.h"
@@ -36,6 +37,17 @@
 #include "state_tracker/sw_winsys.h"
 
 #include <dxgi1_4.h>
+
+static const struct debug_named_value
+debug_options[] = {
+   { "verbose",   D3D12_DEBUG_VERBOSE, NULL },
+   DEBUG_NAMED_VALUE_END
+};
+
+DEBUG_GET_ONCE_FLAGS_OPTION(d3d12_debug, "D3D12_DEBUG", debug_options, 0)
+
+uint32_t
+d3d12_debug;
 
 static const char *
 d3d12_get_vendor(struct pipe_screen *pscreen)
@@ -561,6 +573,8 @@ d3d12_create_screen(struct sw_winsys *winsys)
    struct d3d12_screen *screen = CALLOC_STRUCT(d3d12_screen);
    if (!screen)
       return NULL;
+
+   d3d12_debug = debug_get_option_d3d12_debug();
 
    screen->winsys = winsys;
 
