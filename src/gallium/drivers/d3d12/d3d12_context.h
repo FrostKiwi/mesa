@@ -40,6 +40,11 @@ struct d3d12_rasterizer_state {
    D3D12_RASTERIZER_DESC desc;
 };
 
+struct d3d12_blend_state {
+   D3D12_BLEND_DESC desc;
+   bool need_blend_factor;
+};
+
 struct primconvert_context;
 
 struct d3d12_context {
@@ -58,6 +63,8 @@ struct d3d12_context {
    struct pipe_scissor_state scissor_states[PIPE_MAX_VIEWPORTS];
    D3D12_RECT scissors[PIPE_MAX_VIEWPORTS];
    unsigned num_scissors;
+   struct d3d12_blend_state *blend;
+   float blend_factor[4];
    struct d3d12_rasterizer_state *rast;
 
    HANDLE event;
