@@ -105,21 +105,155 @@ d3d12_delete_vertex_elements_state(struct pipe_context *pctx,
    FREE(ve);
 }
 
+static D3D12_BLEND
+blend_factor(enum pipe_blendfactor factor)
+{
+   switch (factor) {
+   case PIPE_BLENDFACTOR_ZERO: return D3D12_BLEND_ZERO;
+   case PIPE_BLENDFACTOR_ONE: return D3D12_BLEND_ONE;
+   case PIPE_BLENDFACTOR_SRC_COLOR: return D3D12_BLEND_SRC_COLOR;
+   case PIPE_BLENDFACTOR_SRC_ALPHA: return D3D12_BLEND_SRC_ALPHA;
+   case PIPE_BLENDFACTOR_DST_ALPHA: return D3D12_BLEND_DEST_ALPHA;
+   case PIPE_BLENDFACTOR_DST_COLOR: return D3D12_BLEND_DEST_COLOR;
+   case PIPE_BLENDFACTOR_SRC_ALPHA_SATURATE: return D3D12_BLEND_SRC_ALPHA_SAT;
+   case PIPE_BLENDFACTOR_CONST_COLOR: return D3D12_BLEND_BLEND_FACTOR;
+   case PIPE_BLENDFACTOR_SRC1_COLOR: return D3D12_BLEND_SRC1_COLOR;
+   case PIPE_BLENDFACTOR_SRC1_ALPHA: return D3D12_BLEND_SRC1_ALPHA;
+   case PIPE_BLENDFACTOR_INV_SRC_COLOR: return D3D12_BLEND_INV_SRC_COLOR;
+   case PIPE_BLENDFACTOR_INV_SRC_ALPHA: return D3D12_BLEND_INV_SRC_ALPHA;
+   case PIPE_BLENDFACTOR_INV_DST_ALPHA: return D3D12_BLEND_INV_DEST_ALPHA;
+   case PIPE_BLENDFACTOR_INV_DST_COLOR: return D3D12_BLEND_INV_DEST_COLOR;
+   case PIPE_BLENDFACTOR_INV_CONST_COLOR: return D3D12_BLEND_INV_BLEND_FACTOR;
+   case PIPE_BLENDFACTOR_INV_SRC1_COLOR: return D3D12_BLEND_INV_SRC1_COLOR;
+   case PIPE_BLENDFACTOR_INV_SRC1_ALPHA: return D3D12_BLEND_INV_SRC1_ALPHA;
+   case PIPE_BLENDFACTOR_CONST_ALPHA: return D3D12_BLEND_BLEND_FACTOR; /* Doesn't exist in D3D12 */
+   case PIPE_BLENDFACTOR_INV_CONST_ALPHA: return D3D12_BLEND_INV_BLEND_FACTOR; /* Doesn't exist in D3D12 */
+   }
+   unreachable("unexpected blend factor");
+}
+
+static bool
+need_blend_factor(enum pipe_blendfactor factor)
+{
+   switch (factor) {
+   case PIPE_BLENDFACTOR_CONST_COLOR:
+   case PIPE_BLENDFACTOR_CONST_ALPHA:
+   case PIPE_BLENDFACTOR_INV_CONST_COLOR:
+   case PIPE_BLENDFACTOR_INV_CONST_ALPHA:
+      return true;
+
+   default:
+      return false;
+   }
+}
+
+static D3D12_BLEND_OP
+blend_op(enum pipe_blend_func func)
+{
+   switch (func) {
+   case PIPE_BLEND_ADD: return D3D12_BLEND_OP_ADD;
+   case PIPE_BLEND_SUBTRACT: return D3D12_BLEND_OP_SUBTRACT;
+   case PIPE_BLEND_REVERSE_SUBTRACT: return D3D12_BLEND_OP_REV_SUBTRACT;
+   case PIPE_BLEND_MIN: return D3D12_BLEND_OP_MIN;
+   case PIPE_BLEND_MAX: return D3D12_BLEND_OP_MAX;
+   }
+   unreachable("unexpected blend function");
+}
+
+static D3D12_LOGIC_OP
+logic_op(enum pipe_logicop func)
+{
+   switch (func) {
+   case PIPE_LOGICOP_CLEAR: return D3D12_LOGIC_OP_CLEAR;
+   case PIPE_LOGICOP_NOR: return D3D12_LOGIC_OP_NOR;
+   case PIPE_LOGICOP_AND_INVERTED: return D3D12_LOGIC_OP_AND_INVERTED;
+   case PIPE_LOGICOP_COPY_INVERTED: return D3D12_LOGIC_OP_COPY_INVERTED;
+   case PIPE_LOGICOP_AND_REVERSE: return D3D12_LOGIC_OP_AND_REVERSE;
+   case PIPE_LOGICOP_INVERT: return D3D12_LOGIC_OP_INVERT;
+   case PIPE_LOGICOP_XOR: return D3D12_LOGIC_OP_XOR;
+   case PIPE_LOGICOP_NAND: return D3D12_LOGIC_OP_NAND;
+   case PIPE_LOGICOP_AND: return D3D12_LOGIC_OP_AND;
+   case PIPE_LOGICOP_EQUIV: return D3D12_LOGIC_OP_EQUIV;
+   case PIPE_LOGICOP_NOOP: return D3D12_LOGIC_OP_NOOP;
+   case PIPE_LOGICOP_OR_INVERTED: return D3D12_LOGIC_OP_OR_INVERTED;
+   case PIPE_LOGICOP_COPY: return D3D12_LOGIC_OP_COPY;
+   case PIPE_LOGICOP_OR_REVERSE: return D3D12_LOGIC_OP_OR_REVERSE;
+   case PIPE_LOGICOP_OR: return D3D12_LOGIC_OP_OR;
+   case PIPE_LOGICOP_SET: return D3D12_LOGIC_OP_SET;
+   }
+   unreachable("unexpected logicop function");
+}
+
+static UINT8
+color_write_mask(unsigned colormask)
+{
+   UINT8 mask = 0;
+
+   if (colormask & PIPE_MASK_R)
+      mask |= D3D12_COLOR_WRITE_ENABLE_RED;
+   if (colormask & PIPE_MASK_G)
+      mask |= D3D12_COLOR_WRITE_ENABLE_GREEN;
+   if (colormask & PIPE_MASK_B)
+      mask |= D3D12_COLOR_WRITE_ENABLE_BLUE;
+   if (colormask & PIPE_MASK_A)
+      mask |= D3D12_COLOR_WRITE_ENABLE_ALPHA;
+
+   return mask;
+}
+
 static void *
 d3d12_create_blend_state(struct pipe_context *pctx,
                          const struct pipe_blend_state *blend_state)
 {
-   return NULL;
+   struct d3d12_blend_state *state = CALLOC_STRUCT(d3d12_blend_state);
+   if (!state)
+      return NULL;
+
+   /* TODO Dithering */
+
+   state->desc.AlphaToCoverageEnable = blend_state->alpha_to_coverage;
+
+   int num_targets = blend_state->independent_blend_enable ? PIPE_MAX_COLOR_BUFS : 1;
+   for (int i = 0; i < num_targets; ++i) {
+      const struct pipe_rt_blend_state *rt = blend_state->rt + i;
+
+      if (rt->blend_enable) {
+         state->desc.RenderTarget[i].BlendEnable = TRUE;
+         state->desc.RenderTarget[i].SrcBlend = blend_factor((pipe_blendfactor) rt->rgb_src_factor);
+         state->desc.RenderTarget[i].DestBlend = blend_factor((pipe_blendfactor) rt->rgb_dst_factor);
+         state->desc.RenderTarget[i].BlendOp = blend_op((pipe_blend_func) rt->rgb_func);
+         state->desc.RenderTarget[i].SrcBlendAlpha = blend_factor((pipe_blendfactor) rt->alpha_src_factor);
+         state->desc.RenderTarget[i].DestBlendAlpha = blend_factor((pipe_blendfactor) rt->alpha_dst_factor);
+         state->desc.RenderTarget[i].BlendOpAlpha = blend_op((pipe_blend_func) rt->alpha_func);
+
+         if (need_blend_factor((pipe_blendfactor) rt->rgb_src_factor) ||
+             need_blend_factor((pipe_blendfactor) rt->rgb_dst_factor) ||
+             need_blend_factor((pipe_blendfactor) rt->alpha_src_factor) ||
+             need_blend_factor((pipe_blendfactor) rt->alpha_dst_factor))
+            state->need_blend_factor = TRUE;
+
+         if (blend_state->logicop_enable) {
+            state->desc.RenderTarget[i].LogicOpEnable = TRUE;
+            state->desc.RenderTarget[i].LogicOp = logic_op((pipe_logicop) blend_state->logicop_func);
+         }
+      }
+
+      state->desc.RenderTarget[i].RenderTargetWriteMask = color_write_mask(rt->colormask);
+   }
+
+   return state;
 }
 
 static void
 d3d12_bind_blend_state(struct pipe_context *pctx, void *blend_state)
 {
+   d3d12_context(pctx)->blend = (struct d3d12_blend_state *) blend_state;
 }
 
 static void
 d3d12_delete_blend_state(struct pipe_context *pctx, void *blend_state)
 {
+   FREE(blend_state);
 }
 
 static void *
@@ -373,6 +507,14 @@ d3d12_set_framebuffer_state(struct pipe_context *pctx,
    util_copy_framebuffer_state(&d3d12_context(pctx)->fb, state);
 }
 
+static void
+d3d12_set_blend_color(struct pipe_context *pctx,
+                     const struct pipe_blend_color *color)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   memcpy(ctx->blend_factor, color->color, sizeof(float) * 4);
+}
+
 void
 d3d12_flush_cmdlist(struct d3d12_context *ctx)
 {
@@ -520,6 +662,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.set_scissor_states = d3d12_set_scissor_states;
    ctx->base.set_constant_buffer = d3d12_set_constant_buffer;
    ctx->base.set_framebuffer_state = d3d12_set_framebuffer_state;
+   ctx->base.set_blend_color = d3d12_set_blend_color;
 
    ctx->base.clear = d3d12_clear;
    ctx->base.draw_vbo = d3d12_draw_vbo;
