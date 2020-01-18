@@ -26,10 +26,18 @@
 
 #include <stdbool.h>
 
-struct nir_shader;
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct blob;
+struct nir_shader;
 
 bool
 nir_to_dxil(struct nir_shader *s, struct blob *blob);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
