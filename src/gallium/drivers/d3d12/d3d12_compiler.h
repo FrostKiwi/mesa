@@ -1,0 +1,55 @@
+/*
+ * Copyright 2020 Collabora Ltd.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * on the rights to use, copy, modify, merge, publish, distribute, sub
+ * license, and/or sell copies of the Software, and to permit persons to whom
+ * the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice (including the next
+ * paragraph) shall be included in all copies or substantial portions of the
+ * Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+ * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+ * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+#ifndef D3D12_COMPILER_H
+#define D3D12_COMPILER_H
+
+#include "pipe/p_defines.h"
+#include "pipe/p_state.h"
+
+#include "compiler/shader_info.h"
+
+struct pipe_screen;
+
+struct nir_shader_compiler_options;
+struct nir_shader;
+
+const void *
+d3d12_get_compiler_options(struct pipe_screen *screen,
+                           enum pipe_shader_ir ir,
+                           enum pipe_shader_type shader);
+
+struct d3d12_shader {
+   void *bytecode;
+   size_t bytecode_length;
+
+   shader_info info;
+};
+
+struct d3d12_shader *
+d3d12_compile_nir(struct nir_shader *nir);
+
+void
+d3d12_shader_free(struct d3d12_shader *shader);
+
+#endif

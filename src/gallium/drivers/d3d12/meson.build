@@ -19,6 +19,7 @@
 # SOFTWARE.
 
 files_libd3d12 = files(
+  'd3d12_compiler.cpp',
   'd3d12_context.cpp',
   'd3d12_draw.cpp',
   'd3d12_format.c',
@@ -32,7 +33,7 @@ libd3d12 = static_library(
   files_libd3d12,
   c_args : c_vis_args,
   include_directories : [inc_include, inc_src, inc_mesa, inc_gallium, inc_gallium_aux],
-  dependencies: idep_nir_headers,
+  dependencies: [idep_nir_headers, idep_libdxil_compiler],
 )
 
 driver_d3d12 = declare_dependency(

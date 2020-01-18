@@ -23,6 +23,7 @@
 
 #include "d3d12_context.h"
 
+#include "d3d12_compiler.h"
 #include "d3d12_format.h"
 #include "d3d12_resource.h"
 #include "d3d12_screen.h"
@@ -469,42 +470,65 @@ d3d12_destroy_sampler_view(struct pipe_context *pctx,
 {
 }
 
+static void
+bind_stage(struct d3d12_context *ctx, enum pipe_shader_type stage,
+           struct d3d12_shader *shader)
+{
+   assert(stage < PIPE_SHADER_COMPUTE);
+   ctx->gfx_stages[stage] = shader;
+   ctx->dirty_program = true;
+}
+
 static void *
 d3d12_create_vs_state(struct pipe_context *pctx,
                       const struct pipe_shader_state *shader)
 {
-   return NULL;
+   struct nir_shader *nir;
+
+   assert(shader->type == PIPE_SHADER_IR_NIR);
+   nir = (struct nir_shader *)shader->ir.nir;
+
+   return d3d12_compile_nir(nir);
 }
 
 static void
 d3d12_bind_vs_state(struct pipe_context *pctx,
                     void *vss)
 {
+   bind_stage(d3d12_context(pctx), PIPE_SHADER_VERTEX, (struct d3d12_shader *) vss);
 }
 
 static void
 d3d12_delete_vs_state(struct pipe_context *pctx,
                       void *vs)
 {
+   d3d12_shader_free((struct d3d12_shader *) vs);
 }
 
 static void *
 d3d12_create_fs_state(struct pipe_context *pctx,
                       const struct pipe_shader_state *shader)
 {
-   return NULL;
+   struct nir_shader *nir;
+
+   assert(shader->type == PIPE_SHADER_IR_NIR);
+   nir = (struct nir_shader *)shader->ir.nir;
+
+   return d3d12_compile_nir(nir);
 }
 
 static void
 d3d12_bind_fs_state(struct pipe_context *pctx,
-                    void *vss)
+                    void *fss)
 {
+   bind_stage(d3d12_context(pctx), PIPE_SHADER_FRAGMENT, (struct d3d12_shader *) fss);
 }
 
 static void
 d3d12_delete_fs_state(struct pipe_context *pctx,
-                      void *vs)
+                      void *fs)
 {
+   d3d12_shader_free((struct d3d12_shader *) fs);
 }
 
 static void
