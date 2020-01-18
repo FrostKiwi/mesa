@@ -72,6 +72,9 @@ struct d3d12_context {
    struct d3d12_depth_stencil_alpha_state *depth_stencil_alpha_state;
    struct d3d12_rasterizer_state *rast;
 
+   struct d3d12_shader *gfx_stages[PIPE_SHADER_TYPES - 1];
+   unsigned dirty_program : 1;
+
    HANDLE event;
    ID3D12Fence *cmdqueue_fence;
    int fence_value;

@@ -23,6 +23,7 @@
 
 #include "d3d12_screen.h"
 
+#include "d3d12_compiler.h"
 #include "d3d12_context.h"
 #include "d3d12_debug.h"
 #include "d3d12_format.h"
@@ -34,6 +35,7 @@
 #include "util/u_memory.h"
 #include "util/u_screen.h"
 
+#include "nir.h"
 #include "state_tracker/sw_winsys.h"
 
 #include <dxgi1_4.h>
@@ -43,6 +45,7 @@ debug_options[] = {
    { "verbose",      D3D12_DEBUG_VERBOSE,      NULL },
    { "opengl21",     D3D12_DEBUG_OPENGL21,     "Fake OpenGL 2.1 support" },
    { "experimental", D3D12_DEBUG_EXPERIMENTAL, "Enable experimental shader models feature" },
+   { "dxil",         D3D12_DEBUG_DXIL,         "Dump DXIL during program compile" },
    DEBUG_NAMED_VALUE_END
 };
 
@@ -354,7 +357,7 @@ d3d12_get_shader_param(struct pipe_screen *pscreen,
       return 0; /* not implemented */
 
    case PIPE_SHADER_CAP_PREFERRED_IR:
-      return PIPE_SHADER_IR_TGSI;
+      return PIPE_SHADER_IR_NIR;
 
    case PIPE_SHADER_CAP_TGSI_SQRT_SUPPORTED:
       return 0; /* not implemented */
@@ -379,7 +382,7 @@ d3d12_get_shader_param(struct pipe_screen *pscreen,
       return 8; /* no clue */
 
    case PIPE_SHADER_CAP_SUPPORTED_IRS:
-      return 1 << PIPE_SHADER_IR_TGSI;
+      return 1 << PIPE_SHADER_IR_NIR;
 
    case PIPE_SHADER_CAP_MAX_SHADER_IMAGES:
       return 2048;
@@ -640,6 +643,7 @@ d3d12_create_screen(struct sw_winsys *winsys)
    screen->base.get_paramf = d3d12_get_paramf;
    screen->base.get_shader_param = d3d12_get_shader_param;
    screen->base.is_format_supported = d3d12_is_format_supported;
+   screen->base.get_compiler_options = d3d12_get_compiler_options;
    screen->base.context_create = d3d12_context_create;
    screen->base.flush_frontbuffer = d3d12_flush_frontbuffer;
    screen->base.fence_reference = d3d12_fence_reference;
