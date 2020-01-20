@@ -430,9 +430,6 @@ d3d12_create_rasterizer_state(struct pipe_context *pctx,
    cso->desc.FillMode = fill_mode(rs_state->fill_front);
    cso->desc.CullMode = cull_mode(rs_state->cull_face);
    cso->desc.FrontCounterClockwise = rs_state->front_ccw;
-   cso->desc.DepthBias = 0; // TODO
-   cso->desc.DepthBiasClamp = 0; // TODO
-   cso->desc.SlopeScaledDepthBias = 0; // TODO
    cso->desc.DepthClipEnable = rs_state->depth_clip_near;
    cso->desc.MultisampleEnable = rs_state->multisample;
    cso->desc.AntialiasedLineEnable = rs_state->line_smooth;
