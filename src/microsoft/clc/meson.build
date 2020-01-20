@@ -40,4 +40,14 @@ clc_compiler_test = executable('clc_compiler_test', 'clc_compiler_test.cpp',
   link_with : [libclc_compiler],
   dependencies : [idep_gtest])
 
-test('clc_compiler test', clc_compiler_test)
+test('clc_nir_to_dxil',
+  executable(
+   'clc_nir_to_dxil_test',
+    ['clc_nir_to_dxil_test.cpp', 'clc_test_dxlayer.cpp'],
+    cpp_args : [cpp_vis_args, cpp_msvc_compat_args],
+    include_directories : [inc_common],
+    dependencies : [idep_libdxil_compiler, dep_thread, idep_gtest, idep_nir, idep_mesautil],
+    link_with : [libclc_compiler]
+  )
+)
+
