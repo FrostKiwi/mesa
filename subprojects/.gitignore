@@ -1,3 +1,5 @@
 *
 !*.wrap
 !.gitignore
+!llvm/
+!llvm/meson.build
