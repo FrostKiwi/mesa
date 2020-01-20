@@ -160,6 +160,22 @@ blend_op(enum pipe_blend_func func)
    unreachable("unexpected blend function");
 }
 
+static D3D12_COMPARISON_FUNC
+compare_op(enum pipe_compare_func op)
+{
+   switch (op) {
+      case PIPE_FUNC_NEVER: return D3D12_COMPARISON_FUNC_NEVER;
+      case PIPE_FUNC_LESS: return D3D12_COMPARISON_FUNC_LESS;
+      case PIPE_FUNC_EQUAL: return D3D12_COMPARISON_FUNC_EQUAL;
+      case PIPE_FUNC_LEQUAL: return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+      case PIPE_FUNC_GREATER: return D3D12_COMPARISON_FUNC_GREATER;
+      case PIPE_FUNC_NOTEQUAL: return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+      case PIPE_FUNC_GEQUAL: return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+      case PIPE_FUNC_ALWAYS: return D3D12_COMPARISON_FUNC_ALWAYS;
+   }
+   unreachable("unexpected compare");
+}
+
 static D3D12_LOGIC_OP
 logic_op(enum pipe_logicop func)
 {
@@ -256,23 +272,84 @@ d3d12_delete_blend_state(struct pipe_context *pctx, void *blend_state)
    FREE(blend_state);
 }
 
+static D3D12_STENCIL_OP
+stencil_op(enum pipe_stencil_op op)
+{
+   switch (op) {
+   case PIPE_STENCIL_OP_KEEP: return D3D12_STENCIL_OP_KEEP;
+   case PIPE_STENCIL_OP_ZERO: return D3D12_STENCIL_OP_ZERO;
+   case PIPE_STENCIL_OP_REPLACE: return D3D12_STENCIL_OP_REPLACE;
+   case PIPE_STENCIL_OP_INCR: return D3D12_STENCIL_OP_INCR;
+   case PIPE_STENCIL_OP_DECR: return D3D12_STENCIL_OP_DECR;
+   case PIPE_STENCIL_OP_INCR_WRAP: return D3D12_STENCIL_OP_INCR_SAT;
+   case PIPE_STENCIL_OP_DECR_WRAP: return D3D12_STENCIL_OP_DECR_SAT;
+   case PIPE_STENCIL_OP_INVERT: return D3D12_STENCIL_OP_INVERT;
+   }
+   unreachable("unexpected op");
+}
+
+static D3D12_DEPTH_STENCILOP_DESC
+stencil_op_state(const struct pipe_stencil_state *src)
+{
+   D3D12_DEPTH_STENCILOP_DESC ret;
+   ret.StencilFailOp = stencil_op((pipe_stencil_op) src->fail_op);
+   ret.StencilPassOp = stencil_op((pipe_stencil_op) src->zpass_op);
+   ret.StencilDepthFailOp = stencil_op((pipe_stencil_op) src->zfail_op);
+   ret.StencilFunc = compare_op((pipe_compare_func) src->func);
+   return ret;
+}
+
 static void *
 d3d12_create_depth_stencil_alpha_state(struct pipe_context *pctx,
-                                       const struct pipe_depth_stencil_alpha_state *blend_state)
+                                       const struct pipe_depth_stencil_alpha_state *depth_stencil_alpha)
 {
-   return NULL;
+   struct d3d12_depth_stencil_alpha_state *dsa = CALLOC_STRUCT(d3d12_depth_stencil_alpha_state);
+   if (!dsa)
+      return NULL;
+
+   if (depth_stencil_alpha->depth.enabled) {
+      dsa->desc.DepthEnable = TRUE;
+      dsa->desc.DepthFunc = compare_op((pipe_compare_func) depth_stencil_alpha->depth.func);
+   }
+
+   /* TODO Add support for GL_depth_bound_tests */
+   #if 0
+   if (depth_stencil_alpha->depth.bounds_test) {
+      dsa->desc.DepthBoundsTestEnable = TRUE;
+      dsa->min_depth_bounds = depth_stencil_alpha->depth.bounds_min;
+      dsa->max_depth_bounds = depth_stencil_alpha->depth.bounds_max;
+   }
+   #endif
+
+   if (depth_stencil_alpha->stencil[0].enabled) {
+      dsa->desc.StencilEnable = TRUE;
+      dsa->desc.FrontFace = stencil_op_state(depth_stencil_alpha->stencil);
+   }
+
+   if (depth_stencil_alpha->stencil[0].enabled) // XXX not index == 1?
+      dsa->desc.BackFace = stencil_op_state(depth_stencil_alpha->stencil + 1);
+   else
+      dsa->desc.BackFace = dsa->desc.FrontFace;
+
+   dsa->desc.StencilReadMask = depth_stencil_alpha->stencil[0].valuemask; /* FIXME Back face mask */
+   dsa->desc.StencilWriteMask = depth_stencil_alpha->stencil[0].writemask; /* FIXME Back face mask */ 
+   dsa->desc.DepthWriteMask = (D3D12_DEPTH_WRITE_MASK) depth_stencil_alpha->depth.writemask;
+
+   return dsa;
 }
 
 static void
 d3d12_bind_depth_stencil_alpha_state(struct pipe_context *pctx,
-                                     void *blend_state)
+                                     void *dsa)
 {
+   d3d12_context(pctx)->depth_stencil_alpha_state = (struct d3d12_depth_stencil_alpha_state *) dsa;
 }
 
 static void
 d3d12_delete_depth_stencil_alpha_state(struct pipe_context *pctx,
                                        void *dsa_state)
 {
+   FREE(dsa_state);
 }
 
 static D3D12_FILL_MODE

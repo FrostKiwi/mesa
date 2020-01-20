@@ -144,19 +144,9 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    pso_desc.PS.pShaderBytecode = pixel_shader;
 
    pso_desc.BlendState = ctx->blend->desc;
+   pso_desc.DepthStencilState = ctx->depth_stencil_alpha_state->desc;
    pso_desc.SampleMask = UINT_MAX;
    pso_desc.RasterizerState = ctx->rast->desc;
-
-   pso_desc.DepthStencilState.DepthEnable = TRUE; // TODO
-   pso_desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL; // TODO
-   pso_desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS; // TODO
-   pso_desc.DepthStencilState.StencilEnable = FALSE; // TODO
-#if 0
-   pso_desc.DepthStencilState.StencilReadMask;
-   pso_desc.DepthStencilState.StencilWriteMask;
-   pso_desc.DepthStencilState.FrontFace;
-   pso_desc.DepthStencilState.BackFace;
-#endif
 
    pso_desc.InputLayout.pInputElementDescs = ctx->ves->elements;
    pso_desc.InputLayout.NumElements = ctx->ves->num_elements;

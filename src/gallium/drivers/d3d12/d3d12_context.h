@@ -45,6 +45,10 @@ struct d3d12_blend_state {
    bool need_blend_factor;
 };
 
+struct d3d12_depth_stencil_alpha_state {
+   D3D12_DEPTH_STENCIL_DESC desc;
+};
+
 struct primconvert_context;
 
 struct d3d12_context {
@@ -65,6 +69,7 @@ struct d3d12_context {
    unsigned num_scissors;
    struct d3d12_blend_state *blend;
    float blend_factor[4];
+   struct d3d12_depth_stencil_alpha_state *depth_stencil_alpha_state;
    struct d3d12_rasterizer_state *rast;
 
    HANDLE event;
