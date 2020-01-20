@@ -247,6 +247,9 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_GLSL_OPTIMIZE_CONSERVATIVELY:
       return 0; /* not sure */
 
+   case PIPE_CAP_ALPHA_TEST:
+      return 0;
+
    default:
       return u_pipe_screen_get_param_defaults(pscreen, param);
    }
