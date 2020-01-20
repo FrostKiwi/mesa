@@ -276,6 +276,26 @@ fill_descriptor_tables(struct d3d12_context *ctx,
    return num_tables;
 }
 
+static bool
+depth_bias(struct d3d12_rasterizer_state *state, enum pipe_prim_type prim_type)
+{
+   enum pipe_prim_type reduced_prim = u_reduced_prim(prim_type);
+
+   switch (reduced_prim) {
+   case PIPE_PRIM_POINTS:
+      return state->base.offset_point;
+
+   case PIPE_PRIM_LINES:
+      return state->base.offset_line;
+
+   case PIPE_PRIM_TRIANGLES:
+      return state->base.offset_tri;
+
+   default:
+      unreachable("unexpected reduced prim");
+   }
+}
+
 static D3D12_PRIMITIVE_TOPOLOGY_TYPE
 topology_type(enum pipe_prim_type prim_type)
 {
@@ -355,6 +375,12 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    pso_desc.DepthStencilState = ctx->depth_stencil_alpha_state->desc;
    pso_desc.SampleMask = UINT_MAX;
    pso_desc.RasterizerState = ctx->rast->desc;
+
+   if (depth_bias(ctx->rast, prim_type)) {
+      pso_desc.RasterizerState.DepthBias = ctx->rast->base.offset_units;
+      pso_desc.RasterizerState.DepthBiasClamp = ctx->rast->base.offset_clamp;
+      pso_desc.RasterizerState.SlopeScaledDepthBias = ctx->rast->base.offset_scale;
+   }
 
    pso_desc.InputLayout.pInputElementDescs = ctx->ves->elements;
    pso_desc.InputLayout.NumElements = ctx->ves->num_elements;
