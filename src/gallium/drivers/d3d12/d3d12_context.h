@@ -61,6 +61,7 @@ struct d3d12_context {
    struct slab_child_pool transfer_pool;
    struct primconvert_context *primconvert;
 
+   struct pipe_constant_buffer cbufs[PIPE_SHADER_TYPES][PIPE_MAX_CONSTANT_BUFFERS];
    struct pipe_framebuffer_state fb;
    struct d3d12_vertex_elements_state *ves;
    struct pipe_vertex_buffer vbs[PIPE_MAX_ATTRIBS];
@@ -88,6 +89,7 @@ struct d3d12_context {
 
    struct d3d12_descriptor_heap *rtv_heap;
    struct d3d12_descriptor_heap *dsv_heap;
+   struct d3d12_descriptor_heap *view_heap;
 
    PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE D3D12SerializeVersionedRootSignature;
    struct d3d12_validation_tools *validation_tools;
