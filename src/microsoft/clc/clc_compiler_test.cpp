@@ -7,7 +7,7 @@
 #include "clc_compiler.h"
 
 const char *kernel_source =
-"__kernel void main_test(__global char *output)\n\
+"__kernel void main_test(__global uint *output)\n\
 {\n\
     output[get_global_id(0)] = get_global_id(0);\n\
 }\n";
