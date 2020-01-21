@@ -30,6 +30,7 @@
 
 #include "nir.h"
 #include "compiler/nir/nir_builder.h"
+#include "tgsi/tgsi_from_mesa.h"
 
 #include "util/u_memory.h"
 
@@ -83,6 +84,12 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
    if (!nir_to_dxil(nir, &tmp)) {
       debug_printf("D3D12: nir_to_dxil failed\n");
       return NULL;
+   }
+
+   enum pipe_shader_type stage = pipe_shader_type_from_mesa(nir->info.stage);
+   nir_foreach_variable(var, &nir->uniforms) {
+      if (var->interface_type)
+         ret->cb_bindings[ret->num_cb_bindings++] = var->data.binding;
    }
 
    ctx->validation_tools->validate_and_sign(&tmp);

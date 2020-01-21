@@ -31,6 +31,7 @@
 
 #include "util/u_framebuffer.h"
 #include "util/u_helpers.h"
+#include "util/u_inlines.h"
 #include "util/u_memory.h"
 #include "util/u_upload_mgr.h"
 #include "microsoft/compiler/nir_to_dxil.h"
@@ -54,6 +55,7 @@ d3d12_context_destroy(struct pipe_context *pctx)
    CloseHandle(ctx->event);
    d3d12_descriptor_heap_free(ctx->rtv_heap);
    d3d12_descriptor_heap_free(ctx->dsv_heap);
+   d3d12_descriptor_heap_free(ctx->view_heap);
    util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
    FREE(ctx);
@@ -596,6 +598,30 @@ d3d12_set_constant_buffer(struct pipe_context *pctx,
                           enum pipe_shader_type shader, uint index,
                           const struct pipe_constant_buffer *buf)
 {
+   struct d3d12_context *ctx = d3d12_context(pctx);
+
+   if (buf) {
+      struct pipe_resource *buffer = buf->buffer;
+      unsigned offset = buf->buffer_offset;
+      if (buf->user_buffer) {
+         u_upload_data(pctx->const_uploader, 0, buf->buffer_size,
+                       D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
+                       buf->user_buffer, &offset, &buffer);
+      }
+
+      pipe_resource_reference(&ctx->cbufs[shader][index].buffer, buffer);
+      ctx->cbufs[shader][index].buffer_offset = offset;
+      ctx->cbufs[shader][index].buffer_size = buf->buffer_size;
+      ctx->cbufs[shader][index].user_buffer = NULL;
+
+      if (buf->user_buffer)
+         pipe_resource_reference(&buffer, NULL);
+   } else {
+      pipe_resource_reference(&ctx->cbufs[shader][index].buffer, NULL);
+      ctx->cbufs[shader][index].buffer_offset = 0;
+      ctx->cbufs[shader][index].buffer_size = 0;
+      ctx->cbufs[shader][index].user_buffer = NULL;
+   }
 }
 
 static void
@@ -833,6 +859,15 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
                                              D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
                                              10);
    if (!ctx->dsv_heap) {
+      FREE(ctx);
+      return NULL;
+   }
+
+   ctx->view_heap = d3d12_descriptor_heap_new(screen->dev,
+                                              D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                                              D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+                                              PIPE_SHADER_TYPES * PIPE_MAX_CONSTANT_BUFFERS);
+   if (!ctx->view_heap) {
       FREE(ctx);
       return NULL;
    }

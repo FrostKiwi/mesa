@@ -247,6 +247,9 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
       return screen->max_feature_level >= D3D_FEATURE_LEVEL_10_0;
 #endif
 
+   case PIPE_CAP_CONSTANT_BUFFER_OFFSET_ALIGNMENT:
+      return 256;
+
    case PIPE_CAP_PCI_GROUP:
    case PIPE_CAP_PCI_BUS:
    case PIPE_CAP_PCI_DEVICE:
