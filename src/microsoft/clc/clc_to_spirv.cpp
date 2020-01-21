@@ -72,7 +72,7 @@ clc_to_spirv(const char *source,
    // FIXME: Is hard-coding 64-bit OK?
    //        The below is parachuted in from create_compiler_instance(), but
    //        neutered to avoid a device dependency.
-   const std::string target_triple = "spir64-unknown-unknown";
+   const std::string target_triple = "spir-unknown-unknown";
    const std::string clc_version_human = "1.2";
    const std::string clc_version_define = "120";
    clang::LangStandard::Kind clc_version_clang = clang::LangStandard::lang_opencl12;
