@@ -31,19 +31,82 @@
 #include "util/u_debug.h"
 #include "util/u_helpers.h"
 #include "util/u_prim.h"
+#include "util/u_math.h"
 
 extern "C" {
 #include "indices/u_primconvert.h"
+}
+
+static D3D12_SHADER_VISIBILITY
+get_shader_visibility(enum pipe_shader_type stage)
+{
+   switch (stage) {
+   case PIPE_SHADER_VERTEX:
+      return D3D12_SHADER_VISIBILITY_VERTEX;
+   case PIPE_SHADER_FRAGMENT:
+      return D3D12_SHADER_VISIBILITY_PIXEL;
+   case PIPE_SHADER_GEOMETRY:
+      return D3D12_SHADER_VISIBILITY_GEOMETRY;
+   case PIPE_SHADER_TESS_CTRL:
+      return D3D12_SHADER_VISIBILITY_HULL;
+   case PIPE_SHADER_TESS_EVAL:
+      return D3D12_SHADER_VISIBILITY_DOMAIN;
+   default:
+      unreachable("unknown shader stage");
+   }
+}
+
+static inline void
+init_root_parameter(D3D12_ROOT_PARAMETER1 *param,
+                    D3D12_DESCRIPTOR_RANGE1 *range,
+                    D3D12_DESCRIPTOR_RANGE_TYPE type,
+                    uint32_t num_descs,
+                    D3D12_SHADER_VISIBILITY visibility)
+{
+   range->RangeType = type;
+   range->NumDescriptors = num_descs;
+   range->BaseShaderRegister = 0; /* We only have one range/table for each desc type */
+   range->RegisterSpace = 0;
+   range->Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
+   range->OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+   param->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+   param->DescriptorTable.NumDescriptorRanges = 1;
+   param->DescriptorTable.pDescriptorRanges = range;
+   param->ShaderVisibility = visibility;
 }
 
 static ID3D12RootSignature *
 get_root_signature(struct d3d12_context *ctx)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
+   D3D12_ROOT_PARAMETER1 root_params[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
+   D3D12_DESCRIPTOR_RANGE1 desc_ranges[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
+   unsigned num_params = 0;
+
+   for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
+      struct d3d12_shader *shader = ctx->gfx_stages[i];
+
+      if (!shader)
+         continue;
+
+      D3D12_SHADER_VISIBILITY visibility = get_shader_visibility((enum pipe_shader_type)i);
+
+      if (shader->num_cb_bindings > 0) {
+         assert(num_params < PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES);
+         init_root_parameter(&root_params[num_params],
+                             &desc_ranges[num_params],
+                             D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+                             shader->num_cb_bindings,
+                             visibility);
+         num_params++;
+      }
+   }
+
    D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_sig_desc;
    root_sig_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-   root_sig_desc.Desc_1_1.NumParameters = 0;
-   root_sig_desc.Desc_1_1.pParameters = NULL;
+   root_sig_desc.Desc_1_1.NumParameters = num_params;
+   root_sig_desc.Desc_1_1.pParameters = (num_params > 0) ? root_params : NULL;
    root_sig_desc.Desc_1_1.NumStaticSamplers = 0;
    root_sig_desc.Desc_1_1.pStaticSamplers = NULL;
    root_sig_desc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
@@ -68,6 +131,59 @@ get_root_signature(struct d3d12_context *ctx)
       return NULL;
    }
    return ret;
+}
+
+static D3D12_GPU_DESCRIPTOR_HANDLE
+fill_cbv_descriptors(struct d3d12_context *ctx,
+                     struct d3d12_shader *shader,
+                     int stage)
+{
+   struct d3d12_descriptor_handle table_start;
+   d2d12_descriptor_heap_get_next_handle(ctx->view_heap, &table_start);
+
+   for (unsigned i = 0; i < shader->num_cb_bindings; i++) {
+      unsigned index = shader->cb_bindings[i];
+      struct pipe_constant_buffer *buffer = &ctx->cbufs[stage][index];
+
+      assert(buffer->buffer_size > 0);
+      assert(buffer->buffer);
+
+      struct d3d12_resource *res = d3d12_resource(buffer->buffer);
+      D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc = {};
+      cbv_desc.BufferLocation = res->res->GetGPUVirtualAddress() + buffer->buffer_offset;
+
+      cbv_desc.SizeInBytes = align(buffer->buffer_size , 256);
+
+      struct d3d12_descriptor_handle handle;
+      d3d12_descriptor_heap_alloc_handle(ctx->view_heap, &handle);
+      d3d12_screen(ctx->base.screen)->dev->CreateConstantBufferView(&cbv_desc, handle.cpu_handle);
+   }
+
+   return table_start.gpu_handle;
+}
+
+static unsigned
+fill_descriptor_tables(struct d3d12_context *ctx,
+                       ID3D12DescriptorHeap **heaps,
+                       D3D12_GPU_DESCRIPTOR_HANDLE *tables)
+{
+   unsigned num_tables = 0;
+
+   d3d12_descriptor_heap_clear(ctx->view_heap);
+
+   for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
+      struct d3d12_shader *shader = ctx->gfx_stages[i];
+
+      if (!shader)
+         continue;
+
+      if (shader->num_cb_bindings > 0) {
+         heaps[num_tables] = d3d12_descriptor_heap_get(ctx->view_heap);
+         tables[num_tables++] = fill_cbv_descriptors(ctx, shader, i);
+      }
+   }
+
+   return num_tables;
 }
 
 static D3D12_PRIMITIVE_TOPOLOGY_TYPE
@@ -217,10 +333,6 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       return;
    }
 
-   ID3D12RootSignature *root_sig = get_root_signature(ctx);
-   ID3D12PipelineState *pipeline_state = get_gfx_pipeline_state(ctx, root_sig,
-                                                                u_reduced_prim(dinfo->mode));
-
    unsigned index_offset = 0;
    struct pipe_resource *index_buffer = NULL;
    if (dinfo->index_size > 0) {
@@ -234,7 +346,18 @@ d3d12_draw_vbo(struct pipe_context *pctx,
          index_buffer = dinfo->index.resource;
    }
 
+   ID3D12RootSignature *root_sig = get_root_signature(ctx);
+   ID3D12PipelineState *pipeline_state = get_gfx_pipeline_state(ctx, root_sig,
+                                                                u_reduced_prim(dinfo->mode));
    ctx->cmdlist->SetGraphicsRootSignature(root_sig);
+
+   ID3D12DescriptorHeap *heaps[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
+   D3D12_GPU_DESCRIPTOR_HANDLE tables[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
+   unsigned num_tables = fill_descriptor_tables(ctx, heaps, tables);
+   ctx->cmdlist->SetDescriptorHeaps(num_tables, heaps);
+   for (unsigned i = 0; i < num_tables; ++i) {
+      ctx->cmdlist->SetGraphicsRootDescriptorTable(i, tables[i]);
+   }
 
    ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);
    if (ctx->num_scissors > 0)

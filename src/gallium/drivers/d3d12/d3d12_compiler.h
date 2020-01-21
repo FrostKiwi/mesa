@@ -33,6 +33,11 @@
 
 struct pipe_screen;
 
+typedef enum {
+   D3D12_BINDING_CONSTANT_BUFFER,
+   D3D12_NUM_BINDING_TYPES
+} D3D12_BINDING_TYPE;
+
 struct d3d12_validation_tools *d3d12_validator_create();
 
 void d3d12_validator_destroy(struct d3d12_validation_tools *validator);
@@ -47,6 +52,9 @@ struct d3d12_shader {
    size_t bytecode_length;
 
    shader_info info;
+
+   unsigned cb_bindings[PIPE_MAX_CONSTANT_BUFFERS];
+   size_t num_cb_bindings;
 };
 
 struct d3d12_shader *
