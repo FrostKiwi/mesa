@@ -49,6 +49,13 @@ DEBUG_GET_ONCE_FLAGS_OPTION(d3d12_debug, "D3D12_DEBUG", debug_options, 0)
 uint32_t
 d3d12_debug;
 
+enum {
+    HW_VENDOR_SOFTWARE              = 0x0000,
+    HW_VENDOR_AMD                   = 0x1002,
+    HW_VENDOR_NVIDIA                = 0x10de,
+    HW_VENDOR_INTEL                 = 0x8086,
+};
+
 static const char *
 d3d12_get_vendor(struct pipe_screen *pscreen)
 {
@@ -58,7 +65,20 @@ d3d12_get_vendor(struct pipe_screen *pscreen)
 static const char *
 d3d12_get_device_vendor(struct pipe_screen *pscreen)
 {
-   return "Unknown";
+   struct d3d12_screen* screen = d3d12_screen(pscreen);
+
+   switch (screen->adapter_desc.VendorId) {
+   case HW_VENDOR_SOFTWARE:
+      return "Microsoft";
+   case HW_VENDOR_AMD:
+      return "AMD";
+   case HW_VENDOR_NVIDIA:
+      return "NVIDIA";
+   case HW_VENDOR_INTEL:
+      return "Intel";
+   default:
+      return "Unknown";
+   }
 }
 
 static const char *
@@ -66,13 +86,22 @@ d3d12_get_name(struct pipe_screen *pscreen)
 {
    struct d3d12_screen* screen = d3d12_screen(pscreen);
 
-   DXGI_ADAPTER_DESC1 desc;
-   if (FAILED(screen->adapter->GetDesc1(&desc)))
+   if (screen->adapter_desc.Description[0] == '\0')
       return "D3D12 (Unknown)";
 
    static char buf[1000];
-   snprintf(buf, sizeof(buf), "D3D12 (%S)", desc.Description);
+   snprintf(buf, sizeof(buf), "D3D12 (%S)", screen->adapter_desc.Description);
    return buf;
+}
+
+static int
+d3d12_get_video_mem(struct pipe_screen *pscreen)
+{
+   struct d3d12_screen* screen = d3d12_screen(pscreen);
+
+   return (screen->adapter_desc.DedicatedVideoMemory +
+           screen->adapter_desc.DedicatedSystemMemory +
+           screen->adapter_desc.SharedSystemMemory) >> 20;
 }
 
 static int
@@ -184,7 +213,7 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
       return 1;
 
    case PIPE_CAP_VIDEO_MEMORY:
-      return 1 << 20; /* totally fake */
+      return d3d12_get_video_mem(pscreen);
 
    case PIPE_CAP_UMA:
       return screen->architecture.UMA;
@@ -288,11 +317,17 @@ d3d12_get_shader_param(struct pipe_screen *pscreen,
       return screen->max_feature_level >= D3D_FEATURE_LEVEL_10_1 ? 32 : 16;
 
    case PIPE_SHADER_CAP_MAX_TEXTURE_SAMPLERS:
-      return PIPE_MAX_SAMPLERS; /* unsure */
+      if (screen->opts.ResourceBindingTier == D3D12_RESOURCE_BINDING_TIER_1)
+         return 16;
+      return PIPE_MAX_SAMPLERS;
 
    case PIPE_SHADER_CAP_MAX_CONST_BUFFER_SIZE:
-   case PIPE_SHADER_CAP_MAX_CONST_BUFFERS:
       return INT_MAX; /* unsure */
+
+   case PIPE_SHADER_CAP_MAX_CONST_BUFFERS:
+      if (screen->opts.ResourceBindingTier < D3D12_RESOURCE_BINDING_TIER_3)
+         return 14;
+      return INT_MAX;
 
    case PIPE_SHADER_CAP_MAX_TEMPS:
       return INT_MAX;
@@ -314,7 +349,9 @@ d3d12_get_shader_param(struct pipe_screen *pscreen,
       return 0; /* not implemented */
 
    case PIPE_SHADER_CAP_MAX_SAMPLER_VIEWS:
-      return PIPE_MAX_SHADER_SAMPLER_VIEWS; /* unsure */
+      if (screen->opts.ResourceBindingTier == D3D12_RESOURCE_BINDING_TIER_1)
+         return 128;
+      return PIPE_MAX_SHADER_SAMPLER_VIEWS;
 
    case PIPE_SHADER_CAP_TGSI_DROUND_SUPPORTED:
    case PIPE_SHADER_CAP_TGSI_DFRACEXP_DLDEXP_SUPPORTED:
@@ -334,7 +371,7 @@ d3d12_get_shader_param(struct pipe_screen *pscreen,
       return 1 << PIPE_SHADER_IR_TGSI;
 
    case PIPE_SHADER_CAP_MAX_SHADER_IMAGES:
-      return 8; /* no clue */
+      return 2048;
 
    case PIPE_SHADER_CAP_LOWER_IF_THRESHOLD:
    case PIPE_SHADER_CAP_TGSI_SKIP_MERGE_REGISTERS:
@@ -605,6 +642,11 @@ d3d12_create_screen(struct sw_winsys *winsys)
       return NULL;
    }
 
+   if (FAILED(screen->adapter->GetDesc1(&screen->adapter_desc))) {
+      debug_printf("D3D12: failed to retrieve adapter description\n");
+      return NULL;
+   }
+
    screen->dev = create_device(screen->adapter);
    if (!screen->dev) {
       debug_printf("D3D12: failed to create device\n");
@@ -630,6 +672,13 @@ d3d12_create_screen(struct sw_winsys *winsys)
       NewFilter.DenyList.pIDList = msg_ids;
 
       info_queue->PushStorageFilter(&NewFilter);
+   }
+
+   if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS,
+                                               &screen->opts,
+                                               sizeof(screen->opts)))) {
+      debug_printf("D3D12: failed to get device options\n");
+      goto failed;
    }
 
    screen->architecture.NodeIndex = 0;
