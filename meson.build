@@ -1439,7 +1439,7 @@ if (meson.version().version_compare('>= 0.51.0') and
   _llvm_method = 'cmake'
 endif
 
-dep_llvm = null_dep
+with_llvm = false
 if _llvm != 'false'
   dep_llvm = dependency(
     'llvm',
