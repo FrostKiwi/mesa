@@ -60,6 +60,11 @@ struct d3d12_rasterizer_state {
    D3D12_RASTERIZER_DESC desc;
 };
 
+struct d3d12_sampler_state {
+   D3D12_STATIC_SAMPLER_DESC desc;
+   struct d3d12_descriptor_handle handle;
+};
+
 struct d3d12_blend_state {
    D3D12_BLEND_DESC desc;
    bool need_blend_factor;
@@ -106,6 +111,8 @@ struct d3d12_context {
    struct d3d12_rasterizer_state *rast;
    struct pipe_sampler_view *sampler_views[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    unsigned num_sampler_views[PIPE_SHADER_TYPES];
+   struct d3d12_sampler_state *samplers[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
+   unsigned num_samplers[PIPE_SHADER_TYPES];
 
    struct d3d12_shader *gfx_stages[D3D12_GFX_SHADER_STAGES];
    unsigned dirty_program : 1;
@@ -118,10 +125,13 @@ struct d3d12_context {
 
    struct d3d12_descriptor_heap *rtv_heap;
    struct d3d12_descriptor_heap *dsv_heap;
+   struct d3d12_descriptor_pool *sampler_pool;
+   struct d3d12_descriptor_heap *sampler_heap;
    struct d3d12_descriptor_pool *view_pool;
    struct d3d12_descriptor_heap *view_heap;
 
    struct d3d12_descriptor_handle null_srvs[RESOURCE_DIMENSION_COUNT];
+   struct d3d12_descriptor_handle null_sampler;
 
    PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE D3D12SerializeVersionedRootSignature;
    struct d3d12_validation_tools *validation_tools;

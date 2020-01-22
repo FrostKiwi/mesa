@@ -67,7 +67,10 @@ init_root_parameter(D3D12_ROOT_PARAMETER1 *param,
    range->NumDescriptors = num_descs;
    range->BaseShaderRegister = 0; /* We only have one range/table for each desc type */
    range->RegisterSpace = 0;
-   range->Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
+   if (type == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+      range->Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
+   else
+      range->Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
    range->OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
    param->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -106,6 +109,15 @@ get_root_signature(struct d3d12_context *ctx)
          init_root_parameter(&root_params[num_params],
                              &desc_ranges[num_params],
                              D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+                             shader->num_srv_bindings,
+                             visibility);
+         num_params++;
+      }
+
+      if (shader->num_srv_bindings > 0) {
+         init_root_parameter(&root_params[num_params],
+                             &desc_ranges[num_params],
+                             D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
                              shader->num_srv_bindings,
                              visibility);
          num_params++;
@@ -198,6 +210,31 @@ fill_srv_descriptors(struct d3d12_context *ctx,
    return table_start.gpu_handle;
 }
 
+static D3D12_GPU_DESCRIPTOR_HANDLE
+fill_sampler_descriptors(struct d3d12_context *ctx,
+                         struct d3d12_shader *shader,
+                         unsigned stage)
+{
+   D3D12_CPU_DESCRIPTOR_HANDLE descs[PIPE_MAX_SHADER_SAMPLER_VIEWS];
+   struct d3d12_descriptor_handle table_start;
+
+   d2d12_descriptor_heap_get_next_handle(ctx->sampler_heap, &table_start);
+
+   for (int i = 0; i < shader->num_srv_bindings; i++)
+   {
+      int index = shader->srv_bindings[i].index;
+      struct d3d12_sampler_state *sampler = ctx->samplers[stage][index];
+
+      if (sampler != NULL)
+         descs[i] = sampler->handle.cpu_handle;
+      else
+         descs[i] = ctx->null_sampler.cpu_handle;
+   }
+
+   d3d12_descriptor_heap_append_handles(ctx->sampler_heap, descs, shader->num_srv_bindings);
+   return table_start.gpu_handle;
+}
+
 static unsigned
 fill_descriptor_tables(struct d3d12_context *ctx,
                        ID3D12DescriptorHeap **heaps,
@@ -206,8 +243,10 @@ fill_descriptor_tables(struct d3d12_context *ctx,
 {
    unsigned num_tables = 0;
    bool has_view = false;
+   bool has_sampler = false;
 
    d3d12_descriptor_heap_clear(ctx->view_heap);
+   d3d12_descriptor_heap_clear(ctx->sampler_heap);
 
    for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
       struct d3d12_shader *shader = ctx->gfx_stages[i];
@@ -222,12 +261,16 @@ fill_descriptor_tables(struct d3d12_context *ctx,
       if (shader->num_srv_bindings > 0) {
          tables[num_tables++] = fill_srv_descriptors(ctx, shader, i);
          has_view = true;
+         tables[num_tables++] = fill_sampler_descriptors(ctx, shader, i);
+         has_sampler = true;
       }
    }
 
    unsigned count = 0;
    if (has_view)
       heaps[count++] = d3d12_descriptor_heap_get(ctx->view_heap);
+   if (has_sampler)
+      heaps[count++] = d3d12_descriptor_heap_get(ctx->sampler_heap);
    *num_heaps = count;
 
    return num_tables;
