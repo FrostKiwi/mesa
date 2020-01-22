@@ -240,10 +240,8 @@ int clc_compile_from_source(
                      &err_log);
 
    if (ret < 0) {
-      debug_printf("D3D12: clc_to_spirv failed: %s\n", err_log);
+      fprintf(stderr, "D3D12: clc_to_spirv failed: %s\n", err_log);
       return -1;
-   } else {
-      debug_printf("D3D12: clc_to_spirv succeeded: %s\n", err_log);
    }
 
    nir = spirv_to_nir(spv_src, spv_size / 4,
