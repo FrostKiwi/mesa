@@ -135,7 +135,7 @@ root_resource::root_resource(clover::device &dev, memory_obj &obj,
 
    info.array_size = 1;
    info.target = translate_target(obj.type());
-   info.bind = (PIPE_BIND_SAMPLER_VIEW |
+   info.bind = static_cast<pipe_bind_flags>(PIPE_BIND_SAMPLER_VIEW |
                 PIPE_BIND_COMPUTE_RESOURCE |
                 PIPE_BIND_GLOBAL);
 
