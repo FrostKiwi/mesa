@@ -24,13 +24,12 @@ libclc_compiler = static_library(
   'clc_compiler.c',
   'clc_to_spirv.cpp',
   include_directories : [inc_common, inc_compiler, inc_spirv],
-  dependencies: [idep_nir_headers, dep_clang, dep_llvm,
-    dep_llvmspirvlib, idep_mesautil],
+  dependencies: [idep_nir_headers, dep_clang, dep_llvm, idep_mesautil],
   c_args : c_vis_args,
   cpp_args : [
     cpp_vis_args,
     '-DCLANG_RESOURCE_DIR="@0@"'.format(join_paths(
-      meson.source_root(), 'subprojects\llvm\lib\clang', dep_llvm.version(), 'include'
+      meson.source_root(), 'subprojects\llvm\lib\clang', dep_clang.version(), 'include'
     )),
   ],
 )
