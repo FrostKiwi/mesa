@@ -55,6 +55,8 @@ d3d12_context_destroy(struct pipe_context *pctx)
    CloseHandle(ctx->event);
    d3d12_descriptor_heap_free(ctx->rtv_heap);
    d3d12_descriptor_heap_free(ctx->dsv_heap);
+   d3d12_descriptor_heap_free(ctx->sampler_heap);
+   d3d12_descriptor_pool_free(ctx->sampler_pool);
    d3d12_descriptor_heap_free(ctx->view_heap);
    d3d12_descriptor_pool_free(ctx->view_pool);
    util_primconvert_destroy(ctx->primconvert);
@@ -425,11 +427,103 @@ d3d12_delete_rasterizer_state(struct pipe_context *pctx, void *rs_state)
    FREE(rs_state);
 }
 
+static D3D12_TEXTURE_ADDRESS_MODE
+sampler_address_mode(enum pipe_tex_wrap filter)
+{
+   switch (filter) {
+   case PIPE_TEX_WRAP_REPEAT: return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+   case PIPE_TEX_WRAP_CLAMP: return D3D12_TEXTURE_ADDRESS_MODE_CLAMP; /* not technically correct, but kinda works */
+   case PIPE_TEX_WRAP_CLAMP_TO_EDGE: return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+   case PIPE_TEX_WRAP_CLAMP_TO_BORDER: return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+   case PIPE_TEX_WRAP_MIRROR_REPEAT: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+   case PIPE_TEX_WRAP_MIRROR_CLAMP: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE; /* not technically correct, but kinda works */
+   case PIPE_TEX_WRAP_MIRROR_CLAMP_TO_EDGE: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
+   case PIPE_TEX_WRAP_MIRROR_CLAMP_TO_BORDER: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE; /* FIXME: Doesn't exist in D3D12 */
+   }
+   unreachable("unexpected wrap");
+}
+
+static D3D12_FILTER
+get_filter(const struct pipe_sampler_state *state)
+{
+   static const D3D12_FILTER lut[16] = {
+      D3D12_FILTER_MIN_MAG_MIP_POINT,
+      D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+      D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT,
+      D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR,
+      D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT,
+      D3D12_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR,
+      D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+      D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+      D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
+      D3D12_FILTER_COMPARISON_MIN_MAG_POINT_MIP_LINEAR,
+      D3D12_FILTER_COMPARISON_MIN_POINT_MAG_LINEAR_MIP_POINT,
+      D3D12_FILTER_COMPARISON_MIN_POINT_MAG_MIP_LINEAR,
+      D3D12_FILTER_COMPARISON_MIN_LINEAR_MAG_MIP_POINT,
+      D3D12_FILTER_COMPARISON_MIN_LINEAR_MAG_POINT_MIP_LINEAR,
+      D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
+      D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
+   };
+
+   static const D3D12_FILTER anisotropic_lut[2] = {
+      D3D12_FILTER_ANISOTROPIC,
+      D3D12_FILTER_COMPARISON_ANISOTROPIC,
+   };
+
+   if (state->max_anisotropy > 1) {
+      return anisotropic_lut[state->compare_mode];
+   } else {
+      int idx = (state->mag_img_filter << 1) |
+                (state->min_img_filter << 2) |
+                (state->compare_mode << 3);
+      if (state->min_mip_filter != PIPE_TEX_MIPFILTER_NONE)
+         idx |= state->min_mip_filter;
+      return lut[idx];
+   }
+}
+
 static void *
 d3d12_create_sampler_state(struct pipe_context *pctx,
                            const struct pipe_sampler_state *state)
 {
-   return NULL;
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_screen *screen = d3d12_screen(pctx->screen);
+   struct d3d12_sampler_state *ss = CALLOC_STRUCT(d3d12_sampler_state);
+   D3D12_SAMPLER_DESC desc = {0};
+   if (!state)
+      return NULL;
+
+   if (state->min_mip_filter < PIPE_TEX_MIPFILTER_NONE) {
+      desc.MinLOD = state->min_lod;
+      desc.MaxLOD = state->max_lod;
+   } else if (state->min_mip_filter == PIPE_TEX_MIPFILTER_NONE) {
+      desc.MinLOD = 0;
+      desc.MaxLOD = 0;
+   } else {
+      unreachable("unexpected mip filter");
+   }
+
+   if (state->compare_mode == PIPE_TEX_COMPARE_R_TO_TEXTURE)
+      desc.ComparisonFunc = compare_op((pipe_compare_func) state->compare_func);
+   else if (state->compare_mode == PIPE_TEX_COMPARE_NONE)
+      desc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+   else
+      unreachable("unexpected comparison mode");
+
+   desc.MaxAnisotropy = state->max_anisotropy;
+   desc.Filter = get_filter(state);
+
+   desc.AddressU = sampler_address_mode((pipe_tex_wrap) state->wrap_s);
+   desc.AddressV = sampler_address_mode((pipe_tex_wrap) state->wrap_t);
+   desc.AddressW = sampler_address_mode((pipe_tex_wrap) state->wrap_r);
+   desc.MipLODBias = state->lod_bias;
+   memcpy(desc.BorderColor, state->border_color.f, sizeof(float) * 4);
+
+   // TODO Normalized Coordinates?
+   d3d12_descriptor_pool_alloc_handle(ctx->sampler_pool, &ss->handle);
+   screen->dev->CreateSampler(&desc, ss->handle.cpu_handle);
+
+   return ss;
 }
 
 static void
@@ -439,12 +533,22 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
                           unsigned num_samplers,
                           void **samplers)
 {
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   for (unsigned i = 0; i < num_samplers; ++i) {
+      d3d12_sampler_state *sampler = (struct d3d12_sampler_state*) samplers[i];
+      ctx->samplers[shader][start_slot + i] = sampler;
+   }
+   ctx->num_samplers[shader] = start_slot + num_samplers;
 }
 
 static void
 d3d12_delete_sampler_state(struct pipe_context *pctx,
                            void *ss)
 {
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_sampler_state *state = (struct d3d12_sampler_state*) ss;
+   d3d12_descriptor_handle_free(&state->handle);
+   FREE(ss);
 }
 
 static D3D12_SRV_DIMENSION
@@ -915,6 +1019,27 @@ d3d12_init_null_srvs(struct d3d12_context *ctx)
    }
 }
 
+static void
+d3d12_init_null_sampler(struct d3d12_context *ctx)
+{
+   struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
+
+   d3d12_descriptor_pool_alloc_handle(ctx->sampler_pool, &ctx->null_sampler);
+
+   D3D12_SAMPLER_DESC desc;
+   desc.Filter = D3D12_FILTER_ANISOTROPIC;
+   desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+   desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+   desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+   desc.MipLODBias = 0.0f;
+   desc.MaxAnisotropy = 0;
+   desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+   desc.MinLOD = 0.0f;
+   desc.MaxLOD = 0.0f;
+   memset(desc.BorderColor, 0, sizeof(desc.BorderColor));
+   screen->dev->CreateSampler(&desc, ctx->null_sampler.cpu_handle);
+}
+
 struct pipe_context *
 d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
 {
@@ -1044,6 +1169,23 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
       return NULL;
    }
 
+   ctx->sampler_heap = d3d12_descriptor_heap_new(screen->dev,
+                                                 D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+                                                 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+                                                 PIPE_SHADER_TYPES * PIPE_MAX_SAMPLERS);
+   if (!ctx->sampler_heap) {
+      FREE(ctx);
+      return NULL;
+   }
+
+   ctx->sampler_pool = d3d12_descriptor_pool_new(&ctx->base,
+                                                 D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+                                                 64);
+   if (!ctx->sampler_pool) {
+      FREE(ctx);
+      return NULL;
+   }
+
    ctx->view_heap = d3d12_descriptor_heap_new(screen->dev,
                                               D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
                                               D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
@@ -1064,6 +1206,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    }
 
    d3d12_init_null_srvs(ctx);
+   d3d12_init_null_sampler(ctx);
 
    ctx->validation_tools = d3d12_validator_create();
 
