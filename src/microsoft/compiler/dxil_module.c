@@ -1645,6 +1645,8 @@ create_mdnode(struct dxil_module *m, enum mdnode_type type)
 const struct dxil_mdnode *
 dxil_get_metadata_string(struct dxil_module *m, const char *str)
 {
+   assert(str);
+
    struct dxil_mdnode *n;
    LIST_FOR_EACH_ENTRY(n, &m->mdnode_list, head) {
       if (n->type == MD_STRING &&
