@@ -200,9 +200,11 @@ define void @main() {
   %1 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 0, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
   %2 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 1, i32 undef) ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
   %3 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 2, i32 undef) ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
+  %4 = fadd float %3, 1.000000e+00
+  %5 = fmul float %4, 5.000000e-01
   call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %1) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %2) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %3) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %5) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float 1.000000e+00) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   ret void
 }
