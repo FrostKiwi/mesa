@@ -437,7 +437,7 @@ d3d12_create_rasterizer_state(struct pipe_context *pctx,
    cso->desc.MultisampleEnable = rs_state->multisample;
    cso->desc.AntialiasedLineEnable = rs_state->line_smooth;
    cso->desc.ForcedSampleCount = 0; // TODO
-   cso->desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF; // TODO
+   cso->desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF; /* Not Implemented */
 
    return cso;
 }
