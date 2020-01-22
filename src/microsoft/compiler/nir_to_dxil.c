@@ -148,7 +148,7 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
    const struct dxil_mdnode *metadata_tags = dxil_get_metadata_node(m, metadata_tag_nodes, ARRAY_SIZE(metadata_tag_nodes));
 
    const struct dxil_mdnode *global_constant_symbol = dxil_get_metadata_value(m, pointer_type, pointer_undef);
-   const struct dxil_mdnode *name_node = dxil_get_metadata_string(m, name);
+   const struct dxil_mdnode *name_node = dxil_get_metadata_string(m, name ? name : "");
    const struct dxil_mdnode *resource_id = dxil_get_metadata_int32(m, 0);
    const struct dxil_mdnode *bind_id = dxil_get_metadata_int32(m, 0);
    const struct dxil_mdnode *bind_lower_bound = dxil_get_metadata_int32(m, 0);
