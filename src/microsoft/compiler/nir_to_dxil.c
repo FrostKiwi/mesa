@@ -2333,6 +2333,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    ctx.mod.minor_version = 1;
 
    NIR_PASS_V(s, nir_lower_uniforms_to_ubo, 16);
+   NIR_PASS_V(s, nir_lower_clip_halfz);
 
    optimize_nir(s);
 
