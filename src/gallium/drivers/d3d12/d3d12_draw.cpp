@@ -481,7 +481,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    }
 
    ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);
-   if (ctx->num_scissors > 0)
+   if (ctx->rast->base.scissor && ctx->num_scissors > 0)
       ctx->cmdlist->RSSetScissorRects(ctx->num_scissors, ctx->scissors);
    else {
       D3D12_RECT fb_scissor;
