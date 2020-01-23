@@ -1808,26 +1808,29 @@ emit_metadata_node(struct dxil_module *m,
 }
 
 static bool
+emit_mdnode(struct dxil_module *m, struct dxil_mdnode *n)
+{
+   switch (n->type) {
+   case MD_STRING:
+      return emit_metadata_string(m, n->string);
+
+   case MD_VALUE:
+      return emit_metadata_value(m, n->value.type, n->value.value);
+
+   case MD_NODE:
+      return emit_metadata_node(m, n->node.subnodes, n->node.num_subnodes);
+
+   default:
+      unreachable("unexpected n->type");
+   }
+}
+
+static bool
 emit_metadata_nodes(struct dxil_module *m)
 {
-   struct dxil_mdnode *n;
-   LIST_FOR_EACH_ENTRY(n, &m->mdnode_list, head) {
-      switch (n->type) {
-      case MD_STRING:
-         if (!emit_metadata_string(m, n->string))
-            return false;
-         break;
-
-      case MD_VALUE:
-         if (!emit_metadata_value(m, n->value.type, n->value.value))
-            return false;
-         break;
-
-      case MD_NODE:
-         if (!emit_metadata_node(m, n->node.subnodes, n->node.num_subnodes))
-            return false;
-         break;
-      }
+   list_for_each_entry(struct dxil_mdnode, n,  &m->mdnode_list, head) {
+      if (!emit_mdnode(m, n))
+         return false;
    }
    return true;
 }
