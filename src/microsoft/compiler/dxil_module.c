@@ -570,26 +570,45 @@ enum type_codes {
 
 #define TYPE_INDEX FIXED(32)
 
+enum type_table_abbrev_id {
+   TYPE_TABLE_ABBREV_POINTER,
+   TYPE_TABLE_ABBREV_FUNCTION,
+   TYPE_TABLE_ABBREV_STRUCT_ANON,
+   TYPE_TABLE_ABBREV_STRUCT_NAME,
+   TYPE_TABLE_ABBREV_STRUCT_NAMED,
+   TYPE_TABLE_ABBREV_ARRAY,
+};
+
 static const struct dxil_abbrev
 type_table_abbrevs[] = {
-   { { LITERAL(TYPE_CODE_POINTER), TYPE_INDEX, LITERAL(0) }, 3 },
-   { { LITERAL(TYPE_CODE_FUNCTION), FIXED(1), ARRAY, TYPE_INDEX }, 4 },
-   { { LITERAL(TYPE_CODE_STRUCT_ANON), FIXED(1), ARRAY, TYPE_INDEX }, 4 },
-   { { LITERAL(TYPE_CODE_STRUCT_NAME), ARRAY, CHAR6 }, 3 },
-   { { LITERAL(TYPE_CODE_STRUCT_NAMED), FIXED(1), ARRAY, TYPE_INDEX }, 4 },
-   { { LITERAL(TYPE_CODE_ARRAY), VBR(8), TYPE_INDEX }, 3 }
+   [TYPE_TABLE_ABBREV_POINTER] = {
+      { LITERAL(TYPE_CODE_POINTER), TYPE_INDEX, LITERAL(0) }, 3
+   },
+   [TYPE_TABLE_ABBREV_FUNCTION] = {
+      { LITERAL(TYPE_CODE_FUNCTION), FIXED(1), ARRAY, TYPE_INDEX }, 4
+   },
+   [TYPE_TABLE_ABBREV_STRUCT_ANON] = {
+      { LITERAL(TYPE_CODE_STRUCT_ANON), FIXED(1), ARRAY, TYPE_INDEX }, 4
+   },
+   [TYPE_TABLE_ABBREV_STRUCT_NAME] = {
+      { LITERAL(TYPE_CODE_STRUCT_NAME), ARRAY, CHAR6 }, 3
+   },
+   [TYPE_TABLE_ABBREV_STRUCT_NAMED] = {
+      { LITERAL(TYPE_CODE_STRUCT_NAMED), FIXED(1), ARRAY, TYPE_INDEX }, 4
+   },
+   [TYPE_TABLE_ABBREV_ARRAY] = {
+      { LITERAL(TYPE_CODE_ARRAY), VBR(8), TYPE_INDEX }, 3
+   }
 };
 
 static bool
-emit_type_table_abbrev_record(struct dxil_module *m, unsigned abbrev,
+emit_type_table_abbrev_record(struct dxil_module *m,
+                              enum type_table_abbrev_id abbrev,
                               const uint64_t *data, size_t size)
 {
-   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
-   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
-   assert(index < ARRAY_SIZE(type_table_abbrevs));
-
-   return emit_record_abbrev(&m->buf, abbrev, type_table_abbrevs + index,
-                             data, size);
+   assert(abbrev < ARRAY_SIZE(type_table_abbrevs));
+   return emit_record_abbrev(&m->buf, abbrev + DXIL_FIRST_APPLICATION_ABBREV,
+                             type_table_abbrevs + abbrev, data, size);
 }
 
 enum constant_code {
@@ -618,24 +637,31 @@ enum constant_code {
   CST_CODE_INLINEASM = 23
 };
 
+enum const_abbrev_id {
+   CONST_ABBREV_SETTYPE,
+   CONST_ABBREV_INTEGER,
+   CONST_ABBREV_CE_CAST,
+   CONST_ABBREV_NULL,
+};
+
 static const struct dxil_abbrev
 const_abbrevs[] = {
-   { { LITERAL(CST_CODE_SETTYPE), TYPE_INDEX }, 2 },
-   { { LITERAL(CST_CODE_INTEGER), VBR(8) }, 2 },
-   { { LITERAL(CST_CODE_CE_CAST), FIXED(4), TYPE_INDEX, VBR(8) }, 4 },
-   { { LITERAL(CST_CODE_NULL) }, 1 },
+   [CONST_ABBREV_SETTYPE] = { { LITERAL(CST_CODE_SETTYPE), TYPE_INDEX }, 2 },
+   [CONST_ABBREV_INTEGER] = { { LITERAL(CST_CODE_INTEGER), VBR(8) }, 2 },
+   [CONST_ABBREV_CE_CAST] = {
+      { LITERAL(CST_CODE_CE_CAST), FIXED(4), TYPE_INDEX, VBR(8) }, 4
+   },
+   [CONST_ABBREV_NULL] = { { LITERAL(CST_CODE_NULL) }, 1 },
 };
 
 static bool
-emit_const_abbrev_record(struct dxil_module *m, unsigned abbrev,
+emit_const_abbrev_record(struct dxil_module *m, enum const_abbrev_id abbrev,
                          const uint64_t *data, size_t size)
 {
-   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
-   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
-   assert(index < ARRAY_SIZE(const_abbrevs));
+   assert(abbrev < ARRAY_SIZE(const_abbrevs));
 
-   return emit_record_abbrev(&m->buf, abbrev, const_abbrevs + index,
-                             data, size);
+   return emit_record_abbrev(&m->buf, abbrev + DXIL_FIRST_APPLICATION_ABBREV,
+                             const_abbrevs + abbrev, data, size);
 }
 
 enum function_code {
@@ -686,31 +712,51 @@ enum function_code {
   FUNC_CODE_INST_LANDINGPAD = 47,
 };
 
+enum func_abbrev_id {
+   FUNC_ABBREV_LOAD,
+   FUNC_ABBREV_BINOP,
+   FUNC_ABBREV_BINOP_FLAGS,
+   FUNC_ABBREV_CAST,
+   FUNC_ABBREV_RET_VOID,
+   FUNC_ABBREV_RET_VAL,
+   FUNC_ABBREV_UNREACHABLE,
+   FUNC_ABBREV_GEP,
+};
+
 static const struct dxil_abbrev
 func_abbrevs[] = {
-   { { LITERAL(FUNC_CODE_INST_LOAD), VBR(6), TYPE_INDEX, VBR(4),
-       FIXED(1) }, 5 },
-   { { LITERAL(FUNC_CODE_INST_BINOP), VBR(6), VBR(6), FIXED(4) }, 4 },
-   { { LITERAL(FUNC_CODE_INST_BINOP), VBR(6), VBR(6), FIXED(4),
-       FIXED(7) }, 5 },
-   { { LITERAL(FUNC_CODE_INST_CAST), VBR(6), TYPE_INDEX, FIXED(4) }, 4 },
-   { { LITERAL(FUNC_CODE_INST_RET) }, 1 },
-   { { LITERAL(FUNC_CODE_INST_RET), VBR(6) }, 2 },
-   { { LITERAL(FUNC_CODE_INST_UNREACHABLE) }, 1 },
-   { { LITERAL(FUNC_CODE_INST_GEP), FIXED(1), TYPE_INDEX, ARRAY,
-       VBR(6) }, 5 },
+   [FUNC_ABBREV_LOAD] = {
+      { LITERAL(FUNC_CODE_INST_LOAD), VBR(6), TYPE_INDEX, VBR(4),
+        FIXED(1) }, 5
+   },
+   [FUNC_ABBREV_BINOP] = {
+      { LITERAL(FUNC_CODE_INST_BINOP), VBR(6), VBR(6), FIXED(4) }, 4
+   },
+   [FUNC_ABBREV_BINOP_FLAGS] = {
+      { LITERAL(FUNC_CODE_INST_BINOP), VBR(6), VBR(6), FIXED(4),
+        FIXED(7) }, 5
+   },
+   [FUNC_ABBREV_CAST] = {
+      { LITERAL(FUNC_CODE_INST_CAST), VBR(6), TYPE_INDEX, FIXED(4) }, 4
+   },
+   [FUNC_ABBREV_RET_VOID] = { { LITERAL(FUNC_CODE_INST_RET) }, 1 },
+   [FUNC_ABBREV_RET_VAL] = { { LITERAL(FUNC_CODE_INST_RET), VBR(6) }, 2 },
+   [FUNC_ABBREV_UNREACHABLE] = {
+      { LITERAL(FUNC_CODE_INST_UNREACHABLE) }, 1
+   },
+   [FUNC_ABBREV_GEP] = {
+      { LITERAL(FUNC_CODE_INST_GEP), FIXED(1), TYPE_INDEX, ARRAY,
+        VBR(6) }, 5
+   },
 };
 
 static bool
-emit_func_abbrev_record(struct dxil_module *m, unsigned abbrev,
+emit_func_abbrev_record(struct dxil_module *m, enum func_abbrev_id abbrev,
                         const uint64_t *data, size_t size)
 {
-   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
-   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
-   assert(index < ARRAY_SIZE(func_abbrevs));
-
-   return emit_record_abbrev(&m->buf, abbrev, func_abbrevs + index,
-                             data, size);
+   assert(abbrev < ARRAY_SIZE(func_abbrevs));
+   return emit_record_abbrev(&m->buf, abbrev + DXIL_FIRST_APPLICATION_ABBREV,
+                             func_abbrevs + abbrev, data, size);
 }
 
 static bool
@@ -778,11 +824,24 @@ enum value_symtab_code {
   VST_CODE_BBENTRY = 2
 };
 
+enum value_symtab_abbrev_id {
+   VST_ABBREV_ENTRY_8,
+   VST_ABBREV_ENTRY_7,
+   VST_ABBREV_ENTRY_6,
+   VST_ABBREV_BBENTRY_6,
+};
+
 static struct dxil_abbrev value_symtab_abbrevs[] = {
-   { { FIXED(3), VBR(8), ARRAY, FIXED(8) }, 4 },
-   { { LITERAL(VST_CODE_ENTRY), VBR(8), ARRAY, FIXED(7), }, 4 },
-   { { LITERAL(VST_CODE_ENTRY), VBR(8), ARRAY, CHAR6, }, 4 },
-   { { LITERAL(VST_CODE_BBENTRY), VBR(8), ARRAY, CHAR6, }, 4 },
+   [VST_ABBREV_ENTRY_8] = { { FIXED(3), VBR(8), ARRAY, FIXED(8) }, 4 },
+   [VST_ABBREV_ENTRY_7] = {
+      { LITERAL(VST_CODE_ENTRY), VBR(8), ARRAY, FIXED(7), }, 4
+   },
+   [VST_ABBREV_ENTRY_6] = {
+      { LITERAL(VST_CODE_ENTRY), VBR(8), ARRAY, CHAR6, }, 4
+   },
+   [VST_ABBREV_BBENTRY_6] = {
+      { LITERAL(VST_CODE_BBENTRY), VBR(8), ARRAY, CHAR6, }, 4
+   },
 };
 
 static bool
@@ -932,7 +991,8 @@ static bool
 emit_pointer_type(struct dxil_module *m, int type_index)
 {
    uint64_t data[] = { TYPE_CODE_POINTER, type_index, 0 };
-   return emit_type_table_abbrev_record(m, 4, data, ARRAY_SIZE(data));
+   return emit_type_table_abbrev_record(m, TYPE_TABLE_ABBREV_POINTER,
+                                        data, ARRAY_SIZE(data));
 }
 
 static bool
@@ -957,15 +1017,18 @@ emit_struct_name_char6(struct dxil_module *m, const char *name)
    for (int i = 0; i < strlen(name); ++i)
       temp[i + 1] = name[i];
 
-   return emit_type_table_abbrev_record(m, 7, temp, 1 + strlen(name));
+   return emit_type_table_abbrev_record(m, TYPE_TABLE_ABBREV_STRUCT_NAME,
+                                        temp, 1 + strlen(name));
 }
 
 static bool
 emit_struct_type(struct dxil_module *m, const struct dxil_type *type)
 {
-   int abbrev = 6;
+   enum type_table_abbrev_id abbrev = TYPE_TABLE_ABBREV_STRUCT_ANON;
+   enum type_codes type_code = TYPE_CODE_STRUCT_ANON;
    if (type->struct_def.name) {
-      abbrev = 8;
+      abbrev = TYPE_TABLE_ABBREV_STRUCT_NAMED;
+      type_code = TYPE_CODE_STRUCT_NAMED;
       if (is_char6_string(type->struct_def.name)) {
          if (!emit_struct_name_char6(m, type->struct_def.name))
             return false;
@@ -977,7 +1040,7 @@ emit_struct_type(struct dxil_module *m, const struct dxil_type *type)
 
    uint64_t temp[256];
    assert(type->struct_def.num_elem_types < ARRAY_SIZE(temp) - 2);
-   temp[0] = type->struct_def.name ? TYPE_CODE_STRUCT_NAMED : TYPE_CODE_STRUCT_ANON;
+   temp[0] = type_code;
    temp[1] = 0; /* packed */
    for (int i = 0; i < type->struct_def.num_elem_types; ++i) {
       assert(type->struct_def.elem_types[i]->id >= 0);
@@ -1003,7 +1066,8 @@ emit_function_type(struct dxil_module *m, const struct dxil_type *type)
       temp[3 + i] = type->function_def.arg_types[i]->id;
    }
 
-   return emit_type_table_abbrev_record(m, 5, temp, 3 + type->function_def.num_arg_types);
+   return emit_type_table_abbrev_record(m, TYPE_TABLE_ABBREV_FUNCTION,
+                                        temp, 3 + type->function_def.num_arg_types);
 }
 
 static bool
@@ -1425,7 +1489,8 @@ static bool
 emit_set_type(struct dxil_module *m, unsigned type_index)
 {
    uint64_t data[] = { CST_CODE_SETTYPE, type_index };
-   return emit_const_abbrev_record(m, 4, data, ARRAY_SIZE(data));
+   return emit_const_abbrev_record(m, CONST_ABBREV_SETTYPE,
+                                   data, ARRAY_SIZE(data));
 }
 
 static bool
@@ -1451,7 +1516,8 @@ emit_int_value(struct dxil_module *m, int64_t value)
       ((-value << 1) | 1);
 
    uint64_t data[] = { CST_CODE_INTEGER, v };
-   return emit_const_abbrev_record(m, 5, data, ARRAY_SIZE(data));
+   return emit_const_abbrev_record(m, CONST_ABBREV_INTEGER,
+                                   data, ARRAY_SIZE(data));
 }
 
 static bool
@@ -1510,15 +1576,13 @@ emit_module_consts(struct dxil_module *m)
 }
 
 static bool
-emit_value_symtab_abbrev_record(struct dxil_module *m, unsigned abbrev,
+emit_value_symtab_abbrev_record(struct dxil_module *m,
+                                enum const_abbrev_id abbrev,
                                 const uint64_t *data, size_t size)
 {
-   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
-   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
-   assert(index < ARRAY_SIZE(value_symtab_abbrevs));
-
-   return emit_record_abbrev(&m->buf, abbrev, value_symtab_abbrevs + index,
-                             data, size);
+   assert(abbrev < ARRAY_SIZE(value_symtab_abbrevs));
+   return emit_record_abbrev(&m->buf, abbrev + DXIL_FIRST_APPLICATION_ABBREV,
+                             value_symtab_abbrevs + abbrev, data, size);
 }
 
 static bool
@@ -1532,11 +1596,11 @@ emit_symtab_entry(struct dxil_module *m, unsigned value, const char *name)
    for (int i = 0; i < strlen(name); ++i)
       temp[i + 2] = name[i];
 
-   int abbrev = 4;
+   enum value_symtab_abbrev_id abbrev = VST_ABBREV_ENTRY_8;
    if (is_char6_string(name))
-      abbrev = 6;
+      abbrev = VST_ABBREV_ENTRY_6;
    else if (is_char7_string(name))
-      abbrev = 5;
+      abbrev = VST_ABBREV_ENTRY_7;
 
    return emit_value_symtab_abbrev_record(m, abbrev, temp, 2 + strlen(name));
 }
@@ -1564,9 +1628,18 @@ enum metadata_codes {
   METADATA_NAMED_NODE = 10
 };
 
+enum metadata_abbrev_id {
+   METADATA_ABBREV_STRING,
+   METADATA_ABBREV_NAME
+};
+
 static const struct dxil_abbrev metadata_abbrevs[] = {
-   { { LITERAL(METADATA_STRING), ARRAY, FIXED(8) }, 3 },
-   { { LITERAL(METADATA_NAME), ARRAY, FIXED(8) }, 3 },
+   [METADATA_ABBREV_STRING] = {
+      { LITERAL(METADATA_STRING), ARRAY, FIXED(8) }, 3
+   },
+   [METADATA_ABBREV_NAME] = {
+      { LITERAL(METADATA_NAME), ARRAY, FIXED(8) }, 3
+   },
 };
 
 static bool
@@ -1771,15 +1844,13 @@ emit_metadata_value(struct dxil_module *m, const struct dxil_type *type,
 }
 
 static bool
-emit_metadata_abbrev_record(struct dxil_module *m, unsigned abbrev,
+emit_metadata_abbrev_record(struct dxil_module *m,
+                            enum metadata_abbrev_id abbrev,
                             const uint64_t *data, size_t size)
 {
-   assert(abbrev >= DXIL_FIRST_APPLICATION_ABBREV);
-   unsigned index = abbrev - DXIL_FIRST_APPLICATION_ABBREV;
-   assert(index < ARRAY_SIZE(metadata_abbrevs));
-
-   return emit_record_abbrev(&m->buf, abbrev, metadata_abbrevs + index,
-                             data, size);
+   assert(abbrev < ARRAY_SIZE(metadata_abbrevs));
+   return emit_record_abbrev(&m->buf, abbrev + DXIL_FIRST_APPLICATION_ABBREV,
+                             metadata_abbrevs + abbrev, data, size);
 }
 
 static bool
@@ -1791,7 +1862,8 @@ emit_metadata_string(struct dxil_module *m, const char *str)
    for (size_t i = 0; i < strlen(str); ++i)
       data[i + 1] = str[i];
 
-   return emit_metadata_abbrev_record(m, 4, data, strlen(str) + 1);
+   return emit_metadata_abbrev_record(m, METADATA_ABBREV_STRING,
+                                      data, strlen(str) + 1);
 }
 
 static bool
@@ -1844,7 +1916,8 @@ emit_metadata_name(struct dxil_module *m, const char *name)
    for (size_t i = 0; i < strlen(name); ++i)
       data[i + 1] = name[i];
 
-   return emit_metadata_abbrev_record(m, 5, data, strlen(name) + 1);
+   return emit_metadata_abbrev_record(m, METADATA_ABBREV_NAME,
+                                      data, strlen(name) + 1);
 }
 
 static bool
@@ -2035,7 +2108,8 @@ emit_binop(struct dxil_module *m, struct dxil_instr *instr)
       instr->value.id - instr->binop.operands[1]->id,
       instr->binop.opcode
    };
-   return emit_func_abbrev_record(m, 5, data, ARRAY_SIZE(data));
+   return emit_func_abbrev_record(m, FUNC_ABBREV_BINOP,
+                                  data, ARRAY_SIZE(data));
 }
 
 static bool
@@ -2049,7 +2123,8 @@ emit_cast(struct dxil_module *m, struct dxil_instr *instr)
       instr->cast.type->id,
       instr->cast.opcode
    };
-   return emit_func_abbrev_record(m, 7, data, ARRAY_SIZE(data));
+   return emit_func_abbrev_record(m, FUNC_ABBREV_CAST,
+                                  data, ARRAY_SIZE(data));
 }
 
 static bool
@@ -2085,11 +2160,13 @@ emit_ret(struct dxil_module *m, struct dxil_instr *instr)
    if (instr->ret.value) {
       assert(instr->ret.value->id >= 0);
       uint64_t data[] = { FUNC_CODE_INST_RET, instr->ret.value->id };
-      return emit_func_abbrev_record(m, 9, data, ARRAY_SIZE(data));
+      return emit_func_abbrev_record(m, FUNC_ABBREV_RET_VAL,
+                                     data, ARRAY_SIZE(data));
    }
 
    uint64_t data[] = { FUNC_CODE_INST_RET };
-   return emit_func_abbrev_record(m, 8, data, ARRAY_SIZE(data));
+   return emit_func_abbrev_record(m, FUNC_ABBREV_RET_VOID,
+                                  data, ARRAY_SIZE(data));
 }
 
 static bool
