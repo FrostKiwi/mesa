@@ -46,7 +46,7 @@ struct dxil_features {
             native_low_precision : 1,
             shading_rate : 1,
             raytracing_tier_1_1 : 1,
-            sampler_feedback;
+            sampler_feedback : 1;
 };
 
 enum dxil_shader_kind {
