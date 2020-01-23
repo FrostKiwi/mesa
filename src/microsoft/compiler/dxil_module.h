@@ -98,11 +98,8 @@ struct dxil_module {
    unsigned next_type_id;
 
    struct list_head const_list;
-
    struct list_head mdnode_list;
-   unsigned next_mdnode_id;
    struct list_head md_named_node_list;
-
    const struct dxil_type *void_type;
    const struct dxil_type *int1_type;
    const struct dxil_type *int8_type;
