@@ -929,24 +929,6 @@ emit_type_table_abbrevs(struct dxil_module *m)
 }
 
 static bool
-emit_void_type(struct dxil_module *m)
-{
-   return emit_record(m, TYPE_CODE_VOID, NULL, 0);
-}
-
-static bool
-emit_integer_type(struct dxil_module *m, int bit_size)
-{
-   return emit_record_int(m, TYPE_CODE_INTEGER, bit_size);
-}
-
-static bool
-emit_float_type(struct dxil_module *m)
-{
-   return emit_record(m, TYPE_CODE_FLOAT, NULL, 0);
-}
-
-static bool
 emit_pointer_type(struct dxil_module *m, int type_index)
 {
    uint64_t data[] = { TYPE_CODE_POINTER, type_index, 0 };
@@ -1042,17 +1024,17 @@ emit_type_table(struct dxil_module *m)
    LIST_FOR_EACH_ENTRY(type, &m->type_list, head) {
       switch (type->type) {
       case TYPE_VOID:
-         if (!emit_void_type(m))
+         if (!emit_record(m, TYPE_CODE_VOID, NULL, 0))
             return false;
          break;
 
       case TYPE_INTEGER:
-         if (!emit_integer_type(m, type->int_bits))
+         if (!emit_record_int(m, TYPE_CODE_INTEGER, type->int_bits))
             return false;
          break;
 
       case TYPE_FLOAT:
-         if (!emit_float_type(m))
+         if (!emit_record(m, TYPE_CODE_FLOAT, NULL, 0))
             return false;
          break;
 
