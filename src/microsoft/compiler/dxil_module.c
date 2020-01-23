@@ -44,7 +44,6 @@ dxil_module_init(struct dxil_module *m)
    list_inithead(&m->gvar_list);
    list_inithead(&m->const_list);
    list_inithead(&m->instr_list);
-   m->next_value_id = 0;
 
    list_inithead(&m->mdnode_list);
    m->next_mdnode_id = 1; /* zero is reserved for NULL nodes */
@@ -2157,26 +2156,28 @@ emit_function(struct dxil_module *m)
 static void
 assign_values(struct dxil_module *m)
 {
+   int next_value_id = 0;
+
    struct dxil_gvar *gvar;
    LIST_FOR_EACH_ENTRY(gvar, &m->gvar_list, head) {
-      gvar->value.id = m->next_value_id++;
+      gvar->value.id = next_value_id++;
    }
 
    struct dxil_func *func;
    LIST_FOR_EACH_ENTRY(func, &m->func_list, head) {
-      func->value.id = m->next_value_id++;
+      func->value.id = next_value_id++;
    }
 
    struct dxil_const *c;
    LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
-      c->value.id = m->next_value_id++;
+      c->value.id = next_value_id++;
    }
 
    struct dxil_instr *instr;
    LIST_FOR_EACH_ENTRY(instr, &m->instr_list, head) {
-      instr->value.id = m->next_value_id;
+      instr->value.id = next_value_id;
       if (instr->has_value)
-         m->next_value_id++;
+         next_value_id++;
    }
 }
 
