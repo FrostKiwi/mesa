@@ -1545,17 +1545,20 @@ emit_consts(struct dxil_module *m)
       }
 
       if (c->undef) {
-         emit_undef_value(m);
+         if (!emit_undef_value(m))
+            return false;
          continue;
       }
 
       switch (curr_type->type) {
       case TYPE_INTEGER:
-         emit_int_value(m, c->int_value);
+         if (!emit_int_value(m, c->int_value))
+            return false;
          break;
 
       case TYPE_FLOAT:
-         emit_float_value(m, c->float_value);
+         if (!emit_float_value(m, c->float_value))
+            return false;
          break;
 
       default:
