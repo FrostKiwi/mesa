@@ -1013,6 +1013,33 @@ emit_metadata_type(struct dxil_module *m)
 }
 
 static bool
+emit_type(struct dxil_module *m, struct dxil_type *type)
+{
+   switch (type->type) {
+   case TYPE_VOID:
+      return emit_record(m, TYPE_CODE_VOID, NULL, 0);
+
+   case TYPE_INTEGER:
+      return emit_record_int(m, TYPE_CODE_INTEGER, type->int_bits);
+
+   case TYPE_FLOAT:
+      return emit_record(m, TYPE_CODE_FLOAT, NULL, 0);
+
+   case TYPE_POINTER:
+      return emit_pointer_type(m, type->ptr_target_type->id);
+
+   case TYPE_STRUCT:
+      return emit_struct_type(m, type);
+
+   case TYPE_FUNCTION:
+      return emit_function_type(m, type);
+
+   default:
+      unreachable("unexpected type->type");
+   }
+}
+
+static bool
 emit_type_table(struct dxil_module *m)
 {
    if (!enter_subblock(m, DXIL_TYPE_BLOCK, 4) ||
@@ -1020,43 +1047,9 @@ emit_type_table(struct dxil_module *m)
        !emit_record_int(m, 1, 1 + list_length(&m->type_list)))
       return false;
 
-   struct dxil_type *type;
-   LIST_FOR_EACH_ENTRY(type, &m->type_list, head) {
-      switch (type->type) {
-      case TYPE_VOID:
-         if (!emit_record(m, TYPE_CODE_VOID, NULL, 0))
-            return false;
-         break;
-
-      case TYPE_INTEGER:
-         if (!emit_record_int(m, TYPE_CODE_INTEGER, type->int_bits))
-            return false;
-         break;
-
-      case TYPE_FLOAT:
-         if (!emit_record(m, TYPE_CODE_FLOAT, NULL, 0))
-            return false;
-         break;
-
-      case TYPE_POINTER:
-         assert(type->ptr_target_type->id > 0);
-         if (!emit_pointer_type(m, type->ptr_target_type->id))
-            return false;
-         break;
-
-      case TYPE_STRUCT:
-         if (!emit_struct_type(m, type))
-            return false;
-         break;
-
-      case TYPE_FUNCTION:
-         if (!emit_function_type(m, type))
-            return false;
-         break;
-
-      default:
-         unreachable("unexpected type->type");
-      }
+   list_for_each_entry(struct dxil_type, type, &m->type_list, head) {
+      if (!emit_type(m, type))
+         return false;
    }
 
    return emit_metadata_type(m) &&
