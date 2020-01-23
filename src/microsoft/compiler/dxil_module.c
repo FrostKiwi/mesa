@@ -72,46 +72,19 @@ enum dxil_fixed_abbrev {
 };
 
 static bool
-emit_enter_subblock(struct dxil_buffer *b, unsigned id,
-                    unsigned abbrev_width, intptr_t *size_offset)
-{
-   assert(size_offset);
-   if (!dxil_buffer_emit_abbrev_id(b, DXIL_ENTER_SUBBLOCK) ||
-       !dxil_buffer_emit_vbr_bits(b, id, 8) ||
-       !dxil_buffer_emit_vbr_bits(b, abbrev_width, 4) ||
-       !dxil_buffer_align(b))
-      return false;
-
-   b->abbrev_width = abbrev_width;
-   *size_offset = blob_reserve_uint32(&b->blob);
-   return true;
-}
-
-static bool
 enter_subblock(struct dxil_module *m, unsigned id, unsigned abbrev_width)
 {
    assert(m->num_blocks < ARRAY_SIZE(m->blocks));
    m->blocks[m->num_blocks].abbrev_width = m->buf.abbrev_width;
 
-   if (!emit_enter_subblock(&m->buf, id, abbrev_width,
-                            &m->blocks[m->num_blocks].offset))
+   if (!dxil_buffer_emit_abbrev_id(&m->buf, DXIL_ENTER_SUBBLOCK) ||
+       !dxil_buffer_emit_vbr_bits(&m->buf, id, 8) ||
+       !dxil_buffer_emit_vbr_bits(&m->buf, abbrev_width, 4) ||
+       !dxil_buffer_align(&m->buf))
       return false;
 
-   m->num_blocks++;
-   return true;
-}
-
-static bool
-emit_exit_block(struct dxil_buffer *b, intptr_t size_offset)
-{
-   if (!dxil_buffer_emit_abbrev_id(b, DXIL_END_BLOCK) ||
-       !dxil_buffer_align(b))
-      return false;
-
-   uint32_t size = (b->blob.size - size_offset - 1) / sizeof(uint32_t);
-   if (!blob_overwrite_uint32(&b->blob, size_offset, size))
-      return false;
-
+   m->buf.abbrev_width = abbrev_width;
+   m->blocks[m->num_blocks++].offset = blob_reserve_uint32(&m->buf.blob);
    return true;
 }
 
@@ -120,7 +93,14 @@ exit_block(struct dxil_module *m)
 {
    assert(m->num_blocks > 0);
    assert(m->num_blocks < ARRAY_SIZE(m->blocks));
-   if (!emit_exit_block(&m->buf, m->blocks[m->num_blocks - 1].offset))
+
+   if (!dxil_buffer_emit_abbrev_id(&m->buf, DXIL_END_BLOCK) ||
+       !dxil_buffer_align(&m->buf))
+      return false;
+
+   intptr_t size_offset = m->blocks[m->num_blocks - 1].offset;
+   uint32_t size = (m->buf.blob.size - size_offset - 1) / sizeof(uint32_t);
+   if (!blob_overwrite_uint32(&m->buf.blob, size_offset, size))
       return false;
 
    m->num_blocks--;
