@@ -37,8 +37,6 @@ dxil_module_init(struct dxil_module *m)
    m->num_blocks = 0;
 
    list_inithead(&m->type_list);
-   m->next_type_id = 0;
-
    list_inithead(&m->func_list);
    list_inithead(&m->attr_set_list);
    list_inithead(&m->gvar_list);
@@ -373,7 +371,7 @@ create_type(struct dxil_module *m, enum type_type type)
    struct dxil_type *ret = CALLOC_STRUCT(dxil_type);
    if (ret) {
       ret->type = type;
-      ret->id = m->next_type_id++;
+      ret->id = list_length(&m->type_list);
       list_addtail(&ret->head, &m->type_list);
    }
    return ret;
