@@ -21,6 +21,11 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+/*
+ * See the DirectX Shader Compiler for documentation for DXIL details:
+ * https://github.com/Microsoft/DirectXShaderCompiler/blob/master/docs/DXIL.rst
+ */
+
 #ifndef DXIL_H
 #define DXIL_H
 
