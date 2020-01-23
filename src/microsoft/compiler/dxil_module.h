@@ -95,8 +95,6 @@ struct dxil_module {
    struct list_head func_list;
    struct list_head attr_set_list;
    struct list_head instr_list;
-   unsigned next_type_id;
-
    struct list_head const_list;
    struct list_head mdnode_list;
    struct list_head md_named_node_list;
