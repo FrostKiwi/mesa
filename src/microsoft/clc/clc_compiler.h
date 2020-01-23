@@ -79,9 +79,9 @@ struct clc_metadata {
 int clc_compile_from_source(
    const char *source,
    const char *source_name,
-   const struct clc_define defines[], // should be sorted by name
+   const struct clc_define defines[],
    size_t num_defines,
-   const struct clc_header headers[], // should be sorted by name
+   const struct clc_header headers[],
    size_t num_headers,
    clc_msg_callback warning_callback,
    clc_msg_callback error_callback,
