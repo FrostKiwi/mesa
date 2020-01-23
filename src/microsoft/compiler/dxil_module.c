@@ -60,6 +60,9 @@ emit_bits64(struct dxil_buffer *b, uint64_t data, unsigned width)
       return dxil_buffer_emit_bits(b, (uint32_t)data, width);
 }
 
+/* See the LLVM documentation for details about what these are all about:
+ * https://www.llvm.org/docs/BitCodeFormat.html#abbreviation-ids
+ */
 enum dxil_fixed_abbrev {
    DXIL_END_BLOCK = 0,
    DXIL_ENTER_SUBBLOCK = 1,
