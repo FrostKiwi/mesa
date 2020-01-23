@@ -44,9 +44,7 @@ dxil_module_init(struct dxil_module *m)
    list_inithead(&m->gvar_list);
    list_inithead(&m->const_list);
    list_inithead(&m->instr_list);
-
    list_inithead(&m->mdnode_list);
-   m->next_mdnode_id = 1; /* zero is reserved for NULL nodes */
    list_inithead(&m->md_named_node_list);
 
    m->void_type = m->int1_type = m->int8_type = m->int32_type =
@@ -1636,7 +1634,7 @@ create_mdnode(struct dxil_module *m, enum mdnode_type type)
    struct dxil_mdnode *ret = CALLOC_STRUCT(dxil_mdnode);
    if (ret) {
       ret->type = type;
-      ret->id = m->next_mdnode_id++;
+      ret->id = list_length(&m->mdnode_list) + 1; /* zero is reserved for NULL nodes */
       list_addtail(&ret->head, &m->mdnode_list);
    }
    return ret;
