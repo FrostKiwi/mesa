@@ -202,7 +202,6 @@ clc_to_spirv(const char *source,
    *spv_size = spv_out.size();
    *spv_source = static_cast<uint32_t *>(malloc((size_t) *spv_size));
    memcpy(*spv_source, spv_out.data(), *spv_size);
-   *err_buf = strdup(log.c_str());
 
    return 0;
 }
