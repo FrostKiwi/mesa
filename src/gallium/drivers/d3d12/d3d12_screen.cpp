@@ -40,8 +40,9 @@
 
 static const struct debug_named_value
 debug_options[] = {
-   { "verbose",   D3D12_DEBUG_VERBOSE, NULL },
-   { "opengl21",  D3D12_DEBUG_OPENGL21, "Fake OpenGL 2.1 support" },
+   { "verbose",      D3D12_DEBUG_VERBOSE,      NULL },
+   { "opengl21",     D3D12_DEBUG_OPENGL21,     "Fake OpenGL 2.1 support" },
+   { "experimental", D3D12_DEBUG_EXPERIMENTAL, "Enable experimental shader models feature" },
    DEBUG_NAMED_VALUE_END
 };
 
@@ -591,12 +592,19 @@ static ID3D12Device *
 create_device(IDXGIAdapter1 *adapter)
 {
    typedef HRESULT(WINAPI *PFN_D3D12CREATEDEVICE)(IUnknown*, D3D_FEATURE_LEVEL, REFIID, void**);
+   typedef HRESULT(WINAPI *PFN_D3D12ENABLEEXPERIMENTALFEATURES)(UINT, const IID*, void*, UINT*);
    PFN_D3D12CREATEDEVICE D3D12CreateDevice;
+   PFN_D3D12ENABLEEXPERIMENTALFEATURES D3D12EnableExperimentalFeatures;
 
    HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
       debug_printf("D3D12: failed to load D3D12.DLL\n");
       return NULL;
+   }
+
+   if (d3d12_debug & D3D12_DEBUG_EXPERIMENTAL) {
+      D3D12EnableExperimentalFeatures = (PFN_D3D12ENABLEEXPERIMENTALFEATURES)GetProcAddress(hD3D12Mod, "D3D12EnableExperimentalFeatures");
+      D3D12EnableExperimentalFeatures(1, &D3D12ExperimentalShaderModels, NULL, NULL);
    }
 
    D3D12CreateDevice = (PFN_D3D12CREATEDEVICE)GetProcAddress(hD3D12Mod, "D3D12CreateDevice");
