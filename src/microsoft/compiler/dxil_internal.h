@@ -116,6 +116,7 @@ struct attrib_set {
 struct dxil_instr_binop {
    enum dxil_bin_opcode opcode;
    const struct dxil_value *operands[2];
+   enum dxil_opt_flags flags;
 };
 
 struct dxil_instr_cmp {
