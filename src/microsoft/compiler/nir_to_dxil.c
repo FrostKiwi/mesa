@@ -1100,7 +1100,13 @@ emit_binop(struct ntd_context *ctx, nir_alu_instr *alu,
            enum dxil_bin_opcode opcode,
            const struct dxil_value *op0, const struct dxil_value *op1)
 {
-   const struct dxil_value *v = dxil_emit_binop(&ctx->mod, opcode, op0, op1);
+   bool is_float_op = nir_alu_type_get_base_type(nir_op_infos[alu->op].output_type) == nir_type_float;
+
+   enum dxil_opt_flags flags = 0;
+   if (is_float_op && !alu->exact)
+      flags |= DXIL_UNSAFE_ALGEBRA;
+
+   const struct dxil_value *v = dxil_emit_binop(&ctx->mod, opcode, op0, op1, flags);
    if (!v)
       return false;
    store_alu_dest(ctx, alu, 0, v);
@@ -1381,7 +1387,7 @@ emit_ufind_msb(struct ntd_context *ctx, nir_alu_instr *alu,
    if (!size || !zero)
       return false;
 
-   v = dxil_emit_binop(&ctx->mod, DXIL_BINOP_SUB, size, v);
+   v = dxil_emit_binop(&ctx->mod, DXIL_BINOP_SUB, size, v, 0);
    const struct dxil_value *cnd = dxil_emit_cmp(&ctx->mod, DXIL_ICMP_NE,
                                                 val, zero);
    if (!v || !cnd)
@@ -1626,7 +1632,7 @@ offset_to_index(struct dxil_module *m, const struct dxil_value *offset,
    if (!shift)
       return NULL;
 
-   return dxil_emit_binop(m, DXIL_BINOP_LSHR, offset, shift);
+   return dxil_emit_binop(m, DXIL_BINOP_LSHR, offset, shift, 0);
 }
 
 static const struct dxil_value *
@@ -1639,7 +1645,7 @@ index_to_offset(struct dxil_module *m, const struct dxil_value *index,
    if (!shift)
       return NULL;
 
-   return dxil_emit_binop(m, DXIL_BINOP_SHL, index, shift);
+   return dxil_emit_binop(m, DXIL_BINOP_SHL, index, shift, 0);
 }
 
 static bool
@@ -1751,7 +1757,7 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    } else {
       const struct dxil_value *offset_src = get_src(ctx, &intr->src[1], 0, nir_type_uint);
       const struct dxil_value *c4 = dxil_module_get_int32_const(&ctx->mod, 4);
-      offset = dxil_emit_binop(&ctx->mod, DXIL_BINOP_ASHR, offset_src, c4);
+      offset = dxil_emit_binop(&ctx->mod, DXIL_BINOP_ASHR, offset_src, c4, 0);
    }
 
    const struct dxil_value *agg = load_ubo(ctx, const_block_index->u32, offset, DXIL_F32);
@@ -1953,8 +1959,8 @@ emit_load_mem_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr,
    const struct dxil_value *comp_z = dxil_emit_extractval(&ctx->mod, agg, agg_type, 2);
    const struct dxil_value *comp_w = dxil_emit_extractval(&ctx->mod, agg, agg_type, 3);
 
-   const struct dxil_value *bit1 = dxil_emit_binop(&ctx->mod, DXIL_BINOP_AND, comp, comp_mask1);
-   const struct dxil_value *bit2 = dxil_emit_binop(&ctx->mod, DXIL_BINOP_AND, comp, comp_mask2);
+   const struct dxil_value *bit1 = dxil_emit_binop(&ctx->mod, DXIL_BINOP_AND, comp, comp_mask1, 0);
+   const struct dxil_value *bit2 = dxil_emit_binop(&ctx->mod, DXIL_BINOP_AND, comp, comp_mask2, 0);
    const struct dxil_value *sel1 = dxil_emit_cmp(&ctx->mod, DXIL_ICMP_NE, bit1, comp_mask1);
    const struct dxil_value *sel2 = dxil_emit_cmp(&ctx->mod, DXIL_ICMP_NE, bit2, comp_mask2);
 
