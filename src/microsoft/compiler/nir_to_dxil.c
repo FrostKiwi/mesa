@@ -699,8 +699,8 @@ get_alu_src(struct ntd_context *ctx, nir_alu_instr *alu, unsigned src)
    assert(!alu->src[src].abs);
    assert(!alu->src[src].negate);
 
-   assert(util_is_power_of_two_or_zero(alu->dest.write_mask));
-   unsigned chan = ffs(alu->dest.write_mask) - 1;
+   assert(alu->dest.write_mask == 1);
+   unsigned chan = alu->src[src].swizzle[0];
 
    return get_src(ctx, &alu->src[src].src, chan);
 }
