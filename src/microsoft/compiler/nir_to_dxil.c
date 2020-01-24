@@ -708,6 +708,11 @@ store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
       value = bitcast_to_int(ctx, nir_dest_bit_size(*dest), value);
       break;
 
+   case nir_type_bool:
+      assert(nir_dest_bit_size(*dest) == 1);
+      /* nothing to do */
+      break;
+
    default:
       unreachable("unsupported nir_alu_type");
    }
@@ -762,6 +767,11 @@ get_alu_src(struct ntd_context *ctx, nir_alu_instr *alu, unsigned src)
    case nir_type_float:
       assert(nir_src_bit_size(alu->src[src].src) == 32);
       return bitcast_to_float(ctx, value);
+
+   case nir_type_bool:
+      assert(nir_src_bit_size(alu->src[src].src) == 1);
+      /* nothing to do */
+      return value;
 
    default:
       unreachable("unknown nir_alu_type");
