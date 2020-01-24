@@ -154,10 +154,8 @@ struct dxil_module {
    struct list_head mdnode_list;
    struct list_head md_named_node_list;
    const struct dxil_type *void_type;
-   const struct dxil_type *int1_type;
-   const struct dxil_type *int8_type;
-   const struct dxil_type *int32_type;
-   const struct dxil_type *float32_type;
+   const struct dxil_type *int1_type, *int8_type, *int32_type, *int64_type;
+   const struct dxil_type *float32_type, *float64_type;
 };
 
 void
@@ -209,6 +207,9 @@ dxil_module_get_int8_const(struct dxil_module *m, int8_t value);
 
 const struct dxil_value *
 dxil_module_get_int32_const(struct dxil_module *m, int32_t value);
+
+const struct dxil_value *
+dxil_module_get_int64_const(struct dxil_module *m, int64_t value);
 
 const struct dxil_value *
 dxil_module_get_float_const(struct dxil_module *m, float value);
