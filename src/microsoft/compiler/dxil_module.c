@@ -1944,6 +1944,7 @@ emit_metadata(struct dxil_module *m)
 struct dxil_instr {
    enum instr_type {
       INSTR_BINOP,
+      INSTR_CMP,
       INSTR_CAST,
       INSTR_CALL,
       INSTR_RET
@@ -1954,6 +1955,11 @@ struct dxil_instr {
          enum dxil_bin_opcode opcode;
          const struct dxil_value *operands[2];
       } binop;
+
+      struct {
+         enum dxil_cmp_pred pred;
+         const struct dxil_value *operands[2];
+      } cmp;
 
       struct {
          enum dxil_cast_opcode opcode;
@@ -2002,6 +2008,21 @@ dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
    instr->binop.opcode = opcode;
    instr->binop.operands[0] = op0;
    instr->binop.operands[1] = op1;
+   instr->has_value = true;
+   return &instr->value;
+}
+
+const struct dxil_value *
+dxil_emit_cmp(struct dxil_module *m, enum dxil_cmp_pred pred,
+                const struct dxil_value *op0, const struct dxil_value *op1)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_CMP);
+   if (!instr)
+      return NULL;
+
+   instr->cmp.pred = pred;
+   instr->cmp.operands[0] = op0;
+   instr->cmp.operands[1] = op1;
    instr->has_value = true;
    return &instr->value;
 }
@@ -2096,6 +2117,21 @@ emit_binop(struct dxil_module *m, struct dxil_instr *instr)
 }
 
 static bool
+emit_cmp(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_CMP);
+   assert(instr->value.id > instr->cmp.operands[0]->id);
+   assert(instr->value.id > instr->cmp.operands[1]->id);
+   uint64_t data[] = {
+      instr->value.id - instr->cmp.operands[0]->id,
+      instr->value.id - instr->cmp.operands[1]->id,
+      instr->cmp.pred
+   };
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_CMP2,
+                                data, ARRAY_SIZE(data));
+}
+
+static bool
 emit_cast(struct dxil_module *m, struct dxil_instr *instr)
 {
    assert(instr->type == INSTR_CAST);
@@ -2164,6 +2200,11 @@ emit_function(struct dxil_module *m)
       switch (instr->type) {
       case INSTR_BINOP:
          if (!emit_binop(m, instr))
+            return false;
+         break;
+
+      case INSTR_CMP:
+         if (!emit_cmp(m, instr))
             return false;
          break;
 
