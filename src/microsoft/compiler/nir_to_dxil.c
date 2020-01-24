@@ -267,13 +267,17 @@ struct dxil_def {
 
 enum overload_type {
    I32,
+   I64,
    F32,
+   F64,
    NUM_OVERLOADS
 };
 
 static const char *overload_str[NUM_OVERLOADS] = {
    [I32] = "i32",
+   [I64] = "i64",
    [F32] = "f32",
+   [F64] = "f64",
 };
 
 struct ntd_context {
@@ -303,7 +307,9 @@ get_overload_type(struct ntd_context *ctx, enum overload_type overload)
 {
    switch (overload) {
    case I32: return dxil_module_get_int_type(&ctx->mod, 32);
+   case I64: return dxil_module_get_int_type(&ctx->mod, 64);
    case F32: return dxil_module_get_float_type(&ctx->mod, 32);
+   case F64: return dxil_module_get_float_type(&ctx->mod, 64);
    default:
       unreachable("unexpected overload type");
    }
@@ -861,12 +867,12 @@ store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
    switch (nir_alu_type_get_base_type(type)) {
    case nir_type_uint:
    case nir_type_int:
-      assert(nir_dest_bit_size(*dest) == 32);
+      assert(nir_dest_bit_size(*dest) != 1);
       /* nothing to do */
       break;
 
    case nir_type_float:
-      assert(nir_dest_bit_size(*dest) == 32);
+      assert(nir_dest_bit_size(*dest) != 1);
       value = bitcast_to_int(ctx, nir_dest_bit_size(*dest), value);
       break;
 
@@ -910,12 +916,12 @@ get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
    switch (nir_alu_type_get_base_type(type)) {
    case nir_type_int:
    case nir_type_uint:
-      assert(nir_src_bit_size(*src) == 32);
+      assert(nir_src_bit_size(*src) >= 32);
       /* nohing to do */
       return value;
 
    case nir_type_float:
-      assert(nir_src_bit_size(*src) == 32);
+      assert(nir_src_bit_size(*src) >= 32);
       return bitcast_to_float(ctx, nir_src_bit_size(*src), value);
 
    case nir_type_bool:
@@ -977,14 +983,24 @@ emit_cast(struct ntd_context *ctx, nir_alu_instr *alu,
 }
 
 static enum overload_type
-get_overload(nir_alu_type alu_type)
+get_overload(nir_alu_type alu_type, unsigned bit_size)
 {
    switch (nir_alu_type_get_base_type(alu_type)) {
    case nir_type_int:
    case nir_type_uint:
-      return I32;
+      switch (bit_size) {
+      case 32: return I32;
+      case 64: return I64;
+      default:
+         unreachable("unexpected bit_size");
+      }
    case nir_type_float:
-      return F32;
+      switch (bit_size) {
+      case 32: return F32;
+      case 64: return F64;
+      default:
+         unreachable("unexpected bit_size");
+      }
    default:
       unreachable("unexpected output type");
    }
@@ -995,9 +1011,10 @@ emit_unary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
                  enum dxil_intr intr, const struct dxil_value *op)
 {
    const nir_op_info *info = &nir_op_infos[alu->op];
-   assert(nir_dest_bit_size(alu->dest.dest) == 32);
    assert(info->output_type == info->input_types[0]);
-   enum overload_type overload = get_overload(info->output_type);
+   unsigned dst_bits = nir_dest_bit_size(alu->dest.dest);
+   assert(nir_src_bit_size(alu->src[0].src) == dst_bits);
+   enum overload_type overload = get_overload(info->output_type, dst_bits);
 
    const struct dxil_value *v = emit_unary_call(ctx, overload, intr, op);
    if (!v)
@@ -1012,10 +1029,12 @@ emit_binary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
                   const struct dxil_value *op0, const struct dxil_value *op1)
 {
    const nir_op_info *info = &nir_op_infos[alu->op];
-   assert(nir_dest_bit_size(alu->dest.dest) == 32);
    assert(info->output_type == info->input_types[0]);
    assert(info->output_type == info->input_types[1]);
-   enum overload_type overload = get_overload(info->output_type);
+   unsigned dst_bits = nir_dest_bit_size(alu->dest.dest);
+   assert(nir_src_bit_size(alu->src[0].src) == dst_bits);
+   assert(nir_src_bit_size(alu->src[1].src) == dst_bits);
+   enum overload_type overload = get_overload(info->output_type, dst_bits);
 
    const struct dxil_value *v = emit_binary_call(ctx, overload, intr,
                                                  op0, op1);
@@ -1244,13 +1263,31 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 static bool
 emit_load_const(struct ntd_context *ctx, nir_load_const_instr *load_const)
 {
-   assert(load_const->def.bit_size == 32);
    for (int i = 0; i < load_const->def.num_components; ++i) {
-      const struct dxil_value
-         *value = dxil_module_get_int32_const(&ctx->mod,
-                                              load_const->value[i].u32);
+      const struct dxil_value *value;
+      switch (load_const->def.bit_size) {
+      case 1:
+         value = dxil_module_get_int1_const(&ctx->mod,
+                                            load_const->value[i].b);
+         break;
+      case 8:
+         value = dxil_module_get_int8_const(&ctx->mod,
+                                             load_const->value[i].u8);
+         break;
+      case 32:
+         value = dxil_module_get_int32_const(&ctx->mod,
+                                             load_const->value[i].u32);
+         break;
+      case 64:
+         value = dxil_module_get_int64_const(&ctx->mod,
+                                             load_const->value[i].u64);
+         break;
+      default:
+         unreachable("unexpected bit_size");
+      }
       if (!value)
          return false;
+
       store_ssa_def(ctx, &load_const->def, i, value);
    }
    return true;
