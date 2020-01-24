@@ -1945,6 +1945,7 @@ struct dxil_instr {
    enum instr_type {
       INSTR_BINOP,
       INSTR_CMP,
+      INSTR_SELECT,
       INSTR_CAST,
       INSTR_CALL,
       INSTR_RET
@@ -1960,6 +1961,10 @@ struct dxil_instr {
          enum dxil_cmp_pred pred;
          const struct dxil_value *operands[2];
       } cmp;
+
+      struct {
+         const struct dxil_value *operands[3];
+      } select;
 
       struct {
          enum dxil_cast_opcode opcode;
@@ -2023,6 +2028,23 @@ dxil_emit_cmp(struct dxil_module *m, enum dxil_cmp_pred pred,
    instr->cmp.pred = pred;
    instr->cmp.operands[0] = op0;
    instr->cmp.operands[1] = op1;
+   instr->has_value = true;
+   return &instr->value;
+}
+
+const struct dxil_value *
+dxil_emit_select(struct dxil_module *m,
+                const struct dxil_value *op0,
+                const struct dxil_value *op1,
+                const struct dxil_value *op2)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_SELECT);
+   if (!instr)
+      return NULL;
+
+   instr->select.operands[0] = op0;
+   instr->select.operands[1] = op1;
+   instr->select.operands[2] = op2;
    instr->has_value = true;
    return &instr->value;
 }
@@ -2132,6 +2154,22 @@ emit_cmp(struct dxil_module *m, struct dxil_instr *instr)
 }
 
 static bool
+emit_select(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_SELECT);
+   assert(instr->value.id > instr->select.operands[0]->id);
+   assert(instr->value.id > instr->select.operands[1]->id);
+   assert(instr->value.id > instr->select.operands[2]->id);
+   uint64_t data[] = {
+      instr->value.id - instr->select.operands[1]->id,
+      instr->value.id - instr->select.operands[2]->id,
+      instr->value.id - instr->select.operands[0]->id
+   };
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_VSELECT,
+                                data, ARRAY_SIZE(data));
+}
+
+static bool
 emit_cast(struct dxil_module *m, struct dxil_instr *instr)
 {
    assert(instr->type == INSTR_CAST);
@@ -2205,6 +2243,11 @@ emit_function(struct dxil_module *m)
 
       case INSTR_CMP:
          if (!emit_cmp(m, instr))
+            return false;
+         break;
+
+      case INSTR_SELECT:
+         if (!emit_select(m, instr))
             return false;
          break;
 
