@@ -913,6 +913,20 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
       }
       break;
 
+   case nir_op_u2f32: {
+         const struct dxil_type *float_type =
+            dxil_module_get_float_type(&ctx->mod);
+         emit_cast(ctx, alu, DXIL_CAST_UITOFP, float_type, src[0]);
+      }
+      break;
+
+   case nir_op_f2u32: {
+         const struct dxil_type *int32_type =
+            dxil_module_get_int_type(&ctx->mod, 32);
+         emit_cast(ctx, alu, DXIL_CAST_FPTOUI, int32_type, src[0]);
+      }
+      break;
+
    default:
       fprintf(stderr, "emit_alu: not implemented (%s)\n",
               nir_op_infos[alu->op].name);
