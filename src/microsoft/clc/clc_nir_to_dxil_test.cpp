@@ -130,14 +130,10 @@ target triple = "dxil-ms-dx"
 declare void @dx.op.storeOutput.f32(i32, i32, i32, i8, float) #0
 
 define void @main() {
-  %1 = bitcast i32 1065353216 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %1)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %2 = bitcast i32 0 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %2)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %3 = bitcast i32 0 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %3)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %4 = bitcast i32 1065353216 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %4)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float 1.000000e+00) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float 0.000000e+00) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float 0.000000e+00) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float 1.000000e+00) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   ret void
 }
 
@@ -202,19 +198,12 @@ declare void @dx.op.storeOutput.f32(i32, i32, i32, i8, float) #1
 
 define void @main() {
   %1 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 0, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
-  %2 = bitcast float %1 to i32
-  %3 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 1, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
-  %4 = bitcast float %3 to i32
-  %5 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 2, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
-  %6 = bitcast float %5 to i32
-  %7 = bitcast i32 %2 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %7)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %8 = bitcast i32 %4 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %8)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %9 = bitcast i32 %6 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %9)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %10 = bitcast i32 1065353216 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %10)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  %2 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 1, i32 undef) ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
+  %3 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 2, i32 undef) ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %1) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %2) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %3) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float 1.000000e+00) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   ret void
 }
 
