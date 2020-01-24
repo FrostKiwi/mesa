@@ -72,6 +72,35 @@ enum dxil_cast_opcode {
    DXIL_CAST_ADDRSPACECAST = 12
 };
 
+enum dxil_cmp_pred {
+   DXIL_FCMP_FALSE = 0,
+   DXIL_FCMP_OEQ = 1,
+   DXIL_FCMP_OGT = 2,
+   DXIL_FCMP_OGE = 3,
+   DXIL_FCMP_OLT = 4,
+   DXIL_FCMP_OLE = 5,
+   DXIL_FCMP_ONE = 6,
+   DXIL_FCMP_ORD = 7,
+   DXIL_FCMP_UNO = 8,
+   DXIL_FCMP_UEQ = 9,
+   DXIL_FCMP_UGT = 10,
+   DXIL_FCMP_UGE = 11,
+   DXIL_FCMP_ULT = 12,
+   DXIL_FCMP_ULE = 13,
+   DXIL_FCMP_UNE = 14,
+   DXIL_FCMP_TRUE = 15,
+   DXIL_ICMP_EQ = 32,
+   DXIL_ICMP_NE = 33,
+   DXIL_ICMP_UGT = 34,
+   DXIL_ICMP_UGE = 35,
+   DXIL_ICMP_ULT = 36,
+   DXIL_ICMP_ULE = 37,
+   DXIL_ICMP_SGT = 38,
+   DXIL_ICMP_SGE = 39,
+   DXIL_ICMP_SLT = 40,
+   DXIL_ICMP_SLE = 41,
+};
+
 struct dxil_type;
 struct dxil_value;
 struct dxil_gvar;
@@ -190,6 +219,10 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
 const struct dxil_value *
 dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
                 const struct dxil_value *op0, const struct dxil_value *op1);
+
+const struct dxil_value *
+dxil_emit_cmp(struct dxil_module *m, enum dxil_cmp_pred pred,
+              const struct dxil_value *op0, const struct dxil_value *op1);
 
 const struct dxil_value *
 dxil_emit_cast(struct dxil_module *m, enum dxil_cast_opcode opcode,
