@@ -841,6 +841,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
       break;
 
    case nir_op_iadd:
+   case nir_op_fadd:
       emit_binop(ctx, alu, DXIL_BINOP_ADD, src[0], src[1]);
       break;
 
