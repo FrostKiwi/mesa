@@ -788,6 +788,15 @@ emit_binop(struct ntd_context *ctx, nir_alu_instr *alu,
 }
 
 static void
+emit_cmp(struct ntd_context *ctx, nir_alu_instr *alu,
+         enum dxil_cmp_pred pred,
+         const struct dxil_value *op0, const struct dxil_value *op1)
+{
+   const struct dxil_value *v = dxil_emit_cmp(&ctx->mod, pred, op0, op1);
+   store_alu_dest(ctx, alu, 0, v);
+}
+
+static void
 emit_cast(struct ntd_context *ctx, nir_alu_instr *alu,
           enum dxil_cast_opcode opcode,
           const struct dxil_type *type, const struct dxil_value *value)
@@ -881,6 +890,17 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 
    case nir_op_ixor:
       emit_binop(ctx, alu, DXIL_BINOP_XOR, src[0], src[1]);
+      break;
+
+   case nir_op_ine:
+      emit_cmp(ctx, alu, DXIL_ICMP_NE, src[0], src[1]);
+      break;
+
+   case nir_op_bcsel: {
+         const struct dxil_value *v = dxil_emit_select(&ctx->mod, src[0],
+                                                       src[1], src[2]);
+         store_alu_dest(ctx, alu, 0, v);
+      }
       break;
 
    case nir_op_imax:
