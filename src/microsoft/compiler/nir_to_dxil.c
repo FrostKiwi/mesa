@@ -652,18 +652,40 @@ emit_metadata(struct ntd_context *ctx)
                                        &dx_entry_point, 1);
 }
 
+static const struct dxil_value *
+bitcast_to_int(struct ntd_context *ctx, unsigned bit_size,
+               const struct dxil_value *value)
+{
+   const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod, bit_size);
+   if (!type)
+      return NULL;
+
+   return dxil_emit_cast(&ctx->mod, DXIL_CAST_BITCAST, type, value);
+}
+
+static const struct dxil_value *
+bitcast_to_float(struct ntd_context *ctx,
+                 const struct dxil_value *value)
+{
+   const struct dxil_type *type = dxil_module_get_float_type(&ctx->mod);
+   if (!type)
+      return NULL;
+
+   return dxil_emit_cast(&ctx->mod, DXIL_CAST_BITCAST, type, value);
+}
+
 static void
 store_ssa_def(struct ntd_context *ctx, nir_ssa_def *ssa, unsigned chan,
               const struct dxil_value *value)
 {
    assert(ssa->index < ctx->num_defs);
-   assert(chan < NIR_MAX_VEC_COMPONENTS);
+   assert(chan < ssa->num_components);
    ctx->defs[ssa->index].chans[chan] = value;
 }
 
 static void
-store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
-           const struct dxil_value *value)
+store_dest_int(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
+               const struct dxil_value *value)
 {
    assert(dest->is_ssa);
    assert(value);
@@ -671,17 +693,42 @@ store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
 }
 
 static void
+store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
+           const struct dxil_value *value, nir_alu_type type)
+{
+   switch (nir_alu_type_get_base_type(type)) {
+   case nir_type_uint:
+   case nir_type_int:
+      assert(nir_dest_bit_size(*dest) == 32);
+      /* nothing to do */
+      break;
+
+   case nir_type_float:
+      assert(nir_dest_bit_size(*dest) == 32);
+      value = bitcast_to_int(ctx, nir_dest_bit_size(*dest), value);
+      break;
+
+   default:
+      unreachable("unsupported nir_alu_type");
+   }
+
+   store_dest_int(ctx, dest, chan, value);
+}
+
+static void
 store_alu_dest(struct ntd_context *ctx, nir_alu_instr *alu, unsigned chan,
                const struct dxil_value *value)
 {
    assert(!alu->dest.saturate);
-   store_dest(ctx, &alu->dest.dest, chan, value);
+   store_dest(ctx, &alu->dest.dest, chan, value,
+              nir_op_infos[alu->op].output_type);
 }
 
 static const struct dxil_value *
 get_src_ssa(struct ntd_context *ctx, const nir_ssa_def *ssa, unsigned chan)
 {
    assert(ssa->index < ctx->num_defs);
+   assert(chan < ssa->num_components);
    assert(ctx->defs[ssa->index].chans[chan]);
    return ctx->defs[ssa->index].chans[chan];
 }
@@ -702,7 +749,23 @@ get_alu_src(struct ntd_context *ctx, nir_alu_instr *alu, unsigned src)
    assert(alu->dest.write_mask == 1);
    unsigned chan = alu->src[src].swizzle[0];
 
-   return get_src(ctx, &alu->src[src].src, chan);
+   const struct dxil_value *value = get_src(ctx, &alu->src[src].src, chan);
+
+   nir_alu_type type = nir_op_infos[alu->op].input_types[src];
+   switch (nir_alu_type_get_base_type(type)) {
+   case nir_type_int:
+   case nir_type_uint:
+      assert(nir_src_bit_size(alu->src[src].src) == 32);
+      /* nohing to do */
+      return value;
+
+   case nir_type_float:
+      assert(nir_src_bit_size(alu->src[src].src) == 32);
+      return bitcast_to_float(ctx, value);
+
+   default:
+      unreachable("unknown nir_alu_type");
+   }
 }
 
 static void
@@ -860,7 +923,7 @@ emit_load_global_invocation_id(struct ntd_context *ctx,
          const struct dxil_value
             *idx = dxil_module_get_int32_const(&ctx->mod, i),
             *threadid = emit_threadid_call(ctx, idx);
-         store_dest(ctx, &intr->dest, i, threadid);
+         store_dest_int(ctx, &intr->dest, i, threadid);
       }
    }
 }
@@ -877,7 +940,7 @@ emit_load_local_invocation_id(struct ntd_context *ctx,
          const struct dxil_value
             *idx = dxil_module_get_int32_const(&ctx->mod, i),
             *threadidingroup = emit_threadidingroup_call(ctx, idx);
-         store_dest(ctx, &intr->dest, i, threadidingroup);
+         store_dest_int(ctx, &intr->dest, i, threadidingroup);
       }
    }
 }
@@ -894,7 +957,7 @@ emit_load_local_work_group_id(struct ntd_context *ctx,
          const struct dxil_value
             *idx = dxil_module_get_int32_const(&ctx->mod, i),
             *groupid = emit_groupid_call(ctx, idx);
-         store_dest(ctx, &intr->dest, i, groupid);
+         store_dest_int(ctx, &intr->dest, i, groupid);
       }
    }
 }
