@@ -123,6 +123,14 @@ enum dxil_cmp_pred {
    DXIL_CMP_INSTR_COUNT
 };
 
+enum dxil_opt_flags {
+  DXIL_UNSAFE_ALGEBRA = (1 << 0),
+  DXIL_NO_NANS = (1 << 1),
+  DXIL_NO_INFS = (1 << 2),
+  DXIL_NO_SIGNED_ZEROS = (1 << 3),
+  DXIL_ALLOW_RECIPROCAL = (1 << 4)
+};
+
 struct dxil_features {
    unsigned doubles : 1,
             cs_4x_raw_sb : 1,
@@ -328,7 +336,8 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
 
 const struct dxil_value *
 dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
-                const struct dxil_value *op0, const struct dxil_value *op1);
+                const struct dxil_value *op0, const struct dxil_value *op1,
+                enum dxil_opt_flags flags);
 
 const struct dxil_value *
 dxil_emit_cmp(struct dxil_module *m, enum dxil_cmp_pred pred,

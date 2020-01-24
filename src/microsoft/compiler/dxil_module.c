@@ -2186,7 +2186,8 @@ create_instr(struct dxil_module *m, enum instr_type type)
 
 const struct dxil_value *
 dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
-                const struct dxil_value *op0, const struct dxil_value *op1)
+                const struct dxil_value *op0, const struct dxil_value *op1,
+                enum dxil_opt_flags flags)
 {
    struct dxil_instr *instr = create_instr(m, INSTR_BINOP);
    if (!instr)
@@ -2195,6 +2196,7 @@ dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
    instr->binop.opcode = opcode;
    instr->binop.operands[0] = op0;
    instr->binop.operands[1] = op1;
+   instr->binop.flags = flags;
    instr->has_value = true;
    return &instr->value;
 }
@@ -2465,6 +2467,18 @@ emit_binop(struct dxil_module *m, struct dxil_instr *instr)
    assert(instr->type == INSTR_BINOP);
    assert(instr->value.id > instr->binop.operands[0]->id);
    assert(instr->value.id > instr->binop.operands[1]->id);
+
+   if (instr->binop.flags) {
+      uint64_t data[] = {
+         FUNC_CODE_INST_BINOP,
+         instr->value.id - instr->binop.operands[0]->id,
+         instr->value.id - instr->binop.operands[1]->id,
+         instr->binop.opcode,
+         instr->binop.flags
+      };
+      return emit_func_abbrev_record(m, FUNC_ABBREV_BINOP_FLAGS,
+                                     data, ARRAY_SIZE(data));
+   }
    uint64_t data[] = {
       FUNC_CODE_INST_BINOP,
       instr->value.id - instr->binop.operands[0]->id,
