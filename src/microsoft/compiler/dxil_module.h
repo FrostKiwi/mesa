@@ -225,6 +225,12 @@ dxil_emit_cmp(struct dxil_module *m, enum dxil_cmp_pred pred,
               const struct dxil_value *op0, const struct dxil_value *op1);
 
 const struct dxil_value *
+dxil_emit_select(struct dxil_module *m,
+                const struct dxil_value *op0,
+                const struct dxil_value *op1,
+                const struct dxil_value *op2);
+
+const struct dxil_value *
 dxil_emit_cast(struct dxil_module *m, enum dxil_cast_opcode opcode,
                const struct dxil_type *type,
                const struct dxil_value *value);
