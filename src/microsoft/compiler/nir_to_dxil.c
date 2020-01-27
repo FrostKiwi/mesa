@@ -244,6 +244,17 @@ struct dxil_def {
    const struct dxil_value *chans[NIR_MAX_VEC_COMPONENTS];
 };
 
+enum overload_type {
+   I32,
+   F32,
+   NUM_OVERLOADS
+};
+
+static const char *overload_str[NUM_OVERLOADS] = {
+   [I32] = "i32",
+   [F32] = "f32",
+};
+
 struct ntd_context {
    struct dxil_module mod;
 
@@ -257,7 +268,7 @@ struct ntd_context {
    struct dxil_def *defs;
    unsigned num_defs;
 
-   const struct dxil_func *binary_func,
+   const struct dxil_func *binary_funcs[NUM_OVERLOADS],
                           *threadid_func,
                           *threadidingroup_func,
                           *groupid_func,
@@ -265,30 +276,47 @@ struct ntd_context {
                           *createhandle_func;
 };
 
+static const struct dxil_type *
+get_overload_type(struct ntd_context *ctx, enum overload_type overload)
+{
+   switch (overload) {
+   case I32: return dxil_module_get_int_type(&ctx->mod, 32);
+   case F32: return dxil_module_get_float_type(&ctx->mod);
+   default:
+      unreachable("unexpected overload type");
+   }
+}
+
 static const struct dxil_value *
-emit_binary_call(struct ntd_context *ctx, enum dxil_intr intr,
+emit_binary_call(struct ntd_context *ctx, enum overload_type overload,
+                 enum dxil_intr intr,
                  const struct dxil_value *op0, const struct dxil_value *op1)
 {
-   if (!ctx->binary_func) {
+   if (!ctx->binary_funcs[overload]) {
       const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-      if (!int32_type)
+      const struct dxil_type *type = get_overload_type(ctx, overload);
+      if (!int32_type || !type)
          return NULL;
 
       const struct dxil_type *arg_types[] = {
          int32_type,
-         int32_type,
-         int32_type
+         type,
+         type
       };
 
       const struct dxil_type *func_type =
-         dxil_module_add_function_type(&ctx->mod, int32_type,
+         dxil_module_add_function_type(&ctx->mod, type,
                                        arg_types, ARRAY_SIZE(arg_types));
       if (!func_type)
          return NULL;
 
-      ctx->binary_func = dxil_add_function_decl(&ctx->mod,
-         "dx.op.binary.i32", func_type, DXIL_ATTR_KIND_READ_NONE);
-      if (!ctx->binary_func)
+      char name[100];
+      snprintf(name, ARRAY_SIZE(name), "dx.op.binary.%s",
+               overload_str[overload]);
+
+      ctx->binary_funcs[overload] = dxil_add_function_decl(&ctx->mod, name,
+         func_type, DXIL_ATTR_KIND_READ_NONE);
+      if (!ctx->binary_funcs[overload])
          return NULL;
    }
 
@@ -302,7 +330,8 @@ emit_binary_call(struct ntd_context *ctx, enum dxil_intr intr,
      op1
    };
 
-   return dxil_emit_call(&ctx->mod, ctx->binary_func, args, ARRAY_SIZE(args));
+   return dxil_emit_call(&ctx->mod, ctx->binary_funcs[overload],
+                         args, ARRAY_SIZE(args));
 }
 
 static const struct dxil_value *
@@ -806,12 +835,35 @@ emit_cast(struct ntd_context *ctx, nir_alu_instr *alu,
    store_alu_dest(ctx, alu, 0, v);
 }
 
+static enum overload_type
+get_overload(nir_alu_type alu_type)
+{
+   switch (nir_alu_type_get_base_type(alu_type)) {
+   case nir_type_int:
+   case nir_type_uint:
+      return I32;
+   case nir_type_float:
+      return F32;
+   default:
+      unreachable("unexpected output type");
+   }
+}
+
 static void
 emit_binary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
                   enum dxil_intr intr,
                   const struct dxil_value *op0, const struct dxil_value *op1)
 {
-   const struct dxil_value *v = emit_binary_call(ctx, intr, op0, op1);
+   assert(nir_dest_bit_size(alu->dest.dest) == 32);
+   assert(nir_op_infos[alu->op].output_type ==
+          nir_op_infos[alu->op].input_types[0]);
+   assert(nir_op_infos[alu->op].output_type ==
+          nir_op_infos[alu->op].input_types[1]);
+   enum overload_type overload =
+      get_overload(nir_op_infos[alu->op].output_type);
+
+   const struct dxil_value *v = emit_binary_call(ctx, overload, intr,
+                                                 op0, op1);
    store_alu_dest(ctx, alu, 0, v);
 }
 
