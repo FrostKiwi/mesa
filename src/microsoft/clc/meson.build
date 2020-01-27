@@ -19,12 +19,14 @@
 # SOFTWARE.
 
 
-libclc_compiler = static_library(
-  'clc_compiler',
+libclc_compiler = shared_library(
+  'clglon12compiler',
   'clc_compiler.c',
   'clc_to_spirv.cpp',
+  vs_module_defs : 'clglon12compiler.def',
   include_directories : [inc_common, inc_compiler, inc_spirv],
-  dependencies: [idep_nir_headers, dep_clang, dep_llvm, idep_mesautil],
+  dependencies: [idep_nir_headers, dep_clang, dep_llvm, idep_mesautil,
+                 idep_libdxil_compiler, idep_nir],
   c_args : c_vis_args,
   cpp_args : [
     cpp_vis_args,
@@ -34,12 +36,7 @@ libclc_compiler = static_library(
   ],
 )
 
-idep_libclc_compiler = declare_dependency(
-  link_with : libclc_compiler,
-  dependencies : [idep_libdxil_compiler, idep_nir],
-)
-
 clc_compiler_test = executable('clc_compiler_test', 'clc_compiler_test.cpp',
-  dependencies : [idep_libclc_compiler])
+  link_with : [libclc_compiler])
 
 test('clc_compiler test', clc_compiler_test)
