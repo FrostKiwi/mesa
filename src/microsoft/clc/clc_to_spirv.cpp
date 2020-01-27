@@ -56,13 +56,13 @@ llvm_log_handler(const ::llvm::DiagnosticInfo &di, void *data) {
 int
 clc_to_spirv(const char *source,
              const char *source_name,
-	     const struct clc_define defines[],
-	     size_t num_defines,
-	     const struct clc_header headers[],
-	     size_t num_headers,
-	     uint32_t **spv_source,
-	     size_t *spv_size,
-	     const char **err_buf)
+             const struct clc_define defines[],
+             size_t num_defines,
+             const struct clc_header headers[],
+             size_t num_headers,
+             uint32_t **spv_source,
+             size_t *spv_size,
+             const char **err_buf)
 {
    LLVMInitializeAllTargets();
    LLVMInitializeAllTargetInfos();
@@ -90,12 +90,12 @@ clc_to_spirv(const char *source,
 
    if (!clang::CompilerInvocation::CreateFromArgs(c->getInvocation(),
 #if LLVM_VERSION_MAJOR >= 10
-						  clang_opts,
+                                                  clang_opts,
 #else
                                                   clang_opts.data(),
-						  clang_opts.data() + clang_opts.size(),
+                                                  clang_opts.data() + clang_opts.size(),
 #endif
-					          diag)) {
+                                                  diag)) {
       log += "Couldn't create Clang invocation.\n";
       *err_buf = strdup(log.c_str());
       return -1;
@@ -119,20 +119,20 @@ clc_to_spirv(const char *source,
 
    c->getInvocation().setLangDefaults(c->getLangOpts(),
 #if LLVM_VERSION_MAJOR >= 10
-                             clang::Language::OpenCL,
+                                      clang::Language::OpenCL,
 #else
-                             clang::InputKind::OpenCL,
+                                      clang::InputKind::OpenCL,
 #endif
-			     ::llvm::Triple(target_triple),
-                             c->getPreprocessorOpts(),
-                             clc_version_clang);
+                                      ::llvm::Triple(target_triple),
+                                      c->getPreprocessorOpts(),
+                                      clc_version_clang);
 
    c->createDiagnostics(new clang::TextDiagnosticPrinter(
                            *new raw_string_ostream(log),
                            &c->getDiagnosticOpts(), true));
 
    c->setTarget(clang::TargetInfo::CreateTargetInfo(
-                        c->getDiagnostics(), c->getInvocation().TargetOpts));
+                   c->getDiagnostics(), c->getInvocation().TargetOpts));
 
    c->getFrontendOpts().ProgramAction = clang::frontend::EmitLLVMOnly;
    c->getHeaderSearchOpts().UseBuiltinIncludes = true;
@@ -166,15 +166,15 @@ clc_to_spirv(const char *source,
 
       for (size_t i = 0; i < num_headers; i++) {
          std::string h = std::string(headers[i].name);
-	 std::string src = std::string(headers[i].source);
+         std::string src = std::string(headers[i].source);
          c->getPreprocessorOpts().addRemappedFile(tmp_header_path + h,
-	    ::llvm::MemoryBuffer::getMemBufferCopy(src).release());
+            ::llvm::MemoryBuffer::getMemBufferCopy(src).release());
       }
    }
 
    c->getPreprocessorOpts().addRemappedFile(
            source_name,
-	   ::llvm::MemoryBuffer::getMemBufferCopy(std::string(source)).release());
+           ::llvm::MemoryBuffer::getMemBufferCopy(std::string(source)).release());
 
    // Compile the code
    clang::EmitLLVMOnlyAction act(llvm_ctx.get());
