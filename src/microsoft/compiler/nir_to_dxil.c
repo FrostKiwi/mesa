@@ -846,14 +846,17 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
       break;
 
    case nir_op_isub:
+   case nir_op_fsub:
       emit_binop(ctx, alu, DXIL_BINOP_SUB, src[0], src[1]);
       break;
 
    case nir_op_imul:
+   case nir_op_fmul:
       emit_binop(ctx, alu, DXIL_BINOP_MUL, src[0], src[1]);
       break;
 
    case nir_op_idiv:
+   case nir_op_fdiv:
       emit_binop(ctx, alu, DXIL_BINOP_SDIV, src[0], src[1]);
       break;
 
