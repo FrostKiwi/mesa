@@ -965,12 +965,12 @@ static void
 emit_load_const(struct ntd_context *ctx, nir_load_const_instr *load_const)
 {
    assert(load_const->def.bit_size == 32);
-   assert(load_const->def.num_components == 1);
-
-   const struct dxil_value
-      *value = dxil_module_get_int32_const(&ctx->mod,
-                                           load_const->value[0].u32);
-   store_ssa_def(ctx, &load_const->def, 0, value);
+   for (int i = 0; i < load_const->def.num_components; ++i) {
+      const struct dxil_value
+         *value = dxil_module_get_int32_const(&ctx->mod,
+                                              load_const->value[i].u32);
+      store_ssa_def(ctx, &load_const->def, i, value);
+   }
 }
 
 static void
