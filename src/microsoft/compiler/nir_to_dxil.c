@@ -663,8 +663,21 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
    return true;
 }
 
+static const struct dxil_mdnode *
+emit_threads(struct ntd_context *ctx, nir_shader *s)
+{
+   const struct dxil_mdnode *threads_x = dxil_get_metadata_int32(&ctx->mod, MAX2(s->info.cs.local_size[0], 1));
+   const struct dxil_mdnode *threads_y = dxil_get_metadata_int32(&ctx->mod, MAX2(s->info.cs.local_size[1], 1));
+   const struct dxil_mdnode *threads_z = dxil_get_metadata_int32(&ctx->mod, MAX2(s->info.cs.local_size[2], 1));
+   if (!threads_x || !threads_y || !threads_z)
+      return false;
+
+   const struct dxil_mdnode *threads_nodes[] = { threads_x, threads_y, threads_z };
+   return dxil_get_metadata_node(&ctx->mod, threads_nodes, ARRAY_SIZE(threads_nodes));
+}
+
 static bool
-emit_metadata(struct ntd_context *ctx)
+emit_metadata(struct ntd_context *ctx, nir_shader *s)
 {
    if (!emit_llvm_ident(&ctx->mod) ||
        !emit_dx_versions(&ctx->mod, 1, 0) ||
@@ -705,20 +718,26 @@ emit_metadata(struct ntd_context *ctx)
 
    const struct dxil_mdnode *main_name = dxil_get_metadata_string(&ctx->mod, "main");
 
-   const struct dxil_mdnode *nodes_3_3_3[] = { node3, node3, node3 };
-   const struct dxil_mdnode *node32 = dxil_get_metadata_node(&ctx->mod, nodes_3_3_3,
-                                                      ARRAY_SIZE(nodes_3_3_3));
+   const struct dxil_mdnode *shader_properties = NULL;
+   if (ctx->mod.shader_kind == DXIL_COMPUTE_SHADER) {
+      const struct dxil_mdnode *num_thread_tag = dxil_get_metadata_int32(&ctx->mod, 4);
+      const struct dxil_mdnode *num_threads = emit_threads(ctx, s);
+      if (!num_thread_tag || !num_threads)
+         return false;
 
-   const struct dxil_mdnode *node19 = dxil_get_metadata_int32(&ctx->mod, 4);
-   const struct dxil_mdnode *nodes_19_32[] = { node19, node32 };
-   const struct dxil_mdnode *node33 = dxil_get_metadata_node(&ctx->mod, nodes_19_32,
-                                                      ARRAY_SIZE(nodes_19_32));
+      const struct dxil_mdnode *property_list[] = { num_thread_tag, num_threads };
+      shader_properties = dxil_get_metadata_node(&ctx->mod, property_list,
+                                                 ARRAY_SIZE(property_list));
+      if (!shader_properties)
+         return false;
+   }
+
    const struct dxil_mdnode *main_entrypoint_metadata[] = {
       main_entrypoint,
       main_name,
       NULL, /* list of signatures */
       resources_node, /* list of resources */
-      node33 /* list of caps and other properties */
+      shader_properties /* list of caps and other properties */
    };
    const struct dxil_mdnode *dx_resources = resources_node,
                      *dx_type_annotations[] = { main_type_annotation },
@@ -1288,7 +1307,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    free(ctx->defs);
 
-   return emit_metadata(ctx) &&
+   return emit_metadata(ctx, s) &&
           dxil_emit_module(&ctx->mod);
 }
 
