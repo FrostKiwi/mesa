@@ -119,6 +119,13 @@ enum {
 };
 
 enum dxil_intr {
+   DXIL_INTR_FRC = 22,
+
+   DXIL_INTR_ROUND_NE = 26,
+   DXIL_INTR_ROUND_NI = 27,
+   DXIL_INTR_ROUND_PI = 28,
+   DXIL_INTR_ROUND_Z = 29,
+
    DXIL_INTR_IMAX = 37,
    DXIL_INTR_IMIN = 38,
    DXIL_INTR_UMAX = 39,
@@ -1017,6 +1024,26 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
                                                        src[1], src[2]);
          store_alu_dest(ctx, alu, 0, v);
       }
+      break;
+
+   case nir_op_ftrunc:
+      emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_Z, src[0]);
+      break;
+
+   case nir_op_fceil:
+      emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_PI, src[0]);
+      break;
+
+   case nir_op_ffloor:
+      emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NI, src[0]);
+      break;
+
+   case nir_op_ffract:
+      emit_unary_intin(ctx, alu, DXIL_INTR_FRC, src[0]);
+      break;
+
+   case nir_op_fround_even:
+      emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NE, src[0]);
       break;
 
    case nir_op_imax:
