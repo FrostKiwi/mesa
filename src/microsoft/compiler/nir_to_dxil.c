@@ -34,6 +34,20 @@
 
 #include <stdint.h>
 
+#define DEBUG_NIR_TO_DXIL
+
+#ifdef DEBUG_NIR_TO_DXIL
+#define NIR_INSTR_UNSUPPORTED(instr) \
+   do { \
+      fprintf(stderr, "Unsupported instruction:"); \
+      nir_print_instr(instr, stderr); \
+      fprintf(stderr, "\n"); \
+   } while (0)
+#else
+#define NIR_INSTR_UNSUPPORTED(instr)
+#endif
+
+
 static bool
 emit_llvm_ident(struct dxil_module *m)
 {
