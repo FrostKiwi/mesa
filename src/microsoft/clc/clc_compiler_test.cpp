@@ -530,6 +530,23 @@ TEST(built_ins, global_id)
    ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
+TEST(built_ins, global_id_rmw)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *output)\n\
+   {\n\
+       uint id = get_global_id(0);\n\
+       output[id] = output[id] * (id + 1);\n\
+   }\n";
+   const uint32_t input[] = {
+      0x00000001, 0x10000001, 0x00020002, 0x04010203
+   };
+   const uint32_t expected[] = {
+      0x00000001, 0x20000002, 0x00060006, 0x1004080c
+   };
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+}
+
 TEST(types, float_basics)
 {
    const char *kernel_source =
