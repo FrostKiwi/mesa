@@ -2227,48 +2227,42 @@ emit_ret(struct dxil_module *m, struct dxil_instr *instr)
 }
 
 static bool
+emit_instr(struct dxil_module *m, struct dxil_instr *instr)
+{
+   switch (instr->type) {
+   case INSTR_BINOP:
+      return emit_binop(m, instr);
+
+   case INSTR_CMP:
+      return emit_cmp(m, instr);
+
+   case INSTR_SELECT:
+      return emit_select(m, instr);
+
+   case INSTR_CAST:
+      return emit_cast(m, instr);
+
+   case INSTR_CALL:
+      return emit_call(m, instr);
+
+   case INSTR_RET:
+      return emit_ret(m, instr);
+
+   default:
+      unreachable("unexpected instruction type");
+   }
+}
+
+static bool
 emit_function(struct dxil_module *m)
 {
    if (!enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
        !emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
       return false;
 
-   struct dxil_instr *instr;
-   LIST_FOR_EACH_ENTRY(instr, &m->instr_list, head) {
-      switch (instr->type) {
-      case INSTR_BINOP:
-         if (!emit_binop(m, instr))
-            return false;
-         break;
-
-      case INSTR_CMP:
-         if (!emit_cmp(m, instr))
-            return false;
-         break;
-
-      case INSTR_SELECT:
-         if (!emit_select(m, instr))
-            return false;
-         break;
-
-      case INSTR_CAST:
-         if (!emit_cast(m, instr))
-            return false;
-         break;
-
-      case INSTR_CALL:
-         if (!emit_call(m, instr))
-            return false;
-         break;
-
-      case INSTR_RET:
-         if (!emit_ret(m, instr))
-            return false;
-         break;
-
-      default:
-         unreachable("unexpected instruction type");
-      }
+   list_for_each_entry(struct dxil_instr, instr, &m->instr_list, head) {
+      if (!emit_instr(m, instr))
+         return false;
    }
 
    return exit_block(m);
