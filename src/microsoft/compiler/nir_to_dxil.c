@@ -164,6 +164,7 @@ enum dxil_intr {
 
    DXIL_INTR_CREATE_HANDLE = 57,
 
+   DXIL_INTR_BUFFER_LOAD = 68,
    DXIL_INTR_BUFFER_STORE = 69,
 
    DXIL_INTR_THREAD_ID = 93,
@@ -223,6 +224,19 @@ get_dx_handle_type(struct dxil_module *m)
       return NULL;
 
    return dxil_module_get_struct_type(m, "dx.types.Handle", &ptr_type, 1);
+}
+
+static const struct dxil_type *
+get_dx_resret_i32_type(struct dxil_module *m)
+{
+   const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
+   if (!int32_type)
+      return NULL;
+
+   const struct dxil_type *resret[] =
+      { int32_type, int32_type, int32_type, int32_type, int32_type };
+
+   return dxil_module_get_struct_type(m, "dx.types.ResRet.i32", resret, 5);
 }
 
 static const struct dxil_type *
@@ -295,6 +309,7 @@ struct ntd_context {
                           *threadid_func,
                           *threadidingroup_func,
                           *groupid_func,
+                          *bufferload_func,
                           *bufferstore_func,
                           *createhandle_func;
 
@@ -602,6 +617,46 @@ emit_groupid_call(struct ntd_context *ctx, const struct dxil_value *comp)
    return dxil_emit_call(&ctx->mod, ctx->groupid_func, args, ARRAY_SIZE(args));
 }
 
+static const struct dxil_value *
+emit_bufferload_call(struct ntd_context *ctx,
+                     const struct dxil_value *handle,
+                     const struct dxil_value *coord[2])
+{
+   if (!ctx->bufferload_func) {
+      const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
+      const struct dxil_type *handle_type = get_dx_handle_type(&ctx->mod);
+      const struct dxil_type *resret_type = get_dx_resret_i32_type(&ctx->mod);
+      if (!int32_type || !handle_type || !resret_type)
+         return false;
+
+      const struct dxil_type *arg_types[] = {
+         int32_type,
+         handle_type,
+         int32_type,
+         int32_type,
+      };
+
+      const struct dxil_type *func_type =
+         dxil_module_add_function_type(&ctx->mod, resret_type,
+                                       arg_types, ARRAY_SIZE(arg_types));
+      if (!func_type)
+         return false;
+
+      ctx->bufferload_func = dxil_add_function_decl(&ctx->mod,
+                                                    "dx.op.bufferLoad.i32",
+                                                    func_type,
+                                                    DXIL_ATTR_KIND_READ_ONLY);
+      if (!ctx->bufferload_func)
+         return false;
+   }
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
+      DXIL_INTR_BUFFER_LOAD);
+   const struct dxil_value *args[] = { opcode, handle, coord[0], coord[1] };
+
+   return dxil_emit_call(&ctx->mod, ctx->bufferload_func,
+                         args, ARRAY_SIZE(args));
+}
 static bool
 emit_bufferstore_call(struct ntd_context *ctx,
                       const struct dxil_value *handle,
@@ -1426,6 +1481,49 @@ emit_load_local_work_group_id(struct ntd_context *ctx,
 }
 
 static bool
+emit_load_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_type *int32_type =
+      dxil_module_get_int_type(&ctx->mod, 32);
+   const struct dxil_value *int32_undef =
+      dxil_module_get_undef(&ctx->mod, int32_type);
+
+   const struct dxil_value *coord[2] = {
+      get_src(ctx, &intr->src[1], 0, nir_type_uint),
+      int32_undef
+   };
+
+   nir_const_value *const_ssbo = nir_src_as_const_value(intr->src[0]);
+   if (const_ssbo) {
+      unsigned idx = const_ssbo->u32;
+      assert(ctx->num_uavs > idx);
+      assert(intr->dest.is_ssa);
+
+      const struct dxil_value *load =
+         emit_bufferload_call(ctx, ctx->uav_handles[idx], coord);
+      if (!load)
+         return false;
+
+      nir_component_mask_t comps = nir_ssa_def_components_read(&intr->dest.ssa);
+      assert(comps != 0);
+      for (int i = 0; i < nir_intrinsic_dest_components(intr); i++) {
+         if (!(comps & (1 << i)))
+            continue;
+         const struct dxil_value *val =
+            dxil_emit_extractval(&ctx->mod, load, get_dx_resret_i32_type(&ctx->mod), i);
+         if (!val)
+            return false;
+         store_dest_int(ctx, &intr->dest, i, val);
+      }
+   } else {
+      assert("dynamic ssbo addressing not implemented");
+      return false;
+   }
+
+   return true;
+}
+
+static bool
 emit_store_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    const struct dxil_type *int32_type =
@@ -1538,6 +1636,8 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_local_invocation_id(ctx, intr);
    case nir_intrinsic_load_work_group_id:
       return emit_load_local_work_group_id(ctx, intr);
+   case nir_intrinsic_load_ssbo:
+      return emit_load_ssbo(ctx, intr);
    case nir_intrinsic_store_ssbo:
       return emit_store_ssbo(ctx, intr);
    case nir_intrinsic_store_deref:
@@ -1831,6 +1931,69 @@ lower_global_mem_to_ssbo(struct nir_shader *nir)
             store->src[1] = nir_src_for_ssa(ssbo_loc);
             store->src[2] = nir_src_for_ssa(ssbo_idx);
             nir_builder_instr_insert(&b, &store->instr);
+            nir_instr_remove(instr);
+         }
+      }
+
+      /*
+       * Find the corresponding load_global instructions and rewrite them to
+       * SSBO accesses.
+       */
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
+
+            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+            if (intr->intrinsic != nir_intrinsic_load_global)
+               continue;
+            b.cursor = nir_before_instr(instr);
+
+            assert(intr->src[0].is_ssa);
+            nir_ssa_def *ptr = intr->src[0].ssa; /* source 'pointer' */
+#if 0
+            /*
+            * Here's where we would ordinarily do this, and reclaim our SSBO
+            * index from the high bits of the pointer:
+            *  nir_ssa_def *ssbo_loc = nir_ishr(&b, ptr, nir_imm_int(&b, 28));
+            *
+            * However, since we don't implement runtime lookup of SSBO
+            * binding index -> UAV handle yet
+            * (cf. nir_to_dxil.c:emit_store_ssbo), and NIR isn't quite smart
+            * enough to see that: ((x & 0x0fffffff) << 28) >> 28 == 0,
+            * we ... can't actually do this.
+            *
+            * So for just now, you get one SSBO, and all of the above is an
+            * elaborate exercise in misdirection.
+            *
+            * Fixing this would likely involve converting our typed UAVs into
+            * raw, and pushing the handle value into a runtime array; doing
+            * this would bring us closer to the pointer model as we could at
+            * least deal in byte rather than element offsets into the
+            * RWBuffer.
+            */
+            nir_ssa_def *ssbo_loc = nir_ishr(&b, ptr, nir_imm_int(&b, 28));
+#else
+            nir_ssa_def *ssbo_loc = nir_imm_zero(&b, 1, 32);
+#endif
+            nir_ssa_def *ssbo_idx = nir_iand(&b, ptr,
+                                             nir_imm_int(&b, 0x00ffffff));
+            assert(intr->dest.is_ssa);
+            nir_ssa_def *dest = &intr->dest.ssa;
+            ssbo_idx = nir_ishr(&b, ssbo_idx,
+                                nir_imm_int(&b, dest->bit_size / 16));
+
+            nir_intrinsic_instr *load =
+               nir_intrinsic_instr_create(b.shader, nir_intrinsic_load_ssbo);
+            load->num_components = 1;
+            load->src[0] = nir_src_for_ssa(ssbo_loc);
+            load->src[1] = nir_src_for_ssa(ssbo_idx);
+            nir_ssa_dest_init(&load->instr, &load->dest, load->num_components,
+                              dest->bit_size, dest->name);
+            nir_intrinsic_set_align(load, 4, 0);
+
+            nir_builder_instr_insert(&b, &load->instr);
+            nir_ssa_def_rewrite_uses(dest, nir_src_for_ssa(&load->dest.ssa));
             nir_instr_remove(instr);
          }
       }
