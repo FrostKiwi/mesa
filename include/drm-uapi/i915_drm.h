@@ -359,6 +359,7 @@ typedef struct _drm_i915_sarea {
 #define DRM_I915_QUERY			0x39
 #define DRM_I915_GEM_VM_CREATE		0x3a
 #define DRM_I915_GEM_VM_DESTROY		0x3b
+#define DRM_I915_GEM_VM_BIND		0x3c
 /* Must be kept compact -- no holes */
 
 #define DRM_IOCTL_I915_INIT		DRM_IOW( DRM_COMMAND_BASE + DRM_I915_INIT, drm_i915_init_t)
@@ -422,6 +423,7 @@ typedef struct _drm_i915_sarea {
 #define DRM_IOCTL_I915_QUERY			DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_QUERY, struct drm_i915_query)
 #define DRM_IOCTL_I915_GEM_VM_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_VM_CREATE, struct drm_i915_gem_vm_control)
 #define DRM_IOCTL_I915_GEM_VM_DESTROY	DRM_IOW (DRM_COMMAND_BASE + DRM_I915_GEM_VM_DESTROY, struct drm_i915_gem_vm_control)
+#define DRM_IOCTL_I915_GEM_VM_BIND		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_VM_BIND, struct drm_i915_gem_vm_bind)
 
 /* Allow drivers to submit batchbuffers directly to hardware, relying
  * on the security mechanisms provided by hardware.
@@ -619,6 +621,8 @@ typedef struct drm_i915_irq_wait {
  */
 #define I915_PARAM_PERF_REVISION	54
 
+/* Shared Virtual Memory (SVM) support capability */
+#define I915_PARAM_HAS_SVM	57
 /* Must be kept compact -- no holes and well documented */
 
 typedef struct drm_i915_getparam {
@@ -1023,8 +1027,10 @@ struct drm_i915_gem_exec_object2 {
  * if the kernel supports this flag.
  */
 #define EXEC_OBJECT_CAPTURE		(1<<7)
+
+#define EXEC_OBJECT_PERSISTENT		(1<<8)
 /* All remaining bits are MBZ and RESERVED FOR FUTURE USE */
-#define __EXEC_OBJECT_UNKNOWN_FLAGS -(EXEC_OBJECT_CAPTURE<<1)
+#define __EXEC_OBJECT_UNKNOWN_FLAGS -(EXEC_OBJECT_PERSISTENT<<1)
 	__u64 flags;
 
 	union {
@@ -2320,6 +2326,57 @@ struct drm_i915_query_perf_config {
 	 *         - n_flex_regs
 	 */
 	__u8 data[];
+};
+
+/**
+ * struct drm_i915_gem_vm_bind_va
+ *
+ * VA to object mapping to [un]bind.
+ */
+struct drm_i915_gem_vm_bind_va {
+	/** VA start to [un]bind **/
+	__u64 start;
+
+	/** Offset in Object to [un]bind for I915_GEM_VM_BIND_SVM_OBJ type **/
+	__u64 offset;
+
+	/** VA length to [un]bind **/
+	__u64 length;
+
+	/** Type of memory to [un]bind **/
+	__u32 type;
+#define I915_GEM_VM_BIND_SVM_OBJ      0
+
+	/** Object handle to [un]bind for I915_GEM_VM_BIND_SVM_OBJ type **/
+	__u32 handle;
+
+	/** Flags **/
+	__u32 flags;
+#define I915_GEM_VM_BIND_UNBIND      (1 << 0)
+#define I915_GEM_VM_BIND_READONLY    (1 << 1)
+};
+
+/**
+ * struct drm_i915_gem_vm_bind
+ *
+ * [Un]Bind an array of objects in a vm's page table.
+ */
+struct drm_i915_gem_vm_bind {
+	/** vm to [un]bind **/
+	__u32 vm_id;
+
+	/** number of VAs to [un]bind **/
+	__u32 num_vas;
+
+	/** Array of VAs to [un]bind **/
+	__u64 vas_ptr;
+
+	/**
+	 * Zero-terminated chain of extensions.
+	 *
+	 * No current extensions defined; mbz.
+	 */
+	__u64 extensions;
 };
 
 #if defined(__cplusplus)
