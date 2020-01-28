@@ -951,6 +951,7 @@ emit_attribute_table(struct dxil_module *m)
    LIST_FOR_EACH_ENTRY(as, &m->attr_set_list, head) {
       if (!emit_record_int(m, PARAMATTR_CODE_ENTRY, id))
          return false;
+      id++;
    }
 
    return exit_block(m);
