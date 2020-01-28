@@ -28,7 +28,8 @@ cmake -G Ninja ../llvm -DCMAKE_BUILD_TYPE:STRING="Release" ^
                        -DLLVM_OPTIMIZED_TABLEGEN:BOOL=TRUE ^
                        -DLLVM_ENABLE_ASSERTIONS:BOOL=TRUE ^
                        -DLLVM_SPIRV_INCLUDE_TESTS=OFF ^
-                       -DLLVM_ENABLE_PROJECTS="clang"
+                       -DLLVM_ENABLE_PROJECTS="clang" ^
+                       -DCMAKE_INSTALL_PREFIX=<mesa path>\subprojects\llvm
 ninja llvm-spirv -j`nproc`
 ```
 
@@ -37,4 +38,4 @@ For more detail about building LLVM with CMake, visit (https://llvm.org/docs/CMa
 
 ## Installing SPIRV-LLVM-Translator
 
-SPIRV-LLVM-Translator needs to be install in `<mesa repo>\subproject\llvm`
+To install SPIRV-LLVM-Translator to the Mesa subproject folder, simply run `ninja install`.
