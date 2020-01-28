@@ -821,10 +821,31 @@ get_src_ssa(struct ntd_context *ctx, const nir_ssa_def *ssa, unsigned chan)
 }
 
 static const struct dxil_value *
-get_src(struct ntd_context *ctx, nir_src *src, unsigned chan)
+get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
+        nir_alu_type type)
 {
    assert(src->is_ssa);
-   return get_src_ssa(ctx, src->ssa, chan);
+   const struct dxil_value *value = get_src_ssa(ctx, src->ssa, chan);
+
+   switch (nir_alu_type_get_base_type(type)) {
+   case nir_type_int:
+   case nir_type_uint:
+      assert(nir_src_bit_size(*src) == 32);
+      /* nohing to do */
+      return value;
+
+   case nir_type_float:
+      assert(nir_src_bit_size(*src) == 32);
+      return bitcast_to_float(ctx, value);
+
+   case nir_type_bool:
+      assert(nir_src_bit_size(*src) == 1);
+      /* nothing to do */
+      return value;
+
+   default:
+      unreachable("unknown nir_alu_type");
+   }
 }
 
 static const struct dxil_value *
@@ -833,31 +854,9 @@ get_alu_src(struct ntd_context *ctx, nir_alu_instr *alu, unsigned src)
    assert(!alu->src[src].abs);
    assert(!alu->src[src].negate);
 
-   assert(alu->dest.write_mask == 1);
    unsigned chan = alu->src[src].swizzle[0];
-
-   const struct dxil_value *value = get_src(ctx, &alu->src[src].src, chan);
-
-   nir_alu_type type = nir_op_infos[alu->op].input_types[src];
-   switch (nir_alu_type_get_base_type(type)) {
-   case nir_type_int:
-   case nir_type_uint:
-      assert(nir_src_bit_size(alu->src[src].src) == 32);
-      /* nohing to do */
-      return value;
-
-   case nir_type_float:
-      assert(nir_src_bit_size(alu->src[src].src) == 32);
-      return bitcast_to_float(ctx, value);
-
-   case nir_type_bool:
-      assert(nir_src_bit_size(alu->src[src].src) == 1);
-      /* nothing to do */
-      return value;
-
-   default:
-      unreachable("unknown nir_alu_type");
-   }
+   return get_src(ctx, &alu->src[src].src, chan,
+                  nir_op_infos[alu->op].input_types[src]);
 }
 
 static void
@@ -937,17 +936,20 @@ emit_binary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
 static void
 emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 {
-   /* handle vec-instructions first; they are the only ones that can have
-      non-power-of-two write-masks */
+   /* handle vec-instructions first; they are the only ones that produce
+    * vector results.
+    */
    switch (alu->op) {
    case nir_op_vec2:
    case nir_op_vec3:
    case nir_op_vec4:
       for (int i = 0; i < nir_op_infos[alu->op].num_inputs; i++)
-         store_alu_dest(ctx, alu, i, get_src(ctx, &alu->src[i].src, 0));
+         store_alu_dest(ctx, alu, i, get_alu_src(ctx, alu, 0));
       return;
    }
 
+   /* other ops should be scalar */
+   assert(alu->dest.write_mask == 1);
    const struct dxil_value *src[4];
    assert(nir_op_infos[alu->op].num_inputs <= 4);
    for (unsigned i = 0; i < nir_op_infos[alu->op].num_inputs; i++)
@@ -1158,14 +1160,14 @@ emit_store_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       dxil_module_get_undef(&ctx->mod, int32_type);
 
    const struct dxil_value *coord[2] = {
-      get_src(ctx, &intr->src[2], 0),
+      get_src(ctx, &intr->src[2], 0, nir_type_uint),
       int32_undef
    };
    const struct dxil_value *value[4] = {
-      get_src(ctx, &intr->src[0], 0),
-      get_src(ctx, &intr->src[0], 1),
-      get_src(ctx, &intr->src[0], 2),
-      get_src(ctx, &intr->src[0], 3)
+      get_src(ctx, &intr->src[0], 0, nir_type_uint),
+      get_src(ctx, &intr->src[0], 1, nir_type_uint),
+      get_src(ctx, &intr->src[0], 2, nir_type_uint),
+      get_src(ctx, &intr->src[0], 3, nir_type_uint)
    };
 
    const struct dxil_value *write_mask =
