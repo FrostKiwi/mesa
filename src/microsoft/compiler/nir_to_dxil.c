@@ -905,11 +905,10 @@ static void
 emit_unary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
                  enum dxil_intr intr, const struct dxil_value *op)
 {
+   const nir_op_info *info = &nir_op_infos[alu->op];
    assert(nir_dest_bit_size(alu->dest.dest) == 32);
-   assert(nir_op_infos[alu->op].output_type ==
-          nir_op_infos[alu->op].input_types[0]);
-   enum overload_type overload =
-      get_overload(nir_op_infos[alu->op].output_type);
+   assert(info->output_type == info->input_types[0]);
+   enum overload_type overload = get_overload(info->output_type);
 
    const struct dxil_value *v = emit_unary_call(ctx, overload, intr, op);
    store_alu_dest(ctx, alu, 0, v);
@@ -920,13 +919,11 @@ emit_binary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
                   enum dxil_intr intr,
                   const struct dxil_value *op0, const struct dxil_value *op1)
 {
+   const nir_op_info *info = &nir_op_infos[alu->op];
    assert(nir_dest_bit_size(alu->dest.dest) == 32);
-   assert(nir_op_infos[alu->op].output_type ==
-          nir_op_infos[alu->op].input_types[0]);
-   assert(nir_op_infos[alu->op].output_type ==
-          nir_op_infos[alu->op].input_types[1]);
-   enum overload_type overload =
-      get_overload(nir_op_infos[alu->op].output_type);
+   assert(info->output_type == info->input_types[0]);
+   assert(info->output_type == info->input_types[1]);
+   enum overload_type overload = get_overload(info->output_type);
 
    const struct dxil_value *v = emit_binary_call(ctx, overload, intr,
                                                  op0, op1);
