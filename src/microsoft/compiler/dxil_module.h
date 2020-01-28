@@ -312,6 +312,10 @@ dxil_emit_select(struct dxil_module *m,
                 const struct dxil_value *op2);
 
 const struct dxil_value *
+dxil_emit_extractval(struct dxil_module *m, const struct dxil_value *src,
+                     const struct dxil_type *type, const unsigned int index);
+
+const struct dxil_value *
 dxil_emit_cast(struct dxil_module *m, enum dxil_cast_opcode opcode,
                const struct dxil_type *type,
                const struct dxil_value *value);
