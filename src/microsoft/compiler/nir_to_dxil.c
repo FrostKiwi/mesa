@@ -1310,6 +1310,17 @@ get_dxil_shader_kind(struct nir_shader *s)
 bool
 nir_to_dxil(struct nir_shader *s, struct blob *blob)
 {
+   struct ntd_context ctx = { 0 };
+   dxil_module_init(&ctx.mod);
+   ctx.mod.shader_kind = get_dxil_shader_kind(s);
+   ctx.mod.major_version = 6;
+   ctx.mod.minor_version = 0;
+
+   if (!emit_module(&ctx, s)) {
+      debug_printf("D3D12: dxil_container_add_module failed\n");
+      return false;
+   }
+
    struct dxil_container container;
    dxil_container_init(&container);
 
@@ -1325,16 +1336,6 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
       return false;
    }
 
-   struct ntd_context ctx = { 0 };
-   dxil_module_init(&ctx.mod);
-   ctx.mod.shader_kind = get_dxil_shader_kind(s);
-   ctx.mod.major_version = 6;
-   ctx.mod.minor_version = 0;
-
-   if (!emit_module(&ctx, s)) {
-      debug_printf("D3D12: dxil_container_add_module failed\n");
-      return false;
-   }
 
    if (!dxil_container_add_state_validation(&container, ctx.resources,
                                             ctx.num_resources)) {
