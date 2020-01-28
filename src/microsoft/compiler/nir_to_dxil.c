@@ -303,7 +303,7 @@ get_overload_type(struct ntd_context *ctx, enum overload_type overload)
 {
    switch (overload) {
    case I32: return dxil_module_get_int_type(&ctx->mod, 32);
-   case F32: return dxil_module_get_float_type(&ctx->mod);
+   case F32: return dxil_module_get_float_type(&ctx->mod, 32);
    default:
       unreachable("unexpected overload type");
    }
@@ -779,10 +779,10 @@ bitcast_to_int(struct ntd_context *ctx, unsigned bit_size,
 }
 
 static const struct dxil_value *
-bitcast_to_float(struct ntd_context *ctx,
+bitcast_to_float(struct ntd_context *ctx, unsigned bit_size,
                  const struct dxil_value *value)
 {
-   const struct dxil_type *type = dxil_module_get_float_type(&ctx->mod);
+   const struct dxil_type *type = dxil_module_get_float_type(&ctx->mod, bit_size);
    if (!type)
       return NULL;
 
@@ -869,7 +869,7 @@ get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
 
    case nir_type_float:
       assert(nir_src_bit_size(*src) == 32);
-      return bitcast_to_float(ctx, value);
+      return bitcast_to_float(ctx, nir_src_bit_size(*src), value);
 
    case nir_type_bool:
       assert(nir_src_bit_size(*src) == 1);
@@ -1050,7 +1050,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_umin: return emit_binary_intin(ctx, alu, DXIL_INTR_UMIN, src[0], src[1]);
    case nir_op_i2f32: {
          const struct dxil_type *float_type =
-            dxil_module_get_float_type(&ctx->mod);
+            dxil_module_get_float_type(&ctx->mod, 32);
          return emit_cast(ctx, alu, DXIL_CAST_SITOFP, float_type, src[0]);
       }
    case nir_op_f2i32: {
@@ -1060,7 +1060,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
       }
    case nir_op_u2f32: {
          const struct dxil_type *float_type =
-            dxil_module_get_float_type(&ctx->mod);
+            dxil_module_get_float_type(&ctx->mod, 32);
          return emit_cast(ctx, alu, DXIL_CAST_UITOFP, float_type, src[0]);
       }
    case nir_op_f2u32: {

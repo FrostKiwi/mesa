@@ -157,7 +157,7 @@ struct dxil_module {
    const struct dxil_type *int1_type;
    const struct dxil_type *int8_type;
    const struct dxil_type *int32_type;
-   const struct dxil_type *float_type;
+   const struct dxil_type *float32_type;
 };
 
 void
@@ -183,7 +183,7 @@ const struct dxil_type *
 dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size);
 
 const struct dxil_type *
-dxil_module_get_float_type(struct dxil_module *m);
+dxil_module_get_float_type(struct dxil_module *m, unsigned bit_size);
 
 const struct dxil_type *
 dxil_module_get_pointer_type(struct dxil_module *m,
@@ -212,6 +212,9 @@ dxil_module_get_int32_const(struct dxil_module *m, int32_t value);
 
 const struct dxil_value *
 dxil_module_get_float_const(struct dxil_module *m, float value);
+
+const struct dxil_value *
+dxil_module_get_double_const(struct dxil_module *m, double value);
 
 const struct dxil_value *
 dxil_module_get_undef(struct dxil_module *m, const struct dxil_type *type);

@@ -47,7 +47,7 @@ dxil_module_init(struct dxil_module *m)
    list_inithead(&m->md_named_node_list);
 
    m->void_type = m->int1_type = m->int8_type = m->int32_type =
-   m->float_type = NULL;
+   m->float32_type = NULL;
 }
 
 bool
@@ -332,6 +332,7 @@ struct dxil_type {
 
    union {
       unsigned int_bits;
+      unsigned float_bits;
       const struct dxil_type *ptr_target_type;
       struct {
          const char *name;
@@ -403,9 +404,12 @@ get_int32_type(struct dxil_module *m)
 }
 
 static const struct dxil_type *
-create_float_type(struct dxil_module *m)
+create_float_type(struct dxil_module *m, unsigned bit_size)
 {
-   return create_type(m, TYPE_FLOAT);
+   struct dxil_type *type = create_type(m, TYPE_FLOAT);
+   if (type)
+      type->float_bits = bit_size;
+   return type;
 }
 
 const struct dxil_type *
@@ -420,12 +424,19 @@ dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size)
    }
 }
 
-const struct dxil_type *
-dxil_module_get_float_type(struct dxil_module *m)
+static const struct dxil_type *
+get_float32_type(struct dxil_module *m)
 {
-   if (!m->float_type)
-      m->float_type = create_float_type(m);
-   return m->float_type;
+   if (!m->float32_type)
+      m->float32_type = create_float_type(m, 32);
+   return m->float32_type;
+}
+
+const struct dxil_type *
+dxil_module_get_float_type(struct dxil_module *m, unsigned bit_size)
+{
+   assert(bit_size == 32);
+   return get_float32_type(m);
 }
 
 const struct dxil_type *
@@ -970,6 +981,16 @@ emit_type_table_abbrevs(struct dxil_module *m)
 }
 
 static bool
+emit_float_type(struct dxil_module *m, unsigned bit_size)
+{
+   switch (bit_size) {
+   case 32: return emit_record(m, TYPE_CODE_FLOAT, NULL, 0);
+   default:
+      unreachable("unexpected bit_size for float type");
+   }
+}
+
+static bool
 emit_pointer_type(struct dxil_module *m, int type_index)
 {
    uint64_t data[] = { TYPE_CODE_POINTER, type_index, 0 };
@@ -1069,7 +1090,7 @@ emit_type(struct dxil_module *m, struct dxil_type *type)
       return emit_record_int(m, TYPE_CODE_INTEGER, type->int_bits);
 
    case TYPE_FLOAT:
-      return emit_record(m, TYPE_CODE_FLOAT, NULL, 0);
+      return emit_float_type(m, type->float_bits);
 
    case TYPE_POINTER:
       return emit_pointer_type(m, type->ptr_target_type->id);
@@ -1113,7 +1134,7 @@ struct dxil_const {
    bool undef;
    union {
       intmax_t int_value;
-      float float_value;
+      double float_value;
    };
 
    struct list_head head;
@@ -1188,7 +1209,7 @@ dxil_module_get_int32_const(struct dxil_module *m, int32_t value)
 const struct dxil_value *
 dxil_module_get_float_const(struct dxil_module *m, float value)
 {
-   const struct dxil_type *type = dxil_module_get_float_type(m);
+   const struct dxil_type *type = get_float32_type(m);
    if (!type)
       return NULL;
 
