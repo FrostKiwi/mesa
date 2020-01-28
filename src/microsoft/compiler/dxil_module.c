@@ -2044,7 +2044,8 @@ struct dxil_instr {
       INSTR_SELECT,
       INSTR_CAST,
       INSTR_CALL,
-      INSTR_RET
+      INSTR_RET,
+      INSTR_EXTRACTVAL,
    } type;
 
    union {
@@ -2077,6 +2078,12 @@ struct dxil_instr {
       struct {
          struct dxil_value *value;
       } ret;
+
+      struct {
+         const struct dxil_value *src;
+         const struct dxil_type *type;
+         unsigned int idx;
+      } extractval;
    };
 
    bool has_value;
@@ -2218,6 +2225,25 @@ dxil_emit_ret_void(struct dxil_module *m)
    return true;
 }
 
+const struct dxil_value *
+dxil_emit_extractval(struct dxil_module *m, const struct dxil_value *src,
+                     const struct dxil_type *type, const unsigned int index)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_EXTRACTVAL);
+   if (!instr)
+      return NULL;
+
+   assert(type->type == TYPE_STRUCT);
+   assert(index < type->struct_def.num_elem_types);
+
+   instr->extractval.src = src;
+   instr->extractval.type = type;
+   instr->extractval.idx = index;
+   instr->has_value = true;
+
+   return &instr->value;
+}
+
 static bool
 emit_binop(struct dxil_module *m, struct dxil_instr *instr)
 {
@@ -2278,6 +2304,23 @@ emit_cast(struct dxil_module *m, struct dxil_instr *instr)
    };
    return emit_func_abbrev_record(m, FUNC_ABBREV_CAST,
                                   data, ARRAY_SIZE(data));
+}
+
+static bool
+emit_extractval(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_EXTRACTVAL);
+   assert(instr->value.id > instr->extractval.src->id);
+   assert(instr->value.id > instr->extractval.type->id);
+
+   /* relative value ID, followed by absolute type ID (only if
+    * forward-declared), followed by n indices */
+   uint64_t data[] = {
+      instr->value.id - instr->extractval.src->id,
+      instr->extractval.idx
+   };
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_EXTRACTVAL,
+                                data, ARRAY_SIZE(data));
 }
 
 static bool
@@ -2343,6 +2386,9 @@ emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 
    case INSTR_RET:
       return emit_ret(m, instr);
+
+   case INSTR_EXTRACTVAL:
+      return emit_extractval(m, instr);
 
    default:
       unreachable("unexpected instruction type");
