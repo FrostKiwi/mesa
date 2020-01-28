@@ -1311,6 +1311,23 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
           dxil_emit_module(&ctx->mod);
 }
 
+unsigned int
+get_dxil_shader_kind(struct nir_shader *s)
+{
+   switch (s->info.stage) {
+   case MESA_SHADER_VERTEX:
+      return DXIL_VERTEX_SHADER;
+   case MESA_SHADER_FRAGMENT:
+      return DXIL_PIXEL_SHADER;
+   case MESA_SHADER_KERNEL:
+   case MESA_SHADER_COMPUTE:
+      return DXIL_COMPUTE_SHADER;
+   default:
+      unreachable("unknown shader stage in nir_to_dxil");
+      return DXIL_COMPUTE_SHADER;
+   }
+}
+
 bool
 nir_to_dxil(struct nir_shader *s, struct blob *blob)
 {
@@ -1331,9 +1348,10 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
 
    struct ntd_context ctx = { 0 };
    dxil_module_init(&ctx.mod);
-   ctx.mod.shader_kind = DXIL_COMPUTE_SHADER;
+   ctx.mod.shader_kind = get_dxil_shader_kind(s);
    ctx.mod.major_version = 6;
    ctx.mod.minor_version = 0;
+
    if (!emit_module(&ctx, s)) {
       debug_printf("D3D12: dxil_container_add_module failed\n");
       return false;
