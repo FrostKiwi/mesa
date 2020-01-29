@@ -868,11 +868,16 @@ store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
    case nir_type_uint:
    case nir_type_int:
       assert(nir_dest_bit_size(*dest) != 1);
-      /* nothing to do */
+      if (nir_dest_bit_size(*dest) == 64)
+         ctx->mod.feats.int64_ops = true;
       break;
 
    case nir_type_float:
       assert(nir_dest_bit_size(*dest) != 1);
+      if (nir_dest_bit_size(*dest) == 64) {
+         ctx->mod.feats.doubles = true;
+         ctx->mod.feats.int64_ops = true;
+      }
       value = bitcast_to_int(ctx, nir_dest_bit_size(*dest), value);
       break;
 
@@ -917,11 +922,14 @@ get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
    case nir_type_int:
    case nir_type_uint:
       assert(nir_src_bit_size(*src) >= 32);
+      assert(nir_src_bit_size(*src) != 64 || ctx->mod.feats.int64_ops);
       /* nohing to do */
       return value;
 
    case nir_type_float:
       assert(nir_src_bit_size(*src) >= 32);
+      assert(nir_src_bit_size(*src) != 64 || (ctx->mod.feats.doubles &&
+                                              ctx->mod.feats.int64_ops));
       return bitcast_to_float(ctx, nir_src_bit_size(*src), value);
 
    case nir_type_bool:
@@ -1046,6 +1054,13 @@ get_cast_dest_type(struct ntd_context *ctx, nir_alu_instr *alu)
 }
 
 static bool
+is_double(nir_alu_type alu_type, unsigned bit_size)
+{
+   return nir_alu_type_get_base_type(alu_type) == nir_type_float &&
+          bit_size == 64;
+}
+
+static bool
 emit_cast(struct ntd_context *ctx, nir_alu_instr *alu,
           const struct dxil_value *value)
 {
@@ -1053,6 +1068,20 @@ emit_cast(struct ntd_context *ctx, nir_alu_instr *alu,
    const struct dxil_type *type = get_cast_dest_type(ctx, alu);
    if (!type)
       return false;
+
+   const nir_op_info *info = &nir_op_infos[alu->op];
+   switch (opcode) {
+   case DXIL_CAST_UITOFP:
+   case DXIL_CAST_SITOFP:
+      if (is_double(info->output_type, nir_dest_bit_size(alu->dest.dest)))
+         ctx->mod.feats.dx11_1_double_extensions = true;
+      break;
+   case DXIL_CAST_FPTOUI:
+   case DXIL_CAST_FPTOSI:
+      if (is_double(info->input_types[0], nir_src_bit_size(alu->src[0].src)))
+         ctx->mod.feats.dx11_1_double_extensions = true;
+      break;
+   }
 
    const struct dxil_value *v = dxil_emit_cast(&ctx->mod, opcode, type,
                                                value);
@@ -1349,6 +1378,7 @@ emit_load_const(struct ntd_context *ctx, nir_load_const_instr *load_const)
                                              load_const->value[i].u32);
          break;
       case 64:
+         ctx->mod.feats.int64_ops = true;
          value = dxil_module_get_int64_const(&ctx->mod,
                                              load_const->value[i].u64);
          break;
