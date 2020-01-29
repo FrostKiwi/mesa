@@ -969,11 +969,91 @@ emit_cmp(struct ntd_context *ctx, nir_alu_instr *alu,
    return true;
 }
 
+static enum dxil_cast_opcode
+get_cast_op(nir_alu_instr *alu)
+{
+   unsigned dst_bits = nir_dest_bit_size(alu->dest.dest);
+   unsigned src_bits = nir_src_bit_size(alu->src[0].src);
+
+   switch (alu->op) {
+   /* float -> float */
+   case nir_op_f2f32:
+   case nir_op_f2f64:
+      assert(dst_bits != src_bits);
+      if (dst_bits < src_bits)
+         return DXIL_CAST_FPTRUNC;
+      else
+         return DXIL_CAST_FPEXT;
+
+   /* int -> int */
+   case nir_op_i2i32:
+   case nir_op_i2i64:
+      assert(dst_bits != src_bits);
+      if (dst_bits < src_bits)
+         return DXIL_CAST_TRUNC;
+      else
+         return DXIL_CAST_SEXT;
+
+   /* uint -> uint */
+   case nir_op_u2u32:
+   case nir_op_u2u64:
+      assert(dst_bits != src_bits);
+      if (dst_bits < src_bits)
+         return DXIL_CAST_TRUNC;
+      else
+         return DXIL_CAST_ZEXT;
+
+   /* float -> int */
+   case nir_op_f2i32:
+   case nir_op_f2i64:
+      return DXIL_CAST_FPTOSI;
+
+   /* float -> uint */
+   case nir_op_f2u32:
+   case nir_op_f2u64:
+      return DXIL_CAST_FPTOUI;
+
+   /* int -> float */
+   case nir_op_i2f32:
+   case nir_op_i2f64:
+      return DXIL_CAST_SITOFP;
+
+   /* uint -> float */
+   case nir_op_u2f32:
+   case nir_op_u2f64:
+      return DXIL_CAST_UITOFP;
+
+   default:
+      unreachable("unexpected cast op");
+   }
+}
+
+static const struct dxil_type *
+get_cast_dest_type(struct ntd_context *ctx, nir_alu_instr *alu)
+{
+   unsigned dst_bits = nir_dest_bit_size(alu->dest.dest);
+   switch (nir_alu_type_get_base_type(nir_op_infos[alu->op].output_type)) {
+   case nir_type_int:
+   case nir_type_uint:
+      return dxil_module_get_int_type(&ctx->mod, dst_bits);
+
+   case nir_type_float:
+      return dxil_module_get_float_type(&ctx->mod, dst_bits);
+
+   default:
+      unreachable("unknown nir_alu_type");
+   }
+}
+
 static bool
 emit_cast(struct ntd_context *ctx, nir_alu_instr *alu,
-          enum dxil_cast_opcode opcode,
-          const struct dxil_type *type, const struct dxil_value *value)
+          const struct dxil_value *value)
 {
+   enum dxil_cast_opcode opcode = get_cast_op(alu);
+   const struct dxil_type *type = get_cast_dest_type(ctx, alu);
+   if (!type)
+      return false;
+
    const struct dxil_value *v = dxil_emit_cast(&ctx->mod, opcode, type,
                                                value);
    if (!v)
@@ -1114,26 +1194,16 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_imin: return emit_binary_intin(ctx, alu, DXIL_INTR_IMIN, src[0], src[1]);
    case nir_op_umax: return emit_binary_intin(ctx, alu, DXIL_INTR_UMAX, src[0], src[1]);
    case nir_op_umin: return emit_binary_intin(ctx, alu, DXIL_INTR_UMIN, src[0], src[1]);
-   case nir_op_i2f32: {
-         const struct dxil_type *float_type =
-            dxil_module_get_float_type(&ctx->mod, 32);
-         return emit_cast(ctx, alu, DXIL_CAST_SITOFP, float_type, src[0]);
-      }
-   case nir_op_f2i32: {
-         const struct dxil_type *int32_type =
-            dxil_module_get_int_type(&ctx->mod, 32);
-         return emit_cast(ctx, alu, DXIL_CAST_FPTOSI, int32_type, src[0]);
-      }
-   case nir_op_u2f32: {
-         const struct dxil_type *float_type =
-            dxil_module_get_float_type(&ctx->mod, 32);
-         return emit_cast(ctx, alu, DXIL_CAST_UITOFP, float_type, src[0]);
-      }
-   case nir_op_f2u32: {
-         const struct dxil_type *int32_type =
-            dxil_module_get_int_type(&ctx->mod, 32);
-         return emit_cast(ctx, alu, DXIL_CAST_FPTOUI, int32_type, src[0]);
-      }
+
+   case nir_op_f2f32:
+   case nir_op_f2i32:
+   case nir_op_f2u32:
+   case nir_op_i2f32:
+   case nir_op_i2i32:
+   case nir_op_u2f32:
+   case nir_op_u2u32:
+      return emit_cast(ctx, alu, src[0]);
+
    default:
       NIR_INSTR_UNSUPPORTED(&alu->instr);
       assert("Unimplemented ALU instruction");
