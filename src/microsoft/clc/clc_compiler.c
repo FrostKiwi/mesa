@@ -247,6 +247,8 @@ int clc_compile_from_source(
       return -1;
    }
 
+   glsl_type_singleton_init_or_ref();
+
    nir = spirv_to_nir(spv_src, spv_size / 4,
                       NULL, 0,
                       MESA_SHADER_KERNEL, "main_test",
@@ -287,6 +289,8 @@ int clc_compile_from_source(
       debug_printf("D3D12: nir_to_dxil failed\n");
       return -1;
    }
+
+   glsl_type_singleton_decref();
 
    blob_finish_get_buffer(&tmp, blob, blob_size);
    return 0;
