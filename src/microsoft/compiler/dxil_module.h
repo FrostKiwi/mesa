@@ -21,6 +21,11 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+ /*
+  * See the DirectX Shader Compiler for documentation for DXIL details:
+  * https://github.com/Microsoft/DirectXShaderCompiler/blob/master/docs/DXIL.rst
+  */
+
 #ifndef DXIL_MODULE_H
 #define DXIL_MODULE_H
 
@@ -28,10 +33,18 @@
 extern "C" {
 #endif
 
-#include "dxil.h"
 #include "dxil_buffer.h"
 
 #include "util/list.h"
+
+enum dxil_shader_kind {
+   DXIL_PIXEL_SHADER = 0,
+   DXIL_VERTEX_SHADER = 1,
+   DXIL_GEOMETRY_SHADER = 2,
+   DXIL_HULL_SHADER = 3,
+   DXIL_DOMAIN_SHADER = 4,
+   DXIL_COMPUTE_SHADER = 5,
+};
 
 enum dxil_attr_kind {
    DXIL_ATTR_KIND_NONE = 0,
