@@ -25,7 +25,6 @@
 
 #include "dxil_module.h"
 #include "dxil_container.h"
-#include "dxil.h"
 
 #include "util/u_debug.h"
 #include "nir.h"
