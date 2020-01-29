@@ -690,6 +690,35 @@ emit_threads(struct ntd_context *ctx, nir_shader *s)
    return dxil_get_metadata_node(&ctx->mod, threads_nodes, ARRAY_SIZE(threads_nodes));
 }
 
+static int64_t
+get_module_flags(struct ntd_context *ctx)
+{
+   /* See the DXIL documentation for the definition of these flags:
+    *
+    * https://github.com/Microsoft/DirectXShaderCompiler/blob/master/docs/DXIL.rst#shader-flags
+    */
+
+   uint64_t flags = 0;
+   if (ctx->mod.feats.doubles)
+      flags |= (1 << 2);
+   if (ctx->mod.feats.min_precision)
+      flags |= (1 << 5);
+   if (ctx->mod.feats.dx11_1_double_extensions)
+      flags |= (1 << 6);
+   if (ctx->mod.feats.inner_coverage)
+      flags |= (1 << 10);
+   if (ctx->mod.feats.use_64uavs)
+      flags |= (1 << 15);
+   if (ctx->mod.feats.cs_4x_raw_sb)
+      flags |= (1 << 17);
+   if (ctx->mod.feats.wave_ops)
+      flags |= (1 << 19);
+   if (ctx->mod.feats.int64_ops)
+      flags |= (1 << 20);
+
+   return flags;
+}
+
 static bool
 emit_metadata(struct ntd_context *ctx, nir_shader *s)
 {
@@ -734,14 +763,32 @@ emit_metadata(struct ntd_context *ctx, nir_shader *s)
 
    const struct dxil_mdnode *shader_properties = NULL;
    if (ctx->mod.shader_kind == DXIL_COMPUTE_SHADER) {
+      const struct dxil_mdnode *shader_property_nodes[4];
+      size_t num_shader_property_nodes = 0;
+
+      uint64_t flags = get_module_flags(ctx);
+      if (flags != 0) {
+         const struct dxil_mdnode *shader_flags_tag = dxil_get_metadata_int32(&ctx->mod, 0);
+         const struct dxil_mdnode *shader_flags = dxil_get_metadata_int64(&ctx->mod, flags);
+         if (!shader_flags_tag || !shader_flags)
+            return false;
+
+         assert(num_shader_property_nodes <= ARRAY_SIZE(shader_property_nodes) - 2);
+         shader_property_nodes[num_shader_property_nodes++] = shader_flags_tag;
+         shader_property_nodes[num_shader_property_nodes++] = shader_flags;
+      }
+
       const struct dxil_mdnode *num_thread_tag = dxil_get_metadata_int32(&ctx->mod, 4);
       const struct dxil_mdnode *num_threads = emit_threads(ctx, s);
       if (!num_thread_tag || !num_threads)
          return false;
 
-      const struct dxil_mdnode *property_list[] = { num_thread_tag, num_threads };
-      shader_properties = dxil_get_metadata_node(&ctx->mod, property_list,
-                                                 ARRAY_SIZE(property_list));
+      assert(num_shader_property_nodes <= ARRAY_SIZE(shader_property_nodes) - 2);
+      shader_property_nodes[num_shader_property_nodes++] = num_thread_tag;
+      shader_property_nodes[num_shader_property_nodes++] = num_threads;
+
+      shader_properties = dxil_get_metadata_node(&ctx->mod, shader_property_nodes,
+                                                 num_shader_property_nodes);
       if (!shader_properties)
          return false;
    }
