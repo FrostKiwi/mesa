@@ -1231,6 +1231,13 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_i2i32:
    case nir_op_u2f32:
    case nir_op_u2u32:
+   case nir_op_f2f64:
+   case nir_op_f2i64:
+   case nir_op_f2u64:
+   case nir_op_i2f64:
+   case nir_op_i2i64:
+   case nir_op_u2f64:
+   case nir_op_u2u64:
       return emit_cast(ctx, alu, src[0]);
 
    default:
