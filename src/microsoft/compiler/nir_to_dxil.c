@@ -1323,9 +1323,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
 
    struct dxil_container container;
    dxil_container_init(&container);
-
-   struct dxil_features features = { 0 };
-   if (!dxil_container_add_features(&container, &features)) {
+   if (!dxil_container_add_features(&container, &ctx.mod.feats)) {
       debug_printf("D3D12: dxil_container_add_features failed\n");
       return false;
    }
