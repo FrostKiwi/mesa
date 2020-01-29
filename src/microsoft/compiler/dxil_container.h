@@ -28,8 +28,6 @@
 extern "C" {
 #endif
 
-#include "dxil.h"
-
 #include "util/blob.h"
 
 #define DXIL_MAX_PARTS 8
