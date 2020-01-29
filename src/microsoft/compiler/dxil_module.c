@@ -33,6 +33,7 @@ void
 dxil_module_init(struct dxil_module *m)
 {
    dxil_buffer_init(&m->buf, 2);
+   memset(&m->feats, 0, sizeof(m->feats));
 
    m->num_blocks = 0;
 
