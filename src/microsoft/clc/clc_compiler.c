@@ -36,6 +36,8 @@ nir_options = {
    .lower_isign = true,
    .lower_iabs = true,
    .lower_fmod = true,
+   .lower_extract_word = true,
+   .lower_extract_byte = true,
 };
 
 static void
