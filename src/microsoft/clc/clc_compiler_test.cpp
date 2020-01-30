@@ -546,9 +546,24 @@ test_float()
    return test_shader(kernel_source, ARRAY_SIZE(expected), expected);
 }
 
+static bool
+test_double()
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *output)\n\
+   {\n\
+       output[get_global_id(0)] = (uint)((double)get_global_id(0) + 1.5);\n\
+   }\n";
+   const uint32_t expected[] = {
+      1, 2, 3, 4
+   };
+   return test_shader(kernel_source, ARRAY_SIZE(expected), expected);
+}
+
 int main()
 {
    if (!test_global_id() ||
-       !test_float())
+       !test_float() ||
+       !test_double())
       return -1;
 }
