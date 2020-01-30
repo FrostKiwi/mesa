@@ -257,7 +257,7 @@ validate_module(void *data, size_t size)
    IDxcValidator *validator;
    if (FAILED(pfnDxcCreateInstance(CLSID_DxcValidator, __uuidof(IDxcValidator),
                                    (void **)&validator))) {
-      fprintf(stderr, "D3D12: failed to create IDxcValidator");
+      fprintf(stderr, "D3D12: failed to create IDxcValidator\n");
       return false;
    }
 
@@ -265,7 +265,7 @@ validate_module(void *data, size_t size)
    if (FAILED(validator->Validate(&blob, DxcValidatorFlags_InPlaceEdit,
                                   &result))) {
       // TODO: print error message!
-      fprintf(stderr, "D3D12: failed to validate");
+      fprintf(stderr, "D3D12: failed to validate\n");
       validator->Release();
       return false;
    }
