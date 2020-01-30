@@ -560,10 +560,25 @@ test_double()
    return test_shader(kernel_source, ARRAY_SIZE(expected), expected);
 }
 
+static bool
+test_short()
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *output)\n\
+   {\n\
+       output[get_global_id(0)] = (uint)((short)get_global_id(0) + (short)1);\n\
+   }\n";
+   const uint32_t expected[] = {
+      1, 2, 3, 4
+   };
+   return test_shader(kernel_source, ARRAY_SIZE(expected), expected);
+}
+
 int main()
 {
    if (!test_global_id() ||
        !test_float() ||
-       !test_double())
+       !test_double() ||
+       !test_short())
       return -1;
 }
