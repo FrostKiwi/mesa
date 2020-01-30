@@ -261,3 +261,22 @@ TEST_F(ComputeTest, complex_types_global_struct_array)
       EXPECT_EQ(buf[i].mul, expected[i].mul);
    }
 }
+
+TEST_F(ComputeTest, complex_types_const_array)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *output)\n\
+   {\n\
+       uint foo[4] = {100, 101, 102, 103};\n\
+       output[get_global_id(0)] = foo[get_global_id(0)];\n\
+   }\n";
+   const uint32_t input[] = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+   };
+   const uint32_t expected[] = {
+      100, 101, 102, 103
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
