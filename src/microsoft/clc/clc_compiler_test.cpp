@@ -12,8 +12,6 @@ const char *kernel_source =
     output[get_global_id(0)] = get_global_id(0);\n\
 }\n";
 
-#define debug_printf printf
-
 static void
 enable_d3d12_debug_layer()
 {
@@ -23,19 +21,19 @@ enable_d3d12_debug_layer()
 
    HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
-      debug_printf("D3D12: failed to load D3D12.DLL\n");
+      fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
       return;
    }
 
    D3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(hD3D12Mod, "D3D12GetDebugInterface");
    if (!D3D12GetDebugInterface) {
-      debug_printf("D3D12: failed to load D3D12GetDebugInterface from D3D12.DLL\n");
+      fprintf(stderr, "D3D12: failed to load D3D12GetDebugInterface from D3D12.DLL\n");
       return;
    }
 
    ID3D12Debug *debug;
    if (FAILED(D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void **)& debug))) {
-      debug_printf("D3D12: D3D12GetDebugInterface failed\n");
+      fprintf(stderr, "D3D12: D3D12GetDebugInterface failed\n");
       return;
    }
 
@@ -56,20 +54,20 @@ get_dxgi_factory()
 
    HMODULE hDXGIMod = LoadLibrary("DXGI.DLL");
    if (!hDXGIMod) {
-      debug_printf("D3D12: failed to load DXGI.DLL\n");
+      fprintf(stderr, "D3D12: failed to load DXGI.DLL\n");
       return NULL;
    }
 
    CreateDXGIFactory = (PFN_CREATE_DXGI_FACTORY)GetProcAddress(hDXGIMod, "CreateDXGIFactory");
    if (!CreateDXGIFactory) {
-      debug_printf("D3D12: failed to load CreateDXGIFactory from DXGI.DLL\n");
+      fprintf(stderr, "D3D12: failed to load CreateDXGIFactory from DXGI.DLL\n");
       return NULL;
    }
 
    IDXGIFactory4 *factory = NULL;
    HRESULT hr = CreateDXGIFactory(IID_IDXGIFactory4, (void **)&factory);
    if (FAILED(hr)) {
-      debug_printf("D3D12: CreateDXGIFactory failed: %08x\n", hr);
+      fprintf(stderr, "D3D12: CreateDXGIFactory failed: %08x\n", hr);
       return NULL;
    }
 
@@ -83,7 +81,7 @@ choose_adapter(IDXGIFactory4 *factory)
    if (SUCCEEDED(factory->EnumWarpAdapter(__uuidof(IDXGIAdapter1),
       (void **)& ret)))
       return ret;
-   debug_printf("D3D12: failed to enum warp adapter\n");
+   fprintf(stderr, "D3D12: failed to enum warp adapter\n");
    return NULL;
 }
 
@@ -95,13 +93,13 @@ create_device(IDXGIAdapter1 *adapter)
 
    HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
-      debug_printf("D3D12: failed to load D3D12.DLL\n");
+      fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
       return NULL;
    }
 
    D3D12CreateDevice = (PFN_D3D12CREATEDEVICE)GetProcAddress(hD3D12Mod, "D3D12CreateDevice");
    if (!D3D12CreateDevice) {
-      debug_printf("D3D12: failed to load D3D12CreateDevice from D3D12.DLL\n");
+      fprintf(stderr, "D3D12: failed to load D3D12CreateDevice from D3D12.DLL\n");
       return NULL;
    }
 
@@ -110,7 +108,7 @@ create_device(IDXGIAdapter1 *adapter)
       __uuidof(ID3D12Device), (void **)& dev)))
       return dev;
 
-   debug_printf("D3D12: D3D12CreateDevice failed\n");
+   fprintf(stderr, "D3D12: D3D12CreateDevice failed\n");
    return NULL;
 }
 
@@ -144,7 +142,7 @@ create_root_signature(ID3D12Device *dev)
    if (FAILED(D3D12SerializeRootSignature(&root_sig_desc,
       D3D_ROOT_SIGNATURE_VERSION_1,
       &sig, &error))) {
-      debug_printf("D3D12SerializeRootSignature failed\n");
+      fprintf(stderr, "D3D12SerializeRootSignature failed\n");
       return NULL;
    }
 
@@ -154,7 +152,7 @@ create_root_signature(ID3D12Device *dev)
       sig->GetBufferSize(),
       __uuidof(ret),
       (void **)& ret))) {
-      debug_printf("CreateRootSignature failed\n");
+      fprintf(stderr, "CreateRootSignature failed\n");
       return NULL;
    }
    return ret;
@@ -235,13 +233,13 @@ validate_module(void *data, size_t size)
 {
    static HMODULE hmod = LoadLibrary("DXIL.DLL");
    if (!hmod) {
-      debug_printf("D3D12: failed to load DXIL.DLL");
+      fprintf(stderr, "D3D12: failed to load DXIL.DLL");
       return false;
    }
 
    DxcCreateInstanceProc pfnDxcCreateInstance = (DxcCreateInstanceProc)GetProcAddress(hmod, "DxcCreateInstance");
    if (!pfnDxcCreateInstance) {
-      debug_printf("D3D12: failed to load DxcCreateInstance");
+      fprintf(stderr, "D3D12: failed to load DxcCreateInstance");
       return false;
    }
 
@@ -259,7 +257,7 @@ validate_module(void *data, size_t size)
    IDxcValidator *validator;
    if (FAILED(pfnDxcCreateInstance(CLSID_DxcValidator, __uuidof(IDxcValidator),
                                    (void **)&validator))) {
-      debug_printf("D3D12: failed to create IDxcValidator");
+      fprintf(stderr, "D3D12: failed to create IDxcValidator");
       return false;
    }
 
@@ -267,7 +265,7 @@ validate_module(void *data, size_t size)
    if (FAILED(validator->Validate(&blob, DxcValidatorFlags_InPlaceEdit,
                                   &result))) {
       // TODO: print error message!
-      debug_printf("D3D12: failed to validate");
+      fprintf(stderr, "D3D12: failed to validate");
       validator->Release();
       return false;
    }
@@ -277,7 +275,7 @@ validate_module(void *data, size_t size)
        FAILED(hr)) {
       IDxcBlobEncoding *message;
       result->GetErrorBuffer(&message);
-      debug_printf("D3D12: validation failed: %*s\n",
+      fprintf(stderr, "D3D12: validation failed: %*s\n",
                    (int)message->GetBufferSize(),
                    (char *)message->GetBufferPointer());
       message->Release();
@@ -302,7 +300,7 @@ main()
 
    static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
-      debug_printf("D3D12: failed to load D3D12.DLL\n");
+      fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
       return -1;
    }
 
@@ -310,31 +308,31 @@ main()
 
    IDXGIFactory4 *factory = get_dxgi_factory();
    if (!factory) {
-      debug_printf("D3D12: failed to create DXGI factory\n");
+      fprintf(stderr, "D3D12: failed to create DXGI factory\n");
       return -1;
    }
 
    IDXGIAdapter1 *adapter = choose_adapter(factory);
    if (!adapter) {
-      debug_printf("D3D12: failed to choose adapter\n");
+      fprintf(stderr, "D3D12: failed to choose adapter\n");
       return -1;
    }
 
    ID3D12Device *dev = create_device(adapter);
    if (!dev) {
-      debug_printf("D3D12: failed to create device\n");
+      fprintf(stderr, "D3D12: failed to create device\n");
       return -1;
    }
 
    HANDLE event = CreateEvent(NULL, FALSE, FALSE, NULL);
    if (!event) {
-      debug_printf("D3D12: failed to create event\n");
+      fprintf(stderr, "D3D12: failed to create event\n");
       return -1;
    }
    ID3D12Fence *cmdqueue_fence;
    if (FAILED(dev->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(cmdqueue_fence),
       (void **)&cmdqueue_fence))) {
-      debug_printf("D3D12: failed to create fence\n");
+      fprintf(stderr, "D3D12: failed to create fence\n");
       return -1;
    }
 
@@ -347,21 +345,21 @@ main()
    if (FAILED(dev->CreateCommandQueue(&queue_desc,
                                       __uuidof(cmdqueue),
                                       (void **)&cmdqueue))) {
-      debug_printf("D3D12: failed to create command queue\n");
+      fprintf(stderr, "D3D12: failed to create command queue\n");
       return -1;
    }
 
    ID3D12CommandAllocator *cmdalloc;
    if (FAILED(dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE,
              __uuidof(cmdalloc), (void **)&cmdalloc))) {
-      debug_printf("D3D12: failed to create command allocator\n");
+      fprintf(stderr, "D3D12: failed to create command allocator\n");
       return -1;
    }
 
    ID3D12GraphicsCommandList *cmdlist;
    if (FAILED(dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE,
              cmdalloc, NULL, __uuidof(cmdlist), (void **)&cmdlist))) {
-      debug_printf("D3D12: failed to create command list\n");
+      fprintf(stderr, "D3D12: failed to create command list\n");
       return -1;
    }
 
@@ -386,7 +384,7 @@ main()
    if (fp) {
       fwrite(blob, 1, blob_size, fp);
       fclose(fp);
-      debug_printf("D3D12: wrote 'unsigned.cso'...\n");
+      printf("D3D12: wrote 'unsigned.cso'...\n");
    }
 
    if (!validate_module(blob, blob_size))
@@ -396,7 +394,7 @@ main()
    if (fp) {
       fwrite(blob, 1, blob_size, fp);
       fclose(fp);
-      debug_printf("D3D12: wrote 'signed.cso'...\n");
+      printf("D3D12: wrote 'signed.cso'...\n");
    }
 
    ID3D12RootSignature *root_sig = create_root_signature(dev);
@@ -409,7 +407,7 @@ main()
    if (FAILED(dev->CreateComputePipelineState(&pipeline_desc,
                                               __uuidof(pipeline_state),
                                               (void **)& pipeline_state))) {
-      debug_printf("D3D12: failed to create pipeline state\n");
+      fprintf(stderr, "D3D12: failed to create pipeline state\n");
       return -1;
    }
 
@@ -422,30 +420,30 @@ main()
    ID3D12DescriptorHeap *uav_heap;
    if (FAILED(dev->CreateDescriptorHeap(&heap_desc,
       __uuidof(uav_heap), (void **)&uav_heap))) {
-      debug_printf("D3D12: failed to create descriptor heap\n");
+      fprintf(stderr, "D3D12: failed to create descriptor heap\n");
       return -1;
    }
    ID3D12Resource *upload_res = create_buffer(dev, width * sizeof(uint32_t), D3D12_HEAP_TYPE_UPLOAD);
    if (!upload_res) {
-      debug_printf("D3D12: failed to create resource heap\n");
+      fprintf(stderr, "D3D12: failed to create resource heap\n");
       return -1;
    }
    ID3D12Resource *res = create_buffer(dev, width * sizeof(uint32_t), D3D12_HEAP_TYPE_DEFAULT);
    if (!res) {
-      debug_printf("D3D12: failed to create resource heap\n");
+      fprintf(stderr, "D3D12: failed to create resource heap\n");
       return -1;
    }
 
    ID3D12Resource *readback_res = create_buffer(dev, width * sizeof(uint32_t), D3D12_HEAP_TYPE_READBACK);
    if (!readback_res) {
-      debug_printf("D3D12: failed to create resource heap\n");
+      fprintf(stderr, "D3D12: failed to create resource heap\n");
       return -1;
    }
 
    uint32_t *data = NULL;
    D3D12_RANGE res_range = { 0, sizeof(uint32_t) * width };
    if (FAILED(upload_res->Map(0, &res_range, (void **)&data))) {
-      debug_printf("D3D12: failed to map buffer\n");
+      fprintf(stderr, "D3D12: failed to map buffer\n");
       return -1;
    }
    for (int i = 0; i < width; ++i) {
@@ -476,7 +474,7 @@ main()
    cmdlist->CopyResource(readback_res, res);
 
    if (FAILED(cmdlist->Close())) {
-      debug_printf("D3D12: closing ID3D12GraphicsCommandList failed\n");
+      fprintf(stderr, "D3D12: closing ID3D12GraphicsCommandList failed\n");
       return -1;
    }
 
@@ -488,7 +486,7 @@ main()
    WaitForSingleObject(event, INFINITE);
 
    if (FAILED(readback_res->Map(0, &res_range, (void **)&data))) {
-      debug_printf("D3D12: failed to map buffer\n");
+      fprintf(stderr, "D3D12: failed to map buffer\n");
       return -1;
    }
    int ret = 0;
@@ -502,12 +500,12 @@ main()
    readback_res->Unmap(0, &empty_range);
 
    if (FAILED(cmdalloc->Reset())) {
-      debug_printf("D3D12: resetting ID3D12CommandAllocator failed\n");
+      fprintf(stderr, "D3D12: resetting ID3D12CommandAllocator failed\n");
       return -1;
    }
 
    if (FAILED(cmdlist->Reset(cmdalloc, NULL))) {
-      debug_printf("D3D12: resetting ID3D12GraphicsCommandList failed\n");
+      fprintf(stderr, "D3D12: resetting ID3D12GraphicsCommandList failed\n");
       return -1;
    }
 
