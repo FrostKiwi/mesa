@@ -3,6 +3,7 @@
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
+#include <gtest/gtest.h>
 
 #include "clc_compiler.h"
 
@@ -482,13 +483,8 @@ test_shader(const char *kernel_source, int width, const uint32_t expected[])
       fprintf(stderr, "D3D12: failed to map buffer\n");
       return false;
    }
-   bool ret = true;
-   for (int i = 0; i < width; ++i) {
-      if (data[i] != expected[i]) {
-         printf("ERROR: expected 0x%08x, got 0x%08x\n", i, data[i]);
-         ret = false;
-      }
-   }
+   for (int i = 0; i < width; ++i)
+      EXPECT_EQ(data[i], expected[i]);
    D3D12_RANGE empty_range = { 0, 0 };
    readback_res->Unmap(0, &empty_range);
 
@@ -515,11 +511,10 @@ test_shader(const char *kernel_source, int width, const uint32_t expected[])
    dev->Release();
    adapter->Release();
    factory->Release();
-   return ret;
+   return true;
 }
 
-static bool
-test_global_id()
+TEST(built_ins, global_id)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -529,11 +524,10 @@ test_global_id()
    const uint32_t expected[] = {
       0, 1, 2, 3
    };
-   return test_shader(kernel_source, ARRAY_SIZE(expected), expected);
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), expected));
 }
 
-static bool
-test_float()
+TEST(types, float_basics)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -543,11 +537,10 @@ test_float()
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   return test_shader(kernel_source, ARRAY_SIZE(expected), expected);
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), expected));
 }
 
-static bool
-test_double()
+TEST(types, double_basics)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -557,11 +550,10 @@ test_double()
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   return test_shader(kernel_source, ARRAY_SIZE(expected), expected);
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), expected));
 }
 
-static bool
-test_short()
+TEST(types, short_basics)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -571,11 +563,10 @@ test_short()
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   return test_shader(kernel_source, ARRAY_SIZE(expected), expected);
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), expected));
 }
 
-static bool
-test_char()
+TEST(types, char_basics)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -585,15 +576,5 @@ test_char()
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   return test_shader(kernel_source, ARRAY_SIZE(expected), expected);
-}
-
-int main()
-{
-   if (!test_global_id() ||
-       !test_float() ||
-       !test_double() ||
-       !test_short() ||
-       !test_char())
-      return -1;
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), expected));
 }

@@ -38,6 +38,7 @@ libclc_compiler = shared_library(
 )
 
 clc_compiler_test = executable('clc_compiler_test', 'clc_compiler_test.cpp',
-  link_with : [libclc_compiler])
+  link_with : [libclc_compiler],
+  dependencies : [idep_gtest])
 
 test('clc_compiler test', clc_compiler_test)
