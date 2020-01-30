@@ -6,11 +6,7 @@
 
 #include "clc_compiler.h"
 
-const char *kernel_source =
-"__kernel void main_test(__global uint *output)\n\
-{\n\
-    output[get_global_id(0)] = get_global_id(0);\n\
-}\n";
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 static void
 enable_d3d12_debug_layer()
@@ -289,11 +285,8 @@ validate_module(void *data, size_t size)
    return true;
 }
 
-const int
-width = 4;
-
-int
-main()
+static bool
+test_shader(const char *kernel_source, int width, const uint32_t expected[])
 {
    if (true)
       enable_d3d12_debug_layer();
@@ -301,7 +294,7 @@ main()
    static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
       fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
-      return -1;
+      return false;
    }
 
    D3D12SerializeRootSignature = (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeRootSignature");
@@ -309,31 +302,31 @@ main()
    IDXGIFactory4 *factory = get_dxgi_factory();
    if (!factory) {
       fprintf(stderr, "D3D12: failed to create DXGI factory\n");
-      return -1;
+      return false;
    }
 
    IDXGIAdapter1 *adapter = choose_adapter(factory);
    if (!adapter) {
       fprintf(stderr, "D3D12: failed to choose adapter\n");
-      return -1;
+      return false;
    }
 
    ID3D12Device *dev = create_device(adapter);
    if (!dev) {
       fprintf(stderr, "D3D12: failed to create device\n");
-      return -1;
+      return false;
    }
 
    HANDLE event = CreateEvent(NULL, FALSE, FALSE, NULL);
    if (!event) {
       fprintf(stderr, "D3D12: failed to create event\n");
-      return -1;
+      return false;
    }
    ID3D12Fence *cmdqueue_fence;
    if (FAILED(dev->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(cmdqueue_fence),
       (void **)&cmdqueue_fence))) {
       fprintf(stderr, "D3D12: failed to create fence\n");
-      return -1;
+      return false;
    }
 
    D3D12_COMMAND_QUEUE_DESC queue_desc;
@@ -346,21 +339,21 @@ main()
                                       __uuidof(cmdqueue),
                                       (void **)&cmdqueue))) {
       fprintf(stderr, "D3D12: failed to create command queue\n");
-      return -1;
+      return false;
    }
 
    ID3D12CommandAllocator *cmdalloc;
    if (FAILED(dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE,
              __uuidof(cmdalloc), (void **)&cmdalloc))) {
       fprintf(stderr, "D3D12: failed to create command allocator\n");
-      return -1;
+      return false;
    }
 
    ID3D12GraphicsCommandList *cmdlist;
    if (FAILED(dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE,
              cmdalloc, NULL, __uuidof(cmdlist), (void **)&cmdlist))) {
       fprintf(stderr, "D3D12: failed to create command list\n");
-      return -1;
+      return false;
    }
 
    struct clc_metadata metadata;
@@ -377,7 +370,7 @@ main()
        &blob,
        &blob_size) < 0) {
       fprintf(stderr, "failed to compile kernel!\n");
-      return -1;
+      return false;
    }
 
    FILE *fp = fopen("unsigned.cso", "wb");
@@ -388,7 +381,7 @@ main()
    }
 
    if (!validate_module(blob, blob_size))
-      return -1;
+      return false;
 
    fp = fopen("signed.cso", "wb");
    if (fp) {
@@ -408,7 +401,7 @@ main()
                                               __uuidof(pipeline_state),
                                               (void **)& pipeline_state))) {
       fprintf(stderr, "D3D12: failed to create pipeline state\n");
-      return -1;
+      return false;
    }
 
    D3D12_DESCRIPTOR_HEAP_DESC heap_desc;
@@ -421,30 +414,30 @@ main()
    if (FAILED(dev->CreateDescriptorHeap(&heap_desc,
       __uuidof(uav_heap), (void **)&uav_heap))) {
       fprintf(stderr, "D3D12: failed to create descriptor heap\n");
-      return -1;
+      return false;
    }
    ID3D12Resource *upload_res = create_buffer(dev, width * sizeof(uint32_t), D3D12_HEAP_TYPE_UPLOAD);
    if (!upload_res) {
       fprintf(stderr, "D3D12: failed to create resource heap\n");
-      return -1;
+      return false;
    }
    ID3D12Resource *res = create_buffer(dev, width * sizeof(uint32_t), D3D12_HEAP_TYPE_DEFAULT);
    if (!res) {
       fprintf(stderr, "D3D12: failed to create resource heap\n");
-      return -1;
+      return false;
    }
 
    ID3D12Resource *readback_res = create_buffer(dev, width * sizeof(uint32_t), D3D12_HEAP_TYPE_READBACK);
    if (!readback_res) {
       fprintf(stderr, "D3D12: failed to create resource heap\n");
-      return -1;
+      return false;
    }
 
    uint32_t *data = NULL;
    D3D12_RANGE res_range = { 0, sizeof(uint32_t) * width };
    if (FAILED(upload_res->Map(0, &res_range, (void **)&data))) {
       fprintf(stderr, "D3D12: failed to map buffer\n");
-      return -1;
+      return false;
    }
    for (int i = 0; i < width; ++i) {
       data[i] = 0xdeadbeef;
@@ -475,7 +468,7 @@ main()
 
    if (FAILED(cmdlist->Close())) {
       fprintf(stderr, "D3D12: closing ID3D12GraphicsCommandList failed\n");
-      return -1;
+      return false;
    }
 
    ID3D12CommandList *cmdlists[] = { cmdlist };
@@ -487,13 +480,13 @@ main()
 
    if (FAILED(readback_res->Map(0, &res_range, (void **)&data))) {
       fprintf(stderr, "D3D12: failed to map buffer\n");
-      return -1;
+      return false;
    }
-   int ret = 0;
+   bool ret = true;
    for (int i = 0; i < width; ++i) {
-      if (data[i] != i) {
+      if (data[i] != expected[i]) {
          printf("ERROR: expected 0x%08x, got 0x%08x\n", i, data[i]);
-         ret = -1;
+         ret = false;
       }
    }
    D3D12_RANGE empty_range = { 0, 0 };
@@ -501,12 +494,12 @@ main()
 
    if (FAILED(cmdalloc->Reset())) {
       fprintf(stderr, "D3D12: resetting ID3D12CommandAllocator failed\n");
-      return -1;
+      return false;
    }
 
    if (FAILED(cmdlist->Reset(cmdalloc, NULL))) {
       fprintf(stderr, "D3D12: resetting ID3D12GraphicsCommandList failed\n");
-      return -1;
+      return false;
    }
 
    upload_res->Release();
@@ -523,4 +516,24 @@ main()
    adapter->Release();
    factory->Release();
    return ret;
+}
+
+static bool
+test_global_id()
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *output)\n\
+   {\n\
+       output[get_global_id(0)] = get_global_id(0);\n\
+   }\n";
+   const uint32_t expected[] = {
+      0, 1, 2, 3
+   };
+   return test_shader(kernel_source, ARRAY_SIZE(expected), expected);
+}
+
+int main()
+{
+   if (!test_global_id())
+      return -1;
 }
