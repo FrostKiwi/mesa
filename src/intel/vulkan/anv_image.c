@@ -453,8 +453,7 @@ make_surface(struct anv_device *dev,
        */
       const bool allow_compression =
          image->n_planes == 1 &&
-         (image->create_flags & VK_IMAGE_CREATE_ALIAS_BIT) == 0 &&
-         likely((INTEL_DEBUG & DEBUG_NO_RBC) == 0);
+         (image->create_flags & VK_IMAGE_CREATE_ALIAS_BIT);
 
       if (allow_compression) {
          assert(image->planes[plane].aux_surface.isl.size_B == 0);
