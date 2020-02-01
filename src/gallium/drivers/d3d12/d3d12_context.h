@@ -32,6 +32,8 @@
 
 #include <d3d12.h>
 
+#define D3D12_GFX_SHADER_STAGES (PIPE_SHADER_TYPES - 1)
+
 struct d3d12_vertex_elements_state {
    D3D12_INPUT_ELEMENT_DESC elements[PIPE_MAX_ATTRIBS];
    unsigned num_elements;
@@ -75,7 +77,7 @@ struct d3d12_context {
    struct d3d12_depth_stencil_alpha_state *depth_stencil_alpha_state;
    struct d3d12_rasterizer_state *rast;
 
-   struct d3d12_shader *gfx_stages[PIPE_SHADER_TYPES - 1];
+   struct d3d12_shader *gfx_stages[D3D12_GFX_SHADER_STAGES];
    unsigned dirty_program : 1;
 
    HANDLE event;
