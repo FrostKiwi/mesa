@@ -43,6 +43,12 @@ d3d12_context_destroy(struct pipe_context *pctx)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
    d3d12_validator_destroy(ctx->validation_tools);
+
+   /* FIXME: Wait for the queue to be idle */
+   ctx->cmdalloc->Release();
+   ctx->cmdlist->Release();
+   ctx->cmdqueue_fence->Release();
+   CloseHandle(ctx->event);
    util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
    FREE(ctx);
