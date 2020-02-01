@@ -256,9 +256,9 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    D3D12_CPU_DESCRIPTOR_HANDLE render_targets[PIPE_MAX_COLOR_BUFS] = {};
    D3D12_CPU_DESCRIPTOR_HANDLE *depth_desc = NULL, tmp_desc;
    for (int i = 0; i < ctx->fb.nr_cbufs; ++i)
-      render_targets[i] = d3d12_surface(ctx->fb.cbufs[i])->desc_handle;
+      render_targets[i] = d3d12_surface(ctx->fb.cbufs[i])->desc_handle.cpu_handle;
    if (ctx->fb.zsbuf) {
-      tmp_desc = d3d12_surface(ctx->fb.zsbuf)->desc_handle;
+      tmp_desc = d3d12_surface(ctx->fb.zsbuf)->desc_handle.cpu_handle;
       depth_desc = &tmp_desc;
    }
    ctx->cmdlist->OMSetRenderTargets(ctx->fb.nr_cbufs, render_targets, FALSE, depth_desc);
