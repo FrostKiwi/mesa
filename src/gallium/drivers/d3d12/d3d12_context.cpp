@@ -791,7 +791,8 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
       debug_printf("D3D12: failed to load D3D12.DLL\n");
       return NULL;
    }
-   ctx->D3D12SerializeRootSignature = (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeRootSignature");
+   ctx->D3D12SerializeVersionedRootSignature =
+      (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
 
    ctx->event = CreateEvent(NULL, FALSE, FALSE, NULL);
    if (FAILED(screen->dev->CreateFence(0, D3D12_FENCE_FLAG_NONE,
