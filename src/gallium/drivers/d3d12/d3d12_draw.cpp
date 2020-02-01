@@ -101,6 +101,15 @@ get_root_signature(struct d3d12_context *ctx)
                              visibility);
          num_params++;
       }
+
+      if (shader->num_srv_bindings > 0) {
+         init_root_parameter(&root_params[num_params],
+                             &desc_ranges[num_params],
+                             D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+                             shader->num_srv_bindings,
+                             visibility);
+         num_params++;
+      }
    }
 
    D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_sig_desc;
@@ -162,6 +171,33 @@ fill_cbv_descriptors(struct d3d12_context *ctx,
    return table_start.gpu_handle;
 }
 
+static D3D12_GPU_DESCRIPTOR_HANDLE
+fill_srv_descriptors(struct d3d12_context *ctx,
+                     struct d3d12_shader *shader,
+                     unsigned stage)
+{
+   D3D12_CPU_DESCRIPTOR_HANDLE descs[PIPE_MAX_SHADER_SAMPLER_VIEWS];
+   struct d3d12_descriptor_handle table_start;
+
+   d2d12_descriptor_heap_get_next_handle(ctx->view_heap, &table_start);
+
+   for (int i = 0; i < shader->num_srv_bindings; i++)
+   {
+      int index = shader->srv_bindings[i].index;
+      struct d3d12_sampler_view *view =
+         (struct d3d12_sampler_view*) ctx->sampler_views[stage][index];
+
+      if (view != NULL)
+         descs[i] = view->handle.cpu_handle ;
+      else
+         descs[i] = ctx->null_srvs[shader->srv_bindings[i].dimension].cpu_handle;
+   }
+
+   d3d12_descriptor_heap_append_handles(ctx->view_heap, descs, shader->num_srv_bindings);
+
+   return table_start.gpu_handle;
+}
+
 static unsigned
 fill_descriptor_tables(struct d3d12_context *ctx,
                        ID3D12DescriptorHeap **heaps,
@@ -181,6 +217,10 @@ fill_descriptor_tables(struct d3d12_context *ctx,
 
       if (shader->num_cb_bindings > 0) {
          tables[num_tables++] = fill_cbv_descriptors(ctx, shader, i);
+         has_view = true;
+      }
+      if (shader->num_srv_bindings > 0) {
+         tables[num_tables++] = fill_srv_descriptors(ctx, shader, i);
          has_view = true;
       }
    }

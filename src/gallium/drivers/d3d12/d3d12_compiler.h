@@ -35,6 +35,7 @@ struct pipe_screen;
 
 typedef enum {
    D3D12_BINDING_CONSTANT_BUFFER,
+   D3D12_BINDING_SHADER_RESOURCE_VIEW,
    D3D12_NUM_BINDING_TYPES
 } D3D12_BINDING_TYPE;
 
@@ -55,6 +56,13 @@ struct d3d12_shader {
 
    unsigned cb_bindings[PIPE_MAX_CONSTANT_BUFFERS];
    size_t num_cb_bindings;
+
+   struct {
+      int index;
+      int binding;
+      uint32_t dimension;
+   } srv_bindings[PIPE_MAX_SHADER_SAMPLER_VIEWS];
+   size_t num_srv_bindings;
 };
 
 struct d3d12_shader *
