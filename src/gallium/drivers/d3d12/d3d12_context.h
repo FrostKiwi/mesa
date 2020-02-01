@@ -24,6 +24,8 @@
 #ifndef D3D12_CONTEXT_H
 #define D3D12_CONTEXT_H
 
+#include "d3d12_descriptor_pool.h"
+
 #include "pipe/p_context.h"
 #include "pipe/p_state.h"
 #include "util/slab.h"
@@ -82,10 +84,8 @@ struct d3d12_context {
    ID3D12CommandAllocator *cmdalloc;
    ID3D12GraphicsCommandList *cmdlist;
 
-   ID3D12DescriptorHeap *rtv_heap;
-   ID3D12DescriptorHeap *dsv_heap;
-   UINT rtv_increment, dsv_increment;
-   int rtv_index, dsv_index;
+   struct d3d12_descriptor_heap *rtv_heap;
+   struct d3d12_descriptor_heap *dsv_heap;
 
    PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature;
    struct d3d12_validation_tools *validation_tools;

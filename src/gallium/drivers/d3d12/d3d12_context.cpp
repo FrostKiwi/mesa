@@ -49,6 +49,8 @@ d3d12_context_destroy(struct pipe_context *pctx)
    ctx->cmdlist->Release();
    ctx->cmdqueue_fence->Release();
    CloseHandle(ctx->event);
+   d3d12_descriptor_heap_free(ctx->rtv_heap);
+   d3d12_descriptor_heap_free(ctx->dsv_heap);
    util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
    FREE(ctx);
@@ -681,8 +683,8 @@ d3d12_clear(struct pipe_context *pctx,
          d3d12_resource_barrier(ctx, d3d12_resource(psurf->texture),
                                 D3D12_RESOURCE_STATE_COMMON,
                                 D3D12_RESOURCE_STATE_RENDER_TARGET);
-         ctx->cmdlist->ClearRenderTargetView(surf->desc_handle, color->f,
-                                             0, NULL);
+         ctx->cmdlist->ClearRenderTargetView(surf->desc_handle.cpu_handle,
+                                             color->f, 0, NULL);
          d3d12_resource_barrier(ctx, d3d12_resource(psurf->texture),
                                 D3D12_RESOURCE_STATE_RENDER_TARGET,
                                 D3D12_RESOURCE_STATE_COMMON);
@@ -701,7 +703,7 @@ d3d12_clear(struct pipe_context *pctx,
       d3d12_resource_barrier(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
                              D3D12_RESOURCE_STATE_COMMON,
                              D3D12_RESOURCE_STATE_DEPTH_WRITE);
-      ctx->cmdlist->ClearDepthStencilView(surf->desc_handle, flags,
+      ctx->cmdlist->ClearDepthStencilView(surf->desc_handle.cpu_handle, flags,
                                           depth, stencil, 0, NULL);
       d3d12_resource_barrier(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
                              D3D12_RESOURCE_STATE_DEPTH_WRITE,
@@ -828,30 +830,23 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
 
    D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
 
-   heap_desc.NumDescriptors = 100000;
-   heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-   heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-   if (FAILED(screen->dev->CreateDescriptorHeap(&heap_desc,
-                                                __uuidof(ctx->rtv_heap),
-                                                (void **)&ctx->rtv_heap))) {
+   ctx->rtv_heap = d3d12_descriptor_heap_new(screen->dev,
+                                             D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                                             D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                                             100000);
+   if (!ctx->rtv_heap) {
       FREE(ctx);
       return NULL;
    }
 
-   heap_desc.NumDescriptors = 10;
-   heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-   heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-   if (FAILED(screen->dev->CreateDescriptorHeap(&heap_desc,
-                                                __uuidof(ctx->dsv_heap),
-                                                (void **)&ctx->dsv_heap))) {
+   ctx->dsv_heap = d3d12_descriptor_heap_new(screen->dev,
+                                             D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+                                             D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                                             10);
+   if (!ctx->dsv_heap) {
       FREE(ctx);
       return NULL;
    }
-
-   ctx->rtv_increment = screen->dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-   ctx->dsv_increment = screen->dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-
-   ctx->rtv_index = ctx->dsv_index = 0;
 
    ctx->validation_tools = d3d12_validator_create();
 
