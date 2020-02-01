@@ -40,20 +40,20 @@ static ID3D12RootSignature *
 get_root_signature(struct d3d12_context *ctx)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
-   D3D12_ROOT_SIGNATURE_DESC root_sig_desc;
-   root_sig_desc.NumParameters = 0;
-   root_sig_desc.pParameters = NULL;
-   root_sig_desc.NumStaticSamplers = 0;
-   root_sig_desc.pStaticSamplers = NULL;
-   root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+   D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_sig_desc;
+   root_sig_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+   root_sig_desc.Desc_1_1.NumParameters = 0;
+   root_sig_desc.Desc_1_1.pParameters = NULL;
+   root_sig_desc.Desc_1_1.NumStaticSamplers = 0;
+   root_sig_desc.Desc_1_1.pStaticSamplers = NULL;
+   root_sig_desc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
    if (true)
-      root_sig_desc.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+      root_sig_desc.Desc_1_1.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
    ID3DBlob *sig, *error;
-   if (FAILED(ctx->D3D12SerializeRootSignature(&root_sig_desc,
-                                               D3D_ROOT_SIGNATURE_VERSION_1,
-                                               &sig, &error))) {
+   if (FAILED(ctx->D3D12SerializeVersionedRootSignature(&root_sig_desc,
+                                                        &sig, &error))) {
       debug_printf("D3D12SerializeRootSignature failed\n");
       return NULL;
    }

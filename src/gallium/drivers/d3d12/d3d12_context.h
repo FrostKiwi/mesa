@@ -87,7 +87,7 @@ struct d3d12_context {
    struct d3d12_descriptor_heap *rtv_heap;
    struct d3d12_descriptor_heap *dsv_heap;
 
-   PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature;
+   PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE D3D12SerializeVersionedRootSignature;
    struct d3d12_validation_tools *validation_tools;
 
 };
