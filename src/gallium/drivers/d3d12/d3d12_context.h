@@ -34,6 +34,22 @@
 
 #define D3D12_GFX_SHADER_STAGES (PIPE_SHADER_TYPES - 1)
 
+enum resource_dimension
+{
+   RESOURCE_DIMENSION_UNKNOWN = 0,
+   RESOURCE_DIMENSION_BUFFER = 1,
+   RESOURCE_DIMENSION_TEXTURE1D = 2,
+   RESOURCE_DIMENSION_TEXTURE2D = 3,
+   RESOURCE_DIMENSION_TEXTURE2DMS = 4,
+   RESOURCE_DIMENSION_TEXTURE3D = 5,
+   RESOURCE_DIMENSION_TEXTURECUBE = 6,
+   RESOURCE_DIMENSION_TEXTURE1DARRAY = 7,
+   RESOURCE_DIMENSION_TEXTURE2DARRAY = 8,
+   RESOURCE_DIMENSION_TEXTURE2DMSARRAY = 9,
+   RESOURCE_DIMENSION_TEXTURECUBEARRAY = 10,
+   RESOURCE_DIMENSION_COUNT
+};
+
 struct d3d12_vertex_elements_state {
    D3D12_INPUT_ELEMENT_DESC elements[PIPE_MAX_ATTRIBS];
    unsigned num_elements;
@@ -52,6 +68,17 @@ struct d3d12_blend_state {
 struct d3d12_depth_stencil_alpha_state {
    D3D12_DEPTH_STENCIL_DESC desc;
 };
+
+struct d3d12_sampler_view {
+   struct pipe_sampler_view base;
+   struct d3d12_descriptor_handle handle;
+};
+
+static inline struct d3d12_sampler_view *
+d3d12_sampler_view(struct pipe_sampler_view *pview)
+{
+   return (struct d3d12_sampler_view *)pview;
+}
 
 struct primconvert_context;
 struct d3d12_validation_tools;
@@ -77,6 +104,8 @@ struct d3d12_context {
    float blend_factor[4];
    struct d3d12_depth_stencil_alpha_state *depth_stencil_alpha_state;
    struct d3d12_rasterizer_state *rast;
+   struct pipe_sampler_view *sampler_views[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
+   unsigned num_sampler_views[PIPE_SHADER_TYPES];
 
    struct d3d12_shader *gfx_stages[D3D12_GFX_SHADER_STAGES];
    unsigned dirty_program : 1;
@@ -89,7 +118,10 @@ struct d3d12_context {
 
    struct d3d12_descriptor_heap *rtv_heap;
    struct d3d12_descriptor_heap *dsv_heap;
+   struct d3d12_descriptor_pool *view_pool;
    struct d3d12_descriptor_heap *view_heap;
+
+   struct d3d12_descriptor_handle null_srvs[RESOURCE_DIMENSION_COUNT];
 
    PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE D3D12SerializeVersionedRootSignature;
    struct d3d12_validation_tools *validation_tools;

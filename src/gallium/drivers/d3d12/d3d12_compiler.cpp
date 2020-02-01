@@ -73,6 +73,23 @@ d3d12_get_compiler_options(struct pipe_screen *screen,
    return dxil_get_nir_compiler_options();
 }
 
+static uint32_t
+resource_dimension(enum glsl_sampler_dim dim)
+{
+   switch (dim) {
+   case GLSL_SAMPLER_DIM_1D:
+      return RESOURCE_DIMENSION_TEXTURE1D;
+   case GLSL_SAMPLER_DIM_2D:
+      return RESOURCE_DIMENSION_TEXTURE2D;
+   case GLSL_SAMPLER_DIM_3D:
+      return RESOURCE_DIMENSION_TEXTURE3D;
+   case GLSL_SAMPLER_DIM_CUBE:
+      return RESOURCE_DIMENSION_TEXTURECUBE;
+   default:
+      return RESOURCE_DIMENSION_UNKNOWN;
+   }
+}
+
 struct d3d12_shader *
 d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
 {
@@ -88,8 +105,14 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
 
    enum pipe_shader_type stage = pipe_shader_type_from_mesa(nir->info.stage);
    nir_foreach_variable(var, &nir->uniforms) {
-      if (var->interface_type)
+      if (glsl_type_is_sampler(var->type)) {
+         ret->srv_bindings[ret->num_srv_bindings].index = var->data.binding;
+         ret->srv_bindings[ret->num_srv_bindings].binding = ret->num_srv_bindings;
+         ret->srv_bindings[ret->num_srv_bindings].dimension = resource_dimension(glsl_get_sampler_dim(var->type));
+         ret->num_srv_bindings++;
+      } else if (var->interface_type) {
          ret->cb_bindings[ret->num_cb_bindings++] = var->data.binding;
+      }
    }
 
    ctx->validation_tools->validate_and_sign(&tmp);
