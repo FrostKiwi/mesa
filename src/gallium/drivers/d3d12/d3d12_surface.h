@@ -28,12 +28,13 @@
 
 #include <d3d12.h>
 
+struct d3d12_descriptor_handle;
 struct pipe_context;
 
 struct d3d12_surface {
    struct pipe_surface base;
 
-   D3D12_CPU_DESCRIPTOR_HANDLE desc_handle;
+   struct d3d12_descriptor_handle desc_handle;
 };
 
 static inline struct d3d12_surface *
