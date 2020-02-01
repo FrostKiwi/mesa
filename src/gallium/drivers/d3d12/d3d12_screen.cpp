@@ -126,10 +126,8 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
          return 4;
       return 1;
 
-#if 0 /* TODO: enable me */
    case PIPE_CAP_TEXTURE_SWIZZLE:
       return 1;
-#endif
 
    case PIPE_CAP_MAX_TEXTURE_2D_SIZE:
       if (screen->max_feature_level >= D3D_FEATURE_LEVEL_11_0)
@@ -230,10 +228,8 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_MAX_VERTEX_ATTRIB_STRIDE:
       return 2048; /* FIXME: no clue how to query this */
 
-#if 0 /* TODO: Enable me */
    case PIPE_CAP_SAMPLER_VIEW_TARGET:
       return 1;
-#endif
 
    case PIPE_CAP_TEXTURE_FLOAT_LINEAR:
    case PIPE_CAP_TEXTURE_HALF_FLOAT_LINEAR:
