@@ -471,7 +471,7 @@ static void
 bind_stage(struct d3d12_context *ctx, enum pipe_shader_type stage,
            struct d3d12_shader *shader)
 {
-   assert(stage < PIPE_SHADER_COMPUTE);
+   assert(stage < D3D12_GFX_SHADER_STAGES);
    ctx->gfx_stages[stage] = shader;
    ctx->dirty_program = true;
 }
