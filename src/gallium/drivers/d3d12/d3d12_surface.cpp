@@ -55,15 +55,10 @@ d3d12_create_surface(struct pipe_context *pctx,
    surface->base.u.tex.last_layer = tpl->u.tex.last_layer;
 
    if (util_format_is_depth_or_stencil(tpl->format)) {
-      surface->desc_handle = ctx->dsv_heap->GetCPUDescriptorHandleForHeapStart();
-      surface->desc_handle.ptr += (size_t)ctx->dsv_increment * ctx->dsv_index;
+      d3d12_descriptor_heap_alloc_handle(ctx->dsv_heap, &surface->desc_handle);
       screen->dev->CreateDepthStencilView(res->res, NULL,
-                                          surface->desc_handle);
-      ctx->dsv_index++;
+                                          surface->desc_handle.cpu_handle);
    } else {
-      surface->desc_handle = ctx->rtv_heap->GetCPUDescriptorHandleForHeapStart();
-      surface->desc_handle.ptr += (size_t)ctx->rtv_increment * ctx->rtv_index;
-
       D3D12_RENDER_TARGET_VIEW_DESC desc;
       desc.Format = d3d12_get_format(tpl->format);
 
@@ -101,19 +96,23 @@ d3d12_create_surface(struct pipe_context *pctx,
          break;
       }
 
+      d3d12_descriptor_heap_alloc_handle(ctx->rtv_heap, &surface->desc_handle);
       screen->dev->CreateRenderTargetView(res->res, &desc,
-                                          surface->desc_handle);
-      ctx->rtv_index++;
+                                          surface->desc_handle.cpu_handle);
    }
 
    return &surface->base;
 }
 
 static void
-d3d12_surface_destroy(struct pipe_context *context,
-                      struct pipe_surface *surface)
+d3d12_surface_destroy(struct pipe_context *pctx,
+                      struct pipe_surface *psurf)
 {
-   pipe_resource_reference(&surface->texture, NULL);
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_surface *surface = (struct d3d12_surface*) psurf;
+
+   d3d12_descriptor_handle_free(&surface->desc_handle);
+   pipe_resource_reference(&psurf->texture, NULL);
    FREE(surface);
 }
 
