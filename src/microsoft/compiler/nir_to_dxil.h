@@ -26,15 +26,19 @@
 
 #include <stdbool.h>
 
+#include "nir.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct blob;
-struct nir_shader;
 
 bool
 nir_to_dxil(struct nir_shader *s, struct blob *blob);
+
+const nir_shader_compiler_options*
+dxil_get_nir_compiler_options(void);
 
 #ifdef __cplusplus
 }
