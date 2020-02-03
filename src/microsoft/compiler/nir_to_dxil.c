@@ -724,6 +724,26 @@ get_module_flags(struct ntd_context *ctx)
    return flags;
 }
 
+static const struct dxil_mdnode *
+emit_entrypoint(struct ntd_context *ctx,
+                const struct dxil_func *func, const char *name,
+                const struct dxil_mdnode *signatures,
+                const struct dxil_mdnode *resources,
+                const struct dxil_mdnode *shader_props)
+{
+   const struct dxil_mdnode *func_md = dxil_get_metadata_func(&ctx->mod, func);
+   const struct dxil_mdnode *name_md = dxil_get_metadata_string(&ctx->mod, name);
+   const struct dxil_mdnode *nodes[] = {
+      func_md,
+      name_md,
+      signatures,
+      resources,
+      shader_props
+   };
+   return dxil_get_metadata_node(&ctx->mod, nodes,
+                                 ARRAY_SIZE(nodes));
+}
+
 static bool
 emit_metadata(struct ntd_context *ctx, nir_shader *s)
 {
@@ -764,8 +784,6 @@ emit_metadata(struct ntd_context *ctx, nir_shader *s)
    const struct dxil_mdnode *main_type_annotation = dxil_get_metadata_node(&ctx->mod, main_type_annotation_nodes,
                                                                            ARRAY_SIZE(main_type_annotation_nodes));
 
-   const struct dxil_mdnode *main_name = dxil_get_metadata_string(&ctx->mod, "main");
-
    const struct dxil_mdnode *shader_properties = NULL;
    if (ctx->mod.shader_kind == DXIL_COMPUTE_SHADER) {
       const struct dxil_mdnode *shader_property_nodes[4];
@@ -798,17 +816,13 @@ emit_metadata(struct ntd_context *ctx, nir_shader *s)
          return false;
    }
 
-   const struct dxil_mdnode *main_entrypoint_metadata[] = {
-      main_entrypoint,
-      main_name,
-      NULL, /* list of signatures */
-      resources_node, /* list of resources */
-      shader_properties /* list of caps and other properties */
-   };
+   const struct dxil_mdnode *dx_entry_point = emit_entrypoint(ctx, main_func,
+       "main", NULL, resources_node, shader_properties);
+   if (!dx_entry_point)
+      return false;
+
    const struct dxil_mdnode *dx_resources = resources_node,
-                     *dx_type_annotations[] = { main_type_annotation },
-                     *dx_entry_point = dxil_get_metadata_node(&ctx->mod, main_entrypoint_metadata,
-                                                              ARRAY_SIZE(main_entrypoint_metadata));
+                     *dx_type_annotations[] = { main_type_annotation };
 
    return dxil_add_metadata_named_node(&ctx->mod, "dx.resources",
                                        &dx_resources, 1) &&
