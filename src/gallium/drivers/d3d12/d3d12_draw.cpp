@@ -414,7 +414,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    if (dinfo->mode >= PIPE_PRIM_QUADS ||
        dinfo->mode == PIPE_PRIM_LINE_LOOP ||
-       dinfo->mode == PIPE_PRIM_TRIANGLE_FAN) {
+       dinfo->mode == PIPE_PRIM_TRIANGLE_FAN ||
+       dinfo->index_size == 1) {
       if (!u_trim_pipe_prim(dinfo->mode, (unsigned *)&dinfo->count))
          return;
 
@@ -426,6 +427,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    unsigned index_offset = 0;
    struct pipe_resource *index_buffer = NULL;
    if (dinfo->index_size > 0) {
+      assert(dinfo->index_size != 1);
       if (dinfo->has_user_indices) {
          if (!util_upload_index_buffer(pctx, dinfo, &index_buffer,
              &index_offset, 4)) {
