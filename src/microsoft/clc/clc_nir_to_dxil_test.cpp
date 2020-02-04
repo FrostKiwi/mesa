@@ -122,5 +122,70 @@ TEST_F(NirToDXILTest, test_empty_CS_shader)
    run(shader.str(), expect.str());
 }
 
+TEST_F(NirToDXILTest, test_fs_constant_color)
+{
+   const char expect[] = R"(target datalayout = "e-m:e-p:32:32-i1:32-i8:32-i16:32-i32:32-i64:64-f16:32-f32:32-f64:64-n8:16:32:64"
+target triple = "dxil-ms-dx"
 
+declare void @dx.op.storeOutput.f32(i32, i32, i32, i8, float) #0
+
+define void @main() {
+  %1 = bitcast i32 1065353216 to float
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %1)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  %2 = bitcast i32 0 to float
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %2)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  %3 = bitcast i32 0 to float
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %3)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  %4 = bitcast i32 1065353216 to float
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %4)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  ret void
+}
+
+attributes #0 = { nounwind }
+
+!llvm.ident = !{!0}
+!dx.version = !{!1}
+!dx.valver = !{!2}
+!dx.shaderModel = !{!3}
+!dx.typeAnnotations = !{!4}
+!dx.entryPoints = !{!8}
+
+!1 = !{i32 1, i32 0}
+!2 = !{i32 1, i32 4}
+!3 = !{!"ps", i32 6, i32 0}
+!4 = !{i32 1, void ()* @main, !5}
+!5 = !{!6}
+!6 = !{i32 0, !7, !7}
+!7 = !{}
+!8 = !{void ()* @main, !"main", !9, null, null}
+!9 = !{null, !10, null}
+!10 = !{!11}
+!11 = !{i32 0, !"SV_Target", i8 9, i8 16, !12, i8 0, i32 1, i8 4, i32 0, i8 0, null}
+!12 = !{i32 0}
+)";
+
+   const char shader[] = R"(
+shader: MESA_SHADER_FRAGMENT
+inputs: 0
+outputs: 1
+uniforms: 0
+shared: 0
+decl_var shader_out INTERP_MODE_NONE vec4 color (FRAG_RESULT_DATA0.xyzw, 0, 0)
+decl_function main (0 params)
+
+impl main {
+   decl_var  INTERP_MODE_NONE vec4 const_temp
+   decl_var  INTERP_MODE_NONE vec4 out@color-temp
+   decl_var  INTERP_MODE_NONE vec4 color@0
+   block block_0:
+   /* preds: */
+   vec4 32 ssa_0 = load_const (0x3f800000 /* 1.000000 */, 0x00000000 /* 0.000000 */, 0x00000000 /* 0.000000 */, 0x3f800000 /* 1.000000 */)
+   vec1 32 ssa_1 = deref_var &color (shader_out vec4)
+   intrinsic store_deref (ssa_1, ssa_0) (15, 0) /* wrmask=xyzw */ /* access=0 */
+   /* succs: block_1 */
+   block block_1:
+}
+)";
+   run(shader, expect);
+}
 
