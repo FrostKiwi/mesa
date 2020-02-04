@@ -51,6 +51,27 @@ enum dxil_resource_type {
   DXIL_RES_NUM_ENTRIES /* should always be last */
 };
 
+#define DXIL_FOURCC(ch0, ch1, ch2, ch3) ( \
+  (uint32_t)(ch0)        | (uint32_t)(ch1) << 8 | \
+  (uint32_t)(ch2) << 16  | (uint32_t)(ch3) << 24)
+
+enum dxil_part_fourcc {
+   DXIL_RDEF = DXIL_FOURCC('R', 'D', 'E', 'F'),
+   DXIL_ISG1 = DXIL_FOURCC('I', 'S', 'G', '1'),
+   DXIL_OSG1 = DXIL_FOURCC('O', 'S', 'G', '1'),
+   DXIL_PSG1 = DXIL_FOURCC('P', 'S', 'G', '1'),
+   DXIL_STAT = DXIL_FOURCC('S', 'T', 'A', 'T'),
+   DXIL_ILDB = DXIL_FOURCC('I', 'L', 'D', 'B'),
+   DXIL_ILDN = DXIL_FOURCC('I', 'L', 'D', 'N'),
+   DXIL_SFI0 = DXIL_FOURCC('S', 'F', 'I', '0'),
+   DXIL_PRIV = DXIL_FOURCC('P', 'R', 'I', 'V'),
+   DXIL_RTS0 = DXIL_FOURCC('R', 'T', 'S', '0'),
+   DXIL_DXIL = DXIL_FOURCC('D', 'X', 'I', 'L'),
+   DXIL_PSV0 = DXIL_FOURCC('P', 'S', 'V', '0'),
+   DXIL_RDAT = DXIL_FOURCC('R', 'D', 'A', 'T'),
+   DXIL_HASH = DXIL_FOURCC('H', 'A', 'S', 'H'),
+};
+
 struct dxil_resource {
    uint32_t resource_type;
    uint32_t space;
