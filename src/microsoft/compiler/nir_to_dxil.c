@@ -825,6 +825,23 @@ emit_entrypoint(struct ntd_context *ctx,
                                  ARRAY_SIZE(nodes));
 }
 
+static const struct dxil_mdnode *
+emit_resources(struct ntd_context *ctx)
+{
+   bool emit_resources = false;
+   const struct dxil_mdnode *resources_nodes[] = {
+      NULL, NULL, NULL, NULL
+   };
+
+   if (ctx->num_uavs) {
+      resources_nodes[1] = dxil_get_metadata_node(&ctx->mod, ctx->uav_metadata_nodes, ctx->num_uavs);
+      emit_resources = true;
+   }
+
+   return emit_resources ?
+      dxil_get_metadata_node(&ctx->mod, resources_nodes, ARRAY_SIZE(resources_nodes)): NULL;
+}
+
 static bool
 emit_metadata(struct ntd_context *ctx, nir_shader *s)
 {
@@ -840,12 +857,7 @@ emit_metadata(struct ntd_context *ctx, nir_shader *s)
    if (!main_func)
       return false;
 
-   const struct dxil_mdnode *uav_metadata = dxil_get_metadata_node(&ctx->mod, ctx->uav_metadata_nodes, ctx->num_uavs);
-   const struct dxil_mdnode *resources_nodes[] = {
-      NULL, uav_metadata, NULL, NULL
-   };
-   const struct dxil_mdnode *resources_node = dxil_get_metadata_node(&ctx->mod, resources_nodes,
-                                                      ARRAY_SIZE(resources_nodes));
+   const struct dxil_mdnode *resources_node = emit_resources(ctx);
 
    const struct dxil_mdnode *main_entrypoint = dxil_get_metadata_func(&ctx->mod, main_func);
    const struct dxil_mdnode *node27 = dxil_get_metadata_node(&ctx->mod, NULL, 0);
@@ -905,12 +917,14 @@ emit_metadata(struct ntd_context *ctx, nir_shader *s)
    if (!dx_entry_point)
       return false;
 
-   const struct dxil_mdnode *dx_resources = resources_node,
-                     *dx_type_annotations[] = { main_type_annotation };
+   if (resources_node) {
+      const struct dxil_mdnode *dx_resources = resources_node;
+      dxil_add_metadata_named_node(&ctx->mod, "dx.resources",
+                                       &dx_resources, 1);
+   }
 
-   return dxil_add_metadata_named_node(&ctx->mod, "dx.resources",
-                                       &dx_resources, 1) &&
-          dxil_add_metadata_named_node(&ctx->mod, "dx.typeAnnotations",
+   const struct dxil_mdnode *dx_type_annotations[] = { main_type_annotation };
+   return dxil_add_metadata_named_node(&ctx->mod, "dx.typeAnnotations",
                                        dx_type_annotations,
                                        ARRAY_SIZE(dx_type_annotations)) &&
           dxil_add_metadata_named_node(&ctx->mod, "dx.entryPoints",
