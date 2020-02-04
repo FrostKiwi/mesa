@@ -1824,6 +1824,20 @@ dxil_get_metadata_int1(struct dxil_module *m, bool value)
 }
 
 const struct dxil_mdnode *
+dxil_get_metadata_int8(struct dxil_module *m, int8_t value)
+{
+   const struct dxil_type *type = get_int8_type(m);
+   if (!type)
+      return NULL;
+
+   const struct dxil_value *const_value = get_int_const(m, type, value);
+   if (!const_value)
+      return NULL;
+
+   return dxil_get_metadata_value(m, type, const_value);
+}
+
+const struct dxil_mdnode *
 dxil_get_metadata_int32(struct dxil_module *m, int32_t value)
 {
    const struct dxil_type *type = get_int32_type(m);
