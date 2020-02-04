@@ -793,6 +793,8 @@ get_module_flags(struct ntd_context *ctx)
       flags |= (1 << 6);
    if (ctx->mod.feats.inner_coverage)
       flags |= (1 << 10);
+   if (ctx->mod.feats.typed_uav_load_additional_formats)
+      flags |= (1 << 13);
    if (ctx->mod.feats.use_64uavs)
       flags |= (1 << 15);
    if (ctx->mod.feats.cs_4x_raw_sb)
