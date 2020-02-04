@@ -247,6 +247,9 @@ const struct dxil_mdnode *
 dxil_get_metadata_int1(struct dxil_module *m, bool value);
 
 const struct dxil_mdnode *
+dxil_get_metadata_int8(struct dxil_module *m, int8_t value);
+
+const struct dxil_mdnode *
 dxil_get_metadata_int32(struct dxil_module *m, int32_t value);
 
 const struct dxil_mdnode *
