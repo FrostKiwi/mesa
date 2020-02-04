@@ -46,6 +46,14 @@ enum dxil_shader_kind {
    DXIL_COMPUTE_SHADER = 5,
 };
 
+extern int debug_dxil;
+
+enum dxil_debug_flags {
+   DXIL_DEBUG_VERBOSE    = 1 << 0,
+   DXIL_DEBUG_DUMP_BLOB  = 1 << 1,
+   DXIL_DEBUG_TRACE      = 1 << 2,
+};
+
 enum dxil_attr_kind {
    DXIL_ATTR_KIND_NONE = 0,
    DXIL_ATTR_KIND_NO_UNWIND = 18,

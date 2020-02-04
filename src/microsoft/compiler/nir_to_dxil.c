@@ -34,17 +34,37 @@
 
 #include <stdint.h>
 
-#define DEBUG_NIR_TO_DXIL
+int debug_dxil = 0;
 
-#ifdef DEBUG_NIR_TO_DXIL
+static const struct debug_named_value
+debug_options[] = {
+   { "verbose", DXIL_DEBUG_VERBOSE, NULL },
+   { "dump_blob",  DXIL_DEBUG_DUMP_BLOB , "Write shader blobs" },
+   { "trace",  DXIL_DEBUG_TRACE , "Trace instruction conversion" },
+   DEBUG_NAMED_VALUE_END
+};
+
+DEBUG_GET_ONCE_FLAGS_OPTION(debug_dxil, "DXIL_DEBUG", debug_options, 0)
+
+#ifdef DEBUG
 #define NIR_INSTR_UNSUPPORTED(instr) \
+   if (debug_dxil & DXIL_DEBUG_VERBOSE) \
    do { \
       fprintf(stderr, "Unsupported instruction:"); \
       nir_print_instr(instr, stderr); \
       fprintf(stderr, "\n"); \
    } while (0)
+
+#define TRACE_CONVERSION(instr) \
+   if (debug_dxil & DXIL_DEBUG_TRACE) \
+      do { \
+         fprintf(stderr, "Convert '"); \
+         nir_print_instr(instr, stderr); \
+         fprintf(stderr, "'\n"); \
+      } while (0)
 #else
 #define NIR_INSTR_UNSUPPORTED(instr)
+#define TRACE_CONVERSION(instr)
 #endif
 
 static const nir_shader_compiler_options
@@ -1412,6 +1432,8 @@ static bool
 emit_block(struct ntd_context *ctx, struct nir_block *block)
 {
    nir_foreach_instr(instr, block) {
+      TRACE_CONVERSION(instr);
+
       if (!emit_instr(ctx, instr))  {
          return false;
       }
@@ -1655,6 +1677,8 @@ optimize_nir(struct nir_shader *s)
 bool
 nir_to_dxil(struct nir_shader *s, struct blob *blob)
 {
+   debug_dxil = (int)debug_get_option_debug_dxil();
+
    struct ntd_context ctx = { 0 };
    dxil_module_init(&ctx.mod);
    ctx.mod.shader_kind = get_dxil_shader_kind(s);
@@ -1723,6 +1747,19 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    if (!dxil_container_write(&container, blob)) {
       debug_printf("D3D12: dxil_container_write failed\n");
       return false;
+   }
+
+   if (debug_dxil & DXIL_DEBUG_DUMP_BLOB) {
+      static int shader_id = 0;
+      char buffer[64];
+      snprintf(buffer, sizeof(buffer), "shader_%s_%d.blob",
+               get_shader_kind_str(ctx.mod.shader_kind), shader_id++);
+      debug_printf("Try to write blob to %s\n", buffer);
+      FILE *f = fopen(buffer, "wb");
+      if (f) {
+         fwrite(blob->data, 1, blob->size, f);
+         fclose(f);
+      }
    }
 
    return true;
