@@ -189,3 +189,87 @@ impl main {
    run(shader, expect);
 }
 
+
+TEST_F(NirToDXILTest, test_vs_passthrough_pos)
+{
+   const char expect[] =
+R"(target datalayout = "e-m:e-p:32:32-i1:32-i8:32-i16:32-i32:32-i64:64-f16:32-f32:32-f64:64-n8:16:32:64"
+target triple = "dxil-ms-dx"
+
+declare float @dx.op.loadInput.f32(i32, i32, i32, i8, i32) #0
+
+declare void @dx.op.storeOutput.f32(i32, i32, i32, i8, float) #1
+
+define void @main() {
+  %1 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 0, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
+  %2 = bitcast float %1 to i32
+  %3 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 1, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
+  %4 = bitcast float %3 to i32
+  %5 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 2, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
+  %6 = bitcast float %5 to i32
+  %7 = bitcast i32 %2 to float
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %7)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  %8 = bitcast i32 %4 to float
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %8)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  %9 = bitcast i32 %6 to float
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %9)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  %10 = bitcast i32 1065353216 to float
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %10)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  ret void
+}
+
+attributes #0 = { nounwind readnone }
+attributes #1 = { nounwind }
+
+!llvm.ident = !{!0}
+!dx.version = !{!1}
+!dx.valver = !{!2}
+!dx.shaderModel = !{!3}
+!dx.typeAnnotations = !{!4}
+!dx.entryPoints = !{!8}
+
+!1 = !{i32 1, i32 0}
+!2 = !{i32 1, i32 4}
+!3 = !{!"vs", i32 6, i32 0}
+!4 = !{i32 1, void ()* @main, !5}
+!5 = !{!6}
+!6 = !{i32 0, !7, !7}
+!7 = !{}
+!8 = !{void ()* @main, !"main", !9, null, null}
+!9 = !{!10, !13, null}
+!10 = !{!11}
+!11 = !{i32 0, !"POSITION", i8 9, i8 0, !12, i8 0, i32 1, i8 3, i32 0, i8 0, null}
+!12 = !{i32 0}
+!13 = !{!14}
+!14 = !{i32 0, !"SV_Position", i8 9, i8 3, !12, i8 2, i32 1, i8 4, i32 0, i8 0, null}
+)";
+
+const char nir_shader[] =
+R"(shader: MESA_SHADER_VERTEX
+inputs: 1
+outputs: 1
+uniforms: 0
+shared: 0
+decl_var shader_in INTERP_MODE_NONE vec3 vertexPosition_modelspace (VERT_ATTRIB_POS.xyz, 0, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+decl_function main (0 params)
+
+impl main {
+   decl_var  INTERP_MODE_NONE float const_temp
+   decl_var  INTERP_MODE_NONE vec4 in@vertexPosition_modelspace-temp
+   decl_var  INTERP_MODE_NONE vec4 out@gl_Position-temp
+   decl_var  INTERP_MODE_NONE vec4 gl_Position@0
+   block block_0:
+   /* preds: */
+   vec1 32 ssa_0 = deref_var &vertexPosition_modelspace (shader_in vec3)
+   vec3 32 ssa_1 = intrinsic load_deref (ssa_0) (0) /* access=0 */
+   vec1 32 ssa_2 = deref_var &gl_Position (shader_out vec4)
+   vec1 32 ssa_3 = load_const (0x3f800000 /* 1.000000 */)
+   vec4 32 ssa_4 = vec4 ssa_1.x, ssa_1.y, ssa_1.z, ssa_3
+   intrinsic store_deref (ssa_2, ssa_4) (15, 0) /* wrmask=xyzw */ /* access=0 */
+   /* succs: block_1 */
+      block block_1:
+ })";
+
+   run(nir_shader, expect);
+}
