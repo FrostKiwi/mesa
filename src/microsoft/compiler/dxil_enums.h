@@ -194,6 +194,10 @@ enum dxil_interpolation_mode  {
   DXIL_INTERP_INVALID                     = 8
 };
 
+enum dxil_output_id {
+   DXIL_PSOUTPUT_COLOR0 = 5,
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -296,6 +296,9 @@ struct ntd_context {
                           *groupid_func,
                           *bufferstore_func,
                           *createhandle_func;
+
+   const struct dxil_func *store_output_func[NUM_OVERLOADS];
+   const struct dxil_func *load_input_func[NUM_OVERLOADS];
 };
 
 static const struct dxil_type *
@@ -401,6 +404,86 @@ emit_binary_call(struct ntd_context *ctx, enum overload_type overload,
 
    return dxil_emit_call(&ctx->mod, ctx->binary_funcs[overload],
                          args, ARRAY_SIZE(args));
+}
+
+static bool
+allocate_store_output_func(struct ntd_context *ctx, enum overload_type overload)
+{
+   const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
+   const struct dxil_type *int8_type = dxil_module_get_int_type(&ctx->mod, 8);
+   const struct dxil_type *var_type = get_overload_type(ctx, overload);
+   const struct dxil_type *void_type = dxil_module_get_void_type(&ctx->mod);
+   if (!int32_type || !var_type || !int8_type || !void_type) {
+      return false;
+   }
+
+   const struct dxil_type *arg_types[] = {
+      int32_type,
+      int32_type,
+      int32_type,
+      int8_type,
+      var_type
+   };
+
+   const struct dxil_type *func_type =
+      dxil_module_add_function_type(&ctx->mod, void_type,
+                                    arg_types, ARRAY_SIZE(arg_types));
+   if (!func_type) {
+      fprintf(stderr, "%s: Func type allocation failed\n", __func__);
+      return false;
+   }
+
+   char name[100];
+   snprintf(name, ARRAY_SIZE(name), "dx.op.storeOutput.%s",
+            overload_str[overload]);
+
+   ctx->store_output_func[overload] = dxil_add_function_decl(&ctx->mod, name,
+      func_type, DXIL_ATTR_KIND_NO_UNWIND);
+   if (!ctx->store_output_func[overload]) {
+      fprintf(stderr, "%s: Func decl failed\n", __func__);
+      return false;
+   }
+   return true;
+}
+
+static bool
+allocate_load_input_func(struct ntd_context *ctx, enum overload_type overload)
+{
+   const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
+   const struct dxil_type *int8_type = dxil_module_get_int_type(&ctx->mod, 8);
+   const struct dxil_type *return_type = get_overload_type(ctx, overload);
+
+   if (!int32_type || !int8_type || !return_type) {
+      return false;
+   }
+
+   const struct dxil_type *arg_types[] = {
+      int32_type,
+      int32_type,
+      int32_type,
+      int8_type,
+      int32_type,
+   };
+
+   const struct dxil_type *func_type =
+      dxil_module_add_function_type(&ctx->mod, return_type,
+                                    arg_types, ARRAY_SIZE(arg_types));
+   if (!func_type) {
+      fprintf(stderr, "%s: Func type allocation failed\n", __func__);
+      return false;
+   }
+
+   char name[100];
+   snprintf(name, ARRAY_SIZE(name), "dx.op.loadInput.%s",
+            overload_str[overload]);
+
+   ctx->load_input_func[overload] = dxil_add_function_decl(&ctx->mod, name,
+      func_type,  DXIL_ATTR_KIND_READ_NONE);
+   if (!ctx->load_input_func[overload]) {
+      fprintf(stderr, "%s: Func decl failed\n", __func__);
+      return false;
+   }
+   return true;
 }
 
 static const struct dxil_value *
@@ -1357,6 +1440,76 @@ emit_store_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
+emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   nir_deref_instr* deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
+   nir_variable* output = nir_deref_instr_get_variable(deref);
+
+   assert(output->data.mode == nir_var_shader_out);
+
+   if (!ctx->store_output_func[F32] &&
+       !allocate_store_output_func(ctx, F32)) {
+      debug_printf("%s: Unable to allocate storeOutput.%s function\n",
+                   __func__, overload_str[F32]);
+      return false;
+   }
+
+   const struct dxil_value *dest = dxil_module_get_int32_const(&ctx->mod, DXIL_PSOUTPUT_COLOR0);
+   const struct dxil_value *loc = dxil_module_get_int32_const(&ctx->mod, (int)output->data.driver_location);
+   const struct dxil_value *unknown = dxil_module_get_int32_const(&ctx->mod, 0);
+
+   bool success = true;
+   uint32_t writemask = nir_intrinsic_write_mask(intr);
+   for (unsigned i = 0; i < intr->src[1].ssa->num_components && success; ++i) {
+      if (writemask & (1 << i)) {
+         const struct dxil_value *comp = dxil_module_get_int8_const(&ctx->mod, i);
+         const struct dxil_value *value = get_src(ctx, &intr->src[1], i, nir_type_float);
+         const struct dxil_value *args[] = {
+            dest, loc, unknown, comp, value
+         };
+         success &= dxil_emit_call_void(&ctx->mod, ctx->store_output_func[F32], args, ARRAY_SIZE(args));
+      }
+   }
+   return success;
+}
+
+static bool
+emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   nir_deref_instr* deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
+   nir_variable* input = nir_deref_instr_get_variable(deref);
+
+   assert(input->data.mode == nir_var_shader_in);
+
+   if (!ctx->load_input_func[F32] &&
+       !allocate_load_input_func(ctx, F32)) {
+      debug_printf("%s: Unable to allocate loadInput.%s function\n",
+                   __func__, overload_str[F32]);
+      return false;
+   }
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, 4);
+   const struct dxil_value *input_id = dxil_module_get_int32_const(&ctx->mod, (int)input->data.driver_location);
+   const struct dxil_value *row = dxil_module_get_int32_const(&ctx->mod, 0);
+   const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
+   const struct dxil_value *vertex_id = dxil_module_get_undef(&ctx->mod, int32_type);
+
+   for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
+      const struct dxil_value *comp = dxil_module_get_int8_const(&ctx->mod, i);
+
+      const struct dxil_value *args[] = {
+         opcode, input_id, row, comp, vertex_id
+      };
+
+      const struct dxil_value *retval = dxil_emit_call(&ctx->mod, ctx->load_input_func[F32], args, ARRAY_SIZE(args));
+      if (!retval)
+         return false;
+      store_dest(ctx, &intr->dest, i, retval, nir_type_float);
+   }
+   return true;
+}
+
+static bool
 emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    switch (intr->intrinsic) {
@@ -1368,6 +1521,11 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_local_work_group_id(ctx, intr);
    case nir_intrinsic_store_ssbo:
       return emit_store_ssbo(ctx, intr);
+   case nir_intrinsic_store_deref:
+      return emit_store_deref(ctx, intr);
+   case nir_intrinsic_load_deref:
+      return emit_load_deref(ctx, intr);
+
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_local_group_size:
    default:
@@ -1411,6 +1569,19 @@ emit_load_const(struct ntd_context *ctx, nir_load_const_instr *load_const)
    return true;
 }
 
+static bool
+emit_deref(struct ntd_context* ctx, nir_deref_instr* instr)
+{
+   switch (instr->deref_type) {
+   case nir_deref_type_var:
+      return true;
+   default:
+      ;
+   }
+   NIR_INSTR_UNSUPPORTED(&instr->instr);
+   return false;
+}
+
 static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
 {
    switch (instr->type) {
@@ -1420,6 +1591,8 @@ static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
       return emit_intrinsic(ctx, nir_instr_as_intrinsic(instr));
    case nir_instr_type_load_const:
       return emit_load_const(ctx, nir_instr_as_load_const(instr));
+   case nir_instr_type_deref:
+      return emit_deref(ctx, nir_instr_as_deref(instr));
    default:
       NIR_INSTR_UNSUPPORTED(instr);
       assert("Unimplemented instruction type");
