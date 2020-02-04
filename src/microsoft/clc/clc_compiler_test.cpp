@@ -287,7 +287,7 @@ validate_module(void *data, size_t size)
 }
 
 static bool
-test_shader(const char *kernel_source, int width, const uint32_t expected[])
+test_shader(const char *kernel_source, int width, const uint32_t input[], const uint32_t expected[])
 {
    if (true)
       enable_d3d12_debug_layer();
@@ -441,7 +441,7 @@ test_shader(const char *kernel_source, int width, const uint32_t expected[])
       return false;
    }
    for (int i = 0; i < width; ++i) {
-      data[i] = 0xdeadbeef;
+      data[i] = input[i];
    }
    upload_res->Unmap(0, &res_range);
 
@@ -521,10 +521,13 @@ TEST(built_ins, global_id)
    {\n\
        output[get_global_id(0)] = get_global_id(0);\n\
    }\n";
+   const uint32_t input[] = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+   };
    const uint32_t expected[] = {
       0, 1, 2, 3
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), expected));
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, float_basics)
@@ -534,10 +537,13 @@ TEST(types, float_basics)
    {\n\
        output[get_global_id(0)] = (uint)((float)get_global_id(0) + 1.5f);\n\
    }\n";
+   const uint32_t input[] = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+   };
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), expected));
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, double_basics)
@@ -547,10 +553,13 @@ TEST(types, double_basics)
    {\n\
        output[get_global_id(0)] = (uint)((double)get_global_id(0) + 1.5);\n\
    }\n";
+   const uint32_t input[] = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+   };
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), expected));
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, short_basics)
@@ -560,10 +569,13 @@ TEST(types, short_basics)
    {\n\
        output[get_global_id(0)] = (uint)((short)get_global_id(0) + (short)1);\n\
    }\n";
+   const uint32_t input[] = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+   };
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), expected));
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, char_basics)
@@ -573,8 +585,11 @@ TEST(types, char_basics)
    {\n\
        output[get_global_id(0)] = (uint)((char)get_global_id(0) + (char)1);\n\
    }\n";
+   const uint32_t input[] = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+   };
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), expected));
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
