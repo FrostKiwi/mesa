@@ -60,15 +60,15 @@ emit_llvm_ident(struct dxil_module *m)
 }
 
 static bool
-emit_dx_versions(struct dxil_module *m, int major, int minor)
+emit_named_version(struct dxil_module *m, const char *name,
+                   int major, int minor)
 {
    const struct dxil_mdnode *major_node = dxil_get_metadata_int32(m, major);
    const struct dxil_mdnode *minor_node = dxil_get_metadata_int32(m, minor);
    const struct dxil_mdnode *version_nodes[] = { major_node, minor_node };
    const struct dxil_mdnode *version = dxil_get_metadata_node(m, version_nodes,
                                                      ARRAY_SIZE(version_nodes));
-   return dxil_add_metadata_named_node(m, "dx.version", &version, 1) &&
-          dxil_add_metadata_named_node(m, "dx.valver", &version, 1);
+   return dxil_add_metadata_named_node(m, name, &version, 1);
 }
 
 static const char *
@@ -748,7 +748,8 @@ static bool
 emit_metadata(struct ntd_context *ctx, nir_shader *s)
 {
    if (!emit_llvm_ident(&ctx->mod) ||
-       !emit_dx_versions(&ctx->mod, 1, 0) ||
+       !emit_named_version(&ctx->mod, "dx.version", 1, 0) ||
+       !emit_named_version(&ctx->mod, "dx.valver", 1, 0) ||
        !emit_dx_shader_model(&ctx->mod))
       return false;
 
