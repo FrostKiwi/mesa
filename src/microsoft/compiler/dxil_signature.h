@@ -53,6 +53,99 @@ struct dxil_signature_record {
    struct dxil_signature_element sig;
    char *name;
 };
+
+struct dxil_psv_string_table {
+   char *data;
+   uint32_t size;
+};
+
+struct dxil_psv_sem_index_table {
+   uint32_t data[80];
+   uint32_t size;
+};
+
+struct dxil_psv_signature_element {
+   uint32_t semantic_name_offset;          // Offset into StringTable
+   uint32_t semantic_indexes_offset;       // Offset into PSVSemanticIndexTable, count == Rows
+   uint8_t rows;                   // Number of rows this element occupies
+   uint8_t start_row;               // Starting row of packing location if allocated
+   uint8_t cols_and_start;           // 0:4 = Cols, 4:6 = StartCol, 6:7 == Allocated
+   uint8_t semantic_kind;           // PSVSemanticKind
+   uint8_t component_type;          // DxilProgramSigCompType
+   uint8_t interpolation_mode;      // DXIL::InterpolationMode or D3D10_SB_INTERPOLATION_MODE
+   uint8_t dynamic_mask_and_stream;   // 0:4 = DynamicIndexMask, 4:6 = OutputStream (0-3)
+   uint8_t reserved;
+};
+
+struct dxil_vs_info {
+   char output_position_present;
+};
+
+struct dxil_gs_info {
+   uint32_t input_primitive;
+   uint32_t output_toplology;
+   uint32_t output_stream_mask;
+   char output_position_present;
+};
+
+struct dxil_ps_info {
+   char depth_output;
+   char sample_frequency;
+};
+
+/* Maximum sized defining the union size (MSInfo)*/
+struct dxil_max_sized_info {
+   uint32_t dummy1[3];
+   uint16_t dummy2[2];
+};
+
+struct dxil_psv_runtime_info_0 {
+   union {
+      struct dxil_vs_info vs;
+      struct dxil_gs_info gs;
+      struct dxil_ps_info ps;
+      struct dxil_max_sized_info dummy;
+   };
+   uint32_t min_expected_wave_lane_count;  // minimum lane count required, 0 if unused
+   uint32_t max_expected_wave_lane_count;  // maximum lane count required, 0xffffffff if unused
+};
+
+struct dxil_psv_runtime_info_1 {
+   struct dxil_psv_runtime_info_0 psv0;
+   uint8_t shader_stage;              // PSVShaderKind
+   uint8_t uses_view_id;
+   union {
+     uint16_t max_vertex_count;          // MaxVertexCount for GS only (max 1024)
+     uint8_t sig_patch_const_or_prim_vectors;  // Output for HS; Input for DS; Primitive output for MS (overlaps MS1::SigPrimVectors)
+     // struct { uint8_t dummy[2]; } fill;
+   };
+
+   // PSVSignatureElement counts
+   uint8_t sig_input_elements;
+   uint8_t sig_output_elements;
+   uint8_t sig_patch_const_or_prim_elements;
+
+   // Number of packed vectors per signature
+   uint8_t sig_input_vectors;
+   uint8_t sig_output_vectors[4];
+};
+
+struct dxil_pipe_state_validation {
+   unsigned val_major, val_minor;
+   uint32_t version;
+   uint32_t resource_count;
+   uint8_t  shader_stage;
+   struct dxil_psv_string_table string_table;
+   struct dxil_psv_sem_index_table semantic_index_table;
+   uint8_t uses_view_id;
+   uint8_t sig_input_elements;
+   uint8_t sig_output_elements;
+   uint8_t sig_patch_const_or_prim_elements;
+   uint8_t sig_input_vectors;
+   uint8_t sig_patch_const_or_prim_vectors;
+   uint8_t sig_output_vectors[4];
+};
+
 struct dxil_mdnode;
 struct dxil_module;
 
