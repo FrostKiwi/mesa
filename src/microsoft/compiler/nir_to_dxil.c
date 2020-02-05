@@ -25,6 +25,7 @@
 
 #include "dxil_module.h"
 #include "dxil_container.h"
+#include "dxil_enums.h"
 
 #include "util/u_debug.h"
 #include "nir/nir_builder.h"
@@ -121,26 +122,6 @@ emit_dx_shader_model(struct dxil_module *m)
    return dxil_add_metadata_named_node(m, "dx.shaderModel",
                                        &dx_shader_model, 1);
 }
-
-enum dxil_component_type {
-   DXIL_COMP_TYPE_INVALID = 0,
-   DXIL_COMP_TYPE_I1 = 1,
-   DXIL_COMP_TYPE_I16 = 2,
-   DXIL_COMP_TYPE_U16 = 3,
-   DXIL_COMP_TYPE_I32 = 4,
-   DXIL_COMP_TYPE_U32 = 5,
-   DXIL_COMP_TYPE_I64 = 6,
-   DXIL_COMP_TYPE_U64 = 7,
-   DXIL_COMP_TYPE_F16 = 8,
-   DXIL_COMP_TYPE_F32 = 9,
-   DXIL_COMP_TYPE_F64 = 10,
-   DXIL_COMP_TYPE_SNORMF16 = 11,
-   DXIL_COMP_TYPE_UNORMF16 = 12,
-   DXIL_COMP_TYPE_SNORMF32 = 13,
-   DXIL_COMP_TYPE_UNORMF32 = 14,
-   DXIL_COMP_TYPE_SNORMF64 = 15,
-   DXIL_COMP_TYPE_UNORMF64 = 16
-};
 
 enum {
    DXIL_TYPED_BUFFER_ELEMENT_TYPE_TAG = 0,
@@ -253,26 +234,6 @@ get_glsl_type(struct dxil_module *m, const struct glsl_type *type)
    return get_glsl_basetype(m, glsl_get_base_type(type));
 }
 
-static enum dxil_component_type
-get_comp_type(const struct glsl_type *type)
-{
-   switch (glsl_get_base_type(type)) {
-   case GLSL_TYPE_UINT: return DXIL_COMP_TYPE_U32;
-   case GLSL_TYPE_INT: return DXIL_COMP_TYPE_I32;
-   case GLSL_TYPE_FLOAT: return DXIL_COMP_TYPE_F32;
-   case GLSL_TYPE_FLOAT16: return DXIL_COMP_TYPE_F16;
-   case GLSL_TYPE_DOUBLE: return DXIL_COMP_TYPE_F64;
-   case GLSL_TYPE_UINT16: return DXIL_COMP_TYPE_U16;
-   case GLSL_TYPE_INT16: return DXIL_COMP_TYPE_I16;
-   case GLSL_TYPE_UINT64: return DXIL_COMP_TYPE_U64;
-   case GLSL_TYPE_INT64: return DXIL_COMP_TYPE_I64;
-   case GLSL_TYPE_BOOL: return DXIL_COMP_TYPE_I1;
-
-   default:
-      debug_printf("type: %s\n", glsl_get_type_name(type));
-      unreachable("unexpected glsl type");
-   }
-}
 
 #define MAX_UAVS 64
 
@@ -663,7 +624,7 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
    if (!ssbo_gvar)
       return false;
 
-   enum dxil_component_type comp_type = get_comp_type(var->type);
+   enum dxil_component_type comp_type = dxil_get_comp_type(var->type);
    const struct dxil_mdnode *uav_meta = emit_uav_metadata(&ctx->mod, ssbo_struct_type,
                                                           var->name, comp_type);
 

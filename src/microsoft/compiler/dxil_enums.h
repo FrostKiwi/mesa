@@ -162,6 +162,26 @@ enum dxil_semantic_interpret_kind {
    DXIL_SEM_INTERP_INVALID
 };
 
+enum dxil_component_type {
+   DXIL_COMP_TYPE_INVALID = 0,
+   DXIL_COMP_TYPE_I1 = 1,
+   DXIL_COMP_TYPE_I16 = 2,
+   DXIL_COMP_TYPE_U16 = 3,
+   DXIL_COMP_TYPE_I32 = 4,
+   DXIL_COMP_TYPE_U32 = 5,
+   DXIL_COMP_TYPE_I64 = 6,
+   DXIL_COMP_TYPE_U64 = 7,
+   DXIL_COMP_TYPE_F16 = 8,
+   DXIL_COMP_TYPE_F32 = 9,
+   DXIL_COMP_TYPE_F64 = 10,
+   DXIL_COMP_TYPE_SNORMF16 = 11,
+   DXIL_COMP_TYPE_UNORMF16 = 12,
+   DXIL_COMP_TYPE_SNORMF32 = 13,
+   DXIL_COMP_TYPE_UNORMF32 = 14,
+   DXIL_COMP_TYPE_SNORMF64 = 15,
+   DXIL_COMP_TYPE_UNORMF64 = 16
+};
+
 enum dxil_interpolation_mode  {
   DXIL_INTERP_UNDEFINED                   = 0,
   DXIL_INTERP_CONSTANT                    = 1,
@@ -177,6 +197,8 @@ enum dxil_interpolation_mode  {
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+enum dxil_component_type dxil_get_comp_type(const struct glsl_type *type);
 
 enum dxil_prog_sig_comp_type dxil_get_prog_sig_comp_type(const struct glsl_type *type);
 
