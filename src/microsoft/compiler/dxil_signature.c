@@ -356,6 +356,8 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
          interpolation = get_interpolation(var->data.interpolation);
       }
 
+      mod->info.has_out_position |= semantic_kind == DXIL_SEM_POSITION;
+
       outputs[record_id] = fill_SV_param_nodes(mod, record_id, semantic_name,
                                                semantic_kind, columns, interpolation);
       mod->outputs[record_id].name = strdup(semantic_name);
