@@ -1850,6 +1850,38 @@ optimize_nir(struct nir_shader *s)
    } while (progress);
 }
 
+static
+void dxil_fill_validation_state(struct ntd_context *ctx,
+                                struct dxil_validation_state *state)
+{
+   state->num_resources = ctx->num_resources;
+   state->resources = ctx->resources;
+   state->state.psv0.max_expected_wave_lane_count = UINT_MAX;
+   state->state.shader_stage = (uint8_t)ctx->mod.shader_kind;
+   state->state.sig_input_elements = (uint8_t)ctx->mod.num_sig_inputs;
+   state->state.sig_output_elements = (uint8_t)ctx->mod.num_sig_outputs;
+   //state->state.sig_patch_const_or_prim_elements = 0;
+
+   switch (ctx->mod.shader_kind) {
+   case DXIL_VERTEX_SHADER:
+      state->state.psv0.vs.output_position_present = 0; //??
+      break;
+   case DXIL_PIXEL_SHADER:
+      /* TODO: handle depth outputs */
+      state->state.psv0.ps.depth_output = 0;
+      /* just guessing */
+      state->state.psv0.ps.sample_frequency = 0;
+      break;
+   case DXIL_COMPUTE_SHADER:
+      break;
+   case DXIL_GEOMETRY_SHADER:
+      /* TODO: fill with info */
+      break;
+   default:
+      assert(0 && "Shader type not (yet) supported");
+   }
+}
+
 bool
 nir_to_dxil(struct nir_shader *s, struct blob *blob)
 {
@@ -1917,9 +1949,12 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
       return false;
    }
 
+   struct dxil_validation_state validation_state;
+   memset(&validation_state, 0, sizeof(validation_state));
+   dxil_fill_validation_state(&ctx, &validation_state);
 
-   if (!dxil_container_add_state_validation(&container, ctx.resources,
-                                            ctx.num_resources)) {
+   if (!dxil_container_add_state_validation(&container,&ctx.mod,
+                                            &validation_state)) {
       debug_printf("D3D12: failed to write state-validation\n");
       return false;
    }

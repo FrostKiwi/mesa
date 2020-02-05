@@ -81,6 +81,12 @@ struct dxil_resource {
    uint32_t upper_bound;
 };
 
+struct dxil_validation_state {
+   struct dxil_psv_runtime_info_1 state;
+   const struct dxil_resource *resources;
+   uint32_t num_resources;
+};
+
 void
 dxil_container_init(struct dxil_container *c);
 
@@ -97,8 +103,8 @@ dxil_container_add_io_signature(struct dxil_container *c,
 
 bool
 dxil_container_add_state_validation(struct dxil_container *c,
-                                    const struct dxil_resource *resources,
-                                    size_t num_resources);
+                                    const struct dxil_module *m,
+                                    struct dxil_validation_state *state);
 
 bool
 dxil_container_add_module(struct dxil_container *c,
