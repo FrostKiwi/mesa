@@ -1275,7 +1275,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_vec3:
    case nir_op_vec4:
       for (unsigned i = 0; i < nir_op_infos[alu->op].num_inputs; i++)
-         store_alu_dest(ctx, alu, i, get_alu_src(ctx, alu, 0));
+         store_alu_dest(ctx, alu, i, get_alu_src(ctx, alu, i));
       return true;
    default:
       /* silence warnings */
