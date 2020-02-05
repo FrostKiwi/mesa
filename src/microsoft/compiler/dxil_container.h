@@ -30,6 +30,8 @@ extern "C" {
 
 #include "util/blob.h"
 
+#include "dxil_signature.h"
+
 #define DXIL_MAX_PARTS 8
 struct dxil_container {
    struct blob parts;
@@ -86,11 +88,12 @@ bool
 dxil_container_add_features(struct dxil_container *c,
                             const struct dxil_features *features);
 
-bool
-dxil_container_add_input_signature(struct dxil_container *c);
 
 bool
-dxil_container_add_output_signature(struct dxil_container *c);
+dxil_container_add_io_signature(struct dxil_container *c,
+                                enum dxil_part_fourcc part,
+                                unsigned num_records,
+                                struct dxil_signature_record *io);
 
 bool
 dxil_container_add_state_validation(struct dxil_container *c,
