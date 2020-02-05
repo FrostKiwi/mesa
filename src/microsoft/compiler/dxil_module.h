@@ -34,8 +34,10 @@ extern "C" {
 #endif
 
 #include "dxil_buffer.h"
+#include "dxil_signature.h"
 
 #include "util/list.h"
+#include "pipe/p_state.h"
 
 enum dxil_shader_kind {
    DXIL_PIXEL_SHADER = 0,
@@ -160,6 +162,11 @@ struct dxil_module {
 
    struct dxil_buffer buf;
 
+   unsigned num_sig_inputs;
+   unsigned num_sig_outputs;
+
+   struct dxil_signature_record inputs[PIPE_MAX_SHADER_INPUTS];
+   struct dxil_signature_record outputs[PIPE_MAX_SHADER_INPUTS];
    struct {
       unsigned abbrev_width;
       intptr_t offset;
