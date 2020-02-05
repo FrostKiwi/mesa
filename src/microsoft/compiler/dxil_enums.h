@@ -1,0 +1,188 @@
+/*
+ * Copyright 2020 Collabora Ltd.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * on the rights to use, copy, modify, merge, publish, distribute, sub
+ * license, and/or sell copies of the Software, and to permit persons to whom
+ * the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice (including the next
+ * paragraph) shall be included in all copies or substantial portions of the
+ * Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+ * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+ * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+#ifndef DIXL_ENUMS_H
+#define DIXL_ENUMS_H
+
+enum dxil_signature_kind {
+   DXIL_SIG_INVALID = 0,
+   DXIL_SIG_INPUT,
+   DXIL_SIG_OUTPUT,
+   DXIL_SIG_PATCH_CONST_OR_PRIM
+};
+
+/* These enums are taken from
+ * DirectXShaderCompiler/lib/dxc/DXIL/DxilConstants.h
+ */
+enum dxil_semantic_kind {
+  DXIL_SEM_ARBITRARY,
+  DXIL_SEM_VERTEX_ID,
+  DXIL_SEM_INSTANCE_ID,
+  DXIL_SEM_POSITION,
+  DXIL_SEM_RENDERTARGET_ARRAY_INDEX,
+  DXIL_SEM_VIEWPORT_ARRAY_INDEX,
+  DXIL_SEM_CLIP_DISTANCE,
+  DXIL_SEM_CULL_DISTANCE,
+  DXIL_SEM_OUTPUT_CONTROL_POINT_ID,
+  DXIL_SEM_DOMAIN_LOCATION,
+  DXIL_SEM_PRIMITIVE_ID,
+  DXIL_SEM_GS_INSTANCE_ID,
+  DXIL_SEM_SAMPLE_INDEX,
+  DXIL_SEM_IS_FRONT_FACE,
+  DXIL_SEM_COVERAGE,
+  DXIL_SEM_INNER_COVERAGE,
+  DXIL_SEM_TARGET,
+  DXIL_SEM_DEPTH,
+  DXIL_SEM_DEPTH_LE,
+  DXIL_SEM_DEPTH_GE,
+  DXIL_SEM_STENCIL_REF,
+  DXIL_SEM_DISPATCH_THREAD_ID,
+  DXIL_SEM_GROUP_ID,
+  DXIL_SEM_GROUP_INDEX,
+  DXIL_SEM_GROUP_THREAD_ID,
+  DXIL_SEM_TESS_FACTOR,
+  DXIL_SEM_INSIDE_TESS_FACTOR,
+  DXIL_SEM_VIEW_ID,
+  DXIL_SEM_BARYCENTRICS,
+  DXIL_SEM_SHADING_RATE,
+  DXIL_SEM_CULL_PRIMITIVE,
+  DXIL_SEM_INVALID
+};
+
+enum dxil_prog_sig_semantic {
+   DXIL_PROG_SEM_UNDEFINED = 0,
+   DXIL_PROG_SEM_POSITION = 1,
+   DXIL_PROG_SEM_CLIP_DISTANCE = 2,
+   DXIL_PROG_SEM_CULL_DISTANCE = 3,
+   DXIL_PROG_SEM_RENDERTARGET_ARRAY_INDEX = 4,
+   DXIL_PROG_SEM_VIEWPORT_ARRAY_INDEX = 5,
+   DXIL_PROG_SEM_VERTEX_ID = 6,
+   DXIL_PROG_SEM_PRIMITIVE_ID = 7,
+   DXIL_PROG_SEM_INSTANCE_ID = 8,
+   DXIL_PROG_SEM_IS_FRONTFACE = 9,
+   DXIL_PROG_SEM_SAMPLE_INDEX = 10,
+   DXIL_PROG_SEM_FINAL_QUAD_EDGE_TESSFACTOR = 11,
+   DXIL_PROG_SEM_FINAL_QUAD_INSIDE_EDGE_TESSFACTOR = 12,
+   DXIL_PROG_SEM_FINAL_TRI_EDGE_TESSFACTOR = 13,
+   DXIL_PROG_SEM_FINAL_TRI_INSIDE_EDGE_TESSFACTOR = 14,
+   DXIL_PROG_SEM_FINAL_LINE_DETAIL_TESSFACTOR = 15,
+   DXIL_PROG_SEM_FINAL_LINE_DENSITY_TESSFACTOR = 16,
+   DXIL_PROG_SEM_BARYCENTRICS = 23,
+   DXIL_PROG_SEM_SHADING_RATE = 24,
+   DXIL_PROG_SEM_CULL_PRIMITIVE = 25,
+   DXIL_PROG_SEM_TARGET = 64,
+   DXIL_PROG_SEM_DEPTH = 65,
+   DXIL_PROG_SEM_COVERAGE = 66,
+   DXIL_PROG_SEM_DEPTH_GE = 67,
+   DXIL_PROG_SEM_DEPTH_LE = 68,
+   DXIL_PROG_SEM_STENCIL_REF = 69,
+   DXIL_PROG_SEM_INNER_COVERAGE = 70
+};
+
+enum dxil_prog_sig_comp_type {
+   DXIL_PROG_SIG_COMP_TYPE_UNKNOWN = 0,
+   DXIL_PROG_SIG_COMP_TYPE_UINT32 = 1,
+   DXIL_PROG_SIG_COMP_TYPE_SINT32 = 2,
+   DXIL_PROG_SIG_COMP_TYPE_FLOAT32 = 3,
+   DXIL_PROG_SIG_COMP_TYPE_UINT16 = 4,
+   DXIL_PROG_SIG_COMP_TYPE_SINT16 = 5,
+   DXIL_PROG_SIG_COMP_TYPE_FLOAT16 = 6,
+   DXIL_PROG_SIG_COMP_TYPE_UINT64 = 7,
+   DXIL_PROG_SIG_COMP_TYPE_SINT64 = 8,
+   DXIL_PROG_SIG_COMP_TYPE_FLOAT64 = 9
+};
+
+
+enum dxil_sig_point_kind {
+   DXIL_SIG_POINT_VSIN, // Ordinary Vertex Shader input from Input Assembler
+   DXIL_SIG_POINT_VSOUT, // Ordinary Vertex Shader output that may feed Rasterizer
+   DXIL_SIG_POINT_PCIN, // Patch Constant function non-patch inputs
+   DXIL_SIG_POINT_HSIN, // Hull Shader function non-patch inputs
+   DXIL_SIG_POINT_HSCPIN, // Hull Shader patch inputs - Control Points
+   DXIL_SIG_POINT_HSCPOut, // Hull Shader function output - Control Point
+   DXIL_SIG_POINT_PCOUT, // Patch Constant function output - Patch Constant data passed to Domain Shader
+   DXIL_SIG_POINT_DSIN, // Domain Shader regular input - Patch Constant data plus system values
+   DXIL_SIG_POINT_DSCPIN, // Domain Shader patch input - Control Points
+   DXIL_SIG_POINT_DSOUT, // Domain Shader output - vertex data that may feed Rasterizer
+   DXIL_SIG_POINT_GSVIN, // Geometry Shader vertex input - qualified with primitive type
+   DXIL_SIG_POINT_GSIN, // Geometry Shader non-vertex inputs (system values)
+   DXIL_SIG_POINT_GSOUT, // Geometry Shader output - vertex data that may feed Rasterizer
+   DXIL_SIG_POINT_PSIN, // Pixel Shader input
+   DXIL_SIG_POINT_PSOUT, // Pixel Shader output
+   DXIL_SIG_POINT_CSIN, // Compute Shader input
+   DXIL_SIG_POINT_MSIN, // Mesh Shader input
+   DXIL_SIG_POINT_MSOUT, // Mesh Shader vertices output
+   DXIL_SIG_POINT_MSPOUT, // Mesh Shader primitives output
+   DXIL_SIG_POINT_ASIN, // Amplification Shader input
+   DXIL_SIG_POINT_INVALID
+};
+
+enum dxil_min_precision  {
+  DXIL_MIN_PREC_DEFAULT = 0,
+  DXIL_MIN_PREC_FLOAT16 = 1,
+  DXIL_MIN_PREC_FLOAT2_8 = 2,
+  DXIL_MIN_PREC_RESERVED = 3,
+  DXIL_MIN_PREC_SINT16 = 4,
+  DXIL_MIN_PREC_UINT16 = 5,
+  DXIL_MIN_PREC_ANY16 = 0xf0,
+  DXIL_MIN_PREC_ANY10 = 0xf1
+};
+
+enum dxil_semantic_interpret_kind {
+   DXIL_SEM_INTERP_NA, // Not Available
+   DXIL_SEM_INTERP_SV, // Normal System Value
+   DXIL_SEM_INTERP_SGV, // System Generated Value (sorted last)
+   DXIL_SEM_INTERP_ARB, // Treated as Arbitrary
+   DXIL_SEM_INTERP_NOT_IN_SIG, // Not included in signature (intrinsic access)
+   DXIL_SEM_INTERP_NOT_PACKED, // Included in signature, but does not contribute to packing
+   DXIL_SEM_INTERP_TARGET, // Special handling for SV_Target
+   DXIL_SEM_INTERP_TESSFACTOR, // Special handling for tessellation factors
+   DXIL_SEM_INTERP_SHADOW, // Shadow element must be added to a signature for compatibility
+   DXIL_SEM_INTERP_CLIPCULL, // Special packing rules for SV_ClipDistance or SV_CullDistance
+   DXIL_SEM_INTERP_INVALID
+};
+
+enum dxil_interpolation_mode  {
+  DXIL_INTERP_UNDEFINED                   = 0,
+  DXIL_INTERP_CONSTANT                    = 1,
+  DXIL_INTERP_LINEAR                      = 2,
+  DXIL_INTERP_LINEAR_CENTROID             = 3,
+  DXIL_INTERP_LINEAR_NOPERSPECTIVE        = 4,
+  DXIL_INTERP_LINEAR_NOPERSPECTIVE_CENTROID  = 5,
+  DXIL_INTERP_LINEAR_SAMPLE               = 6,
+  DXIL_INTERP_LINEAR_NOPERSPECTIVE_SAMPLE = 7,
+  DXIL_INTERP_INVALID                     = 8
+};
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+enum dxil_prog_sig_comp_type dxil_get_prog_sig_comp_type(const struct glsl_type *type);
+
+#ifdef __cplusplus
+}
+#endif
+
+
+#endif // DXIL_ENUMS_H
