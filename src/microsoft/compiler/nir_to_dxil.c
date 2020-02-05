@@ -847,7 +847,7 @@ emit_metadata(struct ntd_context *ctx, nir_shader *s)
 {
    if (!emit_llvm_ident(&ctx->mod) ||
        !emit_named_version(&ctx->mod, "dx.version", 1, 0) ||
-       !emit_named_version(&ctx->mod, "dx.valver", 1, 0) ||
+       !emit_named_version(&ctx->mod, "dx.valver", 1, 4) ||
        !emit_dx_shader_model(&ctx->mod))
       return false;
 
