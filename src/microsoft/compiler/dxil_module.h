@@ -155,10 +155,15 @@ struct dxil_gvar;
 struct dxil_func;
 struct dxil_mdnode;
 
+struct dxil_shader_info {
+   unsigned has_out_position:1;
+};
+
 struct dxil_module {
    enum dxil_shader_kind shader_kind;
    unsigned major_version, minor_version;
    struct dxil_features feats;
+   struct dxil_shader_info info;
 
    struct dxil_buffer buf;
 

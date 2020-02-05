@@ -1878,7 +1878,7 @@ void dxil_fill_validation_state(struct ntd_context *ctx,
 
    switch (ctx->mod.shader_kind) {
    case DXIL_VERTEX_SHADER:
-      state->state.psv0.vs.output_position_present = 0; //??
+      state->state.psv0.vs.output_position_present = ctx->mod.info.has_out_position;
       break;
    case DXIL_PIXEL_SHADER:
       /* TODO: handle depth outputs */
