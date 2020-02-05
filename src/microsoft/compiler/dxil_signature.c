@@ -167,6 +167,39 @@ get_interpolation(unsigned mode)
    return DXIL_INTERP_LINEAR;
 }
 
+static
+uint32_t
+copy_semantic_name_to_string(struct dxil_psv_string_table *string_out, const char *name)
+{
+   /*  copy the semantic name */
+   uint32_t retval = string_out->size;
+   size_t name_len = strlen(name) + 1;
+   size_t new_string_len = name_len + string_out->size;
+   char *help = realloc(string_out->data, new_string_len);
+   if (!help) {
+      debug_printf("%s: unable to reallocate string\n", __func__);
+      return (uint32_t)-1;
+   }
+   string_out->data = help;
+   memcpy(string_out->data + string_out->size, name, name_len);
+   string_out->size = (uint32_t)new_string_len;
+   return retval;
+}
+
+static
+uint32_t
+append_semantic_index_to_table(struct dxil_psv_sem_index_table *table, uint32_t index)
+{
+   for (unsigned i = 0; i < table->size; ++i) {
+      if (table->data[i] == index)
+         return i;
+   }
+   uint32_t retval = table->size;
+   assert(table->size < 80);
+   table->data[table->size++] = index;
+   return retval;
+}
+
 static const struct dxil_mdnode *
 fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id, char *semantic_name,
                     enum dxil_semantic_kind semantic_kind, uint8_t columns,
@@ -215,6 +248,40 @@ fill_signature_element(struct dxil_signature_element *elm,
    elm->min_precision = DXIL_MIN_PREC_DEFAULT;
 }
 
+static bool
+fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
+                           uint32_t record_id,
+                           enum dxil_semantic_kind semantic_kind,
+                           nir_variable *var, uint8_t columns,
+                           uint8_t interpolation, uint8_t comp_type,
+                           const char *semantic_name,
+                           struct dxil_module *mod)
+{
+   memset(psv_elm, 0, sizeof(struct dxil_psv_signature_element));
+   psv_elm->rows = 1;  // var->num_state_slots ?
+   psv_elm->start_row = (uint8_t)record_id;
+   psv_elm->cols_and_start = (1u << 6) | (uint8_t)(var->data.location_frac << 4) |
+                             columns;
+   psv_elm->semantic_kind = (uint8_t)semantic_kind;
+   psv_elm->component_type = comp_type; //`??
+   psv_elm->interpolation_mode = interpolation;
+   /* to be filled later
+     psv_elm->dynamic_mask_and_stream = 0;
+     psv_elm->semantic_indexes_offset = 0;
+   */
+   if (semantic_kind == DXIL_SEM_ARBITRARY && strlen(semantic_name)) {
+      psv_elm->semantic_name_offset =
+            copy_semantic_name_to_string(&mod->sem_string_table, semantic_name);
+
+      /* TODO: clean up memory */
+      if (psv_elm->semantic_name_offset == (uint32_t)-1)
+         return false;
+   }
+
+   append_semantic_index_to_table(&mod->sem_index_table, record_id);
+   return true;
+}
+
 static const struct dxil_mdnode *
 get_input_signature(struct dxil_module *mod, nir_shader *s)
 {
@@ -249,6 +316,13 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
       struct dxil_signature_element *elm = &mod->inputs[record_id].sig;
 
       fill_signature_element(elm, semantic_kind, var, record_id);
+
+      struct dxil_psv_signature_element *psv_elm = &mod->psv_inputs[record_id];
+      if (!fill_psv_signature_element(psv_elm, record_id, semantic_kind, var, columns,
+                                      interpolation, elm->comp_type,
+                                      semantic_name, mod))
+         return NULL;
+
       ++record_id;
    }
    assert(record_id == num_inputs);
@@ -288,6 +362,12 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
       struct dxil_signature_element *elm = &mod->outputs[record_id].sig;
       fill_signature_element(elm, semantic_kind, var, record_id);
 
+      struct dxil_psv_signature_element *psv_elm = &mod->psv_outputs[record_id];
+      if (!fill_psv_signature_element(psv_elm, record_id, semantic_kind, var, columns,
+                                      interpolation, (uint8_t)elm->comp_type,
+                                      semantic_name, mod))
+         return NULL;
+
       ++record_id;
    }
    assert(record_id == num_outputs);
@@ -301,6 +381,9 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
 const struct dxil_mdnode *
 get_signatures(struct dxil_module *mod, nir_shader *s)
 {
+   /* DXC does the same: Add an empty string before everything else */
+   copy_semantic_name_to_string(&mod->sem_string_table, "");
+
    const struct dxil_mdnode *input_signature = get_input_signature(mod, s);
    const struct dxil_mdnode *output_signature = get_output_signature(mod, s);
 
