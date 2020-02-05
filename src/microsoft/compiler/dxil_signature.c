@@ -126,6 +126,35 @@ get_semantic_name(nir_variable *var, char buffer[64])
    return kind;
 }
 
+static enum dxil_prog_sig_semantic
+prog_semantic_from_kind(enum dxil_semantic_kind kind)
+{
+   switch (kind) {
+   case DXIL_SEM_ARBITRARY: return DXIL_PROG_SEM_UNDEFINED;
+   case DXIL_SEM_VERTEX_ID: return DXIL_PROG_SEM_VERTEX_ID;
+   case DXIL_SEM_INSTANCE_ID: return DXIL_PROG_SEM_INSTANCE_ID;
+   case DXIL_SEM_POSITION: return DXIL_PROG_SEM_POSITION;
+   case DXIL_SEM_COVERAGE: return DXIL_PROG_SEM_COVERAGE;
+   case DXIL_SEM_INNER_COVERAGE: return DXIL_PROG_SEM_INNER_COVERAGE;
+   case DXIL_SEM_PRIMITIVE_ID: return DXIL_PROG_SEM_PRIMITIVE_ID;
+   case DXIL_SEM_SAMPLE_INDEX: return DXIL_PROG_SEM_SAMPLE_INDEX;
+   case DXIL_SEM_IS_FRONT_FACE: return DXIL_PROG_SEM_IS_FRONTFACE;
+   case DXIL_SEM_RENDERTARGET_ARRAY_INDEX: return DXIL_PROG_SEM_RENDERTARGET_ARRAY_INDEX;
+   case DXIL_SEM_VIEWPORT_ARRAY_INDEX: return DXIL_PROG_SEM_VIEWPORT_ARRAY_INDEX;
+   case DXIL_SEM_CLIP_DISTANCE: return DXIL_PROG_SEM_CLIP_DISTANCE;
+   case DXIL_SEM_CULL_DISTANCE: return DXIL_PROG_SEM_CULL_DISTANCE;
+   case DXIL_SEM_BARYCENTRICS: return DXIL_PROG_SEM_BARYCENTRICS;
+   case DXIL_SEM_SHADING_RATE: return DXIL_PROG_SEM_SHADING_RATE;
+   case DXIL_SEM_CULL_PRIMITIVE: return DXIL_PROG_SEM_CULL_PRIMITIVE;
+   case DXIL_SEM_TARGET: return DXIL_PROG_SEM_TARGET;
+   case DXIL_SEM_DEPTH: return DXIL_PROG_SEM_DEPTH;
+   case DXIL_SEM_DEPTH_LE: return DXIL_PROG_SEM_DEPTH_LE;
+   case DXIL_SEM_DEPTH_GE: return DXIL_PROG_SEM_DEPTH_GE;
+   default:
+       return DXIL_PROG_SEM_UNDEFINED;
+   }
+}
+
 static uint8_t
 get_interpolation(unsigned mode)
 {
@@ -169,12 +198,29 @@ fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id, char *semantic_
    return dxil_get_metadata_node(mod, SV_params_nodes, ARRAY_SIZE(SV_params_nodes));
 }
 
+static void
+fill_signature_element(struct dxil_signature_element *elm,
+                       enum dxil_semantic_kind semantic_kind,
+                       nir_variable *var, uint32_t record_id)
+{
+   memset(elm, 0, sizeof(struct dxil_signature_element));
+   // elm->stream = 0;
+   // elm->semantic_name_offset = 0;  // Offset needs to be filled out when writing
+   // elm->semantic_index = 0; // NIR should have packed everything like we need it
+   elm->system_value = (uint32_t) prog_semantic_from_kind(semantic_kind);
+   elm->comp_type = (uint32_t) dxil_get_prog_sig_comp_type(var->type);
+   elm->reg = record_id;
+   elm->mask = (uint8_t) (((1 << glsl_get_components(var->type)) - 1) << var->data.location_frac);
+   // elm->never_writes_mask = 0;
+   elm->min_precision = DXIL_MIN_PREC_DEFAULT;
+}
+
 static const struct dxil_mdnode *
 get_input_signature(struct dxil_module *mod, nir_shader *s)
 {
    unsigned record_id = 0;
    unsigned num_inputs = exec_list_length(&s->inputs);
-   if (num_inputs <= 0)
+   if (!num_inputs)
       return NULL;
 
    struct dxil_mdnode **inputs = malloc(sizeof(const struct dxil_mdnode *) * num_inputs);
@@ -198,6 +244,11 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
       uint8_t columns = (uint8_t)glsl_get_components(var->type);
       inputs[record_id] = fill_SV_param_nodes(mod, record_id, semantic_name,
                                               semantic_kind, columns, interpolation);
+
+      mod->inputs[record_id].name = strdup(semantic_name);
+      struct dxil_signature_element *elm = &mod->inputs[record_id].sig;
+
+      fill_signature_element(elm, semantic_kind, var, record_id);
       ++record_id;
    }
    assert(record_id == num_inputs);
@@ -212,7 +263,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
 {
    unsigned record_id = 0;
    unsigned num_outputs = exec_list_length(&s->outputs);
-   if (num_outputs <= 0)
+   if (!num_outputs)
       return NULL;
 
    struct dxil_mdnode **outputs = malloc(sizeof(const struct dxil_mdnode *) * num_outputs);
@@ -233,6 +284,10 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
 
       outputs[record_id] = fill_SV_param_nodes(mod, record_id, semantic_name,
                                                semantic_kind, columns, interpolation);
+      mod->outputs[record_id].name = strdup(semantic_name);
+      struct dxil_signature_element *elm = &mod->outputs[record_id].sig;
+      fill_signature_element(elm, semantic_kind, var, record_id);
+
       ++record_id;
    }
    assert(record_id == num_outputs);
