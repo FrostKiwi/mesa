@@ -1901,9 +1901,19 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
       return false;
    }
 
-   if (!dxil_container_add_input_signature(&container) ||
-       !dxil_container_add_output_signature(&container)) {
-      debug_printf("D3D12: failed to write input/output signature\n");
+   if (!dxil_container_add_io_signature(&container,
+                                        DXIL_ISG1,
+                                        ctx.mod.num_sig_inputs,
+                                        ctx.mod.inputs)) {
+      debug_printf("D3D12: failed to write input signature\n");
+      return false;
+   }
+
+   if (!dxil_container_add_io_signature(&container,
+                                        DXIL_OSG1,
+                                        ctx.mod.num_sig_outputs,
+                                        ctx.mod.outputs)) {
+      debug_printf("D3D12: failed to write output signature\n");
       return false;
    }
 

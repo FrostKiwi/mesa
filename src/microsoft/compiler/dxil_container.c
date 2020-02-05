@@ -74,17 +74,13 @@ dxil_container_add_features(struct dxil_container *c,
 }
 
 bool
-dxil_container_add_input_signature(struct dxil_container *c)
+dxil_container_add_io_signature(struct dxil_container *c,
+                                enum dxil_part_fourcc part,
+                                unsigned num_records,
+                                struct dxil_signature_record *io)
 {
    uint32_t data[2] = { 0, sizeof(uint32_t) * 2 };
-   return add_part(c, DXIL_ISG1, data, sizeof(data));
-}
-
-bool
-dxil_container_add_output_signature(struct dxil_container *c)
-{
-   uint32_t data[2] = { 0, sizeof(uint32_t) * 2 };
-   return add_part(c, DXIL_OSG1, data, sizeof(data));
+   return add_part(c, part, data, sizeof(data));
 }
 
 bool
