@@ -123,65 +123,108 @@ dxil_container_add_io_signature(struct dxil_container *c,
 
 bool
 dxil_container_add_state_validation(struct dxil_container *c,
-                                    const struct dxil_resource *resources,
-                                    size_t num_resources)
+                                    const struct dxil_module *m,
+                                    struct dxil_validation_state *state)
 {
-   struct {
-      struct {
-         union {
-            uint32_t data[4]; /* actual size */
-         };
-         uint32_t expected_wave_lane_range[2];
-      } psv0;
-      struct {
-         uint8_t shader_stage;
-         uint8_t uses_view_id;
-         union {
-           uint16_t data; /* actual size */
-         };
-         uint8_t sig_input_elements;
-         uint8_t sig_output_elements;
-         uint8_t sig_patch_const_or_prim_elements;
-         uint8_t sig_input_vectors;
-         uint8_t sig_output_vectors[4];
-      } psv1;
-   } psv1_data = {
-      { /* psv0 */
-         { 0, 0, 0, 0 },
-         { 0, UINT_MAX },
-      }, { /* psv1 */
-         DXIL_COMPUTE_SHADER, 0, 0, 0, 0, 0, 0,
-         { 0, 0, 0, 0 }
+   uint32_t psv1_size = sizeof(struct dxil_psv_runtime_info_1);
+   uint32_t resource_bind_info_size = 4 * sizeof(uint32_t);
+   uint32_t dxil_pvs_sig_size = sizeof(struct dxil_psv_signature_element);
+   uint32_t resource_count = state->num_resources;
+
+   uint32_t size = psv1_size + 2 * sizeof(uint32_t);
+   if (resource_count > 0) {
+      size += sizeof (uint32_t) +
+              resource_bind_info_size * resource_count;
+   }
+   uint32_t string_table_size = (m->sem_string_table.size + 3) & ~3u;
+   size  += sizeof(uint32_t) + string_table_size;
+
+   // Semantic index table size, currently always 0
+   size  += sizeof(uint32_t) + m->sem_index_table.size * sizeof(uint32_t);
+
+   if (m->num_sig_inputs || m->num_sig_outputs) {
+      size  += sizeof(uint32_t);
+   }
+
+   size += dxil_pvs_sig_size * m->num_sig_inputs;
+   size += dxil_pvs_sig_size * m->num_sig_outputs;
+   // size += dxil_pvs_sig_size * m->num_sig_patch_const...;
+
+   state->state.sig_input_vectors = (uint8_t)m->num_sig_inputs;
+
+   // TODO: check proper stream
+   state->state.sig_output_vectors[0] = (uint8_t)m->num_sig_outputs;
+
+   // TODO: Add viewID records size
+
+   // TODO: Add sig input output dependency table size
+   uint32_t dependency_table_size = 0;
+   if (state->state.sig_input_vectors > 0) {
+      for (unsigned i = 0; i < 4; ++i) {
+         if (state->state.sig_output_vectors[i] > 0)
+            dependency_table_size += sizeof(uint32_t) * ((state->state.sig_output_vectors[i] + 7) >> 3) *
+                    state->state.sig_input_vectors * 4;
       }
-   };
+   }
+   size += dependency_table_size;
+   // TODO: Domain shader table goes here
 
-   uint32_t psv1_size = sizeof(psv1_data);
-   uint32_t resource_count = num_resources;
-   size_t size = sizeof(psv1_size) + sizeof(psv1_data) +
-                 sizeof(resource_count);
-   uint32_t bind_info_size = sizeof(uint32_t) * 4;
-   uint8_t string_table[4] = { 0, 0, 0, 0 };
-   uint32_t string_table_size = ARRAY_SIZE(string_table);
-   uint32_t semantic_index_table_size = 0;
-   if (num_resources > 0)
-      size += sizeof(uint32_t) + bind_info_size * num_resources;
-   size += sizeof(uint32_t) * 2 + string_table_size + semantic_index_table_size;
-
-   if (!add_part_header(c, DXIL_PSV0, size) ||
-       !blob_write_bytes(&c->parts, &psv1_size, sizeof(psv1_size)) ||
-       !blob_write_bytes(&c->parts, &psv1_data, sizeof(psv1_data)) ||
-       !blob_write_bytes(&c->parts, &resource_count, sizeof(resource_count)))
+   if (!add_part_header(c, DXIL_PSV0, size))
       return false;
 
-   if (num_resources > 0) {
-      if (!blob_write_bytes(&c->parts, &bind_info_size, sizeof(bind_info_size)) ||
-          !blob_write_bytes(&c->parts, resources, bind_info_size * num_resources))
+   if (!blob_write_bytes(&c->parts, &psv1_size, sizeof(psv1_size)))
+       return false;
+
+   if (!blob_write_bytes(&c->parts, &state->state, psv1_size))
+      return false;
+
+   if (!blob_write_bytes(&c->parts, &resource_count, sizeof(resource_count)))
+      return false;
+
+   if (resource_count > 0) {
+      if (!blob_write_bytes(&c->parts, &resource_bind_info_size, sizeof(resource_bind_info_size)) ||
+          !blob_write_bytes(&c->parts, state->resources, resource_bind_info_size * state->num_resources))
          return false;
    }
 
-   return blob_write_bytes(&c->parts, &string_table_size, sizeof(string_table_size)) &&
-          blob_write_bytes(&c->parts, string_table, sizeof(string_table)) &&
-          blob_write_bytes(&c->parts, &semantic_index_table_size, sizeof(semantic_index_table_size));
+
+   uint32_t fill = 0;
+   if (!blob_write_bytes(&c->parts, &string_table_size, sizeof(string_table_size)) ||
+       !blob_write_bytes(&c->parts, m->sem_string_table.data, m->sem_string_table.size) ||
+       !blob_write_bytes(&c->parts, &fill, string_table_size - m->sem_string_table.size))
+      return false;
+
+   // TODO: write the correct sematic index table. Currently it is empty
+   if (!blob_write_bytes(&c->parts, &m->sem_index_table.size, sizeof(uint32_t)))
+      return false;
+
+   if (m->sem_index_table.size > 0) {
+      if (!blob_write_bytes(&c->parts, m->sem_index_table.data,
+                            m->sem_index_table.size * sizeof(uint32_t)))
+         return false;
+   }
+
+   if (m->num_sig_inputs || m->num_sig_outputs) {
+      if (!blob_write_bytes(&c->parts, &dxil_pvs_sig_size, sizeof(dxil_pvs_sig_size)))
+         return false;
+
+      if (!blob_write_bytes(&c->parts, &m->psv_inputs, dxil_pvs_sig_size * m->num_sig_inputs))
+         return false;
+
+      if (!blob_write_bytes(&c->parts, &m->psv_outputs, dxil_pvs_sig_size * m->num_sig_outputs))
+         return false;
+   }
+
+   // TODO: Write PatchConst...
+
+   // TODO: Handle case when ViewID is used
+
+   // TODO: Handle sig input output dependency table
+
+   for (uint32_t i = 0; i < dependency_table_size; ++i)
+      blob_write_uint8(&c->parts, 0);
+
+   return true;
 }
 
 bool
