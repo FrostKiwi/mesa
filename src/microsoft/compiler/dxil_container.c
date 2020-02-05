@@ -77,10 +77,48 @@ bool
 dxil_container_add_io_signature(struct dxil_container *c,
                                 enum dxil_part_fourcc part,
                                 unsigned num_records,
-                                struct dxil_signature_record *io)
+                                struct dxil_signature_record *io_data)
 {
-   uint32_t data[2] = { 0, sizeof(uint32_t) * 2 };
-   return add_part(c, part, data, sizeof(data));
+   struct {
+      uint32_t param_count;
+      uint32_t param_offset;
+   } header;
+   header.param_count = 0;
+   uint32_t fixed_size = sizeof(header);
+   header.param_offset = fixed_size;
+
+   unsigned offset[PIPE_MAX_SHADER_INPUTS];
+
+   for (unsigned i = 0; i < num_records; ++i) {
+      /* TODO:
+       * - Here we need to check whether the value is actually part of the
+       * signature
+       * - We ignore that one semantic could stretch over various rows (IO arrays?) */
+      offset[i] = fixed_size;
+      fixed_size += sizeof(struct dxil_signature_element);
+
+      ++header.param_count;
+   }
+
+   uint32_t last_offset = fixed_size;
+
+   for (unsigned i = 0; i < num_records; ++i) {
+      struct dxil_signature_record *io = &io_data[i];
+      io->sig.semantic_name_offset = last_offset;
+      last_offset += strlen(io->name) + 1;
+   }
+   char *data = malloc(last_offset);
+   memcpy(data, &header, sizeof (header));
+
+   for (unsigned i = 0; i < num_records; ++i) {
+      struct dxil_signature_record *io = &io_data[i];
+      memcpy(data + offset[i], &io->sig, sizeof(struct dxil_signature_element));
+      strcpy(data + io->sig.semantic_name_offset, io->name);
+   }
+
+   bool result = add_part(c, part, data, last_offset);
+   free(data);
+   return result;
 }
 
 bool
