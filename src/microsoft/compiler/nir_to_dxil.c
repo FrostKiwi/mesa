@@ -25,6 +25,7 @@
 
 #include "dxil_module.h"
 #include "dxil_container.h"
+#include "dxil_signature.h"
 #include "dxil_enums.h"
 
 #include "util/u_debug.h"
@@ -897,8 +898,10 @@ emit_metadata(struct ntd_context *ctx, nir_shader *s)
          return false;
    }
 
+   const struct dxil_mdnode *signatures = get_signatures(&ctx->mod, s);
+
    const struct dxil_mdnode *dx_entry_point = emit_entrypoint(ctx, main_func,
-       "main", NULL, resources_node, shader_properties);
+       "main", signatures, resources_node, shader_properties);
    if (!dx_entry_point)
       return false;
 
