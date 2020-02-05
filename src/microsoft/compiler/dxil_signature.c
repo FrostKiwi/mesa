@@ -362,6 +362,10 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
       struct dxil_signature_element *elm = &mod->outputs[record_id].sig;
       fill_signature_element(elm, semantic_kind, var, record_id);
 
+      /* This is fishy, logic suggests that the LHS should be 0xf, but from the
+       * validation it needs to be 0xff */
+      elm->never_writes_mask = 0xff & ~elm->mask;
+
       struct dxil_psv_signature_element *psv_elm = &mod->psv_outputs[record_id];
       if (!fill_psv_signature_element(psv_elm, record_id, semantic_kind, var, columns,
                                       interpolation, (uint8_t)elm->comp_type,
