@@ -201,6 +201,9 @@ struct dxil_module {
 void
 dxil_module_init(struct dxil_module *m);
 
+void
+dxil_module_release(struct dxil_module *m);
+
 const struct dxil_gvar *
 dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
                     bool constant, int align);

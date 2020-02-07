@@ -32,10 +32,10 @@
 void
 dxil_module_init(struct dxil_module *m)
 {
+   memset(m, 0, sizeof(struct dxil_module));
+
    dxil_buffer_init(&m->buf, 2);
    memset(&m->feats, 0, sizeof(m->feats));
-
-   m->num_blocks = 0;
 
    list_inithead(&m->type_list);
    list_inithead(&m->func_list);
@@ -45,10 +45,20 @@ dxil_module_init(struct dxil_module *m)
    list_inithead(&m->instr_list);
    list_inithead(&m->mdnode_list);
    list_inithead(&m->md_named_node_list);
+}
 
-   m->void_type = NULL;
-   m->int1_type = m->int8_type = m->int32_type = m->int64_type = NULL;
-   m->float32_type = m->float64_type = NULL;
+void
+dxil_module_release(struct dxil_module *m)
+{
+   for (unsigned i = 0; i < m->num_sig_inputs; ++i) {
+      if (m->inputs[i].name)
+         free(m->inputs[i].name);
+   }
+
+   for (unsigned i = 0; i < m->num_sig_outputs; ++i) {
+      if (m->outputs[i].name)
+         free(m->outputs[i].name);
+   }
 }
 
 bool
