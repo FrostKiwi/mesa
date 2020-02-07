@@ -58,13 +58,6 @@ enum dxil_debug_flags {
    DXIL_DEBUG_TRACE      = 1 << 2,
 };
 
-enum dxil_attr_kind {
-   DXIL_ATTR_KIND_NONE = 0,
-   DXIL_ATTR_KIND_NO_UNWIND = 18,
-   DXIL_ATTR_KIND_READ_NONE = 20,
-   DXIL_ATTR_KIND_READ_ONLY = 21,
-};
-
 enum dxil_bin_opcode {
    DXIL_BINOP_ADD = 0,
    DXIL_BINOP_SUB = 1,
