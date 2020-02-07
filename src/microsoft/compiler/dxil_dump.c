@@ -1,0 +1,521 @@
+/*
+ * Copyright 2020 Collabora Ltd.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * on the rights to use, copy, modify, merge, publish, distribute, sub
+ * license, and/or sell copies of the Software, and to permit persons to whom
+ * the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice (including the next
+ * paragraph) shall be included in all copies or substantial portions of the
+ * Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+ * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+ * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+#include "dxil_dump.h"
+#include "dxil_internal.h"
+
+#define DIXL_DUMP_DECL
+#include "dxil_dump_decls.h"
+
+#include "dxil_module.h"
+
+
+#include "util/string_buffer.h"
+#include "util/list.h"
+
+#include <stdio.h>
+
+struct dxil_dumper {
+   struct _mesa_string_buffer *buf;
+   int current_indent;
+};
+
+struct dxil_dumper *dxil_dump_create(void)
+{
+   struct dxil_dumper *d = calloc(1, sizeof(struct dxil_dumper));
+   d->buf = _mesa_string_buffer_create(NULL, 1024);
+   d->current_indent = 0;
+   return d;
+}
+
+void dxil_dump_free(struct dxil_dumper *d)
+{
+   _mesa_string_buffer_destroy(d->buf);
+   d->buf = 0;
+   free(d);
+}
+
+void dxil_dump_buf_to_file(struct dxil_dumper *d, FILE *f)
+{
+   assert(f);
+   assert(d);
+   assert(d->buf);
+   fprintf(f, "%s", d->buf->buf);
+}
+
+static
+void dxil_dump_indention_inc(struct dxil_dumper *d)
+{
+   ++d->current_indent;
+}
+
+static
+void dxil_dump_indention_dec(struct dxil_dumper *d)
+{
+   --d->current_indent;
+   assert(d->current_indent >= 0);
+}
+
+static
+void dxil_dump_indent(struct dxil_dumper *d)
+{
+   for (int i = 0; i  < 2 * d->current_indent; ++i)
+      _mesa_string_buffer_append_char(d->buf, ' ');
+}
+
+void
+dxil_dump_module(struct dxil_dumper *d, struct dxil_module *m)
+{
+   assert(m);
+   assert(d);
+
+   _mesa_string_buffer_printf(d->buf, "DXIL MODULE:\n");
+   dump_metadata(d, m);
+   dump_types(d, &m->type_list);
+   dump_gvars(d, &m->gvar_list);
+   dump_funcs(d, &m->func_list);
+   dump_attr_set_list(d, &m->attr_set_list);
+   dump_constants(d, &m->const_list);
+   dump_instrs(d, &m->instr_list);
+   dump_mdnodes(d, &m->mdnode_list);
+   dump_named_nodes(d, &m->md_named_node_list);
+   _mesa_string_buffer_printf(d->buf, "END DXIL MODULE\n");
+}
+
+static void
+dump_metadata(struct dxil_dumper *d, struct dxil_module *m)
+{
+   _mesa_string_buffer_printf(d->buf, "Shader: %s\n",
+                              dump_shader_string(m->shader_kind));
+
+   _mesa_string_buffer_printf(d->buf, "Version: %d.%d\n",
+                              m->major_version, m->minor_version);
+
+   dump_features(d->buf, &m->feats);
+}
+
+static const char *
+dump_shader_string(enum dxil_shader_kind kind)
+{
+#define SHADER_STR(X) case DXIL_ ## X ## _SHADER: return #X
+
+   switch (kind) {
+   SHADER_STR(VERTEX);
+   SHADER_STR(PIXEL);
+   SHADER_STR(GEOMETRY);
+   SHADER_STR(COMPUTE);
+   default:
+      return "UNSUPPORTED";
+   }
+#undef SHADER_STR
+}
+
+static void
+dump_features(struct _mesa_string_buffer *buf, struct dxil_features *feat)
+{
+   _mesa_string_buffer_printf(buf, "Features:\n");
+#define PRINT_FEAT(F) if (feat->F) _mesa_string_buffer_printf(buf, "  %s\n", #F)
+   PRINT_FEAT(doubles);
+   PRINT_FEAT(cs_4x_raw_sb);
+   PRINT_FEAT(uavs_at_every_stage);
+   PRINT_FEAT(use_64uavs);
+   PRINT_FEAT(min_precision);
+   PRINT_FEAT(dx11_1_double_extensions);
+   PRINT_FEAT(dx11_1_shader_extensions);
+   PRINT_FEAT(dx9_comparison_filtering);
+   PRINT_FEAT(tiled_resources);
+   PRINT_FEAT(stencil_ref);
+   PRINT_FEAT(inner_coverage);
+   PRINT_FEAT(typed_uav_load_additional_formats);
+   PRINT_FEAT(rovs);
+   PRINT_FEAT(array_layer_from_vs_or_ds);
+   PRINT_FEAT(wave_ops);
+   PRINT_FEAT(int64_ops);
+   PRINT_FEAT(view_id);
+   PRINT_FEAT(barycentrics);
+   PRINT_FEAT(native_low_precision);
+   PRINT_FEAT(shading_rate);
+   PRINT_FEAT(raytracing_tier_1_1);
+   PRINT_FEAT(sampler_feedback);
+#undef PRINT_FEAT
+}
+
+static void
+dump_types(struct dxil_dumper *d, struct list_head *list)
+{
+   if (!list_length(list))
+      return;
+
+   _mesa_string_buffer_append(d->buf, "Types:\n");
+   dxil_dump_indention_inc(d);
+   list_for_each_entry(struct dxil_type, type, list, head) {
+      dxil_dump_indent(d);
+      dump_type(d, type);
+      _mesa_string_buffer_append(d->buf, "\n");
+   }
+   dxil_dump_indention_dec(d);
+}
+
+static void dump_type_name(struct dxil_dumper *d, const struct dxil_type *type)
+{
+   switch (type->type) {
+   case TYPE_VOID:
+      _mesa_string_buffer_append(d->buf, "void");
+      break;
+   case TYPE_INTEGER:
+      _mesa_string_buffer_printf(d->buf, "int%d", type->int_bits);
+      break;
+   case TYPE_FLOAT:
+      _mesa_string_buffer_printf(d->buf, "float%d", type->float_bits);
+      break;
+   case TYPE_POINTER:
+      dump_type_name(d, type->ptr_target_type);
+      _mesa_string_buffer_append(d->buf, "*");
+      break;
+   case TYPE_STRUCT:
+      _mesa_string_buffer_printf(d->buf, "struct %s", type->struct_def.name);
+      break;
+   case TYPE_FUNCTION:
+      _mesa_string_buffer_append(d->buf, "(");
+      dump_type_name(d, type->function_def.ret_type);
+      _mesa_string_buffer_append(d->buf, ")(");
+      for (size_t i = 0; i < type->function_def.num_arg_types; ++i) {
+         if (i > 0)
+            _mesa_string_buffer_append(d->buf, ", ");
+         dump_type_name(d, type->function_def.arg_types[i]);
+      }
+      _mesa_string_buffer_append(d->buf, ")");
+      break;
+   default:
+      _mesa_string_buffer_printf(d->buf, "unknown type %d", type->type);
+   }
+}
+
+static void dump_type(struct dxil_dumper *d, const struct dxil_type *type)
+{
+   switch (type->type) {
+   case TYPE_STRUCT:
+      _mesa_string_buffer_printf(d->buf, "struct %s {\n", type->struct_def.name);
+      dxil_dump_indention_inc(d);
+
+      for (size_t i = 0; i < type->struct_def.num_elem_types; ++i) {
+         dxil_dump_indent(d);
+         dump_type(d, type->struct_def.elem_types[i]);
+         _mesa_string_buffer_append(d->buf, "\n");
+      }
+      dxil_dump_indention_dec(d);
+      dxil_dump_indent(d);
+      _mesa_string_buffer_append(d->buf, "}\n");
+      break;
+   default:
+      dump_type_name(d, type);
+      break;
+   }
+}
+
+static void
+dump_gvars(struct dxil_dumper *d, struct list_head *list)
+{
+   if (!list_length(list))
+      return;
+
+   _mesa_string_buffer_append(d->buf, "Global variables:\n");
+   dxil_dump_indention_inc(d);
+   list_for_each_entry(struct dxil_gvar, gvar, list, head) {
+      dxil_dump_indent(d);
+      if (gvar->constant)
+         _mesa_string_buffer_append(d->buf, "const ");
+      if (gvar->align)
+         _mesa_string_buffer_append(d->buf, "align ");
+      dump_type_name(d, gvar->type);
+      _mesa_string_buffer_printf(d->buf, " val_id:%d\n", gvar->value.id);
+   }
+   dxil_dump_indention_dec(d);
+}
+
+static void
+dump_funcs(struct dxil_dumper *d, struct list_head *list)
+{
+   if (!list_length(list))
+      return;
+
+   _mesa_string_buffer_append(d->buf, "Functions:\n");
+   dxil_dump_indention_inc(d);
+   list_for_each_entry(struct dxil_func, func, list, head) {
+      dxil_dump_indent(d);
+      if (func->decl)
+         _mesa_string_buffer_append(d->buf, "declare ");
+      _mesa_string_buffer_append(d->buf, func->name);
+      _mesa_string_buffer_append_char(d->buf, ' ');
+      dump_type_name(d, func->type);
+      if (func->attr_set)
+         _mesa_string_buffer_printf(d->buf, " #%d", func->attr_set);
+      _mesa_string_buffer_append_char(d->buf, '\n');
+   }
+   dxil_dump_indention_dec(d);
+}
+
+static void
+dump_attr_set_list(struct dxil_dumper *d, struct list_head *list)
+{
+   if (!list_length(list))
+      return;
+
+   _mesa_string_buffer_append(d->buf, "Attribute set:\n");
+   dxil_dump_indention_inc(d);
+   int attr_id = 1;
+   list_for_each_entry(struct attrib_set, attr, list, head) {
+      _mesa_string_buffer_printf(d->buf, "  #%d: {", attr_id++);
+      for (unsigned i = 0; i < attr->num_attrs; ++i) {
+         if (i > 0)
+            _mesa_string_buffer_append_char(d->buf, ' ');
+
+         assert(attr->attrs[i].type == DXIL_ATTR_ENUM);
+         const char *value = "";
+         switch (attr->attrs[i].kind) {
+         case DXIL_ATTR_KIND_NONE: value = "none"; break;
+         case DXIL_ATTR_KIND_NO_UNWIND: value = "nounwind"; break;
+         case DXIL_ATTR_KIND_READ_NONE: value = "readnone"; break;
+         case DXIL_ATTR_KIND_READ_ONLY: value = "readonly"; break;
+         }
+         _mesa_string_buffer_append(d->buf, value);
+      }
+      _mesa_string_buffer_append(d->buf, "}\n");
+   }
+   dxil_dump_indention_dec(d);
+}
+
+static void
+dump_constants(struct dxil_dumper *d, struct list_head *list)
+{
+   if (!list_length(list))
+      return;
+
+   _mesa_string_buffer_append(d->buf, "Constants:\n");
+   dxil_dump_indention_inc(d);
+   list_for_each_entry(struct dxil_const, cnst, list, head) {
+      _mesa_string_buffer_append_char(d->buf, ' ');
+      dump_value(d->buf, &cnst->value);
+      _mesa_string_buffer_append(d->buf, " = ");
+      dump_type_name(d, cnst->type);
+      if (!cnst->undef) {
+         switch (cnst->type->type) {
+         case TYPE_FLOAT:
+            _mesa_string_buffer_printf(d->buf, " %10.5f\n", cnst->float_value);
+            break;
+         case TYPE_INTEGER:
+            _mesa_string_buffer_printf(d->buf, " %d\n", cnst->int_value);
+            break;
+         default:
+            unreachable("Unsupported const type");
+         }
+      } else
+         _mesa_string_buffer_append(d->buf, " undef\n");
+   }
+   dxil_dump_indention_dec(d);
+}
+
+static void
+dump_instrs(struct dxil_dumper *d, struct list_head *list)
+{
+   _mesa_string_buffer_append(d->buf, "Shader body:\n");
+   dxil_dump_indention_inc(d);
+
+   list_for_each_entry(struct dxil_instr, instr, list, head) {
+
+      dxil_dump_indent(d);
+      if (instr->has_value) {
+         dump_value(d->buf, &instr->value);
+         _mesa_string_buffer_append(d->buf, " = ");
+      } else {
+         _mesa_string_buffer_append_char(d->buf, ' ');
+      }
+
+      switch (instr->type) {
+      case INSTR_BINOP: dump_instr_binop(d->buf, &instr->binop); break;
+      case INSTR_CMP:   dump_instr_cmp(d->buf, &instr->cmp);break;
+      case INSTR_SELECT:dump_instr_select(d->buf, &instr->select); break;
+      case INSTR_CAST:  dump_instr_cast(d, &instr->cast); break;
+      case INSTR_CALL:  dump_instr_call(d, &instr->call); break;
+      case INSTR_RET:   dump_instr_ret(d->buf, &instr->ret); break;
+      }
+
+      _mesa_string_buffer_append(d->buf, "\n");
+   }
+   dxil_dump_indention_dec(d);
+}
+
+static void
+dump_instr_binop(struct _mesa_string_buffer *buf, struct dxil_instr_binop *binop)
+{
+   const char *str = binop->opcode < DXIL_BINOP_INSTR_COUNT ?
+                        binop_strings[binop->opcode] : "INVALID";
+
+   _mesa_string_buffer_printf(buf, "%s ", str);
+   dump_instr_print_operands(buf, 2, binop->operands);
+}
+
+static void
+dump_instr_cmp(struct _mesa_string_buffer *buf, struct dxil_instr_cmp *cmp)
+{
+   const char *str = cmp->pred < DXIL_CMP_INSTR_COUNT ?
+                        pred_strings[cmp->pred] : "INVALID";
+
+   _mesa_string_buffer_printf(buf, "%s ", str);
+   dump_instr_print_operands(buf, 2, cmp->operands);
+}
+
+static void
+dump_instr_select(struct _mesa_string_buffer *buf, struct dxil_instr_select *select)
+{
+   _mesa_string_buffer_append(buf, "sel ");
+   dump_instr_print_operands(buf, 3, select->operands);
+}
+
+static void
+dump_instr_cast(struct dxil_dumper *d, struct dxil_instr_cast *cast)
+{
+   const char *str = cast->opcode < DXIL_CAST_INSTR_COUNT ?
+                        cast_opcode_strings[cast->opcode] : "INVALID";
+
+   _mesa_string_buffer_printf(d->buf, "%s.", str);
+   dump_type_name(d, cast->type);
+   _mesa_string_buffer_append_char(d->buf, ' ');
+   dump_value(d->buf, cast->value);
+}
+
+static void
+dump_instr_call(struct dxil_dumper *d, struct dxil_instr_call *call)
+{
+   assert(call->num_args == call->func->type->function_def.num_arg_types);
+   struct dxil_type **func_arg_types = call->func->type->function_def.arg_types;
+
+   _mesa_string_buffer_printf(d->buf, "%s(", call->func->name);
+   for (unsigned i = 0; i < call->num_args; ++i) {
+      if (i > 0)
+         _mesa_string_buffer_append(d->buf, ", ");
+      dump_type_name(d, func_arg_types[i]);
+      _mesa_string_buffer_append_char(d->buf, ' ');
+      dump_value(d->buf, call->args[i]);
+   }
+   _mesa_string_buffer_append_char(d->buf, ')');
+}
+
+static void
+dump_instr_ret(struct _mesa_string_buffer *buf, struct dxil_instr_ret *ret)
+{
+   _mesa_string_buffer_append(buf, "ret ");
+   if (ret->value)
+      dump_value(buf, ret->value);
+}
+
+static void
+dump_instr_print_operands(struct _mesa_string_buffer *buf, int num,
+                          const struct dxil_value *val[])
+{
+   for (int i = 0; i < num; ++i) {
+      if (i > 0)
+         _mesa_string_buffer_append(buf, ", ");
+      dump_value(buf, val[i]);
+   }
+}
+
+static void
+dump_value(struct _mesa_string_buffer *buf, const struct dxil_value *val)
+{
+   if (val->id < 10)
+      _mesa_string_buffer_append(buf, " ");
+   if (val->id < 100)
+      _mesa_string_buffer_append(buf, " ");
+   _mesa_string_buffer_printf(buf, "%%%d", val->id);
+}
+
+static void
+dump_mdnodes(struct dxil_dumper *d, struct list_head *list)
+{
+   if (!list_length(list))
+      return;
+
+   _mesa_string_buffer_append(d->buf, "MD-Nodes:\n");
+   dxil_dump_indention_inc(d);
+   list_for_each_entry(struct dxil_mdnode, node, list, head) {
+      dump_mdnode(d, node);
+   }
+   dxil_dump_indention_dec(d);
+}
+
+static void
+dump_mdnode(struct dxil_dumper *d, struct dxil_mdnode *node)
+{
+   dxil_dump_indent(d);
+   switch (node->type) {
+   case MD_STRING:
+      _mesa_string_buffer_printf(d->buf, "S:%s\n", node->string);
+      break;
+   case MD_VALUE:
+      _mesa_string_buffer_append(d->buf, "V:");
+      dump_type_name(d, node->value.type);
+      _mesa_string_buffer_append_char(d->buf, ' ');
+      dump_value(d->buf, node->value.value);
+      _mesa_string_buffer_append_char(d->buf, '\n');
+      break;
+   case MD_NODE:
+      _mesa_string_buffer_append(d->buf, " \\\n");
+      dxil_dump_indention_inc(d);
+      for (size_t i = 0; i < node->node.num_subnodes; ++i) {
+         if (node->node.subnodes[i])
+            dump_mdnode(d, node->node.subnodes[i]);
+         else {
+            dxil_dump_indent(d);
+            _mesa_string_buffer_append(d->buf, "(nullptr)\n");
+         }
+      }
+      dxil_dump_indention_dec(d);
+      break;
+   }
+}
+
+static void
+dump_named_nodes(struct dxil_dumper *d, struct list_head *list)
+{
+   if (!list_length(list))
+      return;
+
+   _mesa_string_buffer_append(d->buf, "Named Nodes:\n");
+   dxil_dump_indention_inc(d);
+   list_for_each_entry(struct dxil_named_node, node, list, head) {
+      dxil_dump_indent(d);
+      _mesa_string_buffer_printf(d->buf, "%s:\n", node->name);
+      dxil_dump_indention_inc(d);
+      for (size_t i = 0; i < node->num_subnodes; ++i) {
+         if (node->subnodes[i])
+            dump_mdnode(d, node->subnodes[i]);
+         else {
+            dxil_dump_indent(d);
+            _mesa_string_buffer_append(d->buf, "(nullptr)\n");
+         }
+      }
+      dxil_dump_indention_dec(d);
+   }
+   dxil_dump_indention_dec(d);
+}

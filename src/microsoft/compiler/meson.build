@@ -21,6 +21,7 @@
 files_libdxil_compiler = files(
   'dxil_buffer.c',
   'dxil_container.c',
+  'dxil_dump.c',
   'dxil_enums.c',
   'dxil_function.c',
   'dxil_module.c',
