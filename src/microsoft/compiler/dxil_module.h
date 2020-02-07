@@ -71,7 +71,8 @@ enum dxil_bin_opcode {
    DXIL_BINOP_ASHR = 9,
    DXIL_BINOP_AND = 10,
    DXIL_BINOP_OR = 11,
-   DXIL_BINOP_XOR = 12
+   DXIL_BINOP_XOR = 12,
+   DXIL_BINOP_INSTR_COUNT
 };
 
 enum dxil_tertiary_opcode {
@@ -91,7 +92,8 @@ enum dxil_cast_opcode {
    DXIL_CAST_PTRTOINT = 9,
    DXIL_CAST_INTTOPTR = 10,
    DXIL_CAST_BITCAST = 11,
-   DXIL_CAST_ADDRSPACECAST = 12
+   DXIL_CAST_ADDRSPACECAST = 12,
+   DXIL_CAST_INSTR_COUNT
 };
 
 enum dxil_cmp_pred {
@@ -121,6 +123,7 @@ enum dxil_cmp_pred {
    DXIL_ICMP_SGE = 39,
    DXIL_ICMP_SLT = 40,
    DXIL_ICMP_SLE = 41,
+   DXIL_CMP_INSTR_COUNT
 };
 
 struct dxil_features {
