@@ -22,6 +22,7 @@
  */
 
 #include "dxil_module.h"
+#include "dxil_internal.h"
 
 #include "util/macros.h"
 #include "util/u_math.h"
@@ -340,35 +341,6 @@ emit_record_abbrev(struct dxil_buffer *b,
    return true;
 }
 
-struct dxil_type {
-   enum type_type {
-      TYPE_VOID,
-      TYPE_INTEGER,
-      TYPE_FLOAT,
-      TYPE_POINTER,
-      TYPE_STRUCT,
-      TYPE_FUNCTION
-   } type;
-
-   union {
-      unsigned int_bits;
-      unsigned float_bits;
-      const struct dxil_type *ptr_target_type;
-      struct {
-         const char *name;
-         struct dxil_type **elem_types;
-         size_t num_elem_types;
-      } struct_def;
-      struct {
-         const struct dxil_type *ret_type;
-         struct dxil_type **arg_types;
-         size_t num_arg_types;
-      } function_def;
-   };
-
-   struct list_head head;
-   unsigned id;
-};
 
 static struct dxil_type *
 create_type(struct dxil_module *m, enum type_type type)
@@ -975,16 +947,6 @@ enum attribute_codes {
    PARAMATTR_CODE_ENTRY = 2
 };
 
-struct dxil_attrib {
-   enum {
-      DXIL_ATTR_ENUM
-   } type;
-
-   union {
-      enum dxil_attr_kind kind;
-   };
-};
-
 static bool
 emit_attrib_group(struct dxil_module *m, int id, uint32_t slot,
                   const struct dxil_attrib *attrs, size_t num_attrs)
@@ -1010,12 +972,6 @@ emit_attrib_group(struct dxil_module *m, int id, uint32_t slot,
 
    return emit_record(m, PARAMATTR_GRP_CODE_ENTRY, record, size);
 }
-
-struct attrib_set {
-   struct dxil_attrib attrs[2];
-   unsigned num_attrs;
-   struct list_head head;
-};
 
 static bool
 emit_attrib_group_table(struct dxil_module *m)
@@ -1206,23 +1162,6 @@ emit_type_table(struct dxil_module *m)
           exit_block(m);
 }
 
-struct dxil_value {
-   int id;
-};
-
-struct dxil_const {
-   const struct dxil_type *type;
-   struct dxil_value value;
-
-   bool undef;
-   union {
-      intmax_t int_value;
-      double float_value;
-   };
-
-   struct list_head head;
-};
-
 static struct dxil_const *
 create_const(struct dxil_module *m, const struct dxil_type *type, bool undef)
 {
@@ -1381,15 +1320,6 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
                       temp, strlen(datalayout));
 }
 
-struct dxil_gvar {
-   const struct dxil_type *type;
-   bool constant;
-   int align;
-
-   struct dxil_value value;
-   struct list_head head;
-};
-
 const struct dxil_gvar *
 dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
                     bool constant, int align)
@@ -1406,16 +1336,6 @@ dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
    list_addtail(&gvar->head, &m->gvar_list);
    return gvar;
 }
-
-struct dxil_func {
-   char *name;
-   const struct dxil_type *type;
-   bool decl;
-   unsigned attr_set;
-
-   struct dxil_value value;
-   struct list_head head;
-};
 
 static struct dxil_func *
 add_function(struct dxil_module *m, const char *name,
@@ -1755,31 +1675,6 @@ emit_metadata_abbrevs(struct dxil_module *m)
    return true;
 }
 
-struct dxil_mdnode {
-   enum mdnode_type {
-      MD_STRING,
-      MD_VALUE,
-      MD_NODE
-   } type;
-
-   union {
-      char *string;
-
-      struct {
-         const struct dxil_type *type;
-         const struct dxil_value *value;
-      } value;
-
-      struct {
-         struct dxil_mdnode **subnodes;
-         size_t num_subnodes;
-      } node;
-   };
-
-   struct list_head head;
-   unsigned id;
-};
-
 static struct dxil_mdnode *
 create_mdnode(struct dxil_module *m, enum mdnode_type type)
 {
@@ -1927,13 +1822,6 @@ dxil_get_metadata_int64(struct dxil_module *m, int64_t value)
 
    return dxil_get_metadata_value(m, type, const_value);
 }
-
-struct dxil_named_node {
-   char *name;
-   struct dxil_mdnode **subnodes;
-   size_t num_subnodes;
-   struct list_head head;
-};
 
 bool
 dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
@@ -2088,77 +1976,6 @@ emit_metadata(struct dxil_module *m)
           emit_metadata_named_nodes(m) &&
           exit_block(m);
 }
-
-struct dxil_instr {
-   enum instr_type {
-      INSTR_BINOP,
-      INSTR_CMP,
-      INSTR_SELECT,
-      INSTR_CAST,
-      INSTR_BR,
-      INSTR_PHI,
-      INSTR_CALL,
-      INSTR_RET,
-      INSTR_EXTRACTVAL,
-   } type;
-
-   union {
-      struct {
-         enum dxil_bin_opcode opcode;
-         const struct dxil_value *operands[2];
-      } binop;
-
-      struct {
-         enum dxil_cmp_pred pred;
-         const struct dxil_value *operands[2];
-      } cmp;
-
-      struct {
-         const struct dxil_value *operands[3];
-      } select;
-
-      struct {
-         enum dxil_cast_opcode opcode;
-         const struct dxil_type *type;
-         const struct dxil_value *value;
-      } cast;
-
-      struct {
-         const struct dxil_value *cond;
-         unsigned succ[2];
-      } br;
-
-      struct {
-         const struct dxil_type *type;
-         struct {
-            const struct dxil_value *value;
-            unsigned block;
-         } incoming[127];
-         size_t num_incoming;
-      } phi;
-
-      struct {
-         const struct dxil_func *func;
-         struct dxil_value **args;
-         size_t num_args;
-      } call;
-
-      struct {
-         struct dxil_value *value;
-      } ret;
-
-      struct {
-         const struct dxil_value *src;
-         const struct dxil_type *type;
-         unsigned int idx;
-      } extractval;
-   };
-
-   bool has_value;
-   struct dxil_value value;
-
-   struct list_head head;
-};
 
 static struct dxil_instr *
 create_instr(struct dxil_module *m, enum instr_type type)
