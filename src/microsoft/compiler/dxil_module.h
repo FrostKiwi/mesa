@@ -56,6 +56,7 @@ enum dxil_debug_flags {
    DXIL_DEBUG_VERBOSE    = 1 << 0,
    DXIL_DEBUG_DUMP_BLOB  = 1 << 1,
    DXIL_DEBUG_TRACE      = 1 << 2,
+   DXIL_DEBUG_DUMP_MODULE = 1 << 3,
 };
 
 enum dxil_bin_opcode {

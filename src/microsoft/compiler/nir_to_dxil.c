@@ -28,6 +28,7 @@
 #include "dxil_function.h"
 #include "dxil_signature.h"
 #include "dxil_enums.h"
+#include "dxil_dump.h"
 
 #include "util/u_debug.h"
 #include "nir/nir_builder.h"
@@ -43,6 +44,7 @@ debug_options[] = {
    { "verbose", DXIL_DEBUG_VERBOSE, NULL },
    { "dump_blob",  DXIL_DEBUG_DUMP_BLOB , "Write shader blobs" },
    { "trace",  DXIL_DEBUG_TRACE , "Trace instruction conversion" },
+   { "dump_module", DXIL_DEBUG_DUMP_MODULE, "dump module tree to stderr"},
    DEBUG_NAMED_VALUE_END
 };
 
@@ -1971,6 +1973,15 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
       debug_printf("D3D12: dxil_container_add_module failed\n");
       retval = false;
       goto fail;
+   }
+
+   if (debug_dxil & DXIL_DEBUG_DUMP_MODULE) {
+      struct dxil_dumper *dumper = dxil_dump_create();
+      dxil_dump_module(dumper, &ctx.mod);
+      fprintf(stderr, "\n");
+      dxil_dump_buf_to_file(dumper, stderr);
+      fprintf(stderr, "\n\n");
+      dxil_dump_free(dumper);
    }
 
    struct dxil_container container;
