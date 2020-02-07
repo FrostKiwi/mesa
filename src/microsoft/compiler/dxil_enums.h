@@ -207,6 +207,13 @@ enum dxil_output_id {
    DXIL_PSOUTPUT_COLOR0 = 5,
 };
 
+enum dxil_attr_kind {
+   DXIL_ATTR_KIND_NONE = 0,
+   DXIL_ATTR_KIND_NO_UNWIND = 18,
+   DXIL_ATTR_KIND_READ_NONE = 20,
+   DXIL_ATTR_KIND_READ_ONLY = 21,
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
