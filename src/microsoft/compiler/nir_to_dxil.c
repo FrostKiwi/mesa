@@ -1899,6 +1899,7 @@ void dxil_fill_validation_state(struct ntd_context *ctx,
 bool
 nir_to_dxil(struct nir_shader *s, struct blob *blob)
 {
+   bool retval = true;
    debug_dxil = (int)debug_get_option_debug_dxil();
 
    struct ntd_context ctx = { 0 };
@@ -1937,14 +1938,16 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
 
    if (!emit_module(&ctx, s)) {
       debug_printf("D3D12: dxil_container_add_module failed\n");
-      return false;
+      retval = false;
+      goto fail;
    }
 
    struct dxil_container container;
    dxil_container_init(&container);
    if (!dxil_container_add_features(&container, &ctx.mod.feats)) {
       debug_printf("D3D12: dxil_container_add_features failed\n");
-      return false;
+      retval = false;
+      goto fail;
    }
 
    if (!dxil_container_add_io_signature(&container,
@@ -1952,7 +1955,8 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
                                         ctx.mod.num_sig_inputs,
                                         ctx.mod.inputs)) {
       debug_printf("D3D12: failed to write input signature\n");
-      return false;
+      retval = false;
+      goto fail;
    }
 
    if (!dxil_container_add_io_signature(&container,
@@ -1960,7 +1964,8 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
                                         ctx.mod.num_sig_outputs,
                                         ctx.mod.outputs)) {
       debug_printf("D3D12: failed to write output signature\n");
-      return false;
+      retval = false;
+      goto fail;
    }
 
    struct dxil_validation_state validation_state;
@@ -1970,18 +1975,21 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    if (!dxil_container_add_state_validation(&container,&ctx.mod,
                                             &validation_state)) {
       debug_printf("D3D12: failed to write state-validation\n");
-      return false;
+      retval = false;
+      goto fail;
    }
 
    if (!dxil_container_add_module(&container, &ctx.mod)) {
       debug_printf("D3D12: failed to write module\n");
-      return false;
+      retval = false;
+      goto fail;
    }
 
    blob_init(blob);
    if (!dxil_container_write(&container, blob)) {
       debug_printf("D3D12: dxil_container_write failed\n");
-      return false;
+      retval = false;
+      goto fail;
    }
 
    if (debug_dxil & DXIL_DEBUG_DUMP_BLOB) {
@@ -1997,5 +2005,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
       }
    }
 
-   return true;
+fail:
+   dxil_module_release(&ctx.mod);
+   return retval;
 }
