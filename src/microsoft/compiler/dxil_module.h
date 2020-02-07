@@ -151,13 +151,6 @@ struct dxil_features {
             sampler_feedback : 1;
 };
 
-struct dxil_type;
-struct dxil_value;
-struct dxil_instr;
-struct dxil_gvar;
-struct dxil_func;
-struct dxil_mdnode;
-
 struct dxil_shader_info {
    unsigned has_out_position:1;
 };
