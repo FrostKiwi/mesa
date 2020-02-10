@@ -169,20 +169,12 @@ get_interpolation(unsigned mode)
 
 static
 uint32_t
-copy_semantic_name_to_string(struct dxil_psv_string_table *string_out, const char *name)
+copy_semantic_name_to_string(struct _mesa_string_buffer *string_out, const char *name)
 {
    /*  copy the semantic name */
-   uint32_t retval = string_out->size;
+   uint32_t retval = string_out->length;
    size_t name_len = strlen(name) + 1;
-   size_t new_string_len = name_len + string_out->size;
-   char *help = realloc(string_out->data, new_string_len);
-   if (!help) {
-      debug_printf("%s: unable to reallocate string\n", __func__);
-      return (uint32_t)-1;
-   }
-   string_out->data = help;
-   memcpy(string_out->data + string_out->size, name, name_len);
-   string_out->size = (uint32_t)new_string_len;
+   _mesa_string_buffer_append_len(string_out, name, name_len);
    return retval;
 }
 
@@ -271,7 +263,7 @@ fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
    */
    if (semantic_kind == DXIL_SEM_ARBITRARY && strlen(semantic_name)) {
       psv_elm->semantic_name_offset =
-            copy_semantic_name_to_string(&mod->sem_string_table, semantic_name);
+            copy_semantic_name_to_string(mod->sem_string_table, semantic_name);
 
       /* TODO: clean up memory */
       if (psv_elm->semantic_name_offset == (uint32_t)-1)
@@ -388,7 +380,8 @@ const struct dxil_mdnode *
 get_signatures(struct dxil_module *mod, nir_shader *s)
 {
    /* DXC does the same: Add an empty string before everything else */
-   copy_semantic_name_to_string(&mod->sem_string_table, "");
+   mod->sem_string_table = _mesa_string_buffer_create(NULL, 1024);
+   copy_semantic_name_to_string(mod->sem_string_table, "");
 
    const struct dxil_mdnode *input_signature = get_input_signature(mod, s);
    const struct dxil_mdnode *output_signature = get_output_signature(mod, s);

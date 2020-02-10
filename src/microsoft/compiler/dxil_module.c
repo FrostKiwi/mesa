@@ -59,6 +59,7 @@ dxil_module_release(struct dxil_module *m)
       if (m->outputs[i].name)
          free(m->outputs[i].name);
    }
+   _mesa_string_buffer_destroy(m->sem_string_table);
 }
 
 bool
