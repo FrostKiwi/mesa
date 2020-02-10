@@ -7,7 +7,11 @@ struct path {
 };
 
 struct path_fork {
-   nir_variable *path_var;
+   bool is_var;
+   union {
+      nir_variable *path_var;
+      nir_ssa_def *path_ssa;
+   };
    struct path pathes[2];
 };
 
@@ -23,9 +27,9 @@ struct strct_lvl {
    struct set *blocks;
    struct path out_path;
    struct set *reach;
-   int skip_start;
-   int skip_end;
-   int irreducible;
+   bool skip_start;
+   bool skip_end;
+   bool irreducible;
 };
 
 static void
@@ -35,7 +39,10 @@ set_path_vars(nir_builder *b, struct path_fork *fork, nir_block *target)
    while (fork) {
       for (i = 0; i < 2; i++) {
          if (_mesa_set_search(fork->pathes[i].reachable, target)) {
-            nir_store_var(b, fork->path_var, nir_imm_bool(b, i), 1);
+            if (fork->is_var)
+               nir_store_var(b, fork->path_var, nir_imm_bool(b, i), 1);
+            else
+               fork->path_ssa = nir_imm_bool(b, i);
             fork = fork->pathes[i].fork;
             break;
          }
@@ -53,7 +60,10 @@ set_path_vars_cond(nir_builder *b, struct path_fork *fork, nir_src condition,
       for (i = 0; i < 2; i++) {
          if (_mesa_set_search(fork->pathes[i].reachable, then_block)) {
             if (_mesa_set_search(fork->pathes[i].reachable, else_block)) {
-               nir_store_var(b, fork->path_var, nir_imm_bool(b, i), 1);
+               if (fork->is_var)
+                  nir_store_var(b, fork->path_var, nir_imm_bool(b, i), 1);
+               else
+                  fork->path_ssa = nir_imm_bool(b, i);
                fork = fork->pathes[i].fork;
                break;
             }
@@ -64,13 +74,17 @@ set_path_vars_cond(nir_builder *b, struct path_fork *fork, nir_src condition,
                assert(ssa_def->num_components == 1);
                if (!i)
                   ssa_def = nir_inot(b, ssa_def);
-               nir_store_var(b, fork->path_var, ssa_def, 1);
+               if (fork->is_var)
+                  nir_store_var(b, fork->path_var, ssa_def, 1);
+               else
+                  fork->path_ssa = ssa_def;
                set_path_vars(b, fork->pathes[i].fork, then_block);
                set_path_vars(b, fork->pathes[!i].fork, else_block);
                return;
             }
          }
       }
+      assert(i < 2);
    }
 }
 
@@ -163,6 +177,7 @@ loop_routing_start(struct routes *routing, nir_builder *b,
    routing->loop_backup = routing_backup;
    if (break_needed) {
       struct path_fork *fork = ralloc(routing_backup, struct path_fork);
+      fork->is_var = true;
       fork->path_var = nir_local_variable_create(b->impl, glsl_bool_type(),
                                                  "path_break");
       fork->pathes[0] = routing->brk;
@@ -172,6 +187,7 @@ loop_routing_start(struct routes *routing, nir_builder *b,
    }
    if (continue_needed) {
       struct path_fork *fork = ralloc(routing_backup, struct path_fork);
+      fork->is_var = true;
       fork->path_var = nir_local_variable_create(b->impl, glsl_bool_type(),
                                                  "path_continue");
       fork->pathes[0] = routing->brk;
@@ -180,6 +196,18 @@ loop_routing_start(struct routes *routing, nir_builder *b,
       routing->brk.reachable = fork_reachable(fork);
    }
    nir_push_loop(b);
+}
+
+static nir_ssa_def *
+fork_condition(nir_builder *b, struct path_fork *fork)
+{
+   nir_ssa_def *ret;
+   if (fork->is_var) {
+      ret = nir_load_var(b, fork->path_var);
+   }
+   else
+      ret = fork->path_ssa;
+   return ret;
 }
 
 static void
@@ -191,20 +219,20 @@ loop_routing_end(struct routes *routing, nir_builder *b)
    nir_pop_loop(b, NULL);
    if (routing->brk.fork && routing->brk.fork->pathes[1].reachable ==
        routing_backup->cont.reachable) {
-      assert(!strcmp(routing->brk.fork->path_var->name, "path_continue"));
-      nir_push_if_src(b,
-                      nir_src_for_ssa(nir_load_var
-                                      (b, routing->brk.fork->path_var)));
+      assert(!(routing->brk.fork->is_var &&
+               strcmp(routing->brk.fork->path_var->name, "path_continue")));
+      nir_push_if_src(b, nir_src_for_ssa(
+                         fork_condition(b, routing->brk.fork)));
       nir_jump(b, nir_jump_continue);
       nir_pop_if(b, NULL);
       routing->brk = routing->brk.fork->pathes[0];
    }
    if (routing->brk.fork && routing->brk.fork->pathes[1].reachable ==
        routing_backup->brk.reachable) {
-      assert(!strcmp(routing->brk.fork->path_var->name, "path_break"));
-      nir_push_if_src(b,
-                      nir_src_for_ssa(nir_load_var
-                                      (b, routing->brk.fork->path_var)));
+      assert(!(routing->brk.fork->is_var &&
+               strcmp(routing->brk.fork->path_var->name, "path_break")));
+      nir_push_if_src(b, nir_src_for_ssa(
+                         fork_condition(b, routing->brk.fork)));
       nir_jump(b, nir_jump_break);
       nir_pop_if(b, NULL);
       routing->brk = routing->brk.fork->pathes[0];
@@ -293,13 +321,15 @@ inside_outside(nir_block *block, struct set *loop_heads, struct set *outside,
 }
 
 static struct path_fork *
-select_fork(struct set *reachable, nir_function_impl *impl)
+select_fork(struct set *reachable, nir_function_impl *impl, bool need_var)
 {
    struct path_fork *fork = NULL;
    if (reachable->entries > 1) {
       fork = ralloc(reachable, struct path_fork);
-      fork->path_var = nir_local_variable_create(impl, glsl_bool_type(),
-                                                 "path_select");
+      fork->is_var = need_var;
+      if (need_var)
+         fork->path_var = nir_local_variable_create(impl, glsl_bool_type(),
+                                                    "path_select");
       fork->pathes[0].reachable = _mesa_pointer_set_create(fork);
       struct set_entry *entry = NULL;
       while (fork->pathes[0].reachable->entries < reachable->entries / 2 &&
@@ -307,13 +337,15 @@ select_fork(struct set *reachable, nir_function_impl *impl)
          _mesa_set_add_pre_hashed(fork->pathes[0].reachable,
                                   entry->hash, entry->key);
       }
-      fork->pathes[0].fork = select_fork(fork->pathes[0].reachable, impl);
+      fork->pathes[0].fork = select_fork(fork->pathes[0].reachable, impl,
+                                         need_var);
       fork->pathes[1].reachable = _mesa_pointer_set_create(fork);
       while ((entry = _mesa_set_next_entry(reachable, entry))) {
          _mesa_set_add_pre_hashed(fork->pathes[1].reachable,
                                   entry->hash, entry->key);
       }
-      fork->pathes[1].fork = select_fork(fork->pathes[1].reachable, impl);
+      fork->pathes[1].fork = select_fork(fork->pathes[1].reachable, impl,
+                                         need_var);
    }
    return fork;
 }
@@ -327,7 +359,7 @@ select_fork(struct set *reachable, nir_function_impl *impl)
 static void
 organize_levels(struct exec_list *levels, struct set *remaining,
                 struct set *reach, struct routes *routing,
-                nir_function_impl *impl)
+                nir_function_impl *impl, bool is_domminated)
 {
    void *mem_ctx = ralloc_parent(remaining);
    //blocks that can be reached by the remaining blocks
@@ -457,16 +489,21 @@ organize_levels(struct exec_list *levels, struct set *remaining,
    struct path path_after_skip;
 
    foreach_list_typed_reverse(struct strct_lvl, level, node, levels) {
+      bool need_var = !(is_domminated && exec_node_get_prev(&level->node)
+                                         == &levels->head_sentinel);
       level->out_path = routing->regular;
       if (level->skip_end) {
          path_after_skip = routing->regular;
       }
       routing->regular.reachable = level->blocks;
-      routing->regular.fork = select_fork(routing->regular.reachable, impl);
+      routing->regular.fork = select_fork(routing->regular.reachable, impl,
+                                          need_var);
       if (level->skip_start) {
          struct path_fork *fork = ralloc(level, struct path_fork);
-         fork->path_var = nir_local_variable_create(impl, glsl_bool_type(),
-                                                    "path_conditional");
+         fork->is_var = need_var;
+         if (need_var)
+            fork->path_var = nir_local_variable_create(impl, glsl_bool_type(),
+                                                       "path_conditional");
          fork->pathes[0] = path_after_skip;
          fork->pathes[1] = routing->regular;
          routing->regular.fork = fork;
@@ -484,10 +521,9 @@ select_blocks(struct routes *routing, nir_builder *b, struct path in_path) {
       nir_structurize(routing, b, (nir_block *)
                       _mesa_set_next_entry(in_path.reachable, NULL)->key);
    } else {
-      assert(!strcmp(in_path.fork->path_var->name, "path_select"));
-      nir_push_if_src(b,
-                      nir_src_for_ssa(nir_load_var
-                                      (b, in_path.fork->path_var)));
+      assert(!(in_path.fork->is_var &&
+               strcmp(in_path.fork->path_var->name, "path_select")));
+      nir_push_if_src(b, nir_src_for_ssa(fork_condition(b, in_path.fork)));
       select_blocks(routing, b, in_path.fork->pathes[1]);
       nir_push_else(b, NULL);
       select_blocks(routing, b, in_path.fork->pathes[0]);
@@ -506,12 +542,10 @@ plant_levels(struct exec_list *levels, struct routes *routing,
          exec_node_data(struct strct_lvl, list_node, node);
       if (curr_level->skip_start) {
          assert(routing->regular.fork);
-         assert(!strcmp(routing->regular.fork->path_var->name,
-                        "path_conditional"));
-         nir_push_if_src(b,
-                         nir_src_for_ssa(nir_load_var
-                                         (b,
-                                          routing->regular.fork->path_var)));
+         assert(!(routing->regular.fork->is_var && strcmp(
+             routing->regular.fork->path_var->name, "path_conditional")));
+         nir_push_if_src(b, nir_src_for_ssa(
+                            fork_condition(b, routing->regular.fork)));
          routing->regular = routing->regular.fork->pathes[1];
       }
       struct path in_path = routing->regular;
@@ -555,7 +589,8 @@ nir_structurize(struct routes *routing, nir_builder *b, nir_block *block)
       loop_heads = NULL;
       set_foreach(outside, entry)
          _mesa_set_remove_key(remaining, entry->key);
-      organize_levels(&outside_levels, outside, reach, routing, b->impl);
+      organize_levels(&outside_levels, outside, reach, routing, b->impl,
+                      false);
       _mesa_set_destroy(outside, NULL);
       outside = NULL;
       struct path loop_path;
@@ -573,7 +608,7 @@ nir_structurize(struct routes *routing, nir_builder *b, nir_block *block)
    if (block->successors[1] && block->successors[1]->successors[0]) {
       _mesa_set_add(reach, block->successors[1]);
    }
-   organize_levels(&levels, remaining, reach, routing, b->impl);
+   organize_levels(&levels, remaining, reach, routing, b->impl, true);
    _mesa_set_destroy(remaining, NULL);
    remaining = NULL;
    _mesa_set_destroy(reach, NULL);
