@@ -68,6 +68,15 @@ dump_instr_ret(struct _mesa_string_buffer *buf, struct dxil_instr_ret *ret);
 static void
 dump_instr_print_operands(struct _mesa_string_buffer *buf, int num,
                           const struct dxil_value *val[]);
+
+static void dump_io_signatures(struct _mesa_string_buffer *buf,
+                               struct dxil_module *m);
+static void
+dump_io_signature(struct _mesa_string_buffer *buf, unsigned num,
+                  struct dxil_signature_record *io);
+
+static const char *component_type_as_string(uint32_t type);
+
 static void
 dump_value(struct _mesa_string_buffer *buf, const struct dxil_value *val);
 
@@ -130,4 +139,17 @@ static const char *cast_opcode_strings[DXIL_CAST_INSTR_COUNT] = {
    [DXIL_CAST_INTTOPTR] = "inttoptr",
    [DXIL_CAST_BITCAST] = "bitcast",
    [DXIL_CAST_ADDRSPACECAST] = "addrspacecast",
+};
+
+static const char *dxil_type_strings[DXIL_PROG_SIG_COMP_TYPE_COUNT] = {
+   [DXIL_PROG_SIG_COMP_TYPE_UNKNOWN] = "unknown",
+   [DXIL_PROG_SIG_COMP_TYPE_UINT32] = "uint32",
+   [DXIL_PROG_SIG_COMP_TYPE_SINT32] = "int32",
+   [DXIL_PROG_SIG_COMP_TYPE_FLOAT32] = "float32",
+   [DXIL_PROG_SIG_COMP_TYPE_UINT16] = "uint16",
+   [DXIL_PROG_SIG_COMP_TYPE_SINT16] = "int16",
+   [DXIL_PROG_SIG_COMP_TYPE_FLOAT16] = "float16",
+   [DXIL_PROG_SIG_COMP_TYPE_UINT64] = "uint64",
+   [DXIL_PROG_SIG_COMP_TYPE_SINT64] = "int64",
+   [DXIL_PROG_SIG_COMP_TYPE_FLOAT64] = "float64"
 };
