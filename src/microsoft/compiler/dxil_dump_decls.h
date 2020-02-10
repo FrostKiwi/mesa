@@ -77,6 +77,11 @@ dump_io_signature(struct _mesa_string_buffer *buf, unsigned num,
 
 static const char *component_type_as_string(uint32_t type);
 
+static void dump_psv(struct _mesa_string_buffer *buf,
+                     struct dxil_module *m);
+static void dump_psv_io(struct _mesa_string_buffer *buf, struct dxil_module *m,
+                        unsigned num, struct dxil_psv_signature_element *io);
+
 static void
 dump_value(struct _mesa_string_buffer *buf, const struct dxil_value *val);
 
