@@ -26,6 +26,7 @@
 
 #include "dxil_enums.h"
 #include "nir.h"
+#include "util/string_buffer.h"
 
 /* struct taken from DXILContainer
  * Enums values were replaced by uint32_t since the must occupy 32 bit
@@ -52,11 +53,6 @@ struct dxil_signature_element {
 struct dxil_signature_record {
    struct dxil_signature_element sig;
    char *name;
-};
-
-struct dxil_psv_string_table {
-   char *data;
-   uint32_t size;
 };
 
 struct dxil_psv_sem_index_table {
@@ -135,7 +131,7 @@ struct dxil_pipe_state_validation {
    uint32_t version;
    uint32_t resource_count;
    uint8_t  shader_stage;
-   struct dxil_psv_string_table string_table;
+   struct _mesa_string_buffer *string_table;
    struct dxil_psv_sem_index_table semantic_index_table;
    uint8_t uses_view_id;
    uint8_t sig_input_elements;

@@ -176,7 +176,7 @@ struct dxil_module {
    struct dxil_psv_signature_element psv_inputs[PIPE_MAX_SHADER_INPUTS];
    struct dxil_psv_signature_element psv_outputs[PIPE_MAX_SHADER_INPUTS];
 
-   struct dxil_psv_string_table sem_string_table;
+   struct _mesa_string_buffer *sem_string_table;
    struct dxil_psv_sem_index_table sem_index_table;
 
    struct {
