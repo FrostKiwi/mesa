@@ -100,6 +100,7 @@ dxil_dump_module(struct dxil_dumper *d, struct dxil_module *m)
    dump_mdnodes(d, &m->mdnode_list);
    dump_named_nodes(d, &m->md_named_node_list);
    dump_io_signatures(d->buf, m);
+   dump_psv(d->buf, m);
    _mesa_string_buffer_printf(d->buf, "END DXIL MODULE\n");
 }
 
@@ -558,4 +559,37 @@ static const char *component_type_as_string(uint32_t type)
 {
    return  (type < DXIL_PROG_SIG_COMP_TYPE_COUNT) ?
             dxil_type_strings[type] : "invalid";
+}
+
+static void dump_psv(struct _mesa_string_buffer *buf,
+                     struct dxil_module *m)
+{
+   _mesa_string_buffer_append(buf, "\nPipeline State Validation\nInputs:\n");
+   dump_psv_io(buf, m, m->num_sig_inputs, m->psv_inputs);
+   _mesa_string_buffer_append(buf, "\nOutputs:\n");
+   dump_psv_io(buf, m, m->num_sig_outputs, m->psv_outputs);
+}
+
+static void dump_psv_io(struct _mesa_string_buffer *buf, struct dxil_module *m,
+                        unsigned num, struct dxil_psv_signature_element *io)
+{
+   _mesa_string_buffer_append(buf, " SEMANTIC-NAME Rows Cols Kind Comp-Type Interp dynmask+stream Indices\n");
+   _mesa_string_buffer_append(buf, "----------------------------------------------\n");
+   for (unsigned  i = 0; i < num; ++i, ++io)  {
+      _mesa_string_buffer_printf(buf, "%-14s %d+%d  %d+%d %4d   %-7s    %-4d        %-9d [",
+              m->sem_string_table->buf + io->semantic_name_offset,
+              (int)io->start_row, (int)io->rows,
+              (int)((io->cols_and_start & 0xf) >> 4),
+              (int)(io->cols_and_start & 0xf),
+              (int)io->semantic_kind,
+              component_type_as_string(io->component_type),
+              (int)io->interpolation_mode,
+              (int)io->dynamic_mask_and_stream);
+      for (int k = 0; k < io->rows; ++k) {
+         if (k > 0)
+            _mesa_string_buffer_append(buf, ", ");
+         _mesa_string_buffer_printf(buf,"%d ", m->sem_index_table.data[io->start_row  + k]);
+      }
+      _mesa_string_buffer_append(buf, "]\n");
+   }
 }
