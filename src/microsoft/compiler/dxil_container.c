@@ -136,7 +136,7 @@ dxil_container_add_state_validation(struct dxil_container *c,
       size += sizeof (uint32_t) +
               resource_bind_info_size * resource_count;
    }
-   uint32_t string_table_size = (m->sem_string_table.size + 3) & ~3u;
+   uint32_t string_table_size = (m->sem_string_table->length + 3) & ~3u;
    size  += sizeof(uint32_t) + string_table_size;
 
    // Semantic index table size, currently always 0
@@ -190,8 +190,8 @@ dxil_container_add_state_validation(struct dxil_container *c,
 
    uint32_t fill = 0;
    if (!blob_write_bytes(&c->parts, &string_table_size, sizeof(string_table_size)) ||
-       !blob_write_bytes(&c->parts, m->sem_string_table.data, m->sem_string_table.size) ||
-       !blob_write_bytes(&c->parts, &fill, string_table_size - m->sem_string_table.size))
+       !blob_write_bytes(&c->parts, m->sem_string_table->buf, m->sem_string_table->length) ||
+       !blob_write_bytes(&c->parts, &fill, string_table_size - m->sem_string_table->length))
       return false;
 
    // TODO: write the correct sematic index table. Currently it is empty
