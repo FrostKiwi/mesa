@@ -91,6 +91,7 @@ dxil_dump_module(struct dxil_dumper *d, struct dxil_module *m)
 
    _mesa_string_buffer_printf(d->buf, "DXIL MODULE:\n");
    dump_metadata(d, m);
+   dump_shader_info(d, &m->info);
    dump_types(d, &m->type_list);
    dump_gvars(d, &m->gvar_list);
    dump_funcs(d, &m->func_list);
@@ -114,6 +115,14 @@ dump_metadata(struct dxil_dumper *d, struct dxil_module *m)
                               m->major_version, m->minor_version);
 
    dump_features(d->buf, &m->feats);
+}
+
+static void
+dump_shader_info(struct dxil_dumper *d, struct dxil_shader_info *info)
+{
+   _mesa_string_buffer_append(d->buf, "Shader Info:\n");
+   if (info->has_out_position)
+      _mesa_string_buffer_append(d->buf, "  has_out_position\n");
 }
 
 static const char *
