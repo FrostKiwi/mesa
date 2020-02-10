@@ -274,6 +274,18 @@ fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
    return true;
 }
 
+static const char *in_sysvalue_name(nir_variable *var)
+{
+   switch (var->data.location) {
+   case VARYING_SLOT_POS:
+      return "POS";
+   case VARYING_SLOT_FACE:
+      return "FACE";
+   default:
+      return "NONE";
+   }
+}
+
 static const struct dxil_mdnode *
 get_input_signature(struct dxil_module *mod, nir_shader *s)
 {
@@ -286,11 +298,13 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
       char semantic_name[64] = "";
        enum dxil_semantic_kind semantic_kind;
       uint8_t interpolation = 0;
-      if (s->info.stage == MESA_SHADER_VERTEX)
+      if (s->info.stage == MESA_SHADER_VERTEX) {
          semantic_kind = get_semantic_vs_in_name(var, semantic_name);
-      else {
+         mod->inputs[num_inputs].sysvalue = false;
+      } else {
          semantic_kind = get_semantic_name(var, semantic_name);
          interpolation = get_interpolation(var->data.interpolation);
+         mod->inputs[num_inputs].sysvalue = in_sysvalue_name(var);
       }
       uint8_t columns = (uint8_t)glsl_get_components(var->type);
       inputs[num_inputs] = fill_SV_param_nodes(mod, num_inputs, semantic_name,
@@ -315,6 +329,16 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
    return retval;
 }
 
+static const char *out_sysvalue_name(nir_variable *var)
+{
+   switch (var->data.location) {
+   case VARYING_SLOT_POS:
+      return "POS";
+   default:
+      return "NO";
+   }
+}
+
 static const struct dxil_mdnode *
 get_output_signature(struct dxil_module *mod, nir_shader *s)
 {
@@ -331,9 +355,11 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
 
       if (s->info.stage == MESA_SHADER_FRAGMENT) {
          semantic_kind = get_semantic_ps_outname(var, semantic_name);
+         mod->outputs[num_outputs].sysvalue = "TARGET";
       } else {
          semantic_kind = get_semantic_name(var, semantic_name);
          interpolation = get_interpolation(var->data.interpolation);
+         mod->outputs[num_outputs].sysvalue = out_sysvalue_name(var);
       }
 
       mod->info.has_out_position |= semantic_kind == DXIL_SEM_POSITION;

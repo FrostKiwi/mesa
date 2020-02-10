@@ -52,6 +52,7 @@ struct dxil_signature_element {
 
 struct dxil_signature_record {
    struct dxil_signature_element sig;
+   const char *sysvalue;
    char *name;
 };
 

@@ -99,6 +99,7 @@ dxil_dump_module(struct dxil_dumper *d, struct dxil_module *m)
    dump_instrs(d, &m->instr_list);
    dump_mdnodes(d, &m->mdnode_list);
    dump_named_nodes(d, &m->md_named_node_list);
+   dump_io_signatures(d->buf, m);
    _mesa_string_buffer_printf(d->buf, "END DXIL MODULE\n");
 }
 
@@ -518,4 +519,43 @@ dump_named_nodes(struct dxil_dumper *d, struct list_head *list)
       dxil_dump_indention_dec(d);
    }
    dxil_dump_indention_dec(d);
+}
+
+static void
+mask_to_string(uint32_t mask, char str[5])
+{
+   const char *mc = "xyzw";
+   for (int i = 0; i < 4 && mask; ++i) {
+      str[i] = (mask & (1 << i)) ? mc[i] : '_';
+   }
+   str[4] = 0;
+}
+
+static void dump_io_signatures(struct _mesa_string_buffer *buf, struct dxil_module *m)
+{
+   _mesa_string_buffer_append(buf, "\nInput signature:\n");
+   dump_io_signature(buf, m->num_sig_inputs, m->inputs);
+   _mesa_string_buffer_append(buf, "\nOutput signature:\n");
+   dump_io_signature(buf, m->num_sig_outputs, m->outputs);
+}
+
+static void dump_io_signature(struct _mesa_string_buffer *buf, unsigned num,
+                              struct dxil_signature_record *io)
+{
+   _mesa_string_buffer_append(buf, " SEMANTIC-NAME Index Mask Reg SysValue Format\n");
+   _mesa_string_buffer_append(buf, "----------------------------------------------\n");
+   for (unsigned  i = 0; i < num; ++i, ++io)  {
+      char mask[5] = "";
+      mask_to_string(io->sig.mask, mask);
+      _mesa_string_buffer_printf(buf, "%-15s %3d %4s %3d %-8s %-7s\n",
+                                 io->name, io->sig.semantic_index,
+                                 mask, io->sig.reg, io->sysvalue,
+                                 component_type_as_string(io->sig.comp_type));
+   }
+}
+
+static const char *component_type_as_string(uint32_t type)
+{
+   return  (type < DXIL_PROG_SIG_COMP_TYPE_COUNT) ?
+            dxil_type_strings[type] : "invalid";
 }
