@@ -29,6 +29,8 @@
 
 static void
 dump_metadata(struct dxil_dumper *buf, struct dxil_module *m);
+static void
+dump_shader_info(struct dxil_dumper *buf, struct dxil_shader_info *info);
 static const char *
 dump_shader_string(enum dxil_shader_kind kind);
 static void
