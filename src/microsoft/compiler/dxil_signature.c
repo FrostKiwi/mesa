@@ -25,6 +25,7 @@
 #include "dxil_module.h"
 #include "dxil_signature.h"
 
+#include "nir_to_dxil.h"
 #include "glsl_types.h"
 #include "util/u_debug.h"
 
@@ -40,36 +41,10 @@
 static enum dxil_semantic_kind
 get_semantic_vs_in_name(nir_variable *var, char buffer[64])
 {
-   enum dxil_semantic_kind kind = DXIL_SEM_INVALID;
-   const char *name = "UNDEFINED";
-   switch (var->data.location) {
-   case VERT_ATTRIB_POS:
-      /* The position is not handled as system value here */
-      name = "POSITION";
-      kind = DXIL_SEM_ARBITRARY;
-      break;
-   case VERT_ATTRIB_NORMAL:
-      name = "NORMAL";
-      kind = DXIL_SEM_ARBITRARY;
-      break;
-   case VERT_ATTRIB_COLOR0:
-      name = "COLOR0";
-      kind = DXIL_SEM_ARBITRARY;
-      break;
-   case VERT_ATTRIB_COLOR1:
-      name = "COLOR1";
-      kind = DXIL_SEM_ARBITRARY;
-      break;
-   default:
-      if( var->data.location >= VERT_ATTRIB_GENERIC0 &&
-          var->data.location <= VERT_ATTRIB_GENERIC15) {
-         name = "GENERIC";
-         kind = DXIL_SEM_ARBITRARY;
-      }
-   }
-
-   snprintf(buffer, 64, "%s", name);
-   return kind;
+   const char *name = dxil_vs_attr_index_to_name(var->data.driver_location);
+   assert(strlen(name) < 63);
+   strcpy(buffer, name);
+   return DXIL_SEM_ARBITRARY;
 }
 
 static enum dxil_semantic_kind
@@ -118,10 +93,12 @@ get_semantic_name(nir_variable *var, char buffer[64])
       kind = DXIL_SEM_POSITION;
    } else if (var->data.location >= VARYING_SLOT_VAR0 &&
               var->data.location <= VARYING_SLOT_VAR31) {
-      snprintf(buffer, 64, "%s%d", "VARYING", var->data.location - VARYING_SLOT_VAR0);
+      unsigned index = var->data.location - VARYING_SLOT_VAR0;
+      snprintf(buffer, 64, "%s%c", "VARYING", 'A' + index);
       kind = DXIL_SEM_ARBITRARY;
    } else {
-      snprintf(buffer, 64, "%s%d", "OTHER", var->data.location - VARYING_SLOT_POS);
+      unsigned index = var->data.location - VARYING_SLOT_VAR0;
+      snprintf(buffer, 64, "%s%c", "OTHER", 'A' + index);
    }
    return kind;
 }
