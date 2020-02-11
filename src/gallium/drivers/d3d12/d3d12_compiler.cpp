@@ -45,6 +45,9 @@ struct d3d12_validation_tools
 
    bool validate_and_sign(struct blob *dxil);
 
+   void disassemble(struct blob *dxil);
+
+   ComPtr<IDxcCompiler> compiler;
    ComPtr<IDxcValidator> validator;
    ComPtr<IDxcLibrary> library;
 };
@@ -128,6 +131,14 @@ d3d12_validation_tools::d3d12_validation_tools()
       debug_printf("D3D12: Unable to create library instance\n");
       return;
    }
+
+   if (d3d12_debug & D3D12_DEBUG_DISASS) {
+      hr = compiler_create_func(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler));
+      if (FAILED(hr)) {
+         debug_printf("D3D12: Unable to create compiler instance\n");
+         return;
+      }
+   }
 }
 
 class ShaderBlob : public IDxcBlob {
@@ -177,5 +188,36 @@ bool d3d12_validation_tools::validate_and_sign(struct blob *dxil)
    }
    return true;
 
+}
+
+void d3d12_validation_tools::disassemble(struct blob *dxil)
+{
+   if (!compiler) {
+      fprintf(stderr, "D3D12: No Disassembler\n");
+      return;
+   }
+   ShaderBlob source(dxil);
+   IDxcBlobEncoding* pDisassembly = nullptr;
+
+   if (FAILED(compiler->Disassemble(&source, &pDisassembly))) {
+      fprintf(stderr, "D3D12: Disassembler failed\n");
+      return;
+   }
+
+   ComPtr<IDxcBlobEncoding> dissassably(pDisassembly);
+   ComPtr<IDxcBlobEncoding> blobUtf8;
+   library->GetBlobAsUtf8(pDisassembly, blobUtf8.GetAddressOf());
+   if (!blobUtf8) {
+      fprintf(stderr, "D3D12: Unable to get utf8 encoding\n");
+      return;
+   }
+
+   char *disassembly = reinterpret_cast<char*>(blobUtf8->GetBufferPointer());
+   disassembly[blobUtf8->GetBufferSize() - 1] = 0;
+
+   fprintf(stderr, "== BEGIN SHADER ============================================\n"
+           "%s\n"
+           "== END SHADER ==============================================\n",
+           disassembly);
 }
 
