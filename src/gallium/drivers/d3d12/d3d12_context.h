@@ -50,6 +50,7 @@ struct d3d12_depth_stencil_alpha_state {
 };
 
 struct primconvert_context;
+struct d3d12_validation_tools;
 
 struct d3d12_context {
    struct pipe_context base;
@@ -87,6 +88,8 @@ struct d3d12_context {
    int rtv_index, dsv_index;
 
    PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature;
+   struct d3d12_validation_tools *validation_tools;
+
 };
 
 static inline struct d3d12_context *

@@ -22,6 +22,7 @@
  */
 
 #include "d3d12_compiler.h"
+#include "d3d12_context.h"
 #include "d3d12_debug.h"
 #include "microsoft/compiler/nir_to_dxil.h"
 
@@ -31,6 +32,33 @@
 #include "compiler/nir/nir_builder.h"
 
 #include "util/u_memory.h"
+
+#include <d3d12.h>
+#include <dxcapi.h>
+#include <wrl.h>
+
+using Microsoft::WRL::ComPtr;
+
+struct d3d12_validation_tools
+{
+   d3d12_validation_tools();
+
+   bool validate_and_sign(struct blob *dxil);
+
+   ComPtr<IDxcValidator> validator;
+   ComPtr<IDxcLibrary> library;
+};
+
+struct d3d12_validation_tools *d3d12_validator_create()
+{
+   return new d3d12_validation_tools();
+}
+
+void d3d12_validator_destroy(struct d3d12_validation_tools *validator)
+{
+   delete validator;
+}
+
 
 const void *
 d3d12_get_compiler_options(struct pipe_screen *screen,
@@ -42,7 +70,7 @@ d3d12_get_compiler_options(struct pipe_screen *screen,
 }
 
 struct d3d12_shader *
-d3d12_compile_nir(struct nir_shader *nir)
+d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
 {
    struct d3d12_shader *ret = CALLOC_STRUCT(d3d12_shader);
 
@@ -53,6 +81,13 @@ d3d12_compile_nir(struct nir_shader *nir)
       debug_printf("D3D12: nir_to_dxil failed\n");
       return NULL;
    }
+
+   ctx->validation_tools->validate_and_sign(&tmp);
+
+   if (d3d12_debug & D3D12_DEBUG_DISASS) {
+      ctx->validation_tools->disassemble(&tmp);
+   }
+
    blob_finish_get_buffer(&tmp, &ret->bytecode, &ret->bytecode_length);
 
    if (d3d12_debug & D3D12_DEBUG_DXIL) {
@@ -73,3 +108,74 @@ d3d12_shader_free(struct d3d12_shader *shader)
 {
    FREE(shader);
 }
+
+d3d12_validation_tools::d3d12_validation_tools()
+{
+   HMODULE dxil_module = ::LoadLibrary("dxil.dll");
+   DxcCreateInstanceProc dxil_create_func = (DxcCreateInstanceProc)GetProcAddress(dxil_module, "DxcCreateInstance");
+
+   HRESULT hr = dxil_create_func(CLSID_DxcValidator,  IID_PPV_ARGS(&validator));
+   if (FAILED(hr)) {
+      debug_printf("D3D12: Unable to create validator\n");
+      return;
+   }
+
+   HMODULE dxc_ompiler_module = ::LoadLibrary("dxcompiler.dll");
+   DxcCreateInstanceProc compiler_create_func = (DxcCreateInstanceProc)GetProcAddress(dxc_ompiler_module, "DxcCreateInstance");
+
+   hr = compiler_create_func(CLSID_DxcLibrary, IID_PPV_ARGS(&library));
+   if (FAILED(hr)) {
+      debug_printf("D3D12: Unable to create library instance\n");
+      return;
+   }
+}
+
+class ShaderBlob : public IDxcBlob {
+public:
+   ShaderBlob(blob* data) : m_data(data) {}
+
+   LPVOID STDMETHODCALLTYPE GetBufferPointer(void) override { return m_data->data; }
+
+   SIZE_T STDMETHODCALLTYPE GetBufferSize() override { return m_data->size; }
+
+   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void**) override { return E_NOINTERFACE; }
+
+   ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
+
+   ULONG STDMETHODCALLTYPE Release() override { return 0; }
+
+   blob* m_data;
+};
+
+bool d3d12_validation_tools::validate_and_sign(struct blob *dxil)
+{
+   ShaderBlob source(dxil);
+
+   ComPtr<IDxcOperationResult> result;
+   if (!validator)
+      return false;
+
+   validator->Validate(&source, DxcValidatorFlags_InPlaceEdit, &result);
+   HRESULT validationStatus;
+   result->GetStatus(&validationStatus);
+   if (FAILED(validationStatus) && library) {
+      ComPtr<IDxcBlobEncoding> printBlob, printBlobUtf8;
+      result->GetErrorBuffer(&printBlob);
+      library->GetBlobAsUtf8(printBlob.Get(), printBlobUtf8.GetAddressOf());
+
+      char *errorString;
+      if (printBlobUtf8) {
+         errorString = reinterpret_cast<char*>(printBlobUtf8->GetBufferPointer());
+      }
+
+      errorString[printBlobUtf8->GetBufferSize() - 1] = 0;
+      debug_printf("== VALIDATION ERROR =============================================\n%s\n"
+                   "== END ==========================================================\n",
+                   errorString);
+
+      return false;
+   }
+   return true;
+
+}
+
