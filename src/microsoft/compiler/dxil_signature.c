@@ -65,15 +65,15 @@ get_semantic_ps_outname(nir_variable *var, char buffer[64])
       kind = DXIL_SEM_TARGET;
       break;
    case FRAG_RESULT_DEPTH:
-      snprintf(buffer, 64, "%s", "DEPTH");
+      snprintf(buffer, 64, "%s", "SV_Depth");
       kind = DXIL_SEM_DEPTH;
       break;
    case FRAG_RESULT_STENCIL:
-      snprintf(buffer, 64, "%s", "STENCIL");
+      snprintf(buffer, 64, "%s", "SV_StencilRef");
       kind = DXIL_SEM_STENCIL_REF; //??
       break;
    case FRAG_RESULT_SAMPLE_MASK:
-      snprintf(buffer, 64, "%s", "SAMPLE_MASK");
+      snprintf(buffer, 64, "%s", "SV_Coverage");
       kind = DXIL_SEM_COVERAGE; //??
       break;
    default:
