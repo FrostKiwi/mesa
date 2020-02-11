@@ -284,12 +284,6 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
 
    struct dxil_mdnode **inputs = malloc(sizeof(const struct dxil_mdnode *) * num_inputs);
 
-   /* For this to always work we should use vectorize_io, but for FS out and VS in
-    * this is not implemented globally */
-   const struct dxil_mdnode *flattened_semantics[1] = {
-      dxil_get_metadata_int32(mod, 0)
-   };
-
    nir_foreach_variable(var, &s->inputs) {
       char semantic_name[64] = "";
        enum dxil_semantic_kind semantic_kind;
