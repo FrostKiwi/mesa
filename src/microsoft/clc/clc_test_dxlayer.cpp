@@ -149,6 +149,11 @@ bool DXILCompiler::disassamble(blob *data,
 
       ++c;
    }
+   /* Different versions of dxcompiler seem to disagree whether a new line should
+    * be added at the end or not */
+   if (!linestart)
+      os << '\n';
+
    disassembly = os.str();
    return true;
 }
