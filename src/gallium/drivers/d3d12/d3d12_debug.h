@@ -11,6 +11,7 @@ extern "C" {
 #define D3D12_DEBUG_OPENGL21     2
 #define D3D12_DEBUG_EXPERIMENTAL 4
 #define D3D12_DEBUG_DXIL         8
+#define D3D12_DEBUG_DISASS       16
 
 extern uint32_t d3d12_debug;
 
