@@ -149,6 +149,8 @@ enum {
 };
 
 enum dxil_intr {
+   DXIL_INTR_STORE_OUTPUT = 5,
+
    DXIL_INTR_FRC = 22,
 
    DXIL_INTR_ROUND_NE = 26,
@@ -1273,18 +1275,18 @@ emit_store_output(struct ntd_context *ctx, nir_intrinsic_instr *intr,
    if (!func)
       return false;
 
-   const struct dxil_value *dest = dxil_module_get_int32_const(&ctx->mod, DXIL_PSOUTPUT_COLOR0);
-   const struct dxil_value *loc = dxil_module_get_int32_const(&ctx->mod, (int)output->data.driver_location);
-   const struct dxil_value *unknown = dxil_module_get_int32_const(&ctx->mod, 0);
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_STORE_OUTPUT);
+   const struct dxil_value *output_id = dxil_module_get_int32_const(&ctx->mod, (int)output->data.driver_location);
+   const struct dxil_value *row = dxil_module_get_int32_const(&ctx->mod, 0);
 
    bool success = true;
    uint32_t writemask = nir_intrinsic_write_mask(intr);
    for (unsigned i = 0; i < intr->src[1].ssa->num_components && success; ++i) {
       if (writemask & (1 << i)) {
-         const struct dxil_value *comp = dxil_module_get_int8_const(&ctx->mod, i);
+         const struct dxil_value *col = dxil_module_get_int8_const(&ctx->mod, i);
          const struct dxil_value *value = get_src(ctx, &intr->src[1], i, nir_type_float);
          const struct dxil_value *args[] = {
-            dest, loc, unknown, comp, value
+            opcode, output_id, row, col, value
          };
          success &= dxil_emit_call_void(&ctx->mod, func, args, ARRAY_SIZE(args));
       }
