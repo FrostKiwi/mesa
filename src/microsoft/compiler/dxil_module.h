@@ -37,7 +37,9 @@ extern "C" {
 #include "dxil_signature.h"
 
 #include "util/list.h"
-#include "pipe/p_state.h"
+
+
+#define DXIL_SHADER_MAX_IO_ROWS 80
 
 enum dxil_shader_kind {
    DXIL_PIXEL_SHADER = 0,
@@ -170,11 +172,11 @@ struct dxil_module {
    unsigned num_sig_inputs;
    unsigned num_sig_outputs;
 
-   struct dxil_signature_record inputs[PIPE_MAX_SHADER_INPUTS];
-   struct dxil_signature_record outputs[PIPE_MAX_SHADER_INPUTS];
+   struct dxil_signature_record inputs[DXIL_SHADER_MAX_IO_ROWS];
+   struct dxil_signature_record outputs[DXIL_SHADER_MAX_IO_ROWS];
 
-   struct dxil_psv_signature_element psv_inputs[PIPE_MAX_SHADER_INPUTS];
-   struct dxil_psv_signature_element psv_outputs[PIPE_MAX_SHADER_INPUTS];
+   struct dxil_psv_signature_element psv_inputs[DXIL_SHADER_MAX_IO_ROWS];
+   struct dxil_psv_signature_element psv_outputs[DXIL_SHADER_MAX_IO_ROWS];
 
    struct _mesa_string_buffer *sem_string_table;
    struct dxil_psv_sem_index_table sem_index_table;
