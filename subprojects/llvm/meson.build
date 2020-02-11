@@ -46,13 +46,13 @@ dep_llvm = declare_dependency(
     include_directories : include_directories('include'),
     dependencies : _deps_llvm,
     link_args : 'version.lib',
-    version : '11.0.0',
+    version : '10.0.0',
 )
 
 dep_clang = declare_dependency(
     include_directories : include_directories('include'),
     dependencies : _deps_clang,
-    version : '11.0.0',
+    version : '10.0.0',
 )
 
 has_rtti = false
