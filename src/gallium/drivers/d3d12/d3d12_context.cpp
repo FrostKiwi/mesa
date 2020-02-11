@@ -42,6 +42,7 @@ static void
 d3d12_context_destroy(struct pipe_context *pctx)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
+   d3d12_validator_destroy(ctx->validation_tools);
    util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
    FREE(ctx);
@@ -333,7 +334,7 @@ d3d12_create_depth_stencil_alpha_state(struct pipe_context *pctx,
       dsa->desc.BackFace = dsa->desc.FrontFace;
 
    dsa->desc.StencilReadMask = depth_stencil_alpha->stencil[0].valuemask; /* FIXME Back face mask */
-   dsa->desc.StencilWriteMask = depth_stencil_alpha->stencil[0].writemask; /* FIXME Back face mask */ 
+   dsa->desc.StencilWriteMask = depth_stencil_alpha->stencil[0].writemask; /* FIXME Back face mask */
    dsa->desc.DepthWriteMask = (D3D12_DEPTH_WRITE_MASK) depth_stencil_alpha->depth.writemask;
 
    return dsa;
@@ -488,7 +489,7 @@ d3d12_create_vs_state(struct pipe_context *pctx,
    assert(shader->type == PIPE_SHADER_IR_NIR);
    nir = (struct nir_shader *)shader->ir.nir;
 
-   return d3d12_compile_nir(nir);
+   return d3d12_compile_nir(d3d12_context(pctx), nir);
 }
 
 static void
@@ -514,7 +515,7 @@ d3d12_create_fs_state(struct pipe_context *pctx,
    assert(shader->type == PIPE_SHADER_IR_NIR);
    nir = (struct nir_shader *)shader->ir.nir;
 
-   return d3d12_compile_nir(nir);
+   return d3d12_compile_nir(d3d12_context(pctx), nir);
 }
 
 static void
@@ -845,6 +846,8 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->dsv_increment = screen->dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
    ctx->rtv_index = ctx->dsv_index = 0;
+
+   ctx->validation_tools = d3d12_validator_create();
 
    return &ctx->base;
 }

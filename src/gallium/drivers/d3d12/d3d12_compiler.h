@@ -34,6 +34,10 @@ struct pipe_screen;
 struct nir_shader_compiler_options;
 struct nir_shader;
 
+struct d3d12_validation_tools *d3d12_validator_create();
+
+void d3d12_validator_destroy(struct d3d12_validation_tools *validator);
+
 const void *
 d3d12_get_compiler_options(struct pipe_screen *screen,
                            enum pipe_shader_ir ir,
@@ -47,7 +51,7 @@ struct d3d12_shader {
 };
 
 struct d3d12_shader *
-d3d12_compile_nir(struct nir_shader *nir);
+d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir);
 
 void
 d3d12_shader_free(struct d3d12_shader *shader);
