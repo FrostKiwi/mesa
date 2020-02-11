@@ -87,7 +87,7 @@ dxil_container_add_io_signature(struct dxil_container *c,
    uint32_t fixed_size = sizeof(header);
    header.param_offset = fixed_size;
 
-   unsigned offset[PIPE_MAX_SHADER_INPUTS];
+   unsigned offset[DXIL_SHADER_MAX_IO_ROWS];
 
    for (unsigned i = 0; i < num_records; ++i) {
       /* TODO:
