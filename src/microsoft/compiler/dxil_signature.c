@@ -270,7 +270,7 @@ fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
          return false;
    }
 
-   append_semantic_index_to_table(&mod->sem_index_table, record_id);
+   append_semantic_index_to_table(&mod->sem_index_table, 0);
    return true;
 }
 
