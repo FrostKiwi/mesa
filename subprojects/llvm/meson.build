@@ -9,35 +9,35 @@ _search = join_paths(meson.current_source_dir(), 'lib')
 
 foreach d : ['LLVMAggressiveInstCombine', 'LLVMAnalysis', 'LLVMAsmParser',
              'LLVMAsmPrinter', 'LLVMBinaryFormat', 'LLVMBitReader',
-	     'LLVMBitstreamReader', 'LLVMBitWriter', 'LLVMCFGuard',
-	     'LLVMCodeGen', 'LLVMCore', 'LLVMCoroutines',
-	     'LLVMCoverage', 'LLVMDebugInfoCodeView', 'LLVMDebugInfoDWARF',
-	     'LLVMDebugInfoGSYM', 'LLVMDebugInfoMSF', 'LLVMDebugInfoPDB',
-	     'LLVMDemangle', 'LLVMDlltoolDriver', 'LLVMExecutionEngine',
-	     'LLVMFrontendOpenMP', 'LLVMFuzzMutate', 'LLVMGlobalISel',
-	     'LLVMInstCombine', 'LLVMInstrumentation', 'LLVMInterpreter',
-	     'LLVMipo', 'LLVMIRReader', 'LLVMLibDriver',
-	     'LLVMLineEditor', 'LLVMLinker', 'LLVMLTO',
-	     'LLVMMC', 'LLVMMCA', 'LLVMMCDisassembler', 
-	     'LLVMMCJIT', 'LLVMMCParser', 'LLVMMIRParser',
-	     'LLVMObjCARCOpts', 'LLVMObject', 'LLVMObjectYAML',
-	     'LLVMOption', 'LLVMPasses', 'LLVMProfileData',
-	     'LLVMRemarks', 'LLVMRuntimeDyld', 'LLVMScalarOpts',
-	     'LLVMSelectionDAG', 'LLVMSPIRVLib', 'LLVMSupport',
-	     'LLVMSymbolize', 'LLVMTableGen', 'LLVMTarget',
-	     'LLVMTextAPI', 'LLVMTransformUtils', 'LLVMVectorize',
-	     'LLVMWindowsManifest', 'LLVMX86AsmParser', 'LLVMX86CodeGen',
-	     'LLVMX86Desc', 'LLVMX86Disassembler', 'LLVMX86Info',
-	     'LLVMX86Utils']
+             'LLVMBitstreamReader', 'LLVMBitWriter', 'LLVMCFGuard',
+             'LLVMCodeGen', 'LLVMCore', 'LLVMCoroutines',
+             'LLVMCoverage', 'LLVMDebugInfoCodeView', 'LLVMDebugInfoDWARF',
+             'LLVMDebugInfoGSYM', 'LLVMDebugInfoMSF', 'LLVMDebugInfoPDB',
+             'LLVMDemangle', 'LLVMDlltoolDriver', 'LLVMExecutionEngine',
+             'LLVMFrontendOpenMP', 'LLVMFuzzMutate', 'LLVMGlobalISel',
+             'LLVMInstCombine', 'LLVMInstrumentation', 'LLVMInterpreter',
+             'LLVMipo', 'LLVMIRReader', 'LLVMLibDriver',
+             'LLVMLineEditor', 'LLVMLinker', 'LLVMLTO',
+             'LLVMMC', 'LLVMMCA', 'LLVMMCDisassembler',
+             'LLVMMCJIT', 'LLVMMCParser', 'LLVMMIRParser',
+             'LLVMObjCARCOpts', 'LLVMObject', 'LLVMObjectYAML',
+             'LLVMOption', 'LLVMPasses', 'LLVMProfileData',
+             'LLVMRemarks', 'LLVMRuntimeDyld', 'LLVMScalarOpts',
+             'LLVMSelectionDAG', 'LLVMSPIRVLib', 'LLVMSupport',
+             'LLVMSymbolize', 'LLVMTableGen', 'LLVMTarget',
+             'LLVMTextAPI', 'LLVMTransformUtils', 'LLVMVectorize',
+             'LLVMWindowsManifest', 'LLVMX86AsmParser', 'LLVMX86CodeGen',
+             'LLVMX86Desc', 'LLVMX86Disassembler', 'LLVMX86Info',
+             'LLVMX86Utils']
 
   _deps_llvm += cpp.find_library(d, dirs : _search)
 endforeach
 
 foreach d : ['clangCodeGen', 'clangFrontend', 'clangFrontendTool',
              'clangDriver', 'clangSerialization', 'clangParse',
-	     'clangSema', 'clangAnalysis', 'clangAST',
+             'clangSema', 'clangAnalysis', 'clangAST',
              'clangASTMatchers', 'clangEdit', 'clangLex',
-	     'clangBasic']
+             'clangBasic']
 
   _deps_clang += cpp.find_library(d, dirs : _search)
 endforeach
