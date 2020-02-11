@@ -1854,7 +1854,7 @@ optimize_nir(struct nir_shader *s)
       NIR_PASS(progress, s, nir_opt_undef);
       NIR_PASS(progress, s, nir_opt_deref);
       NIR_PASS_V(s, nir_lower_system_values);
-      if (s->info.stage == MESA_SHADER_COMPUTE)
+      if (s->info.stage == MESA_SHADER_KERNEL)
          NIR_PASS_V(s, nir_lower_explicit_io, nir_var_shader_in | nir_var_mem_global, nir_address_format_32bit_global);
    } while (progress);
 
@@ -1928,7 +1928,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
     * with pointers into SSBO access. We re-run constant folding and undef
     * removal as these two passes both generate extra constants.
     */
-   if (s->info.stage == MESA_SHADER_COMPUTE) {
+   if (s->info.stage == MESA_SHADER_KERNEL) {
       NIR_PASS_V(s, lower_global_mem_to_ssbo);
       NIR_PASS_V(s, nir_lower_variable_initializers, nir_var_all);
       optimize_nir(s);
