@@ -33,10 +33,13 @@
 #include "util/u_helpers.h"
 #include "util/u_memory.h"
 #include "util/u_upload_mgr.h"
+#include "microsoft/compiler/nir_to_dxil.h"
 
 extern "C" {
 #include "indices/u_primconvert.h"
 }
+
+#include <string.h>
 
 static void
 d3d12_context_destroy(struct pipe_context *pctx)
@@ -66,8 +69,8 @@ d3d12_create_vertex_elements_state(struct pipe_context *pctx,
       return NULL;
 
    for (unsigned i = 0; i < num_elements; ++i) {
-      cso->elements[i].SemanticName = "TEXCOORD";
-      cso->elements[i].SemanticIndex = i;
+      cso->elements[i].SemanticName = dxil_vs_attr_index_to_name(i);
+      cso->elements[i].SemanticIndex = 0;
       cso->elements[i].Format = d3d12_get_format(elements[i].src_format);
       assert(cso->elements[i].Format != DXGI_FORMAT_UNKNOWN);
       cso->elements[i].InputSlot = elements[i].vertex_buffer_index;
@@ -80,21 +83,6 @@ d3d12_create_vertex_elements_state(struct pipe_context *pctx,
          cso->elements[i].InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
          cso->elements[i].InstanceDataStepRate = 0;
       }
-
-      // HACK THE PLANET!
-      if (i == 0) {
-         cso->elements[i].SemanticName = "POSITION";
-         cso->elements[i].SemanticIndex = 0;
-      } else if (i == 1) {
-         cso->elements[i].SemanticName = "COLOR";
-         cso->elements[i].SemanticIndex = 0;
-      }
-   }
-   // HACK THE PLANET 2.0!
-   if (num_elements == 1) {
-      cso->elements[1] = cso->elements[0];
-      cso->elements[1].SemanticName = "COLOR";
-      num_elements++;
    }
 
    cso->num_elements = num_elements;

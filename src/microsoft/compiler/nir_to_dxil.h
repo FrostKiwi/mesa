@@ -34,6 +34,9 @@ extern "C" {
 
 struct blob;
 
+const char *
+dxil_vs_attr_index_to_name(unsigned index);
+
 bool
 nir_to_dxil(struct nir_shader *s, struct blob *blob);
 

@@ -2179,3 +2179,21 @@ out:
    ralloc_free(ctx.ralloc_ctx);
    return retval;
 }
+
+static const char *generics_semantics[] = {
+   "GENERICAA", "GENERICAB", "GENERICAC", "GENERIAD",
+   "GENERICAE", "GENERICAF", "GENERICAG", "GENERIAG",
+   "GENERICBA", "GENERICBB", "GENERICBC", "GENERIBD",
+   "GENERICBE", "GENERICBF", "GENERICBG", "GENERIBG",
+   "GENERICCA", "GENERICCB", "GENERICCC", "GENERICD",
+   "GENERICCE", "GENERICCF", "GENERICCG", "GENERICG",
+   "GENERICDA", "GENERICDB", "GENERICDC", "GENERIDD",
+   "GENERICDE", "GENERICDF", "GENERICDG", "GENERIDG"
+};
+
+const char *
+dxil_vs_attr_index_to_name(unsigned index)
+{
+   assert(index < 32);
+   return generics_semantics[index];
+}
