@@ -46,6 +46,7 @@ debug_options[] = {
    { "opengl21",     D3D12_DEBUG_OPENGL21,     "Fake OpenGL 2.1 support" },
    { "experimental", D3D12_DEBUG_EXPERIMENTAL, "Enable experimental shader models feature" },
    { "dxil",         D3D12_DEBUG_DXIL,         "Dump DXIL during program compile" },
+   { "disass",       D3D12_DEBUG_DISASS,       "Dump disassambly of created DXIL shader" },
    DEBUG_NAMED_VALUE_END
 };
 
