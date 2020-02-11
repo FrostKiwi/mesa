@@ -40,6 +40,8 @@ clc_compiler_test = executable('clc_compiler_test', 'clc_compiler_test.cpp',
   link_with : [libclc_compiler],
   dependencies : [idep_gtest])
 
+test('clc_compiler_test', clc_compiler_test)
+
 test('clc_nir_to_dxil',
   executable(
    'clc_nir_to_dxil_test',
