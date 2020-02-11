@@ -277,13 +277,11 @@ fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
 static const struct dxil_mdnode *
 get_input_signature(struct dxil_module *mod, nir_shader *s)
 {
-   unsigned record_id = 0;
-   unsigned num_inputs = exec_list_length(&s->inputs);
-   if (!num_inputs)
+   if (exec_list_is_empty(&s->inputs))
       return NULL;
 
-   struct dxil_mdnode **inputs = malloc(sizeof(const struct dxil_mdnode *) * num_inputs);
-
+   const struct dxil_mdnode *inputs[64];
+   unsigned num_inputs = 0;
    nir_foreach_variable(var, &s->inputs) {
       char semantic_name[64] = "";
        enum dxil_semantic_kind semantic_kind;
@@ -295,40 +293,36 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
          interpolation = get_interpolation(var->data.interpolation);
       }
       uint8_t columns = (uint8_t)glsl_get_components(var->type);
-      inputs[record_id] = fill_SV_param_nodes(mod, record_id, semantic_name,
+      inputs[num_inputs] = fill_SV_param_nodes(mod, num_inputs, semantic_name,
                                               semantic_kind, columns, interpolation);
 
-      mod->inputs[record_id].name = strdup(semantic_name);
-      struct dxil_signature_element *elm = &mod->inputs[record_id].sig;
+      mod->inputs[num_inputs].name = strdup(semantic_name);
+      struct dxil_signature_element *elm = &mod->inputs[num_inputs].sig;
 
-      fill_signature_element(elm, semantic_kind, var, record_id);
+      fill_signature_element(elm, semantic_kind, var, num_inputs);
 
-      struct dxil_psv_signature_element *psv_elm = &mod->psv_inputs[record_id];
-      if (!fill_psv_signature_element(psv_elm, record_id, semantic_kind, var, columns,
+      struct dxil_psv_signature_element *psv_elm = &mod->psv_inputs[num_inputs];
+      if (!fill_psv_signature_element(psv_elm, num_inputs, semantic_kind, var, columns,
                                       interpolation, elm->comp_type,
                                       semantic_name, mod))
          return NULL;
 
-      ++record_id;
+      ++num_inputs;
+      assert(num_inputs < ARRAY_SIZE(inputs));
    }
-   assert(record_id == num_inputs);
    mod->num_sig_inputs = num_inputs;
    const struct dxil_mdnode *retval = dxil_get_metadata_node(mod, inputs, num_inputs);
-   free(inputs);
    return retval;
 }
 
 static const struct dxil_mdnode *
 get_output_signature(struct dxil_module *mod, nir_shader *s)
 {
-   unsigned record_id = 0;
-   unsigned num_outputs = exec_list_length(&s->outputs);
-   if (!num_outputs)
+   if (exec_list_is_empty(&s->outputs))
       return NULL;
 
-   struct dxil_mdnode **outputs = malloc(sizeof(const struct dxil_mdnode *) * num_outputs);
-
-
+   const struct dxil_mdnode *outputs[64];
+   unsigned num_outputs = 0;
    nir_foreach_variable(var, &s->outputs) {
       enum dxil_semantic_kind semantic_kind;
       char semantic_name[64] = "";
@@ -344,28 +338,27 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
 
       mod->info.has_out_position |= semantic_kind == DXIL_SEM_POSITION;
 
-      outputs[record_id] = fill_SV_param_nodes(mod, record_id, semantic_name,
+      outputs[num_outputs] = fill_SV_param_nodes(mod, num_outputs, semantic_name,
                                                semantic_kind, columns, interpolation);
-      mod->outputs[record_id].name = strdup(semantic_name);
-      struct dxil_signature_element *elm = &mod->outputs[record_id].sig;
-      fill_signature_element(elm, semantic_kind, var, record_id);
+      mod->outputs[num_outputs].name = strdup(semantic_name);
+      struct dxil_signature_element *elm = &mod->outputs[num_outputs].sig;
+      fill_signature_element(elm, semantic_kind, var, num_outputs);
 
       /* This is fishy, logic suggests that the LHS should be 0xf, but from the
        * validation it needs to be 0xff */
       elm->never_writes_mask = 0xff & ~elm->mask;
 
-      struct dxil_psv_signature_element *psv_elm = &mod->psv_outputs[record_id];
-      if (!fill_psv_signature_element(psv_elm, record_id, semantic_kind, var, columns,
+      struct dxil_psv_signature_element *psv_elm = &mod->psv_outputs[num_outputs];
+      if (!fill_psv_signature_element(psv_elm, num_outputs, semantic_kind, var, columns,
                                       interpolation, (uint8_t)elm->comp_type,
                                       semantic_name, mod))
          return NULL;
 
-      ++record_id;
+      ++num_outputs;
+      assert(num_outputs < ARRAY_SIZE(outputs));
    }
-   assert(record_id == num_outputs);
 
    const struct dxil_mdnode *retval = dxil_get_metadata_node(mod, outputs, num_outputs);
-   free(outputs);
    mod->num_sig_outputs = num_outputs;
    return retval;
 }
