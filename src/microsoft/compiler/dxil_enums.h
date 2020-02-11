@@ -204,10 +204,6 @@ enum overload_type {
    DXIL_NUM_OVERLOADS
 };
 
-enum dxil_output_id {
-   DXIL_PSOUTPUT_COLOR0 = 5,
-};
-
 enum dxil_attr_kind {
    DXIL_ATTR_KIND_NONE = 0,
    DXIL_ATTR_KIND_NO_UNWIND = 18,
