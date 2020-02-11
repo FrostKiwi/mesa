@@ -61,12 +61,20 @@ private:
    static bool m_initialized;
 };
 
+static bool copy_char_skip_double_ws(stringstream &os, char c, bool last_was_ws);
+
 void NirToDXILTest::run(const string& in_shader, const string& dxil_expect) const
 {
    glsl_type_singleton_init_or_ref();
 
    nir_shader* shader = nir_shader_from_string(in_shader.c_str(), &nir_options);
    ASSERT_TRUE(shader != nullptr);
+
+   stringstream dxil_expect_condesed;
+   bool last_was_ws = false;
+   for (auto c: dxil_expect) {
+      last_was_ws = copy_char_skip_double_ws(dxil_expect_condesed, c, last_was_ws);
+   }
 
    struct blob tmp;
    bool convert_success = nir_to_dxil(shader, &tmp);
@@ -79,7 +87,7 @@ void NirToDXILTest::run(const string& in_shader, const string& dxil_expect) cons
    bool dissasamble_success = compiler->disassamble(&tmp, dxil_disass);
    ASSERT_TRUE(dissasamble_success);
 
-   EXPECT_EQ(dxil_disass, dxil_expect);
+   EXPECT_EQ(dxil_disass, dxil_expect_condesed.str());
 
    bool validate_success = compiler->validate(&tmp);
    ASSERT_TRUE(validate_success);
@@ -131,13 +139,17 @@ bool DXILCompiler::disassamble(blob *data,
 
    bool in_comment = false;
    bool linestart = true;
+   bool last_was_ws = false;
    while (*c) {
-
       if (!in_comment) {
          if (linestart && ((*c == ';') || (*c == '!' && c[1] == '0'))) {
                in_comment = true;
          } else {
-            os << *c;
+            /* condense ws */
+            bool is_ws = isspace(*c);
+            if (!(is_ws && last_was_ws))
+                os << *c;
+            last_was_ws = is_ws;
          }
       }
 
@@ -204,6 +216,15 @@ DXILCompiler *DXILCompiler::instance()
       m_initialized = true;
    }
    return &me;
+}
+
+static bool
+copy_char_skip_double_ws(stringstream &os, char c, bool last_was_ws)
+{
+   bool retval = isspace(c);
+   if (!(retval && last_was_ws))
+       os << c;
+   return retval;
 }
 
 ComPtr<IDxcLibrary> DXILCompiler::m_library;
