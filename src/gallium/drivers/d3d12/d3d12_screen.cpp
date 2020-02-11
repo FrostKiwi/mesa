@@ -176,6 +176,9 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
       return 1;
 #endif
 
+   case PIPE_CAP_TGSI_TEXCOORD:
+      return 1;
+
    case PIPE_CAP_MIXED_COLORBUFFER_FORMATS:
       return 1;
 
