@@ -1073,6 +1073,10 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_ixor: return emit_binop(ctx, alu, DXIL_BINOP_XOR, src[0], src[1]);
    case nir_op_ffma: return emit_tertiary(ctx, alu, DXIL_FFMA, src[0], src[1], src[2]);
    case nir_op_ine:  return emit_cmp(ctx, alu, DXIL_ICMP_NE, src[0], src[1]);
+   case nir_op_ige:  return emit_cmp(ctx, alu, DXIL_ICMP_SGE, src[0], src[1]);
+   case nir_op_uge:  return emit_cmp(ctx, alu, DXIL_ICMP_UGE, src[0], src[1]);
+   case nir_op_ilt:  return emit_cmp(ctx, alu, DXIL_ICMP_SLT, src[0], src[1]);
+   case nir_op_ult:  return emit_cmp(ctx, alu, DXIL_ICMP_ULT, src[0], src[1]);
    case nir_op_bcsel: {
          const struct dxil_value *v = dxil_emit_select(&ctx->mod, src[0],
                                                        src[1], src[2]);
