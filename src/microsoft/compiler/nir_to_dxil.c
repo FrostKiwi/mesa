@@ -226,6 +226,19 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
    return dxil_get_metadata_node(m, fields, ARRAY_SIZE(fields));
 }
 
+static const struct dxil_mdnode *
+emit_cbv_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
+                  const char *name, unsigned size)
+{
+   const struct dxil_mdnode *fields[8];
+
+   fill_resource_metadata(m, fields, struct_type, name);
+   fields[6] = dxil_get_metadata_int32(m, size); // constant buffer size
+   fields[7] = NULL; // metadata
+
+   return dxil_get_metadata_node(m, fields, ARRAY_SIZE(fields));
+}
+
 static const struct dxil_type *
 get_glsl_basetype(struct dxil_module *m, enum glsl_base_type type)
 {
@@ -261,6 +274,7 @@ get_glsl_type(struct dxil_module *m, const struct glsl_type *type)
 
 
 #define MAX_UAVS 64
+#define MAX_CBVS 64 // ??
 
 struct dxil_def {
    const struct dxil_value *chans[NIR_MAX_VEC_COMPONENTS];
@@ -274,6 +288,10 @@ struct ntd_context {
    const struct dxil_mdnode *uav_metadata_nodes[MAX_UAVS];
    const struct dxil_value *uav_handles[MAX_UAVS];
    unsigned num_uavs;
+
+   const struct dxil_mdnode *cbv_metadata_nodes[MAX_CBVS];
+   const struct dxil_value *cbv_handles[MAX_CBVS];
+   unsigned num_cbvs;
 
    struct dxil_resource resources[MAX_UAVS];
    unsigned num_resources;
@@ -523,6 +541,52 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
    return true;
 }
 
+static unsigned get_dword_size(const struct glsl_type *type)
+{
+   unsigned factor = 1;
+   if (glsl_type_is_array(type)) {
+      factor = glsl_get_aoa_size(type);
+      type = glsl_without_array(type);
+   }
+   return (factor * glsl_get_components(type));
+}
+
+static bool
+emit_cbv(struct ntd_context *ctx, nir_variable *var)
+{
+   assert(ctx->num_cbvs < ARRAY_SIZE(ctx->cbv_metadata_nodes));
+   assert(ctx->num_cbvs < ARRAY_SIZE(ctx->cbv_handles));
+   assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
+
+   unsigned size = get_dword_size(var->type);
+
+   const struct dxil_type *float32 = dxil_module_get_float_type(&ctx->mod, 32);
+   const struct dxil_type *buffer_type = dxil_module_get_homogeneous_struct_type(&ctx->mod, var->name,
+                                                                                 float32, size);
+   const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
+                                                          var->name, size * 4);
+
+   if (!cbv_meta)
+      return false;
+
+   ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
+
+   ctx->resources[ctx->num_resources].resource_type = DXIL_RES_CBV;
+   ctx->resources[ctx->num_resources].space = 0;
+   ctx->resources[ctx->num_resources].lower_bound = 0;
+   ctx->resources[ctx->num_resources].upper_bound = 0;
+   ctx->num_resources++;
+
+   const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_CBV, 0, 0, false);
+   if (!handle)
+      return false;
+
+   ctx->cbv_handles[ctx->num_cbvs] = handle;
+   ctx->num_cbvs++;
+
+   return true;
+}
+
 static const struct dxil_mdnode *
 emit_threads(struct ntd_context *ctx, nir_shader *s)
 {
@@ -597,6 +661,11 @@ emit_resources(struct ntd_context *ctx)
 
    if (ctx->num_uavs) {
       resources_nodes[1] = dxil_get_metadata_node(&ctx->mod, ctx->uav_metadata_nodes, ctx->num_uavs);
+      emit_resources = true;
+   }
+
+   if (ctx->num_cbvs) {
+      resources_nodes[2] = dxil_get_metadata_node(&ctx->mod, ctx->cbv_metadata_nodes, ctx->num_cbvs);
       emit_resources = true;
    }
 
