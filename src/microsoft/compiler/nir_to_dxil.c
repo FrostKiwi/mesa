@@ -440,14 +440,7 @@ emit_createhandle_call(struct ntd_context *ctx,
                        const struct dxil_value *resource_range_index,
                        const struct dxil_value *non_uniform_resource_index)
 {
-   const struct dxil_func *func =
-         dxil_get_function(&ctx->mod, "dx.op.createHandle", DXIL_NONE);
-
-   if (!func)
-         return NULL;
-
-   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
-      DXIL_INTR_CREATE_HANDLE);
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CREATE_HANDLE);
    if (!opcode)
       return NULL;
 
@@ -459,7 +452,33 @@ emit_createhandle_call(struct ntd_context *ctx,
       non_uniform_resource_index
    };
 
+   const struct dxil_func *func =
+         dxil_get_function(&ctx->mod, "dx.op.createHandle", DXIL_NONE);
+
+   if (!func)
+         return NULL;
+
    return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static const struct dxil_value *
+emit_createhandle_call_from_values(struct ntd_context *ctx,
+                                   enum dxil_resource_class resource_class,
+                                   unsigned resource_range_id,
+                                   unsigned resource_range_index,
+                                   bool non_uniform_resource_index)
+{
+
+   const struct dxil_value *resource_class_value = dxil_module_get_int8_const(&ctx->mod, resource_class);
+   const struct dxil_value *resource_range_id_value = dxil_module_get_int32_const(&ctx->mod, resource_range_id);
+   const struct dxil_value *resource_range_index_value = dxil_module_get_int32_const(&ctx->mod, resource_range_index);
+   const struct dxil_value *non_uniform_resource_index_value = dxil_module_get_int1_const(&ctx->mod, non_uniform_resource_index);
+   if (!resource_class_value || !resource_range_id_value ||
+       !resource_range_index_value || !non_uniform_resource_index_value)
+      return NULL;
+
+   return emit_createhandle_call(ctx, resource_class_value, resource_range_id_value,
+                                 resource_range_index_value, non_uniform_resource_index_value);
 }
 
 static bool
@@ -496,17 +515,7 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
    ctx->resources[ctx->num_resources].upper_bound = 0;
    ctx->num_resources++;
 
-   const struct dxil_value *resource_class_value = dxil_module_get_int8_const(&ctx->mod, 1);
-   const struct dxil_value *resource_range_id_value = dxil_module_get_int32_const(&ctx->mod, 0);
-   const struct dxil_value *resource_range_index_value = dxil_module_get_int32_const(&ctx->mod, 0);
-   const struct dxil_value *non_uniform_resource_index_value = dxil_module_get_int1_const(&ctx->mod, false);
-   if (!resource_class_value || !resource_range_id_value ||
-       !resource_range_id_value || !non_uniform_resource_index_value)
-      return false;
-
-   const struct dxil_value *handle = emit_createhandle_call(ctx,
-      resource_class_value, resource_range_id_value,
-      resource_range_index_value, non_uniform_resource_index_value);
+   const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_UAV, 0, 0, false);
    if (!handle)
       return false;
 
