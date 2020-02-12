@@ -1908,6 +1908,15 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
                return false;
          }
          break;
+      case nir_var_mem_ubo:
+         if (!emit_cbv(ctx, var))
+            return false;
+         break;
+      case nir_var_uniform:
+         continue;
+      default:
+         debug_printf("Unsupported variable %s of type %s\n",
+                      var->name, glsl_get_type_name(var->type));
       }
    }
 
@@ -2282,6 +2291,8 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    ctx.mod.shader_kind = get_dxil_shader_kind(s);
    ctx.mod.major_version = 6;
    ctx.mod.minor_version = 1;
+
+   NIR_PASS_V(s, nir_lower_uniforms_to_ubo, 16);
 
    optimize_nir(s);
 
