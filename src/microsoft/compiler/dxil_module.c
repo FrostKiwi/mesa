@@ -534,6 +534,24 @@ dxil_module_get_array_type(struct dxil_module *m,
 }
 
 const struct dxil_type *
+dxil_module_get_homogeneous_struct_type(struct dxil_module *m,
+                                        const char *name,
+                                        const struct dxil_type *elem_type,
+                                        size_t num_elems)
+{
+   /* The number is based on the buffer size of 4k allocated as struct of 1024 float32 */
+   struct dxil_type *elem_types[1024];
+   const struct dxil_type *ret;
+   assert(num_elems <= 1024);
+
+   for (unsigned i = 0; i < num_elems; ++i)
+      elem_types[i] = (struct dxil_type *)elem_type;
+   ret = dxil_module_get_struct_type(m, name, elem_types, num_elems);
+
+   return ret;
+}
+
+const struct dxil_type *
 dxil_get_overload_type(struct dxil_module *mod, enum overload_type overload)
 {
    switch (overload) {
