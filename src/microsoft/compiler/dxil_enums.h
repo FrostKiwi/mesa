@@ -204,6 +204,13 @@ enum overload_type {
    DXIL_NUM_OVERLOADS
 };
 
+enum dxil_resource_class {
+   DXIL_RESOURCE_CLASS_SRV     = 0,
+   DXIL_RESOURCE_CLASS_UAV     = 1,
+   DXIL_RESOURCE_CLASS_CBV     = 2,
+   DXIL_RESOURCE_CLASS_SAMPLER = 3
+};
+
 enum dxil_attr_kind {
    DXIL_ATTR_KIND_NONE = 0,
    DXIL_ATTR_KIND_NO_UNWIND = 18,
