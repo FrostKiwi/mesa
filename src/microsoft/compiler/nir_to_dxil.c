@@ -188,43 +188,41 @@ enum dxil_intr {
    DXIL_INTR_ATTRIBUTE_AT_VERTEX = 137,
 };
 
+static void
+fill_resource_metadata(struct dxil_module *m, const struct dxil_mdnode **fields,
+                       const struct dxil_type *struct_type,
+                       const char *name)
+{
+   const struct dxil_type *pointer_type = dxil_module_get_pointer_type(m, struct_type);
+   const struct dxil_value *pointer_undef = dxil_module_get_undef(m, pointer_type);
+
+   fields[0] = dxil_get_metadata_int32(m, 0); // resource ID
+   fields[1] = dxil_get_metadata_value(m, pointer_type, pointer_undef); // global constant symbol
+   fields[2] = dxil_get_metadata_string(m, name ? name : ""); // name
+   fields[3] = dxil_get_metadata_int32(m, 0); // space ID
+   fields[4] = dxil_get_metadata_int32(m, 0); // lower bound
+   fields[5] = dxil_get_metadata_int32(m, 1); // range size
+}
+
 static const struct dxil_mdnode *
 emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
                   const char *name, enum dxil_component_type comp_type)
 {
-   const struct dxil_type *pointer_type = dxil_module_get_pointer_type(m, struct_type);
-   const struct dxil_value *pointer_undef = dxil_module_get_undef(m, pointer_type);
+   const struct dxil_mdnode *fields[11];
 
    const struct dxil_mdnode *buffer_element_type_tag = dxil_get_metadata_int32(m, DXIL_TYPED_BUFFER_ELEMENT_TYPE_TAG);
    const struct dxil_mdnode *element_type = dxil_get_metadata_int32(m, comp_type);
    const struct dxil_mdnode *metadata_tag_nodes[] = {
       buffer_element_type_tag, element_type
    };
-   const struct dxil_mdnode *metadata_tags = dxil_get_metadata_node(m, metadata_tag_nodes, ARRAY_SIZE(metadata_tag_nodes));
 
-   const struct dxil_mdnode *global_constant_symbol = dxil_get_metadata_value(m, pointer_type, pointer_undef);
-   const struct dxil_mdnode *name_node = dxil_get_metadata_string(m, name ? name : "");
-   const struct dxil_mdnode *resource_id = dxil_get_metadata_int32(m, 0);
-   const struct dxil_mdnode *bind_id = dxil_get_metadata_int32(m, 0);
-   const struct dxil_mdnode *bind_lower_bound = dxil_get_metadata_int32(m, 0);
-   const struct dxil_mdnode *bind_range = dxil_get_metadata_int32(m, 1);
-   const struct dxil_mdnode *uav_resource_shape = dxil_get_metadata_int32(m, 10);
-   const struct dxil_mdnode *globally_coherent = dxil_get_metadata_int1(m, false);
-   const struct dxil_mdnode *has_counter = dxil_get_metadata_int1(m, false);
-   const struct dxil_mdnode *is_rov = dxil_get_metadata_int1(m, false);
-   const struct dxil_mdnode *fields[] = {
-      resource_id, // for createHandle
-      global_constant_symbol,
-      name_node,
-      bind_id,
-      bind_lower_bound,
-      bind_range,
-      uav_resource_shape,
-      globally_coherent,
-      has_counter,
-      is_rov,
-      metadata_tags
-   };
+   fill_resource_metadata(m, fields, struct_type, name);
+   fields[6] = dxil_get_metadata_int32(m, 10); // resource shape
+   fields[7] = dxil_get_metadata_int1(m, false); // globally-coherent
+   fields[8] = dxil_get_metadata_int1(m, false); // has counter
+   fields[9] = dxil_get_metadata_int1(m, false); // is ROV
+   fields[10] = dxil_get_metadata_node(m, metadata_tag_nodes, ARRAY_SIZE(metadata_tag_nodes)); // metadata
+
    return dxil_get_metadata_node(m, fields, ARRAY_SIZE(fields));
 }
 
