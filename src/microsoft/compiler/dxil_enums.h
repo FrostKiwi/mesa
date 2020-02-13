@@ -194,6 +194,15 @@ enum dxil_interpolation_mode  {
   DXIL_INTERP_INVALID                     = 8
 };
 
+enum overload_type {
+   DXIL_NONE,
+   DXIL_I32,
+   DXIL_I64,
+   DXIL_F32,
+   DXIL_F64,
+   DXIL_NUM_OVERLOADS
+};
+
 enum dxil_output_id {
    DXIL_PSOUTPUT_COLOR0 = 5,
 };
@@ -205,6 +214,8 @@ extern "C" {
 enum dxil_component_type dxil_get_comp_type(const struct glsl_type *type);
 
 enum dxil_prog_sig_comp_type dxil_get_prog_sig_comp_type(const struct glsl_type *type);
+
+const char *dxil_overload_suffix( enum overload_type overload);
 
 #ifdef __cplusplus
 }
