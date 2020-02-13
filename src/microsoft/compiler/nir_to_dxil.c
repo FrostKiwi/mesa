@@ -25,6 +25,7 @@
 
 #include "dxil_module.h"
 #include "dxil_container.h"
+#include "dxil_function.h"
 #include "dxil_signature.h"
 #include "dxil_enums.h"
 
@@ -72,6 +73,7 @@ static const nir_shader_compiler_options
 nir_options = {
    .lower_negate = true,
    .lower_inot = true,
+   .fuse_ffma = true,
    .lower_isign = true,
    .lower_iabs = true,
    .lower_fmod = true,
@@ -1106,6 +1108,29 @@ emit_binop(struct ntd_context *ctx, nir_alu_instr *alu,
 }
 
 static bool
+emit_tertiary(struct ntd_context *ctx, nir_alu_instr *alu,
+              enum dxil_tertiary_opcode op,
+              const struct dxil_value *op0, const struct dxil_value *op1,
+              const struct dxil_value *op2)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod,
+                                             "dx.op.tertiary", DXIL_F32);
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, op);
+   const struct dxil_value *args[] = {
+      opcode, op0, op1, op2
+   };
+
+   const struct dxil_value *retval = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+   if (!retval)
+      return false;
+
+   store_dest(ctx, &alu->dest.dest, 0, retval, nir_type_float);
+   return true;
+}
+
+
+static bool
 emit_cmp(struct ntd_context *ctx, nir_alu_instr *alu,
          enum dxil_cmp_pred pred,
          const struct dxil_value *op0, const struct dxil_value *op1)
@@ -1345,6 +1370,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_iand: return emit_binop(ctx, alu, DXIL_BINOP_AND, src[0], src[1]);
    case nir_op_ior:  return emit_binop(ctx, alu, DXIL_BINOP_OR, src[0], src[1]);
    case nir_op_ixor: return emit_binop(ctx, alu, DXIL_BINOP_XOR, src[0], src[1]);
+   case nir_op_ffma: return emit_tertiary(ctx, alu, DXIL_FFMA, src[0], src[1], src[2]);
    case nir_op_ine:  return emit_cmp(ctx, alu, DXIL_ICMP_NE, src[0], src[1]);
    case nir_op_bcsel: {
          const struct dxil_value *v = dxil_emit_select(&ctx->mod, src[0],
