@@ -66,3 +66,18 @@ enum dxil_component_type dxil_get_comp_type(const struct glsl_type *type)
       unreachable("unexpected glsl type");
    }
 }
+
+static const char *overload_str[DXIL_NUM_OVERLOADS] = {
+   [DXIL_NONE] = "",
+   [DXIL_I32] = "i32",
+   [DXIL_I64] = "i64",
+   [DXIL_F32] = "f32",
+   [DXIL_F64] = "f64",
+};
+
+const char *dxil_overload_suffix( enum overload_type overload)
+{
+   assert(overload < DXIL_NUM_OVERLOADS);
+   return overload_str[overload];
+}
+
