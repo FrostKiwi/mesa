@@ -276,21 +276,6 @@ struct dxil_def {
    const struct dxil_value *chans[NIR_MAX_VEC_COMPONENTS];
 };
 
-enum overload_type {
-   I32,
-   I64,
-   F32,
-   F64,
-   NUM_OVERLOADS
-};
-
-static const char *overload_str[NUM_OVERLOADS] = {
-   [I32] = "i32",
-   [I64] = "i64",
-   [F32] = "f32",
-   [F64] = "f64",
-};
-
 struct ntd_context {
    struct dxil_module mod;
 
@@ -304,8 +289,8 @@ struct ntd_context {
    struct dxil_def *defs;
    unsigned num_defs;
 
-   const struct dxil_func *unary_funcs[NUM_OVERLOADS],
-                          *binary_funcs[NUM_OVERLOADS],
+   const struct dxil_func *unary_funcs[DXIL_NUM_OVERLOADS],
+                          *binary_funcs[DXIL_NUM_OVERLOADS],
                           *threadid_func,
                           *threadidingroup_func,
                           *groupid_func,
@@ -313,22 +298,9 @@ struct ntd_context {
                           *bufferstore_func,
                           *createhandle_func;
 
-   const struct dxil_func *store_output_func[NUM_OVERLOADS];
-   const struct dxil_func *load_input_func[NUM_OVERLOADS];
+   const struct dxil_func *store_output_func[DXIL_NUM_OVERLOADS];
+   const struct dxil_func *load_input_func[DXIL_NUM_OVERLOADS];
 };
-
-static const struct dxil_type *
-get_overload_type(struct ntd_context *ctx, enum overload_type overload)
-{
-   switch (overload) {
-   case I32: return dxil_module_get_int_type(&ctx->mod, 32);
-   case I64: return dxil_module_get_int_type(&ctx->mod, 64);
-   case F32: return dxil_module_get_float_type(&ctx->mod, 32);
-   case F64: return dxil_module_get_float_type(&ctx->mod, 64);
-   default:
-      unreachable("unexpected overload type");
-   }
-}
 
 static const struct dxil_value *
 emit_unary_call(struct ntd_context *ctx, enum overload_type overload,
@@ -337,7 +309,7 @@ emit_unary_call(struct ntd_context *ctx, enum overload_type overload,
 {
    if (!ctx->unary_funcs[overload]) {
       const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-      const struct dxil_type *type = get_overload_type(ctx, overload);
+      const struct dxil_type *type = dxil_get_overload_type(&ctx->mod, overload);
       if (!int32_type || !type)
          return NULL;
 
@@ -354,7 +326,7 @@ emit_unary_call(struct ntd_context *ctx, enum overload_type overload,
 
       char name[100];
       snprintf(name, ARRAY_SIZE(name), "dx.op.unary.%s",
-               overload_str[overload]);
+               dxil_overload_suffix(overload));
 
       ctx->unary_funcs[overload] = dxil_add_function_decl(&ctx->mod,
          name, func_type, DXIL_ATTR_KIND_READ_NONE);
@@ -382,7 +354,7 @@ emit_binary_call(struct ntd_context *ctx, enum overload_type overload,
 {
    if (!ctx->binary_funcs[overload]) {
       const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-      const struct dxil_type *type = get_overload_type(ctx, overload);
+      const struct dxil_type *type = dxil_get_overload_type(&ctx->mod, overload);
       if (!int32_type || !type)
          return NULL;
 
@@ -400,7 +372,7 @@ emit_binary_call(struct ntd_context *ctx, enum overload_type overload,
 
       char name[100];
       snprintf(name, ARRAY_SIZE(name), "dx.op.binary.%s",
-               overload_str[overload]);
+               dxil_overload_suffix(overload));
 
       ctx->binary_funcs[overload] = dxil_add_function_decl(&ctx->mod, name,
          func_type, DXIL_ATTR_KIND_READ_NONE);
@@ -427,7 +399,7 @@ allocate_store_output_func(struct ntd_context *ctx, enum overload_type overload)
 {
    const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_type *int8_type = dxil_module_get_int_type(&ctx->mod, 8);
-   const struct dxil_type *var_type = get_overload_type(ctx, overload);
+   const struct dxil_type *var_type = dxil_get_overload_type(&ctx->mod, overload);
    const struct dxil_type *void_type = dxil_module_get_void_type(&ctx->mod);
    if (!int32_type || !var_type || !int8_type || !void_type) {
       return false;
@@ -451,7 +423,7 @@ allocate_store_output_func(struct ntd_context *ctx, enum overload_type overload)
 
    char name[100];
    snprintf(name, ARRAY_SIZE(name), "dx.op.storeOutput.%s",
-            overload_str[overload]);
+            dxil_overload_suffix(overload));
 
    ctx->store_output_func[overload] = dxil_add_function_decl(&ctx->mod, name,
       func_type, DXIL_ATTR_KIND_NO_UNWIND);
@@ -467,7 +439,7 @@ allocate_load_input_func(struct ntd_context *ctx, enum overload_type overload)
 {
    const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_type *int8_type = dxil_module_get_int_type(&ctx->mod, 8);
-   const struct dxil_type *return_type = get_overload_type(ctx, overload);
+   const struct dxil_type *return_type = dxil_get_overload_type(&ctx->mod, overload);
 
    if (!int32_type || !int8_type || !return_type) {
       return false;
@@ -491,7 +463,7 @@ allocate_load_input_func(struct ntd_context *ctx, enum overload_type overload)
 
    char name[100];
    snprintf(name, ARRAY_SIZE(name), "dx.op.loadInput.%s",
-            overload_str[overload]);
+            dxil_overload_suffix(overload));
 
    ctx->load_input_func[overload] = dxil_add_function_decl(&ctx->mod, name,
       func_type,  DXIL_ATTR_KIND_READ_NONE);
@@ -1266,15 +1238,15 @@ get_overload(nir_alu_type alu_type, unsigned bit_size)
    case nir_type_int:
    case nir_type_uint:
       switch (bit_size) {
-      case 32: return I32;
-      case 64: return I64;
+      case 32: return DXIL_I32;
+      case 64: return DXIL_I64;
       default:
          unreachable("unexpected bit_size");
       }
    case nir_type_float:
       switch (bit_size) {
-      case 32: return F32;
-      case 64: return F64;
+      case 32: return DXIL_F32;
+      case 64: return DXIL_F64;
       default:
          unreachable("unexpected bit_size");
       }
@@ -1564,10 +1536,10 @@ emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 
    assert(output->data.mode == nir_var_shader_out);
 
-   if (!ctx->store_output_func[F32] &&
-       !allocate_store_output_func(ctx, F32)) {
+   if (!ctx->store_output_func[DXIL_F32] &&
+       !allocate_store_output_func(ctx, DXIL_F32)) {
       debug_printf("%s: Unable to allocate storeOutput.%s function\n",
-                   __func__, overload_str[F32]);
+                   __func__, dxil_overload_suffix(DXIL_F32));
       return false;
    }
 
@@ -1584,7 +1556,7 @@ emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
          const struct dxil_value *args[] = {
             dest, loc, unknown, comp, value
          };
-         success &= dxil_emit_call_void(&ctx->mod, ctx->store_output_func[F32], args, ARRAY_SIZE(args));
+         success &= dxil_emit_call_void(&ctx->mod, ctx->store_output_func[DXIL_F32], args, ARRAY_SIZE(args));
       }
    }
    return success;
@@ -1598,10 +1570,10 @@ emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 
    assert(input->data.mode == nir_var_shader_in);
 
-   if (!ctx->load_input_func[F32] &&
-       !allocate_load_input_func(ctx, F32)) {
+   if (!ctx->load_input_func[DXIL_F32] &&
+       !allocate_load_input_func(ctx, DXIL_F32)) {
       debug_printf("%s: Unable to allocate loadInput.%s function\n",
-                   __func__, overload_str[F32]);
+                   __func__, dxil_overload_suffix(DXIL_F32));
       return false;
    }
 
@@ -1618,7 +1590,7 @@ emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
          opcode, input_id, row, comp, vertex_id
       };
 
-      const struct dxil_value *retval = dxil_emit_call(&ctx->mod, ctx->load_input_func[F32], args, ARRAY_SIZE(args));
+      const struct dxil_value *retval = dxil_emit_call(&ctx->mod, ctx->load_input_func[DXIL_F32], args, ARRAY_SIZE(args));
       if (!retval)
          return false;
       store_dest(ctx, &intr->dest, i, retval, nir_type_float);
