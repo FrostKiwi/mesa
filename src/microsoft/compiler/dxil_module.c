@@ -26,6 +26,7 @@
 #include "util/macros.h"
 #include "util/u_math.h"
 #include "util/u_memory.h"
+#include "util/rb_tree.h"
 
 #include <assert.h>
 
@@ -45,11 +46,16 @@ dxil_module_init(struct dxil_module *m)
    list_inithead(&m->instr_list);
    list_inithead(&m->mdnode_list);
    list_inithead(&m->md_named_node_list);
+
+   m->functions = rzalloc(NULL, struct rb_tree);
+   rb_tree_init(m->functions);
 }
 
 void
 dxil_module_release(struct dxil_module *m)
 {
+   ralloc_free(m->functions);
+
    for (unsigned i = 0; i < m->num_sig_inputs; ++i) {
       if (m->inputs[i].name)
          free(m->inputs[i].name);
