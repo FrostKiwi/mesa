@@ -2091,6 +2091,7 @@ struct dxil_instr {
       INSTR_CMP,
       INSTR_SELECT,
       INSTR_CAST,
+      INSTR_BR,
       INSTR_CALL,
       INSTR_RET,
       INSTR_EXTRACTVAL,
@@ -2116,6 +2117,11 @@ struct dxil_instr {
          const struct dxil_type *type;
          const struct dxil_value *value;
       } cast;
+
+      struct {
+         const struct dxil_value *cond;
+         unsigned succ[2];
+      } br;
 
       struct {
          const struct dxil_func *func;
@@ -2214,6 +2220,20 @@ dxil_emit_cast(struct dxil_module *m, enum dxil_cast_opcode opcode,
    instr->cast.value = value;
    instr->has_value = true;
    return &instr->value;
+}
+
+bool
+dxil_emit_branch(struct dxil_module *m, const struct dxil_value *cond,
+                 unsigned true_block, unsigned false_block)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_BR);
+   if (!instr)
+      return false;
+
+   instr->br.cond = cond;
+   instr->br.succ[0] = true_block;
+   instr->br.succ[1] = false_block;
+   return true;
 }
 
 static struct dxil_instr *
@@ -2354,6 +2374,26 @@ emit_cast(struct dxil_module *m, struct dxil_instr *instr)
                                   data, ARRAY_SIZE(data));
 }
 
+bool
+emit_branch(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_BR);
+   if (!instr->br.cond) {
+      /* unconditional branch */
+      uint64_t succ = instr->br.succ[0];
+      return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_BR, &succ, 1);
+   }
+   /* conditional branch */
+   assert(instr->value.id > instr->br.cond->id);
+   uint64_t data[] = {
+      instr->br.succ[0],
+      instr->br.succ[1],
+      instr->value.id - instr->br.cond->id
+   };
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_BR,
+                                data, ARRAY_SIZE(data));
+}
+
 static bool
 emit_extractval(struct dxil_module *m, struct dxil_instr *instr)
 {
@@ -2428,6 +2468,9 @@ emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 
    case INSTR_CAST:
       return emit_cast(m, instr);
+
+   case INSTR_BR:
+      return emit_branch(m, instr);
 
    case INSTR_CALL:
       return emit_call(m, instr);
