@@ -610,3 +610,23 @@ TEST(types, char_basics)
    };
    ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
+
+TEST(types, if_statement)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *output)\n\
+   {\n\
+       int idx = get_global_id(0);\n\
+       if (idx > 0)\n\
+           output[idx] = ~idx;\n\
+       else\n\
+           output[0] = 0xff;\n\
+   }\n";
+   const uint32_t input[] = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+   };
+   const uint32_t expected[] = {
+      0xff, ~1u, ~2u, ~3u
+   };
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+}
