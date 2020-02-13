@@ -1467,6 +1467,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    nir_function_impl *entry = nir_shader_get_entrypoint(s);
    nir_metadata_require(entry, nir_metadata_block_index);
+   ctx->mod.num_basic_blocks = entry->num_blocks;
 
    ctx->defs = malloc(sizeof(struct dxil_def) * entry->ssa_alloc);
    if (!ctx->defs)

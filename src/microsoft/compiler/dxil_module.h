@@ -204,6 +204,10 @@ struct dxil_module {
    const struct dxil_type *float32_type, *float64_type;
 
    struct rb_tree *functions;
+
+   size_t num_basic_blocks; /* not the same as num_blocks; this one is
+                               the number of basic-blocks, and the other
+                               one is bitcode-blocks */
 };
 
 void

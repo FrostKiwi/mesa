@@ -49,6 +49,8 @@ dxil_module_init(struct dxil_module *m)
 
    m->functions = rzalloc(NULL, struct rb_tree);
    rb_tree_init(m->functions);
+
+   m->num_basic_blocks = 1;
 }
 
 void
@@ -2445,7 +2447,7 @@ static bool
 emit_function(struct dxil_module *m)
 {
    if (!enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
-       !emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, 1))
+       !emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, m->num_basic_blocks))
       return false;
 
    list_for_each_entry(struct dxil_instr, instr, &m->instr_list, head) {
