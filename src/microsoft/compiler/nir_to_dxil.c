@@ -300,7 +300,6 @@ struct ntd_context {
                           *bufferstore_func,
                           *createhandle_func;
 
-   const struct dxil_func *store_output_func[DXIL_NUM_OVERLOADS];
    const struct dxil_func *load_input_func[DXIL_NUM_OVERLOADS];
 };
 
@@ -396,45 +395,6 @@ emit_binary_call(struct ntd_context *ctx, enum overload_type overload,
                          args, ARRAY_SIZE(args));
 }
 
-static bool
-allocate_store_output_func(struct ntd_context *ctx, enum overload_type overload)
-{
-   const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-   const struct dxil_type *int8_type = dxil_module_get_int_type(&ctx->mod, 8);
-   const struct dxil_type *var_type = dxil_get_overload_type(&ctx->mod, overload);
-   const struct dxil_type *void_type = dxil_module_get_void_type(&ctx->mod);
-   if (!int32_type || !var_type || !int8_type || !void_type) {
-      return false;
-   }
-
-   const struct dxil_type *arg_types[] = {
-      int32_type,
-      int32_type,
-      int32_type,
-      int8_type,
-      var_type
-   };
-
-   const struct dxil_type *func_type =
-      dxil_module_add_function_type(&ctx->mod, void_type,
-                                    arg_types, ARRAY_SIZE(arg_types));
-   if (!func_type) {
-      fprintf(stderr, "%s: Func type allocation failed\n", __func__);
-      return false;
-   }
-
-   char name[100];
-   snprintf(name, ARRAY_SIZE(name), "dx.op.storeOutput.%s",
-            dxil_overload_suffix(overload));
-
-   ctx->store_output_func[overload] = dxil_add_function_decl(&ctx->mod, name,
-      func_type, DXIL_ATTR_KIND_NO_UNWIND);
-   if (!ctx->store_output_func[overload]) {
-      fprintf(stderr, "%s: Func decl failed\n", __func__);
-      return false;
-   }
-   return true;
-}
 
 static bool
 allocate_load_input_func(struct ntd_context *ctx, enum overload_type overload)
@@ -1562,12 +1522,10 @@ emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 
    assert(output->data.mode == nir_var_shader_out);
 
-   if (!ctx->store_output_func[DXIL_F32] &&
-       !allocate_store_output_func(ctx, DXIL_F32)) {
-      debug_printf("%s: Unable to allocate storeOutput.%s function\n",
-                   __func__, dxil_overload_suffix(DXIL_F32));
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.storeOutput", DXIL_F32);
+
+   if (!func)
       return false;
-   }
 
    const struct dxil_value *dest = dxil_module_get_int32_const(&ctx->mod, DXIL_PSOUTPUT_COLOR0);
    const struct dxil_value *loc = dxil_module_get_int32_const(&ctx->mod, (int)output->data.driver_location);
@@ -1582,7 +1540,7 @@ emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
          const struct dxil_value *args[] = {
             dest, loc, unknown, comp, value
          };
-         success &= dxil_emit_call_void(&ctx->mod, ctx->store_output_func[DXIL_F32], args, ARRAY_SIZE(args));
+         success &= dxil_emit_call_void(&ctx->mod, func, args, ARRAY_SIZE(args));
       }
    }
    return success;
