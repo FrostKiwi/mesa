@@ -299,8 +299,6 @@ struct ntd_context {
                           *bufferload_func,
                           *bufferstore_func,
                           *createhandle_func;
-
-   const struct dxil_func *load_input_func[DXIL_NUM_OVERLOADS];
 };
 
 static const struct dxil_value *
@@ -393,47 +391,6 @@ emit_binary_call(struct ntd_context *ctx, enum overload_type overload,
 
    return dxil_emit_call(&ctx->mod, ctx->binary_funcs[overload],
                          args, ARRAY_SIZE(args));
-}
-
-
-static bool
-allocate_load_input_func(struct ntd_context *ctx, enum overload_type overload)
-{
-   const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-   const struct dxil_type *int8_type = dxil_module_get_int_type(&ctx->mod, 8);
-   const struct dxil_type *return_type = dxil_get_overload_type(&ctx->mod, overload);
-
-   if (!int32_type || !int8_type || !return_type) {
-      return false;
-   }
-
-   const struct dxil_type *arg_types[] = {
-      int32_type,
-      int32_type,
-      int32_type,
-      int8_type,
-      int32_type,
-   };
-
-   const struct dxil_type *func_type =
-      dxil_module_add_function_type(&ctx->mod, return_type,
-                                    arg_types, ARRAY_SIZE(arg_types));
-   if (!func_type) {
-      fprintf(stderr, "%s: Func type allocation failed\n", __func__);
-      return false;
-   }
-
-   char name[100];
-   snprintf(name, ARRAY_SIZE(name), "dx.op.loadInput.%s",
-            dxil_overload_suffix(overload));
-
-   ctx->load_input_func[overload] = dxil_add_function_decl(&ctx->mod, name,
-      func_type,  DXIL_ATTR_KIND_READ_NONE);
-   if (!ctx->load_input_func[overload]) {
-      fprintf(stderr, "%s: Func decl failed\n", __func__);
-      return false;
-   }
-   return true;
 }
 
 static const struct dxil_value *
@@ -1554,12 +1511,10 @@ emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 
    assert(input->data.mode == nir_var_shader_in);
 
-   if (!ctx->load_input_func[DXIL_F32] &&
-       !allocate_load_input_func(ctx, DXIL_F32)) {
-      debug_printf("%s: Unable to allocate loadInput.%s function\n",
-                   __func__, dxil_overload_suffix(DXIL_F32));
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.loadInput", DXIL_F32);
+
+   if (!func)
       return false;
-   }
 
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, 4);
    const struct dxil_value *input_id = dxil_module_get_int32_const(&ctx->mod, (int)input->data.driver_location);
@@ -1574,7 +1529,7 @@ emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
          opcode, input_id, row, comp, vertex_id
       };
 
-      const struct dxil_value *retval = dxil_emit_call(&ctx->mod, ctx->load_input_func[DXIL_F32], args, ARRAY_SIZE(args));
+      const struct dxil_value *retval = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
       if (!retval)
          return false;
       store_dest(ctx, &intr->dest, i, retval, nir_type_float);
