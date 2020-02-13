@@ -1773,6 +1773,9 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    ctx.mod.major_version = 6;
    ctx.mod.minor_version = 0;
 
+   if (s->info.stage == MESA_SHADER_KERNEL)
+      NIR_PASS_V(s, nir_lower_goto_ifs);
+
    NIR_PASS_V(s, nir_lower_variable_initializers, nir_var_function_temp);
    NIR_PASS_V(s, nir_lower_returns);
    NIR_PASS_V(s, nir_inline_functions);
