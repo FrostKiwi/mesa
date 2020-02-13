@@ -1433,12 +1433,78 @@ emit_block(struct ntd_context *ctx, struct nir_block *block)
 }
 
 static bool
+emit_cf_list(struct ntd_context *ctx, struct exec_list *list);
+
+static bool
+emit_cond_branch(struct ntd_context *ctx, const struct dxil_value *cond,
+                 int true_block, int false_block)
+{
+   assert(cond);
+   assert(true_block >= 0);
+   assert(false_block >= 0);
+   return dxil_emit_branch(&ctx->mod, cond, true_block, false_block);
+}
+
+static bool
+emit_branch(struct ntd_context *ctx, int block)
+{
+   assert(block >= 0);
+   return dxil_emit_branch(&ctx->mod, NULL, block, -1);
+}
+
+static bool
+emit_if(struct ntd_context *ctx, struct nir_if *if_stmt)
+{
+   assert(nir_src_num_components(if_stmt->condition) == 1);
+   const struct dxil_value *cond = get_src(ctx, &if_stmt->condition, 0,
+                                           nir_type_bool);
+
+   /* prepare blocks */
+   nir_block *then_block = nir_if_first_then_block(if_stmt);
+   assert(nir_if_last_then_block(if_stmt)->successors[0]);
+   assert(!nir_if_last_then_block(if_stmt)->successors[1]);
+   int then_succ = nir_if_last_then_block(if_stmt)->successors[0]->index;
+
+   nir_block *else_block = NULL;
+   int else_succ = -1;
+   if (!exec_list_is_empty(&if_stmt->else_list)) {
+      else_block = nir_if_first_else_block(if_stmt);
+      assert(nir_if_last_else_block(if_stmt)->successors[0]);
+      assert(!nir_if_last_else_block(if_stmt)->successors[1]);
+      else_succ = nir_if_last_else_block(if_stmt)->successors[0]->index;
+   }
+
+   if (!emit_cond_branch(ctx, cond, then_block->index,
+                         else_block ? else_block->index : then_succ))
+      return false;
+
+   /* handle then-block */
+   if (!emit_cf_list(ctx, &if_stmt->then_list) ||
+       !emit_branch(ctx, then_succ))
+      return false;
+
+   if (else_block) {
+      /* handle else-block */
+      if (!emit_cf_list(ctx, &if_stmt->else_list) ||
+          !emit_branch(ctx, else_succ))
+         return false;
+   }
+
+   return true;
+}
+
+static bool
 emit_cf_list(struct ntd_context *ctx, struct exec_list *list)
 {
    foreach_list_typed(nir_cf_node, node, node, list) {
       switch (node->type) {
       case nir_cf_node_block:
          if (!emit_block(ctx, nir_cf_node_as_block(node)))
+            return false;
+         break;
+
+      case nir_cf_node_if:
+         if (!emit_if(ctx, nir_cf_node_as_if(node)))
             return false;
          break;
 
