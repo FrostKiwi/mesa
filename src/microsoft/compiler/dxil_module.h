@@ -233,6 +233,9 @@ dxil_module_get_pointer_type(struct dxil_module *m,
                              const struct dxil_type *target);
 
 const struct dxil_type *
+dxil_get_overload_type(struct dxil_module *mod, enum overload_type overload);
+
+const struct dxil_type *
 dxil_module_get_struct_type(struct dxil_module *m,
                             const char *name,
                             const struct dxil_type **elem_types,
