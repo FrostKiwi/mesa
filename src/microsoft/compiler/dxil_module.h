@@ -198,6 +198,8 @@ struct dxil_module {
    const struct dxil_type *void_type;
    const struct dxil_type *int1_type, *int8_type, *int32_type, *int64_type;
    const struct dxil_type *float32_type, *float64_type;
+
+   struct rb_tree *functions;
 };
 
 void
