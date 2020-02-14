@@ -349,6 +349,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    ID3D12RootSignature *root_sig = get_root_signature(ctx);
    ID3D12PipelineState *pipeline_state = get_gfx_pipeline_state(ctx, root_sig,
                                                                 u_reduced_prim(dinfo->mode));
+   assert(pipeline_state);
+
    ctx->cmdlist->SetGraphicsRootSignature(root_sig);
 
    ID3D12DescriptorHeap *heaps[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
