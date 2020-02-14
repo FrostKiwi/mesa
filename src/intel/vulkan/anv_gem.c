@@ -578,3 +578,45 @@ anv_gem_syncobj_wait(struct anv_device *device,
 
    return gen_ioctl(device->fd, DRM_IOCTL_SYNCOBJ_WAIT, &args);
 }
+
+int
+anv_gem_vm_bind(struct anv_device *device, uint64_t address,
+                uint32_t handle, uint32_t offset, uint64_t length)
+{
+   struct drm_i915_gem_vm_bind_va bind_va = {
+      .start = address,
+      .offset = offset,
+      .length = length,
+      .handle = handle,
+      .flags = 0,
+   };
+
+   struct drm_i915_gem_vm_bind bind = {
+      .vm_id = device->vm_id,
+      .num_vas = 1,
+      .vas_ptr = (uintptr_t)&bind_va,
+   };
+
+   return gen_ioctl(device->fd, DRM_IOCTL_I915_GEM_VM_BIND, &bind);
+}
+
+int
+anv_gem_vm_unbind(struct anv_device *device, uint64_t address,
+                  uint32_t handle, uint32_t offset, uint64_t length)
+{
+   struct drm_i915_gem_vm_bind_va bind_va = {
+      .start = address,
+      .offset = offset,
+      .length = length,
+      .handle = handle,
+      .flags = I915_GEM_VM_BIND_UNBIND,
+   };
+
+   struct drm_i915_gem_vm_bind bind = {
+      .vm_id = device->vm_id,
+      .num_vas = 1,
+      .vas_ptr = (uintptr_t)&bind_va,
+   };
+
+   return gen_ioctl(device->fd, DRM_IOCTL_I915_GEM_VM_BIND, &bind);
+}

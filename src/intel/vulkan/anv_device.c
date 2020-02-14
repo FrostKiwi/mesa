@@ -448,6 +448,9 @@ anv_physical_device_try_create(struct anv_instance *instance,
    device->use_softpin = device->has_softpin &&
                          device->supports_48bit_addresses;
 
+   device->use_vm_bind = device->use_softpin &&
+                         anv_gem_get_param(fd, I915_PARAM_HAS_SVM);
+
    device->has_context_isolation =
       anv_gem_get_param(fd, I915_PARAM_HAS_CONTEXT_ISOLATION);
 
@@ -2800,6 +2803,18 @@ VkResult anv_CreateDevice(
    if (device->context_id == -1) {
       result = vk_error(VK_ERROR_INITIALIZATION_FAILED);
       goto fail_fd;
+   }
+
+   if (device->physical->use_vm_bind) {
+      uint64_t vm_id;
+      if (anv_gem_get_context_param(device->fd, device->context_id,
+                                    I915_CONTEXT_PARAM_VM, &vm_id)) {
+         result = vk_error(VK_ERROR_INITIALIZATION_FAILED);
+         goto fail_fd;
+      }
+      device->vm_id = vm_id;
+   } else {
+      device->vm_id = 0;
    }
 
    result = anv_queue_init(device, &device->queue);

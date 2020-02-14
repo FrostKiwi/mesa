@@ -1083,6 +1083,7 @@ struct anv_physical_device {
     uint64_t                                    gtt_size;
 
     bool                                        use_softpin;
+    bool                                        use_vm_bind;
     bool                                        always_use_bindless;
 
     /** True if we can access buffers using A64 messages */
@@ -1317,6 +1318,7 @@ struct anv_device {
     struct gen_device_info                      info;
     struct isl_device                           isl_dev;
     int                                         context_id;
+    int                                         vm_id;
     int                                         fd;
     bool                                        can_chain_batches;
     bool                                        robust_buffer_access;
@@ -1576,6 +1578,10 @@ bool anv_gem_supports_syncobj_wait(int fd);
 int anv_gem_syncobj_wait(struct anv_device *device,
                          uint32_t *handles, uint32_t num_handles,
                          int64_t abs_timeout_ns, bool wait_all);
+int anv_gem_vm_bind(struct anv_device *device, uint64_t address,
+                    uint32_t handle, uint32_t offset, uint64_t length);
+int anv_gem_vm_unbind(struct anv_device *device, uint64_t address,
+                      uint32_t handle, uint32_t offset, uint64_t length);
 
 uint64_t anv_vma_alloc(struct anv_device *device,
                        uint64_t size, uint64_t align,

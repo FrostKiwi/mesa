@@ -246,3 +246,17 @@ anv_gem_reg_read(int fd, uint32_t offset, uint64_t *result)
 {
    unreachable("Unused");
 }
+
+void
+anv_gem_vm_bind(struct anv_device *device, uint64_t address,
+                uint32_t handle, uint32_t offset, uint64_t length)
+{
+   unreachable("Unused");
+}
+
+void
+anv_gem_vm_unbind(struct anv_device *device, uint64_t address,
+                  uint32_t handle, uint32_t offset, uint64_t length)
+{
+   unreachable("Unused");
+}

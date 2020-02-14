@@ -1565,7 +1565,8 @@ anv_bo_cache_finish(struct anv_bo_cache *cache)
     EXEC_OBJECT_ASYNC | \
     EXEC_OBJECT_SUPPORTS_48B_ADDRESS | \
     EXEC_OBJECT_PINNED | \
-    EXEC_OBJECT_CAPTURE)
+    EXEC_OBJECT_CAPTURE | \
+    EXEC_OBJECT_PERSISTENT)
 
 static uint32_t
 anv_bo_alloc_flags_to_bo_flags(struct anv_device *device,
@@ -1591,6 +1592,9 @@ anv_bo_alloc_flags_to_bo_flags(struct anv_device *device,
 
    if (pdevice->use_softpin)
       bo_flags |= EXEC_OBJECT_PINNED;
+
+   if (pdevice->use_vm_bind)
+      bo_flags |= EXEC_OBJECT_PERSISTENT;
 
    return bo_flags;
 }
@@ -1635,6 +1639,16 @@ anv_bo_vma_alloc_or_close(struct anv_device *device,
          anv_bo_finish(device, bo);
          return vk_errorf(device, NULL, VK_ERROR_OUT_OF_DEVICE_MEMORY,
                           "failed to allocate virtual address for BO");
+      }
+   }
+
+   if (device->physical->use_vm_bind) {
+      int ret = anv_gem_vm_bind(device, bo->offset, bo->gem_handle,
+                                0, bo->size + bo->_ccs_size);
+      if (ret) {
+         anv_bo_finish(device, bo);
+         return vk_errorf(device, NULL, VK_ERROR_OUT_OF_DEVICE_MEMORY,
+                          "failed bind the BO to its virtual address: %m");
       }
    }
 
@@ -1876,14 +1890,15 @@ anv_device_import_bo(struct anv_device *device,
       new_flags |= (bo->flags & bo_flags) & EXEC_OBJECT_SUPPORTS_48B_ADDRESS;
       new_flags |= (bo->flags | bo_flags) & EXEC_OBJECT_PINNED;
       new_flags |= (bo->flags | bo_flags) & EXEC_OBJECT_CAPTURE;
+      new_flags |= (bo->flags | bo_flags) & EXEC_OBJECT_PERSISTENT;
 
       /* It's theoretically possible for a BO to get imported such that it's
        * both pinned and not pinned.  The only way this can happen is if it
        * gets imported as both a semaphore and a memory object and that would
        * be an application error.  Just fail out in that case.
        */
-      if ((bo->flags & EXEC_OBJECT_PINNED) !=
-          (bo_flags & EXEC_OBJECT_PINNED)) {
+      if (((bo->flags ^ bo_flags) & EXEC_OBJECT_PINNED) ||
+          ((bo->flags ^ bo_flags) & EXEC_OBJECT_PERSISTENT)) {
          pthread_mutex_unlock(&cache->mutex);
          return vk_errorf(device, NULL, VK_ERROR_INVALID_EXTERNAL_HANDLE,
                           "The same BO was imported two different ways");
@@ -2037,6 +2052,12 @@ anv_device_release_bo(struct anv_device *device,
       gen_aux_map_unmap_range(device->aux_map_ctx,
                               gen_canonical_address(bo->offset),
                               bo->size);
+   }
+
+   if (device->physical->use_vm_bind) {
+      assert(bo->flags & EXEC_OBJECT_PINNED);
+      anv_gem_vm_unbind(device, bo->offset, bo->gem_handle,
+                        0, bo->size + bo->_ccs_size);
    }
 
    /* Memset the BO just in case.  The refcount being zero should be enough to
