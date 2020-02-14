@@ -1601,17 +1601,21 @@ emit_undef_value(struct dxil_module *m)
    return emit_record_no_abbrev(&m->buf, CST_CODE_UNDEF, NULL, 0);
 }
 
+uint64_t
+encode_signed(int64_t value)
+{
+   return value >= 0 ?
+      (value << 1) :
+      ((-value << 1) | 1);
+}
+
 static bool
 emit_int_value(struct dxil_module *m, int64_t value)
 {
    if (!value)
       return emit_null_value(m);
 
-   uint64_t v = value >= 0 ?
-      (value << 1) :
-      ((-value << 1) | 1);
-
-   uint64_t data[] = { CST_CODE_INTEGER, v };
+   uint64_t data[] = { CST_CODE_INTEGER, encode_signed(value) };
    return emit_const_abbrev_record(m, CONST_ABBREV_INTEGER,
                                    data, ARRAY_SIZE(data));
 }
