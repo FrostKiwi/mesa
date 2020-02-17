@@ -559,6 +559,20 @@ dxil_get_overload_type(struct dxil_module *mod, enum overload_type overload)
    }
 }
 
+const struct dxil_type *
+dxil_module_get_handle_type(struct dxil_module *m)
+{
+   const struct dxil_type *int8_type = dxil_module_get_int_type(m, 8);
+   if (!int8_type)
+      return NULL;
+
+   const struct dxil_type *ptr_type = dxil_module_get_pointer_type(m, int8_type);
+   if (!ptr_type)
+      return NULL;
+
+   return dxil_module_get_struct_type(m, "dx.types.Handle", &ptr_type, 1);
+}
+
 
 const struct dxil_type *
 dxil_module_add_function_type(struct dxil_module *m,
