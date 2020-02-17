@@ -2096,6 +2096,7 @@ struct dxil_instr {
       INSTR_SELECT,
       INSTR_CAST,
       INSTR_BR,
+      INSTR_PHI,
       INSTR_CALL,
       INSTR_RET,
       INSTR_EXTRACTVAL,
@@ -2126,6 +2127,15 @@ struct dxil_instr {
          const struct dxil_value *cond;
          unsigned succ[2];
       } br;
+
+      struct {
+         const struct dxil_type *type;
+         struct {
+            const struct dxil_value *value;
+            unsigned block;
+         } incoming[127];
+         size_t num_incoming;
+      } phi;
 
       struct {
          const struct dxil_func *func;
@@ -2239,6 +2249,41 @@ dxil_emit_branch(struct dxil_module *m, const struct dxil_value *cond,
    instr->br.succ[1] = false_block;
    m->curr_block++;
    return true;
+}
+
+struct dxil_instr *
+dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type,
+              const struct dxil_value **out_value)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_PHI);
+   if (!instr)
+      return NULL;
+
+   instr->phi.type = type;
+   instr->phi.num_incoming = 0;
+   instr->has_value = true;
+
+   assert(out_value);
+   *out_value = &instr->value;
+
+   return instr;
+}
+
+void
+dxil_phi_set_incoming(struct dxil_instr *instr,
+                      const struct dxil_value *incoming_values[],
+                      const unsigned incoming_blocks[],
+                      size_t num_incoming)
+{
+   assert(instr->type == INSTR_PHI);
+   assert(num_incoming > 0);
+   assert(num_incoming < ARRAY_SIZE(instr->phi.incoming));
+   for (int i = 0; i < num_incoming; ++i) {
+      assert(incoming_values[i]);
+      instr->phi.incoming[i].value = incoming_values[i];
+      instr->phi.incoming[i].block = incoming_blocks[i];
+   }
+   instr->phi.num_incoming = num_incoming;
 }
 
 static struct dxil_instr *
@@ -2406,6 +2451,24 @@ emit_branch(struct dxil_module *m, struct dxil_instr *instr)
                                 data, ARRAY_SIZE(data));
 }
 
+bool
+emit_phi(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_PHI);
+   uint64_t data[128];
+   data[0] = instr->phi.type->id;
+   assert(instr->phi.num_incoming > 0);
+   for (int i = 0; i < instr->phi.num_incoming; ++i) {
+      int64_t value_delta = instr->value.id - instr->phi.incoming[i].value->id;
+      data[1 + i * 2] = encode_signed(value_delta);
+      assert(instr->phi.incoming[i].block < m->num_basic_block_ids);
+      assert(m->basic_block_ids[instr->phi.incoming[i].block] >= 0);
+      data[1 + i * 2 + 1] = m->basic_block_ids[instr->phi.incoming[i].block];
+   }
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_PHI,
+                                data, 1 + 2 * instr->phi.num_incoming);
+}
+
 static bool
 emit_extractval(struct dxil_module *m, struct dxil_instr *instr)
 {
@@ -2483,6 +2546,9 @@ emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 
    case INSTR_BR:
       return emit_branch(m, instr);
+
+   case INSTR_PHI:
+      return emit_phi(m, instr);
 
    case INSTR_CALL:
       return emit_call(m, instr);

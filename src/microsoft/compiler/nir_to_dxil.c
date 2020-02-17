@@ -263,6 +263,7 @@ struct ntd_context {
 
    struct dxil_def *defs;
    unsigned num_defs;
+   struct hash_table *phis;
 };
 
 static const struct dxil_value *
@@ -1400,6 +1401,42 @@ emit_deref(struct ntd_context* ctx, nir_deref_instr* instr)
    return false;
 }
 
+static bool
+emit_phi(struct ntd_context *ctx, nir_phi_instr *instr)
+{
+   assert(nir_dest_num_components(instr->dest) == 1);
+   unsigned bit_size = nir_dest_bit_size(instr->dest);
+   const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod,
+                                                           bit_size);
+
+   const struct dxil_value *value;
+   struct dxil_instr *phi = dxil_emit_phi(&ctx->mod, type, &value);
+   if (!phi)
+      return false;
+
+   store_dest_int(ctx, &instr->dest, 0, value);
+   _mesa_hash_table_insert(ctx->phis, instr, phi);
+   return true;
+}
+
+static void
+fixup_phi(struct ntd_context *ctx, nir_phi_instr *instr,
+          struct dxil_instr *phi)
+{
+   const struct dxil_value *values[128];
+   unsigned blocks[128];
+   size_t num_incoming = 0;
+   nir_foreach_phi_src(src, instr) {
+      const struct dxil_value *val = get_src_ssa(ctx, src->src.ssa, 0);
+      assert(num_incoming < ARRAY_SIZE(values));
+      values[num_incoming] = val;
+      assert(num_incoming < ARRAY_SIZE(blocks));
+      blocks[num_incoming] = src->pred->index;
+      ++num_incoming;
+   }
+   dxil_phi_set_incoming(phi, values, blocks, num_incoming);
+}
+
 static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
 {
    switch (instr->type) {
@@ -1411,6 +1448,8 @@ static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
       return emit_load_const(ctx, nir_instr_as_load_const(instr));
    case nir_instr_type_deref:
       return emit_deref(ctx, nir_instr_as_deref(instr));
+   case nir_instr_type_phi:
+      return emit_phi(ctx, nir_instr_as_phi(instr));
    default:
       NIR_INSTR_UNSUPPORTED(instr);
       assert("Unimplemented instruction type");
@@ -1551,8 +1590,15 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       return false;
    ctx->num_defs = entry->ssa_alloc;
 
+   ctx->phis = _mesa_pointer_hash_table_create(NULL);
+
    if (!emit_cf_list(ctx, &entry->body))
       return false;
+
+   hash_table_foreach(ctx->phis, entry) {
+      fixup_phi(ctx, (nir_phi_instr *)entry->key,
+                (struct dxil_instr *)entry->data);
+   }
 
    if (!dxil_emit_ret_void(&ctx->mod))
       return false;
