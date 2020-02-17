@@ -1522,13 +1522,15 @@ emit_if(struct ntd_context *ctx, struct nir_if *if_stmt)
 
    /* handle then-block */
    if (!emit_cf_list(ctx, &if_stmt->then_list) ||
-       !emit_branch(ctx, then_succ))
+       (!nir_block_ends_in_jump(nir_if_last_then_block(if_stmt)) &&
+        !emit_branch(ctx, then_succ)))
       return false;
 
    if (else_block) {
       /* handle else-block */
       if (!emit_cf_list(ctx, &if_stmt->else_list) ||
-          !emit_branch(ctx, else_succ))
+          (!nir_block_ends_in_jump(nir_if_last_else_block(if_stmt)) &&
+           !emit_branch(ctx, else_succ)))
          return false;
    }
 
