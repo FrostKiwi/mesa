@@ -277,8 +277,7 @@ struct ntd_context {
    struct dxil_def *defs;
    unsigned num_defs;
 
-   const struct dxil_func *bufferload_func,
-                          *bufferstore_func;
+   const struct dxil_func *bufferload_func;
 };
 
 static const struct dxil_value *
@@ -434,39 +433,10 @@ emit_bufferstore_call(struct ntd_context *ctx,
                       const struct dxil_value *value[4],
                       const struct dxil_value *write_mask)
 {
-   if (!ctx->bufferstore_func) {
-      const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-      const struct dxil_type *int8_type = dxil_module_get_int_type(&ctx->mod, 8);
-      const struct dxil_type *handle_type = dxil_module_get_handle_type(&ctx->mod);
-      const struct dxil_type *void_type = dxil_module_get_void_type(&ctx->mod);
-      if (!int32_type || !int8_type || !handle_type || !void_type)
-         return false;
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.bufferStore", DXIL_I32);
 
-      const struct dxil_type *arg_types[] = {
-         int32_type,
-         handle_type,
-         int32_type,
-         int32_type,
-         int32_type,
-         int32_type,
-         int32_type,
-         int32_type,
-         int8_type
-      };
-
-      const struct dxil_type *func_type =
-         dxil_module_add_function_type(&ctx->mod, void_type,
-                                       arg_types, ARRAY_SIZE(arg_types));
-      if (!func_type)
-         return false;
-
-      ctx->bufferstore_func = dxil_add_function_decl(&ctx->mod,
-                                                     "dx.op.bufferStore.i32",
-                                                     func_type,
-                                                     DXIL_ATTR_KIND_NONE);
-      if (!ctx->bufferstore_func)
-         return false;
-   }
+   if (!func)
+      return false;
 
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
       DXIL_INTR_BUFFER_STORE);
@@ -476,7 +446,7 @@ emit_bufferstore_call(struct ntd_context *ctx,
       write_mask
    };
 
-   return dxil_emit_call_void(&ctx->mod, ctx->bufferstore_func,
+   return dxil_emit_call_void(&ctx->mod, func,
                               args, ARRAY_SIZE(args));
 }
 
