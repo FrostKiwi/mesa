@@ -369,6 +369,7 @@ dump_instrs(struct dxil_dumper *d, struct list_head *list)
       case INSTR_CAST:  dump_instr_cast(d, &instr->cast); break;
       case INSTR_CALL:  dump_instr_call(d, &instr->call); break;
       case INSTR_RET:   dump_instr_ret(d->buf, &instr->ret); break;
+      case INSTR_EXTRACTVAL: dump_instr_extractval(d, &instr->extractval); break;
       }
 
       _mesa_string_buffer_append(d->buf, "\n");
@@ -438,6 +439,15 @@ dump_instr_ret(struct _mesa_string_buffer *buf, struct dxil_instr_ret *ret)
    _mesa_string_buffer_append(buf, "ret ");
    if (ret->value)
       dump_value(buf, ret->value);
+}
+
+static void
+dump_instr_extractval(struct dxil_dumper *d, struct dxil_instr_extractval *extr)
+{
+   _mesa_string_buffer_append(d->buf, "extractvalue ");
+   dump_type_name(d, extr->type);
+   dump_value(d->buf, extr->src);
+   _mesa_string_buffer_printf(d->buf, ", %d", extr->idx);
 }
 
 static void
