@@ -42,7 +42,8 @@ static struct  predefined_func_descr predefined_funcs[] = {
 {"dx.op.threadId", "i", "ii", DXIL_ATTR_KIND_READ_NONE},
 {"dx.op.threadIdInGroup", "i", "ii", DXIL_ATTR_KIND_READ_NONE},
 {"dx.op.groupId", "i", "ii", DXIL_ATTR_KIND_READ_NONE},
-{"dx.op.unary", "O", "iO", DXIL_ATTR_KIND_READ_NONE}
+{"dx.op.unary", "O", "iO", DXIL_ATTR_KIND_READ_NONE},
+{"dx.op.binary", "O", "iOO", DXIL_ATTR_KIND_READ_NONE}
 };
 
 struct func_descr {
