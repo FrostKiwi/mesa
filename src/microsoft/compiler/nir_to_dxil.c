@@ -215,19 +215,6 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 }
 
 static const struct dxil_type *
-get_dx_resret_i32_type(struct dxil_module *m)
-{
-   const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
-   if (!int32_type)
-      return NULL;
-
-   const struct dxil_type *resret[] =
-      { int32_type, int32_type, int32_type, int32_type, int32_type };
-
-   return dxil_module_get_struct_type(m, "dx.types.ResRet.i32", resret, 5);
-}
-
-static const struct dxil_type *
 get_glsl_basetype(struct dxil_module *m, enum glsl_base_type type)
 {
    switch (type) {
@@ -394,7 +381,7 @@ emit_bufferload_call(struct ntd_context *ctx,
    if (!ctx->bufferload_func) {
       const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
       const struct dxil_type *handle_type = dxil_module_get_handle_type(&ctx->mod);
-      const struct dxil_type *resret_type = get_dx_resret_i32_type(&ctx->mod);
+      const struct dxil_type *resret_type = dxil_module_get_resret_i32_type(&ctx->mod);
       if (!int32_type || !handle_type || !resret_type)
          return false;
 
@@ -1249,7 +1236,7 @@ emit_load_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
          if (!(comps & (1 << i)))
             continue;
          const struct dxil_value *val =
-            dxil_emit_extractval(&ctx->mod, load, get_dx_resret_i32_type(&ctx->mod), i);
+            dxil_emit_extractval(&ctx->mod, load, dxil_module_get_resret_i32_type(&ctx->mod), i);
          if (!val)
             return false;
          store_dest_int(ctx, &intr->dest, i, val);
