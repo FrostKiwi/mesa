@@ -1402,6 +1402,38 @@ emit_deref(struct ntd_context* ctx, nir_deref_instr* instr)
 }
 
 static bool
+emit_cond_branch(struct ntd_context *ctx, const struct dxil_value *cond,
+                 int true_block, int false_block)
+{
+   assert(cond);
+   assert(true_block >= 0);
+   assert(false_block >= 0);
+   return dxil_emit_branch(&ctx->mod, cond, true_block, false_block);
+}
+
+static bool
+emit_branch(struct ntd_context *ctx, int block)
+{
+   assert(block >= 0);
+   return dxil_emit_branch(&ctx->mod, NULL, block, -1);
+}
+
+static bool
+emit_jump(struct ntd_context *ctx, nir_jump_instr *instr)
+{
+   switch (instr->type) {
+   case nir_jump_break:
+   case nir_jump_continue:
+      assert(instr->instr.block->successors[0]);
+      assert(!instr->instr.block->successors[1]);
+      return emit_branch(ctx, instr->instr.block->successors[0]->index);
+
+   default:
+      unreachable("Unsupported jump type\n");
+   }
+}
+
+static bool
 emit_phi(struct ntd_context *ctx, nir_phi_instr *instr)
 {
    assert(nir_dest_num_components(instr->dest) == 1);
@@ -1448,6 +1480,8 @@ static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
       return emit_load_const(ctx, nir_instr_as_load_const(instr));
    case nir_instr_type_deref:
       return emit_deref(ctx, nir_instr_as_deref(instr));
+   case nir_instr_type_jump:
+      return emit_jump(ctx, nir_instr_as_jump(instr));
    case nir_instr_type_phi:
       return emit_phi(ctx, nir_instr_as_phi(instr));
    default:
@@ -1476,23 +1510,6 @@ emit_block(struct ntd_context *ctx, struct nir_block *block)
 
 static bool
 emit_cf_list(struct ntd_context *ctx, struct exec_list *list);
-
-static bool
-emit_cond_branch(struct ntd_context *ctx, const struct dxil_value *cond,
-                 int true_block, int false_block)
-{
-   assert(cond);
-   assert(true_block >= 0);
-   assert(false_block >= 0);
-   return dxil_emit_branch(&ctx->mod, cond, true_block, false_block);
-}
-
-static bool
-emit_branch(struct ntd_context *ctx, int block)
-{
-   assert(block >= 0);
-   return dxil_emit_branch(&ctx->mod, NULL, block, -1);
-}
 
 static bool
 emit_if(struct ntd_context *ctx, struct nir_if *if_stmt)
@@ -1538,6 +1555,26 @@ emit_if(struct ntd_context *ctx, struct nir_if *if_stmt)
 }
 
 static bool
+emit_loop(struct ntd_context *ctx, nir_loop *loop)
+{
+   nir_block *first_block = nir_loop_first_block(loop);
+
+   assert(nir_loop_last_block(loop)->successors[0]);
+   assert(!nir_loop_last_block(loop)->successors[1]);
+
+   if (!emit_branch(ctx, first_block->index))
+      return false;
+
+   if (!emit_cf_list(ctx, &loop->body))
+      return false;
+
+   if (!emit_branch(ctx, first_block->index))
+      return false;
+
+   return true;
+}
+
+static bool
 emit_cf_list(struct ntd_context *ctx, struct exec_list *list)
 {
    foreach_list_typed(nir_cf_node, node, node, list) {
@@ -1549,6 +1586,11 @@ emit_cf_list(struct ntd_context *ctx, struct exec_list *list)
 
       case nir_cf_node_if:
          if (!emit_if(ctx, nir_cf_node_as_if(node)))
+            return false;
+         break;
+
+      case nir_cf_node_loop:
+         if (!emit_loop(ctx, nir_cf_node_as_loop(node)))
             return false;
          break;
 
