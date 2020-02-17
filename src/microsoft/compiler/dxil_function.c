@@ -144,6 +144,7 @@ get_type_from_string(struct dxil_module *mod, const char *param_descr,
    case DXIL_FUNC_PARAM_HANDLE: return dxil_module_get_handle_type(mod);
    case DXIL_FUNC_PARAM_VOID: return dxil_module_get_void_type(mod);
    case DXIL_FUNC_PARAM_FROM_OVERLOAD:  return dxil_get_overload_type(mod, overload);
+   case DXIL_FUNC_PARAM_RESRET: return dxil_module_get_resret_i32_type(mod);
    case DXIL_FUNC_PARAM_POINTER: {
          const struct dxil_type *target = get_type_from_string(mod, param_descr, overload, idx);
          return dxil_module_get_pointer_type(mod, target);

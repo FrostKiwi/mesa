@@ -37,6 +37,7 @@
 #define DXIL_FUNC_PARAM_POINTER '*'
 #define DXIL_FUNC_PARAM_VOID 'v'
 #define DXIL_FUNC_PARAM_FROM_OVERLOAD 'O'
+#define DXIL_FUNC_PARAM_RESRET 'R'
 
 #include "dxil_module.h"
 #include "util/rb_tree.h"
