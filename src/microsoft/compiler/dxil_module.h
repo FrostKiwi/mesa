@@ -205,6 +205,8 @@ struct dxil_module {
 
    struct rb_tree *functions;
 
+   int *basic_block_ids; /* maps from "user" ids to LLVM ids */
+   size_t num_basic_block_ids;
    unsigned curr_block;
 };
 

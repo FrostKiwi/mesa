@@ -1422,6 +1422,9 @@ static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
 static bool
 emit_block(struct ntd_context *ctx, struct nir_block *block)
 {
+   assert(block->index < ctx->mod.num_basic_block_ids);
+   ctx->mod.basic_block_ids[block->index] = ctx->mod.curr_block;
+
    nir_foreach_instr(instr, block) {
       TRACE_CONVERSION(instr);
 
@@ -1533,6 +1536,15 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    nir_function_impl *entry = nir_shader_get_entrypoint(s);
    nir_metadata_require(entry, nir_metadata_block_index);
+
+   assert(entry->num_blocks > 0);
+   ctx->mod.basic_block_ids = calloc(sizeof(int), entry->num_blocks);
+   if (!ctx->mod.basic_block_ids)
+      return false;
+
+   for (int i = 0; i < entry->num_blocks; ++i)
+      ctx->mod.basic_block_ids[i] = -1;
+   ctx->mod.num_basic_block_ids = entry->num_blocks;
 
    ctx->defs = malloc(sizeof(struct dxil_def) * entry->ssa_alloc);
    if (!ctx->defs)

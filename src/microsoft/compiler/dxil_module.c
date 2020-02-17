@@ -2384,16 +2384,22 @@ bool
 emit_branch(struct dxil_module *m, struct dxil_instr *instr)
 {
    assert(instr->type == INSTR_BR);
+   assert(instr->br.succ[0] < m->num_basic_block_ids);
+   assert(m->basic_block_ids[instr->br.succ[0]] >= 0);
+
    if (!instr->br.cond) {
       /* unconditional branch */
-      uint64_t succ = instr->br.succ[0];
+      uint64_t succ = m->basic_block_ids[instr->br.succ[0]];
       return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_BR, &succ, 1);
    }
    /* conditional branch */
    assert(instr->value.id > instr->br.cond->id);
+   assert(instr->br.succ[1] < m->num_basic_block_ids);
+   assert(m->basic_block_ids[instr->br.succ[1]] >= 0);
+
    uint64_t data[] = {
-      instr->br.succ[0],
-      instr->br.succ[1],
+      m->basic_block_ids[instr->br.succ[0]],
+      m->basic_block_ids[instr->br.succ[1]],
       instr->value.id - instr->br.cond->id
    };
    return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_BR,
