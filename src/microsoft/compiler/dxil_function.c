@@ -38,7 +38,8 @@ static struct  predefined_func_descr predefined_funcs[] = {
 {"dx.op.createHandle", "@", "iciib", DXIL_ATTR_KIND_READ_ONLY},
 {"dx.op.storeOutput", "v", "iiicO", DXIL_ATTR_KIND_NO_UNWIND},
 {"dx.op.loadInput", "O", "iiici", DXIL_ATTR_KIND_READ_NONE},
-{"dx.op.tertiary", "O", "iOOO", DXIL_ATTR_KIND_READ_NONE}
+{"dx.op.tertiary", "O", "iOOO", DXIL_ATTR_KIND_READ_NONE},
+{"dx.op.threadId", "i", "ii", DXIL_ATTR_KIND_READ_NONE}
 };
 
 struct func_descr {
