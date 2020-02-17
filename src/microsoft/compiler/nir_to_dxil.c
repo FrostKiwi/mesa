@@ -277,8 +277,7 @@ struct ntd_context {
    struct dxil_def *defs;
    unsigned num_defs;
 
-   const struct dxil_func *binary_funcs[DXIL_NUM_OVERLOADS],
-                          *bufferload_func,
+   const struct dxil_func *bufferload_func,
                           *bufferstore_func;
 };
 
@@ -308,33 +307,9 @@ emit_binary_call(struct ntd_context *ctx, enum overload_type overload,
                  enum dxil_intr intr,
                  const struct dxil_value *op0, const struct dxil_value *op1)
 {
-   if (!ctx->binary_funcs[overload]) {
-      const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-      const struct dxil_type *type = dxil_get_overload_type(&ctx->mod, overload);
-      if (!int32_type || !type)
-         return NULL;
-
-      const struct dxil_type *arg_types[] = {
-         int32_type,
-         type,
-         type
-      };
-
-      const struct dxil_type *func_type =
-         dxil_module_add_function_type(&ctx->mod, type,
-                                       arg_types, ARRAY_SIZE(arg_types));
-      if (!func_type)
-         return NULL;
-
-      char name[100];
-      snprintf(name, ARRAY_SIZE(name), "dx.op.binary.%s",
-               dxil_overload_suffix(overload));
-
-      ctx->binary_funcs[overload] = dxil_add_function_decl(&ctx->mod, name,
-         func_type, DXIL_ATTR_KIND_READ_NONE);
-      if (!ctx->binary_funcs[overload])
-         return NULL;
-   }
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.binary", overload);
+   if (!func)
+      return NULL;
 
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, intr);
    if (!opcode)
@@ -346,8 +321,7 @@ emit_binary_call(struct ntd_context *ctx, enum overload_type overload,
      op1
    };
 
-   return dxil_emit_call(&ctx->mod, ctx->binary_funcs[overload],
-                         args, ARRAY_SIZE(args));
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
 
 static const struct dxil_value *
