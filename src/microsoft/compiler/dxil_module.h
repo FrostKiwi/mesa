@@ -205,9 +205,7 @@ struct dxil_module {
 
    struct rb_tree *functions;
 
-   size_t num_basic_blocks; /* not the same as num_blocks; this one is
-                               the number of basic-blocks, and the other
-                               one is bitcode-blocks */
+   unsigned curr_block;
 };
 
 void
