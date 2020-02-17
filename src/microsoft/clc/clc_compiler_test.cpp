@@ -630,3 +630,44 @@ TEST(types, if_statement)
    };
    ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
+
+TEST(types, do_while_loop)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *output)\n\
+   {\n\
+       int value = 1;\n\
+       int i = 1, n = get_global_id(0);\n\
+       do {\n\
+          value *= i++;\n\
+       } while (i <= n);\n\
+       output[n] = value;\n\
+   }\n";
+   const uint32_t input[] = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+   };
+   const uint32_t expected[] = {
+      1, 1, 1*2, 1*2*3, 1*2*3*4
+   };
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+}
+
+TEST(types, for_loop)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *output)\n\
+   {\n\
+       int value = 1;\n\
+       int n = get_global_id(0);\n\
+       for (int i = 1; i <= n; ++i)\n\
+          value *= i;\n\
+       output[n] = value;\n\
+   }\n";
+   const uint32_t input[] = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+   };
+   const uint32_t expected[] = {
+      1, 1, 1*2, 1*2*3, 1*2*3*4
+   };
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+}
