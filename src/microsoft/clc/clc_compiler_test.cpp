@@ -679,3 +679,26 @@ TEST(types, for_loop)
    };
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
+
+TEST(complex_types, global_struct_array)
+{
+   struct two_vals { uint32_t add; uint32_t mul; };
+   const char *kernel_source =
+   "struct two_vals { uint add; uint mul; };\n\
+   __kernel void main_test(__global struct two_vals *in_out)\n\
+   {\n\
+      uint id = get_global_id(0);\n\
+      in_out[id].add = in_out[id].add + id;\n\
+      in_out[id].mul = in_out[id].mul * id;\n\
+   }\n";
+   const struct two_vals input[] = {
+      { 8, 8 }, { 16, 16 }, { 64, 64 }, { 65536, 65536 }
+   };
+   const struct two_vals expected[] = {
+      { 8 + 0, 8 * 0 },
+      { 16 + 1, 16 * 1 },
+      { 64 + 2, 64 * 2 },
+      { 65536 + 3, 65536 * 3 }
+   };
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), sizeof(struct two_vals), input, expected));
+}
