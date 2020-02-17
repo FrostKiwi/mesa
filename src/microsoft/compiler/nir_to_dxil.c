@@ -279,7 +279,6 @@ struct ntd_context {
 
    const struct dxil_func *unary_funcs[DXIL_NUM_OVERLOADS],
                           *binary_funcs[DXIL_NUM_OVERLOADS],
-                          *groupid_func,
                           *bufferload_func,
                           *bufferstore_func;
 };
@@ -421,27 +420,10 @@ emit_threadidingroup_call(struct ntd_context *ctx,
 static const struct dxil_value *
 emit_groupid_call(struct ntd_context *ctx, const struct dxil_value *comp)
 {
-   if (!ctx->groupid_func) {
-      const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-      if (!int32_type)
-         return NULL;
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.groupId", DXIL_I32);
 
-      const struct dxil_type *arg_types[] = {
-         int32_type,
-         int32_type
-      };
-
-      const struct dxil_type *func_type =
-         dxil_module_add_function_type(&ctx->mod, int32_type,
-                                       arg_types, ARRAY_SIZE(arg_types));
-      if (!func_type)
-         return NULL;
-
-      ctx->groupid_func = dxil_add_function_decl(&ctx->mod,
-         "dx.op.groupId.i32", func_type, DXIL_ATTR_KIND_READ_NONE);
-      if (!ctx->groupid_func)
-         return NULL;
-   }
+   if (!func)
+      return NULL;
 
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
        DXIL_INTR_GROUP_ID);
@@ -453,7 +435,7 @@ emit_groupid_call(struct ntd_context *ctx, const struct dxil_value *comp)
      comp
    };
 
-   return dxil_emit_call(&ctx->mod, ctx->groupid_func, args, ARRAY_SIZE(args));
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
 
 static const struct dxil_value *
