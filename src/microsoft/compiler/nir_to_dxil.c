@@ -215,20 +215,6 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 }
 
 static const struct dxil_type *
-get_dx_handle_type(struct dxil_module *m)
-{
-   const struct dxil_type *int8_type = dxil_module_get_int_type(m, 8);
-   if (!int8_type)
-      return NULL;
-
-   const struct dxil_type *ptr_type = dxil_module_get_pointer_type(m, int8_type);
-   if (!ptr_type)
-      return NULL;
-
-   return dxil_module_get_struct_type(m, "dx.types.Handle", &ptr_type, 1);
-}
-
-static const struct dxil_type *
 get_dx_resret_i32_type(struct dxil_module *m)
 {
    const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
@@ -515,7 +501,7 @@ emit_bufferload_call(struct ntd_context *ctx,
 {
    if (!ctx->bufferload_func) {
       const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-      const struct dxil_type *handle_type = get_dx_handle_type(&ctx->mod);
+      const struct dxil_type *handle_type = dxil_module_get_handle_type(&ctx->mod);
       const struct dxil_type *resret_type = get_dx_resret_i32_type(&ctx->mod);
       if (!int32_type || !handle_type || !resret_type)
          return false;
@@ -558,7 +544,7 @@ emit_bufferstore_call(struct ntd_context *ctx,
    if (!ctx->bufferstore_func) {
       const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
       const struct dxil_type *int8_type = dxil_module_get_int_type(&ctx->mod, 8);
-      const struct dxil_type *handle_type = get_dx_handle_type(&ctx->mod);
+      const struct dxil_type *handle_type = dxil_module_get_handle_type(&ctx->mod);
       const struct dxil_type *void_type = dxil_module_get_void_type(&ctx->mod);
       if (!int32_type || !int8_type || !handle_type || !void_type)
          return false;
