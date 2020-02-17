@@ -573,6 +573,18 @@ dxil_module_get_handle_type(struct dxil_module *m)
    return dxil_module_get_struct_type(m, "dx.types.Handle", &ptr_type, 1);
 }
 
+const struct dxil_type *
+dxil_module_get_resret_i32_type(struct dxil_module *m)
+{
+   const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
+   if (!int32_type)
+      return NULL;
+
+   const struct dxil_type *resret[] =
+      { int32_type, int32_type, int32_type, int32_type, int32_type };
+
+   return dxil_module_get_struct_type(m, "dx.types.ResRet.i32", resret, 5);
+}
 
 const struct dxil_type *
 dxil_module_add_function_type(struct dxil_module *m,
