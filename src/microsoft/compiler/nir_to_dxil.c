@@ -283,8 +283,7 @@ struct ntd_context {
                           *threadidingroup_func,
                           *groupid_func,
                           *bufferload_func,
-                          *bufferstore_func,
-                          *createhandle_func;
+                          *bufferstore_func;
 };
 
 static const struct dxil_value *
@@ -594,35 +593,11 @@ emit_createhandle_call(struct ntd_context *ctx,
                        const struct dxil_value *resource_range_index,
                        const struct dxil_value *non_uniform_resource_index)
 {
-   if (!ctx->createhandle_func) {
-      const struct dxil_type *int1_type = dxil_module_get_int_type(&ctx->mod, 1);
-      const struct dxil_type *int8_type = dxil_module_get_int_type(&ctx->mod, 8);
-      const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-      const struct dxil_type *handle_type = get_dx_handle_type(&ctx->mod);
-      if (!int1_type || !int8_type || !int32_type || !handle_type)
-         return NULL;
+   const struct dxil_func *func =
+         dxil_get_function(&ctx->mod, "dx.op.createHandle", DXIL_NONE);
 
-      const struct dxil_type *arg_types[] = {
-         int32_type,
-         int8_type,
-         int32_type,
-         int32_type,
-         int1_type
-      };
-
-      const struct dxil_type *func_type =
-         dxil_module_add_function_type(&ctx->mod, handle_type, arg_types,
-                                       ARRAY_SIZE(arg_types));
-      if (!func_type)
+   if (!func)
          return NULL;
-
-      ctx->createhandle_func = dxil_add_function_decl(&ctx->mod,
-                                                      "dx.op.createHandle",
-                                                      func_type,
-                                                      DXIL_ATTR_KIND_READ_ONLY);
-      if (!ctx->createhandle_func)
-         return NULL;
-   }
 
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
       DXIL_INTR_CREATE_HANDLE);
@@ -637,8 +612,7 @@ emit_createhandle_call(struct ntd_context *ctx,
       non_uniform_resource_index
    };
 
-   return dxil_emit_call(&ctx->mod, ctx->createhandle_func,
-                         args, ARRAY_SIZE(args));
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
 
 static bool
