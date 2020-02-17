@@ -50,7 +50,7 @@ dxil_module_init(struct dxil_module *m)
    m->functions = rzalloc(NULL, struct rb_tree);
    rb_tree_init(m->functions);
 
-   m->num_basic_blocks = 1;
+   m->curr_block = 0;
 }
 
 void
@@ -2237,6 +2237,7 @@ dxil_emit_branch(struct dxil_module *m, const struct dxil_value *cond,
    instr->br.cond = cond;
    instr->br.succ[0] = true_block;
    instr->br.succ[1] = false_block;
+   m->curr_block++;
    return true;
 }
 
@@ -2294,6 +2295,7 @@ dxil_emit_ret_void(struct dxil_module *m)
       return false;
 
    instr->ret.value = NULL;
+   m->curr_block++;
    return true;
 }
 
@@ -2494,7 +2496,7 @@ static bool
 emit_function(struct dxil_module *m)
 {
    if (!enter_subblock(m, DXIL_FUNCTION_BLOCK, 4) ||
-       !emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, m->num_basic_blocks))
+       !emit_record_int(m, FUNC_CODE_DECLAREBLOCKS, m->curr_block))
       return false;
 
    list_for_each_entry(struct dxil_instr, instr, &m->instr_list, head) {
