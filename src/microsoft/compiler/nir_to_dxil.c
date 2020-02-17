@@ -263,8 +263,6 @@ struct ntd_context {
 
    struct dxil_def *defs;
    unsigned num_defs;
-
-   const struct dxil_func *bufferload_func;
 };
 
 static const struct dxil_value *
@@ -378,40 +376,15 @@ emit_bufferload_call(struct ntd_context *ctx,
                      const struct dxil_value *handle,
                      const struct dxil_value *coord[2])
 {
-   if (!ctx->bufferload_func) {
-      const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
-      const struct dxil_type *handle_type = dxil_module_get_handle_type(&ctx->mod);
-      const struct dxil_type *resret_type = dxil_module_get_resret_i32_type(&ctx->mod);
-      if (!int32_type || !handle_type || !resret_type)
-         return false;
-
-      const struct dxil_type *arg_types[] = {
-         int32_type,
-         handle_type,
-         int32_type,
-         int32_type,
-      };
-
-      const struct dxil_type *func_type =
-         dxil_module_add_function_type(&ctx->mod, resret_type,
-                                       arg_types, ARRAY_SIZE(arg_types));
-      if (!func_type)
-         return false;
-
-      ctx->bufferload_func = dxil_add_function_decl(&ctx->mod,
-                                                    "dx.op.bufferLoad.i32",
-                                                    func_type,
-                                                    DXIL_ATTR_KIND_READ_ONLY);
-      if (!ctx->bufferload_func)
-         return false;
-   }
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.bufferLoad", DXIL_I32);
+   if (!func)
+      return NULL;
 
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
       DXIL_INTR_BUFFER_LOAD);
    const struct dxil_value *args[] = { opcode, handle, coord[0], coord[1] };
 
-   return dxil_emit_call(&ctx->mod, ctx->bufferload_func,
-                         args, ARRAY_SIZE(args));
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
 static bool
 emit_bufferstore_call(struct ntd_context *ctx,
