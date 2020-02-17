@@ -157,6 +157,7 @@ struct dxil_features {
 
 struct dxil_type;
 struct dxil_value;
+struct dxil_instr;
 struct dxil_gvar;
 struct dxil_func;
 struct dxil_mdnode;
@@ -342,6 +343,16 @@ dxil_emit_cast(struct dxil_module *m, enum dxil_cast_opcode opcode,
 bool
 dxil_emit_branch(struct dxil_module *m, const struct dxil_value *cond,
                  unsigned true_block, unsigned false_block);
+
+struct dxil_instr *
+dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type,
+              const struct dxil_value **out_value);
+
+void
+dxil_phi_set_incoming(struct dxil_instr *instr,
+                      const struct dxil_value *incoming_values[],
+                      const unsigned incoming_blocks[],
+                      size_t num_incoming);
 
 const struct dxil_value *
 dxil_emit_call(struct dxil_module *m,
