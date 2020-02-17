@@ -287,7 +287,7 @@ validate_module(void *data, size_t size)
 }
 
 static bool
-test_shader(const char *kernel_source, int width, const uint32_t input[], const uint32_t expected[])
+test_shader(const char *kernel_source, int width, int element_size, const void *input, const void *expected)
 {
    if (true)
       enable_d3d12_debug_layer();
@@ -417,40 +417,38 @@ test_shader(const char *kernel_source, int width, const uint32_t input[], const 
       fprintf(stderr, "D3D12: failed to create descriptor heap\n");
       return false;
    }
-   ID3D12Resource *upload_res = create_buffer(dev, width * sizeof(uint32_t), D3D12_HEAP_TYPE_UPLOAD);
+   ID3D12Resource *upload_res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_UPLOAD);
    if (!upload_res) {
       fprintf(stderr, "D3D12: failed to create resource heap\n");
       return false;
    }
-   ID3D12Resource *res = create_buffer(dev, width * sizeof(uint32_t), D3D12_HEAP_TYPE_DEFAULT);
+   ID3D12Resource *res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_DEFAULT);
    if (!res) {
       fprintf(stderr, "D3D12: failed to create resource heap\n");
       return false;
    }
 
-   ID3D12Resource *readback_res = create_buffer(dev, width * sizeof(uint32_t), D3D12_HEAP_TYPE_READBACK);
+   ID3D12Resource *readback_res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_READBACK);
    if (!readback_res) {
       fprintf(stderr, "D3D12: failed to create resource heap\n");
       return false;
    }
 
-   uint32_t *data = NULL;
-   D3D12_RANGE res_range = { 0, sizeof(uint32_t) * width };
+   void *data = NULL;
+   D3D12_RANGE res_range = { 0, (SIZE_T)(element_size * width) };
    if (FAILED(upload_res->Map(0, &res_range, (void **)&data))) {
       fprintf(stderr, "D3D12: failed to map buffer\n");
       return false;
    }
-   for (int i = 0; i < width; ++i) {
-      data[i] = input[i];
-   }
+   memcpy(data, input, element_size * width);
    upload_res->Unmap(0, &res_range);
 
    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc;
-   uav_desc.Format = DXGI_FORMAT_R32_UINT;
+   uav_desc.Format = DXGI_FORMAT_UNKNOWN;
    uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
    uav_desc.Buffer.FirstElement = 0;
    uav_desc.Buffer.NumElements = width;
-   uav_desc.Buffer.StructureByteStride = 0;
+   uav_desc.Buffer.StructureByteStride = element_size;
    uav_desc.Buffer.CounterOffsetInBytes = 0;
    uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
 
@@ -483,8 +481,12 @@ test_shader(const char *kernel_source, int width, const uint32_t input[], const 
       fprintf(stderr, "D3D12: failed to map buffer\n");
       return false;
    }
-   for (int i = 0; i < width; ++i)
-      EXPECT_EQ(data[i], expected[i]);
+
+   for (int i = 0; i < width; ++i) {
+      EXPECT_EQ(memcmp((const char *)data + element_size * i,
+                       (const char *)expected + element_size * i,
+                       element_size), 0);
+   }
    D3D12_RANGE empty_range = { 0, 0 };
    readback_res->Unmap(0, &empty_range);
 
@@ -514,6 +516,12 @@ test_shader(const char *kernel_source, int width, const uint32_t input[], const 
    return true;
 }
 
+static bool
+test_shader_uint(const char *kernel_source, int width, const uint32_t input[], const uint32_t expected[])
+{
+   return test_shader(kernel_source, width, sizeof(uint32_t), (const void *)input, (const void *)expected);
+}
+
 TEST(built_ins, global_id)
 {
    const char *kernel_source =
@@ -527,7 +535,7 @@ TEST(built_ins, global_id)
    const uint32_t expected[] = {
       0, 1, 2, 3
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(built_ins, global_id_rmw)
@@ -544,7 +552,7 @@ TEST(built_ins, global_id_rmw)
    const uint32_t expected[] = {
       0x00000001, 0x20000002, 0x00060006, 0x1004080c
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, float_basics)
@@ -560,7 +568,7 @@ TEST(types, float_basics)
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, double_basics)
@@ -576,7 +584,7 @@ TEST(types, double_basics)
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, short_basics)
@@ -592,7 +600,7 @@ TEST(types, short_basics)
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, char_basics)
@@ -608,7 +616,7 @@ TEST(types, char_basics)
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, if_statement)
@@ -628,7 +636,7 @@ TEST(types, if_statement)
    const uint32_t expected[] = {
       0xff, ~1u, ~2u, ~3u
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, do_while_loop)
@@ -649,7 +657,7 @@ TEST(types, do_while_loop)
    const uint32_t expected[] = {
       1, 1, 1*2, 1*2*3, 1*2*3*4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
 TEST(types, for_loop)
@@ -669,5 +677,5 @@ TEST(types, for_loop)
    const uint32_t expected[] = {
       1, 1, 1*2, 1*2*3, 1*2*3*4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
