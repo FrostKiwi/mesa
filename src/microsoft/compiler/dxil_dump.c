@@ -372,6 +372,8 @@ dump_instrs(struct dxil_dumper *d, struct list_head *list)
       case INSTR_EXTRACTVAL: dump_instr_extractval(d, &instr->extractval); break;
       case INSTR_BR:  dump_instr_branch(d, &instr->br); break;
       case INSTR_PHI:  dump_instr_phi(d, &instr->phi); break;
+      default:
+         _mesa_string_buffer_printf(d->buf, "unknown instruction type %d", instr->type);
       }
 
       _mesa_string_buffer_append(d->buf, "\n");
