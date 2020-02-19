@@ -119,7 +119,7 @@ struct dxil_instr_br {
 
 struct dxil_instr_phi {
    const struct dxil_type *type;
-   struct {
+   struct dxil_phi_src {
       const struct dxil_value *value;
       unsigned block;
    } incoming[127];

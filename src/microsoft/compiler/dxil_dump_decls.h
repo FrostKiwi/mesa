@@ -71,6 +71,8 @@ static void
 dump_instr_extractval(struct dxil_dumper *d, struct dxil_instr_extractval *ret);
 static void
 dump_instr_branch(struct dxil_dumper *d, struct dxil_instr_br *br);
+static void
+dump_instr_phi(struct dxil_dumper *d, struct dxil_instr_phi *phi);
 
 static void
 dump_instr_print_operands(struct _mesa_string_buffer *buf, int num,
