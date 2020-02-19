@@ -48,7 +48,6 @@ debug_options[] = {
 
 DEBUG_GET_ONCE_FLAGS_OPTION(debug_dxil, "DXIL_DEBUG", debug_options, 0)
 
-#ifdef DEBUG
 #define NIR_INSTR_UNSUPPORTED(instr) \
    if (debug_dxil & DXIL_DEBUG_VERBOSE) \
    do { \
@@ -64,10 +63,6 @@ DEBUG_GET_ONCE_FLAGS_OPTION(debug_dxil, "DXIL_DEBUG", debug_options, 0)
          nir_print_instr(instr, stderr); \
          fprintf(stderr, "'\n"); \
       } while (0)
-#else
-#define NIR_INSTR_UNSUPPORTED(instr)
-#define TRACE_CONVERSION(instr)
-#endif
 
 static const nir_shader_compiler_options
 nir_options = {
