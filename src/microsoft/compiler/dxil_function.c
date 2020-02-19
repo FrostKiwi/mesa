@@ -35,6 +35,7 @@ struct predefined_func_descr {
 
 static struct  predefined_func_descr predefined_funcs[] = {
 {"dx.op.cbufferLoad", "O", "i@ii", DXIL_ATTR_KIND_READ_ONLY},
+{"dx.op.cbufferLoadLegacy", "B", "i@i", DXIL_ATTR_KIND_READ_ONLY},
 {"dx.op.createHandle", "@", "iciib", DXIL_ATTR_KIND_READ_ONLY},
 {"dx.op.storeOutput", "v", "iiicO", DXIL_ATTR_KIND_NO_UNWIND},
 {"dx.op.loadInput", "O", "iiici", DXIL_ATTR_KIND_READ_NONE},
@@ -147,6 +148,7 @@ get_type_from_string(struct dxil_module *mod, const char *param_descr,
    case DXIL_FUNC_PARAM_VOID: return dxil_module_get_void_type(mod);
    case DXIL_FUNC_PARAM_FROM_OVERLOAD:  return dxil_get_overload_type(mod, overload);
    case DXIL_FUNC_PARAM_RESRET: return dxil_module_get_resret_i32_type(mod);
+   case DXIL_FUNC_PARAM_CBUF_RET: return dxil_module_get_cbuf_ret_type(mod, overload);
    case DXIL_FUNC_PARAM_POINTER: {
          const struct dxil_type *target = get_type_from_string(mod, param_descr, overload, idx);
          return dxil_module_get_pointer_type(mod, target);
