@@ -2068,22 +2068,6 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    ctx.mod.major_version = 6;
    ctx.mod.minor_version = 0;
 
-   if (s->info.stage == MESA_SHADER_KERNEL)
-      NIR_PASS_V(s, nir_lower_goto_ifs);
-
-   NIR_PASS_V(s, nir_lower_variable_initializers, nir_var_function_temp);
-   NIR_PASS_V(s, nir_lower_returns);
-   NIR_PASS_V(s, nir_inline_functions);
-   NIR_PASS_V(s, nir_opt_deref);
-   foreach_list_typed_safe(nir_function, func, node, &s->functions) {
-      if (!func->is_entrypoint)
-         exec_node_remove(&func->node);
-   }
-   assert(exec_list_length(&s->functions) == 1);
-   NIR_PASS_V(s, nir_lower_variable_initializers, ~nir_var_function_temp);
-
-   NIR_PASS_V(s, nir_lower_system_values);
-
    optimize_nir(s);
 
    NIR_PASS_V(s, nir_remove_dead_variables, nir_var_function_temp);

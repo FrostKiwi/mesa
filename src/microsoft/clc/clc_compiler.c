@@ -86,6 +86,19 @@ int clc_compile_from_source(
       return -1;
    }
 
+   NIR_PASS_V(nir, nir_lower_goto_ifs);
+   NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
+   NIR_PASS_V(nir, nir_lower_returns);
+   NIR_PASS_V(nir, nir_inline_functions);
+   NIR_PASS_V(nir, nir_opt_deref);
+   foreach_list_typed_safe(nir_function, func, node, &nir->functions) {
+      if (!func->is_entrypoint)
+         exec_node_remove(&func->node);
+   }
+   assert(exec_list_length(&nir->functions) == 1);
+   NIR_PASS_V(nir, nir_lower_variable_initializers, ~nir_var_function_temp);
+   NIR_PASS_V(nir, nir_lower_system_values);
+
    struct blob tmp;
    if (!nir_to_dxil(nir, &tmp)) {
       debug_printf("D3D12: nir_to_dxil failed\n");
