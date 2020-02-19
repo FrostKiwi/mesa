@@ -371,6 +371,7 @@ dump_instrs(struct dxil_dumper *d, struct list_head *list)
       case INSTR_RET:   dump_instr_ret(d->buf, &instr->ret); break;
       case INSTR_EXTRACTVAL: dump_instr_extractval(d, &instr->extractval); break;
       case INSTR_BR:  dump_instr_branch(d, &instr->br); break;
+      case INSTR_PHI:  dump_instr_phi(d, &instr->phi); break;
       }
 
       _mesa_string_buffer_append(d->buf, "\n");
@@ -457,6 +458,20 @@ dump_instr_branch(struct dxil_dumper *d, struct dxil_instr_br *br)
    _mesa_string_buffer_append(d->buf, "branch ");
    dump_value(d->buf, br->cond);
    _mesa_string_buffer_printf(d->buf, " %d %d", br->succ[0], br->succ[1]);
+}
+
+static void
+dump_instr_phi(struct dxil_dumper *d, struct dxil_instr_phi *phi)
+{
+   _mesa_string_buffer_append(d->buf, "phi ");
+   dump_type_name(d, phi->type);
+   struct dxil_phi_src *src = phi->incoming;
+   for (unsigned i = 0; i < phi->num_incoming; ++i, ++src) {
+      if (i > 0)
+         _mesa_string_buffer_append(d->buf, ", ");
+      dump_value(d->buf, src->value);
+      _mesa_string_buffer_printf(d->buf, "(%d)", src->block);
+   }
 }
 
 static void
