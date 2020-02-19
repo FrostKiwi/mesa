@@ -99,6 +99,13 @@ int clc_compile_from_source(
    }
    assert(exec_list_length(&nir->functions) == 1);
    NIR_PASS_V(nir, nir_lower_variable_initializers, ~nir_var_function_temp);
+
+   nir_variable_mode modes = nir_var_shader_in | nir_var_mem_global |
+                             nir_var_mem_shared;
+   nir_address_format format = nir->info.cs.ptr_size == 64 ?
+      nir_address_format_64bit_global : nir_address_format_32bit_global;
+   NIR_PASS_V(nir, nir_lower_explicit_io, modes, format);
+
    NIR_PASS_V(nir, nir_lower_system_values);
 
    struct nir_to_dxil_options opts = {

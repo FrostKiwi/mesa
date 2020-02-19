@@ -712,6 +712,18 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var)
    return true;
 }
 
+static bool
+emit_kernel_input(struct ntd_context *ctx, nir_variable *var,
+                  shader_info *info)
+{
+   if (info->cs.global_inputs & BITFIELD64_BIT(var->data.location))
+      return emit_uav(ctx, var);
+   else {
+      debug_printf("unhandled kernel input!\n");
+      return false;
+   }
+}
+
 static const struct dxil_mdnode *
 emit_threads(struct ntd_context *ctx, nir_shader *s)
 {
@@ -1458,79 +1470,113 @@ emit_load_local_work_group_id(struct ntd_context *ctx,
 }
 
 static bool
-emit_load_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+emit_load_kernel_input(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   // we can only load the first input for now
+   nir_const_value *const_input = nir_src_as_const_value(intr->src[0]);
+   assert(const_input);
+   assert(const_input->u32 == 0);
+
+   // just simply store the offset (0) as the pointer
+   const struct dxil_value *offset = dxil_module_get_int32_const(&ctx->mod, 0);
+   store_dest_int(ctx, &intr->dest, 0, offset);
+   return true;
+}
+
+static const struct dxil_value *
+get_int32_undef(struct dxil_module *m)
 {
    const struct dxil_type *int32_type =
-      dxil_module_get_int_type(&ctx->mod, 32);
-   const struct dxil_value *int32_undef =
-      dxil_module_get_undef(&ctx->mod, int32_type);
+      dxil_module_get_int_type(m, 32);
+   if (!int32_type)
+      return NULL;
+
+   return dxil_module_get_undef(m, int32_type);
+}
+
+static const struct dxil_value *
+offset_to_index(struct dxil_module *m, const struct dxil_value *offset,
+                unsigned bit_size)
+{
+   unsigned shift_amt = util_logbase2(bit_size / 8);
+   const struct dxil_value *shift =
+      dxil_module_get_int32_const(m, shift_amt);
+   if (!shift)
+      return NULL;
+
+   return dxil_emit_binop(m, DXIL_BINOP_LSHR, offset, shift);
+}
+
+static bool
+emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
+   const struct dxil_value *offset =
+      get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   if (!int32_undef || !offset)
+      return false;
+
+   // HACK: Force UBO#0. We need a way of loading other UBOs.
+   assert(ctx->num_uavs == 1);
+   const struct dxil_value *handle = ctx->uav_handles[0];
+   const struct dxil_value *index =
+      offset_to_index(&ctx->mod, offset, nir_dest_bit_size(intr->dest));
+   if (!index)
+      return false;
 
    const struct dxil_value *coord[2] = {
-      get_src(ctx, &intr->src[1], 0, nir_type_uint),
+      index,
       int32_undef
    };
 
-   nir_const_value *const_ssbo = nir_src_as_const_value(intr->src[0]);
-   if (const_ssbo) {
-      unsigned idx = const_ssbo->u32;
-      assert(ctx->num_uavs > idx);
-      assert(intr->dest.is_ssa);
-
-      const struct dxil_value *load =
-         emit_bufferload_call(ctx, ctx->uav_handles[idx], coord);
-      if (!load)
-         return false;
-
-      nir_component_mask_t comps = nir_ssa_def_components_read(&intr->dest.ssa);
-      assert(comps != 0);
-      for (int i = 0; i < nir_intrinsic_dest_components(intr); i++) {
-         if (!(comps & (1 << i)))
-            continue;
-         const struct dxil_value *val =
-            dxil_emit_extractval(&ctx->mod, load, dxil_module_get_resret_type(&ctx->mod, DXIL_I32), i);
-         if (!val)
-            return false;
-         store_dest_int(ctx, &intr->dest, i, val);
-      }
-   } else {
-      assert("dynamic ssbo addressing not implemented");
+   const struct dxil_value *load = emit_bufferload_call(ctx, handle, coord);
+   if (!load)
       return false;
-   }
 
+   const struct dxil_value *val =
+      dxil_emit_extractval(&ctx->mod, load,
+                           dxil_module_get_resret_type(&ctx->mod, DXIL_I32),
+                           0);
+   if (!val)
+      return false;
+
+   store_dest_int(ctx, &intr->dest, 0, val);
    return true;
 }
 
 static bool
-emit_store_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
-   const struct dxil_type *int32_type =
-      dxil_module_get_int_type(&ctx->mod, 32);
-   const struct dxil_value *int32_undef =
-      dxil_module_get_undef(&ctx->mod, int32_type);
+   const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
+   const struct dxil_value *offset =
+      get_src(ctx, &intr->src[1], 0, nir_type_uint);
+   if (!int32_undef || !offset)
+      return false;
+
+   // HACK: Force UBO#0. We need a way of loading other UBOs.
+   assert(ctx->num_uavs == 1);
+   const struct dxil_value *handle = ctx->uav_handles[0];
+   const struct dxil_value *index =
+      offset_to_index(&ctx->mod, offset, nir_src_bit_size(intr->src[0]));
+   if (!index)
+      return false;
 
    const struct dxil_value *coord[2] = {
-      get_src(ctx, &intr->src[2], 0, nir_type_uint),
+      index,
       int32_undef
    };
-   const struct dxil_value *value[4] = {
-      get_src(ctx, &intr->src[0], 0, nir_type_uint),
-      get_src(ctx, &intr->src[0], 1, nir_type_uint),
-      get_src(ctx, &intr->src[0], 2, nir_type_uint),
-      get_src(ctx, &intr->src[0], 3, nir_type_uint)
+
+   const struct dxil_value *value =
+      get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   assert(value);
+   const struct dxil_value *value4[4] = {
+      value, value, value, value
    };
-
    const struct dxil_value *write_mask =
-      dxil_module_get_int8_const(&ctx->mod, nir_intrinsic_write_mask(intr));
+      dxil_module_get_int8_const(&ctx->mod, 0xf);
 
-   nir_const_value *const_ssbo = nir_src_as_const_value(intr->src[1]);
-   if (const_ssbo) {
-      unsigned idx = const_ssbo->u32;
-      assert(ctx->num_uavs > idx);
-      return emit_bufferstore_call(ctx, ctx->uav_handles[idx], coord, value, write_mask);
-   } else {
-      assert("dynamic ssbo addressing not implemented");
-      return false;
-   }
+   return emit_bufferstore_call(ctx, ctx->uav_handles[0], coord, value4,
+                                write_mask);
 }
 
 static bool
@@ -1745,10 +1791,12 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_local_invocation_id(ctx, intr);
    case nir_intrinsic_load_work_group_id:
       return emit_load_local_work_group_id(ctx, intr);
-   case nir_intrinsic_load_ssbo:
-      return emit_load_ssbo(ctx, intr);
-   case nir_intrinsic_store_ssbo:
-      return emit_store_ssbo(ctx, intr);
+   case nir_intrinsic_load_kernel_input:
+      return emit_load_kernel_input(ctx, intr);
+   case nir_intrinsic_load_global:
+      return emit_load_global(ctx, intr);
+   case nir_intrinsic_store_global:
+      return emit_store_global(ctx, intr);
    case nir_intrinsic_store_deref:
       return emit_store_deref(ctx, intr);
    case nir_intrinsic_load_deref:
@@ -2332,11 +2380,14 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       }
    }
 
-   /* UAVs */
-   nir_foreach_variable(var, &s->uniforms) {
-      if (var->data.mode == nir_var_mem_ssbo && !var->interface_type) {
-         if (!emit_uav(ctx, var))
-            return false;
+   if (s->info.stage == MESA_SHADER_KERNEL) {
+      nir_foreach_variable(var, &s->inputs) {
+         switch (var->data.mode) {
+         case nir_var_shader_in:
+            if (!emit_kernel_input(ctx, var, &s->info))
+               return false;
+            break;
+         }
       }
    }
 
@@ -2422,204 +2473,6 @@ get_dxil_shader_kind(struct nir_shader *s)
    }
 }
 
-/*
- * Transforming CLC into SPIR-V also uses the global memory model for all
- * access, with a hard requirement on pointers. We don't want that, partly
- * because it's unclear how to support pointers in DXIL, and partly because
- * it also requires more work on the runtime side to patch in the pointers
- * in GPU address space.
- *
- * For now, assume that all shader_in global mem accesses will instead be
- * bound sequentially as SSBOs.
- */
-static void
-lower_global_mem_to_ssbo(struct nir_shader *nir)
-{
-   /*
-    * First, rewrite all our shader_in inputs (global memory model)
-    * to be SSBOs instead.
-    */
-   foreach_list_typed_safe(nir_variable, in, node, &nir->inputs) {
-      if (in->data.mode != nir_var_shader_in)
-         continue;
-
-      struct nir_variable *ssbo = rzalloc(nir, nir_variable);
-      ssbo->data.mode = nir_var_mem_ssbo;
-      ssbo->data.read_only = in->data.read_only;
-      ssbo->data.location = in->data.location;
-      ssbo->name = in->name ? ralloc_strdup(nir, in->name) : NULL;
-      ssbo->type = in->type;
-
-      nir_shader_add_variable(nir, ssbo);
-      nir->num_shared++;
-      exec_node_remove(&in->node);
-      nir->num_inputs--;
-   }
-
-   foreach_list_typed(nir_function, func, node, &nir->functions) {
-      if (!func->is_entrypoint)
-         continue;
-      assert(func->impl);
-
-      nir_builder b;
-      nir_builder_init(&b, func->impl);
-
-      /*
-       * Now, find all our function params: turn the load deref (pull the
-       * pointer * base address) into an SSBO index which we stash in high
-       * bits.
-       */
-      nir_foreach_block(block, func->impl) {
-         nir_foreach_instr_safe(instr, block) {
-            if (instr->type != nir_instr_type_intrinsic)
-               continue;
-
-            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-            if (intr->intrinsic != nir_intrinsic_load_kernel_input)
-               continue;
-            b.cursor = nir_before_instr(instr);
-
-            nir_src *src = &intr->src[0]; /* param location i.e. SSBO slot */
-            assert(src->is_ssa);
-
-            nir_ssa_def *ssbo_loc = nir_ishl(&b, src->ssa, nir_imm_int(&b, 28));
-            nir_ssa_def_rewrite_uses(&intr->dest.ssa,
-                                     nir_src_for_ssa(ssbo_loc));
-            nir_instr_remove(instr);
-         }
-      }
-
-      /*
-       * Find the corresponding store_global instructions and replace them
-       * with SSBO accesses. This requires widening scalar sources to vec4,
-       * and reconstructing the SSBO location + index from the 'pointer'
-       * constructed for us by NIR's IO lowering.
-       */
-      nir_foreach_block(block, func->impl) {
-         nir_foreach_instr_safe(instr, block) {
-            if (instr->type != nir_instr_type_intrinsic)
-               continue;
-
-            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-            if (intr->intrinsic != nir_intrinsic_store_global)
-               continue;
-            b.cursor = nir_before_instr(instr);
-
-            assert(intr->src[0].is_ssa);
-            nir_ssa_def *val = intr->src[0].ssa; /* value */
-            nir_ssa_def *vec4_val = nir_vec4(&b, val, val, val, val);
-
-            assert(intr->src[1].is_ssa);
-            nir_ssa_def *ptr = intr->src[1].ssa; /* source 'pointer' */
-#if 0
-            /*
-            * Here's where we would ordinarily do this, and reclaim our SSBO
-            * index from the high bits of the pointer:
-            *  nir_ssa_def *ssbo_loc = nir_ishr(&b, ptr, nir_imm_int(&b, 28));
-            *
-            * However, since we don't implement runtime lookup of SSBO
-            * binding index -> UAV handle yet
-            * (cf. nir_to_dxil.c:emit_store_ssbo), and NIR isn't quite smart
-            * enough to see that: ((x & 0x0fffffff) << 28) >> 28 == 0,
-            * we ... can't actually do this.
-            *
-            * So for just now, you get one SSBO, and all of the above is an
-            * elaborate exercise in misdirection.
-            *
-            * Fixing this would likely involve converting our typed UAVs into
-            * raw, and pushing the handle value into a runtime array; doing
-            * this would bring us closer to the pointer model as we could at
-            * least deal in byte rather than element offsets into the
-            * RWBuffer.
-            */
-            nir_ssa_def *ssbo_loc = nir_ishr(&b, ptr, nir_imm_int(&b, 28));
-#else
-            nir_ssa_def *ssbo_loc = nir_imm_zero(&b, 1, 32);
-#endif
-            nir_ssa_def *ssbo_idx = nir_iand(&b, ptr,
-                                             nir_imm_int(&b, 0x00ffffff));
-            unsigned shift = util_logbase2(val->bit_size / 8);
-            ssbo_idx = nir_ishr(&b, ssbo_idx,
-                                nir_imm_int(&b, shift));
-
-            nir_intrinsic_instr *store =
-               nir_intrinsic_instr_create(b.shader, nir_intrinsic_store_ssbo);
-            store->num_components = 4;
-            nir_intrinsic_set_write_mask(store, 0xf);
-            nir_intrinsic_set_align(store, 4, 0);
-            store->src[0] = nir_src_for_ssa(vec4_val);
-            store->src[1] = nir_src_for_ssa(ssbo_loc);
-            store->src[2] = nir_src_for_ssa(ssbo_idx);
-            nir_builder_instr_insert(&b, &store->instr);
-            nir_instr_remove(instr);
-         }
-      }
-
-      /*
-       * Find the corresponding load_global instructions and rewrite them to
-       * SSBO accesses.
-       */
-      nir_foreach_block(block, func->impl) {
-         nir_foreach_instr_safe(instr, block) {
-            if (instr->type != nir_instr_type_intrinsic)
-               continue;
-
-            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-            if (intr->intrinsic != nir_intrinsic_load_global)
-               continue;
-            b.cursor = nir_before_instr(instr);
-
-            assert(intr->src[0].is_ssa);
-            nir_ssa_def *ptr = intr->src[0].ssa; /* source 'pointer' */
-#if 0
-            /*
-            * Here's where we would ordinarily do this, and reclaim our SSBO
-            * index from the high bits of the pointer:
-            *  nir_ssa_def *ssbo_loc = nir_ishr(&b, ptr, nir_imm_int(&b, 28));
-            *
-            * However, since we don't implement runtime lookup of SSBO
-            * binding index -> UAV handle yet
-            * (cf. nir_to_dxil.c:emit_store_ssbo), and NIR isn't quite smart
-            * enough to see that: ((x & 0x0fffffff) << 28) >> 28 == 0,
-            * we ... can't actually do this.
-            *
-            * So for just now, you get one SSBO, and all of the above is an
-            * elaborate exercise in misdirection.
-            *
-            * Fixing this would likely involve converting our typed UAVs into
-            * raw, and pushing the handle value into a runtime array; doing
-            * this would bring us closer to the pointer model as we could at
-            * least deal in byte rather than element offsets into the
-            * RWBuffer.
-            */
-            nir_ssa_def *ssbo_loc = nir_ishr(&b, ptr, nir_imm_int(&b, 28));
-#else
-            nir_ssa_def *ssbo_loc = nir_imm_zero(&b, 1, 32);
-#endif
-            nir_ssa_def *ssbo_idx = nir_iand(&b, ptr,
-                                             nir_imm_int(&b, 0x00ffffff));
-            assert(intr->dest.is_ssa);
-            nir_ssa_def *dest = &intr->dest.ssa;
-            ssbo_idx = nir_ishr(&b, ssbo_idx,
-                                nir_imm_int(&b, dest->bit_size / 16));
-
-            nir_intrinsic_instr *load =
-               nir_intrinsic_instr_create(b.shader, nir_intrinsic_load_ssbo);
-            load->num_components = 1;
-            load->src[0] = nir_src_for_ssa(ssbo_loc);
-            load->src[1] = nir_src_for_ssa(ssbo_idx);
-            nir_ssa_dest_init(&load->instr, &load->dest, load->num_components,
-                              dest->bit_size, dest->name);
-            nir_intrinsic_set_align(load, 4, 0);
-
-            nir_builder_instr_insert(&b, &load->instr);
-            nir_ssa_def_rewrite_uses(dest, nir_src_for_ssa(&load->dest.ssa));
-            nir_instr_remove(instr);
-         }
-      }
-   }
-}
-
 static void
 optimize_nir(struct nir_shader *s)
 {
@@ -2640,8 +2493,6 @@ optimize_nir(struct nir_shader *s)
       NIR_PASS(progress, s, nir_opt_undef);
       NIR_PASS(progress, s, nir_opt_deref);
       NIR_PASS_V(s, nir_lower_system_values);
-      if (s->info.stage == MESA_SHADER_KERNEL)
-         NIR_PASS_V(s, nir_lower_explicit_io, nir_var_shader_in | nir_var_mem_global, nir_address_format_32bit_global);
    } while (progress);
 
    do {
@@ -2705,17 +2556,6 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
    optimize_nir(s);
 
    NIR_PASS_V(s, nir_remove_dead_variables, nir_var_function_temp);
-
-   /*
-    * See comments on these two passes: rewrite global memory-model usage
-    * with pointers into SSBO access. We re-run constant folding and undef
-    * removal as these two passes both generate extra constants.
-    */
-   if (s->info.stage == MESA_SHADER_KERNEL) {
-      NIR_PASS_V(s, lower_global_mem_to_ssbo);
-      NIR_PASS_V(s, nir_lower_variable_initializers, nir_var_all);
-      optimize_nir(s);
-   }
 
    if (debug_dxil & DXIL_DEBUG_VERBOSE)
       nir_print_shader(s, stderr);
