@@ -1403,6 +1403,44 @@ emit_store_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
+emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   nir_const_value *const_block_index = nir_src_as_const_value(intr->src[0]);
+   assert(const_block_index); // no dynamic indexing for now
+   assert(const_block_index->u32 == 0); // we only support the default UBO for now
+
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.cbufferLoadLegacy", DXIL_F32);
+   if (!func)
+      return false;
+
+   const struct dxil_value *offset;
+   nir_const_value *const_offset = nir_src_as_const_value(intr->src[1]);
+   if (const_offset) {
+      offset = dxil_module_get_int32_const(&ctx->mod, const_offset->i32 >> 4);
+   } else {
+      const struct dxil_value *offset_src = get_src(ctx, &intr->src[1], 0, nir_type_uint);
+      const struct dxil_value *c4 = dxil_module_get_int32_const(&ctx->mod, 4);
+      offset = dxil_emit_binop(&ctx->mod, DXIL_BINOP_ASHR, offset_src, c4);
+   }
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CBUFFER_LOAD_LEGACY);
+   const struct dxil_value *handle = ctx->cbv_handles[0];
+
+   const struct dxil_value *args[] = {
+      opcode, handle, offset
+   };
+   const struct dxil_value *agg = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+   const struct dxil_type *agg_type = dxil_module_get_cbuf_ret_type(&ctx->mod, DXIL_F32);
+
+   for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
+      const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, agg, agg_type, i);
+      store_dest(ctx, &intr->dest, i, retval,
+                 intr->dest.ssa.bit_size > 1 ? nir_type_float : nir_type_bool);
+   }
+   return true;
+}
+
+static bool
 emit_store_output(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                   nir_variable *output)
 {
@@ -1583,6 +1621,8 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_store_deref(ctx, intr);
    case nir_intrinsic_load_deref:
       return emit_load_deref(ctx, intr);
+   case nir_intrinsic_load_ubo:
+      return emit_load_ubo(ctx, intr);
 
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_local_group_size:
