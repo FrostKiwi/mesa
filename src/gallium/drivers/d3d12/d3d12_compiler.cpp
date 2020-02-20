@@ -221,3 +221,56 @@ void d3d12_validation_tools::disassemble(struct blob *dxil)
            disassembly);
 }
 
+/* Sort io values so that first come normal varyings,
+ * then system values, and then system generated values.
+ */
+static void insert_sorted(struct exec_list *var_list, nir_variable *new_var)
+{
+   nir_foreach_variable(var, var_list) {
+      if (var->data.driver_location > new_var->data.driver_location ||
+          (var->data.driver_location == new_var->data.driver_location &&
+           var->data.location > new_var->data.location)) {
+         exec_node_insert_node_before(&var->node, &new_var->node);
+         return;
+      }
+   }
+   exec_list_push_tail(var_list, &new_var->node);
+}
+
+/* Order VS inputs and PS outputs according to driver location */
+void
+d3d12_sort_by_driver_location(exec_list *io)
+{
+   struct exec_list new_list;
+   exec_list_make_empty(&new_list);
+
+   nir_foreach_variable_safe(var, io) {
+      exec_node_remove(&var->node);
+      insert_sorted(&new_list, var);
+   }
+   exec_list_move_nodes_to(&new_list, io);
+}
+
+/* Order between stage values so that normal varyings come first,
+ * then sysvalues and then system generated values.
+ */
+void
+d3d12_reassign_driver_locations(exec_list *io)
+{
+   struct exec_list new_list;
+   exec_list_make_empty(&new_list);
+
+   nir_foreach_variable_safe(var, io) {
+      exec_node_remove(&var->node);
+      /* We use the driver_location here to avoid introducing a new
+       * struct or member variable here. The true, updated driver location
+       * will be written below, after sorting */
+      var->data.driver_location = nir_var_to_dxil_sysvalue_type(var);
+      insert_sorted(&new_list, var);
+   }
+   exec_list_move_nodes_to(&new_list, io);
+
+   unsigned driver_loc = 0;
+   nir_foreach_variable(var, io)
+      var->data.driver_location = driver_loc++;
+}
