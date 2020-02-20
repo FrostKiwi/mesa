@@ -2203,6 +2203,32 @@ dxil_emit_alloca(struct dxil_module *m, const struct dxil_type *alloc_type,
    return &instr->value;
 }
 
+const struct dxil_value *
+dxil_emit_gep_inbounds(struct dxil_module *m,
+                       const struct dxil_type *source_elem_type,
+                       const struct dxil_value **operands,
+                       size_t num_operands)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_GEP);
+   if (!instr)
+      return NULL;
+
+   instr->gep.operands = CALLOC(sizeof(struct dxil_value *), num_operands);
+   if (!instr->gep.operands) {
+      FREE(instr);
+      return NULL;
+   }
+
+   instr->gep.source_elem_type = source_elem_type;
+   memcpy(instr->gep.operands, operands,
+          sizeof(struct dxil_value *) * num_operands);
+   instr->gep.num_operands = num_operands;
+   instr->gep.inbounds = true;
+
+   instr->has_value = true;
+   return &instr->value;
+}
+
 static bool
 emit_binop(struct dxil_module *m, struct dxil_instr *instr)
 {
@@ -2387,6 +2413,26 @@ emit_alloca(struct dxil_module *m, struct dxil_instr *instr)
 }
 
 static bool
+emit_gep(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_GEP);
+   assert(instr->gep.source_elem_type->id >= 0);
+
+   uint64_t data[256];
+   data[0] = FUNC_CODE_INST_GEP;
+   data[1] = instr->gep.inbounds;
+   data[2] = instr->gep.source_elem_type->id;
+
+   assert(instr->gep.num_operands < ARRAY_SIZE(data) - 3);
+   for (int i = 0; i < instr->gep.num_operands; ++i) {
+      assert(instr->value.id > instr->gep.operands[i]->id);
+      data[3 + i] = instr->value.id - instr->gep.operands[i]->id;
+   }
+   return emit_func_abbrev_record(m, FUNC_ABBREV_GEP,
+                                  data, 3 + instr->gep.num_operands);
+}
+
+static bool
 emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 {
    switch (instr->type) {
@@ -2419,6 +2465,9 @@ emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 
    case INSTR_ALLOCA:
       return emit_alloca(m, instr);
+
+   case INSTR_GEP:
+      return emit_gep(m, instr);
 
    default:
       unreachable("unexpected instruction type");

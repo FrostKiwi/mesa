@@ -373,6 +373,7 @@ dump_instrs(struct dxil_dumper *d, struct list_head *list)
       case INSTR_BR:  dump_instr_branch(d, &instr->br); break;
       case INSTR_PHI:  dump_instr_phi(d, &instr->phi); break;
       case INSTR_ALLOCA: dump_instr_alloca(d, &instr->alloca); break;
+      case INSTR_GEP: dump_instr_gep(d, &instr->gep); break;
       default:
          _mesa_string_buffer_printf(d->buf, "unknown instruction type %d", instr->type);
       }
@@ -489,6 +490,21 @@ dump_instr_alloca(struct dxil_dumper *d, struct dxil_instr_alloca *alloca)
    unsigned align_mask = (1 << 6 ) - 1;
    unsigned align = alloca->align & align_mask;
    _mesa_string_buffer_printf(d->buf, ", %d", 1 << (align - 1));
+}
+
+static void
+dump_instr_gep(struct dxil_dumper *d, struct dxil_instr_gep *gep)
+{
+   _mesa_string_buffer_append(d->buf, "getelementptr ");
+   if (gep->inbounds)
+      _mesa_string_buffer_append(d->buf, "inbounds ");
+   dump_type_name(d, gep->source_elem_type);
+   _mesa_string_buffer_append(d->buf, ", ");
+   for (unsigned i = 0; i < gep->num_operands; ++i) {
+      if (i > 0)
+         _mesa_string_buffer_append(d->buf, ", ");
+      dump_value(d->buf, gep->operands[i]);
+   }
 }
 
 static void
