@@ -2180,6 +2180,29 @@ dxil_emit_extractval(struct dxil_module *m, const struct dxil_value *src,
    return &instr->value;
 }
 
+const struct dxil_value *
+dxil_emit_alloca(struct dxil_module *m, const struct dxil_type *alloc_type,
+                 const struct dxil_type *size_type,
+                 const struct dxil_value *size,
+                 unsigned int align)
+{
+   assert(size_type && size_type->type == TYPE_INTEGER);
+
+   struct dxil_instr *instr = create_instr(m, INSTR_ALLOCA);
+   if (!instr)
+      return NULL;
+
+   instr->alloca.alloc_type = alloc_type;
+   instr->alloca.size_type = size_type;
+   instr->alloca.size = size;
+   instr->alloca.align = util_logbase2(align) + 1;
+   assert(instr->alloca.align < (1 << 5));
+   instr->alloca.align |= 1 << 6;
+
+   instr->has_value = true;
+   return &instr->value;
+}
+
 static bool
 emit_binop(struct dxil_module *m, struct dxil_instr *instr)
 {
@@ -2346,6 +2369,24 @@ emit_ret(struct dxil_module *m, struct dxil_instr *instr)
 }
 
 static bool
+emit_alloca(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_ALLOCA);
+   assert(instr->alloca.alloc_type->id >= 0);
+   assert(instr->alloca.size_type->id >= 0);
+   assert(instr->value.id > instr->alloca.size->id);
+
+   uint64_t data[] = {
+      instr->alloca.alloc_type->id,
+      instr->alloca.size_type->id,
+      instr->value.id - instr->alloca.size->id,
+      instr->alloca.align,
+   };
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_ALLOCA,
+                                data, ARRAY_SIZE(data));
+}
+
+static bool
 emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 {
    switch (instr->type) {
@@ -2375,6 +2416,9 @@ emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 
    case INSTR_EXTRACTVAL:
       return emit_extractval(m, instr);
+
+   case INSTR_ALLOCA:
+      return emit_alloca(m, instr);
 
    default:
       unreachable("unexpected instruction type");
