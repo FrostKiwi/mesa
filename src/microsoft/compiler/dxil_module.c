@@ -2229,6 +2229,22 @@ dxil_emit_gep_inbounds(struct dxil_module *m,
    return &instr->value;
 }
 
+bool
+dxil_emit_store(struct dxil_module *m, const struct dxil_value *value,
+                const struct dxil_value *ptr, unsigned align,
+                bool is_volatile)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_STORE);
+   if (!instr)
+      return false;
+
+   instr->store.value = value;
+   instr->store.ptr = ptr;
+   instr->store.align = util_logbase2(align) + 1;
+   instr->store.is_volatile = is_volatile;
+   return true;
+}
+
 static bool
 emit_binop(struct dxil_module *m, struct dxil_instr *instr)
 {
@@ -2433,6 +2449,23 @@ emit_gep(struct dxil_module *m, struct dxil_instr *instr)
 }
 
 static bool
+emit_store(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_STORE);
+   assert(instr->value.id > instr->store.value->id);
+   assert(instr->value.id > instr->store.ptr->id);
+
+   uint64_t data[] = {
+      instr->value.id - instr->store.ptr->id,
+      instr->value.id - instr->store.value->id,
+      instr->store.align,
+      instr->store.is_volatile
+   };
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_STORE,
+                                data, ARRAY_SIZE(data));
+}
+
+static bool
 emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 {
    switch (instr->type) {
@@ -2468,6 +2501,9 @@ emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 
    case INSTR_GEP:
       return emit_gep(m, instr);
+
+   case INSTR_STORE:
+      return emit_store(m, instr);
 
    default:
       unreachable("unexpected instruction type");
