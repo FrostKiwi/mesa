@@ -480,7 +480,7 @@ dxil_module_get_struct_type(struct dxil_module *m,
       if ((name == NULL) != (type->struct_def.name == NULL))
          continue;
 
-      if (name && !strcmp(type->struct_def.name, name))
+      if (name && strcmp(type->struct_def.name, name))
          continue;
 
       if (type->struct_def.num_elem_types == num_elem_types &&
