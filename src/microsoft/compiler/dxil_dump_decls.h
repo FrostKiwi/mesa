@@ -77,6 +77,8 @@ static void
 dump_instr_alloca(struct dxil_dumper *d, struct dxil_instr_alloca *alloca);
 static void
 dump_instr_gep(struct dxil_dumper *d, struct dxil_instr_gep *gep);
+static void
+dump_instr_store(struct dxil_dumper *d, struct dxil_instr_store *store);
 
 static void
 dump_instr_print_operands(struct _mesa_string_buffer *buf, int num,

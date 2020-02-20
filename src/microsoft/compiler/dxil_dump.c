@@ -374,6 +374,7 @@ dump_instrs(struct dxil_dumper *d, struct list_head *list)
       case INSTR_PHI:  dump_instr_phi(d, &instr->phi); break;
       case INSTR_ALLOCA: dump_instr_alloca(d, &instr->alloca); break;
       case INSTR_GEP: dump_instr_gep(d, &instr->gep); break;
+      case INSTR_STORE: dump_instr_store(d, &instr->store); break;
       default:
          _mesa_string_buffer_printf(d->buf, "unknown instruction type %d", instr->type);
       }
@@ -505,6 +506,18 @@ dump_instr_gep(struct dxil_dumper *d, struct dxil_instr_gep *gep)
          _mesa_string_buffer_append(d->buf, ", ");
       dump_value(d->buf, gep->operands[i]);
    }
+}
+
+static void
+dump_instr_store(struct dxil_dumper *d, struct dxil_instr_store *store)
+{
+   _mesa_string_buffer_append(d->buf, "store ");
+   if (store->is_volatile)
+      _mesa_string_buffer_append(d->buf, " volatile");
+   dump_value(d->buf, store->value);
+   _mesa_string_buffer_append(d->buf, ", ");
+   dump_value(d->buf, store->ptr);
+   _mesa_string_buffer_printf(d->buf, ", %d", store->align);
 }
 
 static void
