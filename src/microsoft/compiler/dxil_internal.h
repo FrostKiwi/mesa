@@ -137,6 +137,13 @@ struct dxil_instr_alloca {
    unsigned align;
 };
 
+struct dxil_instr_gep {
+   bool inbounds;
+   const struct dxil_type *source_elem_type;
+   struct dxil_value **operands;
+   size_t num_operands;
+};
+
 struct dxil_instr {
    enum instr_type {
       INSTR_BINOP,
@@ -148,7 +155,8 @@ struct dxil_instr {
       INSTR_CALL,
       INSTR_RET,
       INSTR_EXTRACTVAL,
-      INSTR_ALLOCA
+      INSTR_ALLOCA,
+      INSTR_GEP
    } type;
 
    union {
@@ -162,6 +170,7 @@ struct dxil_instr {
       struct dxil_instr_phi phi;
       struct dxil_instr_br br;
       struct dxil_instr_alloca alloca;
+      struct dxil_instr_gep gep;
    };
 
    bool has_value;
