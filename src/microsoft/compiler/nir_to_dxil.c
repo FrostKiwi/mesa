@@ -1967,7 +1967,8 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
       optimize_nir(s);
    }
 
-   nir_print_shader(s, stderr);
+   if (debug_dxil & DXIL_DEBUG_VERBOSE)
+      nir_print_shader(s, stderr);
 
    if (!emit_module(&ctx, s)) {
       debug_printf("D3D12: dxil_container_add_module failed\n");
