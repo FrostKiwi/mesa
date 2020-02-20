@@ -7,6 +7,10 @@
 
 #include <stdint.h>
 
+// Malloc.h defines a macro for alloca. Let's at least make sure that all includers
+// of this header have the same definition of alloca.
+#include <malloc.h>
+
 struct dxil_type {
    enum type_type {
       TYPE_VOID,
@@ -126,6 +130,13 @@ struct dxil_instr_phi {
    size_t num_incoming;
 };
 
+struct dxil_instr_alloca {
+   const struct dxil_type *alloc_type;
+   const struct dxil_type *size_type;
+   const struct dxil_value *size;
+   unsigned align;
+};
+
 struct dxil_instr {
    enum instr_type {
       INSTR_BINOP,
@@ -136,7 +147,8 @@ struct dxil_instr {
       INSTR_PHI,
       INSTR_CALL,
       INSTR_RET,
-      INSTR_EXTRACTVAL
+      INSTR_EXTRACTVAL,
+      INSTR_ALLOCA
    } type;
 
    union {
@@ -149,6 +161,7 @@ struct dxil_instr {
       struct dxil_instr_extractval extractval;
       struct dxil_instr_phi phi;
       struct dxil_instr_br br;
+      struct dxil_instr_alloca alloca;
    };
 
    bool has_value;
