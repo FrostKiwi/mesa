@@ -1723,7 +1723,8 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    nir_metadata_require(entry, nir_metadata_block_index);
 
    assert(entry->num_blocks > 0);
-   ctx->mod.basic_block_ids = calloc(sizeof(int), entry->num_blocks);
+   ctx->mod.basic_block_ids = rzalloc_array(ctx->ralloc_ctx, int,
+                                            entry->num_blocks);
    if (!ctx->mod.basic_block_ids)
       return false;
 
