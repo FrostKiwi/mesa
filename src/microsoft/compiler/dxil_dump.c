@@ -372,6 +372,7 @@ dump_instrs(struct dxil_dumper *d, struct list_head *list)
       case INSTR_EXTRACTVAL: dump_instr_extractval(d, &instr->extractval); break;
       case INSTR_BR:  dump_instr_branch(d, &instr->br); break;
       case INSTR_PHI:  dump_instr_phi(d, &instr->phi); break;
+      case INSTR_ALLOCA: dump_instr_alloca(d, &instr->alloca); break;
       default:
          _mesa_string_buffer_printf(d->buf, "unknown instruction type %d", instr->type);
       }
@@ -474,6 +475,20 @@ dump_instr_phi(struct dxil_dumper *d, struct dxil_instr_phi *phi)
       dump_value(d->buf, src->value);
       _mesa_string_buffer_printf(d->buf, "(%d)", src->block);
    }
+}
+
+static void
+dump_instr_alloca(struct dxil_dumper *d, struct dxil_instr_alloca *alloca)
+{
+   _mesa_string_buffer_append(d->buf, "alloca ");
+   dump_type_name(d, alloca->alloc_type);
+   _mesa_string_buffer_append(d->buf, ", ");
+   dump_type_name(d, alloca->size_type);
+   _mesa_string_buffer_append(d->buf, ", ");
+   dump_value(d->buf, alloca->size);
+   unsigned align_mask = (1 << 6 ) - 1;
+   unsigned align = alloca->align & align_mask;
+   _mesa_string_buffer_printf(d->buf, ", %d", 1 << (align - 1));
 }
 
 static void
