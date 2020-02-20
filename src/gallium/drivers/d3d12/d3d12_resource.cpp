@@ -250,6 +250,8 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
    struct d3d12_screen *screen = d3d12_screen(pctx->screen);
    struct d3d12_resource *res = d3d12_resource(ptrans->resource);
    res->res->Unmap(0, NULL);
+   pipe_resource_reference(&ptrans->resource, NULL);
+   slab_free(&d3d12_context(pctx)->transfer_pool, ptrans);
 }
 
 void
