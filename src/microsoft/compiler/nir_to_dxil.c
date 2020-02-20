@@ -1736,7 +1736,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       return false;
    ctx->num_defs = entry->ssa_alloc;
 
-   ctx->phis = _mesa_pointer_hash_table_create(NULL);
+   ctx->phis = _mesa_pointer_hash_table_create(ctx->ralloc_ctx);
    if (!ctx->phis)
       return false;
 
