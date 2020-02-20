@@ -1731,7 +1731,8 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       ctx->mod.basic_block_ids[i] = -1;
    ctx->mod.num_basic_block_ids = entry->num_blocks;
 
-   ctx->defs = malloc(sizeof(struct dxil_def) * entry->ssa_alloc);
+   ctx->defs = rzalloc_array(ctx->ralloc_ctx, struct dxil_def,
+                             entry->ssa_alloc);
    if (!ctx->defs)
       return false;
    ctx->num_defs = entry->ssa_alloc;
@@ -1777,8 +1778,6 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    if (!dxil_emit_ret_void(&ctx->mod))
       return false;
-
-   free(ctx->defs);
 
    return emit_metadata(ctx, s) &&
           dxil_emit_module(&ctx->mod);
