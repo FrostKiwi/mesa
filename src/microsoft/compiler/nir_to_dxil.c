@@ -252,6 +252,8 @@ struct dxil_def {
 };
 
 struct ntd_context {
+   void *ralloc_ctx;
+
    struct dxil_module mod;
 
    const struct dxil_mdnode *uav_metadata_nodes[MAX_UAVS];
@@ -2063,6 +2065,11 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    debug_dxil = (int)debug_get_option_debug_dxil();
 
    struct ntd_context ctx = { 0 };
+
+   ctx.ralloc_ctx = ralloc_context(NULL);
+   if (!ctx.ralloc_ctx)
+      return false;
+
    dxil_module_init(&ctx.mod);
    ctx.mod.shader_kind = get_dxil_shader_kind(s);
    ctx.mod.major_version = 6;
@@ -2166,5 +2173,6 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
 
 out:
    dxil_module_release(&ctx.mod);
+   ralloc_free(ctx.ralloc_ctx);
    return retval;
 }
