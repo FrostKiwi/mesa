@@ -1826,7 +1826,7 @@ lower_global_mem_to_ssbo(struct nir_shader *nir)
       ssbo->data.mode = nir_var_mem_ssbo;
       ssbo->data.read_only = in->data.read_only;
       ssbo->data.location = in->data.location;
-      ssbo->name = in->name ? strdup(in->name) : NULL;
+      ssbo->name = in->name ? ralloc_strdup(nir, in->name) : NULL;
       ssbo->type = in->type;
 
       nir_shader_add_variable(nir, ssbo);
