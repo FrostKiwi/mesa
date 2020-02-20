@@ -370,6 +370,11 @@ dxil_emit_gep_inbounds(struct dxil_module *m,
                        size_t num_operands);
 
 bool
+dxil_emit_store(struct dxil_module *m, const struct dxil_value *value,
+                const struct dxil_value *ptr, unsigned align,
+                bool is_volatile);
+
+bool
 dxil_emit_module(struct dxil_module *m);
 
 #ifdef __cplusplus
