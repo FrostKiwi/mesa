@@ -2091,7 +2091,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    if (!emit_module(&ctx, s)) {
       debug_printf("D3D12: dxil_container_add_module failed\n");
       retval = false;
-      goto fail;
+      goto out;
    }
 
    if (debug_dxil & DXIL_DEBUG_DUMP_MODULE) {
@@ -2108,7 +2108,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    if (!dxil_container_add_features(&container, &ctx.mod.feats)) {
       debug_printf("D3D12: dxil_container_add_features failed\n");
       retval = false;
-      goto fail;
+      goto out;
    }
 
    if (!dxil_container_add_io_signature(&container,
@@ -2117,7 +2117,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
                                         ctx.mod.inputs)) {
       debug_printf("D3D12: failed to write input signature\n");
       retval = false;
-      goto fail;
+      goto out;
    }
 
    if (!dxil_container_add_io_signature(&container,
@@ -2126,7 +2126,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
                                         ctx.mod.outputs)) {
       debug_printf("D3D12: failed to write output signature\n");
       retval = false;
-      goto fail;
+      goto out;
    }
 
    struct dxil_validation_state validation_state;
@@ -2137,20 +2137,20 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
                                             &validation_state)) {
       debug_printf("D3D12: failed to write state-validation\n");
       retval = false;
-      goto fail;
+      goto out;
    }
 
    if (!dxil_container_add_module(&container, &ctx.mod)) {
       debug_printf("D3D12: failed to write module\n");
       retval = false;
-      goto fail;
+      goto out;
    }
 
    blob_init(blob);
    if (!dxil_container_write(&container, blob)) {
       debug_printf("D3D12: dxil_container_write failed\n");
       retval = false;
-      goto fail;
+      goto out;
    }
 
    if (debug_dxil & DXIL_DEBUG_DUMP_BLOB) {
@@ -2166,7 +2166,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
       }
    }
 
-fail:
+out:
    dxil_module_release(&ctx.mod);
    return retval;
 }
