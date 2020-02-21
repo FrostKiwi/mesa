@@ -63,6 +63,9 @@ get_semantic_ps_outname(nir_variable *var, char buffer[64])
    case FRAG_RESULT_DATA7:
       snprintf(buffer, 64, "%s", "SV_Target");
       kind = DXIL_SEM_TARGET;
+      assert((var->data.location == FRAG_RESULT_COLOR ||
+              var->data.location == FRAG_RESULT_DATA0) &&
+             "time to implement semantic indices for PS outputs");
       break;
    case FRAG_RESULT_DEPTH:
       snprintf(buffer, 64, "%s", "SV_Depth");
