@@ -93,17 +93,14 @@ get_semantic_name(nir_variable *var, char buffer[64])
    if (var->data.location == VARYING_SLOT_POS) {
       assert(glsl_get_components(var->type) == 4);
       snprintf(buffer, 64, "%s", "SV_Position");
-      kind = DXIL_SEM_POSITION;
-   } else if (var->data.location >= VARYING_SLOT_VAR0 &&
-              var->data.location <= VARYING_SLOT_VAR31) {
-      unsigned index = var->data.location - VARYING_SLOT_VAR0;
-      snprintf(buffer, 64, "%s%c", "VARYING", 'A' + index);
-      kind = DXIL_SEM_ARBITRARY;
-   } else {
-      unsigned index = var->data.location - VARYING_SLOT_VAR0;
-      snprintf(buffer, 64, "%s%c", "OTHER", 'A' + index);
+      return DXIL_SEM_POSITION;
    }
-   return kind;
+
+   int index = var->data.location - VARYING_SLOT_POS;
+   const char idx1 = 'A' + (char)(index >> 4);
+   const char idx2 = 'A' + (char)(index & 0xf);
+   snprintf(buffer, 64, "VARYING%c%c", idx1, idx2);
+   return  DXIL_SEM_ARBITRARY;
 }
 
 static enum dxil_prog_sig_semantic
