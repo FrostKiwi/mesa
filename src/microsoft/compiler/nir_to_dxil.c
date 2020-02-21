@@ -233,12 +233,15 @@ get_glsl_type(struct dxil_module *m, const struct glsl_type *type)
 {
    assert(type);
 
-   if (!glsl_type_is_scalar(type)) {
-      debug_printf("type: %s\n", glsl_get_type_name(type));
-      unreachable("unexpected glsl type");
-   }
+   if (glsl_type_is_scalar(type))
+      return get_glsl_basetype(m, glsl_get_base_type(type));
 
-   return get_glsl_basetype(m, glsl_get_base_type(type));
+   if (glsl_type_is_array(type))
+      return dxil_module_get_array_type(m,
+         get_glsl_type(m, glsl_get_array_element(type)),
+         glsl_get_length(type));
+
+   unreachable("unexpected glsl type");
 }
 
 
