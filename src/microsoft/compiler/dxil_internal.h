@@ -14,6 +14,7 @@ struct dxil_type {
       TYPE_FLOAT,
       TYPE_POINTER,
       TYPE_STRUCT,
+      TYPE_ARRAY,
       TYPE_FUNCTION
    } type;
 
@@ -26,6 +27,10 @@ struct dxil_type {
          struct dxil_type **elem_types;
          size_t num_elem_types;
       } struct_def;
+      struct {
+         const struct dxil_type *elem_type;
+         size_t num_elems;
+      } array;
       struct {
          const struct dxil_type *ret_type;
          struct dxil_type **arg_types;
