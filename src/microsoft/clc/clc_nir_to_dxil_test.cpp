@@ -262,3 +262,178 @@ impl main {
 
    run(nir_shader, expect);
 }
+
+
+TEST_F(NirToDXILTest, test_fs_uniform_color)
+{
+   const char expect[] = R"(target datalayout = "e-m:e-p:32:32-i1:32-i8:32-i16:32-i32:32-i64:64-f16:32-f32:32-f64:64-n8:16:32:64"
+target triple = "dxil-ms-dx"
+
+%dx.types.Handle = type { i8* }
+%dx.types.CBufRet.f32 = type { float, float, float, float }
+%uniform_0 = type { float, float, float, float }
+
+declare %dx.types.Handle @dx.op.createHandle(i32, i8, i32, i32, i1) #0
+declare %dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32, %dx.types.Handle, i32) #0
+declare void @dx.op.storeOutput.f32(i32, i32, i32, i8, float) #1
+
+define void @main() {
+  %1 = call %dx.types.Handle @dx.op.createHandle(i32 57, i8 2, i32 0, i32 0, i1 false) ; CreateHandle(resourceClass,rangeId,index,nonUniformIndex)
+  %2 = call %dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32 59, %dx.types.Handle %1, i32 0) ; CBufferLoadLegacy(handle,regIndex)
+  %3 = extractvalue %dx.types.CBufRet.f32 %2, 0
+  %4 = extractvalue %dx.types.CBufRet.f32 %2, 1
+  %5 = extractvalue %dx.types.CBufRet.f32 %2, 2
+  %6 = extractvalue %dx.types.CBufRet.f32 %2, 3
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %3) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %4) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %5) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %6) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  ret void
+}
+
+attributes #0 = { nounwind readonly }
+attributes #1 = { nounwind }
+
+!llvm.ident = !{!0}
+!dx.version = !{!1}
+!dx.valver = !{!2}
+!dx.shaderModel = !{!3}
+!dx.resources = !{!4}
+!dx.typeAnnotations = !{!7}
+!dx.entryPoints = !{!11}
+
+!1 = !{i32 1, i32 0}
+!2 = !{i32 1, i32 4}
+!3 = !{!"ps", i32 6, i32 0}
+!4 = !{null, null, !5, null}
+!5 = !{!6}
+!6 = !{i32 0, %uniform_0* undef, !"uniform_0", i32 0, i32 0, i32 1, i32 16, null}
+!7 = !{i32 1, void ()* @main, !8}
+!8 = !{!9}
+!9 = !{i32 0, !10, !10}
+!10 = !{}
+!11 = !{void ()* @main, !"main", !12, !4, null}
+!12 = !{null, !13, null}
+!13 = !{!14}
+!14 = !{i32 0, !"SV_Target", i8 9, i8 16, !15, i8 0, i32 1, i8 4, i32 0, i8 0, null}
+!15 = !{i32 0}
+)";
+
+   const char shader[] = R"(
+shader: MESA_SHADER_FRAGMENT
+inputs: 0
+outputs: 1
+uniforms: 1
+shared: 0
+decl_var uniform INTERP_MODE_NONE vec4 color_in (0, 0, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 color (FRAG_RESULT_DATA0.xyzw, 0, 0)
+decl_function main (0 params)
+
+impl main {
+   decl_var  INTERP_MODE_NONE vec4 const_temp
+   decl_var  INTERP_MODE_NONE vec4 out@color-temp
+   decl_var  INTERP_MODE_NONE vec4 color@0
+   block block_0:
+   /* preds: */
+   vec1 32 ssa_0 = load_const (0x00000000 /* 0.000000 */)
+   vec1 32 ssa_1 = deref_var &color_in (uniform vec4)
+   vec4 32 ssa_2 = intrinsic load_uniform (ssa_0) (0, 4, 160) /* base=0 */ /* range=4 */ /* type=float32 */      /* color_in */
+   vec1 32 ssa_3 = deref_var &color (shader_out vec4)
+   intrinsic store_deref (ssa_3, ssa_2) (15, 0) /* wrmask=xyzw */ /* access=0 */
+   /* succs: block_1 */
+   block block_1:
+}
+)";
+   run(shader, expect);
+}
+
+TEST_F(NirToDXILTest, test_fs_uniform_nonconst_offset)
+{
+   const char expect[] = R"(target datalayout = "e-m:e-p:32:32-i1:32-i8:32-i16:32-i32:32-i64:64-f16:32-f32:32-f64:64-n8:16:32:64"
+target triple = "dxil-ms-dx"
+
+%dx.types.Handle = type { i8* }
+%dx.types.CBufRet.f32 = type { float, float, float, float }
+%uniform_0 = type { float, float, float, float, float, float, float, float }
+
+declare %dx.types.Handle @dx.op.createHandle(i32, i8, i32, i32, i1) #0
+declare %dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32, %dx.types.Handle, i32) #0
+declare void @dx.op.storeOutput.f32(i32, i32, i32, i8, float) #1
+
+define void @main() {
+  %1 = call %dx.types.Handle @dx.op.createHandle(i32 57, i8 2, i32 0, i32 0, i1 false) ; CreateHandle(resourceClass,rangeId,index,nonUniformIndex)
+  %2 = call %dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32 59, %dx.types.Handle %1, i32 0) ; CBufferLoadLegacy(handle,regIndex)
+  %3 = extractvalue %dx.types.CBufRet.f32 %2, 0
+  %4 = bitcast float %3 to i32
+  %5 = shl i32 %4, 4
+  %6 = ashr i32 %5, 4
+  %7 = call %dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32 59, %dx.types.Handle %1, i32 %6) ; CBufferLoadLegacy(handle,regIndex)
+  %8 = extractvalue %dx.types.CBufRet.f32 %7, 0
+  %9 = extractvalue %dx.types.CBufRet.f32 %7, 1
+  %10 = extractvalue %dx.types.CBufRet.f32 %7, 2
+  %11 = extractvalue %dx.types.CBufRet.f32 %7, 3
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %8) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %9) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %10) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %11) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  ret void
+}
+
+attributes #0 = { nounwind readonly }
+attributes #1 = { nounwind }
+
+!llvm.ident = !{!0}
+!dx.version = !{!1}
+!dx.valver = !{!2}
+!dx.shaderModel = !{!3}
+!dx.resources = !{!4}
+!dx.typeAnnotations = !{!7}
+!dx.entryPoints = !{!11}
+
+!1 = !{i32 1, i32 0}
+!2 = !{i32 1, i32 4}
+!3 = !{!"ps", i32 6, i32 0}
+!4 = !{null, null, !5, null}
+!5 = !{!6}
+!6 = !{i32 0, %uniform_0* undef, !"uniform_0", i32 0, i32 0, i32 1, i32 32, null}
+!7 = !{i32 1, void ()* @main, !8}
+!8 = !{!9}
+!9 = !{i32 0, !10, !10}
+!10 = !{}
+!11 = !{void ()* @main, !"main", !12, !4, null}
+!12 = !{null, !13, null}
+!13 = !{!14}
+!14 = !{i32 0, !"SV_Target", i8 9, i8 16, !15, i8 0, i32 1, i8 4, i32 0, i8 0, null}
+!15 = !{i32 0}
+)";
+
+   const char shader[] = R"(
+shader: MESA_SHADER_FRAGMENT
+inputs: 0
+outputs: 1
+uniforms: 2
+shared: 0
+decl_var uniform INTERP_MODE_NONE vec4 color_in (0, 0, 0)
+decl_var uniform INTERP_MODE_NONE int index (1, 0, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 color (FRAG_RESULT_DATA0.xyzw, 0, 0)
+decl_function main (0 params)
+
+impl main {
+   decl_var  INTERP_MODE_NONE vec4 const_temp
+   decl_var  INTERP_MODE_NONE vec4 out@color-temp
+   decl_var  INTERP_MODE_NONE vec4 color@0
+   block block_0:
+   /* preds: */
+   vec1 32 ssa_0 = load_const (0x00000000 /* 0.000000 */)
+   vec1 32 ssa_1 = deref_var &index (uniform int)
+   vec1 32 ssa_2 = intrinsic load_uniform (ssa_0) (0, 4, 160) /* base=1 */ /* range=4 */ /* type=index */ /* index */
+   vec1 32 ssa_3 = deref_var &color_in (uniform vec4)
+   vec4 32 ssa_4 = intrinsic load_uniform (ssa_2) (0, 4, 160) /* base=0 */ /* range=4 */ /* type=float32 */ /* color_in */
+   vec1 32 ssa_5 = deref_var &color (shader_out vec4)
+   intrinsic store_deref (ssa_5, ssa_4) (15, 0) /* wrmask=xyzw */ /* access=0 */
+   /* succs: block_1 */
+   block block_1:
+}
+)";
+   run(shader, expect);
+}
