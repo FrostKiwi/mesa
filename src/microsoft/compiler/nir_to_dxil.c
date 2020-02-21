@@ -264,6 +264,8 @@ struct ntd_context {
    struct dxil_def *defs;
    unsigned num_defs;
    struct hash_table *phis;
+
+   struct hash_table *locals;
 };
 
 static const struct dxil_value *
@@ -1448,11 +1450,50 @@ emit_load_const(struct ntd_context *ctx, nir_load_const_instr *load_const)
 }
 
 static bool
+emit_deref_array(struct ntd_context *ctx, nir_deref_instr *deref)
+{
+   assert(deref->deref_type == nir_deref_type_array);
+   nir_variable *var = nir_deref_instr_get_variable(deref);
+
+   const struct dxil_type *source_elem_type = get_glsl_type(&ctx->mod, var->type);
+   if (!source_elem_type)
+      return false;
+
+   assert(var->data.mode == nir_var_function_temp);
+   struct hash_entry *he =
+      _mesa_hash_table_search(ctx->locals, var);
+   assert(he != NULL);
+   const struct dxil_value *ptr = he->data;
+
+   const struct dxil_value *zero = dxil_module_get_int32_const(&ctx->mod, 0);
+   if (!zero)
+      return false;
+
+   const struct dxil_value *index =
+      get_src(ctx, &deref->arr.index, 0, nir_type_uint);
+   if (!index)
+      return false;
+
+   const struct dxil_value *ops[] = { ptr, zero, index };
+   ptr = dxil_emit_gep_inbounds(&ctx->mod, source_elem_type,
+                                ops, ARRAY_SIZE(ops));
+   if (!ptr)
+      return false;
+
+   store_dest_int(ctx, &deref->dest, 0, ptr);
+   return true;
+}
+
+static bool
 emit_deref(struct ntd_context* ctx, nir_deref_instr* instr)
 {
    switch (instr->deref_type) {
    case nir_deref_type_var:
       return true;
+
+   case nir_deref_type_array:
+      return emit_deref_array(ctx, instr);
+
    default:
       ;
    }
