@@ -1261,13 +1261,9 @@ emit_store_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
-emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+emit_store_output(struct ntd_context *ctx, nir_intrinsic_instr *intr,
+                  nir_variable *output)
 {
-   nir_deref_instr* deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
-   nir_variable* output = nir_deref_instr_get_variable(deref);
-
-   assert(output->data.mode == nir_var_shader_out);
-
    const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.storeOutput", DXIL_F32);
 
    if (!func)
@@ -1293,13 +1289,24 @@ emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
-emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
-   nir_deref_instr* deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
-   nir_variable* input = nir_deref_instr_get_variable(deref);
+   nir_deref_instr *deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
+   nir_variable *var = nir_deref_instr_get_variable(deref);
 
-   assert(input->data.mode == nir_var_shader_in);
+   switch (var->data.mode) {
+   case nir_var_shader_out:
+      return emit_store_output(ctx, intr, var);
 
+   default:
+      unreachable("unsupported nir_variable_mode");
+   }
+}
+
+static bool
+emit_load_input(struct ntd_context *ctx, nir_intrinsic_instr *intr,
+                nir_variable *input)
+{
    const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.loadInput", DXIL_F32);
 
    if (!func)
@@ -1324,6 +1331,21 @@ emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       store_dest(ctx, &intr->dest, i, retval, nir_type_float);
    }
    return true;
+}
+
+static bool
+emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   nir_deref_instr *deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
+   nir_variable *var = nir_deref_instr_get_variable(deref);
+
+   switch (var->data.mode) {
+   case nir_var_shader_in:
+      return emit_load_input(ctx, intr, var);
+
+   default:
+      unreachable("unsupported nir_variable_mode");
+   }
 }
 
 static bool
