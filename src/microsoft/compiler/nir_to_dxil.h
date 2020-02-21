@@ -37,6 +37,15 @@ struct blob;
 const char *
 dxil_vs_attr_index_to_name(unsigned index);
 
+enum dxil_sysvalue_type {
+   DXIL_NO_SYSVALUE = 0,
+   DXIL_SYSVALUE,
+   DXIL_GENERATED_SYSVALUE
+};
+
+enum dxil_sysvalue_type
+nir_var_to_dxil_sysvalue_type(nir_variable *var);
+
 bool
 nir_to_dxil(struct nir_shader *s, struct blob *blob);
 
