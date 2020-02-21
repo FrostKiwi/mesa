@@ -2199,3 +2199,16 @@ dxil_vs_attr_index_to_name(unsigned index)
    assert(index < 32);
    return generics_semantics[index];
 }
+
+enum dxil_sysvalue_type
+nir_var_to_dxil_sysvalue_type(nir_variable *var)
+{
+   switch (var->data.location) {
+   case VARYING_SLOT_POS:
+      return DXIL_SYSVALUE;
+   case VARYING_SLOT_FACE:
+      return DXIL_GENERATED_SYSVALUE;
+   default:
+      return DXIL_NO_SYSVALUE;
+   }
+}
