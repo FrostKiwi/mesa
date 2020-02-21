@@ -521,6 +521,29 @@ dxil_module_get_struct_type(struct dxil_module *m,
 }
 
 const struct dxil_type *
+dxil_module_get_array_type(struct dxil_module *m,
+                           const struct dxil_type *elem_type,
+                           size_t num_elems)
+{
+   struct dxil_type *type;
+   LIST_FOR_EACH_ENTRY(type, &m->type_list, head) {
+      if (type->type != TYPE_ARRAY)
+         continue;
+
+      if (type->array.elem_type == elem_type &&
+          type->array.num_elems == num_elems)
+         return type;
+   }
+
+   type = create_type(m, TYPE_ARRAY);
+   if (type) {
+      type->array.elem_type = elem_type;
+      type->array.num_elems = num_elems;
+   }
+   return type;
+}
+
+const struct dxil_type *
 dxil_get_overload_type(struct dxil_module *mod, enum overload_type overload)
 {
    switch (overload) {
@@ -1094,6 +1117,19 @@ emit_struct_type(struct dxil_module *m, const struct dxil_type *type)
 }
 
 static bool
+emit_array_type(struct dxil_module *m, const struct dxil_type *type)
+{
+   assert(type->array.elem_type->id >= 0);
+   uint64_t data[] = {
+      TYPE_CODE_ARRAY,
+      type->array.num_elems,
+      type->array.elem_type->id
+   };
+   return emit_type_table_abbrev_record(m, TYPE_TABLE_ABBREV_ARRAY, data,
+                                        ARRAY_SIZE(data));
+}
+
+static bool
 emit_function_type(struct dxil_module *m, const struct dxil_type *type)
 {
    uint64_t temp[256];
@@ -1136,6 +1172,9 @@ emit_type(struct dxil_module *m, struct dxil_type *type)
 
    case TYPE_STRUCT:
       return emit_struct_type(m, type);
+
+   case TYPE_ARRAY:
+      return emit_array_type(m, type);
 
    case TYPE_FUNCTION:
       return emit_function_type(m, type);

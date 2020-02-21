@@ -206,6 +206,10 @@ static void dump_type_name(struct dxil_dumper *d, const struct dxil_type *type)
    case TYPE_STRUCT:
       _mesa_string_buffer_printf(d->buf, "struct %s", type->struct_def.name);
       break;
+   case TYPE_ARRAY:
+      dump_type_name(d, type->array.elem_type);
+      _mesa_string_buffer_printf(d->buf, "[%d]", type->array.num_elems);
+      break;
    case TYPE_FUNCTION:
       _mesa_string_buffer_append(d->buf, "(");
       dump_type_name(d, type->function_def.ret_type);
