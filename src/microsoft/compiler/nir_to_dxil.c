@@ -1356,7 +1356,7 @@ emit_load_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
          if (!(comps & (1 << i)))
             continue;
          const struct dxil_value *val =
-            dxil_emit_extractval(&ctx->mod, load, dxil_module_get_resret_i32_type(&ctx->mod), i);
+            dxil_emit_extractval(&ctx->mod, load, dxil_module_get_resret_type(&ctx->mod, DXIL_I32), i);
          if (!val)
             return false;
          store_dest_int(ctx, &intr->dest, i, val);
