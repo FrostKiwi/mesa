@@ -626,16 +626,27 @@ dxil_module_get_cbuf_ret_type(struct dxil_module *mod, enum overload_type overlo
 }
 
 const struct dxil_type *
-dxil_module_get_resret_i32_type(struct dxil_module *m)
+dxil_module_get_resret_type(struct dxil_module *m, enum overload_type overload)
 {
+   const struct dxil_type *overload_type = dxil_get_overload_type(m, overload);
    const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
-   if (!int32_type)
+   const char *name;
+   if (!overload_type)
       return NULL;
 
    const struct dxil_type *resret[] =
-      { int32_type, int32_type, int32_type, int32_type, int32_type };
+      { overload_type, overload_type, overload_type, overload_type, int32_type };
 
-   return dxil_module_get_struct_type(m, "dx.types.ResRet.i32", resret, 5);
+   switch (overload) {
+   case DXIL_I32: name = "dx.types.ResRet.i32"; break;
+   case DXIL_I64: name = "dx.types.ResRet.i64"; break;
+   case DXIL_F32: name = "dx.types.ResRet.f32"; break;
+   case DXIL_F64: name = "dx.types.ResRet.f64"; break;
+   default:
+      unreachable("unexpected overload type");
+   }
+
+   return dxil_module_get_struct_type(m, name, resret, 5);
 }
 
 const struct dxil_type *
