@@ -15,6 +15,7 @@ struct dxil_type {
       TYPE_POINTER,
       TYPE_STRUCT,
       TYPE_ARRAY,
+      TYPE_VECTOR,
       TYPE_FUNCTION
    } type;
 
@@ -36,6 +37,10 @@ struct dxil_type {
          struct dxil_type **arg_types;
          size_t num_arg_types;
       } function_def;
+      struct {
+         const struct dxil_type *elem_type;
+         size_t num_elems;
+      } vector_def;
    };
 
    struct list_head head;
