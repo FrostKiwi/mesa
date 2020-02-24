@@ -37,6 +37,11 @@ struct d3d12_resource {
    unsigned dt_stride;
 };
 
+struct d3d12_transfer {
+   struct pipe_transfer base;
+   struct pipe_resource *staging_res;
+};
+
 static inline struct d3d12_resource *
 d3d12_resource(struct pipe_resource *r)
 {

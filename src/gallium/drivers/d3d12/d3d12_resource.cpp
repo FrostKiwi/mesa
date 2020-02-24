@@ -170,6 +170,65 @@ d3d12_screen_resource_init(struct pipe_screen *pscreen)
    pscreen->resource_destroy = d3d12_resource_destroy;
 }
 
+static bool
+d3d12_transfer_copy_bufimage(struct d3d12_context *ctx,
+                             struct d3d12_resource *res,
+                             struct d3d12_resource *staging_res,
+                             struct d3d12_transfer *trans,
+                             bool buf2img)
+{
+   D3D12_TEXTURE_COPY_LOCATION buf_loc = {};
+   D3D12_TEXTURE_COPY_LOCATION tex_loc = {};
+   D3D12_TEXTURE_COPY_LOCATION *src, *dst;
+   D3D12_BOX src_box = {};
+   UINT dst_x, dst_y, dst_z;
+
+   if (buf2img) {
+      d3d12_resource_barrier(ctx, res,
+                             D3D12_RESOURCE_STATE_COMMON,
+                             D3D12_RESOURCE_STATE_COPY_DEST);
+      src = &buf_loc;
+      dst = &tex_loc;
+      dst_x = trans->base.box.x;
+      dst_y = trans->base.box.y;
+      dst_z = trans->base.box.z;
+   } else {
+      d3d12_resource_barrier(ctx, res,
+                             D3D12_RESOURCE_STATE_COMMON,
+                             D3D12_RESOURCE_STATE_COPY_SOURCE);
+      src = &tex_loc;
+      dst = &buf_loc;
+      dst_x = dst_y = dst_z = 0;
+      src_box.left = trans->base.box.x;
+      src_box.right = trans->base.box.x + trans->base.box.width;
+      src_box.top = trans->base.box.y;
+      src_box.bottom = trans->base.box.y + trans->base.box.height;
+      src_box.front = trans->base.box.z;
+      src_box.back = trans->base.box.z + trans->base.box.depth;
+   }
+
+   tex_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+   tex_loc.SubresourceIndex = trans->base.level;
+   tex_loc.pResource = res->res;
+
+   buf_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+   buf_loc.PlacedFootprint.Offset = 0;
+   buf_loc.PlacedFootprint.Footprint.Format = d3d12_get_format(res->base.format);
+   buf_loc.PlacedFootprint.Footprint.Width = trans->base.box.width;
+   buf_loc.PlacedFootprint.Footprint.Height = trans->base.box.height;
+   buf_loc.PlacedFootprint.Footprint.Depth = trans->base.box.depth;
+   buf_loc.PlacedFootprint.Footprint.RowPitch = trans->base.stride;
+   buf_loc.pResource = staging_res->res;
+
+   ctx->cmdlist->CopyTextureRegion(dst, dst_x, dst_y, dst_z, src, buf2img ? NULL : &src_box);
+
+   d3d12_resource_barrier(ctx, res,
+                          buf2img ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_COPY_SOURCE,
+                          D3D12_RESOURCE_STATE_COMMON);
+
+   return true;
+}
+
 static unsigned
 linear_offset(int x, int y, int z, unsigned stride, unsigned layer_stride)
 {
@@ -193,12 +252,18 @@ d3d12_transfer_map(struct pipe_context *pctx,
    if (usage & PIPE_TRANSFER_MAP_DIRECTLY)
       return NULL;
 
-   struct pipe_transfer *ptrans = (struct pipe_transfer *)slab_alloc(&ctx->transfer_pool);
-   if (!ptrans)
+   struct d3d12_transfer *trans = (struct d3d12_transfer *)slab_alloc(&ctx->transfer_pool);
+   struct pipe_transfer *ptrans = &trans->base;
+   if (!trans)
       return NULL;
 
-   memset(ptrans, 0, sizeof(*ptrans));
+   memset(trans, 0, sizeof(*trans));
    pipe_resource_reference(&ptrans->resource, pres);
+
+   ptrans->resource = pres;
+   ptrans->level = level;
+   ptrans->usage = (enum pipe_transfer_usage)usage;
+   ptrans->box = *box;
 
    D3D12_RANGE range;
    void *ptr;
@@ -211,10 +276,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
 
       ptrans->stride = 0;
       ptrans->layer_stride = 0;
-
-      ptr = ((uint8_t *)ptr) + box->x;
-   } else {
-      assert(res->res->GetDesc().Layout == D3D12_TEXTURE_LAYOUT_ROW_MAJOR);
+   } else if (res->res->GetDesc().Layout == D3D12_TEXTURE_LAYOUT_ROW_MAJOR) {
 
       ptrans->stride = util_format_get_stride(pres->format, box->width);
       ptrans->layer_stride = util_format_get_2d_size(pres->format,
@@ -230,17 +292,37 @@ d3d12_transfer_map(struct pipe_context *pctx,
 
       if (FAILED(res->res->Map(0, &range, &ptr)))
          return NULL;
+   } else {
+      ptrans->stride = align(util_format_get_stride(pres->format, box->width),
+                              D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+      ptrans->layer_stride = util_format_get_2d_size(pres->format,
+                                                     ptrans->stride,
+                                                     box->height);
 
-      ptr = ((uint8_t *)ptr) + range.Begin;
+      trans->staging_res = pipe_buffer_create(pctx->screen, 0,
+                                              (pipe_resource_usage)(PIPE_USAGE_STAGING | usage),
+                                              ptrans->layer_stride * box->depth);
+      if (!trans->staging_res)
+         return NULL;
+
+      struct d3d12_resource *staging_res = d3d12_resource(trans->staging_res);
+
+      if (usage & PIPE_TRANSFER_READ) {
+         bool ret = d3d12_transfer_copy_bufimage(ctx, res, staging_res, trans, false);
+         if (ret == false)
+            return NULL;
+         d3d12_flush_cmdlist(ctx);
+      }
+
+      range.Begin = 0;
+      range.End = ptrans->layer_stride * box->depth;
+
+      if (FAILED(staging_res->res->Map(0, &range, &ptr)))
+         return NULL;
    }
 
-   ptrans->resource = pres;
-   ptrans->level = level;
-   ptrans->usage = (enum pipe_transfer_usage)usage;
-   ptrans->box = *box;
-
    *transfer = ptrans;
-   return ptr;
+   return ((uint8_t *)ptr) + range.Begin;
 }
 
 static void
@@ -249,7 +331,23 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
 {
    struct d3d12_screen *screen = d3d12_screen(pctx->screen);
    struct d3d12_resource *res = d3d12_resource(ptrans->resource);
-   res->res->Unmap(0, NULL);
+   struct d3d12_transfer *trans = (struct d3d12_transfer *)ptrans;
+
+   if (trans->staging_res) {
+      struct d3d12_resource *staging_res = d3d12_resource(trans->staging_res);
+      staging_res->res->Unmap(0, NULL);
+
+      if (trans->base.usage & PIPE_TRANSFER_WRITE) {
+         struct d3d12_context *ctx = d3d12_context(pctx);
+
+         d3d12_transfer_copy_bufimage(ctx, res, staging_res, trans, true);
+      }
+
+      pipe_resource_reference(&trans->staging_res, NULL);
+   } else {
+      res->res->Unmap(0, NULL);
+   }
+
    pipe_resource_reference(&ptrans->resource, NULL);
    slab_free(&d3d12_context(pctx)->transfer_pool, ptrans);
 }
