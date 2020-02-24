@@ -230,6 +230,13 @@ enum dxil_resource_kind {
    DXIL_RESOURCE_KIND_TBUFFER           = 15,
 };
 
+enum dxil_sampler_kind {
+   DXIL_SAMPLER_KIND_DEFAULT    = 0,
+   DXIL_SAMPLER_KIND_COMPARISON = 1,
+   DXIL_SAMPLER_KIND_MONO       = 2,
+   DXIL_SAMPLER_KIND_INVALID    = 3,
+};
+
 enum dxil_attr_kind {
    DXIL_ATTR_KIND_NONE = 0,
    DXIL_ATTR_KIND_NO_UNWIND = 18,
