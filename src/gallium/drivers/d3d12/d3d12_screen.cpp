@@ -764,7 +764,7 @@ d3d12_create_screen(struct sw_winsys *winsys)
       goto failed;
 
    d3d12_screen_resource_init(&screen->base);
-   slab_create_parent(&screen->transfer_pool, sizeof(struct pipe_transfer), 16);
+   slab_create_parent(&screen->transfer_pool, sizeof(struct d3d12_transfer), 16);
 
    return &screen->base;
 
