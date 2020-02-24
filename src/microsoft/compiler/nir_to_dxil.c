@@ -1658,6 +1658,33 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    ctx->phis = _mesa_pointer_hash_table_create(NULL);
 
+   ctx->locals = _mesa_pointer_hash_table_create(NULL);
+   if (!ctx->locals)
+      return false;
+
+   nir_foreach_variable(var, &entry->locals) {
+      if (glsl_type_is_array(var->type)) {
+         assert(!glsl_type_is_unsized_array(var->type));
+         const struct dxil_type *alloc_type =
+            get_glsl_type(&ctx->mod, var->type);
+
+         const struct dxil_type *size_type =
+            dxil_module_get_int_type(&ctx->mod, 32);
+         const struct dxil_value *size =
+            dxil_module_get_int32_const(&ctx->mod,
+                                        glsl_get_length(var->type));
+
+         // TODO: find a way of moving CL-semantics out of nir_to_dxil?
+         assert(s->info.stage == MESA_SHADER_KERNEL);
+         unsigned align =
+            glsl_get_cl_alignment(glsl_get_array_element(var->type));
+
+         const struct dxil_value *ptr =
+            dxil_emit_alloca(&ctx->mod, alloc_type, size_type, size, align);
+         _mesa_hash_table_insert(ctx->locals, var, (void *)ptr);
+      }
+   }
+
    if (!emit_cf_list(ctx, &entry->body))
       return false;
 
