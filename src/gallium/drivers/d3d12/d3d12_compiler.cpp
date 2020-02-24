@@ -44,6 +44,7 @@ using Microsoft::WRL::ComPtr;
 struct d3d12_validation_tools
 {
    d3d12_validation_tools();
+   ~d3d12_validation_tools();
 
    bool validate_and_sign(struct blob *dxil);
 
@@ -52,6 +53,7 @@ struct d3d12_validation_tools
    ComPtr<IDxcCompiler> compiler;
    ComPtr<IDxcValidator> validator;
    ComPtr<IDxcLibrary> library;
+   HMODULE dxil_module;
 };
 
 struct d3d12_validation_tools *d3d12_validator_create()
@@ -154,9 +156,34 @@ d3d12_shader_free(struct d3d12_shader *shader)
    FREE(shader);
 }
 
+// Used to get path to self
+extern "C" extern IMAGE_DOS_HEADER __ImageBase;
+
 d3d12_validation_tools::d3d12_validation_tools()
 {
-   HMODULE dxil_module = ::LoadLibrary("dxil.dll");
+   dxil_module = ::LoadLibrary("dxil.dll");
+   if (!dxil_module) {
+      char selfPath[MAX_PATH] = "";
+      uint32_t pathSize = GetModuleFileNameA((HINSTANCE)&__ImageBase, selfPath, sizeof(selfPath));
+      if (pathSize == 0 || pathSize == sizeof(selfPath)) {
+         debug_printf("D3D12: Unable to get path to self");
+         return;
+      }
+
+      auto lastSlash = strrchr(selfPath, '\\');
+      if (!lastSlash) {
+         debug_printf("D3D12: Unable to get path to self");
+         return;
+      }
+
+      *(lastSlash + 1) = '\0';
+      if (strcat_s(selfPath, "dxil.dll") != 0) {
+         debug_printf("D3D12: Unable to get path to dxil.dll next to self");
+         return;
+      }
+
+      dxil_module = ::LoadLibrary(selfPath);
+   }
    DxcCreateInstanceProc dxil_create_func = (DxcCreateInstanceProc)GetProcAddress(dxil_module, "DxcCreateInstance");
 
    HRESULT hr = dxil_create_func(CLSID_DxcValidator,  IID_PPV_ARGS(&validator));
@@ -180,6 +207,13 @@ d3d12_validation_tools::d3d12_validation_tools()
          debug_printf("D3D12: Unable to create compiler instance\n");
          return;
       }
+   }
+}
+
+d3d12_validation_tools::~d3d12_validation_tools()
+{
+   if (dxil_module) {
+      ::FreeLibrary(dxil_module);
    }
 }
 
