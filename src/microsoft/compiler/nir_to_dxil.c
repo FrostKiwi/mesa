@@ -1289,6 +1289,19 @@ emit_store_output(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 }
 
 static bool
+emit_store_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
+                         nir_variable *var)
+{
+   const struct dxil_value *value =
+      get_src(ctx, &intr->src[1], 0, nir_type_uint);
+   const struct dxil_value *ptr =
+      get_src(ctx, &intr->src[0], 0, nir_type_uint);
+
+   unsigned align = intr->src[0].ssa->bit_size / 8;
+   return dxil_emit_store(&ctx->mod, value, ptr, align, false);
+}
+
+static bool
 emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    nir_deref_instr *deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
@@ -1297,6 +1310,9 @@ emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    switch (var->data.mode) {
    case nir_var_shader_out:
       return emit_store_output(ctx, intr, var);
+
+   case nir_var_function_temp:
+      return emit_store_function_temp(ctx, intr, var);
 
    default:
       unreachable("unsupported nir_variable_mode");
@@ -1334,6 +1350,24 @@ emit_load_input(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 }
 
 static bool
+emit_load_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
+                        nir_variable *var)
+{
+   unsigned bit_size = nir_dest_bit_size(intr->dest);
+   const struct dxil_value *ptr =
+      get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod,
+      bit_size);
+   unsigned align = bit_size / 8;
+
+   const struct dxil_value *retval =
+      dxil_emit_load(&ctx->mod, ptr, type, align, false);
+
+   store_dest(ctx, &intr->dest, 0, retval, nir_type_uint);
+   return true;
+}
+
+static bool
 emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    nir_deref_instr *deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
@@ -1342,6 +1376,9 @@ emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    switch (var->data.mode) {
    case nir_var_shader_in:
       return emit_load_input(ctx, intr, var);
+
+   case nir_var_function_temp:
+      return emit_load_function_temp(ctx, intr, var);
 
    default:
       unreachable("unsupported nir_variable_mode");
