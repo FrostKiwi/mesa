@@ -680,6 +680,29 @@ TEST(types, for_loop)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
+TEST(complex_types, local_array)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout)\n\
+   {\n\
+      uint tmp[] = {\n\
+         get_global_id(1) + 0x00,\n\
+         get_global_id(1) + 0x10,\n\
+         get_global_id(1) + 0x20,\n\
+         get_global_id(1) + 0x30,\n\
+      };\n\
+      uint idx = get_global_id(0);\n\
+      inout[idx] = tmp[idx];\n\
+   }\n";
+   const uint32_t input[] = {
+      0, 0, 0, 0,
+   };
+   const uint32_t expected[] = {
+      0x00, 0x10, 0x20, 0x30,
+   };
+   ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
+}
+
 TEST(complex_types, global_struct_array)
 {
    struct two_vals { uint32_t add; uint32_t mul; };
