@@ -2456,6 +2456,10 @@ void dxil_fill_validation_state(struct ntd_context *ctx,
    }
 }
 
+static const struct nir_lower_tex_options tex_options = {
+   .lower_txp = ~0u, /* No equivalent for textureProj */
+};
+
 bool
 nir_to_dxil(struct nir_shader *s, struct blob *blob)
 {
@@ -2475,6 +2479,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
 
    NIR_PASS_V(s, nir_lower_uniforms_to_ubo, 16);
    NIR_PASS_V(s, nir_lower_clip_halfz);
+   NIR_PASS_V(s, nir_lower_tex, &tex_options);
 
    optimize_nir(s);
 
