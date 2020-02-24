@@ -244,6 +244,9 @@ const struct dxil_type *
 dxil_module_get_cbuf_ret_type(struct dxil_module *mod, enum overload_type overload);
 
 const struct dxil_type *
+dxil_module_get_res_type(struct dxil_module *m, enum dxil_resource_kind kind);
+
+const struct dxil_type *
 dxil_module_get_resret_type(struct dxil_module *m, enum overload_type overload);
 
 const struct dxil_type *
