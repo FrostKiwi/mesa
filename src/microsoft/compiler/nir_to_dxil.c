@@ -1932,6 +1932,254 @@ fixup_phi(struct ntd_context *ctx, nir_phi_instr *instr,
    dxil_phi_set_incoming(phi, values, blocks, num_incoming);
 }
 
+static unsigned
+get_n_src(struct ntd_context *ctx, const struct dxil_value **values,
+          unsigned max_components, nir_tex_src *src, nir_alu_type type)
+{
+   unsigned num_components = nir_src_num_components(src->src);
+   unsigned i = 0;
+
+   assert(num_components <= max_components);
+
+   for (i = 0; i < num_components; ++i) {
+      values[i] = get_src(ctx, &src->src, i, type);
+      assert(values[i] != NULL);
+   }
+
+   return num_components;
+}
+
+#define PAD_SRC(ctx, array, undef) \
+   for (unsigned i = array ## _components; i < ARRAY_SIZE(array); ++i) { \
+      array[i] = undef; \
+   }
+
+static const struct dxil_value *
+emit_sample(struct ntd_context *ctx, const struct dxil_value *tex,
+            const struct dxil_value *sampler, const struct dxil_value **coord,
+            const struct dxil_value **offset, const struct dxil_value *min_lod)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sample", DXIL_F32);
+   if (!func)
+      return NULL;
+
+   const struct dxil_value *args[11] = {
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_SAMPLE),
+      tex, sampler,
+      coord[0], coord[1], coord[2], coord[3],
+      offset[0], offset[1], offset[2],
+      min_lod
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static const struct dxil_value *
+emit_sample_bias(struct ntd_context *ctx, const struct dxil_value *tex,
+                 const struct dxil_value *sampler, const struct dxil_value **coord,
+                 const struct dxil_value **offset, const struct dxil_value *bias,
+                 const struct dxil_value *min_lod)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleBias", DXIL_F32);
+   if (!func)
+      return NULL;
+
+   assert(bias != NULL);
+
+   const struct dxil_value *args[12] = {
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_SAMPLE_BIAS),
+      tex, sampler,
+      coord[0], coord[1], coord[2], coord[3],
+      offset[0], offset[1], offset[2],
+      bias, min_lod
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static const struct dxil_value *
+emit_sample_level(struct ntd_context *ctx, const struct dxil_value *tex,
+                  const struct dxil_value *sampler, const struct dxil_value **coord,
+                  const struct dxil_value **offset, const struct dxil_value *lod)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleLevel", DXIL_F32);
+   if (!func)
+      return NULL;
+
+   assert(lod != NULL);
+
+   const struct dxil_value *args[11] = {
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_SAMPLE_LEVEL),
+      tex, sampler,
+      coord[0], coord[1], coord[2], coord[3],
+      offset[0], offset[1], offset[2],
+      lod
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static const struct dxil_value *
+emit_sample_cmp(struct ntd_context *ctx, const struct dxil_value *tex,
+                const struct dxil_value *sampler, const struct dxil_value **coord,
+                const struct dxil_value **offset, const struct dxil_value *cmp,
+                const struct dxil_value *min_lod)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleCmp", DXIL_F32);
+   if (!func)
+      return NULL;
+
+   const struct dxil_value *args[12] = {
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_SAMPLE_CMP),
+      tex, sampler,
+      coord[0], coord[1], coord[2], coord[3],
+      offset[0], offset[1], offset[2],
+      cmp, min_lod
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static const struct dxil_value *
+emit_sample_grad(struct ntd_context *ctx, const struct dxil_value *tex,
+                 const struct dxil_value *sampler, const struct dxil_value **coord,
+                 const struct dxil_value **offset, const struct dxil_value **dx,
+                 const struct dxil_value **dy, const struct dxil_value *min_lod)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleGrad", DXIL_F32);
+   if (!func)
+      return false;
+
+   const struct dxil_value *args[17] = {
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_SAMPLE_GRAD),
+      tex, sampler,
+      coord[0], coord[1], coord[2], coord[3],
+      offset[0], offset[1], offset[2],
+      dx[0], dx[1], dx[2], dy[0], dy[1], dy[2],
+      min_lod
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static bool
+emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
+{
+   assert(instr->op == nir_texop_tex ||
+          instr->op == nir_texop_txb ||
+          instr->op == nir_texop_txl ||
+          instr->op == nir_texop_txd);
+   assert(instr->texture_index == instr->sampler_index);
+   assert(nir_alu_type_get_base_type(instr->dest_type) == nir_type_float);
+   assert(instr->op == nir_texop_tex);
+
+   assert(instr->texture_index < ctx->num_srvs);
+   const struct dxil_value *tex = ctx->srv_handles[instr->texture_index];
+   const struct dxil_value *sampler = ctx->sampler_handles[instr->texture_index];
+
+   const struct dxil_type *int_type = dxil_module_get_int_type(&ctx->mod, 32);
+   const struct dxil_type *float_type = dxil_module_get_float_type(&ctx->mod, 32);
+   const struct dxil_value *int_undef = dxil_module_get_undef(&ctx->mod, int_type);
+   const struct dxil_value *float_undef = dxil_module_get_undef(&ctx->mod, float_type);
+
+   const struct dxil_value *bias = NULL, *lod = NULL, *dref = NULL, *min_lod = NULL;
+   const struct dxil_value *coord[4], *offset[3], *dx[3], *dy[3];
+   unsigned coord_components = 0, offset_components = 0, dx_components = 0, dy_components = 0;
+
+   for (unsigned i = 0; i < instr->num_srcs; i++) {
+      nir_alu_type type = nir_tex_instr_src_type(instr, i);
+
+      switch (instr->src[i].src_type) {
+      case nir_tex_src_coord:
+         coord_components = get_n_src(ctx, coord, ARRAY_SIZE(coord), &instr->src[i], type);
+         break;
+
+      case nir_tex_src_bias:
+         assert(instr->op == nir_texop_txb);
+         assert(nir_src_num_components(instr->src[i].src) == 1);
+         bias = get_src(ctx, &instr->src[i].src, 0, nir_type_float);
+         assert(bias != NULL);
+         break;
+
+      case nir_tex_src_lod:
+         assert(nir_src_num_components(instr->src[i].src) == 1);
+         lod = get_src(ctx, &instr->src[i].src, 0, type);
+         assert(lod != NULL);
+         break;
+
+      case nir_tex_src_min_lod:
+         assert(nir_src_num_components(instr->src[i].src) == 1);
+         min_lod = get_src(ctx, &instr->src[i].src, 0, type);
+         assert(min_lod != NULL);
+         break;
+
+      case nir_tex_src_comparator:
+         assert(nir_src_num_components(instr->src[i].src) == 1);
+         dref = get_src(ctx, &instr->src[i].src, 0, nir_type_float);
+         assert(dref != NULL);
+         break;
+
+      case nir_tex_src_ddx:
+         dx_components = get_n_src(ctx, dx, ARRAY_SIZE(dx),
+                                   &instr->src[i], nir_type_float);
+         assert(dx_components != 0);
+         break;
+
+      case nir_tex_src_ddy:
+         dy_components = get_n_src(ctx, dy, ARRAY_SIZE(dy),
+                                   &instr->src[i], nir_type_float);
+         assert(dy_components != 0);
+         break;
+
+      case nir_tex_src_projector:
+         unreachable("Texture projector should have been lowered");
+
+      default:
+         fprintf(stderr, "texture source: %d\n", instr->src[i].src_type);
+         unreachable("unknown texture source");
+      }
+   }
+
+   PAD_SRC(ctx, coord, float_undef);
+   PAD_SRC(ctx, offset, int_undef);
+   if (!min_lod) min_lod = float_undef;
+
+   const struct dxil_value *sample = NULL;
+   switch (instr->op) {
+   case nir_texop_tex:
+      if (dref != NULL)
+         sample = emit_sample_cmp(ctx, tex, sampler, coord, offset, min_lod, dref);
+      else
+         sample = emit_sample(ctx, tex, sampler, coord, offset, min_lod);
+      break;
+
+   case nir_texop_txb:
+      sample = emit_sample_bias(ctx, tex, sampler, coord, offset, bias, min_lod);
+      break;
+
+   case nir_texop_txl:
+      sample = emit_sample_level(ctx, tex, sampler, coord, offset, lod);
+      break;
+
+   case nir_texop_txd:
+      PAD_SRC(ctx, dx, float_undef);
+      PAD_SRC(ctx, dy, float_undef);
+      sample = emit_sample_grad(ctx, tex, sampler, coord, offset, dx, dy, min_lod);
+      break;
+   }
+
+   if (!sample)
+      return false;
+
+   const struct dxil_type *sample_type = dxil_module_get_resret_type(&ctx->mod, DXIL_F32);
+   for (unsigned i = 0; i < instr->dest.ssa.num_components; ++i) {
+      const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, sample, sample_type, i);
+      store_dest(ctx, &instr->dest, i, retval, nir_type_float);
+   }
+
+   return true;
+}
+
 static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
 {
    switch (instr->type) {
@@ -1947,6 +2195,8 @@ static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
       return emit_jump(ctx, nir_instr_as_jump(instr));
    case nir_instr_type_phi:
       return emit_phi(ctx, nir_instr_as_phi(instr));
+   case nir_instr_type_tex:
+      return emit_tex(ctx, nir_instr_as_tex(instr));
    default:
       NIR_INSTR_UNSUPPORTED(instr);
       assert("Unimplemented instruction type");
