@@ -216,6 +216,27 @@ fill_resource_metadata(struct dxil_module *m, const struct dxil_mdnode **fields,
 }
 
 static const struct dxil_mdnode *
+emit_srv_metadata(struct dxil_module *m, const struct dxil_type *elem_type,
+                  const char *name, enum dxil_component_type comp_type,
+                  enum dxil_resource_kind res_kind)
+{
+   const struct dxil_mdnode *fields[9];
+
+   const struct dxil_mdnode *buffer_element_type_tag = dxil_get_metadata_int32(m, DXIL_TYPED_BUFFER_ELEMENT_TYPE_TAG);
+   const struct dxil_mdnode *element_type = dxil_get_metadata_int32(m, comp_type);
+   const struct dxil_mdnode *metadata_tag_nodes[] = {
+      buffer_element_type_tag, element_type
+   };
+
+   fill_resource_metadata(m, fields, elem_type, name);
+   fields[6] = dxil_get_metadata_int32(m, res_kind); // resource shape
+   fields[7] = dxil_get_metadata_int1(m, 0); // sample count
+   fields[8] = dxil_get_metadata_node(m, metadata_tag_nodes, ARRAY_SIZE(metadata_tag_nodes)); // metadata
+
+   return dxil_get_metadata_node(m, fields, ARRAY_SIZE(fields));
+}
+
+static const struct dxil_mdnode *
 emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
                   const char *name, enum dxil_component_type comp_type)
 {
@@ -284,6 +305,7 @@ get_glsl_type(struct dxil_module *m, const struct glsl_type *type)
 }
 
 
+#define MAX_SRVS 64 // ??
 #define MAX_UAVS 64
 #define MAX_CBVS 64 // ??
 
@@ -295,6 +317,10 @@ struct ntd_context {
    void *ralloc_ctx;
 
    struct dxil_module mod;
+
+   const struct dxil_mdnode *srv_metadata_nodes[MAX_SRVS];
+   const struct dxil_value *srv_handles[MAX_SRVS];
+   unsigned num_srvs;
 
    const struct dxil_mdnode *uav_metadata_nodes[MAX_UAVS];
    const struct dxil_value *uav_handles[MAX_UAVS];
@@ -509,6 +535,39 @@ emit_createhandle_call_from_values(struct ntd_context *ctx,
 }
 
 static bool
+emit_srv(struct ntd_context *ctx, nir_variable *var)
+{
+   assert(ctx->num_srvs < ARRAY_SIZE(ctx->srv_metadata_nodes));
+   assert(ctx->num_srvs < ARRAY_SIZE(ctx->srv_handles));
+   assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
+
+   enum dxil_component_type comp_type = DXIL_COMP_TYPE_F32;
+   enum dxil_resource_kind res_kind = dxil_get_resource_kind(var->type);
+   const struct dxil_type *res_type = dxil_module_get_res_type(&ctx->mod, res_kind);
+   const struct dxil_mdnode *srv_meta = emit_srv_metadata(&ctx->mod, res_type, var->name, comp_type, res_kind);
+
+   if (!srv_meta)
+      return false;
+
+   ctx->srv_metadata_nodes[ctx->num_srvs] = srv_meta;
+
+   ctx->resources[ctx->num_resources].resource_type = DXIL_RES_SRV_TYPED;
+   ctx->resources[ctx->num_resources].space = 0;
+   ctx->resources[ctx->num_resources].lower_bound = 0;
+   ctx->resources[ctx->num_resources].upper_bound = 0;
+   ctx->num_resources++;
+
+   const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_SRV, 0, 0, false);
+   if (!handle)
+      return false;
+
+   ctx->srv_handles[ctx->num_srvs] = handle;
+   ctx->num_srvs++;
+
+   return true;
+}
+
+static bool
 emit_uav(struct ntd_context *ctx, nir_variable *var)
 {
    assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_metadata_nodes));
@@ -669,6 +728,11 @@ emit_resources(struct ntd_context *ctx)
    const struct dxil_mdnode *resources_nodes[] = {
       NULL, NULL, NULL, NULL
    };
+
+   if (ctx->num_srvs) {
+      resources_nodes[0] = dxil_get_metadata_node(&ctx->mod, ctx->srv_metadata_nodes, ctx->num_srvs);
+      emit_resources = true;
+   }
 
    if (ctx->num_uavs) {
       resources_nodes[1] = dxil_get_metadata_node(&ctx->mod, ctx->uav_metadata_nodes, ctx->num_uavs);
@@ -1956,6 +2020,14 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    nir_foreach_variable(var, &s->uniforms) {
       if (var->data.mode == nir_var_mem_ubo) {
          if (!emit_cbv(ctx, var))
+            return false;
+      }
+   }
+
+   /* SRVs */
+   nir_foreach_variable(var, &s->uniforms) {
+      if (var->data.mode == nir_var_uniform && glsl_type_is_sampler(var->type)) {
+         if (!emit_srv(ctx, var))
             return false;
       }
    }
