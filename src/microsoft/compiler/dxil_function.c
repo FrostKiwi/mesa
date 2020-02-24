@@ -47,7 +47,12 @@ static struct  predefined_func_descr predefined_funcs[] = {
 {"dx.op.binary", "O", "iOO", DXIL_ATTR_KIND_READ_NONE},
 {"dx.op.bufferStore", "v", "i@iiiiiic", DXIL_ATTR_KIND_NONE},
 {"dx.op.bufferLoad", "R", "i@ii", DXIL_ATTR_KIND_READ_ONLY},
-{"dx.op.attributeAtVertex", "O", "iiicc", DXIL_ATTR_KIND_READ_NONE}
+{"dx.op.attributeAtVertex", "O", "iiicc", DXIL_ATTR_KIND_READ_NONE},
+{"dx.op.sample", "R", "i@@ffffiiif", DXIL_ATTR_KIND_READ_ONLY},
+{"dx.op.sampleBias", "R", "i@@ffffiiiff", DXIL_ATTR_KIND_READ_ONLY},
+{"dx.op.sampleLevel", "R", "i@@ffffiiif", DXIL_ATTR_KIND_READ_ONLY},
+{"dx.op.sampleGrad", "R", "i@@ffffiiifffffff", DXIL_ATTR_KIND_READ_ONLY},
+{"dx.op.sampleCmp", "R", "i@@ffffiiiff", DXIL_ATTR_KIND_READ_ONLY},
 };
 
 struct func_descr {
@@ -211,4 +216,3 @@ dxil_alloc_func(struct dxil_module *mod, const char *name, enum overload_type ov
    return dxil_alloc_func_with_rettype(mod, name, overload, retval_type,
                                        param_descr, attr);
 }
-
