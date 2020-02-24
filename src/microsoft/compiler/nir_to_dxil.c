@@ -271,6 +271,19 @@ emit_cbv_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
    return dxil_get_metadata_node(m, fields, ARRAY_SIZE(fields));
 }
 
+static const struct dxil_mdnode *
+emit_sampler_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
+                      const char *name)
+{
+   const struct dxil_mdnode *fields[8];
+
+   fill_resource_metadata(m, fields, struct_type, name);
+   fields[6] = dxil_get_metadata_int32(m, DXIL_SAMPLER_KIND_DEFAULT); // sampler kind
+   fields[7] = NULL; // metadata
+
+   return dxil_get_metadata_node(m, fields, ARRAY_SIZE(fields));
+}
+
 static const struct dxil_type *
 get_glsl_basetype(struct dxil_module *m, enum glsl_base_type type)
 {
@@ -308,6 +321,7 @@ get_glsl_type(struct dxil_module *m, const struct glsl_type *type)
 #define MAX_SRVS 64 // ??
 #define MAX_UAVS 64
 #define MAX_CBVS 64 // ??
+#define MAX_SAMPLERS 64 // ??
 
 struct dxil_def {
    const struct dxil_value *chans[NIR_MAX_VEC_COMPONENTS];
@@ -329,6 +343,10 @@ struct ntd_context {
    const struct dxil_mdnode *cbv_metadata_nodes[MAX_CBVS];
    const struct dxil_value *cbv_handles[MAX_CBVS];
    unsigned num_cbvs;
+
+   const struct dxil_mdnode *sampler_metadata_nodes[MAX_SAMPLERS];
+   const struct dxil_value *sampler_handles[MAX_SAMPLERS];
+   unsigned num_samplers;
 
    struct dxil_resource resources[MAX_UAVS];
    unsigned num_resources;
@@ -657,6 +675,38 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
    return true;
 }
 
+static bool
+emit_sampler(struct ntd_context *ctx, nir_variable *var)
+{
+   assert(ctx->num_samplers < ARRAY_SIZE(ctx->sampler_metadata_nodes));
+   assert(ctx->num_samplers < ARRAY_SIZE(ctx->sampler_handles));
+   assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
+
+   const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
+   const struct dxil_type *sampler_type = dxil_module_get_struct_type(&ctx->mod, "struct.SamplerState", &int32_type, 1);
+   const struct dxil_mdnode *sampler_meta = emit_sampler_metadata(&ctx->mod, sampler_type, var->name);
+
+   if (!sampler_meta)
+      return false;
+
+   ctx->sampler_metadata_nodes[ctx->num_samplers] = sampler_meta;
+
+   ctx->resources[ctx->num_resources].resource_type = DXIL_RES_SAMPLER;
+   ctx->resources[ctx->num_resources].space = 0;
+   ctx->resources[ctx->num_resources].lower_bound = 0;
+   ctx->resources[ctx->num_resources].upper_bound = 0;
+   ctx->num_resources++;
+
+   const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_SAMPLER, 0, 0, false);
+   if (!handle)
+      return false;
+
+   ctx->sampler_handles[ctx->num_samplers] = handle;
+   ctx->num_samplers++;
+
+   return true;
+}
+
 static const struct dxil_mdnode *
 emit_threads(struct ntd_context *ctx, nir_shader *s)
 {
@@ -741,6 +791,11 @@ emit_resources(struct ntd_context *ctx)
 
    if (ctx->num_cbvs) {
       resources_nodes[2] = dxil_get_metadata_node(&ctx->mod, ctx->cbv_metadata_nodes, ctx->num_cbvs);
+      emit_resources = true;
+   }
+
+   if (ctx->num_samplers) {
+      resources_nodes[3] = dxil_get_metadata_node(&ctx->mod, ctx->sampler_metadata_nodes, ctx->num_samplers);
       emit_resources = true;
    }
 
@@ -2021,6 +2076,14 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       if (var->data.mode == nir_var_mem_ubo) {
          if (!emit_cbv(ctx, var))
             return false;
+      }
+   }
+
+   /* Samplers */
+   nir_foreach_variable(var, &s->uniforms) {
+      if (var->data.mode == nir_var_uniform && glsl_type_is_sampler(var->type)) {
+            if (!emit_sampler(ctx, var))
+               return false;
       }
    }
 
