@@ -1981,6 +1981,8 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
 
    optimize_nir(s);
 
+   NIR_PASS_V(s, nir_remove_dead_variables, nir_var_function_temp);
+
    /*
     * See comments on these two passes: rewrite global memory-model usage
     * with pointers into SSBO access. We re-run constant folding and undef
