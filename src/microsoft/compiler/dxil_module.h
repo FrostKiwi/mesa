@@ -374,6 +374,12 @@ dxil_emit_gep_inbounds(struct dxil_module *m,
                        const struct dxil_value **operands,
                        size_t num_operands);
 
+const struct dxil_value *
+dxil_emit_load(struct dxil_module *m, const struct dxil_value *ptr,
+               const struct dxil_type *type,
+               unsigned align,
+               bool is_volatile);
+
 bool
 dxil_emit_store(struct dxil_module *m, const struct dxil_value *value,
                 const struct dxil_value *ptr, unsigned align,

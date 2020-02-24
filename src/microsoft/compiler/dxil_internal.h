@@ -145,6 +145,13 @@ struct dxil_instr_gep {
    size_t num_operands;
 };
 
+struct dxil_instr_load {
+   const struct dxil_value *ptr;
+   const struct dxil_type *type;
+   unsigned align;
+   bool is_volatile;
+};
+
 struct dxil_instr_store {
    const struct dxil_value *value, *ptr;
    unsigned align;
@@ -164,6 +171,7 @@ struct dxil_instr {
       INSTR_EXTRACTVAL,
       INSTR_ALLOCA,
       INSTR_GEP,
+      INSTR_LOAD,
       INSTR_STORE
    } type;
 
@@ -179,6 +187,7 @@ struct dxil_instr {
       struct dxil_instr_br br;
       struct dxil_instr_alloca alloca;
       struct dxil_instr_gep gep;
+      struct dxil_instr_load load;
       struct dxil_instr_store store;
    };
 
