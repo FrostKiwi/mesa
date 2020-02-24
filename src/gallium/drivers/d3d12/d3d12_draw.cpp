@@ -48,8 +48,8 @@ get_root_signature(struct d3d12_context *ctx)
    root_sig_desc.Desc_1_1.pStaticSamplers = NULL;
    root_sig_desc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
-   if (true)
-      root_sig_desc.Desc_1_1.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+   /* TODO Only enable this flag when needed (optimization) */
+   root_sig_desc.Desc_1_1.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
    ID3DBlob *sig, *error;
    if (FAILED(ctx->D3D12SerializeVersionedRootSignature(&root_sig_desc,
