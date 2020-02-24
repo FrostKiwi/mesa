@@ -2268,6 +2268,25 @@ dxil_emit_gep_inbounds(struct dxil_module *m,
    return &instr->value;
 }
 
+const struct dxil_value *
+dxil_emit_load(struct dxil_module *m, const struct dxil_value *ptr,
+               const struct dxil_type *type,
+               unsigned align,
+               bool is_volatile)
+{
+   struct dxil_instr *instr = create_instr(m, INSTR_LOAD);
+   if (!instr)
+      return false;
+
+   instr->load.ptr = ptr;
+   instr->load.type = type;
+   instr->load.align = util_logbase2(align) + 1;
+   instr->load.is_volatile = is_volatile;
+
+   instr->has_value = true;
+   return &instr->value;
+}
+
 bool
 dxil_emit_store(struct dxil_module *m, const struct dxil_value *value,
                 const struct dxil_value *ptr, unsigned align,
@@ -2488,6 +2507,22 @@ emit_gep(struct dxil_module *m, struct dxil_instr *instr)
 }
 
 static bool
+emit_load(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_LOAD);
+   assert(instr->value.id > instr->load.ptr->id);
+   assert(instr->load.type->id >= 0);
+
+   uint64_t data[] = {
+      instr->value.id - instr->load.ptr->id,
+      instr->load.type->id,
+      instr->load.align,
+      instr->load.is_volatile
+   };
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_LOAD,
+                                data, ARRAY_SIZE(data));
+}
+static bool
 emit_store(struct dxil_module *m, struct dxil_instr *instr)
 {
    assert(instr->type == INSTR_STORE);
@@ -2540,6 +2575,9 @@ emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 
    case INSTR_GEP:
       return emit_gep(m, instr);
+
+   case INSTR_LOAD:
+      return emit_load(m, instr);
 
    case INSTR_STORE:
       return emit_store(m, instr);
