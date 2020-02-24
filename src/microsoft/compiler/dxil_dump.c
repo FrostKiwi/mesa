@@ -221,6 +221,11 @@ static void dump_type_name(struct dxil_dumper *d, const struct dxil_type *type)
       }
       _mesa_string_buffer_append(d->buf, ")");
       break;
+   case TYPE_VECTOR:
+      _mesa_string_buffer_append(d->buf, "vector<");
+      dump_type_name(d, type->array.elem_type);
+      _mesa_string_buffer_printf(d->buf, ", %d>", type->array.num_elems);
+      break;
    default:
       _mesa_string_buffer_printf(d->buf, "unknown type %d", type->type);
    }

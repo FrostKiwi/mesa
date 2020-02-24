@@ -264,6 +264,11 @@ dxil_module_get_homogeneous_struct_type(struct dxil_module *m,
                                         size_t num_elems);
 
 const struct dxil_type *
+dxil_module_get_vector_type(struct dxil_module *m,
+                            const struct dxil_type *elem_type,
+                            size_t num_elems);
+
+const struct dxil_type *
 dxil_module_add_function_type(struct dxil_module *m,
                               const struct dxil_type *ret_type,
                               const struct dxil_type **arg_types,

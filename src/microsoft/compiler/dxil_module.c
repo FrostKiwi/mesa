@@ -552,6 +552,28 @@ dxil_module_get_homogeneous_struct_type(struct dxil_module *m,
 }
 
 const struct dxil_type *
+dxil_module_get_vector_type(struct dxil_module *m,
+                            const struct dxil_type *elem_type,
+                            size_t num_elems)
+{
+   struct dxil_type *type;
+   LIST_FOR_EACH_ENTRY(type, &m->type_list, head) {
+      if (type->type == TYPE_VECTOR &&
+          type->vector_def.elem_type == elem_type &&
+          type->vector_def.num_elems == num_elems)
+         return type;
+   }
+
+   type = create_type(m, TYPE_VECTOR);
+   if (!type)
+      return NULL;
+
+   type->vector_def.elem_type = elem_type;
+   type->vector_def.num_elems = num_elems;
+   return type;
+}
+
+const struct dxil_type *
 dxil_get_overload_type(struct dxil_module *mod, enum overload_type overload)
 {
    switch (overload) {
@@ -679,6 +701,7 @@ enum type_table_abbrev_id {
    TYPE_TABLE_ABBREV_STRUCT_NAME,
    TYPE_TABLE_ABBREV_STRUCT_NAMED,
    TYPE_TABLE_ABBREV_ARRAY,
+   TYPE_TABLE_ABBREV_VECTOR,
 };
 
 static const struct dxil_abbrev
@@ -700,7 +723,10 @@ type_table_abbrevs[] = {
    },
    [TYPE_TABLE_ABBREV_ARRAY] = {
       { LITERAL(TYPE_CODE_ARRAY), VBR(8), TYPE_INDEX }, 3
-   }
+   },
+   [TYPE_TABLE_ABBREV_VECTOR] = {
+      { LITERAL(TYPE_CODE_VECTOR), VBR(8), TYPE_INDEX }, 3
+   },
 };
 
 static bool
@@ -1182,6 +1208,17 @@ emit_function_type(struct dxil_module *m, const struct dxil_type *type)
 }
 
 static bool
+emit_vector_type(struct dxil_module *m, const struct dxil_type *type)
+{
+   uint64_t temp[3];
+   temp[0] = TYPE_CODE_VECTOR;
+   temp[1] = type->vector_def.num_elems;
+   temp[2] = type->vector_def.elem_type->id;
+
+   return emit_type_table_abbrev_record(m, TYPE_TABLE_ABBREV_VECTOR , temp, 3);
+}
+
+static bool
 emit_metadata_type(struct dxil_module *m)
 {
    return emit_record(m, TYPE_CODE_METADATA, NULL, 0);
@@ -1211,6 +1248,9 @@ emit_type(struct dxil_module *m, struct dxil_type *type)
 
    case TYPE_FUNCTION:
       return emit_function_type(m, type);
+
+   case TYPE_VECTOR:
+      return emit_vector_type(m, type);
 
    default:
       unreachable("unexpected type->type");
