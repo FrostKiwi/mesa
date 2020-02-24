@@ -218,7 +218,7 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
    };
 
    fill_resource_metadata(m, fields, struct_type, name);
-   fields[6] = dxil_get_metadata_int32(m, 10); // resource shape
+   fields[6] = dxil_get_metadata_int32(m, DXIL_RESOURCE_KIND_TYPED_BUFFER); // resource shape
    fields[7] = dxil_get_metadata_int1(m, false); // globally-coherent
    fields[8] = dxil_get_metadata_int1(m, false); // has counter
    fields[9] = dxil_get_metadata_int1(m, false); // is ROV

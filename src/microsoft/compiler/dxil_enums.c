@@ -67,6 +67,42 @@ enum dxil_component_type dxil_get_comp_type(const struct glsl_type *type)
    }
 }
 
+enum dxil_resource_kind dxil_get_resource_kind(const struct glsl_type *type)
+{
+   bool is_array = glsl_type_is_array(type);
+   const struct glsl_type *t = is_array ? glsl_get_array_element(type) : type;
+
+   if (glsl_type_is_sampler(t)) {
+      switch (glsl_get_sampler_dim(t)) {
+         case GLSL_SAMPLER_DIM_1D:
+            return is_array ? DXIL_RESOURCE_KIND_TEXTURE1D_ARRAY
+                            : DXIL_RESOURCE_KIND_TEXTURE1D;
+         case GLSL_SAMPLER_DIM_2D:
+            return is_array ? DXIL_RESOURCE_KIND_TEXTURE2D_ARRAY
+                            : DXIL_RESOURCE_KIND_TEXTURE2D;
+         case GLSL_SAMPLER_DIM_3D:
+            return DXIL_RESOURCE_KIND_TEXTURE3D;
+         case GLSL_SAMPLER_DIM_CUBE:
+            return is_array ? DXIL_RESOURCE_KIND_TEXTURECUBE_ARRAY
+                            : DXIL_RESOURCE_KIND_TEXTURECUBE;
+         case GLSL_SAMPLER_DIM_RECT:
+            return DXIL_RESOURCE_KIND_TEXTURE2D;
+         case GLSL_SAMPLER_DIM_BUF:
+            return DXIL_RESOURCE_KIND_TYPED_BUFFER; // FIXME
+         case GLSL_SAMPLER_DIM_MS:
+            return is_array ? DXIL_RESOURCE_KIND_TEXTURE2DMS_ARRAY
+                            : DXIL_RESOURCE_KIND_TEXTURE2DMS;
+
+         default:
+            debug_printf("type: %s\n", glsl_get_type_name(type));
+            unreachable("unexpected sampler type");
+      }
+   }
+
+   debug_printf("type: %s\n", glsl_get_type_name(type));
+   unreachable("unexpected glsl type");
+}
+
 static const char *overload_str[DXIL_NUM_OVERLOADS] = {
    [DXIL_NONE] = "",
    [DXIL_I32] = "i32",

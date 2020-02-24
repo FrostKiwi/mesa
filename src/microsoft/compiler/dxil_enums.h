@@ -211,6 +211,25 @@ enum dxil_resource_class {
    DXIL_RESOURCE_CLASS_SAMPLER = 3
 };
 
+enum dxil_resource_kind {
+   DXIL_RESOURCE_KIND_INVALID           = 0,
+   DXIL_RESOURCE_KIND_TEXTURE1D         = 1,
+   DXIL_RESOURCE_KIND_TEXTURE2D         = 2,
+   DXIL_RESOURCE_KIND_TEXTURE2DMS       = 3,
+   DXIL_RESOURCE_KIND_TEXTURE3D         = 4,
+   DXIL_RESOURCE_KIND_TEXTURECUBE       = 5,
+   DXIL_RESOURCE_KIND_TEXTURE1D_ARRAY   = 6,
+   DXIL_RESOURCE_KIND_TEXTURE2D_ARRAY   = 7,
+   DXIL_RESOURCE_KIND_TEXTURE2DMS_ARRAY = 8,
+   DXIL_RESOURCE_KIND_TEXTURECUBE_ARRAY = 9,
+   DXIL_RESOURCE_KIND_TYPED_BUFFER      = 10,
+   DXIL_RESOURCE_KIND_RAW_BUFFER        = 11,
+   DXIL_RESOURCE_KIND_STRUCTURED_BUFFER = 12,
+   DXIL_RESOURCE_KIND_CBUFFER           = 13,
+   DXIL_RESOURCE_KIND_SAMPLER           = 14,
+   DXIL_RESOURCE_KIND_TBUFFER           = 15,
+};
+
 enum dxil_attr_kind {
    DXIL_ATTR_KIND_NONE = 0,
    DXIL_ATTR_KIND_NO_UNWIND = 18,
@@ -225,6 +244,8 @@ extern "C" {
 enum dxil_component_type dxil_get_comp_type(const struct glsl_type *type);
 
 enum dxil_prog_sig_comp_type dxil_get_prog_sig_comp_type(const struct glsl_type *type);
+
+enum dxil_resource_kind dxil_get_resource_kind(const struct glsl_type *type);
 
 const char *dxil_overload_suffix( enum overload_type overload);
 
