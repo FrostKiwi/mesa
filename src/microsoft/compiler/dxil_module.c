@@ -626,6 +626,28 @@ dxil_module_get_cbuf_ret_type(struct dxil_module *mod, enum overload_type overlo
 }
 
 const struct dxil_type *
+dxil_module_get_res_type(struct dxil_module *m, enum dxil_resource_kind kind)
+{
+   switch (kind) {
+   case DXIL_RESOURCE_KIND_TEXTURE1D:
+   case DXIL_RESOURCE_KIND_TEXTURE2D:
+   case DXIL_RESOURCE_KIND_TEXTURE3D:
+   case DXIL_RESOURCE_KIND_TEXTURECUBE:
+   {
+      const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
+      const struct dxil_type *float32_type = dxil_module_get_float_type(m, 32);
+      const struct dxil_type *vec_type = dxil_module_get_vector_type(m, float32_type, 4);
+      const struct dxil_type *mips_type = dxil_module_get_struct_type(m, "class.Texture2D<vector<float, 4> >::mips_type", &int32_type, 1);
+      const struct dxil_type *fields[2] = { vec_type, mips_type };
+      return dxil_module_get_struct_type(m, "class.Texture2D<vector<float, 4> >", fields, 2);
+   }
+
+   default:
+      unreachable("resource type not supported");
+   }
+}
+
+const struct dxil_type *
 dxil_module_get_resret_type(struct dxil_module *m, enum overload_type overload)
 {
    const struct dxil_type *overload_type = dxil_get_overload_type(m, overload);
