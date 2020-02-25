@@ -1356,7 +1356,8 @@ const struct dxil_gvar *
 dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
                     bool constant, int align)
 {
-   struct dxil_gvar *gvar = CALLOC_STRUCT(dxil_gvar);
+   struct dxil_gvar *gvar = ralloc_size(m->ralloc_ctx,
+                                        sizeof(struct dxil_gvar));
    if (!gvar)
       return NULL;
 
