@@ -497,8 +497,8 @@ dxil_module_get_struct_type(struct dxil_module *m,
       } else
          type->struct_def.name = NULL;
 
-      type->struct_def.elem_types = CALLOC(sizeof(struct dxil_type *),
-                                           num_elem_types);
+      type->struct_def.elem_types = ralloc_array(type, struct dxil_type *,
+                                                 num_elem_types);
       if (!type->struct_def.elem_types)
          return NULL;
 
@@ -580,8 +580,9 @@ dxil_module_add_function_type(struct dxil_module *m,
 {
    struct dxil_type *type = create_type(m, TYPE_FUNCTION);
    if (type) {
-      type->function_def.arg_types = CALLOC(sizeof(struct dxil_type *),
-                                            num_arg_types);
+      type->function_def.arg_types = ralloc_array(type,
+                                                  struct dxil_type *,
+                                                  num_arg_types);
       if (!type->function_def.arg_types)
          return NULL;
 
@@ -1782,7 +1783,7 @@ dxil_get_metadata_node(struct dxil_module *m,
 
    n = create_mdnode(m, MD_NODE);
    if (n) {
-      n->node.subnodes = CALLOC(num_subnodes, sizeof(struct dxil_mdnode *));
+      n->node.subnodes = ralloc_array(n, struct dxil_mdnode *, num_subnodes);
       if (!n->node.subnodes)
          return NULL;
 
@@ -1863,7 +1864,7 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
    if (!n->name)
       return false;
 
-   n->subnodes = CALLOC(num_subnodes, sizeof(struct dxil_mdnode *));
+   n->subnodes = ralloc_array(n, struct dxil_mdnode *, num_subnodes);
    if (!n->subnodes)
       return false;
 
@@ -2134,7 +2135,7 @@ create_call_instr(struct dxil_module *m,
    struct dxil_instr *instr = create_instr(m, INSTR_CALL);
    if (instr) {
       instr->call.func = func;
-      instr->call.args = CALLOC(sizeof(struct dxil_value *), num_args);
+      instr->call.args = ralloc_array(instr, struct dxil_value *, num_args);
       if (!args)
          return false;
       memcpy(instr->call.args, args, sizeof(struct dxil_value *) * num_args);
@@ -2236,7 +2237,8 @@ dxil_emit_gep_inbounds(struct dxil_module *m,
    if (!instr)
       return NULL;
 
-   instr->gep.operands = CALLOC(sizeof(struct dxil_value *), num_operands);
+   instr->gep.operands = ralloc_array(instr, struct dxil_value *,
+                                      num_operands);
    if (!instr->gep.operands)
       return NULL;
 
