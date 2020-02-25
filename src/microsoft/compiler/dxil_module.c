@@ -2011,7 +2011,8 @@ emit_metadata(struct dxil_module *m)
 static struct dxil_instr *
 create_instr(struct dxil_module *m, enum instr_type type)
 {
-   struct dxil_instr *ret = CALLOC_STRUCT(dxil_instr);
+   struct dxil_instr *ret = ralloc_size(m->ralloc_ctx,
+                                        sizeof(struct dxil_instr));
    if (ret) {
       ret->type = type;
       ret->value.id = -1;
@@ -2245,10 +2246,8 @@ dxil_emit_gep_inbounds(struct dxil_module *m,
       return NULL;
 
    instr->gep.operands = CALLOC(sizeof(struct dxil_value *), num_operands);
-   if (!instr->gep.operands) {
-      FREE(instr);
+   if (!instr->gep.operands)
       return NULL;
-   }
 
    instr->gep.source_elem_type = source_elem_type;
    memcpy(instr->gep.operands, operands,
