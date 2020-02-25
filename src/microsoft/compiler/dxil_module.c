@@ -337,7 +337,8 @@ emit_record_abbrev(struct dxil_buffer *b,
 static struct dxil_type *
 create_type(struct dxil_module *m, enum type_type type)
 {
-   struct dxil_type *ret = CALLOC_STRUCT(dxil_type);
+   struct dxil_type *ret = ralloc_size(m->ralloc_ctx,
+                                       sizeof(struct dxil_type));
    if (ret) {
       ret->type = type;
       ret->id = list_length(&m->type_list);
@@ -491,10 +492,8 @@ dxil_module_get_struct_type(struct dxil_module *m,
    if (type) {
       if (name) {
          type->struct_def.name = strdup(name);
-         if (!type->struct_def.name) {
-            FREE(type);
+         if (!type->struct_def.name)
             return NULL;
-         }
       } else
          type->struct_def.name = NULL;
 
@@ -502,7 +501,6 @@ dxil_module_get_struct_type(struct dxil_module *m,
                                            num_elem_types);
       if (!type->struct_def.elem_types) {
          free((void *)type->struct_def.name);
-         FREE(type);
          return NULL;
       }
       memcpy(type->struct_def.elem_types, elem_types,
@@ -585,10 +583,9 @@ dxil_module_add_function_type(struct dxil_module *m,
    if (type) {
       type->function_def.arg_types = CALLOC(sizeof(struct dxil_type *),
                                             num_arg_types);
-      if (!type->function_def.arg_types) {
-         FREE(type);
+      if (!type->function_def.arg_types)
          return NULL;
-      }
+
       memcpy(type->function_def.arg_types, arg_types,
              sizeof(struct dxil_type *) * num_arg_types);
       type->function_def.num_arg_types = num_arg_types;
