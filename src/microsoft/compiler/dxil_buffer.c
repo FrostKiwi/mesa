@@ -11,6 +11,12 @@ dxil_buffer_init(struct dxil_buffer *b, unsigned abbrev_width)
    b->abbrev_width = abbrev_width;
 }
 
+void
+dxil_buffer_finish(struct dxil_buffer *b)
+{
+   blob_finish(&b->blob);
+}
+
 static bool
 flush_dword(struct dxil_buffer *b)
 {

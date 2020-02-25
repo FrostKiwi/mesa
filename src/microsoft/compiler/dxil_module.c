@@ -60,6 +60,7 @@ dxil_module_init(struct dxil_module *m, void *ralloc_ctx)
 void
 dxil_module_release(struct dxil_module *m)
 {
+   dxil_buffer_finish(&m->buf);
    _mesa_string_buffer_destroy(m->sem_string_table);
 }
 
