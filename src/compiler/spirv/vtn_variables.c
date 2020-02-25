@@ -2143,8 +2143,6 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
 
    switch (mode) {
    case vtn_variable_mode_ubo:
-      /* There's no other way to get vtn_variable_mode_ubo */
-      vtn_assert(without_array->block);
       b->shader->info.num_ubos++;
       break;
    case vtn_variable_mode_ssbo:
