@@ -157,6 +157,7 @@ struct dxil_shader_info {
 };
 
 struct dxil_module {
+   void *ralloc_ctx;
    enum dxil_shader_kind shader_kind;
    unsigned major_version, minor_version;
    struct dxil_features feats;
@@ -202,7 +203,7 @@ struct dxil_module {
 };
 
 void
-dxil_module_init(struct dxil_module *m);
+dxil_module_init(struct dxil_module *m, void *ralloc_ctx);
 
 void
 dxil_module_release(struct dxil_module *m);
