@@ -89,7 +89,7 @@ int clc_compile_from_source(
    }
 
    NIR_PASS_V(nir, nir_lower_goto_ifs);
-   NIR_PASS_V(nir, nir_lower_constant_initializers, nir_var_function_temp);
+   NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
    NIR_PASS_V(nir, nir_lower_returns);
    NIR_PASS_V(nir, nir_inline_functions);
    NIR_PASS_V(nir, nir_opt_deref);
@@ -98,7 +98,7 @@ int clc_compile_from_source(
          exec_node_remove(&func->node);
    }
    assert(exec_list_length(&nir->functions) == 1);
-   NIR_PASS_V(nir, nir_lower_constant_initializers, ~nir_var_function_temp);
+   NIR_PASS_V(nir, nir_lower_variable_initializers, ~nir_var_function_temp);
 
    nir_variable_mode modes = nir_var_shader_in | nir_var_mem_global |
                              nir_var_mem_shared;
