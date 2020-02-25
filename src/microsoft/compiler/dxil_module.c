@@ -60,15 +60,6 @@ dxil_module_init(struct dxil_module *m, void *ralloc_ctx)
 void
 dxil_module_release(struct dxil_module *m)
 {
-   for (unsigned i = 0; i < m->num_sig_inputs; ++i) {
-      if (m->inputs[i].name)
-         free(m->inputs[i].name);
-   }
-
-   for (unsigned i = 0; i < m->num_sig_outputs; ++i) {
-      if (m->outputs[i].name)
-         free(m->outputs[i].name);
-   }
    _mesa_string_buffer_destroy(m->sem_string_table);
 }
 
