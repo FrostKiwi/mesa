@@ -111,3 +111,8 @@ int clc_compile_from_source(
    blob_finish_get_buffer(&tmp, blob, blob_size);
    return 0;
 }
+
+void clc_free_blob(void *blob)
+{
+   free(blob);
+}
