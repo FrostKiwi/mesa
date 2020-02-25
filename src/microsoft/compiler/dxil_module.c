@@ -1213,7 +1213,7 @@ get_int_const(struct dxil_module *m, const struct dxil_type *type,
 
    struct dxil_const *c;
    LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
-      if (c->type != type)
+      if (c->type != type || c->undef)
          continue;
 
       if (c->int_value == value)
@@ -1277,7 +1277,7 @@ dxil_module_get_float_const(struct dxil_module *m, float value)
 
    struct dxil_const *c;
    LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
-      if (c->type != type)
+      if (c->type != type || c->undef)
          continue;
 
       if (c->float_value == value)
