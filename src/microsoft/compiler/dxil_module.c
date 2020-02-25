@@ -1859,13 +1859,13 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
    if (!n)
       return false;
 
-   n->name = strdup(name);
+   n->name = ralloc_strdup(n, name);
    if (!n->name)
-      goto fail;
+      return false;
 
    n->subnodes = CALLOC(num_subnodes, sizeof(struct dxil_mdnode *));
    if (!n->subnodes)
-      goto fail;
+      return false;
 
    memcpy(n->subnodes, subnodes, sizeof(struct dxil_mdnode *) *
           num_subnodes);
@@ -1873,10 +1873,6 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
 
    list_addtail(&n->head, &m->md_named_node_list);
    return true;
-
-fail:
-   FREE(n->name);
-   return false;
 }
 
 static bool
