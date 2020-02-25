@@ -491,7 +491,7 @@ dxil_module_get_struct_type(struct dxil_module *m,
    type = create_type(m, TYPE_STRUCT);
    if (type) {
       if (name) {
-         type->struct_def.name = strdup(name);
+         type->struct_def.name = ralloc_strdup(type, name);
          if (!type->struct_def.name)
             return NULL;
       } else
@@ -499,10 +499,9 @@ dxil_module_get_struct_type(struct dxil_module *m,
 
       type->struct_def.elem_types = CALLOC(sizeof(struct dxil_type *),
                                            num_elem_types);
-      if (!type->struct_def.elem_types) {
-         free((void *)type->struct_def.name);
+      if (!type->struct_def.elem_types)
          return NULL;
-      }
+
       memcpy(type->struct_def.elem_types, elem_types,
              sizeof(struct dxil_type *) * num_elem_types);
       type->struct_def.num_elem_types = num_elem_types;
