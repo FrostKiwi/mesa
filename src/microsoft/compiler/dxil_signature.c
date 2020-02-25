@@ -310,7 +310,8 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
       inputs[num_inputs] = fill_SV_param_nodes(mod, num_inputs, semantic_name,
                                               semantic_kind, columns, interpolation);
 
-      mod->inputs[num_inputs].name = strdup(semantic_name);
+      mod->inputs[num_inputs].name = ralloc_strdup(mod->ralloc_ctx,
+                                                   semantic_name);
       struct dxil_signature_element *elm = &mod->inputs[num_inputs].sig;
 
       fill_signature_element(elm, semantic_kind, var, num_inputs);
@@ -366,7 +367,8 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
 
       outputs[num_outputs] = fill_SV_param_nodes(mod, num_outputs, semantic_name,
                                                semantic_kind, columns, interpolation);
-      mod->outputs[num_outputs].name = strdup(semantic_name);
+      mod->outputs[num_outputs].name = ralloc_strdup(mod->ralloc_ctx,
+                                                     semantic_name);
       struct dxil_signature_element *elm = &mod->outputs[num_outputs].sig;
       fill_signature_element(elm, semantic_kind, var, num_outputs);
 
