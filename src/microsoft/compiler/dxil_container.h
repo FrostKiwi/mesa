@@ -90,6 +90,9 @@ struct dxil_validation_state {
 void
 dxil_container_init(struct dxil_container *c);
 
+void
+dxil_container_finish(struct dxil_container *c);
+
 bool
 dxil_container_add_features(struct dxil_container *c,
                             const struct dxil_features *features);

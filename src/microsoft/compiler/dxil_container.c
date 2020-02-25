@@ -37,6 +37,12 @@ dxil_container_init(struct dxil_container *c)
    c->num_parts = 0;
 }
 
+void
+dxil_container_finish(struct dxil_container *c)
+{
+   blob_finish(&c->parts);
+}
+
 static bool
 add_part_header(struct dxil_container *c,
                 enum dxil_part_fourcc fourcc,
