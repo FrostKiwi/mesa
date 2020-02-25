@@ -1949,24 +1949,22 @@ emit_cf_list(struct ntd_context *ctx, struct exec_list *list)
 static bool
 emit_module(struct ntd_context *ctx, nir_shader *s)
 {
+   /* The validator forces us to emit resources in a specific order:
+    * CBVs, Samplers, SRVs, UAVs */
+
+   /* CBVs */
    nir_foreach_variable(var, &s->uniforms) {
-      switch (var->data.mode) {
-      case nir_var_mem_ssbo:
-         if (!var->interface_type) {
-            /* this is an SSBO, emit as UAV */
-            if (!emit_uav(ctx, var))
-               return false;
-         }
-         break;
-      case nir_var_mem_ubo:
+      if (var->data.mode == nir_var_mem_ubo) {
          if (!emit_cbv(ctx, var))
             return false;
-         break;
-      case nir_var_uniform:
-         continue;
-      default:
-         debug_printf("Unsupported variable %s of type %s\n",
-                      var->name, glsl_get_type_name(var->type));
+      }
+   }
+
+   /* UAVs */
+   nir_foreach_variable(var, &s->uniforms) {
+      if (var->data.mode == nir_var_mem_ssbo && !var->interface_type) {
+         if (!emit_uav(ctx, var))
+            return false;
       }
    }
 
