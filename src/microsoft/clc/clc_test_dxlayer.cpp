@@ -129,14 +129,11 @@ bool DXILCompiler::disassamble(blob *data,
    if (!blobUtf8)
       return false;
 
-   disassembly = reinterpret_cast<const char*>(blobUtf8->GetBufferPointer());
-   disassembly[blobUtf8->GetBufferSize() - 1] = 0;
+   char *c = reinterpret_cast<char *>(blobUtf8->GetBufferPointer());
+   assert(c);
+   c[blobUtf8->GetBufferSize() - 1] = 0;
 
    stringstream os;
-
-   const char* c = disassembly.c_str();
-   assert(c);
-
    bool in_comment = false;
    bool linestart = true;
    bool last_was_ws = false;
