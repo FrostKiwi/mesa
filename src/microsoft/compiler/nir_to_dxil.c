@@ -2159,6 +2159,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
       retval = false;
       goto out;
    }
+   dxil_container_finish(&container);
 
    if (debug_dxil & DXIL_DEBUG_DUMP_BLOB) {
       static int shader_id = 0;
