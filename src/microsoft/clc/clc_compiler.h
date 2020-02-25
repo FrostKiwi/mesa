@@ -89,6 +89,8 @@ int clc_compile_from_source(
    void **blob,
    size_t *blob_size);
 
+void clc_free_blob(void *blob);
+
 #ifdef __cplusplus
 }
 #endif

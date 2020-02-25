@@ -405,6 +405,8 @@ test_shader(const char *kernel_source, int width, int element_size, const void *
       return false;
    }
 
+   clc_free_blob(blob);
+
    D3D12_DESCRIPTOR_HEAP_DESC heap_desc;
    heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
    heap_desc.NumDescriptors = 1;
