@@ -105,6 +105,7 @@ int clc_compile_from_source(
       return -1;
    }
 
+   ralloc_free(nir);
    glsl_type_singleton_decref();
 
    blob_finish_get_buffer(&tmp, blob, blob_size);
