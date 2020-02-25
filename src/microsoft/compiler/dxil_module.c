@@ -1196,7 +1196,8 @@ emit_type_table(struct dxil_module *m)
 static struct dxil_const *
 create_const(struct dxil_module *m, const struct dxil_type *type, bool undef)
 {
-   struct dxil_const *ret = CALLOC_STRUCT(dxil_const);
+   struct dxil_const *ret = ralloc_size(m->ralloc_ctx,
+                                        sizeof(struct dxil_const));
    if (ret) {
       ret->type = type;
       ret->value.id = -1;
