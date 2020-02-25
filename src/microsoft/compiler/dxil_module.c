@@ -1378,7 +1378,7 @@ add_function(struct dxil_module *m, const char *name,
    if (!func)
       return NULL;
 
-   func->name = strdup(name);
+   func->name = ralloc_strdup(func, name);
    if (!func->name) {
       return NULL;
    }
@@ -1731,7 +1731,7 @@ dxil_get_metadata_string(struct dxil_module *m, const char *str)
 
    n = create_mdnode(m, MD_STRING);
    if (n) {
-      n->string = strdup(str);
+      n->string = ralloc_strdup(n, str);
       if (!n->string)
          return NULL;
    }
