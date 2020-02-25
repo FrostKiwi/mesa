@@ -92,6 +92,7 @@ void NirToDXILTest::run(const string& in_shader, const string& dxil_expect) cons
    bool validate_success = compiler->validate(&tmp);
    ASSERT_TRUE(validate_success);
 
+   blob_finish(&tmp);
    glsl_type_singleton_init_or_ref();
 }
 
