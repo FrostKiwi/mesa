@@ -1742,7 +1742,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    if (!ctx->phis)
       return false;
 
-   ctx->locals = _mesa_pointer_hash_table_create(NULL);
+   ctx->locals = _mesa_pointer_hash_table_create(ctx->ralloc_ctx);
    if (!ctx->locals)
       return false;
 
