@@ -2079,14 +2079,14 @@ Converter::visit(nir_intrinsic_instr *insn)
    }
    case nir_intrinsic_load_kernel_input: {
       assert(prog->getType() == Program::TYPE_COMPUTE);
-      assert(insn->num_components == 1);
 
       LValues &newDefs = convert(&insn->dest);
       const DataType dType = getDType(insn);
       Value *indirect;
       uint32_t idx = getIndirect(insn, 0, 0, indirect, true);
 
-      mkLoad(dType, newDefs[0], mkSymbol(FILE_SHADER_INPUT, 0, dType, idx), indirect);
+      for (uint8_t i = 0u; i < dest_components; ++i)
+         mkLoad(dType, newDefs[i], mkSymbol(FILE_SHADER_INPUT, 0, dType, idx + typeSizeof(dType) * i), indirect);
       break;
    }
    case nir_intrinsic_load_barycentric_at_offset:
