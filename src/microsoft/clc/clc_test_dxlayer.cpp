@@ -119,14 +119,13 @@ bool DXILCompiler::disassamble(blob *data,
 {
    // Disassamble and convert to std::string
    ShaderBlob source(data);
-   IDxcBlobEncoding* pDisassembly = nullptr;
+   ComPtr<IDxcBlobEncoding> pDisassembly = nullptr;
 
    if (FAILED(m_compiler->Disassemble(&source, &pDisassembly)))
       return false;
 
-   ComPtr<IDxcBlobEncoding> dissassably(pDisassembly);
    ComPtr<IDxcBlobEncoding> blobUtf8;
-   m_library->GetBlobAsUtf8(pDisassembly, blobUtf8.GetAddressOf());
+   m_library->GetBlobAsUtf8(pDisassembly.Get(), blobUtf8.GetAddressOf());
    if (!blobUtf8)
       return false;
 
