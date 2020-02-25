@@ -1856,7 +1856,8 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
                              const struct dxil_mdnode *subnodes[],
                              size_t num_subnodes)
 {
-   struct dxil_named_node *n = CALLOC_STRUCT(dxil_named_node);
+   struct dxil_named_node *n = ralloc_size(m->ralloc_ctx,
+                                           sizeof(struct dxil_named_node));
    if (!n)
       return false;
 
@@ -1877,7 +1878,6 @@ dxil_add_metadata_named_node(struct dxil_module *m, const char *name,
 
 fail:
    FREE(n->name);
-   FREE(n);
    return false;
 }
 
