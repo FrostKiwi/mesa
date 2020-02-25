@@ -1419,7 +1419,7 @@ get_attr_set(struct dxil_module *m, enum dxil_attr_kind attr)
       index++;
    }
 
-   as = CALLOC_STRUCT(attrib_set);
+   as = ralloc_size(m->ralloc_ctx, sizeof(struct attrib_set));
    if (!as)
       return 0;
 
