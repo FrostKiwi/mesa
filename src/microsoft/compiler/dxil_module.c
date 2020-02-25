@@ -1375,13 +1375,13 @@ add_function(struct dxil_module *m, const char *name,
 {
    assert(type->type == TYPE_FUNCTION);
 
-   struct dxil_func *func = CALLOC_STRUCT(dxil_func);
+   struct dxil_func *func = ralloc_size(m->ralloc_ctx,
+                                        sizeof(struct dxil_func));
    if (!func)
       return NULL;
 
    func->name = strdup(name);
    if (!func->name) {
-      FREE(func);
       return NULL;
    }
 
