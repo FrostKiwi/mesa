@@ -53,11 +53,23 @@ namespace clover {
          kernel &kern;
          intrusive_ptr<command_queue> q;
 
+         struct CB_buffer {
+            CB_buffer(pipe_resource *pipe) : pipe(pipe), host(false) {}
+            CB_buffer(const void *host) : host_ptr(host), host(true) {}
+
+            union {
+               pipe_resource *pipe;
+               const void *host_ptr;
+            };
+            bool host;
+         };
+
          std::vector<uint8_t> input;
          std::vector<void *> samplers;
          std::vector<pipe_sampler_view *> sviews;
          std::vector<pipe_surface *> resources;
          std::vector<pipe_resource *> g_buffers;
+         std::vector<CB_buffer> cb_buffers;
          std::vector<size_t> g_handles;
          size_t mem_local;
 
@@ -189,6 +201,7 @@ namespace clover {
       class constant_argument : public argument {
       public:
          virtual void set(size_t size, const void *value);
+         virtual void set_svm(const void *value);
          virtual void bind(exec_context &ctx,
                            const module::argument &marg);
          virtual void unbind(exec_context &ctx);
@@ -196,6 +209,7 @@ namespace clover {
       private:
          buffer *buf;
          pipe_surface *st;
+         const void *svm;
       };
 
       class image_argument : public argument {

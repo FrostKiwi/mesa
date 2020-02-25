@@ -75,6 +75,17 @@ kernel::launch(command_queue &q,
    q.pipe->set_global_binding(q.pipe, 0, exec.g_buffers.size(),
                               exec.g_buffers.data(), g_handles.data());
 
+   for (size_t i = 0; i < exec.cb_buffers.size(); ++i) {
+      auto &buf = exec.cb_buffers[i];
+      const struct pipe_constant_buffer cb = {
+         .buffer = !buf.host ? buf.pipe : nullptr,
+         .buffer_offset = !buf.host ? 0x0 : 0x0,
+         .buffer_size = !buf.host ? 0x100 : 0x100,
+         .user_buffer = buf.host ? buf.host_ptr : nullptr,
+      };
+      q.pipe->set_constant_buffer(q.pipe, PIPE_SHADER_COMPUTE, i + 1, &cb);
+   }
+
    // Fill information for the launch_grid() call.
    info.work_dim = grid_size.size();
    copy(pad_vector(q, block_size, 1), info.block);
@@ -84,6 +95,8 @@ kernel::launch(command_queue &q,
 
    q.pipe->launch_grid(q.pipe, &info);
 
+   for (size_t i = 0; i < exec.cb_buffers.size(); ++i)
+      q.pipe->set_constant_buffer(q.pipe, PIPE_SHADER_COMPUTE, i + 1, NULL);
    q.pipe->set_global_binding(q.pipe, 0, exec.g_buffers.size(), NULL, NULL);
    q.pipe->set_compute_resources(q.pipe, 0, exec.resources.size(), NULL);
    q.pipe->set_sampler_views(q.pipe, PIPE_SHADER_COMPUTE, 0,
@@ -251,6 +264,7 @@ kernel::exec_context::unbind() {
    sviews.clear();
    resources.clear();
    g_buffers.clear();
+   cb_buffers.clear();
    g_handles.clear();
    mem_local = 0;
 }
@@ -493,6 +507,14 @@ kernel::constant_argument::set(size_t size, const void *value) {
       throw error(CL_INVALID_ARG_SIZE);
 
    buf = pobj<buffer>(value ? *(cl_mem *)value : NULL);
+   svm = nullptr;
+   _set = true;
+}
+
+void
+kernel::constant_argument::set_svm(const void *value) {
+   svm = value;
+   buf = nullptr;
    _set = true;
 }
 
@@ -501,16 +523,22 @@ kernel::constant_argument::bind(exec_context &ctx,
                                 const module::argument &marg) {
    align(ctx.input, marg.target_align);
 
-   if (buf) {
-      resource &r = buf->resource(*ctx.q);
-      auto v = bytes(ctx.resources.size() << 24 | r.offset[0]);
+   if (buf || svm) {
+      uint64_t offset;
+      uint64_t id = ctx.cb_buffers.size();
+      if (buf) {
+         resource &r = buf->resource(*ctx.q);
+         offset = r.offset[0];
+         ctx.cb_buffers.emplace_back(r.pipe);
+      } else {
+         offset = 0;
+         ctx.cb_buffers.emplace_back(svm);
+      }
 
+      auto v = bytes(id | (offset << 32));
       extend(v, module::argument::zero_ext, marg.target_size);
       byteswap(v, ctx.q->device().endianness());
       insert(ctx.input, v);
-
-      st = r.bind_surface(*ctx.q, false);
-      ctx.resources.push_back(st);
    } else {
       // Null pointer.
       allocate(ctx.input, marg.target_size);
@@ -519,8 +547,6 @@ kernel::constant_argument::bind(exec_context &ctx,
 
 void
 kernel::constant_argument::unbind(exec_context &ctx) {
-   if (buf)
-      buf->resource(*ctx.q).unbind_surface(*ctx.q, st);
 }
 
 void

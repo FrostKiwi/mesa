@@ -4135,6 +4135,7 @@ vtn_handle_preamble_instruction(struct vtn_builder *b, SpvOp opcode,
          b->options->shared_addr_format = nir_address_format_64bit_global;
          b->options->global_addr_format = nir_address_format_64bit_global;
          b->options->temp_addr_format = nir_address_format_64bit_global;
+         b->options->ubo_addr_format = nir_address_format_32bit_index_offset;
          break;
       case SpvAddressingModelLogical:
          vtn_fail_if(b->shader->info.stage == MESA_SHADER_KERNEL,
