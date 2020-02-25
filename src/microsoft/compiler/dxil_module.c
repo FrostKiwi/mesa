@@ -1709,7 +1709,8 @@ emit_metadata_abbrevs(struct dxil_module *m)
 static struct dxil_mdnode *
 create_mdnode(struct dxil_module *m, enum mdnode_type type)
 {
-   struct dxil_mdnode *ret = CALLOC_STRUCT(dxil_mdnode);
+   struct dxil_mdnode *ret = ralloc_size(m->ralloc_ctx,
+                                         sizeof(struct dxil_mdnode));
    if (ret) {
       ret->type = type;
       ret->id = list_length(&m->mdnode_list) + 1; /* zero is reserved for NULL nodes */
@@ -1733,10 +1734,8 @@ dxil_get_metadata_string(struct dxil_module *m, const char *str)
    n = create_mdnode(m, MD_STRING);
    if (n) {
       n->string = strdup(str);
-      if (!n->string) {
-         FREE(n);
+      if (!n->string)
          return NULL;
-      }
    }
    return n;
 }
@@ -1786,10 +1785,8 @@ dxil_get_metadata_node(struct dxil_module *m,
    n = create_mdnode(m, MD_NODE);
    if (n) {
       n->node.subnodes = CALLOC(num_subnodes, sizeof(struct dxil_mdnode *));
-      if (!n->node.subnodes) {
-         FREE(n);
+      if (!n->node.subnodes)
          return NULL;
-      }
 
       memcpy(n->node.subnodes, subnodes, sizeof(struct dxil_mdnode *) *
              num_subnodes);
