@@ -50,7 +50,7 @@ int clc_compile_from_source(
 
    const struct spirv_to_nir_options spirv_options = {
       .environment = NIR_SPIRV_OPENCL,
-      .constant_as_global = true,
+      .constant_as_global = false,
       .caps = {
          .address = true,
          .float64 = true,
