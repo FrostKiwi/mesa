@@ -69,7 +69,7 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
    spirv_options.caps.int16 = true;
    spirv_options.caps.int64 = true;
    spirv_options.caps.kernel = true;
-   spirv_options.constant_as_global = true;
+   spirv_options.constant_as_global = false;
 
    module m;
    // We only insert one section.
@@ -142,6 +142,7 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
       nir_address_format format = nir->info.cs.ptr_size == 64 ?
          nir_address_format_64bit_global : nir_address_format_32bit_global;
       NIR_PASS_V(nir, nir_lower_explicit_io, modes, format);
+      NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_ubo, nir_address_format_32bit_index_offset);
 
       NIR_PASS_V(nir, nir_lower_system_values);
       if (compiler_options->lower_int64_options)
