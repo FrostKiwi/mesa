@@ -37,6 +37,9 @@ struct dxil_buffer {
 void
 dxil_buffer_init(struct dxil_buffer *b, unsigned abbrev_width);
 
+void
+dxil_buffer_finish(struct dxil_buffer *b);
+
 bool
 dxil_buffer_emit_bits(struct dxil_buffer *b, uint32_t data, unsigned width);
 
