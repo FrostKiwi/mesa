@@ -32,9 +32,12 @@
 #include <assert.h>
 
 void
-dxil_module_init(struct dxil_module *m)
+dxil_module_init(struct dxil_module *m, void *ralloc_ctx)
 {
+   assert(ralloc_ctx);
+
    memset(m, 0, sizeof(struct dxil_module));
+   m->ralloc_ctx = ralloc_ctx;
 
    dxil_buffer_init(&m->buf, 2);
    memset(&m->feats, 0, sizeof(m->feats));

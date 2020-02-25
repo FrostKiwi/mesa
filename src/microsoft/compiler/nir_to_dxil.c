@@ -2072,7 +2072,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    if (!ctx.ralloc_ctx)
       return false;
 
-   dxil_module_init(&ctx.mod);
+   dxil_module_init(&ctx.mod, ctx.ralloc_ctx);
    ctx.mod.shader_kind = get_dxil_shader_kind(s);
    ctx.mod.major_version = 6;
    ctx.mod.minor_version = 0;
