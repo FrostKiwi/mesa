@@ -81,6 +81,7 @@ int clc_compile_from_source(
                       &spirv_options,
                       dxil_get_nir_compiler_options(),
                       false);
+   free(spv_src);
    if (!nir) {
       fprintf(stderr, "D3D12: spirv_to_nir failed\n");
       return -1;
