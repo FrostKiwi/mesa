@@ -72,8 +72,11 @@ nir_options = {
    .lower_inot = true,
    .fuse_ffma = true,
    .lower_isign = true,
+   .lower_fsign = true,
    .lower_iabs = true,
    .lower_fmod = true,
+   .lower_fpow = true,
+   .lower_scmp = true,
    .lower_extract_word = true,
    .lower_extract_byte = true,
 };
