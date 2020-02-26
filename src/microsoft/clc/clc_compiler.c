@@ -26,6 +26,7 @@
 #include "../compiler/nir_to_dxil.h"
 
 #include "util/u_debug.h"
+#include <util/u_math.h>
 #include "spirv/nir_spirv.h"
 
 int clc_compile_from_source(
@@ -60,6 +61,8 @@ int clc_compile_from_source(
          .kernel = true,
       },
    };
+   const struct nir_shader_compiler_options *nir_options =
+	   dxil_get_nir_compiler_options();
 
    ret = clc_to_spirv(source, source_name,
                       defines, num_defines,
@@ -80,25 +83,48 @@ int clc_compile_from_source(
                       NULL, 0,
                       MESA_SHADER_KERNEL, "main_test",
                       &spirv_options,
-                      dxil_get_nir_compiler_options(),
+                      nir_options,
                       false);
    free(spv_src);
    if (!nir) {
       fprintf(stderr, "D3D12: spirv_to_nir failed\n");
       return -1;
    }
+   nir->info.cs.local_size_variable = true;
 
    NIR_PASS_V(nir, nir_lower_goto_ifs);
+   NIR_PASS_V(nir, nir_opt_dead_cf);
+
+   // Calculate input offsets.
+   unsigned offset = 0;
+   nir_foreach_variable_safe(var, &nir->inputs) {
+      offset = align(offset, glsl_get_cl_alignment(var->type));
+      var->data.driver_location = offset;
+      offset += glsl_get_cl_size(var->type);
+   }
+
+   // Inline all functions first.
+   // according to the comment on nir_inline_functions
    NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
    NIR_PASS_V(nir, nir_lower_returns);
    NIR_PASS_V(nir, nir_inline_functions);
    NIR_PASS_V(nir, nir_opt_deref);
+
+   // Pick off the single entrypoint that we want.
    foreach_list_typed_safe(nir_function, func, node, &nir->functions) {
       if (!func->is_entrypoint)
          exec_node_remove(&func->node);
    }
    assert(exec_list_length(&nir->functions) == 1);
+
    NIR_PASS_V(nir, nir_lower_variable_initializers, ~nir_var_function_temp);
+
+   // copy propagate to prepare for lower_explicit_io
+   NIR_PASS_V(nir, nir_split_var_copies);
+   NIR_PASS_V(nir, nir_opt_copy_prop_vars);
+   NIR_PASS_V(nir, nir_lower_var_copies);
+   NIR_PASS_V(nir, nir_lower_vars_to_ssa);
+   NIR_PASS_V(nir, nir_opt_dce);
 
    nir_variable_mode modes = nir_var_shader_in | nir_var_mem_global |
                              nir_var_mem_shared;
@@ -107,6 +133,10 @@ int clc_compile_from_source(
    NIR_PASS_V(nir, nir_lower_explicit_io, modes, format);
 
    NIR_PASS_V(nir, nir_lower_system_values);
+   if (nir_options->lower_int64_options)
+      NIR_PASS_V(nir, nir_lower_int64, nir_options->lower_int64_options);
+
+   NIR_PASS_V(nir, nir_opt_dce);
 
    struct nir_to_dxil_options opts = {
       .interpolate_at_vertex = false
