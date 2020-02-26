@@ -1091,6 +1091,8 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_uge:  return emit_cmp(ctx, alu, DXIL_ICMP_UGE, src[0], src[1]);
    case nir_op_ilt:  return emit_cmp(ctx, alu, DXIL_ICMP_SLT, src[0], src[1]);
    case nir_op_ult:  return emit_cmp(ctx, alu, DXIL_ICMP_ULT, src[0], src[1]);
+   case nir_op_flt:  return emit_cmp(ctx, alu, DXIL_FCMP_ULT, src[0], src[1]);
+   case nir_op_fge:  return emit_cmp(ctx, alu, DXIL_FCMP_UGE, src[0], src[1]);
    case nir_op_bcsel: {
          const struct dxil_value *v = dxil_emit_select(&ctx->mod, src[0],
                                                        src[1], src[2]);
