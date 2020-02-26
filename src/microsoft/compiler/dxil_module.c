@@ -1293,6 +1293,30 @@ dxil_module_get_float_const(struct dxil_module *m, float value)
 }
 
 const struct dxil_value *
+dxil_module_get_double_const(struct dxil_module *m, double value)
+{
+   const struct dxil_type *type = get_float64_type(m);
+   if (!type)
+      return NULL;
+
+   struct dxil_const *c;
+   LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
+      if (c->type != type || c->undef)
+         continue;
+
+      if (c->float_value == value)
+         return &c->value;
+   }
+
+   c = create_const(m, type, false);
+   if (!c)
+      return NULL;
+
+   c->float_value = value;
+   return &c->value;
+}
+
+const struct dxil_value *
 dxil_module_get_undef(struct dxil_module *m, const struct dxil_type *type)
 {
    assert(type != NULL);
@@ -1581,6 +1605,16 @@ emit_float_value(struct dxil_module *m, float value)
 }
 
 static bool
+emit_double_value(struct dxil_module *m, double value)
+{
+   union di u;
+   u.d = value;
+   if (u.ui == UINT64_C(0))
+      return emit_null_value(m);
+   return emit_record_no_abbrev(&m->buf, CST_CODE_FLOAT, &u.ui, 1);
+}
+
+static bool
 emit_consts(struct dxil_module *m)
 {
    const struct dxil_type *curr_type = NULL;
@@ -1608,8 +1642,18 @@ emit_consts(struct dxil_module *m)
          break;
 
       case TYPE_FLOAT:
-         if (!emit_float_value(m, c->float_value))
-            return false;
+         switch (curr_type->float_bits) {
+         case 32:
+            if (!emit_float_value(m, c->float_value))
+               return false;
+            break;
+         case 64:
+            if (!emit_double_value(m, c->float_value))
+               return false;
+            break;
+         default:
+            unreachable("unexpected float_bits");
+         }
          break;
 
       default:
