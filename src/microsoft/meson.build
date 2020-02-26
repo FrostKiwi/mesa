@@ -19,4 +19,6 @@
 # SOFTWARE.
 
 subdir('compiler')
-subdir('clc')
+if with_microsoft_clc
+  subdir('clc')
+endif
