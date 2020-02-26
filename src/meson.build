@@ -85,7 +85,7 @@ endif
 if with_dri_i965 or with_intel_vk or with_gallium_iris
   subdir('intel')
 endif
-if with_microsoft_clc
+if with_microsoft_clc or with_gallium_d3d12
   subdir('microsoft')
 endif
 subdir('mesa')
