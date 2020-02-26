@@ -171,6 +171,8 @@ enum dxil_intr {
    DXIL_INTR_THREAD_ID = 93,
    DXIL_INTR_GROUP_ID = 94,
    DXIL_INTR_THREAD_ID_IN_GROUP = 95,
+
+   DXIL_INTR_ATTRIBUTE_AT_VERTEX = 137,
 };
 
 static const struct dxil_mdnode *
@@ -586,7 +588,7 @@ static bool
 emit_metadata(struct ntd_context *ctx, nir_shader *s)
 {
    if (!emit_llvm_ident(&ctx->mod) ||
-       !emit_named_version(&ctx->mod, "dx.version", 1, 0) ||
+       !emit_named_version(&ctx->mod, "dx.version", 1, 1) ||
        !emit_named_version(&ctx->mod, "dx.valver", 1, 4) ||
        !emit_dx_shader_model(&ctx->mod))
       return false;
@@ -1333,7 +1335,7 @@ emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
-emit_load_input(struct ntd_context *ctx, nir_intrinsic_instr *intr,
+emit_load_input_interpolated(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                 nir_variable *input)
 {
    const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.loadInput", DXIL_F32);
@@ -1360,6 +1362,44 @@ emit_load_input(struct ntd_context *ctx, nir_intrinsic_instr *intr,
       store_dest(ctx, &intr->dest, i, retval, nir_type_float);
    }
    return true;
+}
+
+static bool
+emit_load_input_flat(struct ntd_context *ctx, nir_intrinsic_instr *intr, nir_variable* input)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.attributeAtVertex", DXIL_F32);
+   if (!func)
+      return false;
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_ATTRIBUTE_AT_VERTEX);
+   const struct dxil_value *input_id = dxil_module_get_int32_const(&ctx->mod, (int)input->data.driver_location);
+   const struct dxil_value *row = dxil_module_get_int32_const(&ctx->mod, 0);
+   const struct dxil_value *vertex_id = dxil_module_get_int8_const(&ctx->mod, 2);
+
+   for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
+      const struct dxil_value *comp = dxil_module_get_int8_const(&ctx->mod, i);
+      const struct dxil_value *args[] = {
+         opcode, input_id, row, comp, vertex_id
+      };
+
+      const struct dxil_value *retval = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+      if (!retval)
+         return false;
+
+      store_dest(ctx, &intr->dest, i, retval, nir_type_float);
+   }
+   return true;
+}
+
+static bool
+emit_load_input(struct ntd_context *ctx, nir_intrinsic_instr *intr,
+                nir_variable *input)
+{
+   if (ctx->mod.shader_kind != DXIL_PIXEL_SHADER ||
+       input->data.interpolation != INTERP_MODE_FLAT)
+      return emit_load_input_interpolated(ctx, intr, input);
+   else
+      return emit_load_input_flat(ctx, intr, input);
 }
 
 static bool
@@ -2114,7 +2154,7 @@ nir_to_dxil(struct nir_shader *s, struct blob *blob)
    dxil_module_init(&ctx.mod, ctx.ralloc_ctx);
    ctx.mod.shader_kind = get_dxil_shader_kind(s);
    ctx.mod.major_version = 6;
-   ctx.mod.minor_version = 0;
+   ctx.mod.minor_version = 1;
 
    optimize_nir(s);
 
