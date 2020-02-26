@@ -138,6 +138,7 @@ int clc_compile_from_source(
 
    NIR_PASS_V(nir, nir_opt_dce);
 
+   nir_validate_shader(nir, "Validate before feeding NIR to the DXIL compiler");
    struct nir_to_dxil_options opts = {
       .interpolate_at_vertex = false
    };
