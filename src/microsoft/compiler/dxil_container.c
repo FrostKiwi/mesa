@@ -113,18 +113,23 @@ dxil_container_add_io_signature(struct dxil_container *c,
       io->sig.semantic_name_offset = last_offset;
       last_offset += strlen(io->name) + 1;
    }
-   char *data = malloc(last_offset);
-   memcpy(data, &header, sizeof (header));
 
-   for (unsigned i = 0; i < num_records; ++i) {
-      struct dxil_signature_record *io = &io_data[i];
-      memcpy(data + offset[i], &io->sig, sizeof(struct dxil_signature_element));
-      strcpy(data + io->sig.semantic_name_offset, io->name);
-   }
+   if (!add_part_header(c, part, last_offset) ||
+       !blob_write_bytes(&c->parts, &header, sizeof(header)))
+      return false;
 
-   bool result = add_part(c, part, data, last_offset);
-   free(data);
-   return result;
+   /* write all parts */
+   for (unsigned i = 0; i < num_records; ++i)
+      if (!blob_write_bytes(&c->parts, &io_data[i].sig,
+                            sizeof(io_data[i].sig)))
+         return false;
+
+   /* write all names */
+   for (unsigned i = 0; i < num_records; ++i)
+      if (!blob_write_string(&c->parts, io_data[i].name))
+         return false;
+
+   return true;
 }
 
 bool
