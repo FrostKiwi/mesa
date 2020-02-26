@@ -1574,9 +1574,9 @@ emit_int_value(struct dxil_module *m, int64_t value)
 static bool
 emit_float_value(struct dxil_module *m, float value)
 {
-   if (!value)
-      return emit_null_value(m);
    uint64_t data = fui(value);
+   if (data == UINT32_C(0))
+      return emit_null_value(m);
    return emit_record_no_abbrev(&m->buf, CST_CODE_FLOAT, &data, 1);
 }
 
