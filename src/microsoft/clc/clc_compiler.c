@@ -43,7 +43,7 @@ int clc_compile_from_source(
 {
    uint32_t *spv_src;
    size_t spv_size;
-   const char *err_log;
+   char *err_log;
    struct nir_shader *nir;
    int ret;
 
@@ -70,6 +70,7 @@ int clc_compile_from_source(
 
    if (ret < 0) {
       fprintf(stderr, "D3D12: clc_to_spirv failed: %s\n", err_log);
+      free(err_log);
       return -1;
    }
 

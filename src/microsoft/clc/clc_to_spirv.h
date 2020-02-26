@@ -42,7 +42,7 @@ clc_to_spirv(const char *source,
              size_t num_headers,
              uint32_t **spv_source,
              size_t *spv_size,
-             const char **err_buf);
+             char **err_buf);
 
 #ifdef __cplusplus
 }
