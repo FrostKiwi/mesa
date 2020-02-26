@@ -714,30 +714,27 @@ static void
 store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
            const struct dxil_value *value, nir_alu_type type)
 {
-   switch (nir_alu_type_get_base_type(type)) {
-   case nir_type_uint:
-   case nir_type_int:
-      assert(nir_dest_bit_size(*dest) != 1);
-      if (nir_dest_bit_size(*dest) == 64)
-         ctx->mod.feats.int64_ops = true;
-      break;
+   if (nir_dest_bit_size(*dest) != 1) {
+      switch (nir_alu_type_get_base_type(type)) {
+      case nir_type_uint:
+      case nir_type_int:
+         assert(nir_dest_bit_size(*dest) != 1);
+         if (nir_dest_bit_size(*dest) == 64)
+            ctx->mod.feats.int64_ops = true;
+         break;
 
-   case nir_type_float:
-      assert(nir_dest_bit_size(*dest) != 1);
-      if (nir_dest_bit_size(*dest) == 64) {
-         ctx->mod.feats.doubles = true;
-         ctx->mod.feats.int64_ops = true;
+      case nir_type_float:
+         assert(nir_dest_bit_size(*dest) != 1);
+         if (nir_dest_bit_size(*dest) == 64) {
+            ctx->mod.feats.doubles = true;
+            ctx->mod.feats.int64_ops = true;
+         }
+         value = bitcast_to_int(ctx, nir_dest_bit_size(*dest), value);
+         break;
+
+      default:
+         unreachable("unexpected nir_alu_type");
       }
-      value = bitcast_to_int(ctx, nir_dest_bit_size(*dest), value);
-      break;
-
-   case nir_type_bool:
-      assert(nir_dest_bit_size(*dest) == 1);
-      /* nothing to do */
-      break;
-
-   default:
-      unreachable("unsupported nir_alu_type");
    }
 
    store_dest_int(ctx, dest, chan, value);
@@ -768,6 +765,9 @@ get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
    assert(src->is_ssa);
    const struct dxil_value *value = get_src_ssa(ctx, src->ssa, chan);
 
+   if (nir_src_bit_size(*src) == 1)
+      return value;
+
    switch (nir_alu_type_get_base_type(type)) {
    case nir_type_int:
    case nir_type_uint:
@@ -782,13 +782,8 @@ get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
                                               ctx->mod.feats.int64_ops));
       return bitcast_to_float(ctx, nir_src_bit_size(*src), value);
 
-   case nir_type_bool:
-      assert(nir_src_bit_size(*src) == 1);
-      /* nothing to do */
-      return value;
-
    default:
-      unreachable("unknown nir_alu_type");
+      unreachable("unexpected nir_alu_type");
    }
 }
 
