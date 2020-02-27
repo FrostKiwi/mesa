@@ -266,7 +266,7 @@ static const char *in_sysvalue_name(nir_variable *var)
 static const struct dxil_mdnode *
 get_input_signature(struct dxil_module *mod, nir_shader *s)
 {
-   if (exec_list_is_empty(&s->inputs))
+   if (s->info.stage == MESA_SHADER_KERNEL || exec_list_is_empty(&s->inputs))
       return NULL;
 
    const struct dxil_mdnode *inputs[64];
