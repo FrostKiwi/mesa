@@ -1087,11 +1087,16 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
          store_alu_dest(ctx, alu, 0, v);
          return true;
       }
+
    case nir_op_ftrunc: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_Z, src[0]);
    case nir_op_fceil: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_PI, src[0]);
    case nir_op_ffloor: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NI, src[0]);
    case nir_op_ffract: return emit_unary_intin(ctx, alu, DXIL_INTR_FRC, src[0]);
    case nir_op_fround_even: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NE, src[0]);
+   case nir_op_frcp: {
+         const struct dxil_value *one = dxil_module_get_float_const(&ctx->mod, 1.0f);
+         return emit_binop(ctx, alu, DXIL_BINOP_SDIV, one, src[0]);
+      }
    case nir_op_imax: return emit_binary_intin(ctx, alu, DXIL_INTR_IMAX, src[0], src[1]);
    case nir_op_imin: return emit_binary_intin(ctx, alu, DXIL_INTR_IMIN, src[0], src[1]);
    case nir_op_umax: return emit_binary_intin(ctx, alu, DXIL_INTR_UMAX, src[0], src[1]);
