@@ -50,10 +50,13 @@ struct d3d12_validation_tools
 
    void disassemble(struct blob *dxil);
 
+   void load_dxil_dll();
+
    ComPtr<IDxcCompiler> compiler;
    ComPtr<IDxcValidator> validator;
    ComPtr<IDxcLibrary> library;
    HMODULE dxil_module;
+   HMODULE dxc_ompiler_module;
 };
 
 struct d3d12_validation_tools *d3d12_validator_create()
@@ -159,7 +162,7 @@ d3d12_shader_free(struct d3d12_shader *shader)
 // Used to get path to self
 extern "C" extern IMAGE_DOS_HEADER __ImageBase;
 
-d3d12_validation_tools::d3d12_validation_tools()
+void d3d12_validation_tools::load_dxil_dll()
 {
    dxil_module = ::LoadLibrary("dxil.dll");
    if (!dxil_module) {
@@ -184,29 +187,35 @@ d3d12_validation_tools::d3d12_validation_tools()
 
       dxil_module = ::LoadLibrary(selfPath);
    }
+}
+
+d3d12_validation_tools::d3d12_validation_tools()
+{
+   load_dxil_dll();
+   dxc_ompiler_module = ::LoadLibrary("dxcompiler.dll");
    DxcCreateInstanceProc dxil_create_func = (DxcCreateInstanceProc)GetProcAddress(dxil_module, "DxcCreateInstance");
 
    HRESULT hr = dxil_create_func(CLSID_DxcValidator,  IID_PPV_ARGS(&validator));
    if (FAILED(hr)) {
       debug_printf("D3D12: Unable to create validator\n");
-      return;
    }
 
-   HMODULE dxc_ompiler_module = ::LoadLibrary("dxcompiler.dll");
    DxcCreateInstanceProc compiler_create_func = (DxcCreateInstanceProc)GetProcAddress(dxc_ompiler_module, "DxcCreateInstance");
 
-   hr = compiler_create_func(CLSID_DxcLibrary, IID_PPV_ARGS(&library));
-   if (FAILED(hr)) {
-      debug_printf("D3D12: Unable to create library instance\n");
-      return;
-   }
-
-   if (d3d12_debug & D3D12_DEBUG_DISASS) {
-      hr = compiler_create_func(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler));
+   if (compiler_create_func) {
+      hr = compiler_create_func(CLSID_DxcLibrary, IID_PPV_ARGS(&library));
       if (FAILED(hr)) {
-         debug_printf("D3D12: Unable to create compiler instance\n");
-         return;
+         debug_printf("D3D12: Unable to create library instance\n");
       }
+
+      if (d3d12_debug & D3D12_DEBUG_DISASS) {
+         hr = compiler_create_func(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler));
+         if (FAILED(hr)) {
+            debug_printf("D3D12: Unable to create compiler instance\n");
+         }
+      }
+   } else if (d3d12_debug & D3D12_DEBUG_DISASS) {
+      debug_printf("D3D12: Disassembly requested but compiler couldn't be loaded\n");
    }
 }
 
@@ -214,6 +223,9 @@ d3d12_validation_tools::~d3d12_validation_tools()
 {
    if (dxil_module) {
       ::FreeLibrary(dxil_module);
+   }
+   if (dxc_ompiler_module) {
+      ::FreeLibrary(dxc_ompiler_module);
    }
 }
 
