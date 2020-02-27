@@ -31,6 +31,7 @@
 #include "dxil_dump.h"
 
 #include "util/u_debug.h"
+#include "util/u_math.h"
 #include "nir/nir_builder.h"
 
 #include "git_sha1.h"
@@ -2537,8 +2538,9 @@ lower_global_mem_to_ssbo(struct nir_shader *nir)
 #endif
             nir_ssa_def *ssbo_idx = nir_iand(&b, ptr,
                                              nir_imm_int(&b, 0x00ffffff));
+            unsigned shift = util_logbase2(val->bit_size / 8);
             ssbo_idx = nir_ishr(&b, ssbo_idx,
-                                nir_imm_int(&b, val->bit_size / 16));
+                                nir_imm_int(&b, shift));
 
             nir_intrinsic_instr *store =
                nir_intrinsic_instr_create(b.shader, nir_intrinsic_store_ssbo);
