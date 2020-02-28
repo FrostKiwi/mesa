@@ -7,6 +7,10 @@
 
 #include <stdint.h>
 
+// Malloc.h defines a macro for alloca. Let's at least make sure that all includers
+// of this header have the same definition of alloca.
+#include <malloc.h>
+
 struct dxil_type {
    enum type_type {
       TYPE_VOID,
