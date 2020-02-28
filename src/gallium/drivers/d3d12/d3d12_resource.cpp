@@ -332,10 +332,18 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
    struct d3d12_screen *screen = d3d12_screen(pctx->screen);
    struct d3d12_resource *res = d3d12_resource(ptrans->resource);
    struct d3d12_transfer *trans = (struct d3d12_transfer *)ptrans;
+   D3D12_RANGE empty_range;
+   D3D12_RANGE *range = NULL;
+
+   if (!(trans->base.usage & PIPE_TRANSFER_WRITE)) {
+      empty_range.Begin = 0;
+      empty_range.End = 0;
+      range = &empty_range;
+   }
 
    if (trans->staging_res) {
       struct d3d12_resource *staging_res = d3d12_resource(trans->staging_res);
-      staging_res->res->Unmap(0, NULL);
+      staging_res->res->Unmap(0, range);
 
       if (trans->base.usage & PIPE_TRANSFER_WRITE) {
          struct d3d12_context *ctx = d3d12_context(pctx);
@@ -345,7 +353,7 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
 
       pipe_resource_reference(&trans->staging_res, NULL);
    } else {
-      res->res->Unmap(0, NULL);
+      res->res->Unmap(0, range);
    }
 
    pipe_resource_reference(&ptrans->resource, NULL);
