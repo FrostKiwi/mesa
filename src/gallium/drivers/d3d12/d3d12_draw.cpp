@@ -165,9 +165,11 @@ fill_cbv_descriptors(struct d3d12_context *ctx,
 static unsigned
 fill_descriptor_tables(struct d3d12_context *ctx,
                        ID3D12DescriptorHeap **heaps,
+                       unsigned *num_heaps,
                        D3D12_GPU_DESCRIPTOR_HANDLE *tables)
 {
    unsigned num_tables = 0;
+   bool has_view = false;
 
    d3d12_descriptor_heap_clear(ctx->view_heap);
 
@@ -178,10 +180,15 @@ fill_descriptor_tables(struct d3d12_context *ctx,
          continue;
 
       if (shader->num_cb_bindings > 0) {
-         heaps[num_tables] = d3d12_descriptor_heap_get(ctx->view_heap);
          tables[num_tables++] = fill_cbv_descriptors(ctx, shader, i);
+         has_view = true;
       }
    }
+
+   unsigned count = 0;
+   if (has_view)
+      heaps[count++] = d3d12_descriptor_heap_get(ctx->view_heap);
+   *num_heaps = count;
 
    return num_tables;
 }
@@ -355,8 +362,9 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    ID3D12DescriptorHeap *heaps[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
    D3D12_GPU_DESCRIPTOR_HANDLE tables[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
-   unsigned num_tables = fill_descriptor_tables(ctx, heaps, tables);
-   ctx->cmdlist->SetDescriptorHeaps(num_tables, heaps);
+   unsigned num_heaps = 0;
+   unsigned num_tables = fill_descriptor_tables(ctx, heaps, &num_heaps, tables);
+   ctx->cmdlist->SetDescriptorHeaps(num_heaps, heaps);
    for (unsigned i = 0; i < num_tables; ++i) {
       ctx->cmdlist->SetGraphicsRootDescriptorTable(i, tables[i]);
    }
