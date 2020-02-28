@@ -324,6 +324,12 @@ typedef struct shader_info {
           *   AddressingModelPhysical64: 64
           */
          unsigned ptr_size;
+
+         /**
+           * A bitmask showing which ones of the inputs are pointers to
+           * global memory.
+           */
+         uint64_t global_inputs;
       } cs;
 
       /* Applies to both TCS and TES. */

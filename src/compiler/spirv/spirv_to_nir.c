@@ -5187,8 +5187,12 @@ vtn_emit_kernel_entry_point_wrapper(struct vtn_builder *b,
 
    nir_call_instr *call = nir_call_instr_create(b->nb.shader, entry_point);
 
+   b->shader->info.cs.global_inputs = 0;
    for (unsigned i = 0; i < entry_point->num_params; ++i) {
       struct vtn_type *param_type = b->entry_point->func->type->params[i];
+
+      if (param_type->base_type == vtn_base_type_pointer)
+        b->shader->info.cs.global_inputs |= BITFIELD64_BIT(i);
 
       /* consider all pointers to function memory to be parameters passed
        * by value
