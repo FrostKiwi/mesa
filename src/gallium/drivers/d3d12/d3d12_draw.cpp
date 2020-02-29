@@ -173,7 +173,7 @@ fill_cbv_descriptors(struct d3d12_context *ctx,
       D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc = {};
       cbv_desc.BufferLocation = res->res->GetGPUVirtualAddress() + buffer->buffer_offset;
 
-      cbv_desc.SizeInBytes = align(buffer->buffer_size , 256);
+      cbv_desc.SizeInBytes = align(buffer->buffer_size, 256);
 
       struct d3d12_descriptor_handle handle;
       d3d12_descriptor_heap_alloc_handle(ctx->view_heap, &handle);
