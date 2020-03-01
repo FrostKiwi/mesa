@@ -652,8 +652,9 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
    unsigned size = get_dword_size(var->type);
 
    const struct dxil_type *float32 = dxil_module_get_float_type(&ctx->mod, 32);
-   const struct dxil_type *buffer_type = dxil_module_get_homogeneous_struct_type(&ctx->mod, var->name,
-                                                                                 float32, size);
+   const struct dxil_type *array_type = dxil_module_get_array_type(&ctx->mod, float32, size);
+   const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod, var->name,
+                                                                     &array_type, 1);
    const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
                                                           var->name, size * 4);
 

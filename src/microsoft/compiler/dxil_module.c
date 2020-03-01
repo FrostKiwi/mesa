@@ -534,24 +534,6 @@ dxil_module_get_array_type(struct dxil_module *m,
 }
 
 const struct dxil_type *
-dxil_module_get_homogeneous_struct_type(struct dxil_module *m,
-                                        const char *name,
-                                        const struct dxil_type *elem_type,
-                                        size_t num_elems)
-{
-   /* The number is based on the buffer size of 4k allocated as struct of 1024 float32 */
-   struct dxil_type *elem_types[1024];
-   const struct dxil_type *ret;
-   assert(num_elems <= 1024);
-
-   for (unsigned i = 0; i < num_elems; ++i)
-      elem_types[i] = (struct dxil_type *)elem_type;
-   ret = dxil_module_get_struct_type(m, name, elem_types, num_elems);
-
-   return ret;
-}
-
-const struct dxil_type *
 dxil_module_get_vector_type(struct dxil_module *m,
                             const struct dxil_type *elem_type,
                             size_t num_elems)
@@ -604,7 +586,8 @@ const struct dxil_type *
 dxil_module_get_cbuf_ret_type(struct dxil_module *mod, enum overload_type overload)
 {
    const struct dxil_type *overload_type = dxil_get_overload_type(mod, overload);
-   unsigned factor;
+   const struct dxil_type *fields[4] = { overload_type, overload_type, overload_type, overload_type };
+   unsigned num_fields;
 
    char name[64];
    snprintf(name, sizeof(name), "dx.types.CBufRet.%s", dxil_overload_suffix(overload));
@@ -612,17 +595,17 @@ dxil_module_get_cbuf_ret_type(struct dxil_module *mod, enum overload_type overlo
    switch (overload) {
    case DXIL_I32:
    case DXIL_F32:
-      factor = 4;
+      num_fields = 4;
       break;
    case DXIL_I64:
    case DXIL_F64:
-      factor = 2;
+      num_fields = 2;
       break;
    default:
       unreachable("unexpected overload type");
    }
 
-   return dxil_module_get_homogeneous_struct_type(mod, name, overload_type, factor);
+   return dxil_module_get_struct_type(mod, name, fields, num_fields);
 }
 
 const struct dxil_type *
