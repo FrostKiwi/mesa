@@ -282,7 +282,7 @@ target triple = "dxil-ms-dx"
 
 %dx.types.Handle = type { i8* }
 %dx.types.CBufRet.f32 = type { float, float, float, float }
-%uniform_0 = type { float, float, float, float }
+%uniform_0 = type { [4 x float] }
 
 declare %dx.types.Handle @dx.op.createHandle(i32, i8, i32, i32, i1) #0
 declare %dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32, %dx.types.Handle, i32) #0
@@ -374,7 +374,7 @@ target triple = "dxil-ms-dx"
 
 %dx.types.Handle = type { i8* }
 %dx.types.CBufRet.f32 = type { float, float, float, float }
-%uniform_0 = type { float, float, float, float, float, float, float, float }
+%uniform_0 = type { [8 x float] }
 
 declare %dx.types.Handle @dx.op.createHandle(i32, i8, i32, i32, i1) #0
 declare %dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32, %dx.types.Handle, i32) #0
