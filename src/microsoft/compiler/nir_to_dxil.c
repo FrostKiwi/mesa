@@ -169,6 +169,7 @@ enum dxil_intr {
    DXIL_INTR_ROUND_PI = 28,
    DXIL_INTR_ROUND_Z = 29,
 
+   DXIL_INTR_FMAX = 35,
    DXIL_INTR_IMAX = 37,
    DXIL_INTR_IMIN = 38,
    DXIL_INTR_UMAX = 39,
@@ -1155,6 +1156,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_umin: return emit_binary_intin(ctx, alu, DXIL_INTR_UMIN, src[0], src[1]);
    case nir_op_frsq: return emit_unary_intin(ctx, alu, DXIL_INTR_RSQRT, src[0]);
    case nir_op_fsqrt: return emit_unary_intin(ctx, alu, DXIL_INTR_SQRT, src[0]);
+   case nir_op_fmax: return emit_binary_intin(ctx, alu, DXIL_INTR_FMAX, src[0], src[1]);
 
    case nir_op_f2f32:
    case nir_op_f2i32:
