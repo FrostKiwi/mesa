@@ -606,7 +606,7 @@ emit_createhandle_call(struct ntd_context *ctx,
 }
 
 static const struct dxil_value *
-emit_createhandle_call_from_values(struct ntd_context *ctx,
+emit_createhandle_call_const_index(struct ntd_context *ctx,
                                    enum dxil_resource_class resource_class,
                                    unsigned resource_range_id,
                                    unsigned resource_range_index,
@@ -652,7 +652,7 @@ emit_srv(struct ntd_context *ctx, nir_variable *var)
    assert(glsl_type_get_sampler_count(var->type) == 1);
    add_resource(ctx, DXIL_RES_SRV_TYPED, idx, glsl_type_get_sampler_count(var->type));
 
-   const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_SRV,
+   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SRV,
                                                                         idx, idx, false);
    if (!handle)
       return false;
@@ -690,7 +690,7 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
    add_resource(ctx, DXIL_RES_UAV_RAW, idx, 1);
    ctx->mod.raw_and_structured_buffers = true;
 
-   const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_UAV,
+   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_UAV,
                                                                         idx, idx, false);
    if (!handle)
       return false;
@@ -733,7 +733,7 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
    add_resource(ctx, DXIL_RES_CBV, idx, 1);
 
-   const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_CBV,
+   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_CBV,
                                                                         idx, idx, false);
    if (!handle)
       return false;
@@ -761,7 +761,7 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var)
    ctx->sampler_metadata_nodes[ctx->num_samplers] = sampler_meta;
    add_resource(ctx, DXIL_RES_SAMPLER, idx, glsl_type_get_sampler_count(var->type));
 
-   const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_SAMPLER,
+   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SAMPLER,
                                                                         idx, idx, false);
    if (!handle)
       return false;
