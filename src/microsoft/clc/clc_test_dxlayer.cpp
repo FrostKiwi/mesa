@@ -76,8 +76,11 @@ void NirToDXILTest::run(const string& in_shader, const string& dxil_expect) cons
       last_was_ws = copy_char_skip_double_ws(dxil_expect_condesed, c, last_was_ws);
    }
 
+   struct nir_to_dxil_options opts = {};
+   opts.interpolate_at_vertex = true;
+
    struct blob tmp;
-   bool convert_success = nir_to_dxil(shader, &tmp);
+   bool convert_success = nir_to_dxil(shader, &opts, &tmp);
    ralloc_free(shader);
    ASSERT_TRUE(convert_success);
 

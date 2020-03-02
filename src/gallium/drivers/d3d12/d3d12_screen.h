@@ -45,6 +45,7 @@ struct d3d12_screen {
    D3D_FEATURE_LEVEL max_feature_level;
    D3D12_FEATURE_DATA_ARCHITECTURE architecture;
    D3D12_FEATURE_DATA_D3D12_OPTIONS opts;
+   D3D12_FEATURE_DATA_D3D12_OPTIONS3 opts3;
 
    /* description */
    DXGI_ADAPTER_DESC1 adapter_desc;

@@ -723,6 +723,12 @@ d3d12_create_screen(struct sw_winsys *winsys)
       debug_printf("D3D12: failed to get device options\n");
       goto failed;
    }
+   if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS3,
+                                               &screen->opts3,
+                                               sizeof(screen->opts3)))) {
+      debug_printf("D3D12: failed to get device options\n");
+      goto failed;
+   }
 
    screen->architecture.NodeIndex = 0;
    if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE,
