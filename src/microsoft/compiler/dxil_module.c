@@ -2546,12 +2546,12 @@ emit_alloca(struct dxil_module *m, struct dxil_instr *instr)
    assert(instr->type == INSTR_ALLOCA);
    assert(instr->alloca.alloc_type->id >= 0);
    assert(instr->alloca.size_type->id >= 0);
-   assert(instr->value.id > instr->alloca.size->id);
+   assert(instr->alloca.size->id >= 0);
 
    uint64_t data[] = {
       instr->alloca.alloc_type->id,
       instr->alloca.size_type->id,
-      instr->value.id - instr->alloca.size->id,
+      instr->alloca.size->id,
       instr->alloca.align,
    };
    return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_ALLOCA,
