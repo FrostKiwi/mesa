@@ -65,6 +65,9 @@ nir_variable_mode get_variable_mode(const char *string)
    if (!strcmp(string, "uniform"))
       return nir_var_uniform;
 
+   if (!strcmp(string, "ubo"))
+      return nir_var_mem_ubo;
+
    if (!strcmp(string, "function_temp"))
       return nir_var_function_temp;
 
