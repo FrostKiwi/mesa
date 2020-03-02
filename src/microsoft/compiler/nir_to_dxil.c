@@ -152,6 +152,7 @@ enum {
 };
 
 enum dxil_intr {
+   DXIL_INTR_LOAD_INPUT = 4,
    DXIL_INTR_STORE_OUTPUT = 5,
    DXIL_INTR_FABS = 6,
 
@@ -1638,7 +1639,7 @@ emit_load_input_interpolated(struct ntd_context *ctx, nir_intrinsic_instr *intr,
    if (!func)
       return false;
 
-   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, 4);
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_LOAD_INPUT);
    const struct dxil_value *input_id = dxil_module_get_int32_const(&ctx->mod, (int)input->data.driver_location);
    const struct dxil_value *row = dxil_module_get_int32_const(&ctx->mod, 0);
    const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
