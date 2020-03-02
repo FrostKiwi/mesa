@@ -942,14 +942,12 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
 
       for (int i = 0; i < image->base.num_planes; i++) {
          zwp_linux_buffer_params_v1_add(params,
-                                        image->base.fds[i],
+                                        image->base.dma_buf_fd,
                                         i,
                                         image->base.offsets[i],
                                         image->base.row_pitches[i],
                                         image->base.drm_modifier >> 32,
                                         image->base.drm_modifier & 0xffffffff);
-         close(image->base.fds[i]);
-         image->base.fds[i] = -1;
       }
 
       image->buffer =
@@ -966,16 +964,16 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
 
       image->buffer =
          wl_drm_create_prime_buffer(chain->drm_wrapper,
-                                    image->base.fds[0], /* name */
+                                    image->base.dma_buf_fd,
                                     chain->extent.width,
                                     chain->extent.height,
                                     chain->drm_format,
                                     image->base.offsets[0],
                                     image->base.row_pitches[0],
                                     0, 0, 0, 0 /* unused */);
-      close(image->base.fds[0]);
-      image->base.fds[0] = -1;
    }
+   close(image->base.dma_buf_fd);
+   image->base.dma_buf_fd = -1;
 
    if (!image->buffer)
       goto fail_image;
