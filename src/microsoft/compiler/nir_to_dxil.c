@@ -153,6 +153,7 @@ enum {
 
 enum dxil_intr {
    DXIL_INTR_STORE_OUTPUT = 5,
+   DXIL_INTR_FABS = 6,
 
    DXIL_INTR_FRC = 22,
 
@@ -1128,6 +1129,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_fge:  return emit_cmp(ctx, alu, DXIL_FCMP_UGE, src[0], src[1]);
    case nir_op_bcsel: return emit_select(ctx, alu, src[0], src[1], src[2]);
    case nir_op_ftrunc: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_Z, src[0]);
+   case nir_op_fabs: return emit_unary_intin(ctx, alu, DXIL_INTR_FABS, src[0]);
    case nir_op_fceil: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_PI, src[0]);
    case nir_op_ffloor: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NI, src[0]);
    case nir_op_ffract: return emit_unary_intin(ctx, alu, DXIL_INTR_FRC, src[0]);
