@@ -575,21 +575,25 @@ emit_bufferstore_call(struct ntd_context *ctx,
 
 static const struct dxil_value *
 emit_createhandle_call(struct ntd_context *ctx,
-                       const struct dxil_value *resource_class,
-                       const struct dxil_value *resource_range_id,
+                       enum dxil_resource_class resource_class,
+                       unsigned resource_range_id,
                        const struct dxil_value *resource_range_index,
-                       const struct dxil_value *non_uniform_resource_index)
+                       bool non_uniform_resource_index)
 {
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CREATE_HANDLE);
-   if (!opcode)
+   const struct dxil_value *resource_class_value = dxil_module_get_int8_const(&ctx->mod, resource_class);
+   const struct dxil_value *resource_range_id_value = dxil_module_get_int32_const(&ctx->mod, resource_range_id);
+   const struct dxil_value *non_uniform_resource_index_value = dxil_module_get_int1_const(&ctx->mod, non_uniform_resource_index);
+   if (!opcode || !resource_class_value || !resource_range_id_value ||
+       !non_uniform_resource_index_value)
       return NULL;
 
    const struct dxil_value *args[] = {
       opcode,
-      resource_class,
-      resource_range_id,
+      resource_class_value,
+      resource_range_id_value,
       resource_range_index,
-      non_uniform_resource_index
+      non_uniform_resource_index_value
    };
 
    const struct dxil_func *func =
@@ -609,16 +613,13 @@ emit_createhandle_call_from_values(struct ntd_context *ctx,
                                    bool non_uniform_resource_index)
 {
 
-   const struct dxil_value *resource_class_value = dxil_module_get_int8_const(&ctx->mod, resource_class);
-   const struct dxil_value *resource_range_id_value = dxil_module_get_int32_const(&ctx->mod, resource_range_id);
    const struct dxil_value *resource_range_index_value = dxil_module_get_int32_const(&ctx->mod, resource_range_index);
-   const struct dxil_value *non_uniform_resource_index_value = dxil_module_get_int1_const(&ctx->mod, non_uniform_resource_index);
-   if (!resource_class_value || !resource_range_id_value ||
-       !resource_range_index_value || !non_uniform_resource_index_value)
+   if (!resource_range_index_value)
       return NULL;
 
-   return emit_createhandle_call(ctx, resource_class_value, resource_range_id_value,
-                                 resource_range_index_value, non_uniform_resource_index_value);
+   return emit_createhandle_call(ctx, resource_class, resource_range_id,
+                                 resource_range_index_value,
+                                 non_uniform_resource_index);
 }
 
 static void
