@@ -1051,6 +1051,22 @@ static bool emit_select(struct ntd_context *ctx, nir_alu_instr *alu,
 }
 
 static bool
+emit_b2f32(struct ntd_context *ctx, nir_alu_instr *alu, const struct dxil_value *val)
+{
+   assert(val);
+
+   struct dxil_module *m = &ctx->mod;
+
+   const struct dxil_value *c1 = dxil_module_get_float_const(m, 1.0f);
+   const struct dxil_value *c0 = dxil_module_get_float_const(m, 0.0f);
+
+   if (!c0 || !c1)
+      return false;
+
+   return emit_select(ctx, alu, val, c1, c0);
+}
+
+static bool
 emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 {
    /* handle vec-instructions first; they are the only ones that produce
@@ -1140,7 +1156,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_u2f64:
    case nir_op_u2u64:
       return emit_cast(ctx, alu, src[0]);
-
+   case nir_op_b2f32: return emit_b2f32(ctx, alu, src[0]);
    default:
       NIR_INSTR_UNSUPPORTED(&alu->instr);
       assert("Unimplemented ALU instruction");
