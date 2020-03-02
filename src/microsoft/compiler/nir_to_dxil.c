@@ -329,6 +329,7 @@ struct dxil_def {
 
 struct ntd_context {
    void *ralloc_ctx;
+   const struct nir_to_dxil_options *opts;
 
    struct dxil_module mod;
 
@@ -1690,7 +1691,8 @@ emit_load_input(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                 nir_variable *input)
 {
    if (ctx->mod.shader_kind != DXIL_PIXEL_SHADER ||
-       input->data.interpolation != INTERP_MODE_FLAT)
+       input->data.interpolation != INTERP_MODE_FLAT ||
+       !ctx->opts->interpolate_at_vertex)
       return emit_load_input_interpolated(ctx, intr, input);
    else
       return emit_load_input_flat(ctx, intr, input);
@@ -2713,12 +2715,15 @@ static const struct nir_lower_tex_options tex_options = {
 };
 
 bool
-nir_to_dxil(struct nir_shader *s, struct blob *blob)
+nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
+            struct blob *blob)
 {
+   assert(opts);
    bool retval = true;
    debug_dxil = (int)debug_get_option_debug_dxil();
 
    struct ntd_context ctx = { 0 };
+   ctx.opts = opts;
 
    ctx.ralloc_ctx = ralloc_context(NULL);
    if (!ctx.ralloc_ctx)

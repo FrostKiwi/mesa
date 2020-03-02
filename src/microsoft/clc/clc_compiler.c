@@ -99,8 +99,12 @@ int clc_compile_from_source(
    NIR_PASS_V(nir, nir_lower_variable_initializers, ~nir_var_function_temp);
    NIR_PASS_V(nir, nir_lower_system_values);
 
+   struct nir_to_dxil_options opts = {
+      .interpolate_at_vertex = false
+   };
+
    struct blob tmp;
-   if (!nir_to_dxil(nir, &tmp)) {
+   if (!nir_to_dxil(nir, &opts, &tmp)) {
       debug_printf("D3D12: nir_to_dxil failed\n");
       return -1;
    }
