@@ -157,6 +157,8 @@ enum dxil_intr {
 
    DXIL_INTR_FCOS = 12,
    DXIL_INTR_FSIN = 13,
+
+   DXIL_INTR_FEXP2 = 21,
    DXIL_INTR_FRC = 22,
 
    DXIL_INTR_ROUND_NE = 26,
@@ -1135,6 +1137,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_fcos: return emit_unary_intin(ctx, alu, DXIL_INTR_FCOS, src[0]);
    case nir_op_fsin: return emit_unary_intin(ctx, alu, DXIL_INTR_FSIN, src[0]);
    case nir_op_fceil: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_PI, src[0]);
+   case nir_op_fexp2: return emit_unary_intin(ctx, alu, DXIL_INTR_FEXP2, src[0]);
    case nir_op_ffloor: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NI, src[0]);
    case nir_op_ffract: return emit_unary_intin(ctx, alu, DXIL_INTR_FRC, src[0]);
    case nir_op_fround_even: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NE, src[0]);
