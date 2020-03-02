@@ -109,7 +109,7 @@ d3d12_delete_vertex_elements_state(struct pipe_context *pctx,
 }
 
 static D3D12_BLEND
-blend_factor(enum pipe_blendfactor factor)
+blend_factor_rgb(enum pipe_blendfactor factor)
 {
    switch (factor) {
    case PIPE_BLENDFACTOR_ZERO: return D3D12_BLEND_ZERO;
@@ -130,6 +130,33 @@ blend_factor(enum pipe_blendfactor factor)
    case PIPE_BLENDFACTOR_INV_SRC1_COLOR: return D3D12_BLEND_INV_SRC1_COLOR;
    case PIPE_BLENDFACTOR_INV_SRC1_ALPHA: return D3D12_BLEND_INV_SRC1_ALPHA;
    case PIPE_BLENDFACTOR_CONST_ALPHA: return D3D12_BLEND_BLEND_FACTOR; /* Doesn't exist in D3D12 */
+   case PIPE_BLENDFACTOR_INV_CONST_ALPHA: return D3D12_BLEND_INV_BLEND_FACTOR; /* Doesn't exist in D3D12 */
+   }
+   unreachable("unexpected blend factor");
+}
+
+static D3D12_BLEND
+blend_factor_alpha(enum pipe_blendfactor factor)
+{
+   switch (factor) {
+   case PIPE_BLENDFACTOR_ZERO: return D3D12_BLEND_ZERO;
+   case PIPE_BLENDFACTOR_ONE: return D3D12_BLEND_ONE;
+   case PIPE_BLENDFACTOR_SRC_COLOR:
+   case PIPE_BLENDFACTOR_SRC_ALPHA: return D3D12_BLEND_SRC_ALPHA;
+   case PIPE_BLENDFACTOR_DST_COLOR:
+   case PIPE_BLENDFACTOR_DST_ALPHA: return D3D12_BLEND_DEST_ALPHA;
+   case PIPE_BLENDFACTOR_SRC_ALPHA_SATURATE: return D3D12_BLEND_SRC_ALPHA_SAT;
+   case PIPE_BLENDFACTOR_CONST_COLOR: return D3D12_BLEND_BLEND_FACTOR;
+   case PIPE_BLENDFACTOR_SRC1_COLOR:
+   case PIPE_BLENDFACTOR_SRC1_ALPHA: return D3D12_BLEND_SRC1_ALPHA;
+   case PIPE_BLENDFACTOR_INV_SRC_COLOR:
+   case PIPE_BLENDFACTOR_INV_SRC_ALPHA: return D3D12_BLEND_INV_SRC_ALPHA;
+   case PIPE_BLENDFACTOR_INV_DST_COLOR:
+   case PIPE_BLENDFACTOR_INV_DST_ALPHA: return D3D12_BLEND_INV_DEST_ALPHA;
+   case PIPE_BLENDFACTOR_INV_CONST_COLOR: return D3D12_BLEND_INV_BLEND_FACTOR;
+   case PIPE_BLENDFACTOR_INV_SRC1_COLOR:
+   case PIPE_BLENDFACTOR_INV_SRC1_ALPHA: return D3D12_BLEND_INV_SRC1_ALPHA;
+   case PIPE_BLENDFACTOR_CONST_ALPHA:
    case PIPE_BLENDFACTOR_INV_CONST_ALPHA: return D3D12_BLEND_INV_BLEND_FACTOR; /* Doesn't exist in D3D12 */
    }
    unreachable("unexpected blend factor");
@@ -238,11 +265,11 @@ d3d12_create_blend_state(struct pipe_context *pctx,
 
       if (rt->blend_enable) {
          state->desc.RenderTarget[i].BlendEnable = TRUE;
-         state->desc.RenderTarget[i].SrcBlend = blend_factor((pipe_blendfactor) rt->rgb_src_factor);
-         state->desc.RenderTarget[i].DestBlend = blend_factor((pipe_blendfactor) rt->rgb_dst_factor);
+         state->desc.RenderTarget[i].SrcBlend = blend_factor_rgb((pipe_blendfactor) rt->rgb_src_factor);
+         state->desc.RenderTarget[i].DestBlend = blend_factor_rgb((pipe_blendfactor) rt->rgb_dst_factor);
          state->desc.RenderTarget[i].BlendOp = blend_op((pipe_blend_func) rt->rgb_func);
-         state->desc.RenderTarget[i].SrcBlendAlpha = blend_factor((pipe_blendfactor) rt->alpha_src_factor);
-         state->desc.RenderTarget[i].DestBlendAlpha = blend_factor((pipe_blendfactor) rt->alpha_dst_factor);
+         state->desc.RenderTarget[i].SrcBlendAlpha = blend_factor_alpha((pipe_blendfactor) rt->alpha_src_factor);
+         state->desc.RenderTarget[i].DestBlendAlpha = blend_factor_alpha((pipe_blendfactor) rt->alpha_dst_factor);
          state->desc.RenderTarget[i].BlendOpAlpha = blend_op((pipe_blend_func) rt->alpha_func);
 
          if (need_blend_factor((pipe_blendfactor) rt->rgb_src_factor) ||
