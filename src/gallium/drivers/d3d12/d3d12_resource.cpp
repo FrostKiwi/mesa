@@ -360,6 +360,55 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
    slab_free(&d3d12_context(pctx)->transfer_pool, ptrans);
 }
 
+static void
+d3d12_resource_copy_region(struct pipe_context *pctx,
+                           struct pipe_resource *pdst,
+                           unsigned dst_level,
+                           unsigned dstx, unsigned dsty, unsigned dstz,
+                           struct pipe_resource *psrc,
+                           unsigned src_level,
+                           const struct pipe_box *psrc_box)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_resource *dst = d3d12_resource(pdst);
+   struct d3d12_resource *src = d3d12_resource(psrc);
+   D3D12_TEXTURE_COPY_LOCATION src_loc, dst_loc;
+   D3D12_BOX src_box = {};
+   UINT dst_x, dst_y, dst_z;
+
+   d3d12_resource_barrier(ctx, dst,
+                          D3D12_RESOURCE_STATE_COMMON,
+                          D3D12_RESOURCE_STATE_COPY_DEST);
+   d3d12_resource_barrier(ctx, src,
+                          D3D12_RESOURCE_STATE_COMMON,
+                          D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+   src_box.left = psrc_box->x;
+   src_box.right = psrc_box->x + psrc_box->width;
+   src_box.top = psrc_box->y;
+   src_box.bottom = psrc_box->y + psrc_box->height;
+   src_box.front = psrc_box->z;
+   src_box.back = psrc_box->z + psrc_box->depth;
+
+   src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+   src_loc.SubresourceIndex = src_level;
+   src_loc.pResource = src->res;
+
+   dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+   dst_loc.SubresourceIndex = dst_level;
+   dst_loc.pResource = dst->res;
+
+   ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
+                                   &src_loc, &src_box);
+
+   d3d12_resource_barrier(ctx, src,
+                          D3D12_RESOURCE_STATE_COPY_SOURCE,
+                          D3D12_RESOURCE_STATE_COMMON);
+   d3d12_resource_barrier(ctx, dst,
+                          D3D12_RESOURCE_STATE_COPY_DEST,
+                          D3D12_RESOURCE_STATE_COMMON);
+}
+
 void
 d3d12_context_resource_init(struct pipe_context *pctx)
 {
@@ -369,4 +418,6 @@ d3d12_context_resource_init(struct pipe_context *pctx)
    pctx->transfer_flush_region = u_default_transfer_flush_region;
    pctx->buffer_subdata = u_default_buffer_subdata;
    pctx->texture_subdata = u_default_texture_subdata;
+
+   pctx->resource_copy_region = d3d12_resource_copy_region;
 }
