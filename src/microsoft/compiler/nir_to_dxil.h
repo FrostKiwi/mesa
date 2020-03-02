@@ -46,8 +46,13 @@ enum dxil_sysvalue_type {
 enum dxil_sysvalue_type
 nir_var_to_dxil_sysvalue_type(nir_variable *var);
 
+struct nir_to_dxil_options {
+   bool interpolate_at_vertex;
+};
+
 bool
-nir_to_dxil(struct nir_shader *s, struct blob *blob);
+nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
+            struct blob *blob);
 
 const nir_shader_compiler_options*
 dxil_get_nir_compiler_options(void);

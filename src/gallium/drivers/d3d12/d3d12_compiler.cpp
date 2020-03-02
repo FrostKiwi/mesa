@@ -24,6 +24,7 @@
 #include "d3d12_compiler.h"
 #include "d3d12_context.h"
 #include "d3d12_debug.h"
+#include "d3d12_screen.h"
 #include "microsoft/compiler/nir_to_dxil.h"
 
 #include "pipe/p_state.h"
@@ -93,12 +94,16 @@ resource_dimension(enum glsl_sampler_dim dim)
 struct d3d12_shader *
 d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
 {
+   struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
    struct d3d12_shader *ret = CALLOC_STRUCT(d3d12_shader);
 
    ret->info = nir->info;
 
+   struct nir_to_dxil_options opts = {};
+   opts.interpolate_at_vertex = screen->opts3.BarycentricsSupported;
+
    struct blob tmp;
-   if (!nir_to_dxil(nir, &tmp)) {
+   if (!nir_to_dxil(nir, &opts, &tmp)) {
       debug_printf("D3D12: nir_to_dxil failed\n");
       return NULL;
    }
