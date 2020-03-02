@@ -1033,6 +1033,23 @@ emit_binary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
    return true;
 }
 
+static bool emit_select(struct ntd_context *ctx, nir_alu_instr *alu,
+                        const struct dxil_value *sel,
+                        const struct dxil_value *val_true,
+                        const struct dxil_value *val_false)
+{
+   assert(sel);
+   assert(val_true);
+   assert(val_false);
+
+   const struct dxil_value *v = dxil_emit_select(&ctx->mod, sel, val_true, val_false);
+   if (!v)
+      return false;
+
+   store_alu_dest(ctx, alu, 0, v);
+   return true;
+}
+
 static bool
 emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 {
@@ -1093,15 +1110,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_ult:  return emit_cmp(ctx, alu, DXIL_ICMP_ULT, src[0], src[1]);
    case nir_op_flt:  return emit_cmp(ctx, alu, DXIL_FCMP_ULT, src[0], src[1]);
    case nir_op_fge:  return emit_cmp(ctx, alu, DXIL_FCMP_UGE, src[0], src[1]);
-   case nir_op_bcsel: {
-         const struct dxil_value *v = dxil_emit_select(&ctx->mod, src[0],
-                                                       src[1], src[2]);
-         if (!v)
-            return false;
-         store_alu_dest(ctx, alu, 0, v);
-         return true;
-      }
-
+   case nir_op_bcsel: return emit_select(ctx, alu, src[0], src[1], src[2]);
    case nir_op_ftrunc: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_Z, src[0]);
    case nir_op_fceil: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_PI, src[0]);
    case nir_op_ffloor: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NI, src[0]);
