@@ -863,6 +863,12 @@ d3d12_set_blend_color(struct pipe_context *pctx,
    memcpy(ctx->blend_factor, color->color, sizeof(float) * 4);
 }
 
+static void
+d3d12_set_clip_state(struct pipe_context *pctx,
+                     const struct pipe_clip_state *pcs)
+{
+}
+
 void
 d3d12_flush_cmdlist(struct d3d12_context *ctx)
 {
@@ -1119,6 +1125,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.set_scissor_states = d3d12_set_scissor_states;
    ctx->base.set_constant_buffer = d3d12_set_constant_buffer;
    ctx->base.set_framebuffer_state = d3d12_set_framebuffer_state;
+   ctx->base.set_clip_state = d3d12_set_clip_state;
    ctx->base.set_blend_color = d3d12_set_blend_color;
 
    ctx->base.clear = d3d12_clear;
