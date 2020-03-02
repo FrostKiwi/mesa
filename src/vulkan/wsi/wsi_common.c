@@ -340,6 +340,14 @@ align_u32(uint32_t v, uint32_t a)
    return (v + a - 1) & ~(a - 1);
 }
 
+static void
+wsi_image_init(struct wsi_image *image)
+{
+   memset(image, 0, sizeof(*image));
+   for (int i = 0; i < 4; i++)
+      image->fds[i] = -1;
+}
+
 VkResult
 wsi_create_native_image(const struct wsi_swapchain *chain,
                         const VkSwapchainCreateInfoKHR *pCreateInfo,
@@ -351,9 +359,7 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
    const struct wsi_device *wsi = chain->wsi;
    VkResult result;
 
-   memset(image, 0, sizeof(*image));
-   for (int i = 0; i < ARRAY_SIZE(image->fds); i++)
-      image->fds[i] = -1;
+   wsi_image_init(image);
 
    VkImageCreateInfo image_info = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -619,9 +625,6 @@ wsi_create_native_image(const struct wsi_swapchain *chain,
          } else {
             image->fds[p] = dup(fd);
             if (image->fds[p] == -1) {
-               for (uint32_t i = 0; i < p; i++)
-                  close(image->fds[i]);
-
                result = VK_ERROR_OUT_OF_HOST_MEMORY;
                goto fail;
             }
@@ -669,7 +672,7 @@ wsi_create_prime_image(const struct wsi_swapchain *chain,
    const struct wsi_device *wsi = chain->wsi;
    VkResult result;
 
-   memset(image, 0, sizeof(*image));
+   wsi_image_init(image);
 
    const uint32_t cpp = vk_format_size(pCreateInfo->imageFormat);
    const uint32_t linear_stride = align_u32(pCreateInfo->imageExtent.width * cpp,
@@ -868,6 +871,11 @@ wsi_destroy_image(const struct wsi_swapchain *chain,
                   struct wsi_image *image)
 {
    const struct wsi_device *wsi = chain->wsi;
+
+   for (int p = 0; p < image->num_planes; p++) {
+      if (image->fds[p] >= 0)
+         close(image->fds[p]);
+   }
 
    if (image->prime.blit_cmd_buffers) {
       for (uint32_t i = 0; i < wsi->queue_family_count; i++) {

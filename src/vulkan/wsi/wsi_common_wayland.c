@@ -949,6 +949,7 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
                                         image->base.drm_modifier >> 32,
                                         image->base.drm_modifier & 0xffffffff);
          close(image->base.fds[i]);
+         image->base.fds[i] = -1;
       }
 
       image->buffer =
@@ -973,6 +974,7 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
                                     image->base.row_pitches[0],
                                     0, 0, 0, 0 /* unused */);
       close(image->base.fds[0]);
+      image->base.fds[0] = -1;
    }
 
    if (!image->buffer)
