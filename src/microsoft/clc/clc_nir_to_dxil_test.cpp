@@ -302,9 +302,9 @@ attributes #1 = { nounwind }
 !dx.typeAnnotations = !{!7}
 !dx.entryPoints = !{!11}
 
-!1 = !{i32 1, i32 0}
+!1 = !{i32 1, i32 1}
 !2 = !{i32 1, i32 4}
-!3 = !{!"ps", i32 6, i32 0}
+!3 = !{!"ps", i32 6, i32 1}
 !4 = !{null, null, !5, null}
 !5 = !{!6}
 !6 = !{i32 0, %uniform_0* undef, !"uniform_0", i32 0, i32 0, i32 1, i32 16, null}
@@ -390,9 +390,9 @@ attributes #1 = { nounwind }
 !dx.typeAnnotations = !{!7}
 !dx.entryPoints = !{!11}
 
-!1 = !{i32 1, i32 0}
+!1 = !{i32 1, i32 1}
 !2 = !{i32 1, i32 4}
-!3 = !{!"ps", i32 6, i32 0}
+!3 = !{!"ps", i32 6, i32 1}
 !4 = !{null, null, !5, null}
 !5 = !{!6}
 !6 = !{i32 0, %uniform_0* undef, !"uniform_0", i32 0, i32 0, i32 1, i32 32, null}
