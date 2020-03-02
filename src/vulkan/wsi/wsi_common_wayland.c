@@ -972,8 +972,6 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
                                     image->base.row_pitches[0],
                                     0, 0, 0, 0 /* unused */);
    }
-   close(image->base.dma_buf_fd);
-   image->base.dma_buf_fd = -1;
 
    if (!image->buffer)
       goto fail_image;
