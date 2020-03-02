@@ -357,7 +357,6 @@ struct ntd_context {
    unsigned num_resources;
 
    struct dxil_def *defs;
-   BITSET_WORD *float_types;
    unsigned num_defs;
    struct hash_table *phis;
 
@@ -952,13 +951,11 @@ store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
 
       case nir_type_float:
          assert(nir_dest_bit_size(*dest) != 1);
-         if (nir_dest_bit_size(*dest) == 64)
+         if (nir_dest_bit_size(*dest) == 64) {
             ctx->mod.feats.doubles = true;
-         if (!dest->is_ssa || !BITSET_TEST(ctx->float_types, dest->ssa.index)) {
-            if (nir_dest_bit_size(*dest) == 64)
-               ctx->mod.feats.int64_ops = true;
-            value = bitcast_to_int(ctx, nir_dest_bit_size(*dest), value);
+            ctx->mod.feats.int64_ops = true;
          }
+         value = bitcast_to_int(ctx, nir_dest_bit_size(*dest), value);
          break;
 
       default:
@@ -1007,10 +1004,6 @@ get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
 
    case nir_type_float:
       assert(nir_src_bit_size(*src) >= 32);
-      if (src->is_ssa &&
-          BITSET_TEST(ctx->float_types, src->ssa->index))
-         return value;
-
       assert(nir_src_bit_size(*src) != 64 || (ctx->mod.feats.doubles &&
                                               ctx->mod.feats.int64_ops));
       return bitcast_to_float(ctx, nir_src_bit_size(*src), value);
@@ -1776,42 +1769,26 @@ emit_load_const(struct ntd_context *ctx, nir_load_const_instr *load_const)
 {
    for (int i = 0; i < load_const->def.num_components; ++i) {
       const struct dxil_value *value;
-      if (BITSET_TEST(ctx->float_types, load_const->def.index)) {
-         switch (load_const->def.bit_size) {
-         case 32:
-            value = dxil_module_get_float_const(&ctx->mod,
-                                                load_const->value[i].f32);
-            break;
-         case 64:
-            ctx->mod.feats.doubles = true;
-            value = dxil_module_get_double_const(&ctx->mod,
-                                                 load_const->value[i].f64);
-            break;
-         default:
-            unreachable("unexpected bit_size");
-         }
-      } else {
-         switch (load_const->def.bit_size) {
-         case 1:
-            value = dxil_module_get_int1_const(&ctx->mod,
-                                               load_const->value[i].b);
-            break;
-         case 8:
-            value = dxil_module_get_int8_const(&ctx->mod,
-                                                load_const->value[i].u8);
-            break;
-         case 32:
-            value = dxil_module_get_int32_const(&ctx->mod,
-                                                load_const->value[i].u32);
-            break;
-         case 64:
-            ctx->mod.feats.int64_ops = true;
-            value = dxil_module_get_int64_const(&ctx->mod,
-                                                load_const->value[i].u64);
-            break;
-         default:
-            unreachable("unexpected bit_size");
-         }
+      switch (load_const->def.bit_size) {
+      case 1:
+         value = dxil_module_get_int1_const(&ctx->mod,
+                                            load_const->value[i].b);
+         break;
+      case 8:
+         value = dxil_module_get_int8_const(&ctx->mod,
+                                             load_const->value[i].u8);
+         break;
+      case 32:
+         value = dxil_module_get_int32_const(&ctx->mod,
+                                             load_const->value[i].u32);
+         break;
+      case 64:
+         ctx->mod.feats.int64_ops = true;
+         value = dxil_module_get_int64_const(&ctx->mod,
+                                             load_const->value[i].u64);
+         break;
+      default:
+         unreachable("unexpected bit_size");
       }
       if (!value)
          return false;
@@ -2364,7 +2341,6 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    nir_function_impl *entry = nir_shader_get_entrypoint(s);
    nir_metadata_require(entry, nir_metadata_block_index);
-   nir_index_ssa_defs(entry);
 
    assert(entry->num_blocks > 0);
    ctx->mod.basic_block_ids = rzalloc_array(ctx->ralloc_ctx, int,
@@ -2381,19 +2357,6 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    if (!ctx->defs)
       return false;
    ctx->num_defs = entry->ssa_alloc;
-
-   ctx->float_types = rzalloc_array(ctx->ralloc_ctx, BITSET_WORD,
-                                    BITSET_WORDS(entry->ssa_alloc));
-   BITSET_WORD *int_types = rzalloc_array(ctx->ralloc_ctx, BITSET_WORD,
-                                          BITSET_WORDS(entry->ssa_alloc));
-   if (!ctx->float_types || !int_types)
-      return false;
-
-   nir_gather_ssa_types(entry, ctx->float_types, int_types);
-
-   /* we only float-type if type is *only* used as float */
-   for (int i = 0; i < BITSET_WORDS(ctx->num_defs); ++i)
-      ctx->float_types[i] &= ~int_types[i];
 
    ctx->phis = _mesa_pointer_hash_table_create(ctx->ralloc_ctx);
    if (!ctx->phis)
