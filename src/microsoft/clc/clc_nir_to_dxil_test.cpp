@@ -200,11 +200,9 @@ define void @main() {
   %1 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 0, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
   %2 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 1, i32 undef) ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
   %3 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 2, i32 undef) ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
-  %4 = fadd float %3, 1.000000e+00
-  %5 = fmul float %4, 5.000000e-01
   call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %1) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %2) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %5) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %3) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float 1.000000e+00) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   ret void
 }
@@ -328,6 +326,7 @@ outputs: 1
 uniforms: 1
 shared: 0
 decl_var uniform INTERP_MODE_NONE vec4 color_in (0, 0, 0)
+decl_var ubo INTERP_MODE_NONE vec4[1] uniform_0 (0, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 color (FRAG_RESULT_DATA0.xyzw, 0, 0)
 decl_function main (0 params)
 
@@ -339,7 +338,7 @@ impl main {
    /* preds: */
    vec1 32 ssa_0 = load_const (0x00000000 /* 0.000000 */)
    vec1 32 ssa_1 = deref_var &color_in (uniform vec4)
-   vec4 32 ssa_2 = intrinsic load_uniform (ssa_0) (0, 4, 160) /* base=0 */ /* range=4 */ /* type=float32 */      /* color_in */
+   vec4 32 ssa_2 = intrinsic load_ubo (ssa_0, ssa_0) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
    vec1 32 ssa_3 = deref_var &color (shader_out vec4)
    intrinsic store_deref (ssa_3, ssa_2) (15, 0) /* wrmask=xyzw */ /* access=0 */
    /* succs: block_1 */
@@ -415,7 +414,7 @@ inputs: 0
 outputs: 1
 uniforms: 2
 shared: 0
-decl_var uniform INTERP_MODE_NONE vec4 color_in (0, 0, 0)
+decl_var ubo INTERP_MODE_NONE vec4[2] uniform_0 (0, 0, 0)
 decl_var uniform INTERP_MODE_NONE int index (1, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 color (FRAG_RESULT_DATA0.xyzw, 0, 0)
 decl_function main (0 params)
@@ -427,10 +426,11 @@ impl main {
    block block_0:
    /* preds: */
    vec1 32 ssa_0 = load_const (0x00000000 /* 0.000000 */)
-   vec1 32 ssa_1 = deref_var &index (uniform int)
-   vec1 32 ssa_2 = intrinsic load_uniform (ssa_0) (0, 4, 160) /* base=1 */ /* range=4 */ /* type=index */ /* index */
-   vec1 32 ssa_3 = deref_var &color_in (uniform vec4)
-   vec4 32 ssa_4 = intrinsic load_uniform (ssa_2) (0, 4, 160) /* base=0 */ /* range=4 */ /* type=float32 */ /* color_in */
+   vec1 32 ssa_1 = load_const (0x00000001 /* 0.000000 */)
+   vec1 32 ssa_6 = load_const (0x00000004 /* 0.000000 */)
+   vec1 32 ssa_2 = intrinsic load_ubo (ssa_0, ssa_1) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
+   vec1 32 ssa_3 = ishl ssa_2, ssa_6
+   vec4 32 ssa_4 = intrinsic load_ubo (ssa_0, ssa_3) (0, 4, 160) /* base=0 */ /* range=4 */ /* type=float32 */ /* color_in */
    vec1 32 ssa_5 = deref_var &color (shader_out vec4)
    intrinsic store_deref (ssa_5, ssa_4) (15, 0) /* wrmask=xyzw */ /* access=0 */
    /* succs: block_1 */
