@@ -1251,7 +1251,8 @@ wsi_display_wait_for_event(struct wsi_display *wsi,
 static VkResult
 wsi_display_acquire_next_image(struct wsi_swapchain *drv_chain,
                                const VkAcquireNextImageInfoKHR *info,
-                               uint32_t *image_index)
+                               uint32_t *image_index,
+                               UNUSED int *sync_fd)
 {
    struct wsi_display_swapchain *chain =
       (struct wsi_display_swapchain *)drv_chain;
@@ -1716,6 +1717,7 @@ _wsi_display_queue_next(struct wsi_swapchain *drv_chain)
 static VkResult
 wsi_display_queue_present(struct wsi_swapchain *drv_chain,
                           uint32_t image_index,
+                          UNUSED int sync_fd,
                           const VkPresentRegionKHR *damage)
 {
    struct wsi_display_swapchain *chain =
@@ -1723,6 +1725,7 @@ wsi_display_queue_present(struct wsi_swapchain *drv_chain,
    struct wsi_display *wsi = chain->wsi;
    struct wsi_display_image *image = &chain->images[image_index];
    VkResult result;
+   assert(sync_fd < 0);
 
    /* Bail early if the swapchain is broken */
    if (chain->status != VK_SUCCESS)

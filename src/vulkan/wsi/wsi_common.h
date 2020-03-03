@@ -91,7 +91,13 @@ struct wsi_device {
 
    VkPhysicalDevicePCIBusInfoPropertiesEXT pci_bus_info;
 
+   /* An already signaled sync file.  Needed for cases where we end up with no
+    * synchronization but need to signal fences anyway.
+    */
+   int dummy_sync_file;
+
    bool supports_modifiers;
+   bool supports_sync_file;
    uint32_t maxImageDimension2D;
    VkPresentModeKHR override_present_mode;
    bool force_bgra8_unorm_first;
@@ -138,14 +144,17 @@ struct wsi_device {
    WSI_CB(CreateCommandPool);
    WSI_CB(CreateFence);
    WSI_CB(CreateImage);
+   WSI_CB(CreateSemaphore);
    WSI_CB(DestroyBuffer);
    WSI_CB(DestroyCommandPool);
    WSI_CB(DestroyFence);
    WSI_CB(DestroyImage);
+   WSI_CB(DestroySemaphore);
    WSI_CB(EndCommandBuffer);
    WSI_CB(FreeMemory);
    WSI_CB(FreeCommandBuffers);
    WSI_CB(GetBufferMemoryRequirements);
+   WSI_CB(GetFenceFdKHR);
    WSI_CB(GetImageDrmFormatModifierPropertiesEXT);
    WSI_CB(GetImageMemoryRequirements);
    WSI_CB(GetImageSubresourceLayout);
@@ -153,6 +162,9 @@ struct wsi_device {
    WSI_CB(GetPhysicalDeviceFormatProperties);
    WSI_CB(GetPhysicalDeviceFormatProperties2KHR);
    WSI_CB(GetPhysicalDeviceImageFormatProperties2);
+   WSI_CB(GetSemaphoreFdKHR);
+   WSI_CB(ImportFenceFdKHR);
+   WSI_CB(ImportSemaphoreFdKHR);
    WSI_CB(ResetFences);
    WSI_CB(QueueSubmit);
    WSI_CB(WaitForFences);

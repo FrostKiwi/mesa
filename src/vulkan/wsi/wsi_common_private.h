@@ -33,6 +33,7 @@ struct wsi_image {
       VkBuffer buffer;
       VkDeviceMemory memory;
       VkCommandBuffer *blit_cmd_buffers;
+      VkSemaphore semaphore;
    } prime;
 
    uint64_t drm_modifier;
@@ -40,6 +41,7 @@ struct wsi_image {
    uint32_t sizes[4];
    uint32_t offsets[4];
    uint32_t row_pitches[4];
+
    int dma_buf_fd;
 };
 
@@ -53,6 +55,7 @@ struct wsi_swapchain {
    uint32_t image_count;
 
    bool use_prime_blit;
+   bool use_sync_file;
 
    /* Command pools, one per queue family */
    VkCommandPool *cmd_pools;
@@ -63,9 +66,9 @@ struct wsi_swapchain {
                                       uint32_t image_index);
    VkResult (*acquire_next_image)(struct wsi_swapchain *swap_chain,
                                   const VkAcquireNextImageInfoKHR *info,
-                                  uint32_t *image_index);
+                                  uint32_t *image_index, int *sync_fd);
    VkResult (*queue_present)(struct wsi_swapchain *swap_chain,
-                             uint32_t image_index,
+                             uint32_t image_index, int sync_fd,
                              const VkPresentRegionKHR *damage);
 };
 

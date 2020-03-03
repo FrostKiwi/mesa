@@ -768,7 +768,8 @@ wsi_wl_swapchain_get_wsi_image(struct wsi_swapchain *wsi_chain,
 static VkResult
 wsi_wl_swapchain_acquire_next_image(struct wsi_swapchain *wsi_chain,
                                     const VkAcquireNextImageInfoKHR *info,
-                                    uint32_t *image_index)
+                                    uint32_t *image_index,
+                                    UNUSED int *sync_fd)
 {
    struct wsi_wl_swapchain *chain = (struct wsi_wl_swapchain *)wsi_chain;
    struct timespec start_time, end_time;
@@ -858,9 +859,11 @@ static const struct wl_callback_listener frame_listener = {
 static VkResult
 wsi_wl_swapchain_queue_present(struct wsi_swapchain *wsi_chain,
                                uint32_t image_index,
+                               UNUSED int sync_fd,
                                const VkPresentRegionKHR *damage)
 {
    struct wsi_wl_swapchain *chain = (struct wsi_wl_swapchain *)wsi_chain;
+   assert(sync_fd < 0);
 
    if (chain->base.present_mode == VK_PRESENT_MODE_FIFO_KHR) {
       while (!chain->fifo_ready) {

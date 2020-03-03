@@ -1055,7 +1055,8 @@ x11_present_to_x11(struct x11_swapchain *chain, uint32_t image_index,
 static VkResult
 x11_acquire_next_image(struct wsi_swapchain *anv_chain,
                        const VkAcquireNextImageInfoKHR *info,
-                       uint32_t *image_index)
+                       uint32_t *image_index,
+                       UNUSED int *sync_fd)
 {
    struct x11_swapchain *chain = (struct x11_swapchain *)anv_chain;
    uint64_t timeout = info->timeout;
@@ -1074,9 +1075,11 @@ x11_acquire_next_image(struct wsi_swapchain *anv_chain,
 static VkResult
 x11_queue_present(struct wsi_swapchain *anv_chain,
                   uint32_t image_index,
+                  UNUSED int sync_fd,
                   const VkPresentRegionKHR *damage)
 {
    struct x11_swapchain *chain = (struct x11_swapchain *)anv_chain;
+   assert(sync_fd < 0);
 
    /* If the swapchain is in an error state, don't go any further. */
    if (chain->status < 0)
