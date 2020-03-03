@@ -1822,12 +1822,18 @@ anv_queue_execbuf_locked(struct anv_queue *queue,
          result = anv_queue_set_lost(queue, "execbuf2 failed: %m");
    }
 
+   fprintf(stderr, "execbuffer2:\n");
+   struct drm_i915_gem_exec_object2 *objects = execbuf.objects;
+   for (uint32_t k = 0; k < execbuf.bo_count; k++) {
+      fprintf(stderr, "BO: handle=%d, addr=0x%016"PRIx64"\n",
+              objects[k].handle, (uint64_t)objects[k].offset);
+   }
+
    int ret = queue->device->no_hw ? 0 :
       anv_gem_execbuffer(queue->device, &execbuf.execbuf);
    if (ret)
       result = anv_queue_set_lost(queue, "execbuf2 failed: %m");
 
-   struct drm_i915_gem_exec_object2 *objects = execbuf.objects;
    for (uint32_t k = 0; k < execbuf.bo_count; k++) {
       if (execbuf.bos[k]->flags & EXEC_OBJECT_PINNED)
          assert(execbuf.bos[k]->offset == objects[k].offset);
