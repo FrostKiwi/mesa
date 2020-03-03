@@ -494,8 +494,14 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    ctx->cmdlist->SetPipelineState(pipeline_state);
 
-   if (ctx->blend->need_blend_factor)
+   if (ctx->blend->blend_factor_flags & (D3D12_BLEND_FACTOR_COLOR | D3D12_BLEND_FACTOR_ANY)) {
       ctx->cmdlist->OMSetBlendFactor(ctx->blend_factor);
+   } else if (ctx->blend->blend_factor_flags & D3D12_BLEND_FACTOR_ALPHA) {
+      float alpha_const[4] = { ctx->blend_factor[3], ctx->blend_factor[3],
+                               ctx->blend_factor[3], ctx->blend_factor[3] };
+      ctx->cmdlist->OMSetBlendFactor(alpha_const);
+   }
+
 
    D3D12_CPU_DESCRIPTOR_HANDLE render_targets[PIPE_MAX_COLOR_BUFS] = {};
    D3D12_CPU_DESCRIPTOR_HANDLE *depth_desc = NULL, tmp_desc;
