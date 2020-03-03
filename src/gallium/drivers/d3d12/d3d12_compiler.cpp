@@ -99,6 +99,13 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
 
    ret->info = nir->info;
 
+   struct nir_lower_tex_options tex_options = { };
+   tex_options.lower_txp = ~0u; /* No equivalent for textureProj */
+
+   NIR_PASS_V(nir, nir_lower_uniforms_to_ubo, 16);
+   NIR_PASS_V(nir, nir_lower_clip_halfz);
+   NIR_PASS_V(nir, nir_lower_tex, &tex_options);
+
    struct nir_to_dxil_options opts = {};
    opts.interpolate_at_vertex = screen->opts3.BarycentricsSupported;
 
