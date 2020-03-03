@@ -1579,16 +1579,35 @@ emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
                                 write_mask);
 }
 
+const struct dxil_value *
+load_ubo(struct ntd_context *ctx, unsigned ubo_idx,
+         const struct dxil_value *offset)
+{
+   assert(offset);
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CBUFFER_LOAD_LEGACY);
+   if (!opcode)
+      return NULL;
+
+   const struct dxil_value *handle = ctx->cbv_handles[ubo_idx];
+   assert(handle);
+
+   const struct dxil_value *args[] = {
+      opcode, handle, offset
+   };
+
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.cbufferLoadLegacy", DXIL_F32);
+   if (!func)
+      return NULL;
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
 static bool
 emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    nir_const_value *const_block_index = nir_src_as_const_value(intr->src[0]);
    assert(const_block_index); // no dynamic indexing for now
    assert(const_block_index->u32 == 0); // we only support the default UBO for now
-
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.cbufferLoadLegacy", DXIL_F32);
-   if (!func)
-      return false;
 
    const struct dxil_value *offset;
    nir_const_value *const_offset = nir_src_as_const_value(intr->src[1]);
@@ -1600,13 +1619,7 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       offset = dxil_emit_binop(&ctx->mod, DXIL_BINOP_ASHR, offset_src, c4);
    }
 
-   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CBUFFER_LOAD_LEGACY);
-   const struct dxil_value *handle = ctx->cbv_handles[0];
-
-   const struct dxil_value *args[] = {
-      opcode, handle, offset
-   };
-   const struct dxil_value *agg = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+   const struct dxil_value *agg = load_ubo(ctx, 0, offset);
    const struct dxil_type *agg_type = dxil_module_get_cbuf_ret_type(&ctx->mod, DXIL_F32);
 
    for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
