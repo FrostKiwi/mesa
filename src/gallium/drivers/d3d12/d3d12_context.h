@@ -67,9 +67,16 @@ struct d3d12_sampler_state {
    struct d3d12_descriptor_handle handle;
 };
 
+enum d3d12_blend_factor_flags {
+   D3D12_BLEND_FACTOR_NONE  = 0,
+   D3D12_BLEND_FACTOR_COLOR = 1 << 0,
+   D3D12_BLEND_FACTOR_ALPHA = 1 << 1,
+   D3D12_BLEND_FACTOR_ANY   = 1 << 2,
+};
+
 struct d3d12_blend_state {
    D3D12_BLEND_DESC desc;
-   bool need_blend_factor;
+   unsigned blend_factor_flags;
 };
 
 struct d3d12_depth_stencil_alpha_state {

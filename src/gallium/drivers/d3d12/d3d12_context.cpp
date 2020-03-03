@@ -166,18 +166,34 @@ blend_factor_alpha(enum pipe_blendfactor factor)
    unreachable("unexpected blend factor");
 }
 
-static bool
-need_blend_factor(enum pipe_blendfactor factor)
+static unsigned
+need_blend_factor_rgb(enum pipe_blendfactor factor)
 {
    switch (factor) {
    case PIPE_BLENDFACTOR_CONST_COLOR:
-   case PIPE_BLENDFACTOR_CONST_ALPHA:
    case PIPE_BLENDFACTOR_INV_CONST_COLOR:
+      return D3D12_BLEND_FACTOR_COLOR;
+   case PIPE_BLENDFACTOR_CONST_ALPHA:
    case PIPE_BLENDFACTOR_INV_CONST_ALPHA:
-      return true;
+      return D3D12_BLEND_FACTOR_ALPHA;
 
    default:
-      return false;
+      return D3D12_BLEND_FACTOR_NONE;
+   }
+}
+
+static unsigned
+need_blend_factor_alpha(enum pipe_blendfactor factor)
+{
+   switch (factor) {
+   case PIPE_BLENDFACTOR_CONST_COLOR:
+   case PIPE_BLENDFACTOR_INV_CONST_COLOR:
+   case PIPE_BLENDFACTOR_CONST_ALPHA:
+   case PIPE_BLENDFACTOR_INV_CONST_ALPHA:
+      return D3D12_BLEND_FACTOR_ANY;
+
+   default:
+      return D3D12_BLEND_FACTOR_NONE;
    }
 }
 
@@ -276,11 +292,15 @@ d3d12_create_blend_state(struct pipe_context *pctx,
          state->desc.RenderTarget[i].DestBlendAlpha = blend_factor_alpha((pipe_blendfactor) rt->alpha_dst_factor);
          state->desc.RenderTarget[i].BlendOpAlpha = blend_op((pipe_blend_func) rt->alpha_func);
 
-         if (need_blend_factor((pipe_blendfactor) rt->rgb_src_factor) ||
-             need_blend_factor((pipe_blendfactor) rt->rgb_dst_factor) ||
-             need_blend_factor((pipe_blendfactor) rt->alpha_src_factor) ||
-             need_blend_factor((pipe_blendfactor) rt->alpha_dst_factor))
-            state->need_blend_factor = TRUE;
+         state->blend_factor_flags |= need_blend_factor_rgb((pipe_blendfactor) rt->rgb_src_factor);
+         state->blend_factor_flags |= need_blend_factor_rgb((pipe_blendfactor) rt->rgb_dst_factor);
+         state->blend_factor_flags |= need_blend_factor_alpha((pipe_blendfactor) rt->alpha_src_factor);
+         state->blend_factor_flags |= need_blend_factor_alpha((pipe_blendfactor) rt->alpha_dst_factor);
+
+         if (state->blend_factor_flags == (D3D12_BLEND_FACTOR_COLOR & D3D12_BLEND_FACTOR_ALPHA)) {
+            /* We can't set a blend factor for both constant color and constant alpha */
+            debug_printf("D3D12: unsupported blend factors combination (const color and const alpha)\n");
+         }
 
          if (blend_state->logicop_enable) {
             state->desc.RenderTarget[i].LogicOpEnable = TRUE;
