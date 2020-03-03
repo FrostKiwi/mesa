@@ -1622,6 +1622,9 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    const struct dxil_value *agg = load_ubo(ctx, 0, offset);
    const struct dxil_type *agg_type = dxil_module_get_cbuf_ret_type(&ctx->mod, DXIL_F32);
 
+   if (!agg || !agg_type)
+      return false;
+
    for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
       const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, agg, agg_type, i);
       store_dest(ctx, &intr->dest, i, retval,
