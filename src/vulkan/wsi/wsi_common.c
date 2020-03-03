@@ -1130,7 +1130,7 @@ wsi_common_queue_present(const struct wsi_device *wsi,
          const VkFenceCreateInfo fence_info = {
             .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
             .pNext = NULL,
-            .flags = 0,
+            .flags = VK_FENCE_CREATE_SIGNALED_BIT,
          };
          result = wsi->CreateFence(device, &fence_info,
                                    &swapchain->alloc,
@@ -1141,11 +1141,6 @@ wsi_common_queue_present(const struct wsi_device *wsi,
          result =
             wsi->WaitForFences(device, 1, &swapchain->fences[image_index],
                                true, ~0ull);
-         if (result != VK_SUCCESS)
-            goto fail_present;
-
-         result =
-            wsi->ResetFences(device, 1, &swapchain->fences[image_index]);
          if (result != VK_SUCCESS)
             goto fail_present;
       }
@@ -1197,6 +1192,10 @@ wsi_common_queue_present(const struct wsi_device *wsi,
             &image->prime.blit_cmd_buffers[queue_family_index];
          mem_signal.memory = image->prime.memory;
       }
+
+      result = wsi->ResetFences(device, 1, &swapchain->fences[image_index]);
+      if (result != VK_SUCCESS)
+         goto fail_present;
 
       result = wsi->QueueSubmit(queue, 1, &submit_info, swapchain->fences[image_index]);
       vk_free(&swapchain->alloc, stage_flags);
