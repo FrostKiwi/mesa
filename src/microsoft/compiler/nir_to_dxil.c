@@ -1876,6 +1876,9 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_deref(ctx, intr);
    case nir_intrinsic_load_ubo:
       return emit_load_ubo(ctx, intr);
+   case nir_intrinsic_load_front_face:
+      assert(ctx->ps_front_face);
+      return emit_load_input_interpolated(ctx, intr, ctx->ps_front_face);
 
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_local_group_size:
