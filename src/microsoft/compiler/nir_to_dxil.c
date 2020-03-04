@@ -557,12 +557,22 @@ emit_createhandle_call_from_values(struct ntd_context *ctx,
                                  resource_range_index_value, non_uniform_resource_index_value);
 }
 
+static void
+add_resource(struct ntd_context *ctx, enum dxil_resource_type type)
+{
+   assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
+   ctx->resources[ctx->num_resources].resource_type = type;
+   ctx->resources[ctx->num_resources].space = 0;
+   ctx->resources[ctx->num_resources].lower_bound = 0;
+   ctx->resources[ctx->num_resources].upper_bound = 0;
+   ctx->num_resources++;
+}
+
 static bool
 emit_srv(struct ntd_context *ctx, nir_variable *var)
 {
    assert(ctx->num_srvs < ARRAY_SIZE(ctx->srv_metadata_nodes));
    assert(ctx->num_srvs < ARRAY_SIZE(ctx->srv_handles));
-   assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
 
    enum dxil_component_type comp_type = DXIL_COMP_TYPE_F32;
    enum dxil_resource_kind res_kind = dxil_get_resource_kind(var->type);
@@ -573,12 +583,7 @@ emit_srv(struct ntd_context *ctx, nir_variable *var)
       return false;
 
    ctx->srv_metadata_nodes[ctx->num_srvs] = srv_meta;
-
-   ctx->resources[ctx->num_resources].resource_type = DXIL_RES_SRV_TYPED;
-   ctx->resources[ctx->num_resources].space = 0;
-   ctx->resources[ctx->num_resources].lower_bound = 0;
-   ctx->resources[ctx->num_resources].upper_bound = 0;
-   ctx->num_resources++;
+   add_resource(ctx, DXIL_RES_SRV_TYPED);
 
    const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_SRV, 0, 0, false);
    if (!handle)
@@ -595,7 +600,6 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
 {
    assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_metadata_nodes));
    assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_handles));
-   assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
 
    const struct dxil_type *ssbo_type = get_glsl_type(&ctx->mod, var->type);
    if (!ssbo_type)
@@ -617,12 +621,7 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
       return false;
 
    ctx->uav_metadata_nodes[ctx->num_uavs] = uav_meta;
-
-   ctx->resources[ctx->num_resources].resource_type = DXIL_RES_UAV_TYPED;
-   ctx->resources[ctx->num_resources].space = 0;
-   ctx->resources[ctx->num_resources].lower_bound = 0;
-   ctx->resources[ctx->num_resources].upper_bound = 0;
-   ctx->num_resources++;
+   add_resource(ctx, DXIL_RES_UAV_TYPED);
 
    const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_UAV, 0, 0, false);
    if (!handle)
@@ -649,7 +648,6 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
 {
    assert(ctx->num_cbvs < ARRAY_SIZE(ctx->cbv_metadata_nodes));
    assert(ctx->num_cbvs < ARRAY_SIZE(ctx->cbv_handles));
-   assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
 
    unsigned size = get_dword_size(var->type);
 
@@ -663,12 +661,7 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
       return false;
 
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
-
-   ctx->resources[ctx->num_resources].resource_type = DXIL_RES_CBV;
-   ctx->resources[ctx->num_resources].space = 0;
-   ctx->resources[ctx->num_resources].lower_bound = 0;
-   ctx->resources[ctx->num_resources].upper_bound = 0;
-   ctx->num_resources++;
+   add_resource(ctx, DXIL_RES_CBV);
 
    const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_CBV, 0, 0, false);
    if (!handle)
@@ -685,7 +678,6 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var)
 {
    assert(ctx->num_samplers < ARRAY_SIZE(ctx->sampler_metadata_nodes));
    assert(ctx->num_samplers < ARRAY_SIZE(ctx->sampler_handles));
-   assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
 
    const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_type *sampler_type = dxil_module_get_struct_type(&ctx->mod, "struct.SamplerState", &int32_type, 1);
@@ -695,12 +687,7 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var)
       return false;
 
    ctx->sampler_metadata_nodes[ctx->num_samplers] = sampler_meta;
-
-   ctx->resources[ctx->num_resources].resource_type = DXIL_RES_SAMPLER;
-   ctx->resources[ctx->num_resources].space = 0;
-   ctx->resources[ctx->num_resources].lower_bound = 0;
-   ctx->resources[ctx->num_resources].upper_bound = 0;
-   ctx->num_resources++;
+   add_resource(ctx, DXIL_RES_SAMPLER);
 
    const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_SAMPLER, 0, 0, false);
    if (!handle)
