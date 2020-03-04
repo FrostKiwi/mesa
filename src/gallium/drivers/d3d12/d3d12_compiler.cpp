@@ -25,6 +25,7 @@
 #include "d3d12_context.h"
 #include "d3d12_debug.h"
 #include "d3d12_screen.h"
+#include "d3d12_nir_passes.h"
 #include "microsoft/compiler/nir_to_dxil.h"
 
 #include "pipe/p_state.h"
@@ -119,6 +120,7 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
    NIR_PASS_V(nir, nir_lower_uniforms_to_ubo, 16);
    NIR_PASS_V(nir, nir_lower_clip_halfz);
    NIR_PASS_V(nir, nir_lower_tex, &tex_options);
+   NIR_PASS_V(nir, d3d12_lower_bool_loads);
 
    struct nir_to_dxil_options opts = {};
    opts.interpolate_at_vertex = screen->opts3.BarycentricsSupported;
