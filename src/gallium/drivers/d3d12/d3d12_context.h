@@ -28,7 +28,9 @@
 
 #include "pipe/p_context.h"
 #include "pipe/p_state.h"
+#include "util/list.h"
 #include "util/slab.h"
+#include "util/u_suballoc.h"
 
 #include <d3d12.h>
 
@@ -92,6 +94,7 @@ struct d3d12_context {
    struct pipe_context base;
    struct slab_child_pool transfer_pool;
    struct primconvert_context *primconvert;
+   struct u_suballocator *query_allocator;
 
    struct pipe_constant_buffer cbufs[PIPE_SHADER_TYPES][PIPE_MAX_CONSTANT_BUFFERS];
    struct pipe_framebuffer_state fb;
@@ -122,6 +125,9 @@ struct d3d12_context {
    int fence_value;
    ID3D12CommandAllocator *cmdalloc;
    ID3D12GraphicsCommandList *cmdlist;
+
+   struct list_head active_queries;
+   bool queries_disabled;
 
    struct d3d12_descriptor_heap *rtv_heap;
    struct d3d12_descriptor_heap *dsv_heap;
@@ -159,5 +165,8 @@ d3d12_resource_barrier(struct d3d12_context *ctx,
 void
 d3d12_draw_vbo(struct pipe_context *pctx,
                const struct pipe_draw_info *dinfo);
+
+void
+d3d12_context_query_init(struct pipe_context *pctx);
 
 #endif
