@@ -288,14 +288,14 @@ protected:
    }
 
    void
-   resource_barrier(ID3D12Resource *res,
+   resource_barrier(ComPtr<ID3D12Resource> &res,
                     D3D12_RESOURCE_STATES state_before,
                     D3D12_RESOURCE_STATES state_after)
    {
       D3D12_RESOURCE_BARRIER barrier;
       barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
       barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-      barrier.Transition.pResource = res;
+      barrier.Transition.pResource = res.Get();
       barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
       barrier.Transition.StateBefore = state_before;
       barrier.Transition.StateAfter = state_after;
@@ -456,15 +456,15 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
 
    dev->CreateUnorderedAccessView(res.Get(), NULL, &uav_desc, uav_heap->GetCPUDescriptorHandleForHeapStart());
 
-   resource_barrier(res.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+   resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
    cmdlist->CopyResource(res.Get(), upload_res.Get());
-   resource_barrier(res.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+   resource_barrier(res, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
    cmdlist->SetDescriptorHeaps(1, &uav_heap);
    cmdlist->SetComputeRootSignature(root_sig);
    cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
    cmdlist->SetPipelineState(pipeline_state);
    cmdlist->Dispatch(width, 1, 1);
-   resource_barrier(res.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+   resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
    cmdlist->CopyResource(readback_res.Get(), res.Get());
 
    if (FAILED(cmdlist->Close()))
