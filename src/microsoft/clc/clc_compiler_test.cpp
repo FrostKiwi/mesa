@@ -234,12 +234,12 @@ protected:
    }
 
    ComPtr<ID3D12PipelineState>
-   create_pipeline_state(ComPtr<ID3D12RootSignature> &root_sig, void *blob,
-                         size_t blob_size)
+   create_pipeline_state(ComPtr<ID3D12RootSignature> &root_sig,
+                         const std::vector<uint8_t> &blob)
    {
       D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = { root_sig.Get() };
-      pipeline_desc.CS.pShaderBytecode = blob;
-      pipeline_desc.CS.BytecodeLength = blob_size;
+      pipeline_desc.CS.pShaderBytecode = blob.data();
+      pipeline_desc.CS.BytecodeLength = blob.size();
 
       ComPtr<ID3D12PipelineState> pipeline_state;
       if (FAILED(dev->CreateComputePipelineState(&pipeline_desc,
@@ -445,6 +445,32 @@ dump_blob(const char *path, const void *data, size_t size)
    }
 }
 
+static std::vector<uint8_t>
+compile_and_validate(const char *kernel_source, struct clc_metadata *metadata)
+{
+   void *blob;
+   size_t size;
+   if (clc_compile_from_source(
+       kernel_source, "kernel.cl",
+       NULL, 0,
+       NULL, 0,
+       warning_callback, error_callback,
+       metadata,
+       &blob, &size) < 0)
+      throw runtime_error("failed to compile kernel!");
+
+   dump_blob("unsigned.cso", blob, size);
+   if (!validate_module(blob, size))
+      throw runtime_error("failed to validate module!");
+   dump_blob("signed.cso", blob, size);
+
+   std::vector<uint8_t> ret;
+   ret.assign(static_cast<uint8_t *>(blob),
+              static_cast<uint8_t *>(blob) + size);
+   clc_free_blob(blob);
+   return ret;
+}
+
 bool
 ComputeTest::test_shader(const char *kernel_source, int width, int element_size, const void *input, const void *expected)
 {
@@ -455,30 +481,10 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    D3D12SerializeRootSignature = (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeRootSignature");
 
    struct clc_metadata metadata;
-   void *blob = NULL;
-   size_t blob_size = 0;
-   if (clc_compile_from_source(
-       kernel_source,
-       "kernel.cl",
-       NULL, 0,
-       NULL, 0,
-       warning_callback,
-       error_callback,
-       &metadata,
-       &blob,
-       &blob_size) < 0) {
-      fprintf(stderr, "failed to compile kernel!\n");
-      return false;
-   }
-
-   dump_blob("unsigned.cso", blob, blob_size);
-   if (!validate_module(blob, blob_size))
-      return false;
-   dump_blob("signed.cso", blob, blob_size);
+   std::vector<uint8_t> blob = compile_and_validate(kernel_source, &metadata);
 
    auto root_sig = create_root_signature();
-   auto pipeline_state = create_pipeline_state(root_sig, blob, blob_size);
-   clc_free_blob(blob);
+   auto pipeline_state = create_pipeline_state(root_sig, blob);
 
    auto res = create_buffer_with_data(input, width * element_size);
    auto readback_res = create_buffer(width * element_size, D3D12_HEAP_TYPE_READBACK);
