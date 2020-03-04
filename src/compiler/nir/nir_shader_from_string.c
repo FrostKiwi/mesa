@@ -71,6 +71,9 @@ nir_variable_mode get_variable_mode(const char *string)
    if (!strcmp(string, "function_temp"))
       return nir_var_function_temp;
 
+   if (!strcmp(string, "system"))
+      return nir_var_system_value;
+
    error_message("Unsupported variable mode '%s'\n", string);
 
    return (nir_variable_mode)0;
@@ -366,8 +369,8 @@ bool get_global_decl_var(const char *shader, nir_builder *b)
                       global_type, interp, vartype, varname, slot, driver_loc,
                       binding_id);
 
-   if (nread != 7) {
-      error_message("%s: Expect 7 values, only read %d\n", __func__, nread);
+   if (nread < 4) {
+      error_message("%s: unable to read global variable type\n", __func__);
       goto fail;
    }
 
@@ -386,6 +389,10 @@ bool get_global_decl_var(const char *shader, nir_builder *b)
 
    nir_variable *var =
          nir_variable_create(b->shader, mode, type, varname);
+
+   if (mode != nir_var_system_value && nread < 7) {
+      error_message("%s: unable to read global variable, expect 7 values got only %d\n", __func__, nread);
+   }
 
    if (mode == nir_var_shader_in) {
       if (b->shader->info.stage == MESA_SHADER_VERTEX)
