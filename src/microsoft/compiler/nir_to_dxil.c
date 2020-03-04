@@ -157,6 +157,7 @@ enum dxil_intr {
    DXIL_INTR_LOAD_INPUT = 4,
    DXIL_INTR_STORE_OUTPUT = 5,
    DXIL_INTR_FABS = 6,
+   DXIL_INTR_SATURATE = 7,
 
    DXIL_INTR_FCOS = 12,
    DXIL_INTR_FSIN = 13,
@@ -1364,6 +1365,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
          const struct dxil_value *one = dxil_module_get_float_const(&ctx->mod, 1.0f);
          return emit_binop(ctx, alu, DXIL_BINOP_SDIV, one, src[0]);
       }
+   case nir_op_fsat: return emit_unary_intin(ctx, alu, DXIL_INTR_SATURATE, src[0]);
    case nir_op_imax: return emit_binary_intin(ctx, alu, DXIL_INTR_IMAX, src[0], src[1]);
    case nir_op_imin: return emit_binary_intin(ctx, alu, DXIL_INTR_IMIN, src[0], src[1]);
    case nir_op_umax: return emit_binary_intin(ctx, alu, DXIL_INTR_UMAX, src[0], src[1]);
