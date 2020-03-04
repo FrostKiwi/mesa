@@ -1694,19 +1694,21 @@ emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
-emit_load_input_interpolated(struct ntd_context *ctx, nir_intrinsic_instr *intr,
-                nir_variable *input)
+emit_load_input_interpolated(struct ntd_context *ctx, nir_intrinsic_instr *intr, nir_variable *var)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.loadInput", DXIL_F32);
-
-   if (!func)
-      return false;
-
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_LOAD_INPUT);
-   const struct dxil_value *input_id = dxil_module_get_int32_const(&ctx->mod, (int)input->data.driver_location);
+   const struct dxil_value *input_id = dxil_module_get_int32_const(&ctx->mod, var->data.driver_location);
    const struct dxil_value *row = dxil_module_get_int32_const(&ctx->mod, 0);
    const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_value *vertex_id = dxil_module_get_undef(&ctx->mod, int32_type);
+
+   nir_alu_type out_type = nir_get_nir_type_for_glsl_base_type(glsl_get_base_type(var->type));
+   enum overload_type overload = get_overload(out_type, 32);
+
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.loadInput", overload);
+
+   if (!func)
+      return false;
 
    for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
       const struct dxil_value *comp = dxil_module_get_int8_const(&ctx->mod, i);
@@ -1718,22 +1720,25 @@ emit_load_input_interpolated(struct ntd_context *ctx, nir_intrinsic_instr *intr,
       const struct dxil_value *retval = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
       if (!retval)
          return false;
-      store_dest(ctx, &intr->dest, i, retval, nir_type_float);
+      store_dest(ctx, &intr->dest, i, retval, out_type);
    }
    return true;
 }
 
 static bool
-emit_load_input_flat(struct ntd_context *ctx, nir_intrinsic_instr *intr, nir_variable* input)
+emit_load_input_flat(struct ntd_context *ctx, nir_intrinsic_instr *intr, nir_variable* var)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.attributeAtVertex", DXIL_F32);
-   if (!func)
-      return false;
-
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_ATTRIBUTE_AT_VERTEX);
-   const struct dxil_value *input_id = dxil_module_get_int32_const(&ctx->mod, (int)input->data.driver_location);
+   const struct dxil_value *input_id = dxil_module_get_int32_const(&ctx->mod, (int)var->data.driver_location);
    const struct dxil_value *row = dxil_module_get_int32_const(&ctx->mod, 0);
    const struct dxil_value *vertex_id = dxil_module_get_int8_const(&ctx->mod, 2);
+
+   nir_alu_type out_type = nir_get_nir_type_for_glsl_base_type(glsl_get_base_type(var->type));
+   enum overload_type overload = get_overload(out_type, 32);
+
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.attributeAtVertex", overload);
+   if (!func)
+      return false;
 
    for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
       const struct dxil_value *comp = dxil_module_get_int8_const(&ctx->mod, i);
@@ -1745,7 +1750,7 @@ emit_load_input_flat(struct ntd_context *ctx, nir_intrinsic_instr *intr, nir_var
       if (!retval)
          return false;
 
-      store_dest(ctx, &intr->dest, i, retval, nir_type_float);
+      store_dest(ctx, &intr->dest, i, retval, out_type);
    }
    return true;
 }
