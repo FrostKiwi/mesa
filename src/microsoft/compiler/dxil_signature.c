@@ -174,7 +174,7 @@ fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id,
                     char *semantic_name, enum dxil_semantic_kind semantic_kind,
                     uint32_t start_row, uint32_t rows,
                     uint32_t start_col, uint8_t columns,
-                    uint8_t interpolation) {
+                    uint8_t interpolation, uint8_t sig_comp_type) {
 
    const struct dxil_mdnode *SV_params_nodes[11];
    /* For this to always work we should use vectorize_io, but for FS out and VS in
@@ -185,7 +185,7 @@ fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id,
 
    SV_params_nodes[0] = dxil_get_metadata_int32(mod, (int)record_id); // Unique element ID
    SV_params_nodes[1] = dxil_get_metadata_string(mod, semantic_name); // Element name
-   SV_params_nodes[2] = dxil_get_metadata_int8(mod, 9); // Element type
+   SV_params_nodes[2] = dxil_get_metadata_int8(mod, sig_comp_type); // Element type
    SV_params_nodes[3] = dxil_get_metadata_int8(mod, (int8_t)semantic_kind); // Effective system value
    SV_params_nodes[4] = dxil_get_metadata_node(mod, flattened_semantics,
                                          ARRAY_SIZE(flattened_semantics)); // Semantic index vector
@@ -277,6 +277,7 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
       enum dxil_semantic_kind semantic_kind;
       uint8_t interpolation = 0;
       uint8_t comp_type = dxil_get_prog_sig_comp_type(var->type);
+      uint8_t sig_comp_type = dxil_get_comp_type(var->type);
       uint8_t start_row = (uint8_t)var->data.driver_location;
       uint8_t start_col = (uint8_t)var->data.location_frac;
       uint8_t cols = (uint8_t)glsl_get_components(var->type);
@@ -291,7 +292,7 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
       }
       inputs[num_inputs] = fill_SV_param_nodes(mod, num_inputs, semantic_name,
                                                semantic_kind, start_row, 1, start_col, cols,
-                                               interpolation);
+                                               interpolation, sig_comp_type);
 
       mod->inputs[num_inputs].name = ralloc_strdup(mod->ralloc_ctx,
                                                    semantic_name);
@@ -336,6 +337,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
       char semantic_name[64] = "";
       uint8_t interpolation = 0;
       uint8_t comp_type = dxil_get_prog_sig_comp_type(var->type);
+      uint8_t sig_comp_type = dxil_get_comp_type(var->type);
       uint8_t start_row = var->data.driver_location;
       uint8_t start_col = var->data.location_frac;
       uint8_t cols = (uint8_t)glsl_get_components(var->type);
@@ -353,7 +355,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
 
       outputs[num_outputs] = fill_SV_param_nodes(mod, num_outputs, semantic_name,
                                                  semantic_kind, start_row, 1,
-                                                 start_col, cols, interpolation);
+                                                 start_col, cols, interpolation, sig_comp_type);
       mod->outputs[num_outputs].name = ralloc_strdup(mod->ralloc_ctx,
                                                      semantic_name);
       struct dxil_signature_element *elm = &mod->outputs[num_outputs].sig;
