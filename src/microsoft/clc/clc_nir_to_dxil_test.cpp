@@ -466,3 +466,41 @@ impl main {
 )";
    run(shader, expect);
 }
+
+TEST_F(NirToDXILTest, test_shader_validates_fs_0)
+{
+ const char shader[] =
+R"(shader: MESA_SHADER_FRAGMENT
+ name: GLSL3
+ inputs: 2
+ outputs: 1
+ uniforms: 0
+ shared: 0
+ decl_var shader_in INTERP_MODE_NONE vec4 gl_Color (VARYING_SLOT_COL0.xyzw, 0, 0)
+ decl_var shader_in INTERP_MODE_NONE vec4 gl_in (VARYING_SLOT_BFC0.xyzw, 1, 0)
+ decl_var shader_in INTERP_MODE_FLAT uint isFrontFace (VARYING_SLOT_FACE.x, 2, 0)
+ decl_var shader_out INTERP_MODE_NONE vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+ decl_function main (0 params) (entrypoint)
+
+ impl main {
+         block block_0:
+         /* preds: */
+         vec1 32 ssa_0 = deref_var &gl_Color (shader_in vec4)
+         vec4 32 ssa_1 = intrinsic load_deref (ssa_0) (0) /* access=0 */
+         vec1 32 ssa_2 = deref_var &gl_in (shader_in vec4)
+         vec4 32 ssa_3 = intrinsic load_deref (ssa_0) (0) /* access=0 */
+         vec1 32 ssa_4 = intrinsic load_front_face () ()
+         vec1 32 ssa_5 = load_const (0x00000000 /* 0.000000 */)
+         vec1 1 ssa_6 = ine ssa_4, ssa_5
+         vec1 32 ssa_7 = bcsel ssa_6, ssa_1.x, ssa_3.x
+         vec1 32 ssa_8 = bcsel ssa_6, ssa_1.y, ssa_3.y
+         vec1 32 ssa_9 = bcsel ssa_6, ssa_1.z, ssa_3.z
+         vec1 32 ssa_10 = bcsel ssa_6, ssa_1.w, ssa_3.w
+         vec4 32 ssa_11 = vec4 ssa_7, ssa_8, ssa_9, ssa_10
+         vec1 32 ssa_12 = deref_var &gl_FragColor (shader_out vec4)
+         intrinsic store_deref (ssa_12, ssa_11) (15, 0) /* wrmask=xyzw */ /* access=0 */
+         /* succs: block_1 */
+         block block_1:
+ })";
+ run(shader, "");
+}
