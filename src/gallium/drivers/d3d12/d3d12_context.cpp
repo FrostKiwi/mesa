@@ -25,6 +25,7 @@
 
 #include "d3d12_compiler.h"
 #include "d3d12_format.h"
+#include "d3d12_query.h"
 #include "d3d12_resource.h"
 #include "d3d12_screen.h"
 #include "d3d12_surface.h"
@@ -870,6 +871,10 @@ void
 d3d12_flush_cmdlist(struct d3d12_context *ctx)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
+
+   if (!ctx->queries_disabled)
+      d3d12_suspend_queries(ctx);
+
    if (FAILED(ctx->cmdlist->Close())) {
       debug_printf("D3D12: closing ID3D12GraphicsCommandList failed\n");
       return;
@@ -891,6 +896,9 @@ d3d12_flush_cmdlist(struct d3d12_context *ctx)
       debug_printf("D3D12: resetting ID3D12GraphicsCommandList failed\n");
       return;
    }
+
+   if (!ctx->queries_disabled)
+      d3d12_resume_queries(ctx);
 }
 
 void
@@ -1131,6 +1139,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
 
    d3d12_context_surface_init(&ctx->base);
    d3d12_context_resource_init(&ctx->base);
+   d3d12_context_query_init(&ctx->base);
 
    slab_create_child(&ctx->transfer_pool, &d3d12_screen(pscreen)->transfer_pool);
 
