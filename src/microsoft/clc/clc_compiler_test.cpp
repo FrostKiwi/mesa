@@ -349,6 +349,10 @@ protected:
       if (FAILED(dev->CreateDescriptorHeap(&heap_desc,
           __uuidof(uav_heap), (void **)&uav_heap)))
          throw runtime_error("failed to create descriptor heap");
+
+      event = CreateEvent(NULL, FALSE, FALSE, NULL);
+      if (!event)
+         throw runtime_error("Failed to create event");
    }
 
    void TearDown() override
@@ -358,6 +362,8 @@ protected:
 
       if (FAILED(cmdlist->Reset(cmdalloc, NULL)))
          throw runtime_error("resetting ID3D12GraphicsCommandList failed");
+
+      CloseHandle(event);
 
       uav_heap->Release();
       cmdlist->Release();
@@ -380,6 +386,8 @@ protected:
    ID3D12CommandAllocator *cmdalloc;
    ID3D12GraphicsCommandList *cmdlist;
    ID3D12DescriptorHeap *uav_heap;
+
+   HANDLE event;
 };
 
 bool
@@ -390,10 +398,6 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
       throw runtime_error("Failed to load D3D12.DLL");
 
    D3D12SerializeRootSignature = (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeRootSignature");
-
-   HANDLE event = CreateEvent(NULL, FALSE, FALSE, NULL);
-   if (!event)
-      throw runtime_error("Failed to create event");
 
    struct clc_metadata metadata;
    void *blob = NULL;
