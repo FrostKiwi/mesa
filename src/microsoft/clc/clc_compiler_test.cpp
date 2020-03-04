@@ -193,7 +193,7 @@ protected:
       return dev;
    }
 
-   ID3D12RootSignature *
+   ComPtr<ID3D12RootSignature>
    create_root_signature()
    {
       D3D12_DESCRIPTOR_RANGE desc_range;
@@ -222,7 +222,7 @@ protected:
           &sig, &error)))
          throw runtime_error("D3D12SerializeRootSignature failed");
 
-      ID3D12RootSignature *ret;
+      ComPtr<ID3D12RootSignature> ret;
       if (FAILED(dev->CreateRootSignature(0,
           sig->GetBufferPointer(),
           sig->GetBufferSize(),
@@ -233,15 +233,15 @@ protected:
       return ret;
    }
 
-   ID3D12PipelineState *
-   create_pipeline_state(ID3D12RootSignature *root_sig, void *blob,
+   ComPtr<ID3D12PipelineState>
+   create_pipeline_state(ComPtr<ID3D12RootSignature> &root_sig, void *blob,
                          size_t blob_size)
    {
-      D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = { root_sig };
+      D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = { root_sig.Get() };
       pipeline_desc.CS.pShaderBytecode = blob;
       pipeline_desc.CS.BytecodeLength = blob_size;
 
-      ID3D12PipelineState *pipeline_state;
+      ComPtr<ID3D12PipelineState> pipeline_state;
       if (FAILED(dev->CreateComputePipelineState(&pipeline_desc,
                                                  __uuidof(pipeline_state),
                                                  (void **)& pipeline_state)))
@@ -429,7 +429,7 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
       printf("D3D12: wrote 'signed.cso'...\n");
    }
 
-   ID3D12RootSignature *root_sig = create_root_signature();
+   auto root_sig = create_root_signature();
    auto pipeline_state = create_pipeline_state(root_sig, blob, blob_size);
    clc_free_blob(blob);
 
@@ -460,9 +460,9 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    cmdlist->CopyResource(res.Get(), upload_res.Get());
    resource_barrier(res, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
    cmdlist->SetDescriptorHeaps(1, &uav_heap);
-   cmdlist->SetComputeRootSignature(root_sig);
+   cmdlist->SetComputeRootSignature(root_sig.Get());
    cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
-   cmdlist->SetPipelineState(pipeline_state);
+   cmdlist->SetPipelineState(pipeline_state.Get());
    cmdlist->Dispatch(width, 1, 1);
    resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
    cmdlist->CopyResource(readback_res.Get(), res.Get());
@@ -488,8 +488,6 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    D3D12_RANGE empty_range = { 0, 0 };
    readback_res->Unmap(0, &empty_range);
 
-   pipeline_state->Release();
-   root_sig->Release();
    return true;
 }
 
