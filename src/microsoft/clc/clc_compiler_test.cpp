@@ -23,12 +23,15 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdexcept>
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <gtest/gtest.h>
 
 #include "clc_compiler.h"
+
+using std::runtime_error;
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -60,21 +63,18 @@ create_root_signature(ID3D12Device *dev)
 
    ID3DBlob *sig, *error;
    if (FAILED(D3D12SerializeRootSignature(&root_sig_desc,
-      D3D_ROOT_SIGNATURE_VERSION_1,
-      &sig, &error))) {
-      fprintf(stderr, "D3D12SerializeRootSignature failed\n");
-      return NULL;
-   }
+       D3D_ROOT_SIGNATURE_VERSION_1,
+       &sig, &error)))
+      throw runtime_error("D3D12SerializeRootSignature failed");
 
    ID3D12RootSignature *ret;
    if (FAILED(dev->CreateRootSignature(0,
-      sig->GetBufferPointer(),
-      sig->GetBufferSize(),
-      __uuidof(ret),
-      (void **)& ret))) {
-      fprintf(stderr, "CreateRootSignature failed\n");
-      return NULL;
-   }
+       sig->GetBufferPointer(),
+       sig->GetBufferSize(),
+       __uuidof(ret),
+       (void **)& ret)))
+      throw runtime_error("CreateRootSignature failed");
+
    return ret;
 }
 
@@ -108,15 +108,10 @@ create_buffer(ID3D12Device *dev, int size, D3D12_HEAP_TYPE heap_type)
    }
 
    ID3D12Resource *res;
-   HRESULT hres = dev->CreateCommittedResource(&heap_pris,
-      D3D12_HEAP_FLAG_NONE,
-      &desc,
-      initial_state,
-      NULL,
-      __uuidof(ID3D12Resource),
-      (void **)&res);
-   if (FAILED(hres))
-      return NULL;
+   if (FAILED(dev->CreateCommittedResource(&heap_pris,
+       D3D12_HEAP_FLAG_NONE, &desc, initial_state,
+       NULL, __uuidof(ID3D12Resource), (void **)&res)))
+      throw runtime_error("CreateCommittedResource failed");
 
    return res;
 }
@@ -152,16 +147,13 @@ bool
 validate_module(void *data, size_t size)
 {
    static HMODULE hmod = LoadLibrary("DXIL.DLL");
-   if (!hmod) {
-      fprintf(stderr, "D3D12: failed to load DXIL.DLL");
-      return false;
-   }
+   if (!hmod)
+      throw runtime_error("failed to load DXIL.DLL");
 
-   DxcCreateInstanceProc pfnDxcCreateInstance = (DxcCreateInstanceProc)GetProcAddress(hmod, "DxcCreateInstance");
-   if (!pfnDxcCreateInstance) {
-      fprintf(stderr, "D3D12: failed to load DxcCreateInstance");
-      return false;
-   }
+   DxcCreateInstanceProc pfnDxcCreateInstance =
+      (DxcCreateInstanceProc)GetProcAddress(hmod, "DxcCreateInstance");
+   if (!pfnDxcCreateInstance)
+      throw runtime_error("failed to load DxcCreateInstance");
 
    struct shader_blob : public IDxcBlob {
       shader_blob(void *data, size_t size) : data(data), size(size) {}
@@ -176,19 +168,13 @@ validate_module(void *data, size_t size)
 
    IDxcValidator *validator;
    if (FAILED(pfnDxcCreateInstance(CLSID_DxcValidator, __uuidof(IDxcValidator),
-                                   (void **)&validator))) {
-      fprintf(stderr, "D3D12: failed to create IDxcValidator\n");
-      return false;
-   }
+                                   (void **)&validator)))
+      throw runtime_error("failed to create IDxcValidator");
 
    IDxcOperationResult *result;
    if (FAILED(validator->Validate(&blob, DxcValidatorFlags_InPlaceEdit,
-                                  &result))) {
-      // TODO: print error message!
-      fprintf(stderr, "D3D12: failed to validate\n");
-      validator->Release();
-      return false;
-   }
+                                  &result)))
+      throw runtime_error("Validate failed");
 
    HRESULT hr;
    if (FAILED(result->GetStatus(&hr)) ||
@@ -251,23 +237,17 @@ protected:
       PFN_CREATE_DXGI_FACTORY CreateDXGIFactory;
 
       HMODULE hDXGIMod = LoadLibrary("DXGI.DLL");
-      if (!hDXGIMod) {
-         fprintf(stderr, "D3D12: failed to load DXGI.DLL\n");
-         return NULL;
-      }
+      if (!hDXGIMod)
+         throw runtime_error("Failed to load DXGI.DLL");
 
       CreateDXGIFactory = (PFN_CREATE_DXGI_FACTORY)GetProcAddress(hDXGIMod, "CreateDXGIFactory");
-      if (!CreateDXGIFactory) {
-         fprintf(stderr, "D3D12: failed to load CreateDXGIFactory from DXGI.DLL\n");
-         return NULL;
-      }
+      if (!CreateDXGIFactory)
+         throw runtime_error("Failed to load CreateDXGIFactory from DXGI.DLL");
 
       IDXGIFactory4 *factory = NULL;
       HRESULT hr = CreateDXGIFactory(IID_IDXGIFactory4, (void **)&factory);
-      if (FAILED(hr)) {
-         fprintf(stderr, "D3D12: CreateDXGIFactory failed: %08x\n", hr);
-         return NULL;
-      }
+      if (FAILED(hr))
+         throw runtime_error("CreateDXGIFactory failed");
 
       return factory;
    }
@@ -276,11 +256,10 @@ protected:
    choose_adapter(IDXGIFactory4 *factory)
    {
       IDXGIAdapter1 *ret;
-      if (SUCCEEDED(factory->EnumWarpAdapter(__uuidof(IDXGIAdapter1),
-         (void **)& ret)))
-         return ret;
-      fprintf(stderr, "D3D12: failed to enum warp adapter\n");
-      return NULL;
+      if (FAILED(factory->EnumWarpAdapter(__uuidof(IDXGIAdapter1),
+          (void **)& ret)))
+         throw runtime_error("Failed to enum warp adapter");
+      return ret;
    }
 
    static ID3D12Device *
@@ -290,24 +269,19 @@ protected:
       PFN_D3D12CREATEDEVICE D3D12CreateDevice;
 
       HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
-      if (!hD3D12Mod) {
-         fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
-         return NULL;
-      }
+      if (!hD3D12Mod)
+         throw runtime_error("failed to load D3D12.DLL");
 
       D3D12CreateDevice = (PFN_D3D12CREATEDEVICE)GetProcAddress(hD3D12Mod, "D3D12CreateDevice");
-      if (!D3D12CreateDevice) {
-         fprintf(stderr, "D3D12: failed to load D3D12CreateDevice from D3D12.DLL\n");
-         return NULL;
-      }
+      if (!D3D12CreateDevice)
+         throw runtime_error("failed to load D3D12CreateDevice from D3D12.DLL");
 
       ID3D12Device *dev;
-      if (SUCCEEDED(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0,
-         __uuidof(ID3D12Device), (void **)& dev)))
-         return dev;
+      if (FAILED(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0,
+          __uuidof(ID3D12Device), (void **)& dev)))
+         throw runtime_error("D3D12CreateDevice failed");
 
-      fprintf(stderr, "D3D12: D3D12CreateDevice failed\n");
-      return NULL;
+      return dev;
    }
 
    void SetUp() override
@@ -316,20 +290,20 @@ protected:
 
       factory = get_dxgi_factory();
       if (!factory)
-         throw std::runtime_error("D3D12: failed to create DXGI factory");
+         throw runtime_error("failed to create DXGI factory");
 
       adapter = choose_adapter(factory);
       if (!adapter)
-         throw std::runtime_error("D3D12: failed to choose adapter");
+         throw runtime_error("failed to choose adapter");
 
       dev = create_device(adapter);
       if (!dev)
-         throw std::runtime_error("D3D12: failed to create device");
+         throw runtime_error("failed to create device");
 
       if (FAILED(dev->CreateFence(0, D3D12_FENCE_FLAG_NONE,
                                   __uuidof(cmdqueue_fence),
                                   (void **)&cmdqueue_fence)))
-         throw std::runtime_error("D3D12: failed to create fence\n");
+         throw runtime_error("failed to create fence\n");
 
       D3D12_COMMAND_QUEUE_DESC queue_desc;
       queue_desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
@@ -339,15 +313,15 @@ protected:
       if (FAILED(dev->CreateCommandQueue(&queue_desc,
                                          __uuidof(cmdqueue),
                                          (void **)&cmdqueue)))
-         throw std::runtime_error("D3D12: failed to create command queue");
+         throw runtime_error("failed to create command queue");
 
       if (FAILED(dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE,
                 __uuidof(cmdalloc), (void **)&cmdalloc)))
-         throw std::runtime_error("D3D12: failed to create command allocator");
+         throw runtime_error("failed to create command allocator");
 
       if (FAILED(dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE,
                 cmdalloc, NULL, __uuidof(cmdlist), (void **)&cmdlist)))
-         throw std::runtime_error("D3D12: failed to create command list");
+         throw runtime_error("failed to create command list");
 
       D3D12_DESCRIPTOR_HEAP_DESC heap_desc;
       heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -356,16 +330,16 @@ protected:
       heap_desc.NodeMask = 0;
       if (FAILED(dev->CreateDescriptorHeap(&heap_desc,
           __uuidof(uav_heap), (void **)&uav_heap)))
-         throw std::runtime_error("D3D12: failed to create descriptor heap");
+         throw runtime_error("failed to create descriptor heap");
    }
 
    void TearDown() override
    {
       if (FAILED(cmdalloc->Reset()))
-         throw std::runtime_error("D3D12: resetting ID3D12CommandAllocator failed");
+         throw runtime_error("resetting ID3D12CommandAllocator failed");
 
       if (FAILED(cmdlist->Reset(cmdalloc, NULL)))
-         throw std::runtime_error("D3D12: resetting ID3D12GraphicsCommandList failed");
+         throw runtime_error("resetting ID3D12GraphicsCommandList failed");
 
       uav_heap->Release();
       cmdlist->Release();
@@ -394,18 +368,14 @@ bool
 ComputeTest::test_shader(const char *kernel_source, int width, int element_size, const void *input, const void *expected)
 {
    static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
-   if (!hD3D12Mod) {
-      fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
-      return false;
-   }
+   if (!hD3D12Mod)
+      throw runtime_error("Failed to load D3D12.DLL");
 
    D3D12SerializeRootSignature = (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeRootSignature");
 
    HANDLE event = CreateEvent(NULL, FALSE, FALSE, NULL);
-   if (!event) {
-      fprintf(stderr, "D3D12: failed to create event\n");
-      return false;
-   }
+   if (!event)
+      throw runtime_error("Failed to create event");
 
    struct clc_metadata metadata;
    void *blob = NULL;
@@ -450,10 +420,8 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    ID3D12PipelineState *pipeline_state;
    if (FAILED(dev->CreateComputePipelineState(&pipeline_desc,
                                               __uuidof(pipeline_state),
-                                              (void **)& pipeline_state))) {
-      fprintf(stderr, "D3D12: failed to create pipeline state\n");
-      return false;
-   }
+                                              (void **)& pipeline_state)))
+      throw runtime_error("Failed to create pipeline state");
 
    clc_free_blob(blob);
 
@@ -476,10 +444,9 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
 
    void *data = NULL;
    D3D12_RANGE res_range = { 0, (SIZE_T)(element_size * width) };
-   if (FAILED(upload_res->Map(0, &res_range, (void **)&data))) {
-      fprintf(stderr, "D3D12: failed to map buffer\n");
-      return false;
-   }
+   if (FAILED(upload_res->Map(0, &res_range, (void **)&data)))
+      throw runtime_error("Failed to map upload-buffer");
+
    memcpy(data, input, element_size * width);
    upload_res->Unmap(0, &res_range);
 
@@ -505,10 +472,8 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    resource_barrier(cmdlist, res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
    cmdlist->CopyResource(readback_res, res);
 
-   if (FAILED(cmdlist->Close())) {
-      fprintf(stderr, "D3D12: closing ID3D12GraphicsCommandList failed\n");
-      return false;
-   }
+   if (FAILED(cmdlist->Close()))
+      throw runtime_error("Closing ID3D12GraphicsCommandList failed");
 
    ID3D12CommandList *cmdlists[] = { cmdlist };
    cmdqueue->ExecuteCommandLists(1, cmdlists);
@@ -517,10 +482,8 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    cmdqueue->Signal(cmdqueue_fence, value);
    WaitForSingleObject(event, INFINITE);
 
-   if (FAILED(readback_res->Map(0, &res_range, (void **)&data))) {
-      fprintf(stderr, "D3D12: failed to map buffer\n");
-      return false;
-   }
+   if (FAILED(readback_res->Map(0, &res_range, (void **)&data)))
+      throw runtime_error("Failed to map readback-buffer");
 
    for (int i = 0; i < width; ++i) {
       EXPECT_EQ(memcmp((const char *)data + element_size * i,
