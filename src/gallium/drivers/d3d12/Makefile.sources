@@ -25,6 +25,8 @@ C_SOURCES := \
 	d3d12_draw.cpp \
 	d3d12_format.c \
 	d3d12_format.h \
+	d3d12_nir_passes.c \
+	d3d12_nir_passes.h \
 	d3d12_public.h \
 	d3d12_resource.cpp \
 	d3d12_resource.h \
