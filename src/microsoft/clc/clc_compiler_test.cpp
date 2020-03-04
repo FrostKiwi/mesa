@@ -302,6 +302,25 @@ protected:
       cmdlist->ResourceBarrier(1, &barrier);
    }
 
+   void execute_cmdlist()
+   {
+      if (FAILED(cmdlist->Close()))
+         throw runtime_error("Closing ID3D12GraphicsCommandList failed");
+
+      ID3D12CommandList *cmdlists[] = { cmdlist };
+      cmdqueue->ExecuteCommandLists(1, cmdlists);
+      cmdqueue_fence->SetEventOnCompletion(fence_value, event);
+      cmdqueue->Signal(cmdqueue_fence, fence_value);
+      fence_value++;
+      WaitForSingleObject(event, INFINITE);
+
+      if (FAILED(cmdalloc->Reset()))
+         throw runtime_error("resetting ID3D12CommandAllocator failed");
+
+      if (FAILED(cmdlist->Reset(cmdalloc, NULL)))
+         throw runtime_error("resetting ID3D12GraphicsCommandList failed");
+   }
+
    void SetUp() override
    {
       enable_d3d12_debug_layer();
@@ -353,16 +372,11 @@ protected:
       event = CreateEvent(NULL, FALSE, FALSE, NULL);
       if (!event)
          throw runtime_error("Failed to create event");
+      fence_value = 1;
    }
 
    void TearDown() override
    {
-      if (FAILED(cmdalloc->Reset()))
-         throw runtime_error("resetting ID3D12CommandAllocator failed");
-
-      if (FAILED(cmdlist->Reset(cmdalloc, NULL)))
-         throw runtime_error("resetting ID3D12GraphicsCommandList failed");
-
       CloseHandle(event);
 
       uav_heap->Release();
@@ -386,6 +400,7 @@ protected:
    ID3D12CommandAllocator *cmdalloc;
    ID3D12GraphicsCommandList *cmdlist;
    ID3D12DescriptorHeap *uav_heap;
+   int fence_value;
 
    HANDLE event;
 };
@@ -471,15 +486,7 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
    cmdlist->CopyResource(readback_res.Get(), res.Get());
 
-   if (FAILED(cmdlist->Close()))
-      throw runtime_error("Closing ID3D12GraphicsCommandList failed");
-
-   ID3D12CommandList *cmdlists[] = { cmdlist };
-   cmdqueue->ExecuteCommandLists(1, cmdlists);
-   int value = 1;
-   cmdqueue_fence->SetEventOnCompletion(value, event);
-   cmdqueue->Signal(cmdqueue_fence, value);
-   WaitForSingleObject(event, INFINITE);
+   execute_cmdlist();
 
    if (FAILED(readback_res->Map(0, &res_range, (void **)&data)))
       throw runtime_error("Failed to map readback-buffer");
