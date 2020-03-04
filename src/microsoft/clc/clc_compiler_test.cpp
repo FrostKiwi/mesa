@@ -40,115 +40,6 @@ using Microsoft::WRL::ComPtr;
 static PFN_D3D12_SERIALIZE_ROOT_SIGNATURE pfD3D12SerializeRootSignature;
 #define D3D12SerializeRootSignature pfD3D12SerializeRootSignature
 
-ID3D12RootSignature *
-create_root_signature(ID3D12Device *dev)
-{
-   D3D12_DESCRIPTOR_RANGE desc_range;
-   desc_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-   desc_range.NumDescriptors = 1;
-   desc_range.BaseShaderRegister = 0;
-   desc_range.RegisterSpace = 0;
-   desc_range.OffsetInDescriptorsFromTableStart = 0;
-
-   D3D12_ROOT_PARAMETER root_param;
-   root_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-   root_param.DescriptorTable.NumDescriptorRanges = 1;
-   root_param.DescriptorTable.pDescriptorRanges = &desc_range;
-   root_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-   D3D12_ROOT_SIGNATURE_DESC root_sig_desc;
-   root_sig_desc.NumParameters = 1;
-   root_sig_desc.pParameters = &root_param;
-   root_sig_desc.NumStaticSamplers = 0;
-   root_sig_desc.pStaticSamplers = NULL;
-   root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
-
-   ID3DBlob *sig, *error;
-   if (FAILED(D3D12SerializeRootSignature(&root_sig_desc,
-       D3D_ROOT_SIGNATURE_VERSION_1,
-       &sig, &error)))
-      throw runtime_error("D3D12SerializeRootSignature failed");
-
-   ID3D12RootSignature *ret;
-   if (FAILED(dev->CreateRootSignature(0,
-       sig->GetBufferPointer(),
-       sig->GetBufferSize(),
-       __uuidof(ret),
-       (void **)& ret)))
-      throw runtime_error("CreateRootSignature failed");
-
-   return ret;
-}
-
-ID3D12PipelineState *
-create_pipeline_state(ID3D12Device *dev, ID3D12RootSignature *root_sig,
-                      void *blob, size_t blob_size)
-{
-   D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = { root_sig };
-   pipeline_desc.CS.pShaderBytecode = blob;
-   pipeline_desc.CS.BytecodeLength = blob_size;
-
-   ID3D12PipelineState *pipeline_state;
-   if (FAILED(dev->CreateComputePipelineState(&pipeline_desc,
-                                              __uuidof(pipeline_state),
-                                              (void **)& pipeline_state)))
-      throw runtime_error("Failed to create pipeline state");
-   return pipeline_state;
-}
-
-ComPtr<ID3D12Resource>
-create_buffer(ID3D12Device *dev, int size, D3D12_HEAP_TYPE heap_type)
-{
-   D3D12_RESOURCE_DESC desc;
-   desc.Format = DXGI_FORMAT_UNKNOWN;
-   desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-   desc.Width = size;
-   desc.Height = 1;
-   desc.DepthOrArraySize = 1;
-   desc.MipLevels = 1;
-   desc.SampleDesc.Count = 1;
-   desc.SampleDesc.Quality = 0;
-   desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-   desc.Flags = heap_type == D3D12_HEAP_TYPE_DEFAULT ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
-   desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-   D3D12_HEAP_PROPERTIES heap_pris = dev->GetCustomHeapProperties(0, heap_type);
-
-   D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COMMON;
-   switch (heap_type) {
-   case D3D12_HEAP_TYPE_UPLOAD:
-      initial_state = D3D12_RESOURCE_STATE_GENERIC_READ;
-      break;
-
-   case D3D12_HEAP_TYPE_READBACK:
-      initial_state = D3D12_RESOURCE_STATE_COPY_DEST;
-      break;
-   }
-
-   ComPtr<ID3D12Resource> res;
-   if (FAILED(dev->CreateCommittedResource(&heap_pris,
-       D3D12_HEAP_FLAG_NONE, &desc, initial_state,
-       NULL, __uuidof(ID3D12Resource), (void **)&res)))
-      throw runtime_error("CreateCommittedResource failed");
-
-   return res;
-}
-
-void
-resource_barrier(ID3D12GraphicsCommandList *cmdlist, ID3D12Resource *res,
-                 D3D12_RESOURCE_STATES state_before,
-                 D3D12_RESOURCE_STATES state_after)
-{
-   D3D12_RESOURCE_BARRIER barrier;
-   barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-   barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-   barrier.Transition.pResource = res;
-   barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-   barrier.Transition.StateBefore = state_before;
-   barrier.Transition.StateAfter = state_after;
-   cmdlist->ResourceBarrier(1, &barrier);
-}
-
 void warning_callback(const char *src, int line, const char *str)
 {
    fprintf(stderr, "%s(%d): WARNING: %s\n", src, line, str);
@@ -302,6 +193,115 @@ protected:
       return dev;
    }
 
+   ID3D12RootSignature *
+   create_root_signature()
+   {
+      D3D12_DESCRIPTOR_RANGE desc_range;
+      desc_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+      desc_range.NumDescriptors = 1;
+      desc_range.BaseShaderRegister = 0;
+      desc_range.RegisterSpace = 0;
+      desc_range.OffsetInDescriptorsFromTableStart = 0;
+
+      D3D12_ROOT_PARAMETER root_param;
+      root_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+      root_param.DescriptorTable.NumDescriptorRanges = 1;
+      root_param.DescriptorTable.pDescriptorRanges = &desc_range;
+      root_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+      D3D12_ROOT_SIGNATURE_DESC root_sig_desc;
+      root_sig_desc.NumParameters = 1;
+      root_sig_desc.pParameters = &root_param;
+      root_sig_desc.NumStaticSamplers = 0;
+      root_sig_desc.pStaticSamplers = NULL;
+      root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+      ID3DBlob *sig, *error;
+      if (FAILED(D3D12SerializeRootSignature(&root_sig_desc,
+          D3D_ROOT_SIGNATURE_VERSION_1,
+          &sig, &error)))
+         throw runtime_error("D3D12SerializeRootSignature failed");
+
+      ID3D12RootSignature *ret;
+      if (FAILED(dev->CreateRootSignature(0,
+          sig->GetBufferPointer(),
+          sig->GetBufferSize(),
+          __uuidof(ret),
+          (void **)& ret)))
+         throw runtime_error("CreateRootSignature failed");
+
+      return ret;
+   }
+
+   ID3D12PipelineState *
+   create_pipeline_state(ID3D12RootSignature *root_sig, void *blob,
+                         size_t blob_size)
+   {
+      D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = { root_sig };
+      pipeline_desc.CS.pShaderBytecode = blob;
+      pipeline_desc.CS.BytecodeLength = blob_size;
+
+      ID3D12PipelineState *pipeline_state;
+      if (FAILED(dev->CreateComputePipelineState(&pipeline_desc,
+                                                 __uuidof(pipeline_state),
+                                                 (void **)& pipeline_state)))
+         throw runtime_error("Failed to create pipeline state");
+      return pipeline_state;
+   }
+
+   ComPtr<ID3D12Resource>
+   create_buffer(int size, D3D12_HEAP_TYPE heap_type)
+   {
+      D3D12_RESOURCE_DESC desc;
+      desc.Format = DXGI_FORMAT_UNKNOWN;
+      desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+      desc.Width = size;
+      desc.Height = 1;
+      desc.DepthOrArraySize = 1;
+      desc.MipLevels = 1;
+      desc.SampleDesc.Count = 1;
+      desc.SampleDesc.Quality = 0;
+      desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+      desc.Flags = heap_type == D3D12_HEAP_TYPE_DEFAULT ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
+      desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+      D3D12_HEAP_PROPERTIES heap_pris = dev->GetCustomHeapProperties(0, heap_type);
+
+      D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COMMON;
+      switch (heap_type) {
+      case D3D12_HEAP_TYPE_UPLOAD:
+         initial_state = D3D12_RESOURCE_STATE_GENERIC_READ;
+         break;
+
+      case D3D12_HEAP_TYPE_READBACK:
+         initial_state = D3D12_RESOURCE_STATE_COPY_DEST;
+         break;
+      }
+
+      ComPtr<ID3D12Resource> res;
+      if (FAILED(dev->CreateCommittedResource(&heap_pris,
+          D3D12_HEAP_FLAG_NONE, &desc, initial_state,
+          NULL, __uuidof(ID3D12Resource), (void **)&res)))
+         throw runtime_error("CreateCommittedResource failed");
+
+      return res;
+   }
+
+   void
+   resource_barrier(ID3D12Resource *res,
+                    D3D12_RESOURCE_STATES state_before,
+                    D3D12_RESOURCE_STATES state_after)
+   {
+      D3D12_RESOURCE_BARRIER barrier;
+      barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+      barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+      barrier.Transition.pResource = res;
+      barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+      barrier.Transition.StateBefore = state_before;
+      barrier.Transition.StateAfter = state_after;
+      cmdlist->ResourceBarrier(1, &barrier);
+   }
+
    void SetUp() override
    {
       enable_d3d12_debug_layer();
@@ -429,14 +429,13 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
       printf("D3D12: wrote 'signed.cso'...\n");
    }
 
-   ID3D12RootSignature *root_sig = create_root_signature(dev);
-
-   auto pipeline_state = create_pipeline_state(dev, root_sig, blob, blob_size);
+   ID3D12RootSignature *root_sig = create_root_signature();
+   auto pipeline_state = create_pipeline_state(root_sig, blob, blob_size);
    clc_free_blob(blob);
 
-   auto upload_res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_UPLOAD);
-   auto res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_DEFAULT);
-   auto readback_res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_READBACK);
+   auto upload_res = create_buffer(width * element_size, D3D12_HEAP_TYPE_UPLOAD);
+   auto res = create_buffer(width * element_size, D3D12_HEAP_TYPE_DEFAULT);
+   auto readback_res = create_buffer(width * element_size, D3D12_HEAP_TYPE_READBACK);
 
    void *data = NULL;
    D3D12_RANGE res_range = { 0, (SIZE_T)(element_size * width) };
@@ -457,15 +456,15 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
 
    dev->CreateUnorderedAccessView(res.Get(), NULL, &uav_desc, uav_heap->GetCPUDescriptorHandleForHeapStart());
 
-   resource_barrier(cmdlist, res.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+   resource_barrier(res.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
    cmdlist->CopyResource(res.Get(), upload_res.Get());
-   resource_barrier(cmdlist, res.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+   resource_barrier(res.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
    cmdlist->SetDescriptorHeaps(1, &uav_heap);
    cmdlist->SetComputeRootSignature(root_sig);
    cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
    cmdlist->SetPipelineState(pipeline_state);
    cmdlist->Dispatch(width, 1, 1);
-   resource_barrier(cmdlist, res.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+   resource_barrier(res.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
    cmdlist->CopyResource(readback_res.Get(), res.Get());
 
    if (FAILED(cmdlist->Close()))
