@@ -287,6 +287,35 @@ protected:
       return res;
    }
 
+   ComPtr<ID3D12Resource>
+   create_upload_buffer_with_data(const void *data, size_t size)
+   {
+      auto upload_res = create_buffer(size, D3D12_HEAP_TYPE_UPLOAD);
+
+      void *ptr = NULL;
+      D3D12_RANGE res_range = { 0, (SIZE_T)size };
+      if (FAILED(upload_res->Map(0, &res_range, (void **)&ptr)))
+         throw runtime_error("Failed to map upload-buffer");
+      assert(ptr);
+      memcpy(ptr, data, size);
+      upload_res->Unmap(0, &res_range);
+      return upload_res;
+   }
+
+   ComPtr<ID3D12Resource>
+   create_buffer_with_data(const void *data, size_t size)
+   {
+      auto upload_res = create_upload_buffer_with_data(data, size);
+
+      auto res = create_buffer(size, D3D12_HEAP_TYPE_DEFAULT);
+      resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+      cmdlist->CopyResource(res.Get(), upload_res.Get());
+      resource_barrier(res, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
+      execute_cmdlist();
+
+      return res;
+   }
+
    void
    resource_barrier(ComPtr<ID3D12Resource> &res,
                     D3D12_RESOURCE_STATES state_before,
@@ -452,17 +481,8 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    auto pipeline_state = create_pipeline_state(root_sig, blob, blob_size);
    clc_free_blob(blob);
 
-   auto upload_res = create_buffer(width * element_size, D3D12_HEAP_TYPE_UPLOAD);
-   auto res = create_buffer(width * element_size, D3D12_HEAP_TYPE_DEFAULT);
+   auto res = create_buffer_with_data(input, width * element_size);
    auto readback_res = create_buffer(width * element_size, D3D12_HEAP_TYPE_READBACK);
-
-   void *data = NULL;
-   D3D12_RANGE res_range = { 0, (SIZE_T)(element_size * width) };
-   if (FAILED(upload_res->Map(0, &res_range, (void **)&data)))
-      throw runtime_error("Failed to map upload-buffer");
-
-   memcpy(data, input, element_size * width);
-   upload_res->Unmap(0, &res_range);
 
    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc;
    uav_desc.Format = DXGI_FORMAT_UNKNOWN;
@@ -475,9 +495,7 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
 
    dev->CreateUnorderedAccessView(res.Get(), NULL, &uav_desc, uav_heap->GetCPUDescriptorHandleForHeapStart());
 
-   resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-   cmdlist->CopyResource(res.Get(), upload_res.Get());
-   resource_barrier(res, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+   resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
    cmdlist->SetDescriptorHeaps(1, &uav_heap);
    cmdlist->SetComputeRootSignature(root_sig.Get());
    cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
@@ -488,6 +506,8 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
 
    execute_cmdlist();
 
+   void *data = NULL;
+   D3D12_RANGE res_range = { 0, (SIZE_T)(element_size * width) };
    if (FAILED(readback_res->Map(0, &res_range, (void **)&data)))
       throw runtime_error("Failed to map readback-buffer");
 
