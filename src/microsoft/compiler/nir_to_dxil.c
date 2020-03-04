@@ -362,6 +362,7 @@ struct ntd_context {
    struct hash_table *phis;
 
    struct hash_table *locals;
+   nir_variable *ps_front_face;
 };
 
 static const struct dxil_value *
@@ -2631,6 +2632,28 @@ void dxil_fill_validation_state(struct ntd_context *ctx,
    }
 }
 
+static nir_variable *
+fs_append_front_face_input(nir_shader *s)
+{
+   nir_foreach_variable(var, &s->inputs) {
+      if (var->data.location == VARYING_SLOT_FACE)
+         return var;
+   }
+
+   nir_variable *ff = rzalloc(s, nir_variable);
+   if (ff)
+      return NULL;
+   ff->data.driver_location = exec_list_length(&s->inputs);
+   ff->data.location = VARYING_SLOT_FACE;
+   ff->type = glsl_uint_type();
+   ff->name = "IsFrontFace";
+   ff->data.mode = nir_var_shader_in;
+   ff->data.interpolation = INTERP_MODE_FLAT;
+   exec_list_push_tail(&s->inputs, &ff->node);
+
+   return ff;
+}
+
 bool
 nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
             struct blob *blob)
@@ -2654,6 +2677,15 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
    optimize_nir(s);
 
    NIR_PASS_V(s, nir_remove_dead_variables, nir_var_function_temp);
+
+   if ((s->info.stage == MESA_SHADER_FRAGMENT) &&
+       (s->info.system_values_read & (1ull << SYSTEM_VALUE_FRONT_FACE))) {
+      ctx.ps_front_face = fs_append_front_face_input(s);
+      if (ctx.ps_front_face) {
+         retval = false;
+         goto out;
+      }
+   }
 
    if (debug_dxil & DXIL_DEBUG_VERBOSE)
       nir_print_shader(s, stderr);
