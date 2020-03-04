@@ -32,106 +32,6 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
-static void
-enable_d3d12_debug_layer()
-{
-   typedef HRESULT(WINAPI * PFN_D3D12_GET_DEBUG_INTERFACE)(REFIID riid,
-                                                           void **ppFactory);
-   PFN_D3D12_GET_DEBUG_INTERFACE D3D12GetDebugInterface;
-
-   HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
-   if (!hD3D12Mod) {
-      fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
-      return;
-   }
-
-   D3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(hD3D12Mod, "D3D12GetDebugInterface");
-   if (!D3D12GetDebugInterface) {
-      fprintf(stderr, "D3D12: failed to load D3D12GetDebugInterface from D3D12.DLL\n");
-      return;
-   }
-
-   ID3D12Debug *debug;
-   if (FAILED(D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void **)& debug))) {
-      fprintf(stderr, "D3D12: D3D12GetDebugInterface failed\n");
-      return;
-   }
-
-   debug->EnableDebugLayer();
-}
-
-static IDXGIFactory4 *
-get_dxgi_factory()
-{
-   static const GUID IID_IDXGIFactory4 = {
-      0x1bc6ea02, 0xef36, 0x464f,
-      { 0xbf, 0x0c, 0x21, 0xca, 0x39, 0xe5, 0x16, 0x8a }
-   };
-
-   typedef HRESULT(WINAPI * PFN_CREATE_DXGI_FACTORY)(REFIID riid,
-                                                     void **ppFactory);
-   PFN_CREATE_DXGI_FACTORY CreateDXGIFactory;
-
-   HMODULE hDXGIMod = LoadLibrary("DXGI.DLL");
-   if (!hDXGIMod) {
-      fprintf(stderr, "D3D12: failed to load DXGI.DLL\n");
-      return NULL;
-   }
-
-   CreateDXGIFactory = (PFN_CREATE_DXGI_FACTORY)GetProcAddress(hDXGIMod, "CreateDXGIFactory");
-   if (!CreateDXGIFactory) {
-      fprintf(stderr, "D3D12: failed to load CreateDXGIFactory from DXGI.DLL\n");
-      return NULL;
-   }
-
-   IDXGIFactory4 *factory = NULL;
-   HRESULT hr = CreateDXGIFactory(IID_IDXGIFactory4, (void **)&factory);
-   if (FAILED(hr)) {
-      fprintf(stderr, "D3D12: CreateDXGIFactory failed: %08x\n", hr);
-      return NULL;
-   }
-
-   return factory;
-}
-
-static IDXGIAdapter1 *
-choose_adapter(IDXGIFactory4 *factory)
-{
-   IDXGIAdapter1 *ret;
-   if (SUCCEEDED(factory->EnumWarpAdapter(__uuidof(IDXGIAdapter1),
-      (void **)& ret)))
-      return ret;
-   fprintf(stderr, "D3D12: failed to enum warp adapter\n");
-   return NULL;
-}
-
-static ID3D12Device *
-create_device(IDXGIAdapter1 *adapter)
-{
-   typedef HRESULT(WINAPI *PFN_D3D12CREATEDEVICE)(IUnknown *, D3D_FEATURE_LEVEL, REFIID, void **);
-   PFN_D3D12CREATEDEVICE D3D12CreateDevice;
-
-   HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
-   if (!hD3D12Mod) {
-      fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
-      return NULL;
-   }
-
-   D3D12CreateDevice = (PFN_D3D12CREATEDEVICE)GetProcAddress(hD3D12Mod, "D3D12CreateDevice");
-   if (!D3D12CreateDevice) {
-      fprintf(stderr, "D3D12: failed to load D3D12CreateDevice from D3D12.DLL\n");
-      return NULL;
-   }
-
-   ID3D12Device *dev;
-   if (SUCCEEDED(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0,
-      __uuidof(ID3D12Device), (void **)& dev)))
-      return dev;
-
-   fprintf(stderr, "D3D12: D3D12CreateDevice failed\n");
-   return NULL;
-}
-
 static PFN_D3D12_SERIALIZE_ROOT_SIGNATURE pfD3D12SerializeRootSignature;
 #define D3D12SerializeRootSignature pfD3D12SerializeRootSignature
 
@@ -309,12 +209,190 @@ validate_module(void *data, size_t size)
    return true;
 }
 
-static bool
-test_shader(const char *kernel_source, int width, int element_size, const void *input, const void *expected)
-{
-   if (true)
+class ComputeTest : public ::testing::Test {
+protected:
+
+   static void
+   enable_d3d12_debug_layer()
+   {
+      HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
+      if (!hD3D12Mod) {
+         fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
+         return;
+      }
+
+      typedef HRESULT(WINAPI * PFN_D3D12_GET_DEBUG_INTERFACE)(REFIID riid,
+                                                              void **ppFactory);
+      PFN_D3D12_GET_DEBUG_INTERFACE D3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(hD3D12Mod, "D3D12GetDebugInterface");
+      if (!D3D12GetDebugInterface) {
+         fprintf(stderr, "D3D12: failed to load D3D12GetDebugInterface from D3D12.DLL\n");
+         return;
+      }
+
+      ID3D12Debug *debug;
+      if (FAILED(D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void **)& debug))) {
+         fprintf(stderr, "D3D12: D3D12GetDebugInterface failed\n");
+         return;
+      }
+
+      debug->EnableDebugLayer();
+   }
+
+   static IDXGIFactory4 *
+   get_dxgi_factory()
+   {
+      static const GUID IID_IDXGIFactory4 = {
+         0x1bc6ea02, 0xef36, 0x464f,
+         { 0xbf, 0x0c, 0x21, 0xca, 0x39, 0xe5, 0x16, 0x8a }
+      };
+
+      typedef HRESULT(WINAPI * PFN_CREATE_DXGI_FACTORY)(REFIID riid,
+                                                        void **ppFactory);
+      PFN_CREATE_DXGI_FACTORY CreateDXGIFactory;
+
+      HMODULE hDXGIMod = LoadLibrary("DXGI.DLL");
+      if (!hDXGIMod) {
+         fprintf(stderr, "D3D12: failed to load DXGI.DLL\n");
+         return NULL;
+      }
+
+      CreateDXGIFactory = (PFN_CREATE_DXGI_FACTORY)GetProcAddress(hDXGIMod, "CreateDXGIFactory");
+      if (!CreateDXGIFactory) {
+         fprintf(stderr, "D3D12: failed to load CreateDXGIFactory from DXGI.DLL\n");
+         return NULL;
+      }
+
+      IDXGIFactory4 *factory = NULL;
+      HRESULT hr = CreateDXGIFactory(IID_IDXGIFactory4, (void **)&factory);
+      if (FAILED(hr)) {
+         fprintf(stderr, "D3D12: CreateDXGIFactory failed: %08x\n", hr);
+         return NULL;
+      }
+
+      return factory;
+   }
+
+   static IDXGIAdapter1 *
+   choose_adapter(IDXGIFactory4 *factory)
+   {
+      IDXGIAdapter1 *ret;
+      if (SUCCEEDED(factory->EnumWarpAdapter(__uuidof(IDXGIAdapter1),
+         (void **)& ret)))
+         return ret;
+      fprintf(stderr, "D3D12: failed to enum warp adapter\n");
+      return NULL;
+   }
+
+   static ID3D12Device *
+   create_device(IDXGIAdapter1 *adapter)
+   {
+      typedef HRESULT(WINAPI *PFN_D3D12CREATEDEVICE)(IUnknown *, D3D_FEATURE_LEVEL, REFIID, void **);
+      PFN_D3D12CREATEDEVICE D3D12CreateDevice;
+
+      HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
+      if (!hD3D12Mod) {
+         fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
+         return NULL;
+      }
+
+      D3D12CreateDevice = (PFN_D3D12CREATEDEVICE)GetProcAddress(hD3D12Mod, "D3D12CreateDevice");
+      if (!D3D12CreateDevice) {
+         fprintf(stderr, "D3D12: failed to load D3D12CreateDevice from D3D12.DLL\n");
+         return NULL;
+      }
+
+      ID3D12Device *dev;
+      if (SUCCEEDED(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0,
+         __uuidof(ID3D12Device), (void **)& dev)))
+         return dev;
+
+      fprintf(stderr, "D3D12: D3D12CreateDevice failed\n");
+      return NULL;
+   }
+
+   void SetUp() override
+   {
       enable_d3d12_debug_layer();
 
+      factory = get_dxgi_factory();
+      if (!factory)
+         throw std::runtime_error("D3D12: failed to create DXGI factory");
+
+      adapter = choose_adapter(factory);
+      if (!adapter)
+         throw std::runtime_error("D3D12: failed to choose adapter");
+
+      dev = create_device(adapter);
+      if (!dev)
+         throw std::runtime_error("D3D12: failed to create device");
+
+      if (FAILED(dev->CreateFence(0, D3D12_FENCE_FLAG_NONE,
+                                  __uuidof(cmdqueue_fence),
+                                  (void **)&cmdqueue_fence)))
+         throw std::runtime_error("D3D12: failed to create fence\n");
+
+      D3D12_COMMAND_QUEUE_DESC queue_desc;
+      queue_desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+      queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+      queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+      queue_desc.NodeMask = 0;
+      if (FAILED(dev->CreateCommandQueue(&queue_desc,
+                                         __uuidof(cmdqueue),
+                                         (void **)&cmdqueue)))
+         throw std::runtime_error("D3D12: failed to create command queue");
+
+      if (FAILED(dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE,
+                __uuidof(cmdalloc), (void **)&cmdalloc)))
+         throw std::runtime_error("D3D12: failed to create command allocator");
+
+      if (FAILED(dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE,
+                cmdalloc, NULL, __uuidof(cmdlist), (void **)&cmdlist)))
+         throw std::runtime_error("D3D12: failed to create command list");
+
+      D3D12_DESCRIPTOR_HEAP_DESC heap_desc;
+      heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+      heap_desc.NumDescriptors = 1;
+      heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+      heap_desc.NodeMask = 0;
+      if (FAILED(dev->CreateDescriptorHeap(&heap_desc,
+          __uuidof(uav_heap), (void **)&uav_heap)))
+         throw std::runtime_error("D3D12: failed to create descriptor heap");
+   }
+
+   void TearDown() override
+   {
+      if (FAILED(cmdalloc->Reset()))
+         throw std::runtime_error("D3D12: resetting ID3D12CommandAllocator failed");
+
+      if (FAILED(cmdlist->Reset(cmdalloc, NULL)))
+         throw std::runtime_error("D3D12: resetting ID3D12GraphicsCommandList failed");
+
+      uav_heap->Release();
+      cmdlist->Release();
+      cmdalloc->Release();
+      cmdqueue->Release();
+      cmdqueue_fence->Release();
+      dev->Release();
+      adapter->Release();
+      factory->Release();
+   }
+
+   bool test_shader(const char *kernel_source, int width, int element_size, const void *input, const void *expected);
+   bool test_shader_uint(const char *kernel_source, int width, const uint32_t input[], const uint32_t expected[]);
+
+   IDXGIFactory4 *factory;
+   IDXGIAdapter1 *adapter;
+   ID3D12Device *dev;
+   ID3D12Fence *cmdqueue_fence;
+   ID3D12CommandQueue *cmdqueue;
+   ID3D12CommandAllocator *cmdalloc;
+   ID3D12GraphicsCommandList *cmdlist;
+   ID3D12DescriptorHeap *uav_heap;
+};
+
+bool
+ComputeTest::test_shader(const char *kernel_source, int width, int element_size, const void *input, const void *expected)
+{
    static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
       fprintf(stderr, "D3D12: failed to load D3D12.DLL\n");
@@ -323,60 +401,9 @@ test_shader(const char *kernel_source, int width, int element_size, const void *
 
    D3D12SerializeRootSignature = (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeRootSignature");
 
-   IDXGIFactory4 *factory = get_dxgi_factory();
-   if (!factory) {
-      fprintf(stderr, "D3D12: failed to create DXGI factory\n");
-      return false;
-   }
-
-   IDXGIAdapter1 *adapter = choose_adapter(factory);
-   if (!adapter) {
-      fprintf(stderr, "D3D12: failed to choose adapter\n");
-      return false;
-   }
-
-   ID3D12Device *dev = create_device(adapter);
-   if (!dev) {
-      fprintf(stderr, "D3D12: failed to create device\n");
-      return false;
-   }
-
    HANDLE event = CreateEvent(NULL, FALSE, FALSE, NULL);
    if (!event) {
       fprintf(stderr, "D3D12: failed to create event\n");
-      return false;
-   }
-   ID3D12Fence *cmdqueue_fence;
-   if (FAILED(dev->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(cmdqueue_fence),
-      (void **)&cmdqueue_fence))) {
-      fprintf(stderr, "D3D12: failed to create fence\n");
-      return false;
-   }
-
-   D3D12_COMMAND_QUEUE_DESC queue_desc;
-   queue_desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-   queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-   queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-   queue_desc.NodeMask = 0;
-   ID3D12CommandQueue *cmdqueue;
-   if (FAILED(dev->CreateCommandQueue(&queue_desc,
-                                      __uuidof(cmdqueue),
-                                      (void **)&cmdqueue))) {
-      fprintf(stderr, "D3D12: failed to create command queue\n");
-      return false;
-   }
-
-   ID3D12CommandAllocator *cmdalloc;
-   if (FAILED(dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE,
-             __uuidof(cmdalloc), (void **)&cmdalloc))) {
-      fprintf(stderr, "D3D12: failed to create command allocator\n");
-      return false;
-   }
-
-   ID3D12GraphicsCommandList *cmdlist;
-   if (FAILED(dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE,
-             cmdalloc, NULL, __uuidof(cmdlist), (void **)&cmdlist))) {
-      fprintf(stderr, "D3D12: failed to create command list\n");
       return false;
    }
 
@@ -430,18 +457,6 @@ test_shader(const char *kernel_source, int width, int element_size, const void *
 
    clc_free_blob(blob);
 
-   D3D12_DESCRIPTOR_HEAP_DESC heap_desc;
-   heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-   heap_desc.NumDescriptors = 1;
-   heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-   heap_desc.NodeMask = 0;
-
-   ID3D12DescriptorHeap *uav_heap;
-   if (FAILED(dev->CreateDescriptorHeap(&heap_desc,
-      __uuidof(uav_heap), (void **)&uav_heap))) {
-      fprintf(stderr, "D3D12: failed to create descriptor heap\n");
-      return false;
-   }
    ID3D12Resource *upload_res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_UPLOAD);
    if (!upload_res) {
       fprintf(stderr, "D3D12: failed to create resource heap\n");
@@ -515,39 +530,21 @@ test_shader(const char *kernel_source, int width, int element_size, const void *
    D3D12_RANGE empty_range = { 0, 0 };
    readback_res->Unmap(0, &empty_range);
 
-   if (FAILED(cmdalloc->Reset())) {
-      fprintf(stderr, "D3D12: resetting ID3D12CommandAllocator failed\n");
-      return false;
-   }
-
-   if (FAILED(cmdlist->Reset(cmdalloc, NULL))) {
-      fprintf(stderr, "D3D12: resetting ID3D12GraphicsCommandList failed\n");
-      return false;
-   }
-
    upload_res->Release();
    readback_res->Release();
    res->Release();
-   uav_heap->Release();
    pipeline_state->Release();
    root_sig->Release();
-   cmdlist->Release();
-   cmdalloc->Release();
-   cmdqueue->Release();
-   cmdqueue_fence->Release();
-   dev->Release();
-   adapter->Release();
-   factory->Release();
    return true;
 }
 
-static bool
-test_shader_uint(const char *kernel_source, int width, const uint32_t input[], const uint32_t expected[])
+bool
+ComputeTest::test_shader_uint(const char *kernel_source, int width, const uint32_t input[], const uint32_t expected[])
 {
    return test_shader(kernel_source, width, sizeof(uint32_t), (const void *)input, (const void *)expected);
 }
 
-TEST(built_ins, global_id)
+TEST_F(ComputeTest, built_ins_global_id)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -563,7 +560,7 @@ TEST(built_ins, global_id)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
-TEST(built_ins, global_id_rmw)
+TEST_F(ComputeTest, built_ins_global_id_rmw)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -580,7 +577,7 @@ TEST(built_ins, global_id_rmw)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
-TEST(types, float_basics)
+TEST_F(ComputeTest, types_float_basics)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -596,7 +593,7 @@ TEST(types, float_basics)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
-TEST(types, double_basics)
+TEST_F(ComputeTest, types_double_basics)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -612,7 +609,7 @@ TEST(types, double_basics)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
-TEST(types, short_basics)
+TEST_F(ComputeTest, types_short_basics)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -628,7 +625,7 @@ TEST(types, short_basics)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
-TEST(types, char_basics)
+TEST_F(ComputeTest, types_char_basics)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -644,7 +641,7 @@ TEST(types, char_basics)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
-TEST(types, if_statement)
+TEST_F(ComputeTest, types_if_statement)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -664,7 +661,7 @@ TEST(types, if_statement)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
-TEST(types, do_while_loop)
+TEST_F(ComputeTest, types_do_while_loop)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -685,7 +682,7 @@ TEST(types, do_while_loop)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
-TEST(types, for_loop)
+TEST_F(ComputeTest, types_for_loop)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
@@ -705,7 +702,7 @@ TEST(types, for_loop)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
-TEST(complex_types, local_array)
+TEST_F(ComputeTest, complex_types_local_array)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *inout)\n\
@@ -728,7 +725,7 @@ TEST(complex_types, local_array)
    ASSERT_TRUE(test_shader_uint(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
 
-TEST(complex_types, global_struct_array)
+TEST_F(ComputeTest, complex_types_global_struct_array)
 {
    struct two_vals { uint32_t add; uint32_t mul; };
    const char *kernel_source =
