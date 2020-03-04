@@ -316,6 +316,29 @@ protected:
       return res;
    }
 
+   template <typename T>
+   std::vector<T>
+   get_buffer_data(ComPtr<ID3D12Resource> res, size_t width)
+   {
+      auto readback_res = create_buffer(sizeof(T) * width, D3D12_HEAP_TYPE_READBACK);
+      resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
+      cmdlist->CopyResource(readback_res.Get(), res.Get());
+      resource_barrier(res, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON);
+      execute_cmdlist();
+
+      T *data = NULL;
+      D3D12_RANGE res_range = { 0, (SIZE_T)(sizeof(T) * width) };
+      if (FAILED(readback_res->Map(0, &res_range, (void **)&data)))
+         throw runtime_error("Failed to map readback-buffer");
+
+      std::vector<T> ret;
+      ret.assign(data, data + width);
+
+      D3D12_RANGE empty_range = { 0, 0 };
+      readback_res->Unmap(0, &empty_range);
+      return ret;
+   }
+
    void
    resource_barrier(ComPtr<ID3D12Resource> &res,
                     D3D12_RESOURCE_STATES state_before,
@@ -487,7 +510,6 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    auto pipeline_state = create_pipeline_state(root_sig, blob);
 
    auto res = create_buffer_with_data(input, width * element_size);
-   auto readback_res = create_buffer(width * element_size, D3D12_HEAP_TYPE_READBACK);
 
    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc;
    uav_desc.Format = DXGI_FORMAT_UNKNOWN;
@@ -506,23 +528,15 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
    cmdlist->SetPipelineState(pipeline_state.Get());
    cmdlist->Dispatch(width, 1, 1);
-   resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-   cmdlist->CopyResource(readback_res.Get(), res.Get());
-
+   resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
    execute_cmdlist();
 
-   void *data = NULL;
-   D3D12_RANGE res_range = { 0, (SIZE_T)(element_size * width) };
-   if (FAILED(readback_res->Map(0, &res_range, (void **)&data)))
-      throw runtime_error("Failed to map readback-buffer");
-
+   auto buf = get_buffer_data<uint8_t>(res, width * element_size);
    for (int i = 0; i < width; ++i) {
-      EXPECT_EQ(memcmp((const char *)data + element_size * i,
-                       (const char *)expected + element_size * i,
+      EXPECT_EQ(memcmp(buf.data() + element_size * i,
+                       (const uint8_t *)expected + element_size * i,
                        element_size), 0);
    }
-   D3D12_RANGE empty_range = { 0, 0 };
-   readback_res->Unmap(0, &empty_range);
 
    return true;
 }
