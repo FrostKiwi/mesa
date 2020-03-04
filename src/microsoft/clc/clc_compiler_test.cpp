@@ -28,10 +28,12 @@
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <gtest/gtest.h>
+#include <wrl.h>
 
 #include "clc_compiler.h"
 
 using std::runtime_error;
+using Microsoft::WRL::ComPtr;
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -78,7 +80,7 @@ create_root_signature(ID3D12Device *dev)
    return ret;
 }
 
-ID3D12Resource *
+ComPtr<ID3D12Resource>
 create_buffer(ID3D12Device *dev, int size, D3D12_HEAP_TYPE heap_type)
 {
    D3D12_RESOURCE_DESC desc;
@@ -107,7 +109,7 @@ create_buffer(ID3D12Device *dev, int size, D3D12_HEAP_TYPE heap_type)
       break;
    }
 
-   ID3D12Resource *res;
+   ComPtr<ID3D12Resource> res;
    if (FAILED(dev->CreateCommittedResource(&heap_pris,
        D3D12_HEAP_FLAG_NONE, &desc, initial_state,
        NULL, __uuidof(ID3D12Resource), (void **)&res)))
@@ -425,22 +427,9 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
 
    clc_free_blob(blob);
 
-   ID3D12Resource *upload_res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_UPLOAD);
-   if (!upload_res) {
-      fprintf(stderr, "D3D12: failed to create resource heap\n");
-      return false;
-   }
-   ID3D12Resource *res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_DEFAULT);
-   if (!res) {
-      fprintf(stderr, "D3D12: failed to create resource heap\n");
-      return false;
-   }
-
-   ID3D12Resource *readback_res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_READBACK);
-   if (!readback_res) {
-      fprintf(stderr, "D3D12: failed to create resource heap\n");
-      return false;
-   }
+   auto upload_res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_UPLOAD);
+   auto res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_DEFAULT);
+   auto readback_res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_READBACK);
 
    void *data = NULL;
    D3D12_RANGE res_range = { 0, (SIZE_T)(element_size * width) };
@@ -459,18 +448,18 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    uav_desc.Buffer.CounterOffsetInBytes = 0;
    uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
 
-   dev->CreateUnorderedAccessView(res, NULL, &uav_desc, uav_heap->GetCPUDescriptorHandleForHeapStart());
+   dev->CreateUnorderedAccessView(res.Get(), NULL, &uav_desc, uav_heap->GetCPUDescriptorHandleForHeapStart());
 
-   resource_barrier(cmdlist, res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-   cmdlist->CopyResource(res, upload_res);
-   resource_barrier(cmdlist, res, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+   resource_barrier(cmdlist, res.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+   cmdlist->CopyResource(res.Get(), upload_res.Get());
+   resource_barrier(cmdlist, res.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
    cmdlist->SetDescriptorHeaps(1, &uav_heap);
    cmdlist->SetComputeRootSignature(root_sig);
    cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
    cmdlist->SetPipelineState(pipeline_state);
    cmdlist->Dispatch(width, 1, 1);
-   resource_barrier(cmdlist, res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-   cmdlist->CopyResource(readback_res, res);
+   resource_barrier(cmdlist, res.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+   cmdlist->CopyResource(readback_res.Get(), res.Get());
 
    if (FAILED(cmdlist->Close()))
       throw runtime_error("Closing ID3D12GraphicsCommandList failed");
@@ -493,9 +482,6 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    D3D12_RANGE empty_range = { 0, 0 };
    readback_res->Unmap(0, &empty_range);
 
-   upload_res->Release();
-   readback_res->Release();
-   res->Release();
    pipeline_state->Release();
    root_sig->Release();
    return true;
