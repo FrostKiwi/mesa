@@ -90,7 +90,8 @@ void NirToDXILTest::run(const string& in_shader, const string& dxil_expect) cons
    bool dissasamble_success = compiler->disassamble(&tmp, dxil_disass);
    ASSERT_TRUE(dissasamble_success);
 
-   EXPECT_EQ(dxil_disass, dxil_expect_condesed.str());
+   if (dxil_expect_condesed.str().length() > 0)
+      EXPECT_EQ(dxil_disass, dxil_expect_condesed.str());
 
    bool validate_success = compiler->validate(&tmp);
    ASSERT_TRUE(validate_success);
