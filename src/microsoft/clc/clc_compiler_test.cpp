@@ -458,6 +458,10 @@ protected:
    }
 
    template <typename T>
+   std::vector<T>
+   run_shader_with_input(const char *kernel_source, int width, const T *input);
+
+   template <typename T>
    bool test_shader(const char *kernel_source, int width, const T *input, const T *expected);
 
    IDXGIFactory4 *factory;
@@ -511,8 +515,9 @@ compile_and_validate(const char *kernel_source, struct clc_metadata *metadata)
 }
 
 template <typename T>
-bool
-ComputeTest::test_shader(const char *kernel_source, int width, const T *input, const T *expected)
+std::vector<T>
+ComputeTest::run_shader_with_input(const char *kernel_source,
+                                   int width, const T *input)
 {
    static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod)
@@ -538,7 +543,14 @@ ComputeTest::test_shader(const char *kernel_source, int width, const T *input, c
    resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
    execute_cmdlist();
 
-   auto buf = get_buffer_data<T>(res, width);
+   return get_buffer_data<T>(res, width);
+}
+
+template <typename T>
+bool
+ComputeTest::test_shader(const char *kernel_source, int width, const T *input, const T *expected)
+{
+   auto buf = run_shader_with_input(kernel_source, width, input);
    for (int i = 0; i < width; ++i) {
       EXPECT_EQ(memcmp((const uint8_t *)buf.data() + sizeof(T) * i,
                        (const uint8_t *)expected + sizeof(T) * i,
