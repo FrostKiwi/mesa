@@ -441,7 +441,8 @@ protected:
       factory->Release();
    }
 
-   bool test_shader(const char *kernel_source, int width, int element_size, const void *input, const void *expected);
+   template <typename T>
+   bool test_shader(const char *kernel_source, int width, const T *input, const T *expected);
    bool test_shader_uint(const char *kernel_source, int width, const uint32_t input[], const uint32_t expected[]);
 
    IDXGIFactory4 *factory;
@@ -494,8 +495,9 @@ compile_and_validate(const char *kernel_source, struct clc_metadata *metadata)
    return ret;
 }
 
+template <typename T>
 bool
-ComputeTest::test_shader(const char *kernel_source, int width, int element_size, const void *input, const void *expected)
+ComputeTest::test_shader(const char *kernel_source, int width, const T *input, const T *expected)
 {
    static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod)
@@ -509,14 +511,14 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    auto root_sig = create_root_signature();
    auto pipeline_state = create_pipeline_state(root_sig, blob);
 
-   auto res = create_buffer_with_data(input, width * element_size);
+   auto res = create_buffer_with_data(input, width * sizeof(T));
 
    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc;
    uav_desc.Format = DXGI_FORMAT_UNKNOWN;
    uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
    uav_desc.Buffer.FirstElement = 0;
    uav_desc.Buffer.NumElements = width;
-   uav_desc.Buffer.StructureByteStride = element_size;
+   uav_desc.Buffer.StructureByteStride = sizeof(T);
    uav_desc.Buffer.CounterOffsetInBytes = 0;
    uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
 
@@ -531,11 +533,11 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
    resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
    execute_cmdlist();
 
-   auto buf = get_buffer_data<uint8_t>(res, width * element_size);
+   auto buf = get_buffer_data<T>(res, width);
    for (int i = 0; i < width; ++i) {
-      EXPECT_EQ(memcmp(buf.data() + element_size * i,
-                       (const uint8_t *)expected + element_size * i,
-                       element_size), 0);
+      EXPECT_EQ(memcmp((const uint8_t *)buf.data() + sizeof(T) * i,
+                       (const uint8_t *)expected + sizeof(T) * i,
+                       sizeof(T)), 0);
    }
 
    return true;
@@ -544,7 +546,7 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
 bool
 ComputeTest::test_shader_uint(const char *kernel_source, int width, const uint32_t input[], const uint32_t expected[])
 {
-   return test_shader(kernel_source, width, sizeof(uint32_t), (const void *)input, (const void *)expected);
+   return test_shader(kernel_source, width, input, expected);
 }
 
 TEST_F(ComputeTest, built_ins_global_id)
@@ -748,5 +750,5 @@ TEST_F(ComputeTest, complex_types_global_struct_array)
       { 64 + 2, 64 * 2 },
       { 65536 + 3, 65536 * 3 }
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), sizeof(struct two_vals), input, expected));
+   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
 }
