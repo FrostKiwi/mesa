@@ -461,9 +461,6 @@ protected:
    std::vector<T>
    run_shader_with_input(const char *kernel_source, int width, const T *input);
 
-   template <typename T>
-   bool test_shader(const char *kernel_source, int width, const T *input, const T *expected);
-
    IDXGIFactory4 *factory;
    IDXGIAdapter1 *adapter;
    ID3D12Device *dev;
@@ -546,20 +543,6 @@ ComputeTest::run_shader_with_input(const char *kernel_source,
    return get_buffer_data<T>(res, width);
 }
 
-template <typename T>
-bool
-ComputeTest::test_shader(const char *kernel_source, int width, const T *input, const T *expected)
-{
-   auto buf = run_shader_with_input(kernel_source, width, input);
-   for (int i = 0; i < width; ++i) {
-      EXPECT_EQ(memcmp((const uint8_t *)buf.data() + sizeof(T) * i,
-                       (const uint8_t *)expected + sizeof(T) * i,
-                       sizeof(T)), 0);
-   }
-
-   return true;
-}
-
 TEST_F(ComputeTest, built_ins_global_id)
 {
    const char *kernel_source =
@@ -573,7 +556,9 @@ TEST_F(ComputeTest, built_ins_global_id)
    const uint32_t expected[] = {
       0, 1, 2, 3
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
 }
 
 TEST_F(ComputeTest, built_ins_global_id_rmw)
@@ -590,7 +575,9 @@ TEST_F(ComputeTest, built_ins_global_id_rmw)
    const uint32_t expected[] = {
       0x00000001, 0x20000002, 0x00060006, 0x1004080c
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_float_basics)
@@ -606,7 +593,9 @@ TEST_F(ComputeTest, types_float_basics)
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_double_basics)
@@ -622,7 +611,9 @@ TEST_F(ComputeTest, types_double_basics)
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_short_basics)
@@ -638,7 +629,9 @@ TEST_F(ComputeTest, types_short_basics)
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_char_basics)
@@ -654,7 +647,9 @@ TEST_F(ComputeTest, types_char_basics)
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_if_statement)
@@ -674,7 +669,9 @@ TEST_F(ComputeTest, types_if_statement)
    const uint32_t expected[] = {
       0xff, ~1u, ~2u, ~3u
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_do_while_loop)
@@ -695,7 +692,9 @@ TEST_F(ComputeTest, types_do_while_loop)
    const uint32_t expected[] = {
       1, 1, 1*2, 1*2*3, 1*2*3*4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_for_loop)
@@ -715,7 +714,9 @@ TEST_F(ComputeTest, types_for_loop)
    const uint32_t expected[] = {
       1, 1, 1*2, 1*2*3, 1*2*3*4
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
 }
 
 TEST_F(ComputeTest, complex_types_local_array)
@@ -738,7 +739,9 @@ TEST_F(ComputeTest, complex_types_local_array)
    const uint32_t expected[] = {
       0x00, 0x10, 0x20, 0x30,
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
 }
 
 TEST_F(ComputeTest, complex_types_global_struct_array)
@@ -761,5 +764,9 @@ TEST_F(ComputeTest, complex_types_global_struct_array)
       { 64 + 2, 64 * 2 },
       { 65536 + 3, 65536 * 3 }
    };
-   ASSERT_TRUE(test_shader(kernel_source, ARRAY_SIZE(expected), input, expected));
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i) {
+      EXPECT_EQ(buf[i].add, expected[i].add);
+      EXPECT_EQ(buf[i].mul, expected[i].mul);
+   }
 }
