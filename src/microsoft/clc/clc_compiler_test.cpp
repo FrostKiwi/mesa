@@ -373,6 +373,22 @@ protected:
          throw runtime_error("resetting ID3D12GraphicsCommandList failed");
    }
 
+   void create_uav_buffer(ComPtr<ID3D12Resource> res,
+                          size_t width, size_t byte_stride,
+                          D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle)
+   {
+      D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc;
+      uav_desc.Format = DXGI_FORMAT_UNKNOWN;
+      uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+      uav_desc.Buffer.FirstElement = 0;
+      uav_desc.Buffer.NumElements = width;
+      uav_desc.Buffer.StructureByteStride = byte_stride;
+      uav_desc.Buffer.CounterOffsetInBytes = 0;
+      uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+      dev->CreateUnorderedAccessView(res.Get(), NULL, &uav_desc, cpu_handle);
+   }
+
    void SetUp() override
    {
       enable_d3d12_debug_layer();
@@ -511,17 +527,7 @@ ComputeTest::test_shader(const char *kernel_source, int width, const T *input, c
    auto pipeline_state = create_pipeline_state(root_sig, blob);
 
    auto res = create_buffer_with_data(input, width * sizeof(T));
-
-   D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc;
-   uav_desc.Format = DXGI_FORMAT_UNKNOWN;
-   uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-   uav_desc.Buffer.FirstElement = 0;
-   uav_desc.Buffer.NumElements = width;
-   uav_desc.Buffer.StructureByteStride = sizeof(T);
-   uav_desc.Buffer.CounterOffsetInBytes = 0;
-   uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
-
-   dev->CreateUnorderedAccessView(res.Get(), NULL, &uav_desc, uav_heap->GetCPUDescriptorHandleForHeapStart());
+   create_uav_buffer(res, width, sizeof(T), uav_heap->GetCPUDescriptorHandleForHeapStart());
 
    resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
    cmdlist->SetDescriptorHeaps(1, &uav_heap);
