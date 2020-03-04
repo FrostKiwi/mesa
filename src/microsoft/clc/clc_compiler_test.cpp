@@ -434,6 +434,17 @@ protected:
    HANDLE event;
 };
 
+static void
+dump_blob(const char *path, const void *data, size_t size)
+{
+   FILE *fp = fopen(path, "wb");
+   if (fp) {
+      fwrite(data, 1, size, fp);
+      fclose(fp);
+      printf("D3D12: wrote '%s'...\n", path);
+   }
+}
+
 bool
 ComputeTest::test_shader(const char *kernel_source, int width, int element_size, const void *input, const void *expected)
 {
@@ -460,22 +471,10 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
       return false;
    }
 
-   FILE *fp = fopen("unsigned.cso", "wb");
-   if (fp) {
-      fwrite(blob, 1, blob_size, fp);
-      fclose(fp);
-      printf("D3D12: wrote 'unsigned.cso'...\n");
-   }
-
+   dump_blob("unsigned.cso", blob, blob_size);
    if (!validate_module(blob, blob_size))
       return false;
-
-   fp = fopen("signed.cso", "wb");
-   if (fp) {
-      fwrite(blob, 1, blob_size, fp);
-      fclose(fp);
-      printf("D3D12: wrote 'signed.cso'...\n");
-   }
+   dump_blob("signed.cso", blob, blob_size);
 
    auto root_sig = create_root_signature();
    auto pipeline_state = create_pipeline_state(root_sig, blob, blob_size);
