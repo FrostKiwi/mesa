@@ -96,6 +96,12 @@ get_semantic_name(nir_variable *var, char buffer[64])
       return DXIL_SEM_POSITION;
    }
 
+   if (var->data.location == VARYING_SLOT_FACE) {
+      assert(glsl_get_components(var->type) == 1);
+      snprintf(buffer, 64, "%s", "SV_IsFrontFace");
+      return DXIL_SEM_IS_FRONT_FACE;
+   }
+
    int index = var->data.location - VARYING_SLOT_POS;
    const char idx1 = 'A' + (char)(index >> 4);
    const char idx2 = 'A' + (char)(index & 0xf);
