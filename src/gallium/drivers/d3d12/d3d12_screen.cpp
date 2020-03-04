@@ -265,8 +265,10 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_CLIP_PLANES:
       return 0;
 
-   /* Faking OpenGL 2.1 */
    case PIPE_CAP_OCCLUSION_QUERY:
+      return 1;
+
+   /* Faking OpenGL 2.1 */
    case PIPE_CAP_POINT_SPRITE:
    case PIPE_CAP_BLEND_EQUATION_SEPARATE:
       return (d3d12_debug & D3D12_DEBUG_OPENGL21) ? 1 : 0;
