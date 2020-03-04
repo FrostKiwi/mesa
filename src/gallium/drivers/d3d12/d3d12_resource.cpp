@@ -300,7 +300,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
                                                      box->height);
 
       trans->staging_res = pipe_buffer_create(pctx->screen, 0,
-                                              (pipe_resource_usage)(PIPE_USAGE_STAGING | usage),
+                                              PIPE_USAGE_STAGING,
                                               ptrans->layer_stride * box->depth);
       if (!trans->staging_res)
          return NULL;
