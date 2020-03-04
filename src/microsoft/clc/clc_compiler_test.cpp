@@ -80,6 +80,22 @@ create_root_signature(ID3D12Device *dev)
    return ret;
 }
 
+ID3D12PipelineState *
+create_pipeline_state(ID3D12Device *dev, ID3D12RootSignature *root_sig,
+                      void *blob, size_t blob_size)
+{
+   D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = { root_sig };
+   pipeline_desc.CS.pShaderBytecode = blob;
+   pipeline_desc.CS.BytecodeLength = blob_size;
+
+   ID3D12PipelineState *pipeline_state;
+   if (FAILED(dev->CreateComputePipelineState(&pipeline_desc,
+                                              __uuidof(pipeline_state),
+                                              (void **)& pipeline_state)))
+      throw runtime_error("Failed to create pipeline state");
+   return pipeline_state;
+}
+
 ComPtr<ID3D12Resource>
 create_buffer(ID3D12Device *dev, int size, D3D12_HEAP_TYPE heap_type)
 {
@@ -415,16 +431,7 @@ ComputeTest::test_shader(const char *kernel_source, int width, int element_size,
 
    ID3D12RootSignature *root_sig = create_root_signature(dev);
 
-   D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = { root_sig };
-   pipeline_desc.CS.pShaderBytecode = blob;
-   pipeline_desc.CS.BytecodeLength = blob_size;
-
-   ID3D12PipelineState *pipeline_state;
-   if (FAILED(dev->CreateComputePipelineState(&pipeline_desc,
-                                              __uuidof(pipeline_state),
-                                              (void **)& pipeline_state)))
-      throw runtime_error("Failed to create pipeline state");
-
+   auto pipeline_state = create_pipeline_state(dev, root_sig, blob, blob_size);
    clc_free_blob(blob);
 
    auto upload_res = create_buffer(dev, width * element_size, D3D12_HEAP_TYPE_UPLOAD);
