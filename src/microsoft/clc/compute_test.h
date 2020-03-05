@@ -35,6 +35,20 @@
 using std::runtime_error;
 using Microsoft::WRL::ComPtr;
 
+inline D3D12_CPU_DESCRIPTOR_HANDLE
+offset_cpu_handle(D3D12_CPU_DESCRIPTOR_HANDLE handle, UINT offset)
+{
+   handle.ptr += offset;
+   return handle;
+}
+
+inline size_t
+align(size_t value, unsigned alignment)
+{
+   assert(alignment > 0);
+   return ((value + (alignment - 1)) / alignment) * alignment;
+}
+
 class ComputeTest : public ::testing::Test {
 protected:
 
@@ -109,6 +123,9 @@ protected:
                      size_t width, size_t byte_stride,
                      D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle);
 
+   void create_cbv(ComPtr<ID3D12Resource> res, size_t size,
+                   D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle);
+
    void
    SetUp() override;
 
@@ -133,11 +150,23 @@ protected:
       struct clc_metadata metadata;
       std::vector<uint8_t> blob = compile_and_validate(kernel_source, &metadata);
 
-      auto root_sig = create_root_signature(1, 0);
+      auto root_sig = create_root_signature(1, metadata.num_consts);
       auto pipeline_state = create_pipeline_state(root_sig, blob);
 
       auto res = create_buffer_with_data(input, width * sizeof(T));
       create_uav_buffer(res, width, sizeof(T), uav_heap->GetCPUDescriptorHandleForHeapStart());
+
+      for (unsigned i = 0; i < metadata.num_consts; ++i) {
+         size_t size = metadata.consts[i].size;
+         unsigned cbuf_size = align(size * sizeof(T), 256);
+         auto cbuf = create_sized_buffer_with_data(cbuf_size,
+                                                   metadata.consts[i].data,
+                                                   size);
+         create_cbv(cbuf, cbuf_size,
+                    offset_cpu_handle(
+                       uav_heap->GetCPUDescriptorHandleForHeapStart(),
+                       (1 + i) * uav_heap_incr));
+      }
 
       resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
       cmdlist->SetDescriptorHeaps(1, &uav_heap);
@@ -159,6 +188,8 @@ protected:
    ID3D12CommandAllocator *cmdalloc;
    ID3D12GraphicsCommandList *cmdlist;
    ID3D12DescriptorHeap *uav_heap;
+
+   UINT uav_heap_incr;
    int fence_value;
 
    HANDLE event;
