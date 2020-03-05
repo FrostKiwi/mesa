@@ -522,7 +522,7 @@ d3d12_finalize_nir(UNUSED pipe_screen *screen, void *nir, UNUSED bool optimize)
 
    /* Currently we only do something with thevertex shader */
    if (sh->info.stage != MESA_SHADER_VERTEX)
-      d3d12_reassign_driver_locations(&sh->inputs);
+      sh->info.inputs_read = d3d12_reassign_driver_locations(&sh->inputs);
    else
       d3d12_sort_by_driver_location(&sh->inputs);
 

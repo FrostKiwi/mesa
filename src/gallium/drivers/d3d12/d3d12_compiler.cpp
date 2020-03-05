@@ -382,12 +382,13 @@ d3d12_sort_by_driver_location(exec_list *io)
 /* Order between stage values so that normal varyings come first,
  * then sysvalues and then system generated values.
  */
-void
+uint64_t
 d3d12_reassign_driver_locations(exec_list *io)
 {
    struct exec_list new_list;
    exec_list_make_empty(&new_list);
 
+   uint64_t result = 0;
    nir_foreach_variable_safe(var, io) {
       exec_node_remove(&var->node);
       /* We use the driver_location here to avoid introducing a new
@@ -399,6 +400,9 @@ d3d12_reassign_driver_locations(exec_list *io)
    exec_list_move_nodes_to(&new_list, io);
 
    unsigned driver_loc = 0;
-   nir_foreach_variable(var, io)
+   nir_foreach_variable(var, io) {
+      result |= 1ull << var->data.location;
       var->data.driver_location = driver_loc++;
+   }
+   return result;
 }
