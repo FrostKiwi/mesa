@@ -1568,7 +1568,7 @@ emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 
 const struct dxil_value *
 load_ubo(struct ntd_context *ctx, unsigned ubo_idx,
-         const struct dxil_value *offset)
+         const struct dxil_value *offset, enum overload_type overload)
 {
    assert(offset);
 
@@ -1583,7 +1583,7 @@ load_ubo(struct ntd_context *ctx, unsigned ubo_idx,
       opcode, handle, offset
    };
 
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.cbufferLoadLegacy", DXIL_F32);
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.cbufferLoadLegacy", overload);
    if (!func)
       return NULL;
    return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
@@ -1606,7 +1606,7 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       offset = dxil_emit_binop(&ctx->mod, DXIL_BINOP_ASHR, offset_src, c4);
    }
 
-   const struct dxil_value *agg = load_ubo(ctx, 0, offset);
+   const struct dxil_value *agg = load_ubo(ctx, 0, offset, DXIL_F32);
    const struct dxil_type *agg_type = dxil_module_get_cbuf_ret_type(&ctx->mod, DXIL_F32);
 
    if (!agg || !agg_type)
