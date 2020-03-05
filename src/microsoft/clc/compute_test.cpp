@@ -314,6 +314,17 @@ ComputeTest::create_uav_buffer(ComPtr<ID3D12Resource> res,
 }
 
 void
+ComputeTest::create_cbv(ComPtr<ID3D12Resource> res, size_t size,
+                        D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle)
+{
+   D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc;
+   cbv_desc.BufferLocation = res->GetGPUVirtualAddress();
+   cbv_desc.SizeInBytes = size;
+
+   dev->CreateConstantBufferView(&cbv_desc, cpu_handle);
+}
+
+void
 ComputeTest::SetUp()
 {
    enable_d3d12_debug_layer();
@@ -361,6 +372,8 @@ ComputeTest::SetUp()
    if (FAILED(dev->CreateDescriptorHeap(&heap_desc,
        __uuidof(uav_heap), (void **)&uav_heap)))
       throw runtime_error("failed to create descriptor heap");
+
+   uav_heap_incr = dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
    event = CreateEvent(NULL, FALSE, FALSE, NULL);
    if (!event)
