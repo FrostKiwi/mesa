@@ -1494,6 +1494,19 @@ offset_to_index(struct dxil_module *m, const struct dxil_value *offset,
    return dxil_emit_binop(m, DXIL_BINOP_LSHR, offset, shift);
 }
 
+static const struct dxil_value *
+index_to_offset(struct dxil_module *m, const struct dxil_value *index,
+                unsigned bit_size)
+{
+   unsigned shift_amt = util_logbase2(bit_size / 8);
+   const struct dxil_value *shift =
+      dxil_module_get_int32_const(m, shift_amt);
+   if (!shift)
+      return NULL;
+
+   return dxil_emit_binop(m, DXIL_BINOP_SHL, index, shift);
+}
+
 static bool
 emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
@@ -1767,6 +1780,53 @@ emit_load_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 }
 
 static bool
+emit_load_mem_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr,
+                  nir_variable *var)
+{
+   unsigned bit_size = nir_dest_bit_size(intr->dest);
+   const struct dxil_value *ptr =
+      get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod,
+      bit_size);
+   unsigned align = bit_size / 8;
+
+   // HACK: force CBV#0
+   assert(ctx->num_cbvs == 1);
+   unsigned ubo_idx = 0; // HACK!
+   const struct dxil_value *index = offset_to_index(&ctx->mod, ptr, bit_size * 4);
+   const struct dxil_value *agg = load_ubo(ctx, ubo_idx, index, DXIL_I32);
+   const struct dxil_type *agg_type = dxil_module_get_cbuf_ret_type(&ctx->mod, DXIL_I32);
+   if (!index || !agg || !agg_type)
+      return false;
+
+   /* It seems we can't take that address of a struct (in this case
+    * %dx.types.CBufRet.i32)??? And we can only extract values from constant
+    * indices using extractval. So here's a glorious hack: we use a three
+    * level tree of compares and selects to pick the right component!
+    */
+   const struct dxil_value *comp = offset_to_index(&ctx->mod, ptr, bit_size);
+   const struct dxil_value *comp_mask1 = dxil_module_get_int32_const(&ctx->mod, 0x1);
+   const struct dxil_value *comp_mask2 = dxil_module_get_int32_const(&ctx->mod, 0x2);
+
+   const struct dxil_value *comp_x = dxil_emit_extractval(&ctx->mod, agg, agg_type, 0);
+   const struct dxil_value *comp_y = dxil_emit_extractval(&ctx->mod, agg, agg_type, 1);
+   const struct dxil_value *comp_z = dxil_emit_extractval(&ctx->mod, agg, agg_type, 2);
+   const struct dxil_value *comp_w = dxil_emit_extractval(&ctx->mod, agg, agg_type, 3);
+
+   const struct dxil_value *bit1 = dxil_emit_binop(&ctx->mod, DXIL_BINOP_AND, comp, comp_mask1);
+   const struct dxil_value *bit2 = dxil_emit_binop(&ctx->mod, DXIL_BINOP_AND, comp, comp_mask2);
+   const struct dxil_value *sel1 = dxil_emit_cmp(&ctx->mod, DXIL_ICMP_NE, bit1, comp_mask1);
+   const struct dxil_value *sel2 = dxil_emit_cmp(&ctx->mod, DXIL_ICMP_NE, bit2, comp_mask2);
+
+   const struct dxil_value *comp_xy = dxil_emit_select(&ctx->mod, sel1, comp_x, comp_y);
+   const struct dxil_value *comp_zw = dxil_emit_select(&ctx->mod, sel1, comp_z, comp_w);
+   const struct dxil_value *retval = dxil_emit_select(&ctx->mod, sel2, comp_xy, comp_zw);
+
+   store_dest(ctx, &intr->dest, 0, retval, nir_type_uint);
+   return true;
+}
+
+static bool
 emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    nir_deref_instr *deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
@@ -1778,6 +1838,9 @@ emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 
    case nir_var_function_temp:
       return emit_load_function_temp(ctx, intr, var);
+
+   case nir_var_mem_ubo:
+      return emit_load_mem_ubo(ctx, intr, var);
 
    default:
       unreachable("unsupported nir_variable_mode");
@@ -1856,23 +1919,40 @@ emit_deref_array(struct ntd_context *ctx, nir_deref_instr *deref)
    assert(deref->deref_type == nir_deref_type_array);
    nir_variable *var = nir_deref_instr_get_variable(deref);
 
+   const struct dxil_value *index =
+      get_src(ctx, &deref->arr.index, 0, nir_type_uint);
+   if (!index)
+      return false;
+
+   const struct dxil_value *ptr;
+   switch (var->data.mode) {
+   case nir_var_function_temp: {
+         struct hash_entry *he =
+            _mesa_hash_table_search(ctx->locals, var);
+         assert(he != NULL);
+         ptr = he->data;
+      }
+      break;
+
+   case nir_var_mem_ubo: {
+         // HACK: force CBV#0
+         assert(ctx->num_cbvs == 1);
+         unsigned bit_size = glsl_get_bit_size(glsl_without_array(var->type));
+         ptr = index_to_offset(&ctx->mod, index, bit_size);
+         store_dest_int(ctx, &deref->dest, 0, ptr);
+         return true;
+      }
+
+   default:
+      unreachable("unexpected variable-mode");
+   }
+
    const struct dxil_type *source_elem_type = get_glsl_type(&ctx->mod, var->type);
    if (!source_elem_type)
       return false;
 
-   assert(var->data.mode == nir_var_function_temp);
-   struct hash_entry *he =
-      _mesa_hash_table_search(ctx->locals, var);
-   assert(he != NULL);
-   const struct dxil_value *ptr = he->data;
-
    const struct dxil_value *zero = dxil_module_get_int32_const(&ctx->mod, 0);
    if (!zero)
-      return false;
-
-   const struct dxil_value *index =
-      get_src(ctx, &deref->arr.index, 0, nir_type_uint);
-   if (!index)
       return false;
 
    const struct dxil_value *ops[] = { ptr, zero, index };
