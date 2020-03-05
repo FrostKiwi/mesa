@@ -934,7 +934,7 @@ d3d12_resource_barrier(struct d3d12_context *ctx,
    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
    barrier.Transition.pResource = res->res;
-   barrier.Transition.Subresource = 0;
+   barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
    barrier.Transition.StateBefore = before;
    barrier.Transition.StateAfter = after;
    ctx->cmdlist->ResourceBarrier(1, &barrier);
