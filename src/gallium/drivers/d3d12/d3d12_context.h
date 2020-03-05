@@ -128,7 +128,7 @@ struct d3d12_context {
    struct d3d12_sampler_state *samplers[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    unsigned num_samplers[PIPE_SHADER_TYPES];
 
-   struct d3d12_shader *gfx_stages[D3D12_GFX_SHADER_STAGES];
+   struct d3d12_shader_selector *gfx_stages[D3D12_GFX_SHADER_STAGES];
    unsigned dirty_program : 1;
 
    HANDLE event;

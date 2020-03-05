@@ -106,13 +106,15 @@ resource_dimension(enum glsl_sampler_dim dim)
    }
 }
 
-struct d3d12_shader *
+struct d3d12_shader_selector *
 d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
-   struct d3d12_shader *ret = CALLOC_STRUCT(d3d12_shader);
+   struct d3d12_shader_selector *sel = rzalloc(nullptr, d3d12_shader_selector);
+   struct d3d12_shader *shader = rzalloc(sel, d3d12_shader);
 
-   ret->info = nir->info;
+   shader->nir = nir;
+   sel->first = sel->current = shader;
 
    struct nir_lower_tex_options tex_options = { };
    tex_options.lower_txp = ~0u; /* No equivalent for textureProj */
@@ -135,12 +137,12 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
    enum pipe_shader_type stage = pipe_shader_type_from_mesa(nir->info.stage);
    nir_foreach_variable(var, &nir->uniforms) {
       if (glsl_type_is_sampler(var->type)) {
-         ret->srv_bindings[ret->num_srv_bindings].index = var->data.binding;
-         ret->srv_bindings[ret->num_srv_bindings].binding = ret->num_srv_bindings;
-         ret->srv_bindings[ret->num_srv_bindings].dimension = resource_dimension(glsl_get_sampler_dim(var->type));
-         ret->num_srv_bindings++;
+         shader->srv_bindings[shader->num_srv_bindings].index = var->data.binding;
+         shader->srv_bindings[shader->num_srv_bindings].binding = shader->num_srv_bindings;
+         shader->srv_bindings[shader->num_srv_bindings].dimension = resource_dimension(glsl_get_sampler_dim(var->type));
+         shader->num_srv_bindings++;
       } else if (var->interface_type) {
-         ret->cb_bindings[ret->num_cb_bindings++] = var->data.binding;
+         shader->cb_bindings[shader->num_cb_bindings++] = var->data.binding;
       }
    }
 
@@ -150,25 +152,25 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
       ctx->validation_tools->disassemble(&tmp);
    }
 
-   blob_finish_get_buffer(&tmp, &ret->bytecode, &ret->bytecode_length);
+   blob_finish_get_buffer(&tmp, &shader->bytecode, &shader->bytecode_length);
 
    if (d3d12_debug & D3D12_DEBUG_DXIL) {
       char buf[256];
       static int i;
       snprintf(buf, sizeof(buf), "dump%02d.dxil", i++);
       FILE *fp = fopen(buf, "wb");
-      fwrite(ret->bytecode, sizeof(char), ret->bytecode_length, fp);
+      fwrite(shader->bytecode, sizeof(char), shader->bytecode_length, fp);
       fclose(fp);
       fprintf(stderr, "wrote '%s'...\n", buf);
    }
 
-   return ret;
+   return sel;
 }
 
 void
-d3d12_shader_free(struct d3d12_shader *shader)
+d3d12_shader_free(struct d3d12_shader_selector *sel)
 {
-   FREE(shader);
+   ralloc_free(sel);
 }
 
 // Used to get path to self

@@ -88,10 +88,12 @@ get_root_signature(struct d3d12_context *ctx)
    unsigned num_params = 0;
 
    for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
-      struct d3d12_shader *shader = ctx->gfx_stages[i];
 
-      if (!shader)
+      if (!ctx->gfx_stages[i])
          continue;
+
+      struct d3d12_shader *shader = ctx->gfx_stages[i]->current;
+      assert(shader);
 
       D3D12_SHADER_VISIBILITY visibility = get_shader_visibility((enum pipe_shader_type)i);
 
@@ -249,10 +251,11 @@ fill_descriptor_tables(struct d3d12_context *ctx,
    d3d12_descriptor_heap_clear(ctx->sampler_heap);
 
    for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
-      struct d3d12_shader *shader = ctx->gfx_stages[i];
-
-      if (!shader)
+      if (!ctx->gfx_stages[i])
          continue;
+
+      struct d3d12_shader *shader = ctx->gfx_stages[i]->current;
+      assert(shader);
 
       if (shader->num_cb_bindings > 0) {
          tables[num_tables++] = fill_cbv_descriptors(ctx, shader, i);
@@ -362,13 +365,15 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    pso_desc.pRootSignature = root_sig;
 
    if (ctx->gfx_stages[PIPE_SHADER_VERTEX]) {
-      pso_desc.VS.BytecodeLength = ctx->gfx_stages[PIPE_SHADER_VERTEX]->bytecode_length;
-      pso_desc.VS.pShaderBytecode = ctx->gfx_stages[PIPE_SHADER_VERTEX]->bytecode;
+      auto shader = ctx->gfx_stages[PIPE_SHADER_VERTEX]->current;
+      pso_desc.VS.BytecodeLength = shader->bytecode_length;
+      pso_desc.VS.pShaderBytecode = shader->bytecode;
    }
 
    if (ctx->gfx_stages[PIPE_SHADER_FRAGMENT]) {
-      pso_desc.PS.BytecodeLength = ctx->gfx_stages[PIPE_SHADER_FRAGMENT]->bytecode_length;
-      pso_desc.PS.pShaderBytecode = ctx->gfx_stages[PIPE_SHADER_FRAGMENT]->bytecode;
+      auto shader = ctx->gfx_stages[PIPE_SHADER_FRAGMENT]->current;
+      pso_desc.PS.BytecodeLength = shader->bytecode_length;
+      pso_desc.PS.pShaderBytecode = shader->bytecode;
    }
 
    pso_desc.BlendState = ctx->blend->desc;
