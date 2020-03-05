@@ -134,7 +134,6 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
       return NULL;
    }
 
-   enum pipe_shader_type stage = pipe_shader_type_from_mesa(nir->info.stage);
    nir_foreach_variable(var, &nir->uniforms) {
       if (glsl_type_is_sampler(var->type)) {
          shader->srv_bindings[shader->num_srv_bindings].index = var->data.binding;
