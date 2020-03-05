@@ -53,7 +53,7 @@ struct d3d12_shader {
    void *bytecode;
    size_t bytecode_length;
 
-   shader_info info;
+   nir_shader *nir;
 
    unsigned cb_bindings[PIPE_MAX_CONSTANT_BUFFERS];
    size_t num_cb_bindings;
@@ -64,13 +64,21 @@ struct d3d12_shader {
       uint32_t dimension;
    } srv_bindings[PIPE_MAX_SHADER_SAMPLER_VIEWS];
    size_t num_srv_bindings;
+
+   struct d3d12_shader *next_variant;
 };
 
-struct d3d12_shader *
+struct d3d12_shader_selector {
+   struct d3d12_shader *first;
+   struct d3d12_shader *current;
+};
+
+
+struct d3d12_shader_selector *
 d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir);
 
 void
-d3d12_shader_free(struct d3d12_shader *shader);
+d3d12_shader_free(struct d3d12_shader_selector *shader);
 
 void
 d3d12_reassign_driver_locations(exec_list *io);

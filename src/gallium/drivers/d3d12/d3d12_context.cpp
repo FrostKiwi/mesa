@@ -716,7 +716,7 @@ d3d12_destroy_sampler_view(struct pipe_context *pctx,
 
 static void
 bind_stage(struct d3d12_context *ctx, enum pipe_shader_type stage,
-           struct d3d12_shader *shader)
+           struct d3d12_shader_selector *shader)
 {
    assert(stage < D3D12_GFX_SHADER_STAGES);
    ctx->gfx_stages[stage] = shader;
@@ -741,14 +741,15 @@ static void
 d3d12_bind_vs_state(struct pipe_context *pctx,
                     void *vss)
 {
-   bind_stage(d3d12_context(pctx), PIPE_SHADER_VERTEX, (struct d3d12_shader *) vss);
+   bind_stage(d3d12_context(pctx), PIPE_SHADER_VERTEX,
+              (struct d3d12_shader_selector *) vss);
 }
 
 static void
 d3d12_delete_vs_state(struct pipe_context *pctx,
                       void *vs)
 {
-   d3d12_shader_free((struct d3d12_shader *) vs);
+   d3d12_shader_free((struct d3d12_shader_selector *) vs);
 }
 
 static void *
@@ -769,14 +770,15 @@ static void
 d3d12_bind_fs_state(struct pipe_context *pctx,
                     void *fss)
 {
-   bind_stage(d3d12_context(pctx), PIPE_SHADER_FRAGMENT, (struct d3d12_shader *) fss);
+   bind_stage(d3d12_context(pctx), PIPE_SHADER_FRAGMENT,
+              (struct d3d12_shader_selector *) fss);
 }
 
 static void
 d3d12_delete_fs_state(struct pipe_context *pctx,
                       void *fs)
 {
-   d3d12_shader_free((struct d3d12_shader *) fs);
+   d3d12_shader_free((struct d3d12_shader_selector *) fs);
 }
 
 static void
