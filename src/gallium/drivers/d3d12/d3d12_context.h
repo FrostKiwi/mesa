@@ -87,6 +87,7 @@ d3d12_sampler_view(struct pipe_sampler_view *pview)
    return (struct d3d12_sampler_view *)pview;
 }
 
+struct blitter_context;
 struct primconvert_context;
 struct d3d12_validation_tools;
 
@@ -94,6 +95,7 @@ struct d3d12_context {
    struct pipe_context base;
    struct slab_child_pool transfer_pool;
    struct primconvert_context *primconvert;
+   struct blitter_context *blitter;
    struct u_suballocator *query_allocator;
 
    struct pipe_constant_buffer cbufs[PIPE_SHADER_TYPES][PIPE_MAX_CONSTANT_BUFFERS];
@@ -167,6 +169,10 @@ d3d12_resource_barrier(struct d3d12_context *ctx,
 void
 d3d12_draw_vbo(struct pipe_context *pctx,
                const struct pipe_draw_info *dinfo);
+
+void
+d3d12_blit(struct pipe_context *pctx,
+           const struct pipe_blit_info *info);
 
 void
 d3d12_context_query_init(struct pipe_context *pctx);

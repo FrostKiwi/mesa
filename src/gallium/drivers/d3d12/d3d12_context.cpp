@@ -30,6 +30,9 @@
 #include "d3d12_screen.h"
 #include "d3d12_surface.h"
 
+#include "nir/tgsi_to_nir.h"
+
+#include "util/u_blitter.h"
 #include "util/u_framebuffer.h"
 #include "util/u_helpers.h"
 #include "util/u_inlines.h"
@@ -706,8 +709,10 @@ d3d12_create_vs_state(struct pipe_context *pctx,
 {
    struct nir_shader *nir;
 
-   assert(shader->type == PIPE_SHADER_IR_NIR);
-   nir = (struct nir_shader *)shader->ir.nir;
+   if (shader->type != PIPE_SHADER_IR_NIR)
+      nir = tgsi_to_nir(shader->tokens, pctx->screen);
+   else
+      nir = (struct nir_shader *)shader->ir.nir;
 
    return d3d12_compile_nir(d3d12_context(pctx), nir);
 }
@@ -732,8 +737,10 @@ d3d12_create_fs_state(struct pipe_context *pctx,
 {
    struct nir_shader *nir;
 
-   assert(shader->type == PIPE_SHADER_IR_NIR);
-   nir = (struct nir_shader *)shader->ir.nir;
+   if (shader->type != PIPE_SHADER_IR_NIR)
+      nir = tgsi_to_nir(shader->tokens, pctx->screen);
+   else
+      nir = (struct nir_shader *)shader->ir.nir;
 
    return d3d12_compile_nir(d3d12_context(pctx), nir);
 }
@@ -1154,6 +1161,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.clear = d3d12_clear;
    ctx->base.draw_vbo = d3d12_draw_vbo;
    ctx->base.flush = d3d12_flush;
+   ctx->base.blit = d3d12_blit;
 
    ctx->sample_mask = ~0;
 
@@ -1269,6 +1277,10 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    d3d12_init_null_sampler(ctx);
 
    ctx->validation_tools = d3d12_validator_create();
+
+   ctx->blitter = util_blitter_create(&ctx->base);
+   if (!ctx->blitter)
+      return NULL;
 
    return &ctx->base;
 }
