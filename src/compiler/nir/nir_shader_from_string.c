@@ -259,7 +259,10 @@ enum glsl_interp_mode get_interp(const char *string)
 {
    if (!strcmp(string, "INTERP_MODE_SMOOTH"))
       return INTERP_MODE_SMOOTH;
-
+   if (!strcmp(string, "INTERP_MODE_FLAT"))
+      return INTERP_MODE_FLAT;
+   if (!strcmp(string, "INTERP_MODE_NOPERSPECTIVE"))
+      return INTERP_MODE_NOPERSPECTIVE;
    return INTERP_MODE_NONE;
 }
 
