@@ -353,7 +353,7 @@ ComputeTest::SetUp()
 
    D3D12_DESCRIPTOR_HEAP_DESC heap_desc;
    heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-   heap_desc.NumDescriptors = 1;
+   heap_desc.NumDescriptors = 1000;
    heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
    heap_desc.NodeMask = 0;
    if (FAILED(dev->CreateDescriptorHeap(&heap_desc,
