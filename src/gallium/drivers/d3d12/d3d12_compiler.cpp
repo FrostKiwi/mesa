@@ -164,6 +164,21 @@ compile_shader(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    return shader;
 }
 
+void
+d3d12_fill_self_shader_key(d3d12_shader *shader)
+{
+   const uint64_t system_generated_in_values =
+         1ull << VARYING_SLOT_FACE;
+
+   const uint64_t system_out_values =
+         1ull << VARYING_SLOT_POS;
+
+   /* We assume that this shader reads and writes exactly what is needed */
+   memset(&shader->key, 0, sizeof(d3d12_shader_key));
+   shader->key.required_varying_inputs = shader->nir->info.inputs_read & ~system_generated_in_values;
+   shader->key.required_varying_outputs = shader->nir->info.outputs_written & ~system_out_values;
+}
+
 struct d3d12_shader_selector *
 d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
 {
@@ -171,8 +186,10 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
 
    sel->first = sel->current = compile_shader(ctx, sel, nir);
 
-   if (sel->current)
+   if (sel->current) {
+      d3d12_fill_self_shader_key(sel->current);
       return sel;
+   }
    ralloc_free(sel);
    return NULL;
 }

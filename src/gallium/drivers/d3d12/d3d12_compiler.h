@@ -49,6 +49,11 @@ d3d12_get_compiler_options(struct pipe_screen *screen,
                            enum pipe_shader_ir ir,
                            enum pipe_shader_type shader);
 
+struct d3d12_shader_key {
+   uint64_t required_varying_inputs;
+   uint64_t required_varying_outputs;
+};
+
 struct d3d12_shader {
    void *bytecode;
    size_t bytecode_length;
@@ -65,6 +70,7 @@ struct d3d12_shader {
    } srv_bindings[PIPE_MAX_SHADER_SAMPLER_VIEWS];
    size_t num_srv_bindings;
 
+   struct d3d12_shader_key key;
    struct d3d12_shader *next_variant;
 };
 
