@@ -64,7 +64,14 @@ protected:
    create_upload_buffer_with_data(const void *data, size_t size);
 
    ComPtr<ID3D12Resource>
-   create_buffer_with_data(const void *data, size_t size);
+   create_sized_buffer_with_data(size_t buffer_size, const void *data,
+                                 size_t data_size);
+
+   ComPtr<ID3D12Resource>
+   create_buffer_with_data(const void *data, size_t size)
+   {
+      return create_sized_buffer_with_data(size, data, size);
+   }
 
    template <typename T>
    std::vector<T>
