@@ -33,6 +33,7 @@ struct d3d12_resource {
    struct pipe_resource base;
    ID3D12Resource *res;
 
+   DXGI_FORMAT format;
    struct sw_displaytarget *dt;
    unsigned dt_stride;
 };

@@ -55,10 +55,11 @@ d3d12_resource_create(struct pipe_screen *pscreen,
 
    pipe_reference_init(&res->base.reference, 1);
    res->base.screen = pscreen;
+   res->format = templ->target == PIPE_BUFFER ? DXGI_FORMAT_UNKNOWN :
+                 d3d12_get_format(templ->format);
 
    D3D12_RESOURCE_DESC desc;
-   desc.Format = templ->target == PIPE_BUFFER ? DXGI_FORMAT_UNKNOWN :
-                 d3d12_get_format(templ->format);
+   desc.Format = res->format;
    desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
    desc.Width = templ->width0;
    desc.Height = templ->height0;
