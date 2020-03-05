@@ -770,6 +770,14 @@ bool add_intrinsic_op_with_dest(dest_params *dest_descr, char *shader, nir_build
 
    nir_builder_instr_insert(b, &out_instr->instr);
 
+   switch (op) {
+   case nir_intrinsic_load_front_face:
+         b->shader->info.system_values_read |= 1ull << SYSTEM_VALUE_FRONT_FACE;
+      break;
+   default:
+      ;
+   }
+
    retval = true;
 fail:
    return retval;
