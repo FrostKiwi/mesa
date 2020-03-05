@@ -149,6 +149,31 @@ int clc_compile_from_source(
       return -1;
    }
 
+   metadata->num_consts = 0;
+   nir_foreach_variable(var, &nir->uniforms) {
+      if (var->data.mode == nir_var_mem_ubo && var->constant_initializer) {
+         if (glsl_type_is_array(var->type)) {
+            int size = glsl_get_cl_size(var->type);
+            uint8_t *data = malloc(size);
+            if (!data)
+               return -1;
+
+            const struct glsl_type *elm_type = glsl_get_array_element(var->type);
+            assert(glsl_type_is_scalar(elm_type)); // TODO: recursive iteration through types?
+            assert(glsl_get_base_type(elm_type) == GLSL_TYPE_UINT); // TODO: more base-types
+            int elm_size = glsl_get_cl_size(elm_type);
+            for (unsigned i = 0; i < var->constant_initializer->num_elements; i++)
+               memcpy(data + elm_size * i,
+                      &var->constant_initializer->elements[i]->values[0].u32, elm_size);
+
+            metadata->consts[metadata->num_consts].data = data;
+            metadata->consts[metadata->num_consts].size = size;
+            metadata->num_consts++;
+         } else
+            unreachable("unexpected constant initializer");
+      }
+   }
+
    ralloc_free(nir);
    glsl_type_singleton_decref();
 

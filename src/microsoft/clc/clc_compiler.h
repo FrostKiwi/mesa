@@ -42,6 +42,7 @@ struct clc_header {
 
 typedef void (*clc_msg_callback)(const char *, int, const char *);
 
+#define CLC_MAX_CONSTS 32
 #define CLC_MAX_CONST_ARGS 8
 #define CLC_MAX_READ_IMAGE_ARGS 128
 #define CLC_MAX_WRITE_IMAGE_ARGS 8
@@ -68,6 +69,12 @@ struct clc_metadata {
       };
    } args[CLC_MAX_ARGS];
    size_t num_args;
+
+   struct {
+      void *data;
+      size_t size;
+   } consts[CLC_MAX_CONSTS];
+   size_t num_consts;
 
    struct {
       int image_index;
