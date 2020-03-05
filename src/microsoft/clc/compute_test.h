@@ -51,7 +51,7 @@ protected:
    create_device(IDXGIAdapter1 *adapter);
 
    ComPtr<ID3D12RootSignature>
-   create_root_signature();
+   create_root_signature(int num_uavs);
 
    ComPtr<ID3D12PipelineState>
    create_pipeline_state(ComPtr<ID3D12RootSignature> &root_sig,
@@ -126,7 +126,7 @@ protected:
       struct clc_metadata metadata;
       std::vector<uint8_t> blob = compile_and_validate(kernel_source, &metadata);
 
-      auto root_sig = create_root_signature();
+      auto root_sig = create_root_signature(1);
       auto pipeline_state = create_pipeline_state(root_sig, blob);
 
       auto res = create_buffer_with_data(input, width * sizeof(T));

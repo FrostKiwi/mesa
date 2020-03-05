@@ -124,23 +124,27 @@ ComputeTest::create_device(IDXGIAdapter1 *adapter)
 }
 
 ComPtr<ID3D12RootSignature>
-ComputeTest::create_root_signature()
+ComputeTest::create_root_signature(int num_uavs)
 {
-   D3D12_DESCRIPTOR_RANGE desc_range;
-   desc_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-   desc_range.NumDescriptors = 1;
-   desc_range.BaseShaderRegister = 0;
-   desc_range.RegisterSpace = 0;
-   desc_range.OffsetInDescriptorsFromTableStart = 0;
+   D3D12_DESCRIPTOR_RANGE desc_ranges[1];
+   unsigned num_desc_ranges = 0;
+   if (num_uavs > 0) {
+      desc_ranges[num_desc_ranges].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+      desc_ranges[num_desc_ranges].NumDescriptors = num_uavs;
+      desc_ranges[num_desc_ranges].BaseShaderRegister = 0;
+      desc_ranges[num_desc_ranges].RegisterSpace = 0;
+      desc_ranges[num_desc_ranges].OffsetInDescriptorsFromTableStart = num_desc_ranges;
+      num_desc_ranges++;
+   }
 
    D3D12_ROOT_PARAMETER root_param;
    root_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-   root_param.DescriptorTable.NumDescriptorRanges = 1;
-   root_param.DescriptorTable.pDescriptorRanges = &desc_range;
+   root_param.DescriptorTable.NumDescriptorRanges = num_desc_ranges;
+   root_param.DescriptorTable.pDescriptorRanges = desc_ranges;
    root_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
    D3D12_ROOT_SIGNATURE_DESC root_sig_desc;
-   root_sig_desc.NumParameters = 1;
+   root_sig_desc.NumParameters = num_uavs;
    root_sig_desc.pParameters = &root_param;
    root_sig_desc.NumStaticSamplers = 0;
    root_sig_desc.pStaticSamplers = NULL;
