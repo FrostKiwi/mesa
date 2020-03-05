@@ -246,13 +246,15 @@ ComputeTest::create_upload_buffer_with_data(const void *data, size_t size)
 }
 
 ComPtr<ID3D12Resource>
-ComputeTest::create_buffer_with_data(const void *data, size_t size)
+ComputeTest::create_sized_buffer_with_data(size_t buffer_size,
+                                           const void *data,
+                                           size_t data_size)
 {
-   auto upload_res = create_upload_buffer_with_data(data, size);
+   auto upload_res = create_upload_buffer_with_data(data, data_size);
 
-   auto res = create_buffer(size, D3D12_HEAP_TYPE_DEFAULT);
+   auto res = create_buffer(buffer_size, D3D12_HEAP_TYPE_DEFAULT);
    resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-   cmdlist->CopyResource(res.Get(), upload_res.Get());
+   cmdlist->CopyBufferRegion(res.Get(), 0, upload_res.Get(), 0, data_size);
    resource_barrier(res, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
    execute_cmdlist();
 
