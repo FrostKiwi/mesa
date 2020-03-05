@@ -44,7 +44,6 @@ using Microsoft::WRL::ComPtr;
 struct d3d12_validation_tools
 {
    d3d12_validation_tools();
-   ~d3d12_validation_tools();
 
    bool validate_and_sign(struct blob *dxil);
 
@@ -52,11 +51,21 @@ struct d3d12_validation_tools
 
    void load_dxil_dll();
 
+   struct HModule {
+      HModule();
+      ~HModule();
+
+      bool load(LPCSTR file_name);
+      operator HMODULE () const;
+   private:
+      HMODULE module;
+   };
+
+   HModule dxil_module;
+   HModule dxc_compiler_module;
    ComPtr<IDxcCompiler> compiler;
    ComPtr<IDxcValidator> validator;
    ComPtr<IDxcLibrary> library;
-   HMODULE dxil_module;
-   HMODULE dxc_ompiler_module;
 };
 
 struct d3d12_validation_tools *d3d12_validator_create()
@@ -164,8 +173,7 @@ extern "C" extern IMAGE_DOS_HEADER __ImageBase;
 
 void d3d12_validation_tools::load_dxil_dll()
 {
-   dxil_module = ::LoadLibrary("dxil.dll");
-   if (!dxil_module) {
+   if (!dxil_module.load("dxil.dll")) {
       char selfPath[MAX_PATH] = "";
       uint32_t pathSize = GetModuleFileNameA((HINSTANCE)&__ImageBase, selfPath, sizeof(selfPath));
       if (pathSize == 0 || pathSize == sizeof(selfPath)) {
@@ -185,27 +193,29 @@ void d3d12_validation_tools::load_dxil_dll()
          return;
       }
 
-      dxil_module = ::LoadLibrary(selfPath);
+      dxil_module.load(selfPath);
    }
 }
 
 d3d12_validation_tools::d3d12_validation_tools()
 {
    load_dxil_dll();
-   dxc_ompiler_module = ::LoadLibrary("dxcompiler.dll");
    DxcCreateInstanceProc dxil_create_func = (DxcCreateInstanceProc)GetProcAddress(dxil_module, "DxcCreateInstance");
+   assert(dxil_create_func);
 
    HRESULT hr = dxil_create_func(CLSID_DxcValidator,  IID_PPV_ARGS(&validator));
    if (FAILED(hr)) {
       debug_printf("D3D12: Unable to create validator\n");
    }
 
-   DxcCreateInstanceProc compiler_create_func = (DxcCreateInstanceProc)GetProcAddress(dxc_ompiler_module, "DxcCreateInstance");
+   DxcCreateInstanceProc compiler_create_func  = nullptr;
+   if(dxc_compiler_module.load("dxcompiler.dll"))
+      compiler_create_func = (DxcCreateInstanceProc)GetProcAddress(dxc_compiler_module, "DxcCreateInstance");
 
    if (compiler_create_func) {
       hr = compiler_create_func(CLSID_DxcLibrary, IID_PPV_ARGS(&library));
       if (FAILED(hr)) {
-         debug_printf("D3D12: Unable to create library instance\n");
+         debug_printf("D3D12: Unable to create library instance: %x\n", hr);
       }
 
       if (d3d12_debug & D3D12_DEBUG_DISASS) {
@@ -219,15 +229,30 @@ d3d12_validation_tools::d3d12_validation_tools()
    }
 }
 
-d3d12_validation_tools::~d3d12_validation_tools()
+d3d12_validation_tools::HModule::HModule():
+   module(0)
 {
-   if (dxil_module) {
-      ::FreeLibrary(dxil_module);
-   }
-   if (dxc_ompiler_module) {
-      ::FreeLibrary(dxc_ompiler_module);
-   }
 }
+
+d3d12_validation_tools::HModule::~HModule()
+{
+   if (module)
+      ::FreeLibrary(module);
+}
+
+inline
+d3d12_validation_tools::HModule::operator HMODULE () const
+{
+   return module;
+}
+
+bool
+d3d12_validation_tools::HModule::load(LPCSTR file_name)
+{
+   module = ::LoadLibrary(file_name);
+   return module != nullptr;
+}
+
 
 class ShaderBlob : public IDxcBlob {
 public:
