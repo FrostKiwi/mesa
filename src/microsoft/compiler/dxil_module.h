@@ -363,8 +363,7 @@ const struct dxil_value *
 dxil_instr_get_return_value(struct dxil_instr *instr);
 
 struct dxil_instr *
-dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type,
-              const struct dxil_value **out_value);
+dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type);
 
 void
 dxil_phi_set_incoming(struct dxil_instr *instr,

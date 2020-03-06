@@ -2260,8 +2260,7 @@ dxil_instr_get_return_value(struct dxil_instr *instr)
 }
 
 struct dxil_instr *
-dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type,
-              const struct dxil_value **out_value)
+dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type)
 {
    struct dxil_instr *instr = create_instr(m, INSTR_PHI);
    if (!instr)
@@ -2270,9 +2269,6 @@ dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type,
    instr->phi.type = type;
    instr->phi.num_incoming = 0;
    instr->has_value = true;
-
-   assert(out_value);
-   *out_value = &instr->value;
 
    return instr;
 }

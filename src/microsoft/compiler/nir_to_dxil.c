@@ -1939,12 +1939,11 @@ emit_phi(struct ntd_context *ctx, nir_phi_instr *instr)
    const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod,
                                                            bit_size);
 
-   const struct dxil_value *value;
-   struct dxil_instr *phi = dxil_emit_phi(&ctx->mod, type, &value);
+   struct dxil_instr *phi = dxil_emit_phi(&ctx->mod, type);
    if (!phi)
       return false;
 
-   store_dest_int(ctx, &instr->dest, 0, value);
+   store_dest_int(ctx, &instr->dest, 0, dxil_instr_get_return_value(phi));
    _mesa_hash_table_insert(ctx->phis, instr, phi);
    return true;
 }
