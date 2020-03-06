@@ -1931,39 +1931,49 @@ emit_jump(struct ntd_context *ctx, nir_jump_instr *instr)
    }
 }
 
+struct phi_block {
+   unsigned num_components;
+   struct dxil_instr *comp[4];
+};
+
 static bool
 emit_phi(struct ntd_context *ctx, nir_phi_instr *instr)
 {
-   assert(nir_dest_num_components(instr->dest) == 1);
    unsigned bit_size = nir_dest_bit_size(instr->dest);
    const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod,
                                                            bit_size);
 
-   struct dxil_instr *phi = dxil_emit_phi(&ctx->mod, type);
-   if (!phi)
-      return false;
+   struct phi_block *vphi = ralloc(ctx->phis, struct phi_block);
+   vphi->num_components = nir_dest_num_components(instr->dest);
 
-   store_dest_int(ctx, &instr->dest, 0, dxil_instr_get_return_value(phi));
-   _mesa_hash_table_insert(ctx->phis, instr, phi);
+   for (unsigned i = 0; i < vphi->num_components; ++i) {
+      struct dxil_instr *phi = vphi->comp[i] = dxil_emit_phi(&ctx->mod, type);
+      if (!phi)
+         return false;
+      store_dest_int(ctx, &instr->dest, i, dxil_instr_get_return_value(phi));
+   }
+   _mesa_hash_table_insert(ctx->phis, instr, vphi);
    return true;
 }
 
 static void
 fixup_phi(struct ntd_context *ctx, nir_phi_instr *instr,
-          struct dxil_instr *phi)
+          struct phi_block *vphi)
 {
    const struct dxil_value *values[128];
    unsigned blocks[128];
-   size_t num_incoming = 0;
-   nir_foreach_phi_src(src, instr) {
-      const struct dxil_value *val = get_src_ssa(ctx, src->src.ssa, 0);
-      assert(num_incoming < ARRAY_SIZE(values));
-      values[num_incoming] = val;
-      assert(num_incoming < ARRAY_SIZE(blocks));
-      blocks[num_incoming] = src->pred->index;
-      ++num_incoming;
+   for (unsigned i = 0; i < vphi->num_components; ++i) {
+      size_t num_incoming = 0;
+      nir_foreach_phi_src(src, instr) {
+         const struct dxil_value *val = get_src_ssa(ctx, src->src.ssa, i);
+         assert(num_incoming < ARRAY_SIZE(values));
+         values[num_incoming] = val;
+         assert(num_incoming < ARRAY_SIZE(blocks));
+         blocks[num_incoming] = src->pred->index;
+         ++num_incoming;
+      }
+      dxil_phi_set_incoming(vphi->comp[i], values, blocks, num_incoming);
    }
-   dxil_phi_set_incoming(phi, values, blocks, num_incoming);
 }
 
 static unsigned
@@ -2445,7 +2455,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    hash_table_foreach(ctx->phis, entry) {
       fixup_phi(ctx, (nir_phi_instr *)entry->key,
-                (struct dxil_instr *)entry->data);
+                (struct phi_block *)entry->data);
    }
 
    if (!dxil_emit_ret_void(&ctx->mod))
