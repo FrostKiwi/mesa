@@ -1513,6 +1513,8 @@ dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
    gvar->align = align;
 
    gvar->value.id = -1;
+   gvar->value.type = type;
+
    list_addtail(&gvar->head, &m->gvar_list);
    return gvar;
 }
@@ -1539,6 +1541,7 @@ add_function(struct dxil_module *m, const char *name,
    func->attr_set = attr_set;
 
    func->value.id = -1;
+   func->value.type  = type->function_def.ret_type;
    list_addtail(&func->head, &m->func_list);
    return func;
 }
@@ -2171,13 +2174,15 @@ emit_metadata(struct dxil_module *m)
 }
 
 static struct dxil_instr *
-create_instr(struct dxil_module *m, enum instr_type type)
+create_instr(struct dxil_module *m, enum instr_type type,
+             const struct dxil_type *ret_type)
 {
    struct dxil_instr *ret = ralloc_size(m->ralloc_ctx,
                                         sizeof(struct dxil_instr));
    if (ret) {
       ret->type = type;
       ret->value.id = -1;
+      ret->value.type = ret_type;
       ret->has_value = false;
       list_addtail(&ret->head, &m->instr_list);
    }
@@ -2189,7 +2194,7 @@ dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
                 const struct dxil_value *op0, const struct dxil_value *op1,
                 enum dxil_opt_flags flags)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_BINOP);
+   struct dxil_instr *instr = create_instr(m, INSTR_BINOP, op0->type);
    if (!instr)
       return NULL;
 
@@ -2205,7 +2210,7 @@ const struct dxil_value *
 dxil_emit_cmp(struct dxil_module *m, enum dxil_cmp_pred pred,
                 const struct dxil_value *op0, const struct dxil_value *op1)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_CMP);
+   struct dxil_instr *instr = create_instr(m, INSTR_CMP, get_int1_type(m));
    if (!instr)
       return NULL;
 
@@ -2222,7 +2227,7 @@ dxil_emit_select(struct dxil_module *m,
                 const struct dxil_value *op1,
                 const struct dxil_value *op2)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_SELECT);
+   struct dxil_instr *instr = create_instr(m, INSTR_SELECT, op1->type);
    if (!instr)
       return NULL;
 
@@ -2238,7 +2243,7 @@ dxil_emit_cast(struct dxil_module *m, enum dxil_cast_opcode opcode,
                const struct dxil_type *type,
                const struct dxil_value *value)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_CAST);
+   struct dxil_instr *instr = create_instr(m, INSTR_CAST, type);
    if (!instr)
       return NULL;
 
@@ -2253,7 +2258,8 @@ bool
 dxil_emit_branch(struct dxil_module *m, const struct dxil_value *cond,
                  unsigned true_block, unsigned false_block)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_BR);
+   struct dxil_instr *instr = create_instr(m, INSTR_BR,
+                                           dxil_module_get_void_type(m));
    if (!instr)
       return false;
 
@@ -2273,7 +2279,7 @@ dxil_instr_get_return_value(struct dxil_instr *instr)
 struct dxil_instr *
 dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_PHI);
+   struct dxil_instr *instr = create_instr(m, INSTR_PHI, type);
    if (!instr)
       return NULL;
 
@@ -2306,7 +2312,8 @@ create_call_instr(struct dxil_module *m,
                   const struct dxil_func *func,
                   const struct dxil_value **args, size_t num_args)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_CALL);
+   struct dxil_instr *instr = create_instr(m, INSTR_CALL,
+                                           func->type->function_def.ret_type);
    if (instr) {
       instr->call.func = func;
       instr->call.args = ralloc_array(instr, struct dxil_value *, num_args);
@@ -2350,7 +2357,8 @@ dxil_emit_call_void(struct dxil_module *m,
 bool
 dxil_emit_ret_void(struct dxil_module *m)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_RET);
+   struct dxil_instr *instr = create_instr(m, INSTR_RET,
+                                           dxil_module_get_void_type(m));
    if (!instr)
       return false;
 
@@ -2363,12 +2371,13 @@ const struct dxil_value *
 dxil_emit_extractval(struct dxil_module *m, const struct dxil_value *src,
                      const struct dxil_type *type, const unsigned int index)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_EXTRACTVAL);
-   if (!instr)
-      return NULL;
-
    assert(type->type == TYPE_STRUCT);
    assert(index < type->struct_def.num_elem_types);
+
+   struct dxil_instr *instr = create_instr(m, INSTR_EXTRACTVAL,
+                                           type->struct_def.elem_types[index]);
+   if (!instr)
+      return NULL;
 
    instr->extractval.src = src;
    instr->extractval.type = type;
@@ -2386,7 +2395,8 @@ dxil_emit_alloca(struct dxil_module *m, const struct dxil_type *alloc_type,
 {
    assert(size_type && size_type->type == TYPE_INTEGER);
 
-   struct dxil_instr *instr = create_instr(m, INSTR_ALLOCA);
+   struct dxil_instr *instr = create_instr(m, INSTR_ALLOCA,
+                                           dxil_module_get_pointer_type(m, alloc_type));
    if (!instr)
       return NULL;
 
@@ -2401,13 +2411,33 @@ dxil_emit_alloca(struct dxil_module *m, const struct dxil_type *alloc_type,
    return &instr->value;
 }
 
+static const struct dxil_type *
+get_deref_type(const struct dxil_type *type)
+{
+   switch (type->type) {
+   case TYPE_POINTER: return type->ptr_target_type;
+   case TYPE_ARRAY: return type->array.elem_type;
+   default: unreachable("unexpected type");
+   }
+}
+
 const struct dxil_value *
 dxil_emit_gep_inbounds(struct dxil_module *m,
                        const struct dxil_type *source_elem_type,
                        const struct dxil_value **operands,
                        size_t num_operands)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_GEP);
+   const struct dxil_type *type = operands[0]->type;
+   for (int i = 1; i < num_operands; ++i) {
+      assert(operands[i]->type == get_int32_type(m));
+      type = get_deref_type(type);
+   }
+
+   type = dxil_module_get_pointer_type(m, type);
+   if (!type)
+      return NULL;
+
+   struct dxil_instr *instr = create_instr(m, INSTR_GEP, type);
    if (!instr)
       return NULL;
 
@@ -2432,7 +2462,7 @@ dxil_emit_load(struct dxil_module *m, const struct dxil_value *ptr,
                unsigned align,
                bool is_volatile)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_LOAD);
+   struct dxil_instr *instr = create_instr(m, INSTR_LOAD, type);
    if (!instr)
       return false;
 
@@ -2450,7 +2480,8 @@ dxil_emit_store(struct dxil_module *m, const struct dxil_value *value,
                 const struct dxil_value *ptr, unsigned align,
                 bool is_volatile)
 {
-   struct dxil_instr *instr = create_instr(m, INSTR_STORE);
+   struct dxil_instr *instr = create_instr(m, INSTR_STORE,
+                                           dxil_module_get_void_type(m));
    if (!instr)
       return false;
 
