@@ -483,8 +483,8 @@ dxil_module_get_struct_type(struct dxil_module *m,
       if (name && strcmp(type->struct_def.name, name))
          continue;
 
-      if (type->struct_def.num_elem_types == num_elem_types &&
-          !memcmp(type->struct_def.elem_types, elem_types,
+      if (type->struct_def.elem.num_types == num_elem_types &&
+          !memcmp(type->struct_def.elem.types, elem_types,
                   sizeof(struct dxil_type *) * num_elem_types))
          return type;
    }
@@ -498,14 +498,14 @@ dxil_module_get_struct_type(struct dxil_module *m,
       } else
          type->struct_def.name = NULL;
 
-      type->struct_def.elem_types = ralloc_array(type, struct dxil_type *,
+      type->struct_def.elem.types = ralloc_array(type, struct dxil_type *,
                                                  num_elem_types);
-      if (!type->struct_def.elem_types)
+      if (!type->struct_def.elem.types)
          return NULL;
 
-      memcpy(type->struct_def.elem_types, elem_types,
+      memcpy(type->struct_def.elem.types, elem_types,
              sizeof(struct dxil_type *) * num_elem_types);
-      type->struct_def.num_elem_types = num_elem_types;
+      type->struct_def.elem.num_types = num_elem_types;
    }
    return type;
 }
@@ -662,15 +662,15 @@ dxil_module_add_function_type(struct dxil_module *m,
 {
    struct dxil_type *type = create_type(m, TYPE_FUNCTION);
    if (type) {
-      type->function_def.arg_types = ralloc_array(type,
+      type->function_def.args.types = ralloc_array(type,
                                                   struct dxil_type *,
                                                   num_arg_types);
-      if (!type->function_def.arg_types)
+      if (!type->function_def.args.types)
          return NULL;
 
-      memcpy(type->function_def.arg_types, arg_types,
+      memcpy(type->function_def.args.types, arg_types,
              sizeof(struct dxil_type *) * num_arg_types);
-      type->function_def.num_arg_types = num_arg_types;
+      type->function_def.args.num_types = num_arg_types;
       type->function_def.ret_type = ret_type;
    }
    return type;
@@ -1179,16 +1179,16 @@ emit_struct_type(struct dxil_module *m, const struct dxil_type *type)
    }
 
    uint64_t temp[256];
-   assert(type->struct_def.num_elem_types < ARRAY_SIZE(temp) - 2);
+   assert(type->struct_def.elem.num_types < ARRAY_SIZE(temp) - 2);
    temp[0] = type_code;
    temp[1] = 0; /* packed */
-   for (int i = 0; i < type->struct_def.num_elem_types; ++i) {
-      assert(type->struct_def.elem_types[i]->id >= 0);
-      temp[2 + i] = type->struct_def.elem_types[i]->id;
+   for (int i = 0; i < type->struct_def.elem.num_types; ++i) {
+      assert(type->struct_def.elem.types[i]->id >= 0);
+      temp[2 + i] = type->struct_def.elem.types[i]->id;
    }
 
    return emit_type_table_abbrev_record(m, abbrev, temp,
-                                        2 + type->struct_def.num_elem_types);
+                                        2 + type->struct_def.elem.num_types);
 }
 
 static bool
@@ -1208,19 +1208,19 @@ static bool
 emit_function_type(struct dxil_module *m, const struct dxil_type *type)
 {
    uint64_t temp[256];
-   assert(type->function_def.num_arg_types < ARRAY_SIZE(temp) - 3);
+   assert(type->function_def.args.num_types < ARRAY_SIZE(temp) - 3);
    assert(type->function_def.ret_type->id >= 0);
 
    temp[0] = TYPE_CODE_FUNCTION;
    temp[1] = 0; // vararg
    temp[2] = type->function_def.ret_type->id;
-   for (int i = 0; i < type->function_def.num_arg_types; ++i) {
-      assert(type->function_def.arg_types[i]->id >= 0);
-      temp[3 + i] = type->function_def.arg_types[i]->id;
+   for (int i = 0; i < type->function_def.args.num_types; ++i) {
+      assert(type->function_def.args.types[i]->id >= 0);
+      temp[3 + i] = type->function_def.args.types[i]->id;
    }
 
    return emit_type_table_abbrev_record(m, TYPE_TABLE_ABBREV_FUNCTION,
-                                        temp, 3 + type->function_def.num_arg_types);
+                                        temp, 3 + type->function_def.args.num_types);
 }
 
 static bool
@@ -2372,7 +2372,7 @@ dxil_emit_extractval(struct dxil_module *m, const struct dxil_value *src,
                      const struct dxil_type *type, const unsigned int index)
 {
    assert(type->type == TYPE_STRUCT);
-   assert(index < type->struct_def.num_elem_types);
+   assert(index < type->struct_def.elem.num_types);
 
    struct dxil_instr *instr = create_instr(m, INSTR_EXTRACTVAL,
                                            type->struct_def.elem_types[index]);

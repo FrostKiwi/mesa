@@ -214,10 +214,10 @@ static void dump_type_name(struct dxil_dumper *d, const struct dxil_type *type)
       _mesa_string_buffer_append(d->buf, "(");
       dump_type_name(d, type->function_def.ret_type);
       _mesa_string_buffer_append(d->buf, ")(");
-      for (size_t i = 0; i < type->function_def.num_arg_types; ++i) {
+      for (size_t i = 0; i < type->function_def.args.num_types; ++i) {
          if (i > 0)
             _mesa_string_buffer_append(d->buf, ", ");
-         dump_type_name(d, type->function_def.arg_types[i]);
+         dump_type_name(d, type->function_def.args.types[i]);
       }
       _mesa_string_buffer_append(d->buf, ")");
       break;
@@ -238,9 +238,9 @@ static void dump_type(struct dxil_dumper *d, const struct dxil_type *type)
       _mesa_string_buffer_printf(d->buf, "struct %s {\n", type->struct_def.name);
       dxil_dump_indention_inc(d);
 
-      for (size_t i = 0; i < type->struct_def.num_elem_types; ++i) {
+      for (size_t i = 0; i < type->struct_def.elem.num_types; ++i) {
          dxil_dump_indent(d);
-         dump_type(d, type->struct_def.elem_types[i]);
+         dump_type(d, type->struct_def.elem.types[i]);
          _mesa_string_buffer_append(d->buf, "\n");
       }
       dxil_dump_indention_dec(d);
@@ -436,8 +436,8 @@ dump_instr_cast(struct dxil_dumper *d, struct dxil_instr_cast *cast)
 static void
 dump_instr_call(struct dxil_dumper *d, struct dxil_instr_call *call)
 {
-   assert(call->num_args == call->func->type->function_def.num_arg_types);
-   struct dxil_type **func_arg_types = call->func->type->function_def.arg_types;
+   assert(call->num_args == call->func->type->function_def.args.num_types);
+   struct dxil_type **func_arg_types = call->func->type->function_def.args.types;
 
    _mesa_string_buffer_printf(d->buf, "%s(", call->func->name);
    for (unsigned i = 0; i < call->num_args; ++i) {
