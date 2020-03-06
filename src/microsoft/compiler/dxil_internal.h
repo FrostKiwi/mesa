@@ -34,6 +34,11 @@
 // of this header have the same definition of alloca.
 #include <malloc.h>
 
+struct dxil_type_list {
+   struct dxil_type **types;
+   size_t num_types;
+};
+
 struct dxil_type {
    enum type_type {
       TYPE_VOID,
@@ -52,8 +57,7 @@ struct dxil_type {
       const struct dxil_type *ptr_target_type;
       struct {
          const char *name;
-         struct dxil_type **elem_types;
-         size_t num_elem_types;
+         struct dxil_type_list elem;
       } struct_def;
       struct {
          const struct dxil_type *elem_type;
@@ -61,8 +65,7 @@ struct dxil_type {
       } array;
       struct {
          const struct dxil_type *ret_type;
-         struct dxil_type **arg_types;
-         size_t num_arg_types;
+         struct dxil_type_list args;
       } function_def;
       struct {
          const struct dxil_type *elem_type;
