@@ -359,6 +359,8 @@ typedef struct _drm_i915_sarea {
 #define DRM_I915_QUERY			0x39
 #define DRM_I915_GEM_VM_CREATE		0x3a
 #define DRM_I915_GEM_VM_DESTROY		0x3b
+#define DRM_I915_GEM_VM_GETPARAM        DRM_I915_GEM_CONTEXT_GETPARAM
+#define DRM_I915_GEM_VM_SETPARAM        DRM_I915_GEM_CONTEXT_SETPARAM
 #define DRM_I915_GEM_VM_BIND		0x3c
 /* Must be kept compact -- no holes */
 
@@ -423,6 +425,8 @@ typedef struct _drm_i915_sarea {
 #define DRM_IOCTL_I915_QUERY			DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_QUERY, struct drm_i915_query)
 #define DRM_IOCTL_I915_GEM_VM_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_VM_CREATE, struct drm_i915_gem_vm_control)
 #define DRM_IOCTL_I915_GEM_VM_DESTROY	DRM_IOW (DRM_COMMAND_BASE + DRM_I915_GEM_VM_DESTROY, struct drm_i915_gem_vm_control)
+#define DRM_IOCTL_I915_GEM_VM_GETPARAM		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_VM_GETPARAM, struct drm_i915_gem_vm_param)
+#define DRM_IOCTL_I915_GEM_VM_SETPARAM		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_VM_SETPARAM, struct drm_i915_gem_vm_param)
 #define DRM_IOCTL_I915_GEM_VM_BIND		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_VM_BIND, struct drm_i915_gem_vm_bind)
 
 /* Allow drivers to submit batchbuffers directly to hardware, relying
@@ -1849,6 +1853,17 @@ struct drm_i915_gem_vm_control {
 	__u64 extensions;
 	__u32 flags;
 	__u32 vm_id;
+};
+
+struct drm_i915_gem_vm_param {
+	__u32 vm_id;
+	__u32 rsvd;
+
+#define I915_VM_PARAM     (2ull << 32)
+#define I915_GEM_VM_PARAM_SVM   0x1
+	__u64 param;
+
+	__u64 value;
 };
 
 struct drm_i915_reg_read {

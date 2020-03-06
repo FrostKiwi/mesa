@@ -2813,6 +2813,11 @@ VkResult anv_CreateDevice(
          goto fail_fd;
       }
       device->vm_id = vm_id;
+      if (anv_gem_set_vm_param(device->fd, device->vm_id,
+                               I915_GEM_VM_PARAM_SVM, 1)) {
+         result = vk_error(VK_ERROR_INITIALIZATION_FAILED);
+         goto fail_fd;
+      }
    } else {
       device->vm_id = 0;
    }

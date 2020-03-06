@@ -390,6 +390,18 @@ anv_gem_get_context_param(int fd, int context, uint32_t param, uint64_t *value)
 }
 
 int
+anv_gem_set_vm_param(int fd, uint32_t vm_id, uint32_t param, uint64_t value)
+{
+   struct drm_i915_gem_vm_param vm_param = {
+      .vm_id = vm_id,
+      .param = I915_VM_PARAM | param,
+      .value = value,
+   };
+
+   return gen_ioctl(fd, DRM_IOCTL_I915_GEM_VM_SETPARAM, &vm_param);
+}
+
+int
 anv_gem_gpu_get_reset_stats(struct anv_device *device,
                             uint32_t *active, uint32_t *pending)
 {
