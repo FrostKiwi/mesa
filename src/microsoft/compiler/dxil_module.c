@@ -2253,6 +2253,12 @@ dxil_emit_branch(struct dxil_module *m, const struct dxil_value *cond,
    return true;
 }
 
+const struct dxil_value *
+dxil_instr_get_return_value(struct dxil_instr *instr)
+{
+   return instr->has_value ? &instr->value : NULL;
+}
+
 struct dxil_instr *
 dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type,
               const struct dxil_value **out_value)
