@@ -520,15 +520,15 @@ dxil_module_get_array_type(struct dxil_module *m,
       if (type->type != TYPE_ARRAY)
          continue;
 
-      if (type->array.elem_type == elem_type &&
-          type->array.num_elems == num_elems)
+      if (type->array_or_vector_def.elem_type == elem_type &&
+          type->array_or_vector_def.num_elems == num_elems)
          return type;
    }
 
    type = create_type(m, TYPE_ARRAY);
    if (type) {
-      type->array.elem_type = elem_type;
-      type->array.num_elems = num_elems;
+      type->array_or_vector_def.elem_type = elem_type;
+      type->array_or_vector_def.num_elems = num_elems;
    }
    return type;
 }
@@ -541,8 +541,8 @@ dxil_module_get_vector_type(struct dxil_module *m,
    struct dxil_type *type;
    LIST_FOR_EACH_ENTRY(type, &m->type_list, head) {
       if (type->type == TYPE_VECTOR &&
-          type->vector_def.elem_type == elem_type &&
-          type->vector_def.num_elems == num_elems)
+          type->array_or_vector_def.elem_type == elem_type &&
+          type->array_or_vector_def.num_elems == num_elems)
          return type;
    }
 
@@ -550,8 +550,8 @@ dxil_module_get_vector_type(struct dxil_module *m,
    if (!type)
       return NULL;
 
-   type->vector_def.elem_type = elem_type;
-   type->vector_def.num_elems = num_elems;
+   type->array_or_vector_def.elem_type = elem_type;
+   type->array_or_vector_def.num_elems = num_elems;
    return type;
 }
 
@@ -1194,11 +1194,11 @@ emit_struct_type(struct dxil_module *m, const struct dxil_type *type)
 static bool
 emit_array_type(struct dxil_module *m, const struct dxil_type *type)
 {
-   assert(type->array.elem_type->id >= 0);
+   assert(type->array_or_vector_def.elem_type->id >= 0);
    uint64_t data[] = {
       TYPE_CODE_ARRAY,
-      type->array.num_elems,
-      type->array.elem_type->id
+      type->array_or_vector_def.num_elems,
+      type->array_or_vector_def.elem_type->id
    };
    return emit_type_table_abbrev_record(m, TYPE_TABLE_ABBREV_ARRAY, data,
                                         ARRAY_SIZE(data));
@@ -1228,8 +1228,8 @@ emit_vector_type(struct dxil_module *m, const struct dxil_type *type)
 {
    uint64_t temp[3];
    temp[0] = TYPE_CODE_VECTOR;
-   temp[1] = type->vector_def.num_elems;
-   temp[2] = type->vector_def.elem_type->id;
+   temp[1] = type->array_or_vector_def.num_elems;
+   temp[2] = type->array_or_vector_def.elem_type->id;
 
    return emit_type_table_abbrev_record(m, TYPE_TABLE_ABBREV_VECTOR , temp, 3);
 }
@@ -2416,7 +2416,7 @@ get_deref_type(const struct dxil_type *type)
 {
    switch (type->type) {
    case TYPE_POINTER: return type->ptr_target_type;
-   case TYPE_ARRAY: return type->array.elem_type;
+   case TYPE_ARRAY: return type->array_or_vector_def.elem_type;
    default: unreachable("unexpected type");
    }
 }

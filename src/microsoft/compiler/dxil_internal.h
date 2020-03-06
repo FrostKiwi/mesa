@@ -60,17 +60,13 @@ struct dxil_type {
          struct dxil_type_list elem;
       } struct_def;
       struct {
-         const struct dxil_type *elem_type;
-         size_t num_elems;
-      } array;
-      struct {
          const struct dxil_type *ret_type;
          struct dxil_type_list args;
       } function_def;
       struct {
          const struct dxil_type *elem_type;
          size_t num_elems;
-      } vector_def;
+      } array_or_vector_def;
    };
 
    struct list_head head;
