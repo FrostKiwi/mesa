@@ -189,6 +189,11 @@ dump_types(struct dxil_dumper *d, struct list_head *list)
 
 static void dump_type_name(struct dxil_dumper *d, const struct dxil_type *type)
 {
+   if (!type) {
+      _mesa_string_buffer_append(d->buf, "(type error)");
+      return;
+   }
+
    switch (type->type) {
    case TYPE_VOID:
       _mesa_string_buffer_append(d->buf, "void");
@@ -231,7 +236,8 @@ static void dump_type_name(struct dxil_dumper *d, const struct dxil_type *type)
    }
 }
 
-static void dump_type(struct dxil_dumper *d, const struct dxil_type *type)
+static void
+dump_type(struct dxil_dumper *d, const struct dxil_type *type)
 {
    switch (type->type) {
    case TYPE_STRUCT:
@@ -335,7 +341,7 @@ dump_constants(struct dxil_dumper *d, struct list_head *list)
    dxil_dump_indention_inc(d);
    list_for_each_entry(struct dxil_const, cnst, list, head) {
       _mesa_string_buffer_append_char(d->buf, ' ');
-      dump_value(d->buf, &cnst->value);
+      dump_value(d, &cnst->value);
       _mesa_string_buffer_append(d->buf, " = ");
       dump_type_name(d, cnst->value.type);
       if (!cnst->undef) {
@@ -365,19 +371,19 @@ dump_instrs(struct dxil_dumper *d, struct list_head *list)
 
       dxil_dump_indent(d);
       if (instr->has_value) {
-         dump_value(d->buf, &instr->value);
+         dump_value(d, &instr->value);
          _mesa_string_buffer_append(d->buf, " = ");
       } else {
          _mesa_string_buffer_append_char(d->buf, ' ');
       }
 
       switch (instr->type) {
-      case INSTR_BINOP: dump_instr_binop(d->buf, &instr->binop); break;
-      case INSTR_CMP:   dump_instr_cmp(d->buf, &instr->cmp);break;
-      case INSTR_SELECT:dump_instr_select(d->buf, &instr->select); break;
+      case INSTR_BINOP: dump_instr_binop(d, &instr->binop); break;
+      case INSTR_CMP:   dump_instr_cmp(d, &instr->cmp);break;
+      case INSTR_SELECT:dump_instr_select(d, &instr->select); break;
       case INSTR_CAST:  dump_instr_cast(d, &instr->cast); break;
       case INSTR_CALL:  dump_instr_call(d, &instr->call); break;
-      case INSTR_RET:   dump_instr_ret(d->buf, &instr->ret); break;
+      case INSTR_RET:   dump_instr_ret(d, &instr->ret); break;
       case INSTR_EXTRACTVAL: dump_instr_extractval(d, &instr->extractval); break;
       case INSTR_BR:  dump_instr_branch(d, &instr->br); break;
       case INSTR_PHI:  dump_instr_phi(d, &instr->phi); break;
@@ -395,30 +401,30 @@ dump_instrs(struct dxil_dumper *d, struct list_head *list)
 }
 
 static void
-dump_instr_binop(struct _mesa_string_buffer *buf, struct dxil_instr_binop *binop)
+dump_instr_binop(struct dxil_dumper *d, struct dxil_instr_binop *binop)
 {
    const char *str = binop->opcode < DXIL_BINOP_INSTR_COUNT ?
                         binop_strings[binop->opcode] : "INVALID";
 
-   _mesa_string_buffer_printf(buf, "%s ", str);
-   dump_instr_print_operands(buf, 2, binop->operands);
+   _mesa_string_buffer_printf(d->buf, "%s ", str);
+   dump_instr_print_operands(d, 2, binop->operands);
 }
 
 static void
-dump_instr_cmp(struct _mesa_string_buffer *buf, struct dxil_instr_cmp *cmp)
+dump_instr_cmp(struct dxil_dumper *d, struct dxil_instr_cmp *cmp)
 {
    const char *str = cmp->pred < DXIL_CMP_INSTR_COUNT ?
                         pred_strings[cmp->pred] : "INVALID";
 
-   _mesa_string_buffer_printf(buf, "%s ", str);
-   dump_instr_print_operands(buf, 2, cmp->operands);
+   _mesa_string_buffer_printf(d->buf, "%s ", str);
+   dump_instr_print_operands(d, 2, cmp->operands);
 }
 
 static void
-dump_instr_select(struct _mesa_string_buffer *buf, struct dxil_instr_select *select)
+dump_instr_select(struct dxil_dumper *d, struct dxil_instr_select *select)
 {
-   _mesa_string_buffer_append(buf, "sel ");
-   dump_instr_print_operands(buf, 3, select->operands);
+   _mesa_string_buffer_append(d->buf, "sel ");
+   dump_instr_print_operands(d, 3, select->operands);
 }
 
 static void
@@ -430,7 +436,7 @@ dump_instr_cast(struct dxil_dumper *d, struct dxil_instr_cast *cast)
    _mesa_string_buffer_printf(d->buf, "%s.", str);
    dump_type_name(d, cast->type);
    _mesa_string_buffer_append_char(d->buf, ' ');
-   dump_value(d->buf, cast->value);
+   dump_value(d, cast->value);
 }
 
 static void
@@ -445,17 +451,17 @@ dump_instr_call(struct dxil_dumper *d, struct dxil_instr_call *call)
          _mesa_string_buffer_append(d->buf, ", ");
       dump_type_name(d, func_arg_types[i]);
       _mesa_string_buffer_append_char(d->buf, ' ');
-      dump_value(d->buf, call->args[i]);
+      dump_value(d, call->args[i]);
    }
    _mesa_string_buffer_append_char(d->buf, ')');
 }
 
 static void
-dump_instr_ret(struct _mesa_string_buffer *buf, struct dxil_instr_ret *ret)
+dump_instr_ret(struct dxil_dumper *d, struct dxil_instr_ret *ret)
 {
-   _mesa_string_buffer_append(buf, "ret ");
+   _mesa_string_buffer_append(d->buf, "ret ");
    if (ret->value)
-      dump_value(buf, ret->value);
+      dump_value(d, ret->value);
 }
 
 static void
@@ -463,7 +469,7 @@ dump_instr_extractval(struct dxil_dumper *d, struct dxil_instr_extractval *extr)
 {
    _mesa_string_buffer_append(d->buf, "extractvalue ");
    dump_type_name(d, extr->type);
-   dump_value(d->buf, extr->src);
+   dump_value(d, extr->src);
    _mesa_string_buffer_printf(d->buf, ", %d", extr->idx);
 }
 
@@ -487,7 +493,7 @@ dump_instr_phi(struct dxil_dumper *d, struct dxil_instr_phi *phi)
    for (unsigned i = 0; i < phi->num_incoming; ++i, ++src) {
       if (i > 0)
          _mesa_string_buffer_append(d->buf, ", ");
-      dump_value(d->buf, src->value);
+      dump_value(d, src->value);
       _mesa_string_buffer_printf(d->buf, "(%d)", src->block);
    }
 }
@@ -500,7 +506,7 @@ dump_instr_alloca(struct dxil_dumper *d, struct dxil_instr_alloca *alloca)
    _mesa_string_buffer_append(d->buf, ", ");
    dump_type_name(d, alloca->size_type);
    _mesa_string_buffer_append(d->buf, ", ");
-   dump_value(d->buf, alloca->size);
+   dump_value(d, alloca->size);
    unsigned align_mask = (1 << 6 ) - 1;
    unsigned align = alloca->align & align_mask;
    _mesa_string_buffer_printf(d->buf, ", %d", 1 << (align - 1));
@@ -517,7 +523,7 @@ dump_instr_gep(struct dxil_dumper *d, struct dxil_instr_gep *gep)
    for (unsigned i = 0; i < gep->num_operands; ++i) {
       if (i > 0)
          _mesa_string_buffer_append(d->buf, ", ");
-      dump_value(d->buf, gep->operands[i]);
+      dump_value(d, gep->operands[i]);
    }
 }
 
@@ -529,7 +535,7 @@ dump_instr_load(struct dxil_dumper *d, struct dxil_instr_load *load)
       _mesa_string_buffer_append(d->buf, " volatile");
    dump_type_name(d, load->type);
    _mesa_string_buffer_append(d->buf, ", ");
-   dump_value(d->buf, load->ptr);
+   dump_value(d, load->ptr);
    _mesa_string_buffer_printf(d->buf, ", %d", load->align);
 }
 
@@ -539,31 +545,32 @@ dump_instr_store(struct dxil_dumper *d, struct dxil_instr_store *store)
    _mesa_string_buffer_append(d->buf, "store ");
    if (store->is_volatile)
       _mesa_string_buffer_append(d->buf, " volatile");
-   dump_value(d->buf, store->value);
+   dump_value(d, store->value);
    _mesa_string_buffer_append(d->buf, ", ");
-   dump_value(d->buf, store->ptr);
+   dump_value(d, store->ptr);
    _mesa_string_buffer_printf(d->buf, ", %d", store->align);
 }
 
 static void
-dump_instr_print_operands(struct _mesa_string_buffer *buf, int num,
+dump_instr_print_operands(struct dxil_dumper *d, int num,
                           const struct dxil_value *val[])
 {
    for (int i = 0; i < num; ++i) {
       if (i > 0)
-         _mesa_string_buffer_append(buf, ", ");
-      dump_value(buf, val[i]);
+         _mesa_string_buffer_append(d->buf, ", ");
+      dump_value(d, val[i]);
    }
 }
 
 static void
-dump_value(struct _mesa_string_buffer *buf, const struct dxil_value *val)
+dump_value(struct dxil_dumper *d, const struct dxil_value *val)
 {
    if (val->id < 10)
-      _mesa_string_buffer_append(buf, " ");
+      _mesa_string_buffer_append(d->buf, " ");
    if (val->id < 100)
-      _mesa_string_buffer_append(buf, " ");
-   _mesa_string_buffer_printf(buf, "%%%d", val->id);
+      _mesa_string_buffer_append(d->buf, " ");
+   _mesa_string_buffer_printf(d->buf, "%%%d", val->id);
+  dump_type_name(d, val->type);
 }
 
 static void
@@ -592,7 +599,7 @@ dump_mdnode(struct dxil_dumper *d, struct dxil_mdnode *node)
       _mesa_string_buffer_append(d->buf, "V:");
       dump_type_name(d, node->value.type);
       _mesa_string_buffer_append_char(d->buf, ' ');
-      dump_value(d->buf, node->value.value);
+      dump_value(d, node->value.value);
       _mesa_string_buffer_append_char(d->buf, '\n');
       break;
    case MD_NODE:

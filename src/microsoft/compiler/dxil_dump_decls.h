@@ -56,17 +56,17 @@ dump_named_nodes(struct dxil_dumper *d, struct list_head *list);
 static void
 dump_type(struct dxil_dumper *buf, const struct dxil_type *type);
 static void
-dump_instr_binop(struct _mesa_string_buffer *buf, struct dxil_instr_binop *binop);
+dump_instr_binop(struct dxil_dumper *d, struct dxil_instr_binop *binop);
 static void
-dump_instr_cmp(struct _mesa_string_buffer *buf, struct dxil_instr_cmp *cmp);
+dump_instr_cmp(struct dxil_dumper *d, struct dxil_instr_cmp *cmp);
 static void
-dump_instr_select(struct _mesa_string_buffer *buf, struct dxil_instr_select *select);
+dump_instr_select(struct dxil_dumper *d, struct dxil_instr_select *select);
 static void
 dump_instr_cast(struct dxil_dumper *d, struct dxil_instr_cast *cast);
 static void
 dump_instr_call(struct dxil_dumper *d, struct dxil_instr_call *call);
 static void
-dump_instr_ret(struct _mesa_string_buffer *buf, struct dxil_instr_ret *ret);
+dump_instr_ret(struct dxil_dumper *d, struct dxil_instr_ret *ret);
 static void
 dump_instr_extractval(struct dxil_dumper *d, struct dxil_instr_extractval *ret);
 static void
@@ -83,7 +83,7 @@ static void
 dump_instr_store(struct dxil_dumper *d, struct dxil_instr_store *store);
 
 static void
-dump_instr_print_operands(struct _mesa_string_buffer *buf, int num,
+dump_instr_print_operands(struct dxil_dumper *d, int num,
                           const struct dxil_value *val[]);
 
 static void dump_io_signatures(struct _mesa_string_buffer *buf,
@@ -100,7 +100,7 @@ static void dump_psv_io(struct _mesa_string_buffer *buf, struct dxil_module *m,
                         unsigned num, struct dxil_psv_signature_element *io);
 
 static void
-dump_value(struct _mesa_string_buffer *buf, const struct dxil_value *val);
+dump_value(struct dxil_dumper *d, const struct dxil_value *val);
 
 static const char *binop_strings[DXIL_BINOP_INSTR_COUNT] = {
    [DXIL_BINOP_ADD] = "add",
