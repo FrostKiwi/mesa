@@ -348,6 +348,66 @@ create_type(struct dxil_module *m, enum type_type type)
    return ret;
 }
 
+static bool
+types_equal(const struct dxil_type *lhs, const struct dxil_type *rhs);
+
+static bool
+type_list_equal(const struct dxil_type_list *lhs,
+                const struct dxil_type_list *rhs)
+{
+   if (lhs->num_types != rhs->num_types)
+      return false;
+   for (unsigned i = 0; i < lhs->num_types; ++i)
+      if (!types_equal(lhs->types[i],  rhs->types[i]))
+          return false;
+   return true;
+}
+
+static bool
+types_equal(const struct dxil_type *lhs, const struct dxil_type *rhs)
+{
+   if (lhs == rhs)
+      return true;
+
+   /* Below we only assert that different type pointers really define different types
+    * Since this function is only called in asserts, it is not needed to put the code
+    * into a #ifdef NDEBUG statement */
+   if (lhs->type != rhs->type)
+      return false;
+
+   bool retval = false;
+   switch (lhs->type) {
+   case TYPE_VOID:
+      retval = true;
+      break;
+   case TYPE_FLOAT:
+      retval = lhs->float_bits == rhs->float_bits;
+      break;
+   case TYPE_INTEGER:
+      retval = lhs->int_bits == rhs->int_bits;
+      break;
+   case TYPE_POINTER:
+      retval = types_equal(lhs->ptr_target_type, rhs->ptr_target_type);
+      break;
+   case TYPE_ARRAY:
+   case TYPE_VECTOR:
+      retval = (lhs->array_or_vector_def.num_elems == rhs->array_or_vector_def.num_elems) &&
+               types_equal(lhs->array_or_vector_def.elem_type,
+                           rhs->array_or_vector_def.elem_type);
+      break;
+   case TYPE_FUNCTION:
+      if (!types_equal(lhs->function_def.ret_type,
+                            rhs->function_def.ret_type))
+         return false;
+      retval = type_list_equal(&lhs->function_def.args, &rhs->function_def.args);
+      break;
+   case TYPE_STRUCT:
+      retval = type_list_equal(&lhs->struct_def.elem, &rhs->struct_def.elem);
+   }
+   assert(!retval && "Types are equal in structure but not as pointers");
+   return retval;
+}
+
 const struct dxil_type *
 dxil_module_get_void_type(struct dxil_module *m)
 {
