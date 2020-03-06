@@ -202,6 +202,8 @@ struct dxil_module {
    unsigned curr_block;
 };
 
+struct dxil_instr;
+
 void
 dxil_module_init(struct dxil_module *m, void *ralloc_ctx);
 
@@ -356,6 +358,9 @@ dxil_emit_cast(struct dxil_module *m, enum dxil_cast_opcode opcode,
 bool
 dxil_emit_branch(struct dxil_module *m, const struct dxil_value *cond,
                  unsigned true_block, unsigned false_block);
+
+const struct dxil_value *
+dxil_instr_get_return_value(struct dxil_instr *instr);
 
 struct dxil_instr *
 dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type,
