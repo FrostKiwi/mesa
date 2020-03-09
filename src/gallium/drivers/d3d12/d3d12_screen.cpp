@@ -65,7 +65,7 @@ enum {
 static const char *
 d3d12_get_vendor(struct pipe_screen *pscreen)
 {
-   return "Collabora Ltd";
+   return "Microsoft Corporation";
 }
 
 static const char *
