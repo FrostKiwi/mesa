@@ -216,6 +216,10 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
       return 4;
 #endif
 
+   case PIPE_CAP_TGSI_FS_COORD_PIXEL_CENTER_HALF_INTEGER:
+   case PIPE_CAP_TGSI_FS_COORD_ORIGIN_UPPER_LEFT:
+      return 1;
+
    case PIPE_CAP_ACCELERATED:
       return 1;
 
