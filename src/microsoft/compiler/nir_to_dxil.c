@@ -198,6 +198,8 @@ enum dxil_intr {
    DXIL_INTR_BUFFER_LOAD = 68,
    DXIL_INTR_BUFFER_STORE = 69,
 
+   DXIL_INTR_DISCARD = 82,
+
    DXIL_INTR_THREAD_ID = 93,
    DXIL_INTR_GROUP_ID = 94,
    DXIL_INTR_THREAD_ID_IN_GROUP = 95,
@@ -1857,6 +1859,40 @@ emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
+emit_discard_if_with_value(struct ntd_context *ctx, const struct dxil_value *value)
+{
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_DISCARD);
+   if (!opcode)
+      return false;
+
+   const struct dxil_value *args[] = {
+     opcode,
+     value
+   };
+
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.discard", DXIL_NONE);
+   if (!func)
+      return false;
+
+   return dxil_emit_call_void(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static bool
+emit_discard_if(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *value = get_src(ctx, &intr->src[0], 0, nir_type_bool);
+   return emit_discard_if_with_value(ctx, value);
+}
+
+static bool
+emit_discard(struct ntd_context *ctx)
+{
+   const struct dxil_value *value = dxil_module_get_int1_const(&ctx->mod, true);
+   return emit_discard_if_with_value(ctx, value);
+}
+
+
+static bool
 emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    switch (intr->intrinsic) {
@@ -1881,6 +1917,10 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    case nir_intrinsic_load_front_face:
       assert(ctx->ps_front_face);
       return emit_load_input_interpolated(ctx, intr, ctx->ps_front_face);
+   case nir_intrinsic_discard_if:
+      return emit_discard_if(ctx, intr);
+   case nir_intrinsic_discard:
+      return emit_discard(ctx);
 
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_local_group_size:
