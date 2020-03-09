@@ -562,13 +562,13 @@ emit_createhandle_call_from_values(struct ntd_context *ctx,
 }
 
 static void
-add_resource(struct ntd_context *ctx, enum dxil_resource_type type)
+add_resource(struct ntd_context *ctx, enum dxil_resource_type type, unsigned array_size)
 {
    assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
    ctx->resources[ctx->num_resources].resource_type = type;
    ctx->resources[ctx->num_resources].space = 0;
    ctx->resources[ctx->num_resources].lower_bound = 0;
-   ctx->resources[ctx->num_resources].upper_bound = 0;
+   ctx->resources[ctx->num_resources].upper_bound = array_size - 1;
    ctx->num_resources++;
 }
 
@@ -587,7 +587,7 @@ emit_srv(struct ntd_context *ctx, nir_variable *var)
       return false;
 
    ctx->srv_metadata_nodes[ctx->num_srvs] = srv_meta;
-   add_resource(ctx, DXIL_RES_SRV_TYPED);
+   add_resource(ctx, DXIL_RES_SRV_TYPED, glsl_type_get_sampler_count(var->type));
 
    const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_SRV, 0, 0, false);
    if (!handle)
@@ -625,7 +625,7 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
       return false;
 
    ctx->uav_metadata_nodes[ctx->num_uavs] = uav_meta;
-   add_resource(ctx, DXIL_RES_UAV_TYPED);
+   add_resource(ctx, DXIL_RES_UAV_TYPED,  1);
 
    const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_UAV, 0, 0, false);
    if (!handle)
@@ -666,7 +666,7 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
       return false;
 
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
-   add_resource(ctx, DXIL_RES_CBV);
+   add_resource(ctx, DXIL_RES_CBV, 1);
 
    const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_CBV, 0, 0, false);
    if (!handle)
@@ -692,7 +692,7 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var)
       return false;
 
    ctx->sampler_metadata_nodes[ctx->num_samplers] = sampler_meta;
-   add_resource(ctx, DXIL_RES_SAMPLER);
+   add_resource(ctx, DXIL_RES_SAMPLER,  glsl_type_get_sampler_count(var->type));
 
    const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_SAMPLER, 0, 0, false);
    if (!handle)
@@ -2510,7 +2510,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    /* Samplers */
    nir_foreach_variable(var, &s->uniforms) {
-      if (var->data.mode == nir_var_uniform && glsl_type_is_sampler(var->type)) {
+      if (var->data.mode == nir_var_uniform && glsl_type_get_sampler_count(var->type)) {
             if (!emit_sampler(ctx, var))
                return false;
       }
@@ -2518,7 +2518,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    /* SRVs */
    nir_foreach_variable(var, &s->uniforms) {
-      if (var->data.mode == nir_var_uniform && glsl_type_is_sampler(var->type)) {
+      if (var->data.mode == nir_var_uniform && glsl_type_get_sampler_count(var->type)) {
          if (!emit_srv(ctx, var))
             return false;
       }
