@@ -182,6 +182,8 @@ enum dxil_intr {
    DXIL_INTR_UMAX = 39,
    DXIL_INTR_UMIN = 40,
 
+   DXIL_INTR_FFMA = 46,
+
    DXIL_INTR_CREATE_HANDLE = 57,
    DXIL_INTR_CBUFFER_LOAD_LEGACY = 59,
 
@@ -410,6 +412,31 @@ emit_binary_call(struct ntd_context *ctx, enum overload_type overload,
      opcode,
      op0,
      op1
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static const struct dxil_value *
+emit_tertiary_call(struct ntd_context *ctx, enum overload_type overload,
+                   enum dxil_intr intr,
+                   const struct dxil_value *op0,
+                   const struct dxil_value *op1,
+                   const struct dxil_value *op2)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.tertiary", overload);
+   if (!func)
+      return NULL;
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, intr);
+   if (!opcode)
+      return NULL;
+
+   const struct dxil_value *args[] = {
+     opcode,
+     op0,
+     op1,
+     op2
    };
 
    return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
@@ -1046,29 +1073,6 @@ emit_binop(struct ntd_context *ctx, nir_alu_instr *alu,
 }
 
 static bool
-emit_tertiary(struct ntd_context *ctx, nir_alu_instr *alu,
-              enum dxil_tertiary_opcode op,
-              const struct dxil_value *op0, const struct dxil_value *op1,
-              const struct dxil_value *op2)
-{
-   const struct dxil_func *func = dxil_get_function(&ctx->mod,
-                                             "dx.op.tertiary", DXIL_F32);
-
-   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, op);
-   const struct dxil_value *args[] = {
-      opcode, op0, op1, op2
-   };
-
-   const struct dxil_value *retval = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
-   if (!retval)
-      return false;
-
-   store_dest(ctx, &alu->dest.dest, 0, retval, nir_type_float);
-   return true;
-}
-
-
-static bool
 emit_cmp(struct ntd_context *ctx, nir_alu_instr *alu,
          enum dxil_cmp_pred pred,
          const struct dxil_value *op0, const struct dxil_value *op1)
@@ -1256,6 +1260,33 @@ emit_binary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
    return true;
 }
 
+static bool
+emit_tertiary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
+                    enum dxil_intr intr,
+                    const struct dxil_value *op0,
+                    const struct dxil_value *op1,
+                    const struct dxil_value *op2)
+{
+   const nir_op_info *info = &nir_op_infos[alu->op];
+   assert(info->output_type == info->input_types[0]);
+   assert(info->output_type == info->input_types[1]);
+   assert(info->output_type == info->input_types[2]);
+
+   unsigned dst_bits = nir_dest_bit_size(alu->dest.dest);
+   assert(nir_src_bit_size(alu->src[0].src) == dst_bits);
+   assert(nir_src_bit_size(alu->src[1].src) == dst_bits);
+   assert(nir_src_bit_size(alu->src[2].src) == dst_bits);
+
+   enum overload_type overload = get_overload(info->output_type, dst_bits);
+
+   const struct dxil_value *v = emit_tertiary_call(ctx, overload, intr,
+                                                   op0, op1, op2);
+   if (!v)
+      return false;
+   store_alu_dest(ctx, alu, 0, v);
+   return true;
+}
+
 static bool emit_select(struct ntd_context *ctx, nir_alu_instr *alu,
                         const struct dxil_value *sel,
                         const struct dxil_value *val_true,
@@ -1342,7 +1373,6 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_iand: return emit_binop(ctx, alu, DXIL_BINOP_AND, src[0], src[1]);
    case nir_op_ior:  return emit_binop(ctx, alu, DXIL_BINOP_OR, src[0], src[1]);
    case nir_op_ixor: return emit_binop(ctx, alu, DXIL_BINOP_XOR, src[0], src[1]);
-   case nir_op_ffma: return emit_tertiary(ctx, alu, DXIL_FFMA, src[0], src[1], src[2]);
    case nir_op_ieq:  return emit_cmp(ctx, alu, DXIL_ICMP_EQ, src[0], src[1]);
    case nir_op_ine:  return emit_cmp(ctx, alu, DXIL_ICMP_NE, src[0], src[1]);
    case nir_op_ige:  return emit_cmp(ctx, alu, DXIL_ICMP_SGE, src[0], src[1]);
@@ -1385,6 +1415,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_fsqrt: return emit_unary_intin(ctx, alu, DXIL_INTR_SQRT, src[0]);
    case nir_op_fmax: return emit_binary_intin(ctx, alu, DXIL_INTR_FMAX, src[0], src[1]);
    case nir_op_fmin: return emit_binary_intin(ctx, alu, DXIL_INTR_FMIN, src[0], src[1]);
+   case nir_op_ffma: return emit_tertiary_intin(ctx, alu, DXIL_INTR_FFMA, src[0], src[1], src[2]);
 
    case nir_op_f2f32:
    case nir_op_f2i32:
