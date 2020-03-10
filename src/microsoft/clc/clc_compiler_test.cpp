@@ -352,3 +352,21 @@ TEST_F(ComputeTest, rotate)
    for (int i = 0; i < ARRAY_SIZE(expected); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, popcount)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = popcount(inout[get_global_id(0)]);\n\
+   }\n";
+   const uint32_t input[] = {
+      0, 0x1, 0x3, 0x101, 0x110011, ~0u
+   };
+   const uint32_t expected[] = {
+      0, 1, 2, 2, 4, 32
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
