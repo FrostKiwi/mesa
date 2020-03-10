@@ -209,7 +209,7 @@ d3d12_transfer_copy_bufimage(struct d3d12_context *ctx,
    }
 
    tex_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-   tex_loc.SubresourceIndex = 0;
+   tex_loc.SubresourceIndex = trans->base.level;
    tex_loc.pResource = res->res;
 
    buf_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
@@ -393,11 +393,11 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
    src_box.back = psrc_box->z + psrc_box->depth;
 
    src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-   src_loc.SubresourceIndex = 0;
+   src_loc.SubresourceIndex = src_level;
    src_loc.pResource = src->res;
 
    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-   dst_loc.SubresourceIndex = 0;
+   dst_loc.SubresourceIndex = dst_level;
    dst_loc.pResource = dst->res;
 
    ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
