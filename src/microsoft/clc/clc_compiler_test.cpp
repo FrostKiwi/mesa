@@ -334,3 +334,21 @@ TEST_F(ComputeTest, umod)
    for (int i = 0; i < ARRAY_SIZE(expected); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, rotate)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = rotate(inout[get_global_id(0)], get_global_id(0) * 4);\n\
+   }\n";
+   const uint32_t input[] = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef,
+   };
+   const uint32_t expected[] = {
+      0xdeadbeef, 0xeadbeefd, 0xadbeefde, 0xdbeefdea
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}

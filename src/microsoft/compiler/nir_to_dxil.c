@@ -81,7 +81,8 @@ nir_options = {
    .lower_flrp32 = true,
    .lower_extract_word = true,
    .lower_extract_byte = true,
-   .lower_all_io_to_elements = true
+   .lower_all_io_to_elements = true,
+   .lower_rotate = true
 };
 
 const nir_shader_compiler_options*
