@@ -112,6 +112,7 @@ struct d3d12_context {
    float blend_factor[4];
    unsigned sample_mask;
    struct d3d12_depth_stencil_alpha_state *depth_stencil_alpha_state;
+   struct pipe_stencil_ref stencil_ref;
    struct d3d12_rasterizer_state *rast;
    struct pipe_sampler_view *sampler_views[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    unsigned num_sampler_views[PIPE_SHADER_TYPES];
