@@ -337,9 +337,9 @@ dump_constants(struct dxil_dumper *d, struct list_head *list)
       _mesa_string_buffer_append_char(d->buf, ' ');
       dump_value(d->buf, &cnst->value);
       _mesa_string_buffer_append(d->buf, " = ");
-      dump_type_name(d, cnst->type);
+      dump_type_name(d, cnst->value.type);
       if (!cnst->undef) {
-         switch (cnst->type->type) {
+         switch (cnst->value.type->type) {
          case TYPE_FLOAT:
             _mesa_string_buffer_printf(d->buf, " %10.5f\n", cnst->float_value);
             break;

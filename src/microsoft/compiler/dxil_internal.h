@@ -76,6 +76,7 @@ struct dxil_type {
 
 struct dxil_value {
    int id;
+   const struct dxil_type *type;
 };
 
 struct dxil_gvar {
@@ -231,7 +232,6 @@ struct dxil_instr {
 };
 
 struct dxil_const {
-   const struct dxil_type *type;
    struct dxil_value value;
 
    bool undef;
