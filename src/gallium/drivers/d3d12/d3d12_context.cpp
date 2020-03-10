@@ -862,6 +862,13 @@ d3d12_set_blend_color(struct pipe_context *pctx,
 }
 
 static void
+d3d12_set_sample_mask(struct pipe_context *pctx, unsigned sample_mask)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   ctx->sample_mask = sample_mask;
+}
+
+static void
 d3d12_set_clip_state(struct pipe_context *pctx,
                      const struct pipe_clip_state *pcs)
 {
@@ -1132,10 +1139,13 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.set_framebuffer_state = d3d12_set_framebuffer_state;
    ctx->base.set_clip_state = d3d12_set_clip_state;
    ctx->base.set_blend_color = d3d12_set_blend_color;
+   ctx->base.set_sample_mask = d3d12_set_sample_mask;
 
    ctx->base.clear = d3d12_clear;
    ctx->base.draw_vbo = d3d12_draw_vbo;
    ctx->base.flush = d3d12_flush;
+
+   ctx->sample_mask = ~0;
 
    d3d12_context_surface_init(&ctx->base);
    d3d12_context_resource_init(&ctx->base);
