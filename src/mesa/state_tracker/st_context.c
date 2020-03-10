@@ -547,10 +547,14 @@ st_init_driver_flags(struct st_context *st)
    else
       f->NewClipPlaneEnable = ST_NEW_RASTERIZER;
 
+   if (st->lower_y_flip)
+      f->NewViewport = ST_NEW_VIEWPORT | ST_NEW_VS_STATE;
+   else
+      f->NewViewport = ST_NEW_VIEWPORT;
+
    f->NewLineState = ST_NEW_RASTERIZER;
    f->NewPolygonState = ST_NEW_RASTERIZER;
    f->NewPolygonStipple = ST_NEW_POLY_STIPPLE;
-   f->NewViewport = ST_NEW_VIEWPORT;
    f->NewNvConservativeRasterization = ST_NEW_RASTERIZER;
    f->NewNvConservativeRasterizationParams = ST_NEW_RASTERIZER;
    f->NewIntelConservativeRasterization = ST_NEW_RASTERIZER;
@@ -692,6 +696,8 @@ st_create_context_priv(struct gl_context *ctx, struct pipe_context *pipe,
       !screen->get_param(screen, PIPE_CAP_TWO_SIDED_COLOR);
    st->lower_ucp =
       !screen->get_param(screen, PIPE_CAP_CLIP_PLANES);
+   st->lower_y_flip =
+      !screen->get_param(screen, PIPE_CAP_Y_FLIP);
    st->allow_st_finalize_nir_twice = screen->finalize_nir != NULL;
 
    st->has_hw_atomics =
@@ -781,7 +787,8 @@ st_create_context_priv(struct gl_context *ctx, struct pipe_context *pipe,
          !st->clamp_frag_depth_in_shader &&
          !st->clamp_vert_color_in_shader &&
          !st->lower_point_size &&
-         !st->lower_ucp;
+         !st->lower_ucp &&
+         !st->lower_y_flip;
 
    st->shader_has_one_variant[MESA_SHADER_FRAGMENT] =
          st->has_shareable_shaders &&
