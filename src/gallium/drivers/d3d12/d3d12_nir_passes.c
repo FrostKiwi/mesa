@@ -48,6 +48,11 @@ bool lower_bool_loads_filter(const nir_instr *instr,
          return type == GLSL_TYPE_BOOL;
       }
    }
+
+   if (op->intrinsic == nir_intrinsic_load_ubo) {
+      if (op->dest.ssa.bit_size == 1)
+         return true;
+   }
    return false;
 }
 
@@ -60,6 +65,7 @@ lower_bool_loads_impl(nir_builder *b, nir_instr *instr,
 
    switch (load->intrinsic) {
    case nir_intrinsic_load_front_face:
+   case nir_intrinsic_load_ubo:
       load->dest.ssa.bit_size = 32;
       b->cursor = nir_after_instr(instr);
       break;
