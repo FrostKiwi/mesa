@@ -76,10 +76,6 @@ enum dxil_bin_opcode {
    DXIL_BINOP_INSTR_COUNT
 };
 
-enum dxil_tertiary_opcode {
-   DXIL_FFMA = 46
-};
-
 enum dxil_cast_opcode {
    DXIL_CAST_TRUNC = 0,
    DXIL_CAST_ZEXT = 1,
