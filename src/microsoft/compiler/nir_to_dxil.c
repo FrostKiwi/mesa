@@ -175,6 +175,8 @@ enum dxil_intr {
    DXIL_INTR_ROUND_PI = 28,
    DXIL_INTR_ROUND_Z = 29,
 
+   DXIL_INTR_COUNTBITS = 31,
+
    DXIL_INTR_FMAX = 35,
    DXIL_INTR_FMIN = 36,
    DXIL_INTR_IMAX = 37,
@@ -374,12 +376,25 @@ struct ntd_context {
    nir_variable *ps_front_face;
 };
 
+static const char*
+unary_func_name(enum dxil_intr intr)
+{
+   switch (intr) {
+   case DXIL_INTR_COUNTBITS:
+      return "dx.op.unaryBits";
+   }
+
+   return "dx.op.unary";
+}
+
 static const struct dxil_value *
 emit_unary_call(struct ntd_context *ctx, enum overload_type overload,
                 enum dxil_intr intr,
                 const struct dxil_value *op0)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.unary", overload);
+   const struct dxil_func *func = dxil_get_function(&ctx->mod,
+                                                    unary_func_name(intr),
+                                                    overload);
    if (!func)
       return NULL;
 
@@ -1227,7 +1242,8 @@ emit_unary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
                  enum dxil_intr intr, const struct dxil_value *op)
 {
    const nir_op_info *info = &nir_op_infos[alu->op];
-   assert(info->output_type == info->input_types[0]);
+   assert(nir_alu_type_get_base_type(info->output_type) ==
+          nir_alu_type_get_base_type(info->input_types[0]));
    unsigned dst_bits = nir_dest_bit_size(alu->dest.dest);
    assert(nir_src_bit_size(alu->src[0].src) == dst_bits);
    enum overload_type overload = get_overload(info->output_type, dst_bits);
@@ -1407,6 +1423,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
          return emit_binop(ctx, alu, DXIL_BINOP_SDIV, one, src[0]);
       }
    case nir_op_fsat: return emit_unary_intin(ctx, alu, DXIL_INTR_SATURATE, src[0]);
+   case nir_op_bit_count: return emit_unary_intin(ctx, alu, DXIL_INTR_COUNTBITS, src[0]);
    case nir_op_imax: return emit_binary_intin(ctx, alu, DXIL_INTR_IMAX, src[0], src[1]);
    case nir_op_imin: return emit_binary_intin(ctx, alu, DXIL_INTR_IMIN, src[0], src[1]);
    case nir_op_umax: return emit_binary_intin(ctx, alu, DXIL_INTR_UMAX, src[0], src[1]);
