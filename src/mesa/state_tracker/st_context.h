@@ -153,6 +153,7 @@ struct st_context
    boolean lower_point_size;
    boolean lower_two_sided_color;
    boolean lower_ucp;
+   boolean lower_y_flip;
 
    /* There are consequences for drivers wanting to call st_finalize_nir
     * twice, once before shader caching and once after lowering for shader

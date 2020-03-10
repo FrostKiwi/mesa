@@ -4138,6 +4138,8 @@ void nir_lower_passthrough_edgeflags(nir_shader *shader);
 bool nir_lower_patch_vertices(nir_shader *nir, unsigned static_count,
                               const gl_state_index16 *uniform_state_tokens);
 
+void nir_lower_y_flip(nir_shader *shader);
+
 typedef struct nir_lower_wpos_ytransform_options {
    gl_state_index16 state_tokens[STATE_LENGTH];
    bool fs_coord_origin_upper_left :1;
