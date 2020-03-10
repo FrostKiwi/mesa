@@ -373,7 +373,7 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
 
    pso_desc.BlendState = ctx->blend->desc;
    pso_desc.DepthStencilState = ctx->depth_stencil_alpha_state->desc;
-   pso_desc.SampleMask = UINT_MAX;
+   pso_desc.SampleMask = ctx->sample_mask;
    pso_desc.RasterizerState = ctx->rast->desc;
 
    if (depth_bias(ctx->rast, prim_type)) {
