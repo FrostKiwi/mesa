@@ -208,7 +208,8 @@ fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id,
 static void
 fill_signature_element(struct dxil_signature_element *elm,
                        enum dxil_semantic_kind semantic_kind,
-                       uint32_t record_id, uint8_t comp_type,
+                       uint32_t record_id,
+                       enum dxil_prog_sig_comp_type comp_type,
                        uint32_t reg, uint8_t start_col, uint8_t cols)
 {
    memset(elm, 0, sizeof(struct dxil_signature_element));
@@ -275,7 +276,8 @@ fill_io_signature(struct dxil_module *mod, nir_variable *var, int id,
                   uint8_t interpolation, const struct dxil_mdnode **io,
                   struct dxil_signature_element *elm, struct dxil_psv_signature_element *psv_elm)
 {
-   uint8_t comp_type = dxil_get_prog_sig_comp_type(var->type);
+   enum dxil_prog_sig_comp_type comp_type =
+      dxil_get_prog_sig_comp_type(var->type);
    uint8_t sig_comp_type = dxil_get_comp_type(var->type);
    uint8_t start_row = (uint8_t)var->data.driver_location;
    uint8_t start_col = (uint8_t)var->data.location_frac;
