@@ -44,7 +44,8 @@ bool lower_bool_loads_filter(const nir_instr *instr,
       nir_deref_instr *deref = nir_instr_as_deref(op->src[0].ssa->parent_instr);
       if (deref->deref_type == nir_deref_type_var) {
          nir_variable *var = nir_deref_instr_get_variable(deref);
-         enum glsl_base_type type = glsl_get_base_type(var->type);
+         const struct glsl_type *t = glsl_without_array(var->type);
+         enum glsl_base_type type = glsl_get_base_type(t);
          return type == GLSL_TYPE_BOOL;
       }
    }
@@ -54,6 +55,29 @@ bool lower_bool_loads_filter(const nir_instr *instr,
          return true;
    }
    return false;
+}
+
+const struct glsl_type *promote_bool_to_uint(const struct glsl_type *t)
+{
+   if (glsl_type_is_array(t))  {
+      const struct glsl_type *elm_type = glsl_get_array_element(t);
+      return glsl_array_type(promote_bool_to_uint(elm_type),
+                             glsl_get_length(t), 0);
+   }
+
+   assert(glsl_get_base_type(t) == GLSL_TYPE_BOOL);
+
+   if (glsl_type_is_matrix(t)) {
+      unsigned cols = glsl_get_matrix_columns(t);
+      unsigned rows = glsl_get_components(t) / cols;
+      return glsl_matrix_type(GLSL_TYPE_UINT, rows, cols);
+   }
+
+   if (glsl_type_is_vector(t))
+      return glsl_vector_type(GLSL_TYPE_UINT, glsl_get_components(t));
+
+   assert(glsl_type_is_scalar(t));
+   return glsl_uint_type();
 }
 
 static nir_ssa_def *
@@ -72,8 +96,7 @@ lower_bool_loads_impl(nir_builder *b, nir_instr *instr,
    case nir_intrinsic_load_deref: {
          nir_deref_instr *deref = nir_instr_as_deref(load->src[0].ssa->parent_instr);
          nir_variable *var = nir_deref_instr_get_variable(deref);
-         assert(glsl_type_is_scalar(var->type));
-         deref->type = var->type = glsl_uint_type();
+         var->type = deref->type = promote_bool_to_uint(var->type);
          load->dest.ssa.bit_size = 32;
          b->cursor = nir_after_instr(instr);
          break;
