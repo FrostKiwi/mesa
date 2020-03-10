@@ -280,3 +280,39 @@ TEST_F(ComputeTest, complex_types_const_array)
    for (int i = 0; i < ARRAY_SIZE(expected); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, imod_pos)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global int *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = inout[get_global_id(0)] % 3;\n\
+   }\n";
+   const int32_t input[] = {
+      -4, -3, -2, -1, 0, 1, 2, 3, 4
+   };
+   const int32_t expected[] = {
+      -1, 0, -2, -1,  0, 1, 2, 0, 1
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
+
+TEST_F(ComputeTest, imod_neg)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global int *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = inout[get_global_id(0)] % -3;\n\
+   }\n";
+   const int32_t input[] = {
+      -4, -3, -2, -1, 0, 1, 2, 3, 4
+   };
+   const int32_t expected[] = {
+      -1, 0, -2, -1,  0, 1, 2, 0, 1
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
