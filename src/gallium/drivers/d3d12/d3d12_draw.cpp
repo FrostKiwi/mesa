@@ -506,6 +506,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       depth_desc = &tmp_desc;
    }
    ctx->cmdlist->OMSetRenderTargets(ctx->fb.nr_cbufs, render_targets, FALSE, depth_desc);
+   ctx->cmdlist->OMSetStencilRef(ctx->stencil_ref.ref_value[0]);
 
    ctx->cmdlist->IASetPrimitiveTopology(topology(dinfo->mode));
    ctx->cmdlist->IASetVertexBuffers(0, ctx->num_vbs, ctx->vbvs);

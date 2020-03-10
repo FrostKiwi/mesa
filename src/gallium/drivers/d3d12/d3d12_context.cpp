@@ -869,6 +869,15 @@ d3d12_set_sample_mask(struct pipe_context *pctx, unsigned sample_mask)
 }
 
 static void
+d3d12_set_stencil_ref(struct pipe_context *pctx,
+                      const struct pipe_stencil_ref *ref)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   assert(ref->ref_value[0] == ref->ref_value[1]);
+   ctx->stencil_ref = *ref;
+}
+
+static void
 d3d12_set_clip_state(struct pipe_context *pctx,
                      const struct pipe_clip_state *pcs)
 {
@@ -1140,6 +1149,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.set_clip_state = d3d12_set_clip_state;
    ctx->base.set_blend_color = d3d12_set_blend_color;
    ctx->base.set_sample_mask = d3d12_set_sample_mask;
+   ctx->base.set_stencil_ref = d3d12_set_stencil_ref;
 
    ctx->base.clear = d3d12_clear;
    ctx->base.draw_vbo = d3d12_draw_vbo;
