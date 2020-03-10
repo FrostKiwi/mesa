@@ -1296,8 +1296,8 @@ create_const(struct dxil_module *m, const struct dxil_type *type, bool undef)
    struct dxil_const *ret = ralloc_size(m->ralloc_ctx,
                                         sizeof(struct dxil_const));
    if (ret) {
-      ret->type = type;
       ret->value.id = -1;
+      ret->value.type = type;
       ret->undef = undef;
       list_addtail(&ret->head, &m->const_list);
    }
@@ -1312,7 +1312,7 @@ get_int_const(struct dxil_module *m, const struct dxil_type *type,
 
    struct dxil_const *c;
    LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
-      if (c->type != type || c->undef)
+      if (c->value.type != type || c->undef)
          continue;
 
       if (c->int_value == value)
@@ -1402,7 +1402,7 @@ dxil_module_get_float_const(struct dxil_module *m, float value)
 
    struct dxil_const *c;
    LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
-      if (c->type != type || c->undef)
+      if (c->value.type != type || c->undef)
          continue;
 
       if (c->float_value == value)
@@ -1426,7 +1426,7 @@ dxil_module_get_double_const(struct dxil_module *m, double value)
 
    struct dxil_const *c;
    LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
-      if (c->type != type || c->undef)
+      if (c->value.type != type || c->undef)
          continue;
 
       if (c->float_value == value)
@@ -1448,7 +1448,7 @@ dxil_module_get_undef(struct dxil_module *m, const struct dxil_type *type)
 
    struct dxil_const *c;
    LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
-      if (c->type != type)
+      if (c->value.type != type)
          continue;
 
       if (c->undef)
@@ -1746,12 +1746,12 @@ emit_consts(struct dxil_module *m)
    struct dxil_const *c;
    LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
       assert(c->value.id >= 0);
-      assert(c->type != NULL);
-      if (curr_type != c->type) {
-         assert(c->type->id >= 0);
-         if (!emit_set_type(m, c->type->id))
+      assert(c->value.type != NULL);
+      if (curr_type != c->value.type) {
+         assert(c->value.type->id >= 0);
+         if (!emit_set_type(m, c->value.type->id))
             return false;
-         curr_type = c->type;
+         curr_type = c->value.type;
       }
 
       if (c->undef) {
