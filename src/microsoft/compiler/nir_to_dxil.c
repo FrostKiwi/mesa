@@ -2684,7 +2684,7 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
    if ((s->info.stage == MESA_SHADER_FRAGMENT) &&
        (s->info.system_values_read & (1ull << SYSTEM_VALUE_FRONT_FACE))) {
       ctx.ps_front_face = fs_append_front_face_input(s);
-      if (ctx.ps_front_face) {
+      if (!ctx.ps_front_face) {
          retval = false;
          goto out;
       }
