@@ -199,6 +199,10 @@ enum dxil_intr {
    DXIL_INTR_BUFFER_STORE = 69,
 
    DXIL_INTR_DISCARD = 82,
+   DXIL_INTR_DDX_COARSE = 83,
+   DXIL_INTR_DDY_COARSE = 84,
+   DXIL_INTR_DDX_FINE = 85,
+   DXIL_INTR_DDY_FINE = 86,
 
    DXIL_INTR_THREAD_ID = 93,
    DXIL_INTR_GROUP_ID = 94,
@@ -1359,6 +1363,14 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_flog2: return emit_unary_intin(ctx, alu, DXIL_INTR_FLOG2, src[0]);
    case nir_op_ffloor: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NI, src[0]);
    case nir_op_ffract: return emit_unary_intin(ctx, alu, DXIL_INTR_FRC, src[0]);
+
+   case nir_op_fddx:
+   case nir_op_fddx_coarse: return emit_unary_intin(ctx, alu, DXIL_INTR_DDX_COARSE, src[0]);
+   case nir_op_fddx_fine: return emit_unary_intin(ctx, alu, DXIL_INTR_DDX_FINE, src[0]);
+   case nir_op_fddy:
+   case nir_op_fddy_coarse: return emit_unary_intin(ctx, alu, DXIL_INTR_DDY_COARSE, src[0]);
+   case nir_op_fddy_fine: return emit_unary_intin(ctx, alu, DXIL_INTR_DDY_FINE, src[0]);
+
    case nir_op_fround_even: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NE, src[0]);
    case nir_op_frcp: {
          const struct dxil_value *one = dxil_module_get_float_const(&ctx->mod, 1.0f);
