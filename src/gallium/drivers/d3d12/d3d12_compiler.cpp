@@ -118,6 +118,7 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
    tex_options.lower_txp = ~0u; /* No equivalent for textureProj */
 
    NIR_PASS_V(nir, nir_lower_uniforms_to_ubo, 16);
+   NIR_PASS_V(nir, nir_lower_y_flip);
    NIR_PASS_V(nir, nir_lower_clip_halfz);
    NIR_PASS_V(nir, nir_lower_tex, &tex_options);
    NIR_PASS_V(nir, d3d12_lower_bool_loads);
