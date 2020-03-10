@@ -2359,6 +2359,14 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
    return true;
 }
 
+static bool
+emit_undefined(struct ntd_context *ctx, nir_ssa_undef_instr *undef)
+{
+   for (unsigned i = 0; i < undef->def.num_components; ++i)
+      store_ssa_def(ctx, &undef->def, i, dxil_module_get_int32_const(&ctx->mod, 0));
+   return true;
+}
+
 static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
 {
    switch (instr->type) {
@@ -2376,6 +2384,8 @@ static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
       return emit_phi(ctx, nir_instr_as_phi(instr));
    case nir_instr_type_tex:
       return emit_tex(ctx, nir_instr_as_tex(instr));
+   case nir_instr_type_ssa_undef:
+      return emit_undefined(ctx, nir_instr_as_ssa_undef(instr));
    default:
       NIR_INSTR_UNSUPPORTED(instr);
       assert("Unimplemented instruction type");
