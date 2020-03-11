@@ -84,6 +84,7 @@ nir_options = {
    .lower_all_io_to_elements = true,
    .lower_hadd = true,
    .lower_add_sat = true,
+   .lower_uadd_carry = true,
    .lower_rotate = true
 };
 
