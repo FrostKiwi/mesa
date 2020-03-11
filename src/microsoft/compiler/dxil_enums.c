@@ -69,11 +69,13 @@ enum dxil_component_type dxil_get_comp_type(const struct glsl_type *type)
 
 enum dxil_resource_kind dxil_get_resource_kind(const struct glsl_type *type)
 {
-   bool is_array = glsl_type_is_array(type);
-   const struct glsl_type *t = is_array ? glsl_get_array_element(type) : type;
+   if (glsl_type_is_array(type))
+      type = glsl_get_array_element(type);
 
-   if (glsl_type_is_sampler(t)) {
-      switch (glsl_get_sampler_dim(t)) {
+   bool is_array = glsl_sampler_type_is_array(type);
+
+   if (glsl_type_is_sampler(type)) {
+      switch (glsl_get_sampler_dim(type)) {
          case GLSL_SAMPLER_DIM_1D:
             return is_array ? DXIL_RESOURCE_KIND_TEXTURE1D_ARRAY
                             : DXIL_RESOURCE_KIND_TEXTURE1D;
