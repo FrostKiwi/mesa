@@ -96,4 +96,7 @@ d3d12_reassign_driver_locations(exec_list *io);
 void
 d3d12_sort_by_driver_location(exec_list *io);
 
+void
+d3d12_sort_ps_outputs(exec_list *io);
+
 #endif
