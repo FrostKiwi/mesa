@@ -55,10 +55,8 @@ st_update_viewport( struct st_context *st )
       _mesa_get_viewport_xform(ctx, i, scale, translate);
 
       /* _NEW_BUFFERS */
-      /* Drawing to a window where the coordinate system is upside down.
-         Scale should be positive when y-flip lowering is enabled */
-      if ((!st->lower_y_flip && st->state.fb_orientation == Y_0_TOP) ||
-          (st->lower_y_flip && scale[1] < 0)) {
+      /* Drawing to a window where the coordinate system is upside down. */
+      if (st->state.fb_orientation == Y_0_TOP) {
          scale[1] *= -1;
          translate[1] = st->state.fb_height - translate[1];
       }

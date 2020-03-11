@@ -399,7 +399,6 @@ u_pipe_screen_get_param_defaults(struct pipe_screen *pscreen,
    case PIPE_CAP_POINT_SIZE_FIXED:
    case PIPE_CAP_TWO_SIDED_COLOR:
    case PIPE_CAP_CLIP_PLANES:
-   case PIPE_CAP_Y_FLIP:
       return 1;
 
    case PIPE_CAP_MAX_VERTEX_BUFFERS:

@@ -565,7 +565,6 @@ The integer capabilities:
 * ``PIPE_CAP_TWO_SIDED_COLOR``: Driver supports two-sided coloring.
 * ``PIPE_CAP_CLIP_PLANES``: Driver supports user-defined clip-planes.
 * ``PIPE_CAP_MAX_VERTEX_BUFFERS``: Number of supported vertex buffers.
-* ``PIPE_CAP_Y_FLIP``: Driver supports viewport Y flip (negative Y scale).
 
 .. _pipe_capf:
 
