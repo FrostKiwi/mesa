@@ -533,7 +533,7 @@ static void insert_sorted(struct exec_list *var_list, nir_variable *new_var)
    exec_list_push_tail(var_list, &new_var->node);
 }
 
-/* Order VS inputs and PS outputs according to driver location */
+/* Order VS inputs according to driver location */
 void
 d3d12_sort_by_driver_location(exec_list *io)
 {
@@ -545,6 +545,41 @@ d3d12_sort_by_driver_location(exec_list *io)
       insert_sorted(&new_list, var);
    }
    exec_list_move_nodes_to(&new_list, io);
+}
+
+/* Sort PS outputs so that color outputs come first */
+void
+d3d12_sort_ps_outputs(exec_list *io)
+{
+   struct exec_list new_list;
+   exec_list_make_empty(&new_list);
+
+   nir_foreach_variable_safe(var, io) {
+      exec_node_remove(&var->node);
+      /* We use the driver_location here to avoid introducing a new
+       * struct or member variable here. The true, updated driver location
+       * will be written below, after sorting */
+      switch (var->data.location) {
+      case FRAG_RESULT_DEPTH:
+         var->data.driver_location = 1;
+         break;
+      case FRAG_RESULT_STENCIL:
+         var->data.driver_location = 2;
+         break;
+      case FRAG_RESULT_SAMPLE_MASK:
+         var->data.driver_location = 3;
+         break;
+      default:
+         var->data.driver_location = 0;
+      }
+      insert_sorted(&new_list, var);
+   }
+   exec_list_move_nodes_to(&new_list, io);
+
+   unsigned driver_loc = 0;
+   nir_foreach_variable(var, io) {
+      var->data.driver_location = driver_loc++;
+   }
 }
 
 /* Order between stage values so that normal varyings come first,
