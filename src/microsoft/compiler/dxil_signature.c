@@ -178,7 +178,7 @@ append_semantic_index_to_table(struct dxil_psv_sem_index_table *table, uint32_t 
 static const struct dxil_mdnode *
 fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id,
                     char *semantic_name, enum dxil_semantic_kind semantic_kind,
-                    uint32_t start_row, uint32_t rows,
+                    int32_t start_row, uint32_t rows,
                     uint32_t start_col, uint8_t columns,
                     uint8_t interpolation, uint8_t sig_comp_type) {
 
@@ -231,13 +231,25 @@ fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
                            enum dxil_semantic_kind semantic_kind,
                            uint8_t start_col, uint8_t columns,
                            uint8_t interpolation, uint8_t comp_type,
-                           const char *semantic_name, uint8_t start_row,
+                           const char *semantic_name, int32_t start_row,
                            struct dxil_module *mod)
 {
    memset(psv_elm, 0, sizeof(struct dxil_psv_signature_element));
    psv_elm->rows = 1;  // var->num_state_slots ?
-   psv_elm->start_row = start_row;
-   psv_elm->cols_and_start = (1u << 6) | (start_col << 4) | columns;
+   if (start_row >= 0) {
+      assert(start_row < 256);
+      psv_elm->start_row = start_row;
+      psv_elm->cols_and_start = (1u << 6) | (start_col << 4) | columns;
+   } else {
+      /* The validation expects that the the start row is not egative
+       * and apparently the extra bit in the cols_and_start indicates that the
+       * row is meant literally, so don't set it in this case.
+       * (Source of information: Comparing with the validation structures
+       * created by dxcompiler)
+       */
+      psv_elm->start_row = 0;
+      psv_elm->cols_and_start = (start_col << 4) | columns;
+   }
    psv_elm->semantic_kind = (uint8_t)semantic_kind;
    psv_elm->component_type = comp_type; //`??
    psv_elm->interpolation_mode = interpolation;
@@ -276,10 +288,13 @@ fill_io_signature(struct dxil_module *mod, nir_variable *var, int id,
                   uint8_t interpolation, const struct dxil_mdnode **io,
                   struct dxil_signature_element *elm, struct dxil_psv_signature_element *psv_elm)
 {
+
    enum dxil_prog_sig_comp_type comp_type =
       dxil_get_prog_sig_comp_type(var->type);
+
+   bool is_depth = semantic_kind == DXIL_SEM_DEPTH;
    uint8_t sig_comp_type = dxil_get_comp_type(var->type);
-   uint8_t start_row = (uint8_t)var->data.driver_location;
+   int32_t start_row = is_depth ? -1 : (int32_t)var->data.driver_location;
    uint8_t start_col = (uint8_t)var->data.location_frac;
    uint8_t cols = (uint8_t)glsl_get_components(var->type);
 
