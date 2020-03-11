@@ -548,7 +548,7 @@ d3d12_finalize_nir(UNUSED pipe_screen *screen, void *nir, UNUSED bool optimize)
    if (sh->info.stage != MESA_SHADER_FRAGMENT)
       d3d12_reassign_driver_locations(&sh->outputs);
    else
-      d3d12_sort_by_driver_location(&sh->outputs);
+      d3d12_sort_ps_outputs(&sh->outputs);
 }
 
 static void
