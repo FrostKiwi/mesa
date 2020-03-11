@@ -368,6 +368,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
       }
 
       mod->info.has_out_position |= semantic_kind == DXIL_SEM_POSITION;
+      mod->info.has_out_depth |= semantic_kind == DXIL_SEM_DEPTH;
 
       mod->outputs[num_outputs].name = ralloc_strdup(mod->ralloc_ctx,
                                                      semantic_name);
