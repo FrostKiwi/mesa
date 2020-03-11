@@ -384,6 +384,10 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
       elm->never_writes_mask = 0xff & ~elm->mask;
 
       ++num_outputs;
+
+      if (semantic_kind != DXIL_SEM_DEPTH)
+         ++mod->num_psv_outputs;
+
       assert(num_outputs < ARRAY_SIZE(outputs));
    }
 

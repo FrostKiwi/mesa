@@ -164,7 +164,7 @@ dxil_container_add_state_validation(struct dxil_container *c,
    state->state.sig_input_vectors = (uint8_t)m->num_sig_inputs;
 
    // TODO: check proper stream
-   state->state.sig_output_vectors[0] = (uint8_t)m->num_sig_outputs;
+   state->state.sig_output_vectors[0] = (uint8_t)m->num_psv_outputs;
 
    // TODO: Add viewID records size
 
