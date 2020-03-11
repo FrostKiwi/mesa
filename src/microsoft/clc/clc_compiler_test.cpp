@@ -456,3 +456,21 @@ TEST_F(ComputeTest, sub_sat)
    for (int i = 0; i < ARRAY_SIZE(expected); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, mul_hi)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = mul_hi(inout[get_global_id(0)], 1u << 31);\n\
+   }\n";
+   const uint32_t input[] = {
+      0, 1, 2, 3, (1u << 31)
+   };
+   const uint32_t expected[] = {
+      0, 0, 1, 1, (1u << 30)
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
