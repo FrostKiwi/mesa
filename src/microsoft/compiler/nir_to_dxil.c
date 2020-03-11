@@ -302,12 +302,15 @@ emit_cbv_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 
 static const struct dxil_mdnode *
 emit_sampler_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
-                      const char *name, unsigned index)
+                      nir_variable *var, unsigned index)
 {
    const struct dxil_mdnode *fields[8];
 
-   fill_resource_metadata(m, fields, struct_type, name, index, 1);
+   fill_resource_metadata(m, fields, struct_type, var->name, index, 1);
    fields[6] = dxil_get_metadata_int32(m, DXIL_SAMPLER_KIND_DEFAULT); // sampler kind
+   enum dxil_sampler_kind sampler_kind = glsl_sampler_type_is_shadow(var->type) ?
+          DXIL_SAMPLER_KIND_COMPARISON : DXIL_SAMPLER_KIND_DEFAULT;
+   fields[6] = dxil_get_metadata_int32(m, sampler_kind); // sampler kind
    fields[7] = NULL; // metadata
 
    return dxil_get_metadata_node(m, fields, ARRAY_SIZE(fields));
@@ -745,7 +748,7 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var)
    unsigned idx = ctx->num_samplers;
    const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_type *sampler_type = dxil_module_get_struct_type(&ctx->mod, "struct.SamplerState", &int32_type, 1);
-   const struct dxil_mdnode *sampler_meta = emit_sampler_metadata(&ctx->mod, sampler_type, var->name, idx);
+   const struct dxil_mdnode *sampler_meta = emit_sampler_metadata(&ctx->mod, sampler_type, var, idx);
 
    if (!sampler_meta)
       return false;
@@ -2041,7 +2044,6 @@ emit_discard(struct ntd_context *ctx)
    const struct dxil_value *value = dxil_module_get_int1_const(&ctx->mod, true);
    return emit_discard_if_with_value(ctx, value);
 }
-
 
 static bool
 emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
