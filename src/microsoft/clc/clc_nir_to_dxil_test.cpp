@@ -504,3 +504,35 @@ R"(shader: MESA_SHADER_FRAGMENT
  })";
  run(shader, "");
 }
+
+TEST_F(NirToDXILTest, test_shader_bitcast_gl_fragdepth)
+{
+ const char shader[] =
+R"(shader: MESA_SHADER_FRAGMENT
+name: GLSL3
+inputs: 2
+outputs: 2
+uniforms: 0
+shared: 0
+decl_var shader_in INTERP_MODE_NONE vec4 gl_Color (VARYING_SLOT_COL0.xyzw, 0, 0)
+decl_var shader_in INTERP_MODE_NONE float packed:z (VARYING_SLOT_VAR0.x, 1, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+decl_var shader_out INTERP_MODE_NONE float gl_FragDepth (FRAG_RESULT_DEPTH.x, 1, 0)
+decl_function main (0 params) (entrypoint)
+
+impl main {
+        block block_0:
+        /* preds: */
+        vec1 32 ssa_0 = deref_var &packed:z (shader_in float)
+        vec1 32 ssa_1 = intrinsic load_deref (ssa_0) (0) /* access=0 */
+        vec1 32 ssa_2 = deref_var &gl_Color (shader_in vec4)
+        vec4 32 ssa_3 = intrinsic load_deref (ssa_2) (0) /* access=0 */
+        vec1 32 ssa_4 = deref_var &gl_FragDepth (shader_out float)
+        intrinsic store_deref (ssa_4, ssa_1) (1, 0) /* wrmask=x */ /* access=0 */
+        vec1 32 ssa_5 = deref_var &gl_FragColor (shader_out vec4)
+        intrinsic store_deref (ssa_5, ssa_3) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        /* succs: block_1 */
+        block block_1:
+})";
+ run(shader, "");
+}
