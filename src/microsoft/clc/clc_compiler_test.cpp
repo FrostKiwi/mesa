@@ -370,3 +370,53 @@ TEST_F(ComputeTest, popcount)
    for (int i = 0; i < ARRAY_SIZE(expected); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, hadd)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = hadd(inout[get_global_id(0)], 1u << 31);\n\
+   }\n";
+   const uint32_t input[] = {
+      0, 1, 2, 3, 0xfffffffc, 0xfffffffd, 0xfffffffe, 0xffffffff
+   };
+   const uint32_t expected[] = {
+      (1u << 31) >> 1,
+      ((1u << 31) + 1) >> 1,
+      ((1u << 31) + 2) >> 1,
+      ((1u << 31) + 3) >> 1,
+      ((1ull << 31) + 0xfffffffc) >> 1,
+      ((1ull << 31) + 0xfffffffd) >> 1,
+      ((1ull << 31) + 0xfffffffe) >> 1,
+      ((1ull << 31) + 0xffffffff) >> 1,
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
+
+TEST_F(ComputeTest, rhadd)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = rhadd(inout[get_global_id(0)], 1u << 31);\n\
+   }\n";
+   const uint32_t input[] = {
+      0, 1, 2, 3, 0xfffffffc, 0xfffffffd, 0xfffffffe, 0xffffffff
+   };
+   const uint32_t expected[] = {
+      ((1u << 31) + 1) >> 1,
+      ((1u << 31) + 2) >> 1,
+      ((1u << 31) + 3) >> 1,
+      ((1u << 31) + 4) >> 1,
+      ((1ull << 31) + 0xfffffffd) >> 1,
+      ((1ull << 31) + 0xfffffffe) >> 1,
+      ((1ull << 31) + 0xffffffff) >> 1,
+      ((1ull << 31) + (1ull << 32)) >> 1,
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
