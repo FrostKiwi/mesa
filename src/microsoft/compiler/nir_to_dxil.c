@@ -82,6 +82,7 @@ nir_options = {
    .lower_extract_word = true,
    .lower_extract_byte = true,
    .lower_all_io_to_elements = true,
+   .lower_hadd = true,
    .lower_rotate = true
 };
 
