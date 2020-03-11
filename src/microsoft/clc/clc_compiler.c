@@ -124,6 +124,7 @@ int clc_compile_from_source(
    NIR_PASS_V(nir, nir_opt_copy_prop_vars);
    NIR_PASS_V(nir, nir_lower_var_copies);
    NIR_PASS_V(nir, nir_lower_vars_to_ssa);
+   NIR_PASS_V(nir, nir_lower_alu);
    NIR_PASS_V(nir, nir_opt_dce);
 
    nir_variable_mode modes = nir_var_shader_in | nir_var_mem_global |
