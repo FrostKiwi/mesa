@@ -2821,7 +2821,7 @@ void dxil_fill_validation_state(struct ntd_context *ctx,
       break;
    case DXIL_PIXEL_SHADER:
       /* TODO: handle depth outputs */
-      state->state.psv0.ps.depth_output = 0;
+      state->state.psv0.ps.depth_output =  ctx->mod.info.has_out_depth;
       /* just guessing */
       state->state.psv0.ps.sample_frequency = 0;
       break;
