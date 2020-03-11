@@ -420,3 +420,39 @@ TEST_F(ComputeTest, rhadd)
    for (int i = 0; i < ARRAY_SIZE(expected); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, add_sat)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = add_sat(inout[get_global_id(0)], 2u);\n\
+   }\n";
+   const uint32_t input[] = {
+      0xffffffff - 3, 0xffffffff - 2, 0xffffffff - 1, 0xffffffff
+   };
+   const uint32_t expected[] = {
+      0xffffffff - 1, 0xffffffff, 0xffffffff, 0xffffffff
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
+
+TEST_F(ComputeTest, sub_sat)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = sub_sat(inout[get_global_id(0)], 2u);\n\
+   }\n";
+   const uint32_t input[] = {
+      0, 1, 2, 3
+   };
+   const uint32_t expected[] = {
+      0, 0, 0, 1
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
