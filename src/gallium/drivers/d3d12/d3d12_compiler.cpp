@@ -182,6 +182,9 @@ d3d12_fill_self_shader_key(d3d12_shader *shader)
 struct d3d12_shader_selector *
 d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
 {
+   if (nir->info.stage == MESA_SHADER_FRAGMENT)
+      d3d12_sort_ps_outputs(&nir->outputs);
+
    struct d3d12_shader_selector *sel = rzalloc(nullptr, d3d12_shader_selector);
 
    /* Keep this initial shader as the blue print for possible variants */
