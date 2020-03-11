@@ -702,11 +702,6 @@ st_create_vp_variant(struct st_context *st,
          finalize = true;
       }
 
-      if (key->lower_y_flip) {
-         NIR_PASS_V(state.ir.nir, nir_lower_y_flip);
-         finalize = true;
-      }
-
       if (finalize || !st->allow_st_finalize_nir_twice) {
          st_finalize_nir(st, &stvp->Base, stvp->shader_program, state.ir.nir,
                          true);

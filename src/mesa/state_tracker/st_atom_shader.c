@@ -230,11 +230,6 @@ st_update_vp( struct st_context *st )
       if (st->lower_ucp && st_user_clip_planes_enabled(st->ctx))
          key.lower_ucp = st->ctx->Transform.ClipPlanesEnabled;
 
-      /* _NEW_VIEWPORT */
-      key.lower_y_flip = st->lower_y_flip &&
-                         ((st->state.fb_orientation == Y_0_TOP) !=
-                          (st->ctx->Transform.ClipOrigin == GL_UPPER_LEFT));
-
       st->vp_variant = st_get_vp_variant(st, stvp, &key);
    }
 
