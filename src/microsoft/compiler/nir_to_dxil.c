@@ -1108,6 +1108,12 @@ get_cast_op(nir_alu_instr *alu)
    unsigned src_bits = nir_src_bit_size(alu->src[0].src);
 
    switch (alu->op) {
+   /* bool -> int */
+   case nir_op_b2i16:
+   case nir_op_b2i32:
+   case nir_op_b2i64:
+      return DXIL_CAST_ZEXT;
+
    /* float -> float */
    case nir_op_f2f32:
    case nir_op_f2f64:
@@ -1436,6 +1442,8 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_fmin: return emit_binary_intin(ctx, alu, DXIL_INTR_FMIN, src[0], src[1]);
    case nir_op_ffma: return emit_tertiary_intin(ctx, alu, DXIL_INTR_FFMA, src[0], src[1], src[2]);
 
+   case nir_op_b2i16:
+   case nir_op_b2i32:
    case nir_op_f2f32:
    case nir_op_f2i32:
    case nir_op_f2u32:
@@ -1443,6 +1451,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_i2i32:
    case nir_op_u2f32:
    case nir_op_u2u32:
+   case nir_op_b2i64:
    case nir_op_f2f64:
    case nir_op_f2i64:
    case nir_op_f2u64:
@@ -1451,6 +1460,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_u2f64:
    case nir_op_u2u64:
       return emit_cast(ctx, alu, src[0]);
+
    case nir_op_b2f32: return emit_b2f32(ctx, alu, src[0]);
    default:
       NIR_INSTR_UNSUPPORTED(&alu->instr);
