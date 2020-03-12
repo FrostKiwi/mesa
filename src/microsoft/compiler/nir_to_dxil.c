@@ -78,6 +78,7 @@ nir_options = {
    .lower_fmod = true,
    .lower_fpow = true,
    .lower_scmp = true,
+   .lower_ldexp = true,
    .lower_flrp32 = true,
    .lower_extract_word = true,
    .lower_extract_byte = true,
