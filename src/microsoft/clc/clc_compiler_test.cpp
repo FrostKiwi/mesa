@@ -474,3 +474,39 @@ TEST_F(ComputeTest, mul_hi)
    for (int i = 0; i < ARRAY_SIZE(expected); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, ldexp_x)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = ldexp(inout[get_global_id(0)], 5);\n\
+   }\n";
+   const float input[] = {
+      0.0f, 0.5f, 1.0f, 2.0f
+   };
+   const float expected[] = {
+      ldexp(0.0f, 5), ldexp(0.5f, 5), ldexp(1.0f, 5), ldexp(2.0f, 5)
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
+
+TEST_F(ComputeTest, ldexp_y)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = ldexp(inout[get_global_id(0)], get_global_id(0));\n\
+   }\n";
+   const float input[] = {
+      0.25f, 0.5f, 0.75f, 1.0f
+   };
+   const float expected[] = {
+      ldexp(0.25f, 0), ldexp(0.5f, 1), ldexp(0.75f, 2), ldexp(1.0f, 3)
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
