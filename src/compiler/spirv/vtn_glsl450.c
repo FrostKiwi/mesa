@@ -424,11 +424,7 @@ handle_glsl450_alu(struct vtn_builder *b, enum GLSLstd450 entrypoint,
    }
 
    case GLSLstd450Sinh:
-      /* 0.5 * (e^x - e^(-x)) */
-      val->ssa->def =
-         nir_fmul_imm(nb, nir_fsub(nb, nir_fexp(nb, src[0]),
-                                       nir_fexp(nb, nir_fneg(nb, src[0]))),
-                          0.5f);
+      val->ssa->def = nir_fsinh(nb, src[0]);
       return;
 
    case GLSLstd450Cosh:

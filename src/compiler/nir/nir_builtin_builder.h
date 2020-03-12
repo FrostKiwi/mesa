@@ -272,6 +272,14 @@ nir_select(nir_builder *b, nir_ssa_def *x, nir_ssa_def *y, nir_ssa_def *s)
 }
 
 static inline nir_ssa_def *
+nir_fsinh(nir_builder *b, nir_ssa_def *x)
+{
+   return nir_fmul_imm(b, nir_fsub(b, nir_fexp(b, x),
+                                      nir_fexp(b, nir_fneg(b, x))),
+                          0.5f);
+}
+
+static inline nir_ssa_def *
 nir_clz_u(nir_builder *b, nir_ssa_def *a)
 {
    nir_ssa_def *val;
