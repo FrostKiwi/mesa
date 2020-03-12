@@ -2804,6 +2804,8 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
    ctx.mod.major_version = 6;
    ctx.mod.minor_version = 1;
 
+   NIR_PASS_V(s, nir_lower_frexp);
+
    optimize_nir(s);
 
    NIR_PASS_V(s, nir_remove_dead_variables, nir_var_function_temp);
