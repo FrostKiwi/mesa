@@ -67,6 +67,17 @@ nir_exp(nir_builder *b, nir_ssa_def *x)
    return nir_fexp2(b, nir_fmul_imm(b, x, M_LOG2E));
 }
 
+/**
+ * Return 0.5 * (e^x - e^(-x))
+ */
+static inline nir_ssa_def *
+nir_sinh(nir_builder *b, nir_ssa_def *x)
+{
+   return nir_fmul_imm(b, nir_fsub(b, nir_exp(b, x),
+                                      nir_exp(b, nir_fneg(b, x))),
+                       0.5f);
+}
+
 nir_ssa_def *
 nir_get_texture_lod(nir_builder *b, nir_tex_instr *tex);
 
