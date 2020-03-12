@@ -94,6 +94,14 @@ nir_exp(nir_builder *b, nir_ssa_def *x)
    return nir_fexp2(b, nir_fmul_imm(b, x, M_LOG2E));
 }
 
+static inline nir_ssa_def *
+nir_cosh(nir_builder *b, nir_ssa_def *x)
+{
+   return nir_fmul_imm(b, nir_fadd(b, nir_exp(b, x),
+                                      nir_exp(b, nir_fneg(b, x))),
+                          0.5f);
+}
+
 static nir_ssa_def *
 nir_log(nir_builder *b, nir_ssa_def *x)
 {
