@@ -95,6 +95,13 @@ anv_init_wsi(struct anv_physical_device *physical_device)
    physical_device->wsi_device.signal_fence_for_memory =
       anv_wsi_signal_fence_for_memory;
 
+   /* We need sync_file export from all semaphores and we need sync_file
+    * import on both semaphores and fences.  Fences require syncobj_wait so
+    * set that as the minimum bar.
+    */
+   physical_device->wsi_device.supports_sync_file =
+      physical_device->has_syncobj_wait;
+
    return VK_SUCCESS;
 }
 
