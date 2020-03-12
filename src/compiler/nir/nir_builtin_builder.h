@@ -50,6 +50,15 @@ nir_ssa_def* nir_atan(nir_builder *b, nir_ssa_def *y_over_x);
 nir_ssa_def* nir_atan2(nir_builder *b, nir_ssa_def *y, nir_ssa_def *x);
 
 /**
+ * Return ln(x) - the natural logarithm of x.
+ */
+static nir_ssa_def *
+nir_log(nir_builder *b, nir_ssa_def *x)
+{
+   return nir_fmul_imm(b, nir_flog2(b, x), 1.0 / M_LOG2E);
+}
+
+/**
  * Return e^x.
  */
 static inline nir_ssa_def *
