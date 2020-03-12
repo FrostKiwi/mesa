@@ -49,6 +49,15 @@ nir_ssa_def* nir_upsample(nir_builder *b, nir_ssa_def *hi, nir_ssa_def *lo);
 nir_ssa_def* nir_atan(nir_builder *b, nir_ssa_def *y_over_x);
 nir_ssa_def* nir_atan2(nir_builder *b, nir_ssa_def *y, nir_ssa_def *x);
 
+/**
+ * Return e^x.
+ */
+static inline nir_ssa_def *
+nir_exp(nir_builder *b, nir_ssa_def *x)
+{
+   return nir_fexp2(b, nir_fmul_imm(b, x, M_LOG2E));
+}
+
 nir_ssa_def *
 nir_get_texture_lod(nir_builder *b, nir_tex_instr *tex);
 
