@@ -94,6 +94,12 @@ nir_exp(nir_builder *b, nir_ssa_def *x)
    return nir_fexp2(b, nir_fmul_imm(b, x, M_LOG2E));
 }
 
+static nir_ssa_def *
+nir_log(nir_builder *b, nir_ssa_def *x)
+{
+   return nir_fmul_imm(b, nir_flog2(b, x), 1.0 / M_LOG2E);
+}
+
 static inline nir_ssa_def *
 nir_umul24(nir_builder *b, nir_ssa_def *x, nir_ssa_def *y)
 {
