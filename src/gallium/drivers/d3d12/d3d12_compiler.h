@@ -43,7 +43,8 @@ typedef enum {
 } D3D12_BINDING_TYPE;
 
 typedef enum {
-   D3D12_MAX_STATE_VARS = 1
+   D3D12_STATE_VAR_Y_FLIP = 0,
+   D3D12_MAX_STATE_VARS
 } D3D12_STATE_VAR;
 
 #ifdef __cplusplus

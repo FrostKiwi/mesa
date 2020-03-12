@@ -269,6 +269,10 @@ fill_state_vars(struct d3d12_context *ctx,
       uint32_t *ptr = values + size;
 
       switch (shader->state_vars[j].var) {
+      case D3D12_STATE_VAR_Y_FLIP:
+         ptr[0] = fui(ctx->flip_y);
+         size += 4;
+         break;
       default:
          unreachable("unknown state variable");
       }
