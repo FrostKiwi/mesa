@@ -166,7 +166,7 @@ export             LIBDRM_VERSION=libdrm-2.4.100
 export           XCBPROTO_VERSION=xcb-proto-1.13
 export             LIBXCB_VERSION=libxcb-1.13
 export         LIBWAYLAND_VERSION=wayland-1.15.0
-export  WAYLAND_PROTOCOLS_VERSION=wayland-protocols-1.12
+export  WAYLAND_PROTOCOLS_VERSION=wayland-protocols-1.17
 
 wget $XORG_RELEASES/util/$XORGMACROS_VERSION.tar.bz2
 tar -xvf $XORGMACROS_VERSION.tar.bz2 && rm $XORGMACROS_VERSION.tar.bz2
