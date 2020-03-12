@@ -269,6 +269,29 @@ vtn_handle_opencl_vstore(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcod
    _handle_v_load_store(b, opcode, w, count, false);
 }
 
+static void
+vtn_handle_opencl_frexp(struct vtn_builder *b, const uint32_t *w,
+                        unsigned count)
+{
+   vtn_assert(count == 7);
+   const struct glsl_type *dest_type =
+      vtn_value(b, w[1], vtn_value_type_type)->type->type;
+
+   nir_ssa_def *src = vtn_ssa_value(b, w[5])->def;
+   struct vtn_value *exp_ptr = vtn_value(b, w[6], vtn_value_type_pointer);
+
+   struct vtn_ssa_value *exp_val = vtn_create_ssa_value(b, exp_ptr->pointer->type->type);
+   exp_val->def = nir_frexp_exp(&b->nb, src);
+
+   vtn_variable_store(b, exp_val, exp_ptr->pointer);
+
+   nir_ssa_def *result = nir_frexp_sig(&b->nb, src);
+
+   struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
+   val->ssa = vtn_create_ssa_value(b, dest_type);
+   val->ssa->def = result;
+}
+
 static nir_ssa_def *
 handle_printf(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
               unsigned num_srcs, nir_ssa_def **srcs,
@@ -430,6 +453,9 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
       return true;
    case OpenCLstd_Prefetch:
       /* TODO maybe add a nir instruction for this? */
+      return true;
+   case OpenCLstd_Frexp:
+      vtn_handle_opencl_frexp(b, w, count);
       return true;
    default:
       vtn_fail("unhandled opencl opc: %u\n", ext_opcode);
