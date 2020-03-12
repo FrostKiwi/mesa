@@ -817,10 +817,17 @@ d3d12_set_viewport_states(struct pipe_context *pctx,
    struct d3d12_context *ctx = d3d12_context(pctx);
 
    for (unsigned i = 0; i < num_viewports; ++i) {
+      if (state[i].scale[1] < 0) {
+         ctx->flip_y = 1.0f;
+         ctx->viewports[start_slot + i].TopLeftY = state[i].translate[1] + state[i].scale[1];
+         ctx->viewports[start_slot + i].Height = -state[i].scale[1] * 2;
+      } else {
+         ctx->flip_y = -1.0f;
+         ctx->viewports[start_slot + i].TopLeftY = state[i].translate[1] - state[i].scale[1];
+         ctx->viewports[start_slot + i].Height = state[i].scale[1] * 2;
+      }
       ctx->viewports[start_slot + i].TopLeftX = state[i].translate[0] - state[i].scale[0];
-      ctx->viewports[start_slot + i].TopLeftY = state[i].translate[1] + state[i].scale[1];
       ctx->viewports[start_slot + i].Width = state[i].scale[0] * 2;
-      ctx->viewports[start_slot + i].Height = -state[i].scale[1] * 2;
       ctx->viewports[start_slot + i].MinDepth = state[i].translate[2] - state[i].scale[2];
       ctx->viewports[start_slot + i].MaxDepth = state[i].translate[2] + state[i].scale[2];
       ctx->viewport_states[start_slot + i] = state[i];

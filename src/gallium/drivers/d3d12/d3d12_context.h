@@ -111,6 +111,7 @@ struct d3d12_context {
    struct pipe_vertex_buffer vbs[PIPE_MAX_ATTRIBS];
    D3D12_VERTEX_BUFFER_VIEW vbvs[PIPE_MAX_ATTRIBS];
    unsigned num_vbs;
+   float flip_y;
    struct pipe_viewport_state viewport_states[PIPE_MAX_VIEWPORTS];
    D3D12_VIEWPORT viewports[PIPE_MAX_VIEWPORTS];
    unsigned num_viewports;

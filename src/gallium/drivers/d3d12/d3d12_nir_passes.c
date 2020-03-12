@@ -24,6 +24,7 @@
 #include "d3d12_nir_passes.h"
 #include "d3d12_compiler.h"
 #include "nir_builder.h"
+#include "program/prog_instruction.h"
 
 bool lower_bool_loads_filter(const nir_instr *instr,
                                   UNUSED const void *_options)
@@ -116,6 +117,86 @@ d3d12_lower_bool_loads(struct nir_shader *s)
                                         lower_bool_loads_filter,
                                         lower_bool_loads_impl,
                                         NULL);
+}
+
+/**
+ * Lower Y Flip:
+ *
+ * We can't do a Y flip simply by negating the viewport height,
+ * so we need to lower the flip into the NIR shader.
+ */
+
+static nir_ssa_def *
+get_flip(nir_builder *b, nir_variable **flip)
+{
+   const gl_state_index16 tokens[5] = { STATE_INTERNAL, STATE_INTERNAL_DRIVER, D3D12_STATE_VAR_Y_FLIP };
+   if (*flip == NULL) {
+      nir_variable *var = nir_variable_create(b->shader,
+                                              nir_var_uniform,
+                                              glsl_float_type(),
+                                              "d3d12_FlipY");
+
+      var->num_state_slots = 1;
+      var->state_slots = ralloc_array(var, nir_state_slot, 1);
+      memcpy(var->state_slots[0].tokens, tokens,
+             sizeof(var->state_slots[0].tokens));
+      var->data.how_declared = nir_var_hidden;
+      b->shader->num_uniforms++;
+      *flip = var;
+   }
+   return nir_load_var(b, *flip);
+}
+
+static void
+lower_pos_write(nir_builder *b, struct nir_instr *instr, nir_variable **flip)
+{
+   if (instr->type != nir_instr_type_intrinsic)
+      return;
+
+   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+   if (intr->intrinsic != nir_intrinsic_store_deref)
+      return;
+
+   nir_variable *var = nir_intrinsic_get_var(intr, 0);
+   if (var->data.mode != nir_var_shader_out ||
+       var->data.location != VARYING_SLOT_POS)
+      return;
+
+   b->cursor = nir_before_instr(&intr->instr);
+
+   nir_ssa_def *pos = nir_ssa_for_src(b, intr->src[1], 4);
+   nir_ssa_def *flip_y = get_flip(b, flip);
+   nir_ssa_def *def = nir_vec4(b,
+                               nir_channel(b, pos, 0),
+                               nir_fmul(b, nir_channel(b, pos, 1), flip_y),
+                               nir_channel(b, pos, 2),
+                               nir_channel(b, pos, 3));
+   nir_instr_rewrite_src(&intr->instr, intr->src + 1, nir_src_for_ssa(def));
+}
+
+void
+d3d12_lower_yflip(nir_shader *nir)
+{
+   nir_variable *flip = NULL;
+
+   if (nir->info.stage != MESA_SHADER_VERTEX)
+      return;
+
+   nir_foreach_function(function, nir) {
+      if (function->impl) {
+         nir_builder b;
+         nir_builder_init(&b, function->impl);
+
+         nir_foreach_block(block, function->impl) {
+            nir_foreach_instr_safe(instr, block) {
+               lower_pos_write(&b, instr, &flip);
+            }
+         }
+
+         nir_metadata_preserve(function->impl, nir_metadata_block_index |
+                                               nir_metadata_dominance);
+      }
+   }
 }
 
 /**
