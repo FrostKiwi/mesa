@@ -766,9 +766,10 @@ wsi_wl_swapchain_acquire_next_image(struct wsi_swapchain *wsi_chain,
                                     UNUSED int *sync_fd)
 {
    struct wsi_wl_swapchain *chain = (struct wsi_wl_swapchain *)wsi_chain;
+   struct wsi_wl_display *display = chain->display;
    struct timespec start_time, end_time;
    struct timespec rel_timeout;
-   int wl_fd = wl_display_get_fd(chain->display->wl_display);
+   int wl_fd = wl_display_get_fd(display->wl_display);
 
    timespec_from_nsec(&rel_timeout, info->timeout);
 
@@ -777,8 +778,8 @@ wsi_wl_swapchain_acquire_next_image(struct wsi_swapchain *wsi_chain,
 
    while (1) {
       /* Try to dispatch potential events. */
-      int ret = wl_display_dispatch_queue_pending(chain->display->wl_display,
-                                                  chain->display->queue);
+      int ret = wl_display_dispatch_queue_pending(display->wl_display,
+                                                  display->queue);
       if (ret < 0)
          return VK_ERROR_OUT_OF_DATE_KHR;
 
@@ -799,8 +800,8 @@ wsi_wl_swapchain_acquire_next_image(struct wsi_swapchain *wsi_chain,
          return VK_NOT_READY;
 
       /* Try to read events from the server. */
-      ret = wl_display_prepare_read_queue(chain->display->wl_display,
-                                          chain->display->queue);
+      ret = wl_display_prepare_read_queue(display->wl_display,
+                                          display->queue);
       if (ret < 0) {
          /* Another thread might have read events for our queue already. Go
           * back to dispatch them.
@@ -818,7 +819,7 @@ wsi_wl_swapchain_acquire_next_image(struct wsi_swapchain *wsi_chain,
       ret = ppoll(&pollfd, 1, &rel_timeout, NULL);
       if (ret <= 0) {
          int lerrno = errno;
-         wl_display_cancel_read(chain->display->wl_display);
+         wl_display_cancel_read(display->wl_display);
          if (ret < 0) {
             /* If ppoll() was interrupted, try again. */
             if (lerrno == EINTR || lerrno == EAGAIN)
@@ -829,7 +830,7 @@ wsi_wl_swapchain_acquire_next_image(struct wsi_swapchain *wsi_chain,
          continue;
       }
 
-      ret = wl_display_read_events(chain->display->wl_display);
+      ret = wl_display_read_events(display->wl_display);
       if (ret < 0)
          return VK_ERROR_OUT_OF_DATE_KHR;
    }
@@ -857,12 +858,13 @@ wsi_wl_swapchain_queue_present(struct wsi_swapchain *wsi_chain,
                                const VkPresentRegionKHR *damage)
 {
    struct wsi_wl_swapchain *chain = (struct wsi_wl_swapchain *)wsi_chain;
+   struct wsi_wl_display *display = chain->display;
    assert(sync_fd < 0);
 
    if (chain->base.present_mode == VK_PRESENT_MODE_FIFO_KHR) {
       while (!chain->fifo_ready) {
-         int ret = wl_display_dispatch_queue(chain->display->wl_display,
-                                             chain->display->queue);
+         int ret = wl_display_dispatch_queue(display->wl_display,
+                                             display->queue);
          if (ret < 0)
             return VK_ERROR_OUT_OF_DATE_KHR;
       }
@@ -892,7 +894,7 @@ wsi_wl_swapchain_queue_present(struct wsi_swapchain *wsi_chain,
 
    chain->images[image_index].busy = true;
    wl_surface_commit(chain->surface);
-   wl_display_flush(chain->display->wl_display);
+   wl_display_flush(display->wl_display);
 
    return VK_SUCCESS;
 }
@@ -935,7 +937,7 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
 
       struct zwp_linux_buffer_params_v1 *params =
          zwp_linux_dmabuf_v1_create_params(display->dmabuf.wl_dmabuf);
-      wl_proxy_set_queue((struct wl_proxy *) params, chain->display->queue);
+      wl_proxy_set_queue((struct wl_proxy *) params, display->queue);
 
       for (int i = 0; i < image->base.num_planes; i++) {
          zwp_linux_buffer_params_v1_add(params,
@@ -1091,15 +1093,16 @@ wsi_wl_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
    /* Use explicit DRM format modifiers when both the server and the driver
     * support them.
     */
-   if (chain->display->dmabuf.wl_dmabuf &&
+   struct wsi_wl_display *display = chain->display;
+   if (display->dmabuf.wl_dmabuf &&
        chain->base.wsi->supports_modifiers) {
       struct u_vector *modifiers;
       switch (chain->drm_format) {
       case WL_DRM_FORMAT_ARGB8888:
-         modifiers = &chain->display->dmabuf.modifiers.argb8888;
+         modifiers = &display->dmabuf.modifiers.argb8888;
          break;
       case WL_DRM_FORMAT_XRGB8888:
-         modifiers = &chain->display->dmabuf.modifiers.xrgb8888;
+         modifiers = &display->dmabuf.modifiers.xrgb8888;
          break;
       default:
          modifiers = NULL;
