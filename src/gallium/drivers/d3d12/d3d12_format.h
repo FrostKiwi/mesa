@@ -35,6 +35,12 @@ extern "C" {
 DXGI_FORMAT
 d3d12_get_format(enum pipe_format format);
 
+DXGI_FORMAT
+d3d12_get_resource_base_format(DXGI_FORMAT f);
+
+DXGI_FORMAT
+d3d12_get_sampler_format_for_ds(DXGI_FORMAT f);
+
 #ifdef __cplusplus
 }
 #endif
