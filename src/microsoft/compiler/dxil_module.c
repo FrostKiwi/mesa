@@ -1368,6 +1368,32 @@ dxil_module_get_int64_const(struct dxil_module *m, int64_t value)
 }
 
 const struct dxil_value *
+dxil_module_get_int_const(struct dxil_module *m, intmax_t value,
+                          unsigned bit_size)
+{
+   switch (bit_size) {
+   case 1:
+      assert(value == 0 || value == 1);
+      return dxil_module_get_int1_const(m, value);
+
+   case 8:
+      assert(INT8_MIN <= value && value <= INT8_MAX);
+      return dxil_module_get_int8_const(m, value);
+
+   case 32:
+      assert(INT32_MIN <= value && value <= INT32_MAX);
+      return dxil_module_get_int32_const(m, value);
+
+   case 64:
+      assert(INT64_MIN <= value && value <= INT64_MAX);
+      return dxil_module_get_int64_const(m, value);
+
+   default:
+      unreachable("unsupported bit-width");
+   }
+}
+
+const struct dxil_value *
 dxil_module_get_float_const(struct dxil_module *m, float value)
 {
    const struct dxil_type *type = get_float32_type(m);

@@ -282,6 +282,10 @@ const struct dxil_value *
 dxil_module_get_int64_const(struct dxil_module *m, int64_t value);
 
 const struct dxil_value *
+dxil_module_get_int_const(struct dxil_module *m, intmax_t value,
+                          unsigned bit_size);
+
+const struct dxil_value *
 dxil_module_get_float_const(struct dxil_module *m, float value);
 
 const struct dxil_value *
