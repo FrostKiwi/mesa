@@ -180,8 +180,10 @@ d3d12_transfer_copy_bufimage(struct d3d12_context *ctx,
                              struct d3d12_resource *res,
                              struct d3d12_resource *staging_res,
                              struct d3d12_transfer *trans,
+                             unsigned stride,
                              bool buf2img)
 {
+   ID3D12Device* dev = d3d12_screen(ctx->base.screen)->dev;
    D3D12_TEXTURE_COPY_LOCATION buf_loc = {};
    D3D12_TEXTURE_COPY_LOCATION tex_loc = {};
    D3D12_TEXTURE_COPY_LOCATION *src, *dst;
@@ -212,17 +214,21 @@ d3d12_transfer_copy_bufimage(struct d3d12_context *ctx,
       src_box.back = trans->base.box.z + trans->base.box.depth;
    }
 
+   D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
+   auto descr = res->res->GetDesc();
+   dev->GetCopyableFootprints(&descr, 0, 1, 0, &footprint, nullptr, nullptr, nullptr);
+
    tex_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
    tex_loc.SubresourceIndex = trans->base.level;
    tex_loc.pResource = res->res;
 
    buf_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-   buf_loc.PlacedFootprint.Offset = 0;
-   buf_loc.PlacedFootprint.Footprint.Format = d3d12_get_format(res->base.format);
+   buf_loc.PlacedFootprint = footprint;
    buf_loc.PlacedFootprint.Footprint.Width = trans->base.box.width;
    buf_loc.PlacedFootprint.Footprint.Height = trans->base.box.height;
    buf_loc.PlacedFootprint.Footprint.Depth = trans->base.box.depth;
-   buf_loc.PlacedFootprint.Footprint.RowPitch = trans->base.stride;
+   buf_loc.PlacedFootprint.Footprint.RowPitch = stride;
+
    buf_loc.pResource = staging_res->res;
 
    ctx->cmdlist->CopyTextureRegion(dst, dst_x, dst_y, dst_z, src, buf2img ? NULL : &src_box);
@@ -313,7 +319,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
       struct d3d12_resource *staging_res = d3d12_resource(trans->staging_res);
 
       if (usage & PIPE_TRANSFER_READ) {
-         bool ret = d3d12_transfer_copy_bufimage(ctx, res, staging_res, trans, false);
+         bool ret = d3d12_transfer_copy_bufimage(ctx, res, staging_res, trans, ptrans->stride, false);
          if (ret == false)
             return NULL;
          d3d12_flush_cmdlist(ctx);
@@ -351,7 +357,7 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
       if (trans->base.usage & PIPE_TRANSFER_WRITE) {
          struct d3d12_context *ctx = d3d12_context(pctx);
 
-         d3d12_transfer_copy_bufimage(ctx, res, staging_res, trans, true);
+         d3d12_transfer_copy_bufimage(ctx, res, staging_res, trans, ptrans->stride, true);
       }
 
       pipe_resource_reference(&trans->staging_res, NULL);
