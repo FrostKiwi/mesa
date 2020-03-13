@@ -106,13 +106,12 @@ resource_dimension(enum glsl_sampler_dim dim)
    }
 }
 
-struct d3d12_shader_selector *
-d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
+static struct d3d12_shader *
+compile_shader(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
+               struct nir_shader *nir)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
-   struct d3d12_shader_selector *sel = rzalloc(nullptr, d3d12_shader_selector);
    struct d3d12_shader *shader = rzalloc(sel, d3d12_shader);
-
    shader->nir = nir;
    sel->first = sel->current = shader;
 
@@ -162,8 +161,20 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
       fclose(fp);
       fprintf(stderr, "wrote '%s'...\n", buf);
    }
+   return shader;
+}
 
-   return sel;
+struct d3d12_shader_selector *
+d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
+{
+   struct d3d12_shader_selector *sel = rzalloc(nullptr, d3d12_shader_selector);
+
+   sel->first = sel->current = compile_shader(ctx, sel, nir);
+
+   if (sel->current)
+      return sel;
+   ralloc_free(sel);
+   return NULL;
 }
 
 void
