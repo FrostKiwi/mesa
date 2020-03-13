@@ -655,7 +655,7 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
       component_mapping((pipe_swizzle) state->swizzle_b, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2),
       component_mapping((pipe_swizzle) state->swizzle_a, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_3)
    );
-   desc.Format = d3d12_get_format(state->format);
+   desc.Format = d3d12_get_sampler_format_for_ds(d3d12_get_format(state->format));
    desc.ViewDimension = view_dimension(state->target);
    switch (desc.ViewDimension) {
    case D3D12_SRV_DIMENSION_TEXTURE1D:

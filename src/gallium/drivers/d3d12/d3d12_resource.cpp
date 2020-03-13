@@ -50,6 +50,8 @@ d3d12_resource_create(struct pipe_screen *pscreen,
 {
    struct d3d12_screen *screen = d3d12_screen(pscreen);
    struct d3d12_resource *res = CALLOC_STRUCT(d3d12_resource);
+   const uint32_t bind_ds_and_sv = PIPE_BIND_SAMPLER_VIEW | PIPE_BIND_DEPTH_STENCIL;
+   const bool use_as_ds_and_sv = (templ->bind & bind_ds_and_sv) == bind_ds_and_sv;
 
    res->base = *templ;
 
@@ -59,7 +61,9 @@ d3d12_resource_create(struct pipe_screen *pscreen,
                  d3d12_get_format(templ->format);
 
    D3D12_RESOURCE_DESC desc;
-   desc.Format = res->format;
+   desc.Format = use_as_ds_and_sv ?
+                    d3d12_get_resource_base_format(res->format):
+                    res->format;
    desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
    desc.Width = templ->width0;
    desc.Height = templ->height0;
