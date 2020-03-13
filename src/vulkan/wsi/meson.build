@@ -31,6 +31,8 @@ if with_platform_wayland
     wayland_drm_protocol_c,
     linux_dmabuf_unstable_v1_client_protocol_h,
     linux_dmabuf_unstable_v1_protocol_c,
+    linux_explicit_synchronization_unstable_v1_client_protocol_h,
+    linux_explicit_synchronization_unstable_v1_protocol_c,
   ]
 endif
 

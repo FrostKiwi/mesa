@@ -1582,6 +1582,10 @@ if with_platform_wayland
     dep_wl_protocols.get_pkgconfig_variable('pkgdatadir'), 'unstable',
     'linux-dmabuf', 'linux-dmabuf-unstable-v1.xml'
   )
+  wayland_explicit_synchronization_xml = join_paths(
+    dep_wl_protocols.get_pkgconfig_variable('pkgdatadir'), 'unstable',
+    'linux-explicit-synchronization', 'linux-explicit-synchronization-unstable-v1.xml'
+  )
   pre_args += ['-DHAVE_WAYLAND_PLATFORM', '-DWL_HIDE_DEPRECATED']
 endif
 

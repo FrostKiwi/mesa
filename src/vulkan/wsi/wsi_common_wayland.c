@@ -39,6 +39,7 @@
 #include "wsi_common_wayland.h"
 #include "wayland-drm-client-protocol.h"
 #include "linux-dmabuf-unstable-v1-client-protocol.h"
+#include "linux-explicit-synchronization-unstable-v1-protocol.h"
 
 #include <util/hash_table.h>
 #include <util/timespec.h>
@@ -75,6 +76,7 @@ struct wsi_wl_display {
 
    struct wsi_wl_display_drm                    drm;
    struct wsi_wl_display_dmabuf                 dmabuf;
+   struct zwp_linux_explicit_synchronization_v1 *wl_explicit_sync;
 
    struct wsi_wayland *wsi_wl;
 
@@ -85,6 +87,8 @@ struct wsi_wl_display {
 struct wsi_wl_surface {
    struct wsi_wl_display                        display;
    struct wl_surface *                          wl_surface;
+
+   struct zwp_linux_surface_synchronization_v1 *wl_explicit_sync;
 
    uint32_t                                     refcount;
 };
@@ -338,6 +342,12 @@ registry_handle_global(void *data, struct wl_registry *registry,
          wl_registry_bind(registry, name, &zwp_linux_dmabuf_v1_interface, 3);
       zwp_linux_dmabuf_v1_add_listener(display->dmabuf.wl_dmabuf,
                                        &dmabuf_listener, display);
+   } else if (strcmp(interface, "zwp_linux_explicit_synchronization_v1") == 0 &&
+              display->wsi_wl->wsi->supports_sync_file) {
+      display->wl_explicit_sync =
+         wl_registry_bind(registry, name,
+                          &zwp_linux_explicit_synchronization_v1_interface,
+                          MIN2(version, 2));
    }
 }
 
@@ -362,6 +372,8 @@ wsi_wl_display_finish(struct wsi_wl_display *display)
       wl_drm_destroy(display->drm.wl_drm);
    if (display->dmabuf.wl_dmabuf)
       zwp_linux_dmabuf_v1_destroy(display->dmabuf.wl_dmabuf);
+   if (display->wl_explicit_sync)
+      zwp_linux_explicit_synchronization_v1_destroy(display->wl_explicit_sync);
    if (display->wl_display_wrapper)
       wl_proxy_wrapper_destroy(display->wl_display_wrapper);
    if (display->queue)
@@ -470,6 +482,8 @@ wsi_wl_surface_destroy(struct wsi_wl_surface *surface)
 {
    struct wsi_wayland *wsi = surface->display.wsi_wl;
 
+   if (surface->wl_explicit_sync)
+      zwp_linux_surface_synchronization_v1_destroy(surface->wl_explicit_sync);
    if (surface->wl_surface)
       wl_proxy_wrapper_destroy(surface->wl_surface);
    wsi_wl_display_finish(&surface->display);
@@ -503,6 +517,16 @@ wsi_wl_surface_create(struct wsi_wayland *wsi,
    }
    wl_proxy_set_queue((struct wl_proxy *) surface->wl_surface,
                       surface->display.queue);
+
+   if (surface->display.wl_explicit_sync) {
+      surface->wl_explicit_sync =
+         zwp_linux_explicit_synchronization_v1_get_synchronization(
+            surface->display.wl_explicit_sync, wl_surface);
+      if (!surface->wl_explicit_sync) {
+         result = VK_ERROR_OUT_OF_HOST_MEMORY;
+         goto fail;
+      }
+   }
 
    surface->refcount = 1;
    *surface_out = surface;
@@ -749,7 +773,9 @@ VkResult wsi_create_wl_surface(const VkAllocationCallbacks *pAllocator,
 struct wsi_wl_image {
    struct wsi_image                             base;
    struct wl_buffer *                           buffer;
+   struct zwp_linux_buffer_release_v1 *         release;
    bool                                         busy;
+   int                                          out_sync_fd;
 };
 
 struct wsi_wl_swapchain {
@@ -785,7 +811,7 @@ static VkResult
 wsi_wl_swapchain_acquire_next_image(struct wsi_swapchain *wsi_chain,
                                     const VkAcquireNextImageInfoKHR *info,
                                     uint32_t *image_index,
-                                    UNUSED int *sync_fd)
+                                    int *sync_fd)
 {
    struct wsi_wl_swapchain *chain = (struct wsi_wl_swapchain *)wsi_chain;
    struct wsi_wl_display *display = &chain->surface->display;
@@ -810,6 +836,8 @@ wsi_wl_swapchain_acquire_next_image(struct wsi_swapchain *wsi_chain,
          if (!chain->images[i].busy) {
             /* We found a non-busy image */
             *image_index = i;
+            if (chain->base.use_sync_file)
+               *sync_fd = chain->images[i].out_sync_fd;
             chain->images[i].busy = true;
             return VK_SUCCESS;
          }
@@ -873,15 +901,42 @@ static const struct wl_callback_listener frame_listener = {
    frame_handle_done,
 };
 
+static void
+buffer_release_handle_fenced(void *data,
+			     struct zwp_linux_buffer_release_v1 *release,
+                             int32_t fence)
+{
+   struct wsi_wl_image *image = data;
+
+   assert(image->release == release);
+
+   image->busy = false;
+   image->out_sync_fd = fence;
+   image->release = NULL;
+
+   zwp_linux_buffer_release_v1_destroy(release);
+}
+
+static void
+buffer_release_handle_immediate(void *data,
+			        struct zwp_linux_buffer_release_v1 *release)
+{
+   buffer_release_handle_fenced(data, release, -1);
+}
+
+static const struct zwp_linux_buffer_release_v1_listener release_listener = {
+   buffer_release_handle_fenced,
+   buffer_release_handle_immediate,
+};
+
 static VkResult
 wsi_wl_swapchain_queue_present(struct wsi_swapchain *wsi_chain,
                                uint32_t image_index,
-                               UNUSED int sync_fd,
+                               int sync_fd,
                                const VkPresentRegionKHR *damage)
 {
    struct wsi_wl_swapchain *chain = (struct wsi_wl_swapchain *)wsi_chain;
    struct wsi_wl_display *display = &chain->surface->display;
-   assert(sync_fd < 0);
 
    if (chain->base.present_mode == VK_PRESENT_MODE_FIFO_KHR) {
       while (!chain->fifo_ready) {
@@ -910,6 +965,20 @@ wsi_wl_swapchain_queue_present(struct wsi_swapchain *wsi_chain,
                         0, 0, INT32_MAX, INT32_MAX);
    }
 
+   if (chain->base.use_sync_file) {
+      assert(sync_fd >= 0);
+      zwp_linux_surface_synchronization_v1_set_acquire_fence(
+         chain->surface->wl_explicit_sync, sync_fd);
+
+      chain->images[image_index].release =
+         zwp_linux_surface_synchronization_v1_get_release(chain->surface->wl_explicit_sync);
+      zwp_linux_buffer_release_v1_add_listener(chain->images[image_index].release,
+                                               &release_listener,
+                                               &chain->images[image_index]);
+   } else {
+      assert(sync_fd < 0);
+   }
+
    if (chain->base.present_mode == VK_PRESENT_MODE_FIFO_KHR) {
       chain->frame = wl_surface_frame(chain->surface->wl_surface);
       wl_callback_add_listener(chain->frame, &frame_listener, chain);
@@ -929,6 +998,7 @@ buffer_handle_release(void *data, struct wl_buffer *buffer)
    struct wsi_wl_image *image = data;
 
    assert(image->buffer == buffer);
+   assert(image->release == NULL);
 
    image->busy = false;
 }
@@ -999,7 +1069,11 @@ wsi_wl_image_init(struct wsi_wl_swapchain *chain,
    if (!image->buffer)
       goto fail_image;
 
-   wl_buffer_add_listener(image->buffer, &buffer_listener, image);
+   if (!chain->base.use_sync_file)
+      wl_buffer_add_listener(image->buffer, &buffer_listener, image);
+
+   image->out_sync_fd = -1;
+   image->release = NULL;
 
    return VK_SUCCESS;
 
@@ -1018,6 +1092,8 @@ wsi_wl_swapchain_destroy(struct wsi_swapchain *wsi_chain,
    for (uint32_t i = 0; i < chain->base.image_count; i++) {
       if (chain->images[i].buffer) {
          wl_buffer_destroy(chain->images[i].buffer);
+         if (chain->images[i].release)
+            zwp_linux_buffer_release_v1_destroy(chain->images[i].release);
          wsi_destroy_image(&chain->base, &chain->images[i].base);
       }
    }
@@ -1126,6 +1202,16 @@ wsi_wl_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
          chain->drm_modifiers = u_vector_tail(modifiers);
          chain->num_drm_modifiers = u_vector_length(modifiers);
       }
+   }
+
+   /* We can only use explicit sync on wl_drm buffers with version >= 2.
+    * Prior to that, we can only use it with zwp_linux_dmabuf_v1.  We use
+    * zwp_linux_dmabuf_v1 exactly when num_modifiers > 0.
+    */
+   if (display->wl_explicit_sync) {
+      chain->base.use_sync_file =
+         chain->num_drm_modifiers > 0 ||
+         zwp_linux_explicit_synchronization_v1_get_version(display->wl_explicit_sync) >= 2;
    }
 
    chain->fifo_ready = true;
