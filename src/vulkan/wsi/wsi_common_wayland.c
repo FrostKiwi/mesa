@@ -1026,7 +1026,7 @@ wsi_wl_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
                                 const VkAllocationCallbacks* pAllocator,
                                 struct wsi_swapchain **swapchain_out)
 {
-   VkIcdSurfaceWayland *surface = (VkIcdSurfaceWayland *)icd_surface;
+   VkIcdSurfaceWayland *vk_wl_surface = (VkIcdSurfaceWayland *)icd_surface;
    struct wsi_wayland *wsi =
       (struct wsi_wayland *)wsi_device->wsi[VK_ICD_WSI_PLATFORM_WAYLAND];
    struct wsi_wl_swapchain *chain;
@@ -1079,12 +1079,13 @@ wsi_wl_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
       chain->display = wsi_wl_display_ref(old_chain->display);
    } else {
       chain->display = NULL;
-      result = wsi_wl_display_create(wsi, surface->display, &chain->display);
+      result = wsi_wl_display_create(wsi, vk_wl_surface->display,
+                                     &chain->display);
       if (result != VK_SUCCESS)
          goto fail;
    }
 
-   chain->surface = wl_proxy_create_wrapper(surface->surface);
+   chain->surface = wl_proxy_create_wrapper(vk_wl_surface->surface);
    if (!chain->surface) {
       result = VK_ERROR_OUT_OF_HOST_MEMORY;
       goto fail;
