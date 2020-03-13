@@ -56,7 +56,42 @@ d3d12_create_surface(struct pipe_context *pctx,
 
    if (util_format_is_depth_or_stencil(tpl->format)) {
       d3d12_descriptor_heap_alloc_handle(ctx->dsv_heap, &surface->desc_handle);
-      screen->dev->CreateDepthStencilView(res->res, NULL,
+      D3D12_DEPTH_STENCIL_VIEW_DESC desc;
+      desc.Format = d3d12_get_format(tpl->format);
+      desc.Flags = D3D12_DSV_FLAG_NONE;
+      switch (pres->target) {
+      case PIPE_TEXTURE_1D:
+         desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
+         desc.Texture1D.MipSlice = tpl->u.tex.level;
+         break;
+
+      case PIPE_TEXTURE_1D_ARRAY:
+         desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+         desc.Texture1DArray.MipSlice = tpl->u.tex.level;
+         desc.Texture1DArray.FirstArraySlice = tpl->u.tex.first_layer;
+         desc.Texture1DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
+         break;
+
+      case PIPE_TEXTURE_2D:
+      case PIPE_TEXTURE_RECT:
+         desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+         desc.Texture2D.MipSlice = tpl->u.tex.level;
+         break;
+
+      case PIPE_TEXTURE_2D_ARRAY:
+      case PIPE_TEXTURE_CUBE:
+         desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+         desc.Texture2DArray.MipSlice = tpl->u.tex.level;
+         desc.Texture2DArray.FirstArraySlice = tpl->u.tex.first_layer;
+         desc.Texture2DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
+         break;
+
+      default:
+         unreachable("unsupported target"); // dunno how to support, if needed
+         break;
+      }
+
+      screen->dev->CreateDepthStencilView(res->res, &desc,
                                           surface->desc_handle.cpu_handle);
    } else {
       D3D12_RENDER_TARGET_VIEW_DESC desc;

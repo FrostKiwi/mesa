@@ -456,10 +456,29 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
         return FALSE;
 
       if (bind & PIPE_BIND_SAMPLER_VIEW &&
-          !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE))
-         return FALSE;
-   }
+          !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE)) {
 
+         if (!util_format_is_depth_or_stencil(format))
+            return FALSE;
+
+         /* DS surfaces use a different format for SVs, so check if we can get one
+          * that is supported */
+         D3D12_FEATURE_DATA_FORMAT_SUPPORT fmt_info_sv;
+         fmt_info_sv.Format = d3d12_get_sampler_format_for_ds(dxgi_format);
+
+         if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,
+                                                     &fmt_info_sv, sizeof(fmt_info_sv))))
+            return FALSE;
+
+         if (!(fmt_info_sv.Support1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE))
+            return FALSE;
+      }
+
+      if (bind & PIPE_BIND_DEPTH_STENCIL &&
+          !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)) {
+            return FALSE;
+      }
+   }
    return TRUE;
 }
 
