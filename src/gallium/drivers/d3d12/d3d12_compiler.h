@@ -77,6 +77,7 @@ struct d3d12_shader {
 struct d3d12_shader_selector {
    struct d3d12_shader *first;
    struct d3d12_shader *current;
+   nir_shader *nir;
 };
 
 
@@ -85,6 +86,9 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir);
 
 void
 d3d12_shader_free(struct d3d12_shader_selector *shader);
+
+void
+d3d12_select_shader_variants(struct d3d12_context *ctx);
 
 uint64_t
 d3d12_reassign_driver_locations(exec_list *io);
