@@ -81,6 +81,38 @@ static const DXGI_FORMAT formats[PIPE_FORMAT_COUNT] = {
 };
 
 DXGI_FORMAT
+d3d12_get_resource_base_format(DXGI_FORMAT f)
+{
+   switch (f) {
+   case DXGI_FORMAT_D16_UNORM:
+      return DXGI_FORMAT_R16_TYPELESS;
+   case DXGI_FORMAT_D32_FLOAT:
+      return DXGI_FORMAT_R32_TYPELESS;
+   case DXGI_FORMAT_D24_UNORM_S8_UINT:
+      return DXGI_FORMAT_R24G8_TYPELESS;
+
+   default:
+      return f;
+   }
+}
+
+DXGI_FORMAT
+d3d12_get_sampler_format_for_ds(DXGI_FORMAT f)
+{
+   switch (f) {
+   case DXGI_FORMAT_D16_UNORM:
+      return DXGI_FORMAT_R16_FLOAT;
+   case DXGI_FORMAT_D32_FLOAT:
+      return DXGI_FORMAT_R32_FLOAT;
+   case DXGI_FORMAT_D24_UNORM_S8_UINT:
+      return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+
+   default:
+      return f;
+   }
+}
+
+DXGI_FORMAT
 d3d12_get_format(enum pipe_format format)
 {
    return formats[format];
