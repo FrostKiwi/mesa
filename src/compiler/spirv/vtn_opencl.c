@@ -198,6 +198,10 @@ handle_special(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
       return nir_sinh(nb, srcs[0]);
    case OpenCLstd_Cosh:
       return nir_cosh(nb, srcs[0]);
+   case OpenCLstd_Exp:
+      return nir_exp(nb, srcs[0]);
+   case OpenCLstd_Log:
+      return nir_log(nb, srcs[0]);
    default:
       vtn_fail("No NIR equivalent");
       return NULL;
@@ -420,6 +424,8 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_Clz:
    case OpenCLstd_Sinh:
    case OpenCLstd_Cosh:
+   case OpenCLstd_Exp:
+   case OpenCLstd_Log:
       handle_instr(b, ext_opcode, w, count, handle_special);
       return true;
    case OpenCLstd_Vloadn:
