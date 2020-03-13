@@ -184,6 +184,8 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
 {
    struct d3d12_shader_selector *sel = rzalloc(nullptr, d3d12_shader_selector);
 
+   /* Keep this initial shader as the blue print for possible variants */
+   sel->nir = nir_shader_clone(sel, nir);
    sel->first = sel->current = compile_shader(ctx, sel, nir);
 
    if (sel->current) {
@@ -192,6 +194,155 @@ d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
    }
    ralloc_free(sel);
    return NULL;
+}
+
+bool
+d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key *have)
+{
+   assert(expect);
+   assert(have);
+
+   /* Because we only add varyings we check that a shader has at least the expected in-
+    * and outputs. */
+   uint64_t delta_in = expect->required_varying_inputs & ~have->required_varying_inputs;
+   uint64_t delta_out = expect->required_varying_outputs & ~have->required_varying_outputs;
+   return !(delta_in || delta_out);
+}
+
+void
+d3d12_fill_shader_key(d3d12_shader_key *key, d3d12_shader *prev, d3d12_shader *next)
+{
+   const uint64_t system_generated_in_values =
+         (1ull << VARYING_SLOT_FACE) |
+         (1ull << VARYING_SLOT_POS);
+
+   const uint64_t system_out_values =
+         1ull << VARYING_SLOT_POS;
+
+   memset(key, 0, sizeof(d3d12_shader_key));
+
+   /* We require as inputs what the previous stage has written,
+    * except certain system values */
+   if (prev)
+      key->required_varying_inputs = prev->nir->info.outputs_written & ~system_out_values;
+
+   /* We require as outputs what the next stage reads,
+    * except certain system values */
+   if (next)
+      key->required_varying_outputs = next->nir->info.inputs_read & ~system_generated_in_values;
+}
+
+static void
+select_shader_variant(struct d3d12_context *ctx, d3d12_shader_selector *sel,
+                      d3d12_shader *prev, d3d12_shader *next)
+{
+   d3d12_shader_key key;
+   d3d12_fill_shader_key(&key, prev, next);
+
+   for (d3d12_shader *variant = sel->first; variant;
+        variant = variant->next_variant) {
+
+      if (d3d12_compare_shader_keys(&key, &variant->key)) {
+         sel->current = variant;
+         return;
+      }
+   }
+
+   /* Clone the nir shader, add the needed in and outputs, and re-sort */
+   nir_shader *new_nir_variant = nir_shader_clone(sel, sel->nir);
+   uint64_t mask = key.required_varying_inputs & ~sel->first->key.required_varying_inputs;
+
+   if (prev && mask) {
+      nir_foreach_variable(var, &prev->nir->outputs) {
+         if (mask & (1ull << var->data.location)) {
+            nir_variable *new_var = nir_variable_clone(var, new_nir_variant);
+            new_var->data.mode = nir_var_shader_in;
+            new_var->data.driver_location = exec_list_length(&new_nir_variant->inputs);
+            exec_list_push_tail(&new_nir_variant->inputs, &new_var->node);
+         }
+      }
+      d3d12_reassign_driver_locations(&new_nir_variant->inputs);
+   }
+
+   mask = key.required_varying_outputs & ~sel->first->key.required_varying_outputs;
+
+   if (next && mask) {
+      nir_foreach_variable(var, &next->nir->inputs) {
+         if (mask & (1ull << var->data.location)) {
+            nir_variable *new_var = nir_variable_clone(var, new_nir_variant);
+            new_var->data.mode = nir_var_shader_out;
+            new_var->data.driver_location = exec_list_length(&new_nir_variant->outputs);
+            exec_list_push_tail(&new_nir_variant->outputs, &new_var->node);
+         }
+      }
+      d3d12_reassign_driver_locations(&new_nir_variant->outputs);
+   }
+
+   d3d12_shader *new_variant = compile_shader(ctx, sel, new_nir_variant);
+   assert(new_variant);
+   new_variant->key = key;
+
+   /* prepend the new shader in the selector chain and pick it */
+   new_variant->next_variant = sel->first;
+   sel->current = sel->first = new_variant;
+
+   ctx->dirty_program = true;
+}
+
+static d3d12_shader *
+get_prev_shader(struct d3d12_context *ctx, pipe_shader_type current)
+{
+   /* No TESS_CTRL or TESS_EVAL yet */
+
+   switch (current) {
+   case PIPE_SHADER_VERTEX:
+      return NULL;
+   case PIPE_SHADER_FRAGMENT:
+      if (ctx->gfx_stages[PIPE_SHADER_GEOMETRY])
+         return ctx->gfx_stages[PIPE_SHADER_GEOMETRY]->current;
+      /* fallthrough */
+   case PIPE_SHADER_GEOMETRY:
+      assert(ctx->gfx_stages[PIPE_SHADER_VERTEX]);
+      return ctx->gfx_stages[PIPE_SHADER_VERTEX]->current;
+   default:
+      unreachable("shader type not supported");
+   }
+}
+
+static d3d12_shader *
+get_next_shader(struct d3d12_context *ctx, pipe_shader_type current)
+{
+   /* No TESS_CTRL or TESS_EVAL yet */
+
+   switch (current) {
+   case PIPE_SHADER_VERTEX:
+      if (ctx->gfx_stages[PIPE_SHADER_GEOMETRY])
+         return ctx->gfx_stages[PIPE_SHADER_GEOMETRY]->current;
+      /* fallthrough */
+   case PIPE_SHADER_GEOMETRY:
+      assert(ctx->gfx_stages[PIPE_SHADER_FRAGMENT]);
+      return ctx->gfx_stages[PIPE_SHADER_FRAGMENT]->current;
+      /* fallthrough */
+   case PIPE_SHADER_FRAGMENT:
+      return NULL;
+   default:
+      unreachable("shader type not supported");
+   }
+}
+
+void
+d3d12_select_shader_variants(struct d3d12_context *ctx)
+{
+   for (int i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
+      auto sel = ctx->gfx_stages[i];
+      if (!sel)
+         continue;
+
+      d3d12_shader *prev = get_prev_shader(ctx, (pipe_shader_type)i);
+      d3d12_shader *next = get_next_shader(ctx, (pipe_shader_type)i);
+
+      select_shader_variant(ctx, sel, prev, next);
+   }
 }
 
 void
