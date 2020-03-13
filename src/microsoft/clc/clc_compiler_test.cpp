@@ -567,3 +567,111 @@ TEST_F(ComputeTest, clz)
    for (int i = 0; i < ARRAY_SIZE(expected); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, exp)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = native_exp(inout[get_global_id(0)]);\n\
+   }\n";
+   const float input[] = {
+      0.0f, 1.0f, 2.0f, 3.0f
+   };
+   const float expected[] = {
+      exp(0.0f), exp(1.0f), exp(2.0f), exp(3.0f)
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+}
+
+TEST_F(ComputeTest, exp10)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = native_exp10(inout[get_global_id(0)]);\n\
+   }\n";
+   const float input[] = {
+      0.0f, 1.0f, 2.0f, 3.0f
+   };
+   const float expected[] = {
+      pow(10.0f, 0.0f), pow(10.0f, 1.0f), pow(10.0f, 2.0f), pow(10.0f, 3.0f)
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+}
+
+TEST_F(ComputeTest, exp2)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = native_exp2(inout[get_global_id(0)]);\n\
+   }\n";
+   const float input[] = {
+      0.0f, 1.0f, 2.0f, 3.0f
+   };
+   const float expected[] = {
+      pow(2.0f, 0.0f), pow(2.0f, 1.0f), pow(2.0f, 2.0f), pow(2.0f, 3.0f)
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+}
+
+TEST_F(ComputeTest, log)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = native_log(inout[get_global_id(0)]);\n\
+   }\n";
+   const float input[] = {
+      0.0f, 1.0f, 2.0f, 3.0f
+   };
+   const float expected[] = {
+      log(0.0f), log(1.0f), log(2.0f), log(3.0f)
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+}
+
+TEST_F(ComputeTest, log10)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = native_log10(inout[get_global_id(0)]);\n\
+   }\n";
+   const float input[] = {
+      0.0f, 1.0f, 2.0f, 3.0f
+   };
+   const float expected[] = {
+      log10(0.0f), log10(1.0f), log10(2.0f), log10(3.0f)
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+}
+
+TEST_F(ComputeTest, log2)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = native_log2(inout[get_global_id(0)]);\n\
+   }\n";
+   const float input[] = {
+      0.0f, 1.0f, 2.0f, 3.0f
+   };
+   const float expected[] = {
+      log(0.0f) / log(2), log(1.0f) / log(2), log(2.0f) / log(2), log(3.0f) / log(2)
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+}
