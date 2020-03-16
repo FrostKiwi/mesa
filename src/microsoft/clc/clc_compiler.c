@@ -79,7 +79,8 @@ int clc_compile_from_source(
                       NULL, 0,
                       MESA_SHADER_KERNEL, "main_test",
                       &spirv_options,
-                      dxil_get_nir_compiler_options());
+                      dxil_get_nir_compiler_options(),
+                      false);
    if (!nir) {
       fprintf(stderr, "D3D12: spirv_to_nir failed\n");
       return -1;
