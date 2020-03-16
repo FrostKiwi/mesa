@@ -715,3 +715,21 @@ TEST_F(ComputeTest, rint)
    for (int i = 0; i < buf.size(); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, round)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = round(inout[get_global_id(0)]);\n\
+   }\n";
+   const vector<float> input = {
+      0, 0.3f, -0.3f, 0.5f, -0.5f, 1.1f, -1.1f
+   };
+   const float expected[] = {
+      0.0f, 0.0f, -0.0f, 1.0f, -1.0f, 1.0f, -1.0f
+   };
+   auto buf = run_shader_with_input(kernel_source, input);
+   for (int i = 0; i < buf.size(); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
