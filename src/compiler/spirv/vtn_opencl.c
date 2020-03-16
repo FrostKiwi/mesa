@@ -119,6 +119,18 @@ handle_alu(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
 }
 
 static nir_ssa_def *
+build_round(nir_builder *nb, nir_ssa_def *src)
+{
+   nir_ssa_def *const_zero = nir_imm_floatN_t(nb, 0.0, src->bit_size);
+   nir_ssa_def *const_half = nir_imm_floatN_t(nb, 0.5, src->bit_size);
+   nir_ssa_def *sel = nir_fge(nb, src, const_zero);
+   nir_ssa_def *pos = nir_ffloor(nb, nir_fadd(nb, src, const_half));
+   nir_ssa_def *neg = nir_fceil(nb, nir_fsub(nb, src, const_half));
+
+   return nir_bcsel(nb, sel, pos, neg);
+}
+
+static nir_ssa_def *
 handle_special(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
                unsigned num_srcs, nir_ssa_def **srcs,
                const struct glsl_type *dest_type)
@@ -205,6 +217,8 @@ handle_special(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
       return nir_flog(nb, srcs[0]);
    case OpenCLstd_Native_log10:
       return nir_fmul_imm(nb, nir_flog2(nb, srcs[0]), log(2) / log(10));
+   case OpenCLstd_Round:
+      return build_round(nb, srcs[0]);
    default:
       vtn_fail("No NIR equivalent");
       return NULL;
@@ -434,6 +448,7 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_Native_exp10:
    case OpenCLstd_Native_log:
    case OpenCLstd_Native_log10:
+   case OpenCLstd_Round:
       handle_instr(b, cl_opcode, w, count, handle_special);
       return true;
    case OpenCLstd_Vloadn:
