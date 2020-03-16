@@ -338,8 +338,8 @@ emit_record_abbrev(struct dxil_buffer *b,
 static struct dxil_type *
 create_type(struct dxil_module *m, enum type_type type)
 {
-   struct dxil_type *ret = ralloc_size(m->ralloc_ctx,
-                                       sizeof(struct dxil_type));
+   struct dxil_type *ret = rzalloc_size(m->ralloc_ctx,
+                                        sizeof(struct dxil_type));
    if (ret) {
       ret->type = type;
       ret->id = list_length(&m->type_list);
@@ -1878,8 +1878,8 @@ emit_metadata_abbrevs(struct dxil_module *m)
 static struct dxil_mdnode *
 create_mdnode(struct dxil_module *m, enum mdnode_type type)
 {
-   struct dxil_mdnode *ret = ralloc_size(m->ralloc_ctx,
-                                         sizeof(struct dxil_mdnode));
+   struct dxil_mdnode *ret = rzalloc_size(m->ralloc_ctx,
+                                          sizeof(struct dxil_mdnode));
    if (ret) {
       ret->type = type;
       ret->id = list_length(&m->mdnode_list) + 1; /* zero is reserved for NULL nodes */
