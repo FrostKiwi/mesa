@@ -655,7 +655,7 @@ create_device(IDXGIAdapter1 *adapter)
 }
 
 struct pipe_screen *
-d3d12_create_screen(struct sw_winsys *winsys)
+d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
 {
    struct d3d12_screen *screen = CALLOC_STRUCT(d3d12_screen);
    if (!screen)
@@ -688,7 +688,7 @@ d3d12_create_screen(struct sw_winsys *winsys)
       goto failed;
    }
 
-   screen->adapter = choose_adapter(factory, NULL);
+   screen->adapter = choose_adapter(factory, adapter_luid);
    if (!screen->adapter) {
       debug_printf("D3D12: no suitable adapter\n");
       return NULL;
