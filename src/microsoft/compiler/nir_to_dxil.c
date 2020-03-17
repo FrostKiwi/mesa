@@ -2480,7 +2480,7 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
    switch (instr->op) {
    case nir_texop_tex:
       if (dref != NULL)
-         sample = emit_sample_cmp(ctx, tex, sampler, coord, offset, min_lod, dref);
+         sample = emit_sample_cmp(ctx, tex, sampler, coord, offset, dref, min_lod);
       else
          sample = emit_sample(ctx, tex, sampler, coord, offset, min_lod);
       break;
