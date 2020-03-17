@@ -70,6 +70,7 @@ gdi_screen_create(void)
    const char *driver;
    struct pipe_screen *screen = NULL;
    struct sw_winsys *winsys;
+   LUID* adapter_luid = NULL, local_luid;
 
    winsys = gdi_create_sw_winsys();
    if(!winsys)
@@ -103,7 +104,11 @@ gdi_screen_create(void)
 #endif
 #ifdef GALLIUM_D3D12
    if (strcmp(driver, "d3d12") == 0) {
-      screen = d3d12_create_screen( winsys );
+      if (stw_dev && stw_dev->callbacks.pfnGetAdapterLuid) {
+         stw_dev->callbacks.pfnGetAdapterLuid(NULL, &local_luid);
+         adapter_luid = &local_luid;
+      }
+      screen = d3d12_create_screen( winsys, adapter_luid );
       if (screen)
          use_d3d12 = TRUE;
    }
