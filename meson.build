@@ -914,8 +914,13 @@ if ['linux', 'cygwin', 'gnu', 'freebsd', 'gnu/kfreebsd'].contains(host_machine.s
 elif host_machine.system() == 'sunos'
   pre_args += '-D__EXTENSIONS__'
 elif host_machine.system() == 'windows'
+  if with_microsoft_clc or with_gallium_d3d12
+    pre_args += [ '-DWIN32_WINNT=0x0A00', '-DWINVER=0x0A00' ]
+  else
+    pre_args += [ '-DWIN32_WINNT=0x0601', '-DWINVER=0x0601' ]
+  endif
   pre_args += [
-    '-D_WINDOWS', '-D_WIN32_WINNT=0x0A00', '-DWINVER=0x0A00',
+    '-D_WINDOWS',
     '-DPIPE_SUBSYSTEM_WINDOWS_USER',
     '-D_USE_MATH_DEFINES',  # XXX: scons doesn't use this for mingw
   ]
