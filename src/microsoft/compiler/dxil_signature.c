@@ -35,6 +35,7 @@
 struct semantic_info {
    enum dxil_semantic_kind kind;
    char name[64];
+   int index;
 };
 
 /*
@@ -196,7 +197,7 @@ fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id,
    /* For this to always work we should use vectorize_io, but for FS out and VS in
     * this is not implemented globally */
    const struct dxil_mdnode *flattened_semantics[1] = {
-      dxil_get_metadata_int32(mod, 0)
+      dxil_get_metadata_int32(mod, semantic->index)
    };
 
    SV_params_nodes[0] = dxil_get_metadata_int32(mod, (int)record_id); // Unique element ID
@@ -327,7 +328,7 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
    unsigned num_inputs = 0;
 
    nir_foreach_variable(var, &s->inputs) {
-      struct semantic_info semantic;
+      struct semantic_info semantic = {0};
       uint8_t interpolation = 0;
 
       if (s->info.stage == MESA_SHADER_VERTEX) {
@@ -375,7 +376,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
    const struct dxil_mdnode *outputs[64];
    unsigned num_outputs = 0;
    nir_foreach_variable(var, &s->outputs) {
-      struct semantic_info semantic;
+      struct semantic_info semantic = {0};
       uint8_t interpolation = 0;
 
       if (s->info.stage == MESA_SHADER_FRAGMENT) {
