@@ -31,6 +31,12 @@
 
 #include <string.h>
 
+
+struct semantic_info {
+   enum dxil_semantic_kind kind;
+   char name[64];
+};
+
 /*
  * The signatures are written into the stream in two pieces:
  * DxilProgramSignatureElement is a fixes size structure that gets dumped
@@ -38,19 +44,19 @@
  * to the semantic name string. Then these strings are dumped into the stream.
  */
 
-static enum dxil_semantic_kind
-get_semantic_vs_in_name(nir_variable *var, char buffer[64])
+static void
+get_semantic_vs_in_name(nir_variable *var, struct semantic_info *info)
 {
    const char *name = dxil_vs_attr_index_to_name(var->data.driver_location);
    assert(strlen(name) < 63);
-   strcpy(buffer, name);
-   return DXIL_SEM_ARBITRARY;
+   strcpy(info->name, name);
+   info->kind = DXIL_SEM_ARBITRARY;
 }
 
-static enum dxil_semantic_kind
-get_semantic_ps_outname(nir_variable *var, char buffer[64])
+static void
+get_semantic_ps_outname(nir_variable *var, struct semantic_info *info)
 {
-   enum dxil_semantic_kind kind = DXIL_SEM_INVALID;
+   info->kind = DXIL_SEM_INVALID;
    switch (var->data.location) {
    case FRAG_RESULT_COLOR:
    case FRAG_RESULT_DATA0:
@@ -61,52 +67,56 @@ get_semantic_ps_outname(nir_variable *var, char buffer[64])
    case FRAG_RESULT_DATA5:
    case FRAG_RESULT_DATA6:
    case FRAG_RESULT_DATA7:
-      snprintf(buffer, 64, "%s", "SV_Target");
-      kind = DXIL_SEM_TARGET;
+      snprintf(info->name, 64, "%s", "SV_Target");
+      info->kind = DXIL_SEM_TARGET;
       assert((var->data.location == FRAG_RESULT_COLOR ||
               var->data.location == FRAG_RESULT_DATA0) &&
              "time to implement semantic indices for PS outputs");
       break;
    case FRAG_RESULT_DEPTH:
-      snprintf(buffer, 64, "%s", "SV_Depth");
-      kind = DXIL_SEM_DEPTH;
+      snprintf(info->name, 64, "%s", "SV_Depth");
+      info->kind = DXIL_SEM_DEPTH;
       break;
    case FRAG_RESULT_STENCIL:
-      snprintf(buffer, 64, "%s", "SV_StencilRef");
-      kind = DXIL_SEM_STENCIL_REF; //??
+      snprintf(info->name, 64, "%s", "SV_StencilRef");
+      info->kind = DXIL_SEM_STENCIL_REF; //??
       break;
    case FRAG_RESULT_SAMPLE_MASK:
-      snprintf(buffer, 64, "%s", "SV_Coverage");
-      kind = DXIL_SEM_COVERAGE; //??
+      snprintf(info->name, 64, "%s", "SV_Coverage");
+      info->kind = DXIL_SEM_COVERAGE; //??
       break;
    default:
-      snprintf(buffer, 64, "%s", "UNDEFINED");
+      snprintf(info->name, 64, "%s", "UNDEFINED");
       break;
    }
-   return kind;
 }
 
-static enum dxil_semantic_kind
-get_semantic_name(nir_variable *var, char buffer[64])
+static void
+get_semantic_name(nir_variable *var, struct semantic_info *info)
 {
-   enum dxil_semantic_kind kind = DXIL_SEM_INVALID;
-   if (var->data.location == VARYING_SLOT_POS) {
+   info->kind = DXIL_SEM_INVALID;
+   switch (var->data.location) {
+
+   case VARYING_SLOT_POS:
       assert(glsl_get_components(var->type) == 4);
-      snprintf(buffer, 64, "%s", "SV_Position");
-      return DXIL_SEM_POSITION;
-   }
+      snprintf(info->name, 64, "%s", "SV_Position");
+      info->kind = DXIL_SEM_POSITION;
+      break;
 
-   if (var->data.location == VARYING_SLOT_FACE) {
+    case VARYING_SLOT_FACE:
       assert(glsl_get_components(var->type) == 1);
-      snprintf(buffer, 64, "%s", "SV_IsFrontFace");
-      return DXIL_SEM_IS_FRONT_FACE;
-   }
+      snprintf(info->name, 64, "%s", "SV_IsFrontFace");
+      info->kind = DXIL_SEM_IS_FRONT_FACE;
+      break;
 
-   int index = var->data.location - VARYING_SLOT_POS;
-   const char idx1 = 'A' + (char)(index >> 4);
-   const char idx2 = 'A' + (char)(index & 0xf);
-   snprintf(buffer, 64, "VARYING%c%c", idx1, idx2);
-   return  DXIL_SEM_ARBITRARY;
+   default: {
+         int index = var->data.location - VARYING_SLOT_POS;
+         const char idx1 = 'A' + (char)(index >> 4);
+         const char idx2 = 'A' + (char)(index & 0xf);
+         snprintf(info->name, 64, "VARYING%c%c", idx1, idx2);
+         info->kind = DXIL_SEM_ARBITRARY;
+      }
+   }
 }
 
 static enum dxil_prog_sig_semantic
@@ -177,7 +187,7 @@ append_semantic_index_to_table(struct dxil_psv_sem_index_table *table, uint32_t 
 
 static const struct dxil_mdnode *
 fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id,
-                    char *semantic_name, enum dxil_semantic_kind semantic_kind,
+                    struct semantic_info *semantic,
                     int32_t start_row, uint32_t rows,
                     uint32_t start_col, uint8_t columns,
                     uint8_t interpolation, uint8_t sig_comp_type) {
@@ -190,9 +200,9 @@ fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id,
    };
 
    SV_params_nodes[0] = dxil_get_metadata_int32(mod, (int)record_id); // Unique element ID
-   SV_params_nodes[1] = dxil_get_metadata_string(mod, semantic_name); // Element name
+   SV_params_nodes[1] = dxil_get_metadata_string(mod, semantic->name); // Element name
    SV_params_nodes[2] = dxil_get_metadata_int8(mod, sig_comp_type); // Element type
-   SV_params_nodes[3] = dxil_get_metadata_int8(mod, (int8_t)semantic_kind); // Effective system value
+   SV_params_nodes[3] = dxil_get_metadata_int8(mod, (int8_t)semantic->kind); // Effective system value
    SV_params_nodes[4] = dxil_get_metadata_node(mod, flattened_semantics,
                                          ARRAY_SIZE(flattened_semantics)); // Semantic index vector
    SV_params_nodes[5] = dxil_get_metadata_int8(mod, (int8_t)interpolation); // Interpolation mode
@@ -228,11 +238,10 @@ fill_signature_element(struct dxil_signature_element *elm,
 
 static bool
 fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
-                           enum dxil_semantic_kind semantic_kind,
+                           struct semantic_info *semantic,
                            uint8_t start_col, uint8_t columns,
                            uint8_t interpolation, uint8_t comp_type,
-                           const char *semantic_name, int32_t start_row,
-                           struct dxil_module *mod)
+                           int32_t start_row, struct dxil_module *mod)
 {
    memset(psv_elm, 0, sizeof(struct dxil_psv_signature_element));
    psv_elm->rows = 1;  // var->num_state_slots ?
@@ -250,16 +259,16 @@ fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
       psv_elm->start_row = 0;
       psv_elm->cols_and_start = (start_col << 4) | columns;
    }
-   psv_elm->semantic_kind = (uint8_t)semantic_kind;
+   psv_elm->semantic_kind = (uint8_t)semantic->kind;
    psv_elm->component_type = comp_type; //`??
    psv_elm->interpolation_mode = interpolation;
    /* to be filled later
      psv_elm->dynamic_mask_and_stream = 0;
      psv_elm->semantic_indexes_offset = 0;
    */
-   if (semantic_kind == DXIL_SEM_ARBITRARY && strlen(semantic_name)) {
+   if (semantic->kind == DXIL_SEM_ARBITRARY && strlen(semantic->name)) {
       psv_elm->semantic_name_offset =
-            copy_semantic_name_to_string(mod->sem_string_table, semantic_name);
+            copy_semantic_name_to_string(mod->sem_string_table, semantic->name);
 
       /* TODO: clean up memory */
       if (psv_elm->semantic_name_offset == (uint32_t)-1)
@@ -284,7 +293,7 @@ static const char *in_sysvalue_name(nir_variable *var)
 
 static bool
 fill_io_signature(struct dxil_module *mod, nir_variable *var, int id,
-                  enum dxil_semantic_kind semantic_kind, char *semantic_name,
+                  struct semantic_info *semantic,
                   uint8_t interpolation, const struct dxil_mdnode **io,
                   struct dxil_signature_element *elm, struct dxil_psv_signature_element *psv_elm)
 {
@@ -292,22 +301,20 @@ fill_io_signature(struct dxil_module *mod, nir_variable *var, int id,
    enum dxil_prog_sig_comp_type comp_type =
       dxil_get_prog_sig_comp_type(var->type);
 
-   bool is_depth = semantic_kind == DXIL_SEM_DEPTH;
+   bool is_depth = semantic->kind == DXIL_SEM_DEPTH;
    uint8_t sig_comp_type = dxil_get_comp_type(var->type);
    int32_t start_row = is_depth ? -1 : (int32_t)var->data.driver_location;
    uint8_t start_col = (uint8_t)var->data.location_frac;
    uint8_t cols = (uint8_t)glsl_get_components(var->type);
 
-
-   *io = fill_SV_param_nodes(mod, id, semantic_name,
-                             semantic_kind, start_row, 1, start_col, cols,
+   *io = fill_SV_param_nodes(mod, id, semantic, start_row, 1, start_col, cols,
                              interpolation, sig_comp_type);
 
-   fill_signature_element(elm, semantic_kind, id, comp_type, start_row, start_col, cols);
+   fill_signature_element(elm, semantic->kind, id, comp_type, start_row, start_col, cols);
 
-   return fill_psv_signature_element(psv_elm, semantic_kind, start_col, cols,
+   return fill_psv_signature_element(psv_elm, semantic, start_col, cols,
                                      interpolation, elm->comp_type,
-                                     semantic_name, start_row, mod);
+                                     start_row, mod);
 }
 
 static const struct dxil_mdnode *
@@ -320,25 +327,24 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
    unsigned num_inputs = 0;
 
    nir_foreach_variable(var, &s->inputs) {
-      char semantic_name[64] = "";
-      enum dxil_semantic_kind semantic_kind;
+      struct semantic_info semantic;
       uint8_t interpolation = 0;
 
       if (s->info.stage == MESA_SHADER_VERTEX) {
-         semantic_kind = get_semantic_vs_in_name(var, semantic_name);
+         get_semantic_vs_in_name(var, &semantic);
          mod->inputs[num_inputs].sysvalue = false;
       } else {
-         semantic_kind = get_semantic_name(var, semantic_name);
+         get_semantic_name(var, &semantic);
          interpolation = get_interpolation(var->data.interpolation);
          mod->inputs[num_inputs].sysvalue = in_sysvalue_name(var);
       }
 
       mod->inputs[num_inputs].name = ralloc_strdup(mod->ralloc_ctx,
-                                                   semantic_name);
+                                                   semantic.name);
       struct dxil_signature_element *elm = &mod->inputs[num_inputs].sig;
       struct dxil_psv_signature_element *psv_elm = &mod->psv_inputs[num_inputs];
 
-      if (!fill_io_signature(mod, var, num_inputs, semantic_kind, semantic_name,
+      if (!fill_io_signature(mod, var, num_inputs, &semantic,
                              interpolation, &inputs[num_inputs], elm, psv_elm))
          return NULL;
 
@@ -369,29 +375,28 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
    const struct dxil_mdnode *outputs[64];
    unsigned num_outputs = 0;
    nir_foreach_variable(var, &s->outputs) {
-      enum dxil_semantic_kind semantic_kind;
-      char semantic_name[64] = "";
+      struct semantic_info semantic;
       uint8_t interpolation = 0;
 
       if (s->info.stage == MESA_SHADER_FRAGMENT) {
-         semantic_kind = get_semantic_ps_outname(var, semantic_name);
+         get_semantic_ps_outname(var, &semantic);
          mod->outputs[num_outputs].sysvalue = "TARGET";
       } else {
-         semantic_kind = get_semantic_name(var, semantic_name);
+         get_semantic_name(var, &semantic);
          interpolation = get_interpolation(var->data.interpolation);
          mod->outputs[num_outputs].sysvalue = out_sysvalue_name(var);
       }
 
-      mod->info.has_out_position |= semantic_kind == DXIL_SEM_POSITION;
-      mod->info.has_out_depth |= semantic_kind == DXIL_SEM_DEPTH;
+      mod->info.has_out_position |= semantic.kind== DXIL_SEM_POSITION;
+      mod->info.has_out_depth |= semantic.kind == DXIL_SEM_DEPTH;
 
       mod->outputs[num_outputs].name = ralloc_strdup(mod->ralloc_ctx,
-                                                     semantic_name);
+                                                     semantic.name);
       struct dxil_signature_element *elm = &mod->outputs[num_outputs].sig;
 
       struct dxil_psv_signature_element *psv_elm = &mod->psv_outputs[num_outputs];
 
-      if (!fill_io_signature(mod, var, num_outputs, semantic_kind, semantic_name,
+      if (!fill_io_signature(mod, var, num_outputs, &semantic,
                              interpolation, &outputs[num_outputs], elm, psv_elm))
          return NULL;
 
@@ -401,7 +406,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
 
       ++num_outputs;
 
-      if (semantic_kind != DXIL_SEM_DEPTH)
+      if (semantic.kind != DXIL_SEM_DEPTH)
          ++mod->num_psv_outputs;
 
       assert(num_outputs < ARRAY_SIZE(outputs));
