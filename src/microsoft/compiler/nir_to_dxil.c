@@ -226,7 +226,7 @@ enum dxil_intr {
 static void
 fill_resource_metadata(struct dxil_module *m, const struct dxil_mdnode **fields,
                        const struct dxil_type *struct_type,
-                       const char *name, unsigned idx)
+                       const char *name, unsigned idx, unsigned size)
 {
    const struct dxil_type *pointer_type = dxil_module_get_pointer_type(m, struct_type);
    const struct dxil_value *pointer_undef = dxil_module_get_undef(m, pointer_type);
@@ -236,7 +236,7 @@ fill_resource_metadata(struct dxil_module *m, const struct dxil_mdnode **fields,
    fields[2] = dxil_get_metadata_string(m, name ? name : ""); // name
    fields[3] = dxil_get_metadata_int32(m, 0); // space ID
    fields[4] = dxil_get_metadata_int32(m, idx); // lower bound
-   fields[5] = dxil_get_metadata_int32(m, 1); // range size
+   fields[5] = dxil_get_metadata_int32(m, size); // range size
 }
 
 static const struct dxil_mdnode *
@@ -253,7 +253,7 @@ emit_srv_metadata(struct dxil_module *m, const struct dxil_type *elem_type,
       buffer_element_type_tag, element_type
    };
 
-   fill_resource_metadata(m, fields, elem_type, name, index);
+   fill_resource_metadata(m, fields, elem_type, name, index, 1);
    fields[6] = dxil_get_metadata_int32(m, res_kind); // resource shape
    fields[7] = dxil_get_metadata_int1(m, 0); // sample count
    fields[8] = dxil_get_metadata_node(m, metadata_tag_nodes, ARRAY_SIZE(metadata_tag_nodes)); // metadata
@@ -263,7 +263,7 @@ emit_srv_metadata(struct dxil_module *m, const struct dxil_type *elem_type,
 
 static const struct dxil_mdnode *
 emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
-                  const char *name, unsigned index,
+                  const char *name, unsigned index, unsigned size,
                   enum dxil_component_type comp_type,
                   enum dxil_resource_kind res_kind)
 {
@@ -271,7 +271,7 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 
    const struct dxil_mdnode *metadata_tag_nodes[2];
 
-   fill_resource_metadata(m, fields, struct_type, name, index);
+   fill_resource_metadata(m, fields, struct_type, name, index, size);
    fields[6] = dxil_get_metadata_int32(m, res_kind); // resource shape
    fields[7] = dxil_get_metadata_int1(m, false); // globally-coherent
    fields[8] = dxil_get_metadata_int1(m, false); // has counter
@@ -293,7 +293,7 @@ emit_cbv_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 {
    const struct dxil_mdnode *fields[8];
 
-   fill_resource_metadata(m, fields, struct_type, name, index);
+   fill_resource_metadata(m, fields, struct_type, name, index, 1);
    fields[6] = dxil_get_metadata_int32(m, size); // constant buffer size
    fields[7] = NULL; // metadata
 
@@ -306,7 +306,7 @@ emit_sampler_metadata(struct dxil_module *m, const struct dxil_type *struct_type
 {
    const struct dxil_mdnode *fields[8];
 
-   fill_resource_metadata(m, fields, struct_type, name, index);
+   fill_resource_metadata(m, fields, struct_type, name, index, 1);
    fields[6] = dxil_get_metadata_int32(m, DXIL_SAMPLER_KIND_DEFAULT); // sampler kind
    fields[7] = NULL; // metadata
 
@@ -679,7 +679,7 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
 
    unsigned idx = ctx->num_uavs;
    const struct dxil_mdnode *uav_meta = emit_uav_metadata(&ctx->mod, struct_type,
-                                                          var->name, idx,
+                                                          var->name, idx, 1,
                                                           DXIL_COMP_TYPE_INVALID,
                                                           DXIL_RESOURCE_KIND_RAW_BUFFER);
 
