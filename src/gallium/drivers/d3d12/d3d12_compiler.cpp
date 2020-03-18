@@ -171,7 +171,9 @@ d3d12_fill_self_shader_key(d3d12_shader *shader)
          1ull << VARYING_SLOT_FACE;
 
    const uint64_t system_out_values =
-         1ull << VARYING_SLOT_POS;
+         1ull << VARYING_SLOT_POS |
+         1ull << VARYING_SLOT_CLIP_DIST0 |
+         1ull << VARYING_SLOT_CLIP_DIST1;
 
    /* We assume that this shader reads and writes exactly what is needed */
    memset(&shader->key, 0, sizeof(d3d12_shader_key));
@@ -220,7 +222,9 @@ d3d12_fill_shader_key(d3d12_shader_key *key, d3d12_shader *prev, d3d12_shader *n
          (1ull << VARYING_SLOT_POS);
 
    const uint64_t system_out_values =
-         1ull << VARYING_SLOT_POS;
+         1ull << VARYING_SLOT_POS |
+         1ull << VARYING_SLOT_CLIP_DIST0 |
+         1ull << VARYING_SLOT_CLIP_DIST1;
 
    memset(key, 0, sizeof(d3d12_shader_key));
 
