@@ -264,22 +264,25 @@ emit_srv_metadata(struct dxil_module *m, const struct dxil_type *elem_type,
 static const struct dxil_mdnode *
 emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
                   const char *name, unsigned index,
-                  enum dxil_component_type comp_type)
+                  enum dxil_component_type comp_type,
+                  enum dxil_resource_kind res_kind)
 {
    const struct dxil_mdnode *fields[11];
 
-   const struct dxil_mdnode *buffer_element_type_tag = dxil_get_metadata_int32(m, DXIL_TYPED_BUFFER_ELEMENT_TYPE_TAG);
-   const struct dxil_mdnode *element_type = dxil_get_metadata_int32(m, comp_type);
-   const struct dxil_mdnode *metadata_tag_nodes[] = {
-      buffer_element_type_tag, element_type
-   };
+   const struct dxil_mdnode *metadata_tag_nodes[2];
 
    fill_resource_metadata(m, fields, struct_type, name, index);
-   fields[6] = dxil_get_metadata_int32(m, DXIL_RESOURCE_KIND_TYPED_BUFFER); // resource shape
+   fields[6] = dxil_get_metadata_int32(m, res_kind); // resource shape
    fields[7] = dxil_get_metadata_int1(m, false); // globally-coherent
    fields[8] = dxil_get_metadata_int1(m, false); // has counter
    fields[9] = dxil_get_metadata_int1(m, false); // is ROV
-   fields[10] = dxil_get_metadata_node(m, metadata_tag_nodes, ARRAY_SIZE(metadata_tag_nodes)); // metadata
+   if (res_kind != DXIL_RESOURCE_KIND_RAW_BUFFER &&
+       res_kind != DXIL_RESOURCE_KIND_STRUCTURED_BUFFER) {
+      metadata_tag_nodes[0] = dxil_get_metadata_int32(m, DXIL_TYPED_BUFFER_ELEMENT_TYPE_TAG);
+      metadata_tag_nodes[1] = dxil_get_metadata_int32(m, comp_type);
+      fields[10] = dxil_get_metadata_node(m, metadata_tag_nodes, ARRAY_SIZE(metadata_tag_nodes)); // metadata
+   } else
+      fields[10] = NULL;
 
    return dxil_get_metadata_node(m, fields, ARRAY_SIZE(fields));
 }
@@ -676,7 +679,8 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
    unsigned idx = ctx->num_uavs;
    enum dxil_component_type comp_type = dxil_get_comp_type(var->type);
    const struct dxil_mdnode *uav_meta = emit_uav_metadata(&ctx->mod, ssbo_struct_type,
-                                                          var->name, idx, comp_type);
+                                                          var->name, idx, comp_type,
+                                                          DXIL_RESOURCE_KIND_TYPED_BUFFER);
 
    if (!uav_meta)
       return false;
