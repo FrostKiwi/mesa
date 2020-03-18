@@ -1727,17 +1727,14 @@ emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 const struct dxil_value *
-load_ubo(struct ntd_context *ctx, unsigned ubo_idx,
+load_ubo(struct ntd_context *ctx, const struct dxil_value *handle,
          const struct dxil_value *offset, enum overload_type overload)
 {
-   assert(offset);
+   assert(handle && offset);
 
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CBUFFER_LOAD_LEGACY);
    if (!opcode)
       return NULL;
-
-   const struct dxil_value *handle = ctx->cbv_handles[ubo_idx];
-   assert(handle);
 
    const struct dxil_value *args[] = {
       opcode, handle, offset
@@ -1755,6 +1752,7 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    nir_const_value *const_block_index = nir_src_as_const_value(intr->src[0]);
    assert(const_block_index); // no dynamic indexing for now
    assert(const_block_index->u32 <= 1); // we only support the default and state vars UBO for now
+   const struct dxil_value *handle = ctx->cbv_handles[const_block_index->u32];
 
    const struct dxil_value *offset;
    nir_const_value *const_offset = nir_src_as_const_value(intr->src[1]);
@@ -1766,7 +1764,7 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       offset = dxil_emit_binop(&ctx->mod, DXIL_BINOP_ASHR, offset_src, c4, 0);
    }
 
-   const struct dxil_value *agg = load_ubo(ctx, const_block_index->u32, offset, DXIL_F32);
+   const struct dxil_value *agg = load_ubo(ctx, handle, offset, DXIL_F32);
    const struct dxil_type *agg_type = dxil_module_get_cbuf_ret_type(&ctx->mod, DXIL_F32);
 
    if (!agg || !agg_type)
@@ -1944,9 +1942,9 @@ emit_load_mem_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 
    // HACK: force CBV#0
    assert(ctx->num_cbvs == 1);
-   unsigned ubo_idx = 0; // HACK!
+   const struct dxil_value *handle = ctx->cbv_handles[0]; // HACK!
    const struct dxil_value *index = offset_to_index(&ctx->mod, ptr, bit_size * 4);
-   const struct dxil_value *agg = load_ubo(ctx, ubo_idx, index, DXIL_I32);
+   const struct dxil_value *agg = load_ubo(ctx, handle, index, DXIL_I32);
    const struct dxil_type *agg_type = dxil_module_get_cbuf_ret_type(&ctx->mod, DXIL_I32);
    if (!index || !agg || !agg_type)
       return false;
