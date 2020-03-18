@@ -1657,7 +1657,7 @@ emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    if (!int32_undef || !offset)
       return false;
 
-   // HACK: Force UBO#0. We need a way of loading other UBOs.
+   // HACK: Force UAV#0. We need a way of loading other UAVs.
    assert(ctx->num_uavs == 1);
    const struct dxil_value *handle = ctx->uav_handles[0];
    const struct dxil_value *index =
@@ -1694,7 +1694,7 @@ emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    if (!int32_undef || !offset)
       return false;
 
-   // HACK: Force UBO#0. We need a way of loading other UBOs.
+   // HACK: Force UAV#0. We need a way of loading other UAVs.
    assert(ctx->num_uavs == 1);
    const struct dxil_value *handle = ctx->uav_handles[0];
    const struct dxil_value *index =
