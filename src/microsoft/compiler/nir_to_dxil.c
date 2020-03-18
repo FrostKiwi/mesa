@@ -806,6 +806,8 @@ get_module_flags(struct ntd_context *ctx)
    uint64_t flags = 0;
    if (ctx->mod.feats.doubles)
       flags |= (1 << 2);
+   if (ctx->mod.raw_and_structured_buffers)
+      flags |= (1 << 4);
    if (ctx->mod.feats.min_precision)
       flags |= (1 << 5);
    if (ctx->mod.feats.dx11_1_double_extensions)
