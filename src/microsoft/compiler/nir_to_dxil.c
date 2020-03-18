@@ -668,17 +668,17 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
    assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_metadata_nodes));
    assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_handles));
 
-   const struct dxil_type *ssbo_type = get_glsl_type(&ctx->mod, var->type);
-   if (!ssbo_type)
+   const struct dxil_type *type = get_glsl_type(&ctx->mod, var->type);
+   if (!type)
       return false;
 
-   const struct dxil_type *ssbo_struct_type = dxil_module_get_struct_type(&ctx->mod, NULL, &ssbo_type, 1);
-   if (!ssbo_struct_type)
+   const struct dxil_type *struct_type = dxil_module_get_struct_type(&ctx->mod, NULL, &type, 1);
+   if (!struct_type)
       return false;
 
    unsigned idx = ctx->num_uavs;
    enum dxil_component_type comp_type = dxil_get_comp_type(var->type);
-   const struct dxil_mdnode *uav_meta = emit_uav_metadata(&ctx->mod, ssbo_struct_type,
+   const struct dxil_mdnode *uav_meta = emit_uav_metadata(&ctx->mod, struct_type,
                                                           var->name, idx, comp_type,
                                                           DXIL_RESOURCE_KIND_TYPED_BUFFER);
 
