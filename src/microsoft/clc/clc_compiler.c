@@ -310,11 +310,12 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_lower_alu);
    NIR_PASS_V(nir, nir_opt_dce);
 
-   nir_variable_mode modes = nir_var_shader_in | nir_var_mem_global |
-                             nir_var_mem_shared;
+   nir_variable_mode modes = nir_var_shader_in | nir_var_mem_global;
    nir_address_format format = nir->info.cs.ptr_size == 64 ?
       nir_address_format_64bit_global : nir_address_format_32bit_global;
    NIR_PASS_V(nir, nir_lower_explicit_io, modes, format);
+   NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_shared,
+              nir_address_format_32bit_offset);
 
    NIR_PASS_V(nir, nir_lower_system_values);
    if (nir_options->lower_int64_options)
