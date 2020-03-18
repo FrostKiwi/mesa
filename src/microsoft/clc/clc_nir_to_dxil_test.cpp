@@ -536,3 +536,64 @@ impl main {
 })";
  run(shader, "");
 }
+
+TEST_F(NirToDXILTest, test_shader_clipdist_validation)
+{
+ const char shader[] =
+R"(shader: MESA_SHADER_VERTEX
+name: GLSL3
+inputs: 1
+outputs: 3
+uniforms: 8
+shared: 0
+decl_var uniform INTERP_MODE_NONE vec4 gl_ClipPlane0MESA (0, 0, 0)
+decl_var uniform INTERP_MODE_NONE vec4 gl_ClipPlane2MESA (0, 2, 0)
+decl_var uniform INTERP_MODE_NONE vec4 gl_ClipPlane4MESA (0, 4, 0)
+decl_var ubo INTERP_MODE_NONE vec4[8] uniform_0 (0, 0, 0)
+decl_var shader_in INTERP_MODE_NONE vec4 gl_Vertex (VERT_ATTRIB_POS.xyzw, 0, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 clipdist_2 (VARYING_SLOT_CLIP_DIST0.xyzw, 1, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 clipdist_3 (VARYING_SLOT_CLIP_DIST1.xyzw, 2, 0)
+decl_function main (0 params) (entrypoint)
+
+impl main {
+        block block_0:
+        /* preds: */
+        vec1 32 ssa_0 = deref_var &gl_Vertex (shader_in vec4)
+        vec4 32 ssa_1 = intrinsic load_deref (ssa_0) (0) /* access=0 */
+        vec1 32 ssa_33 = load_const (0x00000000 /* 0.000000 */)
+        vec4 32 ssa_53 = intrinsic load_ubo (ssa_33, ssa_33) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
+        vec1 32 ssa_85 = fmul ssa_53.y, ssa_1.y
+        vec1 32 ssa_129 = ffma ssa_53.x, ssa_1.x, ssa_85
+        vec1 32 ssa_128 = ffma ssa_53.z, ssa_1.z, ssa_129
+        vec1 32 ssa_127 = ffma ssa_53.w, ssa_1.w, ssa_128
+        vec1 32 ssa_134 = load_const (0x00000020 /* 0.000000 */)
+        vec4 32 ssa_59 = intrinsic load_ubo (ssa_33, ssa_134) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
+        vec1 32 ssa_92 = fmul ssa_59.y, ssa_1.y
+        vec1 32 ssa_126 = ffma ssa_59.x, ssa_1.x, ssa_92
+        vec1 32 ssa_125 = ffma ssa_59.z, ssa_1.z, ssa_126
+        vec1 32 ssa_124 = ffma ssa_59.w, ssa_1.w, ssa_125
+        vec1 32 ssa_135 = load_const (0x00000040 /* 0.000000 */)
+        vec4 32 ssa_65 = intrinsic load_ubo (ssa_33, ssa_135) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
+        vec1 32 ssa_99 = fmul ssa_65.y, ssa_1.y
+        vec1 32 ssa_123 = ffma ssa_65.x, ssa_1.x, ssa_99
+        vec1 32 ssa_122 = ffma ssa_65.z, ssa_1.z, ssa_123
+        vec1 32 ssa_121 = ffma ssa_65.w, ssa_1.w, ssa_122
+        vec1 32 ssa_25 = deref_var &gl_Position (shader_out vec4)
+        vec1 32 ssa_41 = fadd ssa_1.z, ssa_1.w
+        vec1 32 ssa_42 = load_const (0x3f000000 /* 0.500000 */)
+        vec1 32 ssa_120 = ffma ssa_41, ssa_42, ssa_1.w
+        vec1 32 ssa_70 = fmul ssa_120, ssa_42
+        vec4 32 ssa_74 = vec4 ssa_1.x, ssa_1.y, ssa_70, ssa_1.w
+        intrinsic store_deref (ssa_25, ssa_74) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        vec1 32 ssa_27 = deref_var &clipdist_2 (shader_out vec4)
+        vec4 32 ssa_114 = vec4 ssa_127, ssa_33, ssa_124, ssa_33
+        intrinsic store_deref (ssa_27, ssa_114) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        vec1 32 ssa_29 = deref_var &clipdist_3 (shader_out vec4)
+        vec4 32 ssa_119 = vec4 ssa_121, ssa_33, ssa_33, ssa_33
+        intrinsic store_deref (ssa_29, ssa_119) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        /* succs: block_1 */
+        block block_1:
+})";
+ run(shader, "");
+}
