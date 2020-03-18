@@ -79,6 +79,48 @@ dxil_container_add_features(struct dxil_container *c,
    return add_part(c, DXIL_SFI0, &u.bits, sizeof(u.bits));
 }
 
+typedef struct {
+   const char *name;
+   uint32_t offset;
+} name_offset_t;
+
+static name_offset_t *
+find_name(name_offset_t *table, unsigned nentries, const char *name)
+{
+   /* consider replacing this with a binary search using rb_tree */
+   for (unsigned j = 0; j < nentries; ++j) {
+      if (!strcmp(name, table[j].name)) {
+         return table + j;
+      }
+   }
+   return NULL;
+}
+
+static uint32_t
+collect_semantic_names(unsigned num_records,
+                       struct dxil_signature_record *io_data,
+                       struct _mesa_string_buffer *buf,
+                       uint32_t offset)
+{
+   name_offset_t name_offsets[DXIL_SHADER_MAX_IO_ROWS];
+   unsigned nentries = 0;
+
+   for (unsigned i = 0; i < num_records; ++i) {
+      struct dxil_signature_record *io = &io_data[i];
+      name_offset_t  *entry = find_name(name_offsets, nentries, io->name);
+      if (entry) {
+         io->sig.semantic_name_offset = entry->offset;
+         continue;
+      }
+
+      name_offsets[nentries].name = io->name;
+      name_offsets[nentries].offset = io->sig.semantic_name_offset = buf->length + offset;
+      ++nentries;
+      _mesa_string_buffer_append_len(buf, io->name, strlen(io->name) + 1);
+   }
+   return offset + buf->length;
+}
+
 bool
 dxil_container_add_io_signature(struct dxil_container *c,
                                 enum dxil_part_fourcc part,
@@ -93,6 +135,8 @@ dxil_container_add_io_signature(struct dxil_container *c,
    uint32_t fixed_size = sizeof(header);
    header.param_offset = fixed_size;
 
+   bool retval = true;
+
    unsigned offset[DXIL_SHADER_MAX_IO_ROWS];
 
    for (unsigned i = 0; i < num_records; ++i) {
@@ -106,30 +150,35 @@ dxil_container_add_io_signature(struct dxil_container *c,
       ++header.param_count;
    }
 
-   uint32_t last_offset = fixed_size;
+   struct _mesa_string_buffer *names =
+         _mesa_string_buffer_create(NULL, 1024);
 
-   for (unsigned i = 0; i < num_records; ++i) {
-      struct dxil_signature_record *io = &io_data[i];
-      io->sig.semantic_name_offset = last_offset;
-      last_offset += strlen(io->name) + 1;
-   }
+   uint32_t last_offset = collect_semantic_names(num_records, io_data,
+                                                 names, fixed_size);
+
 
    if (!add_part_header(c, part, last_offset) ||
-       !blob_write_bytes(&c->parts, &header, sizeof(header)))
-      return false;
+       !blob_write_bytes(&c->parts, &header, sizeof(header))) {
+      retval = false;
+      goto cleanup;
+   }
 
    /* write all parts */
    for (unsigned i = 0; i < num_records; ++i)
       if (!blob_write_bytes(&c->parts, &io_data[i].sig,
-                            sizeof(io_data[i].sig)))
-         return false;
+                            sizeof(io_data[i].sig))) {
+         retval = false;
+         goto cleanup;
+      }
 
    /* write all names */
-   for (unsigned i = 0; i < num_records; ++i)
-      if (!blob_write_string(&c->parts, io_data[i].name))
-         return false;
 
-   return true;
+   if (!blob_write_bytes(&c->parts, names->buf, names->length))
+      retval = false;
+
+cleanup:
+   _mesa_string_buffer_destroy(names);
+   return retval;
 }
 
 bool
