@@ -668,7 +668,7 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
    assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_metadata_nodes));
    assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_handles));
 
-   const struct dxil_type *type = get_glsl_type(&ctx->mod, var->type);
+   const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod, 32);
    if (!type)
       return false;
 
@@ -677,16 +677,17 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
       return false;
 
    unsigned idx = ctx->num_uavs;
-   enum dxil_component_type comp_type = dxil_get_comp_type(var->type);
    const struct dxil_mdnode *uav_meta = emit_uav_metadata(&ctx->mod, struct_type,
-                                                          var->name, idx, comp_type,
-                                                          DXIL_RESOURCE_KIND_TYPED_BUFFER);
+                                                          var->name, idx,
+                                                          DXIL_COMP_TYPE_INVALID,
+                                                          DXIL_RESOURCE_KIND_RAW_BUFFER);
 
    if (!uav_meta)
       return false;
 
    ctx->uav_metadata_nodes[ctx->num_uavs] = uav_meta;
-   add_resource(ctx, DXIL_RES_UAV_TYPED, idx, 1);
+   add_resource(ctx, DXIL_RES_UAV_RAW, idx, 1);
+   ctx->mod.raw_and_structured_buffers = true;
 
    const struct dxil_value *handle = emit_createhandle_call_from_values(ctx, DXIL_RESOURCE_CLASS_UAV,
                                                                         idx, idx, false);
@@ -1662,13 +1663,9 @@ emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    // HACK: Force UAV#0. We need a way of loading other UAVs.
    assert(ctx->num_uavs == 1);
    const struct dxil_value *handle = ctx->uav_handles[0];
-   const struct dxil_value *index =
-      offset_to_index(&ctx->mod, offset, nir_dest_bit_size(intr->dest));
-   if (!index)
-      return false;
 
    const struct dxil_value *coord[2] = {
-      index,
+      offset,
       int32_undef
    };
 
@@ -1699,26 +1696,33 @@ emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    // HACK: Force UAV#0. We need a way of loading other UAVs.
    assert(ctx->num_uavs == 1);
    const struct dxil_value *handle = ctx->uav_handles[0];
-   const struct dxil_value *index =
-      offset_to_index(&ctx->mod, offset, nir_src_bit_size(intr->src[0]));
-   if (!index)
-      return false;
 
    const struct dxil_value *coord[2] = {
-      index,
+      offset,
       int32_undef
    };
 
-   const struct dxil_value *value =
-      get_src(ctx, &intr->src[0], 0, nir_type_uint);
-   assert(value);
-   const struct dxil_value *value4[4] = {
-      value, value, value, value
-   };
-   const struct dxil_value *write_mask =
-      dxil_module_get_int8_const(&ctx->mod, 0xf);
+   uint32_t writemask = nir_intrinsic_write_mask(intr);
+   assert(writemask == 0x1 || writemask == 0x3 ||
+          writemask == 0x7 || writemask == 0xf);
 
-   return emit_bufferstore_call(ctx, ctx->uav_handles[0], coord, value4,
+   const struct dxil_value *value[4];
+   for (unsigned i = 0; i < 4; ++i) {
+      if (writemask & (1 << i))
+         value[i] = get_src(ctx, &intr->src[0], i, nir_type_uint);
+      else
+         value[i] = int32_undef;
+
+      if (!value[i])
+         return false;
+   }
+
+   const struct dxil_value *write_mask =
+      dxil_module_get_int8_const(&ctx->mod, writemask);
+   if (!write_mask)
+      return false;
+
+   return emit_bufferstore_call(ctx, ctx->uav_handles[0], coord, value,
                                 write_mask);
 }
 
