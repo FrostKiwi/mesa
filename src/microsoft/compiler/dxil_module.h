@@ -165,6 +165,7 @@ struct dxil_module {
    enum dxil_shader_kind shader_kind;
    unsigned major_version, minor_version;
    struct dxil_features feats;
+   unsigned raw_and_structured_buffers : 1;
    struct dxil_shader_info info;
 
    struct dxil_buffer buf;
