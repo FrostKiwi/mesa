@@ -218,16 +218,15 @@ fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id,
 
 static void
 fill_signature_element(struct dxil_signature_element *elm,
-                       enum dxil_semantic_kind semantic_kind,
-                       uint32_t record_id,
+                       struct semantic_info *semantic,
                        enum dxil_prog_sig_comp_type comp_type,
                        uint32_t reg, uint8_t start_col, uint8_t cols)
 {
    memset(elm, 0, sizeof(struct dxil_signature_element));
    // elm->stream = 0;
    // elm->semantic_name_offset = 0;  // Offset needs to be filled out when writing
-   // elm->semantic_index = 0; // NIR should have packed everything like we need it
-   elm->system_value = (uint32_t) prog_semantic_from_kind(semantic_kind);
+   elm->semantic_index = semantic->index;
+   elm->system_value = (uint32_t) prog_semantic_from_kind(semantic->kind);
    elm->comp_type = (uint32_t) comp_type;
    elm->reg = reg;
 
@@ -265,7 +264,6 @@ fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
    psv_elm->interpolation_mode = interpolation;
    /* to be filled later
      psv_elm->dynamic_mask_and_stream = 0;
-     psv_elm->semantic_indexes_offset = 0;
    */
    if (semantic->kind == DXIL_SEM_ARBITRARY && strlen(semantic->name)) {
       psv_elm->semantic_name_offset =
@@ -276,7 +274,9 @@ fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
          return false;
    }
 
-   append_semantic_index_to_table(&mod->sem_index_table, 0);
+   psv_elm->semantic_indexes_offset =
+         append_semantic_index_to_table(&mod->sem_index_table, semantic->index);
+
    return true;
 }
 
@@ -311,7 +311,7 @@ fill_io_signature(struct dxil_module *mod, nir_variable *var, int id,
    *io = fill_SV_param_nodes(mod, id, semantic, start_row, 1, start_col, cols,
                              interpolation, sig_comp_type);
 
-   fill_signature_element(elm, semantic->kind, id, comp_type, start_row, start_col, cols);
+   fill_signature_element(elm, semantic, comp_type, start_row, start_col, cols);
 
    return fill_psv_signature_element(psv_elm, semantic, start_col, cols,
                                      interpolation, elm->comp_type,
