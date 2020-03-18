@@ -673,10 +673,6 @@ emit_uav(struct ntd_context *ctx, nir_variable *var)
    if (!ssbo_struct_type)
       return false;
 
-   const struct dxil_gvar *ssbo_gvar = dxil_add_global_var(&ctx->mod, ssbo_struct_type, true, 3);
-   if (!ssbo_gvar)
-      return false;
-
    unsigned idx = ctx->num_uavs;
    enum dxil_component_type comp_type = dxil_get_comp_type(var->type);
    const struct dxil_mdnode *uav_meta = emit_uav_metadata(&ctx->mod, ssbo_struct_type,
