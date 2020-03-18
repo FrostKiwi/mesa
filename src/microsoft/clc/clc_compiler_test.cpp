@@ -675,3 +675,22 @@ TEST_F(ComputeTest, log2)
    for (int i = 0; i < ARRAY_SIZE(expected); ++i)
       EXPECT_FLOAT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, rint)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+      inout[get_global_id(0)] = rint(inout[get_global_id(0)]);\n\
+   }\n";
+
+   const float input[] = {
+      0.5f, 1.5f, -0.5f, -1.5f, 1.4f
+   };
+   const float expected[] = {
+      0.0f, 2.0f, 0.0f, -2.0f, 1.0f,
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
