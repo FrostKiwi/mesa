@@ -3003,6 +3003,8 @@ nir_var_to_dxil_sysvalue_type(nir_variable *var)
 {
    switch (var->data.location) {
    case VARYING_SLOT_POS:
+   case VARYING_SLOT_CLIP_DIST0:
+   case VARYING_SLOT_CLIP_DIST1:
       return DXIL_SYSVALUE;
    case VARYING_SLOT_FACE:
       return DXIL_GENERATED_SYSVALUE;
