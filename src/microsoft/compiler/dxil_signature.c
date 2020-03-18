@@ -110,6 +110,15 @@ get_semantic_name(nir_variable *var, struct semantic_info *info)
       info->kind = DXIL_SEM_IS_FRONT_FACE;
       break;
 
+   case VARYING_SLOT_CLIP_DIST1:
+      info->index = 1;
+      /* fallthrough */
+   case VARYING_SLOT_CLIP_DIST0:
+      assert(var->data.location == VARYING_SLOT_CLIP_DIST1 || info->index == 0);
+      snprintf(info->name, 64, "%s", "SV_ClipDistance");
+      info->kind = DXIL_SEM_CLIP_DISTANCE;
+      break;
+
    default: {
          int index = var->data.location - VARYING_SLOT_POS;
          const char idx1 = 'A' + (char)(index >> 4);
@@ -362,6 +371,10 @@ static const char *out_sysvalue_name(nir_variable *var)
    switch (var->data.location) {
    case VARYING_SLOT_POS:
       return "POS";
+   case VARYING_SLOT_CLIP_DIST0:
+   case VARYING_SLOT_CLIP_DIST1:
+      return "CLIPDST";
+
    default:
       return "NO";
    }
