@@ -366,9 +366,7 @@ struct ntd_context {
    const struct dxil_value *srv_handles[MAX_SRVS];
    unsigned num_srvs;
 
-   const struct dxil_mdnode *uav_metadata_nodes[MAX_UAVS];
-   const struct dxil_value *uav_handles[MAX_UAVS];
-   unsigned num_uavs;
+   const struct dxil_mdnode *uav_metadata_node;
 
    const struct dxil_mdnode *cbv_metadata_nodes[MAX_CBVS];
    const struct dxil_value *cbv_handles[MAX_CBVS];
@@ -664,40 +662,34 @@ emit_srv(struct ntd_context *ctx, nir_variable *var)
 }
 
 static bool
-emit_uav(struct ntd_context *ctx, nir_variable *var)
+emit_globals(struct ntd_context *ctx, uint64_t global_inputs)
 {
-   assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_metadata_nodes));
-   assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_handles));
-
    const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod, 32);
    if (!type)
       return false;
 
-   const struct dxil_type *struct_type = dxil_module_get_struct_type(&ctx->mod, NULL, &type, 1);
+   const struct dxil_type *struct_type =
+      dxil_module_get_struct_type(&ctx->mod, NULL, &type, 1);
    if (!struct_type)
       return false;
 
-   unsigned idx = ctx->num_uavs;
-   const struct dxil_mdnode *uav_meta = emit_uav_metadata(&ctx->mod, struct_type,
-                                                          var->name, idx, 1,
-                                                          DXIL_COMP_TYPE_INVALID,
-                                                          DXIL_RESOURCE_KIND_RAW_BUFFER);
+   unsigned size = util_bitcount64(global_inputs);
+   const struct dxil_type *array_type =
+      dxil_module_get_array_type(&ctx->mod, struct_type, size);
+   if (!array_type)
+      return false;
 
+   const struct dxil_mdnode *uav_meta =
+      emit_uav_metadata(&ctx->mod, array_type,
+                                   "globals", 0, size,
+                                   DXIL_COMP_TYPE_INVALID,
+                                   DXIL_RESOURCE_KIND_RAW_BUFFER);
    if (!uav_meta)
       return false;
 
-   ctx->uav_metadata_nodes[ctx->num_uavs] = uav_meta;
-   add_resource(ctx, DXIL_RES_UAV_RAW, idx, 1);
+   ctx->uav_metadata_node = uav_meta;
+   add_resource(ctx, DXIL_RES_UAV_RAW, 0, size);
    ctx->mod.raw_and_structured_buffers = true;
-
-   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_UAV,
-                                                                        idx, idx, false);
-   if (!handle)
-      return false;
-
-   ctx->uav_handles[ctx->num_uavs] = handle;
-   ctx->num_uavs++;
-
    return true;
 }
 
@@ -770,18 +762,6 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var)
    ctx->num_samplers++;
 
    return true;
-}
-
-static bool
-emit_kernel_input(struct ntd_context *ctx, nir_variable *var,
-                  shader_info *info)
-{
-   if (info->cs.global_inputs & BITFIELD64_BIT(var->data.location))
-      return emit_uav(ctx, var);
-   else {
-      debug_printf("unhandled kernel input!\n");
-      return false;
-   }
 }
 
 static const struct dxil_mdnode *
@@ -863,8 +843,8 @@ emit_resources(struct ntd_context *ctx)
       emit_resources = true;
    }
 
-   if (ctx->num_uavs) {
-      resources_nodes[1] = dxil_get_metadata_node(&ctx->mod, ctx->uav_metadata_nodes, ctx->num_uavs);
+   if (ctx->uav_metadata_node) {
+      resources_nodes[1] = dxil_get_metadata_node(&ctx->mod, &ctx->uav_metadata_node, 1);
       emit_resources = true;
    }
 
@@ -1604,14 +1584,13 @@ emit_load_local_work_group_id(struct ntd_context *ctx,
 static bool
 emit_load_kernel_input(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
-   // we can only load the first input for now
    nir_const_value *const_input = nir_src_as_const_value(intr->src[0]);
    assert(const_input);
-   assert(const_input->u32 == 0);
-
-   // just simply store the offset (0) as the pointer
-   const struct dxil_value *offset = dxil_module_get_int32_const(&ctx->mod, 0);
-   store_dest_int(ctx, &intr->dest, 0, offset);
+   assert((const_input->u32 & 3) == 0);
+   assert((const_input->u32 / 4) < 16);
+   const struct dxil_value *ptr =
+      dxil_module_get_int32_const(&ctx->mod, (const_input->u32 / 4) << 28);
+   store_dest_int(ctx, &intr->dest, 0, ptr);
    return true;
 }
 
@@ -1624,6 +1603,27 @@ get_int32_undef(struct dxil_module *m)
       return NULL;
 
    return dxil_module_get_undef(m, int32_type);
+}
+
+static const struct dxil_value *
+ptr_to_buffer(struct dxil_module *m, const struct dxil_value *ptr)
+{
+   const struct dxil_value *shift = dxil_module_get_int32_const(m, 28);
+   if (!shift)
+      return NULL;
+
+   return dxil_emit_binop(m, DXIL_BINOP_LSHR, ptr, shift);
+}
+
+static const struct dxil_value *
+ptr_to_offset(struct dxil_module *m, const struct dxil_value *ptr)
+{
+   const struct dxil_value *mask =
+      dxil_module_get_int32_const(m, (1u << 28) - 1);
+   if (!mask)
+      return NULL;
+
+   return dxil_emit_binop(m, DXIL_BINOP_AND, ptr, mask);
 }
 
 static const struct dxil_value *
@@ -1656,14 +1656,20 @@ static bool
 emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
-   const struct dxil_value *offset =
+   const struct dxil_value *ptr =
       get_src(ctx, &intr->src[0], 0, nir_type_uint);
-   if (!int32_undef || !offset)
+   if (!int32_undef || !ptr)
       return false;
 
-   // HACK: Force UAV#0. We need a way of loading other UAVs.
-   assert(ctx->num_uavs == 1);
-   const struct dxil_value *handle = ctx->uav_handles[0];
+   const struct dxil_value *buffer = ptr_to_buffer(&ctx->mod, ptr);
+   const struct dxil_value *offset = ptr_to_offset(&ctx->mod, ptr);
+   if (!buffer || !offset)
+      return false;
+
+   const struct dxil_value *handle =
+      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
+   if (!handle)
+      return false;
 
    const struct dxil_value *coord[2] = {
       offset,
@@ -1689,14 +1695,20 @@ static bool
 emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
-   const struct dxil_value *offset =
+   const struct dxil_value *ptr =
       get_src(ctx, &intr->src[1], 0, nir_type_uint);
-   if (!int32_undef || !offset)
+   if (!int32_undef || !ptr)
       return false;
 
-   // HACK: Force UAV#0. We need a way of loading other UAVs.
-   assert(ctx->num_uavs == 1);
-   const struct dxil_value *handle = ctx->uav_handles[0];
+   const struct dxil_value *buffer = ptr_to_buffer(&ctx->mod, ptr);
+   const struct dxil_value *offset = ptr_to_offset(&ctx->mod, ptr);
+   if (!buffer || !offset)
+      return false;
+
+   const struct dxil_value *handle =
+      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
+   if (!handle)
+      return false;
 
    const struct dxil_value *coord[2] = {
       offset,
@@ -1723,8 +1735,7 @@ emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    if (!write_mask)
       return false;
 
-   return emit_bufferstore_call(ctx, ctx->uav_handles[0], coord, value,
-                                write_mask);
+   return emit_bufferstore_call(ctx, handle, coord, value, write_mask);
 }
 
 const struct dxil_value *
@@ -2675,14 +2686,9 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    }
 
    if (s->info.stage == MESA_SHADER_KERNEL) {
-      nir_foreach_variable(var, &s->inputs) {
-         switch (var->data.mode) {
-         case nir_var_shader_in:
-            if (!emit_kernel_input(ctx, var, &s->info))
-               return false;
-            break;
-         }
-      }
+      if (s->info.cs.global_inputs &&
+          !emit_globals(ctx, s->info.cs.global_inputs))
+         return false;
    }
 
    nir_function_impl *entry = nir_shader_get_entrypoint(s);
