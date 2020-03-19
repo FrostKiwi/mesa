@@ -105,6 +105,42 @@ enum dxil_resource_kind dxil_get_resource_kind(const struct glsl_type *type)
    unreachable("unexpected glsl type");
 }
 
+enum dxil_input_primitive dxil_get_input_primitive(unsigned primitive)
+{
+   switch (primitive) {
+   case GL_POINTS:
+      return DXIL_INPUT_PRIMITIVE_POINT;
+   case GL_LINES:
+      return DXIL_INPUT_PRIMITIVE_LINE;
+   case GL_LINES_ADJACENCY:
+      return DXIL_INPUT_PRIMITIVE_LINES_ADJENCY;
+   case GL_TRIANGLES:
+      return DXIL_INPUT_PRIMITIVE_TRIANGLE;
+   case GL_TRIANGLES_ADJACENCY:
+      return DXIL_INPUT_PRIMITIVE_TRIANGLES_ADJENCY;
+   default:
+      unreachable("unhandled primitive topology");
+   }
+}
+
+enum dxil_primitive_topology dxil_get_primitive_topology(unsigned topology)
+{
+   switch (topology) {
+   case GL_POINTS:
+      return DXIL_PRIMITIVE_TOPOLOGY_POINT_LIST;
+   case GL_LINES:
+      return DXIL_PRIMITIVE_TOPOLOGY_LINE_LIST;
+   case GL_LINE_STRIP:
+      return DXIL_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+   case GL_TRIANGLES:
+      return DXIL_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+   case GL_TRIANGLE_STRIP:
+      return DXIL_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+   default:
+      unreachable("unhandled primitive topology");
+   }
+}
+
 static const char *overload_str[DXIL_NUM_OVERLOADS] = {
    [DXIL_NONE] = "",
    [DXIL_I32] = "i32",
