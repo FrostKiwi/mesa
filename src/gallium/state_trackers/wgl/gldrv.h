@@ -481,6 +481,10 @@ BOOL            APIENTRY DrvBindDirectDrawTexture(LPDIRECTDRAWSURFACE);
 DWORD           APIENTRY DrvSwapMultipleBuffers(UINT cBuffers,
                                                 CONST WGLSWAP *pgswap);
 
+LONG            APIENTRY DrvDescribePixelFormat(HDC, INT, ULONG, PIXELFORMATDESCRIPTOR*);
+BOOL            APIENTRY DrvSetPixelFormat(HDC, LONG);
+BOOL            APIENTRY DrvSwapBuffers(HDC);
+
 #endif // WINVER >= 0x500
 
 #if WINVER >= 0x600
