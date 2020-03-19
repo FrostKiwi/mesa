@@ -238,14 +238,39 @@ fill_sampler_descriptors(struct d3d12_context *ctx,
 }
 
 static unsigned
-fill_descriptor_tables(struct d3d12_context *ctx,
-                       ID3D12DescriptorHeap **heaps,
-                       unsigned *num_heaps,
-                       D3D12_GPU_DESCRIPTOR_HANDLE *tables)
+set_graphics_descriptor_heaps(struct d3d12_context *ctx)
 {
-   unsigned num_tables = 0;
+   ID3D12DescriptorHeap *heaps[2];
+   unsigned num_heaps = 0;
    bool has_view = false;
    bool has_sampler = false;
+
+   for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
+      if (!ctx->gfx_stages[i])
+         continue;
+
+      struct d3d12_shader *shader = ctx->gfx_stages[i]->current;
+      assert(shader);
+
+      if (shader->num_cb_bindings > 0)
+         has_view = true;
+      if (shader->num_srv_bindings > 0) {
+         has_view = true;
+         has_sampler = true;
+      }
+   }
+
+   if (has_view)
+      heaps[num_heaps++] = d3d12_descriptor_heap_get(ctx->view_heap);
+   if (has_sampler)
+      heaps[num_heaps++] = d3d12_descriptor_heap_get(ctx->sampler_heap);
+   ctx->cmdlist->SetDescriptorHeaps(num_heaps, heaps);
+}
+
+static void
+set_graphics_root_parameters(struct d3d12_context *ctx)
+{
+   unsigned num_params = 0;
 
    d3d12_descriptor_heap_clear(ctx->view_heap);
    d3d12_descriptor_heap_clear(ctx->sampler_heap);
@@ -258,25 +283,16 @@ fill_descriptor_tables(struct d3d12_context *ctx,
       assert(shader);
 
       if (shader->num_cb_bindings > 0) {
-         tables[num_tables++] = fill_cbv_descriptors(ctx, shader, i);
-         has_view = true;
+         ctx->cmdlist->SetGraphicsRootDescriptorTable(num_params++,
+                                                      fill_cbv_descriptors(ctx, shader, i));
       }
       if (shader->num_srv_bindings > 0) {
-         tables[num_tables++] = fill_srv_descriptors(ctx, shader, i);
-         has_view = true;
-         tables[num_tables++] = fill_sampler_descriptors(ctx, shader, i);
-         has_sampler = true;
+         ctx->cmdlist->SetGraphicsRootDescriptorTable(num_params++,
+                                                      fill_srv_descriptors(ctx, shader, i));
+         ctx->cmdlist->SetGraphicsRootDescriptorTable(num_params++,
+                                                      fill_sampler_descriptors(ctx, shader, i));
       }
    }
-
-   unsigned count = 0;
-   if (has_view)
-      heaps[count++] = d3d12_descriptor_heap_get(ctx->view_heap);
-   if (has_sampler)
-      heaps[count++] = d3d12_descriptor_heap_get(ctx->sampler_heap);
-   *num_heaps = count;
-
-   return num_tables;
 }
 
 static bool
@@ -478,14 +494,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    ctx->cmdlist->SetGraphicsRootSignature(root_sig);
 
-   ID3D12DescriptorHeap *heaps[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
-   D3D12_GPU_DESCRIPTOR_HANDLE tables[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
-   unsigned num_heaps = 0;
-   unsigned num_tables = fill_descriptor_tables(ctx, heaps, &num_heaps, tables);
-   ctx->cmdlist->SetDescriptorHeaps(num_heaps, heaps);
-   for (unsigned i = 0; i < num_tables; ++i) {
-      ctx->cmdlist->SetGraphicsRootDescriptorTable(i, tables[i]);
-   }
+   set_graphics_descriptor_heaps(ctx);
+   set_graphics_root_parameters(ctx);
 
    ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);
    if (ctx->rast->base.scissor && ctx->num_scissors > 0)
