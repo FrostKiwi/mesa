@@ -30,8 +30,13 @@
 extern "C" {
 #endif
 
+struct d3d12_shader;
+
 bool
 d3d12_lower_bool_loads(struct nir_shader *s);
+
+bool
+d3d12_lower_state_vars(struct nir_shader *s, struct d3d12_shader *shader);
 
 #ifdef __cplusplus
 }

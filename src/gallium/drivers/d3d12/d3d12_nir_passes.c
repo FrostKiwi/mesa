@@ -22,6 +22,7 @@
  */
 
 #include "d3d12_nir_passes.h"
+#include "d3d12_compiler.h"
 #include "nir_builder.h"
 
 bool lower_bool_loads_filter(const nir_instr *instr,
@@ -115,4 +116,150 @@ d3d12_lower_bool_loads(struct nir_shader *s)
                                         lower_bool_loads_filter,
                                         lower_bool_loads_impl,
                                         NULL);
+}
+
+/**
+ * Lower State Vars:
+ *
+ * All uniforms related to internal D3D12 variables are
+ * condensed into a UBO that is appended at the end of the
+ * current ones.
+ */
+
+static unsigned
+get_state_var_offset(struct d3d12_shader *shader, D3D12_STATE_VAR var)
+{
+   for (unsigned i = 0; i < shader->num_state_vars; ++i) {
+      if (shader->state_vars[i].var == var)
+         return shader->state_vars[i].offset;
+   }
+
+   unsigned offset = shader->state_vars_size;
+   shader->state_vars[shader->num_state_vars].offset = offset;
+   shader->state_vars[shader->num_state_vars].var = var;
+   shader->state_vars_size += 4; /* Use 4-words slots no matter the variable size */
+   shader->num_state_vars++;
+
+   return offset;
+}
+
+static bool
+lower_instr(nir_intrinsic_instr *instr, nir_builder *b,
+            struct d3d12_shader *shader, unsigned binding)
+{
+   nir_variable *variable = NULL;
+   nir_deref_instr *deref = NULL;
+
+   b->cursor = nir_before_instr(&instr->instr);
+
+   if (instr->intrinsic == nir_intrinsic_load_uniform) {
+      nir_foreach_variable(var, &b->shader->uniforms) {
+         if (var->data.driver_location == nir_intrinsic_base(instr)) {
+            variable = var;
+            break;
+         }
+      }
+   } else if (instr->intrinsic == nir_intrinsic_load_deref) {
+      deref = nir_src_as_deref(instr->src[0]);
+      variable = nir_intrinsic_get_var(instr, 0);
+   }
+
+   if (variable == NULL ||
+       variable->num_state_slots != 1 ||
+       variable->state_slots[0].tokens[1] != STATE_INTERNAL_DRIVER)
+      return false;
+
+   D3D12_STATE_VAR var = variable->state_slots[0].tokens[2];
+   nir_ssa_def *ubo_idx = nir_imm_int(b, binding);
+   nir_ssa_def *ubo_offset =  nir_imm_int(b, get_state_var_offset(shader, var));
+   nir_intrinsic_instr *load =
+      nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_ubo);
+   load->num_components = instr->num_components;
+   load->src[0] = nir_src_for_ssa(ubo_idx);
+   load->src[1] = nir_src_for_ssa(ubo_offset);
+   assert(instr->dest.ssa.bit_size >= 8);
+   nir_intrinsic_set_align(load, instr->dest.ssa.bit_size / 8, 0);
+   nir_ssa_dest_init(&load->instr, &load->dest,
+                     load->num_components, instr->dest.ssa.bit_size,
+                     instr->dest.ssa.name);
+   nir_builder_instr_insert(b, &load->instr);
+   nir_ssa_def_rewrite_uses(&instr->dest.ssa, nir_src_for_ssa(&load->dest.ssa));
+
+   /* Remove the old load_* instruction and any parent derefs */
+   nir_instr_remove(&instr->instr);
+   for (nir_deref_instr *d = deref; d; d = nir_deref_instr_parent(d)) {
+      /* If anyone is using this deref, leave it alone */
+      assert(d->dest.is_ssa);
+      if (!list_is_empty(&d->dest.ssa.uses))
+         break;
+
+      nir_instr_remove(&d->instr);
+   }
+
+   return true;
+}
+
+bool
+d3d12_lower_state_vars(nir_shader *nir, struct d3d12_shader *shader)
+{
+   bool progress = false;
+   unsigned binding;
+
+   /* Append state vars UBO at the end of the existing ones */
+   binding = nir->info.num_ubos;
+
+   nir_foreach_function(function, nir) {
+      if (function->impl) {
+         nir_builder builder;
+         nir_builder_init(&builder, function->impl);
+         nir_foreach_block(block, function->impl) {
+            nir_foreach_instr_safe(instr, block) {
+               if (instr->type == nir_instr_type_intrinsic)
+                  progress |= lower_instr(nir_instr_as_intrinsic(instr),
+                                          &builder,
+                                          shader,
+                                          binding);
+            }
+         }
+
+         nir_metadata_preserve(function->impl, nir_metadata_block_index |
+                                               nir_metadata_dominance);
+      }
+   }
+
+   if (progress) {
+      assert(shader->num_state_vars > 0);
+
+      /* Remove state variables */
+      nir_foreach_variable_safe(var, &nir->uniforms) {
+         if (var->num_state_slots == 1 &&
+             var->state_slots[0].tokens[1] == STATE_INTERNAL_DRIVER) {
+            exec_node_remove(&var->node);
+            nir->num_uniforms--;
+         }
+      }
+
+      const gl_state_index16 tokens[5] = { STATE_INTERNAL, STATE_INTERNAL_DRIVER };
+      const struct glsl_type *type = glsl_array_type(glsl_vec4_type(),
+                                                     shader->state_vars_size / 4, 0);
+      nir_variable *ubo = nir_variable_create(nir, nir_var_mem_ubo, type,
+                                                  "d3d12_state_vars");
+      nir->info.num_ubos++;
+      ubo->data.binding = binding;
+      ubo->num_state_slots = 1;
+      ubo->state_slots = ralloc_array(ubo, nir_state_slot, 1);
+      memcpy(ubo->state_slots[0].tokens, tokens,
+              sizeof(ubo->state_slots[0].tokens));
+
+      struct glsl_struct_field field = {
+          .type = type,
+          .name = "data",
+          .location = -1,
+      };
+      ubo->interface_type =
+              glsl_interface_type(&field, 1, GLSL_INTERFACE_PACKING_STD430,
+                                  false, "__d3d12_state_vars_interface");
+   }
+
+   return progress;
 }
