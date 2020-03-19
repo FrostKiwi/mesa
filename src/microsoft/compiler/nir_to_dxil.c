@@ -1356,8 +1356,8 @@ store_ssa_def(struct ntd_context *ctx, nir_ssa_def *ssa, unsigned chan,
 }
 
 static void
-store_dest_int(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
-               const struct dxil_value *value)
+store_dest_value(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
+                 const struct dxil_value *value)
 {
    assert(dest->is_ssa);
    assert(value);
@@ -1395,7 +1395,7 @@ store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
       }
    }
 
-   store_dest_int(ctx, dest, chan, value);
+   store_dest_value(ctx, dest, chan, value);
 }
 
 static void
@@ -2076,7 +2076,7 @@ emit_load_global_invocation_id(struct ntd_context *ctx,
          if (!globalid)
             return false;
 
-         store_dest_int(ctx, &intr->dest, i, globalid);
+         store_dest_value(ctx, &intr->dest, i, globalid);
       }
    }
    return true;
@@ -2099,7 +2099,7 @@ emit_load_local_invocation_id(struct ntd_context *ctx,
             *threadidingroup = emit_threadidingroup_call(ctx, idx);
          if (!threadidingroup)
             return false;
-         store_dest_int(ctx, &intr->dest, i, threadidingroup);
+         store_dest_value(ctx, &intr->dest, i, threadidingroup);
       }
    }
    return true;
@@ -2120,7 +2120,7 @@ emit_load_local_work_group_id(struct ntd_context *ctx,
          const struct dxil_value *groupid = emit_groupid_call(ctx, idx);
          if (!groupid)
             return false;
-         store_dest_int(ctx, &intr->dest, i, groupid);
+         store_dest_value(ctx, &intr->dest, i, groupid);
       }
    }
    return true;
@@ -2144,7 +2144,7 @@ emit_load_primitiveid(struct ntd_context *ctx,
    };
 
    const struct dxil_value *primid = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
-   store_dest_int(ctx, &intr->dest, 0, primid);
+   store_dest_value(ctx, &intr->dest, 0, primid);
 
    return true;
 }
@@ -2238,7 +2238,7 @@ emit_load_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
          dxil_emit_extractval(&ctx->mod, load, i);
       if (!val)
          return false;
-      store_dest_int(ctx, &intr->dest, i, val);
+      store_dest_value(ctx, &intr->dest, i, val);
    }
    return true;
 }
@@ -2458,8 +2458,8 @@ emit_load_ubo_dxil(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return false;
 
    for (unsigned i = 0; i < nir_dest_num_components(intr->dest); i++)
-      store_dest_int(ctx, &intr->dest, i,
-                     dxil_emit_extractval(&ctx->mod, agg, i));
+      store_dest_value(ctx, &intr->dest, i,
+                       dxil_emit_extractval(&ctx->mod, agg, i));
 
    return true;
 }
@@ -3276,7 +3276,7 @@ emit_phi(struct ntd_context *ctx, nir_phi_instr *instr)
       struct dxil_instr *phi = vphi->comp[i] = dxil_emit_phi(&ctx->mod, type);
       if (!phi)
          return false;
-      store_dest_int(ctx, &instr->dest, i, dxil_instr_get_return_value(phi));
+      store_dest_value(ctx, &instr->dest, i, dxil_instr_get_return_value(phi));
    }
    _mesa_hash_table_insert(ctx->phis, instr, vphi);
    return true;
