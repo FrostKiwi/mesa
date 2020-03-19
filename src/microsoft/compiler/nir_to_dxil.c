@@ -386,6 +386,9 @@ struct ntd_context {
    struct dxil_resource resources[MAX_UAVS];
    unsigned num_resources;
 
+   const struct dxil_mdnode *shader_property_nodes[6];
+   size_t num_shader_property_nodes;
+
    struct dxil_def *defs;
    unsigned num_defs;
    struct hash_table *phis;
@@ -871,6 +874,20 @@ emit_resources(struct ntd_context *ctx)
       dxil_get_metadata_node(&ctx->mod, resources_nodes, ARRAY_SIZE(resources_nodes)): NULL;
 }
 
+static boolean
+emit_tag(struct ntd_context *ctx, enum dxil_shader_tag tag,
+         const struct dxil_mdnode *value_node)
+{
+   const struct dxil_mdnode *tag_node = dxil_get_metadata_int32(&ctx->mod, tag);
+   if (!tag_node || !value_node)
+      return false;
+   assert(ctx->num_shader_property_nodes <= ARRAY_SIZE(ctx->shader_property_nodes) - 2);
+   ctx->shader_property_nodes[ctx->num_shader_property_nodes++] = tag_node;
+   ctx->shader_property_nodes[ctx->num_shader_property_nodes++] = value_node;
+
+   return true;
+}
+
 static bool
 emit_metadata(struct ntd_context *ctx, nir_shader *s)
 {
@@ -907,34 +924,20 @@ emit_metadata(struct ntd_context *ctx, nir_shader *s)
    const struct dxil_mdnode *main_type_annotation = dxil_get_metadata_node(&ctx->mod, main_type_annotation_nodes,
                                                                            ARRAY_SIZE(main_type_annotation_nodes));
 
-   const struct dxil_mdnode *shader_properties = NULL;
    if (ctx->mod.shader_kind == DXIL_COMPUTE_SHADER) {
-      const struct dxil_mdnode *shader_property_nodes[4];
-      size_t num_shader_property_nodes = 0;
-
       uint64_t flags = get_module_flags(ctx);
       if (flags != 0) {
-         const struct dxil_mdnode *shader_flags_tag = dxil_get_metadata_int32(&ctx->mod, 0);
-         const struct dxil_mdnode *shader_flags = dxil_get_metadata_int64(&ctx->mod, flags);
-         if (!shader_flags_tag || !shader_flags)
+         if (!emit_tag(ctx, DXIL_SHADER_TAG_FLAGS, dxil_get_metadata_int64(&ctx->mod, flags)))
             return false;
-
-         assert(num_shader_property_nodes <= ARRAY_SIZE(shader_property_nodes) - 2);
-         shader_property_nodes[num_shader_property_nodes++] = shader_flags_tag;
-         shader_property_nodes[num_shader_property_nodes++] = shader_flags;
       }
-
-      const struct dxil_mdnode *num_thread_tag = dxil_get_metadata_int32(&ctx->mod, 4);
-      const struct dxil_mdnode *num_threads = emit_threads(ctx, s);
-      if (!num_thread_tag || !num_threads)
+      if (!emit_tag(ctx, DXIL_SHADER_TAG_NUM_THREADS, emit_threads(ctx, s)))
          return false;
+   }
 
-      assert(num_shader_property_nodes <= ARRAY_SIZE(shader_property_nodes) - 2);
-      shader_property_nodes[num_shader_property_nodes++] = num_thread_tag;
-      shader_property_nodes[num_shader_property_nodes++] = num_threads;
-
-      shader_properties = dxil_get_metadata_node(&ctx->mod, shader_property_nodes,
-                                                 num_shader_property_nodes);
+   const struct dxil_mdnode *shader_properties = NULL;
+   if (ctx->num_shader_property_nodes > 0) {
+      shader_properties = dxil_get_metadata_node(&ctx->mod, ctx->shader_property_nodes,
+                                                 ctx->num_shader_property_nodes);
       if (!shader_properties)
          return false;
    }

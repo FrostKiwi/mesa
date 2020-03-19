@@ -244,6 +244,14 @@ enum dxil_attr_kind {
    DXIL_ATTR_KIND_READ_ONLY = 21,
 };
 
+enum dxil_shader_tag {
+   DXIL_SHADER_TAG_FLAGS       = 0,
+   DXIL_SHADER_TAG_GS_STATE    = 1,
+   DXIL_SHADER_TAG_DS_STATE    = 2,
+   DXIL_SHADER_TAG_HS_STATE    = 3,
+   DXIL_SHADER_TAG_NUM_THREADS = 4,
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
