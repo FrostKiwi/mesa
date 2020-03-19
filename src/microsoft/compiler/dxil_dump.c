@@ -269,6 +269,7 @@ dump_gvars(struct dxil_dumper *d, struct list_head *list)
    dxil_dump_indention_inc(d);
    list_for_each_entry(struct dxil_gvar, gvar, list, head) {
       dxil_dump_indent(d);
+      _mesa_string_buffer_printf(d->buf, "address_space(%d) ", gvar->as);
       if (gvar->constant)
          _mesa_string_buffer_append(d->buf, "const ");
       if (gvar->align)

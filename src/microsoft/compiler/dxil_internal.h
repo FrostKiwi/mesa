@@ -82,6 +82,7 @@ struct dxil_gvar {
    const char *name;
    const struct dxil_type *type;
    bool constant;
+   enum dxil_address_space as;
    int align;
 
    struct dxil_value value;
