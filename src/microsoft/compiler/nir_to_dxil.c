@@ -1903,6 +1903,14 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_vec8:
    case nir_op_vec16:
       return emit_vec(ctx, alu, nir_op_infos[alu->op].num_inputs);
+   case nir_op_mov: {
+         const struct dxil_type *type = get_alu_src_type(ctx, alu, 0);
+         nir_alu_type t = dxil_type_to_nir_type(type);
+         assert(nir_dest_num_components(alu->dest.dest) == 1);
+         store_alu_dest(ctx, alu, 0,get_src(ctx, &alu->src[0].src,
+                        alu->src[0].swizzle[0], t));
+         return true;
+      }
    default:
       /* silence warnings */
       ;
@@ -1916,11 +1924,6 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
       src[i] = get_alu_src(ctx, alu, i);
 
    switch (alu->op) {
-   case nir_op_mov:
-      assert(nir_dest_num_components(alu->dest.dest) == 1);
-      store_alu_dest(ctx, alu, 0, src[0]);
-      return true;
-
    case nir_op_iadd:
    case nir_op_fadd: return emit_binop(ctx, alu, DXIL_BINOP_ADD, src[0], src[1]);
 
