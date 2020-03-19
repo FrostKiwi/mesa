@@ -220,6 +220,9 @@ enum dxil_intr {
    DXIL_INTR_GROUP_ID = 94,
    DXIL_INTR_THREAD_ID_IN_GROUP = 95,
 
+   DXIL_INTR_EMIT_STREAM = 97,
+   DXIL_INTR_CUT_STREAM = 98,
+
    DXIL_INTR_ATTRIBUTE_AT_VERTEX = 137,
 };
 
@@ -2049,6 +2052,46 @@ emit_discard(struct ntd_context *ctx)
 }
 
 static bool
+emit_emit_vertex(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_EMIT_STREAM);
+   const struct dxil_value *stream_id = dxil_module_get_int8_const(&ctx->mod, nir_intrinsic_stream_id(intr));
+   if (!opcode || !stream_id)
+      return false;
+
+   const struct dxil_value *args[] = {
+     opcode,
+     stream_id
+   };
+
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.emitStream", DXIL_NONE);
+   if (!func)
+      return false;
+
+   return dxil_emit_call_void(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static bool
+emit_end_primitive(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CUT_STREAM);
+   const struct dxil_value *stream_id = dxil_module_get_int8_const(&ctx->mod, nir_intrinsic_stream_id(intr));
+   if (!opcode || !stream_id)
+      return false;
+
+   const struct dxil_value *args[] = {
+     opcode,
+     stream_id
+   };
+
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.cutStream", DXIL_NONE);
+   if (!func)
+      return false;
+
+   return dxil_emit_call_void(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static bool
 emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    switch (intr->intrinsic) {
@@ -2077,6 +2120,10 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_discard_if(ctx, intr);
    case nir_intrinsic_discard:
       return emit_discard(ctx);
+   case nir_intrinsic_emit_vertex:
+      return emit_emit_vertex(ctx, intr);
+   case nir_intrinsic_end_primitive:
+      return emit_end_primitive(ctx, intr);
 
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_local_group_size:
