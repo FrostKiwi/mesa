@@ -57,11 +57,24 @@ get_shader_visibility(enum pipe_shader_type stage)
 }
 
 static inline void
-init_root_parameter(D3D12_ROOT_PARAMETER1 *param,
-                    D3D12_DESCRIPTOR_RANGE1 *range,
-                    D3D12_DESCRIPTOR_RANGE_TYPE type,
-                    uint32_t num_descs,
-                    D3D12_SHADER_VISIBILITY visibility)
+init_constant_root_param(D3D12_ROOT_PARAMETER1 *param,
+                         unsigned reg,
+                         unsigned size,
+                         D3D12_SHADER_VISIBILITY visibility)
+{
+   param->ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+   param->ShaderVisibility = visibility;
+   param->Constants.RegisterSpace = 0;
+   param->Constants.ShaderRegister = reg;
+   param->Constants.Num32BitValues = size;
+}
+
+static inline void
+init_range_root_param(D3D12_ROOT_PARAMETER1 *param,
+                      D3D12_DESCRIPTOR_RANGE1 *range,
+                      D3D12_DESCRIPTOR_RANGE_TYPE type,
+                      uint32_t num_descs,
+                      D3D12_SHADER_VISIBILITY visibility)
 {
    range->RangeType = type;
    range->NumDescriptors = num_descs;
@@ -99,29 +112,37 @@ get_root_signature(struct d3d12_context *ctx)
 
       if (shader->num_cb_bindings > 0) {
          assert(num_params < PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES);
-         init_root_parameter(&root_params[num_params],
-                             &desc_ranges[num_params],
-                             D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-                             shader->num_cb_bindings,
-                             visibility);
+         init_range_root_param(&root_params[num_params],
+                               &desc_ranges[num_params],
+                               D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+                               shader->num_cb_bindings,
+                               visibility);
          num_params++;
       }
 
       if (shader->num_srv_bindings > 0) {
-         init_root_parameter(&root_params[num_params],
-                             &desc_ranges[num_params],
-                             D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-                             shader->num_srv_bindings,
-                             visibility);
+         init_range_root_param(&root_params[num_params],
+                               &desc_ranges[num_params],
+                               D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+                               shader->num_srv_bindings,
+                               visibility);
          num_params++;
       }
 
       if (shader->num_srv_bindings > 0) {
-         init_root_parameter(&root_params[num_params],
-                             &desc_ranges[num_params],
-                             D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
-                             shader->num_srv_bindings,
-                             visibility);
+         init_range_root_param(&root_params[num_params],
+                               &desc_ranges[num_params],
+                               D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+                               shader->num_srv_bindings,
+                               visibility);
+         num_params++;
+      }
+
+      if (shader->num_state_vars > 0) {
+         init_constant_root_param(&root_params[num_params],
+                                  shader->state_vars_binding,
+                                  shader->state_vars_size,
+                                  visibility);
          num_params++;
       }
    }
@@ -165,8 +186,8 @@ fill_cbv_descriptors(struct d3d12_context *ctx,
    d2d12_descriptor_heap_get_next_handle(ctx->view_heap, &table_start);
 
    for (unsigned i = 0; i < shader->num_cb_bindings; i++) {
-      unsigned index = shader->cb_bindings[i];
-      struct pipe_constant_buffer *buffer = &ctx->cbufs[stage][index];
+      unsigned binding = shader->cb_bindings[i].binding;
+      struct pipe_constant_buffer *buffer = &ctx->cbufs[stage][binding];
 
       assert(buffer->buffer_size > 0);
       assert(buffer->buffer);
@@ -238,6 +259,25 @@ fill_sampler_descriptors(struct d3d12_context *ctx,
 }
 
 static unsigned
+fill_state_vars(struct d3d12_context *ctx,
+                struct d3d12_shader *shader,
+                uint32_t *values)
+{
+   unsigned size = 0;
+
+   for (unsigned j = 0; j < shader->num_state_vars; ++j) {
+      uint32_t *ptr = values + size;
+
+      switch (shader->state_vars[j].var) {
+      default:
+         unreachable("unknown state variable");
+      }
+   }
+
+   return size;
+}
+
+static void
 set_graphics_descriptor_heaps(struct d3d12_context *ctx)
 {
    ID3D12DescriptorHeap *heaps[2];
@@ -291,6 +331,11 @@ set_graphics_root_parameters(struct d3d12_context *ctx)
                                                       fill_srv_descriptors(ctx, shader, i));
          ctx->cmdlist->SetGraphicsRootDescriptorTable(num_params++,
                                                       fill_sampler_descriptors(ctx, shader, i));
+      }
+      if (shader->num_state_vars > 0) {
+         uint32_t constants[D3D12_MAX_STATE_VARS * 4];
+         unsigned size = fill_state_vars(ctx, shader, constants);
+         ctx->cmdlist->SetGraphicsRoot32BitConstants(num_params++, size, constants, 0);
       }
    }
 }

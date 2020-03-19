@@ -28,6 +28,7 @@
 #include "pipe/p_state.h"
 
 #include "compiler/shader_info.h"
+#include "program/prog_statevars.h"
 
 #include "nir.h"
 
@@ -37,8 +38,17 @@ typedef enum {
    D3D12_BINDING_CONSTANT_BUFFER,
    D3D12_BINDING_SHADER_RESOURCE_VIEW,
    D3D12_BINDING_SAMPLER,
+   D3D12_BINDING_STATE_VARS,
    D3D12_NUM_BINDING_TYPES
 } D3D12_BINDING_TYPE;
+
+typedef enum {
+   D3D12_MAX_STATE_VARS = 1
+} D3D12_STATE_VAR;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct d3d12_validation_tools *d3d12_validator_create();
 
@@ -60,8 +70,18 @@ struct d3d12_shader {
 
    nir_shader *nir;
 
-   unsigned cb_bindings[PIPE_MAX_CONSTANT_BUFFERS];
+   struct {
+      unsigned binding;
+   } cb_bindings[PIPE_MAX_CONSTANT_BUFFERS];
    size_t num_cb_bindings;
+
+   struct {
+      D3D12_STATE_VAR var;
+      unsigned offset;
+   } state_vars[D3D12_MAX_STATE_VARS];
+   unsigned num_state_vars;
+   size_t state_vars_size;
+   unsigned state_vars_binding;
 
    struct {
       int index;
@@ -91,12 +111,16 @@ void
 d3d12_select_shader_variants(struct d3d12_context *ctx);
 
 uint64_t
-d3d12_reassign_driver_locations(exec_list *io);
+d3d12_reassign_driver_locations(struct exec_list *io);
 
 void
-d3d12_sort_by_driver_location(exec_list *io);
+d3d12_sort_by_driver_location(struct exec_list *io);
 
 void
-d3d12_sort_ps_outputs(exec_list *io);
+d3d12_sort_ps_outputs(struct exec_list *io);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

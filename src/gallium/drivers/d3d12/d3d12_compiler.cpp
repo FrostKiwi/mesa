@@ -120,9 +120,11 @@ compile_shader(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
 
    NIR_PASS_V(nir, nir_lower_tex, &tex_options);
    NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform);
-   NIR_PASS_V(nir, nir_lower_uniforms_to_ubo, 16);
    NIR_PASS_V(nir, nir_lower_clip_halfz);
    NIR_PASS_V(nir, d3d12_lower_bool_loads);
+
+   NIR_PASS_V(nir, d3d12_lower_state_vars, shader);
+   NIR_PASS_V(nir, nir_lower_uniforms_to_ubo, 16);
 
    struct nir_to_dxil_options opts = {};
    opts.interpolate_at_vertex = screen->opts3.BarycentricsSupported;
@@ -140,7 +142,10 @@ compile_shader(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
          shader->srv_bindings[shader->num_srv_bindings].dimension = resource_dimension(glsl_get_sampler_dim(var->type));
          shader->num_srv_bindings++;
       } else if (var->interface_type) {
-         shader->cb_bindings[shader->num_cb_bindings++] = var->data.binding;
+         if (var->num_state_slots > 0) /* State Vars UBO */
+            shader->state_vars_binding = var->data.binding;
+         else
+            shader->cb_bindings[shader->num_cb_bindings++].binding = var->data.binding;
       }
    }
 
