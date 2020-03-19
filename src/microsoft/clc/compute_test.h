@@ -139,7 +139,7 @@ protected:
    template <typename T>
    std::vector<T>
    run_shader_with_input(const char *kernel_source,
-                                      int width, const T *input)
+                         const std::vector<T> &input)
    {
       static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
       if (!hD3D12Mod)
@@ -153,8 +153,9 @@ protected:
       auto root_sig = create_root_signature(1, metadata.num_consts);
       auto pipeline_state = create_pipeline_state(root_sig, blob);
 
-      auto res = create_buffer_with_data(input, width * sizeof(T));
-      create_uav_buffer(res, width, sizeof(T), uav_heap->GetCPUDescriptorHandleForHeapStart());
+      auto res = create_buffer_with_data(input.data(), input.size() * sizeof(T));
+      create_uav_buffer(res, input.size(), sizeof(T),
+         uav_heap->GetCPUDescriptorHandleForHeapStart());
 
       for (unsigned i = 0; i < metadata.num_consts; ++i) {
          size_t size = metadata.consts[i].size;
@@ -173,11 +174,11 @@ protected:
       cmdlist->SetComputeRootSignature(root_sig.Get());
       cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
       cmdlist->SetPipelineState(pipeline_state.Get());
-      cmdlist->Dispatch(width, 1, 1);
+      cmdlist->Dispatch(input.size(), 1, 1);
       resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
       execute_cmdlist();
 
-      return get_buffer_data<T>(res, width);
+      return get_buffer_data<T>(res, input.size());
    }
 
    IDXGIFactory4 *factory;
