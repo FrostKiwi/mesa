@@ -271,7 +271,7 @@ TEST_F(ComputeTest, complex_types_const_array)
        output[get_global_id(0)] = foo[get_global_id(0)];\n\
    }\n";
    const uint32_t input[] = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
    };
    const uint32_t expected[] = {
       100, 101, 102, 103
