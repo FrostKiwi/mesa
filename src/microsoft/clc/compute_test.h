@@ -138,9 +138,12 @@ protected:
 
    template <typename T>
    std::vector<T>
-   run_shader_with_input(const char *kernel_source,
-                         const std::vector<T> &input)
+   run_shader_with_inputs(const char *kernel_source,
+                          const std::vector<std::vector<T>> &inputs)
    {
+      if (inputs.size() != 1)
+         throw runtime_error("incorrect number of inputs");
+
       static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
       if (!hD3D12Mod)
          throw runtime_error("Failed to load D3D12.DLL");
@@ -153,9 +156,21 @@ protected:
       auto root_sig = create_root_signature(1, metadata.num_consts);
       auto pipeline_state = create_pipeline_state(root_sig, blob);
 
-      auto res = create_buffer_with_data(input.data(), input.size() * sizeof(T));
-      create_uav_buffer(res, input.size(), sizeof(T),
-         uav_heap->GetCPUDescriptorHandleForHeapStart());
+      int cpu_offset = 0;
+      std::vector<ComPtr<ID3D12Resource>> input_resources;
+      for(auto input : inputs) {
+         if (input.size() != inputs[0].size())
+            throw runtime_error("mismatching input sizes");
+
+         auto res = create_buffer_with_data(input.data(), input.size() * sizeof(T));
+         create_uav_buffer(res, input.size(), sizeof(T),
+                           offset_cpu_handle(
+                              uav_heap->GetCPUDescriptorHandleForHeapStart(),
+                              cpu_offset));
+         resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+         input_resources.push_back(res);
+         cpu_offset += uav_heap_incr;
+      }
 
       for (unsigned i = 0; i < metadata.num_consts; ++i) {
          size_t size = metadata.consts[i].size;
@@ -166,19 +181,31 @@ protected:
          create_cbv(cbuf, cbuf_size,
                     offset_cpu_handle(
                        uav_heap->GetCPUDescriptorHandleForHeapStart(),
-                       (1 + i) * uav_heap_incr));
+                       cpu_offset));
+         cpu_offset += uav_heap_incr;
       }
 
-      resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
       cmdlist->SetDescriptorHeaps(1, &uav_heap);
       cmdlist->SetComputeRootSignature(root_sig.Get());
       cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
       cmdlist->SetPipelineState(pipeline_state.Get());
-      cmdlist->Dispatch(input.size(), 1, 1);
-      resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+      cmdlist->Dispatch(inputs[0].size(), 1, 1);
+
+      for(auto res : input_resources)
+         resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+
       execute_cmdlist();
 
-      return get_buffer_data<T>(res, input.size());
+      return get_buffer_data<T>(input_resources[0], inputs[0].size());
+   }
+
+   template <typename T>
+   std::vector<T>
+   run_shader_with_input(const char *kernel_source,
+                         const std::vector<T> &input)
+   {
+      std::vector<std::vector<T>> inputs = { input };
+      return run_shader_with_inputs(kernel_source, inputs);
    }
 
    IDXGIFactory4 *factory;
