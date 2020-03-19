@@ -777,6 +777,25 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var)
 }
 
 static const struct dxil_mdnode *
+emit_gs_state(struct ntd_context *ctx, nir_shader *s)
+{
+   const struct dxil_mdnode *gs_state_nodes[5];
+
+   gs_state_nodes[0] = dxil_get_metadata_int32(&ctx->mod, dxil_get_input_primitive(s->info.gs.input_primitive));
+   gs_state_nodes[1] = dxil_get_metadata_int32(&ctx->mod, s->info.gs.vertices_out);
+   gs_state_nodes[2] = dxil_get_metadata_int32(&ctx->mod, s->info.gs.active_stream_mask);
+   gs_state_nodes[3] = dxil_get_metadata_int32(&ctx->mod, dxil_get_primitive_topology(s->info.gs.output_primitive));
+   gs_state_nodes[4] = dxil_get_metadata_int32(&ctx->mod, s->info.gs.invocations);
+
+   for (unsigned i = 0; i < ARRAY_SIZE(gs_state_nodes); ++i) {
+      if (!gs_state_nodes[i])
+         return NULL;
+   }
+
+   return dxil_get_metadata_node(&ctx->mod, gs_state_nodes, ARRAY_SIZE(gs_state_nodes));
+}
+
+static const struct dxil_mdnode *
 emit_threads(struct ntd_context *ctx, nir_shader *s)
 {
    const struct dxil_mdnode *threads_x = dxil_get_metadata_int32(&ctx->mod, MAX2(s->info.cs.local_size[0], 1));
@@ -924,7 +943,10 @@ emit_metadata(struct ntd_context *ctx, nir_shader *s)
    const struct dxil_mdnode *main_type_annotation = dxil_get_metadata_node(&ctx->mod, main_type_annotation_nodes,
                                                                            ARRAY_SIZE(main_type_annotation_nodes));
 
-   if (ctx->mod.shader_kind == DXIL_COMPUTE_SHADER) {
+   if (ctx->mod.shader_kind == DXIL_GEOMETRY_SHADER) {
+      if (!emit_tag(ctx, DXIL_SHADER_TAG_GS_STATE, emit_gs_state(ctx, s)))
+         return false;
+   } else if (ctx->mod.shader_kind == DXIL_COMPUTE_SHADER) {
       uint64_t flags = get_module_flags(ctx);
       if (flags != 0) {
          if (!emit_tag(ctx, DXIL_SHADER_TAG_FLAGS, dxil_get_metadata_int64(&ctx->mod, flags)))
@@ -2870,6 +2892,8 @@ get_dxil_shader_kind(struct nir_shader *s)
    switch (s->info.stage) {
    case MESA_SHADER_VERTEX:
       return DXIL_VERTEX_SHADER;
+   case MESA_SHADER_GEOMETRY:
+      return DXIL_GEOMETRY_SHADER;
    case MESA_SHADER_FRAGMENT:
       return DXIL_PIXEL_SHADER;
    case MESA_SHADER_KERNEL:
@@ -2911,6 +2935,7 @@ optimize_nir(struct nir_shader *s)
 
 static
 void dxil_fill_validation_state(struct ntd_context *ctx,
+                                nir_shader *s,
                                 struct dxil_validation_state *state)
 {
    state->num_resources = ctx->num_resources;
@@ -2934,7 +2959,11 @@ void dxil_fill_validation_state(struct ntd_context *ctx,
    case DXIL_COMPUTE_SHADER:
       break;
    case DXIL_GEOMETRY_SHADER:
-      /* TODO: fill with info */
+      state->state.max_vertex_count = s->info.gs.vertices_out;
+      state->state.psv0.gs.input_primitive = dxil_get_input_primitive(s->info.gs.input_primitive);
+      state->state.psv0.gs.output_toplology = dxil_get_primitive_topology(s->info.gs.output_primitive);
+      state->state.psv0.gs.output_stream_mask = s->info.gs.active_stream_mask;
+      state->state.psv0.gs.output_position_present = ctx->mod.info.has_out_position;
       break;
    default:
       assert(0 && "Shader type not (yet) supported");
@@ -3044,7 +3073,7 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
 
    struct dxil_validation_state validation_state;
    memset(&validation_state, 0, sizeof(validation_state));
-   dxil_fill_validation_state(&ctx, &validation_state);
+   dxil_fill_validation_state(&ctx, s, &validation_state);
 
    if (!dxil_container_add_state_validation(&container,&ctx.mod,
                                             &validation_state)) {

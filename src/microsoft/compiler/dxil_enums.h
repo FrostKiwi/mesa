@@ -244,6 +244,24 @@ enum dxil_attr_kind {
    DXIL_ATTR_KIND_READ_ONLY = 21,
 };
 
+enum dxil_input_primitive {
+   DXIL_INPUT_PRIMITIVE_UNDEFINED         = 0,
+   DXIL_INPUT_PRIMITIVE_POINT             = 1,
+   DXIL_INPUT_PRIMITIVE_LINE              = 2,
+   DXIL_INPUT_PRIMITIVE_TRIANGLE          = 3,
+   DXIL_INPUT_PRIMITIVE_LINES_ADJENCY     = 6,
+   DXIL_INPUT_PRIMITIVE_TRIANGLES_ADJENCY = 7,
+};
+
+enum dxil_primitive_topology {
+   DXIL_PRIMITIVE_TOPOLOGY_UNDEFINED      = 0,
+   DXIL_PRIMITIVE_TOPOLOGY_POINT_LIST     = 1,
+   DXIL_PRIMITIVE_TOPOLOGY_LINE_LIST      = 2,
+   DXIL_PRIMITIVE_TOPOLOGY_LINE_STRIP     = 3,
+   DXIL_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST  = 4,
+   DXIL_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP = 5,
+};
+
 enum dxil_shader_tag {
    DXIL_SHADER_TAG_FLAGS       = 0,
    DXIL_SHADER_TAG_GS_STATE    = 1,
@@ -261,6 +279,10 @@ enum dxil_component_type dxil_get_comp_type(const struct glsl_type *type);
 enum dxil_prog_sig_comp_type dxil_get_prog_sig_comp_type(const struct glsl_type *type);
 
 enum dxil_resource_kind dxil_get_resource_kind(const struct glsl_type *type);
+
+enum dxil_primitive_topology dxil_get_primitive_topology(unsigned topology);
+
+enum dxil_input_primitive dxil_get_input_primitive(unsigned primitive);
 
 const char *dxil_overload_suffix( enum overload_type overload);
 
