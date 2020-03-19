@@ -35,6 +35,26 @@
 
 using std::vector;
 
+TEST_F(ComputeTest, two_global_arrays)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *g1, __global uint *g2)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       g1[idx] -= g2[idx];\n\
+   }\n";
+   const vector<vector<uint32_t>> inputs = {
+      { 10, 20, 30, 40 },
+      { 1, 2, 3, 4 },
+   };
+   const uint32_t expected[] = {
+      9, 18, 27, 36
+   };
+   auto buf = run_shader_with_inputs(kernel_source, inputs);
+   for (int i = 0; i < buf.size(); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
+
 TEST_F(ComputeTest, built_ins_global_id)
 {
    const char *kernel_source =
