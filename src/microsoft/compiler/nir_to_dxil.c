@@ -226,7 +226,8 @@ enum dxil_intr {
 static void
 fill_resource_metadata(struct dxil_module *m, const struct dxil_mdnode **fields,
                        const struct dxil_type *struct_type,
-                       const char *name, unsigned idx, unsigned size)
+                       const char *name, unsigned idx, unsigned binding,
+                       unsigned size)
 {
    const struct dxil_type *pointer_type = dxil_module_get_pointer_type(m, struct_type);
    const struct dxil_value *pointer_undef = dxil_module_get_undef(m, pointer_type);
@@ -235,7 +236,7 @@ fill_resource_metadata(struct dxil_module *m, const struct dxil_mdnode **fields,
    fields[1] = dxil_get_metadata_value(m, pointer_type, pointer_undef); // global constant symbol
    fields[2] = dxil_get_metadata_string(m, name ? name : ""); // name
    fields[3] = dxil_get_metadata_int32(m, 0); // space ID
-   fields[4] = dxil_get_metadata_int32(m, idx); // lower bound
+   fields[4] = dxil_get_metadata_int32(m, binding); // lower bound
    fields[5] = dxil_get_metadata_int32(m, size); // range size
 }
 
@@ -253,7 +254,7 @@ emit_srv_metadata(struct dxil_module *m, const struct dxil_type *elem_type,
       buffer_element_type_tag, element_type
    };
 
-   fill_resource_metadata(m, fields, elem_type, name, index, 1);
+   fill_resource_metadata(m, fields, elem_type, name, index, index, 1);
    fields[6] = dxil_get_metadata_int32(m, res_kind); // resource shape
    fields[7] = dxil_get_metadata_int1(m, 0); // sample count
    fields[8] = dxil_get_metadata_node(m, metadata_tag_nodes, ARRAY_SIZE(metadata_tag_nodes)); // metadata
@@ -271,7 +272,7 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 
    const struct dxil_mdnode *metadata_tag_nodes[2];
 
-   fill_resource_metadata(m, fields, struct_type, name, index, size);
+   fill_resource_metadata(m, fields, struct_type, name, index, index, size);
    fields[6] = dxil_get_metadata_int32(m, res_kind); // resource shape
    fields[7] = dxil_get_metadata_int1(m, false); // globally-coherent
    fields[8] = dxil_get_metadata_int1(m, false); // has counter
@@ -289,11 +290,11 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 
 static const struct dxil_mdnode *
 emit_cbv_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
-                  const char *name, unsigned index, unsigned size)
+                  const char *name, unsigned index, unsigned binding, unsigned size)
 {
    const struct dxil_mdnode *fields[8];
 
-   fill_resource_metadata(m, fields, struct_type, name, index, 1);
+   fill_resource_metadata(m, fields, struct_type, name, index, binding, 1);
    fields[6] = dxil_get_metadata_int32(m, size); // constant buffer size
    fields[7] = NULL; // metadata
 
@@ -306,7 +307,7 @@ emit_sampler_metadata(struct dxil_module *m, const struct dxil_type *struct_type
 {
    const struct dxil_mdnode *fields[8];
 
-   fill_resource_metadata(m, fields, struct_type, var->name, index, 1);
+   fill_resource_metadata(m, fields, struct_type, var->name, index, index, 1);
    fields[6] = dxil_get_metadata_int32(m, DXIL_SAMPLER_KIND_DEFAULT); // sampler kind
    enum dxil_sampler_kind sampler_kind = glsl_sampler_type_is_shadow(var->type) ?
           DXIL_SAMPLER_KIND_COMPARISON : DXIL_SAMPLER_KIND_DEFAULT;
@@ -709,31 +710,33 @@ static unsigned get_dword_size(const struct glsl_type *type)
 static bool
 emit_cbv(struct ntd_context *ctx, nir_variable *var)
 {
-   assert(ctx->num_cbvs < ARRAY_SIZE(ctx->cbv_metadata_nodes));
-   assert(ctx->num_cbvs < ARRAY_SIZE(ctx->cbv_handles));
-
    unsigned idx = ctx->num_cbvs;
+   unsigned binding = var->data.binding;
    unsigned size = get_dword_size(var->type);
+
+   assert(idx < ARRAY_SIZE(ctx->cbv_metadata_nodes));
+   assert(binding < ARRAY_SIZE(ctx->cbv_handles));
 
    const struct dxil_type *float32 = dxil_module_get_float_type(&ctx->mod, 32);
    const struct dxil_type *array_type = dxil_module_get_array_type(&ctx->mod, float32, size);
    const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod, var->name,
                                                                      &array_type, 1);
    const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
-                                                          var->name, idx, size * 4);
+                                                          var->name, idx, binding,
+                                                          size * 4);
 
    if (!cbv_meta)
       return false;
 
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
-   add_resource(ctx, DXIL_RES_CBV, idx, 1);
+   add_resource(ctx, DXIL_RES_CBV, binding, 1);
 
    const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_CBV,
-                                                                        idx, idx, false);
+                                                                        idx, binding, false);
    if (!handle)
       return false;
 
-   ctx->cbv_handles[ctx->num_cbvs] = handle;
+   ctx->cbv_handles[binding] = handle;
    ctx->num_cbvs++;
 
    return true;
