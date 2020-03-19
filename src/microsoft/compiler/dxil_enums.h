@@ -278,6 +278,13 @@ enum dxil_barrier_mode {
    DXIL_BARRIER_MODE_GROUPSHARED_MEM_FENCE = 8,
 };
 
+enum dxil_address_space {
+   DXIL_AS_DEFAULT = 0,
+   DXIL_AS_DEVMEM = 1,
+   DXIL_AS_CBUF = 2,
+   DXIL_AS_GROUPSHARED = 3,
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif

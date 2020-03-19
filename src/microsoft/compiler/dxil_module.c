@@ -1595,7 +1595,7 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
 const struct dxil_value *
 dxil_add_global_var(struct dxil_module *m, const char *name,
                     const struct dxil_type *type,
-                    bool constant, int align)
+                    bool constant, enum dxil_address_space as, int align)
 {
    struct dxil_gvar *gvar = ralloc_size(m->ralloc_ctx,
                                         sizeof(struct dxil_gvar));
@@ -1605,6 +1605,7 @@ dxil_add_global_var(struct dxil_module *m, const char *name,
    gvar->type = type;
    gvar->constant = constant;
    gvar->name = ralloc_strdup(m->ralloc_ctx, name);
+   gvar->as = as;
    gvar->align = align;
 
    gvar->value.id = -1;
@@ -1729,7 +1730,8 @@ emit_module_info_global(struct dxil_module *m, const struct dxil_gvar *gvar,
    uint64_t data[] = {
       DXIL_MODULE_CODE_GLOBALVAR,
       gvar->type->id,
-      GVAR_FLAG_EXPLICIT_TYPE | (gvar->constant) ? GVAR_FLAG_CONSTANT : 0,
+      (gvar->as << 2) | GVAR_FLAG_EXPLICIT_TYPE |
+      (gvar->constant ? GVAR_FLAG_CONSTANT : 0),
       0, // initializer
       GVAR_LINKAGE_INTERNAL, // linkage
       util_logbase2(gvar->align) + 1,
