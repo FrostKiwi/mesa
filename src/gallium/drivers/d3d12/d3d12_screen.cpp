@@ -723,13 +723,13 @@ d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
    if (true)
       enable_d3d12_debug_layer();
 
-   IDXGIFactory4 *factory = get_dxgi_factory();
-   if (!factory) {
+   screen->factory = get_dxgi_factory();
+   if (!screen->factory) {
       debug_printf("D3D12: failed to create DXGI factory\n");
       goto failed;
    }
 
-   screen->adapter = choose_adapter(factory, adapter_luid);
+   screen->adapter = choose_adapter(screen->factory, adapter_luid);
    if (!screen->adapter) {
       debug_printf("D3D12: no suitable adapter\n");
       return NULL;
