@@ -102,6 +102,11 @@ nir_lower_uniforms_to_ubo(nir_shader *shader, int multiplier)
    }
 
    if (progress) {
+      nir_foreach_variable(var, &shader->uniforms) {
+         if (var->data.mode == nir_var_mem_ubo)
+            var->data.binding++;
+      }
+
       if (shader->num_uniforms > 0) {
          const struct glsl_type *type = glsl_array_type(glsl_vec4_type(),
                                                         shader->num_uniforms, 0);
