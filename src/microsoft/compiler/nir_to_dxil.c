@@ -2825,7 +2825,7 @@ fs_append_front_face_input(nir_shader *s)
    }
 
    nir_variable *ff = rzalloc(s, nir_variable);
-   if (ff)
+   if (!ff)
       return NULL;
    ff->data.driver_location = exec_list_length(&s->inputs);
    ff->data.location = VARYING_SLOT_FACE;
