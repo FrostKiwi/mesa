@@ -305,6 +305,7 @@ d3d12_create_blend_state(struct pipe_context *pctx,
          state->blend_factor_flags |= need_blend_factor_alpha((pipe_blendfactor) rt->alpha_src_factor);
          state->blend_factor_flags |= need_blend_factor_alpha((pipe_blendfactor) rt->alpha_dst_factor);
 
+
          if (state->blend_factor_flags == (D3D12_BLEND_FACTOR_COLOR & D3D12_BLEND_FACTOR_ALPHA) &&
              (d3d12_debug & D3D12_DEBUG_VERBOSE)) {
             /* We can't set a blend factor for both constant color and constant alpha */
@@ -931,7 +932,9 @@ d3d12_set_stencil_ref(struct pipe_context *pctx,
                       const struct pipe_stencil_ref *ref)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
-   assert(ref->ref_value[0] == ref->ref_value[1]);
+   if ((ref->ref_value[0] != ref->ref_value[1]) &&
+       (d3d12_debug & D3D12_DEBUG_VERBOSE))
+       debug_printf("D3D12: Different values for front and back stencil reference are not supported\n");
    ctx->stencil_ref = *ref;
 }
 
