@@ -70,6 +70,8 @@ struct clc_metadata {
    } args[CLC_MAX_ARGS];
    size_t num_args;
 
+   size_t num_uavs;
+
    struct {
       void *data;
       size_t size;
