@@ -141,8 +141,8 @@ protected:
    run_shader_with_inputs(const char *kernel_source,
                           const std::vector<std::vector<T>> &inputs)
    {
-      if (inputs.size() != 1)
-         throw runtime_error("incorrect number of inputs");
+      if (inputs.size() < 1)
+         throw runtime_error("no inputs");
 
       static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
       if (!hD3D12Mod)
@@ -152,8 +152,10 @@ protected:
 
       struct clc_metadata metadata;
       std::vector<uint8_t> blob = compile_and_validate(kernel_source, &metadata);
+      if (inputs.size() != metadata.num_uavs)
+         throw runtime_error("incorrect number of inputs");
 
-      auto root_sig = create_root_signature(1, metadata.num_consts);
+      auto root_sig = create_root_signature(metadata.num_uavs, metadata.num_consts);
       auto pipeline_state = create_pipeline_state(root_sig, blob);
 
       int cpu_offset = 0;
