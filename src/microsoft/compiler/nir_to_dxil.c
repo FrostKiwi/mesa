@@ -1612,7 +1612,7 @@ ptr_to_buffer(struct dxil_module *m, const struct dxil_value *ptr)
    if (!shift)
       return NULL;
 
-   return dxil_emit_binop(m, DXIL_BINOP_LSHR, ptr, shift);
+   return dxil_emit_binop(m, DXIL_BINOP_LSHR, ptr, shift, 0);
 }
 
 static const struct dxil_value *
@@ -1623,7 +1623,7 @@ ptr_to_offset(struct dxil_module *m, const struct dxil_value *ptr)
    if (!mask)
       return NULL;
 
-   return dxil_emit_binop(m, DXIL_BINOP_AND, ptr, mask);
+   return dxil_emit_binop(m, DXIL_BINOP_AND, ptr, mask, 0);
 }
 
 static const struct dxil_value *
