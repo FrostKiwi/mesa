@@ -103,8 +103,8 @@ anv_shader_bin_create(struct anv_device *device,
    typed_memcpy(prog_data_relocs, prog_data_in->relocs,
                 prog_data_in->num_relocs);
    prog_data->relocs = prog_data_relocs;
-   memset(prog_data_param, 0,
-          prog_data->nr_params * sizeof(*prog_data_param));
+   typed_memcpy(prog_data_param, prog_data_in->param,
+                prog_data_in->nr_params);
    prog_data->param = prog_data_param;
    shader->prog_data = prog_data;
    shader->prog_data_size = prog_data_size;
@@ -159,6 +159,9 @@ anv_shader_bin_write_to_blob(const struct anv_shader_bin *shader,
    blob_write_bytes(blob, shader->prog_data->relocs,
                     shader->prog_data->num_relocs *
                     sizeof(shader->prog_data->relocs[0]));
+   blob_write_bytes(blob, shader->prog_data->param,
+                    shader->prog_data->nr_params *
+                    sizeof(shader->prog_data->param[0]));
 
    blob_write_uint32(blob, shader->num_stats);
    blob_write_bytes(blob, shader->stats,
@@ -216,6 +219,9 @@ anv_shader_bin_create_from_blob(struct anv_device *device,
    prog_data.base.relocs =
       blob_read_bytes(blob, prog_data.base.num_relocs *
                             sizeof(prog_data.base.relocs[0]));
+   prog_data.base.param = (void *)
+      blob_read_bytes(blob, prog_data.base.nr_params *
+                            sizeof(prog_data.base.param[0]));
 
    uint32_t num_stats = blob_read_uint32(blob);
    const struct brw_compile_stats *stats =
