@@ -198,7 +198,7 @@ d3d12_transfer_copy_bufimage(struct d3d12_context *ctx,
       dst = &tex_loc;
       dst_x = trans->base.box.x;
       dst_y = trans->base.box.y;
-      dst_z = trans->base.box.z;
+      dst_z = res->base.target == PIPE_TEXTURE_CUBE ? 0 : trans->base.box.z;
    } else {
       d3d12_resource_barrier(ctx, res,
                              D3D12_RESOURCE_STATE_COMMON,
@@ -214,12 +214,16 @@ d3d12_transfer_copy_bufimage(struct d3d12_context *ctx,
       src_box.back = trans->base.box.z + trans->base.box.depth;
    }
 
+   int subres = res->base.target == PIPE_TEXTURE_CUBE ?
+                   trans->base.box.z * (res->base.last_level + 1) + trans->base.level :
+                   trans->base.level;
+
    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
    auto descr = res->res->GetDesc();
    dev->GetCopyableFootprints(&descr, 0, 1, 0, &footprint, nullptr, nullptr, nullptr);
 
    tex_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-   tex_loc.SubresourceIndex = trans->base.level;
+   tex_loc.SubresourceIndex = subres;
    tex_loc.pResource = res->res;
 
    buf_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
@@ -387,7 +391,7 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
    struct d3d12_resource *src = d3d12_resource(psrc);
    D3D12_TEXTURE_COPY_LOCATION src_loc, dst_loc;
    D3D12_BOX src_box = {};
-   UINT dst_x, dst_y, dst_z;
+   unsigned src_z = psrc_box->z;
 
    d3d12_resource_barrier(ctx, dst,
                           D3D12_RESOURCE_STATE_COMMON,
@@ -396,12 +400,23 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
                           D3D12_RESOURCE_STATE_COMMON,
                           D3D12_RESOURCE_STATE_COPY_SOURCE);
 
+   if (pdst->target == PIPE_TEXTURE_CUBE) {
+      dst_level = dstz * (pdst->last_level + 1) + dst_level;
+      dstz = 0;
+   }
+
+   if (psrc->target == PIPE_TEXTURE_CUBE) {
+      src_level = src_z * (psrc->last_level + 1) + src_level;
+      src_z = 0;
+   }
+
+
    src_box.left = psrc_box->x;
    src_box.right = psrc_box->x + psrc_box->width;
    src_box.top = psrc_box->y;
    src_box.bottom = psrc_box->y + psrc_box->height;
-   src_box.front = psrc_box->z;
-   src_box.back = psrc_box->z + psrc_box->depth;
+   src_box.front = src_z;
+   src_box.back = src_z + psrc_box->depth;
 
    src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
    src_loc.SubresourceIndex = src_level;
