@@ -175,6 +175,8 @@ int clc_compile_from_source(
       }
    }
 
+   metadata->num_uavs = util_bitcount64(nir->info.cs.global_inputs);
+
    ralloc_free(nir);
    glsl_type_singleton_decref();
 
