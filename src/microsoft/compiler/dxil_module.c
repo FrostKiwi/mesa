@@ -1723,16 +1723,16 @@ enum gvar_var_linkage {
 };
 
 static bool
-emit_module_info_global(struct dxil_module *m, int type_id, bool constant,
-                        int alignment, const struct dxil_abbrev *simple_gvar_abbr)
+emit_module_info_global(struct dxil_module *m, const struct dxil_gvar *gvar,
+                        const struct dxil_abbrev *simple_gvar_abbr)
 {
    uint64_t data[] = {
       DXIL_MODULE_CODE_GLOBALVAR,
-      type_id,
-      GVAR_FLAG_EXPLICIT_TYPE | (constant) ? GVAR_FLAG_CONSTANT : 0,
+      gvar->type->id,
+      GVAR_FLAG_EXPLICIT_TYPE | (gvar->constant) ? GVAR_FLAG_CONSTANT : 0,
       0, // initializer
       GVAR_LINKAGE_INTERNAL, // linkage
-      util_logbase2(alignment) + 1,
+      util_logbase2(gvar->align) + 1,
       0
    };
    return emit_record_abbrev(&m->buf, 4, simple_gvar_abbr,
@@ -1766,8 +1766,7 @@ emit_module_info(struct dxil_module *m)
 
    LIST_FOR_EACH_ENTRY(gvar, &m->gvar_list, head) {
       assert(gvar->type->id >= 0);
-      if (!emit_module_info_global(m, gvar->type->id, gvar->constant,
-                                   gvar->align, &simple_gvar_abbr))
+      if (!emit_module_info_global(m, gvar, &simple_gvar_abbr))
          return false;
    }
 
