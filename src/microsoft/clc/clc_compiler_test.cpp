@@ -908,3 +908,45 @@ TEST_F(ComputeTest, link)
    for (int i = 0; i < inout.size(); ++i)
       EXPECT_EQ(inout[i], expected[i]);
 }
+
+TEST_F(ComputeTest, localvar)
+{
+   const char *kernel_source =
+   "__kernel __attribute__((reqd_work_group_size(2, 1, 1)))\n\
+   void main_test(__global float *inout)\n\
+   {\n\
+      __local float2 tmp[2];\n\
+      tmp[get_local_id(0)].x = inout[get_global_id(0)] + 1;\n\
+      tmp[get_local_id(0)].y = inout[get_global_id(0)] - 1;\n\
+      barrier(CLK_LOCAL_MEM_FENCE);\n\
+      inout[get_global_id(0)] = tmp[get_local_id(0) % 2].x * tmp[(get_local_id(0) + 1) % 2].y;\n\
+   }\n";
+
+   auto inout = ShaderArg<float>({ 2.0f, 4.0f }, SHADER_ARG_INOUT);
+   const float expected[] = {
+      9.0f, 5.0f
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
+TEST_F(ComputeTest, localvar_uchar2)
+{
+   const char *kernel_source =
+   "__attribute__((reqd_work_group_size(2, 1, 1)))\n\
+   __kernel void main_test(__global uchar *inout)\n\
+   {\n\
+      __local uchar2 tmp[2];\n\
+      tmp[get_local_id(0)].x = inout[get_global_id(0)] + 1;\n\
+      tmp[get_local_id(0)].y = inout[get_global_id(0)] - 1;\n\
+      barrier(CLK_LOCAL_MEM_FENCE);\n\
+      inout[get_global_id(0)] = tmp[get_local_id(0) % 2].x * tmp[(get_local_id(0) + 1) % 2].y;\n\
+   }\n";
+
+   auto inout = ShaderArg<uint8_t>({ 2, 4 }, SHADER_ARG_INOUT);
+   const uint8_t expected[] = { 9, 5 };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
