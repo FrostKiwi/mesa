@@ -210,6 +210,13 @@ lower_bit_size_callback(const nir_alu_instr *alu, UNUSED void *data)
    }
 }
 
+static void
+shared_type_info(const struct glsl_type *type, unsigned *size, unsigned *align)
+{
+   *size = glsl_get_cl_size(type);
+   *align = glsl_get_cl_alignment(type);
+}
+
 struct clc_dxil_object *
 clc_to_dxil(struct clc_context *ctx,
             const struct clc_object *obj,
@@ -309,6 +316,9 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_lower_vars_to_ssa);
    NIR_PASS_V(nir, nir_lower_alu);
    NIR_PASS_V(nir, nir_opt_dce);
+
+   NIR_PASS_V(nir, nir_lower_vars_to_explicit_types,
+              nir_var_mem_shared, shared_type_info);
 
    nir_variable_mode modes = nir_var_shader_in | nir_var_mem_global;
    nir_address_format format = nir->info.cs.ptr_size == 64 ?
