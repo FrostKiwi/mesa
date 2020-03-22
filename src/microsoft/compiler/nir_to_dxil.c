@@ -430,6 +430,7 @@ struct ntd_context {
    struct hash_table *phis;
 
    struct hash_table *locals;
+   const struct dxil_value *sharedvars;
    nir_variable *ps_front_face;
 };
 
@@ -2061,6 +2062,56 @@ emit_store_global_masked(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
+emit_store_shared(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *zero, *index;
+   unsigned bit_size = nir_src_bit_size(intr->src[0]);
+
+   /* All shared mem accesses should have been lowered to scalar 32bit
+    * accesses.
+    */
+   assert(bit_size == 32);
+   assert(nir_src_num_components(intr->src[0]) == 1);
+
+   zero = dxil_module_get_int32_const(&ctx->mod, 0);
+   if (!zero)
+      return false;
+
+   if (intr->intrinsic == nir_intrinsic_store_shared_dxil)
+      index = get_src(ctx, &intr->src[1], 0, nir_type_uint);
+   else
+      index = get_src(ctx, &intr->src[2], 0, nir_type_uint);
+   if (!index)
+      return false;
+
+   const struct dxil_value *ops[] = { ctx->sharedvars, zero, index };
+   const struct dxil_value *ptr, *value;
+
+   ptr = dxil_emit_gep_inbounds(&ctx->mod, ops, ARRAY_SIZE(ops));
+   if (!ptr)
+      return false;
+
+   value = get_src(ctx, &intr->src[0], 0, nir_type_uint);
+
+   if (intr->intrinsic == nir_intrinsic_store_shared_dxil)
+      return dxil_emit_store(&ctx->mod, value, ptr, 4, false);
+
+   const struct dxil_value *mask = get_src(ctx, &intr->src[1], 0, nir_type_uint);
+
+   if (!dxil_emit_atomicrmw(&ctx->mod, mask, ptr, DXIL_RMWOP_AND, false,
+                            DXIL_ATOMIC_ORDERING_ACQREL,
+                            DXIL_SYNC_SCOPE_CROSSTHREAD))
+      return false;
+
+   if (!dxil_emit_atomicrmw(&ctx->mod, value, ptr, DXIL_RMWOP_OR, false,
+                            DXIL_ATOMIC_ORDERING_ACQREL,
+                            DXIL_SYNC_SCOPE_CROSSTHREAD))
+      return false;
+
+   return true;
+}
+
+static bool
 emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    nir_const_value *const_block_index = nir_src_as_const_value(intr->src[0]);
@@ -2241,6 +2292,42 @@ emit_load_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 }
 
 static bool
+emit_load_shared(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *zero, *one, *index;
+   unsigned bit_size = nir_dest_bit_size(intr->dest);
+   unsigned align = bit_size / 8;
+
+   /* All shared mem accesses should have been lowered to scalar 32bit
+    * accesses.
+    */
+   assert(bit_size == 32);
+   assert(nir_dest_num_components(intr->dest) == 1);
+
+   zero = dxil_module_get_int32_const(&ctx->mod, 0);
+   if (!zero)
+      return false;
+
+   index = get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   if (!index)
+      return false;
+
+   const struct dxil_value *ops[] = { ctx->sharedvars, zero, index };
+   const struct dxil_value *ptr, *retval;
+
+   ptr = dxil_emit_gep_inbounds(&ctx->mod, ops, ARRAY_SIZE(ops));
+   if (!ptr)
+      return false;
+
+   retval = dxil_emit_load(&ctx->mod, ptr, align, false);
+   if (!retval)
+      return false;
+
+   store_dest(ctx, &intr->dest, 0, retval, nir_type_uint);
+   return true;
+}
+
+static bool
 emit_load_mem_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                   nir_variable *var)
 {
@@ -2400,6 +2487,9 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_store_global_masked(ctx, intr);
    case nir_intrinsic_store_deref:
       return emit_store_deref(ctx, intr);
+   case nir_intrinsic_store_shared_dxil:
+   case nir_intrinsic_store_shared_masked_dxil:
+      return emit_store_shared(ctx, intr);
    case nir_intrinsic_load_deref:
       return emit_load_deref(ctx, intr);
    case nir_intrinsic_load_ubo:
@@ -2407,6 +2497,8 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    case nir_intrinsic_load_front_face:
       assert(ctx->ps_front_face);
       return emit_load_input_interpolated(ctx, intr, ctx->ps_front_face);
+   case nir_intrinsic_load_shared_dxil:
+      return emit_load_shared(ctx, intr);
    case nir_intrinsic_discard_if:
       return emit_discard_if(ctx, intr);
    case nir_intrinsic_discard:
@@ -3105,6 +3197,29 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
          if (!emit_srv(ctx, var, count))
             return false;
       }
+   }
+
+   if (s->info.cs.shared_size) {
+      const struct dxil_type *type;
+      unsigned size;
+
+     /*
+      * We always allocate an u32 array, no matter the actual variable types.
+      * According to the DXIL spec, the minimum load/store granularity is
+      * 32-bit, anything smaller requires using a read-extract/read-write-modify
+      * approach. Non-atomic 64-bit accesses are allowed, but the
+      * GEP(cast(gvar, u64[] *), offset) and cast(GEP(gvar, offset), u64 *))
+      * sequences don't seem to be accepted by the DXIL validator when the
+      * pointer is in the groupshared address space, making the 32-bit -> 64-bit
+      * pointer cast impossible.
+      */
+      size = ALIGN_POT(s->info.cs.shared_size, sizeof(uint32_t));
+      type = dxil_module_get_array_type(&ctx->mod,
+                                        dxil_module_get_int_type(&ctx->mod, 32),
+                                        size / sizeof(uint32_t));
+      ctx->sharedvars = dxil_add_global_ptr_var(&ctx->mod, "shared", type, false,
+                                                DXIL_AS_GROUPSHARED,
+                                                ffs(sizeof(uint64_t)));
    }
 
    if (s->info.stage == MESA_SHADER_KERNEL) {
