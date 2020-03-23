@@ -1053,7 +1053,7 @@ nir_texop_info texop_info[] = {
    {nir_texop_txb, "txb", 2},
    {nir_texop_txl, "txl", -1},
    {nir_texop_txd, "txd", -1},
-   {nir_texop_txf, "txf", -1},
+   {nir_texop_txf, "txf", 2},
    {nir_texop_txf_ms, "txf_ms", -1},
    {nir_texop_txf_ms_mcs, "txf_ms_mcs", -1},
    {nir_texop_txs, "txs", -1},
@@ -1126,6 +1126,8 @@ add_tex_op(dest_params *params, char *shader, UNUSED int i, const nir_texop_info
          src_type[isrc] = nir_tex_src_coord;
       else if (!strncmp("(comparator)", si, 12))
          src_type[isrc] = nir_tex_src_comparator;
+      else if (!strncmp("(lod)", si, 5))
+         src_type[isrc] = nir_tex_src_lod;
       else {
          error_message("%s: source type not supported %s\n", __func__, si);
          goto fail;
@@ -1143,6 +1145,7 @@ add_tex_op(dest_params *params, char *shader, UNUSED int i, const nir_texop_info
 
    nir_tex_instr * out_instr = nir_tex_instr_create(b->shader, isrc);
    out_instr->op = info->opcode;
+   out_instr->dest_type = nir_type_float;
 
    if (params->is_ssa) {
       nir_ssa_dest_init(&out_instr->instr, &out_instr->dest,
