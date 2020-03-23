@@ -2394,6 +2394,29 @@ emit_sample_grad(struct ntd_context *ctx, const struct dxil_value *tex,
    return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
 
+static const struct dxil_value *
+emit_texel_fetch(struct ntd_context *ctx, const struct dxil_value *tex,
+                 const struct dxil_value **coord,
+                 const struct dxil_value **offset, const struct dxil_value *lod)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.textureLoad", DXIL_F32);
+   if (!func)
+      return false;
+
+   if (!lod)
+      lod = dxil_module_get_undef(&ctx->mod, dxil_module_get_int_type(&ctx->mod, 32));
+
+   const struct dxil_value *args[] = {
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_TEXTURE_LOAD),
+      tex,
+      lod, coord[0], coord[1], coord[2],
+      offset[0], offset[1], offset[2]
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+
 static bool
 emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 {
@@ -2492,6 +2515,11 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
       PAD_SRC(ctx, dx, float_undef);
       PAD_SRC(ctx, dy, float_undef);
       sample = emit_sample_grad(ctx, tex, sampler, coord, offset, dx, dy, min_lod);
+      break;
+
+   case nir_texop_txf:
+      PAD_SRC(ctx, coord, int_undef);
+      sample = emit_texel_fetch(ctx, tex, coord, offset, lod ? lod : int_undef);
       break;
    }
 
