@@ -597,3 +597,33 @@ impl main {
 })";
  run(shader, "");
 }
+
+TEST_F(NirToDXILTest, test_shader_txf_validation)
+{
+ const char shader[] =
+R"(shader: MESA_SHADER_FRAGMENT
+name: GLSL3
+inputs: 0
+outputs: 1
+uniforms: 2
+shared: 0
+decl_var uniform INTERP_MODE_NONE sampler2D tex (3, 0, 0)
+decl_var ubo INTERP_MODE_NONE vec4[2] uniform_0 (0, 0, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+decl_function main (0 params) (entrypoint)
+
+impl main {
+        block block_0:
+        /* preds: */
+        vec1 32 ssa_1 = load_const (0x00000000 /* 0.000000 */)
+        vec2 32 ssa_12 = intrinsic load_ubo (ssa_1, ssa_1) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
+        vec1 32 ssa_23 = load_const (0x00000010 /* 0.000000 */)
+        vec1 32 ssa_18 = intrinsic load_ubo (ssa_1, ssa_23) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
+        vec4 32 ssa_5 = txf ssa_12 (coord), ssa_18 (lod), 0 (texture), 0 (sampler)
+        vec1 32 ssa_6 = deref_var &gl_FragColor (shader_out vec4)
+        intrinsic store_deref (ssa_6, ssa_5) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        /* succs: block_1 */
+        block block_1:
+})";
+   run(shader, "");
+}
