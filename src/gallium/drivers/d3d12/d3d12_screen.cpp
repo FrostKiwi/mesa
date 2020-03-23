@@ -175,7 +175,7 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
 #endif
 
    case PIPE_CAP_TGSI_TEXCOORD:
-      return 1;
+      return 0;
 
    case PIPE_CAP_MIXED_COLORBUFFER_FORMATS:
       return 1;
@@ -266,10 +266,10 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
       return 0;
 
    case PIPE_CAP_OCCLUSION_QUERY:
+   case PIPE_CAP_POINT_SPRITE:
       return 1;
 
    /* Faking OpenGL 2.1 */
-   case PIPE_CAP_POINT_SPRITE:
    case PIPE_CAP_BLEND_EQUATION_SEPARATE:
       return (d3d12_debug & D3D12_DEBUG_OPENGL21) ? 1 : 0;
 
@@ -290,7 +290,7 @@ d3d12_get_paramf(struct pipe_screen *pscreen, enum pipe_capf param)
 
    case PIPE_CAPF_MAX_POINT_WIDTH:
    case PIPE_CAPF_MAX_POINT_WIDTH_AA:
-      return 1.0f;
+      return D3D12_MAX_POINT_SIZE;
 
    case PIPE_CAPF_MAX_TEXTURE_ANISOTROPY:
       return screen->max_feature_level >= D3D_FEATURE_LEVEL_10_0 ? 16.0f : 2.0f;
