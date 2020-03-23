@@ -780,7 +780,7 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
     * so we compute if we need replicate alpha and emit alpha to coverage
     * workaround here.
     */
-   prog_data->replicate_alpha = key->alpha_test_replicate_alpha ||
+   bool replicate_alpha = key->alpha_test_replicate_alpha ||
       (key->nr_color_regions > 1 && key->alpha_to_coverage &&
        nti_fs->out.sample_mask.file == IBC_FILE_NONE);
 
@@ -796,7 +796,7 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
    assert(!key->clamp_fragment_color);
 
    enum ibc_fb_write_flags flags = IBC_FB_WRITE_FLAGS_NONE;
-   if (prog_data->replicate_alpha)
+   if (replicate_alpha)
       flags |= IBC_FB_WRITE_FLAG_REPLICATE_ALPHA;
 
    if (prog_data->computed_stencil)
@@ -809,7 +809,7 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
          continue;
 
       ibc_ref src0_alpha = {};
-      if (prog_data->replicate_alpha && target != 0) {
+      if (replicate_alpha && target != 0) {
          src0_alpha = nti_fs->out.color[0];
          src0_alpha.logical.comp = 3;
       }
