@@ -2684,11 +2684,37 @@ emit_cf_list(struct ntd_context *ctx, struct exec_list *list)
    return true;
 }
 
+static void insert_sorted_by_binding(struct exec_list *var_list, nir_variable *new_var)
+{
+   nir_foreach_variable(var, var_list) {
+      if (var->data.binding > new_var->data.binding) {
+         exec_node_insert_node_before(&var->node, &new_var->node);
+         return;
+      }
+   }
+   exec_list_push_tail(var_list, &new_var->node);
+}
+
+
+static void sort_uniforms_by_binding(struct exec_list *uniforms)
+{
+   struct exec_list new_list;
+   exec_list_make_empty(&new_list);
+
+   nir_foreach_variable_safe(var, uniforms) {
+      exec_node_remove(&var->node);
+      insert_sorted_by_binding(&new_list, var);
+   }
+   exec_list_move_nodes_to(&new_list, uniforms);
+}
+
 static bool
 emit_module(struct ntd_context *ctx, nir_shader *s)
 {
    /* The validator forces us to emit resources in a specific order:
     * CBVs, Samplers, SRVs, UAVs */
+
+   sort_uniforms_by_binding(&s->uniforms);
 
    /* CBVs */
    nir_foreach_variable(var, &s->uniforms) {
