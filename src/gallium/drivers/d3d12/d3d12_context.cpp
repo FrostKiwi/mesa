@@ -767,6 +767,26 @@ d3d12_delete_fs_state(struct pipe_context *pctx,
    d3d12_shader_free((struct d3d12_shader_selector *) fs);
 }
 
+static void *
+d3d12_create_gs_state(struct pipe_context *pctx,
+                      const struct pipe_shader_state *shader)
+{
+   return d3d12_compile_shader(d3d12_context(pctx), PIPE_SHADER_GEOMETRY, shader);
+}
+
+static void
+d3d12_bind_gs_state(struct pipe_context *pctx, void *gss)
+{
+   bind_stage(d3d12_context(pctx), PIPE_SHADER_GEOMETRY,
+              (struct d3d12_shader_selector *) gss);
+}
+
+static void
+d3d12_delete_gs_state(struct pipe_context *pctx, void *gs)
+{
+   d3d12_shader_free((struct d3d12_shader_selector *) gs);
+}
+
 static void
 d3d12_set_polygon_stipple(struct pipe_context *pctx,
                           const struct pipe_poly_stipple *ps)
@@ -1161,6 +1181,10 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.create_fs_state = d3d12_create_fs_state;
    ctx->base.bind_fs_state = d3d12_bind_fs_state;
    ctx->base.delete_fs_state = d3d12_delete_fs_state;
+
+   ctx->base.create_gs_state = d3d12_create_gs_state;
+   ctx->base.bind_gs_state = d3d12_bind_gs_state;
+   ctx->base.delete_gs_state = d3d12_delete_gs_state;
 
    ctx->base.set_polygon_stipple = d3d12_set_polygon_stipple;
    ctx->base.set_vertex_buffers = d3d12_set_vertex_buffers;
