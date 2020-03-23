@@ -96,14 +96,16 @@ struct d3d12_shader {
 };
 
 struct d3d12_shader_selector {
+   struct pipe_shader_state initial;
    struct d3d12_shader *first;
    struct d3d12_shader *current;
-   nir_shader *nir;
 };
 
 
 struct d3d12_shader_selector *
-d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir);
+d3d12_compile_shader(struct d3d12_context *ctx,
+                     enum pipe_shader_type stage,
+                     const struct pipe_shader_state *shader);
 
 void
 d3d12_shader_free(struct d3d12_shader_selector *shader);
