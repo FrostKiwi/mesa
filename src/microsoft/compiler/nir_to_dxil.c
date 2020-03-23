@@ -2397,13 +2397,8 @@ emit_sample_grad(struct ntd_context *ctx, const struct dxil_value *tex,
 static bool
 emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 {
-   assert(instr->op == nir_texop_tex ||
-          instr->op == nir_texop_txb ||
-          instr->op == nir_texop_txl ||
-          instr->op == nir_texop_txd);
    assert(instr->texture_index == instr->sampler_index);
    assert(nir_alu_type_get_base_type(instr->dest_type) == nir_type_float);
-   assert(instr->op == nir_texop_tex);
 
    assert(instr->texture_index < ctx->num_srvs);
    const struct dxil_value *tex = ctx->srv_handles[instr->texture_index];
