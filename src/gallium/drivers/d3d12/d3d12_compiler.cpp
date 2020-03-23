@@ -34,8 +34,10 @@
 #include "nir/tgsi_to_nir.h"
 #include "compiler/nir/nir_builder.h"
 #include "tgsi/tgsi_from_mesa.h"
+#include "tgsi/tgsi_ureg.h"
 
 #include "util/u_memory.h"
+#include "util/u_simple_shaders.h"
 
 #include <d3d12.h>
 #include <dxcapi.h>
@@ -43,6 +45,7 @@
 
 extern "C" {
 #include "tgsi/tgsi_parse.h"
+#include "tgsi/tgsi_point_sprite.h"
 }
 
 using Microsoft::WRL::ComPtr;
@@ -124,7 +127,6 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    tex_options.lower_txp = ~0u; /* No equivalent for textureProj */
 
    NIR_PASS_V(nir, nir_lower_tex, &tex_options);
-   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform);
    NIR_PASS_V(nir, nir_lower_clip_halfz);
    NIR_PASS_V(nir, d3d12_lower_bool_loads);
    NIR_PASS_V(nir, d3d12_lower_yflip);
@@ -175,9 +177,132 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    return shader;
 }
 
-void
-d3d12_fill_self_shader_key(d3d12_shader *shader)
+struct d3d12_selection_context {
+   struct d3d12_context *ctx;
+   bool needs_point_sprite_lowering;
+};
+
+static d3d12_shader_selector*
+d3d12_make_passthrough_gs(struct d3d12_context *ctx, d3d12_shader_selector *vs)
 {
+   struct d3d12_shader_selector *gs;
+   nir_builder b;
+   nir_shader *nir;
+   nir_intrinsic_instr *instr;
+   struct pipe_shader_state templ;
+
+   assert(vs);
+
+   nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_GEOMETRY, // XXX
+                                  dxil_get_nir_compiler_options());
+
+   nir = b.shader;
+   nir->info.inputs_read = vs->current->nir->info.outputs_written;
+   nir->info.outputs_written = vs->current->nir->info.outputs_written;
+   nir->info.gs.input_primitive = GL_POINTS;
+   nir->info.gs.output_primitive = GL_POINTS;
+   nir->info.gs.vertices_in = 1;
+   nir->info.gs.vertices_out = 1;
+   nir->info.gs.invocations = 1;
+   nir->info.name = ralloc_strdup(nir, "passthrough");
+
+   /* Copy inputs to outputs. */
+   unsigned i = 0;
+   nir_foreach_variable(var, &vs->current->nir->outputs) {
+      nir_variable *in, *out;
+      char tmp[100];
+
+      snprintf(tmp, ARRAY_SIZE(tmp), "in_%d", i);
+      in = nir_variable_create(nir,
+                               nir_var_shader_in,
+                               var->type,
+                               tmp);
+      in->data.location = var->data.location;
+      in->data.driver_location = i;
+      in->data.interpolation = var->data.interpolation;
+
+      snprintf(tmp, ARRAY_SIZE(tmp), "out_%d", i);
+      out = nir_variable_create(nir,
+                                nir_var_shader_out,
+                                var->type,
+                                tmp);
+      out->data.location = var->data.location;
+      out->data.driver_location = i;
+      out->data.interpolation = var->data.interpolation;
+
+      nir_copy_var(&b, out, in);
+      i++;
+   }
+
+   /* EmitVertex */
+   instr = nir_intrinsic_instr_create(nir, nir_intrinsic_emit_vertex);
+   nir_intrinsic_set_stream_id(instr, 0);
+   nir_builder_instr_insert(&b, &instr->instr);
+
+   /* EndPrimitive */
+   instr = nir_intrinsic_instr_create(nir, nir_intrinsic_end_primitive);
+   nir_intrinsic_set_stream_id(instr, 0);
+   nir_builder_instr_insert(&b, &instr->instr);
+
+   NIR_PASS_V(nir, nir_lower_var_copies);
+   nir_validate_shader(nir, "in d3d12_create_passthrough_gs");
+
+   templ.type = PIPE_SHADER_IR_NIR;
+   templ.ir.nir = nir;
+
+   gs = d3d12_compile_shader(ctx, PIPE_SHADER_GEOMETRY, &templ);
+   gs->passthrough = 1;
+   gs->passthrough_varyings = vs->current->nir->info.outputs_written;
+
+   return gs;
+}
+
+static bool
+needs_point_sprite_lowering(struct d3d12_context *ctx, const struct pipe_draw_info *dinfo)
+{
+   struct d3d12_shader_selector *vs = ctx->gfx_stages[PIPE_SHADER_VERTEX];
+   struct d3d12_shader_selector *gs = ctx->gfx_stages[PIPE_SHADER_GEOMETRY];
+
+   if (gs != NULL && !gs->passthrough) {
+      /* There is an user GS; Check if it outputs points with PSIZE */
+      return (gs->first->nir->info.gs.output_primitive == GL_POINTS &&
+              gs->first->nir->info.outputs_written & VARYING_BIT_PSIZ);
+   } else {
+      /* No user GS; check if we are drawing wide points */
+      return (dinfo->mode == PIPE_PRIM_POINTS &&
+              (ctx->rast->base.point_size > 1.0 ||
+               vs->first->nir->info.outputs_written & VARYING_BIT_PSIZ));
+   }
+}
+
+static void
+validate_geometry_shader(struct d3d12_selection_context *sel_ctx)
+{
+   struct d3d12_context *ctx = sel_ctx->ctx;
+
+   /* Determine whether we need to create/recreate the passthrough geometry shader */
+   if (sel_ctx->needs_point_sprite_lowering) {
+      d3d12_shader_selector *vs = ctx->gfx_stages[PIPE_SHADER_VERTEX];
+      d3d12_shader_selector *gs = ctx->gfx_stages[PIPE_SHADER_GEOMETRY];
+
+      /* Make sure the passthrough inputs are matching the vs outputs */
+      if (gs != NULL && gs->passthrough &&
+          gs->passthrough_varyings != vs->current->nir->info.outputs_written) {
+         d3d12_shader_free(gs);
+         gs = NULL;
+      }
+
+      if (gs == NULL)
+         gs = d3d12_make_passthrough_gs(ctx, vs);
+
+      ctx->gfx_stages[PIPE_SHADER_GEOMETRY] = gs;
+   }
+}
+
+static void
+d3d12_fill_current_shader_key(d3d12_shader_selector *sel)
+{
+   d3d12_shader *shader = sel->current;
    const uint64_t system_generated_in_values =
          1ull << VARYING_SLOT_FACE;
 
@@ -188,6 +313,7 @@ d3d12_fill_self_shader_key(d3d12_shader *shader)
 
    /* We assume that this shader reads and writes exactly what is needed */
    memset(&shader->key, 0, sizeof(d3d12_shader_key));
+   shader->key.stage = sel->stage;
    shader->key.required_varying_inputs = shader->nir->info.inputs_read & ~system_generated_in_values;
    shader->key.required_varying_outputs = shader->nir->info.outputs_written & ~system_out_values;
 }
@@ -198,12 +324,14 @@ d3d12_compile_shader(struct d3d12_context *ctx,
                      const struct pipe_shader_state *shader)
 {
    struct d3d12_shader_selector *sel = rzalloc(nullptr, d3d12_shader_selector);
+   sel->stage = stage;
 
    struct nir_shader *nir = NULL;
 
    if (shader->type == PIPE_SHADER_IR_NIR) {
       nir = nir_shader_clone(sel, (nir_shader *)shader->ir.nir);
    } else {
+      assert(shader->type == PIPE_SHADER_IR_TGSI);
       nir = tgsi_to_nir(shader->tokens, ctx->base.screen);
    }
 
@@ -213,21 +341,21 @@ d3d12_compile_shader(struct d3d12_context *ctx,
       d3d12_sort_ps_outputs(&nir->outputs);
 
    /* Keep this initial shader as the blue print for possible variants */
-   sel->initial.type = PIPE_SHADER_IR_NIR;
-   sel->initial.ir.nir = nir;
+   sel->initial = nir;
    sel->first = sel->current = compile_nir(ctx, sel, nir);
    if (!sel->current) {
       ralloc_free(sel);
       return NULL;
    }
-   d3d12_fill_self_shader_key(sel->current);
+   d3d12_fill_current_shader_key(sel);
 
    return sel;
 }
 
-bool
+static bool
 d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key *have)
 {
+   assert(expect->stage == have->stage);
    assert(expect);
    assert(have);
 
@@ -237,42 +365,70 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
        (expect->required_varying_outputs & ~have->required_varying_outputs))
       return false;
 
+   if (expect->stage == PIPE_SHADER_GEOMETRY) {
+      if (expect->gs.writes_psize) {
+         if (!have->gs.writes_psize ||
+             expect->gs.point_pos_stream_out != have->gs.point_pos_stream_out ||
+             expect->gs.sprite_coord_enable != have->gs.sprite_coord_enable ||
+             expect->gs.sprite_origin_upper_left != have->gs.sprite_origin_upper_left)
+            return false;
+      } else if (have->gs.writes_psize) {
+         return false;
+      }
+   }
+
    return true;
 }
 
-void
-d3d12_fill_shader_key(d3d12_shader_key *key, d3d12_shader *prev, d3d12_shader *next)
+static void
+d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
+                      d3d12_shader_key *key, pipe_shader_type stage,
+                      d3d12_shader_selector *prev, d3d12_shader_selector *next)
 {
-   const uint64_t system_generated_in_values =
-         (1ull << VARYING_SLOT_FACE) |
-         (1ull << VARYING_SLOT_POS);
+   uint64_t system_generated_in_values =
+         (1ull << VARYING_SLOT_FACE);
 
-   const uint64_t system_out_values =
-         1ull << VARYING_SLOT_POS |
+   uint64_t system_out_values =
          1ull << VARYING_SLOT_CLIP_DIST0 |
          1ull << VARYING_SLOT_CLIP_DIST1;
 
    memset(key, 0, sizeof(d3d12_shader_key));
+   key->stage = stage;
 
    /* We require as inputs what the previous stage has written,
     * except certain system values */
-   if (prev)
-      key->required_varying_inputs = prev->nir->info.outputs_written & ~system_out_values;
+   if (prev) {
+      if (stage == PIPE_SHADER_FRAGMENT)
+         system_out_values |= 1ull << VARYING_SLOT_POS;
+      key->required_varying_inputs = prev->current->nir->info.outputs_written & ~system_out_values;
+   }
 
    /* We require as outputs what the next stage reads,
     * except certain system values */
-   if (next)
-      key->required_varying_outputs = next->nir->info.inputs_read & ~system_generated_in_values;
+   if (next && !next->passthrough) {
+      if (stage == PIPE_SHADER_VERTEX)
+         system_generated_in_values |= 1ull << VARYING_SLOT_POS;
+      key->required_varying_outputs = next->current->nir->info.inputs_read & ~system_generated_in_values;
+   }
+
+   if (stage == PIPE_SHADER_GEOMETRY && sel_ctx->needs_point_sprite_lowering) {
+      key->gs.writes_psize = 1;
+      key->gs.sprite_coord_enable = sel_ctx->ctx->rast->base.sprite_coord_enable;
+      key->gs.sprite_origin_upper_left =
+         (sel_ctx->ctx->rast->base.sprite_coord_mode != PIPE_SPRITE_COORD_LOWER_LEFT);
+      key->gs.aa_point = sel_ctx->ctx->rast->base.point_smooth;
+   }
 }
 
 static void
-select_shader_variant(struct d3d12_context *ctx, d3d12_shader_selector *sel,
-                      d3d12_shader *prev, d3d12_shader *next)
+select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_selector *sel,
+                     d3d12_shader_selector *prev, d3d12_shader_selector *next)
 {
+   struct d3d12_context *ctx = sel_ctx->ctx;
    d3d12_shader_key key;
    nir_shader *new_nir_variant;
 
-   d3d12_fill_shader_key(&key, prev, next);
+   d3d12_fill_shader_key(sel_ctx, &key, sel->stage, prev, next);
 
    /* Check for an existing variant */
    for (d3d12_shader *variant = sel->first; variant;
@@ -284,18 +440,24 @@ select_shader_variant(struct d3d12_context *ctx, d3d12_shader_selector *sel,
       }
    }
 
-   /* Clone the NIR shader or convert from TGSI to NIR */
-   if (sel->initial.type == PIPE_SHADER_IR_NIR) {
-      new_nir_variant = nir_shader_clone(sel, (nir_shader *)sel->initial.ir.nir);
-   } else {
-      new_nir_variant = tgsi_to_nir(sel->initial.tokens, ctx->base.screen);
+   /* Clone the NIR shader */
+    new_nir_variant = nir_shader_clone(sel, sel->initial);
+
+   /* Apply any needed lowering passes */
+   if (key.gs.writes_psize) {
+      NIR_PASS_V(new_nir_variant, d3d12_lower_point_sprite,
+                 !key.gs.sprite_origin_upper_left,
+                 key.gs.sprite_coord_enable);
+
+      nir_function_impl *impl = nir_shader_get_entrypoint(new_nir_variant);
+      nir_shader_gather_info(new_nir_variant, impl);
    }
 
    /* Add the needed in and outputs, and re-sort */
    uint64_t mask = key.required_varying_inputs & ~new_nir_variant->info.inputs_read;
 
    if (prev && mask) {
-      nir_foreach_variable(var, &prev->nir->outputs) {
+      nir_foreach_variable(var, &prev->current->nir->outputs) {
          if (mask & (1ull << var->data.location)) {
             nir_variable *new_var = nir_variable_clone(var, new_nir_variant);
             new_var->data.mode = nir_var_shader_in;
@@ -308,8 +470,8 @@ select_shader_variant(struct d3d12_context *ctx, d3d12_shader_selector *sel,
 
    mask = key.required_varying_outputs & ~new_nir_variant->info.outputs_written;
 
-   if (next && mask) {
-      nir_foreach_variable(var, &next->nir->inputs) {
+   if (next && !next->passthrough && mask) {
+      nir_foreach_variable(var, &next->current->nir->inputs) {
          if (mask & (1ull << var->data.location)) {
             nir_variable *new_var = nir_variable_clone(var, new_nir_variant);
             new_var->data.mode = nir_var_shader_out;
@@ -331,7 +493,7 @@ select_shader_variant(struct d3d12_context *ctx, d3d12_shader_selector *sel,
    ctx->dirty_program = true;
 }
 
-static d3d12_shader *
+static d3d12_shader_selector *
 get_prev_shader(struct d3d12_context *ctx, pipe_shader_type current)
 {
    /* No TESS_CTRL or TESS_EVAL yet */
@@ -341,17 +503,17 @@ get_prev_shader(struct d3d12_context *ctx, pipe_shader_type current)
       return NULL;
    case PIPE_SHADER_FRAGMENT:
       if (ctx->gfx_stages[PIPE_SHADER_GEOMETRY])
-         return ctx->gfx_stages[PIPE_SHADER_GEOMETRY]->current;
+         return ctx->gfx_stages[PIPE_SHADER_GEOMETRY];
       /* fallthrough */
    case PIPE_SHADER_GEOMETRY:
       assert(ctx->gfx_stages[PIPE_SHADER_VERTEX]);
-      return ctx->gfx_stages[PIPE_SHADER_VERTEX]->current;
+      return ctx->gfx_stages[PIPE_SHADER_VERTEX];
    default:
       unreachable("shader type not supported");
    }
 }
 
-static d3d12_shader *
+static d3d12_shader_selector *
 get_next_shader(struct d3d12_context *ctx, pipe_shader_type current)
 {
    /* No TESS_CTRL or TESS_EVAL yet */
@@ -359,12 +521,11 @@ get_next_shader(struct d3d12_context *ctx, pipe_shader_type current)
    switch (current) {
    case PIPE_SHADER_VERTEX:
       if (ctx->gfx_stages[PIPE_SHADER_GEOMETRY])
-         return ctx->gfx_stages[PIPE_SHADER_GEOMETRY]->current;
+         return ctx->gfx_stages[PIPE_SHADER_GEOMETRY];
       /* fallthrough */
    case PIPE_SHADER_GEOMETRY:
       assert(ctx->gfx_stages[PIPE_SHADER_FRAGMENT]);
-      return ctx->gfx_stages[PIPE_SHADER_FRAGMENT]->current;
-      /* fallthrough */
+      return ctx->gfx_stages[PIPE_SHADER_FRAGMENT];
    case PIPE_SHADER_FRAGMENT:
       return NULL;
    default:
@@ -373,17 +534,24 @@ get_next_shader(struct d3d12_context *ctx, pipe_shader_type current)
 }
 
 void
-d3d12_select_shader_variants(struct d3d12_context *ctx)
+d3d12_select_shader_variants(struct d3d12_context *ctx, const struct pipe_draw_info *dinfo)
 {
+   struct d3d12_selection_context sel_ctx;
+
+   sel_ctx.ctx = ctx;
+   sel_ctx.needs_point_sprite_lowering = needs_point_sprite_lowering(ctx, dinfo);
+
+   validate_geometry_shader(&sel_ctx);
+
    for (int i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
       auto sel = ctx->gfx_stages[i];
       if (!sel)
          continue;
 
-      d3d12_shader *prev = get_prev_shader(ctx, (pipe_shader_type)i);
-      d3d12_shader *next = get_next_shader(ctx, (pipe_shader_type)i);
+      d3d12_shader_selector *prev = get_prev_shader(ctx, sel->stage);
+      d3d12_shader_selector *next = get_next_shader(ctx, sel->stage);
 
-      select_shader_variant(ctx, sel, prev, next);
+      select_shader_variant(&sel_ctx, sel, prev, next);
    }
 }
 

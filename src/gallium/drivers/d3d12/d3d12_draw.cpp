@@ -273,6 +273,13 @@ fill_state_vars(struct d3d12_context *ctx,
          ptr[0] = fui(ctx->flip_y);
          size += 4;
          break;
+      case D3D12_STATE_VAR_PT_SPRITE:
+         ptr[0] = fui(1.0 / ctx->viewports[0].Width);
+         ptr[1] = fui(1.0 / ctx->viewports[0].Height);
+         ptr[2] = fui(ctx->rast->base.point_size);
+         ptr[3] = fui(D3D12_MAX_POINT_SIZE);
+         size += 4;
+         break;
       default:
          unreachable("unknown state variable");
       }
@@ -514,7 +521,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
 
-   d3d12_select_shader_variants(ctx);
+   d3d12_select_shader_variants(ctx, dinfo);
 
    if (dinfo->mode >= PIPE_PRIM_QUADS ||
        dinfo->mode == PIPE_PRIM_LINE_LOOP ||

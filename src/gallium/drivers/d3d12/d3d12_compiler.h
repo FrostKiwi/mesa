@@ -44,6 +44,7 @@ typedef enum {
 
 typedef enum {
    D3D12_STATE_VAR_Y_FLIP = 0,
+   D3D12_STATE_VAR_PT_SPRITE,
    D3D12_MAX_STATE_VARS
 } D3D12_STATE_VAR;
 
@@ -61,8 +62,18 @@ d3d12_get_compiler_options(struct pipe_screen *screen,
                            enum pipe_shader_type shader);
 
 struct d3d12_shader_key {
+   enum pipe_shader_type stage;
+
    uint64_t required_varying_inputs;
    uint64_t required_varying_outputs;
+
+   struct {
+      unsigned sprite_coord_enable:24;
+      unsigned sprite_origin_upper_left:1;
+      unsigned point_pos_stream_out:1;
+      unsigned writes_psize:1;
+      unsigned aa_point:1;
+   } gs;
 };
 
 struct d3d12_shader {
@@ -96,9 +107,13 @@ struct d3d12_shader {
 };
 
 struct d3d12_shader_selector {
-   struct pipe_shader_state initial;
+   enum pipe_shader_type stage;
+   nir_shader *initial;
    struct d3d12_shader *first;
    struct d3d12_shader *current;
+
+   bool passthrough;
+   uint64_t passthrough_varyings;
 };
 
 
@@ -111,7 +126,8 @@ void
 d3d12_shader_free(struct d3d12_shader_selector *shader);
 
 void
-d3d12_select_shader_variants(struct d3d12_context *ctx);
+d3d12_select_shader_variants(struct d3d12_context *ctx,
+                             const struct pipe_draw_info *dinfo);
 
 uint64_t
 d3d12_reassign_driver_locations(struct exec_list *io);

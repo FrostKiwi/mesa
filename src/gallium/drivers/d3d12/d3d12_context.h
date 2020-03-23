@@ -35,6 +35,7 @@
 #include <d3d12.h>
 
 #define D3D12_GFX_SHADER_STAGES (PIPE_SHADER_TYPES - 1)
+#define D3D12_MAX_POINT_SIZE 255.0f
 
 enum resource_dimension
 {
