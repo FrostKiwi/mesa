@@ -446,7 +446,7 @@ const struct dxil_mdnode *
 get_signatures(struct dxil_module *mod, nir_shader *s)
 {
    /* DXC does the same: Add an empty string before everything else */
-   mod->sem_string_table = _mesa_string_buffer_create(NULL, 1024);
+   mod->sem_string_table = _mesa_string_buffer_create(mod->ralloc_ctx, 1024);
    copy_semantic_name_to_string(mod->sem_string_table, "");
 
    const struct dxil_mdnode *input_signature = get_input_signature(mod, s);
