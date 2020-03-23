@@ -589,7 +589,7 @@ ibc_MOV_raw(ibc_builder *b, ibc_ref dest,
 
          ibc_builder_push_group(b, g, split_simd_width);
          if (ibc_type_bit_size(simd_src.type) == 64 &&
-             !b->shader->devinfo->has_64bit_types) {
+             !b->shader->devinfo->has_64bit_int) {
             simd_dest.type = IBC_TYPE_UD;
             simd_src.type = IBC_TYPE_UD;
             ibc_build_alu1(b, IBC_ALU_OP_MOV, simd_dest, simd_src);
