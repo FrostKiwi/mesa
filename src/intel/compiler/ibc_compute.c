@@ -86,7 +86,7 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
-   case nir_intrinsic_barrier: {
+   case nir_intrinsic_control_barrier: {
       prog_data->uses_barrier = true;
 
       uint32_t barrier_id_mask;
