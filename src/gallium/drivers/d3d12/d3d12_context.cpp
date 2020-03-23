@@ -31,8 +31,6 @@
 #include "d3d12_screen.h"
 #include "d3d12_surface.h"
 
-#include "nir/tgsi_to_nir.h"
-
 #include "util/u_blitter.h"
 #include "util/u_framebuffer.h"
 #include "util/u_helpers.h"
@@ -729,14 +727,7 @@ static void *
 d3d12_create_vs_state(struct pipe_context *pctx,
                       const struct pipe_shader_state *shader)
 {
-   struct nir_shader *nir;
-
-   if (shader->type != PIPE_SHADER_IR_NIR)
-      nir = tgsi_to_nir(shader->tokens, pctx->screen);
-   else
-      nir = (struct nir_shader *)shader->ir.nir;
-
-   return d3d12_compile_nir(d3d12_context(pctx), nir);
+   return d3d12_compile_shader(d3d12_context(pctx), PIPE_SHADER_VERTEX, shader);
 }
 
 static void
@@ -758,14 +749,7 @@ static void *
 d3d12_create_fs_state(struct pipe_context *pctx,
                       const struct pipe_shader_state *shader)
 {
-   struct nir_shader *nir;
-
-   if (shader->type != PIPE_SHADER_IR_NIR)
-      nir = tgsi_to_nir(shader->tokens, pctx->screen);
-   else
-      nir = (struct nir_shader *)shader->ir.nir;
-
-   return d3d12_compile_nir(d3d12_context(pctx), nir);
+   return d3d12_compile_shader(d3d12_context(pctx), PIPE_SHADER_FRAGMENT, shader);
 }
 
 static void

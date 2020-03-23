@@ -31,6 +31,7 @@
 #include "pipe/p_state.h"
 
 #include "nir.h"
+#include "nir/tgsi_to_nir.h"
 #include "compiler/nir/nir_builder.h"
 #include "tgsi/tgsi_from_mesa.h"
 
@@ -39,6 +40,10 @@
 #include <d3d12.h>
 #include <dxcapi.h>
 #include <wrl.h>
+
+extern "C" {
+#include "tgsi/tgsi_parse.h"
+}
 
 using Microsoft::WRL::ComPtr;
 
@@ -107,8 +112,8 @@ resource_dimension(enum glsl_sampler_dim dim)
 }
 
 static struct d3d12_shader *
-compile_shader(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
-               struct nir_shader *nir)
+compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
+            struct nir_shader *nir)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
    struct d3d12_shader *shader = rzalloc(sel, d3d12_shader);
@@ -188,23 +193,36 @@ d3d12_fill_self_shader_key(d3d12_shader *shader)
 }
 
 struct d3d12_shader_selector *
-d3d12_compile_nir(struct d3d12_context *ctx, struct nir_shader *nir)
+d3d12_compile_shader(struct d3d12_context *ctx,
+                     pipe_shader_type stage,
+                     const struct pipe_shader_state *shader)
 {
-   if (nir->info.stage == MESA_SHADER_FRAGMENT)
-      d3d12_sort_ps_outputs(&nir->outputs);
-
    struct d3d12_shader_selector *sel = rzalloc(nullptr, d3d12_shader_selector);
 
-   /* Keep this initial shader as the blue print for possible variants */
-   sel->nir = nir_shader_clone(sel, nir);
-   sel->first = sel->current = compile_shader(ctx, sel, nir);
+   struct nir_shader *nir = NULL;
 
-   if (sel->current) {
-      d3d12_fill_self_shader_key(sel->current);
-      return sel;
+   if (shader->type == PIPE_SHADER_IR_NIR) {
+      nir = nir_shader_clone(sel, (nir_shader *)shader->ir.nir);
+   } else {
+      nir = tgsi_to_nir(shader->tokens, ctx->base.screen);
    }
-   ralloc_free(sel);
-   return NULL;
+
+   assert(nir != NULL);
+
+   if (stage == MESA_SHADER_FRAGMENT)
+      d3d12_sort_ps_outputs(&nir->outputs);
+
+   /* Keep this initial shader as the blue print for possible variants */
+   sel->initial.type = PIPE_SHADER_IR_NIR;
+   sel->initial.ir.nir = nir;
+   sel->first = sel->current = compile_nir(ctx, sel, nir);
+   if (!sel->current) {
+      ralloc_free(sel);
+      return NULL;
+   }
+   d3d12_fill_self_shader_key(sel->current);
+
+   return sel;
 }
 
 bool
@@ -215,9 +233,11 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
 
    /* Because we only add varyings we check that a shader has at least the expected in-
     * and outputs. */
-   uint64_t delta_in = expect->required_varying_inputs & ~have->required_varying_inputs;
-   uint64_t delta_out = expect->required_varying_outputs & ~have->required_varying_outputs;
-   return !(delta_in || delta_out);
+   if ((expect->required_varying_inputs & ~have->required_varying_inputs) ||
+       (expect->required_varying_outputs & ~have->required_varying_outputs))
+      return false;
+
+   return true;
 }
 
 void
@@ -250,8 +270,11 @@ select_shader_variant(struct d3d12_context *ctx, d3d12_shader_selector *sel,
                       d3d12_shader *prev, d3d12_shader *next)
 {
    d3d12_shader_key key;
+   nir_shader *new_nir_variant;
+
    d3d12_fill_shader_key(&key, prev, next);
 
+   /* Check for an existing variant */
    for (d3d12_shader *variant = sel->first; variant;
         variant = variant->next_variant) {
 
@@ -261,8 +284,14 @@ select_shader_variant(struct d3d12_context *ctx, d3d12_shader_selector *sel,
       }
    }
 
-   /* Clone the nir shader, add the needed in and outputs, and re-sort */
-   nir_shader *new_nir_variant = nir_shader_clone(sel, sel->nir);
+   /* Clone the NIR shader or convert from TGSI to NIR */
+   if (sel->initial.type == PIPE_SHADER_IR_NIR) {
+      new_nir_variant = nir_shader_clone(sel, (nir_shader *)sel->initial.ir.nir);
+   } else {
+      new_nir_variant = tgsi_to_nir(sel->initial.tokens, ctx->base.screen);
+   }
+
+   /* Add the needed in and outputs, and re-sort */
    uint64_t mask = key.required_varying_inputs & ~new_nir_variant->info.inputs_read;
 
    if (prev && mask) {
@@ -291,7 +320,7 @@ select_shader_variant(struct d3d12_context *ctx, d3d12_shader_selector *sel,
       d3d12_reassign_driver_locations(&new_nir_variant->outputs);
    }
 
-   d3d12_shader *new_variant = compile_shader(ctx, sel, new_nir_variant);
+   d3d12_shader *new_variant = compile_nir(ctx, sel, new_nir_variant);
    assert(new_variant);
    new_variant->key = key;
 
