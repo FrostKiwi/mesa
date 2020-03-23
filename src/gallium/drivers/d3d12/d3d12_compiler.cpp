@@ -263,7 +263,7 @@ select_shader_variant(struct d3d12_context *ctx, d3d12_shader_selector *sel,
 
    /* Clone the nir shader, add the needed in and outputs, and re-sort */
    nir_shader *new_nir_variant = nir_shader_clone(sel, sel->nir);
-   uint64_t mask = key.required_varying_inputs & ~sel->first->key.required_varying_inputs;
+   uint64_t mask = key.required_varying_inputs & ~new_nir_variant->info.inputs_read;
 
    if (prev && mask) {
       nir_foreach_variable(var, &prev->nir->outputs) {
@@ -277,7 +277,7 @@ select_shader_variant(struct d3d12_context *ctx, d3d12_shader_selector *sel,
       d3d12_reassign_driver_locations(&new_nir_variant->inputs);
    }
 
-   mask = key.required_varying_outputs & ~sel->first->key.required_varying_outputs;
+   mask = key.required_varying_outputs & ~new_nir_variant->info.outputs_written;
 
    if (next && mask) {
       nir_foreach_variable(var, &next->nir->inputs) {
