@@ -441,6 +441,12 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
       pso_desc.PS.pShaderBytecode = shader->bytecode;
    }
 
+   if (ctx->gfx_stages[PIPE_SHADER_GEOMETRY]) {
+      auto shader = ctx->gfx_stages[PIPE_SHADER_GEOMETRY]->current;
+      pso_desc.GS.BytecodeLength = shader->bytecode_length;
+      pso_desc.GS.pShaderBytecode = shader->bytecode;
+   }
+
    pso_desc.BlendState = ctx->blend->desc;
    pso_desc.DepthStencilState = ctx->depth_stencil_alpha_state->desc;
    pso_desc.SampleMask = ctx->sample_mask;
