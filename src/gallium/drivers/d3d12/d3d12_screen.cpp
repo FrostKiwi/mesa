@@ -43,7 +43,6 @@
 static const struct debug_named_value
 debug_options[] = {
    { "verbose",      D3D12_DEBUG_VERBOSE,      NULL },
-   { "opengl21",     D3D12_DEBUG_OPENGL21,     "Fake OpenGL 2.1 support" },
    { "experimental", D3D12_DEBUG_EXPERIMENTAL, "Enable experimental shader models feature" },
    { "dxil",         D3D12_DEBUG_DXIL,         "Dump DXIL during program compile" },
    { "disass",       D3D12_DEBUG_DISASS,       "Dump disassambly of created DXIL shader" },
@@ -267,11 +266,8 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
 
    case PIPE_CAP_OCCLUSION_QUERY:
    case PIPE_CAP_POINT_SPRITE:
-      return 1;
-
-   /* Faking OpenGL 2.1 */
    case PIPE_CAP_BLEND_EQUATION_SEPARATE:
-      return (d3d12_debug & D3D12_DEBUG_OPENGL21) ? 1 : 0;
+      return 1;
 
    default:
       return u_pipe_screen_get_param_defaults(pscreen, param);
