@@ -113,7 +113,7 @@ compile_shader(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
    struct d3d12_shader *shader = rzalloc(sel, d3d12_shader);
    shader->nir = nir;
-   sel->first = sel->current = shader;
+   sel->current = shader;
 
    struct nir_lower_tex_options tex_options = { };
    tex_options.lower_txp = ~0u; /* No equivalent for textureProj */
