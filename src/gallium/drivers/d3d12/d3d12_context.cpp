@@ -719,6 +719,8 @@ bind_stage(struct d3d12_context *ctx, enum pipe_shader_type stage,
            struct d3d12_shader_selector *shader)
 {
    assert(stage < D3D12_GFX_SHADER_STAGES);
+   if (ctx->gfx_stages[stage] && ctx->gfx_stages[stage]->passthrough)
+      d3d12_shader_free(shader);
    ctx->gfx_stages[stage] = shader;
    ctx->dirty_program = true;
 }
