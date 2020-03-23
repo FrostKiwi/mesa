@@ -2444,6 +2444,10 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
          coord_components = get_n_src(ctx, coord, ARRAY_SIZE(coord), &instr->src[i], type);
          break;
 
+      case nir_tex_src_offset:
+         offset_components = get_n_src(ctx, offset, ARRAY_SIZE(offset), &instr->src[i],  nir_type_int);
+         break;
+
       case nir_tex_src_bias:
          assert(instr->op == nir_texop_txb);
          assert(nir_src_num_components(instr->src[i].src) == 1);
