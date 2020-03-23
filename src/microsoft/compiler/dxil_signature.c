@@ -159,14 +159,25 @@ prog_semantic_from_kind(enum dxil_semantic_kind kind)
 }
 
 static uint8_t
-get_interpolation(unsigned mode)
+get_interpolation(nir_variable *var)
 {
-   switch (mode) {
-   case INTERP_MODE_NONE: return DXIL_INTERP_LINEAR;
-   case INTERP_MODE_FLAT: return DXIL_INTERP_CONSTANT;
-   case INTERP_MODE_NOPERSPECTIVE: return DXIL_INTERP_LINEAR_NOPERSPECTIVE;
-   case INTERP_MODE_SMOOTH: return DXIL_INTERP_LINEAR;
+   if (unlikely(var->data.centroid)) {
+      switch (var->data.interpolation) {
+      case INTERP_MODE_NONE: return DXIL_INTERP_LINEAR_CENTROID;
+      case INTERP_MODE_FLAT: return DXIL_INTERP_CONSTANT;
+      case INTERP_MODE_NOPERSPECTIVE: return DXIL_INTERP_LINEAR_NOPERSPECTIVE_CENTROID;
+      case INTERP_MODE_SMOOTH: DXIL_INTERP_LINEAR_CENTROID;
+
+      }
+   } else {
+      switch (var->data.interpolation) {
+      case INTERP_MODE_NONE: return DXIL_INTERP_LINEAR;
+      case INTERP_MODE_FLAT: return DXIL_INTERP_CONSTANT;
+      case INTERP_MODE_NOPERSPECTIVE: return DXIL_INTERP_LINEAR_NOPERSPECTIVE;
+      case INTERP_MODE_SMOOTH: return DXIL_INTERP_LINEAR;
+      }
    }
+
    return DXIL_INTERP_LINEAR;
 }
 
@@ -345,7 +356,7 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
          mod->inputs[num_inputs].sysvalue = false;
       } else {
          get_semantic_name(var, &semantic);
-         interpolation = get_interpolation(var->data.interpolation);
+         interpolation = get_interpolation(var);
          mod->inputs[num_inputs].sysvalue = in_sysvalue_name(var);
       }
 
@@ -397,7 +408,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
          mod->outputs[num_outputs].sysvalue = "TARGET";
       } else {
          get_semantic_name(var, &semantic);
-         interpolation = get_interpolation(var->data.interpolation);
+         interpolation = get_interpolation(var);
          mod->outputs[num_outputs].sysvalue = out_sysvalue_name(var);
       }
 
