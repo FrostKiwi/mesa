@@ -26,6 +26,7 @@
 #include "d3d12_compiler.h"
 #include "d3d12_context.h"
 #include "d3d12_debug.h"
+#include "d3d12_fence.h"
 #include "d3d12_format.h"
 #include "d3d12_public.h"
 #include "d3d12_resource.h"
@@ -517,20 +518,6 @@ d3d12_flush_frontbuffer(struct pipe_screen * pscreen,
 }
 
 static void
-d3d12_fence_reference(struct pipe_screen *screen,
-                      struct pipe_fence_handle **ptr,
-                      struct pipe_fence_handle *fence)
-{
-#if 0
-   if (pipe_reference(&(*ptr)->reference, &fence->reference)) {
-      (*ptr)->fence->Release();
-      free(*ptr);
-   }
-#endif
-   *ptr = fence;
-}
-
-static void
 d3d12_finalize_nir(UNUSED pipe_screen *screen, void *nir, UNUSED bool optimize)
 {
    nir_shader *sh = static_cast<nir_shader *>(nir);
@@ -692,7 +679,6 @@ d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
    screen->base.get_compiler_options = d3d12_get_compiler_options;
    screen->base.context_create = d3d12_context_create;
    screen->base.flush_frontbuffer = d3d12_flush_frontbuffer;
-   screen->base.fence_reference = d3d12_fence_reference;
    screen->base.destroy = d3d12_destroy_screen;
    screen->base.finalize_nir = d3d12_finalize_nir;
 
@@ -791,6 +777,7 @@ d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
                                               (void **)&screen->cmdqueue)))
       goto failed;
 
+   d3d12_screen_fence_init(&screen->base);
    d3d12_screen_resource_init(&screen->base);
    slab_create_parent(&screen->transfer_pool, sizeof(struct d3d12_transfer), 16);
 

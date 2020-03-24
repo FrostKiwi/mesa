@@ -173,7 +173,7 @@ begin_query(struct d3d12_context *ctx, struct d3d12_query *q, bool restart)
       union pipe_query_result result;
 
       /* Accumulate current results and store in first slot */
-      d3d12_flush_cmdlist(ctx);
+      d3d12_flush_cmdlist_and_wait(ctx);
       accumulate_result(ctx, q, &result, true);
       q->curr_query = 1;
    }
@@ -216,7 +216,7 @@ d3d12_end_query(struct pipe_context *pctx,
    struct d3d12_query *query = (struct d3d12_query *)q;
 
    end_query(ctx, query);
-   query->fence_value = ctx->fence_value + 1;
+   query->fence_value = ctx->fence_value;
    list_delinit(&query->active_list);
 
    return true;
@@ -231,10 +231,10 @@ d3d12_get_query_result(struct pipe_context *pctx,
    struct d3d12_context *ctx = d3d12_context(pctx);
    struct d3d12_query *query = (struct d3d12_query *)q;
 
-   if (ctx->fence_value < query->fence_value) {
+   if (ctx->cmdqueue_fence->GetCompletedValue() < query->fence_value) {
       if (!wait)
          return false;
-      d3d12_flush_cmdlist(ctx);
+      d3d12_flush_cmdlist_and_wait(ctx);
    }
 
    return accumulate_result(ctx, query, result, false);
