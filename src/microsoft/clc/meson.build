@@ -23,7 +23,7 @@
 libclc_compiler = shared_library(
   'clglon12compiler',
   'clc_compiler.c',
-  'clc_to_spirv.cpp',
+  'clc_helpers.cpp',
   vs_module_defs : 'clglon12compiler.def',
   include_directories : [inc_common, inc_compiler, inc_spirv],
   dependencies: [idep_nir_headers, dep_clang, dep_llvm, idep_mesautil,
