@@ -39,7 +39,7 @@
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 #include <clang/Basic/TargetInfo.h>
 
-#include "clc_to_spirv.h"
+#include "clc_helpers.h"
 
 using ::llvm::Function;
 using ::llvm::LLVMContext;

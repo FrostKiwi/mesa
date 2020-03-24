@@ -22,7 +22,7 @@
  */
 
 #include "clc_compiler.h"
-#include "clc_to_spirv.h"
+#include "clc_helpers.h"
 #include "../compiler/nir_to_dxil.h"
 
 #include "util/u_debug.h"
