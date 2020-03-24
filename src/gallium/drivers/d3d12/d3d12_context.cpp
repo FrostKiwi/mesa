@@ -25,6 +25,7 @@
 
 #include "d3d12_compiler.h"
 #include "d3d12_debug.h"
+#include "d3d12_fence.h"
 #include "d3d12_format.h"
 #include "d3d12_query.h"
 #include "d3d12_resource.h"
@@ -51,17 +52,15 @@ d3d12_context_destroy(struct pipe_context *pctx)
    struct d3d12_context *ctx = d3d12_context(pctx);
    d3d12_validator_destroy(ctx->validation_tools);
 
-   /* FIXME: Wait for the queue to be idle */
-   ctx->cmdalloc->Release();
+   d3d12_end_batch(ctx, d3d12_current_batch(ctx));
+   for (int i = 0; i < ARRAY_SIZE(ctx->batches); ++i)
+      d3d12_destroy_batch(ctx, &ctx->batches[i]);
    ctx->cmdlist->Release();
    ctx->cmdqueue_fence->Release();
-   CloseHandle(ctx->event);
    util_blitter_destroy(ctx->blitter);
    d3d12_descriptor_heap_free(ctx->rtv_heap);
    d3d12_descriptor_heap_free(ctx->dsv_heap);
-   d3d12_descriptor_heap_free(ctx->sampler_heap);
    d3d12_descriptor_pool_free(ctx->sampler_pool);
-   d3d12_descriptor_heap_free(ctx->view_heap);
    d3d12_descriptor_pool_free(ctx->view_pool);
    util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
@@ -947,35 +946,22 @@ d3d12_set_clip_state(struct pipe_context *pctx,
 void
 d3d12_flush_cmdlist(struct d3d12_context *ctx)
 {
-   struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
+   d3d12_end_batch(ctx, d3d12_current_batch(ctx));
 
-   if (!ctx->queries_disabled)
-      d3d12_suspend_queries(ctx);
+   ctx->current_batch_idx++;
+   if (ctx->current_batch_idx == ARRAY_SIZE(ctx->batches))
+      ctx->current_batch_idx = 0;
 
-   if (FAILED(ctx->cmdlist->Close())) {
-      debug_printf("D3D12: closing ID3D12GraphicsCommandList failed\n");
-      return;
-   }
+   d3d12_start_batch(ctx, d3d12_current_batch(ctx));
+}
 
-   ID3D12CommandList* cmdlists[] = { ctx->cmdlist };
-   screen->cmdqueue->ExecuteCommandLists(1, cmdlists);
-   int value = ++ctx->fence_value;
-   ctx->cmdqueue_fence->SetEventOnCompletion(value, ctx->event);
-   screen->cmdqueue->Signal(ctx->cmdqueue_fence, value);
-   WaitForSingleObject(ctx->event, INFINITE);
+void
+d3d12_flush_cmdlist_and_wait(struct d3d12_context *ctx)
+{
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
 
-   if (FAILED(ctx->cmdalloc->Reset())) {
-      debug_printf("D3D12: resetting ID3D12CommandAllocator failed\n");
-      return;
-   }
-
-   if (FAILED(ctx->cmdlist->Reset(ctx->cmdalloc, NULL))) {
-      debug_printf("D3D12: resetting ID3D12GraphicsCommandList failed\n");
-      return;
-   }
-
-   if (!ctx->queries_disabled)
-      d3d12_resume_queries(ctx);
+   d3d12_flush_cmdlist(ctx);
+   d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
 }
 
 void
@@ -1044,6 +1030,15 @@ d3d12_flush(struct pipe_context *pipe,
             struct pipe_fence_handle **fence,
             unsigned flags)
 {
+   struct d3d12_context *ctx = d3d12_context(pipe);
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
+   d3d12_flush_cmdlist(ctx);
+
+   if (fence)
+      d3d12_fence_reference((struct d3d12_fence **)fence, batch->fence);
+
+   if (flags & PIPE_FLUSH_END_OF_FRAME)
+      d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
 }
 
 static void
@@ -1252,7 +1247,6 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->D3D12SerializeVersionedRootSignature =
       (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
 
-   ctx->event = CreateEvent(NULL, FALSE, FALSE, NULL);
    if (FAILED(screen->dev->CreateFence(0, D3D12_FENCE_FLAG_NONE,
                                        __uuidof(ctx->cmdqueue_fence),
                                        (void **)&ctx->cmdqueue_fence))) {
@@ -1260,22 +1254,13 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
       return NULL;
    }
 
-   if (FAILED(screen->dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                                  __uuidof(ctx->cmdalloc),
-                                                  (void **)&ctx->cmdalloc))) {
-      FREE(ctx);
-      return NULL;
+   for (int i = 0; i < ARRAY_SIZE(ctx->batches); ++i) {
+      if (!d3d12_init_batch(ctx, &ctx->batches[i])) {
+         FREE(ctx);
+         return NULL;
+      }
    }
-
-   if (FAILED(screen->dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                             ctx->cmdalloc, NULL,
-                                             __uuidof(ctx->cmdlist),
-                                             (void **)&ctx->cmdlist))) {
-      FREE(ctx);
-      return NULL;
-   }
-
-   D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
+   d3d12_start_batch(ctx, &ctx->batches[0]);
 
    ctx->rtv_heap = d3d12_descriptor_heap_new(screen->dev,
                                              D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
@@ -1295,29 +1280,10 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
       return NULL;
    }
 
-   ctx->sampler_heap = d3d12_descriptor_heap_new(screen->dev,
-                                                 D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-                                                 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-                                                 PIPE_SHADER_TYPES * PIPE_MAX_SAMPLERS);
-   if (!ctx->sampler_heap) {
-      FREE(ctx);
-      return NULL;
-   }
-
    ctx->sampler_pool = d3d12_descriptor_pool_new(&ctx->base,
                                                  D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
                                                  64);
    if (!ctx->sampler_pool) {
-      FREE(ctx);
-      return NULL;
-   }
-
-   ctx->view_heap = d3d12_descriptor_heap_new(screen->dev,
-                                              D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                                              D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-                                              (PIPE_SHADER_TYPES * PIPE_MAX_CONSTANT_BUFFERS +
-                                               PIPE_SHADER_TYPES * PIPE_MAX_SHADER_SAMPLER_VIEWS));
-   if (!ctx->view_heap) {
       FREE(ctx);
       return NULL;
    }

@@ -187,8 +187,9 @@ fill_cbv_descriptors(struct d3d12_context *ctx,
                      struct d3d12_shader *shader,
                      int stage)
 {
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
    struct d3d12_descriptor_handle table_start;
-   d2d12_descriptor_heap_get_next_handle(ctx->view_heap, &table_start);
+   d2d12_descriptor_heap_get_next_handle(batch->view_heap, &table_start);
 
    for (unsigned i = 0; i < shader->num_cb_bindings; i++) {
       unsigned binding = shader->cb_bindings[i].binding;
@@ -204,7 +205,7 @@ fill_cbv_descriptors(struct d3d12_context *ctx,
       cbv_desc.SizeInBytes = align(buffer->buffer_size, 256);
 
       struct d3d12_descriptor_handle handle;
-      d3d12_descriptor_heap_alloc_handle(ctx->view_heap, &handle);
+      d3d12_descriptor_heap_alloc_handle(batch->view_heap, &handle);
       d3d12_screen(ctx->base.screen)->dev->CreateConstantBufferView(&cbv_desc, handle.cpu_handle);
    }
 
@@ -216,10 +217,11 @@ fill_srv_descriptors(struct d3d12_context *ctx,
                      struct d3d12_shader *shader,
                      unsigned stage)
 {
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
    D3D12_CPU_DESCRIPTOR_HANDLE descs[PIPE_MAX_SHADER_SAMPLER_VIEWS];
    struct d3d12_descriptor_handle table_start;
 
-   d2d12_descriptor_heap_get_next_handle(ctx->view_heap, &table_start);
+   d2d12_descriptor_heap_get_next_handle(batch->view_heap, &table_start);
 
    for (int i = 0; i < shader->num_srv_bindings; i++)
    {
@@ -233,7 +235,7 @@ fill_srv_descriptors(struct d3d12_context *ctx,
          descs[i] = ctx->null_srvs[shader->srv_bindings[i].dimension].cpu_handle;
    }
 
-   d3d12_descriptor_heap_append_handles(ctx->view_heap, descs, shader->num_srv_bindings);
+   d3d12_descriptor_heap_append_handles(batch->view_heap, descs, shader->num_srv_bindings);
 
    return table_start.gpu_handle;
 }
@@ -243,10 +245,11 @@ fill_sampler_descriptors(struct d3d12_context *ctx,
                          struct d3d12_shader *shader,
                          unsigned stage)
 {
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
    D3D12_CPU_DESCRIPTOR_HANDLE descs[PIPE_MAX_SHADER_SAMPLER_VIEWS];
    struct d3d12_descriptor_handle table_start;
 
-   d2d12_descriptor_heap_get_next_handle(ctx->sampler_heap, &table_start);
+   d2d12_descriptor_heap_get_next_handle(batch->sampler_heap, &table_start);
 
    for (int i = 0; i < shader->num_srv_bindings; i++)
    {
@@ -259,7 +262,7 @@ fill_sampler_descriptors(struct d3d12_context *ctx,
          descs[i] = ctx->null_sampler.cpu_handle;
    }
 
-   d3d12_descriptor_heap_append_handles(ctx->sampler_heap, descs, shader->num_srv_bindings);
+   d3d12_descriptor_heap_append_handles(batch->sampler_heap, descs, shader->num_srv_bindings);
    return table_start.gpu_handle;
 }
 
@@ -294,42 +297,9 @@ fill_state_vars(struct d3d12_context *ctx,
 }
 
 static void
-set_graphics_descriptor_heaps(struct d3d12_context *ctx)
-{
-   ID3D12DescriptorHeap *heaps[2];
-   unsigned num_heaps = 0;
-   bool has_view = false;
-   bool has_sampler = false;
-
-   for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
-      if (!ctx->gfx_stages[i])
-         continue;
-
-      struct d3d12_shader *shader = ctx->gfx_stages[i]->current;
-      assert(shader);
-
-      if (shader->num_cb_bindings > 0)
-         has_view = true;
-      if (shader->num_srv_bindings > 0) {
-         has_view = true;
-         has_sampler = true;
-      }
-   }
-
-   if (has_view)
-      heaps[num_heaps++] = d3d12_descriptor_heap_get(ctx->view_heap);
-   if (has_sampler)
-      heaps[num_heaps++] = d3d12_descriptor_heap_get(ctx->sampler_heap);
-   ctx->cmdlist->SetDescriptorHeaps(num_heaps, heaps);
-}
-
-static void
 set_graphics_root_parameters(struct d3d12_context *ctx)
 {
    unsigned num_params = 0;
-
-   d3d12_descriptor_heap_clear(ctx->view_heap);
-   d3d12_descriptor_heap_clear(ctx->sampler_heap);
 
    for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
       if (!ctx->gfx_stages[i])
@@ -569,7 +539,6 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    ctx->cmdlist->SetGraphicsRootSignature(root_sig);
 
-   set_graphics_descriptor_heaps(ctx);
    set_graphics_root_parameters(ctx);
 
    ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);

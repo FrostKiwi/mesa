@@ -24,6 +24,7 @@
 #ifndef D3D12_CONTEXT_H
 #define D3D12_CONTEXT_H
 
+#include "d3d12_batch.h"
 #include "d3d12_descriptor_pool.h"
 
 #include "pipe/p_context.h"
@@ -106,6 +107,9 @@ struct d3d12_context {
    struct blitter_context *blitter;
    struct u_suballocator *query_allocator;
 
+   struct d3d12_batch batches[4];
+   unsigned current_batch_idx;
+
    struct pipe_constant_buffer cbufs[PIPE_SHADER_TYPES][PIPE_MAX_CONSTANT_BUFFERS];
    struct pipe_framebuffer_state fb;
    struct d3d12_vertex_elements_state *ves;
@@ -133,10 +137,8 @@ struct d3d12_context {
    struct d3d12_shader_selector *gfx_stages[D3D12_GFX_SHADER_STAGES];
    unsigned dirty_program : 1;
 
-   HANDLE event;
    ID3D12Fence *cmdqueue_fence;
    int fence_value;
-   ID3D12CommandAllocator *cmdalloc;
    ID3D12GraphicsCommandList *cmdlist;
 
    struct list_head active_queries;
@@ -145,9 +147,7 @@ struct d3d12_context {
    struct d3d12_descriptor_heap *rtv_heap;
    struct d3d12_descriptor_heap *dsv_heap;
    struct d3d12_descriptor_pool *sampler_pool;
-   struct d3d12_descriptor_heap *sampler_heap;
    struct d3d12_descriptor_pool *view_pool;
-   struct d3d12_descriptor_heap *view_heap;
 
    struct d3d12_descriptor_handle null_srvs[RESOURCE_DIMENSION_COUNT];
    struct d3d12_descriptor_handle null_sampler;
@@ -163,11 +163,21 @@ d3d12_context(struct pipe_context *context)
    return (struct d3d12_context *)context;
 }
 
+static inline struct d3d12_batch *
+d3d12_current_batch(struct d3d12_context *ctx)
+{
+   assert(ctx->current_batch_idx < ARRAY_SIZE(ctx->batches));
+   return ctx->batches + ctx->current_batch_idx;
+}
+
 struct pipe_context *
 d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags);
 
 void
 d3d12_flush_cmdlist(struct d3d12_context *ctx);
+
+void
+d3d12_flush_cmdlist_and_wait(struct d3d12_context *ctx);
 
 void
 d3d12_resource_barrier(struct d3d12_context *ctx,

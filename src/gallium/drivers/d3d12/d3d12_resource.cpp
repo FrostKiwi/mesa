@@ -326,7 +326,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
          bool ret = d3d12_transfer_copy_bufimage(ctx, res, staging_res, trans, ptrans->stride, false);
          if (ret == false)
             return NULL;
-         d3d12_flush_cmdlist(ctx);
+         d3d12_flush_cmdlist_and_wait(ctx);
       }
 
       range.Begin = 0;
