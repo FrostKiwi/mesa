@@ -2537,6 +2537,7 @@ emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
             surface_state = cmd_buffer->state.null_surface_state;
          }
 
+         assert(surface_state.map);
          bt_map[s] = surface_state.offset + state_offset;
          break;
 
@@ -2556,6 +2557,7 @@ emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
                                        surface_state, format,
                                        constant_data, constant_data_size, 1);
 
+         assert(surface_state.map);
          bt_map[s] = surface_state.offset + state_offset;
          add_surface_reloc(cmd_buffer, surface_state, constant_data);
          break;
@@ -2574,6 +2576,8 @@ emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
                                        format,
                                        cmd_buffer->state.compute.num_workgroups,
                                        12, 1);
+
+         assert(surface_state.map);
          bt_map[s] = surface_state.offset + state_offset;
          if (need_client_mem_relocs) {
             add_surface_reloc(cmd_buffer, surface_state,
@@ -2715,6 +2719,7 @@ emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
             assert(!"Invalid descriptor type");
             continue;
          }
+         assert(surface_state.map);
          bt_map[s] = surface_state.offset + state_offset;
          break;
       }
