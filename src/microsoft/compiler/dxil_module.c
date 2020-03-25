@@ -2254,6 +2254,7 @@ dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
                 const struct dxil_value *op0, const struct dxil_value *op1,
                 enum dxil_opt_flags flags)
 {
+   assert(types_equal(op0->type, op1->type));
    struct dxil_instr *instr = create_instr(m, INSTR_BINOP, op0->type);
    if (!instr)
       return NULL;
@@ -2270,6 +2271,7 @@ const struct dxil_value *
 dxil_emit_cmp(struct dxil_module *m, enum dxil_cmp_pred pred,
                 const struct dxil_value *op0, const struct dxil_value *op1)
 {
+   assert(types_equal(op0->type, op1->type));
    struct dxil_instr *instr = create_instr(m, INSTR_CMP, get_int1_type(m));
    if (!instr)
       return NULL;
@@ -2287,6 +2289,9 @@ dxil_emit_select(struct dxil_module *m,
                 const struct dxil_value *op1,
                 const struct dxil_value *op2)
 {
+   assert(types_equal(op0->type, get_int1_type(m)));
+   assert(types_equal(op1->type, op2->type));
+
    struct dxil_instr *instr = create_instr(m, INSTR_SELECT, op1->type);
    if (!instr)
       return NULL;
@@ -2363,6 +2368,9 @@ dxil_phi_set_incoming(struct dxil_instr *instr,
       assert(incoming_values[i]);
       instr->phi.incoming[i].value = incoming_values[i];
       instr->phi.incoming[i].block = incoming_blocks[i];
+      if (i > 0)
+         assert(types_equal(incoming_values[i]->type,
+                            incoming_values[i-1]->type));
    }
    instr->phi.num_incoming = num_incoming;
 }
@@ -2372,6 +2380,10 @@ create_call_instr(struct dxil_module *m,
                   const struct dxil_func *func,
                   const struct dxil_value **args, size_t num_args)
 {
+   assert(num_args == func->type->function_def.args.num_types);
+   for (size_t i = 0;i <  num_args; ++ i)
+      assert(types_equal(func->type->function_def.args.types[i], args[i]->type));
+
    struct dxil_instr *instr = create_instr(m, INSTR_CALL,
                                            func->type->function_def.ret_type);
    if (instr) {
