@@ -28,6 +28,136 @@
 #include "util/u_debug.h"
 #include <util/u_math.h>
 #include "spirv/nir_spirv.h"
+#include "nir_builder.h"
+
+/*
+ * DXIL doesn't support reading and writing global memory through pointers,
+ * but needs a buffer-index and offset instead. This code lowers this to
+ * DXIL specific intrinsics, so we can deal with these limitations as early
+ * as possible.
+ *
+ * In principle, this is very similar to SSBOs, so at some point we might
+ * want to unify that.
+ */
+
+static void
+lower_load_kernel_input(nir_builder *b, nir_intrinsic_instr *intr)
+{
+   b->cursor = nir_before_instr(&intr->instr);
+
+   nir_src *src = &intr->src[0]; /* param location i.e. SSBO slot */
+   assert(src->is_ssa);
+
+   nir_ssa_def *ssbo_loc = nir_ishl(b, src->ssa, nir_imm_int(b, 28 - 2));
+   nir_ssa_def_rewrite_uses(&intr->dest.ssa,
+                            nir_src_for_ssa(ssbo_loc));
+   nir_instr_remove(&intr->instr);
+}
+
+static nir_ssa_def *
+ptr_to_buffer(nir_builder *b, nir_ssa_def *ptr)
+{
+   return nir_ishr(b, ptr, nir_imm_int(b, 28));
+}
+
+static nir_ssa_def *
+ptr_to_offset(nir_builder *b, nir_ssa_def *ptr)
+{
+   return nir_iand(b, ptr, nir_imm_int(b, 0x0ffffffc));
+}
+
+static void
+lower_load_global(nir_builder *b, nir_intrinsic_instr *intr)
+{
+   b->cursor = nir_before_instr(&intr->instr);
+
+   assert(intr->num_components == 1); // no support for vectors
+   assert(nir_dest_bit_size(intr->dest) == 32);
+
+   /* source 'pointer' */
+   assert(intr->src[0].is_ssa);
+   nir_ssa_def *ptr = intr->src[0].ssa;
+   nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
+   nir_ssa_def *offset = ptr_to_offset(b, ptr);
+
+   nir_ssa_def *result;
+   nir_intrinsic_instr *load =
+      nir_intrinsic_instr_create(b->shader,
+                                 nir_intrinsic_load_global_dxil);
+   load->num_components = 1;
+
+   assert(intr->dest.is_ssa);
+   load->src[0] = nir_src_for_ssa(buffer);
+   load->src[1] = nir_src_for_ssa(offset);
+   nir_ssa_dest_init(&load->instr, &load->dest, load->num_components,
+                     32, intr->dest.ssa.name);
+   nir_builder_instr_insert(b, &load->instr);
+
+   result = &load->dest.ssa;
+   nir_ssa_def_rewrite_uses(&intr->dest.ssa,
+                            nir_src_for_ssa(result));
+   nir_instr_remove(&intr->instr);
+}
+
+static void
+lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
+{
+   b->cursor = nir_before_instr(&intr->instr);
+
+   assert(intr->num_components == 1); // no support for vectors
+   assert(nir_src_bit_size(intr->src[0]) == 32);
+
+   /* source 'pointer' */
+   assert(intr->src[1].is_ssa);
+   nir_ssa_def *ptr = intr->src[1].ssa;
+   nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
+   nir_ssa_def *offset = ptr_to_offset(b, ptr);
+
+   assert(intr->src[0].is_ssa);
+   nir_ssa_def *value = intr->src[0].ssa;
+   nir_intrinsic_instr *store =
+      nir_intrinsic_instr_create(b->shader,
+                                 nir_intrinsic_store_global_dxil);
+   store->num_components = 1;
+   store->src[0] = nir_src_for_ssa(value);
+   store->src[1] = nir_src_for_ssa(buffer);
+   store->src[2] = nir_src_for_ssa(offset);
+   nir_builder_instr_insert(b, &store->instr);
+   nir_instr_remove(&intr->instr);
+}
+
+static void
+lower_global_mem_to_dxil(struct nir_shader *nir)
+{
+   foreach_list_typed(nir_function, func, node, &nir->functions) {
+      if (!func->is_entrypoint)
+         continue;
+      assert(func->impl);
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
+            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+
+            switch (intr->intrinsic) {
+            case nir_intrinsic_load_kernel_input:
+               lower_load_kernel_input(&b, intr);
+               break;
+            case nir_intrinsic_load_global:
+               lower_load_global(&b, intr);
+               break;
+            case nir_intrinsic_store_global:
+               lower_store_global(&b, intr);
+               break;
+            }
+         }
+      }
+   }
+}
 
 enum clc_debug_flags {
    CLC_DEBUG_DUMP_SPIRV = 1 << 0,
@@ -287,6 +417,8 @@ clc_to_dxil(const struct clc_object *obj,
       NIR_PASS_V(nir, nir_lower_int64, nir_options->lower_int64_options);
 
    NIR_PASS_V(nir, nir_opt_dce);
+
+   NIR_PASS_V(nir, lower_global_mem_to_dxil);
 
    NIR_PASS_V(nir, nir_lower_bit_size, lower_bit_size_callback, NULL);
 

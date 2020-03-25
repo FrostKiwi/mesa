@@ -1750,27 +1750,6 @@ get_int32_undef(struct dxil_module *m)
 }
 
 static const struct dxil_value *
-ptr_to_buffer(struct dxil_module *m, const struct dxil_value *ptr)
-{
-   const struct dxil_value *shift = dxil_module_get_int32_const(m, 28);
-   if (!shift)
-      return NULL;
-
-   return dxil_emit_binop(m, DXIL_BINOP_LSHR, ptr, shift, 0);
-}
-
-static const struct dxil_value *
-ptr_to_offset(struct dxil_module *m, const struct dxil_value *ptr)
-{
-   const struct dxil_value *mask =
-      dxil_module_get_int32_const(m, (1u << 28) - 1);
-   if (!mask)
-      return NULL;
-
-   return dxil_emit_binop(m, DXIL_BINOP_AND, ptr, mask, 0);
-}
-
-static const struct dxil_value *
 offset_to_index(struct dxil_module *m, const struct dxil_value *offset,
                 unsigned bit_size)
 {
@@ -1800,15 +1779,15 @@ static bool
 emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
-   const struct dxil_value *ptr =
+   const struct dxil_value *buffer =
       get_src(ctx, &intr->src[0], 0, nir_type_uint);
-   if (!int32_undef || !ptr)
+   const struct dxil_value *offset =
+      get_src(ctx, &intr->src[1], 0, nir_type_uint);
+   if (!int32_undef || !buffer || !offset)
       return false;
 
-   const struct dxil_value *buffer = ptr_to_buffer(&ctx->mod, ptr);
-   const struct dxil_value *offset = ptr_to_offset(&ctx->mod, ptr);
-   if (!buffer || !offset)
-      return false;
+   assert(nir_src_bit_size(intr->src[0]) == 32);
+   assert(nir_intrinsic_dest_components(intr) <= 4);
 
    const struct dxil_value *handle =
       emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
@@ -1824,26 +1803,23 @@ emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    if (!load)
       return false;
 
-   const struct dxil_value *val =
-      dxil_emit_extractval(&ctx->mod, load, 0);
-   if (!val)
-      return false;
-
-   store_dest_int(ctx, &intr->dest, 0, val);
+   for (int i = 0; i < nir_intrinsic_dest_components(intr); i++) {
+      const struct dxil_value *val =
+         dxil_emit_extractval(&ctx->mod, load, i);
+      if (!val)
+         return false;
+      store_dest_int(ctx, &intr->dest, i, val);
+   }
    return true;
 }
 
 static bool
 emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
-   const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
-   const struct dxil_value *ptr =
+   const struct dxil_value *buffer =
       get_src(ctx, &intr->src[1], 0, nir_type_uint);
-   if (!int32_undef || !ptr)
-      return false;
-
-   const struct dxil_value *buffer = ptr_to_buffer(&ctx->mod, ptr);
-   const struct dxil_value *offset = ptr_to_offset(&ctx->mod, ptr);
+   const struct dxil_value *offset =
+      get_src(ctx, &intr->src[2], 0, nir_type_uint);
    if (!buffer || !offset)
       return false;
 
@@ -1852,28 +1828,30 @@ emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    if (!handle)
       return false;
 
+   assert(nir_src_bit_size(intr->src[0]) == 32);
+   unsigned num_components = nir_src_num_components(intr->src[0]);
+   assert(num_components <= 4);
+   const struct dxil_value *value[4];
+   for (unsigned i = 0; i < num_components; ++i) {
+      value[i] = get_src(ctx, &intr->src[0], i, nir_type_uint);
+      if (!value[i])
+         return false;
+   }
+
+   const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
+   if (!int32_undef)
+      return false;
+
    const struct dxil_value *coord[2] = {
       offset,
       int32_undef
    };
 
-   uint32_t writemask = nir_intrinsic_write_mask(intr);
-   assert(writemask == 0x1 || writemask == 0x3 ||
-          writemask == 0x7 || writemask == 0xf);
-
-   const struct dxil_value *value[4];
-   for (unsigned i = 0; i < 4; ++i) {
-      if (writemask & (1 << i))
-         value[i] = get_src(ctx, &intr->src[0], i, nir_type_uint);
-      else
-         value[i] = int32_undef;
-
-      if (!value[i])
-         return false;
-   }
+   for (int i = num_components; i < 4; ++i)
+      value[i] = int32_undef;
 
    const struct dxil_value *write_mask =
-      dxil_module_get_int8_const(&ctx->mod, writemask);
+      dxil_module_get_int8_const(&ctx->mod, (1u << num_components) - 1);
    if (!write_mask)
       return false;
 
@@ -2210,11 +2188,9 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_local_invocation_id(ctx, intr);
    case nir_intrinsic_load_work_group_id:
       return emit_load_local_work_group_id(ctx, intr);
-   case nir_intrinsic_load_kernel_input:
-      return emit_load_kernel_input(ctx, intr);
-   case nir_intrinsic_load_global:
+   case nir_intrinsic_load_global_dxil:
       return emit_load_global(ctx, intr);
-   case nir_intrinsic_store_global:
+   case nir_intrinsic_store_global_dxil:
       return emit_store_global(ctx, intr);
    case nir_intrinsic_store_deref:
       return emit_store_deref(ctx, intr);
