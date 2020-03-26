@@ -309,10 +309,19 @@ vtn_cfg_handle_prepass_instruction(struct vtn_builder *b, SpvOp opcode,
       break;
    }
 
-   case SpvOpFunctionEnd:
+   case SpvOpFunctionEnd: {
+      nir_function *func = b->func->impl->function;
+
+      /* Functions with no body are actually function declarations, and in that
+       * case, nir_function->impl should be NULL.
+       */
+      if (!b->func->start_block)
+	 func->impl = NULL;
+
       b->func->end = w;
       b->func = NULL;
       break;
+   }
 
    case SpvOpFunctionParameter: {
       struct vtn_type *type = vtn_value(b, w[1], vtn_value_type_type)->type;
