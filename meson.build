@@ -34,6 +34,8 @@ cpp = meson.get_compiler('cpp')
 
 null_dep = dependency('', required : false)
 
+need_spirv_tools = false
+
 if get_option('layout') != 'mirror'
   error('`mirror` is the only build directory layout supported')
 endif
@@ -741,11 +743,10 @@ if _opencl != 'disabled'
 
   with_opencl_spirv = get_option('opencl-spirv')
   if with_opencl_spirv
-    dep_spirv_tools = dependency('SPIRV-Tools', required : true, version : '>= 2018.0')
     # LLVMSPIRVLib is available at https://github.com/KhronosGroup/SPIRV-LLVM-Translator
+    need_spirv_tools = true
     dep_llvmspirvlib = dependency('LLVMSPIRVLib', required : true, version : '>= 0.2.1')
   else
-    dep_spirv_tools = null_dep
     dep_llvmspirvlib = null_dep
   endif
 
@@ -758,11 +759,16 @@ if _opencl != 'disabled'
   endif
 else
   dep_clc = null_dep
-  dep_spirv_tools = null_dep
   dep_llvmspirvlib = null_dep
   with_gallium_opencl = false
   with_opencl_icd = false
   with_opencl_spirv = false
+endif
+
+if need_spirv_tools
+  dep_spirv_tools = dependency('SPIRV-Tools', required : true, version : '>= 2018.0')
+else
+  dep_spirv_tools = null_dep
 endif
 
 gl_pkgconfig_c_flags = []
