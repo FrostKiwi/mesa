@@ -56,9 +56,9 @@ llvm_log_handler(const ::llvm::DiagnosticInfo &di, void *data) {
 int
 clc_to_spirv(const char *source,
              const char *source_name,
-             const struct clc_define defines[],
+             const struct clc_named_value defines[],
              size_t num_defines,
-             const struct clc_header headers[],
+             const struct clc_named_value headers[],
              size_t num_headers,
              struct spirv_binary *spvbin,
              char **err_buf)
@@ -150,8 +150,8 @@ clc_to_spirv(const char *source,
 
    for (size_t i = 0; i < num_defines; i++) {
       std::string def = std::string(defines[i].name);
-      if (defines[i].definition != nullptr)
-         def += "=" + std::string(defines[i].definition);
+      if (defines[i].value != nullptr)
+         def += "=" + std::string(defines[i].value);
       c->getPreprocessorOpts().addMacroDef(def);
    }
 
@@ -165,7 +165,7 @@ clc_to_spirv(const char *source,
 
       for (size_t i = 0; i < num_headers; i++) {
          std::string h = std::string(headers[i].name);
-         std::string src = std::string(headers[i].source);
+         std::string src = std::string(headers[i].value);
          c->getPreprocessorOpts().addRemappedFile(tmp_header_path + h,
             ::llvm::MemoryBuffer::getMemBufferCopy(src).release());
       }

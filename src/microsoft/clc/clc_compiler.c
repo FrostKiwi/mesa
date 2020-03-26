@@ -32,9 +32,9 @@
 int clc_compile_from_source(
    const char *source,
    const char *source_name,
-   const struct clc_define defines[],
+   const struct clc_named_value defines[],
    size_t num_defines,
-   const struct clc_header headers[],
+   const struct clc_named_value headers[],
    size_t num_headers,
    const struct clc_logger *logger,
    struct clc_metadata *metadata,
