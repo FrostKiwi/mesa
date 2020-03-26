@@ -31,14 +31,9 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-struct clc_define {
+struct clc_named_value {
    const char *name;
-   const char *definition;
-};
-
-struct clc_header {
-   const char *name;
-   const char *source;
+   const char *value;
 };
 
 typedef void (*clc_msg_callback)(const char *, int, const char *);
@@ -99,9 +94,9 @@ struct clc_metadata {
 int clc_compile_from_source(
    const char *source,
    const char *source_name,
-   const struct clc_define defines[],
+   const struct clc_named_value defines[],
    size_t num_defines,
-   const struct clc_header headers[],
+   const struct clc_named_value headers[],
    size_t num_headers,
    const struct clc_logger *logger,
    struct clc_metadata *metadata,
