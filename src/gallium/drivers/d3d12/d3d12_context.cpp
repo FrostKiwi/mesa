@@ -711,6 +711,7 @@ d3d12_destroy_sampler_view(struct pipe_context *pctx,
    struct d3d12_context *ctx = d3d12_context(pctx);
    struct d3d12_sampler_view *view = d3d12_sampler_view(pview);
    d3d12_descriptor_handle_free(&view->handle);
+   pipe_resource_reference(&view->base.texture, NULL);
    FREE(view);
 }
 
