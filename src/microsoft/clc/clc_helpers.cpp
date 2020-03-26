@@ -60,8 +60,7 @@ clc_to_spirv(const char *source,
              size_t num_defines,
              const struct clc_header headers[],
              size_t num_headers,
-             uint32_t **spv_source,
-             size_t *spv_size,
+             struct spirv_binary *spvbin,
              char **err_buf)
 {
    LLVMInitializeAllTargets();
@@ -199,9 +198,15 @@ clc_to_spirv(const char *source,
    }
 
    const std::string spv_out = spv_stream.str();
-   *spv_size = spv_out.size();
-   *spv_source = static_cast<uint32_t *>(malloc((size_t) *spv_size));
-   memcpy(*spv_source, spv_out.data(), *spv_size);
+   spvbin->size = spv_out.size();
+   spvbin->data = static_cast<uint32_t *>(malloc(spvbin->size));
+   memcpy(spvbin->data, spv_out.data(), spvbin->size);
 
    return 0;
+}
+
+void
+clc_free_spirv_binary(struct spirv_binary *spvbin)
+{
+   free(spvbin->data);
 }
