@@ -475,13 +475,16 @@ std::vector<uint8_t>
 ComputeTest::compile_and_validate(const char *kernel_source,
                                   struct clc_metadata *metadata)
 {
+   struct clc_logger logger = {
+      error_callback, warning_callback,
+   };
    void *blob;
    size_t size;
    if (clc_compile_from_source(
        kernel_source, "kernel.cl",
        NULL, 0,
        NULL, 0,
-       warning_callback, error_callback,
+       &logger,
        metadata,
        &blob, &size) < 0)
       throw runtime_error("failed to compile kernel!");
