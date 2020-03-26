@@ -54,12 +54,7 @@ llvm_log_handler(const ::llvm::DiagnosticInfo &di, void *data) {
 }
 
 int
-clc_to_spirv(const char *source,
-             const char *source_name,
-             const struct clc_named_value defines[],
-             size_t num_defines,
-             const struct clc_named_value headers[],
-             size_t num_headers,
+clc_to_spirv(const struct clc_compile_args *args,
              struct spirv_binary *spvbin,
              char **err_buf)
 {
@@ -85,7 +80,7 @@ clc_to_spirv(const char *source,
    clang::DiagnosticsEngine diag { new clang::DiagnosticIDs,
          new clang::DiagnosticOptions, diag_buffer };
 
-   std::vector<const char *> clang_opts = { source_name };
+   std::vector<const char *> clang_opts = { args->source.name };
 
    if (!clang::CompilerInvocation::CreateFromArgs(c->getInvocation(),
 #if LLVM_VERSION_MAJOR >= 10
@@ -148,14 +143,14 @@ clc_to_spirv(const char *source,
    c->getPreprocessorOpts().addMacroDef("__OPENCL_VERSION__=" +
                                         clc_version_define);
 
-   for (size_t i = 0; i < num_defines; i++) {
-      std::string def = std::string(defines[i].name);
-      if (defines[i].value != nullptr)
-         def += "=" + std::string(defines[i].value);
+   for (size_t i = 0; i < args->num_defines; i++) {
+      std::string def = std::string(args->defines[i].name);
+      if (args->defines[i].value != nullptr)
+         def += "=" + std::string(args->defines[i].value);
       c->getPreprocessorOpts().addMacroDef(def);
    }
 
-   if (num_headers) {
+   if (args->num_headers) {
       const std::string tmp_header_path = "/tmp/clover/";
 
       c->getHeaderSearchOpts().AddPath(tmp_header_path,
@@ -163,17 +158,17 @@ clc_to_spirv(const char *source,
                                        false, false);
 
 
-      for (size_t i = 0; i < num_headers; i++) {
-         std::string h = std::string(headers[i].name);
-         std::string src = std::string(headers[i].value);
+      for (size_t i = 0; i < args->num_headers; i++) {
+         std::string h = std::string(args->headers[i].name);
+         std::string src = std::string(args->headers[i].value);
          c->getPreprocessorOpts().addRemappedFile(tmp_header_path + h,
             ::llvm::MemoryBuffer::getMemBufferCopy(src).release());
       }
    }
 
    c->getPreprocessorOpts().addRemappedFile(
-           source_name,
-           ::llvm::MemoryBuffer::getMemBufferCopy(std::string(source)).release());
+           args->source.name,
+           ::llvm::MemoryBuffer::getMemBufferCopy(std::string(args->source.value)).release());
 
    // Compile the code
    clang::EmitLLVMOnlyAction act(llvm_ctx.get());

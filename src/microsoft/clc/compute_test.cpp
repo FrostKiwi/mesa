@@ -478,12 +478,15 @@ ComputeTest::compile_and_validate(const char *kernel_source,
    struct clc_logger logger = {
       error_callback, warning_callback,
    };
+   struct clc_compile_args args = { 0 };
    void *blob;
    size_t size;
+
+   args.source.name = "kernel.cl";
+   args.source.value = kernel_source;
+
    if (clc_compile_from_source(
-       kernel_source, "kernel.cl",
-       NULL, 0,
-       NULL, 0,
+       &args,
        &logger,
        metadata,
        &blob, &size) < 0)
