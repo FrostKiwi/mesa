@@ -36,6 +36,14 @@ struct clc_named_value {
    const char *value;
 };
 
+struct clc_compile_args {
+   const struct clc_named_value *defines;
+   unsigned num_defines;
+   const struct clc_named_value *headers;
+   unsigned num_headers;
+   struct clc_named_value source;
+};
+
 typedef void (*clc_msg_callback)(const char *, int, const char *);
 
 struct clc_logger {
@@ -92,12 +100,7 @@ struct clc_metadata {
 };
 
 int clc_compile_from_source(
-   const char *source,
-   const char *source_name,
-   const struct clc_named_value defines[],
-   size_t num_defines,
-   const struct clc_named_value headers[],
-   size_t num_headers,
+   const struct clc_compile_args *args,
    const struct clc_logger *logger,
    struct clc_metadata *metadata,
    void **blob,

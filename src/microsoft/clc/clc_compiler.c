@@ -30,12 +30,7 @@
 #include "spirv/nir_spirv.h"
 
 int clc_compile_from_source(
-   const char *source,
-   const char *source_name,
-   const struct clc_named_value defines[],
-   size_t num_defines,
-   const struct clc_named_value headers[],
-   size_t num_headers,
+   const struct clc_compile_args *args,
    const struct clc_logger *logger,
    struct clc_metadata *metadata,
    void **blob,
@@ -62,12 +57,8 @@ int clc_compile_from_source(
    const struct nir_shader_compiler_options *nir_options =
 	   dxil_get_nir_compiler_options();
 
-   ret = clc_to_spirv(source, source_name,
-                      defines, num_defines,
-                      headers, num_headers,
-                     /* TODO: callbacks ... */
-		      &spvbin, &err_log);
-
+   /* TODO: callbacks ... */
+   ret = clc_to_spirv(args, &spvbin, &err_log);
    if (ret < 0) {
       fprintf(stderr, "D3D12: clc_to_spirv failed: %s\n", err_log);
       free(err_log);
