@@ -29,18 +29,16 @@
 #include <util/u_math.h>
 #include "spirv/nir_spirv.h"
 
-int clc_compile_from_source(
-   const struct clc_compile_args *args,
-   const struct clc_logger *logger,
-   struct clc_metadata *metadata,
-   void **blob,
-   size_t *blob_size)
+int clc_compile_from_source(const struct clc_compile_args *args,
+                            struct clc_dxil_object *dxil,
+                            const struct clc_logger *logger)
 {
    struct spirv_binary spvbin;
    char *err_log;
    struct nir_shader *nir;
    int ret;
 
+   memset(dxil, 0, sizeof(*dxil));
 
    const struct spirv_to_nir_options spirv_options = {
       .environment = NIR_SPIRV_OPENCL,
@@ -138,6 +136,8 @@ int clc_compile_from_source(
       return -1;
    }
 
+   struct clc_dxil_metadata *metadata = &dxil->metadata;
+
    metadata->num_consts = 0;
    nir_foreach_variable(var, &nir->uniforms) {
       if (var->data.mode == nir_var_mem_ubo && var->constant_initializer) {
@@ -168,11 +168,15 @@ int clc_compile_from_source(
    ralloc_free(nir);
    glsl_type_singleton_decref();
 
-   blob_finish_get_buffer(&tmp, blob, blob_size);
+   blob_finish_get_buffer(&tmp, &dxil->binary.data,
+                          &dxil->binary.size);
    return 0;
 }
 
-void clc_free_blob(void *blob)
+void clc_free_dxil_object(struct clc_dxil_object *dxil)
 {
-   free(blob);
+   for (unsigned i = 0; i < dxil->metadata.num_consts; i++)
+      free(dxil->metadata.consts[i].data);
+
+   free(dxil->binary.data);
 }

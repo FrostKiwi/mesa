@@ -64,7 +64,7 @@ struct spirv_binary {
 #define CLC_MAX_ARGS (CLC_MAX_CONST_ARGS + CLC_MAX_READ_IMAGE_ARGS + \
                       CLC_MAX_WRITE_IMAGE_ARGS)
 
-struct clc_metadata {
+struct clc_dxil_metadata {
    struct {
       enum {
          CLC_ARG_CONST,
@@ -99,14 +99,19 @@ struct clc_metadata {
    size_t num_image_channels;
 };
 
-int clc_compile_from_source(
-   const struct clc_compile_args *args,
-   const struct clc_logger *logger,
-   struct clc_metadata *metadata,
-   void **blob,
-   size_t *blob_size);
+struct clc_dxil_object {
+   struct clc_dxil_metadata metadata;
+   struct {
+      void *data;
+      size_t size;
+   } binary;
+};
 
-void clc_free_blob(void *blob);
+int clc_compile_from_source(const struct clc_compile_args *args,
+                            struct clc_dxil_object *dxil,
+                            const struct clc_logger *logger);
+
+void clc_free_dxil_object(struct clc_dxil_object *dxil);
 
 #ifdef __cplusplus
 }

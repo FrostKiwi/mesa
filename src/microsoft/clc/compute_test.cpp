@@ -178,11 +178,11 @@ ComputeTest::create_root_signature(int num_uavs, int num_cbvs)
 
 ComPtr<ID3D12PipelineState>
 ComputeTest::create_pipeline_state(ComPtr<ID3D12RootSignature> &root_sig,
-                                   const std::vector<uint8_t> &blob)
+                                   const struct clc_dxil_object &dxil)
 {
    D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = { root_sig.Get() };
-   pipeline_desc.CS.pShaderBytecode = blob.data();
-   pipeline_desc.CS.BytecodeLength = blob.size();
+   pipeline_desc.CS.pShaderBytecode = dxil.binary.data;
+   pipeline_desc.CS.BytecodeLength = dxil.binary.size;
 
    ComPtr<ID3D12PipelineState> pipeline_state;
    if (FAILED(dev->CreateComputePipelineState(&pipeline_desc,
@@ -409,7 +409,7 @@ void error_callback(const char *src, int line, const char *str)
 }
 
 bool
-validate_module(void *data, size_t size)
+validate_module(const struct clc_dxil_object &dxil)
 {
    static HMODULE hmod = LoadLibrary("DXIL.DLL");
    if (!hmod)
@@ -429,7 +429,7 @@ validate_module(void *data, size_t size)
       ULONG STDMETHODCALLTYPE Release() override { return 0; }
       void *data;
       size_t size;
-   } blob(data, size);
+   } blob(dxil.binary.data, dxil.binary.size);
 
    IDxcValidator *validator;
    if (FAILED(pfnDxcCreateInstance(CLSID_DxcValidator, __uuidof(IDxcValidator),
@@ -461,45 +461,33 @@ validate_module(void *data, size_t size)
 }
 
 static void
-dump_blob(const char *path, const void *data, size_t size)
+dump_blob(const char *path, const struct clc_dxil_object &dxil)
 {
    FILE *fp = fopen(path, "wb");
    if (fp) {
-      fwrite(data, 1, size, fp);
+      fwrite(dxil.binary.data, 1, dxil.binary.size, fp);
       fclose(fp);
       printf("D3D12: wrote '%s'...\n", path);
    }
 }
 
-std::vector<uint8_t>
+void
 ComputeTest::compile_and_validate(const char *kernel_source,
-                                  struct clc_metadata *metadata)
+                                  struct clc_dxil_object *dxil)
 {
    struct clc_logger logger = {
       error_callback, warning_callback,
    };
    struct clc_compile_args args = { 0 };
-   void *blob;
-   size_t size;
 
    args.source.name = "kernel.cl";
    args.source.value = kernel_source;
 
-   if (clc_compile_from_source(
-       &args,
-       &logger,
-       metadata,
-       &blob, &size) < 0)
+   if (clc_compile_from_source(&args, dxil, &logger) < 0)
       throw runtime_error("failed to compile kernel!");
 
-   dump_blob("unsigned.cso", blob, size);
-   if (!validate_module(blob, size))
+   dump_blob("unsigned.cso", *dxil);
+   if (!validate_module(*dxil))
       throw runtime_error("failed to validate module!");
-   dump_blob("signed.cso", blob, size);
-
-   std::vector<uint8_t> ret;
-   ret.assign(static_cast<uint8_t *>(blob),
-              static_cast<uint8_t *>(blob) + size);
-   clc_free_blob(blob);
-   return ret;
+   dump_blob("signed.cso", *dxil);
 }
