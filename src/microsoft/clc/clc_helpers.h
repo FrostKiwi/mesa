@@ -36,9 +36,9 @@ extern "C" {
 int
 clc_to_spirv(const char *source,
              const char *source_name,
-             const struct clc_define defines[],
+             const struct clc_named_value defines[],
              size_t num_defines,
-             const struct clc_header headers[],
+             const struct clc_named_value headers[],
              size_t num_headers,
              struct spirv_binary *spvbin,
              char **err_buf);
