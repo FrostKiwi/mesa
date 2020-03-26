@@ -29,6 +29,7 @@ extern "C" {
 #endif
 
 #include <stddef.h>
+#include <stdint.h>
 
 struct clc_define {
    const char *name;
@@ -41,6 +42,11 @@ struct clc_header {
 };
 
 typedef void (*clc_msg_callback)(const char *, int, const char *);
+
+struct spirv_binary {
+   uint32_t *data;
+   size_t size;
+};
 
 #define CLC_MAX_CONSTS 32
 #define CLC_MAX_CONST_ARGS 8

@@ -40,9 +40,11 @@ clc_to_spirv(const char *source,
              size_t num_defines,
              const struct clc_header headers[],
              size_t num_headers,
-             uint32_t **spv_source,
-             size_t *spv_size,
+             struct spirv_binary *spvbin,
              char **err_buf);
+
+void
+clc_free_spirv_binary(struct spirv_binary *spvbin);
 
 #ifdef __cplusplus
 }
