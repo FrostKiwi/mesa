@@ -42,8 +42,7 @@ int clc_compile_from_source(
    void **blob,
    size_t *blob_size)
 {
-   uint32_t *spv_src;
-   size_t spv_size;
+   struct spirv_binary spvbin;
    char *err_log;
    struct nir_shader *nir;
    int ret;
@@ -68,8 +67,7 @@ int clc_compile_from_source(
                       defines, num_defines,
                       headers, num_headers,
                      /* TODO: callbacks ... */
-                     &spv_src, &spv_size,
-                     &err_log);
+		      &spvbin, &err_log);
 
    if (ret < 0) {
       fprintf(stderr, "D3D12: clc_to_spirv failed: %s\n", err_log);
@@ -79,13 +77,13 @@ int clc_compile_from_source(
 
    glsl_type_singleton_init_or_ref();
 
-   nir = spirv_to_nir(spv_src, spv_size / 4,
+   nir = spirv_to_nir(spvbin.data, spvbin.size / 4,
                       NULL, 0,
                       MESA_SHADER_KERNEL, "main_test",
                       &spirv_options,
                       nir_options,
                       false);
-   free(spv_src);
+   clc_free_spirv_binary(&spvbin);
    if (!nir) {
       fprintf(stderr, "D3D12: spirv_to_nir failed\n");
       return -1;
