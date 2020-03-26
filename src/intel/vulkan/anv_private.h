@@ -2579,7 +2579,6 @@ struct anv_surface_state {
  */
 struct anv_attachment_state {
    enum isl_aux_usage                           aux_usage;
-   enum isl_aux_usage                           input_aux_usage;
    struct anv_surface_state                     color;
    struct anv_surface_state                     input;
 
