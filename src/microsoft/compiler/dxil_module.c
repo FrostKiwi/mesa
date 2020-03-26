@@ -619,10 +619,10 @@ const struct dxil_type *
 dxil_get_overload_type(struct dxil_module *mod, enum overload_type overload)
 {
    switch (overload) {
-   case DXIL_I32: return dxil_module_get_int_type(mod, 32);
-   case DXIL_I64: return dxil_module_get_int_type(mod, 64);
-   case DXIL_F32: return dxil_module_get_float_type(mod, 32);
-   case DXIL_F64: return dxil_module_get_float_type(mod, 64);
+   case DXIL_I32: return get_int32_type(mod);
+   case DXIL_I64: return get_int64_type(mod);
+   case DXIL_F32: return get_float32_type(mod);
+   case DXIL_F64: return get_float64_type(mod);
    default:
       unreachable("unexpected overload type");
    }
@@ -631,7 +631,7 @@ dxil_get_overload_type(struct dxil_module *mod, enum overload_type overload)
 const struct dxil_type *
 dxil_module_get_handle_type(struct dxil_module *m)
 {
-   const struct dxil_type *int8_type = dxil_module_get_int_type(m, 8);
+   const struct dxil_type *int8_type = get_int8_type(m);
    if (!int8_type)
       return NULL;
 
