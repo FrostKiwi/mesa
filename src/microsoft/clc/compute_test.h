@@ -69,7 +69,7 @@ protected:
 
    ComPtr<ID3D12PipelineState>
    create_pipeline_state(ComPtr<ID3D12RootSignature> &root_sig,
-                         const std::vector<uint8_t> &blob);
+                         const struct clc_dxil_object &dxil);
 
    ComPtr<ID3D12Resource>
    create_buffer(int size, D3D12_HEAP_TYPE heap_type);
@@ -132,9 +132,9 @@ protected:
    void
    TearDown() override;
 
-   static std::vector<uint8_t>
+   static void
    compile_and_validate(const char *kernel_source,
-                        struct clc_metadata *metadata);
+                        struct clc_dxil_object *dxil);
 
    template <typename T>
    std::vector<T>
@@ -150,19 +150,25 @@ protected:
 
       D3D12SerializeRootSignature = (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeRootSignature");
 
-      struct clc_metadata metadata;
-      std::vector<uint8_t> blob = compile_and_validate(kernel_source, &metadata);
-      if (inputs.size() != metadata.num_uavs)
-         throw runtime_error("incorrect number of inputs");
+      struct clc_dxil_object dxil;
 
-      auto root_sig = create_root_signature(metadata.num_uavs, metadata.num_consts);
-      auto pipeline_state = create_pipeline_state(root_sig, blob);
+      compile_and_validate(kernel_source, &dxil);
+      if (inputs.size() != dxil.metadata.num_uavs) {
+         clc_free_dxil_object(&dxil);
+         throw runtime_error("incorrect number of inputs");
+      }
+
+      auto root_sig = create_root_signature(dxil.metadata.num_uavs,
+                                            dxil.metadata.num_consts);
+      auto pipeline_state = create_pipeline_state(root_sig, dxil);
 
       int cpu_offset = 0;
       std::vector<ComPtr<ID3D12Resource>> input_resources;
       for(auto input : inputs) {
-         if (input.size() != inputs[0].size())
+         if (input.size() != inputs[0].size()) {
+            clc_free_dxil_object(&dxil);
             throw runtime_error("mismatching input sizes");
+         }
 
          auto res = create_buffer_with_data(input.data(), input.size() * sizeof(T));
          create_uav_buffer(res, input.size(), sizeof(T),
@@ -174,11 +180,11 @@ protected:
          cpu_offset += uav_heap_incr;
       }
 
-      for (unsigned i = 0; i < metadata.num_consts; ++i) {
-         size_t size = metadata.consts[i].size;
+      for (unsigned i = 0; i < dxil.metadata.num_consts; ++i) {
+         size_t size = dxil.metadata.consts[i].size;
          unsigned cbuf_size = align(size * sizeof(T), 256);
          auto cbuf = create_sized_buffer_with_data(cbuf_size,
-                                                   metadata.consts[i].data,
+                                                   dxil.metadata.consts[i].data,
                                                    size);
          create_cbv(cbuf, cbuf_size,
                     offset_cpu_handle(
@@ -186,6 +192,8 @@ protected:
                        cpu_offset));
          cpu_offset += uav_heap_incr;
       }
+
+      clc_free_dxil_object(&dxil);
 
       cmdlist->SetDescriptorHeaps(1, &uav_heap);
       cmdlist->SetComputeRootSignature(root_sig.Get());
