@@ -36,8 +36,7 @@ int clc_compile_from_source(
    size_t num_defines,
    const struct clc_header headers[],
    size_t num_headers,
-   clc_msg_callback warning_callback,
-   clc_msg_callback error_callback,
+   const struct clc_logger *logger,
    struct clc_metadata *metadata,
    void **blob,
    size_t *blob_size)
