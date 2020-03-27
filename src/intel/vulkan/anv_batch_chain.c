@@ -533,7 +533,7 @@ anv_batch_bo_list_clone(const struct list_head *list,
 static struct anv_batch_bo *
 anv_cmd_buffer_current_batch_bo(struct anv_cmd_buffer *cmd_buffer)
 {
-   return LIST_ENTRY(struct anv_batch_bo, cmd_buffer->batch_bos.prev, link);
+   return list_last_entry(&cmd_buffer->batch_bos, struct anv_batch_bo, link);
 }
 
 struct anv_address
@@ -858,12 +858,12 @@ anv_cmd_buffer_reset_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer)
 {
    /* Delete all but the first batch bo */
    assert(!list_is_empty(&cmd_buffer->batch_bos));
-   while (cmd_buffer->batch_bos.next != cmd_buffer->batch_bos.prev) {
+   while (!list_is_singular(&cmd_buffer->batch_bos)) {
       struct anv_batch_bo *bbo = anv_cmd_buffer_current_batch_bo(cmd_buffer);
       list_del(&bbo->link);
       anv_batch_bo_destroy(bbo, cmd_buffer);
    }
-   assert(!list_is_empty(&cmd_buffer->batch_bos));
+   assert(list_is_singular(&cmd_buffer->batch_bos));
 
    anv_batch_bo_start(anv_cmd_buffer_current_batch_bo(cmd_buffer),
                       &cmd_buffer->batch,
