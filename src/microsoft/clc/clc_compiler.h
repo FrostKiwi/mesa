@@ -56,6 +56,10 @@ struct spirv_binary {
    size_t size;
 };
 
+struct clc_object {
+   struct spirv_binary spvbin;
+};
+
 #define CLC_MAX_CONSTS 32
 #define CLC_MAX_CONST_ARGS 8
 #define CLC_MAX_READ_IMAGE_ARGS 128
@@ -107,9 +111,16 @@ struct clc_dxil_object {
    } binary;
 };
 
+struct clc_object *
+clc_compile(const struct clc_compile_args *args,
+            const struct clc_logger *logger);
+
+void clc_free_object(struct clc_object *obj);
+
 struct clc_dxil_object *
-clc_compile_from_source(const struct clc_compile_args *args,
-                        const struct clc_logger *logger);
+clc_to_dxil(const struct clc_object *obj,
+            const char *entrypoint,
+            const struct clc_logger *logger);
 
 void clc_free_dxil_object(struct clc_dxil_object *dxil);
 
