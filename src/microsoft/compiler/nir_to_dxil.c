@@ -1925,6 +1925,7 @@ emit_store_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 static bool
 emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
+   assert(intr->src[0].is_ssa);
    nir_deref_instr *deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
    nir_variable *var = nir_deref_instr_get_variable(deref);
 
@@ -2077,6 +2078,7 @@ emit_load_mem_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 static bool
 emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
+   assert(intr->src[0].is_ssa);
    nir_deref_instr *deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
    nir_variable *var = nir_deref_instr_get_variable(deref);
 
@@ -2374,6 +2376,7 @@ fixup_phi(struct ntd_context *ctx, nir_phi_instr *instr,
    for (unsigned i = 0; i < vphi->num_components; ++i) {
       size_t num_incoming = 0;
       nir_foreach_phi_src(src, instr) {
+         assert(src->src.is_ssa);
          const struct dxil_value *val = get_src_ssa(ctx, src->src.ssa, i);
          assert(num_incoming < ARRAY_SIZE(values));
          values[num_incoming] = val;
