@@ -733,3 +733,28 @@ TEST_F(ComputeTest, round)
    for (int i = 0; i < buf.size(); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, link)
+{
+   const char *foo_src =
+   "float foo(float in)\n\
+   {\n\
+       return in * in;\n\
+   }\n";
+   const char *kernel_source =
+   "float foo(float in);\n\
+   __kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = foo(inout[get_global_id(0)]);\n\
+   }\n";
+   std::vector<const char *> srcs = { foo_src, kernel_source };
+   const vector<float> input = {
+      2.0f,
+   };
+   const float expected[] = {
+      4.0f,
+   };
+   auto buf = run_shader_with_input(srcs, input);
+   for (int i = 0; i < buf.size(); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
