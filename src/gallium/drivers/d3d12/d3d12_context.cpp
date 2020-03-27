@@ -873,16 +873,16 @@ d3d12_set_constant_buffer(struct pipe_context *pctx,
       if (buf->user_buffer) {
          u_upload_data(pctx->const_uploader, 0, buf->buffer_size,
                        D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
-                       buf->user_buffer, &offset, &buffer);
-      }
+                       buf->user_buffer, &offset, &ctx->cbufs[shader][index].buffer);
 
-      pipe_resource_reference(&ctx->cbufs[shader][index].buffer, buffer);
+      } else
+         pipe_resource_reference(&ctx->cbufs[shader][index].buffer, buffer);
+
+
       ctx->cbufs[shader][index].buffer_offset = offset;
       ctx->cbufs[shader][index].buffer_size = buf->buffer_size;
       ctx->cbufs[shader][index].user_buffer = NULL;
 
-      if (buf->user_buffer)
-         pipe_resource_reference(&buffer, NULL);
    } else {
       pipe_resource_reference(&ctx->cbufs[shader][index].buffer, NULL);
       ctx->cbufs[shader][index].buffer_offset = 0;
