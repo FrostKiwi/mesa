@@ -2223,10 +2223,6 @@ emit_load_const(struct ntd_context *ctx, nir_load_const_instr *load_const)
          value = dxil_module_get_int1_const(&ctx->mod,
                                             load_const->value[i].b);
          break;
-      case 8:
-         value = dxil_module_get_int8_const(&ctx->mod,
-                                             load_const->value[i].u8);
-         break;
       case 32:
          value = dxil_module_get_int32_const(&ctx->mod,
                                              load_const->value[i].u32);
