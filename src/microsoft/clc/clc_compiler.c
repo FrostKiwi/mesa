@@ -29,16 +29,21 @@
 #include <util/u_math.h>
 #include "spirv/nir_spirv.h"
 
-int clc_compile_from_source(const struct clc_compile_args *args,
-                            struct clc_dxil_object *dxil,
-                            const struct clc_logger *logger)
+struct clc_dxil_object *
+clc_compile_from_source(const struct clc_compile_args *args,
+                        const struct clc_logger *logger)
 {
+   struct clc_dxil_object *dxil;
    struct spirv_binary spvbin;
    char *err_log;
    struct nir_shader *nir;
    int ret;
 
-   memset(dxil, 0, sizeof(*dxil));
+   dxil = calloc(1, sizeof(*dxil));
+   if (!dxil) {
+      fprintf(stderr, "D3D12: failed to allocate the dxil object\n");
+      return NULL;
+   }
 
    const struct spirv_to_nir_options spirv_options = {
       .environment = NIR_SPIRV_OPENCL,
@@ -60,7 +65,7 @@ int clc_compile_from_source(const struct clc_compile_args *args,
    if (ret < 0) {
       fprintf(stderr, "D3D12: clc_to_spirv failed: %s\n", err_log);
       free(err_log);
-      return -1;
+      goto err_free_dxil;
    }
 
    glsl_type_singleton_init_or_ref();
@@ -74,7 +79,7 @@ int clc_compile_from_source(const struct clc_compile_args *args,
    clc_free_spirv_binary(&spvbin);
    if (!nir) {
       fprintf(stderr, "D3D12: spirv_to_nir failed\n");
-      return -1;
+      goto err_free_dxil;
    }
    nir->info.cs.local_size_variable = true;
 
@@ -133,7 +138,7 @@ int clc_compile_from_source(const struct clc_compile_args *args,
    struct blob tmp;
    if (!nir_to_dxil(nir, &opts, &tmp)) {
       debug_printf("D3D12: nir_to_dxil failed\n");
-      return -1;
+      goto err_free_dxil;
    }
 
    struct clc_dxil_metadata *metadata = &dxil->metadata;
@@ -145,7 +150,7 @@ int clc_compile_from_source(const struct clc_compile_args *args,
             int size = glsl_get_cl_size(var->type);
             uint8_t *data = malloc(size);
             if (!data)
-               return -1;
+               goto err_free_dxil;
 
             const struct glsl_type *elm_type = glsl_get_array_element(var->type);
             assert(glsl_type_is_scalar(elm_type)); // TODO: recursive iteration through types?
@@ -170,7 +175,11 @@ int clc_compile_from_source(const struct clc_compile_args *args,
 
    blob_finish_get_buffer(&tmp, &dxil->binary.data,
                           &dxil->binary.size);
-   return 0;
+   return dxil;
+
+err_free_dxil:
+   clc_free_dxil_object(dxil);
+   return NULL;
 }
 
 void clc_free_dxil_object(struct clc_dxil_object *dxil)
@@ -179,4 +188,5 @@ void clc_free_dxil_object(struct clc_dxil_object *dxil)
       free(dxil->metadata.consts[i].data);
 
    free(dxil->binary.data);
+   free(dxil);
 }
