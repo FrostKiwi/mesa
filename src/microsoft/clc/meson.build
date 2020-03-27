@@ -27,7 +27,7 @@ libclc_compiler = shared_library(
   vs_module_defs : 'clglon12compiler.def',
   include_directories : [inc_common, inc_compiler, inc_spirv],
   dependencies: [idep_nir_headers, dep_clang, dep_llvm, idep_mesautil,
-                 idep_libdxil_compiler, idep_nir],
+                 idep_libdxil_compiler, idep_nir, dep_spirv_tools],
   c_args : c_vis_args,
   cpp_args : [
     cpp_vis_args,

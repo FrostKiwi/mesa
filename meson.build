@@ -445,6 +445,7 @@ endif
 if with_microsoft_clc
   dep_llvm = subproject('llvm').get_variable('dep_llvm')
   dep_clang = subproject('llvm').get_variable('dep_clang')
+  need_spirv_tools = true
   with_llvm = true
 else
   dep_llvm = null_dep
