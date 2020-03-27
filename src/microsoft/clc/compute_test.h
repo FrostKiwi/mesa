@@ -51,6 +51,13 @@ align(size_t value, unsigned alignment)
 
 class ComputeTest : public ::testing::Test {
 protected:
+   class ObjectArray : public std::vector<struct clc_object *> {
+   public:
+      ~ObjectArray() {
+         for (auto obj : *this)
+            clc_free_object(obj);
+      }
+   };
 
    static void
    enable_d3d12_debug_layer();
@@ -133,11 +140,11 @@ protected:
    TearDown() override;
 
    static std::shared_ptr<struct clc_dxil_object>
-   compile_and_validate(const char *kernel_source);
+   compile_and_validate(const std::vector<const char *> &sources);
 
    template <typename T>
    std::vector<T>
-   run_shader_with_inputs(const char *kernel_source,
+   run_shader_with_inputs(const std::vector<const char *> &sources,
                           const std::vector<std::vector<T>> &inputs)
    {
       if (inputs.size() < 1)
@@ -151,7 +158,7 @@ protected:
 
       std::shared_ptr<struct clc_dxil_object> dxil;
 
-      dxil = compile_and_validate(kernel_source);
+      dxil = compile_and_validate(sources);
       if (inputs.size() != dxil->metadata.num_uavs)
          throw runtime_error("incorrect number of inputs");
 
@@ -200,6 +207,24 @@ protected:
       execute_cmdlist();
 
       return get_buffer_data<T>(input_resources[0], inputs[0].size());
+   }
+
+   template <typename T>
+   std::vector<T>
+   run_shader_with_inputs(const char *kernel_source,
+                          const std::vector<std::vector<T>> &inputs)
+   {
+      std::vector<const char *> srcs = { kernel_source };
+      return run_shader_with_inputs(srcs, inputs);
+   }
+
+   template <typename T>
+   std::vector<T>
+   run_shader_with_input(const std::vector<const char *> &sources,
+                         const std::vector<T> &input)
+   {
+      std::vector<std::vector<T>> inputs = { input };
+      return run_shader_with_inputs(sources, inputs);
    }
 
    template <typename T>

@@ -472,7 +472,7 @@ dump_blob(const char *path, const struct clc_dxil_object &dxil)
 }
 
 std::shared_ptr<struct clc_dxil_object>
-ComputeTest::compile_and_validate(const char *kernel_source)
+ComputeTest::compile_and_validate(const std::vector<const char *> &sources)
 {
    struct clc_logger logger = {
       error_callback, warning_callback,
@@ -480,13 +480,23 @@ ComputeTest::compile_and_validate(const char *kernel_source)
    struct clc_compile_args args = { 0 };
    struct clc_dxil_object *dxil;
    struct clc_object *obj;
+   ObjectArray objs;
 
-   args.source.name = "kernel.cl";
-   args.source.value = kernel_source;
+   args.source.name = "obj.cl";
 
-   obj = clc_compile(&args, &logger);
+   for (unsigned i = 0; i < sources.size(); i++) {
+      args.source.value = sources[i];
+
+      obj = clc_compile(&args, &logger);
+      if (!obj)
+         throw runtime_error("failed to compile object!");
+
+      objs.push_back(obj);
+   }
+
+   obj = clc_link((const struct clc_object **)objs.data(), objs.size(), &logger);
    if (!obj)
-      throw runtime_error("failed to compile kernel!");
+      throw runtime_error("failed to link objects!");
 
    dxil = clc_to_dxil(obj, "main_test", &logger);
    clc_free_object(obj);
