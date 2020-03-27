@@ -1873,10 +1873,10 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    if (!agg)
       return false;
 
-   for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
+   for (unsigned i = 0; i < nir_dest_num_components(intr->dest); ++i) {
       const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, agg, i);
       store_dest(ctx, &intr->dest, i, retval,
-                 intr->dest.ssa.bit_size > 1 ? nir_type_float : nir_type_bool);
+                 nir_dest_bit_size(intr->dest) > 1 ? nir_type_float : nir_type_bool);
    }
    return true;
 }
@@ -1896,7 +1896,7 @@ emit_store_output(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 
    bool success = true;
    uint32_t writemask = nir_intrinsic_write_mask(intr);
-   for (unsigned i = 0; i < intr->src[1].ssa->num_components && success; ++i) {
+   for (unsigned i = 0; i < nir_src_num_components(intr->src[1]) && success; ++i) {
       if (writemask & (1 << i)) {
          const struct dxil_value *col = dxil_module_get_int8_const(&ctx->mod, i);
          const struct dxil_value *value = get_src(ctx, &intr->src[1], i, nir_type_float);
@@ -1918,7 +1918,7 @@ emit_store_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
    const struct dxil_value *ptr =
       get_src(ctx, &intr->src[0], 0, nir_type_uint);
 
-   unsigned align = intr->src[0].ssa->bit_size / 8;
+   unsigned align = nir_src_bit_size(intr->src[0]) / 8;
    return dxil_emit_store(&ctx->mod, value, ptr, align, false);
 }
 
@@ -1957,7 +1957,7 @@ emit_load_input_interpolated(struct ntd_context *ctx, nir_intrinsic_instr *intr,
    if (!func)
       return false;
 
-   for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
+   for (unsigned i = 0; i < nir_dest_num_components(intr->dest); ++i) {
       const struct dxil_value *comp = dxil_module_get_int8_const(&ctx->mod, i);
 
       const struct dxil_value *args[] = {
@@ -1987,7 +1987,7 @@ emit_load_input_flat(struct ntd_context *ctx, nir_intrinsic_instr *intr, nir_var
    if (!func)
       return false;
 
-   for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
+   for (unsigned i = 0; i < nir_dest_num_components(intr->dest); ++i) {
       const struct dxil_value *comp = dxil_module_get_int8_const(&ctx->mod, i);
       const struct dxil_value *args[] = {
          opcode, input_id, row, comp, vertex_id
@@ -2651,7 +2651,7 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
    if (!sample)
       return false;
 
-   for (unsigned i = 0; i < instr->dest.ssa.num_components; ++i) {
+   for (unsigned i = 0; i < nir_dest_num_components(instr->dest); ++i) {
       const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, sample, i);
       store_dest(ctx, &instr->dest, i, retval, nir_type_float);
    }
