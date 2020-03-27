@@ -115,6 +115,11 @@ struct clc_object *
 clc_compile(const struct clc_compile_args *args,
             const struct clc_logger *logger);
 
+struct clc_object *
+clc_link(const struct clc_object **in_objs,
+         unsigned num_in_objs,
+         const struct clc_logger *logger);
+
 void clc_free_object(struct clc_object *obj);
 
 struct clc_dxil_object *

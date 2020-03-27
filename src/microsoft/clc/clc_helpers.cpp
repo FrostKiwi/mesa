@@ -39,6 +39,8 @@
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 #include <clang/Basic/TargetInfo.h>
 
+#include <spirv-tools/linker.hpp>
+
 #include "clc_helpers.h"
 
 using ::llvm::Function;
@@ -196,6 +198,34 @@ clc_to_spirv(const struct clc_compile_args *args,
    spvbin->size = spv_out.size();
    spvbin->data = static_cast<uint32_t *>(malloc(spvbin->size));
    memcpy(spvbin->data, spv_out.data(), spvbin->size);
+
+   return 0;
+}
+
+int
+clc_link_spirv_binaries(const struct spirv_binary **in_bins,
+                        unsigned num_in_bins,
+                        struct spirv_binary *dst_bin,
+                        char **err_buf)
+{
+   std::vector<std::vector<uint32_t>> binaries;
+
+   for (unsigned i = 0; i < num_in_bins; i++) {
+      std::vector<uint32_t> bin(in_bins[i]->data,
+                                in_bins[i]->data + (in_bins[i]->size / 4));
+      binaries.push_back(bin);
+   }
+
+   spvtools::Context context(SPV_ENV_UNIVERSAL_1_0);
+   spvtools::LinkerOptions options;
+   std::vector<uint32_t> linkingResult;
+   spv_result_t status = spvtools::Link(context, binaries, &linkingResult, options);
+   if (status != SPV_SUCCESS)
+      return -1;
+
+   dst_bin->size = linkingResult.size() * 4;
+   dst_bin->data = static_cast<uint32_t *>(malloc(dst_bin->size));
+   memcpy(dst_bin->data, linkingResult.data(), dst_bin->size);
 
    return 0;
 }

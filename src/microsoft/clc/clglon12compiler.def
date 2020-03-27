@@ -1,5 +1,6 @@
 EXPORTS
     clc_compile
+    clc_link
     clc_free_object
     clc_to_dxil
     clc_free_dxil_object
