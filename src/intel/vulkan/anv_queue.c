@@ -1021,6 +1021,7 @@ VkResult anv_QueueSubmit(
          ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer,
                          pSubmits[i].pCommandBuffers[j]);
          assert(cmd_buffer->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+         assert(cmd_buffer->rec_state == ANV_CMD_BUFFER_REC_STATE_EXECUTABLE);
          assert(!anv_batch_has_error(&cmd_buffer->batch));
 
          /* Fence for this execbuf.  NULL for all but the last one */

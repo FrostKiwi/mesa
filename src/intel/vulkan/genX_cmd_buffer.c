@@ -1559,6 +1559,9 @@ genX(BeginCommandBuffer)(
     */
    anv_cmd_buffer_reset(cmd_buffer);
 
+   assert(cmd_buffer->rec_state == ANV_CMD_BUFFER_REC_STATE_INITIAL);
+   cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING;
+
    cmd_buffer->usage_flags = pBeginInfo->flags;
 
    assert(cmd_buffer->level == VK_COMMAND_BUFFER_LEVEL_SECONDARY ||
@@ -1704,6 +1707,8 @@ genX(EndCommandBuffer)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
 
+   assert(cmd_buffer->rec_state == ANV_CMD_BUFFER_REC_STATE_RECORDING);
+
    if (anv_batch_has_error(&cmd_buffer->batch))
       return cmd_buffer->batch.status;
 
@@ -1718,6 +1723,8 @@ genX(EndCommandBuffer)(
 
    anv_cmd_buffer_end_batch_buffer(cmd_buffer);
 
+   cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_EXECUTABLE;
+
    return VK_SUCCESS;
 }
 
@@ -1730,6 +1737,7 @@ genX(CmdExecuteCommands)(
    ANV_FROM_HANDLE(anv_cmd_buffer, primary, commandBuffer);
 
    assert(primary->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+   assert(primary->rec_state == ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    if (anv_batch_has_error(&primary->batch))
       return;
@@ -1748,6 +1756,7 @@ genX(CmdExecuteCommands)(
       ANV_FROM_HANDLE(anv_cmd_buffer, secondary, pCmdBuffers[i]);
 
       assert(secondary->level == VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+      assert(secondary->rec_state == ANV_CMD_BUFFER_REC_STATE_EXECUTABLE);
       assert(!anv_batch_has_error(&secondary->batch));
 
 #if GEN_GEN >= 8 || GEN_IS_HASWELL
@@ -2312,6 +2321,7 @@ void genX(CmdPipelineBarrier)(
     const VkImageMemoryBarrier*                 pImageMemoryBarriers)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    /* XXX: Right now, we're really dumb and just flush whatever categories
     * the app asks for.  One of these days we may make this a bit better
@@ -3491,6 +3501,7 @@ void genX(CmdDraw)(
     uint32_t                                    firstInstance)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_graphics_pipeline *pipeline = cmd_buffer->state.gfx.pipeline;
    const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
@@ -3541,6 +3552,7 @@ void genX(CmdDrawIndexed)(
     uint32_t                                    firstInstance)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_graphics_pipeline *pipeline = cmd_buffer->state.gfx.pipeline;
    const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
@@ -3602,6 +3614,7 @@ void genX(CmdDrawIndirectByteCountEXT)(
 #if GEN_IS_HASWELL || GEN_GEN >= 8
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, counter_buffer, counterBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_graphics_pipeline *pipeline = cmd_buffer->state.gfx.pipeline;
    const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
@@ -3704,6 +3717,7 @@ void genX(CmdDrawIndirect)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, buffer, _buffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_graphics_pipeline *pipeline = cmd_buffer->state.gfx.pipeline;
    const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
@@ -3753,6 +3767,7 @@ void genX(CmdDrawIndexedIndirect)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, buffer, _buffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_graphics_pipeline *pipeline = cmd_buffer->state.gfx.pipeline;
    const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
 
@@ -3896,6 +3911,7 @@ void genX(CmdDrawIndirectCount)(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, buffer, _buffer);
    ANV_FROM_HANDLE(anv_buffer, count_buffer, _countBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_cmd_state *cmd_state = &cmd_buffer->state;
    struct anv_graphics_pipeline *pipeline = cmd_state->gfx.pipeline;
    const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
@@ -3962,6 +3978,7 @@ void genX(CmdDrawIndexedIndirectCount)(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, buffer, _buffer);
    ANV_FROM_HANDLE(anv_buffer, count_buffer, _countBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_cmd_state *cmd_state = &cmd_buffer->state;
    struct anv_graphics_pipeline *pipeline = cmd_state->gfx.pipeline;
    const struct brw_vs_prog_data *vs_prog_data = get_vs_prog_data(pipeline);
@@ -4025,6 +4042,7 @@ void genX(CmdBeginTransformFeedbackEXT)(
     const VkDeviceSize*                         pCounterBufferOffsets)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    assert(firstCounterBuffer < MAX_XFB_BUFFERS);
    assert(counterBufferCount <= MAX_XFB_BUFFERS);
@@ -4078,6 +4096,7 @@ void genX(CmdEndTransformFeedbackEXT)(
     const VkDeviceSize*                         pCounterBufferOffsets)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    assert(firstCounterBuffer < MAX_XFB_BUFFERS);
    assert(counterBufferCount <= MAX_XFB_BUFFERS);
@@ -4257,6 +4276,7 @@ void genX(CmdDispatchBase)(
     uint32_t                                    groupCountZ)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_compute_pipeline *pipeline = cmd_buffer->state.compute.pipeline;
    const struct brw_cs_prog_data *prog_data = get_cs_prog_data(pipeline);
 
@@ -4314,6 +4334,7 @@ void genX(CmdDispatchIndirect)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, buffer, _buffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_compute_pipeline *pipeline = cmd_buffer->state.compute.pipeline;
    const struct brw_cs_prog_data *prog_data = get_cs_prog_data(pipeline);
    struct anv_address addr = anv_address_add(buffer->address, offset);
@@ -5648,6 +5669,7 @@ void genX(CmdBeginRenderPass)(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_render_pass, pass, pRenderPassBegin->renderPass);
    ANV_FROM_HANDLE(anv_framebuffer, framebuffer, pRenderPassBegin->framebuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    cmd_buffer->state.framebuffer = framebuffer;
    cmd_buffer->state.pass = pass;
@@ -5680,6 +5702,7 @@ void genX(CmdNextSubpass)(
     VkSubpassContents                           contents)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    if (anv_batch_has_error(&cmd_buffer->batch))
       return;
@@ -5703,6 +5726,7 @@ void genX(CmdEndRenderPass)(
     VkCommandBuffer                             commandBuffer)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    if (anv_batch_has_error(&cmd_buffer->batch))
       return;
@@ -5756,6 +5780,7 @@ void genX(CmdBeginConditionalRenderingEXT)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, buffer, pConditionalRenderingBegin->buffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_cmd_state *cmd_state = &cmd_buffer->state;
    struct anv_address value_address =
       anv_address_add(buffer->address, pConditionalRenderingBegin->offset);
@@ -5796,6 +5821,7 @@ void genX(CmdEndConditionalRenderingEXT)(
 	VkCommandBuffer                             commandBuffer)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_cmd_state *cmd_state = &cmd_buffer->state;
 
    cmd_state->conditional_render_enabled = false;
@@ -5828,6 +5854,7 @@ void genX(CmdSetEvent)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_event, event, _event);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    cmd_buffer->state.pending_pipe_bits |= ANV_PIPE_POST_SYNC_BIT;
    genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
@@ -5855,6 +5882,7 @@ void genX(CmdResetEvent)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_event, event, _event);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    cmd_buffer->state.pending_pipe_bits |= ANV_PIPE_POST_SYNC_BIT;
    genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
@@ -5890,6 +5918,7 @@ void genX(CmdWaitEvents)(
 {
 #if GEN_GEN >= 8
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    for (uint32_t i = 0; i < eventCount; i++) {
       ANV_FROM_HANDLE(anv_event, event, pEvents[i]);
@@ -5920,6 +5949,7 @@ VkResult genX(CmdSetPerformanceOverrideINTEL)(
     const VkPerformanceOverrideInfoINTEL*       pOverrideInfo)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    switch (pOverrideInfo->type) {
    case VK_PERFORMANCE_OVERRIDE_TYPE_NULL_HARDWARE_INTEL: {

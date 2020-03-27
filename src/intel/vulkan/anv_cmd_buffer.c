@@ -302,6 +302,7 @@ void anv_FreeCommandBuffers(
 VkResult
 anv_cmd_buffer_reset(struct anv_cmd_buffer *cmd_buffer)
 {
+   cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_INITIAL;
    cmd_buffer->usage_flags = 0;
    anv_cmd_buffer_reset_batch_bo_chain(cmd_buffer);
    anv_cmd_state_reset(cmd_buffer);
@@ -418,6 +419,7 @@ void anv_CmdBindPipeline(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_pipeline, pipeline, _pipeline);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    switch (pipelineBindPoint) {
    case VK_PIPELINE_BIND_POINT_COMPUTE: {
@@ -469,6 +471,7 @@ void anv_CmdSetViewport(
     const VkViewport*                           pViewports)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    const uint32_t total_count = firstViewport + viewportCount;
    if (cmd_buffer->state.gfx.dynamic.viewport.count < total_count)
@@ -487,6 +490,7 @@ void anv_CmdSetScissor(
     const VkRect2D*                             pScissors)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    const uint32_t total_count = firstScissor + scissorCount;
    if (cmd_buffer->state.gfx.dynamic.scissor.count < total_count)
@@ -503,6 +507,7 @@ void anv_CmdSetLineWidth(
     float                                       lineWidth)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    cmd_buffer->state.gfx.dynamic.line_width = lineWidth;
    cmd_buffer->state.gfx.dirty |= ANV_CMD_DIRTY_DYNAMIC_LINE_WIDTH;
@@ -515,6 +520,7 @@ void anv_CmdSetDepthBias(
     float                                       depthBiasSlopeFactor)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    cmd_buffer->state.gfx.dynamic.depth_bias.bias = depthBiasConstantFactor;
    cmd_buffer->state.gfx.dynamic.depth_bias.clamp = depthBiasClamp;
@@ -528,6 +534,7 @@ void anv_CmdSetBlendConstants(
     const float                                 blendConstants[4])
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    memcpy(cmd_buffer->state.gfx.dynamic.blend_constants,
           blendConstants, sizeof(float) * 4);
@@ -541,6 +548,7 @@ void anv_CmdSetDepthBounds(
     float                                       maxDepthBounds)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    cmd_buffer->state.gfx.dynamic.depth_bounds.min = minDepthBounds;
    cmd_buffer->state.gfx.dynamic.depth_bounds.max = maxDepthBounds;
@@ -554,6 +562,7 @@ void anv_CmdSetStencilCompareMask(
     uint32_t                                    compareMask)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    if (faceMask & VK_STENCIL_FACE_FRONT_BIT)
       cmd_buffer->state.gfx.dynamic.stencil_compare_mask.front = compareMask;
@@ -569,6 +578,7 @@ void anv_CmdSetStencilWriteMask(
     uint32_t                                    writeMask)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    if (faceMask & VK_STENCIL_FACE_FRONT_BIT)
       cmd_buffer->state.gfx.dynamic.stencil_write_mask.front = writeMask;
@@ -584,6 +594,7 @@ void anv_CmdSetStencilReference(
     uint32_t                                    reference)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    if (faceMask & VK_STENCIL_FACE_FRONT_BIT)
       cmd_buffer->state.gfx.dynamic.stencil_reference.front = reference;
@@ -599,6 +610,7 @@ void anv_CmdSetLineStippleEXT(
     uint16_t                                    lineStipplePattern)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    cmd_buffer->state.gfx.dynamic.line_stipple.factor = lineStippleFactor;
    cmd_buffer->state.gfx.dynamic.line_stipple.pattern = lineStipplePattern;
@@ -697,6 +709,7 @@ void anv_CmdBindDescriptorSets(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_pipeline_layout, layout, _layout);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    assert(firstSet + descriptorSetCount <= MAX_SETS);
 
@@ -717,6 +730,7 @@ void anv_CmdBindVertexBuffers(
     const VkDeviceSize*                         pOffsets)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_vertex_binding *vb = cmd_buffer->state.vertex_bindings;
 
    /* We have to defer setting up vertex buffer since we need the buffer
@@ -739,6 +753,7 @@ void anv_CmdBindTransformFeedbackBuffersEXT(
     const VkDeviceSize*                         pSizes)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_xfb_binding *xfb = cmd_buffer->state.xfb_bindings;
 
    /* We have to defer setting up vertex buffer since we need the buffer
@@ -880,6 +895,7 @@ void anv_CmdPushConstants(
     const void*                                 pValues)
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    anv_foreach_stage(stage, stageFlags) {
       memcpy(cmd_buffer->state.push_constants[stage].client_data + offset,
@@ -1060,6 +1076,7 @@ void anv_CmdPushDescriptorSetKHR(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_pipeline_layout, layout, _layout);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    assert(_set < MAX_SETS);
 
@@ -1144,6 +1161,7 @@ void anv_CmdPushDescriptorSetWithTemplateKHR(
    ANV_FROM_HANDLE(anv_descriptor_update_template, template,
                    descriptorUpdateTemplate);
    ANV_FROM_HANDLE(anv_pipeline_layout, layout, _layout);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    assert(_set < MAX_PUSH_DESCRIPTORS);
 

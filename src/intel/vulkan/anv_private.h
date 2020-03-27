@@ -2770,6 +2770,12 @@ enum anv_cmd_buffer_exec_mode {
    ANV_CMD_BUFFER_EXEC_MODE_COPY_AND_CHAIN,
 };
 
+enum anv_cmd_buffer_rec_state {
+   ANV_CMD_BUFFER_REC_STATE_INITIAL,
+   ANV_CMD_BUFFER_REC_STATE_RECORDING,
+   ANV_CMD_BUFFER_REC_STATE_EXECUTABLE,
+};
+
 struct anv_cmd_buffer {
    VK_LOADER_DATA                               _loader_data;
 
@@ -2777,6 +2783,8 @@ struct anv_cmd_buffer {
 
    struct anv_cmd_pool *                        pool;
    struct list_head                             pool_link;
+
+   enum anv_cmd_buffer_rec_state                rec_state;
 
    struct anv_batch                             batch;
 

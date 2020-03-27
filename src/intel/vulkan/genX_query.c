@@ -524,6 +524,7 @@ void genX(CmdResetQueryPool)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_query_pool, pool, queryPool);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    switch (pool->type) {
    case VK_QUERY_TYPE_OCCLUSION:
@@ -629,6 +630,7 @@ void genX(CmdBeginQueryIndexedEXT)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_query_pool, pool, queryPool);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_address query_addr = anv_query_address(pool, query);
 
    struct gen_mi_builder b;
@@ -716,6 +718,7 @@ void genX(CmdEndQueryIndexedEXT)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_query_pool, pool, queryPool);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_address query_addr = anv_query_address(pool, query);
 
    struct gen_mi_builder b;
@@ -823,6 +826,7 @@ void genX(CmdWriteTimestamp)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_query_pool, pool, queryPool);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
    struct anv_address query_addr = anv_query_address(pool, query);
 
    assert(pool->type == VK_QUERY_TYPE_TIMESTAMP);
@@ -947,6 +951,7 @@ void genX(CmdCopyQueryPoolResults)(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_query_pool, pool, queryPool);
    ANV_FROM_HANDLE(anv_buffer, buffer, destBuffer);
+   assert(cmd_buffer->rec_state = ANV_CMD_BUFFER_REC_STATE_RECORDING);
 
    struct gen_mi_builder b;
    gen_mi_builder_init(&b, &cmd_buffer->batch);
