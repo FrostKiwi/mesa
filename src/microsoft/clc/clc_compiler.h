@@ -107,9 +107,9 @@ struct clc_dxil_object {
    } binary;
 };
 
-int clc_compile_from_source(const struct clc_compile_args *args,
-                            struct clc_dxil_object *dxil,
-                            const struct clc_logger *logger);
+struct clc_dxil_object *
+clc_compile_from_source(const struct clc_compile_args *args,
+                        const struct clc_logger *logger);
 
 void clc_free_dxil_object(struct clc_dxil_object *dxil);
 
