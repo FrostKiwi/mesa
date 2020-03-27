@@ -55,6 +55,33 @@ clc_compile(const struct clc_compile_args *args,
    return obj;
 }
 
+struct clc_object *
+clc_link(const struct clc_object **in_objs,
+         unsigned num_in_objs,
+         const struct clc_logger *logger)
+{
+   struct clc_object *out_obj;
+   char *err_log;
+   int ret;
+
+   out_obj = malloc(sizeof(*out_obj));
+   if (!out_obj) {
+      fprintf(stderr, "D3D12: failed to allocate a clc_object");
+      return NULL;
+   }
+
+   ret = clc_link_spirv_binaries((const struct spirv_binary **)in_objs,
+                                 num_in_objs, &out_obj->spvbin, &err_log);
+   if (ret < 0) {
+      fprintf(stderr, "D3D12: clc_to_spirv failed: %s\n", err_log);
+      free(err_log);
+      free(out_obj);
+      return NULL;
+   }
+
+   return out_obj;
+}
+
 void clc_free_object(struct clc_object *obj)
 {
    clc_free_spirv_binary(&obj->spvbin);
