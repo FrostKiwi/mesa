@@ -64,6 +64,12 @@ d3d12_context_destroy(struct pipe_context *pctx)
    d3d12_descriptor_pool_free(ctx->view_pool);
    util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
+
+   if (pctx->stream_uploader)
+      u_upload_destroy(pctx->stream_uploader);
+   if (pctx->const_uploader)
+      u_upload_destroy(pctx->const_uploader);
+
    FREE(ctx);
 }
 
@@ -1214,7 +1220,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    slab_create_child(&ctx->transfer_pool, &d3d12_screen(pscreen)->transfer_pool);
 
    ctx->base.stream_uploader = u_upload_create_default(&ctx->base);
-   ctx->base.const_uploader = ctx->base.stream_uploader;
+   ctx->base.const_uploader = u_upload_create_default(&ctx->base);
 
    int prim_hwsupport = 1 << PIPE_PRIM_POINTS |
                         1 << PIPE_PRIM_LINES |
