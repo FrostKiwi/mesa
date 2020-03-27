@@ -29,14 +29,46 @@
 #include <util/u_math.h>
 #include "spirv/nir_spirv.h"
 
+struct clc_object *
+clc_compile(const struct clc_compile_args *args,
+            const struct clc_logger *logger)
+{
+   struct clc_object *obj;
+   char *err_log;
+   int ret;
+
+   obj = malloc(sizeof(*obj));
+   if (!obj) {
+      fprintf(stderr, "D3D12: failed to allocate a clc_object");
+      return NULL;
+   }
+
+   /* TODO: callbacks ... */
+   ret = clc_to_spirv(args, &obj->spvbin, &err_log);
+   if (ret < 0) {
+      fprintf(stderr, "D3D12: clc_to_spirv failed: %s\n", err_log);
+      free(err_log);
+      free(obj);
+      return NULL;
+   }
+
+   return obj;
+}
+
+void clc_free_object(struct clc_object *obj)
+{
+   clc_free_spirv_binary(&obj->spvbin);
+   free(obj);
+}
+
 struct clc_dxil_object *
-clc_compile_from_source(const struct clc_compile_args *args,
-                        const struct clc_logger *logger)
+clc_to_dxil(const struct clc_object *obj,
+            const char *entrypoint,
+            const struct clc_logger *logger)
 {
    struct clc_dxil_object *dxil;
-   struct spirv_binary spvbin;
-   char *err_log;
    struct nir_shader *nir;
+   char *err_log;
    int ret;
 
    dxil = calloc(1, sizeof(*dxil));
@@ -58,25 +90,16 @@ clc_compile_from_source(const struct clc_compile_args *args,
       },
    };
    const struct nir_shader_compiler_options *nir_options =
-	   dxil_get_nir_compiler_options();
-
-   /* TODO: callbacks ... */
-   ret = clc_to_spirv(args, &spvbin, &err_log);
-   if (ret < 0) {
-      fprintf(stderr, "D3D12: clc_to_spirv failed: %s\n", err_log);
-      free(err_log);
-      goto err_free_dxil;
-   }
+      dxil_get_nir_compiler_options();
 
    glsl_type_singleton_init_or_ref();
 
-   nir = spirv_to_nir(spvbin.data, spvbin.size / 4,
+   nir = spirv_to_nir(obj->spvbin.data, obj->spvbin.size / 4,
                       NULL, 0,
-                      MESA_SHADER_KERNEL, "main_test",
+                      MESA_SHADER_KERNEL, entrypoint,
                       &spirv_options,
                       nir_options,
                       false);
-   clc_free_spirv_binary(&spvbin);
    if (!nir) {
       fprintf(stderr, "D3D12: spirv_to_nir failed\n");
       goto err_free_dxil;

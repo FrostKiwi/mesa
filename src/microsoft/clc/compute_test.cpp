@@ -479,11 +479,17 @@ ComputeTest::compile_and_validate(const char *kernel_source)
    };
    struct clc_compile_args args = { 0 };
    struct clc_dxil_object *dxil;
+   struct clc_object *obj;
 
    args.source.name = "kernel.cl";
    args.source.value = kernel_source;
 
-   dxil = clc_compile_from_source(&args, &logger);
+   obj = clc_compile(&args, &logger);
+   if (!obj)
+      throw runtime_error("failed to compile kernel!");
+
+   dxil = clc_to_dxil(obj, "main_test", &logger);
+   clc_free_object(obj);
    if (!dxil)
       throw runtime_error("failed to compile kernel!");
 
@@ -492,6 +498,7 @@ ComputeTest::compile_and_validate(const char *kernel_source)
    dump_blob("unsigned.cso", *dxil);
    if (!validate_module(*dxil))
       throw runtime_error("failed to validate module!");
+
    dump_blob("signed.cso", *dxil);
 
    return ret;
