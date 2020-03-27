@@ -471,23 +471,28 @@ dump_blob(const char *path, const struct clc_dxil_object &dxil)
    }
 }
 
-void
-ComputeTest::compile_and_validate(const char *kernel_source,
-                                  struct clc_dxil_object *dxil)
+std::shared_ptr<struct clc_dxil_object>
+ComputeTest::compile_and_validate(const char *kernel_source)
 {
    struct clc_logger logger = {
       error_callback, warning_callback,
    };
    struct clc_compile_args args = { 0 };
+   struct clc_dxil_object *dxil;
 
    args.source.name = "kernel.cl";
    args.source.value = kernel_source;
 
-   if (clc_compile_from_source(&args, dxil, &logger) < 0)
+   dxil = clc_compile_from_source(&args, &logger);
+   if (!dxil)
       throw runtime_error("failed to compile kernel!");
+
+   std::shared_ptr<struct clc_dxil_object> ret(dxil, clc_free_dxil_object);
 
    dump_blob("unsigned.cso", *dxil);
    if (!validate_module(*dxil))
       throw runtime_error("failed to validate module!");
    dump_blob("signed.cso", *dxil);
+
+   return ret;
 }
