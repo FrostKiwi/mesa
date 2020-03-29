@@ -31,6 +31,7 @@ extern "C" {
 #include "clc_compiler.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <stdint.h>
 
 int
@@ -43,6 +44,9 @@ clc_link_spirv_binaries(const struct spirv_binary **in_bins,
                         unsigned num_in_bins,
                         struct spirv_binary *dst_bin,
                         char **err_buf);
+
+void
+clc_dump_spirv(const struct spirv_binary *spvbin, FILE *f);
 
 void
 clc_free_spirv_binary(struct spirv_binary *spvbin);
