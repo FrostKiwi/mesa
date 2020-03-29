@@ -29,6 +29,17 @@
 #include <util/u_math.h>
 #include "spirv/nir_spirv.h"
 
+enum clc_debug_flags {
+   CLC_DEBUG_DUMP_SPIRV = 1 << 0,
+};
+
+static const struct debug_named_value debug_options[] = {
+   { "dump_spirv",  CLC_DEBUG_DUMP_SPIRV, "Dump spirv blobs" },
+   DEBUG_NAMED_VALUE_END
+};
+
+DEBUG_GET_ONCE_FLAGS_OPTION(debug_clc, "CLC_DEBUG", debug_options, 0)
+
 struct clc_object *
 clc_compile(const struct clc_compile_args *args,
             const struct clc_logger *logger)
@@ -51,6 +62,9 @@ clc_compile(const struct clc_compile_args *args,
       free(obj);
       return NULL;
    }
+
+   if (debug_get_option_debug_clc() & CLC_DEBUG_DUMP_SPIRV)
+      clc_dump_spirv(&obj->spvbin, stdout);
 
    return obj;
 }
@@ -78,6 +92,9 @@ clc_link(const struct clc_object **in_objs,
       free(out_obj);
       return NULL;
    }
+
+   if (debug_get_option_debug_clc() & CLC_DEBUG_DUMP_SPIRV)
+      clc_dump_spirv(&out_obj->spvbin, stdout);
 
    return out_obj;
 }

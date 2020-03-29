@@ -39,6 +39,7 @@
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 #include <clang/Basic/TargetInfo.h>
 
+#include <spirv-tools/libspirv.hpp>
 #include <spirv-tools/linker.hpp>
 
 #include "clc_helpers.h"
@@ -260,6 +261,18 @@ clc_link_spirv_binaries(const struct spirv_binary **in_bins,
    memcpy(dst_bin->data, linkingResult.data(), dst_bin->size);
 
    return 0;
+}
+
+void
+clc_dump_spirv(const struct spirv_binary *spvbin, FILE *f)
+{
+   spvtools::SpirvTools tools(SPV_ENV_UNIVERSAL_1_0);
+   std::vector<uint32_t> bin(spvbin->data, spvbin->data + (spvbin->size / 4));
+   std::string out;
+   tools.Disassemble(bin, &out,
+                     SPV_BINARY_TO_TEXT_OPTION_INDENT |
+                     SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES);
+   fwrite(out.c_str(), out.size(), 1, f);
 }
 
 void
