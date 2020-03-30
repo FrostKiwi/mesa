@@ -132,7 +132,7 @@ d3d12_select_shader_variants(struct d3d12_context *ctx,
 uint64_t
 d3d12_reassign_driver_locations(struct exec_list *io);
 
-void
+uint64_t
 d3d12_sort_by_driver_location(struct exec_list *io);
 
 void
