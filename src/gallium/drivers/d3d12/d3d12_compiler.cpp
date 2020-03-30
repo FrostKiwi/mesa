@@ -337,7 +337,7 @@ d3d12_compile_shader(struct d3d12_context *ctx,
 
    assert(nir != NULL);
 
-   if (stage == MESA_SHADER_FRAGMENT)
+   if (stage == PIPE_SHADER_FRAGMENT)
       d3d12_sort_ps_outputs(&nir->outputs);
 
    /* Keep this initial shader as the blue print for possible variants */
