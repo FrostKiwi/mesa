@@ -442,6 +442,14 @@ get_int8_type(struct dxil_module *m)
 }
 
 static const struct dxil_type *
+get_int16_type(struct dxil_module *m)
+{
+   if (!m->int16_type)
+      m->int16_type = create_int_type(m, 16);
+   return m->int16_type;
+}
+
+static const struct dxil_type *
 get_int32_type(struct dxil_module *m)
 {
    if (!m->int32_type)
@@ -472,6 +480,7 @@ dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size)
    switch (bit_size) {
    case 1: return get_int1_type(m);
    case 8: return get_int8_type(m);
+   case 16: return get_int16_type(m);
    case 32: return get_int32_type(m);
    case 64: return get_int64_type(m);
    default:
@@ -1408,6 +1417,16 @@ dxil_module_get_int8_const(struct dxil_module *m, int8_t value)
 }
 
 const struct dxil_value *
+dxil_module_get_int16_const(struct dxil_module *m, int16_t value)
+{
+   const struct dxil_type *type = get_int16_type(m);
+   if (!type)
+      return NULL;
+
+   return get_int_const(m, type, value);
+}
+
+const struct dxil_value *
 dxil_module_get_int32_const(struct dxil_module *m, int32_t value)
 {
    const struct dxil_type *type = get_int32_type(m);
@@ -1439,6 +1458,10 @@ dxil_module_get_int_const(struct dxil_module *m, intmax_t value,
    case 8:
       assert(INT8_MIN <= value && value <= INT8_MAX);
       return dxil_module_get_int8_const(m, value);
+
+   case 16:
+      assert(INT16_MIN <= value && value <= INT16_MAX);
+      return dxil_module_get_int16_const(m, value);
 
    case 32:
       assert(INT32_MIN <= value && value <= INT32_MAX);
@@ -2255,6 +2278,7 @@ legal_arith_type(const struct dxil_type *type)
    switch (type->type) {
    case TYPE_INTEGER:
       return type->int_bits == 1 ||
+             type->int_bits == 16 ||
              type->int_bits == 32 ||
              type->int_bits == 64;
 

@@ -199,7 +199,8 @@ struct dxil_module {
    struct list_head mdnode_list;
    struct list_head md_named_node_list;
    const struct dxil_type *void_type;
-   const struct dxil_type *int1_type, *int8_type, *int32_type, *int64_type;
+   const struct dxil_type *int1_type, *int8_type, *int16_type,
+                          *int32_type, *int64_type;
    const struct dxil_type *float32_type, *float64_type;
 
    struct rb_tree *functions;
@@ -285,6 +286,9 @@ dxil_module_get_int1_const(struct dxil_module *m, bool value);
 
 const struct dxil_value *
 dxil_module_get_int8_const(struct dxil_module *m, int8_t value);
+
+const struct dxil_value *
+dxil_module_get_int16_const(struct dxil_module *m, int16_t value);
 
 const struct dxil_value *
 dxil_module_get_int32_const(struct dxil_module *m, int32_t value);
