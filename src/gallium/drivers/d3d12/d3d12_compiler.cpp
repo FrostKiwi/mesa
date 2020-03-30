@@ -743,18 +743,21 @@ static void insert_sorted(struct exec_list *var_list, nir_variable *new_var)
    exec_list_push_tail(var_list, &new_var->node);
 }
 
-/* Order VS inputs according to driver location */
-void
+/* Order varyings according to driver location */
+uint64_t
 d3d12_sort_by_driver_location(exec_list *io)
 {
+   uint64_t result = 0;
    struct exec_list new_list;
    exec_list_make_empty(&new_list);
 
    nir_foreach_variable_safe(var, io) {
       exec_node_remove(&var->node);
       insert_sorted(&new_list, var);
+      result |= 1ull << var->data.location;
    }
    exec_list_move_nodes_to(&new_list, io);
+   return result;
 }
 
 /* Sort PS outputs so that color outputs come first */
