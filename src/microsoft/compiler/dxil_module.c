@@ -2323,6 +2323,8 @@ bool
 dxil_emit_branch(struct dxil_module *m, const struct dxil_value *cond,
                  unsigned true_block, unsigned false_block)
 {
+   assert(!cond || types_equal(cond->type, get_int1_type(m)));
+
    struct dxil_instr *instr = create_instr(m, INSTR_BR,
                                            dxil_module_get_void_type(m));
    if (!instr)
