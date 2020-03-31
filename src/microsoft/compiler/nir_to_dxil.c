@@ -1715,9 +1715,7 @@ emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return false;
 
    const struct dxil_value *val =
-      dxil_emit_extractval(&ctx->mod, load,
-                           dxil_module_get_resret_type(&ctx->mod, DXIL_I32),
-                           0);
+      dxil_emit_extractval(&ctx->mod, load, 0);
    if (!val)
       return false;
 
@@ -1811,13 +1809,12 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    }
 
    const struct dxil_value *agg = load_ubo(ctx, handle, offset, DXIL_F32);
-   const struct dxil_type *agg_type = dxil_module_get_cbuf_ret_type(&ctx->mod, DXIL_F32);
 
-   if (!agg || !agg_type)
+   if (!agg)
       return false;
 
    for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
-      const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, agg, agg_type, i);
+      const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, agg, i);
       store_dest(ctx, &intr->dest, i, retval,
                  intr->dest.ssa.bit_size > 1 ? nir_type_float : nir_type_bool);
    }
@@ -1991,8 +1988,7 @@ emit_load_mem_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr,
    const struct dxil_value *handle = ctx->cbv_handles[0]; // HACK!
    const struct dxil_value *index = offset_to_index(&ctx->mod, ptr, bit_size * 4);
    const struct dxil_value *agg = load_ubo(ctx, handle, index, DXIL_I32);
-   const struct dxil_type *agg_type = dxil_module_get_cbuf_ret_type(&ctx->mod, DXIL_I32);
-   if (!index || !agg || !agg_type)
+   if (!index || !agg)
       return false;
 
    /* It seems we can't take that address of a struct (in this case
@@ -2004,10 +2000,10 @@ emit_load_mem_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr,
    const struct dxil_value *comp_mask1 = dxil_module_get_int32_const(&ctx->mod, 0x1);
    const struct dxil_value *comp_mask2 = dxil_module_get_int32_const(&ctx->mod, 0x2);
 
-   const struct dxil_value *comp_x = dxil_emit_extractval(&ctx->mod, agg, agg_type, 0);
-   const struct dxil_value *comp_y = dxil_emit_extractval(&ctx->mod, agg, agg_type, 1);
-   const struct dxil_value *comp_z = dxil_emit_extractval(&ctx->mod, agg, agg_type, 2);
-   const struct dxil_value *comp_w = dxil_emit_extractval(&ctx->mod, agg, agg_type, 3);
+   const struct dxil_value *comp_x = dxil_emit_extractval(&ctx->mod, agg, 0);
+   const struct dxil_value *comp_y = dxil_emit_extractval(&ctx->mod, agg, 1);
+   const struct dxil_value *comp_z = dxil_emit_extractval(&ctx->mod, agg, 2);
+   const struct dxil_value *comp_w = dxil_emit_extractval(&ctx->mod, agg, 3);
 
    const struct dxil_value *bit1 = dxil_emit_binop(&ctx->mod, DXIL_BINOP_AND, comp, comp_mask1, 0);
    const struct dxil_value *bit2 = dxil_emit_binop(&ctx->mod, DXIL_BINOP_AND, comp, comp_mask2, 0);
@@ -2605,9 +2601,8 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
    if (!sample)
       return false;
 
-   const struct dxil_type *sample_type = dxil_module_get_resret_type(&ctx->mod, DXIL_F32);
    for (unsigned i = 0; i < instr->dest.ssa.num_components; ++i) {
-      const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, sample, sample_type, i);
+      const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, sample, i);
       store_dest(ctx, &instr->dest, i, retval, nir_type_float);
    }
 

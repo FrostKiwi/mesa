@@ -2441,18 +2441,19 @@ dxil_emit_ret_void(struct dxil_module *m)
 
 const struct dxil_value *
 dxil_emit_extractval(struct dxil_module *m, const struct dxil_value *src,
-                     const struct dxil_type *type, const unsigned int index)
+                     const unsigned int index)
 {
-   assert(type->type == TYPE_STRUCT);
-   assert(index < type->struct_def.elem.num_types);
+   assert(src->type->type == TYPE_STRUCT);
+   assert(index < src->type->struct_def.elem.num_types);
 
-   struct dxil_instr *instr = create_instr(m, INSTR_EXTRACTVAL,
-                                           type->struct_def.elem_types[index]);
+   struct dxil_instr *instr =
+      create_instr(m, INSTR_EXTRACTVAL,
+                   src->type->struct_def.elem.types[index]);
    if (!instr)
       return NULL;
 
    instr->extractval.src = src;
-   instr->extractval.type = type;
+   instr->extractval.type = src->type;
    instr->extractval.idx = index;
    instr->has_value = true;
 
