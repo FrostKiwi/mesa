@@ -2500,10 +2500,13 @@ get_deref_type(const struct dxil_type *type)
 
 const struct dxil_value *
 dxil_emit_gep_inbounds(struct dxil_module *m,
-                       const struct dxil_type *source_elem_type,
                        const struct dxil_value **operands,
                        size_t num_operands)
 {
+   assert(num_operands > 0);
+   const struct dxil_type *source_elem_type =
+      get_deref_type(operands[0]->type);
+
    const struct dxil_type *type = operands[0]->type;
    for (int i = 1; i < num_operands; ++i) {
       assert(operands[i]->type == get_int32_type(m));

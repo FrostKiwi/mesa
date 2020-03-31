@@ -398,7 +398,6 @@ dxil_emit_alloca(struct dxil_module *m, const struct dxil_type *alloc_type,
 
 const struct dxil_value *
 dxil_emit_gep_inbounds(struct dxil_module *m,
-                       const struct dxil_type *source_elem_type,
                        const struct dxil_value **operands,
                        size_t num_operands);
 

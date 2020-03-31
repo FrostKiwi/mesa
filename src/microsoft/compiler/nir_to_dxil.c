@@ -2223,17 +2223,12 @@ emit_deref_array(struct ntd_context *ctx, nir_deref_instr *deref)
       unreachable("unexpected variable-mode");
    }
 
-   const struct dxil_type *source_elem_type = get_glsl_type(&ctx->mod, var->type);
-   if (!source_elem_type)
-      return false;
-
    const struct dxil_value *zero = dxil_module_get_int32_const(&ctx->mod, 0);
    if (!zero)
       return false;
 
    const struct dxil_value *ops[] = { ptr, zero, index };
-   ptr = dxil_emit_gep_inbounds(&ctx->mod, source_elem_type,
-                                ops, ARRAY_SIZE(ops));
+   ptr = dxil_emit_gep_inbounds(&ctx->mod, ops, ARRAY_SIZE(ops));
    if (!ptr)
       return false;
 
