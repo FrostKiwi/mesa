@@ -2381,7 +2381,7 @@ create_call_instr(struct dxil_module *m,
                   const struct dxil_value **args, size_t num_args)
 {
    assert(num_args == func->type->function_def.args.num_types);
-   for (size_t i = 0;i <  num_args; ++ i)
+   for (size_t i = 0; i < num_args; ++ i)
       assert(types_equal(func->type->function_def.args.types[i], args[i]->type));
 
    struct dxil_instr *instr = create_instr(m, INSTR_CALL,
