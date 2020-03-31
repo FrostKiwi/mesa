@@ -2368,11 +2368,10 @@ dxil_phi_set_incoming(struct dxil_instr *instr,
    assert(num_incoming < ARRAY_SIZE(instr->phi.incoming));
    for (int i = 0; i < num_incoming; ++i) {
       assert(incoming_values[i]);
+      assert(types_equal(incoming_values[i]->type, instr->phi.type));
+
       instr->phi.incoming[i].value = incoming_values[i];
       instr->phi.incoming[i].block = incoming_blocks[i];
-      if (i > 0)
-         assert(types_equal(incoming_values[i]->type,
-                            incoming_values[i-1]->type));
    }
    instr->phi.num_incoming = num_incoming;
 }
