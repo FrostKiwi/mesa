@@ -34,6 +34,14 @@ extern "C" {
 #include <stdio.h>
 #include <stdint.h>
 
+const struct clc_kernel_info *
+clc_spirv_get_kernels_info(const struct spirv_binary *spvbin,
+                           unsigned *num_kernels);
+
+void
+clc_free_kernels_info(const struct clc_kernel_info *kernels,
+                      unsigned num_kernels);
+
 int
 clc_to_spirv(const struct clc_compile_args *args,
              struct spirv_binary *spvbin,
