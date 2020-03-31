@@ -2467,8 +2467,12 @@ dxil_emit_alloca(struct dxil_module *m, const struct dxil_type *alloc_type,
 {
    assert(size_type && size_type->type == TYPE_INTEGER);
 
-   struct dxil_instr *instr = create_instr(m, INSTR_ALLOCA,
-                                           dxil_module_get_pointer_type(m, alloc_type));
+   const struct dxil_type *return_type =
+      dxil_module_get_pointer_type(m, alloc_type);
+   if (!return_type)
+      return NULL;
+
+   struct dxil_instr *instr = create_instr(m, INSTR_ALLOCA, return_type);
    if (!instr)
       return NULL;
 
