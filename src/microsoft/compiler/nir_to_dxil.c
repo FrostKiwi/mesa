@@ -1958,15 +1958,12 @@ static bool
 emit_load_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                         nir_variable *var)
 {
-   unsigned bit_size = nir_dest_bit_size(intr->dest);
    const struct dxil_value *ptr =
       get_src(ctx, &intr->src[0], 0, nir_type_uint);
-   const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod,
-      bit_size);
-   unsigned align = bit_size / 8;
 
+   unsigned align = nir_dest_bit_size(intr->dest) / 8;
    const struct dxil_value *retval =
-      dxil_emit_load(&ctx->mod, ptr, type, align, false);
+      dxil_emit_load(&ctx->mod, ptr, align, false);
 
    store_dest(ctx, &intr->dest, 0, retval, nir_type_uint);
    return true;

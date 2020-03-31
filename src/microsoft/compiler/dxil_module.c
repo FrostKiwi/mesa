@@ -2538,10 +2538,15 @@ dxil_emit_gep_inbounds(struct dxil_module *m,
 
 const struct dxil_value *
 dxil_emit_load(struct dxil_module *m, const struct dxil_value *ptr,
-               const struct dxil_type *type,
                unsigned align,
                bool is_volatile)
 {
+   assert(ptr->type->type == TYPE_POINTER ||
+          ptr->type->type == TYPE_ARRAY);
+   const struct dxil_type *type = ptr->type->type == TYPE_POINTER ?
+      ptr->type->ptr_target_type :
+      ptr->type->array_or_vector_def.elem_type;
+
    struct dxil_instr *instr = create_instr(m, INSTR_LOAD, type);
    if (!instr)
       return false;
