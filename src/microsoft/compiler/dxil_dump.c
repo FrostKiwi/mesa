@@ -478,7 +478,7 @@ dump_instr_branch(struct dxil_dumper *d, struct dxil_instr_br *br)
 {
    _mesa_string_buffer_append(d->buf, "branch ");
    if (br->cond)
-      dump_value(d->buf, br->cond);
+      dump_value(d, br->cond);
    else
       _mesa_string_buffer_append(d->buf, " (uncond)");
    _mesa_string_buffer_printf(d->buf, " %d %d", br->succ[0], br->succ[1]);
