@@ -42,7 +42,9 @@
 #include <spirv-tools/libspirv.hpp>
 #include <spirv-tools/linker.hpp>
 
+#include "util/macros.h"
 #include "clc_helpers.h"
+#include "spirv.h"
 
 using ::llvm::Function;
 using ::llvm::LLVMContext;
@@ -54,6 +56,422 @@ llvm_log_handler(const ::llvm::DiagnosticInfo &di, void *data) {
    raw_string_ostream os { *reinterpret_cast<std::string *>(data) };
    ::llvm::DiagnosticPrinterRawOStream printer { os };
    di.print(printer);
+}
+
+class SPIRVKernelArg {
+public:
+   SPIRVKernelArg(uint32_t id, uint32_t typeId) : id(id), typeId(typeId),
+                                                  addrQualifier(CLC_KERNEL_ARG_ADDRESS_PRIVATE),
+                                                  accessQualifier(0),
+                                                  typeQualifier(0) { }
+   ~SPIRVKernelArg() { }
+
+   uint32_t id;
+   uint32_t typeId;
+   std::string name;
+   std::string typeName;
+   enum clc_kernel_arg_address_qualifier addrQualifier;
+   unsigned accessQualifier;
+   unsigned typeQualifier;
+};
+
+class SPIRVKernelInfo {
+public:
+   SPIRVKernelInfo(uint32_t fid, const char *nm) : funcId(fid), name(nm) { }
+   ~SPIRVKernelInfo() { }
+
+   uint32_t funcId;
+   std::string name;
+   std::vector<SPIRVKernelArg> args;
+};
+
+class SPIRVKernelParser {
+public:
+   SPIRVKernelParser() : curKernel(NULL)
+   {
+      ctx = spvContextCreate(SPV_ENV_UNIVERSAL_1_0);
+   }
+
+   ~SPIRVKernelParser()
+   {
+     spvContextDestroy(ctx);
+   }
+
+   void parseEntryPoint(const spv_parsed_instruction_t *ins)
+   {
+      assert(ins->num_operands >= 3);
+
+      const spv_parsed_operand_t *op = &ins->operands[1];
+
+      assert(op->type == SPV_OPERAND_TYPE_ID);
+
+      uint32_t funcId = ins->words[op->offset];
+
+      for (auto &iter : kernels) {
+         if (funcId == iter.funcId)
+            return;
+      }
+
+      op = &ins->operands[2];
+      assert(op->type == SPV_OPERAND_TYPE_LITERAL_STRING);
+      const char *name = reinterpret_cast<const char *>(ins->words + op->offset);
+
+      kernels.push_back(SPIRVKernelInfo(funcId, name));
+   }
+
+   void parseFunction(const spv_parsed_instruction_t *ins)
+   {
+      assert(ins->num_operands == 4);
+
+      const spv_parsed_operand_t *op = &ins->operands[1];
+
+      assert(op->type == SPV_OPERAND_TYPE_RESULT_ID);
+
+      uint32_t funcId = ins->words[op->offset];
+
+      SPIRVKernelInfo *kernel = NULL;
+
+      for (auto &kernel : kernels) {
+         if (funcId == kernel.funcId && !kernel.args.size()) {
+            curKernel = &kernel;
+	    return;
+         }
+      }
+   }
+
+   void parseFunctionParam(const spv_parsed_instruction_t *ins)
+   {
+      const spv_parsed_operand_t *op;
+      uint32_t id, typeId;
+
+      if (!curKernel)
+         return;
+
+      assert(ins->num_operands == 2);
+      op = &ins->operands[0];
+      assert(op->type == SPV_OPERAND_TYPE_TYPE_ID);
+      typeId = ins->words[op->offset];
+      op = &ins->operands[1];
+      assert(op->type == SPV_OPERAND_TYPE_RESULT_ID);
+      id = ins->words[op->offset];
+      curKernel->args.push_back(SPIRVKernelArg(id, typeId));
+   }
+
+   void parseName(const spv_parsed_instruction_t *ins)
+   {
+      const spv_parsed_operand_t *op;
+      const char *name;
+      uint32_t id;
+
+      assert(ins->num_operands == 2);
+
+      op = &ins->operands[0];
+      assert(op->type == SPV_OPERAND_TYPE_ID);
+      id = ins->words[op->offset];
+      op = &ins->operands[1];
+      assert(op->type == SPV_OPERAND_TYPE_LITERAL_STRING);
+      name = reinterpret_cast<const char *>(ins->words + op->offset);
+
+      for (auto &kernel : kernels) {
+         for (auto &arg : kernel.args) {
+            if (arg.id == id && arg.name.empty()) {
+              arg.name = name;
+              break;
+	    }
+         }
+      }
+   }
+
+   void parseTypePointer(const spv_parsed_instruction_t *ins)
+   {
+      enum clc_kernel_arg_address_qualifier addrQualifier;
+      uint32_t typeId, targetTypeId, storageClass;
+      const spv_parsed_operand_t *op;
+      const char *typeName;
+
+      assert(ins->num_operands == 3);
+
+      op = &ins->operands[0];
+      assert(op->type == SPV_OPERAND_TYPE_RESULT_ID);
+      typeId = ins->words[op->offset];
+
+      op = &ins->operands[1];
+      assert(op->type == SPV_OPERAND_TYPE_STORAGE_CLASS);
+      storageClass = ins->words[op->offset];
+      switch (storageClass) {
+      case SpvStorageClassCrossWorkgroup:
+         addrQualifier = CLC_KERNEL_ARG_ADDRESS_GLOBAL;
+         break;
+      case SpvStorageClassWorkgroup:
+         addrQualifier = CLC_KERNEL_ARG_ADDRESS_LOCAL;
+         break;
+      case SpvStorageClassUniformConstant:
+         addrQualifier = CLC_KERNEL_ARG_ADDRESS_CONSTANT;
+         break;
+      default:
+         addrQualifier = CLC_KERNEL_ARG_ADDRESS_PRIVATE;
+         break;
+      }
+
+      for (auto &kernel : kernels) {
+	 for (auto &arg : kernel.args) {
+            if (arg.typeId == typeId)
+               arg.addrQualifier = addrQualifier;
+         }
+      }
+   }
+
+   void parseOpString(const spv_parsed_instruction_t *ins)
+   {
+      const spv_parsed_operand_t *op;
+      std::string str;
+
+      assert(ins->num_operands == 2);
+
+      op = &ins->operands[1];
+      assert(op->type == SPV_OPERAND_TYPE_LITERAL_STRING);
+      str = reinterpret_cast<const char *>(ins->words + op->offset);
+
+      if (str.find("kernel_arg_type.") != 0)
+         return;
+
+      size_t start = sizeof("kernel_arg_type.") - 1;
+
+      for (auto &kernel : kernels) {
+         size_t pos;
+
+	 pos = str.find(kernel.name, start);
+         if (pos == std::string::npos ||
+             pos != start || str[start + kernel.name.size()] != '.')
+            continue;
+
+	 pos = start + kernel.name.size();
+         if (str[pos++] != '.')
+            continue;
+
+         for (auto &arg : kernel.args) {
+            if (arg.name.empty())
+               break;
+
+            size_t typeEnd = str.find(',', pos);
+	    if (typeEnd == std::string::npos)
+               break;
+
+            arg.typeName = str.substr(pos, typeEnd - pos);
+            pos = typeEnd + 1;
+         }
+      }
+   }
+
+   void parseOpDecorate(const spv_parsed_instruction_t *ins)
+   {
+      const spv_parsed_operand_t *op;
+      uint32_t id, decoration;
+
+      assert(ins->num_operands >= 2);
+
+      op = &ins->operands[0];
+      assert(op->type == SPV_OPERAND_TYPE_ID);
+      id = ins->words[op->offset];
+
+      op = &ins->operands[1];
+      assert(op->type == SPV_OPERAND_TYPE_DECORATION);
+      decoration = ins->words[op->offset];
+
+      for (auto &kernel : kernels) {
+         for (auto &arg : kernel.args) {
+            if (arg.id == id) {
+               switch (decoration) {
+               case SpvDecorationVolatile:
+                  arg.typeQualifier |= CLC_KERNEL_ARG_TYPE_VOLATILE;
+                  break;
+               case SpvDecorationConstant:
+                  arg.typeQualifier |= CLC_KERNEL_ARG_TYPE_CONST;
+                  break;
+               case SpvDecorationRestrict:
+                  arg.typeQualifier |= CLC_KERNEL_ARG_TYPE_RESTRICT;
+                  break;
+               }
+            }
+
+         }
+      }
+   }
+
+   void parseOpTypeImage(const spv_parsed_instruction_t *ins)
+   {
+      const spv_parsed_operand_t *op;
+      unsigned accessQualifier;
+      uint32_t typeId;
+
+      assert(ins->num_operands >= 9);
+
+      if (ins->num_operands < 10)
+         return;
+
+      op = &ins->operands[0];
+      assert(op->type == SPV_OPERAND_TYPE_RESULT_ID);
+      typeId = ins->words[op->offset];
+
+      op = &ins->operands[9];
+      assert(op->type == SPV_OPERAND_TYPE_ACCESS_QUALIFIER);
+      switch (ins->words[op->offset]) {
+      case SpvAccessQualifierReadOnly:
+         accessQualifier = CLC_KERNEL_ARG_ACCESS_READ;
+         break;
+      case SpvAccessQualifierWriteOnly:
+         accessQualifier = CLC_KERNEL_ARG_ACCESS_WRITE;
+         break;
+      case SpvAccessQualifierReadWrite:
+         accessQualifier = CLC_KERNEL_ARG_ACCESS_WRITE |
+                           CLC_KERNEL_ARG_ACCESS_READ;
+         break;
+      }
+
+      for (auto &kernel : kernels) {
+	 for (auto &arg : kernel.args) {
+            if (arg.typeId == typeId)
+               arg.accessQualifier = accessQualifier;
+         }
+      }
+   }
+
+   static spv_result_t
+   parseInstruction(void *data, const spv_parsed_instruction_t *ins)
+   {
+      SPIRVKernelParser *parser = reinterpret_cast<SPIRVKernelParser *>(data);
+
+      switch (ins->opcode) {
+      case SpvOpName:
+         parser->parseName(ins);
+         break;
+      case SpvOpEntryPoint:
+         parser->parseEntryPoint(ins);
+         break;
+      case SpvOpFunction:
+         parser->parseFunction(ins);
+         break;
+      case SpvOpFunctionParameter:
+         parser->parseFunctionParam(ins);
+         break;
+      case SpvOpFunctionEnd:
+      case SpvOpLabel:
+         parser->curKernel = NULL;
+         break;
+      case SpvOpTypePointer:
+         parser->parseTypePointer(ins);
+         break;
+      case SpvOpTypeImage:
+         parser->parseOpTypeImage(ins);
+         break;
+      case SpvOpString:
+         parser->parseOpString(ins);
+         break;
+      case SpvOpDecorate:
+         parser->parseOpDecorate(ins);
+         break;
+      default:
+         break;
+      }
+
+      return SPV_SUCCESS;
+   }
+
+   bool parsingComplete()
+   {
+      for (auto &kernel : kernels) {
+         if (kernel.name.empty())
+            return false;
+
+         for (auto &arg : kernel.args) {
+            if (arg.name.empty() || arg.typeName.empty())
+               return false;
+         }
+      }
+
+      return true;
+   }
+
+   void parseBinary(const struct spirv_binary &spvbin)
+   {
+      /* 3 passes should be enough to retrieve all kernel information:
+       * 1st pass: all entry point name and number of args
+       * 2nd pass: argument names and type names
+       * 3rd pass: pointer type names
+       */
+      for (unsigned pass = 0; pass < 3; pass++) {
+         spvBinaryParse(ctx, reinterpret_cast<void *>(this),
+                        spvbin.data, spvbin.size / 4,
+                        NULL, parseInstruction, NULL);
+
+         if (parsingComplete())
+            return;
+      }
+
+      assert(0);
+   }
+
+   std::vector<SPIRVKernelInfo> kernels;
+   SPIRVKernelInfo *curKernel;
+   spv_context ctx;
+};
+
+const struct clc_kernel_info *
+clc_spirv_get_kernels_info(const struct spirv_binary *spvbin,
+                           unsigned *num_kernels)
+{
+   struct clc_kernel_info *kernels;
+
+   SPIRVKernelParser parser;
+
+   parser.parseBinary(*spvbin);
+   *num_kernels = parser.kernels.size();
+   if (!*num_kernels)
+      return NULL;
+
+   kernels = reinterpret_cast<struct clc_kernel_info *>(calloc(*num_kernels,
+                                                               sizeof(*kernels)));
+   assert(kernels);
+   for (unsigned i = 0; i < parser.kernels.size(); i++) {
+      kernels[i].name = strdup(parser.kernels[i].name.c_str());
+      kernels[i].num_args = parser.kernels[i].args.size();
+      if (!kernels[i].num_args)
+         continue;
+
+      struct clc_kernel_arg *args;
+
+      args = reinterpret_cast<struct clc_kernel_arg *>(calloc(kernels[i].num_args,
+                                                       sizeof(*kernels->args)));
+      kernels[i].args = args;
+      assert(args);
+      for (unsigned j = 0; j < kernels[i].num_args; j++) {
+         if (!parser.kernels[i].args[j].name.empty())
+            args[j].name = strdup(parser.kernels[i].args[j].name.c_str());
+         args[j].type_name = strdup(parser.kernels[i].args[j].typeName.c_str());
+         args[j].address_qualifier = parser.kernels[i].args[j].addrQualifier;
+         args[j].type_qualifier = parser.kernels[i].args[j].typeQualifier;
+         args[j].access_qualifier = parser.kernels[i].args[j].accessQualifier;
+      }
+   }
+
+   return kernels;
+}
+
+void
+clc_free_kernels_info(const struct clc_kernel_info *kernels,
+                      unsigned num_kernels)
+{
+   for (unsigned i = 0; i < num_kernels; i++) {
+      if (kernels[i].args) {
+         for (unsigned j = 0; j < kernels[i].num_args; j++) {
+            free((void *)kernels[i].args[j].name);
+            free((void *)kernels[i].args[j].type_name);
+         }
+      }
+      free((void *)kernels[i].name);
+   }
+
+   free((void *)kernels);
 }
 
 int
