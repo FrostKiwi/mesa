@@ -202,19 +202,13 @@ declare void @dx.op.storeOutput.f32(i32, i32, i32, i8, float) #1
 
 define void @main() {
   %1 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 0, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
-  %2 = bitcast float %1 to i32
-  %3 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 1, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
-  %4 = bitcast float %3 to i32
-  %5 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 2, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
-  %6 = bitcast float %5 to i32
-  %7 = bitcast i32 %2 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %7)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %8 = bitcast i32 %4 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %8)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %9 = bitcast i32 %6 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %9)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %10 = bitcast i32 1065353216 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %10)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  %2 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 1, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
+  %3 = call float @dx.op.loadInput.f32(i32 4, i32 0, i32 0, i8 2, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
+  %4 = bitcast i32 1065353216 to float
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %1)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %2)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %3)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %4)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   ret void
 }
 
@@ -292,21 +286,13 @@ define void @main() {
   %1 = call %dx.types.Handle @dx.op.createHandle(i32 57, i8 2, i32 0, i32 0, i1 false) ; CreateHandle(resourceClass,rangeId,index,nonUniformIndex)
   %2 = call %dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32 59, %dx.types.Handle %1, i32 0) ; CBufferLoadLegacy(handle,regIndex)
   %3 = extractvalue %dx.types.CBufRet.f32 %2, 0
-  %4 = bitcast float %3 to i32
-  %5 = extractvalue %dx.types.CBufRet.f32 %2, 1
-  %6 = bitcast float %5 to i32
-  %7 = extractvalue %dx.types.CBufRet.f32 %2, 2
-  %8 = bitcast float %7 to i32
-  %9 = extractvalue %dx.types.CBufRet.f32 %2, 3
-  %10 = bitcast float %9 to i32
-  %11 = bitcast i32 %4 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %11) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %12 = bitcast i32 %6 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %12) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %13 = bitcast i32 %8 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %13) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %14 = bitcast i32 %10 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %14) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  %4 = extractvalue %dx.types.CBufRet.f32 %2, 1
+  %5 = extractvalue %dx.types.CBufRet.f32 %2, 2
+  %6 = extractvalue %dx.types.CBufRet.f32 %2, 3
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %3) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %4) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %5) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %6) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   ret void
 }
 
@@ -389,21 +375,13 @@ define void @main() {
   %6 = ashr i32 %5, 4
   %7 = call %dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32 59, %dx.types.Handle %1, i32 %6) ; CBufferLoadLegacy(handle,regIndex)
   %8 = extractvalue %dx.types.CBufRet.f32 %7, 0
-  %9 = bitcast float %8 to i32
-  %10 = extractvalue %dx.types.CBufRet.f32 %7, 1
-  %11 = bitcast float %10 to i32
-  %12 = extractvalue %dx.types.CBufRet.f32 %7, 2
-  %13 = bitcast float %12 to i32
-  %14 = extractvalue %dx.types.CBufRet.f32 %7, 3
-  %15 = bitcast float %14 to i32
-  %16 = bitcast i32 %9 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %16) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %17 = bitcast i32 %11 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %17) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %18 = bitcast i32 %13 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %18) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-  %19 = bitcast i32 %15 to float
-  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %19) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  %9 = extractvalue %dx.types.CBufRet.f32 %7, 1
+  %10 = extractvalue %dx.types.CBufRet.f32 %7, 2
+  %11 = extractvalue %dx.types.CBufRet.f32 %7, 3
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %8) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float %9) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float %10) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
+  call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float %11) ; StoreOutput(outputSigId,rowIndex,colIndex,value)
   ret void
 }
 
