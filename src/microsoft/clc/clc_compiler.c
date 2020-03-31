@@ -31,14 +31,58 @@
 
 enum clc_debug_flags {
    CLC_DEBUG_DUMP_SPIRV = 1 << 0,
+   CLC_DEBUG_VERBOSE = 1 << 1,
 };
 
 static const struct debug_named_value debug_options[] = {
    { "dump_spirv",  CLC_DEBUG_DUMP_SPIRV, "Dump spirv blobs" },
+   { "verbose",  CLC_DEBUG_VERBOSE, NULL },
    DEBUG_NAMED_VALUE_END
 };
 
 DEBUG_GET_ONCE_FLAGS_OPTION(debug_clc, "CLC_DEBUG", debug_options, 0)
+
+static void
+clc_print_kernels_info(const struct clc_object *obj)
+{
+   fprintf(stdout, "Kernels:\n");
+   for (unsigned i = 0; i < obj->num_kernels; i++) {
+      const struct clc_kernel_arg *args = obj->kernels[i].args;
+      bool first = true;
+
+      fprintf(stdout, "\tvoid %s(", obj->kernels[i].name);
+      for (unsigned j = 0; j < obj->kernels[i].num_args; j++) {
+         if (!first)
+            fprintf(stdout, ", ");
+         else
+            first = false;
+
+         switch (args[j].address_qualifier) {
+         case CLC_KERNEL_ARG_ADDRESS_GLOBAL:
+            fprintf(stdout, "__global ");
+            break;
+         case CLC_KERNEL_ARG_ADDRESS_LOCAL:
+            fprintf(stdout, "__local ");
+            break;
+	 case CLC_KERNEL_ARG_ADDRESS_CONSTANT:
+            fprintf(stdout, "__constant ");
+            break;
+         default:
+            break;
+         }
+
+         if (args[j].type_qualifier & CLC_KERNEL_ARG_TYPE_VOLATILE)
+            fprintf(stdout, "volatile ");
+         if (args[j].type_qualifier & CLC_KERNEL_ARG_TYPE_CONST)
+            fprintf(stdout, "const ");
+         if (args[j].type_qualifier & CLC_KERNEL_ARG_TYPE_RESTRICT)
+            fprintf(stdout, "restrict ");
+
+         fprintf(stdout, "%s %s", args[j].type_name, args[j].name);
+      }
+      fprintf(stdout, ");\n");
+   }
+}
 
 struct clc_object *
 clc_compile(const struct clc_compile_args *args,
@@ -67,6 +111,9 @@ clc_compile(const struct clc_compile_args *args,
       clc_dump_spirv(&obj->spvbin, stdout);
 
    obj->kernels = clc_spirv_get_kernels_info(&obj->spvbin, &obj->num_kernels);
+
+   if (debug_get_option_debug_clc() & CLC_DEBUG_VERBOSE)
+      clc_print_kernels_info(obj);
 
    return obj;
 }
@@ -100,6 +147,9 @@ clc_link(const struct clc_object **in_objs,
 
    out_obj->kernels = clc_spirv_get_kernels_info(&out_obj->spvbin,
                                                  &out_obj->num_kernels);
+
+   if (debug_get_option_debug_clc() & CLC_DEBUG_VERBOSE)
+      clc_print_kernels_info(out_obj);
 
    return out_obj;
 }
