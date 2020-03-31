@@ -49,7 +49,9 @@
    .vertex_id_zero_based = true,                                              \
    .lower_base_vertex = true,                                                 \
    .use_scoped_memory_barrier = true,                                         \
-   .lower_cs_global_id_from_local = true
+   .lower_cs_global_id_from_local = true,                                     \
+   .support_8bit_alu = true,                                                  \
+   .support_16bit_alu = true
 
 #define COMMON_SCALAR_OPTIONS                                                 \
    .lower_to_scalar = true,                                                   \
