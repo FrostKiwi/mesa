@@ -572,18 +572,19 @@ clc_to_spirv(const struct clc_compile_args *args,
    }
 
    if (args->num_headers) {
-      const std::string tmp_header_path = "/tmp/clover/";
+      ::llvm::SmallString<128> tmp_header_path;
+      ::llvm::sys::path::system_temp_directory(true, tmp_header_path);
+      ::llvm::sys::path::append(tmp_header_path, "openclon12");
 
-      c->getHeaderSearchOpts().AddPath(tmp_header_path,
+      c->getHeaderSearchOpts().AddPath(tmp_header_path.str(),
                                        clang::frontend::Angled,
                                        false, false);
 
-
       for (size_t i = 0; i < args->num_headers; i++) {
-         std::string h = std::string(args->headers[i].name);
-         std::string src = std::string(args->headers[i].value);
-         c->getPreprocessorOpts().addRemappedFile(tmp_header_path + h,
-            ::llvm::MemoryBuffer::getMemBufferCopy(src).release());
+         ::llvm::sys::path::append(tmp_header_path, args->headers[i].name);
+         c->getPreprocessorOpts().addRemappedFile(tmp_header_path.str(),
+            ::llvm::MemoryBuffer::getMemBufferCopy(args->headers[i].value).release());
+         ::llvm::sys::path::remove_filename(tmp_header_path);
       }
    }
 
