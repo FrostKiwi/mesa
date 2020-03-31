@@ -66,6 +66,8 @@ clc_compile(const struct clc_compile_args *args,
    if (debug_get_option_debug_clc() & CLC_DEBUG_DUMP_SPIRV)
       clc_dump_spirv(&obj->spvbin, stdout);
 
+   obj->kernels = clc_spirv_get_kernels_info(&obj->spvbin, &obj->num_kernels);
+
    return obj;
 }
 
@@ -96,11 +98,15 @@ clc_link(const struct clc_object **in_objs,
    if (debug_get_option_debug_clc() & CLC_DEBUG_DUMP_SPIRV)
       clc_dump_spirv(&out_obj->spvbin, stdout);
 
+   out_obj->kernels = clc_spirv_get_kernels_info(&out_obj->spvbin,
+                                                 &out_obj->num_kernels);
+
    return out_obj;
 }
 
 void clc_free_object(struct clc_object *obj)
 {
+   clc_free_kernels_info(obj->kernels, obj->num_kernels);
    clc_free_spirv_binary(&obj->spvbin);
    free(obj);
 }
@@ -119,6 +125,18 @@ clc_to_dxil(const struct clc_object *obj,
    if (!dxil) {
       fprintf(stderr, "D3D12: failed to allocate the dxil object\n");
       return NULL;
+   }
+
+   for (unsigned i = 0; i < obj->num_kernels; i++) {
+      if (!strcmp(obj->kernels[i].name, entrypoint)) {
+         dxil->kernel = &obj->kernels[i];
+         break;
+      }
+   }
+
+   if (!dxil->kernel) {
+      fprintf(stderr, "D3D12: no '%s' kernel found\n", entrypoint);
+      goto err_free_dxil;
    }
 
    const struct spirv_to_nir_options spirv_options = {

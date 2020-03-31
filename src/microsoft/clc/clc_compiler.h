@@ -56,8 +56,42 @@ struct spirv_binary {
    size_t size;
 };
 
+enum clc_kernel_arg_type_qualifier {
+   CLC_KERNEL_ARG_TYPE_CONST = 1 << 0,
+   CLC_KERNEL_ARG_TYPE_RESTRICT = 1 << 1,
+   CLC_KERNEL_ARG_TYPE_VOLATILE = 1 << 2,
+};
+
+enum clc_kernel_arg_access_qualifier {
+   CLC_KERNEL_ARG_ACCESS_READ = 1 << 0,
+   CLC_KERNEL_ARG_ACCESS_WRITE = 1 << 1,
+};
+
+enum clc_kernel_arg_address_qualifier {
+   CLC_KERNEL_ARG_ADDRESS_PRIVATE,
+   CLC_KERNEL_ARG_ADDRESS_CONSTANT,
+   CLC_KERNEL_ARG_ADDRESS_LOCAL,
+   CLC_KERNEL_ARG_ADDRESS_GLOBAL,
+};
+
+struct clc_kernel_arg {
+   const char *name;
+   const char *type_name;
+   unsigned type_qualifier;
+   unsigned access_qualifier;
+   enum clc_kernel_arg_address_qualifier address_qualifier;
+};
+
+struct clc_kernel_info {
+   const char *name;
+   size_t num_args;
+   const struct clc_kernel_arg *args;
+};
+
 struct clc_object {
    struct spirv_binary spvbin;
+   const struct clc_kernel_info *kernels;
+   unsigned num_kernels;
 };
 
 #define CLC_MAX_CONSTS 32
@@ -104,6 +138,7 @@ struct clc_dxil_metadata {
 };
 
 struct clc_dxil_object {
+   const struct clc_kernel_info *kernel;
    struct clc_dxil_metadata metadata;
    struct {
       void *data;
