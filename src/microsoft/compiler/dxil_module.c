@@ -2490,10 +2490,14 @@ dxil_emit_alloca(struct dxil_module *m, const struct dxil_type *alloc_type,
 
 const struct dxil_value *
 dxil_emit_gep_inbounds(struct dxil_module *m,
-                       const struct dxil_type *source_elem_type,
                        const struct dxil_value **operands,
                        size_t num_operands)
 {
+   assert(num_operands > 0);
+   assert(operands[0]->type->type == TYPE_POINTER);
+   const struct dxil_type *source_elem_type =
+      operands[0]->type->ptr_target_type;
+
    struct dxil_instr *instr = create_instr(m, INSTR_GEP, source_elem_type);
    if (!instr)
       return NULL;
