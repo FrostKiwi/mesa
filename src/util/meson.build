@@ -206,6 +206,8 @@ idep_xmlconfig = declare_dependency(
   link_with : _libxmlconfig,
 )
 
+files_xxd = files('xxd.py')
+
 if with_tests
   test(
     'u_atomic',
