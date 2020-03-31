@@ -2249,12 +2249,31 @@ create_instr(struct dxil_module *m, enum instr_type type,
    return ret;
 }
 
+static bool
+legal_arith_type(const struct dxil_type *type)
+{
+   switch (type->type) {
+   case TYPE_INTEGER:
+      return type->int_bits == 1 ||
+             type->int_bits == 32 ||
+             type->int_bits == 64;
+
+   case TYPE_FLOAT:
+      return type->float_bits == 32 ||
+             type->float_bits == 64;
+
+   default:
+      return false;
+   }
+}
+
 const struct dxil_value *
 dxil_emit_binop(struct dxil_module *m, enum dxil_bin_opcode opcode,
                 const struct dxil_value *op0, const struct dxil_value *op1,
                 enum dxil_opt_flags flags)
 {
    assert(types_equal(op0->type, op1->type));
+   assert(legal_arith_type(op0->type));
    struct dxil_instr *instr = create_instr(m, INSTR_BINOP, op0->type);
    if (!instr)
       return NULL;
@@ -2272,6 +2291,7 @@ dxil_emit_cmp(struct dxil_module *m, enum dxil_cmp_pred pred,
                 const struct dxil_value *op0, const struct dxil_value *op1)
 {
    assert(types_equal(op0->type, op1->type));
+   assert(legal_arith_type(op0->type));
    struct dxil_instr *instr = create_instr(m, INSTR_CMP, get_int1_type(m));
    if (!instr)
       return NULL;
@@ -2291,6 +2311,7 @@ dxil_emit_select(struct dxil_module *m,
 {
    assert(types_equal(op0->type, get_int1_type(m)));
    assert(types_equal(op1->type, op2->type));
+   assert(legal_arith_type(op1->type));
 
    struct dxil_instr *instr = create_instr(m, INSTR_SELECT, op1->type);
    if (!instr)
@@ -2308,6 +2329,9 @@ dxil_emit_cast(struct dxil_module *m, enum dxil_cast_opcode opcode,
                const struct dxil_type *type,
                const struct dxil_value *value)
 {
+   assert(legal_arith_type(value->type));
+   assert(legal_arith_type(type));
+
    struct dxil_instr *instr = create_instr(m, INSTR_CAST, type);
    if (!instr)
       return NULL;
@@ -2346,6 +2370,8 @@ dxil_instr_get_return_value(struct dxil_instr *instr)
 struct dxil_instr *
 dxil_emit_phi(struct dxil_module *m, const struct dxil_type *type)
 {
+   assert(legal_arith_type(type));
+
    struct dxil_instr *instr = create_instr(m, INSTR_PHI, type);
    if (!instr)
       return NULL;
@@ -2566,6 +2592,8 @@ dxil_emit_store(struct dxil_module *m, const struct dxil_value *value,
                 const struct dxil_value *ptr, unsigned align,
                 bool is_volatile)
 {
+   assert(legal_arith_type(value->type));
+
    struct dxil_instr *instr = create_instr(m, INSTR_STORE,
                                            dxil_module_get_void_type(m));
    if (!instr)
