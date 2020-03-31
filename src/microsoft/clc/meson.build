@@ -19,23 +19,36 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
+clang_resource_dir = join_paths(
+  dep_clang.get_variable(cmake: 'CLANG_INCLUDE_DIRS'), '..',
+  'lib', 'clang', dep_clang.version(), 'include'
+)
+
+opencl_c_h = custom_target(
+  'opencl-c.h',
+  input : [files_xxd, join_paths(clang_resource_dir, 'opencl-c.h')],
+  output : 'opencl-c.h.h',
+  command : [prog_python, '@INPUT@', '@OUTPUT@', '-n', 'opencl_c_source'],
+)
+opencl_c_base_h = custom_target(
+  'opencl-c-base.h',
+  input : [files_xxd, join_paths(clang_resource_dir, 'opencl-c-base.h')],
+  output : 'opencl-c-base.h.h',
+  command : [prog_python, '@INPUT@', '@OUTPUT@', '-n', 'opencl_c_base_source'],
+)
 
 libclc_compiler = shared_library(
   'clglon12compiler',
   'clc_compiler.c',
   'clc_helpers.cpp',
+  opencl_c_h,
+  opencl_c_base_h,
   vs_module_defs : 'clglon12compiler.def',
   include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_compiler, inc_gallium, inc_spirv],
   dependencies: [idep_nir_headers, dep_clang, dep_llvm, cc.find_library('version'),
     dep_llvmspirvlib, idep_mesautil, idep_libdxil_compiler, idep_nir, dep_spirv_tools],
   c_args : c_vis_args,
-  cpp_args : [
-    cpp_vis_args,
-    '-DCLANG_RESOURCE_DIR="@0@"'.format(join_paths(
-      dep_clang.get_variable(cmake: 'CLANG_INCLUDE_DIRS'), '..',
-      'lib', 'clang', dep_clang.version(), 'include'
-    )),
-  ],
+  cpp_args : cpp_vis_args,
 )
 
 clc_compiler_test = executable('clc_compiler_test',
