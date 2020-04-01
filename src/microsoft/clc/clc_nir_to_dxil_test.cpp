@@ -674,3 +674,81 @@ impl main {
  run(shader, "");
 }
 
+TEST_F(NirToDXILTest, test_shader_two_arrays_of_sampler_validation)
+{
+ const char shader[] =
+R"(shader: MESA_SHADER_FRAGMENT
+name: GLSL3
+inputs: 1
+outputs: 1
+uniforms: 0
+shared: 0
+decl_var uniform INTERP_MODE_NONE sampler2D[2] tex (0, 0, 0)
+decl_var uniform INTERP_MODE_NONE sampler2D[2] tex2 (1, 2, 2)
+decl_var shader_in INTERP_MODE_NONE vec4 texcoords (VARYING_SLOT_VAR9.xyzw, 0, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+decl_function main (0 params) (entrypoint)
+
+impl main {
+        block block_0:
+        /* preds: */
+        vec1 32 ssa_0 = load_const (0x3f000000 /* 0.500000 */)
+        vec1 32 ssa_3 = deref_var &texcoords (shader_in vec4)
+        vec4 32 ssa_4 = intrinsic load_deref (ssa_3) (0) /* access=0 */
+        vec1 1 ssa_5 = flt ssa_4.x, ssa_0
+        /* succs: block_1 block_5 */
+        if ssa_5 {
+                block block_1:
+                /* preds: block_0 */
+                vec1 1 ssa_6 = flt ssa_4.y, ssa_0
+                /* succs: block_2 block_3 */
+                if ssa_6 {
+                        block block_2:
+                        /* preds: block_1 */
+                        vec2 32 ssa_30 = vec2 ssa_4.x, ssa_4.y
+                        vec4 32 ssa_10 = tex ssa_30 (coord), 0 (texture), 0 (sampler)
+                        /* succs: block_4 */
+                } else {
+                        block block_3:
+                        /* preds: block_1 */
+                        vec2 32 ssa_33 = vec2 ssa_4.x, ssa_4.y
+                        vec4 32 ssa_14 = tex ssa_33 (coord), 2 (texture), 2 (sampler)
+                        /* succs: block_4 */
+                }
+                block block_4:
+                /* preds: block_2 block_3 */
+                vec4 32 ssa_15 = phi block_2: ssa_10, block_3: ssa_14
+                /* succs: block_9 */
+        } else {
+                block block_5:
+                /* preds: block_0 */
+                vec1 1 ssa_16 = flt ssa_4.y, ssa_0
+                /* succs: block_6 block_7 */
+                if ssa_16 {
+                        block block_6:
+                        /* preds: block_5 */
+                        vec2 32 ssa_36 = vec2 ssa_4.x, ssa_4.y
+                        vec4 32 ssa_20 = tex ssa_36 (coord), 1 (texture), 1 (sampler)
+                        /* succs: block_8 */
+                } else {
+                        block block_7:
+                        /* preds: block_5 */
+                        vec2 32 ssa_39 = vec2 ssa_4.x, ssa_4.y
+                        vec4 32 ssa_24 = tex ssa_39 (coord), 3 (texture), 3 (sampler)
+                        /* succs: block_8 */
+                }
+                block block_8:
+                /* preds: block_6 block_7 */
+                vec4 32 ssa_25 = phi block_6: ssa_20, block_7: ssa_24
+                /* succs: block_9 */
+        }
+        block block_9:
+        /* preds: block_4 block_8 */
+        vec4 32 ssa_26 = phi block_4: ssa_15, block_8: ssa_25
+        vec1 32 ssa_27 = deref_var &gl_FragColor (shader_out vec4)
+        intrinsic store_deref (ssa_27, ssa_26) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        /* succs: block_10 */
+        block block_10:
+})";
+ run(shader, "");
+}
