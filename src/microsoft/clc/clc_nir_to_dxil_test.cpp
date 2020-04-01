@@ -627,3 +627,50 @@ impl main {
 })";
    run(shader, "");
 }
+
+TEST_F(NirToDXILTest, test_shader_array_of_sampler_validation)
+{
+ const char shader[] =
+R"(shader: MESA_SHADER_FRAGMENT
+name: GLSL3
+inputs: 1
+outputs: 1
+uniforms: 0
+shared: 0
+decl_var uniform INTERP_MODE_NONE sampler2D[2] tex (0, 0, 0)
+decl_var shader_in INTERP_MODE_NONE vec4 texcoords (VARYING_SLOT_VAR9.xyzw, 0, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+decl_function main (0 params) (entrypoint)
+
+impl main {
+        block block_0:
+        /* preds: */
+        vec1 32 ssa_0 = load_const (0x3f000000 /* 0.500000 */)
+        vec1 32 ssa_3 = deref_var &texcoords (shader_in vec4)
+        vec4 32 ssa_4 = intrinsic load_deref (ssa_3) (0) /* access=0 */
+        vec1 1 ssa_5 = flt ssa_4.x, ssa_0
+        /* succs: block_1 block_2 */
+        if ssa_5 {
+                block block_1:
+                /* preds: block_0 */
+                vec2 32 ssa_18 = vec2 ssa_4.x, ssa_4.y
+                vec4 32 ssa_9 = tex ssa_18 (coord), 0 (texture), 0 (sampler)
+                /* succs: block_3 */
+        } else {
+                block block_2:
+                /* preds: block_0 */
+                vec2 32 ssa_21 = vec2 ssa_4.x, ssa_4.y
+                vec4 32 ssa_13 = tex ssa_21 (coord), 1 (texture), 1 (sampler)
+                /* succs: block_3 */
+        }
+        block block_3:
+        /* preds: block_1 block_2 */
+        vec4 32 ssa_14 = phi block_1: ssa_9, block_2: ssa_13
+        vec1 32 ssa_15 = deref_var &gl_FragColor (shader_out vec4)
+        intrinsic store_deref (ssa_15, ssa_14) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        /* succs: block_4 */
+        block block_4:
+})";
+ run(shader, "");
+}
+
