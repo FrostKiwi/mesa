@@ -241,26 +241,31 @@ enum dxil_atomic_op {
    DXIL_ATOMIC_EXCHANGE = 8,
 };
 
+typedef struct {
+   unsigned id;
+   unsigned binding;
+   unsigned size;
+} resource_array_layout;
+
 static void
 fill_resource_metadata(struct dxil_module *m, const struct dxil_mdnode **fields,
                        const struct dxil_type *struct_type,
-                       const char *name, unsigned idx, unsigned binding,
-                       unsigned size)
+                       const char *name, resource_array_layout *layout)
 {
    const struct dxil_type *pointer_type = dxil_module_get_pointer_type(m, struct_type);
    const struct dxil_value *pointer_undef = dxil_module_get_undef(m, pointer_type);
 
-   fields[0] = dxil_get_metadata_int32(m, idx); // resource ID
+   fields[0] = dxil_get_metadata_int32(m, layout->id); // resource ID
    fields[1] = dxil_get_metadata_value(m, pointer_type, pointer_undef); // global constant symbol
    fields[2] = dxil_get_metadata_string(m, name ? name : ""); // name
    fields[3] = dxil_get_metadata_int32(m, 0); // space ID
-   fields[4] = dxil_get_metadata_int32(m, binding); // lower bound
-   fields[5] = dxil_get_metadata_int32(m, size); // range size
+   fields[4] = dxil_get_metadata_int32(m, layout->binding); // lower bound
+   fields[5] = dxil_get_metadata_int32(m, layout->size); // range size
 }
 
 static const struct dxil_mdnode *
 emit_srv_metadata(struct dxil_module *m, const struct dxil_type *elem_type,
-                  const char *name, unsigned index,
+                  const char *name, resource_array_layout *layout,
                   enum dxil_component_type comp_type,
                   enum dxil_resource_kind res_kind)
 {
@@ -272,7 +277,7 @@ emit_srv_metadata(struct dxil_module *m, const struct dxil_type *elem_type,
       buffer_element_type_tag, element_type
    };
 
-   fill_resource_metadata(m, fields, elem_type, name, index, index, 1);
+   fill_resource_metadata(m, fields, elem_type, name, layout);
    fields[6] = dxil_get_metadata_int32(m, res_kind); // resource shape
    fields[7] = dxil_get_metadata_int1(m, 0); // sample count
    fields[8] = dxil_get_metadata_node(m, metadata_tag_nodes, ARRAY_SIZE(metadata_tag_nodes)); // metadata
@@ -282,7 +287,7 @@ emit_srv_metadata(struct dxil_module *m, const struct dxil_type *elem_type,
 
 static const struct dxil_mdnode *
 emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
-                  const char *name, unsigned index, unsigned size,
+                  const char *name, resource_array_layout *layout,
                   enum dxil_component_type comp_type,
                   enum dxil_resource_kind res_kind)
 {
@@ -290,7 +295,7 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 
    const struct dxil_mdnode *metadata_tag_nodes[2];
 
-   fill_resource_metadata(m, fields, struct_type, name, index, index, size);
+   fill_resource_metadata(m, fields, struct_type, name, layout);
    fields[6] = dxil_get_metadata_int32(m, res_kind); // resource shape
    fields[7] = dxil_get_metadata_int1(m, false); // globally-coherent
    fields[8] = dxil_get_metadata_int1(m, false); // has counter
@@ -308,11 +313,13 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 
 static const struct dxil_mdnode *
 emit_cbv_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
-                  const char *name, unsigned index, unsigned binding, unsigned size)
+                  const char *name, unsigned id, unsigned binding, unsigned size)
 {
    const struct dxil_mdnode *fields[8];
 
-   fill_resource_metadata(m, fields, struct_type, name, index, binding, 1);
+   resource_array_layout layout = {id, binding, 1};
+
+   fill_resource_metadata(m, fields, struct_type, name, &layout);
    fields[6] = dxil_get_metadata_int32(m, size); // constant buffer size
    fields[7] = NULL; // metadata
 
@@ -321,11 +328,11 @@ emit_cbv_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 
 static const struct dxil_mdnode *
 emit_sampler_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
-                      nir_variable *var, unsigned index)
+                      nir_variable *var, resource_array_layout *layout)
 {
    const struct dxil_mdnode *fields[8];
 
-   fill_resource_metadata(m, fields, struct_type, var->name, index, index, 1);
+   fill_resource_metadata(m, fields, struct_type, var->name, layout);
    fields[6] = dxil_get_metadata_int32(m, DXIL_SAMPLER_KIND_DEFAULT); // sampler kind
    enum dxil_sampler_kind sampler_kind = glsl_sampler_type_is_shadow(var->type) ?
           DXIL_SAMPLER_KIND_COMPARISON : DXIL_SAMPLER_KIND_DEFAULT;
@@ -671,13 +678,13 @@ emit_createhandle_call_const_index(struct ntd_context *ctx,
 }
 
 static void
-add_resource(struct ntd_context *ctx, enum dxil_resource_type type, unsigned index, unsigned array_size)
+add_resource(struct ntd_context *ctx, enum dxil_resource_type type, resource_array_layout *layout)
 {
    assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
    ctx->resources[ctx->num_resources].resource_type = type;
    ctx->resources[ctx->num_resources].space = 0;
-   ctx->resources[ctx->num_resources].lower_bound = index;
-   ctx->resources[ctx->num_resources].upper_bound = index + array_size - 1;
+   ctx->resources[ctx->num_resources].lower_bound = layout->binding;
+   ctx->resources[ctx->num_resources].upper_bound = layout->binding + layout->size - 1;
    ctx->num_resources++;
 }
 
@@ -688,17 +695,20 @@ emit_srv(struct ntd_context *ctx, nir_variable *var)
    assert(ctx->num_srvs < ARRAY_SIZE(ctx->srv_handles));
 
    unsigned idx = ctx->num_srvs;
+   resource_array_layout layout =  {idx, idx, 1};
+
    enum dxil_component_type comp_type = DXIL_COMP_TYPE_F32;
    enum dxil_resource_kind res_kind = dxil_get_resource_kind(var->type);
    const struct dxil_type *res_type = dxil_module_get_res_type(&ctx->mod, res_kind);
-   const struct dxil_mdnode *srv_meta = emit_srv_metadata(&ctx->mod, res_type, var->name, idx, comp_type, res_kind);
+   const struct dxil_mdnode *srv_meta = emit_srv_metadata(&ctx->mod, res_type, var->name,
+                                                          &layout, comp_type, res_kind);
 
    if (!srv_meta)
       return false;
 
    ctx->srv_metadata_nodes[ctx->num_srvs] = srv_meta;
    assert(glsl_type_get_sampler_count(var->type) == 1);
-   add_resource(ctx, DXIL_RES_SRV_TYPED, idx, glsl_type_get_sampler_count(var->type));
+   add_resource(ctx, DXIL_RES_SRV_TYPED, &layout);
 
    const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SRV,
                                                                         idx, idx, false);
@@ -729,16 +739,17 @@ emit_globals(struct ntd_context *ctx, uint64_t global_inputs)
    if (!array_type)
       return false;
 
+   resource_array_layout layout = {0, 0, size};
    const struct dxil_mdnode *uav_meta =
       emit_uav_metadata(&ctx->mod, array_type,
-                                   "globals", 0, size,
+                                   "globals", &layout,
                                    DXIL_COMP_TYPE_INVALID,
                                    DXIL_RESOURCE_KIND_RAW_BUFFER);
    if (!uav_meta)
       return false;
 
    ctx->uav_metadata_node = uav_meta;
-   add_resource(ctx, DXIL_RES_UAV_RAW, 0, size);
+   add_resource(ctx, DXIL_RES_UAV_RAW, &layout);
    ctx->mod.raw_and_structured_buffers = true;
    return true;
 }
@@ -778,8 +789,9 @@ emit_kernel_inputs_cbv(struct ntd_context *ctx, nir_shader *nir)
    if (!cbv_meta)
       return false;
 
+   resource_array_layout layout = { 0, ctx->num_cbvs, 1 };
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
-   add_resource(ctx, DXIL_RES_CBV, ctx->num_cbvs, 1);
+   add_resource(ctx, DXIL_RES_CBV, &layout);
 
    const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_CBV,
                                                                         ctx->num_cbvs, ctx->num_cbvs,
@@ -795,9 +807,9 @@ emit_kernel_inputs_cbv(struct ntd_context *ctx, nir_shader *nir)
 static bool
 emit_cbv(struct ntd_context *ctx, nir_variable *var)
 {
-   unsigned idx = ctx->num_cbvs;
-   unsigned binding = var->data.binding;
    unsigned size = get_dword_size(var->type);
+   unsigned binding = var->data.binding;
+   unsigned idx = ctx->num_cbvs;
 
    assert(idx < ARRAY_SIZE(ctx->cbv_metadata_nodes));
    assert(binding < ARRAY_SIZE(ctx->cbv_handles));
@@ -807,14 +819,14 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
    const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod, var->name,
                                                                      &array_type, 1);
    const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
-                                                          var->name, idx, binding,
-                                                          size * 4);
+                                                          var->name, idx, binding, 4 * size);
 
    if (!cbv_meta)
       return false;
 
+   resource_array_layout layout = {0, binding, 1};
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
-   add_resource(ctx, DXIL_RES_CBV, binding, 1);
+   add_resource(ctx, DXIL_RES_CBV, &layout);
 
    const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_CBV,
                                                                         idx, binding, false);
@@ -835,15 +847,16 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var)
    assert(ctx->num_samplers < ARRAY_SIZE(ctx->sampler_handles));
 
    unsigned idx = ctx->num_samplers;
+   resource_array_layout layout = {idx, idx, 1};
    const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_type *sampler_type = dxil_module_get_struct_type(&ctx->mod, "struct.SamplerState", &int32_type, 1);
-   const struct dxil_mdnode *sampler_meta = emit_sampler_metadata(&ctx->mod, sampler_type, var, idx);
+   const struct dxil_mdnode *sampler_meta = emit_sampler_metadata(&ctx->mod, sampler_type, var, &layout);
 
    if (!sampler_meta)
       return false;
 
    ctx->sampler_metadata_nodes[ctx->num_samplers] = sampler_meta;
-   add_resource(ctx, DXIL_RES_SAMPLER, idx, glsl_type_get_sampler_count(var->type));
+   add_resource(ctx, DXIL_RES_SAMPLER, &layout);
 
    const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SAMPLER,
                                                                         idx, idx, false);
