@@ -1075,6 +1075,8 @@ store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
       case nir_type_uint:
       case nir_type_int:
          assert(nir_dest_bit_size(*dest) != 1);
+         if (nir_dest_bit_size(*dest) == 16)
+            ctx->mod.feats.min_precision = true;
          if (nir_dest_bit_size(*dest) == 64)
             ctx->mod.feats.int64_ops = true;
          break;
@@ -1127,7 +1129,7 @@ get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
    switch (nir_alu_type_get_base_type(type)) {
    case nir_type_int:
    case nir_type_uint:
-      assert(nir_src_bit_size(*src) >= 32);
+      assert(nir_src_bit_size(*src) >= 16);
       assert(nir_src_bit_size(*src) != 64 || ctx->mod.feats.int64_ops);
       /* nohing to do */
       return value;
@@ -1207,6 +1209,7 @@ get_cast_op(nir_alu_instr *alu)
          return DXIL_CAST_FPEXT;
 
    /* int -> int */
+   case nir_op_i2i16:
    case nir_op_i2i32:
    case nir_op_i2i64:
       assert(dst_bits != src_bits);
@@ -1216,6 +1219,7 @@ get_cast_op(nir_alu_instr *alu)
          return DXIL_CAST_SEXT;
 
    /* uint -> uint */
+   case nir_op_u2u16:
    case nir_op_u2u32:
    case nir_op_u2u64:
       assert(dst_bits != src_bits);
@@ -1569,6 +1573,8 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 
    case nir_op_f2b1:
    case nir_op_b2i16:
+   case nir_op_i2i16:
+   case nir_op_u2u16:
    case nir_op_b2i32:
    case nir_op_f2f32:
    case nir_op_f2i32:
@@ -2222,6 +2228,11 @@ emit_load_const(struct ntd_context *ctx, nir_load_const_instr *load_const)
       case 1:
          value = dxil_module_get_int1_const(&ctx->mod,
                                             load_const->value[i].b);
+         break;
+      case 16:
+         ctx->mod.feats.min_precision = true;
+         value = dxil_module_get_int16_const(&ctx->mod,
+                                             load_const->value[i].u16);
          break;
       case 32:
          value = dxil_module_get_int32_const(&ctx->mod,
