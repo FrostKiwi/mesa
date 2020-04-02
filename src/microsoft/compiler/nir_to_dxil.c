@@ -331,10 +331,11 @@ emit_sampler_metadata(struct dxil_module *m, const struct dxil_type *struct_type
                       nir_variable *var, resource_array_layout *layout)
 {
    const struct dxil_mdnode *fields[8];
+   const struct glsl_type *type = glsl_without_array(var->type);
 
    fill_resource_metadata(m, fields, struct_type, var->name, layout);
    fields[6] = dxil_get_metadata_int32(m, DXIL_SAMPLER_KIND_DEFAULT); // sampler kind
-   enum dxil_sampler_kind sampler_kind = glsl_sampler_type_is_shadow(var->type) ?
+   enum dxil_sampler_kind sampler_kind = glsl_sampler_type_is_shadow(type) ?
           DXIL_SAMPLER_KIND_COMPARISON : DXIL_SAMPLER_KIND_DEFAULT;
    fields[6] = dxil_get_metadata_int32(m, sampler_kind); // sampler kind
    fields[7] = NULL; // metadata
@@ -394,6 +395,7 @@ struct ntd_context {
    const struct dxil_mdnode *srv_metadata_nodes[MAX_SRVS];
    const struct dxil_value *srv_handles[MAX_SRVS];
    unsigned num_srvs;
+   unsigned num_srv_arrays;
 
    const struct dxil_mdnode *uav_metadata_node;
 
@@ -404,6 +406,7 @@ struct ntd_context {
    const struct dxil_mdnode *sampler_metadata_nodes[MAX_SAMPLERS];
    const struct dxil_value *sampler_handles[MAX_SAMPLERS];
    unsigned num_samplers;
+   unsigned num_sampler_arrays;
 
    struct dxil_resource resources[MAX_UAVS];
    unsigned num_resources;
@@ -689,13 +692,14 @@ add_resource(struct ntd_context *ctx, enum dxil_resource_type type, resource_arr
 }
 
 static bool
-emit_srv(struct ntd_context *ctx, nir_variable *var)
+emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned count)
 {
-   assert(ctx->num_srvs < ARRAY_SIZE(ctx->srv_metadata_nodes));
+   assert(ctx->num_srv_arrays < ARRAY_SIZE(ctx->srv_metadata_nodes));
    assert(ctx->num_srvs < ARRAY_SIZE(ctx->srv_handles));
 
+   unsigned id= ctx->num_srv_arrays;
    unsigned idx = ctx->num_srvs;
-   resource_array_layout layout =  {idx, idx, 1};
+   resource_array_layout layout = {id, idx, count};
 
    enum dxil_component_type comp_type = DXIL_COMP_TYPE_F32;
    enum dxil_resource_kind res_kind = dxil_get_resource_kind(var->type);
@@ -706,17 +710,17 @@ emit_srv(struct ntd_context *ctx, nir_variable *var)
    if (!srv_meta)
       return false;
 
-   ctx->srv_metadata_nodes[ctx->num_srvs] = srv_meta;
-   assert(glsl_type_get_sampler_count(var->type) == 1);
+   ctx->srv_metadata_nodes[ctx->num_srv_arrays++] = srv_meta;
    add_resource(ctx, DXIL_RES_SRV_TYPED, &layout);
 
-   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SRV,
-                                                                        idx, idx, false);
-   if (!handle)
-      return false;
+   for (unsigned i = 0; i < count; ++i) {
+      const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SRV,
+                                                                           id, idx + i, false);
+      if (!handle)
+         return false;
 
-   ctx->srv_handles[ctx->num_srvs] = handle;
-   ctx->num_srvs++;
+      ctx->srv_handles[ctx->num_srvs++] = handle;
+   }
 
    return true;
 }
@@ -841,13 +845,14 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
 }
 
 static bool
-emit_sampler(struct ntd_context *ctx, nir_variable *var)
+emit_sampler(struct ntd_context *ctx, nir_variable *var, unsigned count)
 {
-   assert(ctx->num_samplers < ARRAY_SIZE(ctx->sampler_metadata_nodes));
+   assert(ctx->num_sampler_arrays < ARRAY_SIZE(ctx->sampler_metadata_nodes));
    assert(ctx->num_samplers < ARRAY_SIZE(ctx->sampler_handles));
 
+   unsigned id = ctx->num_sampler_arrays;
    unsigned idx = ctx->num_samplers;
-   resource_array_layout layout = {idx, idx, 1};
+   resource_array_layout layout = {id, idx, count};
    const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_type *sampler_type = dxil_module_get_struct_type(&ctx->mod, "struct.SamplerState", &int32_type, 1);
    const struct dxil_mdnode *sampler_meta = emit_sampler_metadata(&ctx->mod, sampler_type, var, &layout);
@@ -855,16 +860,19 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var)
    if (!sampler_meta)
       return false;
 
-   ctx->sampler_metadata_nodes[ctx->num_samplers] = sampler_meta;
+   ctx->sampler_metadata_nodes[id] = sampler_meta;
    add_resource(ctx, DXIL_RES_SAMPLER, &layout);
 
-   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SAMPLER,
-                                                                        idx, idx, false);
-   if (!handle)
-      return false;
+   for (unsigned i = 0; i < count; ++i) {
+      const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SAMPLER,
+                                                                           id, idx + i, false);
+      if (!handle)
+         return false;
 
-   ctx->sampler_handles[ctx->num_samplers] = handle;
-   ctx->num_samplers++;
+      ctx->sampler_handles[ctx->num_samplers] = handle;
+      ctx->num_samplers++;
+   }
+   ctx->num_sampler_arrays++;
 
    return true;
 }
@@ -963,7 +971,7 @@ emit_resources(struct ntd_context *ctx)
    };
 
    if (ctx->num_srvs) {
-      resources_nodes[0] = dxil_get_metadata_node(&ctx->mod, ctx->srv_metadata_nodes, ctx->num_srvs);
+      resources_nodes[0] = dxil_get_metadata_node(&ctx->mod, ctx->srv_metadata_nodes, ctx->num_srv_arrays);
       emit_resources = true;
    }
 
@@ -978,7 +986,7 @@ emit_resources(struct ntd_context *ctx)
    }
 
    if (ctx->num_samplers) {
-      resources_nodes[3] = dxil_get_metadata_node(&ctx->mod, ctx->sampler_metadata_nodes, ctx->num_samplers);
+      resources_nodes[3] = dxil_get_metadata_node(&ctx->mod, ctx->sampler_metadata_nodes, ctx->num_sampler_arrays);
       emit_resources = true;
    }
 
@@ -2945,16 +2953,18 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    /* Samplers */
    nir_foreach_variable(var, &s->uniforms) {
-      if (var->data.mode == nir_var_uniform && glsl_type_get_sampler_count(var->type)) {
-            if (!emit_sampler(ctx, var))
+      unsigned count = glsl_type_get_sampler_count(var->type);
+      if (var->data.mode == nir_var_uniform && count) {
+            if (!emit_sampler(ctx, var, count))
                return false;
       }
    }
 
    /* SRVs */
    nir_foreach_variable(var, &s->uniforms) {
-      if (var->data.mode == nir_var_uniform && glsl_type_get_sampler_count(var->type)) {
-         if (!emit_srv(ctx, var))
+      unsigned count = glsl_type_get_sampler_count(var->type);
+      if (var->data.mode == nir_var_uniform && count) {
+         if (!emit_srv(ctx, var, count))
             return false;
       }
    }
