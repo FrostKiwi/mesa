@@ -29,6 +29,7 @@
 #include "dxil_signature.h"
 #include "dxil_enums.h"
 #include "dxil_dump.h"
+#include "dxil_nir.h"
 
 #include "util/u_debug.h"
 #include "util/u_math.h"
@@ -2996,6 +2997,7 @@ optimize_nir(struct nir_shader *s)
       NIR_PASS_V(s, nir_lower_vars_to_ssa);
       NIR_PASS(progress, s, nir_lower_alu_to_scalar, NULL, NULL);
       NIR_PASS(progress, s, nir_copy_prop);
+      NIR_PASS(progress, s, dxil_nir_lower_8bit_conv);
       NIR_PASS(progress, s, nir_opt_remove_phis);
       NIR_PASS(progress, s, nir_opt_dce);
       NIR_PASS(progress, s, nir_opt_if, true);

@@ -30,9 +30,21 @@ files_libdxil_compiler = files(
   'nir_to_dxil.c'
 )
 
+dxil_nir_algebraic_c = custom_target(
+  'dxil_nir_algebraic.c',
+  input : 'dxil_nir_algebraic.py',
+  output : 'dxil_nir_algebraic.c',
+  command : [
+    prog_python, '@INPUT@',
+    '-p', join_paths(meson.source_root(), 'src/compiler/nir/'),
+  ],
+  capture : true,
+  depend_files : nir_algebraic_py,
+)
+
 libdxil_compiler = static_library(
   'dxil_compiler',
-  [files_libdxil_compiler, sha1_h],
+  [files_libdxil_compiler, dxil_nir_algebraic_c, sha1_h],
   include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_compiler, inc_gallium],
   dependencies: [idep_nir_headers],
   c_args : c_vis_args,
