@@ -858,6 +858,8 @@ intrinsic("bindless_resource_ir3", [1], dest_comp=1, indices=[DESC_SET], flags=[
 # of address, due to lack of real pointers to global memory.
 # src[] = { value, index, offset }.
 intrinsic("store_global_dxil", [0, 1, 1])
+# src[] = { value, mask, index, offset }.
+intrinsic("store_global_masked_dxil", [1] * 4)
 # src[] = { index, offset }.
 load("global_dxil", 2, [], [CAN_ELIMINATE, CAN_REORDER])
 
