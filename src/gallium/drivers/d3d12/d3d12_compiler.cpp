@@ -143,11 +143,16 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    }
 
    nir_foreach_variable(var, &nir->uniforms) {
-      if (glsl_type_is_sampler(var->type)) {
-         shader->srv_bindings[shader->num_srv_bindings].index = var->data.binding;
-         shader->srv_bindings[shader->num_srv_bindings].binding = shader->num_srv_bindings;
-         shader->srv_bindings[shader->num_srv_bindings].dimension = resource_dimension(glsl_get_sampler_dim(var->type));
-         shader->num_srv_bindings++;
+      auto type = glsl_without_array(var->type);
+      if (glsl_type_is_sampler(type)) {
+         assert(!glsl_type_is_array_of_arrays(var->type));
+         unsigned count = glsl_type_is_array(var->type) ? glsl_get_length(var->type) : 1;
+         for (unsigned i = 0; i < count; ++i) {
+            shader->srv_bindings[shader->num_srv_bindings].index = var->data.binding + i;
+            shader->srv_bindings[shader->num_srv_bindings].binding = var->data.binding;
+            shader->srv_bindings[shader->num_srv_bindings].dimension = resource_dimension(glsl_get_sampler_dim(type));
+            shader->num_srv_bindings++;
+         }
       } else if (var->interface_type) {
          if (var->num_state_slots > 0) /* State Vars UBO */
             shader->state_vars_binding = var->data.binding;
