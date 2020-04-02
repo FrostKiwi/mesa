@@ -558,6 +558,11 @@ d3d12_select_shader_variants(struct d3d12_context *ctx, const struct pipe_draw_i
 void
 d3d12_shader_free(struct d3d12_shader_selector *sel)
 {
+   auto shader = sel->first;
+   while (shader) {
+      free(shader->bytecode);
+      shader = shader->next_variant;
+   }
    ralloc_free(sel);
 }
 
