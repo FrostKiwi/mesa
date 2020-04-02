@@ -1897,6 +1897,38 @@ emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
+emit_store_global_masked(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *value =
+      get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   const struct dxil_value *mask =
+      get_src(ctx, &intr->src[1], 0, nir_type_uint);
+   const struct dxil_value *buffer =
+      get_src(ctx, &intr->src[2], 0, nir_type_uint);
+   const struct dxil_value *offset =
+      get_src(ctx, &intr->src[3], 0, nir_type_uint);
+   if (!value || !mask || !buffer || !offset)
+      return false;
+
+   const struct dxil_value *handle =
+      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
+   if (!handle)
+      return false;
+
+   const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
+   if (!int32_undef)
+      return false;
+
+   const struct dxil_value *coord[3] = {
+      offset, int32_undef, int32_undef
+   };
+
+   return
+      emit_atomic_binop(ctx, handle, DXIL_ATOMIC_AND, coord, mask) != NULL &&
+      emit_atomic_binop(ctx, handle, DXIL_ATOMIC_OR, coord, value) != NULL;
+}
+
+static bool
 emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    nir_const_value *const_block_index = nir_src_as_const_value(intr->src[0]);
@@ -2230,6 +2262,8 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_global(ctx, intr);
    case nir_intrinsic_store_global_dxil:
       return emit_store_global(ctx, intr);
+   case nir_intrinsic_store_global_masked_dxil:
+      return emit_store_global_masked(ctx, intr);
    case nir_intrinsic_store_deref:
       return emit_store_deref(ctx, intr);
    case nir_intrinsic_load_deref:
