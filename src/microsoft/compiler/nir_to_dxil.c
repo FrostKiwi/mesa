@@ -557,6 +557,7 @@ emit_bufferload_call(struct ntd_context *ctx,
 
    return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
+
 static bool
 emit_bufferstore_call(struct ntd_context *ctx,
                       const struct dxil_value *handle,
