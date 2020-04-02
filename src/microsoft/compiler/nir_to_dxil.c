@@ -211,6 +211,8 @@ enum dxil_intr {
    DXIL_INTR_BUFFER_LOAD = 68,
    DXIL_INTR_BUFFER_STORE = 69,
 
+   DXIL_INTR_ATOMIC_BINOP = 78,
+
    DXIL_INTR_DISCARD = 82,
    DXIL_INTR_DDX_COARSE = 83,
    DXIL_INTR_DDY_COARSE = 84,
@@ -225,6 +227,18 @@ enum dxil_intr {
    DXIL_INTR_CUT_STREAM = 98,
 
    DXIL_INTR_ATTRIBUTE_AT_VERTEX = 137,
+};
+
+enum dxil_atomic_op {
+   DXIL_ATOMIC_ADD = 0,
+   DXIL_ATOMIC_AND = 1,
+   DXIL_ATOMIC_OR = 2,
+   DXIL_ATOMIC_XOR = 3,
+   DXIL_ATOMIC_IMIN = 4,
+   DXIL_ATOMIC_IMAX = 5,
+   DXIL_ATOMIC_UMIN = 6,
+   DXIL_ATOMIC_UMAX = 7,
+   DXIL_ATOMIC_EXCHANGE = 8,
 };
 
 static void
@@ -581,6 +595,30 @@ emit_bufferstore_call(struct ntd_context *ctx,
 
    return dxil_emit_call_void(&ctx->mod, func,
                               args, ARRAY_SIZE(args));
+}
+
+static const struct dxil_value *
+emit_atomic_binop(struct ntd_context *ctx,
+                  const struct dxil_value *handle,
+                  enum dxil_atomic_op atomic_op,
+                  const struct dxil_value *coord[3],
+                  const struct dxil_value *value)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.atomicBinOp", DXIL_I32);
+
+   if (!func)
+      return false;
+
+   const struct dxil_value *opcode =
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_ATOMIC_BINOP);
+   const struct dxil_value *atomic_op_value =
+      dxil_module_get_int32_const(&ctx->mod, atomic_op);
+   const struct dxil_value *args[] = {
+      opcode, handle, atomic_op_value,
+      coord[0], coord[1], coord[2], value
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
 
 static const struct dxil_value *

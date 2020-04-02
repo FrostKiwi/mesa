@@ -34,6 +34,7 @@ struct predefined_func_descr {
 };
 
 static struct  predefined_func_descr predefined_funcs[] = {
+{"dx.op.atomicBinOp", "O", "i@iiiii", DXIL_ATTR_KIND_READ_NONE},
 {"dx.op.cbufferLoad", "O", "i@ii", DXIL_ATTR_KIND_READ_ONLY},
 {"dx.op.cbufferLoadLegacy", "B", "i@i", DXIL_ATTR_KIND_READ_ONLY},
 {"dx.op.createHandle", "@", "iciib", DXIL_ATTR_KIND_READ_ONLY},
