@@ -329,7 +329,7 @@ d3d12_compile_shader(struct d3d12_context *ctx,
    struct nir_shader *nir = NULL;
 
    if (shader->type == PIPE_SHADER_IR_NIR) {
-      nir = nir_shader_clone(sel, (nir_shader *)shader->ir.nir);
+      nir = (nir_shader *)shader->ir.nir;
    } else {
       assert(shader->type == PIPE_SHADER_IR_TGSI);
       nir = tgsi_to_nir(shader->tokens, ctx->base.screen);
@@ -563,6 +563,7 @@ d3d12_shader_free(struct d3d12_shader_selector *sel)
       free(shader->bytecode);
       shader = shader->next_variant;
    }
+   ralloc_free(sel->initial);
    ralloc_free(sel);
 }
 
