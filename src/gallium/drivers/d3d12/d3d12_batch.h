@@ -24,6 +24,8 @@
 #ifndef D3D12_BATCH_H
 #define D3D12_BATCH_H
 
+#include "util/u_dynarray.h"
+
 #include <d3d12.h>
 
 struct d3d12_descriptor_heap;
@@ -31,6 +33,12 @@ struct d3d12_fence;
 
 struct d3d12_batch {
    struct d3d12_fence *fence;
+
+   struct set *sampler_views;
+   struct set *surfaces;
+   struct set *objects;
+
+   struct util_dynarray zombie_samplers;
 
    ID3D12CommandAllocator *cmdalloc;
    struct d3d12_descriptor_heap *sampler_heap;
@@ -48,5 +56,20 @@ d3d12_start_batch(struct d3d12_context *ctx, struct d3d12_batch *batch);
 
 void
 d3d12_end_batch(struct d3d12_context *ctx, struct d3d12_batch *batch);
+
+#define d3d12_batch_reference_resource(batch, resource) \
+   d3d12_batch_reference_object(batch, resource->res)
+
+void
+d3d12_batch_reference_sampler_view(struct d3d12_batch *batch,
+                                   struct d3d12_sampler_view *sv);
+
+void
+d3d12_batch_reference_surface(struct d3d12_batch *batch,
+                              struct d3d12_surface *surf);
+
+void
+d3d12_batch_reference_object(struct d3d12_batch *batch,
+                             ID3D12Object *object);
 
 #endif

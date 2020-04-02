@@ -25,14 +25,31 @@
 #include "d3d12_context.h"
 #include "d3d12_fence.h"
 #include "d3d12_query.h"
+#include "d3d12_resource.h"
 #include "d3d12_screen.h"
+#include "d3d12_surface.h"
 
+#include "util/hash_table.h"
+#include "util/set.h"
 #include "util/u_inlines.h"
 
 bool
 d3d12_init_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
+
+   batch->sampler_views = _mesa_set_create(NULL, _mesa_hash_pointer,
+                                           _mesa_key_pointer_equal);
+   batch->surfaces = _mesa_set_create(NULL, _mesa_hash_pointer,
+                                      _mesa_key_pointer_equal);
+   batch->objects = _mesa_set_create(NULL,
+                                     _mesa_hash_pointer,
+                                     _mesa_key_pointer_equal);
+
+   if (!batch->sampler_views || !batch->surfaces || !batch->objects)
+      return false;
+
+   util_dynarray_init(&batch->zombie_samplers, NULL);
 
    if (FAILED(screen->dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                                                   __uuidof(batch->cmdalloc),
@@ -59,6 +76,27 @@ d3d12_init_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 }
 
 static void
+delete_sampler_view(set_entry *entry)
+{
+   struct pipe_sampler_view *pres = (struct pipe_sampler_view *)entry->key;
+   pipe_sampler_view_reference(&pres, NULL);
+}
+
+static void
+delete_surface(set_entry *entry)
+{
+   struct pipe_surface *surf = (struct pipe_surface *)entry->key;
+   pipe_surface_reference(&surf, NULL);
+}
+
+static void
+delete_object(set_entry *entry)
+{
+   ID3D12Object *object = (ID3D12Object *)entry->key;
+   object->Release();
+}
+
+static void
 reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
@@ -69,6 +107,14 @@ reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 
    d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
    d3d12_fence_reference(&batch->fence, NULL);
+
+   _mesa_set_clear(batch->sampler_views, delete_sampler_view);
+   _mesa_set_clear(batch->surfaces, delete_surface);
+   _mesa_set_clear(batch->objects, delete_object);
+
+   util_dynarray_foreach(&batch->zombie_samplers, d3d12_descriptor_handle, handle)
+      d3d12_descriptor_handle_free(handle);
+   util_dynarray_clear(&batch->zombie_samplers);
 
    d3d12_descriptor_heap_clear(batch->view_heap);
    d3d12_descriptor_heap_clear(batch->sampler_heap);
@@ -86,6 +132,9 @@ d3d12_destroy_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    batch->cmdalloc->Release();
    d3d12_descriptor_heap_free(batch->sampler_heap);
    d3d12_descriptor_heap_free(batch->view_heap);
+   _mesa_set_destroy(batch->sampler_views, NULL);
+   _mesa_set_destroy(batch->surfaces, NULL);
+   _mesa_set_destroy(batch->objects, NULL);
 }
 
 void
@@ -135,4 +184,37 @@ d3d12_end_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    ID3D12CommandList* cmdlists[] = { ctx->cmdlist };
    screen->cmdqueue->ExecuteCommandLists(1, cmdlists);
    batch->fence = d3d12_create_fence(screen, ctx);
+}
+
+void
+d3d12_batch_reference_sampler_view(struct d3d12_batch *batch,
+                                   struct d3d12_sampler_view *sv)
+{
+   struct set_entry *entry = _mesa_set_search(batch->sampler_views, sv);
+   if (!entry) {
+      entry = _mesa_set_add(batch->sampler_views, sv);
+      pipe_reference(NULL, &sv->base.reference);
+   }
+}
+
+void
+d3d12_batch_reference_surface(struct d3d12_batch *batch,
+                              struct d3d12_surface *surf)
+{
+   struct set_entry *entry = _mesa_set_search(batch->surfaces, surf);
+   if (!entry) {
+      entry = _mesa_set_add(batch->surfaces, surf);
+      pipe_reference(NULL, &surf->base.reference);
+   }
+}
+
+void
+d3d12_batch_reference_object(struct d3d12_batch *batch,
+                             ID3D12Object *object)
+{
+   struct set_entry *entry = _mesa_set_search(batch->objects, object);
+   if (!entry) {
+      entry = _mesa_set_add(batch->objects, object);
+      object->AddRef();
+   }
 }

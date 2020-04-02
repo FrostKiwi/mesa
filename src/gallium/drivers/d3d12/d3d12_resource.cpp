@@ -183,6 +183,7 @@ d3d12_transfer_copy_bufimage(struct d3d12_context *ctx,
                              unsigned stride,
                              bool buf2img)
 {
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
    ID3D12Device* dev = d3d12_screen(ctx->base.screen)->dev;
    D3D12_TEXTURE_COPY_LOCATION buf_loc = {};
    D3D12_TEXTURE_COPY_LOCATION tex_loc = {};
@@ -234,6 +235,9 @@ d3d12_transfer_copy_bufimage(struct d3d12_context *ctx,
    buf_loc.PlacedFootprint.Footprint.RowPitch = stride;
 
    buf_loc.pResource = staging_res->res;
+
+   d3d12_batch_reference_resource(batch, res);
+   d3d12_batch_reference_resource(batch, staging_res);
 
    ctx->cmdlist->CopyTextureRegion(dst, dst_x, dst_y, dst_z, src, buf2img ? NULL : &src_box);
 
@@ -387,6 +391,7 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
                            const struct pipe_box *psrc_box)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
    struct d3d12_resource *dst = d3d12_resource(pdst);
    struct d3d12_resource *src = d3d12_resource(psrc);
    D3D12_TEXTURE_COPY_LOCATION src_loc, dst_loc;
@@ -425,6 +430,9 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
    dst_loc.SubresourceIndex = dst_level;
    dst_loc.pResource = dst->res;
+
+   d3d12_batch_reference_resource(batch, src);
+   d3d12_batch_reference_resource(batch, dst);
 
    ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
                                    &src_loc, &src_box);
