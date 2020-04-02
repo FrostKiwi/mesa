@@ -5192,7 +5192,8 @@ vtn_emit_kernel_entry_point_wrapper(struct vtn_builder *b,
    for (unsigned i = 0; i < entry_point->num_params; ++i) {
       struct vtn_type *param_type = b->entry_point->func->type->params[i];
 
-      if (param_type->base_type == vtn_base_type_pointer)
+      if (param_type->base_type == vtn_base_type_pointer &&
+          param_type->storage_class == SpvStorageClassCrossWorkgroup)
         b->shader->info.cs.global_inputs |= BITFIELD64_BIT(i);
 
       /* consider all pointers to function memory to be parameters passed
