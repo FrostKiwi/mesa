@@ -1175,6 +1175,29 @@ emit_binop(struct ntd_context *ctx, nir_alu_instr *alu,
 }
 
 static bool
+emit_shift(struct ntd_context *ctx, nir_alu_instr *alu,
+           enum dxil_bin_opcode opcode,
+           const struct dxil_value *op0, const struct dxil_value *op1)
+{
+   unsigned op0_bit_size = nir_src_bit_size(alu->src[0].src);
+   unsigned op1_bit_size = nir_src_bit_size(alu->src[1].src);
+   if (op0_bit_size != op1_bit_size) {
+      const struct dxil_type *type =
+         dxil_module_get_int_type(&ctx->mod, op0_bit_size);
+      enum dxil_cast_opcode cast_op =
+         op1_bit_size < op0_bit_size ? DXIL_CAST_ZEXT : DXIL_CAST_TRUNC;
+      op1 = dxil_emit_cast(&ctx->mod, cast_op, type, op1);
+   }
+
+   const struct dxil_value *v =
+      dxil_emit_binop(&ctx->mod, opcode, op0, op1, 0);
+   if (!v)
+      return false;
+   store_alu_dest(ctx, alu, 0, v);
+   return true;
+}
+
+static bool
 emit_cmp(struct ntd_context *ctx, nir_alu_instr *alu,
          enum dxil_cmp_pred pred,
          const struct dxil_value *op0, const struct dxil_value *op1)
@@ -1519,9 +1542,9 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_irem: return emit_binop(ctx, alu, DXIL_BINOP_SREM, src[0], src[1]);
    case nir_op_imod: return emit_binop(ctx, alu, DXIL_BINOP_UREM, src[0], src[1]);
    case nir_op_umod: return emit_binop(ctx, alu, DXIL_BINOP_UREM, src[0], src[1]);
-   case nir_op_ishl: return emit_binop(ctx, alu, DXIL_BINOP_SHL, src[0], src[1]);
-   case nir_op_ishr: return emit_binop(ctx, alu, DXIL_BINOP_ASHR, src[0], src[1]);
-   case nir_op_ushr: return emit_binop(ctx, alu, DXIL_BINOP_LSHR, src[0], src[1]);
+   case nir_op_ishl: return emit_shift(ctx, alu, DXIL_BINOP_SHL, src[0], src[1]);
+   case nir_op_ishr: return emit_shift(ctx, alu, DXIL_BINOP_ASHR, src[0], src[1]);
+   case nir_op_ushr: return emit_shift(ctx, alu, DXIL_BINOP_LSHR, src[0], src[1]);
    case nir_op_iand: return emit_binop(ctx, alu, DXIL_BINOP_AND, src[0], src[1]);
    case nir_op_ior:  return emit_binop(ctx, alu, DXIL_BINOP_OR, src[0], src[1]);
    case nir_op_ixor: return emit_binop(ctx, alu, DXIL_BINOP_XOR, src[0], src[1]);
