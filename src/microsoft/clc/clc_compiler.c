@@ -161,6 +161,22 @@ void clc_free_object(struct clc_object *obj)
    free(obj);
 }
 
+static unsigned
+lower_bit_size_callback(const nir_alu_instr *alu, UNUSED void *data)
+{
+   switch (nir_dest_bit_size(alu->dest.dest)) {
+   case 8:  return 16;
+
+   case 1:
+   case 16:
+   case 32:
+   case 64: return 0;
+
+   default:
+      unreachable("unexpected bit_size");
+   }
+}
+
 struct clc_dxil_object *
 clc_to_dxil(const struct clc_object *obj,
             const char *entrypoint,
@@ -271,6 +287,8 @@ clc_to_dxil(const struct clc_object *obj,
       NIR_PASS_V(nir, nir_lower_int64, nir_options->lower_int64_options);
 
    NIR_PASS_V(nir, nir_opt_dce);
+
+   NIR_PASS_V(nir, nir_lower_bit_size, lower_bit_size_callback, NULL);
 
    nir_validate_shader(nir, "Validate before feeding NIR to the DXIL compiler");
    struct nir_to_dxil_options opts = {
