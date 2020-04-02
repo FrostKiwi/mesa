@@ -54,6 +54,62 @@ TEST_F(ComputeTest, two_global_arrays)
       EXPECT_EQ(g1[i], expected[i]);
 }
 
+TEST_F(ComputeTest, globals_8bit)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global unsigned char *inout)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       inout[idx] = inout[idx] + 1;\n\
+   }\n";
+   auto inout = ShaderArg<uint8_t> ({ 100, 110, 120, 130 }, SHADER_ARG_INOUT);
+   const uint8_t expected[] = {
+      101, 111, 121, 131
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
+TEST_F(ComputeTest, globals_16bit)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global unsigned short *inout)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       inout[idx] = inout[idx] + 1;\n\
+   }\n";
+   auto inout = ShaderArg<uint16_t> ({ 10000, 10010, 10020, 10030 }, SHADER_ARG_INOUT);
+   const uint16_t expected[] = {
+      10001, 10011, 10021, 10031
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
+TEST_F(ComputeTest, DISABLED_globals_64bit)
+{
+   /* Test disabled, because we need a fixed version of WARP that hasn't
+      been officially shipped yet */
+
+   const char *kernel_source =
+   "__kernel void main_test(__global unsigned long *inout)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       inout[idx] = inout[idx] + 1;\n\
+   }\n";
+   uint64_t base = 1ull << 50;
+   auto inout = ShaderArg<uint64_t>({ base, base + 10, base + 20, base + 30 },
+                                    SHADER_ARG_INOUT);
+   const uint64_t expected[] = {
+      base + 1, base + 11, base + 21, base + 31
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
 TEST_F(ComputeTest, built_ins_global_id)
 {
    const char *kernel_source =
