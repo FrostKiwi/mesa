@@ -56,6 +56,7 @@ d3d12_context_destroy(struct pipe_context *pctx)
    ctx->cmdlist->Release();
    ctx->cmdqueue_fence->Release();
    CloseHandle(ctx->event);
+   util_blitter_destroy(ctx->blitter);
    d3d12_descriptor_heap_free(ctx->rtv_heap);
    d3d12_descriptor_heap_free(ctx->dsv_heap);
    d3d12_descriptor_heap_free(ctx->sampler_heap);
@@ -64,6 +65,8 @@ d3d12_context_destroy(struct pipe_context *pctx)
    d3d12_descriptor_pool_free(ctx->view_pool);
    util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
+
+   u_suballocator_destroy(ctx->query_allocator);
 
    if (pctx->stream_uploader)
       u_upload_destroy(pctx->stream_uploader);
