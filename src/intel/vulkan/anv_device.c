@@ -1407,7 +1407,7 @@ void anv_GetPhysicalDeviceProperties(
     * render targets and one slot for the descriptor buffer. */
    const uint32_t max_per_stage =
       pdevice->has_bindless_images && pdevice->has_a64_buffer_access
-      ? UINT32_MAX : MAX_BINDING_TABLE_SIZE - MAX_RTS - 1;
+      ? UINT32_MAX : BRW_MAX_BINDING_TABLE_SIZE - MAX_RTS - 1;
 
    const uint32_t max_workgroup_size = 32 * devinfo->max_cs_threads;
 

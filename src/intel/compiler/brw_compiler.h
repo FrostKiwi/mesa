@@ -518,6 +518,18 @@ struct brw_image_param {
 /** Max number of render targets in a shader */
 #define BRW_MAX_DRAW_BUFFERS 8
 
+/* From the Skylake PRM Vol. 7 "Binding Table Surface State Model":
+ *
+ *    "The surface state model is used when a Binding Table Index (specified
+ *    in the message descriptor) of less than 240 is specified. In this model,
+ *    the Binding Table Index is used to index into the binding table, and the
+ *    binding table entry contains a pointer to the SURFACE_STATE."
+ *
+ * Binding table values above 240 are used for various things in the hardware
+ * such as stateless, stateless with incoherent cache, SLM, and bindless.
+ */
+#define BRW_MAX_BINDING_TABLE_SIZE 240
+
 /**
  * Max number of binding table entries used for stream output.
  *

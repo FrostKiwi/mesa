@@ -169,7 +169,7 @@ find_descriptor_for_index_src(nir_src src,
    uint32_t surface_index = state->set[set].surface_offsets[binding];
 
    /* Only lower to a BTI message if we have a valid binding table index. */
-   return surface_index < MAX_BINDING_TABLE_SIZE;
+   return surface_index < BRW_MAX_BINDING_TABLE_SIZE;
 }
 
 static bool
@@ -752,7 +752,7 @@ lower_image_intrinsic(nir_intrinsic_instr *intrin,
                                intrin->dest.ssa.bit_size, state);
 
       nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(desc));
-   } else if (binding_offset > MAX_BINDING_TABLE_SIZE) {
+   } else if (binding_offset > BRW_MAX_BINDING_TABLE_SIZE) {
       const bool write_only =
          (var->data.access & ACCESS_NON_READABLE) != 0;
       nir_ssa_def *desc =
@@ -840,7 +840,7 @@ lower_tex_deref(nir_tex_instr *tex, nir_tex_src_type deref_src_type,
 
    nir_tex_src_type offset_src_type;
    nir_ssa_def *index = NULL;
-   if (binding_offset > MAX_BINDING_TABLE_SIZE) {
+   if (binding_offset > BRW_MAX_BINDING_TABLE_SIZE) {
       const unsigned plane_offset =
          plane * sizeof(struct anv_sampled_image_descriptor);
 
@@ -1218,7 +1218,7 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
          state.has_dynamic_buffers = true;
 
       if (binding->data & ANV_DESCRIPTOR_SURFACE_STATE) {
-         if (map->surface_count + array_size > MAX_BINDING_TABLE_SIZE ||
+         if (map->surface_count + array_size > BRW_MAX_BINDING_TABLE_SIZE ||
              anv_descriptor_requires_bindless(pdevice, binding, false)) {
             /* If this descriptor doesn't fit in the binding table or if it
              * requires bindless for some reason, flag it as bindless.
@@ -1253,7 +1253,7 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
                }
             }
          }
-         assert(map->surface_count <= MAX_BINDING_TABLE_SIZE);
+         assert(map->surface_count <= BRW_MAX_BINDING_TABLE_SIZE);
       }
 
       if (binding->data & ANV_DESCRIPTOR_SAMPLER_STATE) {
@@ -1303,7 +1303,7 @@ anv_nir_apply_pipeline_layout(const struct anv_physical_device *pdevice,
       if (state.set[set].use_count[binding] == 0)
          continue;
 
-      if (state.set[set].surface_offsets[binding] >= MAX_BINDING_TABLE_SIZE)
+      if (state.set[set].surface_offsets[binding] >= BRW_MAX_BINDING_TABLE_SIZE)
          continue;
 
       struct anv_pipeline_binding *pipe_binding =
