@@ -201,8 +201,8 @@ fill_cbv_descriptors(struct d3d12_context *ctx,
       struct d3d12_resource *res = d3d12_resource(buffer->buffer);
       D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc = {};
       cbv_desc.BufferLocation = res->res->GetGPUVirtualAddress() + buffer->buffer_offset;
-
       cbv_desc.SizeInBytes = align(buffer->buffer_size, 256);
+      d3d12_batch_reference_resource(batch, res);
 
       struct d3d12_descriptor_handle handle;
       d3d12_descriptor_heap_alloc_handle(batch->view_heap, &handle);
@@ -229,10 +229,12 @@ fill_srv_descriptors(struct d3d12_context *ctx,
       struct d3d12_sampler_view *view =
          (struct d3d12_sampler_view*) ctx->sampler_views[stage][index];
 
-      if (view != NULL)
+      if (view != NULL) {
          descs[i] = view->handle.cpu_handle ;
-      else
+         d3d12_batch_reference_sampler_view(batch, view);
+      } else {
          descs[i] = ctx->null_srvs[shader->srv_bindings[i].dimension].cpu_handle;
+      }
    }
 
    d3d12_descriptor_heap_append_handles(batch->view_heap, descs, shader->num_srv_bindings);
@@ -497,6 +499,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                const struct pipe_draw_info *dinfo)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
 
    d3d12_select_shader_variants(ctx, dinfo);
 
@@ -537,7 +540,9 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       get_gfx_pipeline_state(ctx, root_sig, reduced_prim);
    assert(pipeline_state);
 
+   d3d12_batch_reference_object(batch, root_sig);
    ctx->cmdlist->SetGraphicsRootSignature(root_sig);
+   root_sig->Release();
 
    set_graphics_root_parameters(ctx);
 
@@ -553,7 +558,9 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       ctx->cmdlist->RSSetScissorRects(1, &fb_scissor);
    }
 
+   d3d12_batch_reference_object(batch, pipeline_state);
    ctx->cmdlist->SetPipelineState(pipeline_state);
+   pipeline_state->Release();
 
    if (ctx->blend->blend_factor_flags & (D3D12_BLEND_FACTOR_COLOR | D3D12_BLEND_FACTOR_ANY)) {
       ctx->cmdlist->OMSetBlendFactor(ctx->blend_factor);
@@ -566,18 +573,27 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    D3D12_CPU_DESCRIPTOR_HANDLE render_targets[PIPE_MAX_COLOR_BUFS] = {};
    D3D12_CPU_DESCRIPTOR_HANDLE *depth_desc = NULL, tmp_desc;
-   for (int i = 0; i < ctx->fb.nr_cbufs; ++i)
-      render_targets[i] = d3d12_surface(ctx->fb.cbufs[i])->desc_handle.cpu_handle;
+   for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
+      struct d3d12_surface *surface = d3d12_surface(ctx->fb.cbufs[i]);
+      render_targets[i] = surface->desc_handle.cpu_handle;
+      d3d12_batch_reference_surface(batch, surface);
+   }
    if (ctx->fb.zsbuf) {
-      tmp_desc = d3d12_surface(ctx->fb.zsbuf)->desc_handle.cpu_handle;
+      struct d3d12_surface *surface = d3d12_surface(ctx->fb.zsbuf);
+      tmp_desc = surface->desc_handle.cpu_handle;
+      d3d12_batch_reference_surface(batch, surface);
       depth_desc = &tmp_desc;
    }
    ctx->cmdlist->OMSetRenderTargets(ctx->fb.nr_cbufs, render_targets, FALSE, depth_desc);
    ctx->cmdlist->OMSetStencilRef(ctx->stencil_ref.ref_value[0]);
 
    ctx->cmdlist->IASetPrimitiveTopology(topology(dinfo->mode));
-   ctx->cmdlist->IASetVertexBuffers(0, ctx->num_vbs, ctx->vbvs);
 
+   for (int i = 0; i < ctx->num_vbs; ++i) {
+      if (ctx->vbs[i].buffer.resource)
+         d3d12_batch_reference_resource(batch, d3d12_resource(ctx->vbs[i].buffer.resource));
+   }
+   ctx->cmdlist->IASetVertexBuffers(0, ctx->num_vbs, ctx->vbvs);
 
    for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
       struct pipe_surface *psurf = ctx->fb.cbufs[i];
@@ -598,6 +614,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       ibv.SizeInBytes = res->base.width0 - index_offset;
       ibv.Format = ib_format(dinfo->index_size);
 
+      d3d12_batch_reference_resource(batch, res);
       ctx->cmdlist->IASetIndexBuffer(&ibv);
       ctx->cmdlist->DrawIndexedInstanced(dinfo->count, dinfo->instance_count,
                                          dinfo->start, dinfo->index_bias,
