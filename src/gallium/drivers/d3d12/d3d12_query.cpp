@@ -197,12 +197,16 @@ d3d12_begin_query(struct pipe_context *pctx,
 static void
 end_query(struct d3d12_context *ctx, struct d3d12_query *q)
 {
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
    struct d3d12_resource *res = (struct d3d12_resource *)q->buffer;
    unsigned offset = q->buffer_offset + q->curr_query * sizeof(uint64_t);
 
    ctx->cmdlist->EndQuery(q->query_heap, q->d3d12qtype, q->curr_query);
    ctx->cmdlist->ResolveQueryData(q->query_heap, q->d3d12qtype, q->curr_query,
                                   1, res->res, offset);
+
+   d3d12_batch_reference_object(batch, q->query_heap);
+   d3d12_batch_reference_object(batch, res->res);
 
    assert(q->curr_query < q->num_queries);
    q->curr_query++;
