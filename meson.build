@@ -34,8 +34,6 @@ cpp = meson.get_compiler('cpp')
 
 null_dep = dependency('', required : false)
 
-need_spirv_tools = false
-
 if get_option('layout') != 'mirror'
   error('`mirror` is the only build directory layout supported')
 endif
@@ -264,6 +262,22 @@ if with_gallium_tegra and not with_gallium_nouveau
   error('tegra driver requires nouveau driver')
 endif
 
+with_spirv_tools = false
+
+_microsoft_clc = get_option('microsoft-clc')
+if _microsoft_clc == 'auto'
+  with_microsoft_clc = false
+else
+  with_microsoft_clc = _microsoft_clc == 'true'
+endif
+
+if with_microsoft_clc
+  with_spirv_tools = true
+  with_llvm = true
+  dep_llvm = subproject('llvm').get_variable('dep_llvm')
+  dep_clang = subproject('llvm').get_variable('dep_clang')
+endif
+
 if host_machine.system() == 'darwin'
   with_dri_platform = 'apple'
   pre_args += '-DBUILDING_MESA'
@@ -433,24 +447,6 @@ if with_glvnd
   if get_option('egl-lib-suffix') != ''
     error('''EGL lib suffix can't be used with libglvnd''')
   endif
-endif
-
-with_llvm = false
-_microsoft_clc = get_option('microsoft-clc')
-if _microsoft_clc == 'auto'
-  with_microsoft_clc = host_machine.system() == 'windows'
-else
-  with_microsoft_clc = _microsoft_clc == 'true'
-endif
-if with_microsoft_clc
-  dep_llvm = subproject('llvm').get_variable('dep_llvm')
-  dep_clang = subproject('llvm').get_variable('dep_clang')
-  need_spirv_tools = true
-  with_llvm = true
-else
-  dep_llvm = null_dep
-  dep_clang = null_dep
-  with_llvm = false
 endif
 
 if with_vulkan_icd_dir == ''
@@ -744,11 +740,7 @@ if _opencl != 'disabled'
 
   with_opencl_spirv = get_option('opencl-spirv')
   if with_opencl_spirv
-    # LLVMSPIRVLib is available at https://github.com/KhronosGroup/SPIRV-LLVM-Translator
-    need_spirv_tools = true
-    dep_llvmspirvlib = dependency('LLVMSPIRVLib', required : true, version : '>= 0.2.1')
-  else
-    dep_llvmspirvlib = null_dep
+    with_spirv_tools = true
   endif
 
   if host_machine.cpu_family().startswith('ppc') and cpp.compiles('''
@@ -760,16 +752,9 @@ if _opencl != 'disabled'
   endif
 else
   dep_clc = null_dep
-  dep_llvmspirvlib = null_dep
   with_gallium_opencl = false
   with_opencl_icd = false
   with_opencl_spirv = false
-endif
-
-if need_spirv_tools
-  dep_spirv_tools = dependency('SPIRV-Tools', required : true, version : '>= 2018.0')
-else
-  dep_spirv_tools = null_dep
 endif
 
 gl_pkgconfig_c_flags = []
@@ -1503,6 +1488,14 @@ elif with_amd_vk or with_gallium_radeonsi or with_gallium_swr
   error('The following drivers require LLVM: Radv, RadeonSI, SWR. One of these is enabled, but LLVM is disabled.')
 elif with_gallium_opencl
   error('The OpenCL "Clover" state tracker requires LLVM, but LLVM is disabled.')
+
+if with_spirv_tools
+  dep_spirv_tools = dependency('SPIRV-Tools', required : true, version : '>= 2018.0')
+  # LLVMSPIRVLib is available at https://github.com/KhronosGroup/SPIRV-LLVM-Translator
+  dep_llvmspirvlib = dependency('LLVMSPIRVLib', required : true, version : '>= 0.2.1')
+else
+  dep_spirv_tools = null_dep
+  dep_llvmspirvlib = null_dep
 endif
 
 if (with_amd_vk or with_gallium_radeonsi or with_gallium_opencl or
