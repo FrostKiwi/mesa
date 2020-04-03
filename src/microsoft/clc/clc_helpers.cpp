@@ -202,6 +202,36 @@ clc_to_spirv(const struct clc_compile_args *args,
    return 0;
 }
 
+static const char *
+spv_result_to_str(spv_result_t res)
+{
+   switch (res) {
+   case SPV_SUCCESS: return "success";
+   case SPV_UNSUPPORTED: return "unsupported";
+   case SPV_END_OF_STREAM: return "end of stream";
+   case SPV_WARNING: return "warning";
+   case SPV_FAILED_MATCH: return "failed match";
+   case SPV_REQUESTED_TERMINATION: return "requested termination";
+   case SPV_ERROR_INTERNAL: return "internal error";
+   case SPV_ERROR_OUT_OF_MEMORY: return "out of memory";
+   case SPV_ERROR_INVALID_POINTER: return "invalid pointer";
+   case SPV_ERROR_INVALID_BINARY: return "invalid binary";
+   case SPV_ERROR_INVALID_TEXT: return "invalid text";
+   case SPV_ERROR_INVALID_TABLE: return "invalid table";
+   case SPV_ERROR_INVALID_VALUE: return "invalid value";
+   case SPV_ERROR_INVALID_DIAGNOSTIC: return "invalid diagnostic";
+   case SPV_ERROR_INVALID_LOOKUP: return "invalid lookup";
+   case SPV_ERROR_INVALID_ID: return "invalid id";
+   case SPV_ERROR_INVALID_CFG: return "invalid config";
+   case SPV_ERROR_INVALID_LAYOUT: return "invalid layout";
+   case SPV_ERROR_INVALID_CAPABILITY: return "invalid capability";
+   case SPV_ERROR_INVALID_DATA: return "invalid data";
+   case SPV_ERROR_MISSING_EXTENSION: return "missing extension";
+   case SPV_ERROR_WRONG_VERSION: return "wrong version";
+   default: return "unknown error";
+   }
+}
+
 int
 clc_link_spirv_binaries(const struct spirv_binary **in_bins,
                         unsigned num_in_bins,
@@ -220,8 +250,10 @@ clc_link_spirv_binaries(const struct spirv_binary **in_bins,
    spvtools::LinkerOptions options;
    std::vector<uint32_t> linkingResult;
    spv_result_t status = spvtools::Link(context, binaries, &linkingResult, options);
-   if (status != SPV_SUCCESS)
+   if (status != SPV_SUCCESS) {
+      *err_buf = strdup(spv_result_to_str(status));
       return -1;
+   }
 
    dst_bin->size = linkingResult.size() * 4;
    dst_bin->data = static_cast<uint32_t *>(malloc(dst_bin->size));
