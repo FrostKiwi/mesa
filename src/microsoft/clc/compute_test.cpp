@@ -155,7 +155,7 @@ ComputeTest::create_root_signature(int num_uavs, int num_cbvs)
    root_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
    D3D12_ROOT_SIGNATURE_DESC1 root_sig_desc;
-   root_sig_desc.NumParameters = num_uavs + num_cbvs;
+   root_sig_desc.NumParameters = 1;
    root_sig_desc.pParameters = &root_param;
    root_sig_desc.NumStaticSamplers = 0;
    root_sig_desc.pStaticSamplers = NULL;
