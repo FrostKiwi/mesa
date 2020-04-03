@@ -112,6 +112,12 @@ d3d12_descriptor_heap_can_allocate(struct d3d12_descriptor_heap *heap)
            heap->size >= heap->next + heap->desc_size);
 }
 
+uint32_t
+d3d12_descriptor_heap_get_remaining_handles(struct d3d12_descriptor_heap *heap)
+{
+   return (heap->size - heap->next) / heap->desc_size;
+}
+
 void
 d2d12_descriptor_heap_get_next_handle(struct d3d12_descriptor_heap *heap,
                                       struct d3d12_descriptor_handle *handle)
