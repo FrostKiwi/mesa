@@ -464,6 +464,15 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
 void
 ComputeTest::SetUp()
 {
+   static struct clc_context *compiler_ctx_g = nullptr;
+
+   if (!compiler_ctx_g) {
+      compiler_ctx_g = clc_context_new();
+      if (!compiler_ctx_g)
+         throw runtime_error("failed to create CLC compiler context");
+   }
+   compiler_ctx = compiler_ctx_g;
+
    enable_d3d12_debug_layer();
 
    factory = get_dxgi_factory();
@@ -625,20 +634,22 @@ ComputeTest::compile_and_validate(const std::vector<const char *> &sources)
    for (unsigned i = 0; i < sources.size(); i++) {
       args.source.value = sources[i];
 
-      obj = clc_compile(&args, &logger);
+      obj = clc_compile(compiler_ctx, &args, &logger);
       if (!obj)
          throw runtime_error("failed to compile object!");
 
       objs.push_back(obj);
    }
 
-   obj = clc_link((const struct clc_object **)objs.data(), objs.size(), &logger);
+   obj = clc_link(compiler_ctx,
+                  (const struct clc_object **)objs.data(), objs.size(),
+                  &logger);
    if (!obj)
       throw runtime_error("failed to link objects!");
 
    shader.obj = std::shared_ptr<struct clc_object>(obj, clc_free_object);
 
-   dxil = clc_to_dxil(obj, "main_test", &logger);
+   dxil = clc_to_dxil(compiler_ctx, obj, "main_test", &logger);
    if (!dxil)
       throw runtime_error("failed to compile kernel!");
 

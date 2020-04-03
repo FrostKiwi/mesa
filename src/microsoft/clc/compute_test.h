@@ -165,7 +165,7 @@ protected:
    void
    TearDown() override;
 
-   static Shader
+   Shader
    compile_and_validate(const std::vector<const char *> &sources);
 
    enum ShaderArgDirection {
@@ -269,6 +269,8 @@ protected:
    ID3D12CommandAllocator *cmdalloc;
    ID3D12GraphicsCommandList *cmdlist;
    ID3D12DescriptorHeap *uav_heap;
+
+   struct clc_context *compiler_ctx;
 
    UINT uav_heap_incr;
    int fence_value;

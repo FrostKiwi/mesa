@@ -1,4 +1,6 @@
 EXPORTS
+    clc_context_new
+    clc_free_context
     clc_compile
     clc_link
     clc_free_object
