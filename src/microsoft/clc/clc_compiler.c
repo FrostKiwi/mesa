@@ -296,8 +296,28 @@ clc_print_kernels_info(const struct clc_object *obj)
    }
 }
 
+struct clc_context *
+clc_context_new(void)
+{
+   struct clc_context *ctx = calloc(1, sizeof(*ctx));
+   if (!ctx) {
+      fprintf(stderr, "D3D12: failed to allocate a clc_context");
+      return NULL;
+   }
+
+   return ctx;
+}
+
+void
+clc_free_context(struct clc_context *ctx)
+{
+   free(ctx);
+};
+
+
 struct clc_object *
-clc_compile(const struct clc_compile_args *args,
+clc_compile(struct clc_context *ctx,
+            const struct clc_compile_args *args,
             const struct clc_logger *logger)
 {
    struct clc_object *obj;
@@ -331,7 +351,8 @@ clc_compile(const struct clc_compile_args *args,
 }
 
 struct clc_object *
-clc_link(const struct clc_object **in_objs,
+clc_link(struct clc_context *ctx,
+         const struct clc_object **in_objs,
          unsigned num_in_objs,
          const struct clc_logger *logger)
 {
@@ -390,7 +411,8 @@ lower_bit_size_callback(const nir_alu_instr *alu, UNUSED void *data)
 }
 
 struct clc_dxil_object *
-clc_to_dxil(const struct clc_object *obj,
+clc_to_dxil(struct clc_context *ctx,
+            const struct clc_object *obj,
             const char *entrypoint,
             const struct clc_logger *logger)
 {
