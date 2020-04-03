@@ -109,7 +109,9 @@ static void
 d3d12_bind_vertex_elements_state(struct pipe_context *pctx,
                                  void *ve)
 {
-   d3d12_context(pctx)->ves = (struct d3d12_vertex_elements_state *)ve;
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   ctx->ves = (struct d3d12_vertex_elements_state *)ve;
+   ctx->state_dirty |= D3D12_DIRTY_VERTEX_ELEMENTS;
 }
 
 static void
@@ -326,7 +328,15 @@ d3d12_create_blend_state(struct pipe_context *pctx,
 static void
 d3d12_bind_blend_state(struct pipe_context *pctx, void *blend_state)
 {
-   d3d12_context(pctx)->blend = (struct d3d12_blend_state *) blend_state;
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_blend_state *new_state = (struct d3d12_blend_state *) blend_state;
+   struct d3d12_blend_state *old_state = ctx->blend;
+
+   ctx->blend = new_state;
+   ctx->state_dirty |= D3D12_DIRTY_BLEND;
+   if (new_state == NULL || old_state == NULL ||
+       new_state->blend_factor_flags != old_state->blend_factor_flags)
+      ctx->state_dirty |= D3D12_DIRTY_BLEND_COLOR;
 }
 
 static void
@@ -405,7 +415,9 @@ static void
 d3d12_bind_depth_stencil_alpha_state(struct pipe_context *pctx,
                                      void *dsa)
 {
-   d3d12_context(pctx)->depth_stencil_alpha_state = (struct d3d12_depth_stencil_alpha_state *) dsa;
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   ctx->depth_stencil_alpha_state = (struct d3d12_depth_stencil_alpha_state *) dsa;
+   ctx->state_dirty |= D3D12_DIRTY_ZSA;
 }
 
 static void
@@ -479,7 +491,9 @@ d3d12_create_rasterizer_state(struct pipe_context *pctx,
 static void
 d3d12_bind_rasterizer_state(struct pipe_context *pctx, void *rs_state)
 {
-   d3d12_context(pctx)->rast = (struct d3d12_rasterizer_state *)rs_state;
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   ctx->rast = (struct d3d12_rasterizer_state *)rs_state;
+   ctx->state_dirty |= D3D12_DIRTY_RASTERIZER;
 }
 
 static void
@@ -600,6 +614,7 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
       ctx->samplers[shader][start_slot + i] = sampler;
    }
    ctx->num_samplers[shader] = start_slot + num_samplers;
+   ctx->shader_state[shader].state_dirty |= D3D12_SHADER_DIRTY_SAMPLERS;
 }
 
 static void
@@ -716,6 +731,7 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
          views[i]);
    }
    ctx->num_sampler_views[shader_type] = start_slot + num_views;
+   ctx->shader_state[shader_type].state_dirty |= D3D12_SHADER_DIRTY_SAMPLER_VIEWS;
 }
 
 static void
@@ -737,7 +753,6 @@ bind_stage(struct d3d12_context *ctx, enum pipe_shader_type stage,
    if (ctx->gfx_stages[stage] && ctx->gfx_stages[stage]->passthrough)
       d3d12_shader_free(shader);
    ctx->gfx_stages[stage] = shader;
-   ctx->dirty_program = true;
 }
 
 static void *
@@ -827,6 +842,7 @@ d3d12_set_vertex_buffers(struct pipe_context *pctx,
       ctx->vbvs[i].StrideInBytes = buf->stride;
       ctx->vbvs[i].SizeInBytes = res->base.width0 - buf->buffer_offset;
    }
+   ctx->state_dirty |= D3D12_DIRTY_VERTEX_BUFFERS;
 }
 
 static void
@@ -854,6 +870,7 @@ d3d12_set_viewport_states(struct pipe_context *pctx,
       ctx->viewport_states[start_slot + i] = state[i];
    }
    ctx->num_viewports = start_slot + num_viewports;
+   ctx->state_dirty |= D3D12_DIRTY_VIEWPORT;
 }
 
 
@@ -872,6 +889,7 @@ d3d12_set_scissor_states(struct pipe_context *pctx,
       ctx->scissor_states[start_slot + i] = states[i];
    }
    ctx->num_scissors = start_slot + num_scissors;
+   ctx->state_dirty |= D3D12_DIRTY_SCISSOR;
 }
 
 static void
@@ -903,13 +921,17 @@ d3d12_set_constant_buffer(struct pipe_context *pctx,
       ctx->cbufs[shader][index].buffer_size = 0;
       ctx->cbufs[shader][index].user_buffer = NULL;
    }
+   ctx->shader_state[shader].state_dirty |= D3D12_SHADER_DIRTY_CONSTBUF;
 }
 
 static void
 d3d12_set_framebuffer_state(struct pipe_context *pctx,
                             const struct pipe_framebuffer_state *state)
 {
+   struct d3d12_context *ctx = d3d12_context(pctx);
+
    util_copy_framebuffer_state(&d3d12_context(pctx)->fb, state);
+   ctx->state_dirty |= D3D12_DIRTY_FRAMEBUFFER;
 }
 
 static void
@@ -918,6 +940,7 @@ d3d12_set_blend_color(struct pipe_context *pctx,
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
    memcpy(ctx->blend_factor, color->color, sizeof(float) * 4);
+   ctx->state_dirty |= D3D12_DIRTY_BLEND_COLOR;
 }
 
 static void
@@ -925,6 +948,7 @@ d3d12_set_sample_mask(struct pipe_context *pctx, unsigned sample_mask)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
    ctx->sample_mask = sample_mask;
+   ctx->state_dirty |= D3D12_DIRTY_SAMPLE_MASK;
 }
 
 static void
@@ -936,6 +960,7 @@ d3d12_set_stencil_ref(struct pipe_context *pctx,
        (d3d12_debug & D3D12_DEBUG_VERBOSE))
        debug_printf("D3D12: Different values for front and back stencil reference are not supported\n");
    ctx->stencil_ref = *ref;
+   ctx->state_dirty |= D3D12_DIRTY_STENCIL_REF;
 }
 
 static void

@@ -493,8 +493,6 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
    /* prepend the new shader in the selector chain and pick it */
    new_variant->next_variant = sel->first;
    sel->current = sel->first = new_variant;
-
-   ctx->dirty_program = true;
 }
 
 static d3d12_shader_selector *
