@@ -174,7 +174,7 @@ analyze_ubos_block(struct ubo_analysis_state *state, nir_block *block)
          /* TODO: should we count uses in loops as higher benefit? */
 
          struct ubo_block_info *info = get_block_info(state, block);
-         info->offsets |= ((1ull << chunks) - 1) << offset;
+         info->offsets |= BITFIELD64_RANGE(offset, chunks);
          info->uses[offset]++;
       }
    }
@@ -202,9 +202,10 @@ brw_nir_analyze_ubo_ranges(const struct brw_compiler *compiler,
 {
    const struct gen_device_info *devinfo = compiler->devinfo;
 
+   memset(out_ranges, 0, 4 * sizeof(struct brw_ubo_range));
+
    if ((devinfo->gen <= 7 && !devinfo->is_haswell) ||
        !compiler->scalar_stage[nir->info.stage]) {
-      memset(out_ranges, 0, 4 * sizeof(struct brw_ubo_range));
       return;
    }
 
@@ -241,6 +242,22 @@ brw_nir_analyze_ubo_ranges(const struct brw_compiler *compiler,
          }
       }
    }
+
+   if (state.blocks->entries == 0)
+      goto done; /* No constant UBO access */
+
+   /* Return the top 4 or so.  We drop by one if regular uniforms are in
+    * use, assuming one push buffer will be dedicated to those.  We may
+    * also only get 3 on Haswell if we can't write INSTPM.
+    *
+    * The backend may need to shrink these ranges to ensure that they
+    * don't exceed the maximum push constant limits.  It can simply drop
+    * the tail of the list, as that's the least valuable portion.  We
+    * unfortunately can't truncate it here, because we don't know what
+    * the backend is planning to do with regular uniforms.
+    */
+   const int max_ubos = (compiler->constant_buffer_0_is_relative ? 3 : 4) -
+                        state.uses_regular_uniforms;
 
    /* Find ranges: a block, starting 32-byte offset, and length. */
    struct util_dynarray ranges;
@@ -320,28 +337,11 @@ brw_nir_analyze_ubo_ranges(const struct brw_compiler *compiler,
 
    struct ubo_range_entry *entries = ranges.data;
 
-   /* Return the top 4 or so.  We drop by one if regular uniforms are in
-    * use, assuming one push buffer will be dedicated to those.  We may
-    * also only get 3 on Haswell if we can't write INSTPM.
-    *
-    * The backend may need to shrink these ranges to ensure that they
-    * don't exceed the maximum push constant limits.  It can simply drop
-    * the tail of the list, as that's the least valuable portion.  We
-    * unfortunately can't truncate it here, because we don't know what
-    * the backend is planning to do with regular uniforms.
-    */
-   const int max_ubos = (compiler->constant_buffer_0_is_relative ? 3 : 4) -
-                        state.uses_regular_uniforms;
    nr_entries = MIN2(nr_entries, max_ubos);
 
-   for (int i = 0; i < nr_entries; i++) {
+   for (int i = 0; i < nr_entries; i++)
       out_ranges[i] = entries[i].range;
-   }
-   for (int i = nr_entries; i < 4; i++) {
-      out_ranges[i].block = 0;
-      out_ranges[i].start = 0;
-      out_ranges[i].length = 0;
-   }
 
-   ralloc_free(ranges.mem_ctx);
+done:
+   ralloc_free(mem_ctx);
 }
