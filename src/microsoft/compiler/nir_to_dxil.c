@@ -1189,6 +1189,7 @@ get_cast_op(nir_alu_instr *alu)
       return DXIL_CAST_FPTOSI;
 
    /* float -> uint */
+   case nir_op_f2b1:
    case nir_op_f2u32:
    case nir_op_f2u64:
       return DXIL_CAST_FPTOUI;
@@ -1213,6 +1214,8 @@ get_cast_dest_type(struct ntd_context *ctx, nir_alu_instr *alu)
 {
    unsigned dst_bits = nir_dest_bit_size(alu->dest.dest);
    switch (nir_alu_type_get_base_type(nir_op_infos[alu->op].output_type)) {
+   case nir_type_bool:
+      assert(dst_bits == 1);
    case nir_type_int:
    case nir_type_uint:
       return dxil_module_get_int_type(&ctx->mod, dst_bits);
@@ -1523,6 +1526,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_fmin: return emit_binary_intin(ctx, alu, DXIL_INTR_FMIN, src[0], src[1]);
    case nir_op_ffma: return emit_tertiary_intin(ctx, alu, DXIL_INTR_FFMA, src[0], src[1], src[2]);
 
+   case nir_op_f2b1:
    case nir_op_b2i16:
    case nir_op_b2i32:
    case nir_op_f2f32:
