@@ -59,6 +59,11 @@ protected:
       }
    };
 
+   struct Shader {
+      std::shared_ptr<struct clc_object> obj;
+      std::shared_ptr<struct clc_dxil_object> dxil;
+   };
+
    static void
    enable_d3d12_debug_layer();
 
@@ -139,7 +144,7 @@ protected:
    void
    TearDown() override;
 
-   static std::shared_ptr<struct clc_dxil_object>
+   static Shader
    compile_and_validate(const std::vector<const char *> &sources);
 
    template <typename T>
@@ -156,9 +161,9 @@ protected:
 
       D3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
 
-      std::shared_ptr<struct clc_dxil_object> dxil;
+      Shader shader = compile_and_validate(sources);
+      std::shared_ptr<struct clc_dxil_object> &dxil = shader.dxil;
 
-      dxil = compile_and_validate(sources);
       if (inputs.size() != dxil->metadata.num_uavs)
          throw runtime_error("incorrect number of inputs");
 
