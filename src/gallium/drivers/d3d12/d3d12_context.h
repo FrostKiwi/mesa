@@ -26,6 +26,7 @@
 
 #include "d3d12_batch.h"
 #include "d3d12_descriptor_pool.h"
+#include "d3d12_pipeline_state.h"
 
 #include "pipe/p_context.h"
 #include "pipe/p_state.h"
@@ -90,16 +91,6 @@ enum resource_dimension
    RESOURCE_DIMENSION_COUNT
 };
 
-struct d3d12_vertex_elements_state {
-   D3D12_INPUT_ELEMENT_DESC elements[PIPE_MAX_ATTRIBS];
-   unsigned num_elements;
-};
-
-struct d3d12_rasterizer_state {
-   struct pipe_rasterizer_state base;
-   D3D12_RASTERIZER_DESC desc;
-};
-
 struct d3d12_sampler_state {
    D3D12_STATIC_SAMPLER_DESC desc;
    struct d3d12_descriptor_handle handle;
@@ -110,15 +101,6 @@ enum d3d12_blend_factor_flags {
    D3D12_BLEND_FACTOR_COLOR = 1 << 0,
    D3D12_BLEND_FACTOR_ALPHA = 1 << 1,
    D3D12_BLEND_FACTOR_ANY   = 1 << 2,
-};
-
-struct d3d12_blend_state {
-   D3D12_BLEND_DESC desc;
-   unsigned blend_factor_flags;
-};
-
-struct d3d12_depth_stencil_alpha_state {
-   D3D12_DEPTH_STENCIL_DESC desc;
 };
 
 struct d3d12_sampler_view {
@@ -147,13 +129,13 @@ struct d3d12_context {
    struct primconvert_context *primconvert;
    struct blitter_context *blitter;
    struct u_suballocator *query_allocator;
+   struct hash_table *pso_cache;
 
    struct d3d12_batch batches[4];
    unsigned current_batch_idx;
 
    struct pipe_constant_buffer cbufs[PIPE_SHADER_TYPES][PIPE_MAX_CONSTANT_BUFFERS];
    struct pipe_framebuffer_state fb;
-   struct d3d12_vertex_elements_state *ves;
    struct pipe_vertex_buffer vbs[PIPE_MAX_ATTRIBS];
    D3D12_VERTEX_BUFFER_VIEW vbvs[PIPE_MAX_ATTRIBS];
    unsigned num_vbs;
@@ -164,25 +146,20 @@ struct d3d12_context {
    struct pipe_scissor_state scissor_states[PIPE_MAX_VIEWPORTS];
    D3D12_RECT scissors[PIPE_MAX_VIEWPORTS];
    unsigned num_scissors;
-   struct d3d12_blend_state *blend;
    float blend_factor[4];
-   unsigned sample_mask;
-   struct d3d12_depth_stencil_alpha_state *depth_stencil_alpha_state;
    struct pipe_stencil_ref stencil_ref;
-   struct d3d12_rasterizer_state *rast;
    struct pipe_sampler_view *sampler_views[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    unsigned num_sampler_views[PIPE_SHADER_TYPES];
    struct d3d12_sampler_state *samplers[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    unsigned num_samplers[PIPE_SHADER_TYPES];
-   enum pipe_prim_type prim_type;
    D3D12_INDEX_BUFFER_VIEW ibv;
 
    struct d3d12_shader_selector *gfx_stages[D3D12_GFX_SHADER_STAGES];
 
-   struct d3d12_shader_state shader_state[D3D12_GFX_SHADER_STAGES];
+   struct d3d12_gfx_pipeline_state gfx_pipeline_state;
+   unsigned shader_dirty[D3D12_GFX_SHADER_STAGES];
    unsigned state_dirty;
    unsigned cmdlist_dirty;
-   ID3D12RootSignature *current_root_signature;
    ID3D12PipelineState *current_pso;
 
    ID3D12Fence *cmdqueue_fence;

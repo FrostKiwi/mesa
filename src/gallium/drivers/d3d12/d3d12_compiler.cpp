@@ -274,7 +274,7 @@ needs_point_sprite_lowering(struct d3d12_context *ctx, const struct pipe_draw_in
    } else {
       /* No user GS; check if we are drawing wide points */
       return (dinfo->mode == PIPE_PRIM_POINTS &&
-              (ctx->rast->base.point_size > 1.0 ||
+              (ctx->gfx_pipeline_state.rast->base.point_size > 1.0 ||
                vs->first->nir->info.outputs_written & VARYING_BIT_PSIZ));
    }
 }
@@ -416,11 +416,11 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
    }
 
    if (stage == PIPE_SHADER_GEOMETRY && sel_ctx->needs_point_sprite_lowering) {
+      struct pipe_rasterizer_state *rast = &sel_ctx->ctx->gfx_pipeline_state.rast->base;
       key->gs.writes_psize = 1;
-      key->gs.sprite_coord_enable = sel_ctx->ctx->rast->base.sprite_coord_enable;
-      key->gs.sprite_origin_upper_left =
-         (sel_ctx->ctx->rast->base.sprite_coord_mode != PIPE_SPRITE_COORD_LOWER_LEFT);
-      key->gs.aa_point = sel_ctx->ctx->rast->base.point_smooth;
+      key->gs.sprite_coord_enable = rast->sprite_coord_enable;
+      key->gs.sprite_origin_upper_left = (rast->sprite_coord_mode != PIPE_SPRITE_COORD_LOWER_LEFT);
+      key->gs.aa_point = rast->point_smooth;
    }
 }
 
