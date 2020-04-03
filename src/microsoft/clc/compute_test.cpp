@@ -128,14 +128,16 @@ ComputeTest::create_root_signature(int num_uavs, int num_cbvs)
 {
    D3D12_DESCRIPTOR_RANGE1 desc_ranges[2];
    unsigned num_desc_ranges = 0;
+   unsigned num_descriptors = 0;
    if (num_uavs > 0) {
       desc_ranges[num_desc_ranges].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
       desc_ranges[num_desc_ranges].NumDescriptors = num_uavs;
       desc_ranges[num_desc_ranges].BaseShaderRegister = 0;
       desc_ranges[num_desc_ranges].RegisterSpace = 0;
-      desc_ranges[num_desc_ranges].OffsetInDescriptorsFromTableStart = num_desc_ranges;
+      desc_ranges[num_desc_ranges].OffsetInDescriptorsFromTableStart = num_descriptors;
       desc_ranges[num_desc_ranges].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_STATIC_KEEPING_BUFFER_BOUNDS_CHECKS;
       num_desc_ranges++;
+      num_descriptors += num_uavs;
    }
 
    if (num_cbvs > 0) {
@@ -143,9 +145,10 @@ ComputeTest::create_root_signature(int num_uavs, int num_cbvs)
       desc_ranges[num_desc_ranges].NumDescriptors = num_cbvs;
       desc_ranges[num_desc_ranges].BaseShaderRegister = 0;
       desc_ranges[num_desc_ranges].RegisterSpace = 0;
-      desc_ranges[num_desc_ranges].OffsetInDescriptorsFromTableStart = num_desc_ranges;
+      desc_ranges[num_desc_ranges].OffsetInDescriptorsFromTableStart = num_descriptors;
       desc_ranges[num_desc_ranges].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_STATIC_KEEPING_BUFFER_BOUNDS_CHECKS;
       num_desc_ranges++;
+      num_descriptors += num_cbvs;
    }
 
    D3D12_ROOT_PARAMETER1 root_param;
