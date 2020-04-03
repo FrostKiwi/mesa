@@ -357,10 +357,8 @@ set_graphics_root_parameters(struct d3d12_context *ctx)
 }
 
 static bool
-depth_bias(struct d3d12_rasterizer_state *state, enum pipe_prim_type prim_type)
+depth_bias(struct d3d12_rasterizer_state *state, enum pipe_prim_type reduced_prim)
 {
-   enum pipe_prim_type reduced_prim = u_reduced_prim(prim_type);
-
    switch (reduced_prim) {
    case PIPE_PRIM_POINTS:
       return state->base.offset_point;
@@ -437,6 +435,7 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
                        enum pipe_prim_type prim_type)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
+   enum pipe_prim_type reduced_prim = u_reduced_prim(prim_type);
 
    D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = { 0 };
    pso_desc.pRootSignature = root_sig;
@@ -464,7 +463,10 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
    pso_desc.SampleMask = ctx->sample_mask;
    pso_desc.RasterizerState = ctx->rast->desc;
 
-   if (depth_bias(ctx->rast, prim_type)) {
+   if (reduced_prim != PIPE_PRIM_TRIANGLES)
+      pso_desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+   if (depth_bias(ctx->rast, reduced_prim)) {
       pso_desc.RasterizerState.DepthBias = ctx->rast->base.offset_units;
       pso_desc.RasterizerState.DepthBiasClamp = ctx->rast->base.offset_clamp;
       pso_desc.RasterizerState.SlopeScaledDepthBias = ctx->rast->base.offset_scale;
