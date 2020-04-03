@@ -440,6 +440,10 @@ cull_mode(unsigned mode)
    case PIPE_FACE_BACK:
       return D3D12_CULL_MODE_BACK;
 
+   case PIPE_FACE_FRONT_AND_BACK:
+      /* this is wrong, and we shouldn't actually have to support this! */
+      return D3D12_CULL_MODE_NONE;
+
    default:
       unreachable("unsupported cull-mode");
    }
