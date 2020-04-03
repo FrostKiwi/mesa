@@ -540,6 +540,12 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       return;
    }
 
+   /* this should *really* be fixed at a higher level than here! */
+   enum pipe_prim_type reduced_prim = u_reduced_prim(dinfo->mode);
+   if (reduced_prim == PIPE_PRIM_TRIANGLES &&
+       ctx->rast->base.cull_face == PIPE_FACE_FRONT_AND_BACK)
+      return;
+
    unsigned index_offset = 0;
    struct pipe_resource *index_buffer = NULL;
    if (dinfo->index_size > 0) {
@@ -555,8 +561,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    }
 
    ID3D12RootSignature *root_sig = get_root_signature(ctx);
-   ID3D12PipelineState *pipeline_state = get_gfx_pipeline_state(ctx, root_sig,
-                                                                u_reduced_prim(dinfo->mode));
+   ID3D12PipelineState *pipeline_state =
+      get_gfx_pipeline_state(ctx, root_sig, reduced_prim);
    assert(pipeline_state);
 
    ctx->cmdlist->SetGraphicsRootSignature(root_sig);
