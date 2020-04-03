@@ -74,6 +74,9 @@ d2d12_descriptor_heap_get_next_handle(struct d3d12_descriptor_heap *heap,
                                       struct d3d12_descriptor_handle *handle);
 
 uint32_t
+d3d12_descriptor_heap_get_remaining_handles(struct d3d12_descriptor_heap *heap);
+
+uint32_t
 d3d12_descriptor_heap_alloc_handle(struct d3d12_descriptor_heap *heap,
                                    struct d3d12_descriptor_handle *handle);
 

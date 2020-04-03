@@ -1022,8 +1022,6 @@ d3d12_clear(struct pipe_context *pctx,
                              D3D12_RESOURCE_STATE_DEPTH_WRITE,
                              D3D12_RESOURCE_STATE_COMMON);
    }
-
-   d3d12_flush_cmdlist(ctx);
 }
 
 static void
