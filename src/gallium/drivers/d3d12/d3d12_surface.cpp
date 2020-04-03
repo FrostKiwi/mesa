@@ -126,6 +126,13 @@ d3d12_create_surface(struct pipe_context *pctx,
          desc.Texture2DArray.PlaneSlice = 0; // ???
          break;
 
+      case PIPE_TEXTURE_3D:
+         desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
+         desc.Texture3D.MipSlice = tpl->u.tex.level;
+         desc.Texture3D.FirstWSlice = tpl->u.tex.first_layer;
+         desc.Texture3D.WSize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
+         break;
+
       default:
          unreachable("unsupported target"); // dunno how to support, if needed
          break;
