@@ -47,42 +47,22 @@
 struct ubo_range_entry
 {
    struct brw_ubo_range range;
-   int benefit;
+   uint16_t uses;
 };
 
 static int
-score(const struct ubo_range_entry *entry)
-{
-   return 2 * entry->benefit - entry->range.length;
-}
-
-/**
- * Compares score for two UBO range entries.
- *
- * For a descending qsort().
- */
-static int
-cmp_ubo_range_entry(const void *va, const void *vb)
+cmp_ubo_range_entry_uses(const void *va, const void *vb)
 {
    const struct ubo_range_entry *a = va;
    const struct ubo_range_entry *b = vb;
 
-   /* Rank based on scores */
-   int delta = score(b) - score(a);
-
-   /* Then use the UBO block index as a tie-breaker */
-   if (delta == 0)
-      delta = b->range.block - a->range.block;
-
-   /* Finally use the UBO offset as a second tie-breaker */
-   if (delta == 0)
-      delta = b->range.block - a->range.block;
-
-   return delta;
+   return (int)b->uses - (int)a->uses;
 }
 
 struct ubo_block_info
 {
+   uint32_t index;
+
    /* Each bit in the offsets bitfield represents a 32-byte section of data.
     * If it's set to one, there is interesting UBO data at that offset.  If
     * not, there's a "hole" - padding between data - or just nothing at all.
@@ -91,6 +71,15 @@ struct ubo_block_info
    uint8_t uses[64];
 };
 
+static int
+cmp_ubo_block_info(const void *va, const void *vb)
+{
+   const struct ubo_block_info *a = va;
+   const struct ubo_block_info *b = vb;
+
+   return (int)b->index - (int)a->index;
+}
+
 struct ubo_analysis_state
 {
    struct hash_table *blocks;
@@ -98,8 +87,9 @@ struct ubo_analysis_state
 };
 
 static struct ubo_block_info *
-get_block_info(struct ubo_analysis_state *state, int block)
+get_block_info(struct ubo_analysis_state *state, uint32_t block)
 {
+   assert(block < BRW_MAX_BINDING_TABLE_SIZE);
    uint32_t hash = block + 1;
    void *key = (void *) (uintptr_t) hash;
 
@@ -111,6 +101,7 @@ get_block_info(struct ubo_analysis_state *state, int block)
 
    struct ubo_block_info *info =
       rzalloc(state->blocks, struct ubo_block_info);
+   info->index = block;
    _mesa_hash_table_insert_pre_hashed(state->blocks, hash, key, info);
 
    return info;
@@ -151,7 +142,7 @@ analyze_ubos_block(struct ubo_analysis_state *state, nir_block *block)
 
       if (nir_src_is_const(intrin->src[0]) &&
           nir_src_is_const(intrin->src[1])) {
-         const int block = nir_src_as_uint(intrin->src[0]);
+         const uint32_t block = nir_src_as_uint(intrin->src[0]);
          const unsigned byte_offset = nir_src_as_uint(intrin->src[1]);
          const int offset = byte_offset / 32;
 
@@ -180,18 +171,148 @@ analyze_ubos_block(struct ubo_analysis_state *state, nir_block *block)
    }
 }
 
-static void
-print_ubo_entry(FILE *file,
-                const struct ubo_range_entry *entry,
-                struct ubo_analysis_state *state)
+static bool
+brw_ubo_ranges_overlap(struct brw_ubo_range a, struct brw_ubo_range b)
 {
-   struct ubo_block_info *info = get_block_info(state, entry->range.block);
+   return a.block == b.block &&
+          ((a.start >= b.start && a.start < b.start + b.length) ||
+           (b.start >= a.start && b.start < a.start + a.length));
+}
 
-   fprintf(file,
-           "block %2d, start %2d, length %2d, bits = %"PRIx64", "
-           "benefit %2d, cost %2d, score = %2d\n",
-           entry->range.block, entry->range.start, entry->range.length,
-           info->offsets, entry->benefit, entry->range.length, score(entry));
+static bool
+brw_ubo_ranges_adjacent(struct brw_ubo_range a, struct brw_ubo_range b)
+{
+   return a.block == b.block &&
+          (a.start == b.start + b.length || b.start == a.start + a.length);
+}
+
+static struct brw_ubo_range
+brw_ubo_ranges_union(struct brw_ubo_range a, struct brw_ubo_range b)
+{
+   assert(a.block == b.block);
+   unsigned start = MIN2(a.start, b.start);
+   unsigned end = MAX2(a.start + a.length, b.start + b.length);
+   return (struct brw_ubo_range) {
+      .block = a.block,
+      .start = start,
+      .length = end - start,
+   };
+}
+
+static void
+search_for_better_range(const struct ubo_block_info *block, unsigned block_idx,
+                        float *best_metric, struct ubo_range_entry *best_range,
+                        unsigned start_min, unsigned start_max,
+                        unsigned end_min, unsigned end_max,
+                        unsigned max_range_length)
+{
+   for (unsigned start = start_min; start <= start_max; start++) {
+      uint32_t uses = 0;
+      for (unsigned end = start; end <= end_max; end++) {
+         const unsigned length = end - start + 1;
+         if (length > max_range_length)
+            break;
+
+         uses += block->uses[end];
+         if (end < end_min)
+            continue;
+
+         float metric = (float)(uses * uses) / (float)length;
+         if (metric > *best_metric) {
+            *best_metric = metric;
+            *best_range = (struct ubo_range_entry) {
+               .range = {
+                  .block = block_idx,
+                  .start = start,
+                  .length = length,
+               },
+               .uses = uses,
+            };
+         }
+      }
+   }
+}
+
+/* Select the "best" range from the given list of blocks.  We have a few
+ * different metrics we could choose from.  The most obvious two are `metric =
+ * uses` which will always give us full UBOs because it doesn't take length
+ * into account and `metric = uses / length` which will tend to yield single
+ * elements because the average is always less than the maximum.  In order to
+ * split the difference, we choose `metric = uses / sqrt(length)`.
+ *
+ * Because square roots are expensive to calculate, we instead use the metric
+ * `metric = uses^2 / length` which has an equivalent ordering.
+ */
+static struct ubo_range_entry
+select_best_range(const struct ubo_block_info *blocks, unsigned nr_blocks,
+                  struct ubo_range_entry *adj_ranges,
+                  unsigned nr_adj_ranges,
+                  unsigned max_range_length)
+{
+   float best_metric = 0;
+   struct ubo_range_entry best_range = { };
+   if (adj_ranges) {
+      for (unsigned r = 0; r < nr_adj_ranges; r++) {
+         const unsigned block_idx = adj_ranges[r].range.block;
+         const struct ubo_block_info *block = &blocks[block_idx];
+         if (block->offsets == 0)
+            continue;
+
+         int first_bit = ffsll(block->offsets) - 1;
+         int last_bit = util_last_bit64(block->offsets) - 1;
+
+         unsigned range_start = adj_ranges[r].range.start;
+         unsigned range_end = adj_ranges[r].range.start +
+                              adj_ranges[r].range.length - 1;
+
+         if (range_start > first_bit) {
+            /* Try to find a range before this range */
+            search_for_better_range(block, block_idx, &best_metric, &best_range,
+                                    first_bit, last_bit,
+                                    range_start - 1, range_start - 1,
+                                    max_range_length);
+         }
+
+         if (range_end < last_bit) {
+            /* Try to find a range after this range */
+            search_for_better_range(block, block_idx, &best_metric, &best_range,
+                                    range_end + 1, range_end + 1,
+                                    first_bit, last_bit,
+                                    max_range_length);
+         }
+      }
+   } else {
+      for (unsigned block_idx = 0; block_idx < nr_blocks; block_idx++) {
+         const struct ubo_block_info *block = &blocks[block_idx];
+         if (block->offsets == 0)
+            continue;
+
+         int first_bit = ffsll(block->offsets) - 1;
+         int last_bit = util_last_bit64(block->offsets) - 1;
+
+         /* Sanity check */
+         assert(block->offsets & BITFIELD64_BIT(first_bit));
+         assert(block->offsets & BITFIELD64_BIT(last_bit));
+
+         search_for_better_range(block, block_idx, &best_metric, &best_range,
+                                 first_bit, last_bit, first_bit, last_bit,
+                                 max_range_length);
+      }
+   }
+
+   return best_range;
+}
+
+static void
+remove_range_from_blocks_arr(struct ubo_block_info *blocks, unsigned nr_blocks,
+                             struct brw_ubo_range range)
+{
+   assert(range.block < nr_blocks);
+   struct ubo_block_info *block = &blocks[range.block];
+
+   block->offsets &= ~BITFIELD64_RANGE(range.start, range.length);
+   for (unsigned i = 0; i < range.length; i++)
+      block->uses[range.start + i] = 0;
 }
 
 void
@@ -259,88 +380,161 @@ brw_nir_analyze_ubo_ranges(const struct brw_compiler *compiler,
    const int max_ubos = (compiler->constant_buffer_0_is_relative ? 3 : 4) -
                         state.uses_regular_uniforms;
 
-   /* Find ranges: a block, starting 32-byte offset, and length. */
-   struct util_dynarray ranges;
-   util_dynarray_init(&ranges, mem_ctx);
+   const unsigned max_push_regs = 64;
 
-   hash_table_foreach(state.blocks, entry) {
-      const int b = entry->hash - 1;
-      const struct ubo_block_info *info = entry->data;
-      uint64_t offsets = info->offsets;
-
-      /* Walk through the offsets bitfield, finding contiguous regions of
-       * set bits:
-       *
-       *   0000000001111111111111000000000000111111111111110000000011111100
-       *            ^^^^^^^^^^^^^            ^^^^^^^^^^^^^^        ^^^^^^
-       *
-       * Each of these will become a UBO range.
-       */
-      while (offsets != 0) {
-         /* Find the first 1 in the offsets bitfield.  This represents the
-          * start of a range of interesting UBO data.  Make it zero-indexed.
-          */
-         int first_bit = ffsll(offsets) - 1;
-
-         /* Find the first 0 bit in offsets beyond first_bit.  To find the
-          * first zero bit, we find the first 1 bit in the complement.  In
-          * order to ignore bits before first_bit, we mask off those bits.
-          */
-         int first_hole = ffsll(~offsets & ~((1ull << first_bit) - 1)) - 1;
-
-         if (first_hole == -1) {
-            /* If we didn't find a hole, then set it to the end of the
-             * bitfield.  There are no more ranges to process.
-             */
-            first_hole = 64;
-            offsets = 0;
-         } else {
-            /* We've processed all bits before first_hole.  Mask them off. */
-            offsets &= ~((1ull << first_hole) - 1);
-         }
-
-         struct ubo_range_entry *entry =
-            util_dynarray_grow(&ranges, struct ubo_range_entry, 1);
-
-         entry->range.block = b;
-         entry->range.start = first_bit;
-         /* first_hole is one beyond the end, so we don't need to add 1 */
-         entry->range.length = first_hole - first_bit;
-         entry->benefit = 0;
-
-         for (int i = 0; i < entry->range.length; i++)
-            entry->benefit += info->uses[first_bit + i];
-      }
-   }
-
-   int nr_entries = ranges.size / sizeof(struct ubo_range_entry);
-
-   if (0) {
-      util_dynarray_foreach(&ranges, struct ubo_range_entry, entry) {
-         print_ubo_entry(stderr, entry, &state);
-      }
-   }
-
-   /* TODO: Consider combining ranges.
-    *
-    * We can only push 3-4 ranges via 3DSTATE_CONSTANT_XS.  If there are
-    * more ranges, and two are close by with only a small hole, it may be
-    * worth combining them.  The holes will waste register space, but the
-    * benefit of removing pulls may outweigh that cost.
+   /* Turn our set of blocks into an array sorted by block index.  This
+    * ensures that our algorithms are nicely deterministic.
     */
+   const unsigned nr_blocks = state.blocks->entries;
+   const struct ubo_block_info *blocks;
+   {
+      struct ubo_block_info *blocks_rw =
+         ralloc_array(mem_ctx, struct ubo_block_info, nr_blocks);
 
-   /* Sort the list so the most beneficial ranges are at the front. */
-   if (nr_entries > 0) {
-      qsort(ranges.data, nr_entries, sizeof(struct ubo_range_entry),
-            cmp_ubo_range_entry);
+      unsigned b = 0;
+      hash_table_foreach(state.blocks, entry)
+         blocks_rw[b++] = *(struct ubo_block_info *)entry->data;
+      assert(b == nr_blocks);
+
+      qsort(blocks_rw, nr_blocks, sizeof(*blocks_rw), cmp_ubo_block_info);
+
+      blocks = blocks_rw;
    }
 
-   struct ubo_range_entry *entries = ranges.data;
+   /* First, we try to get a trivial solution */
+   if (nr_blocks <= max_ubos) {
+      unsigned total_len = 0;
+      struct ubo_range_entry ranges[4] = {};
+      for (unsigned b = 0; b < nr_blocks; b++) {
+         const struct ubo_block_info *block = &blocks[b];
 
-   nr_entries = MIN2(nr_entries, max_ubos);
+         assert(block->offsets);
+         int first_bit = ffsll(block->offsets) - 1;
+         int last_bit = util_last_bit64(block->offsets) - 1;
 
-   for (int i = 0; i < nr_entries; i++)
-      out_ranges[i] = entries[i].range;
+         ranges[b] = (struct ubo_range_entry) {
+            .range = {
+               .block = b,
+               .start = first_bit,
+               .length = last_bit - first_bit + 1,
+            },
+            .uses = 0,
+         };
+         for (unsigned i = first_bit; i <= last_bit; i++)
+            ranges[b].uses += block->uses[i];
+
+         total_len += ranges[b].range.length;
+      }
+
+      if (total_len <= max_push_regs) {
+         qsort(ranges, nr_blocks, sizeof(*ranges), cmp_ubo_range_entry_uses);
+         for (unsigned b = 0; b < nr_blocks; b++) {
+            out_ranges[b] = ranges[b].range;
+            out_ranges[b].block = blocks[ranges[b].range.block].index;
+         }
+         goto done;
+      }
+   }
+
+   /* Start by choosing the max_ubos "best" ranges */
+   struct ubo_block_info *tmp_blocks =
+      ralloc_array(mem_ctx, struct ubo_block_info, nr_blocks);
+   memcpy(tmp_blocks, blocks, nr_blocks * sizeof(*blocks));
+
+   assert(max_ubos <= 4);
+   unsigned nr_regs = 0;
+   unsigned nr_ranges = 0;
+   struct ubo_range_entry ranges[8] = {}; /* A few extra in our work stack */
+   while (true) {
+      struct ubo_range_entry range =
+         select_best_range(tmp_blocks, nr_blocks, NULL, 0,
+                           nr_regs - max_push_regs);
+      if (range.range.length == 0)
+         break; /* We can't find anything to push */
+
+      remove_range_from_blocks_arr(tmp_blocks, nr_blocks, range.range);
+
+      /* If we hit the end of the stack, make room */
+      if (nr_ranges == ARRAY_SIZE(ranges))
+         nr_ranges--;
+
+      ranges[nr_ranges++] = range;
+
+      /* Now we compact down and de-duplicate the list of ranges */
+      for (unsigned i = 0; i < nr_ranges; i++) {
+         for (unsigned j = i + 1; j < nr_ranges; j++) {
+            if (brw_ubo_ranges_overlap(ranges[i].range, ranges[j].range) ||
+                brw_ubo_ranges_adjacent(ranges[i].range, ranges[j].range)) {
+               ranges[i].range = brw_ubo_ranges_union(ranges[i].range,
+                                                      ranges[j].range);
+               ranges[i].uses += ranges[j].uses;
+
+               /* Mark as unused */
+               ranges[j].uses = 0;
+            }
+         }
+      }
+
+      /* Remove unused ranges and compact the stack */
+      nr_regs = 0;
+      for (unsigned i = 0, j = 0; i < nr_ranges; i++) {
+         if (ranges[i].uses) {
+            ranges[j++] = ranges[i];
+            /* Only consider the UBOs we actually have room for */
+            if (j < (unsigned)max_ubos)
+               nr_regs += ranges[i].range.length;
+         }
+      }
+
+      if (nr_regs == max_push_regs)
+         break;
+   }
+
+   /* We allowed some extra ranges above so that we could keep a bit of
+    * history and compact things.  At this point, we only want to consider
+    * at most the number of UBOs we're allowed to push.
+    */
+   if (nr_ranges > max_ubos)
+      nr_ranges = max_ubos;
+
+   if (nr_regs < max_push_regs) {
+      /* Only looking at consecutive blocks didn't fill our available push
+       * space.  Try to expand ranges in the hopes of picking up more
+       * constants.
+       */
+      memcpy(tmp_blocks, blocks, nr_blocks * sizeof(*blocks));
+
+      /* Remove what's covered by our chosen ranges */
+      for (unsigned r = 0; r < nr_ranges; r++)
+         remove_range_from_blocks_arr(tmp_blocks, nr_blocks, ranges[r].range);
+
+      while (true) {
+         struct ubo_range_entry range =
+            select_best_range(tmp_blocks, nr_blocks, ranges, nr_ranges,
+                              nr_regs - max_push_regs);
+         if (range.range.length == 0)
+            break; /* We can't find anything to push */
+
+         remove_range_from_blocks_arr(tmp_blocks, nr_blocks, range.range);
+
+         ASSERTED bool found = false;
+         for (unsigned r = 0; r < nr_ranges; r++) {
+            assert(!brw_ubo_ranges_overlap(range.range, ranges[r].range));
+            if (brw_ubo_ranges_adjacent(range.range, ranges[r].range)) {
+               found = true;
+               ranges[r].range = brw_ubo_ranges_union(ranges[r].range,
+                                                      range.range);
+               ranges[r].uses += range.uses;
+            }
+         }
+         assert(found);
+      }
+   }
+
+   for (unsigned r = 0; r < MIN2(nr_ranges, (unsigned)max_ubos); r++) {
+      out_ranges[r] = ranges[r].range;
+      out_ranges[r].block = blocks[ranges[r].range.block].index;
+   }
 
 done:
    ralloc_free(mem_ctx);
