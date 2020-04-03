@@ -154,7 +154,7 @@ protected:
       if (!hD3D12Mod)
          throw runtime_error("Failed to load D3D12.DLL");
 
-      D3D12SerializeRootSignature = (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeRootSignature");
+      D3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
 
       std::shared_ptr<struct clc_dxil_object> dxil;
 
@@ -249,5 +249,5 @@ protected:
    int fence_value;
 
    HANDLE event;
-   static PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature;
+   static PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE D3D12SerializeVersionedRootSignature;
 };
