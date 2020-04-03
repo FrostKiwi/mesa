@@ -479,7 +479,7 @@ dump_blob(const char *path, const struct clc_dxil_object &dxil)
    }
 }
 
-std::shared_ptr<struct clc_dxil_object>
+ComputeTest::Shader
 ComputeTest::compile_and_validate(const std::vector<const char *> &sources)
 {
    struct clc_logger logger = {
@@ -487,6 +487,7 @@ ComputeTest::compile_and_validate(const std::vector<const char *> &sources)
    };
    struct clc_compile_args args = { 0 };
    struct clc_dxil_object *dxil;
+   ComputeTest::Shader shader;
    struct clc_object *obj;
    ObjectArray objs;
 
@@ -506,12 +507,13 @@ ComputeTest::compile_and_validate(const std::vector<const char *> &sources)
    if (!obj)
       throw runtime_error("failed to link objects!");
 
+   shader.obj = std::shared_ptr<struct clc_object>(obj, clc_free_object);
+
    dxil = clc_to_dxil(obj, "main_test", &logger);
-   clc_free_object(obj);
    if (!dxil)
       throw runtime_error("failed to compile kernel!");
 
-   std::shared_ptr<struct clc_dxil_object> ret(dxil, clc_free_dxil_object);
+   shader.dxil = std::shared_ptr<struct clc_dxil_object>(dxil, clc_free_dxil_object);
 
    dump_blob("unsigned.cso", *dxil);
    if (!validate_module(*dxil))
@@ -519,5 +521,5 @@ ComputeTest::compile_and_validate(const std::vector<const char *> &sources)
 
    dump_blob("signed.cso", *dxil);
 
-   return ret;
+   return shader;
 }
