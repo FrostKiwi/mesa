@@ -298,6 +298,41 @@ fill_state_vars(struct d3d12_context *ctx,
    return size;
 }
 
+static bool
+check_descriptors_left(struct d3d12_context *ctx)
+{
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
+   unsigned needed_descs = 0;
+
+   for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
+      struct d3d12_shader_selector *shader = ctx->gfx_stages[i];
+
+      if (!shader)
+         continue;
+
+      needed_descs += shader->current->num_cb_bindings;
+      needed_descs += shader->current->num_srv_bindings;
+   }
+
+   if (d3d12_descriptor_heap_get_remaining_handles(batch->view_heap) < needed_descs)
+      return false;
+
+   needed_descs = 0;
+   for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
+      struct d3d12_shader_selector *shader = ctx->gfx_stages[i];
+
+      if (!shader)
+         continue;
+
+      needed_descs += shader->current->num_srv_bindings;
+   }
+
+   if (d3d12_descriptor_heap_get_remaining_handles(batch->sampler_heap) < needed_descs)
+      return false;
+
+   return true;
+}
+
 static void
 set_graphics_root_parameters(struct d3d12_context *ctx)
 {
@@ -499,7 +534,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                const struct pipe_draw_info *dinfo)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
-   struct d3d12_batch *batch = d3d12_current_batch(ctx);
+   struct d3d12_batch *batch;
 
    d3d12_select_shader_variants(ctx, dinfo);
 
@@ -514,6 +549,10 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       util_primconvert_draw_vbo(ctx->primconvert, dinfo);
       return;
    }
+
+   if (!check_descriptors_left(ctx))
+      d3d12_flush_cmdlist(ctx);
+   batch = d3d12_current_batch(ctx);
 
    /* this should *really* be fixed at a higher level than here! */
    enum pipe_prim_type reduced_prim = u_reduced_prim(dinfo->mode);
@@ -635,7 +674,6 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                              D3D12_RESOURCE_STATE_COMMON);
    }
 
-   d3d12_flush_cmdlist(ctx);
    if (dinfo->index_size && index_buffer != dinfo->index.resource)
       pipe_resource_reference(&index_buffer, NULL);
 }
