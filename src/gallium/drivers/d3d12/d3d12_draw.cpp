@@ -42,6 +42,11 @@ extern "C" {
 #include "indices/u_primconvert.h"
 }
 
+static const D3D12_RECT MAX_SCISSOR = { D3D12_VIEWPORT_BOUNDS_MIN,
+                                        D3D12_VIEWPORT_BOUNDS_MIN,
+                                        D3D12_VIEWPORT_BOUNDS_MAX,
+                                        D3D12_VIEWPORT_BOUNDS_MAX };
+
 static D3D12_SHADER_VISIBILITY
 get_shader_visibility(enum pipe_shader_type stage)
 {
@@ -343,22 +348,28 @@ set_graphics_root_parameters(struct d3d12_context *ctx)
          continue;
 
       struct d3d12_shader *shader = ctx->gfx_stages[i]->current;
+      uint64_t dirty = ctx->shader_state[i].state_dirty;
       assert(shader);
 
       if (shader->num_cb_bindings > 0) {
-         ctx->cmdlist->SetGraphicsRootDescriptorTable(num_params++,
-                                                      fill_cbv_descriptors(ctx, shader, i));
+         if (dirty & D3D12_SHADER_DIRTY_CONSTBUF)
+            ctx->cmdlist->SetGraphicsRootDescriptorTable(num_params, fill_cbv_descriptors(ctx, shader, i));
+         num_params++;
       }
       if (shader->num_srv_bindings > 0) {
-         ctx->cmdlist->SetGraphicsRootDescriptorTable(num_params++,
-                                                      fill_srv_descriptors(ctx, shader, i));
-         ctx->cmdlist->SetGraphicsRootDescriptorTable(num_params++,
-                                                      fill_sampler_descriptors(ctx, shader, i));
+         if (dirty & D3D12_SHADER_DIRTY_SAMPLER_VIEWS)
+            ctx->cmdlist->SetGraphicsRootDescriptorTable(num_params, fill_srv_descriptors(ctx, shader, i));
+         num_params++;
+         if (dirty & D3D12_SHADER_DIRTY_SAMPLERS)
+            ctx->cmdlist->SetGraphicsRootDescriptorTable(num_params, fill_sampler_descriptors(ctx, shader, i));
+         num_params++;
       }
+      /* TODO Don't always update state vars */
       if (shader->num_state_vars > 0) {
          uint32_t constants[D3D12_MAX_STATE_VARS * 4];
          unsigned size = fill_state_vars(ctx, shader, constants);
-         ctx->cmdlist->SetGraphicsRoot32BitConstants(num_params++, size, constants, 0);
+         ctx->cmdlist->SetGraphicsRoot32BitConstants(num_params, size, constants, 0);
+         num_params++;
       }
    }
 }
@@ -384,7 +395,9 @@ depth_bias(struct d3d12_rasterizer_state *state, enum pipe_prim_type reduced_pri
 static D3D12_PRIMITIVE_TOPOLOGY_TYPE
 topology_type(enum pipe_prim_type prim_type)
 {
-   switch (prim_type) {
+   enum pipe_prim_type reduced_prim = u_reduced_prim(prim_type);
+
+   switch (reduced_prim) {
    case PIPE_PRIM_POINTS:
       return D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
 
@@ -437,15 +450,13 @@ topology(enum pipe_prim_type prim_type)
 }
 
 static ID3D12PipelineState *
-get_gfx_pipeline_state(struct d3d12_context *ctx,
-                       ID3D12RootSignature *root_sig,
-                       enum pipe_prim_type prim_type)
+get_gfx_pipeline_state(struct d3d12_context *ctx)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
-   enum pipe_prim_type reduced_prim = u_reduced_prim(prim_type);
+   enum pipe_prim_type reduced_prim = u_reduced_prim(ctx->prim_type);
 
    D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = { 0 };
-   pso_desc.pRootSignature = root_sig;
+   pso_desc.pRootSignature = ctx->current_root_signature;
 
    if (ctx->gfx_stages[PIPE_SHADER_VERTEX]) {
       auto shader = ctx->gfx_stages[PIPE_SHADER_VERTEX]->current;
@@ -484,7 +495,7 @@ get_gfx_pipeline_state(struct d3d12_context *ctx,
 
    pso_desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED; // TODO
 
-   pso_desc.PrimitiveTopologyType = topology_type(prim_type);
+   pso_desc.PrimitiveTopologyType = topology_type(ctx->prim_type);
 
    pso_desc.NumRenderTargets = ctx->fb.nr_cbufs;
    for (int i = 0; i < ctx->fb.nr_cbufs; ++i)
@@ -536,8 +547,6 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    struct d3d12_context *ctx = d3d12_context(pctx);
    struct d3d12_batch *batch;
 
-   d3d12_select_shader_variants(ctx, dinfo);
-
    if (dinfo->mode >= PIPE_PRIM_QUADS ||
        dinfo->mode == PIPE_PRIM_LINE_LOOP ||
        dinfo->mode == PIPE_PRIM_TRIANGLE_FAN ||
@@ -550,89 +559,144 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       return;
    }
 
-   if (!check_descriptors_left(ctx))
-      d3d12_flush_cmdlist(ctx);
-   batch = d3d12_current_batch(ctx);
-
    /* this should *really* be fixed at a higher level than here! */
    enum pipe_prim_type reduced_prim = u_reduced_prim(dinfo->mode);
    if (reduced_prim == PIPE_PRIM_TRIANGLES &&
        ctx->rast->base.cull_face == PIPE_FACE_FRONT_AND_BACK)
       return;
 
-   unsigned index_offset = 0;
-   struct pipe_resource *index_buffer = NULL;
+   if (ctx->prim_type != dinfo->mode) {
+      ctx->prim_type = dinfo->mode;
+      ctx->state_dirty |= D3D12_DIRTY_PRIM_MODE;
+   }
+
+   d3d12_select_shader_variants(ctx, dinfo);
+   for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
+      struct d3d12_shader *shader = ctx->gfx_stages[i] ? ctx->gfx_stages[i]->current : NULL;
+      if (ctx->shader_state[i].current != shader) {
+         ctx->shader_state[i].current = shader;
+         ctx->state_dirty |= D3D12_DIRTY_SHADER;
+         ctx->shader_state[i].state_dirty |= D3D12_SHADER_DIRTY_ALL;
+      }
+   }
+
+   if (!ctx->current_root_signature || ctx->state_dirty & D3D12_DIRTY_SHADER) {
+      if (ctx->current_root_signature)
+         ctx->current_root_signature->Release();
+      ctx->current_root_signature = get_root_signature(ctx);
+      ctx->state_dirty |= D3D12_DIRTY_ROOT_SIGNATURE;
+   }
+
+   if (!ctx->current_pso || ctx->state_dirty & D3D12_DIRTY_PSO) {
+      if (ctx->current_pso)
+         ctx->current_pso->Release();
+      ctx->current_pso = get_gfx_pipeline_state(ctx);
+      assert(ctx->current_pso);
+   }
+
+   ctx->cmdlist_dirty |= ctx->state_dirty;
+
+   if (!check_descriptors_left(ctx))
+      d3d12_flush_cmdlist(ctx);
+   batch = d3d12_current_batch(ctx);
+
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_ROOT_SIGNATURE) {
+      d3d12_batch_reference_object(batch, ctx->current_root_signature);
+      ctx->cmdlist->SetGraphicsRootSignature(ctx->current_root_signature);
+   }
+
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_PSO) {
+      assert(ctx->current_pso);
+      d3d12_batch_reference_object(batch, ctx->current_pso);
+      ctx->cmdlist->SetPipelineState(ctx->current_pso);
+   }
+
+   set_graphics_root_parameters(ctx);
+
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_VIEWPORT)
+      ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);
+
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_SCISSOR) {
+      if (ctx->rast->base.scissor && ctx->num_scissors > 0)
+         ctx->cmdlist->RSSetScissorRects(ctx->num_scissors, ctx->scissors);
+      else
+         ctx->cmdlist->RSSetScissorRects(1, &MAX_SCISSOR);
+   }
+
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_BLEND_COLOR) {
+      unsigned blend_factor_flags = ctx->blend->blend_factor_flags;
+      if (blend_factor_flags & (D3D12_BLEND_FACTOR_COLOR | D3D12_BLEND_FACTOR_ANY)) {
+         ctx->cmdlist->OMSetBlendFactor(ctx->blend_factor);
+      } else if (blend_factor_flags & D3D12_BLEND_FACTOR_ALPHA) {
+         float alpha_const[4] = { ctx->blend_factor[3], ctx->blend_factor[3],
+                                 ctx->blend_factor[3], ctx->blend_factor[3] };
+         ctx->cmdlist->OMSetBlendFactor(alpha_const);
+      }
+   }
+
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_STENCIL_REF)
+      ctx->cmdlist->OMSetStencilRef(ctx->stencil_ref.ref_value[0]);
+
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_PRIM_MODE)
+      ctx->cmdlist->IASetPrimitiveTopology(topology(dinfo->mode));
+
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_VERTEX_BUFFERS) {
+      for (unsigned i = 0; i < ctx->num_vbs; ++i) {
+         if (ctx->vbs[i].buffer.resource) {
+            struct d3d12_resource *res = d3d12_resource(ctx->vbs[i].buffer.resource);
+            d3d12_batch_reference_resource(batch, res);
+         }
+      }
+      ctx->cmdlist->IASetVertexBuffers(0, ctx->num_vbs, ctx->vbvs);
+   }
+
    if (dinfo->index_size > 0) {
       assert(dinfo->index_size != 1);
+      unsigned index_offset = 0;
+      struct pipe_resource *index_buffer = NULL;
+
       if (dinfo->has_user_indices) {
          if (!util_upload_index_buffer(pctx, dinfo, &index_buffer,
              &index_offset, 4)) {
             debug_printf("util_upload_index_buffer() failed\n");
             return;
          }
-      } else
+      } else {
          index_buffer = dinfo->index.resource;
+      }
+
+      D3D12_INDEX_BUFFER_VIEW ibv;
+      struct d3d12_resource *res = d3d12_resource(index_buffer);
+      ibv.BufferLocation = res->res->GetGPUVirtualAddress() + index_offset;
+      ibv.SizeInBytes = res->base.width0 - index_offset;
+      ibv.Format = ib_format(dinfo->index_size);
+      if (ctx->cmdlist_dirty & D3D12_DIRTY_INDEX_BUFFER ||
+          memcmp(&ctx->ibv, &ibv, sizeof(D3D12_INDEX_BUFFER_VIEW)) != 0) {
+         ctx->ibv = ibv;
+         d3d12_batch_reference_resource(batch, res);
+         ctx->cmdlist->IASetIndexBuffer(&ibv);
+      }
+
+      if (dinfo->has_user_indices)
+         pipe_resource_reference(&index_buffer, NULL);
    }
 
-   ID3D12RootSignature *root_sig = get_root_signature(ctx);
-   ID3D12PipelineState *pipeline_state =
-      get_gfx_pipeline_state(ctx, root_sig, reduced_prim);
-   assert(pipeline_state);
-
-   d3d12_batch_reference_object(batch, root_sig);
-   ctx->cmdlist->SetGraphicsRootSignature(root_sig);
-   root_sig->Release();
-
-   set_graphics_root_parameters(ctx);
-
-   ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);
-   if (ctx->rast->base.scissor && ctx->num_scissors > 0)
-      ctx->cmdlist->RSSetScissorRects(ctx->num_scissors, ctx->scissors);
-   else {
-      D3D12_RECT fb_scissor;
-      fb_scissor.left = 0;
-      fb_scissor.top = 0;
-      fb_scissor.right = ctx->fb.width;
-      fb_scissor.bottom = ctx->fb.height;
-      ctx->cmdlist->RSSetScissorRects(1, &fb_scissor);
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_FRAMEBUFFER) {
+      D3D12_CPU_DESCRIPTOR_HANDLE render_targets[PIPE_MAX_COLOR_BUFS] = {};
+      D3D12_CPU_DESCRIPTOR_HANDLE *depth_desc = NULL, tmp_desc;
+      for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
+         struct d3d12_surface *surface = d3d12_surface(ctx->fb.cbufs[i]);
+         render_targets[i] = surface->desc_handle.cpu_handle;
+         d3d12_batch_reference_surface(batch, surface);
+      }
+      if (ctx->fb.zsbuf) {
+         struct d3d12_surface *surface = d3d12_surface(ctx->fb.zsbuf);
+         tmp_desc = surface->desc_handle.cpu_handle;
+         d3d12_batch_reference_surface(batch, surface);
+         depth_desc = &tmp_desc;
+      }
+      ctx->cmdlist->OMSetRenderTargets(ctx->fb.nr_cbufs, render_targets, FALSE, depth_desc);
    }
-
-   d3d12_batch_reference_object(batch, pipeline_state);
-   ctx->cmdlist->SetPipelineState(pipeline_state);
-   pipeline_state->Release();
-
-   if (ctx->blend->blend_factor_flags & (D3D12_BLEND_FACTOR_COLOR | D3D12_BLEND_FACTOR_ANY)) {
-      ctx->cmdlist->OMSetBlendFactor(ctx->blend_factor);
-   } else if (ctx->blend->blend_factor_flags & D3D12_BLEND_FACTOR_ALPHA) {
-      float alpha_const[4] = { ctx->blend_factor[3], ctx->blend_factor[3],
-                               ctx->blend_factor[3], ctx->blend_factor[3] };
-      ctx->cmdlist->OMSetBlendFactor(alpha_const);
-   }
-
-
-   D3D12_CPU_DESCRIPTOR_HANDLE render_targets[PIPE_MAX_COLOR_BUFS] = {};
-   D3D12_CPU_DESCRIPTOR_HANDLE *depth_desc = NULL, tmp_desc;
-   for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
-      struct d3d12_surface *surface = d3d12_surface(ctx->fb.cbufs[i]);
-      render_targets[i] = surface->desc_handle.cpu_handle;
-      d3d12_batch_reference_surface(batch, surface);
-   }
-   if (ctx->fb.zsbuf) {
-      struct d3d12_surface *surface = d3d12_surface(ctx->fb.zsbuf);
-      tmp_desc = surface->desc_handle.cpu_handle;
-      d3d12_batch_reference_surface(batch, surface);
-      depth_desc = &tmp_desc;
-   }
-   ctx->cmdlist->OMSetRenderTargets(ctx->fb.nr_cbufs, render_targets, FALSE, depth_desc);
-   ctx->cmdlist->OMSetStencilRef(ctx->stencil_ref.ref_value[0]);
-
-   ctx->cmdlist->IASetPrimitiveTopology(topology(dinfo->mode));
-
-   for (int i = 0; i < ctx->num_vbs; ++i) {
-      if (ctx->vbs[i].buffer.resource)
-         d3d12_batch_reference_resource(batch, d3d12_resource(ctx->vbs[i].buffer.resource));
-   }
-   ctx->cmdlist->IASetVertexBuffers(0, ctx->num_vbs, ctx->vbvs);
 
    for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
       struct pipe_surface *psurf = ctx->fb.cbufs[i];
@@ -646,19 +710,11 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                              D3D12_RESOURCE_STATE_DEPTH_WRITE);
    }
 
-   if (dinfo->index_size > 0) {
-      struct d3d12_resource *res = d3d12_resource(index_buffer);
-      D3D12_INDEX_BUFFER_VIEW ibv;
-      ibv.BufferLocation = res->res->GetGPUVirtualAddress() + index_offset;
-      ibv.SizeInBytes = res->base.width0 - index_offset;
-      ibv.Format = ib_format(dinfo->index_size);
-
-      d3d12_batch_reference_resource(batch, res);
-      ctx->cmdlist->IASetIndexBuffer(&ibv);
+   if (dinfo->index_size > 0)
       ctx->cmdlist->DrawIndexedInstanced(dinfo->count, dinfo->instance_count,
                                          dinfo->start, dinfo->index_bias,
                                          dinfo->start_instance);
-   } else
+   else
       ctx->cmdlist->DrawInstanced(dinfo->count, dinfo->instance_count,
                                   dinfo->start, dinfo->start_instance);
 
@@ -674,6 +730,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                              D3D12_RESOURCE_STATE_COMMON);
    }
 
-   if (dinfo->index_size && index_buffer != dinfo->index.resource)
-      pipe_resource_reference(&index_buffer, NULL);
+   ctx->state_dirty = 0;
+   ctx->cmdlist_dirty = 0;
+   for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i)
+      ctx->shader_state[i].state_dirty = 0;
 }

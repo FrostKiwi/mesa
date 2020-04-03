@@ -38,6 +38,42 @@
 #define D3D12_GFX_SHADER_STAGES (PIPE_SHADER_TYPES - 1)
 #define D3D12_MAX_POINT_SIZE 255.0f
 
+enum d3d12_dirty_flags
+{
+   D3D12_DIRTY_NONE             = 0,
+   D3D12_DIRTY_BLEND            = (1 << 0),
+   D3D12_DIRTY_RASTERIZER       = (1 << 1),
+   D3D12_DIRTY_ZSA              = (1 << 2),
+   D3D12_DIRTY_VERTEX_ELEMENTS  = (1 << 3),
+   D3D12_DIRTY_BLEND_COLOR      = (1 << 4),
+   D3D12_DIRTY_STENCIL_REF      = (1 << 5),
+   D3D12_DIRTY_SAMPLE_MASK      = (1 << 6),
+   D3D12_DIRTY_VIEWPORT         = (1 << 7),
+   D3D12_DIRTY_FRAMEBUFFER      = (1 << 8),
+   D3D12_DIRTY_SCISSOR          = (1 << 9),
+   D3D12_DIRTY_VERTEX_BUFFERS   = (1 << 10),
+   D3D12_DIRTY_INDEX_BUFFER     = (1 << 11),
+   D3D12_DIRTY_PRIM_MODE        = (1 << 12),
+   D3D12_DIRTY_SHADER           = (1 << 13),
+   D3D12_DIRTY_ROOT_SIGNATURE   = (1 << 14),
+};
+
+enum d3d12_shader_dirty_flags
+{
+   D3D12_SHADER_DIRTY_CONSTBUF      = (1 << 0),
+   D3D12_SHADER_DIRTY_SAMPLER_VIEWS = (1 << 1),
+   D3D12_SHADER_DIRTY_SAMPLERS      = (1 << 2),
+};
+
+#define D3D12_DIRTY_PSO (D3D12_DIRTY_BLEND | D3D12_DIRTY_RASTERIZER | D3D12_DIRTY_ZSA | \
+                         D3D12_DIRTY_FRAMEBUFFER | D3D12_DIRTY_SAMPLE_MASK | \
+                         D3D12_DIRTY_VERTEX_ELEMENTS | D3D12_DIRTY_PRIM_MODE | \
+                         D3D12_DIRTY_SHADER | D3D12_DIRTY_ROOT_SIGNATURE)
+
+#define D3D12_SHADER_DIRTY_ALL (D3D12_SHADER_DIRTY_CONSTBUF | D3D12_SHADER_DIRTY_SAMPLER_VIEWS | \
+                                D3D12_SHADER_DIRTY_SAMPLERS)
+
+
 enum resource_dimension
 {
    RESOURCE_DIMENSION_UNKNOWN = 0,
@@ -96,6 +132,11 @@ d3d12_sampler_view(struct pipe_sampler_view *pview)
    return (struct d3d12_sampler_view *)pview;
 }
 
+struct d3d12_shader_state {
+   struct d3d12_shader *current;
+   unsigned state_dirty;
+};
+
 struct blitter_context;
 struct primconvert_context;
 struct d3d12_validation_tools;
@@ -133,9 +174,16 @@ struct d3d12_context {
    unsigned num_sampler_views[PIPE_SHADER_TYPES];
    struct d3d12_sampler_state *samplers[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    unsigned num_samplers[PIPE_SHADER_TYPES];
+   enum pipe_prim_type prim_type;
+   D3D12_INDEX_BUFFER_VIEW ibv;
 
    struct d3d12_shader_selector *gfx_stages[D3D12_GFX_SHADER_STAGES];
-   unsigned dirty_program : 1;
+
+   struct d3d12_shader_state shader_state[D3D12_GFX_SHADER_STAGES];
+   unsigned state_dirty;
+   unsigned cmdlist_dirty;
+   ID3D12RootSignature *current_root_signature;
+   ID3D12PipelineState *current_pso;
 
    ID3D12Fence *cmdqueue_fence;
    int fence_value;
