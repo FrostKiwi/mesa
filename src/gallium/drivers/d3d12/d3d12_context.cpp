@@ -64,6 +64,7 @@ d3d12_context_destroy(struct pipe_context *pctx)
    d3d12_descriptor_pool_free(ctx->view_pool);
    util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
+   d3d12_gfx_pipeline_state_cache_destroy(ctx);
 
    u_suballocator_destroy(ctx->query_allocator);
 
@@ -110,7 +111,7 @@ d3d12_bind_vertex_elements_state(struct pipe_context *pctx,
                                  void *ve)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
-   ctx->ves = (struct d3d12_vertex_elements_state *)ve;
+   ctx->gfx_pipeline_state.ves = (struct d3d12_vertex_elements_state *)ve;
    ctx->state_dirty |= D3D12_DIRTY_VERTEX_ELEMENTS;
 }
 
@@ -330,9 +331,9 @@ d3d12_bind_blend_state(struct pipe_context *pctx, void *blend_state)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
    struct d3d12_blend_state *new_state = (struct d3d12_blend_state *) blend_state;
-   struct d3d12_blend_state *old_state = ctx->blend;
+   struct d3d12_blend_state *old_state = ctx->gfx_pipeline_state.blend;
 
-   ctx->blend = new_state;
+   ctx->gfx_pipeline_state.blend = new_state;
    ctx->state_dirty |= D3D12_DIRTY_BLEND;
    if (new_state == NULL || old_state == NULL ||
        new_state->blend_factor_flags != old_state->blend_factor_flags)
@@ -342,6 +343,7 @@ d3d12_bind_blend_state(struct pipe_context *pctx, void *blend_state)
 static void
 d3d12_delete_blend_state(struct pipe_context *pctx, void *blend_state)
 {
+   d3d12_gfx_pipeline_state_cache_invalidate(d3d12_context(pctx), blend_state);
    FREE(blend_state);
 }
 
@@ -416,7 +418,7 @@ d3d12_bind_depth_stencil_alpha_state(struct pipe_context *pctx,
                                      void *dsa)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
-   ctx->depth_stencil_alpha_state = (struct d3d12_depth_stencil_alpha_state *) dsa;
+   ctx->gfx_pipeline_state.zsa = (struct d3d12_depth_stencil_alpha_state *) dsa;
    ctx->state_dirty |= D3D12_DIRTY_ZSA;
 }
 
@@ -424,6 +426,7 @@ static void
 d3d12_delete_depth_stencil_alpha_state(struct pipe_context *pctx,
                                        void *dsa_state)
 {
+   d3d12_gfx_pipeline_state_cache_invalidate(d3d12_context(pctx), dsa_state);
    FREE(dsa_state);
 }
 
@@ -492,13 +495,14 @@ static void
 d3d12_bind_rasterizer_state(struct pipe_context *pctx, void *rs_state)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
-   ctx->rast = (struct d3d12_rasterizer_state *)rs_state;
+   ctx->gfx_pipeline_state.rast = (struct d3d12_rasterizer_state *)rs_state;
    ctx->state_dirty |= D3D12_DIRTY_RASTERIZER;
 }
 
 static void
 d3d12_delete_rasterizer_state(struct pipe_context *pctx, void *rs_state)
 {
+   d3d12_gfx_pipeline_state_cache_invalidate(d3d12_context(pctx), rs_state);
    FREE(rs_state);
 }
 
@@ -614,7 +618,7 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
       ctx->samplers[shader][start_slot + i] = sampler;
    }
    ctx->num_samplers[shader] = start_slot + num_samplers;
-   ctx->shader_state[shader].state_dirty |= D3D12_SHADER_DIRTY_SAMPLERS;
+   ctx->shader_dirty[shader] |= D3D12_SHADER_DIRTY_SAMPLERS;
 }
 
 static void
@@ -731,7 +735,7 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
          views[i]);
    }
    ctx->num_sampler_views[shader_type] = start_slot + num_views;
-   ctx->shader_state[shader_type].state_dirty |= D3D12_SHADER_DIRTY_SAMPLER_VIEWS;
+   ctx->shader_dirty[shader_type] |= D3D12_SHADER_DIRTY_SAMPLER_VIEWS;
 }
 
 static void
@@ -746,12 +750,20 @@ d3d12_destroy_sampler_view(struct pipe_context *pctx,
 }
 
 static void
+delete_shader(struct d3d12_context *ctx, enum pipe_shader_type stage,
+              struct d3d12_shader_selector *shader)
+{
+   d3d12_gfx_pipeline_state_cache_invalidate_shader(ctx, stage, shader);
+   d3d12_shader_free(shader);
+}
+
+static void
 bind_stage(struct d3d12_context *ctx, enum pipe_shader_type stage,
            struct d3d12_shader_selector *shader)
 {
    assert(stage < D3D12_GFX_SHADER_STAGES);
    if (ctx->gfx_stages[stage] && ctx->gfx_stages[stage]->passthrough)
-      d3d12_shader_free(shader);
+      delete_shader(ctx, stage, ctx->gfx_stages[stage]);
    ctx->gfx_stages[stage] = shader;
 }
 
@@ -774,7 +786,8 @@ static void
 d3d12_delete_vs_state(struct pipe_context *pctx,
                       void *vs)
 {
-   d3d12_shader_free((struct d3d12_shader_selector *) vs);
+   delete_shader(d3d12_context(pctx), PIPE_SHADER_VERTEX,
+                 (struct d3d12_shader_selector *) vs);
 }
 
 static void *
@@ -796,7 +809,8 @@ static void
 d3d12_delete_fs_state(struct pipe_context *pctx,
                       void *fs)
 {
-   d3d12_shader_free((struct d3d12_shader_selector *) fs);
+   delete_shader(d3d12_context(pctx), PIPE_SHADER_FRAGMENT,
+                 (struct d3d12_shader_selector *) fs);
 }
 
 static void *
@@ -816,7 +830,8 @@ d3d12_bind_gs_state(struct pipe_context *pctx, void *gss)
 static void
 d3d12_delete_gs_state(struct pipe_context *pctx, void *gs)
 {
-   d3d12_shader_free((struct d3d12_shader_selector *) gs);
+   delete_shader(d3d12_context(pctx), PIPE_SHADER_GEOMETRY,
+                 (struct d3d12_shader_selector *) gs);
 }
 
 static void
@@ -921,7 +936,7 @@ d3d12_set_constant_buffer(struct pipe_context *pctx,
       ctx->cbufs[shader][index].buffer_size = 0;
       ctx->cbufs[shader][index].user_buffer = NULL;
    }
-   ctx->shader_state[shader].state_dirty |= D3D12_SHADER_DIRTY_CONSTBUF;
+   ctx->shader_dirty[shader] |= D3D12_SHADER_DIRTY_CONSTBUF;
 }
 
 static void
@@ -931,6 +946,16 @@ d3d12_set_framebuffer_state(struct pipe_context *pctx,
    struct d3d12_context *ctx = d3d12_context(pctx);
 
    util_copy_framebuffer_state(&d3d12_context(pctx)->fb, state);
+
+   ctx->gfx_pipeline_state.num_cbufs = state->nr_cbufs;
+   for (int i = 0; i < state->nr_cbufs; ++i)
+      ctx->gfx_pipeline_state.rtv_formats[i] = d3d12_get_format(state->cbufs[i]->format);
+
+   if (state->zsbuf)
+      ctx->gfx_pipeline_state.dsv_format = d3d12_get_format(state->zsbuf->format);
+   else
+      ctx->gfx_pipeline_state.dsv_format = DXGI_FORMAT_UNKNOWN;
+
    ctx->state_dirty |= D3D12_DIRTY_FRAMEBUFFER;
 }
 
@@ -947,7 +972,7 @@ static void
 d3d12_set_sample_mask(struct pipe_context *pctx, unsigned sample_mask)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
-   ctx->sample_mask = sample_mask;
+   ctx->gfx_pipeline_state.sample_mask = sample_mask;
    ctx->state_dirty |= D3D12_DIRTY_SAMPLE_MASK;
 }
 
@@ -1240,7 +1265,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.flush = d3d12_flush;
    ctx->base.blit = d3d12_blit;
 
-   ctx->sample_mask = ~0;
+   ctx->gfx_pipeline_state.sample_mask = ~0;
 
    d3d12_context_surface_init(&ctx->base);
    d3d12_context_resource_init(&ctx->base);
@@ -1262,6 +1287,8 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
       debug_printf("D3D12: failed to create primconvert\n");
       return NULL;
    }
+
+   d3d12_gfx_pipeline_state_cache_init(ctx);
 
    HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
