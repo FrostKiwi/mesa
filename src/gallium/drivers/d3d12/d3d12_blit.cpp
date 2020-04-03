@@ -42,11 +42,11 @@ d3d12_blit(struct pipe_context *pctx,
       return;
    }
 
-   util_blitter_save_blend(ctx->blitter, ctx->blend);
-   util_blitter_save_depth_stencil_alpha(ctx->blitter, ctx->depth_stencil_alpha_state);
-   util_blitter_save_vertex_elements(ctx->blitter, ctx->ves);
+   util_blitter_save_blend(ctx->blitter, ctx->gfx_pipeline_state.blend);
+   util_blitter_save_depth_stencil_alpha(ctx->blitter, ctx->gfx_pipeline_state.zsa);
+   util_blitter_save_vertex_elements(ctx->blitter, ctx->gfx_pipeline_state.ves);
    util_blitter_save_stencil_ref(ctx->blitter, &ctx->stencil_ref);
-   util_blitter_save_rasterizer(ctx->blitter, ctx->rast);
+   util_blitter_save_rasterizer(ctx->blitter, ctx->gfx_pipeline_state.rast);
    util_blitter_save_fragment_shader(ctx->blitter, ctx->gfx_stages[PIPE_SHADER_FRAGMENT]);
    util_blitter_save_vertex_shader(ctx->blitter, ctx->gfx_stages[PIPE_SHADER_VERTEX]);
    util_blitter_save_geometry_shader(ctx->blitter, ctx->gfx_stages[PIPE_SHADER_GEOMETRY]);
@@ -61,7 +61,7 @@ d3d12_blit(struct pipe_context *pctx,
                                             ctx->sampler_views[PIPE_SHADER_FRAGMENT]);
    util_blitter_save_fragment_constant_buffer_slot(ctx->blitter, ctx->cbufs[PIPE_SHADER_FRAGMENT]);
    util_blitter_save_vertex_buffer_slot(ctx->blitter, ctx->vbs);
-   util_blitter_save_sample_mask(ctx->blitter, ctx->sample_mask);
+   util_blitter_save_sample_mask(ctx->blitter, ctx->gfx_pipeline_state.sample_mask);
 
    util_blitter_blit(ctx->blitter, info);
 }

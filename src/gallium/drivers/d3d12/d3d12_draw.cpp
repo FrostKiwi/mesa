@@ -291,7 +291,7 @@ fill_state_vars(struct d3d12_context *ctx,
       case D3D12_STATE_VAR_PT_SPRITE:
          ptr[0] = fui(1.0 / ctx->viewports[0].Width);
          ptr[1] = fui(1.0 / ctx->viewports[0].Height);
-         ptr[2] = fui(ctx->rast->base.point_size);
+         ptr[2] = fui(ctx->gfx_pipeline_state.rast->base.point_size);
          ptr[3] = fui(D3D12_MAX_POINT_SIZE);
          size += 4;
          break;
@@ -348,7 +348,7 @@ set_graphics_root_parameters(struct d3d12_context *ctx)
          continue;
 
       struct d3d12_shader *shader = ctx->gfx_stages[i]->current;
-      uint64_t dirty = ctx->shader_state[i].state_dirty;
+      uint64_t dirty = ctx->shader_dirty[i];
       assert(shader);
 
       if (shader->num_cb_bindings > 0) {
@@ -374,47 +374,6 @@ set_graphics_root_parameters(struct d3d12_context *ctx)
    }
 }
 
-static bool
-depth_bias(struct d3d12_rasterizer_state *state, enum pipe_prim_type reduced_prim)
-{
-   switch (reduced_prim) {
-   case PIPE_PRIM_POINTS:
-      return state->base.offset_point;
-
-   case PIPE_PRIM_LINES:
-      return state->base.offset_line;
-
-   case PIPE_PRIM_TRIANGLES:
-      return state->base.offset_tri;
-
-   default:
-      unreachable("unexpected reduced prim");
-   }
-}
-
-static D3D12_PRIMITIVE_TOPOLOGY_TYPE
-topology_type(enum pipe_prim_type prim_type)
-{
-   enum pipe_prim_type reduced_prim = u_reduced_prim(prim_type);
-
-   switch (reduced_prim) {
-   case PIPE_PRIM_POINTS:
-      return D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
-
-   case PIPE_PRIM_LINES:
-      return D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
-
-   case PIPE_PRIM_TRIANGLES:
-      return D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-
-   case PIPE_PRIM_PATCHES:
-      return D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
-
-   default:
-      debug_printf("pipe_prim_type: %s\n", u_prim_name(prim_type));
-      unreachable("unexpected enum pipe_prim_type");
-   }
-}
 static D3D_PRIMITIVE_TOPOLOGY
 topology(enum pipe_prim_type prim_type)
 {
@@ -449,84 +408,6 @@ topology(enum pipe_prim_type prim_type)
    }
 }
 
-static ID3D12PipelineState *
-get_gfx_pipeline_state(struct d3d12_context *ctx)
-{
-   struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
-   enum pipe_prim_type reduced_prim = u_reduced_prim(ctx->prim_type);
-
-   D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = { 0 };
-   pso_desc.pRootSignature = ctx->current_root_signature;
-
-   if (ctx->gfx_stages[PIPE_SHADER_VERTEX]) {
-      auto shader = ctx->gfx_stages[PIPE_SHADER_VERTEX]->current;
-      pso_desc.VS.BytecodeLength = shader->bytecode_length;
-      pso_desc.VS.pShaderBytecode = shader->bytecode;
-   }
-
-   if (ctx->gfx_stages[PIPE_SHADER_FRAGMENT]) {
-      auto shader = ctx->gfx_stages[PIPE_SHADER_FRAGMENT]->current;
-      pso_desc.PS.BytecodeLength = shader->bytecode_length;
-      pso_desc.PS.pShaderBytecode = shader->bytecode;
-   }
-
-   if (ctx->gfx_stages[PIPE_SHADER_GEOMETRY]) {
-      auto shader = ctx->gfx_stages[PIPE_SHADER_GEOMETRY]->current;
-      pso_desc.GS.BytecodeLength = shader->bytecode_length;
-      pso_desc.GS.pShaderBytecode = shader->bytecode;
-   }
-
-   pso_desc.BlendState = ctx->blend->desc;
-   pso_desc.DepthStencilState = ctx->depth_stencil_alpha_state->desc;
-   pso_desc.SampleMask = ctx->sample_mask;
-   pso_desc.RasterizerState = ctx->rast->desc;
-
-   if (reduced_prim != PIPE_PRIM_TRIANGLES)
-      pso_desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-
-   if (depth_bias(ctx->rast, reduced_prim)) {
-      pso_desc.RasterizerState.DepthBias = ctx->rast->base.offset_units;
-      pso_desc.RasterizerState.DepthBiasClamp = ctx->rast->base.offset_clamp;
-      pso_desc.RasterizerState.SlopeScaledDepthBias = ctx->rast->base.offset_scale;
-   }
-
-   pso_desc.InputLayout.pInputElementDescs = ctx->ves->elements;
-   pso_desc.InputLayout.NumElements = ctx->ves->num_elements;
-
-   pso_desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED; // TODO
-
-   pso_desc.PrimitiveTopologyType = topology_type(ctx->prim_type);
-
-   pso_desc.NumRenderTargets = ctx->fb.nr_cbufs;
-   for (int i = 0; i < ctx->fb.nr_cbufs; ++i)
-      pso_desc.RTVFormats[i] = d3d12_get_format(ctx->fb.cbufs[i]->format);
-
-   if (ctx->fb.zsbuf)
-      pso_desc.DSVFormat = d3d12_get_format(ctx->fb.zsbuf->format);
-   else
-      pso_desc.DSVFormat = DXGI_FORMAT_UNKNOWN;
-
-   pso_desc.SampleDesc.Count = 1;
-   pso_desc.SampleDesc.Quality = 0;
-
-   pso_desc.NodeMask = 0;
-
-   pso_desc.CachedPSO.pCachedBlob = NULL;
-   pso_desc.CachedPSO.CachedBlobSizeInBytes = 0;
-
-   pso_desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-
-   ID3D12PipelineState *ret;
-   if (FAILED(screen->dev->CreateGraphicsPipelineState(&pso_desc,
-                                                       __uuidof(ret),
-                                                       (void **)&ret))) {
-      debug_printf("D3D12: CreateGraphicsPipelineState failed!\n");
-      return NULL;
-   }
-
-   return ret;
-}
-
 static DXGI_FORMAT
 ib_format(unsigned index_size)
 {
@@ -554,7 +435,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       if (!u_trim_pipe_prim(dinfo->mode, (unsigned *)&dinfo->count))
          return;
 
-      util_primconvert_save_rasterizer_state(ctx->primconvert, &ctx->rast->base);
+      util_primconvert_save_rasterizer_state(ctx->primconvert, &ctx->gfx_pipeline_state.rast->base);
       util_primconvert_draw_vbo(ctx->primconvert, dinfo);
       return;
    }
@@ -562,35 +443,33 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    /* this should *really* be fixed at a higher level than here! */
    enum pipe_prim_type reduced_prim = u_reduced_prim(dinfo->mode);
    if (reduced_prim == PIPE_PRIM_TRIANGLES &&
-       ctx->rast->base.cull_face == PIPE_FACE_FRONT_AND_BACK)
+       ctx->gfx_pipeline_state.rast->base.cull_face == PIPE_FACE_FRONT_AND_BACK)
       return;
 
-   if (ctx->prim_type != dinfo->mode) {
-      ctx->prim_type = dinfo->mode;
+   if (ctx->gfx_pipeline_state.prim_type != dinfo->mode) {
+      ctx->gfx_pipeline_state.prim_type = dinfo->mode;
       ctx->state_dirty |= D3D12_DIRTY_PRIM_MODE;
    }
 
    d3d12_select_shader_variants(ctx, dinfo);
    for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
       struct d3d12_shader *shader = ctx->gfx_stages[i] ? ctx->gfx_stages[i]->current : NULL;
-      if (ctx->shader_state[i].current != shader) {
-         ctx->shader_state[i].current = shader;
+      if (ctx->gfx_pipeline_state.stages[i] != shader) {
+         ctx->gfx_pipeline_state.stages[i] = shader;
          ctx->state_dirty |= D3D12_DIRTY_SHADER;
-         ctx->shader_state[i].state_dirty |= D3D12_SHADER_DIRTY_ALL;
+         ctx->shader_dirty[i] |= D3D12_SHADER_DIRTY_ALL;
       }
    }
 
-   if (!ctx->current_root_signature || ctx->state_dirty & D3D12_DIRTY_SHADER) {
-      if (ctx->current_root_signature)
-         ctx->current_root_signature->Release();
-      ctx->current_root_signature = get_root_signature(ctx);
+   if (!ctx->gfx_pipeline_state.root_signature || ctx->state_dirty & D3D12_DIRTY_SHADER) {
+      if (ctx->gfx_pipeline_state.root_signature)
+         ctx->gfx_pipeline_state.root_signature->Release();
+      ctx->gfx_pipeline_state.root_signature = get_root_signature(ctx);
       ctx->state_dirty |= D3D12_DIRTY_ROOT_SIGNATURE;
    }
 
    if (!ctx->current_pso || ctx->state_dirty & D3D12_DIRTY_PSO) {
-      if (ctx->current_pso)
-         ctx->current_pso->Release();
-      ctx->current_pso = get_gfx_pipeline_state(ctx);
+      ctx->current_pso = d3d12_get_gfx_pipeline_state(ctx);
       assert(ctx->current_pso);
    }
 
@@ -601,8 +480,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    batch = d3d12_current_batch(ctx);
 
    if (ctx->cmdlist_dirty & D3D12_DIRTY_ROOT_SIGNATURE) {
-      d3d12_batch_reference_object(batch, ctx->current_root_signature);
-      ctx->cmdlist->SetGraphicsRootSignature(ctx->current_root_signature);
+      d3d12_batch_reference_object(batch, ctx->gfx_pipeline_state.root_signature);
+      ctx->cmdlist->SetGraphicsRootSignature(ctx->gfx_pipeline_state.root_signature);
    }
 
    if (ctx->cmdlist_dirty & D3D12_DIRTY_PSO) {
@@ -617,14 +496,14 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);
 
    if (ctx->cmdlist_dirty & D3D12_DIRTY_SCISSOR) {
-      if (ctx->rast->base.scissor && ctx->num_scissors > 0)
+      if (ctx->gfx_pipeline_state.rast->base.scissor && ctx->num_scissors > 0)
          ctx->cmdlist->RSSetScissorRects(ctx->num_scissors, ctx->scissors);
       else
          ctx->cmdlist->RSSetScissorRects(1, &MAX_SCISSOR);
    }
 
    if (ctx->cmdlist_dirty & D3D12_DIRTY_BLEND_COLOR) {
-      unsigned blend_factor_flags = ctx->blend->blend_factor_flags;
+      unsigned blend_factor_flags = ctx->gfx_pipeline_state.blend->blend_factor_flags;
       if (blend_factor_flags & (D3D12_BLEND_FACTOR_COLOR | D3D12_BLEND_FACTOR_ANY)) {
          ctx->cmdlist->OMSetBlendFactor(ctx->blend_factor);
       } else if (blend_factor_flags & D3D12_BLEND_FACTOR_ALPHA) {
@@ -733,5 +612,5 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    ctx->state_dirty = 0;
    ctx->cmdlist_dirty = 0;
    for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i)
-      ctx->shader_state[i].state_dirty = 0;
+      ctx->shader_dirty[i] = 0;
 }
