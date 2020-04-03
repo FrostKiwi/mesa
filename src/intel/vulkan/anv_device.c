@@ -147,7 +147,6 @@ anv_physical_device_init_heaps(struct anv_physical_device *device, int fd)
     * address is required for the vertex cache flush workaround.
     */
    device->supports_48bit_addresses = (device->info.gen >= 8) &&
-                                      device->has_softpin &&
                                       device->gtt_size > (4ULL << 30 /* GiB */);
 
    uint64_t heap_size = anv_compute_heap_size(fd, device->gtt_size);
@@ -429,7 +428,14 @@ anv_physical_device_try_create(struct anv_instance *instance,
       goto fail_alloc;
    }
 
-   device->has_softpin = anv_gem_get_param(fd, I915_PARAM_HAS_EXEC_SOFTPIN);
+   if (device->info.gen >= 8 && !device->info.is_cherryview &&
+       !anv_gem_get_param(fd, I915_PARAM_HAS_EXEC_SOFTPIN)) {
+      result = vk_errorfi(device->instance, NULL,
+                          VK_ERROR_INITIALIZATION_FAILED,
+                          "kernel missing softpin");
+      goto fail_alloc;
+   }
+
    device->has_exec_async = anv_gem_get_param(fd, I915_PARAM_HAS_EXEC_ASYNC);
    device->has_exec_capture = anv_gem_get_param(fd, I915_PARAM_HAS_EXEC_CAPTURE);
    device->has_exec_fence = anv_gem_get_param(fd, I915_PARAM_HAS_EXEC_FENCE);
@@ -442,8 +448,9 @@ anv_physical_device_try_create(struct anv_instance *instance,
    if (result != VK_SUCCESS)
       goto fail_alloc;
 
-   device->use_softpin = device->has_softpin &&
-                         device->supports_48bit_addresses;
+   device->use_softpin = device->info.gen >= 8 &&
+                         !device->info.is_cherryview;
+   assert(device->use_softpin == device->supports_48bit_addresses);
 
    device->has_context_isolation =
       anv_gem_get_param(fd, I915_PARAM_HAS_CONTEXT_ISOLATION);
@@ -451,17 +458,14 @@ anv_physical_device_try_create(struct anv_instance *instance,
    device->always_use_bindless =
       env_var_as_boolean("ANV_ALWAYS_BINDLESS", false);
 
-   /* We first got the A64 messages on broadwell and we can only use them if
-    * we can pass addresses directly into the shader which requires softpin.
+   /* We first got the A64 messages on broadwell.  We can't use them on
+    * Braswell because we can't really do softpin there.
     */
-   device->has_a64_buffer_access = device->info.gen >= 8 &&
-                                   device->use_softpin;
+   device->has_a64_buffer_access =
+      device->info.gen >= 8 && !device->info.is_cherryview;
 
-   /* We first get bindless image access on Skylake and we can only really do
-    * it if we don't have any relocations so we need softpin.
-    */
-   device->has_bindless_images = device->info.gen >= 9 &&
-                                 device->use_softpin;
+   /* We first get bindless image access on Skylake */
+   device->has_bindless_images = device->info.gen >= 9;
 
    /* We've had bindless samplers since Ivy Bridge (forever in Vulkan terms)
     * because it's just a matter of setting the sampler address in the sample

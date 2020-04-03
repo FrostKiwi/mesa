@@ -1034,7 +1034,6 @@ struct anv_physical_device {
     struct isl_device                           isl_dev;
     struct gen_perf_config *                    perf;
     int                                         cmd_parser_version;
-    bool                                        has_softpin;
     bool                                        has_exec_async;
     bool                                        has_exec_capture;
     bool                                        has_exec_fence;
