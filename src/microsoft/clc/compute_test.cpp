@@ -126,7 +126,7 @@ ComputeTest::create_device(IDXGIAdapter1 *adapter)
 ComPtr<ID3D12RootSignature>
 ComputeTest::create_root_signature(int num_uavs, int num_cbvs)
 {
-   D3D12_DESCRIPTOR_RANGE desc_ranges[2];
+   D3D12_DESCRIPTOR_RANGE1 desc_ranges[2];
    unsigned num_desc_ranges = 0;
    if (num_uavs > 0) {
       desc_ranges[num_desc_ranges].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
@@ -134,6 +134,7 @@ ComputeTest::create_root_signature(int num_uavs, int num_cbvs)
       desc_ranges[num_desc_ranges].BaseShaderRegister = 0;
       desc_ranges[num_desc_ranges].RegisterSpace = 0;
       desc_ranges[num_desc_ranges].OffsetInDescriptorsFromTableStart = num_desc_ranges;
+      desc_ranges[num_desc_ranges].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_STATIC_KEEPING_BUFFER_BOUNDS_CHECKS;
       num_desc_ranges++;
    }
 
@@ -143,27 +144,31 @@ ComputeTest::create_root_signature(int num_uavs, int num_cbvs)
       desc_ranges[num_desc_ranges].BaseShaderRegister = 0;
       desc_ranges[num_desc_ranges].RegisterSpace = 0;
       desc_ranges[num_desc_ranges].OffsetInDescriptorsFromTableStart = num_desc_ranges;
+      desc_ranges[num_desc_ranges].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_STATIC_KEEPING_BUFFER_BOUNDS_CHECKS;
       num_desc_ranges++;
    }
 
-   D3D12_ROOT_PARAMETER root_param;
+   D3D12_ROOT_PARAMETER1 root_param;
    root_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
    root_param.DescriptorTable.NumDescriptorRanges = num_desc_ranges;
    root_param.DescriptorTable.pDescriptorRanges = desc_ranges;
    root_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-   D3D12_ROOT_SIGNATURE_DESC root_sig_desc;
+   D3D12_ROOT_SIGNATURE_DESC1 root_sig_desc;
    root_sig_desc.NumParameters = num_uavs + num_cbvs;
    root_sig_desc.pParameters = &root_param;
    root_sig_desc.NumStaticSamplers = 0;
    root_sig_desc.pStaticSamplers = NULL;
    root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
+   D3D12_VERSIONED_ROOT_SIGNATURE_DESC versioned_desc;
+   versioned_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+   versioned_desc.Desc_1_1 = root_sig_desc;
+
    ID3DBlob *sig, *error;
-   if (FAILED(D3D12SerializeRootSignature(&root_sig_desc,
-       D3D_ROOT_SIGNATURE_VERSION_1,
+   if (FAILED(D3D12SerializeVersionedRootSignature(&versioned_desc,
        &sig, &error)))
-      throw runtime_error("D3D12SerializeRootSignature failed");
+      throw runtime_error("D3D12SerializeVersionedRootSignature failed");
 
    ComPtr<ID3D12RootSignature> ret;
    if (FAILED(dev->CreateRootSignature(0,
@@ -396,7 +401,7 @@ ComputeTest::TearDown()
    factory->Release();
 }
 
-PFN_D3D12_SERIALIZE_ROOT_SIGNATURE ComputeTest::D3D12SerializeRootSignature;
+PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE ComputeTest::D3D12SerializeVersionedRootSignature;
 
 void warning_callback(const char *src, int line, const char *str)
 {
