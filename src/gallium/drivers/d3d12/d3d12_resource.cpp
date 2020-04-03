@@ -41,6 +41,7 @@ d3d12_resource_destroy(struct pipe_screen *pscreen,
                        struct pipe_resource *presource)
 {
    struct d3d12_resource *resource = d3d12_resource(presource);
+   resource->res->Release();
    FREE(resource);
 }
 
