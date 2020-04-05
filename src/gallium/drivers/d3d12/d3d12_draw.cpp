@@ -25,6 +25,7 @@
 #include "d3d12_context.h"
 #include "d3d12_format.h"
 #include "d3d12_resource.h"
+#include "d3d12_root_signature.h"
 #include "d3d12_screen.h"
 #include "d3d12_surface.h"
 
@@ -34,10 +35,6 @@
 #include "util/u_prim.h"
 #include "util/u_math.h"
 
-#include <wrl.h>
-
-using Microsoft::WRL::ComPtr;
-
 extern "C" {
 #include "indices/u_primconvert.h"
 }
@@ -46,146 +43,6 @@ static const D3D12_RECT MAX_SCISSOR = { D3D12_VIEWPORT_BOUNDS_MIN,
                                         D3D12_VIEWPORT_BOUNDS_MIN,
                                         D3D12_VIEWPORT_BOUNDS_MAX,
                                         D3D12_VIEWPORT_BOUNDS_MAX };
-
-static D3D12_SHADER_VISIBILITY
-get_shader_visibility(enum pipe_shader_type stage)
-{
-   switch (stage) {
-   case PIPE_SHADER_VERTEX:
-      return D3D12_SHADER_VISIBILITY_VERTEX;
-   case PIPE_SHADER_FRAGMENT:
-      return D3D12_SHADER_VISIBILITY_PIXEL;
-   case PIPE_SHADER_GEOMETRY:
-      return D3D12_SHADER_VISIBILITY_GEOMETRY;
-   case PIPE_SHADER_TESS_CTRL:
-      return D3D12_SHADER_VISIBILITY_HULL;
-   case PIPE_SHADER_TESS_EVAL:
-      return D3D12_SHADER_VISIBILITY_DOMAIN;
-   default:
-      unreachable("unknown shader stage");
-   }
-}
-
-static inline void
-init_constant_root_param(D3D12_ROOT_PARAMETER1 *param,
-                         unsigned reg,
-                         unsigned size,
-                         D3D12_SHADER_VISIBILITY visibility)
-{
-   param->ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-   param->ShaderVisibility = visibility;
-   param->Constants.RegisterSpace = 0;
-   param->Constants.ShaderRegister = reg;
-   param->Constants.Num32BitValues = size;
-}
-
-static inline void
-init_range_root_param(D3D12_ROOT_PARAMETER1 *param,
-                      D3D12_DESCRIPTOR_RANGE1 *range,
-                      D3D12_DESCRIPTOR_RANGE_TYPE type,
-                      uint32_t num_descs,
-                      D3D12_SHADER_VISIBILITY visibility)
-{
-   range->RangeType = type;
-   range->NumDescriptors = num_descs;
-   range->BaseShaderRegister = 0; /* We only have one range/table for each desc type */
-   range->RegisterSpace = 0;
-   if (type == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
-      range->Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
-   else
-      range->Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
-   range->OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-   param->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-   param->DescriptorTable.NumDescriptorRanges = 1;
-   param->DescriptorTable.pDescriptorRanges = range;
-   param->ShaderVisibility = visibility;
-}
-
-static ID3D12RootSignature *
-get_root_signature(struct d3d12_context *ctx)
-{
-   struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
-   D3D12_ROOT_PARAMETER1 root_params[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
-   D3D12_DESCRIPTOR_RANGE1 desc_ranges[PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES];
-   unsigned num_params = 0;
-
-   for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
-
-      if (!ctx->gfx_stages[i])
-         continue;
-
-      struct d3d12_shader *shader = ctx->gfx_stages[i]->current;
-      assert(shader);
-
-      D3D12_SHADER_VISIBILITY visibility = get_shader_visibility((enum pipe_shader_type)i);
-
-      if (shader->num_cb_bindings > 0) {
-         assert(num_params < PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES);
-         init_range_root_param(&root_params[num_params],
-                               &desc_ranges[num_params],
-                               D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-                               shader->num_cb_bindings,
-                               visibility);
-         num_params++;
-      }
-
-      if (shader->num_srv_bindings > 0) {
-         init_range_root_param(&root_params[num_params],
-                               &desc_ranges[num_params],
-                               D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-                               shader->num_srv_bindings,
-                               visibility);
-         num_params++;
-      }
-
-      if (shader->num_srv_bindings > 0) {
-         init_range_root_param(&root_params[num_params],
-                               &desc_ranges[num_params],
-                               D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
-                               shader->num_srv_bindings,
-                               visibility);
-         num_params++;
-      }
-
-      if (shader->num_state_vars > 0) {
-         init_constant_root_param(&root_params[num_params],
-                                  shader->state_vars_binding,
-                                  shader->state_vars_size,
-                                  visibility);
-         num_params++;
-      }
-   }
-
-   D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_sig_desc;
-   root_sig_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-   root_sig_desc.Desc_1_1.NumParameters = num_params;
-   root_sig_desc.Desc_1_1.pParameters = (num_params > 0) ? root_params : NULL;
-   root_sig_desc.Desc_1_1.NumStaticSamplers = 0;
-   root_sig_desc.Desc_1_1.pStaticSamplers = NULL;
-   root_sig_desc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
-
-   /* TODO Only enable this flag when needed (optimization) */
-   root_sig_desc.Desc_1_1.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-   ComPtr<ID3DBlob> sig, error;
-   if (FAILED(ctx->D3D12SerializeVersionedRootSignature(&root_sig_desc,
-                                                        &sig, &error))) {
-      debug_printf("D3D12SerializeRootSignature failed\n");
-      return NULL;
-   }
-
-   ID3D12RootSignature *ret;
-   if (FAILED(screen->dev->CreateRootSignature(0,
-                                               sig->GetBufferPointer(),
-                                               sig->GetBufferSize(),
-                                               __uuidof(ret),
-                                               (void **)&ret))) {
-      debug_printf("CreateRootSignature failed\n");
-      return NULL;
-   }
-   return ret;
-}
 
 static D3D12_GPU_DESCRIPTOR_HANDLE
 fill_cbv_descriptors(struct d3d12_context *ctx,
@@ -462,10 +319,11 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    }
 
    if (!ctx->gfx_pipeline_state.root_signature || ctx->state_dirty & D3D12_DIRTY_SHADER) {
-      if (ctx->gfx_pipeline_state.root_signature)
-         ctx->gfx_pipeline_state.root_signature->Release();
-      ctx->gfx_pipeline_state.root_signature = get_root_signature(ctx);
-      ctx->state_dirty |= D3D12_DIRTY_ROOT_SIGNATURE;
+      ID3D12RootSignature *root_signature = d3d12_get_root_signature(ctx);
+      if (ctx->gfx_pipeline_state.root_signature != root_signature) {
+         ctx->gfx_pipeline_state.root_signature = root_signature;
+         ctx->state_dirty |= D3D12_DIRTY_ROOT_SIGNATURE;
+      }
    }
 
    if (!ctx->current_pso || ctx->state_dirty & D3D12_DIRTY_PSO) {
