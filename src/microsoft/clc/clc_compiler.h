@@ -103,25 +103,6 @@ struct clc_object {
                       CLC_MAX_WRITE_IMAGE_ARGS)
 
 struct clc_dxil_metadata {
-   struct {
-      enum {
-         CLC_ARG_CONST,
-         CLC_ARG_READ_IMAGE,
-         CLC_ARG_WRITE_IMAGE
-      } type;
-      union {
-         struct {
-            /* TODO */
-            int dummy;
-         } const_arg;
-         struct {
-            /* TODO */
-            int dummy;
-         } image_arg;
-      };
-   } args[CLC_MAX_ARGS];
-   size_t num_args;
-
    size_t num_uavs;
 
    struct {
