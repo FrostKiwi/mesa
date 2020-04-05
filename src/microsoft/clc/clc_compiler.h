@@ -103,6 +103,11 @@ struct clc_object {
                       CLC_MAX_WRITE_IMAGE_ARGS)
 
 struct clc_dxil_metadata {
+   struct {
+      unsigned offset;
+      unsigned size;
+   } *args;
+   unsigned kernel_inputs_buf_size;
    size_t num_uavs;
 
    struct {
