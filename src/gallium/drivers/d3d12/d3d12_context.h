@@ -143,6 +143,7 @@ struct d3d12_context {
    struct blitter_context *blitter;
    struct u_suballocator *query_allocator;
    struct hash_table *pso_cache;
+   struct hash_table *root_signature_cache;
 
    struct d3d12_batch batches[4];
    unsigned current_batch_idx;
