@@ -73,7 +73,7 @@ clc_link(const struct clc_object **in_objs,
    ret = clc_link_spirv_binaries((const struct spirv_binary **)in_objs,
                                  num_in_objs, &out_obj->spvbin, &err_log);
    if (ret < 0) {
-      fprintf(stderr, "D3D12: clc_to_spirv failed: %s\n", err_log);
+      fprintf(stderr, "D3D12: clc_link_spirv_binaries failed: %s\n", err_log);
       free(err_log);
       free(out_obj);
       return NULL;
