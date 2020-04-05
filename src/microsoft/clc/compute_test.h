@@ -120,6 +120,15 @@ protected:
                    D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle);
 
    void
+   add_uav_resource(std::vector<ComPtr<ID3D12Resource>> &resources,
+                    const void *data = NULL, size_t num_elems = 0,
+                    size_t elem_size = 0);
+
+   void
+   add_cbv_resource(std::vector<ComPtr<ID3D12Resource>> &resources,
+                    const void *data, size_t size);
+
+   void
    SetUp() override;
 
    void
@@ -152,34 +161,18 @@ protected:
                                             dxil->metadata.num_consts);
       auto pipeline_state = create_pipeline_state(root_sig, *dxil);
 
-      int cpu_offset = 0;
-      std::vector<ComPtr<ID3D12Resource>> input_resources;
+      std::vector<ComPtr<ID3D12Resource>> resources;
       for(auto input : inputs) {
          if (input.size() != inputs[0].size())
             throw runtime_error("mismatching input sizes");
 
-         auto res = create_buffer_with_data(input.data(), input.size() * sizeof(T));
-         create_uav_buffer(res, input.size(), sizeof(T),
-                           offset_cpu_handle(
-                              uav_heap->GetCPUDescriptorHandleForHeapStart(),
-                              cpu_offset));
-         resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-         input_resources.push_back(res);
-         cpu_offset += uav_heap_incr;
+         add_uav_resource(resources, input.data(),
+                          input.size(), sizeof(T));
       }
 
-      for (unsigned i = 0; i < dxil->metadata.num_consts; ++i) {
-         size_t size = dxil->metadata.consts[i].size;
-         unsigned cbuf_size = align(size * sizeof(T), 256);
-         auto cbuf = create_sized_buffer_with_data(cbuf_size,
-                                                   dxil->metadata.consts[i].data,
-                                                   size);
-         create_cbv(cbuf, cbuf_size,
-                    offset_cpu_handle(
-                       uav_heap->GetCPUDescriptorHandleForHeapStart(),
-                       cpu_offset));
-         cpu_offset += uav_heap_incr;
-      }
+      for (unsigned i = 0; i < dxil->metadata.num_consts; ++i)
+         add_cbv_resource(resources, dxil->metadata.consts[i].data,
+                          dxil->metadata.consts[i].size);
 
       cmdlist->SetDescriptorHeaps(1, &uav_heap);
       cmdlist->SetComputeRootSignature(root_sig.Get());
@@ -187,13 +180,13 @@ protected:
       cmdlist->SetPipelineState(pipeline_state.Get());
       cmdlist->Dispatch(inputs[0].size(), 1, 1);
 
-      for(auto res : input_resources)
-         resource_barrier(res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+      for(unsigned i = 0; i < inputs.size(); i++)
+         resource_barrier(resources[i], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
 
       execute_cmdlist();
 
       std::vector<T> out(inputs[0].size());
-      get_buffer_data(input_resources[0], out.data(), out.size() * sizeof(T));
+      get_buffer_data(resources[0], out.data(), out.size() * sizeof(T));
 
       return out;
    }
