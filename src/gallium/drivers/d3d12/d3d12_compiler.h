@@ -24,6 +24,8 @@
 #ifndef D3D12_COMPILER_H
 #define D3D12_COMPILER_H
 
+#include "d3d12_context.h"
+
 #include "pipe/p_defines.h"
 #include "pipe/p_state.h"
 
@@ -33,20 +35,6 @@
 #include "nir.h"
 
 struct pipe_screen;
-
-typedef enum {
-   D3D12_BINDING_CONSTANT_BUFFER,
-   D3D12_BINDING_SHADER_RESOURCE_VIEW,
-   D3D12_BINDING_SAMPLER,
-   D3D12_BINDING_STATE_VARS,
-   D3D12_NUM_BINDING_TYPES
-} D3D12_BINDING_TYPE;
-
-typedef enum {
-   D3D12_STATE_VAR_Y_FLIP = 0,
-   D3D12_STATE_VAR_PT_SPRITE,
-   D3D12_MAX_STATE_VARS
-} D3D12_STATE_VAR;
 
 #ifdef __cplusplus
 extern "C" {
@@ -88,7 +76,7 @@ struct d3d12_shader {
    size_t num_cb_bindings;
 
    struct {
-      D3D12_STATE_VAR var;
+      enum d3d12_state_var var;
       unsigned offset;
    } state_vars[D3D12_MAX_STATE_VARS];
    unsigned num_state_vars;
