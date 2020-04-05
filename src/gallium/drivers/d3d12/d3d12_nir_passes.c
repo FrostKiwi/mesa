@@ -208,7 +208,7 @@ d3d12_lower_yflip(nir_shader *nir)
  */
 
 static unsigned
-get_state_var_offset(struct d3d12_shader *shader, D3D12_STATE_VAR var)
+get_state_var_offset(struct d3d12_shader *shader, enum d3d12_state_var var)
 {
    for (unsigned i = 0; i < shader->num_state_vars; ++i) {
       if (shader->state_vars[i].var == var)
@@ -250,7 +250,7 @@ lower_instr(nir_intrinsic_instr *instr, nir_builder *b,
        variable->state_slots[0].tokens[1] != STATE_INTERNAL_DRIVER)
       return false;
 
-   D3D12_STATE_VAR var = variable->state_slots[0].tokens[2];
+   enum d3d12_state_var var = variable->state_slots[0].tokens[2];
    nir_ssa_def *ubo_idx = nir_imm_int(b, binding);
    nir_ssa_def *ubo_offset =  nir_imm_int(b, get_state_var_offset(shader, var));
    nir_intrinsic_instr *load =
