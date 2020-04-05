@@ -29,6 +29,7 @@
 #include "d3d12_format.h"
 #include "d3d12_query.h"
 #include "d3d12_resource.h"
+#include "d3d12_root_signature.h"
 #include "d3d12_screen.h"
 #include "d3d12_surface.h"
 
@@ -65,6 +66,7 @@ d3d12_context_destroy(struct pipe_context *pctx)
    util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
    d3d12_gfx_pipeline_state_cache_destroy(ctx);
+   d3d12_root_signature_cache_destroy(ctx);
 
    u_suballocator_destroy(ctx->query_allocator);
 
@@ -1289,6 +1291,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    }
 
    d3d12_gfx_pipeline_state_cache_init(ctx);
+   d3d12_root_signature_cache_init(ctx);
 
    HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
