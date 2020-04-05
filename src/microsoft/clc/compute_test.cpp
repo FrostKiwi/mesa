@@ -270,6 +270,27 @@ ComputeTest::create_sized_buffer_with_data(size_t buffer_size,
 }
 
 void
+ComputeTest::get_buffer_data(ComPtr<ID3D12Resource> res,
+                             void *buf, size_t size)
+{
+   auto readback_res = create_buffer(size, D3D12_HEAP_TYPE_READBACK);
+   resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
+   cmdlist->CopyResource(readback_res.Get(), res.Get());
+   resource_barrier(res, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON);
+   execute_cmdlist();
+
+   void *ptr = NULL;
+   D3D12_RANGE res_range = { 0, size };
+   if (FAILED(readback_res->Map(0, &res_range, &ptr)))
+      throw runtime_error("Failed to map readback-buffer");
+
+   memcpy(buf, ptr, size);
+
+   D3D12_RANGE empty_range = { 0, 0 };
+   readback_res->Unmap(0, &empty_range);
+}
+
+void
 ComputeTest::resource_barrier(ComPtr<ID3D12Resource> &res,
                               D3D12_RESOURCE_STATES state_before,
                               D3D12_RESOURCE_STATES state_after)
