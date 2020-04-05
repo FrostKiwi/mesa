@@ -99,28 +99,9 @@ protected:
       return create_sized_buffer_with_data(size, data, size);
    }
 
-   template <typename T>
-   std::vector<T>
-   get_buffer_data(ComPtr<ID3D12Resource> res, size_t width)
-   {
-      auto readback_res = create_buffer(sizeof(T) * width, D3D12_HEAP_TYPE_READBACK);
-      resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
-      cmdlist->CopyResource(readback_res.Get(), res.Get());
-      resource_barrier(res, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON);
-      execute_cmdlist();
-
-      T *data = NULL;
-      D3D12_RANGE res_range = { 0, (SIZE_T)(sizeof(T) * width) };
-      if (FAILED(readback_res->Map(0, &res_range, (void **)&data)))
-         throw runtime_error("Failed to map readback-buffer");
-
-      std::vector<T> ret;
-      ret.assign(data, data + width);
-
-      D3D12_RANGE empty_range = { 0, 0 };
-      readback_res->Unmap(0, &empty_range);
-      return ret;
-   }
+   void
+   get_buffer_data(ComPtr<ID3D12Resource> res,
+                   void *buf, size_t size);
 
    void
    resource_barrier(ComPtr<ID3D12Resource> &res,
@@ -211,7 +192,10 @@ protected:
 
       execute_cmdlist();
 
-      return get_buffer_data<T>(input_resources[0], inputs[0].size());
+      std::vector<T> out(inputs[0].size());
+      get_buffer_data(input_resources[0], out.data(), out.size() * sizeof(T));
+
+      return out;
    }
 
    template <typename T>
