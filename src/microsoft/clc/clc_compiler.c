@@ -193,7 +193,6 @@ clc_to_dxil(const struct clc_object *obj,
 
    struct clc_dxil_metadata *metadata = &dxil->metadata;
 
-   metadata->num_consts = 0;
    nir_foreach_variable(var, &nir->uniforms) {
       if (var->data.mode == nir_var_mem_ubo && var->constant_initializer) {
          if (glsl_type_is_array(var->type)) {
