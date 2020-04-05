@@ -278,6 +278,25 @@ clc_to_dxil(const struct clc_object *obj,
 
    struct clc_dxil_metadata *metadata = &dxil->metadata;
 
+   metadata->args = calloc(dxil->kernel->num_args,
+                           sizeof(*metadata->args));
+   if (!metadata->args) {
+      debug_printf("D3D12: failed to allocate arg positions\n");
+      goto err_free_dxil;
+   }
+
+   unsigned i = 0;
+   nir_foreach_variable(var, &nir->inputs) {
+      metadata->args[i].offset = var->data.driver_location;
+      metadata->args[i].size = glsl_get_cl_size(var->type);
+      metadata->kernel_inputs_buf_size = MAX2(metadata->kernel_inputs_buf_size,
+                                              metadata->args[i].offset +
+                                              metadata->args[i].size);
+      i++;
+   }
+
+   assert(i == dxil->kernel->num_args);
+
    nir_foreach_variable(var, &nir->uniforms) {
       if (var->data.mode == nir_var_mem_ubo && var->constant_initializer) {
          if (glsl_type_is_array(var->type)) {
