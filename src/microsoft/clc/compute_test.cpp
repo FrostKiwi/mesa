@@ -354,6 +354,45 @@ ComputeTest::create_cbv(ComPtr<ID3D12Resource> res, size_t size,
 }
 
 void
+ComputeTest::add_uav_resource(std::vector<ComPtr<ID3D12Resource>> &resources,
+                              const void *data, size_t num_elems,
+                              size_t elem_size)
+{
+   size_t size = elem_size * num_elems;
+   D3D12_CPU_DESCRIPTOR_HANDLE handle;
+   ComPtr<ID3D12Resource> res;
+
+   assert(size);
+   if (data)
+      res = create_buffer_with_data(data, size);
+   else
+      res = create_buffer(size, D3D12_HEAP_TYPE_DEFAULT);
+
+   handle = uav_heap->GetCPUDescriptorHandleForHeapStart();
+   handle = offset_cpu_handle(handle, resources.size() * uav_heap_incr);
+   create_uav_buffer(res, num_elems, elem_size, handle);
+   resource_barrier(res, D3D12_RESOURCE_STATE_COMMON,
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+   resources.push_back(res);
+}
+
+void
+ComputeTest::add_cbv_resource(std::vector<ComPtr<ID3D12Resource>> &resources,
+                              const void *data, size_t size)
+{
+   unsigned aligned_size = align(size, 256);
+   D3D12_CPU_DESCRIPTOR_HANDLE handle;
+   ComPtr<ID3D12Resource> res;
+
+   assert(size && data);
+   res = create_sized_buffer_with_data(aligned_size, data, size);
+   handle = uav_heap->GetCPUDescriptorHandleForHeapStart();
+   handle = offset_cpu_handle(handle, resources.size() * uav_heap_incr);
+   create_cbv(res, aligned_size, handle);
+   resources.push_back(res);
+}
+
+void
 ComputeTest::SetUp()
 {
    enable_d3d12_debug_layer();
