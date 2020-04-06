@@ -292,13 +292,15 @@ clc_to_dxil(const struct clc_object *obj,
       goto err_free_dxil;
    }
 
-   unsigned i = 0;
+   unsigned i = 0, uav_id = 0;
    nir_foreach_variable(var, &nir->inputs) {
       metadata->args[i].offset = var->data.driver_location;
       metadata->args[i].size = glsl_get_cl_size(var->type);
       metadata->kernel_inputs_buf_size = MAX2(metadata->kernel_inputs_buf_size,
                                               metadata->args[i].offset +
                                               metadata->args[i].size);
+      if (dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL)
+         metadata->args[i].buf_id = uav_id++;
       i++;
    }
 
@@ -322,12 +324,14 @@ clc_to_dxil(const struct clc_object *obj,
 
             metadata->consts[metadata->num_consts].data = data;
             metadata->consts[metadata->num_consts].size = size;
+            metadata->consts[metadata->num_consts].cbv_id = metadata->num_consts;
             metadata->num_consts++;
          } else
             unreachable("unexpected constant initializer");
       }
    }
 
+   metadata->kernel_inputs_cbv_id = metadata->num_consts;
    metadata->num_uavs = util_bitcount64(nir->info.cs.global_inputs);
 
    ralloc_free(nir);

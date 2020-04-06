@@ -106,13 +106,16 @@ struct clc_dxil_metadata {
    struct {
       unsigned offset;
       unsigned size;
+      unsigned buf_id;
    } *args;
+   unsigned kernel_inputs_cbv_id;
    unsigned kernel_inputs_buf_size;
    size_t num_uavs;
 
    struct {
       void *data;
       size_t size;
+      unsigned cbv_id;
    } consts[CLC_MAX_CONSTS];
    size_t num_consts;
 
