@@ -1040,6 +1040,55 @@ TEST_F(ComputeTest, clz)
       EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
+TEST_F(ComputeTest, sin)
+{
+   struct sin_vals { float in; float clc; float native; };
+   const char *kernel_source =
+   "struct sin_vals { float in; float clc; float native; };\n\
+   __kernel void main_test(__global struct sin_vals *inout)\n\
+   {\n\
+       inout[get_global_id(0)].clc = sin(inout[get_global_id(0)].in);\n\
+       inout[get_global_id(0)].native = native_sin(inout[get_global_id(0)].in);\n\
+   }\n";
+   const vector<sin_vals> input = {
+      { 0.0f, 0.0f, 0.0f },
+      { 1.0f, 0.0f, 0.0f },
+      { 2.0f, 0.0f, 0.0f },
+      { 3.0f, 0.0f, 0.0f },
+   };
+   auto inout = ShaderArg<sin_vals>(input, SHADER_ARG_INOUT);
+   const struct sin_vals expected[] = {
+      { 0.0f, 0.0f,       0.0f       },
+      { 1.0f, sin(1.0f), sin(1.0f) },
+      { 2.0f, sin(2.0f), sin(2.0f) },
+      { 3.0f, sin(3.0f), sin(3.0f) },
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i) {
+      EXPECT_FLOAT_EQ(inout[i].in, inout[i].in);
+      EXPECT_FLOAT_EQ(inout[i].clc, inout[i].clc);
+      EXPECT_NEAR(inout[i].clc, inout[i].native, 0.008f); // range from DXIL spec
+   }
+}
+
+TEST_F(ComputeTest, DISABLED_cosh)
+{
+   /* Disabled because of WARP failures, where we fetch incorrect results when
+    * sourcing from non-float ICBs */
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = cosh(inout[get_global_id(0)]);\n\
+   }\n";
+   auto inout = ShaderArg<float>({ 0.0f, 1.0f, 2.0f, 3.0f }, SHADER_ARG_INOUT);
+   const float expected[] = {
+      cosh(0.0f), cosh(1.0f), cosh(2.0f), cosh(3.0f)
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
+}
+
 TEST_F(ComputeTest, exp)
 {
    const char *kernel_source =
