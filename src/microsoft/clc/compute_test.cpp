@@ -124,37 +124,12 @@ ComputeTest::create_device(IDXGIAdapter1 *adapter)
 }
 
 ComPtr<ID3D12RootSignature>
-ComputeTest::create_root_signature(int num_uavs, int num_cbvs)
+ComputeTest::create_root_signature(const ComputeTest::Resources &resources)
 {
-   D3D12_DESCRIPTOR_RANGE1 desc_ranges[2];
-   unsigned num_desc_ranges = 0;
-   unsigned num_descriptors = 0;
-   if (num_uavs > 0) {
-      desc_ranges[num_desc_ranges].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-      desc_ranges[num_desc_ranges].NumDescriptors = num_uavs;
-      desc_ranges[num_desc_ranges].BaseShaderRegister = 0;
-      desc_ranges[num_desc_ranges].RegisterSpace = 0;
-      desc_ranges[num_desc_ranges].OffsetInDescriptorsFromTableStart = num_descriptors;
-      desc_ranges[num_desc_ranges].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_STATIC_KEEPING_BUFFER_BOUNDS_CHECKS;
-      num_desc_ranges++;
-      num_descriptors += num_uavs;
-   }
-
-   if (num_cbvs > 0) {
-      desc_ranges[num_desc_ranges].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-      desc_ranges[num_desc_ranges].NumDescriptors = num_cbvs;
-      desc_ranges[num_desc_ranges].BaseShaderRegister = 0;
-      desc_ranges[num_desc_ranges].RegisterSpace = 0;
-      desc_ranges[num_desc_ranges].OffsetInDescriptorsFromTableStart = num_descriptors;
-      desc_ranges[num_desc_ranges].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_STATIC_KEEPING_BUFFER_BOUNDS_CHECKS;
-      num_desc_ranges++;
-      num_descriptors += num_cbvs;
-   }
-
    D3D12_ROOT_PARAMETER1 root_param;
    root_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-   root_param.DescriptorTable.NumDescriptorRanges = num_desc_ranges;
-   root_param.DescriptorTable.pDescriptorRanges = desc_ranges;
+   root_param.DescriptorTable.NumDescriptorRanges = resources.ranges.size();
+   root_param.DescriptorTable.pDescriptorRanges = resources.ranges.data();
    root_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
    D3D12_ROOT_SIGNATURE_DESC1 root_sig_desc;
@@ -354,7 +329,8 @@ ComputeTest::create_cbv(ComPtr<ID3D12Resource> res, size_t size,
 }
 
 void
-ComputeTest::add_uav_resource(std::vector<ComPtr<ID3D12Resource>> &resources,
+ComputeTest::add_uav_resource(ComputeTest::Resources &resources,
+                              unsigned spaceid, unsigned resid,
                               const void *data, size_t num_elems,
                               size_t elem_size)
 {
@@ -369,15 +345,16 @@ ComputeTest::add_uav_resource(std::vector<ComPtr<ID3D12Resource>> &resources,
       res = create_buffer(size, D3D12_HEAP_TYPE_DEFAULT);
 
    handle = uav_heap->GetCPUDescriptorHandleForHeapStart();
-   handle = offset_cpu_handle(handle, resources.size() * uav_heap_incr);
+   handle = offset_cpu_handle(handle, resources.descs.size() * uav_heap_incr);
    create_uav_buffer(res, num_elems, elem_size, handle);
    resource_barrier(res, D3D12_RESOURCE_STATE_COMMON,
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-   resources.push_back(res);
+   resources.add(res, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, spaceid, resid);
 }
 
 void
-ComputeTest::add_cbv_resource(std::vector<ComPtr<ID3D12Resource>> &resources,
+ComputeTest::add_cbv_resource(ComputeTest::Resources &resources,
+                              unsigned spaceid, unsigned resid,
                               const void *data, size_t size)
 {
    unsigned aligned_size = align(size, 256);
@@ -387,9 +364,9 @@ ComputeTest::add_cbv_resource(std::vector<ComPtr<ID3D12Resource>> &resources,
    assert(size && data);
    res = create_sized_buffer_with_data(aligned_size, data, size);
    handle = uav_heap->GetCPUDescriptorHandleForHeapStart();
-   handle = offset_cpu_handle(handle, resources.size() * uav_heap_incr);
+   handle = offset_cpu_handle(handle, resources.descs.size() * uav_heap_incr);
    create_cbv(res, aligned_size, handle);
-   resources.push_back(res);
+   resources.add(res, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, spaceid, resid);
 }
 
 void
