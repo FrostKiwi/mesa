@@ -30,6 +30,7 @@
 
 #include "util/u_debug.h"
 #include "util/u_helpers.h"
+#include "util/u_inlines.h"
 #include "util/u_prim.h"
 #include "util/u_math.h"
 
@@ -637,4 +638,6 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    }
 
    d3d12_flush_cmdlist(ctx);
+   if (dinfo->index_size && index_buffer != dinfo->index.resource)
+      pipe_resource_reference(&index_buffer, NULL);
 }
