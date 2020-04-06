@@ -229,6 +229,13 @@ clc_to_dxil(const struct clc_object *obj,
       offset += glsl_get_cl_size(var->type);
    }
 
+   // Calculate UBO bindings
+   unsigned binding = 0;
+   nir_foreach_variable_safe(var, &nir->uniforms) {
+      if (var->data.mode == nir_var_mem_ubo)
+         var->data.binding = binding++;
+   }
+
    // Inline all functions first.
    // according to the comment on nir_inline_functions
    NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
