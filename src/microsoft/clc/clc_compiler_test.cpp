@@ -43,16 +43,15 @@ TEST_F(ComputeTest, two_global_arrays)
        uint idx = get_global_id(0);\n\
        g1[idx] -= g2[idx];\n\
    }\n";
-   const vector<vector<uint32_t>> inputs = {
-      { 10, 20, 30, 40 },
-      { 1, 2, 3, 4 },
-   };
+   auto g1 = ShaderArg<uint32_t>({ 10, 20, 30, 40 }, SHADER_ARG_INOUT);
+   auto g2 = ShaderArg<uint32_t>({ 1, 2, 3, 4 }, SHADER_ARG_INPUT);
    const uint32_t expected[] = {
       9, 18, 27, 36
    };
-   auto buf = run_shader_with_inputs(kernel_source, inputs);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+
+   run_shader(kernel_source, g1.size(), 1, 1, g1, g2);
+   for (int i = 0; i < g1.size(); ++i)
+      EXPECT_EQ(g1[i], expected[i]);
 }
 
 TEST_F(ComputeTest, built_ins_global_id)
@@ -62,15 +61,15 @@ TEST_F(ComputeTest, built_ins_global_id)
    {\n\
        output[get_global_id(0)] = get_global_id(0);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
-   };
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
    const uint32_t expected[] = {
       0, 1, 2, 3
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
 }
 
 TEST_F(ComputeTest, built_ins_global_id_rmw)
@@ -81,15 +80,14 @@ TEST_F(ComputeTest, built_ins_global_id_rmw)
        uint id = get_global_id(0);\n\
        output[id] = output[id] * (id + 1);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0x00000001, 0x10000001, 0x00020002, 0x04010203
-   };
+   auto inout = ShaderArg<uint32_t>({0x00000001, 0x10000001, 0x00020002, 0x04010203},
+                                    SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       0x00000001, 0x20000002, 0x00060006, 0x1004080c
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_float_basics)
@@ -99,15 +97,14 @@ TEST_F(ComputeTest, types_float_basics)
    {\n\
        output[get_global_id(0)] = (uint)((float)get_global_id(0) + 1.5f);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
-   };
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_double_basics)
@@ -117,15 +114,14 @@ TEST_F(ComputeTest, types_double_basics)
    {\n\
        output[get_global_id(0)] = (uint)((double)get_global_id(0) + 1.5);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
-   };
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_short_basics)
@@ -135,15 +131,14 @@ TEST_F(ComputeTest, types_short_basics)
    {\n\
        output[get_global_id(0)] = (uint)((short)get_global_id(0) + (short)1);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
-   };
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_char_basics)
@@ -153,15 +148,14 @@ TEST_F(ComputeTest, types_char_basics)
    {\n\
        output[get_global_id(0)] = (uint)((char)get_global_id(0) + (char)1);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
-   };
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
    const uint32_t expected[] = {
       1, 2, 3, 4
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_if_statement)
@@ -175,15 +169,14 @@ TEST_F(ComputeTest, types_if_statement)
        else\n\
            output[0] = 0xff;\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
-   };
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
    const uint32_t expected[] = {
       0xff, ~1u, ~2u, ~3u
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_do_while_loop)
@@ -198,15 +191,14 @@ TEST_F(ComputeTest, types_do_while_loop)
        } while (i <= n);\n\
        output[n] = value;\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
-   };
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(5, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
    const uint32_t expected[] = {
       1, 1, 1*2, 1*2*3, 1*2*3*4
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
 }
 
 TEST_F(ComputeTest, types_for_loop)
@@ -220,15 +212,14 @@ TEST_F(ComputeTest, types_for_loop)
           value *= i;\n\
        output[n] = value;\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
-   };
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(5, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
    const uint32_t expected[] = {
       1, 1, 1*2, 1*2*3, 1*2*3*4
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
 }
 
 TEST_F(ComputeTest, complex_types_local_array)
@@ -245,15 +236,13 @@ TEST_F(ComputeTest, complex_types_local_array)
       uint idx = get_global_id(0);\n\
       inout[idx] = tmp[idx];\n\
    }\n";
-   const vector<uint32_t> input = {
-      0, 0, 0, 0,
-   };
+   auto inout = ShaderArg<uint32_t>({ 0, 0, 0, 0 }, SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       0x00, 0x10, 0x20, 0x30,
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, complex_types_global_struct_array)
@@ -267,19 +256,18 @@ TEST_F(ComputeTest, complex_types_global_struct_array)
       in_out[id].add = in_out[id].add + id;\n\
       in_out[id].mul = in_out[id].mul * id;\n\
    }\n";
-   const vector<two_vals> input = {
-      { 8, 8 }, { 16, 16 }, { 64, 64 }, { 65536, 65536 }
-   };
+   auto inout = ShaderArg<struct two_vals>({ { 8, 8 }, { 16, 16 }, { 64, 64 }, { 65536, 65536 } },
+                                           SHADER_ARG_INOUT);
    const struct two_vals expected[] = {
       { 8 + 0, 8 * 0 },
       { 16 + 1, 16 * 1 },
       { 64 + 2, 64 * 2 },
       { 65536 + 3, 65536 * 3 }
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i) {
-      EXPECT_EQ(buf[i].add, expected[i].add);
-      EXPECT_EQ(buf[i].mul, expected[i].mul);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i) {
+      EXPECT_EQ(inout[i].add, expected[i].add);
+      EXPECT_EQ(inout[i].mul, expected[i].mul);
    }
 }
 
@@ -291,15 +279,14 @@ TEST_F(ComputeTest, complex_types_const_array)
        uint foo[4] = {100, 101, 102, 103};\n\
        output[get_global_id(0)] = foo[get_global_id(0)];\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
-   };
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
    const uint32_t expected[] = {
       100, 101, 102, 103
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
 }
 
 TEST_F(ComputeTest, two_const_arrays)
@@ -312,15 +299,14 @@ TEST_F(ComputeTest, two_const_arrays)
       uint bar[4] = {1, 2, 3, 4};\n\
       output[id] = foo[id] * bar[id];\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
-   };
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
    const uint32_t expected[] = {
       100, 202, 306, 412
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
 }
 
 TEST_F(ComputeTest, imod_pos)
@@ -330,15 +316,14 @@ TEST_F(ComputeTest, imod_pos)
    {\n\
        inout[get_global_id(0)] = inout[get_global_id(0)] % 3;\n\
    }\n";
-   const vector<int32_t> input = {
-      -4, -3, -2, -1, 0, 1, 2, 3, 4
-   };
+   auto inout = ShaderArg<int32_t>({ -4, -3, -2, -1, 0, 1, 2, 3, 4 },
+                                   SHADER_ARG_INOUT);
    const int32_t expected[] = {
       -1, 0, -2, -1,  0, 1, 2, 0, 1
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, imod_neg)
@@ -348,15 +333,14 @@ TEST_F(ComputeTest, imod_neg)
    {\n\
        inout[get_global_id(0)] = inout[get_global_id(0)] % -3;\n\
    }\n";
-   const vector<int32_t> input = {
-      -4, -3, -2, -1, 0, 1, 2, 3, 4
-   };
+   auto inout = ShaderArg<int32_t>({ -4, -3, -2, -1, 0, 1, 2, 3, 4 },
+                                   SHADER_ARG_INOUT);
    const int32_t expected[] = {
       -1, 0, -2, -1,  0, 1, 2, 0, 1
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, umod)
@@ -366,15 +350,14 @@ TEST_F(ComputeTest, umod)
    {\n\
        inout[get_global_id(0)] = inout[get_global_id(0)] % 0xfffffffc;\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xfffffffa, 0xfffffffb, 0xfffffffc, 0xfffffffd, 0xfffffffe
-   };
+   auto inout = ShaderArg<uint32_t>({ 0xfffffffa, 0xfffffffb, 0xfffffffc, 0xfffffffd, 0xfffffffe },
+                                    SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       0xfffffffa, 0xfffffffb, 0, 1, 2
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, rotate)
@@ -384,15 +367,14 @@ TEST_F(ComputeTest, rotate)
    {\n\
        inout[get_global_id(0)] = rotate(inout[get_global_id(0)], get_global_id(0) * 4);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef,
-   };
+   auto inout = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                    SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       0xdeadbeef, 0xeadbeefd, 0xadbeefde, 0xdbeefdea
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, popcount)
@@ -402,15 +384,14 @@ TEST_F(ComputeTest, popcount)
    {\n\
        inout[get_global_id(0)] = popcount(inout[get_global_id(0)]);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0, 0x1, 0x3, 0x101, 0x110011, ~0u
-   };
+   auto inout = ShaderArg<uint32_t>({ 0, 0x1, 0x3, 0x101, 0x110011, ~0u },
+                                    SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       0, 1, 2, 2, 4, 32
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, hadd)
@@ -420,9 +401,8 @@ TEST_F(ComputeTest, hadd)
    {\n\
        inout[get_global_id(0)] = hadd(inout[get_global_id(0)], 1u << 31);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0, 1, 2, 3, 0xfffffffc, 0xfffffffd, 0xfffffffe, 0xffffffff
-   };
+   auto inout = ShaderArg<uint32_t>({ 0, 1, 2, 3, 0xfffffffc, 0xfffffffd, 0xfffffffe, 0xffffffff },
+                                    SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       (1u << 31) >> 1,
       ((1u << 31) + 1) >> 1,
@@ -433,9 +413,9 @@ TEST_F(ComputeTest, hadd)
       ((1ull << 31) + 0xfffffffe) >> 1,
       ((1ull << 31) + 0xffffffff) >> 1,
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, rhadd)
@@ -445,9 +425,8 @@ TEST_F(ComputeTest, rhadd)
    {\n\
        inout[get_global_id(0)] = rhadd(inout[get_global_id(0)], 1u << 31);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0, 1, 2, 3, 0xfffffffc, 0xfffffffd, 0xfffffffe, 0xffffffff
-   };
+   auto inout = ShaderArg<uint32_t>({ 0, 1, 2, 3, 0xfffffffc, 0xfffffffd, 0xfffffffe, 0xffffffff },
+                                    SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       ((1u << 31) + 1) >> 1,
       ((1u << 31) + 2) >> 1,
@@ -458,9 +437,9 @@ TEST_F(ComputeTest, rhadd)
       ((1ull << 31) + 0xffffffff) >> 1,
       ((1ull << 31) + (1ull << 32)) >> 1,
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, add_sat)
@@ -470,15 +449,14 @@ TEST_F(ComputeTest, add_sat)
    {\n\
        inout[get_global_id(0)] = add_sat(inout[get_global_id(0)], 2u);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0xffffffff - 3, 0xffffffff - 2, 0xffffffff - 1, 0xffffffff
-   };
+   auto inout = ShaderArg<uint32_t>({ 0xffffffff - 3, 0xffffffff - 2, 0xffffffff - 1, 0xffffffff },
+                                    SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       0xffffffff - 1, 0xffffffff, 0xffffffff, 0xffffffff
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, sub_sat)
@@ -488,15 +466,13 @@ TEST_F(ComputeTest, sub_sat)
    {\n\
        inout[get_global_id(0)] = sub_sat(inout[get_global_id(0)], 2u);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0, 1, 2, 3
-   };
+   auto inout = ShaderArg<uint32_t>({ 0, 1, 2, 3 }, SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       0, 0, 0, 1
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, mul_hi)
@@ -506,15 +482,13 @@ TEST_F(ComputeTest, mul_hi)
    {\n\
        inout[get_global_id(0)] = mul_hi(inout[get_global_id(0)], 1u << 31);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0, 1, 2, 3, (1u << 31)
-   };
+   auto inout = ShaderArg<uint32_t>({ 0, 1, 2, 3, (1u << 31) }, SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       0, 0, 1, 1, (1u << 30)
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, ldexp_x)
@@ -524,15 +498,13 @@ TEST_F(ComputeTest, ldexp_x)
    {\n\
        inout[get_global_id(0)] = ldexp(inout[get_global_id(0)], 5);\n\
    }\n";
-   const vector<float> input = {
-      0.0f, 0.5f, 1.0f, 2.0f
-   };
+   auto inout = ShaderArg<float>({ 0.0f, 0.5f, 1.0f, 2.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       ldexp(0.0f, 5), ldexp(0.5f, 5), ldexp(1.0f, 5), ldexp(2.0f, 5)
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, ldexp_y)
@@ -542,15 +514,13 @@ TEST_F(ComputeTest, ldexp_y)
    {\n\
        inout[get_global_id(0)] = ldexp(inout[get_global_id(0)], get_global_id(0));\n\
    }\n";
-   const vector<float> input = {
-      0.25f, 0.5f, 0.75f, 1.0f
-   };
+   auto inout = ShaderArg<float>({ 0.25f, 0.5f, 0.75f, 1.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       ldexp(0.25f, 0), ldexp(0.5f, 1), ldexp(0.75f, 2), ldexp(1.0f, 3)
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, frexp_ret)
@@ -561,15 +531,13 @@ TEST_F(ComputeTest, frexp_ret)
        int exp;\n\
        inout[get_global_id(0)] = frexp(inout[get_global_id(0)], &exp);\n\
    }\n";
-   const vector<float> input = {
-      0.0f, 0.5f, 1.0f, 3.0f
-   };
+   auto inout = ShaderArg<float>({ 0.0f, 0.5f, 1.0f, 3.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       0.0f, 0.5f, 0.5f, 0.75f
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, frexp_exp)
@@ -581,15 +549,13 @@ TEST_F(ComputeTest, frexp_exp)
        frexp(inout[get_global_id(0)], &exp);\n\
        inout[get_global_id(0)] = (float)exp;\n\
    }\n";
-   const vector<float> input = {
-      0.0f, 0.5f, 1.0f, 3.0f
-   };
+   auto inout = ShaderArg<float>({ 0.0f, 0.5f, 1.0f, 3.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       0.0f, 0.0f, 1.0f, 2.0f
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, clz)
@@ -599,15 +565,13 @@ TEST_F(ComputeTest, clz)
    {\n\
        inout[get_global_id(0)] = clz(inout[get_global_id(0)]);\n\
    }\n";
-   const vector<uint32_t> input = {
-      0, 1, 0xffff,  (1u << 30), (1u << 31)
-   };
+   auto inout = ShaderArg<uint32_t>({ 0, 1, 0xffff,  (1u << 30), (1u << 31) }, SHADER_ARG_INOUT);
    const uint32_t expected[] = {
       32, 31, 16, 1, 0
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, exp)
@@ -617,15 +581,13 @@ TEST_F(ComputeTest, exp)
    {\n\
        inout[get_global_id(0)] = native_exp(inout[get_global_id(0)]);\n\
    }\n";
-   const vector<float> input = {
-      0.0f, 1.0f, 2.0f, 3.0f
-   };
+   auto inout = ShaderArg<float>({ 0.0f, 1.0f, 2.0f, 3.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       exp(0.0f), exp(1.0f), exp(2.0f), exp(3.0f)
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, exp10)
@@ -635,15 +597,13 @@ TEST_F(ComputeTest, exp10)
    {\n\
        inout[get_global_id(0)] = native_exp10(inout[get_global_id(0)]);\n\
    }\n";
-   const vector<float> input = {
-      0.0f, 1.0f, 2.0f, 3.0f
-   };
+   auto inout = ShaderArg<float>({ 0.0f, 1.0f, 2.0f, 3.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       pow(10.0f, 0.0f), pow(10.0f, 1.0f), pow(10.0f, 2.0f), pow(10.0f, 3.0f)
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, exp2)
@@ -653,15 +613,13 @@ TEST_F(ComputeTest, exp2)
    {\n\
        inout[get_global_id(0)] = native_exp2(inout[get_global_id(0)]);\n\
    }\n";
-   const vector<float> input = {
-      0.0f, 1.0f, 2.0f, 3.0f
-   };
+   auto inout = ShaderArg<float>({ 0.0f, 1.0f, 2.0f, 3.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       pow(2.0f, 0.0f), pow(2.0f, 1.0f), pow(2.0f, 2.0f), pow(2.0f, 3.0f)
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, log)
@@ -671,15 +629,13 @@ TEST_F(ComputeTest, log)
    {\n\
        inout[get_global_id(0)] = native_log(inout[get_global_id(0)]);\n\
    }\n";
-   const vector<float> input = {
-      0.0f, 1.0f, 2.0f, 3.0f
-   };
+   auto inout = ShaderArg<float>({ 0.0f, 1.0f, 2.0f, 3.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       log(0.0f), log(1.0f), log(2.0f), log(3.0f)
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, log10)
@@ -689,15 +645,13 @@ TEST_F(ComputeTest, log10)
    {\n\
        inout[get_global_id(0)] = native_log10(inout[get_global_id(0)]);\n\
    }\n";
-   const vector<float> input = {
-      0.0f, 1.0f, 2.0f, 3.0f
-   };
+   auto inout = ShaderArg<float>({ 0.0f, 1.0f, 2.0f, 3.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       log10(0.0f), log10(1.0f), log10(2.0f), log10(3.0f)
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, log2)
@@ -707,15 +661,13 @@ TEST_F(ComputeTest, log2)
    {\n\
        inout[get_global_id(0)] = native_log2(inout[get_global_id(0)]);\n\
    }\n";
-   const vector<float> input = {
-      0.0f, 1.0f, 2.0f, 3.0f
-   };
+   auto inout = ShaderArg<float>({ 0.0f, 1.0f, 2.0f, 3.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       log(0.0f) / log(2), log(1.0f) / log(2), log(2.0f) / log(2), log(3.0f) / log(2)
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_FLOAT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, rint)
@@ -726,15 +678,13 @@ TEST_F(ComputeTest, rint)
       inout[get_global_id(0)] = rint(inout[get_global_id(0)]);\n\
    }\n";
 
-   const vector<float> input = {
-      0.5f, 1.5f, -0.5f, -1.5f, 1.4f
-   };
+   auto inout = ShaderArg<float>({ 0.5f, 1.5f, -0.5f, -1.5f, 1.4f }, SHADER_ARG_INOUT);
    const float expected[] = {
       0.0f, 2.0f, 0.0f, -2.0f, 1.0f,
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, round)
@@ -744,15 +694,14 @@ TEST_F(ComputeTest, round)
    {\n\
        inout[get_global_id(0)] = round(inout[get_global_id(0)]);\n\
    }\n";
-   const vector<float> input = {
-      0, 0.3f, -0.3f, 0.5f, -0.5f, 1.1f, -1.1f
-   };
+   auto inout = ShaderArg<float>({ 0, 0.3f, -0.3f, 0.5f, -0.5f, 1.1f, -1.1f },
+                                 SHADER_ARG_INOUT);
    const float expected[] = {
       0.0f, 0.0f, -0.0f, 1.0f, -1.0f, 1.0f, -1.0f
    };
-   auto buf = run_shader_with_input(kernel_source, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
 TEST_F(ComputeTest, link)
@@ -769,13 +718,11 @@ TEST_F(ComputeTest, link)
        inout[get_global_id(0)] = foo(inout[get_global_id(0)]);\n\
    }\n";
    std::vector<const char *> srcs = { foo_src, kernel_source };
-   const vector<float> input = {
-      2.0f,
-   };
+   auto inout = ShaderArg<float>({ 2.0f }, SHADER_ARG_INOUT);
    const float expected[] = {
       4.0f,
    };
-   auto buf = run_shader_with_input(srcs, input);
-   for (int i = 0; i < buf.size(); ++i)
-      EXPECT_EQ(buf[i], expected[i]);
+   run_shader(srcs, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
 }
