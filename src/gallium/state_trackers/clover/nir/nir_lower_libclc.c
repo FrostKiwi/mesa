@@ -32,53 +32,86 @@
 #include "nir_lower_libclc.h"
 
 static bool
-lower_clc_block(nir_block *block, nir_builder *b,
-                const nir_shader *clc_shader)
+lower_clc_deref_instr(nir_instr *instr, nir_builder *b,
+                      const nir_shader *clc_shader,
+                      struct hash_table *copy_vars)
 {
-   bool progress = false;
+   nir_deref_instr *deref = nir_instr_as_deref(instr);
+   if (deref->deref_type != nir_deref_type_var ||
+       !nir_variable_is_global(deref->var))
+      return false;
 
-   nir_foreach_instr_safe(instr, block) {
-      if (instr->type != nir_instr_type_call)
+   foreach_list_typed(nir_variable, clc_var, node, &clc_shader->uniforms) {
+      if (clc_var != deref->var)
          continue;
 
-      progress = true;
-
-      nir_call_instr *call = nir_instr_as_call(instr);
-      nir_function *func = NULL;
-      nir_foreach_function(function, clc_shader) {
-         if (strcmp(function->name, call->callee->name) == 0) {
-            func = function;
-            break;
-         }
-      }
-      if (!func || !func->impl) {
-         return NULL;
+      nir_variable *user_var;
+      struct hash_entry *entry = _mesa_hash_table_search(copy_vars, deref->var);
+      if (entry) {
+         user_var = entry->data;
+      } else {
+         user_var = nir_variable_clone(deref->var, b->shader);
+         nir_shader_add_variable(b->shader, user_var);
+         _mesa_hash_table_insert(copy_vars, deref->var, user_var);
       }
 
-      nir_ssa_def *params[4] = { NULL, };
-
-      for (unsigned i = 0; i < call->num_params; i++) {
-         params[i] = nir_ssa_for_src(b, call->params[i],
-                                     call->callee->params[i].num_components);
-      }
-
-      b->cursor = nir_instr_remove(&call->instr);
-      nir_inline_function_impl(b, func->impl, params);
+      b->cursor = nir_before_instr(instr);
+      nir_deref_instr *new = nir_build_deref_var(b, user_var);
+      nir_ssa_def_rewrite_uses(&deref->dest.ssa, nir_src_for_ssa(&new->dest.ssa));
+      nir_instr_remove(instr);
+      return true;
    }
-   return progress;
+   return false;
+}
+
+static bool
+lower_clc_call_instr(nir_instr *instr, nir_builder *b,
+                     const nir_shader *clc_shader)
+{
+   nir_call_instr *call = nir_instr_as_call(instr);
+   nir_function *func = NULL;
+   nir_foreach_function(function, clc_shader) {
+   if (strcmp(function->name, call->callee->name) == 0) {
+      func = function;
+      break;
+     }
+   }
+   if (!func || !func->impl) {
+     return false;
+   }
+
+   nir_ssa_def *params[32] = { NULL, };
+
+   for (unsigned i = 0; i < call->num_params; i++) {
+      params[i] = nir_ssa_for_src(b, call->params[i],
+                                  call->callee->params[i].num_components);
+   }
+
+   b->cursor = nir_instr_remove(&call->instr);
+   nir_inline_function_impl(b, func->impl, params);
+
+   return true;
 }
 
 static bool
 nir_lower_libclc_impl(nir_function_impl *impl,
-                      const nir_shader *clc_shader)
+                      const nir_shader *clc_shader,
+                      struct hash_table *copy_vars)
 {
    nir_builder b;
    nir_builder_init(&b, impl);
 
    bool progress = false;
    nir_foreach_block_safe(block, impl) {
-      progress |= lower_clc_block(block, &b, clc_shader);
+      nir_foreach_instr_safe(instr, block) {
+         if (instr->type == nir_instr_type_call) {
+            progress |= lower_clc_call_instr(instr, &b, clc_shader);
+         } else if (instr->type == nir_instr_type_deref) {
+            progress |= lower_clc_deref_instr(instr, &b, clc_shader, copy_vars);
+         }
+      }
    }
+
    if (progress) {
       nir_index_ssa_defs(impl);
       nir_index_local_regs(impl);
@@ -95,6 +128,8 @@ bool
 nir_lower_libclc(nir_shader *shader,
                  const nir_shader *clc_shader)
 {
+   void *ra_ctx = ralloc_context(NULL);
+   struct hash_table *copy_vars = _mesa_pointer_hash_table_create(ra_ctx);
    bool progress = false;
 
    /* do progress passes inside the pass */
@@ -102,8 +137,12 @@ nir_lower_libclc(nir_shader *shader,
      progress = false;
      nir_foreach_function(function, shader) {
        if (function->impl)
-         progress |= nir_lower_libclc_impl(function->impl, clc_shader);
+         progress |= nir_lower_libclc_impl(function->impl, clc_shader,
+                                           copy_vars);
      }
    } while(progress);
+
+   ralloc_free(ra_ctx);
+
    return progress;
 }
