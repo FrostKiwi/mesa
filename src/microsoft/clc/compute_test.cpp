@@ -370,6 +370,98 @@ ComputeTest::add_cbv_resource(ComputeTest::Resources &resources,
 }
 
 void
+ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
+                                      unsigned x, unsigned y, unsigned z,
+                                      const std::vector<RawShaderArg *> &args)
+{
+   if (args.size() < 1)
+      throw runtime_error("no inputs");
+
+   static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
+   if (!hD3D12Mod)
+      throw runtime_error("Failed to load D3D12.DLL");
+
+   D3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
+
+   Shader shader = compile_and_validate(sources);
+   std::shared_ptr<struct clc_dxil_object> &dxil = shader.dxil;
+
+   if (args.size() != dxil->kernel->num_args)
+      throw runtime_error("incorrect number of inputs");
+
+   std::vector<uint8_t> argsbuf(dxil->metadata.kernel_inputs_buf_size);
+   Resources resources;
+   unsigned uav_idx = 0;
+
+   for (unsigned i = 0; i < dxil->kernel->num_args; ++i) {
+      RawShaderArg *arg = args[i];
+      size_t size = arg->get_elem_size() * arg->get_num_elems();
+      void *slot = argsbuf.data() + dxil->metadata.args[i].offset;
+
+      switch (dxil->kernel->args[i].address_qualifier) {
+      case CLC_KERNEL_ARG_ADDRESS_GLOBAL: {
+         assert(dxil->metadata.args[i].size == sizeof(uint32_t));
+         add_uav_resource(resources, 0, dxil->metadata.args[i].buf_id,
+                          arg->get_data(), arg->get_num_elems(),
+                          arg->get_elem_size());
+
+         uint32_t *ptr_slot = (uint32_t *)slot;
+         *ptr_slot = uav_idx++ << 28;
+         break;
+      }
+      case CLC_KERNEL_ARG_ADDRESS_PRIVATE: {
+         assert(size == dxil->metadata.args[i].size);
+         memcpy(slot, arg->get_data(), size);
+         break;
+      }
+      default:
+         assert(0);
+      }
+   }
+
+   for (unsigned i = 0; i < dxil->metadata.num_consts; ++i)
+      add_cbv_resource(resources, 0, dxil->metadata.consts[i].cbv_id,
+                       dxil->metadata.consts[i].data,
+                       dxil->metadata.consts[i].size);
+
+   if (argsbuf.size())
+      add_cbv_resource(resources, 0, dxil->metadata.kernel_inputs_cbv_id,
+                       argsbuf.data(), argsbuf.size());
+
+   auto root_sig = create_root_signature(resources);
+   auto pipeline_state = create_pipeline_state(root_sig, *dxil);
+
+   cmdlist->SetDescriptorHeaps(1, &uav_heap);
+   cmdlist->SetComputeRootSignature(root_sig.Get());
+   cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
+   cmdlist->SetPipelineState(pipeline_state.Get());
+   cmdlist->Dispatch(x, y, z);
+
+   for (auto &range : resources.ranges) {
+      if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_UAV) {
+         for (unsigned i = range.OffsetInDescriptorsFromTableStart;
+              i < range.NumDescriptors; i++)
+            resource_barrier(resources.descs[i],
+                             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                             D3D12_RESOURCE_STATE_COMMON);
+      }
+   }
+
+   execute_cmdlist();
+
+   uav_idx = 0;
+   for (unsigned i = 0; i < args.size(); i++) {
+      if (!(args[i]->get_direction() & SHADER_ARG_OUTPUT))
+         continue;
+
+      assert(dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL);
+      get_buffer_data(resources.descs[uav_idx], args[i]->get_data(),
+                      args[i]->get_elem_size() * args[i]->get_num_elems());
+      uav_idx++;
+   }
+}
+
+void
 ComputeTest::SetUp()
 {
    enable_d3d12_debug_layer();

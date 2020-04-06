@@ -181,6 +181,99 @@ protected:
    static Shader
    compile_and_validate(const std::vector<const char *> &sources);
 
+   enum ShaderArgDirection {
+      SHADER_ARG_INPUT = 1,
+      SHADER_ARG_OUTPUT = 2,
+      SHADER_ARG_INOUT = SHADER_ARG_INPUT | SHADER_ARG_OUTPUT,
+   };
+
+   class RawShaderArg {
+   public:
+      RawShaderArg(enum ShaderArgDirection dir) : dir(dir) { }
+      virtual size_t get_elem_size() const = 0;
+      virtual size_t get_num_elems() const = 0;
+      virtual const void *get_data() const = 0;
+      virtual void *get_data() = 0;
+      enum ShaderArgDirection get_direction() { return dir; }
+   private:
+      enum ShaderArgDirection dir;
+   };
+
+   template <typename T>
+   class ShaderArg : public std::vector<T>, public RawShaderArg
+   {
+   public:
+      ShaderArg(const T &v, enum ShaderArgDirection dir = SHADER_ARG_INOUT) :
+         std::vector<T>({ v }), RawShaderArg(dir) { }
+      ShaderArg(const std::vector<T> &v, enum ShaderArgDirection dir = SHADER_ARG_INOUT) :
+         std::vector<T>(v), RawShaderArg(dir) { }
+      ShaderArg(const std::initializer_list<T> v, enum ShaderArgDirection dir = SHADER_ARG_INOUT) :
+         std::vector<T>(v), RawShaderArg(dir) { }
+
+      ShaderArg<T>& operator =(const T &v)
+      {
+         this->clear();
+	 this->push_back(v);
+         return *this;
+      }
+
+      operator T&() { return this->at(0); }
+      operator const T&() const { return this->at(0); }
+
+      ShaderArg<T>& operator =(const std::vector<T> &v)
+      {
+	 *this = v;
+         return *this;
+      }
+
+      ShaderArg<T>& operator =(std::initializer_list<T> v)
+      {
+	 *this = v;
+         return *this;
+      }
+
+      size_t get_elem_size() const override { return sizeof(T); }
+      size_t get_num_elems() const override { return this->size(); }
+      const void *get_data() const override { return this->data(); }
+      void *get_data() override { return this->data(); }
+   };
+
+private:
+   void gather_args(std::vector<RawShaderArg *> &args) { }
+
+   template <typename T, typename... Rest>
+   void gather_args(std::vector<RawShaderArg *> &args, T &arg, Rest&... rest)
+   {
+      args.push_back(&arg);
+      gather_args(args, rest...);
+   }
+
+   void run_shader_with_raw_args(const std::vector<const char *> &sources,
+                                 unsigned x, unsigned y, unsigned z,
+                                 const std::vector<RawShaderArg *> &args);
+
+protected:
+   template <typename... Args>
+   void run_shader(const std::vector<const char *> &sources,
+                   unsigned x, unsigned y, unsigned z,
+                   Args&... args)
+   {
+      std::vector<RawShaderArg *> raw_args;
+      gather_args(raw_args, args...);
+      run_shader_with_raw_args(sources, x, y, z, raw_args);
+   }
+
+   template <typename... Args>
+   void run_shader(const char *source,
+                   unsigned x, unsigned y, unsigned z,
+                   Args&... args)
+   {
+      std::vector<RawShaderArg *> raw_args;
+      gather_args(raw_args, args...);
+      run_shader_with_raw_args(std::vector<const char *>({ source }),
+                               x, y, z, raw_args);
+   }
+
    template <typename T>
    std::vector<T>
    run_shader_with_inputs(const std::vector<const char *> &sources,
