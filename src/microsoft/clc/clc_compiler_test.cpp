@@ -302,6 +302,27 @@ TEST_F(ComputeTest, complex_types_const_array)
       EXPECT_EQ(buf[i], expected[i]);
 }
 
+TEST_F(ComputeTest, two_const_arrays)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *output)\n\
+   {\n\
+      uint id = get_global_id(0);\n\
+      uint foo[4] = {100, 101, 102, 103};\n\
+      uint bar[4] = {1, 2, 3, 4};\n\
+      output[id] = foo[id] * bar[id];\n\
+   }\n";
+   const vector<uint32_t> input = {
+      0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef
+   };
+   const uint32_t expected[] = {
+      100, 202, 306, 412
+   };
+   auto buf = run_shader_with_input(kernel_source, input);
+   for (int i = 0; i < buf.size(); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
+
 TEST_F(ComputeTest, imod_pos)
 {
    const char *kernel_source =
