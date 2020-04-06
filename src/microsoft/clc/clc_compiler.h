@@ -159,7 +159,7 @@ struct clc_dxil_object {
 };
 
 struct clc_context {
-   unsigned int dummy;
+   void *libclc_nir;
 };
 
 struct clc_context *clc_context_new(void);

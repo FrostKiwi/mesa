@@ -37,12 +37,22 @@ opencl_c_base_h = custom_target(
   command : [prog_python, '@INPUT@', '@OUTPUT@', '-n', 'opencl_c_base_source'],
 )
 
+dep_libclc = dependency('libclc')
+clc_base_dir = dep_libclc.get_pkgconfig_variable('libexecdir')
+clc_mesa_spv_h = custom_target(
+  'spirv-mesa3d-.spv.h',
+  input : [files_xxd, join_paths(clc_base_dir, 'spirv-mesa3d-.spv')],
+  output : 'spirv-mesa3d-.spv.h',
+  command : [prog_python, '@INPUT@', '@OUTPUT@', '-n', 'libclc_spirv_bytecode'],
+)
+
 libclc_compiler = shared_library(
   'clglon12compiler',
   'clc_compiler.c',
   'clc_helpers.cpp',
   opencl_c_h,
   opencl_c_base_h,
+  clc_mesa_spv_h,
   vs_module_defs : 'clglon12compiler.def',
   include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_compiler, inc_gallium, inc_spirv],
   dependencies: [idep_nir_headers, dep_clang, dep_llvm, cc.find_library('version'),
