@@ -21,6 +21,9 @@
  * IN THE SOFTWARE.
  */
 
+#include "nir.h"
+#include "glsl_types.h"
+#include "nir_types.h"
 #include "clc_compiler.h"
 #include "clc_helpers.h"
 #include "../compiler/dxil_nir.h"
@@ -40,6 +43,8 @@
  * In principle, this is very similar to SSBOs, so at some point we might
  * want to unify that.
  */
+
+#include "spirv-mesa3d-.spv.h"
 
 enum clc_debug_flags {
    CLC_DEBUG_DUMP_SPIRV = 1 << 0,
@@ -267,15 +272,51 @@ clc_context_new(void)
       return NULL;
    }
 
+   const struct spirv_to_nir_options libclc_spirv_options = {
+      .environment = NIR_SPIRV_OPENCL,
+      .constant_as_global = false,
+      .create_library = true,
+      .caps = {
+         .address = true,
+         .float64 = true,
+         .int8 = true,
+         .int16 = true,
+         .int64 = true,
+         .kernel = true,
+      },
+   };
+   const struct nir_shader_compiler_options *libclc_nir_options =
+      dxil_get_nir_compiler_options();
+
+   glsl_type_singleton_init_or_ref();
+
+   ctx->libclc_nir =
+      spirv_to_nir((uint32_t *) libclc_spirv_bytecode,
+                   sizeof(libclc_spirv_bytecode) / 4,
+                   NULL, 0, MESA_SHADER_KERNEL, "libclc_spirv",
+                   &libclc_spirv_options, libclc_nir_options, false);
+   if (!ctx->libclc_nir) {
+      fprintf(stderr, "D3D12: spirv_to_nir failed on libclc blob\n");
+      goto err_free_ctx;
+   }
+   NIR_PASS_V(ctx->libclc_nir, nir_lower_goto_ifs);
+   NIR_PASS_V(ctx->libclc_nir, nir_lower_variable_initializers, nir_var_function_temp);
+   NIR_PASS_V(ctx->libclc_nir, nir_lower_returns);
+
    return ctx;
+
+err_free_ctx:
+   free(ctx);
+   return NULL;
 }
 
 void
 clc_free_context(struct clc_context *ctx)
 {
+   ralloc_free(ctx->libclc_nir);
    free(ctx);
+   glsl_type_singleton_decref();
 };
-
 
 struct clc_object *
 clc_compile(struct clc_context *ctx,
