@@ -24,6 +24,7 @@
 #include "nir.h"
 #include "glsl_types.h"
 #include "nir_types.h"
+#include "nir_lower_libclc.h"
 #include "clc_compiler.h"
 #include "clc_helpers.h"
 #include "../compiler/dxil_nir.h"
@@ -275,6 +276,7 @@ clc_context_new(void)
    const struct spirv_to_nir_options libclc_spirv_options = {
       .environment = NIR_SPIRV_OPENCL,
       .constant_as_global = false,
+      .mangle = clc_fn_mangle_libclc,
       .create_library = true,
       .caps = {
          .address = true,
@@ -501,6 +503,8 @@ clc_to_dxil(struct clc_context *ctx,
    const struct spirv_to_nir_options spirv_options = {
       .environment = NIR_SPIRV_OPENCL,
       .constant_as_global = false,
+      .clc_shader = ctx->libclc_nir,
+      .mangle = clc_fn_mangle_libclc,
       .caps = {
          .address = true,
          .float64 = true,
@@ -585,6 +589,7 @@ clc_to_dxil(struct clc_context *ctx,
    // according to the comment on nir_inline_functions
    NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
    NIR_PASS_V(nir, nir_lower_returns);
+   NIR_PASS_V(nir, nir_lower_libclc, ctx->libclc_nir);
    NIR_PASS_V(nir, nir_inline_functions);
    NIR_PASS_V(nir, nir_opt_deref);
 

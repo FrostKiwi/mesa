@@ -28,6 +28,8 @@
 extern "C" {
 #endif
 
+#include "nir_types.h"
+
 #include "clc_compiler.h"
 
 #include <stddef.h>
@@ -57,6 +59,12 @@ clc_dump_spirv(const struct spirv_binary *spvbin, FILE *f);
 
 void
 clc_free_spirv_binary(struct spirv_binary *spvbin);
+
+void clc_fn_mangle_libclc(const char *in_name,
+                          uint32_t ptr_mask,
+                          int ntypes,
+                          const struct glsl_type **src_types,
+                          char **out_string);
 
 #ifdef __cplusplus
 }
