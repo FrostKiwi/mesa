@@ -714,6 +714,45 @@ static unsigned get_dword_size(const struct glsl_type *type)
 }
 
 static bool
+emit_kernel_inputs_cbv(struct ntd_context *ctx, nir_shader *nir)
+{
+   unsigned size = 0;
+
+   nir_foreach_variable(var, &nir->inputs)
+      size = MAX2(size,
+                  var->data.driver_location +
+                  glsl_get_cl_size(var->type));
+
+   size = align(size, 4);
+   if (!size)
+      return true;
+
+   const struct dxil_type *int32 = dxil_module_get_int_type(&ctx->mod, 32);
+   const struct dxil_type *array_type = dxil_module_get_array_type(&ctx->mod, int32, size / 4);
+   const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod, "kernel_inputs",
+                                                                     &array_type, 1);
+   const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
+                                                          "kernel_inputs", ctx->num_cbvs,
+                                                          ctx->num_cbvs, size);
+
+   if (!cbv_meta)
+      return false;
+
+   ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
+   add_resource(ctx, DXIL_RES_CBV, ctx->num_cbvs, 1);
+
+   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_CBV,
+                                                                        ctx->num_cbvs, ctx->num_cbvs,
+                                                                        false);
+   if (!handle)
+      return false;
+
+   ctx->cbv_handles[ctx->num_cbvs++] = handle;
+
+   return true;
+}
+
+static bool
 emit_cbv(struct ntd_context *ctx, nir_variable *var)
 {
    unsigned idx = ctx->num_cbvs;
@@ -1621,16 +1660,51 @@ emit_load_local_work_group_id(struct ntd_context *ctx,
    return true;
 }
 
+const struct dxil_value *
+load_ubo(struct ntd_context *ctx, const struct dxil_value *handle,
+         const struct dxil_value *offset, enum overload_type overload)
+{
+   assert(handle && offset);
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CBUFFER_LOAD_LEGACY);
+   if (!opcode)
+      return NULL;
+
+   const struct dxil_value *args[] = {
+      opcode, handle, offset
+   };
+
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.cbufferLoadLegacy", overload);
+   if (!func)
+      return NULL;
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
 static bool
 emit_load_kernel_input(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
-   nir_const_value *const_input = nir_src_as_const_value(intr->src[0]);
-   assert(const_input);
-   assert((const_input->u32 & 3) == 0);
-   assert((const_input->u32 / 4) < 16);
-   const struct dxil_value *ptr =
-      dxil_module_get_int32_const(&ctx->mod, (const_input->u32 / 4) << 28);
-   store_dest_int(ctx, &intr->dest, 0, ptr);
+   const struct dxil_value *handle = ctx->cbv_handles[ctx->num_cbvs - 1];
+   const struct dxil_value *offset;
+   nir_const_value *const_offset = nir_src_as_const_value(intr->src[0]);
+   assert(const_offset);
+   if (const_offset) {
+      offset = dxil_module_get_int32_const(&ctx->mod, const_offset->i32 >> 4);
+   } else {
+      const struct dxil_value *offset_src = get_src(ctx, &intr->src[0], 0, nir_type_uint);
+      const struct dxil_value *c4 = dxil_module_get_int32_const(&ctx->mod, 4);
+      offset = dxil_emit_binop(&ctx->mod, DXIL_BINOP_ASHR, offset_src, c4, 0);
+   }
+
+   const struct dxil_value *agg = load_ubo(ctx, handle, offset, DXIL_I32);
+
+   if (!agg)
+      return false;
+
+   unsigned start = (const_offset->i32 % 16) / 4;
+   for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
+      const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, agg, start + i);
+      store_dest_int(ctx, &intr->dest, i, retval);
+   }
    return true;
 }
 
@@ -1774,26 +1848,6 @@ emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return false;
 
    return emit_bufferstore_call(ctx, handle, coord, value, write_mask);
-}
-
-const struct dxil_value *
-load_ubo(struct ntd_context *ctx, const struct dxil_value *handle,
-         const struct dxil_value *offset, enum overload_type overload)
-{
-   assert(handle && offset);
-
-   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CBUFFER_LOAD_LEGACY);
-   if (!opcode)
-      return NULL;
-
-   const struct dxil_value *args[] = {
-      opcode, handle, offset
-   };
-
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.cbufferLoadLegacy", overload);
-   if (!func)
-      return NULL;
-   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
 
 static bool
@@ -2789,6 +2843,9 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
             return false;
       }
    }
+
+   if (!emit_kernel_inputs_cbv(ctx, s))
+      return false;
 
    /* Samplers */
    nir_foreach_variable(var, &s->uniforms) {
