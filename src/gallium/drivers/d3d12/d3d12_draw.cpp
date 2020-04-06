@@ -34,6 +34,10 @@
 #include "util/u_prim.h"
 #include "util/u_math.h"
 
+#include <wrl.h>
+
+using Microsoft::WRL::ComPtr;
+
 extern "C" {
 #include "indices/u_primconvert.h"
 }
@@ -159,7 +163,7 @@ get_root_signature(struct d3d12_context *ctx)
    /* TODO Only enable this flag when needed (optimization) */
    root_sig_desc.Desc_1_1.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
-   ID3DBlob *sig, *error;
+   ComPtr<ID3DBlob> sig, error;
    if (FAILED(ctx->D3D12SerializeVersionedRootSignature(&root_sig_desc,
                                                         &sig, &error))) {
       debug_printf("D3D12SerializeRootSignature failed\n");
