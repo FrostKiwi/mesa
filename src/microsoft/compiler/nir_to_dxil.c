@@ -720,6 +720,7 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
    unsigned binding = var->data.binding;
    unsigned size = get_dword_size(var->type);
 
+   assert(idx == binding);
    assert(idx < ARRAY_SIZE(ctx->cbv_metadata_nodes));
    assert(binding < ARRAY_SIZE(ctx->cbv_handles));
 
@@ -742,6 +743,7 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
    if (!handle)
       return false;
 
+   assert(!ctx->cbv_handles[binding]);
    ctx->cbv_handles[binding] = handle;
    ctx->num_cbvs++;
 
@@ -1801,7 +1803,7 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    assert(const_block_index); // no dynamic indexing for now
    assert(const_block_index->u32 <= 1); // we only support the default and state vars UBO for now
    const struct dxil_value *handle = ctx->cbv_handles[const_block_index->u32];
-
+   assert(handle);
    const struct dxil_value *offset;
    nir_const_value *const_offset = nir_src_as_const_value(intr->src[1]);
    if (const_offset) {
@@ -1984,9 +1986,8 @@ emit_load_mem_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr,
       bit_size);
    unsigned align = bit_size / 8;
 
-   // HACK: force CBV#0
-   assert(ctx->num_cbvs == 1);
-   const struct dxil_value *handle = ctx->cbv_handles[0]; // HACK!
+   const struct dxil_value *handle = ctx->cbv_handles[var->data.binding];
+   assert(handle);
    const struct dxil_value *index = offset_to_index(&ctx->mod, ptr, bit_size * 4);
    const struct dxil_value *agg = load_ubo(ctx, handle, index, DXIL_I32);
    if (!index || !agg)
@@ -2213,7 +2214,6 @@ emit_deref_array(struct ntd_context *ctx, nir_deref_instr *deref)
 
    case nir_var_mem_ubo: {
          // HACK: force CBV#0
-         assert(ctx->num_cbvs == 1);
          unsigned bit_size = glsl_get_bit_size(glsl_without_array(var->type));
          ptr = index_to_offset(&ctx->mod, index, bit_size);
          store_dest_int(ctx, &deref->dest, 0, ptr);
