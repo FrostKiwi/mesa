@@ -103,19 +103,6 @@ protected:
          ranges.push_back(range);
       }
 
-      unsigned get_next_resid(D3D12_DESCRIPTOR_RANGE_TYPE type,
-                              unsigned spaceid)
-      {
-         unsigned resid = 0;
-
-         for (auto &range: ranges) {
-            if (range.RangeType == type && range.RegisterSpace == spaceid)
-               resid = max(resid, range.BaseShaderRegister + range.NumDescriptors);
-         }
-
-	 return resid;
-      }
-
       std::vector<D3D12_DESCRIPTOR_RANGE1> ranges;
       std::vector<ComPtr<ID3D12Resource>> descs;
    };
@@ -272,96 +259,6 @@ protected:
       gather_args(raw_args, args...);
       run_shader_with_raw_args(std::vector<const char *>({ source }),
                                x, y, z, raw_args);
-   }
-
-   template <typename T>
-   std::vector<T>
-   run_shader_with_inputs(const std::vector<const char *> &sources,
-                          const std::vector<std::vector<T>> &inputs)
-   {
-      if (inputs.size() < 1)
-         throw runtime_error("no inputs");
-
-      static HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
-      if (!hD3D12Mod)
-         throw runtime_error("Failed to load D3D12.DLL");
-
-      D3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
-
-      Shader shader = compile_and_validate(sources);
-      std::shared_ptr<struct clc_dxil_object> &dxil = shader.dxil;
-
-      if (inputs.size() != dxil->metadata.num_uavs)
-         throw runtime_error("incorrect number of inputs");
-
-      Resources resources;
-      for(auto input : inputs) {
-         if (input.size() != inputs[0].size())
-            throw runtime_error("mismatching input sizes");
-
-         unsigned resid = resources.get_next_resid(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0);
-         add_uav_resource(resources, 0, resid, input.data(), input.size(), sizeof(T));
-      }
-
-      for (unsigned i = 0; i < dxil->metadata.num_consts; ++i) {
-         unsigned resid = resources.get_next_resid(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 0);
-         add_cbv_resource(resources, 0, resid, dxil->metadata.consts[i].data,
-                          dxil->metadata.consts[i].size);
-      }
-
-      auto root_sig = create_root_signature(resources);
-      auto pipeline_state = create_pipeline_state(root_sig, *dxil);
-
-      cmdlist->SetDescriptorHeaps(1, &uav_heap);
-      cmdlist->SetComputeRootSignature(root_sig.Get());
-      cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
-      cmdlist->SetPipelineState(pipeline_state.Get());
-      cmdlist->Dispatch(inputs[0].size(), 1, 1);
-
-      for (auto &range : resources.ranges) {
-         if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_UAV) {
-            for (unsigned i = range.OffsetInDescriptorsFromTableStart;
-                 i < range.NumDescriptors; i++)
-               resource_barrier(resources.descs[i],
-                                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                                D3D12_RESOURCE_STATE_COMMON);
-         }
-      }
-
-      execute_cmdlist();
-
-      std::vector<T> out(inputs[0].size());
-      get_buffer_data(resources.descs[0], out.data(),
-                      out.size() * sizeof(T));
-
-      return out;
-   }
-
-   template <typename T>
-   std::vector<T>
-   run_shader_with_inputs(const char *kernel_source,
-                          const std::vector<std::vector<T>> &inputs)
-   {
-      std::vector<const char *> srcs = { kernel_source };
-      return run_shader_with_inputs(srcs, inputs);
-   }
-
-   template <typename T>
-   std::vector<T>
-   run_shader_with_input(const std::vector<const char *> &sources,
-                         const std::vector<T> &input)
-   {
-      std::vector<std::vector<T>> inputs = { input };
-      return run_shader_with_inputs(sources, inputs);
-   }
-
-   template <typename T>
-   std::vector<T>
-   run_shader_with_input(const char *kernel_source,
-                         const std::vector<T> &input)
-   {
-      std::vector<std::vector<T>> inputs = { input };
-      return run_shader_with_inputs(kernel_source, inputs);
    }
 
    IDXGIFactory4 *factory;
