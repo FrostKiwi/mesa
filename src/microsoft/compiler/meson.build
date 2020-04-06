@@ -32,7 +32,7 @@ files_libdxil_compiler = files(
 
 libdxil_compiler = static_library(
   'dxil_compiler',
-  files_libdxil_compiler,
+  [files_libdxil_compiler, sha1_h],
   include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_compiler, inc_gallium],
   dependencies: [idep_nir_headers],
   c_args : c_vis_args,
