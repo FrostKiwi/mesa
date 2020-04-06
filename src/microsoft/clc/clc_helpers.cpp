@@ -25,10 +25,13 @@
 
 #include <sstream>
 
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/IR/DiagnosticPrinter.h>
 #include <llvm/IR/DiagnosticInfo.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Type.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm-c/Core.h>
 #include <llvm-c/Target.h>
 #include <LLVMSPIRVLib/LLVMSPIRVLib.h>
 
@@ -43,6 +46,10 @@
 #include <spirv-tools/linker.hpp>
 
 #include "util/macros.h"
+#include "glsl_types.h"
+#include "nir.h"
+#include "nir_types.h"
+
 #include "clc_helpers.h"
 #include "spirv.h"
 
@@ -495,6 +502,72 @@ clc_free_kernels_info(const struct clc_kernel_info *kernels,
    }
 
    free((void *)kernels);
+}
+
+static ::llvm::Type *to_llvm_type(LLVMContextRef ctx,
+                                  const struct glsl_type *type,
+                                  bool is_ptr)
+{
+   LLVMTypeRef base_type;
+   switch (glsl_get_base_type(type)) {
+   case GLSL_TYPE_UINT:
+   case GLSL_TYPE_INT:
+      base_type = LLVMIntTypeInContext(ctx, 32);
+      break;
+   case GLSL_TYPE_UINT64:
+   case GLSL_TYPE_INT64:
+      base_type = LLVMIntTypeInContext(ctx, 64);
+      break;
+   case GLSL_TYPE_UINT16:
+   case GLSL_TYPE_INT16:
+      base_type = LLVMIntTypeInContext(ctx, 16);
+      break;
+   case GLSL_TYPE_UINT8:
+   case GLSL_TYPE_INT8:
+      base_type = LLVMInt8TypeInContext(ctx);
+      break;
+   case GLSL_TYPE_DOUBLE:
+      base_type = LLVMDoubleTypeInContext(ctx);
+      break;
+   case GLSL_TYPE_FLOAT16:
+      base_type = LLVMHalfTypeInContext(ctx);
+      break;
+   case GLSL_TYPE_FLOAT:
+   default:
+      base_type = LLVMFloatTypeInContext(ctx);
+      break;
+   }
+
+   int elem = glsl_get_vector_elements(type);
+   if (elem > 1)
+      base_type = LLVMVectorType(base_type, elem);
+
+   if (is_ptr)
+      base_type = LLVMPointerType(base_type, 0);
+
+   return ::llvm::unwrap(base_type);
+}
+
+extern "C" {
+void clc_fn_mangle_libclc(const char *in_name,
+                          uint32_t ptr_mask,
+                          int ntypes,
+                          const struct glsl_type **src_types,
+                          char **out_string)
+{
+   std::vector<::llvm::Type *> Types;
+   std::string mangled_name;
+   std::string fixed_name = in_name;
+
+   LLVMContextRef ctx = LLVMContextCreate();
+
+   for (int i = 0; i < ntypes; i++)
+      Types.push_back(to_llvm_type(ctx, src_types[i], !!(ptr_mask & (1u << i))));
+
+   ::llvm::ArrayRef<::llvm::Type *> ArgTypes = Types;
+   ::llvm::mangleOpenClBuiltin(fixed_name, ArgTypes, mangled_name);
+   *out_string = strdup(mangled_name.c_str());
+}
 }
 
 int

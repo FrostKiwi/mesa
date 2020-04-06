@@ -46,15 +46,19 @@ clc_mesa_spv_h = custom_target(
   command : [prog_python, '@INPUT@', '@OUTPUT@', '-n', 'libclc_spirv_bytecode'],
 )
 
+dir_clover_nir = '../../gallium/state_trackers/clover/nir'
+inc_clover_nir = include_directories(dir_clover_nir)
+
 libclc_compiler = shared_library(
   'clglon12compiler',
   'clc_compiler.c',
   'clc_helpers.cpp',
+  join_paths(dir_clover_nir, 'nir_lower_libclc.c'),
   opencl_c_h,
   opencl_c_base_h,
   clc_mesa_spv_h,
   vs_module_defs : 'clglon12compiler.def',
-  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_compiler, inc_gallium, inc_spirv],
+  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_compiler, inc_gallium, inc_spirv, inc_clover_nir],
   dependencies: [idep_nir_headers, dep_clang, dep_llvm, cc.find_library('version'),
                  dep_spirv_tools, dep_llvmspirvlib,
                  idep_mesautil, idep_libdxil_compiler, idep_nir],
