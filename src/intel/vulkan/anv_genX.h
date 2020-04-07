@@ -80,6 +80,10 @@ void genX(cmd_buffer_mark_image_written)(struct anv_cmd_buffer *cmd_buffer,
 
 void genX(cmd_emit_conditional_render_predicate)(struct anv_cmd_buffer *cmd_buffer);
 
+void genX(cmd_buffer_flush_gather_constants)(struct anv_cmd_buffer *cmd_buffer,
+                                             struct anv_cmd_gather_state *state,
+                                             struct anv_graphics_pipeline *pipeline);
+
 void
 genX(emit_urb_setup)(struct anv_device *device, struct anv_batch *batch,
                      const struct gen_l3_config *l3_config,

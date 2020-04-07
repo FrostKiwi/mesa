@@ -48,6 +48,7 @@ anv_shader_bin_create(struct anv_device *device,
    uint32_t *prog_data_param;
    nir_xfb_info *xfb_info;
    struct anv_pipeline_binding *surface_to_descriptor, *sampler_to_descriptor;
+   struct anv_push_gather *gathers;
 
    ANV_MULTIALLOC(ma);
    anv_multialloc_add(&ma, &shader, 1);
@@ -62,6 +63,7 @@ anv_shader_bin_create(struct anv_device *device,
                            bind_map->surface_count);
    anv_multialloc_add(&ma, &sampler_to_descriptor,
                            bind_map->sampler_count);
+   anv_multialloc_add(&ma, &gathers, bind_map->gather_count);
 
    if (!anv_multialloc_alloc(&ma, &device->alloc,
                              VK_SYSTEM_ALLOCATION_SCOPE_DEVICE))
@@ -117,6 +119,8 @@ anv_shader_bin_create(struct anv_device *device,
    typed_memcpy(sampler_to_descriptor, bind_map->sampler_to_descriptor,
                 bind_map->sampler_count);
    shader->bind_map.sampler_to_descriptor = sampler_to_descriptor;
+   typed_memcpy(gathers, bind_map->gathers, bind_map->gather_count);
+   shader->bind_map.gathers = gathers;
 
    return shader;
 }
@@ -177,6 +181,11 @@ anv_shader_bin_write_to_blob(const struct anv_shader_bin *shader,
    blob_write_bytes(blob, shader->bind_map.sampler_to_descriptor,
                     shader->bind_map.sampler_count *
                     sizeof(*shader->bind_map.sampler_to_descriptor));
+   blob_write_uint32(blob, shader->bind_map.gather_size);
+   blob_write_uint32(blob, shader->bind_map.gather_count);
+   blob_write_bytes(blob, shader->bind_map.gathers,
+                    shader->bind_map.gather_count *
+                    sizeof(*shader->bind_map.gathers));
    blob_write_bytes(blob, shader->bind_map.push_ranges,
                     sizeof(shader->bind_map.push_ranges));
 
@@ -225,6 +234,10 @@ anv_shader_bin_create_from_blob(struct anv_device *device,
    bind_map.sampler_to_descriptor = (void *)
       blob_read_bytes(blob, bind_map.sampler_count *
                             sizeof(*bind_map.sampler_to_descriptor));
+   bind_map.gather_size = blob_read_uint32(blob);
+   bind_map.gather_count = blob_read_uint32(blob);
+   bind_map.gathers = (void *)
+      blob_read_bytes(blob, bind_map.gather_count * sizeof(*bind_map.gathers));
    blob_copy_bytes(blob, bind_map.push_ranges, sizeof(bind_map.push_ranges));
 
    if (blob->overrun)

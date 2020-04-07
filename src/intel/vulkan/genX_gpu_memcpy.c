@@ -87,7 +87,7 @@ genX(cmd_buffer_so_memcpy)(struct anv_cmd_buffer *cmd_buffer,
    dw = anv_batch_emitn(&cmd_buffer->batch, 5, GENX(3DSTATE_VERTEX_BUFFERS));
    GENX(VERTEX_BUFFER_STATE_pack)(&cmd_buffer->batch, dw + 1,
       &(struct GENX(VERTEX_BUFFER_STATE)) {
-         .VertexBufferIndex = 32, /* Reserved for this */
+         .VertexBufferIndex = 32, /* Reserved for this and gather */
          .AddressModifyEnable = true,
          .BufferStartingAddress = src,
          .BufferPitch = bs,

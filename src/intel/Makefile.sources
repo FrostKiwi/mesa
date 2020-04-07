@@ -271,6 +271,7 @@ VULKAN_FILES := \
 	vulkan/anv_pipeline_cache.c \
 	vulkan/anv_private.h \
 	vulkan/anv_queue.c \
+	vulkan/anv_ubo_gather.c \
 	vulkan/anv_util.c \
 	vulkan/anv_wsi.c \
 	vulkan/vk_format_info.h
@@ -308,7 +309,8 @@ VULKAN_GENX_FILES := \
 	vulkan/genX_gpu_memcpy.c \
 	vulkan/genX_pipeline.c \
 	vulkan/genX_query.c \
-	vulkan/genX_state.c
+	vulkan/genX_state.c \
+	vulkan/genX_ubo_gather.c
 
 VULKAN_GEN7_FILES := \
 	vulkan/gen7_cmd_buffer.c \

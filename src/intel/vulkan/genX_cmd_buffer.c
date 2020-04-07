@@ -1811,6 +1811,9 @@ genX(CmdExecuteCommands)(
          ANV_PIPE_CS_STALL_BIT | ANV_PIPE_VF_CACHE_INVALIDATE_BIT;
    }
 
+   /* The secondary may invalidate constants */
+   anv_cmd_gather_state_invalidate(&primary->state.gather);
+
    /* The secondary may have selected a different pipeline (3D or compute) and
     * may have changed the current L3$ configuration.  Reset our tracking
     * variables to invalid values to ensure that we re-emit these in the case
@@ -2388,6 +2391,9 @@ void genX(CmdPipelineBarrier)(
       }
    }
 
+   if (dst_flags & VK_ACCESS_UNIFORM_READ_BIT)
+      anv_cmd_gather_state_invalidate(&cmd_buffer->state.gather);
+
    cmd_buffer->state.pending_pipe_bits |=
       anv_pipe_flush_bits_for_access_flags(src_flags) |
       anv_pipe_invalidate_bits_for_access_flags(dst_flags);
@@ -2919,6 +2925,10 @@ get_push_range_address(struct anv_cmd_buffer *cmd_buffer,
       };
    }
 
+   case ANV_DESCRIPTOR_SET_GATHER_CONSTANTS:
+      assert(!anv_address_is_null(cmd_buffer->state.gather.data[stage].address));
+      return cmd_buffer->state.gather.data[stage].address;
+
    default: {
       assert(range->set < MAX_SETS);
       struct anv_descriptor_set *set =
@@ -2967,6 +2977,11 @@ get_push_range_bound_size(struct anv_cmd_buffer *cmd_buffer,
 
    case ANV_DESCRIPTOR_SET_PUSH_CONSTANTS:
       return (range->start + range->length) * 32;
+
+   case ANV_DESCRIPTOR_SET_GATHER_CONSTANTS:
+      assert(range->start == 0);
+      assert(range->length * 32 == cmd_buffer->state.gather.data[stage].size);
+      return range->length * 32;
 
    default: {
       assert(range->set < MAX_SETS);
@@ -3258,6 +3273,14 @@ genX(cmd_buffer_flush_state)(struct anv_cmd_buffer *cmd_buffer)
    genX(cmd_buffer_emit_hashing_mode)(cmd_buffer, UINT_MAX, UINT_MAX, 1);
 
    genX(flush_pipeline_select_3d)(cmd_buffer);
+
+#if GEN_GEN >= 8
+   if (cmd_buffer->state.gather.dirty & pipeline->active_stages) {
+      genX(cmd_buffer_flush_gather_constants)(cmd_buffer,
+                                              &cmd_buffer->state.gather,
+                                              pipeline);
+   }
+#endif
 
    /* Apply any pending pipeline flushes we may have.  We want to apply them
     * now because, if any of those flushes are for things like push constants,

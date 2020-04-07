@@ -76,6 +76,7 @@ anv_gen_files = files(
   'genX_pipeline.c',
   'genX_query.c',
   'genX_state.c',
+  'genX_ubo_gather.c',
 )
 foreach g : [['70', ['gen7_cmd_buffer.c']], ['75', ['gen7_cmd_buffer.c']],
              ['80', ['gen8_cmd_buffer.c']], ['90', ['gen8_cmd_buffer.c']],
@@ -123,6 +124,7 @@ libanv_files = files(
   'anv_pipeline_cache.c',
   'anv_private.h',
   'anv_queue.c',
+  'anv_ubo_gather.c',
   'anv_util.c',
   'anv_wsi.c',
   'vk_format_info.h',

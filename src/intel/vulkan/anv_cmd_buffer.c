@@ -178,6 +178,7 @@ anv_cmd_state_finish(struct anv_cmd_buffer *cmd_buffer)
 
    anv_cmd_pipeline_state_finish(cmd_buffer, &state->gfx.base);
    anv_cmd_pipeline_state_finish(cmd_buffer, &state->compute.base);
+   anv_cmd_gather_state_finish(cmd_buffer, &state->gather);
 
    vk_free(&cmd_buffer->pool->alloc, state->attachments);
 }
@@ -405,6 +406,12 @@ set_dirty_for_bind_map(struct anv_cmd_buffer *cmd_buffer,
    if (mem_update(cmd_buffer->state.sampler_sha1s[stage],
                   map->sampler_sha1, sizeof(map->sampler_sha1)))
       cmd_buffer->state.descriptors_dirty |= mesa_to_vk_shader_stage(stage);
+
+   if (mem_update(cmd_buffer->state.gather_sha1s[stage],
+                  map->gather_sha1, sizeof(map->gather_sha1))) {
+      cmd_buffer->state.gather.dirty |= mesa_to_vk_shader_stage(stage);
+      cmd_buffer->state.push_constants_dirty |= mesa_to_vk_shader_stage(stage);
+   }
 
    if (mem_update(cmd_buffer->state.push_sha1s[stage],
                   map->push_sha1, sizeof(map->push_sha1)))
@@ -683,6 +690,7 @@ anv_cmd_buffer_bind_descriptor_set(struct anv_cmd_buffer *cmd_buffer,
 
    cmd_buffer->state.descriptors_dirty |= dirty_stages;
    cmd_buffer->state.push_constants_dirty |= dirty_stages;
+   cmd_buffer->state.gather.dirty |= dirty_stages;
 }
 
 void anv_CmdBindDescriptorSets(

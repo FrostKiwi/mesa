@@ -2083,7 +2083,8 @@ anv_descriptor_set_destroy(struct anv_device *device,
                            struct anv_descriptor_pool *pool,
                            struct anv_descriptor_set *set);
 
-#define ANV_DESCRIPTOR_SET_NULL             (UINT8_MAX - 5)
+#define ANV_DESCRIPTOR_SET_NULL             (UINT8_MAX - 6)
+#define ANV_DESCRIPTOR_SET_GATHER_CONSTANTS (UINT8_MAX - 5)
 #define ANV_DESCRIPTOR_SET_PUSH_CONSTANTS   (UINT8_MAX - 4)
 #define ANV_DESCRIPTOR_SET_DESCRIPTORS      (UINT8_MAX - 3)
 #define ANV_DESCRIPTOR_SET_NUM_WORK_GROUPS  (UINT8_MAX - 2)
@@ -2140,6 +2141,25 @@ struct anv_push_range {
 
    /** Range in units of 32B */
    uint8_t length;
+};
+
+struct anv_push_gather {
+   /** Index in the descriptor set */
+   uint32_t index;
+
+   /** Descriptor set index */
+   uint8_t set;
+
+   /** Dynamic offset index (for dynamic UBOs) */
+   uint8_t dynamic_offset_index;
+
+   uint16_t pad;
+
+   /** Offset at which to start gathering data */
+   uint32_t start;
+
+   /** Bitset of which dwords (starting at start) should be included */
+   uint32_t dwords;
 };
 
 struct anv_pipeline_layout {
@@ -2672,6 +2692,28 @@ struct anv_cmd_compute_state {
    struct anv_address num_workgroups;
 };
 
+struct anv_cmd_gather_state {
+   struct util_dynarray                         used_bos;
+
+   struct anv_bo *                              bo;
+
+   /* CPU-side count of the number of gathers currently in the buffer */
+   uint32_t                                     count;
+
+   /* Gathered data to push.  Relative to dynamic state base address */
+   struct anv_cmd_gather_data {
+      struct anv_address                        address;
+      uint32_t                                  size;
+   } data[MESA_SHADER_STAGES];
+
+   VkShaderStageFlags                           dirty;
+};
+
+void anv_cmd_gather_state_finish(struct anv_cmd_buffer *cmd_buffer,
+                                 struct anv_cmd_gather_state *state);
+void anv_cmd_gather_state_invalidate(struct anv_cmd_gather_state *state);
+struct anv_shader_bin *anv_get_gather_shader_bin(struct anv_device *device);
+
 /** State required while building cmd buffer */
 struct anv_cmd_state {
    /* PIPELINE_SELECT.PipelineSelection */
@@ -2681,6 +2723,7 @@ struct anv_cmd_state {
 
    struct anv_cmd_graphics_state                gfx;
    struct anv_cmd_compute_state                 compute;
+   struct anv_cmd_gather_state                  gather;
 
    enum anv_pipe_bits                           pending_pipe_bits;
    VkShaderStageFlags                           descriptors_dirty;
@@ -2701,6 +2744,7 @@ struct anv_cmd_state {
 
    unsigned char                                sampler_sha1s[MESA_SHADER_STAGES][20];
    unsigned char                                surface_sha1s[MESA_SHADER_STAGES][20];
+   unsigned char                                gather_sha1s[MESA_SHADER_STAGES][20];
    unsigned char                                push_sha1s[MESA_SHADER_STAGES][20];
 
    /**
@@ -3072,6 +3116,7 @@ mesa_to_vk_shader_stage(gl_shader_stage mesa_stage)
 struct anv_pipeline_bind_map {
    unsigned char                                surface_sha1[20];
    unsigned char                                sampler_sha1[20];
+   unsigned char                                gather_sha1[20];
    unsigned char                                push_sha1[20];
 
    uint32_t surface_count;
@@ -3079,6 +3124,10 @@ struct anv_pipeline_bind_map {
 
    struct anv_pipeline_binding *                surface_to_descriptor;
    struct anv_pipeline_binding *                sampler_to_descriptor;
+
+   uint16_t gather_size;
+   uint16_t gather_count;
+   struct anv_push_gather *                     gathers;
 
    struct anv_push_range                        push_ranges[4];
 };
