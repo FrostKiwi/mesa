@@ -284,10 +284,18 @@ bool
 d3d12_lower_state_vars(nir_shader *nir, struct d3d12_shader *shader)
 {
    bool progress = false;
-   unsigned binding;
 
-   /* Append state vars UBO at the end of the existing ones */
-   binding = nir->info.num_ubos;
+   /* The state var UBO is added after all the other UBOs if it already
+    * exists it will be replaced by using the same binding */
+   unsigned binding = nir->info.num_ubos;
+   nir_foreach_variable_safe(var, &nir->uniforms) {
+      if (var->num_state_slots == 1 &&
+          var->state_slots[0].tokens[1] == STATE_INTERNAL_DRIVER) {
+         if (var->data.mode == nir_var_mem_ubo) {
+            binding = var->data.binding;
+         }
+      }
+   }
 
    nir_foreach_function(function, nir) {
       if (function->impl) {
@@ -325,7 +333,8 @@ d3d12_lower_state_vars(nir_shader *nir, struct d3d12_shader *shader)
                                                      shader->state_vars_size / 4, 0);
       nir_variable *ubo = nir_variable_create(nir, nir_var_mem_ubo, type,
                                                   "d3d12_state_vars");
-      nir->info.num_ubos++;
+      if (binding == nir->info.num_ubos)
+         nir->info.num_ubos++;
       ubo->data.binding = binding;
       ubo->num_state_slots = 1;
       ubo->state_slots = ralloc_array(ubo, nir_state_slot, 1);
