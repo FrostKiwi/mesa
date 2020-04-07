@@ -228,7 +228,7 @@ static bool
 lower_instr(nir_intrinsic_instr *instr, nir_builder *b,
             struct d3d12_shader *shader, unsigned binding)
 {
-   nir_variable *variable;
+   nir_variable *variable = NULL;
    nir_deref_instr *deref = NULL;
 
    b->cursor = nir_before_instr(&instr->instr);
