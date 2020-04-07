@@ -535,6 +535,8 @@ d3d12_finalize_nir(UNUSED pipe_screen *screen, void *nir, UNUSED bool optimize)
 {
    nir_shader *sh = static_cast<nir_shader *>(nir);
 
+   NIR_PASS_V(sh, nir_remove_dead_variables, nir_var_uniform);
+
    /* Currently we only do something with thevertex shader */
    if (sh->info.stage != MESA_SHADER_VERTEX)
       sh->info.inputs_read = d3d12_reassign_driver_locations(&sh->inputs);
