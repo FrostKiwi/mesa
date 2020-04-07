@@ -122,6 +122,7 @@ nir_lower_uniforms_to_ubo(nir_shader *shader, int multiplier)
          ubo->interface_type =
                glsl_interface_type(&field, 1, GLSL_INTERFACE_PACKING_STD430,
                                    false, "__ubo0_interface");
+         shader->info.num_ubos++;
       }
    }
 
