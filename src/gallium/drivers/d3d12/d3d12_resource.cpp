@@ -72,6 +72,28 @@ resource_is_busy(struct d3d12_context *ctx,
    return busy;
 }
 
+static void
+init_resource_state(struct d3d12_resource *res)
+{
+   D3D12_RESOURCE_DESC desc = res->res->GetDesc();
+
+   // Calculate the total number of subresources
+   unsigned arraySize = desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ?
+                        1 : desc.DepthOrArraySize;
+   unsigned total_subresources = desc.MipLevels *
+                                 arraySize *
+                                 d3d12_non_opaque_plane_count(desc.Format);
+   total_subresources *= util_format_has_stencil(util_format_description(res->base.format)) ?
+                         2 : 1;
+
+   res->trans_state = new TransitionableResourceState(res->res,
+                                                      total_subresources, 
+                                                      !!(desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS));
+
+   if (can_map_directly(&res->base))
+      util_range_init(&res->valid_buffer_range);
+}
+
 static struct pipe_resource *
 d3d12_resource_create(struct pipe_screen *pscreen,
                       const struct pipe_resource *templ)
@@ -190,29 +212,56 @@ d3d12_resource_create(struct pipe_screen *pscreen,
                                              &res->dt_stride);
    }
 
-   // Calculate the total number of subresources
-   unsigned arraySize = desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ?
-                        1 : desc.DepthOrArraySize;
-   unsigned total_subresources = desc.MipLevels *
-                                 arraySize *
-                                 d3d12_non_opaque_plane_count(desc.Format);
-   total_subresources *= util_format_has_stencil(util_format_description(templ->format)) ?
-                         2 : 1;
-
-   res->trans_state = new TransitionableResourceState(res->res,
-                                                      total_subresources,
-                                                      !!(desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS));
-
-   if (can_map_directly(&res->base))
-      util_range_init(&res->valid_buffer_range);
+   init_resource_state(res);
 
    return &res->base;
+}
+
+static struct pipe_resource *
+d3d12_resource_from_handle(struct pipe_screen *pscreen,
+                          const struct pipe_resource *templ,
+                          struct winsys_handle *handle, unsigned usage)
+{
+   if (handle->type != WINSYS_HANDLE_TYPE_D3D12_RES)
+      return NULL;
+
+   struct d3d12_resource *res = CALLOC_STRUCT(d3d12_resource);
+   if (!res)
+      return NULL;
+
+   res->base = *templ;
+   pipe_reference_init(&res->base.reference, 1);
+   res->base.screen = pscreen;
+   res->format = templ->target == PIPE_BUFFER ? DXGI_FORMAT_UNKNOWN :
+                 d3d12_get_format(templ->format);
+   res->res = (ID3D12Resource *)handle->com_obj;
+   init_resource_state(res);
+   return &res->base;
+}
+
+static bool
+d3d12_resource_get_handle(struct pipe_screen *pscreen,
+                          struct pipe_context *pcontext,
+                          struct pipe_resource *pres,
+                          struct winsys_handle *handle,
+                          unsigned usage)
+{
+   struct d3d12_screen *screen = d3d12_screen(pscreen);
+   struct d3d12_resource *res = d3d12_resource(pres);
+
+   if (handle->type != WINSYS_HANDLE_TYPE_D3D12_RES)
+      return false;
+
+   handle->com_obj = res->res;
+   return true;
 }
 
 void
 d3d12_screen_resource_init(struct pipe_screen *pscreen)
 {
    pscreen->resource_create = d3d12_resource_create;
+   pscreen->resource_from_handle = d3d12_resource_from_handle;
+   pscreen->resource_get_handle = d3d12_resource_get_handle;
    pscreen->resource_destroy = d3d12_resource_destroy;
 }
 
