@@ -1352,6 +1352,14 @@ store_ssa_def(struct ntd_context *ctx, nir_ssa_def *ssa, unsigned chan,
 {
    assert(ssa->index < ctx->num_defs);
    assert(chan < ssa->num_components);
+   /* We pre-defined the dest value because of a phi node, so bitcast while storing if the
+    * base type differs */
+   if (ctx->defs[ssa->index].chans[chan]) {
+      const struct dxil_type *expect_type = dxil_value_get_type(ctx->defs[ssa->index].chans[chan]);
+      const struct dxil_type *value_type = dxil_value_get_type(value);
+      if (dxil_type_to_nir_type(expect_type) != dxil_type_to_nir_type(value_type))
+         value = dxil_emit_cast(&ctx->mod, DXIL_CAST_BITCAST, expect_type, value);
+   }
    ctx->defs[ssa->index].chans[chan] = value;
 }
 
@@ -3805,6 +3813,35 @@ static void sort_uniforms_by_binding_and_remove_structs(struct exec_list *unifor
    exec_list_move_nodes_to(&new_list, uniforms);
 }
 
+static void
+prepare_phi_values(struct ntd_context *ctx, nir_shader *shader)
+{
+   /* PHI nodes are difficult to get right when tracking the types:
+    * Since the incoming sources are linked to blocks, we can't bitcast
+    * on the fly while loading. So scan the shader and insert a typed dummy
+    * value for each phi source, and when storing we convert if the incoming
+    * value has a different type then the one expected by the phi node.
+    * We choose int as default, because it supports more bit sizes.
+    */
+   nir_foreach_function(function, shader) {
+      if (function->impl) {
+         nir_foreach_block(block, function->impl) {
+            nir_foreach_instr(instr, block) {
+               if (instr->type == nir_instr_type_phi) {
+                  nir_phi_instr *ir = nir_instr_as_phi(instr);
+                  unsigned bitsize = nir_dest_bit_size(ir->dest);
+                  const struct dxil_value *dummy = dxil_module_get_int_const(&ctx->mod, 0, bitsize);
+                  nir_foreach_phi_src(src, ir) {
+                     for(unsigned int i = 0; i < ir->dest.ssa.num_components; ++i)
+                        store_ssa_def(ctx, src->src.ssa, i, dummy);
+                  }
+               }
+            }
+         }
+      }
+   }
+}
+
 static bool
 emit_cbvs(struct ntd_context *ctx, nir_shader *s)
 {
@@ -3991,6 +4028,8 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    ctx->phis = _mesa_pointer_hash_table_create(ctx->ralloc_ctx);
    if (!ctx->phis)
       return false;
+
+   prepare_phi_values(ctx, s);
 
    if (!emit_cf_list(ctx, &entry->body))
       return false;
