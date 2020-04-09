@@ -219,7 +219,8 @@ void
 dxil_module_release(struct dxil_module *m);
 
 const struct dxil_value *
-dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
+dxil_add_global_var(struct dxil_module *m, const char *name,
+                    const struct dxil_type *type,
                     bool constant, int align);
 
 const struct dxil_func *
