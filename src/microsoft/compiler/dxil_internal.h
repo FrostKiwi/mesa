@@ -79,6 +79,7 @@ struct dxil_value {
 };
 
 struct dxil_gvar {
+   const char *name;
    const struct dxil_type *type;
    bool constant;
    int align;
