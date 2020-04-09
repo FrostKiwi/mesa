@@ -1581,7 +1581,7 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
                       temp, strlen(datalayout));
 }
 
-const struct dxil_gvar *
+const struct dxil_value *
 dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
                     bool constant, int align)
 {
@@ -1598,7 +1598,7 @@ dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
    gvar->value.type = type;
 
    list_addtail(&gvar->head, &m->gvar_list);
-   return gvar;
+   return &gvar->value;
 }
 
 static struct dxil_func *
