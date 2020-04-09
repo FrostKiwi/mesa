@@ -759,7 +759,6 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
    unsigned binding = var->data.binding;
    unsigned size = get_dword_size(var->type);
 
-   assert(idx == binding);
    assert(idx < ARRAY_SIZE(ctx->cbv_metadata_nodes));
    assert(binding < ARRAY_SIZE(ctx->cbv_handles));
 
