@@ -1718,7 +1718,7 @@ emit_module_info_global(struct dxil_module *m, int type_id, bool constant,
       type_id,
       GVAR_FLAG_EXPLICIT_TYPE | (constant) ? GVAR_FLAG_CONSTANT : 0,
       0, // initializer
-      GVAR_LINKAGE_EXTERNAL, // linkage
+      GVAR_LINKAGE_INTERNAL, // linkage
       util_logbase2(alignment) + 1,
       0
    };
