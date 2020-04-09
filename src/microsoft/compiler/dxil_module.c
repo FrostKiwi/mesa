@@ -1719,7 +1719,7 @@ emit_module_info_global(struct dxil_module *m, int type_id, bool constant,
       GVAR_FLAG_EXPLICIT_TYPE | (constant) ? GVAR_FLAG_CONSTANT : 0,
       0, // initializer
       GVAR_LINKAGE_EXTERNAL, // linkage
-      alignment,
+      util_logbase2(alignment) + 1,
       0
    };
    return emit_record_abbrev(&m->buf, 4, simple_gvar_abbr,
@@ -1731,15 +1731,19 @@ emit_module_info(struct dxil_module *m)
 {
    struct dxil_gvar *gvar;
    int max_global_type = 0;
+   int max_alignment = 0;
    LIST_FOR_EACH_ENTRY(gvar, &m->gvar_list, head) {
       assert(gvar->type->id >= 0);
       max_global_type = MAX2(max_global_type, gvar->type->id);
+      max_alignment = MAX2(max_alignment, gvar->align);
    }
 
    struct dxil_abbrev simple_gvar_abbr = {
       { LITERAL(DXIL_MODULE_CODE_GLOBALVAR),
         FIXED(util_logbase2(max_global_type) + 1),
-        VBR(6), VBR(6), FIXED(5), FIXED(2), LITERAL(0) }, 7
+        VBR(6), VBR(6), FIXED(5),
+        FIXED(util_logbase2(max_alignment) + 1),
+        LITERAL(0) }, 7
    };
 
    if (!emit_target_triple(m, "dxil-ms-dx") ||
