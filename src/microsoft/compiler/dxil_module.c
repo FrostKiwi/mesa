@@ -1582,7 +1582,8 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
 }
 
 const struct dxil_value *
-dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
+dxil_add_global_var(struct dxil_module *m, const char *name,
+                    const struct dxil_type *type,
                     bool constant, int align)
 {
    struct dxil_gvar *gvar = ralloc_size(m->ralloc_ctx,
@@ -1592,6 +1593,7 @@ dxil_add_global_var(struct dxil_module *m, const struct dxil_type *type,
 
    gvar->type = type;
    gvar->constant = constant;
+   gvar->name = ralloc_strdup(m->ralloc_ctx, name);
    gvar->align = align;
 
    gvar->value.id = -1;
@@ -1944,6 +1946,11 @@ emit_value_symbol_table(struct dxil_module *m)
    struct dxil_func *func;
    LIST_FOR_EACH_ENTRY(func, &m->func_list, head) {
       if (!emit_symtab_entry(m, func->value.id, func->name))
+         return false;
+   }
+   struct dxil_gvar *gvar;
+   LIST_FOR_EACH_ENTRY(gvar, &m->gvar_list, head) {
+      if (!emit_symtab_entry(m, gvar->value.id, gvar->name))
          return false;
    }
    return exit_block(m);
