@@ -2844,8 +2844,9 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       }
    }
 
-   if (!emit_kernel_inputs_cbv(ctx, s))
-      return false;
+   if (s->info.stage == MESA_SHADER_KERNEL)
+      if (!emit_kernel_inputs_cbv(ctx, s))
+         return false;
 
    /* Samplers */
    nir_foreach_variable(var, &s->uniforms) {
