@@ -327,6 +327,114 @@ TEST_F(ComputeTest, complex_types_global_struct_array)
    }
 }
 
+TEST_F(ComputeTest, complex_types_global_uint2)
+{
+   struct uint2 { uint32_t x; uint32_t y; };
+   const char *kernel_source =
+   "__kernel void main_test(__global uint2 *inout)\n\
+   {\n\
+      uint id = get_global_id(0);\n\
+      inout[id].x = inout[id].x + id;\n\
+      inout[id].y = inout[id].y * id;\n\
+   }\n";
+   auto inout = ShaderArg<struct uint2>({ { 8, 8 }, { 16, 16 }, { 64, 64 }, { 65536, 65536 } },
+                                        SHADER_ARG_INOUT);
+   const struct uint2 expected[] = {
+      { 8 + 0, 8 * 0 },
+      { 16 + 1, 16 * 1 },
+      { 64 + 2, 64 * 2 },
+      { 65536 + 3, 65536 * 3 }
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i) {
+      EXPECT_EQ(inout[i].x, expected[i].x);
+      EXPECT_EQ(inout[i].y, expected[i].y);
+   }
+}
+
+TEST_F(ComputeTest, complex_types_global_ushort2)
+{
+   struct ushort2 { uint16_t x; uint16_t y; };
+   const char *kernel_source =
+   "__kernel void main_test(__global ushort2 *inout)\n\
+   {\n\
+      uint id = get_global_id(0);\n\
+      inout[id].x = inout[id].x + id;\n\
+      inout[id].y = inout[id].y * id;\n\
+   }\n";
+   auto inout = ShaderArg<struct ushort2>({ { 8, 8 }, { 16, 16 }, { 64, 64 },
+                                            { (uint16_t)65536, (uint16_t)65536 } },
+                                          SHADER_ARG_INOUT);
+   const struct ushort2 expected[] = {
+      { 8 + 0, 8 * 0 },
+      { 16 + 1, 16 * 1 },
+      { 64 + 2, 64 * 2 },
+      { (uint16_t)(65536 + 3), (uint16_t)(65536 * 3) }
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i) {
+      EXPECT_EQ(inout[i].x, expected[i].x);
+      EXPECT_EQ(inout[i].y, expected[i].y);
+   }
+}
+
+TEST_F(ComputeTest, complex_types_global_uchar3)
+{
+   struct uchar3 { uint8_t x; uint8_t y; uint8_t z; uint8_t pad; };
+   const char *kernel_source =
+   "__kernel void main_test(__global uchar3 *inout)\n\
+   {\n\
+      uint id = get_global_id(0);\n\
+      inout[id].x = inout[id].x + id;\n\
+      inout[id].y = inout[id].y * id;\n\
+      inout[id].z = inout[id].y + inout[id].x;\n\
+   }\n";
+   auto inout = ShaderArg<struct uchar3>({ { 8, 8, 8 }, { 16, 16, 16 }, { 64, 64, 64 }, { 255, 255, 255 } },
+                                         SHADER_ARG_INOUT);
+   const struct uchar3 expected[] = {
+      { 8 + 0, 8 * 0, (8 + 0) + (8 * 0) },
+      { 16 + 1, 16 * 1, (16 + 1) + (16 * 1) },
+      { 64 + 2, 64 * 2, (64 + 2) + (64 * 2) },
+      { (uint8_t)(255 + 3), (uint8_t)(255 * 3), (uint8_t)((255 + 3) + (255 * 3)) }
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i) {
+      EXPECT_EQ(inout[i].x, expected[i].x);
+      EXPECT_EQ(inout[i].y, expected[i].y);
+      EXPECT_EQ(inout[i].z, expected[i].z);
+   }
+}
+
+TEST_F(ComputeTest, complex_types_global_uint8)
+{
+   struct uint8 {
+      uint32_t s0; uint32_t s1; uint32_t s2; uint32_t s3;
+      uint32_t s4; uint32_t s5; uint32_t s6; uint32_t s7;
+   };
+   const char *kernel_source =
+   "__kernel void main_test(__global uint8 *inout)\n\
+   {\n\
+      uint id = get_global_id(0);\n\
+      inout[id].s01234567 = inout[id].s01234567 * 2;\n\
+   }\n";
+   auto inout = ShaderArg<struct uint8>({ { 1, 2, 3, 4, 5, 6, 7, 8 } },
+                                        SHADER_ARG_INOUT);
+   const struct uint8 expected[] = {
+      { 2, 4, 6, 8, 10, 12, 14, 16 }
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i) {
+      EXPECT_EQ(inout[i].s0, expected[i].s0);
+      EXPECT_EQ(inout[i].s1, expected[i].s1);
+      EXPECT_EQ(inout[i].s2, expected[i].s2);
+      EXPECT_EQ(inout[i].s3, expected[i].s3);
+      EXPECT_EQ(inout[i].s4, expected[i].s4);
+      EXPECT_EQ(inout[i].s5, expected[i].s5);
+      EXPECT_EQ(inout[i].s6, expected[i].s6);
+      EXPECT_EQ(inout[i].s7, expected[i].s7);
+   }
+}
+
 TEST_F(ComputeTest, complex_types_const_array)
 {
    const char *kernel_source =
