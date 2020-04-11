@@ -1276,6 +1276,8 @@ struct brw_compile_stats {
    uint32_t cycles;
    uint32_t spills;
    uint32_t fills;
+   uint8_t sha1[20];
+   bool cache_hit;
 };
 
 /** @} */

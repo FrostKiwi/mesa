@@ -1035,7 +1035,8 @@ static void
 anv_pipeline_add_executable(struct anv_pipeline *pipeline,
                             struct anv_pipeline_stage *stage,
                             struct brw_compile_stats *stats,
-                            uint32_t code_offset)
+                            uint32_t code_offset,
+                            bool cache_hit)
 {
    char *nir = NULL;
    if (stage->nir &&
@@ -1132,12 +1133,16 @@ anv_pipeline_add_executable(struct anv_pipeline *pipeline,
       free(stream_data);
    }
 
-   const struct anv_pipeline_executable exe = {
+   struct anv_pipeline_executable exe = {
       .stage = stage->stage,
       .stats = *stats,
       .nir = nir,
       .disasm = disasm,
    };
+   _mesa_sha1_compute((char *)stage->code + code_offset,
+                      stage->prog_data.base.program_size,
+                      exe.stats.sha1);
+   exe.stats.cache_hit = cache_hit;
    util_dynarray_append(&pipeline->executables,
                         struct anv_pipeline_executable, exe);
 }
@@ -1145,7 +1150,8 @@ anv_pipeline_add_executable(struct anv_pipeline *pipeline,
 static void
 anv_pipeline_add_executables(struct anv_pipeline *pipeline,
                              struct anv_pipeline_stage *stage,
-                             struct anv_shader_bin *bin)
+                             struct anv_shader_bin *bin,
+                             bool cache_hit)
 {
    if (stage->stage == MESA_SHADER_FRAGMENT) {
       /* We pull the prog data and stats out of the anv_shader_bin because
@@ -1157,20 +1163,22 @@ anv_pipeline_add_executables(struct anv_pipeline *pipeline,
       struct brw_compile_stats *stats = bin->stats;
 
       if (wm_prog_data->dispatch_8) {
-         anv_pipeline_add_executable(pipeline, stage, stats++, 0);
+         anv_pipeline_add_executable(pipeline, stage, stats++, 0, cache_hit);
       }
 
       if (wm_prog_data->dispatch_16) {
          anv_pipeline_add_executable(pipeline, stage, stats++,
-                                     wm_prog_data->prog_offset_16);
+                                     wm_prog_data->prog_offset_16,
+                                     cache_hit);
       }
 
       if (wm_prog_data->dispatch_32) {
          anv_pipeline_add_executable(pipeline, stage, stats++,
-                                     wm_prog_data->prog_offset_32);
+                                     wm_prog_data->prog_offset_32,
+                                     cache_hit);
       }
    } else {
-      anv_pipeline_add_executable(pipeline, stage, bin->stats, 0);
+      anv_pipeline_add_executable(pipeline, stage, bin->stats, 0, cache_hit);
    }
 }
 
@@ -1321,7 +1329,8 @@ anv_pipeline_compile_graphics(struct anv_graphics_pipeline *pipeline,
                continue;
 
             anv_pipeline_add_executables(&pipeline->base, &stages[s],
-                                         pipeline->shaders[s]);
+                                         pipeline->shaders[s],
+                                         true);
          }
          anv_pipeline_init_from_cached_graphics(pipeline);
          goto done;
@@ -1497,7 +1506,7 @@ anv_pipeline_compile_graphics(struct anv_graphics_pipeline *pipeline,
          goto fail;
       }
 
-      anv_pipeline_add_executables(&pipeline->base, &stages[s], bin);
+      anv_pipeline_add_executables(&pipeline->base, &stages[s], bin, false);
 
       pipeline->shaders[s] = bin;
       ralloc_free(stage_ctx);
@@ -1682,9 +1691,11 @@ anv_pipeline_compile_cs(struct anv_compute_pipeline *pipeline,
       }
 
       stage.feedback.duration = os_time_get_nano() - stage_start;
-   }
 
-   anv_pipeline_add_executables(&pipeline->base, &stage, bin);
+      anv_pipeline_add_executables(&pipeline->base, &stage, bin, false);
+   } else {
+      anv_pipeline_add_executables(&pipeline->base, &stage, bin, true);
+   }
 
    ralloc_free(mem_ctx);
 
@@ -2160,6 +2171,20 @@ VkResult anv_GetPipelineExecutableStatisticsKHR(
    }
    default:
       unreachable("invalid pipeline type");
+   }
+
+   vk_outarray_append(&out, stat) {
+      WRITE_STR(stat->name, "Executable Hash");
+      WRITE_STR(stat->description, "Executable Hash");
+      stat->format = VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_UINT64_KHR;
+      memcpy(&stat->value.u64, exe->stats.sha1, sizeof(uint64_t));
+   }
+
+   vk_outarray_append(&out, stat) {
+      WRITE_STR(stat->name, "Cache Hit");
+      WRITE_STR(stat->description, "Cache Hit");
+      stat->format = VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_BOOL32_KHR;
+      stat->value.b32 = exe->stats.cache_hit;
    }
 
    vk_outarray_append(&out, stat) {
