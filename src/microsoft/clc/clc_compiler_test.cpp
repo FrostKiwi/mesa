@@ -986,3 +986,28 @@ TEST_F(ComputeTest, reqd_work_group_size)
    for (int i = 0; i < output.size(); ++i)
       EXPECT_EQ(output[i], expected[i]);
 }
+
+TEST_F(ComputeTest, image)
+{
+   const char* kernel_source =
+   "__kernel void main_test(image2d_t image, __global float* output)\n\
+   {\n\
+      output[get_global_id(0)] = read_imagef(image, (int2)(0, 0)).x;\n\
+   }\n";
+   Shader shader = compile(std::vector<const char*>({ kernel_source }));
+   validate(shader);
+}
+
+TEST_F(ComputeTest, image_two_reads)
+{
+   const char* kernel_source =
+   "__kernel void main_test(image2d_t image, int is_float, __global float* output)\n\
+   {\n\
+      if (is_float)\n\
+         output[get_global_id(0)] = read_imagef(image, (int2)(0, 0)).x;\n\
+      else \n\
+         output[get_global_id(0)] = (float)read_imagei(image, (int2)(0, 0)).x;\n\
+   }\n";
+   Shader shader = compile(std::vector<const char*>({ kernel_source }));
+   validate(shader);
+}
