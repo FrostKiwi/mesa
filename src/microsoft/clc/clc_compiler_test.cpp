@@ -950,3 +950,39 @@ TEST_F(ComputeTest, localvar_uchar2)
    for (int i = 0; i < inout.size(); ++i)
       EXPECT_EQ(inout[i], expected[i]);
 }
+
+TEST_F(ComputeTest, work_group_size_hint)
+{
+   const char *kernel_source =
+   "__attribute__((work_group_size_hint(2, 1, 1)))\n\
+   __kernel void main_test(__global uint *output)\n\
+   {\n\
+       output[get_global_id(0)] = get_local_id(0);\n\
+   }\n";
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
+   const uint32_t expected[] = {
+      0, 1, 2, 3
+   };
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
+}
+
+TEST_F(ComputeTest, reqd_work_group_size)
+{
+   const char *kernel_source =
+   "__attribute__((reqd_work_group_size(2, 1, 1)))\n\
+   __kernel void main_test(__global uint *output)\n\
+   {\n\
+       output[get_global_id(0)] = get_local_id(0);\n\
+   }\n";
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
+   const uint32_t expected[] = {
+      0, 1, 0, 1
+   };
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
+}
