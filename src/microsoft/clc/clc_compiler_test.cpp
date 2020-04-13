@@ -1417,9 +1417,10 @@ TEST_F(ComputeTest, reqd_work_group_size)
 TEST_F(ComputeTest, image)
 {
    const char* kernel_source =
-   "__kernel void main_test(image2d_t image, __global float* output)\n\
+   "__kernel void main_test(read_only image2d_t input, write_only image2d_t output)\n\
    {\n\
-      output[get_global_id(0)] = read_imagef(image, (int2)(0, 0)).x;\n\
+      int2 coords = (int2)(get_global_id(0), get_global_id(1));\n\
+      write_imagef(output, coords, read_imagef(input, coords));\n\
    }\n";
    Shader shader = compile(std::vector<const char*>({ kernel_source }));
    validate(shader);
