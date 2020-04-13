@@ -96,6 +96,155 @@ clc_print_kernels_info(const struct clc_object *obj)
    }
 }
 
+static enum glsl_base_type
+glsl_base_type_for_image_pipe_format(enum pipe_format format)
+{
+   switch (format)
+   {
+   case PIPE_FORMAT_R32G32B32A32_FLOAT: return GLSL_TYPE_FLOAT;
+   case PIPE_FORMAT_R16G16B16A16_FLOAT: return GLSL_TYPE_FLOAT16;
+   case PIPE_FORMAT_R32G32B32A32_SINT: return GLSL_TYPE_INT;
+   case PIPE_FORMAT_R32G32B32A32_UINT: return GLSL_TYPE_UINT;
+   }
+   return GLSL_TYPE_VOID;
+}
+
+static void
+clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref)
+{
+   // The input variable here isn't actually an image, it's just the
+   // image format data.
+   //
+   // For every use of an image in a different way, we'll add an
+   // appropriate uniform to match it. That can result in up to
+   // 3 uniforms (float4, int4, uint4) for each image. Only one of these 
+   // formats will actually produce correct data, but a single kernel 
+   // could use runtime conditionals to potentially access any of them.
+   //
+   // If the image is used in a query that doesn't have a corresponding
+   // DXIL intrinsic (CL image channel order or channel format), then
+   // we'll add a kernel input for that data that'll be lowered by the 
+   // explicit IO pass later on.
+   //
+   // After all that, we can remove the image input variable and deref.
+
+   enum image_uniform_type {
+      FLOAT4,
+      INT4,
+      UINT4,
+      IMAGE_UNIFORM_TYPE_COUNT
+   };
+
+   nir_ssa_def *uniform_deref_dests[IMAGE_UNIFORM_TYPE_COUNT] = {0};
+
+   nir_variable *in_var = nir_deref_instr_get_variable(deref);
+   assert(in_var->data.mode == nir_var_shader_in);
+   enum gl_access_qualifier access = in_var->data.access;
+
+   nir_foreach_use_safe(src, &deref->dest.ssa) {
+      // When we add samplers, we can have tex instructions here too, but just
+      // intrinsics for now
+      nir_intrinsic_instr *intrinsic = nir_instr_as_intrinsic(src->parent_instr);
+      enum image_uniform_type type;
+      enum nir_alu_type dest_type;
+
+      switch (intrinsic->intrinsic) {
+      case nir_intrinsic_image_deref_load: {
+         enum pipe_format intr_format = nir_intrinsic_format(intrinsic);
+
+         switch (intr_format) {
+         case PIPE_FORMAT_R32G32B32A32_FLOAT: type = FLOAT4; dest_type = nir_type_float; break;
+         case PIPE_FORMAT_R32G32B32A32_SINT: type = INT4; dest_type = nir_type_int; break;
+         case PIPE_FORMAT_R32G32B32A32_UINT: type = UINT4; dest_type = nir_type_uint; break;
+         default: assert(!"Unsupported image format for load.");
+         }
+
+         nir_ssa_def *image_deref = uniform_deref_dests[type];
+         if (!image_deref) {
+            assert(!(in_var->data.access & ACCESS_NON_READABLE));
+            const struct glsl_type* new_var_type;
+            if (in_var->data.access & ACCESS_NON_WRITEABLE) {
+               // Non-writeable images should be converted to samplers,
+               // since they may have texture operations done on them
+               new_var_type = glsl_sampler_type(glsl_get_sampler_dim(in_var->type),
+                     false, false, glsl_base_type_for_image_pipe_format(intr_format));
+            } else {
+               new_var_type = glsl_image_type(glsl_get_sampler_dim(in_var->type),
+                     false, glsl_base_type_for_image_pipe_format(intr_format));
+            }
+
+            nir_variable *uniform = nir_variable_create(b->shader, nir_var_uniform, new_var_type, NULL);
+            uniform->data.access = in_var->data.access;
+            uniform->data.image.format = intr_format;
+            uniform->data.binding = in_var->data.binding;
+
+            b->cursor = nir_after_instr(&deref->instr);
+            nir_deref_instr *deref_uniform = nir_build_deref_var(b, uniform);
+            image_deref = uniform_deref_dests[type] = &deref_uniform->dest.ssa;
+         }
+
+         if (in_var->data.access & ACCESS_NON_WRITEABLE) {
+            // Read of a read-only resource, convert to sampler fetch
+            b->cursor = nir_before_instr(&intrinsic->instr);
+            nir_tex_instr *tex = nir_tex_instr_create(b->shader, 2); // No LOD/MSAA
+
+            tex->op = nir_texop_txf;
+            tex->sampler_dim = glsl_get_sampler_dim(in_var->type);
+            tex->src[0].src = nir_src_for_ssa(image_deref);
+            tex->src[0].src_type = nir_tex_src_texture_deref;
+            tex->src[1].src = nir_src_for_ssa(intrinsic->src[1].ssa);
+            tex->src[1].src_type = nir_tex_src_coord;
+            tex->dest_type = dest_type;
+            nir_ssa_dest_init(&tex->instr, &tex->dest, 4, 32, NULL);
+
+            nir_builder_instr_insert(b, &tex->instr);
+            nir_ssa_def_rewrite_uses(&intrinsic->dest.ssa, nir_src_for_ssa(&tex->dest.ssa));
+            nir_instr_remove(&intrinsic->instr);
+         } else {
+            // Read of a read-write resource, leave as image intrinsic
+            nir_src uniform_src = nir_src_for_ssa(image_deref);
+            nir_instr_rewrite_src(&intrinsic->instr, src, uniform_src);
+         }
+
+         break;
+      }
+
+      default:
+         assert(!"Unsupported image intrinsic");
+      }
+   }
+
+   nir_instr_remove(&deref->instr);
+   exec_node_remove(&in_var->node);
+}
+
+static void
+clc_lower_images(nir_shader *nir)
+{
+   nir_foreach_function(func, nir) {
+      if (!func->is_entrypoint)
+         continue;
+      assert(func->impl);
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type == nir_instr_type_deref) {
+               nir_deref_instr *deref = nir_instr_as_deref(instr);
+
+               if (deref->mode == nir_var_shader_in &&
+                   glsl_type_is_image(deref->type)) {
+                  assert(deref->deref_type == nir_deref_type_var);
+                  clc_lower_input_image_deref(&b, deref);
+               }
+            }
+         }
+      }
+   }
+}
+
 struct clc_context *
 clc_context_new(void)
 {
@@ -329,6 +478,10 @@ clc_to_dxil(struct clc_context *ctx,
    assert(exec_list_length(&nir->functions) == 1);
 
    NIR_PASS_V(nir, nir_lower_variable_initializers, ~nir_var_function_temp);
+
+   // Needs to come before lower_explicit_io
+   NIR_PASS_V(nir, clc_lower_images);
+   NIR_PASS_V(nir, nir_lower_samplers);
 
    // copy propagate to prepare for lower_explicit_io
    NIR_PASS_V(nir, nir_split_var_copies);
