@@ -219,7 +219,8 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
          enum nir_alu_type dest_type;
 
          switch (intrinsic->intrinsic) {
-         case nir_intrinsic_image_deref_load: {
+         case nir_intrinsic_image_deref_load:
+         case nir_intrinsic_image_deref_store: {
             enum pipe_format intr_format = nir_intrinsic_format(intrinsic);
 
             switch (intr_format) {
@@ -231,7 +232,6 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
 
             nir_ssa_def *image_deref = uniform_deref_dests[type];
             if (!image_deref) {
-               assert(!(in_var->data.access & ACCESS_NON_READABLE));
                const struct glsl_type *new_var_type;
                if (in_var->data.access & ACCESS_NON_WRITEABLE) {
                   image_deref = lower_read_only_image_deref(b, context, intr_format);
@@ -244,6 +244,7 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
 
             if (in_var->data.access & ACCESS_NON_WRITEABLE) {
                // Read of a read-only resource, convert to sampler fetch
+               assert(intrinsic->intrinsic == nir_intrinsic_image_deref_load);
                b->cursor = nir_before_instr(&intrinsic->instr);
                nir_tex_instr *tex = nir_tex_instr_create(b->shader, 2); // No LOD/MSAA
 
@@ -260,11 +261,10 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
                nir_ssa_def_rewrite_uses(&intrinsic->dest.ssa, nir_src_for_ssa(&tex->dest.ssa));
                nir_instr_remove(&intrinsic->instr);
             } else {
-               // Read of a read-write resource, leave as image intrinsic
+               // Op on a writable image, leave as image intrinsic
                nir_src uniform_src = nir_src_for_ssa(image_deref);
                nir_instr_rewrite_src(&intrinsic->instr, src, uniform_src);
             }
-
             break;
          }
 
