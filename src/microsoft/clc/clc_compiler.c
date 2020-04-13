@@ -419,6 +419,7 @@ clc_to_dxil(struct clc_context *ctx,
          .int16 = true,
          .int64 = true,
          .kernel = true,
+         .kernel_image = true,
       },
    };
    const struct nir_shader_compiler_options *nir_options =
