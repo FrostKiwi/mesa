@@ -176,76 +176,120 @@ d3d12_screen_resource_init(struct pipe_screen *pscreen)
    pscreen->resource_destroy = d3d12_resource_destroy;
 }
 
-static bool
-d3d12_transfer_copy_bufimage(struct d3d12_context *ctx,
-                             struct d3d12_resource *res,
-                             struct d3d12_resource *staging_res,
-                             struct d3d12_transfer *trans,
-                             unsigned stride,
-                             bool buf2img)
+static D3D12_TEXTURE_COPY_LOCATION
+fill_texture_location(struct d3d12_resource *res,
+                      struct d3d12_transfer *trans, unsigned resid = 0)
 {
-   struct d3d12_batch *batch = d3d12_current_batch(ctx);
-   ID3D12Device* dev = d3d12_screen(ctx->base.screen)->dev;
-   D3D12_TEXTURE_COPY_LOCATION buf_loc = {};
-   D3D12_TEXTURE_COPY_LOCATION tex_loc = {};
-   D3D12_TEXTURE_COPY_LOCATION *src, *dst;
-   D3D12_BOX src_box = {};
-   UINT dst_x, dst_y, dst_z;
-
-   if (buf2img) {
-      d3d12_resource_barrier(ctx, res,
-                             D3D12_RESOURCE_STATE_COMMON,
-                             D3D12_RESOURCE_STATE_COPY_DEST);
-      src = &buf_loc;
-      dst = &tex_loc;
-      dst_x = trans->base.box.x;
-      dst_y = trans->base.box.y;
-      dst_z = res->base.target == PIPE_TEXTURE_CUBE ? 0 : trans->base.box.z;
-   } else {
-      d3d12_resource_barrier(ctx, res,
-                             D3D12_RESOURCE_STATE_COMMON,
-                             D3D12_RESOURCE_STATE_COPY_SOURCE);
-      src = &tex_loc;
-      dst = &buf_loc;
-      dst_x = dst_y = dst_z = 0;
-      src_box.left = trans->base.box.x;
-      src_box.right = trans->base.box.x + trans->base.box.width;
-      src_box.top = trans->base.box.y;
-      src_box.bottom = trans->base.box.y + trans->base.box.height;
-      src_box.front = trans->base.box.z;
-      src_box.back = trans->base.box.z + trans->base.box.depth;
-   }
-
+   D3D12_TEXTURE_COPY_LOCATION tex_loc = {0};
    int subres = res->base.target == PIPE_TEXTURE_CUBE ?
                    trans->base.box.z * (res->base.last_level + 1) + trans->base.level :
-                   trans->base.level;
-
-   D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
-   auto descr = res->res->GetDesc();
-   dev->GetCopyableFootprints(&descr, 0, 1, 0, &footprint, nullptr, nullptr, nullptr);
+                   trans->base.level + resid;
 
    tex_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
    tex_loc.SubresourceIndex = subres;
    tex_loc.pResource = res->res;
+   return tex_loc;
+}
+
+static D3D12_TEXTURE_COPY_LOCATION
+fill_buffer_location(struct d3d12_context *ctx,
+                     ID3D12Resource *res,
+                     ID3D12Resource *staging_res,
+                     struct d3d12_transfer *trans,
+                     unsigned resid = 0)
+{
+   D3D12_TEXTURE_COPY_LOCATION buf_loc = {0};
+   D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
+   auto descr = res->GetDesc();
+   ID3D12Device* dev = d3d12_screen(ctx->base.screen)->dev;
+   dev->GetCopyableFootprints(&descr, resid, 1, 0, &footprint, nullptr, nullptr, nullptr);
 
    buf_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
    buf_loc.PlacedFootprint = footprint;
    buf_loc.PlacedFootprint.Footprint.Width = trans->base.box.width;
    buf_loc.PlacedFootprint.Footprint.Height = trans->base.box.height;
    buf_loc.PlacedFootprint.Footprint.Depth = trans->base.box.depth;
-   buf_loc.PlacedFootprint.Footprint.RowPitch = stride;
+   buf_loc.PlacedFootprint.Footprint.RowPitch = trans->base.stride;
+   buf_loc.pResource = staging_res;
 
-   buf_loc.pResource = staging_res->res;
+   return buf_loc;
+}
 
-   d3d12_batch_reference_resource(batch, res);
-   d3d12_batch_reference_resource(batch, staging_res);
+struct copy_info {
+   D3D12_TEXTURE_COPY_LOCATION *dst;
+   UINT dst_x, dst_y, dst_z;
+   D3D12_TEXTURE_COPY_LOCATION *src;
+   D3D12_BOX *src_box;
+};
 
-   ctx->cmdlist->CopyTextureRegion(dst, dst_x, dst_y, dst_z, src, buf2img ? NULL : &src_box);
 
-   d3d12_resource_barrier(ctx, res,
-                          buf2img ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_COPY_SOURCE,
-                          D3D12_RESOURCE_STATE_COMMON);
+static void
+copy_texture_region(struct d3d12_context *ctx,
+                    struct d3d12_resource *res,
+                    struct copy_info& info)
+{
+   auto state = info.src_box ? D3D12_RESOURCE_STATE_COPY_SOURCE : D3D12_RESOURCE_STATE_COPY_DEST;
 
+   auto batch = d3d12_current_batch(ctx);
+
+   d3d12_batch_reference_object(batch, info.src->pResource);
+   d3d12_batch_reference_object(batch, info.dst->pResource);
+
+   d3d12_resource_barrier(ctx, res, D3D12_RESOURCE_STATE_COMMON, state);
+   ctx->cmdlist->CopyTextureRegion(info.dst, info.dst_x, info.dst_y, info.dst_z,
+                                   info.src, info.src_box);
+   d3d12_resource_barrier(ctx, res, state, D3D12_RESOURCE_STATE_COMMON);
+}
+
+static bool
+d3d12_transfer_buf_to_image(struct d3d12_context *ctx,
+                            struct d3d12_resource *res,
+                            struct d3d12_resource *staging_res,
+                            struct d3d12_transfer *trans)
+{
+   auto tex_loc = fill_texture_location(res, trans);
+   auto buf_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans);
+
+   struct copy_info copy_info;
+   copy_info.src = &buf_loc;
+   copy_info.dst = &tex_loc;
+   copy_info.dst_x = trans->base.box.x;
+   copy_info.dst_y = trans->base.box.y;
+   copy_info.dst_z = res->base.target == PIPE_TEXTURE_CUBE ? 0 : trans->base.box.z;
+   copy_info.src_box = nullptr;
+
+   copy_texture_region(ctx, res, copy_info);
+
+   return true;
+}
+
+static bool
+d3d12_transfer_image_to_buf(struct d3d12_context *ctx,
+                            struct d3d12_resource *res,
+                            struct d3d12_resource *staging_res,
+                            struct d3d12_transfer *trans,
+                            unsigned resid)
+{
+   D3D12_BOX src_box = {};
+
+   auto tex_loc = fill_texture_location(res, trans, resid);
+   auto buf_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans,
+                                       resid);
+
+   src_box.left = trans->base.box.x;
+   src_box.right = trans->base.box.x + trans->base.box.width;
+   src_box.top = trans->base.box.y;
+   src_box.bottom = trans->base.box.y + trans->base.box.height;
+   src_box.front = trans->base.box.z;
+   src_box.back = trans->base.box.z + trans->base.box.depth;
+
+   struct copy_info copy_info;
+   copy_info.dst_x = copy_info.dst_y = copy_info.dst_z = 0;
+   copy_info.src = &tex_loc;
+   copy_info.dst = &buf_loc;
+   copy_info.src_box = &src_box;
+
+   copy_texture_region(ctx, res, copy_info);
    return true;
 }
 
@@ -266,7 +310,6 @@ d3d12_transfer_map(struct pipe_context *pctx,
                    struct pipe_transfer **transfer)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
-   struct d3d12_screen *screen = d3d12_screen(pctx->screen);
    struct d3d12_resource *res = d3d12_resource(pres);
 
    if (usage & PIPE_TRANSFER_MAP_DIRECTLY)
@@ -328,7 +371,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
       struct d3d12_resource *staging_res = d3d12_resource(trans->staging_res);
 
       if (usage & PIPE_TRANSFER_READ) {
-         bool ret = d3d12_transfer_copy_bufimage(ctx, res, staging_res, trans, ptrans->stride, false);
+         bool ret = d3d12_transfer_image_to_buf(ctx, res, staging_res, trans, 0);
          if (ret == false)
             return NULL;
          d3d12_flush_cmdlist_and_wait(ctx);
@@ -349,7 +392,6 @@ static void
 d3d12_transfer_unmap(struct pipe_context *pctx,
                      struct pipe_transfer *ptrans)
 {
-   struct d3d12_screen *screen = d3d12_screen(pctx->screen);
    struct d3d12_resource *res = d3d12_resource(ptrans->resource);
    struct d3d12_transfer *trans = (struct d3d12_transfer *)ptrans;
    D3D12_RANGE range = { 0, 0 };
@@ -365,8 +407,7 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
 
       if (trans->base.usage & PIPE_TRANSFER_WRITE) {
          struct d3d12_context *ctx = d3d12_context(pctx);
-
-         d3d12_transfer_copy_bufimage(ctx, res, staging_res, trans, ptrans->stride, true);
+         d3d12_transfer_buf_to_image(ctx, res, staging_res, trans);
       }
 
       pipe_resource_reference(&trans->staging_res, NULL);
