@@ -2938,6 +2938,7 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    }
 
    nir_intrinsic_set_access(intrin, image.image->access);
+   nir_intrinsic_set_format(intrin, image.image->type->image_format);
 
    switch (opcode) {
    case SpvOpAtomicLoad:
@@ -2955,17 +2956,30 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    case SpvOpAtomicStore:
    case SpvOpImageWrite: {
       const uint32_t value_id = opcode == SpvOpAtomicStore ? w[4] : w[3];
-      nir_ssa_def *value = vtn_ssa_value(b, value_id)->def;
+      struct vtn_ssa_value *value = vtn_ssa_value(b, value_id);
       /* nir_intrinsic_image_deref_store always takes a vec4 value */
       assert(op == nir_intrinsic_image_deref_store);
       intrin->num_components = 4;
-      intrin->src[3] = nir_src_for_ssa(expand_to_vec4(&b->nb, value));
+      intrin->src[3] = nir_src_for_ssa(expand_to_vec4(&b->nb, value->def));
       /* Only OpImageWrite can support a lod parameter if
        * SPV_AMD_shader_image_load_store_lod is used but the current NIR
        * intrinsics definition for atomics requires us to set it for
        * OpAtomicStore.
        */
       intrin->src[4] = nir_src_for_ssa(image.lod);
+
+      if (image.image->type->image_format == PIPE_FORMAT_NONE) {
+         /* Add type info to the intrinsic for storing to untyped OpenCL images */
+         enum pipe_format format;
+         switch (glsl_get_base_type(value->type)) {
+         case GLSL_TYPE_INT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
+         case GLSL_TYPE_UINT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
+         case GLSL_TYPE_FLOAT: format = PIPE_FORMAT_R32G32B32A32_FLOAT; break;
+         case GLSL_TYPE_FLOAT16: format = PIPE_FORMAT_R16G16B16A16_FLOAT; break;
+         default: unreachable("unexpected format");
+         }
+         nir_intrinsic_set_format(intrin, format);
+      }
       break;
    }
 
@@ -2983,6 +2997,7 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    case SpvOpAtomicAnd:
    case SpvOpAtomicOr:
    case SpvOpAtomicXor:
+      assert(image.image->type->image_format != PIPE_FORMAT_NONE);
       fill_common_atomic_sources(b, opcode, w, &intrin->src[3]);
       break;
 
@@ -3020,6 +3035,19 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
       struct vtn_value *val =
          vtn_push_ssa(b, w[2], type, vtn_create_ssa_value(b, type->type));
       val->ssa->def = result;
+
+      if (image.image->type->image_format == PIPE_FORMAT_NONE) {
+         /* Add type info to the intrinsic for reading from OpenCL images */
+         enum pipe_format format;
+         switch (glsl_get_base_type(type->type)) {
+         case GLSL_TYPE_INT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
+         case GLSL_TYPE_UINT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
+         case GLSL_TYPE_FLOAT: format = PIPE_FORMAT_R32G32B32A32_FLOAT; break;
+         case GLSL_TYPE_FLOAT16: format = PIPE_FORMAT_R16G16B16A16_FLOAT; break;
+         default: unreachable("unexpected format");
+         }
+         nir_intrinsic_set_format(intrin, format);
+      }
    } else {
       nir_builder_instr_insert(&b->nb, &intrin->instr);
    }
