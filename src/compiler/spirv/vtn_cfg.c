@@ -44,6 +44,11 @@ vtn_load_param_pointer(struct vtn_builder *b,
       ptr_type->base_type = vtn_base_type_pointer;
       ptr_type->deref = param_type;
       ptr_type->storage_class = SpvStorageClassUniformConstant;
+
+      ptr_type->type = nir_address_format_to_glsl_type(
+         vtn_mode_to_address_format(b,
+            vtn_storage_class_to_mode(
+               b, ptr_type->storage_class, param_type, NULL)));
    }
 
    return vtn_pointer_from_ssa(b, nir_load_param(&b->nb, param_idx), ptr_type);
