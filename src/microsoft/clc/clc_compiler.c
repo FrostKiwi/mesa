@@ -279,13 +279,33 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_lower_goto_ifs);
    NIR_PASS_V(nir, nir_opt_dead_cf);
 
-   // Calculate input offsets.
-   unsigned offset = 0;
-   nir_foreach_variable_safe(var, &nir->inputs) {
+   struct clc_dxil_metadata *metadata = &dxil->metadata;
+
+   metadata->args = calloc(dxil->kernel->num_args,
+                           sizeof(*metadata->args));
+   if (!metadata->args) {
+      debug_printf("D3D12: failed to allocate arg positions\n");
+      goto err_free_dxil;
+   }
+
+   // Calculate input offsets/metadata.
+   unsigned i = 0, uav_id = 0, offset = 0;
+   nir_foreach_variable(var, &nir->inputs) {
+      unsigned size = glsl_get_cl_size(var->type);
       offset = align(offset, glsl_get_cl_alignment(var->type));
       var->data.driver_location = offset;
-      offset += glsl_get_cl_size(var->type);
+
+      metadata->args[i].offset = offset;
+      metadata->args[i].size = size;
+      metadata->kernel_inputs_buf_size = MAX2(metadata->kernel_inputs_buf_size,
+                                              offset + size);
+      if (dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL)
+         metadata->args[i].buf_id = uav_id++;
+      i++;
+      offset += size;
    }
+
+   assert(i == dxil->kernel->num_args);
 
    // Calculate UBO bindings
    unsigned binding = 0;
@@ -366,33 +386,10 @@ clc_to_dxil(struct clc_context *ctx,
       goto err_free_dxil;
    }
 
-   struct clc_dxil_metadata *metadata = &dxil->metadata;
-
    memcpy(metadata->local_size, nir->info.cs.local_size,
           sizeof(metadata->local_size));
    memcpy(metadata->local_size_hint, nir->info.cs.local_size_hint,
           sizeof(metadata->local_size));
-
-   metadata->args = calloc(dxil->kernel->num_args,
-                           sizeof(*metadata->args));
-   if (!metadata->args) {
-      debug_printf("D3D12: failed to allocate arg positions\n");
-      goto err_free_dxil;
-   }
-
-   unsigned i = 0, uav_id = 0;
-   nir_foreach_variable(var, &nir->inputs) {
-      metadata->args[i].offset = var->data.driver_location;
-      metadata->args[i].size = glsl_get_cl_size(var->type);
-      metadata->kernel_inputs_buf_size = MAX2(metadata->kernel_inputs_buf_size,
-                                              metadata->args[i].offset +
-                                              metadata->args[i].size);
-      if (dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL)
-         metadata->args[i].buf_id = uav_id++;
-      i++;
-   }
-
-   assert(i == dxil->kernel->num_args);
 
    nir_foreach_variable(var, &nir->uniforms) {
       if (var->data.mode == nir_var_mem_ubo && var->constant_initializer) {
