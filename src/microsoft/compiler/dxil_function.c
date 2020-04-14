@@ -24,7 +24,7 @@
 #include "dxil_function.h"
 #include "dxil_module.h"
 
-#define MAX_FUNC_PARAMS 10
+#define MAX_FUNC_PARAMS 17
 
 struct predefined_func_descr {
    const char *base_name;
@@ -187,6 +187,7 @@ dxil_alloc_func_with_rettype(struct dxil_module *mod, const char *name,
       const struct dxil_type *t = get_type_from_string(mod, param_descr, overload, &index);
       if (!t)
          return false;
+      assert(num_params < MAX_FUNC_PARAMS);
       arg_types[num_params++] = t;
    }
 
