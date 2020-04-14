@@ -40,20 +40,6 @@
  * want to unify that.
  */
 
-static void
-lower_load_kernel_input(nir_builder *b, nir_intrinsic_instr *intr)
-{
-   b->cursor = nir_before_instr(&intr->instr);
-
-   nir_src *src = &intr->src[0]; /* param location i.e. SSBO slot */
-   assert(src->is_ssa);
-
-   nir_ssa_def *ssbo_loc = nir_ishl(b, src->ssa, nir_imm_int(b, 28 - 2));
-   nir_ssa_def_rewrite_uses(&intr->dest.ssa,
-                            nir_src_for_ssa(ssbo_loc));
-   nir_instr_remove(&intr->instr);
-}
-
 static nir_ssa_def *
 ptr_to_buffer(nir_builder *b, nir_ssa_def *ptr)
 {
@@ -243,9 +229,6 @@ lower_global_mem_to_dxil(struct nir_shader *nir)
             nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
 
             switch (intr->intrinsic) {
-            case nir_intrinsic_load_kernel_input:
-               lower_load_kernel_input(&b, intr);
-               break;
             case nir_intrinsic_load_global:
                lower_load_global(&b, intr);
                break;
