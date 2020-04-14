@@ -2279,6 +2279,8 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_local_invocation_id(ctx, intr);
    case nir_intrinsic_load_work_group_id:
       return emit_load_local_work_group_id(ctx, intr);
+   case nir_intrinsic_load_kernel_input:
+      return emit_load_kernel_input(ctx, intr);
    case nir_intrinsic_load_global_dxil:
       return emit_load_global(ctx, intr);
    case nir_intrinsic_store_global_dxil:
