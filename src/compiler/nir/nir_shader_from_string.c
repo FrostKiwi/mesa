@@ -165,6 +165,8 @@ const struct glsl_type *get_sampler_type(char *stype)
    } else if (stype[0] == '3') {
       dim = GLSL_SAMPLER_DIM_3D;
       stype += 2;
+   } else if (!*stype) {
+      return glsl_bare_sampler_type();
    } else {
       error_message("TODO: support sampler with dim %s\n", stype);
       return NULL;
