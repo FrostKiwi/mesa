@@ -126,6 +126,9 @@ struct clc_dxil_metadata {
             unsigned num_buf_ids;
          } image;
          struct {
+            unsigned sampler_id;
+         } sampler;
+         struct {
             unsigned buf_id;
          } globconstptr;
          struct {
