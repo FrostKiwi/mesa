@@ -144,7 +144,7 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
 
    nir_foreach_variable(var, &nir->uniforms) {
       auto type = glsl_without_array(var->type);
-      if (glsl_type_is_sampler(type)) {
+      if (glsl_type_is_sampler(type) && glsl_get_sampler_result_type(type) != GLSL_TYPE_VOID) {
          assert(!glsl_type_is_array_of_arrays(var->type));
          unsigned count = glsl_type_is_array(var->type) ? glsl_get_length(var->type) : 1;
          for (unsigned i = 0; i < count; ++i) {

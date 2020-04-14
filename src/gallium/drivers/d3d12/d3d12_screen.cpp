@@ -30,6 +30,7 @@
 #include "d3d12_format.h"
 #include "d3d12_public.h"
 #include "d3d12_resource.h"
+#include "d3d12_nir_passes.h"
 
 #include "util/debug.h"
 #include "util/u_math.h"
@@ -524,6 +525,7 @@ d3d12_finalize_nir(UNUSED pipe_screen *screen, void *nir, UNUSED bool optimize)
    nir_shader *sh = static_cast<nir_shader *>(nir);
 
    NIR_PASS_V(sh, nir_remove_dead_variables, nir_var_uniform);
+   NIR_PASS_V(sh, d3d12_create_bare_samplers);
 
    /* Currently we only do something with thevertex shader */
    if (sh->info.stage != MESA_SHADER_VERTEX)
