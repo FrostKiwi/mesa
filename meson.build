@@ -273,10 +273,6 @@ endif
 
 if with_microsoft_clc
   with_spirv_tools = true
-  clang_prefix_path = get_option('clang-prefix')
-  if clang_prefix_path != ''
-    clang_prefix_path = join_paths(clang_prefix_path, 'lib', 'cmake', 'clang')
-  endif
   dep_clang = dependency(
     'clang',
     method: 'cmake',
@@ -284,7 +280,6 @@ if with_microsoft_clc
       'clangBasic', 'clangCodeGen', 'clangDriver', 'clangFrontend', 'clangFrontendTool',
       'clangHandleCXX', 'clangHandleLLVM',
     ],
-    cmake_module_path: clang_prefix_path
   )
 endif
 
