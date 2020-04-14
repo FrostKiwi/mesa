@@ -760,6 +760,24 @@ TEST_F(ComputeTest, round)
       EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
+TEST_F(ComputeTest, arg_by_val)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout, float mul)\n\
+   {\n\
+       inout[get_global_id(0)] = inout[get_global_id(0)] * mul;\n\
+   }\n";
+   auto inout = ShaderArg<float>({ 0, 0.3f, -0.3f, 0.5f, -0.5f, 1.1f, -1.1f },
+                                 SHADER_ARG_INOUT);
+   auto mul = ShaderArg<float>(10.0f, SHADER_ARG_INPUT);
+   const float expected[] = {
+      0.0f, 3.0f, -3.0f, 5.0f, -5.0f, 11.0f, -11.0f
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout, mul);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
+}
+
 TEST_F(ComputeTest, link)
 {
    const char *foo_src =
