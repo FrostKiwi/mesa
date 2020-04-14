@@ -608,6 +608,7 @@ outputs: 1
 uniforms: 2
 shared: 0
 decl_var uniform INTERP_MODE_NONE sampler2D tex (3, 0, 0)
+decl_var uniform INTERP_MODE_NONE sampler samp (3, 0, 0)
 decl_var ubo INTERP_MODE_NONE vec4[2] uniform_0 (0, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
 decl_function main (0 params) (entrypoint)

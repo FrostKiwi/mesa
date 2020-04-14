@@ -2868,11 +2868,10 @@ emit_texture_size(struct ntd_context *ctx, const struct dxil_value *tex,
 static bool
 emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 {
-   assert(instr->texture_index == instr->sampler_index);
-
    assert(instr->texture_index < ctx->num_srvs);
+   assert(instr->op == nir_texop_txf || instr->sampler_index < ctx->num_samplers);
    const struct dxil_value *tex = ctx->srv_handles[instr->texture_index];
-   const struct dxil_value *sampler = ctx->sampler_handles[instr->texture_index];
+   const struct dxil_value *sampler = ctx->sampler_handles[instr->sampler_index];
 
    const struct dxil_type *int_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_type *float_type = dxil_module_get_float_type(&ctx->mod, 32);
@@ -3184,7 +3183,8 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    /* Samplers */
    nir_foreach_variable(var, &s->uniforms) {
       unsigned count = glsl_type_get_sampler_count(var->type);
-      if (var->data.mode == nir_var_uniform && count) {
+      if (var->data.mode == nir_var_uniform && count &&
+          glsl_get_sampler_result_type(glsl_without_array(var->type)) == GLSL_TYPE_VOID) {
             if (!emit_sampler(ctx, var, count))
                return false;
       }
@@ -3193,7 +3193,8 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    /* SRVs */
    nir_foreach_variable(var, &s->uniforms) {
       unsigned count = glsl_type_get_sampler_count(var->type);
-      if (var->data.mode == nir_var_uniform && count) {
+      if (var->data.mode == nir_var_uniform && count &&
+          glsl_get_sampler_result_type(glsl_without_array(var->type)) != GLSL_TYPE_VOID) {
          if (!emit_srv(ctx, var, count))
             return false;
       }
