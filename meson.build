@@ -276,6 +276,7 @@ if with_microsoft_clc
   dep_clang = dependency(
     'clang',
     method: 'cmake',
+    static: true,
     modules: [
       'clangBasic', 'clangCodeGen', 'clangDriver', 'clangFrontend', 'clangFrontendTool',
       'clangHandleCXX', 'clangHandleLLVM',
