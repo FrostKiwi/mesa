@@ -153,6 +153,7 @@ prog_semantic_from_kind(enum dxil_semantic_kind kind)
    case DXIL_SEM_DEPTH: return DXIL_PROG_SEM_DEPTH;
    case DXIL_SEM_DEPTH_LE: return DXIL_PROG_SEM_DEPTH_LE;
    case DXIL_SEM_DEPTH_GE: return DXIL_PROG_SEM_DEPTH_GE;
+   case DXIL_SEM_STENCIL_REF: return DXIL_PROG_SEM_STENCIL_REF;
    default:
        return DXIL_PROG_SEM_UNDEFINED;
    }
@@ -313,6 +314,13 @@ static const char *in_sysvalue_name(nir_variable *var)
 }
 
 static bool
+is_depth_output(enum dxil_semantic_kind kind)
+{
+   return kind == DXIL_SEM_DEPTH ||
+         kind == DXIL_SEM_STENCIL_REF;
+}
+
+static bool
 fill_io_signature(struct dxil_module *mod, nir_variable *var, int id,
                   struct semantic_info *semantic,
                   uint8_t interpolation, const struct dxil_mdnode **io,
@@ -322,7 +330,7 @@ fill_io_signature(struct dxil_module *mod, nir_variable *var, int id,
    enum dxil_prog_sig_comp_type comp_type =
       dxil_get_prog_sig_comp_type(var->type);
 
-   bool is_depth = semantic->kind == DXIL_SEM_DEPTH;
+   bool is_depth = is_depth_output(semantic->kind);
    uint8_t sig_comp_type = dxil_get_comp_type(var->type);
    int32_t start_row = is_depth ? -1 : (int32_t)var->data.driver_location;
    uint8_t start_col = (uint8_t)var->data.location_frac;
@@ -431,7 +439,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
 
       ++num_outputs;
 
-      if (semantic.kind != DXIL_SEM_DEPTH)
+      if (!is_depth_output(semantic.kind))
          ++mod->num_psv_outputs;
 
       assert(num_outputs < ARRAY_SIZE(outputs));
