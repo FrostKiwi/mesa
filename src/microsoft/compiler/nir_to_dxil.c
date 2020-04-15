@@ -977,6 +977,8 @@ get_module_flags(struct ntd_context *ctx)
       flags |= (1 << 19);
    if (ctx->mod.feats.int64_ops)
       flags |= (1 << 20);
+   if (ctx->mod.feats.stencil_ref)
+      flags |= (1 << 11);
 
    return flags;
 }
@@ -1087,15 +1089,15 @@ emit_metadata(struct ntd_context *ctx, nir_shader *s)
       if (!emit_tag(ctx, DXIL_SHADER_TAG_GS_STATE, emit_gs_state(ctx, s)))
          return false;
    } else if (ctx->mod.shader_kind == DXIL_COMPUTE_SHADER) {
-      uint64_t flags = get_module_flags(ctx);
-      if (flags != 0) {
-         if (!emit_tag(ctx, DXIL_SHADER_TAG_FLAGS, dxil_get_metadata_int64(&ctx->mod, flags)))
-            return false;
-      }
       if (!emit_tag(ctx, DXIL_SHADER_TAG_NUM_THREADS, emit_threads(ctx, s)))
          return false;
    }
 
+   uint64_t flags = get_module_flags(ctx);
+   if (flags != 0) {
+      if (!emit_tag(ctx, DXIL_SHADER_TAG_FLAGS, dxil_get_metadata_int64(&ctx->mod, flags)))
+         return false;
+   }
    const struct dxil_mdnode *shader_properties = NULL;
    if (ctx->num_shader_property_nodes > 0) {
       shader_properties = dxil_get_metadata_node(&ctx->mod, ctx->shader_property_nodes,
@@ -3113,6 +3115,14 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    if (!dxil_emit_ret_void(&ctx->mod))
       return false;
+
+   if (s->info.stage == MESA_SHADER_FRAGMENT) {
+      nir_foreach_variable(var, &s->outputs) {
+         if (var->data.location == FRAG_RESULT_STENCIL) {
+            ctx->mod.feats.stencil_ref = true;
+         }
+      }
+   }
 
    return emit_metadata(ctx, s) &&
           dxil_emit_module(&ctx->mod);
