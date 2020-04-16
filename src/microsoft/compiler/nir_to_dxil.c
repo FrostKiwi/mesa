@@ -313,13 +313,12 @@ emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 
 static const struct dxil_mdnode *
 emit_cbv_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
-                  const char *name, unsigned id, unsigned binding, unsigned size)
+                  const char *name, const resource_array_layout *layout,
+                  unsigned size)
 {
    const struct dxil_mdnode *fields[8];
 
-   resource_array_layout layout = {id, binding, 1};
-
-   fill_resource_metadata(m, fields, struct_type, name, &layout);
+   fill_resource_metadata(m, fields, struct_type, name, layout);
    fields[6] = dxil_get_metadata_int32(m, size); // constant buffer size
    fields[7] = NULL; // metadata
 
@@ -787,14 +786,13 @@ emit_kernel_inputs_cbv(struct ntd_context *ctx, nir_shader *nir)
    const struct dxil_type *array_type = dxil_module_get_array_type(&ctx->mod, int32, size / 4);
    const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod, "kernel_inputs",
                                                                      &array_type, 1);
+   resource_array_layout layout = { ctx->num_cbvs, ctx->num_cbvs, 1 };
    const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
-                                                          "kernel_inputs", ctx->num_cbvs,
-                                                          ctx->num_cbvs, size);
+                                                          "kernel_inputs", &layout, size);
 
    if (!cbv_meta)
       return false;
 
-   resource_array_layout layout = { ctx->num_cbvs, ctx->num_cbvs, 1 };
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
    add_resource(ctx, DXIL_RES_CBV, &layout);
 
@@ -823,13 +821,13 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
    const struct dxil_type *array_type = dxil_module_get_array_type(&ctx->mod, float32, size);
    const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod, var->name,
                                                                      &array_type, 1);
+   resource_array_layout layout = {idx, binding, 1};
    const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
-                                                          var->name, idx, binding, 4 * size);
+                                                          var->name, &layout, 4 * size);
 
    if (!cbv_meta)
       return false;
 
-   resource_array_layout layout = {idx, binding, 1};
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
    add_resource(ctx, DXIL_RES_CBV, &layout);
 
