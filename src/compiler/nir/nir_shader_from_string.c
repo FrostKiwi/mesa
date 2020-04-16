@@ -417,7 +417,7 @@ bool get_global_decl_var(const char *shader, nir_builder *b)
       var->data.driver_location = (unsigned)atoi(driver_loc);
    }
 
-   if (mode == nir_var_uniform) {
+   if (mode == nir_var_uniform || mode == nir_var_mem_ubo) {
       var->data.location = atoi(slot);
       var->data.driver_location = (unsigned)atoi(driver_loc);
       var->data.binding  = atoi(binding_id);
