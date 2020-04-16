@@ -26,6 +26,7 @@
 
 #include "pipe/p_context.h"
 
+#define D3D12_IGNORE_SDK_LAYERS
 #include <d3d12.h>
 
 struct d3d12_descriptor_pool;
