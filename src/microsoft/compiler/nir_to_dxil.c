@@ -250,7 +250,7 @@ typedef struct {
 static void
 fill_resource_metadata(struct dxil_module *m, const struct dxil_mdnode **fields,
                        const struct dxil_type *struct_type,
-                       const char *name, resource_array_layout *layout)
+                       const char *name, const resource_array_layout *layout)
 {
    const struct dxil_type *pointer_type = dxil_module_get_pointer_type(m, struct_type);
    const struct dxil_value *pointer_undef = dxil_module_get_undef(m, pointer_type);
@@ -265,7 +265,7 @@ fill_resource_metadata(struct dxil_module *m, const struct dxil_mdnode **fields,
 
 static const struct dxil_mdnode *
 emit_srv_metadata(struct dxil_module *m, const struct dxil_type *elem_type,
-                  const char *name, resource_array_layout *layout,
+                  const char *name, const resource_array_layout *layout,
                   enum dxil_component_type comp_type,
                   enum dxil_resource_kind res_kind)
 {
@@ -287,7 +287,7 @@ emit_srv_metadata(struct dxil_module *m, const struct dxil_type *elem_type,
 
 static const struct dxil_mdnode *
 emit_uav_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
-                  const char *name, resource_array_layout *layout,
+                  const char *name, const resource_array_layout *layout,
                   enum dxil_component_type comp_type,
                   enum dxil_resource_kind res_kind)
 {
@@ -328,7 +328,7 @@ emit_cbv_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
 
 static const struct dxil_mdnode *
 emit_sampler_metadata(struct dxil_module *m, const struct dxil_type *struct_type,
-                      nir_variable *var, resource_array_layout *layout)
+                      nir_variable *var, const resource_array_layout *layout)
 {
    const struct dxil_mdnode *fields[8];
    const struct glsl_type *type = glsl_without_array(var->type);
@@ -681,7 +681,8 @@ emit_createhandle_call_const_index(struct ntd_context *ctx,
 }
 
 static void
-add_resource(struct ntd_context *ctx, enum dxil_resource_type type, resource_array_layout *layout)
+add_resource(struct ntd_context *ctx, enum dxil_resource_type type,
+             const resource_array_layout *layout)
 {
    assert(ctx->num_resources < ARRAY_SIZE(ctx->resources));
    ctx->resources[ctx->num_resources].resource_type = type;
