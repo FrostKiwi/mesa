@@ -35,8 +35,6 @@
 #include <sstream>
 #include <cassert>
 
-#pragma comment(lib, "dxcompiler")
-
 using std::string;
 using std::stringstream;
 
@@ -51,13 +49,11 @@ public:
    static DXILCompiler *instance();
 
 private:
-
-
    DXILCompiler() = default;
-
    static ComPtr<IDxcLibrary> m_library;
    static ComPtr<IDxcCompiler> m_compiler;
    static ComPtr<IDxcValidator> m_validator;
+
    static bool m_initialized;
 };
 
@@ -202,15 +198,27 @@ DXILCompiler *DXILCompiler::instance()
    // TODO? not reentrant
    static DXILCompiler me;
    if (!m_initialized) {
-     HRESULT hr = DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&m_library));
+
+      auto dxc_compiler_module = ::LoadLibrary("dxcompiler.dll");
+
+      if (!dxc_compiler_module) {
+         debug_printf("Unable to load dxcompiler.dll\n");
+         return nullptr;
+      }
+
+      auto compiler_create_func = (DxcCreateInstanceProc)GetProcAddress(dxc_compiler_module, "DxcCreateInstance");
+      if (!compiler_create_func)
+         return nullptr;
+
+      HRESULT hr = compiler_create_func(CLSID_DxcLibrary, IID_PPV_ARGS(&m_library));
       if (FAILED(hr))
          return nullptr;
 
-      hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&m_compiler));
+      hr = compiler_create_func(CLSID_DxcCompiler, IID_PPV_ARGS(&m_compiler));
       if (FAILED(hr))
          return nullptr;
 
-      hr = DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(&m_validator));
+      hr = compiler_create_func(CLSID_DxcValidator, IID_PPV_ARGS(&m_validator));
       if (FAILED(hr))
          return nullptr;
 
@@ -231,4 +239,5 @@ copy_char_skip_double_ws(stringstream &os, char c, bool last_was_ws)
 ComPtr<IDxcLibrary> DXILCompiler::m_library;
 ComPtr<IDxcCompiler> DXILCompiler::m_compiler;
 ComPtr<IDxcValidator> DXILCompiler::m_validator;
+
 bool DXILCompiler::m_initialized = false;

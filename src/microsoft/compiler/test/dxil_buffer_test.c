@@ -21,7 +21,7 @@
  * IN THE SOFTWARE.
  */
 
-#include "dxil_buffer.h"
+#include "microsoft/compiler/dxil_buffer.h"
 #include <assert.h>
 #include <stdio.h>
 
