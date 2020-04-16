@@ -1604,6 +1604,8 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_vec2:
    case nir_op_vec3:
    case nir_op_vec4:
+   case nir_op_vec8:
+   case nir_op_vec16:
       for (unsigned i = 0; i < nir_op_infos[alu->op].num_inputs; i++)
          store_alu_dest(ctx, alu, i, get_alu_src(ctx, alu, i));
       return true;
