@@ -793,7 +793,7 @@ emit_kernel_inputs_cbv(struct ntd_context *ctx, nir_shader *nir)
    if (!cbv_meta)
       return false;
 
-   resource_array_layout layout = { 0, ctx->num_cbvs, 1 };
+   resource_array_layout layout = { ctx->num_cbvs, ctx->num_cbvs, 1 };
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
    add_resource(ctx, DXIL_RES_CBV, &layout);
 
@@ -828,7 +828,7 @@ emit_cbv(struct ntd_context *ctx, nir_variable *var)
    if (!cbv_meta)
       return false;
 
-   resource_array_layout layout = {0, binding, 1};
+   resource_array_layout layout = {idx, binding, 1};
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
    add_resource(ctx, DXIL_RES_CBV, &layout);
 
