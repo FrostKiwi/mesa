@@ -40,6 +40,7 @@
 #include "state_tracker/sw_winsys.h"
 
 #include <dxgi1_4.h>
+#include <d3d12sdklayers.h>
 
 static const struct debug_named_value
 debug_options[] = {

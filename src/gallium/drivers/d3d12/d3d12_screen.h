@@ -28,6 +28,7 @@
 
 #include "util/slab.h"
 
+#define D3D12_IGNORE_SDK_LAYERS
 #include <d3d12.h>
 #include <dxgi1_4.h>
 
