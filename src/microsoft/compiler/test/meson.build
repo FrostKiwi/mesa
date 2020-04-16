@@ -19,41 +19,21 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
-files_libdxil_compiler = files(
-  'dxil_buffer.c',
-  'dxil_container.c',
-  'dxil_dump.c',
-  'dxil_enums.c',
-  'dxil_function.c',
-  'dxil_module.c',
-  'dxil_nir.c',
-  'dxil_signature.c',
-  'nir_to_dxil.c'
+test('clc_nir_to_dxil',
+  executable(
+   'clc_nir_to_dxil_test',
+    ['clc_nir_to_dxil_test.cpp', 'clc_test_dxlayer.cpp'],
+    cpp_args : [cpp_vis_args, cpp_msvc_compat_args],
+    include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium],
+    dependencies : [idep_libdxil_compiler, dep_thread, idep_gtest, idep_nir, idep_mesautil]
+  ),
+  suite : ['microsoft' , 'compiler'],
 )
 
-dxil_nir_algebraic_c = custom_target(
-  'dxil_nir_algebraic.c',
-  input : 'dxil_nir_algebraic.py',
-  output : 'dxil_nir_algebraic.c',
-  command : [
-    prog_python, '@INPUT@',
-    '-p', join_paths(meson.source_root(), 'src/compiler/nir/'),
-  ],
-  capture : true,
-  depend_files : nir_algebraic_py,
+test('dxil_buffer test',
+  executable('dxil_buffer_test', 'dxil_buffer_test.c',
+    include_directories : inc_src,
+    dependencies : [idep_libdxil_compiler]
+  ),
+  suite : ['microsoft' , 'compiler'],
 )
-
-libdxil_compiler = static_library(
-  'dxil_compiler',
-  [files_libdxil_compiler, dxil_nir_algebraic_c, sha1_h],
-  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_compiler, inc_gallium],
-  dependencies: [idep_nir_headers],
-  c_args : c_vis_args,
-)
-
-idep_libdxil_compiler = declare_dependency(
-  link_with : libdxil_compiler,
-  dependencies : [idep_mesautil],
-)
-
-subdir('test')
