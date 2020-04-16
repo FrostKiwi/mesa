@@ -214,9 +214,11 @@ fill_buffer_location(struct d3d12_context *ctx,
 }
 
 struct copy_info {
-   D3D12_TEXTURE_COPY_LOCATION *dst;
+   struct d3d12_resource *dst;
+   D3D12_TEXTURE_COPY_LOCATION dst_loc;
    UINT dst_x, dst_y, dst_z;
-   D3D12_TEXTURE_COPY_LOCATION *src;
+   struct d3d12_resource *src;
+   D3D12_TEXTURE_COPY_LOCATION src_loc;
    D3D12_BOX *src_box;
 };
 
@@ -230,12 +232,12 @@ copy_texture_region(struct d3d12_context *ctx,
 
    auto batch = d3d12_current_batch(ctx);
 
-   d3d12_batch_reference_object(batch, info.src->pResource);
-   d3d12_batch_reference_object(batch, info.dst->pResource);
+   d3d12_batch_reference_resource(batch, info.src);
+   d3d12_batch_reference_resource(batch, info.dst);
 
    d3d12_resource_barrier(ctx, res, D3D12_RESOURCE_STATE_COMMON, state);
-   ctx->cmdlist->CopyTextureRegion(info.dst, info.dst_x, info.dst_y, info.dst_z,
-                                   info.src, info.src_box);
+   ctx->cmdlist->CopyTextureRegion(&info.dst_loc, info.dst_x, info.dst_y, info.dst_z,
+                                   &info.src_loc, info.src_box);
    d3d12_resource_barrier(ctx, res, state, D3D12_RESOURCE_STATE_COMMON);
 }
 
@@ -246,13 +248,13 @@ transfer_buf_to_image_part(struct d3d12_context *ctx,
                            struct d3d12_transfer *trans,
                            int z, int depth, int start_z, int dest_z)
 {
-   auto tex_loc = fill_texture_location(res, trans, z);
-   auto buf_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans, depth, z);
-   buf_loc.PlacedFootprint.Offset = (z  - start_z) * trans->base.layer_stride;
-
    struct copy_info copy_info;
-   copy_info.src = &buf_loc;
-   copy_info.dst = &tex_loc;
+   copy_info.src = staging_res;
+   copy_info.src_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans, depth, z);
+   copy_info.src_loc.PlacedFootprint.Offset = (z  - start_z) * trans->base.layer_stride;
+   copy_info.src_box = nullptr;
+   copy_info.dst = res;
+   copy_info.dst_loc = fill_texture_location(res, trans, z);
    copy_info.dst_x = trans->base.box.x;
    copy_info.dst_y = trans->base.box.y;
    copy_info.dst_z = res->base.target == PIPE_TEXTURE_CUBE ? 0 : dest_z;
@@ -294,12 +296,6 @@ transfer_image_part_to_buf(struct d3d12_context *ctx,
 {
    D3D12_BOX src_box = {};
 
-   auto tex_loc = fill_texture_location(res, trans, resid + z);
-   auto buf_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans,
-                                       trans->base.box.depth, resid + z);
-
-   buf_loc.PlacedFootprint.Offset = (z  - start_layer) * trans->base.layer_stride;
-
    src_box.left = trans->base.box.x;
    src_box.right = trans->base.box.x + trans->base.box.width;
    src_box.top = trans->base.box.y;
@@ -308,10 +304,14 @@ transfer_image_part_to_buf(struct d3d12_context *ctx,
    src_box.back = start_box_z + depth;
 
    struct copy_info copy_info;
-   copy_info.dst_x = copy_info.dst_y = copy_info.dst_z = 0;
-   copy_info.src = &tex_loc;
-   copy_info.dst = &buf_loc;
+   copy_info.src = res;
+   copy_info.src_loc = fill_texture_location(res, trans, resid + z);
    copy_info.src_box = &src_box;
+   copy_info.dst = staging_res;
+   copy_info.dst_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans,
+                                            trans->base.box.depth, resid + z);
+   copy_info.dst_loc.PlacedFootprint.Offset = (z  - start_layer) * trans->base.layer_stride;
+   copy_info.dst_x = copy_info.dst_y = copy_info.dst_z = 0;
 
    copy_texture_region(ctx, res, copy_info);
 }

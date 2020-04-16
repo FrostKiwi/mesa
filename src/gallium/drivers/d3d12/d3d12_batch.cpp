@@ -38,6 +38,8 @@ d3d12_init_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
 
+   batch->resources = _mesa_set_create(NULL, _mesa_hash_pointer,
+                                       _mesa_key_pointer_equal);
    batch->sampler_views = _mesa_set_create(NULL, _mesa_hash_pointer,
                                            _mesa_key_pointer_equal);
    batch->surfaces = _mesa_set_create(NULL, _mesa_hash_pointer,
@@ -46,7 +48,7 @@ d3d12_init_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
                                      _mesa_hash_pointer,
                                      _mesa_key_pointer_equal);
 
-   if (!batch->sampler_views || !batch->surfaces || !batch->objects)
+   if (!batch->resources || !batch->sampler_views || !batch->surfaces || !batch->objects)
       return false;
 
    util_dynarray_init(&batch->zombie_samplers, NULL);
@@ -73,6 +75,13 @@ d3d12_init_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
       return false;
 
    return true;
+}
+
+static void
+delete_resource(set_entry *entry)
+{
+   struct pipe_resource *pres = (struct pipe_resource *)entry->key;
+   pipe_resource_reference(&pres, NULL);
 }
 
 static void
@@ -108,6 +117,7 @@ reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
    d3d12_fence_reference(&batch->fence, NULL);
 
+   _mesa_set_clear(batch->resources, delete_resource);
    _mesa_set_clear(batch->sampler_views, delete_sampler_view);
    _mesa_set_clear(batch->surfaces, delete_surface);
    _mesa_set_clear(batch->objects, delete_object);
@@ -132,6 +142,7 @@ d3d12_destroy_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    batch->cmdalloc->Release();
    d3d12_descriptor_heap_free(batch->sampler_heap);
    d3d12_descriptor_heap_free(batch->view_heap);
+   _mesa_set_destroy(batch->resources, NULL);
    _mesa_set_destroy(batch->sampler_views, NULL);
    _mesa_set_destroy(batch->surfaces, NULL);
    _mesa_set_destroy(batch->objects, NULL);
@@ -188,6 +199,17 @@ d3d12_end_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    ID3D12CommandList* cmdlists[] = { ctx->cmdlist };
    screen->cmdqueue->ExecuteCommandLists(1, cmdlists);
    batch->fence = d3d12_create_fence(screen, ctx);
+}
+
+void
+d3d12_batch_reference_resource(struct d3d12_batch *batch,
+                               struct d3d12_resource *res)
+{
+   struct set_entry *entry = _mesa_set_search(batch->resources, res);
+   if (!entry) {
+      entry = _mesa_set_add(batch->resources, res);
+      pipe_reference(NULL, &res->base.reference);
+   }
 }
 
 void
