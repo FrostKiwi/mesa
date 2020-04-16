@@ -1645,8 +1645,6 @@ anv_bo_vma_alloc_or_close(struct anv_device *device,
    if (device->physical->use_vm_bind) {
       int ret = anv_gem_vm_bind(device, bo->offset, bo->gem_handle,
                                 0, bo->size + bo->_ccs_size);
-      fprintf(stderr, "VM_BIND: handle=%d, addr=0x%016"PRIx64"\n",
-              bo->gem_handle, bo->offset);
       if (ret) {
          anv_bo_finish(device, bo);
          return vk_errorf(device, NULL, VK_ERROR_OUT_OF_DEVICE_MEMORY,
