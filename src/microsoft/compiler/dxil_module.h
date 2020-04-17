@@ -221,12 +221,14 @@ dxil_module_release(struct dxil_module *m);
 const struct dxil_value *
 dxil_add_global_var(struct dxil_module *m, const char *name,
                     const struct dxil_type *type,
-                    bool constant, enum dxil_address_space as, int align);
+                    enum dxil_address_space as, int align,
+                    const struct dxil_value *value);
 
 const struct dxil_value *
 dxil_add_global_ptr_var(struct dxil_module *m, const char *name,
                         const struct dxil_type *type,
-                        bool constant, enum dxil_address_space as, int align);
+                        enum dxil_address_space as, int align,
+                        const struct dxil_value *value);
 
 const struct dxil_func *
 dxil_add_function_def(struct dxil_module *m, const char *name,

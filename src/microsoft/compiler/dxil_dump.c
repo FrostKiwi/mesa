@@ -274,6 +274,8 @@ dump_gvars(struct dxil_dumper *d, struct list_head *list)
          _mesa_string_buffer_append(d->buf, "const ");
       if (gvar->align)
          _mesa_string_buffer_append(d->buf, "align ");
+      if (gvar->initializer)
+         _mesa_string_buffer_printf(d->buf, "init_id:%d\n", gvar->initializer->id);
       dump_type_name(d, gvar->type);
       _mesa_string_buffer_printf(d->buf, " val_id:%d\n", gvar->value.id);
    }

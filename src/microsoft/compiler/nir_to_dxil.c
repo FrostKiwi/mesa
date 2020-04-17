@@ -3246,9 +3246,10 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       type = dxil_module_get_array_type(&ctx->mod,
                                         dxil_module_get_int_type(&ctx->mod, 32),
                                         size / sizeof(uint32_t));
-      ctx->sharedvars = dxil_add_global_ptr_var(&ctx->mod, "shared", type, false,
+      ctx->sharedvars = dxil_add_global_ptr_var(&ctx->mod, "shared", type,
                                                 DXIL_AS_GROUPSHARED,
-                                                ffs(sizeof(uint64_t)));
+                                                ffs(sizeof(uint64_t)),
+                                                NULL);
    }
 
    if (s->info.stage == MESA_SHADER_KERNEL) {
