@@ -20,7 +20,13 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+
+#ifndef DXIL_NIR_H
+#define DXIL_NIR_H
+
 #include <stdbool.h>
 #include "nir.h"
 
 bool dxil_nir_lower_8bit_conv(nir_shader *shader);
+
+#endif /* DXIL_NIR_H */
