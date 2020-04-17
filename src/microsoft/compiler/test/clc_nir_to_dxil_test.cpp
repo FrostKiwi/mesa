@@ -752,3 +752,41 @@ impl main {
 })";
  run(shader, "");
 }
+
+TEST_F(NirToDXILTest, test_shader_stencil_ref_validation)
+{
+ const char shader[] =
+R"(shader: MESA_SHADER_FRAGMENT
+name: GLSL0
+inputs: 0
+outputs: 1
+uniforms: 3
+shared: 0
+decl_var uniform INTERP_MODE_NONE vec4[3] gl_CurrentAttribFragMESA (0, 0, 0)
+decl_var ubo INTERP_MODE_NONE vec4[3] uniform_0 (0, 0, 0)
+decl_var ubo INTERP_MODE_NONE vec4[1] d3d12_state_vars (0, 0, 1)
+decl_var shader_in INTERP_MODE_FLAT uint IsFrontFace (VARYING_SLOT_FACE.x, 0, 0)
+decl_var shader_out INTERP_MODE_NONE vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+decl_var shader_out INTERP_MODE_NONE uint StencilRef (FRAG_RESULT_STENCIL.x, 1, 0)
+decl_function main (0 params) (entrypoint)
+
+impl main {
+        block block_0:
+        /* preds: */
+        vec1 32 ssa_0 = load_const (0x00000000 /* 0.000000 */)
+        vec1 32 ssa_1 = load_const (0x00000020 /* 0.000000 */)
+        vec4 32 ssa_2 = intrinsic load_ubo (ssa_0, ssa_1) (0, 4, 0) /* access=0 */ /* align_mul=4 */ /* align_offset=0 */
+        vec1 32 ssa_3 = deref_var &gl_FragColor (shader_out vec4)
+        intrinsic store_deref (ssa_3, ssa_2) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        vec1 32 ssa_11 = load_const (0x00000001 /* 0.000000 */)
+        vec2 32 ssa_13 = intrinsic load_ubo (ssa_11, ssa_0) (0, 4, 0) /* access=0 */ /* align_mul=4 */ /* align_offset=0 */
+        vec1 32 ssa_6 = intrinsic load_front_face () ()
+        vec1 1 ssa_15 = ine ssa_6, ssa_0
+        vec1 32 ssa_9 = bcsel ssa_15, ssa_13.x, ssa_13.y
+        vec1 32 ssa_10 = deref_var &StencilRef (shader_out uint)
+        intrinsic store_deref (ssa_10, ssa_9) (1, 0) /* wrmask=x */ /* access=0 */
+        /* succs: block_1 */
+        block block_1:
+})";
+ run(shader, "");
+}
