@@ -1691,6 +1691,24 @@ emit_module_info_function(struct dxil_module *m, int type, bool declaration,
    return emit_record(m, DXIL_MODULE_CODE_FUNCTION, data, ARRAY_SIZE(data));
 }
 
+enum gvar_var_flags {
+   GVAR_FLAG_CONSTANT = (1 << 0),
+   GVAR_FLAG_EXPLICIT_TYPE = (1 << 1),
+};
+
+enum gvar_var_linkage {
+   GVAR_LINKAGE_EXTERNAL = 0,
+   GVAR_LINKAGE_APPENDING = 2,
+   GVAR_LINKAGE_INTERNAL = 3,
+   GVAR_LINKAGE_EXTERNAL_WEAK = 7,
+   GVAR_LINKAGE_COMMON = 8,
+   GVAR_LINKAGE_PRIVATE = 9,
+   GVAR_LINKAGE_AVAILABLE_EXTERNALLY = 12,
+   GVAR_LINKAGE_WEAK_ANY = 16,
+   GVAR_LINKAGE_WEAK_ODR = 17,
+   GVAR_LINKAGE_LINK_ONCE_ODR = 19,
+};
+
 static bool
 emit_module_info_global(struct dxil_module *m, int type_id, bool constant,
                         int alignment, const struct dxil_abbrev *simple_gvar_abbr)
@@ -1698,9 +1716,9 @@ emit_module_info_global(struct dxil_module *m, int type_id, bool constant,
    uint64_t data[] = {
       DXIL_MODULE_CODE_GLOBALVAR,
       type_id,
-      2 | constant,
+      GVAR_FLAG_EXPLICIT_TYPE | (constant) ? GVAR_FLAG_CONSTANT : 0,
       0, // initializer
-      0, // linkage
+      GVAR_LINKAGE_EXTERNAL, // linkage
       alignment,
       0
    };
