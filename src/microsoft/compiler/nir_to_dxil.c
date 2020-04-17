@@ -2547,8 +2547,6 @@ emit_load_mem_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr,
    unsigned bit_size = nir_dest_bit_size(intr->dest);
    const struct dxil_value *ptr =
       get_src(ctx, &intr->src[0], 0, nir_type_uint);
-   const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod,
-      bit_size);
    unsigned align = bit_size / 8;
 
    const struct dxil_value *handle = ctx->cbv_handles[var->data.binding];
