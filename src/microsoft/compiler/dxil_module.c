@@ -1608,6 +1608,32 @@ dxil_module_get_double_const(struct dxil_module *m, double value)
 }
 
 const struct dxil_value *
+dxil_module_get_array_const(struct dxil_module *m, const struct dxil_type *type,
+                            const struct dxil_value **values)
+{
+   assert(type->type == TYPE_ARRAY);
+   unsigned int num_values = type->array_or_vector_def.num_elems;
+
+   struct dxil_const *c;
+   LIST_FOR_EACH_ENTRY(c, &m->const_list, head) {
+      if (c->value.type != type || c->undef)
+         continue;
+
+      if (!memcmp(c->array_values, values, sizeof(*values) * num_values))
+         return &c->value;
+   }
+
+   c = create_const(m, type, false);
+   if (!c)
+      return NULL;
+   c->array_values =
+      ralloc_array(m->ralloc_ctx, const struct dxil_value *, num_values);
+   memcpy(c->array_values, values, sizeof(*values) * num_values);
+
+   return &c->value;
+}
+
+const struct dxil_value *
 dxil_module_get_undef(struct dxil_module *m, const struct dxil_type *type)
 {
    assert(type != NULL);
@@ -1954,6 +1980,20 @@ emit_double_value(struct dxil_module *m, double value)
 }
 
 static bool
+emit_aggregate_values(struct dxil_module *m, const struct dxil_value **values,
+                      int num_values)
+{
+   uint64_t *value_ids = ralloc_array(m->ralloc_ctx, uint64_t, num_values);
+   int i;
+
+   for (i = 0; i < num_values; i++)
+      value_ids[i] = values[i]->id;
+
+   return emit_record_no_abbrev(&m->buf, CST_CODE_AGGREGATE, value_ids,
+                                num_values);
+}
+
+static bool
 emit_consts(struct dxil_module *m)
 {
    const struct dxil_type *curr_type = NULL;
@@ -1993,6 +2033,12 @@ emit_consts(struct dxil_module *m)
          default:
             unreachable("unexpected float_bits");
          }
+         break;
+
+      case TYPE_ARRAY:
+         if (!emit_aggregate_values(m, c->array_values,
+                                    c->value.type->array_or_vector_def.num_elems))
+            return false;
          break;
 
       default:
