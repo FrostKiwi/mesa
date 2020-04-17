@@ -355,6 +355,19 @@ dump_constants(struct dxil_dumper *d, struct list_head *list)
          case TYPE_INTEGER:
             _mesa_string_buffer_printf(d->buf, " %d\n", cnst->int_value);
             break;
+         case TYPE_ARRAY:
+            _mesa_string_buffer_append(d->buf, "{");
+            for (unsigned i = 0;
+                 i < cnst->value.type->array_or_vector_def.num_elems; i++) {
+               _mesa_string_buffer_printf(d->buf, " %%%d",
+                                          cnst->array_values[i]->id);
+               dump_type_name(d, cnst->value.type);
+	       if (i != cnst->value.type->array_or_vector_def.num_elems - 1)
+                  _mesa_string_buffer_append(d->buf, ",");
+               _mesa_string_buffer_append(d->buf, " ");
+            }
+            _mesa_string_buffer_append(d->buf, "}\n");
+            break;
          default:
             unreachable("Unsupported const type");
          }

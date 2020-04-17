@@ -318,6 +318,10 @@ const struct dxil_value *
 dxil_module_get_double_const(struct dxil_module *m, double value);
 
 const struct dxil_value *
+dxil_module_get_array_const(struct dxil_module *m, const struct dxil_type *type,
+                            const struct dxil_value **values);
+
+const struct dxil_value *
 dxil_module_get_undef(struct dxil_module *m, const struct dxil_type *type);
 
 const struct dxil_mdnode *

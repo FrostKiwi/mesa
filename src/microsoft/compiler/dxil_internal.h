@@ -250,6 +250,7 @@ struct dxil_const {
    union {
       intmax_t int_value;
       double float_value;
+      const struct dxil_value **array_values;
    };
 
    struct list_head head;
