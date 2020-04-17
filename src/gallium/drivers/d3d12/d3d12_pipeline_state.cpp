@@ -215,6 +215,7 @@ d3d12_gfx_pipeline_state_cache_invalidate(struct d3d12_context *ctx, const void 
          if (ctx->current_pso == (ID3D12PipelineState *)entry->data)
             ctx->current_pso = NULL;
          _mesa_hash_table_remove(ctx->pso_cache, entry);
+         delete_entry(entry);
       }
    }
 }
@@ -233,6 +234,7 @@ d3d12_gfx_pipeline_state_cache_invalidate_shader(struct d3d12_context *ctx,
             if (ctx->current_pso == (ID3D12PipelineState *)entry->data)
                ctx->current_pso = NULL;
             _mesa_hash_table_remove(ctx->pso_cache, entry);
+            delete_entry(entry);
          }
       }
       shader = shader->next_variant;
