@@ -1668,7 +1668,7 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
 static const struct dxil_value *
 add_gvar(struct dxil_module *m, const char *name,
          const struct dxil_type *type, const struct dxil_type *value_type,
-         bool constant, enum dxil_address_space as, int align)
+         enum dxil_address_space as, int align, const struct dxil_value *value)
 {
    struct dxil_gvar *gvar = ralloc_size(m->ralloc_ctx,
                                         sizeof(struct dxil_gvar));
@@ -1676,10 +1676,11 @@ add_gvar(struct dxil_module *m, const char *name,
       return NULL;
 
    gvar->type = type;
-   gvar->constant = constant;
    gvar->name = ralloc_strdup(m->ralloc_ctx, name);
    gvar->as = as;
    gvar->align = align;
+   gvar->constant = !!value;
+   gvar->initializer = value;
 
    gvar->value.id = -1;
    gvar->value.type = value_type;
@@ -1691,18 +1692,20 @@ add_gvar(struct dxil_module *m, const char *name,
 const struct dxil_value *
 dxil_add_global_var(struct dxil_module *m, const char *name,
                     const struct dxil_type *type,
-                    bool constant, enum dxil_address_space as, int align)
+                    enum dxil_address_space as, int align,
+                    const struct dxil_value *value)
 {
-   return add_gvar(m, name, type, type, constant, as, align);
+   return add_gvar(m, name, type, type, as, align, value);
 }
 
 const struct dxil_value *
 dxil_add_global_ptr_var(struct dxil_module *m, const char *name,
                         const struct dxil_type *type,
-                        bool constant, enum dxil_address_space as, int align)
+                        enum dxil_address_space as, int align,
+                        const struct dxil_value *value)
 {
    return add_gvar(m, name, type, dxil_module_get_pointer_type(m, type),
-                   constant, as, align);
+                   as, align, value);
 }
 
 static struct dxil_func *
@@ -1822,7 +1825,7 @@ emit_module_info_global(struct dxil_module *m, const struct dxil_gvar *gvar,
       gvar->type->id,
       (gvar->as << 2) | GVAR_FLAG_EXPLICIT_TYPE |
       (gvar->constant ? GVAR_FLAG_CONSTANT : 0),
-      0, // initializer
+      gvar->initializer ? gvar->initializer->id + 1 : 0,
       GVAR_LINKAGE_INTERNAL, // linkage
       util_logbase2(gvar->align) + 1,
       0

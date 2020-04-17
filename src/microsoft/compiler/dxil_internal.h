@@ -85,6 +85,7 @@ struct dxil_gvar {
    enum dxil_address_space as;
    int align;
 
+   const struct dxil_value *initializer;
    struct dxil_value value;
    struct list_head head;
 };
