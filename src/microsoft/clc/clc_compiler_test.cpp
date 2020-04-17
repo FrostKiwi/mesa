@@ -504,13 +504,16 @@ TEST_F(ComputeTest, complex_types_global_uint8)
    }
 }
 
-TEST_F(ComputeTest, complex_types_const_array)
+TEST_F(ComputeTest, DISABLED_complex_types_const_array)
 {
+   /* DISABLED because current release versions of WARP either return
+    * rubbish from reads or crash: they are not prepared to handle
+    * non-float global constants */
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
    {\n\
-       uint foo[4] = {100, 101, 102, 103};\n\
-       output[get_global_id(0)] = foo[get_global_id(0)];\n\
+       const uint foo[] = { 100, 101, 102, 103 };\n\
+       output[get_global_id(0)] = foo[get_global_id(0) % 4];\n\
    }\n";
    auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
                                      SHADER_ARG_OUTPUT);
@@ -547,8 +550,11 @@ TEST_F(ComputeTest, mem_access_load_store_ordering)
       EXPECT_EQ(output[i], expected[i]);
 }
 
-TEST_F(ComputeTest, two_const_arrays)
+TEST_F(ComputeTest, DISABLED_two_const_arrays)
 {
+   /* DISABLED because current release versions of WARP either return
+    * rubbish from reads or crash: they are not prepared to handle
+    * non-float global constants */
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\
    {\n\
