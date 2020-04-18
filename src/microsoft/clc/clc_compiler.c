@@ -110,7 +110,7 @@ glsl_base_type_for_image_pipe_format(enum pipe_format format)
 }
 
 static void
-clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref)
+clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref, struct clc_dxil_metadata *metadata, unsigned *num_srvs, unsigned *num_uavs)
 {
    // The input variable here isn't actually an image, it's just the
    // image format data.
@@ -140,6 +140,13 @@ clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref)
    nir_variable *in_var = nir_deref_instr_get_variable(deref);
    assert(in_var->data.mode == nir_var_shader_in);
    enum gl_access_qualifier access = in_var->data.access;
+
+   int metadata_index = 0;
+   while (metadata->args[metadata_index].buf_ids[0] != in_var->data.binding)
+      metadata_index++;
+
+   unsigned *num_buf_ids = &metadata->args[metadata_index].num_buf_ids;
+   *num_buf_ids = 0;
 
    nir_foreach_use_safe(src, &deref->dest.ssa) {
       // When we add samplers, we can have tex instructions here too, but just
@@ -177,6 +184,12 @@ clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref)
             uniform->data.access = in_var->data.access;
             uniform->data.image.format = intr_format;
             uniform->data.binding = in_var->data.binding;
+            if (*num_buf_ids > 0) {
+               // Need to assign a new binding
+               int *binding_counter = (in_var->data.access & ACCESS_NON_WRITEABLE) ? num_srvs : num_uavs;
+               metadata->args[metadata_index].buf_ids[*num_buf_ids] = uniform->data.binding = (*binding_counter)++;
+            }
+            (*num_buf_ids)++;
 
             b->cursor = nir_after_instr(&deref->instr);
             nir_deref_instr *deref_uniform = nir_build_deref_var(b, uniform);
@@ -219,7 +232,7 @@ clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref)
 }
 
 static void
-clc_lower_images(nir_shader *nir)
+clc_lower_images(nir_shader *nir, struct clc_dxil_metadata *metadata, unsigned *num_srvs, unsigned *num_uavs)
 {
    nir_foreach_function(func, nir) {
       if (!func->is_entrypoint)
@@ -237,7 +250,7 @@ clc_lower_images(nir_shader *nir)
                if (deref->mode == nir_var_shader_in &&
                    glsl_type_is_image(deref->type)) {
                   assert(deref->deref_type == nir_deref_type_var);
-                  clc_lower_input_image_deref(&b, deref);
+                  clc_lower_input_image_deref(&b, deref, metadata, num_srvs, num_uavs);
                }
             }
          }
@@ -448,13 +461,35 @@ clc_to_dxil(struct clc_context *ctx,
       metadata->args[i].size = size;
       metadata->kernel_inputs_buf_size = MAX2(metadata->kernel_inputs_buf_size,
                                               offset + size);
-      if (dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL)
-         metadata->args[i].buf_id = uav_id++;
+      if (dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL &&
+          // Ignore images during this pass - global memory buffers need to have contiguous bindings
+          !glsl_type_is_image(var->type)) {
+         metadata->args[i].buf_ids[0] = uav_id++;
+         metadata->args[i].num_buf_ids = 1;
+      }
       i++;
       offset += size;
    }
 
    assert(i == dxil->kernel->num_args);
+
+   // Second pass over inputs to calculate image bindings
+   unsigned srv_id = 0;
+   i = 0;
+   nir_foreach_variable(var, &nir->inputs) {
+      if (glsl_type_is_image(var->type)) {
+         if (var->data.access == ACCESS_NON_WRITEABLE) {
+            metadata->args[i].buf_ids[0] = srv_id++;
+         } else {
+            // Write or read-write are UAVs
+            metadata->args[i].buf_ids[0] = uav_id++;
+         }
+
+         metadata->args[i].num_buf_ids = 1;
+         var->data.binding = metadata->args[i].buf_ids[0];
+      }
+      i++;
+   }
 
    // Calculate UBO bindings
    unsigned binding = 0;
@@ -480,7 +515,7 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_lower_variable_initializers, ~nir_var_function_temp);
 
    // Needs to come before lower_explicit_io
-   NIR_PASS_V(nir, clc_lower_images);
+   NIR_PASS_V(nir, clc_lower_images, metadata, &srv_id, &uav_id);
    NIR_PASS_V(nir, nir_lower_samplers);
 
    // copy propagate to prepare for lower_explicit_io

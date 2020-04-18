@@ -95,18 +95,14 @@ struct clc_object {
 };
 
 #define CLC_MAX_CONSTS 32
-#define CLC_MAX_CONST_ARGS 8
-#define CLC_MAX_READ_IMAGE_ARGS 128
-#define CLC_MAX_WRITE_IMAGE_ARGS 8
-
-#define CLC_MAX_ARGS (CLC_MAX_CONST_ARGS + CLC_MAX_READ_IMAGE_ARGS + \
-                      CLC_MAX_WRITE_IMAGE_ARGS)
+#define CLC_MAX_BINDINGS_PER_ARG 3
 
 struct clc_dxil_metadata {
    struct {
       unsigned offset;
       unsigned size;
-      unsigned buf_id;
+      unsigned buf_ids[CLC_MAX_BINDINGS_PER_ARG];
+      unsigned num_buf_ids;
    } *args;
    unsigned kernel_inputs_cbv_id;
    unsigned kernel_inputs_buf_size;
@@ -120,11 +116,6 @@ struct clc_dxil_metadata {
    } consts[CLC_MAX_CONSTS];
    size_t num_consts;
 
-   struct {
-      int image_index;
-      int cbuf_offset;
-   } image_channels[CLC_MAX_READ_IMAGE_ARGS + CLC_MAX_WRITE_IMAGE_ARGS];
-   size_t num_image_channels;
    uint16_t local_size[3];
    uint16_t local_size_hint[3];
 };
