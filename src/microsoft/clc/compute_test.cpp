@@ -461,7 +461,7 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
       switch (dxil->kernel->args[i].address_qualifier) {
       case CLC_KERNEL_ARG_ADDRESS_GLOBAL: {
          assert(dxil->metadata.args[i].size == sizeof(uint32_t));
-         add_uav_resource(resources, 0, dxil->metadata.args[i].buf_id,
+         add_uav_resource(resources, 0, dxil->metadata.args[i].buf_ids[0],
                           arg->get_data(), arg->get_num_elems(),
                           arg->get_elem_size());
 
