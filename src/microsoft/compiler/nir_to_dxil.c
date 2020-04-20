@@ -402,6 +402,7 @@ struct ntd_context {
 
    const struct dxil_mdnode *cbv_metadata_nodes[MAX_CBVS];
    const struct dxil_value *cbv_handles[MAX_CBVS];
+   const struct dxil_value *kernel_inputs_handle;
    unsigned num_cbvs;
 
    const struct dxil_mdnode *sampler_metadata_nodes[MAX_SAMPLERS];
@@ -804,7 +805,8 @@ emit_kernel_inputs_cbv(struct ntd_context *ctx, nir_shader *nir)
    if (!handle)
       return false;
 
-   ctx->cbv_handles[ctx->num_cbvs++] = handle;
+   ctx->kernel_inputs_handle = handle;
+   ctx->num_cbvs++;
 
    return true;
 }
@@ -1773,7 +1775,7 @@ load_ubo(struct ntd_context *ctx, const struct dxil_value *handle,
 static bool
 emit_load_kernel_input(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
-   const struct dxil_value *handle = ctx->cbv_handles[ctx->num_cbvs - 1];
+   const struct dxil_value *handle = ctx->kernel_inputs_handle;
    const struct dxil_value *offset;
    nir_const_value *const_offset = nir_src_as_const_value(intr->src[0]);
    assert(const_offset);
