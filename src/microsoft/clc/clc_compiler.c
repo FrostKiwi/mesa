@@ -586,6 +586,7 @@ clc_to_dxil(struct clc_context *ctx,
    }
 
    metadata->kernel_inputs_cbv_id = metadata->num_consts;
+   metadata->global_work_offset_cbv_id = metadata->num_consts + 1;
    metadata->num_uavs = util_bitcount64(nir->info.cs.global_inputs);
 
    ralloc_free(nir);
