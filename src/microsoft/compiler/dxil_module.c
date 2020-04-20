@@ -1592,10 +1592,10 @@ emit_datalayout(struct dxil_module *m, const char *datalayout)
                       temp, strlen(datalayout));
 }
 
-const struct dxil_value *
-dxil_add_global_var(struct dxil_module *m, const char *name,
-                    const struct dxil_type *type,
-                    bool constant, enum dxil_address_space as, int align)
+static const struct dxil_value *
+add_gvar(struct dxil_module *m, const char *name,
+         const struct dxil_type *type, const struct dxil_type *value_type,
+         bool constant, enum dxil_address_space as, int align)
 {
    struct dxil_gvar *gvar = ralloc_size(m->ralloc_ctx,
                                         sizeof(struct dxil_gvar));
@@ -1609,10 +1609,27 @@ dxil_add_global_var(struct dxil_module *m, const char *name,
    gvar->align = align;
 
    gvar->value.id = -1;
-   gvar->value.type = type;
+   gvar->value.type = value_type;
 
    list_addtail(&gvar->head, &m->gvar_list);
    return &gvar->value;
+}
+
+const struct dxil_value *
+dxil_add_global_var(struct dxil_module *m, const char *name,
+                    const struct dxil_type *type,
+                    bool constant, enum dxil_address_space as, int align)
+{
+   return add_gvar(m, name, type, type, constant, as, align);
+}
+
+const struct dxil_value *
+dxil_add_global_ptr_var(struct dxil_module *m, const char *name,
+                        const struct dxil_type *type,
+                        bool constant, enum dxil_address_space as, int align)
+{
+   return add_gvar(m, name, type, dxil_module_get_pointer_type(m, type),
+                   constant, as, align);
 }
 
 static struct dxil_func *
