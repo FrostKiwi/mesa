@@ -723,6 +723,17 @@ dxil_module_get_resret_type(struct dxil_module *m, enum overload_type overload)
 }
 
 const struct dxil_type *
+dxil_module_get_dimret_type(struct dxil_module *m)
+{
+   const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
+
+   const struct dxil_type *dimret[] =
+      { int32_type, int32_type, int32_type, int32_type };
+
+   return dxil_module_get_struct_type(m, "dx.types.Dimensions", dimret, 4);
+}
+
+const struct dxil_type *
 dxil_module_add_function_type(struct dxil_module *m,
                               const struct dxil_type *ret_type,
                               const struct dxil_type **arg_types,
