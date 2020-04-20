@@ -403,6 +403,7 @@ struct ntd_context {
    const struct dxil_mdnode *cbv_metadata_nodes[MAX_CBVS];
    const struct dxil_value *cbv_handles[MAX_CBVS];
    const struct dxil_value *kernel_inputs_handle;
+   const struct dxil_value *kernel_global_work_offset_handle;
    unsigned num_cbvs;
 
    const struct dxil_mdnode *sampler_metadata_nodes[MAX_SAMPLERS];
@@ -769,6 +770,37 @@ static unsigned get_dword_size(const struct glsl_type *type)
       type = glsl_without_array(type);
    }
    return (factor * glsl_get_components(type));
+}
+
+static bool
+emit_kernel_global_work_offset_cbv(struct ntd_context *ctx)
+{
+   const struct dxil_type *int32 = dxil_module_get_int_type(&ctx->mod, 32);
+   const struct dxil_type *array_type = dxil_module_get_array_type(&ctx->mod, int32, 3);
+   const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod,
+                                                                     "kernel_global_work_offset",
+                                                                     &array_type, 1);
+   resource_array_layout layout = { ctx->num_cbvs, ctx->num_cbvs, 1 };
+   const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
+                                                          "kernel_global_work_offset",
+                                                          &layout, 3 * sizeof(int32_t));
+
+   if (!cbv_meta)
+      return false;
+
+   ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
+   add_resource(ctx, DXIL_RES_CBV, &layout);
+
+   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_CBV,
+                                                                        ctx->num_cbvs, ctx->num_cbvs,
+                                                                        false);
+   if (!handle)
+      return false;
+
+   ctx->kernel_global_work_offset_handle = handle;
+   ctx->num_cbvs++;
+
+   return true;
 }
 
 static bool
@@ -1687,22 +1719,55 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    }
 }
 
+const struct dxil_value *
+load_ubo(struct ntd_context *ctx, const struct dxil_value *handle,
+         const struct dxil_value *offset, enum overload_type overload)
+{
+   assert(handle && offset);
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CBUFFER_LOAD_LEGACY);
+   if (!opcode)
+      return NULL;
+
+   const struct dxil_value *args[] = {
+      opcode, handle, offset
+   };
+
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.cbufferLoadLegacy", overload);
+   if (!func)
+      return NULL;
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
 static bool
 emit_load_global_invocation_id(struct ntd_context *ctx,
                                     nir_intrinsic_instr *intr)
 {
    assert(intr->dest.is_ssa);
    nir_component_mask_t comps = nir_ssa_def_components_read(&intr->dest.ssa);
+   const struct dxil_value *offset = NULL;
+
+   if (ctx->kernel_global_work_offset_handle)
+      offset = load_ubo(ctx, ctx->kernel_global_work_offset_handle,
+                        dxil_module_get_int32_const(&ctx->mod, 0),
+                        DXIL_I32);
 
    for (int i = 0; i < nir_intrinsic_dest_components(intr); i++) {
       if (comps & (1 << i)) {
          const struct dxil_value *idx = dxil_module_get_int32_const(&ctx->mod, i);
          if (!idx)
             return false;
-         const struct dxil_value *threadid = emit_threadid_call(ctx, idx);
-         if (!threadid)
+         const struct dxil_value *globalid = emit_threadid_call(ctx, idx);
+
+         if (offset)
+            globalid = dxil_emit_binop(&ctx->mod, DXIL_BINOP_ADD, globalid,
+                                       dxil_emit_extractval(&ctx->mod, offset, i),
+                                       0);
+
+         if (!globalid)
             return false;
-         store_dest_int(ctx, &intr->dest, i, threadid);
+
+         store_dest_int(ctx, &intr->dest, i, globalid);
       }
    }
    return true;
@@ -1750,26 +1815,6 @@ emit_load_local_work_group_id(struct ntd_context *ctx,
       }
    }
    return true;
-}
-
-const struct dxil_value *
-load_ubo(struct ntd_context *ctx, const struct dxil_value *handle,
-         const struct dxil_value *offset, enum overload_type overload)
-{
-   assert(handle && offset);
-
-   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_CBUFFER_LOAD_LEGACY);
-   if (!opcode)
-      return NULL;
-
-   const struct dxil_value *args[] = {
-      opcode, handle, offset
-   };
-
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.cbufferLoadLegacy", overload);
-   if (!func)
-      return NULL;
-   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
 
 static bool
@@ -2971,9 +3016,12 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       }
    }
 
-   if (s->info.stage == MESA_SHADER_KERNEL)
+   if (s->info.stage == MESA_SHADER_KERNEL) {
       if (!emit_kernel_inputs_cbv(ctx, s))
          return false;
+      if (!emit_kernel_global_work_offset_cbv(ctx))
+         return false;
+   }
 
    /* Samplers */
    nir_foreach_variable(var, &s->uniforms) {
