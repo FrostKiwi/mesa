@@ -60,7 +60,7 @@ inputs: 0
 outputs: 0
 uniforms: 0
 shared: 0
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 )";
 
    for (int i = 0; i < MESA_SHADER_COMPUTE; ++i) {
@@ -81,7 +81,7 @@ inputs: 0
 outputs: 0
 uniforms: 0
 shared: 0
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 )";
 
    stringstream s;
@@ -99,7 +99,7 @@ outputs: 0
 uniforms: 0
 shared: 0
 decl_var shader_in INTERP_MODE_NONE vec3 vertexPosition_modelspace (VERT_ATTRIB_GENERIC0.xyz, 0, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 )";
 
    stringstream s;
@@ -117,7 +117,7 @@ outputs: 1
 uniforms: 0
 shared: 0
 decl_var shader_out INTERP_MODE_NONE vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 )";
 
    stringstream s;
@@ -136,7 +136,7 @@ outputs: 0
 uniforms: 4
 shared: 0
 decl_var uniform INTERP_MODE_NONE mat4 MVP (0, 0, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 )";
 
    stringstream s;
@@ -159,7 +159,7 @@ decl_var shader_in INTERP_MODE_NONE vec4 gl_Vertex (VERT_ATTRIB_POS.xyzw, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_out_TexCoord0 (VARYING_SLOT_VAR0.xyzw, 1, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_out_TexCoord2 (VARYING_SLOT_VAR2.xyzw, 2, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 )";
 
    stringstream s;
@@ -183,7 +183,7 @@ decl_var shader_in INTERP_MODE_NONE float scale (VERT_ATTRIB_GENERIC2.x, 3, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_out_TexCoord0 (VARYING_SLOT_VAR0.xyzw, 1, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_out_TexCoord2 (VARYING_SLOT_VAR2.xyzw, 2, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 )";
 
    stringstream s;
@@ -201,7 +201,7 @@ uniforms: 0
 shared: 0
 decl_var shader_in INTERP_MODE_NONE vec3 vertexPosition_modelspace (VERT_ATTRIB_GENERIC0.xyz, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 
 impl main {
    decl_var  INTERP_MODE_NONE float const_temp
@@ -230,7 +230,7 @@ outputs: 1
 uniforms: 0
 shared: 0
 decl_var shader_out INTERP_MODE_NONE vec3 color (FRAG_RESULT_DATA0.xyz, 0, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 
 impl main {
    decl_var  INTERP_MODE_NONE vec3 const_temp
@@ -257,7 +257,7 @@ shared: 0
 decl_var uniform INTERP_MODE_NONE mat4 MVP (0, 0, 0)
 decl_var shader_in INTERP_MODE_NONE vec3 vertexPosition_modelspace (VERT_ATTRIB_GENERIC0.xyz, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 
 impl main {
    decl_var  INTERP_MODE_NONE int const_temp
@@ -302,7 +302,7 @@ shared: 0
 decl_var uniform INTERP_MODE_NONE sampler2D myTextureSampler (1, 0, 0)
 decl_var shader_in INTERP_MODE_NONE vec2 UV (VARYING_SLOT_VAR9.xy, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec3 color (FRAG_RESULT_DATA0.xyz, 0, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 
 impl main {
    decl_var  INTERP_MODE_NONE vec3 color@0
@@ -330,7 +330,7 @@ shared: 0
 decl_var uniform INTERP_MODE_NONE sampler1DShadow tex (0, 0, 0)
 decl_var shader_in INTERP_MODE_NONE vec4 texcoords (VARYING_SLOT_VAR9.xyzw, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 
 impl main {
    decl_var  INTERP_MODE_NONE vec4 out@gl_FragColor-temp
@@ -362,7 +362,7 @@ decl_var uniform INTERP_MODE_NONE vec4 gl_FbWposYTransform (0, 0, 0)
 decl_var shader_in INTERP_MODE_NONE vec4 gl_FragCoord (VARYING_SLOT_POS.xyzw, 0, 0)
 decl_var shader_in INTERP_MODE_NONE vec4 gl_in_TexCoord0 (VARYING_SLOT_VAR0.xyzw, 1, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 
 impl main {
    decl_var  INTERP_MODE_NONE bool compiler_temp
@@ -421,7 +421,7 @@ shared: 0
 decl_var shader_in INTERP_MODE_NONE vec4 piglit_vertex (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 color (VARYING_SLOT_VAR9.xyzw, 1, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 
 impl main {
    decl_var  INTERP_MODE_NONE int const_temp
@@ -495,7 +495,7 @@ shared: 0
 decl_var shader_in INTERP_MODE_NONE vec4 piglit_vertex (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 color (VARYING_SLOT_VAR9.xyzw, 1, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 
 impl main {
    decl_reg vec1 32 r0
@@ -557,7 +557,7 @@ decl_var uniform INTERP_MODE_NONE int readIndex (1, 1, 0)
 decl_var shader_in INTERP_MODE_NONE vec4 gl_Vertex (VERT_ATTRIB_POS.xyzw, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 color (VARYING_SLOT_VAR9.xyzw, 1, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 
 impl main {
    decl_var  INTERP_MODE_NONE vec4[5] a2
@@ -630,7 +630,7 @@ decl_var uniform INTERP_MODE_NONE int index (1, 0, 0)
 decl_var uniform INTERP_MODE_NONE int col (2, 1, 0)
 decl_var uniform INTERP_MODE_NONE vec2 expect (3, 2, 0)
 decl_var shader_out INTERP_MODE_NONE vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
-decl_function main (0 params)
+decl_function main (0 params) (entrypoint)
 
 impl main {
     decl_var  INTERP_MODE_NONE mat2[3] m
