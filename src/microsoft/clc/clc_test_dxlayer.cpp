@@ -97,7 +97,7 @@ void NirToDXILTest::run(const string& in_shader, const string& dxil_expect) cons
    ASSERT_TRUE(validate_success);
 
    blob_finish(&tmp);
-   glsl_type_singleton_init_or_ref();
+   glsl_type_singleton_decref();
 }
 
 class ShaderBlob : public IDxcBlob {
