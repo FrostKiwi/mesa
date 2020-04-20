@@ -390,6 +390,7 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
       throw runtime_error("incorrect number of inputs");
 
    std::vector<uint8_t> argsbuf(dxil->metadata.kernel_inputs_buf_size);
+   uint32_t global_work_offset[3] = {0, 0, 0};
    Resources resources;
    unsigned uav_idx = 0;
 
@@ -423,6 +424,9 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
       add_cbv_resource(resources, 0, dxil->metadata.consts[i].cbv_id,
                        dxil->metadata.consts[i].data,
                        dxil->metadata.consts[i].size);
+
+   add_cbv_resource(resources, 0, dxil->metadata.global_work_offset_cbv_id,
+                    global_work_offset, sizeof(global_work_offset));
 
    if (argsbuf.size())
       add_cbv_resource(resources, 0, dxil->metadata.kernel_inputs_cbv_id,
