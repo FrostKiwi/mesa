@@ -211,6 +211,8 @@ enum dxil_intr {
    DXIL_INTR_BUFFER_LOAD = 68,
    DXIL_INTR_BUFFER_STORE = 69,
 
+   DXIL_INTR_TEXTURE_SIZE = 72,
+
    DXIL_INTR_ATOMIC_BINOP = 78,
 
    DXIL_INTR_DISCARD = 82,
@@ -2641,12 +2643,27 @@ emit_texel_fetch(struct ntd_context *ctx, const struct dxil_value *tex,
    return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
 
+static const struct dxil_value *
+emit_texture_size(struct ntd_context *ctx, const struct dxil_value *tex,
+                 const struct dxil_value *lod)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.getDimensions", DXIL_NONE);
+   if (!func)
+      return false;
+
+   const struct dxil_value *args[] = {
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_TEXTURE_SIZE),
+      tex,
+      lod
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
 
 static bool
 emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 {
    assert(instr->texture_index == instr->sampler_index);
-   assert(nir_alu_type_get_base_type(instr->dest_type) == nir_type_float);
 
    assert(instr->texture_index < ctx->num_srvs);
    const struct dxil_value *tex = ctx->srv_handles[instr->texture_index];
@@ -2750,6 +2767,10 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
       PAD_SRC(ctx, coord, int_undef);
       sample = emit_texel_fetch(ctx, tex, coord, offset, lod ? lod : int_undef);
       break;
+
+   case nir_texop_txs:
+      sample = emit_texture_size(ctx, tex, lod);
+      break;
    }
 
    if (!sample)
@@ -2757,7 +2778,7 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 
    for (unsigned i = 0; i < nir_dest_num_components(instr->dest); ++i) {
       const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, sample, i);
-      store_dest(ctx, &instr->dest, i, retval, nir_type_float);
+      store_dest(ctx, &instr->dest, i, retval, nir_alu_type_get_base_type(instr->dest_type));
    }
 
    return true;

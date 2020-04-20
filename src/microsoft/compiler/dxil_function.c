@@ -59,6 +59,7 @@ static struct  predefined_func_descr predefined_funcs[] = {
 {"dx.op.discard", "v", "ib", DXIL_ATTR_KIND_READ_NONE},
 {"dx.op.emitStream", "v", "ic", DXIL_ATTR_KIND_NONE},
 {"dx.op.cutStream", "v", "ic", DXIL_ATTR_KIND_NONE},
+{"dx.op.getDimensions", "D", "i@i", DXIL_ATTR_KIND_READ_ONLY},
 };
 
 struct func_descr {
@@ -159,6 +160,7 @@ get_type_from_string(struct dxil_module *mod, const char *param_descr,
    case DXIL_FUNC_PARAM_VOID: return dxil_module_get_void_type(mod);
    case DXIL_FUNC_PARAM_FROM_OVERLOAD:  return dxil_get_overload_type(mod, overload);
    case DXIL_FUNC_PARAM_RESRET: return dxil_module_get_resret_type(mod, overload);
+   case DXIL_FUNC_PARAM_DIM: return dxil_module_get_dimret_type(mod);
    case DXIL_FUNC_PARAM_CBUF_RET: return dxil_module_get_cbuf_ret_type(mod, overload);
    case DXIL_FUNC_PARAM_POINTER: {
          const struct dxil_type *target = get_type_from_string(mod, param_descr, overload, idx);
