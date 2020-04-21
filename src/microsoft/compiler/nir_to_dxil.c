@@ -714,9 +714,9 @@ emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned count)
    unsigned idx = ctx->num_srvs;
    resource_array_layout layout = {id, idx, count};
 
-   enum dxil_component_type comp_type = DXIL_COMP_TYPE_F32;
+   enum dxil_component_type comp_type = dxil_get_comp_type(var->type);
    enum dxil_resource_kind res_kind = dxil_get_resource_kind(var->type);
-   const struct dxil_type *res_type = dxil_module_get_res_type(&ctx->mod, res_kind);
+   const struct dxil_type *res_type = dxil_module_get_res_type(&ctx->mod, res_kind, comp_type);
    const struct dxil_mdnode *srv_meta = emit_srv_metadata(&ctx->mod, res_type, var->name,
                                                           &layout, comp_type, res_kind);
 

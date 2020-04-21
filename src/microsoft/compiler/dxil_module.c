@@ -676,21 +676,79 @@ dxil_module_get_cbuf_ret_type(struct dxil_module *mod, enum overload_type overlo
    return dxil_module_get_struct_type(mod, name, fields, num_fields);
 }
 
+static const struct dxil_type *
+dxil_module_get_type_from_comp_type(struct dxil_module *m, enum dxil_component_type comp_type)
+{
+   switch (comp_type) {
+   case DXIL_COMP_TYPE_U32: return get_int32_type(m);
+   case DXIL_COMP_TYPE_I32: return get_int32_type(m);
+   case DXIL_COMP_TYPE_F32: return get_float32_type(m);
+   case DXIL_COMP_TYPE_F64: return get_float64_type(m);
+   case DXIL_COMP_TYPE_U16: return get_int16_type(m);
+   case DXIL_COMP_TYPE_I16: return get_int16_type(m);
+   case DXIL_COMP_TYPE_U64: return get_int64_type(m);
+   case DXIL_COMP_TYPE_I64: return get_int64_type(m);
+   case DXIL_COMP_TYPE_I1: return get_int1_type(m);
+
+   case DXIL_COMP_TYPE_F16:
+   default:
+      unreachable("unexpected component type");
+   }
+}
+
+static const char *
+get_res_comp_type_name(enum dxil_component_type comp_type)
+{
+   switch (comp_type) {
+   case DXIL_COMP_TYPE_F64: return "double";
+   case DXIL_COMP_TYPE_F32: return "float";
+   case DXIL_COMP_TYPE_I32: return "int";
+   case DXIL_COMP_TYPE_U32: return "uint";
+   case DXIL_COMP_TYPE_I64: return "int64";
+   case DXIL_COMP_TYPE_U64: return "uint64";
+   default:
+      unreachable("unexpected resource component type");
+   }
+}
+
+static const char *
+get_res_dimension_type_name(enum dxil_resource_kind kind)
+{
+   switch (kind) {
+   case DXIL_RESOURCE_KIND_TEXTURE1D: return "Texture1D";
+   case DXIL_RESOURCE_KIND_TEXTURE1D_ARRAY: return "Texture1DArray";
+   case DXIL_RESOURCE_KIND_TEXTURE2D: return "Texture2D";
+   case DXIL_RESOURCE_KIND_TEXTURE2DMS: return "Texture2DMS";
+   case DXIL_RESOURCE_KIND_TEXTURE2D_ARRAY: return "Texture2DArray";
+   case DXIL_RESOURCE_KIND_TEXTURE2DMS_ARRAY: return "Texture2DMSArray";
+   case DXIL_RESOURCE_KIND_TEXTURE3D: return "Texture3D";
+   case DXIL_RESOURCE_KIND_TEXTURECUBE: return "TextureCube";
+   case DXIL_RESOURCE_KIND_TEXTURECUBE_ARRAY: return "TextureCubeArray";
+   default:
+      unreachable("unexpected resource kind");
+   }
+}
+
 const struct dxil_type *
-dxil_module_get_res_type(struct dxil_module *m, enum dxil_resource_kind kind)
+dxil_module_get_res_type(struct dxil_module *m, enum dxil_resource_kind kind, enum dxil_component_type comp_type)
 {
    switch (kind) {
    case DXIL_RESOURCE_KIND_TEXTURE1D:
+   case DXIL_RESOURCE_KIND_TEXTURE1D_ARRAY:
    case DXIL_RESOURCE_KIND_TEXTURE2D:
+   case DXIL_RESOURCE_KIND_TEXTURE2D_ARRAY:
    case DXIL_RESOURCE_KIND_TEXTURE3D:
    case DXIL_RESOURCE_KIND_TEXTURECUBE:
+   case DXIL_RESOURCE_KIND_TEXTURECUBE_ARRAY:
    {
       const struct dxil_type *int32_type = dxil_module_get_int_type(m, 32);
-      const struct dxil_type *float32_type = dxil_module_get_float_type(m, 32);
-      const struct dxil_type *vec_type = dxil_module_get_vector_type(m, float32_type, 4);
-      const struct dxil_type *mips_type = dxil_module_get_struct_type(m, "class.Texture2D<vector<float, 4> >::mips_type", &int32_type, 1);
-      const struct dxil_type *fields[2] = { vec_type, mips_type };
-      return dxil_module_get_struct_type(m, "class.Texture2D<vector<float, 4> >", fields, 2);
+      const struct dxil_type *component_type = dxil_module_get_type_from_comp_type(m, comp_type);
+      const struct dxil_type *vec_type = dxil_module_get_vector_type(m, component_type, 4);
+      char class_name[64] = { 0 };
+      sprintf_s(class_name, 64, "class.%s<vector<%s, 4> >",
+                get_res_dimension_type_name(kind),
+                get_res_comp_type_name(comp_type));
+      return dxil_module_get_struct_type(m, class_name, &vec_type, 1);
    }
 
    default:
