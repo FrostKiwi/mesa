@@ -549,3 +549,21 @@ TEST_F(ComputeTest, frexp_exp)
    for (int i = 0; i < ARRAY_SIZE(expected); ++i)
       EXPECT_EQ(buf[i], expected[i]);
 }
+
+TEST_F(ComputeTest, clz)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = clz(inout[get_global_id(0)]);\n\
+   }\n";
+   const uint32_t input[] = {
+      0, 1, 0xffff,  (1u << 30), (1u << 31)
+   };
+   const uint32_t expected[] = {
+      32, 31, 16, 1, 0
+   };
+   auto buf = run_shader_with_input(kernel_source, ARRAY_SIZE(expected), input);
+   for (int i = 0; i < ARRAY_SIZE(expected); ++i)
+      EXPECT_EQ(buf[i], expected[i]);
+}
