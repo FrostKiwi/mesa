@@ -514,7 +514,7 @@ clc_to_dxil(struct clc_context *ctx,
    }
    assert(exec_list_length(&nir->functions) == 1);
 
-   NIR_PASS_V(nir, nir_lower_variable_initializers, ~nir_var_function_temp);
+   NIR_PASS_V(nir, nir_lower_variable_initializers, ~(nir_var_function_temp | nir_var_shader_temp));
 
    // Needs to come before lower_explicit_io
    NIR_PASS_V(nir, clc_lower_images, metadata, &srv_id, &uav_id);

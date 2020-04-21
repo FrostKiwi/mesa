@@ -431,6 +431,8 @@ struct ntd_context {
 
    struct hash_table *locals;
    const struct dxil_value *sharedvars;
+   struct hash_table *consts;
+
    nir_variable *ps_front_face;
 };
 
@@ -783,6 +785,157 @@ static unsigned get_dword_size(const struct glsl_type *type)
       type = glsl_without_array(type);
    }
    return (factor * glsl_get_components(type));
+}
+
+static bool
+var_fill_const_array_with_vector_or_scalar(struct ntd_context *ctx,
+                                           const struct nir_constant *c,
+                                           const struct glsl_type *type,
+                                           void *const_vals,
+                                           unsigned int parent_offset)
+{
+   assert(glsl_type_is_vector_or_scalar(type));
+   enum glsl_base_type base_type = glsl_get_base_type(type);
+   unsigned int components = glsl_get_vector_elements(type);
+   unsigned int offset = align(parent_offset, glsl_get_cl_alignment(type));
+   unsigned bit_size = glsl_get_bit_size(type);
+   unsigned int increment =
+      glsl_get_cl_size(type) / ((components == 3) ? 4 : components);
+
+
+   for (unsigned int comp = 0; comp < components; comp++) {
+      uint8_t *dst = (uint8_t *)const_vals + offset;
+      assert(!((uintptr_t)dst & ((1 << util_logbase2(bit_size / 8)) - 1)));
+
+      if (glsl_base_type_is_integer(base_type)) {
+         switch (glsl_get_bit_size(type)) {
+         case 64:
+           *((uint64_t *)dst) = c->values[comp].i64;
+           break;
+         case 32:
+           *((uint32_t *)dst) = c->values[comp].i32;
+           break;
+         case 16:
+           *((uint16_t *)dst) = c->values[comp].i16;
+           break;
+         case 8:
+           *dst = c->values[comp].i8;
+           break;
+         default:
+            unreachable("unexpeted bit-size");
+         }
+      } else {
+         switch (glsl_get_bit_size(type)) {
+         case 64:
+            *((double *)dst) = c->values[comp].f64;
+           break;
+         case 32:
+            *((float *)dst) = c->values[comp].f32;
+            break;
+         default:
+            unreachable("unexpeted bit-size");
+         }
+      }
+
+      offset += increment;
+   }
+
+   return true;
+}
+
+static bool
+var_fill_const_array(struct ntd_context *ctx, const struct nir_constant *c,
+                     const struct glsl_type *type, void *const_vals,
+                     unsigned int parent_offset)
+{
+   assert(!glsl_type_is_interface(type));
+
+   if (glsl_type_is_vector_or_scalar(type)) {
+      return var_fill_const_array_with_vector_or_scalar(ctx, c, type,
+                                                        const_vals,
+                                                        parent_offset);
+   } else if (glsl_type_is_array(type)) {
+      assert(!glsl_type_is_unsized_array(type));
+      const struct glsl_type *without = glsl_without_array(type);
+      enum glsl_base_type without_base = glsl_get_base_type(without);
+      unsigned int offset = parent_offset;
+
+      for (unsigned elt = 0; elt < glsl_get_length(type); elt++) {
+         offset = align(offset, glsl_get_cl_alignment(without));
+         if (!var_fill_const_array(ctx, c->elements[elt], without,
+                                   const_vals, offset)) {
+            return false;
+         }
+         offset += glsl_get_cl_size(without);
+      }
+      return true;
+   } else if (glsl_type_is_struct(type)) {
+      unsigned int offset = parent_offset;
+
+      for (unsigned int elt = 0; elt < glsl_get_length(type); elt++) {
+         const struct glsl_type *elt_type = glsl_get_struct_field(type, elt);
+
+         offset = align(offset, glsl_get_cl_alignment(elt_type));
+         if (!var_fill_const_array(ctx, c->elements[elt],
+                                   elt_type, const_vals, offset)) {
+            return false;
+         }
+         offset += glsl_get_cl_size(elt_type);
+      }
+      return true;
+   }
+
+   unreachable("unknown GLSL type in var_fill_const_array");
+}
+
+static bool
+emit_global_consts(struct ntd_context *ctx, struct exec_list *globals)
+{
+   nir_foreach_variable(var, globals) {
+      struct dxil_value *ret;
+      bool err;
+
+      if (var->data.mode != nir_var_shader_temp)
+         continue;
+
+      assert(var->constant_initializer);
+
+      unsigned int num_members = DIV_ROUND_UP(glsl_get_cl_size(var->type), 4);
+      uint32_t *const_ints = ralloc_array(ctx->ralloc_ctx, uint32_t, num_members);
+      err = var_fill_const_array(ctx, var->constant_initializer, var->type,
+                                 const_ints, 0);
+      if (!err)
+         return false;
+      const struct dxil_value **const_vals =
+         ralloc_array(ctx->ralloc_ctx, const struct dxil_value *, num_members);
+      if (!const_vals)
+         return false;
+      for (int i = 0; i < num_members; i++)
+         const_vals[i] = dxil_module_get_int32_const(&ctx->mod, const_ints[i]);
+
+      const struct dxil_type *elt_type = dxil_module_get_int_type(&ctx->mod, 32);
+      if (!elt_type)
+         return false;
+      const struct dxil_type *type =
+         dxil_module_get_array_type(&ctx->mod, elt_type, num_members);
+      if (!type)
+         return false;
+      const struct dxil_value *agg_vals =
+         dxil_module_get_array_const(&ctx->mod, type, const_vals);
+      if (!agg_vals)
+         return false;
+
+      const struct dxil_value *gvar = dxil_add_global_ptr_var(&ctx->mod, var->name, type,
+                                                              DXIL_AS_DEFAULT, 4,
+                                                              agg_vals);
+      if (!gvar)
+         return false;
+
+      if (!_mesa_hash_table_insert(ctx->consts, var, (void *)gvar))
+         return false;
+   }
+
+   return true;
 }
 
 static bool
@@ -1961,8 +2114,14 @@ static const struct dxil_value *
 emit_gep_for_index(struct ntd_context *ctx, const nir_variable *var,
                    const struct dxil_value *index)
 {
-   assert(var->data.mode ==  nir_var_function_temp);
-   struct hash_entry *he = _mesa_hash_table_search(ctx->locals, var);
+   assert(var->data.mode == nir_var_function_temp ||
+          var->data.mode == nir_var_shader_temp);
+
+   struct hash_entry *he;
+   if (var->data.mode == nir_var_function_temp)
+      he = _mesa_hash_table_search(ctx->locals, var);
+   else
+      he = _mesa_hash_table_search(ctx->consts, var);
    assert(he != NULL);
    const struct dxil_value *ptr = he->data;
 
@@ -3264,6 +3423,12 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    if (s->info.stage == MESA_SHADER_KERNEL) {
       if (s->info.cs.global_inputs &&
           !emit_globals(ctx, s->info.cs.global_inputs))
+         return false;
+
+      ctx->consts = _mesa_pointer_hash_table_create(ctx->ralloc_ctx);
+      if (!ctx->consts)
+         return false;
+      if (!emit_global_consts(ctx, &s->globals))
          return false;
    }
 
