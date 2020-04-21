@@ -49,7 +49,10 @@ enum dxil_prog_sig_comp_type dxil_get_prog_sig_comp_type(const struct glsl_type 
 
 enum dxil_component_type dxil_get_comp_type(const struct glsl_type *type)
 {
-   switch (glsl_get_base_type(type)) {
+   enum glsl_base_type base_type = glsl_get_base_type(type);
+   if (glsl_type_is_sampler(type))
+      base_type = glsl_get_sampler_result_type(type);
+   switch (base_type) {
    case GLSL_TYPE_UINT: return DXIL_COMP_TYPE_U32;
    case GLSL_TYPE_INT: return DXIL_COMP_TYPE_I32;
    case GLSL_TYPE_FLOAT: return DXIL_COMP_TYPE_F32;
