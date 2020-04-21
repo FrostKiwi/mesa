@@ -53,12 +53,12 @@ d3d12_context_destroy(struct pipe_context *pctx)
    struct d3d12_context *ctx = d3d12_context(pctx);
    d3d12_validator_destroy(ctx->validation_tools);
 
+   util_blitter_destroy(ctx->blitter);
    d3d12_end_batch(ctx, d3d12_current_batch(ctx));
    for (int i = 0; i < ARRAY_SIZE(ctx->batches); ++i)
       d3d12_destroy_batch(ctx, &ctx->batches[i]);
    ctx->cmdlist->Release();
    ctx->cmdqueue_fence->Release();
-   util_blitter_destroy(ctx->blitter);
    d3d12_descriptor_heap_free(ctx->rtv_heap);
    d3d12_descriptor_heap_free(ctx->dsv_heap);
    d3d12_descriptor_pool_free(ctx->sampler_pool);
