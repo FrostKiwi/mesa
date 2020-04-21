@@ -109,111 +109,133 @@ load_comps_to_vec32(nir_builder *b, unsigned src_bit_size,
 static void
 lower_load_global(nir_builder *b, nir_intrinsic_instr *intr)
 {
-   b->cursor = nir_before_instr(&intr->instr);
+   assert(intr->dest.is_ssa);
+   unsigned bit_size = nir_dest_bit_size(intr->dest);
+   unsigned num_components = nir_dest_num_components(intr->dest);
+   unsigned num_bits = num_components * bit_size;
 
-   assert(intr->num_components == 1); // no support for vectors
+   b->cursor = nir_before_instr(&intr->instr);
 
    /* source 'pointer' */
    assert(intr->src[0].is_ssa);
    nir_ssa_def *ptr = intr->src[0].ssa;
    nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
    nir_ssa_def *offset = ptr_to_offset(b, ptr);
+   nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
+   unsigned comp_idx = 0;
 
-   nir_ssa_def *result;
-   unsigned bit_size = nir_dest_bit_size(intr->dest);
-
-   nir_intrinsic_instr *load =
-      nir_intrinsic_instr_create(b->shader,
-                                 nir_intrinsic_load_global_dxil);
-
-   load->num_components = DIV_ROUND_UP(bit_size, 32);
-   assert(intr->dest.is_ssa);
-   load->src[0] = nir_src_for_ssa(buffer);
-   load->src[1] = nir_src_for_ssa(offset);
-
-   nir_ssa_dest_init(&load->instr, &load->dest, load->num_components,
-                     32, intr->dest.ssa.name);
-   nir_builder_instr_insert(b, &load->instr);
-
-   nir_ssa_def *vec32 = &load->dest.ssa;
-
-   /* If we have 2 bytes or less to load we need to adjust the u32 value so
-    * we can always extract the LSB.
+   /* We need to split loads in 16byte chunks because that's the optimal
+    * granularity of bufferLoad(). Minimum alignment is 4byte, which saves
+    * from us from extra complexity to extract >= 32 bit components.
     */
-   if (bit_size < 32) {
-      nir_ssa_def *shift = nir_imul(b, nir_iand(b, ptr, nir_imm_int(b, 3)),
-                                       nir_imm_int(b, 8));
-      vec32 = nir_ushr(b, vec32, shift);
+   for (unsigned i = 0; i < num_bits; i += 4 * 32) {
+      /* For each 16byte chunk (or smaller) we generate a 32bit global vec
+       * load.
+       */
+      unsigned subload_num_bits = MIN2(num_bits - i, 4 * 32);
+      nir_intrinsic_instr *load =
+         nir_intrinsic_instr_create(b->shader,
+                                    nir_intrinsic_load_global_dxil);
+
+      /* The number of components to store depends on the number of bytes. */
+      load->num_components = DIV_ROUND_UP(subload_num_bits, 32);
+      load->src[0] = nir_src_for_ssa(buffer);
+      load->src[1] = nir_src_for_ssa(nir_iadd(b, offset, nir_imm_int(b, i / 8)));
+      nir_ssa_dest_init(&load->instr, &load->dest, load->num_components,
+                        32, NULL);
+      nir_builder_instr_insert(b, &load->instr);
+
+      nir_ssa_def *vec32 = &load->dest.ssa;
+
+      /* If we have 2 bytes or less to load we need to adjust the u32 value so
+       * we can always extract the LSB.
+       */
+      if (subload_num_bits <= 16) {
+         nir_ssa_def *shift = nir_imul(b, nir_iand(b, ptr, nir_imm_int(b, 3)),
+                                          nir_imm_int(b, 8));
+         vec32 = nir_ushr(b, vec32, shift);
+      }
+
+      /* And now comes the pack/unpack step to match the original type. */
+      extract_comps_from_vec32(b, vec32, bit_size, &comps[comp_idx],
+                               subload_num_bits / bit_size);
+      comp_idx += subload_num_bits / bit_size;
    }
 
-   unsigned comp_offset = 0;
-   extract_comps_from_vec32(b, vec32, bit_size, &result, 1);
-
-   nir_ssa_def_rewrite_uses(&intr->dest.ssa,
-                            nir_src_for_ssa(result));
+   assert(comp_idx == num_components);
+   nir_ssa_def *result = nir_vec(b, comps, num_components);
+   nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
    nir_instr_remove(&intr->instr);
 }
 
 static void
 lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
 {
-   b->cursor = nir_before_instr(&intr->instr);
+   assert(intr->src[0].is_ssa);
+   unsigned num_components = nir_src_num_components(intr->src[0]);
+   unsigned bit_size = nir_src_bit_size(intr->src[0]);
+   unsigned num_bits = num_components * bit_size;
 
-   assert(intr->num_components == 1); // no support for vectors
+   b->cursor = nir_before_instr(&intr->instr);
 
    /* source 'pointer' */
    assert(intr->src[1].is_ssa);
    nir_ssa_def *ptr = intr->src[1].ssa;
    nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
    nir_ssa_def *offset = ptr_to_offset(b, ptr);
+   nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
+   unsigned comp_idx = 0;
 
-   assert(intr->src[0].is_ssa);
-   nir_ssa_def *value;
+   for (unsigned i = 0; i < num_components; i++)
+      comps[i] = nir_channel(b, intr->src[0].ssa, i);
 
-   unsigned bit_size = nir_src_bit_size(intr->src[0]);
-   unsigned comp_offset = 0;
+   /* We split stores in 16byte chunks because that's the optimal granularity
+    * of bufferStore(). Minimum alignment is 4byte, which saves from us from
+    * extra complexity to store >= 32 bit components.
+    */
+   for (unsigned i = 0; i < num_bits; i += 4 * 32) {
+      /* For each 16byte chunk (or smaller) we generate a 32bit global vec
+       * store.
+       */
+      unsigned substore_num_bits = MIN2(num_bits - i, 4 * 32);
+      nir_ssa_def *local_offset = nir_iadd(b, offset, nir_imm_int(b, i / 8));
+      nir_ssa_def *vec32 = load_comps_to_vec32(b, bit_size, &comps[comp_idx],
+                                               substore_num_bits / bit_size);
+      nir_intrinsic_instr *store;
 
-   value = load_comps_to_vec32(b, bit_size, &intr->src[0].ssa, 1);
+      if (substore_num_bits < 32) {
+         nir_ssa_def *mask = nir_imm_int(b, (1 << substore_num_bits) - 1);
 
-   if (bit_size >= 32) {
-      nir_intrinsic_instr *store =
-         nir_intrinsic_instr_create(b->shader,
-                                    nir_intrinsic_store_global_dxil);
-      store->num_components = value->num_components;
-      store->src[0] = nir_src_for_ssa(value);
-      store->src[1] = nir_src_for_ssa(buffer);
-      store->src[2] = nir_src_for_ssa(offset);
-      nir_builder_instr_insert(b, &store->instr);
-   } else {
-      nir_ssa_def *shift, *mask;
-      switch (bit_size) {
-      case 8:
-         shift = nir_iand(b, ptr, nir_imm_int(b, 3));
-         break;
+        /* If we have 16 bits or less to store we need to place them
+         * correctly in the u32 component. Anything greater than 16 bits
+         * (including uchar3) is naturally aligned on 32bits.
+         */
+         if (substore_num_bits <= 16) {
+            nir_ssa_def *pos = nir_iand(b, ptr, nir_imm_int(b, 3));
+            nir_ssa_def *shift = nir_imul_imm(b, pos, 8);
 
-      case 16:
-         shift = nir_iand(b, ptr, nir_imm_int(b, 2));
-         break;
+            vec32 = nir_ishl(b, vec32, shift);
+            mask = nir_ishl(b, mask, shift);
+         }
 
-      default:
-         unreachable("unexpected bit_size");
+         store = nir_intrinsic_instr_create(b->shader,
+                                            nir_intrinsic_store_global_masked_dxil);
+         store->src[0] = nir_src_for_ssa(vec32);
+         store->src[1] = nir_src_for_ssa(nir_inot(b, mask));
+         store->src[2] = nir_src_for_ssa(buffer);
+         store->src[3] = nir_src_for_ssa(local_offset);
+      } else {
+         store = nir_intrinsic_instr_create(b->shader,
+                                            nir_intrinsic_store_global_dxil);
+         store->src[0] = nir_src_for_ssa(vec32);
+         store->src[1] = nir_src_for_ssa(buffer);
+         store->src[2] = nir_src_for_ssa(local_offset);
       }
 
-      /* need to decompose this into 32-bit masked writes */
-      shift = nir_imul_imm(b, shift, 8);
-      value = nir_ishl(b, value, shift);
-      mask = nir_inot(b, nir_ishl(b, nir_imm_int(b, (1 << bit_size) - 1),
-                                     shift));
-
-      nir_intrinsic_instr *store =
-         nir_intrinsic_instr_create(b->shader,
-                                    nir_intrinsic_store_global_masked_dxil);
-      store->num_components = 1;
-      store->src[0] = nir_src_for_ssa(value);
-      store->src[1] = nir_src_for_ssa(mask);
-      store->src[2] = nir_src_for_ssa(buffer);
-      store->src[3] = nir_src_for_ssa(offset);
+      /* The number of components to store depends on the number of bits. */
+      store->num_components = DIV_ROUND_UP(substore_num_bits, 32);
       nir_builder_instr_insert(b, &store->instr);
+      comp_idx += substore_num_bits / bit_size;
    }
 
    nir_instr_remove(&intr->instr);
