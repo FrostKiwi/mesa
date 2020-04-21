@@ -124,7 +124,8 @@ lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
 
    nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
    nir_variable *var = nir_deref_instr_get_variable(deref);
-   if (var->data.mode != nir_var_function_temp)
+   if (var->data.mode != nir_var_function_temp &&
+       var->data.mode != nir_var_shader_temp)
       return false;
    nir_ssa_def *ptr = nir_build_deref_offset(b, deref, cl_type_size_align);
    nir_ssa_def *offset = nir_iand(b, ptr, nir_inot(b, nir_imm_int(b, 3)));
@@ -189,7 +190,8 @@ lower_store_deref(nir_builder *b, nir_intrinsic_instr *intr)
 
    nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
    nir_variable *var = nir_deref_instr_get_variable(deref);
-   if (var->data.mode != nir_var_function_temp)
+   if (var->data.mode != nir_var_function_temp &&
+       var->data.mode != nir_var_shader_temp)
       return false;
    nir_src val = intr->src[1];
    nir_ssa_def *ptr = nir_build_deref_offset(b, deref, cl_type_size_align);
