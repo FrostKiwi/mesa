@@ -90,7 +90,11 @@ nir_options = {
    .lower_add_sat = true,
    .lower_uadd_carry = true,
    .lower_mul_high = true,
-   .lower_rotate = true
+   .lower_rotate = true,
+   .lower_pack_64_2x32_split = true,
+   .lower_pack_32_2x16_split = true,
+   .lower_unpack_64_2x32_split = true,
+   .lower_unpack_32_2x16_split = true,
 };
 
 const nir_shader_compiler_options*
@@ -3239,6 +3243,7 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
    ctx.mod.major_version = 6;
    ctx.mod.minor_version = 1;
 
+   NIR_PASS_V(s, nir_lower_pack);
    NIR_PASS_V(s, nir_lower_frexp);
 
    optimize_nir(s);
