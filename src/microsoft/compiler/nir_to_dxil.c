@@ -2721,9 +2721,10 @@ get_n_src(struct ntd_context *ctx, const struct dxil_value **values,
 static const struct dxil_value *
 emit_sample(struct ntd_context *ctx, const struct dxil_value *tex,
             const struct dxil_value *sampler, const struct dxil_value **coord,
-            const struct dxil_value **offset, const struct dxil_value *min_lod)
+            const struct dxil_value **offset, const struct dxil_value *min_lod,
+            enum overload_type overload)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sample", DXIL_F32);
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sample", overload);
    if (!func)
       return NULL;
 
@@ -2742,9 +2743,9 @@ static const struct dxil_value *
 emit_sample_bias(struct ntd_context *ctx, const struct dxil_value *tex,
                  const struct dxil_value *sampler, const struct dxil_value **coord,
                  const struct dxil_value **offset, const struct dxil_value *bias,
-                 const struct dxil_value *min_lod)
+                 const struct dxil_value *min_lod, enum overload_type overload)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleBias", DXIL_F32);
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleBias", overload);
    if (!func)
       return NULL;
 
@@ -2764,9 +2765,10 @@ emit_sample_bias(struct ntd_context *ctx, const struct dxil_value *tex,
 static const struct dxil_value *
 emit_sample_level(struct ntd_context *ctx, const struct dxil_value *tex,
                   const struct dxil_value *sampler, const struct dxil_value **coord,
-                  const struct dxil_value **offset, const struct dxil_value *lod)
+                  const struct dxil_value **offset, const struct dxil_value *lod,
+                  enum overload_type overload)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleLevel", DXIL_F32);
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleLevel", overload);
    if (!func)
       return NULL;
 
@@ -2808,9 +2810,10 @@ static const struct dxil_value *
 emit_sample_grad(struct ntd_context *ctx, const struct dxil_value *tex,
                  const struct dxil_value *sampler, const struct dxil_value **coord,
                  const struct dxil_value **offset, const struct dxil_value **dx,
-                 const struct dxil_value **dy, const struct dxil_value *min_lod)
+                 const struct dxil_value **dy, const struct dxil_value *min_lod,
+                 enum overload_type overload)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleGrad", DXIL_F32);
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleGrad", overload);
    if (!func)
       return false;
 
@@ -2829,9 +2832,10 @@ emit_sample_grad(struct ntd_context *ctx, const struct dxil_value *tex,
 static const struct dxil_value *
 emit_texel_fetch(struct ntd_context *ctx, const struct dxil_value *tex,
                  const struct dxil_value **coord,
-                 const struct dxil_value **offset, const struct dxil_value *lod)
+                 const struct dxil_value **offset, const struct dxil_value *lod,
+                 enum overload_type overload)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.textureLoad", DXIL_F32);
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.textureLoad", overload);
    if (!func)
       return false;
 
@@ -2881,6 +2885,7 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
    const struct dxil_value *bias = NULL, *lod = NULL, *dref = NULL, *min_lod = NULL;
    const struct dxil_value *coord[4], *offset[3], *dx[3], *dy[3];
    unsigned coord_components = 0, offset_components = 0, dx_components = 0, dy_components = 0;
+   enum overload_type overload = get_overload(instr->dest_type, 32);
 
    for (unsigned i = 0; i < instr->num_srcs; i++) {
       nir_alu_type type = nir_tex_instr_src_type(instr, i);
@@ -2950,26 +2955,26 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
       if (dref != NULL)
          sample = emit_sample_cmp(ctx, tex, sampler, coord, offset, dref, min_lod);
       else
-         sample = emit_sample(ctx, tex, sampler, coord, offset, min_lod);
+         sample = emit_sample(ctx, tex, sampler, coord, offset, min_lod, overload);
       break;
 
    case nir_texop_txb:
-      sample = emit_sample_bias(ctx, tex, sampler, coord, offset, bias, min_lod);
+      sample = emit_sample_bias(ctx, tex, sampler, coord, offset, bias, min_lod, overload);
       break;
 
    case nir_texop_txl:
-      sample = emit_sample_level(ctx, tex, sampler, coord, offset, lod);
+      sample = emit_sample_level(ctx, tex, sampler, coord, offset, lod, overload);
       break;
 
    case nir_texop_txd:
       PAD_SRC(ctx, dx, float_undef);
       PAD_SRC(ctx, dy, float_undef);
-      sample = emit_sample_grad(ctx, tex, sampler, coord, offset, dx, dy, min_lod);
+      sample = emit_sample_grad(ctx, tex, sampler, coord, offset, dx, dy, min_lod, overload);
       break;
 
    case nir_texop_txf:
       PAD_SRC(ctx, coord, int_undef);
-      sample = emit_texel_fetch(ctx, tex, coord, offset, lod ? lod : int_undef);
+      sample = emit_texel_fetch(ctx, tex, coord, offset, lod ? lod : int_undef, overload);
       break;
 
    case nir_texop_txs:
