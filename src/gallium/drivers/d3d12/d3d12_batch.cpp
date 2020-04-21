@@ -135,6 +135,7 @@ d3d12_destroy_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    _mesa_set_destroy(batch->sampler_views, NULL);
    _mesa_set_destroy(batch->surfaces, NULL);
    _mesa_set_destroy(batch->objects, NULL);
+   util_dynarray_fini(&batch->zombie_samplers);
 }
 
 void
