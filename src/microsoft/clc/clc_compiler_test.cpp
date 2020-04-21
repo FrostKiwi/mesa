@@ -1439,6 +1439,17 @@ TEST_F(ComputeTest, image_two_reads)
    validate(shader);
 }
 
+TEST_F(ComputeTest, sampler)
+{
+   const char* kernel_source =
+   "__kernel void main_test(image2d_t image, sampler_t sampler, __global float* output)\n\
+   {\n\
+      output[get_global_id(0)] = read_imagef(image, sampler, (int2)(0, 0)).x;\n\
+   }\n";
+   Shader shader = compile(std::vector<const char*>({ kernel_source }));
+   validate(shader);
+}
+
 TEST_F(ComputeTest, local_ptr)
 {
    struct uint2 { uint32_t x, y; };
