@@ -241,6 +241,133 @@ lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
    nir_instr_remove(&intr->instr);
 }
 
+static nir_ssa_def *
+lower_load_shared_vec32(nir_builder *b, nir_ssa_def *index, unsigned num_comps)
+{
+   nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
+
+   for (unsigned i = 0; i < num_comps; i++) {
+      nir_intrinsic_instr *load =
+         nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_shared_dxil);
+
+      load->num_components = 1;
+      load->src[0] = nir_src_for_ssa(nir_iadd(b, index, nir_imm_int(b, i)));
+      nir_ssa_dest_init(&load->instr, &load->dest, 1, 32, NULL);
+      nir_builder_instr_insert(b, &load->instr);
+      comps[i] = &load->dest.ssa;
+   }
+
+   return nir_vec(b, comps, num_comps);
+}
+
+static void
+lower_load_shared(nir_builder *b, nir_intrinsic_instr *intr)
+{
+   assert(intr->dest.is_ssa);
+   unsigned bit_size = nir_dest_bit_size(intr->dest);
+   unsigned num_components = nir_dest_num_components(intr->dest);
+   unsigned num_bits = num_components * bit_size;
+
+   b->cursor = nir_before_instr(&intr->instr);
+
+   assert(intr->src[0].is_ssa);
+   nir_ssa_def *offset =
+      nir_iadd(b, intr->src[0].ssa, nir_imm_int(b, nir_intrinsic_base(intr)));
+   nir_ssa_def *index = nir_ushr(b, offset, nir_imm_int(b, 2));
+   nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
+
+   /* We need to split loads in 32-bit accesses because the sharedvars buffer
+    * is an i32 array and DXIL does not support type casts on shared memory.
+    */
+   nir_ssa_def *vec32 =
+      lower_load_shared_vec32(b, index, DIV_ROUND_UP(num_bits, 32));
+
+   /* If we have 16 bits or less to load we need to adjust the u32 value so
+    * we can always extract the LSB.
+    */
+   if (num_bits <= 16) {
+      nir_ssa_def *shift =
+         nir_imul(b, nir_iand(b, offset, nir_imm_int(b, 3)),
+                     nir_imm_int(b, 8));
+      vec32 = nir_ushr(b, vec32, shift);
+   }
+
+   /* And now comes the pack/unpack step to match the original type. */
+   extract_comps_from_vec32(b, vec32, bit_size, comps, num_components);
+
+   nir_ssa_def *result = nir_vec(b, comps, num_components);
+   nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
+   nir_instr_remove(&intr->instr);
+}
+
+static void
+lower_store_shared_vec32(nir_builder *b, nir_ssa_def *index, nir_ssa_def *vec32)
+{
+
+   for (unsigned i = 0; i < vec32->num_components; i++) {
+      nir_intrinsic_instr *store =
+         nir_intrinsic_instr_create(b->shader, nir_intrinsic_store_shared_dxil);
+
+      store->src[0] = nir_src_for_ssa(nir_channel(b, vec32, i));
+      store->src[1] = nir_src_for_ssa(nir_iadd(b, index, nir_imm_int(b, i)));
+      store->num_components = 1;
+      nir_builder_instr_insert(b, &store->instr);
+   }
+}
+
+static void
+lower_store_shared(nir_builder *b, nir_intrinsic_instr *intr)
+{
+   assert(intr->src[0].is_ssa);
+   unsigned num_components = nir_src_num_components(intr->src[0]);
+   unsigned bit_size = nir_src_bit_size(intr->src[0]);
+   unsigned num_bits = num_components * bit_size;
+
+   b->cursor = nir_before_instr(&intr->instr);
+
+   nir_ssa_def *offset =
+      nir_iadd(b, intr->src[1].ssa, nir_imm_int(b, nir_intrinsic_base(intr)));
+   nir_ssa_def *index = nir_ushr(b, offset, nir_imm_int(b, 2));
+   nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
+
+   for (unsigned i = 0; i < num_components; i++)
+      comps[i] = nir_channel(b, intr->src[0].ssa, i);
+
+   nir_ssa_def *vec32 = load_comps_to_vec32(b, bit_size, comps, num_components);
+
+   /* For anything less than 32bits we need to use the masked version of the
+    * intrinsic to preserve data living in the same 32bit slot.
+    */
+   if (num_bits < 32) {
+      nir_ssa_def *mask = nir_imm_int(b, (1 << num_bits) - 1);
+
+      /* If we have 16 bits or less to store we need to place them correctly in
+       * the u32 component. Anything greater than 16 bits (including uchar3) is
+       * naturally aligned on 32bits.
+       */
+      if (num_bits <= 16) {
+         nir_ssa_def *shift =
+            nir_imul_imm(b, nir_iand(b, offset, nir_imm_int(b, 3)), 8);
+
+         vec32 = nir_ishl(b, vec32, shift);
+         mask = nir_ishl(b, mask, shift);
+      }
+
+      nir_intrinsic_instr *store =
+         nir_intrinsic_instr_create(b->shader,
+                                    nir_intrinsic_store_shared_masked_dxil);
+      store->src[0] = nir_src_for_ssa(vec32);
+      store->src[1] = nir_src_for_ssa(nir_inot(b, mask));
+      store->src[2] = nir_src_for_ssa(index);
+      store->num_components = 1;
+      nir_builder_instr_insert(b, &store->instr);
+   } else {
+      lower_store_shared_vec32(b, index, vec32);
+   }
+
+   nir_instr_remove(&intr->instr);
+}
+
 bool
 dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
 {
@@ -265,8 +392,16 @@ dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
                lower_load_global(&b, intr);
                progress = true;
                break;
+            case nir_intrinsic_load_shared:
+               lower_load_shared(&b, intr);
+               progress = true;
+               break;
             case nir_intrinsic_store_global:
                lower_store_global(&b, intr);
+               progress = true;
+               break;
+            case nir_intrinsic_store_shared:
+               lower_store_shared(&b, intr);
                progress = true;
                break;
             }
