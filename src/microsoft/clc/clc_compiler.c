@@ -200,6 +200,7 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
    };
 
    nir_ssa_def *uniform_deref_dests[IMAGE_UNIFORM_TYPE_COUNT] = {0};
+   nir_ssa_def *format_deref_dest = NULL, *order_deref_dest = NULL;
 
    nir_variable *in_var = nir_deref_instr_get_variable(context->deref);
    assert(in_var->data.mode == nir_var_shader_in);
@@ -317,6 +318,28 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
                nir_src uniform_src = nir_src_for_ssa(image_deref);
                nir_instr_rewrite_src(&intrinsic->instr, src, uniform_src);
             }
+            break;
+         }
+
+         case nir_intrinsic_image_deref_format:
+         case nir_intrinsic_image_deref_order: {
+            nir_ssa_def **cached_deref = intrinsic->intrinsic == nir_intrinsic_image_deref_format ?
+               &format_deref_dest : &order_deref_dest;
+            if (!*cached_deref) {
+               nir_variable *new_input = nir_variable_create(b->shader, nir_var_shader_in, glsl_uint_type(), NULL);
+               new_input->data.driver_location = in_var->data.driver_location;
+               if (intrinsic->intrinsic == nir_intrinsic_image_deref_format) {
+                  /* Match cl_image_format { image_channel_order, image_channel_data_type }; */
+                  new_input->data.driver_location += glsl_get_cl_size(new_input->type);
+               }
+
+               b->cursor = nir_after_instr(&context->deref->instr);
+               *cached_deref = nir_load_var(b, new_input);
+            }
+
+            /* No actual intrinsic needed here, just reference the loaded variable */
+            nir_ssa_def_rewrite_uses(&intrinsic->dest.ssa, nir_src_for_ssa(*cached_deref));
+            nir_instr_remove(&intrinsic->instr);
             break;
          }
 
