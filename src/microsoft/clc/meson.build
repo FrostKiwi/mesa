@@ -54,7 +54,8 @@ libclc_compiler = shared_library(
 clc_compiler_test = executable('clc_compiler_test',
   ['clc_compiler_test.cpp', 'compute_test.cpp'],
   link_with : [libclc_compiler],
-  dependencies : [idep_gtest])
+  dependencies : [idep_gtest, idep_mesautil],
+  include_directories : [inc_include, inc_src])
 
 test('clc_compiler_test', clc_compiler_test)
 
@@ -68,4 +69,3 @@ test('clc_nir_to_dxil',
     link_with : [libclc_compiler]
   )
 )
-

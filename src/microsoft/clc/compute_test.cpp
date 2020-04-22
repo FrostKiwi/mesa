@@ -30,12 +30,24 @@
 #include <gtest/gtest.h>
 #include <wrl.h>
 
+#include "util/u_debug.h"
 #include "clc_compiler.h"
 #include "compute_test.h"
 #include "dxcapi.h"
 
 using std::runtime_error;
 using Microsoft::WRL::ComPtr;
+
+enum compute_test_debug_flags {
+   COMPUTE_DEBUG_EXPERIMENTAL_SHADERS = 1 << 0,
+};
+
+static const struct debug_named_value debug_options[] = {
+   { "experimental_shaders",  COMPUTE_DEBUG_EXPERIMENTAL_SHADERS, "Enable experimental shaders" },
+   DEBUG_NAMED_VALUE_END
+};
+
+DEBUG_GET_ONCE_FLAGS_OPTION(debug_compute, "COMPUTE_TEST_DEBUG", debug_options, 0)
 
 void
 ComputeTest::enable_d3d12_debug_layer()
@@ -110,6 +122,15 @@ ComputeTest::create_device(IDXGIAdapter1 *adapter)
    HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod)
       throw runtime_error("failed to load D3D12.DLL");
+
+   if (debug_get_option_debug_compute() & COMPUTE_DEBUG_EXPERIMENTAL_SHADERS) {
+      typedef HRESULT(WINAPI *PFN_D3D12ENABLEEXPERIMENTALFEATURES)(UINT, const IID *, void *, UINT *);
+      PFN_D3D12ENABLEEXPERIMENTALFEATURES D3D12EnableExperimentalFeatures;
+      D3D12EnableExperimentalFeatures = (PFN_D3D12ENABLEEXPERIMENTALFEATURES)
+         GetProcAddress(hD3D12Mod, "D3D12EnableExperimentalFeatures");
+      if (FAILED(D3D12EnableExperimentalFeatures(1, &D3D12ExperimentalShaderModels, NULL, NULL)))
+         throw runtime_error("failed to enable experimental shader models");
+   }
 
    D3D12CreateDevice = (PFN_D3D12CREATEDEVICE)GetProcAddress(hD3D12Mod, "D3D12CreateDevice");
    if (!D3D12CreateDevice)
@@ -562,8 +583,14 @@ bool
 validate_module(const struct clc_dxil_object &dxil)
 {
    static HMODULE hmod = LoadLibrary("DXIL.DLL");
-   if (!hmod)
-      throw runtime_error("failed to load DXIL.DLL");
+   if (!hmod) {
+      /* Enabling experimental shaders allows us to run unsigned shader code,
+       * such as when under the debugger where we can't run the validator. */
+      if (debug_get_option_debug_compute() & COMPUTE_DEBUG_EXPERIMENTAL_SHADERS)
+         return true;
+      else
+         throw runtime_error("failed to load DXIL.DLL");
+   }
 
    DxcCreateInstanceProc pfnDxcCreateInstance =
       (DxcCreateInstanceProc)GetProcAddress(hmod, "DxcCreateInstance");
