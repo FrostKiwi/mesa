@@ -285,6 +285,35 @@ enum dxil_address_space {
    DXIL_AS_GROUPSHARED = 3,
 };
 
+enum dxil_rmw_op {
+   DXIL_RMWOP_XCHG = 0,
+   DXIL_RMWOP_ADD = 1,
+   DXIL_RMWOP_SUB = 2,
+   DXIL_RMWOP_AND = 3,
+   DXIL_RMWOP_NAND = 4,
+   DXIL_RMWOP_OR = 5,
+   DXIL_RMWOP_XOR = 6,
+   DXIL_RMWOP_MAX = 7,
+   DXIL_RMWOP_MIN = 8,
+   DXIL_RMWOP_UMAX = 9,
+   DXIL_RMWOP_UMIN = 10,
+};
+
+enum dxil_atomic_ordering {
+   DXIL_ATOMIC_ORDERING_NOTATOMIC = 0,
+   DXIL_ATOMIC_ORDERING_UNORDERED = 1,
+   DXIL_ATOMIC_ORDERING_MONOTONIC = 2,
+   DXIL_ATOMIC_ORDERING_ACQUIRE = 3,
+   DXIL_ATOMIC_ORDERING_RELEASE = 4,
+   DXIL_ATOMIC_ORDERING_ACQREL = 5,
+   DXIL_ATOMIC_ORDERING_SEQCST = 6,
+};
+
+enum dxil_sync_scope {
+   DXIL_SYNC_SCOPE_SINGLETHREAD = 0,
+   DXIL_SYNC_SCOPE_CROSSTHREAD = 1,
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
