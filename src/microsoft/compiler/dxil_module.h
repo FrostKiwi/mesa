@@ -424,6 +424,12 @@ dxil_emit_store(struct dxil_module *m, const struct dxil_value *value,
                 const struct dxil_value *ptr, unsigned align,
                 bool is_volatile);
 
+const struct dxil_value *
+dxil_emit_atomicrmw(struct dxil_module *m, const struct dxil_value *value,
+                    const struct dxil_value *ptr, enum dxil_rmw_op op,
+                    bool is_volatile, enum dxil_atomic_ordering ordering,
+                    enum dxil_sync_scope syncscope);
+
 bool
 dxil_emit_module(struct dxil_module *m);
 

@@ -81,6 +81,8 @@ static void
 dump_instr_load(struct dxil_dumper *d, struct dxil_instr_load *store);
 static void
 dump_instr_store(struct dxil_dumper *d, struct dxil_instr_store *store);
+static void
+dump_instr_atomicrmw(struct dxil_dumper *d, struct dxil_instr_atomicrmw *rmw);
 
 static void
 dump_instr_print_operands(struct dxil_dumper *d, int num,

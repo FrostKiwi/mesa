@@ -392,6 +392,7 @@ dump_instrs(struct dxil_dumper *d, struct list_head *list)
       case INSTR_GEP: dump_instr_gep(d, &instr->gep); break;
       case INSTR_LOAD: dump_instr_load(d, &instr->load); break;
       case INSTR_STORE: dump_instr_store(d, &instr->store); break;
+      case INSTR_ATOMICRMW: dump_instr_atomicrmw(d, &instr->atomicrmw); break;
       default:
          _mesa_string_buffer_printf(d->buf, "unknown instruction type %d", instr->type);
       }
@@ -550,6 +551,49 @@ dump_instr_store(struct dxil_dumper *d, struct dxil_instr_store *store)
    _mesa_string_buffer_append(d->buf, ", ");
    dump_value(d, store->ptr);
    _mesa_string_buffer_printf(d->buf, ", %d", store->align);
+}
+
+static const char *rmworder_str[] = {
+   [DXIL_ATOMIC_ORDERING_NOTATOMIC] = "not-atomic",
+   [DXIL_ATOMIC_ORDERING_UNORDERED] = "unordered",
+   [DXIL_ATOMIC_ORDERING_MONOTONIC] = "monotonic",
+   [DXIL_ATOMIC_ORDERING_ACQUIRE] = "acquire",
+   [DXIL_ATOMIC_ORDERING_RELEASE] = "release",
+   [DXIL_ATOMIC_ORDERING_ACQREL] = "acqrel",
+   [DXIL_ATOMIC_ORDERING_SEQCST] = "seqcst",
+};
+
+static const char *rmwsync_str[] = {
+   [DXIL_SYNC_SCOPE_SINGLETHREAD] = "single-thread",
+   [DXIL_SYNC_SCOPE_CROSSTHREAD] = "cross-thread",
+};
+
+static const char *rmwop_str[] = {
+   [DXIL_RMWOP_XCHG] = "xchg",
+   [DXIL_RMWOP_ADD] = "add",
+   [DXIL_RMWOP_SUB] = "sub",
+   [DXIL_RMWOP_AND] = "and",
+   [DXIL_RMWOP_NAND] = "nand",
+   [DXIL_RMWOP_OR] = "or",
+   [DXIL_RMWOP_XOR] = "xor",
+   [DXIL_RMWOP_MAX] = "max",
+   [DXIL_RMWOP_MIN] = "min",
+   [DXIL_RMWOP_UMAX] = "umax",
+   [DXIL_RMWOP_UMIN] = "umin",
+};
+
+static void
+dump_instr_atomicrmw(struct dxil_dumper *d, struct dxil_instr_atomicrmw *rmw)
+{
+   _mesa_string_buffer_printf(d->buf, "atomicrmw.%s ", rmwop_str[rmw->op]);
+
+   if (rmw->is_volatile)
+      _mesa_string_buffer_append(d->buf, " volatile");
+   dump_value(d, rmw->value);
+   _mesa_string_buffer_append(d->buf, ", ");
+   dump_value(d, rmw->ptr);
+   _mesa_string_buffer_printf(d->buf, ", ordering(%s)", rmworder_str[rmw->ordering]);
+   _mesa_string_buffer_printf(d->buf, ", sync_scope(%s)", rmwsync_str[rmw->syncscope]);
 }
 
 static void
