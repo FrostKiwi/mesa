@@ -407,7 +407,10 @@ struct ntd_context {
    uint64_t srvs_used : MAX_SRVS;
    unsigned num_srv_arrays;
 
-   const struct dxil_mdnode *uav_metadata_node;
+   const struct dxil_mdnode *uav_metadata_nodes[MAX_UAVS];
+   const struct dxil_value *uav_handles[MAX_UAVS];
+   unsigned num_uavs;
+   unsigned num_uav_arrays;
 
    const struct dxil_mdnode *cbv_metadata_nodes[MAX_CBVS];
    const struct dxil_value *cbv_handles[MAX_CBVS];
@@ -738,7 +741,7 @@ emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned count)
 
    enum dxil_component_type comp_type = dxil_get_comp_type(var->type);
    enum dxil_resource_kind res_kind = dxil_get_resource_kind(var->type);
-   const struct dxil_type *res_type = dxil_module_get_res_type(&ctx->mod, res_kind, comp_type);
+   const struct dxil_type *res_type = dxil_module_get_res_type(&ctx->mod, res_kind, comp_type, false /* readwrite */);
    const struct dxil_mdnode *srv_meta = emit_srv_metadata(&ctx->mod, res_type, var->name,
                                                           &layout, comp_type, res_kind);
 
@@ -793,9 +796,45 @@ emit_globals(struct ntd_context *ctx, uint64_t global_inputs)
    if (!uav_meta)
       return false;
 
-   ctx->uav_metadata_node = uav_meta;
+   ctx->uav_metadata_nodes[ctx->num_uav_arrays++] = uav_meta;
+   /* Handles to UAVs used for kernel globals are created on-demand */
+   ctx->num_uavs += size;
    add_resource(ctx, DXIL_RES_UAV_RAW, &layout);
    ctx->mod.raw_and_structured_buffers = true;
+   return true;
+}
+
+static bool
+emit_uav(struct ntd_context *ctx, nir_variable *var, unsigned count)
+{
+   assert(ctx->num_uav_arrays < ARRAY_SIZE(ctx->uav_metadata_nodes));
+   assert(ctx->num_uavs < ARRAY_SIZE(ctx->uav_handles));
+
+   unsigned id = ctx->num_uav_arrays;
+   unsigned idx = var->data.binding;
+   resource_array_layout layout = { id, idx, count };
+
+   enum dxil_component_type comp_type = dxil_get_comp_type(var->type);
+   enum dxil_resource_kind res_kind = dxil_get_resource_kind(var->type);
+   const struct dxil_type *res_type = dxil_module_get_res_type(&ctx->mod, res_kind, comp_type, true /* readwrite */);
+   const struct dxil_mdnode *uav_meta = emit_uav_metadata(&ctx->mod, res_type, var->name,
+                                                          &layout, comp_type, res_kind);
+
+   if (!uav_meta)
+      return false;
+
+   ctx->uav_metadata_nodes[ctx->num_uav_arrays++] = uav_meta;
+   add_resource(ctx, DXIL_RES_UAV_TYPED, &layout);
+
+   for (unsigned i = 0; i < count; ++i) {
+      const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_UAV,
+                                                                           id, idx + i, false);
+      if (!handle)
+         return false;
+
+      ctx->uav_handles[ctx->num_uavs++] = handle;
+   }
+
    return true;
 }
 
@@ -1130,8 +1169,8 @@ emit_resources(struct ntd_context *ctx)
       emit_resources = true;
    }
 
-   if (ctx->uav_metadata_node) {
-      resources_nodes[1] = dxil_get_metadata_node(&ctx->mod, &ctx->uav_metadata_node, 1);
+   if (ctx->num_uavs) {
+      resources_nodes[1] = dxil_get_metadata_node(&ctx->mod, ctx->uav_metadata_nodes, ctx->num_uav_arrays);
       emit_resources = true;
    }
 
@@ -3480,6 +3519,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
                                                 NULL);
    }
 
+   /* UAVs */
    if (s->info.stage == MESA_SHADER_KERNEL) {
       if (s->info.cs.global_inputs &&
           !emit_globals(ctx, s->info.cs.global_inputs))
@@ -3490,6 +3530,14 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
          return false;
       if (!emit_global_consts(ctx, &s->globals))
          return false;
+   }
+
+   nir_foreach_variable(var, &s->uniforms) {
+      unsigned count = glsl_type_get_image_count(var->type);
+      if (var->data.mode == nir_var_uniform && count) {
+         if (!emit_uav(ctx, var, count))
+            return false;
+      }
    }
 
    nir_function_impl *entry = nir_shader_get_entrypoint(s);
