@@ -3220,6 +3220,7 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
    assert(ctx->srvs_used & (1ull << instr->texture_index));
    assert(instr->op == nir_texop_txf ||
           instr->op == nir_texop_txf_ms ||
+          nir_tex_instr_is_query(instr) ||
           ctx->samplers_used & (1ull << instr->sampler_index));
    assert(instr->op == nir_texop_txf || ctx->samplers_used & (1ull << instr->sampler_index));
 
