@@ -624,6 +624,31 @@ emit_bufferstore_call(struct ntd_context *ctx,
                               args, ARRAY_SIZE(args));
 }
 
+static bool
+emit_texturestore_call(struct ntd_context *ctx,
+                       const struct dxil_value *handle,
+                       const struct dxil_value *coord[3],
+                       const struct dxil_value *value[4],
+                       const struct dxil_value *write_mask,
+                       enum overload_type overload)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.textureStore", overload);
+
+   if (!func)
+      return false;
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
+      DXIL_INTR_TEXTURE_STORE);
+   const struct dxil_value *args[] = {
+      opcode, handle, coord[0], coord[1], coord[2],
+      value[0], value[1], value[2], value[3],
+      write_mask
+   };
+
+   return dxil_emit_call_void(&ctx->mod, func,
+                              args, ARRAY_SIZE(args));
+}
+
 static const struct dxil_value *
 emit_atomic_binop(struct ntd_context *ctx,
                   const struct dxil_value *handle,
@@ -2591,6 +2616,53 @@ emit_end_primitive(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
+emit_image_deref_store(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   assert(intr->src[0].is_ssa);
+   nir_deref_instr *deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
+   nir_variable *var = nir_deref_instr_get_variable(deref);
+
+   const struct dxil_value *handle = ctx->uav_handles[var->data.binding];
+   if (!handle)
+      return false;
+
+   const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
+   if (!int32_undef)
+      return false;
+
+   const struct dxil_value *coord[3] = { int32_undef, int32_undef, int32_undef };
+   unsigned num_coords = nir_src_num_components(intr->src[1]);
+   for (unsigned i = 0; i < num_coords && i < 3; ++i) {
+      coord[i] = get_src(ctx, &intr->src[1], i, nir_type_uint);
+      if (!coord[i])
+         return false;
+   }
+
+   nir_alu_type in_type = nir_get_nir_type_for_glsl_base_type(glsl_get_sampler_result_type(var->type));
+   enum overload_type overload = get_overload(in_type, 32);
+
+   assert(nir_src_bit_size(intr->src[3]) == 32);
+   unsigned num_components = nir_src_num_components(intr->src[3]);
+   assert(num_components <= 4);
+   const struct dxil_value *value[4];
+   for (unsigned i = 0; i < num_components; ++i) {
+      value[i] = get_src(ctx, &intr->src[3], i, in_type);
+      if (!value[i])
+         return false;
+   }
+
+   for (int i = num_components; i < 4; ++i)
+      value[i] = int32_undef;
+
+   const struct dxil_value *write_mask =
+      dxil_module_get_int8_const(&ctx->mod, (1u << num_components) - 1);
+   if (!write_mask)
+      return false;
+
+   return emit_texturestore_call(ctx, handle, coord, value, write_mask, overload);
+}
+
+static bool
 emit_ssbo_atomic(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                    enum dxil_atomic_op op, nir_alu_type type)
 {
@@ -2827,6 +2899,8 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_shared_atomic(ctx, intr, DXIL_RMWOP_XCHG, nir_type_int);
    case nir_intrinsic_shared_atomic_comp_swap_dxil:
       return emit_shared_atomic_comp_swap(ctx, intr);
+   case nir_intrinsic_image_deref_store:
+      return emit_image_deref_store(ctx, intr);
 
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_local_group_size:
