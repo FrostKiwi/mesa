@@ -193,6 +193,14 @@ struct dxil_instr_store {
    bool is_volatile;
 };
 
+struct dxil_instr_atomicrmw {
+   const struct dxil_value *value, *ptr;
+   enum dxil_rmw_op op;
+   bool is_volatile;
+   enum dxil_atomic_ordering ordering;
+   enum dxil_sync_scope syncscope;
+};
+
 struct dxil_instr {
    enum instr_type {
       INSTR_BINOP,
@@ -207,7 +215,8 @@ struct dxil_instr {
       INSTR_ALLOCA,
       INSTR_GEP,
       INSTR_LOAD,
-      INSTR_STORE
+      INSTR_STORE,
+      INSTR_ATOMICRMW,
    } type;
 
    union {
@@ -224,6 +233,7 @@ struct dxil_instr {
       struct dxil_instr_gep gep;
       struct dxil_instr_load load;
       struct dxil_instr_store store;
+      struct dxil_instr_atomicrmw atomicrmw;
    };
 
    bool has_value;
