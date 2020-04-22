@@ -40,10 +40,12 @@ using Microsoft::WRL::ComPtr;
 
 enum compute_test_debug_flags {
    COMPUTE_DEBUG_EXPERIMENTAL_SHADERS = 1 << 0,
+   COMPUTE_DEBUG_USE_HW_D3D           = 1 << 1,
 };
 
 static const struct debug_named_value debug_options[] = {
    { "experimental_shaders",  COMPUTE_DEBUG_EXPERIMENTAL_SHADERS, "Enable experimental shaders" },
+   { "use_hw_d3d",            COMPUTE_DEBUG_USE_HW_D3D,           "Use a hardware D3D device"   },
    DEBUG_NAMED_VALUE_END
 };
 
@@ -107,10 +109,21 @@ IDXGIAdapter1 *
 ComputeTest::choose_adapter(IDXGIFactory4 *factory)
 {
    IDXGIAdapter1 *ret;
-   if (FAILED(factory->EnumWarpAdapter(__uuidof(IDXGIAdapter1),
-       (void **)& ret)))
-      throw runtime_error("Failed to enum warp adapter");
-   return ret;
+
+   if (debug_get_option_debug_compute() & COMPUTE_DEBUG_USE_HW_D3D) {
+      for (unsigned i = 0; SUCCEEDED(factory->EnumAdapters1(i, &ret)); i++) {
+         DXGI_ADAPTER_DESC1 desc;
+         ret->GetDesc1(&desc);
+         if (!(desc.Flags & D3D_DRIVER_TYPE_SOFTWARE))
+            return ret;
+      }
+      throw runtime_error("Failed to enum hardware adapter");
+   } else {
+      if (FAILED(factory->EnumWarpAdapter(__uuidof(IDXGIAdapter1),
+         (void **)& ret)))
+         throw runtime_error("Failed to enum warp adapter");
+      return ret;
+   }
 }
 
 ID3D12Device *
