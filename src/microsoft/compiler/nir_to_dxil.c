@@ -780,16 +780,14 @@ emit_kernel_global_work_offset_cbv(struct ntd_context *ctx)
    const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod,
                                                                      "kernel_global_work_offset",
                                                                      &array_type, 1);
+   resource_array_layout layout = { ctx->num_cbvs, ctx->num_cbvs, 1 };
    const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
                                                           "kernel_global_work_offset",
-                                                          ctx->num_cbvs,
-                                                          ctx->num_cbvs,
-                                                          3 * sizeof(int32_t));
+                                                          &layout, 3 * sizeof(int32_t));
 
    if (!cbv_meta)
       return false;
 
-   resource_array_layout layout = { 0, ctx->num_cbvs, 1 };
    ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
    add_resource(ctx, DXIL_RES_CBV, &layout);
 
