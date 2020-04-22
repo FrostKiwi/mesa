@@ -2662,6 +2662,65 @@ emit_image_deref_store(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    return emit_texturestore_call(ctx, handle, coord, value, write_mask, overload);
 }
 
+struct texop_parameters {
+   const struct dxil_value *tex;
+   const struct dxil_value *sampler;
+   const struct dxil_value *bias, *lod_or_sample, *min_lod;
+   const struct dxil_value *coord[4], *offset[3], *dx[3], *dy[3];
+   const struct dxil_value *cmp;
+   enum overload_type overload;
+};
+
+static const struct dxil_value *
+emit_texture_size(struct ntd_context *ctx, struct texop_parameters *params)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.getDimensions", DXIL_NONE);
+   if (!func)
+      return false;
+
+   const struct dxil_value *args[] = {
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_TEXTURE_SIZE),
+      params->tex,
+      params->lod_or_sample
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static bool
+emit_image_deref_size(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   assert(intr->src[0].is_ssa);
+   nir_deref_instr *deref = nir_instr_as_deref(intr->src[0].ssa->parent_instr);
+   nir_variable *var = nir_deref_instr_get_variable(deref);
+
+   const struct dxil_value *handle = ctx->uav_handles[var->data.binding];
+   if (!handle)
+      return false;
+
+   const struct dxil_value *lod = get_int32_undef(&ctx->mod);
+   if (intr->intrinsic == nir_intrinsic_image_deref_size_lod) {
+      lod = get_src(ctx, &intr->src[1], 0, nir_type_uint);
+      if (!lod)
+         return false;
+   }
+
+   struct texop_parameters params = {
+      .tex = handle,
+      .lod_or_sample = lod
+   };
+   const struct dxil_value *dimensions = emit_texture_size(ctx, &params);
+   if (!dimensions)
+      return false;
+
+   for (unsigned i = 0; i < nir_dest_num_components(intr->dest); ++i) {
+      const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, dimensions, i);
+      store_dest(ctx, &intr->dest, i, retval, nir_type_uint);
+   }
+
+   return true;
+}
+
 static bool
 emit_ssbo_atomic(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                    enum dxil_atomic_op op, nir_alu_type type)
@@ -2901,6 +2960,9 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_shared_atomic_comp_swap(ctx, intr);
    case nir_intrinsic_image_deref_store:
       return emit_image_deref_store(ctx, intr);
+   case nir_intrinsic_image_deref_size:
+   case nir_intrinsic_image_deref_size_lod:
+      return emit_image_deref_size(ctx, intr);
 
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_local_group_size:
@@ -3053,15 +3115,6 @@ get_n_src(struct ntd_context *ctx, const struct dxil_value **values,
       array[i] = undef; \
    }
 
-struct texop_parameters {
-   const struct dxil_value *tex;
-   const struct dxil_value *sampler;
-   const struct dxil_value *bias, *lod_or_sample, *min_lod;
-   const struct dxil_value *coord[4], *offset[3], *dx[3], *dy[3];
-   const struct dxil_value *cmp;
-   enum overload_type overload;
-};
-
 static const struct dxil_value *
 emit_sample(struct ntd_context *ctx, struct texop_parameters *params)
 {
@@ -3173,22 +3226,6 @@ emit_texel_fetch(struct ntd_context *ctx, struct texop_parameters *params)
       params->tex,
       params->lod_or_sample, params->coord[0], params->coord[1], params->coord[2],
       params->offset[0], params->offset[1], params->offset[2]
-   };
-
-   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
-}
-
-static const struct dxil_value *
-emit_texture_size(struct ntd_context *ctx, struct texop_parameters *params)
-{
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.getDimensions", DXIL_NONE);
-   if (!func)
-      return false;
-
-   const struct dxil_value *args[] = {
-      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_TEXTURE_SIZE),
-      params->tex,
-      params->lod_or_sample
    };
 
    return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
