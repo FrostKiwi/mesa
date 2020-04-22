@@ -711,6 +711,13 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
       desc.Texture2D.PlaneSlice = state->u.tex.first_layer; /* FIXME unsure */
       desc.Texture2D.ResourceMinLODClamp = 0.0f;
       break;
+   case D3D12_SRV_DIMENSION_TEXTURE2DARRAY:
+      desc.Texture2DArray.MostDetailedMip = state->u.tex.first_level;
+      desc.Texture2DArray.MipLevels = state->u.tex.last_level - state->u.tex.first_level + 1;
+      desc.Texture2DArray.ResourceMinLODClamp = 0.0f;
+      desc.Texture2DArray.FirstArraySlice = 0;
+      desc.Texture2DArray.ArraySize = texture->array_size;
+      break;
    case D3D12_SRV_DIMENSION_TEXTURE3D:
       desc.Texture3D.MostDetailedMip = state->u.tex.first_level;
       desc.Texture3D.MipLevels = state->u.tex.last_level - state->u.tex.first_level + 1;
