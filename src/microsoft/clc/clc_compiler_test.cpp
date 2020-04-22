@@ -1451,6 +1451,18 @@ TEST_F(ComputeTest, sampler)
    validate(shader);
 }
 
+TEST_F(ComputeTest, image_dims)
+{
+   const char* kernel_source =
+   "__kernel void main_test(image2d_t roimage, write_only image2d_t woimage, __global uint* output)\n\
+   {\n\
+      output[get_global_id(0)] = get_image_width(roimage);\n\
+      output[get_global_id(0) + 1] = get_image_width(woimage);\n\
+   }\n";
+   Shader shader = compile(std::vector<const char*>({ kernel_source }));
+   validate(shader);
+}
+
 TEST_F(ComputeTest, local_ptr)
 {
    struct uint2 { uint32_t x, y; };
