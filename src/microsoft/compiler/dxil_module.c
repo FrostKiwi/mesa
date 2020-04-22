@@ -2687,6 +2687,30 @@ dxil_emit_store(struct dxil_module *m, const struct dxil_value *value,
    return true;
 }
 
+const struct dxil_value *
+dxil_emit_atomicrmw(struct dxil_module *m, const struct dxil_value *value,
+                    const struct dxil_value *ptr, enum dxil_rmw_op op,
+                    bool is_volatile, enum dxil_atomic_ordering ordering,
+                    enum dxil_sync_scope syncscope)
+{
+   assert(ptr->type->type == TYPE_POINTER);
+
+   struct dxil_instr *instr = create_instr(m, INSTR_ATOMICRMW,
+                                           ptr->type->ptr_target_type);
+   if (!instr)
+      return false;
+
+   instr->atomicrmw.value = value;
+   instr->atomicrmw.ptr = ptr;
+   instr->atomicrmw.op = op;
+   instr->atomicrmw.is_volatile = is_volatile;
+   instr->atomicrmw.ordering = ordering;
+   instr->atomicrmw.syncscope = syncscope;
+
+   instr->has_value = true;
+   return &instr->value;
+}
+
 static bool
 emit_binop(struct dxil_module *m, struct dxil_instr *instr)
 {
@@ -2936,6 +2960,24 @@ emit_store(struct dxil_module *m, struct dxil_instr *instr)
 }
 
 static bool
+emit_atomicrmw(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_ATOMICRMW);
+   assert(instr->value.id > instr->atomicrmw.value->id);
+   assert(instr->value.id > instr->atomicrmw.ptr->id);
+   uint64_t data[] = {
+      instr->value.id - instr->atomicrmw.ptr->id,
+      instr->value.id - instr->atomicrmw.value->id,
+      instr->atomicrmw.op,
+      instr->atomicrmw.is_volatile,
+      instr->atomicrmw.ordering,
+      instr->atomicrmw.syncscope,
+   };
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_ATOMICRMW,
+                                data, ARRAY_SIZE(data));
+}
+
+static bool
 emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 {
    switch (instr->type) {
@@ -2977,6 +3019,9 @@ emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 
    case INSTR_STORE:
       return emit_store(m, instr);
+
+   case INSTR_ATOMICRMW:
+      return emit_atomicrmw(m, instr);
 
    default:
       unreachable("unexpected instruction type");
