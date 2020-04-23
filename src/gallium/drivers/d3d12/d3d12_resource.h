@@ -41,6 +41,7 @@ struct d3d12_resource {
 struct d3d12_transfer {
    struct pipe_transfer base;
    struct pipe_resource *staging_res;
+   void *data;
 };
 
 static inline struct d3d12_resource *
