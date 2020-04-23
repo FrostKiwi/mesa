@@ -166,7 +166,10 @@ protected:
    TearDown() override;
 
    Shader
-   compile_and_validate(const std::vector<const char *> &sources);
+   compile(const std::vector<const char *> &sources);
+
+   void
+   validate(Shader &shader);
 
    enum ShaderArgDirection {
       SHADER_ARG_INPUT = 1,
