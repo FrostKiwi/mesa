@@ -2194,6 +2194,35 @@ vtn_emit_scoped_memory_barrier(struct vtn_builder *b, SpvScope scope,
    nir_builder_instr_insert(&b->nb, &intrin->instr);
 }
 
+static void
+vtn_emit_scoped_control_memory_barrier(struct vtn_builder *b,
+                                       SpvScope exec_scope,
+                                       SpvScope mem_scope,
+                                       SpvMemorySemanticsMask semantics)
+{
+   nir_memory_semantics nir_semantics;
+   nir_variable_mode modes;
+
+   nir_semantics = vtn_mem_semantics_to_nir_mem_semantics(b, semantics);
+   modes = vtn_mem_sematics_to_nir_var_modes(b, semantics);
+
+   /* No barrier to add. */
+   if (nir_semantics == 0 || modes == 0)
+      return;
+
+   nir_scope nir_mem_scope = vtn_scope_to_nir_scope(b, mem_scope);
+   nir_scope nir_exec_scope = vtn_scope_to_nir_scope(b, exec_scope);
+   nir_intrinsic_instr *intrin =
+      nir_intrinsic_instr_create(b->shader,
+                                 nir_intrinsic_scoped_control_memory_barrier);
+   nir_intrinsic_set_memory_semantics(intrin, nir_semantics);
+
+   nir_intrinsic_set_memory_modes(intrin, modes);
+   nir_intrinsic_set_memory_scope(intrin, nir_mem_scope);
+   nir_intrinsic_set_execution_scope(intrin, nir_exec_scope);
+   nir_builder_instr_insert(&b->nb, &intrin->instr);
+}
+
 struct vtn_ssa_value *
 vtn_create_ssa_value(struct vtn_builder *b, const struct glsl_type *type)
 {
@@ -3688,6 +3717,13 @@ vtn_handle_barrier(struct vtn_builder *b, SpvOp opcode,
       SpvScope execution_scope = vtn_constant_uint(b, w[1]);
       SpvScope memory_scope = vtn_constant_uint(b, w[2]);
       SpvMemorySemanticsMask memory_semantics = vtn_constant_uint(b, w[3]);
+
+      if (b->shader->options->use_scoped_control_memory_barrier) {
+         vtn_emit_scoped_control_memory_barrier(b, execution_scope,
+                                                memory_scope,
+                                                memory_semantics);
+         return;
+      }
 
       /* GLSLang, prior to commit 8297936dd6eb3, emitted OpControlBarrier with
        * memory semantics of None for GLSL barrier().
