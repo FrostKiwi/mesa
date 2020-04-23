@@ -221,6 +221,7 @@ struct clc_dxil_object *
 clc_to_dxil(struct clc_context *ctx,
             const struct clc_object *obj,
             const char *entrypoint,
+            const struct clc_runtime_kernel_conf *conf,
             const struct clc_logger *logger)
 {
    struct clc_dxil_object *dxil;
@@ -341,6 +342,23 @@ clc_to_dxil(struct clc_context *ctx,
    struct nir_to_dxil_options opts = {
       .interpolate_at_vertex = false
    };
+
+   // Patch the localsize before calling nir_to_dxil().
+   if (conf) {
+      for (unsigned i = 0; i < ARRAY_SIZE(nir->info.cs.local_size); i++) {
+         if (!conf->local_size[i] ||
+             conf->local_size[i] == nir->info.cs.local_size[i])
+            continue;
+
+         if (nir->info.cs.local_size[i] &&
+             nir->info.cs.local_size[i] != conf->local_size[i]) {
+            debug_printf("D3D12: runtime local size does not match reqd_work_group_size() values\n");
+            goto err_free_dxil;
+         }
+
+         nir->info.cs.local_size[i] = conf->local_size[i];
+      }
+   }
 
    struct blob tmp;
    if (!nir_to_dxil(nir, &opts, &tmp)) {
