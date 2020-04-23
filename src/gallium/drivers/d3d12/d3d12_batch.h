@@ -73,4 +73,7 @@ void
 d3d12_batch_reference_object(struct d3d12_batch *batch,
                              ID3D12Object *object);
 
+void
+d3d12_batch_wait_fence(struct d3d12_batch *batch);
+
 #endif
