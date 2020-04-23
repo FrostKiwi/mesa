@@ -2036,9 +2036,9 @@ vtn_split_barrier_semantics(struct vtn_builder *b,
       *after |= SpvMemorySemanticsMakeAvailableMask | storage_semantics;
 }
 
-static void
-vtn_emit_scoped_memory_barrier(struct vtn_builder *b, SpvScope scope,
-                               SpvMemorySemanticsMask semantics)
+static nir_memory_semantics
+vtn_mem_semantics_to_nir_mem_semantics(struct vtn_builder *b,
+                                       SpvMemorySemanticsMask semantics)
 {
    nir_memory_semantics nir_semantics = 0;
 
@@ -2095,6 +2095,13 @@ vtn_emit_scoped_memory_barrier(struct vtn_builder *b, SpvScope scope,
       nir_semantics |= NIR_MEMORY_MAKE_VISIBLE;
    }
 
+   return nir_semantics;
+}
+
+static nir_variable_mode
+vtn_mem_sematics_to_nir_var_modes(struct vtn_builder *b,
+                                  SpvMemorySemanticsMask semantics)
+{
    /* Vulkan Environment for SPIR-V says "SubgroupMemory, CrossWorkgroupMemory,
     * and AtomicCounterMemory are ignored".
     */
@@ -2120,10 +2127,12 @@ vtn_emit_scoped_memory_barrier(struct vtn_builder *b, SpvScope scope,
       modes |= nir_var_shader_out;
    }
 
-   /* No barrier to add. */
-   if (nir_semantics == 0 || modes == 0)
-      return;
+   return modes;
+}
 
+static nir_scope
+vtn_scope_to_nir_scope(struct vtn_builder *b, SpvScope scope)
+{
    nir_scope nir_scope;
    switch (scope) {
    case SpvScopeDevice:
@@ -2158,6 +2167,24 @@ vtn_emit_scoped_memory_barrier(struct vtn_builder *b, SpvScope scope,
       vtn_fail("Invalid memory scope");
    }
 
+   return nir_scope;
+}
+
+static void
+vtn_emit_scoped_memory_barrier(struct vtn_builder *b, SpvScope scope,
+                               SpvMemorySemanticsMask semantics)
+{
+   nir_memory_semantics nir_semantics;
+   nir_variable_mode modes;
+
+   nir_semantics = vtn_mem_semantics_to_nir_mem_semantics(b, semantics);
+   modes = vtn_mem_sematics_to_nir_var_modes(b, semantics);
+
+   /* No barrier to add. */
+   if (nir_semantics == 0 || modes == 0)
+      return;
+
+   nir_scope nir_scope = vtn_scope_to_nir_scope(b, scope);
    nir_intrinsic_instr *intrin =
       nir_intrinsic_instr_create(b->shader, nir_intrinsic_scoped_memory_barrier);
    nir_intrinsic_set_memory_semantics(intrin, nir_semantics);
