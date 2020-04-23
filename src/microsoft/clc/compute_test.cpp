@@ -416,8 +416,9 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
       throw runtime_error("Failed to load D3D12.DLL");
 
    D3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
+   Shader shader = compile(sources);
+   validate(shader);
 
-   Shader shader = compile_and_validate(sources);
    std::shared_ptr<struct clc_dxil_object> &dxil = shader.dxil;
 
    if (args.size() != dxil->kernel->num_args)
@@ -662,7 +663,7 @@ dump_blob(const char *path, const struct clc_dxil_object &dxil)
 }
 
 ComputeTest::Shader
-ComputeTest::compile_and_validate(const std::vector<const char *> &sources)
+ComputeTest::compile(const std::vector<const char *> &sources)
 {
    struct clc_logger logger = {
       error_callback, warning_callback,
@@ -671,6 +672,7 @@ ComputeTest::compile_and_validate(const std::vector<const char *> &sources)
    struct clc_dxil_object *dxil;
    ComputeTest::Shader shader;
    struct clc_object *obj;
+
    ObjectArray objs;
 
    args.source.name = "obj.cl";
@@ -692,18 +694,20 @@ ComputeTest::compile_and_validate(const std::vector<const char *> &sources)
       throw runtime_error("failed to link objects!");
 
    shader.obj = std::shared_ptr<struct clc_object>(obj, clc_free_object);
-
    dxil = clc_to_dxil(compiler_ctx, obj, "main_test", NULL, &logger);
    if (!dxil)
       throw runtime_error("failed to compile kernel!");
 
    shader.dxil = std::shared_ptr<struct clc_dxil_object>(dxil, clc_free_dxil_object);
+   return shader;
+}
 
-   dump_blob("unsigned.cso", *dxil);
-   if (!validate_module(*dxil))
+void
+ComputeTest::validate(ComputeTest::Shader &shader)
+{
+   dump_blob("unsigned.cso", *shader.dxil);
+   if (!validate_module(*shader.dxil))
       throw runtime_error("failed to validate module!");
 
-   dump_blob("signed.cso", *dxil);
-
-   return shader;
+   dump_blob("signed.cso", *shader.dxil);
 }
