@@ -184,7 +184,7 @@ fill_texture_location(struct d3d12_resource *res,
    D3D12_TEXTURE_COPY_LOCATION tex_loc = {0};
    int subres = res->base.target == PIPE_TEXTURE_CUBE ?
                    trans->base.box.z * (res->base.last_level + 1) + trans->base.level :
-                   trans->base.level + resid;
+                   trans->base.level + (res->base.last_level + 1) * resid;
 
    tex_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
    tex_loc.SubresourceIndex = subres;
@@ -197,6 +197,7 @@ fill_buffer_location(struct d3d12_context *ctx,
                      ID3D12Resource *res,
                      ID3D12Resource *staging_res,
                      struct d3d12_transfer *trans,
+                     unsigned depth,
                      unsigned resid = 0)
 {
    D3D12_TEXTURE_COPY_LOCATION buf_loc = {0};
@@ -209,7 +210,7 @@ fill_buffer_location(struct d3d12_context *ctx,
    buf_loc.PlacedFootprint = footprint;
    buf_loc.PlacedFootprint.Footprint.Width = trans->base.box.width;
    buf_loc.PlacedFootprint.Footprint.Height = trans->base.box.height;
-   buf_loc.PlacedFootprint.Footprint.Depth = trans->base.box.depth;
+   buf_loc.PlacedFootprint.Footprint.Depth = depth;
    buf_loc.PlacedFootprint.Footprint.RowPitch = trans->base.stride;
    buf_loc.pResource = staging_res;
 
@@ -242,25 +243,48 @@ copy_texture_region(struct d3d12_context *ctx,
    d3d12_resource_barrier(ctx, res, state, D3D12_RESOURCE_STATE_COMMON);
 }
 
-static bool
-d3d12_transfer_buf_to_image(struct d3d12_context *ctx,
-                            struct d3d12_resource *res,
-                            struct d3d12_resource *staging_res,
-                            struct d3d12_transfer *trans)
+static void
+transfer_buf_to_image_part(struct d3d12_context *ctx,
+                           struct d3d12_resource *res,
+                           struct d3d12_resource *staging_res,
+                           struct d3d12_transfer *trans,
+                           int z, int depth, int start_z, int dest_z)
 {
-   auto tex_loc = fill_texture_location(res, trans);
-   auto buf_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans);
+   auto tex_loc = fill_texture_location(res, trans, z);
+   auto buf_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans, depth, z);
+   buf_loc.PlacedFootprint.Offset = (z  - start_z) * trans->base.layer_stride;
 
    struct copy_info copy_info;
    copy_info.src = &buf_loc;
    copy_info.dst = &tex_loc;
    copy_info.dst_x = trans->base.box.x;
    copy_info.dst_y = trans->base.box.y;
-   copy_info.dst_z = res->base.target == PIPE_TEXTURE_CUBE ? 0 : trans->base.box.z;
+   copy_info.dst_z = res->base.target == PIPE_TEXTURE_CUBE ? 0 : dest_z;
    copy_info.src_box = nullptr;
 
    copy_texture_region(ctx, res, copy_info);
+}
 
+static bool
+transfer_buf_to_image(struct d3d12_context *ctx,
+                      struct d3d12_resource *res,
+                      struct d3d12_resource *staging_res,
+                      struct d3d12_transfer *trans)
+{
+   if (res->base.target == PIPE_TEXTURE_3D) {
+      transfer_buf_to_image_part(ctx, res, staging_res, trans,
+                                 0, trans->base.box.depth, 0,
+                                 trans->base.box.z);
+   } else {
+      int num_layers = trans->base.box.depth;
+      int start_z = trans->base.box.z;
+
+      for (int z = start_z; z < start_z + num_layers; ++z) {
+         transfer_buf_to_image_part(ctx, res, staging_res, trans,
+                                           z, 1, start_z, 0);
+
+      }
+   }
    return true;
 }
 
@@ -275,7 +299,7 @@ d3d12_transfer_image_to_buf(struct d3d12_context *ctx,
 
    auto tex_loc = fill_texture_location(res, trans, resid);
    auto buf_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans,
-                                       resid);
+                                       trans->base.box.depth, resid);
 
    src_box.left = trans->base.box.x;
    src_box.right = trans->base.box.x + trans->base.box.width;
@@ -529,7 +553,7 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
 
       if (trans->base.usage & PIPE_TRANSFER_WRITE) {
          struct d3d12_context *ctx = d3d12_context(pctx);
-         d3d12_transfer_buf_to_image(ctx, res, staging_res, trans);
+         transfer_buf_to_image(ctx, res, staging_res, trans);
       }
 
       pipe_resource_reference(&trans->staging_res, NULL);
