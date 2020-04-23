@@ -417,6 +417,30 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
 
    D3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
    Shader shader = compile(sources);
+
+   struct clc_runtime_kernel_conf conf = { 0 };
+
+   if (!shader.dxil->metadata.local_size[0])
+      conf.local_size[0] = x;
+   else
+      conf.local_size[0] = shader.dxil->metadata.local_size[0];
+
+   if (!shader.dxil->metadata.local_size[1])
+      conf.local_size[1] = y;
+   else
+      conf.local_size[1] = shader.dxil->metadata.local_size[1];
+
+   if (!shader.dxil->metadata.local_size[2])
+      conf.local_size[2] = z;
+   else
+      conf.local_size[2] = shader.dxil->metadata.local_size[2];
+
+   if (x % conf.local_size[0] ||
+       y % conf.local_size[1] ||
+       z % conf.local_size[2])
+      throw runtime_error("invalid global size must be a multiple of local size");
+
+   configure(shader, &conf);
    validate(shader);
 
    std::shared_ptr<struct clc_dxil_object> &dxil = shader.dxil;
@@ -474,7 +498,10 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
    cmdlist->SetComputeRootSignature(root_sig.Get());
    cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
    cmdlist->SetPipelineState(pipeline_state.Get());
-   cmdlist->Dispatch(x, y, z);
+
+   cmdlist->Dispatch(x / conf.local_size[0],
+                     y / conf.local_size[1],
+                     z / conf.local_size[2]);
 
    for (auto &range : resources.ranges) {
       if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_UAV) {
