@@ -2577,27 +2577,19 @@ emit_deref_array(struct ntd_context *ctx, nir_deref_instr *deref)
    if (!index)
       return false;
 
-   const struct dxil_value *ptr;
-   switch (var->data.mode) {
-   case nir_var_function_temp: {
-         struct hash_entry *he =
-            _mesa_hash_table_search(ctx->locals, var);
-         assert(he != NULL);
-         ptr = he->data;
-      }
-      break;
-
-   case nir_var_mem_ubo: {
-         // HACK: force CBV#0
-         unsigned bit_size = glsl_get_bit_size(glsl_without_array(var->type));
-         ptr = index_to_offset(&ctx->mod, index, bit_size);
-         store_dest_int(ctx, &deref->dest, 0, ptr);
-         return true;
-      }
-
-   default:
-      unreachable("unexpected variable-mode");
+   if (var->data.mode == nir_var_mem_ubo) {
+      unsigned bit_size = glsl_get_bit_size(glsl_without_array(var->type));
+      // HACK: force CBV#0 for UBOs
+      const struct dxil_value *offset = index_to_offset(&ctx->mod, index, bit_size);
+      store_dest_int(ctx, &deref->dest, 0, offset);
+      return true;
    }
+
+   assert(var->data.mode == nir_var_function_temp);
+
+   struct hash_entry *he = _mesa_hash_table_search(ctx->locals, var);
+   assert(he != NULL);
+   const struct dxil_value *ptr = he->data;
 
    const struct dxil_value *zero = dxil_module_get_int32_const(&ctx->mod, 0);
    if (!zero)
