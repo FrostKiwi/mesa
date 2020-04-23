@@ -132,6 +132,8 @@ MEMORY_SEMANTICS = "NIR_INTRINSIC_MEMORY_SEMANTICS"
 MEMORY_MODES = "NIR_INTRINSIC_MEMORY_MODES"
 # Scope of a memory operation
 MEMORY_SCOPE = "NIR_INTRINSIC_MEMORY_SCOPE"
+# Scope of a control barrier
+EXECUTION_SCOPE = "NIR_INTRINSIC_EXECUTION_SCOPE"
 
 #
 # Possible flags:
@@ -224,6 +226,8 @@ barrier("memory_barrier")
 # barrierr applies is represented using NIR variable modes.
 intrinsic("scoped_memory_barrier",
           indices=[MEMORY_SEMANTICS, MEMORY_MODES, MEMORY_SCOPE])
+intrinsic("scoped_control_memory_barrier",
+          indices=[EXECUTION_SCOPE, MEMORY_SEMANTICS, MEMORY_MODES, MEMORY_SCOPE])
 
 # Shader clock intrinsic with semantics analogous to the clock2x32ARB()
 # GLSL intrinsic.

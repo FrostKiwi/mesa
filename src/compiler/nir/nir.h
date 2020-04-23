@@ -1627,6 +1627,11 @@ typedef enum {
     */
    NIR_INTRINSIC_MEMORY_SCOPE,
 
+   /**
+    * Value of nir_scope.
+    */
+   NIR_INTRINSIC_EXECUTION_SCOPE,
+
    NIR_INTRINSIC_NUM_INDEX_FLAGS,
 
 } nir_intrinsic_index_flag;
@@ -1739,6 +1744,7 @@ INTRINSIC_IDX_ACCESSORS(driver_location, DRIVER_LOCATION, unsigned)
 INTRINSIC_IDX_ACCESSORS(memory_semantics, MEMORY_SEMANTICS, nir_memory_semantics)
 INTRINSIC_IDX_ACCESSORS(memory_modes, MEMORY_MODES, nir_variable_mode)
 INTRINSIC_IDX_ACCESSORS(memory_scope, MEMORY_SCOPE, nir_scope)
+INTRINSIC_IDX_ACCESSORS(execution_scope, EXECUTION_SCOPE, nir_scope)
 
 static inline void
 nir_intrinsic_set_align(nir_intrinsic_instr *intrin,
