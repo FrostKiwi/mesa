@@ -159,7 +159,7 @@ d3d12_start_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
                                                 __uuidof(ctx->cmdlist),
                                                 (void **)&ctx->cmdlist))) {
          debug_printf("D3D12: creating ID3D12GraphicsCommandList failed\n");
-         return; 
+         return;
       }
    }
 
@@ -221,4 +221,11 @@ d3d12_batch_reference_object(struct d3d12_batch *batch,
       entry = _mesa_set_add(batch->objects, object);
       object->AddRef();
    }
+}
+
+void
+d3d12_batch_wait_fence(struct d3d12_batch *batch)
+{
+   if (batch->fence)
+      d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
 }
