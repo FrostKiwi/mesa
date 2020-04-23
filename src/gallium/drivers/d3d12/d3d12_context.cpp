@@ -1014,7 +1014,7 @@ d3d12_flush_cmdlist_and_wait(struct d3d12_context *ctx)
    struct d3d12_batch *batch = d3d12_current_batch(ctx);
 
    d3d12_flush_cmdlist(ctx);
-   d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
+   d3d12_batch_wait_fence(batch);
 }
 
 void
@@ -1089,7 +1089,7 @@ d3d12_flush(struct pipe_context *pipe,
       d3d12_fence_reference((struct d3d12_fence **)fence, batch->fence);
 
    if (flags & PIPE_FLUSH_END_OF_FRAME)
-      d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
+      d3d12_batch_wait_fence(batch);
 }
 
 static void
