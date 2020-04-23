@@ -476,6 +476,10 @@ d3d12_transfer_map(struct pipe_context *pctx,
                                                      ptrans->stride,
                                                      box->height);
 
+      if (res->base.target != PIPE_TEXTURE_3D)
+         ptrans->layer_stride = align(ptrans->layer_stride,
+                                      D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+
       trans->staging_res = pipe_buffer_create(pctx->screen,
                                               (pipe_bind_flags)0,
                                               PIPE_USAGE_STAGING,
