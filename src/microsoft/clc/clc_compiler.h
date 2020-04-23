@@ -159,10 +159,15 @@ clc_link(struct clc_context *ctx,
 
 void clc_free_object(struct clc_object *obj);
 
+struct clc_runtime_kernel_conf {
+   uint16_t local_size[3];
+};
+
 struct clc_dxil_object *
 clc_to_dxil(struct clc_context *ctx,
             const struct clc_object *obj,
             const char *entrypoint,
+            const struct clc_runtime_kernel_conf *conf,
             const struct clc_logger *logger);
 
 void clc_free_dxil_object(struct clc_dxil_object *dxil);

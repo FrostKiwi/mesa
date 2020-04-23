@@ -693,7 +693,7 @@ ComputeTest::compile_and_validate(const std::vector<const char *> &sources)
 
    shader.obj = std::shared_ptr<struct clc_object>(obj, clc_free_object);
 
-   dxil = clc_to_dxil(compiler_ctx, obj, "main_test", &logger);
+   dxil = clc_to_dxil(compiler_ctx, obj, "main_test", NULL, &logger);
    if (!dxil)
       throw runtime_error("failed to compile kernel!");
 
