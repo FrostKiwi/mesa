@@ -35,6 +35,7 @@
 #include "state_tracker/sw_winsys.h"
 
 #include <d3d12.h>
+#include <memory>
 
 static void
 d3d12_resource_destroy(struct pipe_screen *pscreen,
@@ -301,6 +302,114 @@ linear_offset(int x, int y, int z, unsigned stride, unsigned layer_stride)
           z * layer_stride;
 }
 
+/* A wrapper to make sure local resources are freed and unmapped with
+ * any exit path */
+struct local_resource {
+   local_resource(pipe_screen *s, struct pipe_resource *tmpl):
+      screen(s)
+   {
+      res = d3d12_resource(d3d12_resource_create(s, tmpl));
+   }
+
+   ~local_resource() {
+      if (res) {
+         if (mapped)
+            res->res->Unmap(0, nullptr);
+         d3d12_resource_destroy(screen, &res->base);
+      }
+   }
+
+   void *
+   map() {
+      void *ptr;
+      if (FAILED(res->res->Map(0, nullptr, &ptr)))  {
+         return NULL;
+      }
+      mapped = true;
+      return ptr;
+   }
+
+   pipe_screen *screen;
+   struct d3d12_resource *res;
+   bool mapped;
+};
+
+/* Combined depth-stencil needs a special handling for reading back: DX handled
+ * depth and stencil parts as separate resources and handles copying them only
+ * by using seperate texture copy calls with different formats. So create two
+ * buffers, read back both resources and interleave the data.
+ */
+static void *
+read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
+                const struct pipe_box *box,
+                struct d3d12_transfer *trans)
+{
+   pipe_screen *pscreen = ctx->base.screen;
+   trans->base.stride = align(util_format_get_stride(res->base.format, box->width),
+                              D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+   trans->base.layer_stride = util_format_get_2d_size(res->base.format,
+                                                      trans->base.stride,
+                                                      box->height);
+
+   struct pipe_resource tmpl;
+   memset(&tmpl, 0, sizeof tmpl);
+   tmpl.target = PIPE_BUFFER;
+   tmpl.format = PIPE_FORMAT_R32_UNORM;
+   tmpl.bind = 0;
+   tmpl.usage = PIPE_USAGE_STAGING;
+   tmpl.flags = 0;
+   tmpl.width0 = trans->base.layer_stride;
+   tmpl.height0 = 1;
+   tmpl.depth0 = 1;
+   tmpl.array_size = 1;
+
+   auto depth_buffer = std::make_unique<local_resource>(pscreen, &tmpl);
+   if (!depth_buffer || !depth_buffer->res) {
+      debug_printf("Allocating staging buffer for depth failed\n");
+      return NULL;
+   }
+
+   if (!d3d12_transfer_image_to_buf(ctx, res, depth_buffer->res, trans, 0))
+      return NULL;
+
+   tmpl.format = PIPE_FORMAT_R8_UINT;
+
+   auto stencil_buffer = std::make_unique<local_resource>(pscreen, &tmpl);
+   if (!stencil_buffer || !stencil_buffer->res) {
+      debug_printf("Allocating staging buffer for stencilfailed\n");
+      return NULL;
+   }
+
+   if (!d3d12_transfer_image_to_buf(ctx, res, stencil_buffer->res, trans, 1))
+      return NULL;
+
+   d3d12_flush_cmdlist_and_wait(ctx);
+
+   uint32_t *depth_ptr = (uint32_t *)depth_buffer->map();
+   if (!depth_ptr) {
+      debug_printf("Mapping staging depth buffer failed\n");
+      return NULL;
+   }
+
+   char *stencil_ptr =  (char *)stencil_buffer->map();
+   if (!stencil_ptr) {
+      debug_printf("Mapping staging stencil buffer failed\n");
+      return NULL;
+   }
+
+   uint32_t *buf = (uint32_t *)malloc(trans->base.layer_stride);
+   if (!buf)
+      return NULL;
+
+   trans->data = buf;
+
+   for (unsigned i = 0; i < trans->base.layer_stride/4; ++i) {
+      buf[i] = (stencil_ptr[i] << 24) | (depth_ptr[i] & 0xffffff);
+   }
+
+   return trans->data;
+}
+
 static void *
 d3d12_transfer_map(struct pipe_context *pctx,
                    struct pipe_resource *pres,
@@ -329,6 +438,8 @@ d3d12_transfer_map(struct pipe_context *pctx,
    ptrans->box = *box;
 
    D3D12_RANGE range;
+   range.Begin = 0;
+
    void *ptr;
    if (pres->target == PIPE_BUFFER) {
       range.Begin = box->x;
@@ -355,6 +466,9 @@ d3d12_transfer_map(struct pipe_context *pctx,
 
       if (FAILED(res->res->Map(0, &range, &ptr)))
          return NULL;
+   } else if ((unlikely(pres->format == PIPE_FORMAT_Z24_UNORM_S8_UINT)) &&
+              (usage & PIPE_TRANSFER_READ)) {
+      ptr = read_zs_surface(ctx, res, box, trans);
    } else {
       ptrans->stride = align(util_format_get_stride(pres->format, box->width),
                               D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
@@ -396,7 +510,10 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
    struct d3d12_transfer *trans = (struct d3d12_transfer *)ptrans;
    D3D12_RANGE range = { 0, 0 };
 
-   if (trans->staging_res) {
+   if (trans->data != nullptr) {
+      /* We only support this buffer for reading, so the resources are already unmapped */
+      free(trans->data);
+   } else if (trans->staging_res) {
       struct d3d12_resource *staging_res = d3d12_resource(trans->staging_res);
 
       if (trans->base.usage & PIPE_TRANSFER_WRITE) {
