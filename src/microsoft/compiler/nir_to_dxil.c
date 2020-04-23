@@ -95,6 +95,8 @@ nir_options = {
    .lower_pack_32_2x16_split = true,
    .lower_unpack_64_2x32_split = true,
    .lower_unpack_32_2x16_split = true,
+   .use_scoped_memory_barrier = true,
+   .use_scoped_control_memory_barrier = true,
 };
 
 const nir_shader_compiler_options*
@@ -218,6 +220,8 @@ enum dxil_intr {
    DXIL_INTR_TEXTURE_SIZE = 72,
 
    DXIL_INTR_ATOMIC_BINOP = 78,
+
+   DXIL_INTR_BARRIER = 80,
 
    DXIL_INTR_DISCARD = 82,
    DXIL_INTR_DDX_COARSE = 83,
@@ -1748,6 +1752,57 @@ load_ubo(struct ntd_context *ctx, const struct dxil_value *handle,
 }
 
 static bool
+emit_barrier(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *opcode, *mode;
+   const struct dxil_func *func;
+   uint32_t flags = 0;
+
+   if (intr->intrinsic == nir_intrinsic_scoped_control_memory_barrier) {
+      if (nir_intrinsic_execution_scope(intr) != NIR_SCOPE_WORKGROUP)
+         return false;
+
+      flags |= DXIL_BARRIER_MODE_SYNC_THREAD_GROUP;
+   }
+
+   nir_variable_mode modes = nir_intrinsic_memory_modes(intr);
+   nir_scope mem_scope = nir_intrinsic_memory_scope(intr);
+
+   if (modes & ~(nir_var_mem_ssbo | nir_var_mem_global | nir_var_mem_shared))
+      return false;
+
+   if (mem_scope != NIR_SCOPE_DEVICE && mem_scope != NIR_SCOPE_WORKGROUP)
+      return false;
+
+   if (modes & (nir_var_mem_ssbo | nir_var_mem_global)) {
+      if (mem_scope == NIR_SCOPE_DEVICE)
+         flags |= DXIL_BARRIER_MODE_UAV_FENCE_GLOBAL;
+      else
+         flags |= DXIL_BARRIER_MODE_UAV_FENCE_THREAD_GROUP;
+   }
+
+   if (modes & nir_var_mem_shared)
+      flags |= DXIL_BARRIER_MODE_UAV_FENCE_THREAD_GROUP;
+
+   func = dxil_get_function(&ctx->mod, "dx.op.barrier", DXIL_NONE);
+   if (!func)
+      return false;
+
+   opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_BARRIER);
+   if (!opcode)
+      return false;
+
+   mode = dxil_module_get_int32_const(&ctx->mod, flags);
+   if (!mode)
+      return false;
+
+   const struct dxil_value *args[] = { opcode, mode };
+
+   return dxil_emit_call_void(&ctx->mod, func,
+                              args, ARRAY_SIZE(args));
+}
+
+static bool
 emit_load_global_invocation_id(struct ntd_context *ctx,
                                     nir_intrinsic_instr *intr)
 {
@@ -2360,6 +2415,9 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_emit_vertex(ctx, intr);
    case nir_intrinsic_end_primitive:
       return emit_end_primitive(ctx, intr);
+   case nir_intrinsic_scoped_memory_barrier:
+   case nir_intrinsic_scoped_control_memory_barrier:
+      return emit_barrier(ctx, intr);
 
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_local_group_size:
