@@ -126,16 +126,13 @@ lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
    nir_variable *var = nir_deref_instr_get_variable(deref);
    if (var->data.mode != nir_var_function_temp)
       return false;
-   assert(glsl_type_is_array(var->type));
-   const struct glsl_type *without = glsl_without_array(var->type);
-   unsigned align = glsl_get_cl_alignment(without);
-   unsigned bit_size = nir_dest_bit_size(intr->dest);
    nir_ssa_def *ptr = nir_build_deref_offset(b, deref, cl_type_size_align);
-   nir_ssa_def *offset = nir_iand(b, ptr, nir_inot(b, nir_imm_int(b, (bit_size / 8) - 1)));
-   unsigned load_size = glsl_get_bit_size(without);
+   nir_ssa_def *offset = nir_iand(b, ptr, nir_inot(b, nir_imm_int(b, 3)));
+   unsigned load_size = 32;
 
    assert(intr->dest.is_ssa);
    unsigned num_components = nir_dest_num_components(intr->dest);
+   unsigned bit_size = nir_dest_bit_size(intr->dest);
    unsigned num_bits = num_components * bit_size;
    nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
    unsigned comp_idx = 0;
@@ -155,7 +152,7 @@ lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
 
       load->src[1] =
          nir_src_for_ssa(nir_ishr(b, nir_iadd(b, offset, nir_imm_int(b, i / 8)),
-                                  nir_imm_int(b, log2(bit_size / 8))));
+                                  nir_imm_int(b, 2 /* log2(32 / 8) */)));
       nir_ssa_dest_init(&load->instr, &load->dest, load->num_components,
                         32, NULL);
       nir_builder_instr_insert(b, &load->instr);
@@ -194,16 +191,13 @@ lower_store_deref(nir_builder *b, nir_intrinsic_instr *intr)
    if (var->data.mode != nir_var_function_temp)
       return false;
    nir_src val = intr->src[1];
-   assert(glsl_type_is_array(var->type));
-   const struct glsl_type *without = glsl_without_array(var->type);
-   unsigned align = glsl_get_cl_alignment(without);
-   unsigned bit_size = nir_src_bit_size(val);
    nir_ssa_def *ptr = nir_build_deref_offset(b, deref, cl_type_size_align);
-   nir_ssa_def *offset = nir_iand(b, ptr, nir_inot(b, nir_imm_int(b, (bit_size / 8) - 1)));
-   unsigned store_size = bit_size;
+   nir_ssa_def *offset = nir_iand(b, ptr, nir_inot(b, nir_imm_int(b, 3)));
+   unsigned store_size = 32;
 
    assert(val.is_ssa);
    unsigned num_components = nir_src_num_components(val);
+   unsigned bit_size = nir_src_bit_size(val);
    unsigned num_bits = num_components * bit_size;
    nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
    unsigned comp_idx = 0;
@@ -223,7 +217,32 @@ lower_store_deref(nir_builder *b, nir_intrinsic_instr *intr)
                                                substore_num_bits / bit_size);
       nir_intrinsic_instr *store;
 
-      assert(substore_num_bits == 32);
+      if (substore_num_bits < 32) {
+         nir_ssa_def *mask = nir_imm_int(b, (1 << substore_num_bits) - 1);
+
+        /* If we have 16 bits or less to store we need to place them
+         * correctly in the u32 component. Anything greater than 16 bits
+         * (including uchar3) is naturally aligned on 32bits.
+         */
+         if (substore_num_bits <= 16) {
+            nir_ssa_def *pos = nir_iand(b, ptr, nir_imm_int(b, 3));
+            nir_ssa_def *shift = nir_imul_imm(b, pos, 8);
+
+            vec32 = nir_ishl(b, vec32, shift);
+            mask = nir_ishl(b, mask, shift);
+         }
+
+         nir_intrinsic_instr *load =
+            nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_ptr_dxil);
+         load->num_components = 1;
+         load->src[0] = nir_src_for_ssa(&path.path[0]->dest.ssa);
+         load->src[1] = nir_src_for_ssa(local_offset);
+         nir_ssa_dest_init(&load->instr, &load->dest, load->num_components, 32,
+                           NULL);
+         nir_builder_instr_insert(b, &load->instr);
+         vec32 = nir_ior(b, vec32,
+                        nir_iand(b, &load->dest.ssa, nir_inot(b, mask)));
+      }
 
       store = nir_intrinsic_instr_create(b->shader,
                                        nir_intrinsic_store_ptr_dxil);

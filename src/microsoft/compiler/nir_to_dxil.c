@@ -2212,8 +2212,7 @@ emit_store_ptr(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    if (!ptr)
       return false;
 
-   unsigned align = nir_src_bit_size(intr->src[2]) / 8;
-   return dxil_emit_store(&ctx->mod, value, ptr, align, false);
+   return dxil_emit_store(&ctx->mod, value, ptr, 4, false);
 }
 
 static bool
@@ -2318,9 +2317,8 @@ emit_load_ptr(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    if (!ptr)
       return false;
 
-   unsigned align = nir_dest_bit_size(intr->dest) / 8;
    const struct dxil_value *retval =
-      dxil_emit_load(&ctx->mod, ptr, align, false);
+      dxil_emit_load(&ctx->mod, ptr, 4, false);
 
    store_dest(ctx, &intr->dest, 0, retval, nir_type_uint);
    return true;
@@ -3288,14 +3286,16 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    nir_foreach_variable(var, &entry->locals) {
       if (glsl_type_is_array(var->type)) {
          assert(!glsl_type_is_unsized_array(var->type));
-         const struct dxil_type *alloc_type =
-            get_glsl_type(&ctx->mod, var->type);
+         unsigned array_len = glsl_get_cl_size(var->type) / 4;
 
-         const struct dxil_type *size_type =
-            dxil_module_get_int_type(&ctx->mod, 32);
          const struct dxil_value *size =
-            dxil_module_get_int32_const(&ctx->mod,
-                                        glsl_get_length(var->type));
+            dxil_module_get_int32_const(&ctx->mod, array_len);
+
+         const struct dxil_type *int32 =
+            dxil_module_get_int_type(&ctx->mod, 32);
+
+         const struct dxil_type *alloc_type =
+            dxil_module_get_array_type(&ctx->mod, int32, array_len);
 
          // TODO: find a way of moving CL-semantics out of nir_to_dxil?
          assert(s->info.stage == MESA_SHADER_KERNEL);
@@ -3303,7 +3303,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
             glsl_get_cl_alignment(glsl_get_array_element(var->type));
 
          const struct dxil_value *ptr =
-            dxil_emit_alloca(&ctx->mod, alloc_type, size_type, size, align);
+            dxil_emit_alloca(&ctx->mod, alloc_type, int32, size, align);
          _mesa_hash_table_insert(ctx->locals, var, (void *)ptr);
       }
    }
