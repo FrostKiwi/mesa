@@ -4474,12 +4474,6 @@ struct gl_extensions
     * while meta is in progress.
     */
    GLubyte Version;
-   /**
-    * Force-enabled, yet unrecognized, extensions.
-    * See _mesa_one_time_init_extension_overrides()
-    */
-#define MAX_UNRECOGNIZED_EXTENSIONS 16
-   const char *unrecognized_extensions[MAX_UNRECOGNIZED_EXTENSIONS];
 };
 
 
