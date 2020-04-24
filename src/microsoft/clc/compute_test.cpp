@@ -418,6 +418,9 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
    D3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
    Shader shader = compile(sources);
 
+   if (args.size() != shader.dxil->kernel->num_args)
+      throw runtime_error("incorrect number of inputs");
+
    struct clc_runtime_kernel_conf conf = { 0 };
 
    if (!shader.dxil->metadata.local_size[0])
@@ -440,13 +443,27 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
        z % conf.local_size[2])
       throw runtime_error("invalid global size must be a multiple of local size");
 
+   std::vector<struct clc_runtime_arg_info> argsinfo(args.size());
+
+   conf.args = argsinfo.data();
+
+   for (unsigned i = 0; i < shader.dxil->kernel->num_args; ++i) {
+      RawShaderArg *arg = args[i];
+      size_t size = arg->get_elem_size() * arg->get_num_elems();
+
+      switch (shader.dxil->kernel->args[i].address_qualifier) {
+      case CLC_KERNEL_ARG_ADDRESS_LOCAL:
+         argsinfo[i].localptr.size = size;
+         break;
+      default:
+         break;
+      }
+   }
+
    configure(shader, &conf);
    validate(shader);
 
    std::shared_ptr<struct clc_dxil_object> &dxil = shader.dxil;
-
-   if (args.size() != dxil->kernel->num_args)
-      throw runtime_error("incorrect number of inputs");
 
    std::vector<uint8_t> argsbuf(dxil->metadata.kernel_inputs_buf_size);
    uint32_t global_work_offset[3] = {0, 0, 0};
@@ -467,6 +484,11 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
 
          uint32_t *ptr_slot = (uint32_t *)slot;
          *ptr_slot = uav_idx++ << 28;
+         break;
+      }
+      case CLC_KERNEL_ARG_ADDRESS_LOCAL: {
+         uint32_t *ptr_slot = (uint32_t *)slot;
+         *ptr_slot = dxil->metadata.args[i].localptr.sharedmem_offset;
          break;
       }
       case CLC_KERNEL_ARG_ADDRESS_PRIVATE: {
