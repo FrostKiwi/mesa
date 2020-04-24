@@ -350,6 +350,11 @@ clc_to_dxil(struct clc_context *ctx,
 
    struct clc_dxil_metadata *metadata = &dxil->metadata;
 
+   memcpy(metadata->local_size, nir->info.cs.local_size,
+          sizeof(metadata->local_size));
+   memcpy(metadata->local_size_hint, nir->info.cs.local_size_hint,
+          sizeof(metadata->local_size));
+
    metadata->args = calloc(dxil->kernel->num_args,
                            sizeof(*metadata->args));
    if (!metadata->args) {
