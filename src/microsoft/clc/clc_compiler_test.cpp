@@ -1011,3 +1011,22 @@ TEST_F(ComputeTest, image_two_reads)
    Shader shader = compile(std::vector<const char*>({ kernel_source }));
    validate(shader);
 }
+
+TEST_F(ComputeTest, local_ptr)
+{
+   struct uint2 { uint32_t x, y; };
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout, __local uint2 *tmp)\n\
+   {\n\
+      tmp[get_local_id(0)].x = inout[get_global_id(0)] + 1;\n\
+      tmp[get_local_id(0)].y = inout[get_global_id(0)] - 1;\n\
+      barrier(CLK_LOCAL_MEM_FENCE);\n\
+      inout[get_global_id(0)] = tmp[get_local_id(0) % 2].x * tmp[(get_local_id(0) + 1) % 2].y;\n\
+   }\n";
+   auto inout = ShaderArg<uint32_t>({ 2, 4 }, SHADER_ARG_INOUT);
+   auto tmp = ShaderArg<struct uint2>(std::vector<struct uint2>(4096), SHADER_ARG_INPUT);
+   const uint8_t expected[] = { 9, 5 };
+   run_shader(kernel_source, inout.size(), 1, 1, inout, tmp);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
