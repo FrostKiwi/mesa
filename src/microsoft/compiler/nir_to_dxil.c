@@ -1957,6 +1957,23 @@ index_to_offset(struct dxil_module *m, const struct dxil_value *index,
    return dxil_emit_binop(m, DXIL_BINOP_SHL, index, shift, 0);
 }
 
+static const struct dxil_value *
+emit_gep_for_index(struct ntd_context *ctx, const nir_variable *var,
+                   const struct dxil_value *index)
+{
+   assert(var->data.mode ==  nir_var_function_temp);
+   struct hash_entry *he = _mesa_hash_table_search(ctx->locals, var);
+   assert(he != NULL);
+   const struct dxil_value *ptr = he->data;
+
+   const struct dxil_value *zero = dxil_module_get_int32_const(&ctx->mod, 0);
+   if (!zero)
+      return NULL;
+
+   const struct dxil_value *ops[] = { ptr, zero, index };
+   return dxil_emit_gep_inbounds(&ctx->mod, ops, ARRAY_SIZE(ops));
+}
+
 static bool
 emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
@@ -2586,17 +2603,7 @@ emit_deref_array(struct ntd_context *ctx, nir_deref_instr *deref)
    }
 
    assert(var->data.mode == nir_var_function_temp);
-
-   struct hash_entry *he = _mesa_hash_table_search(ctx->locals, var);
-   assert(he != NULL);
-   const struct dxil_value *ptr = he->data;
-
-   const struct dxil_value *zero = dxil_module_get_int32_const(&ctx->mod, 0);
-   if (!zero)
-      return false;
-
-   const struct dxil_value *ops[] = { ptr, zero, index };
-   ptr = dxil_emit_gep_inbounds(&ctx->mod, ops, ARRAY_SIZE(ops));
+   const struct dxil_value *ptr = emit_gep_for_index(ctx, var, index);
    if (!ptr)
       return false;
 
