@@ -31,14 +31,14 @@ libopengl32 = shared_library(
   ['libgl_gdi.c'],
   vs_module_defs : ogldef,
   include_directories : [
-    inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_gallium_aux, inc_wgl, inc_gallium_winsys_sw, inc_gallium_drivers,
+    inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_gallium_aux, inc_wgl, inc_gallium_winsys, inc_gallium_winsys_sw, inc_gallium_drivers,
   ],
   link_whole : [libwgl],
   link_with : [
     libgallium, libglsl, libmesa_gallium, libwsgdi, libglapi_static, libglapi
   ],
   dependencies : [
-    dep_ws2_32, idep_nir, idep_mesautil, driver_swrast, driver_swr, driver_d3d12
+    dep_ws2_32, idep_nir, idep_mesautil, driver_swrast, driver_swr, driver_d3d12, winsys_d3d12_wgl
   ],
   name_prefix : '',  # otherwise mingw will create libopengl32.dll
   install : true,

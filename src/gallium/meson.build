@@ -218,10 +218,13 @@ if with_gallium_st_nine
 endif
 if with_platform_windows
   subdir('state_trackers/wgl')
-  subdir('targets/libgl-gdi')
   if with_gallium_d3d12
+    subdir('winsys/d3d12/wgl')
     subdir('targets/libgl-d3d12')
+  else
+    winsys_d3d12_wgl = declare_dependency()
   endif
+  subdir('targets/libgl-gdi')
 endif
 if with_tests
   subdir('targets/graw-null')
