@@ -109,6 +109,9 @@ struct clc_dxil_metadata {
          struct {
             unsigned buf_id;
          } globalptr;
+         struct {
+            unsigned sharedmem_offset;
+	 } localptr;
       };
    } *args;
    unsigned kernel_inputs_cbv_id;
@@ -157,8 +160,17 @@ clc_link(struct clc_context *ctx,
 
 void clc_free_object(struct clc_object *obj);
 
+struct clc_runtime_arg_info {
+   union {
+      struct {
+         unsigned size;
+      } localptr;
+   };
+};
+
 struct clc_runtime_kernel_conf {
    uint16_t local_size[3];
+   struct clc_runtime_arg_info *args;
 };
 
 struct clc_dxil_object *
