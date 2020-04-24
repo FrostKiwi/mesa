@@ -694,12 +694,24 @@ ComputeTest::compile(const std::vector<const char *> &sources)
       throw runtime_error("failed to link objects!");
 
    shader.obj = std::shared_ptr<struct clc_object>(obj, clc_free_object);
-   dxil = clc_to_dxil(compiler_ctx, obj, "main_test", NULL, &logger);
+   configure(shader, NULL);
+   return shader;
+}
+
+void
+ComputeTest::configure(Shader &shader,
+                       const struct clc_runtime_kernel_conf *conf)
+{
+   struct clc_logger logger = {
+      error_callback, warning_callback,
+   };
+   struct clc_dxil_object *dxil;
+
+   dxil = clc_to_dxil(compiler_ctx, shader.obj.get(), "main_test", conf, &logger);
    if (!dxil)
       throw runtime_error("failed to compile kernel!");
 
    shader.dxil = std::shared_ptr<struct clc_dxil_object>(dxil, clc_free_dxil_object);
-   return shader;
 }
 
 void
