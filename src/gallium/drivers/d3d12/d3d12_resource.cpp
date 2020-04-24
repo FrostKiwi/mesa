@@ -288,25 +288,28 @@ transfer_buf_to_image(struct d3d12_context *ctx,
    return true;
 }
 
-static bool
-d3d12_transfer_image_to_buf(struct d3d12_context *ctx,
-                            struct d3d12_resource *res,
-                            struct d3d12_resource *staging_res,
-                            struct d3d12_transfer *trans,
-                            unsigned resid)
+static void
+transfer_image_part_to_buf(struct d3d12_context *ctx,
+                           struct d3d12_resource *res,
+                           struct d3d12_resource *staging_res,
+                           struct d3d12_transfer *trans,
+                           unsigned resid, int z, int start_layer,
+                           int start_box_z, int depth)
 {
    D3D12_BOX src_box = {};
 
-   auto tex_loc = fill_texture_location(res, trans, resid);
+   auto tex_loc = fill_texture_location(res, trans, resid + z);
    auto buf_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans,
-                                       trans->base.box.depth, resid);
+                                       trans->base.box.depth, resid + z);
+
+   buf_loc.PlacedFootprint.Offset = (z  - start_layer) * trans->base.layer_stride;
 
    src_box.left = trans->base.box.x;
    src_box.right = trans->base.box.x + trans->base.box.width;
    src_box.top = trans->base.box.y;
    src_box.bottom = trans->base.box.y + trans->base.box.height;
-   src_box.front = trans->base.box.z;
-   src_box.back = trans->base.box.z + trans->base.box.depth;
+   src_box.front = start_box_z;
+   src_box.back = start_box_z + depth;
 
    struct copy_info copy_info;
    copy_info.dst_x = copy_info.dst_y = copy_info.dst_z = 0;
@@ -315,6 +318,31 @@ d3d12_transfer_image_to_buf(struct d3d12_context *ctx,
    copy_info.src_box = &src_box;
 
    copy_texture_region(ctx, res, copy_info);
+}
+
+static bool
+transfer_image_to_buf(struct d3d12_context *ctx,
+                            struct d3d12_resource *res,
+                            struct d3d12_resource *staging_res,
+                            struct d3d12_transfer *trans,
+                            unsigned resid)
+{
+
+   /* We only suppport loading from either an texture array
+    * or a ZS texture, so either resid is zero, or num_layers == 1)
+    */
+   assert(resid == 0 || trans->base.box.depth == 1);
+
+   if (res->base.target == PIPE_TEXTURE_3D) {
+      transfer_image_part_to_buf(ctx, res, staging_res, trans, resid,
+                                 0, 0, trans->base.box.z, trans->base.box.depth);
+   } else {
+      int start_layer = trans->base.box.z;
+      for (int z = start_layer; z < start_layer + trans->base.box.depth; ++z) {
+         transfer_image_part_to_buf(ctx, res, staging_res, trans, resid,
+                                    z, start_layer, 0, 1);
+      }
+   }
    return true;
 }
 
@@ -393,7 +421,7 @@ read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
       return NULL;
    }
 
-   if (!d3d12_transfer_image_to_buf(ctx, res, depth_buffer->res, trans, 0))
+   if (!transfer_image_to_buf(ctx, res, depth_buffer->res, trans, 0))
       return NULL;
 
    tmpl.format = PIPE_FORMAT_R8_UINT;
@@ -404,7 +432,7 @@ read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
       return NULL;
    }
 
-   if (!d3d12_transfer_image_to_buf(ctx, res, stencil_buffer->res, trans, 1))
+   if (!transfer_image_to_buf(ctx, res, stencil_buffer->res, trans, 1))
       return NULL;
 
    d3d12_flush_cmdlist_and_wait(ctx);
@@ -513,7 +541,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
       struct d3d12_resource *staging_res = d3d12_resource(trans->staging_res);
 
       if (usage & PIPE_TRANSFER_READ) {
-         bool ret = d3d12_transfer_image_to_buf(ctx, res, staging_res, trans, 0);
+         bool ret = transfer_image_to_buf(ctx, res, staging_res, trans, 0);
          if (ret == false)
             return NULL;
          d3d12_flush_cmdlist_and_wait(ctx);
