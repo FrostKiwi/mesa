@@ -2204,8 +2204,12 @@ emit_store_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 {
    const struct dxil_value *value =
       get_src(ctx, &intr->src[1], 0, nir_type_uint);
-   const struct dxil_value *ptr =
+   const struct dxil_value *index =
       get_src(ctx, &intr->src[0], 0, nir_type_uint);
+
+   const struct dxil_value *ptr = emit_gep_for_index(ctx, var, index);
+   if (!ptr)
+      return false;
 
    unsigned align = nir_src_bit_size(intr->src[0]) / 8;
    return dxil_emit_store(&ctx->mod, value, ptr, align, false);
@@ -2308,8 +2312,12 @@ static bool
 emit_load_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                         nir_variable *var)
 {
-   const struct dxil_value *ptr =
+   const struct dxil_value *index =
       get_src(ctx, &intr->src[0], 0, nir_type_uint);
+
+   const struct dxil_value *ptr = emit_gep_for_index(ctx, var, index);
+   if (!ptr)
+      return false;
 
    unsigned align = nir_dest_bit_size(intr->dest) / 8;
    const struct dxil_value *retval =
@@ -2603,11 +2611,7 @@ emit_deref_array(struct ntd_context *ctx, nir_deref_instr *deref)
    }
 
    assert(var->data.mode == nir_var_function_temp);
-   const struct dxil_value *ptr = emit_gep_for_index(ctx, var, index);
-   if (!ptr)
-      return false;
-
-   store_dest_int(ctx, &deref->dest, 0, ptr);
+   store_dest_int(ctx, &deref->dest, 0, index);
    return true;
 }
 
