@@ -125,6 +125,8 @@ struct clc_dxil_metadata {
       int cbuf_offset;
    } image_channels[CLC_MAX_READ_IMAGE_ARGS + CLC_MAX_WRITE_IMAGE_ARGS];
    size_t num_image_channels;
+   uint16_t local_size[3];
+   uint16_t local_size_hint[3];
 };
 
 struct clc_dxil_object {
