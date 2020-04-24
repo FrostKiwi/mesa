@@ -568,6 +568,32 @@ clc_to_dxil(struct clc_context *ctx,
       }
    }
 
+   for (unsigned i = 0; i < dxil->kernel->num_args; i++) {
+      if (dxil->kernel->args[i].address_qualifier != CLC_KERNEL_ARG_ADDRESS_LOCAL)
+         continue;
+
+      /* If we don't have the runtime conf yet, we just create a dummy variable.
+       * This will be adjusted when clc_to_dxil() is called with a conf
+       * argument.
+       */
+      unsigned size = 4;
+      if (conf && conf->args)
+         size = conf->args[i].localptr.size;
+
+      /* The alignment required for the pointee type is not easy to get from
+       * here, so let's base our logic on the size itself. Anything bigger than
+       * the maximum alignment constraint (which is 128 bytes, since ulong16 or
+       * doubl16 size are the biggest base types) should be aligned on this
+       * maximum alignment constraint. For smaller types, we use the size
+       * itself to calculate the alignment.
+       */
+      unsigned alignment = size < 128 ? (1 << (ffs(size) - 1)) : 128;
+
+      nir->info.cs.shared_size = align(nir->info.cs.shared_size, alignment);
+      metadata->args[i].localptr.sharedmem_offset = nir->info.cs.shared_size;
+      nir->info.cs.shared_size += size;
+   }
+
    struct blob tmp;
    if (!nir_to_dxil(nir, &opts, &tmp)) {
       debug_printf("D3D12: nir_to_dxil failed\n");
