@@ -169,6 +169,10 @@ protected:
    compile(const std::vector<const char *> &sources);
 
    void
+   configure(Shader &shader,
+             const struct clc_runtime_kernel_conf *conf);
+
+   void
    validate(Shader &shader);
 
    enum ShaderArgDirection {
