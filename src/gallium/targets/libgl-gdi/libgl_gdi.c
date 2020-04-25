@@ -201,6 +201,19 @@ gdi_get_pfd_flags(struct pipe_screen *screen)
 }
 
 
+static struct stw_winsys_framebuffer *
+gdi_create_framebuffer(struct pipe_screen *screen,
+                       HDC hDC,
+                       int iPixelFormat)
+{
+#ifdef GALLIUM_D3D12
+   if (use_d3d12)
+      return d3d12_wgl_create_framebuffer(screen, hDC, iPixelFormat);
+#endif
+   return NULL;
+}
+
+
 static const struct stw_winsys stw_winsys = {
    &gdi_screen_create,
    &gdi_present,
@@ -213,6 +226,7 @@ static const struct stw_winsys stw_winsys = {
    NULL, /* shared_surface_close */
    NULL, /* compose */
    &gdi_get_pfd_flags,
+   &gdi_create_framebuffer,
 };
 
 
