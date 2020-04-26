@@ -5602,7 +5602,9 @@ genX(init_atoms)(struct brw_context *brw)
        * table upload must be last.
        */
       &brw_vs_pull_constants,
+      &brw_vs_ubo_surfaces,
       &brw_wm_pull_constants,
+      &brw_wm_ubo_surfaces,
       &brw_renderbuffer_surfaces,
       &brw_renderbuffer_read_surfaces,
       &brw_texture_surfaces,
