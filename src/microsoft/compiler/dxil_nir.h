@@ -28,6 +28,6 @@
 #include "nir.h"
 
 bool dxil_nir_lower_8bit_conv(nir_shader *shader);
-bool dxil_nir_lower_global_mem_to_dxil(nir_shader *shader);
+bool dxil_nir_lower_loads_stores_to_dxil(nir_shader *shader);
 
 #endif /* DXIL_NIR_H */

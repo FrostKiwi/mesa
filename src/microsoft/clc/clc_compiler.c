@@ -322,7 +322,7 @@ clc_to_dxil(struct clc_context *ctx,
 
    NIR_PASS_V(nir, nir_opt_dce);
 
-   NIR_PASS_V(nir, dxil_nir_lower_global_mem_to_dxil);
+   NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
 
    NIR_PASS_V(nir, nir_lower_bit_size, lower_bit_size_callback, NULL);
 
