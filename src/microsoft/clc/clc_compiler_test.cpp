@@ -278,6 +278,52 @@ TEST_F(ComputeTest, types_for_loop)
       EXPECT_EQ(output[i], expected[i]);
 }
 
+TEST_F(ComputeTest, DISABLED_complex_types_local_array_long)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global ulong *inout)\n\
+   {\n\
+      ushort tmp[] = {\n\
+         get_global_id(1) + 0x00000000,\n\
+         get_global_id(1) + 0x10000001,\n\
+         get_global_id(1) + 0x20000020,\n\
+         get_global_id(1) + 0x30000300,\n\
+      };\n\
+      uint idx = get_global_id(0);\n\
+      inout[idx] = tmp[idx];\n\
+   }\n";
+   auto inout = ShaderArg<uint64_t>({ 0, 0, 0, 0 }, SHADER_ARG_INOUT);
+   const uint16_t expected[] = {
+      0x00000000, 0x10000001, 0x20000020, 0x30000300,
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
+TEST_F(ComputeTest, complex_types_local_array_short)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global ushort *inout)\n\
+   {\n\
+      ushort tmp[] = {\n\
+         get_global_id(1) + 0x00,\n\
+         get_global_id(1) + 0x10,\n\
+         get_global_id(1) + 0x20,\n\
+         get_global_id(1) + 0x30,\n\
+      };\n\
+      uint idx = get_global_id(0);\n\
+      inout[idx] = tmp[idx];\n\
+   }\n";
+   auto inout = ShaderArg<uint16_t>({ 0, 0, 0, 0 }, SHADER_ARG_INOUT);
+   const uint16_t expected[] = {
+      0x00, 0x10, 0x20, 0x30,
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
 TEST_F(ComputeTest, complex_types_local_array)
 {
    const char *kernel_source =
