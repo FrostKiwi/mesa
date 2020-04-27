@@ -35,6 +35,7 @@ extern "C" {
 
 struct hash_table;
 struct brw_stage_prog_data;
+struct brw_vue_map;
 
 struct ibc_payload_base {
    /** Number of registers used for fixed-function thread payload */
@@ -276,6 +277,11 @@ bool ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
 bool ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
                                const nir_intrinsic_instr *instr);
 ibc_ref ibc_emit_fs_sample_live_predicate(struct nir_to_ibc_state *nti);
+
+void ibc_emit_urb_writes(ibc_builder *b,
+                         const struct brw_vue_map *vue_map,
+                         ibc_ref handle,
+                         const ibc_ref *outputs);
 
 #ifdef __cplusplus
 } /* extern "C" */
