@@ -542,7 +542,8 @@ clc_to_dxil(struct clc_context *ctx,
    if (nir_options->lower_int64_options)
       NIR_PASS_V(nir, nir_lower_int64, nir_options->lower_int64_options);
 
-   NIR_PASS_V(nir, nir_opt_dce);
+   NIR_PASS_V(nir, nir_opt_deref);
+   NIR_PASS_V(nir, nir_lower_vars_to_ssa);
 
    NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
 
