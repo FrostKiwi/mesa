@@ -865,6 +865,8 @@ intrinsic("bindless_resource_ir3", [1], dest_comp=1, indices=[DESC_SET], flags=[
 intrinsic("store_global_dxil", [0, 1, 1])
 # src[] = { value, mask, index, offset }.
 intrinsic("store_global_masked_dxil", [1] * 4)
+# src[] = { value, deref_var, offset }
+intrinsic("store_ptr_dxil", [0, 1, 1])
 # src[] = { index, offset }.
 load("global_dxil", 2, [], [CAN_ELIMINATE, CAN_REORDER])
 # src[] = { value, index }.
@@ -873,6 +875,8 @@ intrinsic("store_shared_dxil", [1] * 2)
 intrinsic("store_shared_masked_dxil", [1] * 3)
 # src[] = { index }.
 load("shared_dxil", 1, [], [CAN_ELIMINATE, CAN_REORDER])
+# src[] = { deref_var, offset }
+load("ptr_dxil", 2, [], [])
 
 # Intrinsics used by the Midgard/Bifrost blend pipeline. These are defined
 # within a blend shader to read/write the raw value from the tile buffer,
