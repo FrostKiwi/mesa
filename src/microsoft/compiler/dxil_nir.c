@@ -106,7 +106,7 @@ load_comps_to_vec32(nir_builder *b, unsigned src_bit_size,
    return nir_vec(b, vec32comps, num_vec32comps);
 }
 
-static void
+static bool
 lower_load_global(nir_builder *b, nir_intrinsic_instr *intr)
 {
    assert(intr->dest.is_ssa);
@@ -166,9 +166,10 @@ lower_load_global(nir_builder *b, nir_intrinsic_instr *intr)
    nir_ssa_def *result = nir_vec(b, comps, num_components);
    nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
    nir_instr_remove(&intr->instr);
+   return true;
 }
 
-static void
+static bool
 lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
 {
    assert(intr->src[0].is_ssa);
@@ -239,6 +240,7 @@ lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
    }
 
    nir_instr_remove(&intr->instr);
+   return true;
 }
 
 static nir_ssa_def *
@@ -260,7 +262,7 @@ lower_load_shared_vec32(nir_builder *b, nir_ssa_def *index, unsigned num_comps)
    return nir_vec(b, comps, num_comps);
 }
 
-static void
+static bool
 lower_load_shared(nir_builder *b, nir_intrinsic_instr *intr)
 {
    assert(intr->dest.is_ssa);
@@ -298,6 +300,8 @@ lower_load_shared(nir_builder *b, nir_intrinsic_instr *intr)
    nir_ssa_def *result = nir_vec(b, comps, num_components);
    nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
    nir_instr_remove(&intr->instr);
+
+   return true;
 }
 
 static void
@@ -315,7 +319,7 @@ lower_store_shared_vec32(nir_builder *b, nir_ssa_def *index, nir_ssa_def *vec32)
    }
 }
 
-static void
+static bool
 lower_store_shared(nir_builder *b, nir_intrinsic_instr *intr)
 {
    assert(intr->src[0].is_ssa);
@@ -366,6 +370,8 @@ lower_store_shared(nir_builder *b, nir_intrinsic_instr *intr)
    }
 
    nir_instr_remove(&intr->instr);
+
+   return true;
 }
 
 bool
@@ -389,20 +395,16 @@ dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
 
             switch (intr->intrinsic) {
             case nir_intrinsic_load_global:
-               lower_load_global(&b, intr);
-               progress = true;
+               progress |= lower_load_global(&b, intr);
                break;
             case nir_intrinsic_load_shared:
-               lower_load_shared(&b, intr);
-               progress = true;
+               progress |= lower_load_shared(&b, intr);
                break;
             case nir_intrinsic_store_global:
-               lower_store_global(&b, intr);
-               progress = true;
+               progress |= lower_store_global(&b, intr);
                break;
             case nir_intrinsic_store_shared:
-               lower_store_shared(&b, intr);
-               progress = true;
+               progress |= lower_store_shared(&b, intr);
                break;
             }
          }
