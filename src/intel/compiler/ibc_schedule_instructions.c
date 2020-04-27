@@ -280,6 +280,9 @@ ibc_instr_dest_latency(const ibc_instr *instr,
 
       case BRW_SFID_URB:
          switch (brw_urb_desc_msg_type(devinfo, send->desc_imm)) {
+         case GEN8_URB_OPCODE_SIMD8_READ:
+            return 200; /* TODO */
+
          case GEN8_URB_OPCODE_SIMD8_WRITE:
             /* Assume writes are pretty cheap */
             return 2 * (send->mlen + send->ex_mlen);

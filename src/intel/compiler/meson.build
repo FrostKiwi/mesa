@@ -158,6 +158,7 @@ libintel_compiler_files = files(
   'ibc_ra_reg_sets.h',
   'ibc_schedule_instructions.c',
   'ibc_split_regs.c',
+  'ibc_tess_eval.c',
   'ibc_urb.c',
   'ibc_validate.c',
   'ibc_vertex.c',

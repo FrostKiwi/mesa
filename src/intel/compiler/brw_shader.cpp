@@ -26,6 +26,7 @@
 #include "brw_fs.h"
 #include "brw_nir.h"
 #include "brw_vec4_tes.h"
+#include "ibc_compile.h"
 #include "dev/gen_debug.h"
 #include "main/uniforms.h"
 #include "util/macros.h"
@@ -1354,6 +1355,11 @@ brw_compile_tes(const struct brw_compiler *compiler,
       brw_print_vue_map(stderr, input_vue_map);
       fprintf(stderr, "TES Output ");
       brw_print_vue_map(stderr, &prog_data->base.vue_map);
+   }
+
+   if (brw_nir_should_use_ibc(nir, compiler, true)) {
+      return ibc_compile_tes(compiler, log_data, mem_ctx, key, input_vue_map,
+                             prog_data, nir, error_str);
    }
 
    if (is_scalar) {

@@ -915,6 +915,10 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       if (ibc_emit_nir_vs_intrinsic(nti, instr))
          return;
       break;
+   case MESA_SHADER_TESS_EVAL:
+      if (ibc_emit_nir_tes_intrinsic(nti, instr))
+         return;
+      break;
    case MESA_SHADER_FRAGMENT:
       if (ibc_emit_nir_fs_intrinsic(nti, instr))
          return;

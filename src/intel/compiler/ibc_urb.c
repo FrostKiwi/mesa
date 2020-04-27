@@ -24,6 +24,31 @@
 #include "ibc_compile.h"
 #include "ibc_nir.h"
 
+void
+ibc_emit_urb_read(ibc_builder *b,
+                  ibc_ref dest,
+                  ibc_ref handle,
+                  ibc_ref per_slot_offset,
+                  unsigned global_offset,
+                  unsigned num_components)
+{
+   ibc_intrinsic_src srcs[IBC_URB_READ_NUM_SRCS] = {
+      [IBC_URB_READ_SRC_HANDLE] = { .ref = handle, .num_comps = 1 },
+      [IBC_URB_READ_SRC_PER_SLOT_OFFSET] =
+         { .ref = per_slot_offset, .num_comps = 1 },
+      [IBC_URB_READ_SRC_GLOBAL_OFFSET] =
+         { .ref = ibc_imm_ud(global_offset), .num_comps = 1 },
+   };
+
+   ibc_intrinsic_instr *read =
+      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_URB_READ,
+                          dest, -1, num_components,
+                          srcs, IBC_URB_READ_NUM_SRCS);
+
+   read->can_reorder = false;
+   read->has_side_effects = true;
+}
+
 static void
 ibc_emit_urb_write(ibc_builder *b,
                    ibc_ref handle,
@@ -132,7 +157,11 @@ ibc_emit_urb_writes(ibc_builder *b,
          flush = true;
 
       if (flush) {
-         bool eot = slot == last_slot;
+         /* ICL WA 1805992985: see ibc_emit_icl_tes_eot_workaround(). */
+         bool icl_tes_eot_wa = b->shader->devinfo->gen == 11 &&
+                               b->shader->stage == MESA_SHADER_TESS_EVAL;
+
+         bool eot = slot == last_slot && !icl_tes_eot_wa;
 
          ibc_emit_urb_write(b, handle, sources, urb_offset, length, eot);
 
@@ -152,6 +181,85 @@ ibc_emit_urb_writes(ibc_builder *b,
       sources[0] = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
       ibc_emit_urb_write(b, handle, sources, urb_offset, 1, true);
    }
+}
+
+bool
+ibc_lower_io_urb_read_to_send(ibc_builder *b, ibc_intrinsic_instr *read)
+{
+   const ibc_ref handle = read->src[IBC_URB_READ_SRC_HANDLE].ref;
+   ibc_ref per_slot_offset =
+      read->src[IBC_URB_READ_SRC_PER_SLOT_OFFSET].ref;
+   const uint32_t global_offset =
+      ibc_ref_as_uint(read->src[IBC_URB_READ_SRC_GLOBAL_OFFSET].ref);
+   const bool per_slot_offset_present =
+      !ibc_ref_is_null_or_zero(per_slot_offset);
+
+   ibc_builder_push_instr_group(b, &read->instr);
+
+   assert(!read->can_reorder && read->has_side_effects);
+   assert(read->instr.predicate == IBC_PREDICATE_NONE);
+   ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 8);
+   send->can_reorder = false;
+   send->has_side_effects = true;
+
+   ibc_intrinsic_src msg_srcs[2];
+   unsigned num_msg_srcs = 0;
+
+   msg_srcs[num_msg_srcs++] = (ibc_intrinsic_src) { .ref = handle, };
+
+   if (read->instr.simd_width == 1)
+      per_slot_offset = ibc_uniformize(b, per_slot_offset);
+
+   if (per_slot_offset_present)
+      msg_srcs[num_msg_srcs++] = (ibc_intrinsic_src){ .ref = per_slot_offset };
+
+   unsigned mlen;
+   ibc_ref msg = ibc_MESSAGE(b, msg_srcs, num_msg_srcs, &mlen);
+
+   send->payload[0] = msg;
+   send->dest = read->dest;
+   send->mlen = mlen;
+   send->rlen = read->num_dest_comps;
+   send->sfid = BRW_SFID_URB;
+   send->desc_imm =
+      brw_urb_desc(b->shader->devinfo, GEN8_URB_OPCODE_SIMD8_READ,
+                   per_slot_offset_present, false, global_offset);
+
+   send->has_header = true;
+   send->has_side_effects = true;
+
+   if (read->instr.simd_width == 1) {
+      ibc_reg *tmp_reg =
+         ibc_hw_grf_reg_create(b->shader, send->rlen * REG_SIZE, REG_SIZE);
+      send->dest = ibc_typed_ref(tmp_reg, read->dest.type);
+      send->instr.we_all = true;
+   }
+
+   ibc_builder_insert_instr(b, &send->instr);
+
+   ibc_builder_pop(b);
+
+   /* XXX: deduplicate with lower_surface_access etc */
+   if (read->instr.simd_width == 1) {
+      ibc_builder_push_scalar(b);
+      assert(ibc_type_bit_size(read->dest.type) == 32);
+      assert(send->dest.type == read->dest.type);
+
+      ibc_ref vec_src[4];
+      assert(read->num_dest_comps <= ARRAY_SIZE(vec_src));
+      for (unsigned i = 0; i < read->num_dest_comps; i++) {
+         vec_src[i] = send->dest;
+         vec_src[i].hw_grf.byte += i * REG_SIZE;
+         ibc_hw_grf_mul_stride(&vec_src[i].hw_grf, 0);
+      }
+      ibc_VEC_to(b, read->dest, vec_src, read->num_dest_comps);
+
+      ibc_builder_pop(b);
+   }
+
+   ibc_instr_remove(&read->instr);
+
+   return true;
 }
 
 bool
