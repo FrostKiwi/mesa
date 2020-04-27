@@ -1150,6 +1150,17 @@ enum ibc_tex_src {
    IBC_TEX_NUM_SRCS,
 };
 
+/* Sources for URB write intrinsics */
+enum ibc_urb_write_src {
+   IBC_URB_WRITE_SRC_HANDLE,          /* REQUIRED */
+   IBC_URB_WRITE_SRC_DATA,            /* REQUIRED */
+   IBC_URB_WRITE_SRC_GLOBAL_OFFSET,   /* REQUIRED - immediate */
+   IBC_URB_WRITE_SRC_PER_SLOT_OFFSET, /* optional */
+   IBC_URB_WRITE_SRC_CHANNEL_MASK,    /* optional */
+   IBC_URB_WRITE_SRC_EOT,             /* REQUIRED - immediate boolean */
+   IBC_URB_WRITE_NUM_SRCS,
+};
+
 typedef struct {
    ibc_ref ref;
 

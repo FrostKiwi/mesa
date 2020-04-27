@@ -137,16 +137,6 @@ ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
    return true;
 }
 
-enum ibc_urb_write_src {
-   IBC_URB_WRITE_SRC_HANDLE,          /* REQUIRED */
-   IBC_URB_WRITE_SRC_DATA,            /* REQUIRED */
-   IBC_URB_WRITE_SRC_GLOBAL_OFFSET,   /* REQUIRED - immediate */
-   IBC_URB_WRITE_SRC_PER_SLOT_OFFSET, /* optional */
-   IBC_URB_WRITE_SRC_CHANNEL_MASK,    /* optional */
-   IBC_URB_WRITE_SRC_EOT,             /* REQUIRED - immediate boolean */
-   IBC_URB_WRITE_NUM_SRCS,
-};
-
 static void
 ibc_emit_urb_write(ibc_builder *b,
                    ibc_ref handle,
