@@ -242,7 +242,7 @@ lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
 }
 
 bool
-dxil_nir_lower_global_mem_to_dxil(nir_shader *nir)
+dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
 {
    bool progress = false;
 
