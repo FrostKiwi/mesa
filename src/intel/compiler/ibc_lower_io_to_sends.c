@@ -425,23 +425,6 @@ sampler_msg_type(const struct gen_device_info *devinfo,
    }
 }
 
-static bool
-ref_is_null_or_zero(ibc_ref ref)
-{
-   if (ref.file == IBC_FILE_NONE)
-      return true;
-
-   if (ref.file != IBC_FILE_IMM)
-      return false;
-
-   for (unsigned i = 0; i < ibc_type_byte_size(ref.type); i++) {
-      if (ref.imm[i] != 0)
-         return false;
-   }
-
-   return true;
-}
-
 #define MAX_SAMPLER_MESSAGE_SIZE 11
 
 unsigned
@@ -464,7 +447,7 @@ ibc_tex_instr_max_simd_width(const ibc_intrinsic_instr *intrin,
    const bool implicit_lod = devinfo->gen >= 9 &&
                              (intrin->op == IBC_INTRINSIC_OP_TXL ||
                               intrin->op == IBC_INTRINSIC_OP_TXF) &&
-                             ref_is_null_or_zero(lod);
+                             ibc_ref_is_null_or_zero(lod);
 
    const unsigned num_payload_components =
       intrin->src[IBC_TEX_SRC_COORD].num_comps +
@@ -637,7 +620,7 @@ lower_tex(ibc_builder *b, ibc_intrinsic_instr *intrin)
       break;
 
    case IBC_INTRINSIC_OP_TXL:
-      if (devinfo->gen >= 9 && ref_is_null_or_zero(lod)) {
+      if (devinfo->gen >= 9 && ibc_ref_is_null_or_zero(lod)) {
          zero_lod = true;
       } else {
          src[num_srcs++].ref = lod;
@@ -679,7 +662,7 @@ lower_tex(ibc_builder *b, ibc_intrinsic_instr *intrin)
                                                   ibc_imm_ud(0);
       }
 
-      if (devinfo->gen >= 9 && ref_is_null_or_zero(lod)) {
+      if (devinfo->gen >= 9 && ibc_ref_is_null_or_zero(lod)) {
          zero_lod = true;
       } else {
          src[num_srcs++].ref = lod;
