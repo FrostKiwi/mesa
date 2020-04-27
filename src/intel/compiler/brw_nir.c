@@ -839,6 +839,7 @@ brw_nir_should_use_ibc(const nir_shader *nir,
 
    switch (nir->info.stage) {
    case MESA_SHADER_VERTEX:
+   case MESA_SHADER_TESS_EVAL:
       return true;
 
    case MESA_SHADER_COMPUTE:
