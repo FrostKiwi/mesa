@@ -521,6 +521,23 @@ typedef struct ibc_ref {
 
 bool ibc_refs_equal(ibc_ref a, ibc_ref b);
 
+static inline bool
+ibc_ref_is_null_or_zero(ibc_ref ref)
+{
+   if (ref.file == IBC_FILE_NONE)
+      return true;
+
+   if (ref.file != IBC_FILE_IMM)
+      return false;
+
+   for (unsigned i = 0; i < ibc_type_byte_size(ref.type); i++) {
+      if (ref.imm[i] != 0)
+         return false;
+   }
+
+   return true;
+}
+
 static inline uint64_t
 ibc_ref_as_uint(ibc_ref ref)
 {
