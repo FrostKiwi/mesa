@@ -324,6 +324,29 @@ TEST_F(ComputeTest, complex_types_local_array_short)
       EXPECT_EQ(inout[i], expected[i]);
 }
 
+TEST_F(ComputeTest, complex_types_local_array_struct_vec_float_misaligned)
+{
+   const char *kernel_source =
+   "struct has_vecs { uchar c; ushort s; float2 f; };\n\
+   __kernel void main_test(__global uint *inout)\n\
+   {\n\
+      struct has_vecs tmp[] = {\n\
+         { 10 + get_global_id(0), get_global_id(1), { 10.0f, 1.0f } },\n\
+         { 19 + get_global_id(0), get_global_id(1), { 20.0f, 4.0f } },\n\
+         { 28 + get_global_id(0), get_global_id(1), { 30.0f, 9.0f } },\n\
+         { 37 + get_global_id(0), get_global_id(1), { 40.0f, 16.0f } },\n\
+      };\n\
+      uint idx = get_global_id(0);\n\
+      uint mul = (tmp[idx].c + tmp[idx].s) * trunc(tmp[idx].f[0]);\n\
+      inout[idx] = mul + trunc(tmp[idx].f[1]);\n\
+   }\n";
+   auto inout = ShaderArg<uint32_t>({ 0, 0, 0, 0 }, SHADER_ARG_INOUT);
+   const uint16_t expected[] = { 101, 404, 909, 1616 };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
 TEST_F(ComputeTest, complex_types_local_array)
 {
    const char *kernel_source =
