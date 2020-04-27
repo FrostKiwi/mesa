@@ -2611,6 +2611,14 @@ emit_deref_array(struct ntd_context *ctx, nir_deref_instr *deref)
 }
 
 static bool
+emit_deref_struct(struct ntd_context *ctx, nir_deref_instr *deref)
+{
+   nir_variable *var = nir_deref_instr_get_variable(deref);
+   assert(var->data.mode == nir_var_function_temp);
+   return true;
+}
+
+static bool
 emit_deref(struct ntd_context* ctx, nir_deref_instr* instr)
 {
    switch (instr->deref_type) {
@@ -2619,6 +2627,9 @@ emit_deref(struct ntd_context* ctx, nir_deref_instr* instr)
 
    case nir_deref_type_array:
       return emit_deref_array(ctx, instr);
+
+   case nir_deref_type_struct:
+      return emit_deref_struct(ctx, instr);
 
    default:
       ;
