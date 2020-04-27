@@ -21,8 +21,8 @@
  * IN THE SOFTWARE.
  */
 
+#include "d3d12_blit.h"
 #include "d3d12_context.h"
-
 #include "d3d12_compiler.h"
 #include "d3d12_debug.h"
 #include "d3d12_fence.h"
@@ -1279,13 +1279,14 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.clear = d3d12_clear;
    ctx->base.draw_vbo = d3d12_draw_vbo;
    ctx->base.flush = d3d12_flush;
-   ctx->base.blit = d3d12_blit;
 
    ctx->gfx_pipeline_state.sample_mask = ~0;
 
    d3d12_context_surface_init(&ctx->base);
    d3d12_context_resource_init(&ctx->base);
    d3d12_context_query_init(&ctx->base);
+   d3d12_context_blit_init(&ctx->base);
+
 
    slab_create_child(&ctx->transfer_pool, &d3d12_screen(pscreen)->transfer_pool);
 
