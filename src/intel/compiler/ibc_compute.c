@@ -381,25 +381,11 @@ cs_fill_push_const_info(const struct gen_device_info *devinfo,
    fill_push_const_block_info(&cs_prog_data->push.cross_thread, cross_thread_dwords);
    fill_push_const_block_info(&cs_prog_data->push.per_thread, per_thread_dwords);
 
-   unsigned total_dwords =
-      (cs_prog_data->push.per_thread.size * cs_prog_data->threads +
-       cs_prog_data->push.cross_thread.size) / 4;
-   fill_push_const_block_info(&cs_prog_data->push.total, total_dwords);
-
    assert(cs_prog_data->push.cross_thread.dwords % 8 == 0 ||
           cs_prog_data->push.per_thread.size == 0);
    assert(cs_prog_data->push.cross_thread.dwords +
           cs_prog_data->push.per_thread.dwords ==
              prog_data->nr_params);
-}
-
-static void
-cs_set_simd_size(struct brw_cs_prog_data *cs_prog_data, unsigned size)
-{
-   cs_prog_data->simd_size = size;
-   unsigned group_size = cs_prog_data->local_size[0] *
-      cs_prog_data->local_size[1] * cs_prog_data->local_size[2];
-   cs_prog_data->threads = (group_size + size - 1) / size;
 }
 
 static nir_shader *
@@ -554,7 +540,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
          continue;
 
       /* Grab the widest shader we find */
-      cs_set_simd_size(prog_data, bin_simd_width);
+      prog_data->simd_size = bin_simd_width;
       cs_fill_push_const_info(compiler->devinfo, prog_data);
       prog_data->base.dispatch_grf_start_reg = bin[i].num_ff_regs;
       prog_data->base.program_size = bin[i].size;
