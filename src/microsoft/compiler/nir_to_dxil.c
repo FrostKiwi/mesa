@@ -2199,19 +2199,20 @@ emit_store_output(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 }
 
 static bool
-emit_store_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
-                         nir_variable *var)
+emit_store_ptr(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    const struct dxil_value *value =
-      get_src(ctx, &intr->src[1], 0, nir_type_uint);
-   const struct dxil_value *index =
       get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   struct nir_variable *var =
+      nir_deref_instr_get_variable(nir_src_as_deref(intr->src[1]));
+   const struct dxil_value *index =
+      get_src(ctx, &intr->src[2], 0, nir_type_uint);
 
    const struct dxil_value *ptr = emit_gep_for_index(ctx, var, index);
    if (!ptr)
       return false;
 
-   unsigned align = nir_src_bit_size(intr->src[0]) / 8;
+   unsigned align = nir_src_bit_size(intr->src[2]) / 8;
    return dxil_emit_store(&ctx->mod, value, ptr, align, false);
 }
 
@@ -2225,9 +2226,6 @@ emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    switch (var->data.mode) {
    case nir_var_shader_out:
       return emit_store_output(ctx, intr, var);
-
-   case nir_var_function_temp:
-      return emit_store_function_temp(ctx, intr, var);
 
    default:
       unreachable("unsupported nir_variable_mode");
@@ -2309,11 +2307,12 @@ emit_load_input(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 }
 
 static bool
-emit_load_function_temp(struct ntd_context *ctx, nir_intrinsic_instr *intr,
-                        nir_variable *var)
+emit_load_ptr(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
+   struct nir_variable *var =
+      nir_deref_instr_get_variable(nir_src_as_deref(intr->src[0]));
    const struct dxil_value *index =
-      get_src(ctx, &intr->src[0], 0, nir_type_uint);
+      get_src(ctx, &intr->src[1], 0, nir_type_uint);
 
    const struct dxil_value *ptr = emit_gep_for_index(ctx, var, index);
    if (!ptr)
@@ -2418,9 +2417,6 @@ emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    switch (var->data.mode) {
    case nir_var_shader_in:
       return emit_load_input(ctx, intr, var);
-
-   case nir_var_function_temp:
-      return emit_load_function_temp(ctx, intr, var);
 
    case nir_var_mem_ubo:
       return emit_load_mem_ubo(ctx, intr, var);
@@ -2528,6 +2524,10 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_store_shared(ctx, intr);
    case nir_intrinsic_load_deref:
       return emit_load_deref(ctx, intr);
+   case nir_intrinsic_load_ptr_dxil:
+      return emit_load_ptr(ctx, intr);
+   case nir_intrinsic_store_ptr_dxil:
+      return emit_store_ptr(ctx, intr);
    case nir_intrinsic_load_ubo:
       return emit_load_ubo(ctx, intr);
    case nir_intrinsic_load_front_face:
@@ -2597,21 +2597,18 @@ emit_deref_array(struct ntd_context *ctx, nir_deref_instr *deref)
    assert(deref->deref_type == nir_deref_type_array);
    nir_variable *var = nir_deref_instr_get_variable(deref);
 
+   if (var->data.mode != nir_var_mem_ubo)
+      return true;
+
    const struct dxil_value *index =
       get_src(ctx, &deref->arr.index, 0, nir_type_uint);
    if (!index)
       return false;
 
-   if (var->data.mode == nir_var_mem_ubo) {
-      unsigned bit_size = glsl_get_bit_size(glsl_without_array(var->type));
-      // HACK: force CBV#0 for UBOs
-      const struct dxil_value *offset = index_to_offset(&ctx->mod, index, bit_size);
-      store_dest_int(ctx, &deref->dest, 0, offset);
-      return true;
-   }
-
-   assert(var->data.mode == nir_var_function_temp);
-   store_dest_int(ctx, &deref->dest, 0, index);
+   unsigned bit_size = glsl_get_bit_size(glsl_without_array(var->type));
+   // HACK: force CBV#0 for UBOs
+   const struct dxil_value *offset = index_to_offset(&ctx->mod, index, bit_size);
+   store_dest_int(ctx, &deref->dest, 0, offset);
    return true;
 }
 
