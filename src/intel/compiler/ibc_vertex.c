@@ -148,15 +148,13 @@ enum ibc_urb_write_src {
 };
 
 static void
-ibc_emit_urb_write(struct nir_to_ibc_state *nti,
+ibc_emit_urb_write(ibc_builder *b,
                    ibc_ref handle,
                    ibc_ref *sources,
                    unsigned global_offset,
                    unsigned length,
                    bool eot)
 {
-   ibc_builder *b = &nti->b;
-
    ibc_ref data = ibc_VEC(b, sources, length);
 
    ibc_intrinsic_src srcs[IBC_URB_WRITE_NUM_SRCS] = {
@@ -177,35 +175,29 @@ ibc_emit_urb_write(struct nir_to_ibc_state *nti,
 }
 
 static bool
-output_slot_unwritten(const struct nir_vs_to_ibc_state *nti_vs,
+output_slot_unwritten(const ibc_ref *outputs,
                       const struct brw_vue_map *vue_map, int slot)
 {
    gl_varying_slot varying = vue_map->slot_to_varying[slot];
 
    return (int)varying == BRW_VARYING_SLOT_PAD ||
-          nti_vs->out.outputs[varying].file == IBC_FILE_NONE;
+          outputs[varying].file == IBC_FILE_NONE;
 }
 
-static void
-ibc_emit_urb_writes(struct nir_to_ibc_state *nti)
+void
+ibc_emit_urb_writes(ibc_builder *b,
+                    const struct brw_vue_map *vue_map,
+                    ibc_ref handle,
+                    const ibc_ref *outputs)
 {
-   const struct brw_vs_prog_data *prog_data = (void *)nti->prog_data;
-   const struct brw_vue_prog_data *vue_prog_data = &prog_data->base;
-   const struct brw_vue_map *vue_map = &vue_prog_data->vue_map;
-   struct nir_vs_to_ibc_state *nti_vs = nti->stage_state;
-   struct ibc_vs_payload *payload = (struct ibc_vs_payload *)nti->payload;
-   ibc_ref *outputs = nti_vs->out.outputs;
-   ibc_builder *b = &nti->b;
    const uint64_t vue_header_mask =
       VARYING_BIT_LAYER | VARYING_BIT_VIEWPORT | VARYING_BIT_PSIZ;
-
-   ibc_ref handle = payload->urb_return_handles;
 
    /* SSO shaders can have VUE slots allocated which are never actually
     * written to, so ignore them when looking for the last (written) slot.
     */
    int last_slot = vue_map->num_slots - 1;
-   while (last_slot > 0 && output_slot_unwritten(nti_vs, vue_map, last_slot))
+   while (last_slot > 0 && output_slot_unwritten(outputs, vue_map, last_slot))
       last_slot--;
 
    unsigned starting_urb_offset = 0;
@@ -238,7 +230,7 @@ ibc_emit_urb_writes(struct nir_to_ibc_state *nti)
             sources[length++] = (vue_map->slots_valid & VARYING_BIT_PSIZ) ?
                                 outputs[VARYING_SLOT_PSIZ] : zero;
          }
-      } else if (output_slot_unwritten(nti_vs, vue_map, slot)) {
+      } else if (output_slot_unwritten(outputs, vue_map, slot)) {
          /* Some outputs (like position or clip distances) may have output
           * slots assigned but not be written by the shader.  If we've already
           * queued up writes, flush them; otherwise just advance urb_offset to
@@ -265,7 +257,7 @@ ibc_emit_urb_writes(struct nir_to_ibc_state *nti)
       if (flush) {
          bool eot = slot == last_slot;
 
-         ibc_emit_urb_write(nti, handle, sources, urb_offset, length, eot);
+         ibc_emit_urb_write(b, handle, sources, urb_offset, length, eot);
 
          length = 0;
          urb_offset = starting_urb_offset + slot + 1;
@@ -281,7 +273,7 @@ ibc_emit_urb_writes(struct nir_to_ibc_state *nti)
     */
    if (!urb_written) {
       sources[0] = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
-      ibc_emit_urb_write(nti, handle, sources, urb_offset, 1, true);
+      ibc_emit_urb_write(b, handle, sources, urb_offset, 1, true);
    }
 }
 
@@ -369,8 +361,11 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
                          8, mem_ctx);
 
    nti.payload = &ibc_setup_vs_payload(&nti.b, prog_data, mem_ctx)->base;
+   struct ibc_vs_payload *payload = (struct ibc_vs_payload *)nti.payload;
+
    ibc_emit_nir_shader(&nti, nir);
-   ibc_emit_urb_writes(&nti);
+   ibc_emit_urb_writes(&nti.b, &prog_data->base.vue_map,
+                       payload->urb_return_handles, vs_state.out.outputs);
 
    ibc_shader *ibc = nir_to_ibc_state_finish(&nti);
    if (INTEL_DEBUG & DEBUG_VS)
