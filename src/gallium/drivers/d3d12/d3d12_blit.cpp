@@ -22,6 +22,7 @@
  */
 
 #include "d3d12_context.h"
+#include "d3d12_debug.h"
 #include "d3d12_format.h"
 #include "d3d12_resource.h"
 #include "d3d12_screen.h"
@@ -34,6 +35,17 @@ d3d12_blit(struct pipe_context *pctx,
            const struct pipe_blit_info *info)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
+
+   if (D3D12_DEBUG_BLIT & d3d12_debug) {
+      debug_printf("D3D12 BLIT: from %s@%d %dx%dx%d + %dx%dx%d\n",
+                   util_format_name(info->src.format), info->src.level,
+                   info->src.box.x, info->src.box.y, info->src.box.z,
+                   info->src.box.width, info->src.box.height, info->src.box.depth);
+      debug_printf("      to   %s@%d %dx%dx%d + %dx%dx%d\n",
+                   util_format_name(info->dst.format), info->dst.level,
+                   info->dst.box.x, info->dst.box.y, info->dst.box.z,
+                   info->dst.box.width, info->dst.box.height, info->dst.box.depth);
+   }
 
    if (!util_blitter_is_blit_supported(ctx->blitter, info)) {
       debug_printf("blit unsupported %s -> %s\n",
@@ -82,6 +94,16 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
    D3D12_TEXTURE_COPY_LOCATION src_loc, dst_loc;
    D3D12_BOX src_box = {};
    unsigned src_z = psrc_box->z;
+
+   if (D3D12_DEBUG_BLIT & d3d12_debug) {
+      debug_printf("D3D12 COPY: from %s@%d %dx%dx%d + %dx%dx%d\n",
+                   util_format_name(psrc->format), src_level,
+                   psrc_box->x, psrc_box->y, psrc_box->z,
+                   psrc_box->width, psrc_box->height, psrc_box->depth);
+      debug_printf("      to   %s@%d %dx%dx%d\n",
+                   util_format_name(pdst->format), dst_level,
+                   dstx, dsty, dstz);
+   }
 
    d3d12_resource_barrier(ctx, dst,
                           D3D12_RESOURCE_STATE_COMMON,

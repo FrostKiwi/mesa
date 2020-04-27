@@ -46,6 +46,7 @@
 static const struct debug_named_value
 debug_options[] = {
    { "verbose",      D3D12_DEBUG_VERBOSE,      NULL },
+   { "blit",         D3D12_DEBUG_BLIT,         "Trace blit and copy resource calls" },
    { "experimental", D3D12_DEBUG_EXPERIMENTAL, "Enable experimental shader models feature" },
    { "dxil",         D3D12_DEBUG_DXIL,         "Dump DXIL during program compile" },
    { "disass",       D3D12_DEBUG_DISASS,       "Dump disassambly of created DXIL shader" },
