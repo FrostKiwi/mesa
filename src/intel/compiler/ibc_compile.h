@@ -35,6 +35,15 @@ void
 ibc_init_compiler(struct brw_compiler *compiler);
 
 const unsigned *
+ibc_compile_tes(const struct brw_compiler *compiler, void *log_data,
+                void *mem_ctx,
+                const struct brw_tes_prog_key *key,
+                const struct brw_vue_map *input_vue_map,
+                struct brw_tes_prog_data *prog_data,
+                struct nir_shader *shader,
+                char **error_str);
+
+const unsigned *
 ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
                void *mem_ctx,
                const struct brw_vs_prog_key *key,

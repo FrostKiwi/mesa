@@ -1071,6 +1071,7 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_PLN,
    IBC_INTRINSIC_OP_ALIGN16_DDX_FINE,
    IBC_INTRINSIC_OP_FB_WRITE,
+   IBC_INTRINSIC_OP_URB_READ,
    IBC_INTRINSIC_OP_URB_WRITE,
 
    /* Sources:
@@ -1159,6 +1160,13 @@ enum ibc_urb_write_src {
    IBC_URB_WRITE_SRC_CHANNEL_MASK,    /* optional */
    IBC_URB_WRITE_SRC_EOT,             /* REQUIRED - immediate boolean */
    IBC_URB_WRITE_NUM_SRCS,
+};
+
+enum ibc_urb_read_src {
+   IBC_URB_READ_SRC_HANDLE,          /* REQUIRED */
+   IBC_URB_READ_SRC_GLOBAL_OFFSET,   /* REQUIRED - immediate */
+   IBC_URB_READ_SRC_PER_SLOT_OFFSET, /* optional */
+   IBC_URB_READ_NUM_SRCS,
 };
 
 typedef struct {
@@ -1547,6 +1555,8 @@ bool ibc_lower_fb_writes(ibc_shader *shader);
 bool ibc_lower_gather_ops(ibc_shader *shader);
 bool ibc_lower_integer_multiplication(ibc_shader *shader);
 bool ibc_lower_io_to_sends(ibc_shader *shader);
+bool ibc_lower_io_urb_read_to_send(struct ibc_builder *b,
+                                   ibc_intrinsic_instr *intrin);
 bool ibc_lower_io_urb_write_to_send(struct ibc_builder *b,
                                     ibc_intrinsic_instr *intrin);
 bool ibc_lower_io_fb_write_to_send(struct ibc_builder *b,

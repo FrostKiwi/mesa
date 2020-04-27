@@ -272,12 +272,20 @@ ibc_builder_push_nir_intrinsic_dest_group(ibc_builder *b,
 
 bool ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
                                const nir_intrinsic_instr *instr);
+bool ibc_emit_nir_tes_intrinsic(struct nir_to_ibc_state *nti,
+                                const nir_intrinsic_instr *instr);
 bool ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
                                const nir_intrinsic_instr *instr);
 bool ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
                                const nir_intrinsic_instr *instr);
 ibc_ref ibc_emit_fs_sample_live_predicate(struct nir_to_ibc_state *nti);
 
+void ibc_emit_urb_read(ibc_builder *b,
+                       ibc_ref dest,
+                       ibc_ref handle,
+                       ibc_ref per_slot_offset,
+                       unsigned global_offset,
+                       unsigned num_components);
 void ibc_emit_urb_writes(ibc_builder *b,
                          const struct brw_vue_map *vue_map,
                          ibc_ref handle,
