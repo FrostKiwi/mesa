@@ -110,7 +110,7 @@ d3d12_resource_create(struct pipe_screen *pscreen,
                        PIPE_BIND_CONSTANT_BUFFER | PIPE_BIND_SAMPLER_VIEW |
                        PIPE_BIND_SHADER_IMAGE |
                        PIPE_BIND_COMMAND_ARGS_BUFFER |
-                       PIPE_BIND_STREAM_OUTPUT;
+                       PIPE_BIND_STREAM_OUTPUT | PIPE_BIND_DEPTH_STENCIL;
    if ((templ->bind & srv_bits) == 0)
       desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
