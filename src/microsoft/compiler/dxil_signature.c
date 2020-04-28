@@ -120,6 +120,22 @@ get_semantic_vs_in_name(nir_variable *var, struct semantic_info *info)
 }
 
 static void
+get_semantic_sv_name(nir_variable *var, struct semantic_info *info)
+{
+   switch (var->data.location) {
+   case SYSTEM_VALUE_VERTEX_ID:
+      info->kind = DXIL_SEM_VERTEX_ID;
+      break;
+   case SYSTEM_VALUE_FRONT_FACE:
+      info->kind = DXIL_SEM_IS_FRONT_FACE;
+      break;
+   default:
+      unreachable("unsupported system value");
+   }
+   strncpy(info->name, var->name, 64);
+}
+
+static void
 get_semantic_ps_outname(nir_variable *var, struct semantic_info *info)
 {
    info->kind = DXIL_SEM_INVALID;
@@ -384,13 +400,18 @@ get_input_signature_group(struct dxil_module *mod, const struct dxil_mdnode **in
 static const struct dxil_mdnode *
 get_input_signature(struct dxil_module *mod, nir_shader *s)
 {
-   if (s->info.stage == MESA_SHADER_KERNEL || exec_list_is_empty(&s->inputs))
+   if (s->info.stage == MESA_SHADER_KERNEL || (exec_list_is_empty(&s->inputs) &&
+                                               exec_list_is_empty(&s->system_values)))
       return NULL;
 
    const struct dxil_mdnode *inputs[VARYING_SLOT_MAX];
    mod->num_sig_inputs = get_input_signature_group(mod, inputs, 0, &s->inputs,
                                                    s->info.stage == MESA_SHADER_VERTEX ?
                                                       get_semantic_vs_in_name : get_semantic_in_name);
+
+   mod->num_sig_inputs = get_input_signature_group(mod, inputs, mod->num_sig_inputs, &s->system_values,
+                                                   get_semantic_sv_name);
+
 
    const struct dxil_mdnode *retval = mod->num_sig_inputs ?
          dxil_get_metadata_node(mod, inputs, mod->num_sig_inputs) : NULL;
