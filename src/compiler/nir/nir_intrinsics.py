@@ -877,6 +877,50 @@ intrinsic("store_shared_masked_dxil", [1] * 3)
 load("shared_dxil", 1, [], [CAN_ELIMINATE])
 # src[] = { deref_var, offset }
 load("ptr_dxil", 2, [], [])
+# DXIL Global atomic intrinsics
+#
+# All of the shared variable atomic memory operations read a value from
+# memory, compute a new value using one of the operations below, write the
+# new value to memory, and return the original value read.
+#
+# All operations take 3 sources:
+#
+# 0: The UAV index
+# 1: The offset in the UAV
+# 2: The data parameter to the atomic function (i.e. the value to add
+#    in shared_atomic_add, etc).
+intrinsic("global_atomic_add_dxil",  src_comp=[1, 1, 1], dest_comp=1)
+intrinsic("global_atomic_imin_dxil", src_comp=[1, 1, 1], dest_comp=1)
+intrinsic("global_atomic_umin_dxil", src_comp=[1, 1, 1], dest_comp=1)
+intrinsic("global_atomic_imax_dxil", src_comp=[1, 1, 1], dest_comp=1)
+intrinsic("global_atomic_umax_dxil", src_comp=[1, 1, 1], dest_comp=1)
+intrinsic("global_atomic_and_dxil",  src_comp=[1, 1, 1], dest_comp=1)
+intrinsic("global_atomic_or_dxil",   src_comp=[1, 1, 1], dest_comp=1)
+intrinsic("global_atomic_xor_dxil",  src_comp=[1, 1, 1], dest_comp=1)
+intrinsic("global_atomic_exchange_dxil", src_comp=[1, 1, 1], dest_comp=1)
+intrinsic("global_atomic_comp_swap_dxil", src_comp=[1, 1, 1, 1], dest_comp=1)
+
+# DXIL Shared atomic intrinsics
+#
+# All of the shared variable atomic memory operations read a value from
+# memory, compute a new value using one of the operations below, write the
+# new value to memory, and return the original value read.
+#
+# All operations take 2 sources:
+#
+# 0: The index in the i32 array for by the shared memory region
+# 1: The data parameter to the atomic function (i.e. the value to add
+#    in shared_atomic_add, etc).
+intrinsic("shared_atomic_add_dxil",  src_comp=[1, 1], dest_comp=1)
+intrinsic("shared_atomic_imin_dxil", src_comp=[1, 1], dest_comp=1)
+intrinsic("shared_atomic_umin_dxil", src_comp=[1, 1], dest_comp=1)
+intrinsic("shared_atomic_imax_dxil", src_comp=[1, 1], dest_comp=1)
+intrinsic("shared_atomic_umax_dxil", src_comp=[1, 1], dest_comp=1)
+intrinsic("shared_atomic_and_dxil",  src_comp=[1, 1], dest_comp=1)
+intrinsic("shared_atomic_or_dxil",   src_comp=[1, 1], dest_comp=1)
+intrinsic("shared_atomic_xor_dxil",  src_comp=[1, 1], dest_comp=1)
+intrinsic("shared_atomic_exchange_dxil", src_comp=[1, 1], dest_comp=1)
+intrinsic("shared_atomic_comp_swap_dxil", src_comp=[1, 1, 1], dest_comp=1)
 
 # Intrinsics used by the Midgard/Bifrost blend pipeline. These are defined
 # within a blend shader to read/write the raw value from the tile buffer,
