@@ -1343,7 +1343,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->dsv_heap = d3d12_descriptor_heap_new(screen->dev,
                                              D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
                                              D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-                                             10);
+                                             100);
    if (!ctx->dsv_heap) {
       FREE(ctx);
       return NULL;
