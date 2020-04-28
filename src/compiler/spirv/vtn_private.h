@@ -399,9 +399,6 @@ struct vtn_type {
 
       /* Members for image types */
       struct {
-         /* For images, indicates whether it's sampled or storage */
-         bool sampled;
-
          /* Image format for image_load_store type images */
          unsigned image_format;
 
