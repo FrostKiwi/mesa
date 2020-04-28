@@ -2777,6 +2777,9 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    case nir_intrinsic_load_front_face:
       return emit_load_input_interpolated(ctx, intr,
                                           ctx->system_value[SYSTEM_VALUE_FRONT_FACE]);
+   case nir_intrinsic_load_vertex_id:
+      return emit_load_input_interpolated(ctx, intr,
+                                          ctx->system_value[SYSTEM_VALUE_VERTEX_ID]);
    case nir_intrinsic_load_shared_dxil:
       return emit_load_shared(ctx, intr);
    case nir_intrinsic_discard_if:
@@ -3760,6 +3763,29 @@ append_input_or_sysvalue(struct ntd_context *ctx, nir_shader *s,
    return (ctx->system_value[sv_slot] != NULL);
 }
 
+struct sysvalue_name {
+   gl_system_value value;
+   char *name;
+} possible_sysvalues[] = {
+   {SYSTEM_VALUE_VERTEX_ID, "SV_VertexID"}
+};
+
+static bool
+allocate_sysvalues(struct ntd_context *ctx, nir_shader *s)
+{
+   unsigned driver_location = exec_list_length(&s->inputs) +
+                              exec_list_length(&s->system_values);
+
+   for (unsigned i = 0; i < ARRAY_SIZE(possible_sysvalues); ++i) {
+      struct sysvalue_name *info = &possible_sysvalues[i];
+      if ((1 << info->value) & s->info.system_values_read) {
+         if (!append_input_or_sysvalue(ctx, s, -1,
+                                       info->value, info->name,
+                                       driver_location++))
+            return false;
+      }
+   }
+   return true;
 }
 
 bool
@@ -3798,6 +3824,9 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
          goto out;
       }
    }
+
+   if (!allocate_sysvalues(&ctx, s))
+      return false;
 
    if (debug_dxil & DXIL_DEBUG_VERBOSE)
       nir_print_shader(s, stderr);
