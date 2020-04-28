@@ -142,6 +142,8 @@ d3d12_descriptor_heap_alloc_handle(struct d3d12_descriptor_heap *heap,
       offset = heap->next;
       heap->next += heap->desc_size;
    } else {
+      /* Todo: we should add a new descriptor heap to get more handles */
+      assert(0 && "No handles available in descriptor heap");
       return 0;
    }
 
