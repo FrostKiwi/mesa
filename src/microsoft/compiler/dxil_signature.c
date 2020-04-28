@@ -108,6 +108,8 @@ get_additional_semantic_info(nir_variable *var, struct semantic_info *info)
    info->cols = (uint8_t)glsl_get_components(var->type);
 }
 
+typedef void (*sematic_info_proc)(nir_variable *var, struct semantic_info *info);
+
 static void
 get_semantic_vs_in_name(nir_variable *var, struct semantic_info *info)
 {
@@ -160,7 +162,6 @@ get_semantic_name(nir_variable *var, struct semantic_info *info)
 {
    info->kind = DXIL_SEM_INVALID;
    info->interpolation = get_interpolation(var);
-   info->sysvalue_name = in_sysvalue_name(var);
    switch (var->data.location) {
 
    case VARYING_SLOT_POS:
@@ -192,6 +193,13 @@ get_semantic_name(nir_variable *var, struct semantic_info *info)
          info->kind = DXIL_SEM_ARBITRARY;
       }
    }
+}
+
+static void
+get_semantic_in_name(nir_variable *var, struct semantic_info *info)
+{
+   get_semantic_name(var, info);
+   info->sysvalue_name = in_sysvalue_name(var);
 }
 
 static enum dxil_prog_sig_semantic
@@ -348,23 +356,13 @@ fill_io_signature(struct dxil_module *mod, int id,
    return fill_psv_signature_element(psv_elm, semantic, mod);
 }
 
-static const struct dxil_mdnode *
-get_input_signature(struct dxil_module *mod, nir_shader *s)
+static unsigned
+get_input_signature_group(struct dxil_module *mod, const struct dxil_mdnode **inputs,
+                          unsigned num_inputs, struct exec_list *nir_vars, sematic_info_proc get_semantics)
 {
-   if (s->info.stage == MESA_SHADER_KERNEL || exec_list_is_empty(&s->inputs))
-      return NULL;
-
-   const struct dxil_mdnode *inputs[VARYING_SLOT_MAX];
-   unsigned num_inputs = 0;
-
-   nir_foreach_variable(var, &s->inputs) {
+   nir_foreach_variable(var, nir_vars) {
       struct semantic_info semantic = {0};
-
-      if (s->info.stage == MESA_SHADER_VERTEX) {
-         get_semantic_vs_in_name(var, &semantic);
-      } else {
-         get_semantic_name(var, &semantic);
-      }
+      get_semantics(var, &semantic);
       mod->inputs[num_inputs].sysvalue = semantic.sysvalue_name;
       get_additional_semantic_info(var, &semantic);
 
@@ -375,13 +373,27 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
 
       if (!fill_io_signature(mod, num_inputs, &semantic,
                              &inputs[num_inputs], elm, psv_elm))
-         return NULL;
+         return 0;
 
       ++num_inputs;
-      assert(num_inputs < ARRAY_SIZE(inputs));
+      assert(num_inputs < VARYING_SLOT_MAX);
    }
-   mod->num_sig_inputs = num_inputs;
-   const struct dxil_mdnode *retval = dxil_get_metadata_node(mod, inputs, num_inputs);
+   return num_inputs;
+}
+
+static const struct dxil_mdnode *
+get_input_signature(struct dxil_module *mod, nir_shader *s)
+{
+   if (s->info.stage == MESA_SHADER_KERNEL || exec_list_is_empty(&s->inputs))
+      return NULL;
+
+   const struct dxil_mdnode *inputs[VARYING_SLOT_MAX];
+   mod->num_sig_inputs = get_input_signature_group(mod, inputs, 0, &s->inputs,
+                                                   s->info.stage == MESA_SHADER_VERTEX ?
+                                                      get_semantic_vs_in_name : get_semantic_in_name);
+
+   const struct dxil_mdnode *retval = mod->num_sig_inputs ?
+         dxil_get_metadata_node(mod, inputs, mod->num_sig_inputs) : NULL;
    return retval;
 }
 
