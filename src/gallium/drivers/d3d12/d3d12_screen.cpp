@@ -443,10 +443,38 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
    if (dxgi_format == DXGI_FORMAT_UNKNOWN)
       return false;
 
+   enum D3D12_FORMAT_SUPPORT1 dim_support = D3D12_FORMAT_SUPPORT1_NONE;
+   switch (target) {
+   case PIPE_TEXTURE_1D:
+   case PIPE_TEXTURE_1D_ARRAY:
+      dim_support = D3D12_FORMAT_SUPPORT1_TEXTURE1D;
+      break;
+   case PIPE_TEXTURE_2D:
+   case PIPE_TEXTURE_RECT:
+   case PIPE_TEXTURE_2D_ARRAY:
+      dim_support = D3D12_FORMAT_SUPPORT1_TEXTURE2D;
+      break;
+   case PIPE_TEXTURE_3D:
+      dim_support = D3D12_FORMAT_SUPPORT1_TEXTURE3D;
+      break;
+   case PIPE_TEXTURE_CUBE:
+   case PIPE_TEXTURE_CUBE_ARRAY:
+      dim_support = D3D12_FORMAT_SUPPORT1_TEXTURECUBE;
+      break;
+   case PIPE_BUFFER:
+      dim_support = D3D12_FORMAT_SUPPORT1_BUFFER;
+      break;
+   default:
+      unreachable("Unknown target");
+   }
+
    D3D12_FEATURE_DATA_FORMAT_SUPPORT fmt_info;
    fmt_info.Format = dxgi_format;
    if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,
                                                &fmt_info, sizeof(fmt_info))))
+      return false;
+
+   if (!(fmt_info.Support1 & dim_support))
       return false;
 
    if (target == PIPE_BUFFER) {
