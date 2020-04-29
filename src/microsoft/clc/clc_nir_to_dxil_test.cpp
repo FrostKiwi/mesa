@@ -55,12 +55,12 @@ define void @main() {
 !dx.typeAnnotations = !{!4}
 !dx.entryPoints = !{!8}
 
-!1 = !{i32 1, i32 0}
+!1 = !{i32 1, i32 1}
 !2 = !{i32 1, i32 4}
 !3 = !{!")";
 
 static const char expect_ps_end[] =
-R"(", i32 6, i32 0}
+R"(", i32 6, i32 1}
 !4 = !{i32 1, void ()* @main, !5}
 !5 = !{!6}
 !6 = !{i32 0, !7, !7}
@@ -70,7 +70,7 @@ R"(", i32 6, i32 0}
 )";
 
 static const char expect_end[] =
-R"(", i32 6, i32 0}
+R"(", i32 6, i32 1}
 !4 = !{i32 1, void ()* @main, !5}
 !5 = !{!6}
 !6 = !{i32 0, !7, !7}
@@ -79,7 +79,7 @@ R"(", i32 6, i32 0}
 )";
 
 const  char expect_cs_end[] =
-R"(", i32 6, i32 0}
+R"(", i32 6, i32 1}
 !4 = !{i32 1, void ()* @main, !5}
 !5 = !{!6}
 !6 = !{i32 0, !7, !7}
