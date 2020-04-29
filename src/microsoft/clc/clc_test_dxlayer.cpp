@@ -61,6 +61,8 @@ private:
    static bool m_initialized;
 };
 
+static bool copy_char_skip_double_ws(stringstream &os, char c, bool last_was_ws);
+
 void NirToDXILTest::run(const string& in_shader, const string& dxil_expect) const
 {
    glsl_type_singleton_init_or_ref();
@@ -68,8 +70,17 @@ void NirToDXILTest::run(const string& in_shader, const string& dxil_expect) cons
    nir_shader* shader = nir_shader_from_string(in_shader.c_str(), &nir_options);
    ASSERT_TRUE(shader != nullptr);
 
+   stringstream dxil_expect_condesed;
+   bool last_was_ws = false;
+   for (auto c: dxil_expect) {
+      last_was_ws = copy_char_skip_double_ws(dxil_expect_condesed, c, last_was_ws);
+   }
+
+   struct nir_to_dxil_options opts = {};
+   opts.interpolate_at_vertex = true;
+
    struct blob tmp;
-   bool convert_success = nir_to_dxil(shader, &tmp);
+   bool convert_success = nir_to_dxil(shader, &opts, &tmp);
    ralloc_free(shader);
    ASSERT_TRUE(convert_success);
 
@@ -79,12 +90,14 @@ void NirToDXILTest::run(const string& in_shader, const string& dxil_expect) cons
    bool dissasamble_success = compiler->disassamble(&tmp, dxil_disass);
    ASSERT_TRUE(dissasamble_success);
 
-   EXPECT_EQ(dxil_disass, dxil_expect);
+   if (dxil_expect_condesed.str().length() > 0)
+      EXPECT_EQ(dxil_disass, dxil_expect_condesed.str());
 
    bool validate_success = compiler->validate(&tmp);
    ASSERT_TRUE(validate_success);
 
-   glsl_type_singleton_init_or_ref();
+   blob_finish(&tmp);
+   glsl_type_singleton_decref();
 }
 
 class ShaderBlob : public IDxcBlob {
@@ -110,34 +123,34 @@ bool DXILCompiler::disassamble(blob *data,
 {
    // Disassamble and convert to std::string
    ShaderBlob source(data);
-   IDxcBlobEncoding* pDisassembly = nullptr;
+   ComPtr<IDxcBlobEncoding> pDisassembly = nullptr;
 
    if (FAILED(m_compiler->Disassemble(&source, &pDisassembly)))
       return false;
 
-   ComPtr<IDxcBlobEncoding> dissassably(pDisassembly);
    ComPtr<IDxcBlobEncoding> blobUtf8;
-   m_library->GetBlobAsUtf8(pDisassembly, blobUtf8.GetAddressOf());
+   m_library->GetBlobAsUtf8(pDisassembly.Get(), blobUtf8.GetAddressOf());
    if (!blobUtf8)
       return false;
 
-   disassembly = reinterpret_cast<const char*>(blobUtf8->GetBufferPointer());
-   disassembly[blobUtf8->GetBufferSize() - 1] = 0;
+   char *c = reinterpret_cast<char *>(blobUtf8->GetBufferPointer());
+   assert(c);
+   c[blobUtf8->GetBufferSize() - 1] = 0;
 
    stringstream os;
-
-   const char* c = disassembly.c_str();
-   assert(c);
-
    bool in_comment = false;
    bool linestart = true;
+   bool last_was_ws = false;
    while (*c) {
-
       if (!in_comment) {
          if (linestart && ((*c == ';') || (*c == '!' && c[1] == '0'))) {
                in_comment = true;
          } else {
-            os << *c;
+            /* condense ws */
+            bool is_ws = isspace(*c);
+            if (!(is_ws && last_was_ws))
+                os << *c;
+            last_was_ws = is_ws;
          }
       }
 
@@ -149,6 +162,11 @@ bool DXILCompiler::disassamble(blob *data,
 
       ++c;
    }
+   /* Different versions of dxcompiler seem to disagree whether a new line should
+    * be added at the end or not */
+   if (!linestart)
+      os << '\n';
+
    disassembly = os.str();
    return true;
 }
@@ -201,8 +219,16 @@ DXILCompiler *DXILCompiler::instance()
    return &me;
 }
 
+static bool
+copy_char_skip_double_ws(stringstream &os, char c, bool last_was_ws)
+{
+   bool retval = isspace(c);
+   if (!(retval && last_was_ws))
+       os << c;
+   return retval;
+}
+
 ComPtr<IDxcLibrary> DXILCompiler::m_library;
 ComPtr<IDxcCompiler> DXILCompiler::m_compiler;
 ComPtr<IDxcValidator> DXILCompiler::m_validator;
 bool DXILCompiler::m_initialized = false;
-
