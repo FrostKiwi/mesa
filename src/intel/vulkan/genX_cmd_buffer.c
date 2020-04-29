@@ -86,8 +86,7 @@ genX(cmd_buffer_emit_state_base_address)(struct anv_cmd_buffer *cmd_buffer)
        *      * STATE_BASE_ADDRESS
        *      * 3DSTATE_BINDING_TABLE_POOL_ALLOC
        */
-      if (devinfo->revision == 0 /* A0 */)
-         pc.HDCPipelineFlushEnable = true;
+      pc.HDCPipelineFlushEnable = true;
 #endif
    }
 
@@ -2067,7 +2066,7 @@ genX(cmd_buffer_apply_pipe_flushes)(struct anv_cmd_buffer *cmd_buffer)
     * On Gen12 this is GEN:BUG:1607156449.
     */
    if (bits & ANV_PIPE_POST_SYNC_BIT) {
-      if ((GEN_GEN == 9 || (GEN_GEN == 12 && devinfo->revision == 0 /* A0 */)) &&
+      if ((GEN_GEN == 9 || GEN_GEN == 12) &&
           cmd_buffer->state.current_pipeline == GPGPU)
          bits |= ANV_PIPE_CS_STALL_BIT;
       bits &= ~ANV_PIPE_POST_SYNC_BIT;
