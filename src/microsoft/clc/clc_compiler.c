@@ -142,10 +142,10 @@ clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref, struct clc_d
    enum gl_access_qualifier access = in_var->data.access;
 
    int metadata_index = 0;
-   while (metadata->args[metadata_index].buf_ids[0] != in_var->data.binding)
+   while (metadata->args[metadata_index].image.buf_ids[0] != in_var->data.binding)
       metadata_index++;
 
-   unsigned *num_buf_ids = &metadata->args[metadata_index].num_buf_ids;
+   unsigned *num_buf_ids = &metadata->args[metadata_index].image.num_buf_ids;
    *num_buf_ids = 0;
 
    nir_foreach_use_safe(src, &deref->dest.ssa) {
@@ -187,7 +187,7 @@ clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref, struct clc_d
             if (*num_buf_ids > 0) {
                // Need to assign a new binding
                int *binding_counter = (in_var->data.access & ACCESS_NON_WRITEABLE) ? num_srvs : num_uavs;
-               metadata->args[metadata_index].buf_ids[*num_buf_ids] = uniform->data.binding = (*binding_counter)++;
+               metadata->args[metadata_index].image.buf_ids[*num_buf_ids] = uniform->data.binding = (*binding_counter)++;
             }
             (*num_buf_ids)++;
 
@@ -465,8 +465,7 @@ clc_to_dxil(struct clc_context *ctx,
       if (dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL &&
           // Ignore images during this pass - global memory buffers need to have contiguous bindings
           !glsl_type_is_image(var->type)) {
-         metadata->args[i].buf_ids[0] = uav_id++;
-         metadata->args[i].num_buf_ids = 1;
+         metadata->args[i].globalptr.buf_id = uav_id++;
       }
       i++;
       offset += size;
@@ -480,14 +479,14 @@ clc_to_dxil(struct clc_context *ctx,
    nir_foreach_variable(var, &nir->inputs) {
       if (glsl_type_is_image(var->type)) {
          if (var->data.access == ACCESS_NON_WRITEABLE) {
-            metadata->args[i].buf_ids[0] = srv_id++;
+            metadata->args[i].image.buf_ids[0] = srv_id++;
          } else {
             // Write or read-write are UAVs
-            metadata->args[i].buf_ids[0] = uav_id++;
+            metadata->args[i].image.buf_ids[0] = uav_id++;
          }
 
-         metadata->args[i].num_buf_ids = 1;
-         var->data.binding = metadata->args[i].buf_ids[0];
+         metadata->args[i].image.num_buf_ids = 1;
+         var->data.binding = metadata->args[i].image.buf_ids[0];
       }
       i++;
    }
