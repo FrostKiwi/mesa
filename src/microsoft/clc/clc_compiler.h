@@ -101,8 +101,15 @@ struct clc_dxil_metadata {
    struct {
       unsigned offset;
       unsigned size;
-      unsigned buf_ids[CLC_MAX_BINDINGS_PER_ARG];
-      unsigned num_buf_ids;
+      union {
+         struct {
+            unsigned buf_ids[CLC_MAX_BINDINGS_PER_ARG];
+            unsigned num_buf_ids;
+         } image;
+         struct {
+            unsigned buf_id;
+         } globalptr;
+      };
    } *args;
    unsigned kernel_inputs_cbv_id;
    unsigned kernel_inputs_buf_size;
