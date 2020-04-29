@@ -496,7 +496,7 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
 
       if (bind & PIPE_BIND_BLENDABLE &&
          !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_BLENDABLE))
-        return false;
+         return false;
 
       D3D12_FEATURE_DATA_FORMAT_SUPPORT fmt_info_sv;
       if (util_format_is_depth_or_stencil(format)) {
@@ -506,10 +506,6 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
             return false;
       } else
          fmt_info_sv = fmt_info;
-
-      if (bind & PIPE_BIND_SAMPLER_VIEW &&
-          !(fmt_info_sv.Support1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE))
-         return false;
 
       if (bind & PIPE_BIND_DEPTH_STENCIL &&
           !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL))
