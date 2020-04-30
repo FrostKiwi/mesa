@@ -3368,8 +3368,14 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 
    case nir_texop_txf:
    case nir_texop_txf_ms:
-      PAD_SRC(ctx, params.coord, coord_components, int_undef);
-      sample = emit_texel_fetch(ctx, &params);
+      if (instr->sampler_dim == GLSL_SAMPLER_DIM_BUF) {
+         params.coord[1] = int_undef;
+         sample = emit_bufferload_call(ctx, params.tex, params.coord);
+      }
+      else {
+         PAD_SRC(ctx, params.coord, coord_components, int_undef);
+         sample = emit_texel_fetch(ctx, &params);
+      }
       break;
 
    case nir_texop_txs:
