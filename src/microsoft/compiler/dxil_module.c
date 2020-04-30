@@ -715,6 +715,7 @@ static const char *
 get_res_dimension_type_name(enum dxil_resource_kind kind)
 {
    switch (kind) {
+   case DXIL_RESOURCE_KIND_TYPED_BUFFER: return "Buffer";
    case DXIL_RESOURCE_KIND_TEXTURE1D: return "Texture1D";
    case DXIL_RESOURCE_KIND_TEXTURE1D_ARRAY: return "Texture1DArray";
    case DXIL_RESOURCE_KIND_TEXTURE2D: return "Texture2D";
@@ -746,6 +747,7 @@ dxil_module_get_res_type(struct dxil_module *m, enum dxil_resource_kind kind,
                          enum dxil_component_type comp_type, bool readwrite)
 {
    switch (kind) {
+   case DXIL_RESOURCE_KIND_TYPED_BUFFER:
    case DXIL_RESOURCE_KIND_TEXTURE1D:
    case DXIL_RESOURCE_KIND_TEXTURE1D_ARRAY:
    case DXIL_RESOURCE_KIND_TEXTURE2D:

@@ -96,7 +96,7 @@ enum dxil_resource_kind dxil_get_resource_kind(const struct glsl_type *type)
          case GLSL_SAMPLER_DIM_RECT:
             return DXIL_RESOURCE_KIND_TEXTURE2D;
          case GLSL_SAMPLER_DIM_BUF:
-            return DXIL_RESOURCE_KIND_TYPED_BUFFER; // FIXME
+            return DXIL_RESOURCE_KIND_TYPED_BUFFER;
          case GLSL_SAMPLER_DIM_MS:
             return is_array ? DXIL_RESOURCE_KIND_TEXTURE2DMS_ARRAY
                             : DXIL_RESOURCE_KIND_TEXTURE2DMS;
