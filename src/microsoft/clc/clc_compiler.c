@@ -945,6 +945,8 @@ clc_to_dxil(struct clc_context *ctx,
    metadata->kernel_inputs_cbv_id = inputs_var ? inputs_var->data.binding : 0;
    metadata->global_work_offset_cbv_id = global_work_offset_var->data.binding;
    metadata->num_uavs = uav_id;
+   metadata->num_srvs = srv_id;
+   metadata->num_samplers = sampler_id;
 
    ralloc_free(nir);
    glsl_type_singleton_decref();

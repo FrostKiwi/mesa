@@ -140,6 +140,8 @@ struct clc_dxil_metadata {
    unsigned kernel_inputs_buf_size;
    unsigned global_work_offset_cbv_id;
    size_t num_uavs;
+   size_t num_srvs;
+   size_t num_samplers;
 
    struct {
       void *data;
