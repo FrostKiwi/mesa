@@ -605,9 +605,10 @@ emit_bufferstore_call(struct ntd_context *ctx,
                       const struct dxil_value *handle,
                       const struct dxil_value *coord[2],
                       const struct dxil_value *value[4],
-                      const struct dxil_value *write_mask)
+                      const struct dxil_value *write_mask,
+                      enum overload_type overload)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.bufferStore", DXIL_I32);
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.bufferStore", overload);
 
    if (!func)
       return false;
@@ -2188,7 +2189,7 @@ emit_store_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    if (!write_mask)
       return false;
 
-   return emit_bufferstore_call(ctx, handle, coord, value, write_mask);
+   return emit_bufferstore_call(ctx, handle, coord, value, write_mask, DXIL_I32);
 }
 
 static bool
@@ -2659,7 +2660,12 @@ emit_image_deref_store(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    if (!write_mask)
       return false;
 
-   return emit_texturestore_call(ctx, handle, coord, value, write_mask, overload);
+   if (glsl_get_sampler_dim(var->type) == GLSL_SAMPLER_DIM_BUF) {
+      coord[1] = int32_undef;
+      return emit_bufferstore_call(ctx, handle, coord, value, write_mask, overload);
+   }
+   else
+      return emit_texturestore_call(ctx, handle, coord, value, write_mask, overload);
 }
 
 struct texop_parameters {
