@@ -1475,6 +1475,17 @@ TEST_F(ComputeTest, image_format)
    validate(shader);
 }
 
+TEST_F(ComputeTest, image1d_buffer_t)
+{
+   const char* kernel_source =
+   "__kernel void main_test(read_only image1d_buffer_t input, write_only image1d_buffer_t output)\n\
+   {\n\
+      write_imageui(output, get_global_id(0), read_imageui(input, get_global_id(0)));\n\
+   }\n";
+   Shader shader = compile(std::vector<const char*>({ kernel_source }));
+   validate(shader);
+}
+
 TEST_F(ComputeTest, local_ptr)
 {
    struct uint2 { uint32_t x, y; };
