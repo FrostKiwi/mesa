@@ -529,7 +529,7 @@ anv_physical_device_try_create(struct anv_instance *instance,
       .supports_shader_constants = true,
       .compact_params = false,
       .lower_variable_group_size = false,
-      .has_cs_base_work_group_id = false,
+      .has_cs_base_work_group_id = true,
    };
    device->compiler = brw_compiler_create(NULL, &compiler_options);
    if (device->compiler == NULL) {

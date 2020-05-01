@@ -26,6 +26,12 @@
 #include "compiler/brw_nir.h"
 #include "util/mesa-sha1.h"
 
+static unsigned
+base_work_group_offset(const struct brw_compiler *compiler)
+{
+   return offsetof(struct anv_push_constants, cs.base_work_group_id);
+}
+
 void
 anv_nir_compute_push_layout(const struct anv_physical_device *pdevice,
                             bool robust_buffer_access,
@@ -59,6 +65,14 @@ anv_nir_compute_push_layout(const struct anv_physical_device *pdevice,
             case nir_intrinsic_load_push_constant: {
                unsigned base = nir_intrinsic_base(intrin);
                unsigned range = nir_intrinsic_range(intrin);
+               push_start = MIN2(push_start, base);
+               push_end = MAX2(push_end, base + range);
+               break;
+            }
+
+            case nir_intrinsic_load_base_work_group: {
+               unsigned base = base_work_group_offset(compiler);
+               unsigned range = 3 * sizeof(uint32_t);
                push_start = MIN2(push_start, base);
                push_end = MAX2(push_end, base + range);
                break;
@@ -128,6 +142,9 @@ anv_nir_compute_push_layout(const struct anv_physical_device *pdevice,
          if (!function->impl)
             continue;
 
+         nir_builder b;
+         nir_builder_init(&b, function->impl);
+
          nir_foreach_block(block, function->impl) {
             nir_foreach_instr_safe(instr, block) {
                if (instr->type != nir_instr_type_intrinsic)
@@ -141,6 +158,25 @@ anv_nir_compute_push_layout(const struct anv_physical_device *pdevice,
                                          nir_intrinsic_base(intrin) -
                                          push_start);
                   break;
+
+               case nir_intrinsic_load_base_work_group: {
+                  b.cursor = nir_after_instr(&intrin->instr);
+
+                  nir_intrinsic_instr *load =
+                     nir_intrinsic_instr_create(b.shader, nir_intrinsic_load_uniform);
+                  load->num_components = 3;
+                  load->src[0] = nir_src_for_ssa(nir_imm_int(&b, 0));
+                  unsigned base = base_work_group_offset(compiler);
+                  nir_intrinsic_set_base(load, base - push_start);
+                  nir_intrinsic_set_range(load, 3 * sizeof(uint32_t));
+                  nir_ssa_dest_init(&load->instr, &load->dest, 3, 32, NULL);
+                  nir_builder_instr_insert(&b, &load->instr);
+
+                  nir_ssa_def_rewrite_uses(&intrin->dest.ssa,
+                                           nir_src_for_ssa(&load->dest.ssa));
+                  nir_instr_remove(&intrin->instr);
+                  break;
+               }
 
                default:
                   break;
