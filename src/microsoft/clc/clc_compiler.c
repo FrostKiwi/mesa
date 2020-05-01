@@ -933,6 +933,13 @@ clc_to_dxil(struct clc_context *ctx,
       NIR_PASS_V(nir, nir_lower_int64, ~0u);
    }
 
+   // Assign bindings for constant samplers
+   nir_foreach_variable_safe(var, &nir->uniforms) {
+      if (glsl_type_is_sampler(var->type) &&
+          var->constant_initializer)
+         var->data.binding = sampler_id++;
+   }
+
    nir_validate_shader(nir, "Validate before feeding NIR to the DXIL compiler");
    struct nir_to_dxil_options opts = {
       .interpolate_at_vertex = false
@@ -1014,6 +1021,14 @@ clc_to_dxil(struct clc_context *ctx,
             metadata->num_consts++;
          } else
             unreachable("unexpected constant initializer");
+      } else if (var->data.mode == nir_var_uniform &&
+                 glsl_type_is_sampler(var->type) &&
+                 var->constant_initializer) {
+         metadata->const_samplers[metadata->num_const_samplers].sampler_id = var->data.binding;
+         metadata->const_samplers[metadata->num_const_samplers].addressing_mode = var->constant_initializer->values[0].u32;
+         metadata->const_samplers[metadata->num_const_samplers].normalized_coords = var->constant_initializer->values[1].u32;
+         metadata->const_samplers[metadata->num_const_samplers].filter_mode = var->constant_initializer->values[2].u32;
+         metadata->num_const_samplers++;
       }
    }
 
