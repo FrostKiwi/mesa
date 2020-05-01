@@ -197,6 +197,9 @@ struct clc_runtime_arg_info {
       struct {
          unsigned size;
       } localptr;
+      struct {
+         unsigned normalized_coords;
+      } sampler;
    };
 };
 

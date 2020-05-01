@@ -34,6 +34,7 @@
 #include <util/u_math.h>
 #include "spirv/nir_spirv.h"
 #include "nir_builder.h"
+#include "nir_builtin_builder.h"
 
 #include "spirv64-mesa3d-.spv.h"
 
@@ -459,6 +460,56 @@ clc_lower_64bit_semantics(nir_shader *nir)
    }
 }
 
+static void
+clc_lower_nonnormalized_samplers(nir_shader *nir, const struct clc_runtime_kernel_conf *conf)
+{
+   nir_foreach_function(func, nir) {
+      if (!func->is_entrypoint)
+         continue;
+      assert(func->impl);
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_tex)
+               continue;
+            nir_tex_instr *tex = nir_instr_as_tex(instr);
+
+            int sampler_src_idx = nir_tex_instr_src_index(tex, nir_tex_src_sampler_deref);
+            if (sampler_src_idx == -1)
+               continue;
+
+            nir_src *sampler_src = &tex->src[sampler_src_idx].src;
+            assert(sampler_src->is_ssa && sampler_src->ssa->parent_instr->type == nir_instr_type_deref);
+            nir_variable *sampler = nir_deref_instr_get_variable(
+               nir_instr_as_deref(sampler_src->ssa->parent_instr));
+
+            // If sampler uses normalized coords, nothing to do
+            if (sampler->constant_initializer) {
+               if (sampler->constant_initializer->values[1].u32)
+                  continue;
+            }
+            else if (!conf || conf->args[sampler->data.binding].sampler.normalized_coords)
+               continue;
+
+            int coords_idx = nir_tex_instr_src_index(tex, nir_tex_src_coord);
+            assert(coords_idx != -1);
+            nir_ssa_def *coords =
+               nir_ssa_for_src(&b, tex->src[coords_idx].src, tex->coord_components);
+
+            nir_ssa_def *txs = nir_i2f32(&b, nir_get_texture_size(&b, tex));
+            nir_ssa_def *scale = nir_frcp(&b, txs);
+            nir_instr_rewrite_src(&tex->instr,
+                                  &tex->src[coords_idx].src,
+                                  nir_src_for_ssa(nir_fmul(&b, coords, scale)));
+         }
+      }
+   }
+}
+
+
 struct clc_context *
 clc_context_new(void)
 {
@@ -880,6 +931,7 @@ clc_to_dxil(struct clc_context *ctx,
    // Needs to come before lower_explicit_io
    struct clc_image_lower_context image_lower_context = { metadata, &srv_id, &uav_id };
    NIR_PASS_V(nir, clc_lower_images, &image_lower_context);
+   NIR_PASS_V(nir, clc_lower_nonnormalized_samplers, conf);
    NIR_PASS_V(nir, nir_lower_samplers);
 
    // copy propagate to prepare for lower_explicit_io
