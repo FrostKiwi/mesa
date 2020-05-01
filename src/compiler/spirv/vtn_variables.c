@@ -2517,6 +2517,30 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
       break;
    }
 
+   case SpvOpConstantSampler: {
+      /* Synthesize a pointer-to-sampler type, create a variable of that type,
+       * and give the variable a constant initializer with the sampler params */
+      struct vtn_type *sampler_type = vtn_value(b, w[1], vtn_value_type_type)->type;
+      struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_pointer);
+
+      struct vtn_type *ptr_type = rzalloc(b, struct vtn_type);
+      ptr_type = rzalloc(b, struct vtn_type);
+      ptr_type->base_type = vtn_base_type_pointer;
+      ptr_type->deref = sampler_type;
+      ptr_type->storage_class = SpvStorageClassUniform;
+
+      ptr_type->type = nir_address_format_to_glsl_type(
+         vtn_mode_to_address_format(b, vtn_variable_mode_uniform));
+
+      nir_constant *sampler_constant = rzalloc(b, nir_constant);
+      sampler_constant->values[0].u32 = w[3]; /*Addressing mode*/
+      sampler_constant->values[1].u32 = w[4]; /*Normalized coordinates*/
+      sampler_constant->values[2].u32 = w[5]; /*Filter mode*/
+
+      vtn_create_variable(b, val, ptr_type, ptr_type->storage_class, sampler_constant, NULL);
+      break;
+   }
+
    case SpvOpAccessChain:
    case SpvOpPtrAccessChain:
    case SpvOpInBoundsAccessChain:

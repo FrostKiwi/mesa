@@ -895,6 +895,23 @@ enum float_controls
    FLOAT_CONTROLS_ROUNDING_MODE_RTZ_FP64            = 0x4000,
 };
 
+/**
+* Enums to describe sampler properties used by OpenCL's inline constant samplers.
+* These values match the meanings described in the SPIR-V spec.
+*/
+enum cl_sampler_addressing_mode {
+   ADDRESSING_MODE_NONE = 0,
+   ADDRESSING_MODE_CLAMP_TO_EDGE = 1,
+   ADDRESSING_MODE_CLAMP = 2,
+   ADDRESSING_MODE_REPEAT = 3,
+   ADDRESSING_MODE_REPEAT_MIRRORED = 4,
+};
+
+enum cl_sampler_filter_mode {
+   FILTER_MODE_NEAREST = 0,
+   FILTER_MODE_LINEAR = 1,
+};
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

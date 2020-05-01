@@ -1934,10 +1934,6 @@ vtn_handle_constant(struct vtn_builder *b, SpvOp opcode,
       val->constant = vtn_null_constant(b, val->type);
       break;
 
-   case SpvOpConstantSampler:
-      vtn_fail("OpConstantSampler requires Kernel Capability");
-      break;
-
    default:
       vtn_fail_with_opcode("Unhandled opcode", opcode);
    }
@@ -4714,7 +4710,6 @@ vtn_handle_variable_or_type_instruction(struct vtn_builder *b, SpvOp opcode,
    case SpvOpConstantFalse:
    case SpvOpConstant:
    case SpvOpConstantComposite:
-   case SpvOpConstantSampler:
    case SpvOpConstantNull:
    case SpvOpSpecConstantTrue:
    case SpvOpSpecConstantFalse:
@@ -4726,6 +4721,7 @@ vtn_handle_variable_or_type_instruction(struct vtn_builder *b, SpvOp opcode,
 
    case SpvOpUndef:
    case SpvOpVariable:
+   case SpvOpConstantSampler:
       vtn_handle_variables(b, opcode, w, count);
       break;
 
