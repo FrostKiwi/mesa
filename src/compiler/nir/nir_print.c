@@ -298,6 +298,29 @@ get_var_name(nir_variable *var, print_state *state)
    return name;
 }
 
+static const char *
+get_constant_sampler_addressing_mode(enum cl_sampler_addressing_mode mode)
+{
+   switch (mode) {
+   case ADDRESSING_MODE_NONE: return "none";
+   case ADDRESSING_MODE_CLAMP_TO_EDGE: return "clamp_to_edge";
+   case ADDRESSING_MODE_CLAMP: return "clamp";
+   case ADDRESSING_MODE_REPEAT: return "repeat";
+   case ADDRESSING_MODE_REPEAT_MIRRORED: return "repeat_mirrored";
+   default: unreachable("Invalid addressing mode");
+   }
+}
+
+static const char *
+get_constant_sampler_filter_mode(enum cl_sampler_filter_mode mode)
+{
+   switch (mode) {
+   case FILTER_MODE_NEAREST: return "nearest";
+   case FILTER_MODE_LINEAR: return "linear";
+   default: unreachable("Invalid filter mode");
+   }
+}
+
 static void
 print_constant(nir_constant *c, const struct glsl_type *type, print_state *state)
 {
@@ -414,6 +437,13 @@ print_constant(nir_constant *c, const struct glsl_type *type, print_state *state
          print_constant(c->elements[i], glsl_get_array_element(type), state);
          fprintf(fp, " }");
       }
+      break;
+
+   case GLSL_TYPE_SAMPLER:
+      fprintf(fp, "%s, %s, %s",
+              get_constant_sampler_addressing_mode(c->values[0].u32),
+              c->values[1].u32 ? "true" : "false",
+              get_constant_sampler_filter_mode(c->values[2].u32));
       break;
 
    default:
