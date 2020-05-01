@@ -1731,3 +1731,17 @@ TEST_F(ComputeTest, local_atomic_cmpxchg)
    for (int i = 0; i < out.size(); ++i)
       EXPECT_EQ(out[i], expected[i]);
 }
+
+TEST_F(ComputeTest, constant_sampler)
+{
+   const char* kernel_source =
+   "__constant sampler_t sampler = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP | CLK_FILTER_LINEAR;\n\
+   __kernel void main_test(read_only image2d_t input, write_only image2d_t output)\n\
+   {\n\
+      int2 coordsi = (int2)(get_global_id(0), get_global_id(1));\n\
+      float2 coordsf = (float2)((float)coordsi.x / get_image_width(input), (float)coordsi.y / get_image_height(input));\n\
+      write_imagef(output, coordsi, read_imagef(input, sampler, coordsf));\n\
+   }\n";
+   Shader shader = compile(std::vector<const char*>({ kernel_source }));
+   validate(shader);
+}
