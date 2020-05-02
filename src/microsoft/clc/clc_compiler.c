@@ -858,6 +858,7 @@ clc_to_dxil(struct clc_context *ctx,
 
    NIR_PASS_V(nir, nir_lower_goto_ifs);
    NIR_PASS_V(nir, nir_opt_dead_cf);
+   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform);
 
    struct clc_dxil_metadata *metadata = &dxil->metadata;
 
@@ -1077,6 +1078,7 @@ clc_to_dxil(struct clc_context *ctx,
       } else if (var->data.mode == nir_var_uniform &&
                  glsl_type_is_sampler(var->type) &&
                  var->constant_initializer) {
+         assert(metadata->num_const_samplers < CLC_MAX_SAMPLERS);
          metadata->const_samplers[metadata->num_const_samplers].sampler_id = var->data.binding;
          metadata->const_samplers[metadata->num_const_samplers].addressing_mode = var->constant_initializer->values[0].u32;
          metadata->const_samplers[metadata->num_const_samplers].normalized_coords = var->constant_initializer->values[1].u32;
