@@ -215,10 +215,8 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_MAX_VIEWPORTS:
       return 1; /* probably wrong */
 
-#if 0 /* TODO: Enable me */
    case PIPE_CAP_MIXED_FRAMEBUFFER_SIZES:
       return 1;
-#endif
 
 #if 0 /* TODO: Enable me. Enables ARB_texture_gather */
    case PIPE_CAP_MAX_TEXTURE_GATHER_COMPONENTS:
