@@ -397,7 +397,8 @@ compile_cs_to_nir(const struct brw_compiler *compiler,
 {
    nir_shader *shader = nir_shader_clone(mem_ctx, src_shader);
    brw_nir_apply_key(shader, compiler, &key->base, dispatch_width, true);
-   brw_nir_lower_cs_intrinsics(shader, dispatch_width);
+   brw_nir_lower_cs_intrinsics(shader);
+   brw_nir_lower_simd(shader, dispatch_width);
    brw_postprocess_nir(shader, compiler, true);
    return shader;
 }
