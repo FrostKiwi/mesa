@@ -1955,6 +1955,8 @@ vtn_storage_class_to_memory_semantics(SpvStorageClass sc)
       return SpvMemorySemanticsUniformMemoryMask;
    case SpvStorageClassWorkgroup:
       return SpvMemorySemanticsWorkgroupMemoryMask;
+   case SpvStorageClassCrossWorkgroup:
+      return SpvMemorySemanticsCrossWorkgroupMemoryMask;
    default:
       return SpvMemorySemanticsMaskNone;
    }
@@ -2109,12 +2111,25 @@ static nir_variable_mode
 vtn_mem_sematics_to_nir_var_modes(struct vtn_builder *b,
                                   SpvMemorySemanticsMask semantics)
 {
-   /* Vulkan Environment for SPIR-V says "SubgroupMemory, CrossWorkgroupMemory,
-    * and AtomicCounterMemory are ignored".
-    */
-   semantics &= ~(SpvMemorySemanticsSubgroupMemoryMask |
-                  SpvMemorySemanticsCrossWorkgroupMemoryMask |
-                  SpvMemorySemanticsAtomicCounterMemoryMask);
+   if (b->shader->info.stage != MESA_SHADER_KERNEL) {
+      /* Vulkan Environment for SPIR-V says "SubgroupMemory,
+       * CrossWorkgroupMemory, and AtomicCounterMemory are ignored".
+       */
+      semantics &= ~(SpvMemorySemanticsSubgroupMemoryMask |
+                     SpvMemorySemanticsCrossWorkgroupMemoryMask |
+                     SpvMemorySemanticsAtomicCounterMemoryMask);
+   } else {
+      /* Only WorkgroupMemory, CrossWorkgroupMemory and
+       * MemorySemanticsImageMemory are expected for a CL kernel.
+       */
+      assert(!(semantics &
+               (SpvMemorySemanticsUniformMemoryMask |
+                SpvMemorySemanticsSubgroupMemoryMask |
+                SpvMemorySemanticsAtomicCounterMemoryMask)));
+      semantics &= ~(SpvMemorySemanticsUniformMemoryMask |
+                     SpvMemorySemanticsSubgroupMemoryMask |
+                     SpvMemorySemanticsAtomicCounterMemoryMask);
+   }
 
    /* TODO: Consider adding nir_var_mem_image mode to NIR so it can be used
     * for SpvMemorySemanticsImageMemoryMask.
@@ -2130,6 +2145,8 @@ vtn_mem_sematics_to_nir_var_modes(struct vtn_builder *b,
    }
    if (semantics & SpvMemorySemanticsWorkgroupMemoryMask)
       modes |= nir_var_mem_shared;
+   if (semantics & SpvMemorySemanticsCrossWorkgroupMemoryMask)
+      modes |= nir_var_mem_global;
    if (semantics & SpvMemorySemanticsOutputMemoryMask) {
       modes |= nir_var_shader_out;
    }
