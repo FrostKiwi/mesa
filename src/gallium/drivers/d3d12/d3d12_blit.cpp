@@ -30,6 +30,86 @@
 #include "util/u_blitter.h"
 #include "util/format/u_format.h"
 
+
+static bool
+formats_are_copy_comaptible(enum pipe_format src, enum pipe_format dst)
+{
+   if (src == dst)
+      return true;
+
+   /* We can skip the stencil copy */
+   if (util_format_get_depth_only(src) == dst ||
+       util_format_get_depth_only(dst) == src)
+      return true;
+
+   return false;
+}
+
+static bool
+box_fits(const struct pipe_box *box, const struct pipe_resource *res, int level)
+{
+   unsigned lwidth = u_minify(res->width0, level);
+   unsigned lheight= u_minify(res->height0, level);
+   unsigned ldepth = res->target == PIPE_TEXTURE_3D ? u_minify(res->depth0, level) :
+                                                      res->array_size;
+
+   unsigned wb = box->x;
+   unsigned we = box->x + box->width;
+
+   unsigned hb = box->y;
+   unsigned he = box->y + box->height;
+
+   unsigned db = box->z;
+   unsigned de = box->z + box->depth;
+
+   return (wb <= lwidth && we <= lwidth &&
+           hb <= lheight && he <= lheight &&
+           db <= ldepth && de <= ldepth);
+}
+
+static bool
+direct_copy_supported(const struct pipe_blit_info *info)
+{
+   if (info->scissor_enable || info->alpha_blend ||
+       info->render_condition_enable) {
+      return false;
+   }
+
+   if (!formats_are_copy_comaptible(info->src.format, info->dst.format))
+      return false;
+
+   if (util_format_is_depth_or_stencil(info->src.format) && !(info->mask & PIPE_MASK_ZS)) {
+      return false;
+   }
+
+   if (!util_format_is_depth_or_stencil(info->src.format)) {
+      if (util_format_get_mask(info->dst.format) != info->mask ||
+          util_format_get_mask(info->src.format) != info->mask)
+         return false;
+   }
+
+   if (!box_fits(&info->dst.box, info->dst.resource, info->dst.level)) {
+      return false;
+   }
+   if (!box_fits(&info->src.box, info->src.resource, info->src.level)) {
+      return false;
+   }
+
+   if (info->src.box.width != info->dst.box.width) {
+      return false;
+   }
+
+   if (info->src.box.height != info->dst.box.height) {
+      return false;
+   }
+
+   if (info->src.box.depth != info->dst.box.depth) {
+      return false;
+   }
+
+   return true;
+}
+
 void
 copy_subregion_no_barriers(struct d3d12_context *ctx,
                            struct d3d12_resource *dst,
@@ -103,30 +183,78 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
    }
 }
 
-void
-d3d12_blit(struct pipe_context *pctx,
-           const struct pipe_blit_info *info)
+static void
+copy_resource_y_flipped(struct d3d12_context *ctx,
+                        const struct pipe_blit_info *info)
 {
-   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
+   struct d3d12_resource *src = d3d12_resource(info->src.resource);
+   struct d3d12_resource *dst = d3d12_resource(info->dst.resource);
 
    if (D3D12_DEBUG_BLIT & d3d12_debug) {
-      debug_printf("D3D12 BLIT: from %s@%d %dx%dx%d + %dx%dx%d\n",
-                   util_format_name(info->src.format), info->src.level,
+      debug_printf("D3D12 BLIT as COPY: from %s@%d %dx%dx%d + %dx%dx%d\n",
+                   util_format_name(src->base.format), info->src.level,
                    info->src.box.x, info->src.box.y, info->src.box.z,
                    info->src.box.width, info->src.box.height, info->src.box.depth);
-      debug_printf("      to   %s@%d %dx%dx%d + %dx%dx%d\n",
-                   util_format_name(info->dst.format), info->dst.level,
-                   info->dst.box.x, info->dst.box.y, info->dst.box.z,
-                   info->dst.box.width, info->dst.box.height, info->dst.box.depth);
+      debug_printf("      to   %s@%d %dx%dx%d\n",
+                   util_format_name(dst->base.format), info->dst.level,
+                   info->dst.box.x, info->dst.box.y, info->dst.box.z);
    }
 
-   if (!util_blitter_is_blit_supported(ctx->blitter, info)) {
-      debug_printf("blit unsupported %s -> %s\n",
-              util_format_short_name(info->src.resource->format),
-              util_format_short_name(info->dst.resource->format));
-      return;
-   }
+   d3d12_resource_barrier(ctx, dst,
+                          D3D12_RESOURCE_STATE_COMMON,
+                          D3D12_RESOURCE_STATE_COPY_DEST);
+   d3d12_resource_barrier(ctx, src,
+                          D3D12_RESOURCE_STATE_COMMON,
+                          D3D12_RESOURCE_STATE_COPY_SOURCE);
 
+   d3d12_batch_reference_resource(batch, src);
+   d3d12_batch_reference_resource(batch, dst);
+
+   struct pipe_box src_box = info->src.box;
+   int src_inc = info->src.box.height > 0 ? 1 : -1;
+   int dst_inc = info->dst.box.height > 0 ? 1 : -1;
+   src_box.height = 1;
+   int rows_to_copy = abs(info->src.box.height);
+
+   if (info->src.box.height < 0)
+      --src_box.y;
+
+   for (int y = 0, dest_y = info->dst.box.y; y < rows_to_copy;
+        ++y, src_box.y += src_inc, dest_y += dst_inc) {
+
+      copy_subregion_no_barriers(ctx, dst, info->dst.level,
+                                       info->dst.box.x, dest_y, info->dst.box.z,
+                                       src, info->src.level, &src_box);
+   }
+   d3d12_resource_barrier(ctx, src,
+                          D3D12_RESOURCE_STATE_COPY_SOURCE,
+                          D3D12_RESOURCE_STATE_COMMON);
+   d3d12_resource_barrier(ctx, dst,
+                          D3D12_RESOURCE_STATE_COPY_DEST,
+                          D3D12_RESOURCE_STATE_COMMON);
+}
+
+static void
+direct_copy(struct d3d12_context *ctx,
+            const struct pipe_blit_info *info)
+{
+   /* No flipping, we can forward this directly to resource_copy_region */
+   if (info->src.box.height == info->dst.box.height) {
+      ctx->base.resource_copy_region(&ctx->base, info->dst.resource, info->dst.level,
+                                     info->dst.box.x, info->dst.box.y, info->dst.box.z,
+                                     info->src.resource, info->src.level,
+                                     &info->src.box);
+   } else {
+      assert(info->src.box.height == -info->dst.box.height);
+      copy_resource_y_flipped(ctx, info);
+   }
+}
+
+static void
+util_blit(struct d3d12_context *ctx,
+          const struct pipe_blit_info *info)
+{
    util_blitter_save_blend(ctx->blitter, ctx->gfx_pipeline_state.blend);
    util_blitter_save_depth_stencil_alpha(ctx->blitter, ctx->gfx_pipeline_state.zsa);
    util_blitter_save_vertex_elements(ctx->blitter, ctx->gfx_pipeline_state.ves);
@@ -149,6 +277,33 @@ d3d12_blit(struct pipe_context *pctx,
    util_blitter_save_sample_mask(ctx->blitter, ctx->gfx_pipeline_state.sample_mask);
 
    util_blitter_blit(ctx->blitter, info);
+}
+
+void
+d3d12_blit(struct pipe_context *pctx,
+           const struct pipe_blit_info *info)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+
+   if (D3D12_DEBUG_BLIT & d3d12_debug) {
+      debug_printf("D3D12 BLIT: from %s@%d %dx%dx%d + %dx%dx%d\n",
+                   util_format_name(info->src.format), info->src.level,
+                   info->src.box.x, info->src.box.y, info->src.box.z,
+                   info->src.box.width, info->src.box.height, info->src.box.depth);
+      debug_printf("      to   %s@%d %dx%dx%d + %dx%dx%d\n",
+                   util_format_name(info->dst.format), info->dst.level,
+                   info->dst.box.x, info->dst.box.y, info->dst.box.z,
+                   info->dst.box.width, info->dst.box.height, info->dst.box.depth);
+   }
+
+   if (direct_copy_supported(info))
+      direct_copy(ctx, info);
+   else if (util_blitter_is_blit_supported(ctx->blitter, info))
+      util_blit(ctx, info);
+   else
+      debug_printf("blit unsupported %s -> %s\n",
+                 util_format_short_name(info->src.resource->format),
+                 util_format_short_name(info->dst.resource->format));
 }
 
 static void
