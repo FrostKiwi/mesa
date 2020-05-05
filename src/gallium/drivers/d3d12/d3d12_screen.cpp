@@ -430,41 +430,41 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
    struct d3d12_screen *screen = d3d12_screen(pscreen);
 
    if (sample_count > 1)
-      return FALSE;
+      return false;
 
    DXGI_FORMAT dxgi_format = d3d12_get_format(format);
    if (dxgi_format == DXGI_FORMAT_UNKNOWN)
-      return FALSE;
+      return false;
 
    D3D12_FEATURE_DATA_FORMAT_SUPPORT fmt_info;
    fmt_info.Format = dxgi_format;
    if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,
                                                &fmt_info, sizeof(fmt_info))))
-      return FALSE;
+      return false;
 
    if (target == PIPE_BUFFER) {
       if (bind & PIPE_BIND_VERTEX_BUFFER &&
           !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER))
-         return FALSE;
+         return false;
 
       if (bind & PIPE_BIND_INDEX_BUFFER &&
           !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_IA_INDEX_BUFFER))
-         return FALSE;
+         return false;
    } else {
       /* all other targets are texture-targets */
       if (bind & PIPE_BIND_RENDER_TARGET &&
           !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET))
-         return FALSE;
+         return false;
 
       if (bind & PIPE_BIND_BLENDABLE &&
          !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_BLENDABLE))
-        return FALSE;
+        return false;
 
       if (bind & PIPE_BIND_SAMPLER_VIEW &&
           !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE)) {
 
          if (!util_format_is_depth_or_stencil(format))
-            return FALSE;
+            return false;
 
          /* DS surfaces use a different format for SVs, so check if we can get one
           * that is supported */
@@ -473,18 +473,18 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
 
          if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,
                                                      &fmt_info_sv, sizeof(fmt_info_sv))))
-            return FALSE;
+            return false;
 
          if (!(fmt_info_sv.Support1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE))
-            return FALSE;
+            return false;
       }
 
       if (bind & PIPE_BIND_DEPTH_STENCIL &&
           !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)) {
-            return FALSE;
+            return false;
       }
    }
-   return TRUE;
+   return true;
 }
 
 static void
