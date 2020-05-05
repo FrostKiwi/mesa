@@ -222,6 +222,7 @@ enum dxil_intr {
    DXIL_INTR_ATOMIC_BINOP = 78,
    DXIL_INTR_ATOMIC_CMPXCHG = 79,
    DXIL_INTR_BARRIER = 80,
+   DXIL_INTR_TEXTURE_LOD = 81,
 
    DXIL_INTR_DISCARD = 82,
    DXIL_INTR_DDX_COARSE = 83,
@@ -3080,6 +3081,26 @@ emit_texture_size(struct ntd_context *ctx, struct texop_parameters *params)
    return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
 }
 
+static const struct dxil_value *
+emit_texture_lod(struct ntd_context *ctx, struct texop_parameters *params)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.calculateLOD", DXIL_F32);
+   if (!func)
+      return false;
+
+   const struct dxil_value *args[] = {
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_TEXTURE_LOD),
+      params->tex,
+      params->sampler,
+      params->coord[0],
+      params->coord[1],
+      params->coord[2],
+      dxil_module_get_int1_const(&ctx->mod, 1)
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
 static bool
 emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 {
@@ -3203,6 +3224,11 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
    case nir_texop_txs:
       sample = emit_texture_size(ctx, &params);
       break;
+
+   case nir_texop_lod:
+      sample = emit_texture_lod(ctx, &params);
+      store_dest(ctx, &instr->dest, 0, sample, nir_alu_type_get_base_type(instr->dest_type));
+      return true;
    }
 
    if (!sample)
