@@ -972,6 +972,8 @@ d3d12_set_framebuffer_state(struct pipe_context *pctx,
    else
       ctx->gfx_pipeline_state.dsv_format = DXGI_FORMAT_UNKNOWN;
 
+   ctx->gfx_pipeline_state.samples = MAX2(state->samples, 1);
+
    ctx->state_dirty |= D3D12_DIRTY_FRAMEBUFFER;
 }
 
