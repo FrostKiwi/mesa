@@ -1304,28 +1304,6 @@ emit_shift(struct ntd_context *ctx, nir_alu_instr *alu,
 }
 
 static bool
-emit_b2i(struct ntd_context *ctx, nir_alu_instr *alu,
-         const struct dxil_value *op)
-{
-   unsigned dst_bits = nir_dest_bit_size(alu->dest.dest);
-   assert(dst_bits != 1);
-   assert(nir_src_bit_size(alu->src[0].src) == 1);
-
-   const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod,
-                                                           dst_bits);
-   if (!type)
-      return false;
-
-   const struct dxil_value *v = dxil_emit_cast(&ctx->mod, DXIL_CAST_ZEXT,
-                                               type, op);
-   if (!v)
-      return false;
-
-   store_alu_dest(ctx, alu, 0, v);
-   return true;
-}
-
-static bool
 emit_cmp(struct ntd_context *ctx, nir_alu_instr *alu,
          enum dxil_cmp_pred pred,
          const struct dxil_value *op0, const struct dxil_value *op1)
@@ -1344,6 +1322,12 @@ get_cast_op(nir_alu_instr *alu)
    unsigned src_bits = nir_src_bit_size(alu->src[0].src);
 
    switch (alu->op) {
+   /* bool -> int */
+   case nir_op_b2i16:
+   case nir_op_b2i32:
+   case nir_op_b2i64:
+      return DXIL_CAST_ZEXT;
+
    /* float -> float */
    case nir_op_f2f32:
    case nir_op_f2f64:
@@ -1719,8 +1703,10 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_ffma: return emit_tertiary_intin(ctx, alu, DXIL_INTR_FFMA, src[0], src[1], src[2]);
 
    case nir_op_f2b1:
+   case nir_op_b2i16:
    case nir_op_i2i16:
    case nir_op_u2u16:
+   case nir_op_b2i32:
    case nir_op_f2f32:
    case nir_op_f2i32:
    case nir_op_f2u32:
@@ -1728,6 +1714,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_i2i32:
    case nir_op_u2f32:
    case nir_op_u2u32:
+   case nir_op_b2i64:
    case nir_op_f2f64:
    case nir_op_f2i64:
    case nir_op_f2u64:
@@ -1736,11 +1723,6 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_u2f64:
    case nir_op_u2u64:
       return emit_cast(ctx, alu, src[0]);
-
-   case nir_op_b2i16:
-   case nir_op_b2i32:
-   case nir_op_b2i64:
-      return emit_b2i(ctx, alu, src[0]);
 
    case nir_op_b2f32: return emit_b2f32(ctx, alu, src[0]);
    default:
