@@ -43,37 +43,64 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
    D3D12_BOX src_box = {};
    unsigned src_z = psrc_box->z;
 
-   if (dst->base.target == PIPE_TEXTURE_CUBE) {
-      dst_level = dstz * (dst->base.last_level + 1) + dst_level;
-      dstz = 0;
+   int src_subres_stride = src->base.last_level + 1;
+   int dst_subres_stride = dst->base.last_level + 1;
+
+   int stencil_src_res_offset = 1;
+   int stencil_dst_res_offset = 1;
+
+   int src_nres = 1;
+   int dst_nres = 1;
+
+   if (dst->base.format == PIPE_FORMAT_Z24_UNORM_S8_UINT ||
+       dst->base.format == PIPE_FORMAT_S8_UINT_Z24_UNORM) {
+      stencil_dst_res_offset = dst_subres_stride * dst->base.array_size;
+      src_nres = 2;
    }
 
-   if (src->base.target == PIPE_TEXTURE_CUBE) {
-      src_level = src_z * (src->base.last_level + 1) + src_level;
-      src_z = 0;
+   if (src->base.format == PIPE_FORMAT_Z24_UNORM_S8_UINT ||
+       src->base.format == PIPE_FORMAT_S8_UINT_Z24_UNORM) {
+      stencil_src_res_offset = src_subres_stride * src->base.array_size;
+      dst_nres = 2;
    }
 
+   int nsubres = min(src_nres, dst_nres);
 
-   src_box.left = psrc_box->x;
-   src_box.right = psrc_box->x + psrc_box->width;
-   src_box.top = psrc_box->y;
-   src_box.bottom = psrc_box->y + psrc_box->height;
-   src_box.front = src_z;
-   src_box.back = src_z + psrc_box->depth;
+   for (int subres = 0; subres < nsubres; ++subres) {
+      if (dst->base.target == PIPE_TEXTURE_CUBE ||
+          dst->base.target == PIPE_TEXTURE_1D_ARRAY ||
+          dst->base.target == PIPE_TEXTURE_2D_ARRAY) {
+         dst_level = dst_subres_stride * dstz + dst_level;
+         dstz = 0;
+      }
+      dst_level += subres * stencil_dst_res_offset;
 
-   src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-   src_loc.SubresourceIndex = src_level;
-   src_loc.pResource = src->res;
+      if (src->base.target == PIPE_TEXTURE_CUBE ||
+          src->base.target == PIPE_TEXTURE_1D_ARRAY ||
+          src->base.target == PIPE_TEXTURE_2D_ARRAY) {
+         src_level = src_z * src_subres_stride + src_level;
+         src_z = 0;
+      }
+      src_level += subres * stencil_src_res_offset;
 
-   dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-   dst_loc.SubresourceIndex = dst_level;
-   dst_loc.pResource = dst->res;
+      src_box.left = psrc_box->x;
+      src_box.right = psrc_box->x + psrc_box->width;
+      src_box.top = psrc_box->y;
+      src_box.bottom = psrc_box->y + psrc_box->height;
+      src_box.front = src_z;
+      src_box.back = src_z + psrc_box->depth;
 
+      src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+      src_loc.SubresourceIndex = src_level;
+      src_loc.pResource = src->res;
 
-   ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
-                                   &src_loc, &src_box);
+      dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+      dst_loc.SubresourceIndex = dst_level;
+      dst_loc.pResource = dst->res;
 
-
+      ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
+                                      &src_loc, &src_box);
+   }
 }
 
 void
