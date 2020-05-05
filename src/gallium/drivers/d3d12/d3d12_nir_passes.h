@@ -33,9 +33,6 @@ extern "C" {
 struct d3d12_shader;
 
 bool
-d3d12_lower_bool_loads(struct nir_shader *s);
-
-bool
 d3d12_lower_point_sprite(nir_shader *shader,
                          bool sprite_origin_lower_left,
                          unsigned point_coord_enable);
