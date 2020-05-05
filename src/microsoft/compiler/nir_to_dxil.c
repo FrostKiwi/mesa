@@ -1322,6 +1322,10 @@ get_cast_op(nir_alu_instr *alu)
    unsigned src_bits = nir_src_bit_size(alu->src[0].src);
 
    switch (alu->op) {
+   /* int -> bool */
+   case nir_op_i2b1:
+      return DXIL_CAST_TRUNC;
+
    /* bool -> int */
    case nir_op_b2i16:
    case nir_op_b2i32:
@@ -1702,6 +1706,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_fmin: return emit_binary_intin(ctx, alu, DXIL_INTR_FMIN, src[0], src[1]);
    case nir_op_ffma: return emit_tertiary_intin(ctx, alu, DXIL_INTR_FFMA, src[0], src[1], src[2]);
 
+   case nir_op_i2b1:
    case nir_op_f2b1:
    case nir_op_b2i16:
    case nir_op_i2i16:
