@@ -60,6 +60,7 @@ struct d3d12_gfx_pipeline_state {
    struct d3d12_depth_stencil_alpha_state *zsa;
    struct d3d12_rasterizer_state *rast;
 
+   unsigned samples;
    unsigned sample_mask;
    unsigned num_cbufs;
    DXGI_FORMAT rtv_formats[8];

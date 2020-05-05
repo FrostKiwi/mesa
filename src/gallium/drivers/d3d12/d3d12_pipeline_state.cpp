@@ -130,7 +130,7 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
       pso_desc.RTVFormats[i] = state->rtv_formats[i];
    pso_desc.DSVFormat = state->dsv_format;
 
-   pso_desc.SampleDesc.Count = 1;
+   pso_desc.SampleDesc.Count = state->samples;
    pso_desc.SampleDesc.Quality = 0;
 
    pso_desc.NodeMask = 0;
