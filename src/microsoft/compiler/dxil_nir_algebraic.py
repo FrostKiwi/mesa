@@ -54,6 +54,11 @@ for outer_op_type in ('u2u', 'i2i', 'u2f', 'i2f'):
                     new_seq = (conv_op, new_seq)
                 no_8bit_conv += [(orig_seq, new_seq)]
 
+lower_b2b = [
+  (('b2b32', 'a'), ('b2i32', 'a')),
+  (('b2b1', 'a'), ('i2b1', 'a')),
+]
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--import-path', required=True)
@@ -69,6 +74,8 @@ def run():
 
     print(nir_algebraic.AlgebraicPass("dxil_nir_lower_8bit_conv",
                                       no_8bit_conv).render())
+    print(nir_algebraic.AlgebraicPass("dxil_nir_lower_b2b",
+                                      lower_b2b).render())
 
 if __name__ == '__main__':
     main()
