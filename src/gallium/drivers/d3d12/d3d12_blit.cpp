@@ -31,6 +31,52 @@
 #include "util/format/u_format.h"
 
 void
+copy_subregion_no_barriers(struct d3d12_context *ctx,
+                           struct d3d12_resource *dst,
+                           unsigned dst_level,
+                           unsigned dstx, unsigned dsty, unsigned dstz,
+                           struct d3d12_resource *src,
+                           unsigned src_level,
+                           const struct pipe_box *psrc_box)
+{
+   D3D12_TEXTURE_COPY_LOCATION src_loc, dst_loc;
+   D3D12_BOX src_box = {};
+   unsigned src_z = psrc_box->z;
+
+   if (dst->base.target == PIPE_TEXTURE_CUBE) {
+      dst_level = dstz * (dst->base.last_level + 1) + dst_level;
+      dstz = 0;
+   }
+
+   if (src->base.target == PIPE_TEXTURE_CUBE) {
+      src_level = src_z * (src->base.last_level + 1) + src_level;
+      src_z = 0;
+   }
+
+
+   src_box.left = psrc_box->x;
+   src_box.right = psrc_box->x + psrc_box->width;
+   src_box.top = psrc_box->y;
+   src_box.bottom = psrc_box->y + psrc_box->height;
+   src_box.front = src_z;
+   src_box.back = src_z + psrc_box->depth;
+
+   src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+   src_loc.SubresourceIndex = src_level;
+   src_loc.pResource = src->res;
+
+   dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+   dst_loc.SubresourceIndex = dst_level;
+   dst_loc.pResource = dst->res;
+
+
+   ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
+                                   &src_loc, &src_box);
+
+
+}
+
+void
 d3d12_blit(struct pipe_context *pctx,
            const struct pipe_blit_info *info)
 {
@@ -91,9 +137,6 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
    struct d3d12_batch *batch = d3d12_current_batch(ctx);
    struct d3d12_resource *dst = d3d12_resource(pdst);
    struct d3d12_resource *src = d3d12_resource(psrc);
-   D3D12_TEXTURE_COPY_LOCATION src_loc, dst_loc;
-   D3D12_BOX src_box = {};
-   unsigned src_z = psrc_box->z;
 
    if (D3D12_DEBUG_BLIT & d3d12_debug) {
       debug_printf("D3D12 COPY: from %s@%d %dx%dx%d + %dx%dx%d\n",
@@ -112,37 +155,11 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
                           D3D12_RESOURCE_STATE_COMMON,
                           D3D12_RESOURCE_STATE_COPY_SOURCE);
 
-   if (pdst->target == PIPE_TEXTURE_CUBE) {
-      dst_level = dstz * (pdst->last_level + 1) + dst_level;
-      dstz = 0;
-   }
-
-   if (psrc->target == PIPE_TEXTURE_CUBE) {
-      src_level = src_z * (psrc->last_level + 1) + src_level;
-      src_z = 0;
-   }
-
-
-   src_box.left = psrc_box->x;
-   src_box.right = psrc_box->x + psrc_box->width;
-   src_box.top = psrc_box->y;
-   src_box.bottom = psrc_box->y + psrc_box->height;
-   src_box.front = src_z;
-   src_box.back = src_z + psrc_box->depth;
-
-   src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-   src_loc.SubresourceIndex = src_level;
-   src_loc.pResource = src->res;
-
-   dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-   dst_loc.SubresourceIndex = dst_level;
-   dst_loc.pResource = dst->res;
-
    d3d12_batch_reference_resource(batch, src);
    d3d12_batch_reference_resource(batch, dst);
 
-   ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
-                                   &src_loc, &src_box);
+   copy_subregion_no_barriers(ctx, dst, dst_level, dstx, dsty, dstz,
+                              src, src_level, psrc_box);
 
    d3d12_resource_barrier(ctx, src,
                           D3D12_RESOURCE_STATE_COPY_SOURCE,
