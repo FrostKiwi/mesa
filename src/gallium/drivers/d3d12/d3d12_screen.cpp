@@ -429,7 +429,7 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
 {
    struct d3d12_screen *screen = d3d12_screen(pscreen);
 
-   if (sample_count > 1)
+   if (MAX2(1, sample_count) != MAX2(1, storage_sample_count))
       return false;
 
    DXGI_FORMAT dxgi_format = d3d12_get_format(format);
@@ -449,6 +449,9 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
 
       if (bind & PIPE_BIND_INDEX_BUFFER &&
           !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_IA_INDEX_BUFFER))
+         return false;
+
+      if (sample_count > 0)
          return false;
    } else {
       /* all other targets are texture-targets */
@@ -481,6 +484,16 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
 
       if (bind & PIPE_BIND_DEPTH_STENCIL &&
           !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)) {
+            return false;
+      }
+
+      if (sample_count > 0) {
+         D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS ms_info = {};
+         ms_info.Format = dxgi_format;
+         ms_info.SampleCount = sample_count;
+         if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+                                                     &ms_info,
+                                                     sizeof(ms_info))))
             return false;
       }
    }
