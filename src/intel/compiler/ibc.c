@@ -693,7 +693,7 @@ ibc_repair_wlr_order(ibc_shader *shader)
       ibc_instr_foreach_reg_write(instr, repair_wlr_write_cb, NULL);
 }
 
-static bool
+bool
 ibc_optimize(ibc_shader *ibc)
 {
    bool progress, any_progress = false;

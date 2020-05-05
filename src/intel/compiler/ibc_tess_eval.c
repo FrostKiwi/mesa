@@ -31,8 +31,8 @@ struct ibc_tes_payload {
 
    ibc_ref tess_coord;
    ibc_ref urb_return_handles;
-   // XXX: size is probably wrong here
-   ibc_ref inputs[32];
+
+   unsigned push_input_start_reg;
 };
 
 struct nir_tes_to_ibc_state {
@@ -67,6 +67,8 @@ ibc_setup_tes_payload(ibc_builder *b,
    /* Set up push constants */
    ibc_setup_curb_payload(b, &payload->base, &prog_data->base.base);
    reg = payload->base.num_ff_regs + payload->base.num_curb_regs;
+
+   payload->push_input_start_reg = reg;
 
    return payload;
 }
@@ -122,7 +124,6 @@ ibc_emit_nir_tes_intrinsic(struct nir_to_ibc_state *nti,
 
       dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, read_components);
 
-      /* XXX: Push inputs */
       ibc_emit_urb_read(b, dest, handle, per_slot_offset, global_offset,
                         read_components);
 
@@ -170,6 +171,75 @@ ibc_emit_nir_tes_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    return true;
+}
+
+/**
+ * Lower URB_READ logical intrinsics for TES inputs to either reads of
+ * pushed registers, or SEND intrinsics to pull those inputs.
+ *
+ * Returns the URB read length required for push inputs.
+ */
+static unsigned
+ibc_lower_tes_inputs(ibc_shader *shader,
+                     unsigned push_input_start_reg)
+{
+   ibc_builder b;
+   ibc_builder_init(&b, shader);
+
+   unsigned urb_read_length = 0;
+
+   ibc_foreach_instr_safe(instr, shader) {
+      if (instr->type != IBC_INSTR_TYPE_INTRINSIC)
+         continue;
+
+      ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
+
+      if (intrin->op != IBC_INTRINSIC_OP_URB_READ)
+         continue;
+
+      const ibc_ref per_slot_offset =
+         intrin->src[IBC_URB_READ_SRC_PER_SLOT_OFFSET].ref;
+      const ibc_ref global_offset_ref =
+         intrin->src[IBC_URB_READ_SRC_GLOBAL_OFFSET].ref;
+      unsigned offset = ibc_ref_as_uint(global_offset_ref);
+
+      /* Arbitrarily only push up to 32 vec4 slots worth of data,
+       * which is 16 registers (since each holds 2 vec4 slots).
+       */
+      const unsigned push_limit = 32;
+
+      if (offset < push_limit && ibc_ref_is_null_or_zero(per_slot_offset)) {
+         /* Use push access; lower to a payload read. */
+         unsigned reg = push_input_start_reg + offset / 2;
+
+         ibc_builder_push_scalar(&b);
+
+         b.cursor = ibc_after_start(shader);
+
+         ibc_ref input =
+            ibc_load_payload_logical(&b, &reg, intrin->dest.type, 8);
+
+         b.cursor = ibc_before_instr(instr);
+
+         ibc_ref srcs[4];
+         for (unsigned i = 0; i < intrin->num_dest_comps; i++) {
+            srcs[i] = ibc_comp_ref(input, 4 * (offset % 2) + i);
+         }
+         ibc_VEC_to(&b, intrin->dest, srcs, intrin->num_dest_comps);
+
+         ibc_builder_pop(&b);
+
+         ibc_instr_remove(&intrin->instr);
+
+         urb_read_length = MAX2(urb_read_length, (offset / 2) + 1);
+      } else {
+         /* Use pull access; lower to a SEND instruction. */
+         b.cursor = ibc_before_instr(instr);
+         ibc_lower_io_urb_read_to_send(&b, intrin);
+      }
+   }
+
+   return urb_read_length;
 }
 
 static void
@@ -268,6 +338,13 @@ ibc_compile_tes(const struct brw_compiler *compiler, void *log_data,
    if (INTEL_DEBUG & DEBUG_TES)
       ibc_print_shader(ibc, stderr);
    ibc_validate_shader(ibc);
+
+   /* Optimize before lowering input reads so we see constant offsets */
+   ibc_optimize(ibc);
+
+   /* Lower inputs to either push register reads or pull messages */
+   prog_data->base.urb_read_length =
+      ibc_lower_tes_inputs(ibc, payload->push_input_start_reg);
 
    ibc_lower_and_optimize(ibc);
 

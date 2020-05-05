@@ -1555,6 +1555,7 @@ typedef struct {
 
 ibc_dominance *ibc_compute_dominance(ibc_shader *shader, void *mem_ctx);
 
+bool ibc_optimize(ibc_shader *ibc);
 void ibc_lower_and_optimize(ibc_shader *ibc);
 
 bool ibc_lower_fb_writes(ibc_shader *shader);
