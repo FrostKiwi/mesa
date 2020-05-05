@@ -1425,6 +1425,31 @@ brw_compile_clip(const struct brw_compiler *compiler,
                  struct brw_vue_map *vue_map,
                  unsigned *final_assembly_size);
 
+struct brw_sip_eu_dump {
+   uint32_t grf[128][8];
+
+   /* We can only capture a0.0-3 because we use a0.4-7 for scratch in SIP */
+   uint16_t addr[4];
+
+   uint16_t flag[2][2];
+
+   uint32_t cr0[3];
+
+   uint32_t pad[1];
+};
+
+/**
+ * Compile a system routine
+ *
+ * This is a fixed-function shader that, upon receiving an exception, dumps
+ * all EU instruction pointers out to scratch space for debugging.
+ */
+const unsigned *
+brw_compile_sip(const struct brw_compiler *compiler,
+                void *mem_ctx,
+                uint64_t dump_addr,
+                unsigned *final_assembly_size);
+
 /**
  * Compile a fragment shader.
  *

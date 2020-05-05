@@ -1281,6 +1281,12 @@ enum brw_message_target {
 #define BRW_DATAPORT_OWORD_BLOCK_2_OWORDS     2
 #define BRW_DATAPORT_OWORD_BLOCK_4_OWORDS     3
 #define BRW_DATAPORT_OWORD_BLOCK_8_OWORDS     4
+#define BRW_DATAPORT_OWORD_BLOCK_OWORDS(n)              \
+   ((n) == 1 ? BRW_DATAPORT_OWORD_BLOCK_1_OWORDLOW :    \
+    (n) == 2 ? BRW_DATAPORT_OWORD_BLOCK_2_OWORDS :      \
+    (n) == 4 ? BRW_DATAPORT_OWORD_BLOCK_4_OWORDS :     \
+    (n) == 8 ? BRW_DATAPORT_OWORD_BLOCK_8_OWORDS :     \
+    (abort(), ~0))
 #define BRW_DATAPORT_OWORD_BLOCK_DWORDS(n)              \
    ((n) == 4 ? BRW_DATAPORT_OWORD_BLOCK_1_OWORDLOW :    \
     (n) == 8 ? BRW_DATAPORT_OWORD_BLOCK_2_OWORDS :      \
@@ -1401,6 +1407,7 @@ enum brw_message_target {
 #define GEN9_DATAPORT_DC_PORT1_A64_SCATTERED_READ                   0x10
 #define GEN8_DATAPORT_DC_PORT1_A64_UNTYPED_SURFACE_READ             0x11
 #define GEN8_DATAPORT_DC_PORT1_A64_UNTYPED_ATOMIC_OP                0x12
+#define GEN9_DATAPORT_DC_PORT1_A64_OWORD_BLOCK_WRITE                0x15
 #define GEN8_DATAPORT_DC_PORT1_A64_UNTYPED_SURFACE_WRITE            0x19
 #define GEN8_DATAPORT_DC_PORT1_A64_SCATTERED_WRITE                  0x1a
 #define GEN9_DATAPORT_DC_PORT1_UNTYPED_ATOMIC_FLOAT_OP              0x1b
