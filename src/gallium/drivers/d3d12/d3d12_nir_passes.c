@@ -24,6 +24,7 @@
 #include "d3d12_nir_passes.h"
 #include "d3d12_compiler.h"
 #include "nir_builder.h"
+#include "nir_builtin_builder.h"
 #include "program/prog_instruction.h"
 
 /**
