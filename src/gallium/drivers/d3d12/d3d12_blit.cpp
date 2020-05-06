@@ -30,6 +30,78 @@
 #include "util/u_blitter.h"
 #include "util/format/u_format.h"
 
+static bool
+resolve_supported(const struct pipe_blit_info *info)
+{
+   // need actually be a resolve operation
+   if (info->src.resource->nr_samples <= 1 ||
+       info->dst.resource->nr_samples > 1)
+      return false;
+
+   // check for unsupported operations
+   if (util_format_get_mask(info->dst.format) != info->mask ||
+       util_format_get_mask(info->src.format) != info->mask ||
+       info->filter != PIPE_TEX_FILTER_NEAREST ||
+       info->scissor_enable ||
+       info->num_window_rectangles > 0 ||
+       info->alpha_blend)
+      return false;
+
+   // formats need to match
+   struct d3d12_resource *src = d3d12_resource(info->src.resource);
+   struct d3d12_resource *dst = d3d12_resource(info->dst.resource);
+   if (src->format != dst->format)
+      return false;
+
+   // sizes needs to match
+   if (info->src.box.width != info->dst.box.width ||
+       info->src.box.height != info->dst.box.height)
+      return false;
+
+   // can only resolve full subresource
+   if (info->src.box.width != u_minify(info->src.resource->width0,
+                                       info->src.level) ||
+       info->src.box.height != u_minify(info->src.resource->height0,
+                                        info->src.level) ||
+       info->dst.box.width != u_minify(info->dst.resource->width0,
+                                           info->dst.level) ||
+       info->dst.box.height != u_minify(info->dst.resource->height0,
+                                            info->dst.level))
+      return false;
+
+   return true;
+}
+
+static void
+blit_resolve(struct d3d12_context *ctx, const struct pipe_blit_info *info)
+{
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
+   struct d3d12_resource *src = d3d12_resource(info->src.resource);
+   struct d3d12_resource *dst = d3d12_resource(info->dst.resource);
+
+   d3d12_resource_barrier(ctx, src,
+                          D3D12_RESOURCE_STATE_COMMON,
+                          D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+   d3d12_resource_barrier(ctx, dst,
+                          D3D12_RESOURCE_STATE_COMMON,
+                          D3D12_RESOURCE_STATE_RESOLVE_DEST);
+
+   d3d12_batch_reference_resource(batch, src);
+   d3d12_batch_reference_resource(batch, dst);
+
+   assert(src->format == dst->format);
+   ctx->cmdlist->ResolveSubresource(
+      dst->res, info->dst.level,
+      src->res, info->src.level,
+      src->format);
+
+   d3d12_resource_barrier(ctx, src,
+                          D3D12_RESOURCE_STATE_RESOLVE_SOURCE,
+                          D3D12_RESOURCE_STATE_COMMON);
+   d3d12_resource_barrier(ctx, dst,
+                          D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                          D3D12_RESOURCE_STATE_COMMON);
+}
 
 static bool
 formats_are_copy_comaptible(enum pipe_format src, enum pipe_format dst)
@@ -71,7 +143,9 @@ static bool
 direct_copy_supported(const struct pipe_blit_info *info)
 {
    if (info->scissor_enable || info->alpha_blend ||
-       info->render_condition_enable) {
+       info->render_condition_enable ||
+       info->src.resource->nr_samples > 1 ||
+       info->dst.resource->nr_samples > 1) {
       return false;
    }
 
@@ -296,7 +370,9 @@ d3d12_blit(struct pipe_context *pctx,
                    info->dst.box.width, info->dst.box.height, info->dst.box.depth);
    }
 
-   if (direct_copy_supported(info))
+   if (resolve_supported(info))
+      blit_resolve(ctx, info);
+   else if (direct_copy_supported(info))
       direct_copy(ctx, info);
    else if (util_blitter_is_blit_supported(ctx->blitter, info))
       util_blit(ctx, info);
