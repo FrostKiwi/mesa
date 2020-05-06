@@ -2954,7 +2954,7 @@ VkResult anv_CreateDevice(
       unreachable("unhandled gen");
    }
    if (result != VK_SUCCESS)
-      goto fail_workaround_bo;
+      goto fail_scratch_pool;
 
    anv_pipeline_cache_init(&device->default_pipeline_cache, device, true);
 
@@ -2968,13 +2968,14 @@ VkResult anv_CreateDevice(
 
    return VK_SUCCESS;
 
- fail_workaround_bo:
+ fail_scratch_pool:
    anv_scratch_pool_finish(device, &device->scratch_pool);
    if (device->info.gen >= 10)
       anv_device_release_bo(device, device->hiz_clear_bo);
-   anv_device_release_bo(device, device->workaround_bo);
  fail_trivial_batch_bo:
    anv_device_release_bo(device, device->trivial_batch_bo);
+ fail_workaround_bo:
+   anv_device_release_bo(device, device->workaround_bo);
  fail_surface_aux_map_pool:
    if (device->info.gen >= 12) {
       gen_aux_map_finish(device->aux_map_ctx);
