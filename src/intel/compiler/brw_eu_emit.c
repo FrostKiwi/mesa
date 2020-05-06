@@ -1262,6 +1262,13 @@ brw_F16TO32(struct brw_codegen *p, struct brw_reg dst, struct brw_reg src)
 }
 
 
+void brw_ERROR(struct brw_codegen *p)
+{
+   brw_inst *insn = next_insn(p, BRW_OPCODE_ILLEGAL);
+   memset(insn, 0, sizeof(*insn));
+   brw_inst_set_opcode(p->devinfo, insn, BRW_OPCODE_ILLEGAL);
+}
+
 void brw_NOP(struct brw_codegen *p)
 {
    brw_inst *insn = next_insn(p, BRW_OPCODE_NOP);

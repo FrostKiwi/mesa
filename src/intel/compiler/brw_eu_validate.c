@@ -1946,7 +1946,7 @@ brw_validate_instruction(const struct gen_device_info *devinfo,
    struct string error_msg = { .str = NULL, .len = 0 };
 
    if (is_unsupported_inst(devinfo, inst)) {
-      ERROR("Instruction not supported on this Gen");
+      //ERROR("Instruction not supported on this Gen");
    } else {
       CHECK(invalid_values);
 

@@ -777,6 +777,8 @@ fs_generator::generate_cs_terminate(fs_inst *inst, struct brw_reg payload)
 {
    struct brw_inst *insn;
 
+   brw_ERROR(p);
+
    insn = brw_next_insn(p, BRW_OPCODE_SEND);
 
    brw_set_dest(p, insn, retype(brw_null_reg(), BRW_REGISTER_TYPE_UW));

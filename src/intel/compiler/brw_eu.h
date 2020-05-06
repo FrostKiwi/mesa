@@ -1111,6 +1111,8 @@ void brw_land_fwd_jump(struct brw_codegen *p, int jmp_insn_idx);
 brw_inst *brw_JMPI(struct brw_codegen *p, struct brw_reg index,
                    unsigned predicate_control);
 
+void brw_ERROR(struct brw_codegen *p);
+
 void brw_NOP(struct brw_codegen *p);
 
 void brw_WAIT(struct brw_codegen *p);
