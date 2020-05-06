@@ -472,6 +472,8 @@ anv_physical_device_try_create(struct anv_instance *instance,
 
    device->has_implicit_ccs = device->info.has_aux_map;
 
+   device->use_sip = device->use_softpin;
+
    device->has_mem_available = get_available_system_memory() != 0;
 
    device->always_flush_cache =
@@ -2924,6 +2926,18 @@ VkResult anv_CreateDevice(
          goto fail_trivial_batch_bo;
    }
 
+   if (device->physical->use_sip) {
+      /* TODO: This is hard-coded for ICL */
+      uint32_t eu_dump_size = 8 * 8 * 8 * sizeof(struct brw_sip_eu_dump);
+      result = anv_device_alloc_bo(device, eu_dump_size,
+                                   ANV_BO_ALLOC_CAPTURE,
+                                   0 /* explicit_address */,
+                                   &device->eu_dump_bo);
+      result = anv_device_init_hiz_clear_value_bo(device);
+      if (result != VK_SUCCESS)
+         goto fail_hiz_clear_bo;
+   }
+
    anv_scratch_pool_init(device, &device->scratch_pool);
 
    switch (device->info.gen) {
@@ -2970,6 +2984,9 @@ VkResult anv_CreateDevice(
 
  fail_scratch_pool:
    anv_scratch_pool_finish(device, &device->scratch_pool);
+   if (device->physical->use_sip)
+      anv_device_release_bo(device, device->eu_dump_bo);
+ fail_hiz_clear_bo:
    if (device->info.gen >= 10)
       anv_device_release_bo(device, device->hiz_clear_bo);
  fail_trivial_batch_bo:
@@ -3040,6 +3057,8 @@ void anv_DestroyDevice(
 
    anv_scratch_pool_finish(device, &device->scratch_pool);
 
+   if (device->physical->use_sip)
+      anv_device_release_bo(device, device->eu_dump_bo);
    anv_device_release_bo(device, device->workaround_bo);
    anv_device_release_bo(device, device->trivial_batch_bo);
    if (device->info.gen >= 10)

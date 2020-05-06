@@ -1429,6 +1429,12 @@ setup_execbuf_for_cmd_buffer(struct anv_execbuf *execbuf,
          if (result != VK_SUCCESS)
             return result;
       }
+      if (cmd_buffer->device->physical->use_sip) {
+         result = anv_execbuf_add_bo(cmd_buffer->device, execbuf,
+                                     cmd_buffer->device->eu_dump_bo, NULL, 0);
+         if (result != VK_SUCCESS)
+            return result;
+      }
    } else {
       /* Since we aren't in the softpin case, all of our STATE_BASE_ADDRESS BOs
        * will get added automatically by processing relocations on the batch

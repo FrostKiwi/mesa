@@ -278,6 +278,26 @@ genX(init_device_state)(struct anv_device *device)
 #endif
    }
 
+   if (device->physical->use_sip) {
+      void *mem_ctx = ralloc_context(NULL);
+      struct anv_address eu_dump_addr = { .bo = device->eu_dump_bo };
+
+      unsigned sip_size;
+      const unsigned *sip_data =
+         brw_compile_sip(device->physical->compiler, mem_ctx,
+                         anv_address_physical(eu_dump_addr), &sip_size);
+
+      struct anv_state sip_state =
+         anv_state_pool_alloc(&device->instruction_state_pool, sip_size, 8);
+      memcpy(sip_state.map, sip_data, sip_size);
+
+      ralloc_free(mem_ctx);
+
+      anv_batch_emit(&batch, GENX(STATE_SIP), sip) {
+         sip.SystemInstructionPointer = sip_state.offset;
+      }
+   }
+
    anv_batch_emit(&batch, GENX(MI_BATCH_BUFFER_END), bbe);
 
    assert(batch.next <= batch.end);

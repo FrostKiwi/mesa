@@ -1065,6 +1065,9 @@ struct anv_physical_device {
      */
     bool                                        has_implicit_ccs;
 
+    /** True if we want to use a system routine to capture EU state */
+    bool                                        use_sip;
+
     bool                                        always_flush_cache;
 
     struct anv_device_extension_table           supported_extensions;
@@ -1305,6 +1308,7 @@ struct anv_device {
     struct anv_bo *                             trivial_batch_bo;
     struct anv_bo *                             hiz_clear_bo;
     struct anv_state                            null_surface_state;
+    struct anv_bo *                             eu_dump_bo;
 
     struct anv_pipeline_cache                   default_pipeline_cache;
     struct blorp_context                        blorp;
