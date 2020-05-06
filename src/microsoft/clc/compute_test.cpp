@@ -537,15 +537,13 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
 
    execute_cmdlist();
 
-   uav_idx = 0;
    for (unsigned i = 0; i < args.size(); i++) {
       if (!(args[i]->get_direction() & SHADER_ARG_OUTPUT))
          continue;
 
       assert(dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL);
-      get_buffer_data(resources.descs[uav_idx], args[i]->get_data(),
+      get_buffer_data(resources.descs[dxil->metadata.args[i].globalptr.buf_id], args[i]->get_data(),
                       args[i]->get_elem_size() * args[i]->get_num_elems());
-      uav_idx++;
    }
 }
 
