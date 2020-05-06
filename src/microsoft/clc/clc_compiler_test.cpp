@@ -1030,3 +1030,19 @@ TEST_F(ComputeTest, local_ptr)
    for (int i = 0; i < inout.size(); ++i)
       EXPECT_EQ(inout[i], expected[i]);
 }
+
+TEST_F(ComputeTest, int8_to_float)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global char* in, __global float* out)\n\
+   {\n\
+      uint pos = get_global_id(0);\n\
+      out[pos] = in[pos] / 100.0f;\n\
+   }";
+   auto in = ShaderArg<char>({ 10, 20, 30, 40 }, SHADER_ARG_INPUT);
+   auto out = ShaderArg<float>(std::vector<float>(4, std::numeric_limits<float>::infinity()), SHADER_ARG_OUTPUT);
+   const float expected[] = { 0.1f, 0.2f, 0.3f, 0.4f };
+   run_shader(kernel_source, in.size(), 1, 1, in, out);
+   for (int i = 0; i < in.size(); ++i)
+      EXPECT_EQ(out[i], expected[i]);
+}
