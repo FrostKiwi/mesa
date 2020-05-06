@@ -2930,6 +2930,7 @@ VkResult anv_CreateDevice(
       /* TODO: This is hard-coded for ICL */
       uint32_t eu_dump_size = 8 * 8 * 8 * sizeof(struct brw_sip_eu_dump);
       result = anv_device_alloc_bo(device, eu_dump_size,
+                                   ANV_BO_ALLOC_MAPPED |
                                    ANV_BO_ALLOC_CAPTURE,
                                    0 /* explicit_address */,
                                    &device->eu_dump_bo);
@@ -3040,6 +3041,42 @@ void anv_DestroyDevice(
 
    if (!device)
       return;
+
+   if (device->physical->use_sip) {
+      uint32_t zero[8] = {};
+      struct brw_sip_eu_dump *dumps = device->eu_dump_bo->map;
+      for (unsigned i = 0; i < 8 * 8 * 8; i++) {
+         if (memcmp(zero, dumps[i].grf[0], sizeof(zero)) == 0)
+            continue;
+
+         fprintf(stderr, "\nThread %d:\n", i);
+         for (unsigned grf = 0; grf < 128; grf++) {
+            fprintf(stderr, "g%d:", grf);
+            if (grf < 10)
+               fprintf(stderr, " ");
+            if (grf < 100)
+               fprintf(stderr, " ");
+            for (unsigned j = 0; j < 8; j++)
+               fprintf(stderr, "  0x%08x", dumps[i].grf[grf][j]);
+            fprintf(stderr, "\n");
+         }
+
+         fprintf(stderr, "a0:");
+         for (unsigned j = 0; j < 4; j++)
+            fprintf(stderr, "  0x%04x", dumps[i].addr[j]);
+         fprintf(stderr, "\n");
+
+         for (unsigned j = 0; j < 2; j++) {
+            fprintf(stderr, "f%d:  0x%04x  0x%04x\n",
+                    j, dumps[i].flag[j][0], dumps[i].flag[j][1]);
+         }
+
+         fprintf(stderr, "cr0:");
+         for (unsigned j = 0; j < 3; j++)
+            fprintf(stderr, "  0x%08x", dumps[i].cr0[j]);
+         fprintf(stderr, "\n");
+      }
+   }
 
    anv_device_finish_blorp(device);
 
