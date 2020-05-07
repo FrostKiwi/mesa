@@ -483,9 +483,8 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
       }
 
       if (bind & PIPE_BIND_DEPTH_STENCIL &&
-          !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)) {
+          !(fmt_info.Support1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL))
             return false;
-      }
 
       if (sample_count > 0) {
          D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS ms_info = {};
