@@ -61,6 +61,7 @@ enum d3d12_dirty_flags
    D3D12_DIRTY_PRIM_MODE        = (1 << 12),
    D3D12_DIRTY_SHADER           = (1 << 13),
    D3D12_DIRTY_ROOT_SIGNATURE   = (1 << 14),
+   D3D12_DIRTY_STREAM_OUTPUT    = (1 << 15),
 };
 
 enum d3d12_shader_dirty_flags
@@ -138,6 +139,12 @@ d3d12_sampler_view(struct pipe_sampler_view *pview)
    return (struct d3d12_sampler_view *)pview;
 }
 
+struct d3d12_stream_output_target {
+   struct pipe_stream_output_target base;
+   struct pipe_resource *fill_buffer;
+   unsigned fill_buffer_offset;
+};
+
 struct d3d12_shader_state {
    struct d3d12_shader *current;
    unsigned state_dirty;
@@ -157,6 +164,7 @@ struct d3d12_context {
    struct primconvert_context *primconvert;
    struct blitter_context *blitter;
    struct u_suballocator *query_allocator;
+   struct u_suballocator *so_allocator;
    struct hash_table *pso_cache;
    struct hash_table *root_signature_cache;
 
@@ -185,6 +193,10 @@ struct d3d12_context {
    D3D12_INDEX_BUFFER_VIEW ibv;
    d3d12_wrap_sampler_states tex_wrap_states[PIPE_SHADER_TYPES];
    d3d12_sampler_compare_funcs tex_cmp_state[PIPE_SHADER_TYPES];
+
+   struct pipe_stream_output_target *so_targets[PIPE_MAX_SO_BUFFERS];
+   D3D12_STREAM_OUTPUT_BUFFER_VIEW so_buffer_views[PIPE_MAX_SO_BUFFERS];
+   unsigned num_so_targets;
 
    struct d3d12_shader_selector *gfx_stages[D3D12_GFX_SHADER_STAGES];
 
