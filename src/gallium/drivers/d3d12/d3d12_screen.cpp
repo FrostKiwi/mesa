@@ -290,6 +290,9 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_CONDITIONAL_RENDER:
       return 1;
 
+   case PIPE_CAP_MAX_STREAM_OUTPUT_BUFFERS:
+      return 4;
+
    default:
       return u_pipe_screen_get_param_defaults(pscreen, param);
    }
