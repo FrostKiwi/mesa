@@ -2843,20 +2843,22 @@ emit_sample_grad(struct ntd_context *ctx, const struct dxil_value *tex,
 static const struct dxil_value *
 emit_texel_fetch(struct ntd_context *ctx, const struct dxil_value *tex,
                  const struct dxil_value **coord,
-                 const struct dxil_value **offset, const struct dxil_value *lod,
+                 const struct dxil_value **offset,
+                 const struct dxil_value *lod_or_sample,
                  enum overload_type overload)
 {
    const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.textureLoad", overload);
    if (!func)
       return false;
 
-   if (!lod)
-      lod = dxil_module_get_undef(&ctx->mod, dxil_module_get_int_type(&ctx->mod, 32));
+   if (!lod_or_sample)
+      lod_or_sample = dxil_module_get_undef(&ctx->mod, dxil_module_get_int_type(&ctx->mod, 32));
 
    const struct dxil_value *args[] = {
       dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_TEXTURE_LOAD),
       tex,
-      lod, coord[0], coord[1], coord[2],
+      lod_or_sample,
+      coord[0], coord[1], coord[2],
       offset[0], offset[1], offset[2]
    };
 
@@ -2884,7 +2886,9 @@ static bool
 emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 {
    assert(ctx->srvs_used & (1ull << instr->texture_index));
-   assert(instr->op == nir_texop_txf || ctx->samplers_used & (1ull << instr->sampler_index));
+   assert(instr->op == nir_texop_txf ||
+          instr->op == nir_texop_txf_ms ||
+          ctx->samplers_used & (1ull << instr->sampler_index));
    const struct dxil_value *tex = ctx->srv_handles[instr->texture_index];
    const struct dxil_value *sampler = ctx->sampler_handles[instr->sampler_index];
 
@@ -2893,7 +2897,7 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
    const struct dxil_value *int_undef = dxil_module_get_undef(&ctx->mod, int_type);
    const struct dxil_value *float_undef = dxil_module_get_undef(&ctx->mod, float_type);
 
-   const struct dxil_value *bias = NULL, *lod = NULL, *dref = NULL, *min_lod = NULL;
+   const struct dxil_value *bias = NULL, *lod = NULL, *dref = NULL, *min_lod = NULL, *ms_index = NULL;
    const struct dxil_value *coord[4], *offset[3], *dx[3], *dy[3];
    unsigned coord_components = 0, offset_components = 0, dx_components = 0, dy_components = 0;
    enum overload_type overload = get_overload(instr->dest_type, 32);
@@ -2947,6 +2951,11 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
          assert(dy_components != 0);
          break;
 
+      case nir_tex_src_ms_index:
+         ms_index = get_src(ctx, &instr->src[i].src, 0, nir_type_int);
+         assert(ms_index != NULL);
+         break;
+
       case nir_tex_src_projector:
          unreachable("Texture projector should have been lowered");
 
@@ -2984,8 +2993,11 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
       break;
 
    case nir_texop_txf:
+   case nir_texop_txf_ms:
       PAD_SRC(ctx, coord, int_undef);
-      sample = emit_texel_fetch(ctx, tex, coord, offset, lod, overload);
+      sample = emit_texel_fetch(ctx, tex, coord, offset,
+                                instr->op == nir_texop_txf_ms ? ms_index : lod,
+                                overload);
       break;
 
    case nir_texop_txs:
