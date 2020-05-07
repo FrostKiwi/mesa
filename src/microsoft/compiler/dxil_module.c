@@ -729,6 +729,18 @@ get_res_dimension_type_name(enum dxil_resource_kind kind)
    }
 }
 
+static const char *
+get_res_ms_postfix(enum dxil_resource_kind kind)
+{
+   switch (kind) {
+   case DXIL_RESOURCE_KIND_TEXTURE2DMS:
+   case DXIL_RESOURCE_KIND_TEXTURE2DMS_ARRAY:
+      return ", 0";
+
+   default:
+      return " ";
+   }
+}
 const struct dxil_type *
 dxil_module_get_res_type(struct dxil_module *m, enum dxil_resource_kind kind, enum dxil_component_type comp_type)
 {
@@ -737,6 +749,8 @@ dxil_module_get_res_type(struct dxil_module *m, enum dxil_resource_kind kind, en
    case DXIL_RESOURCE_KIND_TEXTURE1D_ARRAY:
    case DXIL_RESOURCE_KIND_TEXTURE2D:
    case DXIL_RESOURCE_KIND_TEXTURE2D_ARRAY:
+   case DXIL_RESOURCE_KIND_TEXTURE2DMS:
+   case DXIL_RESOURCE_KIND_TEXTURE2DMS_ARRAY:
    case DXIL_RESOURCE_KIND_TEXTURE3D:
    case DXIL_RESOURCE_KIND_TEXTURECUBE:
    case DXIL_RESOURCE_KIND_TEXTURECUBE_ARRAY:
@@ -745,9 +759,10 @@ dxil_module_get_res_type(struct dxil_module *m, enum dxil_resource_kind kind, en
       const struct dxil_type *component_type = dxil_module_get_type_from_comp_type(m, comp_type);
       const struct dxil_type *vec_type = dxil_module_get_vector_type(m, component_type, 4);
       char class_name[64] = { 0 };
-      sprintf_s(class_name, 64, "class.%s<vector<%s, 4> >",
+      sprintf_s(class_name, 64, "class.%s<vector<%s, 4>%s>",
                 get_res_dimension_type_name(kind),
-                get_res_comp_type_name(comp_type));
+                get_res_comp_type_name(comp_type),
+                get_res_ms_postfix(kind));
       return dxil_module_get_struct_type(m, class_name, &vec_type, 1);
    }
 
