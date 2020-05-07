@@ -359,8 +359,10 @@ void clc_free_object(struct clc_object *obj)
 static unsigned
 lower_bit_size_callback(const nir_alu_instr *alu, UNUSED void *data)
 {
+   if (nir_op_infos[alu->op].is_conversion)
+      return 0;
    switch (nir_dest_bit_size(alu->dest.dest)) {
-   case 8:  return 16;
+   case 8: return 16;
 
    case 1:
    case 16:
