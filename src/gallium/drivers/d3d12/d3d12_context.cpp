@@ -635,13 +635,17 @@ d3d12_delete_sampler_state(struct pipe_context *pctx,
 }
 
 static D3D12_SRV_DIMENSION
-view_dimension(enum pipe_texture_target target)
+view_dimension(enum pipe_texture_target target, unsigned samples)
 {
    switch (target) {
    case PIPE_TEXTURE_1D: return D3D12_SRV_DIMENSION_TEXTURE1D;
    case PIPE_TEXTURE_1D_ARRAY: return D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
-   case PIPE_TEXTURE_2D: return D3D12_SRV_DIMENSION_TEXTURE2D;
-   case PIPE_TEXTURE_2D_ARRAY: return D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+   case PIPE_TEXTURE_2D:
+      return samples > 0 ? D3D12_SRV_DIMENSION_TEXTURE2DMS :
+                           D3D12_SRV_DIMENSION_TEXTURE2D;
+   case PIPE_TEXTURE_2D_ARRAY:
+      return samples > 0 ? D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY :
+                           D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
    case PIPE_TEXTURE_CUBE: return D3D12_SRV_DIMENSION_TEXTURECUBE;
    case PIPE_TEXTURE_CUBE_ARRAY: return D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
    case PIPE_TEXTURE_3D: return D3D12_SRV_DIMENSION_TEXTURE3D;
@@ -691,7 +695,7 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
       component_mapping((pipe_swizzle) state->swizzle_a, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_3)
    );
    desc.Format = d3d12_get_sampler_format_for_ds(d3d12_get_format(state->format));
-   desc.ViewDimension = view_dimension(state->target);
+   desc.ViewDimension = view_dimension(state->target, texture->nr_samples);
    switch (desc.ViewDimension) {
    case D3D12_SRV_DIMENSION_TEXTURE1D:
       desc.Texture1D.MostDetailedMip = state->u.tex.first_level;
@@ -711,12 +715,18 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
       desc.Texture2D.PlaneSlice = state->u.tex.first_layer; /* FIXME unsure */
       desc.Texture2D.ResourceMinLODClamp = 0.0f;
       break;
+   case D3D12_SRV_DIMENSION_TEXTURE2DMS:
+      break;
    case D3D12_SRV_DIMENSION_TEXTURE2DARRAY:
       desc.Texture2DArray.MostDetailedMip = state->u.tex.first_level;
       desc.Texture2DArray.MipLevels = state->u.tex.last_level - state->u.tex.first_level + 1;
       desc.Texture2DArray.ResourceMinLODClamp = 0.0f;
       desc.Texture2DArray.FirstArraySlice = 0;
       desc.Texture2DArray.ArraySize = texture->array_size;
+      break;
+   case D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY:
+      desc.Texture2DMSArray.FirstArraySlice = 0;
+      desc.Texture2DMSArray.ArraySize = texture->array_size;
       break;
    case D3D12_SRV_DIMENSION_TEXTURE3D:
       desc.Texture3D.MostDetailedMip = state->u.tex.first_level;
