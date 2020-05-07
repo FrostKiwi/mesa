@@ -2510,9 +2510,15 @@ vtn_handle_texture(struct vtn_builder *b, SpvOp opcode,
       if (is_array && texop != nir_texop_lod)
          coord_components++;
 
-      coord = vtn_ssa_value(b, w[idx++])->def;
+      struct vtn_ssa_value *val = vtn_ssa_value(b, w[idx++]);
+      coord = val->def;
       p->src = nir_src_for_ssa(nir_channels(&b->nb, coord,
                                             (1 << coord_components) - 1));
+
+      /* OpenCL allows integer sampling coordinates */
+      if (glsl_type_is_integer(val->type))
+         p->src = nir_src_for_ssa(nir_i2f32(&b->nb, p->src.ssa));
+
       p->src_type = nir_tex_src_coord;
       p++;
       break;
