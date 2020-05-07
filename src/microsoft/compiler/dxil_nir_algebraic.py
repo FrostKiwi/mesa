@@ -43,16 +43,39 @@ for outer_op_type in ('u2u', 'i2i', 'u2f', 'i2f'):
         outer_op = outer_op_type + str(int(outer_op_sz))
         for inner_op in ('u2u8', 'i2i8'):
             for src_sz in (16, 32, 64):
+                # Coming from integral, truncate appropriately
                 orig_seq = (outer_op, (inner_op, 'a@' + str(int(src_sz))))
                 if (outer_op[0] == 'u'):
                     new_seq = ('iand', a, 0xff)
                 else:
                     shift = src_sz - 8
                     new_seq = ('ishr', ('ishl', a, shift), shift)
-                if outer_op_sz != src_sz:
-                    conv_op = outer_op[0] + '2' + outer_op[0] + str(int(outer_op_sz))
-                    new_seq = (conv_op, new_seq)
+                # Make sure the destination is the right type/size
+                if outer_op_sz != src_sz or outer_op[2] != inner_op[0]:
+                    new_seq = (outer_op, new_seq)
                 no_8bit_conv += [(orig_seq, new_seq)]
+        for inner_op in ('f2u8', 'f2i8'):
+            if (outer_op[2] == 'f'):
+                # From float and to float, just truncate via min/max, and ensure the right float size
+                for src_sz in (16, 32, 64):
+                    orig_seq = (outer_op, (inner_op, 'a@' + str(int(src_sz))))
+                    if (outer_op[0] == 'u'):
+                        new_seq = ('fmed3', a, 0.0, 255.0)
+                    else:
+                        new_seq = ('fmed3', a, -128.0, 127.0)
+                    if outer_op_sz != src_sz:
+                        new_seq = ('f2f' + str(int(outer_op_sz)), new_seq)
+            else:
+                # From float to integral, convert to integral type first, then truncate
+                orig_seq = (outer_op, (inner_op, a))
+                float_conv = ('f2' + inner_op[2] + str(int(outer_op_sz)), a)
+                if (outer_op[0] == 'u'):
+                    new_seq = ('iand', float_conv, 0xff)
+                else:
+                    shift = outer_op_sz - 8
+                    new_seq = ('ishr', ('ishl', float_conv, shift), shift)
+            no_8bit_conv += [(orig_seq, new_seq)]
+
 
 lower_b2b = [
   (('b2b32', 'a'), ('b2i32', 'a')),
