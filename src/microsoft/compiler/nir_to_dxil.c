@@ -2985,7 +2985,7 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 
    case nir_texop_txf:
       PAD_SRC(ctx, coord, int_undef);
-      sample = emit_texel_fetch(ctx, tex, coord, offset, lod ? lod : int_undef, overload);
+      sample = emit_texel_fetch(ctx, tex, coord, offset, lod, overload);
       break;
 
    case nir_texop_txs:
