@@ -27,6 +27,7 @@
 #include "d3d12_context.h"
 
 struct d3d12_root_signature_key {
+   bool has_stream_output;
    struct {
       unsigned num_cb_bindings;
       unsigned num_srv_bindings;

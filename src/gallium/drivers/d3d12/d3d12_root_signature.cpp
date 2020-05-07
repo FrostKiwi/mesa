@@ -149,6 +149,9 @@ create_root_signature(struct d3d12_context *ctx, struct d3d12_root_signature_key
    /* TODO Only enable this flag when needed (optimization) */
    root_sig_desc.Desc_1_1.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
+   if (key->has_stream_output)
+      root_sig_desc.Desc_1_1.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_STREAM_OUTPUT;
+
    ComPtr<ID3DBlob> sig, error;
    if (FAILED(ctx->D3D12SerializeVersionedRootSignature(&root_sig_desc,
                                                         &sig, &error))) {
@@ -180,6 +183,9 @@ fill_key(struct d3d12_context *ctx, struct d3d12_root_signature_key *key)
          key->stages[i].num_cb_bindings = shader->num_cb_bindings;
          key->stages[i].num_srv_bindings = shader->num_srv_bindings;
          key->stages[i].state_vars_size = shader->state_vars_size;
+
+         if (ctx->gfx_stages[i]->so_info.num_outputs > 0)
+            key->has_stream_output = true;
       }
    }
 }
