@@ -1144,6 +1144,82 @@ d3d12_set_clip_state(struct pipe_context *pctx,
 {
 }
 
+static struct pipe_stream_output_target *
+d3d12_create_stream_output_target(struct pipe_context *pctx,
+                                  struct pipe_resource *pres,
+                                  unsigned buffer_offset,
+                                  unsigned buffer_size)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_screen *screen = d3d12_screen(pctx->screen);
+   struct d3d12_resource *res = d3d12_resource(pres);
+   struct d3d12_stream_output_target *cso = CALLOC_STRUCT(d3d12_stream_output_target);
+
+   if (!cso)
+      return NULL;
+
+   pipe_reference_init(&cso->base.reference, 1);
+   pipe_resource_reference(&cso->base.buffer, pres);
+   cso->base.buffer_offset = buffer_offset;
+   cso->base.buffer_size = buffer_size;
+   cso->base.context = pctx;
+
+   util_range_add(pres, &res->valid_buffer_range, buffer_offset,
+                  buffer_offset + buffer_size);
+
+   return &cso->base;
+}
+
+static void
+d3d12_stream_output_target_destroy(struct pipe_context *ctx,
+                                   struct pipe_stream_output_target *state)
+{
+   pipe_resource_reference(&state->buffer, NULL);
+
+   FREE(state);
+}
+
+static void
+fill_stream_output_buffer_view(D3D12_STREAM_OUTPUT_BUFFER_VIEW *view,
+                               struct d3d12_stream_output_target *target)
+{
+   struct d3d12_resource *res = d3d12_resource(target->base.buffer);
+   struct d3d12_resource *fill_res = d3d12_resource(target->fill_buffer);
+
+   view->SizeInBytes = target->base.buffer_size;
+   view->BufferLocation = d3d12_resource_gpu_virtual_address(res) + target->base.buffer_offset;
+   view->BufferFilledSizeLocation = d3d12_resource_gpu_virtual_address(fill_res) + target->fill_buffer_offset;
+}
+
+static void
+d3d12_set_stream_output_targets(struct pipe_context *pctx,
+                                unsigned num_targets,
+                                struct pipe_stream_output_target **targets,
+                                const unsigned *offsets)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+
+   assert(num_targets <= ARRAY_SIZE(ctx->so_targets));
+
+   for (unsigned i = 0; i < num_targets; i++) {
+      struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)targets[i];
+
+      /* Sub-allocate a new fill buffer each time to avoid GPU/CPU synchronization */
+      u_suballocator_alloc(ctx->so_allocator, sizeof(uint64_t), 4,
+                           &target->fill_buffer_offset, &target->fill_buffer);
+      fill_stream_output_buffer_view(&ctx->so_buffer_views[i], target);
+      pipe_so_target_reference(&ctx->so_targets[i], targets[i]);
+   }
+
+   for (unsigned i = num_targets; i < ctx->num_so_targets; i++) {
+      ctx->so_buffer_views[i].SizeInBytes = 0;
+      pipe_so_target_reference(&ctx->so_targets[i], NULL);
+   }
+
+   ctx->num_so_targets = num_targets;
+   ctx->state_dirty |= D3D12_DIRTY_STREAM_OUTPUT;
+}
+
 void
 d3d12_flush_cmdlist(struct d3d12_context *ctx)
 {
@@ -1452,6 +1528,10 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.set_sample_mask = d3d12_set_sample_mask;
    ctx->base.set_stencil_ref = d3d12_set_stencil_ref;
 
+   ctx->base.create_stream_output_target = d3d12_create_stream_output_target;
+   ctx->base.stream_output_target_destroy = d3d12_stream_output_target_destroy;
+   ctx->base.set_stream_output_targets = d3d12_set_stream_output_targets;
+
    ctx->base.clear = d3d12_clear;
    ctx->base.draw_vbo = d3d12_draw_vbo;
    ctx->base.flush = d3d12_flush;
@@ -1469,6 +1549,9 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
 
    ctx->base.stream_uploader = u_upload_create_default(&ctx->base);
    ctx->base.const_uploader = u_upload_create_default(&ctx->base);
+   ctx->so_allocator = u_suballocator_create(&ctx->base, 4056, 0,
+                                             (pipe_resource_usage) PIPE_USAGE_DEFAULT,
+                                             0, true);
 
    int prim_hwsupport = 1 << PIPE_PRIM_POINTS |
                         1 << PIPE_PRIM_LINES |

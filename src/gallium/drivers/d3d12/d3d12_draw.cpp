@@ -470,6 +470,24 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       ctx->cmdlist->OMSetRenderTargets(ctx->fb.nr_cbufs, render_targets, FALSE, depth_desc);
    }
 
+   for (int i = 0; i < ctx->num_so_targets; ++i) {
+      struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)ctx->so_targets[i];
+      struct d3d12_resource *so_buffer = d3d12_resource(target->base.buffer);
+      struct d3d12_resource *fill_buffer = d3d12_resource(target->fill_buffer);
+
+      if (ctx->cmdlist_dirty & D3D12_DIRTY_STREAM_OUTPUT) {
+         d3d12_batch_reference_resource(batch, so_buffer);
+         d3d12_batch_reference_resource(batch, fill_buffer);
+      }
+
+      d3d12_transition_resource_state(ctx, so_buffer, D3D12_RESOURCE_STATE_STREAM_OUT,
+                                      SubresourceTransitionFlags::SubresourceTransitionFlags_None);
+      d3d12_transition_resource_state(ctx, fill_buffer, D3D12_RESOURCE_STATE_STREAM_OUT,
+                                      SubresourceTransitionFlags::SubresourceTransitionFlags_None);
+   }
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_STREAM_OUTPUT)
+      ctx->cmdlist->SOSetTargets(0, 4, ctx->so_buffer_views);
+
    for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
       struct pipe_surface *psurf = ctx->fb.cbufs[i];
       if (!psurf)
