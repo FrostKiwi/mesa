@@ -192,6 +192,9 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
       return 0;
 #endif
 
+   case PIPE_CAP_TEXTURE_MULTISAMPLE:
+      return 1;
+
    case PIPE_CAP_CUBE_MAP_ARRAY:
       return screen->max_feature_level >= D3D_FEATURE_LEVEL_10_1;
 
@@ -481,6 +484,9 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
             return false;
 
       if (sample_count > 0) {
+         if (!(fmt_info_sv.Support1 & D3D12_FORMAT_SUPPORT1_MULTISAMPLE_LOAD))
+            return false;
+
          D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS ms_info = {};
          ms_info.Format = dxgi_format;
          ms_info.SampleCount = sample_count;
