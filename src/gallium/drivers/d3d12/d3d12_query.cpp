@@ -35,6 +35,7 @@ struct d3d12_query {
 
    ID3D12QueryHeap *query_heap;
    unsigned curr_query, num_queries;
+   size_t query_size;
 
    D3D12_QUERY_TYPE d3d12qtype;
 
@@ -94,6 +95,7 @@ d3d12_create_query(struct pipe_context *pctx,
    query->d3d12qtype = d3d12_query_type(query_type);
    query->num_queries = 16;
    query->curr_query = 0;
+   query->query_size = sizeof(uint64_t);
 
    desc.Count = query->num_queries;
    desc.Type = d3d12_query_heap_type(query_type);
@@ -105,7 +107,7 @@ d3d12_create_query(struct pipe_context *pctx,
    }
 
    /* Query result goes into a readback buffer */
-   size_t buffer_size = sizeof(uint64_t) * query->num_queries;
+   size_t buffer_size = query->query_size * query->num_queries;
    u_suballocator_alloc(ctx->query_allocator, buffer_size, 256,
                         &query->buffer_offset, &query->buffer);
 
@@ -128,27 +130,29 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
 {
    struct pipe_transfer *transfer = NULL;
    unsigned access = PIPE_TRANSFER_READ;
-   uint64_t *results;
+   void *results;
 
    if (write)
       access |= PIPE_TRANSFER_WRITE;
-   results = (uint64_t *)pipe_buffer_map_range(&ctx->base, q->buffer, q->buffer_offset,
-                                               q->num_queries * sizeof(uint64_t),
-                                               access, &transfer);
+   results = pipe_buffer_map_range(&ctx->base, q->buffer, q->buffer_offset,
+                                   q->num_queries * q->query_size,
+                                   access, &transfer);
 
    if (results == NULL)
       return false;
+
+   uint64_t *results_u64 = (uint64_t *)results;
 
    util_query_clear_result(result, q->type);
    for (int i = 0; i < q->curr_query; ++i) {
       switch (q->type) {
       case PIPE_QUERY_OCCLUSION_PREDICATE:
       case PIPE_QUERY_OCCLUSION_PREDICATE_CONSERVATIVE:
-         result->b |= results[i] != 0;
+         result->b |= results_u64[i] != 0;
          break;
 
       case PIPE_QUERY_OCCLUSION_COUNTER:
-         result->u64 += results[i];
+         result->u64 += results_u64[i];
          break;
 
       default:
@@ -204,7 +208,7 @@ end_query(struct d3d12_context *ctx, struct d3d12_query *q)
    struct d3d12_resource *res = (struct d3d12_resource *)q->buffer;
    ID3D12Resource *d3d12_res = d3d12_resource_underlying(res, &offset);
 
-   offset += q->buffer_offset + q->curr_query * sizeof(uint64_t);
+   offset += q->buffer_offset + q->curr_query * q->query_size;
    ctx->cmdlist->EndQuery(q->query_heap, q->d3d12qtype, q->curr_query);
    d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_COPY_DEST, SubresourceTransitionFlags::SubresourceTransitionFlags_None);
    d3d12_apply_resource_states(ctx, false);
