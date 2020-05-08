@@ -220,7 +220,7 @@ enum dxil_intr {
    DXIL_INTR_TEXTURE_SIZE = 72,
 
    DXIL_INTR_ATOMIC_BINOP = 78,
-
+   DXIL_INTR_ATOMIC_CMPXCHG = 79,
    DXIL_INTR_BARRIER = 80,
 
    DXIL_INTR_DISCARD = 82,
@@ -640,6 +640,28 @@ emit_atomic_binop(struct ntd_context *ctx,
    const struct dxil_value *args[] = {
       opcode, handle, atomic_op_value,
       coord[0], coord[1], coord[2], value
+   };
+
+   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+}
+
+static const struct dxil_value *
+emit_atomic_cmpxchg(struct ntd_context *ctx,
+                    const struct dxil_value *handle,
+                    const struct dxil_value *coord[3],
+                    const struct dxil_value *cmpval,
+                    const struct dxil_value *newval)
+{
+   const struct dxil_func *func =
+      dxil_get_function(&ctx->mod, "dx.op.atomicCompareExchange", DXIL_I32);
+
+   if (!func)
+      return false;
+
+   const struct dxil_value *opcode =
+      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_ATOMIC_CMPXCHG);
+   const struct dxil_value *args[] = {
+      opcode, handle, coord[0], coord[1], coord[2], cmpval, newval
    };
 
    return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));

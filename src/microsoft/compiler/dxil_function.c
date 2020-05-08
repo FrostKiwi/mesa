@@ -61,6 +61,7 @@ static struct  predefined_func_descr predefined_funcs[] = {
 {"dx.op.cutStream", "v", "ic", DXIL_ATTR_KIND_NONE},
 {"dx.op.getDimensions", "D", "i@i", DXIL_ATTR_KIND_READ_ONLY},
 {"dx.op.barrier", "v", "ii", DXIL_ATTR_KIND_NO_DUPLICATE},
+{"dx.op.atomicCompareExchange", "O", "i@iiiii", DXIL_ATTR_KIND_READ_NONE},
 };
 
 struct func_descr {
