@@ -431,6 +431,13 @@ dxil_emit_store(struct dxil_module *m, const struct dxil_value *value,
                 bool is_volatile);
 
 const struct dxil_value *
+dxil_emit_cmpxchg(struct dxil_module *m, const struct dxil_value *cmpval,
+                  const struct dxil_value *newval,
+                  const struct dxil_value *ptr, bool is_volatile,
+                  enum dxil_atomic_ordering ordering,
+                  enum dxil_sync_scope syncscope);
+
+const struct dxil_value *
 dxil_emit_atomicrmw(struct dxil_module *m, const struct dxil_value *value,
                     const struct dxil_value *ptr, enum dxil_rmw_op op,
                     bool is_volatile, enum dxil_atomic_ordering ordering,

@@ -202,6 +202,13 @@ struct dxil_instr_atomicrmw {
    enum dxil_sync_scope syncscope;
 };
 
+struct dxil_instr_cmpxchg {
+   const struct dxil_value *cmpval, *newval, *ptr;
+   bool is_volatile;
+   enum dxil_atomic_ordering ordering;
+   enum dxil_sync_scope syncscope;
+};
+
 struct dxil_instr {
    enum instr_type {
       INSTR_BINOP,
@@ -218,6 +225,7 @@ struct dxil_instr {
       INSTR_LOAD,
       INSTR_STORE,
       INSTR_ATOMICRMW,
+      INSTR_CMPXCHG,
    } type;
 
    union {
@@ -235,6 +243,7 @@ struct dxil_instr {
       struct dxil_instr_load load;
       struct dxil_instr_store store;
       struct dxil_instr_atomicrmw atomicrmw;
+      struct dxil_instr_cmpxchg cmpxchg;
    };
 
    bool has_value;
