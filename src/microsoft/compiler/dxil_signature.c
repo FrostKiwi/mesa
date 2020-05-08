@@ -354,7 +354,7 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
    if (s->info.stage == MESA_SHADER_KERNEL || exec_list_is_empty(&s->inputs))
       return NULL;
 
-   const struct dxil_mdnode *inputs[64];
+   const struct dxil_mdnode *inputs[VARYING_SLOT_MAX];
    unsigned num_inputs = 0;
 
    nir_foreach_variable(var, &s->inputs) {
@@ -405,7 +405,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
    if (exec_list_is_empty(&s->outputs))
       return NULL;
 
-   const struct dxil_mdnode *outputs[64];
+   const struct dxil_mdnode *outputs[VARYING_SLOT_MAX];
    unsigned num_outputs = 0;
    nir_foreach_variable(var, &s->outputs) {
       struct semantic_info semantic = {0};
