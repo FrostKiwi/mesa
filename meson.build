@@ -270,9 +270,11 @@ else
 endif
 
 with_llvmspirvlib = false
+with_spirv_tools = false
 
 if with_microsoft_clc
   with_llvmspirvlib = true
+  with_spirv_tools = true
   dep_clang = dependency(
     'clang',
     method: 'cmake',
@@ -746,10 +748,8 @@ if _opencl != 'disabled'
 
   with_opencl_spirv = get_option('opencl-spirv')
   if with_opencl_spirv
-    dep_spirv_tools = dependency('SPIRV-Tools', required : true, version : '>= 2018.0')
+    with_spirv_tools = true
     with_llvmspirvlib = true
-  else
-    dep_spirv_tools = null_dep
   endif
 
   if host_machine.cpu_family().startswith('ppc') and cpp.compiles('''
@@ -761,7 +761,6 @@ if _opencl != 'disabled'
   endif
 else
   dep_clc = null_dep
-  dep_spirv_tools = null_dep
   with_gallium_opencl = false
   with_opencl_icd = false
   with_opencl_spirv = false
@@ -1512,6 +1511,12 @@ if with_llvmspirvlib
   dep_llvmspirvlib = dependency('LLVMSPIRVLib', required : true, version : '>= 0.2.1')
 else
   dep_llvmspirvlib = null_dep
+endif
+
+if with_spirv_tools
+  dep_spirv_tools = dependency('SPIRV-Tools', required : true, version : '>= 2018.0')
+else
+  dep_spirv_tools = null_dep
 endif
 
 if (with_amd_vk or with_gallium_radeonsi or with_gallium_opencl or
