@@ -1257,3 +1257,115 @@ TEST_F(ComputeTest, compiler_defines)
    EXPECT_EQ(out[0], 5);
    EXPECT_EQ(out[1], 100);
 }
+
+/* There's a bug in WARP turning atomic_add(ptr, x) into
+ * atomic_add(ptr, x * 4). Works fine on intel HW.
+ */
+TEST_F(ComputeTest, DISABLED_global_atomic_add)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global int *inout, __global int *old)\n\
+   {\n\
+      old[get_global_id(0)] = atomic_add(inout + get_global_id(0), 3);\n\
+   }\n";
+   auto inout = ShaderArg<int32_t>({ 2, 4 }, SHADER_ARG_INOUT);
+   auto old = ShaderArg<int32_t>(std::vector<int32_t>(2, 0xdeadbeef), SHADER_ARG_OUTPUT);
+   const int32_t expected_inout[] = { 5, 7 };
+   const int32_t expected_old[] = { 2, 4 };
+   run_shader(kernel_source, inout.size(), 1, 1, inout, old);
+   for (int i = 0; i < inout.size(); ++i) {
+      EXPECT_EQ(inout[i], expected_inout[i]);
+      EXPECT_EQ(old[i], expected_old[i]);
+   }
+}
+
+TEST_F(ComputeTest, global_atomic_imin)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global int *inout, __global int *old)\n\
+   {\n\
+      old[get_global_id(0)] = atomic_min(inout + get_global_id(0), 1);\n\
+   }\n";
+   auto inout = ShaderArg<int32_t>({ 0, 2, -1 }, SHADER_ARG_INOUT);
+   auto old = ShaderArg<int32_t>(std::vector<int32_t>(3, 0xdeadbeef), SHADER_ARG_OUTPUT);
+   const int32_t expected_inout[] = { 0, 1, -1 };
+   const int32_t expected_old[] = { 0, 2, -1 };
+   run_shader(kernel_source, inout.size(), 1, 1, inout, old);
+   for (int i = 0; i < inout.size(); ++i) {
+      EXPECT_EQ(inout[i], expected_inout[i]);
+      EXPECT_EQ(old[i], expected_old[i]);
+   }
+}
+
+TEST_F(ComputeTest, global_atomic_and_or)
+{
+   const char *kernel_source =
+   "__attribute__((reqd_work_group_size(3, 1, 1)))\n\
+   __kernel void main_test(__global int *inout)\n\
+   {\n\
+      atomic_and(inout, ~(1 << get_global_id(0)));\n\
+      atomic_or(inout, (1 << (get_global_id(0) + 4)));\n\
+   }\n";
+   auto inout = ShaderArg<int32_t>(0xf, SHADER_ARG_INOUT);
+   const int32_t expected[] = { 0x78 };
+   run_shader(kernel_source, 3, 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
+TEST_F(ComputeTest, global_atomic_cmpxchg)
+{
+   const char *kernel_source =
+   "__attribute__((reqd_work_group_size(2, 1, 1)))\n\
+   __kernel void main_test(__global int *inout)\n\
+   {\n\
+      while (atomic_cmpxchg(inout, get_global_id(0), get_global_id(0) + 1) != get_global_id(0))\n\
+         ;\n\
+   }\n";
+   auto inout = ShaderArg<int32_t>(0, SHADER_ARG_INOUT);
+   const int32_t expected_inout[] = { 2 };
+   run_shader(kernel_source, 2, 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected_inout[i]);
+}
+
+TEST_F(ComputeTest, local_atomic_and_or)
+{
+   const char *kernel_source =
+   "__attribute__((reqd_work_group_size(2, 1, 1)))\n\
+   __kernel void main_test(__global ushort *inout)\n\
+   {\n\
+      __local ushort tmp;\n\
+      atomic_and(&tmp, ~(0xff << (get_global_id(0) * 8)));\n\
+      atomic_or(&tmp, inout[get_global_id(0)] << (get_global_id(0) * 8));\n\
+      barrier(CLK_LOCAL_MEM_FENCE);\n\
+      inout[get_global_id(0)] = tmp;\n\
+   }\n";
+   auto inout = ShaderArg<uint16_t>({ 2, 4 }, SHADER_ARG_INOUT);
+   const uint16_t expected[] = { 0x402, 0x402 };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
+TEST_F(ComputeTest, local_atomic_cmpxchg)
+{
+   const char *kernel_source =
+   "__attribute__((reqd_work_group_size(2, 1, 1)))\n\
+   __kernel void main_test(__global int *out)\n\
+   {\n\
+      __local uint tmp;\n\
+      tmp = 0;\n\
+      barrier(CLK_LOCAL_MEM_FENCE);\n\
+      while (atomic_cmpxchg(&tmp, get_global_id(0), get_global_id(0) + 1) != get_global_id(0))\n\
+         ;\n\
+      barrier(CLK_LOCAL_MEM_FENCE);\n\
+      out[0] = tmp;\n\
+   }\n";
+
+   auto out = ShaderArg<uint32_t>(0xdeadbeef, SHADER_ARG_OUTPUT);
+   const uint16_t expected[] = { 2 };
+   run_shader(kernel_source, 2, 1, 1, out);
+   for (int i = 0; i < out.size(); ++i)
+      EXPECT_EQ(out[i], expected[i]);
+}
