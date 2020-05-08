@@ -268,10 +268,6 @@ lower_load_shared(nir_builder *b, nir_intrinsic_instr *intr)
    unsigned num_components = nir_dest_num_components(intr->dest);
    unsigned num_bits = num_components * bit_size;
 
-   /* If the access is a 32bit scalar access there's nothing to do. */
-   if (bit_size == 32 && num_components == 1)
-      return;
-
    b->cursor = nir_before_instr(&intr->instr);
 
    assert(intr->src[0].is_ssa);
@@ -326,10 +322,6 @@ lower_store_shared(nir_builder *b, nir_intrinsic_instr *intr)
    unsigned num_components = nir_src_num_components(intr->src[0]);
    unsigned bit_size = nir_src_bit_size(intr->src[0]);
    unsigned num_bits = num_components * bit_size;
-
-   /* If the access is a 32bit scalar access there's nothing to do. */
-   if (bit_size == 32 && num_components == 1)
-      return;
 
    b->cursor = nir_before_instr(&intr->instr);
 
