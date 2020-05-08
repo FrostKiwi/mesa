@@ -2678,6 +2678,153 @@ emit_end_primitive(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
+emit_global_atomic(struct ntd_context *ctx, nir_intrinsic_instr *intr,
+                   enum dxil_atomic_op op, nir_alu_type type)
+{
+   const struct dxil_value *buffer =
+      get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   const struct dxil_value *offset =
+      get_src(ctx, &intr->src[1], 0, nir_type_uint);
+   const struct dxil_value *value =
+      get_src(ctx, &intr->src[2], 0, type);
+
+   if (!value || !buffer || !offset)
+      return false;
+
+   const struct dxil_value *handle =
+      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
+   if (!handle)
+      return false;
+
+   const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
+   if (!int32_undef)
+      return false;
+
+   const struct dxil_value *coord[3] = {
+      offset, int32_undef, int32_undef
+   };
+
+   const struct dxil_value *retval =
+      emit_atomic_binop(ctx, handle, op, coord, value);
+
+   if (!retval)
+      return false;
+
+   store_dest(ctx, &intr->dest, 0, retval, type);
+   return true;
+}
+
+static bool
+emit_global_atomic_comp_swap(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *buffer =
+      get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   const struct dxil_value *offset =
+      get_src(ctx, &intr->src[1], 0, nir_type_uint);
+   const struct dxil_value *cmpval =
+      get_src(ctx, &intr->src[2], 0, nir_type_int);
+   const struct dxil_value *newval =
+      get_src(ctx, &intr->src[3], 0, nir_type_int);
+
+   if (!cmpval || !newval || !buffer || !offset)
+      return false;
+
+   const struct dxil_value *handle =
+      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
+   if (!handle)
+      return false;
+
+   const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
+   if (!int32_undef)
+      return false;
+
+   const struct dxil_value *coord[3] = {
+      offset, int32_undef, int32_undef
+   };
+
+   const struct dxil_value *retval =
+      emit_atomic_cmpxchg(ctx, handle, coord, cmpval, newval);
+
+   if (!retval)
+      return false;
+
+   store_dest(ctx, &intr->dest, 0, retval, nir_type_int);
+   return true;
+}
+
+static bool
+emit_shared_atomic(struct ntd_context *ctx, nir_intrinsic_instr *intr,
+                   enum dxil_rmw_op op, nir_alu_type type)
+{
+   const struct dxil_value *zero, *index;
+   unsigned bit_size = nir_src_bit_size(intr->src[1]);
+
+   assert(bit_size == 32);
+
+   zero = dxil_module_get_int32_const(&ctx->mod, 0);
+   if (!zero)
+      return false;
+
+   index = get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   if (!index)
+      return false;
+
+   const struct dxil_value *ops[] = { ctx->sharedvars, zero, index };
+   const struct dxil_value *ptr, *value, *retval;
+
+   ptr = dxil_emit_gep_inbounds(&ctx->mod, ops, ARRAY_SIZE(ops));
+   if (!ptr)
+      return false;
+
+   value = get_src(ctx, &intr->src[1], 0, type);
+
+   retval = dxil_emit_atomicrmw(&ctx->mod, value, ptr, op, false,
+                                DXIL_ATOMIC_ORDERING_ACQREL,
+                                DXIL_SYNC_SCOPE_CROSSTHREAD);
+   if (!retval)
+      return false;
+
+   store_dest(ctx, &intr->dest, 0, retval, type);
+   return true;
+}
+
+static bool
+emit_shared_atomic_comp_swap(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *zero, *index;
+   unsigned bit_size = nir_src_bit_size(intr->src[1]);
+
+   assert(bit_size == 32);
+
+   zero = dxil_module_get_int32_const(&ctx->mod, 0);
+   if (!zero)
+      return false;
+
+   index = get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   if (!index)
+      return false;
+
+   const struct dxil_value *ops[] = { ctx->sharedvars, zero, index };
+   const struct dxil_value *ptr, *cmpval, *newval, *retval;
+
+   ptr = dxil_emit_gep_inbounds(&ctx->mod, ops, ARRAY_SIZE(ops));
+   if (!ptr)
+      return false;
+
+   cmpval = get_src(ctx, &intr->src[1], 0, nir_type_uint);
+   newval = get_src(ctx, &intr->src[2], 0, nir_type_uint);
+
+   retval = dxil_emit_cmpxchg(&ctx->mod, cmpval, newval, ptr, false,
+                              DXIL_ATOMIC_ORDERING_ACQREL,
+                              DXIL_SYNC_SCOPE_CROSSTHREAD);
+   if (!retval)
+      return false;
+
+   store_dest(ctx, &intr->dest, 0, retval, nir_type_uint);
+   return true;
+}
+
+static bool
 emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    switch (intr->intrinsic) {
@@ -2724,6 +2871,46 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    case nir_intrinsic_scoped_memory_barrier:
    case nir_intrinsic_scoped_control_memory_barrier:
       return emit_barrier(ctx, intr);
+   case nir_intrinsic_global_atomic_add_dxil:
+      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_ADD, nir_type_int);
+   case nir_intrinsic_global_atomic_imin_dxil:
+      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_IMIN, nir_type_int);
+   case nir_intrinsic_global_atomic_umin_dxil:
+      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_UMIN, nir_type_uint);
+   case nir_intrinsic_global_atomic_imax_dxil:
+      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_IMAX, nir_type_int);
+   case nir_intrinsic_global_atomic_umax_dxil:
+      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_UMAX, nir_type_uint);
+   case nir_intrinsic_global_atomic_and_dxil:
+      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_AND, nir_type_uint);
+   case nir_intrinsic_global_atomic_or_dxil:
+      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_OR, nir_type_uint);
+   case nir_intrinsic_global_atomic_xor_dxil:
+      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_XOR, nir_type_uint);
+   case nir_intrinsic_global_atomic_exchange_dxil:
+      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_EXCHANGE, nir_type_int);
+   case nir_intrinsic_global_atomic_comp_swap_dxil:
+      return emit_global_atomic_comp_swap(ctx, intr);
+   case nir_intrinsic_shared_atomic_add_dxil:
+      return emit_shared_atomic(ctx, intr, DXIL_RMWOP_ADD, nir_type_int);
+   case nir_intrinsic_shared_atomic_imin_dxil:
+      return emit_shared_atomic(ctx, intr, DXIL_RMWOP_MIN, nir_type_int);
+   case nir_intrinsic_shared_atomic_umin_dxil:
+      return emit_shared_atomic(ctx, intr, DXIL_RMWOP_UMIN, nir_type_uint);
+   case nir_intrinsic_shared_atomic_imax_dxil:
+      return emit_shared_atomic(ctx, intr, DXIL_RMWOP_MAX, nir_type_int);
+   case nir_intrinsic_shared_atomic_umax_dxil:
+      return emit_shared_atomic(ctx, intr, DXIL_RMWOP_UMAX, nir_type_uint);
+   case nir_intrinsic_shared_atomic_and_dxil:
+      return emit_shared_atomic(ctx, intr, DXIL_RMWOP_AND, nir_type_uint);
+   case nir_intrinsic_shared_atomic_or_dxil:
+      return emit_shared_atomic(ctx, intr, DXIL_RMWOP_OR, nir_type_uint);
+   case nir_intrinsic_shared_atomic_xor_dxil:
+      return emit_shared_atomic(ctx, intr, DXIL_RMWOP_XOR, nir_type_uint);
+   case nir_intrinsic_shared_atomic_exchange_dxil:
+      return emit_shared_atomic(ctx, intr, DXIL_RMWOP_XCHG, nir_type_int);
+   case nir_intrinsic_shared_atomic_comp_swap_dxil:
+      return emit_shared_atomic_comp_swap(ctx, intr);
 
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_local_group_size:
