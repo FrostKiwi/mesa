@@ -262,14 +262,14 @@ if with_gallium_tegra and not with_gallium_nouveau
   error('tegra driver requires nouveau driver')
 endif
 
+with_spirv_tools = false
+
 _microsoft_clc = get_option('microsoft-clc')
 if _microsoft_clc == 'auto'
   with_microsoft_clc = false
 else
   with_microsoft_clc = _microsoft_clc == 'true'
 endif
-
-with_spirv_tools = false
 
 if with_microsoft_clc
   with_spirv_tools = true
