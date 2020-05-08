@@ -538,6 +538,7 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_lower_vars_to_ssa);
 
    NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
+   NIR_PASS_V(nir, dxil_nir_lower_atomics_to_dxil);
 
    // Calculate UBO bindings
    unsigned binding = 0;
