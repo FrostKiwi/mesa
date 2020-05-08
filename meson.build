@@ -269,6 +269,18 @@ else
   with_microsoft_clc = _microsoft_clc == 'true'
 endif
 
+if with_microsoft_clc
+  dep_clang = dependency(
+    'clang',
+    method: 'cmake',
+    static: true,
+    modules: [
+      'clangBasic', 'clangCodeGen', 'clangDriver', 'clangFrontend', 'clangFrontendTool',
+      'clangHandleCXX', 'clangHandleLLVM',
+    ],
+  )
+endif
+
 if host_machine.system() == 'darwin'
   with_dri_platform = 'apple'
   pre_args += '-DBUILDING_MESA'
@@ -1408,8 +1420,13 @@ if with_gallium_opencl
     'lto', 'option', 'objcarcopts', 'profiledata',
   ]
 endif
+if with_microsoft_clc
+  llvm_modules += ['target', 'linker', 'irreader', 'option', 'libdriver']
+endif
 
-if with_amd_vk or with_gallium_radeonsi
+if with_microsoft_clc
+  _llvm_version = '>= 10.0.0'
+elif with_amd_vk or with_gallium_radeonsi
   _llvm_version = '>= 8.0.0'
 elif with_gallium_swr
   _llvm_version = '>= 6.0.0'
@@ -1443,7 +1460,7 @@ if _llvm != 'false'
     optional_modules : llvm_optional_modules,
     required : (
       with_amd_vk or with_gallium_radeonsi or with_gallium_swr or
-      with_gallium_opencl or _llvm == 'true'
+      with_gallium_opencl or with_microsoft_clc or _llvm == 'true'
     ),
     static : not _shared_llvm,
     method : _llvm_method,
@@ -1486,6 +1503,8 @@ elif with_amd_vk or with_gallium_radeonsi or with_gallium_swr
   error('The following drivers require LLVM: Radv, RadeonSI, SWR. One of these is enabled, but LLVM is disabled.')
 elif with_gallium_opencl
   error('The OpenCL "Clover" state tracker requires LLVM, but LLVM is disabled.')
+elif with_microsoft_clc
+  error('The Microsoft CLC compiler requires LLVM, but LLVM is disabled.')
 endif
 
 if (with_amd_vk or with_gallium_radeonsi or with_gallium_opencl or
