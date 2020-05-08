@@ -269,11 +269,9 @@ else
   with_microsoft_clc = _microsoft_clc == 'true'
 endif
 
-with_llvmspirvlib = false
 with_spirv_tools = false
 
 if with_microsoft_clc
-  with_llvmspirvlib = true
   with_spirv_tools = true
   dep_clang = dependency(
     'clang',
@@ -749,7 +747,6 @@ if _opencl != 'disabled'
   with_opencl_spirv = get_option('opencl-spirv')
   if with_opencl_spirv
     with_spirv_tools = true
-    with_llvmspirvlib = true
   endif
 
   if host_machine.cpu_family().startswith('ppc') and cpp.compiles('''
@@ -1506,17 +1503,13 @@ elif with_microsoft_clc
   error('The Microsoft CLC compiler requires LLVM, but LLVM is disabled.')
 endif
 
-if with_llvmspirvlib
+if with_spirv_tools
+  dep_spirv_tools = dependency('SPIRV-Tools', required : true, version : '>= 2018.0')
   # LLVMSPIRVLib is available at https://github.com/KhronosGroup/SPIRV-LLVM-Translator
   dep_llvmspirvlib = dependency('LLVMSPIRVLib', required : true, version : '>= 0.2.1')
 else
-  dep_llvmspirvlib = null_dep
-endif
-
-if with_spirv_tools
-  dep_spirv_tools = dependency('SPIRV-Tools', required : true, version : '>= 2018.0')
-else
   dep_spirv_tools = null_dep
+  dep_llvmspirvlib = null_dep
 endif
 
 if (with_amd_vk or with_gallium_radeonsi or with_gallium_opencl or
