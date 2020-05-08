@@ -722,3 +722,111 @@ dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
 
    return progress;
 }
+
+static bool
+lower_global_atomic(nir_builder *b, nir_intrinsic_instr *intr,
+                    nir_intrinsic_op dxil_op)
+{
+   b->cursor = nir_before_instr(&intr->instr);
+
+   assert(intr->src[0].is_ssa);
+   nir_ssa_def *ptr = intr->src[0].ssa;
+   nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
+   nir_ssa_def *offset = ptr_to_offset(b, ptr);
+
+   nir_intrinsic_instr *atomic = nir_intrinsic_instr_create(b->shader, dxil_op);
+   atomic->src[0] = nir_src_for_ssa(buffer);
+   atomic->src[1] = nir_src_for_ssa(offset);
+   assert(intr->src[1].is_ssa);
+   atomic->src[2] = nir_src_for_ssa(intr->src[1].ssa);
+   if (dxil_op == nir_intrinsic_global_atomic_comp_swap_dxil) {
+      assert(intr->src[2].is_ssa);
+      atomic->src[3] = nir_src_for_ssa(intr->src[2].ssa);
+   }
+   atomic->num_components = 1;
+   nir_ssa_dest_init(&atomic->instr, &atomic->dest, 1, 32, intr->dest.ssa.name);
+
+   nir_builder_instr_insert(b, &atomic->instr);
+   nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(&atomic->dest.ssa));
+   nir_instr_remove(&intr->instr);
+   return true;
+}
+
+static bool
+lower_shared_atomic(nir_builder *b, nir_intrinsic_instr *intr,
+                    nir_intrinsic_op dxil_op)
+{
+   b->cursor = nir_before_instr(&intr->instr);
+
+   assert(intr->src[0].is_ssa);
+   nir_ssa_def *offset =
+      nir_iadd(b, intr->src[0].ssa, nir_imm_int(b, nir_intrinsic_base(intr)));
+   nir_ssa_def *index = nir_ushr(b, offset, nir_imm_int(b, 2));
+
+   nir_intrinsic_instr *atomic = nir_intrinsic_instr_create(b->shader, dxil_op);
+   atomic->src[0] = nir_src_for_ssa(index);
+   assert(intr->src[1].is_ssa);
+   atomic->src[1] = nir_src_for_ssa(intr->src[1].ssa);
+   if (dxil_op == nir_intrinsic_shared_atomic_comp_swap_dxil) {
+      assert(intr->src[2].is_ssa);
+      atomic->src[2] = nir_src_for_ssa(intr->src[2].ssa);
+   }
+   atomic->num_components = 1;
+   nir_ssa_dest_init(&atomic->instr, &atomic->dest, 1, 32, intr->dest.ssa.name);
+
+   nir_builder_instr_insert(b, &atomic->instr);
+   nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(&atomic->dest.ssa));
+   nir_instr_remove(&intr->instr);
+   return true;
+}
+
+bool
+dxil_nir_lower_atomics_to_dxil(nir_shader *nir)
+{
+   bool progress = false;
+
+   foreach_list_typed(nir_function, func, node, &nir->functions) {
+      if (!func->is_entrypoint)
+         continue;
+      assert(func->impl);
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
+            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+
+            switch (intr->intrinsic) {
+
+#define ATOMIC(op)                                                            \
+  case nir_intrinsic_global_atomic_##op:                                     \
+     progress |= lower_global_atomic(&b, intr,                                \
+                                     nir_intrinsic_global_atomic_##op##_dxil); \
+     break;                                                                   \
+  case nir_intrinsic_shared_atomic_##op:                                     \
+     progress |= lower_shared_atomic(&b, intr,                                \
+                                     nir_intrinsic_shared_atomic_##op##_dxil); \
+     break
+
+            ATOMIC(add);
+            ATOMIC(imin);
+            ATOMIC(umin);
+            ATOMIC(imax);
+            ATOMIC(umax);
+            ATOMIC(and);
+            ATOMIC(or);
+            ATOMIC(xor);
+            ATOMIC(exchange);
+            ATOMIC(comp_swap);
+
+#undef ATOMIC
+            }
+         }
+      }
+   }
+
+   return progress;
+}
