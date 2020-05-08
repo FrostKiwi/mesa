@@ -2810,6 +2810,31 @@ dxil_emit_store(struct dxil_module *m, const struct dxil_value *value,
 }
 
 const struct dxil_value *
+dxil_emit_cmpxchg(struct dxil_module *m, const struct dxil_value *cmpval,
+                  const struct dxil_value *newval,
+                  const struct dxil_value *ptr, bool is_volatile,
+                  enum dxil_atomic_ordering ordering,
+                  enum dxil_sync_scope syncscope)
+{
+   assert(ptr->type->type == TYPE_POINTER);
+
+   struct dxil_instr *instr = create_instr(m, INSTR_CMPXCHG,
+                                           ptr->type->ptr_target_type);
+   if (!instr)
+      return false;
+
+   instr->cmpxchg.cmpval = cmpval;
+   instr->cmpxchg.newval = newval;
+   instr->cmpxchg.ptr = ptr;
+   instr->cmpxchg.is_volatile = is_volatile;
+   instr->cmpxchg.ordering = ordering;
+   instr->cmpxchg.syncscope = syncscope;
+
+   instr->has_value = true;
+   return &instr->value;
+}
+
+const struct dxil_value *
 dxil_emit_atomicrmw(struct dxil_module *m, const struct dxil_value *value,
                     const struct dxil_value *ptr, enum dxil_rmw_op op,
                     bool is_volatile, enum dxil_atomic_ordering ordering,
@@ -3082,6 +3107,25 @@ emit_store(struct dxil_module *m, struct dxil_instr *instr)
 }
 
 static bool
+emit_cmpxchg(struct dxil_module *m, struct dxil_instr *instr)
+{
+   assert(instr->type == INSTR_CMPXCHG);
+   assert(instr->value.id > instr->cmpxchg.cmpval->id);
+   assert(instr->value.id > instr->cmpxchg.newval->id);
+   assert(instr->value.id > instr->cmpxchg.ptr->id);
+   uint64_t data[] = {
+      instr->value.id - instr->cmpxchg.ptr->id,
+      instr->value.id - instr->cmpxchg.cmpval->id,
+      instr->value.id - instr->cmpxchg.newval->id,
+      instr->cmpxchg.is_volatile,
+      instr->cmpxchg.ordering,
+      instr->cmpxchg.syncscope,
+   };
+   return emit_record_no_abbrev(&m->buf, FUNC_CODE_INST_CMPXCHG_OLD,
+                                data, ARRAY_SIZE(data));
+}
+
+static bool
 emit_atomicrmw(struct dxil_module *m, struct dxil_instr *instr)
 {
    assert(instr->type == INSTR_ATOMICRMW);
@@ -3144,6 +3188,9 @@ emit_instr(struct dxil_module *m, struct dxil_instr *instr)
 
    case INSTR_ATOMICRMW:
       return emit_atomicrmw(m, instr);
+
+   case INSTR_CMPXCHG:
+      return emit_cmpxchg(m, instr);
 
    default:
       unreachable("unexpected instruction type");
