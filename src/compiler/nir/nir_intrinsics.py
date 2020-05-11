@@ -412,6 +412,9 @@ image("size_lod", src_comp=[1], dest_comp=0, flags=[CAN_ELIMINATE, CAN_REORDER])
 image("samples", dest_comp=1, flags=[CAN_ELIMINATE, CAN_REORDER])
 image("atomic_inc_wrap",  src_comp=[4, 1, 1], dest_comp=1)
 image("atomic_dec_wrap",  src_comp=[4, 1, 1], dest_comp=1)
+# CL-specific format queries
+image("format", dest_comp=1, flags=[CAN_ELIMINATE, CAN_REORDER])
+image("order", dest_comp=1, flags=[CAN_ELIMINATE, CAN_REORDER])
 
 # Intel-specific query for loading from the brw_image_param struct passed
 # into the shader as a uniform.  The variable is a deref to the image
