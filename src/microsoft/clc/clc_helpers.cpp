@@ -507,14 +507,6 @@ clc_to_spirv(const struct clc_compile_args *args,
    LLVMInitializeAllTargetMCs();
    LLVMInitializeAllAsmPrinters();
 
-   // FIXME: Is hard-coding 64-bit OK?
-   //        The below is parachuted in from create_compiler_instance(), but
-   //        neutered to avoid a device dependency.
-   const std::string target_triple = "spir-unknown-unknown";
-   const std::string clc_version_human = "1.2";
-   const std::string clc_version_define = "120";
-   clang::LangStandard::Kind clc_version_clang = clang::LangStandard::lang_opencl12;
-
    std::string log;
    std::unique_ptr<LLVMContext> llvm_ctx { new LLVMContext };
    llvm_ctx->setDiagnosticHandlerCallBack(llvm_log_handler, &log);
@@ -524,7 +516,19 @@ clc_to_spirv(const struct clc_compile_args *args,
    clang::DiagnosticsEngine diag { new clang::DiagnosticIDs,
          new clang::DiagnosticOptions, diag_buffer };
 
-   std::vector<const char *> clang_opts = { args->source.name };
+   std::vector<const char *> clang_opts = {
+      args->source.name,
+      "-triple", "spir-unknown-unknown",
+      // By default, clang prefers to use modules to pull in the default headers,
+      // which doesn't work with our technique of embedding the headers in our binary
+      "-finclude-default-header",
+      // Add a default CL compiler version. Clang will pick the last one specified
+      // on the command line, so the app can override this one.
+      "-cl-std=cl1.2",
+   };
+   // We assume there's appropriate defines for __OPENCL_VERSION__ and __IMAGE_SUPPORT__
+   // being provided by the caller here.
+   clang_opts.insert(clang_opts.end(), args->args, args->args + args->num_args);
 
    if (!clang::CompilerInvocation::CreateFromArgs(c->getInvocation(),
 #if LLVM_VERSION_MAJOR >= 10
@@ -546,24 +550,10 @@ clc_to_spirv(const struct clc_compile_args *args,
       return -1;
    }
 
-   c->getTargetOpts().CPU = "";
-   c->getTargetOpts().Triple = target_triple;
-   c->getLangOpts().NoBuiltin = true;
-
    // This is a workaround for a Clang bug which causes the number
    // of warnings and errors to be printed to stderr.
    // http://www.llvm.org/bugs/show_bug.cgi?id=19735
    c->getDiagnosticOpts().ShowCarets = false;
-
-   c->getInvocation().setLangDefaults(c->getLangOpts(),
-#if LLVM_VERSION_MAJOR >= 10
-                                      clang::Language::OpenCL,
-#else
-                                      clang::InputKind::OpenCL,
-#endif
-                                      ::llvm::Triple(target_triple),
-                                      c->getPreprocessorOpts(),
-                                      clc_version_clang);
 
    c->createDiagnostics(new clang::TextDiagnosticPrinter(
                            *new raw_string_ostream(log),
@@ -576,7 +566,7 @@ clc_to_spirv(const struct clc_compile_args *args,
    c->getHeaderSearchOpts().UseBuiltinIncludes = false;
    c->getHeaderSearchOpts().UseStandardSystemIncludes = false;
 
-   // Add opencl-c generic search path and include
+   // Add opencl-c generic search path
    {
       ::llvm::SmallString<128> system_header_path;
       ::llvm::sys::path::system_temp_directory(true, system_header_path);
@@ -586,7 +576,6 @@ clc_to_spirv(const struct clc_compile_args *args,
                                        false, false);
 
       ::llvm::sys::path::append(system_header_path, "opencl-c.h");
-      c->getPreprocessorOpts().Includes.push_back(system_header_path.str());
       c->getPreprocessorOpts().addRemappedFile(system_header_path.str(),
          ::llvm::MemoryBuffer::getMemBuffer(llvm::StringRef(opencl_c_source, _countof(opencl_c_source) - 1)).release());
 
@@ -594,17 +583,6 @@ clc_to_spirv(const struct clc_compile_args *args,
       ::llvm::sys::path::append(system_header_path, "opencl-c-base.h");
       c->getPreprocessorOpts().addRemappedFile(system_header_path.str(),
          ::llvm::MemoryBuffer::getMemBuffer(llvm::StringRef(opencl_c_base_source, _countof(opencl_c_base_source) - 1)).release());
-   }
-
-   // Add definition for the OpenCL version
-   c->getPreprocessorOpts().addMacroDef("__OPENCL_VERSION__=" +
-                                        clc_version_define);
-
-   for (size_t i = 0; i < args->num_defines; i++) {
-      std::string def = std::string(args->defines[i].name);
-      if (args->defines[i].value != nullptr)
-         def += "=" + std::string(args->defines[i].value);
-      c->getPreprocessorOpts().addMacroDef(def);
    }
 
    if (args->num_headers) {
