@@ -1002,6 +1002,8 @@ glsl_type::get_image_instance(enum glsl_sampler_dim dim,
          return (array ? vimage2DArray_type : vimage2D_type);
       case GLSL_SAMPLER_DIM_3D:
          return (array ? error_type : vimage3D_type);
+      case GLSL_SAMPLER_DIM_BUF:
+         return (array ? error_type : vbuffer_type);
       default:
          return error_type;
       }
