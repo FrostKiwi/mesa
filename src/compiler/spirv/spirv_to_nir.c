@@ -2859,6 +2859,14 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
       image.lod = NULL;
       break;
 
+   case SpvOpImageQueryFormat:
+   case SpvOpImageQueryOrder:
+      image.image = vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
+      image.coord = NULL;
+      image.sample = NULL;
+      image.lod = NULL;
+      break;
+
    case SpvOpImageRead: {
       image.image = vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
       image.coord = get_image_coord(b, w[4]);
@@ -2962,6 +2970,8 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    OP(AtomicAnd,                 atomic_and)
    OP(AtomicOr,                  atomic_or)
    OP(AtomicXor,                 atomic_xor)
+   OP(ImageQueryFormat,          format)
+   OP(ImageQueryOrder,           order)
 #undef OP
    default:
       vtn_fail_with_opcode("Invalid image opcode", opcode);
@@ -2972,13 +2982,19 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    nir_deref_instr *image_deref = vtn_pointer_to_deref(b, image.image);
    intrin->src[0] = nir_src_for_ssa(&image_deref->dest.ssa);
 
-   /* size doesn't take non-lod coordinate parameters */
-   if (opcode != SpvOpImageQuerySize && opcode != SpvOpImageQuerySizeLod) {
+   switch (opcode) {
+   case SpvOpImageQuerySize:
+   case SpvOpImageQuerySizeLod:
+   case SpvOpImageQueryFormat:
+   case SpvOpImageQueryOrder:
+      break;
+   default:
       /* The image coordinate is always 4 components but we may not have that
        * many.  Swizzle to compensate.
        */
       intrin->src[1] = nir_src_for_ssa(expand_to_vec4(&b->nb, image.coord));
       intrin->src[2] = nir_src_for_ssa(image.sample);
+      break;
    }
 
    nir_intrinsic_set_access(intrin, image.image->access);
@@ -2986,6 +3002,8 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
 
    switch (opcode) {
    case SpvOpImageQuerySize:
+   case SpvOpImageQueryFormat:
+   case SpvOpImageQueryOrder:
       /* No additional sources */
       break;
    case SpvOpImageQuerySizeLod:
@@ -4920,6 +4938,8 @@ vtn_handle_body_instruction(struct vtn_builder *b, SpvOp opcode,
    case SpvOpImageRead:
    case SpvOpImageWrite:
    case SpvOpImageTexelPointer:
+   case SpvOpImageQueryFormat:
+   case SpvOpImageQueryOrder:
       vtn_handle_image(b, opcode, w, count);
       break;
 
