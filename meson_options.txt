@@ -263,12 +263,6 @@ option(
   description : 'Whether to link LLVM shared or statically.'
 )
 option(
-  'clang-prefix',
-  type : 'string',
-  value : '',
-  description: 'libclang installation prefix'
-)
-option(
   'valgrind',
   type : 'combo',
   value : 'auto',
