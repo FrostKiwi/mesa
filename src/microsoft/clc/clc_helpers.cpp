@@ -312,37 +312,36 @@ public:
    void parseOpTypeImage(const spv_parsed_instruction_t *ins)
    {
       const spv_parsed_operand_t *op;
-      unsigned accessQualifier;
       uint32_t typeId;
-
-      assert(ins->num_operands >= 9);
-
-      if (ins->num_operands < 10)
-         return;
+      unsigned accessQualifier = CLC_KERNEL_ARG_ACCESS_READ;
 
       op = &ins->operands[0];
       assert(op->type == SPV_OPERAND_TYPE_RESULT_ID);
       typeId = ins->words[op->offset];
 
-      op = &ins->operands[9];
-      assert(op->type == SPV_OPERAND_TYPE_ACCESS_QUALIFIER);
-      switch (ins->words[op->offset]) {
-      case SpvAccessQualifierReadOnly:
-         accessQualifier = CLC_KERNEL_ARG_ACCESS_READ;
-         break;
-      case SpvAccessQualifierWriteOnly:
-         accessQualifier = CLC_KERNEL_ARG_ACCESS_WRITE;
-         break;
-      case SpvAccessQualifierReadWrite:
-         accessQualifier = CLC_KERNEL_ARG_ACCESS_WRITE |
-                           CLC_KERNEL_ARG_ACCESS_READ;
-         break;
+      if (ins->num_operands >= 9) {
+         op = &ins->operands[8];
+         assert(op->type == SPV_OPERAND_TYPE_ACCESS_QUALIFIER);
+         switch (ins->words[op->offset]) {
+         case SpvAccessQualifierReadOnly:
+            accessQualifier = CLC_KERNEL_ARG_ACCESS_READ;
+            break;
+         case SpvAccessQualifierWriteOnly:
+            accessQualifier = CLC_KERNEL_ARG_ACCESS_WRITE;
+            break;
+         case SpvAccessQualifierReadWrite:
+            accessQualifier = CLC_KERNEL_ARG_ACCESS_WRITE |
+               CLC_KERNEL_ARG_ACCESS_READ;
+            break;
+         }
       }
 
       for (auto &kernel : kernels) {
 	 for (auto &arg : kernel.args) {
-            if (arg.typeId == typeId)
+            if (arg.typeId == typeId) {
                arg.accessQualifier = accessQualifier;
+               arg.addrQualifier = CLC_KERNEL_ARG_ADDRESS_GLOBAL;
+            }
          }
       }
    }
