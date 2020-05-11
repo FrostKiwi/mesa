@@ -37,11 +37,11 @@ struct clc_named_value {
 };
 
 struct clc_compile_args {
-   const struct clc_named_value *defines;
-   unsigned num_defines;
    const struct clc_named_value *headers;
    unsigned num_headers;
    struct clc_named_value source;
+   const char * const *args;
+   unsigned num_args;
 };
 
 typedef void (*clc_msg_callback)(const char *, int, const char *);
