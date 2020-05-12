@@ -314,8 +314,7 @@ clc_compile(struct clc_context *ctx,
 
 struct clc_object *
 clc_link(struct clc_context *ctx,
-         const struct clc_object **in_objs,
-         unsigned num_in_objs,
+         const struct clc_linker_args *args,
          const struct clc_logger *logger)
 {
    struct clc_object *out_obj;
@@ -328,8 +327,7 @@ clc_link(struct clc_context *ctx,
       return NULL;
    }
 
-   ret = clc_link_spirv_binaries((const struct spirv_binary **)in_objs,
-                                 num_in_objs, &out_obj->spvbin, &err_log);
+   ret = clc_link_spirv_binaries(args, &out_obj->spvbin, &err_log);
    if (ret < 0) {
       fprintf(stderr, "D3D12: clc_link_spirv_binaries failed: %s\n", err_log);
       free(err_log);

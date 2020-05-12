@@ -752,8 +752,11 @@ ComputeTest::compile(const std::vector<const char *> &sources,
       objs.push_back(obj);
    }
 
+   struct clc_linker_args link_args = {};
+   link_args.in_objs = objs.data();
+   link_args.num_in_objs = (unsigned)objs.size();
    obj = clc_link(compiler_ctx,
-                  (const struct clc_object **)objs.data(), objs.size(),
+                  &link_args,
                   &logger);
    if (!obj)
       throw runtime_error("failed to link objects!");

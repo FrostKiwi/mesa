@@ -667,16 +667,16 @@ spv_result_to_str(spv_result_t res)
 }
 
 int
-clc_link_spirv_binaries(const struct spirv_binary **in_bins,
-                        unsigned num_in_bins,
+clc_link_spirv_binaries(const struct clc_linker_args *args,
                         struct spirv_binary *dst_bin,
                         char **err_buf)
 {
    std::vector<std::vector<uint32_t>> binaries;
 
-   for (unsigned i = 0; i < num_in_bins; i++) {
-      std::vector<uint32_t> bin(in_bins[i]->data,
-                                in_bins[i]->data + (in_bins[i]->size / 4));
+   for (unsigned i = 0; i < args->num_in_objs; i++) {
+      std::vector<uint32_t> bin(args->in_objs[i]->spvbin.data,
+                                args->in_objs[i]->spvbin.data +
+                                   (args->in_objs[i]->spvbin.size / 4));
       binaries.push_back(bin);
    }
 
