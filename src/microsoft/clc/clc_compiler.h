@@ -47,6 +47,7 @@ struct clc_compile_args {
 struct clc_linker_args {
    const struct clc_object * const *in_objs;
    unsigned num_in_objs;
+   unsigned create_library;
 };
 
 typedef void (*clc_msg_callback)(const char *, int, const char *);

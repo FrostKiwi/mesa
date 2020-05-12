@@ -682,6 +682,8 @@ clc_link_spirv_binaries(const struct clc_linker_args *args,
 
    spvtools::Context context(SPV_ENV_UNIVERSAL_1_0);
    spvtools::LinkerOptions options;
+   options.SetAllowPartialLinkage(args->create_library);
+   options.SetCreateLibrary(args->create_library);
    std::vector<uint32_t> linkingResult;
    spv_result_t status = spvtools::Link(context, binaries, &linkingResult, options);
    if (status != SPV_SUCCESS) {
