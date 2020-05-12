@@ -27,6 +27,7 @@
 #include "d3d12_batch.h"
 #include "d3d12_descriptor_pool.h"
 #include "d3d12_pipeline_state.h"
+#include "d3d12_nir_lower_int_samplers.h"
 
 #include "pipe/p_context.h"
 #include "pipe/p_state.h"
@@ -113,6 +114,11 @@ enum resource_dimension
 struct d3d12_sampler_state {
    D3D12_STATIC_SAMPLER_DESC desc;
    struct d3d12_descriptor_handle handle;
+   bool is_integer_texture;
+   enum pipe_tex_wrap wrap_r;
+   enum pipe_tex_wrap wrap_s;
+   enum pipe_tex_wrap wrap_t;
+   float border_color[4];
 };
 
 enum d3d12_blend_factor_flags {
@@ -172,9 +178,11 @@ struct d3d12_context {
    struct pipe_stencil_ref stencil_ref;
    struct pipe_sampler_view *sampler_views[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    unsigned num_sampler_views[PIPE_SHADER_TYPES];
+   unsigned has_int_samplers;
    struct d3d12_sampler_state *samplers[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    unsigned num_samplers[PIPE_SHADER_TYPES];
    D3D12_INDEX_BUFFER_VIEW ibv;
+   d3d12_wrap_sampler_states tex_wrap_states[PIPE_SHADER_TYPES];
 
    struct d3d12_shader_selector *gfx_stages[D3D12_GFX_SHADER_STAGES];
 
