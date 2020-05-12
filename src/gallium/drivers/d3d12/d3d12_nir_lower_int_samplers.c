@@ -35,7 +35,8 @@ lower_sample_to_txf_for_integer_tex_filter(const nir_instr *instr,
    nir_tex_instr *tex = nir_instr_as_tex(instr);
    if (tex->op != nir_texop_tex &&
        tex->op != nir_texop_txb &&
-       tex->op != nir_texop_txl)
+       tex->op != nir_texop_txl &&
+       tex->op != nir_texop_txd)
       return false;
 
    return (tex->dest_type & (nir_type_int | nir_type_uint));
@@ -324,11 +325,29 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
    if (tex->is_array)
       params.ncoord_comp -= 1;
 
+   /* This helper to get the texture size always uses LOD 0, and DirectX doesn't support
+    * giving another LOD when querying the texture size */
+   nir_ssa_def *size0 = nir_get_texture_size(b, tex);
+
    /* Evaluate the LOD to be used for the texel fetch */
    if (unlikely(tex->op == nir_texop_txl)) {
       int lod_index = nir_tex_instr_src_index(tex, nir_tex_src_lod);
       /* if we have an explicite LOD, take it, otherwise evaluate it */
       params.lod = tex->src[lod_index].src.ssa;
+   } else if (unlikely(tex->op == nir_texop_txd)) {
+      int ddx_index = nir_tex_instr_src_index(tex, nir_tex_src_ddx);
+      int ddy_index = nir_tex_instr_src_index(tex, nir_tex_src_ddy);
+      assert(ddx_index >= 0 && ddy_index >= 0);
+
+      nir_ssa_def *grad = nir_fmax(b,
+                                   tex->src[ddx_index].src.ssa,
+                                   tex->src[ddy_index].src.ssa);
+
+      nir_ssa_def *r = nir_fmul(b, grad, nir_i2f32(b, size0));
+      nir_ssa_def *rho = nir_channel(b, r, 0);
+      for (int i = 1; i < params.ncoord_comp; ++i)
+         rho = nir_fmax(b, rho, nir_channel(b, r, i));
+      params.lod = nir_flog2(b, rho);
    } else {
       params.lod = dx_get_texture_lod(b, tex);
    }
@@ -339,10 +358,6 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
       params.lod = nir_fadd(b, params.lod, tex->src[bias_index].src.ssa);
    }
    params.lod = nir_f2i32(b, params.lod);
-
-   /* This helper to get the texture size always uses LOD 0, and DirectX doesn't support
-    * giving another LOD when querying the texture size */
-   nir_ssa_def *size0 = nir_get_texture_size(b, tex);
    params.size = nir_i2f32(b, nir_ishr(b, size0, params.lod));
 
    nir_ssa_def *coord_help[3];
