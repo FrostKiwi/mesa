@@ -1146,3 +1146,38 @@ TEST_F(ComputeTest, int8_to_float)
    for (int i = 0; i < in.size(); ++i)
       EXPECT_FLOAT_EQ(out[i], expected[i]);
 }
+
+TEST_F(ComputeTest, vec_hint_float4)
+{
+   const char *kernel_source =
+   "__kernel __attribute__((vec_type_hint(float4))) void main_test(__global float *inout)\n\
+   {\n\
+      inout[get_global_id(0)] *= inout[get_global_id(1)];\n\
+   }";
+   Shader shader = compile({ kernel_source });
+   EXPECT_EQ(shader.obj->kernels[0].vec_hint_size, 4);
+   EXPECT_EQ(shader.obj->kernels[0].vec_hint_type, CLC_VEC_HINT_TYPE_FLOAT);
+}
+
+TEST_F(ComputeTest, vec_hint_uchar2)
+{
+   const char *kernel_source =
+   "__kernel __attribute__((vec_type_hint(uchar2))) void main_test(__global float *inout)\n\
+   {\n\
+      inout[get_global_id(0)] *= inout[get_global_id(1)];\n\
+   }";
+   Shader shader = compile({ kernel_source });
+   EXPECT_EQ(shader.obj->kernels[0].vec_hint_size, 2);
+   EXPECT_EQ(shader.obj->kernels[0].vec_hint_type, CLC_VEC_HINT_TYPE_CHAR);
+}
+
+TEST_F(ComputeTest, vec_hint_none)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout)\n\
+   {\n\
+      inout[get_global_id(0)] *= inout[get_global_id(1)];\n\
+   }";
+   Shader shader = compile({ kernel_source });
+   EXPECT_EQ(shader.obj->kernels[0].vec_hint_size, 0);
+}

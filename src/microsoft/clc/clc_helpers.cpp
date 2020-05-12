@@ -80,12 +80,13 @@ public:
 
 class SPIRVKernelInfo {
 public:
-   SPIRVKernelInfo(uint32_t fid, const char *nm) : funcId(fid), name(nm) { }
+   SPIRVKernelInfo(uint32_t fid, const char *nm) : funcId(fid), name(nm), vecHint(0) { }
    ~SPIRVKernelInfo() { }
 
    uint32_t funcId;
    std::string name;
    std::vector<SPIRVKernelArg> args;
+   unsigned vecHint;
 };
 
 class SPIRVKernelParser {
@@ -339,6 +340,20 @@ public:
       }
    }
 
+   void parseExecutionMode(const spv_parsed_instruction_t *ins)
+   {
+      uint32_t executionMode = ins->words[ins->operands[1].offset];
+      if (executionMode != SpvExecutionModeVecTypeHint)
+         return;
+
+      uint32_t funcId = ins->words[ins->operands[0].offset];
+      uint32_t vecHint = ins->words[ins->operands[2].offset];
+      for (auto& kernel : kernels) {
+         if (kernel.funcId == funcId)
+            kernel.vecHint = vecHint;
+      }
+   }
+
    static spv_result_t
    parseInstruction(void *data, const spv_parsed_instruction_t *ins)
    {
@@ -372,6 +387,9 @@ public:
          break;
       case SpvOpDecorate:
          parser->parseOpDecorate(ins);
+         break;
+      case SpvOpExecutionMode:
+         parser->parseExecutionMode(ins);
          break;
       default:
          break;
@@ -438,6 +456,8 @@ clc_spirv_get_kernels_info(const struct spirv_binary *spvbin,
    for (unsigned i = 0; i < parser.kernels.size(); i++) {
       kernels[i].name = strdup(parser.kernels[i].name.c_str());
       kernels[i].num_args = parser.kernels[i].args.size();
+      kernels[i].vec_hint_size = parser.kernels[i].vecHint >> 16;
+      kernels[i].vec_hint_type = (enum clc_vec_hint_type)(parser.kernels[i].vecHint & 0xFFFF);
       if (!kernels[i].num_args)
          continue;
 
