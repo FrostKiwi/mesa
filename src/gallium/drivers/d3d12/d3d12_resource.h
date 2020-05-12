@@ -58,6 +58,9 @@ d3d12_resource(struct pipe_resource *r)
 }
 
 void
+d3d12_resource_release(struct d3d12_resource *res);
+
+void
 d3d12_screen_resource_init(struct pipe_screen *pscreen);
 
 void
