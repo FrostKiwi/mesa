@@ -131,6 +131,7 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    NIR_PASS_V(nir, d3d12_lower_yflip);
    NIR_PASS_V(nir, nir_lower_uniforms_to_ubo, 16);
    NIR_PASS_V(nir, d3d12_lower_state_vars, shader);
+   NIR_PASS_V(nir, d3d12_lower_front_face);
 
    struct nir_to_dxil_options opts = {};
    opts.interpolate_at_vertex = screen->opts3.BarycentricsSupported;
