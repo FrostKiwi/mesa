@@ -1207,3 +1207,20 @@ TEST_F(ComputeTest, DISABLED_debug_layer_failure)
    for (int i = 0; i < inout.size(); ++i)
       EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
+
+TEST_F(ComputeTest, compiler_defines)
+{
+   const char *kernel_source =
+      "__kernel void main_test(__global int* out)\n\
+   {\n\
+      out[0] = OUT_VAL0;\n\
+      out[1] = __OPENCL_C_VERSION__;\n\
+   }";
+   auto out = ShaderArg<int>(std::vector<int>(2, 0), SHADER_ARG_OUTPUT);
+   CompileArgs compile_args = { 1, 1, 1 };
+   compile_args.compiler_command_line = { "-DOUT_VAL0=5", "-cl-std=cl" };
+   std::vector<RawShaderArg *> raw_args = { &out };
+   run_shader({ kernel_source }, compile_args, out);
+   EXPECT_EQ(out[0], 5);
+   EXPECT_EQ(out[1], 100);
+}
