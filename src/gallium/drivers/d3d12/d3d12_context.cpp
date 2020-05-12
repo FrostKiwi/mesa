@@ -576,6 +576,11 @@ d3d12_create_sampler_state(struct pipe_context *pctx,
    if (!state)
       return NULL;
 
+   ss->wrap_r = (pipe_tex_wrap)state->wrap_r;
+   ss->wrap_s = (pipe_tex_wrap)state->wrap_s;
+   ss->wrap_t = (pipe_tex_wrap)state->wrap_t;
+   memcpy(ss->border_color, state->border_color.f, sizeof(float) * 4);
+
    if (state->min_mip_filter < PIPE_TEX_MIPFILTER_NONE) {
       desc.MinLOD = state->min_lod;
       desc.MaxLOD = state->max_lod;
@@ -617,12 +622,33 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
                           void **samplers)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
+   bool shader_state_dirty = false;
+
    for (unsigned i = 0; i < num_samplers; ++i) {
       d3d12_sampler_state *sampler = (struct d3d12_sampler_state*) samplers[i];
       ctx->samplers[shader][start_slot + i] = sampler;
+      d3d12_wrap_sampler_state &wrap = ctx->tex_wrap_states[shader].states[start_slot + i];
+      if (sampler) {
+         shader_state_dirty |= wrap.wrap_r != sampler->wrap_r ||
+                               wrap.wrap_s != sampler->wrap_s ||
+                               wrap.wrap_t != sampler->wrap_t;
+         shader_state_dirty |= !!memcmp(wrap.border_color, sampler->border_color, 4 * sizeof(float));
+
+         wrap.wrap_r = sampler->wrap_r;
+         wrap.wrap_s = sampler->wrap_s;
+         wrap.wrap_t = sampler->wrap_t;
+         memcpy(wrap.border_color, sampler->border_color, 4 * sizeof(float));
+      } else {
+         memset(&wrap, 0, sizeof (d3d12_wrap_sampler_state));
+      }
    }
+
+   ctx->tex_wrap_states[shader].n_states = start_slot + num_samplers;
+
    ctx->num_samplers[shader] = start_slot + num_samplers;
    ctx->shader_dirty[shader] |= D3D12_SHADER_DIRTY_SAMPLERS;
+   if (shader_state_dirty)
+      ctx->state_dirty |= D3D12_DIRTY_SHADER;
 }
 
 static void
@@ -759,10 +785,18 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
    assert(views);
+   unsigned shader_bit = (1 << shader_type);
+   ctx->has_int_samplers &= ~shader_bit;
+
    for (unsigned i = 0; i < num_views; ++i) {
       pipe_sampler_view_reference(
          &ctx->sampler_views[shader_type][start_slot + i],
          views[i]);
+
+      if (views[i] && util_format_is_pure_integer(views[i]->format)) {
+          ctx->has_int_samplers |= shader_bit;
+          ctx->tex_wrap_states[shader_type].states[start_slot + i].is_int_sampler = 1;
+      }
    }
    ctx->num_sampler_views[shader_type] = start_slot + num_views;
    ctx->shader_dirty[shader_type] |= D3D12_SHADER_DIRTY_SAMPLER_VIEWS;
