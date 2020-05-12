@@ -48,8 +48,7 @@ clc_to_spirv(const struct clc_compile_args *args,
              char **err_buf);
 
 int
-clc_link_spirv_binaries(const struct spirv_binary **in_bins,
-                        unsigned num_in_bins,
+clc_link_spirv_binaries(const struct clc_linker_args *args,
                         struct spirv_binary *dst_bin,
                         char **err_buf);
 

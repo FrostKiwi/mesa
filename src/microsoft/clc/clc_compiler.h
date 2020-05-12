@@ -44,6 +44,11 @@ struct clc_compile_args {
    unsigned num_args;
 };
 
+struct clc_linker_args {
+   const struct clc_object * const *in_objs;
+   unsigned num_in_objs;
+};
+
 typedef void (*clc_msg_callback)(const char *, int, const char *);
 
 struct clc_logger {
@@ -167,8 +172,7 @@ clc_compile(struct clc_context *ctx,
 
 struct clc_object *
 clc_link(struct clc_context *ctx,
-         const struct clc_object **in_objs,
-         unsigned num_in_objs,
+         const struct clc_linker_args *args,
          const struct clc_logger *logger);
 
 void clc_free_object(struct clc_object *obj);
