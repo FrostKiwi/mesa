@@ -293,3 +293,30 @@ d3d12_create_bare_samplers(nir_shader *nir)
       }
    }
 }
+
+bool
+lower_front_face_filter(const nir_instr *instr,
+                        UNUSED const void *_options)
+{
+   if (instr->type != nir_instr_type_intrinsic)
+      return false;
+
+   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+   return intr->intrinsic == nir_intrinsic_load_front_face;
+}
+
+static nir_ssa_def *
+lower_front_face_impl(nir_builder *b, nir_instr *instr,
+                      UNUSED void *_options)
+{
+   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+   intr->dest.ssa.bit_size = 32;
+   return nir_i2b1(b, &intr->dest.ssa);
+}
+
+bool
+d3d12_lower_front_face(struct nir_shader *s)
+{
+   return nir_shader_lower_instructions(s, lower_front_face_filter,
+                                        lower_front_face_impl, NULL);
+}
