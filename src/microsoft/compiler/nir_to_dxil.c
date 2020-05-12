@@ -403,7 +403,7 @@ struct ntd_context {
 
    const struct dxil_mdnode *srv_metadata_nodes[MAX_SRVS];
    const struct dxil_value *srv_handles[MAX_SRVS];
-   unsigned num_srvs;
+   uint64_t srvs_used : MAX_SRVS;
    unsigned num_srv_arrays;
 
    const struct dxil_mdnode *uav_metadata_node;
@@ -416,7 +416,7 @@ struct ntd_context {
 
    const struct dxil_mdnode *sampler_metadata_nodes[MAX_SAMPLERS];
    const struct dxil_value *sampler_handles[MAX_SAMPLERS];
-   unsigned num_samplers;
+   uint64_t samplers_used : MAX_SAMPLERS;
    unsigned num_sampler_arrays;
 
    struct dxil_resource resources[MAX_UAVS];
@@ -708,11 +708,9 @@ static bool
 emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned count)
 {
    assert(ctx->num_srv_arrays < ARRAY_SIZE(ctx->srv_metadata_nodes));
-   assert(ctx->num_srvs < ARRAY_SIZE(ctx->srv_handles));
 
-   unsigned id= ctx->num_srv_arrays;
-   unsigned idx = ctx->num_srvs;
-   resource_array_layout layout = {id, idx, count};
+   unsigned id = ctx->num_srv_arrays;
+   resource_array_layout layout = {id, var->data.binding, count};
 
    enum dxil_component_type comp_type = dxil_get_comp_type(var->type);
    enum dxil_resource_kind res_kind = dxil_get_resource_kind(var->type);
@@ -727,12 +725,18 @@ emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned count)
    add_resource(ctx, DXIL_RES_SRV_TYPED, &layout);
 
    for (unsigned i = 0; i < count; ++i) {
-      const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SRV,
-                                                                           id, idx + i, false);
+      int idx = var->data.binding + i;
+      const struct dxil_value *handle =
+         emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SRV,
+                                            id, idx, false);
       if (!handle)
          return false;
 
-      ctx->srv_handles[ctx->num_srvs++] = handle;
+      uint64_t bit = 1ull << idx;
+      assert(!(ctx->srvs_used & bit));
+      ctx->srv_handles[idx] = handle;
+      ctx->srvs_used |= bit;
+
    }
 
    return true;
@@ -892,11 +896,9 @@ static bool
 emit_sampler(struct ntd_context *ctx, nir_variable *var, unsigned count)
 {
    assert(ctx->num_sampler_arrays < ARRAY_SIZE(ctx->sampler_metadata_nodes));
-   assert(ctx->num_samplers < ARRAY_SIZE(ctx->sampler_handles));
 
    unsigned id = ctx->num_sampler_arrays;
-   unsigned idx = ctx->num_samplers;
-   resource_array_layout layout = {id, idx, count};
+   resource_array_layout layout = {id, var->data.binding, count};
    const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_type *sampler_type = dxil_module_get_struct_type(&ctx->mod, "struct.SamplerState", &int32_type, 1);
    const struct dxil_mdnode *sampler_meta = emit_sampler_metadata(&ctx->mod, sampler_type, var, &layout);
@@ -908,13 +910,17 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var, unsigned count)
    add_resource(ctx, DXIL_RES_SAMPLER, &layout);
 
    for (unsigned i = 0; i < count; ++i) {
-      const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SAMPLER,
-                                                                           id, idx + i, false);
+      int idx = var->data.binding + i;
+      const struct dxil_value *handle =
+         emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SAMPLER,
+                                            id, idx, false);
       if (!handle)
          return false;
 
-      ctx->sampler_handles[ctx->num_samplers] = handle;
-      ctx->num_samplers++;
+      uint64_t bit = 1ull << idx;
+      assert(!(ctx->samplers_used & bit));
+      ctx->sampler_handles[idx] = handle;
+      ctx->samplers_used |= bit;
    }
    ctx->num_sampler_arrays++;
 
@@ -1016,7 +1022,7 @@ emit_resources(struct ntd_context *ctx)
       NULL, NULL, NULL, NULL
    };
 
-   if (ctx->num_srvs) {
+   if (ctx->srvs_used) {
       resources_nodes[0] = dxil_get_metadata_node(&ctx->mod, ctx->srv_metadata_nodes, ctx->num_srv_arrays);
       emit_resources = true;
    }
@@ -1031,7 +1037,7 @@ emit_resources(struct ntd_context *ctx)
       emit_resources = true;
    }
 
-   if (ctx->num_samplers) {
+   if (ctx->samplers_used) {
       resources_nodes[3] = dxil_get_metadata_node(&ctx->mod, ctx->sampler_metadata_nodes, ctx->num_sampler_arrays);
       emit_resources = true;
    }
@@ -2877,8 +2883,8 @@ emit_texture_size(struct ntd_context *ctx, const struct dxil_value *tex,
 static bool
 emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 {
-   assert(instr->texture_index < ctx->num_srvs);
-   assert(instr->op == nir_texop_txf || instr->sampler_index < ctx->num_samplers);
+   assert(ctx->srvs_used & (1ull << instr->texture_index));
+   assert(instr->op == nir_texop_txf || ctx->samplers_used & (1ull << instr->sampler_index));
    const struct dxil_value *tex = ctx->srv_handles[instr->texture_index];
    const struct dxil_value *sampler = ctx->sampler_handles[instr->sampler_index];
 
