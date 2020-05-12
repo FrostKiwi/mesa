@@ -405,7 +405,7 @@ ComputeTest::add_cbv_resource(ComputeTest::Resources &resources,
 
 void
 ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
-                                      unsigned x, unsigned y, unsigned z,
+                                      const CompileArgs &compile_args,
                                       const std::vector<RawShaderArg *> &args)
 {
    if (args.size() < 1)
@@ -416,7 +416,7 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
       throw runtime_error("Failed to load D3D12.DLL");
 
    D3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
-   Shader shader = compile(sources);
+   Shader shader = compile(sources, compile_args.compiler_command_line);
 
    if (args.size() != shader.dxil->kernel->num_args)
       throw runtime_error("incorrect number of inputs");
@@ -424,23 +424,23 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
    struct clc_runtime_kernel_conf conf = { 0 };
 
    if (!shader.dxil->metadata.local_size[0])
-      conf.local_size[0] = x;
+      conf.local_size[0] = compile_args.x;
    else
       conf.local_size[0] = shader.dxil->metadata.local_size[0];
 
    if (!shader.dxil->metadata.local_size[1])
-      conf.local_size[1] = y;
+      conf.local_size[1] = compile_args.y;
    else
       conf.local_size[1] = shader.dxil->metadata.local_size[1];
 
    if (!shader.dxil->metadata.local_size[2])
-      conf.local_size[2] = z;
+      conf.local_size[2] = compile_args.z;
    else
       conf.local_size[2] = shader.dxil->metadata.local_size[2];
 
-   if (x % conf.local_size[0] ||
-       y % conf.local_size[1] ||
-       z % conf.local_size[2])
+   if (compile_args.x % conf.local_size[0] ||
+       compile_args.y % conf.local_size[1] ||
+       compile_args.z % conf.local_size[2])
       throw runtime_error("invalid global size must be a multiple of local size");
 
    std::vector<struct clc_runtime_arg_info> argsinfo(args.size());
@@ -521,9 +521,9 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
    cmdlist->SetComputeRootDescriptorTable(0, uav_heap->GetGPUDescriptorHandleForHeapStart());
    cmdlist->SetPipelineState(pipeline_state.Get());
 
-   cmdlist->Dispatch(x / conf.local_size[0],
-                     y / conf.local_size[1],
-                     z / conf.local_size[2]);
+   cmdlist->Dispatch(compile_args.x / conf.local_size[0],
+                     compile_args.y / conf.local_size[1],
+                     compile_args.z / conf.local_size[2]);
 
    for (auto &range : resources.ranges) {
       if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_UAV) {
@@ -725,12 +725,15 @@ dump_blob(const char *path, const struct clc_dxil_object &dxil)
 }
 
 ComputeTest::Shader
-ComputeTest::compile(const std::vector<const char *> &sources)
+ComputeTest::compile(const std::vector<const char *> &sources,
+                     const std::vector<const char *> &compile_args)
 {
    struct clc_logger logger = {
       error_callback, warning_callback,
    };
    struct clc_compile_args args = { 0 };
+   args.args = compile_args.data();
+   args.num_args = (unsigned)compile_args.size();
    struct clc_dxil_object *dxil;
    ComputeTest::Shader shader;
    struct clc_object *obj;

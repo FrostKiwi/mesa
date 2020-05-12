@@ -166,7 +166,8 @@ protected:
    TearDown() override;
 
    Shader
-   compile(const std::vector<const char *> &sources);
+   compile(const std::vector<const char *> &sources,
+           const std::vector<const char *> &compile_args = {});
 
    void
    configure(Shader &shader,
@@ -232,6 +233,12 @@ protected:
       void *get_data() override { return this->data(); }
    };
 
+   struct CompileArgs
+   {
+      unsigned x, y, z;
+      std::vector<const char *> compiler_command_line;
+   };
+
 private:
    void gather_args(std::vector<RawShaderArg *> &args) { }
 
@@ -243,7 +250,7 @@ private:
    }
 
    void run_shader_with_raw_args(const std::vector<const char *> &sources,
-                                 unsigned x, unsigned y, unsigned z,
+                                 const CompileArgs &compile_args,
                                  const std::vector<RawShaderArg *> &args);
 
 protected:
@@ -254,7 +261,18 @@ protected:
    {
       std::vector<RawShaderArg *> raw_args;
       gather_args(raw_args, args...);
-      run_shader_with_raw_args(sources, x, y, z, raw_args);
+      CompileArgs compile_args = { x, y, z };
+      run_shader_with_raw_args(sources, compile_args, raw_args);
+   }
+
+   template <typename... Args>
+   void run_shader(const std::vector<const char *> &sources,
+                   const CompileArgs &compile_args,
+                   Args&... args)
+   {
+      std::vector<RawShaderArg *> raw_args;
+      gather_args(raw_args, args...);
+      run_shader_with_raw_args(sources, compile_args, raw_args);
    }
 
    template <typename... Args>
@@ -264,8 +282,9 @@ protected:
    {
       std::vector<RawShaderArg *> raw_args;
       gather_args(raw_args, args...);
+      CompileArgs compile_args = { x, y, z };
       run_shader_with_raw_args(std::vector<const char *>({ source }),
-                               x, y, z, raw_args);
+                               compile_args, raw_args);
    }
 
    IDXGIFactory4 *factory;
