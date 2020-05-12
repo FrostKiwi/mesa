@@ -56,7 +56,8 @@ d3d12_resource_destroy(struct pipe_screen *pscreen,
       delete resource->trans_state;
    if (can_map_directly(presource))
       util_range_destroy(&resource->valid_buffer_range);
-   resource->res->Release();
+   if (resource->res)
+      resource->res->Release();
    FREE(resource);
 }
 
@@ -70,6 +71,15 @@ resource_is_busy(struct d3d12_context *ctx,
       busy |= d3d12_batch_has_references(&ctx->batches[i], res);
 
    return busy;
+}
+
+void
+d3d12_resource_release(struct d3d12_resource *resource)
+{
+   if (!resource->res)
+      return;
+   resource->res->Release();
+   resource->res = NULL;
 }
 
 static void
