@@ -82,10 +82,23 @@ struct clc_kernel_arg {
    enum clc_kernel_arg_address_qualifier address_qualifier;
 };
 
+enum clc_vec_hint_type {
+   CLC_VEC_HINT_TYPE_CHAR = 0,
+   CLC_VEC_HINT_TYPE_SHORT = 1,
+   CLC_VEC_HINT_TYPE_INT = 2,
+   CLC_VEC_HINT_TYPE_LONG = 3,
+   CLC_VEC_HINT_TYPE_HALF = 4,
+   CLC_VEC_HINT_TYPE_FLOAT = 5,
+   CLC_VEC_HINT_TYPE_DOUBLE = 6
+};
+
 struct clc_kernel_info {
    const char *name;
    size_t num_args;
    const struct clc_kernel_arg *args;
+
+   unsigned vec_hint_size;
+   enum clc_vec_hint_type vec_hint_type;
 };
 
 struct clc_object {
