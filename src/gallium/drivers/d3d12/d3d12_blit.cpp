@@ -194,7 +194,6 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
                            const struct pipe_box *psrc_box)
 {
    D3D12_TEXTURE_COPY_LOCATION src_loc, dst_loc;
-   D3D12_BOX src_box = {};
    unsigned src_z = psrc_box->z;
 
    int src_subres_stride = src->base.last_level + 1;
@@ -237,13 +236,6 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
       }
       src_level += subres * stencil_src_res_offset;
 
-      src_box.left = psrc_box->x;
-      src_box.right = psrc_box->x + psrc_box->width;
-      src_box.top = psrc_box->y;
-      src_box.bottom = psrc_box->y + psrc_box->height;
-      src_box.front = src_z;
-      src_box.back = src_z + psrc_box->depth;
-
       src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
       src_loc.SubresourceIndex = src_level;
       src_loc.pResource = src->res;
@@ -252,8 +244,25 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
       dst_loc.SubresourceIndex = dst_level;
       dst_loc.pResource = dst->res;
 
-      ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
-                                      &src_loc, &src_box);
+      if (psrc_box->x == 0 && psrc_box->y == 0 && psrc_box->z == 0 &&
+          psrc_box->width == u_minify(src->base.width0, src_level) &&
+          psrc_box->height == u_minify(src->base.height0, src_level) &&
+          psrc_box->depth == u_minify(src->base.depth0, src_level)) {
+         ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
+                                         &src_loc, NULL);
+
+      } else {
+         D3D12_BOX src_box;
+         src_box.left = psrc_box->x;
+         src_box.right = psrc_box->x + psrc_box->width;
+         src_box.top = psrc_box->y;
+         src_box.bottom = psrc_box->y + psrc_box->height;
+         src_box.front = src_z;
+         src_box.back = src_z + psrc_box->depth;
+
+         ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
+                                         &src_loc, &src_box);
+      }
    }
 }
 
