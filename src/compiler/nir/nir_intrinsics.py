@@ -868,13 +868,13 @@ intrinsic("store_global_masked_dxil", [1] * 4)
 # src[] = { value, deref_var, offset }
 intrinsic("store_ptr_dxil", [0, 1, 1])
 # src[] = { index, offset }.
-load("global_dxil", 2, [], [CAN_ELIMINATE, CAN_REORDER])
+load("global_dxil", 2, [], [CAN_ELIMINATE])
 # src[] = { value, index }.
 intrinsic("store_shared_dxil", [1] * 2)
 # src[] = { value, mask, index }.
 intrinsic("store_shared_masked_dxil", [1] * 3)
 # src[] = { index }.
-load("shared_dxil", 1, [], [CAN_ELIMINATE, CAN_REORDER])
+load("shared_dxil", 1, [], [CAN_ELIMINATE])
 # src[] = { deref_var, offset }
 load("ptr_dxil", 2, [], [])
 
