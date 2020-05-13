@@ -300,6 +300,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
    struct d3d12_batch *batch;
+   struct pipe_resource *index_buffer = NULL;
+   unsigned index_offset = 0;
 
    if (dinfo->mode >= PIPE_PRIM_QUADS ||
        dinfo->mode == PIPE_PRIM_LINE_LOOP ||
@@ -348,6 +350,20 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    }
 
    ctx->cmdlist_dirty |= ctx->state_dirty;
+
+   if (dinfo->index_size > 0) {
+      assert(dinfo->index_size != 1);
+
+      if (dinfo->has_user_indices) {
+         if (!util_upload_index_buffer(pctx, dinfo, &index_buffer,
+             &index_offset, 4)) {
+            debug_printf("util_upload_index_buffer() failed\n");
+            return;
+         }
+      } else {
+         index_buffer = dinfo->index.resource;
+      }
+   }
 
    if (!check_descriptors_left(ctx))
       d3d12_flush_cmdlist(ctx);
@@ -405,21 +421,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    if (ctx->cmdlist_dirty & D3D12_DIRTY_VERTEX_BUFFERS)
       ctx->cmdlist->IASetVertexBuffers(0, ctx->num_vbs, ctx->vbvs);
 
-   if (dinfo->index_size > 0) {
-      assert(dinfo->index_size != 1);
-      unsigned index_offset = 0;
-      struct pipe_resource *index_buffer = NULL;
-
-      if (dinfo->has_user_indices) {
-         if (!util_upload_index_buffer(pctx, dinfo, &index_buffer,
-             &index_offset, 4)) {
-            debug_printf("util_upload_index_buffer() failed\n");
-            return;
-         }
-      } else {
-         index_buffer = dinfo->index.resource;
-      }
-
+   if (index_buffer) {
       D3D12_INDEX_BUFFER_VIEW ibv;
       struct d3d12_resource *res = d3d12_resource(index_buffer);
       ibv.BufferLocation = res->res->GetGPUVirtualAddress() + index_offset;
