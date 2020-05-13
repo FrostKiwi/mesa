@@ -39,6 +39,14 @@
 #include <d3d12.h>
 #include <memory>
 
+static bool
+can_map_directly(struct pipe_resource *pres)
+{
+   return pres->bind & (PIPE_BIND_SCANOUT | PIPE_BIND_SHARED | PIPE_BIND_LINEAR) ||
+          pres->usage == PIPE_USAGE_STAGING ||
+          pres->target == PIPE_BUFFER;
+}
+
 static void
 d3d12_resource_destroy(struct pipe_screen *pscreen,
                        struct pipe_resource *presource)
@@ -46,6 +54,8 @@ d3d12_resource_destroy(struct pipe_screen *pscreen,
    struct d3d12_resource *resource = d3d12_resource(presource);
    if (resource->trans_state != nullptr)
       delete resource->trans_state;
+   if (can_map_directly(presource))
+      util_range_destroy(&resource->valid_buffer_range);
    resource->res->Release();
    FREE(resource);
 }
@@ -192,6 +202,9 @@ d3d12_resource_create(struct pipe_screen *pscreen,
    res->trans_state = new TransitionableResourceState(res->res,
                                                       total_subresources,
                                                       !!(desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS));
+
+   if (can_map_directly(&res->base))
+      util_range_init(&res->valid_buffer_range);
 
    return &res->base;
 }
@@ -380,6 +393,48 @@ linear_offset(int x, int y, int z, unsigned stride, unsigned layer_stride)
           z * layer_stride;
 }
 
+static void *
+synchronize_map(struct d3d12_context *ctx,
+                struct d3d12_resource *res,
+                unsigned usage,
+                D3D12_RANGE *range)
+{
+   void *ptr;
+
+   assert(can_map_directly(&res->base));
+
+   /* Check whether that range contains valid data; if not, we might not need to sync */
+   if (!(usage & PIPE_TRANSFER_UNSYNCHRONIZED) &&
+       usage & PIPE_TRANSFER_WRITE &&
+       !util_ranges_intersect(&res->valid_buffer_range, range->Begin, range->End)) {
+      usage |= PIPE_TRANSFER_UNSYNCHRONIZED;
+   }
+
+   if (!(usage & PIPE_TRANSFER_UNSYNCHRONIZED) && resource_is_busy(ctx, res)) {
+      if (usage & PIPE_TRANSFER_DONTBLOCK)
+         return NULL;
+
+      if (d3d12_batch_has_references(d3d12_current_batch(ctx), res)) {
+         d3d12_flush_cmdlist_and_wait(ctx);
+      } else {
+         d3d12_foreach_submitted_batch(ctx, batch) {
+            d3d12_reset_batch(ctx, batch);
+            if (!resource_is_busy(ctx, res))
+               break;
+         }
+      }
+   }
+
+   if (usage & PIPE_TRANSFER_WRITE)
+      util_range_add(&res->base, &res->valid_buffer_range,
+                     range->Begin, range->End);
+
+   if (FAILED(res->res->Map(0, range, &ptr)))
+      return NULL;
+
+   return ((uint8_t *)ptr) + range->Begin;
+}
+
 /* A wrapper to make sure local resources are freed and unmapped with
  * any exit path */
 struct local_resource {
@@ -523,8 +578,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
       range.Begin = box->x;
       range.End = box->x + box->width;
 
-      if (FAILED(res->res->Map(0, &range, &ptr)))
-         return NULL;
+      ptr = synchronize_map(ctx, res, usage, &range);
 
       ptrans->stride = 0;
       ptrans->layer_stride = 0;
@@ -542,8 +596,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
                                 box->z + box->depth,
                                 ptrans->stride, ptrans->layer_stride);
 
-      if (FAILED(res->res->Map(0, &range, &ptr)))
-         return NULL;
+      ptr = synchronize_map(ctx, res, usage, &range);
    } else if ((unlikely(pres->format == PIPE_FORMAT_Z24_UNORM_S8_UINT)) &&
               (usage & PIPE_TRANSFER_READ)) {
       ptr = read_zs_surface(ctx, res, box, trans);
@@ -577,12 +630,11 @@ d3d12_transfer_map(struct pipe_context *pctx,
       range.Begin = 0;
       range.End = ptrans->layer_stride * box->depth;
 
-      if (FAILED(staging_res->res->Map(0, &range, &ptr)))
-         return NULL;
+      ptr = synchronize_map(ctx, staging_res, usage, &range);
    }
 
    *transfer = ptrans;
-   return ((uint8_t *)ptr) + range.Begin;
+   return ptr;
 }
 
 static void

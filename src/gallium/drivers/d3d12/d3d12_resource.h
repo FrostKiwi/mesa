@@ -25,6 +25,7 @@
 #define D3D12_RESOURCE_H
 
 struct pipe_screen;
+#include "util/u_range.h"
 #include "util/u_transfer.h"
 
 #include <d3d12.h>
@@ -41,6 +42,7 @@ struct d3d12_resource {
    unsigned mip_levels;
    struct sw_displaytarget *dt;
    unsigned dt_stride;
+   struct util_range valid_buffer_range;
 };
 
 struct d3d12_transfer {
