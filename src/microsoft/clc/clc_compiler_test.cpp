@@ -1044,5 +1044,5 @@ TEST_F(ComputeTest, int8_to_float)
    const float expected[] = { 0.1f, 0.2f, 0.3f, 0.4f };
    run_shader(kernel_source, in.size(), 1, 1, in, out);
    for (int i = 0; i < in.size(); ++i)
-      EXPECT_EQ(out[i], expected[i]);
+      EXPECT_FLOAT_EQ(out[i], expected[i]);
 }
