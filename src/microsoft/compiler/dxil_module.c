@@ -1852,7 +1852,7 @@ emit_module_info_global(struct dxil_module *m, const struct dxil_gvar *gvar,
       (gvar->as << 2) | GVAR_FLAG_EXPLICIT_TYPE |
       (gvar->constant ? GVAR_FLAG_CONSTANT : 0),
       gvar->initializer ? gvar->initializer->id + 1 : 0,
-      GVAR_LINKAGE_INTERNAL, // linkage
+      (gvar->initializer ? GVAR_LINKAGE_INTERNAL : GVAR_LINKAGE_EXTERNAL),
       util_logbase2(gvar->align) + 1,
       0
    };
