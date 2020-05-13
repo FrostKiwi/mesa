@@ -52,6 +52,9 @@ d3d12_lower_bool_input(struct nir_shader *s);
 bool
 d3d12_lower_frag_result(struct nir_shader *s, unsigned nr_cbufs);
 
+bool
+d3d12_fix_stencil_export_type(struct nir_shader *s);
+
 #ifdef __cplusplus
 }
 #endif

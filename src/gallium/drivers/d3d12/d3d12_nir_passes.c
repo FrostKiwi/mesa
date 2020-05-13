@@ -409,3 +409,37 @@ d3d12_lower_frag_result(struct nir_shader *nir, unsigned nr_cbufs)
    }
    return progress;
 }
+
+bool
+d3d12_fix_stencil_export_type(struct nir_shader *s)
+{
+   if (!(s->info.outputs_written & (1 << FRAG_RESULT_STENCIL)))
+      return false;
+
+   nir_variable *stencil_export = NULL;
+   nir_foreach_variable(var, &s->outputs) {
+      if (var->data.location == FRAG_RESULT_STENCIL) {
+         var->type = glsl_uint_type();
+         stencil_export = var;
+         break;
+      }
+   }
+
+   assert(stencil_export);
+
+   nir_foreach_function(function, s) {
+      if (function->impl) {
+         nir_foreach_block(block, function->impl) {
+            nir_foreach_instr_safe(instr, block) {
+               if (instr->type == nir_instr_type_deref) {
+                  nir_deref_instr *deref = nir_instr_as_deref(instr);
+                  if (deref->var == stencil_export)
+                     deref->type = stencil_export->type;
+               }
+            }
+         }
+      }
+   }
+
+   return true;
+}
