@@ -522,6 +522,31 @@ TEST_F(ComputeTest, complex_types_const_array)
       EXPECT_EQ(output[i], expected[i]);
 }
 
+TEST_F(ComputeTest, mem_access_load_store_ordering)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *output)\n\
+   {\n\
+       uint foo[4];\n\
+       foo[0] = 0x11111111;\n\
+       foo[1] = 0x22222222;\n\
+       foo[2] = 0x44444444;\n\
+       foo[3] = 0x88888888;\n\
+       foo[get_global_id(1)] -= 0x11111111; // foo[0] = 0 \n\
+       foo[0] += get_global_id(0); // foo[0] = tid\n\
+       foo[foo[get_global_id(1)]] = get_global_id(0); // foo[tid] = tid\n\
+       output[get_global_id(0)] = foo[get_global_id(0)]; // output[tid] = tid\n\
+   }\n";
+   auto output = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
+                                     SHADER_ARG_OUTPUT);
+   const uint16_t expected[] = {
+      0, 1, 2, 3
+   };
+   run_shader(kernel_source, output.size(), 1, 1, output);
+   for (int i = 0; i < output.size(); ++i)
+      EXPECT_EQ(output[i], expected[i]);
+}
+
 TEST_F(ComputeTest, two_const_arrays)
 {
    const char *kernel_source =
