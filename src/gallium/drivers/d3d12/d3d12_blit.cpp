@@ -145,8 +145,7 @@ direct_copy_supported(struct d3d12_screen *screen,
 {
    if (info->scissor_enable || info->alpha_blend ||
        info->render_condition_enable ||
-       info->src.resource->nr_samples > 1 ||
-       info->dst.resource->nr_samples > 1) {
+       info->src.resource->nr_samples != info->dst.resource->nr_samples) {
       return false;
    }
 
