@@ -201,13 +201,19 @@ d3d12_end_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    batch->fence = d3d12_create_fence(screen, ctx);
 }
 
+bool
+d3d12_batch_has_references(struct d3d12_batch *batch,
+                           struct d3d12_resource *res)
+{
+   return (_mesa_set_search(batch->resources, res) != NULL);
+}
+
 void
 d3d12_batch_reference_resource(struct d3d12_batch *batch,
                                struct d3d12_resource *res)
 {
-   struct set_entry *entry = _mesa_set_search(batch->resources, res);
-   if (!entry) {
-      entry = _mesa_set_add(batch->resources, res);
+   if (!d3d12_batch_has_references(batch, res)) {
+      _mesa_set_add(batch->resources, res);
       pipe_reference(NULL, &res->base.reference);
    }
 }

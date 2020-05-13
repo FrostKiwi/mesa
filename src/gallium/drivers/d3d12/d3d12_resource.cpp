@@ -50,6 +50,18 @@ d3d12_resource_destroy(struct pipe_screen *pscreen,
    FREE(resource);
 }
 
+static bool
+resource_is_busy(struct d3d12_context *ctx,
+                 struct d3d12_resource *res)
+{
+   bool busy = false;
+
+   for (int i = 0; i < ARRAY_SIZE(ctx->batches); i++)
+      busy |= d3d12_batch_has_references(&ctx->batches[i], res);
+
+   return busy;
+}
+
 static struct pipe_resource *
 d3d12_resource_create(struct pipe_screen *pscreen,
                       const struct pipe_resource *templ)
