@@ -493,13 +493,6 @@ clc_to_dxil(struct clc_context *ctx,
       i++;
    }
 
-   // Calculate UBO bindings
-   unsigned binding = 0;
-   nir_foreach_variable_safe(var, &nir->uniforms) {
-      if (var->data.mode == nir_var_mem_ubo)
-         var->data.binding = binding++;
-   }
-
    // Inline all functions first.
    // according to the comment on nir_inline_functions
    NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
@@ -543,9 +536,17 @@ clc_to_dxil(struct clc_context *ctx,
       NIR_PASS_V(nir, nir_lower_int64, nir_options->lower_int64_options);
 
    NIR_PASS_V(nir, nir_opt_deref);
+   NIR_PASS_V(nir, dxil_nir_lower_ubo_to_temp);
    NIR_PASS_V(nir, nir_lower_vars_to_ssa);
 
    NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
+
+   // Calculate UBO bindings
+   unsigned binding = 0;
+   nir_foreach_variable_safe(var, &nir->uniforms) {
+      if (var->data.mode == nir_var_mem_ubo)
+         var->data.binding = binding++;
+   }
 
    NIR_PASS_V(nir, nir_lower_bit_size, lower_bit_size_callback, NULL);
 
