@@ -802,7 +802,6 @@ var_fill_const_array_with_vector_or_scalar(struct ntd_context *ctx,
    unsigned int increment =
       glsl_get_cl_size(type) / ((components == 3) ? 4 : components);
 
-
    for (unsigned int comp = 0; comp < components; comp++) {
       uint8_t *dst = (uint8_t *)const_vals + offset;
       assert(!((uintptr_t)dst & ((1 << util_logbase2(bit_size / 8)) - 1)));
