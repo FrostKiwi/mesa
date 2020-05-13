@@ -184,7 +184,7 @@ direct_copy_supported(const struct pipe_blit_info *info)
    return true;
 }
 
-void
+static void
 copy_subregion_no_barriers(struct d3d12_context *ctx,
                            struct d3d12_resource *dst,
                            unsigned dst_level,
