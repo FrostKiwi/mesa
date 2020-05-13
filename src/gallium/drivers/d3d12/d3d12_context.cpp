@@ -287,6 +287,11 @@ d3d12_create_blend_state(struct pipe_context *pctx,
    if (!state)
       return NULL;
 
+   if (blend_state->logicop_enable) {
+      state->desc.RenderTarget[0].LogicOpEnable = TRUE;
+      state->desc.RenderTarget[0].LogicOp = logic_op((pipe_logicop) blend_state->logicop_func);
+   }
+
    /* TODO Dithering */
 
    state->desc.AlphaToCoverageEnable = blend_state->alpha_to_coverage;
@@ -314,11 +319,6 @@ d3d12_create_blend_state(struct pipe_context *pctx,
              (d3d12_debug & D3D12_DEBUG_VERBOSE)) {
             /* We can't set a blend factor for both constant color and constant alpha */
             debug_printf("D3D12: unsupported blend factors combination (const color and const alpha)\n");
-         }
-
-         if (blend_state->logicop_enable) {
-            state->desc.RenderTarget[i].LogicOpEnable = TRUE;
-            state->desc.RenderTarget[i].LogicOp = logic_op((pipe_logicop) blend_state->logicop_func);
          }
       }
 
