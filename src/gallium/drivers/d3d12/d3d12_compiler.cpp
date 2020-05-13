@@ -643,8 +643,10 @@ d3d12_compile_shader(struct d3d12_context *ctx,
 
    if (nir->info.stage != MESA_SHADER_FRAGMENT)
       nir->info.outputs_written = d3d12_reassign_driver_locations(&nir->outputs);
-   else
+   else {
+      NIR_PASS_V(nir, d3d12_fix_stencil_export_type);
       d3d12_sort_ps_outputs(&nir->outputs);
+   }
 
    /* Keep this initial shader as the blue print for possible variants */
    sel->initial = nir;
