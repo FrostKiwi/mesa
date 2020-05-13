@@ -62,6 +62,10 @@ d3d12_end_batch(struct d3d12_context *ctx, struct d3d12_batch *batch);
 void
 d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch);
 
+bool
+d3d12_batch_has_references(struct d3d12_batch *batch,
+                           struct d3d12_resource *res);
+
 void
 d3d12_batch_reference_resource(struct d3d12_batch *batch,
                                struct d3d12_resource *res);
