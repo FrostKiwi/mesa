@@ -1490,6 +1490,12 @@ ibc_before_shader(ibc_shader *shader)
    return (ibc_cursor) { &shader->instrs };
 }
 
+static inline ibc_cursor
+ibc_after_start(ibc_shader *shader)
+{
+   return (ibc_cursor) { shader->instrs.next };
+}
+
 void ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor);
 void ibc_instr_remove(ibc_instr *instr);
 
