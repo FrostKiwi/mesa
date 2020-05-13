@@ -103,25 +103,21 @@ d3d12_resource_create(struct pipe_screen *pscreen,
 
    desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-   /*
-    * TODO: unsure if *all* of these should block shader-resources
-    */
-   unsigned srv_bits = PIPE_BIND_VERTEX_BUFFER | PIPE_BIND_INDEX_BUFFER |
-                       PIPE_BIND_CONSTANT_BUFFER | PIPE_BIND_SAMPLER_VIEW |
-                       PIPE_BIND_SHADER_IMAGE |
-                       PIPE_BIND_COMMAND_ARGS_BUFFER |
-                       PIPE_BIND_STREAM_OUTPUT | PIPE_BIND_DEPTH_STENCIL;
-   if ((templ->bind & srv_bits) == 0)
-      desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-
    if (templ->bind & PIPE_BIND_SHADER_BUFFER)
       desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
    if (templ->bind & PIPE_BIND_RENDER_TARGET)
       desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
-   if (templ->bind & PIPE_BIND_DEPTH_STENCIL)
+   if (templ->bind & PIPE_BIND_DEPTH_STENCIL) {
       desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+      /* Sadly, we can't set D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE in the
+       * case where PIPE_BIND_SAMPLER_VIEW isn't set, because that would
+       * prevent us from using the resource with u_blitter, which requires
+       * sneaking in sampler-usage throught the back-door.
+       */
+   }
 
    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
    if ((templ->bind & (PIPE_BIND_SCANOUT |
