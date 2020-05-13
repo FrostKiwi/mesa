@@ -141,8 +141,7 @@ clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref, struct clc_d
    while (metadata->args[metadata_index].image.buf_ids[0] != in_var->data.binding)
       metadata_index++;
 
-   unsigned *num_buf_ids = &metadata->args[metadata_index].image.num_buf_ids;
-   *num_buf_ids = 0;
+   unsigned num_buf_ids = 0;
 
    nir_foreach_use_safe(src, &deref->dest.ssa) {
       // When we add samplers, we can have tex instructions here too, but just
@@ -180,12 +179,12 @@ clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref, struct clc_d
             uniform->data.access = in_var->data.access;
             uniform->data.image.format = intr_format;
             uniform->data.binding = in_var->data.binding;
-            if (*num_buf_ids > 0) {
+            if (num_buf_ids > 0) {
                // Need to assign a new binding
                int *binding_counter = (in_var->data.access & ACCESS_NON_WRITEABLE) ? num_srvs : num_uavs;
-               metadata->args[metadata_index].image.buf_ids[*num_buf_ids] = uniform->data.binding = (*binding_counter)++;
+               metadata->args[metadata_index].image.buf_ids[num_buf_ids] = uniform->data.binding = (*binding_counter)++;
             }
-            (*num_buf_ids)++;
+            num_buf_ids++;
 
             b->cursor = nir_after_instr(&deref->instr);
             nir_deref_instr *deref_uniform = nir_build_deref_var(b, uniform);
@@ -222,6 +221,8 @@ clc_lower_input_image_deref(nir_builder *b, nir_deref_instr *deref, struct clc_d
          assert(!"Unsupported image intrinsic");
       }
    }
+
+   metadata->args[metadata_index].image.num_buf_ids = num_buf_ids;
 
    nir_instr_remove(&deref->instr);
    exec_node_remove(&in_var->node);
