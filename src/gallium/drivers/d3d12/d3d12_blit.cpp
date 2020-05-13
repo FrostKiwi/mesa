@@ -219,6 +219,15 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
    int src_subres_stride = src->base.last_level + 1;
    int dst_subres_stride = dst->base.last_level + 1;
 
+   int src_array_size = src->base.array_size;
+   int dst_array_size = dst->base.array_size;
+
+   if (dst->base.target == PIPE_TEXTURE_CUBE)
+      dst_array_size *= 6;
+
+   if (src->base.target == PIPE_TEXTURE_CUBE)
+      src_array_size *= 6;
+
    int stencil_src_res_offset = 1;
    int stencil_dst_res_offset = 1;
 
@@ -227,13 +236,13 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
 
    if (dst->base.format == PIPE_FORMAT_Z24_UNORM_S8_UINT ||
        dst->base.format == PIPE_FORMAT_S8_UINT_Z24_UNORM) {
-      stencil_dst_res_offset = dst_subres_stride * dst->base.array_size;
+      stencil_dst_res_offset = dst_subres_stride * dst_array_size;
       src_nres = 2;
    }
 
    if (src->base.format == PIPE_FORMAT_Z24_UNORM_S8_UINT ||
        src->base.format == PIPE_FORMAT_S8_UINT_Z24_UNORM) {
-      stencil_src_res_offset = src_subres_stride * src->base.array_size;
+      stencil_src_res_offset = src_subres_stride * src_array_size;
       dst_nres = 2;
    }
 
