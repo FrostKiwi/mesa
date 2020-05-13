@@ -140,7 +140,8 @@ box_fits(const struct pipe_box *box, const struct pipe_resource *res, int level)
 }
 
 static bool
-direct_copy_supported(const struct pipe_blit_info *info)
+direct_copy_supported(struct d3d12_screen *screen,
+                      const struct pipe_blit_info *info)
 {
    if (info->scissor_enable || info->alpha_blend ||
        info->render_condition_enable ||
@@ -181,6 +182,30 @@ direct_copy_supported(const struct pipe_blit_info *info)
       return false;
    }
 
+   if ((screen->opts2.ProgrammableSamplePositionsTier ==
+        D3D12_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_NOT_SUPPORTED &&
+        (info->src.resource->bind & PIPE_BIND_DEPTH_STENCIL ||
+         info->dst.resource->bind & PIPE_BIND_DEPTH_STENCIL)) ||
+        info->src.resource->nr_samples > 1) {
+
+      if (info->dst.box.x != 0 ||
+          info->dst.box.y != 0 ||
+          info->dst.box.z != 0)
+         return false;
+
+      if (info->src.box.x != 0 ||
+          info->src.box.y != 0 ||
+          info->src.box.z != 0 ||
+          info->src.box.width != u_minify(info->src.resource->width0,
+                                          info->src.level) ||
+          info->src.box.height != u_minify(info->src.resource->height0,
+                                           info->src.level) ||
+          info->src.box.depth != u_minify(info->src.resource->depth0,
+                                          info->src.level))
+         return false;
+   }
+
+
    return true;
 }
 
@@ -193,6 +218,7 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
                            unsigned src_level,
                            const struct pipe_box *psrc_box)
 {
+   struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
    D3D12_TEXTURE_COPY_LOCATION src_loc, dst_loc;
    unsigned src_z = psrc_box->z;
 
@@ -248,6 +274,15 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
           psrc_box->width == u_minify(src->base.width0, src_level) &&
           psrc_box->height == u_minify(src->base.height0, src_level) &&
           psrc_box->depth == u_minify(src->base.depth0, src_level)) {
+
+         assert((dstx == 0 && dsty == 0 && dstz == 0) ||
+                screen->opts2.ProgrammableSamplePositionsTier !=
+                D3D12_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_NOT_SUPPORTED ||
+                (!util_format_is_depth_or_stencil(dst->base.format) &&
+                 !util_format_is_depth_or_stencil(src->base.format) &&
+                  dst->base.nr_samples <= 1 &&
+                  src->base.nr_samples <= 1));
+
          ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
                                          &src_loc, NULL);
 
@@ -259,6 +294,13 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
          src_box.bottom = psrc_box->y + psrc_box->height;
          src_box.front = src_z;
          src_box.back = src_z + psrc_box->depth;
+
+         assert((screen->opts2.ProgrammableSamplePositionsTier !=
+                 D3D12_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_NOT_SUPPORTED ||
+                 (!util_format_is_depth_or_stencil(dst->base.format) &&
+                  !util_format_is_depth_or_stencil(src->base.format))) &&
+                dst->base.nr_samples <= 1 &&
+                src->base.nr_samples <= 1);
 
          ctx->cmdlist->CopyTextureRegion(&dst_loc, dstx, dsty, dstz,
                                          &src_loc, &src_box);
@@ -381,7 +423,7 @@ d3d12_blit(struct pipe_context *pctx,
 
    if (resolve_supported(info))
       blit_resolve(ctx, info);
-   else if (direct_copy_supported(info))
+   else if (direct_copy_supported(d3d12_screen(pctx->screen), info))
       direct_copy(ctx, info);
    else if (util_blitter_is_blit_supported(ctx->blitter, info))
       util_blit(ctx, info);
