@@ -126,6 +126,8 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    struct nir_lower_tex_options tex_options = { };
    tex_options.lower_txp = ~0u; /* No equivalent for textureProj */
 
+   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform);
+   NIR_PASS_V(nir, d3d12_create_bare_samplers);
    NIR_PASS_V(nir, nir_lower_tex, &tex_options);
    NIR_PASS_V(nir, nir_lower_clip_halfz);
    NIR_PASS_V(nir, d3d12_lower_yflip);
@@ -341,7 +343,14 @@ d3d12_compile_shader(struct d3d12_context *ctx,
 
    assert(nir != NULL);
 
-   if (stage == PIPE_SHADER_FRAGMENT)
+   if (nir->info.stage != MESA_SHADER_VERTEX)
+      nir->info.inputs_read = d3d12_reassign_driver_locations(&nir->inputs);
+   else
+      nir->info.inputs_read = d3d12_sort_by_driver_location(&nir->inputs);
+
+   if (nir->info.stage != MESA_SHADER_FRAGMENT)
+      nir->info.outputs_written = d3d12_reassign_driver_locations(&nir->outputs);
+   else
       d3d12_sort_ps_outputs(&nir->outputs);
 
    /* Keep this initial shader as the blue print for possible variants */
