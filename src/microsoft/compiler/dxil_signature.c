@@ -103,7 +103,14 @@ get_additional_semantic_info(nir_variable *var, struct semantic_info *info)
 
    bool is_depth = is_depth_output(info->kind);
    info->sig_comp_type = dxil_get_comp_type(var->type);
-   info->start_row = is_depth ? -1 : (int32_t)var->data.driver_location;
+
+   if (info->kind == DXIL_SEM_TARGET)
+      info->start_row = info->index;
+   else if (is_depth)
+      info->start_row = -1;
+   else
+      info->start_row = (int32_t)var->data.driver_location;
+
    info->start_col = (uint8_t)var->data.location_frac;
    info->cols = (uint8_t)glsl_get_components(var->type);
 }
@@ -141,6 +148,10 @@ get_semantic_ps_outname(nir_variable *var, struct semantic_info *info)
    info->kind = DXIL_SEM_INVALID;
    switch (var->data.location) {
    case FRAG_RESULT_COLOR:
+      snprintf(info->name, 64, "%s", "SV_Target");
+      info->index = var->data.index;
+      info->kind = DXIL_SEM_TARGET;
+      break;
    case FRAG_RESULT_DATA0:
    case FRAG_RESULT_DATA1:
    case FRAG_RESULT_DATA2:
@@ -150,10 +161,8 @@ get_semantic_ps_outname(nir_variable *var, struct semantic_info *info)
    case FRAG_RESULT_DATA6:
    case FRAG_RESULT_DATA7:
       snprintf(info->name, 64, "%s", "SV_Target");
+      info->index = var->data.location - FRAG_RESULT_DATA0;
       info->kind = DXIL_SEM_TARGET;
-      assert((var->data.location == FRAG_RESULT_COLOR ||
-              var->data.location == FRAG_RESULT_DATA0) &&
-             "time to implement semantic indices for PS outputs");
       break;
    case FRAG_RESULT_DEPTH:
       snprintf(info->name, 64, "%s", "SV_Depth");
