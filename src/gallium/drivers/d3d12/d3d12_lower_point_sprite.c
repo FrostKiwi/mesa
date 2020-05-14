@@ -109,9 +109,14 @@ get_scaled_point_size(nir_builder *b, struct lower_state *state,
    nir_ssa_def *uniform = nir_load_var(b, state->uniform);
    nir_ssa_def *point_size = state->point_size;
 
-   /* Use static point size (from uniform) if the shader output was not set */
-   if (!point_size)
+   /* clamp point-size to valid range */
+   if (point_size) {
+      point_size = nir_fmax(b, point_size, nir_imm_float(b, 1.0f));
+      point_size = nir_fmin(b, point_size, nir_imm_float(b, D3D12_MAX_POINT_SIZE));
+   } else {
+      /* Use static point size (from uniform) if the shader output was not set */
       point_size = nir_channel(b, uniform, 2);
+   }
 
    point_size = nir_fmul(b, point_size, nir_channel(b, state->point_pos, 3));
    *x = nir_fmul(b, point_size, nir_channel(b, uniform, 0));
