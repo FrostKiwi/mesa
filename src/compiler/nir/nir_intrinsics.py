@@ -877,6 +877,9 @@ intrinsic("store_shared_masked_dxil", [1] * 3)
 load("shared_dxil", 1, [], [CAN_ELIMINATE])
 # src[] = { deref_var, offset }
 load("ptr_dxil", 2, [], [])
+# src[] = { index, 16-byte-based-offset }
+load("ubo_dxil", 2, [], [CAN_ELIMINATE])
+
 # DXIL Global atomic intrinsics
 #
 # All of the shared variable atomic memory operations read a value from
