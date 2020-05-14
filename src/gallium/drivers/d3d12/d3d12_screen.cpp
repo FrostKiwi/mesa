@@ -538,26 +538,6 @@ d3d12_flush_frontbuffer(struct pipe_screen * pscreen,
 }
 
 static void
-d3d12_finalize_nir(UNUSED pipe_screen *screen, void *nir, UNUSED bool optimize)
-{
-   nir_shader *sh = static_cast<nir_shader *>(nir);
-
-   NIR_PASS_V(sh, nir_remove_dead_variables, nir_var_uniform);
-   NIR_PASS_V(sh, d3d12_create_bare_samplers);
-
-   /* Currently we only do something with thevertex shader */
-   if (sh->info.stage != MESA_SHADER_VERTEX)
-      sh->info.inputs_read = d3d12_reassign_driver_locations(&sh->inputs);
-   else
-      sh->info.inputs_read = d3d12_sort_by_driver_location(&sh->inputs);
-
-   if (sh->info.stage != MESA_SHADER_FRAGMENT)
-      sh->info.outputs_written = d3d12_reassign_driver_locations(&sh->outputs);
-   else
-      d3d12_sort_ps_outputs(&sh->outputs);
-}
-
-static void
 enable_d3d12_debug_layer()
 {
    typedef HRESULT(WINAPI *PFN_D3D12_GET_DEBUG_INTERFACE)(REFIID riid, void **ppFactory);
@@ -701,7 +681,6 @@ d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
    screen->base.context_create = d3d12_context_create;
    screen->base.flush_frontbuffer = d3d12_flush_frontbuffer;
    screen->base.destroy = d3d12_destroy_screen;
-   screen->base.finalize_nir = d3d12_finalize_nir;
 
    if (true)
       enable_d3d12_debug_layer();
