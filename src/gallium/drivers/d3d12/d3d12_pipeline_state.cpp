@@ -76,6 +76,22 @@ topology_type(enum pipe_prim_type reduced_prim)
    }
 }
 
+static DXGI_FORMAT
+logic_op_format(DXGI_FORMAT fmt)
+{
+   switch (fmt) {
+   case DXGI_FORMAT_R8G8B8A8_SNORM:
+      return DXGI_FORMAT_R8G8B8A8_SINT;
+
+   case DXGI_FORMAT_R8G8B8A8_UNORM:
+   case DXGI_FORMAT_B8G8R8A8_UNORM:
+   case DXGI_FORMAT_B8G8R8X8_UNORM:
+      return DXGI_FORMAT_R8G8B8A8_UINT;
+   default:
+      unreachable("unsupported logic-op format");
+   }
+}
+
 static ID3D12PipelineState *
 create_gfx_pipeline_state(struct d3d12_context *ctx)
 {
@@ -129,8 +145,12 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
    pso_desc.PrimitiveTopologyType = topology_type(reduced_prim);
 
    pso_desc.NumRenderTargets = state->num_cbufs;
-   for (int i = 0; i < state->num_cbufs; ++i)
-      pso_desc.RTVFormats[i] = state->rtv_formats[i];
+   for (int i = 0; i < state->num_cbufs; ++i) {
+      if (pso_desc.BlendState.RenderTarget[0].LogicOpEnable)
+         pso_desc.RTVFormats[i] = logic_op_format(state->rtv_formats[i]);
+      else
+         pso_desc.RTVFormats[i] = state->rtv_formats[i];
+   }
    pso_desc.DSVFormat = state->dsv_format;
 
    pso_desc.SampleDesc.Count = state->samples;
