@@ -3560,14 +3560,8 @@ static void sort_uniforms_by_binding(struct exec_list *uniforms)
 }
 
 static bool
-emit_module(struct ntd_context *ctx, nir_shader *s)
+emit_cbvs(struct ntd_context *ctx, nir_shader *s)
 {
-   /* The validator forces us to emit resources in a specific order:
-    * CBVs, Samplers, SRVs, UAVs */
-
-   sort_uniforms_by_binding(&s->uniforms);
-
-   /* CBVs */
    nir_foreach_variable(var, &s->uniforms) {
       if (var->data.mode == nir_var_mem_ubo) {
          if (!emit_ubo_var(ctx, var))
@@ -3581,6 +3575,21 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       if (!emit_kernel_global_work_offset_cbv(ctx))
          return false;
    }
+
+   return true;
+}
+
+static bool
+emit_module(struct ntd_context *ctx, nir_shader *s)
+{
+   /* The validator forces us to emit resources in a specific order:
+    * CBVs, Samplers, SRVs, UAVs */
+
+   sort_uniforms_by_binding(&s->uniforms);
+
+   /* CBVs */
+   if (!emit_cbvs(ctx, s))
+      return false;
 
    /* Samplers */
    nir_foreach_variable(var, &s->uniforms) {
