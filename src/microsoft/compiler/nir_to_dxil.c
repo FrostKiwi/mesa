@@ -1031,7 +1031,7 @@ emit_kernel_inputs_cbv(struct ntd_context *ctx, nir_shader *nir)
 }
 
 static bool
-emit_cbv(struct ntd_context *ctx, nir_variable *var)
+emit_ubo_var(struct ntd_context *ctx, nir_variable *var)
 {
    unsigned size = get_dword_size(var->type);
    unsigned binding = var->data.binding;
@@ -3570,7 +3570,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    /* CBVs */
    nir_foreach_variable(var, &s->uniforms) {
       if (var->data.mode == nir_var_mem_ubo) {
-         if (!emit_cbv(ctx, var))
+         if (!emit_ubo_var(ctx, var))
             return false;
       }
    }
