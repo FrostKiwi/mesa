@@ -137,6 +137,9 @@ lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
    nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
    unsigned comp_idx = 0;
 
+   nir_deref_path path;
+   nir_deref_path_init(&path, deref, NULL);
+
    /* Split loads into 32-bit chunks */
    for (unsigned i = 0; i < num_bits; i += load_size) {
       unsigned subload_num_bits = MIN2(num_bits - i, load_size);
@@ -145,10 +148,7 @@ lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
 
       load->num_components = 1;
 
-      nir_deref_path path;
-      nir_deref_path_init(&path, deref, NULL);
       load->src[0] = nir_src_for_ssa(&path.path[0]->dest.ssa);
-      nir_deref_path_finish(&path);
 
       load->src[1] =
          nir_src_for_ssa(nir_ishr(b, nir_iadd(b, offset, nir_imm_int(b, i / 8)),
@@ -174,6 +174,7 @@ lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
       comp_idx += subload_num_bits / bit_size;
    }
 
+   nir_deref_path_finish(&path);
    assert(comp_idx == num_components);
    nir_ssa_def *result = nir_vec(b, comps, num_components);
    nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
