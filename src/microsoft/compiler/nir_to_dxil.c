@@ -3636,6 +3636,7 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
 
    NIR_PASS_V(s, nir_lower_pack);
    NIR_PASS_V(s, nir_lower_frexp);
+   NIR_PASS_V(s, nir_lower_flrp, 16 | 32 | 64, true, true);
 
    optimize_nir(s);
 
