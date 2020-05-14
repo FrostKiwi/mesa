@@ -105,6 +105,9 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
    }
 
    pso_desc.BlendState = state->blend->desc;
+   if (state->has_float_rtv)
+      pso_desc.BlendState.RenderTarget[0].LogicOpEnable = FALSE;
+
    pso_desc.DepthStencilState = state->zsa->desc;
    pso_desc.SampleMask = state->sample_mask;
    pso_desc.RasterizerState = state->rast->desc;

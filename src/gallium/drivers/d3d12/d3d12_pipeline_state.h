@@ -63,6 +63,7 @@ struct d3d12_gfx_pipeline_state {
    unsigned samples;
    unsigned sample_mask;
    unsigned num_cbufs;
+   bool has_float_rtv;
    DXGI_FORMAT rtv_formats[8];
    DXGI_FORMAT dsv_format;
    D3D12_INDEX_BUFFER_STRIP_CUT_VALUE ib_strip_cut_value;
