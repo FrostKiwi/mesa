@@ -47,7 +47,7 @@ void
 d3d12_create_bare_samplers(nir_shader *s);
 
 bool
-d3d12_lower_front_face(struct nir_shader *s);
+d3d12_lower_bool_input(struct nir_shader *s);
 
 #ifdef __cplusplus
 }
