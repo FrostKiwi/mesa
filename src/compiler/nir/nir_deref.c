@@ -308,11 +308,10 @@ nir_build_deref_offset(nir_builder *b, nir_deref_instr *deref,
    nir_deref_path path;
    nir_deref_path_init(&path, deref, NULL);
 
-   assert(path.path[0]->deref_type == nir_deref_type_var);
-
    nir_ssa_def *offset = nir_imm_intN_t(b, 0, deref->dest.ssa.bit_size);
    for (nir_deref_instr **p = &path.path[1]; *p; p++) {
-      if ((*p)->deref_type == nir_deref_type_array) {
+      if ((*p)->deref_type == nir_deref_type_array ||
+          (*p)->deref_type == nir_deref_type_ptr_as_array) {
          nir_ssa_def *index = nir_ssa_for_src(b, (*p)->arr.index, 1);
          int stride = type_get_array_stride((*p)->type, size_align);
          offset = nir_iadd(b, offset, nir_amul_imm(b, index, stride));
