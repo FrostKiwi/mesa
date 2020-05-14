@@ -974,8 +974,13 @@ d3d12_set_framebuffer_state(struct pipe_context *pctx,
    util_copy_framebuffer_state(&d3d12_context(pctx)->fb, state);
 
    ctx->gfx_pipeline_state.num_cbufs = state->nr_cbufs;
-   for (int i = 0; i < state->nr_cbufs; ++i)
+   ctx->gfx_pipeline_state.has_float_rtv = false;
+   for (int i = 0; i < state->nr_cbufs; ++i) {
+      if (util_format_is_float(state->cbufs[i]->format))
+         ctx->gfx_pipeline_state.has_float_rtv = true;
+
       ctx->gfx_pipeline_state.rtv_formats[i] = d3d12_get_format(state->cbufs[i]->format);
+   }
 
    if (state->zsbuf)
       ctx->gfx_pipeline_state.dsv_format = d3d12_get_format(state->zsbuf->format);
