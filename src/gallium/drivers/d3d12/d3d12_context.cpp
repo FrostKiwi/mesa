@@ -300,7 +300,12 @@ d3d12_create_blend_state(struct pipe_context *pctx,
 
    state->desc.AlphaToCoverageEnable = blend_state->alpha_to_coverage;
 
-   int num_targets = blend_state->independent_blend_enable ? PIPE_MAX_COLOR_BUFS : 1;
+   int num_targets = 1;
+   if (blend_state->independent_blend_enable) {
+      state->desc.IndependentBlendEnable = TRUE;
+      num_targets = PIPE_MAX_COLOR_BUFS;
+   }
+
    for (int i = 0; i < num_targets; ++i) {
       const struct pipe_rt_blend_state *rt = blend_state->rt + i;
 
