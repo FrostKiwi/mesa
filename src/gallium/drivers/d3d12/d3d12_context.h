@@ -108,7 +108,6 @@ enum resource_dimension
 };
 
 struct d3d12_sampler_state {
-   D3D12_STATIC_SAMPLER_DESC desc;
    struct d3d12_descriptor_handle handle;
    bool is_integer_texture;
    enum pipe_tex_wrap wrap_r;
