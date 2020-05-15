@@ -162,6 +162,10 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_VERTEX_SHADER_SATURATE:
       return 1;
 
+   /* We need to do some lowering that requires a link to the sampler */
+   case PIPE_CAP_NIR_SAMPLERS_AS_DEREF:
+      return 1;
+
    case PIPE_CAP_MAX_TEXTURE_ARRAY_LAYERS:
       if (screen->max_feature_level >= D3D_FEATURE_LEVEL_11_0)
          return 1 << 14;
