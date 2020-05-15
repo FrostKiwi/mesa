@@ -308,7 +308,7 @@ validate_geometry_shader(struct d3d12_selection_context *sel_ctx)
 }
 
 static void
-d3d12_fill_current_shader_key(d3d12_shader_selector *sel)
+d3d12_fill_current_shader_key(d3d12_shader_selector *sel, struct d3d12_context *ctx)
 {
    d3d12_shader *shader = sel->current;
    const uint64_t system_generated_in_values =
@@ -324,47 +324,7 @@ d3d12_fill_current_shader_key(d3d12_shader_selector *sel)
    shader->key.stage = sel->stage;
    shader->key.required_varying_inputs = shader->nir->info.inputs_read & ~system_generated_in_values;
    shader->key.required_varying_outputs = shader->nir->info.outputs_written & ~system_out_values;
-}
 
-struct d3d12_shader_selector *
-d3d12_compile_shader(struct d3d12_context *ctx,
-                     pipe_shader_type stage,
-                     const struct pipe_shader_state *shader)
-{
-   struct d3d12_shader_selector *sel = rzalloc(nullptr, d3d12_shader_selector);
-   sel->stage = stage;
-
-   struct nir_shader *nir = NULL;
-
-   if (shader->type == PIPE_SHADER_IR_NIR) {
-      nir = (nir_shader *)shader->ir.nir;
-   } else {
-      assert(shader->type == PIPE_SHADER_IR_TGSI);
-      nir = tgsi_to_nir(shader->tokens, ctx->base.screen);
-   }
-
-   assert(nir != NULL);
-
-   if (nir->info.stage != MESA_SHADER_VERTEX)
-      nir->info.inputs_read = d3d12_reassign_driver_locations(&nir->inputs);
-   else
-      nir->info.inputs_read = d3d12_sort_by_driver_location(&nir->inputs);
-
-   if (nir->info.stage != MESA_SHADER_FRAGMENT)
-      nir->info.outputs_written = d3d12_reassign_driver_locations(&nir->outputs);
-   else
-      d3d12_sort_ps_outputs(&nir->outputs);
-
-   /* Keep this initial shader as the blue print for possible variants */
-   sel->initial = nir;
-   sel->first = sel->current = compile_nir(ctx, sel, nir);
-   if (!sel->current) {
-      ralloc_free(sel);
-      return NULL;
-   }
-   d3d12_fill_current_shader_key(sel);
-
-   return sel;
 }
 
 static bool
@@ -544,6 +504,41 @@ get_next_shader(struct d3d12_context *ctx, pipe_shader_type current)
    default:
       unreachable("shader type not supported");
    }
+}
+
+struct d3d12_shader_selector *
+d3d12_compile_shader(struct d3d12_context *ctx,
+                     pipe_shader_type stage,
+                     const struct pipe_shader_state *shader)
+{
+   struct d3d12_shader_selector *sel = rzalloc(nullptr, d3d12_shader_selector);
+   sel->stage = stage;
+
+   struct nir_shader *nir = NULL;
+
+   if (shader->type == PIPE_SHADER_IR_NIR) {
+      nir = (nir_shader *)shader->ir.nir;
+   } else {
+      assert(shader->type == PIPE_SHADER_IR_TGSI);
+      nir = tgsi_to_nir(shader->tokens, ctx->base.screen);
+   }
+
+   assert(nir != NULL);
+
+   if (nir->info.stage != MESA_SHADER_VERTEX)
+      nir->info.inputs_read = d3d12_reassign_driver_locations(&nir->inputs);
+   else
+      nir->info.inputs_read = d3d12_sort_by_driver_location(&nir->inputs);
+
+   if (nir->info.stage != MESA_SHADER_FRAGMENT)
+      nir->info.outputs_written = d3d12_reassign_driver_locations(&nir->outputs);
+   else
+      d3d12_sort_ps_outputs(&nir->outputs);
+
+   /* Keep this initial shader as the blue print for possible variants */
+   sel->initial = nir;
+
+   return sel;
 }
 
 void
