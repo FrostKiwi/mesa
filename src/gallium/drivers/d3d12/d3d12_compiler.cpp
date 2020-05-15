@@ -189,6 +189,7 @@ struct d3d12_selection_context {
    struct d3d12_context *ctx;
    bool needs_point_sprite_lowering;
    bool samples_int_textures;
+   unsigned frag_result_color_lowering;
 };
 
 static d3d12_shader_selector*
@@ -264,6 +265,18 @@ d3d12_make_passthrough_gs(struct d3d12_context *ctx, d3d12_shader_selector *vs)
    gs->passthrough_varyings = vs->current->nir->info.outputs_written;
 
    return gs;
+}
+
+static unsigned
+frag_result_color_lowering(struct d3d12_context *ctx)
+{
+   struct d3d12_shader_selector *fs = ctx->gfx_stages[PIPE_SHADER_FRAGMENT];
+   assert(fs);
+
+   if (fs->first->nir->info.outputs_written & BITFIELD64_BIT(FRAG_RESULT_COLOR))
+      return ctx->fb.nr_cbufs > 1 ? ctx->fb.nr_cbufs : 0;
+
+   return 0;
 }
 
 static bool
@@ -357,6 +370,9 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
       } else if (have->gs.writes_psize) {
          return false;
       }
+   } else if (expect->stage == PIPE_SHADER_FRAGMENT) {
+      if (expect->fs.frag_result_color_lowering != have->fs.frag_result_color_lowering)
+         return false;
    }
 
    if (expect->int_tex_states.n_states != have->int_tex_states.n_states)
@@ -406,7 +422,8 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       key->gs.sprite_coord_enable = rast->sprite_coord_enable;
       key->gs.sprite_origin_upper_left = (rast->sprite_coord_mode != PIPE_SPRITE_COORD_LOWER_LEFT);
       key->gs.aa_point = rast->point_smooth;
-   }
+   } else if (stage == PIPE_SHADER_FRAGMENT)
+      key->fs.frag_result_color_lowering = sel_ctx->frag_result_color_lowering;
 
    if (sel_ctx->samples_int_textures) {
       key->int_tex_states.n_states = sel_ctx->ctx->tex_wrap_states[stage].n_states;
@@ -457,6 +474,10 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
 
    if (key.int_tex_states.n_states)
       NIR_PASS_V(new_nir_variant, d3d12_lower_sample_to_txf_for_integer_tex, &key.int_tex_states);
+
+   if (key.fs.frag_result_color_lowering)
+      NIR_PASS_V(new_nir_variant, d3d12_lower_frag_result,
+                 key.fs.frag_result_color_lowering);
 
    /* Add the needed in and outputs, and re-sort */
    uint64_t mask = key.required_varying_inputs & ~new_nir_variant->info.inputs_read;
@@ -627,6 +648,7 @@ d3d12_select_shader_variants(struct d3d12_context *ctx, const struct pipe_draw_i
 
    sel_ctx.ctx = ctx;
    sel_ctx.needs_point_sprite_lowering = needs_point_sprite_lowering(ctx, dinfo);
+   sel_ctx.frag_result_color_lowering = frag_result_color_lowering(ctx);
 
    validate_geometry_shader(&sel_ctx);
 
