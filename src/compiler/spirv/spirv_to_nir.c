@@ -5664,6 +5664,9 @@ spirv_to_nir(const uint32_t *words, size_t word_count,
       entry_point->is_entrypoint = true;
    }
 
+   /* structurize the CFG */
+   nir_lower_goto_ifs(b->shader);
+
    /* When multiple shader stages exist in the same SPIR-V module, we
     * generate input and output variables for every stage, in the same
     * NIR program.  These dead variables can be invalid NIR.  For example,
