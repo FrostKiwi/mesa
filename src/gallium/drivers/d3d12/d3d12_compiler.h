@@ -63,6 +63,10 @@ struct d3d12_shader_key {
       unsigned aa_point:1;
    } gs;
 
+   struct {
+      unsigned frag_result_color_lowering : 4;
+   } fs;
+
    d3d12_wrap_sampler_states int_tex_states;
 };
 
