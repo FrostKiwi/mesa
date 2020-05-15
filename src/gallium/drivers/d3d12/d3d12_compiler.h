@@ -62,6 +62,8 @@ struct d3d12_shader_key {
       unsigned writes_psize:1;
       unsigned aa_point:1;
    } gs;
+
+   d3d12_wrap_sampler_states int_tex_states;
 };
 
 struct d3d12_shader {

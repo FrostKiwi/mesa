@@ -326,6 +326,12 @@ d3d12_fill_current_shader_key(d3d12_shader_selector *sel, struct d3d12_context *
    shader->key.required_varying_inputs = shader->nir->info.inputs_read & ~system_generated_in_values;
    shader->key.required_varying_outputs = shader->nir->info.outputs_written & ~system_out_values;
 
+   /* Copy only the number of texture states so that we don't force a rer-creation of the
+    * shader only because there are any texturs. We have to keep the initial version of the
+    * shader intact though, because we need the sampling instructions for loweing the boundary
+    * conditions and the texture instructions itself when they change. */
+   if (sel->samples_int_textures)
+      shader->key.int_tex_states.n_states = ctx->tex_wrap_states[sel->stage].n_states;
 }
 
 static bool
@@ -352,6 +358,13 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
          return false;
       }
    }
+
+   if (expect->int_tex_states.n_states != have->int_tex_states.n_states)
+      return false;
+
+   if (memcmp(expect->int_tex_states.states, have->int_tex_states.states,
+              expect->int_tex_states.n_states * sizeof(d3d12_wrap_sampler_state)))
+      return false;
 
    return true;
 }
@@ -394,6 +407,18 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       key->gs.sprite_origin_upper_left = (rast->sprite_coord_mode != PIPE_SPRITE_COORD_LOWER_LEFT);
       key->gs.aa_point = rast->point_smooth;
    }
+
+   if (sel_ctx->samples_int_textures) {
+      key->int_tex_states.n_states = sel_ctx->ctx->tex_wrap_states[stage].n_states;
+      /* Copy only states with integer textures */
+      for(unsigned  i = 0; i < key->int_tex_states.n_states; ++i) {
+         auto& wrap_state = sel_ctx->ctx->tex_wrap_states[stage].states[i];
+         if (wrap_state.is_int_sampler) {
+            memcpy(&key->int_tex_states.states[i],
+                   &wrap_state, sizeof(wrap_state));
+         }
+      }
+   }
 }
 
 static void
@@ -429,6 +454,9 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
       nir_function_impl *impl = nir_shader_get_entrypoint(new_nir_variant);
       nir_shader_gather_info(new_nir_variant, impl);
    }
+
+   if (key.int_tex_states.n_states)
+      NIR_PASS_V(new_nir_variant, d3d12_lower_sample_to_txf_for_integer_tex, &key.int_tex_states);
 
    /* Add the needed in and outputs, and re-sort */
    uint64_t mask = key.required_varying_inputs & ~new_nir_variant->info.inputs_read;
