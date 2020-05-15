@@ -230,6 +230,15 @@ d3d12_current_batch(struct d3d12_context *ctx)
    return ctx->batches + ctx->current_batch_idx;
 }
 
+#define d3d12_foreach_submitted_batch(ctx, batch) \
+   unsigned oldest = (ctx->current_batch_idx + 1) % ARRAY_SIZE(ctx->batches); \
+   while (ctx->batches[oldest].fence == NULL && oldest != ctx->current_batch_idx) \
+      oldest = (oldest + 1) % ARRAY_SIZE(ctx->batches); \
+   struct d3d12_batch *batch = &ctx->batches[oldest]; \
+   for (; oldest != ctx->current_batch_idx; \
+        oldest = (oldest + 1) % ARRAY_SIZE(ctx->batches), \
+        batch = &ctx->batches[oldest])
+
 struct pipe_context *
 d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags);
 

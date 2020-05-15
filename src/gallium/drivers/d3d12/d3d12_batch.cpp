@@ -105,8 +105,8 @@ delete_object(set_entry *entry)
    object->Release();
 }
 
-static void
-reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
+void
+d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
 
@@ -138,7 +138,7 @@ reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 void
 d3d12_destroy_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 {
-   reset_batch(ctx, batch);
+   d3d12_reset_batch(ctx, batch);
    batch->cmdalloc->Release();
    d3d12_descriptor_heap_free(batch->sampler_heap);
    d3d12_descriptor_heap_free(batch->view_heap);
@@ -156,7 +156,7 @@ d3d12_start_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    ID3D12DescriptorHeap* heaps[2] = { d3d12_descriptor_heap_get(batch->view_heap),
                                       d3d12_descriptor_heap_get(batch->sampler_heap) };
 
-   reset_batch(ctx, batch);
+   d3d12_reset_batch(ctx, batch);
 
    /* Create or reset global command list */
    if (ctx->cmdlist) {
@@ -243,11 +243,4 @@ d3d12_batch_reference_object(struct d3d12_batch *batch,
       entry = _mesa_set_add(batch->objects, object);
       object->AddRef();
    }
-}
-
-void
-d3d12_batch_wait_fence(struct d3d12_batch *batch)
-{
-   if (batch->fence)
-      d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
 }
