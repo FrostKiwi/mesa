@@ -54,6 +54,26 @@ TEST_F(ComputeTest, two_global_arrays)
       EXPECT_EQ(g1[i], expected[i]);
 }
 
+TEST_F(ComputeTest, two_constant_arrays)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__constant uint *c1, __global uint *g1, __constant uint *c2)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       g1[idx] -= c1[idx] + c2[idx];\n\
+   }\n";
+   auto g1 = ShaderArg<uint32_t>({ 10, 20, 30, 40 }, SHADER_ARG_INOUT);
+   auto c1 = ShaderArg<uint32_t>({ 1, 2, 3, 4 }, SHADER_ARG_INPUT);
+   auto c2 = ShaderArg<uint32_t>(std::vector<uint32_t>(16384, 5), SHADER_ARG_INPUT);
+   const uint32_t expected[] = {
+      4, 13, 22, 31
+   };
+
+   run_shader(kernel_source, g1.size(), 1, 1, c1, g1, c2);
+   for (int i = 0; i < g1.size(); ++i)
+      EXPECT_EQ(g1[i], expected[i]);
+}
+
 TEST_F(ComputeTest, globals_8bit)
 {
    const char *kernel_source =
