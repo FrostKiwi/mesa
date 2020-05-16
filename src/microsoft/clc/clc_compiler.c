@@ -422,6 +422,47 @@ shared_type_info(const struct glsl_type *type, unsigned *size, unsigned *align)
    *align = glsl_get_cl_alignment(type);
 }
 
+static nir_variable *
+add_kernel_inputs_var(struct clc_dxil_object *dxil, nir_shader *nir,
+                      unsigned *cbv_id)
+{
+   if (!dxil->kernel->num_args)
+      return NULL;
+
+   struct clc_dxil_metadata *metadata = &dxil->metadata;
+   unsigned size = 0;
+
+   nir_foreach_variable(var, &nir->inputs)
+      size = MAX2(size,
+                  var->data.driver_location +
+                  glsl_get_cl_size(var->type));
+
+   size = align(size, 4);
+
+   nir_variable *var =
+      nir_variable_create(nir, nir_var_mem_ubo,
+                          glsl_array_type(glsl_uint_type(),
+                                          size / 4, 0),
+                          "kernel_inputs");
+   var->data.binding = (*cbv_id)++;
+   var->data.how_declared = nir_var_hidden;
+   return var;
+}
+
+static nir_variable *
+add_global_work_offset_var(struct clc_dxil_object *dxil,
+                           struct nir_shader *nir, unsigned *cbv_id)
+{
+   struct clc_dxil_metadata *metadata = &dxil->metadata;
+   nir_variable *var =
+      nir_variable_create(nir, nir_var_mem_ubo,
+                          glsl_array_type(glsl_uint_type(), 3, 0),
+                          "kernel_global_work_offset");
+   var->data.binding = (*cbv_id)++;
+   var->data.how_declared = nir_var_hidden;
+   return var;
+}
+
 static void
 clc_lower_ubo_to_ssbo(nir_shader *nir,
                       const struct clc_kernel_info *kerninfo, unsigned *uav_id)
@@ -634,6 +675,17 @@ clc_to_dxil(struct clc_context *ctx,
 
    NIR_PASS_V(nir, nir_opt_deref);
    NIR_PASS_V(nir, nir_lower_vars_to_ssa);
+
+   unsigned cbv_id = 0;
+
+   nir_variable *inputs_var =
+      add_kernel_inputs_var(dxil, nir, &cbv_id);
+   nir_variable *global_work_offset_var =
+      add_global_work_offset_var(dxil, nir, &cbv_id);
+
+   NIR_PASS_V(nir, dxil_nir_lower_kernel_input_loads, inputs_var);
+   NIR_PASS_V(nir, dxil_nir_lower_kernel_global_work_offset,
+              global_work_offset_var);
    NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
    NIR_PASS_V(nir, dxil_nir_opt_alu_deref_srcs);
    NIR_PASS_V(nir, dxil_nir_lower_atomics_to_dxil);
@@ -724,12 +776,8 @@ clc_to_dxil(struct clc_context *ctx,
       }
    }
 
-   unsigned cbv_id = 0;
-
-   if (dxil->kernel->num_args)
-      metadata->kernel_inputs_cbv_id = cbv_id++;
-
-   metadata->global_work_offset_cbv_id = cbv_id++;
+   metadata->kernel_inputs_cbv_id = inputs_var ? inputs_var->data.binding : 0;
+   metadata->global_work_offset_cbv_id = global_work_offset_var->data.binding;
    metadata->num_uavs = uav_id;
 
    ralloc_free(nir);

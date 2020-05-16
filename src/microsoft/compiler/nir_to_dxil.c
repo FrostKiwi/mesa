@@ -410,8 +410,6 @@ struct ntd_context {
 
    const struct dxil_mdnode *cbv_metadata_nodes[MAX_CBVS];
    const struct dxil_value *cbv_handles[MAX_CBVS];
-   const struct dxil_value *kernel_inputs_handle;
-   const struct dxil_value *kernel_global_work_offset_handle;
    unsigned num_cbvs;
 
    const struct dxil_mdnode *sampler_metadata_nodes[MAX_SAMPLERS];
@@ -955,77 +953,6 @@ emit_global_consts(struct ntd_context *ctx, struct exec_list *globals)
       if (!_mesa_hash_table_insert(ctx->consts, var, (void *)gvar))
          return false;
    }
-
-   return true;
-}
-
-static bool
-emit_kernel_global_work_offset_cbv(struct ntd_context *ctx)
-{
-   const struct dxil_type *int32 = dxil_module_get_int_type(&ctx->mod, 32);
-   const struct dxil_type *array_type = dxil_module_get_array_type(&ctx->mod, int32, 3);
-   const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod,
-                                                                     "kernel_global_work_offset",
-                                                                     &array_type, 1);
-   resource_array_layout layout = { ctx->num_cbvs, ctx->num_cbvs, 1 };
-   const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
-                                                          "kernel_global_work_offset",
-                                                          &layout, 3 * sizeof(int32_t));
-
-   if (!cbv_meta)
-      return false;
-
-   ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
-   add_resource(ctx, DXIL_RES_CBV, &layout);
-
-   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_CBV,
-                                                                        ctx->num_cbvs, ctx->num_cbvs,
-                                                                        false);
-   if (!handle)
-      return false;
-
-   ctx->kernel_global_work_offset_handle = handle;
-   ctx->num_cbvs++;
-
-   return true;
-}
-
-static bool
-emit_kernel_inputs_cbv(struct ntd_context *ctx, nir_shader *nir)
-{
-   unsigned size = 0;
-
-   nir_foreach_variable(var, &nir->inputs)
-      size = MAX2(size,
-                  var->data.driver_location +
-                  glsl_get_cl_size(var->type));
-
-   size = align(size, 4);
-   if (!size)
-      return true;
-
-   const struct dxil_type *int32 = dxil_module_get_int_type(&ctx->mod, 32);
-   const struct dxil_type *array_type = dxil_module_get_array_type(&ctx->mod, int32, size / 4);
-   const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod, "kernel_inputs",
-                                                                     &array_type, 1);
-   resource_array_layout layout = { ctx->num_cbvs, ctx->num_cbvs, 1 };
-   const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
-                                                          "kernel_inputs", &layout, size);
-
-   if (!cbv_meta)
-      return false;
-
-   ctx->cbv_metadata_nodes[ctx->num_cbvs] = cbv_meta;
-   add_resource(ctx, DXIL_RES_CBV, &layout);
-
-   const struct dxil_value *handle = emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_CBV,
-                                                                        ctx->num_cbvs, ctx->num_cbvs,
-                                                                        false);
-   if (!handle)
-      return false;
-
-   ctx->kernel_inputs_handle = handle;
-   ctx->num_cbvs++;
 
    return true;
 }
@@ -1994,12 +1921,6 @@ emit_load_global_invocation_id(struct ntd_context *ctx,
 {
    assert(intr->dest.is_ssa);
    nir_component_mask_t comps = nir_ssa_def_components_read(&intr->dest.ssa);
-   const struct dxil_value *offset = NULL;
-
-   if (ctx->kernel_global_work_offset_handle)
-      offset = load_ubo(ctx, ctx->kernel_global_work_offset_handle,
-                        dxil_module_get_int32_const(&ctx->mod, 0),
-                        DXIL_I32);
 
    for (int i = 0; i < nir_intrinsic_dest_components(intr); i++) {
       if (comps & (1 << i)) {
@@ -2007,11 +1928,6 @@ emit_load_global_invocation_id(struct ntd_context *ctx,
          if (!idx)
             return false;
          const struct dxil_value *globalid = emit_threadid_call(ctx, idx);
-
-         if (offset)
-            globalid = dxil_emit_binop(&ctx->mod, DXIL_BINOP_ADD, globalid,
-                                       dxil_emit_extractval(&ctx->mod, offset, i),
-                                       0);
 
          if (!globalid)
             return false;
@@ -2062,34 +1978,6 @@ emit_load_local_work_group_id(struct ntd_context *ctx,
             return false;
          store_dest_int(ctx, &intr->dest, i, groupid);
       }
-   }
-   return true;
-}
-
-static bool
-emit_load_kernel_input(struct ntd_context *ctx, nir_intrinsic_instr *intr)
-{
-   const struct dxil_value *handle = ctx->kernel_inputs_handle;
-   const struct dxil_value *offset;
-   nir_const_value *const_offset = nir_src_as_const_value(intr->src[0]);
-   assert(const_offset);
-   if (const_offset) {
-      offset = dxil_module_get_int32_const(&ctx->mod, const_offset->i32 >> 4);
-   } else {
-      const struct dxil_value *offset_src = get_src(ctx, &intr->src[0], 0, nir_type_uint);
-      const struct dxil_value *c4 = dxil_module_get_int32_const(&ctx->mod, 4);
-      offset = dxil_emit_binop(&ctx->mod, DXIL_BINOP_ASHR, offset_src, c4, 0);
-   }
-
-   const struct dxil_value *agg = load_ubo(ctx, handle, offset, DXIL_I32);
-
-   if (!agg)
-      return false;
-
-   unsigned start = (const_offset->i32 % 16) / 4;
-   for (unsigned i = 0; i < intr->dest.ssa.num_components; ++i) {
-      const struct dxil_value *retval = dxil_emit_extractval(&ctx->mod, agg, start + i);
-      store_dest_int(ctx, &intr->dest, i, retval);
    }
    return true;
 }
@@ -2863,8 +2751,6 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_local_invocation_id(ctx, intr);
    case nir_intrinsic_load_work_group_id:
       return emit_load_local_work_group_id(ctx, intr);
-   case nir_intrinsic_load_kernel_input:
-      return emit_load_kernel_input(ctx, intr);
    case nir_intrinsic_load_global_dxil:
       return emit_load_global(ctx, intr);
    case nir_intrinsic_store_global_dxil:
@@ -3600,13 +3486,6 @@ emit_cbvs(struct ntd_context *ctx, nir_shader *s)
          if (!emit_ubo_var(ctx, var))
             return false;
       }
-   }
-
-   if (s->info.stage == MESA_SHADER_KERNEL) {
-      if (!emit_kernel_inputs_cbv(ctx, s))
-         return false;
-      if (!emit_kernel_global_work_offset_cbv(ctx))
-         return false;
    }
 
    return true;
