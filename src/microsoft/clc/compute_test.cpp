@@ -476,10 +476,6 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
       switch (dxil->kernel->args[i].address_qualifier) {
       case CLC_KERNEL_ARG_ADDRESS_GLOBAL: {
          assert(dxil->metadata.args[i].size == sizeof(uint32_t));
-         add_uav_resource(resources, 0, dxil->metadata.args[i].globalptr.buf_id,
-                          arg->get_data(), arg->get_num_elems(),
-                          arg->get_elem_size());
-
          uint32_t *ptr_slot = (uint32_t *)slot;
          *ptr_slot = dxil->metadata.args[i].globalptr.buf_id << 28;
          break;
@@ -497,6 +493,15 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
       default:
          assert(0);
       }
+   }
+
+   for (unsigned i = 0; i < dxil->kernel->num_args; ++i) {
+      RawShaderArg *arg = args[i];
+
+      if (dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL)
+         add_uav_resource(resources, 0, dxil->metadata.args[i].globalptr.buf_id,
+                          arg->get_data(), arg->get_num_elems(),
+                          arg->get_elem_size());
    }
 
    for (unsigned i = 0; i < dxil->metadata.num_consts; ++i)
