@@ -2351,6 +2351,37 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
+emit_load_ubo_dxil(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   assert(nir_dest_num_components(intr->dest) <= 4);
+   assert(nir_dest_bit_size(intr->dest) == 32);
+
+   /* We only support const indexes right now. */
+   nir_const_value *index = nir_src_as_const_value(intr->src[0]);
+   assert(index && index->u32 < ARRAY_SIZE(ctx->cbv_handles));
+
+   const struct dxil_value *offset =
+      get_src(ctx, &intr->src[1], 0, nir_type_uint);
+
+   if (!index || !offset)
+      return false;
+
+   const struct dxil_value *handle = ctx->cbv_handles[index->u32];
+   if (!handle)
+      return false;
+
+   const struct dxil_value *agg = load_ubo(ctx, handle, offset, DXIL_I32);
+   if (!agg)
+      return false;
+
+   for (unsigned i = 0; i < nir_dest_num_components(intr->dest); i++)
+      store_dest_int(ctx, &intr->dest, i,
+                     dxil_emit_extractval(&ctx->mod, agg, i));
+
+   return true;
+}
+
+static bool
 emit_store_output(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                   nir_variable *output)
 {
@@ -2853,6 +2884,8 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_store_ptr(ctx, intr);
    case nir_intrinsic_load_ubo:
       return emit_load_ubo(ctx, intr);
+   case nir_intrinsic_load_ubo_dxil:
+      return emit_load_ubo_dxil(ctx, intr);
    case nir_intrinsic_load_front_face:
       assert(ctx->ps_front_face);
       return emit_load_input_interpolated(ctx, intr, ctx->ps_front_face);
