@@ -467,7 +467,6 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
    std::vector<uint8_t> argsbuf(dxil->metadata.kernel_inputs_buf_size);
    uint32_t global_work_offset[3] = {0, 0, 0};
    Resources resources;
-   unsigned uav_idx = 0;
 
    for (unsigned i = 0; i < dxil->kernel->num_args; ++i) {
       RawShaderArg *arg = args[i];
@@ -482,7 +481,7 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
                           arg->get_elem_size());
 
          uint32_t *ptr_slot = (uint32_t *)slot;
-         *ptr_slot = uav_idx++ << 28;
+         *ptr_slot = dxil->metadata.args[i].globalptr.buf_id << 28;
          break;
       }
       case CLC_KERNEL_ARG_ADDRESS_LOCAL: {
