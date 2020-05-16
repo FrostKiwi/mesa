@@ -34,5 +34,7 @@ bool dxil_nir_lower_loads_stores_to_dxil(nir_shader *shader);
 bool dxil_nir_lower_atomics_to_dxil(nir_shader *shader);
 bool dxil_nir_lower_deref_ssbo(nir_shader *shader);
 bool dxil_nir_opt_alu_deref_srcs(nir_shader *shader);
+bool dxil_nir_lower_kernel_input_loads(nir_shader *shader, nir_variable *var);
+bool dxil_nir_lower_kernel_global_work_offset(nir_shader *shader, nir_variable *var);
 
 #endif /* DXIL_NIR_H */

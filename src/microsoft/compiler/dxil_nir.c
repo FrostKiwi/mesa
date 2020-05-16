@@ -187,6 +187,101 @@ lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
    return true;
 }
 
+static nir_ssa_def *
+ubo_load_select_32b_comps(nir_builder *b, nir_ssa_def *vec32,
+                          nir_ssa_def *offset, unsigned num_bytes)
+{
+   assert(num_bytes == 16 || num_bytes == 12 || num_bytes == 8 ||
+          num_bytes == 4 || num_bytes == 3 || num_bytes == 2 ||
+          num_bytes == 1);
+   assert(vec32->num_components == 4);
+
+   /* 16 and 12 byte types are always aligned on 16 bytes. */
+   if (num_bytes > 8)
+      return vec32;
+
+   nir_ssa_def *comps[4];
+   nir_ssa_def *cond;
+
+   for (unsigned i = 0; i < 4; i++)
+      comps[i] = nir_channel(b, vec32, i);
+
+   /* If we have 8bytes or less to load, select which half the vec4 should
+    * be used.
+    */
+   cond = nir_ine(b, nir_iand(b, offset, nir_imm_int(b, 0x8)),
+                                 nir_imm_int(b, 0));
+
+   comps[0] = nir_bcsel(b, cond, comps[2], comps[0]);
+   comps[1] = nir_bcsel(b, cond, comps[3], comps[1]);
+
+   /* Thanks to the CL alignment constraints, if we want 8 bytes we're done. */
+   if (num_bytes == 8)
+      return nir_vec(b, comps, 2);
+
+   /* 4 bytes or less needed, select which of the 32bit component should be
+    * used and return it. The sub-32bit split is handled in
+    * extract_comps_from_vec32().
+    */
+   cond = nir_ine(b, nir_iand(b, offset, nir_imm_int(b, 0x4)),
+                                 nir_imm_int(b, 0));
+   return nir_bcsel(b, cond, comps[1], comps[0]);
+}
+
+static nir_ssa_def *
+emit_load_ubo_dxil(nir_builder *b, nir_ssa_def *buffer,
+                   nir_ssa_def *offset, unsigned num_components,
+                   unsigned bit_size)
+{
+   nir_ssa_def *idx = nir_ushr(b, offset, nir_imm_int(b, 4));
+   nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
+   unsigned num_bits = num_components * bit_size;
+   unsigned comp_idx = 0;
+
+   /* We need to split loads in 16byte chunks because that's the
+    * granularity of cBufferLoadLegacy().
+    */
+   for (unsigned i = 0; i < num_bits; i += (16 * 8)) {
+      /* For each 16byte chunk (or smaller) we generate a 32bit ubo vec
+       * load.
+       */
+      unsigned subload_num_bits = MIN2(num_bits - i, 16 * 8);
+      nir_intrinsic_instr *load =
+         nir_intrinsic_instr_create(b->shader,
+                                    nir_intrinsic_load_ubo_dxil);
+
+      load->num_components = 4;
+      load->src[0] = nir_src_for_ssa(buffer);
+      load->src[1] = nir_src_for_ssa(nir_iadd(b, idx, nir_imm_int(b, i / (16 * 8))));
+      nir_ssa_dest_init(&load->instr, &load->dest, load->num_components,
+                        32, NULL);
+      nir_builder_instr_insert(b, &load->instr);
+
+      nir_ssa_def *vec32 = &load->dest.ssa;
+
+      /* First re-arrange the vec32 to account for intra 16-byte offset. */
+      vec32 = ubo_load_select_32b_comps(b, vec32, offset, subload_num_bits / 8);
+
+      /* If we have 2 bytes or less to load we need to adjust the u32 value so
+       * we can always extract the LSB.
+       */
+      if (subload_num_bits <= 16) {
+         nir_ssa_def *shift = nir_imul(b, nir_iand(b, offset,
+                                                      nir_imm_int(b, 3)),
+                                          nir_imm_int(b, 8));
+         vec32 = nir_ushr(b, vec32, shift);
+      }
+
+      /* And now comes the pack/unpack step to match the original type. */
+      extract_comps_from_vec32(b, vec32, bit_size, &comps[comp_idx],
+                               subload_num_bits / bit_size);
+      comp_idx += subload_num_bits / bit_size;
+   }
+
+   assert(comp_idx == num_components);
+   return nir_vec(b, comps, num_components);
+}
+
 static bool
 lower_store_deref(nir_builder *b, nir_intrinsic_instr *intr)
 {
@@ -969,6 +1064,102 @@ dxil_nir_opt_alu_deref_srcs(nir_shader *nir)
 
             nir_alu_instr *alu = nir_instr_as_alu(instr);
             progress |= lower_alu_deref_srcs(&b, alu);
+         }
+      }
+   }
+
+   return progress;
+}
+
+static bool
+lower_load_kernel_input(nir_builder *b, nir_intrinsic_instr *intr,
+                        nir_variable *var)
+{
+   nir_intrinsic_instr *load;
+
+   b->cursor = nir_before_instr(&intr->instr);
+
+   nir_ssa_def *result =
+      emit_load_ubo_dxil(b, nir_imm_int(b, var->data.binding),
+                         intr->src[0].ssa,
+                         nir_dest_num_components(intr->dest),
+                         nir_dest_bit_size(intr->dest));
+   nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
+   nir_instr_remove(&intr->instr);
+   return true;
+}
+
+bool
+dxil_nir_lower_kernel_input_loads(nir_shader *nir, nir_variable *var)
+{
+   bool progress = false;
+
+   foreach_list_typed(nir_function, func, node, &nir->functions) {
+      if (!func->is_entrypoint)
+         continue;
+      assert(func->impl);
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
+
+            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+
+            if (intr->intrinsic == nir_intrinsic_load_kernel_input)
+               progress |= lower_load_kernel_input(&b, intr, var);
+         }
+      }
+   }
+
+   return progress;
+}
+
+static bool
+lower_load_global_invocation_id(nir_builder *b, nir_intrinsic_instr *intr,
+                                nir_variable *var)
+{
+   nir_intrinsic_instr *load;
+
+   b->cursor = nir_after_instr(&intr->instr);
+
+   nir_ssa_def *offset =
+      emit_load_ubo_dxil(b, nir_imm_int(b, var->data.binding),
+                         nir_imm_int(b, 0),
+                         nir_dest_num_components(intr->dest),
+                         nir_dest_bit_size(intr->dest));
+   nir_ssa_def *result = nir_iadd(b, &intr->dest.ssa, offset);
+   nir_ssa_def_rewrite_uses_after(&intr->dest.ssa, nir_src_for_ssa(result),
+                                  result->parent_instr);
+   return true;
+}
+
+/* Make sure you only call this lowering pass once. */
+bool
+dxil_nir_lower_kernel_global_work_offset(nir_shader *nir, nir_variable *var)
+{
+   bool progress = false;
+
+   foreach_list_typed(nir_function, func, node, &nir->functions) {
+      if (!func->is_entrypoint)
+         continue;
+      assert(func->impl);
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
+
+            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+
+            if (intr->intrinsic == nir_intrinsic_load_global_invocation_id)
+               progress |= lower_load_global_invocation_id(&b, intr, var);
          }
       }
    }
