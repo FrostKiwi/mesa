@@ -481,6 +481,7 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
          break;
       }
       case CLC_KERNEL_ARG_ADDRESS_LOCAL: {
+         assert(dxil->metadata.args[i].size == sizeof(uint32_t));
          uint32_t *ptr_slot = (uint32_t *)slot;
          *ptr_slot = dxil->metadata.args[i].localptr.sharedmem_offset;
          break;
