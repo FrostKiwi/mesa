@@ -29,7 +29,11 @@
 static nir_ssa_def *
 ptr_to_buffer(nir_builder *b, nir_ssa_def *ptr)
 {
-   return nir_ishr(b, ptr, nir_imm_int(b, 28));
+   /* Buffers IDs are 1-based to support NULL pointers. We need to decrement
+    * them when calculating the buffer index passed to global_dxil
+    * intrinsics.
+    */
+   return nir_isub(b, nir_ishr(b, ptr, nir_imm_int(b, 28)), nir_imm_int(b, 1));
 }
 
 static nir_ssa_def *
@@ -863,7 +867,7 @@ lower_deref_ssbo(nir_builder *b, nir_deref_instr *deref)
       /* We turn all deref_var into deref_cast and build a pointer value based on
        * the var binding which encodes the UAV id.
        */
-      nir_ssa_def *ptr = nir_ishl(b, nir_imm_int(b, var->data.binding),
+      nir_ssa_def *ptr = nir_ishl(b, nir_imm_int(b, var->data.binding + 1),
                                   nir_imm_int(b, 28));
       nir_deref_instr *deref_cast =
          nir_build_deref_cast(b, ptr, nir_var_mem_global, deref->type,
