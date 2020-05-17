@@ -141,7 +141,7 @@ struct clc_dxil_metadata {
    struct {
       void *data;
       size_t size;
-      unsigned cbv_id;
+      unsigned uav_id;
    } consts[CLC_MAX_CONSTS];
    size_t num_consts;
 

@@ -511,9 +511,9 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
    }
 
    for (unsigned i = 0; i < dxil->metadata.num_consts; ++i)
-      add_cbv_resource(resources, 0, dxil->metadata.consts[i].cbv_id,
+      add_uav_resource(resources, 0, dxil->metadata.consts[i].uav_id,
                        dxil->metadata.consts[i].data,
-                       dxil->metadata.consts[i].size);
+                       dxil->metadata.consts[i].size / 4, 4);
 
    if (argsbuf.size())
       add_cbv_resource(resources, 0, dxil->metadata.kernel_inputs_cbv_id,

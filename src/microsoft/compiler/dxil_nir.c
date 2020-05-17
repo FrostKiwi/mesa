@@ -830,3 +830,84 @@ dxil_nir_lower_atomics_to_dxil(nir_shader *nir)
 
    return progress;
 }
+
+static void
+update_deref_mode(nir_deref_instr *deref, nir_variable_mode mode)
+{
+   deref->mode = mode;
+
+   nir_foreach_use_safe(src, &deref->dest.ssa) {
+      assert(src->is_ssa);
+      if (src->parent_instr->type != nir_instr_type_deref)
+         continue;
+
+      nir_deref_instr *sub_deref = nir_instr_as_deref(src->parent_instr);
+      if (!sub_deref)
+         continue;
+
+      update_deref_mode(sub_deref, mode);
+   }
+}
+
+static bool
+lower_deref_ssbo(nir_builder *b, nir_deref_instr *deref)
+{
+   assert(deref->mode == nir_var_mem_ssbo);
+   assert(deref->deref_type == nir_deref_type_var ||
+          deref->deref_type == nir_deref_type_cast);
+   nir_variable *var = deref->var;
+
+   b->cursor = nir_before_instr(&deref->instr);
+
+   if (deref->deref_type == nir_deref_type_var) {
+      /* We turn all deref_var into deref_cast and build a pointer value based on
+       * the var binding which encodes the UAV id.
+       */
+      nir_ssa_def *ptr = nir_ishl(b, nir_imm_int(b, var->data.binding),
+                                  nir_imm_int(b, 28));
+      nir_deref_instr *deref_cast =
+         nir_build_deref_cast(b, ptr, nir_var_mem_global, deref->type,
+                              glsl_get_explicit_stride(var->type));
+      nir_ssa_def_rewrite_uses(&deref->dest.ssa,
+                               nir_src_for_ssa(&deref_cast->dest.ssa));
+      nir_instr_remove(&deref->instr);
+
+      deref = deref_cast;
+   }
+
+   update_deref_mode(deref, nir_var_mem_global);
+   return true;
+}
+
+bool
+dxil_nir_lower_deref_ssbo(nir_shader *nir)
+{
+   bool progress = false;
+
+   foreach_list_typed(nir_function, func, node, &nir->functions) {
+      if (!func->is_entrypoint)
+         continue;
+      assert(func->impl);
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_deref)
+               continue;
+
+            nir_deref_instr *deref = nir_instr_as_deref(instr);
+
+            if (deref->mode != nir_var_mem_ssbo ||
+                (deref->deref_type != nir_deref_type_var &&
+                 deref->deref_type != nir_deref_type_cast))
+               continue;
+
+            progress |= lower_deref_ssbo(&b, deref);
+         }
+      }
+   }
+
+   return progress;
+}
