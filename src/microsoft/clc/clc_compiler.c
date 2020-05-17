@@ -379,6 +379,54 @@ shared_type_info(const struct glsl_type *type, unsigned *size, unsigned *align)
    *align = glsl_get_cl_alignment(type);
 }
 
+static void
+clc_lower_ubo_to_ssbo(nir_shader *nir,
+                      const struct clc_kernel_info *kerninfo, unsigned *uav_id)
+{
+   /* First mark constant inputs as global inputs. */
+   for (unsigned i = 0; i < kerninfo->num_args; i++) {
+      if (kerninfo->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_CONSTANT) {
+         assert(!(nir->info.cs.global_inputs & BITFIELD_BIT(i)));
+         nir->info.cs.global_inputs |= BITFIELD_BIT(i);
+      }
+   }
+
+   /* Update UBO vars and assign them a binding. */
+   nir_foreach_variable(var, &nir->uniforms) {
+      if (var->data.mode == nir_var_mem_ubo) {
+         var->data.mode = nir_var_mem_ssbo;
+         var->data.binding = (*uav_id)++;
+      }
+   }
+
+   /* And finally patch all the derefs referincing the constant
+    * variables/pointers.
+    */
+   nir_foreach_function(func, nir) {
+      if (!func->is_entrypoint)
+         continue;
+
+      assert(func->impl);
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_deref)
+               continue;
+
+            nir_deref_instr *deref = nir_instr_as_deref(instr);
+
+            if (deref->mode != nir_var_mem_ubo)
+               continue;
+
+            deref->mode = nir_var_mem_ssbo;
+         }
+      }
+   }
+}
+
 struct clc_dxil_object *
 clc_to_dxil(struct clc_context *ctx,
             const struct clc_object *obj,
@@ -520,6 +568,8 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_opt_dce);
 
    NIR_PASS_V(nir, dxil_nir_lower_ubo_to_temp);
+   NIR_PASS_V(nir, clc_lower_ubo_to_ssbo, dxil->kernel, &uav_id);
+   NIR_PASS_V(nir, dxil_nir_lower_deref_ssbo);
 
    NIR_PASS_V(nir, nir_lower_vars_to_explicit_types,
               nir_var_mem_shared, shared_type_info);
@@ -537,16 +587,8 @@ clc_to_dxil(struct clc_context *ctx,
 
    NIR_PASS_V(nir, nir_opt_deref);
    NIR_PASS_V(nir, nir_lower_vars_to_ssa);
-
    NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
    NIR_PASS_V(nir, dxil_nir_lower_atomics_to_dxil);
-
-   // Calculate UBO bindings
-   unsigned binding = 0;
-   nir_foreach_variable_safe(var, &nir->uniforms) {
-      if (var->data.mode == nir_var_mem_ubo)
-         var->data.binding = binding++;
-   }
 
    NIR_PASS_V(nir, nir_lower_bit_size, lower_bit_size_callback, NULL);
 
@@ -610,9 +652,9 @@ clc_to_dxil(struct clc_context *ctx,
           sizeof(metadata->local_size));
 
    nir_foreach_variable(var, &nir->uniforms) {
-      if (var->data.mode == nir_var_mem_ubo && var->constant_initializer) {
+      if (var->data.mode == nir_var_mem_ssbo && var->constant_initializer) {
          if (glsl_type_is_array(var->type)) {
-            int size = glsl_get_cl_size(var->type);
+            int size = align(glsl_get_cl_size(var->type), 4);
             uint8_t *data = malloc(size);
             if (!data)
                goto err_free_dxil;
@@ -627,16 +669,20 @@ clc_to_dxil(struct clc_context *ctx,
 
             metadata->consts[metadata->num_consts].data = data;
             metadata->consts[metadata->num_consts].size = size;
-            metadata->consts[metadata->num_consts].cbv_id = metadata->num_consts;
+            metadata->consts[metadata->num_consts].uav_id = var->data.binding;
             metadata->num_consts++;
          } else
             unreachable("unexpected constant initializer");
       }
    }
 
-   metadata->kernel_inputs_cbv_id = metadata->num_consts;
-   metadata->global_work_offset_cbv_id = metadata->num_consts + 1;
-   metadata->num_uavs = util_bitcount64(nir->info.cs.global_inputs);
+   unsigned cbv_id = 0;
+
+   if (dxil->kernel->num_args)
+      metadata->kernel_inputs_cbv_id = cbv_id++;
+
+   metadata->global_work_offset_cbv_id = cbv_id++;
+   metadata->num_uavs = uav_id;
 
    ralloc_free(nir);
    glsl_type_singleton_decref();
