@@ -191,6 +191,15 @@ protected:
       enum ShaderArgDirection dir;
    };
 
+   class NullShaderArg : public RawShaderArg {
+   public:
+      NullShaderArg() : RawShaderArg(SHADER_ARG_INPUT) { }
+      size_t get_elem_size() const override { return 0; }
+      size_t get_num_elems() const override { return 0; }
+      const void *get_data() const override { return NULL; }
+      void *get_data() override { return NULL; }
+   };
+
    template <typename T>
    class ShaderArg : public std::vector<T>, public RawShaderArg
    {

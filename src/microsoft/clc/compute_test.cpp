@@ -282,7 +282,7 @@ void
 ComputeTest::get_buffer_data(ComPtr<ID3D12Resource> res,
                              void *buf, size_t size)
 {
-   auto readback_res = create_buffer(size, D3D12_HEAP_TYPE_READBACK);
+   auto readback_res = create_buffer(MAX2(size, 4), D3D12_HEAP_TYPE_READBACK);
    resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
    cmdlist->CopyResource(readback_res.Get(), res.Get());
    resource_barrier(res, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON);
@@ -340,13 +340,13 @@ ComputeTest::create_uav_buffer(ComPtr<ID3D12Resource> res,
                                D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle)
 {
    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc;
-   uav_desc.Format = DXGI_FORMAT_UNKNOWN;
+   uav_desc.Format = DXGI_FORMAT_R32_TYPELESS;
    uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
    uav_desc.Buffer.FirstElement = 0;
-   uav_desc.Buffer.NumElements = width;
-   uav_desc.Buffer.StructureByteStride = byte_stride;
+   uav_desc.Buffer.NumElements = MAX2(width * byte_stride / 4, 1);
+   uav_desc.Buffer.StructureByteStride = 0;
    uav_desc.Buffer.CounterOffsetInBytes = 0;
-   uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+   uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
 
    dev->CreateUnorderedAccessView(res.Get(), NULL, &uav_desc, cpu_handle);
 }
@@ -356,7 +356,7 @@ ComputeTest::create_cbv(ComPtr<ID3D12Resource> res, size_t size,
                         D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle)
 {
    D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc;
-   cbv_desc.BufferLocation = res->GetGPUVirtualAddress();
+   cbv_desc.BufferLocation = res ? res->GetGPUVirtualAddress() : 0;
    cbv_desc.SizeInBytes = size;
 
    dev->CreateConstantBufferView(&cbv_desc, cpu_handle);
@@ -368,21 +368,22 @@ ComputeTest::add_uav_resource(ComputeTest::Resources &resources,
                               const void *data, size_t num_elems,
                               size_t elem_size)
 {
-   size_t size = elem_size * num_elems;
+   size_t size = MAX2(elem_size * num_elems, 4);
    D3D12_CPU_DESCRIPTOR_HANDLE handle;
    ComPtr<ID3D12Resource> res;
-
-   assert(size);
-   if (data)
-      res = create_buffer_with_data(data, size);
-   else
-      res = create_buffer(size, D3D12_HEAP_TYPE_DEFAULT);
-
    handle = uav_heap->GetCPUDescriptorHandleForHeapStart();
    handle = offset_cpu_handle(handle, resources.descs.size() * uav_heap_incr);
+
+   if (size) {
+      if (data)
+         res = create_buffer_with_data(data, size);
+      else
+         res = create_buffer(size, D3D12_HEAP_TYPE_DEFAULT);
+
+      resource_barrier(res, D3D12_RESOURCE_STATE_COMMON,
+                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+   }
    create_uav_buffer(res, num_elems, elem_size, handle);
-   resource_barrier(res, D3D12_RESOURCE_STATE_COMMON,
-                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
    resources.add(res, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, spaceid, resid);
    return res;
 }
@@ -395,11 +396,13 @@ ComputeTest::add_cbv_resource(ComputeTest::Resources &resources,
    unsigned aligned_size = align(size, 256);
    D3D12_CPU_DESCRIPTOR_HANDLE handle;
    ComPtr<ID3D12Resource> res;
-
-   assert(size && data);
-   res = create_sized_buffer_with_data(aligned_size, data, size);
    handle = uav_heap->GetCPUDescriptorHandleForHeapStart();
    handle = offset_cpu_handle(handle, resources.descs.size() * uav_heap_incr);
+
+   if (size) {
+     assert(data);
+     res = create_sized_buffer_with_data(aligned_size, data, size);
+   }
    create_cbv(res, aligned_size, handle);
    resources.add(res, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, spaceid, resid);
    return res;
@@ -481,7 +484,10 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
       case CLC_KERNEL_ARG_ADDRESS_GLOBAL: {
          assert(dxil->metadata.args[i].size == sizeof(uint32_t));
          uint32_t *ptr_slot = (uint32_t *)slot;
-         *ptr_slot = (dxil->metadata.args[i].globconstptr.buf_id + 1) << 28;
+         if (arg->get_data())
+            *ptr_slot = (dxil->metadata.args[i].globconstptr.buf_id + 1) << 28;
+         else
+            *ptr_slot = 0;
          break;
       }
       case CLC_KERNEL_ARG_ADDRESS_LOCAL: {
@@ -539,10 +545,14 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
    for (auto &range : resources.ranges) {
       if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_UAV) {
          for (unsigned i = range.OffsetInDescriptorsFromTableStart;
-              i < range.NumDescriptors; i++)
+              i < range.NumDescriptors; i++) {
+            if (!resources.descs[i].Get())
+               continue;
+
             resource_barrier(resources.descs[i],
                              D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                              D3D12_RESOURCE_STATE_COMMON);
+         }
       }
    }
 
