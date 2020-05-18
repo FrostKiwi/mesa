@@ -100,8 +100,10 @@ struct d3d12_shader_selector {
    struct d3d12_shader *first;
    struct d3d12_shader *current;
 
-   bool passthrough;
+   unsigned passthrough:1;
+   unsigned samples_int_textures:1;
    uint64_t passthrough_varyings;
+
 };
 
 
