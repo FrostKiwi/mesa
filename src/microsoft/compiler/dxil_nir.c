@@ -915,3 +915,63 @@ dxil_nir_lower_deref_ssbo(nir_shader *nir)
 
    return progress;
 }
+
+static bool
+lower_alu_deref_srcs(nir_builder *b, nir_alu_instr *alu)
+{
+   const nir_op_info *info = &nir_op_infos[alu->op];
+   bool progress = false;
+
+   b->cursor = nir_before_instr(&alu->instr);
+
+   for (unsigned i = 0; i < info->num_inputs; i++) {
+      nir_deref_instr *deref = nir_src_as_deref(alu->src[i].src);
+
+      if (!deref)
+         continue;
+
+      nir_deref_path path;
+      nir_deref_path_init(&path, deref, NULL);
+      nir_deref_instr *root_deref = path.path[0];
+      nir_deref_path_finish(&path);
+
+      if (root_deref->deref_type != nir_deref_type_cast)
+         continue;
+
+      nir_ssa_def *ptr =
+         nir_iadd(b, root_deref->parent.ssa,
+                     nir_build_deref_offset(b, deref, cl_type_size_align));
+      nir_instr_rewrite_src(&alu->instr, &alu->src[i].src, nir_src_for_ssa(ptr));
+      progress = true;
+   }
+
+   return progress;
+}
+
+bool
+dxil_nir_opt_alu_deref_srcs(nir_shader *nir)
+{
+   bool progress = false;
+
+   foreach_list_typed(nir_function, func, node, &nir->functions) {
+      if (!func->is_entrypoint)
+         continue;
+      assert(func->impl);
+
+      bool progress = false;
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_alu)
+               continue;
+
+            nir_alu_instr *alu = nir_instr_as_alu(instr);
+            progress |= lower_alu_deref_srcs(&b, alu);
+         }
+      }
+   }
+
+   return progress;
+}
