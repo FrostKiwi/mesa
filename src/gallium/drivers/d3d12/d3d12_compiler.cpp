@@ -188,6 +188,7 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
 struct d3d12_selection_context {
    struct d3d12_context *ctx;
    bool needs_point_sprite_lowering;
+   bool samples_int_textures;
 };
 
 static d3d12_shader_selector*
@@ -403,6 +404,7 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
    d3d12_shader_key key;
    nir_shader *new_nir_variant;
 
+   sel_ctx->samples_int_textures = sel->samples_int_textures;
    d3d12_fill_shader_key(sel_ctx, &key, sel->stage, prev, next);
 
    /* Check for an existing variant */
@@ -506,6 +508,31 @@ get_next_shader(struct d3d12_context *ctx, pipe_shader_type current)
    }
 }
 
+static bool
+scan_texture_use(nir_shader *nir)
+{
+   nir_foreach_function(func, nir) {
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr(instr, block) {
+            if (instr->type == nir_instr_type_tex) {
+               auto tex = nir_instr_as_tex(instr);
+               switch (tex->op) {
+               case nir_texop_tex:
+               case nir_texop_txb:
+               case nir_texop_txl:
+               case nir_texop_txd:
+                  if (tex->dest_type & (nir_type_int | nir_type_uint))
+                     return true;
+               default:
+                  ;
+               }
+            }
+         }
+      }
+   }
+   return false;
+}
+
 struct d3d12_shader_selector *
 d3d12_compile_shader(struct d3d12_context *ctx,
                      pipe_shader_type stage,
@@ -522,6 +549,8 @@ d3d12_compile_shader(struct d3d12_context *ctx,
       assert(shader->type == PIPE_SHADER_IR_TGSI);
       nir = tgsi_to_nir(shader->tokens, ctx->base.screen);
    }
+
+   sel->samples_int_textures = scan_texture_use(nir);
 
    assert(nir != NULL);
 
