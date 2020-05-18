@@ -142,12 +142,12 @@ protected:
    void create_cbv(ComPtr<ID3D12Resource> res, size_t size,
                    D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle);
 
-   void
+   ComPtr<ID3D12Resource>
    add_uav_resource(Resources &resources, unsigned spaceid, unsigned resid,
                     const void *data = NULL, size_t num_elems = 0,
                     size_t elem_size = 0);
 
-   void
+   ComPtr<ID3D12Resource>
    add_cbv_resource(Resources &resources, unsigned spaceid, unsigned resid,
                     const void *data, size_t size);
 
