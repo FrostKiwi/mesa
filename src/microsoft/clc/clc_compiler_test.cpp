@@ -136,6 +136,65 @@ TEST_F(ComputeTest, DISABLED_null_global_ptr)
       EXPECT_EQ(g1[i], expected2[i]);
 }
 
+TEST_F(ComputeTest, ret_constant_ptr)
+{
+   struct s { uint32_t ptr; uint32_t val; };
+   const char *kernel_source =
+   "struct s { __constant uint *ptr; uint val; };\n\
+   __kernel void main_test(__global struct s *out, __constant uint *in)\n\
+   {\n\
+       __constant uint foo[] = { 1, 2 };\n\
+       uint idx = get_global_id(0);\n\
+       if (idx == 0)\n\
+          out[idx].ptr = foo;\n\
+       else\n\
+          out[idx].ptr = in;\n\
+       out[idx].val = out[idx].ptr[idx];\n\
+   }\n";
+   auto out = ShaderArg<struct s>(std::vector<struct s>(2, {0xdeadbeef, 0}), SHADER_ARG_OUTPUT);
+   auto in = ShaderArg<uint32_t>({ 3, 4 }, SHADER_ARG_INPUT);
+   const uint32_t expected_val[] = {
+      1, 4
+   };
+   const uint32_t expected_ptr[] = {
+      0x30000000, 0x20000000
+   };
+
+   run_shader(kernel_source, out.size(), 1, 1, out, in);
+   for (int i = 0; i < out.size(); ++i) {
+      EXPECT_EQ(out[i].val, expected_val[i]);
+      EXPECT_EQ(out[i].ptr, expected_ptr[i]);
+   }
+}
+
+TEST_F(ComputeTest, ret_global_ptr)
+{
+   struct s { uint32_t ptr; uint32_t val; };
+   const char *kernel_source =
+   "struct s { __global uint *ptr; uint val; };\n\
+   __kernel void main_test(__global struct s *out, __global uint *in1, __global uint *in2)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       out[idx].ptr = idx ? in2 : in1;\n\
+       out[idx].val = out[idx].ptr[idx];\n\
+   }\n";
+   auto out = ShaderArg<struct s>(std::vector<struct s>(2, {0xdeadbeef, 0}), SHADER_ARG_OUTPUT);
+   auto in1 = ShaderArg<uint32_t>({ 1, 2 }, SHADER_ARG_INPUT);
+   auto in2 = ShaderArg<uint32_t>({ 3, 4 }, SHADER_ARG_INPUT);
+   const uint32_t expected_val[] = {
+      1, 4
+   };
+   const uint32_t expected_ptr[] = {
+      0x20000000, 0x30000000
+   };
+
+   run_shader(kernel_source, out.size(), 1, 1, out, in1, in2);
+   for (int i = 0; i < out.size(); ++i) {
+      EXPECT_EQ(out[i].val, expected_val[i]);
+      EXPECT_EQ(out[i].ptr, expected_ptr[i]);
+   }
+}
+
 TEST_F(ComputeTest, globals_8bit)
 {
    const char *kernel_source =
