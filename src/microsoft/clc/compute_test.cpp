@@ -362,7 +362,7 @@ ComputeTest::create_cbv(ComPtr<ID3D12Resource> res, size_t size,
    dev->CreateConstantBufferView(&cbv_desc, cpu_handle);
 }
 
-void
+ComPtr<ID3D12Resource>
 ComputeTest::add_uav_resource(ComputeTest::Resources &resources,
                               unsigned spaceid, unsigned resid,
                               const void *data, size_t num_elems,
@@ -384,9 +384,10 @@ ComputeTest::add_uav_resource(ComputeTest::Resources &resources,
    resource_barrier(res, D3D12_RESOURCE_STATE_COMMON,
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
    resources.add(res, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, spaceid, resid);
+   return res;
 }
 
-void
+ComPtr<ID3D12Resource>
 ComputeTest::add_cbv_resource(ComputeTest::Resources &resources,
                               unsigned spaceid, unsigned resid,
                               const void *data, size_t size)
@@ -401,6 +402,7 @@ ComputeTest::add_cbv_resource(ComputeTest::Resources &resources,
    handle = offset_cpu_handle(handle, resources.descs.size() * uav_heap_incr);
    create_cbv(res, aligned_size, handle);
    resources.add(res, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, spaceid, resid);
+   return res;
 }
 
 void
@@ -465,6 +467,7 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
    std::shared_ptr<struct clc_dxil_object> &dxil = shader.dxil;
 
    std::vector<uint8_t> argsbuf(dxil->metadata.kernel_inputs_buf_size);
+   std::vector<ComPtr<ID3D12Resource>> argres(shader.dxil->kernel->num_args);
    uint32_t global_work_offset[3] = {0, 0, 0};
    Resources resources;
 
@@ -499,17 +502,18 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
    for (unsigned i = 0; i < dxil->kernel->num_args; ++i) {
       RawShaderArg *arg = args[i];
 
-      if (dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL)
-         add_uav_resource(resources, 0, dxil->metadata.args[i].globalptr.buf_id,
-                          arg->get_data(), arg->get_num_elems(),
-                          arg->get_elem_size());
+      if (dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL) {
+         argres[i] = add_uav_resource(resources, 0,
+                                      dxil->metadata.args[i].globalptr.buf_id,
+                                      arg->get_data(), arg->get_num_elems(),
+                                      arg->get_elem_size());
+      }
    }
 
    for (unsigned i = 0; i < dxil->metadata.num_consts; ++i)
       add_cbv_resource(resources, 0, dxil->metadata.consts[i].cbv_id,
                        dxil->metadata.consts[i].data,
                        dxil->metadata.consts[i].size);
-
 
    if (argsbuf.size())
       add_cbv_resource(resources, 0, dxil->metadata.kernel_inputs_cbv_id,
@@ -547,7 +551,7 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
          continue;
 
       assert(dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL);
-      get_buffer_data(resources.descs[dxil->metadata.args[i].globalptr.buf_id], args[i]->get_data(),
+      get_buffer_data(argres[i], args[i]->get_data(),
                       args[i]->get_elem_size() * args[i]->get_num_elems());
    }
 
