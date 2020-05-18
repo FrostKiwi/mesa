@@ -74,6 +74,68 @@ TEST_F(ComputeTest, two_constant_arrays)
       EXPECT_EQ(g1[i], expected[i]);
 }
 
+TEST_F(ComputeTest, null_constant_ptr)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *g1, __constant uint *c1)\n\
+   {\n\
+       __constant uint fallback[] = {2, 3, 4, 5};\n\
+       __constant uint *c = c1 ? c1 : fallback;\n\
+       uint idx = get_global_id(0);\n\
+       g1[idx] -= c[idx];\n\
+   }\n";
+   auto g1 = ShaderArg<uint32_t>({ 10, 20, 30, 40 }, SHADER_ARG_INOUT);
+   auto c1 = ShaderArg<uint32_t>({ 1, 2, 3, 4 }, SHADER_ARG_INPUT);
+   const uint32_t expected1[] = {
+      9, 18, 27, 36
+   };
+
+   run_shader(kernel_source, g1.size(), 1, 1, g1, c1);
+   for (int i = 0; i < g1.size(); ++i)
+      EXPECT_EQ(g1[i], expected1[i]);
+
+   const uint32_t expected2[] = {
+      8, 17, 26, 35
+   };
+
+   g1 = ShaderArg<uint32_t>({ 10, 20, 30, 40 }, SHADER_ARG_INOUT);
+   auto c2 = NullShaderArg();
+   run_shader(kernel_source, g1.size(), 1, 1, g1, c2);
+   for (int i = 0; i < g1.size(); ++i)
+      EXPECT_EQ(g1[i], expected2[i]);
+}
+
+/* This test seems to fail on older versions of WARP. */
+TEST_F(ComputeTest, DISABLED_null_global_ptr)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *g1, __global uint *g2)\n\
+   {\n\
+       __constant uint fallback[] = {2, 3, 4, 5};\n\
+       uint idx = get_global_id(0);\n\
+       g1[idx] -= g2 ? g2[idx] : fallback[idx];\n\
+   }\n";
+   auto g1 = ShaderArg<uint32_t>({ 10, 20, 30, 40 }, SHADER_ARG_INOUT);
+   auto g2 = ShaderArg<uint32_t>({ 1, 2, 3, 4 }, SHADER_ARG_INPUT);
+   const uint32_t expected1[] = {
+      9, 18, 27, 36
+   };
+
+   run_shader(kernel_source, g1.size(), 1, 1, g1, g2);
+   for (int i = 0; i < g1.size(); ++i)
+      EXPECT_EQ(g1[i], expected1[i]);
+
+   const uint32_t expected2[] = {
+      8, 17, 26, 35
+   };
+
+   g1 = ShaderArg<uint32_t>({ 10, 20, 30, 40 }, SHADER_ARG_INOUT);
+   auto g2null = NullShaderArg();
+   run_shader(kernel_source, g1.size(), 1, 1, g1, g2null);
+   for (int i = 0; i < g1.size(); ++i)
+      EXPECT_EQ(g1[i], expected2[i]);
+}
+
 TEST_F(ComputeTest, globals_8bit)
 {
    const char *kernel_source =
