@@ -125,6 +125,8 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
 
    struct nir_lower_tex_options tex_options = { };
    tex_options.lower_txp = ~0u; /* No equivalent for textureProj */
+   tex_options.lower_rect = true;
+   tex_options.lower_rect_offset = true;
 
    NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform);
    NIR_PASS_V(nir, d3d12_create_bare_samplers);
