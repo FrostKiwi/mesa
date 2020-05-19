@@ -4024,6 +4024,11 @@ typedef struct nir_lower_tex_options {
    bool lower_rect;
 
    /**
+    * If true, the also normalize the texel fetch coordinates.
+    */
+   bool lower_rect_normalizes_txf;
+
+   /**
     * If true, convert yuv to rgb.
     */
    unsigned lower_y_uv_external;
