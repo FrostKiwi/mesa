@@ -157,6 +157,17 @@ direct_copy_supported(struct d3d12_screen *screen,
          return false;
    }
 
+   if (abs(info->src.box.height) != info->dst.box.height) {
+      return false;
+   }
+
+   if (info->src.box.height != info->dst.box.height &&
+       (!util_format_is_depth_or_stencil(info->src.format) ||
+        screen->opts2.ProgrammableSamplePositionsTier ==
+        D3D12_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_NOT_SUPPORTED)) {
+      return false;
+   }
+
    if (!box_fits(&info->dst.box, info->dst.resource, info->dst.level)) {
       return false;
    }
@@ -165,10 +176,6 @@ direct_copy_supported(struct d3d12_screen *screen,
    }
 
    if (info->src.box.width != info->dst.box.width) {
-      return false;
-   }
-
-   if (info->src.box.height != info->dst.box.height) {
       return false;
    }
 
@@ -198,7 +205,6 @@ direct_copy_supported(struct d3d12_screen *screen,
                                           info->src.level))
          return false;
    }
-
 
    return true;
 }
