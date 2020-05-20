@@ -1181,3 +1181,29 @@ TEST_F(ComputeTest, vec_hint_none)
    Shader shader = compile({ kernel_source });
    EXPECT_EQ(shader.obj->kernels[0].vec_hint_size, 0);
 }
+
+TEST_F(ComputeTest, DISABLED_debug_layer_failure)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *inout, float mul)\n\
+   {\n\
+       inout[get_global_id(0)] = inout[get_global_id(0)] * mul;\n\
+   }\n";
+   auto inout = ShaderArg<float>({ 0, 0.3f, -0.3f, 0.5f, -0.5f, 1.1f, -1.1f },
+                                 SHADER_ARG_INOUT);
+   auto mul = ShaderArg<float>(10.0f, SHADER_ARG_INPUT);
+   const float expected[] = {
+      0.0f, 3.0f, -3.0f, 5.0f, -5.0f, 11.0f, -11.0f
+   };
+   ComPtr<ID3D12InfoQueue> info_queue;
+   dev->QueryInterface(info_queue.ReleaseAndGetAddressOf());
+   if (!info_queue) {
+      GTEST_SKIP() << "No info queue";
+      return;
+   }
+
+   info_queue->AddApplicationMessage(D3D12_MESSAGE_SEVERITY_ERROR, "This should cause the test to fail");
+   run_shader(kernel_source, inout.size(), 1, 1, inout, mul);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_FLOAT_EQ(inout[i], expected[i]);
+}
