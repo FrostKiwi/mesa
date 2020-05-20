@@ -545,6 +545,21 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
       get_buffer_data(resources.descs[dxil->metadata.args[i].globalptr.buf_id], args[i]->get_data(),
                       args[i]->get_elem_size() * args[i]->get_num_elems());
    }
+
+   ComPtr<ID3D12InfoQueue> info_queue;
+   dev->QueryInterface(info_queue.ReleaseAndGetAddressOf());
+   if (info_queue)
+   {
+      EXPECT_EQ(0, info_queue->GetNumStoredMessages());
+      for (unsigned i = 0; i < info_queue->GetNumStoredMessages(); ++i) {
+         size_t message_size = 0;
+         info_queue->GetMessageA(i, nullptr, &message_size);
+         D3D12_MESSAGE* message = (D3D12_MESSAGE*)malloc(message_size);
+         info_queue->GetMessageA(i, message, &message_size);
+         FAIL() << message->pDescription;
+         free(message);
+      }
+   }
 }
 
 void
