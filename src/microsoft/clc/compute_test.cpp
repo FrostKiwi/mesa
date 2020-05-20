@@ -404,7 +404,7 @@ ComputeTest::add_cbv_resource(ComputeTest::Resources &resources,
 }
 
 void
-ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
+ComputeTest::run_shader_with_raw_args(Shader shader,
                                       const CompileArgs &compile_args,
                                       const std::vector<RawShaderArg *> &args)
 {
@@ -416,7 +416,6 @@ ComputeTest::run_shader_with_raw_args(const std::vector<const char *> &sources,
       throw runtime_error("Failed to load D3D12.DLL");
 
    D3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(hD3D12Mod, "D3D12SerializeVersionedRootSignature");
-   Shader shader = compile(sources, compile_args.compiler_command_line);
 
    if (args.size() != shader.dxil->kernel->num_args)
       throw runtime_error("incorrect number of inputs");
@@ -726,7 +725,8 @@ dump_blob(const char *path, const struct clc_dxil_object &dxil)
 
 ComputeTest::Shader
 ComputeTest::compile(const std::vector<const char *> &sources,
-                     const std::vector<const char *> &compile_args)
+                     const std::vector<const char *> &compile_args,
+                     bool create_library)
 {
    struct clc_logger logger = {
       error_callback, warning_callback,
@@ -736,33 +736,55 @@ ComputeTest::compile(const std::vector<const char *> &sources,
    args.num_args = (unsigned)compile_args.size();
    struct clc_dxil_object *dxil;
    ComputeTest::Shader shader;
-   struct clc_object *obj;
 
-   ObjectArray objs;
+   std::vector<Shader> shaders;
 
    args.source.name = "obj.cl";
 
    for (unsigned i = 0; i < sources.size(); i++) {
       args.source.value = sources[i];
 
-      obj = clc_compile(compiler_ctx, &args, &logger);
+      auto obj = clc_compile(compiler_ctx, &args, &logger);
       if (!obj)
          throw runtime_error("failed to compile object!");
 
-      objs.push_back(obj);
+      Shader shader;
+      shader.obj = std::shared_ptr<struct clc_object>(obj, clc_free_object);
+      shaders.push_back(shader);
    }
+
+   if (shaders.size() == 1 && create_library)
+      return shaders[0];
+
+   return link(shaders, create_library);
+}
+
+ComputeTest::Shader
+ComputeTest::link(const std::vector<Shader> &sources,
+                  bool create_library)
+{
+   struct clc_logger logger = {
+      error_callback, warning_callback,
+   };
+   std::vector<const clc_object*> objs;
+   for (auto& source : sources)
+      objs.push_back(&*source.obj);
 
    struct clc_linker_args link_args = {};
    link_args.in_objs = objs.data();
    link_args.num_in_objs = (unsigned)objs.size();
-   obj = clc_link(compiler_ctx,
-                  &link_args,
-                  &logger);
+   link_args.create_library = create_library;
+   struct clc_object *obj = clc_link(compiler_ctx,
+                                     &link_args,
+                                     &logger);
    if (!obj)
       throw runtime_error("failed to link objects!");
 
+   ComputeTest::Shader shader;
    shader.obj = std::shared_ptr<struct clc_object>(obj, clc_free_object);
-   configure(shader, NULL);
+   if (!link_args.create_library)
+      configure(shader, NULL);
+
    return shader;
 }
 
