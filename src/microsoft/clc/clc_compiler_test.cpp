@@ -1009,6 +1009,39 @@ TEST_F(ComputeTest, link)
       EXPECT_EQ(inout[i], expected[i]);
 }
 
+TEST_F(ComputeTest, link_library)
+{
+   const char *bar_src =
+   "float bar(float in)\n\
+   {\n\
+      return in * 5;\n\
+   }\n";
+   const char *foo_src =
+   "float bar(float in);\n\
+   float foo(float in)\n\
+   {\n\
+       return in * bar(in);\n\
+   }\n";
+   const char *kernel_source =
+   "float foo(float in);\n\
+   __kernel void main_test(__global float *inout)\n\
+   {\n\
+       inout[get_global_id(0)] = foo(inout[get_global_id(0)]);\n\
+   }\n";
+   std::vector<Shader> libraries = {
+      compile({ bar_src, kernel_source }, {}, true),
+      compile({ foo_src }, {}, true)
+   };
+   Shader exe = link(libraries);
+   auto inout = ShaderArg<float>({ 2.0f }, SHADER_ARG_INOUT);
+   const float expected[] = {
+      20.0f,
+   };
+   run_shader(exe, { (unsigned)inout.size(), 1, 1 }, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
 TEST_F(ComputeTest, localvar)
 {
    const char *kernel_source =
