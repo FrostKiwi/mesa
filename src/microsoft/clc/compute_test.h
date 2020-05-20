@@ -51,14 +51,6 @@ align(size_t value, unsigned alignment)
 
 class ComputeTest : public ::testing::Test {
 protected:
-   class ObjectArray : public std::vector<struct clc_object *> {
-   public:
-      ~ObjectArray() {
-         for (auto obj : *this)
-            clc_free_object(obj);
-      }
-   };
-
    struct Shader {
       std::shared_ptr<struct clc_object> obj;
       std::shared_ptr<struct clc_dxil_object> dxil;
@@ -167,7 +159,12 @@ protected:
 
    Shader
    compile(const std::vector<const char *> &sources,
-           const std::vector<const char *> &compile_args = {});
+           const std::vector<const char *> &compile_args = {},
+           bool create_library = false);
+
+   Shader
+   link(const std::vector<Shader> &sources,
+        bool create_library = false);
 
    void
    configure(Shader &shader,
@@ -249,11 +246,21 @@ private:
       gather_args(args, rest...);
    }
 
-   void run_shader_with_raw_args(const std::vector<const char *> &sources,
+   void run_shader_with_raw_args(Shader shader,
                                  const CompileArgs &compile_args,
                                  const std::vector<RawShaderArg *> &args);
 
 protected:
+   template <typename... Args>
+   void run_shader(Shader shader,
+                   const CompileArgs &compile_args,
+                   Args&... args)
+   {
+      std::vector<RawShaderArg *> raw_args;
+      gather_args(raw_args, args...);
+      run_shader_with_raw_args(shader, compile_args, raw_args);
+   }
+
    template <typename... Args>
    void run_shader(const std::vector<const char *> &sources,
                    unsigned x, unsigned y, unsigned z,
@@ -262,7 +269,7 @@ protected:
       std::vector<RawShaderArg *> raw_args;
       gather_args(raw_args, args...);
       CompileArgs compile_args = { x, y, z };
-      run_shader_with_raw_args(sources, compile_args, raw_args);
+      run_shader_with_raw_args(compile(sources), compile_args, raw_args);
    }
 
    template <typename... Args>
@@ -272,7 +279,9 @@ protected:
    {
       std::vector<RawShaderArg *> raw_args;
       gather_args(raw_args, args...);
-      run_shader_with_raw_args(sources, compile_args, raw_args);
+      run_shader_with_raw_args(
+         compile(sources, compile_args.compiler_command_line),
+         compile_args, raw_args);
    }
 
    template <typename... Args>
@@ -283,8 +292,7 @@ protected:
       std::vector<RawShaderArg *> raw_args;
       gather_args(raw_args, args...);
       CompileArgs compile_args = { x, y, z };
-      run_shader_with_raw_args(std::vector<const char *>({ source }),
-                               compile_args, raw_args);
+      run_shader_with_raw_args(compile({ source }), compile_args, raw_args);
    }
 
    IDXGIFactory4 *factory;
