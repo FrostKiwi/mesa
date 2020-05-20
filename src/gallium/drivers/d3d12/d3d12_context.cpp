@@ -498,7 +498,7 @@ d3d12_bind_rasterizer_state(struct pipe_context *pctx, void *rs_state)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
    ctx->gfx_pipeline_state.rast = (struct d3d12_rasterizer_state *)rs_state;
-   ctx->state_dirty |= D3D12_DIRTY_RASTERIZER;
+   ctx->state_dirty |= D3D12_DIRTY_RASTERIZER | D3D12_DIRTY_SCISSOR;
 }
 
 static void
