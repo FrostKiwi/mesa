@@ -127,7 +127,7 @@ struct clc_dxil_metadata {
          } image;
          struct {
             unsigned buf_id;
-         } globalptr;
+         } globconstptr;
          struct {
             unsigned sharedmem_offset;
 	 } localptr;

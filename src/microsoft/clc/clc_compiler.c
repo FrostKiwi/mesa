@@ -510,10 +510,11 @@ clc_to_dxil(struct clc_context *ctx,
       metadata->args[i].size = size;
       metadata->kernel_inputs_buf_size = MAX2(metadata->kernel_inputs_buf_size,
                                               offset + size);
-      if (dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL &&
+      if ((dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_GLOBAL ||
+           dxil->kernel->args[i].address_qualifier == CLC_KERNEL_ARG_ADDRESS_CONSTANT) &&
           // Ignore images during this pass - global memory buffers need to have contiguous bindings
           !glsl_type_is_image(var->type)) {
-         metadata->args[i].globalptr.buf_id = uav_id++;
+         metadata->args[i].globconstptr.buf_id = uav_id++;
       }
       i++;
       offset += size;
