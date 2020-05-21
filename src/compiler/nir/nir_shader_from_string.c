@@ -1118,11 +1118,12 @@ add_tex_op(dest_params *params, char *shader, UNUSED int i, const nir_texop_info
          goto fail;
       }
 
-      si = strchr(si, '(');
-      if (!si) {
+      char *parenthesis = strchr(si, '(');
+      if (!parenthesis) {
          error_message("%s: Did not find opening '(' in %s\n", __func__, si);
          goto fail;
       }
+      si = parenthesis;
 
       if (!strncmp("(coord)", si, 7))
          src_type[isrc] = nir_tex_src_coord;
@@ -1137,11 +1138,12 @@ add_tex_op(dest_params *params, char *shader, UNUSED int i, const nir_texop_info
 
       ++isrc;
 
-      si = strchr(si, ',');
-      if (!si) {
+      char *comma = strchr(si, ',');
+      if (!comma) {
          error_message("%s: didn't find seperator ',' in %s\n", __func__, si);
          goto fail;
       }
+      si = comma;
       ++si;
    }
 
