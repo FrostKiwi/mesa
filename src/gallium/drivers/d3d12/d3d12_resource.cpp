@@ -302,14 +302,33 @@ d3d12_screen_resource_init(struct pipe_screen *pscreen)
    pscreen->resource_destroy = d3d12_resource_destroy;
 }
 
+unsigned int
+get_subresource_id(struct d3d12_resource *res, unsigned resid,
+                   unsigned z, unsigned base_level)
+{
+   unsigned resource_stride = res->base.last_level + 1;
+   if (res->base.target == PIPE_TEXTURE_1D_ARRAY ||
+       res->base.target == PIPE_TEXTURE_2D_ARRAY)
+      resource_stride *= res->base.array_size;
+
+   if (res->base.target == PIPE_TEXTURE_CUBE)
+      resource_stride *= 6;
+
+   if (res->base.target == PIPE_TEXTURE_CUBE_ARRAY)
+      resource_stride *= 6 * res->base.array_size;
+
+   unsigned layer_stride = res->base.last_level + 1;
+
+   return resid * resource_stride + z * layer_stride +
+         base_level;
+}
+
 static D3D12_TEXTURE_COPY_LOCATION
 fill_texture_location(struct d3d12_resource *res,
-                      struct d3d12_transfer *trans, unsigned resid = 0)
+                      struct d3d12_transfer *trans, unsigned resid, unsigned z)
 {
    D3D12_TEXTURE_COPY_LOCATION tex_loc = {0};
-   int subres = res->base.target == PIPE_TEXTURE_CUBE ?
-                   trans->base.box.z * (res->base.last_level + 1) + trans->base.level :
-                   trans->base.level + (res->base.last_level + 1) * resid;
+   int subres = get_subresource_id(res, resid, z, trans->base.level);
 
    tex_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
    tex_loc.SubresourceIndex = subres;
@@ -323,14 +342,16 @@ fill_buffer_location(struct d3d12_context *ctx,
                      struct d3d12_resource *staging_res,
                      struct d3d12_transfer *trans,
                      unsigned depth,
-                     unsigned resid = 0)
+                     unsigned resid, unsigned z)
 {
    D3D12_TEXTURE_COPY_LOCATION buf_loc = {0};
    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
    uint64_t offset = 0;
    auto descr = d3d12_resource_underlying(res, &offset)->GetDesc();
    ID3D12Device* dev = d3d12_screen(ctx->base.screen)->dev;
-   dev->GetCopyableFootprints(&descr, resid, 1, 0, &footprint, nullptr, nullptr, nullptr);
+
+   unsigned sub_resid = get_subresource_id(res, resid, z, trans->base.level);
+   dev->GetCopyableFootprints(&descr, sub_resid, 1, 0, &footprint, nullptr, nullptr, nullptr);
 
    buf_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
    buf_loc.pResource = d3d12_resource_underlying(staging_res, &offset);
@@ -389,11 +410,11 @@ transfer_buf_to_image_part(struct d3d12_context *ctx,
 
    struct copy_info copy_info;
    copy_info.src = staging_res;
-   copy_info.src_loc = fill_buffer_location(ctx, res, staging_res, trans, depth, z);
-   copy_info.src_loc.PlacedFootprint.Offset += (z  - start_z) * trans->base.layer_stride;
+   copy_info.src_loc = fill_buffer_location(ctx, res, staging_res, trans, depth, 0, z);
+   copy_info.src_loc.PlacedFootprint.Offset = (z  - start_z) * trans->base.layer_stride;
    copy_info.src_box = nullptr;
    copy_info.dst = res;
-   copy_info.dst_loc = fill_texture_location(res, trans, z);
+   copy_info.dst_loc = fill_texture_location(res, trans, 0, z);
    copy_info.dst_x = trans->base.box.x;
    copy_info.dst_y = trans->base.box.y;
    copy_info.dst_z = res->base.target == PIPE_TEXTURE_CUBE ? 0 : dest_z;
@@ -444,12 +465,12 @@ transfer_image_part_to_buf(struct d3d12_context *ctx,
 
    struct copy_info copy_info;
    copy_info.src = res;
-   copy_info.src_loc = fill_texture_location(res, trans, resid + z);
+   copy_info.src_loc = fill_texture_location(res, trans, resid, z);
    copy_info.src_box = &src_box;
    copy_info.dst = staging_res;
    copy_info.dst_loc = fill_buffer_location(ctx, res, staging_res, trans,
-                                            trans->base.box.depth, resid + z);
-   copy_info.dst_loc.PlacedFootprint.Offset += (z  - start_layer) * trans->base.layer_stride;
+                                            trans->base.box.depth, resid, z);
+   copy_info.dst_loc.PlacedFootprint.Offset = (z  - start_layer) * trans->base.layer_stride;
    copy_info.dst_x = copy_info.dst_y = copy_info.dst_z = 0;
 
    copy_texture_region(ctx, copy_info);
