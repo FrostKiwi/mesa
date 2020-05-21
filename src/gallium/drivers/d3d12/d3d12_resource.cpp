@@ -173,9 +173,8 @@ init_texture(struct d3d12_screen *screen,
    }
 
    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-   if ((templ->bind & (PIPE_BIND_SCANOUT |
-                      PIPE_BIND_SHARED | PIPE_BIND_LINEAR)) ||
-       templ->usage == PIPE_USAGE_STAGING)
+   if (templ->bind & (PIPE_BIND_SCANOUT |
+                      PIPE_BIND_SHARED | PIPE_BIND_LINEAR))
       desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
    D3D12_HEAP_TYPE heap_type = D3D12_HEAP_TYPE_DEFAULT;
