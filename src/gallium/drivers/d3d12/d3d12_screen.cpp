@@ -52,6 +52,7 @@ debug_options[] = {
    { "experimental", D3D12_DEBUG_EXPERIMENTAL, "Enable experimental shader models feature" },
    { "dxil",         D3D12_DEBUG_DXIL,         "Dump DXIL during program compile" },
    { "disass",       D3D12_DEBUG_DISASS,       "Dump disassambly of created DXIL shader" },
+   { "res",          D3D12_DEBUG_RESOURCE,     "Debug resources" },
    DEBUG_NAMED_VALUE_END
 };
 
