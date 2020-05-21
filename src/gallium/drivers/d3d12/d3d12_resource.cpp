@@ -26,6 +26,7 @@
 #include "d3d12_context.h"
 #include "d3d12_format.h"
 #include "d3d12_screen.h"
+#include "d3d12_debug.h"
 
 #include "pipebuffer/pb_bufmgr.h"
 #include "util/slab.h"
@@ -226,6 +227,14 @@ d3d12_resource_create(struct pipe_screen *pscreen,
 
    res->base = *templ;
 
+   if (D3D12_DEBUG_RESOURCE & d3d12_debug) {
+      debug_printf("D3D12: Create %sresource %s@%d %dx%dx%d as:%d mip:%d\n",
+                   templ->usage == PIPE_USAGE_STAGING ? "STAGING " :"",
+                   util_format_name(templ->format), templ->nr_samples,
+                   templ->width0, templ->height0, templ->depth0,
+                   templ->array_size, templ->last_level, templ);
+   }
+
    pipe_reference_init(&res->base.reference, 1);
    res->base.screen = pscreen;
 
@@ -370,6 +379,14 @@ transfer_buf_to_image_part(struct d3d12_context *ctx,
                            struct d3d12_transfer *trans,
                            int z, int depth, int start_z, int dest_z)
 {
+   if (D3D12_DEBUG_RESOURCE & d3d12_debug) {
+      debug_printf("D3D12: Copy %dx%dx%d + %dx%dx%d from buffer %s to image %s\n",
+                   trans->base.box.x, trans->base.box.y, trans->base.box.z,
+                   trans->base.box.width, trans->base.box.height, trans->base.box.depth,
+                   util_format_name(staging_res->base.format),
+                   util_format_name(res->base.format));
+   }
+
    struct copy_info copy_info;
    copy_info.src = staging_res;
    copy_info.src_loc = fill_buffer_location(ctx, res, staging_res, trans, depth, z);
@@ -450,6 +467,14 @@ transfer_image_to_buf(struct d3d12_context *ctx,
     * or a ZS texture, so either resid is zero, or num_layers == 1)
     */
    assert(resid == 0 || trans->base.box.depth == 1);
+
+   if (D3D12_DEBUG_RESOURCE & d3d12_debug) {
+      debug_printf("D3D12: Copy %dx%dx%d + %dx%dx%d from %s@%d to %s\n",
+                   trans->base.box.x, trans->base.box.y, trans->base.box.z,
+                   trans->base.box.width, trans->base.box.height, trans->base.box.depth,
+                   util_format_name(res->base.format), resid,
+                   util_format_name(staging_res->base.format));
+   }
 
    if (res->base.target == PIPE_TEXTURE_3D) {
       transfer_image_part_to_buf(ctx, res, staging_res, trans, resid,
