@@ -435,6 +435,20 @@ lower_load_global(nir_builder *b, nir_intrinsic_instr *intr)
 }
 
 static bool
+lower_load_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
+{
+   b->cursor = nir_before_instr(&intr->instr);
+
+   assert(intr->dest.is_ssa);
+   assert(intr->src[0].is_ssa);
+   assert(intr->src[1].is_ssa);
+
+   nir_ssa_def *buffer = nir_isub(b, intr->src[0].ssa, nir_imm_int(b, 1));
+   nir_ssa_def *offset = intr->src[1].ssa;
+   return lower_load_global_impl(b, intr, buffer, offset);
+}
+
+static bool
 lower_store_global_impl(nir_builder *b, nir_intrinsic_instr *intr, nir_ssa_def *val,
                         nir_ssa_def *buffer, nir_ssa_def *offset)
 {
@@ -513,6 +527,21 @@ lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
    nir_ssa_def *ptr = intr->src[1].ssa;
    nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
    nir_ssa_def *offset = ptr_to_offset(b, ptr);
+
+   return lower_store_global_impl(b, intr, intr->src[0].ssa, buffer, offset);
+}
+
+static bool
+lower_store_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
+{
+   b->cursor = nir_before_instr(&intr->instr);
+
+   assert(intr->src[0].is_ssa);
+   assert(intr->src[1].is_ssa);
+   assert(intr->src[2].is_ssa);
+
+   nir_ssa_def *buffer = nir_isub(b, intr->src[1].ssa, nir_imm_int(b, 1));
+   nir_ssa_def *offset = intr->src[2].ssa;
 
    return lower_store_global_impl(b, intr, intr->src[0].ssa, buffer, offset);
 }
@@ -793,6 +822,26 @@ dxil_nir_lower_ubo_to_temp(nir_shader *nir)
    return progress;
 }
 
+static bool
+lower_kernel_input_offset_bit_size(nir_builder *b, nir_intrinsic_instr *intr)
+{
+   assert(intr->src[0].is_ssa);
+   if (intr->src[0].ssa->parent_instr->type != nir_instr_type_load_const)
+      return false;
+
+   nir_load_const_instr *load = nir_instr_as_load_const(intr->src[0].ssa->parent_instr);
+   if (load->def.bit_size <= 32)
+      return false;
+
+   nir_const_value *value = load->value;
+   if (value->u64 > 0xffffffff)
+      return false;
+
+   value->u32 = (unsigned)value->u64;
+   load->def.bit_size = 32;
+   return true;
+}
+
 bool
 dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
 {
@@ -822,6 +871,9 @@ dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
             case nir_intrinsic_load_shared:
                progress |= lower_load_shared(&b, intr);
                break;
+            case nir_intrinsic_load_ssbo:
+               progress |= lower_load_ssbo(&b, intr);
+               break;
             case nir_intrinsic_store_deref:
                progress |= lower_store_deref(&b, intr);
                break;
@@ -830,6 +882,9 @@ dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
                break;
             case nir_intrinsic_store_shared:
                progress |= lower_store_shared(&b, intr);
+               break;
+            case nir_intrinsic_store_ssbo:
+               progress |= lower_store_ssbo(&b, intr);
                break;
             }
          }
@@ -1126,8 +1181,10 @@ dxil_nir_lower_kernel_input_loads(nir_shader *nir, nir_variable *var)
 
             nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
 
-            if (intr->intrinsic == nir_intrinsic_load_kernel_input)
+            if (intr->intrinsic == nir_intrinsic_load_kernel_input) {
+               progress |= lower_kernel_input_offset_bit_size(&b, intr);
                progress |= lower_load_kernel_input(&b, intr, var);
+            }
          }
       }
    }
