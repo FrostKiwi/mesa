@@ -1224,6 +1224,11 @@ void anv_CmdClearColorImage(
          anv_get_format_plane(&cmd_buffer->device->info, image->vk_format,
                               VK_IMAGE_ASPECT_COLOR_BIT, image->tiling);
 
+      const bool compute =
+         unlikely((INTEL_DEBUG & DEBUG_BLOCS) &&
+                  blorp_clear_supports_compute(batch.blorp, false, false,
+                                               surf.aux_usage));
+
       unsigned base_layer = pRanges[r].baseArrayLayer;
       unsigned layer_count = anv_get_layerCount(image, &pRanges[r]);
 
@@ -1246,7 +1251,7 @@ void anv_CmdClearColorImage(
                      src_format.isl_format, src_format.swizzle,
                      level, base_layer, layer_count,
                      0, 0, level_width, level_height,
-                     vk_to_isl_color(*pColor), color_write_disable, false);
+                     vk_to_isl_color(*pColor), color_write_disable, compute);
       }
    }
 
