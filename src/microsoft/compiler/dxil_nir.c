@@ -364,20 +364,14 @@ lower_store_deref(nir_builder *b, nir_intrinsic_instr *intr)
 }
 
 static bool
-lower_load_global(nir_builder *b, nir_intrinsic_instr *intr)
+lower_load_global_impl(nir_builder *b, nir_intrinsic_instr *intr,
+                       nir_ssa_def *buffer, nir_ssa_def *offset)
 {
    assert(intr->dest.is_ssa);
    unsigned bit_size = nir_dest_bit_size(intr->dest);
    unsigned num_components = nir_dest_num_components(intr->dest);
    unsigned num_bits = num_components * bit_size;
 
-   b->cursor = nir_before_instr(&intr->instr);
-
-   /* source 'pointer' */
-   assert(intr->src[0].is_ssa);
-   nir_ssa_def *ptr = intr->src[0].ssa;
-   nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
-   nir_ssa_def *offset = ptr_to_offset(b, ptr);
    nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
    unsigned comp_idx = 0;
 
@@ -408,7 +402,7 @@ lower_load_global(nir_builder *b, nir_intrinsic_instr *intr)
        * we can always extract the LSB.
        */
       if (subload_num_bits <= 16) {
-         nir_ssa_def *shift = nir_imul(b, nir_iand(b, ptr, nir_imm_int(b, 3)),
+         nir_ssa_def *shift = nir_imul(b, nir_iand(b, offset, nir_imm_int(b, 3)),
                                           nir_imm_int(b, 8));
          vec32 = nir_ushr(b, vec32, shift);
       }
@@ -427,25 +421,32 @@ lower_load_global(nir_builder *b, nir_intrinsic_instr *intr)
 }
 
 static bool
-lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
+lower_load_global(nir_builder *b, nir_intrinsic_instr *intr)
 {
-   assert(intr->src[0].is_ssa);
-   unsigned num_components = nir_src_num_components(intr->src[0]);
-   unsigned bit_size = nir_src_bit_size(intr->src[0]);
-   unsigned num_bits = num_components * bit_size;
-
    b->cursor = nir_before_instr(&intr->instr);
 
    /* source 'pointer' */
-   assert(intr->src[1].is_ssa);
-   nir_ssa_def *ptr = intr->src[1].ssa;
+   assert(intr->src[0].is_ssa);
+   nir_ssa_def *ptr = intr->src[0].ssa;
    nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
    nir_ssa_def *offset = ptr_to_offset(b, ptr);
+
+   return lower_load_global_impl(b, intr, buffer, offset);
+}
+
+static bool
+lower_store_global_impl(nir_builder *b, nir_intrinsic_instr *intr, nir_ssa_def *val,
+                        nir_ssa_def *buffer, nir_ssa_def *offset)
+{
+   unsigned bit_size = val->bit_size;
+   unsigned num_components = val->num_components;
+   unsigned num_bits = num_components * bit_size;
+
    nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
    unsigned comp_idx = 0;
 
    for (unsigned i = 0; i < num_components; i++)
-      comps[i] = nir_channel(b, intr->src[0].ssa, i);
+      comps[i] = nir_channel(b, val, i);
 
    /* We split stores in 16byte chunks because that's the optimal granularity
     * of bufferStore(). Minimum alignment is 4byte, which saves from us from
@@ -469,7 +470,7 @@ lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
          * (including uchar3) is naturally aligned on 32bits.
          */
          if (substore_num_bits <= 16) {
-            nir_ssa_def *pos = nir_iand(b, ptr, nir_imm_int(b, 3));
+            nir_ssa_def *pos = nir_iand(b, offset, nir_imm_int(b, 3));
             nir_ssa_def *shift = nir_imul_imm(b, pos, 8);
 
             vec32 = nir_ishl(b, vec32, shift);
@@ -498,6 +499,22 @@ lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
 
    nir_instr_remove(&intr->instr);
    return true;
+}
+
+static bool
+lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
+{
+   b->cursor = nir_before_instr(&intr->instr);
+
+   assert(intr->src[0].is_ssa);
+
+   /* source 'pointer' */
+   assert(intr->src[1].is_ssa);
+   nir_ssa_def *ptr = intr->src[1].ssa;
+   nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
+   nir_ssa_def *offset = ptr_to_offset(b, ptr);
+
+   return lower_store_global_impl(b, intr, intr->src[0].ssa, buffer, offset);
 }
 
 static nir_ssa_def *
