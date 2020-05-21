@@ -78,25 +78,26 @@ vtn_type_count_function_params(struct vtn_type *type)
 }
 
 static void
-vtn_type_add_to_function_params(struct vtn_type *type,
+vtn_type_add_to_function_params(struct vtn_builder *b,
+                                struct vtn_type *type,
                                 nir_function *func,
                                 unsigned *param_idx)
 {
-   static const nir_parameter nir_deref_param = {
+   const nir_parameter nir_deref_param = {
       .num_components = 1,
-      .bit_size = 32,
+      .bit_size = nir_get_ptr_bitsize(b->shader),
    };
 
    switch (type->base_type) {
    case vtn_base_type_array:
    case vtn_base_type_matrix:
       for (unsigned i = 0; i < type->length; i++)
-         vtn_type_add_to_function_params(type->array_element, func, param_idx);
+         vtn_type_add_to_function_params(b, type->array_element, func, param_idx);
       break;
 
    case vtn_base_type_struct:
       for (unsigned i = 0; i < type->length; i++)
-         vtn_type_add_to_function_params(type->members[i], func, param_idx);
+         vtn_type_add_to_function_params(b, type->members[i], func, param_idx);
       break;
 
    case vtn_base_type_sampled_image:
@@ -288,17 +289,15 @@ vtn_cfg_handle_prepass_instruction(struct vtn_builder *b, SpvOp opcode,
 
       unsigned idx = 0;
       if (func_type->return_type->base_type != vtn_base_type_void) {
-         nir_address_format addr_format =
-            vtn_mode_to_address_format(b, vtn_variable_mode_function);
          /* The return value is a regular pointer */
          func->params[idx++] = (nir_parameter) {
-            .num_components = nir_address_format_num_components(addr_format),
-            .bit_size = nir_address_format_bit_size(addr_format),
+            .num_components = 1,
+            .bit_size = nir_get_ptr_bitsize(b->shader),
          };
       }
 
       for (unsigned i = 0; i < func_type->length; i++)
-         vtn_type_add_to_function_params(func_type->params[i], func, &idx);
+         vtn_type_add_to_function_params(b, func_type->params[i], func, &idx);
       assert(idx == num_params);
 
       b->func->impl = nir_function_impl_create(func);
