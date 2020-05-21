@@ -138,7 +138,7 @@ TEST_F(ComputeTest, DISABLED_null_global_ptr)
 
 TEST_F(ComputeTest, ret_constant_ptr)
 {
-   struct s { uint32_t ptr; uint32_t val; };
+   struct s { uint64_t ptr; uint32_t val; };
    const char *kernel_source =
    "struct s { __constant uint *ptr; uint val; };\n\
    __kernel void main_test(__global struct s *out, __constant uint *in)\n\
@@ -151,13 +151,13 @@ TEST_F(ComputeTest, ret_constant_ptr)
           out[idx].ptr = in;\n\
        out[idx].val = out[idx].ptr[idx];\n\
    }\n";
-   auto out = ShaderArg<struct s>(std::vector<struct s>(2, {0xdeadbeef, 0}), SHADER_ARG_OUTPUT);
+   auto out = ShaderArg<struct s>(std::vector<struct s>(2, {0xdeadbeefdeadbeef, 0}), SHADER_ARG_OUTPUT);
    auto in = ShaderArg<uint32_t>({ 3, 4 }, SHADER_ARG_INPUT);
    const uint32_t expected_val[] = {
       1, 4
    };
-   const uint32_t expected_ptr[] = {
-      0x30000000, 0x20000000
+   const uint64_t expected_ptr[] = {
+      3ull << 32, 2ull << 32
    };
 
    run_shader(kernel_source, out.size(), 1, 1, out, in);
@@ -169,7 +169,7 @@ TEST_F(ComputeTest, ret_constant_ptr)
 
 TEST_F(ComputeTest, ret_global_ptr)
 {
-   struct s { uint32_t ptr; uint32_t val; };
+   struct s { uint64_t ptr; uint32_t val; };
    const char *kernel_source =
    "struct s { __global uint *ptr; uint val; };\n\
    __kernel void main_test(__global struct s *out, __global uint *in1, __global uint *in2)\n\
@@ -178,14 +178,14 @@ TEST_F(ComputeTest, ret_global_ptr)
        out[idx].ptr = idx ? in2 : in1;\n\
        out[idx].val = out[idx].ptr[idx];\n\
    }\n";
-   auto out = ShaderArg<struct s>(std::vector<struct s>(2, {0xdeadbeef, 0}), SHADER_ARG_OUTPUT);
+   auto out = ShaderArg<struct s>(std::vector<struct s>(2, {0xdeadbeefdeadbeef, 0}), SHADER_ARG_OUTPUT);
    auto in1 = ShaderArg<uint32_t>({ 1, 2 }, SHADER_ARG_INPUT);
    auto in2 = ShaderArg<uint32_t>({ 3, 4 }, SHADER_ARG_INPUT);
    const uint32_t expected_val[] = {
       1, 4
    };
-   const uint32_t expected_ptr[] = {
-      0x20000000, 0x30000000
+   const uint64_t expected_ptr[] = {
+      2ull << 32, 3ull << 32
    };
 
    run_shader(kernel_source, out.size(), 1, 1, out, in1, in2);
@@ -831,7 +831,7 @@ TEST_F(ComputeTest, rotate)
    const char *kernel_source =
    "__kernel void main_test(__global uint *inout)\n\
    {\n\
-       inout[get_global_id(0)] = rotate(inout[get_global_id(0)], get_global_id(0) * 4);\n\
+       inout[get_global_id(0)] = rotate(inout[get_global_id(0)], (uint)get_global_id(0) * 4);\n\
    }\n";
    auto inout = ShaderArg<uint32_t>(std::vector<uint32_t>(4, 0xdeadbeef),
                                     SHADER_ARG_INOUT);

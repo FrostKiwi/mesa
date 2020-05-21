@@ -40,9 +40,9 @@ opencl_c_base_h = custom_target(
 dep_libclc = dependency('libclc')
 clc_base_dir = dep_libclc.get_pkgconfig_variable('libexecdir')
 clc_mesa_spv_h = custom_target(
-  'spirv-mesa3d-.spv.h',
-  input : [files_xxd, join_paths(clc_base_dir, 'spirv-mesa3d-.spv')],
-  output : 'spirv-mesa3d-.spv.h',
+  'spirv64-mesa3d-.spv.h',
+  input : [files_xxd, join_paths(clc_base_dir, 'spirv64-mesa3d-.spv')],
+  output : 'spirv64-mesa3d-.spv.h',
   command : [prog_python, '@INPUT@', '@OUTPUT@', '-n', 'libclc_spirv_bytecode'],
 )
 

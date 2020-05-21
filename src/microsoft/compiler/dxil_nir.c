@@ -131,7 +131,7 @@ lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
    if (var->data.mode != nir_var_function_temp &&
        var->data.mode != nir_var_shader_temp)
       return false;
-   nir_ssa_def *ptr = nir_build_deref_offset(b, deref, cl_type_size_align);
+   nir_ssa_def *ptr = nir_u2u32(b, nir_build_deref_offset(b, deref, cl_type_size_align));
    nir_ssa_def *offset = nir_iand(b, ptr, nir_inot(b, nir_imm_int(b, 3)));
    unsigned load_size = 32;
 
@@ -293,7 +293,7 @@ lower_store_deref(nir_builder *b, nir_intrinsic_instr *intr)
        var->data.mode != nir_var_shader_temp)
       return false;
    nir_src val = intr->src[1];
-   nir_ssa_def *ptr = nir_build_deref_offset(b, deref, cl_type_size_align);
+   nir_ssa_def *ptr = nir_u2u32(b, nir_build_deref_offset(b, deref, cl_type_size_align));
    nir_ssa_def *offset = nir_iand(b, ptr, nir_inot(b, nir_imm_int(b, 3)));
    unsigned store_size = 32;
 
@@ -1035,24 +1035,6 @@ dxil_nir_lower_atomics_to_dxil(nir_shader *nir)
    return progress;
 }
 
-static void
-update_deref_mode(nir_deref_instr *deref, nir_variable_mode mode)
-{
-   deref->mode = mode;
-
-   nir_foreach_use_safe(src, &deref->dest.ssa) {
-      assert(src->is_ssa);
-      if (src->parent_instr->type != nir_instr_type_deref)
-         continue;
-
-      nir_deref_instr *sub_deref = nir_instr_as_deref(src->parent_instr);
-      if (!sub_deref)
-         continue;
-
-      update_deref_mode(sub_deref, mode);
-   }
-}
-
 static bool
 lower_deref_ssbo(nir_builder *b, nir_deref_instr *deref)
 {
@@ -1067,20 +1049,18 @@ lower_deref_ssbo(nir_builder *b, nir_deref_instr *deref)
       /* We turn all deref_var into deref_cast and build a pointer value based on
        * the var binding which encodes the UAV id.
        */
-      nir_ssa_def *ptr = nir_ishl(b, nir_imm_int(b, var->data.binding + 1),
-                                  nir_imm_int(b, 28));
+      nir_ssa_def *ptr = nir_imm_int64(b, (uint64_t)(var->data.binding + 1) << 32);
       nir_deref_instr *deref_cast =
-         nir_build_deref_cast(b, ptr, nir_var_mem_global, deref->type,
+         nir_build_deref_cast(b, ptr, nir_var_mem_ssbo, deref->type,
                               glsl_get_explicit_stride(var->type));
       nir_ssa_def_rewrite_uses(&deref->dest.ssa,
                                nir_src_for_ssa(&deref_cast->dest.ssa));
       nir_instr_remove(&deref->instr);
 
       deref = deref_cast;
+      return true;
    }
-
-   update_deref_mode(deref, nir_var_mem_global);
-   return true;
+   return false;
 }
 
 bool
