@@ -591,7 +591,7 @@ clc_to_spirv(const struct clc_compile_args *args,
 
    std::vector<const char *> clang_opts = {
       args->source.name,
-      "-triple", "spir-unknown-unknown",
+      "-triple", "spir64-unknown-unknown",
       // By default, clang prefers to use modules to pull in the default headers,
       // which doesn't work with our technique of embedding the headers in our binary
       "-finclude-default-header",

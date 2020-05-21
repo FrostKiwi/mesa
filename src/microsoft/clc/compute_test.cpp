@@ -482,17 +482,17 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
       switch (dxil->kernel->args[i].address_qualifier) {
       case CLC_KERNEL_ARG_ADDRESS_CONSTANT:
       case CLC_KERNEL_ARG_ADDRESS_GLOBAL: {
-         assert(dxil->metadata.args[i].size == sizeof(uint32_t));
-         uint32_t *ptr_slot = (uint32_t *)slot;
+         assert(dxil->metadata.args[i].size == sizeof(uint64_t));
+         uint64_t *ptr_slot = (uint64_t *)slot;
          if (arg->get_data())
-            *ptr_slot = (dxil->metadata.args[i].globconstptr.buf_id + 1) << 28;
+            *ptr_slot = (uint64_t)(dxil->metadata.args[i].globconstptr.buf_id + 1) << 32;
          else
-            *ptr_slot = 0;
+            *ptr_slot = ~0ull;
          break;
       }
       case CLC_KERNEL_ARG_ADDRESS_LOCAL: {
-         assert(dxil->metadata.args[i].size == sizeof(uint32_t));
-         uint32_t *ptr_slot = (uint32_t *)slot;
+         assert(dxil->metadata.args[i].size == sizeof(uint64_t));
+         uint64_t *ptr_slot = (uint64_t *)slot;
          *ptr_slot = dxil->metadata.args[i].localptr.sharedmem_offset;
          break;
       }
