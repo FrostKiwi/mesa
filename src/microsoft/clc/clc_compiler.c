@@ -264,6 +264,43 @@ clc_lower_images(nir_shader *nir, struct clc_dxil_metadata *metadata, unsigned *
    }
 }
 
+static void
+clc_lower_64bit_semantics(nir_shader *nir)
+{
+   nir_foreach_function(func, nir) {
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type == nir_instr_type_intrinsic) {
+               nir_intrinsic_instr *intrinsic = nir_instr_as_intrinsic(instr);
+               switch (intrinsic->intrinsic) {
+               case nir_intrinsic_load_global_invocation_id:
+               case nir_intrinsic_load_local_invocation_id:
+               case nir_intrinsic_load_work_group_id:
+                  break;
+               default:
+                  continue;
+               }
+
+               if (nir_instr_ssa_def(instr)->bit_size != 64)
+                  continue;
+
+               intrinsic->dest.ssa.bit_size = 32;
+               b.cursor = nir_after_instr(instr);
+
+               nir_ssa_def *i64 = nir_u2u64(&b, &intrinsic->dest.ssa);
+               nir_ssa_def_rewrite_uses_after(
+                  &intrinsic->dest.ssa,
+                  nir_src_for_ssa(i64),
+                  i64->parent_instr);
+            }
+         }
+      }
+   }
+}
+
 struct clc_context *
 clc_context_new(void)
 {
@@ -678,6 +715,7 @@ clc_to_dxil(struct clc_context *ctx,
               nir_address_format_32bit_offset);
 
    NIR_PASS_V(nir, nir_lower_system_values);
+   NIR_PASS_V(nir, clc_lower_64bit_semantics);
    if (nir_options->lower_int64_options)
       NIR_PASS_V(nir, nir_lower_int64, nir_options->lower_int64_options);
 
