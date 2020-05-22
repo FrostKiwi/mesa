@@ -685,8 +685,13 @@ read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
 
    trans->data = buf;
 
-   for (unsigned i = 0; i < trans->base.layer_stride/4; ++i) {
-      buf[i] = (stencil_ptr[i] << 24) | (depth_ptr[i] & 0xffffff);
+   for (int y = 0; y < trans->base.box.height; ++y) {
+      char *s = stencil_ptr + y * trans->base.stride;
+      uint32_t *d = depth_ptr + y * trans->base.stride / 4;
+      uint32_t *b = buf + y * trans->base.stride / 4;
+      for (int i = 0; i < trans->base.box.width; ++i, ++s, ++d, ++b) {
+         *b = (*s << 24) | (*d & 0xffffff);
+      }
    }
 
    return trans->data;
