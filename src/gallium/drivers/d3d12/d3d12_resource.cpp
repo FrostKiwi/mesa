@@ -612,17 +612,26 @@ struct local_resource {
  * by using seperate texture copy calls with different formats. So create two
  * buffers, read back both resources and interleave the data.
  */
+static void
+prepare_zs_layer_strides(struct d3d12_resource *res,
+                         const struct pipe_box *box,
+                         struct d3d12_transfer *trans)
+{
+   trans->base.stride = align(util_format_get_stride(res->base.format, box->width),
+                              D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+   trans->base.layer_stride = util_format_get_2d_size(res->base.format,
+                                                      trans->base.stride,
+                                                      box->height);
+}
+
 static void *
 read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
                 const struct pipe_box *box,
                 struct d3d12_transfer *trans)
 {
    pipe_screen *pscreen = ctx->base.screen;
-   trans->base.stride = align(util_format_get_stride(res->base.format, box->width),
-                              D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-   trans->base.layer_stride = util_format_get_2d_size(res->base.format,
-                                                      trans->base.stride,
-                                                      box->height);
+
+   prepare_zs_layer_strides(res, box, trans);
 
    struct pipe_resource tmpl;
    memset(&tmpl, 0, sizeof tmpl);
