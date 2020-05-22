@@ -81,8 +81,6 @@ logic_op_format(DXGI_FORMAT fmt)
 {
    switch (fmt) {
    case DXGI_FORMAT_R8G8B8A8_SNORM:
-      return DXGI_FORMAT_R8G8B8A8_SINT;
-
    case DXGI_FORMAT_R8G8B8A8_UNORM:
    case DXGI_FORMAT_B8G8R8A8_UNORM:
    case DXGI_FORMAT_B8G8R8X8_UNORM:
