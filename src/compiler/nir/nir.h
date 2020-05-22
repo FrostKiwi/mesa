@@ -3784,8 +3784,8 @@ static inline bool should_print_nir(void) { return false; }
       progress = true;                                               \
       if (should_print_nir())                                        \
          nir_print_shader(nir, stdout);                              \
-      nir_metadata_check_validation_flag(nir);                       \
    }                                                                 \
+   nir_metadata_check_validation_flag(nir);                          \
 )
 
 #define NIR_PASS_V(nir, pass, ...) _PASS(pass, nir,                  \
@@ -3794,6 +3794,7 @@ static inline bool should_print_nir(void) { return false; }
    pass(nir, ##__VA_ARGS__);                                         \
    if (should_print_nir())                                           \
       nir_print_shader(nir, stdout);                                 \
+   nir_metadata_check_validation_flag(nir);                          \
 )
 
 #define NIR_SKIP(name) should_skip_nir(#name)
