@@ -34,6 +34,8 @@
 
 #include "state_tracker/sw_winsys.h"
 
+#include "D3D12ResourceState.h"
+
 #include <d3d12.h>
 #include <memory>
 
@@ -42,6 +44,8 @@ d3d12_resource_destroy(struct pipe_screen *pscreen,
                        struct pipe_resource *presource)
 {
    struct d3d12_resource *resource = d3d12_resource(presource);
+   if (resource->trans_state != nullptr)
+      delete resource->trans_state;
    resource->res->Release();
    FREE(resource);
 }
@@ -164,6 +168,19 @@ d3d12_resource_create(struct pipe_screen *pscreen,
                                              &res->dt_stride);
    }
 
+   // Calculate the total number of subresources
+   unsigned arraySize = desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ?
+                        1 : desc.DepthOrArraySize;
+   unsigned total_subresources = desc.MipLevels *
+                                 arraySize *
+                                 d3d12_non_opaque_plane_count(desc.Format);
+   total_subresources *= util_format_has_stencil(util_format_description(templ->format)) ?
+                         2 : 1;
+
+   res->trans_state = new TransitionableResourceState(res->res,
+                                                      total_subresources,
+                                                      !!(desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS));
+
    return &res->base;
 }
 
@@ -226,20 +243,20 @@ struct copy_info {
 
 static void
 copy_texture_region(struct d3d12_context *ctx,
-                    struct d3d12_resource *res,
                     struct copy_info& info)
 {
-   auto state = info.src_box ? D3D12_RESOURCE_STATE_COPY_SOURCE : D3D12_RESOURCE_STATE_COPY_DEST;
-
    auto batch = d3d12_current_batch(ctx);
 
    d3d12_batch_reference_resource(batch, info.src);
    d3d12_batch_reference_resource(batch, info.dst);
 
-   d3d12_resource_barrier(ctx, res, D3D12_RESOURCE_STATE_COMMON, state);
+   d3d12_transition_resource_state(ctx, info.src, D3D12_RESOURCE_STATE_COPY_SOURCE,
+                                   SubresourceTransitionFlags::SubresourceTransitionFlags_None);
+   d3d12_transition_resource_state(ctx, info.dst, D3D12_RESOURCE_STATE_COPY_DEST,
+                                   SubresourceTransitionFlags::SubresourceTransitionFlags_None);
+   d3d12_apply_resource_states(ctx, false);
    ctx->cmdlist->CopyTextureRegion(&info.dst_loc, info.dst_x, info.dst_y, info.dst_z,
                                    &info.src_loc, info.src_box);
-   d3d12_resource_barrier(ctx, res, state, D3D12_RESOURCE_STATE_COMMON);
 }
 
 static void
@@ -261,7 +278,7 @@ transfer_buf_to_image_part(struct d3d12_context *ctx,
    copy_info.dst_z = res->base.target == PIPE_TEXTURE_CUBE ? 0 : dest_z;
    copy_info.src_box = nullptr;
 
-   copy_texture_region(ctx, res, copy_info);
+   copy_texture_region(ctx, copy_info);
 }
 
 static bool
@@ -314,7 +331,7 @@ transfer_image_part_to_buf(struct d3d12_context *ctx,
    copy_info.dst_loc.PlacedFootprint.Offset = (z  - start_layer) * trans->base.layer_stride;
    copy_info.dst_x = copy_info.dst_y = copy_info.dst_z = 0;
 
-   copy_texture_region(ctx, res, copy_info);
+   copy_texture_region(ctx, copy_info);
 }
 
 static bool
@@ -364,7 +381,7 @@ struct local_resource {
       if (res) {
          if (mapped)
             res->res->Unmap(0, nullptr);
-         d3d12_resource_destroy(screen, &res->base);
+         pipe_resource_reference((struct pipe_resource **)&res, NULL);
       }
    }
 

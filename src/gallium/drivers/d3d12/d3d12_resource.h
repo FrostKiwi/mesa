@@ -29,8 +29,12 @@ struct pipe_screen;
 
 #include <d3d12.h>
 
+struct TransitionableResourceState;
+
 struct d3d12_resource {
    struct pipe_resource base;
+   struct TransitionableResourceState *trans_state;
+
    ID3D12Resource *res;
 
    DXGI_FORMAT format;
