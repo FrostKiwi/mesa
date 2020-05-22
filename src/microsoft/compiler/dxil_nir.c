@@ -26,22 +26,6 @@
 #include "nir_builder.h"
 #include "nir_deref.h"
 
-static nir_ssa_def *
-ptr_to_buffer(nir_builder *b, nir_ssa_def *ptr)
-{
-   /* Buffers IDs are 1-based to support NULL pointers. We need to decrement
-    * them when calculating the buffer index passed to global_dxil
-    * intrinsics.
-    */
-   return nir_isub(b, nir_ishr(b, ptr, nir_imm_int(b, 28)), nir_imm_int(b, 1));
-}
-
-static nir_ssa_def *
-ptr_to_offset(nir_builder *b, nir_ssa_def *ptr)
-{
-   return nir_iand(b, ptr, nir_imm_int(b, 0x0ffffffc));
-}
-
 static void
 cl_type_size_align(const struct glsl_type *type, unsigned *size,
                    unsigned *align)
@@ -364,7 +348,7 @@ lower_store_deref(nir_builder *b, nir_intrinsic_instr *intr)
 }
 
 static bool
-lower_load_global_impl(nir_builder *b, nir_intrinsic_instr *intr,
+lower_load_ssbo_impl(nir_builder *b, nir_intrinsic_instr *intr,
                        nir_ssa_def *buffer, nir_ssa_def *offset)
 {
    assert(intr->dest.is_ssa);
@@ -380,13 +364,13 @@ lower_load_global_impl(nir_builder *b, nir_intrinsic_instr *intr,
     * from us from extra complexity to extract >= 32 bit components.
     */
    for (unsigned i = 0; i < num_bits; i += 4 * 32) {
-      /* For each 16byte chunk (or smaller) we generate a 32bit global vec
+      /* For each 16byte chunk (or smaller) we generate a 32bit ssbo vec
        * load.
        */
       unsigned subload_num_bits = MIN2(num_bits - i, 4 * 32);
       nir_intrinsic_instr *load =
          nir_intrinsic_instr_create(b->shader,
-                                    nir_intrinsic_load_global_dxil);
+                                    nir_intrinsic_load_ssbo);
 
       /* The number of components to store depends on the number of bytes. */
       load->num_components = DIV_ROUND_UP(subload_num_bits, 32);
@@ -407,6 +391,8 @@ lower_load_global_impl(nir_builder *b, nir_intrinsic_instr *intr,
          vec32 = nir_ushr(b, vec32, shift);
       }
 
+      nir_intrinsic_set_align(load, 4, 0);
+
       /* And now comes the pack/unpack step to match the original type. */
       extract_comps_from_vec32(b, vec32, bit_size, &comps[comp_idx],
                                subload_num_bits / bit_size);
@@ -421,20 +407,6 @@ lower_load_global_impl(nir_builder *b, nir_intrinsic_instr *intr,
 }
 
 static bool
-lower_load_global(nir_builder *b, nir_intrinsic_instr *intr)
-{
-   b->cursor = nir_before_instr(&intr->instr);
-
-   /* source 'pointer' */
-   assert(intr->src[0].is_ssa);
-   nir_ssa_def *ptr = intr->src[0].ssa;
-   nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
-   nir_ssa_def *offset = ptr_to_offset(b, ptr);
-
-   return lower_load_global_impl(b, intr, buffer, offset);
-}
-
-static bool
 lower_load_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
 {
    b->cursor = nir_before_instr(&intr->instr);
@@ -445,11 +417,11 @@ lower_load_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
 
    nir_ssa_def *buffer = intr->src[0].ssa;
    nir_ssa_def *offset = intr->src[1].ssa;
-   return lower_load_global_impl(b, intr, buffer, offset);
+   return lower_load_ssbo_impl(b, intr, buffer, offset);
 }
 
 static bool
-lower_store_global_impl(nir_builder *b, nir_intrinsic_instr *intr, nir_ssa_def *val,
+lower_store_ssbo_impl(nir_builder *b, nir_intrinsic_instr *intr, nir_ssa_def *val,
                         nir_ssa_def *buffer, nir_ssa_def *offset)
 {
    unsigned bit_size = val->bit_size;
@@ -467,7 +439,7 @@ lower_store_global_impl(nir_builder *b, nir_intrinsic_instr *intr, nir_ssa_def *
     * extra complexity to store >= 32 bit components.
     */
    for (unsigned i = 0; i < num_bits; i += 4 * 32) {
-      /* For each 16byte chunk (or smaller) we generate a 32bit global vec
+      /* For each 16byte chunk (or smaller) we generate a 32bit ssbo vec
        * store.
        */
       unsigned substore_num_bits = MIN2(num_bits - i, 4 * 32);
@@ -492,17 +464,19 @@ lower_store_global_impl(nir_builder *b, nir_intrinsic_instr *intr, nir_ssa_def *
          }
 
          store = nir_intrinsic_instr_create(b->shader,
-                                            nir_intrinsic_store_global_masked_dxil);
+                                            nir_intrinsic_store_ssbo_masked_dxil);
          store->src[0] = nir_src_for_ssa(vec32);
          store->src[1] = nir_src_for_ssa(nir_inot(b, mask));
          store->src[2] = nir_src_for_ssa(buffer);
          store->src[3] = nir_src_for_ssa(local_offset);
       } else {
          store = nir_intrinsic_instr_create(b->shader,
-                                            nir_intrinsic_store_global_dxil);
+                                            nir_intrinsic_store_ssbo);
          store->src[0] = nir_src_for_ssa(vec32);
          store->src[1] = nir_src_for_ssa(buffer);
          store->src[2] = nir_src_for_ssa(local_offset);
+
+         nir_intrinsic_set_align(store, 4, 0);
       }
 
       /* The number of components to store depends on the number of bits. */
@@ -513,22 +487,6 @@ lower_store_global_impl(nir_builder *b, nir_intrinsic_instr *intr, nir_ssa_def *
 
    nir_instr_remove(&intr->instr);
    return true;
-}
-
-static bool
-lower_store_global(nir_builder *b, nir_intrinsic_instr *intr)
-{
-   b->cursor = nir_before_instr(&intr->instr);
-
-   assert(intr->src[0].is_ssa);
-
-   /* source 'pointer' */
-   assert(intr->src[1].is_ssa);
-   nir_ssa_def *ptr = intr->src[1].ssa;
-   nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
-   nir_ssa_def *offset = ptr_to_offset(b, ptr);
-
-   return lower_store_global_impl(b, intr, intr->src[0].ssa, buffer, offset);
 }
 
 static bool
@@ -543,7 +501,7 @@ lower_store_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
    nir_ssa_def *buffer = intr->src[1].ssa;
    nir_ssa_def *offset = intr->src[2].ssa;
 
-   return lower_store_global_impl(b, intr, intr->src[0].ssa, buffer, offset);
+   return lower_store_ssbo_impl(b, intr, intr->src[0].ssa, buffer, offset);
 }
 
 static nir_ssa_def *
@@ -865,9 +823,6 @@ dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
             case nir_intrinsic_load_deref:
                progress |= lower_load_deref(&b, intr);
                break;
-            case nir_intrinsic_load_global:
-               progress |= lower_load_global(&b, intr);
-               break;
             case nir_intrinsic_load_shared:
                progress |= lower_load_shared(&b, intr);
                break;
@@ -876,9 +831,6 @@ dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
                break;
             case nir_intrinsic_store_deref:
                progress |= lower_store_deref(&b, intr);
-               break;
-            case nir_intrinsic_store_global:
-               progress |= lower_store_global(&b, intr);
                break;
             case nir_intrinsic_store_shared:
                progress |= lower_store_shared(&b, intr);
@@ -894,65 +846,6 @@ dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
    return progress;
 }
 
-static bool
-lower_global_atomic(nir_builder *b, nir_intrinsic_instr *intr,
-                    nir_intrinsic_op dxil_op)
-{
-   b->cursor = nir_before_instr(&intr->instr);
-
-   assert(intr->src[0].is_ssa);
-   nir_ssa_def *ptr = intr->src[0].ssa;
-   nir_ssa_def *buffer = ptr_to_buffer(b, ptr);
-   nir_ssa_def *offset = ptr_to_offset(b, ptr);
-
-   nir_intrinsic_instr *atomic = nir_intrinsic_instr_create(b->shader, dxil_op);
-   atomic->src[0] = nir_src_for_ssa(buffer);
-   atomic->src[1] = nir_src_for_ssa(offset);
-   assert(intr->src[1].is_ssa);
-   atomic->src[2] = nir_src_for_ssa(intr->src[1].ssa);
-   if (dxil_op == nir_intrinsic_global_atomic_comp_swap_dxil) {
-      assert(intr->src[2].is_ssa);
-      atomic->src[3] = nir_src_for_ssa(intr->src[2].ssa);
-   }
-   atomic->num_components = 1;
-   nir_ssa_dest_init(&atomic->instr, &atomic->dest, 1, 32, intr->dest.ssa.name);
-
-   nir_builder_instr_insert(b, &atomic->instr);
-   nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(&atomic->dest.ssa));
-   nir_instr_remove(&intr->instr);
-   return true;
-}
-
-static bool
-lower_ssbo_atomic(nir_builder *b, nir_intrinsic_instr *intr,
-                  nir_intrinsic_op dxil_op)
-{
-   b->cursor = nir_before_instr(&intr->instr);
-
-   assert(intr->src[0].is_ssa);
-   assert(intr->src[1].is_ssa);
-   nir_ssa_def *buffer = intr->src[0].ssa;
-   nir_ssa_def *offset = intr->src[1].ssa;
-
-   nir_intrinsic_instr *atomic = nir_intrinsic_instr_create(b->shader, dxil_op);
-   atomic->src[0] = nir_src_for_ssa(buffer);
-   atomic->src[1] = nir_src_for_ssa(offset);
-   assert(intr->src[2].is_ssa);
-   atomic->src[2] = nir_src_for_ssa(intr->src[2].ssa);
-   if (dxil_op == nir_intrinsic_global_atomic_comp_swap_dxil) {
-      assert(intr->src[3].is_ssa);
-      atomic->src[3] = nir_src_for_ssa(intr->src[3].ssa);
-   }
-   atomic->num_components = 1;
-   nir_ssa_dest_init(&atomic->instr, &atomic->dest, 1, 32, intr->dest.ssa.name);
-
-   nir_builder_instr_insert(b, &atomic->instr);
-   nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(&atomic->dest.ssa));
-   nir_instr_remove(&intr->instr);
-   return true;
-}
-
-static bool
 lower_shared_atomic(nir_builder *b, nir_intrinsic_instr *intr,
                     nir_intrinsic_op dxil_op)
 {
@@ -1002,17 +895,9 @@ dxil_nir_lower_atomics_to_dxil(nir_shader *nir)
             switch (intr->intrinsic) {
 
 #define ATOMIC(op)                                                            \
-  case nir_intrinsic_global_atomic_##op:                                     \
-     progress |= lower_global_atomic(&b, intr,                                \
-                                     nir_intrinsic_global_atomic_##op##_dxil); \
-     break;                                                                   \
   case nir_intrinsic_shared_atomic_##op:                                     \
      progress |= lower_shared_atomic(&b, intr,                                \
                                      nir_intrinsic_shared_atomic_##op##_dxil); \
-     break;                                                                  \
-  case nir_intrinsic_ssbo_atomic_##op:                                       \
-     progress |= lower_ssbo_atomic(&b, intr,                                 \
-                                   nir_intrinsic_global_atomic_##op##_dxil); \
      break
 
             ATOMIC(add);

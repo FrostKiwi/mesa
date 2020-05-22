@@ -2045,7 +2045,7 @@ emit_gep_for_index(struct ntd_context *ctx, const nir_variable *var,
 }
 
 static bool
-emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+emit_load_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    const struct dxil_value *int32_undef = get_int32_undef(&ctx->mod);
    const struct dxil_value *buffer =
@@ -2083,7 +2083,7 @@ emit_load_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
-emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+emit_store_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    const struct dxil_value *buffer =
       get_src(ctx, &intr->src[1], 0, nir_type_uint);
@@ -2128,7 +2128,7 @@ emit_store_global(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
-emit_store_global_masked(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+emit_store_ssbo_masked(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    const struct dxil_value *value =
       get_src(ctx, &intr->src[0], 0, nir_type_uint);
@@ -2552,7 +2552,7 @@ emit_end_primitive(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
-emit_global_atomic(struct ntd_context *ctx, nir_intrinsic_instr *intr,
+emit_ssbo_atomic(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                    enum dxil_atomic_op op, nir_alu_type type)
 {
    const struct dxil_value *buffer =
@@ -2589,7 +2589,7 @@ emit_global_atomic(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 }
 
 static bool
-emit_global_atomic_comp_swap(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+emit_ssbo_atomic_comp_swap(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    const struct dxil_value *buffer =
       get_src(ctx, &intr->src[0], 0, nir_type_uint);
@@ -2708,12 +2708,12 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_local_invocation_id(ctx, intr);
    case nir_intrinsic_load_work_group_id:
       return emit_load_local_work_group_id(ctx, intr);
-   case nir_intrinsic_load_global_dxil:
-      return emit_load_global(ctx, intr);
-   case nir_intrinsic_store_global_dxil:
-      return emit_store_global(ctx, intr);
-   case nir_intrinsic_store_global_masked_dxil:
-      return emit_store_global_masked(ctx, intr);
+   case nir_intrinsic_load_ssbo:
+      return emit_load_ssbo(ctx, intr);
+   case nir_intrinsic_store_ssbo:
+      return emit_store_ssbo(ctx, intr);
+   case nir_intrinsic_store_ssbo_masked_dxil:
+      return emit_store_ssbo_masked(ctx, intr);
    case nir_intrinsic_store_deref:
       return emit_store_deref(ctx, intr);
    case nir_intrinsic_store_shared_dxil:
@@ -2748,26 +2748,26 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    case nir_intrinsic_scoped_memory_barrier:
    case nir_intrinsic_scoped_control_memory_barrier:
       return emit_barrier(ctx, intr);
-   case nir_intrinsic_global_atomic_add_dxil:
-      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_ADD, nir_type_int);
-   case nir_intrinsic_global_atomic_imin_dxil:
-      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_IMIN, nir_type_int);
-   case nir_intrinsic_global_atomic_umin_dxil:
-      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_UMIN, nir_type_uint);
-   case nir_intrinsic_global_atomic_imax_dxil:
-      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_IMAX, nir_type_int);
-   case nir_intrinsic_global_atomic_umax_dxil:
-      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_UMAX, nir_type_uint);
-   case nir_intrinsic_global_atomic_and_dxil:
-      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_AND, nir_type_uint);
-   case nir_intrinsic_global_atomic_or_dxil:
-      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_OR, nir_type_uint);
-   case nir_intrinsic_global_atomic_xor_dxil:
-      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_XOR, nir_type_uint);
-   case nir_intrinsic_global_atomic_exchange_dxil:
-      return emit_global_atomic(ctx, intr, DXIL_ATOMIC_EXCHANGE, nir_type_int);
-   case nir_intrinsic_global_atomic_comp_swap_dxil:
-      return emit_global_atomic_comp_swap(ctx, intr);
+   case nir_intrinsic_ssbo_atomic_add:
+      return emit_ssbo_atomic(ctx, intr, DXIL_ATOMIC_ADD, nir_type_int);
+   case nir_intrinsic_ssbo_atomic_imin:
+      return emit_ssbo_atomic(ctx, intr, DXIL_ATOMIC_IMIN, nir_type_int);
+   case nir_intrinsic_ssbo_atomic_umin:
+      return emit_ssbo_atomic(ctx, intr, DXIL_ATOMIC_UMIN, nir_type_uint);
+   case nir_intrinsic_ssbo_atomic_imax:
+      return emit_ssbo_atomic(ctx, intr, DXIL_ATOMIC_IMAX, nir_type_int);
+   case nir_intrinsic_ssbo_atomic_umax:
+      return emit_ssbo_atomic(ctx, intr, DXIL_ATOMIC_UMAX, nir_type_uint);
+   case nir_intrinsic_ssbo_atomic_and:
+      return emit_ssbo_atomic(ctx, intr, DXIL_ATOMIC_AND, nir_type_uint);
+   case nir_intrinsic_ssbo_atomic_or:
+      return emit_ssbo_atomic(ctx, intr, DXIL_ATOMIC_OR, nir_type_uint);
+   case nir_intrinsic_ssbo_atomic_xor:
+      return emit_ssbo_atomic(ctx, intr, DXIL_ATOMIC_XOR, nir_type_uint);
+   case nir_intrinsic_ssbo_atomic_exchange:
+      return emit_ssbo_atomic(ctx, intr, DXIL_ATOMIC_EXCHANGE, nir_type_int);
+   case nir_intrinsic_ssbo_atomic_comp_swap:
+      return emit_ssbo_atomic_comp_swap(ctx, intr);
    case nir_intrinsic_shared_atomic_add_dxil:
       return emit_shared_atomic(ctx, intr, DXIL_RMWOP_ADD, nir_type_int);
    case nir_intrinsic_shared_atomic_imin_dxil:
