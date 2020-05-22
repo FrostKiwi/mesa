@@ -41,6 +41,8 @@
 #include "util/u_upload_mgr.h"
 #include "nir_to_dxil.h"
 
+#include "D3D12ResourceState.h"
+
 extern "C" {
 #include "indices/u_primconvert.h"
 }
@@ -74,6 +76,8 @@ d3d12_context_destroy(struct pipe_context *pctx)
       u_upload_destroy(pctx->stream_uploader);
    if (pctx->const_uploader)
       u_upload_destroy(pctx->const_uploader);
+
+   delete ctx->resource_state_manager;
 
    FREE(ctx);
 }
@@ -1085,19 +1089,39 @@ d3d12_flush_cmdlist_and_wait(struct d3d12_context *ctx)
 }
 
 void
-d3d12_resource_barrier(struct d3d12_context *ctx,
-                       struct d3d12_resource *res,
-                       D3D12_RESOURCE_STATES before,
-                       D3D12_RESOURCE_STATES after)
+d3d12_transition_resource_state(struct d3d12_context *ctx,
+                                struct d3d12_resource *res,
+                                D3D12_RESOURCE_STATES state,
+                                SubresourceTransitionFlags flags)
 {
-   D3D12_RESOURCE_BARRIER barrier;
-   barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-   barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-   barrier.Transition.pResource = res->res;
-   barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-   barrier.Transition.StateBefore = before;
-   barrier.Transition.StateAfter = after;
-   ctx->cmdlist->ResourceBarrier(1, &barrier);
+   TransitionableResourceState *xres = res->trans_state;
+   ctx->resource_state_manager->TransitionResource(xres, state, flags);
+}
+
+void
+d3d12_transition_subresources_state(struct d3d12_context *ctx,
+                                    struct d3d12_resource *res,
+                                    uint32_t start_level, uint32_t num_levels,
+                                    uint32_t start_layer, uint32_t num_layers,
+                                    D3D12_RESOURCE_STATES state,
+                                    SubresourceTransitionFlags flags)
+{
+   TransitionableResourceState *xres = res->trans_state;
+
+   for (uint32_t l = 0; l < num_levels; l++) {
+      const uint32_t level = start_level + l;
+      for (uint32_t a = 0; a < num_layers; a++) {
+         const uint32_t layer = start_layer + a;
+         uint32_t subres_id = level + (layer * res->mip_levels);
+         ctx->resource_state_manager->TransitionSubresource(xres, subres_id, state, flags);
+      }
+   }
+}
+
+void
+d3d12_apply_resource_states(struct d3d12_context *ctx, bool predraw)
+{
+   ctx->resource_state_manager->ApplyAllResourceTransitions(ctx->cmdlist, predraw);
 }
 
 static void
@@ -1112,14 +1136,12 @@ d3d12_clear(struct pipe_context *pctx,
       for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
          struct pipe_surface *psurf = ctx->fb.cbufs[i];
          struct d3d12_surface *surf = d3d12_surface(psurf);
-         d3d12_resource_barrier(ctx, d3d12_resource(psurf->texture),
-                                D3D12_RESOURCE_STATE_COMMON,
-                                D3D12_RESOURCE_STATE_RENDER_TARGET);
+         d3d12_transition_resource_state(ctx, d3d12_resource(psurf->texture),
+                                         D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                         SubresourceTransitionFlags_None);
+         d3d12_apply_resource_states(ctx, false);
          ctx->cmdlist->ClearRenderTargetView(surf->desc_handle.cpu_handle,
                                              color->f, 0, NULL);
-         d3d12_resource_barrier(ctx, d3d12_resource(psurf->texture),
-                                D3D12_RESOURCE_STATE_RENDER_TARGET,
-                                D3D12_RESOURCE_STATE_COMMON);
       }
    }
 
@@ -1132,14 +1154,12 @@ d3d12_clear(struct pipe_context *pctx,
       if (buffers & PIPE_CLEAR_STENCIL)
          flags |= D3D12_CLEAR_FLAG_STENCIL;
 
-      d3d12_resource_barrier(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
-                             D3D12_RESOURCE_STATE_COMMON,
-                             D3D12_RESOURCE_STATE_DEPTH_WRITE);
+      d3d12_transition_resource_state(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
+                                      D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                                      SubresourceTransitionFlags_None);
+      d3d12_apply_resource_states(ctx, false);
       ctx->cmdlist->ClearDepthStencilView(surf->desc_handle.cpu_handle, flags,
                                           depth, stencil, 0, NULL);
-      d3d12_resource_barrier(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
-                             D3D12_RESOURCE_STATE_DEPTH_WRITE,
-                             D3D12_RESOURCE_STATE_COMMON);
    }
 }
 
@@ -1150,6 +1170,17 @@ d3d12_flush(struct pipe_context *pipe,
 {
    struct d3d12_context *ctx = d3d12_context(pipe);
    struct d3d12_batch *batch = d3d12_current_batch(ctx);
+
+   // Transition fb's to COMMON state
+   for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
+      struct pipe_surface* psurf = ctx->fb.cbufs[i];
+      d3d12_transition_resource_state(ctx, d3d12_resource(psurf->texture),
+         D3D12_RESOURCE_STATE_COMMON,
+         SubresourceTransitionFlags_None);
+   }
+
+   d3d12_apply_resource_states(ctx, false);
+
    d3d12_flush_cmdlist(ctx);
 
    if (fence)
@@ -1427,6 +1458,8 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->blitter = util_blitter_create(&ctx->base);
    if (!ctx->blitter)
       return NULL;
+
+   ctx->resource_state_manager = new ResourceStateManager();
 
    return &ctx->base;
 }
