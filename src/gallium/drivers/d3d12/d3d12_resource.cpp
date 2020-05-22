@@ -705,6 +705,78 @@ read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
 }
 
 static void *
+prepare_write_zs_surface(struct d3d12_resource *res,
+                         const struct pipe_box *box,
+                         struct d3d12_transfer *trans)
+{
+   prepare_zs_layer_strides(res, box, trans);
+   uint32_t *buf = (uint32_t *)malloc(trans->base.layer_stride);
+   if (!buf)
+      return NULL;
+
+   trans->data = buf;
+   return trans->data;
+}
+
+static void
+write_zs_surface(struct pipe_context *pctx, struct d3d12_resource *res,
+                 struct d3d12_transfer *trans)
+{
+   struct pipe_resource tmpl;
+   memset(&tmpl, 0, sizeof tmpl);
+   tmpl.target = PIPE_BUFFER;
+   tmpl.format = PIPE_FORMAT_R32_UNORM;
+   tmpl.bind = 0;
+   tmpl.usage = PIPE_USAGE_STAGING;
+   tmpl.flags = 0;
+   tmpl.width0 = trans->base.layer_stride;
+   tmpl.height0 = 1;
+   tmpl.depth0 = 1;
+   tmpl.array_size = 1;
+
+   auto depth_buffer = std::make_unique<local_resource>(pctx->screen, &tmpl);
+   if (!depth_buffer || !depth_buffer->res) {
+      debug_printf("Allocating staging buffer for depth failed\n");
+      return;
+   }
+
+   auto stencil_buffer = std::make_unique<local_resource>(pctx->screen, &tmpl);
+   if (!stencil_buffer || !stencil_buffer->res) {
+      debug_printf("Allocating staging buffer for depth failed\n");
+      return;
+   }
+
+   uint32_t *depth_ptr = (uint32_t *)depth_buffer->map();
+   if (!depth_ptr) {
+      debug_printf("Mapping staging depth buffer failed\n");
+      return;
+   }
+
+   char *stencil_ptr =  (char *)stencil_buffer->map();
+   if (!stencil_ptr) {
+      debug_printf("Mapping staging stencil buffer failed\n");
+      return;
+   }
+
+   uint32_t *buf = (uint32_t *)trans->data;
+   for (int y = 0; y < trans->base.box.height; ++y) {
+      char *s = stencil_ptr + y * trans->base.stride;
+      uint32_t *d = depth_ptr + y * trans->base.stride / 4;
+      uint32_t *b = buf + y * trans->base.stride / 4;
+      for (int i = 0; i < trans->base.box.width; ++i, ++s, ++d, ++b) {
+         *s = (*b >> 24) & 0xff;
+         *d = *b & 0xffffff;
+      }
+   }
+
+   stencil_buffer->unmap();
+   depth_buffer->unmap();
+
+   transfer_buf_to_image(d3d12_context(pctx), res, depth_buffer->res, trans, 0);
+   transfer_buf_to_image(d3d12_context(pctx), res, stencil_buffer->res, trans, 1);
+}
+
+static void *
 d3d12_transfer_map(struct pipe_context *pctx,
                    struct pipe_resource *pres,
                    unsigned level,
@@ -750,9 +822,12 @@ d3d12_transfer_map(struct pipe_context *pctx,
       if (!synchronize(ctx, res, usage, &range))
          return NULL;
       ptr = d3d12_bo_map(res->bo, &range);
-   } else if ((unlikely(pres->format == PIPE_FORMAT_Z24_UNORM_S8_UINT)) &&
-              (usage & PIPE_TRANSFER_READ)) {
-      ptr = read_zs_surface(ctx, res, box, trans);
+   } else if (unlikely(pres->format == PIPE_FORMAT_Z24_UNORM_S8_UINT)) {
+      if (usage & PIPE_TRANSFER_READ) {
+         ptr = read_zs_surface(ctx, res, box, trans);
+      } else if (usage & PIPE_TRANSFER_WRITE){
+         ptr = prepare_write_zs_surface(res, box, trans);
+      }
    } else {
       ptrans->stride = align(util_format_get_stride(pres->format, box->width),
                               D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
@@ -798,7 +873,8 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
    D3D12_RANGE range = { 0, 0 };
 
    if (trans->data != nullptr) {
-      /* We only support this buffer for reading, so the resources are already unmapped */
+      if (trans->base.usage & PIPE_TRANSFER_WRITE)
+         write_zs_surface(pctx, res, trans);
       free(trans->data);
    } else if (trans->staging_res) {
       struct d3d12_resource *staging_res = d3d12_resource(trans->staging_res);
