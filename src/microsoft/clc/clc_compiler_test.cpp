@@ -494,6 +494,35 @@ TEST_F(ComputeTest, complex_types_global_uchar3)
    }
 }
 
+TEST_F(ComputeTest, complex_types_constant_uchar3)
+{
+   struct uchar3 { uint8_t x; uint8_t y; uint8_t z; uint8_t pad; };
+   const char *kernel_source =
+   "__kernel void main_test(__global uchar3 *out, __constant uchar3 *in)\n\
+   {\n\
+      uint id = get_global_id(0);\n\
+      out[id].x = in[id].x + id;\n\
+      out[id].y = in[id].y * id;\n\
+      out[id].z = out[id].y + out[id].x;\n\
+   }\n";
+   auto in = ShaderArg<struct uchar3>({ { 8, 8, 8 }, { 16, 16, 16 }, { 64, 64, 64 }, { 255, 255, 255 } },
+                                      SHADER_ARG_INPUT);
+   auto out = ShaderArg<struct uchar3>(std::vector<struct uchar3>(4, { 0xff, 0xff, 0xff }),
+                                      SHADER_ARG_OUTPUT);
+   const struct uchar3 expected[] = {
+      { 8 + 0, 8 * 0, (8 + 0) + (8 * 0) },
+      { 16 + 1, 16 * 1, (16 + 1) + (16 * 1) },
+      { 64 + 2, 64 * 2, (64 + 2) + (64 * 2) },
+      { (uint8_t)(255 + 3), (uint8_t)(255 * 3), (uint8_t)((255 + 3) + (255 * 3)) }
+   };
+   run_shader(kernel_source, out.size(), 1, 1, out, in);
+   for (int i = 0; i < out.size(); ++i) {
+      EXPECT_EQ(out[i].x, expected[i].x);
+      EXPECT_EQ(out[i].y, expected[i].y);
+      EXPECT_EQ(out[i].z, expected[i].z);
+   }
+}
+
 TEST_F(ComputeTest, complex_types_global_uint8)
 {
    struct uint8 {
@@ -521,6 +550,38 @@ TEST_F(ComputeTest, complex_types_global_uint8)
       EXPECT_EQ(inout[i].s5, expected[i].s5);
       EXPECT_EQ(inout[i].s6, expected[i].s6);
       EXPECT_EQ(inout[i].s7, expected[i].s7);
+   }
+}
+
+TEST_F(ComputeTest, complex_types_constant_uint8)
+{
+   struct uint8 {
+      uint32_t s0; uint32_t s1; uint32_t s2; uint32_t s3;
+      uint32_t s4; uint32_t s5; uint32_t s6; uint32_t s7;
+   };
+   const char *kernel_source =
+   "__kernel void main_test(__global uint8 *out, __constant uint8 *in)\n\
+   {\n\
+      uint id = get_global_id(0);\n\
+      out[id].s01234567 = in[id].s01234567 * 2;\n\
+   }\n";
+   auto in = ShaderArg<struct uint8>({ { 1, 2, 3, 4, 5, 6, 7, 8 } },
+                                     SHADER_ARG_INPUT);
+   auto out = ShaderArg<struct uint8>({ { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } },
+                                      SHADER_ARG_INOUT);
+   const struct uint8 expected[] = {
+      { 2, 4, 6, 8, 10, 12, 14, 16 }
+   };
+   run_shader(kernel_source, out.size(), 1, 1, out, in);
+   for (int i = 0; i < out.size(); ++i) {
+      EXPECT_EQ(out[i].s0, expected[i].s0);
+      EXPECT_EQ(out[i].s1, expected[i].s1);
+      EXPECT_EQ(out[i].s2, expected[i].s2);
+      EXPECT_EQ(out[i].s3, expected[i].s3);
+      EXPECT_EQ(out[i].s4, expected[i].s4);
+      EXPECT_EQ(out[i].s5, expected[i].s5);
+      EXPECT_EQ(out[i].s6, expected[i].s6);
+      EXPECT_EQ(out[i].s7, expected[i].s7);
    }
 }
 
