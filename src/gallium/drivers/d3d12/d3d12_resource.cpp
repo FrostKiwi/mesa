@@ -59,6 +59,7 @@ d3d12_resource_create(struct pipe_screen *pscreen,
 
    pipe_reference_init(&res->base.reference, 1);
    res->base.screen = pscreen;
+   res->mip_levels = templ->last_level + 1;
    res->format = templ->target == PIPE_BUFFER ? DXGI_FORMAT_UNKNOWN :
                  d3d12_get_format(templ->format);
 

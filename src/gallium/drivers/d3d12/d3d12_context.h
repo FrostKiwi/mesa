@@ -123,6 +123,8 @@ enum d3d12_blend_factor_flags {
 struct d3d12_sampler_view {
    struct pipe_sampler_view base;
    struct d3d12_descriptor_handle handle;
+   unsigned mip_levels;
+   unsigned array_size;
 };
 
 static inline struct d3d12_sampler_view *

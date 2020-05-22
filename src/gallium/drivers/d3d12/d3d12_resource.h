@@ -34,6 +34,7 @@ struct d3d12_resource {
    ID3D12Resource *res;
 
    DXGI_FORMAT format;
+   unsigned mip_levels;
    struct sw_displaytarget *dt;
    unsigned dt_stride;
 };
