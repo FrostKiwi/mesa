@@ -603,6 +603,12 @@ struct local_resource {
       return ptr;
    }
 
+   void unmap()
+   {
+      if (mapped)
+         d3d12_bo_unmap(res->bo, nullptr);
+      mapped = false;
+   }
    pipe_screen *screen;
    struct d3d12_resource *res;
    bool mapped;
