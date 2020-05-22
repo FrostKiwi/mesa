@@ -397,7 +397,8 @@ transfer_buf_to_image_part(struct d3d12_context *ctx,
                            struct d3d12_resource *res,
                            struct d3d12_resource *staging_res,
                            struct d3d12_transfer *trans,
-                           int z, int depth, int start_z, int dest_z)
+                           int z, int depth, int start_z, int dest_z,
+                           int resid)
 {
    if (D3D12_DEBUG_RESOURCE & d3d12_debug) {
       debug_printf("D3D12: Copy %dx%dx%d + %dx%dx%d from buffer %s to image %s\n",
@@ -409,11 +410,11 @@ transfer_buf_to_image_part(struct d3d12_context *ctx,
 
    struct copy_info copy_info;
    copy_info.src = staging_res;
-   copy_info.src_loc = fill_buffer_location(ctx, res, staging_res, trans, depth, 0, z);
+   copy_info.src_loc = fill_buffer_location(ctx, res, staging_res, trans, depth, resid, z);
    copy_info.src_loc.PlacedFootprint.Offset = (z  - start_z) * trans->base.layer_stride;
    copy_info.src_box = nullptr;
    copy_info.dst = res;
-   copy_info.dst_loc = fill_texture_location(res, trans, 0, z);
+   copy_info.dst_loc = fill_texture_location(res, trans, resid, z);
    copy_info.dst_x = trans->base.box.x;
    copy_info.dst_y = trans->base.box.y;
    copy_info.dst_z = res->base.target == PIPE_TEXTURE_CUBE ? 0 : dest_z;
@@ -426,20 +427,20 @@ static bool
 transfer_buf_to_image(struct d3d12_context *ctx,
                       struct d3d12_resource *res,
                       struct d3d12_resource *staging_res,
-                      struct d3d12_transfer *trans)
+                      struct d3d12_transfer *trans, int resid)
 {
    if (res->base.target == PIPE_TEXTURE_3D) {
+      assert(resid == 0);
       transfer_buf_to_image_part(ctx, res, staging_res, trans,
                                  0, trans->base.box.depth, 0,
-                                 trans->base.box.z);
+                                 trans->base.box.z, 0);
    } else {
       int num_layers = trans->base.box.depth;
       int start_z = trans->base.box.z;
 
       for (int z = start_z; z < start_z + num_layers; ++z) {
          transfer_buf_to_image_part(ctx, res, staging_res, trans,
-                                           z, 1, start_z, 0);
-
+                                           z, 1, start_z, 0, resid);
       }
    }
    return true;
@@ -805,7 +806,7 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
 
       if (trans->base.usage & PIPE_TRANSFER_WRITE) {
          struct d3d12_context *ctx = d3d12_context(pctx);
-         transfer_buf_to_image(ctx, res, staging_res, trans);
+         transfer_buf_to_image(ctx, res, staging_res, trans, 0);
       }
 
       pipe_resource_reference(&trans->staging_res, NULL);
