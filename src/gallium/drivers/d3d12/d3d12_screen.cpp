@@ -183,6 +183,9 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_MIXED_COLORBUFFER_FORMATS:
       return 1;
 
+   case PIPE_CAP_VERTEX_COLOR_UNCLAMPED:
+      return 1;
+
    case PIPE_CAP_GLSL_FEATURE_LEVEL:
    case PIPE_CAP_GLSL_FEATURE_LEVEL_COMPATIBILITY:
       return 120;
