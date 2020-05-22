@@ -157,7 +157,7 @@ TEST_F(ComputeTest, ret_constant_ptr)
       1, 4
    };
    const uint64_t expected_ptr[] = {
-      3ull << 32, 2ull << 32
+      2ull << 32, 1ull << 32
    };
 
    run_shader(kernel_source, out.size(), 1, 1, out, in);
@@ -185,7 +185,7 @@ TEST_F(ComputeTest, ret_global_ptr)
       1, 4
    };
    const uint64_t expected_ptr[] = {
-      2ull << 32, 3ull << 32
+      1ull << 32, 2ull << 32
    };
 
    run_shader(kernel_source, out.size(), 1, 1, out, in1, in2);

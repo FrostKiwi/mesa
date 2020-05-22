@@ -443,7 +443,7 @@ lower_load_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
    assert(intr->src[0].is_ssa);
    assert(intr->src[1].is_ssa);
 
-   nir_ssa_def *buffer = nir_isub(b, intr->src[0].ssa, nir_imm_int(b, 1));
+   nir_ssa_def *buffer = intr->src[0].ssa;
    nir_ssa_def *offset = intr->src[1].ssa;
    return lower_load_global_impl(b, intr, buffer, offset);
 }
@@ -540,7 +540,7 @@ lower_store_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
    assert(intr->src[1].is_ssa);
    assert(intr->src[2].is_ssa);
 
-   nir_ssa_def *buffer = nir_isub(b, intr->src[1].ssa, nir_imm_int(b, 1));
+   nir_ssa_def *buffer = intr->src[1].ssa;
    nir_ssa_def *offset = intr->src[2].ssa;
 
    return lower_store_global_impl(b, intr, intr->src[0].ssa, buffer, offset);
@@ -931,7 +931,7 @@ lower_ssbo_atomic(nir_builder *b, nir_intrinsic_instr *intr,
 
    assert(intr->src[0].is_ssa);
    assert(intr->src[1].is_ssa);
-   nir_ssa_def *buffer = nir_isub(b, intr->src[0].ssa, nir_imm_int(b, 1));
+   nir_ssa_def *buffer = intr->src[0].ssa;
    nir_ssa_def *offset = intr->src[1].ssa;
 
    nir_intrinsic_instr *atomic = nir_intrinsic_instr_create(b->shader, dxil_op);
@@ -1049,7 +1049,7 @@ lower_deref_ssbo(nir_builder *b, nir_deref_instr *deref)
       /* We turn all deref_var into deref_cast and build a pointer value based on
        * the var binding which encodes the UAV id.
        */
-      nir_ssa_def *ptr = nir_imm_int64(b, (uint64_t)(var->data.binding + 1) << 32);
+      nir_ssa_def *ptr = nir_imm_int64(b, (uint64_t)var->data.binding << 32);
       nir_deref_instr *deref_cast =
          nir_build_deref_cast(b, ptr, nir_var_mem_ssbo, deref->type,
                               glsl_get_explicit_stride(var->type));

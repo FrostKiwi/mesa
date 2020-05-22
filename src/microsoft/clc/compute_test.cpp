@@ -485,7 +485,7 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
          assert(dxil->metadata.args[i].size == sizeof(uint64_t));
          uint64_t *ptr_slot = (uint64_t *)slot;
          if (arg->get_data())
-            *ptr_slot = (uint64_t)(dxil->metadata.args[i].globconstptr.buf_id + 1) << 32;
+            *ptr_slot = (uint64_t)dxil->metadata.args[i].globconstptr.buf_id << 32;
          else
             *ptr_slot = ~0ull;
          break;
