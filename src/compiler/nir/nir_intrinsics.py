@@ -859,16 +859,11 @@ intrinsic("load_global_ir3", [2, 1], dest_comp=0, indices=[ACCESS, ALIGN_MUL, AL
 # Note that this doesn't actually turn into a HW instruction.
 intrinsic("bindless_resource_ir3", [1], dest_comp=1, indices=[DESC_SET], flags=[CAN_ELIMINATE, CAN_REORDER])
 
-# DXIL specific load/store intrinsics. These require index and offset instead
-# of address, due to lack of real pointers to global memory.
-# src[] = { value, index, offset }.
-intrinsic("store_global_dxil", [0, 1, 1])
+# DXIL specific load/store intrinsics. 
 # src[] = { value, mask, index, offset }.
-intrinsic("store_global_masked_dxil", [1] * 4)
+intrinsic("store_ssbo_masked_dxil", [1] * 4)
 # src[] = { value, deref_var, offset }
 intrinsic("store_ptr_dxil", [0, 1, 1])
-# src[] = { index, offset }.
-load("global_dxil", 2, [], [CAN_ELIMINATE])
 # src[] = { value, index }.
 intrinsic("store_shared_dxil", [1] * 2)
 # src[] = { value, mask, index }.
@@ -879,29 +874,6 @@ load("shared_dxil", 1, [], [CAN_ELIMINATE])
 load("ptr_dxil", 2, [], [])
 # src[] = { index, 16-byte-based-offset }
 load("ubo_dxil", 2, [], [CAN_ELIMINATE])
-
-# DXIL Global atomic intrinsics
-#
-# All of the shared variable atomic memory operations read a value from
-# memory, compute a new value using one of the operations below, write the
-# new value to memory, and return the original value read.
-#
-# All operations take 3 sources:
-#
-# 0: The UAV index
-# 1: The offset in the UAV
-# 2: The data parameter to the atomic function (i.e. the value to add
-#    in shared_atomic_add, etc).
-intrinsic("global_atomic_add_dxil",  src_comp=[1, 1, 1], dest_comp=1)
-intrinsic("global_atomic_imin_dxil", src_comp=[1, 1, 1], dest_comp=1)
-intrinsic("global_atomic_umin_dxil", src_comp=[1, 1, 1], dest_comp=1)
-intrinsic("global_atomic_imax_dxil", src_comp=[1, 1, 1], dest_comp=1)
-intrinsic("global_atomic_umax_dxil", src_comp=[1, 1, 1], dest_comp=1)
-intrinsic("global_atomic_and_dxil",  src_comp=[1, 1, 1], dest_comp=1)
-intrinsic("global_atomic_or_dxil",   src_comp=[1, 1, 1], dest_comp=1)
-intrinsic("global_atomic_xor_dxil",  src_comp=[1, 1, 1], dest_comp=1)
-intrinsic("global_atomic_exchange_dxil", src_comp=[1, 1, 1], dest_comp=1)
-intrinsic("global_atomic_comp_swap_dxil", src_comp=[1, 1, 1, 1], dest_comp=1)
 
 # DXIL Shared atomic intrinsics
 #

@@ -35,16 +35,6 @@
 #include "spirv/nir_spirv.h"
 #include "nir_builder.h"
 
-/*
- * DXIL doesn't support reading and writing global memory through pointers,
- * but needs a buffer-index and offset instead. This code lowers this to
- * DXIL specific intrinsics, so we can deal with these limitations as early
- * as possible.
- *
- * In principle, this is very similar to SSBOs, so at some point we might
- * want to unify that.
- */
-
 #include "spirv64-mesa3d-.spv.h"
 
 enum clc_debug_flags {
