@@ -1458,6 +1458,27 @@ TEST_F(ComputeTest, local_ptr)
       EXPECT_EQ(inout[i], expected[i]);
 }
 
+TEST_F(ComputeTest, two_local_ptrs)
+{
+   struct uint2 { uint32_t x, y; };
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *inout, __local uint2 *tmp, __local uint *tmp2)\n\
+   {\n\
+      tmp[get_local_id(0)].x = inout[get_global_id(0)] + 1;\n\
+      tmp[get_local_id(0)].y = inout[get_global_id(0)] - 1;\n\
+      tmp2[get_local_id(0)] = get_global_id(0);\n\
+      barrier(CLK_LOCAL_MEM_FENCE);\n\
+      inout[get_global_id(0)] = tmp[get_local_id(0) % 2].x * tmp[(get_local_id(0) + 1) % 2].y + tmp2[get_local_id(0) % 2];\n\
+   }\n";
+   auto inout = ShaderArg<uint32_t>({ 2, 4 }, SHADER_ARG_INOUT);
+   auto tmp = ShaderArg<struct uint2>(std::vector<struct uint2>(1024), SHADER_ARG_INPUT);
+   auto tmp2 = ShaderArg<uint32_t>(std::vector<uint32_t>(1024), SHADER_ARG_INPUT);
+   const uint8_t expected[] = { 9, 6 };
+   run_shader(kernel_source, inout.size(), 1, 1, inout, tmp, tmp2);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i], expected[i]);
+}
+
 TEST_F(ComputeTest, int8_to_float)
 {
    const char *kernel_source =
