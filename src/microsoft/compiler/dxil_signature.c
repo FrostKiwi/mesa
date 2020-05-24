@@ -136,6 +136,9 @@ get_semantic_sv_name(nir_variable *var, struct semantic_info *info)
    case SYSTEM_VALUE_FRONT_FACE:
       info->kind = DXIL_SEM_IS_FRONT_FACE;
       break;
+   case SYSTEM_VALUE_INSTANCE_ID:
+      info->kind = DXIL_SEM_INSTANCE_ID;
+      break;
    default:
       unreachable("unsupported system value");
    }
