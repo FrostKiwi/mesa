@@ -1630,9 +1630,10 @@ dxil_module_get_array_const(struct dxil_module *m, const struct dxil_type *type,
    c = create_const(m, type, false);
    if (!c)
       return NULL;
-   c->array_values =
+   void *tmp =
       ralloc_array(m->ralloc_ctx, const struct dxil_value *, num_values);
-   memcpy(c->array_values, values, sizeof(*values) * num_values);
+   memcpy(tmp, values, sizeof(*values) * num_values);
+   c->array_values = tmp;
 
    return &c->value;
 }
