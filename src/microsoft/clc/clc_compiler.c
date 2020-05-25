@@ -552,6 +552,34 @@ clc_lower_ubo_to_ssbo(nir_shader *nir,
    }
 }
 
+static void
+clc_lower_global_to_ssbo(nir_shader *nir)
+{
+   nir_foreach_function(func, nir) {
+      if (!func->is_entrypoint)
+         continue;
+
+      assert(func->impl);
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_deref)
+               continue;
+
+            nir_deref_instr *deref = nir_instr_as_deref(instr);
+
+            if (deref->mode != nir_var_mem_global)
+               continue;
+
+            deref->mode = nir_var_mem_ssbo;
+         }
+      }
+   }
+}
+
 struct clc_dxil_object *
 clc_to_dxil(struct clc_context *ctx,
             const struct clc_object *obj,
