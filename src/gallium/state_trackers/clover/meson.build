@@ -90,7 +90,7 @@ libclnir = static_library(
   'clnir',
   files('nir/invocation.cpp', 'nir/invocation.hpp', 'nir/nir_lower_libclc.c', 'nir/nir_lower_libclc.h'),
   include_directories : [clover_incs, inc_mesa],
-  dependencies : [idep_nir, dep_llvmspirvlib],
+  dependencies : [idep_nir, dep_llvm, dep_llvmspirvlib],
   cpp_args : [clover_opencl_cpp_args, clover_spirv_cpp_args, cpp_vis_args,
         '-DLIBCLC_LIBEXECDIR="@0@/"'.format(dep_clc.get_pkgconfig_variable('libexecdir')),
   ],
