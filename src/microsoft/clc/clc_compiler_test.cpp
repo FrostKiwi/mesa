@@ -218,6 +218,32 @@ TEST_F(ComputeTest, ret_local_ptr)
    }
 }
 
+TEST_F(ComputeTest, ret_private_ptr)
+{
+   struct s { uint64_t ptr; uint32_t value; };
+   const char *kernel_source =
+   "struct s { __private uint *ptr; uint value; };\n\
+   __kernel void main_test(__global struct s *out)\n\
+   {\n\
+       uint tmp[2] = {1, 2};\n\
+       uint idx = get_global_id(0);\n\
+       out[idx].ptr = &tmp[idx];\n\
+       out[idx].value = *out[idx].ptr;\n\
+   }\n";
+   auto out = ShaderArg<struct s>(std::vector<struct s>(2, { 0xdeadbeefdeadbeef }), SHADER_ARG_OUTPUT);
+   const uint64_t expected_ptr[] = {
+      0, 4,
+   };
+   const uint32_t expected_value[] = {
+      1, 2
+   };
+
+   run_shader(kernel_source, out.size(), 1, 1, out);
+   for (int i = 0; i < out.size(); ++i) {
+      EXPECT_EQ(out[i].ptr, expected_ptr[i]);
+   }
+}
+
 TEST_F(ComputeTest, globals_8bit)
 {
    const char *kernel_source =
