@@ -433,6 +433,7 @@ struct ntd_context {
 
    struct hash_table *locals;
    const struct dxil_value *sharedvars;
+   const struct dxil_value *scratchvars;
    struct hash_table *consts;
 
    nir_variable *ps_front_face;
@@ -2275,6 +2276,37 @@ emit_store_shared(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
+emit_store_scratch(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *zero, *index;
+   unsigned bit_size = nir_src_bit_size(intr->src[0]);
+
+   /* All scratch mem accesses should have been lowered to scalar 32bit
+    * accesses.
+    */
+   assert(bit_size == 32);
+   assert(nir_src_num_components(intr->src[0]) == 1);
+
+   zero = dxil_module_get_int32_const(&ctx->mod, 0);
+   if (!zero)
+      return false;
+
+   index = get_src(ctx, &intr->src[1], 0, nir_type_uint);
+   if (!index)
+      return false;
+
+   const struct dxil_value *ops[] = { ctx->scratchvars, zero, index };
+   const struct dxil_value *ptr, *value;
+
+   ptr = dxil_emit_gep_inbounds(&ctx->mod, ops, ARRAY_SIZE(ops));
+   if (!ptr)
+      return false;
+
+   value = get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   return dxil_emit_store(&ctx->mod, value, ptr, 4, false);
+}
+
+static bool
 emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    nir_const_value *const_block_index = nir_src_as_const_value(intr->src[0]);
@@ -2513,6 +2545,42 @@ emit_load_shared(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return false;
 
    const struct dxil_value *ops[] = { ctx->sharedvars, zero, index };
+   const struct dxil_value *ptr, *retval;
+
+   ptr = dxil_emit_gep_inbounds(&ctx->mod, ops, ARRAY_SIZE(ops));
+   if (!ptr)
+      return false;
+
+   retval = dxil_emit_load(&ctx->mod, ptr, align, false);
+   if (!retval)
+      return false;
+
+   store_dest(ctx, &intr->dest, 0, retval, nir_type_uint);
+   return true;
+}
+
+static bool
+emit_load_scratch(struct ntd_context *ctx, nir_intrinsic_instr *intr)
+{
+   const struct dxil_value *zero, *one, *index;
+   unsigned bit_size = nir_dest_bit_size(intr->dest);
+   unsigned align = bit_size / 8;
+
+   /* All scratch mem accesses should have been lowered to scalar 32bit
+    * accesses.
+    */
+   assert(bit_size == 32);
+   assert(nir_dest_num_components(intr->dest) == 1);
+
+   zero = dxil_module_get_int32_const(&ctx->mod, 0);
+   if (!zero)
+      return false;
+
+   index = get_src(ctx, &intr->src[0], 0, nir_type_uint);
+   if (!index)
+      return false;
+
+   const struct dxil_value *ops[] = { ctx->scratchvars, zero, index };
    const struct dxil_value *ptr, *retval;
 
    ptr = dxil_emit_gep_inbounds(&ctx->mod, ops, ARRAY_SIZE(ops));
@@ -2895,6 +2963,8 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    case nir_intrinsic_store_shared_dxil:
    case nir_intrinsic_store_shared_masked_dxil:
       return emit_store_shared(ctx, intr);
+   case nir_intrinsic_store_scratch_dxil:
+      return emit_store_scratch(ctx, intr);
    case nir_intrinsic_load_deref:
       return emit_load_deref(ctx, intr);
    case nir_intrinsic_load_ptr_dxil:
@@ -2913,6 +2983,8 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
                                           ctx->system_value[SYSTEM_VALUE_VERTEX_ID]);
    case nir_intrinsic_load_shared_dxil:
       return emit_load_shared(ctx, intr);
+   case nir_intrinsic_load_scratch_dxil:
+      return emit_load_scratch(ctx, intr);
    case nir_intrinsic_discard_if:
       return emit_discard_if(ctx, intr);
    case nir_intrinsic_discard:
@@ -3587,6 +3659,35 @@ emit_cbvs(struct ntd_context *ctx, nir_shader *s)
 }
 
 static bool
+emit_scratch(struct ntd_context *ctx, nir_shader *s)
+{
+   if (s->scratch_size) {
+      /*
+       * We always allocate an u32 array, no matter the actual variable types.
+       * According to the DXIL spec, the minimum load/store granularity is
+       * 32-bit, anything smaller requires using a read-extract/read-write-modify
+       * approach.
+       */
+      unsigned size = ALIGN_POT(s->scratch_size, sizeof(uint32_t));
+      const struct dxil_type *int32 = dxil_module_get_int_type(&ctx->mod, 32);
+      const struct dxil_value *array_length = dxil_module_get_int32_const(&ctx->mod, size / sizeof(uint32_t));
+      if (!int32 || !array_length)
+         return false;
+
+      const struct dxil_type *type = dxil_module_get_array_type(
+         &ctx->mod, int32, size / sizeof(uint32_t));
+      if (!type)
+         return false;
+
+      ctx->scratchvars = dxil_emit_alloca(&ctx->mod, type, int32, array_length, 4);
+      if (!ctx->scratchvars)
+         return false;
+   }
+
+   return true;
+}
+
+static bool
 emit_module(struct ntd_context *ctx, nir_shader *s)
 {
    /* The validator forces us to emit resources in a specific order:
@@ -3641,6 +3742,9 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
                                                 ffs(sizeof(uint64_t)),
                                                 NULL);
    }
+
+   if (!emit_scratch(ctx, s))
+      return false;
 
    /* UAVs */
    if (s->info.stage == MESA_SHADER_KERNEL) {
