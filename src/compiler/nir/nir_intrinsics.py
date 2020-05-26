@@ -866,8 +866,6 @@ intrinsic("bindless_resource_ir3", [1], dest_comp=1, indices=[DESC_SET], flags=[
 # DXIL specific load/store intrinsics. 
 # src[] = { value, mask, index, offset }.
 intrinsic("store_ssbo_masked_dxil", [1] * 4)
-# src[] = { value, deref_var, offset }
-intrinsic("store_ptr_dxil", [0, 1, 1])
 # src[] = { value, index }.
 intrinsic("store_shared_dxil", [1] * 2)
 # src[] = { value, mask, index }.
