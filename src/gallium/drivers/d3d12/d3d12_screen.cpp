@@ -272,6 +272,7 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_CLIP_PLANES:
       return 0;
 
+   case PIPE_CAP_TEXTURE_QUERY_LOD:
    case PIPE_CAP_SHADER_STENCIL_EXPORT:
    case PIPE_CAP_OCCLUSION_QUERY:
    case PIPE_CAP_POINT_SPRITE:
