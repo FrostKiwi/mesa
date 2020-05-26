@@ -1237,6 +1237,26 @@ TEST_F(ComputeTest, arg_by_val)
       EXPECT_FLOAT_EQ(inout[i], expected[i]);
 }
 
+TEST_F(ComputeTest, uint8_by_val)
+{
+   struct uint8 {
+      uint32_t s0; uint32_t s1; uint32_t s2; uint32_t s3;
+      uint32_t s4; uint32_t s5; uint32_t s6; uint32_t s7;
+   };
+   const char *kernel_source =
+   "__kernel void main_test(__global uint *out, uint8 val)\n\
+   {\n\
+       out[get_global_id(0)] = val.s0 + val.s1 + val.s2 + val.s3 +\n\
+                               val.s4 + val.s5 + val.s6 + val.s7;\n\
+   }\n";
+   auto out = ShaderArg<uint32_t>({ 0 }, SHADER_ARG_OUTPUT);
+   auto val = ShaderArg<struct uint8>({ {0, 1, 2, 3, 4, 5, 6, 7 }}, SHADER_ARG_INPUT);
+   const uint32_t expected[] = { 0 + 1 + 2 + 3 + 4 + 5 + 6 + 7 };
+   run_shader(kernel_source, out.size(), 1, 1, out, val);
+   for (int i = 0; i < out.size(); ++i)
+      EXPECT_EQ(out[i], expected[i]);
+}
+
 TEST_F(ComputeTest, link)
 {
    const char *foo_src =
