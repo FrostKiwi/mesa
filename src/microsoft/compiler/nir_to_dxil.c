@@ -431,7 +431,6 @@ struct ntd_context {
    unsigned num_defs;
    struct hash_table *phis;
 
-   struct hash_table *locals;
    const struct dxil_value *sharedvars;
    const struct dxil_value *scratchvars;
    struct hash_table *consts;
@@ -2091,14 +2090,9 @@ static const struct dxil_value *
 emit_gep_for_index(struct ntd_context *ctx, const nir_variable *var,
                    const struct dxil_value *index)
 {
-   assert(var->data.mode == nir_var_function_temp ||
-          var->data.mode == nir_var_shader_temp);
+   assert(var->data.mode == nir_var_shader_temp);
 
-   struct hash_entry *he;
-   if (var->data.mode == nir_var_function_temp)
-      he = _mesa_hash_table_search(ctx->locals, var);
-   else
-      he = _mesa_hash_table_search(ctx->consts, var);
+   struct hash_entry *he = _mesa_hash_table_search(ctx->consts, var);
    assert(he != NULL);
    const struct dxil_value *ptr = he->data;
 
@@ -2394,23 +2388,6 @@ emit_store_output(struct ntd_context *ctx, nir_intrinsic_instr *intr,
       }
    }
    return success;
-}
-
-static bool
-emit_store_ptr(struct ntd_context *ctx, nir_intrinsic_instr *intr)
-{
-   const struct dxil_value *value =
-      get_src(ctx, &intr->src[0], 0, nir_type_uint);
-   struct nir_variable *var =
-      nir_deref_instr_get_variable(nir_src_as_deref(intr->src[1]));
-   const struct dxil_value *index =
-      get_src(ctx, &intr->src[2], 0, nir_type_uint);
-
-   const struct dxil_value *ptr = emit_gep_for_index(ctx, var, index);
-   if (!ptr)
-      return false;
-
-   return dxil_emit_store(&ctx->mod, value, ptr, 4, false);
 }
 
 static bool
@@ -2969,8 +2946,6 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_deref(ctx, intr);
    case nir_intrinsic_load_ptr_dxil:
       return emit_load_ptr(ctx, intr);
-   case nir_intrinsic_store_ptr_dxil:
-      return emit_store_ptr(ctx, intr);
    case nir_intrinsic_load_ubo:
       return emit_load_ubo(ctx, intr);
    case nir_intrinsic_load_ubo_dxil:
@@ -3789,35 +3764,6 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
    ctx->phis = _mesa_pointer_hash_table_create(ctx->ralloc_ctx);
    if (!ctx->phis)
       return false;
-
-   ctx->locals = _mesa_pointer_hash_table_create(ctx->ralloc_ctx);
-   if (!ctx->locals)
-      return false;
-
-   nir_foreach_variable(var, &entry->locals) {
-      if (glsl_type_is_array(var->type)) {
-         assert(!glsl_type_is_unsized_array(var->type));
-         unsigned array_len = glsl_get_cl_size(var->type) / 4;
-
-         const struct dxil_value *size =
-            dxil_module_get_int32_const(&ctx->mod, array_len);
-
-         const struct dxil_type *int32 =
-            dxil_module_get_int_type(&ctx->mod, 32);
-
-         const struct dxil_type *alloc_type =
-            dxil_module_get_array_type(&ctx->mod, int32, array_len);
-
-         // TODO: find a way of moving CL-semantics out of nir_to_dxil?
-         assert(s->info.stage == MESA_SHADER_KERNEL);
-         unsigned align =
-            glsl_get_cl_alignment(glsl_get_array_element(var->type));
-
-         const struct dxil_value *ptr =
-            dxil_emit_alloca(&ctx->mod, alloc_type, int32, size, align);
-         _mesa_hash_table_insert(ctx->locals, var, (void *)ptr);
-      }
-   }
 
    if (!emit_cf_list(ctx, &entry->body))
       return false;

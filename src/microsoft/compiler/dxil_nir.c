@@ -112,8 +112,7 @@ lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
 
    nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
    nir_variable *var = nir_deref_instr_get_variable(deref);
-   if (var->data.mode != nir_var_function_temp &&
-       var->data.mode != nir_var_shader_temp)
+   if (var->data.mode != nir_var_shader_temp)
       return false;
    nir_ssa_def *ptr = nir_u2u32(b, nir_build_deref_offset(b, deref, cl_type_size_align));
    nir_ssa_def *offset = nir_iand(b, ptr, nir_inot(b, nir_imm_int(b, 3)));
@@ -264,87 +263,6 @@ emit_load_ubo_dxil(nir_builder *b, nir_ssa_def *buffer,
 
    assert(comp_idx == num_components);
    return nir_vec(b, comps, num_components);
-}
-
-static bool
-lower_store_deref(nir_builder *b, nir_intrinsic_instr *intr)
-{
-   b->cursor = nir_before_instr(&intr->instr);
-
-   nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
-   nir_variable *var = nir_deref_instr_get_variable(deref);
-   if (var->data.mode != nir_var_function_temp &&
-       var->data.mode != nir_var_shader_temp)
-      return false;
-   nir_src val = intr->src[1];
-   nir_ssa_def *ptr = nir_u2u32(b, nir_build_deref_offset(b, deref, cl_type_size_align));
-   nir_ssa_def *offset = nir_iand(b, ptr, nir_inot(b, nir_imm_int(b, 3)));
-   unsigned store_size = 32;
-
-   assert(val.is_ssa);
-   unsigned num_components = nir_src_num_components(val);
-   unsigned bit_size = nir_src_bit_size(val);
-   unsigned num_bits = num_components * bit_size;
-   nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
-   unsigned comp_idx = 0;
-
-   for (unsigned i = 0; i < num_components; i++)
-      comps[i] = nir_channel(b, val.ssa, i);
-
-   nir_deref_path path;
-   nir_deref_path_init(&path, deref, NULL);
-   /* Split stores into bitsize components */
-   for (unsigned i = 0; i < num_bits; i += store_size) {
-      unsigned substore_num_bits = MIN2(num_bits - i, store_size);
-      nir_ssa_def *local_offset =
-         nir_ishr(b, nir_iadd(b, offset, nir_imm_int(b, i / 8)),
-                  nir_imm_int(b, 2 /* log2(32 / 8) */));
-      nir_ssa_def *vec32 = load_comps_to_vec32(b, bit_size, &comps[comp_idx],
-                                               substore_num_bits / bit_size);
-      nir_intrinsic_instr *store;
-
-      if (substore_num_bits < 32) {
-         nir_ssa_def *mask = nir_imm_int(b, (1 << substore_num_bits) - 1);
-
-        /* If we have 16 bits or less to store we need to place them
-         * correctly in the u32 component. Anything greater than 16 bits
-         * (including uchar3) is naturally aligned on 32bits.
-         */
-         if (substore_num_bits <= 16) {
-            nir_ssa_def *pos = nir_iand(b, ptr, nir_imm_int(b, 3));
-            nir_ssa_def *shift = nir_imul_imm(b, pos, 8);
-
-            vec32 = nir_ishl(b, vec32, shift);
-            mask = nir_ishl(b, mask, shift);
-         }
-
-         nir_intrinsic_instr *load =
-            nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_ptr_dxil);
-         load->num_components = 1;
-         load->src[0] = nir_src_for_ssa(&path.path[0]->dest.ssa);
-         load->src[1] = nir_src_for_ssa(local_offset);
-         nir_ssa_dest_init(&load->instr, &load->dest, load->num_components, 32,
-                           NULL);
-         nir_builder_instr_insert(b, &load->instr);
-         vec32 = nir_ior(b, vec32,
-                        nir_iand(b, &load->dest.ssa, nir_inot(b, mask)));
-      }
-
-      store = nir_intrinsic_instr_create(b->shader,
-                                       nir_intrinsic_store_ptr_dxil);
-      store->src[0] = nir_src_for_ssa(vec32);
-      store->src[1] = nir_src_for_ssa(&path.path[0]->dest.ssa);
-      store->src[2] = nir_src_for_ssa(local_offset);
-
-
-      store->num_components = 1;
-      nir_builder_instr_insert(b, &store->instr);
-      comp_idx += substore_num_bits / bit_size;
-   }
-
-   nir_deref_path_finish(&path);
-   nir_instr_remove(&intr->instr);
-   return true;
 }
 
 static bool
@@ -853,9 +771,6 @@ dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
                break;
             case nir_intrinsic_load_ssbo:
                progress |= lower_load_ssbo(&b, intr);
-               break;
-            case nir_intrinsic_store_deref:
-               progress |= lower_store_deref(&b, intr);
                break;
             case nir_intrinsic_store_shared:
             case nir_intrinsic_store_scratch:
