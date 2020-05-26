@@ -302,6 +302,13 @@ intrinsic_instrs_equal(const ibc_intrinsic_instr *intrin_a,
    if (intrin_a->op != intrin_b->op)
       return false;
 
+   if (intrin_a->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD) {
+      assert(intrin_a->src[0].ref.file == IBC_FILE_HW_GRF);
+      assert(intrin_b->src[0].ref.file == IBC_FILE_HW_GRF);
+      return refs_equal_except_reg(&intrin_a->src[0].ref,
+                                   &intrin_b->src[0].ref);
+   }
+
    /* If one of the instructions can't be re-ordered or has side-effects, we
     * can't combine them so compare unequal.
     */
