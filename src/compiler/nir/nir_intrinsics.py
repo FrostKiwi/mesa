@@ -872,8 +872,12 @@ intrinsic("store_ptr_dxil", [0, 1, 1])
 intrinsic("store_shared_dxil", [1] * 2)
 # src[] = { value, mask, index }.
 intrinsic("store_shared_masked_dxil", [1] * 3)
+# src[] = { value, index }.
+intrinsic("store_scratch_dxil", [1] * 2)
 # src[] = { index }.
 load("shared_dxil", 1, [], [CAN_ELIMINATE])
+# src[] = { index }.
+load("scratch_dxil", 1, [], [CAN_ELIMINATE])
 # src[] = { deref_var, offset }
 load("ptr_dxil", 2, [], [])
 # src[] = { index, 16-byte-based-offset }
