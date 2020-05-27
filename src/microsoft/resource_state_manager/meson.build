@@ -19,8 +19,19 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
-subdir('compiler')
-if with_microsoft_clc
-  subdir('clc')
-endif
-subdir('resource_state_manager')
+files_libd3d12_resource_state = files(
+  'D3D12ResourceState.cpp',
+)
+
+libd3d12_resource_state = static_library(
+  'd3d12_resource_state',
+  files_libd3d12_resource_state,
+  c_args : c_vis_args,
+  include_directories : [inc_include, inc_src, inc_mesa],
+  dependencies: [],
+)
+
+idep_libd3d12_resource_state = declare_dependency(
+  link_with : [libd3d12_resource_state],
+  include_directories : include_directories('.')
+)
