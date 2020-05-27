@@ -1178,20 +1178,23 @@ d3d12_flush(struct pipe_context *pipe,
    struct d3d12_context *ctx = d3d12_context(pipe);
    struct d3d12_batch *batch = d3d12_current_batch(ctx);
 
-   // Transition fb's to COMMON state
-   for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
-      struct pipe_surface* psurf = ctx->fb.cbufs[i];
-      d3d12_transition_resource_state(ctx, d3d12_resource(psurf->texture),
-         D3D12_RESOURCE_STATE_COMMON,
-         SubresourceTransitionFlags_None);
-   }
-
-   d3d12_apply_resource_states(ctx, false);
-
    d3d12_flush_cmdlist(ctx);
 
    if (fence)
       d3d12_fence_reference((struct d3d12_fence **)fence, batch->fence);
+}
+
+static void
+d3d12_flush_resource(struct pipe_context *pctx,
+                     struct pipe_resource *pres)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_resource *res = d3d12_resource(pres);
+
+   d3d12_transition_resource_state(ctx, res,
+                                   D3D12_RESOURCE_STATE_COMMON,
+                                   SubresourceTransitionFlags_None);
+   d3d12_apply_resource_states(ctx, false);
 }
 
 static void
@@ -1367,6 +1370,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.clear = d3d12_clear;
    ctx->base.draw_vbo = d3d12_draw_vbo;
    ctx->base.flush = d3d12_flush;
+   ctx->base.flush_resource = d3d12_flush_resource;
 
    ctx->gfx_pipeline_state.sample_mask = ~0;
 
