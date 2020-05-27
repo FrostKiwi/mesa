@@ -388,6 +388,12 @@ handle_rounding_mode(struct vtn_builder *b, struct vtn_value *val, int member,
    case SpvFPRoundingModeRTZ:
       *out_rounding_mode = nir_rounding_mode_rtz;
       break;
+   case SpvFPRoundingModeRTP:
+      *out_rounding_mode = nir_rounding_mode_ru;
+      break;
+   case SpvFPRoundingModeRTN:
+      *out_rounding_mode = nir_rounding_mode_rd;
+      break;
    default:
       unreachable("Not supported rounding mode");
       break;
