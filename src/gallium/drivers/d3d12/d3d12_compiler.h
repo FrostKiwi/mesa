@@ -68,6 +68,7 @@ struct d3d12_shader_key {
    } fs;
 
    d3d12_wrap_sampler_states int_tex_states;
+   d3d12_sampler_compare_funcs sampler_compare_funcs;
 };
 
 struct d3d12_shader {
@@ -108,6 +109,7 @@ struct d3d12_shader_selector {
 
    unsigned passthrough:1;
    unsigned samples_int_textures:1;
+   unsigned compare_with_lod_bias_grad:1;
    uint64_t passthrough_varyings;
 
 };
