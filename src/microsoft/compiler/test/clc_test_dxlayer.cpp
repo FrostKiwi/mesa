@@ -24,7 +24,7 @@
 #include "clc_test_dxlayer.h"
 #include "util/blob.h"
 #include "nir.h"
-#include "microsoft/compiler/nir_to_dxil.h"
+#include "nir_to_dxil.h"
 
 #include <d3d12.h>
 #include <dxcapi.h>

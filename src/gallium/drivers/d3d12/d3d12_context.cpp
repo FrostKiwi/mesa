@@ -39,7 +39,7 @@
 #include "util/u_inlines.h"
 #include "util/u_memory.h"
 #include "util/u_upload_mgr.h"
-#include "microsoft/compiler/nir_to_dxil.h"
+#include "nir_to_dxil.h"
 
 extern "C" {
 #include "indices/u_primconvert.h"
