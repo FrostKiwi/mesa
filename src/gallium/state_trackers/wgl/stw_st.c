@@ -267,6 +267,8 @@ notify_before_flush_cb(void* _args)
 
       /* FRONT_LEFT is resolved in flush_frontbuffer. */
    }
+
+   pipe->flush_resource(pipe, args->stwfb->textures[ST_ATTACHMENT_BACK_LEFT]);
 }
 
 void
@@ -334,6 +336,9 @@ stw_st_framebuffer_flush_front(struct st_context_iface *stctx,
       /* Resolve the front buffer. */
       stw_pipe_blit(pipe, stwfb->textures[statt], stwfb->msaa_textures[statt]);
    }
+
+   if (stwfb->textures[statt])
+      pipe->flush_resource(pipe, stwfb->textures[statt]);
 
    pipe->flush(pipe, NULL, 0);
 
