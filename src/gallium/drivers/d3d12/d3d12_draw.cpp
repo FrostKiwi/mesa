@@ -61,8 +61,6 @@ fill_cbv_descriptors(struct d3d12_context *ctx,
       assert(buffer->buffer);
 
       struct d3d12_resource *res = d3d12_resource(buffer->buffer);
-      d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-                                      SubresourceTransitionFlags_TransitionPreDraw);
       D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc = {};
       cbv_desc.BufferLocation = res->res->GetGPUVirtualAddress() + buffer->buffer_offset;
       cbv_desc.SizeInBytes = align(buffer->buffer_size, 256);
@@ -96,20 +94,6 @@ fill_srv_descriptors(struct d3d12_context *ctx,
       if (view != NULL) {
          descs[i] = view->handle.cpu_handle ;
          d3d12_batch_reference_sampler_view(batch, view);
-
-         D3D12_RESOURCE_STATES state = (stage == PIPE_SHADER_FRAGMENT) ?
-                                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE :
-                                       D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-         if (view->base.texture->target == PIPE_BUFFER) {
-            d3d12_transition_resource_state(ctx, d3d12_resource(view->base.texture),
-                                            state,
-                                            SubresourceTransitionFlags_TransitionPreDraw);
-         } else {
-            d3d12_transition_subresources_state(ctx, d3d12_resource(view->base.texture),
-                                                view->base.u.tex.first_level, view->mip_levels,
-                                                view->base.u.tex.first_layer, view->array_size,
-                                                state, SubresourceTransitionFlags_TransitionPreDraw);
-         }
       } else {
          descs[i] = ctx->null_srvs[shader->srv_bindings[i].dimension].cpu_handle;
       }
@@ -393,17 +377,15 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    if (ctx->cmdlist_dirty & D3D12_DIRTY_PRIM_MODE)
       ctx->cmdlist->IASetPrimitiveTopology(topology(dinfo->mode));
 
-   for (unsigned i = 0; i < ctx->num_vbs; ++i) {
-      if (ctx->vbs[i].buffer.resource) {
-         struct d3d12_resource *res = d3d12_resource(ctx->vbs[i].buffer.resource);
-         d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-                                         SubresourceTransitionFlags_TransitionPreDraw);
-         if (ctx->cmdlist_dirty & D3D12_DIRTY_VERTEX_BUFFERS)
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_VERTEX_BUFFERS) {
+      for (unsigned i = 0; i < ctx->num_vbs; ++i) {
+         if (ctx->vbs[i].buffer.resource) {
+            struct d3d12_resource *res = d3d12_resource(ctx->vbs[i].buffer.resource);
             d3d12_batch_reference_resource(batch, res);
+         }
       }
-   }
-   if (ctx->cmdlist_dirty & D3D12_DIRTY_VERTEX_BUFFERS)
       ctx->cmdlist->IASetVertexBuffers(0, ctx->num_vbs, ctx->vbvs);
+   }
 
    if (dinfo->index_size > 0) {
       assert(dinfo->index_size != 1);
@@ -425,8 +407,6 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       ibv.BufferLocation = res->res->GetGPUVirtualAddress() + index_offset;
       ibv.SizeInBytes = res->base.width0 - index_offset;
       ibv.Format = ib_format(dinfo->index_size);
-      d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_INDEX_BUFFER,
-                                      SubresourceTransitionFlags_TransitionPreDraw);
       if (ctx->cmdlist_dirty & D3D12_DIRTY_INDEX_BUFFER ||
           memcmp(&ctx->ibv, &ibv, sizeof(D3D12_INDEX_BUFFER_VIEW)) != 0) {
          ctx->ibv = ibv;
@@ -457,24 +437,15 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
       struct pipe_surface *psurf = ctx->fb.cbufs[i];
-      const uint32_t num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
-      d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
-                                          psurf->u.tex.level, 1,
-                                          psurf->u.tex.first_layer, num_layers,
-                                          D3D12_RESOURCE_STATE_RENDER_TARGET,
-                                          SubresourceTransitionFlags_TransitionPreDraw);
+      d3d12_resource_barrier(ctx, d3d12_resource(psurf->texture),
+                             D3D12_RESOURCE_STATE_COMMON,
+                             D3D12_RESOURCE_STATE_RENDER_TARGET);
    }
    if (ctx->fb.zsbuf) {
-      struct pipe_surface *psurf = ctx->fb.zsbuf;
-      const uint32_t num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
-      d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
-                                          psurf->u.tex.level, 1,
-                                          psurf->u.tex.first_layer, num_layers,
-                                          D3D12_RESOURCE_STATE_DEPTH_WRITE,
-                                          SubresourceTransitionFlags_TransitionPreDraw);
+      d3d12_resource_barrier(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
+                             D3D12_RESOURCE_STATE_COMMON,
+                             D3D12_RESOURCE_STATE_DEPTH_WRITE);
    }
-
-   d3d12_apply_resource_states(ctx, true);
 
    if (dinfo->index_size > 0)
       ctx->cmdlist->DrawIndexedInstanced(dinfo->count, dinfo->instance_count,
@@ -483,6 +454,18 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    else
       ctx->cmdlist->DrawInstanced(dinfo->count, dinfo->instance_count,
                                   dinfo->start, dinfo->start_instance);
+
+   for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
+      struct pipe_surface *psurf = ctx->fb.cbufs[i];
+      d3d12_resource_barrier(ctx, d3d12_resource(psurf->texture),
+                             D3D12_RESOURCE_STATE_RENDER_TARGET,
+                             D3D12_RESOURCE_STATE_COMMON);
+   }
+   if (ctx->fb.zsbuf) {
+      d3d12_resource_barrier(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
+                             D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                             D3D12_RESOURCE_STATE_COMMON);
+   }
 
    ctx->state_dirty = 0;
    ctx->cmdlist_dirty = 0;

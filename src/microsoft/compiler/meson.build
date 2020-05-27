@@ -54,7 +54,6 @@ libdxil_compiler = static_library(
 idep_libdxil_compiler = declare_dependency(
   link_with : libdxil_compiler,
   dependencies : [idep_mesautil],
-  include_directories : include_directories('.')
 )
 
 subdir('test')
