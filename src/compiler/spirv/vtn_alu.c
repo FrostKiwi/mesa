@@ -213,7 +213,7 @@ vtn_handle_matrix_alu(struct vtn_builder *b, SpvOp opcode,
 }
 
 nir_op
-vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b,
+vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b, struct vtn_value *val,
                                 SpvOp opcode, bool *swap,
                                 unsigned src_bit_size, unsigned dst_bit_size)
 {
@@ -563,7 +563,7 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
       bool swap;
       unsigned src_bit_size = glsl_get_bit_size(vtn_src[0]->type);
       unsigned dst_bit_size = glsl_get_bit_size(type);
-      nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, opcode, &swap,
+      nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, val, opcode, &swap,
                                                   src_bit_size, dst_bit_size);
 
       if (swap) {
@@ -589,7 +589,7 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
       bool swap;
       unsigned src_bit_size = glsl_get_bit_size(vtn_src[0]->type);
       unsigned dst_bit_size = glsl_get_bit_size(type);
-      nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, opcode, &swap,
+      nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, val, opcode, &swap,
                                                   src_bit_size, dst_bit_size);
 
       assert(!swap);
@@ -624,7 +624,7 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
       bool swap;
       unsigned src0_bit_size = glsl_get_bit_size(vtn_src[0]->type);
       unsigned dst_bit_size = glsl_get_bit_size(type);
-      nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, opcode, &swap,
+      nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, val, opcode, &swap,
                                                   src0_bit_size, dst_bit_size);
 
       assert (op == nir_op_ushr || op == nir_op_ishr || op == nir_op_ishl ||
@@ -673,7 +673,7 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
       bool swap;
       unsigned src_bit_size = glsl_get_bit_size(vtn_src[0]->type);
       unsigned dst_bit_size = glsl_get_bit_size(type);
-      nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, opcode, &swap,
+      nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, val, opcode, &swap,
                                                   src_bit_size, dst_bit_size);
 
       if (swap) {
