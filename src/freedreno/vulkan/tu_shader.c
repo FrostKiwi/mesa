@@ -788,6 +788,9 @@ tu_shader_create(struct tu_device *dev,
       NIR_PASS_V(nir, tu_nir_lower_multiview, multiview_mask, dev);
    }
 
+   NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_push_const,
+              nir_address_format_32bit_offset);
+
    NIR_PASS_V(nir, nir_lower_explicit_io,
               nir_var_mem_ubo | nir_var_mem_ssbo,
               nir_address_format_vec2_index_32bit_offset);
