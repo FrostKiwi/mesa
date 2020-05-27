@@ -212,6 +212,33 @@ vtn_handle_matrix_alu(struct vtn_builder *b, SpvOp opcode,
    }
 }
 
+static void
+handle_rounding_mode(struct vtn_builder *b, struct vtn_value *val, int member,
+                     const struct vtn_decoration *dec, void *_out_rounding_mode)
+{
+   nir_rounding_mode *out_rounding_mode = _out_rounding_mode;
+   assert(dec->scope == VTN_DEC_DECORATION);
+   if (dec->decoration != SpvDecorationFPRoundingMode)
+      return;
+   switch (dec->operands[0]) {
+   case SpvFPRoundingModeRTE:
+      *out_rounding_mode = nir_rounding_mode_rtne;
+      break;
+   case SpvFPRoundingModeRTZ:
+      *out_rounding_mode = nir_rounding_mode_rtz;
+      break;
+   case SpvFPRoundingModeRTP:
+      *out_rounding_mode = nir_rounding_mode_ru;
+      break;
+   case SpvFPRoundingModeRTN:
+      *out_rounding_mode = nir_rounding_mode_rd;
+      break;
+   default:
+      unreachable("Not supported rounding mode");
+      break;
+   }
+}
+
 nir_op
 vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b, struct vtn_value *val,
                                 SpvOp opcode, bool *swap,
@@ -313,6 +340,11 @@ vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b, struct vtn_value *val,
    case SpvOpFConvert: {
       nir_alu_type src_type;
       nir_alu_type dst_type;
+      nir_rounding_mode round = nir_rounding_mode_undef;
+      vtn_foreach_decoration(b, val, handle_rounding_mode, &round);
+      vtn_fail_if(round != nir_rounding_mode_undef &&
+                  b->shader->info.stage != MESA_SHADER_KERNEL,
+                  "Rounding mode can only be applied to conversions in OpenCL");
 
       switch (opcode) {
       case SpvOpConvertFToS:
@@ -345,7 +377,7 @@ vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b, struct vtn_value *val,
       }
       src_type |= src_bit_size;
       dst_type |= dst_bit_size;
-      return nir_type_conversion_op(src_type, dst_type, nir_rounding_mode_undef);
+      return nir_type_conversion_op(src_type, dst_type, round);
    }
    /* Derivatives: */
    case SpvOpDPdx:         return nir_op_fddx;
@@ -371,33 +403,6 @@ handle_no_contraction(struct vtn_builder *b, struct vtn_value *val, int member,
       return;
 
    b->nb.exact = true;
-}
-
-static void
-handle_rounding_mode(struct vtn_builder *b, struct vtn_value *val, int member,
-                     const struct vtn_decoration *dec, void *_out_rounding_mode)
-{
-   nir_rounding_mode *out_rounding_mode = _out_rounding_mode;
-   assert(dec->scope == VTN_DEC_DECORATION);
-   if (dec->decoration != SpvDecorationFPRoundingMode)
-      return;
-   switch (dec->operands[0]) {
-   case SpvFPRoundingModeRTE:
-      *out_rounding_mode = nir_rounding_mode_rtne;
-      break;
-   case SpvFPRoundingModeRTZ:
-      *out_rounding_mode = nir_rounding_mode_rtz;
-      break;
-   case SpvFPRoundingModeRTP:
-      *out_rounding_mode = nir_rounding_mode_ru;
-      break;
-   case SpvFPRoundingModeRTN:
-      *out_rounding_mode = nir_rounding_mode_rd;
-      break;
-   default:
-      unreachable("Not supported rounding mode");
-      break;
-   }
 }
 
 static void
