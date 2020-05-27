@@ -79,12 +79,14 @@ blit_resolve(struct d3d12_context *ctx, const struct pipe_blit_info *info)
    struct d3d12_resource *src = d3d12_resource(info->src.resource);
    struct d3d12_resource *dst = d3d12_resource(info->dst.resource);
 
-   d3d12_resource_barrier(ctx, src,
-                          D3D12_RESOURCE_STATE_COMMON,
-                          D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-   d3d12_resource_barrier(ctx, dst,
-                          D3D12_RESOURCE_STATE_COMMON,
-                          D3D12_RESOURCE_STATE_RESOLVE_DEST);
+   d3d12_transition_resource_state(ctx, src,
+                                   D3D12_RESOURCE_STATE_RESOLVE_SOURCE,
+                                   SubresourceTransitionFlags_None);
+   d3d12_transition_resource_state(ctx, dst,
+                                   D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                                   SubresourceTransitionFlags_None);
+
+   d3d12_apply_resource_states(ctx, false);
 
    d3d12_batch_reference_resource(batch, src);
    d3d12_batch_reference_resource(batch, dst);
@@ -94,13 +96,6 @@ blit_resolve(struct d3d12_context *ctx, const struct pipe_blit_info *info)
       dst->res, info->dst.level,
       src->res, info->src.level,
       src->format);
-
-   d3d12_resource_barrier(ctx, src,
-                          D3D12_RESOURCE_STATE_RESOLVE_SOURCE,
-                          D3D12_RESOURCE_STATE_COMMON);
-   d3d12_resource_barrier(ctx, dst,
-                          D3D12_RESOURCE_STATE_RESOLVE_DEST,
-                          D3D12_RESOURCE_STATE_COMMON);
 }
 
 static bool
@@ -325,12 +320,16 @@ copy_resource_y_flipped(struct d3d12_context *ctx,
                    info->dst.box.x, info->dst.box.y, info->dst.box.z);
    }
 
-   d3d12_resource_barrier(ctx, dst,
-                          D3D12_RESOURCE_STATE_COMMON,
-                          D3D12_RESOURCE_STATE_COPY_DEST);
-   d3d12_resource_barrier(ctx, src,
-                          D3D12_RESOURCE_STATE_COMMON,
-                          D3D12_RESOURCE_STATE_COPY_SOURCE);
+   /* HACK: We're not supposed to be able to copy from/to the same subresource,
+            but it works if we only set one state (COPY_DEST) */
+   if (src != dst)
+      d3d12_transition_resource_state(ctx, src,
+                                      D3D12_RESOURCE_STATE_COPY_SOURCE,
+                                      SubresourceTransitionFlags_None);
+   d3d12_transition_resource_state(ctx, dst,
+                                   D3D12_RESOURCE_STATE_COPY_DEST,
+                                   SubresourceTransitionFlags_None);
+   d3d12_apply_resource_states(ctx, false);
 
    d3d12_batch_reference_resource(batch, src);
    d3d12_batch_reference_resource(batch, dst);
@@ -351,12 +350,6 @@ copy_resource_y_flipped(struct d3d12_context *ctx,
                                        info->dst.box.x, dest_y, info->dst.box.z,
                                        src, info->src.level, &src_box);
    }
-   d3d12_resource_barrier(ctx, src,
-                          D3D12_RESOURCE_STATE_COPY_SOURCE,
-                          D3D12_RESOURCE_STATE_COMMON);
-   d3d12_resource_barrier(ctx, dst,
-                          D3D12_RESOURCE_STATE_COPY_DEST,
-                          D3D12_RESOURCE_STATE_COMMON);
 }
 
 static void
@@ -456,25 +449,23 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
                    dstx, dsty, dstz);
    }
 
-   d3d12_resource_barrier(ctx, dst,
-                          D3D12_RESOURCE_STATE_COMMON,
-                          D3D12_RESOURCE_STATE_COPY_DEST);
-   d3d12_resource_barrier(ctx, src,
-                          D3D12_RESOURCE_STATE_COMMON,
-                          D3D12_RESOURCE_STATE_COPY_SOURCE);
+   /* HACK: We're not supposed to be able to copy from/to the same subresource,
+            but it works if we only set one state (COPY_DEST) */
+   if (src != dst)
+      d3d12_transition_resource_state(ctx, src,
+                                      D3D12_RESOURCE_STATE_COPY_SOURCE,
+                                      SubresourceTransitionFlags_None);
+   d3d12_transition_resource_state(ctx, dst,
+                                   D3D12_RESOURCE_STATE_COPY_DEST,
+                                   SubresourceTransitionFlags_None);
+
+   d3d12_apply_resource_states(ctx, false);
 
    d3d12_batch_reference_resource(batch, src);
    d3d12_batch_reference_resource(batch, dst);
 
    copy_subregion_no_barriers(ctx, dst, dst_level, dstx, dsty, dstz,
                               src, src_level, psrc_box);
-
-   d3d12_resource_barrier(ctx, src,
-                          D3D12_RESOURCE_STATE_COPY_SOURCE,
-                          D3D12_RESOURCE_STATE_COMMON);
-   d3d12_resource_barrier(ctx, dst,
-                          D3D12_RESOURCE_STATE_COPY_DEST,
-                          D3D12_RESOURCE_STATE_COMMON);
 }
 
 void
