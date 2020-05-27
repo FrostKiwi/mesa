@@ -1,5 +1,5 @@
 variables:
-  FDO_UPSTREAM_REPO: mesa/mesa
+  FDO_UPSTREAM_REPO: kusma/mesa
 
 include:
   - project: 'freedesktop/ci-templates'
@@ -101,9 +101,8 @@ success:
   extends:
     - .ci-run-policy
   rules:
-    # Run pipeline by default if it was triggered by Marge Bot, is for a
-    # merge request, and any files affecting it were changed
-    - if: '$GITLAB_USER_LOGIN == "marge-bot" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_COMMIT_REF_NAME'
+    # Run pipeline by default if it is for a merge request, and any files affecting it were changed
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_COMMIT_REF_NAME'
       changes:
         *all_paths
       when: on_success
