@@ -190,6 +190,7 @@ struct d3d12_selection_context {
    struct d3d12_context *ctx;
    bool needs_point_sprite_lowering;
    bool samples_int_textures;
+   bool compare_with_lod_bias_grad;
    unsigned frag_result_color_lowering;
 };
 
@@ -346,6 +347,8 @@ d3d12_fill_current_shader_key(d3d12_shader_selector *sel, struct d3d12_context *
     * conditions and the texture instructions itself when they change. */
    if (sel->samples_int_textures)
       shader->key.int_tex_states.n_states = ctx->tex_wrap_states[sel->stage].n_states;
+   if (sel->compare_with_lod_bias_grad)
+      shader->key.sampler_compare_funcs.n_states = ctx->tex_cmp_state[sel->stage].n_states;
 }
 
 static bool
@@ -381,6 +384,14 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
 
    if (memcmp(expect->int_tex_states.states, have->int_tex_states.states,
               expect->int_tex_states.n_states * sizeof(d3d12_wrap_sampler_state)))
+      return false;
+
+   if (expect->sampler_compare_funcs.n_states != have->sampler_compare_funcs.n_states)
+      return false;
+
+   if (memcmp(&expect->sampler_compare_funcs, &have->sampler_compare_funcs,
+              expect->sampler_compare_funcs.n_states *
+              sizeof(d3d12_sampler_compare_and_swizzle)))
       return false;
 
    return true;
@@ -437,6 +448,11 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
          }
       }
    }
+
+   if (sel_ctx->compare_with_lod_bias_grad) {
+      memcpy(&key->sampler_compare_funcs, &sel_ctx->ctx->tex_cmp_state[stage],
+             sizeof(d3d12_sampler_compare_funcs));
+   }
 }
 
 static void
@@ -448,6 +464,7 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
    nir_shader *new_nir_variant;
 
    sel_ctx->samples_int_textures = sel->samples_int_textures;
+   sel_ctx->compare_with_lod_bias_grad = sel->compare_with_lod_bias_grad;
    d3d12_fill_shader_key(sel_ctx, &key, sel->stage, prev, next);
 
    /* Check for an existing variant */
@@ -479,6 +496,9 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
    if (key.fs.frag_result_color_lowering)
       NIR_PASS_V(new_nir_variant, d3d12_lower_frag_result,
                  key.fs.frag_result_color_lowering);
+
+   if (sel_ctx->compare_with_lod_bias_grad)
+      NIR_PASS_V(new_nir_variant, d3d12_lower_sample_tex_compare, &key.sampler_compare_funcs);
 
    /* Add the needed in and outputs, and re-sort */
    uint64_t mask = key.required_varying_inputs & ~new_nir_variant->info.inputs_read;
@@ -558,7 +578,8 @@ get_next_shader(struct d3d12_context *ctx, pipe_shader_type current)
 
 enum tex_scan_flags {
    TEX_SAMPLE_INTEGER_TEXTURE = 1 << 0,
-   TEX_SCAN_ALL_FLAGS =        (1 << 1) - 1
+   TEX_CMP_WITH_LOD_BIAS_GRAD = 1 << 1,
+   TEX_SCAN_ALL_FLAGS         = (1 << 2) - 1
 };
 
 static unsigned
@@ -571,10 +592,13 @@ scan_texture_use(nir_shader *nir)
             if (instr->type == nir_instr_type_tex) {
                auto tex = nir_instr_as_tex(instr);
                switch (tex->op) {
-               case nir_texop_tex:
                case nir_texop_txb:
                case nir_texop_txl:
                case nir_texop_txd:
+                  if (tex->is_shadow)
+                     result |= TEX_CMP_WITH_LOD_BIAS_GRAD;
+                  /* fallthrough */
+               case nir_texop_tex:
                   if (tex->dest_type & (nir_type_int | nir_type_uint))
                      result |= TEX_SAMPLE_INTEGER_TEXTURE;
                default:
@@ -608,6 +632,7 @@ d3d12_compile_shader(struct d3d12_context *ctx,
 
    unsigned tex_scan_result = scan_texture_use(nir);
    sel->samples_int_textures = (tex_scan_result & TEX_SAMPLE_INTEGER_TEXTURE) != 0;
+   sel->compare_with_lod_bias_grad = (tex_scan_result & TEX_CMP_WITH_LOD_BIAS_GRAD) != 0;
 
    assert(nir != NULL);
 
