@@ -189,6 +189,7 @@ struct clc_runtime_arg_info {
 struct clc_runtime_kernel_conf {
    uint16_t local_size[3];
    struct clc_runtime_arg_info *args;
+   unsigned lower_int64;
 };
 
 struct clc_dxil_object *
