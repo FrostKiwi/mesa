@@ -239,6 +239,17 @@ handle_rounding_mode(struct vtn_builder *b, struct vtn_value *val, int member,
    }
 }
 
+static void
+handle_saturation(struct vtn_builder *b, struct vtn_value *val, int member,
+                  const struct vtn_decoration *dec, void *_out_saturate)
+{
+   bool *out_saturate = _out_saturate;
+   assert(dec->scope == VTN_DEC_DECORATION);
+   if (dec->decoration != SpvDecorationSaturatedConversion)
+      return;
+   *out_saturate = true;
+}
+
 nir_op
 vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b, struct vtn_value *val,
                                 SpvOp opcode, bool *swap,
@@ -345,6 +356,11 @@ vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b, struct vtn_value *val,
       vtn_fail_if(round != nir_rounding_mode_undef &&
                   b->shader->info.stage != MESA_SHADER_KERNEL,
                   "Rounding mode can only be applied to conversions in OpenCL");
+
+      bool saturate = false;
+      vtn_foreach_decoration(b, val, handle_saturation, &saturate);
+      vtn_fail_if(saturate && b->shader->info.stage != MESA_SHADER_KERNEL,
+                  "Saturation can only be applied to conversions in OpenCL");
 
       switch (opcode) {
       case SpvOpConvertFToS:
