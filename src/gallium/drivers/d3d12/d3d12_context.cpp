@@ -587,6 +587,7 @@ d3d12_create_sampler_state(struct pipe_context *pctx,
    ss->wrap_s = (pipe_tex_wrap)state->wrap_s;
    ss->wrap_t = (pipe_tex_wrap)state->wrap_t;
    memcpy(ss->border_color, state->border_color.f, sizeof(float) * 4);
+   ss->compare_func = (pipe_compare_func)state->compare_func;
 
    if (state->min_mip_filter < PIPE_TEX_MIPFILTER_NONE) {
       desc.MinLOD = state->min_lod;
@@ -630,6 +631,20 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
    bool shader_state_dirty = false;
+   d3d12_sampler_compare_funcs &scf = ctx->tex_cmp_state[shader];
+
+#define STATIC_ASSERT_PIPE_EQUAL_COMP_FUNC(X) \
+   static_assert((enum compare_func)PIPE_FUNC_##X == COMPARE_FUNC_##X, #X " needs switch case");
+
+   STATIC_ASSERT_PIPE_EQUAL_COMP_FUNC(LESS);
+   STATIC_ASSERT_PIPE_EQUAL_COMP_FUNC(GREATER);
+   STATIC_ASSERT_PIPE_EQUAL_COMP_FUNC(LEQUAL);
+   STATIC_ASSERT_PIPE_EQUAL_COMP_FUNC(GEQUAL);
+   STATIC_ASSERT_PIPE_EQUAL_COMP_FUNC(NOTEQUAL);
+   STATIC_ASSERT_PIPE_EQUAL_COMP_FUNC(NEVER);
+   STATIC_ASSERT_PIPE_EQUAL_COMP_FUNC(ALWAYS);
+
+#undef STATIC_ASSERT_PIPE_EQUAL_COMP_FUNC
 
    for (unsigned i = 0; i < num_samplers; ++i) {
       d3d12_sampler_state *sampler = (struct d3d12_sampler_state*) samplers[i];
@@ -645,11 +660,13 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
          wrap.wrap_s = sampler->wrap_s;
          wrap.wrap_t = sampler->wrap_t;
          memcpy(wrap.border_color, sampler->border_color, 4 * sizeof(float));
+         scf.state[start_slot + i].compare_func = (enum compare_func)sampler->compare_func;
       } else {
          memset(&wrap, 0, sizeof (d3d12_wrap_sampler_state));
       }
    }
 
+   scf.n_states = start_slot + num_samplers;
    ctx->tex_wrap_states[shader].n_states = start_slot + num_samplers;
 
    ctx->num_samplers[shader] = start_slot + num_samplers;
@@ -800,9 +817,18 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
          &ctx->sampler_views[shader_type][start_slot + i],
          views[i]);
 
-      if (views[i] && util_format_is_pure_integer(views[i]->format)) {
-          ctx->has_int_samplers |= shader_bit;
-          ctx->tex_wrap_states[shader_type].states[start_slot + i].is_int_sampler = 1;
+      if (views[i]) {
+         if (util_format_is_pure_integer(views[i]->format)) {
+            ctx->has_int_samplers |= shader_bit;
+            ctx->tex_wrap_states[shader_type].states[start_slot + i].is_int_sampler = 1;
+         }
+         /* We need the swizzle state for compare texture lowering, because it
+          * encode the use of the shadow texture lookup result as either luminosity,
+          * intensity, or alpha. */
+         ctx->tex_cmp_state[shader_type].state[i].swizzle_r = views[i]->swizzle_r;
+         ctx->tex_cmp_state[shader_type].state[i].swizzle_g = views[i]->swizzle_g;
+         ctx->tex_cmp_state[shader_type].state[i].swizzle_b = views[i]->swizzle_b;
+         ctx->tex_cmp_state[shader_type].state[i].swizzle_a = views[i]->swizzle_a;
       }
    }
    ctx->num_sampler_views[shader_type] = start_slot + num_views;

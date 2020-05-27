@@ -28,6 +28,7 @@
 #include "d3d12_descriptor_pool.h"
 #include "d3d12_pipeline_state.h"
 #include "d3d12_nir_lower_int_samplers.h"
+#include "d3d12_nir_lower_texcmp.h"
 
 #include "pipe/p_context.h"
 #include "pipe/p_state.h"
@@ -114,6 +115,7 @@ struct d3d12_sampler_state {
    enum pipe_tex_wrap wrap_s;
    enum pipe_tex_wrap wrap_t;
    float border_color[4];
+   enum pipe_compare_func compare_func;
 };
 
 enum d3d12_blend_factor_flags {
@@ -182,6 +184,7 @@ struct d3d12_context {
    unsigned num_samplers[PIPE_SHADER_TYPES];
    D3D12_INDEX_BUFFER_VIEW ibv;
    d3d12_wrap_sampler_states tex_wrap_states[PIPE_SHADER_TYPES];
+   d3d12_sampler_compare_funcs tex_cmp_state[PIPE_SHADER_TYPES];
 
    struct d3d12_shader_selector *gfx_stages[D3D12_GFX_SHADER_STAGES];
 
