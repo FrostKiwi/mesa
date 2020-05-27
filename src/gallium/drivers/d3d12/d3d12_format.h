@@ -41,9 +41,6 @@ d3d12_get_resource_base_format(DXGI_FORMAT f);
 DXGI_FORMAT
 d3d12_get_sampler_format_for_ds(DXGI_FORMAT f);
 
-unsigned
-d3d12_non_opaque_plane_count(DXGI_FORMAT f);
-
 #ifdef __cplusplus
 }
 #endif

@@ -35,7 +35,6 @@ struct d3d12_fence;
 struct d3d12_batch {
    struct d3d12_fence *fence;
 
-   struct set *resources;
    struct set *sampler_views;
    struct set *surfaces;
    struct set *objects;
@@ -59,9 +58,8 @@ d3d12_start_batch(struct d3d12_context *ctx, struct d3d12_batch *batch);
 void
 d3d12_end_batch(struct d3d12_context *ctx, struct d3d12_batch *batch);
 
-void
-d3d12_batch_reference_resource(struct d3d12_batch *batch,
-                               struct d3d12_resource *res);
+#define d3d12_batch_reference_resource(batch, resource) \
+   d3d12_batch_reference_object(batch, resource->res)
 
 void
 d3d12_batch_reference_sampler_view(struct d3d12_batch *batch,

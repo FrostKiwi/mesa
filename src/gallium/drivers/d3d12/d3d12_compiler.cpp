@@ -26,7 +26,7 @@
 #include "d3d12_debug.h"
 #include "d3d12_screen.h"
 #include "d3d12_nir_passes.h"
-#include "nir_to_dxil.h"
+#include "microsoft/compiler/nir_to_dxil.h"
 
 #include "pipe/p_state.h"
 

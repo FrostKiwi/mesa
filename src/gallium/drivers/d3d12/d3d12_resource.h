@@ -27,16 +27,13 @@
 struct pipe_screen;
 #include "util/u_transfer.h"
 
-#include "D3D12ResourceState.h"
+#include <d3d12.h>
 
 struct d3d12_resource {
    struct pipe_resource base;
-   TransitionableResourceState *trans_state;
-
    ID3D12Resource *res;
 
    DXGI_FORMAT format;
-   uint32_t mip_levels;
    struct sw_displaytarget *dt;
    unsigned dt_stride;
 };

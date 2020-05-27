@@ -129,24 +129,3 @@ d3d12_get_format(enum pipe_format format)
 {
    return formats[format];
 }
-
-unsigned
-d3d12_non_opaque_plane_count(DXGI_FORMAT format)
-{
-   switch (format) {
-   case DXGI_FORMAT_V208:
-   case DXGI_FORMAT_V408:
-      return 3;
-
-   case DXGI_FORMAT_NV12:
-   case DXGI_FORMAT_P010:
-   case DXGI_FORMAT_P016:
-   case DXGI_FORMAT_YUY2:
-   case DXGI_FORMAT_Y210:
-   case DXGI_FORMAT_Y216:
-   case DXGI_FORMAT_NV11:
-      return 2;
-   }
-
-   return 1;
-}

@@ -35,14 +35,6 @@
 #include "util/slab.h"
 #include "util/u_suballoc.h"
 
-#include "D3D12StateTransitionFlags.h"
-
-#ifdef __cplusplus
-class ResourceStateManager;
-#endif
-
-#include <d3d12.h>
-
 #define D3D12_GFX_SHADER_STAGES (PIPE_SHADER_TYPES - 1)
 #define D3D12_MAX_POINT_SIZE 255.0f
 
@@ -131,8 +123,6 @@ enum d3d12_blend_factor_flags {
 struct d3d12_sampler_view {
    struct pipe_sampler_view base;
    struct d3d12_descriptor_handle handle;
-   uint32_t mip_levels;
-   uint32_t array_size;
 };
 
 static inline struct d3d12_sampler_view *
@@ -210,11 +200,6 @@ struct d3d12_context {
    PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE D3D12SerializeVersionedRootSignature;
    struct d3d12_validation_tools *validation_tools;
 
-#ifdef __cplusplus
-   ResourceStateManager *resource_state_manager;
-#else
-   void *resource_state_manager; /* opaque pointer; we don't know about classes in C */
-#endif
 };
 
 static inline struct d3d12_context *
@@ -239,23 +224,11 @@ d3d12_flush_cmdlist(struct d3d12_context *ctx);
 void
 d3d12_flush_cmdlist_and_wait(struct d3d12_context *ctx);
 
-
 void
-d3d12_transition_resource_state(struct d3d12_context* ctx,
-                                struct d3d12_resource* res,
-                                D3D12_RESOURCE_STATES state,
-                                SubresourceTransitionFlags flags);
-
-void
-d3d12_transition_subresources_state(struct d3d12_context *ctx,
-                                    struct d3d12_resource *res,
-                                    uint32_t start_level, uint32_t num_levels,
-                                    uint32_t start_layer, uint32_t num_layers,
-                                    D3D12_RESOURCE_STATES state,
-                                    SubresourceTransitionFlags flags);
-
-void
-d3d12_apply_resource_states(struct d3d12_context* ctx, bool predraw);
+d3d12_resource_barrier(struct d3d12_context *ctx,
+                       struct d3d12_resource *res,
+                       D3D12_RESOURCE_STATES before,
+                       D3D12_RESOURCE_STATES after);
 
 void
 d3d12_draw_vbo(struct pipe_context *pctx,
