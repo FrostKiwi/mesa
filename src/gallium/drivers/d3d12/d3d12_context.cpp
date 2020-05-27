@@ -1192,11 +1192,6 @@ d3d12_flush(struct pipe_context *pipe,
 
    if (fence)
       d3d12_fence_reference((struct d3d12_fence **)fence, batch->fence);
-
-   if (flags & PIPE_FLUSH_END_OF_FRAME) {
-      d3d12_foreach_submitted_batch(ctx, submitted_batch)
-         d3d12_reset_batch(ctx, submitted_batch);
-   }
 }
 
 static void
