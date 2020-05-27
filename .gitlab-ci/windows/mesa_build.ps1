@@ -4,7 +4,7 @@ Write-Host "Refreshing Windows TLS CA cache"
 
 Get-Date
 Write-Host "Compiling Mesa"
-$builddir = New-Item -ItemType Directory -Name "build"
+$builddir = New-Item -ItemType Directory -Name "_build"
 Push-Location $builddir.FullName
 cmd.exe /C 'C:\BuildTools\Common7\Tools\VsDevCmd.bat -host_arch=amd64 -arch=amd64 && meson --default-library=static --buildtype=release -Db_vscrt=mt --cmake-prefix-path="C:\llvm-10" --pkg-config-path="C:\llvm-10\lib\pkgconfig;C:\llvm-10\share\pkgconfig;C:\spirv-tools\lib\pkgconfig" -Dllvm=true -Dshared-llvm=false -Dmicrosoft-clc=true -Dgallium-drivers=swrast,d3d12 -Dbuild-tests=true && ninja test'
 $buildstatus = $?
