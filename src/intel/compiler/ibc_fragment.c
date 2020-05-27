@@ -84,7 +84,7 @@ ibc_load_fs_payload_reg(ibc_builder *b, ibc_ref *dest,
                         enum ibc_type type)
 {
    ibc_builder_push_group(b, simd_group, MIN2(16, b->simd_width));
-   ibc_ref tmp = ibc_load_payload_logical(b, reg, type, 1);
+   ibc_ref tmp = ibc_load_payload_logical(b, reg, type, 1, false);
    ibc_builder_pop(b);
    set_ref_or_zip(b, dest, tmp, 1);
 }
@@ -103,7 +103,7 @@ ibc_load_fs_barycentric(ibc_builder *b, ibc_ref *dest,
    ibc_builder_push_group(b, simd_group, MIN2(16, b->simd_width));
    for (unsigned int g = 0; g < b->simd_width; g += 8) {
       ibc_builder_push_group(b, g, 8);
-      ibc_ref bary8 = ibc_load_payload_logical(b, reg, IBC_TYPE_F, 2);
+      ibc_ref bary8 = ibc_load_payload_logical(b, reg, IBC_TYPE_F, 2, false);
       ibc_builder_pop(b);
       set_ref_or_zip(b, &bary, bary8, 2);
    }
@@ -120,7 +120,7 @@ ibc_setup_fs_payload(ibc_builder *b, struct brw_wm_prog_data *prog_data,
 
    unsigned reg = payload->base.num_ff_regs;
    for (unsigned g = 0; g < b->shader->simd_width; g += 16)
-      payload->pixel[g / 16] = ibc_load_payload_reg(b, &reg);
+      payload->pixel[g / 16] = ibc_load_payload_reg(b, &reg, true);
 
    for (unsigned g = 0; g < b->shader->simd_width; g += 16) {
       for (int i = 0; i < BRW_BARYCENTRIC_MODE_COUNT; ++i) {
@@ -138,7 +138,7 @@ ibc_setup_fs_payload(ibc_builder *b, struct brw_wm_prog_data *prog_data,
 
       /* R31: MSAA position offsets. */
       if (prog_data->uses_pos_offset)
-         payload->sample_pos[g / 16] = ibc_load_payload_reg(b, &reg);
+         payload->sample_pos[g / 16] = ibc_load_payload_reg(b, &reg, false);
 
       /* R32-33: MSAA input coverage mask */
       if (prog_data->uses_sample_mask)
@@ -161,7 +161,7 @@ ibc_setup_fs_payload(ibc_builder *b, struct brw_wm_prog_data *prog_data,
          ibc_ref grf = ibc_hw_grf_ref(reg + (c / 2), (c % 2) * 4, IBC_TYPE_UD);
          payload->inputs[i][c] =
             ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 4);
-         ibc_load_payload(b, payload->inputs[i][c], grf, 4);
+         ibc_load_payload(b, payload->inputs[i][c], grf, 4, false);
       }
       reg += 2;
    }

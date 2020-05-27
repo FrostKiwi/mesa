@@ -56,11 +56,11 @@ ibc_setup_tes_payload(ibc_builder *b,
 
    /* R1-3: TessCoord.xyz */
    payload->tess_coord =
-      ibc_load_payload_logical(b, &reg, IBC_TYPE_F, 3);
+      ibc_load_payload_logical(b, &reg, IBC_TYPE_F, 3, false);
 
    /* R4: URB return handles */
    payload->urb_return_handles =
-      ibc_load_payload_logical(b, &reg, IBC_TYPE_UD, 1);
+      ibc_load_payload_logical(b, &reg, IBC_TYPE_UD, 1, false);
 
    payload->base.num_ff_regs = reg;
 
@@ -217,7 +217,7 @@ ibc_lower_tes_inputs(ibc_shader *shader,
          b.cursor = ibc_after_start(shader);
 
          ibc_ref input =
-            ibc_load_payload_logical(&b, &reg, intrin->dest.type, 8);
+            ibc_load_payload_logical(&b, &reg, intrin->dest.type, 8, false);
 
          b.cursor = ibc_before_instr(instr);
 

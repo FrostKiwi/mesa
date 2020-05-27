@@ -73,7 +73,7 @@ void
 ibc_setup_payload_base(ibc_builder *b, struct ibc_payload_base *payload)
 {
    payload->num_ff_regs = 0;
-   b->shader->g0 = ibc_load_payload_reg(b, &payload->num_ff_regs).reg;
+   b->shader->g0 = ibc_load_payload_reg(b, &payload->num_ff_regs, true).reg;
 }
 
 /* Allow at most 64 registers worth of push constants */
