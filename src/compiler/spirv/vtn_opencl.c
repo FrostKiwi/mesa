@@ -620,7 +620,7 @@ _handle_v_load_store(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
    const struct glsl_type *dest_type = type->type;
    unsigned components = glsl_get_vector_elements(dest_type);
 
-   nir_ssa_def *offset = vtn_ssa_value(b, w[5 + a])->def;
+   nir_ssa_def *offset = vtn_get_nir_ssa(b, w[5 + a]);
    struct vtn_value *p = vtn_value(b, w[6 + a], vtn_value_type_pointer);
 
    struct vtn_ssa_value *comps[NIR_MAX_VEC_COMPONENTS];
