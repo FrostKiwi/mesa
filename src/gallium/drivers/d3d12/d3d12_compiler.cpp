@@ -556,9 +556,15 @@ get_next_shader(struct d3d12_context *ctx, pipe_shader_type current)
    }
 }
 
-static bool
+enum tex_scan_flags {
+   TEX_SAMPLE_INTEGER_TEXTURE = 1 << 0,
+   TEX_SCAN_ALL_FLAGS =        (1 << 1) - 1
+};
+
+static unsigned
 scan_texture_use(nir_shader *nir)
 {
+   unsigned result = 0;
    nir_foreach_function(func, nir) {
       nir_foreach_block(block, func->impl) {
          nir_foreach_instr(instr, block) {
@@ -570,15 +576,17 @@ scan_texture_use(nir_shader *nir)
                case nir_texop_txl:
                case nir_texop_txd:
                   if (tex->dest_type & (nir_type_int | nir_type_uint))
-                     return true;
+                     result |= TEX_SAMPLE_INTEGER_TEXTURE;
                default:
                   ;
                }
             }
+            if (TEX_SCAN_ALL_FLAGS == result)
+               return result;
          }
       }
    }
-   return false;
+   return result;
 }
 
 struct d3d12_shader_selector *
@@ -598,7 +606,8 @@ d3d12_compile_shader(struct d3d12_context *ctx,
       nir = tgsi_to_nir(shader->tokens, ctx->base.screen);
    }
 
-   sel->samples_int_textures = scan_texture_use(nir);
+   unsigned tex_scan_result = scan_texture_use(nir);
+   sel->samples_int_textures = (tex_scan_result & TEX_SAMPLE_INTEGER_TEXTURE) != 0;
 
    assert(nir != NULL);
 
