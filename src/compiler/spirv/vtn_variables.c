@@ -179,10 +179,9 @@ bool
 vtn_mode_uses_ssa_offset(struct vtn_builder *b,
                          enum vtn_variable_mode mode)
 {
-   return ((mode == vtn_variable_mode_ubo ||
-            mode == vtn_variable_mode_ssbo) &&
-           b->options->lower_ubo_ssbo_access_to_offsets) ||
-          mode == vtn_variable_mode_push_constant;
+   return (mode == vtn_variable_mode_ubo ||
+           mode == vtn_variable_mode_ssbo) &&
+          b->options->lower_ubo_ssbo_access_to_offsets;
 }
 
 static bool
@@ -203,8 +202,7 @@ vtn_pointer_is_external_block(struct vtn_builder *b,
 {
    return ptr->mode == vtn_variable_mode_ssbo ||
           ptr->mode == vtn_variable_mode_ubo ||
-          ptr->mode == vtn_variable_mode_phys_ssbo ||
-          ptr->mode == vtn_variable_mode_push_constant;
+          ptr->mode == vtn_variable_mode_phys_ssbo;
 }
 
 static nir_ssa_def *
@@ -1876,7 +1874,7 @@ vtn_storage_class_to_mode(struct vtn_builder *b,
       break;
    case SpvStorageClassPushConstant:
       mode = vtn_variable_mode_push_constant;
-      nir_mode = nir_var_uniform;
+      nir_mode = nir_var_mem_push_const;
       break;
    case SpvStorageClassInput:
       mode = vtn_variable_mode_input;
@@ -2249,6 +2247,7 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
 
    case vtn_variable_mode_ubo:
    case vtn_variable_mode_ssbo:
+   case vtn_variable_mode_push_constant:
       var->var = rzalloc(b->shader, nir_variable);
       var->var->name = ralloc_strdup(var->var, val->name);
 
@@ -2257,7 +2256,7 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
 
       var->var->data.mode = nir_mode;
       var->var->data.location = -1;
-
+      var->var->data.driver_location = 0;
       break;
 
    case vtn_variable_mode_workgroup:
@@ -2360,7 +2359,6 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
       break;
    }
 
-   case vtn_variable_mode_push_constant:
    case vtn_variable_mode_cross_workgroup:
       /* These don't need actual variables. */
       break;
