@@ -427,6 +427,10 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
 
    struct clc_runtime_kernel_conf conf = { 0 };
 
+   // Older WARP and some hardware doesn't support int64, so for these tests, unconditionally lower away int64
+   // A more complex runtime can be smarter about detecting when this needs to be done
+   conf.lower_int64 = true;
+
    if (!shader.dxil->metadata.local_size[0])
       conf.local_size[0] = compile_args.x;
    else

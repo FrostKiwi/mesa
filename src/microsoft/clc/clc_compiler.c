@@ -757,6 +757,10 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, dxil_nir_lower_atomics_to_dxil);
 
    NIR_PASS_V(nir, nir_lower_bit_size, lower_bit_size_callback, NULL);
+   
+   if (conf && conf->lower_int64) {
+      NIR_PASS_V(nir, nir_lower_int64, ~0u);
+   }
 
    nir_validate_shader(nir, "Validate before feeding NIR to the DXIL compiler");
    struct nir_to_dxil_options opts = {
