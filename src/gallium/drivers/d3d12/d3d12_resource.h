@@ -63,16 +63,13 @@ d3d12_resource_underlying(struct d3d12_resource *res, uint64_t *offset)
    return d3d12_bo_get_base(res->bo, offset)->res;
 }
 
-/* Returns the underlying ID3D12Resource for this resource.
- * This helper should only be called for resources that are known
- * to own the complete ID3D12Resource. */
+/* Returns the underlying ID3D12Resource for this resource. */
 static inline ID3D12Resource *
 d3d12_resource_resource(struct d3d12_resource *res)
 {
    ID3D12Resource *ret;
    uint64_t offset;
    ret = d3d12_resource_underlying(res, &offset);
-   assert(ret == NULL || offset == 0);
    return ret;
 }
 

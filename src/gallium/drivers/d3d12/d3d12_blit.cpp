@@ -386,15 +386,12 @@ d3d12_direct_copy(struct d3d12_context *ctx,
 {
    struct d3d12_batch *batch = d3d12_current_batch(ctx);
 
-   /* HACK: We're not supposed to be able to copy from/to the same subresource,
-            but it works if we only set one state (COPY_DEST) */
-   if (src != dst)
-      d3d12_transition_resource_state(ctx, src,
-                                      D3D12_RESOURCE_STATE_COPY_SOURCE,
-                                      SubresourceTransitionFlags_None);
-   d3d12_transition_resource_state(ctx, dst,
-                                   D3D12_RESOURCE_STATE_COPY_DEST,
-                                   SubresourceTransitionFlags_None);
+   d3d12_transition_subresources_state(ctx, src, src_level, 1, 0, 1, 0, 1,
+                                       D3D12_RESOURCE_STATE_COPY_SOURCE,
+                                       SubresourceTransitionFlags_None);
+   d3d12_transition_subresources_state(ctx, dst, dst_level, 1, 0, 1, 0, 1,
+                                       D3D12_RESOURCE_STATE_COPY_DEST,
+                                       SubresourceTransitionFlags_None);
    d3d12_apply_resource_states(ctx, false);
 
    d3d12_batch_reference_resource(batch, src);
@@ -413,6 +410,66 @@ d3d12_direct_copy(struct d3d12_context *ctx,
       copy_resource_y_flipped_no_barriers(ctx, dst, dst_level, pdst_box,
                                           src, src_level, psrc_box);
    }
+}
+
+static bool
+is_same_resource(const struct pipe_blit_info *info)
+{
+   return d3d12_resource_resource(d3d12_resource(info->src.resource)) ==
+             d3d12_resource_resource(d3d12_resource(info->dst.resource)) &&
+          info->src.level == info->dst.level;
+}
+
+static struct pipe_resource *
+create_staging_resource(struct d3d12_context *ctx,
+                        struct d3d12_resource *src,
+                        unsigned src_level,
+                        const struct pipe_box *src_box,
+                        struct pipe_box *dst_box)
+
+{
+   struct pipe_resource templ = {{0}};
+   struct pipe_resource *staging_res;
+
+   templ.format = src->base.format;
+   templ.width0 = src_box->width;
+   templ.height0 = src_box->height;
+   templ.depth0 = src_box->depth;
+   templ.array_size = 1;
+   templ.nr_samples = 1;
+   templ.nr_storage_samples = 1;
+   templ.usage = PIPE_USAGE_DEFAULT | PIPE_USAGE_STAGING;
+   templ.bind = PIPE_BIND_RENDER_TARGET;
+   templ.target = src->base.target;
+
+   staging_res = ctx->base.screen->resource_create(ctx->base.screen, &templ);
+
+   dst_box->x = 0;
+   dst_box->y = 0;
+   dst_box->z = 0;
+   dst_box->width = src_box->width;
+   dst_box->height = src_box->height;
+   dst_box->depth = src_box->depth;
+
+   d3d12_direct_copy(ctx, d3d12_resource(staging_res), 0, dst_box,
+                     src, src_level, src_box);
+
+   return staging_res;
+}
+
+static void
+blit_same_resource(struct d3d12_context *ctx,
+                   const struct pipe_blit_info *info)
+{
+   struct pipe_blit_info dst_info = *info;
+
+   dst_info.src.level = 0;
+   dst_info.src.resource = create_staging_resource(ctx, d3d12_resource(info->src.resource),
+                                                   info->src.level,
+                                                   &info->src.box,
+                                                   &dst_info.src.box);
+   ctx->base.blit(&ctx->base, &dst_info);
+   pipe_resource_reference(&dst_info.src.resource, NULL);
 }
 
 static void
@@ -471,8 +528,9 @@ d3d12_blit(struct pipe_context *pctx,
                    info->alpha_blend ? "blend" : "");
    }
 
-
-   if (resolve_supported(info))
+   if (is_same_resource(info))
+      blit_same_resource(ctx, info);
+   else if (resolve_supported(info))
       blit_resolve(ctx, info);
    else if (direct_copy_supported(d3d12_screen(pctx->screen), info))
       d3d12_direct_copy(ctx, d3d12_resource(info->dst.resource),
@@ -505,7 +563,11 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
                            const struct pipe_box *psrc_box)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
-   struct pipe_box dst_box;
+   struct d3d12_resource *dst = d3d12_resource(pdst);
+   struct d3d12_resource *src = d3d12_resource(psrc);
+   struct pipe_resource *staging_res = NULL;
+   const struct pipe_box *src_box = psrc_box;
+   struct pipe_box staging_box, dst_box;
 
    if (D3D12_DEBUG_BLIT & d3d12_debug) {
       debug_printf("D3D12 COPY: from %s@%d %dx%dx%d + %dx%dx%d\n",
@@ -517,14 +579,25 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
                    dstx, dsty, dstz);
    }
 
+   /* Use an intermediate resource if copying from/to the same subresource */
+   if (d3d12_resource_resource(dst) == d3d12_resource_resource(src) && dst_level == src_level) {
+      staging_res = create_staging_resource(ctx, src, src_level, psrc_box, &staging_box);
+      src = d3d12_resource(staging_res);
+      src_level = 0;
+      src_box = &staging_box;
+   }
+
    dst_box.x = dstx;
    dst_box.y = dsty;
    dst_box.z = dstz;
    dst_box.width = psrc_box->width;
    dst_box.height = psrc_box->height;
 
-   d3d12_direct_copy(ctx, d3d12_resource(pdst), dst_level, &dst_box,
-                     d3d12_resource(psrc), src_level, psrc_box);
+   d3d12_direct_copy(ctx, dst, dst_level, &dst_box,
+                     src, src_level, src_box);
+
+   if (staging_res)
+      pipe_resource_reference(&staging_res, NULL);
 }
 
 void
