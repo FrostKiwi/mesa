@@ -30,8 +30,7 @@ bool
 vtn_handle_amd_gcn_shader_instruction(struct vtn_builder *b, SpvOp ext_opcode,
                                       const uint32_t *w, unsigned count)
 {
-   const struct glsl_type *dest_type =
-                           vtn_value(b, w[1], vtn_value_type_type)->type->type;
+   const struct glsl_type *dest_type = vtn_get_type(b, w[1])->type;
    struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
    val->ssa = vtn_create_ssa_value(b, dest_type);
 
@@ -60,8 +59,7 @@ bool
 vtn_handle_amd_shader_ballot_instruction(struct vtn_builder *b, SpvOp ext_opcode,
                                          const uint32_t *w, unsigned count)
 {
-   const struct glsl_type *dest_type =
-                           vtn_value(b, w[1], vtn_value_type_type)->type->type;
+   const struct glsl_type *dest_type = vtn_get_type(b, w[1])->type;
    struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
    val->ssa = vtn_create_ssa_value(b, dest_type);
 
@@ -122,8 +120,7 @@ vtn_handle_amd_shader_trinary_minmax_instruction(struct vtn_builder *b, SpvOp ex
                                                  const uint32_t *w, unsigned count)
 {
    struct nir_builder *nb = &b->nb;
-   const struct glsl_type *dest_type =
-      vtn_value(b, w[1], vtn_value_type_type)->type->type;
+   const struct glsl_type *dest_type = vtn_get_type(b, w[1])->type;
    struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
    val->ssa = vtn_create_ssa_value(b, dest_type);
 
@@ -173,9 +170,7 @@ bool
 vtn_handle_amd_shader_explicit_vertex_parameter_instruction(struct vtn_builder *b, SpvOp ext_opcode,
                                                             const uint32_t *w, unsigned count)
 {
-   const struct glsl_type *dest_type =
-      vtn_value(b, w[1], vtn_value_type_type)->type->type;
-
+   const struct glsl_type *dest_type = vtn_get_type(b, w[1])->type;
    struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
    val->ssa = vtn_create_ssa_value(b, dest_type);
 

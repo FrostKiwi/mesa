@@ -240,7 +240,7 @@ vtn_handle_function_call(struct vtn_builder *b, SpvOp opcode,
    if (vtn_handle_builtin_call(b, opcode, w, count))
       return;
 
-   struct vtn_type *res_type = vtn_value(b, w[1], vtn_value_type_type)->type;
+   struct vtn_type *res_type = vtn_get_type(b, w[1]);
    struct vtn_function *vtn_callee =
       vtn_value(b, w[3], vtn_value_type_function)->func;
    struct nir_function *callee = vtn_callee->impl->function;
@@ -311,12 +311,11 @@ vtn_cfg_handle_prepass_instruction(struct vtn_builder *b, SpvOp opcode,
       list_inithead(&b->func->body);
       b->func->control = w[3];
 
-      UNUSED const struct glsl_type *result_type =
-         vtn_value(b, w[1], vtn_value_type_type)->type->type;
+      UNUSED const struct glsl_type *result_type = vtn_get_type(b, w[1])->type;
       struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_function);
       val->func = b->func;
 
-      b->func->type = vtn_value(b, w[4], vtn_value_type_type)->type;
+      b->func->type = vtn_get_type(b, w[4]);
       const struct vtn_type *func_type = b->func->type;
 
       vtn_assert(func_type->return_type->type == result_type);
@@ -376,7 +375,7 @@ vtn_cfg_handle_prepass_instruction(struct vtn_builder *b, SpvOp opcode,
    }
 
    case SpvOpFunctionParameter: {
-      struct vtn_type *type = vtn_value(b, w[1], vtn_value_type_type)->type;
+      struct vtn_type *type = vtn_get_type(b, w[1]);
 
       vtn_assert(b->func_param_idx < b->func->impl->function->num_params);
 
@@ -1214,7 +1213,7 @@ vtn_handle_phis_first_pass(struct vtn_builder *b, SpvOp opcode,
     * algorithm all over again.  It's easier if we just let
     * lower_vars_to_ssa do that for us instead of repeating it here.
     */
-   struct vtn_type *type = vtn_value(b, w[1], vtn_value_type_type)->type;
+   struct vtn_type *type = vtn_get_type(b, w[1]);
    nir_variable *phi_var =
       nir_local_variable_create(b->nb.impl, type->type, "phi");
    _mesa_hash_table_insert(b->phi_table, w, phi_var);

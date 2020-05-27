@@ -199,7 +199,7 @@ handle_instr(struct vtn_builder *b, uint32_t opcode,
              const uint32_t *w_src, unsigned num_srcs, const uint32_t *w_dest, nir_handler handler)
 {
    const struct glsl_type *dest_type = w_dest ?
-      vtn_value(b, w_dest[0], vtn_value_type_type)->type->type : NULL;
+       vtn_get_type(b, w_dest[0])->type : NULL;
 
    nir_ssa_def *srcs[5] = { NULL };
    const struct glsl_type *src_types[5] = { NULL };
@@ -614,9 +614,9 @@ _handle_v_load_store(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
 {
    struct vtn_type *type;
    if (load)
-      type = vtn_value(b, w[1], vtn_value_type_type)->type;
+      type = vtn_get_type(b, w[1]);
    else
-      type = vtn_untyped_value(b, w[5])->type;
+      type = vtn_get_value_type(b, w[5]);
    unsigned a = load ? 0 : 1;
 
    const struct glsl_type *dest_type = type->type;
