@@ -509,7 +509,6 @@ get_prev_shader(struct d3d12_context *ctx, pipe_shader_type current)
          return ctx->gfx_stages[PIPE_SHADER_GEOMETRY];
       /* fallthrough */
    case PIPE_SHADER_GEOMETRY:
-      assert(ctx->gfx_stages[PIPE_SHADER_VERTEX]);
       return ctx->gfx_stages[PIPE_SHADER_VERTEX];
    default:
       unreachable("shader type not supported");
@@ -527,7 +526,6 @@ get_next_shader(struct d3d12_context *ctx, pipe_shader_type current)
          return ctx->gfx_stages[PIPE_SHADER_GEOMETRY];
       /* fallthrough */
    case PIPE_SHADER_GEOMETRY:
-      assert(ctx->gfx_stages[PIPE_SHADER_FRAGMENT]);
       return ctx->gfx_stages[PIPE_SHADER_FRAGMENT];
    case PIPE_SHADER_FRAGMENT:
       return NULL;
@@ -594,6 +592,30 @@ d3d12_compile_shader(struct d3d12_context *ctx,
 
    /* Keep this initial shader as the blue print for possible variants */
    sel->initial = nir;
+
+   /*
+    * We must compile some shader here, because if the previous or a next shaders exists later
+    * when the shaders are bound, then the key evaluation in the shader selector will access
+    * the current variant of these  prev and next shader, and we can only assign
+    * a current variant when it has been successfully compiled.
+    *
+    * For shaders that require lowering because certain instructions are not available
+    * and their emulation is state depended (like sampling an integer texture that must be
+    * emulated and needs handling of boundary conditions, or shadow compare sampling with LOD),
+    * we must go through the shader selector here to create a compilable variant.
+    * For shaders that are not depended on the state this is just compiling the original
+    * shader.
+    */
+   struct d3d12_selection_context sel_ctx;
+   sel_ctx.ctx = ctx;
+   d3d12_shader_selector *prev = get_prev_shader(ctx, sel->stage);
+   d3d12_shader_selector *next = get_next_shader(ctx, sel->stage);
+   select_shader_variant(&sel_ctx, sel, prev, next);
+
+   if (!sel->current) {
+      ralloc_free(sel);
+      return NULL;
+   }
 
    return sel;
 }
