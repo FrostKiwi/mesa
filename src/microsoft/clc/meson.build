@@ -72,4 +72,4 @@ clc_compiler_test = executable('clc_compiler_test',
   dependencies : [idep_gtest, idep_mesautil],
   include_directories : [inc_include, inc_src])
 
-test('clc_compiler_test', clc_compiler_test)
+test('clc_compiler_test', clc_compiler_test, timeout: 120)
