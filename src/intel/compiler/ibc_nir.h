@@ -214,25 +214,27 @@ ibc_write_nir_dest(struct nir_to_ibc_state *nti, const nir_dest *ndest,
 
 static inline ibc_intrinsic_instr *
 ibc_load_payload(ibc_builder *b, ibc_ref dest,
-                 ibc_ref src, unsigned num_comps)
+                 ibc_ref src, unsigned num_comps,
+                 bool keep_alive)
 {
    ibc_intrinsic_instr *load =
       ibc_build_intrinsic(b, IBC_INTRINSIC_OP_LOAD_PAYLOAD,
                           dest, -1, num_comps,
                           &(ibc_intrinsic_src) { .ref = src }, 1);
    load->can_reorder = false;
-   load->has_side_effects = true;
+   load->has_side_effects = keep_alive;
    return load;
 }
 
 static inline ibc_ref
-ibc_load_payload_reg(ibc_builder *b, unsigned *reg)
+ibc_load_payload_reg(ibc_builder *b, unsigned *reg, bool keep_alive)
 {
    ibc_reg *dest_reg = ibc_hw_grf_reg_create(b->shader, 32, 32);
    dest_reg->is_wlr = true;
    ibc_ref dest = ibc_typed_ref(dest_reg, IBC_TYPE_UD);
    ibc_builder_push_we_all(b, 8);
-   ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, IBC_TYPE_UD), 1);
+   ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, IBC_TYPE_UD), 1,
+                    keep_alive);
    ibc_builder_pop(b);
    *reg += 1;
    return dest;
@@ -240,11 +242,12 @@ ibc_load_payload_reg(ibc_builder *b, unsigned *reg)
 
 static inline ibc_ref
 ibc_load_payload_logical(ibc_builder *b, unsigned *reg, enum ibc_type type,
-                         unsigned num_comps)
+                         unsigned num_comps, bool keep_alive)
 {
    assert(ibc_type_bit_size(type) == 32);
    ibc_ref dest = ibc_builder_new_logical_reg(b, type, num_comps);
-   ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, type), num_comps);
+   ibc_load_payload(b, dest, ibc_hw_grf_ref(*reg, 0, type), num_comps,
+                    keep_alive);
    *reg += (b->simd_width * ibc_type_byte_size(type) * num_comps) / REG_SIZE;
    return dest;
 }

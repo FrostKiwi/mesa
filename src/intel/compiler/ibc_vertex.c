@@ -50,7 +50,7 @@ ibc_setup_vs_payload(ibc_builder *b,
    unsigned reg = payload->base.num_ff_regs;
 
    payload->urb_return_handles =
-      ibc_load_payload_logical(b, &reg, IBC_TYPE_UD, 1);
+      ibc_load_payload_logical(b, &reg, IBC_TYPE_UD, 1, false);
 
    payload->base.num_ff_regs = reg;
 
@@ -66,7 +66,8 @@ ibc_setup_vs_payload(ibc_builder *b,
     * TODO: VF component packing?
     */
    for (unsigned i = 0; i < prog_data->nr_attribute_slots; i++) {
-      payload->inputs[i] = ibc_load_payload_logical(b, &reg, IBC_TYPE_UD, 4);
+      payload->inputs[i] =
+         ibc_load_payload_logical(b, &reg, IBC_TYPE_UD, 4, false);
    }
 
    return payload;
