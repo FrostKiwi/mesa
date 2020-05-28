@@ -379,6 +379,14 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    BINOP_CASE(ishr, SHR)
    BINOP_CASE(ushr, SHR)
 
+   case nir_op_iadd_sat:
+   case nir_op_uadd_sat: {
+      dest = ibc_ADD(b, dest_type, src[0], src[1]);
+      ibc_alu_instr *add = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+      add->saturate = true;
+      break;
+   }
+
    case nir_op_irhadd:
    case nir_op_urhadd:
       assert(ibc_type_bit_size(dest_type) < 64);

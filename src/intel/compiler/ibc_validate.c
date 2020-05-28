@@ -394,9 +394,6 @@ ibc_validate_alu_instr(struct ibc_validate_state *s, const ibc_alu_instr *alu)
       }
    }
 
-   ibc_assert(s, !alu->saturate ||
-                 ibc_type_base_type(alu->dest.type) == IBC_TYPE_FLOAT);
-
    if (alu->dest.file == IBC_FILE_NONE) {
       ibc_validate_null_ref(s, &alu->dest);
    } else {
