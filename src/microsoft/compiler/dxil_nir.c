@@ -348,10 +348,16 @@ lower_store_deref(nir_builder *b, nir_intrinsic_instr *intr)
 }
 
 static bool
-lower_load_ssbo_impl(nir_builder *b, nir_intrinsic_instr *intr,
-                       nir_ssa_def *buffer, nir_ssa_def *offset)
+lower_load_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
 {
    assert(intr->dest.is_ssa);
+   assert(intr->src[0].is_ssa);
+   assert(intr->src[1].is_ssa);
+
+   b->cursor = nir_before_instr(&intr->instr);
+
+   nir_ssa_def *buffer = intr->src[0].ssa;
+   nir_ssa_def *offset = nir_iand(b, intr->src[1].ssa, nir_imm_int(b, ~3UL));
    unsigned bit_size = nir_dest_bit_size(intr->dest);
    unsigned num_components = nir_dest_num_components(intr->dest);
    unsigned num_bits = num_components * bit_size;
@@ -386,7 +392,7 @@ lower_load_ssbo_impl(nir_builder *b, nir_intrinsic_instr *intr,
        * we can always extract the LSB.
        */
       if (subload_num_bits <= 16) {
-         nir_ssa_def *shift = nir_imul(b, nir_iand(b, offset, nir_imm_int(b, 3)),
+         nir_ssa_def *shift = nir_imul(b, nir_iand(b, intr->src[1].ssa, nir_imm_int(b, 3)),
                                           nir_imm_int(b, 8));
          vec32 = nir_ushr(b, vec32, shift);
       }
@@ -407,23 +413,18 @@ lower_load_ssbo_impl(nir_builder *b, nir_intrinsic_instr *intr,
 }
 
 static bool
-lower_load_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
+lower_store_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
 {
    b->cursor = nir_before_instr(&intr->instr);
 
-   assert(intr->dest.is_ssa);
    assert(intr->src[0].is_ssa);
    assert(intr->src[1].is_ssa);
+   assert(intr->src[2].is_ssa);
 
-   nir_ssa_def *buffer = intr->src[0].ssa;
-   nir_ssa_def *offset = intr->src[1].ssa;
-   return lower_load_ssbo_impl(b, intr, buffer, offset);
-}
+   nir_ssa_def *val = intr->src[0].ssa;
+   nir_ssa_def *buffer = intr->src[1].ssa;
+   nir_ssa_def *offset = nir_iand(b, intr->src[2].ssa, nir_imm_int(b, ~3UL));
 
-static bool
-lower_store_ssbo_impl(nir_builder *b, nir_intrinsic_instr *intr, nir_ssa_def *val,
-                        nir_ssa_def *buffer, nir_ssa_def *offset)
-{
    unsigned bit_size = val->bit_size;
    unsigned num_components = val->num_components;
    unsigned num_bits = num_components * bit_size;
@@ -456,7 +457,7 @@ lower_store_ssbo_impl(nir_builder *b, nir_intrinsic_instr *intr, nir_ssa_def *va
          * (including uchar3) is naturally aligned on 32bits.
          */
          if (substore_num_bits <= 16) {
-            nir_ssa_def *pos = nir_iand(b, offset, nir_imm_int(b, 3));
+            nir_ssa_def *pos = nir_iand(b, intr->src[2].ssa, nir_imm_int(b, 3));
             nir_ssa_def *shift = nir_imul_imm(b, pos, 8);
 
             vec32 = nir_ishl(b, vec32, shift);
@@ -487,21 +488,6 @@ lower_store_ssbo_impl(nir_builder *b, nir_intrinsic_instr *intr, nir_ssa_def *va
 
    nir_instr_remove(&intr->instr);
    return true;
-}
-
-static bool
-lower_store_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
-{
-   b->cursor = nir_before_instr(&intr->instr);
-
-   assert(intr->src[0].is_ssa);
-   assert(intr->src[1].is_ssa);
-   assert(intr->src[2].is_ssa);
-
-   nir_ssa_def *buffer = intr->src[1].ssa;
-   nir_ssa_def *offset = intr->src[2].ssa;
-
-   return lower_store_ssbo_impl(b, intr, intr->src[0].ssa, buffer, offset);
 }
 
 static nir_ssa_def *
