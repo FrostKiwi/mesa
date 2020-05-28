@@ -341,60 +341,33 @@ vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b, struct vtn_value *val,
    case SpvOpFUnordGreaterThanEqual:               return nir_op_fge;
 
    /* Conversions: */
-   case SpvOpQuantizeToF16:         return nir_op_fquantize2f16;
-   case SpvOpUConvert:
-   case SpvOpConvertFToU:
-   case SpvOpConvertFToS:
-   case SpvOpConvertSToF:
-   case SpvOpConvertUToF:
+   case SpvOpQuantizeToF16:                        return nir_op_fquantize2f16;
    case SpvOpSConvert:
-   case SpvOpFConvert: {
+   case SpvOpFConvert:
+   case SpvOpUConvert: {
       nir_alu_type src_type;
       nir_alu_type dst_type;
-      nir_rounding_mode round = nir_rounding_mode_undef;
-      vtn_foreach_decoration(b, val, handle_rounding_mode, &round);
-      vtn_fail_if(round != nir_rounding_mode_undef &&
-                  b->shader->info.stage != MESA_SHADER_KERNEL,
-                  "Rounding mode can only be applied to conversions in OpenCL");
-
-      bool saturate = false;
-      vtn_foreach_decoration(b, val, handle_saturation, &saturate);
-      vtn_fail_if(saturate && b->shader->info.stage != MESA_SHADER_KERNEL,
-                  "Saturation can only be applied to conversions in OpenCL");
 
       switch (opcode) {
-      case SpvOpConvertFToS:
-         src_type = nir_type_float;
-         dst_type = nir_type_int;
-         break;
-      case SpvOpConvertFToU:
-         src_type = nir_type_float;
-         dst_type = nir_type_uint;
-         break;
       case SpvOpFConvert:
          src_type = dst_type = nir_type_float;
          break;
-      case SpvOpConvertSToF:
-         src_type = nir_type_int;
-         dst_type = nir_type_float;
-         break;
       case SpvOpSConvert:
          src_type = dst_type = nir_type_int;
-         break;
-      case SpvOpConvertUToF:
-         src_type = nir_type_uint;
-         dst_type = nir_type_float;
          break;
       case SpvOpUConvert:
          src_type = dst_type = nir_type_uint;
          break;
       default:
-         unreachable("Invalid opcode");
+         unreachable("unknown conversion type");
       }
+
       src_type |= src_bit_size;
       dst_type |= dst_bit_size;
-      return nir_type_conversion_op(src_type, dst_type, round);
+      return nir_type_conversion_op(src_type, dst_type, nir_rounding_mode_undef);
    }
+
+
    /* Derivatives: */
    case SpvOpDPdx:         return nir_op_fddx;
    case SpvOpDPdy:         return nir_op_fddy;
@@ -621,6 +594,61 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
                   nir_iand(&b->nb,
                           nir_feq(&b->nb, src[0], src[0]),
                           nir_feq(&b->nb, src[1], src[1])));
+      break;
+   }
+
+   case SpvOpUConvert:
+   case SpvOpConvertFToU:
+   case SpvOpConvertFToS:
+   case SpvOpConvertSToF:
+   case SpvOpConvertUToF:
+   case SpvOpSConvert: {
+      nir_alu_type src_type;
+      unsigned src_bit_size = glsl_get_bit_size(vtn_src[0]->type);
+      nir_alu_type dst_type;
+      unsigned dst_bit_size = glsl_get_bit_size(type);
+      nir_rounding_mode round = nir_rounding_mode_undef;
+      vtn_foreach_decoration(b, val, handle_rounding_mode, &round);
+      vtn_fail_if(b->shader->info.stage != MESA_SHADER_KERNEL &&
+                  round != nir_rounding_mode_undef,
+                  "Rounding mode can only be applied to conversions in OpenCL");
+
+      bool saturate = false;
+      vtn_foreach_decoration(b, val, handle_saturation, &saturate);
+      vtn_fail_if(saturate && b->shader->info.stage != MESA_SHADER_KERNEL,
+                  "Saturation can only be applied to conversions in OpenCL");
+
+      switch (opcode) {
+      case SpvOpConvertFToS:
+         src_type = nir_type_float;
+         dst_type = nir_type_int;
+         break;
+      case SpvOpConvertFToU:
+         src_type = nir_type_float;
+         dst_type = nir_type_uint;
+         break;
+      case SpvOpConvertSToF:
+         src_type = nir_type_int;
+         dst_type = nir_type_float;
+         break;
+      case SpvOpSConvert:
+         src_type = dst_type = nir_type_int;
+         break;
+      case SpvOpConvertUToF:
+         src_type = nir_type_uint;
+         dst_type = nir_type_float;
+         break;
+      case SpvOpUConvert:
+         src_type = dst_type = nir_type_uint;
+         break;
+      default:
+         unreachable("Invalid opcode");
+      }
+
+      src_type |= src_bit_size;
+      dst_type |= dst_bit_size;
+      nir_op op = nir_type_conversion_op(src_type, dst_type, round);
+      val->ssa->def = nir_build_alu(&b->nb, op, src[0], src[1], NULL, NULL);
       break;
    }
 
