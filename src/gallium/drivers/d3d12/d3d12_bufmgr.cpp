@@ -120,6 +120,22 @@ d3d12_bo_new(ID3D12Device *dev, uint64_t size, uint64_t alignment)
    return d3d12_bo_wrap_res(res, PIPE_FORMAT_NONE);
 }
 
+struct d3d12_bo *
+d3d12_bo_wrap_buffer(struct pb_buffer *buf)
+{
+   struct d3d12_bo *bo;
+
+   bo = CALLOC_STRUCT(d3d12_bo);
+   if (!bo)
+      return NULL;
+
+   bo->refcount = 1;
+   bo->buffer = buf;
+   bo->trans_state = NULL; /* State from base BO will be used */
+
+   return bo;
+}
+
 void
 d3d12_bo_unreference(struct d3d12_bo *bo)
 {

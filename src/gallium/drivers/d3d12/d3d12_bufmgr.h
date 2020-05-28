@@ -37,6 +37,7 @@ struct TransitionableResourceState;
 struct d3d12_bo {
    int refcount;
    ID3D12Resource *res;
+   struct pb_buffer *buffer;
    struct TransitionableResourceState *trans_state;
 };
 
@@ -58,14 +59,23 @@ d3d12_buffer(struct pb_buffer *buf)
 static inline struct d3d12_bo *
 d3d12_bo_get_base(struct d3d12_bo *bo, uint64_t *offset)
 {
-   *offset = 0;
-   return bo;
+   if (bo->buffer) {
+      struct pb_buffer *base_buffer;
+      pb_get_base_buffer(bo->buffer, &base_buffer, offset);
+      return d3d12_buffer(base_buffer)->bo;
+   } else {
+      *offset = 0;
+      return bo;
+   }
 }
 
 static inline uint64_t
 d3d12_bo_get_size(struct d3d12_bo *bo)
 {
-   return bo->res->GetDesc().Width;
+   if (bo->buffer)
+      return bo->buffer->size;
+   else
+      return bo->res->GetDesc().Width;
 }
 
 struct d3d12_bo *
@@ -73,6 +83,9 @@ d3d12_bo_new(ID3D12Device *dev, uint64_t size, uint64_t alignment);
 
 struct d3d12_bo *
 d3d12_bo_wrap_res(ID3D12Resource *res, enum pipe_format format);
+
+struct d3d12_bo *
+d3d12_bo_wrap_buffer(struct pb_buffer *buf);
 
 static inline void
 d3d12_bo_reference(struct d3d12_bo *bo)
