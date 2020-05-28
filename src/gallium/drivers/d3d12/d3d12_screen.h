@@ -32,6 +32,8 @@
 #include <d3d12.h>
 #include <dxgi1_4.h>
 
+struct pb_manager;
+
 struct d3d12_screen {
    struct pipe_screen base;
    struct sw_winsys *winsys;
@@ -42,6 +44,7 @@ struct d3d12_screen {
    ID3D12CommandQueue *cmdqueue;
 
    struct slab_parent_pool transfer_pool;
+   struct pb_manager *bufmgr;
 
    /* capabilities */
    D3D_FEATURE_LEVEL max_feature_level;

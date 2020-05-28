@@ -23,6 +23,7 @@
 
 #include "d3d12_screen.h"
 
+#include "d3d12_bufmgr.h"
 #include "d3d12_compiler.h"
 #include "d3d12_context.h"
 #include "d3d12_debug.h"
@@ -32,6 +33,7 @@
 #include "d3d12_resource.h"
 #include "d3d12_nir_passes.h"
 
+#include "pipebuffer/pb_bufmgr.h"
 #include "util/debug.h"
 #include "util/u_math.h"
 #include "util/u_memory.h"
@@ -547,6 +549,7 @@ d3d12_destroy_screen(struct pipe_screen *pscreen)
 {
    struct d3d12_screen *screen = d3d12_screen(pscreen);
    slab_destroy_parent(&screen->transfer_pool);
+   screen->bufmgr->destroy(screen->bufmgr);
    FREE(screen);
 }
 
@@ -830,6 +833,8 @@ d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
    d3d12_screen_fence_init(&screen->base);
    d3d12_screen_resource_init(&screen->base);
    slab_create_parent(&screen->transfer_pool, sizeof(struct d3d12_transfer), 16);
+
+   screen->bufmgr = d3d12_bufmgr_create(screen);
 
    return &screen->base;
 

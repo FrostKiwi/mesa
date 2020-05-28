@@ -27,6 +27,7 @@
 #include "d3d12_format.h"
 #include "d3d12_screen.h"
 
+#include "pipebuffer/pb_bufmgr.h"
 #include "util/slab.h"
 #include "util/format/u_format.h"
 #include "util/u_inlines.h"
@@ -90,11 +91,17 @@ init_buffer(struct d3d12_screen *screen,
             struct d3d12_resource *res,
             const struct pipe_resource *templ)
 {
+   struct pb_desc buf_desc;
+   struct pb_buffer *buf;
+
+   buf_desc.alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+   buf_desc.usage = (pb_usage_flags)PB_USAGE_ALL;
    res->format = DXGI_FORMAT_UNKNOWN;
-   res->bo = d3d12_bo_new(screen->dev, templ->width0,
-                          D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
-   if (!res->bo)
+   buf = screen->bufmgr->create_buffer(screen->bufmgr,
+                                       templ->width0, &buf_desc);
+   if (!buf)
       return false;
+   res->bo = d3d12_bo_wrap_buffer(buf);
 
    return true;
 }
