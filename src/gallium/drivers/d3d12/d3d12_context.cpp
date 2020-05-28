@@ -1207,7 +1207,6 @@ d3d12_init_null_srvs(struct d3d12_context *ctx)
 
       srv.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
       srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-      srv.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
       switch (i) {
       case RESOURCE_DIMENSION_BUFFER:
       case RESOURCE_DIMENSION_UNKNOWN:
