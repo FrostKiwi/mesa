@@ -665,13 +665,6 @@ lower_bit_size_callback(const nir_alu_instr *alu, UNUSED void *data)
    }
 }
 
-static void
-shared_type_info(const struct glsl_type *type, unsigned *size, unsigned *align)
-{
-   *size = glsl_get_cl_size(type);
-   *align = glsl_get_cl_alignment(type);
-}
-
 static nir_variable *
 add_kernel_inputs_var(struct clc_dxil_object *dxil, nir_shader *nir,
                       unsigned *cbv_id)
@@ -949,7 +942,7 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, dxil_nir_lower_deref_ssbo);
 
    NIR_PASS_V(nir, nir_lower_vars_to_explicit_types,
-              nir_var_mem_shared, shared_type_info);
+              nir_var_mem_shared, glsl_get_cl_type_size_align);
 
    assert(nir->info.cs.ptr_size == 64);
    NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_ssbo,
