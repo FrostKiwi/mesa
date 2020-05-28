@@ -444,9 +444,12 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       D3D12_CPU_DESCRIPTOR_HANDLE render_targets[PIPE_MAX_COLOR_BUFS] = {};
       D3D12_CPU_DESCRIPTOR_HANDLE *depth_desc = NULL, tmp_desc;
       for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
-         struct d3d12_surface *surface = d3d12_surface(ctx->fb.cbufs[i]);
-         render_targets[i] = surface->desc_handle.cpu_handle;
-         d3d12_batch_reference_surface(batch, surface);
+         if (ctx->fb.cbufs[i]) {
+            struct d3d12_surface *surface = d3d12_surface(ctx->fb.cbufs[i]);
+            render_targets[i] = surface->desc_handle.cpu_handle;
+            d3d12_batch_reference_surface(batch, surface);
+         } else
+            render_targets[i] = ctx->null_rtv.cpu_handle;
       }
       if (ctx->fb.zsbuf) {
          struct d3d12_surface *surface = d3d12_surface(ctx->fb.zsbuf);
@@ -459,6 +462,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
       struct pipe_surface *psurf = ctx->fb.cbufs[i];
+      if (!psurf)
+         continue;
       const uint32_t num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
       d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
                                           psurf->u.tex.level, 1,
