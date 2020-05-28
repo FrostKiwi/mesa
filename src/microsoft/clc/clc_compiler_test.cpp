@@ -35,6 +35,33 @@
 
 using std::vector;
 
+TEST_F(ComputeTest, runtime_memcpy)
+{
+   struct shift { uint8_t val; uint8_t shift; uint16_t ret; };
+   const char *kernel_source =
+   "struct shift { uchar val; uchar shift; ushort ret; };\n\
+   __kernel void main_test(__global struct shift *inout)\n\
+   {\n\
+      uint id = get_global_id(0);\n\
+      uint id2 = id + get_global_id(1);\n\
+      struct shift lc[4] = { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 }};\n\
+      lc[id] = inout[id];\n\
+      inout[id2].ret = (ushort) lc[id2].val << (ushort) lc[id2].shift;\n\
+   }\n";
+
+   auto inout = ShaderArg<struct shift>({
+         { 0x10, 1, 0xffff },
+         { 0x20, 2, 0xffff },
+         { 0x30, 3, 0xffff },
+         { 0x40, 4, 0xffff },
+      },
+      SHADER_ARG_INOUT);
+   const uint16_t expected[] = { 0x20, 0x80, 0x180, 0x400 };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i)
+      EXPECT_EQ(inout[i].ret, expected[i]);
+}
+
 TEST_F(ComputeTest, two_global_arrays)
 {
    const char *kernel_source =
