@@ -94,6 +94,7 @@ ibc_type_for_nir(nir_alu_type ntype)
    switch (nir_alu_type_get_base_type(ntype)) {
    case nir_type_int:   stype = IBC_TYPE_INT;   break;
    case nir_type_uint:  stype = IBC_TYPE_UINT;  break;
+   case nir_type_bool:  stype = IBC_TYPE_UINT;  break;
    case nir_type_float: stype = IBC_TYPE_FLOAT; break;
    default:
       unreachable("Unsupported base type");
