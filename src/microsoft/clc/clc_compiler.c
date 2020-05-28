@@ -972,6 +972,9 @@ clc_to_dxil(struct clc_context *ctx,
 
    NIR_PASS_V(nir, nir_lower_variable_initializers, ~(nir_var_function_temp | nir_var_shader_temp));
 
+   // Lower memcpy
+   NIR_PASS_V(nir, dxil_nir_lower_memcpy_deref);
+
    // Needs to come before lower_explicit_io
    struct clc_image_lower_context image_lower_context = { metadata, &srv_id, &uav_id };
    NIR_PASS_V(nir, clc_lower_images, &image_lower_context);
