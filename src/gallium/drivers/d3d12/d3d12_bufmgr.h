@@ -24,10 +24,14 @@
 #ifndef D3D12_BUFMGR_H
 #define D3D12_BUFMGR_H
 
+#include "pipebuffer/pb_buffer.h"
 #include "util/u_atomic.h"
 
 #include <d3d12.h>
 
+struct d3d12_bufmgr;
+struct d3d12_screen;
+struct pb_manager;
 struct TransitionableResourceState;
 
 struct d3d12_bo {
@@ -35,6 +39,21 @@ struct d3d12_bo {
    ID3D12Resource *res;
    struct TransitionableResourceState *trans_state;
 };
+
+struct d3d12_buffer {
+   struct pb_buffer base;
+
+   struct d3d12_bo *bo;
+   D3D12_RANGE range;
+   void *map;
+};
+
+static inline struct d3d12_buffer *
+d3d12_buffer(struct pb_buffer *buf)
+{
+   assert(buf);
+   return (struct d3d12_buffer *)buf;
+}
 
 static inline struct d3d12_bo *
 d3d12_bo_get_base(struct d3d12_bo *bo, uint64_t *offset)
@@ -69,5 +88,8 @@ d3d12_bo_map(struct d3d12_bo *bo, D3D12_RANGE *range);
 
 void
 d3d12_bo_unmap(struct d3d12_bo *bo, D3D12_RANGE *range);
+
+struct pb_manager *
+d3d12_bufmgr_create(struct d3d12_screen *screen);
 
 #endif
