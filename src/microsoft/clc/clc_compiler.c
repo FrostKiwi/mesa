@@ -782,6 +782,56 @@ clc_lower_global_to_ssbo(nir_shader *nir)
    }
 }
 
+static void
+copy_const_initializer(const nir_constant *constant, const struct glsl_type *type,
+                       uint8_t *data)
+{
+   unsigned size = glsl_get_cl_size(type);
+
+   data = (uint8_t *)align64((uintptr_t)data, glsl_get_cl_alignment(type));
+
+   if (glsl_type_is_array(type)) {
+      const struct glsl_type *elm_type = glsl_get_array_element(type);
+      unsigned elm_size = glsl_get_cl_size(elm_type);
+      unsigned elm_align = glsl_get_cl_alignment(elm_type);
+      unsigned step_size = align(elm_size, elm_align);
+
+      for (unsigned i = 0; i < constant->num_elements; i++) {
+         copy_const_initializer(constant->elements[i], elm_type,
+                                data + (i * step_size));
+      }
+   } else if (glsl_type_is_struct(type)) {
+      for (unsigned i = 0; i < constant->num_elements; i++) {
+         const struct glsl_type *elm_type = glsl_get_struct_field(type, i);
+         int offset = glsl_get_struct_field_offset(type, i);
+         copy_const_initializer(constant->elements[i], elm_type, data + offset);
+      }
+   } else {
+      assert(glsl_type_is_vector_or_scalar(type));
+
+      for (unsigned i = 0; i < glsl_get_components(type); i++) {
+         switch (glsl_get_bit_size(type)) {
+         case 64:
+            *((uint64_t *)data) = constant->values[i].u64;
+            break;
+         case 32:
+            *((uint32_t *)data) = constant->values[i].u32;
+            break;
+         case 16:
+            *((uint16_t *)data) = constant->values[i].u16;
+            break;
+         case 8:
+            *((uint8_t *)data) = constant->values[i].u8;
+            break;
+         default:
+            unreachable("Invalid base type");
+         }
+
+         data += glsl_get_bit_size(type) / 8;
+      }
+   }
+}
+
 struct clc_dxil_object *
 clc_to_dxil(struct clc_context *ctx,
             const struct clc_object *obj,
@@ -1057,14 +1107,7 @@ clc_to_dxil(struct clc_context *ctx,
             if (!data)
                goto err_free_dxil;
 
-            const struct glsl_type *elm_type = glsl_get_array_element(var->type);
-            assert(glsl_type_is_scalar(elm_type)); // TODO: recursive iteration through types?
-            assert(glsl_get_base_type(elm_type) == GLSL_TYPE_UINT); // TODO: more base-types
-            int elm_size = glsl_get_cl_size(elm_type);
-            for (unsigned i = 0; i < var->constant_initializer->num_elements; i++)
-               memcpy(data + elm_size * i,
-                      &var->constant_initializer->elements[i]->values[0].u32, elm_size);
-
+            copy_const_initializer(var->constant_initializer, var->type, data);
             metadata->consts[metadata->num_consts].data = data;
             metadata->consts[metadata->num_consts].size = size;
             metadata->consts[metadata->num_consts].uav_id = var->data.binding;
