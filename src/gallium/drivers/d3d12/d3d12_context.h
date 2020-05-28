@@ -205,6 +205,7 @@ struct d3d12_context {
    struct d3d12_descriptor_pool *view_pool;
 
    struct d3d12_descriptor_handle null_srvs[RESOURCE_DIMENSION_COUNT];
+   struct d3d12_descriptor_handle null_rtv;
    struct d3d12_descriptor_handle null_sampler;
 
    PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE D3D12SerializeVersionedRootSignature;

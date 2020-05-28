@@ -1285,6 +1285,20 @@ d3d12_init_null_srvs(struct d3d12_context *ctx)
 }
 
 static void
+d3d12_init_null_rtv(struct d3d12_context *ctx)
+{
+   struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
+
+   D3D12_RENDER_TARGET_VIEW_DESC rtv = {};
+   rtv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+   rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+   rtv.Texture2D.MipSlice = 0;
+   rtv.Texture2D.PlaneSlice = 0;
+   d3d12_descriptor_heap_alloc_handle(ctx->rtv_heap, &ctx->null_rtv);
+   screen->dev->CreateRenderTargetView(NULL, &rtv, ctx->null_rtv.cpu_handle);
+}
+
+static void
 d3d12_init_null_sampler(struct d3d12_context *ctx)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
@@ -1458,6 +1472,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    }
 
    d3d12_init_null_srvs(ctx);
+   d3d12_init_null_rtv(ctx);
    d3d12_init_null_sampler(ctx);
 
    ctx->validation_tools = d3d12_validator_create();
