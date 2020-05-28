@@ -97,8 +97,8 @@ init_buffer(struct d3d12_screen *screen,
    buf_desc.alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
    buf_desc.usage = (pb_usage_flags)PB_USAGE_ALL;
    res->format = DXGI_FORMAT_UNKNOWN;
-   buf = screen->bufmgr->create_buffer(screen->bufmgr,
-                                       templ->width0, &buf_desc);
+   buf = screen->slab_bufmgr->create_buffer(screen->slab_bufmgr,
+                                            templ->width0, &buf_desc);
    if (!buf)
       return false;
    res->bo = d3d12_bo_wrap_buffer(buf);

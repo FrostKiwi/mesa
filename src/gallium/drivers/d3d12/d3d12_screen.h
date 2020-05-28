@@ -45,6 +45,8 @@ struct d3d12_screen {
 
    struct slab_parent_pool transfer_pool;
    struct pb_manager *bufmgr;
+   struct pb_manager *cache_bufmgr;
+   struct pb_manager *slab_bufmgr;
 
    /* capabilities */
    D3D_FEATURE_LEVEL max_feature_level;

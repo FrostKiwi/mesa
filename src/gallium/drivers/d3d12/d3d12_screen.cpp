@@ -549,6 +549,8 @@ d3d12_destroy_screen(struct pipe_screen *pscreen)
 {
    struct d3d12_screen *screen = d3d12_screen(pscreen);
    slab_destroy_parent(&screen->transfer_pool);
+   screen->slab_bufmgr->destroy(screen->slab_bufmgr);
+   screen->cache_bufmgr->destroy(screen->cache_bufmgr);
    screen->bufmgr->destroy(screen->bufmgr);
    FREE(screen);
 }
@@ -834,7 +836,15 @@ d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
    d3d12_screen_resource_init(&screen->base);
    slab_create_parent(&screen->transfer_pool, sizeof(struct d3d12_transfer), 16);
 
+   struct pb_desc desc;
+   desc.alignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
+   desc.usage = (pb_usage_flags)PB_USAGE_ALL;
+
    screen->bufmgr = d3d12_bufmgr_create(screen);
+   screen->cache_bufmgr = pb_cache_manager_create(screen->bufmgr, 0xfffff, 2, 0, 64 * 1024 * 1024);
+   screen->slab_bufmgr = pb_slab_range_manager_create(screen->cache_bufmgr, 16, 512,
+                                                      D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
+                                                      &desc);
 
    return &screen->base;
 

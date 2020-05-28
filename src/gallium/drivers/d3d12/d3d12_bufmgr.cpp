@@ -145,8 +145,12 @@ d3d12_bo_unreference(struct d3d12_bo *bo)
    assert(p_atomic_read(&bo->refcount) > 0);
 
    if (p_atomic_dec_zero(&bo->refcount)) {
-      delete bo->trans_state;
-      bo->res->Release();
+      if (bo->buffer) {
+         pb_reference(&bo->buffer, NULL);
+      } else {
+         delete bo->trans_state;
+         bo->res->Release();
+      }
       FREE(bo);
    }
 }
