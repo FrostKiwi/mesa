@@ -380,6 +380,7 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
 
    BINOP_CASE(ADD)
    BINOP_CASE(MUL)
+   BINOP_CASE(AVG)
    UNOP_CASE(FRC)
    UNOP_CASE(RNDU)
    UNOP_CASE(RNDD)
