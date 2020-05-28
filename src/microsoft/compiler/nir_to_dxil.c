@@ -3265,7 +3265,6 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
           instr->op == nir_texop_txf_ms ||
           nir_tex_instr_is_query(instr) ||
           ctx->samplers_used & (1ull << instr->sampler_index));
-   assert(instr->op == nir_texop_txf || ctx->samplers_used & (1ull << instr->sampler_index));
 
    struct texop_parameters params;
    memset(&params, 0, sizeof(struct texop_parameters));
