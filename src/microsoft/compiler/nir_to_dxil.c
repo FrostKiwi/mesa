@@ -796,8 +796,18 @@ emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned count)
 }
 
 static bool
-emit_globals(struct ntd_context *ctx, uint64_t global_inputs)
+emit_globals(struct ntd_context *ctx, nir_shader *s)
 {
+   unsigned size = util_bitcount64(s->info.cs.global_inputs);
+
+   nir_foreach_variable(var, &s->uniforms) {
+      if (var->data.mode == nir_var_mem_ssbo)
+         size++;
+   }
+
+   if (!size)
+      return true;
+
    const struct dxil_type *type = dxil_module_get_int_type(&ctx->mod, 32);
    if (!type)
       return false;
@@ -807,7 +817,6 @@ emit_globals(struct ntd_context *ctx, uint64_t global_inputs)
    if (!struct_type)
       return false;
 
-   unsigned size = util_bitcount64(global_inputs);
    const struct dxil_type *array_type =
       dxil_module_get_array_type(&ctx->mod, struct_type, size);
    if (!array_type)
@@ -3723,8 +3732,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
 
    /* UAVs */
    if (s->info.stage == MESA_SHADER_KERNEL) {
-      if (s->info.cs.global_inputs &&
-          !emit_globals(ctx, s->info.cs.global_inputs))
+      if (!emit_globals(ctx, s))
          return false;
 
       ctx->consts = _mesa_pointer_hash_table_create(ctx->ralloc_ctx);
