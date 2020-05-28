@@ -50,6 +50,9 @@ d3d12_bo_get_size(struct d3d12_bo *bo)
 }
 
 struct d3d12_bo *
+d3d12_bo_new(ID3D12Device *dev, uint64_t size, uint64_t alignment);
+
+struct d3d12_bo *
 d3d12_bo_wrap_res(ID3D12Resource *res, enum pipe_format format);
 
 static inline void

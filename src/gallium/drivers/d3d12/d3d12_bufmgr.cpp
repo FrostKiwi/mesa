@@ -68,6 +68,39 @@ d3d12_bo_wrap_res(ID3D12Resource *res, enum pipe_format format)
    return bo;
 }
 
+struct d3d12_bo *
+d3d12_bo_new(ID3D12Device *dev, uint64_t size, uint64_t alignment)
+{
+   ID3D12Resource *res;
+
+   D3D12_RESOURCE_DESC res_desc;
+   res_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+   res_desc.Format = DXGI_FORMAT_UNKNOWN;
+   res_desc.Alignment = alignment;
+   res_desc.Width = size;
+   res_desc.Height = 1;
+   res_desc.DepthOrArraySize = 1;
+   res_desc.MipLevels = 1;
+   res_desc.SampleDesc.Count = 1;
+   res_desc.SampleDesc.Quality = 0;
+   res_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+   res_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+   D3D12_HEAP_PROPERTIES heap_pris = dev->GetCustomHeapProperties(0, D3D12_HEAP_TYPE_UPLOAD);
+   HRESULT hres = dev->CreateCommittedResource(&heap_pris,
+                                               D3D12_HEAP_FLAG_NONE,
+                                               &res_desc,
+                                               D3D12_RESOURCE_STATE_COMMON,
+                                               NULL,
+                                               __uuidof(ID3D12Resource),
+                                               (void **)&res);
+
+   if (FAILED(hres))
+      return NULL;
+
+   return d3d12_bo_wrap_res(res, PIPE_FORMAT_NONE);
+}
+
 void
 d3d12_bo_unreference(struct d3d12_bo *bo)
 {
