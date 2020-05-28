@@ -1046,10 +1046,8 @@ brw_nir_apply_sampler_key(nir_shader *nir,
    };
 
    /* Iron Lake and prior require lowering of all rectangle textures */
-   if (devinfo->gen < 6) {
+   if (devinfo->gen < 6)
       tex_options.lower_rect = true;
-      tex_options.lower_rect_normalizes_txf = true;
-   }
 
    /* Prior to Broadwell, our hardware can't actually do GL_CLAMP */
    if (devinfo->gen < 8) {
