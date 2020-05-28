@@ -27,10 +27,29 @@
 
 #include "D3D12ResourceState.h"
 
+#include "pipebuffer/pb_buffer.h"
+#include "pipebuffer/pb_bufmgr.h"
+
 #include "util/format/u_format.h"
 #include "util/u_memory.h"
 
 #include <d3d12.h>
+
+struct d3d12_bufmgr {
+   struct pb_manager base;
+
+   ID3D12Device *dev;
+};
+
+extern const struct pb_vtbl d3d12_buffer_vtbl;
+
+static inline struct d3d12_bufmgr *
+d3d12_bufmgr(struct pb_manager *mgr)
+{
+   assert(mgr);
+
+   return (struct d3d12_bufmgr *)mgr;
+}
 
 static struct TransitionableResourceState *
 create_trans_state(ID3D12Resource *res, enum pipe_format format)
@@ -165,4 +184,122 @@ d3d12_bo_unmap(struct d3d12_bo *bo, D3D12_RANGE *range)
    }
 
    base_bo->res->Unmap(0, range);
+}
+
+static void
+d3d12_buffer_destroy(struct pb_buffer *pbuf)
+{
+   struct d3d12_buffer *buf = d3d12_buffer(pbuf);
+
+   d3d12_bo_unmap(buf->bo, &buf->range);
+   d3d12_bo_unreference(buf->bo);
+   FREE(buf);
+}
+
+static void *
+d3d12_buffer_map(struct pb_buffer *pbuf,
+                 enum pb_usage_flags flags,
+                 void *flush_ctx)
+{
+   return d3d12_buffer(pbuf)->map;
+}
+
+static void
+d3d12_buffer_unmap(struct pb_buffer *pbuf)
+{
+}
+
+static void
+d3d12_buffer_get_base_buffer(struct pb_buffer *buf,
+                             struct pb_buffer **base_buf,
+                             pb_size *offset)
+{
+   *base_buf = buf;
+   *offset = 0;
+}
+
+static enum pipe_error
+d3d12_buffer_validate(struct pb_buffer *pbuf,
+                      struct pb_validate *vl,
+                      enum pb_usage_flags flags )
+{
+   /* Always pinned */
+   return PIPE_OK;
+}
+
+static void
+d3d12_buffer_fence(struct pb_buffer *pbuf,
+                   struct pipe_fence_handle *fence )
+{
+}
+
+const struct pb_vtbl d3d12_buffer_vtbl = {
+   d3d12_buffer_destroy,
+   d3d12_buffer_map,
+   d3d12_buffer_unmap,
+   d3d12_buffer_validate,
+   d3d12_buffer_fence,
+   d3d12_buffer_get_base_buffer
+};
+
+static struct pb_buffer *
+d3d12_bufmgr_create_buffer(struct pb_manager *pmgr,
+                           pb_size size,
+                           const struct pb_desc *pb_desc)
+{
+   struct d3d12_bufmgr *mgr = d3d12_bufmgr(pmgr);
+   struct d3d12_buffer *buf;
+
+   buf = CALLOC_STRUCT(d3d12_buffer);
+   if (!buf)
+      return NULL;
+
+   pipe_reference_init(&buf->base.reference, 1);
+   buf->base.alignment = pb_desc->alignment;
+   buf->base.usage = pb_desc->usage;
+   buf->base.vtbl = &d3d12_buffer_vtbl;
+   buf->base.size = size;
+   buf->range.Begin = 0;
+   buf->range.End = size;
+
+   buf->bo = d3d12_bo_new(mgr->dev, size, pb_desc->alignment);
+   buf->map = d3d12_bo_map(buf->bo, &buf->range);
+   if (!buf->map) {
+      d3d12_bo_unreference(buf->bo);
+      FREE(buf);
+      return NULL;
+   }
+
+   return &buf->base;
+}
+
+static void
+d3d12_bufmgr_flush(struct pb_manager *mgr)
+{
+   /* No-op */
+}
+
+static void
+d3d12_bufmgr_destroy(struct pb_manager *_mgr)
+{
+   struct d3d12_bufmgr *mgr = d3d12_bufmgr(_mgr);
+   FREE(mgr);
+}
+
+struct pb_manager *
+d3d12_bufmgr_create(struct d3d12_screen *screen)
+{
+   struct d3d12_bufmgr *mgr;
+
+   mgr = CALLOC_STRUCT(d3d12_bufmgr);
+   if (!mgr)
+      return NULL;
+
+   mgr->base.destroy = d3d12_bufmgr_destroy;
+   mgr->base.create_buffer = d3d12_bufmgr_create_buffer;
+   mgr->base.flush = d3d12_bufmgr_flush;
+
+   mgr->dev = screen->dev;
+
+   return &mgr->base;
 }
