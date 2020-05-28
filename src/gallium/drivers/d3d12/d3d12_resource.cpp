@@ -452,14 +452,27 @@ linear_offset(int x, int y, int z, unsigned stride, unsigned layer_stride)
           z * layer_stride;
 }
 
-static void *
-synchronize_map(struct d3d12_context *ctx,
-                struct d3d12_resource *res,
-                unsigned usage,
-                D3D12_RANGE *range)
+static D3D12_RANGE
+linear_range(const struct pipe_box *box, unsigned stride, unsigned layer_stride)
 {
-   void *ptr;
+   D3D12_RANGE range;
 
+   range.Begin = linear_offset(box->x, box->y, box->z,
+                               stride, layer_stride);
+   range.End = linear_offset(box->x + box->width,
+                             box->y + box->height - 1,
+                             box->z + box->depth - 1,
+                             stride, layer_stride);
+
+   return range;
+}
+
+static bool
+synchronize(struct d3d12_context *ctx,
+            struct d3d12_resource *res,
+            unsigned usage,
+            D3D12_RANGE *range)
+{
    assert(can_map_directly(&res->base));
 
    /* Check whether that range contains valid data; if not, we might not need to sync */
@@ -471,7 +484,7 @@ synchronize_map(struct d3d12_context *ctx,
 
    if (!(usage & PIPE_TRANSFER_UNSYNCHRONIZED) && resource_is_busy(ctx, res)) {
       if (usage & PIPE_TRANSFER_DONTBLOCK)
-         return NULL;
+         return false;
 
       if (d3d12_batch_has_references(d3d12_current_batch(ctx), res)) {
          d3d12_flush_cmdlist_and_wait(ctx);
@@ -488,10 +501,7 @@ synchronize_map(struct d3d12_context *ctx,
       util_range_add(&res->base, &res->valid_buffer_range,
                      range->Begin, range->End);
 
-   if (FAILED(res->res->Map(0, range, &ptr)))
-      return NULL;
-
-   return ((uint8_t *)ptr) + range->Begin;
+   return true;
 }
 
 /* A wrapper to make sure local resources are freed and unmapped with
@@ -633,29 +643,23 @@ d3d12_transfer_map(struct pipe_context *pctx,
    range.Begin = 0;
 
    void *ptr;
-   if (pres->target == PIPE_BUFFER) {
-      range.Begin = box->x;
-      range.End = box->x + box->width;
+   if (can_map_directly(&res->base)) {
+      if (pres->target == PIPE_BUFFER) {
+         ptrans->stride = 0;
+         ptrans->layer_stride = 0;
+      } else {
+         ptrans->stride = util_format_get_stride(pres->format, box->width);
+         ptrans->layer_stride = util_format_get_2d_size(pres->format,
+                                                        ptrans->stride,
+                                                        box->height);
+      }
 
-      ptr = synchronize_map(ctx, res, usage, &range);
-
-      ptrans->stride = 0;
-      ptrans->layer_stride = 0;
-   } else if (res->res->GetDesc().Layout == D3D12_TEXTURE_LAYOUT_ROW_MAJOR) {
-
-      ptrans->stride = util_format_get_stride(pres->format, box->width);
-      ptrans->layer_stride = util_format_get_2d_size(pres->format,
-                                                     ptrans->stride,
-                                                     box->height);
-
-      range.Begin = linear_offset(box->x, box->y, box->z,
-                                  ptrans->stride, ptrans->layer_stride);
-      range.End = linear_offset(box->x + box->width,
-                                box->y + box->height,
-                                box->z + box->depth,
-                                ptrans->stride, ptrans->layer_stride);
-
-      ptr = synchronize_map(ctx, res, usage, &range);
+      range = linear_range(box, ptrans->stride, ptrans->layer_stride);
+      if (!synchronize(ctx, res, usage, &range))
+         return NULL;
+      if (FAILED(res->res->Map(0, &range, &ptr)))
+         return NULL;
+      ptr = (uint8_t *)ptr + range.Begin;
    } else if ((unlikely(pres->format == PIPE_FORMAT_Z24_UNORM_S8_UINT)) &&
               (usage & PIPE_TRANSFER_READ)) {
       ptr = read_zs_surface(ctx, res, box, trans);
@@ -688,7 +692,8 @@ d3d12_transfer_map(struct pipe_context *pctx,
       range.Begin = 0;
       range.End = ptrans->layer_stride * box->depth;
 
-      ptr = synchronize_map(ctx, staging_res, usage, &range);
+      if (FAILED(staging_res->res->Map(0, &range, &ptr)))
+         return NULL;
    }
 
    *transfer = ptrans;
