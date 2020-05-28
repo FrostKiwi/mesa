@@ -85,23 +85,31 @@ d3d12_resource_release(struct d3d12_resource *resource)
    resource->bo = NULL;
 }
 
-static struct pipe_resource *
-d3d12_resource_create(struct pipe_screen *pscreen,
-                      const struct pipe_resource *templ)
+static bool
+init_buffer(struct d3d12_screen *screen,
+            struct d3d12_resource *res,
+            const struct pipe_resource *templ)
 {
-   struct d3d12_screen *screen = d3d12_screen(pscreen);
-   struct d3d12_resource *res = CALLOC_STRUCT(d3d12_resource);
+   res->format = DXGI_FORMAT_UNKNOWN;
+   res->bo = d3d12_bo_new(screen->dev, templ->width0,
+                          D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
+   if (!res->bo)
+      return false;
+
+   return true;
+}
+
+static bool
+init_texture(struct d3d12_screen *screen,
+             struct d3d12_resource *res,
+             const struct pipe_resource *templ)
+{
    const uint32_t bind_ds_and_sv = PIPE_BIND_SAMPLER_VIEW | PIPE_BIND_DEPTH_STENCIL;
    const bool use_as_ds_and_sv = (templ->bind & bind_ds_and_sv) == bind_ds_and_sv;
    ID3D12Resource *d3d12_res;
 
-   res->base = *templ;
-
-   pipe_reference_init(&res->base.reference, 1);
-   res->base.screen = pscreen;
    res->mip_levels = templ->last_level + 1;
-   res->format = templ->target == PIPE_BUFFER ? DXGI_FORMAT_UNKNOWN :
-                 d3d12_get_format(templ->format);
+   res->format = d3d12_get_format(templ->format);
 
    D3D12_RESOURCE_DESC desc;
    desc.Format = use_as_ds_and_sv ?
@@ -117,10 +125,6 @@ d3d12_resource_create(struct pipe_screen *pscreen,
    desc.SampleDesc.Quality = 0; /* TODO: figure this one out */
 
    switch (templ->target) {
-   case PIPE_BUFFER:
-      desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-      break;
-
    case PIPE_TEXTURE_1D:
    case PIPE_TEXTURE_1D_ARRAY:
       desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D;
@@ -163,8 +167,7 @@ d3d12_resource_create(struct pipe_screen *pscreen,
    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
    if ((templ->bind & (PIPE_BIND_SCANOUT |
                       PIPE_BIND_SHARED | PIPE_BIND_LINEAR)) ||
-       templ->usage == PIPE_USAGE_STAGING ||
-       templ->target == PIPE_BUFFER)
+       templ->usage == PIPE_USAGE_STAGING)
       desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
    D3D12_HEAP_TYPE heap_type = D3D12_HEAP_TYPE_DEFAULT;
@@ -173,8 +176,7 @@ d3d12_resource_create(struct pipe_screen *pscreen,
                       PIPE_BIND_SCANOUT |
                       PIPE_BIND_SHARED))
       heap_type = D3D12_HEAP_TYPE_READBACK;
-   else if (templ->target == PIPE_BUFFER ||
-       templ->usage == PIPE_USAGE_STAGING)
+   else if (templ->usage == PIPE_USAGE_STAGING)
       heap_type = D3D12_HEAP_TYPE_UPLOAD;
 
    D3D12_HEAP_PROPERTIES heap_pris = screen->dev->GetCustomHeapProperties(0, heap_type);
@@ -186,10 +188,8 @@ d3d12_resource_create(struct pipe_screen *pscreen,
                                                    NULL,
                                                    __uuidof(ID3D12Resource),
                                                    (void **)&d3d12_res);
-   if (FAILED(hres)) {
-      FREE(res);
-      return NULL;
-   }
+   if (FAILED(hres))
+      return false;
 
    if (screen->winsys && (templ->bind & (PIPE_BIND_DISPLAY_TARGET |
                                          PIPE_BIND_SCANOUT |
@@ -205,6 +205,34 @@ d3d12_resource_create(struct pipe_screen *pscreen,
    }
 
    res->bo = d3d12_bo_wrap_res(d3d12_res, templ->format);
+
+   return true;
+}
+
+static struct pipe_resource *
+d3d12_resource_create(struct pipe_screen *pscreen,
+                      const struct pipe_resource *templ)
+{
+   struct d3d12_screen *screen = d3d12_screen(pscreen);
+   struct d3d12_resource *res = CALLOC_STRUCT(d3d12_resource);
+   bool ret;
+
+   res->base = *templ;
+
+   pipe_reference_init(&res->base.reference, 1);
+   res->base.screen = pscreen;
+
+   if (templ->target == PIPE_BUFFER) {
+      ret = init_buffer(screen, res, templ);
+   } else {
+      ret = init_texture(screen, res, templ);
+   }
+
+   if (!ret) {
+      FREE(res);
+      return NULL;
+   }
+
    init_valid_range(res);
 
    return &res->base;
