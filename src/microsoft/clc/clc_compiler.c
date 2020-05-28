@@ -941,15 +941,18 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, clc_lower_global_to_ssbo);
    NIR_PASS_V(nir, dxil_nir_lower_deref_ssbo);
 
+   assert(nir->scratch_size == 0);
    NIR_PASS_V(nir, nir_lower_vars_to_explicit_types,
-              nir_var_mem_shared, glsl_get_cl_type_size_align);
+              nir_var_mem_shared | nir_var_function_temp,
+              glsl_get_cl_type_size_align);
 
    assert(nir->info.cs.ptr_size == 64);
    NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_ssbo,
               nir_address_format_32bit_index_offset_pack64);
    NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_shader_in,
               nir_address_format_32bit_global);
-   NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_shared,
+   NIR_PASS_V(nir, nir_lower_explicit_io,
+              nir_var_mem_shared | nir_var_function_temp,
               nir_address_format_32bit_offset_as_64bit);
 
    NIR_PASS_V(nir, nir_lower_system_values);
