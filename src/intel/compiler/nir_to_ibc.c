@@ -379,6 +379,25 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    BINOP_CASE(ishr, SHR)
    BINOP_CASE(ushr, SHR)
 
+   case nir_op_irhadd:
+   case nir_op_urhadd:
+      assert(ibc_type_bit_size(dest_type) < 64);
+      dest = ibc_AVG(b, dest_type, src[0], src[1]);
+      break;
+
+   case nir_op_ihadd:
+   case nir_op_uhadd: {
+      assert(nir_dest_bit_size(instr->dest.dest) < 64);
+
+      /* AVG(x, y) - ((x ^ y) & 1) */
+      ibc_ref t1 = ibc_AVG(b, dest_type, src[0], src[1]);
+      ibc_ref t2 = ibc_AND(b, dest_type,
+                           ibc_XOR(b, IBC_TYPE_UD, src[0], src[1]),
+                           ibc_imm_ud(1));
+      dest = ibc_ADD(b, dest_type, t1, ibc_NEG(b, dest_type, t2));
+      break;
+   }
+
    case nir_op_ubfe:
    case nir_op_ibfe:
       assert(ibc_type_bit_size(dest_type) < 64);
