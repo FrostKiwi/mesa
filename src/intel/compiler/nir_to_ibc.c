@@ -379,6 +379,15 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    BINOP_CASE(ishr, SHR)
    BINOP_CASE(ushr, SHR)
 
+   case nir_op_imul_32x16:
+   case nir_op_umul_32x16: {
+      enum ibc_type wordtype =
+         (dest_type & ~IBC_TYPE_32_BIT) | IBC_TYPE_16_BIT;
+
+      dest = ibc_MUL(b, dest_type, src[0], ibc_UNPACK(b, wordtype, src[1], 0));
+      break;
+   }
+
    case nir_op_iadd_sat:
    case nir_op_uadd_sat: {
       dest = ibc_ADD(b, dest_type, src[0], src[1]);
