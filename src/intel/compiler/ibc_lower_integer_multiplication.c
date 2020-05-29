@@ -43,20 +43,23 @@ build_MACH(ibc_builder *b, enum ibc_type dest_type, ibc_ref accum,
 static bool
 lower_mul(ibc_builder *b, ibc_alu_instr *alu)
 {
+   /* We only handle integer non-vector types in this pass. */
+   if (ibc_type_base_type(alu->dest.type) != IBC_TYPE_INT &&
+       ibc_type_base_type(alu->dest.type) != IBC_TYPE_UINT)
+      return false;
+
+   if (alu->dest.type & IBC_TYPE_VECTOR)
+      return false;
+
    b->cursor = ibc_after_instr(&alu->instr);
    bool progress = false;
 
    ibc_builder_push_instr_group(b, &alu->instr);
 
-   if ((alu->dest.type == IBC_TYPE_Q ||
-        alu->dest.type == IBC_TYPE_UQ) &&
-       (alu->src[0].ref.type == IBC_TYPE_Q ||
-        alu->src[0].ref.type == IBC_TYPE_UQ) &&
-       (alu->src[1].ref.type == IBC_TYPE_Q ||
-        alu->src[1].ref.type == IBC_TYPE_UQ)) {
+   if (ibc_type_bit_size(alu->dest.type) == 64) {
       assert(!"unimplemented");
-   } else if (alu->dest.type == IBC_TYPE_D ||
-              alu->dest.type == IBC_TYPE_UD) {
+   } else if (ibc_type_bit_size(alu->src[0].ref.type) == 32 &&
+              ibc_type_bit_size(alu->src[1].ref.type) == 32) {
       ibc_ref src1_uw = ibc_MOV(b, IBC_TYPE_UW, alu->src[1].ref);
 
       if (alu->instr.simd_width == 1)
