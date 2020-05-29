@@ -57,6 +57,42 @@ d3d12_resource(struct pipe_resource *r)
    return (struct d3d12_resource *)r;
 }
 
+/* Returns the underlying ID3D12Resource and offset for this resource */
+static inline ID3D12Resource *
+d3d12_resource_underlying(struct d3d12_resource *res, uint64_t *offset)
+{
+   *offset = 0;
+   return res->res;
+}
+
+
+/* Returns the underlying ID3D12Resource for this resource.
+ * This helper should only be called for resources that are known
+ * to own the complete ID3D12Resource. */
+static inline ID3D12Resource *
+d3d12_resource_resource(struct d3d12_resource *res)
+{
+   ID3D12Resource *ret;
+   uint64_t offset;
+   ret = d3d12_resource_underlying(res, &offset);
+   assert(ret == NULL || offset == 0);
+   return ret;
+}
+
+static inline struct TransitionableResourceState *
+d3d12_resource_state(struct d3d12_resource *res)
+{
+   return res->trans_state;
+}
+
+static inline D3D12_GPU_VIRTUAL_ADDRESS
+d3d12_resource_gpu_virtual_address(struct d3d12_resource *res)
+{
+   uint64_t offset;
+   ID3D12Resource *base_res = d3d12_resource_underlying(res, &offset);
+   return base_res->GetGPUVirtualAddress() + offset;
+}
+
 void
 d3d12_resource_release(struct d3d12_resource *res);
 

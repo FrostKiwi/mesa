@@ -560,6 +560,7 @@ d3d12_flush_frontbuffer(struct pipe_screen * pscreen,
    struct d3d12_screen *screen = d3d12_screen(pscreen);
    struct sw_winsys *winsys = screen->winsys;
    struct d3d12_resource *res = d3d12_resource(pres);
+   ID3D12Resource *d3d12_res = d3d12_resource_resource(res);
 
    if (!winsys)
      return;
@@ -568,14 +569,14 @@ d3d12_flush_frontbuffer(struct pipe_screen * pscreen,
    void *map = winsys->displaytarget_map(winsys, res->dt, 0);
 
    if (map) {
-      res->res->ReadFromSubresource(map, res->dt_stride, 0, 0, NULL);
+      d3d12_res->ReadFromSubresource(map, res->dt_stride, 0, 0, NULL);
       winsys->displaytarget_unmap(winsys, res->dt);
    }
 
    ID3D12SharingContract *sharing_contract;
    if (SUCCEEDED(screen->cmdqueue->QueryInterface(__uuidof(sharing_contract),
                                                   (void **)&sharing_contract)))
-      sharing_contract->Present(res->res, 0, WindowFromDC((HDC)winsys_drawable_handle));
+      sharing_contract->Present(d3d12_res, 0, WindowFromDC((HDC)winsys_drawable_handle));
 
    winsys->displaytarget_display(winsys, res->dt, winsys_drawable_handle, sub_box);
 }

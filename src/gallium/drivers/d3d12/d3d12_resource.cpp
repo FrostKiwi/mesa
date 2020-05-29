@@ -262,7 +262,7 @@ d3d12_resource_get_handle(struct pipe_screen *pscreen,
    if (handle->type != WINSYS_HANDLE_TYPE_D3D12_RES)
       return false;
 
-   handle->com_obj = res->res;
+   handle->com_obj = d3d12_resource_resource(res);
    return true;
 }
 
@@ -286,31 +286,33 @@ fill_texture_location(struct d3d12_resource *res,
 
    tex_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
    tex_loc.SubresourceIndex = subres;
-   tex_loc.pResource = res->res;
+   tex_loc.pResource = d3d12_resource_resource(res);
    return tex_loc;
 }
 
 static D3D12_TEXTURE_COPY_LOCATION
 fill_buffer_location(struct d3d12_context *ctx,
-                     ID3D12Resource *res,
-                     ID3D12Resource *staging_res,
+                     struct d3d12_resource *res,
+                     struct d3d12_resource *staging_res,
                      struct d3d12_transfer *trans,
                      unsigned depth,
                      unsigned resid = 0)
 {
    D3D12_TEXTURE_COPY_LOCATION buf_loc = {0};
    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
-   auto descr = res->GetDesc();
+   uint64_t offset = 0;
+   auto descr = d3d12_resource_underlying(res, &offset)->GetDesc();
    ID3D12Device* dev = d3d12_screen(ctx->base.screen)->dev;
    dev->GetCopyableFootprints(&descr, resid, 1, 0, &footprint, nullptr, nullptr, nullptr);
 
    buf_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+   buf_loc.pResource = d3d12_resource_underlying(staging_res, &offset);
    buf_loc.PlacedFootprint = footprint;
+   buf_loc.PlacedFootprint.Offset += offset;
    buf_loc.PlacedFootprint.Footprint.Width = trans->base.box.width;
    buf_loc.PlacedFootprint.Footprint.Height = trans->base.box.height;
    buf_loc.PlacedFootprint.Footprint.Depth = depth;
    buf_loc.PlacedFootprint.Footprint.RowPitch = trans->base.stride;
-   buf_loc.pResource = staging_res;
 
    return buf_loc;
 }
@@ -352,7 +354,7 @@ transfer_buf_to_image_part(struct d3d12_context *ctx,
 {
    struct copy_info copy_info;
    copy_info.src = staging_res;
-   copy_info.src_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans, depth, z);
+   copy_info.src_loc = fill_buffer_location(ctx, res, staging_res, trans, depth, z);
    copy_info.src_loc.PlacedFootprint.Offset = (z  - start_z) * trans->base.layer_stride;
    copy_info.src_box = nullptr;
    copy_info.dst = res;
@@ -410,7 +412,7 @@ transfer_image_part_to_buf(struct d3d12_context *ctx,
    copy_info.src_loc = fill_texture_location(res, trans, resid + z);
    copy_info.src_box = &src_box;
    copy_info.dst = staging_res;
-   copy_info.dst_loc = fill_buffer_location(ctx, res->res, staging_res->res, trans,
+   copy_info.dst_loc = fill_buffer_location(ctx, res, staging_res, trans,
                                             trans->base.box.depth, resid + z);
    copy_info.dst_loc.PlacedFootprint.Offset = (z  - start_layer) * trans->base.layer_stride;
    copy_info.dst_x = copy_info.dst_y = copy_info.dst_z = 0;

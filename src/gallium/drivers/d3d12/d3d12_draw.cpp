@@ -64,7 +64,7 @@ fill_cbv_descriptors(struct d3d12_context *ctx,
       d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
                                       SubresourceTransitionFlags_TransitionPreDraw);
       D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc = {};
-      cbv_desc.BufferLocation = res->res->GetGPUVirtualAddress() + buffer->buffer_offset;
+      cbv_desc.BufferLocation = d3d12_resource_gpu_virtual_address(res) + buffer->buffer_offset;
       cbv_desc.SizeInBytes = align(buffer->buffer_size, 256);
       d3d12_batch_reference_resource(batch, res);
 
@@ -424,7 +424,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    if (index_buffer) {
       D3D12_INDEX_BUFFER_VIEW ibv;
       struct d3d12_resource *res = d3d12_resource(index_buffer);
-      ibv.BufferLocation = res->res->GetGPUVirtualAddress() + index_offset;
+      ibv.BufferLocation = d3d12_resource_gpu_virtual_address(res) + index_offset;
       ibv.SizeInBytes = res->base.width0 - index_offset;
       ibv.Format = ib_format(dinfo->index_size);
       d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_INDEX_BUFFER,

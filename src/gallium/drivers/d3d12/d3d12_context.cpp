@@ -796,7 +796,8 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
    }
 
    d3d12_descriptor_pool_alloc_handle(ctx->view_pool, &sampler_view->handle);
-   screen->dev->CreateShaderResourceView(res->res, &desc, sampler_view->handle.cpu_handle);
+   screen->dev->CreateShaderResourceView(d3d12_resource_resource(res), &desc,
+                                         sampler_view->handle.cpu_handle);
 
    return &sampler_view->base;
 }
@@ -951,7 +952,7 @@ d3d12_set_vertex_buffers(struct pipe_context *pctx,
    for (unsigned i = 0; i < ctx->num_vbs; ++i) {
       const struct pipe_vertex_buffer* buf = ctx->vbs + i;
       struct d3d12_resource *res = d3d12_resource(buf->buffer.resource);
-      ctx->vbvs[i].BufferLocation = res->res->GetGPUVirtualAddress() + buf->buffer_offset;
+      ctx->vbvs[i].BufferLocation = d3d12_resource_gpu_virtual_address(res) + buf->buffer_offset;
       ctx->vbvs[i].StrideInBytes = buf->stride;
       ctx->vbvs[i].SizeInBytes = res->base.width0 - buf->buffer_offset;
    }
@@ -1130,7 +1131,7 @@ d3d12_transition_resource_state(struct d3d12_context *ctx,
                                 D3D12_RESOURCE_STATES state,
                                 SubresourceTransitionFlags flags)
 {
-   TransitionableResourceState *xres = res->trans_state;
+   TransitionableResourceState *xres = d3d12_resource_state(res);
    ctx->resource_state_manager->TransitionResource(xres, state, flags);
 }
 
@@ -1142,7 +1143,7 @@ d3d12_transition_subresources_state(struct d3d12_context *ctx,
                                     D3D12_RESOURCE_STATES state,
                                     SubresourceTransitionFlags flags)
 {
-   TransitionableResourceState *xres = res->trans_state;
+   TransitionableResourceState *xres = d3d12_resource_state(res);
 
    for (uint32_t l = 0; l < num_levels; l++) {
       const uint32_t level = start_level + l;
