@@ -34,8 +34,6 @@
 
 #include "state_tracker/sw_winsys.h"
 
-#include "D3D12ResourceState.h"
-
 #include <d3d12.h>
 #include <memory>
 
@@ -48,16 +46,21 @@ can_map_directly(struct pipe_resource *pres)
 }
 
 static void
+init_valid_range(struct d3d12_resource *res)
+{
+   if (can_map_directly(&res->base))
+      util_range_init(&res->valid_buffer_range);
+}
+
+static void
 d3d12_resource_destroy(struct pipe_screen *pscreen,
                        struct pipe_resource *presource)
 {
    struct d3d12_resource *resource = d3d12_resource(presource);
-   if (resource->trans_state != nullptr)
-      delete resource->trans_state;
    if (can_map_directly(presource))
       util_range_destroy(&resource->valid_buffer_range);
-   if (resource->res)
-      resource->res->Release();
+   if (resource->bo)
+      d3d12_bo_unreference(resource->bo);
    FREE(resource);
 }
 
@@ -68,7 +71,7 @@ resource_is_busy(struct d3d12_context *ctx,
    bool busy = false;
 
    for (int i = 0; i < ARRAY_SIZE(ctx->batches); i++)
-      busy |= d3d12_batch_has_references(&ctx->batches[i], res);
+      busy |= d3d12_batch_has_references(&ctx->batches[i], res->bo);
 
    return busy;
 }
@@ -76,32 +79,10 @@ resource_is_busy(struct d3d12_context *ctx,
 void
 d3d12_resource_release(struct d3d12_resource *resource)
 {
-   if (!resource->res)
+   if (!resource->bo)
       return;
-   resource->res->Release();
-   resource->res = NULL;
-}
-
-static void
-init_resource_state(struct d3d12_resource *res)
-{
-   D3D12_RESOURCE_DESC desc = res->res->GetDesc();
-
-   // Calculate the total number of subresources
-   unsigned arraySize = desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ?
-                        1 : desc.DepthOrArraySize;
-   unsigned total_subresources = desc.MipLevels *
-                                 arraySize *
-                                 d3d12_non_opaque_plane_count(desc.Format);
-   total_subresources *= util_format_has_stencil(util_format_description(res->base.format)) ?
-                         2 : 1;
-
-   res->trans_state = new TransitionableResourceState(res->res,
-                                                      total_subresources, 
-                                                      !!(desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS));
-
-   if (can_map_directly(&res->base))
-      util_range_init(&res->valid_buffer_range);
+   d3d12_bo_unreference(resource->bo);
+   resource->bo = NULL;
 }
 
 static struct pipe_resource *
@@ -112,6 +93,7 @@ d3d12_resource_create(struct pipe_screen *pscreen,
    struct d3d12_resource *res = CALLOC_STRUCT(d3d12_resource);
    const uint32_t bind_ds_and_sv = PIPE_BIND_SAMPLER_VIEW | PIPE_BIND_DEPTH_STENCIL;
    const bool use_as_ds_and_sv = (templ->bind & bind_ds_and_sv) == bind_ds_and_sv;
+   ID3D12Resource *d3d12_res;
 
    res->base = *templ;
 
@@ -203,7 +185,7 @@ d3d12_resource_create(struct pipe_screen *pscreen,
                                                    D3D12_RESOURCE_STATE_COMMON,
                                                    NULL,
                                                    __uuidof(ID3D12Resource),
-                                                   (void **)&res->res);
+                                                   (void **)&d3d12_res);
    if (FAILED(hres)) {
       FREE(res);
       return NULL;
@@ -222,7 +204,8 @@ d3d12_resource_create(struct pipe_screen *pscreen,
                                              &res->dt_stride);
    }
 
-   init_resource_state(res);
+   res->bo = d3d12_bo_wrap_res(d3d12_res, templ->format);
+   init_valid_range(res);
 
    return &res->base;
 }
@@ -244,8 +227,8 @@ d3d12_resource_from_handle(struct pipe_screen *pscreen,
    res->base.screen = pscreen;
    res->format = templ->target == PIPE_BUFFER ? DXGI_FORMAT_UNKNOWN :
                  d3d12_get_format(templ->format);
-   res->res = (ID3D12Resource *)handle->com_obj;
-   init_resource_state(res);
+   res->bo = d3d12_bo_wrap_res((ID3D12Resource *)handle->com_obj, templ->format);
+   init_valid_range(res);
    return &res->base;
 }
 
@@ -488,7 +471,7 @@ synchronize(struct d3d12_context *ctx,
       if (usage & PIPE_TRANSFER_DONTBLOCK)
          return false;
 
-      if (d3d12_batch_has_references(d3d12_current_batch(ctx), res)) {
+      if (d3d12_batch_has_references(d3d12_current_batch(ctx), res->bo)) {
          d3d12_flush_cmdlist_and_wait(ctx);
       } else {
          d3d12_foreach_submitted_batch(ctx, batch) {
@@ -518,7 +501,7 @@ struct local_resource {
    ~local_resource() {
       if (res) {
          if (mapped)
-            res->res->Unmap(0, nullptr);
+            d3d12_bo_unmap(res->bo, nullptr);
          pipe_resource_reference((struct pipe_resource **)&res, NULL);
       }
    }
@@ -526,10 +509,9 @@ struct local_resource {
    void *
    map() {
       void *ptr;
-      if (FAILED(res->res->Map(0, nullptr, &ptr)))  {
-         return NULL;
-      }
-      mapped = true;
+      ptr = d3d12_bo_map(res->bo, nullptr);
+      if (ptr)
+         mapped = true;
       return ptr;
    }
 
@@ -625,7 +607,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
    struct d3d12_context *ctx = d3d12_context(pctx);
    struct d3d12_resource *res = d3d12_resource(pres);
 
-   if (usage & PIPE_TRANSFER_MAP_DIRECTLY)
+   if (usage & PIPE_TRANSFER_MAP_DIRECTLY || !res->bo)
       return NULL;
 
    struct d3d12_transfer *trans = (struct d3d12_transfer *)slab_alloc(&ctx->transfer_pool);
@@ -659,9 +641,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
       range = linear_range(box, ptrans->stride, ptrans->layer_stride);
       if (!synchronize(ctx, res, usage, &range))
          return NULL;
-      if (FAILED(res->res->Map(0, &range, &ptr)))
-         return NULL;
-      ptr = (uint8_t *)ptr + range.Begin;
+      ptr = d3d12_bo_map(res->bo, &range);
    } else if ((unlikely(pres->format == PIPE_FORMAT_Z24_UNORM_S8_UINT)) &&
               (usage & PIPE_TRANSFER_READ)) {
       ptr = read_zs_surface(ctx, res, box, trans);
@@ -695,8 +675,7 @@ d3d12_transfer_map(struct pipe_context *pctx,
       range.Begin = 0;
       range.End = ptrans->layer_stride * box->depth;
 
-      if (FAILED(staging_res->res->Map(0, &range, &ptr)))
-         return NULL;
+      ptr = d3d12_bo_map(staging_res->bo, &range);
    }
 
    *transfer = ptrans;
@@ -721,7 +700,7 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
          range.Begin = 0;
          range.End = ptrans->layer_stride * ptrans->box.depth;
       }
-      staging_res->res->Unmap(0, &range);
+      d3d12_bo_unmap(staging_res->bo, &range);
 
       if (trans->base.usage & PIPE_TRANSFER_WRITE) {
          struct d3d12_context *ctx = d3d12_context(pctx);
@@ -734,7 +713,7 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
          range.Begin = ptrans->box.x;
          range.End = ptrans->box.x + ptrans->box.width;
       }
-      res->res->Unmap(0, &range);
+      d3d12_bo_unmap(res->bo, &range);
    }
 
    pipe_resource_reference(&ptrans->resource, NULL);

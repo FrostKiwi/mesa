@@ -38,8 +38,8 @@ d3d12_init_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
 
-   batch->resources = _mesa_set_create(NULL, _mesa_hash_pointer,
-                                       _mesa_key_pointer_equal);
+   batch->bos = _mesa_set_create(NULL, _mesa_hash_pointer,
+                                 _mesa_key_pointer_equal);
    batch->sampler_views = _mesa_set_create(NULL, _mesa_hash_pointer,
                                            _mesa_key_pointer_equal);
    batch->surfaces = _mesa_set_create(NULL, _mesa_hash_pointer,
@@ -48,7 +48,7 @@ d3d12_init_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
                                      _mesa_hash_pointer,
                                      _mesa_key_pointer_equal);
 
-   if (!batch->resources || !batch->sampler_views || !batch->surfaces || !batch->objects)
+   if (!batch->bos || !batch->sampler_views || !batch->surfaces || !batch->objects)
       return false;
 
    util_dynarray_init(&batch->zombie_samplers, NULL);
@@ -78,10 +78,10 @@ d3d12_init_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 }
 
 static void
-delete_resource(set_entry *entry)
+delete_bo(set_entry *entry)
 {
-   struct pipe_resource *pres = (struct pipe_resource *)entry->key;
-   pipe_resource_reference(&pres, NULL);
+   struct d3d12_bo *bo = (struct d3d12_bo *)entry->key;
+   d3d12_bo_unreference(bo);
 }
 
 static void
@@ -117,7 +117,7 @@ d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
    d3d12_fence_reference(&batch->fence, NULL);
 
-   _mesa_set_clear(batch->resources, delete_resource);
+   _mesa_set_clear(batch->bos, delete_bo);
    _mesa_set_clear(batch->sampler_views, delete_sampler_view);
    _mesa_set_clear(batch->surfaces, delete_surface);
    _mesa_set_clear(batch->objects, delete_object);
@@ -142,7 +142,7 @@ d3d12_destroy_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    batch->cmdalloc->Release();
    d3d12_descriptor_heap_free(batch->sampler_heap);
    d3d12_descriptor_heap_free(batch->view_heap);
-   _mesa_set_destroy(batch->resources, NULL);
+   _mesa_set_destroy(batch->bos, NULL);
    _mesa_set_destroy(batch->sampler_views, NULL);
    _mesa_set_destroy(batch->surfaces, NULL);
    _mesa_set_destroy(batch->objects, NULL);
@@ -203,18 +203,18 @@ d3d12_end_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 
 bool
 d3d12_batch_has_references(struct d3d12_batch *batch,
-                           struct d3d12_resource *res)
+                           struct d3d12_bo *bo)
 {
-   return (_mesa_set_search(batch->resources, res) != NULL);
+   return (_mesa_set_search(batch->bos, bo) != NULL);
 }
 
 void
 d3d12_batch_reference_resource(struct d3d12_batch *batch,
                                struct d3d12_resource *res)
 {
-   if (!d3d12_batch_has_references(batch, res)) {
-      _mesa_set_add(batch->resources, res);
-      pipe_reference(NULL, &res->base.reference);
+   if (!d3d12_batch_has_references(batch, res->bo)) {
+      _mesa_set_add(batch->bos, res->bo);
+      d3d12_bo_reference(res->bo);
    }
 }
 
