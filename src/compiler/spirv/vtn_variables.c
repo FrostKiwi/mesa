@@ -1384,7 +1384,10 @@ vtn_get_builtin_location(struct vtn_builder *b,
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInNumWorkgroups:
-      *location = SYSTEM_VALUE_NUM_WORK_GROUPS;
+      if (b->shader->info.stage == MESA_SHADER_KERNEL)
+         *location = SYSTEM_VALUE_NUM_TOTAL_WORK_GROUPS;
+      else
+         *location = SYSTEM_VALUE_NUM_WORK_GROUPS;
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInWorkgroupSize:
@@ -1392,7 +1395,10 @@ vtn_get_builtin_location(struct vtn_builder *b,
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInWorkgroupId:
-      *location = SYSTEM_VALUE_WORK_GROUP_ID;
+      if (b->shader->info.stage == MESA_SHADER_KERNEL)
+         *location = SYSTEM_VALUE_WORK_GROUP_ID_WITH_OFFSET;
+      else
+         *location = SYSTEM_VALUE_WORK_GROUP_ID;
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInLocalInvocationId:
@@ -1404,11 +1410,18 @@ vtn_get_builtin_location(struct vtn_builder *b,
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInGlobalInvocationId:
-      *location = SYSTEM_VALUE_GLOBAL_INVOCATION_ID;
+      if (b->shader->info.stage == MESA_SHADER_KERNEL)
+         *location = SYSTEM_VALUE_GLOBAL_INVOCATION_ID_WITH_OFFSET;
+      else
+         *location = SYSTEM_VALUE_GLOBAL_INVOCATION_ID;
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInGlobalLinearId:
       *location = SYSTEM_VALUE_GLOBAL_INVOCATION_INDEX;
+      set_mode_system_value(b, mode);
+      break;
+   case SpvBuiltInGlobalOffset:
+      *location = SYSTEM_VALUE_GLOBAL_INVOCATION_OFFSET;
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInBaseVertex:
