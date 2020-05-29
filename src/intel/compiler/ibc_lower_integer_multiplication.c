@@ -56,19 +56,59 @@ lower_mul(ibc_builder *b, ibc_alu_instr *alu)
       assert(!"unimplemented");
    } else if (ibc_type_bit_size(alu->src[0].ref.type) == 32 &&
               ibc_type_bit_size(alu->src[1].ref.type) == 32) {
-      ibc_ref src1_uw = ibc_MOV(b, IBC_TYPE_UW, alu->src[1].ref);
+      /* Most of our hardware cannot do 32-bit integer multiplication in a
+       * single instruction, but instead must do a sequence (which actually
+       * calculations a 64-bit result):
+       *
+       *    mul(8)  acc0<1>D   g3<8,8,1>D      g4<8,8,1>D
+       *    mach(8) null       g3<8,8,1>D      g4<8,8,1>D
+       *    mov(8)  g2<1>D     acc0<8,8,1>D
+       *
+       * However, the fixed accumulator access prevents scheduling, and
+       * also has issues in higher SIMD widths.
+       *
+       * Since we only want the low 32-bits of the result, we can do two
+       * 32-bit x 16-bit multiplies (like the mul and mach are doing), and
+       * adjust the high result and add them (like the mach is doing):
+       *
+       *    mul(8)  g7<1>D     g3<8,8,1>D      g4.0<8,8,1>UW
+       *    mul(8)  g8<1>D     g3<8,8,1>D      g4.1<8,8,1>UW
+       *    shl(8)  g9<1>D     g8<8,8,1>D      16D
+       *    add(8)  g2<1>D     g7<8,8,1>D      g8<8,8,1>D
+       *
+       * We avoid the shl instruction by realizing that we only want to add
+       * the low 16-bits of the "high" result to the high 16-bits of the
+       * "low" result and using proper regioning on the add:
+       *
+       *    mul(8)  g7<1>D     g3<8,8,1>D      g4.0<16,8,2>UW
+       *    mul(8)  g8<1>D     g3<8,8,1>D      g4.1<16,8,2>UW
+       *    add(8)  g7.1<2>UW  g7.1<16,8,2>UW  g8<16,8,2>UW
+       */
+      ibc_ref x = alu->src[0].ref;
+      ibc_ref y = alu->src[1].ref;
 
-      if (alu->instr.simd_width == 1)
-         ibc_builder_push_we_all(b, 8);
+      ibc_ref y_lo, y_hi;
+      if (y.file == IBC_FILE_IMM) {
+         uint32_t src1_imm = ibc_ref_as_uint(y);
+         y_lo = ibc_imm_uw(src1_imm & 0xffff);
+         y_hi = ibc_imm_uw(src1_imm >> 16);
+      } else {
+         y_lo = ibc_subscript_ref(y, IBC_TYPE_UW, 0);
+         y_hi = ibc_subscript_ref(y, IBC_TYPE_UW, 1);
+      }
 
-      ibc_ref acc = ibc_builder_new_accum_reg(b, alu->dest.type);
-      ibc_build_alu2(b, IBC_ALU_OP_IMUL, acc, alu->src[0].ref, src1_uw);
-      build_MACH(b, alu->dest.type, acc, alu->src[0].ref, alu->src[1].ref);
+      ibc_ref low  = ibc_IMUL(b, IBC_TYPE_D, x, y_lo);
+      ibc_ref high = ibc_IMUL(b, IBC_TYPE_D, x, y_hi);
 
-      if (alu->instr.simd_width == 1)
-         ibc_builder_pop(b);
+      /* Our construction of "low" violates WLR rules; don't claim it. */
+      ((struct ibc_reg *) low.reg)->is_wlr = false;
 
-      ibc_MOV_to(b, alu->dest, acc);
+      ibc_build_alu2(b, IBC_ALU_OP_ADD,
+                     ibc_subscript_ref(low, IBC_TYPE_UW, 1),
+                     ibc_subscript_ref(low, IBC_TYPE_UW, 1),
+                     ibc_subscript_ref(high, IBC_TYPE_UW, 0));
+
+      ibc_MOV_to(b, alu->dest, low);
 
       ibc_instr_remove(&alu->instr);
       progress = true;
