@@ -29,13 +29,14 @@
 #define D3D12_IGNORE_SDK_LAYERS
 #include <d3d12.h>
 
+struct d3d12_bo;
 struct d3d12_descriptor_heap;
 struct d3d12_fence;
 
 struct d3d12_batch {
    struct d3d12_fence *fence;
 
-   struct set *resources;
+   struct set *bos;
    struct set *sampler_views;
    struct set *surfaces;
    struct set *objects;
@@ -64,7 +65,7 @@ d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch);
 
 bool
 d3d12_batch_has_references(struct d3d12_batch *batch,
-                           struct d3d12_resource *res);
+                           struct d3d12_bo *bo);
 
 void
 d3d12_batch_reference_resource(struct d3d12_batch *batch,

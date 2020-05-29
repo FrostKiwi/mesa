@@ -25,19 +25,15 @@
 #define D3D12_RESOURCE_H
 
 struct pipe_screen;
+#include "d3d12_bufmgr.h"
 #include "util/u_range.h"
 #include "util/u_transfer.h"
 
 #include <d3d12.h>
 
-struct TransitionableResourceState;
-
 struct d3d12_resource {
    struct pipe_resource base;
-   struct TransitionableResourceState *trans_state;
-
-   ID3D12Resource *res;
-
+   struct d3d12_bo *bo;
    DXGI_FORMAT format;
    unsigned mip_levels;
    struct sw_displaytarget *dt;
@@ -61,10 +57,11 @@ d3d12_resource(struct pipe_resource *r)
 static inline ID3D12Resource *
 d3d12_resource_underlying(struct d3d12_resource *res, uint64_t *offset)
 {
-   *offset = 0;
-   return res->res;
-}
+   if (!res->bo)
+      return NULL;
 
+   return d3d12_bo_get_base(res->bo, offset)->res;
+}
 
 /* Returns the underlying ID3D12Resource for this resource.
  * This helper should only be called for resources that are known
@@ -82,7 +79,10 @@ d3d12_resource_resource(struct d3d12_resource *res)
 static inline struct TransitionableResourceState *
 d3d12_resource_state(struct d3d12_resource *res)
 {
-   return res->trans_state;
+   uint64_t offset;
+   if (!res->bo)
+      return NULL;
+   return d3d12_bo_get_base(res->bo, &offset)->trans_state;
 }
 
 static inline D3D12_GPU_VIRTUAL_ADDRESS
