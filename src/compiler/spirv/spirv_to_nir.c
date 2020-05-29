@@ -3272,7 +3272,7 @@ vtn_handle_atomics(struct vtn_builder *b, SpvOp opcode,
    }
 
    /* uniform as "atomic counter uniform" */
-   if (ptr->mode == vtn_variable_mode_uniform) {
+   if (ptr->mode == vtn_variable_mode_atomic_counter) {
       nir_deref_instr *deref = vtn_pointer_to_deref(b, ptr);
       const struct glsl_type *deref_type = deref->type;
       nir_intrinsic_op op = get_uniform_nir_atomic_op(b, opcode);
