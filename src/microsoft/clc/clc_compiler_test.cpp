@@ -1839,3 +1839,23 @@ TEST_F(ComputeTest, hi)
    Shader shader = compile(std::vector<const char*>({ kernel_source }));
    validate(shader);
 }
+
+TEST_F(ComputeTest, system_values)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global uint* outputs)\n\
+   {\n\
+      outputs[0] = get_work_dim();\n\
+      outputs[1] = get_global_size(0);\n\
+      outputs[2] = get_local_size(0);\n\
+      outputs[3] = get_num_groups(0);\n\
+      outputs[4] = get_group_id(0);\n\
+      outputs[5] = get_global_offset(0);\n\
+      outputs[6] = get_global_id(0);\n\
+   }\n";
+   auto out = ShaderArg<uint32_t>(std::vector<uint32_t>(6, 0xdeadbeef), SHADER_ARG_OUTPUT);
+   const uint16_t expected[] = { 3, 1, 1, 1, 0, 0, 0, };
+   run_shader(kernel_source, 1, 1, 1, out);
+   for (int i = 0; i < out.size(); ++i)
+      EXPECT_EQ(out[i], expected[i]);
+}
