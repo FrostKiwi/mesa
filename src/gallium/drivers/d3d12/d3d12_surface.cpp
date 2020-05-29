@@ -101,7 +101,7 @@ d3d12_create_surface(struct pipe_context *pctx,
          break;
       }
 
-      screen->dev->CreateDepthStencilView(res->res, &desc,
+      screen->dev->CreateDepthStencilView(d3d12_resource_resource(res), &desc,
                                           surface->desc_handle.cpu_handle);
    } else {
       D3D12_RENDER_TARGET_VIEW_DESC desc;
@@ -159,7 +159,7 @@ d3d12_create_surface(struct pipe_context *pctx,
       }
 
       d3d12_descriptor_heap_alloc_handle(ctx->rtv_heap, &surface->desc_handle);
-      screen->dev->CreateRenderTargetView(res->res, &desc,
+      screen->dev->CreateRenderTargetView(d3d12_resource_resource(res), &desc,
                                           surface->desc_handle.cpu_handle);
    }
 

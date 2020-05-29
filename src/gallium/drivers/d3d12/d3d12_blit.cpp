@@ -93,8 +93,8 @@ blit_resolve(struct d3d12_context *ctx, const struct pipe_blit_info *info)
 
    assert(src->format == dst->format);
    ctx->cmdlist->ResolveSubresource(
-      dst->res, info->dst.level,
-      src->res, info->src.level,
+      d3d12_resource_resource(dst), info->dst.level,
+      d3d12_resource_resource(src), info->src.level,
       src->format);
 }
 
@@ -258,11 +258,11 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
 
       src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
       src_loc.SubresourceIndex = src_level;
-      src_loc.pResource = src->res;
+      src_loc.pResource = d3d12_resource_resource(src);
 
       dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
       dst_loc.SubresourceIndex = dst_level;
-      dst_loc.pResource = dst->res;
+      dst_loc.pResource = d3d12_resource_resource(dst);
 
       if (psrc_box->x == 0 && psrc_box->y == 0 && psrc_box->z == 0 &&
           psrc_box->width == u_minify(src->base.width0, src_level) &&
