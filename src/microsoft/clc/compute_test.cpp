@@ -475,7 +475,14 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
 
    std::vector<uint8_t> argsbuf(dxil->metadata.kernel_inputs_buf_size);
    std::vector<ComPtr<ID3D12Resource>> argres(shader.dxil->kernel->num_args);
-   uint32_t global_work_offset[3] = {0, 0, 0};
+   clc_work_properties_data work_props = {
+      0, 0, 0, // global_offsets
+      3,       // num_dims
+      // num_groups
+      compile_args.x / conf.local_size[0],
+      compile_args.y / conf.local_size[1],
+      compile_args.z / conf.local_size[2]
+   };
    Resources resources;
 
    for (unsigned i = 0; i < dxil->kernel->num_args; ++i) {
@@ -532,7 +539,7 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
                        argsbuf.data(), argsbuf.size());
 
    add_cbv_resource(resources, 0, dxil->metadata.global_work_offset_cbv_id,
-                    global_work_offset, sizeof(global_work_offset));
+                    &work_props, sizeof(work_props));
 
    auto root_sig = create_root_signature(resources);
    auto pipeline_state = create_pipeline_state(root_sig, *dxil);
