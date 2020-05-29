@@ -2047,7 +2047,7 @@ emit_load_local_work_group_id(struct ntd_context *ctx,
    for (int i = 0; i < nir_intrinsic_dest_components(intr); i++) {
       if (comps & (1 << i)) {
          const struct dxil_value *idx = dxil_module_get_int32_const(&ctx->mod, i);
-         if (idx)
+         if (!idx)
             return false;
          const struct dxil_value *groupid = emit_groupid_call(ctx, idx);
          if (!groupid)
