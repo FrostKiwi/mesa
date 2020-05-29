@@ -245,6 +245,24 @@ ibc_fref(const ibc_reg *reg)
 }
 
 static inline ibc_ref
+ibc_subscript_ref(ibc_ref ref, enum ibc_type type, unsigned i)
+{
+   assert(ibc_type_bit_size(type) < ibc_type_bit_size(ref.type));
+
+   ibc_ref sub = ref;
+   sub.type = type;
+
+   if (ref.file == IBC_FILE_LOGICAL) {
+      sub.logical.byte += i * ibc_type_byte_size(type);
+   } else {
+      assert(ref.file == IBC_FILE_HW_GRF);
+      sub.hw_grf.byte += i * ibc_type_byte_size(type);
+   }
+
+   return sub;
+}
+
+static inline ibc_ref
 ibc_null(enum ibc_type type)
 {
    return (ibc_ref) {
