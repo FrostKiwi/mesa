@@ -1870,3 +1870,54 @@ TEST_F(ComputeTest, system_values)
    for (int i = 0; i < out.size(); ++i)
       EXPECT_EQ(out[i], expected_withoffsets[i]);
 }
+
+TEST_F(ComputeTest, convert_round_sat)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float *f, __global uchar *u)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       u[idx] = convert_uchar_sat_rtp(f[idx]);\n\
+   }\n";
+   auto f = ShaderArg<float>({ -1.0f, 1.1f, 20.0f, 255.5f }, SHADER_ARG_INPUT);
+   auto u = ShaderArg<uint8_t>({ 255, 0, 0, 0 }, SHADER_ARG_OUTPUT);
+   const uint8_t expected[] = {
+      0, 2, 20, 255
+   };
+
+   run_shader(kernel_source, f.size(), 1, 1, f, u);
+   for (int i = 0; i < u.size(); ++i)
+      EXPECT_EQ(u[i], expected[i]);
+}
+
+TEST_F(ComputeTest, convert_round_sat_vec)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global float16 *f, __global uchar16 *u)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       u[idx] = convert_uchar16_sat_rtp(f[idx]);\n\
+   }\n";
+   auto f = ShaderArg<float>({
+      -1.0f, 1.1f, 20.0f, 255.5f, -1.0f, 1.1f, 20.0f, 255.5f, -1.0f, 1.1f, 20.0f, 255.5f, -1.0f, 1.1f, 20.0f, 255.5f,
+      -0.5f, 1.9f, 20.0f, 254.5f, -1.0f, 1.1f, 20.0f, 255.5f, -1.0f, 1.1f, 20.0f, 255.5f, -1.0f, 1.1f, 20.0f, 255.5f,
+       0.0f, 1.3f, 20.0f, 255.1f, -1.0f, 1.1f, 20.0f, 255.5f, -1.0f, 1.1f, 20.0f, 255.5f, -1.0f, 1.1f, 20.0f, 255.5f,
+      -0.0f, 1.5555f, 20.0f, 254.9f, -1.0f, 1.1f, 20.0f, 255.5f, -1.0f, 1.1f, 20.0f, 255.5f, -1.0f, 1.1f, 20.0f, 255.5f,
+   }, SHADER_ARG_INPUT);
+   auto u = ShaderArg<uint8_t>({
+      255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0,
+      255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0,
+      255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0,
+      255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0,
+   }, SHADER_ARG_OUTPUT);
+   const uint8_t expected[] = {
+      0, 2, 20, 255, 0, 2, 20, 255, 0, 2, 20, 255, 0, 2, 20, 255,
+      0, 2, 20, 255, 0, 2, 20, 255, 0, 2, 20, 255, 0, 2, 20, 255,
+      0, 2, 20, 255, 0, 2, 20, 255, 0, 2, 20, 255, 0, 2, 20, 255,
+      0, 2, 20, 255, 0, 2, 20, 255, 0, 2, 20, 255, 0, 2, 20, 255,
+   };
+
+   run_shader(kernel_source, 4, 1, 1, f, u);
+   for (int i = 0; i < u.size(); ++i)
+      EXPECT_EQ(u[i], expected[i]);
+}
