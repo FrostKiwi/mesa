@@ -1855,7 +1855,18 @@ TEST_F(ComputeTest, system_values)
    }\n";
    auto out = ShaderArg<uint32_t>(std::vector<uint32_t>(6, 0xdeadbeef), SHADER_ARG_OUTPUT);
    const uint16_t expected[] = { 3, 1, 1, 1, 0, 0, 0, };
-   run_shader(kernel_source, 1, 1, 1, out);
+   CompileArgs args = { 1, 1, 1 };
+   Shader shader = compile({ kernel_source });
+   run_shader(shader, args, out);
    for (int i = 0; i < out.size(); ++i)
       EXPECT_EQ(out[i], expected[i]);
+
+   args.work_props.work_dim = 2;
+   args.work_props.global_offset_x = 100;
+   args.work_props.group_id_offset_x = 2;
+   args.work_props.group_count_total_x = 5;
+   const uint32_t expected_withoffsets[] = { 2, 5, 1, 5, 2, 100, 102 };
+   run_shader(shader, args, out);
+   for (int i = 0; i < out.size(); ++i)
+      EXPECT_EQ(out[i], expected_withoffsets[i]);
 }
