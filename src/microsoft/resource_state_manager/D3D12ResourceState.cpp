@@ -34,18 +34,18 @@ CDesiredResourceState::SubresourceInfo const& CDesiredResourceState::GetSubresou
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------
-void CDesiredResourceState::update_subresource_state(unsigned subresource_index, SubresourceInfo const& info)
+void CDesiredResourceState::UpdateSubresourceState(unsigned SubresourceIndex, SubresourceInfo const& info)
 {
-   if (m_spSubresourceInfo[subresource_index].State == UNKNOWN_RESOURCE_STATE ||
+   if (m_spSubresourceInfo[SubresourceIndex].State == UNKNOWN_RESOURCE_STATE ||
       info.State == UNKNOWN_RESOURCE_STATE ||
       IsD3D12WriteState(info.State, SubresourceTransitionFlags_None))
    {
-      m_spSubresourceInfo[subresource_index] = info;
+      m_spSubresourceInfo[SubresourceIndex] = info;
    }
    else
    {
       // Accumulate read state state bits
-      m_spSubresourceInfo[subresource_index].State |= info.State;
+      m_spSubresourceInfo[SubresourceIndex].State |= info.State;
    }
 }
 
@@ -53,7 +53,7 @@ void CDesiredResourceState::update_subresource_state(unsigned subresource_index,
 void CDesiredResourceState::SetResourceState(SubresourceInfo const & Info)
 {
    m_bAllSubresourcesSame = true;
-   update_subresource_state(0, Info);
+   UpdateSubresourceState(0, Info);
 }
     
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -68,7 +68,7 @@ void CDesiredResourceState::SetSubresourceState(UINT SubresourceIndex, Subresour
    {
       SubresourceIndex = 0;
    }
-   update_subresource_state(SubresourceIndex, Info);
+   UpdateSubresourceState(SubresourceIndex, Info);
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -80,9 +80,9 @@ void CDesiredResourceState::Reset()
 //----------------------------------------------------------------------------------------------------------------------------------
 void CCurrentResourceState::ConvertToSubresourceTracking()
 {
-   if (m_bAllSubresourcesSame && m_spExplicitState.size() > 1)
+   if (m_bAllSubresourcesSame && m_spLogicalState.size() > 1)
    {
-      std::fill(m_spExplicitState.begin() + 1, m_spExplicitState.end(), m_spExplicitState[0]);
+      std::fill(m_spLogicalState.begin() + 1, m_spLogicalState.end(), m_spLogicalState[0]);
       m_bAllSubresourcesSame = false;
    }
 }
@@ -90,40 +90,40 @@ void CCurrentResourceState::ConvertToSubresourceTracking()
 //----------------------------------------------------------------------------------------------------------------------------------
 CCurrentResourceState::CCurrentResourceState(UINT SubresourceCount, bool bSimultaneousAccess)
    : m_bSimultaneousAccess(bSimultaneousAccess)
-   , m_spExplicitState(SubresourceCount)
+   , m_spLogicalState(SubresourceCount)
 {
-   m_spExplicitState[0] = ExplicitState{};
+   m_spLogicalState[0] = LogicalState{};
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------
-void CCurrentResourceState::SetExplicitResourceState(ExplicitState const& State)
+void CCurrentResourceState::SetLogicalResourceState(LogicalState const& State)
 {
    m_bAllSubresourcesSame = true;
-   m_spExplicitState[0] = State;
+   m_spLogicalState[0] = State;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------
-void CCurrentResourceState::SetExplicitSubresourceState(UINT SubresourceIndex, ExplicitState const& State)
+void CCurrentResourceState::SetLogicalSubresourceState(UINT SubresourceIndex, LogicalState const& State)
 {
    ConvertToSubresourceTracking();
-   m_spExplicitState[SubresourceIndex] = State;
+   m_spLogicalState[SubresourceIndex] = State;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------
-auto CCurrentResourceState::GetExplicitSubresourceState(UINT SubresourceIndex) const -> ExplicitState const&
+auto CCurrentResourceState::GetLogicalSubresourceState(UINT SubresourceIndex) const -> LogicalState const&
 {
    if (AreAllSubresourcesSame())
    {
       SubresourceIndex = 0;
    }
-   return m_spExplicitState[SubresourceIndex];
+   return m_spLogicalState[SubresourceIndex];
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------
 void CCurrentResourceState::Reset()
 {
    m_bAllSubresourcesSame = true;
-   m_spExplicitState[0] = ExplicitState{};
+   m_spLogicalState[0] = LogicalState{};
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -204,20 +204,19 @@ void ResourceStateManager::ApplyResourceTransitionsPreamble()
 
 //----------------------------------------------------------------------------------------------------------------------------------
 void ResourceStateManager::AddCurrentStateUpdate(TransitionableResourceState& Resource,
-                                                   CCurrentResourceState& CurrentState,
-                                                   UINT SubresourceIndex,
-                                                   D3D12_RESOURCE_STATES NewState,
-                                                   bool MayDecay)
+                                                 CCurrentResourceState& CurrentState,
+                                                 UINT SubresourceIndex,
+                                                 D3D12_RESOURCE_STATES NewState,
+                                                 bool MayDecay)
 {
-   CCurrentResourceState::ExplicitState NewExplicitState = {};
-   NewExplicitState.State = NewState;
+   CCurrentResourceState::LogicalState NewLogicalState{NewState};
    if (SubresourceIndex == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
    {
-      CurrentState.SetExplicitResourceState(NewExplicitState);
+      CurrentState.SetLogicalResourceState(NewLogicalState);
    }
    else
    {
-      CurrentState.SetExplicitSubresourceState(SubresourceIndex, NewExplicitState);
+      CurrentState.SetLogicalSubresourceState(SubresourceIndex, NewLogicalState);
    }
 }
 
@@ -317,7 +316,7 @@ auto ResourceStateManager::ProcessTransitioningResource(ID3D12Resource* pTransit
 //----------------------------------------------------------------------------------------------------------------------------------
 void ResourceStateManager::ProcessTransitioningSubresourceExplicit(
    CCurrentResourceState& CurrentState,
-   UINT i,
+   UINT SubresourceIndex,
    CDesiredResourceState::SubresourceInfo& SubresourceDestinationInfo,
    D3D12_RESOURCE_STATES after,
    TransitionableResourceState& TransitionableResourceState,
@@ -329,17 +328,17 @@ void ResourceStateManager::ProcessTransitioningSubresourceExplicit(
    //    For simultaneous access resources, this only happens if the new usage is in the same command list as the previous.
    // 2. Simultaneous access only and not used in the current command list.
    //    The subresource is marked as MayDecay unless the new state is a read state.
-   CCurrentResourceState::ExplicitState CurrentExplicitState = CurrentState.GetExplicitSubresourceState(i);
+   CCurrentResourceState::LogicalState CurrentLogicalState = CurrentState.GetLogicalSubresourceState(SubresourceIndex);
    bool MayDecay = false;
 
    bool bQueueStateUpdate = (SubresourceDestinationInfo.Flags & SubresourceTransitionFlags_NotUsedInCommandListIfNoStateChange) == SubresourceTransitionFlags_None;
 
    if (!CurrentState.SupportsSimultaneousAccess() /*BUGBUG: Pending promotion and decay support: || IsNewExecuteGroup()*/)
    {
-      if (TransitionRequired(CurrentExplicitState.State, /*inout*/ after, SubresourceDestinationInfo.Flags))
+      if (TransitionRequired(CurrentLogicalState.State, /*inout*/ after, SubresourceDestinationInfo.Flags))
       {
          // Insert a single concrete barrier (for non-simultaneous access resources).
-         TransitionDesc.Transition.StateBefore = D3D12_RESOURCE_STATES(CurrentExplicitState.State);
+         TransitionDesc.Transition.StateBefore = D3D12_RESOURCE_STATES(CurrentLogicalState.State);
          TransitionDesc.Transition.StateAfter = D3D12_RESOURCE_STATES(after);
          assert(TransitionDesc.Transition.StateBefore != TransitionDesc.Transition.StateAfter);
          m_vResourceBarriers.push_back(TransitionDesc); // throw( bad_alloc )
