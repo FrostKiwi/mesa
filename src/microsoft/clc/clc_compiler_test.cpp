@@ -1798,3 +1798,17 @@ TEST_F(ComputeTest, constant_sampler)
    Shader shader = compile(std::vector<const char*>({ kernel_source }));
    validate(shader);
 }
+
+TEST_F(ComputeTest, hi)
+{
+   const char *kernel_source = R"(
+   __kernel void main_test(__global char3 *srcA, __global char2 *dst)
+   {
+       int  tid = get_global_id(0);
+
+       char2 tmp = srcA[tid].hi;
+       dst[tid] = tmp;
+   })";
+   Shader shader = compile(std::vector<const char*>({ kernel_source }));
+   validate(shader);
+}
