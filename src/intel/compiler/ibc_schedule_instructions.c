@@ -1798,22 +1798,43 @@ dynamic_ra_sensitive_choose_node(ibc_schedule_builder *b,
       /* First, try to find a node that frees registers or, at the very least
        * doesn't hurt our register pressure.
        */
-      rb_tree_foreach_rev(ibc_sched_node, node, ready, rb_node) {
-         if (hsu_grf_bytes_freed(node, false /* statistical */) >= 0) {
-            rb_tree_remove(ready, &node->rb_node);
-            return node;
-         }
-      }
-      rb_tree_foreach(ibc_sched_node, node, leader, rb_node) {
-         if (hsu_grf_bytes_freed(node, false /* statistical */) >= 0) {
-            rb_tree_remove(leader, &node->rb_node);
-            return node;
-         }
-      }
-
       int highest_grf_bytes_stat_freed = INT_MIN;
       ibc_sched_node *highest_grf_bytes_stat_freed_node = NULL;
       struct rb_tree *highest_grf_bytes_stat_freed_tree = NULL;
+
+      rb_tree_foreach_rev(ibc_sched_node, node, ready, rb_node) {
+         int grf_bytes_stat_freed =
+            hsu_grf_bytes_freed(node, false /* statistical */);
+         if (highest_grf_bytes_stat_freed < grf_bytes_stat_freed) {
+            highest_grf_bytes_stat_freed = grf_bytes_stat_freed;
+            highest_grf_bytes_stat_freed_node = node;
+            highest_grf_bytes_stat_freed_tree = ready;
+         }
+      }
+
+      if (highest_grf_bytes_stat_freed > 0) {
+         /* If a ready instructions cuts pressure, pick that. */
+         rb_tree_remove(highest_grf_bytes_stat_freed_tree,
+                        &highest_grf_bytes_stat_freed_node->rb_node);
+         return highest_grf_bytes_stat_freed_node;
+      }
+
+      rb_tree_foreach(ibc_sched_node, node, leader, rb_node) {
+         int grf_bytes_stat_freed =
+            hsu_grf_bytes_freed(node, false /* statistical */);
+         if (highest_grf_bytes_stat_freed < grf_bytes_stat_freed) {
+            highest_grf_bytes_stat_freed = grf_bytes_stat_freed;
+            highest_grf_bytes_stat_freed_node = node;
+            highest_grf_bytes_stat_freed_tree = leader;
+         }
+      }
+
+      if (highest_grf_bytes_stat_freed >= 0) {
+         /* If a ready or leader instruction isn't worse, pick that. */
+         rb_tree_remove(highest_grf_bytes_stat_freed_tree,
+                        &highest_grf_bytes_stat_freed_node->rb_node);
+         return highest_grf_bytes_stat_freed_node;
+      }
 
       rb_tree_foreach_rev(ibc_sched_node, node, ready, rb_node) {
          int grf_bytes_stat_freed =
