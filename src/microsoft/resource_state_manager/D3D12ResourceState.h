@@ -154,7 +154,7 @@ public:
    void Reset();
 
 private:
-   void update_subresource_state(unsigned subresource_index, SubresourceInfo const& info);
+   void UpdateSubresourceState(unsigned SubresourceIndex, SubresourceInfo const& info);
 };
 
 //==================================================================================================================================
@@ -165,7 +165,7 @@ private:
 class CCurrentResourceState
 {
 public:
-   struct ExplicitState
+   struct LogicalState
    {
       D3D12_RESOURCE_STATES State = D3D12_RESOURCE_STATE_COMMON;
    };
@@ -174,7 +174,7 @@ private:
    const bool m_bSimultaneousAccess;
    bool m_bAllSubresourcesSame = true;
 
-   std::vector<ExplicitState> m_spExplicitState;
+   std::vector<LogicalState> m_spLogicalState;
 
    void ConvertToSubresourceTracking();
 
@@ -184,9 +184,9 @@ public:
    bool SupportsSimultaneousAccess() const { return false; } // BUGBUG: return m_bSimultaneousAccess once promotion and decay are supported
    bool AreAllSubresourcesSame() const { return m_bAllSubresourcesSame; }
 
-   void SetExplicitResourceState(ExplicitState const& State);
-   void SetExplicitSubresourceState(UINT SubresourceIndex, ExplicitState const& State);
-   ExplicitState const& GetExplicitSubresourceState(UINT SubresourceIndex) const;
+   void SetLogicalResourceState(LogicalState const& State);
+   void SetLogicalSubresourceState(UINT SubresourceIndex, LogicalState const& State);
+   LogicalState const& GetLogicalSubresourceState(UINT SubresourceIndex) const;
 
    void Reset();
 };
@@ -200,10 +200,10 @@ struct TransitionableResourceState
    STATE_LIST_ENTRY m_TransitionListEntry;
    CDesiredResourceState m_DesiredState;
 
-   TransitionableResourceState(ID3D12Resource *pResource, UINT total_subresources, bool supports_simultaneous_access) :
-      m_DesiredState(total_subresources),
-      m_total_subresources(total_subresources),
-      m_currentState(total_subresources, supports_simultaneous_access),
+   TransitionableResourceState(ID3D12Resource *pResource, UINT TotalSubresources, bool SupportsSimultaneousAccess) :
+      m_DesiredState(TotalSubresources),
+      m_TotalSubresources(TotalSubresources),
+      m_currentState(TotalSubresources, SupportsSimultaneousAccess),
       m_pResource(pResource)
    {
       InitializeListHead(&m_TransitionListEntry);
@@ -219,15 +219,15 @@ struct TransitionableResourceState
 
    bool IsTransitionPending() const { return !IsListEmpty(&m_TransitionListEntry); }
 
-   UINT NumSubresources() { return m_total_subresources; }
+   UINT NumSubresources() { return m_TotalSubresources; }
 
    CCurrentResourceState& GetCurrentState() { return m_currentState; }
 
    inline ID3D12Resource* GetD3D12Resource() const { return m_pResource; }
 
 private:
-   unsigned m_total_subresources;
-   bool m_supports_simultaneous_access;
+   unsigned m_TotalSubresources;
+   bool m_SupportsSimultaneousAccess;
 
    CCurrentResourceState m_currentState;
 
@@ -268,16 +268,6 @@ protected:
 
    STATE_LIST_ENTRY m_TransitionListHead;
 
-   // State that is reset during the preamble, accumulated during resource traversal,
-   // and applied during the submission phase.
-   struct PostApplyUpdate
-   {
-      TransitionableResourceState& AffectedResource;
-      CCurrentResourceState& CurrentState;
-      UINT SubresourceIndex;
-      D3D12_RESOURCE_STATES NewState;
-      bool MayDecay;
-   };
    std::vector<D3D12_RESOURCE_BARRIER> m_vResourceBarriers;
 
 public:
