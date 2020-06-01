@@ -202,11 +202,6 @@ static struct vtn_ssa_value *
 vtn_const_ssa_value(struct vtn_builder *b, nir_constant *constant,
                     const struct glsl_type *type)
 {
-   struct hash_entry *entry = _mesa_hash_table_search(b->const_table, constant);
-
-   if (entry)
-      return entry->data;
-
    struct vtn_ssa_value *val = rzalloc(b, struct vtn_ssa_value);
    val->type = type;
 
@@ -223,17 +218,10 @@ vtn_const_ssa_value(struct vtn_builder *b, nir_constant *constant,
    case GLSL_TYPE_FLOAT:
    case GLSL_TYPE_FLOAT16:
    case GLSL_TYPE_DOUBLE: {
-      int bit_size = glsl_get_bit_size(type);
       if (glsl_type_is_vector_or_scalar(type)) {
-         unsigned num_components = glsl_get_vector_elements(val->type);
-         nir_load_const_instr *load =
-            nir_load_const_instr_create(b->shader, num_components, bit_size);
-
-         memcpy(load->value, constant->values,
-                sizeof(nir_const_value) * load->def.num_components);
-
-         nir_instr_insert_before_cf_list(&b->nb.impl->body, &load->instr);
-         val->def = &load->def;
+         val->def = nir_build_imm(&b->nb, glsl_get_vector_elements(val->type),
+                                  glsl_get_bit_size(val->type),
+                                  constant->values);
       } else {
          assert(glsl_type_is_matrix(type));
          unsigned columns = glsl_get_matrix_columns(val->type);
@@ -5294,8 +5282,6 @@ spirv_to_nir(const uint32_t *words, size_t word_count,
       vtn_foreach_cf_node(node, &b->functions) {
          struct vtn_function *func = vtn_cf_node_as_function(node);
          if (func->referenced && !func->emitted) {
-            b->const_table = _mesa_pointer_hash_table_create(b);
-
             vtn_function_emit(b, func, vtn_handle_body_instruction);
             progress = true;
          }
