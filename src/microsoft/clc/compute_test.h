@@ -243,6 +243,7 @@ protected:
    {
       unsigned x, y, z;
       std::vector<const char *> compiler_command_line;
+      clc_work_properties_data work_props;
    };
 
 private:
