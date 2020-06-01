@@ -454,6 +454,14 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
    std::vector<struct clc_runtime_arg_info> argsinfo(args.size());
 
    conf.args = argsinfo.data();
+   conf.support_global_work_id_offsets =
+      compile_args.work_props.global_offset_x != 0 ||
+      compile_args.work_props.global_offset_y != 0 ||
+      compile_args.work_props.global_offset_z != 0;
+   conf.support_work_group_id_offsets =
+      compile_args.work_props.group_id_offset_x != 0 ||
+      compile_args.work_props.group_id_offset_y != 0 ||
+      compile_args.work_props.group_id_offset_z != 0;
 
    for (unsigned i = 0; i < shader.dxil->kernel->num_args; ++i) {
       RawShaderArg *arg = args[i];
@@ -475,14 +483,14 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
 
    std::vector<uint8_t> argsbuf(dxil->metadata.kernel_inputs_buf_size);
    std::vector<ComPtr<ID3D12Resource>> argres(shader.dxil->kernel->num_args);
-   clc_work_properties_data work_props = {
-      0, 0, 0, // global_offsets
-      3,       // num_dims
-      // num_groups
-      compile_args.x / conf.local_size[0],
-      compile_args.y / conf.local_size[1],
-      compile_args.z / conf.local_size[2]
-   };
+   clc_work_properties_data work_props = compile_args.work_props;
+   if (!conf.support_work_group_id_offsets) {
+      work_props.group_count_total_x = compile_args.x / conf.local_size[0];
+      work_props.group_count_total_y = compile_args.y / conf.local_size[1];
+      work_props.group_count_total_z = compile_args.z / conf.local_size[2];
+   }
+   if (work_props.work_dim == 0)
+      work_props.work_dim = 3;
    Resources resources;
 
    for (unsigned i = 0; i < dxil->kernel->num_args; ++i) {
