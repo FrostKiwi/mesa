@@ -538,7 +538,7 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
       add_cbv_resource(resources, 0, dxil->metadata.kernel_inputs_cbv_id,
                        argsbuf.data(), argsbuf.size());
 
-   add_cbv_resource(resources, 0, dxil->metadata.global_work_offset_cbv_id,
+   add_cbv_resource(resources, 0, dxil->metadata.work_properties_cbv_id,
                     &work_props, sizeof(work_props));
 
    auto root_sig = create_root_signature(resources);
