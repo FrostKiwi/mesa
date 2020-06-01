@@ -889,8 +889,11 @@ clc_to_dxil(struct clc_context *ctx,
          .literal_sampler = true,
       },
    };
-   const struct nir_shader_compiler_options *nir_options =
-      dxil_get_nir_compiler_options();
+   nir_shader_compiler_options nir_options =
+      *dxil_get_nir_compiler_options();
+   nir_options.has_cs_global_work_offsets = conf && conf->support_global_work_id_offsets;
+   nir_options.has_cs_work_group_offsets = conf && conf->support_work_group_id_offsets;
+   nir_options.lower_cs_global_id_from_local = nir_options.has_cs_work_group_offsets;
 
    glsl_type_singleton_init_or_ref();
 
@@ -898,7 +901,7 @@ clc_to_dxil(struct clc_context *ctx,
                       NULL, 0,
                       MESA_SHADER_KERNEL, entrypoint,
                       &spirv_options,
-                      nir_options,
+                      &nir_options,
                       false);
    if (!nir) {
       fprintf(stderr, "D3D12: spirv_to_nir failed\n");
@@ -1017,8 +1020,8 @@ clc_to_dxil(struct clc_context *ctx,
 
    NIR_PASS_V(nir, nir_lower_system_values);
    NIR_PASS_V(nir, clc_lower_64bit_semantics);
-   if (nir_options->lower_int64_options)
-      NIR_PASS_V(nir, nir_lower_int64, nir_options->lower_int64_options);
+   if (nir_options.lower_int64_options)
+      NIR_PASS_V(nir, nir_lower_int64, nir_options.lower_int64_options);
 
    NIR_PASS_V(nir, nir_opt_deref);
    NIR_PASS_V(nir, nir_lower_vars_to_ssa);

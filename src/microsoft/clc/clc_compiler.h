@@ -207,6 +207,8 @@ struct clc_runtime_kernel_conf {
    uint16_t local_size[3];
    struct clc_runtime_arg_info *args;
    unsigned lower_int64;
+   unsigned support_global_work_id_offsets;
+   unsigned support_work_group_id_offsets;
 };
 
 struct clc_dxil_object *
