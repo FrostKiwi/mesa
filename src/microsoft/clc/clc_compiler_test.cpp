@@ -750,6 +750,33 @@ TEST_F(ComputeTest, complex_types_global_uint8)
    }
 }
 
+TEST_F(ComputeTest, complex_types_local_ulong16)
+{
+   struct ulong16 {
+      uint64_t values[16];
+   };
+   const char *kernel_source =
+   R"(__kernel void main_test(__global ulong16 *inout)
+   {
+      __local ulong16 local_array[2];
+      uint id = get_global_id(0);
+      local_array[id] = inout[id];
+      barrier(CLK_LOCAL_MEM_FENCE);
+      inout[id] = local_array[0] * 2;
+   })";
+   auto inout = ShaderArg<struct ulong16>({ { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 } },
+                                        SHADER_ARG_INOUT);
+   const struct ulong16 expected[] = {
+      { 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30 }
+   };
+   run_shader(kernel_source, inout.size(), 1, 1, inout);
+   for (int i = 0; i < inout.size(); ++i) {
+      for (int j = 0; j < 16; ++j) {
+         EXPECT_EQ(inout[i].values[j], expected[i].values[j]);
+      }
+   }
+}
+
 TEST_F(ComputeTest, complex_types_constant_uint8)
 {
    struct uint8 {
