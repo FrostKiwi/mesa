@@ -486,6 +486,11 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_CBIT(b, dest_type, src[0]);
       break;
 
+   case nir_op_uclz:
+      assert(nir_dest_bit_size(instr->dest.dest) == 32);
+      dest = ibc_LZD(b, IBC_TYPE_UD, src[0]);
+      break;
+
    case nir_op_ufind_msb:
    case nir_op_ifind_msb: {
       ibc_ref tmp = ibc_FBH(b, IBC_TYPE_D, src[0]);
