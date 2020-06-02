@@ -409,11 +409,9 @@ lower_store_ssbo(nir_builder *b, nir_intrinsic_instr *intr)
    return true;
 }
 
-static nir_ssa_def *
-lower_load_vec32(nir_builder *b, nir_ssa_def *index, unsigned num_comps, nir_intrinsic_op op)
+void
+lower_load_vec32(nir_builder *b, nir_ssa_def *index, unsigned num_comps, nir_ssa_def **comps, nir_intrinsic_op op)
 {
-   nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
-
    for (unsigned i = 0; i < num_comps; i++) {
       nir_intrinsic_instr *load =
          nir_intrinsic_instr_create(b->shader, op);
@@ -424,8 +422,6 @@ lower_load_vec32(nir_builder *b, nir_ssa_def *index, unsigned num_comps, nir_int
       nir_builder_instr_insert(b, &load->instr);
       comps[i] = &load->dest.ssa;
    }
-
-   return nir_vec(b, comps, num_comps);
 }
 
 static bool
@@ -450,25 +446,33 @@ lower_32b_offset_load(nir_builder *b, nir_intrinsic_instr *intr)
    }
    nir_ssa_def *index = nir_ushr(b, offset, nir_imm_int(b, 2));
    nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
+   nir_ssa_def *comps_32bit[NIR_MAX_VEC_COMPONENTS * 2];
 
    /* We need to split loads in 32-bit accesses because the buffer
     * is an i32 array and DXIL does not support type casts.
     */
-   nir_ssa_def *vec32 =
-      lower_load_vec32(b, index, DIV_ROUND_UP(num_bits, 32), op);
+   unsigned num_32bit_comps = DIV_ROUND_UP(num_bits, 32);
+   lower_load_vec32(b, index, num_32bit_comps, comps_32bit, op);
 
-   /* If we have 16 bits or less to load we need to adjust the u32 value so
-    * we can always extract the LSB.
-    */
-   if (num_bits <= 16) {
-      nir_ssa_def *shift =
-         nir_imul(b, nir_iand(b, offset, nir_imm_int(b, 3)),
-                     nir_imm_int(b, 8));
-      vec32 = nir_ushr(b, vec32, shift);
+   for (unsigned i = 0; i < num_32bit_comps; i += NIR_MAX_VEC_COMPONENTS) {
+      unsigned num_vec32_comps = MIN2(num_32bit_comps, NIR_MAX_VEC_COMPONENTS);
+      unsigned num_dest_comps = num_vec32_comps * 32 / bit_size;
+      nir_ssa_def *vec32 = nir_vec(b, &comps_32bit[i], num_vec32_comps);
+
+      /* If we have 16 bits or less to load we need to adjust the u32 value so
+       * we can always extract the LSB.
+       */
+      if (num_bits <= 16) {
+         nir_ssa_def *shift =
+            nir_imul(b, nir_iand(b, offset, nir_imm_int(b, 3)),
+                        nir_imm_int(b, 8));
+         vec32 = nir_ushr(b, vec32, shift);
+      }
+
+      /* And now comes the pack/unpack step to match the original type. */
+      unsigned dest_index = i * 32 / bit_size;
+      extract_comps_from_vec32(b, vec32, bit_size, &comps[dest_index], num_dest_comps);
    }
-
-   /* And now comes the pack/unpack step to match the original type. */
-   extract_comps_from_vec32(b, vec32, bit_size, comps, num_components);
 
    nir_ssa_def *result = nir_vec(b, comps, num_components);
    nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
@@ -556,21 +560,31 @@ lower_32b_offset_store(nir_builder *b, nir_intrinsic_instr *intr)
       offset = nir_u2u32(b, offset);
       op = nir_intrinsic_store_scratch_dxil;
    }
-   nir_ssa_def *index = nir_ushr(b, offset, nir_imm_int(b, 2));
    nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
 
+   unsigned comp_idx = 0;
    for (unsigned i = 0; i < num_components; i++)
       comps[i] = nir_channel(b, intr->src[0].ssa, i);
 
-   nir_ssa_def *vec32 = load_comps_to_vec32(b, bit_size, comps, num_components);
+   for (unsigned i = 0; i < num_bits; i += 4 * 32) {
+      /* For each 4byte chunk (or smaller) we generate a 32bit scalar store.
+       */
+      unsigned substore_num_bits = MIN2(num_bits - i, 4 * 32);
+      nir_ssa_def *local_offset = nir_iadd(b, offset, nir_imm_int(b, i / 8));
+      nir_ssa_def *vec32 = load_comps_to_vec32(b, bit_size, &comps[comp_idx],
+                                               substore_num_bits / bit_size);
+      nir_ssa_def *index = nir_ushr(b, local_offset, nir_imm_int(b, 2));
 
-   /* For anything less than 32bits we need to use the masked version of the
-    * intrinsic to preserve data living in the same 32bit slot.
-    */
-   if (num_bits < 32) {
-      lower_masked_store_vec32(b, offset, index, vec32, num_bits, op);
-   } else {
-      lower_store_vec32(b, index, vec32, op);
+      /* For anything less than 32bits we need to use the masked version of the
+       * intrinsic to preserve data living in the same 32bit slot.
+       */
+      if (num_bits < 32) {
+         lower_masked_store_vec32(b, local_offset, index, vec32, num_bits, op);
+      } else {
+         lower_store_vec32(b, index, vec32, op);
+      }
+
+      comp_idx += substore_num_bits / bit_size;
    }
 
    nir_instr_remove(&intr->instr);
