@@ -641,9 +641,6 @@ void emit_binary_bundle(
         struct util_dynarray *emission,
         int next_tag);
 
-bool
-nir_undef_to_zero(nir_shader *shader);
-
 void midgard_nir_lod_errata(nir_shader *shader);
 
 /* Optimizations */
