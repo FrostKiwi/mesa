@@ -27,6 +27,7 @@
 #include "compiler/glsl_types.h"
 #include "compiler/nir/nir_builder.h"
 #include "util/u_math.h"
+#include "util/debug.h"
 
 static bool
 remap_tess_levels(nir_builder *b, nir_intrinsic_instr *intr,
@@ -789,6 +790,9 @@ brw_nir_should_use_ibc(const nir_shader *nir,
                        bool is_scalar)
 {
    if (!is_scalar)
+      return false;
+
+   if (env_var_as_boolean("IBC_DISABLE", false))
       return false;
 
    switch (nir->info.stage) {

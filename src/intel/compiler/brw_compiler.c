@@ -225,6 +225,7 @@ brw_get_compiler_config_value(const struct brw_compiler *compiler)
       insert_u64_bit(&config, (debug_bits & bit) != 0);
       mask &= ~bit;
    }
+   insert_u64_bit(&config, env_var_as_boolean("IBC_DISABLE", false));
    return config;
 }
 
