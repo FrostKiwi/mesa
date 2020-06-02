@@ -3328,7 +3328,7 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
    struct texop_parameters params;
    memset(&params, 0, sizeof(struct texop_parameters));
    params.tex = ctx->srv_handles[instr->texture_index];
-   params.sampler = ctx->sampler_handles[instr->texture_index];
+   params.sampler = ctx->sampler_handles[instr->sampler_index];
 
    const struct dxil_type *int_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_type *float_type = dxil_module_get_float_type(&ctx->mod, 32);
