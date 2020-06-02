@@ -3838,6 +3838,7 @@ optimize_nir(struct nir_shader *s)
       NIR_PASS(progress, s, dxil_nir_lower_b2b);
       NIR_PASS(progress, s, nir_opt_constant_folding);
       NIR_PASS(progress, s, nir_opt_undef);
+      NIR_PASS(progress, s, nir_lower_undef_to_zero);
       NIR_PASS(progress, s, nir_opt_deref);
       NIR_PASS_V(s, nir_lower_system_values);
    } while (progress);
