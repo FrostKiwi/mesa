@@ -747,6 +747,9 @@ ibc_emit_fb_write(struct nir_to_ibc_state *nti,
                               IBC_PREDICATE_NORMAL);
    }
 
+   if (color1.file != IBC_FILE_NONE && color0.file != IBC_FILE_NONE)
+      prog_data->dual_src_blend = true;
+
    return write;
 }
 
