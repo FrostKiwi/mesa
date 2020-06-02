@@ -473,7 +473,7 @@ optimise_nir(nir_shader *nir, unsigned quirks)
                 }
 
                 NIR_PASS(progress, nir, nir_opt_undef);
-                NIR_PASS(progress, nir, nir_undef_to_zero);
+                NIR_PASS(progress, nir, nir_lower_undef_to_zero);
 
                 NIR_PASS(progress, nir, nir_opt_loop_unroll,
                          nir_var_shader_in |
