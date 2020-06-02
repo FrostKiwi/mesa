@@ -491,7 +491,20 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_LZD(b, IBC_TYPE_UD, src[0]);
       break;
 
-   case nir_op_ufind_msb:
+   case nir_op_ufind_msb: {
+      ibc_ref tmp = ibc_LZD(b, IBC_TYPE_UD, src[0]);
+
+      /* LZD counts from the MSB side, while GLSL's findMSB() wants the count
+       * from the LSB side. Subtract the result from 31 to convert the MSB
+       * count into an LSB count.  If no bits are set, LZD will return 32.
+       * 31-32 = -1, which is exactly what findMSB() is supposed to return.
+       */
+      dest = ibc_ADD(b, IBC_TYPE_D, tmp, ibc_imm_d(31));
+      ibc_alu_instr *add = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+      add->src[0].mod = IBC_ALU_SRC_MOD_NEG;
+      break;
+   }
+
    case nir_op_ifind_msb: {
       ibc_ref tmp = ibc_FBH(b, IBC_TYPE_D, src[0]);
 
