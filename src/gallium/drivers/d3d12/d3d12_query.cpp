@@ -40,7 +40,7 @@ struct d3d12_query {
 
    pipe_resource *buffer;
    unsigned buffer_offset;
-   int fence_value;
+   uint64_t fence_value;
 
    struct list_head active_list;
    struct d3d12_resource *predicate;
