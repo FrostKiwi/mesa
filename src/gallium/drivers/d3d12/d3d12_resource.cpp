@@ -580,8 +580,7 @@ synchronize(struct d3d12_context *ctx,
 /* A wrapper to make sure local resources are freed and unmapped with
  * any exit path */
 struct local_resource {
-   local_resource(pipe_screen *s, struct pipe_resource *tmpl):
-      screen(s)
+   local_resource(pipe_screen *s, struct pipe_resource *tmpl)
    {
       res = d3d12_resource(d3d12_resource_create(s, tmpl));
    }
@@ -609,7 +608,15 @@ struct local_resource {
          d3d12_bo_unmap(res->bo, nullptr);
       mapped = false;
    }
-   pipe_screen *screen;
+
+   operator struct d3d12_resource *() {
+      return res;
+   }
+
+   bool operator !() {
+      return !res;
+   }
+private:
    struct d3d12_resource *res;
    bool mapped;
 };
@@ -652,35 +659,35 @@ read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
    tmpl.depth0 = 1;
    tmpl.array_size = 1;
 
-   auto depth_buffer = std::make_unique<local_resource>(pscreen, &tmpl);
-   if (!depth_buffer || !depth_buffer->res) {
+   local_resource depth_buffer(pscreen, &tmpl);
+   if (!depth_buffer) {
       debug_printf("Allocating staging buffer for depth failed\n");
       return NULL;
    }
 
-   if (!transfer_image_to_buf(ctx, res, depth_buffer->res, trans, 0))
+   if (!transfer_image_to_buf(ctx, res, depth_buffer, trans, 0))
       return NULL;
 
    tmpl.format = PIPE_FORMAT_R8_UINT;
 
-   auto stencil_buffer = std::make_unique<local_resource>(pscreen, &tmpl);
-   if (!stencil_buffer || !stencil_buffer->res) {
+   local_resource stencil_buffer(pscreen, &tmpl);
+   if (!stencil_buffer) {
       debug_printf("Allocating staging buffer for stencilfailed\n");
       return NULL;
    }
 
-   if (!transfer_image_to_buf(ctx, res, stencil_buffer->res, trans, 1))
+   if (!transfer_image_to_buf(ctx, res, stencil_buffer, trans, 1))
       return NULL;
 
    d3d12_flush_cmdlist_and_wait(ctx);
 
-   uint32_t *depth_ptr = (uint32_t *)depth_buffer->map();
+   uint32_t *depth_ptr = (uint32_t *)depth_buffer.map();
    if (!depth_ptr) {
       debug_printf("Mapping staging depth buffer failed\n");
       return NULL;
    }
 
-   char *stencil_ptr =  (char *)stencil_buffer->map();
+   char *stencil_ptr =  (char *)stencil_buffer.map();
    if (!stencil_ptr) {
       debug_printf("Mapping staging stencil buffer failed\n");
       return NULL;
@@ -734,25 +741,25 @@ write_zs_surface(struct pipe_context *pctx, struct d3d12_resource *res,
    tmpl.depth0 = 1;
    tmpl.array_size = 1;
 
-   auto depth_buffer = std::make_unique<local_resource>(pctx->screen, &tmpl);
-   if (!depth_buffer || !depth_buffer->res) {
+   local_resource depth_buffer(pctx->screen, &tmpl);
+   if (!depth_buffer) {
       debug_printf("Allocating staging buffer for depth failed\n");
       return;
    }
 
-   auto stencil_buffer = std::make_unique<local_resource>(pctx->screen, &tmpl);
-   if (!stencil_buffer || !stencil_buffer->res) {
+   local_resource stencil_buffer(pctx->screen, &tmpl);
+   if (!stencil_buffer) {
       debug_printf("Allocating staging buffer for depth failed\n");
       return;
    }
 
-   uint32_t *depth_ptr = (uint32_t *)depth_buffer->map();
+   uint32_t *depth_ptr = (uint32_t *)depth_buffer.map();
    if (!depth_ptr) {
       debug_printf("Mapping staging depth buffer failed\n");
       return;
    }
 
-   char *stencil_ptr =  (char *)stencil_buffer->map();
+   char *stencil_ptr =  (char *)stencil_buffer.map();
    if (!stencil_ptr) {
       debug_printf("Mapping staging stencil buffer failed\n");
       return;
@@ -769,11 +776,11 @@ write_zs_surface(struct pipe_context *pctx, struct d3d12_resource *res,
       }
    }
 
-   stencil_buffer->unmap();
-   depth_buffer->unmap();
+   stencil_buffer.unmap();
+   depth_buffer.unmap();
 
-   transfer_buf_to_image(d3d12_context(pctx), res, depth_buffer->res, trans, 0);
-   transfer_buf_to_image(d3d12_context(pctx), res, stencil_buffer->res, trans, 1);
+   transfer_buf_to_image(d3d12_context(pctx), res, depth_buffer, trans, 0);
+   transfer_buf_to_image(d3d12_context(pctx), res, stencil_buffer, trans, 1);
 }
 
 static void *
