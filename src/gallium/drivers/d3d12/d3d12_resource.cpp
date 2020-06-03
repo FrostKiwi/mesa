@@ -453,24 +453,31 @@ transfer_image_part_to_buf(struct d3d12_context *ctx,
                            unsigned resid, int z, int start_layer,
                            int start_box_z, int depth)
 {
+   struct pipe_box *box = &trans->base.box;
    D3D12_BOX src_box = {};
 
-   src_box.left = trans->base.box.x;
-   src_box.right = trans->base.box.x + trans->base.box.width;
-   src_box.top = trans->base.box.y;
-   src_box.bottom = trans->base.box.y + trans->base.box.height;
-   src_box.front = start_box_z;
-   src_box.back = start_box_z + depth;
-
    struct copy_info copy_info;
+   copy_info.src_box = nullptr;
    copy_info.src = res;
    copy_info.src_loc = fill_texture_location(res, trans, resid, z);
    copy_info.src_box = &src_box;
    copy_info.dst = staging_res;
    copy_info.dst_loc = fill_buffer_location(ctx, res, staging_res, trans,
-                                            trans->base.box.depth, resid, z);
+                                            box->depth, resid, z);
    copy_info.dst_loc.PlacedFootprint.Offset = (z  - start_layer) * trans->base.layer_stride;
    copy_info.dst_x = copy_info.dst_y = copy_info.dst_z = 0;
+
+   if (!util_texrange_covers_whole_level(&res->base, trans->base.level,
+                                         box->x, box->y, box->z,
+                                         box->width, box->height, box->depth)) {
+      src_box.left = box->x;
+      src_box.right = box->x + box->width;
+      src_box.top = box->y;
+      src_box.bottom = box->y + box->height;
+      src_box.front = start_box_z;
+      src_box.back = start_box_z + depth;
+      copy_info.src_box = &src_box;
+   }
 
    copy_texture_region(ctx, copy_info);
 }
