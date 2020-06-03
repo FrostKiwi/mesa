@@ -599,15 +599,16 @@ d3d12_create_sampler_state(struct pipe_context *pctx,
       unreachable("unexpected mip filter");
    }
 
-   if (state->compare_mode == PIPE_TEX_COMPARE_R_TO_TEXTURE)
+   if (state->compare_mode == PIPE_TEX_COMPARE_R_TO_TEXTURE) {
       desc.ComparisonFunc = compare_op((pipe_compare_func) state->compare_func);
-   else if (state->compare_mode == PIPE_TEX_COMPARE_NONE)
+      desc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
+   } else if (state->compare_mode == PIPE_TEX_COMPARE_NONE) {
       desc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-   else
+      desc.Filter = get_filter(state);
+   } else
       unreachable("unexpected comparison mode");
 
    desc.MaxAnisotropy = state->max_anisotropy;
-   desc.Filter = get_filter(state);
 
    desc.AddressU = sampler_address_mode((pipe_tex_wrap) state->wrap_s);
    desc.AddressV = sampler_address_mode((pipe_tex_wrap) state->wrap_t);
