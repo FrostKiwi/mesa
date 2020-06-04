@@ -535,6 +535,8 @@ clc_to_spirv(const struct clc_compile_args *args,
       // Add a default CL compiler version. Clang will pick the last one specified
       // on the command line, so the app can override this one.
       "-cl-std=cl1.2",
+      // The LLVM-SPIRV-Translator doesn't support memset with variable size
+      "-fno-builtin-memset",
    };
    // We assume there's appropriate defines for __OPENCL_VERSION__ and __IMAGE_SUPPORT__
    // being provided by the caller here.
