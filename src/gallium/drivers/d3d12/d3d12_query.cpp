@@ -204,6 +204,8 @@ end_query(struct d3d12_context *ctx, struct d3d12_query *q)
 
    offset += q->buffer_offset + q->curr_query * sizeof(uint64_t);
    ctx->cmdlist->EndQuery(q->query_heap, q->d3d12qtype, q->curr_query);
+   d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_COPY_DEST, SubresourceTransitionFlags::SubresourceTransitionFlags_None);
+   d3d12_apply_resource_states(ctx, false);
    ctx->cmdlist->ResolveQueryData(q->query_heap, q->d3d12qtype, q->curr_query,
                                   1, d3d12_res, offset);
 
