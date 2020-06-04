@@ -418,6 +418,8 @@ d3d12_blit(struct pipe_context *pctx,
    struct d3d12_context *ctx = d3d12_context(pctx);
 
    if (!info->render_condition_enable && ctx->current_predication) {
+      if (D3D12_DEBUG_BLIT & d3d12_debug)
+         debug_printf("D3D12 BLIT: Disable predication\n");
       ctx->cmdlist->SetPredication(nullptr, 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
    }
 
@@ -426,11 +428,16 @@ d3d12_blit(struct pipe_context *pctx,
                    util_format_name(info->src.format), info->src.level,
                    info->src.box.x, info->src.box.y, info->src.box.z,
                    info->src.box.width, info->src.box.height, info->src.box.depth);
-      debug_printf("      to   %s@%d %dx%dx%d + %dx%dx%d\n",
+      debug_printf("      to   %s@%d %dx%dx%d + %dx%dx%d ",
                    util_format_name(info->dst.format), info->dst.level,
                    info->dst.box.x, info->dst.box.y, info->dst.box.z,
                    info->dst.box.width, info->dst.box.height, info->dst.box.depth);
+      debug_printf("| flags %s%s%s\n",
+                   info->render_condition_enable ? "cond " : "",
+                   info->scissor_enable ? "scissor " : "",
+                   info->alpha_blend ? "blend" : "");
    }
+
 
    if (resolve_supported(info))
       blit_resolve(ctx, info);
@@ -446,7 +453,10 @@ d3d12_blit(struct pipe_context *pctx,
    if (!info->render_condition_enable && ctx->current_predication) {
       ctx->cmdlist->SetPredication(
                d3d12_resource_resource(ctx->current_predication), 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
+      if (D3D12_DEBUG_BLIT & d3d12_debug)
+         debug_printf("D3D12 BLIT: Re-enable predication\n");
    }
+
 }
 
 static void
