@@ -789,6 +789,11 @@ brw_nir_should_use_ibc(const nir_shader *nir,
                        const struct brw_compiler *compiler,
                        bool is_scalar)
 {
+   const struct gen_device_info *devinfo = compiler->devinfo;
+
+   if (devinfo->gen <= 8 || devinfo->gen >= 12)
+      return false;
+
    if (!is_scalar)
       return false;
 
