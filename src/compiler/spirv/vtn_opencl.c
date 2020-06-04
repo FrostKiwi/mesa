@@ -34,21 +34,40 @@ typedef nir_ssa_def *(*nir_handler)(struct vtn_builder *b,
                                     enum OpenCLstd_Entrypoints opcode,
                                     unsigned num_srcs, nir_ssa_def **srcs,
                                     const struct glsl_type **src_types,
+                                    const nir_variable_mode *address_types,
                                     const struct glsl_type *dest_type);
+
+static int to_llvm_address_space(nir_variable_mode mode)
+{
+   switch (mode) {
+   case nir_var_function_temp:
+   case nir_var_shader_temp: return 0;
+   case nir_var_mem_global: return 1;
+   case nir_var_uniform:
+   case nir_var_mem_ubo: return 2;
+   case nir_var_mem_shared: return 3;
+   default: return -1;
+   }
+}
+
 
 static void
 vtn_opencl_mangle(const char *in_name,
-                  uint32_t ptr_mask,
                   uint32_t const_mask,
                   int ntypes, const struct glsl_type **src_types,
+                  const nir_variable_mode *address_types,
                   char **outstring)
 {
    char local_name[256] = "";
    char *args_str = local_name + sprintf(local_name, "_Z%zu%s", strlen(in_name), in_name);
 
    for (unsigned i = 0; i < ntypes; ++i) {
-      if (ptr_mask & (1 << i))
+      int address_space = to_llvm_address_space(address_types[i]);
+      if (address_space >= 0) {
          *(args_str++) = 'P';
+         if (address_space > 0)
+            args_str += sprintf(args_str, "U3AS%d", address_space);
+      }
 
       if (const_mask & (1 << i))
          *(args_str++) = 'K';
@@ -101,15 +120,15 @@ vtn_opencl_mangle(const char *in_name,
 
 static nir_function *mangle_and_find(struct vtn_builder *b,
                                      const char *name,
-                                     uint32_t ptr_mask,
                                      uint32_t const_mask,
                                      uint32_t num_srcs,
-                                     const struct glsl_type **src_types)
+                                     const struct glsl_type **src_types,
+                                     const nir_variable_mode *address_types)
 {
    char *mname;
    nir_function *found = NULL;
 
-   vtn_opencl_mangle(name, ptr_mask, const_mask, num_srcs, src_types, &mname);
+   vtn_opencl_mangle(name, const_mask, num_srcs, src_types, address_types, &mname);
    /* try and find in current shader first. */
    nir_foreach_function(funcs, b->shader) {
       if (!strcmp(funcs->name, mname)) {
@@ -143,15 +162,15 @@ static nir_function *mangle_and_find(struct vtn_builder *b,
 
 static bool call_mangled_function(struct vtn_builder *b,
                                   const char *name,
-                                  uint32_t ptr_mask,
                                   uint32_t const_mask,
                                   uint32_t num_srcs,
                                   const struct glsl_type **src_types,
+                                  const nir_variable_mode *address_types,
                                   const struct glsl_type *dest_type,
                                   nir_ssa_def **srcs,
                                   nir_deref_instr **ret_deref_ptr)
 {
-   nir_function *found = mangle_and_find(b, name, ptr_mask, const_mask, num_srcs, src_types);
+   nir_function *found = mangle_and_find(b, name, const_mask, num_srcs, src_types, address_types);
    if (!found)
       return false;
 
@@ -185,13 +204,29 @@ handle_instr(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
    unsigned num_srcs = count - 5;
    nir_ssa_def *srcs[3] = { NULL };
    const struct glsl_type *src_types[3] = { NULL };
+   nir_variable_mode address_types[3] = { 0 };
    vtn_assert(num_srcs <= ARRAY_SIZE(srcs));
    for (unsigned i = 0; i < num_srcs; i++) {
-      srcs[i] = vtn_ssa_value(b, w[i + 5])->def;
-      src_types[i] = vtn_ssa_value(b, w[i + 5])->type;
+      struct vtn_value *val = vtn_untyped_value(b, w[i + 5]);
+      struct vtn_ssa_value *ssa_val = vtn_ssa_value(b, w[i + 5]);
+      srcs[i] = ssa_val->def;
+      src_types[i] = ssa_val->type;
+      if (val->type->base_type == vtn_base_type_pointer) {
+         if (val->pointer->deref)
+            address_types[i] = val->pointer->deref->mode;
+         else if (val->pointer->var)
+            address_types[i] = val->pointer->var->var->data.mode;
+         if (val->pointer->type)
+            src_types[i] = val->pointer->type->type;
+
+         if (glsl_type_is_vector(src_types[i]) &&
+             glsl_get_components(src_types[i]) == 3) {
+            src_types[i] = glsl_vector_type(glsl_get_base_type(src_types[i]), 4);
+         }
+      }
    }
 
-   nir_ssa_def *result = handler(b, opcode, num_srcs, srcs, src_types, dest_type);
+   nir_ssa_def *result = handler(b, opcode, num_srcs, srcs, src_types, address_types, dest_type);
    if (result) {
       struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
       val->ssa = vtn_create_ssa_value(b, dest_type);
@@ -255,7 +290,7 @@ nir_alu_op_for_opencl_opcode(struct vtn_builder *b,
 static nir_ssa_def *
 handle_alu(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
            unsigned num_srcs, nir_ssa_def **srcs, const struct glsl_type **src_types,
-           const struct glsl_type *dest_type)
+           const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
    return nir_build_alu(&b->nb, nir_alu_op_for_opencl_opcode(b, opcode),
                         srcs[0], srcs[1], srcs[2], NULL);
@@ -364,20 +399,17 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
               int num_srcs,
               nir_ssa_def **srcs,
               const struct glsl_type **src_types,
+              const nir_variable_mode *address_types,
               const struct glsl_type *dest_type)
 {
-   uint32_t ptr_mask = 0;
-
    const char *name = remap_clc_opcode(opcode);
    if (!name)
        return NULL;
 
    if (opcode == OpenCLstd_Fract) {
-      ptr_mask = (1u << 1);
       src_types[1] = src_types[0];
    }
    if (opcode == OpenCLstd_Frexp) {
-      ptr_mask = (1u << 1);
       int elem = glsl_get_vector_elements(src_types[0]);
       if (elem > 1)
          src_types[1] = glsl_vector_type(GLSL_TYPE_INT, elem);
@@ -385,7 +417,6 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
          src_types[1] = glsl_int_type();
    }
    if (opcode == OpenCLstd_Lgamma_r) {
-      ptr_mask = (1u << 1);
       int elem = glsl_get_vector_elements(src_types[0]);
       if (elem > 1)
          src_types[1] = glsl_vector_type(GLSL_TYPE_INT, elem);
@@ -393,7 +424,6 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
          src_types[1] = glsl_int_type();
    }
    if (opcode == OpenCLstd_Remquo) {
-      ptr_mask = (1u << 2);
       int elem = glsl_get_vector_elements(src_types[0]);
       if (elem > 1)
          src_types[2] = glsl_vector_type(GLSL_TYPE_INT, elem);
@@ -401,17 +431,15 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
          src_types[2] = glsl_int_type();
    }
    if (opcode == OpenCLstd_Sincos) {
-      ptr_mask = (1u << 1);
       src_types[1] = src_types[0];
    }
    if (opcode == OpenCLstd_Modf) {
-      ptr_mask = (1u << 1);
       src_types[1] = src_types[0];
    }
 
    nir_deref_instr *ret_deref = NULL;
 
-   if (!call_mangled_function(b, name, ptr_mask, 0, num_srcs, src_types,
+   if (!call_mangled_function(b, name, 0, num_srcs, src_types, address_types,
                               dest_type, srcs, &ret_deref))
       return NULL;
 
@@ -421,11 +449,11 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
 static nir_ssa_def *
 handle_special(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
                unsigned num_srcs, nir_ssa_def **srcs, const struct glsl_type **src_types,
-               const struct glsl_type *dest_type)
+               const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
    nir_builder *nb = &b->nb;
 
-   nir_ssa_def *ret = handle_clc_fn(b, opcode, num_srcs, srcs, src_types, dest_type);
+   nir_ssa_def *ret = handle_clc_fn(b, opcode, num_srcs, srcs, src_types, address_types, dest_type);
    if (ret)
       return ret;
 
@@ -566,7 +594,7 @@ vtn_handle_opencl_vstore(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcod
 static nir_ssa_def *
 handle_printf(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
               unsigned num_srcs, nir_ssa_def **srcs, const struct glsl_type **src_types,
-              const struct glsl_type *dest_type)
+              const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
    /* hahah, yeah, right.. */
    return nir_imm_int(&b->nb, -1);
@@ -574,7 +602,8 @@ handle_printf(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
 
 static nir_ssa_def *
 handle_shuffle(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode, unsigned num_srcs,
-               nir_ssa_def **srcs, const struct glsl_type **src_types, const struct glsl_type *dest_type)
+               nir_ssa_def **srcs, const struct glsl_type **src_types,
+               const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
    struct nir_ssa_def *input = srcs[0];
    struct nir_ssa_def *mask = srcs[1];
@@ -593,7 +622,8 @@ handle_shuffle(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode, unsigne
 
 static nir_ssa_def *
 handle_shuffle2(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode, unsigned num_srcs,
-                nir_ssa_def **srcs, const struct glsl_type **src_types, const struct glsl_type *dest_type)
+                nir_ssa_def **srcs, const struct glsl_type **src_types,
+                const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
    struct nir_ssa_def *input0 = srcs[0];
    struct nir_ssa_def *input1 = srcs[1];
