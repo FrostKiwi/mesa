@@ -884,6 +884,17 @@ delete_shader(struct d3d12_context *ctx, enum pipe_shader_type stage,
               struct d3d12_shader_selector *shader)
 {
    d3d12_gfx_pipeline_state_cache_invalidate_shader(ctx, stage, shader);
+
+   /* Make sure the pipeline state no longer reference the deleted shader */
+   struct d3d12_shader *iter = shader->first;
+   while (iter) {
+      if (ctx->gfx_pipeline_state.stages[stage] == iter) {
+         ctx->gfx_pipeline_state.stages[stage] = NULL;
+         break;
+      }
+      iter = iter->next_variant;
+   }
+
    d3d12_shader_free(shader);
 }
 
