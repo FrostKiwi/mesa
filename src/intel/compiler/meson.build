@@ -123,6 +123,7 @@ libintel_compiler_files = files(
   'brw_vec4_vs.h',
   'brw_vue_map.c',
   'brw_wm_iz.cpp',
+  'gen_eu_performance.h',
   'gen6_gs_visitor.cpp',
   'gen6_gs_visitor.h',
   'nir_to_ibc.c',
