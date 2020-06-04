@@ -131,6 +131,7 @@ COMPILER_FILES = \
 	compiler/brw_vec4_vs.h \
 	compiler/brw_vue_map.c \
 	compiler/brw_wm_iz.cpp \
+	compiler/gen_eu_performance.h \
 	compiler/gen6_gs_visitor.cpp \
 	compiler/gen6_gs_visitor.h
 
