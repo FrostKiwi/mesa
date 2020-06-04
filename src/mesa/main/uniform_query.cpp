@@ -891,6 +891,8 @@ glsl_type_name(enum glsl_base_type type)
       return "void";
    case GLSL_TYPE_ERROR:
       return "error";
+   case GLSL_TYPE_EVENT:
+      return "event";
    default:
       return "other";
    }

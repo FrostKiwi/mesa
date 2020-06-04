@@ -580,6 +580,12 @@ glsl_bare_sampler_type()
 }
 
 const struct glsl_type *
+glsl_event_type()
+{
+   return glsl_type::event_type;
+}
+
+const struct glsl_type *
 glsl_bare_shadow_sampler_type()
 {
    return glsl_type::samplerShadow_type;
@@ -702,6 +708,7 @@ glsl_get_natural_size_align_bytes(const struct glsl_type *type,
    case GLSL_TYPE_ERROR:
    case GLSL_TYPE_INTERFACE:
    case GLSL_TYPE_FUNCTION:
+   case GLSL_TYPE_EVENT:
       unreachable("type does not have a natural size");
    }
 }

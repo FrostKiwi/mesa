@@ -86,6 +86,7 @@ copy_constant_to_storage(union gl_constant_value *storage,
       case GLSL_TYPE_UINT8:
       case GLSL_TYPE_INT8:
       case GLSL_TYPE_FLOAT16:
+      case GLSL_TYPE_EVENT:
          /* All other types should have already been filtered by other
           * paths in the caller.
           */

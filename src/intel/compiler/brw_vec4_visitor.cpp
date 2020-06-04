@@ -634,6 +634,7 @@ type_size_xvec4(const struct glsl_type *type, bool as_vec4, bool bindless)
    case GLSL_TYPE_VOID:
    case GLSL_TYPE_ERROR:
    case GLSL_TYPE_FUNCTION:
+   case GLSL_TYPE_EVENT:
       unreachable("not reached");
    }
 
