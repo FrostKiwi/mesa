@@ -1938,3 +1938,22 @@ TEST_F(ComputeTest, convert_char2_uchar2)
    for (int i = 0; i < u.size(); i++)
       EXPECT_EQ(u[i], expected[i]);
 }
+
+TEST_F(ComputeTest, async_copy)
+{
+   const char *kernel_source = R"(
+   __kernel void main_test( const __global char *src, __global char *dst, __local char *localBuffer, int copiesPerWorkgroup, int copiesPerWorkItem )
+   {
+    int i;
+    for(i=0; i<copiesPerWorkItem; i++)
+        localBuffer[ get_local_id( 0 )*copiesPerWorkItem+i ] = (char)(char)0;
+       barrier( CLK_LOCAL_MEM_FENCE );
+       event_t event;
+       event = async_work_group_copy( (__local char*)localBuffer, (__global const char*)(src+copiesPerWorkgroup*get_group_id(0)), (size_t)copiesPerWorkgroup, 0 );
+       wait_group_events( 1, &event );
+    for(i=0; i<copiesPerWorkItem; i++)
+     dst[ get_global_id( 0 )*copiesPerWorkItem+i ] = localBuffer[ get_local_id( 0 )*copiesPerWorkItem+i ];
+   })";
+   Shader shader = compile({ kernel_source });
+   validate(shader);
+}
