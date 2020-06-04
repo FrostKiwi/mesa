@@ -41,7 +41,11 @@ lower_clc_deref_instr(nir_instr *instr, nir_builder *b,
        !nir_variable_is_global(deref->var))
       return false;
 
-   foreach_list_typed(nir_variable, clc_var, node, &clc_shader->uniforms) {
+   const struct exec_list *list = &clc_shader->uniforms;
+   if (deref->mode == nir_var_system_value)
+      list = &clc_shader->system_values;
+
+   foreach_list_typed(nir_variable, clc_var, node, list) {
       if (clc_var != deref->var)
          continue;
 
