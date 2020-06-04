@@ -31,7 +31,7 @@
 #include "OpenCL.std.h"
 
 typedef nir_ssa_def *(*nir_handler)(struct vtn_builder *b,
-                                    enum OpenCLstd_Entrypoints opcode,
+                                    uint32_t opcode,
                                     unsigned num_srcs, nir_ssa_def **srcs,
                                     const struct glsl_type **src_types,
                                     const nir_variable_mode *address_types,
@@ -195,20 +195,19 @@ static bool call_mangled_function(struct vtn_builder *b,
 }
 
 static void
-handle_instr(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
-             const uint32_t *w, unsigned count, nir_handler handler)
+handle_instr(struct vtn_builder *b, uint32_t opcode,
+             const uint32_t *w_src, unsigned num_srcs, const uint32_t *w_dest, nir_handler handler)
 {
-   const struct glsl_type *dest_type =
-      vtn_value(b, w[1], vtn_value_type_type)->type->type;
+   const struct glsl_type *dest_type = w_dest ?
+      vtn_value(b, w_dest[0], vtn_value_type_type)->type->type : NULL;
 
-   unsigned num_srcs = count - 5;
-   nir_ssa_def *srcs[3] = { NULL };
-   const struct glsl_type *src_types[3] = { NULL };
-   nir_variable_mode address_types[3] = { 0 };
+   nir_ssa_def *srcs[5] = { NULL };
+   const struct glsl_type *src_types[5] = { NULL };
+   nir_variable_mode address_types[5] = { 0 };
    vtn_assert(num_srcs <= ARRAY_SIZE(srcs));
    for (unsigned i = 0; i < num_srcs; i++) {
-      struct vtn_value *val = vtn_untyped_value(b, w[i + 5]);
-      struct vtn_ssa_value *ssa_val = vtn_ssa_value(b, w[i + 5]);
+      struct vtn_value *val = vtn_untyped_value(b, w_src[i]);
+      struct vtn_ssa_value *ssa_val = vtn_ssa_value(b, w_src[i]);
       srcs[i] = ssa_val->def;
       src_types[i] = ssa_val->type;
       if (val->type->base_type == vtn_base_type_pointer) {
@@ -228,11 +227,11 @@ handle_instr(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
 
    nir_ssa_def *result = handler(b, opcode, num_srcs, srcs, src_types, address_types, dest_type);
    if (result) {
-      struct vtn_value *val = vtn_push_value(b, w[2], vtn_value_type_ssa);
+      struct vtn_value *val = vtn_push_value(b, w_dest[1], vtn_value_type_ssa);
       val->ssa = vtn_create_ssa_value(b, dest_type);
       val->ssa->def = result;
    } else {
-      vtn_assert(dest_type == glsl_void_type());
+      vtn_assert(dest_type == NULL);
    }
 }
 
@@ -288,11 +287,11 @@ nir_alu_op_for_opencl_opcode(struct vtn_builder *b,
 }
 
 static nir_ssa_def *
-handle_alu(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
+handle_alu(struct vtn_builder *b, uint32_t opcode,
            unsigned num_srcs, nir_ssa_def **srcs, const struct glsl_type **src_types,
            const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
-   return nir_build_alu(&b->nb, nir_alu_op_for_opencl_opcode(b, opcode),
+   return nir_build_alu(&b->nb, nir_alu_op_for_opencl_opcode(b, (enum OpenCLstd_Entrypoints)opcode),
                         srcs[0], srcs[1], srcs[2], NULL);
 }
 
@@ -447,17 +446,18 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
 }
 
 static nir_ssa_def *
-handle_special(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
+handle_special(struct vtn_builder *b, uint32_t opcode,
                unsigned num_srcs, nir_ssa_def **srcs, const struct glsl_type **src_types,
                const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
    nir_builder *nb = &b->nb;
+   enum OpenCLstd_Entrypoints cl_opcode = (enum OpenCLstd_Entrypoints)opcode;
 
-   nir_ssa_def *ret = handle_clc_fn(b, opcode, num_srcs, srcs, src_types, address_types, dest_type);
+   nir_ssa_def *ret = handle_clc_fn(b, cl_opcode, num_srcs, srcs, src_types, address_types, dest_type);
    if (ret)
       return ret;
 
-   switch (opcode) {
+   switch (cl_opcode) {
    case OpenCLstd_SAbs_diff:
      /* these works easier in direct NIR */
       return nir_iabs_diff(nb, srcs[0], srcs[1]);
@@ -533,6 +533,32 @@ handle_special(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
    }
 }
 
+static nir_ssa_def *
+handle_core(struct vtn_builder *b, uint32_t opcode,
+            unsigned num_srcs, nir_ssa_def **srcs, const struct glsl_type **src_types,
+            const nir_variable_mode *address_types, const struct glsl_type *dest_type)
+{
+   nir_deref_instr *ret_deref = NULL;
+
+   switch ((SpvOp)opcode) {
+   case SpvOpGroupAsyncCopy: {
+      if (!call_mangled_function(b, "async_work_group_strided_copy", (1 << 1), num_srcs, src_types, address_types, dest_type, srcs, &ret_deref))
+         return NULL;
+      break;
+   }
+   case SpvOpGroupWaitEvents: {
+      src_types[0] = glsl_int_type();
+      if (!call_mangled_function(b, "wait_group_events", 0, num_srcs, src_types, address_types, dest_type, srcs, &ret_deref))
+         return NULL;
+      break;
+   }
+   default:
+      return NULL;
+   }
+
+   return ret_deref ? nir_load_deref(&b->nb, ret_deref) : NULL;
+}
+
 static void
 _handle_v_load_store(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
                      const uint32_t *w, unsigned count, bool load)
@@ -592,7 +618,7 @@ vtn_handle_opencl_vstore(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcod
 }
 
 static nir_ssa_def *
-handle_printf(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
+handle_printf(struct vtn_builder *b, uint32_t opcode,
               unsigned num_srcs, nir_ssa_def **srcs, const struct glsl_type **src_types,
               const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
@@ -601,7 +627,7 @@ handle_printf(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
 }
 
 static nir_ssa_def *
-handle_shuffle(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode, unsigned num_srcs,
+handle_shuffle(struct vtn_builder *b, uint32_t opcode, unsigned num_srcs,
                nir_ssa_def **srcs, const struct glsl_type **src_types,
                const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
@@ -621,7 +647,7 @@ handle_shuffle(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode, unsigne
 }
 
 static nir_ssa_def *
-handle_shuffle2(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode, unsigned num_srcs,
+handle_shuffle2(struct vtn_builder *b, uint32_t opcode, unsigned num_srcs,
                 nir_ssa_def **srcs, const struct glsl_type **src_types,
                 const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
@@ -695,7 +721,7 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_Trunc:
    case OpenCLstd_Rint:
    case OpenCLstd_Ldexp:
-      handle_instr(b, cl_opcode, w, count, handle_alu);
+      handle_instr(b, ext_opcode, w + 5, count - 5, w + 1, handle_alu);
       return true;
    case OpenCLstd_SAbs_diff:
    case OpenCLstd_UAbs_diff:
@@ -789,7 +815,7 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_SMad_sat:
    case OpenCLstd_Round:
    case OpenCLstd_Native_tan:
-      handle_instr(b, cl_opcode, w, count, handle_special);
+      handle_instr(b, ext_opcode, w + 5, count - 5, w + 1, handle_special);
       return true;
    case OpenCLstd_Vloadn:
       vtn_handle_opencl_vload(b, cl_opcode, w, count);
@@ -798,13 +824,13 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
       vtn_handle_opencl_vstore(b, cl_opcode, w, count);
       return true;
    case OpenCLstd_Shuffle:
-      handle_instr(b, cl_opcode, w, count, handle_shuffle);
+      handle_instr(b, ext_opcode, w + 5, count - 5, w + 1, handle_shuffle);
       return true;
    case OpenCLstd_Shuffle2:
-      handle_instr(b, cl_opcode, w, count, handle_shuffle2);
+      handle_instr(b, ext_opcode, w + 5, count - 5, w + 1, handle_shuffle2);
       return true;
    case OpenCLstd_Printf:
-      handle_instr(b, cl_opcode, w, count, handle_printf);
+      handle_instr(b, ext_opcode, w + 5, count - 5, w + 1, handle_printf);
       return true;
    case OpenCLstd_Prefetch:
       /* TODO maybe add a nir instruction for this? */
@@ -813,4 +839,21 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
       vtn_fail("unhandled opencl opc: %u\n", ext_opcode);
       return false;
    }
+}
+
+bool
+vtn_handle_opencl_core_instruction(struct vtn_builder *b, SpvOp opcode,
+                                   const uint32_t *w, unsigned count)
+{
+   switch (opcode) {
+   case SpvOpGroupAsyncCopy:
+      handle_instr(b, opcode, w + 4, count - 4, w + 1, handle_core);
+      return true;
+   case SpvOpGroupWaitEvents:
+      handle_instr(b, opcode, w + 2, count - 2, NULL, handle_core);
+      return true;
+   default:
+      return false;
+   }
+   return true;
 }
