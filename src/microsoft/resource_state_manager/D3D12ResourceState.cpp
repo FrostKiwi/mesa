@@ -390,7 +390,7 @@ void ResourceStateManager::TransitionSubresource(TransitionableResourceState* pR
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------
-void ResourceStateManager::ApplyAllResourceTransitions(ID3D12GraphicsCommandList *pCommandList, bool bIsPreDraw)
+void ResourceStateManager::ApplyAllResourceTransitions(ID3D12GraphicsCommandList *pCommandList, UINT64 /*ExecutionId*/, bool bIsPreDraw)
 {
    ApplyResourceTransitionsPreamble();
 

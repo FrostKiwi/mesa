@@ -1158,7 +1158,7 @@ d3d12_transition_subresources_state(struct d3d12_context *ctx,
 void
 d3d12_apply_resource_states(struct d3d12_context *ctx, bool predraw)
 {
-   ctx->resource_state_manager->ApplyAllResourceTransitions(ctx->cmdlist, predraw);
+   ctx->resource_state_manager->ApplyAllResourceTransitions(ctx->cmdlist, ctx->fence_value, predraw);
 }
 
 static void

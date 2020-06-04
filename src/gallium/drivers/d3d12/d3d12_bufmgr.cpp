@@ -64,11 +64,10 @@ create_trans_state(ID3D12Resource *res, enum pipe_format format)
                                  d3d12_non_opaque_plane_count(desc.Format);
    total_subresources *= util_format_has_stencil(util_format_description(format)) ?
                          2 : 1;
-   bool simultaneous_access = !!(desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS);
 
    return new TransitionableResourceState(res,
                                           total_subresources,
-                                          simultaneous_access);
+                                          SupportsSimultaneousAccess(desc));
 }
 
 struct d3d12_bo *

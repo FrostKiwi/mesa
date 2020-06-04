@@ -121,6 +121,12 @@ inline void InsertTailList(_Inout_ PSTATE_LIST_ENTRY ListHead, _Out_ __drv_alias
    return;
 }
 
+inline bool SupportsSimultaneousAccess(const D3D12_RESOURCE_DESC &desc)
+{
+   return D3D12_RESOURCE_DIMENSION_BUFFER == desc.Dimension ||
+          !!(desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS);
+}
+
 //==================================================================================================================================
 // CDesiredResourceState
 // Stores the current desired state of either an entire resource, or each subresource.
@@ -294,7 +300,7 @@ public:
                               SubresourceTransitionFlags Flags = SubresourceTransitionFlags_None);
 
    // Submit all barriers and queue sync.
-   void ApplyAllResourceTransitions(ID3D12GraphicsCommandList *pCommandList, bool bIsPreDraw = false);
+   void ApplyAllResourceTransitions(ID3D12GraphicsCommandList *pCommandList, UINT64 ExecutionId, bool bIsPreDraw = false);
 
 private:
    // These methods set the destination state of the resource/subresources and ensure it's in the transition list.
