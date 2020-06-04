@@ -375,6 +375,7 @@ ir_constant::clone(void *mem_ctx, struct hash_table *ht) const
    case GLSL_TYPE_SUBROUTINE:
    case GLSL_TYPE_INTERFACE:
    case GLSL_TYPE_FUNCTION:
+   case GLSL_TYPE_EVENT:
       assert(!"Should not get here.");
       break;
    }

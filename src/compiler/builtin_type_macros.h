@@ -184,6 +184,8 @@ DECL_TYPE(usubpassInputMS, 0,                                          GLSL_TYPE
 
 DECL_TYPE(atomic_uint, GL_UNSIGNED_INT_ATOMIC_COUNTER, GLSL_TYPE_ATOMIC_UINT, 1, 1)
 
+DECL_TYPE(event, GL_INVALID_ENUM, GLSL_TYPE_EVENT, 1, 1)
+
 STRUCT_TYPE(gl_DepthRangeParameters)
 STRUCT_TYPE(gl_PointParameters)
 STRUCT_TYPE(gl_MaterialParameters)

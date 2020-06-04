@@ -1076,6 +1076,7 @@ nir_get_nir_type_for_glsl_base_type(enum glsl_base_type base_type)
    case GLSL_TYPE_SUBROUTINE:
    case GLSL_TYPE_FUNCTION:
    case GLSL_TYPE_ERROR:
+   case GLSL_TYPE_EVENT:
       return nir_type_invalid;
    }
 

@@ -81,6 +81,7 @@ enum glsl_base_type {
    GLSL_TYPE_BOOL,
    GLSL_TYPE_SAMPLER,
    GLSL_TYPE_IMAGE,
+   GLSL_TYPE_EVENT,
    GLSL_TYPE_ATOMIC_UINT,
    GLSL_TYPE_STRUCT,
    GLSL_TYPE_INTERFACE,
@@ -119,6 +120,7 @@ static unsigned glsl_base_type_bit_size(enum glsl_base_type type)
    case GLSL_TYPE_UINT64:
    case GLSL_TYPE_IMAGE:
    case GLSL_TYPE_SAMPLER:
+   case GLSL_TYPE_EVENT:
       return 64;
 
    default:
@@ -154,7 +156,8 @@ static inline bool glsl_base_type_is_integer(enum glsl_base_type type)
           type == GLSL_TYPE_INT64 ||
           type == GLSL_TYPE_BOOL ||
           type == GLSL_TYPE_SAMPLER ||
-          type == GLSL_TYPE_IMAGE;
+          type == GLSL_TYPE_IMAGE ||
+          type == GLSL_TYPE_EVENT;
 }
 
 static inline unsigned int
@@ -184,6 +187,7 @@ glsl_base_type_get_bit_size(const enum glsl_base_type base_type)
    case GLSL_TYPE_UINT64:
    case GLSL_TYPE_IMAGE:
    case GLSL_TYPE_SAMPLER:
+   case GLSL_TYPE_EVENT:
       return 64;
 
    default:
@@ -670,7 +674,7 @@ public:
    {
       return (vector_elements == 1)
 	 && (base_type >= GLSL_TYPE_UINT)
-	 && (base_type <= GLSL_TYPE_IMAGE);
+	 && (base_type <= GLSL_TYPE_EVENT);
    }
 
    /**

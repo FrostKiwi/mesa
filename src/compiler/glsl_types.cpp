@@ -456,6 +456,7 @@ const glsl_type *glsl_type::get_bare_type() const
    case GLSL_TYPE_SUBROUTINE:
    case GLSL_TYPE_FUNCTION:
    case GLSL_TYPE_ERROR:
+   case GLSL_TYPE_EVENT:
       return this;
    }
 
@@ -1529,6 +1530,7 @@ glsl_type::component_slots() const
    case GLSL_TYPE_ATOMIC_UINT:
    case GLSL_TYPE_VOID:
    case GLSL_TYPE_ERROR:
+   case GLSL_TYPE_EVENT:
       break;
    }
 
@@ -2544,6 +2546,7 @@ glsl_type::count_vec4_slots(bool is_gl_vertex_input, bool is_bindless) const
    case GLSL_TYPE_ATOMIC_UINT:
    case GLSL_TYPE_VOID:
    case GLSL_TYPE_ERROR:
+   case GLSL_TYPE_EVENT:
       break;
    }
 
@@ -2597,6 +2600,7 @@ glsl_type::count_dword_slots(bool is_bindless) const
    case GLSL_TYPE_VOID:
    case GLSL_TYPE_ERROR:
    case GLSL_TYPE_FUNCTION:
+   case GLSL_TYPE_EVENT:
    default:
       unreachable("invalid type in st_glsl_type_dword_size()");
    }
@@ -2734,6 +2738,7 @@ encode_type_to_blob(struct blob *blob, const glsl_type *type)
       encoded.sampler.sampled_type = type->sampled_type;
       break;
    case GLSL_TYPE_ATOMIC_UINT:
+   case GLSL_TYPE_EVENT:
       break;
    case GLSL_TYPE_ARRAY:
       encoded.array.length = MIN2(type->length, 0x1fff);
@@ -2887,6 +2892,8 @@ decode_type_from_blob(struct blob_reader *blob)
    }
    case GLSL_TYPE_VOID:
       return glsl_type::void_type;
+   case GLSL_TYPE_EVENT:
+      return glsl_type::event_type;
    case GLSL_TYPE_ERROR:
    default:
       assert(!"Cannot decode type!");
