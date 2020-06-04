@@ -461,7 +461,6 @@ transfer_image_part_to_buf(struct d3d12_context *ctx,
    copy_info.src_box = nullptr;
    copy_info.src = res;
    copy_info.src_loc = fill_texture_location(res, trans, resid, z);
-   copy_info.src_box = &src_box;
    copy_info.dst = staging_res;
    copy_info.dst_loc = fill_buffer_location(ctx, res, staging_res, trans,
                                             box->depth, resid, z);
@@ -469,8 +468,8 @@ transfer_image_part_to_buf(struct d3d12_context *ctx,
    copy_info.dst_x = copy_info.dst_y = copy_info.dst_z = 0;
 
    if (!util_texrange_covers_whole_level(&res->base, trans->base.level,
-                                         box->x, box->y, box->z,
-                                         box->width, box->height, box->depth)) {
+                                         box->x, box->y, start_box_z,
+                                         box->width, box->height, depth)) {
       src_box.left = box->x;
       src_box.right = box->x + box->width;
       src_box.top = box->y;
