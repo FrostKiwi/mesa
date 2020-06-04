@@ -21,7 +21,7 @@
  * IN THE SOFTWARE.
  */
 
-#include "brw_eu.h"
+#include "gen_eu_performance.h"
 #include "brw_fs.h"
 #include "brw_vec4.h"
 #include "brw_cfg.h"
@@ -29,250 +29,6 @@
 using namespace brw;
 
 namespace {
-   /**
-    * Enumeration representing the various asynchronous units that can run
-    * computations in parallel on behalf of a shader thread.
-    */
-   enum gen_eu_unit {
-      /** EU front-end. */
-      GEN_UNIT_FE,
-      /** EU FPU0 (Note that co-issue to FPU1 is currently not modeled here). */
-      GEN_UNIT_FPU,
-      /** Extended Math unit (AKA FPU1 on Gen8-11, part of the EU on Gen6+). */
-      GEN_UNIT_EM,
-      /** Sampler shared function. */
-      GEN_UNIT_SAMPLER,
-      /** Pixel Interpolator shared function. */
-      GEN_UNIT_PI,
-      /** Unified Return Buffer shared function. */
-      GEN_UNIT_URB,
-      /** Data Port Data Cache shared function. */
-      GEN_UNIT_DP_DC,
-      /** Data Port Render Cache shared function. */
-      GEN_UNIT_DP_RC,
-      /** Data Port Constant Cache shared function. */
-      GEN_UNIT_DP_CC,
-      /** Message Gateway shared function. */
-      GEN_UNIT_GATEWAY,
-      /** Thread Spawner shared function. */
-      GEN_UNIT_SPAWNER,
-      /* GEN_UNIT_VME, */
-      /* GEN_UNIT_CRE, */
-      /** Number of asynchronous units currently tracked. */
-      GEN_NUM_UNITS,
-      /** Dummy unit for instructions that don't consume runtime from the above. */
-      GEN_UNIT_NULL = GEN_NUM_UNITS
-   };
-
-   /**
-    * Enumeration representing a computation result another computation can
-    * potentially depend on.
-    */
-   enum gen_eu_dependency_id {
-      /* Register part of the GRF. */
-      GEN_DEPENDENCY_ID_GRF0 = 0,
-      /* Register part of the MRF.  Only used on Gen4-6. */
-      GEN_DEPENDENCY_ID_MRF0 = GEN_DEPENDENCY_ID_GRF0 + BRW_MAX_GRF,
-      /* Address register part of the ARF. */
-      GEN_DEPENDENCY_ID_ADDR0 = GEN_DEPENDENCY_ID_MRF0 + 24,
-      /* Accumulator register part of the ARF. */
-      GEN_DEPENDENCY_ID_ACCUM0 = GEN_DEPENDENCY_ID_ADDR0 + 1,
-      /* Flag register part of the ARF. */
-      GEN_DEPENDENCY_ID_FLAG0 = GEN_DEPENDENCY_ID_ACCUM0 + 12,
-      /* SBID token write completion.  Only used on Gen12+. */
-      GEN_DEPENDENCY_ID_SBID_WR0 = GEN_DEPENDENCY_ID_FLAG0 + 8,
-      /* SBID token read completion.  Only used on Gen12+. */
-      GEN_DEPENDENCY_ID_SBID_RD0 = GEN_DEPENDENCY_ID_SBID_WR0 + 16,
-      /* Number of computation dependencies currently tracked. */
-      GEN_NUM_DEPENDENCY_IDS = GEN_DEPENDENCY_ID_SBID_RD0 + 16
-   };
-
-   /**
-    * State of our modeling of the program execution.
-    */
-   struct state {
-      state() : unit_ready(), dep_ready(), unit_busy(), weight(1.0) {}
-      /**
-       * Time at which a given unit will be ready to execute the next
-       * computation, in clock units.
-       */
-      unsigned unit_ready[GEN_NUM_UNITS];
-      /**
-       * Time at which an instruction dependent on a given dependency ID will
-       * be ready to execute, in clock units.
-       */
-      unsigned dep_ready[GEN_NUM_DEPENDENCY_IDS];
-      /**
-       * Aggregated utilization of a given unit excluding idle cycles,
-       * in clock units.
-       */
-      float unit_busy[GEN_NUM_UNITS];
-      /**
-       * Factor of the overhead of a computation accounted for in the
-       * aggregated utilization calculation.
-       */
-      float weight;
-   };
-
-   /**
-    * Information derived from an IR instruction used to compute performance
-    * estimates.  Allows the timing calculation to work on both FS and VEC4
-    * instructions.
-    */
-   struct instruction_info {
-      instruction_info(const gen_device_info *devinfo, const fs_inst *inst) :
-         devinfo(devinfo), op(inst->opcode),
-         td(inst->dst.type), sd(DIV_ROUND_UP(inst->size_written, REG_SIZE)),
-         tx(get_exec_type(inst)), sx(0), ss(0),
-         sc(has_bank_conflict(devinfo, inst) ? sd : 0),
-         desc(inst->desc), sfid(inst->sfid)
-      {
-         /* We typically want the maximum source size, except for split send
-          * messages which require the total size.
-          */
-         if (inst->opcode == SHADER_OPCODE_SEND) {
-            ss = DIV_ROUND_UP(inst->size_read(2), REG_SIZE) +
-                 DIV_ROUND_UP(inst->size_read(3), REG_SIZE);
-         } else {
-            for (unsigned i = 0; i < inst->sources; i++)
-               ss = MAX2(ss, DIV_ROUND_UP(inst->size_read(i), REG_SIZE));
-         }
-
-         /* Convert the execution size to GRF units. */
-         sx = DIV_ROUND_UP(inst->exec_size * type_sz(tx), REG_SIZE);
-
-         /* 32x32 integer multiplication has half the usual ALU throughput.
-          * Treat it as double-precision.
-          */
-         if ((inst->opcode == BRW_OPCODE_MUL || inst->opcode == BRW_OPCODE_MAD) &&
-             !brw_reg_type_is_floating_point(tx) && type_sz(tx) == 4 &&
-             type_sz(inst->src[0].type) == type_sz(inst->src[1].type))
-            tx = brw_int_type(8, tx == BRW_REGISTER_TYPE_D);
-      }
-
-      instruction_info(const gen_device_info *devinfo,
-                       const vec4_instruction *inst) :
-         devinfo(devinfo), op(inst->opcode),
-         td(inst->dst.type), sd(DIV_ROUND_UP(inst->size_written, REG_SIZE)),
-         tx(get_exec_type(inst)), sx(0), ss(0), sc(0),
-         desc(inst->desc), sfid(inst->sfid)
-      {
-         /* Compute the maximum source size. */
-         for (unsigned i = 0; i < ARRAY_SIZE(inst->src); i++)
-            ss = MAX2(ss, DIV_ROUND_UP(inst->size_read(i), REG_SIZE));
-
-         /* Convert the execution size to GRF units. */
-         sx = DIV_ROUND_UP(inst->exec_size * type_sz(tx), REG_SIZE);
-
-         /* 32x32 integer multiplication has half the usual ALU throughput.
-          * Treat it as double-precision.
-          */
-         if ((inst->opcode == BRW_OPCODE_MUL || inst->opcode == BRW_OPCODE_MAD) &&
-             !brw_reg_type_is_floating_point(tx) && type_sz(tx) == 4 &&
-             type_sz(inst->src[0].type) == type_sz(inst->src[1].type))
-            tx = brw_int_type(8, tx == BRW_REGISTER_TYPE_D);
-      }
-
-      /** Device information. */
-      const struct gen_device_info *devinfo;
-      /** Instruction opcode. */
-      opcode op;
-      /** Destination type. */
-      brw_reg_type td;
-      /** Destination size in GRF units. */
-      unsigned sd;
-      /** Execution type. */
-      brw_reg_type tx;
-      /** Execution size in GRF units. */
-      unsigned sx;
-      /** Source size. */
-      unsigned ss;
-      /** Bank conflict penalty size in GRF units (equal to sd if non-zero). */
-      unsigned sc;
-      /** Send message descriptor. */
-      uint32_t desc;
-      /** Send message shared function ID. */
-      uint8_t sfid;
-   };
-
-   /**
-    * Timing information of an instruction used to estimate the performance of
-    * the program.
-    */
-   struct perf_desc {
-      perf_desc(enum gen_eu_unit u, int df, int db,
-                int ls, int ld, int la, int lf) :
-         u(u), df(df), db(db), ls(ls), ld(ld), la(la), lf(lf) {}
-
-      /**
-       * Back-end unit its runtime shall be accounted to, in addition to the
-       * EU front-end which is always assumed to be involved.
-       */
-      enum gen_eu_unit u;
-      /**
-       * Overhead cycles from the time that the EU front-end starts executing
-       * the instruction until it's ready to execute the next instruction.
-       */
-      int df;
-      /**
-       * Overhead cycles from the time that the back-end starts executing the
-       * instruction until it's ready to execute the next instruction.
-       */
-      int db;
-      /**
-       * Latency cycles from the time that the back-end starts executing the
-       * instruction until its sources have been read from the register file.
-       */
-      int ls;
-      /**
-       * Latency cycles from the time that the back-end starts executing the
-       * instruction until its regular destination has been written to the
-       * register file.
-       */
-      int ld;
-      /**
-       * Latency cycles from the time that the back-end starts executing the
-       * instruction until its accumulator destination has been written to the
-       * ARF file.
-       *
-       * Note that this is an approximation of the real behavior of
-       * accumulating instructions in the hardware: Instead of modeling a pair
-       * of back-to-back accumulating instructions as a first computation with
-       * latency equal to ld followed by another computation with a
-       * mid-pipeline stall (e.g. after the "M" part of a MAC instruction), we
-       * model the stall as if it occurred at the top of the pipeline, with
-       * the latency of the accumulator computation offset accordingly.
-       */
-      int la;
-      /**
-       * Latency cycles from the time that the back-end starts executing the
-       * instruction until its flag destination has been written to the ARF
-       * file.
-       */
-      int lf;
-   };
-
-   /**
-    * Compute the timing information of an instruction based on any relevant
-    * information from the IR and a number of parameters specifying a linear
-    * approximation: Parameter X_Y specifies the derivative of timing X
-    * relative to info field Y, while X_1 specifies the independent term of
-    * the approximation of timing X.
-    */
-   perf_desc
-   calculate_desc(const instruction_info &info, enum gen_eu_unit u,
-                  int df_1, int df_sd, int df_sc,
-                  int db_1, int db_sx,
-                  int ls_1, int ld_1, int la_1, int lf_1,
-                  int l_ss, int l_sd)
-   {
-      return perf_desc(u, df_1 + df_sd * int(info.sd) + df_sc * int(info.sc),
-                          db_1 + db_sx * int(info.sx),
-                          ls_1 + l_ss * int(info.ss),
-                          ld_1 + l_ss * int(info.ss) + l_sd * int(info.sd),
-                          la_1, lf_1);
-   }
-
    /**
     * Compute the timing information of an instruction based on any relevant
     * information from the IR and a number of linear approximation parameters
@@ -287,12 +43,12 @@ namespace {
     * high variance or completely guessed in cases where experimental data was
     * unavailable.
     */
-   const perf_desc
-   instruction_desc(const instruction_info &info)
+   const struct gen_eu_perf_desc
+   instruction_desc(const struct gen_eu_instruction_info *info)
    {
-      const struct gen_device_info *devinfo = info.devinfo;
+      const struct gen_device_info *devinfo = info->devinfo;
 
-      switch (info.op) {
+      switch (info->op) {
       case BRW_OPCODE_SYNC:
       case BRW_OPCODE_SEL:
       case BRW_OPCODE_NOT:
@@ -361,7 +117,7 @@ namespace {
             return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 0, 0, 2,
                                   0, 10, 6 /* XXX */, 14, 0, 0);
          } else if (devinfo->gen >= 8) {
-            if (type_sz(info.tx) > 4)
+            if (type_sz(info->tx) > 4)
                return calculate_desc(info, GEN_UNIT_FPU, 0, 4, 0, 0, 4,
                                      0, 12, 8 /* XXX */, 16 /* XXX */, 0, 0);
             else
@@ -384,21 +140,21 @@ namespace {
             return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 0, 0, 2,
                                   0, 10, 6, 14, 0, 0);
          } else if (devinfo->gen >= 8) {
-            if (type_sz(info.tx) > 4)
+            if (type_sz(info->tx) > 4)
                return calculate_desc(info, GEN_UNIT_FPU, 0, 4, 0, 0, 4,
                                      0, 12, 8 /* XXX */, 16 /* XXX */, 0, 0);
             else
                return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 0, 0, 2,
                                      0, 8, 4, 12, 0, 0);
          } else if (devinfo->is_haswell) {
-            if (info.tx == BRW_REGISTER_TYPE_F)
+            if (info->tx == BRW_REGISTER_TYPE_F)
                return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 0, 0, 2,
                                      0, 12, 8 /* XXX */, 18, 0, 0);
             else
                return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 0, 0, 2,
                                      0, 10, 6 /* XXX */, 16, 0, 0);
          } else if (devinfo->gen >= 7) {
-            if (info.tx == BRW_REGISTER_TYPE_F)
+            if (info->tx == BRW_REGISTER_TYPE_F)
                return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 0, 0, 2,
                                      0, 14, 10 /* XXX */, 20, 0, 0);
             else
@@ -434,21 +190,21 @@ namespace {
             return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 1, 0, 2,
                                   0, 10, 6 /* XXX */, 14 /* XXX */, 0, 0);
          } else if (devinfo->gen >= 8) {
-            if (type_sz(info.tx) > 4)
+            if (type_sz(info->tx) > 4)
                return calculate_desc(info, GEN_UNIT_FPU, 0, 4, 1, 0, 4,
                                      0, 12, 8 /* XXX */, 16 /* XXX */, 0, 0);
             else
                return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 1, 0, 2,
                                      0, 8, 4 /* XXX */, 12 /* XXX */, 0, 0);
          } else if (devinfo->is_haswell) {
-            if (info.tx == BRW_REGISTER_TYPE_F)
+            if (info->tx == BRW_REGISTER_TYPE_F)
                return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 1, 0, 2,
                                      0, 12, 8 /* XXX */, 18, 0, 0);
             else
                return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 1, 0, 2,
                                      0, 10, 6 /* XXX */, 16, 0, 0);
          } else if (devinfo->gen >= 7) {
-            if (info.tx == BRW_REGISTER_TYPE_F)
+            if (info->tx == BRW_REGISTER_TYPE_F)
                return calculate_desc(info, GEN_UNIT_FPU, 0, 2, 1, 0, 2,
                                      0, 14, 10 /* XXX */, 20, 0, 0);
             else
@@ -504,7 +260,7 @@ namespace {
       case SHADER_OPCODE_INT_QUOTIENT:
       case SHADER_OPCODE_INT_REMAINDER:
          if (devinfo->gen >= 6) {
-            switch (info.op) {
+            switch (info->op) {
             case SHADER_OPCODE_RCP:
             case SHADER_OPCODE_RSQ:
             case SHADER_OPCODE_SQRT:
@@ -542,7 +298,7 @@ namespace {
                abort();
             }
          } else {
-            switch (info.op) {
+            switch (info->op) {
             case SHADER_OPCODE_RCP:
                return calculate_desc(info, GEN_UNIT_EM, 2, 0, 0, 0, 8,
                                      0, 22, 0, 0, 0, 8);
@@ -929,7 +685,7 @@ namespace {
 
       case SHADER_OPCODE_MEMORY_FENCE:
       case SHADER_OPCODE_INTERLOCK:
-         switch (info.sfid) {
+         switch (info->sfid) {
          case GEN6_SFID_DATAPORT_RENDER_CACHE:
             if (devinfo->gen >= 7)
                return calculate_desc(info, GEN_UNIT_DP_RC, 2, 0, 0, 30 /* XXX */, 0,
@@ -1024,10 +780,10 @@ namespace {
             abort();
 
       case SHADER_OPCODE_SEND:
-         switch (info.sfid) {
+         switch (info->sfid) {
          case GEN6_SFID_DATAPORT_RENDER_CACHE:
             if (devinfo->gen >= 7) {
-               switch (brw_dp_desc_msg_type(devinfo, info.desc)) {
+               switch (brw_dp_desc_msg_type(devinfo, info->desc)) {
                case GEN7_DATAPORT_RC_TYPED_ATOMIC_OP:
                   return calculate_desc(info, GEN_UNIT_DP_RC, 2, 0, 0,
                                         30 /* XXX */, 450 /* XXX */,
@@ -1056,7 +812,7 @@ namespace {
          case GEN7_SFID_DATAPORT_DATA_CACHE:
          case HSW_SFID_DATAPORT_DATA_CACHE_1:
             if (devinfo->gen >= 8 || devinfo->is_haswell) {
-               switch (brw_dp_desc_msg_type(devinfo, info.desc)) {
+               switch (brw_dp_desc_msg_type(devinfo, info->desc)) {
                case HSW_DATAPORT_DC_PORT1_UNTYPED_ATOMIC_OP:
                case HSW_DATAPORT_DC_PORT1_UNTYPED_ATOMIC_OP_SIMD4X2:
                case HSW_DATAPORT_DC_PORT1_TYPED_ATOMIC_OP_SIMD4X2:
@@ -1073,7 +829,7 @@ namespace {
                                         0, 0);
                }
             } else if (devinfo->gen >= 7) {
-               switch (brw_dp_desc_msg_type(devinfo, info.desc)) {
+               switch (brw_dp_desc_msg_type(devinfo, info->desc)) {
                case GEN7_DATAPORT_DC_UNTYPED_ATOMIC_OP:
                   return calculate_desc(info, GEN_UNIT_DP_DC, 2, 0, 0,
                                         30 /* XXX */, 400 /* XXX */,
@@ -1107,72 +863,6 @@ namespace {
       default:
          abort();
       }
-   }
-
-   /**
-    * Model the performance behavior of a stall on the specified dependency
-    * ID.
-    */
-   void
-   stall_on_dependency(state &st, enum gen_eu_dependency_id id)
-   {
-      if (id < ARRAY_SIZE(st.dep_ready))
-         st.unit_ready[GEN_UNIT_FE] = MAX2(st.unit_ready[GEN_UNIT_FE],
-                                       st.dep_ready[id]);
-   }
-
-   /**
-    * Model the performance behavior of the front-end and back-end while
-    * executing an instruction with the specified timing information, assuming
-    * all dependencies are already clear.
-    */
-   void
-   execute_instruction(state &st, const perf_desc &perf)
-   {
-      /* Compute the time at which the front-end will be ready to execute the
-       * next instruction.
-       */
-      st.unit_ready[GEN_UNIT_FE] += perf.df;
-
-      if (perf.u < GEN_NUM_UNITS) {
-         /* Wait for the back-end to be ready to execute this instruction. */
-         st.unit_ready[GEN_UNIT_FE] = MAX2(st.unit_ready[GEN_UNIT_FE],
-                                       st.unit_ready[perf.u]);
-
-         /* Compute the time at which the back-end will be ready to execute
-          * the next instruction, and update the back-end utilization.
-          */
-         st.unit_ready[perf.u] = st.unit_ready[GEN_UNIT_FE] + perf.db;
-         st.unit_busy[perf.u] += perf.db * st.weight;
-      }
-   }
-
-   /**
-    * Model the performance behavior of a read dependency provided by an
-    * instruction.
-    */
-   void
-   mark_read_dependency(state &st, const perf_desc &perf,
-                        enum gen_eu_dependency_id id)
-   {
-      if (id < ARRAY_SIZE(st.dep_ready))
-         st.dep_ready[id] = st.unit_ready[GEN_UNIT_FE] + perf.ls;
-   }
-
-   /**
-    * Model the performance behavior of a write dependency provided by an
-    * instruction.
-    */
-   void
-   mark_write_dependency(state &st, const perf_desc &perf,
-                         enum gen_eu_dependency_id id)
-   {
-      if (id >= GEN_DEPENDENCY_ID_ACCUM0 && id < GEN_DEPENDENCY_ID_FLAG0)
-         st.dep_ready[id] = st.unit_ready[GEN_UNIT_FE] + perf.la;
-      else if (id >= GEN_DEPENDENCY_ID_FLAG0 && id < GEN_DEPENDENCY_ID_SBID_WR0)
-         st.dep_ready[id] = st.unit_ready[GEN_UNIT_FE] + perf.lf;
-      else if (id < ARRAY_SIZE(st.dep_ready))
-         st.dep_ready[id] = st.unit_ready[GEN_UNIT_FE] + perf.ld;
    }
 
    /**
@@ -1221,48 +911,6 @@ namespace {
    }
 
    /**
-    * Return the dependency ID of flag register starting at offset \p i.
-    */
-   enum gen_eu_dependency_id
-   flag_dependency_id(unsigned i)
-   {
-      assert(i < GEN_DEPENDENCY_ID_SBID_WR0 - GEN_DEPENDENCY_ID_FLAG0);
-      return gen_eu_dependency_id(GEN_DEPENDENCY_ID_FLAG0 + i);
-   }
-
-   /**
-    * Return the dependency ID corresponding to the SBID read completion
-    * condition of a Gen12+ SWSB.
-    */
-   enum gen_eu_dependency_id
-   tgl_swsb_rd_dependency_id(tgl_swsb swsb)
-   {
-      if (swsb.mode) {
-         assert(swsb.sbid <
-                GEN_NUM_DEPENDENCY_IDS - GEN_DEPENDENCY_ID_SBID_RD0);
-         return gen_eu_dependency_id(GEN_DEPENDENCY_ID_SBID_RD0 + swsb.sbid);
-      } else {
-         return GEN_NUM_DEPENDENCY_IDS;
-      }
-   }
-
-   /**
-    * Return the dependency ID corresponding to the SBID write completion
-    * condition of a Gen12+ SWSB.
-    */
-   enum gen_eu_dependency_id
-   tgl_swsb_wr_dependency_id(tgl_swsb swsb)
-   {
-      if (swsb.mode) {
-         assert(swsb.sbid <
-                GEN_DEPENDENCY_ID_SBID_RD0 - GEN_DEPENDENCY_ID_SBID_WR0);
-         return gen_eu_dependency_id(GEN_DEPENDENCY_ID_SBID_WR0 + swsb.sbid);
-      } else {
-         return GEN_NUM_DEPENDENCY_IDS;
-      }
-   }
-
-   /**
     * Return the implicit accumulator register accessed by channel \p i of the
     * instruction.
     */
@@ -1278,16 +926,61 @@ namespace {
       return offset / REG_SIZE % 2;
    }
 
+   struct gen_eu_instruction_info
+   inst_info(const gen_device_info *devinfo, const fs_inst *inst)
+   {
+      enum brw_reg_type tx = get_exec_type(inst);
+
+      /* We typically want the maximum source size, except for split send
+       * messages which require the total size.
+       */
+      unsigned ss = 0;
+      if (inst->opcode == SHADER_OPCODE_SEND) {
+         ss = DIV_ROUND_UP(inst->size_read(2), REG_SIZE) +
+              DIV_ROUND_UP(inst->size_read(3), REG_SIZE);
+      } else {
+         for (unsigned i = 0; i < inst->sources; i++)
+            ss = MAX2(ss, DIV_ROUND_UP(inst->size_read(i), REG_SIZE));
+      }
+
+      /* Convert the execution size to GRF units. */
+      unsigned sx = DIV_ROUND_UP(inst->exec_size * type_sz(tx), REG_SIZE);
+
+      /* 32x32 integer multiplication has half the usual ALU throughput.
+       * Treat it as double-precision.
+       */
+      if ((inst->opcode == BRW_OPCODE_MUL || inst->opcode == BRW_OPCODE_MAD) &&
+          !brw_reg_type_is_floating_point(tx) && type_sz(tx) == 4 &&
+          type_sz(inst->src[0].type) == type_sz(inst->src[1].type))
+         tx = brw_int_type(8, tx == BRW_REGISTER_TYPE_D);
+
+      struct gen_eu_instruction_info info;
+
+      info.devinfo = devinfo;
+      info.op = inst->opcode;
+      info.td = inst->dst.type;
+      info.sd = DIV_ROUND_UP(inst->size_written, REG_SIZE);
+      info.tx = tx;
+      info.sx = sx;
+      info.ss = ss;
+      info.sc = has_bank_conflict(devinfo, inst) ? info.sd : 0;
+      info.desc = inst->desc;
+      info.sfid = inst->sfid;
+
+      return info;
+   }
+
    /**
     * Model the performance behavior of an FS back-end instruction.
     */
    void
-   issue_fs_inst(state &st, const gen_device_info *devinfo,
+   issue_fs_inst(struct gen_eu_performance_state *st,
+                 const gen_device_info *devinfo,
                  const backend_instruction *be_inst)
    {
       const fs_inst *inst = static_cast<const fs_inst *>(be_inst);
-      const instruction_info info(devinfo, inst);
-      const perf_desc perf = instruction_desc(info);
+      const struct gen_eu_instruction_info info = inst_info(devinfo, inst);
+      const gen_eu_perf_desc perf = instruction_desc(&info);
 
       /* Stall on any source dependencies. */
       for (unsigned i = 0; i < inst->sources; i++) {
@@ -1349,7 +1042,7 @@ namespace {
          stall_on_dependency(st, tgl_swsb_rd_dependency_id(inst->sched));
 
       /* Execute the instruction. */
-      execute_instruction(st, perf);
+      execute_instruction(st, &perf);
 
       /* Mark any source dependencies. */
       if (inst->is_send_from_grf()) {
@@ -1357,21 +1050,21 @@ namespace {
             if (inst->is_payload(i)) {
                for (unsigned j = 0; j < regs_read(inst, i); j++)
                   mark_read_dependency(
-                     st, perf, reg_dependency_id(devinfo, inst->src[i], j));
+                     st, &perf, reg_dependency_id(devinfo, inst->src[i], j));
             }
          }
       }
 
       if (is_send(inst) && inst->base_mrf != -1) {
          for (unsigned j = 0; j < inst->mlen; j++)
-            mark_read_dependency(st, perf,
+            mark_read_dependency(st, &perf,
                reg_dependency_id(devinfo, brw_uvec_mrf(8, inst->base_mrf, 0), j));
       }
 
       /* Mark any destination dependencies. */
       if (inst->dst.file != BAD_FILE && !inst->dst.is_null()) {
          for (unsigned j = 0; j < regs_written(inst); j++) {
-            mark_write_dependency(st, perf,
+            mark_write_dependency(st, &perf,
                                   reg_dependency_id(devinfo, inst->dst, j));
          }
       }
@@ -1380,35 +1073,73 @@ namespace {
          for (unsigned j = accum_reg_of_channel(devinfo, inst, info.tx, 0);
               j <= accum_reg_of_channel(devinfo, inst, info.tx,
                                         inst->exec_size - 1); j++)
-            mark_write_dependency(st, perf,
+            mark_write_dependency(st, &perf,
                                   reg_dependency_id(devinfo, brw_acc_reg(8), j));
       }
 
       if (const unsigned mask = inst->flags_written()) {
          for (unsigned i = 0; i < sizeof(mask) * CHAR_BIT; i++) {
             if (mask & (1 << i))
-               mark_write_dependency(st, perf, flag_dependency_id(i));
+               mark_write_dependency(st, &perf, flag_dependency_id(i));
          }
       }
 
       /* Mark any SBID dependencies. */
       if (inst->sched.mode & TGL_SBID_SET) {
-         mark_read_dependency(st, perf, tgl_swsb_rd_dependency_id(inst->sched));
-         mark_write_dependency(st, perf, tgl_swsb_wr_dependency_id(inst->sched));
+         mark_read_dependency(st, &perf, tgl_swsb_rd_dependency_id(inst->sched));
+         mark_write_dependency(st, &perf, tgl_swsb_wr_dependency_id(inst->sched));
       }
+   }
+
+   struct gen_eu_instruction_info
+   inst_info(const gen_device_info *devinfo, const vec4_instruction *inst)
+   {
+      enum brw_reg_type tx = get_exec_type(inst);
+
+      /* Compute the maximum source size. */
+      unsigned ss = 0;
+      for (unsigned i = 0; i < ARRAY_SIZE(inst->src); i++)
+         ss = MAX2(ss, DIV_ROUND_UP(inst->size_read(i), REG_SIZE));
+
+      /* Convert the execution size to GRF units. */
+      unsigned sx = DIV_ROUND_UP(inst->exec_size * type_sz(tx), REG_SIZE);
+
+      /* 32x32 integer multiplication has half the usual ALU throughput.
+       * Treat it as double-precision.
+       */
+      if ((inst->opcode == BRW_OPCODE_MUL || inst->opcode == BRW_OPCODE_MAD) &&
+          !brw_reg_type_is_floating_point(tx) && type_sz(tx) == 4 &&
+          type_sz(inst->src[0].type) == type_sz(inst->src[1].type))
+         tx = brw_int_type(8, tx == BRW_REGISTER_TYPE_D);
+
+      struct gen_eu_instruction_info info;
+
+      info.devinfo = devinfo;
+      info.op = inst->opcode;
+      info.td = inst->dst.type;
+      info.sd = DIV_ROUND_UP(inst->size_written, REG_SIZE);
+      info.tx = tx;
+      info.sx = sx;
+      info.ss = ss;
+      info.sc = 0;
+      info.desc = inst->desc;
+      info.sfid = inst->sfid;
+
+      return info;
    }
 
    /**
     * Model the performance behavior of a VEC4 back-end instruction.
     */
    void
-   issue_vec4_instruction(state &st, const gen_device_info *devinfo,
+   issue_vec4_instruction(struct gen_eu_performance_state *st,
+                          const gen_device_info *devinfo,
                           const backend_instruction *be_inst)
    {
       const vec4_instruction *inst =
          static_cast<const vec4_instruction *>(be_inst);
-      const instruction_info info(devinfo, inst);
-      const perf_desc perf = instruction_desc(info);
+      const struct gen_eu_instruction_info info = inst_info(devinfo, inst);
+      const gen_eu_perf_desc perf = instruction_desc(&info);
 
       /* Stall on any source dependencies. */
       for (unsigned i = 0; i < ARRAY_SIZE(inst->src); i++) {
@@ -1456,27 +1187,27 @@ namespace {
       }
 
       /* Execute the instruction. */
-      execute_instruction(st, perf);
+      execute_instruction(st, &perf);
 
       /* Mark any source dependencies. */
       if (inst->is_send_from_grf()) {
          for (unsigned i = 0; i < ARRAY_SIZE(inst->src); i++) {
             for (unsigned j = 0; j < regs_read(inst, i); j++)
                mark_read_dependency(
-                  st, perf, reg_dependency_id(devinfo, inst->src[i], j));
+                  st, &perf, reg_dependency_id(devinfo, inst->src[i], j));
          }
       }
 
       if (inst->base_mrf != -1) {
          for (unsigned j = 0; j < inst->mlen; j++)
-            mark_read_dependency(st, perf,
+            mark_read_dependency(st, &perf,
                reg_dependency_id(devinfo, brw_uvec_mrf(8, inst->base_mrf, 0), j));
       }
 
       /* Mark any destination dependencies. */
       if (inst->dst.file != BAD_FILE && !inst->dst.is_null()) {
          for (unsigned j = 0; j < regs_written(inst); j++) {
-            mark_write_dependency(st, perf,
+            mark_write_dependency(st, &perf,
                                   reg_dependency_id(devinfo, inst->dst, j));
          }
       }
@@ -1485,26 +1216,12 @@ namespace {
          for (unsigned j = accum_reg_of_channel(devinfo, inst, info.tx, 0);
               j <= accum_reg_of_channel(devinfo, inst, info.tx,
                                         inst->exec_size - 1); j++)
-            mark_write_dependency(st, perf,
+            mark_write_dependency(st, &perf,
                                   reg_dependency_id(devinfo, brw_acc_reg(8), j));
       }
 
       if (inst->writes_flag())
-         mark_write_dependency(st, perf, GEN_DEPENDENCY_ID_FLAG0);
-   }
-
-   /**
-    * Calculate the maximum possible throughput of the program compatible with
-    * the cycle-count utilization estimated for each asynchronous unit, in
-    * threads-per-cycle units.
-    */
-   float
-   calculate_thread_throughput(const state &st, float busy)
-   {
-      for (unsigned i = 0; i < GEN_NUM_UNITS; i++)
-         busy = MAX2(busy, st.unit_busy[i]);
-
-      return 1.0 / busy;
+         mark_write_dependency(st, &perf, GEN_DEPENDENCY_ID_FLAG0);
    }
 
    /**
@@ -1513,7 +1230,8 @@ namespace {
    void
    calculate_performance(performance &p, const backend_shader *s,
                          void (*issue_instruction)(
-                            state &, const gen_device_info *,
+                            struct gen_eu_performance_state *,
+                            const gen_device_info *,
                             const backend_instruction *),
                          unsigned dispatch_width)
    {
@@ -1547,7 +1265,9 @@ namespace {
       const float loop_weight = 10;
       unsigned halt_count = 0;
       unsigned elapsed = 0;
-      state st;
+      struct gen_eu_performance_state st;
+
+      gen_eu_performance_state_init(&st);
 
       foreach_block(block, s->cfg) {
          const unsigned elapsed0 = elapsed;
@@ -1555,7 +1275,7 @@ namespace {
          foreach_inst_in_block(backend_instruction, inst, block) {
             const unsigned clock0 = st.unit_ready[GEN_UNIT_FE];
 
-            issue_instruction(st, s->devinfo, inst);
+            issue_instruction(&st, s->devinfo, inst);
 
             if (inst->opcode == SHADER_OPCODE_HALT_TARGET && halt_count)
                st.weight /= discard_weight;
@@ -1574,7 +1294,7 @@ namespace {
       }
 
       p.latency = elapsed;
-      p.throughput = dispatch_width * calculate_thread_throughput(st, elapsed);
+      p.throughput = dispatch_width * calculate_thread_throughput(&st, elapsed);
    }
 }
 
