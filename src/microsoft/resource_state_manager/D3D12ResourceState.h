@@ -174,6 +174,9 @@ public:
    struct LogicalState
    {
       D3D12_RESOURCE_STATES State = D3D12_RESOURCE_STATE_COMMON;
+      UINT64 ExecutionId = 0;
+      bool IsPromotedState = false;
+      bool MayDecay = false;
    };
 
 private:
@@ -187,7 +190,12 @@ private:
 public:
    CCurrentResourceState(UINT SubresourceCount, bool bSimultaneousAccess);
 
-   bool SupportsSimultaneousAccess() const { return false; } // BUGBUG: return m_bSimultaneousAccess once promotion and decay are supported
+   bool SupportsSimultaneousAccess() const { return m_bSimultaneousAccess; }
+
+   // Returns the destination state if the current state is promotable.
+   // Returns D3D12_RESOURCE_STATE_COMMON if not.
+   D3D12_RESOURCE_STATES StateIfPromoted(D3D12_RESOURCE_STATES State, UINT SubresourceIndex, SubresourceTransitionFlags Flags);
+
    bool AreAllSubresourcesSame() const { return m_bAllSubresourcesSame; }
 
    void SetLogicalResourceState(LogicalState const& State);
@@ -349,6 +357,7 @@ private:
                                                 TransitionableResourceState& TransitionableResourceState,
                                                 CCurrentResourceState& CurrentState,
                                                 UINT NumTotalSubresources,
+                                                UINT64 ExecutionId,
                                                 bool bIsPreDraw);
 
 private:
@@ -357,15 +366,15 @@ private:
    void AddCurrentStateUpdate(TransitionableResourceState& Resource,
                               CCurrentResourceState& CurrentState,
                               UINT SubresourceIndex,
-                              D3D12_RESOURCE_STATES NewState,
-                              bool MayDecay);
+                              const CCurrentResourceState::LogicalState &NewLogicalState);
    void ProcessTransitioningSubresourceExplicit(CCurrentResourceState& CurrentState,
                                                 UINT i,
                                                 CDesiredResourceState::SubresourceInfo& SubresourceDestinationInfo,
                                                 D3D12_RESOURCE_STATES after,
                                                 TransitionableResourceState& TransitionableResourceState,
                                                 D3D12_RESOURCE_BARRIER& TransitionDesc,
-                                                SubresourceTransitionFlags Flags);
+                                                SubresourceTransitionFlags Flags,
+                                                UINT64 ExecutionId);
 };
 
 #endif // D3D12_RESOURCE_STATE_H

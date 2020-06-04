@@ -96,6 +96,40 @@ CCurrentResourceState::CCurrentResourceState(UINT SubresourceCount, bool bSimult
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------
+D3D12_RESOURCE_STATES CCurrentResourceState::StateIfPromoted(D3D12_RESOURCE_STATES State, UINT SubresourceIndex, SubresourceTransitionFlags Flags)
+{
+   D3D12_RESOURCE_STATES Result = D3D12_RESOURCE_STATE_COMMON;
+
+   if((Flags & SubresourceTransitionFlags_ForceExplicitState) != SubresourceTransitionFlags_ForceExplicitState && (
+         m_bSimultaneousAccess ||
+         !!(State & (
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | 
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | 
+            D3D12_RESOURCE_STATE_COPY_SOURCE | 
+            D3D12_RESOURCE_STATE_COPY_DEST))))
+   {
+      auto CurState = GetLogicalSubresourceState(SubresourceIndex);
+
+      // If the current state is COMMON...
+      if(CurState.State == D3D12_RESOURCE_STATE_COMMON)
+      {
+         // ...then promotion is allowed
+         Result = State;
+      }
+      // If the current state is a read state resulting from previous promotion...
+      else if(CurState.IsPromotedState && !!(CurState.State & D3D12_RESOURCE_STATE_GENERIC_READ))
+      {
+         // ...then (accumulated) promotion is allowed
+         Result = State |= CurState.State;
+      }
+   }
+
+   return Result;
+}
+
+
+
+//----------------------------------------------------------------------------------------------------------------------------------
 void CCurrentResourceState::SetLogicalResourceState(LogicalState const& State)
 {
    m_bAllSubresourcesSame = true;
@@ -206,10 +240,8 @@ void ResourceStateManager::ApplyResourceTransitionsPreamble()
 void ResourceStateManager::AddCurrentStateUpdate(TransitionableResourceState& Resource,
                                                  CCurrentResourceState& CurrentState,
                                                  UINT SubresourceIndex,
-                                                 D3D12_RESOURCE_STATES NewState,
-                                                 bool MayDecay)
+                                                 const CCurrentResourceState::LogicalState &NewLogicalState)
 {
-   CCurrentResourceState::LogicalState NewLogicalState{NewState};
    if (SubresourceIndex == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
    {
       CurrentState.SetLogicalResourceState(NewLogicalState);
@@ -225,6 +257,7 @@ auto ResourceStateManager::ProcessTransitioningResource(ID3D12Resource* pTransit
                                                             TransitionableResourceState& TransitionableResourceState,
                                                             CCurrentResourceState& CurrentState,
                                                             UINT NumTotalSubresources,
+                                                            UINT64 ExecutionId,
                                                             bool bIsPreDraw) -> TransitionResult
 {
    // By default, assume that the resource is fully processed by this routine.
@@ -271,7 +304,8 @@ auto ResourceStateManager::ProcessTransitioningResource(ID3D12Resource* pTransit
          after,
          TransitionableResourceState,
          TransitionDesc,
-         Flags); // throw( bad_alloc )
+         Flags,
+         ExecutionId); // throw( bad_alloc )
    }
 
    CDesiredResourceState::SubresourceInfo UnknownDestinationState = {};
@@ -296,17 +330,17 @@ auto ResourceStateManager::ProcessTransitioningResource(ID3D12Resource* pTransit
 
       for (UINT i = 0; i < numSubresources; ++i)
       {
-            if ((DestinationState.GetSubresourceInfo(i).Flags & SubresourceTransitionFlags_TransitionPreDraw) == SubresourceTransitionFlags_None)
+         if ((DestinationState.GetSubresourceInfo(i).Flags & SubresourceTransitionFlags_TransitionPreDraw) == SubresourceTransitionFlags_None)
+         {
+            if (bAllSubresourcesAtOnce)
             {
-               if (bAllSubresourcesAtOnce)
-               {
-                  DestinationState.SetResourceState(UnknownDestinationState);
-               }
-               else
-               {
-                  DestinationState.SetSubresourceState(i, UnknownDestinationState);
-               }
+               DestinationState.SetResourceState(UnknownDestinationState);
             }
+            else
+            {
+               DestinationState.SetSubresourceState(i, UnknownDestinationState);
+            }
+         }
       }
    }
 
@@ -321,19 +355,33 @@ void ResourceStateManager::ProcessTransitioningSubresourceExplicit(
    D3D12_RESOURCE_STATES after,
    TransitionableResourceState& TransitionableResourceState,
    D3D12_RESOURCE_BARRIER& TransitionDesc,
-   SubresourceTransitionFlags Flags)
+   SubresourceTransitionFlags Flags,
+   UINT64 ExecutionId)
 {
-   // If the subresource is currently exclusively used by one queue, there's one of several outcomes:
-   // 1. A transition barrier into a different state.
-   //    For simultaneous access resources, this only happens if the new usage is in the same command list as the previous.
-   // 2. Simultaneous access only and not used in the current command list.
-   //    The subresource is marked as MayDecay unless the new state is a read state.
+   // Simultaneous access resources currently in the COMMON
+   // state can be implicitly promoted to any state other state.
+   // Any non-simultaneous-access resources currently in the
+   // COMMON state can still be implicitly  promoted to SRV,
+   // NON_PS_SRV, COPY_SRC, or COPY_DEST.
    CCurrentResourceState::LogicalState CurrentLogicalState = CurrentState.GetLogicalSubresourceState(SubresourceIndex);
+
+   // If the last time this logical state was set was in a different
+   // execution period and is decayable then decay the current state
+   // to COMMON
+   if(ExecutionId != CurrentLogicalState.ExecutionId && CurrentLogicalState.MayDecay)
+   {
+      CurrentLogicalState.State = D3D12_RESOURCE_STATE_COMMON;
+      CurrentLogicalState.IsPromotedState = false;
+   }
    bool MayDecay = false;
+   bool IsPromotion = false;
 
    bool bQueueStateUpdate = (SubresourceDestinationInfo.Flags & SubresourceTransitionFlags_NotUsedInCommandListIfNoStateChange) == SubresourceTransitionFlags_None;
 
-   if (!CurrentState.SupportsSimultaneousAccess() /*BUGBUG: Pending promotion and decay support: || IsNewExecuteGroup()*/)
+   // If not promotable then StateIfPromoted will be D3D12_RESOURCE_STATE_COMMON
+   auto StateIfPromoted = CurrentState.StateIfPromoted(after, SubresourceIndex, Flags);
+
+   if ( D3D12_RESOURCE_STATE_COMMON == StateIfPromoted )
    {
       if (TransitionRequired(CurrentLogicalState.State, /*inout*/ after, SubresourceDestinationInfo.Flags))
       {
@@ -344,24 +392,29 @@ void ResourceStateManager::ProcessTransitioningSubresourceExplicit(
          m_vResourceBarriers.push_back(TransitionDesc); // throw( bad_alloc )
 
          MayDecay = CurrentState.SupportsSimultaneousAccess() && !IsD3D12WriteState(after, Flags);
+         IsPromotion = false;
          bQueueStateUpdate = true;
       }
-      // Regardless of whether a transition was inserted, we'll update the current state
-      // of this subresource, to at least update its fence value.
-      // Unless it was transitioning to COMMON for CPU access and was already in COMMON.
    }
    else
    {
-      MayDecay = !IsD3D12WriteState(after, Flags);
+      // Handle identity state transition
+      if(after != StateIfPromoted)
+      {
+         after = StateIfPromoted;
+         MayDecay = !IsD3D12WriteState(after, Flags);
+         IsPromotion = true;
+         bQueueStateUpdate = true;
+      }
    }
 
    if (bQueueStateUpdate)
    {
+      CCurrentResourceState::LogicalState NewLogicalState{after, ExecutionId, IsPromotion, MayDecay};
       AddCurrentStateUpdate(TransitionableResourceState,
-                              CurrentState,
-                              TransitionDesc.Transition.Subresource,
-                              after,
-                              MayDecay);
+                            CurrentState,
+                            TransitionDesc.Transition.Subresource,
+                            NewLogicalState);
    }
 }
 
@@ -390,7 +443,7 @@ void ResourceStateManager::TransitionSubresource(TransitionableResourceState* pR
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------
-void ResourceStateManager::ApplyAllResourceTransitions(ID3D12GraphicsCommandList *pCommandList, UINT64 /*ExecutionId*/, bool bIsPreDraw)
+void ResourceStateManager::ApplyAllResourceTransitions(ID3D12GraphicsCommandList *pCommandList, UINT64 ExecutionId, bool bIsPreDraw)
 {
    ApplyResourceTransitionsPreamble();
 
@@ -405,6 +458,7 @@ void ResourceStateManager::ApplyAllResourceTransitions(ID3D12GraphicsCommandList
            CurResource,
            CurResource.GetCurrentState(),
            CurResource.NumSubresources(),
+           ExecutionId,
            bIsPreDraw);
    });
 
