@@ -221,6 +221,17 @@ delete_entry(struct hash_entry *entry)
    FREE(data);
 }
 
+static void
+remove_entry(struct d3d12_context *ctx, struct hash_entry *entry)
+{
+   struct d3d12_pso_entry *data = (struct d3d12_pso_entry *)entry->data;
+
+   if (ctx->current_pso == data->pso)
+      ctx->current_pso = NULL;
+   _mesa_hash_table_remove(ctx->pso_cache, entry);
+   delete_entry(entry);
+}
+
 void
 d3d12_gfx_pipeline_state_cache_destroy(struct d3d12_context *ctx)
 {
@@ -232,12 +243,8 @@ d3d12_gfx_pipeline_state_cache_invalidate(struct d3d12_context *ctx, const void 
 {
    hash_table_foreach(ctx->pso_cache, entry) {
       const struct d3d12_gfx_pipeline_state *key = (struct d3d12_gfx_pipeline_state *)entry->key;
-      if (key->blend == state || key->zsa == state || key->rast == state) {
-         if (ctx->current_pso == (ID3D12PipelineState *)entry->data)
-            ctx->current_pso = NULL;
-         _mesa_hash_table_remove(ctx->pso_cache, entry);
-         delete_entry(entry);
-      }
+      if (key->blend == state || key->zsa == state || key->rast == state)
+         remove_entry(ctx, entry);
    }
 }
 
@@ -251,12 +258,8 @@ d3d12_gfx_pipeline_state_cache_invalidate_shader(struct d3d12_context *ctx,
    while (shader) {
       hash_table_foreach(ctx->pso_cache, entry) {
          const struct d3d12_gfx_pipeline_state *key = (struct d3d12_gfx_pipeline_state *)entry->key;
-         if (key->stages[stage] == shader) {
-            if (ctx->current_pso == (ID3D12PipelineState *)entry->data)
-               ctx->current_pso = NULL;
-            _mesa_hash_table_remove(ctx->pso_cache, entry);
-            delete_entry(entry);
-         }
+         if (key->stages[stage] == shader)
+            remove_entry(ctx, entry);
       }
       shader = shader->next_variant;
    }
