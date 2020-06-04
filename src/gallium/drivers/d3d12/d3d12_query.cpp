@@ -286,6 +286,7 @@ d3d12_render_condition(struct pipe_context *pctx,
 
    if (pquery == nullptr) {
       ctx->cmdlist->SetPredication(nullptr, 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
+      ctx->current_predication = nullptr;
       return;
    }
 
@@ -302,6 +303,7 @@ d3d12_render_condition(struct pipe_context *pctx,
                                    SubresourceTransitionFlags_None);
    d3d12_apply_resource_states(ctx, false);
 
+   ctx->current_predication = res;
    /* documentation of ID3D12GraphicsCommandList::SetPredication method:
     * "resource manipulation commands are _not_ actually performed
     *  if the resulting predicate data of the predicate is equal to

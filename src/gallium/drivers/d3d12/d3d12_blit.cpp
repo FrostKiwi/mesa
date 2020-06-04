@@ -417,6 +417,10 @@ d3d12_blit(struct pipe_context *pctx,
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
 
+   if (!info->render_condition_enable && ctx->current_predication) {
+      ctx->cmdlist->SetPredication(nullptr, 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
+   }
+
    if (D3D12_DEBUG_BLIT & d3d12_debug) {
       debug_printf("D3D12 BLIT: from %s@%d %dx%dx%d + %dx%dx%d\n",
                    util_format_name(info->src.format), info->src.level,
@@ -438,6 +442,11 @@ d3d12_blit(struct pipe_context *pctx,
       debug_printf("blit unsupported %s -> %s\n",
                  util_format_short_name(info->src.resource->format),
                  util_format_short_name(info->dst.resource->format));
+
+   if (!info->render_condition_enable && ctx->current_predication) {
+      ctx->cmdlist->SetPredication(
+               d3d12_resource_resource(ctx->current_predication), 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
+   }
 }
 
 static void
