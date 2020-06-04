@@ -276,6 +276,36 @@ d3d12_set_active_query_state(struct pipe_context *pctx, bool enable)
       d3d12_suspend_queries(ctx);
 }
 
+static void
+d3d12_render_condition(struct pipe_context *pctx,
+                       struct pipe_query *pquery,
+                       bool condition,
+                       enum pipe_render_cond_flag mode)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+
+   if (pquery == nullptr) {
+      ctx->cmdlist->SetPredication(nullptr, 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
+      return;
+   }
+
+   struct d3d12_query *query = (struct d3d12_query *)pquery;
+   struct d3d12_resource *res = (struct d3d12_resource *)query->buffer;
+
+   d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_PREDICATION,
+                                   SubresourceTransitionFlags_None);
+   d3d12_apply_resource_states(ctx, false);
+
+   /* documentation of ID3D12GraphicsCommandList::SetPredication method:
+    * "resource manipulation commands are _not_ actually performed
+    *  if the resulting predicate data of the predicate is equal to
+    *  the operation specified."
+    */
+   ctx->cmdlist->SetPredication(d3d12_resource_resource(res), 0,
+                                condition ? D3D12_PREDICATION_OP_NOT_EQUAL_ZERO :
+                                D3D12_PREDICATION_OP_EQUAL_ZERO);
+}
+
 void
 d3d12_context_query_init(struct pipe_context *pctx)
 {
@@ -293,4 +323,5 @@ d3d12_context_query_init(struct pipe_context *pctx)
    pctx->end_query = d3d12_end_query;
    pctx->get_query_result = d3d12_get_query_result;
    pctx->set_active_query_state = d3d12_set_active_query_state;
+   pctx->render_condition = d3d12_render_condition;
 }
