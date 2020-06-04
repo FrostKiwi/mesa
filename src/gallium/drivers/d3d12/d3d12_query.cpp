@@ -289,6 +289,12 @@ d3d12_render_condition(struct pipe_context *pctx,
       return;
    }
 
+   if (mode == PIPE_RENDER_COND_WAIT) {
+      d3d12_flush_cmdlist_and_wait(ctx);
+      union pipe_query_result result;
+      accumulate_result(ctx, (d3d12_query *)pquery, &result, true);
+   }
+
    struct d3d12_query *query = (struct d3d12_query *)pquery;
    struct d3d12_resource *res = (struct d3d12_resource *)query->buffer;
 
