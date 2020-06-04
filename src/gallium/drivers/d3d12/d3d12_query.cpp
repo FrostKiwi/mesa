@@ -43,6 +43,7 @@ struct d3d12_query {
    int fence_value;
 
    struct list_head active_list;
+   struct d3d12_resource *predicate;
 };
 
 static D3D12_QUERY_HEAP_TYPE
@@ -116,7 +117,8 @@ d3d12_destroy_query(struct pipe_context *pctx,
                     struct pipe_query *q)
 {
    struct d3d12_query *query = (struct d3d12_query *)q;
-
+   pipe_resource *predicate = &query->predicate->base;
+   pipe_resource_reference(&predicate, NULL);
    query->query_heap->Release();
 }
 
@@ -283,12 +285,17 @@ d3d12_render_condition(struct pipe_context *pctx,
                        enum pipe_render_cond_flag mode)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_query *query = (struct d3d12_query *)pquery;
 
-   if (pquery == nullptr) {
+   if (query == nullptr) {
       ctx->cmdlist->SetPredication(nullptr, 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
       ctx->current_predication = nullptr;
       return;
    }
+
+   if (!query->predicate)
+      query->predicate = d3d12_resource(pipe_buffer_create(pctx->screen, (pipe_bind_flags)0,
+                                                           PIPE_USAGE_DEFAULT, sizeof(uint64_t)));
 
    if (mode == PIPE_RENDER_COND_WAIT) {
       d3d12_flush_cmdlist_and_wait(ctx);
@@ -296,20 +303,27 @@ d3d12_render_condition(struct pipe_context *pctx,
       accumulate_result(ctx, (d3d12_query *)pquery, &result, true);
    }
 
-   struct d3d12_query *query = (struct d3d12_query *)pquery;
    struct d3d12_resource *res = (struct d3d12_resource *)query->buffer;
+   d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_COPY_SOURCE,
+                                   SubresourceTransitionFlags::SubresourceTransitionFlags_None);
+   d3d12_transition_resource_state(ctx, query->predicate, D3D12_RESOURCE_STATE_COPY_DEST,
+                                   SubresourceTransitionFlags::SubresourceTransitionFlags_None);
+   d3d12_apply_resource_states(ctx, false);
+   ctx->cmdlist->CopyBufferRegion(d3d12_resource_resource(query->predicate), 0,
+                                  d3d12_resource_resource(res), 0,
+                                  sizeof(uint64_t));
 
-   d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_PREDICATION,
+   d3d12_transition_resource_state(ctx, query->predicate, D3D12_RESOURCE_STATE_PREDICATION,
                                    SubresourceTransitionFlags_None);
    d3d12_apply_resource_states(ctx, false);
 
-   ctx->current_predication = res;
+   ctx->current_predication = query->predicate;
    /* documentation of ID3D12GraphicsCommandList::SetPredication method:
     * "resource manipulation commands are _not_ actually performed
     *  if the resulting predicate data of the predicate is equal to
     *  the operation specified."
     */
-   ctx->cmdlist->SetPredication(d3d12_resource_resource(res), 0,
+   ctx->cmdlist->SetPredication(d3d12_resource_resource(query->predicate), 0,
                                 condition ? D3D12_PREDICATION_OP_NOT_EQUAL_ZERO :
                                 D3D12_PREDICATION_OP_EQUAL_ZERO);
 }
