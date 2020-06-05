@@ -656,6 +656,31 @@ choose_drm_format_mod(const struct anv_physical_device *device,
       return NULL;
 }
 
+static void
+anv_image_bind_vma_plane(struct anv_device *device,
+                         struct anv_image *image,
+                         uint32_t plane,
+                         struct anv_vma_range *vma,
+                         uint32_t memory_offset)
+{
+   assert(!image->planes[plane].bo_is_owned);
+
+   if (!vma) {
+      image->planes[plane].address = ANV_NULL_ADDRESS;
+      return;
+   }
+
+   image->planes[plane].address = anv_address_add(vma->addr, memory_offset);
+
+   /* If we're on a platform that uses implicit CCS and our buffer does not
+    * have any implicit CCS data, disable compression on that image.  For VMA
+    * ranges that don't have a BO, we assume it has implicit CCS.
+    */
+   if (device->physical->has_implicit_ccs &&
+       vma->addr.bo && !vma->addr.bo->has_implicit_ccs)
+      image->planes[plane].aux_usage = ISL_AUX_USAGE_NONE;
+}
+
 VkResult
 anv_image_create(VkDevice _device,
                  const struct anv_image_create_info *create_info,
@@ -900,23 +925,9 @@ static void anv_image_bind_memory_plane(struct anv_device *device,
                                         struct anv_device_memory *memory,
                                         uint32_t memory_offset)
 {
-   assert(!image->planes[plane].bo_is_owned);
-
-   if (!memory) {
-      image->planes[plane].address = ANV_NULL_ADDRESS;
-      return;
-   }
-
-   image->planes[plane].address = (struct anv_address) {
-      .bo = memory->bo,
-      .offset = memory_offset,
-   };
-
-   /* If we're on a platform that uses implicit CCS and our buffer does not
-    * have any implicit CCS data, disable compression on that image.
-    */
-   if (device->physical->has_implicit_ccs && !memory->bo->has_implicit_ccs)
-      image->planes[plane].aux_usage = ISL_AUX_USAGE_NONE;
+   anv_image_bind_vma_plane(device, image, plane,
+                            memory ? &memory->vma : NULL,
+                            memory_offset);
 }
 
 /* We are binding AHardwareBuffer. Get a description, resolve the

@@ -1788,6 +1788,11 @@ _anv_combine_address(struct anv_batch *batch, void *location,
 /* #define __gen_address_value anv_address_physical */
 /* #define __gen_address_offset anv_address_add */
 
+struct anv_vma_range {
+   struct anv_address   addr;
+   VkDeviceSize         size;
+};
+
 struct anv_device_memory {
    struct vk_object_base                        base;
 
@@ -1797,6 +1802,8 @@ struct anv_device_memory {
    struct anv_memory_type *                     type;
    VkDeviceSize                                 map_size;
    void *                                       map;
+
+   struct anv_vma_range                         vma;
 
    /* If set, we are holding reference to AHardwareBuffer
     * which we must release when memory is freed.

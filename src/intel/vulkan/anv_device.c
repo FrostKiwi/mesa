@@ -3658,6 +3658,9 @@ VkResult anv_AllocateMemory(
    list_addtail(&mem->link, &device->memory_objects);
    pthread_mutex_unlock(&device->mutex);
 
+   mem->vma.addr = (struct anv_address) { .bo = mem->bo };
+   mem->vma.size = mem->bo->size;
+
    *pMem = anv_device_memory_to_handle(mem);
 
    return VK_SUCCESS;
@@ -4099,10 +4102,8 @@ anv_bind_buffer_memory(const VkBindBufferMemoryInfo *pBindInfo)
    assert(pBindInfo->sType == VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO);
 
    if (mem) {
-      buffer->address = (struct anv_address) {
-         .bo = mem->bo,
-         .offset = pBindInfo->memoryOffset,
-      };
+      buffer->address = anv_address_add(mem->vma.addr,
+                                        pBindInfo->memoryOffset);
    } else {
       buffer->address = ANV_NULL_ADDRESS;
    }
