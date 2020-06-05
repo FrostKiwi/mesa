@@ -1545,12 +1545,14 @@ get_cast_op(nir_alu_instr *alu)
          return DXIL_CAST_ZEXT;
 
    /* float -> int */
+   case nir_op_f2i16:
    case nir_op_f2i32:
    case nir_op_f2i64:
       return DXIL_CAST_FPTOSI;
 
    /* float -> uint */
    case nir_op_f2b1:
+   case nir_op_f2u16:
    case nir_op_f2u32:
    case nir_op_f2u64:
       return DXIL_CAST_FPTOUI;
@@ -1893,6 +1895,8 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_f2b1:
    case nir_op_b2i16:
    case nir_op_i2i16:
+   case nir_op_f2i16:
+   case nir_op_f2u16:
    case nir_op_u2u16:
    case nir_op_b2i32:
    case nir_op_f2f32:
