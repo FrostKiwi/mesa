@@ -108,6 +108,7 @@ fill_srv_descriptors(struct d3d12_context *ctx,
             d3d12_transition_subresources_state(ctx, d3d12_resource(view->base.texture),
                                                 view->base.u.tex.first_level, view->mip_levels,
                                                 view->base.u.tex.first_layer, view->array_size,
+                                                0, 1,
                                                 state, SubresourceTransitionFlags_TransitionPreDraw);
          }
       } else {
@@ -524,15 +525,20 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
                                           psurf->u.tex.level, 1,
                                           psurf->u.tex.first_layer, num_layers,
+                                          0, 1,
                                           D3D12_RESOURCE_STATE_RENDER_TARGET,
                                           SubresourceTransitionFlags_TransitionPreDraw);
    }
    if (ctx->fb.zsbuf) {
       struct pipe_surface *psurf = ctx->fb.zsbuf;
       const uint32_t num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
+      const struct util_format_description *descr = util_format_description(psurf->format);
+      int num_planes = (util_format_has_depth(descr) ? 1 : 0) +
+                       (util_format_has_stencil(descr) ? 1 : 0);
       d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
                                           psurf->u.tex.level, 1,
                                           psurf->u.tex.first_layer, num_layers,
+                                          0, num_planes,
                                           D3D12_RESOURCE_STATE_DEPTH_WRITE,
                                           SubresourceTransitionFlags_TransitionPreDraw);
    }
