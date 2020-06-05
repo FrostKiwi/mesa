@@ -1385,6 +1385,7 @@ d3d12_transition_subresources_state(struct d3d12_context *ctx,
                                     struct d3d12_resource *res,
                                     uint32_t start_level, uint32_t num_levels,
                                     uint32_t start_layer, uint32_t num_layers,
+                                    uint32_t start_plane, uint32_t num_planes,
                                     D3D12_RESOURCE_STATES state,
                                     SubresourceTransitionFlags flags)
 {
@@ -1394,8 +1395,11 @@ d3d12_transition_subresources_state(struct d3d12_context *ctx,
       const uint32_t level = start_level + l;
       for (uint32_t a = 0; a < num_layers; a++) {
          const uint32_t layer = start_layer + a;
-         uint32_t subres_id = level + (layer * res->mip_levels);
-         ctx->resource_state_manager->TransitionSubresource(xres, subres_id, state, flags);
+         for( uint32_t p = 0; p < num_planes; p++) {
+            const uint32_t plane = start_plane + p;
+            uint32_t subres_id = level + (layer * res->mip_levels) + plane * (res->mip_levels * res->base.array_size);
+            ctx->resource_state_manager->TransitionSubresource(xres, subres_id, state, flags);
+         }
       }
    }
 }

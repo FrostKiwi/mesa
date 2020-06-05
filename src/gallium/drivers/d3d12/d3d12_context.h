@@ -298,6 +298,7 @@ d3d12_transition_subresources_state(struct d3d12_context *ctx,
                                     struct d3d12_resource *res,
                                     uint32_t start_level, uint32_t num_levels,
                                     uint32_t start_layer, uint32_t num_layers,
+                                    uint32_t start_plane, uint32_t num_planes,
                                     D3D12_RESOURCE_STATES state,
                                     SubresourceTransitionFlags flags);
 
