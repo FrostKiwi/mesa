@@ -4094,7 +4094,8 @@ void anv_GetDeviceMemoryCommitment(
 }
 
 static void
-anv_bind_buffer_memory(const VkBindBufferMemoryInfo *pBindInfo)
+anv_bind_buffer_memory(struct anv_device *device,
+                       const VkBindBufferMemoryInfo *pBindInfo)
 {
    ANV_FROM_HANDLE(anv_device_memory, mem, pBindInfo->memory);
    ANV_FROM_HANDLE(anv_buffer, buffer, pBindInfo->buffer);
@@ -4110,12 +4111,14 @@ anv_bind_buffer_memory(const VkBindBufferMemoryInfo *pBindInfo)
 }
 
 VkResult anv_BindBufferMemory(
-    VkDevice                                    device,
+    VkDevice                                    _device,
     VkBuffer                                    buffer,
     VkDeviceMemory                              memory,
     VkDeviceSize                                memoryOffset)
 {
-   anv_bind_buffer_memory(
+   ANV_FROM_HANDLE(anv_device, device, _device);
+
+   anv_bind_buffer_memory(device,
       &(VkBindBufferMemoryInfo) {
          .sType         = VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO,
          .buffer        = buffer,
@@ -4127,12 +4130,14 @@ VkResult anv_BindBufferMemory(
 }
 
 VkResult anv_BindBufferMemory2(
-    VkDevice                                    device,
+    VkDevice                                    _device,
     uint32_t                                    bindInfoCount,
     const VkBindBufferMemoryInfo*               pBindInfos)
 {
+   ANV_FROM_HANDLE(anv_device, device, _device);
+
    for (uint32_t i = 0; i < bindInfoCount; i++)
-      anv_bind_buffer_memory(&pBindInfos[i]);
+      anv_bind_buffer_memory(device, &pBindInfos[i]);
 
    return VK_SUCCESS;
 }
