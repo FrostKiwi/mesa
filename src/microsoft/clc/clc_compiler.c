@@ -911,7 +911,7 @@ clc_to_dxil(struct clc_context *ctx,
 
    NIR_PASS_V(nir, nir_lower_goto_ifs);
    NIR_PASS_V(nir, nir_opt_dead_cf);
-   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform);
+   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform | nir_var_mem_ubo);
 
    struct clc_dxil_metadata *metadata = &dxil->metadata;
 
