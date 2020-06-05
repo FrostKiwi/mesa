@@ -340,6 +340,7 @@ d3d12_fill_current_shader_key(d3d12_shader_selector *sel, struct d3d12_context *
    shader->key.stage = sel->stage;
    shader->key.required_varying_inputs = shader->nir->info.inputs_read & ~system_generated_in_values;
    shader->key.required_varying_outputs = shader->nir->info.outputs_written & ~system_out_values;
+   shader->key.next_varying_inputs = shader->nir->info.outputs_written;
 
    /* Copy only the number of texture states so that we don't force a rer-creation of the
     * shader only because there are any texturs. We have to keep the initial version of the
@@ -361,7 +362,9 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
    /* Because we only add varyings we check that a shader has at least the expected in-
     * and outputs. */
    if ((expect->required_varying_inputs & ~have->required_varying_inputs) ||
-       (expect->required_varying_outputs & ~have->required_varying_outputs))
+       (expect->required_varying_outputs & ~have->required_varying_outputs) ||
+       (expect->next_varying_inputs != have->next_varying_inputs) ||
+       (expect->prev_varying_outputs != have->prev_varying_outputs))
       return false;
 
    if (expect->stage == PIPE_SHADER_GEOMETRY) {
@@ -418,6 +421,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       if (stage == PIPE_SHADER_FRAGMENT)
          system_out_values |= 1ull << VARYING_SLOT_POS;
       key->required_varying_inputs = prev->current->nir->info.outputs_written & ~system_out_values;
+      key->prev_varying_outputs = prev->current->nir->info.outputs_written;
    }
 
    /* We require as outputs what the next stage reads,
@@ -426,6 +430,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       if (stage == PIPE_SHADER_VERTEX)
          system_generated_in_values |= 1ull << VARYING_SLOT_POS;
       key->required_varying_outputs = next->current->nir->info.inputs_read & ~system_generated_in_values;
+      key->next_varying_inputs = next->current->nir->info.inputs_read;
    }
 
    if (stage == PIPE_SHADER_GEOMETRY && sel_ctx->needs_point_sprite_lowering) {
@@ -503,30 +508,36 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
    /* Add the needed in and outputs, and re-sort */
    uint64_t mask = key.required_varying_inputs & ~new_nir_variant->info.inputs_read;
 
-   if (prev && mask) {
-      nir_foreach_variable(var, &prev->current->nir->outputs) {
-         if (mask & (1ull << var->data.location)) {
-            nir_variable *new_var = nir_variable_clone(var, new_nir_variant);
-            new_var->data.mode = nir_var_shader_in;
-            new_var->data.driver_location = exec_list_length(&new_nir_variant->inputs);
-            exec_list_push_tail(&new_nir_variant->inputs, &new_var->node);
+   if (prev) {
+      if (mask) {
+         nir_foreach_variable(var, &prev->current->nir->outputs) {
+            if (mask & (1ull << var->data.location)) {
+               nir_variable *new_var = nir_variable_clone(var, new_nir_variant);
+               new_var->data.mode = nir_var_shader_in;
+               new_var->data.driver_location = exec_list_length(&new_nir_variant->inputs);
+               exec_list_push_tail(&new_nir_variant->inputs, &new_var->node);
+            }
          }
       }
-      d3d12_reassign_driver_locations(&new_nir_variant->inputs);
+      d3d12_reassign_driver_locations(&new_nir_variant->inputs,
+                                      prev->current->nir->info.outputs_written);
    }
 
    mask = key.required_varying_outputs & ~new_nir_variant->info.outputs_written;
 
-   if (next && !next->passthrough && mask) {
-      nir_foreach_variable(var, &next->current->nir->inputs) {
-         if (mask & (1ull << var->data.location)) {
-            nir_variable *new_var = nir_variable_clone(var, new_nir_variant);
-            new_var->data.mode = nir_var_shader_out;
-            new_var->data.driver_location = exec_list_length(&new_nir_variant->outputs);
-            exec_list_push_tail(&new_nir_variant->outputs, &new_var->node);
+   if (next && !next->passthrough) {
+      if (mask) {
+         nir_foreach_variable(var, &next->current->nir->inputs) {
+            if (mask & (1ull << var->data.location)) {
+               nir_variable *new_var = nir_variable_clone(var, new_nir_variant);
+               new_var->data.mode = nir_var_shader_out;
+               new_var->data.driver_location = exec_list_length(&new_nir_variant->outputs);
+               exec_list_push_tail(&new_nir_variant->outputs, &new_var->node);
+            }
          }
       }
-      d3d12_reassign_driver_locations(&new_nir_variant->outputs);
+      d3d12_reassign_driver_locations(&new_nir_variant->outputs,
+                                      next->current->nir->info.inputs_read);
    }
 
    d3d12_shader *new_variant = compile_nir(ctx, sel, new_nir_variant);
@@ -635,14 +646,20 @@ d3d12_compile_shader(struct d3d12_context *ctx,
    sel->compare_with_lod_bias_grad = (tex_scan_result & TEX_CMP_WITH_LOD_BIAS_GRAD) != 0;
 
    assert(nir != NULL);
+   d3d12_shader_selector *prev = get_prev_shader(ctx, sel->stage);
+   d3d12_shader_selector *next = get_next_shader(ctx, sel->stage);
 
    if (nir->info.stage != MESA_SHADER_VERTEX)
-      nir->info.inputs_read = d3d12_reassign_driver_locations(&nir->inputs);
+      nir->info.inputs_read =
+            d3d12_reassign_driver_locations(&nir->inputs,
+                                            prev ? prev->current->nir->info.outputs_written : 0);
    else
       nir->info.inputs_read = d3d12_sort_by_driver_location(&nir->inputs);
 
    if (nir->info.stage != MESA_SHADER_FRAGMENT)
-      nir->info.outputs_written = d3d12_reassign_driver_locations(&nir->outputs);
+      nir->info.outputs_written =
+            d3d12_reassign_driver_locations(&nir->outputs,
+                                            next ? next->current->nir->info.inputs_read : 0);
    else {
       NIR_PASS_V(nir, d3d12_fix_stencil_export_type);
       d3d12_sort_ps_outputs(&nir->outputs);
@@ -666,8 +683,6 @@ d3d12_compile_shader(struct d3d12_context *ctx,
     */
    struct d3d12_selection_context sel_ctx;
    sel_ctx.ctx = ctx;
-   d3d12_shader_selector *prev = get_prev_shader(ctx, sel->stage);
-   d3d12_shader_selector *next = get_next_shader(ctx, sel->stage);
    select_shader_variant(&sel_ctx, sel, prev, next);
 
    if (!sel->current) {
@@ -951,7 +966,7 @@ d3d12_sort_ps_outputs(exec_list *io)
  * then sysvalues and then system generated values.
  */
 uint64_t
-d3d12_reassign_driver_locations(exec_list *io)
+d3d12_reassign_driver_locations(exec_list *io, uint64_t other_stage_mask)
 {
    struct exec_list new_list;
    exec_list_make_empty(&new_list);
@@ -962,7 +977,7 @@ d3d12_reassign_driver_locations(exec_list *io)
       /* We use the driver_location here to avoid introducing a new
        * struct or member variable here. The true, updated driver location
        * will be written below, after sorting */
-      var->data.driver_location = nir_var_to_dxil_sysvalue_type(var);
+      var->data.driver_location = nir_var_to_dxil_sysvalue_type(var, other_stage_mask);
       insert_sorted(&new_list, var);
    }
    exec_list_move_nodes_to(&new_list, io);

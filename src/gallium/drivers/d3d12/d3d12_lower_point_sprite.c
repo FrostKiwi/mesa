@@ -283,7 +283,7 @@ d3d12_lower_point_sprite(nir_shader *shader,
    }
    state.num_point_coords = count;
    if (point_coord_enable)
-      d3d12_reassign_driver_locations(&shader->outputs);
+      d3d12_reassign_driver_locations(&shader->outputs, 0);
 
    nir_foreach_function(function, shader) {
       if (function->impl) {

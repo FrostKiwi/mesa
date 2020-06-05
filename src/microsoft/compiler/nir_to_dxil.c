@@ -4101,15 +4101,17 @@ dxil_vs_attr_index_to_name(unsigned index)
 }
 
 enum dxil_sysvalue_type
-nir_var_to_dxil_sysvalue_type(nir_variable *var)
+nir_var_to_dxil_sysvalue_type(nir_variable *var, uint64_t other_stage_mask)
 {
    switch (var->data.location) {
+   case VARYING_SLOT_FACE:
+      return DXIL_GENERATED_SYSVALUE;
    case VARYING_SLOT_POS:
    case VARYING_SLOT_CLIP_DIST0:
    case VARYING_SLOT_CLIP_DIST1:
-      return DXIL_SYSVALUE;
-   case VARYING_SLOT_FACE:
-      return DXIL_GENERATED_SYSVALUE;
+      if (!((1 << var->data.location) & other_stage_mask))
+         return DXIL_SYSVALUE;
+      /* fallthrough */
    default:
       return DXIL_NO_SYSVALUE;
    }
