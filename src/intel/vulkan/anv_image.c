@@ -777,13 +777,44 @@ anv_image_create(VkDevice _device,
          goto fail;
    }
 
+   if (image->create_flags & VK_IMAGE_CREATE_SPARSE_BINDING_BIT) {
+      if (image->disjoint) {
+         for (uint32_t p = 0; p < image->n_planes; p++) {
+            r = anv_vma_range_create(device, image->planes[p].size, alloc,
+                                     &image->planes[p].sparse_vma);
+            if (r != VK_SUCCESS)
+               goto fail;
+            anv_image_bind_vma_plane(device, image, p,
+                                     image->planes[p].sparse_vma, 0);
+         }
+      } else {
+         r = anv_vma_range_create(device, image->size, alloc,
+                                  &image->sparse_vma);
+         if (r != VK_SUCCESS)
+            goto fail;
+         for (uint32_t p = 0; p < image->n_planes; p++) {
+            anv_image_bind_vma_plane(device, image, p,
+                                     image->sparse_vma, 0);
+         }
+      }
+   }
+
    *pImage = anv_image_to_handle(image);
 
    return VK_SUCCESS;
 
 fail:
-   if (image)
+   if (image) {
+      if (image->sparse_vma)
+         anv_vma_range_destroy(device, image->sparse_vma, alloc);
+
+      for (uint32_t p = 0; p < image->n_planes; p++) {
+         if (image->planes[p].sparse_vma)
+            anv_vma_range_destroy(device, image->planes[p].sparse_vma, alloc);
+      }
+
       vk_free2(&device->vk.alloc, alloc, image);
+   }
 
    return r;
 }
@@ -908,11 +939,16 @@ anv_DestroyImage(VkDevice _device, VkImage _image,
    if (!image)
       return;
 
+   if (image->sparse_vma)
+      anv_vma_range_destroy(device, image->sparse_vma, pAllocator);
+
    for (uint32_t p = 0; p < image->n_planes; ++p) {
       if (image->planes[p].bo_is_owned) {
          assert(image->planes[p].address.bo != NULL);
          anv_device_release_bo(device, image->planes[p].address.bo);
       }
+      if (image->planes[p].sparse_vma)
+         anv_vma_range_destroy(device, image->planes[p].sparse_vma, pAllocator);
    }
 
    vk_object_base_finish(&image->base);
@@ -925,9 +961,19 @@ static void anv_image_bind_memory_plane(struct anv_device *device,
                                         struct anv_device_memory *memory,
                                         uint32_t memory_offset)
 {
-   anv_image_bind_vma_plane(device, image, plane,
-                            memory ? &memory->vma : NULL,
-                            memory_offset);
+   if (image->sparse_vma) {
+      anv_vma_range_bind_bo(device, image->sparse_vma,
+                            memory ? memory->bo : NULL, memory_offset,
+                            image->sparse_vma->size);
+   } else if (image->planes[plane].sparse_vma) {
+      anv_vma_range_bind_bo(device, image->planes[plane].sparse_vma,
+                            memory ? memory->bo : NULL, memory_offset,
+                            image->planes[plane].sparse_vma->size);
+   } else {
+      anv_image_bind_vma_plane(device, image, plane,
+                               memory ? &memory->vma : NULL,
+                               memory_offset);
+   }
 }
 
 /* We are binding AHardwareBuffer. Get a description, resolve the

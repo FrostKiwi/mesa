@@ -1793,6 +1793,23 @@ struct anv_vma_range {
    VkDeviceSize         size;
 };
 
+VkResult
+anv_vma_range_create(struct anv_device *device,
+                     uint64_t size,
+                     const VkAllocationCallbacks* pAllocator,
+                     struct anv_vma_range **range_out);
+
+void
+anv_vma_range_destroy(struct anv_device *device,
+                      struct anv_vma_range *range,
+                      const VkAllocationCallbacks* pAllocator);
+
+VkResult
+anv_vma_range_bind_bo(struct anv_device *device,
+                      struct anv_vma_range *range,
+                      struct anv_bo *bo,
+                      uint64_t offset, uint64_t size);
+
 struct anv_device_memory {
    struct vk_object_base                        base;
 
@@ -2267,6 +2284,8 @@ struct anv_buffer {
    VkDeviceSize                                 size;
 
    VkBufferUsageFlags                           usage;
+
+   struct anv_vma_range *                       sparse_vma;
 
    /* Set when bound */
    struct anv_address                           address;
@@ -3607,6 +3626,8 @@ struct anv_image {
    VkDeviceSize size;
    uint32_t alignment;
 
+   struct anv_vma_range *sparse_vma;
+
    /* Whether the image is made of several underlying buffer objects rather a
     * single one with different offsets.
     */
@@ -3657,6 +3678,8 @@ struct anv_image {
        * set to 0).
        */
       uint32_t offset;
+
+      struct anv_vma_range *sparse_vma;
 
       VkDeviceSize size;
       uint32_t alignment;

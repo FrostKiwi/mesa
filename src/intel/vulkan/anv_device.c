@@ -3400,6 +3400,64 @@ anv_vma_free(struct anv_device *device,
    pthread_mutex_unlock(&device->vma_mutex);
 }
 
+VkResult
+anv_vma_range_create(struct anv_device *device,
+                     uint64_t size,
+                     const VkAllocationCallbacks* pAllocator,
+                     struct anv_vma_range **vma_out)
+{
+   struct anv_vma_range *vma =
+      vk_zalloc2(&device->vk.alloc, pAllocator, sizeof(*vma), 8,
+                 VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   if (vma == NULL)
+      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   /* TODO: Do we want 64K for some sparse stuff? */
+   uint32_t align = 4096;
+
+   vma->addr.offset = anv_vma_alloc(device, size, align, 0, 0);
+   if (vma->addr.offset == 0) {
+      vk_free2(&device->vk.alloc, pAllocator, vma);
+      return vk_error(VK_ERROR_OUT_OF_DEVICE_MEMORY);
+   }
+
+   vma->size = size;
+
+   *vma_out = vma;
+
+   return VK_SUCCESS;
+}
+
+void
+anv_vma_range_destroy(struct anv_device *device,
+                      struct anv_vma_range *vma,
+                      const VkAllocationCallbacks* pAllocator)
+{
+   /* Tell the kernel to free the whole range */
+   int ret = anv_gem_vm_bind(device, vma->addr.offset, 0, 0, vma->size);
+   if (ret != 0)
+      anv_device_set_lost(device, "VM_BIND failed to unbind memory: %m");
+
+   anv_vma_free(device, vma->addr.offset, vma->size);
+   vk_free2(&device->vk.alloc, pAllocator, vma);
+}
+
+VkResult
+anv_vma_range_bind_bo(struct anv_device *device,
+                      struct anv_vma_range *vma,
+                      struct anv_bo *bo,
+                      uint64_t offset, uint64_t size)
+{
+   int ret = anv_gem_vm_bind(device, vma->addr.offset,
+                             bo ? bo->gem_handle : 0, offset, size);
+   if (ret != 0) {
+      return vk_errorf(device, device, VK_ERROR_OUT_OF_DEVICE_MEMORY,
+                       "VM_BIND failed to bind memory: %m");
+   }
+
+   return VK_SUCCESS;
+}
+
 VkResult anv_AllocateMemory(
     VkDevice                                    _device,
     const VkMemoryAllocateInfo*                 pAllocateInfo,
@@ -4102,11 +4160,18 @@ anv_bind_buffer_memory(struct anv_device *device,
 
    assert(pBindInfo->sType == VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO);
 
-   if (mem) {
-      buffer->address = anv_address_add(mem->vma.addr,
-                                        pBindInfo->memoryOffset);
+   if (buffer->sparse_vma) {
+      anv_vma_range_bind_bo(device, buffer->sparse_vma,
+                            mem ? mem->bo : NULL,
+                            pBindInfo->memoryOffset,
+                            buffer->sparse_vma->size);
    } else {
-      buffer->address = ANV_NULL_ADDRESS;
+      if (mem) {
+         buffer->address = anv_address_add(mem->vma.addr,
+                                           pBindInfo->memoryOffset);
+      } else {
+         buffer->address = ANV_NULL_ADDRESS;
+      }
    }
 }
 
@@ -4265,6 +4330,17 @@ VkResult anv_CreateBuffer(
    buffer->size = pCreateInfo->size;
    buffer->usage = pCreateInfo->usage;
    buffer->address = ANV_NULL_ADDRESS;
+
+   if (pCreateInfo->flags & VK_BUFFER_CREATE_SPARSE_BINDING_BIT) {
+      VkResult result = anv_vma_range_create(device, buffer->size,
+                                             pAllocator, &buffer->sparse_vma);
+      if (result != VK_SUCCESS) {
+         vk_object_base_finish(&buffer->base);
+         vk_free2(&device->vk.alloc, pAllocator, buffer);
+         return result;
+      }
+      buffer->address = buffer->sparse_vma->addr;
+   }
 
    *pBuffer = anv_buffer_to_handle(buffer);
 

@@ -603,6 +603,9 @@ anv_gem_vm_bind(struct anv_device *device, uint64_t address,
       .flags = 0,
    };
 
+   if (handle == 0)
+      bind_va.flags |= I915_GEM_VM_BIND_UNBIND;
+
    struct drm_i915_gem_vm_bind bind = {
       .vm_id = device->vm_id,
       .num_vas = 1,
