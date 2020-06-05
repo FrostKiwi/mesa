@@ -1062,6 +1062,8 @@ clc_to_dxil(struct clc_context *ctx,
       NIR_PASS_V(nir, nir_lower_int64, ~0u);
    }
 
+   NIR_PASS_V(nir, nir_lower_64bit_phis);
+
    // Assign bindings for constant samplers
    nir_foreach_variable_safe(var, &nir->uniforms) {
       if (glsl_type_is_sampler(var->type) &&
