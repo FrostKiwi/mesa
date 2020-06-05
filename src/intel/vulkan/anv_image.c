@@ -1052,32 +1052,23 @@ VkResult anv_BindImageMemory2(
                                        swapchain_info->imageIndex);
             assert(swapchain_image);
             assert(image->aspects == swapchain_image->aspects);
+            assert(image->n_planes == swapchain_image->n_planes);
             assert(mem == NULL);
 
-            uint32_t aspect_bit;
-            anv_foreach_image_aspect_bit(aspect_bit, image, aspects) {
-               uint32_t plane =
-                  anv_image_aspect_to_plane(image->aspects, 1UL << aspect_bit);
-               struct anv_device_memory mem = {
-                  .bo = swapchain_image->planes[plane].address.bo,
-               };
-               anv_image_bind_memory_plane(device, image, plane,
-                                           &mem, bind_info->memoryOffset);
+            for (uint32_t plane = 0; plane < image->n_planes; plane++) {
+               image->planes[plane].address =
+                  swapchain_image->planes[plane].address;
+               image->planes[plane].aux_usage =
+                  swapchain_image->planes[plane].aux_usage;
             }
-            break;
+            /* Nothing else to do.  Carry on with the next bind item */
+            continue;
          }
          default:
             anv_debug_ignored_stype(s->sType);
             break;
          }
       }
-
-      /* VkBindImageMemorySwapchainInfoKHR requires memory to be
-       * VK_NULL_HANDLE. In such case, just carry one with the next bind
-       * item.
-       */
-      if (!mem)
-         continue;
 
       uint32_t aspect_bit;
       anv_foreach_image_aspect_bit(aspect_bit, image, aspects) {
