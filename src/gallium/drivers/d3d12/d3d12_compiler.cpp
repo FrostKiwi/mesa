@@ -478,7 +478,7 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
    }
 
    /* Clone the NIR shader */
-    new_nir_variant = nir_shader_clone(sel, sel->initial);
+   new_nir_variant = nir_shader_clone(sel, sel->initial);
 
    /* Apply any needed lowering passes */
    if (key.gs.writes_psize) {
