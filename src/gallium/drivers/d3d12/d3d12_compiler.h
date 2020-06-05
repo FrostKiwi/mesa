@@ -54,6 +54,8 @@ struct d3d12_shader_key {
 
    uint64_t required_varying_inputs;
    uint64_t required_varying_outputs;
+   uint64_t next_varying_inputs;
+   uint64_t prev_varying_outputs;
 
    struct {
       unsigned sprite_coord_enable:24;
@@ -128,7 +130,7 @@ d3d12_select_shader_variants(struct d3d12_context *ctx,
                              const struct pipe_draw_info *dinfo);
 
 uint64_t
-d3d12_reassign_driver_locations(struct exec_list *io);
+d3d12_reassign_driver_locations(struct exec_list *io, uint64_t other_stage_mask);
 
 uint64_t
 d3d12_sort_by_driver_location(struct exec_list *io);

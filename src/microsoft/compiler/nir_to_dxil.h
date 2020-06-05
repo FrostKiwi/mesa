@@ -44,7 +44,7 @@ enum dxil_sysvalue_type {
 };
 
 enum dxil_sysvalue_type
-nir_var_to_dxil_sysvalue_type(nir_variable *var);
+nir_var_to_dxil_sysvalue_type(nir_variable *var, uint64_t other_stage_mask);
 
 struct nir_to_dxil_options {
    bool interpolate_at_vertex;
