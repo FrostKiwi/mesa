@@ -1609,6 +1609,34 @@ ibc_validate_shader(const ibc_shader *shader)
 void ibc_validate_shader(const ibc_shader *shader);
 #endif
 
+struct ibc_eu_performance {
+   /**
+    * Array containing estimates of the runtime of each basic block of the
+    * program in cycle units.
+    */
+   unsigned *block_latency;
+
+   /**
+    * Estimate of the runtime of the whole program in cycle units assuming
+    * uncontended execution.
+    */
+   unsigned latency;
+
+   /**
+    * Estimate of the throughput of the whole program in
+    * invocations-per-cycle units.
+    *
+    * Note that this might be lower than the ratio between the dispatch
+    * width of the program and its latency estimate in cases where
+    * performance doesn't scale without limits as a function of its thread
+    * parallelism, e.g. due to the existence of a bottleneck in a shared
+    * function.
+    */
+   float throughput;
+};
+
+struct ibc_eu_performance *ibc_estimate_performance(ibc_shader *shader);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
