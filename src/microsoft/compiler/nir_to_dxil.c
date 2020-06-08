@@ -3685,6 +3685,40 @@ emit_scratch(struct ntd_context *ctx, nir_shader *s)
    return true;
 }
 
+/* The validator complains if we don't have ops that reference a global variable. */
+static bool
+shader_has_shared_ops(struct nir_shader *s)
+{
+   nir_foreach_function(func, s) {
+      if (!func->impl)
+         continue;
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
+            nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+            switch (intrin->intrinsic) {
+            case nir_intrinsic_load_shared_dxil:
+            case nir_intrinsic_store_shared_dxil:
+            case nir_intrinsic_shared_atomic_add_dxil:
+            case nir_intrinsic_shared_atomic_and_dxil:
+            case nir_intrinsic_shared_atomic_comp_swap_dxil:
+            case nir_intrinsic_shared_atomic_exchange_dxil:
+            case nir_intrinsic_shared_atomic_imax_dxil:
+            case nir_intrinsic_shared_atomic_imin_dxil:
+            case nir_intrinsic_shared_atomic_or_dxil:
+            case nir_intrinsic_shared_atomic_umax_dxil:
+            case nir_intrinsic_shared_atomic_umin_dxil:
+            case nir_intrinsic_shared_atomic_xor_dxil:
+               return true;
+            default: break;
+            }
+         }
+      }
+   }
+   return false;
+}
+
 static bool
 emit_module(struct ntd_context *ctx, nir_shader *s)
 {
@@ -3717,7 +3751,7 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       }
    }
 
-   if (s->info.cs.shared_size) {
+   if (s->info.cs.shared_size && shader_has_shared_ops(s)) {
       const struct dxil_type *type;
       unsigned size;
 
