@@ -704,7 +704,9 @@ add_work_properties_var(struct clc_dxil_object *dxil,
    struct clc_dxil_metadata *metadata = &dxil->metadata;
    nir_variable *var =
       nir_variable_create(nir, nir_var_mem_ubo,
-                          glsl_array_type(glsl_uint_type(), 3, 0),
+                          glsl_array_type(glsl_uint_type(),
+                                          sizeof(struct clc_work_properties_data) / sizeof(unsigned),
+                                          0),
                           "kernel_work_properies");
    var->data.binding = (*cbv_id)++;
    var->data.how_declared = nir_var_hidden;
@@ -1028,9 +1030,25 @@ clc_to_dxil(struct clc_context *ctx,
    nir_variable *work_properties_var =
       add_work_properties_var(dxil, nir, &cbv_id);
 
+   // Patch the localsize before calling clc_nir_lower_system_values().
+   if (conf) {
+      for (unsigned i = 0; i < ARRAY_SIZE(nir->info.cs.local_size); i++) {
+         if (!conf->local_size[i] ||
+             conf->local_size[i] == nir->info.cs.local_size[i])
+            continue;
+
+         if (nir->info.cs.local_size[i] &&
+             nir->info.cs.local_size[i] != conf->local_size[i]) {
+            debug_printf("D3D12: runtime local size does not match reqd_work_group_size() values\n");
+            goto err_free_dxil;
+         }
+
+         nir->info.cs.local_size[i] = conf->local_size[i];
+      }
+   }
+
    NIR_PASS_V(nir, dxil_nir_lower_kernel_input_loads, inputs_var);
-   NIR_PASS_V(nir, clc_nir_lower_kernel_global_work_offset,
-              work_properties_var);
+   NIR_PASS_V(nir, clc_nir_lower_system_values, work_properties_var);
    NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
    NIR_PASS_V(nir, dxil_nir_opt_alu_deref_srcs);
    NIR_PASS_V(nir, dxil_nir_lower_atomics_to_dxil);
@@ -1052,23 +1070,6 @@ clc_to_dxil(struct clc_context *ctx,
    struct nir_to_dxil_options opts = {
       .interpolate_at_vertex = false
    };
-
-   // Patch the localsize before calling nir_to_dxil().
-   if (conf) {
-      for (unsigned i = 0; i < ARRAY_SIZE(nir->info.cs.local_size); i++) {
-         if (!conf->local_size[i] ||
-             conf->local_size[i] == nir->info.cs.local_size[i])
-            continue;
-
-         if (nir->info.cs.local_size[i] &&
-             nir->info.cs.local_size[i] != conf->local_size[i]) {
-            debug_printf("D3D12: runtime local size does not match reqd_work_group_size() values\n");
-            goto err_free_dxil;
-         }
-
-         nir->info.cs.local_size[i] = conf->local_size[i];
-      }
-   }
 
    for (unsigned i = 0; i < dxil->kernel->num_args; i++) {
       if (dxil->kernel->args[i].address_qualifier != CLC_KERNEL_ARG_ADDRESS_LOCAL)
