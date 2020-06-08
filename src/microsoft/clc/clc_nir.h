@@ -21,26 +21,13 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef DXIL_NIR_H
-#define DXIL_NIR_H
+#ifndef CLC_NIR_H
+#define CLC_NIR_H
 
 #include <stdbool.h>
 #include "nir.h"
-#include "nir_builder.h"
 
-bool dxil_nir_lower_8bit_conv(nir_shader *shader);
-bool dxil_nir_lower_b2b(nir_shader *shader);
-bool dxil_nir_lower_ubo_to_temp(nir_shader *shader);
-bool dxil_nir_lower_loads_stores_to_dxil(nir_shader *shader);
-bool dxil_nir_lower_atomics_to_dxil(nir_shader *shader);
-bool dxil_nir_lower_deref_ssbo(nir_shader *shader);
-bool dxil_nir_opt_alu_deref_srcs(nir_shader *shader);
-bool dxil_nir_lower_kernel_input_loads(nir_shader *shader, nir_variable *var);
-bool dxil_nir_lower_memcpy_deref(nir_shader *shader);
+bool
+clc_nir_lower_kernel_global_work_offset(nir_shader *nir, nir_variable *var);
 
-nir_ssa_def *
-build_load_ubo_dxil(nir_builder *b, nir_ssa_def *buffer,
-                    nir_ssa_def *offset, unsigned num_components,
-                    unsigned bit_size);
-
-#endif /* DXIL_NIR_H */
+#endif

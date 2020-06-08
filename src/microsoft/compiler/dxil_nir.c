@@ -212,10 +212,10 @@ ubo_load_select_32b_comps(nir_builder *b, nir_ssa_def *vec32,
    return nir_bcsel(b, cond, comps[1], comps[0]);
 }
 
-static nir_ssa_def *
-emit_load_ubo_dxil(nir_builder *b, nir_ssa_def *buffer,
-                   nir_ssa_def *offset, unsigned num_components,
-                   unsigned bit_size)
+nir_ssa_def *
+build_load_ubo_dxil(nir_builder *b, nir_ssa_def *buffer,
+                    nir_ssa_def *offset, unsigned num_components,
+                    unsigned bit_size)
 {
    nir_ssa_def *idx = nir_ushr(b, offset, nir_imm_int(b, 4));
    nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
@@ -1006,10 +1006,10 @@ lower_load_kernel_input(nir_builder *b, nir_intrinsic_instr *intr,
    b->cursor = nir_before_instr(&intr->instr);
 
    nir_ssa_def *result =
-      emit_load_ubo_dxil(b, nir_imm_int(b, var->data.binding),
-                         intr->src[0].ssa,
-                         nir_dest_num_components(intr->dest),
-                         nir_dest_bit_size(intr->dest));
+      build_load_ubo_dxil(b, nir_imm_int(b, var->data.binding),
+                          intr->src[0].ssa,
+                          nir_dest_num_components(intr->dest),
+                          nir_dest_bit_size(intr->dest));
    nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
    nir_instr_remove(&intr->instr);
    return true;
@@ -1039,55 +1039,6 @@ dxil_nir_lower_kernel_input_loads(nir_shader *nir, nir_variable *var)
                progress |= lower_kernel_input_offset_bit_size(&b, intr);
                progress |= lower_load_kernel_input(&b, intr, var);
             }
-         }
-      }
-   }
-
-   return progress;
-}
-
-static bool
-lower_load_global_invocation_id(nir_builder *b, nir_intrinsic_instr *intr,
-                                nir_variable *var)
-{
-   nir_intrinsic_instr *load;
-
-   b->cursor = nir_after_instr(&intr->instr);
-
-   nir_ssa_def *offset =
-      emit_load_ubo_dxil(b, nir_imm_int(b, var->data.binding),
-                         nir_imm_int(b, 0),
-                         nir_dest_num_components(intr->dest),
-                         nir_dest_bit_size(intr->dest));
-   nir_ssa_def *result = nir_iadd(b, &intr->dest.ssa, offset);
-   nir_ssa_def_rewrite_uses_after(&intr->dest.ssa, nir_src_for_ssa(result),
-                                  result->parent_instr);
-   return true;
-}
-
-/* Make sure you only call this lowering pass once. */
-bool
-dxil_nir_lower_kernel_global_work_offset(nir_shader *nir, nir_variable *var)
-{
-   bool progress = false;
-
-   foreach_list_typed(nir_function, func, node, &nir->functions) {
-      if (!func->is_entrypoint)
-         continue;
-      assert(func->impl);
-
-      nir_builder b;
-      nir_builder_init(&b, func->impl);
-
-      nir_foreach_block(block, func->impl) {
-         nir_foreach_instr_safe(instr, block) {
-            if (instr->type != nir_instr_type_intrinsic)
-               continue;
-
-            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-
-            if (intr->intrinsic == nir_intrinsic_load_global_invocation_id)
-               progress |= lower_load_global_invocation_id(&b, intr, var);
          }
       }
    }
