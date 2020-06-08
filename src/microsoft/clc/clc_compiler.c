@@ -839,6 +839,113 @@ copy_const_initializer(const nir_constant *constant, const struct glsl_type *typ
    }
 }
 
+static void
+split_unaligned_load(nir_builder *b, nir_intrinsic_instr *intrin)
+{
+   unsigned alignment = nir_intrinsic_align(intrin);
+   enum gl_access_qualifier access = nir_intrinsic_access(intrin);
+   nir_ssa_def *srcs[NIR_MAX_VEC_COMPONENTS * NIR_MAX_VEC_COMPONENTS * sizeof(int64_t) / 8];
+   unsigned comp_size = intrin->dest.ssa.bit_size / 8;
+   unsigned num_comps = intrin->dest.ssa.num_components;
+
+   b->cursor = nir_before_instr(&intrin->instr);
+
+   nir_deref_instr *ptr = nir_src_as_deref(intrin->src[0]);
+   const struct glsl_type *cast_type = alignment == 1 ? glsl_int8_t_type() : glsl_int16_t_type();
+   nir_deref_instr *cast = nir_build_deref_cast(b, &ptr->dest.ssa, ptr->mode, cast_type, alignment);
+
+   unsigned num_loads = DIV_ROUND_UP(comp_size * num_comps, alignment);
+   for (unsigned i = 0; i < num_loads; ++i) {
+      nir_deref_instr *elem = nir_build_deref_ptr_as_array(b, cast, nir_imm_intN_t(b, i, cast->dest.ssa.bit_size));
+      srcs[i] = nir_load_deref_with_access(b, elem, access);
+   }
+
+   nir_ssa_def *new_dest = nir_extract_bits(b, srcs, num_loads, 0, num_comps, intrin->dest.ssa.bit_size);
+   nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(new_dest));
+   nir_instr_remove(&intrin->instr);
+}
+
+static void
+split_unaligned_store(nir_builder *b, nir_intrinsic_instr *intrin)
+{
+   unsigned alignment = nir_intrinsic_align(intrin);
+   enum gl_access_qualifier access = nir_intrinsic_access(intrin);
+
+   assert(intrin->src[1].is_ssa);
+   nir_ssa_def *value = intrin->src[1].ssa;
+   unsigned comp_size = value->bit_size / 8;
+   unsigned num_comps = value->num_components;
+   
+   b->cursor = nir_before_instr(&intrin->instr);
+
+   nir_deref_instr *ptr = nir_src_as_deref(intrin->src[0]);
+   const struct glsl_type *cast_type = alignment == 1 ? glsl_int8_t_type() : glsl_int16_t_type();
+   nir_deref_instr *cast = nir_build_deref_cast(b, &ptr->dest.ssa, ptr->mode, cast_type, alignment);
+
+   unsigned num_stores = DIV_ROUND_UP(comp_size * num_comps, alignment);
+   for (unsigned i = 0; i < num_stores; ++i) {
+      nir_ssa_def *substore_val = nir_extract_bits(b, &value, 1, i * alignment * 8, 1, alignment * 8);
+      nir_deref_instr *elem = nir_build_deref_ptr_as_array(b, cast, nir_imm_intN_t(b, i, cast->dest.ssa.bit_size));
+      nir_store_deref_with_access(b, elem, substore_val, ~0, access);
+   }
+
+   nir_instr_remove(&intrin->instr);
+}
+
+static bool
+split_unaligned_loads_stores(nir_shader *shader)
+{
+   bool progress = false;
+
+   nir_foreach_function(function, shader) {
+      if (!function->impl)
+         continue;
+
+      nir_builder b;
+      nir_builder_init(&b, function->impl);
+
+      nir_foreach_block(block, function->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
+            nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+            if (intrin->intrinsic != nir_intrinsic_load_deref &&
+                intrin->intrinsic != nir_intrinsic_store_deref)
+               continue;
+            unsigned alignment = nir_intrinsic_align(intrin);
+
+            /* Alignment = 0 means naturally aligned. We can load anything at 4-byte alignment. */
+            if (alignment == 0 || alignment >= 4)
+               continue;
+
+            nir_ssa_def *val;
+            if (intrin->intrinsic == nir_intrinsic_load_deref) {
+               assert(intrin->dest.is_ssa);
+               val = &intrin->dest.ssa;
+            } else {
+               assert(intrin->src[1].is_ssa);
+               val = intrin->src[1].ssa;
+            }
+
+            unsigned natural_alignment =
+               val->bit_size / 8 *
+               (val->num_components == 3 ? 4 : val->num_components);
+
+            if (alignment >= natural_alignment)
+               continue;
+
+            if (intrin->intrinsic == nir_intrinsic_load_deref)
+               split_unaligned_load(&b, intrin);
+            else
+               split_unaligned_store(&b, intrin);
+            progress = true;
+         }
+      }
+   }
+
+   return progress;
+}
+
 struct clc_dxil_object *
 clc_to_dxil(struct clc_context *ctx,
             const struct clc_object *obj,
@@ -992,6 +1099,7 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_lower_samplers);
 
    // copy propagate to prepare for lower_explicit_io
+   NIR_PASS_V(nir, split_unaligned_loads_stores);
    NIR_PASS_V(nir, nir_split_var_copies);
    NIR_PASS_V(nir, nir_opt_copy_prop_vars);
    NIR_PASS_V(nir, nir_lower_var_copies);
