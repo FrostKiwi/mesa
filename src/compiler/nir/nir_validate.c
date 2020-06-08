@@ -451,10 +451,13 @@ validate_deref_instr(nir_deref_instr *instr, validate_state *state)
          if (instr->mode == nir_var_mem_ubo ||
              instr->mode == nir_var_mem_ssbo ||
              instr->mode == nir_var_mem_shared ||
-             instr->mode == nir_var_mem_global) {
+             instr->mode == nir_var_mem_global ||
+             state->shader->info.stage == MESA_SHADER_KERNEL) {
             /* Shared variables and UBO/SSBOs have a bit more relaxed rules
              * because we need to be able to handle array derefs on vectors.
              * Fortunately, nir_lower_io handles these just fine.
+             * For OpenCL, we also need to support array derefs on vectors
+             * of function temp memory.
              */
             validate_assert(state, glsl_type_is_array(parent->type) ||
                                    glsl_type_is_matrix(parent->type) ||
