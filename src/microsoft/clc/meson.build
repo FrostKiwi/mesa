@@ -52,6 +52,7 @@ inc_clover_nir = include_directories(dir_clover_nir)
 libclc_compiler = shared_library(
   'clglon12compiler',
   'clc_compiler.c',
+  'clc_nir.c',
   'clc_helpers.cpp',
   join_paths(dir_clover_nir, 'nir_lower_libclc.c'),
   opencl_c_h,

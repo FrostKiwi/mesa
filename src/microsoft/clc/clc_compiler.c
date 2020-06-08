@@ -27,6 +27,7 @@
 #include "nir_lower_libclc.h"
 #include "clc_compiler.h"
 #include "clc_helpers.h"
+#include "clc_nir.h"
 #include "../compiler/dxil_nir.h"
 #include "../compiler/nir_to_dxil.h"
 
@@ -1028,7 +1029,7 @@ clc_to_dxil(struct clc_context *ctx,
       add_work_properties_var(dxil, nir, &cbv_id);
 
    NIR_PASS_V(nir, dxil_nir_lower_kernel_input_loads, inputs_var);
-   NIR_PASS_V(nir, dxil_nir_lower_kernel_global_work_offset,
+   NIR_PASS_V(nir, clc_nir_lower_kernel_global_work_offset,
               work_properties_var);
    NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
    NIR_PASS_V(nir, dxil_nir_opt_alu_deref_srcs);
