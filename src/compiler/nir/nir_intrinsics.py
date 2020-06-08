@@ -166,8 +166,8 @@ intrinsic("nop", flags=[CAN_ELIMINATE])
 intrinsic("load_param", dest_comp=0, indices=[PARAM_IDX], flags=[CAN_ELIMINATE])
 
 intrinsic("load_deref", dest_comp=0, src_comp=[-1],
-          indices=[ACCESS], flags=[CAN_ELIMINATE])
-intrinsic("store_deref", src_comp=[-1, 0], indices=[WRMASK, ACCESS])
+          indices=[ACCESS, ALIGN_MUL, ALIGN_OFFSET], flags=[CAN_ELIMINATE])
+intrinsic("store_deref", src_comp=[-1, 0], indices=[WRMASK, ACCESS, ALIGN_MUL, ALIGN_OFFSET])
 intrinsic("copy_deref", src_comp=[-1, -1], indices=[DST_ACCESS, SRC_ACCESS])
 intrinsic("memcpy_deref", src_comp=[-1, -1, 1], indices=[DST_ACCESS, SRC_ACCESS])
 

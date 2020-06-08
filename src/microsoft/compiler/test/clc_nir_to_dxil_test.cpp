@@ -181,7 +181,7 @@ impl main {
    /* preds: */
    vec4 32 ssa_0 = load_const (0x3f800000 /* 1.000000 */, 0x00000000 /* 0.000000 */, 0x00000000 /* 0.000000 */, 0x3f800000 /* 1.000000 */)
    vec1 32 ssa_1 = deref_var &color (shader_out vec4)
-   intrinsic store_deref (ssa_1, ssa_0) (15, 0) /* wrmask=xyzw */ /* access=0 */
+   intrinsic store_deref (ssa_1, ssa_0) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
    /* succs: block_1 */
    block block_1:
 }
@@ -262,11 +262,11 @@ impl main {
    block block_0:
    /* preds: */
    vec1 32 ssa_0 = deref_var &vertexPosition_modelspace (shader_in vec3)
-   vec3 32 ssa_1 = intrinsic load_deref (ssa_0) (0) /* access=0 */
+   vec3 32 ssa_1 = intrinsic load_deref (ssa_0) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
    vec1 32 ssa_2 = deref_var &gl_Position (shader_out vec4)
    vec1 32 ssa_3 = load_const (0x3f800000 /* 1.000000 */)
    vec4 32 ssa_4 = vec4 ssa_1.x, ssa_1.y, ssa_1.z, ssa_3
-   intrinsic store_deref (ssa_2, ssa_4) (15, 0) /* wrmask=xyzw */ /* access=0 */
+   intrinsic store_deref (ssa_2, ssa_4) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
    /* succs: block_1 */
       block block_1:
  })";
@@ -359,7 +359,7 @@ impl main {
    vec1 32 ssa_1 = deref_var &color_in (uniform vec4)
    vec4 32 ssa_2 = intrinsic load_ubo (ssa_0, ssa_0) (0, 4, 0) /* access=0 */ /* align_mul=4 */ /* align_offset=0 */
    vec1 32 ssa_3 = deref_var &color (shader_out vec4)
-   intrinsic store_deref (ssa_3, ssa_2) (15, 0) /* wrmask=xyzw */ /* access=0 */
+   intrinsic store_deref (ssa_3, ssa_2) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
    /* succs: block_1 */
    block block_1:
 }
@@ -459,7 +459,7 @@ impl main {
    vec1 32 ssa_3 = ishl ssa_2, ssa_6
    vec4 32 ssa_4 = intrinsic load_ubo (ssa_0, ssa_3) (0, 4, 0) /* access=0 */ /* align_mul=4 */ /* align_offset=0 */
    vec1 32 ssa_5 = deref_var &color (shader_out vec4)
-   intrinsic store_deref (ssa_5, ssa_4) (15, 0) /* wrmask=xyzw */ /* access=0 */
+   intrinsic store_deref (ssa_5, ssa_4) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
    /* succs: block_1 */
    block block_1:
 }
@@ -486,9 +486,9 @@ R"(shader: MESA_SHADER_FRAGMENT
          block block_0:
          /* preds: */
          vec1 32 ssa_0 = deref_var &gl_Color (shader_in vec4)
-         vec4 32 ssa_1 = intrinsic load_deref (ssa_0) (0) /* access=0 */
+         vec4 32 ssa_1 = intrinsic load_deref (ssa_0) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
          vec1 32 ssa_2 = deref_var &gl_in (shader_in vec4)
-         vec4 32 ssa_3 = intrinsic load_deref (ssa_0) (0) /* access=0 */
+         vec4 32 ssa_3 = intrinsic load_deref (ssa_0) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
          vec1 32 ssa_4 = intrinsic load_front_face () ()
          vec1 32 ssa_5 = load_const (0x00000000 /* 0.000000 */)
          vec1 1 ssa_6 = ine ssa_4, ssa_5
@@ -498,7 +498,7 @@ R"(shader: MESA_SHADER_FRAGMENT
          vec1 32 ssa_10 = bcsel ssa_6, ssa_1.w, ssa_3.w
          vec4 32 ssa_11 = vec4 ssa_7, ssa_8, ssa_9, ssa_10
          vec1 32 ssa_12 = deref_var &gl_FragColor (shader_out vec4)
-         intrinsic store_deref (ssa_12, ssa_11) (15, 0) /* wrmask=xyzw */ /* access=0 */
+         intrinsic store_deref (ssa_12, ssa_11) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
          /* succs: block_1 */
          block block_1:
  })";
@@ -524,13 +524,13 @@ impl main {
         block block_0:
         /* preds: */
         vec1 32 ssa_0 = deref_var &packed:z (shader_in float)
-        vec1 32 ssa_1 = intrinsic load_deref (ssa_0) (0) /* access=0 */
+        vec1 32 ssa_1 = intrinsic load_deref (ssa_0) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         vec1 32 ssa_2 = deref_var &gl_Color (shader_in vec4)
-        vec4 32 ssa_3 = intrinsic load_deref (ssa_2) (0) /* access=0 */
+        vec4 32 ssa_3 = intrinsic load_deref (ssa_2) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         vec1 32 ssa_4 = deref_var &gl_FragDepth (shader_out float)
-        intrinsic store_deref (ssa_4, ssa_1) (1, 0) /* wrmask=x */ /* access=0 */
+        intrinsic store_deref (ssa_4, ssa_1) (1, 0, 0, 0) /* wrmask=x */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         vec1 32 ssa_5 = deref_var &gl_FragColor (shader_out vec4)
-        intrinsic store_deref (ssa_5, ssa_3) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        intrinsic store_deref (ssa_5, ssa_3) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         /* succs: block_1 */
         block block_1:
 })";
@@ -560,7 +560,7 @@ impl main {
         block block_0:
         /* preds: */
         vec1 32 ssa_0 = deref_var &gl_Vertex (shader_in vec4)
-        vec4 32 ssa_1 = intrinsic load_deref (ssa_0) (0) /* access=0 */
+        vec4 32 ssa_1 = intrinsic load_deref (ssa_0) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         vec1 32 ssa_33 = load_const (0x00000000 /* 0.000000 */)
         vec4 32 ssa_53 = intrinsic load_ubo (ssa_33, ssa_33) (0, 4, 0) /* access=0 */ /* align_mul=4 */ /* align_offset=0 */
         vec1 32 ssa_85 = fmul ssa_53.y, ssa_1.y
@@ -585,13 +585,13 @@ impl main {
         vec1 32 ssa_120 = ffma ssa_41, ssa_42, ssa_1.w
         vec1 32 ssa_70 = fmul ssa_120, ssa_42
         vec4 32 ssa_74 = vec4 ssa_1.x, ssa_1.y, ssa_70, ssa_1.w
-        intrinsic store_deref (ssa_25, ssa_74) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        intrinsic store_deref (ssa_25, ssa_74) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         vec1 32 ssa_27 = deref_var &clipdist_2 (shader_out vec4)
         vec4 32 ssa_114 = vec4 ssa_127, ssa_33, ssa_124, ssa_33
-        intrinsic store_deref (ssa_27, ssa_114) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        intrinsic store_deref (ssa_27, ssa_114) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         vec1 32 ssa_29 = deref_var &clipdist_3 (shader_out vec4)
         vec4 32 ssa_119 = vec4 ssa_121, ssa_33, ssa_33, ssa_33
-        intrinsic store_deref (ssa_29, ssa_119) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        intrinsic store_deref (ssa_29, ssa_119) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         /* succs: block_1 */
         block block_1:
 })";
@@ -622,7 +622,7 @@ impl main {
         vec1 32 ssa_18 = intrinsic load_ubo (ssa_1, ssa_23) (0, 4, 0) /* access=0 */ /* align_mul=4 */ /* align_offset=0 */
         vec4 32 ssa_5 = txf ssa_12 (coord), ssa_18 (lod), 0 (texture), 0 (sampler)
         vec1 32 ssa_6 = deref_var &gl_FragColor (shader_out vec4)
-        intrinsic store_deref (ssa_6, ssa_5) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        intrinsic store_deref (ssa_6, ssa_5) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         /* succs: block_1 */
         block block_1:
 })";
@@ -649,7 +649,7 @@ impl main {
         /* preds: */
         vec1 32 ssa_0 = load_const (0x3f000000 /* 0.500000 */)
         vec1 32 ssa_3 = deref_var &texcoords (shader_in vec4)
-        vec4 32 ssa_4 = intrinsic load_deref (ssa_3) (0) /* access=0 */
+        vec4 32 ssa_4 = intrinsic load_deref (ssa_3) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         vec1 1 ssa_5 = flt ssa_4.x, ssa_0
         /* succs: block_1 block_2 */
         if ssa_5 {
@@ -669,7 +669,7 @@ impl main {
         /* preds: block_1 block_2 */
         vec4 32 ssa_14 = phi block_1: ssa_9, block_2: ssa_13
         vec1 32 ssa_15 = deref_var &gl_FragColor (shader_out vec4)
-        intrinsic store_deref (ssa_15, ssa_14) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        intrinsic store_deref (ssa_15, ssa_14) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         /* succs: block_4 */
         block block_4:
 })";
@@ -698,7 +698,7 @@ impl main {
         /* preds: */
         vec1 32 ssa_0 = load_const (0x3f000000 /* 0.500000 */)
         vec1 32 ssa_3 = deref_var &texcoords (shader_in vec4)
-        vec4 32 ssa_4 = intrinsic load_deref (ssa_3) (0) /* access=0 */
+        vec4 32 ssa_4 = intrinsic load_deref (ssa_3) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         vec1 1 ssa_5 = flt ssa_4.x, ssa_0
         /* succs: block_1 block_5 */
         if ssa_5 {
@@ -750,7 +750,7 @@ impl main {
         /* preds: block_4 block_8 */
         vec4 32 ssa_26 = phi block_4: ssa_15, block_8: ssa_25
         vec1 32 ssa_27 = deref_var &gl_FragColor (shader_out vec4)
-        intrinsic store_deref (ssa_27, ssa_26) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        intrinsic store_deref (ssa_27, ssa_26) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         /* succs: block_10 */
         block block_10:
 })";
@@ -781,14 +781,14 @@ impl main {
         vec1 32 ssa_1 = load_const (0x00000020 /* 0.000000 */)
         vec4 32 ssa_2 = intrinsic load_ubo (ssa_0, ssa_1) (0, 4, 0) /* access=0 */ /* align_mul=4 */ /* align_offset=0 */
         vec1 32 ssa_3 = deref_var &gl_FragColor (shader_out vec4)
-        intrinsic store_deref (ssa_3, ssa_2) (15, 0) /* wrmask=xyzw */ /* access=0 */
+        intrinsic store_deref (ssa_3, ssa_2) (15, 0, 0, 0) /* wrmask=xyzw */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         vec1 32 ssa_11 = load_const (0x00000001 /* 0.000000 */)
         vec2 32 ssa_13 = intrinsic load_ubo (ssa_11, ssa_0) (0, 4, 0) /* access=0 */ /* align_mul=4 */ /* align_offset=0 */
         vec1 32 ssa_6 = intrinsic load_front_face () ()
         vec1 1 ssa_15 = ine ssa_6, ssa_0
         vec1 32 ssa_9 = bcsel ssa_15, ssa_13.x, ssa_13.y
         vec1 32 ssa_10 = deref_var &StencilRef (shader_out uint)
-        intrinsic store_deref (ssa_10, ssa_9) (1, 0) /* wrmask=x */ /* access=0 */
+        intrinsic store_deref (ssa_10, ssa_9) (1, 0, 0, 0) /* wrmask=x */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
         /* succs: block_1 */
         block block_1:
 })";

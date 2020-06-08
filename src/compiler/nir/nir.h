@@ -1818,8 +1818,11 @@ static inline void
 nir_intrinsic_set_align(nir_intrinsic_instr *intrin,
                         unsigned align_mul, unsigned align_offset)
 {
-   assert(util_is_power_of_two_nonzero(align_mul));
-   assert(align_offset < align_mul);
+   assert(align_mul == 0 || util_is_power_of_two_nonzero(align_mul));
+   assert(align_mul == 0 ? align_offset == 0 : align_offset < align_mul);
+   assert(align_mul != 0 ||
+          intrin->intrinsic == nir_intrinsic_load_deref ||
+          intrin->intrinsic == nir_intrinsic_store_deref);
    nir_intrinsic_set_align_mul(intrin, align_mul);
    nir_intrinsic_set_align_offset(intrin, align_offset);
 }
@@ -1836,7 +1839,7 @@ nir_intrinsic_align(const nir_intrinsic_instr *intrin)
 {
    const unsigned align_mul = nir_intrinsic_align_mul(intrin);
    const unsigned align_offset = nir_intrinsic_align_offset(intrin);
-   assert(align_offset < align_mul);
+   assert(align_mul == 0 ? align_offset == 0 : align_offset < align_mul);
    return align_offset ? 1 << (ffs(align_offset) - 1) : align_mul;
 }
 
