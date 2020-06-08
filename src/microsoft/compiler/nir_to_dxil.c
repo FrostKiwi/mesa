@@ -3365,7 +3365,11 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 
       case nir_tex_src_lod:
          assert(nir_src_num_components(instr->src[i].src) == 1);
-         params.lod_or_sample = get_src(ctx, &instr->src[i].src, 0, type);
+         /* Buffers don't have a LOD */
+         if (instr->sampler_dim != GLSL_SAMPLER_DIM_BUF)
+            params.lod_or_sample = get_src(ctx, &instr->src[i].src, 0, type);
+         else
+            params.lod_or_sample = int_undef;
          assert(params.lod_or_sample != NULL);
          break;
 
