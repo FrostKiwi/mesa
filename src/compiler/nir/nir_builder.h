@@ -1166,8 +1166,9 @@ nir_load_reg(nir_builder *build, nir_register *reg)
 }
 
 static inline nir_ssa_def *
-nir_load_deref_with_access(nir_builder *build, nir_deref_instr *deref,
-                           enum gl_access_qualifier access)
+nir_load_deref_with_access_and_align(nir_builder *build, nir_deref_instr *deref,
+                                     enum gl_access_qualifier access, unsigned alignment,
+                                     unsigned align_offset)
 {
    nir_intrinsic_instr *load =
       nir_intrinsic_instr_create(build->shader, nir_intrinsic_load_deref);
@@ -1176,8 +1177,16 @@ nir_load_deref_with_access(nir_builder *build, nir_deref_instr *deref,
    nir_ssa_dest_init(&load->instr, &load->dest, load->num_components,
                      glsl_get_bit_size(deref->type), NULL);
    nir_intrinsic_set_access(load, access);
+   nir_intrinsic_set_align(load, alignment, align_offset);
    nir_builder_instr_insert(build, &load->instr);
    return &load->dest.ssa;
+}
+
+static inline nir_ssa_def *
+nir_load_deref_with_access(nir_builder *build, nir_deref_instr *deref,
+                           enum gl_access_qualifier access)
+{
+   return nir_load_deref_with_access_and_align(build, deref, access, 0, 0);
 }
 
 static inline nir_ssa_def *
@@ -1187,9 +1196,10 @@ nir_load_deref(nir_builder *build, nir_deref_instr *deref)
 }
 
 static inline void
-nir_store_deref_with_access(nir_builder *build, nir_deref_instr *deref,
-                            nir_ssa_def *value, unsigned writemask,
-                            enum gl_access_qualifier access)
+nir_store_deref_with_access_and_align(nir_builder *build, nir_deref_instr *deref,
+                                      nir_ssa_def *value, unsigned writemask,
+                                      enum gl_access_qualifier access, unsigned alignment,
+                                      unsigned align_offset)
 {
    nir_intrinsic_instr *store =
       nir_intrinsic_instr_create(build->shader, nir_intrinsic_store_deref);
@@ -1199,7 +1209,16 @@ nir_store_deref_with_access(nir_builder *build, nir_deref_instr *deref,
    nir_intrinsic_set_write_mask(store,
                                 writemask & ((1 << store->num_components) - 1));
    nir_intrinsic_set_access(store, access);
+   nir_intrinsic_set_align(store, alignment, align_offset);
    nir_builder_instr_insert(build, &store->instr);
+}
+
+static inline void
+nir_store_deref_with_access(nir_builder *build, nir_deref_instr *deref,
+                            nir_ssa_def *value, unsigned writemask,
+                            enum gl_access_qualifier access)
+{
+   nir_store_deref_with_access_and_align(build, deref, value, writemask, access, 0, 0);
 }
 
 static inline void

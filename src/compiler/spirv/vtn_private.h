@@ -835,17 +835,17 @@ vtn_pointer_to_offset(struct vtn_builder *b, struct vtn_pointer *ptr,
 
 struct vtn_ssa_value *
 vtn_local_load(struct vtn_builder *b, nir_deref_instr *src,
-               enum gl_access_qualifier access);
+               enum gl_access_qualifier access, unsigned alignment);
 
 void vtn_local_store(struct vtn_builder *b, struct vtn_ssa_value *src,
                      nir_deref_instr *dest,
-                     enum gl_access_qualifier access);
+                     enum gl_access_qualifier access, unsigned alignment);
 
 struct vtn_ssa_value *
-vtn_variable_load(struct vtn_builder *b, struct vtn_pointer *src);
+vtn_variable_load(struct vtn_builder *b, struct vtn_pointer *src, unsigned alignment);
 
 void vtn_variable_store(struct vtn_builder *b, struct vtn_ssa_value *src,
-                        struct vtn_pointer *dest);
+                        struct vtn_pointer *dest, unsigned alignment);
 
 void vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
                           const uint32_t *w, unsigned count);

@@ -468,13 +468,13 @@ _handle_v_load_store(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
       nir_deref_instr *arr_deref = nir_build_deref_ptr_as_array(&b->nb, deref, coffset);
 
       if (load) {
-         comps[i] = vtn_local_load(b, arr_deref, p->type->access);
+         comps[i] = vtn_local_load(b, arr_deref, p->type->access, 0);
          ncomps[i] = comps[i]->def;
       } else {
          struct vtn_ssa_value *ssa = vtn_create_ssa_value(b, glsl_scalar_type(glsl_get_base_type(dest_type)));
          struct vtn_ssa_value *val = vtn_ssa_value(b, w[5]);
          ssa->def = nir_channel(&b->nb, val->def, i);
-         vtn_local_store(b, ssa, arr_deref, p->type->access);
+         vtn_local_store(b, ssa, arr_deref, p->type->access, 0);
       }
    }
    if (load) {
