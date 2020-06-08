@@ -275,6 +275,7 @@ void nir_load_store_vectorize_test::create_shared_load(
    nir_ssa_dest_init(&load->instr, &load->dest, components, bit_size, NULL);
    load->num_components = components;
    load->src[0] = nir_src_for_ssa(&deref->dest.ssa);
+   nir_intrinsic_set_align(load, (bit_size == 1 ? 32 : bit_size) / 8, 0);
    nir_builder_instr_insert(b, &load->instr);
    nir_instr *mov = nir_mov(b, &load->dest.ssa)->parent_instr;
    loads[id] = &nir_instr_as_alu(mov)->src[0];
@@ -295,6 +296,7 @@ void nir_load_store_vectorize_test::create_shared_store(
    store->src[0] = nir_src_for_ssa(&deref->dest.ssa);
    store->src[1] = nir_src_for_ssa(value);
    nir_intrinsic_set_write_mask(store, wrmask & ((1 << components) - 1));
+   nir_intrinsic_set_align(store, (bit_size == 1 ? 32 : bit_size) / 8, 0);
    nir_builder_instr_insert(b, &store->instr);
 }
 
@@ -1136,7 +1138,7 @@ TEST_F(nir_load_store_vectorize_test, shared_load_distant_64bit)
    nir_validate_shader(b->shader, NULL);
    ASSERT_EQ(count_intrinsics(nir_intrinsic_load_deref), 2);
 
-   EXPECT_FALSE(run_vectorizer(nir_var_mem_shared));
+   EXPECT_TRUE(run_vectorizer(nir_var_mem_shared));
 
    ASSERT_EQ(count_intrinsics(nir_intrinsic_load_deref), 2);
 }
