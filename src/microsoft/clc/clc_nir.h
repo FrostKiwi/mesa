@@ -28,6 +28,6 @@
 #include "nir.h"
 
 bool
-clc_nir_lower_kernel_global_work_offset(nir_shader *nir, nir_variable *var);
+clc_nir_lower_system_values(nir_shader *nir, nir_variable *var);
 
 #endif
