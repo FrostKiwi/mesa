@@ -24,7 +24,20 @@
 #ifndef D3D12_BLIT_H
 #define D3D12_BLIT_H
 
+struct d3d12_context;
+struct d3d12_resource;
+struct pipe_box;
+
 void
 d3d12_context_blit_init(struct pipe_context *ctx);
+
+void
+d3d12_direct_copy(struct d3d12_context *ctx,
+                  struct d3d12_resource *dst,
+                  unsigned dst_level,
+                  const struct pipe_box *pdst_box,
+                  struct d3d12_resource *src,
+                  unsigned src_level,
+                  const struct pipe_box *psrc_box);
 
 #endif // D3D12_BLIT_H

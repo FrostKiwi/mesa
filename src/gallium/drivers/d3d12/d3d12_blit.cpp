@@ -370,14 +370,14 @@ copy_resource_y_flipped_no_barriers(struct d3d12_context *ctx,
    }
 }
 
-static void
-direct_copy(struct d3d12_context *ctx,
-            struct d3d12_resource *dst,
-            unsigned dst_level,
-            const struct pipe_box *pdst_box,
-            struct d3d12_resource *src,
-            unsigned src_level,
-            const struct pipe_box *psrc_box)
+void
+d3d12_direct_copy(struct d3d12_context *ctx,
+                  struct d3d12_resource *dst,
+                  unsigned dst_level,
+                  const struct pipe_box *pdst_box,
+                  struct d3d12_resource *src,
+                  unsigned src_level,
+                  const struct pipe_box *psrc_box)
 {
    struct d3d12_batch *batch = d3d12_current_batch(ctx);
 
@@ -470,10 +470,10 @@ d3d12_blit(struct pipe_context *pctx,
    if (resolve_supported(info))
       blit_resolve(ctx, info);
    else if (direct_copy_supported(d3d12_screen(pctx->screen), info))
-      direct_copy(ctx, d3d12_resource(info->dst.resource),
-                  info->dst.level, &info->dst.box,
-                  d3d12_resource(info->src.resource),
-                  info->src.level, &info->src.box);
+      d3d12_direct_copy(ctx, d3d12_resource(info->dst.resource),
+                        info->dst.level, &info->dst.box,
+                        d3d12_resource(info->src.resource),
+                        info->src.level, &info->src.box);
    else if (util_blitter_is_blit_supported(ctx->blitter, info))
       util_blit(ctx, info);
    else
@@ -518,8 +518,8 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
    dst_box.width = psrc_box->width;
    dst_box.height = psrc_box->height;
 
-   direct_copy(ctx, d3d12_resource(pdst), dst_level, &dst_box,
-               d3d12_resource(psrc), src_level, psrc_box);
+   d3d12_direct_copy(ctx, d3d12_resource(pdst), dst_level, &dst_box,
+                     d3d12_resource(psrc), src_level, psrc_box);
 }
 
 void
