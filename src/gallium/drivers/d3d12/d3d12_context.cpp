@@ -912,7 +912,7 @@ static void *
 d3d12_create_vs_state(struct pipe_context *pctx,
                       const struct pipe_shader_state *shader)
 {
-   return d3d12_compile_shader(d3d12_context(pctx), PIPE_SHADER_VERTEX, shader);
+   return d3d12_create_shader(d3d12_context(pctx), PIPE_SHADER_VERTEX, shader);
 }
 
 static void
@@ -935,7 +935,7 @@ static void *
 d3d12_create_fs_state(struct pipe_context *pctx,
                       const struct pipe_shader_state *shader)
 {
-   return d3d12_compile_shader(d3d12_context(pctx), PIPE_SHADER_FRAGMENT, shader);
+   return d3d12_create_shader(d3d12_context(pctx), PIPE_SHADER_FRAGMENT, shader);
 }
 
 static void
@@ -958,7 +958,7 @@ static void *
 d3d12_create_gs_state(struct pipe_context *pctx,
                       const struct pipe_shader_state *shader)
 {
-   return d3d12_compile_shader(d3d12_context(pctx), PIPE_SHADER_GEOMETRY, shader);
+   return d3d12_create_shader(d3d12_context(pctx), PIPE_SHADER_GEOMETRY, shader);
 }
 
 static void
