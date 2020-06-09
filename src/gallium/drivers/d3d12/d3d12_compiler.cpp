@@ -264,10 +264,13 @@ d3d12_make_passthrough_gs(struct d3d12_context *ctx, d3d12_shader_selector *vs)
 
    templ.type = PIPE_SHADER_IR_NIR;
    templ.ir.nir = nir;
+   templ.stream_output.num_outputs = 0;
 
    gs = d3d12_create_shader(ctx, PIPE_SHADER_GEOMETRY, &templ);
    gs->passthrough = 1;
    gs->passthrough_varyings = vs->current->nir->info.outputs_written;
+   gs->enabled_stream_outputs = vs->enabled_stream_outputs;
+   memcpy(&gs->so_info, &vs->so_info, sizeof(gs->so_info));
 
    return gs;
 }
