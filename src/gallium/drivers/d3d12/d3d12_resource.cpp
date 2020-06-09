@@ -23,6 +23,7 @@
 
 #include "d3d12_resource.h"
 
+#include "d3d12_blit.h"
 #include "d3d12_context.h"
 #include "d3d12_format.h"
 #include "d3d12_screen.h"
@@ -94,13 +95,16 @@ init_buffer(struct d3d12_screen *screen,
             const struct pipe_resource *templ)
 {
    struct pb_desc buf_desc;
+   struct pb_manager *bufmgr;
    struct pb_buffer *buf;
 
+   /* Don't use slab buffer manager for GPU writable buffers */
+   bufmgr = templ->bind & PIPE_BIND_STREAM_OUTPUT ? screen->cache_bufmgr
+                                                  : screen->slab_bufmgr;
    buf_desc.alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
    buf_desc.usage = (pb_usage_flags)PB_USAGE_ALL;
    res->format = DXGI_FORMAT_UNKNOWN;
-   buf = screen->slab_bufmgr->create_buffer(screen->slab_bufmgr,
-                                            templ->width0, &buf_desc);
+   buf = bufmgr->create_buffer(bufmgr, templ->width0, &buf_desc);
    if (!buf)
       return false;
    res->bo = d3d12_bo_wrap_buffer(buf);
@@ -929,6 +933,43 @@ d3d12_transfer_unmap(struct pipe_context *pctx,
 
    pipe_resource_reference(&ptrans->resource, NULL);
    slab_free(&d3d12_context(pctx)->transfer_pool, ptrans);
+}
+
+void
+d3d12_resource_make_writeable(struct pipe_context *pctx,
+                              struct pipe_resource *pres)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_resource *res = d3d12_resource(pres);
+   struct d3d12_resource *dup_res;
+
+   if (!res->bo || !d3d12_bo_is_suballocated(res->bo))
+      return;
+
+   dup_res = d3d12_resource(pipe_buffer_create(pres->screen,
+                                               pres->bind & PIPE_BIND_STREAM_OUTPUT,
+                                               (pipe_resource_usage) pres->usage,
+                                               pres->width0));
+
+   if (res->valid_buffer_range.end > res->valid_buffer_range.start) {
+      struct pipe_box box;
+
+      box.x = res->valid_buffer_range.start;
+      box.y = 0;
+      box.z = 0;
+      box.width = res->valid_buffer_range.end - res->valid_buffer_range.start;
+      box.height = 1;
+      box.depth = 1;
+
+      d3d12_direct_copy(ctx, dup_res, 0, &box, res, 0, &box);
+   }
+
+   /* Move new BO to old resource */
+   d3d12_bo_unreference(res->bo);
+   res->bo = dup_res->bo;
+   d3d12_bo_reference(res->bo);
+
+   d3d12_resource_destroy(dup_res->base.screen, &dup_res->base);
 }
 
 void
