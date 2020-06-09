@@ -318,22 +318,51 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
 }
 
 static void
-copy_resource_y_flipped(struct d3d12_context *ctx,
-                        const struct pipe_blit_info *info)
+copy_resource_y_flipped_no_barriers(struct d3d12_context *ctx,
+                                    struct d3d12_resource *dst,
+                                    unsigned dst_level,
+                                    const struct pipe_box *pdst_box,
+                                    struct d3d12_resource *src,
+                                    unsigned src_level,
+                                    const struct pipe_box *psrc_box)
 {
-   struct d3d12_batch *batch = d3d12_current_batch(ctx);
-   struct d3d12_resource *src = d3d12_resource(info->src.resource);
-   struct d3d12_resource *dst = d3d12_resource(info->dst.resource);
-
    if (D3D12_DEBUG_BLIT & d3d12_debug) {
       debug_printf("D3D12 BLIT as COPY: from %s@%d %dx%dx%d + %dx%dx%d\n",
-                   util_format_name(src->base.format), info->src.level,
-                   info->src.box.x, info->src.box.y, info->src.box.z,
-                   info->src.box.width, info->src.box.height, info->src.box.depth);
+                   util_format_name(src->base.format), src_level,
+                   psrc_box->x, psrc_box->y, psrc_box->z,
+                   psrc_box->width, psrc_box->height, psrc_box->depth);
       debug_printf("      to   %s@%d %dx%dx%d\n",
-                   util_format_name(dst->base.format), info->dst.level,
-                   info->dst.box.x, info->dst.box.y, info->dst.box.z);
+                   util_format_name(dst->base.format), dst_level,
+                   pdst_box->x, pdst_box->y, pdst_box->z);
    }
+
+   struct pipe_box src_box = *psrc_box;
+   int src_inc = psrc_box->height > 0 ? 1 : -1;
+   int dst_inc = pdst_box->height > 0 ? 1 : -1;
+   src_box.height = 1;
+   int rows_to_copy = abs(psrc_box->height);
+
+   if (psrc_box->height < 0)
+      --src_box.y;
+
+   for (int y = 0, dest_y = pdst_box->y; y < rows_to_copy;
+        ++y, src_box.y += src_inc, dest_y += dst_inc) {
+      copy_subregion_no_barriers(ctx, dst, dst_level,
+                                 pdst_box->x, dest_y, pdst_box->z,
+                                 src, src_level, &src_box);
+   }
+}
+
+static void
+direct_copy(struct d3d12_context *ctx,
+            struct d3d12_resource *dst,
+            unsigned dst_level,
+            const struct pipe_box *pdst_box,
+            struct d3d12_resource *src,
+            unsigned src_level,
+            const struct pipe_box *psrc_box)
+{
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
 
    /* HACK: We're not supposed to be able to copy from/to the same subresource,
             but it works if we only set one state (COPY_DEST) */
@@ -349,37 +378,15 @@ copy_resource_y_flipped(struct d3d12_context *ctx,
    d3d12_batch_reference_resource(batch, src);
    d3d12_batch_reference_resource(batch, dst);
 
-   struct pipe_box src_box = info->src.box;
-   int src_inc = info->src.box.height > 0 ? 1 : -1;
-   int dst_inc = info->dst.box.height > 0 ? 1 : -1;
-   src_box.height = 1;
-   int rows_to_copy = abs(info->src.box.height);
-
-   if (info->src.box.height < 0)
-      --src_box.y;
-
-   for (int y = 0, dest_y = info->dst.box.y; y < rows_to_copy;
-        ++y, src_box.y += src_inc, dest_y += dst_inc) {
-
-      copy_subregion_no_barriers(ctx, dst, info->dst.level,
-                                       info->dst.box.x, dest_y, info->dst.box.z,
-                                       src, info->src.level, &src_box);
-   }
-}
-
-static void
-direct_copy(struct d3d12_context *ctx,
-            const struct pipe_blit_info *info)
-{
    /* No flipping, we can forward this directly to resource_copy_region */
-   if (info->src.box.height == info->dst.box.height) {
-      ctx->base.resource_copy_region(&ctx->base, info->dst.resource, info->dst.level,
-                                     info->dst.box.x, info->dst.box.y, info->dst.box.z,
-                                     info->src.resource, info->src.level,
-                                     &info->src.box);
+   if (psrc_box->height == pdst_box->height) {
+      copy_subregion_no_barriers(ctx, dst, dst_level,
+                                 pdst_box->x, pdst_box->y, pdst_box->z,
+                                 src, src_level, psrc_box);
    } else {
-      assert(info->src.box.height == -info->dst.box.height);
-      copy_resource_y_flipped(ctx, info);
+      assert(psrc_box->height == -pdst_box->height);
+      copy_resource_y_flipped_no_barriers(ctx, dst, dst_level, pdst_box,
+                                          src, src_level, psrc_box);
    }
 }
 
@@ -443,7 +450,10 @@ d3d12_blit(struct pipe_context *pctx,
    if (resolve_supported(info))
       blit_resolve(ctx, info);
    else if (direct_copy_supported(d3d12_screen(pctx->screen), info))
-      direct_copy(ctx, info);
+      direct_copy(ctx, d3d12_resource(info->dst.resource),
+                  info->dst.level, &info->dst.box,
+                  d3d12_resource(info->src.resource),
+                  info->src.level, &info->src.box);
    else if (util_blitter_is_blit_supported(ctx->blitter, info))
       util_blit(ctx, info);
    else
@@ -470,9 +480,7 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
                            const struct pipe_box *psrc_box)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
-   struct d3d12_batch *batch = d3d12_current_batch(ctx);
-   struct d3d12_resource *dst = d3d12_resource(pdst);
-   struct d3d12_resource *src = d3d12_resource(psrc);
+   struct pipe_box dst_box;
 
    if (D3D12_DEBUG_BLIT & d3d12_debug) {
       debug_printf("D3D12 COPY: from %s@%d %dx%dx%d + %dx%dx%d\n",
@@ -484,23 +492,14 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
                    dstx, dsty, dstz);
    }
 
-   /* HACK: We're not supposed to be able to copy from/to the same subresource,
-            but it works if we only set one state (COPY_DEST) */
-   if (src != dst)
-      d3d12_transition_resource_state(ctx, src,
-                                      D3D12_RESOURCE_STATE_COPY_SOURCE,
-                                      SubresourceTransitionFlags_None);
-   d3d12_transition_resource_state(ctx, dst,
-                                   D3D12_RESOURCE_STATE_COPY_DEST,
-                                   SubresourceTransitionFlags_None);
+   dst_box.x = dstx;
+   dst_box.y = dsty;
+   dst_box.z = dstz;
+   dst_box.width = psrc_box->width;
+   dst_box.height = psrc_box->height;
 
-   d3d12_apply_resource_states(ctx, false);
-
-   d3d12_batch_reference_resource(batch, src);
-   d3d12_batch_reference_resource(batch, dst);
-
-   copy_subregion_no_barriers(ctx, dst, dst_level, dstx, dsty, dstz,
-                              src, src_level, psrc_box);
+   direct_copy(ctx, d3d12_resource(pdst), dst_level, &dst_box,
+               d3d12_resource(psrc), src_level, psrc_box);
 }
 
 void
