@@ -78,6 +78,19 @@ d3d12_bo_get_size(struct d3d12_bo *bo)
       return bo->res->GetDesc().Width;
 }
 
+static inline bool
+d3d12_bo_is_suballocated(struct d3d12_bo *bo)
+{
+   struct d3d12_bo *base_bo;
+   uint64_t offset;
+
+   if (!bo->buffer)
+      return false;
+
+   base_bo = d3d12_bo_get_base(bo, &offset);
+   return d3d12_bo_get_size(base_bo) != d3d12_bo_get_size(bo);
+}
+
 struct d3d12_bo *
 d3d12_bo_new(ID3D12Device *dev, uint64_t size, uint64_t alignment);
 
