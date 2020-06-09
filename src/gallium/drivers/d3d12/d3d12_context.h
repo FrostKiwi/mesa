@@ -235,6 +235,15 @@ d3d12_current_batch(struct d3d12_context *ctx)
    return ctx->batches + ctx->current_batch_idx;
 }
 
+static inline struct d3d12_shader_selector *
+d3d12_last_vertex_stage(struct d3d12_context *ctx)
+{
+   struct d3d12_shader_selector *sel = ctx->gfx_stages[PIPE_SHADER_GEOMETRY];
+   if (!sel)
+      sel = ctx->gfx_stages[PIPE_SHADER_VERTEX];
+   return sel;
+}
+
 #define d3d12_foreach_submitted_batch(ctx, batch) \
    unsigned oldest = (ctx->current_batch_idx + 1) % ARRAY_SIZE(ctx->batches); \
    while (ctx->batches[oldest].fence == NULL && oldest != ctx->current_batch_idx) \
