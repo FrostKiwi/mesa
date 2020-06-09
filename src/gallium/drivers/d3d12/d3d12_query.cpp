@@ -57,6 +57,8 @@ d3d12_query_heap_type(unsigned query_type)
       return D3D12_QUERY_HEAP_TYPE_OCCLUSION;
    case PIPE_QUERY_PIPELINE_STATISTICS:
       return D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
+   case PIPE_QUERY_SO_STATISTICS:
+      return D3D12_QUERY_HEAP_TYPE_SO_STATISTICS;
    default:
       debug_printf("unknown query: %s\n",
                    util_str_query_type(query_type, true));
@@ -75,6 +77,8 @@ d3d12_query_type(unsigned query_type)
       return D3D12_QUERY_TYPE_BINARY_OCCLUSION;
    case PIPE_QUERY_PIPELINE_STATISTICS:
       return D3D12_QUERY_TYPE_PIPELINE_STATISTICS;
+   case PIPE_QUERY_SO_STATISTICS:
+      return D3D12_QUERY_TYPE_SO_STATISTICS_STREAM0;
    default:
       debug_printf("unknown query: %s\n",
                    util_str_query_type(query_type, true));
@@ -103,6 +107,9 @@ d3d12_create_query(struct pipe_context *pctx,
    switch (query->d3d12qtype) {
    case D3D12_QUERY_TYPE_PIPELINE_STATISTICS:
       query->query_size = sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS);
+      break;
+   case D3D12_QUERY_TYPE_SO_STATISTICS_STREAM0:
+      query->query_size = sizeof(D3D12_QUERY_DATA_SO_STATISTICS);
       break;
    default:
       query->query_size = sizeof(uint64_t);
@@ -155,6 +162,7 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
 
    uint64_t *results_u64 = (uint64_t *)results;
    D3D12_QUERY_DATA_PIPELINE_STATISTICS *results_stats = (D3D12_QUERY_DATA_PIPELINE_STATISTICS *)results;
+   D3D12_QUERY_DATA_SO_STATISTICS *results_so = (D3D12_QUERY_DATA_SO_STATISTICS *)results;
 
    util_query_clear_result(result, q->type);
    for (int i = 0; i < q->curr_query; ++i) {
@@ -182,6 +190,11 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
          result->pipeline_statistics.cs_invocations += results_stats[i].CSInvocations;
          break;
 
+      case PIPE_QUERY_SO_STATISTICS:
+         result->so_statistics.num_primitives_written += results_so[i].NumPrimitivesWritten;
+         result->so_statistics.primitives_storage_needed += results_so[i].PrimitivesStorageNeeded;
+         break;
+
       default:
          debug_printf("unsupported query type: %s\n",
                       util_str_query_type(q->type, true));
@@ -202,6 +215,9 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
          results_stats[0].HSInvocations = result->pipeline_statistics.hs_invocations;
          results_stats[0].DSInvocations = result->pipeline_statistics.ds_invocations;
          results_stats[0].CSInvocations = result->pipeline_statistics.cs_invocations;
+      } else if (q->type == PIPE_QUERY_SO_STATISTICS) {
+         results_so[0].NumPrimitivesWritten = result->so_statistics.num_primitives_written;
+         results_so[0].PrimitivesStorageNeeded = result->so_statistics.primitives_storage_needed;
       } else {
          results_u64[0] = result->u64;
       }
