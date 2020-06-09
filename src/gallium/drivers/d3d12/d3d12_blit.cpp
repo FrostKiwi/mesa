@@ -30,6 +30,23 @@
 #include "util/u_blitter.h"
 #include "util/format/u_format.h"
 
+static void
+copy_buffer_region_no_barriers(struct d3d12_context *ctx,
+                               struct d3d12_resource *dst,
+                               uint64_t dst_offset,
+                               struct d3d12_resource *src,
+                               uint64_t src_offset,
+                               uint64_t size)
+{
+   uint64_t dst_off, src_off;
+   ID3D12Resource *dst_buf = d3d12_resource_underlying(dst, &dst_off);
+   ID3D12Resource *src_buf = d3d12_resource_underlying(src, &src_off);
+
+   ctx->cmdlist->CopyBufferRegion(dst_buf, dst_offset + dst_off,
+                                  src_buf, src_offset + src_off,
+                                  size);
+}
+
 static bool
 resolve_supported(const struct pipe_blit_info *info)
 {
@@ -378,8 +395,11 @@ direct_copy(struct d3d12_context *ctx,
    d3d12_batch_reference_resource(batch, src);
    d3d12_batch_reference_resource(batch, dst);
 
-   /* No flipping, we can forward this directly to resource_copy_region */
-   if (psrc_box->height == pdst_box->height) {
+   if (src->base.target == PIPE_BUFFER) {
+      copy_buffer_region_no_barriers(ctx, dst, pdst_box->x,
+                                     src, psrc_box->x, psrc_box->width);
+   } else if (psrc_box->height == pdst_box->height) {
+      /* No flipping, we can forward this directly to resource_copy_region */
       copy_subregion_no_barriers(ctx, dst, dst_level,
                                  pdst_box->x, pdst_box->y, pdst_box->z,
                                  src, src_level, psrc_box);
