@@ -116,10 +116,11 @@ resource_dimension(enum glsl_sampler_dim dim)
 
 static struct d3d12_shader *
 compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
-            struct nir_shader *nir)
+            struct d3d12_shader_key *key, struct nir_shader *nir)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
    struct d3d12_shader *shader = rzalloc(sel, d3d12_shader);
+   shader->key = *key;
    shader->nir = nir;
    sel->current = shader;
 
@@ -132,8 +133,10 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform);
    NIR_PASS_V(nir, d3d12_create_bare_samplers);
    NIR_PASS_V(nir, nir_lower_tex, &tex_options);
-   NIR_PASS_V(nir, nir_lower_clip_halfz);
-   NIR_PASS_V(nir, d3d12_lower_yflip);
+   if (key->last_vertex_processing_stage) {
+      NIR_PASS_V(nir, nir_lower_clip_halfz);
+      NIR_PASS_V(nir, d3d12_lower_yflip);
+   }
    NIR_PASS_V(nir, nir_lower_uniforms_to_ubo, 16);
    NIR_PASS_V(nir, d3d12_lower_state_vars, shader);
    NIR_PASS_V(nir, d3d12_lower_bool_input);
@@ -433,6 +436,10 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       key->next_varying_inputs = next->current->nir->info.inputs_read;
    }
 
+   if (stage == PIPE_SHADER_GEOMETRY ||
+       (stage == PIPE_SHADER_VERTEX && (!next || next->stage != PIPE_SHADER_GEOMETRY)))
+      key->last_vertex_processing_stage = 1;
+
    if (stage == PIPE_SHADER_GEOMETRY && sel_ctx->needs_point_sprite_lowering) {
       struct pipe_rasterizer_state *rast = &sel_ctx->ctx->gfx_pipeline_state.rast->base;
       key->gs.writes_psize = 1;
@@ -540,9 +547,8 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
                                       next->current->nir->info.inputs_read);
    }
 
-   d3d12_shader *new_variant = compile_nir(ctx, sel, new_nir_variant);
+   d3d12_shader *new_variant = compile_nir(ctx, sel, &key, new_nir_variant);
    assert(new_variant);
-   new_variant->key = key;
 
    /* prepend the new shader in the selector chain and pick it */
    new_variant->next_variant = sel->first;

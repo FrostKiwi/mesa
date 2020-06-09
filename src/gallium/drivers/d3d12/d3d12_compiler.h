@@ -56,6 +56,7 @@ struct d3d12_shader_key {
    uint64_t required_varying_outputs;
    uint64_t next_varying_inputs;
    uint64_t prev_varying_outputs;
+   unsigned last_vertex_processing_stage;
 
    struct {
       unsigned sprite_coord_enable:24;

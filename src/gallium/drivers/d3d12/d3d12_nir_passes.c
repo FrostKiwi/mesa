@@ -87,7 +87,8 @@ d3d12_lower_yflip(nir_shader *nir)
 {
    nir_variable *flip = NULL;
 
-   if (nir->info.stage != MESA_SHADER_VERTEX)
+   if (nir->info.stage != MESA_SHADER_VERTEX &&
+       nir->info.stage != MESA_SHADER_GEOMETRY)
       return;
 
    nir_foreach_function(function, nir) {
