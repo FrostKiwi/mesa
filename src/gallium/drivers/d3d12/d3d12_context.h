@@ -143,6 +143,7 @@ struct d3d12_stream_output_target {
    struct pipe_stream_output_target base;
    struct pipe_resource *fill_buffer;
    unsigned fill_buffer_offset;
+   uint64_t cached_filled_size;
 };
 
 struct d3d12_shader_state {
@@ -197,6 +198,9 @@ struct d3d12_context {
    struct pipe_stream_output_target *so_targets[PIPE_MAX_SO_BUFFERS];
    D3D12_STREAM_OUTPUT_BUFFER_VIEW so_buffer_views[PIPE_MAX_SO_BUFFERS];
    unsigned num_so_targets;
+   struct pipe_stream_output_target *fake_so_targets[PIPE_MAX_SO_BUFFERS];
+   D3D12_STREAM_OUTPUT_BUFFER_VIEW fake_so_buffer_views[PIPE_MAX_SO_BUFFERS];
+   bool use_fake_so_buffers;
 
    struct d3d12_shader_selector *gfx_stages[D3D12_GFX_SHADER_STAGES];
 
@@ -267,6 +271,12 @@ d3d12_last_vertex_stage(struct d3d12_context *ctx)
 
 struct pipe_context *
 d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags);
+
+bool
+d3d12_enable_fake_so_buffers(struct d3d12_context *ctx);
+
+bool
+d3d12_disable_fake_so_buffers(struct d3d12_context *ctx);
 
 void
 d3d12_flush_cmdlist(struct d3d12_context *ctx);
