@@ -336,6 +336,16 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       }
    }
 
+   /* Copy the stream output info from the current vertex/geometry shader */
+   if (ctx->state_dirty & D3D12_DIRTY_SHADER) {
+      struct d3d12_shader_selector *sel = d3d12_last_vertex_stage(ctx);
+      if (sel) {
+         ctx->gfx_pipeline_state.so_info = sel->so_info;
+      } else {
+         memset(&ctx->gfx_pipeline_state.so_info, 0, sizeof(sel->so_info));
+      }
+   }
+
    if (!ctx->gfx_pipeline_state.root_signature || ctx->state_dirty & D3D12_DIRTY_SHADER) {
       ID3D12RootSignature *root_signature = d3d12_get_root_signature(ctx);
       if (ctx->gfx_pipeline_state.root_signature != root_signature) {

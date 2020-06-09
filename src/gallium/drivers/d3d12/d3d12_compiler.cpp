@@ -630,6 +630,29 @@ scan_texture_use(nir_shader *nir)
    return result;
 }
 
+static uint64_t
+update_so_info(struct pipe_stream_output_info *so_info,
+               uint64_t outputs_written)
+{
+   uint64_t so_outputs = 0;
+   uint8_t reverse_map[64] = {0};
+   unsigned slot = 0;
+
+   while (outputs_written)
+      reverse_map[slot++] = u_bit_scan64(&outputs_written);
+
+   for (unsigned i = 0; i < so_info->num_outputs; i++) {
+      struct pipe_stream_output *output = &so_info->output[i];
+
+      /* Map Gallium's condensed "slots" back to real VARYING_SLOT_* enums */
+      output->register_index = reverse_map[output->register_index];
+
+      so_outputs |= 1ull << output->register_index;
+   }
+
+   return so_outputs;
+}
+
 struct d3d12_shader_selector *
 d3d12_create_shader(struct d3d12_context *ctx,
                     pipe_shader_type stage,
@@ -650,6 +673,10 @@ d3d12_create_shader(struct d3d12_context *ctx,
    unsigned tex_scan_result = scan_texture_use(nir);
    sel->samples_int_textures = (tex_scan_result & TEX_SAMPLE_INTEGER_TEXTURE) != 0;
    sel->compare_with_lod_bias_grad = (tex_scan_result & TEX_CMP_WITH_LOD_BIAS_GRAD) != 0;
+
+   memcpy(&sel->so_info, &shader->stream_output, sizeof(sel->so_info));
+   sel->enabled_stream_outputs = update_so_info(&sel->so_info,
+                                                nir->info.outputs_written);
 
    assert(nir != NULL);
    d3d12_shader_selector *prev = get_prev_shader(ctx, sel->stage);
