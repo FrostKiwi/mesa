@@ -55,6 +55,8 @@ d3d12_query_heap_type(unsigned query_type)
    case PIPE_QUERY_OCCLUSION_PREDICATE:
    case PIPE_QUERY_OCCLUSION_PREDICATE_CONSERVATIVE:
       return D3D12_QUERY_HEAP_TYPE_OCCLUSION;
+   case PIPE_QUERY_PIPELINE_STATISTICS:
+      return D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
    default:
       debug_printf("unknown query: %s\n",
                    util_str_query_type(query_type, true));
@@ -71,6 +73,8 @@ d3d12_query_type(unsigned query_type)
    case PIPE_QUERY_OCCLUSION_PREDICATE:
    case PIPE_QUERY_OCCLUSION_PREDICATE_CONSERVATIVE:
       return D3D12_QUERY_TYPE_BINARY_OCCLUSION;
+   case PIPE_QUERY_PIPELINE_STATISTICS:
+      return D3D12_QUERY_TYPE_PIPELINE_STATISTICS;
    default:
       debug_printf("unknown query: %s\n",
                    util_str_query_type(query_type, true));
@@ -95,7 +99,15 @@ d3d12_create_query(struct pipe_context *pctx,
    query->d3d12qtype = d3d12_query_type(query_type);
    query->num_queries = 16;
    query->curr_query = 0;
-   query->query_size = sizeof(uint64_t);
+
+   switch (query->d3d12qtype) {
+   case D3D12_QUERY_TYPE_PIPELINE_STATISTICS:
+      query->query_size = sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS);
+      break;
+   default:
+      query->query_size = sizeof(uint64_t);
+      break;
+   }
 
    desc.Count = query->num_queries;
    desc.Type = d3d12_query_heap_type(query_type);
@@ -142,6 +154,7 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
       return false;
 
    uint64_t *results_u64 = (uint64_t *)results;
+   D3D12_QUERY_DATA_PIPELINE_STATISTICS *results_stats = (D3D12_QUERY_DATA_PIPELINE_STATISTICS *)results;
 
    util_query_clear_result(result, q->type);
    for (int i = 0; i < q->curr_query; ++i) {
@@ -155,6 +168,20 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
          result->u64 += results_u64[i];
          break;
 
+      case PIPE_QUERY_PIPELINE_STATISTICS:
+         result->pipeline_statistics.ia_vertices += results_stats[i].IAVertices;
+         result->pipeline_statistics.ia_primitives += results_stats[i].IAPrimitives;
+         result->pipeline_statistics.vs_invocations += results_stats[i].VSInvocations;
+         result->pipeline_statistics.gs_invocations += results_stats[i].GSInvocations;
+         result->pipeline_statistics.gs_primitives += results_stats[i].GSPrimitives;
+         result->pipeline_statistics.c_invocations += results_stats[i].CInvocations;
+         result->pipeline_statistics.c_primitives += results_stats[i].CPrimitives;
+         result->pipeline_statistics.ps_invocations += results_stats[i].PSInvocations;
+         result->pipeline_statistics.hs_invocations += results_stats[i].HSInvocations;
+         result->pipeline_statistics.ds_invocations += results_stats[i].DSInvocations;
+         result->pipeline_statistics.cs_invocations += results_stats[i].CSInvocations;
+         break;
+
       default:
          debug_printf("unsupported query type: %s\n",
                       util_str_query_type(q->type, true));
@@ -162,8 +189,23 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
       }
    }
 
-   if (write)
-      results[0] = result->u64;
+   if (write) {
+      if (q->type == PIPE_QUERY_PIPELINE_STATISTICS) {
+         results_stats[0].IAVertices = result->pipeline_statistics.ia_vertices;
+         results_stats[0].IAPrimitives = result->pipeline_statistics.ia_primitives;
+         results_stats[0].VSInvocations = result->pipeline_statistics.vs_invocations;
+         results_stats[0].GSInvocations = result->pipeline_statistics.gs_invocations;
+         results_stats[0].GSPrimitives = result->pipeline_statistics.gs_primitives;
+         results_stats[0].CInvocations = result->pipeline_statistics.c_invocations;
+         results_stats[0].CPrimitives = result->pipeline_statistics.c_primitives;
+         results_stats[0].PSInvocations = result->pipeline_statistics.ps_invocations;
+         results_stats[0].HSInvocations = result->pipeline_statistics.hs_invocations;
+         results_stats[0].DSInvocations = result->pipeline_statistics.ds_invocations;
+         results_stats[0].CSInvocations = result->pipeline_statistics.cs_invocations;
+      } else {
+         results_u64[0] = result->u64;
+      }
+   }
 
    pipe_buffer_unmap(&ctx->base, transfer);
 
