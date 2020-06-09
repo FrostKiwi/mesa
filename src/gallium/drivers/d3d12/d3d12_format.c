@@ -115,7 +115,7 @@ d3d12_get_sampler_format_for_ds(DXGI_FORMAT f)
 {
    switch (f) {
    case DXGI_FORMAT_D16_UNORM:
-      return DXGI_FORMAT_R16_FLOAT;
+      return DXGI_FORMAT_R16_UNORM;
    case DXGI_FORMAT_D32_FLOAT:
       return DXGI_FORMAT_R32_FLOAT;
    case DXGI_FORMAT_D24_UNORM_S8_UINT:
