@@ -160,7 +160,7 @@ lower_instr(nir_intrinsic_instr *instr, nir_builder *b,
 
    enum d3d12_state_var var = variable->state_slots[0].tokens[2];
    nir_ssa_def *ubo_idx = nir_imm_int(b, binding);
-   nir_ssa_def *ubo_offset =  nir_imm_int(b, get_state_var_offset(shader, var));
+   nir_ssa_def *ubo_offset =  nir_imm_int(b, get_state_var_offset(shader, var) * 4);
    nir_intrinsic_instr *load =
       nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_ubo);
    load->num_components = instr->num_components;
