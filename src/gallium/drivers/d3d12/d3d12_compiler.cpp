@@ -696,6 +696,7 @@ d3d12_compile_shader(struct d3d12_context *ctx,
 void
 d3d12_select_shader_variants(struct d3d12_context *ctx, const struct pipe_draw_info *dinfo)
 {
+   static unsigned order[] = {PIPE_SHADER_VERTEX, PIPE_SHADER_GEOMETRY, PIPE_SHADER_FRAGMENT};
    struct d3d12_selection_context sel_ctx;
 
    sel_ctx.ctx = ctx;
@@ -704,8 +705,8 @@ d3d12_select_shader_variants(struct d3d12_context *ctx, const struct pipe_draw_i
 
    validate_geometry_shader(&sel_ctx);
 
-   for (int i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
-      auto sel = ctx->gfx_stages[i];
+   for (int i = 0; i < ARRAY_SIZE(order); ++i) {
+      auto sel = ctx->gfx_stages[order[i]];
       if (!sel)
          continue;
 
