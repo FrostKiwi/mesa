@@ -1201,6 +1201,8 @@ d3d12_set_stream_output_targets(struct pipe_context *pctx,
 
    assert(num_targets <= ARRAY_SIZE(ctx->so_targets));
 
+   d3d12_disable_fake_so_buffers(ctx);
+
    for (unsigned i = 0; i < num_targets; i++) {
       struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)targets[i];
 
@@ -1218,6 +1220,118 @@ d3d12_set_stream_output_targets(struct pipe_context *pctx,
 
    ctx->num_so_targets = num_targets;
    ctx->state_dirty |= D3D12_DIRTY_STREAM_OUTPUT;
+}
+
+bool
+d3d12_enable_fake_so_buffers(struct d3d12_context *ctx)
+{
+   if (ctx->use_fake_so_buffers)
+      return true;
+
+   for (int i = 0; i < ctx->num_so_targets; ++i) {
+      struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)ctx->so_targets[i];
+      struct d3d12_stream_output_target *fake_target;
+
+      fake_target = CALLOC_STRUCT(d3d12_stream_output_target);
+      if (!fake_target)
+         return false;
+      pipe_reference_init(&fake_target->base.reference, 1);
+      fake_target->base.context = &ctx->base;
+
+      d3d12_resource_wait_idle(ctx, d3d12_resource(target->base.buffer));
+
+      /* Check if another target is using the same buffer */
+      for (int j = i - 1; j >= 0; --j) {
+         if (ctx->so_targets[j] && ctx->so_targets[j]->buffer == target->base.buffer) {
+            struct d3d12_stream_output_target *prev_target =
+               (struct d3d12_stream_output_target *)ctx->fake_so_targets[j];
+            pipe_resource_reference(&fake_target->base.buffer, prev_target->base.buffer);
+            pipe_resource_reference(&fake_target->fill_buffer, prev_target->fill_buffer);
+            fake_target->fill_buffer_offset = prev_target->fill_buffer_offset;
+            fake_target->cached_filled_size = prev_target->cached_filled_size;
+            break;
+         }
+      }
+
+      /* Create new SO buffer 6x (2 triangles instead of 1 point) the original size if not */
+      if (!fake_target->base.buffer) {
+         fake_target->base.buffer = pipe_buffer_create(ctx->base.screen,
+                                                       PIPE_BIND_STREAM_OUTPUT,
+                                                       PIPE_USAGE_STAGING,
+                                                       target->base.buffer->width0 * 6);
+         u_suballocator_alloc(ctx->so_allocator, sizeof(uint64_t), 4,
+                              &fake_target->fill_buffer_offset, &fake_target->fill_buffer);
+         pipe_buffer_read(&ctx->base, target->fill_buffer,
+                          target->fill_buffer_offset, sizeof(uint64_t),
+                          &fake_target->cached_filled_size);
+      }
+
+      fake_target->base.buffer_offset = target->base.buffer_offset * 6;
+      fake_target->base.buffer_size = (target->base.buffer_size - fake_target->cached_filled_size) * 6;
+      ctx->fake_so_targets[i] = &fake_target->base;
+      fill_stream_output_buffer_view(&ctx->fake_so_buffer_views[i], fake_target);
+   }
+
+   ctx->use_fake_so_buffers = true;
+   ctx->cmdlist_dirty |= D3D12_DIRTY_STREAM_OUTPUT;
+
+   return true;
+}
+
+bool
+d3d12_disable_fake_so_buffers(struct d3d12_context *ctx)
+{
+   if (!ctx->use_fake_so_buffers)
+      return true;
+
+   d3d12_flush_cmdlist_and_wait(ctx);
+
+   for (int i = 0; i < ctx->num_so_targets; ++i) {
+      struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)ctx->so_targets[i];
+      struct d3d12_stream_output_target *fake_target = (struct d3d12_stream_output_target *)ctx->fake_so_targets[i];
+      uint64_t filled_size;
+      struct pipe_transfer *src_transfer, *dst_transfer;
+      uint8_t *src, *dst;
+
+      if (fake_target == NULL)
+         continue;
+
+      pipe_buffer_read(&ctx->base, fake_target->fill_buffer,
+                       fake_target->fill_buffer_offset, sizeof(uint64_t),
+                       &filled_size);
+
+      src = (uint8_t *)pipe_buffer_map_range(&ctx->base, fake_target->base.buffer,
+                                             fake_target->base.buffer_offset,
+                                             fake_target->base.buffer_size,
+                                             PIPE_TRANSFER_READ, &src_transfer);
+      dst = (uint8_t *)pipe_buffer_map_range(&ctx->base, target->base.buffer,
+                                             target->base.buffer_offset,
+                                             target->base.buffer_size,
+                                             PIPE_TRANSFER_READ, &dst_transfer);
+
+      /* Note: This will break once support for gl_SkipComponents is added */
+      uint16_t stride = ctx->gfx_pipeline_state.so_info.stride[i] * 6;
+      for (uint64_t offset = 0; offset < filled_size; offset += stride * 6)
+         memcpy(dst + offset + fake_target->cached_filled_size,
+                src + offset, stride);
+
+      pipe_buffer_unmap(&ctx->base, src_transfer);
+      pipe_buffer_unmap(&ctx->base, dst_transfer);
+
+      pipe_so_target_reference(&ctx->fake_so_targets[i], NULL);
+      ctx->fake_so_buffer_views[i].SizeInBytes = 0;
+
+      /* Make sure the buffer is not copied twice */
+      for (int j = i + 1; j <= ctx->num_so_targets; ++j) {
+         if (ctx->so_targets[j] && ctx->so_targets[j]->buffer == target->base.buffer)
+            pipe_so_target_reference(&ctx->fake_so_targets[j], NULL);
+      }
+   }
+
+   ctx->use_fake_so_buffers = false;
+   ctx->cmdlist_dirty |= D3D12_DIRTY_STREAM_OUTPUT;
+
+   return true;
 }
 
 void
