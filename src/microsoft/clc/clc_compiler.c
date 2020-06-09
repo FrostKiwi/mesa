@@ -795,8 +795,6 @@ copy_const_initializer(const nir_constant *constant, const struct glsl_type *typ
 {
    unsigned size = glsl_get_cl_size(type);
 
-   data = (uint8_t *)align64((uintptr_t)data, glsl_get_cl_alignment(type));
-
    if (glsl_type_is_array(type)) {
       const struct glsl_type *elm_type = glsl_get_array_element(type);
       unsigned elm_size = glsl_get_cl_size(elm_type);
