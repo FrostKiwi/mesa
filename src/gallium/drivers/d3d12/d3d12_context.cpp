@@ -691,6 +691,7 @@ static D3D12_SRV_DIMENSION
 view_dimension(enum pipe_texture_target target, unsigned samples)
 {
    switch (target) {
+   case PIPE_BUFFER: return D3D12_SRV_DIMENSION_BUFFER;
    case PIPE_TEXTURE_1D: return D3D12_SRV_DIMENSION_TEXTURE1D;
    case PIPE_TEXTURE_1D_ARRAY: return D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
    case PIPE_TEXTURE_2D:
@@ -792,6 +793,11 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
       desc.TextureCube.MostDetailedMip = state->u.tex.first_level;
       desc.TextureCube.MipLevels = sampler_view->mip_levels;
       desc.TextureCube.ResourceMinLODClamp = 0.0f;
+      break;
+   case D3D12_SRV_DIMENSION_BUFFER:
+      desc.Buffer.FirstElement = 0;
+      desc.Buffer.StructureByteStride = 0;
+      desc.Buffer.NumElements = texture->width0 / util_format_get_blocksize(state->format);
       break;
    }
 
