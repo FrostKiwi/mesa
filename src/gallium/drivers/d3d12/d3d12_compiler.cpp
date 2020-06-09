@@ -262,7 +262,7 @@ d3d12_make_passthrough_gs(struct d3d12_context *ctx, d3d12_shader_selector *vs)
    templ.type = PIPE_SHADER_IR_NIR;
    templ.ir.nir = nir;
 
-   gs = d3d12_compile_shader(ctx, PIPE_SHADER_GEOMETRY, &templ);
+   gs = d3d12_create_shader(ctx, PIPE_SHADER_GEOMETRY, &templ);
    gs->passthrough = 1;
    gs->passthrough_varyings = vs->current->nir->info.outputs_written;
 
@@ -625,9 +625,9 @@ scan_texture_use(nir_shader *nir)
 }
 
 struct d3d12_shader_selector *
-d3d12_compile_shader(struct d3d12_context *ctx,
-                     pipe_shader_type stage,
-                     const struct pipe_shader_state *shader)
+d3d12_create_shader(struct d3d12_context *ctx,
+                    pipe_shader_type stage,
+                    const struct pipe_shader_state *shader)
 {
    struct d3d12_shader_selector *sel = rzalloc(nullptr, d3d12_shader_selector);
    sel->stage = stage;
