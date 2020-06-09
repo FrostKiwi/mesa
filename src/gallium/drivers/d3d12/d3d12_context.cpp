@@ -744,14 +744,39 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
    sampler_view->array_size = texture->array_size;
 
    D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
-   desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
-      component_mapping((pipe_swizzle) state->swizzle_r, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_0),
-      component_mapping((pipe_swizzle) state->swizzle_g, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1),
-      component_mapping((pipe_swizzle) state->swizzle_b, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2),
-      component_mapping((pipe_swizzle) state->swizzle_a, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_3)
-   );
+   pipe_swizzle swizzle[4] = {
+      (pipe_swizzle) state->swizzle_r,
+      (pipe_swizzle) state->swizzle_g,
+      (pipe_swizzle) state->swizzle_b,
+      (pipe_swizzle) state->swizzle_a
+   };
+
    desc.Format = d3d12_get_sampler_format_for_ds(d3d12_get_format(state->format));
    desc.ViewDimension = view_dimension(state->target, texture->nr_samples);
+
+   if (desc.Format == DXGI_FORMAT_UNKNOWN) {
+      /* The format is not directly supported, but if it is an legacy format, then
+       * we may be able to emulate it */
+      auto format_descr = d3d12_get_emulated_view_format(state->format);
+      if (!format_descr->dxgi_format) {
+         if (d3d12_debug & D3D12_DEBUG_VERBOSE)
+            debug_printf("Format %s has no DXGI format and can't be emulated\n",
+                         util_format_name(state->format));
+         FREE(sampler_view);
+         return nullptr;
+      }
+
+      desc.Format = format_descr->dxgi_format;
+      memcpy(swizzle, format_descr->swizzle, sizeof(swizzle));
+   }
+
+   desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
+         component_mapping(swizzle[0], D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_0),
+         component_mapping(swizzle[1], D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1),
+         component_mapping(swizzle[2], D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2),
+         component_mapping(swizzle[3], D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_3)
+         );
+
    switch (desc.ViewDimension) {
    case D3D12_SRV_DIMENSION_TEXTURE1D:
       desc.Texture1D.MostDetailedMip = state->u.tex.first_level;
