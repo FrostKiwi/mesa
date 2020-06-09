@@ -137,6 +137,37 @@ d3d12_get_format(enum pipe_format format)
    return formats[format];
 }
 
+#define EMU_ALPHA_SWIZZLE { PIPE_SWIZZLE_0, PIPE_SWIZZLE_0, PIPE_SWIZZLE_0, PIPE_SWIZZLE_X }
+#define EMU_LUMINANCE_SWIZZLE { PIPE_SWIZZLE_X, PIPE_SWIZZLE_X, PIPE_SWIZZLE_X, PIPE_SWIZZLE_1 }
+#define EMU_LUMINANCE_ALPHA_SWIZZLE { PIPE_SWIZZLE_X, PIPE_SWIZZLE_X, PIPE_SWIZZLE_X, PIPE_SWIZZLE_Y }
+#define EMU_INTENSITY_SWIZZLE { PIPE_SWIZZLE_X, PIPE_SWIZZLE_X, PIPE_SWIZZLE_X, PIPE_SWIZZLE_X }
+
+#define EMU_FORMAT(BITS, TYPE) \
+   [PIPE_FORMAT_A ## BITS ## _ ## TYPE] = {DXGI_FORMAT_R ## BITS ## _ ## TYPE, EMU_ALPHA_SWIZZLE}, \
+   [PIPE_FORMAT_L ## BITS ## _ ## TYPE] = {DXGI_FORMAT_R ## BITS ## _ ## TYPE, EMU_LUMINANCE_SWIZZLE}, \
+   [PIPE_FORMAT_I ## BITS ## _ ## TYPE] = {DXGI_FORMAT_R ## BITS ## _ ## TYPE, EMU_INTENSITY_SWIZZLE}, \
+   [PIPE_FORMAT_L ## BITS ## A ## BITS ## _ ## TYPE] = \
+          {DXGI_FORMAT_R ## BITS ## G ## BITS ## _ ## TYPE, EMU_LUMINANCE_ALPHA_SWIZZLE}
+
+const struct d3d12_arb_emulation_format arb_emulation_format[PIPE_FORMAT_COUNT] = {
+   EMU_FORMAT(8, UNORM),
+   EMU_FORMAT(8, SINT),
+   EMU_FORMAT(8, UINT),
+   EMU_FORMAT(16, UNORM),
+   EMU_FORMAT(16, SINT),
+   EMU_FORMAT(16, UINT),
+   EMU_FORMAT(16, FLOAT),
+   EMU_FORMAT(32, SINT),
+   EMU_FORMAT(32, UINT),
+   EMU_FORMAT(32, FLOAT)
+};
+
+const struct d3d12_arb_emulation_format *
+d3d12_get_emulated_view_format(enum pipe_format format)
+{
+   return &arb_emulation_format[format];
+}
+
 unsigned
 d3d12_non_opaque_plane_count(DXGI_FORMAT format)
 {

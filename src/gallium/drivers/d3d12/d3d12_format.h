@@ -27,6 +27,7 @@
 #include <dxgiformat.h>
 
 #include "pipe/p_format.h"
+#include "pipe/p_defines.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,6 +44,14 @@ d3d12_get_sampler_format_for_ds(DXGI_FORMAT f);
 
 unsigned
 d3d12_non_opaque_plane_count(DXGI_FORMAT f);
+
+struct d3d12_arb_emulation_format {
+   DXGI_FORMAT dxgi_format;
+   enum pipe_swizzle swizzle[4];
+};
+
+const struct d3d12_arb_emulation_format *
+d3d12_get_emulated_view_format(enum pipe_format format);
 
 #ifdef __cplusplus
 }
