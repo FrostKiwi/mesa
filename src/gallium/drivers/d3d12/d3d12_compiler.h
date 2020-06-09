@@ -110,6 +110,9 @@ struct d3d12_shader_selector {
    struct d3d12_shader *first;
    struct d3d12_shader *current;
 
+   struct pipe_stream_output_info so_info;
+   uint64_t enabled_stream_outputs;
+
    unsigned passthrough:1;
    unsigned samples_int_textures:1;
    unsigned compare_with_lod_bias_grad:1;

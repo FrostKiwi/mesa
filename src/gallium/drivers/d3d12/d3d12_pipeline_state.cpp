@@ -36,6 +36,90 @@ struct d3d12_pso_entry {
    ID3D12PipelineState *pso;
 };
 
+static const char *slot_to_varying[] = {
+   "VARYINGAA", "VARYINGAB", "VARYINGAC", "VARYINGAD", "VARYINGAE", "VARYINGAF", "VARYINGAG", "VARYINGAH",
+   "VARYINGAI", "VARYINGAJ", "VARYINGAK", "VARYINGAL", "VARYINGAM", "VARYINGAN", "VARYINGAO", "VARYINGAP",
+   "VARYINGBA", "VARYINGBB", "VARYINGBC", "VARYINGBD", "VARYINGBE", "VARYINGBF", "VARYINGBG", "VARYINGBH",
+   "VARYINGBI", "VARYINGBJ", "VARYINGBK", "VARYINGBL", "VARYINGBM", "VARYINGBN", "VARYINGBO", "VARYINGBP",
+   "VARYINGCA", "VARYINGCB", "VARYINGCC", "VARYINGCD", "VARYINGCE", "VARYINGCF", "VARYINGCG", "VARYINGCH",
+   "VARYINGCI", "VARYINGCJ", "VARYINGCK", "VARYINGCL", "VARYINGCM", "VARYINGCN", "VARYINGCO", "VARYINGCP",
+   "VARYINGDA", "VARYINGDB", "VARYINGDC", "VARYINGDD", "VARYINGDE", "VARYINGDF", "VARYINGDG", "VARYINGDH",
+   "VARYINGDI", "VARYINGDJ", "VARYINGDK", "VARYINGDL", "VARYINGDM", "VARYINGDN", "VARYINGDO", "VARYINGDP",
+};
+
+static const char *
+get_semantic_name(int slot, unsigned *index)
+{
+   *index = 0; /* Default index */
+
+   switch (slot) {
+
+   case VARYING_SLOT_POS:
+      return "SV_Position";
+
+    case VARYING_SLOT_FACE:
+      return "SV_IsFrontFace";
+
+   case VARYING_SLOT_CLIP_DIST1:
+      *index = 1;
+      /* fallthrough */
+   case VARYING_SLOT_CLIP_DIST0:
+      return "SV_ClipDistance";
+
+   default: {
+         int index = slot - VARYING_SLOT_POS;
+         return slot_to_varying[index];
+      }
+   }
+}
+
+static void
+fill_so_declaration(const struct pipe_stream_output_info *info,
+                    D3D12_SO_DECLARATION_ENTRY *entries, UINT *num_entries,
+                    UINT *strides, UINT *num_strides)
+{
+   int next_offset[MAX_VERTEX_STREAMS] = { 0 };
+
+   *num_entries = 0;
+
+   for (unsigned i = 0; i < info->num_outputs; i++) {
+      const struct pipe_stream_output *output = &info->output[i];
+      const int buffer = output->output_buffer;
+      const int varying = output->register_index;
+      unsigned index;
+
+      /* Mesa doesn't store entries for gl_SkipComponents in the Outputs[]
+       * array.  Instead, it simply increments DstOffset for the following
+       * input by the number of components that should be skipped.
+       *
+       * DirectX12 requires that we create gap entries.
+       */
+      int skip_components = output->dst_offset - next_offset[buffer];
+
+      if (skip_components > 0) {
+         entries[*num_entries].Stream = output->stream;
+         entries[*num_entries].SemanticName = NULL;
+         entries[*num_entries].ComponentCount = skip_components;
+         entries[*num_entries].OutputSlot = buffer;
+         (*num_entries)++;
+      }
+
+      next_offset[buffer] = output->dst_offset + output->num_components;
+
+      entries[*num_entries].Stream = output->stream;
+      entries[*num_entries].SemanticName = get_semantic_name(output->register_index, &index);
+      entries[*num_entries].SemanticIndex = index;
+      entries[*num_entries].StartComponent = output->start_component;
+      entries[*num_entries].ComponentCount = output->num_components;
+      entries[*num_entries].OutputSlot = buffer;
+      (*num_entries)++;
+   }
+
+   for (unsigned i = 0; i < MAX_VERTEX_STREAMS; i++)
+      strides[i] = info->stride[i] * 4;
+   *num_strides = MAX_VERTEX_STREAMS;
+}
+
 static bool
 depth_bias(struct d3d12_rasterizer_state *state, enum pipe_prim_type reduced_prim)
 {
@@ -96,6 +180,9 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
    struct d3d12_gfx_pipeline_state *state = &ctx->gfx_pipeline_state;
    enum pipe_prim_type reduced_prim = u_reduced_prim(state->prim_type);
+   D3D12_SO_DECLARATION_ENTRY entries[PIPE_MAX_SO_OUTPUTS];
+   UINT strides[PIPE_MAX_SO_OUTPUTS];
+   UINT num_entries, num_strides;
 
    D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = { 0 };
    pso_desc.pRootSignature = state->root_signature;
@@ -117,6 +204,14 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
       pso_desc.GS.BytecodeLength = shader->bytecode_length;
       pso_desc.GS.pShaderBytecode = shader->bytecode;
    }
+
+   fill_so_declaration(&state->so_info, entries, &num_entries,
+                       strides, &num_strides);
+   pso_desc.StreamOutput.NumEntries = num_entries;
+   pso_desc.StreamOutput.pSODeclaration = entries;
+   pso_desc.StreamOutput.RasterizedStream = 0;
+   pso_desc.StreamOutput.NumStrides = num_strides;
+   pso_desc.StreamOutput.pBufferStrides = strides;
 
    pso_desc.BlendState = state->blend->desc;
    if (state->has_float_rtv)

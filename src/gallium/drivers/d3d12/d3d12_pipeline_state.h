@@ -54,6 +54,7 @@ struct d3d12_depth_stencil_alpha_state {
 struct d3d12_gfx_pipeline_state {
    ID3D12RootSignature *root_signature;
    struct d3d12_shader *stages[PIPE_SHADER_TYPES - 1];
+   struct pipe_stream_output_info so_info;
 
    struct d3d12_vertex_elements_state *ves;
    struct d3d12_blend_state *blend;
