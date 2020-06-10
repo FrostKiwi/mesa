@@ -383,6 +383,7 @@ clc_lower_sampler_deref(nir_builder *b, nir_deref_instr *deref)
     nir_variable *in_var = nir_deref_instr_get_variable(deref);
     nir_variable *uniform = nir_variable_create(
        b->shader, nir_var_uniform, in_var->type, NULL);
+    uniform->data.binding = in_var->data.binding;
 
     b->cursor = nir_after_instr(&deref->instr);
     nir_deref_instr *deref_uniform = nir_build_deref_var(b, uniform);
