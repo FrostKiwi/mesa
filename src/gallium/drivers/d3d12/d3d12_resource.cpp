@@ -33,6 +33,7 @@
 #include "util/format/u_format.h"
 #include "util/u_inlines.h"
 #include "util/u_memory.h"
+#include "util/format/u_format_zs.h"
 
 #include "state_tracker/sw_winsys.h"
 
@@ -680,32 +681,28 @@ read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
 
    d3d12_flush_cmdlist_and_wait(ctx);
 
-   uint32_t *depth_ptr = (uint32_t *)depth_buffer.map();
+   void *depth_ptr = depth_buffer.map();
    if (!depth_ptr) {
       debug_printf("Mapping staging depth buffer failed\n");
       return NULL;
    }
 
-   char *stencil_ptr =  (char *)stencil_buffer.map();
+   uint8_t *stencil_ptr =  (uint8_t *)stencil_buffer.map();
    if (!stencil_ptr) {
       debug_printf("Mapping staging stencil buffer failed\n");
       return NULL;
    }
 
-   uint32_t *buf = (uint32_t *)malloc(trans->base.layer_stride);
+   uint8_t *buf = (uint8_t *)malloc(trans->base.layer_stride);
    if (!buf)
       return NULL;
 
    trans->data = buf;
 
-   for (int y = 0; y < trans->base.box.height; ++y) {
-      char *s = stencil_ptr + y * trans->base.stride;
-      uint32_t *d = depth_ptr + y * trans->base.stride / 4;
-      uint32_t *b = buf + y * trans->base.stride / 4;
-      for (int i = 0; i < trans->base.box.width; ++i, ++s, ++d, ++b) {
-         *b = (*s << 24) | (*d & 0xffffff);
-      }
-   }
+   util_format_z24_unorm_s8_uint_pack_separate(buf, trans->base.stride,
+                                               (uint32_t *)depth_ptr, trans->base.stride,
+                                               stencil_ptr, trans->base.stride,
+                                               trans->base.box.width, trans->base.box.height);
 
    return trans->data;
 }
@@ -752,28 +749,24 @@ write_zs_surface(struct pipe_context *pctx, struct d3d12_resource *res,
       return;
    }
 
-   uint32_t *depth_ptr = (uint32_t *)depth_buffer.map();
+   void *depth_ptr = depth_buffer.map();
    if (!depth_ptr) {
       debug_printf("Mapping staging depth buffer failed\n");
       return;
    }
 
-   char *stencil_ptr =  (char *)stencil_buffer.map();
+   uint8_t *stencil_ptr =  (uint8_t *)stencil_buffer.map();
    if (!stencil_ptr) {
       debug_printf("Mapping staging stencil buffer failed\n");
       return;
    }
 
-   uint32_t *buf = (uint32_t *)trans->data;
-   for (int y = 0; y < trans->base.box.height; ++y) {
-      char *s = stencil_ptr + y * trans->base.stride;
-      uint32_t *d = depth_ptr + y * trans->base.stride / 4;
-      uint32_t *b = buf + y * trans->base.stride / 4;
-      for (int i = 0; i < trans->base.box.width; ++i, ++s, ++d, ++b) {
-         *s = (*b >> 24) & 0xff;
-         *d = *b & 0xffffff;
-      }
-   }
+   util_format_z32_unorm_unpack_z_32unorm((uint32_t *)depth_ptr, trans->base.stride, (uint8_t*)trans->data,
+                                          trans->base.stride, trans->base.box.width,
+                                          trans->base.box.height);
+   util_format_z24_unorm_s8_uint_unpack_s_8uint(stencil_ptr, trans->base.stride, (uint8_t*)trans->data,
+                                                trans->base.stride, trans->base.box.width,
+                                                trans->base.box.height);
 
    stencil_buffer.unmap();
    depth_buffer.unmap();
