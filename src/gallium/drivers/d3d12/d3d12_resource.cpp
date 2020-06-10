@@ -81,6 +81,21 @@ resource_is_busy(struct d3d12_context *ctx,
 }
 
 void
+d3d12_resource_wait_idle(struct d3d12_context *ctx,
+                         struct d3d12_resource *res)
+{
+   if (d3d12_batch_has_references(d3d12_current_batch(ctx), res->bo)) {
+      d3d12_flush_cmdlist_and_wait(ctx);
+   } else {
+      d3d12_foreach_submitted_batch(ctx, batch) {
+         d3d12_reset_batch(ctx, batch);
+         if (!resource_is_busy(ctx, res))
+            break;
+      }
+   }
+}
+
+void
 d3d12_resource_release(struct d3d12_resource *resource)
 {
    if (!resource->bo)
@@ -563,15 +578,7 @@ synchronize(struct d3d12_context *ctx,
       if (usage & PIPE_TRANSFER_DONTBLOCK)
          return false;
 
-      if (d3d12_batch_has_references(d3d12_current_batch(ctx), res->bo)) {
-         d3d12_flush_cmdlist_and_wait(ctx);
-      } else {
-         d3d12_foreach_submitted_batch(ctx, batch) {
-            d3d12_reset_batch(ctx, batch);
-            if (!resource_is_busy(ctx, res))
-               break;
-         }
-      }
+      d3d12_resource_wait_idle(ctx, res);
    }
 
    if (usage & PIPE_TRANSFER_WRITE)

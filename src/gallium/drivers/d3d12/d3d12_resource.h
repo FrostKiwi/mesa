@@ -97,6 +97,10 @@ void
 d3d12_resource_release(struct d3d12_resource *res);
 
 void
+d3d12_resource_wait_idle(struct d3d12_context *ctx,
+                         struct d3d12_resource *res);
+
+void
 d3d12_resource_make_writeable(struct pipe_context *pctx,
                               struct pipe_resource *pres);
 
