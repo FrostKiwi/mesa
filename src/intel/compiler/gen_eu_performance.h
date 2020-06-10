@@ -298,6 +298,16 @@ mark_write_dependency(struct gen_eu_performance_state *st,
 }
 
 /**
+ * Return the dependency ID of GRF register starting at offset \p i.
+ */
+static enum gen_eu_dependency_id
+grf_dependency_id(unsigned i)
+{
+   assert(i < GEN_DEPENDENCY_ID_MRF0 - GEN_DEPENDENCY_ID_GRF0);
+   return (enum gen_eu_dependency_id) (GEN_DEPENDENCY_ID_GRF0 + i);
+}
+
+/**
  * Return the dependency ID of flag register starting at offset \p i.
  */
 static enum gen_eu_dependency_id
