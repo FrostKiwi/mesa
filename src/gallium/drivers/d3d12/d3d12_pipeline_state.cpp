@@ -209,7 +209,7 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
                        strides, &num_strides);
    pso_desc.StreamOutput.NumEntries = num_entries;
    pso_desc.StreamOutput.pSODeclaration = entries;
-   pso_desc.StreamOutput.RasterizedStream = 0;
+   pso_desc.StreamOutput.RasterizedStream = state->rast->base.rasterizer_discard ? D3D12_SO_NO_RASTERIZED_STREAM : 0;
    pso_desc.StreamOutput.NumStrides = num_strides;
    pso_desc.StreamOutput.pBufferStrides = strides;
 
