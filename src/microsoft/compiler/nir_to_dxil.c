@@ -389,7 +389,7 @@ get_glsl_type(struct dxil_module *m, const struct glsl_type *type)
 }
 
 
-#define MAX_SRVS 64 // ??
+#define MAX_SRVS 128
 #define MAX_UAVS 64
 #define MAX_CBVS 64 // ??
 #define MAX_SAMPLERS 64 // ??
@@ -406,7 +406,7 @@ struct ntd_context {
 
    const struct dxil_mdnode *srv_metadata_nodes[MAX_SRVS];
    const struct dxil_value *srv_handles[MAX_SRVS];
-   uint64_t srvs_used : MAX_SRVS;
+   uint64_t srvs_used[2];
    unsigned num_srv_arrays;
 
    const struct dxil_mdnode *uav_metadata_nodes[MAX_UAVS];
@@ -423,7 +423,7 @@ struct ntd_context {
    uint64_t samplers_used : MAX_SAMPLERS;
    unsigned num_sampler_arrays;
 
-   struct dxil_resource resources[MAX_UAVS];
+   struct dxil_resource resources[MAX_SRVS + MAX_UAVS + MAX_CBVS];
    unsigned num_resources;
 
    const struct dxil_mdnode *shader_property_nodes[6];
@@ -787,10 +787,10 @@ emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned count)
       if (!handle)
          return false;
 
-      uint64_t bit = 1ull << idx;
-      assert(!(ctx->srvs_used & bit));
+      uint64_t bit = 1ull << (idx % 64);
+      assert(!(ctx->srvs_used[idx / 64] & bit));
       ctx->srv_handles[idx] = handle;
-      ctx->srvs_used |= bit;
+      ctx->srvs_used[idx / 64] |= bit;
 
    }
 
@@ -834,6 +834,8 @@ emit_globals(struct ntd_context *ctx, nir_shader *s)
       return false;
 
    ctx->uav_metadata_nodes[ctx->num_uav_arrays++] = uav_meta;
+   if (ctx->num_uav_arrays > 8)
+      ctx->mod.feats.use_64uavs = 1;
    /* Handles to UAVs used for kernel globals are created on-demand */
    ctx->num_uavs += size;
    add_resource(ctx, DXIL_RES_UAV_RAW, &layout);
@@ -861,6 +863,8 @@ emit_uav(struct ntd_context *ctx, nir_variable *var, unsigned count)
       return false;
 
    ctx->uav_metadata_nodes[ctx->num_uav_arrays++] = uav_meta;
+   if (ctx->num_uav_arrays > 8)
+      ctx->mod.feats.use_64uavs = 1;
    add_resource(ctx, DXIL_RES_UAV_TYPED, &layout);
 
    for (unsigned i = 0; i < count; ++i) {
@@ -1201,7 +1205,7 @@ emit_resources(struct ntd_context *ctx)
       NULL, NULL, NULL, NULL
    };
 
-   if (ctx->srvs_used) {
+   if (ctx->srvs_used[0] || ctx->srvs_used[1]) {
       resources_nodes[0] = dxil_get_metadata_node(&ctx->mod, ctx->srv_metadata_nodes, ctx->num_srv_arrays);
       emit_resources = true;
    }
@@ -3326,7 +3330,7 @@ emit_texture_lod(struct ntd_context *ctx, struct texop_parameters *params)
 static bool
 emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 {
-   assert(ctx->srvs_used & (1ull << instr->texture_index));
+   assert(ctx->srvs_used[instr->texture_index / 64] & (1ull << (instr->texture_index % 64)));
    assert(instr->op == nir_texop_txf ||
           instr->op == nir_texop_txf_ms ||
           nir_tex_instr_is_query(instr) ||
