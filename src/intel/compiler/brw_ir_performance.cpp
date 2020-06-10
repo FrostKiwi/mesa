@@ -867,8 +867,7 @@ namespace {
    {
       if (r.file == VGRF) {
          const unsigned i = r.nr + r.offset / REG_SIZE + delta;
-         assert(i < GEN_DEPENDENCY_ID_MRF0 - GEN_DEPENDENCY_ID_GRF0);
-         return gen_eu_dependency_id(GEN_DEPENDENCY_ID_GRF0 + i);
+         return grf_dependency_id(i);
 
       } else if (r.file == FIXED_GRF) {
          const unsigned i = r.nr + delta;
