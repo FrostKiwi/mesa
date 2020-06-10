@@ -699,10 +699,24 @@ read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
 
    trans->data = buf;
 
-   util_format_z24_unorm_s8_uint_pack_separate(buf, trans->base.stride,
-                                               (uint32_t *)depth_ptr, trans->base.stride,
-                                               stencil_ptr, trans->base.stride,
-                                               trans->base.box.width, trans->base.box.height);
+   switch (res->base.format) {
+   case PIPE_FORMAT_Z24_UNORM_S8_UINT:
+      util_format_z24_unorm_s8_uint_pack_separate(buf, trans->base.stride,
+                                                  (uint32_t *)depth_ptr, trans->base.stride,
+                                                  stencil_ptr, trans->base.stride,
+                                                  trans->base.box.width, trans->base.box.height);
+      break;
+   case PIPE_FORMAT_Z32_FLOAT_S8X24_UINT:
+      util_format_z32_float_s8x24_uint_pack_z_float(buf, trans->base.stride,
+                                                    (float *)depth_ptr, trans->base.stride,
+                                                    trans->base.box.width, trans->base.box.height);
+      util_format_z32_float_s8x24_uint_pack_s_8uint(buf, trans->base.stride,
+                                                    stencil_ptr, trans->base.stride,
+                                                    trans->base.box.width, trans->base.box.height);
+      break;
+   default:
+      unreachable("Unsupported depth steancil format");
+   };
 
    return trans->data;
 }
@@ -761,12 +775,26 @@ write_zs_surface(struct pipe_context *pctx, struct d3d12_resource *res,
       return;
    }
 
-   util_format_z32_unorm_unpack_z_32unorm((uint32_t *)depth_ptr, trans->base.stride, (uint8_t*)trans->data,
-                                          trans->base.stride, trans->base.box.width,
-                                          trans->base.box.height);
-   util_format_z24_unorm_s8_uint_unpack_s_8uint(stencil_ptr, trans->base.stride, (uint8_t*)trans->data,
-                                                trans->base.stride, trans->base.box.width,
-                                                trans->base.box.height);
+   switch (res->base.format) {
+   case PIPE_FORMAT_Z24_UNORM_S8_UINT:
+      util_format_z32_unorm_unpack_z_32unorm((uint32_t *)depth_ptr, trans->base.stride, (uint8_t*)trans->data,
+                                             trans->base.stride, trans->base.box.width,
+                                             trans->base.box.height);
+      util_format_z24_unorm_s8_uint_unpack_s_8uint(stencil_ptr, trans->base.stride, (uint8_t*)trans->data,
+                                                   trans->base.stride, trans->base.box.width,
+                                                   trans->base.box.height);
+      break;
+   case PIPE_FORMAT_Z32_FLOAT_S8X24_UINT:
+      util_format_z32_float_s8x24_uint_unpack_z_float((float *)depth_ptr, trans->base.stride, (uint8_t*)trans->data,
+                                                      trans->base.stride, trans->base.box.width,
+                                                      trans->base.box.height);
+      util_format_z32_float_s8x24_uint_unpack_s_8uint(stencil_ptr, trans->base.stride, (uint8_t*)trans->data,
+                                                      trans->base.stride, trans->base.box.width,
+                                                      trans->base.box.height);
+      break;
+   default:
+      unreachable("Unsupported depth steancil format");
+   };
 
    stencil_buffer.unmap();
    depth_buffer.unmap();
@@ -821,7 +849,8 @@ d3d12_transfer_map(struct pipe_context *pctx,
       if (!synchronize(ctx, res, usage, &range))
          return NULL;
       ptr = d3d12_bo_map(res->bo, &range);
-   } else if (unlikely(pres->format == PIPE_FORMAT_Z24_UNORM_S8_UINT)) {
+   } else if (unlikely(pres->format == PIPE_FORMAT_Z24_UNORM_S8_UINT ||
+                       pres->format == PIPE_FORMAT_Z32_FLOAT_S8X24_UINT)) {
       if (usage & PIPE_TRANSFER_READ) {
          ptr = read_zs_surface(ctx, res, box, trans);
       } else if (usage & PIPE_TRANSFER_WRITE){
