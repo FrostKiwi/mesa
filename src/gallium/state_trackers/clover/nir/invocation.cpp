@@ -173,7 +173,7 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
       NIR_PASS_V(nir, nir_lower_libclc, dev.clc_nir);
 
       NIR_PASS_V(nir, nir_inline_functions);
-
+      NIR_PASS_V(nir, nir_copy_prop);
       NIR_PASS_V(nir, nir_opt_deref);
 
       // Pick off the single entrypoint that we want.
