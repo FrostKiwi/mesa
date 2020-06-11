@@ -180,6 +180,11 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
    prog_data->base.dispatch_mode = DISPATCH_MODE_SIMD8;
 
    IBC_PASS_V(ibc, ibc_schedule_instructions_post_ra);
+
+   struct ibc_eu_performance *perf = ibc_estimate_performance(ibc);
+   ibc->cycles = perf->latency;
+   ralloc_free(perf);
+
    return ibc_to_binary(ibc, &nir->info, compiler, log_data, mem_ctx,
                         &prog_data->base.base.program_size);
 }
