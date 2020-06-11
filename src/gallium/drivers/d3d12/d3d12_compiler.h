@@ -71,7 +71,7 @@ struct d3d12_shader_key {
       unsigned frag_result_color_lowering : 4;
    } fs;
 
-   d3d12_wrap_sampler_states int_tex_states;
+   dxil_wrap_sampler_states int_tex_states;
    d3d12_sampler_compare_funcs sampler_compare_funcs;
 };
 

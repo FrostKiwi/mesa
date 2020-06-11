@@ -365,7 +365,7 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
       return false;
 
    if (memcmp(expect->int_tex_states.states, have->int_tex_states.states,
-              expect->int_tex_states.n_states * sizeof(d3d12_wrap_sampler_state)))
+              expect->int_tex_states.n_states * sizeof(dxil_wrap_sampler_state)))
       return false;
 
    if (expect->sampler_compare_funcs.n_states != have->sampler_compare_funcs.n_states)
@@ -490,7 +490,7 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
    }
 
    if (key.int_tex_states.n_states)
-      NIR_PASS_V(new_nir_variant, d3d12_lower_sample_to_txf_for_integer_tex, &key.int_tex_states);
+      NIR_PASS_V(new_nir_variant, dxil_lower_sample_to_txf_for_integer_tex, &key.int_tex_states);
 
    if (key.fs.frag_result_color_lowering)
       NIR_PASS_V(new_nir_variant, d3d12_lower_frag_result,
