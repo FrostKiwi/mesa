@@ -603,6 +603,8 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    case SpvOpFConvert:
    case SpvOpConvertSToF:
    case SpvOpConvertUToF:
+   case SpvOpSatConvertSToU:
+   case SpvOpSatConvertUToS:
    case SpvOpSConvert: {
       nir_alu_type src_type;
       unsigned src_bit_size = glsl_get_bit_size(vtn_src[0]->type);
@@ -634,6 +636,16 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
          break;
       case SpvOpSConvert:
          src_type = dst_type = nir_type_int;
+         break;
+      case SpvOpSatConvertSToU:
+         src_type = nir_type_int;
+         dst_type = nir_type_uint;
+         saturate = true;
+         break;
+      case SpvOpSatConvertUToS:
+         src_type = nir_type_uint;
+         dst_type = nir_type_int;
+         saturate = true;
          break;
       case SpvOpConvertUToF:
          src_type = nir_type_uint;
