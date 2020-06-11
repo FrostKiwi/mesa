@@ -518,6 +518,11 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
 
       if (assigned) {
          IBC_PASS_V(ibc, ibc_schedule_instructions_post_ra);
+
+         struct ibc_eu_performance *perf = ibc_estimate_performance(ibc);
+         ibc->cycles = perf->latency;
+         ralloc_free(perf);
+
          bin[i].data = ibc_to_binary(ibc, &shader->info, compiler, log_data,
                                      mem_ctx, &bin[i].size);
          bin[i].num_ff_regs = nti.payload->num_ff_regs;
