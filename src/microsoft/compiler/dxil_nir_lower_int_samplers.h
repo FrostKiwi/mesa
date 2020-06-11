@@ -21,8 +21,8 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef D3D12_NIR_LOWER_INT_SAMPLERS_H
-#define D3D12_NIR_LOWER_INT_SAMPLERS_H
+#ifndef DXIL_NIR_LOWER_INT_SAMPLERS_H
+#define DXIL_NIR_LOWER_INT_SAMPLERS_H
 
 #include "pipe/p_state.h"
 #include "nir.h"
@@ -37,19 +37,19 @@ typedef struct {
    unsigned wrap_s:4;
    unsigned wrap_t:4;
    unsigned is_int_sampler:4;
-} d3d12_wrap_sampler_state;
+} dxil_wrap_sampler_state;
 
 typedef struct {
    unsigned n_states;
-   d3d12_wrap_sampler_state states[PIPE_MAX_SHADER_SAMPLER_VIEWS];
-} d3d12_wrap_sampler_states;
+   dxil_wrap_sampler_state states[PIPE_MAX_SHADER_SAMPLER_VIEWS];
+} dxil_wrap_sampler_states;
 
 bool
-d3d12_lower_sample_to_txf_for_integer_tex(nir_shader *s,
-                                          d3d12_wrap_sampler_states *state);
+dxil_lower_sample_to_txf_for_integer_tex(nir_shader *s,
+                                         dxil_wrap_sampler_states *state);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // D3D12_NIR_LOWER_INT_SAMPLERS_H
+#endif // DXIL_NIR_LOWER_INT_SAMPLERS_H

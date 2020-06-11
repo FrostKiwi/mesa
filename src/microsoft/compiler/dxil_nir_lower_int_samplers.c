@@ -21,7 +21,7 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "d3d12_nir_lower_int_samplers.h"
+#include "dxil_nir_lower_int_samplers.h"
 #include "nir_builder.h"
 #include "nir_builtin_builder.h"
 
@@ -195,7 +195,7 @@ wrap_coords(nir_builder *b, nir_ssa_def *coords, enum pipe_tex_wrap wrap)
 }
 
 static nir_ssa_def *
-load_bordercolor(nir_builder *b, nir_tex_instr *tex, d3d12_wrap_sampler_state *active_state)
+load_bordercolor(nir_builder *b, nir_tex_instr *tex, dxil_wrap_sampler_state *active_state)
 {
    nir_const_value const_value[4] = {{0}};
    int ndest_comp = nir_dest_num_components(tex->dest);
@@ -214,11 +214,8 @@ create_txf_from_tex(nir_builder *b, nir_tex_instr *tex)
    unsigned num_srcs = 0;
    for (unsigned i = 0; i < tex->num_srcs; i++) {
       if (tex->src[i].src_type == nir_tex_src_texture_deref ||
-          tex->src[i].src_type == nir_tex_src_sampler_deref ||
           tex->src[i].src_type == nir_tex_src_texture_offset ||
-          tex->src[i].src_type == nir_tex_src_sampler_offset ||
-          tex->src[i].src_type == nir_tex_src_texture_handle ||
-          tex->src[i].src_type == nir_tex_src_sampler_handle)
+          tex->src[i].src_type == nir_tex_src_texture_handle)
          num_srcs++;
    }
 
@@ -235,11 +232,8 @@ create_txf_from_tex(nir_builder *b, nir_tex_instr *tex)
    unsigned idx = 0;
    for (unsigned i = 0; i < tex->num_srcs; i++) {
       if (tex->src[i].src_type == nir_tex_src_texture_deref ||
-          tex->src[i].src_type == nir_tex_src_sampler_deref ||
           tex->src[i].src_type == nir_tex_src_texture_offset ||
-          tex->src[i].src_type == nir_tex_src_sampler_offset ||
-          tex->src[i].src_type == nir_tex_src_texture_handle ||
-          tex->src[i].src_type == nir_tex_src_sampler_handle) {
+          tex->src[i].src_type == nir_tex_src_texture_handle) {
          nir_src_copy(&txf->src[idx].src, &tex->src[i].src, txf);
          txf->src[idx].src_type = tex->src[i].src_type;
          idx++;
@@ -311,11 +305,11 @@ static nir_ssa_def *
 lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
                                          void *options)
 {
-   d3d12_wrap_sampler_states *states = (d3d12_wrap_sampler_states *)options;
+   dxil_wrap_sampler_states *states = (dxil_wrap_sampler_states *)options;
    wrap_lower_param_t params = {0};
 
    nir_tex_instr *tex = nir_instr_as_tex(instr);
-   d3d12_wrap_sampler_state *active_state = &states->states[tex->texture_index];
+   dxil_wrap_sampler_state *active_state = &states->states[tex->sampler_index];
 
    b->cursor = nir_before_instr(instr);
 
@@ -411,8 +405,8 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
  * applied on, and take care of the boundary conditions .
  */
 bool
-d3d12_lower_sample_to_txf_for_integer_tex(nir_shader *s,
-                                          d3d12_wrap_sampler_states *state)
+dxil_lower_sample_to_txf_for_integer_tex(nir_shader *s,
+                                         dxil_wrap_sampler_states *state)
 {
    if (!state)
       return false;

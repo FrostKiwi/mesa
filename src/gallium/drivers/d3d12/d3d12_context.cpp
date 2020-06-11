@@ -650,7 +650,7 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
    for (unsigned i = 0; i < num_samplers; ++i) {
       d3d12_sampler_state *sampler = (struct d3d12_sampler_state*) samplers[i];
       ctx->samplers[shader][start_slot + i] = sampler;
-      d3d12_wrap_sampler_state &wrap = ctx->tex_wrap_states[shader].states[start_slot + i];
+      dxil_wrap_sampler_state &wrap = ctx->tex_wrap_states[shader].states[start_slot + i];
       if (sampler) {
          shader_state_dirty |= wrap.wrap_r != sampler->wrap_r ||
                                wrap.wrap_s != sampler->wrap_s ||
@@ -663,7 +663,7 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
          memcpy(wrap.border_color, sampler->border_color, 4 * sizeof(float));
          scf.state[start_slot + i].compare_func = (enum compare_func)sampler->compare_func;
       } else {
-         memset(&wrap, 0, sizeof (d3d12_wrap_sampler_state));
+         memset(&wrap, 0, sizeof (dxil_wrap_sampler_state));
       }
    }
 
