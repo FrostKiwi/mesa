@@ -432,10 +432,12 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
 
    /* We require as outputs what the next stage reads,
     * except certain system values */
-   if (next && !next->passthrough) {
-      if (stage == PIPE_SHADER_VERTEX)
-         system_generated_in_values |= 1ull << VARYING_SLOT_POS;
-      key->required_varying_outputs = next->current->nir->info.inputs_read & ~system_generated_in_values;
+   if (next) {
+      if (!next->passthrough) {
+         if (stage == PIPE_SHADER_VERTEX)
+            system_generated_in_values |= 1ull << VARYING_SLOT_POS;
+         key->required_varying_outputs = next->current->nir->info.inputs_read & ~system_generated_in_values;
+      }
       key->next_varying_inputs = next->current->nir->info.inputs_read;
    }
 
@@ -499,7 +501,8 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
    if (key.gs.writes_psize) {
       NIR_PASS_V(new_nir_variant, d3d12_lower_point_sprite,
                  !key.gs.sprite_origin_upper_left,
-                 key.gs.sprite_coord_enable);
+                 key.gs.sprite_coord_enable,
+                 next ? next->current->nir->info.inputs_read : 0);
 
       nir_function_impl *impl = nir_shader_get_entrypoint(new_nir_variant);
       nir_shader_gather_info(new_nir_variant, impl);
@@ -535,8 +538,8 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
 
    mask = key.required_varying_outputs & ~new_nir_variant->info.outputs_written;
 
-   if (next && !next->passthrough) {
-      if (mask) {
+   if (next) {
+      if (mask && !next->passthrough) {
          nir_foreach_variable(var, &next->current->nir->inputs) {
             if (mask & (1ull << var->data.location)) {
                nir_variable *new_var = nir_variable_clone(var, new_nir_variant);
