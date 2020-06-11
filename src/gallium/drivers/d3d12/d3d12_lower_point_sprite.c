@@ -229,7 +229,8 @@ lower_instr(nir_intrinsic_instr *instr, nir_builder *b, struct lower_state *stat
 bool
 d3d12_lower_point_sprite(nir_shader *shader,
                          bool sprite_origin_lower_left,
-                         unsigned point_coord_enable)
+                         unsigned point_coord_enable,
+                         uint64_t next_inputs_read)
 {
    const gl_state_index16 tokens[5] = { STATE_INTERNAL,
                                         STATE_INTERNAL_DRIVER,
@@ -283,7 +284,7 @@ d3d12_lower_point_sprite(nir_shader *shader,
    }
    state.num_point_coords = count;
    if (point_coord_enable)
-      d3d12_reassign_driver_locations(&shader->outputs, 0);
+      d3d12_reassign_driver_locations(&shader->outputs, next_inputs_read);
 
    nir_foreach_function(function, shader) {
       if (function->impl) {
