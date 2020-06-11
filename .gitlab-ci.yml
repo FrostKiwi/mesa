@@ -1,5 +1,9 @@
 variables:
   FDO_UPSTREAM_REPO: kusma/mesa
+  CI_PRE_CLONE_SCRIPT: |-
+          set -o xtrace
+          /usr/bin/wget -q -O- ${CI_PROJECT_URL}/-/raw/${CI_COMMIT_SHA}/.gitlab-ci/download-git-cache.sh | sh -
+          set +o xtrace
 
 include:
   - project: 'freedesktop/ci-templates'
