@@ -1111,8 +1111,7 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
    } bin[3] = {
       { .enabled = !(INTEL_DEBUG & DEBUG_NO8), },
       { .enabled = !(INTEL_DEBUG & DEBUG_NO16), },
-//      { .enabled = (INTEL_DEBUG & DEBUG_DO32), },
-      { .enabled = true, },
+      { .enabled = !(INTEL_DEBUG & DEBUG_NO32), },
    };
 
    bool first_bin = true;
