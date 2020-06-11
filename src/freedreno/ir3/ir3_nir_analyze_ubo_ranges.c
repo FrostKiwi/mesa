@@ -336,7 +336,7 @@ lower_ubo_load_to_uniform(nir_intrinsic_instr *instr, nir_builder *b,
 	nir_intrinsic_set_base(uniform, const_offset);
 	nir_ssa_dest_init(&uniform->instr, &uniform->dest,
 					  uniform->num_components, instr->dest.ssa.bit_size,
-					  instr->dest.ssa.name);
+					  NULL);
 	nir_builder_instr_insert(b, &uniform->instr);
 	nir_ssa_def_rewrite_uses(&instr->dest.ssa,
 							 nir_src_for_ssa(&uniform->dest.ssa));

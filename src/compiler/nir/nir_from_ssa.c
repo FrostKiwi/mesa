@@ -107,10 +107,7 @@ merge_set_dump(merge_set *set, FILE *fp)
       for (int i = 0; i <= dom_idx; i++)
          fprintf(fp, "  ");
 
-      if (node->def->name)
-         fprintf(fp, "ssa_%d /* %s */\n", node->def->index, node->def->name);
-      else
-         fprintf(fp, "ssa_%d\n", node->def->index);
+      fprintf(fp, "ssa_%d\n", node->def->index);
 
       dom[++dom_idx] = node->def;
    }
@@ -341,7 +338,7 @@ isolate_phi_nodes_block(nir_block *block, void *dead_ctx)
                                                   nir_parallel_copy_entry);
          nir_ssa_dest_init(&pcopy->instr, &entry->dest,
                            phi->dest.ssa.num_components,
-                           phi->dest.ssa.bit_size, src->src.ssa->name);
+                           phi->dest.ssa.bit_size, NULL);
          exec_list_push_tail(&pcopy->entries, &entry->node);
 
          assert(src->src.is_ssa);
@@ -355,7 +352,7 @@ isolate_phi_nodes_block(nir_block *block, void *dead_ctx)
                                                nir_parallel_copy_entry);
       nir_ssa_dest_init(&block_pcopy->instr, &entry->dest,
                         phi->dest.ssa.num_components, phi->dest.ssa.bit_size,
-                        phi->dest.ssa.name);
+                        NULL);
       exec_list_push_tail(&block_pcopy->entries, &entry->node);
 
       nir_ssa_def_rewrite_uses(&phi->dest.ssa,
@@ -453,7 +450,6 @@ create_reg_for_ssa_def(nir_ssa_def *def, nir_function_impl *impl)
 {
    nir_register *reg = nir_local_reg_create(impl);
 
-   reg->name = def->name;
    reg->num_components = def->num_components;
    reg->bit_size = def->bit_size;
    reg->num_array_elems = 0;
@@ -707,7 +703,6 @@ resolve_parallel_copy(nir_parallel_copy_instr *pcopy,
        */
       assert(num_vals < num_copies * 2);
       nir_register *reg = nir_local_reg_create(state->builder.impl);
-      reg->name = "copy_temp";
       reg->num_array_elems = 0;
       if (values[b].is_ssa) {
          reg->num_components = values[b].ssa->num_components;

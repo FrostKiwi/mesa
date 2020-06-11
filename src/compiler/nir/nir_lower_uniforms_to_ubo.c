@@ -88,8 +88,7 @@ lower_instr(nir_intrinsic_instr *instr, nir_builder *b, int multiplier)
                                             instr->dest.ssa.bit_size / 8), 0);
       }
       nir_ssa_dest_init(&load->instr, &load->dest,
-                        load->num_components, instr->dest.ssa.bit_size,
-                        instr->dest.ssa.name);
+                        load->num_components, instr->dest.ssa.bit_size, NULL);
       nir_builder_instr_insert(b, &load->instr);
       nir_ssa_def_rewrite_uses(&instr->dest.ssa, nir_src_for_ssa(&load->dest.ssa));
 

@@ -711,8 +711,7 @@ rematerialize_deref_in_block(nir_deref_instr *deref,
 
    nir_ssa_dest_init(&new_deref->instr, &new_deref->dest,
                      deref->dest.ssa.num_components,
-                     deref->dest.ssa.bit_size,
-                     deref->dest.ssa.name);
+                     deref->dest.ssa.bit_size, NULL);
    nir_builder_instr_insert(b, &new_deref->instr);
 
    return new_deref;
