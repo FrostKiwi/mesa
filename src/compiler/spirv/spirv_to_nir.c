@@ -5017,6 +5017,8 @@ vtn_handle_body_instruction(struct vtn_builder *b, SpvOp opcode,
    case SpvOpConvertFToS:
    case SpvOpConvertSToF:
    case SpvOpConvertUToF:
+   case SpvOpSatConvertSToU:
+   case SpvOpSatConvertUToS:
    case SpvOpUConvert:
    case SpvOpSConvert:
    case SpvOpFConvert:
