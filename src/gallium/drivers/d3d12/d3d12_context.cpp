@@ -1310,10 +1310,13 @@ d3d12_disable_fake_so_buffers(struct d3d12_context *ctx)
                                              PIPE_TRANSFER_READ, &dst_transfer);
 
       /* Note: This will break once support for gl_SkipComponents is added */
-      uint16_t stride = ctx->gfx_pipeline_state.so_info.stride[i] * 6;
-      for (uint64_t offset = 0; offset < filled_size; offset += stride * 6)
-         memcpy(dst + offset + fake_target->cached_filled_size,
-                src + offset, stride);
+      uint32_t stride = ctx->gfx_pipeline_state.so_info.stride[i] * 4;
+      uint64_t src_offset = 0, dst_offset = fake_target->cached_filled_size;
+      while (src_offset < filled_size) {
+         memcpy(dst + dst_offset, src + dst_offset, stride);
+         src_offset += stride * 6;
+         dst_offset += stride;
+      }
 
       pipe_buffer_unmap(&ctx->base, src_transfer);
       pipe_buffer_unmap(&ctx->base, dst_transfer);
