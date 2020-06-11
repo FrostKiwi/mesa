@@ -600,6 +600,7 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    case SpvOpUConvert:
    case SpvOpConvertFToU:
    case SpvOpConvertFToS:
+   case SpvOpFConvert:
    case SpvOpConvertSToF:
    case SpvOpConvertUToF:
    case SpvOpSConvert: {
@@ -609,9 +610,6 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
       unsigned dst_bit_size = glsl_get_bit_size(type);
       nir_rounding_mode round = nir_rounding_mode_undef;
       vtn_foreach_decoration(b, val, handle_rounding_mode, &round);
-      vtn_fail_if(b->shader->info.stage != MESA_SHADER_KERNEL &&
-                  round != nir_rounding_mode_undef,
-                  "Rounding mode can only be applied to conversions in OpenCL");
 
       bool saturate = false;
       vtn_foreach_decoration(b, val, handle_saturation, &saturate);
@@ -626,6 +624,9 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
       case SpvOpConvertFToU:
          src_type = nir_type_float;
          dst_type = nir_type_uint;
+         break;
+      case SpvOpFConvert:
+         src_type = dst_type = nir_type_float;
          break;
       case SpvOpConvertSToF:
          src_type = nir_type_int;
@@ -645,21 +646,18 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
          unreachable("Invalid opcode");
       }
 
+      /* OpenCL allows all rounding modes; graphics shaders may only
+       * use rtne/rtz, and only to f16 */
+      vtn_fail_if(b->shader->info.stage != MESA_SHADER_KERNEL &&
+                  (round != nir_rounding_mode_undef &&
+                  ((round != nir_rounding_mode_rtne &&
+                    round != nir_rounding_mode_rtz) ||
+                   dst_type != nir_type_float || dst_bit_size != 16)),
+                  "Rounding mode can only be applied to conversions in OpenCL");
+
       src_type |= src_bit_size;
       dst_type |= dst_bit_size;
       nir_op op = nir_type_conversion_op(src_type, dst_type, round);
-      val->ssa->def = nir_build_alu(&b->nb, op, src[0], src[1], NULL, NULL);
-      break;
-   }
-
-   case SpvOpFConvert: {
-      nir_alu_type src_alu_type = nir_get_nir_type_for_glsl_type(vtn_src[0]->type);
-      nir_alu_type dst_alu_type = nir_get_nir_type_for_glsl_type(type);
-      nir_rounding_mode rounding_mode = nir_rounding_mode_undef;
-
-      vtn_foreach_decoration(b, val, handle_rounding_mode, &rounding_mode);
-      nir_op op = nir_type_conversion_op(src_alu_type, dst_alu_type, rounding_mode);
-
       val->ssa->def = nir_build_alu(&b->nb, op, src[0], src[1], NULL, NULL);
       break;
    }
