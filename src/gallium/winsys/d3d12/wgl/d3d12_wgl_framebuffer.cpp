@@ -101,7 +101,7 @@ d3d12_wgl_framebuffer_resize(stw_winsys_framebuffer *fb,
       swapchain1.As(&framebuffer->swapchain);
    }
    else {
-      struct pipe_fence_handle *fence;
+      struct pipe_fence_handle *fence = NULL;
 
       /* Ensure all resources are flushed */
       ctx->flush(ctx, &fence, PIPE_FLUSH_HINT_FINISH);
