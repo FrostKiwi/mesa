@@ -4010,17 +4010,22 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
    bool retval = true;
    debug_dxil = (int)debug_get_option_debug_dxil();
 
-   struct ntd_context ctx = { 0 };
-   ctx.opts = opts;
-
-   ctx.ralloc_ctx = ralloc_context(NULL);
-   if (!ctx.ralloc_ctx)
+   struct ntd_context *ctx = calloc(1, sizeof(*ctx));
+   if (!ctx)
       return false;
 
-   dxil_module_init(&ctx.mod, ctx.ralloc_ctx);
-   ctx.mod.shader_kind = get_dxil_shader_kind(s);
-   ctx.mod.major_version = 6;
-   ctx.mod.minor_version = 1;
+   ctx->opts = opts;
+
+   ctx->ralloc_ctx = ralloc_context(NULL);
+   if (!ctx->ralloc_ctx) {
+      retval = false;
+      goto out;
+   }
+
+   dxil_module_init(&ctx->mod, ctx->ralloc_ctx);
+   ctx->mod.shader_kind = get_dxil_shader_kind(s);
+   ctx->mod.major_version = 6;
+   ctx->mod.minor_version = 1;
 
    NIR_PASS_V(s, nir_lower_pack);
    NIR_PASS_V(s, nir_lower_frexp);
@@ -4030,13 +4035,13 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
 
    NIR_PASS_V(s, nir_remove_dead_variables, nir_var_function_temp);
 
-   if (!allocate_sysvalues(&ctx, s))
+   if (!allocate_sysvalues(ctx, s))
       return false;
 
    if (debug_dxil & DXIL_DEBUG_VERBOSE)
       nir_print_shader(s, stderr);
 
-   if (!emit_module(&ctx, s)) {
+   if (!emit_module(ctx, s)) {
       debug_printf("D3D12: dxil_container_add_module failed\n");
       retval = false;
       goto out;
@@ -4044,7 +4049,7 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
 
    if (debug_dxil & DXIL_DEBUG_DUMP_MODULE) {
       struct dxil_dumper *dumper = dxil_dump_create();
-      dxil_dump_module(dumper, &ctx.mod);
+      dxil_dump_module(dumper, &ctx->mod);
       fprintf(stderr, "\n");
       dxil_dump_buf_to_file(dumper, stderr);
       fprintf(stderr, "\n\n");
@@ -4053,7 +4058,7 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
 
    struct dxil_container container;
    dxil_container_init(&container);
-   if (!dxil_container_add_features(&container, &ctx.mod.feats)) {
+   if (!dxil_container_add_features(&container, &ctx->mod.feats)) {
       debug_printf("D3D12: dxil_container_add_features failed\n");
       retval = false;
       goto out;
@@ -4061,8 +4066,8 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
 
    if (!dxil_container_add_io_signature(&container,
                                         DXIL_ISG1,
-                                        ctx.mod.num_sig_inputs,
-                                        ctx.mod.inputs)) {
+                                        ctx->mod.num_sig_inputs,
+                                        ctx->mod.inputs)) {
       debug_printf("D3D12: failed to write input signature\n");
       retval = false;
       goto out;
@@ -4070,8 +4075,8 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
 
    if (!dxil_container_add_io_signature(&container,
                                         DXIL_OSG1,
-                                        ctx.mod.num_sig_outputs,
-                                        ctx.mod.outputs)) {
+                                        ctx->mod.num_sig_outputs,
+                                        ctx->mod.outputs)) {
       debug_printf("D3D12: failed to write output signature\n");
       retval = false;
       goto out;
@@ -4079,16 +4084,16 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
 
    struct dxil_validation_state validation_state;
    memset(&validation_state, 0, sizeof(validation_state));
-   dxil_fill_validation_state(&ctx, s, &validation_state);
+   dxil_fill_validation_state(ctx, s, &validation_state);
 
-   if (!dxil_container_add_state_validation(&container,&ctx.mod,
+   if (!dxil_container_add_state_validation(&container,&ctx->mod,
                                             &validation_state)) {
       debug_printf("D3D12: failed to write state-validation\n");
       retval = false;
       goto out;
    }
 
-   if (!dxil_container_add_module(&container, &ctx.mod)) {
+   if (!dxil_container_add_module(&container, &ctx->mod)) {
       debug_printf("D3D12: failed to write module\n");
       retval = false;
       goto out;
@@ -4106,7 +4111,7 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
       static int shader_id = 0;
       char buffer[64];
       snprintf(buffer, sizeof(buffer), "shader_%s_%d.blob",
-               get_shader_kind_str(ctx.mod.shader_kind), shader_id++);
+               get_shader_kind_str(ctx->mod.shader_kind), shader_id++);
       debug_printf("Try to write blob to %s\n", buffer);
       FILE *f = fopen(buffer, "wb");
       if (f) {
@@ -4116,8 +4121,9 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
    }
 
 out:
-   dxil_module_release(&ctx.mod);
-   ralloc_free(ctx.ralloc_ctx);
+   dxil_module_release(&ctx->mod);
+   ralloc_free(ctx->ralloc_ctx);
+   free(ctx);
    return retval;
 }
 
