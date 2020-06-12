@@ -325,7 +325,8 @@ notify_before_flush_cb(void* _args)
                     args->stwfb->back_texture);
    }
 
-   pipe->flush_resource(pipe, args->stwfb->textures[ST_ATTACHMENT_BACK_LEFT]);
+   if (!args->stwfb->textures[ST_ATTACHMENT_BACK_LEFT])
+      pipe->flush_resource(pipe, args->stwfb->textures[ST_ATTACHMENT_BACK_LEFT]);
 }
 
 void
