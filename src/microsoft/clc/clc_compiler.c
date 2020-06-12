@@ -217,163 +217,168 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
 
    context->num_buf_ids = 0;
 
-   nir_foreach_use_safe(src, &context->deref->dest.ssa) {
-      enum image_uniform_type type;
+   for (int pass = 0; pass < 2; ++pass) {
+      nir_foreach_use_safe(src, &context->deref->dest.ssa) {
+         enum image_uniform_type type;
 
-      if (src->parent_instr->type == nir_instr_type_intrinsic) {
-         nir_intrinsic_instr *intrinsic = nir_instr_as_intrinsic(src->parent_instr);
-         enum nir_alu_type dest_type;
+         if (src->parent_instr->type == nir_instr_type_intrinsic) {
+            nir_intrinsic_instr *intrinsic = nir_instr_as_intrinsic(src->parent_instr);
+            enum nir_alu_type dest_type;
 
-         switch (intrinsic->intrinsic) {
-         case nir_intrinsic_image_deref_load:
-         case nir_intrinsic_image_deref_store: {
-            enum pipe_format intr_format = nir_intrinsic_format(intrinsic);
+            switch (intrinsic->intrinsic) {
+            case nir_intrinsic_image_deref_load:
+            case nir_intrinsic_image_deref_store: {
+               enum pipe_format intr_format = nir_intrinsic_format(intrinsic);
 
-            switch (intr_format) {
-            case PIPE_FORMAT_R32G32B32A32_FLOAT: type = FLOAT4; dest_type = nir_type_float; break;
-            case PIPE_FORMAT_R32G32B32A32_SINT: type = INT4; dest_type = nir_type_int; break;
-            case PIPE_FORMAT_R32G32B32A32_UINT: type = UINT4; dest_type = nir_type_uint; break;
-            default: unreachable("Unsupported image format for load.");
+               switch (intr_format) {
+               case PIPE_FORMAT_R32G32B32A32_FLOAT: type = FLOAT4; dest_type = nir_type_float; break;
+               case PIPE_FORMAT_R32G32B32A32_SINT: type = INT4; dest_type = nir_type_int; break;
+               case PIPE_FORMAT_R32G32B32A32_UINT: type = UINT4; dest_type = nir_type_uint; break;
+               default: unreachable("Unsupported image format for load.");
+               }
+
+               nir_ssa_def *image_deref = uniform_deref_dests[type];
+               if (!image_deref) {
+                  const struct glsl_type *new_var_type;
+                  if (in_var->data.access & ACCESS_NON_WRITEABLE) {
+                     image_deref = lower_read_only_image_deref(b, context, intr_format);
+                  } else {
+                     image_deref = lower_read_write_image_deref(b, context, intr_format);
+                  }
+
+                  uniform_deref_dests[type] = image_deref;
+               }
+
+               if (in_var->data.access & ACCESS_NON_WRITEABLE) {
+                  // Read of a read-only resource, convert to sampler fetch
+                  assert(intrinsic->intrinsic == nir_intrinsic_image_deref_load);
+                  b->cursor = nir_before_instr(&intrinsic->instr);
+                  nir_tex_instr *tex = nir_tex_instr_create(b->shader, 2); // No LOD/MSAA
+
+                  tex->op = nir_texop_txf;
+                  tex->is_array = glsl_sampler_type_is_array(in_var->type);
+                  tex->sampler_dim = glsl_get_sampler_dim(in_var->type);
+                  tex->src[0].src = nir_src_for_ssa(image_deref);
+                  tex->src[0].src_type = nir_tex_src_texture_deref;
+                  tex->src[1].src = nir_src_for_ssa(intrinsic->src[1].ssa);
+                  tex->src[1].src_type = nir_tex_src_coord;
+                  tex->coord_components = tex->src[1].src.ssa->num_components;
+                  tex->dest_type = dest_type;
+                  nir_ssa_dest_init(&tex->instr, &tex->dest, 4, 32, NULL);
+
+                  nir_builder_instr_insert(b, &tex->instr);
+                  nir_ssa_def_rewrite_uses(&intrinsic->dest.ssa, nir_src_for_ssa(&tex->dest.ssa));
+                  nir_instr_remove(&intrinsic->instr);
+               } else {
+                  // Op on a writable image, leave as image intrinsic
+                  nir_src uniform_src = nir_src_for_ssa(image_deref);
+                  nir_instr_rewrite_src(&intrinsic->instr, src, uniform_src);
+               }
+               break;
+            }
+
+            case nir_intrinsic_image_deref_size:
+            case nir_intrinsic_image_deref_size_lod: {
+               nir_ssa_def *image_deref = NULL;
+               for (unsigned i = 0; i < IMAGE_UNIFORM_TYPE_COUNT; ++i) {
+                  if (uniform_deref_dests[i]) {
+                     image_deref = uniform_deref_dests[i];
+                     break;
+                  }
+               }
+               if (!image_deref) {
+                  // Skip for now and come back to it
+                  if (pass == 0)
+                     break;
+
+                  type = FLOAT4;
+                  const struct glsl_type *new_var_type;
+                  if (in_var->data.access & ACCESS_NON_WRITEABLE) {
+                     image_deref = lower_read_only_image_deref(b, context, PIPE_FORMAT_R32G32B32A32_FLOAT);
+                  } else {
+                     image_deref = lower_read_write_image_deref(b, context, PIPE_FORMAT_R32G32B32A32_FLOAT);
+                  }
+
+                  uniform_deref_dests[type] = image_deref;
+               }
+
+               if (in_var->data.access & ACCESS_NON_WRITEABLE) {
+                  // Size query on non-readable resource, convert to txs
+                  b->cursor = nir_before_instr(&intrinsic->instr);
+                  unsigned num_src = 1;
+                  if (intrinsic->intrinsic == nir_intrinsic_image_deref_size_lod)
+                     num_src = 2;
+                  nir_tex_instr *tex = nir_tex_instr_create(b->shader, num_src);
+
+                  tex->op = nir_texop_txs;
+                  tex->is_array = glsl_sampler_type_is_array(in_var->type);
+                  tex->sampler_dim = glsl_get_sampler_dim(in_var->type);
+                  tex->src[0].src = nir_src_for_ssa(image_deref);
+                  tex->src[0].src_type = nir_tex_src_texture_deref;
+                  if (intrinsic->intrinsic == nir_intrinsic_image_deref_size_lod) {
+                     tex->src[1].src = nir_src_for_ssa(intrinsic->src[1].ssa);
+                     tex->src[1].src_type = nir_tex_src_lod;
+                  }
+                  tex->dest_type = nir_type_uint;
+                  nir_ssa_dest_init(&tex->instr, &tex->dest, nir_tex_instr_dest_size(tex), 32, NULL);
+
+                  nir_builder_instr_insert(b, &tex->instr);
+                  nir_ssa_def_rewrite_uses(&intrinsic->dest.ssa, nir_src_for_ssa(&tex->dest.ssa));
+                  nir_instr_remove(&intrinsic->instr);
+               } else {
+                  // Op on a writable image, leave as image intrinsic
+                  nir_src uniform_src = nir_src_for_ssa(image_deref);
+                  nir_instr_rewrite_src(&intrinsic->instr, src, uniform_src);
+               }
+               break;
+            }
+
+            case nir_intrinsic_image_deref_format:
+            case nir_intrinsic_image_deref_order: {
+               nir_ssa_def **cached_deref = intrinsic->intrinsic == nir_intrinsic_image_deref_format ?
+                  &format_deref_dest : &order_deref_dest;
+               if (!*cached_deref) {
+                  nir_variable *new_input = nir_variable_create(b->shader, nir_var_shader_in, glsl_uint_type(), NULL);
+                  new_input->data.driver_location = in_var->data.driver_location;
+                  if (intrinsic->intrinsic == nir_intrinsic_image_deref_format) {
+                     /* Match cl_image_format { image_channel_order, image_channel_data_type }; */
+                     new_input->data.driver_location += glsl_get_cl_size(new_input->type);
+                  }
+
+                  b->cursor = nir_after_instr(&context->deref->instr);
+                  *cached_deref = nir_load_var(b, new_input);
+               }
+
+               /* No actual intrinsic needed here, just reference the loaded variable */
+               nir_ssa_def_rewrite_uses(&intrinsic->dest.ssa, nir_src_for_ssa(*cached_deref));
+               nir_instr_remove(&intrinsic->instr);
+               break;
+            }
+
+            default:
+               unreachable("Unsupported image intrinsic");
+            }
+         } else if (src->parent_instr->type == nir_instr_type_tex) {
+            assert(in_var->data.access & ACCESS_NON_WRITEABLE);
+            nir_tex_instr *tex = nir_instr_as_tex(src->parent_instr);
+
+            switch (tex->dest_type) {
+            case nir_type_float: type = FLOAT4; break;
+            case nir_type_int: type = INT4; break;
+            case nir_type_uint: type = UINT4; break;
+            default: unreachable("Unsupported image format for sample.");
             }
 
             nir_ssa_def *image_deref = uniform_deref_dests[type];
             if (!image_deref) {
-               const struct glsl_type *new_var_type;
-               if (in_var->data.access & ACCESS_NON_WRITEABLE) {
-                  image_deref = lower_read_only_image_deref(b, context, intr_format);
-               } else {
-                  image_deref = lower_read_write_image_deref(b, context, intr_format);
-               }
-
-               uniform_deref_dests[type] = image_deref;
+               enum pipe_format image_format = pipe_format_for_nir_format(tex->dest_type);
+               image_deref = uniform_deref_dests[type] =
+                  lower_read_only_image_deref(b, context, image_format);
             }
 
-            if (in_var->data.access & ACCESS_NON_WRITEABLE) {
-               // Read of a read-only resource, convert to sampler fetch
-               assert(intrinsic->intrinsic == nir_intrinsic_image_deref_load);
-               b->cursor = nir_before_instr(&intrinsic->instr);
-               nir_tex_instr *tex = nir_tex_instr_create(b->shader, 2); // No LOD/MSAA
-
-               tex->op = nir_texop_txf;
-               tex->is_array = glsl_sampler_type_is_array(in_var->type);
-               tex->sampler_dim = glsl_get_sampler_dim(in_var->type);
-               tex->src[0].src = nir_src_for_ssa(image_deref);
-               tex->src[0].src_type = nir_tex_src_texture_deref;
-               tex->src[1].src = nir_src_for_ssa(intrinsic->src[1].ssa);
-               tex->src[1].src_type = nir_tex_src_coord;
-               tex->coord_components = tex->src[1].src.ssa->num_components;
-               tex->dest_type = dest_type;
-               nir_ssa_dest_init(&tex->instr, &tex->dest, 4, 32, NULL);
-
-               nir_builder_instr_insert(b, &tex->instr);
-               nir_ssa_def_rewrite_uses(&intrinsic->dest.ssa, nir_src_for_ssa(&tex->dest.ssa));
-               nir_instr_remove(&intrinsic->instr);
-            } else {
-               // Op on a writable image, leave as image intrinsic
-               nir_src uniform_src = nir_src_for_ssa(image_deref);
-               nir_instr_rewrite_src(&intrinsic->instr, src, uniform_src);
-            }
-            break;
+            nir_src uniform_src = nir_src_for_ssa(image_deref);
+            nir_instr_rewrite_src(&tex->instr, src, uniform_src);
          }
-
-         case nir_intrinsic_image_deref_size:
-         case nir_intrinsic_image_deref_size_lod: {
-            nir_ssa_def *image_deref = NULL;
-            for (unsigned i = 0; i < IMAGE_UNIFORM_TYPE_COUNT; ++i) {
-               if (uniform_deref_dests[i]) {
-                  image_deref = uniform_deref_dests[i];
-                  break;
-               }
-            }
-            if (!image_deref) {
-               // Pick one. Maybe consider moving to a second pass so we can make sure we're picking one that exists...
-               type = FLOAT4;
-               const struct glsl_type *new_var_type;
-               if (in_var->data.access & ACCESS_NON_WRITEABLE) {
-                  image_deref = lower_read_only_image_deref(b, context, PIPE_FORMAT_R32G32B32A32_FLOAT);
-               } else {
-                  image_deref = lower_read_write_image_deref(b, context, PIPE_FORMAT_R32G32B32A32_FLOAT);
-               }
-
-               uniform_deref_dests[type] = image_deref;
-            }
-
-            if (in_var->data.access & ACCESS_NON_WRITEABLE) {
-               // Size query on non-readable resource, convert to txs
-               b->cursor = nir_before_instr(&intrinsic->instr);
-               unsigned num_src = 1;
-               if (intrinsic->intrinsic == nir_intrinsic_image_deref_size_lod)
-                  num_src = 2;
-               nir_tex_instr *tex = nir_tex_instr_create(b->shader, num_src);
-
-               tex->op = nir_texop_txs;
-               tex->is_array = glsl_sampler_type_is_array(in_var->type);
-               tex->sampler_dim = glsl_get_sampler_dim(in_var->type);
-               tex->src[0].src = nir_src_for_ssa(image_deref);
-               tex->src[0].src_type = nir_tex_src_texture_deref;
-               if (intrinsic->intrinsic == nir_intrinsic_image_deref_size_lod) {
-                  tex->src[1].src = nir_src_for_ssa(intrinsic->src[1].ssa);
-                  tex->src[1].src_type = nir_tex_src_lod;
-               }
-               tex->dest_type = nir_type_uint;
-               nir_ssa_dest_init(&tex->instr, &tex->dest, nir_tex_instr_dest_size(tex), 32, NULL);
-
-               nir_builder_instr_insert(b, &tex->instr);
-               nir_ssa_def_rewrite_uses(&intrinsic->dest.ssa, nir_src_for_ssa(&tex->dest.ssa));
-               nir_instr_remove(&intrinsic->instr);
-            } else {
-               // Op on a writable image, leave as image intrinsic
-               nir_src uniform_src = nir_src_for_ssa(image_deref);
-               nir_instr_rewrite_src(&intrinsic->instr, src, uniform_src);
-            }
-            break;
-         }
-
-         case nir_intrinsic_image_deref_format:
-         case nir_intrinsic_image_deref_order: {
-            nir_ssa_def **cached_deref = intrinsic->intrinsic == nir_intrinsic_image_deref_format ?
-               &format_deref_dest : &order_deref_dest;
-            if (!*cached_deref) {
-               nir_variable *new_input = nir_variable_create(b->shader, nir_var_shader_in, glsl_uint_type(), NULL);
-               new_input->data.driver_location = in_var->data.driver_location;
-               if (intrinsic->intrinsic == nir_intrinsic_image_deref_format) {
-                  /* Match cl_image_format { image_channel_order, image_channel_data_type }; */
-                  new_input->data.driver_location += glsl_get_cl_size(new_input->type);
-               }
-
-               b->cursor = nir_after_instr(&context->deref->instr);
-               *cached_deref = nir_load_var(b, new_input);
-            }
-
-            /* No actual intrinsic needed here, just reference the loaded variable */
-            nir_ssa_def_rewrite_uses(&intrinsic->dest.ssa, nir_src_for_ssa(*cached_deref));
-            nir_instr_remove(&intrinsic->instr);
-            break;
-         }
-
-         default:
-            unreachable("Unsupported image intrinsic");
-         }
-      } else if (src->parent_instr->type == nir_instr_type_tex) {
-         assert(in_var->data.access & ACCESS_NON_WRITEABLE);
-         nir_tex_instr *tex = nir_instr_as_tex(src->parent_instr);
-
-         switch (tex->dest_type) {
-         case nir_type_float: type = FLOAT4; break;
-         case nir_type_int: type = INT4; break;
-         case nir_type_uint: type = UINT4; break;
-         default: unreachable("Unsupported image format for sample.");
-         }
-
-         nir_ssa_def *image_deref = uniform_deref_dests[type];
-         if (!image_deref) {
-            enum pipe_format image_format = pipe_format_for_nir_format(tex->dest_type);
-            image_deref = uniform_deref_dests[type] =
-               lower_read_only_image_deref(b, context, image_format);
-         }
-
-         nir_src uniform_src = nir_src_for_ssa(image_deref);
-         nir_instr_rewrite_src(&tex->instr, src, uniform_src);
       }
    }
 
