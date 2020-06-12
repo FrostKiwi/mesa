@@ -551,11 +551,11 @@ clc_lower_nonnormalized_samplers(nir_shader *nir,
 
 
 struct clc_context *
-clc_context_new(void)
+clc_context_new(const struct clc_logger *logger)
 {
    struct clc_context *ctx = calloc(1, sizeof(*ctx));
    if (!ctx) {
-      fprintf(stderr, "D3D12: failed to allocate a clc_context");
+      clc_error(logger, "D3D12: failed to allocate a clc_context");
       return NULL;
    }
 
@@ -588,7 +588,7 @@ clc_context_new(void)
                    NULL, 0, MESA_SHADER_KERNEL, "libclc_spirv",
                    &libclc_spirv_options, libclc_nir_options, false);
    if (!ctx->libclc_nir) {
-      fprintf(stderr, "D3D12: spirv_to_nir failed on libclc blob\n");
+      clc_error(logger, "D3D12: spirv_to_nir failed on libclc blob");
       goto err_free_ctx;
    }
    NIR_PASS_V(ctx->libclc_nir, nir_lower_goto_ifs);
@@ -616,20 +616,16 @@ clc_compile(struct clc_context *ctx,
             const struct clc_logger *logger)
 {
    struct clc_object *obj;
-   char *err_log;
    int ret;
 
    obj = calloc(1, sizeof(*obj));
    if (!obj) {
-      fprintf(stderr, "D3D12: failed to allocate a clc_object");
+      clc_error(logger, "D3D12: failed to allocate a clc_object");
       return NULL;
    }
 
-   /* TODO: callbacks ... */
-   ret = clc_to_spirv(args, &obj->spvbin, &err_log);
+   ret = clc_to_spirv(args, &obj->spvbin, logger);
    if (ret < 0) {
-      fprintf(stderr, "D3D12: clc_to_spirv failed: %s\n", err_log);
-      free(err_log);
       free(obj);
       return NULL;
    }
@@ -646,19 +642,16 @@ clc_link(struct clc_context *ctx,
          const struct clc_logger *logger)
 {
    struct clc_object *out_obj;
-   char *err_log;
    int ret;
 
    out_obj = malloc(sizeof(*out_obj));
    if (!out_obj) {
-      fprintf(stderr, "D3D12: failed to allocate a clc_object");
+      clc_error(logger, "failed to allocate a clc_object");
       return NULL;
    }
 
-   ret = clc_link_spirv_binaries(args, &out_obj->spvbin, &err_log);
+   ret = clc_link_spirv_binaries(args, &out_obj->spvbin, logger);
    if (ret < 0) {
-      fprintf(stderr, "D3D12: clc_link_spirv_binaries failed: %s\n", err_log);
-      free(err_log);
       free(out_obj);
       return NULL;
    }
@@ -1100,7 +1093,7 @@ clc_to_dxil(struct clc_context *ctx,
 
    dxil = calloc(1, sizeof(*dxil));
    if (!dxil) {
-      fprintf(stderr, "D3D12: failed to allocate the dxil object\n");
+      clc_error(logger, "failed to allocate the dxil object");
       return NULL;
    }
 
@@ -1112,7 +1105,7 @@ clc_to_dxil(struct clc_context *ctx,
    }
 
    if (!dxil->kernel) {
-      fprintf(stderr, "D3D12: no '%s' kernel found\n", entrypoint);
+      clc_error(logger, "no '%s' kernel found", entrypoint);
       goto err_free_dxil;
    }
 
@@ -1151,7 +1144,7 @@ clc_to_dxil(struct clc_context *ctx,
                       &nir_options,
                       false);
    if (!nir) {
-      fprintf(stderr, "D3D12: spirv_to_nir failed\n");
+      clc_error(logger, "spirv_to_nir() failed");
       goto err_free_dxil;
    }
    nir->info.cs.local_size_variable = true;
@@ -1165,7 +1158,7 @@ clc_to_dxil(struct clc_context *ctx,
    metadata->args = calloc(dxil->kernel->num_args,
                            sizeof(*metadata->args));
    if (!metadata->args) {
-      debug_printf("D3D12: failed to allocate arg positions\n");
+      clc_error(logger, "failed to allocate arg positions");
       goto err_free_dxil;
    }
 

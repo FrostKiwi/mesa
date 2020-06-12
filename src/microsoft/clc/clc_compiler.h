@@ -179,7 +179,7 @@ struct clc_context {
    void *libclc_nir;
 };
 
-struct clc_context *clc_context_new(void);
+struct clc_context *clc_context_new(const struct clc_logger *logger);
 
 void clc_free_context(struct clc_context *ctx);
 

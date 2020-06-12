@@ -624,7 +624,7 @@ ComputeTest::SetUp()
    static struct clc_context *compiler_ctx_g = nullptr;
 
    if (!compiler_ctx_g) {
-      compiler_ctx_g = clc_context_new();
+      compiler_ctx_g = clc_context_new(&logger);
       if (!compiler_ctx_g)
          throw runtime_error("failed to create CLC compiler context");
    }
