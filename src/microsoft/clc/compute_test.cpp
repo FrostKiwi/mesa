@@ -51,6 +51,22 @@ static const struct debug_named_value debug_options[] = {
 
 DEBUG_GET_ONCE_FLAGS_OPTION(debug_compute, "COMPUTE_TEST_DEBUG", debug_options, 0)
 
+static void warning_callback(void *priv, const char *msg)
+{
+   fprintf(stderr, "WARNING: %s\n", msg);
+}
+
+static void error_callback(void *priv, const char *msg)
+{
+   fprintf(stderr, "ERROR: %s\n", msg);
+}
+
+static const struct clc_logger logger = {
+   NULL,
+   error_callback,
+   warning_callback,
+};
+
 void
 ComputeTest::enable_d3d12_debug_layer()
 {
@@ -685,16 +701,6 @@ ComputeTest::TearDown()
 
 PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE ComputeTest::D3D12SerializeVersionedRootSignature;
 
-void warning_callback(const char *src, int line, const char *str)
-{
-   fprintf(stderr, "%s(%d): WARNING: %s\n", src, line, str);
-}
-
-void error_callback(const char *src, int line, const char *str)
-{
-   fprintf(stderr, "%s(%d): ERROR: %s\n", src, line, str);
-}
-
 bool
 validate_module(const struct clc_dxil_object &dxil)
 {
@@ -769,9 +775,6 @@ ComputeTest::compile(const std::vector<const char *> &sources,
                      const std::vector<const char *> &compile_args,
                      bool create_library)
 {
-   struct clc_logger logger = {
-      error_callback, warning_callback,
-   };
    struct clc_compile_args args = { 0 };
    args.args = compile_args.data();
    args.num_args = (unsigned)compile_args.size();
@@ -804,9 +807,6 @@ ComputeTest::Shader
 ComputeTest::link(const std::vector<Shader> &sources,
                   bool create_library)
 {
-   struct clc_logger logger = {
-      error_callback, warning_callback,
-   };
    std::vector<const clc_object*> objs;
    for (auto& source : sources)
       objs.push_back(&*source.obj);
@@ -833,9 +833,6 @@ void
 ComputeTest::configure(Shader &shader,
                        const struct clc_runtime_kernel_conf *conf)
 {
-   struct clc_logger logger = {
-      error_callback, warning_callback,
-   };
    struct clc_dxil_object *dxil;
 
    dxil = clc_to_dxil(compiler_ctx, shader.obj.get(), "main_test", conf, &logger);
