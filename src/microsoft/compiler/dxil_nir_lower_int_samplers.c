@@ -95,7 +95,6 @@ dx_get_texture_lod(nir_builder *b, nir_tex_instr *tex)
 typedef struct {
    nir_ssa_def *coords;
    nir_ssa_def *use_border_color;
-   nir_ssa_def *size_correction;
 } wrap_result_t;
 
 typedef struct {
@@ -106,89 +105,90 @@ typedef struct {
 } wrap_lower_param_t;
 
 static void
-wrap_clamp_to_edge(nir_builder *b, wrap_result_t *wrap_params)
+wrap_clamp_to_edge(nir_builder *b, wrap_result_t *wrap_params, nir_ssa_def *size)
 {
-   /* clamp coordinate */
-   wrap_params->coords = nir_fsat(b, wrap_params->coords);
-
-   /* Correct the final lookup coordinate to be inside the texture */
-   wrap_params->size_correction = nir_imm_float(b, -.1);
+   /* clamp(coord, 0, size - 1) */
+   wrap_params->coords = nir_fmin(b, nir_fsub(b, size, nir_imm_float(b, 1.0f)),
+                                  nir_fmax(b, wrap_params->coords, nir_imm_float(b, 0.0f)));
 }
 
 static void
-wrap_repeat(nir_builder *b, wrap_result_t *wrap_params)
+wrap_repeat(nir_builder *b, wrap_result_t *wrap_params, nir_ssa_def *size)
 {
-   /* For repeate we just strip the integer part of the coordinate */
-   wrap_params->coords = nir_ffract(b, wrap_params->coords);
+   /* mod(coord, size) */
+   wrap_params->coords = nir_fmod(b, wrap_params->coords, size);
+}
+
+static nir_ssa_def *
+mirror(nir_builder *b, nir_ssa_def *coord)
+{
+   /* coord if >= 0, otherwise -(1 + coord) */
+   return nir_bcsel(b, nir_fge(b, coord, nir_imm_float(b, 0.0f)), coord,
+                    nir_fneg(b, nir_fadd(b, nir_imm_float(b, 1.0f), coord)));
 }
 
 static void
-wrap_mirror_repeat(nir_builder *b, wrap_result_t *wrap_params)
+wrap_mirror_repeat(nir_builder *b, wrap_result_t *wrap_params, nir_ssa_def *size)
 {
-   // 1 - |2 * frac( 0.5 * |c|) - 1|
-   nir_ssa_def *a = nir_fmul_imm(b, nir_fabs(b, wrap_params->coords), 0.5);
-   a = nir_fadd_imm(b, nir_fmul_imm(b, nir_ffract(b, a), 2.0), -1.0);
-   wrap_params->coords = nir_fadd_imm(b, nir_fneg(b, nir_fabs(b, a)), 1.0);
+   /* (size − 1) − mirror(mod(coord, 2 * size) − size) */
+   nir_ssa_def *a = nir_fsub(b, nir_fmod(b, wrap_params->coords, nir_fmul(b, nir_imm_float(b, 2.0f), size)), size);
+   wrap_params->coords = nir_fsub(b, nir_fsub(b, size, nir_imm_float(b, 1.0f)), mirror(b, a));
 }
 
 static void
-wrap_mirror_clamp_to_edge(nir_builder *b, wrap_result_t *wrap_params)
+wrap_mirror_clamp_to_edge(nir_builder *b, wrap_result_t *wrap_params, nir_ssa_def *size)
 {
-   /* This needs a test */
-   nir_ssa_def *a = nir_fsat(b, nir_fmul_imm(b, nir_fabs(b, wrap_params->coords), 0.5));
-   a = nir_fadd_imm(b, nir_fmul_imm(b, a, 2.0), -1.0);
-   wrap_params->coords = nir_fadd_imm(b, nir_fneg(b, nir_fabs(b, a)), 1.0);
-
-   /* Correct the final lookup coordinate to be inside the texture */
-   wrap_params->size_correction = nir_imm_float(b, -.1);
+   /* clamp(mirror(coord), 0, size - 1) */
+   wrap_params->coords = nir_fmin(b, nir_fsub(b, size, nir_imm_float(b, 1.0f)),
+                                  nir_fmax(b, mirror(b, wrap_params->coords), nir_imm_float(b, 0.0f)));
 }
 
 static void
-wrap_clamp(nir_builder *b, wrap_result_t *wrap_params)
+wrap_clamp(nir_builder *b, wrap_result_t *wrap_params, nir_ssa_def *size)
 {
-   /* For clamping we have to check whether the coordinate is in [0,1) */
-   nir_ssa_def *is_low = nir_flt(b, wrap_params->coords, nir_imm_float(b, 0.0 ));
-   nir_ssa_def *is_high = nir_fge(b, wrap_params->coords, nir_imm_float(b, 1.0 ));
+   nir_ssa_def *is_low = nir_flt(b, wrap_params->coords, nir_imm_float(b, 0.0));
+   nir_ssa_def *is_high = nir_fge(b, wrap_params->coords, size);
    wrap_params->use_border_color = nir_ior(b, is_low, is_high);
 }
 
 static void
-wrap_mirror_clamp(nir_builder *b, wrap_result_t *wrap_params)
+wrap_mirror_clamp(nir_builder *b, wrap_result_t *wrap_params, nir_ssa_def *size)
 {
+   /* We have to take care of the boundaries */
+   nir_ssa_def *is_low = nir_flt(b, wrap_params->coords, nir_fmul(b, size, nir_imm_float(b, -1.0)));
+   nir_ssa_def *is_high = nir_flt(b, nir_fmul(b, size, nir_imm_float(b, 2.0)), wrap_params->coords);
+   wrap_params->use_border_color = nir_ior(b, is_low, is_high);
+
    /* Within the boundaries this acts like mirror_repeat */
-   wrap_mirror_repeat(b, wrap_params);
+   wrap_mirror_repeat(b, wrap_params, size);
 
-   /* We still have to takle care of the boundaries */
-   nir_ssa_def *is_low = nir_flt(b, wrap_params->coords, nir_imm_float(b, -1.0 ));
-   nir_ssa_def *is_high = nir_flt(b,nir_imm_float(b, 2.0 ), wrap_params->coords);
-   wrap_params->use_border_color = nir_ior(b, is_low, is_high);
 }
 
 static wrap_result_t
-wrap_coords(nir_builder *b, nir_ssa_def *coords, enum pipe_tex_wrap wrap)
+wrap_coords(nir_builder *b, nir_ssa_def *coords, enum pipe_tex_wrap wrap, nir_ssa_def *size)
 {
-   wrap_result_t result = {coords, nir_imm_false(b), nir_imm_int(b, 0)};
+   wrap_result_t result = {coords, nir_imm_false(b)};
 
    switch (wrap) {
    case PIPE_TEX_WRAP_CLAMP:
    case PIPE_TEX_WRAP_CLAMP_TO_EDGE:
-      wrap_clamp_to_edge(b, &result);
+      wrap_clamp_to_edge(b, &result, size);
       break;
    case PIPE_TEX_WRAP_REPEAT:
-      wrap_repeat(b, &result);
+      wrap_repeat(b, &result, size);
       break;
    case PIPE_TEX_WRAP_MIRROR_REPEAT:
-      wrap_mirror_repeat(b, &result);
+      wrap_mirror_repeat(b, &result, size);
       break;
    case PIPE_TEX_WRAP_MIRROR_CLAMP:
    case PIPE_TEX_WRAP_MIRROR_CLAMP_TO_EDGE:
-      wrap_mirror_clamp_to_edge(b, &result);
+      wrap_mirror_clamp_to_edge(b, &result, size);
       break;
    case PIPE_TEX_WRAP_CLAMP_TO_BORDER:
-      wrap_clamp(b, &result);
+      wrap_clamp(b, &result, size);
       break;
    case PIPE_TEX_WRAP_MIRROR_CLAMP_TO_BORDER:
-      wrap_mirror_clamp(b, &result);
+      wrap_mirror_clamp(b, &result, size);
       break;
    }
    return result;
@@ -251,51 +251,27 @@ static nir_ssa_def *
 load_texel(nir_builder *b, nir_tex_instr *tex, wrap_lower_param_t *params)
 {
    nir_ssa_def *texcoord = NULL;
-   nir_ssa_def *size_corr = NULL;
 
    /* Put coordinates back together */
    switch (params->ncoord_comp) {
    case 1:
       texcoord = params->wrap[0].coords;
-      size_corr = params->wrap[0].size_correction;
       break;
    case 2:
       texcoord = nir_vec2(b, params->wrap[0].coords, params->wrap[1].coords);
-      size_corr = nir_vec2(b, params->wrap[0].size_correction, params->wrap[1].size_correction);
       break;
    case 3:
       texcoord = nir_vec3(b, params->wrap[0].coords, params->wrap[1].coords, params->wrap[2].coords);
-      size_corr = nir_vec3(b, params->wrap[0].size_correction, params->wrap[1].size_correction,
-            params->wrap[2].size_correction);
       break;
    default:
       ;
    }
 
-   /* Evaluate the integer lookup coordinates for the requested LOD, don't touch the
-    * array index */
-   nir_ssa_def *new_coord = NULL;
-   if (!tex->is_array) {
-      new_coord = nir_f2i32(b, nir_fadd(b, nir_fmul(b, params->size, texcoord), size_corr));
-   } else {
-      nir_ssa_def *array_index = nir_channel(b, texcoord, 1 << params->ncoord_comp);
-      int mask = (1 << params->ncoord_comp) - 1;
-      nir_ssa_def *coord =
-            nir_f2i32(b, nir_fmul(b, nir_fadd(b, nir_channels(b, params->size, mask),
-                                  nir_channels(b, texcoord, mask)), size_corr));
-      switch (params->ncoord_comp) {
-      case 1: new_coord = nir_vec2(b, coord, array_index);
-      case 2: new_coord = nir_vec3(b, nir_channel(b, coord, 0),
-                                   nir_channel(b, coord, 1),
-                                   array_index);
-      default:
-         unreachable("unsupported number of non-array coordinates");
-      }
-   }
+   texcoord = nir_f2i32(b, texcoord);
 
    nir_tex_instr *load = create_txf_from_tex(b, tex);
    nir_tex_instr_add_src(load, nir_tex_src_lod, nir_src_for_ssa(params->lod));
-   nir_tex_instr_add_src(load, nir_tex_src_coord, nir_src_for_ssa(new_coord));
+   nir_tex_instr_add_src(load, nir_tex_src_coord, nir_src_for_ssa(texcoord));
    b->cursor = nir_after_instr(&load->instr);
    return &load->dest.ssa;
 }
@@ -354,36 +330,53 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
    params.lod = nir_f2i32(b, params.lod);
    params.size = nir_i2f32(b, nir_ishr(b, size0, params.lod));
 
+   nir_ssa_def *new_coord = old_coord;
+   if (!active_state->is_nonnormalized_coords) {
+      /* Evaluate the integer lookup coordinates for the requested LOD, don't touch the
+       * array index */
+      if (!tex->is_array) {
+         new_coord = nir_fmul(b, params.size, old_coord);
+      } else {
+         nir_ssa_def *array_index = nir_channel(b, old_coord, 1 << params.ncoord_comp);
+         int mask = (1 << params.ncoord_comp) - 1;
+         nir_ssa_def *coord = nir_fmul(b, nir_channels(b, params.size, mask),
+                                          nir_channels(b, old_coord, mask));
+         switch (params.ncoord_comp) {
+         case 1: new_coord = nir_vec2(b, coord, array_index);
+         case 2: new_coord = nir_vec3(b, nir_channel(b, coord, 0),
+                                       nir_channel(b, coord, 1),
+                                       array_index);
+         default:
+            unreachable("unsupported number of non-array coordinates");
+         }
+      }
+   }
+
    nir_ssa_def *coord_help[3];
-
    for (int i = 0; i < params.ncoord_comp; ++i)
-      coord_help[i] = nir_channel(b, old_coord, i);
+      coord_help[i] = nir_ffloor(b, nir_channel(b, new_coord, i));
 
-   /* Correct the texture coordinates for the offsets, but offsets are in pixel space
-    * and handling the boundary coordinates in pixel space is ugly, so scale.
-    */
+   /* Correct the texture coordinates for the offsets. */
    int offset_index = nir_tex_instr_src_index(tex, nir_tex_src_offset);
    if (offset_index >= 0) {
       nir_ssa_def *offset = tex->src[offset_index].src.ssa;
-      nir_ssa_def *scale = nir_frcp(b, nir_channels(b, params.size, (1 << params.ncoord_comp) - 1));
-      nir_ssa_def *shift = nir_fmul(b, nir_i2f32(b, offset), scale);
       for (int i = 0; i < params.ncoord_comp; ++i)
-         coord_help[i] = nir_fadd(b, coord_help[i], nir_channel(b, shift, i));
+         coord_help[i] = nir_fadd(b, coord_help[i], nir_channel(b, offset, i));
    }
 
    nir_ssa_def *use_border_color = nir_imm_false(b);
 
    switch (params.ncoord_comp) {
    case 3:
-      params.wrap[2] = wrap_coords(b, coord_help[2], active_state->wrap_t);
+      params.wrap[2] = wrap_coords(b, coord_help[2], active_state->wrap_t, nir_channel(b, params.size, 2));
       use_border_color = nir_ior(b, use_border_color, params.wrap[2].use_border_color);
       /* fallthrough */
    case 2:
-      params.wrap[1] = wrap_coords(b, coord_help[1], active_state->wrap_s);
+      params.wrap[1] = wrap_coords(b, coord_help[1], active_state->wrap_s, nir_channel(b, params.size, 1));
       use_border_color = nir_ior(b, use_border_color, params.wrap[1].use_border_color);
       /* fallthrough */
    case 1:
-      params.wrap[0] = wrap_coords(b, coord_help[0], active_state->wrap_r);
+      params.wrap[0] = wrap_coords(b, coord_help[0], active_state->wrap_r, nir_channel(b, params.size, 0));
       use_border_color = nir_ior(b, use_border_color, params.wrap[0].use_border_color);
       break;
    default:
