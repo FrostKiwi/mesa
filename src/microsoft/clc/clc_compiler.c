@@ -1310,6 +1310,9 @@ clc_to_dxil(struct clc_context *ctx,
       nir->info.cs.shared_size += size;
    }
 
+   metadata->local_mem_size = nir->info.cs.shared_size;
+   metadata->priv_mem_size = nir->scratch_size;
+
    struct blob tmp;
    if (!nir_to_dxil(nir, &opts, &tmp)) {
       debug_printf("D3D12: nir_to_dxil failed\n");
