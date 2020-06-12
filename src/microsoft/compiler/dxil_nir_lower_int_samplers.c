@@ -253,7 +253,7 @@ load_texel(nir_builder *b, nir_tex_instr *tex, wrap_lower_param_t *params)
    nir_ssa_def *texcoord = NULL;
 
    /* Put coordinates back together */
-   switch (params->ncoord_comp) {
+   switch (tex->coord_components) {
    case 1:
       texcoord = params->wrap[0].coords;
       break;
@@ -291,7 +291,7 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
 
    int coord_index = nir_tex_instr_src_index(tex, nir_tex_src_coord);
    nir_ssa_def *old_coord = tex->src[coord_index].src.ssa;
-   params.ncoord_comp = nir_src_num_components(tex->src[coord_index].src);
+   params.ncoord_comp = tex->coord_components;
    if (tex->is_array)
       params.ncoord_comp -= 1;
 
@@ -337,15 +337,19 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
       if (!tex->is_array) {
          new_coord = nir_fmul(b, params.size, old_coord);
       } else {
-         nir_ssa_def *array_index = nir_channel(b, old_coord, 1 << params.ncoord_comp);
+         nir_ssa_def *array_index = nir_channel(b, old_coord, params.ncoord_comp);
          int mask = (1 << params.ncoord_comp) - 1;
          nir_ssa_def *coord = nir_fmul(b, nir_channels(b, params.size, mask),
                                           nir_channels(b, old_coord, mask));
          switch (params.ncoord_comp) {
-         case 1: new_coord = nir_vec2(b, coord, array_index);
-         case 2: new_coord = nir_vec3(b, nir_channel(b, coord, 0),
-                                       nir_channel(b, coord, 1),
-                                       array_index);
+         case 1:
+            new_coord = nir_vec2(b, coord, array_index);
+            break;
+         case 2:
+            new_coord = nir_vec3(b, nir_channel(b, coord, 0),
+                                    nir_channel(b, coord, 1),
+                                    array_index);
+            break;
          default:
             unreachable("unsupported number of non-array coordinates");
          }
@@ -355,6 +359,10 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
    nir_ssa_def *coord_help[3];
    for (int i = 0; i < params.ncoord_comp; ++i)
       coord_help[i] = nir_ffloor(b, nir_channel(b, new_coord, i));
+
+   // Note: array index needs to be rounded to nearest before clamp rather than floored
+   if (tex->is_array)
+      coord_help[params.ncoord_comp] = nir_fround_even(b, nir_channel(b, new_coord, params.ncoord_comp));
 
    /* Correct the texture coordinates for the offsets. */
    int offset_index = nir_tex_instr_src_index(tex, nir_tex_src_offset);
@@ -382,6 +390,11 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
    default:
       unreachable("unsupported coordinate count");
    }
+
+   if (tex->is_array)
+      params.wrap[params.ncoord_comp] = wrap_coords(b, coord_help[params.ncoord_comp],
+                                                    PIPE_TEX_WRAP_CLAMP_TO_EDGE,
+                                                    nir_channel(b, params.size, params.ncoord_comp));
 
    nir_if *border_if = nir_push_if(b, use_border_color);
    nir_ssa_def *border_color = load_bordercolor(b, tex, active_state);
