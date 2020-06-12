@@ -523,19 +523,21 @@ clc_lower_nonnormalized_samplers(nir_shader *nir,
 
             // Normalize coords for tex
             nir_ssa_def *scale = nir_frcp(&b, txs);
-            // The CTS is pretty clear that this value has to be floored for nearest sampling
-            // but must not be for linear sampling.
-            if (!states->states[sampler->data.binding].is_linear_filtering)
-               coords = nir_ffloor(&b, coords);
-            // Don't scale the array index
-            assert(txs->num_components == coords->num_components ||
-                  (txs->num_components == coords->num_components - 1 && tex->is_array));
             nir_ssa_def *comps[4];
             for (unsigned i = 0; i < coords->num_components; ++i) {
                comps[i] = nir_channel(&b, coords, i);
-               if (i >= txs->num_components)
+               if (tex->is_array && i == coords->num_components - 1) {
+                  // Don't scale the array index, but do clamp it
+                  comps[i] = nir_fround_even(&b, comps[i]);
+                  comps[i] = nir_fmax(&b, comps[i], nir_imm_float(&b, 0.0f));
+                  comps[i] = nir_fmin(&b, comps[i], nir_fsub(&b, nir_channel(&b, txs, i), nir_imm_float(&b, 1.0f)));
                   break;
+               }
 
+               // The CTS is pretty clear that this value has to be floored for nearest sampling
+               // but must not be for linear sampling.
+               if (!states->states[sampler->data.binding].is_linear_filtering)
+                  comps[i] = nir_ffloor(&b, comps[i]);
                comps[i] = nir_fmul(&b, comps[i], nir_channel(&b, scale, i));
             }
             nir_ssa_def *normalized_coords = nir_vec(&b, comps, coords->num_components);
