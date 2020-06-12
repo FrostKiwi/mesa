@@ -252,6 +252,7 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
                nir_tex_instr *tex = nir_tex_instr_create(b->shader, 2); // No LOD/MSAA
 
                tex->op = nir_texop_txf;
+               tex->is_array = glsl_sampler_type_is_array(in_var->type);
                tex->sampler_dim = glsl_get_sampler_dim(in_var->type);
                tex->src[0].src = nir_src_for_ssa(image_deref);
                tex->src[0].src_type = nir_tex_src_texture_deref;
@@ -302,6 +303,7 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
                nir_tex_instr *tex = nir_tex_instr_create(b->shader, num_src);
 
                tex->op = nir_texop_txs;
+               tex->is_array = glsl_sampler_type_is_array(in_var->type);
                tex->sampler_dim = glsl_get_sampler_dim(in_var->type);
                tex->src[0].src = nir_src_for_ssa(image_deref);
                tex->src[0].src_type = nir_tex_src_texture_deref;
