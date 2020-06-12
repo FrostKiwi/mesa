@@ -161,7 +161,8 @@ lower_read_only_image_deref(nir_builder *b, struct clc_image_lower_context *cont
    // since they may have texture operations done on them
    const struct glsl_type *new_var_type =
       glsl_sampler_type(glsl_get_sampler_dim(in_var->type),
-            false, false, glsl_base_type_for_image_pipe_format(image_format));
+            false, glsl_sampler_type_is_array(in_var->type),
+            glsl_base_type_for_image_pipe_format(image_format));
    return lower_image_deref_impl(b, context, new_var_type, context->num_srvs, image_format);
 }
 
@@ -172,7 +173,8 @@ lower_read_write_image_deref(nir_builder *b, struct clc_image_lower_context *con
    nir_variable *in_var = nir_deref_instr_get_variable(context->deref);
    const struct glsl_type *new_var_type =
       glsl_image_type(glsl_get_sampler_dim(in_var->type),
-         false, glsl_base_type_for_image_pipe_format(image_format));
+         glsl_sampler_type_is_array(in_var->type),
+         glsl_base_type_for_image_pipe_format(image_format));
    return lower_image_deref_impl(b, context, new_var_type, context->num_uavs, image_format);
 }
 
@@ -259,6 +261,7 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
                tex->src[0].src_type = nir_tex_src_texture_deref;
                tex->src[1].src = nir_src_for_ssa(intrinsic->src[1].ssa);
                tex->src[1].src_type = nir_tex_src_coord;
+               tex->coord_components = tex->src[1].src.ssa->num_components;
                tex->dest_type = dest_type;
                nir_ssa_dest_init(&tex->instr, &tex->dest, 4, 32, NULL);
 
