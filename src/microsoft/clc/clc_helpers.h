@@ -49,12 +49,12 @@ clc_free_kernels_info(const struct clc_kernel_info *kernels,
 int
 clc_to_spirv(const struct clc_compile_args *args,
              struct spirv_binary *spvbin,
-             char **err_buf);
+             const struct clc_logger *logger);
 
 int
 clc_link_spirv_binaries(const struct clc_linker_args *args,
                         struct spirv_binary *dst_bin,
-                        char **err_buf);
+                        const struct clc_logger *logger);
 
 void
 clc_dump_spirv(const struct spirv_binary *spvbin, FILE *f);

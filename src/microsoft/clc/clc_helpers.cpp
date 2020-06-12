@@ -575,7 +575,7 @@ void clc_fn_mangle_libclc(const char *in_name,
 int
 clc_to_spirv(const struct clc_compile_args *args,
              struct spirv_binary *spvbin,
-             char **err_buf)
+             const struct clc_logger *logger)
 {
    LLVMInitializeAllTargets();
    LLVMInitializeAllTargetInfos();
@@ -615,13 +615,13 @@ clc_to_spirv(const struct clc_compile_args *args,
 #endif
                                                   diag)) {
       log += "Couldn't create Clang invocation.\n";
-      *err_buf = strdup(log.c_str());
+      clc_error(logger, log.c_str());
       return -1;
    }
 
    if (diag.hasErrorOccurred()) {
       log += "Errors occurred during Clang invocation.\n";
-      *err_buf = strdup(log.c_str());
+      clc_error(logger, log.c_str());
       return -1;
    }
 
@@ -685,21 +685,21 @@ clc_to_spirv(const struct clc_compile_args *args,
    clang::EmitLLVMOnlyAction act(llvm_ctx.get());
    if (!c->ExecuteAction(act)) {
       log += "Error executing LLVM compilation action.\n";
-      *err_buf = strdup(log.c_str());
+      clc_error(logger, log.c_str());
       return -1;
    }
 
    auto mod = act.takeModule();
    if (!::llvm::regularizeLlvmForSpirv(mod.get(), log)) {
       log += "Translation from LLVM IR to SPIR-V failed.\n";
-      *err_buf = strdup(log.c_str());
+      clc_error(logger, log.c_str());
       return -1;
    }
 
    std::ostringstream spv_stream;
    if (!::llvm::writeSpirv(mod.get(), spv_stream, log)) {
       log += "Translation from LLVM IR to SPIR-V failed.\n";
-      *err_buf = strdup(log.c_str());
+      clc_error(logger, log.c_str());
       return -1;
    }
 
@@ -741,10 +741,39 @@ spv_result_to_str(spv_result_t res)
    }
 }
 
+class SPIRVMessageConsumer {
+public:
+   SPIRVMessageConsumer(const struct clc_logger *logger): logger(logger) {}
+
+   void operator()(spv_message_level_t level, const char *src,
+                   const spv_position_t &pos, const char *msg)
+   {
+      switch(level) {
+      case SPV_MSG_FATAL:
+      case SPV_MSG_INTERNAL_ERROR:
+      case SPV_MSG_ERROR:
+         clc_error(logger, "(file=%s,line=%ld,column=%ld,index=%ld): %s",
+                   src, pos.line, pos.column, pos.index, msg);
+         break;
+
+      case SPV_MSG_WARNING:
+         clc_warning(logger, "(file=%s,line=%ld,column=%ld,index=%ld): %s",
+                     src, pos.line, pos.column, pos.index, msg);
+         break;
+
+      default:
+         break;
+      }
+   }
+
+private:
+   const struct clc_logger *logger;
+};
+
 int
 clc_link_spirv_binaries(const struct clc_linker_args *args,
                         struct spirv_binary *dst_bin,
-                        char **err_buf)
+                        const struct clc_logger *logger)
 {
    std::vector<std::vector<uint32_t>> binaries;
 
@@ -755,14 +784,15 @@ clc_link_spirv_binaries(const struct clc_linker_args *args,
       binaries.push_back(bin);
    }
 
+   SPIRVMessageConsumer msgconsumer(logger);
    spvtools::Context context(SPV_ENV_UNIVERSAL_1_0);
+   context.SetMessageConsumer(msgconsumer);
    spvtools::LinkerOptions options;
    options.SetAllowPartialLinkage(args->create_library);
    options.SetCreateLibrary(args->create_library);
    std::vector<uint32_t> linkingResult;
    spv_result_t status = spvtools::Link(context, binaries, &linkingResult, options);
    if (status != SPV_SUCCESS) {
-      *err_buf = strdup(spv_result_to_str(status));
       return -1;
    }
 
