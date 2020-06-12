@@ -113,9 +113,6 @@ d3d12_wgl_framebuffer_resize(stw_winsys_framebuffer *fb,
       for (int i = 0; i < 2; ++i) {
          if (framebuffer->buffers[i]) {
             d3d12_resource_release(d3d12_resource(framebuffer->buffers[i]));
-            /* There should be 2 references left: this one (that is released right after)
-             * and the one kept by the state tracker until framebuffer validation is finished */
-            assert(p_atomic_read(&framebuffer->buffers[i]->reference.count) == 2);
             pipe_resource_reference(&framebuffer->buffers[i], NULL);
          }
       }
