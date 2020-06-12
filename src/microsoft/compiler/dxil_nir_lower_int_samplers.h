@@ -36,7 +36,9 @@ typedef struct {
    unsigned wrap_r:4;
    unsigned wrap_s:4;
    unsigned wrap_t:4;
-   unsigned is_int_sampler:4;
+   unsigned is_int_sampler:1;
+   unsigned is_nonnormalized_coords:1;
+   unsigned is_linear_filtering:2;
 } dxil_wrap_sampler_state;
 
 typedef struct {
