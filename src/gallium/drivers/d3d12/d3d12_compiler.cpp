@@ -429,6 +429,8 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       key->gs.writes_psize = 1;
       key->gs.sprite_coord_enable = rast->sprite_coord_enable;
       key->gs.sprite_origin_upper_left = (rast->sprite_coord_mode != PIPE_SPRITE_COORD_LOWER_LEFT);
+      if (sel_ctx->ctx->flip_y < 0)
+         key->gs.sprite_origin_upper_left = !key->gs.sprite_origin_upper_left;
       key->gs.aa_point = rast->point_smooth;
    } else if (stage == PIPE_SHADER_FRAGMENT)
       key->fs.frag_result_color_lowering = sel_ctx->frag_result_color_lowering;
