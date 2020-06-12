@@ -388,7 +388,8 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
                       d3d12_shader_selector *prev, d3d12_shader_selector *next)
 {
    uint64_t system_generated_in_values =
-         (1ull << VARYING_SLOT_FACE);
+         1ull << VARYING_SLOT_FACE |
+         1ull << VARYING_SLOT_PNTC;
 
    uint64_t system_out_values =
          1ull << VARYING_SLOT_CLIP_DIST0 |
