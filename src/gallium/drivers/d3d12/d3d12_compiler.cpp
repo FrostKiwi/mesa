@@ -331,35 +331,6 @@ validate_geometry_shader(struct d3d12_selection_context *sel_ctx)
    }
 }
 
-static void
-d3d12_fill_current_shader_key(d3d12_shader_selector *sel, struct d3d12_context *ctx)
-{
-   d3d12_shader *shader = sel->current;
-   const uint64_t system_generated_in_values =
-         1ull << VARYING_SLOT_FACE;
-
-   const uint64_t system_out_values =
-         1ull << VARYING_SLOT_POS |
-         1ull << VARYING_SLOT_CLIP_DIST0 |
-         1ull << VARYING_SLOT_CLIP_DIST1;
-
-   /* We assume that this shader reads and writes exactly what is needed */
-   memset(&shader->key, 0, sizeof(d3d12_shader_key));
-   shader->key.stage = sel->stage;
-   shader->key.required_varying_inputs = shader->nir->info.inputs_read & ~system_generated_in_values;
-   shader->key.required_varying_outputs = shader->nir->info.outputs_written & ~system_out_values;
-   shader->key.next_varying_inputs = shader->nir->info.outputs_written;
-
-   /* Copy only the number of texture states so that we don't force a rer-creation of the
-    * shader only because there are any texturs. We have to keep the initial version of the
-    * shader intact though, because we need the sampling instructions for loweing the boundary
-    * conditions and the texture instructions itself when they change. */
-   if (sel->samples_int_textures)
-      shader->key.int_tex_states.n_states = ctx->tex_wrap_states[sel->stage].n_states;
-   if (sel->compare_with_lod_bias_grad)
-      shader->key.sampler_compare_funcs.n_states = ctx->tex_cmp_state[sel->stage].n_states;
-}
-
 static bool
 d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key *have)
 {
