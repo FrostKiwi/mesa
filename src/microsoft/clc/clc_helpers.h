@@ -31,7 +31,9 @@ extern "C" {
 #include "nir_types.h"
 
 #include "clc_compiler.h"
+#include "util/u_string.h"
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -65,6 +67,18 @@ void clc_fn_mangle_libclc(const char *in_name,
                           int ntypes,
                           const struct glsl_type **src_types,
                           char **out_string);
+
+#define clc_log(logger, level, fmt, ...) do {        \
+      if (!logger || !logger->level) break;          \
+      char *msg = NULL;                              \
+      asprintf(&msg, fmt, __VA_ARGS__);              \
+      assert(msg);                                   \
+      logger->level(logger->priv, msg);              \
+      free(msg);                                     \
+   } while (0)
+
+#define clc_error(logger, fmt, ...) clc_log(logger, error, fmt, __VA_ARGS__)
+#define clc_warning(logger, fmt, ...) clc_log(logger, warning, fmt, __VA_ARGS__)
 
 #ifdef __cplusplus
 }
