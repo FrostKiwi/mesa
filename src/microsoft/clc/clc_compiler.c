@@ -29,6 +29,7 @@
 #include "clc_helpers.h"
 #include "clc_nir.h"
 #include "../compiler/dxil_nir.h"
+#include "../compiler/dxil_nir_lower_int_samplers.h"
 #include "../compiler/nir_to_dxil.h"
 
 #include "util/u_debug.h"
@@ -469,7 +470,8 @@ clc_lower_64bit_semantics(nir_shader *nir)
 }
 
 static void
-clc_lower_nonnormalized_samplers(nir_shader *nir, const struct clc_runtime_kernel_conf *conf)
+clc_lower_nonnormalized_samplers(nir_shader *nir,
+                                 const dxil_wrap_sampler_states *states)
 {
    nir_foreach_function(func, nir) {
       if (!func->is_entrypoint)
@@ -494,13 +496,15 @@ clc_lower_nonnormalized_samplers(nir_shader *nir, const struct clc_runtime_kerne
             nir_variable *sampler = nir_deref_instr_get_variable(
                nir_instr_as_deref(sampler_src->ssa->parent_instr));
 
-            // If sampler uses normalized coords, nothing to do
-            if (sampler->constant_initializer) {
-               if (sampler->constant_initializer->values[1].u32)
-                  continue;
-            }
-            else if (!conf || conf->args[sampler->data.binding].sampler.normalized_coords)
+            // If the sampler returns ints, we'll handle this in the int lowering pass
+            if (nir_alu_type_get_base_type(tex->dest_type) != nir_type_float)
                continue;
+
+            // If sampler uses normalized coords, nothing to do
+            if (!states->states[sampler->data.binding].is_nonnormalized_coords)
+               continue;
+
+            b.cursor = nir_before_instr(&tex->instr);
 
             int coords_idx = nir_tex_instr_src_index(tex, nir_tex_src_coord);
             assert(coords_idx != -1);
@@ -508,10 +512,28 @@ clc_lower_nonnormalized_samplers(nir_shader *nir, const struct clc_runtime_kerne
                nir_ssa_for_src(&b, tex->src[coords_idx].src, tex->coord_components);
 
             nir_ssa_def *txs = nir_i2f32(&b, nir_get_texture_size(&b, tex));
+
+            // Normalize coords for tex
             nir_ssa_def *scale = nir_frcp(&b, txs);
+            // The CTS is pretty clear that this value has to be floored for nearest sampling
+            // but must not be for linear sampling.
+            if (!states->states[sampler->data.binding].is_linear_filtering)
+               coords = nir_ffloor(&b, coords);
+            // Don't scale the array index
+            assert(txs->num_components == coords->num_components ||
+                  (txs->num_components == coords->num_components - 1 && tex->is_array));
+            nir_ssa_def *comps[4];
+            for (unsigned i = 0; i < coords->num_components; ++i) {
+               comps[i] = nir_channel(&b, coords, i);
+               if (i >= txs->num_components)
+                  break;
+
+               comps[i] = nir_fmul(&b, comps[i], nir_channel(&b, scale, i));
+            }
+            nir_ssa_def *normalized_coords = nir_vec(&b, comps, coords->num_components);
             nir_instr_rewrite_src(&tex->instr,
                                   &tex->src[coords_idx].src,
-                                  nir_src_for_ssa(nir_fmul(&b, coords, scale)));
+                                  nir_src_for_ssa(normalized_coords));
          }
       }
    }
@@ -1038,6 +1060,22 @@ split_unaligned_loads_stores(nir_shader *shader)
    return progress;
 }
 
+static enum pipe_tex_wrap
+wrap_from_cl_addressing(unsigned addressing_mode)
+{
+   switch (addressing_mode)
+   {
+   default:
+   case ADDRESSING_MODE_NONE:
+   case ADDRESSING_MODE_CLAMP:
+      // Since OpenCL's only border color is 0's and D3D specs out-of-bounds loads to return 0, don't apply any wrap mode
+      return (enum pipe_tex_wrap)-1;
+   case ADDRESSING_MODE_CLAMP_TO_EDGE: return PIPE_TEX_WRAP_CLAMP_TO_EDGE;
+   case ADDRESSING_MODE_REPEAT: return PIPE_TEX_WRAP_REPEAT;
+   case ADDRESSING_MODE_REPEAT_MIRRORED: return PIPE_TEX_WRAP_MIRROR_REPEAT;
+   }
+}
+
 struct clc_dxil_object *
 clc_to_dxil(struct clc_context *ctx,
             const struct clc_object *obj,
@@ -1123,6 +1161,7 @@ clc_to_dxil(struct clc_context *ctx,
 
    // Calculate input offsets/metadata.
    unsigned i = 0, uav_id = 0, sampler_id = 0, offset = 0;
+   dxil_wrap_sampler_states int_sampler_states = { 0 };
    nir_foreach_variable(var, &nir->inputs) {
       unsigned size = glsl_get_cl_size(var->type);
       offset = align(offset, glsl_get_cl_alignment(var->type));
@@ -1138,6 +1177,14 @@ clc_to_dxil(struct clc_context *ctx,
           !glsl_type_is_image(var->type)) {
          metadata->args[i].globconstptr.buf_id = uav_id++;
       } else if (glsl_type_is_sampler(var->type)) {
+         unsigned address_mode = conf ? conf->args[i].sampler.addressing_mode : 0u;
+         int_sampler_states.states[sampler_id].wrap_r =
+            int_sampler_states.states[sampler_id].wrap_s =
+            int_sampler_states.states[sampler_id].wrap_t = wrap_from_cl_addressing(address_mode);
+         int_sampler_states.states[sampler_id].is_nonnormalized_coords =
+            conf ? !conf->args[i].sampler.normalized_coords : 0;
+         int_sampler_states.states[sampler_id].is_linear_filtering =
+            conf ? conf->args[i].sampler.linear_filtering : 0;
          metadata->args[i].sampler.sampler_id = var->data.binding = sampler_id++;
       }
       i++;
@@ -1187,8 +1234,9 @@ clc_to_dxil(struct clc_context *ctx,
    // Needs to come before lower_explicit_io
    struct clc_image_lower_context image_lower_context = { metadata, &srv_id, &uav_id };
    NIR_PASS_V(nir, clc_lower_images, &image_lower_context);
-   NIR_PASS_V(nir, clc_lower_nonnormalized_samplers, conf);
+   NIR_PASS_V(nir, clc_lower_nonnormalized_samplers, &int_sampler_states);
    NIR_PASS_V(nir, nir_lower_samplers);
+   NIR_PASS_V(nir, dxil_lower_sample_to_txf_for_integer_tex, &int_sampler_states);
 
    // copy propagate to prepare for lower_explicit_io
    NIR_PASS_V(nir, split_unaligned_loads_stores);
@@ -1273,8 +1321,17 @@ clc_to_dxil(struct clc_context *ctx,
    // Assign bindings for constant samplers
    nir_foreach_variable_safe(var, &nir->uniforms) {
       if (glsl_type_is_sampler(var->type) &&
-          var->constant_initializer)
+          var->constant_initializer) {
+         int_sampler_states.states[sampler_id].wrap_r =
+            int_sampler_states.states[sampler_id].wrap_s =
+            int_sampler_states.states[sampler_id].wrap_t =
+            wrap_from_cl_addressing(var->constant_initializer->values[0].u32);
+         int_sampler_states.states[sampler_id].is_nonnormalized_coords =
+            var->constant_initializer->values[1].u32;
+         int_sampler_states.states[sampler_id].is_linear_filtering =
+            var->constant_initializer->values[2].u32 == FILTER_MODE_LINEAR;
          var->data.binding = sampler_id++;
+      }
    }
 
    nir_validate_shader(nir, "Validate before feeding NIR to the DXIL compiler");
