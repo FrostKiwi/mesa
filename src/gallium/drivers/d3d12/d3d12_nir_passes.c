@@ -108,6 +108,62 @@ d3d12_lower_yflip(nir_shader *nir)
    }
 }
 
+static void
+invert_depth(nir_builder *b, struct nir_instr *instr)
+{
+   if (instr->type != nir_instr_type_intrinsic)
+      return;
+
+   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+   if (intr->intrinsic != nir_intrinsic_store_deref)
+      return;
+
+   nir_variable *var = nir_intrinsic_get_var(intr, 0);
+   if (var->data.mode != nir_var_shader_out ||
+       var->data.location != VARYING_SLOT_POS)
+      return;
+
+   b->cursor = nir_before_instr(&intr->instr);
+
+   nir_ssa_def *pos = nir_ssa_for_src(b, intr->src[1], 4);
+   nir_ssa_def *def = nir_vec4(b,
+                               nir_channel(b, pos, 0),
+                               nir_channel(b, pos, 1),
+                               nir_fneg(b, nir_channel(b, pos, 2)),
+                               nir_channel(b, pos, 3));
+   nir_instr_rewrite_src(&intr->instr, intr->src + 1, nir_src_for_ssa(def));
+}
+
+/* In OpenGL the windows space depth value z_w is evaluated according to "s * z_d + b"
+ * with  "s + (far - near) / 2" (depth clip:minus_one_to_one) [OpenGL 3.3, 2.13.1].
+ * When we switch the far and near value to satisfy DirectX requirements we have
+ * to compensate by inverting "z_d' = -z_d" with this lowering pass.
+ */
+void
+d3d12_nir_invert_depth(nir_shader *shader)
+{
+   if (shader->info.stage != MESA_SHADER_VERTEX &&
+       shader->info.stage != MESA_SHADER_GEOMETRY)
+      return;
+
+   nir_foreach_function(function, shader) {
+      if (function->impl) {
+         nir_builder b;
+         nir_builder_init(&b, function->impl);
+
+         nir_foreach_block(block, function->impl) {
+            nir_foreach_instr_safe(instr, block) {
+               invert_depth(&b, instr);
+            }
+         }
+
+         nir_metadata_preserve(function->impl, nir_metadata_block_index |
+                                               nir_metadata_dominance);
+      }
+   }
+}
+
+
 /**
  * Lower State Vars:
  *
