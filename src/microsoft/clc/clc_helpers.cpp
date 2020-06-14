@@ -490,6 +490,9 @@ void
 clc_free_kernels_info(const struct clc_kernel_info *kernels,
                       unsigned num_kernels)
 {
+   if (!kernels)
+      return;
+
    for (unsigned i = 0; i < num_kernels; i++) {
       if (kernels[i].args) {
          for (unsigned j = 0; j < kernels[i].num_args; j++) {

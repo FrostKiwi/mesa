@@ -584,7 +584,7 @@ clc_compile(struct clc_context *ctx,
    char *err_log;
    int ret;
 
-   obj = malloc(sizeof(*obj));
+   obj = calloc(1, sizeof(*obj));
    if (!obj) {
       fprintf(stderr, "D3D12: failed to allocate a clc_object");
       return NULL;
@@ -601,11 +601,6 @@ clc_compile(struct clc_context *ctx,
 
    if (debug_get_option_debug_clc() & CLC_DEBUG_DUMP_SPIRV)
       clc_dump_spirv(&obj->spvbin, stdout);
-
-   obj->kernels = clc_spirv_get_kernels_info(&obj->spvbin, &obj->num_kernels);
-
-   if (debug_get_option_debug_clc() & CLC_DEBUG_VERBOSE)
-      clc_print_kernels_info(obj);
 
    return obj;
 }
