@@ -670,10 +670,10 @@ clc_to_spirv(const struct clc_compile_args *args,
                                        false, false);
 
       for (size_t i = 0; i < args->num_headers; i++) {
-         ::llvm::sys::path::append(tmp_header_path, args->headers[i].name);
-         c->getPreprocessorOpts().addRemappedFile(tmp_header_path.str(),
+         auto path_copy = tmp_header_path;
+         ::llvm::sys::path::append(path_copy, ::llvm::sys::path::convert_to_slash(args->headers[i].name));
+         c->getPreprocessorOpts().addRemappedFile(path_copy.str(),
             ::llvm::MemoryBuffer::getMemBufferCopy(args->headers[i].value).release());
-         ::llvm::sys::path::remove_filename(tmp_header_path);
       }
    }
 
