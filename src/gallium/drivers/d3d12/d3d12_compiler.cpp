@@ -134,6 +134,8 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    NIR_PASS_V(nir, d3d12_create_bare_samplers);
    NIR_PASS_V(nir, nir_lower_tex, &tex_options);
    if (key->last_vertex_processing_stage) {
+      if (key->invert_depth)
+         NIR_PASS_V(nir, d3d12_nir_invert_depth);
       NIR_PASS_V(nir, nir_lower_clip_halfz);
       NIR_PASS_V(nir, d3d12_lower_yflip);
    }
@@ -403,6 +405,9 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
               sizeof(d3d12_sampler_compare_and_swizzle)))
       return false;
 
+   if (expect->invert_depth != have->invert_depth)
+      return false;
+
    return true;
 }
 
@@ -442,8 +447,10 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
    }
 
    if (stage == PIPE_SHADER_GEOMETRY ||
-       (stage == PIPE_SHADER_VERTEX && (!next || next->stage != PIPE_SHADER_GEOMETRY)))
+       (stage == PIPE_SHADER_VERTEX && (!next || next->stage != PIPE_SHADER_GEOMETRY))) {
       key->last_vertex_processing_stage = 1;
+      key->invert_depth = sel_ctx->ctx->reverse_depth_range;
+   }
 
    if (stage == PIPE_SHADER_GEOMETRY && sel_ctx->needs_point_sprite_lowering) {
       struct pipe_rasterizer_state *rast = &sel_ctx->ctx->gfx_pipeline_state.rast->base;
