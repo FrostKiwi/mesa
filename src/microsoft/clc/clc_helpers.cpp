@@ -663,7 +663,7 @@ clc_to_spirv(const struct clc_compile_args *args,
       ::llvm::sys::path::append(tmp_header_path, "openclon12");
 
       c->getHeaderSearchOpts().AddPath(tmp_header_path.str(),
-                                       clang::frontend::Angled,
+                                       clang::frontend::Quoted,
                                        false, false);
 
       for (size_t i = 0; i < args->num_headers; i++) {
