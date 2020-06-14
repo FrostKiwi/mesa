@@ -176,10 +176,8 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
          return 1 << 13;
       return 0;
 
-#if 0 /* TODO: Enable me */
    case PIPE_CAP_DEPTH_CLIP_DISABLE:
       return 1;
-#endif
 
 #if 0 /* TODO: Enable me */
    case PIPE_CAP_TGSI_INSTANCEID:
