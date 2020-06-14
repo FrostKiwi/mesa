@@ -1021,8 +1021,18 @@ d3d12_set_viewport_states(struct pipe_context *pctx,
       }
       ctx->viewports[start_slot + i].TopLeftX = state[i].translate[0] - state[i].scale[0];
       ctx->viewports[start_slot + i].Width = state[i].scale[0] * 2;
-      ctx->viewports[start_slot + i].MinDepth = state[i].translate[2] - state[i].scale[2];
-      ctx->viewports[start_slot + i].MaxDepth = state[i].translate[2] + state[i].scale[2];
+
+      float near_depth = state[i].translate[2] - state[i].scale[2];
+      float far_depth = state[i].translate[2] + state[i].scale[2];
+
+      ctx->reverse_depth_range = near_depth > far_depth;
+      if (ctx->reverse_depth_range) {
+         float tmp = near_depth;
+         near_depth = far_depth;
+         far_depth = tmp;
+      }
+      ctx->viewports[start_slot + i].MinDepth = near_depth;
+      ctx->viewports[start_slot + i].MaxDepth = far_depth;
       ctx->viewport_states[start_slot + i] = state[i];
    }
    ctx->num_viewports = start_slot + num_viewports;

@@ -209,6 +209,7 @@ struct d3d12_context {
    unsigned state_dirty;
    unsigned cmdlist_dirty;
    ID3D12PipelineState *current_pso;
+   bool reverse_depth_range;
 
    ID3D12Fence *cmdqueue_fence;
    uint64_t fence_value;
