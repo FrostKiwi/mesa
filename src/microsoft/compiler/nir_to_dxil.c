@@ -3437,17 +3437,20 @@ emit_tex(struct ntd_context *ctx, nir_tex_instr *instr)
 
    const struct dxil_value *sample = NULL;
    switch (instr->op) {
-   case nir_texop_tex:
-      if (params.cmp != NULL)
-         sample = emit_sample_cmp(ctx, &params);
-      else
-         sample = emit_sample(ctx, &params);
-      break;
-
    case nir_texop_txb:
       sample = emit_sample_bias(ctx, &params);
       break;
 
+   case nir_texop_tex:
+      if (params.cmp != NULL) {
+         sample = emit_sample_cmp(ctx, &params);
+         break;
+      } else if (ctx->mod.shader_kind == DXIL_PIXEL_SHADER) {
+         sample = emit_sample(ctx, &params);
+         break;
+      }
+      params.lod_or_sample = dxil_module_get_float_const(&ctx->mod, 0);
+      /* fallthrough */
    case nir_texop_txl:
       sample = emit_sample_level(ctx, &params);
       break;
