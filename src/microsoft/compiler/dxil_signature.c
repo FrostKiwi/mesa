@@ -139,6 +139,9 @@ get_semantic_sv_name(nir_variable *var, struct semantic_info *info)
    case SYSTEM_VALUE_INSTANCE_ID:
       info->kind = DXIL_SEM_INSTANCE_ID;
       break;
+   case SYSTEM_VALUE_PRIMITIVE_ID:
+      info->kind = DXIL_SEM_PRIMITIVE_ID;
+      break;
    default:
       unreachable("unsupported system value");
    }
@@ -203,6 +206,12 @@ get_semantic_name(nir_variable *var, struct semantic_info *info)
       snprintf(info->name, 64, "%s", "SV_IsFrontFace");
       info->kind = DXIL_SEM_IS_FRONT_FACE;
       break;
+
+   case VARYING_SLOT_PRIMITIVE_ID:
+     assert(glsl_get_components(var->type) == 1);
+     snprintf(info->name, 64, "%s", "SV_PrimitiveID");
+     info->kind = DXIL_SEM_PRIMITIVE_ID;
+     break;
 
    case VARYING_SLOT_CLIP_DIST1:
       info->index = 1;
@@ -438,7 +447,8 @@ static const char *out_sysvalue_name(nir_variable *var)
    case VARYING_SLOT_CLIP_DIST0:
    case VARYING_SLOT_CLIP_DIST1:
       return "CLIPDST";
-
+   case VARYING_SLOT_PRIMITIVE_ID:
+      return "PRIMID";
    default:
       return "NO";
    }
