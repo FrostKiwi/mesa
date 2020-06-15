@@ -30,6 +30,9 @@
 
 enum dxil_prog_sig_comp_type dxil_get_prog_sig_comp_type(const struct glsl_type *type)
 {
+   if (glsl_type_is_array(type))
+      type = glsl_get_array_element(type);
+
    switch (glsl_get_base_type(type)) {
    case GLSL_TYPE_UINT: return DXIL_PROG_SIG_COMP_TYPE_UINT32;
    case GLSL_TYPE_INT: return DXIL_PROG_SIG_COMP_TYPE_SINT32;
