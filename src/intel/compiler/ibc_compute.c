@@ -412,21 +412,31 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                char **error_str_out)
 {
    assert(src_shader->info.stage == MESA_SHADER_COMPUTE);
-   prog_data->base.total_shared = src_shader->info.cs.shared_size;
-   prog_data->local_size[0] = src_shader->info.cs.local_size[0];
-   prog_data->local_size[1] = src_shader->info.cs.local_size[1];
-   prog_data->local_size[2] = src_shader->info.cs.local_size[2];
-   prog_data->slm_size = src_shader->shared_size;
-   unsigned local_workgroup_size =
-      src_shader->info.cs.local_size[0] * src_shader->info.cs.local_size[1] *
-      src_shader->info.cs.local_size[2];
 
-   unsigned min_simd_width =
-      DIV_ROUND_UP(local_workgroup_size, compiler->devinfo->max_cs_threads);
-   min_simd_width = MAX2(8, min_simd_width);
-   min_simd_width = util_next_power_of_two(min_simd_width);
-   assert(min_simd_width <= 32);
+   bool generate_all;
+   unsigned min_simd_width = 8;
    unsigned max_simd_width = 32;
+
+   if (src_shader->info.cs.local_size_variable) {
+      generate_all = true;
+   } else {
+      generate_all = false;
+      prog_data->local_size[0] = src_shader->info.cs.local_size[0];
+      prog_data->local_size[1] = src_shader->info.cs.local_size[1];
+      prog_data->local_size[2] = src_shader->info.cs.local_size[2];
+      unsigned local_workgroup_size = src_shader->info.cs.local_size[0] *
+                                      src_shader->info.cs.local_size[1] *
+                                      src_shader->info.cs.local_size[2];
+
+      /* Limit max_threads to 64 for the GPGPU_WALKER command */
+      const uint32_t max_threads = MIN2(64, compiler->devinfo->max_cs_threads);
+      min_simd_width = util_next_power_of_two(
+         MAX2(8, DIV_ROUND_UP(local_workgroup_size, max_threads)));
+      assert(min_simd_width <= 32);
+   }
+
+   prog_data->base.total_shared = src_shader->info.cs.shared_size;
+   prog_data->slm_size = src_shader->shared_size;
 
    if (key->base.subgroup_size_type >= BRW_SUBGROUP_SIZE_REQUIRE_8) {
       /* These enum values are expressly chosen to be equal to the subgroup
@@ -534,18 +544,39 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
       first_bin = false;
    }
 
-   for (int i = 2; i >= 0; i--) {
-      const unsigned bin_simd_width = 8 << i;
-      if (bin[i].data == NULL)
-         continue;
+   if (generate_all) {
+      prog_data->base.program_size = ALIGN(bin[0].size, 64) +
+                                     ALIGN(bin[1].size, 64) +
+                                     ALIGN(bin[2].size, 64);
+      unsigned *combined = rzalloc_size(mem_ctx, prog_data->base.program_size);
+      unsigned offset = 0;
 
-      /* Grab the widest shader we find */
-      prog_data->simd_size = bin_simd_width;
-      cs_fill_push_const_info(compiler->devinfo, prog_data);
-      prog_data->base.dispatch_grf_start_reg = bin[i].num_ff_regs;
-      prog_data->base.program_size = bin[i].size;
+      prog_data->base.dispatch_grf_start_reg = bin[2].num_ff_regs;
 
-      return bin[i].data;
+      for (int i = 0; i <= 2; i++) {
+         if (bin[i].data == NULL)
+            continue;
+
+         prog_data->prog_mask |= 1 << i;
+         prog_data->prog_offset[i] = offset;
+         cs_fill_push_const_info(compiler->devinfo, prog_data);
+         memcpy((char *)combined + offset, bin[i].data, bin[i].size);
+         offset += ALIGN(bin[i].size, 64);
+      }
+      return combined;
+   } else {
+      for (int i = 2; i >= 0; i--) {
+         if (bin[i].data == NULL)
+            continue;
+
+         /* Grab the widest shader we find */
+         prog_data->prog_mask = 1 << i;
+         cs_fill_push_const_info(compiler->devinfo, prog_data);
+         prog_data->base.dispatch_grf_start_reg = bin[i].num_ff_regs;
+         prog_data->base.program_size = bin[i].size;
+
+         return bin[i].data;
+      }
    }
 
    return NULL;
