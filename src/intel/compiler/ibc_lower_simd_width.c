@@ -109,7 +109,7 @@ ibc_alu_instr_max_simd_width(const ibc_alu_instr *alu,
       /* Integer division is limited to SIMD8 on all generations. */
       return MIN2(max_simd_width, 8);
 
-   case IBC_ALU_OP_MUL:
+   case IBC_ALU_OP_IMUL:
       /* Integer multiply is lowered to MUL/MACH using the accumulator which
        * is 8-wide for integer types.
        */

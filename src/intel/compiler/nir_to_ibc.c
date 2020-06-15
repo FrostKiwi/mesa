@@ -370,8 +370,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    BINOP_CASE(iadd, ADD)
    BINOP_CASE(fadd, ADD)
-   BINOP_CASE(fmul, MUL)
-   BINOP_CASE(imul, MUL)
+   BINOP_CASE(fmul, FMUL)
+   BINOP_CASE(imul, IMUL)
    BINOP_CASE(iand, AND)
    BINOP_CASE(ior,  OR)
    BINOP_CASE(ixor, XOR)
@@ -384,7 +384,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       enum ibc_type wordtype =
          (dest_type & ~IBC_TYPE_32_BIT) | IBC_TYPE_16_BIT;
 
-      dest = ibc_MUL(b, dest_type, src[0], ibc_UNPACK(b, wordtype, src[1], 0));
+      dest = ibc_IMUL(b, dest_type, src[0],
+                      ibc_UNPACK(b, wordtype, src[1], 0));
       break;
    }
 
@@ -902,8 +903,8 @@ nti_op_for_nir_reduction_op(nir_op op)
    switch (op) {
    case nir_op_iadd: return IBC_ALU_OP_ADD;
    case nir_op_fadd: return IBC_ALU_OP_ADD;
-//   case nir_op_imul: return IBC_ALU_OP_MUL;
-   case nir_op_fmul: return IBC_ALU_OP_MUL;
+//   case nir_op_imul: return IBC_ALU_OP_IMUL;
+   case nir_op_fmul: return IBC_ALU_OP_FMUL;
    case nir_op_imin: return IBC_ALU_OP_SEL;
    case nir_op_umin: return IBC_ALU_OP_SEL;
    case nir_op_fmin: return IBC_ALU_OP_SEL;
