@@ -43,11 +43,7 @@ build_MACH(ibc_builder *b, enum ibc_type dest_type, ibc_ref accum,
 static bool
 lower_mul(ibc_builder *b, ibc_alu_instr *alu)
 {
-   /* We only handle integer non-vector types in this pass. */
-   if (ibc_type_base_type(alu->dest.type) != IBC_TYPE_INT &&
-       ibc_type_base_type(alu->dest.type) != IBC_TYPE_UINT)
-      return false;
-
+   /* We only handle non-vector types in this pass. */
    if (alu->dest.type & IBC_TYPE_VECTOR)
       return false;
 
@@ -66,7 +62,7 @@ lower_mul(ibc_builder *b, ibc_alu_instr *alu)
          ibc_builder_push_we_all(b, 8);
 
       ibc_ref acc = ibc_builder_new_accum_reg(b, alu->dest.type);
-      ibc_build_alu2(b, IBC_ALU_OP_MUL, acc, alu->src[0].ref, src1_uw);
+      ibc_build_alu2(b, IBC_ALU_OP_IMUL, acc, alu->src[0].ref, src1_uw);
       build_MACH(b, alu->dest.type, acc, alu->src[0].ref, alu->src[1].ref);
 
       if (alu->instr.simd_width == 1)
@@ -98,7 +94,7 @@ ibc_lower_integer_multiplication(ibc_shader *shader)
 
       ibc_alu_instr *alu = ibc_instr_as_alu(instr);
       switch (alu->op) {
-      case IBC_ALU_OP_MUL:
+      case IBC_ALU_OP_IMUL:
          progress |= lower_mul(&b, alu);
          break;
       default:

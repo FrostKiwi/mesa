@@ -784,7 +784,7 @@ lower_tex(ibc_builder *b, ibc_intrinsic_instr *intrin)
       ibc_builder_push_scalar(b);
       if (ibc_refs_equal(surface_bti, sampler_bti)) {
          /* This case is common in GL */
-         send->desc = ibc_MUL(b, IBC_TYPE_UD, surface_bti, ibc_imm_ud(0x101));
+         send->desc = ibc_IMUL(b, IBC_TYPE_UD, surface_bti, ibc_imm_ud(0x101));
       } else {
          if (sampler_handle.file != IBC_FILE_NONE) {
             send->desc = ibc_MOV(b, IBC_TYPE_UD, surface_bti);

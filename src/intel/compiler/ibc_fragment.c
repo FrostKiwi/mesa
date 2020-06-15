@@ -259,8 +259,8 @@ ibc_sample_pos(struct nir_to_ibc_state *nti)
 
          ibc_builder_push_group(b, g, MIN2(b->simd_width, 16));
          ibc_ref pos_float =
-            ibc_MUL(b, IBC_TYPE_F, ibc_MOV(b, IBC_TYPE_F, pos_fixed),
-                                   ibc_imm_f(1 / 16.0f));
+            ibc_FMUL(b, IBC_TYPE_F, ibc_MOV(b, IBC_TYPE_F, pos_fixed),
+                                    ibc_imm_f(1 / 16.0f));
          ibc_builder_pop(b);
 
          set_ref_or_zip(b, &sample_pos[i], pos_float, 1);
