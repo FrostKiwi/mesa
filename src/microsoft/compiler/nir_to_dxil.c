@@ -3252,19 +3252,32 @@ emit_sample_level(struct ntd_context *ctx, struct texop_parameters *params)
 static const struct dxil_value *
 emit_sample_cmp(struct ntd_context *ctx, struct texop_parameters *params)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.sampleCmp", DXIL_F32);
+   const struct dxil_func *func;
+   enum dxil_intr opcode;
+   int numparam;
+
+   if (ctx->mod.shader_kind == DXIL_PIXEL_SHADER)  {
+      func = dxil_get_function(&ctx->mod, "dx.op.sampleCmp", DXIL_F32);
+      opcode = DXIL_INTR_SAMPLE_CMP;
+      numparam = 12;
+   } else {
+      func = dxil_get_function(&ctx->mod, "dx.op.sampleCmpLevelZero", DXIL_F32);
+      opcode = DXIL_INTR_SAMPLE_CMP_LVL_ZERO;
+      numparam = 11;
+   }
+
    if (!func)
       return NULL;
 
    const struct dxil_value *args[12] = {
-      dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_SAMPLE_CMP),
+      dxil_module_get_int32_const(&ctx->mod, opcode),
       params->tex, params->sampler,
       params->coord[0], params->coord[1], params->coord[2], params->coord[3],
       params->offset[0], params->offset[1], params->offset[2],
       params->cmp, params->min_lod
    };
 
-   return dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+   return dxil_emit_call(&ctx->mod, func, args, numparam);
 }
 
 static const struct dxil_value *
