@@ -3976,6 +3976,7 @@ struct sysvalue_name {
 } possible_sysvalues[] = {
    {SYSTEM_VALUE_VERTEX_ID, -1, "SV_VertexID"},
    {SYSTEM_VALUE_INSTANCE_ID, -1, "SV_InstanceID"},
+   {SYSTEM_VALUE_FRONT_FACE, VARYING_SLOT_FACE, "SV_IsFrontFace"}
 };
 
 static bool
@@ -4023,15 +4024,6 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
    optimize_nir(s);
 
    NIR_PASS_V(s, nir_remove_dead_variables, nir_var_function_temp);
-
-   if ((s->info.stage == MESA_SHADER_FRAGMENT) &&
-       (s->info.system_values_read & (1ull << SYSTEM_VALUE_FRONT_FACE))) {
-      if (!append_input_or_sysvalue(&ctx, s, VARYING_SLOT_FACE, SYSTEM_VALUE_FRONT_FACE,
-                                    "SV_IsFrontFace", exec_list_length(&s->inputs))) {
-         retval = false;
-         goto out;
-      }
-   }
 
    if (!allocate_sysvalues(&ctx, s))
       return false;
