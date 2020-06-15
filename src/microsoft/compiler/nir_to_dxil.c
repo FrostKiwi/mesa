@@ -3976,7 +3976,8 @@ struct sysvalue_name {
 } possible_sysvalues[] = {
    {SYSTEM_VALUE_VERTEX_ID, -1, "SV_VertexID"},
    {SYSTEM_VALUE_INSTANCE_ID, -1, "SV_InstanceID"},
-   {SYSTEM_VALUE_FRONT_FACE, VARYING_SLOT_FACE, "SV_IsFrontFace"}
+   {SYSTEM_VALUE_FRONT_FACE, VARYING_SLOT_FACE, "SV_IsFrontFace"},
+   {SYSTEM_VALUE_PRIMITIVE_ID, VARYING_SLOT_PRIMITIVE_ID, "SV_PrimitiveID"},
 };
 
 static bool
@@ -4143,6 +4144,7 @@ nir_var_to_dxil_sysvalue_type(nir_variable *var, uint64_t other_stage_mask)
    case VARYING_SLOT_POS:
    case VARYING_SLOT_CLIP_DIST0:
    case VARYING_SLOT_CLIP_DIST1:
+   case VARYING_SLOT_PRIMITIVE_ID:
       if (!((1 << var->data.location) & other_stage_mask))
          return DXIL_SYSVALUE;
       /* fallthrough */
