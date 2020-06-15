@@ -3971,10 +3971,11 @@ append_input_or_sysvalue(struct ntd_context *ctx, nir_shader *s,
 
 struct sysvalue_name {
    gl_system_value value;
+   int slot;
    char *name;
 } possible_sysvalues[] = {
-   {SYSTEM_VALUE_VERTEX_ID, "SV_VertexID"},
-   {SYSTEM_VALUE_INSTANCE_ID, "SV_InstanceID"},
+   {SYSTEM_VALUE_VERTEX_ID, -1, "SV_VertexID"},
+   {SYSTEM_VALUE_INSTANCE_ID, -1, "SV_InstanceID"},
 };
 
 static bool
@@ -3986,7 +3987,7 @@ allocate_sysvalues(struct ntd_context *ctx, nir_shader *s)
    for (unsigned i = 0; i < ARRAY_SIZE(possible_sysvalues); ++i) {
       struct sysvalue_name *info = &possible_sysvalues[i];
       if ((1 << info->value) & s->info.system_values_read) {
-         if (!append_input_or_sysvalue(ctx, s, -1,
+         if (!append_input_or_sysvalue(ctx, s, info->slot,
                                        info->value, info->name,
                                        driver_location++))
             return false;
