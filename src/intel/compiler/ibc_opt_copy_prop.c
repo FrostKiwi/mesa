@@ -338,6 +338,7 @@ can_flip_alu_instr(const ibc_alu_instr *alu)
    case IBC_ALU_OP_OR:
    case IBC_ALU_OP_CMP:
    case IBC_ALU_OP_ADD:
+   case IBC_ALU_OP_FMUL:
       return true;
    default:
       return false;
