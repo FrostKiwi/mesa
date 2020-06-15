@@ -2427,6 +2427,47 @@ emit_store_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 }
 
 static bool
+emit_load_input_array(struct ntd_context *ctx, nir_intrinsic_instr *intr, nir_variable *var, nir_src *index)
+{
+   assert(var);
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_LOAD_INPUT);
+   const struct dxil_value *input_id = dxil_module_get_int32_const(&ctx->mod, var->data.driver_location);
+   const struct dxil_value *vertex_id;
+   const struct dxil_value *row;
+
+   if (ctx->mod.shader_kind == DXIL_GEOMETRY_SHADER) {
+      vertex_id = get_src(ctx, index, 0, nir_type_int);
+      row = dxil_module_get_int32_const(&ctx->mod, 0);
+   } else {
+      const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
+      vertex_id = dxil_module_get_undef(&ctx->mod, int32_type);
+      row = get_src(ctx, index, 0, nir_type_int);
+   }
+
+   nir_alu_type out_type = nir_get_nir_type_for_glsl_base_type(glsl_get_base_type(glsl_get_array_element(var->type)));
+   enum overload_type overload = get_overload(out_type, 32);
+
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.loadInput", overload);
+
+   if (!func)
+      return false;
+
+   for (unsigned i = 0; i < nir_dest_num_components(intr->dest); ++i) {
+      const struct dxil_value *comp = dxil_module_get_int8_const(&ctx->mod, i);
+
+      const struct dxil_value *args[] = {
+         opcode, input_id, row, comp, vertex_id
+      };
+
+      const struct dxil_value *retval = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+      if (!retval)
+         return false;
+      store_dest(ctx, &intr->dest, i, retval, out_type);
+   }
+   return true;
+}
+
+static bool
 emit_load_input_interpolated(struct ntd_context *ctx, nir_intrinsic_instr *intr, nir_variable *var)
 {
    assert(var);
@@ -2601,6 +2642,8 @@ emit_load_deref(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 
    switch (var->data.mode) {
    case nir_var_shader_in:
+      if (glsl_type_is_array(var->type))
+         return emit_load_input_array(ctx, intr, var, &deref->arr.index);
       return emit_load_input(ctx, intr, var);
 
    default:
@@ -3087,7 +3130,8 @@ emit_load_const(struct ntd_context *ctx, nir_load_const_instr *load_const)
 static bool
 emit_deref(struct ntd_context* ctx, nir_deref_instr* instr)
 {
-   assert(instr->deref_type == nir_deref_type_var);
+   assert(instr->deref_type == nir_deref_type_var ||
+          instr->deref_type == nir_deref_type_array);
    return true;
 }
 

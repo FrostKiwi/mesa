@@ -98,6 +98,8 @@ in_sysvalue_name(nir_variable *var)
 static void
 get_additional_semantic_info(nir_variable *var, struct semantic_info *info)
 {
+   const struct glsl_type *type = var->type;
+
    info->comp_type =
       dxil_get_prog_sig_comp_type(var->type);
 
@@ -112,7 +114,9 @@ get_additional_semantic_info(nir_variable *var, struct semantic_info *info)
       info->start_row = (int32_t)var->data.driver_location;
 
    info->start_col = (uint8_t)var->data.location_frac;
-   info->cols = (uint8_t)glsl_get_components(var->type);
+   if (glsl_type_is_array(type))
+      type = glsl_get_array_element(type);
+   info->cols = (uint8_t)glsl_get_components(type);
 }
 
 typedef void (*sematic_info_proc)(nir_variable *var, struct semantic_info *info);
