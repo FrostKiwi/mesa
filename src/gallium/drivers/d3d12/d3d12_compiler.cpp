@@ -425,7 +425,9 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       key->invert_depth = sel_ctx->ctx->reverse_depth_range;
    }
 
-   if (stage == PIPE_SHADER_GEOMETRY && sel_ctx->needs_point_sprite_lowering) {
+   if (stage == PIPE_SHADER_GEOMETRY &&
+       sel_ctx->needs_point_sprite_lowering &&
+       sel_ctx->ctx->gfx_pipeline_state.rast) {
       struct pipe_rasterizer_state *rast = &sel_ctx->ctx->gfx_pipeline_state.rast->base;
       key->gs.writes_psize = 1;
       key->gs.sprite_coord_enable = rast->sprite_coord_enable;
