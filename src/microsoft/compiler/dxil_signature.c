@@ -39,6 +39,7 @@ struct semantic_info {
    enum dxil_prog_sig_comp_type comp_type;
    uint8_t sig_comp_type;
    int32_t start_row;
+   int32_t rows;
    uint8_t start_col;
    uint8_t cols;
    uint8_t interpolation;
@@ -106,6 +107,7 @@ get_additional_semantic_info(nir_variable *var, struct semantic_info *info)
    bool is_depth = is_depth_output(info->kind);
    info->sig_comp_type = dxil_get_comp_type(var->type);
 
+   info->rows = 1;
    if (info->kind == DXIL_SEM_TARGET)
       info->start_row = info->index;
    else if (is_depth)
@@ -300,8 +302,7 @@ append_semantic_index_to_table(struct dxil_psv_sem_index_table *table, uint32_t 
 
 static const struct dxil_mdnode *
 fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id,
-                    struct semantic_info *semantic,
-                    uint32_t rows) {
+                    struct semantic_info *semantic) {
 
    const struct dxil_mdnode *SV_params_nodes[11];
    /* For this to always work we should use vectorize_io, but for FS out and VS in
@@ -317,7 +318,7 @@ fill_SV_param_nodes(struct dxil_module *mod, unsigned record_id,
    SV_params_nodes[4] = dxil_get_metadata_node(mod, flattened_semantics,
                                          ARRAY_SIZE(flattened_semantics)); // Semantic index vector
    SV_params_nodes[5] = dxil_get_metadata_int8(mod, semantic->interpolation); // Interpolation mode
-   SV_params_nodes[6] = dxil_get_metadata_int32(mod, rows); // Number of rows
+   SV_params_nodes[6] = dxil_get_metadata_int32(mod, semantic->rows); // Number of rows
    SV_params_nodes[7] = dxil_get_metadata_int8(mod, semantic->cols); // Number of columns
    SV_params_nodes[8] = dxil_get_metadata_int32(mod, semantic->start_row); // Element packing start row
    SV_params_nodes[9] = dxil_get_metadata_int8(mod, semantic->start_col); // Element packing start column
@@ -349,7 +350,7 @@ fill_psv_signature_element(struct dxil_psv_signature_element *psv_elm,
                            struct semantic_info *semantic, struct dxil_module *mod)
 {
    memset(psv_elm, 0, sizeof(struct dxil_psv_signature_element));
-   psv_elm->rows = 1;  // var->num_state_slots ?
+   psv_elm->rows = semantic->rows;
    if (semantic->start_row >= 0) {
       assert(semantic->start_row < 256);
       psv_elm->start_row = semantic->start_row;
@@ -392,7 +393,7 @@ fill_io_signature(struct dxil_module *mod, int id,
                   struct dxil_signature_element *elm, struct dxil_psv_signature_element *psv_elm)
 {
 
-   *io = fill_SV_param_nodes(mod, id, semantic, 1);
+   *io = fill_SV_param_nodes(mod, id, semantic);
    fill_signature_element(elm, semantic);
    return fill_psv_signature_element(psv_elm, semantic, mod);
 }
