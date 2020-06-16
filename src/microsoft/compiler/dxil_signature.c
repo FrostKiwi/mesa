@@ -96,8 +96,8 @@ in_sysvalue_name(nir_variable *var)
  * to the stream in order of the registers and each contains an offset
  * to the semantic name string. Then these strings are dumped into the stream.
  */
-static void
-get_additional_semantic_info(nir_variable *var, struct semantic_info *info)
+static unsigned
+get_additional_semantic_info(nir_variable *var, struct semantic_info *info, unsigned next_row)
 {
    const struct glsl_type *type = var->type;
 
@@ -108,17 +108,20 @@ get_additional_semantic_info(nir_variable *var, struct semantic_info *info)
    info->sig_comp_type = dxil_get_comp_type(var->type);
 
    info->rows = 1;
-   if (info->kind == DXIL_SEM_TARGET)
+   if (info->kind == DXIL_SEM_TARGET) {
       info->start_row = info->index;
-   else if (is_depth)
+   } else if (is_depth) {
       info->start_row = -1;
-   else
-      info->start_row = (int32_t)var->data.driver_location;
-
+   } else {
+      info->start_row = next_row;
+      next_row += info->rows;
+   }
    info->start_col = (uint8_t)var->data.location_frac;
    if (glsl_type_is_array(type))
       type = glsl_get_array_element(type);
    info->cols = (uint8_t)glsl_get_components(type);
+
+   return next_row;
 }
 
 typedef void (*sematic_info_proc)(nir_variable *var, struct semantic_info *info);
@@ -400,13 +403,14 @@ fill_io_signature(struct dxil_module *mod, int id,
 
 static unsigned
 get_input_signature_group(struct dxil_module *mod, const struct dxil_mdnode **inputs,
-                          unsigned num_inputs, struct exec_list *nir_vars, sematic_info_proc get_semantics)
+                          unsigned num_inputs, struct exec_list *nir_vars,
+                          sematic_info_proc get_semantics, unsigned *next_row)
 {
    nir_foreach_variable(var, nir_vars) {
       struct semantic_info semantic = {0};
       get_semantics(var, &semantic);
       mod->inputs[num_inputs].sysvalue = semantic.sysvalue_name;
-      get_additional_semantic_info(var, &semantic);
+      *next_row = get_additional_semantic_info(var, &semantic, *next_row);
 
       mod->inputs[num_inputs].name = ralloc_strdup(mod->ralloc_ctx,
                                                    semantic.name);
@@ -431,12 +435,15 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
       return NULL;
 
    const struct dxil_mdnode *inputs[VARYING_SLOT_MAX];
+   unsigned next_row = 0;
    mod->num_sig_inputs = get_input_signature_group(mod, inputs, 0, &s->inputs,
                                                    s->info.stage == MESA_SHADER_VERTEX ?
-                                                      get_semantic_vs_in_name : get_semantic_in_name);
+                                                      get_semantic_vs_in_name : get_semantic_in_name,
+                                                   &next_row);
 
    mod->num_sig_inputs = get_input_signature_group(mod, inputs, mod->num_sig_inputs, &s->system_values,
-                                                   get_semantic_sv_name);
+                                                   get_semantic_sv_name,
+                                                   &next_row);
 
 
    const struct dxil_mdnode *retval = mod->num_sig_inputs ?
@@ -467,6 +474,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
 
    const struct dxil_mdnode *outputs[VARYING_SLOT_MAX];
    unsigned num_outputs = 0;
+   unsigned next_row = 0;
    nir_foreach_variable(var, &s->outputs) {
       struct semantic_info semantic = {0};
 
@@ -477,7 +485,7 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
          get_semantic_name(var, &semantic);
          mod->outputs[num_outputs].sysvalue = out_sysvalue_name(var);
       }
-      get_additional_semantic_info(var, &semantic);
+      next_row = get_additional_semantic_info(var, &semantic, next_row);
 
       mod->info.has_out_position |= semantic.kind== DXIL_SEM_POSITION;
       mod->info.has_out_depth |= semantic.kind == DXIL_SEM_DEPTH;
