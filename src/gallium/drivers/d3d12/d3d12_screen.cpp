@@ -125,6 +125,9 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_NPOT_TEXTURES:
       return 1;
 
+   case PIPE_CAP_ANISOTROPIC_FILTER:
+      return 1;
+
    case PIPE_CAP_MAX_RENDER_TARGETS:
       if (screen->max_feature_level >= D3D_FEATURE_LEVEL_10_0)
          return 8;
