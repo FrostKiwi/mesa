@@ -592,7 +592,7 @@ ComputeTest::run_shader_with_raw_args(Shader shader,
    {
       EXPECT_EQ(0, info_queue->GetNumStoredMessages());
       for (unsigned i = 0; i < info_queue->GetNumStoredMessages(); ++i) {
-         size_t message_size = 0;
+         SIZE_T message_size = 0;
          info_queue->GetMessageA(i, nullptr, &message_size);
          D3D12_MESSAGE* message = (D3D12_MESSAGE*)malloc(message_size);
          info_queue->GetMessageA(i, message, &message_size);
