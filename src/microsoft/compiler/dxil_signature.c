@@ -114,6 +114,11 @@ get_additional_semantic_info(nir_variable *var, struct semantic_info *info, unsi
       info->start_row = -1;
    } else {
       info->start_row = next_row;
+      if (glsl_type_is_array(type)) {
+         info->rows = glsl_get_aoa_size(type);
+         type = glsl_get_array_element(type);
+         assert(info->rows);
+      }
       next_row += info->rows;
    }
    info->start_col = (uint8_t)var->data.location_frac;
