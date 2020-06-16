@@ -587,9 +587,10 @@ clc_to_spirv(const struct clc_compile_args *args,
    llvm_ctx->setDiagnosticHandlerCallBack(llvm_log_handler, &log);
 
    std::unique_ptr<clang::CompilerInstance> c { new clang::CompilerInstance };
-   clang::TextDiagnosticBuffer *diag_buffer = new clang::TextDiagnosticBuffer;
    clang::DiagnosticsEngine diag { new clang::DiagnosticIDs,
-         new clang::DiagnosticOptions, diag_buffer };
+         new clang::DiagnosticOptions,
+         new clang::TextDiagnosticPrinter(*new raw_string_ostream(log),
+                                          &c->getDiagnosticOpts(), true)};
 
    std::vector<const char *> clang_opts = {
       args->source.name,
@@ -618,7 +619,6 @@ clc_to_spirv(const struct clc_compile_args *args,
       return -1;
    }
 
-   diag_buffer->FlushDiagnostics(diag);
    if (diag.hasErrorOccurred()) {
       log += "Errors occurred during Clang invocation.\n";
       *err_buf = strdup(log.c_str());
