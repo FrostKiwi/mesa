@@ -489,7 +489,7 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
       nir_shader_gather_info(new_nir_variant, impl);
    }
 
-   if (key.int_tex_states.n_states)
+   if (sel_ctx->samples_int_textures)
       NIR_PASS_V(new_nir_variant, dxil_lower_sample_to_txf_for_integer_tex, &key.int_tex_states);
 
    if (key.fs.frag_result_color_lowering)
