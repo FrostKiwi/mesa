@@ -62,12 +62,6 @@ clc_dump_spirv(const struct spirv_binary *spvbin, FILE *f);
 void
 clc_free_spirv_binary(struct spirv_binary *spvbin);
 
-void clc_fn_mangle_libclc(const char *in_name,
-                          uint32_t ptr_mask,
-                          int ntypes,
-                          const struct glsl_type **src_types,
-                          char **out_string);
-
 #define clc_log(logger, level, fmt, ...) do {        \
       if (!logger || !logger->level) break;          \
       char *msg = NULL;                              \
