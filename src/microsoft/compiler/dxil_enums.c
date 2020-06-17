@@ -141,8 +141,6 @@ enum dxil_primitive_topology dxil_get_primitive_topology(unsigned topology)
       return DXIL_PRIMITIVE_TOPOLOGY_LINE_LIST;
    case GL_LINE_STRIP:
       return DXIL_PRIMITIVE_TOPOLOGY_LINE_STRIP;
-   case GL_TRIANGLES:
-      return DXIL_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
    case GL_TRIANGLE_STRIP:
       return DXIL_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
    default:
