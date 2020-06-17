@@ -63,13 +63,40 @@ shared: 0
 decl_function main (0 params) (entrypoint)
 )";
 
-   for (int i = 0; i < MESA_SHADER_COMPUTE; ++i) {
+   for (int i = 0; i < 4; ++i) {
       stringstream s;
       s << sh_head;
       s << shader_stages[i] << shader_mid << empty_main;
       run(s.str());
    }
 }
+
+TEST_F(nir_shader_from_string_test, test_default_shader_simple_gs)
+{
+   const char sh_head[] = "shader: MESA_SHADER_";
+
+   const char shader_mid[] =
+R"(
+inputs: 0
+outputs: 0
+uniforms: 0
+shared: 0
+invocations: 0
+vertices in: 0
+vertices out: 0
+input primitive: POINTS
+output primitive: POINTS
+active_stream_mask: 0x0
+uses_end_primitive: 0
+decl_function main (0 params) (entrypoint)
+)";
+
+   stringstream s;
+   s << sh_head;
+   s << "GEOMETRY" << shader_mid << empty_main;
+   run(s.str());
+}
+
 
 TEST_F(nir_shader_from_string_test, test_default_shader_cs)
 {
@@ -730,7 +757,7 @@ std::string CaptureFile::text()
 }
 
 const char *nir_shader_from_string_test::shader_stages[MESA_SHADER_STAGES] = {
-  "VERTEX", "TESS_CTRL", "TESS_EVAL", "GEOMETRY", "FRAGMENT", "COMPUTE"
+  "VERTEX", "TESS_CTRL", "TESS_EVAL", "FRAGMENT", "COMPUTE"
 };
 
 const char *nir_shader_from_string_test::empty_main =
