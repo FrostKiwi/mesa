@@ -458,10 +458,11 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
    mod->num_sig_inputs = get_input_signature_group(mod, inputs, mod->num_sig_inputs, &s->system_values,
                                                    get_semantic_sv_name,
                                                    &next_row);
-
+   mod->num_psv_inputs = next_row;
 
    const struct dxil_mdnode *retval = mod->num_sig_inputs ?
          dxil_get_metadata_node(mod, inputs, mod->num_sig_inputs) : NULL;
+
    return retval;
 }
 

@@ -210,7 +210,7 @@ dxil_container_add_state_validation(struct dxil_container *c,
    size += dxil_pvs_sig_size * m->num_sig_outputs;
    // size += dxil_pvs_sig_size * m->num_sig_patch_const...;
 
-   state->state.sig_input_vectors = (uint8_t)m->num_sig_inputs;
+   state->state.sig_input_vectors = (uint8_t)m->num_psv_inputs;
 
    // TODO: check proper stream
    state->state.sig_output_vectors[0] = (uint8_t)m->num_psv_outputs;
