@@ -80,45 +80,47 @@ dxil_container_add_features(struct dxil_container *c,
 }
 
 typedef struct {
-   const char *name;
-   uint32_t offset;
-} name_offset_t;
+   struct {
+      const char *name;
+      uint32_t offset;
+   } entries[DXIL_SHADER_MAX_IO_ROWS];
+   uint32_t num_entries;
+} name_offset_cache_t;
 
-static name_offset_t *
-find_name(name_offset_t *table, unsigned nentries, const char *name)
+static uint32_t
+get_semantic_name_offset(name_offset_cache_t *cache, const char *name,
+                         struct _mesa_string_buffer *buf, uint32_t buf_offset)
 {
    /* consider replacing this with a binary search using rb_tree */
-   for (unsigned j = 0; j < nentries; ++j) {
-      if (!strcmp(name, table[j].name)) {
-         return table + j;
-      }
+   for (unsigned i = 0; i < cache->num_entries; ++i) {
+      if (!strcmp(name, cache->entries[i].name))
+         return cache->entries[i].offset;
    }
-   return NULL;
+
+   uint32_t offset = buf->length + buf_offset;
+   cache->entries[cache->num_entries].name = name;
+   cache->entries[cache->num_entries].offset = offset;
+   ++cache->num_entries;
+   _mesa_string_buffer_append_len(buf, name, strlen(name) + 1);
+
+   return offset;
 }
 
 static uint32_t
 collect_semantic_names(unsigned num_records,
                        struct dxil_signature_record *io_data,
                        struct _mesa_string_buffer *buf,
-                       uint32_t offset)
+                       uint32_t buf_offset)
 {
-   name_offset_t name_offsets[DXIL_SHADER_MAX_IO_ROWS];
-   unsigned nentries = 0;
+   name_offset_cache_t cache;
+   cache.num_entries = 0;
 
    for (unsigned i = 0; i < num_records; ++i) {
       struct dxil_signature_record *io = &io_data[i];
-      name_offset_t  *entry = find_name(name_offsets, nentries, io->name);
-      if (entry) {
-         io->sig.semantic_name_offset = entry->offset;
-         continue;
-      }
-
-      name_offsets[nentries].name = io->name;
-      name_offsets[nentries].offset = io->sig.semantic_name_offset = buf->length + offset;
-      ++nentries;
-      _mesa_string_buffer_append_len(buf, io->name, strlen(io->name) + 1);
+      uint32_t offset = get_semantic_name_offset(&cache, io->name, buf, buf_offset);
+      io->sig.semantic_name_offset = offset;
    }
-   return offset + buf->length;
+   return buf_offset + buf->length;
 }
 
 bool
