@@ -794,3 +794,57 @@ impl main {
 })";
  run(shader, "");
 }
+
+
+
+
+TEST_F(NirToDXILTest, test_shader_GS_triangle_to_point)
+{
+   struct SetupShaderGS : public SetupShader {
+      void operator () (UNUSED nir_shader *shader) const override {
+         shader->info.gs.vertices_in = 3;
+         shader->info.gs.vertices_out = 1;
+         shader->info.gs.input_primitive = GL_TRIANGLES;
+         shader->info.gs.output_primitive = GL_TRIANGLE_STRIP;
+         shader->info.gs.invocations = 1;
+         shader->info.gs.active_stream_mask = 1;
+      };
+   };
+
+
+   const char shader[] =
+R"(shader: MESA_SHADER_GEOMETRY
+name: GLSL1
+inputs: 1
+outputs: 1
+uniforms: 0
+shared: 0
+decl_var shader_in INTERP_MODE_FLAT int[3] vertex_id (VARYING_SLOT_VAR9.x, 0, 0)
+decl_var shader_out INTERP_MODE_FLAT ivec3 vertex_out (VARYING_SLOT_VAR9.xyz, 0, 0)
+decl_function main (0 params) (entrypoint)
+
+impl main {
+        block block_0:
+        /* preds: */
+        vec1 32 ssa_0 = deref_var &vertex_id (shader_in int[3])
+        vec1 32 ssa_1 = load_const (0x00000000 /* 0.000000 */)
+        vec1 32 ssa_2 = deref_array &(*ssa_0)[0] (shader_in int) /* &packed:vertex_id[0] */
+        vec1 32 ssa_3 = intrinsic load_deref (ssa_2) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
+        vec1 32 ssa_4 = load_const (0x00000001 /* 0.000000 */)
+        vec1 32 ssa_5 = deref_array &(*ssa_0)[1] (shader_in int) /* &packed:vertex_id[1] */
+        vec1 32 ssa_6 = intrinsic load_deref (ssa_5) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
+        vec1 32 ssa_7 = load_const (0x00000002 /* 0.000000 */)
+        vec1 32 ssa_8 = deref_array &(*ssa_0)[2] (shader_in int) /* &packed:vertex_id[2] */
+        vec1 32 ssa_9 = intrinsic load_deref (ssa_8) (0, 0, 0) /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
+        vec1 32 ssa_10 = iadd ssa_3, ssa_4
+        vec1 32 ssa_11 = iadd ssa_6, ssa_4
+        vec1 32 ssa_12 = iadd ssa_9, ssa_4
+        vec3 32 ssa_13 = vec3 ssa_10, ssa_11, ssa_12
+        vec1 32 ssa_14 = deref_var &vertex_out (shader_out ivec3)
+        intrinsic store_deref (ssa_14, ssa_13) (7, 0, 0, 0) /* wrmask=xyz */ /* access=0 */ /* align_mul=0 */ /* align_offset=0 */
+        intrinsic emit_vertex (0) /* stream-id=0 */
+        /* succs: block_1 */
+        block block_1:
+})";
+   run(shader, "", SetupShaderGS());
+}
