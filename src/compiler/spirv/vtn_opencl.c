@@ -217,11 +217,6 @@ handle_instr(struct vtn_builder *b, uint32_t opcode,
             address_types[i] = val->pointer->var->var->data.mode;
          if (val->pointer->type)
             src_types[i] = val->pointer->type->type;
-
-         if (glsl_type_is_vector(src_types[i]) &&
-             glsl_get_components(src_types[i]) == 3) {
-            src_types[i] = glsl_vector_type(glsl_get_base_type(src_types[i]), 4);
-         }
       }
    }
 
@@ -405,35 +400,27 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
    if (!name)
        return NULL;
 
-   if (opcode == OpenCLstd_Fract) {
-      src_types[1] = src_types[0];
+   /* Some functions which take out params end up with pointer-to-uint being passed,
+    * which doesn't mangle correctly when the function expects pointer-to-int
+    */
+   int signed_out_param = -1;
+   switch (opcode) {
+   case OpenCLstd_Frexp:
+   case OpenCLstd_Lgamma_r:
+      signed_out_param = 1;
+      break;
+   case OpenCLstd_Remquo:
+      signed_out_param = 2;
+      break;
+   default: break;
    }
-   if (opcode == OpenCLstd_Frexp) {
-      int elem = glsl_get_vector_elements(src_types[0]);
+
+   if (signed_out_param >= 0) {
+      int elem = glsl_get_vector_elements(src_types[signed_out_param]);
       if (elem > 1)
-         src_types[1] = glsl_vector_type(GLSL_TYPE_INT, elem);
+         src_types[signed_out_param] = glsl_vector_type(GLSL_TYPE_INT, elem);
       else
-         src_types[1] = glsl_int_type();
-   }
-   if (opcode == OpenCLstd_Lgamma_r) {
-      int elem = glsl_get_vector_elements(src_types[0]);
-      if (elem > 1)
-         src_types[1] = glsl_vector_type(GLSL_TYPE_INT, elem);
-      else
-         src_types[1] = glsl_int_type();
-   }
-   if (opcode == OpenCLstd_Remquo) {
-      int elem = glsl_get_vector_elements(src_types[0]);
-      if (elem > 1)
-         src_types[2] = glsl_vector_type(GLSL_TYPE_INT, elem);
-      else
-         src_types[2] = glsl_int_type();
-   }
-   if (opcode == OpenCLstd_Sincos) {
-      src_types[1] = src_types[0];
-   }
-   if (opcode == OpenCLstd_Modf) {
-      src_types[1] = src_types[0];
+         src_types[signed_out_param] = glsl_int_type();
    }
 
    nir_deref_instr *ret_deref = NULL;
@@ -542,6 +529,18 @@ handle_core(struct vtn_builder *b, uint32_t opcode,
 
    switch ((SpvOp)opcode) {
    case SpvOpGroupAsyncCopy: {
+      /* Libclc doesn't include 3-component overloads of the async copy functions.
+       * However, the CLC spec says:
+       * async_work_group_copy and async_work_group_strided_copy for 3-component vector types
+       * behave as async_work_group_copy and async_work_group_strided_copy respectively for 4-component
+       * vector types
+       */
+      for (unsigned i = 0; i < num_srcs; ++i) {
+         if (glsl_type_is_vector(src_types[i]) &&
+             glsl_get_components(src_types[i]) == 3) {
+            src_types[i] = glsl_vector_type(glsl_get_base_type(src_types[i]), 4);
+         }
+      }
       if (!call_mangled_function(b, "async_work_group_strided_copy", (1 << 1), num_srcs, src_types, address_types, dest_type, srcs, &ret_deref))
          return NULL;
       break;
