@@ -726,13 +726,15 @@ static void dump_io_signature(struct _mesa_string_buffer *buf, unsigned num,
 {
    _mesa_string_buffer_append(buf, " SEMANTIC-NAME Index Mask Reg SysValue Format\n");
    _mesa_string_buffer_append(buf, "----------------------------------------------\n");
-   for (unsigned  i = 0; i < num; ++i, ++io)  {
-      char mask[5] = "";
-      mask_to_string(io->sig.mask, mask);
-      _mesa_string_buffer_printf(buf, "%-15s %3d %4s %3d %-8s %-7s\n",
-                                 io->name, io->sig.semantic_index,
-                                 mask, io->sig.reg, io->sysvalue,
-                                 component_type_as_string(io->sig.comp_type));
+   for (unsigned i = 0; i < num; ++i, ++io)  {
+      for (unsigned j = 0; j < io->num_elements; ++j) {
+         char mask[5] = "";
+         mask_to_string(io->elements[j].mask, mask);
+         _mesa_string_buffer_printf(buf, "%-15s %3d %4s %3d %-8s %-7s\n",
+                                    io->name, io->elements[j].semantic_index,
+                                    mask, io->elements[j].reg, io->sysvalue,
+                                    component_type_as_string(io->elements[j].comp_type));
+      }
    }
 }
 

@@ -118,7 +118,8 @@ collect_semantic_names(unsigned num_records,
    for (unsigned i = 0; i < num_records; ++i) {
       struct dxil_signature_record *io = &io_data[i];
       uint32_t offset = get_semantic_name_offset(&cache, io->name, buf, buf_offset);
-      io->sig.semantic_name_offset = offset;
+      for (unsigned j = 0; j < io->num_elements; ++j)
+         io->elements[j].semantic_name_offset = offset;
    }
    return buf_offset + buf->length;
 }
@@ -139,17 +140,12 @@ dxil_container_add_io_signature(struct dxil_container *c,
 
    bool retval = true;
 
-   unsigned offset[DXIL_SHADER_MAX_IO_ROWS];
-
    for (unsigned i = 0; i < num_records; ++i) {
       /* TODO:
        * - Here we need to check whether the value is actually part of the
-       * signature
-       * - We ignore that one semantic could stretch over various rows (IO arrays?) */
-      offset[i] = fixed_size;
-      fixed_size += sizeof(struct dxil_signature_element);
-
-      ++header.param_count;
+       * signature */
+      fixed_size += sizeof(struct dxil_signature_element) * io_data[i].num_elements;
+      header.param_count += io_data[i].num_elements;
    }
 
    struct _mesa_string_buffer *names =
@@ -167,10 +163,12 @@ dxil_container_add_io_signature(struct dxil_container *c,
 
    /* write all parts */
    for (unsigned i = 0; i < num_records; ++i)
-      if (!blob_write_bytes(&c->parts, &io_data[i].sig,
-                            sizeof(io_data[i].sig))) {
-         retval = false;
-         goto cleanup;
+      for (unsigned j = 0; j < io_data[i].num_elements; ++j) {
+         if (!blob_write_bytes(&c->parts, &io_data[i].elements[j],
+                              sizeof(io_data[i].elements[j]))) {
+            retval = false;
+            goto cleanup;
+         }
       }
 
    /* write all names */
