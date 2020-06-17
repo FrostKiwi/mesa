@@ -701,7 +701,7 @@ d3d12_create_shader(struct d3d12_context *ctx,
     * For shaders that are not depended on the state this is just compiling the original
     * shader.
     */
-   struct d3d12_selection_context sel_ctx;
+   struct d3d12_selection_context sel_ctx = {0};
    sel_ctx.ctx = ctx;
    select_shader_variant(&sel_ctx, sel, prev, next);
 
