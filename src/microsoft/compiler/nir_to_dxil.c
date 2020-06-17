@@ -2386,7 +2386,9 @@ static bool
 emit_store_output(struct ntd_context *ctx, nir_intrinsic_instr *intr,
                   nir_variable *output)
 {
-   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.storeOutput", DXIL_F32);
+   nir_alu_type out_type = nir_get_nir_type_for_glsl_base_type(glsl_get_base_type(output->type));
+   enum overload_type overload = get_overload(out_type, 32);
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.storeOutput", overload);
 
    if (!func)
       return false;
@@ -2400,7 +2402,7 @@ emit_store_output(struct ntd_context *ctx, nir_intrinsic_instr *intr,
    for (unsigned i = 0; i < nir_src_num_components(intr->src[1]) && success; ++i) {
       if (writemask & (1 << i)) {
          const struct dxil_value *col = dxil_module_get_int8_const(&ctx->mod, i);
-         const struct dxil_value *value = get_src(ctx, &intr->src[1], i, nir_type_float);
+         const struct dxil_value *value = get_src(ctx, &intr->src[1], i, out_type);
          const struct dxil_value *args[] = {
             opcode, output_id, row, col, value
          };
