@@ -369,7 +369,7 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
    if (offset_index >= 0) {
       nir_ssa_def *offset = tex->src[offset_index].src.ssa;
       for (int i = 0; i < params.ncoord_comp; ++i)
-         coord_help[i] = nir_fadd(b, coord_help[i], nir_channel(b, offset, i));
+         coord_help[i] = nir_fadd(b, coord_help[i], nir_i2f32(b, nir_channel(b, offset, i)));
    }
 
    nir_ssa_def *use_border_color = nir_imm_false(b);
