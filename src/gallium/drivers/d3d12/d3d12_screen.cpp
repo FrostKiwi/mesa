@@ -158,6 +158,7 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
          return 12;
       return 9;
 
+   case PIPE_CAP_PRIMITIVE_RESTART:
    case PIPE_CAP_INDEP_BLEND_ENABLE:
    case PIPE_CAP_INDEP_BLEND_FUNC:
    case PIPE_CAP_FRAGMENT_SHADER_TEXTURE_LOD:
