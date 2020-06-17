@@ -527,6 +527,43 @@ ibc_alu_instr_exec_type(ibc_alu_instr *alu)
    return exec_type;
 }
 
+static enum ibc_type
+ibc_intrinsic_instr_exec_type(ibc_intrinsic_instr *intrin)
+{
+   enum ibc_type exec_type = IBC_TYPE_INVALID;
+   for (unsigned i = 0; i < intrin->num_srcs; i++) {
+      enum ibc_type t = ibc_type_exec_type(intrin->src[i].ref.type);
+      if (ibc_type_bit_size(t) > ibc_type_bit_size(exec_type) ||
+          (ibc_type_bit_size(t) == ibc_type_bit_size(exec_type) &&
+           ibc_type_base_type(t) == IBC_TYPE_FLOAT))
+         exec_type = t;
+   }
+
+   if (exec_type == IBC_TYPE_INVALID)
+      exec_type = intrin->dest.type;
+
+   return exec_type;
+}
+
+enum ibc_type
+ibc_instr_exec_type(ibc_instr *instr)
+{
+   switch (instr->type) {
+   case IBC_INSTR_TYPE_ALU:
+      return ibc_alu_instr_exec_type(ibc_instr_as_alu(instr));
+   case IBC_INSTR_TYPE_INTRINSIC:
+      return ibc_intrinsic_instr_exec_type(ibc_instr_as_intrinsic(instr));
+   case IBC_INSTR_TYPE_FLOW:
+      return IBC_TYPE_INVALID;
+   case IBC_INSTR_TYPE_SEND: {
+      ibc_send_instr *send = ibc_instr_as_send(instr);
+      /* XXX: payload[1]? */
+      return ibc_type_exec_type(send->payload[0].type);
+   }
+   }
+   unreachable("Unhandled instruction type");
+}
+
 ibc_alu_instr *
 ibc_alu_instr_create(struct ibc_shader *shader, enum ibc_alu_op op,
                      uint8_t simd_group, uint8_t simd_width)
