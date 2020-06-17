@@ -2066,6 +2066,9 @@ static bool
 blorp_emit_compute_state(struct blorp_batch *batch,
                          const struct blorp_params *params)
 {
+#if GEN_GEN > 12 || GEN_IS_GEN12HP
+   unreachable("Blorp compute support not yet implemented on Gen12-HP");
+#else /* GEN_GEN <= 12 && !GEN_IS_GEN12HP */
    const struct brw_cs_prog_data *cs_prog_data = params->cs_prog_data;
    const struct brw_stage_prog_data *prog_data = &cs_prog_data->base;
    const uint32_t group_size =
@@ -2203,6 +2206,7 @@ blorp_emit_compute_state(struct blorp_batch *batch,
    }
 
    return true;
+#endif /* GEN_GEN <= 12 && !GEN_IS_GEN12HP */
 }
 #endif
 
