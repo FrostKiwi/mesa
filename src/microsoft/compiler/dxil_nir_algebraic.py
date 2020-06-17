@@ -90,9 +90,11 @@ def remove_unsupported_casts(arr, bit_size, mask, max_unsigned_float, min_signed
 remove_unsupported_casts(no_8bit_conv, 8, 0xff, 255.0, -128.0, 127.0)
 remove_unsupported_casts(no_16bit_conv, 16, 0xffff, 65535.0, -32768.0, 32767.0)
 
-lower_b2b = [
+lower_x2b = [
   (('b2b32', 'a'), ('b2i32', 'a')),
   (('b2b1', 'a'), ('i2b1', 'a')),
+  (('i2b1', 'a'), ('ine', a, 0)),
+  (('f2b1', 'a'), ('fne', a, 0)),
 ]
 
 def main():
@@ -112,8 +114,8 @@ def run():
                                       no_8bit_conv).render())
     print(nir_algebraic.AlgebraicPass("dxil_nir_lower_16bit_conv",
                                       no_16bit_conv).render())
-    print(nir_algebraic.AlgebraicPass("dxil_nir_lower_b2b",
-                                      lower_b2b).render())
+    print(nir_algebraic.AlgebraicPass("dxil_nir_lower_x2b",
+                                      lower_x2b).render())
 
 if __name__ == '__main__':
     main()
