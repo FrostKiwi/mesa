@@ -173,6 +173,7 @@ struct dxil_module {
 
    unsigned num_sig_inputs;
    unsigned num_sig_outputs;
+   unsigned num_psv_inputs;
    unsigned num_psv_outputs;
 
    struct dxil_signature_record inputs[DXIL_SHADER_MAX_IO_ROWS];
