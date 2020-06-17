@@ -28,10 +28,16 @@
 #include "gtest/gtest.h"
 
 #include <string>
+#include "nir.h"
+
+struct SetupShader {
+   virtual void operator () (UNUSED nir_shader *shader) const {};
+};
 
 class NirToDXILTest : public ::testing::Test {
 protected:
-   void run(const std::string& nir_shader, const std::string& dxil_expect) const;
+   void run(const std::string& nir_shader, const std::string& dxil_expect,
+            const SetupShader &setup = SetupShader()) const;
 };
 
 #endif // DXLAYER_H
