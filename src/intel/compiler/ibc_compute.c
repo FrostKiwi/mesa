@@ -472,8 +472,8 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    } bin[3] = {
       { .enabled = !(INTEL_DEBUG & DEBUG_NO8), },
       { .enabled = !(INTEL_DEBUG & DEBUG_NO16), },
-//      { .enabled = (INTEL_DEBUG & DEBUG_DO32) || min_simd_width == 32, },
-      { .enabled = true, },
+      { .enabled = (INTEL_DEBUG & DEBUG_DO32) || min_simd_width == 32
+                                              || generate_all, },
    };
 
    bool first_bin = true;
