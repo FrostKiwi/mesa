@@ -36,16 +36,80 @@ typedef nir_ssa_def *(*nir_handler)(struct vtn_builder *b,
                                     const struct glsl_type **src_types,
                                     const struct glsl_type *dest_type);
 
+static void
+vtn_opencl_mangle(const char *in_name,
+                  uint32_t ptr_mask,
+                  uint32_t const_mask,
+                  int ntypes, const struct glsl_type **src_types,
+                  char **outstring)
+{
+   char local_name[256] = "";
+   char *args_str = local_name + sprintf(local_name, "_Z%zu%s", strlen(in_name), in_name);
+
+   for (unsigned i = 0; i < ntypes; ++i) {
+      if (ptr_mask & (1 << i))
+         *(args_str++) = 'P';
+
+      if (const_mask & (1 << i))
+         *(args_str++) = 'K';
+
+      unsigned num_elements = glsl_get_components(src_types[i]);
+      if (num_elements > 1) {
+         /* Vectors are not treated as built-ins for mangling, so check for substitution.
+          * In theory, we'd need to know which substitution value this is. In practice,
+          * the functions we need from libclc only support 1
+          */
+         bool substitution = false;
+         for (unsigned j = 0; j < i; ++j) {
+            if (src_types[i] == src_types[j]) {
+               substitution = true;
+               break;
+            }
+         }
+
+         if (substitution) {
+            args_str += sprintf(args_str, "S_");
+            continue;
+         } else
+            args_str += sprintf(args_str, "Dv%d_", num_elements);
+      }
+
+      const char *primitives[] = {
+         [GLSL_TYPE_UINT] = "j",
+         [GLSL_TYPE_INT] = "i",
+         [GLSL_TYPE_FLOAT] = "f",
+         [GLSL_TYPE_FLOAT16] = "Dh",
+         [GLSL_TYPE_DOUBLE] = "d",
+         [GLSL_TYPE_UINT8] = "h",
+         [GLSL_TYPE_INT8] = "c",
+         [GLSL_TYPE_UINT16] = "t",
+         [GLSL_TYPE_INT16] = "s",
+         [GLSL_TYPE_UINT64] = "m",
+         [GLSL_TYPE_INT64] = "l",
+         [GLSL_TYPE_BOOL] = "b",
+         [GLSL_TYPE_SAMPLER] = "11ocl_sampler",
+         [GLSL_TYPE_EVENT] = "9ocl_event",
+         [GLSL_TYPE_ERROR] = NULL,
+      };
+      enum glsl_base_type base_type = glsl_get_base_type(src_types[i]);
+      assert(base_type < ARRAY_SIZE(primitives) && primitives[base_type]);
+      args_str += sprintf(args_str, "%s", primitives[base_type]);
+   }
+
+   *outstring = strdup(local_name);
+}
+
 static nir_function *mangle_and_find(struct vtn_builder *b,
                                      const char *name,
                                      uint32_t ptr_mask,
+                                     uint32_t const_mask,
                                      uint32_t num_srcs,
                                      const struct glsl_type **src_types)
 {
    char *mname;
    nir_function *found = NULL;
 
-   b->options->mangle(name, ptr_mask, num_srcs, src_types, &mname);
+   vtn_opencl_mangle(name, ptr_mask, const_mask, num_srcs, src_types, &mname);
    /* try and find in current shader first. */
    nir_foreach_function(funcs, b->shader) {
       if (!strcmp(funcs->name, mname)) {
@@ -80,13 +144,14 @@ static nir_function *mangle_and_find(struct vtn_builder *b,
 static bool call_mangled_function(struct vtn_builder *b,
                                   const char *name,
                                   uint32_t ptr_mask,
+                                  uint32_t const_mask,
                                   uint32_t num_srcs,
                                   const struct glsl_type **src_types,
                                   const struct glsl_type *dest_type,
                                   nir_ssa_def **srcs,
                                   nir_deref_instr **ret_deref_ptr)
 {
-   nir_function *found = mangle_and_find(b, name, ptr_mask, num_srcs, src_types);
+   nir_function *found = mangle_and_find(b, name, ptr_mask, const_mask, num_srcs, src_types);
    if (!found)
       return false;
 
@@ -346,7 +411,7 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
 
    nir_deref_instr *ret_deref = NULL;
 
-   if (!call_mangled_function(b, name, ptr_mask, num_srcs, src_types,
+   if (!call_mangled_function(b, name, ptr_mask, 0, num_srcs, src_types,
                               dest_type, srcs, &ret_deref))
       return NULL;
 
