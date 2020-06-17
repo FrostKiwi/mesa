@@ -29,6 +29,37 @@
 #include "util/u_memory.h"
 #include "u_prim_restart.h"
 
+void
+util_translate_prim_restart_data(unsigned index_size,
+                                 void *src_map, void *dst_map,
+                                 unsigned count, unsigned restart_index)
+{
+   if (index_size == 1) {
+      uint8_t *src = (uint8_t *) src_map;
+      uint16_t *dst = (uint16_t *) dst_map;
+      unsigned i;
+      for (i = 0; i < count; i++) {
+         dst[i] = (src[i] == restart_index) ? 0xffff : src[i];
+      }
+   }
+   else if (index_size == 2) {
+      uint16_t *src = (uint16_t *) src_map;
+      uint16_t *dst = (uint16_t *) dst_map;
+      unsigned i;
+      for (i = 0; i < count; i++) {
+         dst[i] = (src[i] == restart_index) ? 0xffff : src[i];
+      }
+   }
+   else {
+      uint32_t *src = (uint32_t *) src_map;
+      uint32_t *dst = (uint32_t *) dst_map;
+      unsigned i;
+      assert(index_size == 4);
+      for (i = 0; i < count; i++) {
+         dst[i] = (src[i] == restart_index) ? 0xffffffff : src[i];
+      }
+   }
+}
 
 /**
  * Translate an index buffer for primitive restart.
@@ -77,32 +108,8 @@ util_translate_prim_restart_ib(struct pipe_context *context,
    if (!src_map)
       goto error;
 
-   if (src_index_size == 1 && dst_index_size == 2) {
-      uint8_t *src = (uint8_t *) src_map;
-      uint16_t *dst = (uint16_t *) dst_map;
-      unsigned i;
-      for (i = 0; i < info->count; i++) {
-         dst[i] = (src[i] == info->restart_index) ? 0xffff : src[i];
-      }
-   }
-   else if (src_index_size == 2 && dst_index_size == 2) {
-      uint16_t *src = (uint16_t *) src_map;
-      uint16_t *dst = (uint16_t *) dst_map;
-      unsigned i;
-      for (i = 0; i < info->count; i++) {
-         dst[i] = (src[i] == info->restart_index) ? 0xffff : src[i];
-      }
-   }
-   else {
-      uint32_t *src = (uint32_t *) src_map;
-      uint32_t *dst = (uint32_t *) dst_map;
-      unsigned i;
-      assert(src_index_size == 4);
-      assert(dst_index_size == 4);
-      for (i = 0; i < info->count; i++) {
-         dst[i] = (src[i] == info->restart_index) ? 0xffffffff : src[i];
-      }
-   }
+   util_translate_prim_restart_data(src_index_size, src_map, dst_map,
+                                    info->count, info->restart_index);
 
    pipe_buffer_unmap(context, src_transfer);
    pipe_buffer_unmap(context, dst_transfer);
