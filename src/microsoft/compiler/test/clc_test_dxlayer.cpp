@@ -59,12 +59,15 @@ private:
 
 static bool copy_char_skip_double_ws(stringstream &os, char c, bool last_was_ws);
 
-void NirToDXILTest::run(const string& in_shader, const string& dxil_expect) const
+void NirToDXILTest::run(const string& in_shader, const string& dxil_expect,
+                        const SetupShader &setup) const
 {
    glsl_type_singleton_init_or_ref();
 
    nir_shader* shader = nir_shader_from_string(in_shader.c_str(), &nir_options);
    ASSERT_TRUE(shader != nullptr);
+
+   setup(shader);
 
    stringstream dxil_expect_condesed;
    bool last_was_ws = false;
