@@ -194,6 +194,15 @@ const struct glsl_type *get_vector_type(char *dim_str)
 }
 
 static
+const struct glsl_type *get_ivector_type(char *dim_str)
+{
+   int dim = 0;
+   if (sscanf(dim_str, "%d", &dim) != 1)
+      return NULL;
+   return  glsl_vector_type(GLSL_TYPE_INT, dim);
+}
+
+static
 const struct glsl_type *get_matrix_type(char *dim_str)
 {
    int nx, ny;
@@ -229,6 +238,8 @@ const struct glsl_type *get_variable_base_type(char *stype)
       return glsl_float_type();
    if (!strncmp(stype, "vec", 3))
       return get_vector_type(stype + 3);
+   if (!strncmp(stype, "ivec", 4))
+      return get_ivector_type(stype + 4);
    if (!strncmp(stype, "mat", 3))
       return get_matrix_type(stype + 3);
 
@@ -386,8 +397,10 @@ bool get_global_decl_var(const char *shader, nir_builder *b)
 
    const struct glsl_type *type = get_variable_type(vartype);
 
-   if (!type)
+   if (!type) {
+      fprintf(stderr, "Unable to get type %s\n", vartype);
       goto fail;
+   }
 
    nir_variable *var =
          nir_variable_create(b->shader, mode, type, varname);
