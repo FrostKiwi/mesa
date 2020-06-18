@@ -326,8 +326,12 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    if (dinfo->mode >= PIPE_PRIM_QUADS ||
        dinfo->mode == PIPE_PRIM_LINE_LOOP ||
        dinfo->mode == PIPE_PRIM_TRIANGLE_FAN ||
-       dinfo->index_size == 1) {
-      if (!u_trim_pipe_prim(dinfo->mode, (unsigned *)&dinfo->count))
+       dinfo->index_size == 1 ||
+       (dinfo->primitive_restart && dinfo->restart_index != 0xffff &&
+        dinfo->restart_index != 0xffffffff)) {
+
+      if (!dinfo->primitive_restart &&
+          !u_trim_pipe_prim(dinfo->mode, (unsigned *)&dinfo->count))
          return;
 
       util_primconvert_save_rasterizer_state(ctx->primconvert, &ctx->gfx_pipeline_state.rast->base);
