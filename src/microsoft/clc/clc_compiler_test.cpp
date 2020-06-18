@@ -1921,3 +1921,20 @@ TEST_F(ComputeTest, convert_round_sat_vec)
    for (int i = 0; i < u.size(); ++i)
       EXPECT_EQ(u[i], expected[i]);
 }
+
+TEST_F(ComputeTest, convert_char2_uchar2)
+{
+   const char *kernel_source =
+   "__kernel void main_test( __global char2 *src, __global uchar2 *dest )\n\
+   {\n\
+      size_t i = get_global_id(0);\n\
+      dest[i] = convert_uchar2_sat( src[i] );\n\
+   }\n";
+
+   auto c = ShaderArg<int8_t>({ -127, -4, 0, 4, 126, 127, 16, 32 }, SHADER_ARG_INPUT);
+   auto u = ShaderArg<uint8_t>({ 99, 99, 99, 99, 99, 99, 99, 99 }, SHADER_ARG_OUTPUT);
+   const uint8_t expected[] = { 0, 0, 0, 4, 126, 127, 16, 32 };
+   run_shader(kernel_source, 4, 1, 1, c, u);
+   for (int i = 0; i < u.size(); i++)
+      EXPECT_EQ(u[i], expected[i]);
+}
