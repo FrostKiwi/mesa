@@ -680,17 +680,30 @@ lower_bit_size_callback(const nir_alu_instr *alu, UNUSED void *data)
 {
    if (nir_op_infos[alu->op].is_conversion)
       return 0;
-   switch (nir_dest_bit_size(alu->dest.dest)) {
-   case 8: return 16;
 
-   case 1:
-   case 16:
-   case 32:
-   case 64: return 0;
+   unsigned num_inputs = nir_op_infos[alu->op].num_inputs;
 
-   default:
-      unreachable("unexpected bit_size");
+   if (alu->op == nir_op_bcsel)
+      num_inputs--; /* ignore binary condition for bcsel */
+
+   unsigned ret = 0;
+   for (unsigned i = 0; i < num_inputs; i++) {
+      switch (nir_src_bit_size(alu->src[i].src)) {
+      case 8:
+         ret = 16;
+         break;
+
+      case 1:
+      case 16:
+      case 32:
+      case 64:
+         break;
+      default:
+         unreachable("unexpected bit_size");
+      }
    }
+
+   return ret;
 }
 
 static nir_variable *
