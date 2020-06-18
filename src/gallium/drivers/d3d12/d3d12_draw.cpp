@@ -369,6 +369,20 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       return;
    }
 
+   if (dinfo->index_size > 0) {
+      assert(dinfo->index_size != 1);
+
+      if (dinfo->has_user_indices) {
+         if (!util_upload_index_buffer(pctx, dinfo, &index_buffer,
+             &index_offset, 4)) {
+            debug_printf("util_upload_index_buffer() failed\n");
+            return;
+         }
+      } else {
+         index_buffer = dinfo->index.resource;
+      }
+   }
+
    if (!ctx->gfx_pipeline_state.root_signature || ctx->state_dirty & D3D12_DIRTY_SHADER) {
       ID3D12RootSignature *root_signature = d3d12_get_root_signature(ctx);
       if (ctx->gfx_pipeline_state.root_signature != root_signature) {
@@ -383,20 +397,6 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    }
 
    ctx->cmdlist_dirty |= ctx->state_dirty;
-
-   if (dinfo->index_size > 0) {
-      assert(dinfo->index_size != 1);
-
-      if (dinfo->has_user_indices) {
-         if (!util_upload_index_buffer(pctx, dinfo, &index_buffer,
-             &index_offset, 4)) {
-            debug_printf("util_upload_index_buffer() failed\n");
-            return;
-         }
-      } else {
-         index_buffer = dinfo->index.resource;
-      }
-   }
 
    if (!check_descriptors_left(ctx))
       d3d12_flush_cmdlist(ctx);
