@@ -61,19 +61,32 @@ dx_get_texture_lod(nir_builder *b, nir_tex_instr *tex)
 
    tql = nir_tex_instr_create(b->shader, num_srcs);
    tql->op = nir_texop_lod;
-   tql->coord_components = tex->coord_components;
+   unsigned coord_components = tex->coord_components;
+   if (tex->is_array)
+      --coord_components;
+
+   tql->coord_components = coord_components;
    tql->sampler_dim = tex->sampler_dim;
-   tql->is_array = tex->is_array;
    tql->is_shadow = tex->is_shadow;
    tql->is_new_style_shadow = tex->is_new_style_shadow;
    tql->texture_index = tex->texture_index;
    tql->sampler_index = tex->sampler_index;
    tql->dest_type = nir_type_float;
 
-   unsigned idx = 0;
+   /* The coordinate needs special handling because we might have
+    * to strip the array index. Don't clutter the code  with an additional
+    * check for is_array though, in the worst case we create an additional
+    * move the the optimization will remove later again. */
+   int coord_index = nir_tex_instr_src_index(tex, nir_tex_src_coord);
+   nir_ssa_def *ssa_src = nir_channels(b, tex->src[coord_index].src.ssa,
+                                       (1 << coord_components) - 1);
+   nir_src src = nir_src_for_ssa(ssa_src);
+   nir_src_copy(&tql->src[0].src, &src, tql);
+   tql->src[0].src_type = nir_tex_src_coord;
+
+   unsigned idx = 1;
    for (unsigned i = 0; i < tex->num_srcs; i++) {
-      if (tex->src[i].src_type == nir_tex_src_coord ||
-          tex->src[i].src_type == nir_tex_src_texture_deref ||
+      if (tex->src[i].src_type == nir_tex_src_texture_deref ||
           tex->src[i].src_type == nir_tex_src_sampler_deref ||
           tex->src[i].src_type == nir_tex_src_texture_offset ||
           tex->src[i].src_type == nir_tex_src_sampler_offset ||
