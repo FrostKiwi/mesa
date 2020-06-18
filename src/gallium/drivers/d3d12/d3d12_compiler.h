@@ -101,6 +101,8 @@ struct d3d12_shader {
    } srv_bindings[PIPE_MAX_SHADER_SAMPLER_VIEWS];
    size_t num_srv_bindings;
 
+   bool has_default_ubo0;
+
    struct d3d12_shader_key key;
    struct d3d12_shader *next_variant;
 };

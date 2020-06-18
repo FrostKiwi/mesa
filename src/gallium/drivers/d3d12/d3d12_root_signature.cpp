@@ -72,11 +72,12 @@ init_range_root_param(D3D12_ROOT_PARAMETER1 *param,
                       D3D12_DESCRIPTOR_RANGE1 *range,
                       D3D12_DESCRIPTOR_RANGE_TYPE type,
                       uint32_t num_descs,
-                      D3D12_SHADER_VISIBILITY visibility)
+                      D3D12_SHADER_VISIBILITY visibility,
+                      uint32_t base_shader_register)
 {
    range->RangeType = type;
    range->NumDescriptors = num_descs;
-   range->BaseShaderRegister = 0; /* We only have one range/table for each desc type */
+   range->BaseShaderRegister = base_shader_register;
    range->RegisterSpace = 0;
    if (type == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
       range->Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
@@ -107,7 +108,8 @@ create_root_signature(struct d3d12_context *ctx, struct d3d12_root_signature_key
                                &desc_ranges[num_params],
                                D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
                                key->stages[i].num_cb_bindings,
-                               visibility);
+                               visibility,
+                               key->stages[i].has_default_ubo0 ? 0 : 1);
          num_params++;
       }
 
@@ -116,7 +118,8 @@ create_root_signature(struct d3d12_context *ctx, struct d3d12_root_signature_key
                                &desc_ranges[num_params],
                                D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
                                key->stages[i].num_srv_bindings,
-                               visibility);
+                               visibility,
+                               0);
          num_params++;
       }
 
@@ -125,13 +128,14 @@ create_root_signature(struct d3d12_context *ctx, struct d3d12_root_signature_key
                                &desc_ranges[num_params],
                                D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
                                key->stages[i].num_srv_bindings,
-                               visibility);
+                               visibility,
+                               0);
          num_params++;
       }
 
       if (key->stages[i].state_vars_size > 0) {
          init_constant_root_param(&root_params[num_params],
-                                  key->stages[i].num_cb_bindings,
+                                  key->stages[i].num_cb_bindings + (key->stages[i].has_default_ubo0 ? 0 : 1),
                                   key->stages[i].state_vars_size,
                                   visibility);
          num_params++;
@@ -186,6 +190,8 @@ fill_key(struct d3d12_context *ctx, struct d3d12_root_signature_key *key)
 
          if (ctx->gfx_stages[i]->so_info.num_outputs > 0)
             key->has_stream_output = true;
+
+         key->stages[i].has_default_ubo0 = shader->has_default_ubo0 > 0;
       }
    }
 }
