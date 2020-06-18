@@ -70,6 +70,9 @@ resolve_supported(const struct pipe_blit_info *info)
    if (src->format != dst->format)
       return false;
 
+   if (util_format_is_pure_integer(src->base.format))
+      return false;
+
    // sizes needs to match
    if (info->src.box.width != info->dst.box.width ||
        info->src.box.height != info->dst.box.height)
