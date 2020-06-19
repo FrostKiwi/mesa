@@ -1168,6 +1168,12 @@ clc_to_dxil(struct clc_context *ctx,
    nir_options.has_cs_work_group_offsets = conf && conf->support_work_group_id_offsets;
    nir_options.lower_cs_global_id_from_local = nir_options.has_cs_work_group_offsets;
 
+   if (conf && conf->lower_bit_size & 64) {
+      nir_options.lower_pack_64_2x32_split = false;
+      nir_options.lower_unpack_64_2x32_split = false;
+      nir_options.lower_int64_options = ~0;
+   }
+
    glsl_type_singleton_init_or_ref();
 
    nir = spirv_to_nir(obj->spvbin.data, obj->spvbin.size / 4,
@@ -1304,8 +1310,6 @@ clc_to_dxil(struct clc_context *ctx,
 
    NIR_PASS_V(nir, nir_lower_system_values);
    NIR_PASS_V(nir, clc_lower_64bit_semantics);
-   if (nir_options.lower_int64_options)
-      NIR_PASS_V(nir, nir_lower_int64, nir_options.lower_int64_options);
 
    NIR_PASS_V(nir, nir_opt_deref);
    NIR_PASS_V(nir, nir_lower_vars_to_ssa);
@@ -1346,11 +1350,6 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_opt_algebraic);
 
    NIR_PASS_V(nir, nir_lower_bit_size, lower_bit_size_callback, (void*)conf);
-   
-   if (conf && (conf->lower_bit_size & 64)) {
-      NIR_PASS_V(nir, nir_lower_int64, ~0u);
-   }
-
    NIR_PASS_V(nir, nir_lower_64bit_phis);
 
    NIR_PASS_V(nir, nir_opt_dce);
