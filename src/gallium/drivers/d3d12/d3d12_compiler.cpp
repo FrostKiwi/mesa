@@ -145,6 +145,7 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
 
    struct nir_to_dxil_options opts = {};
    opts.interpolate_at_vertex = screen->opts3.BarycentricsSupported;
+   opts.lower_int16 = !screen->opts4.Native16BitShaderOpsSupported;
 
    struct blob tmp;
    if (!nir_to_dxil(nir, &opts, &tmp)) {
