@@ -81,6 +81,49 @@ TEST_F(ComputeTest, two_global_arrays)
       EXPECT_EQ(g1[i], expected[i]);
 }
 
+TEST_F(ComputeTest, i64tof32)
+{
+   const char *kernel_source =
+   "__kernel void main_test(__global long *out, __constant long *in)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       float tmp = in[idx];\n\
+       out[idx] = tmp;\n\
+   }\n";
+   auto in = ShaderArg<int64_t>({ 0x100000000LL,
+                                  -0x100000000LL,
+                                  0x7fffffffffffffffLL,
+                                  0x4000004000000000LL,
+                                  0x4000003fffffffffLL,
+                                  0x4000004000000001LL,
+                                  -1,
+                                  -0x4000004000000000LL,
+                                  -0x4000003fffffffffLL,
+                                  -0x4000004000000001LL,
+                                  0,
+				  INT64_MIN },
+                                SHADER_ARG_INPUT);
+   auto out = ShaderArg<int64_t>(std::vector<int64_t>(12, 0xdeadbeed), SHADER_ARG_OUTPUT);
+   const int64_t expected[] = {
+      0x100000000LL,
+      -0x100000000LL,
+      0x8000000000000000LL,
+      0x4000000000000000LL,
+      0x4000000000000000LL,
+      0x4000008000000000LL,
+      -1,
+      -0x4000000000000000LL,
+      -0x4000000000000000LL,
+      -0x4000008000000000LL,
+      0,
+      INT64_MIN,
+   };
+
+   run_shader(kernel_source, out.size(), 1, 1, out, in);
+   for (int i = 0; i < out.size(); ++i) {
+      EXPECT_EQ((int64_t)out[i], expected[i]);
+   }
+}
 TEST_F(ComputeTest, two_constant_arrays)
 {
    const char *kernel_source =
