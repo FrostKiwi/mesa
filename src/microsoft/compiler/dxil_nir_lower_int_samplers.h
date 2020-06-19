@@ -39,7 +39,8 @@ typedef struct {
    unsigned is_int_sampler:1;
    unsigned is_nonnormalized_coords:1;
    unsigned is_linear_filtering:1;
-   unsigned unused:17;
+   unsigned skip_boundary_conditions:1;
+   unsigned unused:16;
 } dxil_wrap_sampler_state;
 
 typedef struct {
