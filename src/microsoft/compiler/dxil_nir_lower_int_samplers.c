@@ -178,7 +178,8 @@ wrap_mirror_clamp(nir_builder *b, wrap_result_t *wrap_params, nir_ssa_def *size)
 }
 
 static wrap_result_t
-wrap_coords(nir_builder *b, nir_ssa_def *coords, enum pipe_tex_wrap wrap, nir_ssa_def *size)
+wrap_coords(nir_builder *b, nir_ssa_def *coords, enum pipe_tex_wrap wrap,
+            nir_ssa_def *size)
 {
    wrap_result_t result = {coords, nir_imm_false(b)};
 
@@ -387,27 +388,38 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
 
    nir_ssa_def *use_border_color = nir_imm_false(b);
 
-   switch (params.ncoord_comp) {
-   case 3:
-      params.wrap[2] = wrap_coords(b, coord_help[2], active_state->wrap_t, nir_channel(b, params.size, 2));
-      use_border_color = nir_ior(b, use_border_color, params.wrap[2].use_border_color);
-      /* fallthrough */
-   case 2:
-      params.wrap[1] = wrap_coords(b, coord_help[1], active_state->wrap_s, nir_channel(b, params.size, 1));
-      use_border_color = nir_ior(b, use_border_color, params.wrap[1].use_border_color);
-      /* fallthrough */
-   case 1:
-      params.wrap[0] = wrap_coords(b, coord_help[0], active_state->wrap_r, nir_channel(b, params.size, 0));
-      use_border_color = nir_ior(b, use_border_color, params.wrap[0].use_border_color);
-      break;
-   default:
-      unreachable("unsupported coordinate count");
-   }
+   if (!active_state->skip_boundary_conditions) {
 
-   if (tex->is_array)
-      params.wrap[params.ncoord_comp] = wrap_coords(b, coord_help[params.ncoord_comp],
-                                                    PIPE_TEX_WRAP_CLAMP_TO_EDGE,
-                                                    nir_i2f32(b, nir_channel(b, size0, params.ncoord_comp)));
+      switch (params.ncoord_comp) {
+      case 3:
+         params.wrap[2] = wrap_coords(b, coord_help[2], active_state->wrap_t, nir_channel(b, params.size, 2));
+         use_border_color = nir_ior(b, use_border_color, params.wrap[2].use_border_color);
+         /* fallthrough */
+      case 2:
+         params.wrap[1] = wrap_coords(b, coord_help[1], active_state->wrap_s, nir_channel(b, params.size, 1));
+         use_border_color = nir_ior(b, use_border_color, params.wrap[1].use_border_color);
+         /* fallthrough */
+      case 1:
+         params.wrap[0] = wrap_coords(b, coord_help[0], active_state->wrap_r, nir_channel(b, params.size, 0));
+         use_border_color = nir_ior(b, use_border_color, params.wrap[0].use_border_color);
+         break;
+      default:
+         unreachable("unsupported coordinate count");
+      }
+
+      if (tex->is_array)
+         params.wrap[params.ncoord_comp] =
+               wrap_coords(b, coord_help[params.ncoord_comp],
+                           PIPE_TEX_WRAP_CLAMP_TO_EDGE,
+                           nir_i2f32(b, nir_channel(b, size0, params.ncoord_comp)));
+   } else {
+      /* When we emulate a cube map by using a texture array, the coordinates are always
+       * in range, and we don't have to take care of boundary conditions */
+      for (unsigned i = 0; i < 3; ++i) {
+         params.wrap[i].coords = coord_help[i];
+         params.wrap[i].use_border_color = nir_imm_false(b);
+      }
+   }
 
    nir_if *border_if = nir_push_if(b, use_border_color);
    nir_ssa_def *border_color = load_bordercolor(b, tex, active_state);
