@@ -863,6 +863,8 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
          if (util_format_is_pure_integer(views[i]->format)) {
             ctx->has_int_samplers |= shader_bit;
             ctx->tex_wrap_states[shader_type].states[start_slot + i].is_int_sampler = 1;
+         } else {
+            ctx->tex_wrap_states[shader_type].states[start_slot + i].is_int_sampler = 0;
          }
          /* We need the swizzle state for compare texture lowering, because it
           * encode the use of the shadow texture lookup result as either luminosity,
