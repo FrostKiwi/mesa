@@ -407,7 +407,7 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
    if (tex->is_array)
       params.wrap[params.ncoord_comp] = wrap_coords(b, coord_help[params.ncoord_comp],
                                                     PIPE_TEX_WRAP_CLAMP_TO_EDGE,
-                                                    nir_channel(b, params.size, params.ncoord_comp));
+                                                    nir_i2f32(b, nir_channel(b, size0, params.ncoord_comp)));
 
    nir_if *border_if = nir_push_if(b, use_border_color);
    nir_ssa_def *border_color = load_bordercolor(b, tex, active_state);
