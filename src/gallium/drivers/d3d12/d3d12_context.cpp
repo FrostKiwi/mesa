@@ -754,6 +754,15 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
    desc.Format = d3d12_get_sampler_format_for_ds(d3d12_get_format(state->format));
    desc.ViewDimension = view_dimension(state->target, texture->nr_samples);
 
+   /* Integer cube textures are not really supported, because TextureLoad doesn't exist
+    * for cube maps, and we sampling is not supported for integer textures, so we have to
+    * handle this SRV as if it were a 2D texture array */
+   if ((desc.ViewDimension == D3D12_SRV_DIMENSION_TEXTURECUBE ||
+        desc.ViewDimension == D3D12_SRV_DIMENSION_TEXTURECUBEARRAY) &&
+       util_format_is_pure_integer(state->format)) {
+      desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+   }
+
    if (desc.Format == DXGI_FORMAT_UNKNOWN) {
       /* The format is not directly supported, but if it is an legacy format, then
        * we may be able to emulate it */
