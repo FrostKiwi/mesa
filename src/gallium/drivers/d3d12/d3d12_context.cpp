@@ -860,11 +860,20 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
          views[i]);
 
       if (views[i]) {
+         dxil_wrap_sampler_state &wss = ctx->tex_wrap_states[shader_type].states[start_slot + i];
          if (util_format_is_pure_integer(views[i]->format)) {
             ctx->has_int_samplers |= shader_bit;
-            ctx->tex_wrap_states[shader_type].states[start_slot + i].is_int_sampler = 1;
+            wss.is_int_sampler = 1;
+
+            /* When we emulate a integer cube texture (array) by using a texture 2d Array
+             * the coordinates are evaluated to always reside withing the acceptable range
+             * because the 3d ray for picking the texel is always pointing at one cube face,
+             * hence we can skip the boundary condition handling when the texture operations are
+             * lowered to texel fetches later. */
+            wss.skip_boundary_conditions = views[i]->target == PIPE_TEXTURE_CUBE ||
+                                           views[i]->target == PIPE_TEXTURE_CUBE_ARRAY;
          } else {
-            ctx->tex_wrap_states[shader_type].states[start_slot + i].is_int_sampler = 0;
+            wss.is_int_sampler = 0;
          }
          /* We need the swizzle state for compare texture lowering, because it
           * encode the use of the shadow texture lookup result as either luminosity,
