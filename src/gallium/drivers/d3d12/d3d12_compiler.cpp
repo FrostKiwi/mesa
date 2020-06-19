@@ -686,6 +686,11 @@ d3d12_create_shader(struct d3d12_context *ctx,
       d3d12_sort_ps_outputs(&nir->outputs);
    }
 
+   /* Integer cube maps are not supported in DirectX because sampling is not supported
+    * on integer textures and TextureLoad is not supported for cube maps, so we have to
+    * lower integer cube maps to be handled like 2D textures arrays*/
+   NIR_PASS_V(nir, d3d12_lower_int_cubmap_to_array);
+
    /* Keep this initial shader as the blue print for possible variants */
    sel->initial = nir;
 
