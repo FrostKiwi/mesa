@@ -3884,7 +3884,7 @@ get_dxil_shader_kind(struct nir_shader *s)
 }
 
 static void
-optimize_nir(struct nir_shader *s)
+optimize_nir(struct nir_shader *s, const struct nir_to_dxil_options *opts)
 {
    bool progress;
    do {
@@ -3893,6 +3893,8 @@ optimize_nir(struct nir_shader *s)
       NIR_PASS(progress, s, nir_lower_alu_to_scalar, NULL, NULL);
       NIR_PASS(progress, s, nir_copy_prop);
       NIR_PASS(progress, s, dxil_nir_lower_8bit_conv);
+      if (opts->lower_int16)
+         NIR_PASS(progress, s, dxil_nir_lower_16bit_conv);
       NIR_PASS(progress, s, nir_opt_remove_phis);
       NIR_PASS(progress, s, nir_opt_dce);
       NIR_PASS(progress, s, nir_opt_if, true);
@@ -4047,7 +4049,7 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
    NIR_PASS_V(s, nir_lower_frexp);
    NIR_PASS_V(s, nir_lower_flrp, 16 | 32 | 64, true, true);
 
-   optimize_nir(s);
+   optimize_nir(s, opts);
 
    NIR_PASS_V(s, nir_remove_dead_variables, nir_var_function_temp);
 
