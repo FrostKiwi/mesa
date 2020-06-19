@@ -380,7 +380,7 @@ TEST_F(ComputeTest, types_float_basics)
       EXPECT_EQ(output[i], expected[i]);
 }
 
-TEST_F(ComputeTest, types_double_basics)
+TEST_F(ComputeTest, DISABLED_types_double_basics)
 {
    const char *kernel_source =
    "__kernel void main_test(__global uint *output)\n\

@@ -1085,6 +1085,34 @@ wrap_from_cl_addressing(unsigned addressing_mode)
    }
 }
 
+static bool shader_has_double(nir_shader *nir)
+{
+   bool progress = false;
+
+   foreach_list_typed(nir_function, func, node, &nir->functions) {
+      if (!func->is_entrypoint)
+         continue;
+
+      assert(func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_alu)
+               continue;
+
+             nir_alu_instr *alu = nir_instr_as_alu(instr);
+             const nir_op_info *info = &nir_op_infos[alu->op];
+
+             if (info->output_type & nir_type_float &&
+                 nir_dest_bit_size(alu->dest.dest) == 64)
+                 return true;
+         }
+      }
+   }
+
+   return false;
+}
+
 struct clc_dxil_object *
 clc_to_dxil(struct clc_context *ctx,
             const struct clc_object *obj,
@@ -1382,6 +1410,15 @@ clc_to_dxil(struct clc_context *ctx,
 
    metadata->local_mem_size = nir->info.cs.shared_size;
    metadata->priv_mem_size = nir->scratch_size;
+
+   /* DXIL double math is too limited compared to what NIR expects. Let's refuse
+    * to compile a shader when it contains double operations until we have
+    * double lowering hooked up.
+    */
+   if (shader_has_double(nir)) {
+      clc_error(logger, "NIR shader contains doubles, which we don't support yet");
+      goto err_free_dxil;
+   }
 
    struct blob tmp;
    if (!nir_to_dxil(nir, &opts, &tmp)) {
