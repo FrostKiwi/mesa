@@ -1173,6 +1173,8 @@ get_module_flags(struct ntd_context *ctx)
       flags |= (1 << 20);
    if (ctx->mod.feats.stencil_ref)
       flags |= (1 << 11);
+   if (ctx->mod.feats.native_low_precision)
+      flags |= (1 << 23) | (1 << 5);
 
    return flags;
 }
@@ -1246,8 +1248,9 @@ emit_tag(struct ntd_context *ctx, enum dxil_shader_tag tag,
 static bool
 emit_metadata(struct ntd_context *ctx, nir_shader *s)
 {
+   unsigned dxilMinor = ctx->mod.minor_version;
    if (!emit_llvm_ident(&ctx->mod) ||
-       !emit_named_version(&ctx->mod, "dx.version", 1, 1) ||
+       !emit_named_version(&ctx->mod, "dx.version", 1, dxilMinor) ||
        !emit_named_version(&ctx->mod, "dx.valver", 1, 4) ||
        !emit_dx_shader_model(&ctx->mod))
       return false;
@@ -1371,7 +1374,7 @@ store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
       case nir_type_int:
          assert(nir_dest_bit_size(*dest) != 1);
          if (nir_dest_bit_size(*dest) == 16)
-            ctx->mod.feats.min_precision = true;
+            ctx->mod.feats.native_low_precision = true;
          if (nir_dest_bit_size(*dest) == 64)
             ctx->mod.feats.int64_ops = true;
          break;
@@ -3060,7 +3063,7 @@ emit_load_const(struct ntd_context *ctx, nir_load_const_instr *load_const)
                                             load_const->value[i].b);
          break;
       case 16:
-         ctx->mod.feats.min_precision = true;
+         ctx->mod.feats.native_low_precision = true;
          value = dxil_module_get_int16_const(&ctx->mod,
                                              load_const->value[i].u16);
          break;
@@ -3859,6 +3862,9 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
          }
       }
    }
+
+   if (ctx->mod.feats.native_low_precision)
+      ctx->mod.minor_version = max(ctx->mod.minor_version, 2);
 
    return emit_metadata(ctx, s) &&
           dxil_emit_module(&ctx->mod);
