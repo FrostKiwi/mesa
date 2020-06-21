@@ -2128,3 +2128,19 @@ TEST_F(ComputeTest, DISABLED_packed_struct_const)
       EXPECT_EQ(out[i].us, expected[i].us);
    }
 }
+
+TEST_F(ComputeTest, DISABLED_printf)
+{
+   const char *kernel_source = R"(
+   __kernel void main_test(__global float *src, __global uint *dest)
+   {
+      __constant char *format_str = "%s: %f";
+      __constant char *str_val = "Test";
+      *dest = printf(format_str, str_val, src[0]);
+   })";
+
+   auto src = ShaderArg<float>({ 1.0f }, SHADER_ARG_INPUT);
+   auto dest = ShaderArg<uint32_t>({ 0xdeadbeef }, SHADER_ARG_OUTPUT);
+   run_shader(kernel_source, 1, 1, 1, src, dest);
+   EXPECT_EQ(dest[0], 0);
+}
