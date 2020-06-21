@@ -87,6 +87,7 @@ struct spirv_supported_capabilities {
    bool amd_trinary_minmax;
    bool amd_image_read_write_lod;
    bool amd_shader_explicit_vertex_parameter;
+   bool printf;
 };
 
 typedef struct shader_info {

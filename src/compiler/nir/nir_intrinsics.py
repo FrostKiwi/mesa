@@ -800,6 +800,12 @@ store("global", 2, [WRMASK, ACCESS, ALIGN_MUL, ALIGN_OFFSET])
 # src[] = { value, offset }.
 store("scratch", 2, [ALIGN_MUL, ALIGN_OFFSET, WRMASK])
 
+# OpenCL printf instruction
+# First source is a deref to the format string
+# Second source is a deref to a struct containing the args
+# Dest is success or failure
+intrinsic("printf", src_comp=[1, 1], dest_comp=1)
+
 # IR3-specific version of most SSBO intrinsics. The only different
 # compare to the originals is that they add an extra source to hold
 # the dword-offset, which is needed by the backend code apart from
