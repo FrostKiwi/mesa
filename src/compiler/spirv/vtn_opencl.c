@@ -650,8 +650,39 @@ handle_printf(struct vtn_builder *b, uint32_t opcode,
               unsigned num_srcs, nir_ssa_def **srcs, const struct glsl_type **src_types,
               const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
-   /* hahah, yeah, right.. */
-   return nir_imm_int(&b->nb, -1);
+   if (!b->options->caps.printf)
+      return nir_imm_int(&b->nb, -1);
+
+   /* Step 1, build an ad-hoc struct type out of the args */
+   unsigned field_offset = 0;
+   struct glsl_struct_field *fields = ralloc_array(b->shader, struct glsl_struct_field, num_srcs);
+   for (unsigned i = 1; i < num_srcs; ++i) {
+      fields[i - 1].type = src_types[i];
+      fields[i - 1].name = ralloc_asprintf(b->shader, "arg_%u", i);
+      field_offset = align(field_offset, glsl_get_cl_alignment(src_types[i]));
+      fields[i - 1].offset = field_offset;
+      field_offset += glsl_get_cl_size(src_types[i]);
+   }
+
+   const struct glsl_type *struct_type = glsl_struct_type(fields, num_srcs - 1, "printf", false);
+   ralloc_free(fields);
+
+   /* Step 2, create a variable of that type and populate its fields */
+   nir_variable *var = nir_local_variable_create(b->func->impl, struct_type, NULL);
+   nir_deref_instr *deref_var = nir_build_deref_var(&b->nb, var);
+   for (unsigned i = 1; i < num_srcs; ++i) {
+      nir_deref_instr *field_deref = nir_build_deref_struct(&b->nb, deref_var, i - 1);
+      nir_store_deref(&b->nb, field_deref, srcs[i], ~0);
+   }
+
+   /* Lastly, the actual intrinsic */
+   nir_intrinsic_instr *printf = nir_intrinsic_instr_create(b->shader, nir_intrinsic_printf);
+   nir_ssa_dest_init(&printf->instr, &printf->dest, 1, 32, NULL);
+   printf->src[0] = nir_src_for_ssa(srcs[0]);
+   printf->src[1] = nir_src_for_ssa(&deref_var->dest.ssa);
+   nir_builder_instr_insert(&b->nb, &printf->instr);
+
+   return &printf->dest.ssa;
 }
 
 static nir_ssa_def *
