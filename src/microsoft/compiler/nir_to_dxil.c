@@ -2122,7 +2122,8 @@ emit_load_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    assert(nir_intrinsic_dest_components(intr) <= 4);
 
    const struct dxil_value *handle =
-      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
+      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer,
+                             nir_src_is_const(intr->src[0]));
    if (!handle)
       return false;
 
@@ -2156,7 +2157,8 @@ emit_store_ssbo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return false;
 
    const struct dxil_value *handle =
-      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
+      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer,
+                             nir_src_is_const(intr->src[1]));
    if (!handle)
       return false;
 
@@ -2205,7 +2207,8 @@ emit_store_ssbo_masked(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return false;
 
    const struct dxil_value *handle =
-      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
+      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer,
+                             nir_src_is_const(intr->src[2]));
    if (!handle)
       return false;
 
@@ -2835,7 +2838,8 @@ emit_ssbo_atomic(struct ntd_context *ctx, nir_intrinsic_instr *intr,
       return false;
 
    const struct dxil_value *handle =
-      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
+      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer,
+                             nir_src_is_const(intr->src[0]));
    if (!handle)
       return false;
 
@@ -2873,7 +2877,8 @@ emit_ssbo_atomic_comp_swap(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return false;
 
    const struct dxil_value *handle =
-      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer, true);
+      emit_createhandle_call(ctx, DXIL_RESOURCE_CLASS_UAV, 0, buffer,
+                             nir_src_is_const(intr->src[0]));
    if (!handle)
       return false;
 
