@@ -1061,6 +1061,7 @@ clc_to_dxil(struct clc_context *ctx,
          .kernel = true,
          .kernel_image = true,
          .literal_sampler = true,
+         .printf = true,
       },
    };
    nir_shader_compiler_options nir_options =
@@ -1173,6 +1174,10 @@ clc_to_dxil(struct clc_context *ctx,
 
    // Lower memcpy
    NIR_PASS_V(nir, dxil_nir_lower_memcpy_deref);
+
+   bool has_printf = false;
+   NIR_PASS(has_printf, nir, clc_nir_lower_printf, uav_id);
+   metadata->printf_uav_id = has_printf ? uav_id++ : -1;
 
    // Needs to come before lower_explicit_io
    struct clc_image_lower_context image_lower_context = { metadata, &srv_id, &uav_id };
