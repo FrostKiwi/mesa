@@ -98,7 +98,7 @@ in_sysvalue_name(nir_variable *var)
  */
 static unsigned
 get_additional_semantic_info(nir_variable *var, struct semantic_info *info,
-                             unsigned next_row, bool strip_one_in_array_layer)
+                             unsigned next_row, bool is_gs_shader)
 {
    const struct glsl_type *type = var->type;
 
@@ -111,11 +111,11 @@ get_additional_semantic_info(nir_variable *var, struct semantic_info *info,
    info->rows = 1;
    if (info->kind == DXIL_SEM_TARGET) {
       info->start_row = info->index;
-   } else if (is_depth) {
+   } else if (is_depth || (info->kind == DXIL_SEM_PRIMITIVE_ID && is_gs_shader)) {
       info->start_row = -1;
    } else {
       info->start_row = next_row;
-      if (glsl_type_is_array(type) && strip_one_in_array_layer)
+      if (glsl_type_is_array(type) && is_gs_shader)
          type = glsl_without_array(type);
 
       if (glsl_type_is_array(type)) {
@@ -436,13 +436,13 @@ static unsigned
 get_input_signature_group(struct dxil_module *mod, const struct dxil_mdnode **inputs,
                           unsigned num_inputs, struct exec_list *nir_vars,
                           sematic_info_proc get_semantics, unsigned *row_iter,
-                          bool strip_one_in_array_layer)
+                          bool is_gs_shader)
 {
    nir_foreach_variable(var, nir_vars) {
       struct semantic_info semantic = {0};
       get_semantics(var, &semantic);
       mod->inputs[num_inputs].sysvalue = semantic.sysvalue_name;
-      *row_iter = get_additional_semantic_info(var, &semantic, *row_iter, strip_one_in_array_layer);
+      *row_iter = get_additional_semantic_info(var, &semantic, *row_iter, is_gs_shader);
 
       mod->inputs[num_inputs].name = ralloc_strdup(mod->ralloc_ctx,
                                                    semantic.name);
@@ -469,18 +469,18 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
 
    const struct dxil_mdnode *inputs[VARYING_SLOT_MAX];
    unsigned next_row = 0;
-   bool strip_one_in_array_layer = s->info.stage == MESA_SHADER_GEOMETRY;
+   bool is_gs_shader = s->info.stage == MESA_SHADER_GEOMETRY;
 
    mod->num_sig_inputs = get_input_signature_group(mod, inputs, 0, &s->inputs,
                                                    s->info.stage == MESA_SHADER_VERTEX ?
                                                       get_semantic_vs_in_name :
                                                       (s->info.stage == MESA_SHADER_GEOMETRY ?
                                                          get_semantic_gs_in_name : get_semantic_in_name),
-                                                   &next_row, strip_one_in_array_layer);
+                                                   &next_row, is_gs_shader);
 
    mod->num_sig_inputs = get_input_signature_group(mod, inputs, mod->num_sig_inputs, &s->system_values,
                                                    get_semantic_sv_name,
-                                                   &next_row, strip_one_in_array_layer);
+                                                   &next_row, is_gs_shader);
    mod->num_psv_inputs = next_row;
 
    const struct dxil_mdnode *retval = mod->num_sig_inputs ?
