@@ -233,7 +233,7 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
    pso_desc.InputLayout.pInputElementDescs = state->ves->elements;
    pso_desc.InputLayout.NumElements = state->ves->num_elements;
 
-   pso_desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED; // TODO
+   pso_desc.IBStripCutValue = state->ib_strip_cut_value;
 
    pso_desc.PrimitiveTopologyType = topology_type(reduced_prim);
 
