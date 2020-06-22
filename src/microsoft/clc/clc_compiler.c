@@ -677,26 +677,6 @@ void clc_free_object(struct clc_object *obj)
    free(obj);
 }
 
-static unsigned
-lower_bit_size_callback(const nir_alu_instr *alu, void *data)
-{
-   if (nir_op_infos[alu->op].is_conversion)
-      return 0;
-
-   unsigned num_inputs = nir_op_infos[alu->op].num_inputs;
-   struct clc_runtime_kernel_conf *conf = (struct clc_runtime_kernel_conf *)data;
-   unsigned min_bit_size = conf && (conf->lower_bit_size & 16) ? 32 : 16;
-
-   unsigned ret = 0;
-   for (unsigned i = 0; i < num_inputs; i++) {
-      unsigned bit_size = nir_src_bit_size(alu->src[i].src);
-      if (bit_size != 1 && bit_size < min_bit_size)
-         ret = min_bit_size;
-   }
-
-   return ret;
-}
-
 static nir_variable *
 add_kernel_inputs_var(struct clc_dxil_object *dxil, nir_shader *nir,
                       unsigned *cbv_id)
@@ -1348,8 +1328,7 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_lower_pack);
    // Lower pack_split to bit math
    NIR_PASS_V(nir, nir_opt_algebraic);
-
-   NIR_PASS_V(nir, nir_lower_bit_size, lower_bit_size_callback, (void*)conf);
+   
    NIR_PASS_V(nir, nir_lower_64bit_phis);
 
    NIR_PASS_V(nir, nir_opt_dce);

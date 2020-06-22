@@ -3936,6 +3936,26 @@ get_dxil_shader_kind(struct nir_shader *s)
    }
 }
 
+static unsigned
+lower_bit_size_callback(const nir_alu_instr *alu, void *data)
+{
+   if (nir_op_infos[alu->op].is_conversion)
+      return 0;
+
+   unsigned num_inputs = nir_op_infos[alu->op].num_inputs;
+   const struct nir_to_dxil_options *opts = (const struct nir_to_dxil_options*)data;
+   unsigned min_bit_size = opts->lower_int16 ? 32 : 16;
+
+   unsigned ret = 0;
+   for (unsigned i = 0; i < num_inputs; i++) {
+      unsigned bit_size = nir_src_bit_size(alu->src[i].src);
+      if (bit_size != 1 && bit_size < min_bit_size)
+         ret = min_bit_size;
+   }
+
+   return ret;
+}
+
 static void
 optimize_nir(struct nir_shader *s, const struct nir_to_dxil_options *opts)
 {
@@ -3945,6 +3965,7 @@ optimize_nir(struct nir_shader *s, const struct nir_to_dxil_options *opts)
       NIR_PASS_V(s, nir_lower_vars_to_ssa);
       NIR_PASS(progress, s, nir_lower_alu_to_scalar, NULL, NULL);
       NIR_PASS(progress, s, nir_copy_prop);
+      NIR_PASS(progress, s, nir_lower_bit_size, lower_bit_size_callback, (void*)opts);
       NIR_PASS(progress, s, dxil_nir_lower_8bit_conv);
       if (opts->lower_int16)
          NIR_PASS(progress, s, dxil_nir_lower_16bit_conv);
