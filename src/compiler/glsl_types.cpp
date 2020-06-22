@@ -2928,10 +2928,11 @@ unsigned
 glsl_type::cl_size() const
 {
    if (this->is_scalar()) {
-      return glsl_base_type_get_bit_size(this->base_type) / 8;
+      /* For bools, round up their size to a byte */
+      return DIV_ROUND_UP(glsl_base_type_get_bit_size(this->base_type), 8);
    } else if (this->is_vector()) {
       unsigned vec_elemns = this->vector_elements == 3 ? 4 : this->vector_elements;
-      return vec_elemns * glsl_base_type_get_bit_size(this->base_type) / 8;
+      return DIV_ROUND_UP(vec_elemns * glsl_base_type_get_bit_size(this->base_type), 8);
    } else if (this->is_array()) {
       unsigned size = this->without_array()->cl_size();
       return size * this->length;
