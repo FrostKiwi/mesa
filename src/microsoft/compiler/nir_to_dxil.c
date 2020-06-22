@@ -3175,7 +3175,7 @@ emit_jump(struct ntd_context *ctx, nir_jump_instr *instr)
 
 struct phi_block {
    unsigned num_components;
-   struct dxil_instr *comp[4];
+   struct dxil_instr *comp[NIR_MAX_VEC_COMPONENTS];
 };
 
 static bool
