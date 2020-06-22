@@ -289,6 +289,16 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_MAX_STREAM_OUTPUT_BUFFERS:
       return 4;
 
+   case PIPE_CAP_MAX_STREAM_OUTPUT_SEPARATE_COMPONENTS:
+   case PIPE_CAP_MAX_STREAM_OUTPUT_INTERLEAVED_COMPONENTS:
+      return 16 * 4;
+
+   /* Geometry shader output. */
+   case PIPE_CAP_MAX_GEOMETRY_OUTPUT_VERTICES:
+      return 256;
+   case PIPE_CAP_MAX_GEOMETRY_TOTAL_OUTPUT_COMPONENTS:
+      return 256 * 4;
+
    default:
       return u_pipe_screen_get_param_defaults(pscreen, param);
    }
