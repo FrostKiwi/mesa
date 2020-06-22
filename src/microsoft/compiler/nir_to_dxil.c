@@ -1644,6 +1644,7 @@ get_overload(nir_alu_type alu_type, unsigned bit_size)
    case nir_type_int:
    case nir_type_uint:
       switch (bit_size) {
+      case 16: return DXIL_I16;
       case 32: return DXIL_I32;
       case 64: return DXIL_I64;
       default:

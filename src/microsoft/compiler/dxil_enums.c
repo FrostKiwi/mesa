@@ -152,6 +152,7 @@ enum dxil_primitive_topology dxil_get_primitive_topology(unsigned topology)
 
 static const char *overload_str[DXIL_NUM_OVERLOADS] = {
    [DXIL_NONE] = "",
+   [DXIL_I16] = "i16",
    [DXIL_I32] = "i32",
    [DXIL_I64] = "i64",
    [DXIL_F32] = "f32",
