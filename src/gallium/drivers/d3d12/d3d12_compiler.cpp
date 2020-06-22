@@ -222,6 +222,7 @@ d3d12_make_passthrough_gs(struct d3d12_context *ctx, d3d12_shader_selector *vs)
    nir->info.gs.vertices_in = 1;
    nir->info.gs.vertices_out = 1;
    nir->info.gs.invocations = 1;
+   nir->info.gs.active_stream_mask = 1;
    nir->info.name = ralloc_strdup(nir, "passthrough");
 
    /* Copy inputs to outputs. */
