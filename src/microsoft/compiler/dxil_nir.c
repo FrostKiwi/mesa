@@ -1142,3 +1142,101 @@ dxil_nir_lower_memcpy_deref(nir_shader *nir)
 
    return progress;
 }
+
+static nir_alu_type
+find_phi_cast_type(nir_ssa_def *def)
+{
+   nir_alu_type type = nir_type_invalid;
+   nir_foreach_use(src, def) {
+      assert(src->parent_instr->type == nir_instr_type_alu);
+      nir_alu_instr *alu = nir_instr_as_alu(src->parent_instr);
+      assert(nir_op_infos[alu->op].is_conversion);
+      assert(type == nir_type_invalid ||
+             type == nir_alu_type_get_base_type(nir_op_infos[alu->op].output_type));
+      type = nir_alu_type_get_base_type(nir_op_infos[alu->op].output_type);
+   }
+   return type;
+}
+
+static void
+cast_phi(nir_builder *b, nir_phi_instr *phi, unsigned new_bit_size)
+{
+   nir_phi_instr *lowered = nir_phi_instr_create(b->shader);
+   int num_components = 0;
+   int old_bit_size = phi->dest.ssa.bit_size;
+
+   nir_alu_type cast_type = find_phi_cast_type(&phi->dest.ssa);
+   nir_op upcast_op = nir_type_conversion_op(cast_type | old_bit_size, cast_type | new_bit_size, nir_rounding_mode_undef);
+   nir_op downcast_op = nir_type_conversion_op(cast_type | new_bit_size, cast_type | old_bit_size, nir_rounding_mode_undef);
+
+   nir_foreach_phi_src(src, phi) {
+      assert(num_components == 0 || num_components == src->src.ssa->num_components);
+      num_components = src->src.ssa->num_components;
+
+      b->cursor = nir_after_instr(src->src.ssa->parent_instr);
+
+      nir_ssa_def *cast = nir_build_alu(b, upcast_op, src->src.ssa, NULL, NULL, NULL);
+
+      nir_phi_src *new_src = rzalloc(lowered, nir_phi_src);
+      new_src->pred = src->pred;
+      new_src->src = nir_src_for_ssa(cast);
+      exec_list_push_tail(&lowered->srcs, &new_src->node);
+   }
+
+   nir_ssa_dest_init(&lowered->instr, &lowered->dest,
+                     num_components, new_bit_size, NULL);
+
+   b->cursor = nir_before_instr(&phi->instr);
+   nir_builder_instr_insert(b, &lowered->instr);
+
+   b->cursor = nir_after_phis(nir_cursor_current_block(b->cursor));
+   nir_ssa_def *result = nir_build_alu(b, downcast_op, &lowered->dest.ssa, NULL, NULL, NULL);
+
+   nir_ssa_def_rewrite_uses(&phi->dest.ssa, nir_src_for_ssa(result));
+   nir_instr_remove(&phi->instr);
+}
+
+static bool
+upcast_phi_impl(nir_function_impl *impl, unsigned min_bit_size)
+{
+   nir_builder b;
+   nir_builder_init(&b, impl);
+   bool progress = false;
+
+   nir_foreach_block_reverse(block, impl) {
+      nir_foreach_instr_safe(instr, block) {
+         if (instr->type != nir_instr_type_phi)
+            continue;
+
+         nir_phi_instr *phi = nir_instr_as_phi(instr);
+         assert(phi->dest.is_ssa);
+
+         if (phi->dest.ssa.bit_size == 1 ||
+             phi->dest.ssa.bit_size >= min_bit_size)
+            continue;
+
+         cast_phi(&b, phi, min_bit_size);
+         progress = true;
+      }
+   }
+
+   if (progress) {
+      nir_metadata_preserve(impl, nir_metadata_block_index |
+                                  nir_metadata_dominance);
+   }
+
+   return progress;
+}
+
+bool
+dxil_nir_lower_upcast_phis(nir_shader *shader, unsigned min_bit_size)
+{
+   bool progress = false;
+
+   nir_foreach_function(function, shader) {
+      if (function->impl)
+         progress |= upcast_phi_impl(function->impl, min_bit_size);
+   }
+
+   return progress;
+}
