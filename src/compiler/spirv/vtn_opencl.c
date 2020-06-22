@@ -412,6 +412,14 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
    case OpenCLstd_Remquo:
       signed_out_param = 2;
       break;
+   case OpenCLstd_SMad_sat: {
+      /* All parameters need to be converted to signed */
+      enum glsl_base_type unsigned_type = glsl_get_base_type(src_types[0]);
+      const struct glsl_type *signed_type = glsl_vector_type(glsl_signed_base_type_of(unsigned_type),
+                                                             glsl_get_vector_elements(src_types[0]));
+      src_types[0] = src_types[1] = src_types[2] = signed_type;
+      break;
+   }
    default: break;
    }
 
