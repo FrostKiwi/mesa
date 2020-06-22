@@ -675,28 +675,20 @@ void clc_free_object(struct clc_object *obj)
 }
 
 static unsigned
-lower_bit_size_callback(const nir_alu_instr *alu, UNUSED void *data)
+lower_bit_size_callback(const nir_alu_instr *alu, void *data)
 {
    if (nir_op_infos[alu->op].is_conversion)
       return 0;
 
    unsigned num_inputs = nir_op_infos[alu->op].num_inputs;
+   struct clc_runtime_kernel_conf *conf = (struct clc_runtime_kernel_conf *)data;
+   unsigned min_bit_size = conf && (conf->lower_bit_size & 16) ? 32 : 16;
 
    unsigned ret = 0;
    for (unsigned i = 0; i < num_inputs; i++) {
-      switch (nir_src_bit_size(alu->src[i].src)) {
-      case 8:
-         ret = 16;
-         break;
-
-      case 1:
-      case 16:
-      case 32:
-      case 64:
-         break;
-      default:
-         unreachable("unexpected bit_size");
-      }
+      unsigned bit_size = nir_src_bit_size(alu->src[i].src);
+      if (bit_size != 1 && bit_size < min_bit_size)
+         ret = min_bit_size;
    }
 
    return ret;
@@ -885,14 +877,15 @@ find_8bit_cast_type(nir_ssa_def *def)
 }
 
 static void
-cast_8bit_phi(nir_builder *b, nir_phi_instr *phi)
+cast_phi(nir_builder *b, nir_phi_instr *phi, unsigned new_bit_size)
 {
    nir_phi_instr *lowered = nir_phi_instr_create(b->shader);
    int num_components = 0;
+   int old_bit_size = phi->dest.ssa.bit_size;
 
    nir_alu_type cast_type = find_8bit_cast_type(&phi->dest.ssa);
-   nir_op upcast_op = nir_type_conversion_op(cast_type | 8, cast_type | 16, nir_rounding_mode_undef);
-   nir_op downcast_op = nir_type_conversion_op(cast_type | 16, cast_type | 8, nir_rounding_mode_undef);
+   nir_op upcast_op = nir_type_conversion_op(cast_type | old_bit_size, cast_type | new_bit_size, nir_rounding_mode_undef);
+   nir_op downcast_op = nir_type_conversion_op(cast_type | new_bit_size, cast_type | old_bit_size, nir_rounding_mode_undef);
 
    nir_foreach_phi_src(src, phi) {
       assert(num_components == 0 || num_components == src->src.ssa->num_components);
@@ -909,7 +902,7 @@ cast_8bit_phi(nir_builder *b, nir_phi_instr *phi)
    }
 
    nir_ssa_dest_init(&lowered->instr, &lowered->dest,
-                     num_components, 16, NULL);
+                     num_components, new_bit_size, NULL);
 
    b->cursor = nir_before_instr(&phi->instr);
    nir_builder_instr_insert(b, &lowered->instr);
@@ -922,13 +915,13 @@ cast_8bit_phi(nir_builder *b, nir_phi_instr *phi)
 }
 
 static bool
-lower_8bit_phi_impl(nir_function_impl *impl)
+upcast_phi_impl(nir_function_impl *impl, unsigned min_bit_size)
 {
    nir_builder b;
    nir_builder_init(&b, impl);
    bool progress = false;
 
-   nir_foreach_block(block, impl) {
+   nir_foreach_block_reverse(block, impl) {
       nir_foreach_instr_safe(instr, block) {
          if (instr->type != nir_instr_type_phi)
             continue;
@@ -936,10 +929,11 @@ lower_8bit_phi_impl(nir_function_impl *impl)
          nir_phi_instr *phi = nir_instr_as_phi(instr);
          assert(phi->dest.is_ssa);
 
-         if (phi->dest.ssa.bit_size != 8)
+         if (phi->dest.ssa.bit_size == 1 ||
+             phi->dest.ssa.bit_size >= min_bit_size)
             continue;
 
-         cast_8bit_phi(&b, phi);
+         cast_phi(&b, phi, min_bit_size);
          progress = true;
       }
    }
@@ -953,13 +947,13 @@ lower_8bit_phi_impl(nir_function_impl *impl)
 }
 
 static bool
-clc_lower_8bit_phis(nir_shader *shader)
+clc_lower_upcast_phis(nir_shader *shader, unsigned min_bit_size)
 {
    bool progress = false;
 
    nir_foreach_function(function, shader) {
       if (function->impl)
-         progress |= lower_8bit_phi_impl(function->impl);
+         progress |= upcast_phi_impl(function->impl, min_bit_size);
    }
 
    return progress;
@@ -1315,16 +1309,22 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, dxil_nir_opt_alu_deref_srcs);
    NIR_PASS_V(nir, dxil_nir_lower_atomics_to_dxil);
 
-   NIR_PASS_V(nir, nir_lower_bit_size, lower_bit_size_callback, NULL);
+   // Convert pack to pack_split
+   NIR_PASS_V(nir, nir_lower_pack);
+   // Lower pack_split to bit math
+   NIR_PASS_V(nir, nir_opt_algebraic);
+
+   NIR_PASS_V(nir, nir_lower_bit_size, lower_bit_size_callback, (void*)conf);
    
-   if (conf && conf->lower_int64) {
+   if (conf && (conf->lower_bit_size & 64)) {
       NIR_PASS_V(nir, nir_lower_int64, ~0u);
    }
 
    NIR_PASS_V(nir, nir_lower_64bit_phis);
 
    NIR_PASS_V(nir, nir_opt_dce);
-   NIR_PASS_V(nir, clc_lower_8bit_phis);
+   NIR_PASS_V(nir, clc_lower_upcast_phis,
+              conf && (conf->lower_bit_size & 16) ? 32 : 16);
 
    // We might've ended up with mul_high instructions after int64 lowering
    NIR_PASS_V(nir, nir_lower_alu);
