@@ -453,9 +453,10 @@ lower_32b_offset_load(nir_builder *b, nir_intrinsic_instr *intr)
     */
    unsigned num_32bit_comps = DIV_ROUND_UP(num_bits, 32);
    lower_load_vec32(b, index, num_32bit_comps, comps_32bit, op);
+   unsigned num_comps_per_pass = MIN2(num_32bit_comps, 4);
 
-   for (unsigned i = 0; i < num_32bit_comps; i += NIR_MAX_VEC_COMPONENTS) {
-      unsigned num_vec32_comps = MIN2(num_32bit_comps, NIR_MAX_VEC_COMPONENTS);
+   for (unsigned i = 0; i < num_32bit_comps; i += num_comps_per_pass) {
+      unsigned num_vec32_comps = MIN2(num_32bit_comps - i, 4);
       unsigned num_dest_comps = num_vec32_comps * 32 / bit_size;
       nir_ssa_def *vec32 = nir_vec(b, &comps_32bit[i], num_vec32_comps);
 
