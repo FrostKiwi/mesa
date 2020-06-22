@@ -33,6 +33,7 @@
 #include "util/u_helpers.h"
 #include "util/u_inlines.h"
 #include "util/u_prim.h"
+#include "util/u_prim_restart.h"
 #include "util/u_math.h"
 
 extern "C" {
@@ -369,6 +370,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       return;
    }
 
+   D3D12_INDEX_BUFFER_STRIP_CUT_VALUE ib_strip_cut_value =
+      D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
    if (dinfo->index_size > 0) {
       assert(dinfo->index_size != 1);
 
@@ -381,6 +384,19 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       } else {
          index_buffer = dinfo->index.resource;
       }
+
+      if (dinfo->primitive_restart) {
+         assert(dinfo->restart_index == 0xffff ||
+                dinfo->restart_index == 0xffffffff);
+         ib_strip_cut_value = dinfo->restart_index == 0xffff ?
+            D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF :
+            D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF;
+      }
+   }
+
+   if (ctx->gfx_pipeline_state.ib_strip_cut_value != ib_strip_cut_value) {
+      ctx->gfx_pipeline_state.ib_strip_cut_value = ib_strip_cut_value;
+      ctx->state_dirty |= D3D12_DIRTY_STRIP_CUT_VALUE;
    }
 
    if (!ctx->gfx_pipeline_state.root_signature || ctx->state_dirty & D3D12_DIRTY_SHADER) {

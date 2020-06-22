@@ -63,6 +63,7 @@ enum d3d12_dirty_flags
    D3D12_DIRTY_SHADER           = (1 << 13),
    D3D12_DIRTY_ROOT_SIGNATURE   = (1 << 14),
    D3D12_DIRTY_STREAM_OUTPUT    = (1 << 15),
+   D3D12_DIRTY_STRIP_CUT_VALUE  = (1 << 16),
 };
 
 enum d3d12_shader_dirty_flags
@@ -75,7 +76,8 @@ enum d3d12_shader_dirty_flags
 #define D3D12_DIRTY_PSO (D3D12_DIRTY_BLEND | D3D12_DIRTY_RASTERIZER | D3D12_DIRTY_ZSA | \
                          D3D12_DIRTY_FRAMEBUFFER | D3D12_DIRTY_SAMPLE_MASK | \
                          D3D12_DIRTY_VERTEX_ELEMENTS | D3D12_DIRTY_PRIM_MODE | \
-                         D3D12_DIRTY_SHADER | D3D12_DIRTY_ROOT_SIGNATURE)
+                         D3D12_DIRTY_SHADER | D3D12_DIRTY_ROOT_SIGNATURE | \
+                         D3D12_DIRTY_STRIP_CUT_VALUE)
 
 #define D3D12_SHADER_DIRTY_ALL (D3D12_SHADER_DIRTY_CONSTBUF | D3D12_SHADER_DIRTY_SAMPLER_VIEWS | \
                                 D3D12_SHADER_DIRTY_SAMPLERS)
