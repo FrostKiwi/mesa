@@ -404,7 +404,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
    /* We require as inputs what the previous stage has written,
     * except certain system values */
    if (prev) {
-      if (stage == PIPE_SHADER_FRAGMENT)
+      if (stage == PIPE_SHADER_FRAGMENT || stage == PIPE_SHADER_GEOMETRY)
          system_out_values |= 1ull << VARYING_SLOT_POS;
       key->required_varying_inputs = prev->current->nir->info.outputs_written & ~system_out_values;
       key->prev_varying_outputs = prev->current->nir->info.outputs_written;
