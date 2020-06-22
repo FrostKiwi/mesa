@@ -3024,6 +3024,9 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    case nir_intrinsic_load_instance_id:
       return emit_load_input_interpolated(ctx, intr,
                                           ctx->system_value[SYSTEM_VALUE_INSTANCE_ID]);
+   case nir_intrinsic_load_primitive_id:
+      return emit_load_input_interpolated(ctx, intr,
+                                          ctx->system_value[SYSTEM_VALUE_PRIMITIVE_ID]);
    case nir_intrinsic_load_shared_dxil:
       return emit_load_shared(ctx, intr);
    case nir_intrinsic_load_scratch_dxil:
