@@ -682,9 +682,6 @@ lower_bit_size_callback(const nir_alu_instr *alu, UNUSED void *data)
 
    unsigned num_inputs = nir_op_infos[alu->op].num_inputs;
 
-   if (alu->op == nir_op_bcsel)
-      num_inputs--; /* ignore binary condition for bcsel */
-
    unsigned ret = 0;
    for (unsigned i = 0; i < num_inputs; i++) {
       switch (nir_src_bit_size(alu->src[i].src)) {
