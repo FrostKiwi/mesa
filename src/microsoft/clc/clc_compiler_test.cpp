@@ -2000,3 +2000,131 @@ TEST_F(ComputeTest, async_copy)
    Shader shader = compile({ kernel_source });
    validate(shader);
 }
+
+TEST_F(ComputeTest, packed_struct_global)
+{
+#pragma pack(push, 1)
+   struct s { uint8_t uc; uint64_t ul; uint16_t us; };
+#pragma pack(pop)
+
+   const char *kernel_source =
+   "struct __attribute__((packed)) s {uchar uc; ulong ul; ushort us; };\n\
+   __kernel void main_test(__global struct s *inout, global uint *size)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       inout[idx].uc = idx + 1;\n\
+       inout[idx].ul = ((ulong)(idx + 1 + 0xfbfcfdfe) << 32) | 0x12345678;\n\
+       inout[idx].us = ((ulong)(idx + 1 + 0xa0) << 8) | 0x12;\n\
+       *size = sizeof(struct s);\n\
+   }\n";
+   auto inout = ShaderArg<struct s>({0, 0, 0}, SHADER_ARG_OUTPUT);
+   auto size = ShaderArg<uint32_t>(0, SHADER_ARG_OUTPUT);
+   const struct s expected[] = {
+      { 1, 0xfbfcfdff12345678, 0xa112 }
+   };
+
+   run_shader(kernel_source, inout.size(), 1, 1, inout, size);
+   for (int i = 0; i < inout.size(); ++i) {
+      EXPECT_EQ(inout[i].uc, expected[i].uc);
+      EXPECT_EQ(inout[i].ul, expected[i].ul);
+      EXPECT_EQ(inout[i].us, expected[i].us);
+   }
+   EXPECT_EQ(size, sizeof(struct s));
+}
+
+TEST_F(ComputeTest, packed_struct_arg)
+{
+#pragma pack(push, 1)
+   struct s { uint8_t uc; uint64_t ul; uint16_t us; };
+#pragma pack(pop)
+
+   const char *kernel_source =
+   "struct __attribute__((packed)) s {uchar uc; ulong ul; ushort us; };\n\
+   __kernel void main_test(__global struct s *out, struct s in)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       out[idx].uc = in.uc + 0x12;\n\
+       out[idx].ul = in.ul + 0x123456789abcdef;\n\
+       out[idx].us = in.us + 0x1234;\n\
+   }\n";
+   auto out = ShaderArg<struct s>({0, 0, 0}, SHADER_ARG_OUTPUT);
+   auto in = ShaderArg<struct s>({1, 2, 3}, SHADER_ARG_INPUT);
+   const struct s expected[] = {
+      { 0x12 + 1, 0x123456789abcdef + 2, 0x1234 + 3 }
+   };
+
+   run_shader(kernel_source, out.size(), 1, 1, out, in);
+   for (int i = 0; i < out.size(); ++i) {
+      EXPECT_EQ(out[i].uc, expected[i].uc);
+      EXPECT_EQ(out[i].ul, expected[i].ul);
+      EXPECT_EQ(out[i].us, expected[i].us);
+   }
+}
+
+TEST_F(ComputeTest, packed_struct_local)
+{
+#pragma pack(push, 1)
+   struct s { uint8_t uc; uint64_t ul; uint16_t us; };
+#pragma pack(pop)
+
+   const char *kernel_source =
+   "struct __attribute__((packed)) s {uchar uc; ulong ul; ushort us; };\n\
+   __kernel void main_test(__global struct s *out, __constant struct s *in)\n\
+   {\n\
+       uint idx = get_global_id(0);\n\
+       __local struct s tmp[2];\n\
+       tmp[get_local_id(0)] = in[idx];\n\
+       barrier(CLK_LOCAL_MEM_FENCE);\n\
+       out[idx] = tmp[(get_local_id(0) + 1) % 2];\n\
+   }\n";
+   auto out = ShaderArg<struct s>({{0, 0, 0}, {0, 0, 0}}, SHADER_ARG_OUTPUT);
+   auto in = ShaderArg<struct s>({{1, 2, 3}, {0x12, 0x123456789abcdef, 0x1234} }, SHADER_ARG_INPUT);
+   const struct s expected[] = {
+      { 0x12, 0x123456789abcdef, 0x1234 },
+      { 1, 2, 3 },
+   };
+
+   run_shader(kernel_source, out.size(), 1, 1, out, in);
+   for (int i = 0; i < out.size(); ++i) {
+      EXPECT_EQ(out[i].uc, expected[i].uc);
+      EXPECT_EQ(out[i].ul, expected[i].ul);
+      EXPECT_EQ(out[i].us, expected[i].us);
+   }
+}
+
+/* DISABLED because current release versions of WARP either return
+ * rubbish from reads or crash: they are not prepared to handle
+ * non-float global constants */
+TEST_F(ComputeTest, DISABLED_packed_struct_const)
+{
+#pragma pack(push, 1)
+   struct s { uint8_t uc; uint64_t ul; uint16_t us; };
+#pragma pack(pop)
+
+   const char *kernel_source =
+   "struct __attribute__((packed)) s {uchar uc; ulong ul; ushort us; };\n\
+   __kernel void main_test(__global struct s *out, struct s in)\n\
+   {\n\
+       __constant struct s base[] = {\n\
+          {0x12, 0x123456789abcdef, 0x1234},\n\
+          {0x11, 0x123456789abcdee, 0x1233},\n\
+       };\n\
+       uint idx = get_global_id(0);\n\
+       out[idx].uc = base[idx % 2].uc + in.uc;\n\
+       out[idx].ul = base[idx % 2].ul + in.ul;\n\
+       out[idx].us = base[idx % 2].us + in.us;\n\
+   }\n";
+   auto out = ShaderArg<struct s>(std::vector<struct s>(2, {0, 0, 0}), SHADER_ARG_OUTPUT);
+   auto in = ShaderArg<struct s>({1, 2, 3}, SHADER_ARG_INPUT);
+   const struct s expected[] = {
+      { 0x12 + 1, 0x123456789abcdef + 2, 0x1234 + 3 },
+      { 0x11 + 1, 0x123456789abcdee + 2, 0x1233 + 3 },
+   };
+
+   run_shader(kernel_source, out.size(), 1, 1, out, in);
+   for (int i = 0; i < out.size(); ++i) {
+      EXPECT_EQ(out[i].uc, expected[i].uc);
+      EXPECT_EQ(out[i].ul, expected[i].ul);
+      EXPECT_EQ(out[i].us, expected[i].us);
+   }
+}
