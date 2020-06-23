@@ -298,7 +298,7 @@ void
 ComputeTest::get_buffer_data(ComPtr<ID3D12Resource> res,
                              void *buf, size_t size)
 {
-   auto readback_res = create_buffer(MAX2(size, 4), D3D12_HEAP_TYPE_READBACK);
+   auto readback_res = create_buffer(align(size, 4), D3D12_HEAP_TYPE_READBACK);
    resource_barrier(res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
    cmdlist->CopyResource(readback_res.Get(), res.Get());
    resource_barrier(res, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON);
@@ -359,7 +359,7 @@ ComputeTest::create_uav_buffer(ComPtr<ID3D12Resource> res,
    uav_desc.Format = DXGI_FORMAT_R32_TYPELESS;
    uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
    uav_desc.Buffer.FirstElement = 0;
-   uav_desc.Buffer.NumElements = MAX2(width * byte_stride / 4, 1);
+   uav_desc.Buffer.NumElements = DIV_ROUND_UP(width * byte_stride, 4);
    uav_desc.Buffer.StructureByteStride = 0;
    uav_desc.Buffer.CounterOffsetInBytes = 0;
    uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
@@ -384,7 +384,7 @@ ComputeTest::add_uav_resource(ComputeTest::Resources &resources,
                               const void *data, size_t num_elems,
                               size_t elem_size)
 {
-   size_t size = MAX2(elem_size * num_elems, 4);
+   size_t size = align(elem_size * num_elems, 4);
    D3D12_CPU_DESCRIPTOR_HANDLE handle;
    ComPtr<ID3D12Resource> res;
    handle = uav_heap->GetCPUDescriptorHandleForHeapStart();
