@@ -2766,6 +2766,7 @@ typedef enum {
    nir_lower_ufind_msb64 = (1 << 14),
    nir_lower_i2f = (1 << 15),
    nir_lower_f2i = (1 << 16),
+   nir_lower_bit_count64 = (1 << 17),
 } nir_lower_int64_options;
 
 typedef enum {
