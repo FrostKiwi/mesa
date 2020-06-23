@@ -708,6 +708,10 @@ d3d12_create_shader(struct d3d12_context *ctx,
     * we must go through the shader selector here to create a compilable variant.
     * For shaders that are not depended on the state this is just compiling the original
     * shader.
+    *
+    * TODO: get rid of having to compiling the shader here if it can be forseen that it will
+    * be thrown away (i.e. it depends on states that are likely to change before the shader is
+    * used for the first time)
     */
    struct d3d12_selection_context sel_ctx = {0};
    sel_ctx.ctx = ctx;
