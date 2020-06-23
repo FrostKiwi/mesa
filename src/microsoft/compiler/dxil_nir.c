@@ -713,26 +713,6 @@ dxil_nir_lower_ubo_to_temp(nir_shader *nir)
    return progress;
 }
 
-static bool
-lower_kernel_input_offset_bit_size(nir_builder *b, nir_intrinsic_instr *intr)
-{
-   assert(intr->src[0].is_ssa);
-   if (intr->src[0].ssa->parent_instr->type != nir_instr_type_load_const)
-      return false;
-
-   nir_load_const_instr *load = nir_instr_as_load_const(intr->src[0].ssa->parent_instr);
-   if (load->def.bit_size <= 32)
-      return false;
-
-   nir_const_value *value = load->value;
-   if (value->u64 > 0xffffffff)
-      return false;
-
-   value->u32 = (unsigned)value->u64;
-   load->def.bit_size = 32;
-   return true;
-}
-
 bool
 dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
 {
@@ -983,7 +963,7 @@ lower_load_kernel_input(nir_builder *b, nir_intrinsic_instr *intr,
 
    nir_ssa_def *result =
       build_load_ubo_dxil(b, nir_imm_int(b, var->data.binding),
-                          intr->src[0].ssa,
+                          nir_u2u(b, intr->src[0].ssa, 32),
                           nir_dest_num_components(intr->dest),
                           nir_dest_bit_size(intr->dest));
    nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
@@ -1011,10 +991,8 @@ dxil_nir_lower_kernel_input_loads(nir_shader *nir, nir_variable *var)
 
             nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
 
-            if (intr->intrinsic == nir_intrinsic_load_kernel_input) {
-               progress |= lower_kernel_input_offset_bit_size(&b, intr);
+            if (intr->intrinsic == nir_intrinsic_load_kernel_input)
                progress |= lower_load_kernel_input(&b, intr, var);
-            }
          }
       }
    }
