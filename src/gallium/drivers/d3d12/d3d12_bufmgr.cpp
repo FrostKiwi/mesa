@@ -273,6 +273,10 @@ d3d12_bufmgr_create_buffer(struct pb_manager *pmgr,
    if (!buf)
       return NULL;
 
+   // Align the buffer to D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT
+   // in case it is to be used as a CBV.
+   size = align(size, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
    pipe_reference_init(&buf->base.reference, 1);
    buf->base.alignment = pb_desc->alignment;
    buf->base.usage = pb_desc->usage;
