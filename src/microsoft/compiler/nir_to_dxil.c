@@ -1667,9 +1667,8 @@ emit_unary_intin(struct ntd_context *ctx, nir_alu_instr *alu,
                  enum dxil_intr intr, const struct dxil_value *op)
 {
    const nir_op_info *info = &nir_op_infos[alu->op];
-   unsigned dst_bits = nir_dest_bit_size(alu->dest.dest);
-   assert(nir_src_bit_size(alu->src[0].src) == dst_bits);
-   enum overload_type overload = get_overload(info->output_type, dst_bits);
+   unsigned src_bits = nir_src_bit_size(alu->src[0].src);
+   enum overload_type overload = get_overload(info->input_types[0], src_bits);
 
    const struct dxil_value *v = emit_unary_call(ctx, overload, intr, op);
    if (!v)
