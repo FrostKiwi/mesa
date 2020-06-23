@@ -1145,3 +1145,4 @@ binop("imul24", tint32, _2src_commutative + associative,
       "(((int32_t)src0 << 8) >> 8) * (((int32_t)src1 << 8) >> 8)")
 
 unop_convert("fisnormal", tbool1, tfloat, "isnormal(src0)")
+unop_convert("fisfinite", tbool1, tfloat, "isfinite(src0)")
