@@ -673,6 +673,11 @@ d3d12_create_shader(struct d3d12_context *ctx,
    d3d12_shader_selector *prev = get_prev_shader(ctx, sel->stage);
    d3d12_shader_selector *next = get_next_shader(ctx, sel->stage);
 
+   uint64_t out_mask = nir->info.stage == MESA_SHADER_FRAGMENT ?
+                          (1ull << FRAG_RESULT_STENCIL) : 0;
+
+   d3d12_fix_io_uint_type(nir, 0, out_mask);
+
    if (nir->info.stage != MESA_SHADER_VERTEX)
       nir->info.inputs_read =
             d3d12_reassign_driver_locations(&nir->inputs,
@@ -680,12 +685,11 @@ d3d12_create_shader(struct d3d12_context *ctx,
    else
       nir->info.inputs_read = d3d12_sort_by_driver_location(&nir->inputs);
 
-   if (nir->info.stage != MESA_SHADER_FRAGMENT)
+   if (nir->info.stage != MESA_SHADER_FRAGMENT) {
       nir->info.outputs_written =
             d3d12_reassign_driver_locations(&nir->outputs,
                                             next ? next->current->nir->info.inputs_read : 0);
-   else {
-      NIR_PASS_V(nir, d3d12_fix_stencil_export_type);
+   } else {
       d3d12_sort_ps_outputs(&nir->outputs);
    }
 

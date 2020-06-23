@@ -467,22 +467,19 @@ d3d12_lower_frag_result(struct nir_shader *nir, unsigned nr_cbufs)
    return progress;
 }
 
-bool
-d3d12_fix_stencil_export_type(struct nir_shader *s)
+static bool
+fix_io_uint_type(struct nir_shader *s, struct exec_list *io, int slot)
 {
-   if (!(s->info.outputs_written & (1 << FRAG_RESULT_STENCIL)))
-      return false;
-
-   nir_variable *stencil_export = NULL;
-   nir_foreach_variable(var, &s->outputs) {
-      if (var->data.location == FRAG_RESULT_STENCIL) {
+   nir_variable *fixed_var = NULL;
+   nir_foreach_variable(var, io) {
+      if (var->data.location == slot) {
          var->type = glsl_uint_type();
-         stencil_export = var;
+         fixed_var = var;
          break;
       }
    }
 
-   assert(stencil_export);
+   assert(fixed_var);
 
    nir_foreach_function(function, s) {
       if (function->impl) {
@@ -490,13 +487,36 @@ d3d12_fix_stencil_export_type(struct nir_shader *s)
             nir_foreach_instr_safe(instr, block) {
                if (instr->type == nir_instr_type_deref) {
                   nir_deref_instr *deref = nir_instr_as_deref(instr);
-                  if (deref->var == stencil_export)
-                     deref->type = stencil_export->type;
+                  if (deref->var == fixed_var)
+                     deref->type = fixed_var->type;
                }
             }
          }
       }
    }
-
    return true;
+}
+
+bool
+d3d12_fix_io_uint_type(struct nir_shader *s, uint64_t in_mask, uint64_t out_mask)
+{
+   if (!(s->info.outputs_written & out_mask) &&
+       !(s->info.inputs_read & in_mask))
+      return false;
+
+   bool progress = false;
+
+   while (in_mask) {
+      int slot = u_bit_scan64(&in_mask);
+      progress |= (s->info.inputs_read & (1ull << slot)) &&
+                  fix_io_uint_type(s, &s->inputs, slot);
+   }
+
+   while (out_mask) {
+      int slot = u_bit_scan64(&out_mask);
+      progress |= (s->info.outputs_written & (1ull << slot)) &&
+                  fix_io_uint_type(s, &s->outputs, slot);
+   }
+
+   return progress;
 }
