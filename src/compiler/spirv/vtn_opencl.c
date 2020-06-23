@@ -286,8 +286,11 @@ handle_alu(struct vtn_builder *b, uint32_t opcode,
            unsigned num_srcs, nir_ssa_def **srcs, const struct glsl_type **src_types,
            const nir_variable_mode *address_types, const struct glsl_type *dest_type)
 {
-   return nir_build_alu(&b->nb, nir_alu_op_for_opencl_opcode(b, (enum OpenCLstd_Entrypoints)opcode),
-                        srcs[0], srcs[1], srcs[2], NULL);
+   nir_ssa_def *ret = nir_build_alu(&b->nb, nir_alu_op_for_opencl_opcode(b, (enum OpenCLstd_Entrypoints)opcode),
+                                    srcs[0], srcs[1], srcs[2], NULL);
+   if (opcode == OpenCLstd_Popcount)
+      ret = nir_u2u(&b->nb, ret, glsl_get_bit_size(dest_type));
+   return ret;
 }
 
 #define REMAP(op, str) [OpenCLstd_##op] = { str }
