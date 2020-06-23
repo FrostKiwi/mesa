@@ -175,6 +175,7 @@ enum dxil_intr {
    DXIL_INTR_FABS = 6,
    DXIL_INTR_SATURATE = 7,
 
+   DXIL_INTR_ISFINITE = 10,
    DXIL_INTR_ISNORMAL = 11,
 
    DXIL_INTR_FCOS = 12,
@@ -448,6 +449,7 @@ unary_func_name(enum dxil_intr intr)
    case DXIL_INTR_COUNTBITS:
    case DXIL_INTR_FIRSTBIT_HI:
       return "dx.op.unaryBits";
+   case DXIL_INTR_ISFINITE:
    case DXIL_INTR_ISNORMAL:
       return "dx.op.isSpecialFloat";
    }
@@ -1876,6 +1878,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_ffloor: return emit_unary_intin(ctx, alu, DXIL_INTR_ROUND_NI, src[0]);
    case nir_op_ffract: return emit_unary_intin(ctx, alu, DXIL_INTR_FRC, src[0]);
    case nir_op_fisnormal: return emit_unary_intin(ctx, alu, DXIL_INTR_ISNORMAL, src[0]);
+   case nir_op_fisfinite: return emit_unary_intin(ctx, alu, DXIL_INTR_ISFINITE, src[0]);
 
    case nir_op_fddx:
    case nir_op_fddx_coarse: return emit_unary_intin(ctx, alu, DXIL_INTR_DDX_COARSE, src[0]);
