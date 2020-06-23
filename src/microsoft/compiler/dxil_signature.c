@@ -97,7 +97,8 @@ in_sysvalue_name(nir_variable *var)
  * to the semantic name string. Then these strings are dumped into the stream.
  */
 static unsigned
-get_additional_semantic_info(nir_variable *var, struct semantic_info *info, unsigned next_row)
+get_additional_semantic_info(nir_variable *var, struct semantic_info *info,
+                             unsigned next_row, bool strip_one_in_array_layer)
 {
    const struct glsl_type *type = var->type;
 
@@ -114,6 +115,9 @@ get_additional_semantic_info(nir_variable *var, struct semantic_info *info, unsi
       info->start_row = -1;
    } else {
       info->start_row = next_row;
+      if (glsl_type_is_array(type) && strip_one_in_array_layer)
+         type = glsl_without_array(type);
+
       if (glsl_type_is_array(type)) {
          info->rows = glsl_get_aoa_size(type);
          type = glsl_get_array_element(type);
@@ -203,14 +207,15 @@ get_semantic_ps_outname(nir_variable *var, struct semantic_info *info)
 }
 
 static void
-get_semantic_name(nir_variable *var, struct semantic_info *info)
+get_semantic_name(nir_variable *var, struct semantic_info *info,
+                  const struct glsl_type *type)
 {
    info->kind = DXIL_SEM_INVALID;
    info->interpolation = get_interpolation(var);
    switch (var->data.location) {
 
    case VARYING_SLOT_POS:
-      assert(glsl_get_components(var->type) == 4);
+      assert(glsl_get_components(type) == 4);
       snprintf(info->name, 64, "%s", "SV_Position");
       info->kind = DXIL_SEM_POSITION;
       break;
@@ -249,9 +254,22 @@ get_semantic_name(nir_variable *var, struct semantic_info *info)
 static void
 get_semantic_in_name(nir_variable *var, struct semantic_info *info)
 {
-   get_semantic_name(var, info);
+   get_semantic_name(var, info, var->type);
    info->sysvalue_name = in_sysvalue_name(var);
 }
+
+static void
+get_semantic_gs_in_name(nir_variable *var, struct semantic_info *info)
+{
+   /* geometry shader input varyings come as arrays, but we want to use
+    * the element type */
+   const struct glsl_type *type =
+         glsl_type_is_array(var->type) ? glsl_without_array(var->type) : var->type;
+
+   get_semantic_name(var, info, type);
+   info->sysvalue_name = in_sysvalue_name(var);
+}
+
 
 static enum dxil_prog_sig_semantic
 prog_semantic_from_kind(enum dxil_semantic_kind kind)
@@ -417,13 +435,14 @@ fill_io_signature(struct dxil_module *mod, int id,
 static unsigned
 get_input_signature_group(struct dxil_module *mod, const struct dxil_mdnode **inputs,
                           unsigned num_inputs, struct exec_list *nir_vars,
-                          sematic_info_proc get_semantics, unsigned *row_iter)
+                          sematic_info_proc get_semantics, unsigned *row_iter,
+                          bool strip_one_in_array_layer)
 {
    nir_foreach_variable(var, nir_vars) {
       struct semantic_info semantic = {0};
       get_semantics(var, &semantic);
       mod->inputs[num_inputs].sysvalue = semantic.sysvalue_name;
-      *row_iter = get_additional_semantic_info(var, &semantic, *row_iter);
+      *row_iter = get_additional_semantic_info(var, &semantic, *row_iter, strip_one_in_array_layer);
 
       mod->inputs[num_inputs].name = ralloc_strdup(mod->ralloc_ctx,
                                                    semantic.name);
@@ -450,14 +469,18 @@ get_input_signature(struct dxil_module *mod, nir_shader *s)
 
    const struct dxil_mdnode *inputs[VARYING_SLOT_MAX];
    unsigned next_row = 0;
+   bool strip_one_in_array_layer = s->info.stage == MESA_SHADER_GEOMETRY;
+
    mod->num_sig_inputs = get_input_signature_group(mod, inputs, 0, &s->inputs,
                                                    s->info.stage == MESA_SHADER_VERTEX ?
-                                                      get_semantic_vs_in_name : get_semantic_in_name,
-                                                   &next_row);
+                                                      get_semantic_vs_in_name :
+                                                      (s->info.stage == MESA_SHADER_GEOMETRY ?
+                                                         get_semantic_gs_in_name : get_semantic_in_name),
+                                                   &next_row, strip_one_in_array_layer);
 
    mod->num_sig_inputs = get_input_signature_group(mod, inputs, mod->num_sig_inputs, &s->system_values,
                                                    get_semantic_sv_name,
-                                                   &next_row);
+                                                   &next_row, strip_one_in_array_layer);
    mod->num_psv_inputs = next_row;
 
    const struct dxil_mdnode *retval = mod->num_sig_inputs ?
@@ -497,10 +520,10 @@ get_output_signature(struct dxil_module *mod, nir_shader *s)
          get_semantic_ps_outname(var, &semantic);
          mod->outputs[num_outputs].sysvalue = "TARGET";
       } else {
-         get_semantic_name(var, &semantic);
+         get_semantic_name(var, &semantic, var->type);
          mod->outputs[num_outputs].sysvalue = out_sysvalue_name(var);
       }
-      next_row = get_additional_semantic_info(var, &semantic, next_row);
+      next_row = get_additional_semantic_info(var, &semantic, next_row, false);
 
       mod->info.has_out_position |= semantic.kind== DXIL_SEM_POSITION;
       mod->info.has_out_depth |= semantic.kind == DXIL_SEM_DEPTH;
