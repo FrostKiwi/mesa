@@ -448,6 +448,8 @@ unary_func_name(enum dxil_intr intr)
    case DXIL_INTR_COUNTBITS:
    case DXIL_INTR_FIRSTBIT_HI:
       return "dx.op.unaryBits";
+   case DXIL_INTR_ISNORMAL:
+      return "dx.op.isSpecialFloat";
    }
 
    return "dx.op.unary";
