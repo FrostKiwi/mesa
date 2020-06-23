@@ -1150,6 +1150,8 @@ find_phi_cast_type(nir_ssa_def *def)
    nir_foreach_use(src, def) {
       assert(src->parent_instr->type == nir_instr_type_alu);
       nir_alu_instr *alu = nir_instr_as_alu(src->parent_instr);
+      if (alu->op == nir_op_mov || nir_op_is_vec(alu->op))
+         return find_phi_cast_type(&alu->dest.dest.ssa);
       assert(nir_op_infos[alu->op].is_conversion);
       assert(type == nir_type_invalid ||
              type == nir_alu_type_get_base_type(nir_op_infos[alu->op].output_type));
