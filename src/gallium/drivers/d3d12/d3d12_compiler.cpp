@@ -673,10 +673,14 @@ d3d12_create_shader(struct d3d12_context *ctx,
    d3d12_shader_selector *prev = get_prev_shader(ctx, sel->stage);
    d3d12_shader_selector *next = get_next_shader(ctx, sel->stage);
 
-   uint64_t out_mask = nir->info.stage == MESA_SHADER_FRAGMENT ?
-                          (1ull << FRAG_RESULT_STENCIL) : 0;
+   uint64_t in_mask = nir->info.stage == MESA_SHADER_VERTEX ?
+                         0 : VARYING_BIT_PRIMITIVE_ID;
 
-   d3d12_fix_io_uint_type(nir, 0, out_mask);
+   uint64_t out_mask = nir->info.stage == MESA_SHADER_FRAGMENT ?
+                          (1ull << FRAG_RESULT_STENCIL) :
+                          VARYING_BIT_PRIMITIVE_ID;
+
+   d3d12_fix_io_uint_type(nir, in_mask, out_mask);
 
    if (nir->info.stage != MESA_SHADER_VERTEX)
       nir->info.inputs_read =
