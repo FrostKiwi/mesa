@@ -274,7 +274,9 @@ nir_alu_op_for_opencl_opcode(struct vtn_builder *b,
    case OpenCLstd_Trunc: return nir_op_ftrunc;
    case OpenCLstd_Rint: return nir_op_fround_even;
    case OpenCLstd_Ldexp: return nir_op_ldexp;
-   /* uhm... */
+   case OpenCLstd_Half_divide: return nir_op_fdiv;
+   case OpenCLstd_Half_recip: return nir_op_frcp;
+      /* uhm... */
    case OpenCLstd_UAbs: return nir_op_mov;
    default:
       vtn_fail("No NIR equivalent");
@@ -340,6 +342,17 @@ static const struct {
    REMAP(Sincos, "sincos"),
    REMAP(Fract, "fract"),
    REMAP(Frexp, "frexp"),
+
+   REMAP(Half_cos, "cos"),
+   REMAP(Half_exp, "exp"),
+   REMAP(Half_exp2, "exp2"),
+   REMAP(Half_exp10, "exp10"),
+   REMAP(Half_log, "log"),
+   REMAP(Half_log2, "log2"),
+   REMAP(Half_log10, "log10"),
+   REMAP(Half_powr, "powr"),
+   REMAP(Half_sin, "sin"),
+   REMAP(Half_tan, "tan"),
 
    REMAP(Remainder, "remainder"),
    REMAP(Remquo, "remquo"),
@@ -734,6 +747,8 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_Trunc:
    case OpenCLstd_Rint:
    case OpenCLstd_Ldexp:
+   case OpenCLstd_Half_divide:
+   case OpenCLstd_Half_recip:
       handle_instr(b, ext_opcode, w + 5, count - 5, w + 1, handle_alu);
       return true;
    case OpenCLstd_SAbs_diff:
@@ -828,6 +843,16 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_SMad_sat:
    case OpenCLstd_Round:
    case OpenCLstd_Native_tan:
+   case OpenCLstd_Half_cos:
+   case OpenCLstd_Half_exp:
+   case OpenCLstd_Half_exp2:
+   case OpenCLstd_Half_exp10:
+   case OpenCLstd_Half_log:
+   case OpenCLstd_Half_log2:
+   case OpenCLstd_Half_log10:
+   case OpenCLstd_Half_powr:
+   case OpenCLstd_Half_sin:
+   case OpenCLstd_Half_tan:
       handle_instr(b, ext_opcode, w + 5, count - 5, w + 1, handle_special);
       return true;
    case OpenCLstd_Vloadn:
