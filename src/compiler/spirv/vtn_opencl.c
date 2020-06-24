@@ -475,7 +475,7 @@ handle_special(struct vtn_builder *b, uint32_t opcode,
    case OpenCLstd_UMul24:
       return nir_umul24(nb, srcs[0], srcs[1]);
    case OpenCLstd_SMad24:
-      return nir_imad24(nb, srcs[0], srcs[1], srcs[2]);
+      return nir_iadd(nb, nir_amul(nb, srcs[0], srcs[1]), srcs[2]);
    case OpenCLstd_UMad24:
       return nir_umad24(nb, srcs[0], srcs[1], srcs[2]);
    case OpenCLstd_FClamp:
