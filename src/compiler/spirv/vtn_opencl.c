@@ -468,7 +468,10 @@ handle_special(struct vtn_builder *b, uint32_t opcode,
    case OpenCLstd_UMad_hi:
       return nir_umad_hi(nb, srcs[0], srcs[1], srcs[2]);
    case OpenCLstd_SMul24:
-      return nir_imul24(nb, srcs[0], srcs[1]);
+      /* amul is undefined if the numbers are out-of range, similar to the
+       * SPIR-V opcode here.
+       */
+      return nir_amul(nb, srcs[0], srcs[1]);
    case OpenCLstd_UMul24:
       return nir_umul24(nb, srcs[0], srcs[1]);
    case OpenCLstd_SMad24:
