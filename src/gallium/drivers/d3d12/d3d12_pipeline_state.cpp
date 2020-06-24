@@ -187,22 +187,26 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
    D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = { 0 };
    pso_desc.pRootSignature = state->root_signature;
 
+   bool last_vertex_stage_writes_pos = false;
+
    if (state->stages[PIPE_SHADER_VERTEX]) {
       auto shader = state->stages[PIPE_SHADER_VERTEX];
       pso_desc.VS.BytecodeLength = shader->bytecode_length;
       pso_desc.VS.pShaderBytecode = shader->bytecode;
-   }
-
-   if (state->stages[PIPE_SHADER_FRAGMENT]) {
-      auto shader = state->stages[PIPE_SHADER_FRAGMENT];
-      pso_desc.PS.BytecodeLength = shader->bytecode_length;
-      pso_desc.PS.pShaderBytecode = shader->bytecode;
+      last_vertex_stage_writes_pos = (shader->nir->info.outputs_written & VARYING_BIT_POS) != 0;
    }
 
    if (state->stages[PIPE_SHADER_GEOMETRY]) {
       auto shader = state->stages[PIPE_SHADER_GEOMETRY];
       pso_desc.GS.BytecodeLength = shader->bytecode_length;
       pso_desc.GS.pShaderBytecode = shader->bytecode;
+      last_vertex_stage_writes_pos = (shader->nir->info.outputs_written & VARYING_BIT_POS) != 0;
+   }
+
+   if (last_vertex_stage_writes_pos && state->stages[PIPE_SHADER_FRAGMENT]) {
+      auto shader = state->stages[PIPE_SHADER_FRAGMENT];
+      pso_desc.PS.BytecodeLength = shader->bytecode_length;
+      pso_desc.PS.pShaderBytecode = shader->bytecode;
    }
 
    fill_so_declaration(&state->so_info, entries, &num_entries,
