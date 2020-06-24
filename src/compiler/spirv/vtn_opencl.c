@@ -416,17 +416,17 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
    if (!name)
        return NULL;
 
-   /* Some functions which take out params end up with pointer-to-uint being passed,
-    * which doesn't mangle correctly when the function expects pointer-to-int
+   /* Some functions which take params end up with uint (or pointer-to-uint) being passed,
+    * which doesn't mangle correctly when the function expects int or pointer-to-int
     */
-   int signed_out_param = -1;
+   int signed_param = -1;
    switch (opcode) {
    case OpenCLstd_Frexp:
    case OpenCLstd_Lgamma_r:
-      signed_out_param = 1;
+      signed_param = 1;
       break;
    case OpenCLstd_Remquo:
-      signed_out_param = 2;
+      signed_param = 2;
       break;
    case OpenCLstd_SMad_sat: {
       /* All parameters need to be converted to signed */
@@ -439,12 +439,12 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
    default: break;
    }
 
-   if (signed_out_param >= 0) {
-      int elem = glsl_get_vector_elements(src_types[signed_out_param]);
+   if (signed_param >= 0) {
+      int elem = glsl_get_vector_elements(src_types[signed_param]);
       if (elem > 1)
-         src_types[signed_out_param] = glsl_vector_type(GLSL_TYPE_INT, elem);
+         src_types[signed_param] = glsl_vector_type(GLSL_TYPE_INT, elem);
       else
-         src_types[signed_out_param] = glsl_int_type();
+         src_types[signed_param] = glsl_int_type();
    }
 
    nir_deref_instr *ret_deref = NULL;
