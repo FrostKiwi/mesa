@@ -424,6 +424,7 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
    case OpenCLstd_Frexp:
    case OpenCLstd_Lgamma_r:
    case OpenCLstd_Pown:
+   case OpenCLstd_Rootn:
       signed_param = 1;
       break;
    case OpenCLstd_Remquo:
