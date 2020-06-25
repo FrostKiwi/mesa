@@ -862,7 +862,7 @@ split_unaligned_load(nir_builder *b, nir_intrinsic_instr *intrin)
    unsigned num_loads = DIV_ROUND_UP(comp_size * num_comps, alignment);
    for (unsigned i = 0; i < num_loads; ++i) {
       nir_deref_instr *elem = nir_build_deref_ptr_as_array(b, cast, nir_imm_intN_t(b, i, cast->dest.ssa.bit_size));
-      srcs[i] = nir_load_deref_with_access(b, elem, access);
+      srcs[i] = nir_load_deref_with_access_and_align(b, elem, access, alignment, 0);
    }
 
    nir_ssa_def *new_dest = nir_extract_bits(b, srcs, num_loads, 0, num_comps, intrin->dest.ssa.bit_size);
@@ -891,7 +891,7 @@ split_unaligned_store(nir_builder *b, nir_intrinsic_instr *intrin)
    for (unsigned i = 0; i < num_stores; ++i) {
       nir_ssa_def *substore_val = nir_extract_bits(b, &value, 1, i * alignment * 8, 1, alignment * 8);
       nir_deref_instr *elem = nir_build_deref_ptr_as_array(b, cast, nir_imm_intN_t(b, i, cast->dest.ssa.bit_size));
-      nir_store_deref_with_access(b, elem, substore_val, ~0, access);
+      nir_store_deref_with_access_and_align(b, elem, substore_val, ~0, access, alignment, 0);
    }
 
    nir_instr_remove(&intrin->instr);
