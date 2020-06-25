@@ -1220,7 +1220,7 @@ clc_to_dxil(struct clc_context *ctx,
       }
    }
 
-   NIR_PASS_V(nir, dxil_nir_lower_kernel_input_loads, inputs_var);
+   NIR_PASS_V(nir, clc_nir_lower_kernel_input_loads, inputs_var);
    NIR_PASS_V(nir, clc_nir_lower_system_values, work_properties_var);
    NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
    NIR_PASS_V(nir, dxil_nir_opt_alu_deref_srcs);

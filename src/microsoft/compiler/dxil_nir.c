@@ -953,53 +953,6 @@ dxil_nir_opt_alu_deref_srcs(nir_shader *nir)
    return progress;
 }
 
-static bool
-lower_load_kernel_input(nir_builder *b, nir_intrinsic_instr *intr,
-                        nir_variable *var)
-{
-   nir_intrinsic_instr *load;
-
-   b->cursor = nir_before_instr(&intr->instr);
-
-   nir_ssa_def *result =
-      build_load_ubo_dxil(b, nir_imm_int(b, var->data.binding),
-                          nir_u2u(b, intr->src[0].ssa, 32),
-                          nir_dest_num_components(intr->dest),
-                          nir_dest_bit_size(intr->dest));
-   nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
-   nir_instr_remove(&intr->instr);
-   return true;
-}
-
-bool
-dxil_nir_lower_kernel_input_loads(nir_shader *nir, nir_variable *var)
-{
-   bool progress = false;
-
-   foreach_list_typed(nir_function, func, node, &nir->functions) {
-      if (!func->is_entrypoint)
-         continue;
-      assert(func->impl);
-
-      nir_builder b;
-      nir_builder_init(&b, func->impl);
-
-      nir_foreach_block(block, func->impl) {
-         nir_foreach_instr_safe(instr, block) {
-            if (instr->type != nir_instr_type_intrinsic)
-               continue;
-
-            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-
-            if (intr->intrinsic == nir_intrinsic_load_kernel_input)
-               progress |= lower_load_kernel_input(&b, intr, var);
-         }
-      }
-   }
-
-   return progress;
-}
-
 static nir_ssa_def *
 memcpy_load_deref_elem(nir_builder *b, nir_deref_instr *parent,
                        nir_ssa_def *index)
