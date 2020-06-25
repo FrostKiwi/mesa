@@ -973,10 +973,11 @@ build_explicit_io_load(nir_builder *b, nir_intrinsic_instr *intrin,
       bit_size = 32;
    }
 
-   /* TODO: We should try and provide a better alignment.  For OpenCL, we need
-    * to plumb the alignment through from SPIR-V when we have one.
-    */
-   nir_intrinsic_set_align(load, bit_size / 8, 0);
+   if (nir_intrinsic_align_mul(intrin))
+      nir_intrinsic_set_align(load, nir_intrinsic_align_mul(intrin),
+                              nir_intrinsic_align_offset(intrin));
+   else
+      nir_intrinsic_set_align(load, bit_size / 8, 0);
 
    assert(intrin->dest.is_ssa);
    load->num_components = num_components;
@@ -1083,10 +1084,11 @@ build_explicit_io_store(nir_builder *b, nir_intrinsic_instr *intrin,
    if (mode == nir_var_mem_ssbo || mode == nir_var_mem_global)
       nir_intrinsic_set_access(store, nir_intrinsic_access(intrin));
 
-   /* TODO: We should try and provide a better alignment.  For OpenCL, we need
-    * to plumb the alignment through from SPIR-V when we have one.
-    */
-   nir_intrinsic_set_align(store, value->bit_size / 8, 0);
+   if (nir_intrinsic_align_mul(intrin))
+      nir_intrinsic_set_align(store, nir_intrinsic_align_mul(intrin),
+                              nir_intrinsic_align_offset(intrin));
+   else
+      nir_intrinsic_set_align(store, value->bit_size / 8, 0);
 
    assert(value->num_components == 1 ||
           value->num_components == intrin->num_components);
