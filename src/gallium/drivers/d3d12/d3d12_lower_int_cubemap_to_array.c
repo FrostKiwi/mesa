@@ -189,8 +189,8 @@ lower_cube_sample(nir_builder *b, nir_tex_instr *tex)
 static nir_ssa_def *
 lower_cube_txs(nir_builder *b, nir_tex_instr *tex)
 {
-   nir_ssa_def *size = nir_get_texture_size(b, tex);
-   return nir_channels(b, size, 3);
+   b->cursor = nir_after_instr(&tex->instr);
+   return nir_channels(b, &tex->dest.ssa, 3);
 }
 
 static const struct glsl_type *
