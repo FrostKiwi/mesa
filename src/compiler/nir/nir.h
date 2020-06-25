@@ -1456,7 +1456,7 @@ typedef struct {
 
 #include "nir_intrinsics.h"
 
-#define NIR_INTRINSIC_MAX_CONST_INDEX 4
+#define NIR_INTRINSIC_MAX_CONST_INDEX 6
 
 /** Represents an intrinsic
  *
@@ -1677,6 +1677,12 @@ typedef enum {
    NIR_INTRINSIC_SRC_ACCESS,
    NIR_INTRINSIC_DST_ACCESS,
 
+   /* Separate source/dest align info for copies */
+   NIR_INTRINSIC_SRC_ALIGN_MUL,
+   NIR_INTRINSIC_DST_ALIGN_MUL,
+   NIR_INTRINSIC_SRC_ALIGN_OFFSET,
+   NIR_INTRINSIC_DST_ALIGN_OFFSET,
+
    /* Driver location for nir_load_patch_location_ir3 */
    NIR_INTRINSIC_DRIVER_LOCATION,
 
@@ -1804,7 +1810,11 @@ INTRINSIC_IDX_ACCESSORS(src_access, SRC_ACCESS, enum gl_access_qualifier)
 INTRINSIC_IDX_ACCESSORS(dst_access, DST_ACCESS, enum gl_access_qualifier)
 INTRINSIC_IDX_ACCESSORS(format, FORMAT, enum pipe_format)
 INTRINSIC_IDX_ACCESSORS(align_mul, ALIGN_MUL, unsigned)
+INTRINSIC_IDX_ACCESSORS(src_align_mul, SRC_ALIGN_MUL, unsigned)
+INTRINSIC_IDX_ACCESSORS(dst_align_mul, DST_ALIGN_MUL, unsigned)
 INTRINSIC_IDX_ACCESSORS(align_offset, ALIGN_OFFSET, unsigned)
+INTRINSIC_IDX_ACCESSORS(src_align_offset, SRC_ALIGN_OFFSET, unsigned)
+INTRINSIC_IDX_ACCESSORS(dst_align_offset, DST_ALIGN_OFFSET, unsigned)
 INTRINSIC_IDX_ACCESSORS(desc_type, DESC_TYPE, unsigned)
 INTRINSIC_IDX_ACCESSORS(type, TYPE, nir_alu_type)
 INTRINSIC_IDX_ACCESSORS(swizzle_mask, SWIZZLE_MASK, unsigned)
@@ -1814,19 +1824,6 @@ INTRINSIC_IDX_ACCESSORS(memory_modes, MEMORY_MODES, nir_variable_mode)
 INTRINSIC_IDX_ACCESSORS(memory_scope, MEMORY_SCOPE, nir_scope)
 INTRINSIC_IDX_ACCESSORS(execution_scope, EXECUTION_SCOPE, nir_scope)
 
-static inline void
-nir_intrinsic_set_align(nir_intrinsic_instr *intrin,
-                        unsigned align_mul, unsigned align_offset)
-{
-   assert(align_mul == 0 || util_is_power_of_two_nonzero(align_mul));
-   assert(align_mul == 0 ? align_offset == 0 : align_offset < align_mul);
-   assert(align_mul != 0 ||
-          intrin->intrinsic == nir_intrinsic_load_deref ||
-          intrin->intrinsic == nir_intrinsic_store_deref);
-   nir_intrinsic_set_align_mul(intrin, align_mul);
-   nir_intrinsic_set_align_offset(intrin, align_offset);
-}
-
 /** Returns a simple alignment for a load/store intrinsic offset
  *
  * Instead of the full mul+offset alignment scheme provided by the ALIGN_MUL
@@ -1834,14 +1831,34 @@ nir_intrinsic_set_align(nir_intrinsic_instr *intrin,
  * provides a single simple alignment parameter.  The offset X is guaranteed
  * to satisfy X % align == 0.
  */
-static inline unsigned
-nir_intrinsic_align(const nir_intrinsic_instr *intrin)
-{
-   const unsigned align_mul = nir_intrinsic_align_mul(intrin);
-   const unsigned align_offset = nir_intrinsic_align_offset(intrin);
-   assert(align_mul == 0 ? align_offset == 0 : align_offset < align_mul);
-   return align_offset ? 1 << (ffs(align_offset) - 1) : align_mul;
+
+#define INTRINSIC_ALIGN_ACCESSORS(name)                                        \
+static inline unsigned                                                         \
+nir_intrinsic_##name(const nir_intrinsic_instr *intrin)                        \
+{                                                                              \
+   const unsigned align_mul = nir_intrinsic_##name##_mul(intrin);              \
+   const unsigned align_offset = nir_intrinsic_##name##_offset(intrin);        \
+   assert(align_mul == 0 ? align_offset == 0 : align_offset < align_mul);      \
+   return align_offset ? 1 << (ffs(align_offset) - 1) : align_mul;             \
+}                                                                              \
+                                                                               \
+static inline void                                                             \
+nir_intrinsic_set_##name(nir_intrinsic_instr *intrin,                          \
+                         unsigned align_mul, unsigned align_offset)            \
+{                                                                              \
+   assert(align_mul == 0 || util_is_power_of_two_nonzero(align_mul));          \
+   assert(align_mul == 0 ? align_offset == 0 : align_offset < align_mul);      \
+   assert(align_mul != 0 ||                                                    \
+          intrin->intrinsic == nir_intrinsic_load_deref ||                     \
+          intrin->intrinsic == nir_intrinsic_store_deref ||                    \
+          intrin->intrinsic == nir_intrinsic_copy_deref);                      \
+   nir_intrinsic_set_##name##_mul(intrin, align_mul);                          \
+   nir_intrinsic_set_##name##_offset(intrin, align_offset);                    \
 }
+
+INTRINSIC_ALIGN_ACCESSORS(align)
+INTRINSIC_ALIGN_ACCESSORS(src_align)
+INTRINSIC_ALIGN_ACCESSORS(dst_align)
 
 unsigned
 nir_image_intrinsic_coord_components(const nir_intrinsic_instr *instr);
