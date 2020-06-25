@@ -662,6 +662,8 @@ d3d12_create_shader(struct d3d12_context *ctx,
       nir = tgsi_to_nir(shader->tokens, ctx->base.screen);
    }
 
+   nir_shader_gather_info(nir, nir_shader_get_entrypoint(nir));
+
    unsigned tex_scan_result = scan_texture_use(nir);
    sel->samples_int_textures = (tex_scan_result & TEX_SAMPLE_INTEGER_TEXTURE) != 0;
    sel->compare_with_lod_bias_grad = (tex_scan_result & TEX_CMP_WITH_LOD_BIAS_GRAD) != 0;
