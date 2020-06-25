@@ -117,7 +117,11 @@ SRC_ACCESS = "NIR_INTRINSIC_SRC_ACCESS"
 FORMAT = "NIR_INTRINSIC_FORMAT"
 # Offset or address alignment
 ALIGN_MUL = "NIR_INTRINSIC_ALIGN_MUL"
+SRC_ALIGN_MUL = "NIR_INTRINSIC_SRC_ALIGN_MUL"
+DST_ALIGN_MUL = "NIR_INTRINSIC_DST_ALIGN_MUL"
 ALIGN_OFFSET = "NIR_INTRINSIC_ALIGN_OFFSET"
+SRC_ALIGN_OFFSET = "NIR_INTRINSIC_SRC_ALIGN_OFFSET"
+DST_ALIGN_OFFSET = "NIR_INTRINSIC_DST_ALIGN_OFFSET"
 # The vulkan descriptor type for vulkan_resource_index
 DESC_TYPE = "NIR_INTRINSIC_DESC_TYPE"
 # The nir_alu_type of a uniform/input/output
@@ -168,8 +172,10 @@ intrinsic("load_param", dest_comp=0, indices=[PARAM_IDX], flags=[CAN_ELIMINATE])
 intrinsic("load_deref", dest_comp=0, src_comp=[-1],
           indices=[ACCESS, ALIGN_MUL, ALIGN_OFFSET], flags=[CAN_ELIMINATE])
 intrinsic("store_deref", src_comp=[-1, 0], indices=[WRMASK, ACCESS, ALIGN_MUL, ALIGN_OFFSET])
-intrinsic("copy_deref", src_comp=[-1, -1], indices=[DST_ACCESS, SRC_ACCESS])
-intrinsic("memcpy_deref", src_comp=[-1, -1, 1], indices=[DST_ACCESS, SRC_ACCESS])
+intrinsic("copy_deref", src_comp=[-1, -1], indices=[DST_ACCESS, DST_ALIGN_MUL, DST_ALIGN_OFFSET,
+                                                    SRC_ACCESS, SRC_ALIGN_MUL, SRC_ALIGN_OFFSET])
+intrinsic("memcpy_deref", src_comp=[-1, -1, 1], indices=[DST_ACCESS, DST_ALIGN_MUL, DST_ALIGN_OFFSET,
+                                                         SRC_ACCESS, SRC_ALIGN_MUL, SRC_ALIGN_OFFSET])
 
 # Interpolation of input.  The interp_deref_at* intrinsics are similar to the
 # load_var intrinsic acting on a shader input except that they interpolate the
