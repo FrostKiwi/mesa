@@ -172,11 +172,34 @@ lower_load_kernel_input(nir_builder *b, nir_intrinsic_instr *intr,
 
    b->cursor = nir_before_instr(&intr->instr);
 
+   unsigned bit_size = nir_dest_bit_size(intr->dest);
+   enum glsl_base_type base_type;
+
+   switch (bit_size) {
+   case 64:
+      base_type = GLSL_TYPE_UINT64;
+      break;
+   case 32:
+      base_type = GLSL_TYPE_UINT;
+      break;
+    case 16:
+      base_type = GLSL_TYPE_UINT16;
+      break;
+    case 8:
+      base_type = GLSL_TYPE_UINT8;
+      break;
+   }
+
+   const struct glsl_type *type =
+      glsl_vector_type(base_type, nir_dest_num_components(intr->dest));
+   nir_ssa_def *ptr = nir_vec2(b, nir_imm_int(b, var->data.binding),
+                                  nir_u2u(b, intr->src[0].ssa, 32));
+   nir_deref_instr *deref = nir_build_deref_cast(b, ptr, nir_var_mem_ubo, type,
+                                                    bit_size / 8);
    nir_ssa_def *result =
-      build_load_ubo_dxil(b, nir_imm_int(b, var->data.binding),
-                          nir_u2u(b, intr->src[0].ssa, 32),
-                          nir_dest_num_components(intr->dest),
-                          nir_dest_bit_size(intr->dest));
+      nir_load_deref_with_access_and_align(b, deref, (enum gl_access_qualifier)0,
+                                           nir_intrinsic_align_mul(intr),
+                                           nir_intrinsic_align_offset(intr));
    nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
    nir_instr_remove(&intr->instr);
    return true;

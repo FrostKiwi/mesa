@@ -714,6 +714,25 @@ dxil_nir_lower_ubo_to_temp(nir_shader *nir)
 }
 
 bool
+lower_load_ubo(nir_builder *b, nir_intrinsic_instr *intr)
+{
+   assert(intr->dest.is_ssa);
+   assert(intr->src[0].is_ssa);
+   assert(intr->src[1].is_ssa);
+
+   b->cursor = nir_before_instr(&intr->instr);
+
+   nir_ssa_def *result =
+      build_load_ubo_dxil(b, intr->src[0].ssa, intr->src[1].ssa,
+                             nir_dest_num_components(intr->dest),
+                             nir_dest_bit_size(intr->dest));
+
+   nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(result));
+   nir_instr_remove(&intr->instr);
+   return true;
+}
+
+bool
 dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
 {
    bool progress = false;
@@ -742,6 +761,9 @@ dxil_nir_lower_loads_stores_to_dxil(nir_shader *nir)
                break;
             case nir_intrinsic_load_ssbo:
                progress |= lower_load_ssbo(&b, intr);
+               break;
+            case nir_intrinsic_load_ubo:
+               progress |= lower_load_ubo(&b, intr);
                break;
             case nir_intrinsic_store_shared:
             case nir_intrinsic_store_scratch:
