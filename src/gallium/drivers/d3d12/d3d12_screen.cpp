@@ -179,11 +179,6 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_DEPTH_CLIP_DISABLE:
       return 1;
 
-#if 0 /* TODO: Enable me */
-   case PIPE_CAP_TGSI_INSTANCEID:
-      return 1;
-#endif
-
    case PIPE_CAP_TGSI_TEXCOORD:
       return 0;
 
