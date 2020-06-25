@@ -844,6 +844,22 @@ copy_const_initializer(const nir_constant *constant, const struct glsl_type *typ
    }
 }
 
+static const struct glsl_type *
+get_cast_type(unsigned bit_size)
+{
+   switch (bit_size) {
+   case 64:
+      return glsl_int64_t_type();
+   case 32:
+      return glsl_int_type();
+   case 16:
+      return glsl_int16_t_type();
+   case 8:
+      return glsl_int8_t_type();
+   }
+   unreachable("Invalid bit_size");
+}
+
 static void
 split_unaligned_load(nir_builder *b, nir_intrinsic_instr *intrin)
 {
@@ -856,7 +872,7 @@ split_unaligned_load(nir_builder *b, nir_intrinsic_instr *intrin)
    b->cursor = nir_before_instr(&intrin->instr);
 
    nir_deref_instr *ptr = nir_src_as_deref(intrin->src[0]);
-   const struct glsl_type *cast_type = alignment == 1 ? glsl_int8_t_type() : glsl_int16_t_type();
+   const struct glsl_type *cast_type = get_cast_type(alignment * 8);
    nir_deref_instr *cast = nir_build_deref_cast(b, &ptr->dest.ssa, ptr->mode, cast_type, alignment);
 
    unsigned num_loads = DIV_ROUND_UP(comp_size * num_comps, alignment);
@@ -884,7 +900,7 @@ split_unaligned_store(nir_builder *b, nir_intrinsic_instr *intrin)
    b->cursor = nir_before_instr(&intrin->instr);
 
    nir_deref_instr *ptr = nir_src_as_deref(intrin->src[0]);
-   const struct glsl_type *cast_type = alignment == 1 ? glsl_int8_t_type() : glsl_int16_t_type();
+   const struct glsl_type *cast_type = get_cast_type(alignment * 8);
    nir_deref_instr *cast = nir_build_deref_cast(b, &ptr->dest.ssa, ptr->mode, cast_type, alignment);
 
    unsigned num_stores = DIV_ROUND_UP(comp_size * num_comps, alignment);
@@ -918,9 +934,14 @@ split_unaligned_loads_stores(nir_shader *shader)
                 intrin->intrinsic != nir_intrinsic_store_deref)
                continue;
             unsigned alignment = nir_intrinsic_align(intrin);
+            nir_deref_instr *deref = nir_src_as_deref(intrin->src[0]);
 
-            /* Alignment = 0 means naturally aligned. We can load anything at 4-byte alignment. */
-            if (alignment == 0 || alignment >= 4)
+            /* Alignment = 0 means naturally aligned. We can load anything at
+             * 4-byte alignment, except for UBOs (AKA CBs where the granularity
+             * is 16 bytes.
+             */
+            if (alignment == 0 ||
+                alignment >= (deref->mode == nir_var_mem_ubo ? 16 : 4))
                continue;
 
             nir_ssa_def *val;
@@ -1221,6 +1242,9 @@ clc_to_dxil(struct clc_context *ctx,
    }
 
    NIR_PASS_V(nir, clc_nir_lower_kernel_input_loads, inputs_var);
+   NIR_PASS_V(nir, split_unaligned_loads_stores);
+   NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_ubo,
+              nir_address_format_32bit_index_offset);
    NIR_PASS_V(nir, clc_nir_lower_system_values, work_properties_var);
    NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
    NIR_PASS_V(nir, dxil_nir_opt_alu_deref_srcs);
