@@ -61,6 +61,10 @@ d3d12_query_heap_type(unsigned query_type)
    case PIPE_QUERY_PRIMITIVES_EMITTED:
    case PIPE_QUERY_SO_STATISTICS:
       return D3D12_QUERY_HEAP_TYPE_SO_STATISTICS;
+   case PIPE_QUERY_TIMESTAMP:
+   case PIPE_QUERY_TIME_ELAPSED:
+      return D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+
    default:
       debug_printf("unknown query: %s\n",
                    util_str_query_type(query_type, true));
@@ -83,6 +87,9 @@ d3d12_query_type(unsigned query_type)
    case PIPE_QUERY_PRIMITIVES_EMITTED:
    case PIPE_QUERY_SO_STATISTICS:
       return D3D12_QUERY_TYPE_SO_STATISTICS_STREAM0;
+   case PIPE_QUERY_TIMESTAMP:
+   case PIPE_QUERY_TIME_ELAPSED:
+      return D3D12_QUERY_TYPE_TIMESTAMP;
    default:
       debug_printf("unknown query: %s\n",
                    util_str_query_type(query_type, true));
@@ -106,6 +113,12 @@ d3d12_create_query(struct pipe_context *pctx,
    query->type = (pipe_query_type)query_type;
    query->d3d12qtype = d3d12_query_type(query_type);
    query->num_queries = 16;
+
+   /* With timer queries we want a few more queries, especially since we need two slots
+    * per query for TIME_ELAPSED queries */
+   if (unlikely(query->d3d12qtype == D3D12_QUERY_TYPE_TIMESTAMP))
+      query->num_queries = 64;
+
    query->curr_query = 0;
 
    switch (query->d3d12qtype) {
@@ -152,6 +165,7 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
                   union pipe_query_result *result, bool write)
 {
    struct pipe_transfer *transfer = NULL;
+   struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
    unsigned access = PIPE_TRANSFER_READ;
    void *results;
 
@@ -179,6 +193,9 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
       case PIPE_QUERY_OCCLUSION_COUNTER:
          result->u64 += results_u64[i];
          break;
+      case PIPE_QUERY_TIMESTAMP:
+         result->u64 = results_u64[i];
+         break;
 
       case PIPE_QUERY_PRIMITIVES_GENERATED:
          result->u64 += results_stats[i].IAPrimitives;
@@ -200,6 +217,10 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
 
       case PIPE_QUERY_PRIMITIVES_EMITTED:
          result->u64 += results_so[i].NumPrimitivesWritten;
+         break;
+
+      case PIPE_QUERY_TIME_ELAPSED:
+         result->u64 += results_u64[2 * i + 1] - results_u64[2 * i];
          break;
 
       case PIPE_QUERY_SO_STATISTICS:
@@ -231,11 +252,20 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
          results_so[0].NumPrimitivesWritten = result->so_statistics.num_primitives_written;
          results_so[0].PrimitivesStorageNeeded = result->so_statistics.primitives_storage_needed;
       } else {
-         results_u64[0] = result->u64;
+         if (unlikely(q->d3d12qtype == D3D12_QUERY_TYPE_TIMESTAMP)) {
+            results_u64[0] = 0;
+            results_u64[1] = result->u64;
+         } else {
+            results_u64[0] = result->u64;
+         }
       }
    }
 
    pipe_buffer_unmap(&ctx->base, transfer);
+
+   if (q->type == PIPE_QUERY_TIME_ELAPSED ||
+       q->type == PIPE_QUERY_TIMESTAMP)
+      result->u64 = static_cast<uint64_t>(screen->timestamp_multiplier * result->u64);
 
    return true;
 }
@@ -257,6 +287,29 @@ begin_query(struct d3d12_context *ctx, struct d3d12_query *q, bool restart)
    ctx->cmdlist->BeginQuery(q->query_heap, q->d3d12qtype, q->curr_query);
 }
 
+
+static void
+begin_timer_query(struct d3d12_context *ctx, struct d3d12_query *q, bool restart)
+{
+   /* For PIPE_QUERY_TIME_ELAPSED we record one time with BeginQuery and one in
+    * EndQuery, so we need two query slots */
+   unsigned query_index = 2 * q->curr_query;
+
+   if (restart) {
+      q->curr_query = 0;
+      query_index = 0;
+   } else if (query_index == q->num_queries) {
+      union pipe_query_result result;
+
+      /* Accumulate current results and store in first slot */
+      d3d12_flush_cmdlist_and_wait(ctx);
+      accumulate_result(ctx, q, &result, true);
+      q->curr_query = 2;
+   }
+
+   ctx->cmdlist->EndQuery(q->query_heap, q->d3d12qtype, query_index);
+}
+
 static bool
 d3d12_begin_query(struct pipe_context *pctx,
                   struct pipe_query *q)
@@ -264,8 +317,14 @@ d3d12_begin_query(struct pipe_context *pctx,
    struct d3d12_context *ctx = d3d12_context(pctx);
    struct d3d12_query *query = (struct d3d12_query *)q;
 
-   begin_query(ctx, query, true);
-   list_addtail(&query->active_list, &ctx->active_queries);
+   assert(query->type != PIPE_QUERY_TIMESTAMP);
+
+   if (unlikely(query->type == PIPE_QUERY_TIME_ELAPSED))
+      begin_timer_query(ctx, query, true);
+   else {
+      begin_query(ctx, query, true);
+      list_addtail(&query->active_list, &ctx->active_queries);
+   }
 
    return true;
 }
@@ -278,12 +337,20 @@ end_query(struct d3d12_context *ctx, struct d3d12_query *q)
    struct d3d12_resource *res = (struct d3d12_resource *)q->buffer;
    ID3D12Resource *d3d12_res = d3d12_resource_underlying(res, &offset);
 
-   offset += q->buffer_offset + q->curr_query * q->query_size;
-   ctx->cmdlist->EndQuery(q->query_heap, q->d3d12qtype, q->curr_query);
+   /* With QUERY_TIME_ELAPSED we have recorded one value at
+    * (2 * q->curr_query), and now we record a value at (2 * q->curr_query + 1)
+    * and when resolving the query we subtract the latter from the former */
+
+   unsigned resolve_count = q->type == PIPE_QUERY_TIME_ELAPSED ? 2 : 1;
+   unsigned resolve_index = resolve_count * q->curr_query;
+   unsigned end_index = resolve_index + resolve_count - 1;
+
+   offset += q->buffer_offset + resolve_index * q->query_size;
+   ctx->cmdlist->EndQuery(q->query_heap, q->d3d12qtype, end_index);
    d3d12_transition_resource_state(ctx, res, D3D12_RESOURCE_STATE_COPY_DEST, SubresourceTransitionFlags::SubresourceTransitionFlags_None);
    d3d12_apply_resource_states(ctx, false);
-   ctx->cmdlist->ResolveQueryData(q->query_heap, q->d3d12qtype, q->curr_query,
-                                  1, d3d12_res, offset);
+   ctx->cmdlist->ResolveQueryData(q->query_heap, q->d3d12qtype, resolve_index,
+                                  resolve_count, d3d12_res, offset);
 
    d3d12_batch_reference_object(batch, q->query_heap);
    d3d12_batch_reference_resource(batch, res);
@@ -300,9 +367,12 @@ d3d12_end_query(struct pipe_context *pctx,
    struct d3d12_query *query = (struct d3d12_query *)q;
 
    end_query(ctx, query);
-   query->fence_value = ctx->fence_value;
-   list_delinit(&query->active_list);
 
+   if (query->type != PIPE_QUERY_TIMESTAMP &&
+       query->type != PIPE_QUERY_TIME_ELAPSED)
+      list_delinit(&query->active_list);
+
+   query->fence_value = ctx->fence_value;
    return true;
 }
 
