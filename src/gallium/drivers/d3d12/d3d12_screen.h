@@ -58,6 +58,7 @@ struct d3d12_screen {
 
    /* description */
    DXGI_ADAPTER_DESC1 adapter_desc;
+   double timestamp_multiplier;
 };
 
 static inline struct d3d12_screen *
