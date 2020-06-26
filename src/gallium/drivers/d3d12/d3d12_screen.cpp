@@ -837,6 +837,11 @@ d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
                                               (void **)&screen->cmdqueue)))
       goto failed;
 
+   UINT64 timestamp_freq;
+   if (FAILED(screen->cmdqueue->GetTimestampFrequency(&timestamp_freq)))
+       timestamp_freq = 10000000;
+   screen->timestamp_multiplier = 1000000000.0 / timestamp_freq;
+
    d3d12_screen_fence_init(&screen->base);
    d3d12_screen_resource_init(&screen->base);
    slab_create_parent(&screen->transfer_pool, sizeof(struct d3d12_transfer), 16);
