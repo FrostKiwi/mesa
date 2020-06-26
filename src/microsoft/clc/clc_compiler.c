@@ -1163,13 +1163,13 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, dxil_lower_sample_to_txf_for_integer_tex, &int_sampler_states);
 
    // copy propagate to prepare for lower_explicit_io
-   NIR_PASS_V(nir, split_unaligned_loads_stores);
    NIR_PASS_V(nir, nir_split_var_copies);
    NIR_PASS_V(nir, nir_opt_copy_prop_vars);
    NIR_PASS_V(nir, nir_lower_var_copies);
    NIR_PASS_V(nir, nir_lower_vars_to_ssa);
    NIR_PASS_V(nir, nir_lower_alu);
    NIR_PASS_V(nir, nir_opt_dce);
+   NIR_PASS_V(nir, split_unaligned_loads_stores);
 
    NIR_PASS_V(nir, dxil_nir_lower_ubo_to_temp);
    NIR_PASS_V(nir, clc_lower_ubo_to_ssbo, dxil->kernel, &uav_id);
