@@ -55,6 +55,9 @@ d3d12_context_destroy(struct pipe_context *pctx)
    struct d3d12_context *ctx = d3d12_context(pctx);
    d3d12_validator_destroy(ctx->validation_tools);
 
+   if (ctx->timestamp_query)
+      pctx->destroy_query(pctx, ctx->timestamp_query);
+
    util_blitter_destroy(ctx->blitter);
    d3d12_end_batch(ctx, d3d12_current_batch(ctx));
    for (int i = 0; i < ARRAY_SIZE(ctx->batches); ++i)
@@ -1618,6 +1621,21 @@ d3d12_init_null_sampler(struct d3d12_context *ctx)
    screen->dev->CreateSampler(&desc, ctx->null_sampler.cpu_handle);
 }
 
+static uint64_t
+d3d12_get_timestamp(struct pipe_context *pctx)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_screen *screen = d3d12_screen(pctx->screen);
+
+   if (!ctx->timestamp_query)
+      ctx->timestamp_query =  pctx->create_query(pctx, PIPE_QUERY_TIMESTAMP, 0);
+
+   pipe_query_result result;
+   pctx->end_query(pctx, ctx->timestamp_query);
+   pctx->get_query_result(pctx, ctx->timestamp_query, true, &result);
+   return result.u64;
+}
+
 struct pipe_context *
 d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
 {
@@ -1682,6 +1700,8 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.create_stream_output_target = d3d12_create_stream_output_target;
    ctx->base.stream_output_target_destroy = d3d12_stream_output_target_destroy;
    ctx->base.set_stream_output_targets = d3d12_set_stream_output_targets;
+
+   ctx->base.get_timestamp = d3d12_get_timestamp;
 
    ctx->base.clear = d3d12_clear;
    ctx->base.draw_vbo = d3d12_draw_vbo;
