@@ -283,6 +283,7 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_PSIZ_CLAMPED:
    case PIPE_CAP_BLEND_EQUATION_SEPARATE:
    case PIPE_CAP_CONDITIONAL_RENDER:
+   case PIPE_CAP_QUERY_TIMESTAMP:
       return 1;
 
    case PIPE_CAP_MAX_STREAM_OUTPUT_BUFFERS:
