@@ -240,6 +240,7 @@ struct d3d12_context {
 #else
    void *resource_state_manager; /* opaque pointer; we don't know about classes in C */
 #endif
+   struct pipe_query *timestamp_query;
 };
 
 static inline struct d3d12_context *
