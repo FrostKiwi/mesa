@@ -2175,6 +2175,7 @@ blorp_emit_compute_state(struct blorp_batch *batch,
 
    uint32_t samplers_offset = blorp_emit_sampler_state(batch);
 
+#if GEN_GEN <= 12 && !GEN_IS_GEN12HP
    struct GENX(INTERFACE_DESCRIPTOR_DATA) desc = {
       .KernelStartPointer = params->cs_prog_kernel,
       .SamplerStatePointer = samplers_offset,
@@ -2204,6 +2205,7 @@ blorp_emit_compute_state(struct blorp_batch *batch,
       mid.InterfaceDescriptorTotalLength        = size;
       mid.InterfaceDescriptorDataStartAddress   = idd_offset;
    }
+#endif
 
    return true;
 #endif /* GEN_GEN <= 12 && !GEN_IS_GEN12HP */
