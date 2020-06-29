@@ -104,6 +104,20 @@ load_comps_to_vec32(nir_builder *b, unsigned src_bit_size,
    return nir_vec(b, vec32comps, num_vec32comps);
 }
 
+static nir_ssa_def *
+build_load_ptr_dxil(nir_builder *b, nir_deref_instr *deref, nir_ssa_def *idx)
+{
+   nir_intrinsic_instr *load =
+      nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_ptr_dxil);
+
+   load->num_components = 1;
+   load->src[0] = nir_src_for_ssa(&deref->dest.ssa);
+   load->src[1] = nir_src_for_ssa(idx);
+   nir_ssa_dest_init(&load->instr, &load->dest, 1, 32, NULL);
+   nir_builder_instr_insert(b, &load->instr);
+   return &load->dest.ssa;
+}
+
 static bool
 lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
 {
@@ -116,36 +130,30 @@ lower_load_deref(nir_builder *b, nir_intrinsic_instr *intr)
       return false;
    nir_ssa_def *ptr = nir_u2u32(b, nir_build_deref_offset(b, deref, cl_type_size_align));
    nir_ssa_def *offset = nir_iand(b, ptr, nir_inot(b, nir_imm_int(b, 3)));
-   unsigned load_size = 32;
 
    assert(intr->dest.is_ssa);
    unsigned num_components = nir_dest_num_components(intr->dest);
    unsigned bit_size = nir_dest_bit_size(intr->dest);
+   unsigned load_size = MAX2(32, bit_size);
    unsigned num_bits = num_components * bit_size;
    nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
    unsigned comp_idx = 0;
 
    nir_deref_path path;
    nir_deref_path_init(&path, deref, NULL);
+   nir_ssa_def *base_idx = nir_ishr(b, offset, nir_imm_int(b, 2 /* log2(32 / 8) */));
 
    /* Split loads into 32-bit chunks */
    for (unsigned i = 0; i < num_bits; i += load_size) {
       unsigned subload_num_bits = MIN2(num_bits - i, load_size);
-      nir_intrinsic_instr *load =
-         nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_ptr_dxil);
+      nir_ssa_def *idx = nir_iadd(b, base_idx, nir_imm_int(b, i / 32));
+      nir_ssa_def *vec32 = build_load_ptr_dxil(b, path.path[0], idx);
 
-      load->num_components = 1;
-
-      load->src[0] = nir_src_for_ssa(&path.path[0]->dest.ssa);
-
-      load->src[1] =
-         nir_src_for_ssa(nir_ishr(b, nir_iadd(b, offset, nir_imm_int(b, i / 8)),
-                                  nir_imm_int(b, 2 /* log2(32 / 8) */)));
-      nir_ssa_dest_init(&load->instr, &load->dest, load->num_components,
-                        32, NULL);
-      nir_builder_instr_insert(b, &load->instr);
-
-      nir_ssa_def *vec32 = &load->dest.ssa;
+      if (load_size == 64) {
+         idx = nir_iadd(b, idx, nir_imm_int(b, 1));
+         vec32 = nir_vec2(b, vec32,
+                             build_load_ptr_dxil(b, path.path[0], idx));
+      }
 
       /* If we have 2 bytes or less to load we need to adjust the u32 value so
        * we can always extract the LSB.
