@@ -108,7 +108,7 @@ success:
       when: on_success
     # Run pipeline by default in the main project if any files affecting it were
     # changed
-    - if: '$CI_PROJECT_PATH == "mesa/mesa"'
+    - if: '$CI_PROJECT_PATH == "kusma/mesa"'
       changes:
         *all_paths
       when: on_success
