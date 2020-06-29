@@ -388,6 +388,8 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
               expect->n_texture_states * sizeof(dxil_wrap_sampler_state)))
       return false;
 
+   if (memcmp(expect->swizzle_state, have->swizzle_state,
+              expect->n_texture_states * sizeof(dxil_texture_swizzle_state)))
       return false;
 
    if (expect->sampler_compare_funcs.n_states != have->sampler_compare_funcs.n_states)
@@ -467,6 +469,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
          auto& wrap_state = sel_ctx->ctx->tex_wrap_states[stage][i];
          if (wrap_state.is_int_sampler) {
             memcpy(&key->tex_wrap_states[i], &wrap_state, sizeof(wrap_state));
+            key->swizzle_state[i] = sel_ctx->ctx->tex_swizzle_state[stage][i];
          }
       }
    }

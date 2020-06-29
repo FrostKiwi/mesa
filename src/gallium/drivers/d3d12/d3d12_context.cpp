@@ -883,6 +883,13 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
          ctx->tex_cmp_state[shader_type].state[i].swizzle_g = views[i]->swizzle_g;
          ctx->tex_cmp_state[shader_type].state[i].swizzle_b = views[i]->swizzle_b;
          ctx->tex_cmp_state[shader_type].state[i].swizzle_a = views[i]->swizzle_a;
+
+         /* We need the swizzle state for applying the boundary color correctly */
+         ctx->tex_swizzle_state[shader_type][i].swizzle_r = views[i]->swizzle_r;
+         ctx->tex_swizzle_state[shader_type][i].swizzle_g = views[i]->swizzle_g;
+         ctx->tex_swizzle_state[shader_type][i].swizzle_b = views[i]->swizzle_b;
+         ctx->tex_swizzle_state[shader_type][i].swizzle_a = views[i]->swizzle_a;
+
       }
    }
    ctx->num_sampler_views[shader_type] = start_slot + num_views;
