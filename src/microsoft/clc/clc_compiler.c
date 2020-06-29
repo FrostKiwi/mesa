@@ -75,7 +75,7 @@ clc_print_kernels_info(const struct clc_object *obj)
          case CLC_KERNEL_ARG_ADDRESS_LOCAL:
             fprintf(stdout, "__local ");
             break;
-	 case CLC_KERNEL_ARG_ADDRESS_CONSTANT:
+         case CLC_KERNEL_ARG_ADDRESS_CONSTANT:
             fprintf(stdout, "__constant ");
             break;
          default:
@@ -482,7 +482,7 @@ clc_lower_64bit_semantics(nir_shader *nir)
 
 static void
 clc_lower_nonnormalized_samplers(nir_shader *nir,
-                                 const dxil_wrap_sampler_states *states)
+                                 const dxil_wrap_sampler_state *states)
 {
    nir_foreach_function(func, nir) {
       if (!func->is_entrypoint)
@@ -512,7 +512,7 @@ clc_lower_nonnormalized_samplers(nir_shader *nir,
                continue;
 
             // If sampler uses normalized coords, nothing to do
-            if (!states->states[sampler->data.binding].is_nonnormalized_coords)
+            if (!states[sampler->data.binding].is_nonnormalized_coords)
                continue;
 
             b.cursor = nir_before_instr(&tex->instr);
@@ -539,7 +539,7 @@ clc_lower_nonnormalized_samplers(nir_shader *nir,
 
                // The CTS is pretty clear that this value has to be floored for nearest sampling
                // but must not be for linear sampling.
-               if (!states->states[sampler->data.binding].is_linear_filtering)
+               if (!states[sampler->data.binding].is_linear_filtering)
                   comps[i] = nir_ffloor(&b, comps[i]);
                comps[i] = nir_fmul(&b, comps[i], nir_channel(&b, scale, i));
             }
@@ -894,7 +894,7 @@ split_unaligned_store(nir_builder *b, nir_intrinsic_instr *intrin)
    nir_ssa_def *value = intrin->src[1].ssa;
    unsigned comp_size = value->bit_size / 8;
    unsigned num_comps = value->num_components;
-   
+
    b->cursor = nir_before_instr(&intrin->instr);
 
    nir_deref_instr *ptr = nir_src_as_deref(intrin->src[0]);
@@ -1105,7 +1105,7 @@ clc_to_dxil(struct clc_context *ctx,
 
    // Calculate input offsets/metadata.
    unsigned i = 0, uav_id = 0, sampler_id = 0, offset = 0;
-   dxil_wrap_sampler_states int_sampler_states = { 0 };
+   dxil_wrap_sampler_state int_sampler_states[PIPE_MAX_SHADER_SAMPLER_VIEWS] = {{{0}}};
    nir_foreach_variable(var, &nir->inputs) {
       unsigned size = glsl_get_cl_size(var->type);
       offset = align(offset, glsl_get_cl_alignment(var->type));
@@ -1122,12 +1122,12 @@ clc_to_dxil(struct clc_context *ctx,
          metadata->args[i].globconstptr.buf_id = uav_id++;
       } else if (glsl_type_is_sampler(var->type)) {
          unsigned address_mode = conf ? conf->args[i].sampler.addressing_mode : 0u;
-         int_sampler_states.states[sampler_id].wrap_r =
-            int_sampler_states.states[sampler_id].wrap_s =
-            int_sampler_states.states[sampler_id].wrap_t = wrap_from_cl_addressing(address_mode);
-         int_sampler_states.states[sampler_id].is_nonnormalized_coords =
+         int_sampler_states[sampler_id].wrap_r =
+            int_sampler_states[sampler_id].wrap_s =
+            int_sampler_states[sampler_id].wrap_t = wrap_from_cl_addressing(address_mode);
+         int_sampler_states[sampler_id].is_nonnormalized_coords =
             conf ? !conf->args[i].sampler.normalized_coords : 0;
-         int_sampler_states.states[sampler_id].is_linear_filtering =
+         int_sampler_states[sampler_id].is_linear_filtering =
             conf ? conf->args[i].sampler.linear_filtering : 0;
          metadata->args[i].sampler.sampler_id = var->data.binding = sampler_id++;
       }
@@ -1182,9 +1182,10 @@ clc_to_dxil(struct clc_context *ctx,
    // Needs to come before lower_explicit_io
    struct clc_image_lower_context image_lower_context = { metadata, &srv_id, &uav_id };
    NIR_PASS_V(nir, clc_lower_images, &image_lower_context);
-   NIR_PASS_V(nir, clc_lower_nonnormalized_samplers, &int_sampler_states);
+   NIR_PASS_V(nir, clc_lower_nonnormalized_samplers, int_sampler_states);
    NIR_PASS_V(nir, nir_lower_samplers);
-   NIR_PASS_V(nir, dxil_lower_sample_to_txf_for_integer_tex, &int_sampler_states);
+   NIR_PASS_V(nir, dxil_lower_sample_to_txf_for_integer_tex,
+              int_sampler_states, NULL);
 
    // copy propagate to prepare for lower_explicit_io
    NIR_PASS_V(nir, nir_split_var_copies);
@@ -1257,7 +1258,7 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_lower_pack);
    // Lower pack_split to bit math
    NIR_PASS_V(nir, nir_opt_algebraic);
-   
+
    NIR_PASS_V(nir, nir_lower_64bit_phis);
 
    NIR_PASS_V(nir, nir_opt_dce);
@@ -1266,13 +1267,13 @@ clc_to_dxil(struct clc_context *ctx,
    nir_foreach_variable_safe(var, &nir->uniforms) {
       if (glsl_type_is_sampler(var->type) &&
           var->constant_initializer) {
-         int_sampler_states.states[sampler_id].wrap_r =
-            int_sampler_states.states[sampler_id].wrap_s =
-            int_sampler_states.states[sampler_id].wrap_t =
+         int_sampler_states[sampler_id].wrap_r =
+            int_sampler_states[sampler_id].wrap_s =
+            int_sampler_states[sampler_id].wrap_t =
             wrap_from_cl_addressing(var->constant_initializer->values[0].u32);
-         int_sampler_states.states[sampler_id].is_nonnormalized_coords =
+         int_sampler_states[sampler_id].is_nonnormalized_coords =
             var->constant_initializer->values[1].u32;
-         int_sampler_states.states[sampler_id].is_linear_filtering =
+         int_sampler_states[sampler_id].is_linear_filtering =
             var->constant_initializer->values[2].u32 == FILTER_MODE_LINEAR;
          var->data.binding = sampler_id++;
       }

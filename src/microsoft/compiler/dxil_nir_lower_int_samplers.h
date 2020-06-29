@@ -32,6 +32,13 @@ extern "C" {
 #endif
 
 typedef struct {
+   unsigned swizzle_r:3;
+   unsigned swizzle_g:3;
+   unsigned swizzle_b:3;
+   unsigned swizzle_a:3;
+} dxil_texture_swizzle_state;
+
+typedef struct {
    float border_color[4];
    unsigned wrap_r:4;
    unsigned wrap_s:4;
@@ -43,14 +50,10 @@ typedef struct {
    unsigned unused:16;
 } dxil_wrap_sampler_state;
 
-typedef struct {
-   unsigned n_states;
-   dxil_wrap_sampler_state states[PIPE_MAX_SHADER_SAMPLER_VIEWS];
-} dxil_wrap_sampler_states;
-
 bool
 dxil_lower_sample_to_txf_for_integer_tex(nir_shader *s,
-                                         dxil_wrap_sampler_states *state);
+                                         dxil_wrap_sampler_state *wrap_states,
+                                         dxil_texture_swizzle_state *tex_swizzles);
 
 #ifdef __cplusplus
 }

@@ -196,7 +196,8 @@ struct d3d12_context {
    struct d3d12_sampler_state *samplers[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    unsigned num_samplers[PIPE_SHADER_TYPES];
    D3D12_INDEX_BUFFER_VIEW ibv;
-   dxil_wrap_sampler_states tex_wrap_states[PIPE_SHADER_TYPES];
+   dxil_wrap_sampler_state tex_wrap_states[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
+   dxil_texture_swizzle_state tex_swizzle_state[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    d3d12_sampler_compare_funcs tex_cmp_state[PIPE_SHADER_TYPES];
 
    struct pipe_stream_output_target *so_targets[PIPE_MAX_SO_BUFFERS];

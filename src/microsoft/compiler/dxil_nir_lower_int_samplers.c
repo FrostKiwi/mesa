@@ -290,16 +290,21 @@ load_texel(nir_builder *b, nir_tex_instr *tex, wrap_lower_param_t *params)
    return &load->dest.ssa;
 }
 
+typedef struct {
+   dxil_wrap_sampler_state *wrap_states;
+   dxil_texture_swizzle_state *tex_swizzles;
+} sampler_states;
+
 
 static nir_ssa_def *
 lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
                                          void *options)
 {
-   dxil_wrap_sampler_states *states = (dxil_wrap_sampler_states *)options;
+   sampler_states *states = (sampler_states *)options;
    wrap_lower_param_t params = {0};
 
    nir_tex_instr *tex = nir_instr_as_tex(instr);
-   dxil_wrap_sampler_state *active_state = &states->states[tex->sampler_index];
+   dxil_wrap_sampler_state *active_wrap_state = &states->wrap_states[tex->sampler_index];
 
    b->cursor = nir_before_instr(instr);
 
@@ -345,7 +350,7 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
    params.size = nir_i2f32(b, nir_ishr(b, size0, params.lod));
 
    nir_ssa_def *new_coord = old_coord;
-   if (!active_state->is_nonnormalized_coords) {
+   if (!active_wrap_state->is_nonnormalized_coords) {
       /* Evaluate the integer lookup coordinates for the requested LOD, don't touch the
        * array index */
       if (!tex->is_array) {
@@ -388,19 +393,19 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
 
    nir_ssa_def *use_border_color = nir_imm_false(b);
 
-   if (!active_state->skip_boundary_conditions) {
+   if (!active_wrap_state->skip_boundary_conditions) {
 
       switch (params.ncoord_comp) {
       case 3:
-         params.wrap[2] = wrap_coords(b, coord_help[2], active_state->wrap_t, nir_channel(b, params.size, 2));
+         params.wrap[2] = wrap_coords(b, coord_help[2], active_wrap_state->wrap_t, nir_channel(b, params.size, 2));
          use_border_color = nir_ior(b, use_border_color, params.wrap[2].use_border_color);
          /* fallthrough */
       case 2:
-         params.wrap[1] = wrap_coords(b, coord_help[1], active_state->wrap_s, nir_channel(b, params.size, 1));
+         params.wrap[1] = wrap_coords(b, coord_help[1], active_wrap_state->wrap_s, nir_channel(b, params.size, 1));
          use_border_color = nir_ior(b, use_border_color, params.wrap[1].use_border_color);
          /* fallthrough */
       case 1:
-         params.wrap[0] = wrap_coords(b, coord_help[0], active_state->wrap_r, nir_channel(b, params.size, 0));
+         params.wrap[0] = wrap_coords(b, coord_help[0], active_wrap_state->wrap_r, nir_channel(b, params.size, 0));
          use_border_color = nir_ior(b, use_border_color, params.wrap[0].use_border_color);
          break;
       default:
@@ -422,7 +427,7 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
    }
 
    nir_if *border_if = nir_push_if(b, use_border_color);
-   nir_ssa_def *border_color = load_bordercolor(b, tex, active_state);
+   nir_ssa_def *border_color = load_bordercolor(b, tex, active_wrap_state);
    nir_if *border_else = nir_push_else(b, border_if);
    nir_ssa_def *sampler_color = load_texel(b, tex, &params);
    nir_pop_if(b, border_else);
@@ -437,15 +442,15 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
  */
 bool
 dxil_lower_sample_to_txf_for_integer_tex(nir_shader *s,
-                                         dxil_wrap_sampler_states *state)
+                                         dxil_wrap_sampler_state *wrap_states,
+                                         dxil_texture_swizzle_state *tex_swizzles)
 {
-   if (!state)
-      return false;
+   sampler_states states = {wrap_states, tex_swizzles};
 
    bool result =
          nir_shader_lower_instructions(s,
                                        lower_sample_to_txf_for_integer_tex_filter,
                                        lower_sample_to_txf_for_integer_tex_impl,
-                                       state);
+                                       &states);
    return result;
 }
