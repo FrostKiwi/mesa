@@ -655,28 +655,37 @@ vtn_pointer_to_deref(struct vtn_builder *b, struct vtn_pointer *ptr)
 static void
 _vtn_local_load_store(struct vtn_builder *b, bool load, nir_deref_instr *deref,
                       struct vtn_ssa_value *inout,
-                      enum gl_access_qualifier access, unsigned alignment)
+                      enum gl_access_qualifier access,
+                      unsigned align_mul, unsigned align_offset)
 {
    if (glsl_type_is_vector_or_scalar(deref->type)) {
+      align_offset = align_mul ? align_offset % align_mul : 0;
       if (load) {
-         inout->def = nir_load_deref_with_access_and_align(&b->nb, deref, access, alignment, 0);
+         inout->def = nir_load_deref_with_access_and_align(&b->nb, deref, access,
+                                                           align_mul, align_offset);
       } else {
-         nir_store_deref_with_access_and_align(&b->nb, deref, inout->def, ~0, access, alignment, 0);
+         nir_store_deref_with_access_and_align(&b->nb, deref, inout->def, ~0,
+                                               access, align_mul, align_offset);
       }
    } else if (glsl_type_is_array(deref->type) ||
               glsl_type_is_matrix(deref->type)) {
+      const struct glsl_type *elem_type = glsl_without_array_or_matrix(deref->type);
+      unsigned stride = glsl_get_explicit_stride(elem_type);
       unsigned elems = glsl_get_length(deref->type);
       for (unsigned i = 0; i < elems; i++) {
          nir_deref_instr *child =
             nir_build_deref_array_imm(&b->nb, deref, i);
-         _vtn_local_load_store(b, load, child, inout->elems[i], access, alignment);
+         _vtn_local_load_store(b, load, child, inout->elems[i], access,
+                               align_mul, align_offset + (i * stride));
       }
    } else {
       vtn_assert(glsl_type_is_struct_or_ifc(deref->type));
       unsigned elems = glsl_get_length(deref->type);
       for (unsigned i = 0; i < elems; i++) {
          nir_deref_instr *child = nir_build_deref_struct(&b->nb, deref, i);
-         _vtn_local_load_store(b, load, child, inout->elems[i], access, alignment);
+         unsigned field_offset = glsl_get_struct_field_offset(deref->type, i);
+         _vtn_local_load_store(b, load, child, inout->elems[i], access,
+                               align_mul, align_offset + field_offset);
       }
    }
 }
@@ -714,7 +723,7 @@ vtn_local_load(struct vtn_builder *b, nir_deref_instr *src,
 {
    nir_deref_instr *src_tail = get_deref_tail(src);
    struct vtn_ssa_value *val = vtn_create_ssa_value(b, src_tail->type);
-   _vtn_local_load_store(b, true, src_tail, val, access, alignment);
+   _vtn_local_load_store(b, true, src_tail, val, access, alignment, 0);
 
    if (src_tail != src) {
       val->type = src->type;
@@ -733,13 +742,13 @@ vtn_local_store(struct vtn_builder *b, struct vtn_ssa_value *src,
 
    if (dest_tail != dest) {
       struct vtn_ssa_value *val = vtn_create_ssa_value(b, dest_tail->type);
-      _vtn_local_load_store(b, true, dest_tail, val, access, alignment);
+      _vtn_local_load_store(b, true, dest_tail, val, access, alignment, 0);
 
       val->def = nir_vector_insert(&b->nb, val->def, src->def,
                                    dest->arr.index.ssa);
-      _vtn_local_load_store(b, false, dest_tail, val, access, alignment);
+      _vtn_local_load_store(b, false, dest_tail, val, access, alignment, 0);
    } else {
-      _vtn_local_load_store(b, false, dest_tail, src, access, alignment);
+      _vtn_local_load_store(b, false, dest_tail, src, access, alignment, 0);
    }
 }
 
