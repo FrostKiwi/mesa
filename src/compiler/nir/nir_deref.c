@@ -279,8 +279,6 @@ nir_deref_instr_get_const_offset(nir_deref_instr *deref,
    nir_deref_path path;
    nir_deref_path_init(&path, deref, NULL);
 
-   assert(path.path[0]->deref_type == nir_deref_type_var);
-
    unsigned offset = 0;
    for (nir_deref_instr **p = &path.path[1]; *p; p++) {
       if ((*p)->deref_type == nir_deref_type_array) {
@@ -291,7 +289,7 @@ nir_deref_instr_get_const_offset(nir_deref_instr *deref,
          nir_deref_instr *parent = *(p - 1);
          offset += struct_type_get_field_offset(parent->type, size_align,
                                                 (*p)->strct.index);
-      } else {
+      } else if ((*p)->deref_type != nir_deref_type_cast) {
          unreachable("Unsupported deref type");
       }
    }
@@ -322,7 +320,7 @@ nir_build_deref_offset(nir_builder *b, nir_deref_instr *deref,
             struct_type_get_field_offset(parent->type, size_align,
                                          (*p)->strct.index);
          offset = nir_iadd_imm(b, offset, field_offset);
-      } else {
+      } else if ((*p)->deref_type != nir_deref_type_cast) {
          unreachable("Unsupported deref type");
       }
    }
