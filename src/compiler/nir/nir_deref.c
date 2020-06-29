@@ -252,6 +252,7 @@ type_get_array_stride(const struct glsl_type *elem_type,
 {
    unsigned elem_size, elem_align;
    size_align(elem_type, &elem_size, &elem_align);
+   elem_align = glsl_type_is_packed(elem_type) ? 1 : elem_align;
    return ALIGN_POT(elem_size, elem_align);
 }
 
@@ -265,6 +266,7 @@ struct_type_get_field_offset(const struct glsl_type *struct_type,
    for (unsigned i = 0; i <= field_idx; i++) {
       unsigned elem_size, elem_align;
       size_align(glsl_get_struct_field(struct_type, i), &elem_size, &elem_align);
+      elem_align = glsl_type_is_packed(struct_type) ? 1 : elem_align;
       offset = ALIGN_POT(offset, elem_align);
       if (i < field_idx)
          offset += elem_size;
