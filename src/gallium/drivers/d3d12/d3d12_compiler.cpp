@@ -314,13 +314,16 @@ validate_geometry_shader(struct d3d12_selection_context *sel_ctx)
 {
    struct d3d12_context *ctx = sel_ctx->ctx;
 
+   d3d12_shader_selector *gs = ctx->gfx_stages[PIPE_SHADER_GEOMETRY];
+
    /* Determine whether we need to create/recreate the passthrough geometry shader */
+   bool have_passthrough_gs = gs != NULL && gs->passthrough;
+
    if (sel_ctx->needs_point_sprite_lowering) {
       d3d12_shader_selector *vs = ctx->gfx_stages[PIPE_SHADER_VERTEX];
-      d3d12_shader_selector *gs = ctx->gfx_stages[PIPE_SHADER_GEOMETRY];
 
       /* Make sure the passthrough inputs are matching the vs outputs */
-      if (gs != NULL && gs->passthrough &&
+      if (have_passthrough_gs &&
           gs->passthrough_varyings != vs->current->nir->info.outputs_written) {
          d3d12_shader_free(gs);
          gs = NULL;
@@ -330,6 +333,11 @@ validate_geometry_shader(struct d3d12_selection_context *sel_ctx)
          gs = d3d12_make_passthrough_gs(ctx, vs);
 
       ctx->gfx_stages[PIPE_SHADER_GEOMETRY] = gs;
+   } else if (have_passthrough_gs) {
+      /* We don't need a GS for lowering point sprites, so remove the
+       * passthrough shader */
+      ctx->gfx_stages[PIPE_SHADER_GEOMETRY] = NULL;
+      d3d12_shader_free(gs);
    }
 }
 
