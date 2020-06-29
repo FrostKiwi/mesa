@@ -66,7 +66,8 @@ fill_cbv_descriptors(struct d3d12_context *ctx,
                                       SubresourceTransitionFlags_TransitionPreDraw);
       D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc = {};
       cbv_desc.BufferLocation = d3d12_resource_gpu_virtual_address(res) + buffer->buffer_offset;
-      cbv_desc.SizeInBytes = align(buffer->buffer_size, 256);
+      cbv_desc.SizeInBytes = min(D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16, 
+                                 align(buffer->buffer_size, 256));
       d3d12_batch_reference_resource(batch, res);
 
       struct d3d12_descriptor_handle handle;
