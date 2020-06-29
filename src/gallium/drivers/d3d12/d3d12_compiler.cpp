@@ -146,6 +146,7 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
       NIR_PASS_V(nir, nir_lower_clip_halfz);
       NIR_PASS_V(nir, d3d12_lower_yflip);
    }
+   NIR_PASS_V(nir, nir_lower_packed_ubo_loads);
    NIR_PASS_V(nir, d3d12_lower_load_first_vertex);
    NIR_PASS_V(nir, d3d12_lower_state_vars, shader);
    NIR_PASS_V(nir, d3d12_lower_bool_input);
@@ -161,6 +162,7 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
       return NULL;
    }
 
+   // Non-ubo variables
    nir_foreach_variable(var, &nir->uniforms) {
       auto type = glsl_without_array(var->type);
       if (glsl_type_is_sampler(type) && glsl_get_sampler_result_type(type) != GLSL_TYPE_VOID) {
@@ -172,14 +174,17 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
             shader->srv_bindings[shader->num_srv_bindings].dimension = resource_dimension(glsl_get_sampler_dim(type));
             shader->num_srv_bindings++;
          }
-      } else if (var->interface_type) {
-         if (var->num_state_slots > 0) /* State Vars UBO */
-            shader->state_vars_binding = var->data.binding;
-         else
-            shader->cb_bindings[shader->num_cb_bindings++].binding = var->data.binding;
       }
    }
 
+   // Ubo variables
+   if(nir->info.num_ubos) {
+      // Ignore state_vars ubo as it is bound as root constants
+      unsigned num_ubo_bindings = nir->info.num_ubos - (shader->state_vars_used ? 1 : 0);
+      for(unsigned i = opts.ubo_binding_offset; i < num_ubo_bindings; ++i) {
+         shader->cb_bindings[shader->num_cb_bindings++].binding = i;
+      }
+   }
    ctx->validation_tools->validate_and_sign(&tmp);
 
    if (d3d12_debug & D3D12_DEBUG_DISASS) {

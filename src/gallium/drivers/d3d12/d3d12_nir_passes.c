@@ -26,6 +26,7 @@
 #include "nir_builder.h"
 #include "nir_builtin_builder.h"
 #include "program/prog_instruction.h"
+#include "dxil_nir.h"
 
 /**
  * Lower Y Flip:
@@ -340,6 +341,8 @@ d3d12_lower_state_vars(nir_shader *nir, struct d3d12_shader *shader)
    if (progress) {
       assert(shader->num_state_vars > 0);
 
+      shader->state_vars_used = true;
+
       /* Remove state variables */
       nir_foreach_variable_safe(var, &nir->uniforms) {
          if (var->num_state_slots == 1 &&
@@ -575,4 +578,39 @@ d3d12_fix_io_uint_type(struct nir_shader *s, uint64_t in_mask, uint64_t out_mask
    }
 
    return progress;
+}
+
+bool
+lower_load_ubo_packed_filter(const nir_instr *instr,
+                             UNUSED const void *_options) {
+   if (instr->type != nir_instr_type_intrinsic)
+      return false;
+
+   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+
+   return intr->intrinsic == nir_intrinsic_load_ubo;
+}
+
+static nir_ssa_def *
+lower_load_ubo_packed_impl(nir_builder *b, nir_instr *instr,
+                              UNUSED const void *_options) {
+   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+
+   nir_ssa_def *buffer = intr->src[0].ssa;
+   nir_ssa_def *offset = intr->src[1].ssa;
+
+   nir_ssa_def *result =
+      build_load_ubo_dxil(b, buffer,
+                          offset,
+                          nir_dest_num_components(intr->dest),
+                          nir_dest_bit_size(intr->dest));
+   return result;
+}
+
+bool
+nir_lower_packed_ubo_loads(nir_shader *nir) {
+   return nir_shader_lower_instructions(nir,
+                                        lower_load_ubo_packed_filter,
+                                        lower_load_ubo_packed_impl,
+                                        NULL);
 }
