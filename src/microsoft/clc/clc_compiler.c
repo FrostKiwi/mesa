@@ -1282,7 +1282,8 @@ clc_to_dxil(struct clc_context *ctx,
    nir_validate_shader(nir, "Validate before feeding NIR to the DXIL compiler");
    struct nir_to_dxil_options opts = {
       .interpolate_at_vertex = false,
-      .lower_int16 = (conf && (conf->lower_bit_size & 16) != 0)
+      .lower_int16 = (conf && (conf->lower_bit_size & 16) != 0),
+      .ubo_binding_offset = 0
    };
 
    for (unsigned i = 0; i < dxil->kernel->num_args; i++) {
