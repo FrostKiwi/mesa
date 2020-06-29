@@ -209,13 +209,37 @@ wrap_coords(nir_builder *b, nir_ssa_def *coords, enum pipe_tex_wrap wrap,
 }
 
 static nir_ssa_def *
-load_bordercolor(nir_builder *b, nir_tex_instr *tex, dxil_wrap_sampler_state *active_state)
+load_bordercolor(nir_builder *b, nir_tex_instr *tex, dxil_wrap_sampler_state *active_state,
+                 const dxil_texture_swizzle_state *tex_swizzle)
 {
    nir_const_value const_value[4] = {{0}};
    int ndest_comp = nir_dest_num_components(tex->dest);
 
-   for (int i = 0; i < ndest_comp; ++i)
-      const_value[i].f32 = active_state->border_color[i];
+   unsigned swizzle[4] = {
+      tex_swizzle->swizzle_r,
+      tex_swizzle->swizzle_g,
+      tex_swizzle->swizzle_b,
+      tex_swizzle->swizzle_a
+   };
+
+   for (int i = 0; i < ndest_comp; ++i) {
+      switch (swizzle[i]) {
+      case PIPE_SWIZZLE_0:
+         const_value[i].f32 = 0;
+         break;
+      case PIPE_SWIZZLE_1:
+         const_value[i].f32 = 0;
+         break;
+      case PIPE_SWIZZLE_X:
+      case PIPE_SWIZZLE_Y:
+      case PIPE_SWIZZLE_Z:
+      case PIPE_SWIZZLE_W:
+         const_value[i].f32 = active_state->border_color[swizzle[i]];
+         break;
+      default:
+         unreachable("Unexpected swizzle value");
+      }
+   }
 
    return nir_build_imm(b, ndest_comp, 32, const_value);
 }
@@ -426,8 +450,16 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
       }
    }
 
+   const dxil_texture_swizzle_state one2one = {
+     PIPE_SWIZZLE_X,  PIPE_SWIZZLE_Y,  PIPE_SWIZZLE_Z, PIPE_SWIZZLE_W
+   };
+
    nir_if *border_if = nir_push_if(b, use_border_color);
-   nir_ssa_def *border_color = load_bordercolor(b, tex, active_wrap_state);
+   const dxil_texture_swizzle_state *swizzle = states->tex_swizzles ?
+                                                 &states->tex_swizzles[tex->sampler_index]:
+                                                 &one2one;
+
+   nir_ssa_def *border_color = load_bordercolor(b, tex, active_wrap_state, swizzle);
    nir_if *border_else = nir_push_else(b, border_if);
    nir_ssa_def *sampler_color = load_texel(b, tex, &params);
    nir_pop_if(b, border_else);
