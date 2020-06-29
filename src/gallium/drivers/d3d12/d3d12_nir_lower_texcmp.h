@@ -24,31 +24,22 @@
 #ifndef D3D12_NIR_LOWER_TEXCOMP_H
 #define D3D12_NIR_LOWER_TEXCOMP_H
 
+#include "dxil_nir_lower_int_samplers.h"
 
 #include "pipe/p_state.h"
+#include "compiler/shader_enums.h"
 #include "nir.h"
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct {
-   enum compare_func compare_func;
-   unsigned swizzle_r:3;         /**< PIPE_SWIZZLE_x for red component */
-   unsigned swizzle_g:3;         /**< PIPE_SWIZZLE_x for green component */
-   unsigned swizzle_b:3;         /**< PIPE_SWIZZLE_x for blue component */
-   unsigned swizzle_a:3;         /**< PIPE_SWIZZLE_x for alpha component */
-} d3d12_sampler_compare_and_swizzle;
-
-typedef struct {
-   unsigned n_states;
-   d3d12_sampler_compare_and_swizzle state[PIPE_MAX_SHADER_SAMPLER_VIEWS];
-} d3d12_sampler_compare_funcs;
-
 bool
 d3d12_lower_sample_tex_compare(nir_shader *s,
-                               d3d12_sampler_compare_funcs *state);
-
+                               unsigned n_states,
+                               enum compare_func *compare_func,
+                               dxil_texture_swizzle_state *tex_swizzles);
 
 #ifdef __cplusplus
 }

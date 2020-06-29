@@ -635,7 +635,6 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
    bool shader_state_dirty = false;
-   d3d12_sampler_compare_funcs &scf = ctx->tex_cmp_state[shader];
 
 #define STATIC_ASSERT_PIPE_EQUAL_COMP_FUNC(X) \
    static_assert((enum compare_func)PIPE_FUNC_##X == COMPARE_FUNC_##X, #X " needs switch case");
@@ -664,13 +663,12 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
          wrap.wrap_s = sampler->wrap_s;
          wrap.wrap_t = sampler->wrap_t;
          memcpy(wrap.border_color, sampler->border_color, 4 * sizeof(float));
-         scf.state[start_slot + i].compare_func = (enum compare_func)sampler->compare_func;
+         ctx->tex_compare_func[shader][start_slot + i] = (enum compare_func)sampler->compare_func;
       } else {
          memset(&wrap, 0, sizeof (dxil_wrap_sampler_state));
       }
    }
 
-   scf.n_states = start_slot + num_samplers;
    ctx->num_samplers[shader] = start_slot + num_samplers;
    ctx->shader_dirty[shader] |= D3D12_SHADER_DIRTY_SAMPLERS;
    if (shader_state_dirty)
@@ -862,6 +860,7 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
 
       if (views[i]) {
          dxil_wrap_sampler_state &wss = ctx->tex_wrap_states[shader_type][start_slot + i];
+         dxil_texture_swizzle_state &swizzle_state = ctx->tex_swizzle_state[shader_type][i];
          if (util_format_is_pure_integer(views[i]->format)) {
             ctx->has_int_samplers |= shader_bit;
             wss.is_int_sampler = 1;
@@ -878,18 +877,12 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
          }
          /* We need the swizzle state for compare texture lowering, because it
           * encode the use of the shadow texture lookup result as either luminosity,
-          * intensity, or alpha. */
-         ctx->tex_cmp_state[shader_type].state[i].swizzle_r = views[i]->swizzle_r;
-         ctx->tex_cmp_state[shader_type].state[i].swizzle_g = views[i]->swizzle_g;
-         ctx->tex_cmp_state[shader_type].state[i].swizzle_b = views[i]->swizzle_b;
-         ctx->tex_cmp_state[shader_type].state[i].swizzle_a = views[i]->swizzle_a;
-
-         /* We need the swizzle state for applying the boundary color correctly */
-         ctx->tex_swizzle_state[shader_type][i].swizzle_r = views[i]->swizzle_r;
-         ctx->tex_swizzle_state[shader_type][i].swizzle_g = views[i]->swizzle_g;
-         ctx->tex_swizzle_state[shader_type][i].swizzle_b = views[i]->swizzle_b;
-         ctx->tex_swizzle_state[shader_type][i].swizzle_a = views[i]->swizzle_a;
-
+          * intensity, or alpha. and we need the swizzle state for applying the
+          * boundary color correctly */
+         swizzle_state.swizzle_r = views[i]->swizzle_r;
+         swizzle_state.swizzle_g = views[i]->swizzle_g;
+         swizzle_state.swizzle_b = views[i]->swizzle_b;
+         swizzle_state.swizzle_a = views[i]->swizzle_a;
       }
    }
    ctx->num_sampler_views[shader_type] = start_slot + num_views;
