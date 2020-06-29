@@ -392,12 +392,8 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
               expect->n_texture_states * sizeof(dxil_texture_swizzle_state)))
       return false;
 
-   if (expect->sampler_compare_funcs.n_states != have->sampler_compare_funcs.n_states)
-      return false;
-
-   if (memcmp(&expect->sampler_compare_funcs, &have->sampler_compare_funcs,
-              expect->sampler_compare_funcs.n_states *
-              sizeof(d3d12_sampler_compare_and_swizzle)))
+   if (memcmp(expect->sampler_compare_funcs, have->sampler_compare_funcs,
+              expect->n_texture_states * sizeof(enum compare_func)))
       return false;
 
    if (expect->invert_depth != have->invert_depth)
@@ -475,9 +471,13 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
    }
 
    if (sel_ctx->compare_with_lod_bias_grad) {
-      memcpy(&key->sampler_compare_funcs, &sel_ctx->ctx->tex_cmp_state[stage],
-             sizeof(d3d12_sampler_compare_funcs));
+      key->n_texture_states = sel_ctx->ctx->num_sampler_views[stage];
+      memcpy(key->sampler_compare_funcs, sel_ctx->ctx->tex_compare_func[stage],
+             key->n_texture_states * sizeof(enum compare_func));
+      memcpy(key->swizzle_state, sel_ctx->ctx->tex_swizzle_state[stage],
+             key->n_texture_states * sizeof(dxil_texture_swizzle_state));
    }
+
 }
 
 static void
@@ -525,7 +525,8 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
                  key.fs.frag_result_color_lowering);
 
    if (sel_ctx->compare_with_lod_bias_grad)
-      NIR_PASS_V(new_nir_variant, d3d12_lower_sample_tex_compare, &key.sampler_compare_funcs);
+      NIR_PASS_V(new_nir_variant, d3d12_lower_sample_tex_compare, key.n_texture_states,
+                 key.sampler_compare_funcs, key.swizzle_state);
 
    /* Add the needed in and outputs, and re-sort */
    uint64_t mask = key.required_varying_inputs & ~new_nir_variant->info.inputs_read;
