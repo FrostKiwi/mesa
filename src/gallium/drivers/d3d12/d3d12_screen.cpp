@@ -192,7 +192,7 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_GLSL_FEATURE_LEVEL:
       return 150;
    case PIPE_CAP_GLSL_FEATURE_LEVEL_COMPATIBILITY:
-      return 130;
+      return 140;
 
 #if 0 /* TODO: Enable me */
    case PIPE_CAP_COMPUTE:
@@ -389,10 +389,10 @@ d3d12_get_shader_param(struct pipe_screen *pscreen,
    case PIPE_SHADER_CAP_INDIRECT_INPUT_ADDR:
    case PIPE_SHADER_CAP_INDIRECT_OUTPUT_ADDR:
    case PIPE_SHADER_CAP_INDIRECT_TEMP_ADDR:
-   case PIPE_SHADER_CAP_INDIRECT_CONST_ADDR:
    case PIPE_SHADER_CAP_SUBROUTINES:
       return 0; /* not implemented */
 
+   case PIPE_SHADER_CAP_INDIRECT_CONST_ADDR:
    case PIPE_SHADER_CAP_INTEGERS:
       return 1;
 
