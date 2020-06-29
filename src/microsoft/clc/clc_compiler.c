@@ -804,9 +804,7 @@ copy_const_initializer(const nir_constant *constant, const struct glsl_type *typ
 
    if (glsl_type_is_array(type)) {
       const struct glsl_type *elm_type = glsl_get_array_element(type);
-      unsigned elm_size = glsl_get_cl_size(elm_type);
-      unsigned elm_align = glsl_get_cl_alignment(elm_type);
-      unsigned step_size = align(elm_size, elm_align);
+      unsigned step_size = glsl_get_explicit_stride(type);
 
       for (unsigned i = 0; i < constant->num_elements; i++) {
          copy_const_initializer(constant->elements[i], elm_type,
