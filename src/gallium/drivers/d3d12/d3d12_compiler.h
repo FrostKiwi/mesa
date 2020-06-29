@@ -58,6 +58,7 @@ struct d3d12_shader_key {
    uint64_t prev_varying_outputs;
    unsigned last_vertex_processing_stage : 1;
    unsigned invert_depth : 1;
+   unsigned have_int_textures : 1;
 
    struct {
       unsigned sprite_coord_enable:24;
@@ -71,7 +72,9 @@ struct d3d12_shader_key {
       unsigned frag_result_color_lowering : 4;
    } fs;
 
-   dxil_wrap_sampler_states int_tex_states;
+   int n_texture_states;
+   dxil_wrap_sampler_state tex_wrap_states[PIPE_MAX_SHADER_SAMPLER_VIEWS];
+   dxil_texture_swizzle_state swizzle_state[PIPE_MAX_SHADER_SAMPLER_VIEWS];
    d3d12_sampler_compare_funcs sampler_compare_funcs;
 };
 
