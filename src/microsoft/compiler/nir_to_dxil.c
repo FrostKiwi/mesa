@@ -1030,22 +1030,20 @@ emit_global_consts(struct ntd_context *ctx, struct exec_list *globals)
 }
 
 static bool
-emit_ubo_var(struct ntd_context *ctx, nir_variable *var)
+emit_cbv(struct ntd_context *ctx, unsigned binding, 
+         unsigned size, char *name)
 {
-   unsigned size = get_dword_size(var->type);
-   unsigned binding = var->data.binding;
    unsigned idx = ctx->num_cbvs;
 
    assert(idx < ARRAY_SIZE(ctx->cbv_metadata_nodes));
-   assert(binding < ARRAY_SIZE(ctx->cbv_handles));
 
    const struct dxil_type *float32 = dxil_module_get_float_type(&ctx->mod, 32);
    const struct dxil_type *array_type = dxil_module_get_array_type(&ctx->mod, float32, size);
-   const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod, var->name,
+   const struct dxil_type *buffer_type = dxil_module_get_struct_type(&ctx->mod, name,
                                                                      &array_type, 1);
    resource_array_layout layout = {idx, binding, 1};
    const struct dxil_mdnode *cbv_meta = emit_cbv_metadata(&ctx->mod, buffer_type,
-                                                          var->name, &layout, 4 * size);
+                                                          name, &layout, 4 * size);
 
    if (!cbv_meta)
       return false;
@@ -1063,6 +1061,14 @@ emit_ubo_var(struct ntd_context *ctx, nir_variable *var)
    ctx->num_cbvs++;
 
    return true;
+}
+
+static bool
+emit_ubo_var(struct ntd_context *ctx, nir_variable *var)
+{
+   unsigned size = get_dword_size(var->type);
+   unsigned binding = var->data.binding;
+   return emit_cbv(ctx, var->data.binding, get_dword_size(var->type), var->name);
 }
 
 static bool
@@ -2338,7 +2344,6 @@ emit_load_ubo(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    nir_const_value *const_block_index = nir_src_as_const_value(intr->src[0]);
    assert(const_block_index); // no dynamic indexing for now
-   assert(const_block_index->u32 <= 1); // we only support the default and state vars UBO for now
    const struct dxil_value *handle = ctx->cbv_handles[const_block_index->u32];
    assert(handle);
    const struct dxil_value *offset;
@@ -3729,9 +3734,18 @@ static void sort_uniforms_by_binding(struct exec_list *uniforms)
 static bool
 emit_cbvs(struct ntd_context *ctx, nir_shader *s)
 {
-   nir_foreach_variable(var, &s->uniforms) {
-      if (var->data.mode == nir_var_mem_ubo) {
-         if (!emit_ubo_var(ctx, var))
+   if (s->info.stage == MESA_SHADER_KERNEL) {
+      nir_foreach_variable(var, &s->uniforms) {
+         if (var->data.mode == nir_var_mem_ubo) {
+            if (!emit_ubo_var(ctx, var))
+               return false;
+         }
+      }
+   } else {
+      for (int i = ctx->opts->ubo_binding_offset; i < s->info.num_ubos; ++i) {
+         char name[64];
+         snprintf(name, sizeof(name), "__ubo%d", i);
+         if (!emit_cbv(ctx, i, 16384 /*4096 vec4's*/, name))
             return false;
       }
    }
