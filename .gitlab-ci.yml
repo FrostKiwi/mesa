@@ -752,7 +752,7 @@ virgl-gles3:
       when: manual
     - when: never
 
-arm64_a630_gles2:
+.arm64_a630_gles2:
   extends:
     - .deqp-test-gl
     - .use-arm_test
@@ -769,13 +769,13 @@ arm64_a630_gles2:
   dependencies:
     - meson-arm64
 
-arm64_a630_gles31:
-  extends: arm64_a630_gles2
+.arm64_a630_gles31:
+  extends: .arm64_a630_gles2
   variables:
     DEQP_VER: gles31
 
-arm64_a630_gles3:
-  extends: arm64_a630_gles2
+.arm64_a630_gles3:
+  extends: .arm64_a630_gles2
   variables:
     DEQP_VER: gles3
 
@@ -784,7 +784,7 @@ arm64_a630_gles3:
     - .ci-run-policy
   stage: test
 
-arm64_a306_gles2:
+.arm64_a306_gles2:
   extends:
     - .baremetal-test
     - .use-arm_build
@@ -806,17 +806,17 @@ arm64_a306_gles2:
     - google-freedreno-db410c
 
 # Disabled due to flaky results
-arm64_a306_gles3:
+.arm64_a306_gles3:
   extends:
-    - arm64_a306_gles2
+    - .arm64_a306_gles2
     - .test-manual
   parallel: 8
   variables:
     DEQP_VER: gles3
 
-arm64_a530_gles2:
+.arm64_a530_gles2:
   extends:
-    - arm64_a306_gles2
+    - .arm64_a306_gles2
   stage: freedreno
   variables:
     BM_KERNEL: /lava-files/db820c-kernel
@@ -827,9 +827,9 @@ arm64_a530_gles2:
   tags:
     - google-freedreno-db820c
 
-arm64_a530_gles3:
+.arm64_a530_gles3:
   extends:
-    - arm64_a530_gles2
+    - .arm64_a530_gles2
     - .test-manual
   parallel: 6
   variables:
