@@ -95,7 +95,7 @@ struct d3d12_shader {
    } state_vars[D3D12_MAX_STATE_VARS];
    unsigned num_state_vars;
    size_t state_vars_size;
-   unsigned state_vars_binding;
+   bool state_vars_used;
 
    struct {
       int index;
