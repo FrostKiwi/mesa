@@ -600,55 +600,40 @@ lower_32b_offset_store(nir_builder *b, nir_intrinsic_instr *intr)
    return true;
 }
 
-struct dxil_ubo_deref {
-   bool chain_has_deref_cast;
-};
-
-struct dxil_ubo_to_temp_ctx {
-   struct hash_table *ubos;
-};
-
-static inline nir_variable *
-dxil_nir_deref_instr_get_variable(const nir_deref_instr *instr,
-                                  bool *has_deref_cast)
+static void
+ubo_to_temp_patch_deref_mode(nir_deref_instr *deref)
 {
-   *has_deref_cast = false;
-   while (instr->deref_type != nir_deref_type_var) {
-      if (instr->deref_type == nir_deref_type_cast)
-         *has_deref_cast = true;
+   deref->mode = nir_var_shader_temp;
+   nir_foreach_use(use_src, &deref->dest.ssa) {
+      if (use_src->parent_instr->type != nir_instr_type_deref)
+	 continue;
 
-      instr = nir_deref_instr_parent(instr);
-      if (!instr)
-         return NULL;
+      nir_deref_instr *parent = nir_instr_as_deref(use_src->parent_instr);
+      ubo_to_temp_patch_deref_mode(parent);
    }
-
-   return instr->var;
 }
 
-static bool
-dxil_nir_deref_instr_patch_variable(nir_deref_instr *instr,
-                                    struct hash_table *ubo_to_temp)
+static void
+ubo_to_temp_update_entry(nir_deref_instr *deref, struct hash_entry *he)
 {
-   nir_deref_instr *parent;
-   bool patched = false;
+   assert(deref->mode == nir_var_mem_ubo);
+   assert(deref->dest.is_ssa);
+   assert(he->data);
 
-   if (instr->deref_type == nir_deref_type_var) {
-      struct hash_entry *he = _mesa_hash_table_search(ubo_to_temp, instr->var);
-      const nir_variable *var = he ? he->data : NULL;
+   nir_foreach_use(use_src, &deref->dest.ssa) {
+      if (use_src->parent_instr->type == nir_instr_type_deref) {
+         ubo_to_temp_update_entry(nir_instr_as_deref(use_src->parent_instr), he);
+      } else if (use_src->parent_instr->type == nir_instr_type_intrinsic) {
+         nir_intrinsic_instr *intr = nir_instr_as_intrinsic(use_src->parent_instr);
+         if (intr->intrinsic != nir_intrinsic_load_deref)
+            he->data = NULL;
+      } else {
+         he->data = NULL;
+      }
 
-      if (!var)
-         return false;
-
-      instr->mode = var->data.mode;
-      return true;
+      if (!he->data)
+         break;
    }
-
-   parent = nir_deref_instr_parent(instr);
-   if (!parent || !dxil_nir_deref_instr_patch_variable(parent, ubo_to_temp))
-      return false;
-
-   instr->mode = parent->mode;
-   return true;
 }
 
 bool
@@ -667,36 +652,24 @@ dxil_nir_lower_ubo_to_temp(nir_shader *nir)
 
       nir_foreach_block(block, func->impl) {
          nir_foreach_instr_safe(instr, block) {
-            if (instr->type != nir_instr_type_intrinsic)
-               continue;
-            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-
-            if (intr->intrinsic != nir_intrinsic_load_deref)
+            if (instr->type != nir_instr_type_deref)
                continue;
 
-            nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
-            nir_variable_mode mode = deref->mode;
+            nir_deref_instr *deref = nir_instr_as_deref(instr);
+            if (deref->mode != nir_var_mem_ubo ||
+                deref->deref_type != nir_deref_type_var)
+                  continue;
 
-            if (mode != nir_var_mem_ubo)
+            struct hash_entry *he =
+               _mesa_hash_table_search(ubo_to_temp, deref->var);
+
+            if (!he)
+               he = _mesa_hash_table_insert(ubo_to_temp, deref->var, deref->var);
+
+            if (!he->data)
                continue;
 
-            bool has_deref_cast;
-            nir_variable *var =
-               dxil_nir_deref_instr_get_variable(deref, &has_deref_cast);
-
-            if (!var || !var->constant_initializer)
-               continue;
-
-            struct hash_entry *he = _mesa_hash_table_search(ubo_to_temp, var);
-            if (he && has_deref_cast) {
-               /* As soon as we have one deref_cast, we should avoid turning the
-                * UBO into a shader temp with constant initializer.
-                */
-                he->data = NULL;
-            } else if (!he) {
-                _mesa_hash_table_insert(ubo_to_temp, var,
-                                        has_deref_cast ? NULL : var);
-            }
+            ubo_to_temp_update_entry(deref, he);
          }
       }
    }
@@ -711,7 +684,9 @@ dxil_nir_lower_ubo_to_temp(nir_shader *nir)
       var->data.mode = nir_var_shader_temp;
       exec_node_remove(&var->node);
       nir_shader_add_variable(nir, var);
+      progress = true;
    }
+   _mesa_hash_table_destroy(ubo_to_temp, NULL);
 
    /* Second pass: patch all derefs that were accessing the converted UBOs
     * variables.
@@ -723,25 +698,18 @@ dxil_nir_lower_ubo_to_temp(nir_shader *nir)
 
       nir_foreach_block(block, func->impl) {
          nir_foreach_instr_safe(instr, block) {
-            if (instr->type != nir_instr_type_intrinsic)
-               continue;
-            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-
-            if (intr->intrinsic != nir_intrinsic_load_deref)
+            if (instr->type != nir_instr_type_deref)
                continue;
 
-            nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
-            nir_variable_mode mode = deref->mode;
-
-            if (mode != nir_var_mem_ubo)
-               continue;
-
-            progress |= dxil_nir_deref_instr_patch_variable(deref, ubo_to_temp);
+            nir_deref_instr *deref = nir_instr_as_deref(instr);
+            if (deref->mode == nir_var_mem_ubo &&
+                deref->deref_type == nir_deref_type_var &&
+                deref->var->data.mode == nir_var_shader_temp)
+               ubo_to_temp_patch_deref_mode(deref);
          }
       }
    }
 
-   _mesa_hash_table_destroy(ubo_to_temp, NULL);
    return progress;
 }
 
