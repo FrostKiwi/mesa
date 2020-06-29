@@ -898,48 +898,33 @@ var_fill_const_array_with_vector_or_scalar(struct ntd_context *ctx,
                                            const struct nir_constant *c,
                                            const struct glsl_type *type,
                                            void *const_vals,
-                                           unsigned int parent_offset)
+                                           unsigned int offset)
 {
    assert(glsl_type_is_vector_or_scalar(type));
    enum glsl_base_type base_type = glsl_get_base_type(type);
    unsigned int components = glsl_get_vector_elements(type);
-   unsigned int offset = align(parent_offset, glsl_get_cl_alignment(type));
    unsigned bit_size = glsl_get_bit_size(type);
-   unsigned int increment =
-      glsl_get_cl_size(type) / ((components == 3) ? 4 : components);
+   unsigned int increment = bit_size / 8;
 
    for (unsigned int comp = 0; comp < components; comp++) {
       uint8_t *dst = (uint8_t *)const_vals + offset;
-      assert(!((uintptr_t)dst & ((1 << util_logbase2(bit_size / 8)) - 1)));
 
-      if (glsl_base_type_is_integer(base_type)) {
-         switch (glsl_get_bit_size(type)) {
-         case 64:
-           *((uint64_t *)dst) = c->values[comp].i64;
-           break;
-         case 32:
-           *((uint32_t *)dst) = c->values[comp].i32;
-           break;
-         case 16:
-           *((uint16_t *)dst) = c->values[comp].i16;
-           break;
-         case 8:
-           *dst = c->values[comp].i8;
-           break;
-         default:
-            unreachable("unexpeted bit-size");
-         }
-      } else {
-         switch (glsl_get_bit_size(type)) {
-         case 64:
-            *((double *)dst) = c->values[comp].f64;
-           break;
-         case 32:
-            *((float *)dst) = c->values[comp].f32;
-            break;
-         default:
-            unreachable("unexpeted bit-size");
-         }
+      switch (bit_size) {
+      case 64:
+         memcpy(dst, &c->values[comp].u64, sizeof(c->values[0].u64));
+         break;
+      case 32:
+         memcpy(dst, &c->values[comp].u32, sizeof(c->values[0].u32));
+         break;
+      case 16:
+         memcpy(dst, &c->values[comp].u16, sizeof(c->values[0].u16));
+         break;
+      case 8:
+         assert(glsl_base_type_is_integer(base_type));
+         memcpy(dst, &c->values[comp].u8, sizeof(c->values[0].u8));
+         break;
+      default:
+         unreachable("unexpeted bit-size");
       }
 
       offset += increment;
@@ -951,41 +936,38 @@ var_fill_const_array_with_vector_or_scalar(struct ntd_context *ctx,
 static bool
 var_fill_const_array(struct ntd_context *ctx, const struct nir_constant *c,
                      const struct glsl_type *type, void *const_vals,
-                     unsigned int parent_offset)
+                     unsigned int offset)
 {
    assert(!glsl_type_is_interface(type));
 
    if (glsl_type_is_vector_or_scalar(type)) {
       return var_fill_const_array_with_vector_or_scalar(ctx, c, type,
                                                         const_vals,
-                                                        parent_offset);
+                                                        offset);
    } else if (glsl_type_is_array(type)) {
       assert(!glsl_type_is_unsized_array(type));
       const struct glsl_type *without = glsl_without_array(type);
+      unsigned stride = glsl_get_explicit_stride(without);
       enum glsl_base_type without_base = glsl_get_base_type(without);
-      unsigned int offset = parent_offset;
 
       for (unsigned elt = 0; elt < glsl_get_length(type); elt++) {
-         offset = align(offset, glsl_get_cl_alignment(without));
          if (!var_fill_const_array(ctx, c->elements[elt], without,
-                                   const_vals, offset)) {
+                                   const_vals, offset + (elt * stride))) {
             return false;
          }
          offset += glsl_get_cl_size(without);
       }
       return true;
    } else if (glsl_type_is_struct(type)) {
-      unsigned int offset = parent_offset;
-
       for (unsigned int elt = 0; elt < glsl_get_length(type); elt++) {
          const struct glsl_type *elt_type = glsl_get_struct_field(type, elt);
+         unsigned field_offset = glsl_get_struct_field_offset(type, elt);
 
-         offset = align(offset, glsl_get_cl_alignment(elt_type));
          if (!var_fill_const_array(ctx, c->elements[elt],
-                                   elt_type, const_vals, offset)) {
+                                   elt_type, const_vals,
+                                   offset + field_offset)) {
             return false;
          }
-         offset += glsl_get_cl_size(elt_type);
       }
       return true;
    }
