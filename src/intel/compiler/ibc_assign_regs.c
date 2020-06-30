@@ -331,6 +331,13 @@ struct ibc_assign_regs_gc_state {
    unsigned num_hack_nodes;
 };
 
+static unsigned
+reg_to_ra_node(const struct ibc_assign_regs_gc_state *state,
+               const ibc_reg *reg)
+{
+   return state->num_hack_nodes + reg->index;
+}
+
 static bool
 rewrite_ref_from_gc_graph(ibc_ref *_ref,
                           int num_bytes, int num_comps,
@@ -347,7 +354,7 @@ rewrite_ref_from_gc_graph(ibc_ref *_ref,
       return true;
 
    const ibc_reg *reg = ref->reg;
-   const unsigned node = state->num_hack_nodes + reg->index;
+   const unsigned node = reg_to_ra_node(state, reg);
    const unsigned ra_reg = ra_get_node_reg(state->g, node);
    assert(ra_reg != ~0U);
    const unsigned grf_byte = state->reg_set->ra_reg_to_grf[ra_reg];
@@ -476,8 +483,9 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
       if (!should_assign_reg(reg))
          continue;
 
+      const unsigned reg_node = reg_to_ra_node(&state, reg);
       const ibc_ra_reg_class *c = ibc_reg_to_class(reg, state.reg_set);
-      ra_set_node_class(g, state.num_hack_nodes + reg->index, c->nr);
+      ra_set_node_class(g, reg_node, c->nr);
 
       bool reg_has_strided_class =
          ibc_reg_has_strided_class(reg, state.reg_set);
@@ -492,6 +500,8 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
          if (other == reg)
             break;
 
+         const unsigned other_node = reg_to_ra_node(&state, other);
+
          if (reg_has_strided_class &&
              other->file == IBC_FILE_LOGICAL &&
              reg->logical.stride == other->logical.stride &&
@@ -504,15 +514,13 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
                 reg_logical_live[other->index] != NULL &&
                 interval_sets_intersect(reg_logical_live[reg->index],
                                         reg_logical_live[other->index]))
-               ra_add_node_interference(g, state.num_hack_nodes + reg->index,
-                                        state.num_hack_nodes + other->index);
+               ra_add_node_interference(g, reg_node, other_node);
          } else {
             const ibc_reg_live_intervals *rli = &state.live->regs[reg->index];
             const ibc_reg_live_intervals *oli = &state.live->regs[other->index];
             if (!(rli->physical_end <= oli->physical_start ||
                   oli->physical_end <= rli->physical_start))
-               ra_add_node_interference(g, state.num_hack_nodes + reg->index,
-                                        state.num_hack_nodes + other->index);
+               ra_add_node_interference(g, reg_node, other_node);
          }
       }
    }
@@ -543,16 +551,14 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
                const ibc_ra_reg_class *c =
                   ibc_reg_to_class(send->payload[1].reg, state.reg_set);
                byte -= c->reg_size;
-               ra_set_node_reg(g, state.num_hack_nodes +
-                                  send->payload[1].reg->index,
+               ra_set_node_reg(g, reg_to_ra_node(&state, send->payload[1].reg),
                                ibc_ra_reg_class_grf_to_reg(c, byte));
             }
 
             const ibc_ra_reg_class *c =
                ibc_reg_to_class(send->payload[0].reg, state.reg_set);
             byte -= c->reg_size;
-            ra_set_node_reg(g, state.num_hack_nodes +
-                               send->payload[0].reg->index,
+            ra_set_node_reg(g, reg_to_ra_node(&state, send->payload[0].reg),
                             ibc_ra_reg_class_grf_to_reg(c, byte));
          }
          break;
@@ -571,7 +577,7 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
                ibc_reg_to_class(intrin->dest.reg, state.reg_set);
             unsigned byte = intrin->src[0].ref.hw_grf.byte -
                             intrin->dest.hw_grf.byte;
-            unsigned node = state.num_hack_nodes + intrin->dest.reg->index;
+            unsigned node = reg_to_ra_node(&state, intrin->dest.reg);
             if (ra_get_node_reg(g, node) == ~0U)
                ra_set_node_reg(g, node, ibc_ra_reg_class_grf_to_reg(c, byte));
          }
