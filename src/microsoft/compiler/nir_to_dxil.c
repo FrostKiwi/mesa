@@ -240,6 +240,8 @@ enum dxil_intr {
    DXIL_INTR_EMIT_STREAM = 97,
    DXIL_INTR_CUT_STREAM = 98,
 
+   DXIL_INTR_PRIMITIVE_ID = 108,
+
    DXIL_INTR_ATTRIBUTE_AT_VERTEX = 137,
 };
 
@@ -2052,6 +2054,29 @@ emit_load_local_work_group_id(struct ntd_context *ctx,
    return true;
 }
 
+static bool
+emit_load_primitiveid(struct ntd_context *ctx,
+                      nir_intrinsic_instr *intr)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod, "dx.op.primitiveID", DXIL_I32);
+   if (!func)
+      return false;
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod,
+       DXIL_INTR_PRIMITIVE_ID);
+   if (!opcode)
+      return false;
+
+   const struct dxil_value *args[] = {
+     opcode
+   };
+
+   const struct dxil_value *primid = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+   store_dest_int(ctx, &intr->dest, 0, primid);
+
+   return true;
+}
+
 static const struct dxil_value *
 get_int32_undef(struct dxil_module *m)
 {
@@ -3013,8 +3038,7 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return emit_load_input_interpolated(ctx, intr,
                                           ctx->system_value[SYSTEM_VALUE_INSTANCE_ID]);
    case nir_intrinsic_load_primitive_id:
-      return emit_load_input_interpolated(ctx, intr,
-                                          ctx->system_value[SYSTEM_VALUE_PRIMITIVE_ID]);
+      return emit_load_primitiveid(ctx, intr);
    case nir_intrinsic_load_shared_dxil:
       return emit_load_shared(ctx, intr);
    case nir_intrinsic_load_scratch_dxil:
@@ -4233,9 +4257,9 @@ nir_var_to_dxil_sysvalue_type(nir_variable *var, uint64_t other_stage_mask)
 {
    switch (var->data.location) {
    case VARYING_SLOT_FACE:
-   case VARYING_SLOT_PRIMITIVE_ID:
       return DXIL_GENERATED_SYSVALUE;
    case VARYING_SLOT_POS:
+   case VARYING_SLOT_PRIMITIVE_ID:
    case VARYING_SLOT_CLIP_DIST0:
    case VARYING_SLOT_CLIP_DIST1:
    case VARYING_SLOT_PSIZ:
