@@ -97,6 +97,8 @@ nir_options = {
    .lower_unpack_32_2x16_split = true,
    .use_scoped_memory_barrier = true,
    .use_scoped_control_memory_barrier = true,
+   .vertex_id_zero_based = true,
+   .lower_base_vertex = true,
 };
 
 const nir_shader_compiler_options*
@@ -3031,9 +3033,9 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    case nir_intrinsic_load_front_face:
       return emit_load_input_interpolated(ctx, intr,
                                           ctx->system_value[SYSTEM_VALUE_FRONT_FACE]);
-   case nir_intrinsic_load_vertex_id:
+   case nir_intrinsic_load_vertex_id_zero_base:
       return emit_load_input_interpolated(ctx, intr,
-                                          ctx->system_value[SYSTEM_VALUE_VERTEX_ID]);
+                                          ctx->system_value[SYSTEM_VALUE_VERTEX_ID_ZERO_BASE]);
    case nir_intrinsic_load_instance_id:
       return emit_load_input_interpolated(ctx, intr,
                                           ctx->system_value[SYSTEM_VALUE_INSTANCE_ID]);
@@ -4085,7 +4087,7 @@ struct sysvalue_name {
    int slot;
    char *name;
 } possible_sysvalues[] = {
-   {SYSTEM_VALUE_VERTEX_ID, -1, "SV_VertexID"},
+   {SYSTEM_VALUE_VERTEX_ID_ZERO_BASE, -1, "SV_VertexID"},
    {SYSTEM_VALUE_INSTANCE_ID, -1, "SV_InstanceID"},
    {SYSTEM_VALUE_FRONT_FACE, VARYING_SLOT_FACE, "SV_IsFrontFace"},
    {SYSTEM_VALUE_PRIMITIVE_ID, VARYING_SLOT_PRIMITIVE_ID, "SV_PrimitiveID"},

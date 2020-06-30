@@ -44,6 +44,9 @@ d3d12_lower_state_vars(struct nir_shader *s, struct d3d12_shader *shader);
 void
 d3d12_lower_yflip(nir_shader *s);
 
+bool
+d3d12_lower_load_first_vertex(nir_shader *nir);
+
 void
 d3d12_create_bare_samplers(nir_shader *s);
 

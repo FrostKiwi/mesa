@@ -148,7 +148,7 @@ static void
 get_semantic_sv_name(nir_variable *var, struct semantic_info *info)
 {
    switch (var->data.location) {
-   case SYSTEM_VALUE_VERTEX_ID:
+   case SYSTEM_VALUE_VERTEX_ID_ZERO_BASE:
       info->kind = DXIL_SEM_VERTEX_ID;
       break;
    case SYSTEM_VALUE_FRONT_FACE:

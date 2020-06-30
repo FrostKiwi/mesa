@@ -150,6 +150,7 @@ fill_sampler_descriptors(struct d3d12_context *ctx,
 
 static unsigned
 fill_state_vars(struct d3d12_context *ctx,
+                const struct pipe_draw_info *dinfo,
                 struct d3d12_shader *shader,
                 uint32_t *values)
 {
@@ -168,6 +169,10 @@ fill_state_vars(struct d3d12_context *ctx,
          ptr[1] = fui(1.0 / ctx->viewports[0].Height);
          ptr[2] = fui(ctx->gfx_pipeline_state.rast->base.point_size);
          ptr[3] = fui(D3D12_MAX_POINT_SIZE);
+         size += 4;
+         break;
+      case D3D12_STATE_VAR_FIRST_VERTEX:
+         ptr[0] = dinfo->start;
          size += 4;
          break;
       default:
@@ -214,7 +219,8 @@ check_descriptors_left(struct d3d12_context *ctx)
 }
 
 static void
-set_graphics_root_parameters(struct d3d12_context *ctx)
+set_graphics_root_parameters(struct d3d12_context *ctx,
+                             const struct pipe_draw_info *dinfo)
 {
    unsigned num_params = 0;
 
@@ -242,7 +248,7 @@ set_graphics_root_parameters(struct d3d12_context *ctx)
       /* TODO Don't always update state vars */
       if (shader->num_state_vars > 0) {
          uint32_t constants[D3D12_MAX_STATE_VARS * 4];
-         unsigned size = fill_state_vars(ctx, shader, constants);
+         unsigned size = fill_state_vars(ctx, dinfo, shader, constants);
          ctx->cmdlist->SetGraphicsRoot32BitConstants(num_params, size, constants, 0);
          num_params++;
       }
@@ -433,7 +439,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       ctx->cmdlist->SetPipelineState(ctx->current_pso);
    }
 
-   set_graphics_root_parameters(ctx);
+   set_graphics_root_parameters(ctx, dinfo);
 
    if (ctx->cmdlist_dirty & D3D12_DIRTY_VIEWPORT)
       ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);

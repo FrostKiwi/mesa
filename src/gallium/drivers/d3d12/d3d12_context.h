@@ -93,6 +93,7 @@ enum d3d12_binding_type {
 enum d3d12_state_var {
    D3D12_STATE_VAR_Y_FLIP = 0,
    D3D12_STATE_VAR_PT_SPRITE,
+   D3D12_STATE_VAR_FIRST_VERTEX,
    D3D12_MAX_STATE_VARS
 };
 
