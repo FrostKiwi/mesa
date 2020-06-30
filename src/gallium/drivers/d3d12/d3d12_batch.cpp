@@ -111,11 +111,13 @@ d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
 
    // batch hasn't been submitted before
-   if (!batch->fence)
+   if (!batch->fence && !batch->has_errors)
       return;
 
-   d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
-   d3d12_fence_reference(&batch->fence, NULL);
+   if (batch->fence) {
+      d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
+      d3d12_fence_reference(&batch->fence, NULL);
+   }
 
    _mesa_set_clear(batch->bos, delete_bo);
    _mesa_set_clear(batch->sampler_views, delete_sampler_view);
@@ -133,6 +135,7 @@ d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
       debug_printf("D3D12: resetting ID3D12CommandAllocator failed\n");
       return;
    }
+   batch->has_errors = false;
 }
 
 void
@@ -162,6 +165,7 @@ d3d12_start_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    if (ctx->cmdlist) {
       if (FAILED(ctx->cmdlist->Reset(batch->cmdalloc, NULL))) {
          debug_printf("D3D12: resetting ID3D12GraphicsCommandList failed\n");
+         batch->has_errors = true;
          return;
       }
    } else {
@@ -170,6 +174,7 @@ d3d12_start_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
                                                 __uuidof(ctx->cmdlist),
                                                 (void **)&ctx->cmdlist))) {
          debug_printf("D3D12: creating ID3D12GraphicsCommandList failed\n");
+         batch->has_errors = true;
          return;
       }
    }
@@ -193,6 +198,7 @@ d3d12_end_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 
    if (FAILED(ctx->cmdlist->Close())) {
       debug_printf("D3D12: closing ID3D12GraphicsCommandList failed\n");
+      batch->has_errors = true;
       return;
    }
 
