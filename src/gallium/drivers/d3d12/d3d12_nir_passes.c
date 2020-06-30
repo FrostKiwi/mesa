@@ -113,6 +113,54 @@ d3d12_lower_yflip(nir_shader *nir)
    }
 }
 
+static bool
+lower_load_first_vertex(nir_builder *b, nir_instr *instr, nir_variable **first_vertex)
+{
+   if (instr->type != nir_instr_type_intrinsic)
+      return false;
+
+   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+
+   if (intr->intrinsic != nir_intrinsic_load_first_vertex)
+      return false;
+
+   b->cursor = nir_before_instr(&intr->instr);
+
+   nir_ssa_def *load = get_state_var(b, D3D12_STATE_VAR_FIRST_VERTEX, "d3d12_FirstVertex",
+                                     glsl_uint_type(), first_vertex);
+   nir_ssa_def_rewrite_uses(&intr->dest.ssa, nir_src_for_ssa(load));
+   nir_instr_remove(instr);
+
+   return true;
+}
+
+bool
+d3d12_lower_load_first_vertex(struct nir_shader *nir)
+{
+   nir_variable *first_vertex = NULL;
+   bool progress = false;
+
+   if (nir->info.stage != MESA_SHADER_VERTEX)
+      return false;
+
+   nir_foreach_function(function, nir) {
+      if (function->impl) {
+         nir_builder b;
+         nir_builder_init(&b, function->impl);
+
+         nir_foreach_block(block, function->impl) {
+            nir_foreach_instr_safe(instr, block) {
+               progress |= lower_load_first_vertex(&b, instr, &first_vertex);
+            }
+         }
+
+         nir_metadata_preserve(function->impl, nir_metadata_block_index |
+                                               nir_metadata_dominance);
+      }
+   }
+   return progress;
+}
+
 static void
 invert_depth(nir_builder *b, struct nir_instr *instr)
 {
