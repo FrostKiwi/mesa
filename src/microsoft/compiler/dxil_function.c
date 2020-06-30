@@ -66,6 +66,7 @@ static struct  predefined_func_descr predefined_funcs[] = {
 {"dx.op.barrier", "v", "ii", DXIL_ATTR_KIND_NO_DUPLICATE},
 {"dx.op.atomicCompareExchange", "O", "i@iiiii", DXIL_ATTR_KIND_READ_NONE},
 {"dx.op.textureStore", "v", "i@iiiOOOOc", DXIL_ATTR_KIND_NONE},
+{"dx.op.primitiveID", "i", "i", DXIL_ATTR_KIND_READ_NONE},
 };
 
 struct func_descr {
