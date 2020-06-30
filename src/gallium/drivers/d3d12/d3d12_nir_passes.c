@@ -35,14 +35,18 @@
  */
 
 static nir_ssa_def *
-get_flip(nir_builder *b, nir_variable **flip)
+get_state_var(nir_builder *b,
+              enum d3d12_state_var var_enum,
+              const char *var_name,
+              const struct glsl_type *var_type,
+              nir_variable **out_var)
 {
-   const gl_state_index16 tokens[5] = { STATE_INTERNAL, STATE_INTERNAL_DRIVER, D3D12_STATE_VAR_Y_FLIP };
-   if (*flip == NULL) {
+   const gl_state_index16 tokens[5] = { STATE_INTERNAL, STATE_INTERNAL_DRIVER, var_enum };
+   if (*out_var == NULL) {
       nir_variable *var = nir_variable_create(b->shader,
                                               nir_var_uniform,
-                                              glsl_float_type(),
-                                              "d3d12_FlipY");
+                                              var_type,
+                                              var_name);
 
       var->num_state_slots = 1;
       var->state_slots = ralloc_array(var, nir_state_slot, 1);
@@ -50,9 +54,9 @@ get_flip(nir_builder *b, nir_variable **flip)
              sizeof(var->state_slots[0].tokens));
       var->data.how_declared = nir_var_hidden;
       b->shader->num_uniforms++;
-      *flip = var;
+      *out_var = var;
    }
-   return nir_load_var(b, *flip);
+   return nir_load_var(b, *out_var);
 }
 
 static void
@@ -73,7 +77,8 @@ lower_pos_write(nir_builder *b, struct nir_instr *instr, nir_variable **flip)
    b->cursor = nir_before_instr(&intr->instr);
 
    nir_ssa_def *pos = nir_ssa_for_src(b, intr->src[1], 4);
-   nir_ssa_def *flip_y = get_flip(b, flip);
+   nir_ssa_def *flip_y = get_state_var(b, D3D12_STATE_VAR_Y_FLIP, "d3d12_FlipY",
+                                       glsl_float_type(), flip);
    nir_ssa_def *def = nir_vec4(b,
                                nir_channel(b, pos, 0),
                                nir_fmul(b, nir_channel(b, pos, 1), flip_y),
