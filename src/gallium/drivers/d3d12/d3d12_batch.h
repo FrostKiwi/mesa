@@ -46,6 +46,7 @@ struct d3d12_batch {
    ID3D12CommandAllocator *cmdalloc;
    struct d3d12_descriptor_heap *sampler_heap;
    struct d3d12_descriptor_heap *view_heap;
+   bool has_errors;
 };
 
 bool
