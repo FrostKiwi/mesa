@@ -1346,7 +1346,7 @@ d3d12_disable_fake_so_buffers(struct d3d12_context *ctx)
       uint32_t stride = ctx->gfx_pipeline_state.so_info.stride[i] * 4;
       uint64_t src_offset = 0, dst_offset = fake_target->cached_filled_size;
       while (src_offset < filled_size) {
-         memcpy(dst + dst_offset, src + dst_offset, stride);
+         memcpy(dst + dst_offset, src + src_offset, stride);
          src_offset += stride * 6;
          dst_offset += stride;
       }
