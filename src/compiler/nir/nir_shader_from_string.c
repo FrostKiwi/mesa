@@ -436,6 +436,8 @@ bool get_global_decl_var(const char *shader, nir_builder *b)
       var->data.location = atoi(slot);
       var->data.driver_location = (unsigned)atoi(driver_loc);
       var->data.binding  = atoi(binding_id);
+      if(mode == nir_var_mem_ubo && var->data.binding + 1 > b->shader->info.num_ubos)
+         b->shader->info.num_ubos = var->data.binding + 1;
    }
 
    retval = true;
