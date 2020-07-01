@@ -187,11 +187,10 @@ fill_key(struct d3d12_context *ctx, struct d3d12_root_signature_key *key)
          key->stages[i].num_cb_bindings = shader->num_cb_bindings;
          key->stages[i].num_srv_bindings = shader->num_srv_bindings;
          key->stages[i].state_vars_size = shader->state_vars_size;
+         key->stages[i].has_default_ubo0 = shader->has_default_ubo0;
 
          if (ctx->gfx_stages[i]->so_info.num_outputs > 0)
             key->has_stream_output = true;
-
-         key->stages[i].has_default_ubo0 = shader->has_default_ubo0 > 0;
       }
    }
 }
