@@ -67,7 +67,7 @@ resolve_supported(const struct pipe_blit_info *info)
    // formats need to match
    struct d3d12_resource *src = d3d12_resource(info->src.resource);
    struct d3d12_resource *dst = d3d12_resource(info->dst.resource);
-   if (src->format != dst->format)
+   if (src->dxgi_format != dst->dxgi_format)
       return false;
 
    if (util_format_is_pure_integer(src->base.format))
@@ -111,11 +111,11 @@ blit_resolve(struct d3d12_context *ctx, const struct pipe_blit_info *info)
    d3d12_batch_reference_resource(batch, src);
    d3d12_batch_reference_resource(batch, dst);
 
-   assert(src->format == dst->format);
+   assert(src->dxgi_format == dst->dxgi_format);
    ctx->cmdlist->ResolveSubresource(
       d3d12_resource_resource(dst), info->dst.level,
       d3d12_resource_resource(src), info->src.level,
-      src->format);
+      src->dxgi_format);
 }
 
 static bool

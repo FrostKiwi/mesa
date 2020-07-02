@@ -34,7 +34,7 @@ struct pipe_screen;
 struct d3d12_resource {
    struct pipe_resource base;
    struct d3d12_bo *bo;
-   DXGI_FORMAT format;
+   DXGI_FORMAT dxgi_format;
    unsigned mip_levels;
    struct sw_displaytarget *dt;
    unsigned dt_stride;
