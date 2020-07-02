@@ -45,7 +45,6 @@ static bool
 can_map_directly(struct pipe_resource *pres)
 {
    return pres->bind & (PIPE_BIND_SCANOUT | PIPE_BIND_SHARED | PIPE_BIND_LINEAR) ||
-          pres->usage == PIPE_USAGE_STAGING ||
           pres->target == PIPE_BUFFER;
 }
 
