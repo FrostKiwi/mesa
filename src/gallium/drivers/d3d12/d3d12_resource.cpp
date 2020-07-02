@@ -118,7 +118,7 @@ init_buffer(struct d3d12_screen *screen,
                                                   : screen->slab_bufmgr;
    buf_desc.alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
    buf_desc.usage = (pb_usage_flags)PB_USAGE_ALL;
-   res->format = DXGI_FORMAT_UNKNOWN;
+   res->dxgi_format = DXGI_FORMAT_UNKNOWN;
    buf = bufmgr->create_buffer(bufmgr, templ->width0, &buf_desc);
    if (!buf)
       return false;
@@ -132,17 +132,19 @@ init_texture(struct d3d12_screen *screen,
              struct d3d12_resource *res,
              const struct pipe_resource *templ)
 {
-   const uint32_t bind_ds_and_sv = PIPE_BIND_SAMPLER_VIEW | PIPE_BIND_DEPTH_STENCIL;
-   const bool use_as_ds_and_sv = (templ->bind & bind_ds_and_sv) == bind_ds_and_sv;
    ID3D12Resource *d3d12_res;
 
+   const uint32_t bind_ds_and_sv = PIPE_BIND_SAMPLER_VIEW | PIPE_BIND_DEPTH_STENCIL;
+   const bool use_as_ds_and_sv = (templ->bind & bind_ds_and_sv) == bind_ds_and_sv;
+
    res->mip_levels = templ->last_level + 1;
-   res->format = d3d12_get_format(templ->format);
+
+   res->dxgi_format = d3d12_get_format(templ->format);
 
    D3D12_RESOURCE_DESC desc;
    desc.Format = use_as_ds_and_sv ?
-                    d3d12_get_resource_base_format(res->format):
-                    res->format;
+                    d3d12_get_resource_base_format(res->dxgi_format):
+                    res->dxgi_format;
    desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
    desc.Width = templ->width0;
    desc.Height = templ->height0;
@@ -288,7 +290,7 @@ d3d12_resource_from_handle(struct pipe_screen *pscreen,
    res->base = *templ;
    pipe_reference_init(&res->base.reference, 1);
    res->base.screen = pscreen;
-   res->format = templ->target == PIPE_BUFFER ? DXGI_FORMAT_UNKNOWN :
+   res->dxgi_format = templ->target == PIPE_BUFFER ? DXGI_FORMAT_UNKNOWN :
                  d3d12_get_format(templ->format);
    res->bo = d3d12_bo_wrap_res((ID3D12Resource *)handle->com_obj, templ->format);
    init_valid_range(res);
@@ -538,6 +540,8 @@ transfer_image_to_buf(struct d3d12_context *ctx,
       resolve_info.src.format = res->base.format;
       resolve_info.filter = PIPE_TEX_FILTER_NEAREST;
       resolve_info.mask = util_format_get_mask(tmpl.format);
+
+
 
       d3d12_blit(&ctx->base, &resolve_info);
       res = (struct d3d12_resource *)resolved_resource;
