@@ -523,6 +523,27 @@ transfer_image_to_buf(struct d3d12_context *ctx,
                    util_format_name(staging_res->base.format));
    }
 
+   struct pipe_resource *resolved_resource = nullptr;
+   if (res->base.nr_samples > 1) {
+      struct pipe_resource tmpl = res->base;
+      tmpl.nr_samples = 0;
+      resolved_resource = d3d12_resource_create(ctx->base.screen, &tmpl);
+      struct pipe_blit_info resolve_info = {0};
+      struct pipe_box box = {0,0,0, (int)res->base.width0, (int16_t)res->base.height0, (int16_t)res->base.depth0};
+      resolve_info.dst.resource = resolved_resource;
+      resolve_info.dst.box = box;
+      resolve_info.dst.format = res->base.format;
+      resolve_info.src.resource = &res->base;
+      resolve_info.src.box = box;
+      resolve_info.src.format = res->base.format;
+      resolve_info.filter = PIPE_TEX_FILTER_NEAREST;
+      resolve_info.mask = util_format_get_mask(tmpl.format);
+
+      d3d12_blit(&ctx->base, &resolve_info);
+      res = (struct d3d12_resource *)resolved_resource;
+   }
+
+
    if (res->base.target == PIPE_TEXTURE_3D) {
       transfer_image_part_to_buf(ctx, res, staging_res, trans, resid,
                                  0, 0, trans->base.box.z, trans->base.box.depth);
@@ -533,6 +554,9 @@ transfer_image_to_buf(struct d3d12_context *ctx,
                                     z, start_layer, 0, 1);
       }
    }
+
+   pipe_resource_reference(&resolved_resource, NULL);
+
    return true;
 }
 
