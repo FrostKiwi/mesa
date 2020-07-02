@@ -379,9 +379,7 @@ d3d12_get_shader_param(struct pipe_screen *pscreen,
       return 65536;
 
    case PIPE_SHADER_CAP_MAX_CONST_BUFFERS:
-      if (screen->opts.ResourceBindingTier < D3D12_RESOURCE_BINDING_TIER_3)
-         return 14;
-      return INT_MAX;
+      return 13; /* 15 - 2 for lowered uniforms and state vars*/
 
    case PIPE_SHADER_CAP_MAX_TEMPS:
       return INT_MAX;
