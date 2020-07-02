@@ -771,6 +771,8 @@ validate_jump_instr(nir_jump_instr *instr, validate_state *state)
    case nir_jump_return:
       validate_assert(state, block->successors[0] == state->impl->end_block);
       validate_assert(state, block->successors[1] == NULL);
+      validate_assert(state, instr->target == NULL);
+      validate_assert(state, instr->else_target == NULL);
       break;
 
    case nir_jump_break:
@@ -782,6 +784,8 @@ validate_jump_instr(nir_jump_instr *instr, validate_state *state)
          validate_assert(state, block->successors[0] == after);
       }
       validate_assert(state, block->successors[1] == NULL);
+      validate_assert(state, instr->target == NULL);
+      validate_assert(state, instr->else_target == NULL);
       break;
 
    case nir_jump_continue:
@@ -792,6 +796,24 @@ validate_jump_instr(nir_jump_instr *instr, validate_state *state)
          validate_assert(state, block->successors[0] == first);
       }
       validate_assert(state, block->successors[1] == NULL);
+      validate_assert(state, instr->target == NULL);
+      validate_assert(state, instr->else_target == NULL);
+      break;
+
+   case nir_jump_goto:
+      validate_assert(state, !state->impl->structured);
+      validate_assert(state, instr->target == block->successors[0]);
+      validate_assert(state, instr->target != NULL);
+      validate_assert(state, instr->else_target == NULL);
+      break;
+
+   case nir_jump_goto_if:
+      validate_assert(state, !state->impl->structured);
+      validate_assert(state, instr->target == block->successors[1]);
+      validate_assert(state, instr->else_target == block->successors[0]);
+      validate_src(&instr->condition, state, 0, 1);
+      validate_assert(state, instr->target != NULL);
+      validate_assert(state, instr->else_target != NULL);
       break;
 
    default:

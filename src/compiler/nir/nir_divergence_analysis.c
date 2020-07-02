@@ -579,6 +579,7 @@ visit_jump(nir_jump_instr *jump, struct divergence_state *state)
    case nir_jump_return:
       unreachable("NIR divergence analysis: Unsupported return instruction.");
       break;
+   case nir_jump_goto:
    case nir_jump_goto_if:
       unreachable("NIR divergence analysis: Unsupported goto_if instruction.");
       break;
