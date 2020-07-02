@@ -457,6 +457,13 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
    if (MAX2(1, sample_count) != MAX2(1, storage_sample_count))
       return false;
 
+   /* Allow 3-comp 32 bit formats only for BOs (needed for ARB_tbo_rgb32) */
+   if ((format == PIPE_FORMAT_R32G32B32_FLOAT ||
+       format == PIPE_FORMAT_R32G32B32_SINT ||
+       format == PIPE_FORMAT_R32G32B32_UINT) &&
+       target != PIPE_BUFFER)
+      return false;
+
    DXGI_FORMAT dxgi_format = d3d12_get_format(format);
    if (dxgi_format == DXGI_FORMAT_UNKNOWN)
       return false;
