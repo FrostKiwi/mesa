@@ -54,10 +54,12 @@ d3d12_create_surface(struct pipe_context *pctx,
    surface->base.u.tex.first_layer = tpl->u.tex.first_layer;
    surface->base.u.tex.last_layer = tpl->u.tex.last_layer;
 
+   DXGI_FORMAT dxgi_format = d3d12_get_resource_rt_format(d3d12_get_format(tpl->format));
+
    if (util_format_is_depth_or_stencil(tpl->format)) {
       d3d12_descriptor_heap_alloc_handle(ctx->dsv_heap, &surface->desc_handle);
       D3D12_DEPTH_STENCIL_VIEW_DESC desc;
-      desc.Format = d3d12_get_format(tpl->format);
+      desc.Format = dxgi_format;
       desc.Flags = D3D12_DSV_FLAG_NONE;
       switch (pres->target) {
       case PIPE_TEXTURE_1D:
@@ -105,7 +107,7 @@ d3d12_create_surface(struct pipe_context *pctx,
                                           surface->desc_handle.cpu_handle);
    } else {
       D3D12_RENDER_TARGET_VIEW_DESC desc;
-      desc.Format = d3d12_get_format(tpl->format);
+      desc.Format = dxgi_format;
 
       switch (pres->target) {
       case PIPE_TEXTURE_1D:

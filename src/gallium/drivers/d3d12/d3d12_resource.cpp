@@ -134,17 +134,11 @@ init_texture(struct d3d12_screen *screen,
 {
    ID3D12Resource *d3d12_res;
 
-   const uint32_t bind_ds_and_sv = PIPE_BIND_SAMPLER_VIEW | PIPE_BIND_DEPTH_STENCIL;
-   const bool use_as_ds_and_sv = (templ->bind & bind_ds_and_sv) == bind_ds_and_sv;
-
    res->mip_levels = templ->last_level + 1;
-
    res->dxgi_format = d3d12_get_format(templ->format);
 
    D3D12_RESOURCE_DESC desc;
-   desc.Format = use_as_ds_and_sv ?
-                    d3d12_get_resource_base_format(res->dxgi_format):
-                    res->dxgi_format;
+   desc.Format = res->dxgi_format;
    desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
    desc.Width = templ->width0;
    desc.Height = templ->height0;
