@@ -30,8 +30,7 @@
 
 enum dxil_prog_sig_comp_type dxil_get_prog_sig_comp_type(const struct glsl_type *type)
 {
-   if (glsl_type_is_array(type))
-      type = glsl_get_array_element(type);
+   type = glsl_without_array(type);
 
    switch (glsl_get_base_type(type)) {
    case GLSL_TYPE_UINT: return DXIL_PROG_SIG_COMP_TYPE_UINT32;
@@ -52,8 +51,7 @@ enum dxil_prog_sig_comp_type dxil_get_prog_sig_comp_type(const struct glsl_type 
 
 enum dxil_component_type dxil_get_comp_type(const struct glsl_type *type)
 {
-   if (glsl_type_is_array(type))
-      type = glsl_get_array_element(type);
+   type = glsl_without_array(type);
 
    enum glsl_base_type base_type = glsl_get_base_type(type);
    if (glsl_type_is_sampler(type) || glsl_type_is_image(type))
@@ -78,9 +76,10 @@ enum dxil_component_type dxil_get_comp_type(const struct glsl_type *type)
 
 enum dxil_resource_kind dxil_get_resource_kind(const struct glsl_type *type)
 {
-   if (glsl_type_is_array(type))
-      type = glsl_get_array_element(type);
+   type = glsl_without_array(type);
 
+   /* This looks wired, we strip the arrays but then we still test whether it's
+    * an array, key is the first refers to sampler[] and the second to samplerArray */
    bool is_array = glsl_sampler_type_is_array(type);
 
    if (glsl_type_is_sampler(type) || glsl_type_is_image(type)) {
