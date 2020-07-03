@@ -414,13 +414,13 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
                       d3d12_shader_selector *prev, d3d12_shader_selector *next)
 {
    uint64_t system_generated_in_values =
-         1ull << VARYING_SLOT_FACE |
-         1ull << VARYING_SLOT_PNTC |
-         1ull << VARYING_SLOT_PRIMITIVE_ID;
+         VARYING_BIT_FACE |
+         VARYING_BIT_PNTC |
+         VARYING_BIT_PRIMITIVE_ID;
 
    uint64_t system_out_values =
-         1ull << VARYING_SLOT_CLIP_DIST0 |
-         1ull << VARYING_SLOT_CLIP_DIST1;
+         VARYING_BIT_CLIP_DIST0 |
+         VARYING_BIT_CLIP_DIST1;
 
    memset(key, 0, sizeof(d3d12_shader_key));
    key->stage = stage;
@@ -429,7 +429,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
     * except certain system values */
    if (prev) {
       if (stage == PIPE_SHADER_FRAGMENT || stage == PIPE_SHADER_GEOMETRY)
-         system_out_values |= 1ull << VARYING_SLOT_POS;
+         system_out_values |= VARYING_BIT_POS;
       key->required_varying_inputs = prev->current->nir->info.outputs_written & ~system_out_values;
       key->prev_varying_outputs = prev->current->nir->info.outputs_written;
    }
@@ -439,7 +439,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
    if (next) {
       if (!next->passthrough) {
          if (stage == PIPE_SHADER_VERTEX)
-            system_generated_in_values |= 1ull << VARYING_SLOT_POS;
+            system_generated_in_values |= VARYING_BIT_POS;
          key->required_varying_outputs = next->current->nir->info.inputs_read & ~system_generated_in_values;
       }
       key->next_varying_inputs = next->current->nir->info.inputs_read;
