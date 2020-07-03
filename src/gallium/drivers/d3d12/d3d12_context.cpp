@@ -1455,6 +1455,7 @@ d3d12_clear(struct pipe_context *pctx,
          d3d12_apply_resource_states(ctx, false);
          ctx->cmdlist->ClearRenderTargetView(surf->desc_handle.cpu_handle,
                                              color->f, 0, NULL);
+         d3d12_batch_reference_surface_texture(d3d12_current_batch(ctx), surf);
       }
    }
 
@@ -1473,6 +1474,7 @@ d3d12_clear(struct pipe_context *pctx,
       d3d12_apply_resource_states(ctx, false);
       ctx->cmdlist->ClearDepthStencilView(surf->desc_handle.cpu_handle, flags,
                                           depth, stencil, 0, NULL);
+      d3d12_batch_reference_surface_texture(d3d12_current_batch(ctx), surf);
    }
 }
 
