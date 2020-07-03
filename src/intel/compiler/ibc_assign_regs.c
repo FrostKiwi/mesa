@@ -326,6 +326,9 @@ struct ibc_assign_regs_gc_state {
    const ibc_ra_reg_set *reg_set;
    const ibc_live_intervals *live;
 
+   /** Mapping from ibc_reg::index to the assigned ibc_ra_reg_class */
+   const struct ibc_ra_reg_class **reg_class;
+
    struct ra_graph *g;
    int grf127_send_hack_node;
    unsigned num_hack_nodes;
@@ -581,12 +584,16 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
       reg_logical_live[i] = reg_live;
    }
 
+   state.reg_class = rzalloc_array(state.mem_ctx, const ibc_ra_reg_class *,
+                                   state.live->num_regs);
+
    ibc_foreach_reg(reg, shader) {
       if (!should_assign_reg(reg))
          continue;
 
       const unsigned reg_node = reg_to_ra_node(&state, reg);
       const ibc_ra_reg_class *c = ibc_reg_to_class(reg, state.reg_set);
+      state.reg_class[reg->index] = c;
       ra_set_node_class(g, reg_node, c->nr);
 
       bool reg_has_strided_class =
