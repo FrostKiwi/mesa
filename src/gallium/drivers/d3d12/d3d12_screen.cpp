@@ -301,6 +301,9 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_MAX_GEOMETRY_TOTAL_OUTPUT_COMPONENTS:
       return 256 * 4;
 
+   case PIPE_CAP_MAX_VARYINGS:
+      return 32;
+
    default:
       return u_pipe_screen_get_param_defaults(pscreen, param);
    }
