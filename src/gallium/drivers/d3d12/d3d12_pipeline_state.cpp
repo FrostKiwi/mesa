@@ -66,6 +66,9 @@ get_semantic_name(int slot, unsigned *index)
    case VARYING_SLOT_CLIP_DIST0:
       return "SV_ClipDistance";
 
+   case VARYING_SLOT_PRIMITIVE_ID:
+      return "SV_PrimitiveID";
+
    default: {
          int index = slot - VARYING_SLOT_POS;
          return slot_to_varying[index];
