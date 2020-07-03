@@ -361,8 +361,12 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
       for (int i = 1; i < params.ncoord_comp; ++i)
          rho = nir_fmax(b, rho, nir_channel(b, r, i));
       params.lod = nir_flog2(b, rho);
-   } else {
+   } else if (b->shader->info.stage == MESA_SHADER_FRAGMENT){
       params.lod = dx_get_texture_lod(b, tex);
+   } else {
+      /* Only fragment shaders provide the gradient information to evaluate a LOD,
+       * so force 0 otherwise */
+      params.lod = nir_imm_float(b, 0.0);
    }
 
    /* Apply LOD bias */
