@@ -3719,14 +3719,15 @@ static void insert_sorted_by_binding(struct exec_list *var_list, nir_variable *n
 }
 
 
-static void sort_uniforms_by_binding(struct exec_list *uniforms)
+static void sort_uniforms_by_binding_and_remove_structs(struct exec_list *uniforms)
 {
    struct exec_list new_list;
    exec_list_make_empty(&new_list);
 
    nir_foreach_variable_safe(var, uniforms) {
       exec_node_remove(&var->node);
-      insert_sorted_by_binding(&new_list, var);
+      if (!glsl_type_is_struct(var->type))
+         insert_sorted_by_binding(&new_list, var);
    }
    exec_list_move_nodes_to(&new_list, uniforms);
 }
@@ -3820,9 +3821,9 @@ static bool
 emit_module(struct ntd_context *ctx, nir_shader *s)
 {
    /* The validator forces us to emit resources in a specific order:
-    * CBVs, Samplers, SRVs, UAVs */
-
-   sort_uniforms_by_binding(&s->uniforms);
+    * CBVs, Samplers, SRVs, UAVs. While we are at it also remove
+    * stale struct uniforms, they are lowered but might not have been removed */
+   sort_uniforms_by_binding_and_remove_structs(&s->uniforms);
 
    /* CBVs */
    if (!emit_cbvs(ctx, s))
