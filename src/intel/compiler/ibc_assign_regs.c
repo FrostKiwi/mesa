@@ -338,6 +338,76 @@ reg_to_ra_node(const struct ibc_assign_regs_gc_state *state,
    return state->num_hack_nodes + reg->index;
 }
 
+static ibc_ref
+convert_logical_to_hw_grf(const ibc_ref *ref,
+                          bool is_read,
+                          uint8_t simd_group,
+                          ibc_reg *new_vgrf,
+                          unsigned grf_byte)
+{
+   if (ref->file != IBC_FILE_LOGICAL || !ref->reg)
+      return (ibc_ref){};
+
+   assert(!new_vgrf || new_vgrf->file == IBC_FILE_HW_GRF);
+
+   const ibc_reg *reg = ref->reg;
+
+   ibc_ref new_ref = {
+      .file = IBC_FILE_HW_GRF,
+      .type = ref->type,
+      .reg = new_vgrf,
+   };
+
+   assert(reg->logical.bit_size % 8 == 0);
+
+   /* Stash this so we can access it unchanged */
+   unsigned stride;
+   if (reg->logical.simd_width == 1) {
+      assert(reg->logical.stride == 0);
+      new_ref.hw_grf.byte = grf_byte;
+      new_ref.hw_grf.byte += ref->logical.comp *
+                             (reg->logical.bit_size / 8);
+      new_ref.hw_grf.byte += ref->logical.byte;
+      /* This is needed for the !state->is_read case below */
+      stride = reg->logical.bit_size / 8;
+   } else {
+      assert(reg->logical.stride >= reg->logical.bit_size / 8);
+      new_ref.hw_grf.byte = grf_byte;
+      new_ref.hw_grf.byte += ref->logical.comp *
+                             reg->logical.simd_width *
+                             reg->logical.stride;
+      new_ref.hw_grf.byte += ref->logical.byte;
+      stride = reg->logical.stride;
+   }
+
+   if (ref->logical.broadcast) {
+      new_ref.hw_grf.byte += ref->logical.simd_channel * stride;
+   } else if (reg->logical.simd_width > 1) {
+      new_ref.hw_grf.byte +=
+         (simd_group - reg->logical.simd_group) * stride;
+   }
+
+   if (ref->logical.broadcast || reg->logical.simd_width == 1) {
+      if (is_read) {
+         new_ref.hw_grf.vstride = 0;
+         new_ref.hw_grf.width = 1;
+         new_ref.hw_grf.hstride = 0;
+      } else {
+         new_ref.hw_grf.hstride = ibc_type_byte_size(ref->type);
+         new_ref.hw_grf.width = 8;
+         new_ref.hw_grf.vstride = new_ref.hw_grf.hstride *
+                                  new_ref.hw_grf.width;
+      }
+   } else {
+      new_ref.hw_grf.hstride = stride;
+      new_ref.hw_grf.width = 8;
+      new_ref.hw_grf.vstride = new_ref.hw_grf.hstride *
+                               new_ref.hw_grf.width;
+   }
+
+   return new_ref;
+}
+
 static bool
 rewrite_ref_from_gc_graph(ibc_ref *_ref,
                           int num_bytes, int num_comps,
@@ -370,52 +440,9 @@ rewrite_ref_from_gc_graph(ibc_ref *_ref,
       break;
 
    case IBC_FILE_LOGICAL: {
-      assert(reg->logical.bit_size % 8 == 0);
-
-      /* Stash this so we can access it unchanged */
-      unsigned stride;
-      if (reg->logical.simd_width == 1) {
-         assert(reg->logical.stride == 0);
-         new_ref.hw_grf.byte = grf_byte;
-         new_ref.hw_grf.byte += ref->logical.comp *
-                                (reg->logical.bit_size / 8);
-         new_ref.hw_grf.byte += ref->logical.byte;
-         /* This is needed for the !state->is_read case below */
-         stride = reg->logical.bit_size / 8;
-      } else {
-         assert(reg->logical.stride >= reg->logical.bit_size / 8);
-         new_ref.hw_grf.byte = grf_byte;
-         new_ref.hw_grf.byte += ref->logical.comp *
-                                reg->logical.simd_width *
-                                reg->logical.stride;
-         new_ref.hw_grf.byte += ref->logical.byte;
-         stride = reg->logical.stride;
-      }
-
-      if (ref->logical.broadcast) {
-         new_ref.hw_grf.byte += ref->logical.simd_channel * stride;
-      } else if (reg->logical.simd_width > 1) {
-         new_ref.hw_grf.byte +=
-            (simd_group - reg->logical.simd_group) * stride;
-      }
-
-      if (ref->logical.broadcast || reg->logical.simd_width == 1) {
-         if (state->is_read) {
-            new_ref.hw_grf.vstride = 0;
-            new_ref.hw_grf.width = 1;
-            new_ref.hw_grf.hstride = 0;
-         } else {
-            new_ref.hw_grf.hstride = ibc_type_byte_size(ref->type);
-            new_ref.hw_grf.width = 8;
-            new_ref.hw_grf.vstride = new_ref.hw_grf.hstride *
-                                     new_ref.hw_grf.width;
-         }
-      } else {
-         new_ref.hw_grf.hstride = stride;
-         new_ref.hw_grf.width = 8;
-         new_ref.hw_grf.vstride = new_ref.hw_grf.hstride *
-                                  new_ref.hw_grf.width;
-      }
+      new_ref = convert_logical_to_hw_grf(ref, state->is_read, simd_group,
+                                          NULL, grf_byte);
+      assert(new_ref.file != IBC_FILE_NONE);
       break;
    }
 
