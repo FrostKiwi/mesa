@@ -186,6 +186,9 @@ get_semantic_ps_outname(nir_variable *var, struct semantic_info *info)
    case FRAG_RESULT_DATA7:
       snprintf(info->name, 64, "%s", "SV_Target");
       info->index = var->data.location - FRAG_RESULT_DATA0;
+      if (var->data.location == FRAG_RESULT_DATA0 &&
+          var->data.index > 0)
+         info->index = var->data.index;
       info->kind = DXIL_SEM_TARGET;
       break;
    case FRAG_RESULT_DEPTH:

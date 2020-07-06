@@ -125,6 +125,21 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_NPOT_TEXTURES:
       return 1;
 
+   case PIPE_CAP_MAX_DUAL_SOURCE_RENDER_TARGETS:
+      /* D3D12 only supports dual-source blending for a single
+       * render-target. From the D3D11 functional spec (which also defines
+       * this for D3D12):
+       *
+       * "When Dual Source Color Blending is enabled, the Pixel Shader must
+       *  have only a single RenderTarget bound, at slot 0, and must output
+       *  both o0 and o1. Writing to other outputs (o2, o3 etc.) produces
+       *  undefined results for the corresponding RenderTargets, if bound
+       *  illegally."
+       *
+       * Source: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#17.6%20Dual%20Source%20Color%20Blending
+       */
+      return 1;
+
    case PIPE_CAP_ANISOTROPIC_FILTER:
       return 1;
 
