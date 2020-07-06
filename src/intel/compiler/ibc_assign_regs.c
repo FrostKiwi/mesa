@@ -28,6 +28,8 @@
 
 #include "brw_compiler.h"
 
+#include "dev/gen_debug.h"
+
 #include "util/register_allocate.h"
 
 static bool
@@ -328,12 +330,22 @@ struct ibc_assign_regs_gc_state {
    const ibc_ra_reg_set *reg_set;
    const ibc_live_intervals *live;
 
+   /** Mapping from spill temp reg::index to the IP where they are live */
+   struct util_dynarray spill_temp_live_ip;
+
+   /** Header register to be used in spill/fill messages */
+   ibc_reg *spill_header;
+
    /** Mapping from ibc_reg::index to the assigned ibc_ra_reg_class */
    const struct ibc_ra_reg_class **reg_class;
 
    struct ra_graph *g;
    int grf127_send_hack_node;
    unsigned num_hack_nodes;
+
+   unsigned program_start_ip;
+
+   unsigned last_scratch;
 };
 
 static unsigned
@@ -592,10 +604,24 @@ ibc_gc_set_spill_costs(struct ibc_assign_regs_gc_state *state,
     * loops run 10 times.
     */
    ibc_foreach_instr_safe(instr, shader) {
-      st.is_read = true;
-      ibc_instr_foreach_read(instr, count_cost_cb, &st);
-      st.is_read = false;
-      ibc_instr_foreach_write(instr, count_cost_cb, &st);
+      ibc_intrinsic_instr *intrin = instr->type == IBC_INSTR_TYPE_INTRINSIC ?
+                                    ibc_instr_as_intrinsic(instr) : NULL;
+
+      if (ibc_instr_is_load_payload(instr)) {
+         /* We don't support spilling unaligned payload registers yet. */
+         if (intrin->src[0].ref.hw_grf.byte % REG_SIZE)
+            st.cost[intrin->dest.reg->index] = -1000.0f;
+      } else if (intrin && intrin->op == IBC_INTRINSIC_OP_PLN &&
+                 instr->simd_width > 8) {
+         /* SIMD16 PLNs need adjacent src[1..2]; we don't handle that yet. */
+         st.cost[intrin->src[1].ref.reg->index] = -1000.0f;
+         st.cost[intrin->src[2].ref.reg->index] = -1000.0f;
+      } else {
+         st.is_read = true;
+         ibc_instr_foreach_read(instr, count_cost_cb, &st);
+         st.is_read = false;
+         ibc_instr_foreach_write(instr, count_cost_cb, &st);
+      }
 
       if (instr->type == IBC_INSTR_TYPE_FLOW) {
          ibc_flow_instr *flow = ibc_instr_as_flow(instr);
@@ -649,6 +675,450 @@ ibc_gc_set_spill_costs(struct ibc_assign_regs_gc_state *state,
    free(st.cost);
 }
 
+static unsigned
+choose_spill_reg(struct ibc_assign_regs_gc_state *state,
+                 ibc_shader *shader)
+{
+   if (!state->have_spill_costs)
+      ibc_gc_set_spill_costs(state, shader);
+
+   int node = ra_get_best_spill_node(state->g);
+   if (node < 0)
+      return NO_REG;
+
+   assert(node >= state->num_hack_nodes);
+   return node - state->num_hack_nodes;
+}
+
+static void
+setup_oword_block_header(ibc_builder *b,
+                         ibc_reg *header_reg,
+                         unsigned scratch_offset_B,
+                         unsigned instr_ip)
+{
+   ibc_alu_instr *alu;
+
+   ibc_builder_push_scalar(b);
+   ibc_ref offset_ref = ibc_typed_ref(header_reg, IBC_TYPE_UD);
+   offset_ref.hw_grf.byte += 2 * sizeof(uint32_t);
+   alu = ibc_MOV_to(b, offset_ref, ibc_imm_ud(scratch_offset_B / 16));
+   alu->instr.index = instr_ip;
+   ibc_builder_pop(b);
+}
+
+/**
+ * Emit an OWord block read message to fill from scratch space.
+ *
+ * Assumes `msg` contains the message header, and the destination
+ * should be 1 REG_SIZE over from that.
+ */
+static void
+emit_unspill(ibc_builder *b,
+             ibc_reg *header_reg,
+             ibc_ref dest_ref,
+             uint8_t simd_width,
+             unsigned scratch_offset_B,
+             unsigned num_regs,
+             unsigned instr_ip)
+{
+   while (num_regs > 0) {
+      const unsigned block_size_regs = 1 << util_logbase2(MIN2(num_regs, 4));
+      const unsigned block_size_bytes = block_size_regs * REG_SIZE;
+
+      setup_oword_block_header(b, header_reg, scratch_offset_B, instr_ip);
+
+      /* Always use SIMD16...SIMD8 messages are horribly broken. */
+      ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 16);
+      send->instr.index = instr_ip;
+      send->can_reorder = false;
+      send->has_side_effects = true;
+      send->has_header = true;
+      send->instr.we_all = true;
+      send->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
+      send->mlen = 1;
+      send->rlen = block_size_regs;
+      send->desc_imm =
+         brw_dp_read_desc(b->shader->devinfo, GEN8_BTI_STATELESS_NON_COHERENT,
+                          BRW_DATAPORT_OWORD_BLOCK_DWORDS(block_size_regs * 8),
+                          GEN7_DATAPORT_DC_OWORD_BLOCK_READ,
+                          BRW_DATAPORT_READ_TARGET_DATA_CACHE);
+      send->payload[0] = ibc_typed_ref(header_reg, IBC_TYPE_UD);
+      send->dest = dest_ref;
+
+      ibc_builder_insert_instr(b, &send->instr);
+
+      scratch_offset_B += block_size_bytes;
+      dest_ref.hw_grf.byte += block_size_bytes;
+      num_regs -= block_size_regs;
+   }
+}
+
+/**
+ * Emit an OWord block write message to spill to scratch space.
+ *
+ * Assumes `msg` already has the header set up and the payload data.
+ */
+static void
+emit_spill(ibc_builder *b,
+           ibc_reg *header_reg,
+           ibc_ref data_ref,
+           uint8_t simd_width,
+           unsigned scratch_offset_B,
+           unsigned num_regs,
+           unsigned instr_ip)
+{
+   while (num_regs > 0) {
+      const unsigned block_size_regs = 1 << util_logbase2(MIN2(num_regs, 4));
+      const unsigned block_size_bytes = block_size_regs * REG_SIZE;
+
+      setup_oword_block_header(b, header_reg, scratch_offset_B, instr_ip);
+
+      /* Always use SIMD16...SIMD8 messages are horribly broken. */
+      ibc_send_instr *send = ibc_send_instr_create(b->shader, 0, 16);
+      send->instr.index = instr_ip;
+      send->can_reorder = false;
+      send->has_side_effects = true;
+      send->has_header = true;
+      send->instr.we_all = true;
+      send->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
+      send->rlen = 0;
+      send->mlen = 1;
+      send->ex_mlen = block_size_regs;
+      send->desc_imm =
+         brw_dp_write_desc(b->shader->devinfo, GEN8_BTI_STATELESS_NON_COHERENT,
+                           BRW_DATAPORT_OWORD_BLOCK_DWORDS(block_size_regs * 8),
+                           GEN7_DATAPORT_DC_OWORD_BLOCK_WRITE, 0, 0);
+      send->payload[0] = ibc_typed_ref(header_reg, IBC_TYPE_UD);
+      send->payload[1] = data_ref,
+
+      ibc_builder_insert_instr(b, &send->instr);
+
+      scratch_offset_B += block_size_bytes;
+      data_ref.hw_grf.byte += block_size_bytes;
+      num_regs -= block_size_regs;
+   }
+}
+
+struct ibc_spill_fill_state {
+   ibc_builder *b;
+
+   /** Current instruction being updated */
+   ibc_instr *iter_instr;
+
+   /** Register to spill */
+   unsigned reg_idx;
+
+   /** [min, max] interval in GRF units */
+   unsigned min, max;
+
+   /** Are we processing a read?  (The same callback is used for both.) */
+   bool is_read;
+
+   /** Temporary to use for spill/fills at this instruction */
+   ibc_reg *temp_reg;
+};
+
+static bool
+retarget_ref_and_update_range(ibc_ref *ref,
+                              int num_bytes, int num_comps,
+                              uint8_t simd_group, uint8_t simd_width,
+                              void *_st)
+{
+   struct ibc_spill_fill_state *st = _st;
+
+   /* Bail if this isn't accessing the register we're spilling. */
+   if (ref->file == IBC_FILE_NONE || ref->file == IBC_FILE_IMM ||
+       !ref->reg || ref->reg->index != st->reg_idx)
+      return true;
+
+   struct ibc_ref new_ref;
+
+   if (ref->file == IBC_FILE_LOGICAL) {
+      /* Make this instead reference our temporary HW_GRF. */
+      new_ref = convert_logical_to_hw_grf(ref, st->is_read, simd_group,
+                                          st->temp_reg, 0);
+   } else {
+      /* Retarget to the temporary HW_GRF. */
+      new_ref = *ref;
+      new_ref.reg = st->temp_reg;
+   }
+
+   ibc_instr_set_ref(st->iter_instr, ref, new_ref);
+
+   /* Expand the range of accessed data */
+   unsigned min, max;
+   ibc_calc_hw_grf_range(&new_ref, num_bytes, num_comps, simd_width,
+                         &min, &max);
+
+   st->min = MIN2(st->min, min);
+   st->max = MAX2(st->max, max);
+
+   return true;
+}
+
+static const uint16_t SPILL_PLACEHOLDER_SIZE = UINT16_MAX;
+
+static bool
+shrink_spill_temp_ref(ibc_ref *ref,
+                      int num_bytes, int num_comps,
+                      uint8_t simd_group, uint8_t simd_width,
+                      void *_st)
+{
+   struct ibc_spill_fill_state *st = _st;
+
+   /* Note that SPILL_PLACEHOLDER_SIZE is unique to our temporaries;
+    * it's far larger than any actual legal register size.
+    */
+   if (ref->file == IBC_FILE_HW_GRF && ref->reg &&
+       ref->reg->hw_grf.size == SPILL_PLACEHOLDER_SIZE) {
+      ref->hw_grf.byte -= st->min * REG_SIZE;
+   }
+   return true;
+}
+
+static unsigned
+calc_first_non_payload_ip(struct ibc_shader *shader)
+{
+   const ibc_instr *after_start =
+      LIST_ENTRY(ibc_instr, shader->instrs.next->next, link);
+
+   ibc_foreach_instr_from(instr, shader, after_start) {
+      if (ibc_instr_is_load_payload(instr))
+         continue;
+      return instr->index;
+   }
+   unreachable("end instruction prevents this");
+}
+
+static bool
+ibc_spill_reg(struct ibc_assign_regs_gc_state *state,
+              struct ibc_builder *b,
+              unsigned reg_idx)
+{
+   struct ra_graph *g = state->g;
+   const struct ibc_ra_reg_class *class = state->reg_class[reg_idx];
+   unsigned size = ALIGN(class->reg_size, REG_SIZE);
+
+   if (!state->spill_header) {
+      /* Copy g0 to a distinct temporary for spill message headers. */
+      ibc_reg *header = state->spill_header =
+         ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
+      const ibc_ra_reg_class *c = ibc_reg_to_class(header, state->reg_set);
+      unsigned header_node = ra_add_node(g, c->nr);
+      ra_set_node_spill_cost(g, header_node, NEVER_SPILL_COST);
+      header->index = header_node - state->num_hack_nodes;
+      header->is_wlr = false;
+
+      unsigned g0_node = reg_to_ra_node(state, b->shader->g0);
+      ra_add_node_interference(g, header_node, g0_node);
+
+      b->cursor = ibc_after_payload(b->shader);
+      ibc_builder_push_we_all(b, 8);
+      ibc_MOV_to(b, ibc_typed_ref(header, IBC_TYPE_UD),
+                 ibc_typed_ref(b->shader->g0, IBC_TYPE_UD));
+      ibc_builder_pop(b);
+   }
+
+   /* We're about to replace all uses of this register, which means it
+    * won't conflicts with anything.  We can drop its interference.
+    */
+   unsigned orig_node = reg_index_to_ra_node(state, reg_idx);
+   ra_set_node_spill_cost(g, orig_node, NEVER_SPILL_COST);
+   ra_set_node_reg(g, orig_node, NO_REG);
+   ra_reset_node_interference(g, orig_node);
+
+   ibc_instr *spill_header_init =
+      LIST_ENTRY(ibc_reg_write, state->spill_header->writes.next, link)->instr;
+
+   struct ibc_spill_fill_state st = {
+      .b = b,
+      .reg_idx = reg_idx,
+   };
+
+   unsigned spill_offset_B = state->last_scratch;
+
+   state->last_scratch += size;
+
+   st.temp_reg =
+      ibc_hw_grf_reg_create(b->shader, SPILL_PLACEHOLDER_SIZE, REG_SIZE);
+
+   ibc_foreach_instr_safe(instr, b->shader) {
+      st.iter_instr = instr;
+
+      const bool is_payload = ibc_instr_is_load_payload(instr);
+
+      if (0) {
+         fprintf(stderr, "spill debug: [%02u] ", instr->index);
+         ibc_print_instr(stderr, instr);
+      }
+
+      st.min = ~0;
+      st.max = 0;
+      st.is_read = true;
+      ibc_instr_foreach_read(instr, retarget_ref_and_update_range, &st);
+
+      unsigned unspill_min = st.min;
+      unsigned unspill_max = st.max;
+
+      st.min = ~0;
+      st.max = 0;
+      st.is_read = false;
+      ibc_instr_foreach_write(instr, retarget_ref_and_update_range, &st);
+
+      const unsigned spill_min = st.min;
+      const unsigned spill_max = st.max;
+
+      st.min = MIN2(spill_min, unspill_min);
+      st.max = MAX2(spill_max, unspill_max);
+
+      /* Continue on if this instruction doesn't reference our register. */
+      if (st.min == ~0)
+         continue;
+
+      /* TODO: Only do this when necessary:
+       * 1. Inside non-uniform control flow
+       * 2. Predicated instruction with non-uniform condition
+       * 3. Partial writes...
+       *
+       * We could also look at disabling nomask when things line up,
+       * which would prevent the need for this as well.
+       */
+      if (!is_payload) {
+         unspill_min = st.min;
+         unspill_max = st.max;
+      }
+
+      /* Set up the temporary register. */
+
+      if (is_payload) {
+         /* For load_payload destinations, fix the register to be an exact
+          * match for the one we're replacing, as it needs to be in a fixed
+          * location.  We'll pin it there shortly.
+          */
+         assert(st.min == 0);
+         st.temp_reg->hw_grf.size = size;
+      } else {
+         /* Now that we know what subrange this instruction accesses, we can
+          * shrink our temporary register to only hold that much data.
+          */
+         if (st.min != 0) {
+            /* Subtract st.min * REG_SIZE so references are zero-based. */
+            ibc_instr_foreach_read(instr, shrink_spill_temp_ref, &st);
+            ibc_instr_foreach_write(instr, shrink_spill_temp_ref, &st);
+         }
+
+         st.temp_reg->hw_grf.size = (st.max - st.min) * REG_SIZE;
+      }
+
+      assert(st.temp_reg->hw_grf.size <= size);
+
+      const ibc_ra_reg_class *c =
+         ibc_reg_to_class(st.temp_reg, state->reg_set);
+
+      unsigned temp_node = ra_add_node(g, c->nr);
+
+      st.temp_reg->index = temp_node - state->num_hack_nodes;
+      ra_set_node_spill_cost(g, temp_node, NEVER_SPILL_COST);
+
+      ibc_pin_payload_and_eot_regs(state, instr);
+
+      /* Record that our temporary is live at this IP */
+      if (!util_dynarray_resize(&state->spill_temp_live_ip, unsigned,
+                                st.temp_reg->index + 1))
+         return false;
+
+      unsigned new_ip = -instr->index;
+
+      unsigned *temp_live_ip = util_dynarray_begin(&state->spill_temp_live_ip);
+      temp_live_ip[st.temp_reg->index] = new_ip;
+
+      /* Our new temporaries need to conflict with other live registers. */
+      ibc_foreach_reg(other, b->shader) {
+         if (!should_assign_reg(other) ||
+             other->index == reg_idx ||
+             other->index == st.temp_reg->index)
+            continue;
+
+         const unsigned other_node = reg_to_ra_node(state, other);
+
+         bool interferes = false;
+
+         if (instr->index < state->program_start_ip &&
+             ibc_instr_is_load_payload(ibc_reg_ssa_instr(other))) {
+            /* Payload fields all interfere with one another. */
+            interferes = true;
+         } else if (other->index < state->live->num_regs) {
+            /* `other` is a normal register, use liveness to determine
+             * whether it interferes with our new temporaries.
+             */
+            const ibc_reg_live_intervals *oli =
+               &state->live->regs[other->index];
+
+            interferes = !(MAX2(instr->index, state->program_start_ip)
+                             <= oli->physical_start ||
+                           oli->physical_end <= instr->index);
+         } else {
+            /* `other` is a temporary from an earlier spill operation, which
+             * is alive for one IP (in the original program before spilling).
+             * We might have spilled one source of this instruction in an
+             * earlier pass, and be spilling a second source now, at which
+             * point the temporaries for both spills will be live at the
+             * same time and need to interfere.
+             */
+            interferes = temp_live_ip[other->index] == new_ip;
+         }
+
+         if (interferes)
+            ra_add_node_interference(g, temp_node, other_node);
+      }
+
+      /* Fill the existing values from scratch space */
+      if (unspill_min != ~0) {
+         ibc_ref temp_ref = ibc_typed_ref(st.temp_reg, IBC_TYPE_UD);
+         temp_ref.hw_grf.byte += (unspill_min - st.min) * REG_SIZE;
+
+         b->cursor = ibc_before_instr(instr);
+
+         emit_unspill(b, state->spill_header, temp_ref, instr->simd_width,
+                      spill_offset_B + unspill_min * REG_SIZE,
+                      unspill_max - unspill_min,
+                      new_ip);
+      }
+
+      /* Spill the new values back to scratch space */
+      if (spill_min != ~0) {
+         ibc_ref temp_ref = ibc_typed_ref(st.temp_reg, IBC_TYPE_UD);
+         temp_ref.hw_grf.byte += (spill_min - st.min) * REG_SIZE;
+
+         b->cursor = ibc_after_instr(is_payload ? spill_header_init : instr);
+
+         emit_spill(b, state->spill_header, temp_ref, instr->simd_width,
+                    spill_offset_B + spill_min * REG_SIZE,
+                    spill_max - spill_min,
+                    new_ip);
+      }
+
+      /* Set up a fresh temporary for the next iteration */
+      st.temp_reg =
+         ibc_hw_grf_reg_create(b->shader, SPILL_PLACEHOLDER_SIZE, REG_SIZE);
+   }
+
+   /* Make the spill header conflict with everything. */
+   unsigned header_node = reg_to_ra_node(state, state->spill_header);
+
+   ibc_foreach_reg(other, b->shader) {
+      if (!should_assign_reg(other))
+         continue;
+
+      const unsigned other_node = reg_to_ra_node(state, other);
+      ra_add_node_interference(g, other_node, header_node);
+   }
+
+   ibc_repair_wlr_order(b->shader);
+
+   return true;
+}
+
 static bool
 ibc_assign_regs_graph_color(ibc_shader *shader,
                             const struct brw_compiler *compiler,
@@ -667,6 +1137,8 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
 
    state.live = ibc_compute_live_intervals(shader, should_assign_reg,
                                            state.mem_ctx);
+
+   util_dynarray_init(&state.spill_temp_live_ip, state.mem_ctx);
 
    unsigned node_count = 0;
    state.grf127_send_hack_node = node_count++;
@@ -755,14 +1227,58 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
       ibc_pin_payload_and_eot_regs(&state, instr);
    }
 
-   if (!ra_allocate(g)) {
-      //assert(!allow_spilling);
-      ralloc_free(state.mem_ctx);
-      return false;
-   }
+   state.program_start_ip = calc_first_non_payload_ip(shader);
 
    struct ibc_builder b;
    ibc_builder_init(&b, shader);
+
+#if 0
+   if (unlikely((INTEL_DEBUG & DEBUG_SPILL_FS))) {
+      fprintf(stderr, "\nIBC before SPILLING:\n");
+      ibc_print_shader(shader, stderr);
+
+      ibc_spill_reg(&state, &b, 3);
+
+      fprintf(stderr, "\nIBC after SPILLING:\n");
+      ibc_print_shader(shader, stderr);
+      ibc_validate_shader(shader);
+   }
+#else
+   if (unlikely((INTEL_DEBUG & DEBUG_SPILL_FS))) {
+      while (true) {
+         unsigned spill_reg = choose_spill_reg(&state, shader);
+         if (spill_reg == NO_REG)
+            break;
+
+         if (0)
+            fprintf(stderr, "ibc_spill_reg(&state, &b, %u);\n", spill_reg);
+
+         ibc_spill_reg(&state, &b, spill_reg);
+         ibc_validate_shader(shader);
+      }
+   }
+#endif
+
+   while (true) {
+      if (ra_allocate(g))
+         break;
+
+      if (!allow_spilling) {
+         ralloc_free(state.mem_ctx);
+         return false;
+      }
+
+      int spill_reg = choose_spill_reg(&state, shader);
+      if (spill_reg == NO_REG)
+         return false;
+
+      if (!ibc_spill_reg(&state, &b, spill_reg))
+         return false;
+
+      ibc_validate_shader(shader);
+   }
+
+   shader->scratch_B = state.last_scratch;
 
    ibc_foreach_instr_safe(instr, shader) {
       state.iter_instr = instr;
