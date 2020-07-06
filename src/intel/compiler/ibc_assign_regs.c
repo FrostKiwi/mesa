@@ -323,6 +323,8 @@ struct ibc_assign_regs_gc_state {
    /* True if we're currently walking instruction reads */
    bool is_read;
 
+   bool have_spill_costs;
+
    const ibc_ra_reg_set *reg_set;
    const ibc_live_intervals *live;
 
@@ -531,6 +533,120 @@ ibc_pin_payload_and_eot_regs(struct ibc_assign_regs_gc_state *state,
    default:
       break;
    }
+}
+
+#define NEVER_SPILL_COST (-1.0f)
+
+struct ibc_spill_cost_state {
+   bool is_read;
+   float block_scale;
+   float *cost;
+};
+
+static bool
+count_cost_cb(ibc_ref *ref,
+              int num_bytes, int num_comps,
+              uint8_t simd_group, uint8_t simd_width,
+              void *data)
+{
+   struct ibc_spill_cost_state *st = data;
+
+   if (ref->file == IBC_FILE_NONE || ref->file == IBC_FILE_IMM || !ref->reg)
+      return true;
+
+   struct ibc_ref grf;
+
+   if (ref->file == IBC_FILE_LOGICAL) {
+      grf = convert_logical_to_hw_grf(ref, st->is_read, simd_group, NULL, 0);
+   } else {
+      grf = *ref;
+   }
+
+   unsigned min, max;
+   ibc_calc_hw_grf_range(&grf, num_bytes, num_comps, simd_width, &min, &max);
+
+   assert(max > min);
+
+   /* Weight fills as being more expensive than spills since we likely
+    * have to stall for their results, while spills are fire-and-forget.
+    */
+   float weight = st->is_read ? 10 : 1;
+
+   if (st->cost[ref->reg->index] >= 0)
+      st->cost[ref->reg->index] += weight * (max - min);
+
+   return true;
+}
+
+static void
+ibc_gc_set_spill_costs(struct ibc_assign_regs_gc_state *state,
+                       ibc_shader *shader)
+{
+   struct ibc_spill_cost_state st = {
+      .block_scale = 1.0,
+      .cost = calloc(state->live->num_regs, sizeof(float)),
+   };
+
+   /* Calculate costs for spilling nodes.  Call it a cost of 1 per
+    * spill/unspill we'll have to do, and guess that the insides of
+    * loops run 10 times.
+    */
+   ibc_foreach_instr_safe(instr, shader) {
+      st.is_read = true;
+      ibc_instr_foreach_read(instr, count_cost_cb, &st);
+      st.is_read = false;
+      ibc_instr_foreach_write(instr, count_cost_cb, &st);
+
+      if (instr->type == IBC_INSTR_TYPE_FLOW) {
+         ibc_flow_instr *flow = ibc_instr_as_flow(instr);
+         switch (flow->op) {
+         case IBC_FLOW_OP_DO:
+            st.block_scale *= 10;
+            break;
+         case IBC_FLOW_OP_WHILE:
+            st.block_scale /= 10;
+            break;
+         case IBC_FLOW_OP_IF:
+            st.block_scale *= 0.5;
+            break;
+         case IBC_FLOW_OP_ENDIF:
+            st.block_scale /= 0.5;
+            break;
+         default:
+            break;
+         }
+      }
+   }
+
+   ibc_foreach_reg(reg, shader) {
+      if (!should_assign_reg(reg))
+         continue;
+
+      ibc_reg_live_intervals *rli = &state->live->regs[reg->index];
+      int live_length = rli->physical_end - rli->physical_start;
+      if (live_length <= 0)
+         continue;
+
+      /* Divide the cost (in number of spills/fills) by the log of the length
+       * of the live range of the register.  This will encourage spill logic
+       * to spill long-living things before spilling short-lived things where
+       * spilling is less likely to actually do us any good.  We use the log
+       * of the length because it will fall off very quickly and not cause us
+       * to spill medium length registers with more uses.
+       */
+      float adjusted_cost = st.cost[reg->index] / logf(live_length);
+      const unsigned reg_node = reg_to_ra_node(state, reg);
+
+      ra_set_node_spill_cost(state->g, reg_node, adjusted_cost);
+   }
+
+   /* It makes no sense to spill g0; it's required to do a spill */
+   ra_set_node_spill_cost(state->g, reg_to_ra_node(state, shader->g0),
+                          NEVER_SPILL_COST);
+
+   state->have_spill_costs = true;
+
+   free(st.cost);
 }
 
 static bool
