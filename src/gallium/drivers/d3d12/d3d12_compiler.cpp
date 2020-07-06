@@ -729,6 +729,7 @@ d3d12_create_shader(struct d3d12_context *ctx,
             d3d12_reassign_driver_locations(&nir->outputs,
                                             next ? next->current->nir->info.inputs_read : 0);
    } else {
+      NIR_PASS_V(nir, nir_lower_fragcoord_wtrans);
       d3d12_sort_ps_outputs(&nir->outputs);
    }
 
