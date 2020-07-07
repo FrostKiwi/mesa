@@ -117,13 +117,6 @@ void brw_vec4_alloc_reg_set(struct brw_compiler *compiler);
 extern const char *const conditional_modifier[16];
 extern const char *const pred_ctrl_align16[16];
 
-/* Per-thread scratch space is a power-of-two multiple of 1KB. */
-static inline int
-brw_get_scratch_size(int size)
-{
-   return MAX2(1024, util_next_power_of_two(size));
-}
-
 bool brw_texture_offset(const nir_tex_instr *tex, unsigned src,
                         uint32_t *offset_bits);
 
