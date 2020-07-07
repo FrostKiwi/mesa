@@ -1535,6 +1535,13 @@ void brw_debug_key_recompile(const struct brw_compiler *c, void *log,
                              const struct brw_base_prog_key *old_key,
                              const struct brw_base_prog_key *key);
 
+/* Per-thread scratch space is a power-of-two multiple of 1KB. */
+static inline int
+brw_get_scratch_size(int size)
+{
+   return MAX2(1024, util_next_power_of_two(size));
+}
+
 static inline uint32_t
 encode_slm_size(unsigned gen, uint32_t bytes)
 {
