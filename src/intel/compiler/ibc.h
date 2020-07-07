@@ -1632,6 +1632,10 @@ void ibc_schedule_instructions(ibc_shader *shader);
 void ibc_schedule_instructions_post_ra(ibc_shader *shader);
 bool ibc_split_regs(ibc_shader *shader);
 
+void ibc_calc_hw_grf_range(ibc_ref *ref,
+                           int num_bytes, int num_comps, uint8_t simd_width,
+                           unsigned *min, unsigned *max);
+
 const unsigned *ibc_to_binary(const ibc_shader *shader,
                               const struct shader_info *info,
                               const struct brw_compiler *compiler,

@@ -422,11 +422,13 @@ byte_range_cb(unsigned byte, void *data)
    state->max = MAX2(state->max, byte + 1);
 }
 
-static void
-calc_hw_grf_range(ibc_ref *ref,
-                  int num_bytes, int num_comps, uint8_t simd_width,
-                  unsigned *min, unsigned *max)
+void
+ibc_calc_hw_grf_range(ibc_ref *ref,
+                      int num_bytes, int num_comps, uint8_t simd_width,
+                      unsigned *min, unsigned *max)
 {
+   assert(ref->file == IBC_FILE_HW_GRF);
+
    if (num_comps < 0) {
       assert(num_bytes >= 0);
       *min = ref->hw_grf.byte / REG_SIZE;
@@ -443,7 +445,7 @@ static unsigned
 hw_grf_count(ibc_ref *ref, int num_bytes, int num_comps, uint8_t simd_width)
 {
    unsigned min, max;
-   calc_hw_grf_range(ref, num_bytes, num_comps, simd_width, &min, &max);
+   ibc_calc_hw_grf_range(ref, num_bytes, num_comps, simd_width, &min, &max);
    return max - min;
 }
 
@@ -585,7 +587,7 @@ stall_for_ref_callback(ibc_ref *ref,
       assert(!ref->reg); /* We don't handle virtual registers yet. */
 
       unsigned min, max;
-      calc_hw_grf_range(ref, num_bytes, num_comps, simd_width, &min, &max);
+      ibc_calc_hw_grf_range(ref, num_bytes, num_comps, simd_width, &min, &max);
 
       for (unsigned i = min; i < max; i++)
          stall_on_dependency(st, grf_dependency_id(i));
@@ -647,7 +649,7 @@ mark_write_dependency_for_ref_callback(ibc_ref *ref,
       assert(!ref->reg); /* We don't handle virtual registers yet. */
 
       unsigned min, max;
-      calc_hw_grf_range(ref, num_bytes, num_comps, simd_width, &min, &max);
+      ibc_calc_hw_grf_range(ref, num_bytes, num_comps, simd_width, &min, &max);
 
       for (unsigned i = min; i < max; i++)
          mark_write_dependency(st, perf, grf_dependency_id(i));
