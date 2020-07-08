@@ -1477,6 +1477,9 @@ typedef struct ibc_shader {
 
    /** Estimated cycle count from the scheduler */
    uint32_t cycles;
+
+   /** Total scratch space in bytes used by the shader */
+   uint32_t scratch_B;
 } ibc_shader;
 
 ibc_shader *ibc_shader_create(void *mem_ctx,

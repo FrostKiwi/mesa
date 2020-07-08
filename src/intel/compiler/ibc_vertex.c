@@ -176,6 +176,11 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
       return NULL;
    }
 
+   if (ibc->scratch_B > 0) {
+      prog_data->base.base.total_scratch =
+         brw_get_scratch_size(ibc->scratch_B);
+   }
+
    prog_data->base.base.dispatch_grf_start_reg = nti.payload->num_ff_regs;
    prog_data->base.dispatch_mode = DISPATCH_MODE_SIMD8;
 
