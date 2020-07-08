@@ -527,6 +527,12 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
          ibc_print_shader(ibc, stderr);
 
       if (assigned) {
+         if (ibc->scratch_B > 0) {
+            prog_data->base.total_scratch =
+               MAX2(brw_get_scratch_size(ibc->scratch_B),
+                    prog_data->base.total_scratch);
+         }
+
          IBC_PASS_V(ibc, ibc_schedule_instructions_post_ra);
 
          struct ibc_eu_performance *perf = ibc_estimate_performance(ibc);
