@@ -212,6 +212,7 @@ struct d3d12_selection_context {
    bool needs_point_sprite_lowering;
    bool samples_int_textures;
    bool compare_with_lod_bias_grad;
+   unsigned missing_dual_src_outputs;
    unsigned frag_result_color_lowering;
 };
 
@@ -292,6 +293,44 @@ d3d12_make_passthrough_gs(struct d3d12_context *ctx, d3d12_shader_selector *vs)
    memcpy(&gs->so_info, &vs->so_info, sizeof(gs->so_info));
 
    return gs;
+}
+
+static unsigned
+missing_dual_src_outputs(struct d3d12_context *ctx)
+{
+   if (!ctx->gfx_pipeline_state.blend->is_dual_src)
+      return 0;
+
+   struct d3d12_shader_selector *fs = ctx->gfx_stages[PIPE_SHADER_FRAGMENT];
+   nir_shader *s = fs->initial;
+
+   unsigned indices_seen = 0;
+   nir_foreach_function(function, s) {
+      if (function->impl) {
+         nir_foreach_block(block, function->impl) {
+            nir_foreach_instr(instr, block) {
+               if (instr->type != nir_instr_type_intrinsic)
+                  continue;
+
+               nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+               if (intr->intrinsic != nir_intrinsic_store_deref)
+                  continue;
+
+               nir_variable *var = nir_intrinsic_get_var(intr, 0);
+               if (var->data.mode != nir_var_shader_out ||
+                   (var->data.location != FRAG_RESULT_COLOR &&
+                    var->data.location != FRAG_RESULT_DATA0))
+                  continue;
+
+               indices_seen |= 1u << var->data.index;
+               if ((indices_seen & 3) == 3)
+                  return 0;
+            }
+         }
+      }
+   }
+
+   return 3 & ~indices_seen;
 }
 
 static unsigned
@@ -475,8 +514,10 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       if (sel_ctx->ctx->flip_y < 0)
          key->gs.sprite_origin_upper_left = !key->gs.sprite_origin_upper_left;
       key->gs.aa_point = rast->point_smooth;
-   } else if (stage == PIPE_SHADER_FRAGMENT)
+   } else if (stage == PIPE_SHADER_FRAGMENT) {
+      key->fs.missing_dual_src_outputs = sel_ctx->missing_dual_src_outputs;
       key->fs.frag_result_color_lowering = sel_ctx->frag_result_color_lowering;
+   }
 
    if (sel_ctx->samples_int_textures) {
       key->n_texture_states = sel_ctx->ctx->num_sampler_views[stage];
@@ -547,9 +588,13 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
       NIR_PASS_V(new_nir_variant, dxil_lower_sample_to_txf_for_integer_tex,
                  key.tex_wrap_states, key.swizzle_state);
 
-   if (key.fs.frag_result_color_lowering)
+   if (key.fs.missing_dual_src_outputs) {
+      NIR_PASS_V(new_nir_variant, d3d12_add_missing_dual_src_target,
+                 key.fs.missing_dual_src_outputs);
+   } else if (key.fs.frag_result_color_lowering) {
       NIR_PASS_V(new_nir_variant, d3d12_lower_frag_result,
                  key.fs.frag_result_color_lowering);
+   }
 
    if (sel_ctx->compare_with_lod_bias_grad)
       NIR_PASS_V(new_nir_variant, d3d12_lower_sample_tex_compare, key.n_texture_states,
@@ -797,6 +842,7 @@ d3d12_select_shader_variants(struct d3d12_context *ctx, const struct pipe_draw_i
 
    sel_ctx.ctx = ctx;
    sel_ctx.needs_point_sprite_lowering = needs_point_sprite_lowering(ctx, dinfo);
+   sel_ctx.missing_dual_src_outputs = missing_dual_src_outputs(ctx);
    sel_ctx.frag_result_color_lowering = frag_result_color_lowering(ctx);
 
    validate_geometry_shader(&sel_ctx);

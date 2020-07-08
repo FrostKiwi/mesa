@@ -526,6 +526,36 @@ d3d12_lower_frag_result(struct nir_shader *nir, unsigned nr_cbufs)
    return progress;
 }
 
+void
+d3d12_add_missing_dual_src_target(struct nir_shader *s,
+                                  unsigned missing_mask)
+{
+   assert(missing_mask != 0);
+   nir_builder b;
+   nir_function_impl *impl = nir_shader_get_entrypoint(s);
+   nir_builder_init(&b, impl);
+   b.cursor = nir_before_cf_list(&impl->body);
+
+   nir_ssa_def *zero = nir_imm_zero(&b, 4, 32);
+   for (unsigned i = 0; i < 2; ++i) {
+
+      if (!(missing_mask & (1u << i)))
+         continue;
+
+      const char *name = i == 0 ? "gl_FragData[0]" :
+                                  "gl_SecondaryFragDataEXT[0]";
+      nir_variable *out = nir_variable_create(s, nir_var_shader_out,
+                                              glsl_vec4_type(), name);
+      out->data.location = FRAG_RESULT_DATA0;
+      out->data.driver_location = i;
+      out->data.index = i;
+
+      nir_store_var(&b, out, zero, 0xf);
+   }
+   nir_metadata_preserve(impl, nir_metadata_block_index |
+                               nir_metadata_dominance);
+}
+
 static bool
 fix_io_uint_type(struct nir_shader *s, struct exec_list *io, int slot)
 {
