@@ -56,6 +56,10 @@ d3d12_lower_bool_input(struct nir_shader *s);
 bool
 d3d12_lower_frag_result(struct nir_shader *s, unsigned nr_cbufs);
 
+void
+d3d12_add_missing_dual_src_target(struct nir_shader *s,
+                                  unsigned missing_mask);
+
 bool
 d3d12_fix_io_uint_type(struct nir_shader *s, uint64_t in_mask, uint64_t out_mask);
 
