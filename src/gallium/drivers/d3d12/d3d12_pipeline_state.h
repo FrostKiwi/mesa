@@ -48,6 +48,7 @@ struct d3d12_rasterizer_state {
 struct d3d12_blend_state {
    D3D12_BLEND_DESC desc;
    unsigned blend_factor_flags;
+   bool is_dual_src;
 };
 
 struct d3d12_depth_stencil_alpha_state {
