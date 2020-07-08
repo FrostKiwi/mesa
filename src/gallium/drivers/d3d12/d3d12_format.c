@@ -168,6 +168,24 @@ d3d12_get_emulated_view_format(enum pipe_format format)
    return &arb_emulation_format[format];
 }
 
+enum pipe_format
+d3d12_emulated_vtx_format(enum pipe_format fmt)
+{
+   switch (fmt) {
+   case PIPE_FORMAT_R10G10B10A2_SNORM:
+   case PIPE_FORMAT_R10G10B10A2_SSCALED:
+   case PIPE_FORMAT_R10G10B10A2_USCALED:
+   case PIPE_FORMAT_B10G10R10A2_UNORM:
+   case PIPE_FORMAT_B10G10R10A2_SNORM:
+   case PIPE_FORMAT_B10G10R10A2_SSCALED:
+   case PIPE_FORMAT_B10G10R10A2_USCALED:
+      return PIPE_FORMAT_R32_UINT;
+   default:
+      return fmt;
+   }
+}
+
+
 unsigned
 d3d12_non_opaque_plane_count(DXGI_FORMAT format)
 {
