@@ -34,6 +34,7 @@
 #include "d3d12_surface.h"
 
 #include "util/u_blitter.h"
+#include "util/u_dual_blend.h"
 #include "util/u_framebuffer.h"
 #include "util/u_helpers.h"
 #include "util/u_inlines.h"
@@ -338,6 +339,9 @@ d3d12_create_blend_state(struct pipe_context *pctx,
             /* We can't set a blend factor for both constant color and constant alpha */
             debug_printf("D3D12: unsupported blend factors combination (const color and const alpha)\n");
          }
+
+         if (util_blend_state_is_dual(blend_state, i))
+            state->is_dual_src = true;
       }
 
       state->desc.RenderTarget[i].RenderTargetWriteMask = color_write_mask(rt->colormask);
