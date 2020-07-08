@@ -315,6 +315,8 @@ ibc_instr_dest_latency(const ibc_instr *instr,
              */
             return 600;
 
+         case GEN7_DATAPORT_DC_OWORD_BLOCK_READ:
+         case GEN7_DATAPORT_DC_OWORD_BLOCK_WRITE:
          case GEN7_DATAPORT_DC_MEMORY_FENCE:
             return 100; /* TODO */
 
