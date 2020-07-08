@@ -97,7 +97,13 @@ d3d12_create_vertex_elements_state(struct pipe_context *pctx,
    for (unsigned i = 0; i < num_elements; ++i) {
       cso->elements[i].SemanticName = dxil_vs_attr_index_to_name(i);
       cso->elements[i].SemanticIndex = 0;
-      cso->elements[i].Format = d3d12_get_format(elements[i].src_format);
+
+      enum pipe_format format_helper = d3d12_emulated_vtx_format(elements[i].src_format);
+      bool needs_emulation = format_helper != elements[i].src_format;
+      cso->needs_format_emulation |= needs_emulation;
+      cso->format_conversion[i] = needs_emulation ? elements[i].src_format : PIPE_FORMAT_NONE;
+
+      cso->elements[i].Format = d3d12_get_format(format_helper);
       assert(cso->elements[i].Format != DXGI_FORMAT_UNKNOWN);
       cso->elements[i].InputSlot = elements[i].vertex_buffer_index;
       cso->elements[i].AlignedByteOffset = elements[i].src_offset;
