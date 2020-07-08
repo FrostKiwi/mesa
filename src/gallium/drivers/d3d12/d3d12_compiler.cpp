@@ -134,6 +134,9 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    NIR_PASS_V(nir, d3d12_create_bare_samplers);
    NIR_PASS_V(nir, nir_lower_tex, &tex_options);
 
+   if (key->vs.needs_format_emulation)
+      d3d12_nir_lower_vs_vertex_conversion(nir, key->vs.format_conversion);
+
    uint32_t num_ubos_before_lower_to_ubo = nir->info.num_ubos;
    uint32_t num_uniforms_before_lower_to_ubo = nir->num_uniforms;
    NIR_PASS_V(nir, nir_lower_uniforms_to_ubo, 16);
@@ -404,6 +407,16 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
    if (expect->invert_depth != have->invert_depth)
       return false;
 
+   if (expect->stage == PIPE_SHADER_VERTEX) {
+      if (expect->vs.needs_format_emulation) {
+         if (!have->vs.needs_format_emulation)
+            return false;
+         if (memcmp(expect->vs.format_conversion, have->vs.format_conversion,
+                    PIPE_MAX_ATTRIBS * sizeof (enum pipe_format)))
+            return false;
+      }
+   }
+
    return true;
 }
 
@@ -485,6 +498,13 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
              key->n_texture_states * sizeof(dxil_texture_swizzle_state));
    }
 
+   if (stage == PIPE_SHADER_VERTEX && sel_ctx->ctx->gfx_pipeline_state.ves) {
+      key->vs.needs_format_emulation = sel_ctx->ctx->gfx_pipeline_state.ves->needs_format_emulation;
+      if (key->vs.needs_format_emulation) {
+         memcpy(key->vs.format_conversion, sel_ctx->ctx->gfx_pipeline_state.ves->format_conversion,
+                sel_ctx->ctx->gfx_pipeline_state.ves->num_elements * sizeof(enum pipe_format));
+      }
+   }
 }
 
 static void

@@ -61,6 +61,11 @@ struct d3d12_shader_key {
    unsigned have_int_textures : 1;
 
    struct {
+      unsigned needs_format_emulation:1;
+      enum pipe_format format_conversion[PIPE_MAX_ATTRIBS];
+   } vs;
+
+   struct {
       unsigned sprite_coord_enable:24;
       unsigned sprite_origin_upper_left:1;
       unsigned point_pos_stream_out:1;
