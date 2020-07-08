@@ -112,6 +112,11 @@ init_buffer(struct d3d12_screen *screen,
    struct pb_manager *bufmgr;
    struct pb_buffer *buf;
 
+   /* Assert that we don't want to create a buffer with one of the emulated
+    * formats, these are (currently) only supported when passing the vertex
+    * element state */
+   assert(templ->format == d3d12_emulated_vtx_format(templ->format));
+
    /* Don't use slab buffer manager for GPU writable buffers */
    bufmgr = templ->bind & PIPE_BIND_STREAM_OUTPUT ? screen->cache_bufmgr
                                                   : screen->slab_bufmgr;
