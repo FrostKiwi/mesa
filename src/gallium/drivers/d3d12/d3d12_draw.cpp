@@ -507,14 +507,14 @@ d3d12_draw_vbo(struct pipe_context *pctx,
          if (ctx->fb.cbufs[i]) {
             struct d3d12_surface *surface = d3d12_surface(ctx->fb.cbufs[i]);
             render_targets[i] = surface->desc_handle.cpu_handle;
-            d3d12_batch_reference_surface(batch, surface);
+            d3d12_batch_reference_surface_texture(batch, surface);
          } else
             render_targets[i] = ctx->null_rtv.cpu_handle;
       }
       if (ctx->fb.zsbuf) {
          struct d3d12_surface *surface = d3d12_surface(ctx->fb.zsbuf);
          tmp_desc = surface->desc_handle.cpu_handle;
-         d3d12_batch_reference_surface(batch, surface);
+         d3d12_batch_reference_surface_texture(batch, surface);
          depth_desc = &tmp_desc;
       }
       ctx->cmdlist->OMSetRenderTargets(ctx->fb.nr_cbufs, render_targets, FALSE, depth_desc);

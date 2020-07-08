@@ -236,14 +236,10 @@ d3d12_batch_reference_sampler_view(struct d3d12_batch *batch,
 }
 
 void
-d3d12_batch_reference_surface(struct d3d12_batch *batch,
-                              struct d3d12_surface *surf)
+d3d12_batch_reference_surface_texture(struct d3d12_batch *batch,
+                                      struct d3d12_surface *surf)
 {
-   struct set_entry *entry = _mesa_set_search(batch->surfaces, surf);
-   if (!entry) {
-      entry = _mesa_set_add(batch->surfaces, surf);
-      pipe_reference(NULL, &surf->base.reference);
-   }
+   d3d12_batch_reference_resource(batch, d3d12_resource(surf->base.texture));
 }
 
 void

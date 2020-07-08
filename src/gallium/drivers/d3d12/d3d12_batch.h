@@ -77,7 +77,7 @@ d3d12_batch_reference_sampler_view(struct d3d12_batch *batch,
                                    struct d3d12_sampler_view *sv);
 
 void
-d3d12_batch_reference_surface(struct d3d12_batch *batch,
+d3d12_batch_reference_surface_texture(struct d3d12_batch *batch,
                               struct d3d12_surface *surf);
 
 void
