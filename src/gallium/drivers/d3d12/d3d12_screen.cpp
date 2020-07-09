@@ -637,8 +637,8 @@ d3d12_flush_frontbuffer(struct pipe_screen * pscreen,
    winsys->displaytarget_display(winsys, res->dt, winsys_drawable_handle, sub_box);
 }
 
-static void
-enable_d3d12_debug_layer()
+static ID3D12Debug *
+get_debug_interface()
 {
    typedef HRESULT(WINAPI *PFN_D3D12_GET_DEBUG_INTERFACE)(REFIID riid, void **ppFactory);
    PFN_D3D12_GET_DEBUG_INTERFACE D3D12GetDebugInterface;
@@ -646,22 +646,30 @@ enable_d3d12_debug_layer()
    HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {
       debug_printf("D3D12: failed to load D3D12.DLL\n");
-      return;
+      return NULL;
    }
 
    D3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(hD3D12Mod, "D3D12GetDebugInterface");
    if (!D3D12GetDebugInterface) {
       debug_printf("D3D12: failed to load D3D12GetDebugInterface from D3D12.DLL\n");
-      return;
+      return NULL;
    }
 
    ID3D12Debug *debug;
    if (FAILED(D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void **)&debug))) {
       debug_printf("D3D12: D3D12GetDebugInterface failed\n");
-      return;
+      return NULL;
    }
 
-   debug->EnableDebugLayer();
+   return debug;
+}
+
+static void
+enable_d3d12_debug_layer()
+{
+   ID3D12Debug *debug = get_debug_interface();
+   if (debug)
+      debug->EnableDebugLayer();
 }
 
 static IDXGIFactory4 *
