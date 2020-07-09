@@ -36,6 +36,7 @@ extern "C" {
 #define D3D12_DEBUG_DISASS       (1 << 3)
 #define D3D12_DEBUG_BLIT         (1 << 4)
 #define D3D12_DEBUG_RESOURCE     (1 << 5)
+#define D3D12_DEBUG_DEBUG_LAYER  (1 << 6)
 
 extern uint32_t d3d12_debug;
 
