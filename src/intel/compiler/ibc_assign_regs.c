@@ -455,6 +455,74 @@ rewrite_ref_from_gc_graph(ibc_ref *_ref,
    return true;
 }
 
+static void
+ibc_pin_payload_and_eot_regs(struct ibc_assign_regs_gc_state *state,
+                             ibc_instr *instr)
+{
+   struct ra_graph *g = state->g;
+
+   switch (instr->type) {
+   case IBC_INSTR_TYPE_SEND: {
+      ibc_send_instr *send = ibc_instr_as_send(instr);
+
+      /* We can't validate this in ibc_validate because .packed gets set as
+       * a late-binding thing.  However, before we RA, we should assert
+       * that things are packed.
+       */
+      if (send->rlen > 0 && send->dest.file == IBC_FILE_LOGICAL)
+         assert(send->dest.reg->logical.packed);
+      if (send->payload[0].file == IBC_FILE_LOGICAL)
+         assert(send->payload[0].reg->logical.packed);
+      if (send->ex_mlen > 0 && send->payload[1].file == IBC_FILE_LOGICAL)
+         assert(send->payload[1].reg->logical.packed);
+
+      if (send->eot) {
+         unsigned byte = TOTAL_GRF_BYTES;
+         if (send->ex_mlen > 0) {
+            assert(send->payload[1].file == IBC_FILE_LOGICAL ||
+                   send->payload[1].file == IBC_FILE_HW_GRF);
+
+            const ibc_ra_reg_class *c =
+               ibc_reg_to_class(send->payload[1].reg, state->reg_set);
+            byte -= c->reg_size;
+            ra_set_node_reg(g, reg_to_ra_node(state, send->payload[1].reg),
+                            ibc_ra_reg_class_grf_to_reg(c, byte));
+         }
+
+         const ibc_ra_reg_class *c =
+            ibc_reg_to_class(send->payload[0].reg, state->reg_set);
+         byte -= c->reg_size;
+         ra_set_node_reg(g, reg_to_ra_node(state, send->payload[0].reg),
+                         ibc_ra_reg_class_grf_to_reg(c, byte));
+      }
+      break;
+   }
+
+   case IBC_INSTR_TYPE_INTRINSIC: {
+      ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
+      if (intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD ||
+          (intrin->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO &&
+           intrin->src[0].ref.file != IBC_FILE_NONE)) {
+         assert(intrin->dest.reg);
+         assert(intrin->src[0].ref.file == IBC_FILE_HW_GRF);
+         assert(intrin->src[0].ref.reg == NULL);
+
+         const ibc_ra_reg_class *c =
+            ibc_reg_to_class(intrin->dest.reg, state->reg_set);
+         unsigned byte = intrin->src[0].ref.hw_grf.byte -
+                         intrin->dest.hw_grf.byte;
+         unsigned node = reg_to_ra_node(state, intrin->dest.reg);
+         if (ra_get_node_reg(g, node) == ~0U)
+            ra_set_node_reg(g, node, ibc_ra_reg_class_grf_to_reg(c, byte));
+      }
+      break;
+   }
+
+   default:
+      break;
+   }
+}
+
 static bool
 ibc_assign_regs_graph_color(ibc_shader *shader,
                             const struct brw_compiler *compiler,
@@ -554,66 +622,7 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
 
    /* Walk backwards so that we hit the EOT send before any LOAD_PAYLOAD */
    ibc_foreach_instr_reverse(instr, shader) {
-      switch (instr->type) {
-      case IBC_INSTR_TYPE_SEND: {
-         ibc_send_instr *send = ibc_instr_as_send(instr);
-
-         /* We can't validate this in ibc_validate because .packed gets set as
-          * a late-binding thing.  However, before we RA, we should assert
-          * that things are packed.
-          */
-         if (send->rlen > 0 && send->dest.file == IBC_FILE_LOGICAL)
-            assert(send->dest.reg->logical.packed);
-         if (send->payload[0].file == IBC_FILE_LOGICAL)
-            assert(send->payload[0].reg->logical.packed);
-         if (send->ex_mlen > 0 && send->payload[1].file == IBC_FILE_LOGICAL)
-            assert(send->payload[1].reg->logical.packed);
-
-         if (send->eot) {
-            unsigned byte = TOTAL_GRF_BYTES;
-            if (send->ex_mlen > 0) {
-               assert(send->payload[1].file == IBC_FILE_LOGICAL ||
-                      send->payload[1].file == IBC_FILE_HW_GRF);
-
-               const ibc_ra_reg_class *c =
-                  ibc_reg_to_class(send->payload[1].reg, state.reg_set);
-               byte -= c->reg_size;
-               ra_set_node_reg(g, reg_to_ra_node(&state, send->payload[1].reg),
-                               ibc_ra_reg_class_grf_to_reg(c, byte));
-            }
-
-            const ibc_ra_reg_class *c =
-               ibc_reg_to_class(send->payload[0].reg, state.reg_set);
-            byte -= c->reg_size;
-            ra_set_node_reg(g, reg_to_ra_node(&state, send->payload[0].reg),
-                            ibc_ra_reg_class_grf_to_reg(c, byte));
-         }
-         break;
-      }
-
-      case IBC_INSTR_TYPE_INTRINSIC: {
-         ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-         if (intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD ||
-             (intrin->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO &&
-              intrin->src[0].ref.file != IBC_FILE_NONE)) {
-            assert(intrin->dest.reg);
-            assert(intrin->src[0].ref.file == IBC_FILE_HW_GRF);
-            assert(intrin->src[0].ref.reg == NULL);
-
-            const ibc_ra_reg_class *c =
-               ibc_reg_to_class(intrin->dest.reg, state.reg_set);
-            unsigned byte = intrin->src[0].ref.hw_grf.byte -
-                            intrin->dest.hw_grf.byte;
-            unsigned node = reg_to_ra_node(&state, intrin->dest.reg);
-            if (ra_get_node_reg(g, node) == ~0U)
-               ra_set_node_reg(g, node, ibc_ra_reg_class_grf_to_reg(c, byte));
-         }
-         break;
-      }
-
-      default:
-         break;
-      }
+      ibc_pin_payload_and_eot_regs(&state, instr);
    }
 
    if (!ra_allocate(g)) {
