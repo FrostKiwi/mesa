@@ -105,17 +105,18 @@ delete_object(set_entry *entry)
    object->Release();
 }
 
-void
-d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
+bool
+d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch, uint64_t timeout_ns)
 {
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
 
    // batch hasn't been submitted before
    if (!batch->fence && !batch->has_errors)
-      return;
+      return true;
 
    if (batch->fence) {
-      d3d12_fence_finish(batch->fence, PIPE_TIMEOUT_INFINITE);
+      if (!d3d12_fence_finish(batch->fence, timeout_ns))
+         return false;
       d3d12_fence_reference(&batch->fence, NULL);
    }
 
@@ -133,15 +134,16 @@ d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 
    if (FAILED(batch->cmdalloc->Reset())) {
       debug_printf("D3D12: resetting ID3D12CommandAllocator failed\n");
-      return;
+      return false;
    }
    batch->has_errors = false;
+   return true;
 }
 
 void
 d3d12_destroy_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
 {
-   d3d12_reset_batch(ctx, batch);
+   d3d12_reset_batch(ctx, batch, PIPE_TIMEOUT_INFINITE);
    batch->cmdalloc->Release();
    d3d12_descriptor_heap_free(batch->sampler_heap);
    d3d12_descriptor_heap_free(batch->view_heap);
@@ -159,7 +161,7 @@ d3d12_start_batch(struct d3d12_context *ctx, struct d3d12_batch *batch)
    ID3D12DescriptorHeap* heaps[2] = { d3d12_descriptor_heap_get(batch->view_heap),
                                       d3d12_descriptor_heap_get(batch->sampler_heap) };
 
-   d3d12_reset_batch(ctx, batch);
+   d3d12_reset_batch(ctx, batch, PIPE_TIMEOUT_INFINITE);
 
    /* Create or reset global command list */
    if (ctx->cmdlist) {
