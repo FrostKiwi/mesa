@@ -47,13 +47,14 @@
 
 static const struct debug_named_value
 debug_options[] = {
-   { "verbose",      D3D12_DEBUG_VERBOSE,      NULL },
-   { "blit",         D3D12_DEBUG_BLIT,         "Trace blit and copy resource calls" },
-   { "experimental", D3D12_DEBUG_EXPERIMENTAL, "Enable experimental shader models feature" },
-   { "dxil",         D3D12_DEBUG_DXIL,         "Dump DXIL during program compile" },
-   { "disass",       D3D12_DEBUG_DISASS,       "Dump disassambly of created DXIL shader" },
-   { "res",          D3D12_DEBUG_RESOURCE,     "Debug resources" },
-   { "debuglayer",   D3D12_DEBUG_DEBUG_LAYER,  "Enable debug layer" },
+   { "verbose",      D3D12_DEBUG_VERBOSE,       NULL },
+   { "blit",         D3D12_DEBUG_BLIT,          "Trace blit and copy resource calls" },
+   { "experimental", D3D12_DEBUG_EXPERIMENTAL,  "Enable experimental shader models feature" },
+   { "dxil",         D3D12_DEBUG_DXIL,          "Dump DXIL during program compile" },
+   { "disass",       D3D12_DEBUG_DISASS,        "Dump disassambly of created DXIL shader" },
+   { "res",          D3D12_DEBUG_RESOURCE,      "Debug resources" },
+   { "debuglayer",   D3D12_DEBUG_DEBUG_LAYER,   "Enable debug layer" },
+   { "gpuvalidator", D3D12_DEBUG_GPU_VALIDATOR, "Enable GPU validator" },
    DEBUG_NAMED_VALUE_END
 };
 
@@ -672,6 +673,16 @@ enable_d3d12_debug_layer()
       debug->EnableDebugLayer();
 }
 
+static void
+enable_gpu_validation()
+{
+   ID3D12Debug *debug = get_debug_interface();
+   ID3D12Debug3 *debug3;
+   if (debug &&
+       SUCCEEDED(debug->QueryInterface(__uuidof(debug), (void **)&debug3)))
+      debug3->SetEnableGPUBasedValidation(true);
+}
+
 static IDXGIFactory4 *
 get_dxgi_factory()
 {
@@ -805,6 +816,9 @@ d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
    if (d3d12_debug & D3D12_DEBUG_DEBUG_LAYER)
 #endif
       enable_d3d12_debug_layer();
+
+   if (d3d12_debug & D3D12_DEBUG_GPU_VALIDATOR)
+      enable_gpu_validation();
 
    screen->factory = get_dxgi_factory();
    if (!screen->factory) {
