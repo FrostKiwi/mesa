@@ -286,6 +286,11 @@ d3d12_bufmgr_create_buffer(struct pb_manager *pmgr,
    buf->range.End = size;
 
    buf->bo = d3d12_bo_new(mgr->dev, size, pb_desc->alignment);
+   if (!buf->bo) {
+      FREE(buf);
+      return NULL;
+   }
+
    buf->map = d3d12_bo_map(buf->bo, &buf->range);
    if (!buf->map) {
       d3d12_bo_unreference(buf->bo);
