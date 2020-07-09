@@ -53,6 +53,7 @@ debug_options[] = {
    { "dxil",         D3D12_DEBUG_DXIL,         "Dump DXIL during program compile" },
    { "disass",       D3D12_DEBUG_DISASS,       "Dump disassambly of created DXIL shader" },
    { "res",          D3D12_DEBUG_RESOURCE,     "Debug resources" },
+   { "debuglayer",   D3D12_DEBUG_DEBUG_LAYER,  "Enable debug layer" },
    DEBUG_NAMED_VALUE_END
 };
 
@@ -792,7 +793,9 @@ d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
    screen->base.flush_frontbuffer = d3d12_flush_frontbuffer;
    screen->base.destroy = d3d12_destroy_screen;
 
-   if (true)
+#ifndef DEBUG
+   if (d3d12_debug & D3D12_DEBUG_DEBUG_LAYER)
+#endif
       enable_d3d12_debug_layer();
 
    screen->factory = get_dxgi_factory();
