@@ -23,6 +23,7 @@ d3d12_create_fence(struct d3d12_screen *screen, struct d3d12_context *ctx)
       return NULL;
    }
 
+   ret->cmdqueue_fence = ctx->cmdqueue_fence;
    ret->value = ++ctx->fence_value;
    ret->event = CreateEvent(NULL, FALSE, FALSE, NULL);
    if (FAILED(ctx->cmdqueue_fence->SetEventOnCompletion(ret->value, ret->event)))
@@ -60,19 +61,28 @@ d3d12_fence_finish(struct d3d12_fence *fence, uint64_t timeout_ns)
 {
    if (fence->signaled)
       return true;
-   DWORD timeout_ms = (timeout_ns == PIPE_TIMEOUT_INFINITE) ? INFINITE : timeout_ns * 1000;
-   if (WaitForSingleObject(fence->event, timeout_ms) == WAIT_OBJECT_0) {
-      fence->signaled = true;
-      return true;
+   
+   bool complete = fence->cmdqueue_fence->GetCompletedValue() >= fence->value;
+   if (!complete && timeout_ns) {
+      DWORD timeout_ms = (timeout_ns == PIPE_TIMEOUT_INFINITE) ? INFINITE : timeout_ns * 1000;
+      complete = WaitForSingleObject(fence->event, timeout_ms) == WAIT_OBJECT_0;
    }
-   return false;
+
+   fence->signaled = complete;
+   return complete;
 }
 
 static bool
 fence_finish(struct pipe_screen *pscreen, struct pipe_context *pctx,
              struct pipe_fence_handle *pfence, uint64_t timeout_ns)
 {
-   return d3d12_fence_finish(d3d12_fence(pfence), timeout_ns);
+   bool ret = d3d12_fence_finish(d3d12_fence(pfence), timeout_ns);
+   if (ret && pctx) {
+      struct d3d12_context *ctx = d3d12_context(pctx);
+      d3d12_foreach_submitted_batch(ctx, batch)
+         d3d12_reset_batch(ctx, batch, 0);
+   }
+   return ret;
 }
 
 void

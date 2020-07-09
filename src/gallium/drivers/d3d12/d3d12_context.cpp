@@ -1396,9 +1396,9 @@ d3d12_flush_cmdlist_and_wait(struct d3d12_context *ctx)
    struct d3d12_batch *batch = d3d12_current_batch(ctx);
 
    d3d12_foreach_submitted_batch(ctx, old_batch)
-      d3d12_reset_batch(ctx, old_batch);
+      d3d12_reset_batch(ctx, old_batch, PIPE_TIMEOUT_INFINITE);
    d3d12_flush_cmdlist(ctx);
-   d3d12_reset_batch(ctx, batch);
+   d3d12_reset_batch(ctx, batch, PIPE_TIMEOUT_INFINITE);
 }
 
 void

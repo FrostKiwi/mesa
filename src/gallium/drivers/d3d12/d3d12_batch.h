@@ -25,6 +25,7 @@
 #define D3D12_BATCH_H
 
 #include "util/u_dynarray.h"
+#include <stdint.h>
 
 #define D3D12_IGNORE_SDK_LAYERS
 #include <d3d12.h>
@@ -61,8 +62,8 @@ d3d12_start_batch(struct d3d12_context *ctx, struct d3d12_batch *batch);
 void
 d3d12_end_batch(struct d3d12_context *ctx, struct d3d12_batch *batch);
 
-void
-d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch);
+bool
+d3d12_reset_batch(struct d3d12_context *ctx, struct d3d12_batch *batch, uint64_t timeout_ns);
 
 bool
 d3d12_batch_has_references(struct d3d12_batch *batch,
