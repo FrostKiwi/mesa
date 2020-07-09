@@ -451,7 +451,7 @@ d3d12_get_shader_param(struct pipe_screen *pscreen,
       return 1 << PIPE_SHADER_IR_NIR;
 
    case PIPE_SHADER_CAP_MAX_SHADER_IMAGES:
-      return 2048;
+      return 0; /* TODO: enable me */
 
    case PIPE_SHADER_CAP_LOWER_IF_THRESHOLD:
    case PIPE_SHADER_CAP_TGSI_SKIP_MERGE_REGISTERS:
