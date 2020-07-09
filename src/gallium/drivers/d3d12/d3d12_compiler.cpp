@@ -339,7 +339,7 @@ frag_result_color_lowering(struct d3d12_context *ctx)
    struct d3d12_shader_selector *fs = ctx->gfx_stages[PIPE_SHADER_FRAGMENT];
    assert(fs);
 
-   if (fs->first->nir->info.outputs_written & BITFIELD64_BIT(FRAG_RESULT_COLOR))
+   if (fs->initial->info.outputs_written & BITFIELD64_BIT(FRAG_RESULT_COLOR))
       return ctx->fb.nr_cbufs > 1 ? ctx->fb.nr_cbufs : 0;
 
    return 0;
@@ -353,13 +353,13 @@ needs_point_sprite_lowering(struct d3d12_context *ctx, const struct pipe_draw_in
 
    if (gs != NULL && !gs->passthrough) {
       /* There is an user GS; Check if it outputs points with PSIZE */
-      return (gs->first->nir->info.gs.output_primitive == GL_POINTS &&
-              gs->first->nir->info.outputs_written & VARYING_BIT_PSIZ);
+      return (gs->initial->info.gs.output_primitive == GL_POINTS &&
+              gs->initial->info.outputs_written & VARYING_BIT_PSIZ);
    } else {
       /* No user GS; check if we are drawing wide points */
       return (dinfo->mode == PIPE_PRIM_POINTS &&
               (ctx->gfx_pipeline_state.rast->base.point_size > 1.0 ||
-               vs->first->nir->info.outputs_written & VARYING_BIT_PSIZ));
+               vs->initial->info.outputs_written & VARYING_BIT_PSIZ));
    }
 }
 
