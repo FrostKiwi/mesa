@@ -30,13 +30,14 @@ extern "C" {
 
 #include <stdint.h>
 
-#define D3D12_DEBUG_VERBOSE      (1 << 0)
-#define D3D12_DEBUG_EXPERIMENTAL (1 << 1)
-#define D3D12_DEBUG_DXIL         (1 << 2)
-#define D3D12_DEBUG_DISASS       (1 << 3)
-#define D3D12_DEBUG_BLIT         (1 << 4)
-#define D3D12_DEBUG_RESOURCE     (1 << 5)
-#define D3D12_DEBUG_DEBUG_LAYER  (1 << 6)
+#define D3D12_DEBUG_VERBOSE       (1 << 0)
+#define D3D12_DEBUG_EXPERIMENTAL  (1 << 1)
+#define D3D12_DEBUG_DXIL          (1 << 2)
+#define D3D12_DEBUG_DISASS        (1 << 3)
+#define D3D12_DEBUG_BLIT          (1 << 4)
+#define D3D12_DEBUG_RESOURCE      (1 << 5)
+#define D3D12_DEBUG_DEBUG_LAYER   (1 << 6)
+#define D3D12_DEBUG_GPU_VALIDATOR (1 << 7)
 
 extern uint32_t d3d12_debug;
 
