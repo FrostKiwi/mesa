@@ -36,6 +36,7 @@ CDesiredResourceState::SubresourceInfo const& CDesiredResourceState::GetSubresou
 //----------------------------------------------------------------------------------------------------------------------------------
 void CDesiredResourceState::UpdateSubresourceState(unsigned SubresourceIndex, SubresourceInfo const& info)
 {
+   assert(SubresourceIndex < m_spSubresourceInfo.size());
    if (m_spSubresourceInfo[SubresourceIndex].State == UNKNOWN_RESOURCE_STATE ||
       info.State == UNKNOWN_RESOURCE_STATE ||
       IsD3D12WriteState(info.State, SubresourceTransitionFlags_None))
