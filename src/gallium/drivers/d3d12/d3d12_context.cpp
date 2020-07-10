@@ -334,7 +334,7 @@ d3d12_create_blend_state(struct pipe_context *pctx,
          state->blend_factor_flags |= need_blend_factor_alpha((pipe_blendfactor) rt->alpha_dst_factor);
 
 
-         if (state->blend_factor_flags == (D3D12_BLEND_FACTOR_COLOR & D3D12_BLEND_FACTOR_ALPHA) &&
+         if (state->blend_factor_flags == (D3D12_BLEND_FACTOR_COLOR | D3D12_BLEND_FACTOR_ALPHA) &&
              (d3d12_debug & D3D12_DEBUG_VERBOSE)) {
             /* We can't set a blend factor for both constant color and constant alpha */
             debug_printf("D3D12: unsupported blend factors combination (const color and const alpha)\n");
