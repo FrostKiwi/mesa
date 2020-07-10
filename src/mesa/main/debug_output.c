@@ -36,8 +36,7 @@
 #include "util/list.h"
 
 
-static simple_mtx_t DynamicIDMutex = _SIMPLE_MTX_INITIALIZER_NP;
-static GLuint NextDynamicID = 1;
+static GLuint PrevDynamicID = 0;
 
 
 /**
@@ -193,10 +192,7 @@ void
 _mesa_debug_get_id(GLuint *id)
 {
    if (!(*id)) {
-      simple_mtx_lock(&DynamicIDMutex);
-      if (!(*id))
-         *id = NextDynamicID++;
-      simple_mtx_unlock(&DynamicIDMutex);
+      *id = p_atomic_inc_return(&PrevDynamicID);
    }
 }
 
