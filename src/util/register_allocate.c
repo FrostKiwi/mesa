@@ -1005,7 +1005,7 @@ ra_get_best_spill_node(struct ra_graph *g)
       if (cost <= 0.0f)
          continue;
 
-      if (BITSET_TEST(g->tmp.in_stack, n))
+      if (g->tmp.stack_count > 0 && BITSET_TEST(g->tmp.in_stack, n))
          continue;
 
       benefit = ra_get_spill_benefit(g, n);
