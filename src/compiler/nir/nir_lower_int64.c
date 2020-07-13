@@ -880,8 +880,8 @@ lower_int64_alu_instr(nir_builder *b, nir_instr *instr, void *_state)
 static bool
 should_lower_int64_alu_instr(const nir_instr *instr, const void *_options)
 {
-   const nir_lower_int64_options options =
-      *(const nir_lower_int64_options *)_options;
+   const nir_shader_compiler_options *options =
+      (const nir_shader_compiler_options *)_options;
 
    if (instr->type != nir_instr_type_alu)
       return false;
@@ -934,14 +934,15 @@ should_lower_int64_alu_instr(const nir_instr *instr, const void *_options)
       break;
    }
 
-   return (options & nir_lower_int64_op_to_options_mask(alu->op)) != 0;
+   unsigned mask = nir_lower_int64_op_to_options_mask(alu->op);
+   return (options->lower_int64_options & mask) != 0;
 }
 
 bool
-nir_lower_int64(nir_shader *shader, nir_lower_int64_options options)
+nir_lower_int64(nir_shader *shader)
 {
    return nir_shader_lower_instructions(shader,
                                         should_lower_int64_alu_instr,
                                         lower_int64_alu_instr,
-                                        &options);
+                                        (void *)shader->options);
 }
