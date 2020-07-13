@@ -76,6 +76,7 @@ struct d3d12_shader_key {
    struct {
       unsigned missing_dual_src_outputs : 2;
       unsigned frag_result_color_lowering : 4;
+      unsigned provoking_vertex_first : 1;
    } fs;
 
    int n_texture_states;

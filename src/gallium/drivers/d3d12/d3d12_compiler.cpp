@@ -158,6 +158,7 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    opts.interpolate_at_vertex = screen->have_load_at_vertex;
    opts.lower_int16 = !screen->opts4.Native16BitShaderOpsSupported;
    opts.ubo_binding_offset = shader->has_default_ubo0 ? 0 : 1;
+   opts.flatshade_first = key->fs.provoking_vertex_first;
 
    struct blob tmp;
    if (!nir_to_dxil(nir, &opts, &tmp)) {
@@ -456,6 +457,9 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
       }
    }
 
+   if (expect->fs.provoking_vertex_first != have->fs.provoking_vertex_first)
+      return false;
+
    return true;
 }
 
@@ -546,6 +550,12 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
                 sel_ctx->ctx->gfx_pipeline_state.ves->num_elements * sizeof(enum pipe_format));
       }
    }
+
+   /* Only set the key value if the driver actually supports changing the provoking vertex */
+   if (stage == PIPE_SHADER_FRAGMENT && sel_ctx->ctx->gfx_pipeline_state.rast &&
+       d3d12_screen(sel_ctx->ctx->base.screen)->have_load_at_vertex)
+      key->fs.provoking_vertex_first = sel_ctx->ctx->gfx_pipeline_state.rast->base.flatshade_first;
+
 }
 
 static void
