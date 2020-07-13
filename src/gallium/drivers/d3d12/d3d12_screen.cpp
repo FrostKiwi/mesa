@@ -111,9 +111,11 @@ d3d12_get_video_mem(struct pipe_screen *pscreen)
 {
    struct d3d12_screen* screen = d3d12_screen(pscreen);
 
-   return (screen->adapter_desc.DedicatedVideoMemory +
-           screen->adapter_desc.DedicatedSystemMemory +
-           screen->adapter_desc.SharedSystemMemory) >> 20;
+   // Note: memory sizes in bytes, but stored in size_t, so may be capped at 4GB.
+   // In that case, adding before conversion to MB can easily overflow.
+   return (screen->adapter_desc.DedicatedVideoMemory >> 20) +
+          (screen->adapter_desc.DedicatedSystemMemory >> 20) +
+          (screen->adapter_desc.SharedSystemMemory >> 20);
 }
 
 static int
