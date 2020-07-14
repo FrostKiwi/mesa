@@ -755,6 +755,17 @@ create_device(IDXGIAdapter1 *adapter)
    return NULL;
 }
 
+static bool
+can_attribute_at_vertex(struct d3d12_screen *screen)
+{
+   switch (screen->adapter_desc.VendorId)  {
+   case HW_VENDOR_MICROSOFT:
+      return true;
+   default:
+      return screen->opts3.BarycentricsSupported;
+   }
+}
+
 struct pipe_screen *
 d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
 {
@@ -904,6 +915,7 @@ d3d12_create_screen(struct sw_winsys *winsys, LUID *adapter_luid)
                                                       D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
                                                       &desc);
 
+   screen->have_load_at_vertex = can_attribute_at_vertex(screen);
    return &screen->base;
 
 failed:
