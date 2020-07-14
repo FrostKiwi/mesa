@@ -2557,7 +2557,8 @@ emit_load_input(struct ntd_context *ctx, nir_intrinsic_instr *intr,
 {
    if (ctx->mod.shader_kind != DXIL_PIXEL_SHADER ||
        input->data.interpolation != INTERP_MODE_FLAT ||
-       !ctx->opts->interpolate_at_vertex)
+       !ctx->opts->interpolate_at_vertex ||
+       glsl_type_is_integer(input->type))
       return emit_load_input_interpolated(ctx, intr, input);
    else
       return emit_load_input_flat(ctx, intr, input);
