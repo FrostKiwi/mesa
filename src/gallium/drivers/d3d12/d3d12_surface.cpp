@@ -40,6 +40,14 @@ d3d12_create_surface(struct pipe_context *pctx,
    struct d3d12_context *ctx = d3d12_context(pctx);
    struct d3d12_screen *screen = d3d12_screen(pctx->screen);
 
+   bool is_depth_or_stencil = util_format_is_depth_or_stencil(tpl->format);
+   unsigned bind = is_depth_or_stencil ? PIPE_BIND_DEPTH_STENCIL : PIPE_BIND_RENDER_TARGET;
+
+   /* Don't bother if we don't support the requested format as RT or DS */
+   if (!pctx->screen->is_format_supported(pctx->screen, tpl->format, PIPE_TEXTURE_2D,
+                                          tpl->nr_samples, tpl->nr_samples,bind))
+      return NULL;
+
    struct d3d12_surface *surface = CALLOC_STRUCT(d3d12_surface);
    if (!surface)
       return NULL;
@@ -56,7 +64,7 @@ d3d12_create_surface(struct pipe_context *pctx,
 
    DXGI_FORMAT dxgi_format = d3d12_get_resource_rt_format(d3d12_get_format(tpl->format));
 
-   if (util_format_is_depth_or_stencil(tpl->format)) {
+   if (is_depth_or_stencil) {
       d3d12_descriptor_heap_alloc_handle(ctx->dsv_heap, &surface->desc_handle);
       D3D12_DEPTH_STENCIL_VIEW_DESC desc;
       desc.Format = dxgi_format;
