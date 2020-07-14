@@ -62,10 +62,10 @@ uint32_t
 d3d12_debug;
 
 enum {
-    HW_VENDOR_SOFTWARE              = 0x0000,
     HW_VENDOR_AMD                   = 0x1002,
-    HW_VENDOR_NVIDIA                = 0x10de,
     HW_VENDOR_INTEL                 = 0x8086,
+    HW_VENDOR_MICROSOFT             = 0x1414,
+    HW_VENDOR_NVIDIA                = 0x10de,
 };
 
 static const char *
@@ -80,7 +80,7 @@ d3d12_get_device_vendor(struct pipe_screen *pscreen)
    struct d3d12_screen* screen = d3d12_screen(pscreen);
 
    switch (screen->adapter_desc.VendorId) {
-   case HW_VENDOR_SOFTWARE:
+   case HW_VENDOR_MICROSOFT:
       return "Microsoft";
    case HW_VENDOR_AMD:
       return "AMD";
