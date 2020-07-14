@@ -59,6 +59,7 @@ struct d3d12_screen {
    /* description */
    DXGI_ADAPTER_DESC1 adapter_desc;
    double timestamp_multiplier;
+   bool have_load_at_vertex;
 };
 
 static inline struct d3d12_screen *
