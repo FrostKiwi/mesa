@@ -1155,6 +1155,22 @@ clc_to_dxil(struct clc_context *ctx,
       i++;
    }
 
+   // Assign bindings for constant samplers
+   nir_foreach_variable_safe(var, &nir->uniforms) {
+      if (glsl_type_is_sampler(var->type) &&
+          var->constant_initializer) {
+         int_sampler_states[sampler_id].wrap_r =
+            int_sampler_states[sampler_id].wrap_s =
+            int_sampler_states[sampler_id].wrap_t =
+            wrap_from_cl_addressing(var->constant_initializer->values[0].u32);
+         int_sampler_states[sampler_id].is_nonnormalized_coords =
+            !var->constant_initializer->values[1].u32;
+         int_sampler_states[sampler_id].is_linear_filtering =
+            var->constant_initializer->values[2].u32 == FILTER_MODE_LINEAR;
+         var->data.binding = sampler_id++;
+      }
+   }
+
    // Inline all functions first.
    // according to the comment on nir_inline_functions
    NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
@@ -1262,22 +1278,6 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_lower_64bit_phis);
 
    NIR_PASS_V(nir, nir_opt_dce);
-
-   // Assign bindings for constant samplers
-   nir_foreach_variable_safe(var, &nir->uniforms) {
-      if (glsl_type_is_sampler(var->type) &&
-          var->constant_initializer) {
-         int_sampler_states[sampler_id].wrap_r =
-            int_sampler_states[sampler_id].wrap_s =
-            int_sampler_states[sampler_id].wrap_t =
-            wrap_from_cl_addressing(var->constant_initializer->values[0].u32);
-         int_sampler_states[sampler_id].is_nonnormalized_coords =
-            var->constant_initializer->values[1].u32;
-         int_sampler_states[sampler_id].is_linear_filtering =
-            var->constant_initializer->values[2].u32 == FILTER_MODE_LINEAR;
-         var->data.binding = sampler_id++;
-      }
-   }
 
    nir_validate_shader(nir, "Validate before feeding NIR to the DXIL compiler");
    struct nir_to_dxil_options opts = {
