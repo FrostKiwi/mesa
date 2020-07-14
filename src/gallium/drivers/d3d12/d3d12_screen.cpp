@@ -584,6 +584,9 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
          if (!(fmt_info_sv.Support1 & D3D12_FORMAT_SUPPORT1_MULTISAMPLE_LOAD))
             return false;
 
+         if (!util_is_power_of_two_nonzero(sample_count))
+            return false;
+
          D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS ms_info = {};
          ms_info.Format = dxgi_format;
          ms_info.SampleCount = sample_count;
