@@ -994,7 +994,7 @@ d3d12_resource_make_writeable(struct pipe_context *pctx,
       box.height = 1;
       box.depth = 1;
 
-      d3d12_direct_copy(ctx, dup_res, 0, &box, res, 0, &box);
+      d3d12_direct_copy(ctx, dup_res, 0, &box, res, 0, &box, PIPE_MASK_RGBAZS);
    }
 
    /* Move new BO to old resource */

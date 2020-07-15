@@ -38,6 +38,6 @@ d3d12_direct_copy(struct d3d12_context *ctx,
                   const struct pipe_box *pdst_box,
                   struct d3d12_resource *src,
                   unsigned src_level,
-                  const struct pipe_box *psrc_box);
+                  const struct pipe_box *psrc_box, unsigned mask);
 
 #endif // D3D12_BLIT_H
