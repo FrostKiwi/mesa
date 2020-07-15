@@ -56,9 +56,15 @@ resolve_supported(const struct pipe_blit_info *info)
       return false;
 
    // check for unsupported operations
-   if (util_format_get_mask(info->dst.format) != info->mask ||
-       util_format_get_mask(info->src.format) != info->mask ||
-       info->filter != PIPE_TEX_FILTER_NEAREST ||
+   if (util_format_is_depth_or_stencil(info->src.format) && !(info->mask & PIPE_MASK_ZS)) {
+      return false;
+   } else {
+      if (util_format_get_mask(info->dst.format) != info->mask ||
+          util_format_get_mask(info->src.format) != info->mask)
+         return false;
+   }
+
+   if (info->filter != PIPE_TEX_FILTER_NEAREST ||
        info->scissor_enable ||
        info->num_window_rectangles > 0 ||
        info->alpha_blend)
