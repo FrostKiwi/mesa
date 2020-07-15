@@ -37,10 +37,10 @@ DXGI_FORMAT
 d3d12_get_format(enum pipe_format format);
 
 DXGI_FORMAT
-d3d12_get_resource_srv_format(DXGI_FORMAT f);
+d3d12_get_resource_srv_format(enum pipe_format f);
 
 DXGI_FORMAT
-d3d12_get_resource_rt_format(DXGI_FORMAT f);
+d3d12_get_resource_rt_format(enum pipe_format f);
 
 unsigned
 d3d12_non_opaque_plane_count(DXGI_FORMAT f);

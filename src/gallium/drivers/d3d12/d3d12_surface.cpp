@@ -62,7 +62,7 @@ d3d12_create_surface(struct pipe_context *pctx,
    surface->base.u.tex.first_layer = tpl->u.tex.first_layer;
    surface->base.u.tex.last_layer = tpl->u.tex.last_layer;
 
-   DXGI_FORMAT dxgi_format = d3d12_get_resource_rt_format(d3d12_get_format(tpl->format));
+   DXGI_FORMAT dxgi_format = d3d12_get_resource_rt_format(tpl->format);
 
    if (is_depth_or_stencil) {
       d3d12_descriptor_heap_alloc_handle(ctx->dsv_heap, &surface->desc_handle);

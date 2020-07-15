@@ -529,7 +529,7 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
    }
 
    D3D12_FEATURE_DATA_FORMAT_SUPPORT fmt_info;
-   fmt_info.Format = d3d12_get_resource_rt_format(dxgi_format);
+   fmt_info.Format = d3d12_get_resource_rt_format(format);
    if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,
                                                &fmt_info, sizeof(fmt_info))))
       return false;
@@ -560,7 +560,7 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
 
       D3D12_FEATURE_DATA_FORMAT_SUPPORT fmt_info_sv;
       if (util_format_is_depth_or_stencil(format)) {
-         fmt_info_sv.Format = d3d12_get_resource_srv_format(dxgi_format);
+         fmt_info_sv.Format = d3d12_get_resource_srv_format(format);
          if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,
                                                      &fmt_info_sv, sizeof(fmt_info_sv))))
             return false;

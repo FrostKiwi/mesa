@@ -96,45 +96,50 @@ static const DXGI_FORMAT formats[PIPE_FORMAT_COUNT] = {
 };
 
 DXGI_FORMAT
-d3d12_get_resource_rt_format(DXGI_FORMAT f)
-{
-   switch (f) {
-   case DXGI_FORMAT_R16_TYPELESS:
-      return DXGI_FORMAT_D16_UNORM;
-   case DXGI_FORMAT_R32_TYPELESS:
-      return DXGI_FORMAT_D32_FLOAT;
-   case DXGI_FORMAT_R24G8_TYPELESS:
-      return DXGI_FORMAT_D24_UNORM_S8_UINT;
-   case DXGI_FORMAT_R32G8X24_TYPELESS:
-      return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-   case DXGI_FORMAT_R24_UNORM_X8_TYPELESS:
-      return DXGI_FORMAT_D24_UNORM_S8_UINT;
-   default:
-      return f;
-   }
-}
-
-DXGI_FORMAT
-d3d12_get_resource_srv_format(DXGI_FORMAT f)
-{
-   switch (f) {
-   case DXGI_FORMAT_R16_TYPELESS:
-      return DXGI_FORMAT_R16_UNORM;
-   case DXGI_FORMAT_R32_TYPELESS:
-      return DXGI_FORMAT_R32_FLOAT;
-   case DXGI_FORMAT_R24G8_TYPELESS:
-      return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-   case DXGI_FORMAT_R32G8X24_TYPELESS:
-      return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
-   default:
-      return f;
-   }
-}
-
-DXGI_FORMAT
 d3d12_get_format(enum pipe_format format)
 {
    return formats[format];
+}
+
+DXGI_FORMAT
+d3d12_get_resource_rt_format(enum pipe_format f)
+{
+   switch (f) {
+   case PIPE_FORMAT_Z16_UNORM:
+      return DXGI_FORMAT_D16_UNORM;
+   case PIPE_FORMAT_Z32_FLOAT:
+      return DXGI_FORMAT_D32_FLOAT;
+   case PIPE_FORMAT_Z24X8_UNORM:
+   case PIPE_FORMAT_X24S8_UINT:
+      return DXGI_FORMAT_D24_UNORM_S8_UINT;
+      return DXGI_FORMAT_D24_UNORM_S8_UINT;
+   case PIPE_FORMAT_Z32_FLOAT_S8X24_UINT:
+      return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+   case PIPE_FORMAT_Z24_UNORM_S8_UINT:
+      return DXGI_FORMAT_D24_UNORM_S8_UINT;
+   default:
+      return d3d12_get_format(f);
+   }
+}
+
+DXGI_FORMAT
+d3d12_get_resource_srv_format(enum pipe_format f)
+{
+   switch (f) {
+   case PIPE_FORMAT_Z16_UNORM:
+      return DXGI_FORMAT_R16_UNORM;
+   case PIPE_FORMAT_Z32_FLOAT:
+      return DXGI_FORMAT_R32_FLOAT;
+   case PIPE_FORMAT_Z24X8_UNORM:
+   case PIPE_FORMAT_Z24_UNORM_S8_UINT:
+      return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+   case PIPE_FORMAT_X24S8_UINT:
+      return DXGI_FORMAT_X24_TYPELESS_G8_UINT;
+   case PIPE_FORMAT_Z32_FLOAT_S8X24_UINT:
+      return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+   default:
+      return d3d12_get_format(f);
+   }
 }
 
 #define EMU_ALPHA_SWIZZLE { PIPE_SWIZZLE_0, PIPE_SWIZZLE_0, PIPE_SWIZZLE_0, PIPE_SWIZZLE_X }

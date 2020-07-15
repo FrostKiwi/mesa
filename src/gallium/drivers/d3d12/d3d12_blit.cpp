@@ -117,7 +117,7 @@ blit_resolve(struct d3d12_context *ctx, const struct pipe_blit_info *info)
    d3d12_batch_reference_resource(batch, src);
    d3d12_batch_reference_resource(batch, dst);
 
-   DXGI_FORMAT dxgi_format = d3d12_get_resource_srv_format(src->dxgi_format);
+   DXGI_FORMAT dxgi_format = d3d12_get_resource_srv_format(src->base.format);
 
    assert(src->dxgi_format == dst->dxgi_format);
    ctx->cmdlist->ResolveSubresource(

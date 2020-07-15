@@ -784,7 +784,7 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
       (pipe_swizzle) state->swizzle_a
    };
 
-   desc.Format = d3d12_get_resource_srv_format(d3d12_get_format(state->format));
+   desc.Format = d3d12_get_resource_srv_format(state->format);
    desc.ViewDimension = view_dimension(state->target, texture->nr_samples);
 
    /* Integer cube textures are not really supported, because TextureLoad doesn't exist
@@ -1165,7 +1165,7 @@ d3d12_set_framebuffer_state(struct pipe_context *pctx,
    }
 
    if (state->zsbuf)
-      ctx->gfx_pipeline_state.dsv_format = d3d12_get_resource_rt_format(d3d12_get_format(state->zsbuf->format));
+      ctx->gfx_pipeline_state.dsv_format = d3d12_get_resource_rt_format(state->zsbuf->format);
    else
       ctx->gfx_pipeline_state.dsv_format = DXGI_FORMAT_UNKNOWN;
 
