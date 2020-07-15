@@ -1863,10 +1863,13 @@ TEST_F(ComputeTest, constant_sampler)
    {\n\
       int2 coordsi = (int2)(get_global_id(0), get_global_id(1));\n\
       float2 coordsf = (float2)((float)coordsi.x / get_image_width(input), (float)coordsi.y / get_image_height(input));\n\
-      write_imagef(output, coordsi, read_imagef(input, sampler, coordsf));\n\
+      write_imagef(output, coordsi, \n\
+         read_imagef(input, sampler, coordsf) + \n\
+         read_imagef(input, sampler, coordsf + (float2)(0.1, 0.1)));\n\
    }\n";
    Shader shader = compile(std::vector<const char*>({ kernel_source }));
    validate(shader);
+   EXPECT_EQ(shader.dxil->metadata.num_const_samplers, 1);
 }
 
 TEST_F(ComputeTest, hi)
