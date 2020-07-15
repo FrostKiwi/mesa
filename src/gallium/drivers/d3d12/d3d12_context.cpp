@@ -473,26 +473,6 @@ fill_mode(unsigned mode)
    }
 }
 
-static D3D12_CULL_MODE
-cull_mode(unsigned mode)
-{
-   switch (mode) {
-   case PIPE_FACE_NONE:
-      return D3D12_CULL_MODE_NONE;
-   case PIPE_FACE_FRONT:
-      return D3D12_CULL_MODE_FRONT;
-   case PIPE_FACE_BACK:
-      return D3D12_CULL_MODE_BACK;
-
-   case PIPE_FACE_FRONT_AND_BACK:
-      /* this is wrong, and we shouldn't actually have to support this! */
-      return D3D12_CULL_MODE_NONE;
-
-   default:
-      unreachable("unsupported cull-mode");
-   }
-}
-
 static void *
 d3d12_create_rasterizer_state(struct pipe_context *pctx,
                               const struct pipe_rasterizer_state *rs_state)
@@ -503,13 +483,37 @@ d3d12_create_rasterizer_state(struct pipe_context *pctx,
 
    cso->base = *rs_state;
 
-   if (rs_state->fill_front != rs_state->fill_back)
-      debug_printf("D3D12: unsupported fill-mode combination\n");
-
    assert(rs_state->depth_clip_near == rs_state->depth_clip_far);
 
-   cso->desc.FillMode = fill_mode(rs_state->fill_front);
-   cso->desc.CullMode = cull_mode(rs_state->cull_face);
+   switch (rs_state->cull_face) {
+   case PIPE_FACE_NONE:
+      cso->desc.CullMode = D3D12_CULL_MODE_NONE;
+      if (rs_state->fill_front != rs_state->fill_back &&
+          (d3d12_debug & D3D12_DEBUG_VERBOSE))
+         debug_printf("D3D12: unsupported fill-mode combination\n");
+      cso->desc.FillMode = fill_mode(rs_state->fill_front);
+      break;
+
+   case PIPE_FACE_FRONT:
+      cso->desc.CullMode = D3D12_CULL_MODE_FRONT;
+      cso->desc.FillMode = fill_mode(rs_state->fill_back);
+      break;
+
+   case PIPE_FACE_BACK:
+      cso->desc.CullMode = D3D12_CULL_MODE_BACK;
+      cso->desc.FillMode = fill_mode(rs_state->fill_front);
+      break;
+
+   case PIPE_FACE_FRONT_AND_BACK:
+      /* this is wrong, and we shouldn't actually have to support this! */
+      cso->desc.CullMode = D3D12_CULL_MODE_NONE;
+      cso->desc.FillMode = D3D12_FILL_MODE_SOLID;
+      break;
+
+   default:
+      unreachable("unsupported cull-mode");
+   }
+
    cso->desc.FrontCounterClockwise = rs_state->front_ccw;
    cso->desc.DepthClipEnable = rs_state->depth_clip_near;
    cso->desc.MultisampleEnable = rs_state->multisample;
