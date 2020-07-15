@@ -321,6 +321,19 @@ ib_format(unsigned index_size)
    }
 }
 
+static void
+twoface_emulation(struct d3d12_context *ctx,
+                  struct d3d12_rasterizer_state *rast,
+                  const struct pipe_draw_info *dinfo)
+{
+   /* draw backfaces */
+   ctx->base.bind_rasterizer_state(&ctx->base, rast->twoface_back);
+   d3d12_draw_vbo(&ctx->base, dinfo);
+
+   /* restore real state */
+   ctx->base.bind_rasterizer_state(&ctx->base, rast);
+}
+
 void
 d3d12_draw_vbo(struct pipe_context *pctx,
                const struct pipe_draw_info *dinfo)
@@ -345,6 +358,10 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       util_primconvert_draw_vbo(ctx->primconvert, dinfo);
       return;
    }
+
+   struct d3d12_rasterizer_state *rast = ctx->gfx_pipeline_state.rast;
+   if (rast->twoface_back)
+      twoface_emulation(ctx, rast, dinfo);
 
    /* this should *really* be fixed at a higher level than here! */
    enum pipe_prim_type reduced_prim = u_reduced_prim(dinfo->mode);
