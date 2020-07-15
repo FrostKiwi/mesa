@@ -1092,6 +1092,9 @@ clc_to_dxil(struct clc_context *ctx,
 
    NIR_PASS_V(nir, nir_lower_goto_ifs);
    NIR_PASS_V(nir, nir_opt_dead_cf);
+
+   // Before removing dead uniforms, dedupe constant samplers to make more dead uniforms
+   NIR_PASS_V(nir, clc_nir_dedupe_const_samplers);
    NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform | nir_var_mem_ubo);
 
    struct clc_dxil_metadata *metadata = &dxil->metadata;
