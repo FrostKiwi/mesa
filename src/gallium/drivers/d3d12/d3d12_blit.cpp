@@ -158,10 +158,11 @@ box_fits(const struct pipe_box *box, const struct pipe_resource *res, int level)
 
 static bool
 direct_copy_supported(struct d3d12_screen *screen,
-                      const struct pipe_blit_info *info)
+                      const struct pipe_blit_info *info,
+                      bool have_predication)
 {
    if (info->scissor_enable || info->alpha_blend ||
-       info->render_condition_enable ||
+       (have_predication && info->render_condition_enable) ||
        info->src.resource->nr_samples != info->dst.resource->nr_samples) {
       return false;
    }
@@ -532,7 +533,7 @@ d3d12_blit(struct pipe_context *pctx,
       blit_same_resource(ctx, info);
    else if (resolve_supported(info))
       blit_resolve(ctx, info);
-   else if (direct_copy_supported(d3d12_screen(pctx->screen), info))
+   else if (direct_copy_supported(d3d12_screen(pctx->screen), info, ctx->current_predication != nullptr))
       d3d12_direct_copy(ctx, d3d12_resource(info->dst.resource),
                         info->dst.level, &info->dst.box,
                         d3d12_resource(info->src.resource),
