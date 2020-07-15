@@ -85,7 +85,7 @@ record_write(ibc_ref *ref,
    return true;
 }
 
-static bool
+bool
 ibc_instr_is_load_payload(const ibc_instr *instr)
 {
    if (instr->type != IBC_INSTR_TYPE_INTRINSIC)

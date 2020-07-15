@@ -107,18 +107,6 @@ remap_ref(ibc_ref *ref,
 }
 
 static bool
-ibc_instr_is_load_payload(const ibc_instr *instr)
-{
-   if (instr->type != IBC_INSTR_TYPE_INTRINSIC)
-      return false;
-
-   ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-   return intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD ||
-          (intrin->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO &&
-           intrin->src[0].ref.file != IBC_FILE_NONE);
-}
-
-static bool
 try_coalesce_refs(ibc_instr *copy_instr, ibc_ref dest, ibc_ref src,
                   unsigned num_comps,
                   uint8_t simd_group, uint8_t simd_width,

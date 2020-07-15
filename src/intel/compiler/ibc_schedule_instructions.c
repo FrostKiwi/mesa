@@ -433,21 +433,6 @@ ibc_instr_can_reorder(const ibc_instr *instr)
    unreachable("Invalid IBC instruction type");
 }
 
-/* LOAD_PAYLOAD and BTI_BLOCK_LOAD_UBO instructions at this point in the
- * optimization and lowering are just place-holders to help RA.
- */
-static bool
-ibc_instr_is_load_payload(const ibc_instr *instr)
-{
-   if (instr->type != IBC_INSTR_TYPE_INTRINSIC)
-      return false;
-
-   ibc_intrinsic_instr *intrin = ibc_instr_as_intrinsic(instr);
-   return intrin->op == IBC_INTRINSIC_OP_LOAD_PAYLOAD ||
-          (intrin->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO &&
-           intrin->src[0].ref.file != IBC_FILE_NONE);
-}
-
 static bool
 ibc_instr_is_full_barrier(const ibc_instr *instr)
 {
