@@ -43,6 +43,7 @@ struct d3d12_vertex_elements_state {
 struct d3d12_rasterizer_state {
    struct pipe_rasterizer_state base;
    D3D12_RASTERIZER_DESC desc;
+   void *twoface_back;
 };
 
 struct d3d12_blend_state {

@@ -487,11 +487,26 @@ d3d12_create_rasterizer_state(struct pipe_context *pctx,
 
    switch (rs_state->cull_face) {
    case PIPE_FACE_NONE:
-      cso->desc.CullMode = D3D12_CULL_MODE_NONE;
-      if (rs_state->fill_front != rs_state->fill_back &&
-          (d3d12_debug & D3D12_DEBUG_VERBOSE))
-         debug_printf("D3D12: unsupported fill-mode combination\n");
-      cso->desc.FillMode = fill_mode(rs_state->fill_front);
+      if (rs_state->fill_front != rs_state->fill_back) {
+         cso->desc.CullMode = D3D12_CULL_MODE_BACK;
+         cso->desc.FillMode = fill_mode(rs_state->fill_front);
+
+         /* create a modified CSO for the back-state, so we can draw with
+          * either.
+          */
+         struct pipe_rasterizer_state templ = *rs_state;
+         templ.cull_face = PIPE_FACE_FRONT;
+         templ.fill_front = rs_state->fill_back;
+         cso->twoface_back = d3d12_create_rasterizer_state(pctx, &templ);
+
+         if (!cso->twoface_back) {
+            FREE(cso);
+            return NULL;
+         }
+      } else {
+         cso->desc.CullMode = D3D12_CULL_MODE_NONE;
+         cso->desc.FillMode = fill_mode(rs_state->fill_front);
+      }
       break;
 
    case PIPE_FACE_FRONT:
