@@ -534,12 +534,14 @@ d3d12_blit(struct pipe_context *pctx,
    }
 
    if (D3D12_DEBUG_BLIT & d3d12_debug) {
-      debug_printf("D3D12 BLIT: from %s@%d %dx%dx%d + %dx%dx%d\n",
+      debug_printf("D3D12 BLIT: from %s@%d msaa:%d %dx%dx%d + %dx%dx%d\n",
                    util_format_name(info->src.format), info->src.level,
+                   info->src.resource->nr_samples,
                    info->src.box.x, info->src.box.y, info->src.box.z,
                    info->src.box.width, info->src.box.height, info->src.box.depth);
-      debug_printf("      to   %s@%d %dx%dx%d + %dx%dx%d ",
+      debug_printf("            to   %s@%d msaa:%d %dx%dx%d + %dx%dx%d ",
                    util_format_name(info->dst.format), info->dst.level,
+                   info->dst.resource->nr_samples,
                    info->dst.box.x, info->dst.box.y, info->dst.box.z,
                    info->dst.box.width, info->dst.box.height, info->dst.box.depth);
       debug_printf("| flags %s%s%s\n",
