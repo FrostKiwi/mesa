@@ -1588,6 +1588,7 @@ bool ibc_opt_predicate(ibc_shader *shader);
 bool ibc_instr_is_load_payload(const ibc_instr *instr);
 
 void ibc_print_shader(const ibc_shader *shader, FILE *fp);
+void ibc_print_instr(FILE *fp, const ibc_instr *instr);
 
 void ibc_repair_wlr_order(ibc_shader *shader);
 

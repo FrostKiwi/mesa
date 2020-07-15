@@ -509,7 +509,7 @@ print_flow_instr(FILE *fp, ibc_flow_instr *flow)
    }
 }
 
-static void
+void
 ibc_print_instr(FILE *fp, const ibc_instr *instr)
 {
    switch (instr->type) {
