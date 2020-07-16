@@ -3049,6 +3049,12 @@ typedef struct nir_shader_compiler_options {
    bool use_scoped_control_memory_barrier;
 
    /**
+    * Whether denorms are supported or not. Some lowering passes need to know
+    * that to output a correct value.
+    */
+   bool denorms_not_supported;
+
+   /**
     * Is this the Intel vec4 backend?
     *
     * Used to inhibit algebraic optimizations that are known to be harmful on
