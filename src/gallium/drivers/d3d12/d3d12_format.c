@@ -24,6 +24,8 @@
 #include "d3d12_format.h"
 
 #include "pipe/p_format.h"
+#include "util/format/u_format.h"
+#include "util/u_math.h"
 
 static const DXGI_FORMAT formats[PIPE_FORMAT_COUNT] = {
 #define MAP_FORMAT_NORM(FMT) \
@@ -210,4 +212,11 @@ d3d12_non_opaque_plane_count(DXGI_FORMAT format)
    }
 
    return 1;
+}
+
+unsigned
+d3d12_get_format_num_planes(enum pipe_format fmt)
+{
+   return util_format_is_depth_or_stencil(fmt) ?
+      util_bitcount(util_format_get_mask(fmt)) : 1;
 }

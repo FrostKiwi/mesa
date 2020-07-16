@@ -576,13 +576,10 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    if (ctx->fb.zsbuf) {
       struct pipe_surface *psurf = ctx->fb.zsbuf;
       const uint32_t num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
-      const struct util_format_description *descr = util_format_description(psurf->format);
-      int num_planes = (util_format_has_depth(descr) ? 1 : 0) +
-                       (util_format_has_stencil(descr) ? 1 : 0);
       d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
                                           psurf->u.tex.level, 1,
                                           psurf->u.tex.first_layer, num_layers,
-                                          0, num_planes,
+                                          0, d3d12_get_format_num_planes(psurf->format),
                                           D3D12_RESOURCE_STATE_DEPTH_WRITE,
                                           SubresourceTransitionFlags_TransitionPreDraw);
    }
