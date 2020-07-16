@@ -99,6 +99,7 @@ nir_options = {
    .use_scoped_control_memory_barrier = true,
    .vertex_id_zero_based = true,
    .lower_base_vertex = true,
+   .denorms_not_supported = true,
 };
 
 const nir_shader_compiler_options*
