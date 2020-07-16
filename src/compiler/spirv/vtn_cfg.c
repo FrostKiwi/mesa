@@ -188,10 +188,43 @@ vtn_ssa_value_load_function_param(struct vtn_builder *b,
    }
 }
 
+struct vtn_builtin_function {
+   const char *name;
+   void (*handler)(struct vtn_builder *b, SpvOp opcode,
+                   const uint32_t *w, unsigned count);
+};
+
+static const struct vtn_builtin_function builtin_funcs[] = {
+};
+
+static bool
+vtn_handle_builtin_call(struct vtn_builder *b, SpvOp opcode,
+                        const uint32_t *w, unsigned count)
+{
+   struct vtn_function *vtn_callee =
+      vtn_value(b, w[3], vtn_value_type_function)->func;
+   struct nir_function *callee = vtn_callee->impl->function;
+
+   if (strncmp(callee->name, "__builtin_", sizeof("__builtin_") - 1))
+      return false;
+
+   for (unsigned i = 0; i < ARRAY_SIZE(builtin_funcs); i++) {
+      if (!strcmp(callee->name, builtin_funcs[i].name)) {
+         builtin_funcs[i].handler(b, opcode, w, count);
+         return true;
+      }
+   }
+
+   return false;
+}
+
 void
 vtn_handle_function_call(struct vtn_builder *b, SpvOp opcode,
                          const uint32_t *w, unsigned count)
 {
+   if (vtn_handle_builtin_call(b, opcode, w, count))
+      return;
+
    struct vtn_type *res_type = vtn_value(b, w[1], vtn_value_type_type)->type;
    struct vtn_function *vtn_callee =
       vtn_value(b, w[3], vtn_value_type_function)->func;
