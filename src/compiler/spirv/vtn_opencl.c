@@ -250,7 +250,6 @@ nir_alu_op_for_opencl_opcode(struct vtn_builder *b,
    case OpenCLstd_Fmin: return nir_op_fmin;
    case OpenCLstd_SMin: return nir_op_imin;
    case OpenCLstd_UMin: return nir_op_umin;
-   case OpenCLstd_Fmod: return nir_op_fmod;
    case OpenCLstd_Mix: return nir_op_flrp;
    case OpenCLstd_Native_cos: return nir_op_fcos;
    case OpenCLstd_Native_divide: return nir_op_fdiv;
@@ -342,6 +341,7 @@ static const struct {
    REMAP(Sincos, "sincos"),
    REMAP(Fract, "fract"),
    REMAP(Frexp, "frexp"),
+   REMAP(Fmod, "fmod"),
 
    REMAP(Half_cos, "cos"),
    REMAP(Half_exp, "exp"),
@@ -509,6 +509,10 @@ handle_special(struct vtn_builder *b, uint32_t opcode,
       return nir_cross3(nb, srcs[0], srcs[1]);
    case OpenCLstd_Fdim:
       return nir_fdim(nb, srcs[0], srcs[1]);
+   case OpenCLstd_Fmod:
+      if (nb->shader->options->lower_fmod)
+         break;
+      return nir_fmod(nb, srcs[0], srcs[1]);
    case OpenCLstd_Mad:
       return nir_fmad(nb, srcs[0], srcs[1], srcs[2]);
    case OpenCLstd_Maxmag:
@@ -773,7 +777,6 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_Native_rsqrt:
    case OpenCLstd_Native_sin:
    case OpenCLstd_Native_sqrt:
-   case OpenCLstd_Fmod:
    case OpenCLstd_SMul_hi:
    case OpenCLstd_UMul_hi:
    case OpenCLstd_Popcount:
@@ -849,6 +852,7 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_Exp2:
    case OpenCLstd_Expm1:
    case OpenCLstd_Exp10:
+   case OpenCLstd_Fmod:
    case OpenCLstd_Ilogb:
    case OpenCLstd_Log:
    case OpenCLstd_Log2:
