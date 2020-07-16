@@ -72,7 +72,7 @@ static const nir_shader_compiler_options
 nir_options = {
    .lower_negate = true,
    .lower_inot = true,
-   .fuse_ffma = true,
+   .lower_ffma = true,
    .lower_isign = true,
    .lower_fsign = true,
    .lower_iabs = true,
