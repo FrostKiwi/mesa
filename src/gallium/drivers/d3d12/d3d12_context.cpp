@@ -812,6 +812,15 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
       memcpy(swizzle, format_descr->swizzle, sizeof(swizzle));
    }
 
+   int plane_slice = 0;
+
+   /* When reading from a stencil texture we have to use plane 1, and
+    * the format X24S8 the actual data is in the y-channel. */
+   if (state->format == PIPE_FORMAT_X24S8_UINT) {
+      plane_slice = 1;
+      swizzle[0] = PIPE_SWIZZLE_Y;
+   }
+
    desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
          component_mapping(swizzle[0], D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_0),
          component_mapping(swizzle[1], D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1),
@@ -835,7 +844,7 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
    case D3D12_SRV_DIMENSION_TEXTURE2D:
       desc.Texture2D.MostDetailedMip = state->u.tex.first_level;
       desc.Texture2D.MipLevels = sampler_view->mip_levels;
-      desc.Texture2D.PlaneSlice = state->u.tex.first_layer; /* FIXME unsure */
+      desc.Texture2D.PlaneSlice = plane_slice;
       desc.Texture2D.ResourceMinLODClamp = 0.0f;
       break;
    case D3D12_SRV_DIMENSION_TEXTURE2DMS:
@@ -845,6 +854,7 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
       desc.Texture2DArray.MipLevels = sampler_view->mip_levels;
       desc.Texture2DArray.ResourceMinLODClamp = 0.0f;
       desc.Texture2DArray.FirstArraySlice = 0;
+      desc.Texture2DArray.PlaneSlice = plane_slice;
       desc.Texture2DArray.ArraySize = texture->array_size;
       break;
    case D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY:
