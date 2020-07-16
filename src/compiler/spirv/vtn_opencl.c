@@ -272,7 +272,6 @@ nir_alu_op_for_opencl_opcode(struct vtn_builder *b,
    case OpenCLstd_USub_sat: return nir_op_usub_sat;
    case OpenCLstd_Trunc: return nir_op_ftrunc;
    case OpenCLstd_Rint: return nir_op_fround_even;
-   case OpenCLstd_Ldexp: return nir_op_ldexp;
    case OpenCLstd_Half_divide: return nir_op_fdiv;
    case OpenCLstd_Half_recip: return nir_op_frcp;
       /* uhm... */
@@ -361,6 +360,7 @@ static const struct {
    REMAP(Exp2, "exp2"),
    REMAP(Exp10, "exp10"),
    REMAP(Expm1, "expm1"),
+   REMAP(Ldexp, "ldexp"),
 
    REMAP(Ilogb, "ilogb"),
    REMAP(Log, "log"),
@@ -431,6 +431,7 @@ handle_clc_fn(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
    case OpenCLstd_Lgamma_r:
    case OpenCLstd_Pown:
    case OpenCLstd_Rootn:
+   case OpenCLstd_Ldexp:
       signed_param = 1;
       break;
    case OpenCLstd_Remquo:
@@ -549,6 +550,10 @@ handle_special(struct vtn_builder *b, uint32_t opcode,
       return build_round(nb, srcs[0]);
    case OpenCLstd_Native_tan:
       return nir_ftan(nb, srcs[0]);
+   case OpenCLstd_Ldexp:
+      if (nb->shader->options->lower_ldexp)
+         break;
+      return nir_ldexp(nb, srcs[0], srcs[1]);
    default:
       break;
    }
@@ -789,7 +794,6 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_USub_sat:
    case OpenCLstd_Trunc:
    case OpenCLstd_Rint:
-   case OpenCLstd_Ldexp:
    case OpenCLstd_Half_divide:
    case OpenCLstd_Half_recip:
       handle_instr(b, ext_opcode, w + 5, count - 5, w + 1, handle_alu);
@@ -859,6 +863,7 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_Log10:
    case OpenCLstd_Log1p:
    case OpenCLstd_Logb:
+   case OpenCLstd_Ldexp:
    case OpenCLstd_Cos:
    case OpenCLstd_Cosh:
    case OpenCLstd_Cospi:
