@@ -194,7 +194,22 @@ struct vtn_builtin_function {
                    const uint32_t *w, unsigned count);
 };
 
+static void
+vtn_builtin_has_hw_fma32(struct vtn_builder *b, SpvOp opcode,
+                         const uint32_t *w, unsigned count)
+{
+   struct vtn_type *res_type = vtn_value(b, w[1], vtn_value_type_type)->type;
+
+   vtn_fail_if(res_type->type != glsl_bool_type(),
+               "Invalid return type for __builtin_has_hw_fma32()");
+   struct vtn_ssa_value *res = vtn_create_ssa_value(b, res_type->type);
+
+   res->def = nir_imm_bool(&b->nb, !b->nb.shader->options->lower_ffma);
+   vtn_push_ssa(b, w[2], res_type, res);
+}
+
 static const struct vtn_builtin_function builtin_funcs[] = {
+   { "__builtin_has_hw_fma32", .handler = vtn_builtin_has_hw_fma32 },
 };
 
 static bool
