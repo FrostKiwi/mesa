@@ -169,7 +169,7 @@ direct_copy_supported(struct d3d12_screen *screen,
 {
    if (info->scissor_enable || info->alpha_blend ||
        (have_predication && info->render_condition_enable) ||
-       info->src.resource->nr_samples != info->dst.resource->nr_samples) {
+       MAX2(info->src.resource->nr_samples, 1) != MAX2(info->dst.resource->nr_samples, 1)) {
       return false;
    }
 
