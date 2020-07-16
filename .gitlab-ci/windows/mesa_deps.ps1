@@ -66,7 +66,7 @@ if (!$?) {
   Write-Host "Failed to clone LLVM repository"
   Exit 1
 }
-git clone -b llvm_release_100 https://github.com/KhronosGroup/SPIRV-LLVM-Translator llvm-project/llvm/projects/SPIRV-LLVM-Translator
+git clone -b v10.0.0 https://github.com/KhronosGroup/SPIRV-LLVM-Translator llvm-project/llvm/projects/SPIRV-LLVM-Translator
 if (!$?) {
   Write-Host "Failed to clone SPIRV-LLVM-Translator repository"
   Exit 1
