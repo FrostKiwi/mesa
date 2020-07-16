@@ -396,12 +396,18 @@ static nir_ssa_def *
 build_round(nir_builder *nb, nir_ssa_def *src)
 {
    nir_ssa_def *const_zero = nir_imm_floatN_t(nb, 0.0, src->bit_size);
-   nir_ssa_def *const_half = nir_imm_floatN_t(nb, 0.5, src->bit_size);
-   nir_ssa_def *sel = nir_fge(nb, src, const_zero);
-   nir_ssa_def *pos = nir_ffloor(nb, nir_fadd(nb, src, const_half));
-   nir_ssa_def *neg = nir_fceil(nb, nir_fsub(nb, src, const_half));
+   nir_ssa_def *is_positive = nir_fge(nb, src, const_zero);
+   nir_ssa_def *add = nir_bcsel(nb, is_positive,
+                                nir_imm_floatN_t(nb, 0.5, src->bit_size),
+                                nir_imm_floatN_t(nb, -0.5, src->bit_size));
+   nir_ssa_def *rounded = nir_ftrunc(nb, nir_fadd(nb, src, add));
 
-   return nir_bcsel(nb, sel, pos, neg);
+   /* If the float has no fractional part, we shouldn't round it, otherwise
+    * the addition might alter the end result on numbers with an exponent of 23
+    * whose MSB is one (that's caused by the round-to-nearest-even mode).
+    */
+   nir_ssa_def *has_frac = nir_fne(nb, src, nir_ftrunc(nb, src));
+   return nir_bcsel(nb, has_frac, rounded, src);
 }
 
 static nir_ssa_def *
