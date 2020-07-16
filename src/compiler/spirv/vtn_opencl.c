@@ -472,10 +472,6 @@ handle_special(struct vtn_builder *b, uint32_t opcode,
    nir_builder *nb = &b->nb;
    enum OpenCLstd_Entrypoints cl_opcode = (enum OpenCLstd_Entrypoints)opcode;
 
-   nir_ssa_def *ret = handle_clc_fn(b, cl_opcode, num_srcs, srcs, src_types, address_types, dest_type);
-   if (ret)
-      return ret;
-
    switch (cl_opcode) {
    case OpenCLstd_SAbs_diff:
      /* these works easier in direct NIR */
@@ -550,9 +546,14 @@ handle_special(struct vtn_builder *b, uint32_t opcode,
    case OpenCLstd_Native_tan:
       return nir_ftan(nb, srcs[0]);
    default:
-      vtn_fail("No NIR equivalent");
-      return NULL;
+      break;
    }
+
+   nir_ssa_def *ret = handle_clc_fn(b, cl_opcode, num_srcs, srcs, src_types, address_types, dest_type);
+   if (!ret)
+      vtn_fail("No NIR equivalent");
+
+   return ret;
 }
 
 static nir_ssa_def *
