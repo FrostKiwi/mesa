@@ -34,7 +34,4 @@ bool dxil_nir_lower_kernel_input_loads(nir_shader *nir, nir_variable *var);
 bool
 clc_nir_lower_printf(nir_shader *nir, unsigned uav_id);
 
-bool
-clc_nir_dedupe_const_samplers(nir_shader *nir);
-
 #endif
