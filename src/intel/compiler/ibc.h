@@ -1469,6 +1469,8 @@ ibc_shader *ibc_shader_create(void *mem_ctx,
 #define ibc_foreach_reg_safe(reg, shader) \
    list_for_each_entry_safe(ibc_reg, reg, &(shader)->regs, link)
 
+bool ibc_instr_is_load_payload(const ibc_instr *instr);
+
 typedef struct {
    struct list_head *prev;
 } ibc_cursor;
@@ -1492,9 +1494,16 @@ ibc_before_shader(ibc_shader *shader)
 }
 
 static inline ibc_cursor
-ibc_after_start(ibc_shader *shader)
+ibc_after_payload(ibc_shader *shader)
 {
-   return (ibc_cursor) { shader->instrs.next };
+   const ibc_instr *after_start =
+      LIST_ENTRY(ibc_instr, shader->instrs.next->next, link);
+
+   ibc_foreach_instr_from(instr, shader, after_start) {
+      if (!ibc_instr_is_load_payload(instr))
+         return ibc_before_instr(instr);
+   }
+   unreachable("end instruction prevents this");
 }
 
 void ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor);
@@ -1584,8 +1593,6 @@ bool ibc_opt_dead_code(ibc_shader *shader);
 bool ibc_opt_gather(ibc_shader *shader);
 bool ibc_opt_halt(ibc_shader *shader);
 bool ibc_opt_predicate(ibc_shader *shader);
-
-bool ibc_instr_is_load_payload(const ibc_instr *instr);
 
 void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 void ibc_print_instr(FILE *fp, const ibc_instr *instr);
