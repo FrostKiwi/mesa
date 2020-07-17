@@ -214,7 +214,7 @@ ibc_lower_tes_inputs(ibc_shader *shader,
 
          ibc_builder_push_scalar(&b);
 
-         b.cursor = ibc_after_start(shader);
+         b.cursor = ibc_after_payload(shader);
 
          ibc_ref input =
             ibc_load_payload_logical(&b, &reg, intrin->dest.type, 8, false);
