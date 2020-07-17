@@ -271,13 +271,15 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
    int dst_nres = 1;
 
    if (dst->base.format == PIPE_FORMAT_Z24_UNORM_S8_UINT ||
-       dst->base.format == PIPE_FORMAT_S8_UINT_Z24_UNORM) {
+       dst->base.format == PIPE_FORMAT_S8_UINT_Z24_UNORM ||
+       dst->base.format == PIPE_FORMAT_Z32_FLOAT_S8X24_UINT) {
       stencil_dst_res_offset = dst_subres_stride * dst_array_size;
       src_nres = 2;
    }
 
    if (src->base.format == PIPE_FORMAT_Z24_UNORM_S8_UINT ||
-       src->base.format == PIPE_FORMAT_S8_UINT_Z24_UNORM) {
+       src->base.format == PIPE_FORMAT_S8_UINT_Z24_UNORM ||
+       dst->base.format == PIPE_FORMAT_Z32_FLOAT_S8X24_UINT) {
       stencil_src_res_offset = src_subres_stride * src_array_size;
       dst_nres = 2;
    }
