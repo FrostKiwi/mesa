@@ -626,12 +626,6 @@ clc_to_spirv(const struct clc_compile_args *args,
    }
 
    auto mod = act.takeModule();
-   if (!::llvm::regularizeLlvmForSpirv(mod.get(), log)) {
-      log += "Translation from LLVM IR to SPIR-V failed.\n";
-      clc_error(logger, log.c_str());
-      return -1;
-   }
-
    std::ostringstream spv_stream;
    if (!::llvm::writeSpirv(mod.get(), spv_stream, log)) {
       log += "Translation from LLVM IR to SPIR-V failed.\n";
