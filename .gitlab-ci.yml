@@ -210,7 +210,7 @@ arm_test:
 
 .windows-docker-vs2019:
   variables:
-    WINDOWS_TAG: "2020-06-18-libclc-async-mangle"
+    WINDOWS_TAG: "2020-07-20-libclc-fma"
     WINDOWS_IMAGE: "$CI_REGISTRY_IMAGE/windows/x64_build:$WINDOWS_TAG"
     WINDOWS_UPSTREAM_IMAGE: "$CI_REGISTRY/$FDO_UPSTREAM_REPO/windows/x64_build:$WINDOWS_TAG"
 
