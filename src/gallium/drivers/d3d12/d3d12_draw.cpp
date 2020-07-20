@@ -340,7 +340,7 @@ transition_surface_subresources_state(struct d3d12_context *ctx,
                                       D3D12_RESOURCE_STATES state,
                                       SubresourceTransitionFlags flags)
 {
-   const uint32_t num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
+   const unsigned num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
    d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
                                        psurf->u.tex.level, 1,
                                        psurf->u.tex.first_layer, num_layers,
