@@ -1071,23 +1071,6 @@ dxil_nir_lower_memcpy_deref(nir_shader *nir)
    return progress;
 }
 
-static nir_alu_type
-find_phi_cast_type(nir_ssa_def *def)
-{
-   nir_alu_type type = nir_type_invalid;
-   nir_foreach_use(src, def) {
-      assert(src->parent_instr->type == nir_instr_type_alu);
-      nir_alu_instr *alu = nir_instr_as_alu(src->parent_instr);
-      if (alu->op == nir_op_mov || nir_op_is_vec(alu->op))
-         return find_phi_cast_type(&alu->dest.dest.ssa);
-      assert(nir_op_infos[alu->op].is_conversion);
-      assert(type == nir_type_invalid ||
-             type == nir_alu_type_get_base_type(nir_op_infos[alu->op].output_type));
-      type = nir_alu_type_get_base_type(nir_op_infos[alu->op].output_type);
-   }
-   return type;
-}
-
 static void
 cast_phi(nir_builder *b, nir_phi_instr *phi, unsigned new_bit_size)
 {
@@ -1095,9 +1078,12 @@ cast_phi(nir_builder *b, nir_phi_instr *phi, unsigned new_bit_size)
    int num_components = 0;
    int old_bit_size = phi->dest.ssa.bit_size;
 
-   nir_alu_type cast_type = find_phi_cast_type(&phi->dest.ssa);
-   nir_op upcast_op = nir_type_conversion_op(cast_type | old_bit_size, cast_type | new_bit_size, nir_rounding_mode_undef);
-   nir_op downcast_op = nir_type_conversion_op(cast_type | new_bit_size, cast_type | old_bit_size, nir_rounding_mode_undef);
+   nir_op upcast_op = nir_type_conversion_op(nir_type_uint | old_bit_size,
+                                             nir_type_uint | new_bit_size,
+                                             nir_rounding_mode_undef);
+   nir_op downcast_op = nir_type_conversion_op(nir_type_uint | new_bit_size,
+                                               nir_type_uint | old_bit_size,
+                                               nir_rounding_mode_undef);
 
    nir_foreach_phi_src(src, phi) {
       assert(num_components == 0 || num_components == src->src.ssa->num_components);
