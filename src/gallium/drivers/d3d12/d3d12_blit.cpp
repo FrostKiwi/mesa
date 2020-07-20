@@ -238,6 +238,20 @@ direct_copy_supported(struct d3d12_screen *screen,
    return true;
 }
 
+inline static unsigned
+get_subresource_id(enum pipe_texture_target target, unsigned subres, unsigned stride,
+                   unsigned z, unsigned *updated_z)
+{
+   if (target == PIPE_TEXTURE_CUBE ||
+       target == PIPE_TEXTURE_1D_ARRAY ||
+       target == PIPE_TEXTURE_2D_ARRAY) {
+      subres += stride * z + subres;
+      if (updated_z)
+         *updated_z = 0;
+   }
+   return subres;
+}
+
 static void
 copy_subregion_no_barriers(struct d3d12_context *ctx,
                            struct d3d12_resource *dst,
@@ -293,28 +307,14 @@ copy_subregion_no_barriers(struct d3d12_context *ctx,
       if (!(subresource_copy_mask & (1 << subres)))
          continue;
 
-      if (dst->base.target == PIPE_TEXTURE_CUBE ||
-          dst->base.target == PIPE_TEXTURE_1D_ARRAY ||
-          dst->base.target == PIPE_TEXTURE_2D_ARRAY) {
-         dst_level = dst_subres_stride * dstz + dst_level;
-         dstz = 0;
-      }
-      dst_level += subres * stencil_dst_res_offset;
-
-      if (src->base.target == PIPE_TEXTURE_CUBE ||
-          src->base.target == PIPE_TEXTURE_1D_ARRAY ||
-          src->base.target == PIPE_TEXTURE_2D_ARRAY) {
-         src_level = src_z * src_subres_stride + src_level;
-         src_z = 0;
-      }
-      src_level += subres * stencil_src_res_offset;
-
       src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-      src_loc.SubresourceIndex = src_level;
+      src_loc.SubresourceIndex = get_subresource_id(src->base.target, src_level, src_subres_stride, src_z, &src_z) +
+                                 subres * stencil_src_res_offset;
       src_loc.pResource = d3d12_resource_resource(src);
 
       dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-      dst_loc.SubresourceIndex = dst_level;
+      dst_loc.SubresourceIndex = get_subresource_id(dst->base.target, dst_level, dst_subres_stride, dstz, &dstz) +
+                                 subres * stencil_dst_res_offset;
       dst_loc.pResource = d3d12_resource_resource(dst);
 
       if (psrc_box->x == 0 && psrc_box->y == 0 && psrc_box->z == 0 &&
