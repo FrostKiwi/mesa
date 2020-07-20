@@ -334,6 +334,20 @@ twoface_emulation(struct d3d12_context *ctx,
    ctx->base.bind_rasterizer_state(&ctx->base, rast);
 }
 
+static void
+transition_surface_subresources_state(struct d3d12_context *ctx,
+                                      struct pipe_surface *psurf,
+                                      D3D12_RESOURCE_STATES state,
+                                      SubresourceTransitionFlags flags)
+{
+   const uint32_t num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
+   d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
+                                       psurf->u.tex.level, 1,
+                                       psurf->u.tex.first_layer, num_layers,
+                                       0, 1,
+                                       state, flags);
+}
+
 void
 d3d12_draw_vbo(struct pipe_context *pctx,
                const struct pipe_draw_info *dinfo)
@@ -565,23 +579,16 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       struct pipe_surface *psurf = ctx->fb.cbufs[i];
       if (!psurf)
          continue;
-      const uint32_t num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
-      d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
-                                          psurf->u.tex.level, 1,
-                                          psurf->u.tex.first_layer, num_layers,
-                                          0, 1,
-                                          D3D12_RESOURCE_STATE_RENDER_TARGET,
-                                          SubresourceTransitionFlags_TransitionPreDraw);
+
+      transition_surface_subresources_state(ctx, psurf,
+         D3D12_RESOURCE_STATE_RENDER_TARGET,
+         SubresourceTransitionFlags_TransitionPreDraw);
    }
    if (ctx->fb.zsbuf) {
       struct pipe_surface *psurf = ctx->fb.zsbuf;
-      const uint32_t num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
-      d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
-                                          psurf->u.tex.level, 1,
-                                          psurf->u.tex.first_layer, num_layers,
-                                          0, d3d12_get_format_num_planes(psurf->format),
-                                          D3D12_RESOURCE_STATE_DEPTH_WRITE,
-                                          SubresourceTransitionFlags_TransitionPreDraw);
+      transition_surface_subresources_state(ctx, psurf,
+         D3D12_RESOURCE_STATE_DEPTH_WRITE,
+         SubresourceTransitionFlags_TransitionPreDraw);
    }
 
    d3d12_apply_resource_states(ctx, true);
