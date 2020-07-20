@@ -90,6 +90,14 @@ d3d12_resource_gpu_virtual_address(struct d3d12_resource *res)
    return base_res->GetGPUVirtualAddress() + offset;
 }
 
+static inline bool
+d3d12_subresource_id_uses_layer(enum pipe_texture_target target)
+{
+   return target == PIPE_TEXTURE_CUBE ||
+          target == PIPE_TEXTURE_1D_ARRAY ||
+          target == PIPE_TEXTURE_2D_ARRAY;
+}
+
 void
 d3d12_resource_release(struct d3d12_resource *res);
 

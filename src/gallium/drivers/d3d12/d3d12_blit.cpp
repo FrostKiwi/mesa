@@ -242,9 +242,7 @@ inline static unsigned
 get_subresource_id(enum pipe_texture_target target, unsigned subres, unsigned stride,
                    unsigned z, unsigned *updated_z)
 {
-   if (target == PIPE_TEXTURE_CUBE ||
-       target == PIPE_TEXTURE_1D_ARRAY ||
-       target == PIPE_TEXTURE_2D_ARRAY) {
+   if (d3d12_subresource_id_uses_layer(target)) {
       subres += stride * z;
       if (updated_z)
          *updated_z = 0;
