@@ -1076,6 +1076,9 @@ clc_to_dxil(struct clc_context *ctx,
       nir_options.lower_int64_options = ~0;
    }
 
+   if (conf && conf->lower_bit_size & 16)
+      nir_options.support_16bit_alu = true;
+
    glsl_type_singleton_init_or_ref();
 
    nir = spirv_to_nir(obj->spvbin.data, obj->spvbin.size / 4,
