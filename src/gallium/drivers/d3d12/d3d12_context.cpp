@@ -1470,6 +1470,7 @@ d3d12_transition_subresources_state(struct d3d12_context *ctx,
          for( uint32_t p = 0; p < num_planes; p++) {
             const uint32_t plane = start_plane + p;
             uint32_t subres_id = level + (layer * res->mip_levels) + plane * (res->mip_levels * res->base.array_size);
+            assert(subres_id < xres->NumSubresources());
             ctx->resource_state_manager->TransitionSubresource(xres, subres_id, state, flags);
          }
       }
