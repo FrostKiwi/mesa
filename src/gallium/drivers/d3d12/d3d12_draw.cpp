@@ -340,10 +340,18 @@ transition_surface_subresources_state(struct d3d12_context *ctx,
                                       D3D12_RESOURCE_STATES state,
                                       SubresourceTransitionFlags flags)
 {
-   const unsigned num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
-   d3d12_transition_subresources_state(ctx, d3d12_resource(psurf->texture),
+   struct d3d12_resource *res = d3d12_resource(psurf->texture);
+   unsigned start_layer, num_layers;
+   if (!d3d12_subresource_id_uses_layer(res->base.target)) {
+      start_layer = 0;
+      num_layers = 1;
+   } else {
+      start_layer = psurf->u.tex.first_layer;
+      num_layers = psurf->u.tex.last_layer - psurf->u.tex.first_layer + 1;
+   }
+   d3d12_transition_subresources_state(ctx, res,
                                        psurf->u.tex.level, 1,
-                                       psurf->u.tex.first_layer, num_layers,
+                                       start_layer, num_layers,
                                        0, 1,
                                        state, flags);
 }
