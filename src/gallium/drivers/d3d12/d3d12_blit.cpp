@@ -407,12 +407,17 @@ d3d12_direct_copy(struct d3d12_context *ctx,
    if (D3D12_DEBUG_BLIT & d3d12_debug)
       debug_printf("BLIT: Direct copy\n");
 
-   d3d12_transition_subresources_state(ctx, src, src_level, 1, 0, 1, 0,
+   unsigned src_subres = get_subresource_id(src->base.target, src_level, src->base.last_level + 1,
+                                            psrc_box->z, nullptr);
+   unsigned dst_subres = get_subresource_id(dst->base.target, dst_level, dst->base.last_level + 1,
+                                            pdst_box->z, nullptr);
+
+   d3d12_transition_subresources_state(ctx, src, src_subres, 1, 0, 1, 0,
                                        d3d12_get_format_num_planes(src->base.format),
                                        D3D12_RESOURCE_STATE_COPY_SOURCE,
                                        SubresourceTransitionFlags_None);
 
-   d3d12_transition_subresources_state(ctx, dst, dst_level, 1, 0, 1, 0,
+   d3d12_transition_subresources_state(ctx, dst, dst_subres, 1, 0, 1, 0,
                                        d3d12_get_format_num_planes(dst->base.format),
                                        D3D12_RESOURCE_STATE_COPY_DEST,
                                        SubresourceTransitionFlags_None);
