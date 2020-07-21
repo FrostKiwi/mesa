@@ -1759,7 +1759,10 @@ late_optimizations = [
    # Subtractions get lowered during optimization, so we need to recombine them
    (('fadd', 'a', ('fneg', 'b')), ('fsub', 'a', 'b'), '!options->lower_sub'),
    (('iadd', 'a', ('ineg', 'b')), ('isub', 'a', 'b'), '!options->lower_sub'),
-   (('fneg', a), ('fsub', 0.0, a), 'options->lower_negate'),
+
+   # fneg(a) can't be lowered to fsub(0, a) if we care about the 0.0/-0.0
+   # differentiation, we have to use an fmul() here.
+   (('fneg', a), ('fmul', a, -1.0), 'options->lower_negate'),
    (('ineg', a), ('isub', 0, a), 'options->lower_negate'),
    (('inot', a), ('ixor', a, -1), 'options->lower_inot'),
    (('iabs', a), ('imax', a, ('ineg', a)), 'options->lower_iabs'),
