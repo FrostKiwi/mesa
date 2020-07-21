@@ -595,7 +595,12 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                                   dinfo->start, dinfo->start_instance);
 
    ctx->state_dirty = 0;
-   ctx->cmdlist_dirty = 0;
+
+   if (index_buffer)
+      ctx->cmdlist_dirty = 0;
+   else
+      ctx->cmdlist_dirty &= D3D12_DIRTY_INDEX_BUFFER;
+
    for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i)
       ctx->shader_dirty[i] = 0;
 }
