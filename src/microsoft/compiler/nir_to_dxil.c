@@ -2763,8 +2763,9 @@ emit_image_deref_store(struct ntd_context *ctx, nir_intrinsic_instr *intr)
       return false;
 
    const struct dxil_value *coord[3] = { int32_undef, int32_undef, int32_undef };
-   unsigned num_coords = nir_src_num_components(intr->src[1]);
-   for (unsigned i = 0; i < num_coords && i < 3; ++i) {
+   unsigned num_coords = glsl_get_sampler_coordinate_components(var->type);
+   assert(num_coords <= nir_src_num_components(intr->src[1]));
+   for (unsigned i = 0; i < num_coords; ++i) {
       coord[i] = get_src(ctx, &intr->src[1], i, nir_type_uint);
       if (!coord[i])
          return false;
