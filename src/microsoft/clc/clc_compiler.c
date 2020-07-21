@@ -1281,8 +1281,6 @@ clc_to_dxil(struct clc_context *ctx,
    // Lower pack_split to bit math
    NIR_PASS_V(nir, nir_opt_algebraic);
 
-   NIR_PASS_V(nir, nir_lower_64bit_phis);
-
    NIR_PASS_V(nir, nir_opt_dce);
 
    nir_validate_shader(nir, "Validate before feeding NIR to the DXIL compiler");
