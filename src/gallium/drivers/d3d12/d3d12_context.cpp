@@ -815,8 +815,9 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
    int plane_slice = 0;
 
    /* When reading from a stencil texture we have to use plane 1, and
-    * the format X24S8 the actual data is in the y-channel. */
-   if (state->format == PIPE_FORMAT_X24S8_UINT) {
+    * the formats X24S8 and X32_S8X24 have the actual data in the y-channel. */
+   if (state->format == PIPE_FORMAT_X24S8_UINT ||
+       state->format == PIPE_FORMAT_X32_S8X24_UINT) {
       plane_slice = 1;
       swizzle[0] = PIPE_SWIZZLE_Y;
    }
