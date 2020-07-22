@@ -709,8 +709,7 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
             }
          }
       }
-      d3d12_reassign_driver_locations(&new_nir_variant->outputs,
-                                      next->current->nir->info.inputs_read);
+      d3d12_reassign_driver_locations(&new_nir_variant->outputs, key.next_varying_inputs);
    }
 
    d3d12_shader *new_variant = compile_nir(ctx, sel, &key, new_nir_variant);
