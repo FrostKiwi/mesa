@@ -208,6 +208,14 @@ struct d3d12_context {
    dxil_texture_swizzle_state tex_swizzle_state[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    enum compare_func tex_compare_func[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
 
+   struct {
+      bool enabled;
+      uint32_t pattern[32];
+      struct pipe_resource *texture;
+      struct pipe_sampler_view *sampler_view;
+      struct d3d12_sampler_state *sampler_cso;
+   } pstipple;
+
    struct pipe_stream_output_target *so_targets[PIPE_MAX_SO_BUFFERS];
    D3D12_STREAM_OUTPUT_BUFFER_VIEW so_buffer_views[PIPE_MAX_SO_BUFFERS];
    unsigned num_so_targets;

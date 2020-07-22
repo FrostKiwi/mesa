@@ -40,6 +40,7 @@
 #include "util/u_inlines.h"
 #include "util/u_memory.h"
 #include "util/u_upload_mgr.h"
+#include "util/u_pstipple.h"
 #include "nir_to_dxil.h"
 
 #include "D3D12ResourceState.h"
@@ -1086,10 +1087,46 @@ d3d12_delete_gs_state(struct pipe_context *pctx, void *gs)
                  (struct d3d12_shader_selector *) gs);
 }
 
+static bool
+d3d12_init_polygon_stipple(struct pipe_context *pctx)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+
+   ctx->pstipple.texture = util_pstipple_create_stipple_texture(pctx, NULL);
+   if (!ctx->pstipple.texture)
+      return false;
+
+   ctx->pstipple.sampler_view = util_pstipple_create_sampler_view(pctx, ctx->pstipple.texture);
+   if (!ctx->pstipple.sampler_view)
+      return false;
+
+   ctx->pstipple.sampler_cso = (struct d3d12_sampler_state *)util_pstipple_create_sampler(pctx);
+   if (!ctx->pstipple.sampler_cso)
+      return false;
+
+   return true;
+}
+
 static void
 d3d12_set_polygon_stipple(struct pipe_context *pctx,
                           const struct pipe_poly_stipple *ps)
 {
+   static bool initialized = false;
+   static const uint32_t zero[32] = {0};
+   static uint32_t undef[32] = {0};
+   struct d3d12_context *ctx = d3d12_context(pctx);
+
+   if (!initialized)
+      memset(undef, UINT32_MAX, sizeof(undef));
+
+   if (!memcmp(ctx->pstipple.pattern, ps->stipple, sizeof(ps->stipple)))
+      return;
+
+   memcpy(ctx->pstipple.pattern, ps->stipple, sizeof(ps->stipple));
+   ctx->pstipple.enabled = !!memcmp(ps->stipple, undef, sizeof(ps->stipple)) &&
+                           !!memcmp(ps->stipple, zero, sizeof(ps->stipple));
+   if (ctx->pstipple.enabled)
+      util_pstipple_update_stipple_texture(pctx, ctx->pstipple.texture, ps->stipple);
 }
 
 static void
@@ -1908,6 +1945,12 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
       return NULL;
 
    ctx->resource_state_manager = new ResourceStateManager();
+
+   if (!d3d12_init_polygon_stipple(&ctx->base)) {
+      debug_printf("D3D12: failed to initialize polygon stipple resources\n");
+      FREE(ctx);
+      return NULL;
+   }
 
    return &ctx->base;
 }

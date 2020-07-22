@@ -91,9 +91,14 @@ fill_srv_descriptors(struct d3d12_context *ctx,
 
    for (int i = 0; i < shader->num_srv_bindings; i++)
    {
-      int index = shader->srv_bindings[i].index;
-      struct d3d12_sampler_view *view =
-         (struct d3d12_sampler_view*) ctx->sampler_views[stage][index];
+      struct d3d12_sampler_view *view;
+
+      if (shader->srv_bindings[i].binding == shader->pstipple_binding) {
+         view = (struct d3d12_sampler_view*)ctx->pstipple.sampler_view;
+      } else {
+         int index = shader->srv_bindings[i].index;
+         view = (struct d3d12_sampler_view*)ctx->sampler_views[stage][index];
+      }
 
       if (view != NULL) {
          descs[i] = view->handle.cpu_handle ;
@@ -136,8 +141,14 @@ fill_sampler_descriptors(struct d3d12_context *ctx,
 
    for (int i = 0; i < shader->num_srv_bindings; i++)
    {
-      int index = shader->srv_bindings[i].index;
-      struct d3d12_sampler_state *sampler = ctx->samplers[stage][index];
+      struct d3d12_sampler_state *sampler;
+
+      if (shader->srv_bindings[i].binding == shader->pstipple_binding) {
+         sampler = ctx->pstipple.sampler_cso;
+      } else {
+         int index = shader->srv_bindings[i].index;
+         sampler = ctx->samplers[stage][index];
+      }
 
       if (sampler != NULL)
          descs[i] = sampler->handle.cpu_handle;
@@ -419,6 +430,10 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    struct d3d12_rasterizer_state *rast = ctx->gfx_pipeline_state.rast;
    if (rast->twoface_back)
       twoface_emulation(ctx, rast, dinfo);
+
+   if (ctx->pstipple.enabled)
+      ctx->shader_dirty[PIPE_SHADER_FRAGMENT] |= D3D12_SHADER_DIRTY_SAMPLER_VIEWS |
+                                                 D3D12_SHADER_DIRTY_SAMPLERS;
 
    /* this should *really* be fixed at a higher level than here! */
    enum pipe_prim_type reduced_prim = u_reduced_prim(dinfo->mode);

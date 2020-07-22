@@ -78,6 +78,7 @@ struct d3d12_shader_key {
       unsigned frag_result_color_lowering : 4;
       unsigned provoking_vertex : 2;
       unsigned manual_depth_range : 1;
+      unsigned polygon_stipple : 1;
    } fs;
 
    int n_texture_states;
@@ -113,6 +114,7 @@ struct d3d12_shader {
    size_t num_srv_bindings;
 
    bool has_default_ubo0;
+   unsigned pstipple_binding;
 
    struct d3d12_shader_key key;
    struct d3d12_shader *next_variant;
