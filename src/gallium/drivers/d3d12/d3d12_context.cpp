@@ -1870,3 +1870,45 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
 
    return &ctx->base;
 }
+
+bool
+d3d12_need_zero_one_depth_range(struct d3d12_context *ctx)
+{
+   struct d3d12_shader_selector *fs = ctx->gfx_stages[PIPE_SHADER_FRAGMENT];
+
+   /**
+    * OpenGL Compatibility spec, section 15.2.3 (Shader Outputs) says
+    * the following:
+    *
+    *    For fixed-point depth buffers, the final fragment depth written by
+    *    a fragment shader is first clamped to [0, 1] and then converted to
+    *    fixed-point as if it were a window z value (see section 13.8.1).
+    *    For floating-point depth buffers, conversion is not performed but
+    *    clamping is. Note that the depth range computation is not applied
+    *    here, only the conversion to fixed-point.
+    *
+    * However, the D3D11.3 Functional Spec, section 17.10 (Depth Clamp) says
+    * the following:
+    *
+    *    Depth values that reach the Output Merger, whether coming from
+    *    interpolation or from Pixel Shader output (replacing the
+    *    interpolated z), are always clamped:
+    *    z = min(Viewport.MaxDepth,max(Viewport.MinDepth,z))
+    *    following the D3D11 Floating Point Rules(3.1) for min/max.
+    *
+    * This means that we can't always use the fixed-function viewport-mapping
+    * D3D provides.
+    *
+    * There's only one case where the difference matters: When the fragment
+    * shader writes a non-implicit value to gl_FragDepth. In all other
+    * cases, the fragment either shouldn't have been rasterized in the
+    * first place, or the implicit gl_FragCoord.z-value should already have
+    * been clamped to the depth-range.
+    *
+    * For simplicity, let's assume that an explicitly written frag-result
+    * doesn't simply forward the value of gl_FragCoord.z. If it does, we'll
+    * end up generating needless code, but the result will be correct.
+    */
+
+   return fs->initial->info.outputs_written & BITFIELD64_BIT(FRAG_RESULT_DEPTH);
+}

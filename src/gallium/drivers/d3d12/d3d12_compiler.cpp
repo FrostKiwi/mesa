@@ -216,6 +216,7 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
 struct d3d12_selection_context {
    struct d3d12_context *ctx;
    bool needs_point_sprite_lowering;
+   bool manual_depth_range;
    bool samples_int_textures;
    bool compare_with_lod_bias_grad;
    unsigned missing_dual_src_outputs;
@@ -352,6 +353,36 @@ frag_result_color_lowering(struct d3d12_context *ctx)
 }
 
 static bool
+manual_depth_range(struct d3d12_context *ctx)
+{
+   if (!d3d12_need_zero_one_depth_range(ctx))
+      return false;
+
+   /**
+    * If we can't use the D3D12 zero-one depth-range, we might have to apply
+    * depth-range ourselves.
+    *
+    * Because we only need to override the depth-range to zero-one range in
+    * the case where we write frag-depth, we only need to apply manual
+    * depth-range to gl_FragCoord.z.
+    *
+    * No extra care is needed to be taken in the case where gl_FragDepth is
+    * written conditionally, because the GLSL 4.60 spec states:
+    *
+    *    If a shader statically assigns a value to gl_FragDepth, and there
+    *    is an execution path through the shader that does not set
+    *    gl_FragDepth, then the value of the fragment’s depth may be
+    *    undefined for executions of the shader that take that path. That
+    *    is, if the set of linked fragment shaders statically contain a
+    *    write to gl_FragDepth, then it is responsible for always writing
+    *    it.
+    */
+
+   struct d3d12_shader_selector *fs = ctx->gfx_stages[PIPE_SHADER_FRAGMENT];
+   return fs && fs->initial->info.inputs_read & VARYING_BIT_POS;
+}
+
+static bool
 needs_point_sprite_lowering(struct d3d12_context *ctx, const struct pipe_draw_info *dinfo)
 {
    struct d3d12_shader_selector *vs = ctx->gfx_stages[PIPE_SHADER_VERTEX];
@@ -428,6 +459,8 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
       }
    } else if (expect->stage == PIPE_SHADER_FRAGMENT) {
       if (expect->fs.frag_result_color_lowering != have->fs.frag_result_color_lowering)
+         return false;
+      if (expect->fs.manual_depth_range != have->fs.manual_depth_range)
          return false;
    }
 
@@ -526,6 +559,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
    } else if (stage == PIPE_SHADER_FRAGMENT) {
       key->fs.missing_dual_src_outputs = sel_ctx->missing_dual_src_outputs;
       key->fs.frag_result_color_lowering = sel_ctx->frag_result_color_lowering;
+      key->fs.manual_depth_range = sel_ctx->manual_depth_range;
    }
 
    if (sel_ctx->samples_int_textures) {
@@ -607,6 +641,9 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
       NIR_PASS_V(new_nir_variant, d3d12_lower_frag_result,
                  key.fs.frag_result_color_lowering);
    }
+
+   if (key.fs.manual_depth_range)
+      NIR_PASS_V(new_nir_variant, d3d12_lower_depth_range);
 
    if (sel_ctx->compare_with_lod_bias_grad)
       NIR_PASS_V(new_nir_variant, d3d12_lower_sample_tex_compare, key.n_texture_states,
@@ -856,6 +893,7 @@ d3d12_select_shader_variants(struct d3d12_context *ctx, const struct pipe_draw_i
    sel_ctx.needs_point_sprite_lowering = needs_point_sprite_lowering(ctx, dinfo);
    sel_ctx.missing_dual_src_outputs = missing_dual_src_outputs(ctx);
    sel_ctx.frag_result_color_lowering = frag_result_color_lowering(ctx);
+   sel_ctx.manual_depth_range = manual_depth_range(ctx);
 
    validate_geometry_shader(&sel_ctx);
 

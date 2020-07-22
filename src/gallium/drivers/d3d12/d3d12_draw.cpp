@@ -486,8 +486,24 @@ d3d12_draw_vbo(struct pipe_context *pctx,
 
    set_graphics_root_parameters(ctx, dinfo);
 
-   if (ctx->cmdlist_dirty & D3D12_DIRTY_VIEWPORT)
-      ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);
+   bool need_zero_one_depth_range = d3d12_need_zero_one_depth_range(ctx);
+   if (need_zero_one_depth_range != ctx->need_zero_one_depth_range) {
+      ctx->cmdlist_dirty |= D3D12_DIRTY_VIEWPORT;
+      ctx->need_zero_one_depth_range = need_zero_one_depth_range;
+   }
+
+   if (ctx->cmdlist_dirty & D3D12_DIRTY_VIEWPORT) {
+      if (ctx->need_zero_one_depth_range) {
+         D3D12_VIEWPORT viewports[PIPE_MAX_VIEWPORTS];
+         for (int i = 0; i < ctx->num_viewports; ++i) {
+            viewports[i] = ctx->viewports[i];
+            viewports[i].MinDepth = 0.0f;
+            viewports[i].MaxDepth = 1.0f;
+         }
+         ctx->cmdlist->RSSetViewports(ctx->num_viewports, viewports);
+      } else
+         ctx->cmdlist->RSSetViewports(ctx->num_viewports, ctx->viewports);
+   }
 
    if (ctx->cmdlist_dirty & D3D12_DIRTY_SCISSOR) {
       if (ctx->gfx_pipeline_state.rast->base.scissor && ctx->num_scissors > 0)

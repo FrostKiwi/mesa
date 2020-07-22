@@ -185,6 +185,7 @@ struct d3d12_context {
    D3D12_VERTEX_BUFFER_VIEW vbvs[PIPE_MAX_ATTRIBS];
    unsigned num_vbs;
    float flip_y;
+   bool need_zero_one_depth_range;
    struct pipe_viewport_state viewport_states[PIPE_MAX_VIEWPORTS];
    D3D12_VIEWPORT viewports[PIPE_MAX_VIEWPORTS];
    unsigned num_viewports;
@@ -323,5 +324,8 @@ d3d12_blit(struct pipe_context *pctx,
 
 void
 d3d12_context_query_init(struct pipe_context *pctx);
+
+bool
+d3d12_need_zero_one_depth_range(struct d3d12_context *ctx);
 
 #endif
