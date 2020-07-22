@@ -253,6 +253,14 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
                   // Read of a read-only resource, convert to sampler fetch
                   assert(intrinsic->intrinsic == nir_intrinsic_image_deref_load);
                   b->cursor = nir_before_instr(&intrinsic->instr);
+
+                  nir_deref_instr *deref = nir_src_as_deref(intrinsic->src[0]);
+                  enum glsl_sampler_dim dim = glsl_get_sampler_dim(deref->type);
+                  unsigned coord_comps =
+                     glsl_get_sampler_dim_coordinate_components(dim) +
+                     glsl_sampler_type_is_array(deref->type);
+                  nir_ssa_def *coord =
+                     nir_channels(b, intrinsic->src[1].ssa, (1 << coord_comps) - 1);
                   nir_tex_instr *tex = nir_tex_instr_create(b->shader, 3);
 
                   tex->op = nir_texop_txf;
@@ -260,7 +268,7 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
                   tex->sampler_dim = glsl_get_sampler_dim(in_var->type);
                   tex->src[0].src = nir_src_for_ssa(image_deref);
                   tex->src[0].src_type = nir_tex_src_texture_deref;
-                  tex->src[1].src = nir_src_for_ssa(intrinsic->src[1].ssa);
+                  tex->src[1].src = nir_src_for_ssa(coord);
                   tex->src[1].src_type = nir_tex_src_coord;
                   tex->src[2].src = nir_src_for_ssa(nir_imm_int(b, 0));
                   tex->src[2].src_type = nir_tex_src_lod;
