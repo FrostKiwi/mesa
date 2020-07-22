@@ -3718,7 +3718,7 @@ static bool emit_instr(struct ntd_context *ctx, struct nir_instr* instr)
       return emit_undefined(ctx, nir_instr_as_ssa_undef(instr));
    default:
       NIR_INSTR_UNSUPPORTED(instr);
-      assert("Unimplemented instruction type");
+      unreachable("Unimplemented instruction type");
       return false;
    }
 }
