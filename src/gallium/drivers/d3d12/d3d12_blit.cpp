@@ -245,7 +245,7 @@ get_subresource_id(enum pipe_texture_target target, unsigned subres, unsigned st
    if (target == PIPE_TEXTURE_CUBE ||
        target == PIPE_TEXTURE_1D_ARRAY ||
        target == PIPE_TEXTURE_2D_ARRAY) {
-      subres += stride * z + subres;
+      subres += stride * z;
       if (updated_z)
          *updated_z = 0;
    }
