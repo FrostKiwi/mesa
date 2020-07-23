@@ -426,7 +426,7 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
          return false;
    }
 
-   if (expect->have_int_textures != have->have_int_textures)
+   if (expect->samples_int_textures != have->samples_int_textures)
       return false;
 
    if (expect->n_texture_states != have->n_texture_states)

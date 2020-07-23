@@ -58,7 +58,7 @@ struct d3d12_shader_key {
    uint64_t prev_varying_outputs;
    unsigned last_vertex_processing_stage : 1;
    unsigned invert_depth : 1;
-   unsigned have_int_textures : 1;
+   unsigned samples_int_textures : 1;
 
    struct {
       unsigned needs_format_emulation:1;
