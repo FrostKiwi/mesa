@@ -22,6 +22,7 @@
  */
 
 #include "d3d12_context.h"
+#include "d3d12_compiler.h"
 #include "d3d12_debug.h"
 #include "d3d12_format.h"
 #include "d3d12_resource.h"
@@ -514,7 +515,16 @@ util_blit(struct d3d12_context *ctx,
    util_blitter_save_rasterizer(ctx->blitter, ctx->gfx_pipeline_state.rast);
    util_blitter_save_fragment_shader(ctx->blitter, ctx->gfx_stages[PIPE_SHADER_FRAGMENT]);
    util_blitter_save_vertex_shader(ctx->blitter, ctx->gfx_stages[PIPE_SHADER_VERTEX]);
-   util_blitter_save_geometry_shader(ctx->blitter, ctx->gfx_stages[PIPE_SHADER_GEOMETRY]);
+
+   /* we should not save the passthrough geometry shader, as it'll be
+    * automagically deleted when no longer needed.
+    */
+   if (ctx->gfx_stages[PIPE_SHADER_GEOMETRY] &&
+       !ctx->gfx_stages[PIPE_SHADER_GEOMETRY]->passthrough) {
+      util_blitter_save_geometry_shader(ctx->blitter, ctx->gfx_stages[PIPE_SHADER_GEOMETRY]);
+   } else
+      util_blitter_save_geometry_shader(ctx->blitter, NULL);
+
    util_blitter_save_framebuffer(ctx->blitter, &ctx->fb);
    util_blitter_save_viewport(ctx->blitter, ctx->viewport_states);
    util_blitter_save_scissor(ctx->blitter, ctx->scissor_states);
