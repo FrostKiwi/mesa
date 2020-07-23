@@ -404,13 +404,15 @@ d3d12_direct_copy(struct d3d12_context *ctx,
 {
    struct d3d12_batch *batch = d3d12_current_batch(ctx);
 
-   if (D3D12_DEBUG_BLIT & d3d12_debug)
-      debug_printf("BLIT: Direct copy\n");
-
    unsigned src_subres = get_subresource_id(src->base.target, src_level, src->base.last_level + 1,
                                             psrc_box->z, nullptr);
    unsigned dst_subres = get_subresource_id(dst->base.target, dst_level, dst->base.last_level + 1,
                                             pdst_box->z, nullptr);
+
+   if (D3D12_DEBUG_BLIT & d3d12_debug)
+      debug_printf("BLIT: Direct copy from subres %d to subres  %d\n",
+                   src_subres, dst_subres);
+
 
    d3d12_transition_subresources_state(ctx, src, src_subres, 1, 0, 1, 0,
                                        d3d12_get_format_num_planes(src->base.format),
@@ -603,13 +605,14 @@ d3d12_resource_copy_region(struct pipe_context *pctx,
    struct pipe_box staging_box, dst_box;
 
    if (D3D12_DEBUG_BLIT & d3d12_debug) {
-      debug_printf("D3D12 COPY: from %s@%d %dx%dx%d + %dx%dx%d\n",
-                   util_format_name(psrc->format), src_level,
+      debug_printf("D3D12 COPY: from %s@%d msaa:%d mips:%d %dx%dx%d + %dx%dx%d\n",
+                   util_format_name(psrc->format), src_level, psrc->nr_samples,
+                   psrc->last_level,
                    psrc_box->x, psrc_box->y, psrc_box->z,
                    psrc_box->width, psrc_box->height, psrc_box->depth);
-      debug_printf("      to   %s@%d %dx%dx%d\n",
-                   util_format_name(pdst->format), dst_level,
-                   dstx, dsty, dstz);
+      debug_printf("            to   %s@%d msaa:%d mips:%d %dx%dx%d\n",
+                   util_format_name(pdst->format), dst_level, psrc->nr_samples,
+                   psrc->last_level, dstx, dsty, dstz);
    }
 
    /* Use an intermediate resource if copying from/to the same subresource */
