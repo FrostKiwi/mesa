@@ -538,41 +538,18 @@ def binop_reduce(name, output_size, output_type, src_type, prereduce_expr,
       return reduce_expr.format(src0=src0, src1=src1)
    def prereduce(src0, src1):
       return "(" + prereduce_expr.format(src0=src0, src1=src1) + ")"
-   src0 = prereduce("src0.x", "src1.x")
-   src1 = prereduce("src0.y", "src1.y")
-   src2 = prereduce("src0.z", "src1.z")
-   src3 = prereduce("src0.w", "src1.w")
-   src4 = prereduce("src0.e", "src1.e")
-   src5 = prereduce("src0.f", "src1.f")
-   src6 = prereduce("src0.g", "src1.g")
-   src7 = prereduce("src0.h", "src1.h")
-   src8 = prereduce("src0.i", "src1.i")
-   src9 = prereduce("src0.j", "src1.j")
-   src10 = prereduce("src0.k", "src1.k")
-   src11 = prereduce("src0.l", "src1.l")
-   src12 = prereduce("src0.m", "src1.m")
-   src13 = prereduce("src0.n", "src1.n")
-   src14 = prereduce("src0.o", "src1.o")
-   src15 = prereduce("src0.p", "src1.p")
-   opcode(name + "2", output_size, output_type,
-          [2, 2], [src_type, src_type], False, _2src_commutative,
-          final(reduce_(src0, src1)))
+   srcs = [prereduce("src0." + letter, "src1." + letter) for letter in "xyzwefghijklmnop"]
+   def pairwise_reduce(start, size):
+      if (size == 1):
+         return srcs[start]
+      return reduce_(pairwise_reduce(start, size // 2), pairwise_reduce(start + size // 2, size // 2))
+   for size in [2, 4, 8, 16]:
+      opcode(name + str(size), output_size, output_type,
+             [size, size], [src_type, src_type], False, _2src_commutative,
+             final(pairwise_reduce(0, size)))
    opcode(name + "3", output_size, output_type,
           [3, 3], [src_type, src_type], False, _2src_commutative,
-          final(reduce_(reduce_(src0, src1), src2)))
-   opcode(name + "4", output_size, output_type,
-          [4, 4], [src_type, src_type], False, _2src_commutative,
-          final(reduce_(reduce_(src0, src1), reduce_(src2, src3))))
-   opcode(name + "8", output_size, output_type,
-          [8, 8], [src_type, src_type], False, _2src_commutative,
-          final(reduce_(reduce_(reduce_(src0, src1), reduce_(src2, src3)),
-                        reduce_(reduce_(src4, src5), reduce_(src6, src7)))))
-   opcode(name + "16", output_size, output_type,
-          [16, 16], [src_type, src_type], False, _2src_commutative,
-          final(reduce_(reduce_(reduce_(reduce_(src0, src1), reduce_(src2, src3)),
-                                reduce_(reduce_(src4, src5), reduce_(src6, src7))),
-                        reduce_(reduce_(reduce_(src8, src9), reduce_(src10, src11)),
-                                reduce_(reduce_(src12, src13), reduce_(src14, src15))))))
+          final(reduce_(reduce_(srcs[0], srcs[1]), srcs[2])))
 
 def binop_reduce_all_sizes(name, output_size, src_type, prereduce_expr,
                            reduce_expr, final_expr):
