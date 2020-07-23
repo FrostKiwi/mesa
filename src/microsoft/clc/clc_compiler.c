@@ -255,10 +255,7 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
                   b->cursor = nir_before_instr(&intrinsic->instr);
 
                   nir_deref_instr *deref = nir_src_as_deref(intrinsic->src[0]);
-                  enum glsl_sampler_dim dim = glsl_get_sampler_dim(deref->type);
-                  unsigned coord_comps =
-                     glsl_get_sampler_dim_coordinate_components(dim) +
-                     glsl_sampler_type_is_array(deref->type);
+                  unsigned coord_comps = glsl_get_sampler_coordinate_components(deref->type);
                   nir_ssa_def *coord =
                      nir_channels(b, intrinsic->src[1].ssa, (1 << coord_comps) - 1);
                   nir_tex_instr *tex = nir_tex_instr_create(b->shader, 3);
