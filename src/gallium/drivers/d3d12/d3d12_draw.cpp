@@ -176,6 +176,11 @@ fill_state_vars(struct d3d12_context *ctx,
          ptr[0] = dinfo->start;
          size += 4;
          break;
+      case D3D12_STATE_VAR_DEPTH_TRANSFORM:
+         ptr[0] = fui(ctx->viewport_states[0].scale[2]);
+         ptr[1] = fui(ctx->viewport_states[0].translate[2]);
+         size += 4;
+         break;
       default:
          unreachable("unknown state variable");
       }
