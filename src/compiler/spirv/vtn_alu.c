@@ -488,7 +488,7 @@ round_float(struct vtn_builder *b, nir_rounding_mode round,
       }
       case nir_rounding_mode_undef:
       case nir_rounding_mode_rtne:
-         rets[i] = src;
+         rets[i] = comp;
          break;
       default:
          unreachable("unexpected rounding mode");
