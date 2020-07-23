@@ -703,7 +703,7 @@ vtn_nir_deref(struct vtn_builder *b, uint32_t id)
  * indexing in SPIR-V.
  */
 static nir_deref_instr *
-get_deref_tail(nir_deref_instr *deref)
+get_deref_tail(struct vtn_builder *b, nir_deref_instr *deref)
 {
    if (deref->deref_type != nir_deref_type_array)
       return deref;
@@ -711,17 +711,22 @@ get_deref_tail(nir_deref_instr *deref)
    nir_deref_instr *parent =
       nir_instr_as_deref(deref->parent.ssa->parent_instr);
 
-   if (glsl_type_is_vector(parent->type))
-      return parent;
-   else
+   if (!glsl_type_is_vector(parent->type) ||
+       deref->mode == nir_var_mem_ubo ||
+       deref->mode == nir_var_mem_ssbo ||
+       deref->mode == nir_var_mem_shared ||
+       deref->mode == nir_var_mem_global ||
+       b->nb.shader->info.stage == MESA_SHADER_KERNEL)
       return deref;
+
+   return parent;
 }
 
 struct vtn_ssa_value *
 vtn_local_load(struct vtn_builder *b, nir_deref_instr *src,
                enum gl_access_qualifier access, unsigned alignment)
 {
-   nir_deref_instr *src_tail = get_deref_tail(src);
+   nir_deref_instr *src_tail = get_deref_tail(b, src);
    struct vtn_ssa_value *val = vtn_create_ssa_value(b, src_tail->type);
    _vtn_local_load_store(b, true, src_tail, val, access, alignment, 0);
 
@@ -738,7 +743,7 @@ vtn_local_store(struct vtn_builder *b, struct vtn_ssa_value *src,
                 nir_deref_instr *dest, enum gl_access_qualifier access,
                 unsigned alignment)
 {
-   nir_deref_instr *dest_tail = get_deref_tail(dest);
+   nir_deref_instr *dest_tail = get_deref_tail(b, dest);
 
    if (dest_tail != dest) {
       struct vtn_ssa_value *val = vtn_create_ssa_value(b, dest_tail->type);
