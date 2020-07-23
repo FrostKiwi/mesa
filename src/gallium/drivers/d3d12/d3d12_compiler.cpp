@@ -134,6 +134,10 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    NIR_PASS_V(nir, d3d12_create_bare_samplers);
    NIR_PASS_V(nir, nir_lower_tex, &tex_options);
 
+   if (key->samples_int_textures)
+      NIR_PASS_V(nir, dxil_lower_sample_to_txf_for_integer_tex,
+                 key->tex_wrap_states, key->swizzle_state);
+
    if (key->vs.needs_format_emulation)
       d3d12_nir_lower_vs_vertex_conversion(nir, key->vs.format_conversion);
 
@@ -524,6 +528,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
    }
 
    if (sel_ctx->samples_int_textures) {
+      key->samples_int_textures = sel_ctx->samples_int_textures;
       key->n_texture_states = sel_ctx->ctx->num_sampler_views[stage];
       /* Copy only states with integer textures */
       for(int i = 0; i < key->n_texture_states; ++i) {
@@ -593,10 +598,6 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
       nir_function_impl *impl = nir_shader_get_entrypoint(new_nir_variant);
       nir_shader_gather_info(new_nir_variant, impl);
    }
-
-   if (sel_ctx->samples_int_textures)
-      NIR_PASS_V(new_nir_variant, dxil_lower_sample_to_txf_for_integer_tex,
-                 key.tex_wrap_states, key.swizzle_state);
 
    if (key.fs.missing_dual_src_outputs) {
       NIR_PASS_V(new_nir_variant, d3d12_add_missing_dual_src_target,
