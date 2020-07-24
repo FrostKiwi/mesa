@@ -491,21 +491,9 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
 
    if (!active_wrap_state->skip_boundary_conditions) {
 
-      switch (params.ncoord_comp) {
-      case 3:
-         params.wrap[2] = wrap_coords(b, coord_help[2], active_wrap_state->wrap[2], nir_channel(b, params.size, 2));
-         use_border_color = nir_ior(b, use_border_color, params.wrap[2].use_border_color);
-         /* fallthrough */
-      case 2:
-         params.wrap[1] = wrap_coords(b, coord_help[1], active_wrap_state->wrap[1], nir_channel(b, params.size, 1));
-         use_border_color = nir_ior(b, use_border_color, params.wrap[1].use_border_color);
-         /* fallthrough */
-      case 1:
-         params.wrap[0] = wrap_coords(b, coord_help[0], active_wrap_state->wrap[0], nir_channel(b, params.size, 0));
-         use_border_color = nir_ior(b, use_border_color, params.wrap[0].use_border_color);
-         break;
-      default:
-         unreachable("unsupported coordinate count");
+      for (int i = 0; i < params.ncoord_comp; ++i) {
+         params.wrap[i] = wrap_coords(b, coord_help[i], active_wrap_state->wrap[i], nir_channel(b, params.size, i));
+         use_border_color = nir_ior(b, use_border_color, params.wrap[i].use_border_color);
       }
 
       if (tex->is_array)
