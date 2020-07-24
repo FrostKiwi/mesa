@@ -135,6 +135,7 @@ vtn_type_add_to_function_params(struct vtn_builder *b,
    case vtn_base_type_matrix:
    case vtn_base_type_struct:
    case vtn_base_type_pointer:
+   case vtn_base_type_event:
       glsl_type_add_to_function_params(type->type, func, param_idx);
       break;
 
