@@ -2862,7 +2862,8 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
       break;
 
    case SpvOpImageQuerySizeLod:
-      image.image = vtn_value(b, w[3], vtn_value_type_pointer)->pointer;
+      res_val = vtn_value(b, w[3], vtn_value_type_pointer);
+      image.image = res_val->pointer;
       image.coord = NULL;
       image.sample = NULL;
       image.lod = vtn_ssa_value(b, w[4])->def;
