@@ -205,7 +205,7 @@ vtn_builtin_has_hw_fma32(struct vtn_builder *b, SpvOp opcode,
    struct vtn_ssa_value *res = vtn_create_ssa_value(b, res_type->type);
 
    res->def = nir_imm_bool(&b->nb, !b->nb.shader->options->lower_ffma);
-   vtn_push_ssa(b, w[2], res_type, res);
+   vtn_push_ssa_value(b, w[2], res);
 }
 
 static const struct vtn_builtin_function builtin_funcs[] = {
