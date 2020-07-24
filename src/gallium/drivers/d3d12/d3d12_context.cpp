@@ -691,14 +691,14 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
       ctx->samplers[shader][start_slot + i] = sampler;
       dxil_wrap_sampler_state &wrap = ctx->tex_wrap_states[shader][start_slot + i];
       if (sampler) {
-         shader_state_dirty |= wrap.wrap_r != sampler->wrap_r ||
-                               wrap.wrap_s != sampler->wrap_s ||
-                               wrap.wrap_t != sampler->wrap_t;
+         shader_state_dirty |= wrap.wrap[0] != sampler->wrap_s ||
+                               wrap.wrap[1] != sampler->wrap_t ||
+                               wrap.wrap[2] != sampler->wrap_r;
          shader_state_dirty |= !!memcmp(wrap.border_color, sampler->border_color, 4 * sizeof(float));
 
-         wrap.wrap_r = sampler->wrap_r;
-         wrap.wrap_s = sampler->wrap_s;
-         wrap.wrap_t = sampler->wrap_t;
+         wrap.wrap[0] = sampler->wrap_s;
+         wrap.wrap[1] = sampler->wrap_t;
+         wrap.wrap[2] = sampler->wrap_r;
          wrap.lod_bias = sampler->lod_bias;
          wrap.min_lod = sampler->min_lod;
          wrap.max_lod = sampler->max_lod;

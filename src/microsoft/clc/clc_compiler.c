@@ -186,13 +186,13 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
    //
    // For every use of an image in a different way, we'll add an
    // appropriate uniform to match it. That can result in up to
-   // 3 uniforms (float4, int4, uint4) for each image. Only one of these 
-   // formats will actually produce correct data, but a single kernel 
+   // 3 uniforms (float4, int4, uint4) for each image. Only one of these
+   // formats will actually produce correct data, but a single kernel
    // could use runtime conditionals to potentially access any of them.
    //
    // If the image is used in a query that doesn't have a corresponding
    // DXIL intrinsic (CL image channel order or channel format), then
-   // we'll add a kernel input for that data that'll be lowered by the 
+   // we'll add a kernel input for that data that'll be lowered by the
    // explicit IO pass later on.
    //
    // After all that, we can remove the image input variable and deref.
@@ -1133,9 +1133,9 @@ clc_to_dxil(struct clc_context *ctx,
          metadata->args[i].globconstptr.buf_id = uav_id++;
       } else if (glsl_type_is_sampler(var->type)) {
          unsigned address_mode = conf ? conf->args[i].sampler.addressing_mode : 0u;
-         int_sampler_states[sampler_id].wrap_r =
-            int_sampler_states[sampler_id].wrap_s =
-            int_sampler_states[sampler_id].wrap_t = wrap_from_cl_addressing(address_mode);
+         int_sampler_states[sampler_id].wrap[0] =
+            int_sampler_states[sampler_id].wrap[1] =
+            int_sampler_states[sampler_id].wrap[2] = wrap_from_cl_addressing(address_mode);
          int_sampler_states[sampler_id].is_nonnormalized_coords =
             conf ? !conf->args[i].sampler.normalized_coords : 0;
          int_sampler_states[sampler_id].is_linear_filtering =
@@ -1170,9 +1170,9 @@ clc_to_dxil(struct clc_context *ctx,
    nir_foreach_variable_safe(var, &nir->uniforms) {
       if (glsl_type_is_sampler(var->type) &&
           var->constant_initializer) {
-         int_sampler_states[sampler_id].wrap_r =
-            int_sampler_states[sampler_id].wrap_s =
-            int_sampler_states[sampler_id].wrap_t =
+         int_sampler_states[sampler_id].wrap[0] =
+            int_sampler_states[sampler_id].wrap[0] =
+            int_sampler_states[sampler_id].wrap[0] =
             wrap_from_cl_addressing(var->constant_initializer->values[0].u32);
          int_sampler_states[sampler_id].is_nonnormalized_coords =
             !var->constant_initializer->values[1].u32;

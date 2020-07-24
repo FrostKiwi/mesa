@@ -43,14 +43,12 @@ typedef struct {
    float lod_bias;
    float min_lod, max_lod;
    int last_level;
-   unsigned wrap_r:4;
-   unsigned wrap_s:4;
-   unsigned wrap_t:4;
-   unsigned is_int_sampler:1;
-   unsigned is_nonnormalized_coords:1;
-   unsigned is_linear_filtering:1;
-   unsigned skip_boundary_conditions:1;
-   unsigned unused:16;
+   uint8_t wrap[3];
+   uint8_t is_int_sampler:1;
+   uint8_t is_nonnormalized_coords:1;
+   uint8_t is_linear_filtering:1;
+   uint8_t skip_boundary_conditions:1;
+   uint8_t unused:4;
 } dxil_wrap_sampler_state;
 
 bool
