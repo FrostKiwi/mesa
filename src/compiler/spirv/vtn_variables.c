@@ -2849,9 +2849,7 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
       else
          vtn_fail("OpCopyMemorySized size argument must be an SSA or constant integer.");
 
-      nir_memcpy_deref_with_access(&b->nb, dst, src, size,
-                                   vtn_value_access(vtn_untyped_value(b, w[1])),
-                                   vtn_value_access(vtn_untyped_value(b, w[2])));
+      nir_memcpy_deref_with_access(&b->nb, dst, src, size, 0, 0);
       break;
    }
 
