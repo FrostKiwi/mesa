@@ -493,15 +493,15 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
 
       switch (params.ncoord_comp) {
       case 3:
-         params.wrap[2] = wrap_coords(b, coord_help[2], active_wrap_state->wrap_t, nir_channel(b, params.size, 2));
+         params.wrap[2] = wrap_coords(b, coord_help[2], active_wrap_state->wrap_r, nir_channel(b, params.size, 2));
          use_border_color = nir_ior(b, use_border_color, params.wrap[2].use_border_color);
          /* fallthrough */
       case 2:
-         params.wrap[1] = wrap_coords(b, coord_help[1], active_wrap_state->wrap_s, nir_channel(b, params.size, 1));
+         params.wrap[1] = wrap_coords(b, coord_help[1], active_wrap_state->wrap_t, nir_channel(b, params.size, 1));
          use_border_color = nir_ior(b, use_border_color, params.wrap[1].use_border_color);
          /* fallthrough */
       case 1:
-         params.wrap[0] = wrap_coords(b, coord_help[0], active_wrap_state->wrap_r, nir_channel(b, params.size, 0));
+         params.wrap[0] = wrap_coords(b, coord_help[0], active_wrap_state->wrap_s, nir_channel(b, params.size, 0));
          use_border_color = nir_ior(b, use_border_color, params.wrap[0].use_border_color);
          break;
       default:
