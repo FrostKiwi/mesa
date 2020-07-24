@@ -128,8 +128,11 @@ wrap_clamp_to_edge(nir_builder *b, wrap_result_t *wrap_params, nir_ssa_def *size
 static void
 wrap_repeat(nir_builder *b, wrap_result_t *wrap_params, nir_ssa_def *size)
 {
-   /* mod(coord, size) */
+   /* mod(coord, size)
+    * This instruction must be exact, otherwise certain sizes result in
+    * incorrect sampling */
    wrap_params->coords = nir_fmod(b, wrap_params->coords, size);
+   nir_instr_as_alu(wrap_params->coords->parent_instr)->exact = true;
 }
 
 static nir_ssa_def *
@@ -144,7 +147,9 @@ static void
 wrap_mirror_repeat(nir_builder *b, wrap_result_t *wrap_params, nir_ssa_def *size)
 {
    /* (size − 1) − mirror(mod(coord, 2 * size) − size) */
-   nir_ssa_def *a = nir_fsub(b, nir_fmod(b, wrap_params->coords, nir_fmul(b, nir_imm_float(b, 2.0f), size)), size);
+   nir_ssa_def *coord_mod2size = nir_fmod(b, wrap_params->coords, nir_fmul(b, nir_imm_float(b, 2.0f), size));
+   nir_instr_as_alu(coord_mod2size->parent_instr)->exact = true;
+   nir_ssa_def *a = nir_fsub(b, coord_mod2size, size);
    wrap_params->coords = nir_fsub(b, nir_fsub(b, size, nir_imm_float(b, 1.0f)), mirror(b, a));
 }
 
