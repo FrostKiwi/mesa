@@ -1031,7 +1031,7 @@ emit_global_consts(struct ntd_context *ctx, struct exec_list *globals)
 }
 
 static bool
-emit_cbv(struct ntd_context *ctx, unsigned binding, 
+emit_cbv(struct ntd_context *ctx, unsigned binding,
          unsigned size, char *name)
 {
    unsigned idx = ctx->num_cbvs;
