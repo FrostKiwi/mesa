@@ -776,13 +776,13 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
       break;
 
    case SpvOpOrdered:
-      val->ssa->def = nir_iand(&b->nb, nir_feq(&b->nb, src[0], src[0]),
-                                       nir_feq(&b->nb, src[1], src[1]));
+      dest->def = nir_iand(&b->nb, nir_feq(&b->nb, src[0], src[0]),
+                                   nir_feq(&b->nb, src[1], src[1]));
       break;
 
    case SpvOpUnordered:
-      val->ssa->def = nir_ior(&b->nb, nir_fne(&b->nb, src[0], src[0]),
-                                      nir_fne(&b->nb, src[1], src[1]));
+      dest->def = nir_ior(&b->nb, nir_fne(&b->nb, src[0], src[0]),
+                                  nir_fne(&b->nb, src[1], src[1]));
       break;
 
    case SpvOpIsInf: {
