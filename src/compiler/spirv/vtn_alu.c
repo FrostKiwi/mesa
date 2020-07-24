@@ -965,16 +965,16 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    case SpvOpBitCount: {
       bool swap;
       unsigned src_bit_size = glsl_get_bit_size(vtn_src[0]->type);
-      unsigned dst_bit_size = glsl_get_bit_size(type);
-      nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, val, opcode, &swap,
+      unsigned dst_bit_size = glsl_get_bit_size(dest_type);
+      nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, dest_val, opcode, &swap,
                                                   src_bit_size, dst_bit_size);
-      val->ssa->def = nir_build_alu(&b->nb, op, src[0], src[1], src[2], src[3]);
+      dest->def = nir_build_alu(&b->nb, op, src[0], src[1], src[2], src[3]);
 
       /* bit_count always returns int32, but the SPIR-V opcode just says the return
        * value needs to be big enough to store the number of bits.
        */
       if (dst_bit_size != 32) {
-         val->ssa->def = nir_u2u(&b->nb, val->ssa->def, dst_bit_size);
+         dest->def = nir_u2u(&b->nb, dest->def, dst_bit_size);
       }
       break;
    }
