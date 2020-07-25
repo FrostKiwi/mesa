@@ -684,6 +684,13 @@ dxil_nir_lower_ubo_to_temp(nir_shader *nir)
       var->data.mode = nir_var_shader_temp;
       exec_node_remove(&var->node);
       nir_shader_add_variable(nir, var);
+
+      /* Make sure the variable has a name.
+       * DXIL variables must have names.
+       */
+      if (!var->name)
+         var->name = ralloc_asprintf(nir, "global_%d", exec_list_length(&nir->globals));
+
       progress = true;
    }
    _mesa_hash_table_destroy(ubo_to_temp, NULL);
