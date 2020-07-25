@@ -1826,15 +1826,7 @@ vtn_storage_class_to_mode(struct vtn_builder *b,
       break;
    case SpvStorageClassUniformConstant:
       if (b->shader->info.stage == MESA_SHADER_KERNEL) {
-         if (interface_type &&
-               (interface_type->base_type == vtn_base_type_image ||
-                interface_type->base_type == vtn_base_type_sampler)) {
-            /* For kernels, SPIR-V declares these as uniform, but we know
-             * that we're always going to get them as input.
-	     */
-            mode = vtn_variable_mode_input;
-            nir_mode = nir_var_shader_in;
-         } else if (b->options->constant_as_global) {
+         if (b->options->constant_as_global) {
             mode = vtn_variable_mode_cross_workgroup;
             nir_mode = nir_var_mem_global;
          } else {
