@@ -3117,7 +3117,6 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    enum gl_access_qualifier access = 0;
    vtn_foreach_decoration(b, res_val, non_uniform_decoration_cb, &access);
    nir_intrinsic_set_access(intrin, access);
-   nir_intrinsic_set_format(intrin, image.image->type->image_format);
 
    switch (opcode) {
    case SpvOpImageQuerySize:
@@ -3152,15 +3151,17 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
        */
       intrin->src[4] = nir_src_for_ssa(image.lod);
 
-      if (image.image->type->image_format == PIPE_FORMAT_NONE) {
+      if (opcode == SpvOpImageWrite) {
          /* Add type info to the intrinsic for storing to untyped OpenCL images */
-         enum pipe_format format;
-         switch (glsl_get_base_type(value->type)) {
-         case GLSL_TYPE_INT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
-         case GLSL_TYPE_UINT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
-         case GLSL_TYPE_FLOAT: format = PIPE_FORMAT_R32G32B32A32_FLOAT; break;
-         case GLSL_TYPE_FLOAT16: format = PIPE_FORMAT_R16G16B16A16_FLOAT; break;
-         default: unreachable("unexpected format");
+         enum pipe_format format = vtn_get_value_type(b, w[1])->image_format;
+         if (format == PIPE_FORMAT_NONE) {
+            switch (glsl_get_base_type(value->type)) {
+            case GLSL_TYPE_INT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
+            case GLSL_TYPE_UINT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
+            case GLSL_TYPE_FLOAT: format = PIPE_FORMAT_R32G32B32A32_FLOAT; break;
+            case GLSL_TYPE_FLOAT16: format = PIPE_FORMAT_R16G16B16A16_FLOAT; break;
+            default: unreachable("unexpected format");
+            }
          }
          nir_intrinsic_set_format(intrin, format);
       }
@@ -3181,7 +3182,6 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
    case SpvOpAtomicAnd:
    case SpvOpAtomicOr:
    case SpvOpAtomicXor:
-      assert(image.image->type->image_format != PIPE_FORMAT_NONE);
       fill_common_atomic_sources(b, opcode, w, &intrin->src[3]);
       break;
 
@@ -3218,15 +3218,17 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
 
       vtn_push_nir_ssa(b, w[2], result);
 
-      if (image.image->type->image_format == PIPE_FORMAT_NONE) {
+      if (opcode == SpvOpImageRead) {
          /* Add type info to the intrinsic for reading from OpenCL images */
-         enum pipe_format format;
-         switch (glsl_get_base_type(type->type)) {
-         case GLSL_TYPE_INT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
-         case GLSL_TYPE_UINT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
-         case GLSL_TYPE_FLOAT: format = PIPE_FORMAT_R32G32B32A32_FLOAT; break;
-         case GLSL_TYPE_FLOAT16: format = PIPE_FORMAT_R16G16B16A16_FLOAT; break;
-         default: unreachable("unexpected format");
+         enum pipe_format format = vtn_get_value_type(b, w[1])->image_format;
+         if (format == PIPE_FORMAT_NONE) {
+            switch (glsl_get_base_type(type->type)) {
+            case GLSL_TYPE_INT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
+            case GLSL_TYPE_UINT: format = PIPE_FORMAT_R32G32B32A32_SINT; break;
+            case GLSL_TYPE_FLOAT: format = PIPE_FORMAT_R32G32B32A32_FLOAT; break;
+            case GLSL_TYPE_FLOAT16: format = PIPE_FORMAT_R16G16B16A16_FLOAT; break;
+            default: unreachable("unexpected format");
+            }
          }
          nir_intrinsic_set_format(intrin, format);
       }
