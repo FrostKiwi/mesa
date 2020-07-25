@@ -2504,7 +2504,7 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
       ptr_type->storage_class = SpvStorageClassUniform;
 
       ptr_type->type = nir_address_format_to_glsl_type(
-         vtn_mode_to_address_format(b, vtn_variable_mode_uniform));
+         vtn_mode_to_address_format(b, vtn_variable_mode_function));
 
       nir_constant *sampler_constant = rzalloc(b, nir_constant);
       sampler_constant->values[0].u32 = w[3]; /*Addressing mode*/
