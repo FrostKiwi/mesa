@@ -2963,8 +2963,8 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
 
    case SpvOpImageQueryFormat:
    case SpvOpImageQueryOrder:
-      res_val = vtn_value(b, w[3], vtn_value_type_pointer);
-      image.image = res_val->pointer;
+      res_val = vtn_untyped_value(b, w[3]);
+      image.image = vtn_get_image(b, w[3]);
       image.coord = NULL;
       image.sample = NULL;
       image.lod = NULL;
