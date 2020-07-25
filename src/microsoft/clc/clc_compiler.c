@@ -208,7 +208,6 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
    nir_ssa_def *format_deref_dest = NULL, *order_deref_dest = NULL;
 
    nir_variable *in_var = nir_deref_instr_get_variable(context->deref);
-   assert(in_var->data.mode == nir_var_shader_in);
    enum gl_access_qualifier access = in_var->data.access;
 
    context->metadata_index = 0;
@@ -396,25 +395,15 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
 }
 
 static void
-clc_lower_sampler_deref(nir_builder *b, nir_deref_instr *deref)
-{
-    nir_variable *in_var = nir_deref_instr_get_variable(deref);
-    nir_variable *uniform = nir_variable_create(
-       b->shader, nir_var_uniform, in_var->type, NULL);
-    uniform->data.binding = in_var->data.binding;
-
-    b->cursor = nir_after_instr(&deref->instr);
-    nir_deref_instr *deref_uniform = nir_build_deref_var(b, uniform);
-    nir_ssa_def_rewrite_uses(&deref->dest.ssa,
-       nir_src_for_ssa(&deref_uniform->dest.ssa));
-
-    nir_instr_remove(&deref->instr);
-    exec_node_remove(&in_var->node);
-}
-
-static void
 clc_lower_images(nir_shader *nir, struct clc_image_lower_context *context)
 {
+   /* We'll do this in three steps:
+    * 1. Change the deref mode for derefs of images/samplers to uniform.
+    * 2. Run nir_opt_deref to remove casts, now that the deref modes match
+    * 3. We should have unbroken deref chains from variables to their loads/stores,
+    *    so follow those chains and adjust the variables to something saner.
+    */
+
    nir_foreach_function(func, nir) {
       if (!func->is_entrypoint)
          continue;
@@ -429,13 +418,39 @@ clc_lower_images(nir_shader *nir, struct clc_image_lower_context *context)
                context->deref = nir_instr_as_deref(instr);
 
                if (context->deref->mode == nir_var_shader_in &&
-                   glsl_type_is_image(context->deref->type)) {
+                   (glsl_type_is_image(context->deref->type) ||
+                    glsl_type_is_sampler(context->deref->type))) {
+                  assert(context->deref->deref_type == nir_deref_type_var);
+                  context->deref->mode = nir_var_uniform;
+
+                  nir_variable *var = nir_deref_instr_get_variable(context->deref);
+                  var->data.mode = nir_var_uniform;
+                  exec_node_remove(&var->node);
+                  nir_shader_add_variable(nir, var);
+               }
+            }
+         }
+      }
+   }
+
+   nir_opt_deref(nir);
+
+   nir_foreach_function(func, nir) {
+      if (!func->is_entrypoint)
+         continue;
+      assert(func->impl);
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type == nir_instr_type_deref) {
+               context->deref = nir_instr_as_deref(instr);
+
+               if (glsl_type_is_image(context->deref->type)) {
                   assert(context->deref->deref_type == nir_deref_type_var);
                   clc_lower_input_image_deref(&b, context);
-               } else if (context->deref->mode == nir_var_shader_in &&
-                  glsl_type_is_sampler(context->deref->type)) {
-                  assert(context->deref->deref_type == nir_deref_type_var);
-                  clc_lower_sampler_deref(&b, context->deref);
                }
             }
          }
@@ -1101,10 +1116,6 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_lower_goto_ifs);
    NIR_PASS_V(nir, nir_opt_dead_cf);
 
-   // Before removing dead uniforms, dedupe constant samplers to make more dead uniforms
-   NIR_PASS_V(nir, clc_nir_dedupe_const_samplers);
-   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform | nir_var_mem_ubo);
-
    struct clc_dxil_metadata *metadata = &dxil->metadata;
 
    metadata->args = calloc(dxil->kernel->num_args,
@@ -1166,6 +1177,20 @@ clc_to_dxil(struct clc_context *ctx,
       i++;
    }
 
+   // Inline all functions first.
+   // according to the comment on nir_inline_functions
+   NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
+   NIR_PASS_V(nir, nir_lower_returns);
+   NIR_PASS_V(nir, nir_lower_libclc, ctx->libclc_nir);
+   NIR_PASS_V(nir, nir_inline_functions);
+   NIR_PASS_V(nir, nir_copy_prop);
+   NIR_PASS_V(nir, nir_opt_deref);
+   NIR_PASS_V(nir, nir_opt_dce);
+
+   // Before removing dead uniforms, dedupe constant samplers to make more dead uniforms
+   NIR_PASS_V(nir, clc_nir_dedupe_const_samplers);
+   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform | nir_var_mem_ubo);
+
    // Assign bindings for constant samplers
    nir_foreach_variable_safe(var, &nir->uniforms) {
       if (glsl_type_is_sampler(var->type) &&
@@ -1181,14 +1206,6 @@ clc_to_dxil(struct clc_context *ctx,
          var->data.binding = sampler_id++;
       }
    }
-
-   // Inline all functions first.
-   // according to the comment on nir_inline_functions
-   NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
-   NIR_PASS_V(nir, nir_lower_returns);
-   NIR_PASS_V(nir, nir_lower_libclc, ctx->libclc_nir);
-   NIR_PASS_V(nir, nir_inline_functions);
-   NIR_PASS_V(nir, nir_opt_deref);
 
    // Pick off the single entrypoint that we want.
    foreach_list_typed_safe(nir_function, func, node, &nir->functions) {
