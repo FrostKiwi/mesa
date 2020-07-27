@@ -419,7 +419,7 @@ byte_range_cb(unsigned byte, void *data)
 {
    struct byte_range_cb_state *state = data;
    state->min = MIN2(state->min, byte);
-   state->max = MAX2(state->max, byte);
+   state->max = MAX2(state->max, byte + 1);
 }
 
 static void
