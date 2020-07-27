@@ -644,7 +644,7 @@ ttn_src_for_file_and_index(struct ttn_compile *c, unsigned file, unsigned index,
          break;
       case TGSI_SEMANTIC_BLOCK_ID:
          op = nir_intrinsic_load_work_group_id;
-         load = nir_load_work_group_id(b);
+         load = nir_load_work_group_id(b, 32);
          break;
       case TGSI_SEMANTIC_CS_USER_DATA_AMD:
          op = nir_intrinsic_load_user_data_amd;
