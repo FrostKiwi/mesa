@@ -26,7 +26,7 @@
 #include "compiler/brw_compiler.h"
 
 bool
-anv_nir_add_base_work_group_id(nir_shader *shader)
+anv_nir_add_base_work_group_id_zero_base(nir_shader *shader)
 {
    assert(shader->info.stage == MESA_SHADER_COMPUTE);
 
@@ -44,7 +44,7 @@ anv_nir_add_base_work_group_id(nir_shader *shader)
                continue;
 
             nir_intrinsic_instr *load_id = nir_instr_as_intrinsic(instr);
-            if (load_id->intrinsic != nir_intrinsic_load_work_group_id)
+            if (load_id->intrinsic != nir_intrinsic_load_work_group_id_zero_base)
                continue;
 
             b.cursor = nir_after_instr(&load_id->instr);
@@ -56,7 +56,7 @@ anv_nir_add_base_work_group_id(nir_shader *shader)
             nir_ssa_dest_init(&load_base->instr, &load_base->dest, 3, 32, NULL);
             nir_intrinsic_set_base(load_base,
                                    offsetof(struct anv_push_constants,
-                                            cs.base_work_group_id));
+                                            cs.base_work_group_id_zero_base));
             nir_intrinsic_set_range(load_base, 3 * sizeof(uint32_t));
             nir_builder_instr_insert(&b, &load_base->instr);
 

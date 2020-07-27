@@ -2339,7 +2339,7 @@ ntq_emit_intrinsic(struct v3d_compile *c, nir_intrinsic_instr *instr)
                                        vir_uniform_ui(c, 32 - c->local_invocation_index_bits)));
                 break;
 
-        case nir_intrinsic_load_work_group_id:
+        case nir_intrinsic_load_work_group_id_zero_base:
                 ntq_store_dest(c, &instr->dest, 0,
                                vir_AND(c, c->cs_payload[0],
                                        vir_uniform_ui(c, 0xffff)));

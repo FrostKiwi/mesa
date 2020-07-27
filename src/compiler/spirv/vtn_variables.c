@@ -1365,7 +1365,7 @@ vtn_get_builtin_location(struct vtn_builder *b,
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInWorkgroupId:
-      *location = SYSTEM_VALUE_WORK_GROUP_ID;
+      *location = SYSTEM_VALUE_WORK_GROUP_ID_ZERO_BASE;
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInLocalInvocationId:
@@ -1377,7 +1377,7 @@ vtn_get_builtin_location(struct vtn_builder *b,
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInGlobalInvocationId:
-      *location = SYSTEM_VALUE_GLOBAL_INVOCATION_ID;
+      *location = SYSTEM_VALUE_GLOBAL_INVOCATION_ID_ZERO_BASE;
       set_mode_system_value(b, mode);
       break;
    case SpvBuiltInGlobalLinearId:

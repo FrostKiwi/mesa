@@ -67,7 +67,7 @@ bool ComputeShaderFromNir::emit_intrinsic_instruction_override(nir_intrinsic_ins
    switch (instr->intrinsic) {
    case nir_intrinsic_load_local_invocation_id:
       return emit_load_3vec(instr, m_local_invocation_id);
-   case nir_intrinsic_load_work_group_id:
+   case nir_intrinsic_load_work_group_id_zero_base:
       return emit_load_3vec(instr, m_workgroup_id);
    case nir_intrinsic_load_num_work_groups:
       return emit_load_num_work_groups(instr);

@@ -183,11 +183,11 @@ emit_system_values_block(nir_block *block, fs_visitor *v)
             *reg = *v->emit_samplemaskin_setup();
          break;
 
-      case nir_intrinsic_load_work_group_id:
+      case nir_intrinsic_load_work_group_id_zero_base:
          assert(v->stage == MESA_SHADER_COMPUTE);
-         reg = &v->nir_system_values[SYSTEM_VALUE_WORK_GROUP_ID];
+         reg = &v->nir_system_values[SYSTEM_VALUE_WORK_GROUP_ID_ZERO_BASE];
          if (reg->file == BAD_FILE)
-            *reg = *v->emit_cs_work_group_id_setup();
+            *reg = *v->emit_cs_work_group_id_zero_base_setup();
          break;
 
       case nir_intrinsic_load_helper_invocation:
@@ -3742,7 +3742,7 @@ fs_visitor::nir_emit_cs_intrinsic(const fs_builder &bld,
       break;
 
    case nir_intrinsic_load_local_invocation_id:
-   case nir_intrinsic_load_work_group_id: {
+   case nir_intrinsic_load_work_group_id_zero_base: {
       gl_system_value sv = nir_system_value_from_intrinsic(instr->intrinsic);
       fs_reg val = nir_system_values[sv];
       assert(val.file != BAD_FILE);

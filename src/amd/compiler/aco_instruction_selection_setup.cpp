@@ -691,7 +691,7 @@ void init_context(isel_context *ctx, nir_shader *shader)
                RegType type = RegType::sgpr;
                switch(intrinsic->intrinsic) {
                   case nir_intrinsic_load_push_constant:
-                  case nir_intrinsic_load_work_group_id:
+                  case nir_intrinsic_load_work_group_id_zero_base:
                   case nir_intrinsic_load_num_work_groups:
                   case nir_intrinsic_load_subgroup_id:
                   case nir_intrinsic_load_num_subgroups:

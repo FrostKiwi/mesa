@@ -1546,7 +1546,7 @@ static unsigned
 compute_builtin_arg(nir_op op)
 {
         switch (op) {
-        case nir_intrinsic_load_work_group_id:
+        case nir_intrinsic_load_work_group_id_zero_base:
                 return 0x14;
         case nir_intrinsic_load_local_invocation_id:
                 return 0x10;
@@ -2032,7 +2032,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
                 emit_sysval_read(ctx, &instr->instr, 3, 0);
                 break;
 
-        case nir_intrinsic_load_work_group_id:
+        case nir_intrinsic_load_work_group_id_zero_base:
         case nir_intrinsic_load_local_invocation_id:
                 emit_compute_builtin(ctx, instr);
                 break;

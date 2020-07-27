@@ -100,7 +100,7 @@ visit_intrinsic(nir_intrinsic_instr *instr, struct divergence_state *state)
    case nir_intrinsic_vote_feq:
    case nir_intrinsic_vote_ieq:
    case nir_intrinsic_load_work_dim:
-   case nir_intrinsic_load_work_group_id:
+   case nir_intrinsic_load_work_group_id_zero_base:
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_local_group_size:
    case nir_intrinsic_load_subgroup_id:
@@ -323,7 +323,7 @@ visit_intrinsic(nir_intrinsic_instr *instr, struct divergence_state *state)
    case nir_intrinsic_load_invocation_id:
    case nir_intrinsic_load_local_invocation_id:
    case nir_intrinsic_load_local_invocation_index:
-   case nir_intrinsic_load_global_invocation_id:
+   case nir_intrinsic_load_global_invocation_id_zero_base:
    case nir_intrinsic_load_global_invocation_index:
    case nir_intrinsic_load_subgroup_invocation:
    case nir_intrinsic_load_helper_invocation:

@@ -246,12 +246,12 @@ gather_intrinsic_info(const nir_shader *nir, const nir_intrinsic_instr *instr,
 		info->cs.uses_grid_size = true;
 		break;
 	case nir_intrinsic_load_local_invocation_id:
-	case nir_intrinsic_load_work_group_id: {
+	case nir_intrinsic_load_work_group_id_zero_base: {
 		unsigned mask = nir_ssa_def_components_read(&instr->dest.ssa);
 		while (mask) {
 			unsigned i = u_bit_scan(&mask);
 
-			if (instr->intrinsic == nir_intrinsic_load_work_group_id)
+			if (instr->intrinsic == nir_intrinsic_load_work_group_id_zero_base)
 				info->cs.uses_block_id[i] = true;
 			else
 				info->cs.uses_thread_id[i] = true;

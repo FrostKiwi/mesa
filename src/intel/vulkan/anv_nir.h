@@ -70,7 +70,7 @@ void anv_nir_compute_push_layout(const struct anv_physical_device *pdevice,
 void anv_nir_validate_push_layout(struct brw_stage_prog_data *prog_data,
                                   struct anv_pipeline_bind_map *map);
 
-bool anv_nir_add_base_work_group_id(nir_shader *shader);
+bool anv_nir_add_base_work_group_id_zero_base(nir_shader *shader);
 
 #ifdef __cplusplus
 }

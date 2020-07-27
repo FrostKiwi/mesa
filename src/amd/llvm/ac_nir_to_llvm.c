@@ -3697,7 +3697,7 @@ static void visit_intrinsic(struct ac_nir_context *ctx,
 	case nir_intrinsic_load_subgroup_invocation:
 		result = ac_get_thread_id(&ctx->ac);
 		break;
-	case nir_intrinsic_load_work_group_id: {
+	case nir_intrinsic_load_work_group_id_zero_base: {
 		LLVMValueRef values[3];
 
 		for (int i = 0; i < 3; i++) {

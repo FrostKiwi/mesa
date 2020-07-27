@@ -113,12 +113,12 @@ cs_program_emit(struct fd_ringbuffer *ring, struct ir3_shader_variant *v)
 	OUT_PKT4(ring, REG_A6XX_SP_CS_UNKNOWN_A9B1, 1);
 	OUT_RING(ring, 0x41);
 
-	uint32_t local_invocation_id, work_group_id;
+	uint32_t local_invocation_id, work_group_id_zero_base;
 	local_invocation_id = ir3_find_sysval_regid(v, SYSTEM_VALUE_LOCAL_INVOCATION_ID);
-	work_group_id = ir3_find_sysval_regid(v, SYSTEM_VALUE_WORK_GROUP_ID);
+	work_group_id_zero_base = ir3_find_sysval_regid(v, SYSTEM_VALUE_WORK_GROUP_ID_ZERO_BASE);
 
 	OUT_PKT4(ring, REG_A6XX_HLSQ_CS_CNTL_0, 2);
-	OUT_RING(ring, A6XX_HLSQ_CS_CNTL_0_WGIDCONSTID(work_group_id) |
+	OUT_RING(ring, A6XX_HLSQ_CS_CNTL_0_WGIDCONSTID(work_group_id_zero_base) |
 		A6XX_HLSQ_CS_CNTL_0_UNK0(regid(63, 0)) |
 		A6XX_HLSQ_CS_CNTL_0_UNK1(regid(63, 0)) |
 		A6XX_HLSQ_CS_CNTL_0_LOCALIDREGID(local_invocation_id));

@@ -1576,7 +1576,7 @@ Converter::convert(nir_intrinsic_op intr)
       return SV_TESS_OUTER;
    case nir_intrinsic_load_vertex_id:
       return SV_VERTEX_ID;
-   case nir_intrinsic_load_work_group_id:
+   case nir_intrinsic_load_work_group_id_zero_base:
       return SV_CTAID;
    default:
       ERROR("unknown SVSemantic for nir_intrinsic_op %s\n",
@@ -1842,7 +1842,7 @@ Converter::visit(nir_intrinsic_instr *insn)
    case nir_intrinsic_load_tess_level_inner:
    case nir_intrinsic_load_tess_level_outer:
    case nir_intrinsic_load_vertex_id:
-   case nir_intrinsic_load_work_group_id: {
+   case nir_intrinsic_load_work_group_id_zero_base: {
       const DataType dType = getDType(insn);
       SVSemantic sv = convert(op);
       LValues &newDefs = convert(&insn->dest);

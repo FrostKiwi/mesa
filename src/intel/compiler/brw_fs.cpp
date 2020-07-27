@@ -8781,7 +8781,7 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
 }
 
 fs_reg *
-fs_visitor::emit_cs_work_group_id_setup()
+fs_visitor::emit_cs_work_group_id_zero_base_setup()
 {
    assert(stage == MESA_SHADER_COMPUTE);
 

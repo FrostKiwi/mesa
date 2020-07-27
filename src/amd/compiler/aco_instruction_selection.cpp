@@ -7564,7 +7564,7 @@ void visit_intrinsic(isel_context *ctx, nir_intrinsic_instr *instr)
       emit_split_vector(ctx, dst, 3);
       break;
    }
-   case nir_intrinsic_load_work_group_id: {
+   case nir_intrinsic_load_work_group_id_zero_base: {
       Temp dst = get_ssa_temp(ctx, &instr->dest.ssa);
       struct ac_arg *args = ctx->args->ac.workgroup_ids;
       bld.pseudo(aco_opcode::p_create_vector, Definition(dst),

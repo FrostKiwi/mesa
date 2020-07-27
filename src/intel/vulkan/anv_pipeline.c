@@ -1710,7 +1710,7 @@ anv_pipeline_compile_cs(struct anv_compute_pipeline *pipeline,
          return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
       }
 
-      NIR_PASS_V(stage.nir, anv_nir_add_base_work_group_id);
+      NIR_PASS_V(stage.nir, anv_nir_add_base_work_group_id_zero_base);
 
       anv_pipeline_lower_nir(&pipeline->base, mem_ctx, &stage, layout);
 

@@ -98,7 +98,7 @@ struct ir3_context {
 	struct ir3_instruction *tess_coord;
 
 	/* Compute shader inputs: */
-	struct ir3_instruction *local_invocation_id, *work_group_id;
+	struct ir3_instruction *local_invocation_id, *work_group_id_zero_base;
 
 	/* mapping from nir_register to defining instruction: */
 	struct hash_table *def_ht;

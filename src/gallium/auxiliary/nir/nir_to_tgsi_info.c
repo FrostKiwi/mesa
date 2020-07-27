@@ -224,12 +224,12 @@ static void scan_instruction(const struct nir_shader *nir,
             info->uses_block_size = true;
          break;
       case nir_intrinsic_load_local_invocation_id:
-      case nir_intrinsic_load_work_group_id: {
+      case nir_intrinsic_load_work_group_id_zero_base: {
          unsigned mask = nir_ssa_def_components_read(&intr->dest.ssa);
          while (mask) {
             unsigned i = u_bit_scan(&mask);
 
-            if (intr->intrinsic == nir_intrinsic_load_work_group_id)
+            if (intr->intrinsic == nir_intrinsic_load_work_group_id_zero_base)
                info->uses_block_id[i] = true;
             else
                info->uses_thread_id[i] = true;

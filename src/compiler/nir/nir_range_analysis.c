@@ -1185,13 +1185,13 @@ nir_unsigned_upper_bound(nir_shader *shader, struct hash_table *range_ht,
          else
             res = shader->info.cs.local_size[scalar.comp] - 1u;
          break;
-      case nir_intrinsic_load_work_group_id:
+      case nir_intrinsic_load_work_group_id_zero_base:
          res = config->max_work_group_count[scalar.comp] - 1u;
          break;
       case nir_intrinsic_load_num_work_groups:
          res = config->max_work_group_count[scalar.comp];
          break;
-      case nir_intrinsic_load_global_invocation_id:
+      case nir_intrinsic_load_global_invocation_id_zero_base:
          if (shader->info.cs.local_size_variable) {
             res = mul_clamp(config->max_work_group_size[scalar.comp],
                             config->max_work_group_count[scalar.comp]) - 1u;

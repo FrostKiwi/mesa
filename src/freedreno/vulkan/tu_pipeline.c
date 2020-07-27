@@ -488,12 +488,12 @@ tu6_emit_cs_config(struct tu_cs *cs, const struct tu_shader *shader,
 
    uint32_t local_invocation_id =
       ir3_find_sysval_regid(v, SYSTEM_VALUE_LOCAL_INVOCATION_ID);
-   uint32_t work_group_id =
-      ir3_find_sysval_regid(v, SYSTEM_VALUE_WORK_GROUP_ID);
+   uint32_t work_group_id_zero_base =
+      ir3_find_sysval_regid(v, SYSTEM_VALUE_WORK_GROUP_ID_ZERO_BASE);
 
    tu_cs_emit_pkt4(cs, REG_A6XX_HLSQ_CS_CNTL_0, 2);
    tu_cs_emit(cs,
-              A6XX_HLSQ_CS_CNTL_0_WGIDCONSTID(work_group_id) |
+              A6XX_HLSQ_CS_CNTL_0_WGIDCONSTID(work_group_id_zero_base) |
               A6XX_HLSQ_CS_CNTL_0_UNK0(regid(63, 0)) |
               A6XX_HLSQ_CS_CNTL_0_UNK1(regid(63, 0)) |
               A6XX_HLSQ_CS_CNTL_0_LOCALIDREGID(local_invocation_id));

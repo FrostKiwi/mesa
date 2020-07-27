@@ -129,7 +129,7 @@ lower_cs_derived_visitor::find_sysvals()
 
    if (!gl_WorkGroupID)
       gl_WorkGroupID = add_system_value(
-            SYSTEM_VALUE_WORK_GROUP_ID, glsl_type::uvec3_type, "gl_WorkGroupID");
+            SYSTEM_VALUE_WORK_GROUP_ID_ZERO_BASE, glsl_type::uvec3_type, "gl_WorkGroupID");
    if (!gl_LocalInvocationID)
       gl_LocalInvocationID = add_system_value(
             SYSTEM_VALUE_LOCAL_INVOCATION_ID, glsl_type::uvec3_type,
@@ -206,7 +206,7 @@ ir_visitor_status
 lower_cs_derived_visitor::visit(ir_dereference_variable *ir)
 {
    if (ir->var->data.mode == ir_var_system_value &&
-       ir->var->data.location == SYSTEM_VALUE_GLOBAL_INVOCATION_ID) {
+       ir->var->data.location == SYSTEM_VALUE_GLOBAL_INVOCATION_ID_ZERO_BASE) {
       make_gl_GlobalInvocationID();
       ir->var = gl_GlobalInvocationID;
       progress = true;
