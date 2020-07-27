@@ -343,40 +343,87 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
     * giving another LOD when querying the texture size */
    nir_ssa_def *size0 = nir_get_texture_size(b, tex);
 
-   /* Evaluate the LOD to be used for the texel fetch */
-   if (unlikely(tex->op == nir_texop_txl)) {
-      int lod_index = nir_tex_instr_src_index(tex, nir_tex_src_lod);
-      /* if we have an explicite LOD, take it, otherwise evaluate it */
-      params.lod = tex->src[lod_index].src.ssa;
-   } else if (unlikely(tex->op == nir_texop_txd)) {
-      int ddx_index = nir_tex_instr_src_index(tex, nir_tex_src_ddx);
-      int ddy_index = nir_tex_instr_src_index(tex, nir_tex_src_ddy);
-      assert(ddx_index >= 0 && ddy_index >= 0);
+   params.lod = nir_imm_int(b, 0.0);
 
-      nir_ssa_def *grad = nir_fmax(b,
-                                   tex->src[ddx_index].src.ssa,
-                                   tex->src[ddy_index].src.ssa);
+   if (active_wrap_state->last_level > 0) {
+      /* Later we use min_lod for clamping the LOD to a legal value */
+      float min_lod = MAX2(active_wrap_state->min_lod, 0.0f);
 
-      nir_ssa_def *r = nir_fmul(b, grad, nir_i2f32(b, size0));
-      nir_ssa_def *rho = nir_channel(b, r, 0);
-      for (int i = 1; i < params.ncoord_comp; ++i)
-         rho = nir_fmax(b, rho, nir_channel(b, r, i));
-      params.lod = nir_flog2(b, rho);
-   } else if (b->shader->info.stage == MESA_SHADER_FRAGMENT){
-      params.lod = dx_get_texture_lod(b, tex);
+      /* Evaluate the LOD to be used for the texel fetch */
+      if (unlikely(tex->op == nir_texop_txl)) {
+         int lod_index = nir_tex_instr_src_index(tex, nir_tex_src_lod);
+         /* if we have an explicite LOD, take it */
+         params.lod = tex->src[lod_index].src.ssa;
+      } else if (unlikely(tex->op == nir_texop_txd)) {
+         int ddx_index = nir_tex_instr_src_index(tex, nir_tex_src_ddx);
+         int ddy_index = nir_tex_instr_src_index(tex, nir_tex_src_ddy);
+         assert(ddx_index >= 0 && ddy_index >= 0);
+
+         nir_ssa_def *grad = nir_fmax(b,
+                                      tex->src[ddx_index].src.ssa,
+                                      tex->src[ddy_index].src.ssa);
+
+         nir_ssa_def *r = nir_fmul(b, grad, nir_i2f32(b, size0));
+         nir_ssa_def *rho = nir_channel(b, r, 0);
+         for (int i = 1; i < params.ncoord_comp; ++i)
+            rho = nir_fmax(b, rho, nir_channel(b, r, i));
+         params.lod = nir_flog2(b, rho);
+      } else if (b->shader->info.stage == MESA_SHADER_FRAGMENT){
+         params.lod = dx_get_texture_lod(b, tex);
+      } else {
+         /* Only fragment shaders provide the gradient information to evaluate a LOD,
+          * so force 0 otherwise */
+         params.lod = nir_imm_float(b, 0.0);
+      }
+
+      /* Evaluate bias according to OpenGL (4.6 (Compatibility  Profile) October 22, 2019),
+       * sec. 8.14.1, eq. (8.9)
+       *
+       *    lod' = lambda + CLAMP(bias_texobj + bias_texunit + bias_shader)
+       *
+       * bias_texobj is the value of TEXTURE_LOD_BIAS for the bound texture object. ...
+       * bias_textuint is the value of TEXTURE_LOD_BIAS for the current texture unit, ...
+       * bias shader is the value of the optional bias parameter in the texture
+       * lookup functions available to fragment shaders. ... The sum of these values
+       * is clamped to the range [−bias_max, bias_max] where bias_max is the value
+       * of the implementation defined constant MAX_TEXTURE_LOD_BIAS.
+       * In core contexts the value bias_texunit is dropped from above equation.
+       *
+       * Gallium provides the value lod_bias as the sum of bias_texobj and bias_texunit
+       * in compatibility contexts and as bias_texobj in core contexts, hence the
+       * implementation here is the same in both cases.
+       */
+      nir_ssa_def *lod_bias = nir_imm_float(b, active_wrap_state->lod_bias);
+
+      if (unlikely(tex->op == nir_texop_txb)) {
+         int bias_index = nir_tex_instr_src_index(tex, nir_tex_src_bias);
+         lod_bias = nir_fadd(b, lod_bias, tex->src[bias_index].src.ssa);
+      }
+
+      params.lod = nir_fadd(b, params.lod,
+                            nir_fclamp(b, lod_bias,
+                                       nir_imm_float(b, -states->max_bias),
+                                       nir_imm_float(b, states->max_bias)));
+
+      /* Clamp lod accroding to ibid. (8.10) */
+      params.lod = nir_fmax(b, params.lod, nir_imm_int(b, min_lod));
+
+      /* If the max lod is > max_bias = log2(max_texture_size), the lod will be clamped
+       * by the number of levels, no need to clamp it againt the max_lod first. */
+      if (active_wrap_state->max_lod <= states->max_bias)
+         params.lod = nir_fmin(b, params.lod, nir_imm_float(b, active_wrap_state->max_lod));
+
+      /* Pick nearest LOD */
+      params.lod = nir_f2i32(b, nir_fround_even(b, params.lod));
+
+      /* cap actual lod by number of available levels */
+      params.lod = nir_imin(b, params.lod, nir_imm_int(b, active_wrap_state->last_level));
+
+      /* Evaluate actual level size*/
+      params.size = nir_i2f32(b, nir_ishr(b, size0, params.lod));
    } else {
-      /* Only fragment shaders provide the gradient information to evaluate a LOD,
-       * so force 0 otherwise */
-      params.lod = nir_imm_float(b, 0.0);
+      params.size = nir_i2f32(b, size0);
    }
-
-   /* Apply LOD bias */
-   if (unlikely(tex->op == nir_texop_txb)) {
-      int bias_index = nir_tex_instr_src_index(tex, nir_tex_src_bias);
-      params.lod = nir_fadd(b, params.lod, tex->src[bias_index].src.ssa);
-   }
-   params.lod = nir_f2i32(b, params.lod);
-   params.size = nir_i2f32(b, nir_ishr(b, size0, params.lod));
 
    nir_ssa_def *new_coord = old_coord;
    if (!active_wrap_state->is_nonnormalized_coords) {
