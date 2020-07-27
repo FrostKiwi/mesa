@@ -1389,10 +1389,12 @@ d3d12_set_stream_output_targets(struct pipe_context *pctx,
 }
 
 bool
-d3d12_enable_fake_so_buffers(struct d3d12_context *ctx)
+d3d12_enable_fake_so_buffers(struct d3d12_context *ctx, unsigned factor)
 {
-   if (ctx->use_fake_so_buffers)
+   if (ctx->fake_so_buffer_factor == factor)
       return true;
+
+   d3d12_disable_fake_so_buffers(ctx);
 
    for (int i = 0; i < ctx->num_so_targets; ++i) {
       struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)ctx->so_targets[i];
@@ -1424,7 +1426,7 @@ d3d12_enable_fake_so_buffers(struct d3d12_context *ctx)
          fake_target->base.buffer = pipe_buffer_create(ctx->base.screen,
                                                        PIPE_BIND_STREAM_OUTPUT,
                                                        PIPE_USAGE_STAGING,
-                                                       target->base.buffer->width0 * 6);
+                                                       target->base.buffer->width0 * factor);
          u_suballocator_alloc(ctx->so_allocator, sizeof(uint64_t), 4,
                               &fake_target->fill_buffer_offset, &fake_target->fill_buffer);
          pipe_buffer_read(&ctx->base, target->fill_buffer,
@@ -1432,13 +1434,13 @@ d3d12_enable_fake_so_buffers(struct d3d12_context *ctx)
                           &fake_target->cached_filled_size);
       }
 
-      fake_target->base.buffer_offset = target->base.buffer_offset * 6;
-      fake_target->base.buffer_size = (target->base.buffer_size - fake_target->cached_filled_size) * 6;
+      fake_target->base.buffer_offset = target->base.buffer_offset * factor;
+      fake_target->base.buffer_size = (target->base.buffer_size - fake_target->cached_filled_size) * factor;
       ctx->fake_so_targets[i] = &fake_target->base;
       fill_stream_output_buffer_view(&ctx->fake_so_buffer_views[i], fake_target);
    }
 
-   ctx->use_fake_so_buffers = true;
+   ctx->fake_so_buffer_factor = factor;
    ctx->cmdlist_dirty |= D3D12_DIRTY_STREAM_OUTPUT;
 
    return true;
@@ -1447,7 +1449,7 @@ d3d12_enable_fake_so_buffers(struct d3d12_context *ctx)
 bool
 d3d12_disable_fake_so_buffers(struct d3d12_context *ctx)
 {
-   if (!ctx->use_fake_so_buffers)
+   if (ctx->fake_so_buffer_factor == 0)
       return true;
 
    d3d12_flush_cmdlist_and_wait(ctx);
@@ -1480,7 +1482,7 @@ d3d12_disable_fake_so_buffers(struct d3d12_context *ctx)
       uint64_t src_offset = 0, dst_offset = fake_target->cached_filled_size;
       while (src_offset < filled_size) {
          memcpy(dst + dst_offset, src + src_offset, stride);
-         src_offset += stride * 6;
+         src_offset += stride * ctx->fake_so_buffer_factor;
          dst_offset += stride;
       }
 
@@ -1497,7 +1499,7 @@ d3d12_disable_fake_so_buffers(struct d3d12_context *ctx)
       }
    }
 
-   ctx->use_fake_so_buffers = false;
+   ctx->fake_so_buffer_factor = 0;
    ctx->cmdlist_dirty |= D3D12_DIRTY_STREAM_OUTPUT;
 
    return true;

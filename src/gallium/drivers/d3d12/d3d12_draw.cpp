@@ -275,17 +275,14 @@ set_graphics_root_parameters(struct d3d12_context *ctx,
 static bool
 validate_stream_output_targets(struct d3d12_context *ctx)
 {
-   /* When lowering wide point sprites to triangles, we need to accumulate
-    * stream output values into a larger fake buffer (2 triangles gives us
-    * 6 vertices instead of the 1 vertex expected from the transform feedback).
-    * Once done, we copy every stride out of 6 to the real transform feedback
-    * buffer. */
-   bool needs_fake_so_buffer = (ctx->num_so_targets &&
-                                ctx->gfx_pipeline_state.stages[PIPE_SHADER_GEOMETRY] &&
-                                ctx->gfx_pipeline_state.stages[PIPE_SHADER_GEOMETRY]->key.gs.writes_psize);
+   unsigned factor = 0;
 
-   if (needs_fake_so_buffer)
-      return d3d12_enable_fake_so_buffers(ctx);
+   if (ctx->num_so_targets &&
+       ctx->gfx_pipeline_state.stages[PIPE_SHADER_GEOMETRY])
+      factor = ctx->gfx_pipeline_state.stages[PIPE_SHADER_GEOMETRY]->key.gs.stream_output_factor;
+
+   if (factor > 1)
+      return d3d12_enable_fake_so_buffers(ctx, factor);
    else
       return d3d12_disable_fake_so_buffers(ctx);
 }
@@ -625,10 +622,10 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       ctx->cmdlist->OMSetRenderTargets(ctx->fb.nr_cbufs, render_targets, FALSE, depth_desc);
    }
 
-   struct pipe_stream_output_target **so_targets = ctx->use_fake_so_buffers ? ctx->fake_so_targets
-                                                                            : ctx->so_targets;
-   D3D12_STREAM_OUTPUT_BUFFER_VIEW *so_buffer_views = ctx->use_fake_so_buffers ? ctx->fake_so_buffer_views
-                                                                               : ctx->so_buffer_views;
+   struct pipe_stream_output_target **so_targets = ctx->fake_so_buffer_factor ? ctx->fake_so_targets
+                                                                              : ctx->so_targets;
+   D3D12_STREAM_OUTPUT_BUFFER_VIEW *so_buffer_views = ctx->fake_so_buffer_factor ? ctx->fake_so_buffer_views
+                                                                                 : ctx->so_buffer_views;
    for (int i = 0; i < ctx->num_so_targets; ++i) {
       struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)so_targets[i];
       struct d3d12_resource *so_buffer = d3d12_resource(target->base.buffer);

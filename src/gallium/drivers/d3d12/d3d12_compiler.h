@@ -71,6 +71,7 @@ struct d3d12_shader_key {
       unsigned point_pos_stream_out:1;
       unsigned writes_psize:1;
       unsigned aa_point:1;
+      unsigned stream_output_factor:3;
    } gs;
 
    struct {

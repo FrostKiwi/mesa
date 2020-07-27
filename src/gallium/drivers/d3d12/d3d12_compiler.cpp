@@ -591,6 +591,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       if (sel_ctx->ctx->flip_y < 0)
          key->gs.sprite_origin_upper_left = !key->gs.sprite_origin_upper_left;
       key->gs.aa_point = rast->point_smooth;
+      key->gs.stream_output_factor = 6;
    } else if (stage == PIPE_SHADER_FRAGMENT) {
       key->fs.missing_dual_src_outputs = sel_ctx->missing_dual_src_outputs;
       key->fs.frag_result_color_lowering = sel_ctx->frag_result_color_lowering;

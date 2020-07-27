@@ -221,7 +221,7 @@ struct d3d12_context {
    unsigned num_so_targets;
    struct pipe_stream_output_target *fake_so_targets[PIPE_MAX_SO_BUFFERS];
    D3D12_STREAM_OUTPUT_BUFFER_VIEW fake_so_buffer_views[PIPE_MAX_SO_BUFFERS];
-   bool use_fake_so_buffers;
+   unsigned fake_so_buffer_factor;
 
    struct d3d12_shader_selector *gfx_stages[D3D12_GFX_SHADER_STAGES];
 
@@ -296,7 +296,7 @@ struct pipe_context *
 d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags);
 
 bool
-d3d12_enable_fake_so_buffers(struct d3d12_context *ctx);
+d3d12_enable_fake_so_buffers(struct d3d12_context *ctx, unsigned factor);
 
 bool
 d3d12_disable_fake_so_buffers(struct d3d12_context *ctx);
