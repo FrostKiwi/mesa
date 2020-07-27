@@ -623,6 +623,9 @@ d3d12_create_sampler_state(struct pipe_context *pctx,
    ss->wrap_r = (pipe_tex_wrap)state->wrap_r;
    ss->wrap_s = (pipe_tex_wrap)state->wrap_s;
    ss->wrap_t = (pipe_tex_wrap)state->wrap_t;
+   ss->lod_bias = state->lod_bias;
+   ss->min_lod = state->min_lod;
+   ss->max_lod = state->max_lod;
    memcpy(ss->border_color, state->border_color.f, sizeof(float) * 4);
    ss->compare_func = (pipe_compare_func)state->compare_func;
 
@@ -696,6 +699,9 @@ d3d12_bind_sampler_states(struct pipe_context *pctx,
          wrap.wrap_r = sampler->wrap_r;
          wrap.wrap_s = sampler->wrap_s;
          wrap.wrap_t = sampler->wrap_t;
+         wrap.lod_bias = sampler->lod_bias;
+         wrap.min_lod = sampler->min_lod;
+         wrap.max_lod = sampler->max_lod;
          memcpy(wrap.border_color, sampler->border_color, 4 * sizeof(float));
          ctx->tex_compare_func[shader][start_slot + i] = (enum compare_func)sampler->compare_func;
       } else {
@@ -909,7 +915,7 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
          if (util_format_is_pure_integer(views[i]->format)) {
             ctx->has_int_samplers |= shader_bit;
             wss.is_int_sampler = 1;
-
+            wss.last_level = views[i]->texture->last_level;
             /* When we emulate a integer cube texture (array) by using a texture 2d Array
              * the coordinates are evaluated to always reside withing the acceptable range
              * because the 3d ray for picking the texel is always pointing at one cube face,

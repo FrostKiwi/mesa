@@ -40,6 +40,9 @@ typedef struct {
 
 typedef struct {
    float border_color[4];
+   float lod_bias;
+   float min_lod, max_lod;
+   int last_level;
    unsigned wrap_r:4;
    unsigned wrap_s:4;
    unsigned wrap_t:4;
@@ -53,7 +56,8 @@ typedef struct {
 bool
 dxil_lower_sample_to_txf_for_integer_tex(nir_shader *s,
                                          dxil_wrap_sampler_state *wrap_states,
-                                         dxil_texture_swizzle_state *tex_swizzles);
+                                         dxil_texture_swizzle_state *tex_swizzles,
+                                         float max_bias);
 
 #ifdef __cplusplus
 }

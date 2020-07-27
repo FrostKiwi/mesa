@@ -1212,7 +1212,7 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, clc_lower_nonnormalized_samplers, int_sampler_states);
    NIR_PASS_V(nir, nir_lower_samplers);
    NIR_PASS_V(nir, dxil_lower_sample_to_txf_for_integer_tex,
-              int_sampler_states, NULL);
+              int_sampler_states, NULL, 14.0f);
 
    // copy propagate to prepare for lower_explicit_io
    NIR_PASS_V(nir, nir_split_var_copies);

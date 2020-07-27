@@ -119,6 +119,8 @@ struct d3d12_sampler_state {
    enum pipe_tex_wrap wrap_r;
    enum pipe_tex_wrap wrap_s;
    enum pipe_tex_wrap wrap_t;
+   float lod_bias;
+   float min_lod, max_lod;
    float border_color[4];
    enum pipe_compare_func compare_func;
 };

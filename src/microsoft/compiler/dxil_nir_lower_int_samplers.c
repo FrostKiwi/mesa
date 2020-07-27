@@ -317,6 +317,7 @@ load_texel(nir_builder *b, nir_tex_instr *tex, wrap_lower_param_t *params)
 typedef struct {
    dxil_wrap_sampler_state *wrap_states;
    dxil_texture_swizzle_state *tex_swizzles;
+   float max_bias;
 } sampler_states;
 
 
@@ -479,9 +480,10 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
 bool
 dxil_lower_sample_to_txf_for_integer_tex(nir_shader *s,
                                          dxil_wrap_sampler_state *wrap_states,
-                                         dxil_texture_swizzle_state *tex_swizzles)
+                                         dxil_texture_swizzle_state *tex_swizzles,
+                                         float max_bias)
 {
-   sampler_states states = {wrap_states, tex_swizzles};
+   sampler_states states = {wrap_states, tex_swizzles, max_bias};
 
    bool result =
          nir_shader_lower_instructions(s,
