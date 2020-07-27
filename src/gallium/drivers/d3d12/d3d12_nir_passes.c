@@ -114,6 +114,64 @@ d3d12_lower_yflip(nir_shader *nir)
    }
 }
 
+static void
+lower_pos_read(nir_builder *b, struct nir_instr *instr,
+               nir_variable **depth_transform_var)
+{
+   if (instr->type != nir_instr_type_intrinsic)
+      return;
+
+   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+   if (intr->intrinsic != nir_intrinsic_load_deref)
+      return;
+
+   nir_variable *var = nir_intrinsic_get_var(intr, 0);
+   if (var->data.mode != nir_var_shader_in ||
+       var->data.location != VARYING_SLOT_POS)
+      return;
+
+   b->cursor = nir_after_instr(instr);
+
+   nir_ssa_def *pos = nir_instr_ssa_def(instr);
+   nir_ssa_def *depth = nir_channel(b, pos, 2);
+
+   assert(depth_transform_var);
+   nir_ssa_def *depth_transform = get_state_var(b, D3D12_STATE_VAR_DEPTH_TRANSFORM,
+                                                "d3d12_DepthTransform",
+                                                glsl_vec_type(2),
+                                                depth_transform_var);
+   depth = nir_fmad(b, depth, nir_channel(b, depth_transform, 0),
+                              nir_channel(b, depth_transform, 1));
+
+   pos = nir_vector_insert_imm(b, pos, depth, 2);
+
+   assert(intr->dest.is_ssa);
+   nir_ssa_def_rewrite_uses_after(&intr->dest.ssa, nir_src_for_ssa(pos),
+                                  pos->parent_instr);
+}
+
+void
+d3d12_lower_depth_range(nir_shader *nir)
+{
+   assert(nir->info.stage == MESA_SHADER_FRAGMENT);
+   nir_variable *depth_transform = NULL;
+   nir_foreach_function(function, nir) {
+      if (function->impl) {
+         nir_builder b;
+         nir_builder_init(&b, function->impl);
+
+         nir_foreach_block(block, function->impl) {
+            nir_foreach_instr_safe(instr, block) {
+               lower_pos_read(&b, instr, &depth_transform);
+            }
+         }
+
+         nir_metadata_preserve(function->impl, nir_metadata_block_index |
+                                               nir_metadata_dominance);
+      }
+   }
+}
+
 static bool
 lower_load_first_vertex(nir_builder *b, nir_instr *instr, nir_variable **first_vertex)
 {
