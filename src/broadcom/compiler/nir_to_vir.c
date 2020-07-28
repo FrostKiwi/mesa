@@ -2543,11 +2543,6 @@ ntq_emit_jump(struct v3d_compile *c, nir_jump_instr *jump)
 
         case nir_jump_return:
                 unreachable("All returns shouold be lowered\n");
-                break;
-
-        case nir_jump_goto_if:
-                unreachable("not supported\n");
-                break;
         }
 }
 

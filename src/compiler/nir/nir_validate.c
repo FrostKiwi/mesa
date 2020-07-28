@@ -762,17 +762,6 @@ validate_phi_instr(nir_phi_instr *instr, validate_state *state)
 }
 
 static void
-validate_jump_instr(nir_jump_instr *instr, validate_state *state)
-{
-   if (instr->type != nir_jump_goto_if) {
-      validate_assert(state, instr->target == NULL);
-   } else {
-      validate_src(&instr->condition, state, 0, 1);
-      validate_assert(state, instr->target != NULL);
-   }
-}
-
-static void
 validate_instr(nir_instr *instr, validate_state *state)
 {
    validate_assert(state, instr->block == state->block);
@@ -813,7 +802,6 @@ validate_instr(nir_instr *instr, validate_state *state)
       break;
 
    case nir_instr_type_jump:
-      validate_jump_instr(nir_instr_as_jump(instr), state);
       break;
 
    default:
@@ -900,26 +888,24 @@ validate_block(nir_block *block, validate_state *state)
 
    if (!exec_list_is_empty(&block->instr_list) &&
        nir_block_last_instr(block)->type == nir_instr_type_jump) {
+      validate_assert(state, block->successors[1] == NULL);
       nir_jump_instr *jump = nir_instr_as_jump(nir_block_last_instr(block));
       switch (jump->type) {
       case nir_jump_break: {
          nir_block *after =
             nir_cf_node_as_block(nir_cf_node_next(&state->loop->cf_node));
          validate_assert(state, block->successors[0] == after);
-         validate_assert(state, block->successors[1] == NULL);
          break;
       }
 
       case nir_jump_continue: {
          nir_block *first = nir_loop_first_block(state->loop);
          validate_assert(state, block->successors[0] == first);
-         validate_assert(state, block->successors[1] == NULL);
          break;
       }
 
       case nir_jump_return:
          validate_assert(state, block->successors[0] == state->impl->end_block);
-         validate_assert(state, block->successors[1] == NULL);
          break;
 
       case nir_jump_goto_if: {
@@ -969,16 +955,12 @@ validate_block(nir_block *block, validate_state *state)
                    nir_if_first_then_block(if_stmt));
             validate_assert(state, block->successors[1] ==
                    nir_if_first_else_block(if_stmt));
-         } else if (next->type == nir_cf_node_loop) {
+         } else {
             validate_assert(state, next->type == nir_cf_node_loop);
             nir_loop *loop = nir_cf_node_as_loop(next);
             validate_assert(state, block->successors[0] ==
                    nir_loop_first_block(loop));
             validate_assert(state, block->successors[1] == NULL);
-         } else if (next->type == nir_cf_node_block) {
-            nir_block *nextb = nir_cf_node_as_block(next);
-            validate_assert(state, block->successors[0] == nextb);
-            validate_assert(state, _mesa_set_search(nextb->predecessors, block));
          }
       }
    }
