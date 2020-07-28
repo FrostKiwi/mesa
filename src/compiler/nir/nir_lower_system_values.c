@@ -190,17 +190,24 @@ lower_system_value_instr(nir_builder *b, nir_instr *instr, void *_state)
    case nir_intrinsic_load_global_invocation_id_zero_base: {
       if (b->shader->options->lower_cs_global_id_from_local) {
          nir_ssa_def *group_size = nir_load_local_group_size(b);
-         nir_ssa_def *group_id = nir_load_work_group_id_zero_base(b);
+         /* Note: including base work group ID */
+         nir_ssa_def *group_id = nir_load_work_group_id(b, bit_size);
          nir_ssa_def *local_id = nir_load_local_invocation_id(b);
 
-         return nir_iadd(b, nir_imul(b, nir_u2u(b, group_id, bit_size),
+         return nir_iadd(b, nir_imul(b, group_id,
                                         nir_u2u(b, group_size, bit_size)),
                             nir_u2u(b, local_id, bit_size));
       } else
          return NULL;
    }
 
+   case nir_intrinsic_load_global_invocation_id: {
+      return nir_iadd(b, nir_load_global_invocation_id_zero_base(b, bit_size),
+                         nir_load_base_global_invocation_id(b, bit_size));
+   }
+
    case nir_intrinsic_load_global_invocation_index: {
+      /* According to the CL spec, this value is not supposed to include global invocation offsets */
       nir_ssa_def *global_id = nir_load_global_invocation_id_zero_base(b, bit_size);
       nir_ssa_def *global_size = build_global_group_size(b, bit_size);
 
@@ -228,6 +235,30 @@ lower_system_value_instr(nir_builder *b, nir_instr *instr, void *_state)
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_work_group_id_zero_base:
       return sanitize_32bit_sysval(b, intrin);
+
+   case nir_intrinsic_load_work_group_id:
+      return nir_iadd(b, nir_u2u(b, nir_load_work_group_id_zero_base(b), bit_size),
+                         nir_load_base_work_group_id(b, bit_size));
+
+   case nir_intrinsic_load_base_global_invocation_id:
+   case nir_intrinsic_load_base_work_group_id: {
+      bool lower_to_zero =
+         (intrin->intrinsic == nir_intrinsic_load_base_global_invocation_id &&
+          !b->shader->options->has_cs_base_global_invocation_id) ||
+         (intrin->intrinsic == nir_intrinsic_load_base_work_group_id &&
+          !b->shader->options->has_cs_base_work_group_id);
+
+      if (lower_to_zero) {
+         nir_const_value v[3] = {
+            nir_const_value_for_int(0, bit_size),
+            nir_const_value_for_int(0, bit_size),
+            nir_const_value_for_int(0, bit_size)
+         };
+
+         return nir_build_imm(b, 3, bit_size, v);
+      } else
+         return NULL;
+   }
 
    case nir_intrinsic_load_deref: {
       nir_deref_instr *deref = nir_src_as_deref(intrin->src[0]);

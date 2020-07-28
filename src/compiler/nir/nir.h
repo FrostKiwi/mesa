@@ -3050,6 +3050,14 @@ typedef struct nir_shader_compiler_options {
    bool lower_cs_local_id_from_index;
    bool lower_cs_global_id_from_local;
 
+   /**
+    * Compute shader invocation and work group IDs are lowered to zero_base + base.
+    * Most of the time, the base will be zero - always for GL for example.
+    * Unless these options are set, the base IDs will simply be lowered away to zero.
+    */
+   bool has_cs_base_global_invocation_id;
+   bool has_cs_base_work_group_id;
+
    bool lower_device_index_to_zero;
 
    /* Set if nir_lower_wpos_ytransform() should also invert gl_PointCoord. */
