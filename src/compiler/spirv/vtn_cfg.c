@@ -325,41 +325,6 @@ vtn_cfg_handle_prepass_instruction(struct vtn_builder *b, SpvOp opcode,
    return true;
 }
 
-static void
-vtn_add_case(struct vtn_builder *b, struct vtn_switch *swtch,
-             struct vtn_block *break_block,
-             uint32_t block_id, uint64_t val, bool is_default)
-{
-   struct vtn_block *case_block = vtn_block(b, block_id);
-
-   /* Don't create dummy cases that just break */
-   if (case_block == break_block)
-      return;
-
-   if (case_block->switch_case == NULL) {
-      struct vtn_case *c = ralloc(b, struct vtn_case);
-
-      c->node.type = vtn_cf_node_type_case;
-      c->node.parent = &swtch->node;
-      list_inithead(&c->body);
-      c->start_block = case_block;
-      c->fallthrough = NULL;
-      util_dynarray_init(&c->values, b);
-      c->is_default = false;
-      c->visited = false;
-
-      list_addtail(&c->node.link, &swtch->cases);
-
-      case_block->switch_case = c;
-   }
-
-   if (is_default) {
-      case_block->switch_case->is_default = true;
-   } else {
-      util_dynarray_append(&case_block->switch_case->values, uint64_t, val);
-   }
-}
-
 /* This function performs a depth-first search of the cases and puts them
  * in fall-through order.
  */
@@ -955,60 +920,6 @@ vtn_cfg_walk_blocks_unstructured(struct vtn_builder *b, struct list_head *cf_lis
          return;
       }
 
-      case SpvOpSwitch: {
-         struct vtn_switch *swtch = ralloc(b, struct vtn_switch);
-
-         swtch->node.type = vtn_cf_node_type_switch;
-         swtch->selector = block->branch[1];
-         list_inithead(&swtch->cases);
-
-         block->branch_type = vtn_branch_type_goto_if;
-
-         list_addtail(&swtch->node.link, cf_list);
-
-         /* First, we go through and record all of the cases. */
-         const uint32_t *branch_end =
-            block->branch + (block->branch[0] >> SpvWordCountShift);
-
-         struct vtn_value *cond_val = vtn_untyped_value(b, block->branch[1]);
-         vtn_fail_if(!cond_val->type ||
-                     cond_val->type->base_type != vtn_base_type_scalar,
-                     "Selector of OpSelect must have a type of OpTypeInt");
-
-         nir_alu_type cond_type =
-            nir_get_nir_type_for_glsl_type(cond_val->type->type);
-         vtn_fail_if(nir_alu_type_get_base_type(cond_type) != nir_type_int &&
-                     nir_alu_type_get_base_type(cond_type) != nir_type_uint,
-                     "Selector of OpSelect must have a type of OpTypeInt");
-
-         bool is_default = true;
-         const unsigned bitsize = nir_alu_type_get_type_size(cond_type);
-         for (const uint32_t *w = block->branch + 2; w < branch_end;) {
-            uint64_t literal = 0;
-            if (!is_default) {
-               if (bitsize <= 32) {
-                  literal = *(w++);
-               } else {
-                  assert(bitsize == 64);
-                  literal = vtn_u64_literal(w);
-                  w += 2;
-               }
-            }
-
-            uint32_t block_id = *(w++);
-
-            vtn_add_case(b, swtch, NULL, block_id, literal, is_default);
-            is_default = false;
-         }
-
-         vtn_foreach_cf_node(case_node, &swtch->cases) {
-            struct vtn_case *cse = vtn_cf_node_as_case(case_node);
-            vtn_cfg_walk_blocks_unstructured(b, &cse->body, cse->start_block);
-         }
-
-         return;
-      }
-
       default:
          vtn_fail("Unhandled opcode %s", spirv_op_to_string(op));
       }
@@ -1026,7 +937,7 @@ vtn_build_cfg(struct vtn_builder *b, const uint32_t *words, const uint32_t *end,
       struct vtn_function *func = vtn_cf_node_as_function(func_node);
 
       if (!structured_cf) {
-         vtn_cfg_walk_blocks_unstructured(b, &func->body, func->start_block);
+         vtn_cfg_walk_blocks_unstructured(b, &func->body, &func->start_block);
          continue;
       }
 
@@ -1429,17 +1340,13 @@ vtn_emit_cf_node_unstructured(struct vtn_builder *b, struct vtn_cf_node *node,
       case vtn_branch_type_goto: {
          vtn_emit_branch(b, block->branch_type, NULL, NULL, NULL);
 
+         struct vtn_cf_node *next_node = LIST_ENTRY(struct vtn_cf_node, node->link.next, link);
+         vtn_assert(next_node->type == vtn_cf_node_type_block);
+
          if (block->connect) {
             _mesa_set_add(s, node);
             return false;
          }
-
-         struct list_head *list_entry = (struct list_head*)node->link.next;
-         if (block->switch_case && list_entry == &block->switch_case->body)
-            return false;
-
-         struct vtn_cf_node *next_node = LIST_ENTRY(struct vtn_cf_node, node->link.next, link);
-         vtn_assert(next_node->type == vtn_cf_node_type_block);
 
          struct vtn_block *next = (struct vtn_block*)next_node;
          vtn_assert(!next->block);
@@ -1456,23 +1363,11 @@ vtn_emit_cf_node_unstructured(struct vtn_builder *b, struct vtn_cf_node *node,
       }
 
       case vtn_branch_type_goto_if: {
-         struct vtn_cf_node *next = LIST_ENTRY(struct vtn_cf_node, node->link.next, link);
          nir_ssa_def *cond = vtn_ssa_value(b, block->branch[1])->def;
+         vtn_emit_branch(b, block->branch_type, NULL, cond, NULL);
 
-         switch (next->type) {
-         case vtn_cf_node_type_if:
-            vtn_emit_branch(b, block->branch_type, NULL, cond, NULL);
-            break;
-         case vtn_cf_node_type_switch: {
-            /* nothing to do here */
-            break;
-         }
-
-         default:
-            vtn_fail("Invalid node type");
-
-         }
-
+         struct vtn_cf_node *next = LIST_ENTRY(struct vtn_cf_node, node->link.next, link);
+         vtn_assert(next->type == vtn_cf_node_type_if);
          return true;
       }
 
@@ -1538,59 +1433,6 @@ vtn_emit_cf_node_unstructured(struct vtn_builder *b, struct vtn_cf_node *node,
       }
 
       return false;
-   }
-
-   case vtn_cf_node_type_switch: {
-      struct vtn_switch *vtn_switch = (struct vtn_switch *)node;
-      struct nir_block *block = nir_cursor_current_block(b->nb.cursor);
-      nir_ssa_def *sel = vtn_ssa_value(b, vtn_switch->selector)->def;
-
-      struct vtn_case *def = NULL;
-      vtn_foreach_cf_node(case_node, &vtn_switch->cases) {
-         struct vtn_case *cse = vtn_cf_node_as_case(case_node);
-
-         /* we handle the default case last */
-         if (cse->is_default) {
-            def = cse;
-            continue;
-         }
-
-         /* Figure out the condition */
-         nir_ssa_def *cond =
-            vtn_switch_case_condition(b, vtn_switch, sel, cse);
-
-         /* block for the next case or the default block */
-         nir_block *e = nir_block_create(b->shader);
-         exec_list_push_tail(&b->nb.impl->body, &e->cf_node.node);
-         e->cf_node.parent = &b->nb.impl->cf_node;
-
-         /* block for the case */
-         nir_block *t = nir_block_create(b->shader);
-         exec_list_push_tail(&b->nb.impl->body, &t->cf_node.node);
-         t->cf_node.parent = &b->nb.impl->cf_node;
-
-         nir_goto_if(&b->nb, t, nir_src_for_ssa(cond));
-
-         block->successors[0] = e;
-         _mesa_set_add(e->predecessors, block);
-
-         block->successors[1] = t;
-         _mesa_set_add(t->predecessors, block);
-
-         b->nb.cursor = nir_after_block(t);
-         list_for_each_entry(struct vtn_cf_node, node, &cse->body, link)
-            if (!vtn_emit_cf_node_unstructured(b, node, handler, s))
-               break;
-         block = e;
-         b->nb.cursor = nir_after_block(e);
-      }
-
-      vtn_assert(def);
-      list_for_each_entry(struct vtn_cf_node, node, &def->body, link)
-         if (!vtn_emit_cf_node_unstructured(b, node, handler, s))
-            break;
-
-      return true;
    }
 
    default:
