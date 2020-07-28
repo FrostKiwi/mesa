@@ -4301,12 +4301,12 @@ anv_cmd_buffer_push_base_group_id(struct anv_cmd_buffer *cmd_buffer,
 
    struct anv_push_constants *push =
       &cmd_buffer->state.push_constants[MESA_SHADER_COMPUTE];
-   if (push->cs.base_work_group_id_zero_base[0] != baseGroupX ||
-       push->cs.base_work_group_id_zero_base[1] != baseGroupY ||
-       push->cs.base_work_group_id_zero_base[2] != baseGroupZ) {
-      push->cs.base_work_group_id_zero_base[0] = baseGroupX;
-      push->cs.base_work_group_id_zero_base[1] = baseGroupY;
-      push->cs.base_work_group_id_zero_base[2] = baseGroupZ;
+   if (push->cs.base_work_group_id[0] != baseGroupX ||
+       push->cs.base_work_group_id[1] != baseGroupY ||
+       push->cs.base_work_group_id[2] != baseGroupZ) {
+      push->cs.base_work_group_id[0] = baseGroupX;
+      push->cs.base_work_group_id[1] = baseGroupY;
+      push->cs.base_work_group_id[2] = baseGroupZ;
 
       cmd_buffer->state.push_constants_dirty |= VK_SHADER_STAGE_COMPUTE_BIT;
    }

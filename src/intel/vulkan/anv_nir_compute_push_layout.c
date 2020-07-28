@@ -27,7 +27,7 @@
 #include "util/mesa-sha1.h"
 
 static unsigned
-base_work_group_offset(const struct brw_compiler *compiler)
+base_work_group_id_offset(const struct brw_compiler *compiler)
 {
    return offsetof(struct anv_push_constants, cs.base_work_group_id);
 }
@@ -70,8 +70,8 @@ anv_nir_compute_push_layout(const struct anv_physical_device *pdevice,
                break;
             }
 
-            case nir_intrinsic_load_base_work_group: {
-               unsigned base = base_work_group_offset(compiler);
+            case nir_intrinsic_load_base_work_group_id: {
+               unsigned base = base_work_group_id_offset(compiler);
                unsigned range = 3 * sizeof(uint32_t);
                push_start = MIN2(push_start, base);
                push_end = MAX2(push_end, base + range);
@@ -159,14 +159,14 @@ anv_nir_compute_push_layout(const struct anv_physical_device *pdevice,
                                          push_start);
                   break;
 
-               case nir_intrinsic_load_base_work_group: {
+               case nir_intrinsic_load_base_work_group_id: {
                   b.cursor = nir_after_instr(&intrin->instr);
 
                   nir_intrinsic_instr *load =
                      nir_intrinsic_instr_create(b.shader, nir_intrinsic_load_uniform);
                   load->num_components = 3;
                   load->src[0] = nir_src_for_ssa(nir_imm_int(&b, 0));
-                  unsigned base = base_work_group_offset(compiler);
+                  unsigned base = base_work_group_id_offset(compiler);
                   nir_intrinsic_set_base(load, base - push_start);
                   nir_intrinsic_set_range(load, 3 * sizeof(uint32_t));
                   nir_ssa_dest_init(&load->instr, &load->dest, 3, 32, NULL);

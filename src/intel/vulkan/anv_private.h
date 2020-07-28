@@ -2586,7 +2586,7 @@ struct anv_push_constants {
        *
        * Used for vkCmdDispatchBase.
        */
-      uint32_t base_work_group_id_zero_base[3];
+      uint32_t base_work_group_id[3];
 
       /** Subgroup ID
        *
