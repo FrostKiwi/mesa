@@ -964,8 +964,7 @@ ibc_validate_shader(const ibc_shader *shader)
 
    const ibc_instr *start_instr =
       LIST_ENTRY(const ibc_instr, shader->instrs.next, link);
-   ibc_assert(&s, start_instr->type == IBC_INSTR_TYPE_FLOW &&
-                  ibc_instr_as_flow(start_instr)->op == IBC_FLOW_OP_START);
+   ibc_assert(&s, ibc_instr_is_start(start_instr));
 
    const ibc_instr *end_instr =
       LIST_ENTRY(const ibc_instr, shader->instrs.prev, link);

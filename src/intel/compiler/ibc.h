@@ -1469,6 +1469,7 @@ ibc_shader *ibc_shader_create(void *mem_ctx,
 #define ibc_foreach_reg_safe(reg, shader) \
    list_for_each_entry_safe(ibc_reg, reg, &(shader)->regs, link)
 
+bool ibc_instr_is_start(const ibc_instr *instr);
 bool ibc_instr_is_load_payload(const ibc_instr *instr);
 
 typedef struct {
