@@ -79,7 +79,6 @@ static const nir_shader_compiler_options options = {
 		 * supported there.
 		 */
 		.lower_int64_options = (nir_lower_int64_options)~0,
-		.lower_cs_global_id_from_local = true,
 };
 
 /* we don't want to lower vertex_id to _zero_based on newer gpus: */
@@ -130,7 +129,6 @@ static const nir_shader_compiler_options options_a6xx = {
 		 * supported there.
 		 */
 		.lower_int64_options = (nir_lower_int64_options)~0,
-		.lower_cs_global_id_from_local = true,
 };
 
 const nir_shader_compiler_options *

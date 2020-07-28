@@ -988,7 +988,6 @@ static const nir_shader_compiler_options nir_options = {
    .lower_helper_invocation = false,
    .lower_cs_local_index_from_id = true,
    .lower_cs_local_id_from_index = false,
-   .lower_cs_global_id_from_local = true,
    .lower_device_index_to_zero = false, // TODO
    .lower_wpos_pntc = false, // TODO
    .lower_hadd = true, // TODO
