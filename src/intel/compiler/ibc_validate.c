@@ -50,6 +50,8 @@ struct ibc_validate_state {
 
    /* ibc_reg* -> reg_validate_state* */
    struct hash_table *reg_state;
+
+   bool after_payload;
 };
 
 struct reg_validate_state {
@@ -818,6 +820,13 @@ ibc_validate_instr(struct ibc_validate_state *s, const ibc_instr *instr)
                        ref_simd_group, ref_simd_width);
    } else if (!ibc_instr_writes_flag(instr)) {
       ibc_validate_null_ref(s, &instr->flag);
+   }
+
+   if (ibc_instr_is_start(instr) || ibc_instr_is_load_payload(instr)) {
+      /* load_payload instructions must be at the start of the program */
+      ibc_assert(s, !s->after_payload);
+   } else {
+      s->after_payload = true;
    }
 
    switch (instr->type) {
