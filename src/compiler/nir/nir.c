@@ -2113,16 +2113,6 @@ nir_intrinsic_from_system_value(gl_system_value val)
       return nir_intrinsic_load_work_dim;
    case SYSTEM_VALUE_USER_DATA_AMD:
       return nir_intrinsic_load_user_data_amd;
-   case SYSTEM_VALUE_GLOBAL_INVOCATION_ID_WITH_OFFSET:
-      return nir_intrinsic_load_global_invocation_id_with_offset;
-   case SYSTEM_VALUE_WORK_GROUP_ID_WITH_OFFSET:
-      return nir_intrinsic_load_work_group_id_with_offset;
-   case SYSTEM_VALUE_WORK_GROUP_OFFSET:
-      return nir_intrinsic_load_work_group_offset;
-   case SYSTEM_VALUE_GLOBAL_INVOCATION_OFFSET:
-      return nir_intrinsic_load_global_invocation_offset;
-   case SYSTEM_VALUE_NUM_TOTAL_WORK_GROUPS:
-      return nir_intrinsic_load_num_total_work_groups;
    default:
       unreachable("system value does not directly correspond to intrinsic");
    }
@@ -2220,16 +2210,6 @@ nir_system_value_from_intrinsic(nir_intrinsic_op intrin)
       return SYSTEM_VALUE_WORK_DIM;
    case nir_intrinsic_load_user_data_amd:
       return SYSTEM_VALUE_USER_DATA_AMD;
-   case nir_intrinsic_load_global_invocation_id_with_offset:
-      return SYSTEM_VALUE_GLOBAL_INVOCATION_ID_WITH_OFFSET;
-   case nir_intrinsic_load_work_group_id_with_offset:
-      return SYSTEM_VALUE_WORK_GROUP_ID_WITH_OFFSET;
-   case nir_intrinsic_load_work_group_offset:
-      return SYSTEM_VALUE_WORK_GROUP_OFFSET;
-   case nir_intrinsic_load_global_invocation_offset:
-      return SYSTEM_VALUE_GLOBAL_INVOCATION_OFFSET;
-   case nir_intrinsic_load_num_total_work_groups:
-      return SYSTEM_VALUE_NUM_TOTAL_WORK_GROUPS;
    default:
       unreachable("intrinsic doesn't produce a system value");
    }

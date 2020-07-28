@@ -624,6 +624,8 @@ system_value("num_subgroups", 1)
 system_value("subgroup_id", 1)
 system_value("local_group_size", 3)
 system_value("global_invocation_id", 3, bit_sizes=[32, 64])
+system_value("global_invocation_index", 1, bit_sizes=[32, 64])
+system_value("work_dim", 1)
 # Driver-specific viewport scale/offset parameters.
 #
 # VC4 and V3D need to emit a scaled version of the position in the vertex
@@ -658,15 +660,6 @@ system_value("color1", 4)
 
 # System value for internal compute shaders in radeonsi.
 system_value("user_data_amd", 4)
-
-# OpenCL system values
-system_value("global_invocation_id_with_offset", 3, bit_sizes=[32, 64])
-system_value("global_invocation_index", 1, bit_sizes=[32, 64])
-system_value("work_dim", 1)
-system_value("work_group_id_with_offset", 3, bit_sizes=[32, 64])
-system_value("work_group_offset", 3, bit_sizes=[32, 64])
-system_value("global_invocation_offset", 3, bit_sizes=[32, 64])
-system_value("num_total_work_groups", 3, bit_sizes=[32, 64])
 
 # Barycentric coordinate intrinsics.
 #
