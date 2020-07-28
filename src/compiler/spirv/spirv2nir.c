@@ -142,7 +142,7 @@ int main(int argc, char **argv)
 
    nir_shader *nir = spirv_to_nir(map, word_count, NULL, 0,
                                   shader_stage, entry_point,
-                                  &spirv_opts, NULL, true);
+                                  &spirv_opts, NULL);
 
    if (nir)
       nir_print_shader(nir, stderr);

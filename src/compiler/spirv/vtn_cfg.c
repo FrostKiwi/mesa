@@ -22,7 +22,6 @@
  */
 
 #include "vtn_private.h"
-#include "spirv_info.h"
 #include "nir/nir_vla.h"
 
 static struct vtn_block *
@@ -853,93 +852,14 @@ vtn_process_block(struct vtn_builder *b,
    }
 }
 
-static void
-vtn_cfg_walk_blocks_unstructured(struct vtn_builder *b, struct list_head *cf_list,
-                                 struct vtn_block *start)
-{
-   struct vtn_block *block = start;
-   while (block) {
-      vtn_assert(block->node.link.next == NULL);
-      list_addtail(&block->node.link, cf_list);
-
-      SpvOp op = *block->branch & SpvOpCodeMask;
-      switch (op) {
-
-      case SpvOpBranch: {
-         struct vtn_block *branch_block =
-            vtn_value(b, block->branch[1], vtn_value_type_block)->block;
-         block->branch_type = vtn_branch_type_goto;
-
-         if (branch_block->node.link.next) {
-            block->connect = branch_block;
-            return;
-         }
-         block = branch_block;
-         continue;
-      }
-
-      case SpvOpReturn:
-      case SpvOpReturnValue:
-         block->branch_type = vtn_branch_type_return;
-         return;
-
-      case SpvOpBranchConditional: {
-         struct vtn_block *then_block =
-            vtn_value(b, block->branch[2], vtn_value_type_block)->block;
-         struct vtn_block *else_block =
-            vtn_value(b, block->branch[3], vtn_value_type_block)->block;
-
-         struct vtn_if *if_stmt = ralloc(b, struct vtn_if);
-
-         if_stmt->node.type = vtn_cf_node_type_if;
-         if_stmt->condition = block->branch[1];
-         if_stmt->control = SpvSelectionControlMaskNone;
-
-         list_inithead(&if_stmt->then_body);
-         if_stmt->then_type = vtn_branch_type_none;
-         list_inithead(&if_stmt->else_body);
-         if_stmt->else_type = vtn_branch_type_none;
-
-         list_addtail(&if_stmt->node.link, cf_list);
-
-         block->branch_type = vtn_branch_type_goto_if;
-
-         if (!else_block->node.link.next) {
-            if_stmt->else_connect = NULL;
-            vtn_cfg_walk_blocks_unstructured(b, &if_stmt->else_body, else_block);
-         } else {
-            if_stmt->else_connect = else_block;
-         }
-
-         if (!then_block->node.link.next) {
-            if_stmt->then_connect = NULL;
-            vtn_cfg_walk_blocks_unstructured(b, &if_stmt->then_body, then_block);
-         } else {
-            if_stmt->then_connect = then_block;
-         }
-         return;
-      }
-
-      default:
-         vtn_fail("Unhandled opcode %s", spirv_op_to_string(op));
-      }
-   }
-}
-
 void
-vtn_build_cfg(struct vtn_builder *b, const uint32_t *words, const uint32_t *end,
-              bool structured_cf)
+vtn_build_cfg(struct vtn_builder *b, const uint32_t *words, const uint32_t *end)
 {
    vtn_foreach_instruction(b, words, end,
                            vtn_cfg_handle_prepass_instruction);
 
    vtn_foreach_cf_node(func_node, &b->functions) {
       struct vtn_function *func = vtn_cf_node_as_function(func_node);
-
-      if (!structured_cf) {
-         vtn_cfg_walk_blocks_unstructured(b, &func->body, &func->start_block);
-         continue;
-      }
 
       /* We build the CFG for each function by doing a breadth-first search on
        * the control-flow graph.  We keep track of our state using a worklist.
@@ -1036,8 +956,7 @@ vtn_handle_phi_second_pass(struct vtn_builder *b, SpvOp opcode,
 
 static void
 vtn_emit_branch(struct vtn_builder *b, enum vtn_branch_type branch_type,
-                nir_variable *switch_fall_var, nir_ssa_def *cond,
-                bool *has_switch_break)
+                nir_variable *switch_fall_var, bool *has_switch_break)
 {
    switch (branch_type) {
    case vtn_branch_type_if_merge:
@@ -1063,13 +982,6 @@ vtn_emit_branch(struct vtn_builder *b, enum vtn_branch_type branch_type,
       nir_intrinsic_instr *discard =
          nir_intrinsic_instr_create(b->nb.shader, nir_intrinsic_discard);
       nir_builder_instr_insert(&b->nb, &discard->instr);
-      break;
-   }
-   case vtn_branch_type_goto: {
-      break;
-   }
-   case vtn_branch_type_goto_if: {
-      nir_goto_if(&b->nb, NULL, nir_src_for_ssa(cond));
       break;
    }
    default:
@@ -1183,7 +1095,7 @@ vtn_emit_cf_list_structured(struct vtn_builder *b, struct list_head *cf_list,
 
          if (block->branch_type != vtn_branch_type_none) {
             vtn_emit_branch(b, block->branch_type,
-                            switch_fall_var, NULL, has_switch_break);
+                            switch_fall_var, has_switch_break);
             return;
          }
 
@@ -1203,7 +1115,7 @@ vtn_emit_cf_list_structured(struct vtn_builder *b, struct list_head *cf_list,
             vtn_emit_cf_list_structured(b, &vtn_if->then_body,
                                         switch_fall_var, &sw_break, handler);
          } else {
-            vtn_emit_branch(b, vtn_if->then_type, switch_fall_var, NULL, &sw_break);
+            vtn_emit_branch(b, vtn_if->then_type, switch_fall_var, &sw_break);
          }
 
          nir_push_else(&b->nb, nif);
@@ -1211,7 +1123,7 @@ vtn_emit_cf_list_structured(struct vtn_builder *b, struct list_head *cf_list,
             vtn_emit_cf_list_structured(b, &vtn_if->else_body,
                                         switch_fall_var, &sw_break, handler);
          } else {
-            vtn_emit_branch(b, vtn_if->else_type, switch_fall_var, NULL, &sw_break);
+            vtn_emit_branch(b, vtn_if->else_type, switch_fall_var, &sw_break);
          }
 
          nir_pop_if(&b->nb, nif);
@@ -1315,190 +1227,8 @@ vtn_emit_cf_list_structured(struct vtn_builder *b, struct list_head *cf_list,
    }
 }
 
-static bool
-vtn_emit_cf_node_unstructured(struct vtn_builder *b, struct vtn_cf_node *node,
-                              vtn_instruction_handler handler, struct set *s)
-{
-   switch (node->type) {
-   case vtn_cf_node_type_block: {
-      struct vtn_block *block = (struct vtn_block *)node;
-
-      vtn_assert(!block->block);
-      vtn_assert(!block->merge);
-
-      block->block = nir_cursor_current_block(b->nb.cursor);
-      const uint32_t *block_start = block->label;
-      const uint32_t *block_end = block->branch;
-
-      block_start = vtn_foreach_instruction(b, block_start, block_end,
-                                            vtn_handle_phis_first_pass);
-      vtn_foreach_instruction(b, block_start, block_end, handler);
-      block->end_nop = nir_intrinsic_instr_create(b->nb.shader, nir_intrinsic_nop);
-      nir_builder_instr_insert(&b->nb, &block->end_nop->instr);
-
-      switch (block->branch_type) {
-      case vtn_branch_type_goto: {
-         vtn_emit_branch(b, block->branch_type, NULL, NULL, NULL);
-
-         struct vtn_cf_node *next_node = LIST_ENTRY(struct vtn_cf_node, node->link.next, link);
-         vtn_assert(next_node->type == vtn_cf_node_type_block);
-
-         if (block->connect) {
-            _mesa_set_add(s, node);
-            return false;
-         }
-
-         struct vtn_block *next = (struct vtn_block*)next_node;
-         vtn_assert(!next->block);
-
-         nir_block *n = nir_block_create(b->shader);
-         exec_list_push_tail(&b->nb.impl->body, &n->cf_node.node);
-         n->cf_node.parent = &b->nb.impl->cf_node;
-
-         block->block->successors[0] = n;
-         _mesa_set_add(n->predecessors, block->block);
-
-         b->nb.cursor = nir_after_block(n);
-         return true;
-      }
-
-      case vtn_branch_type_goto_if: {
-         nir_ssa_def *cond = vtn_ssa_value(b, block->branch[1])->def;
-         vtn_emit_branch(b, block->branch_type, NULL, cond, NULL);
-
-         struct vtn_cf_node *next = LIST_ENTRY(struct vtn_cf_node, node->link.next, link);
-         vtn_assert(next->type == vtn_cf_node_type_if);
-         return true;
-      }
-
-      case vtn_branch_type_return: {
-         vtn_emit_ret_store(b, block);
-         vtn_emit_branch(b, block->branch_type, NULL, NULL, NULL);
-         return false;
-      }
-
-      default:
-         vtn_fail("Invalid branch type");
-      }
-
-      break;
-   }
-
-   case vtn_cf_node_type_if: {
-      struct vtn_if *vtn_if = (struct vtn_if *)node;
-      struct nir_block *block = nir_cursor_current_block(b->nb.cursor);
-
-      nir_block *e = NULL;
-      if (!vtn_if->else_connect) {
-         e = nir_block_create(b->shader);
-         exec_list_push_tail(&b->nb.impl->body, &e->cf_node.node);
-         e->cf_node.parent = &b->nb.impl->cf_node;
-
-         b->nb.cursor = nir_after_block(e);
-         list_for_each_entry(struct vtn_cf_node, node, &vtn_if->else_body, link)
-            if (!vtn_emit_cf_node_unstructured(b, node, handler, s))
-               break;
-      } else {
-         _mesa_set_add(s, node);
-      }
-
-      nir_block *t = NULL;
-      if (!vtn_if->then_connect) {
-         t = nir_block_create(b->shader);
-         exec_list_push_tail(&b->nb.impl->body, &t->cf_node.node);
-         t->cf_node.parent = &b->nb.impl->cf_node;
-
-         b->nb.cursor = nir_after_block(t);
-         list_for_each_entry(struct vtn_cf_node, node, &vtn_if->then_body, link)
-            if (!vtn_emit_cf_node_unstructured(b, node, handler, s))
-               break;
-      } else {
-         _mesa_set_add(s, node);
-      }
-
-      /* connect after walking the tree */
-      if (e) {
-         block->successors[0] = e;
-         _mesa_set_add(e->predecessors, block);
-      }
-      if (t) {
-         block->successors[1] = t;
-         _mesa_set_add(t->predecessors, block);
-
-         if (nir_block_ends_in_jump(block)) {
-            nir_jump_instr *instr = nir_instr_as_jump(nir_block_last_instr(block));
-            assert(instr->type == nir_jump_goto_if);
-            instr->target = t;
-         }
-      }
-
-      return false;
-   }
-
-   default:
-      vtn_fail("Invalid CF node type");
-   }
-}
-
-static void
-vtn_emit_cf_func_unstructured(struct vtn_builder *b, struct vtn_function *func,
-                              vtn_instruction_handler handler)
-{
-   struct vtn_cf_node *node = LIST_ENTRY(struct vtn_cf_node, func->body.next, link);
-   vtn_assert(node->type == vtn_cf_node_type_block);
-
-   struct set *s = _mesa_pointer_set_create(b->shader);
-   list_for_each_entry(struct vtn_cf_node, node, &func->body, link)
-      if (!vtn_emit_cf_node_unstructured(b, node, handler, s))
-         break;
-
-   set_foreach(s, e) {
-      struct vtn_cf_node *node = (struct vtn_cf_node *)e->key;
-      switch (node->type) {
-      case vtn_cf_node_type_block: {
-         struct vtn_block *block = (struct vtn_block *)node;
-         vtn_assert(!block->block->successors[0]);
-         block->block->successors[0] = block->connect->block;
-         _mesa_set_add(block->connect->block->predecessors, block->block);
-         break;
-      }
-      case vtn_cf_node_type_if: {
-         struct vtn_if *vtn_if = (struct vtn_if *)node;
-         struct vtn_cf_node *prev = LIST_ENTRY(struct vtn_cf_node, vtn_if->node.link.prev, link);
-         assert(prev->type == vtn_cf_node_type_block);
-         struct nir_block *block = ((struct vtn_block*)prev)->block;
-
-         if (vtn_if->then_connect) {
-            vtn_assert(!block->successors[1]);
-            block->successors[1] = vtn_if->then_connect->block;
-            _mesa_set_add(vtn_if->then_connect->block->predecessors, block);
-
-            if (nir_block_ends_in_jump(block)) {
-               nir_jump_instr *instr = nir_instr_as_jump(nir_block_last_instr(block));
-               assert(instr->type == nir_jump_goto_if);
-               instr->target = vtn_if->then_connect->block;
-            }
-         }
-
-         if (vtn_if->else_connect) {
-            vtn_assert(!block->successors[0]);
-            block->successors[0] = vtn_if->else_connect->block;
-            _mesa_set_add(vtn_if->else_connect->block->predecessors, block);
-         }
-
-         break;
-      }
-
-      default:
-         vtn_fail("Invalid CF node type");
-      }
-   }
-   _mesa_set_destroy(s, NULL);
-}
-
 void
 vtn_function_emit(struct vtn_builder *b, struct vtn_function *func,
-                  bool structured_cf,
                   vtn_instruction_handler instruction_handler)
 {
    nir_builder_init(&b->nb, func->impl);
@@ -1508,11 +1238,7 @@ vtn_function_emit(struct vtn_builder *b, struct vtn_function *func,
    b->has_loop_continue = false;
    b->phi_table = _mesa_pointer_hash_table_create(b);
 
-   if (structured_cf)
-      vtn_emit_cf_list_structured(b, &func->body, NULL, NULL,
-                                  instruction_handler);
-   else
-      vtn_emit_cf_func_unstructured(b, func, instruction_handler);
+   vtn_emit_cf_list_structured(b, &func->body, NULL, NULL, instruction_handler);
 
    vtn_foreach_instruction(b, func->start_block->label, func->end,
                            vtn_handle_phi_second_pass);

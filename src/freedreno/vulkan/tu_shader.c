@@ -86,7 +86,7 @@ tu_spirv_to_nir(struct ir3_compiler *compiler,
 
    nir_shader *nir =
       spirv_to_nir(words, word_count, spec, num_spec, stage, entry_point_name,
-                   &spirv_options, nir_options, true);
+                   &spirv_options, nir_options);
 
    free(spec);
 

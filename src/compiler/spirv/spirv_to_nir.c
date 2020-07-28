@@ -5555,8 +5555,8 @@ spirv_to_nir(const uint32_t *words, size_t word_count,
              struct nir_spirv_specialization *spec, unsigned num_spec,
              gl_shader_stage stage, const char *entry_point_name,
              const struct spirv_to_nir_options *options,
-             const nir_shader_compiler_options *nir_options,
-             bool structured_cf)
+             const nir_shader_compiler_options *nir_options)
+
 {
    const uint32_t *word_end = words + word_count;
 
@@ -5631,7 +5631,7 @@ spirv_to_nir(const uint32_t *words, size_t word_count,
    /* Set types on all vtn_values */
    vtn_foreach_instruction(b, words, word_end, vtn_set_instruction_result_type);
 
-   vtn_build_cfg(b, words, word_end, structured_cf);
+   vtn_build_cfg(b, words, word_end);
 
    if (!options->create_library) {
       assert(b->entry_point->value_type == vtn_value_type_function);
@@ -5646,8 +5646,7 @@ spirv_to_nir(const uint32_t *words, size_t word_count,
          if ((options->create_library || func->referenced) && !func->emitted) {
             b->const_table = _mesa_pointer_hash_table_create(b);
 
-            vtn_function_emit(b, func, structured_cf,
-                              vtn_handle_body_instruction);
+            vtn_function_emit(b, func, vtn_handle_body_instruction);
             progress = true;
          }
       }

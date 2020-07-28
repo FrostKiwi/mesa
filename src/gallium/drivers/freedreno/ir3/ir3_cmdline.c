@@ -251,7 +251,7 @@ load_spirv(const char *filename, const char *entry, gl_shader_stage stage)
 			NULL, 0, /* spec_entries */
 			stage, entry,
 			&spirv_options,
-			ir3_get_compiler_options(compiler), true);
+			ir3_get_compiler_options(compiler));
 
 	nir_print_shader(nir, stdout);
 

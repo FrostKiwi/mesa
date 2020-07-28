@@ -141,17 +141,10 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
 
       nir_shader *nir = spirv_to_nir(data, num_words, nullptr, 0,
                                      MESA_SHADER_KERNEL, name,
-                                     &spirv_options, compiler_options, false);
+                                     &spirv_options, compiler_options);
 
       nir->info.cs.local_size_variable = true;
       nir_validate_shader(nir, "clover");
-
-      // structurize
-//      nir_print_shader(nir, stderr);
-      NIR_PASS_V(nir, nir_lower_goto_ifs);
-//      nir_print_shader(nir, stderr);
-      assert(nir->structured);
-      NIR_PASS_V(nir, nir_opt_dead_cf);
 
       // Calculate input offsets.
       unsigned offset = 0;

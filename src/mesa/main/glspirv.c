@@ -264,7 +264,7 @@ _mesa_spirv_to_nir(struct gl_context *ctx,
                    spec_entries, spirv_data->NumSpecializationConstants,
                    stage, entry_point_name,
                    &spirv_options,
-                   options, true);
+                   options);
    free(spec_entries);
 
    assert(nir);

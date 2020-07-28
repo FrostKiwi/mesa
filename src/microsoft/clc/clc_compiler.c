@@ -608,7 +608,7 @@ clc_context_new(const struct clc_logger *logger)
       spirv_to_nir((uint32_t *) libclc_spirv_bytecode,
                    sizeof(libclc_spirv_bytecode) / 4,
                    NULL, 0, MESA_SHADER_KERNEL, "libclc_spirv",
-                   &libclc_spirv_options, libclc_nir_options, false);
+                   &libclc_spirv_options, libclc_nir_options);
    if (!ctx->libclc_nir) {
       clc_error(logger, "D3D12: spirv_to_nir failed on libclc blob");
       goto err_free_ctx;
@@ -1105,8 +1105,7 @@ clc_to_dxil(struct clc_context *ctx,
                       NULL, 0,
                       MESA_SHADER_KERNEL, entrypoint,
                       &spirv_options,
-                      &nir_options,
-                      false);
+                      &nir_options);
    if (!nir) {
       clc_error(logger, "spirv_to_nir() failed");
       goto err_free_dxil;
