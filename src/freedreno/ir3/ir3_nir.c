@@ -73,6 +73,12 @@ static const nir_shader_compiler_options options = {
 		.lower_rotate = true,
 		.lower_to_scalar = true,
 		.has_imul24 = true,
+
+		/* Only needed for the spirv_to_nir() pass done in ir3_cmdline.c
+		 * but that should be harmless for GL since 64b is not
+		 * supported there.
+		 */
+		.lower_int64_options = (nir_lower_int64_options)~0,
 		.lower_cs_global_id_from_local = true,
 };
 
@@ -118,6 +124,12 @@ static const nir_shader_compiler_options options_a6xx = {
 		.lower_to_scalar = true,
 		.has_imul24 = true,
 		.max_unroll_iterations = 32,
+		
+		/* Only needed for the spirv_to_nir() pass done in ir3_cmdline.c
+		 * but that should be harmless for GL since 64b is not
+		 * supported there.
+		 */
+		.lower_int64_options = (nir_lower_int64_options)~0,
 		.lower_cs_global_id_from_local = true,
 };
 
