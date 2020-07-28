@@ -519,18 +519,22 @@ anv_physical_device_try_create(struct anv_instance *instance,
          device->info.max_cs_threads = max_cs_threads;
    }
 
-   device->compiler = brw_compiler_create(NULL, &device->info);
+   const struct brw_compiler_options compiler_options = {
+      .devinfo = &device->info,
+      .shader_debug_log = compiler_debug_log,
+      .shader_perf_log = compiler_perf_log,
+      .supports_pull_constants = false,
+      .constant_buffer_0_is_relative = device->info.gen < 8 ||
+                                       !device->has_context_isolation,
+      .supports_shader_constants = true,
+      .compact_params = false,
+      .lower_variable_group_size = false,
+   };
+   device->compiler = brw_compiler_create(NULL, &compiler_options);
    if (device->compiler == NULL) {
       result = vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
       goto fail_alloc;
    }
-   device->compiler->shader_debug_log = compiler_debug_log;
-   device->compiler->shader_perf_log = compiler_perf_log;
-   device->compiler->supports_pull_constants = false;
-   device->compiler->constant_buffer_0_is_relative =
-      device->info.gen < 8 || !device->has_context_isolation;
-   device->compiler->supports_shader_constants = true;
-   device->compiler->compact_params = false;
 
    /* Broadwell PRM says:
     *

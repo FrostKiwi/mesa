@@ -95,11 +95,20 @@ static const struct nir_shader_compiler_options vector_nir_options = {
 };
 
 struct brw_compiler *
-brw_compiler_create(void *mem_ctx, const struct gen_device_info *devinfo)
+brw_compiler_create(void *mem_ctx, const struct brw_compiler_options *options)
 {
+   const struct gen_device_info *devinfo = options->devinfo;
    struct brw_compiler *compiler = rzalloc(mem_ctx, struct brw_compiler);
 
    compiler->devinfo = devinfo;
+   compiler->shader_debug_log = options->shader_debug_log;
+   compiler->shader_perf_log = options->shader_perf_log;
+   compiler->constant_buffer_0_is_relative =
+      options->constant_buffer_0_is_relative;
+   compiler->supports_pull_constants = options->supports_pull_constants;
+   compiler->supports_shader_constants = options->supports_shader_constants;
+   compiler->compact_params = options->compact_params;
+   compiler->lower_variable_group_size = options->lower_variable_group_size;
 
    brw_fs_alloc_reg_sets(compiler);
    brw_vec4_alloc_reg_set(compiler);

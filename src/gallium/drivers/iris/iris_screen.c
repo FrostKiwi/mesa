@@ -735,12 +735,17 @@ iris_screen_create(int fd, const struct pipe_screen_config *config)
 
    isl_device_init(&screen->isl_dev, &screen->devinfo, false);
 
-   screen->compiler = brw_compiler_create(screen, &screen->devinfo);
-   screen->compiler->shader_debug_log = iris_shader_debug_log;
-   screen->compiler->shader_perf_log = iris_shader_perf_log;
-   screen->compiler->supports_pull_constants = false;
-   screen->compiler->supports_shader_constants = true;
-   screen->compiler->compact_params = false;
+   const struct brw_compiler_options compiler_options = {
+      .devinfo = &screen->devinfo,
+      .shader_debug_log = iris_shader_debug_log,
+      .shader_perf_log = iris_shader_perf_log,
+      .supports_pull_constants = false,
+      .constant_buffer_0_is_relative = false,
+      .supports_shader_constants = true,
+      .compact_params = false,
+      .lower_variable_group_size = false,
+   };
+   screen->compiler = brw_compiler_create(screen, &compiler_options);
 
    screen->l3_config_3d = iris_get_default_l3_config(&screen->devinfo, false);
    screen->l3_config_cs = iris_get_default_l3_config(&screen->devinfo, true);

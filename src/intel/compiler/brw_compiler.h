@@ -38,6 +38,20 @@ struct ra_regs;
 struct nir_shader;
 struct brw_program;
 
+struct brw_compiler_options {
+   const struct gen_device_info *devinfo;
+
+   void (*shader_debug_log)(void *, const char *str, ...) PRINTFLIKE(2, 3);
+   void (*shader_perf_log)(void *, const char *str, ...) PRINTFLIKE(2, 3);
+
+   /* See the equivalently named variables in brw_compiler for descriptions */
+   bool constant_buffer_0_is_relative;
+   bool supports_pull_constants;
+   bool supports_shader_constants;
+   bool compact_params;
+   bool lower_variable_group_size;
+};
+
 struct brw_compiler {
    const struct gen_device_info *devinfo;
 
@@ -1332,7 +1346,7 @@ struct brw_compile_stats {
 /** @} */
 
 struct brw_compiler *
-brw_compiler_create(void *mem_ctx, const struct gen_device_info *devinfo);
+brw_compiler_create(void *mem_ctx, const struct brw_compiler_options *options);
 
 /**
  * Returns a compiler configuration for use with disk shader cache

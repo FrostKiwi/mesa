@@ -2805,22 +2805,26 @@ __DRIconfig **intelInitScreen2(__DRIscreen *dri_screen)
    dri_screen->extensions = !screen->has_context_reset_notification
       ? screenExtensions : intelRobustScreenExtensions;
 
-   screen->compiler = brw_compiler_create(screen, devinfo);
-   screen->compiler->shader_debug_log = shader_debug_log_mesa;
-   screen->compiler->shader_perf_log = shader_perf_log_mesa;
+   const struct brw_compiler_options compiler_options = {
+      .devinfo = devinfo,
+      .shader_debug_log = shader_debug_log_mesa,
+      .shader_perf_log = shader_perf_log_mesa,
+      .supports_pull_constants = true,
 
-   /* Changing the meaning of constant buffer pointers from a dynamic state
-    * offset to an absolute address is only safe if the kernel isolates other
-    * contexts from our changes.
-    */
-   screen->compiler->constant_buffer_0_is_relative = devinfo->gen < 8 ||
-      !(screen->kernel_features & KERNEL_ALLOWS_CONTEXT_ISOLATION);
+      /* Changing the meaning of constant buffer pointers from a dynamic state
+       * offset to an absolute address is only safe if the kernel isolates
+       * other contexts from our changes.
+       */
+      .constant_buffer_0_is_relative = devinfo->gen < 8 ||
+         !(screen->kernel_features & KERNEL_ALLOWS_CONTEXT_ISOLATION),
+
+      .supports_shader_constants = false,
+      .compact_params = true,
+      .lower_variable_group_size = true,
+   };
+   screen->compiler = brw_compiler_create(screen, &compiler_options);
 
    screen->compiler->glsl_compiler_options[MESA_SHADER_VERTEX].PositionAlwaysInvariant = driQueryOptionb(&screen->optionCache, "vs_position_always_invariant");
-
-   screen->compiler->supports_pull_constants = true;
-   screen->compiler->compact_params = true;
-   screen->compiler->lower_variable_group_size = true;
 
    screen->has_exec_fence =
      intel_get_boolean(screen, I915_PARAM_HAS_EXEC_FENCE);
