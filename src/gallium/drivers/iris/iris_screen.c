@@ -744,6 +744,7 @@ iris_screen_create(int fd, const struct pipe_screen_config *config)
       .supports_shader_constants = true,
       .compact_params = false,
       .lower_variable_group_size = false,
+      .has_cs_base_work_group_id = false,
    };
    screen->compiler = brw_compiler_create(screen, &compiler_options);
 

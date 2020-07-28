@@ -50,6 +50,7 @@ struct brw_compiler_options {
    bool supports_shader_constants;
    bool compact_params;
    bool lower_variable_group_size;
+   bool has_cs_base_work_group_id;
 };
 
 struct brw_compiler {

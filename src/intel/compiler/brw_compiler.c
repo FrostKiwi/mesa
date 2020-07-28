@@ -198,6 +198,9 @@ brw_compiler_create(void *mem_ctx, const struct brw_compiler_options *options)
          *nir_options = vector_nir_options;
       }
 
+      nir_options->has_cs_base_work_group_id =
+         options->has_cs_base_work_group_id;
+
       /* Prior to Gen6, there are no three source operations, and Gen11 loses
        * LRP.
        */

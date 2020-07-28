@@ -2821,6 +2821,7 @@ __DRIconfig **intelInitScreen2(__DRIscreen *dri_screen)
       .supports_shader_constants = false,
       .compact_params = true,
       .lower_variable_group_size = true,
+      .has_cs_base_work_group_id = false,
    };
    screen->compiler = brw_compiler_create(screen, &compiler_options);
 
