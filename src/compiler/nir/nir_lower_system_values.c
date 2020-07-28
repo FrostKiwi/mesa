@@ -44,9 +44,9 @@ static nir_ssa_def*
 build_global_group_size(nir_builder *b, unsigned bit_size)
 {
    nir_ssa_def *group_size = nir_load_local_group_size(b);
-   nir_ssa_def *num_work_groups = nir_load_num_total_work_groups(b, bit_size);
+   nir_ssa_def *num_work_groups = nir_load_num_work_groups(b);
    return nir_imul(b, nir_u2u(b, group_size, bit_size),
-                      num_work_groups);
+                      nir_u2u(b, num_work_groups, bit_size));
 }
 
 static bool
@@ -190,7 +190,7 @@ lower_system_value_instr(nir_builder *b, nir_instr *instr, void *_state)
    case nir_intrinsic_load_global_invocation_id: {
       if (b->shader->options->lower_cs_global_id_from_local) {
          nir_ssa_def *group_size = nir_load_local_group_size(b);
-         nir_ssa_def *group_id = nir_load_work_group_id_with_offset(b, bit_size);
+         nir_ssa_def *group_id = nir_load_work_group_id(b);
          nir_ssa_def *local_id = nir_load_local_invocation_id(b);
 
          return nir_iadd(b, nir_imul(b, nir_u2u(b, group_id, bit_size),
@@ -198,26 +198,6 @@ lower_system_value_instr(nir_builder *b, nir_instr *instr, void *_state)
                             nir_u2u(b, local_id, bit_size));
       } else
          return NULL;
-   }
-
-   case nir_intrinsic_load_global_invocation_id_with_offset: {
-      /* This math only works if global index is computed from local index with offset */
-      assert(!b->shader->options->has_cs_work_group_offsets ||
-              b->shader->options->lower_cs_global_id_from_local);
-      nir_ssa_def *global_id = nir_load_global_invocation_id(b, bit_size);
-      nir_ssa_def *offset = nir_load_global_invocation_offset(b, bit_size);
-      return nir_iadd(b, global_id, offset);
-   }
-
-   case nir_intrinsic_load_global_invocation_offset: {
-      if (b->shader->options->has_cs_global_work_offsets)
-         return NULL;
-      nir_const_value v[3] = {
-         nir_const_value_for_int(0, bit_size),
-         nir_const_value_for_int(0, bit_size),
-         nir_const_value_for_int(0, bit_size)
-      };
-      return nir_build_imm(b, 3, bit_size, v);
    }
 
    case nir_intrinsic_load_global_invocation_index: {
@@ -248,27 +228,6 @@ lower_system_value_instr(nir_builder *b, nir_instr *instr, void *_state)
    case nir_intrinsic_load_num_work_groups:
    case nir_intrinsic_load_work_group_id:
       return sanitize_32bit_sysval(b, intrin);
-
-   case nir_intrinsic_load_num_total_work_groups:
-      if (b->shader->options->has_cs_work_group_offsets)
-         return NULL;
-      return nir_u2u(b, nir_load_num_work_groups(b), bit_size);
-
-   case nir_intrinsic_load_work_group_offset: {
-      if (b->shader->options->has_cs_work_group_offsets)
-         return NULL;
-
-      nir_const_value v[3] = {
-         nir_const_value_for_int(0, bit_size),
-         nir_const_value_for_int(0, bit_size),
-         nir_const_value_for_int(0, bit_size)
-      };
-      return nir_build_imm(b, 3, bit_size, v);
-   }
-
-   case nir_intrinsic_load_work_group_id_with_offset:
-      return nir_iadd(b, nir_u2u(b, nir_load_work_group_id(b), bit_size),
-                         nir_load_work_group_offset(b, bit_size));
 
    case nir_intrinsic_load_deref: {
       nir_deref_instr *deref = nir_src_as_deref(intrin->src[0]);
