@@ -708,6 +708,13 @@ ibc_should_print_shader(const ibc_shader *ibc)
    return INTEL_DEBUG & intel_debug_flag_for_shader_stage(ibc->stage);
 }
 
+bool
+ibc_instr_is_start(const ibc_instr *instr)
+{
+   return instr->type == IBC_INSTR_TYPE_FLOW &&
+          ibc_instr_as_flow(instr)->op == IBC_FLOW_OP_START;
+}
+
 static bool
 repair_wlr_write_cb(ibc_reg_write *write, ibc_ref *ref,
                     UNUSED void *_state)
