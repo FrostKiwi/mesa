@@ -32,9 +32,6 @@ struct strct_lvl {
    bool irreducible;
 };
 
-/**
- * Sets all path variables to reach the target block via a fork
- */
 static void
 set_path_vars(nir_builder *b, struct path_fork *fork, nir_block *target)
 {
@@ -54,12 +51,6 @@ set_path_vars(nir_builder *b, struct path_fork *fork, nir_block *target)
    }
 }
 
-/**
- * Sets all path variables to reach the both target blocks via a fork.
- * If the blocks are in different fork pathes, the condition will be used.
- * As the fork is already created, the then and else blocks may be swapped,
- * in this case the condition is inverted
- */
 static void
 set_path_vars_cond(nir_builder *b, struct path_fork *fork, nir_src condition,
                    nir_block *then_block, nir_block *else_block)
@@ -97,10 +88,6 @@ set_path_vars_cond(nir_builder *b, struct path_fork *fork, nir_src condition,
    }
 }
 
-/**
- * Sets all path variables and places the right jump instruction to reach the
- * target block
- */
 static void
 route_to(nir_builder *b, struct routes *routing, nir_block *target)
 {
@@ -121,17 +108,6 @@ route_to(nir_builder *b, struct routes *routing, nir_block *target)
    }
 }
 
-/**
- * Sets path vars and places the right jump instr to reach one of the two
- * target blocks based on the condition. If the targets need different jump
- * istructions, they will be placed into an if else statement.
- * This can happen if one target is the loop head
- *     A __
- *     |   \
- *     B    |
- *     |\__/
- *     C
- */
 static void
 route_to_cond(nir_builder *b, struct routes *routing, nir_src condition,
               nir_block *then_block, nir_block *else_block)
@@ -166,10 +142,6 @@ route_to_cond(nir_builder *b, struct routes *routing, nir_src condition,
    nir_pop_if(b, NULL);
 }
 
-/**
- * Merges the reachable sets of both fork subpaths into the forks entire
- * reachable set
- */
 static struct set *
 fork_reachable(struct path_fork *fork)
 {
@@ -179,14 +151,6 @@ fork_reachable(struct path_fork *fork)
    return reachable;
 }
 
-/**
- * Modifies the routing to be the routing inside a loop. The old regular path
- * becomes the new break path. The loop in path becomes the new regular and
- * continue path.
- * The lost routing information is stacked into the loop_backup stack.
- * Also creates helper vars for multilevel loop jumping if needed.
- * Also calls the nir builder to build the loop
- */
 static void
 loop_routing_start(struct routes *routing, nir_builder *b,
                    struct path loop_path, struct set *reach)
@@ -234,10 +198,6 @@ loop_routing_start(struct routes *routing, nir_builder *b,
    nir_push_loop(b);
 }
 
-/**
- * Gets a forks condition as ssa def if the condition is inside a helper var,
- * the variable will be read into an ssa def
- */
 static nir_ssa_def *
 fork_condition(nir_builder *b, struct path_fork *fork)
 {
@@ -250,11 +210,6 @@ fork_condition(nir_builder *b, struct path_fork *fork)
    return ret;
 }
 
-/**
- * Restores the routing after leaving a loop based on the loop_backup stack.
- * Also handles multi level jump helper vars if existing and calls the nir
- * builder to pop the nir loop
- */
 static void
 loop_routing_end(struct routes *routing, nir_builder *b)
 {
@@ -288,32 +243,21 @@ loop_routing_end(struct routes *routing, nir_builder *b)
    ralloc_free(routing_backup);
 }
 
-/**
- * checks if two sets contain common entries
- */
-static bool
+static int
 set_common(struct set *set1, struct set *set2)
 {
    set_foreach(set1, entry) {
       if (_mesa_set_search_pre_hashed(set2, entry->hash, entry->key))
-         return true;
+         return 1;
    }
-   return false;
+   return 0;
 }
 
 /**
  * generates a list of all blocks dominated by the loop header, but the
- * control flow can't go back to the loop header from the block.
+ * control flow can't go back to the loop header from the block
  * also generates a list of all blocks that can be reached from within the
  * loop
- *    | __
- *    A´  \
- *    | \  \
- *    B  C-´
- *   /
- *  D
- * here B and C are directly dominated by A but only C can reach back to the
- * loop head A. B will be added to the outside set and to the reach set.
  * \param  loop_heads  set of loop heads. All blocks inside the loop will be
  *                     added to this set
  * \param  outside  all blocks directly outside the loop will be added
@@ -376,13 +320,6 @@ inside_outside(nir_block *block, struct set *loop_heads, struct set *outside,
    }
 }
 
-/**
- * Gets a set of blocks organized into the same level by the organize_levels
- * function and creates enough forks to be able to route to them.
- * If the set only contains one block, the function has nothing to do.
- * The set should almost never contain more than two blocks, but if, then the
- * function calls itself recursively
- */
 static struct path_fork *
 select_fork(struct set *reachable, nir_function_impl *impl, bool need_var)
 {
@@ -414,102 +351,10 @@ select_fork(struct set *reachable, nir_function_impl *impl, bool need_var)
 }
 
 /**
- * gets called when the organize_levels functions fails to find blocks that
- * can't be reached by the other remaining blocks. This means, at least two
- * dominance sibling blocks can reach each other. So we have a multi entry
- * loop. This function tries to find the smallest possible set of blocks that
- * must be part of the multi entry loop.
- * example cf:  |    |
- *              A<---B
- *             / \__,^ \
- *             \       /
- *               \   /
- *                 C
- * The function choses a random block as candidate. for example C
- * The function checks which remaining blocks can reach C, in this case A.
- * So A becomes the new candidate and C is removed from the result set.
- * B can reach A.
- * So B becomes the new candidate and A is removed from the set.
- * A can reach B.
- * A was an old candidate. So it is added to the set containing B.
- * No other remaining blocks can reach A or B.
- * So only A and B must be part of the multi entry loop.
- */
-static void
-handle_irreducible(struct set *remaining, struct strct_lvl *curr_level,
-                   struct set *brk_reachable) {
-   nir_block *candidate = (nir_block *)
-      _mesa_set_next_entry(remaining, NULL)->key;
-   nir_block *to_be_added;
-   struct set *old_candidates = _mesa_pointer_set_create(curr_level);
-   while (candidate) {
-      _mesa_set_add(old_candidates, candidate);
-      to_be_added = candidate;
-      candidate = NULL;
-      _mesa_set_clear(curr_level->blocks, NULL);
-      while (to_be_added) {
-         _mesa_set_add(curr_level->blocks, to_be_added);
-         to_be_added = NULL;
-         set_foreach(remaining, entry) {
-            nir_block *remaining_block = (nir_block *) entry->key;
-            if (!_mesa_set_search(curr_level->blocks, remaining_block)
-                && set_common(remaining_block->dom_frontier,
-                              curr_level->blocks)) {
-               if (_mesa_set_search(old_candidates, remaining_block))
-                  to_be_added = remaining_block;
-               else
-                  candidate = remaining_block;
-               break;
-            }
-         }
-      }
-   }
-   _mesa_set_destroy(old_candidates, NULL);
-   old_candidates = NULL;
-   struct set *loop_heads = _mesa_set_clone(curr_level->blocks, curr_level);
-   curr_level->reach = _mesa_pointer_set_create(curr_level);
-   set_foreach(curr_level->blocks, entry) {
-      _mesa_set_remove_key(remaining, entry->key);
-      inside_outside((nir_block *) entry->key, loop_heads, remaining,
-                     curr_level->reach, brk_reachable);
-   }
-   _mesa_set_destroy(loop_heads, NULL);
-}
-
-/**
- * organize a set of blocks into a list of levels. Where every level contains
- * one or more blocks. So that every block is before all blocks it can reach.
+ * organize a set of blocks into a list list of levels with one or more
+ * blocks, so that every block is before all blocks it can reach.
  * Also creates all path variables needed, for the control flow between the
- * block.
- * For example if the control flow looks like this:
- *       A
- *     / |
- *    B  C
- *    | / \
- *    E    |
- *     \  /
- *      F
- * B, C, E and F are dominance children of A
- * The level list should look like this:
- *          blocks  irreducible   conditional
- * level 0   B, C     false        false
- * level 1    E       false        true
- * level 2    F       false        false
- * The final structure should look like this:
- * A
- * if (path_select) {
- *    B
- * } else {
- *    C
- * }
- * if (path_conditional) {
- *   E
- * }
- * F
- * 
- * \param  levels  uninitialized list
- * \param  is_dominated  if true, no helper variables will be created for the
- *                       zeroth level
+ * block
  */
 static void
 organize_levels(struct exec_list *levels, struct set *remaining,
@@ -544,7 +389,43 @@ organize_levels(struct exec_list *levels, struct set *remaining,
       }
       curr_level->irreducible = !curr_level->blocks->entries;
       if (curr_level->irreducible) {
-         handle_irreducible(remaining, curr_level, routing->brk.reachable);
+         nir_block *candidate = (nir_block *)
+            _mesa_set_next_entry(remaining, NULL)->key;
+         nir_block *to_be_added;
+         struct set *old_candidates = _mesa_pointer_set_create(curr_level);
+         while (candidate) {
+            _mesa_set_add(old_candidates, candidate);
+            to_be_added = candidate;
+            candidate = NULL;
+            _mesa_set_clear(curr_level->blocks, NULL);
+            while (to_be_added) {
+               _mesa_set_add(curr_level->blocks, to_be_added);
+               to_be_added = NULL;
+               set_foreach(remaining, entry) {
+                  nir_block *remaining_block = (nir_block *) entry->key;
+                  if (!_mesa_set_search(curr_level->blocks, remaining_block)
+                      && set_common(remaining_block->dom_frontier,
+                                    curr_level->blocks)) {
+                     if (_mesa_set_search(old_candidates, remaining_block))
+                        to_be_added = remaining_block;
+                     else
+                        candidate = remaining_block;
+                     break;
+                  }
+               }
+            }
+         }
+         _mesa_set_destroy(old_candidates, NULL);
+         old_candidates = NULL;
+         struct set *loop_heads = _mesa_set_clone(curr_level->blocks,
+                                                  curr_level);
+         curr_level->reach = _mesa_pointer_set_create(curr_level);
+         set_foreach(curr_level->blocks, entry) {
+            _mesa_set_remove_key(remaining, entry->key);
+            inside_outside((nir_block *) entry->key, loop_heads, remaining,
+                           curr_level->reach, routing->brk.reachable);
+         }
+         _mesa_set_destroy(loop_heads, NULL);
       }
       assert(curr_level->blocks->entries);
       curr_level->skip_start = 0;
@@ -634,10 +515,6 @@ organize_levels(struct exec_list *levels, struct set *remaining,
 static void
 nir_structurize(struct routes *routing, nir_builder *b, nir_block *block);
 
-/**
- * Places all the if else statements to select between all blocks in a select
- * path
- */
 static void
 select_blocks(struct routes *routing, nir_builder *b, struct path in_path) {
    if (!in_path.fork) {
@@ -654,9 +531,6 @@ select_blocks(struct routes *routing, nir_builder *b, struct path in_path) {
    }
 }
 
-/**
- * Builds the structurized nir code by the final level list.
- */
 static void
 plant_levels(struct exec_list *levels, struct routes *routing,
              nir_builder *b)
@@ -690,12 +564,11 @@ plant_levels(struct exec_list *levels, struct routes *routing,
 
 /**
  * builds the control flow of a block and all its dominance children
- * \param  routing  the routing after the block and all dominated blocks
  */
 static void
 nir_structurize(struct routes *routing, nir_builder *b, nir_block *block)
 {
-   void *mem_ctx = ralloc_context(routing);  //freed at end of the function
+   void *mem_ctx = ralloc_context(routing);
    struct exec_list levels;
    struct exec_list outside_levels;
    struct set *reach;
@@ -704,7 +577,6 @@ nir_structurize(struct routes *routing, nir_builder *b, nir_block *block)
       if (!_mesa_set_search(routing->brk.reachable, block->dom_children[i]))
          _mesa_set_add(remaining, block->dom_children[i]);
    }
-   //if the block can reach back to itself, it is a loop head
    int is_looped = _mesa_set_search(block->dom_frontier, block) != NULL;
    if (is_looped) {
       struct set *loop_heads = _mesa_pointer_set_create(mem_ctx);
