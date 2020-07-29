@@ -37,6 +37,7 @@
 #include "tgsi/tgsi_ureg.h"
 
 #include "util/u_memory.h"
+#include "util/u_prim.h"
 #include "util/u_simple_shaders.h"
 
 #include <d3d12.h>
@@ -163,7 +164,7 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    opts.interpolate_at_vertex = screen->have_load_at_vertex;
    opts.lower_int16 = !screen->opts4.Native16BitShaderOpsSupported;
    opts.ubo_binding_offset = shader->has_default_ubo0 ? 0 : 1;
-   opts.flatshade_first = key->fs.provoking_vertex_first;
+   opts.provoking_vertex = key->fs.provoking_vertex;
 
    struct blob tmp;
    if (!nir_to_dxil(nir, &opts, &tmp)) {
@@ -215,6 +216,7 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
 
 struct d3d12_selection_context {
    struct d3d12_context *ctx;
+   const struct pipe_draw_info *dinfo;
    bool needs_point_sprite_lowering;
    bool manual_depth_range;
    bool samples_int_textures;
@@ -401,6 +403,32 @@ needs_point_sprite_lowering(struct d3d12_context *ctx, const struct pipe_draw_in
    }
 }
 
+static unsigned
+get_provoking_vertex(struct d3d12_selection_context *sel_ctx, d3d12_shader_selector *prev)
+{
+   if (sel_ctx->ctx->gfx_pipeline_state.rast && sel_ctx->ctx->gfx_pipeline_state.rast->base.flatshade_first)
+      return 0;
+
+   /* Make sure GL prims match Gallium prims */
+   STATIC_ASSERT(GL_POINTS == PIPE_PRIM_POINTS);
+   STATIC_ASSERT(GL_LINES == PIPE_PRIM_LINES);
+   STATIC_ASSERT(GL_LINE_STRIP == PIPE_PRIM_LINE_STRIP);
+
+   enum pipe_prim_type mode;
+   switch (prev->stage) {
+   case PIPE_SHADER_GEOMETRY:
+      mode = (enum pipe_prim_type)prev->current->nir->info.gs.output_primitive;
+      break;
+   case PIPE_SHADER_VERTEX:
+      mode = sel_ctx->dinfo->mode;
+      break;
+   default:
+      unreachable("Tesselation shaders are not supported");
+   }
+
+   return u_prim_vertex_count(mode)->min - 1;
+}
+
 static void
 validate_geometry_shader(struct d3d12_selection_context *sel_ctx)
 {
@@ -497,7 +525,7 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
       }
    }
 
-   if (expect->fs.provoking_vertex_first != have->fs.provoking_vertex_first)
+   if (expect->fs.provoking_vertex != have->fs.provoking_vertex)
       return false;
 
    return true;
@@ -596,8 +624,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
    /* Only set the key value if the driver actually supports changing the provoking vertex */
    if (stage == PIPE_SHADER_FRAGMENT && sel_ctx->ctx->gfx_pipeline_state.rast &&
        d3d12_screen(sel_ctx->ctx->base.screen)->have_load_at_vertex)
-      key->fs.provoking_vertex_first = sel_ctx->ctx->gfx_pipeline_state.rast->base.flatshade_first;
-
+      key->fs.provoking_vertex = get_provoking_vertex(sel_ctx, prev);
 }
 
 static void
@@ -892,6 +919,7 @@ d3d12_select_shader_variants(struct d3d12_context *ctx, const struct pipe_draw_i
    struct d3d12_selection_context sel_ctx;
 
    sel_ctx.ctx = ctx;
+   sel_ctx.dinfo = dinfo;
    sel_ctx.needs_point_sprite_lowering = needs_point_sprite_lowering(ctx, dinfo);
    sel_ctx.missing_dual_src_outputs = missing_dual_src_outputs(ctx);
    sel_ctx.frag_result_color_lowering = frag_result_color_lowering(ctx);

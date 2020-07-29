@@ -50,7 +50,7 @@ struct nir_to_dxil_options {
    bool interpolate_at_vertex;
    bool lower_int16;
    unsigned ubo_binding_offset;
-   bool flatshade_first;
+   unsigned provoking_vertex;
 };
 
 bool

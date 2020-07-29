@@ -2590,8 +2590,7 @@ emit_load_input_flat(struct ntd_context *ctx, nir_intrinsic_instr *intr, nir_var
    const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_ATTRIBUTE_AT_VERTEX);
    const struct dxil_value *input_id = dxil_module_get_int32_const(&ctx->mod, (int)var->data.driver_location);
    const struct dxil_value *row = dxil_module_get_int32_const(&ctx->mod, 0);
-   const struct dxil_value *vertex_id = dxil_module_get_int8_const(&ctx->mod,
-                                                                   ctx->opts->flatshade_first ? 0 : 2);
+   const struct dxil_value *vertex_id = dxil_module_get_int8_const(&ctx->mod, ctx->opts->provoking_vertex);
 
    nir_alu_type out_type = nir_get_nir_type_for_glsl_base_type(glsl_get_base_type(var->type));
    enum overload_type overload = get_overload(out_type, 32);
