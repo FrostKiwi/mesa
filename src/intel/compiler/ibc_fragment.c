@@ -167,6 +167,10 @@ ibc_setup_fs_payload(ibc_builder *b, struct brw_wm_prog_data *prog_data,
    }
    ibc_builder_pop(b);
 
+   ibc_repair_load_payload_order(b->shader);
+   ibc_instr *last = list_last_entry(&b->shader->instrs, ibc_instr, link);
+   b->cursor = ibc_after_instr(last);
+
    return payload;
 }
 

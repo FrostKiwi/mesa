@@ -1602,6 +1602,7 @@ void ibc_print_shader(const ibc_shader *shader, FILE *fp);
 void ibc_print_instr(FILE *fp, const ibc_instr *instr);
 
 void ibc_repair_wlr_order(ibc_shader *shader);
+void ibc_repair_load_payload_order(ibc_shader *shader);
 
 void ibc_schedule_instructions(ibc_shader *shader);
 void ibc_schedule_instructions_post_ra(ibc_shader *shader);
