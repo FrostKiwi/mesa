@@ -1496,14 +1496,17 @@ ibc_before_shader(ibc_shader *shader)
 static inline ibc_cursor
 ibc_after_payload(ibc_shader *shader)
 {
-   const ibc_instr *after_start =
-      LIST_ENTRY(ibc_instr, shader->instrs.next->next, link);
+   ibc_instr *prev = list_first_entry(&shader->instrs, ibc_instr, link);
+   ibc_instr *after_start = LIST_ENTRY(ibc_instr, prev->link.next, link);
 
    ibc_foreach_instr_from(instr, shader, after_start) {
       if (!ibc_instr_is_load_payload(instr))
-         return ibc_before_instr(instr);
+         break;
+
+      prev = instr;
    }
-   unreachable("end instruction prevents this");
+
+   return ibc_after_instr(prev);
 }
 
 void ibc_instr_insert(ibc_instr *instr, ibc_cursor cursor);
