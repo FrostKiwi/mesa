@@ -57,6 +57,7 @@ static D3D12_RTV_DIMENSION
 view_rtv_dimension(enum pipe_texture_target target, unsigned samples)
 {
    switch (target) {
+   case PIPE_BUFFER: return D3D12_RTV_DIMENSION_BUFFER;
    case PIPE_TEXTURE_1D: return D3D12_RTV_DIMENSION_TEXTURE1D;
    case PIPE_TEXTURE_1D_ARRAY: return D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
 
@@ -155,6 +156,11 @@ d3d12_create_surface(struct pipe_context *pctx,
 
       desc.ViewDimension = view_rtv_dimension(pres->target, pres->nr_samples);
       switch (desc.ViewDimension) {
+      case D3D12_RTV_DIMENSION_BUFFER:
+         desc.Buffer.FirstElement = 0;
+         desc.Buffer.NumElements = pres->width0 / util_format_get_blocksize(tpl->format);
+         break;
+
       case D3D12_RTV_DIMENSION_TEXTURE1D:
          desc.Texture1D.MipSlice = tpl->u.tex.level;
          break;
