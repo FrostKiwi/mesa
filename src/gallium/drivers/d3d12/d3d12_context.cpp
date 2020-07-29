@@ -733,6 +733,7 @@ view_dimension(enum pipe_texture_target target, unsigned samples)
    case PIPE_BUFFER: return D3D12_SRV_DIMENSION_BUFFER;
    case PIPE_TEXTURE_1D: return D3D12_SRV_DIMENSION_TEXTURE1D;
    case PIPE_TEXTURE_1D_ARRAY: return D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+   case PIPE_TEXTURE_RECT:
    case PIPE_TEXTURE_2D:
       return samples > 1 ? D3D12_SRV_DIMENSION_TEXTURE2DMS :
                            D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -742,7 +743,6 @@ view_dimension(enum pipe_texture_target target, unsigned samples)
    case PIPE_TEXTURE_CUBE: return D3D12_SRV_DIMENSION_TEXTURECUBE;
    case PIPE_TEXTURE_CUBE_ARRAY: return D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
    case PIPE_TEXTURE_3D: return D3D12_SRV_DIMENSION_TEXTURE3D;
-   case PIPE_TEXTURE_RECT: return D3D12_SRV_DIMENSION_TEXTURE2D; /* not sure */
    default:
       unreachable("unexpected target");
    }
