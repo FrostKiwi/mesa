@@ -137,7 +137,7 @@ d3d12_create_surface(struct pipe_context *pctx,
          else {
             desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
             desc.Texture2D.MipSlice = tpl->u.tex.level;
-            desc.Texture2D.PlaneSlice = tpl->u.tex.first_layer;
+            desc.Texture2D.PlaneSlice = 0;
          }
          break;
 
@@ -152,7 +152,7 @@ d3d12_create_surface(struct pipe_context *pctx,
             desc.Texture2DArray.MipSlice = tpl->u.tex.level;
             desc.Texture2DArray.FirstArraySlice = tpl->u.tex.first_layer;
             desc.Texture2DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
-            desc.Texture2DArray.PlaneSlice = 0; // ???
+            desc.Texture2DArray.PlaneSlice = 0;
          }
          break;
 
