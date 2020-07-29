@@ -120,6 +120,10 @@ d3d12_create_surface(struct pipe_context *pctx,
       desc.ViewDimension = view_dsv_dimension(pres->target, pres->nr_samples);
       switch (desc.ViewDimension) {
       case D3D12_DSV_DIMENSION_TEXTURE1D:
+         if (tpl->u.tex.first_layer > 0)
+            debug_printf("D3D12: can't create 1D DSV from layer %d\n",
+                         tpl->u.tex.first_layer);
+
          desc.Texture1D.MipSlice = tpl->u.tex.level;
          break;
 
@@ -130,9 +134,17 @@ d3d12_create_surface(struct pipe_context *pctx,
          break;
 
       case D3D12_DSV_DIMENSION_TEXTURE2DMS:
+         if (tpl->u.tex.first_layer > 0)
+            debug_printf("D3D12: can't create 2DMS DSV from layer %d\n",
+                         tpl->u.tex.first_layer);
+
          break;
 
       case D3D12_DSV_DIMENSION_TEXTURE2D:
+         if (tpl->u.tex.first_layer > 0)
+            debug_printf("D3D12: can't create 2D DSV from layer %d\n",
+                         tpl->u.tex.first_layer);
+
          desc.Texture2D.MipSlice = tpl->u.tex.level;
          break;
 
@@ -162,6 +174,10 @@ d3d12_create_surface(struct pipe_context *pctx,
          break;
 
       case D3D12_RTV_DIMENSION_TEXTURE1D:
+         if (tpl->u.tex.first_layer > 0)
+            debug_printf("D3D12: can't create 1D RTV from layer %d\n",
+                         tpl->u.tex.first_layer);
+
          desc.Texture1D.MipSlice = tpl->u.tex.level;
          break;
 
@@ -172,9 +188,16 @@ d3d12_create_surface(struct pipe_context *pctx,
          break;
 
       case D3D12_RTV_DIMENSION_TEXTURE2DMS:
+         if (tpl->u.tex.first_layer > 0)
+            debug_printf("D3D12: can't create 2DMS RTV from layer %d\n",
+                         tpl->u.tex.first_layer);
          break;
 
       case D3D12_RTV_DIMENSION_TEXTURE2D:
+         if (tpl->u.tex.first_layer > 0)
+            debug_printf("D3D12: can't create 2D RTV from layer %d\n",
+                         tpl->u.tex.first_layer);
+
          desc.Texture2D.MipSlice = tpl->u.tex.level;
          desc.Texture2D.PlaneSlice = 0;
          break;
