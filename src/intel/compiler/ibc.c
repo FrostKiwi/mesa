@@ -737,6 +737,27 @@ ibc_repair_wlr_order(ibc_shader *shader)
       ibc_instr_foreach_reg_write(instr, repair_wlr_write_cb, NULL);
 }
 
+/**
+ * load_payload instructions must be in a contiguous block at the top
+ * of the shader.  Sometimes it's convenient to be construct them with
+ * other mov/zip operations mixed in, however.  This pass repairs that.
+ */
+void
+ibc_repair_load_payload_order(ibc_shader *shader)
+{
+   ibc_cursor top = ibc_before_shader(shader);
+
+   ibc_foreach_instr_reverse_safe(instr, shader) {
+      if (ibc_instr_is_load_payload(instr) || ibc_instr_is_start(instr)) {
+         list_del(&instr->link);
+         list_add(&instr->link, top.prev);
+
+         if (ibc_instr_is_start(instr))
+            break;
+      }
+   }
+}
+
 bool
 ibc_optimize(ibc_shader *ibc)
 {
