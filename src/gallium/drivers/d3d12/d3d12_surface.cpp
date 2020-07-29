@@ -31,6 +31,52 @@
 #include "util/u_inlines.h"
 #include "util/u_memory.h"
 
+static D3D12_DSV_DIMENSION
+view_dsv_dimension(enum pipe_texture_target target, unsigned samples)
+{
+   switch (target) {
+   case PIPE_TEXTURE_1D: return D3D12_DSV_DIMENSION_TEXTURE1D;
+   case PIPE_TEXTURE_1D_ARRAY: return D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+
+   case PIPE_TEXTURE_2D:
+   case PIPE_TEXTURE_RECT:
+      return samples > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS :
+                           D3D12_DSV_DIMENSION_TEXTURE2D;
+
+   case PIPE_TEXTURE_2D_ARRAY:
+   case PIPE_TEXTURE_CUBE:
+      return samples > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY :
+                           D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+
+   default:
+      unreachable("unexpected target");
+   }
+}
+
+static D3D12_RTV_DIMENSION
+view_rtv_dimension(enum pipe_texture_target target, unsigned samples)
+{
+   switch (target) {
+   case PIPE_TEXTURE_1D: return D3D12_RTV_DIMENSION_TEXTURE1D;
+   case PIPE_TEXTURE_1D_ARRAY: return D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+
+   case PIPE_TEXTURE_2D:
+   case PIPE_TEXTURE_RECT:
+      return samples > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMS :
+                           D3D12_RTV_DIMENSION_TEXTURE2D;
+
+   case PIPE_TEXTURE_2D_ARRAY:
+   case PIPE_TEXTURE_CUBE:
+      return samples > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY :
+                           D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+
+   case PIPE_TEXTURE_3D: return D3D12_RTV_DIMENSION_TEXTURE3D;
+
+   default:
+      unreachable("unexpected target");
+   }
+}
+
 static struct pipe_surface *
 d3d12_create_surface(struct pipe_context *pctx,
                      struct pipe_resource *pres,
@@ -69,45 +115,35 @@ d3d12_create_surface(struct pipe_context *pctx,
       D3D12_DEPTH_STENCIL_VIEW_DESC desc;
       desc.Format = dxgi_format;
       desc.Flags = D3D12_DSV_FLAG_NONE;
-      switch (pres->target) {
-      case PIPE_TEXTURE_1D:
-         desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
+
+      desc.ViewDimension = view_dsv_dimension(pres->target, pres->nr_samples);
+      switch (desc.ViewDimension) {
+      case D3D12_DSV_DIMENSION_TEXTURE1D:
          desc.Texture1D.MipSlice = tpl->u.tex.level;
          break;
 
-      case PIPE_TEXTURE_1D_ARRAY:
-         desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+      case D3D12_DSV_DIMENSION_TEXTURE1DARRAY:
          desc.Texture1DArray.MipSlice = tpl->u.tex.level;
          desc.Texture1DArray.FirstArraySlice = tpl->u.tex.first_layer;
          desc.Texture1DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
          break;
 
-      case PIPE_TEXTURE_2D:
-      case PIPE_TEXTURE_RECT:
-         if (pres->nr_samples > 0)
-            desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
-         else {
-            desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-            desc.Texture2D.MipSlice = tpl->u.tex.level;
-         }
+      case D3D12_DSV_DIMENSION_TEXTURE2DMS:
          break;
 
-      case PIPE_TEXTURE_2D_ARRAY:
-      case PIPE_TEXTURE_CUBE:
-         if (pres->nr_samples > 0) {
-            desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
-            desc.Texture2DMSArray.FirstArraySlice = tpl->u.tex.first_layer;
-            desc.Texture2DMSArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
-         } else {
-            desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-            desc.Texture2DArray.MipSlice = tpl->u.tex.level;
-            desc.Texture2DArray.FirstArraySlice = tpl->u.tex.first_layer;
-            desc.Texture2DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
-         }
+      case D3D12_DSV_DIMENSION_TEXTURE2D:
+         desc.Texture2D.MipSlice = tpl->u.tex.level;
          break;
 
-      default:
-         unreachable("unsupported target"); // dunno how to support, if needed
+      case D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY:
+         desc.Texture2DMSArray.FirstArraySlice = tpl->u.tex.first_layer;
+         desc.Texture2DMSArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
+         break;
+
+      case D3D12_DSV_DIMENSION_TEXTURE2DARRAY:
+         desc.Texture2DArray.MipSlice = tpl->u.tex.level;
+         desc.Texture2DArray.FirstArraySlice = tpl->u.tex.first_layer;
+         desc.Texture2DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
          break;
       }
 
@@ -117,54 +153,42 @@ d3d12_create_surface(struct pipe_context *pctx,
       D3D12_RENDER_TARGET_VIEW_DESC desc;
       desc.Format = dxgi_format;
 
-      switch (pres->target) {
-      case PIPE_TEXTURE_1D:
-         desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
+      desc.ViewDimension = view_rtv_dimension(pres->target, pres->nr_samples);
+      switch (desc.ViewDimension) {
+      case D3D12_RTV_DIMENSION_TEXTURE1D:
          desc.Texture1D.MipSlice = tpl->u.tex.level;
          break;
 
-      case PIPE_TEXTURE_1D_ARRAY:
-         desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+      case D3D12_RTV_DIMENSION_TEXTURE1DARRAY:
          desc.Texture1DArray.MipSlice = tpl->u.tex.level;
          desc.Texture1DArray.FirstArraySlice = tpl->u.tex.first_layer;
          desc.Texture1DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
          break;
 
-      case PIPE_TEXTURE_2D:
-      case PIPE_TEXTURE_RECT:
-         if (pres->nr_samples > 0)
-            desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
-         else {
-            desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-            desc.Texture2D.MipSlice = tpl->u.tex.level;
-            desc.Texture2D.PlaneSlice = 0;
-         }
+      case D3D12_RTV_DIMENSION_TEXTURE2DMS:
          break;
 
-      case PIPE_TEXTURE_2D_ARRAY:
-      case PIPE_TEXTURE_CUBE:
-         if (pres->nr_samples > 0) {
-            desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
-            desc.Texture2DMSArray.FirstArraySlice = tpl->u.tex.first_layer;
-            desc.Texture2DMSArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
-         } else {
-            desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-            desc.Texture2DArray.MipSlice = tpl->u.tex.level;
-            desc.Texture2DArray.FirstArraySlice = tpl->u.tex.first_layer;
-            desc.Texture2DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
-            desc.Texture2DArray.PlaneSlice = 0;
-         }
+      case D3D12_RTV_DIMENSION_TEXTURE2D:
+         desc.Texture2D.MipSlice = tpl->u.tex.level;
+         desc.Texture2D.PlaneSlice = 0;
          break;
 
-      case PIPE_TEXTURE_3D:
-         desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
+      case D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY:
+         desc.Texture2DMSArray.FirstArraySlice = tpl->u.tex.first_layer;
+         desc.Texture2DMSArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
+         break;
+
+      case D3D12_RTV_DIMENSION_TEXTURE2DARRAY:
+         desc.Texture2DArray.MipSlice = tpl->u.tex.level;
+         desc.Texture2DArray.FirstArraySlice = tpl->u.tex.first_layer;
+         desc.Texture2DArray.ArraySize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
+         desc.Texture2DArray.PlaneSlice = 0;
+         break;
+
+      case D3D12_RTV_DIMENSION_TEXTURE3D:
          desc.Texture3D.MipSlice = tpl->u.tex.level;
          desc.Texture3D.FirstWSlice = tpl->u.tex.first_layer;
          desc.Texture3D.WSize = tpl->u.tex.last_layer - tpl->u.tex.first_layer + 1;
-         break;
-
-      default:
-         unreachable("unsupported target"); // dunno how to support, if needed
          break;
       }
 
