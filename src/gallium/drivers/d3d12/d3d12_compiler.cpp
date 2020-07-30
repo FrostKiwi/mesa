@@ -487,9 +487,10 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
       return false;
 
    if (expect->stage == PIPE_SHADER_VERTEX) {
+      if (expect->vs.needs_format_emulation != have->vs.needs_format_emulation)
+         return false;
+
       if (expect->vs.needs_format_emulation) {
-         if (!have->vs.needs_format_emulation)
-            return false;
          if (memcmp(expect->vs.format_conversion, have->vs.format_conversion,
                     PIPE_MAX_ATTRIBS * sizeof (enum pipe_format)))
             return false;
