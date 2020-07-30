@@ -177,8 +177,8 @@ fill_state_vars(struct d3d12_context *ctx,
          size += 4;
          break;
       case D3D12_STATE_VAR_DEPTH_TRANSFORM:
-         ptr[0] = fui(ctx->viewport_states[0].scale[2]);
-         ptr[1] = fui(ctx->viewport_states[0].translate[2]);
+         ptr[0] = fui(2.0f * ctx->viewport_states[0].scale[2]);
+         ptr[1] = fui(ctx->viewport_states[0].translate[2] - ctx->viewport_states[0].scale[2]);
          size += 4;
          break;
       default:
