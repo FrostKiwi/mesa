@@ -226,6 +226,16 @@ struct d3d12_selection_context {
    unsigned frag_result_color_lowering;
 };
 
+static void
+nir_emit_vertex(nir_builder *b, unsigned stream_id)
+{
+   nir_intrinsic_instr *instr;
+
+   instr = nir_intrinsic_instr_create(b->shader, nir_intrinsic_emit_vertex);
+   nir_intrinsic_set_stream_id(instr, stream_id);
+   nir_builder_instr_insert(b, &instr->instr);
+}
+
 static d3d12_shader_selector*
 d3d12_make_passthrough_gs(struct d3d12_context *ctx, d3d12_shader_selector *vs)
 {
@@ -280,9 +290,7 @@ d3d12_make_passthrough_gs(struct d3d12_context *ctx, d3d12_shader_selector *vs)
    }
 
    /* EmitVertex */
-   instr = nir_intrinsic_instr_create(nir, nir_intrinsic_emit_vertex);
-   nir_intrinsic_set_stream_id(instr, 0);
-   nir_builder_instr_insert(&b, &instr->instr);
+   nir_emit_vertex(&b, 0);
 
    /* EndPrimitive */
    instr = nir_intrinsic_instr_create(nir, nir_intrinsic_end_primitive);
