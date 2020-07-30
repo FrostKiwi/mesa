@@ -608,7 +608,7 @@ handle_core(struct vtn_builder *b, uint32_t opcode,
 
 static void
 _handle_v_load_store(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
-                     const uint32_t *w, unsigned count, bool load)
+                     const uint32_t *w, unsigned count, bool load, bool aligned, nir_rounding_mode round)
 {
    struct vtn_type *type;
    if (load)
@@ -626,7 +626,7 @@ _handle_v_load_store(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
    struct vtn_ssa_value *comps[NIR_MAX_VEC_COMPONENTS];
    nir_ssa_def *ncomps[NIR_MAX_VEC_COMPONENTS];
 
-   nir_ssa_def *moffset = nir_imul_imm(&b->nb, offset, components);
+   nir_ssa_def *moffset = nir_imul_imm(&b->nb, offset, (aligned && components == 3) ? 4 : components);
    nir_deref_instr *deref = vtn_pointer_to_deref(b, p->pointer);
 
    for (int i = 0; i < components; i++) {
@@ -636,10 +636,21 @@ _handle_v_load_store(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
       if (load) {
          comps[i] = vtn_local_load(b, arr_deref, p->type->access, 0);
          ncomps[i] = comps[i]->def;
+         if (glsl_get_base_type(comps[i]->type) != glsl_get_base_type(dest_type)) {
+            assert(comps[i]->type == glsl_float16_t_type() && glsl_get_base_type(dest_type) == GLSL_TYPE_FLOAT);
+            ncomps[i] = nir_f2f32(&b->nb, ncomps[i]);
+         }
       } else {
-         struct vtn_ssa_value *ssa = vtn_create_ssa_value(b, glsl_scalar_type(glsl_get_base_type(dest_type)));
          struct vtn_ssa_value *val = vtn_ssa_value(b, w[5]);
-         ssa->def = nir_channel(&b->nb, val->def, i);
+         nir_ssa_def *def = val->def;
+         if (glsl_get_base_type(p->pointer->type->type) != glsl_get_base_type(dest_type)) {
+            assert(p->pointer->type->type == glsl_float16_t_type() &&
+                   (glsl_get_base_type(dest_type) == GLSL_TYPE_FLOAT ||
+                    glsl_get_base_type(dest_type) == GLSL_TYPE_DOUBLE));
+            def = vtn_handle_convert(b, round, false, nir_type_float, def, nir_type_float, 16);
+         }
+         struct vtn_ssa_value *ssa = vtn_create_ssa_value(b, glsl_scalar_type(glsl_get_base_type(dest_type)));
+         ssa->def = nir_channel(&b->nb, def, i);
          vtn_local_store(b, ssa, arr_deref, p->type->access, 0);
       }
    }
@@ -652,14 +663,21 @@ static void
 vtn_handle_opencl_vload(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
                         const uint32_t *w, unsigned count)
 {
-   _handle_v_load_store(b, opcode, w, count, true);
+   _handle_v_load_store(b, opcode, w, count, true, opcode == OpenCLstd_Vloada_halfn, nir_rounding_mode_undef);
 }
 
 static void
 vtn_handle_opencl_vstore(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
                          const uint32_t *w, unsigned count)
 {
-   _handle_v_load_store(b, opcode, w, count, false);
+   _handle_v_load_store(b, opcode, w, count, false, opcode == OpenCLstd_Vstorea_halfn, nir_rounding_mode_undef);
+}
+
+static void
+vtn_handle_opencl_vstore_half_r(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
+                                const uint32_t *w, unsigned count)
+{
+   _handle_v_load_store(b, opcode, w, count, false, opcode == OpenCLstd_Vstorea_halfn_r, vtn_rounding_mode_to_nir(w[8]));
 }
 
 static nir_ssa_def *
@@ -906,10 +924,21 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
       handle_instr(b, ext_opcode, w + 5, count - 5, w + 1, handle_special);
       return true;
    case OpenCLstd_Vloadn:
+   case OpenCLstd_Vload_half:
+   case OpenCLstd_Vload_halfn:
+   case OpenCLstd_Vloada_halfn:
       vtn_handle_opencl_vload(b, cl_opcode, w, count);
       return true;
    case OpenCLstd_Vstoren:
+   case OpenCLstd_Vstore_half:
+   case OpenCLstd_Vstore_halfn:
+   case OpenCLstd_Vstorea_halfn:
       vtn_handle_opencl_vstore(b, cl_opcode, w, count);
+      return true;
+   case OpenCLstd_Vstore_half_r:
+   case OpenCLstd_Vstore_halfn_r:
+   case OpenCLstd_Vstorea_halfn_r:
+      vtn_handle_opencl_vstore_half_r(b, cl_opcode, w, count);
       return true;
    case OpenCLstd_Shuffle:
       handle_instr(b, ext_opcode, w + 5, count - 5, w + 1, handle_shuffle);

@@ -211,6 +211,24 @@ vtn_handle_matrix_alu(struct vtn_builder *b, SpvOp opcode,
    }
 }
 
+nir_rounding_mode
+vtn_rounding_mode_to_nir(uint32_t mode)
+{
+   switch (mode) {
+   case SpvFPRoundingModeRTE:
+      return nir_rounding_mode_rtne;
+   case SpvFPRoundingModeRTZ:
+      return nir_rounding_mode_rtz;
+   case SpvFPRoundingModeRTP:
+      return nir_rounding_mode_ru;
+   case SpvFPRoundingModeRTN:
+      return nir_rounding_mode_rd;
+   default:
+      unreachable("Not supported rounding mode");
+      break;
+   }
+}
+
 static void
 handle_rounding_mode(struct vtn_builder *b, struct vtn_value *val, int member,
                      const struct vtn_decoration *dec, void *_out_rounding_mode)
@@ -219,23 +237,7 @@ handle_rounding_mode(struct vtn_builder *b, struct vtn_value *val, int member,
    assert(dec->scope == VTN_DEC_DECORATION);
    if (dec->decoration != SpvDecorationFPRoundingMode)
       return;
-   switch (dec->operands[0]) {
-   case SpvFPRoundingModeRTE:
-      *out_rounding_mode = nir_rounding_mode_rtne;
-      break;
-   case SpvFPRoundingModeRTZ:
-      *out_rounding_mode = nir_rounding_mode_rtz;
-      break;
-   case SpvFPRoundingModeRTP:
-      *out_rounding_mode = nir_rounding_mode_ru;
-      break;
-   case SpvFPRoundingModeRTN:
-      *out_rounding_mode = nir_rounding_mode_rd;
-      break;
-   default:
-      unreachable("Not supported rounding mode");
-      break;
-   }
+   *out_rounding_mode = vtn_rounding_mode_to_nir(dec->operands[0]);
 }
 
 static void
@@ -591,7 +593,7 @@ clamp_to_range(struct vtn_builder *b, nir_ssa_def *src, nir_alu_type src_type,
    return nir_vec(&b->nb, rets, src->num_components);
 }
 
-static nir_ssa_def *
+nir_ssa_def *
 vtn_handle_convert(struct vtn_builder *b, nir_rounding_mode round,
                    bool want_clamp, nir_alu_type src_type, nir_ssa_def *src,
                    nir_alu_type dst_type, unsigned int dst_bit_size)
