@@ -233,7 +233,7 @@ load_bordercolor(nir_builder *b, nir_tex_instr *tex, dxil_wrap_sampler_state *ac
          const_value[i].f32 = 0;
          break;
       case PIPE_SWIZZLE_1:
-         const_value[i].f32 = 0;
+         const_value[i].i32 = 1;
          break;
       case PIPE_SWIZZLE_X:
       case PIPE_SWIZZLE_Y:
