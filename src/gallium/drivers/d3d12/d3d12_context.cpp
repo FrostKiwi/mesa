@@ -853,6 +853,7 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
          component_mapping(swizzle[3], D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_3)
          );
 
+   unsigned array_size = state->u.tex.last_layer - state->u.tex.first_layer + 1;
    switch (desc.ViewDimension) {
    case D3D12_SRV_DIMENSION_TEXTURE1D:
       desc.Texture1D.MostDetailedMip = state->u.tex.first_level;
@@ -864,7 +865,7 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
       desc.Texture1DArray.MipLevels = sampler_view->mip_levels;
       desc.Texture1DArray.ResourceMinLODClamp = 0.0f;
       desc.Texture1DArray.FirstArraySlice = 0;
-      desc.Texture1DArray.ArraySize = texture->array_size;
+      desc.Texture1DArray.ArraySize = array_size;
       break;
    case D3D12_SRV_DIMENSION_TEXTURE2D:
       desc.Texture2D.MostDetailedMip = state->u.tex.first_level;
@@ -880,11 +881,11 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
       desc.Texture2DArray.ResourceMinLODClamp = 0.0f;
       desc.Texture2DArray.FirstArraySlice = 0;
       desc.Texture2DArray.PlaneSlice = plane_slice;
-      desc.Texture2DArray.ArraySize = texture->array_size;
+      desc.Texture2DArray.ArraySize = array_size;
       break;
    case D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY:
       desc.Texture2DMSArray.FirstArraySlice = 0;
-      desc.Texture2DMSArray.ArraySize = texture->array_size;
+      desc.Texture2DMSArray.ArraySize = array_size;
       break;
    case D3D12_SRV_DIMENSION_TEXTURE3D:
       desc.Texture3D.MostDetailedMip = state->u.tex.first_level;
