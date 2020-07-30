@@ -105,25 +105,35 @@ lower_vs_vertex_conversion_impl(nir_builder *b, nir_instr *instr, void *options)
    nir_variable *var = nir_intrinsic_get_var(intr, 0);
    enum pipe_format fmt = get_input_target_format(var, options);
 
-   nir_ssa_def *src = nir_channel(b, &intr->dest.ssa, 0);
+   if (!util_format_has_alpha(fmt)) {
+      /* these formats need the alpha channel replaced with 1: */
+      assert(fmt == PIPE_FORMAT_R8G8B8_SINT ||
+             fmt == PIPE_FORMAT_R8G8B8_UINT ||
+             fmt == PIPE_FORMAT_R16G16B16_SINT ||
+             fmt == PIPE_FORMAT_R16G16B16_UINT);
+      return nir_vector_insert_imm(b, &intr->dest.ssa, nir_imm_int(b, 1), 3);
+   } else {
+      nir_ssa_def *src = nir_channel(b, &intr->dest.ssa, 0);
 
-   switch (fmt) {
-   case PIPE_FORMAT_R10G10B10A2_SNORM:
-      return from_10_10_10_2_snorm(b, src, lshift_rgba(b));
-   case PIPE_FORMAT_B10G10R10A2_SNORM:
-      return from_10_10_10_2_snorm(b, src, lshift_bgra(b));
-   case PIPE_FORMAT_B10G10R10A2_UNORM:
-      return from_10_10_10_2_unorm(b, src, lshift_bgra(b));
-   case PIPE_FORMAT_R10G10B10A2_SSCALED:
-      return from_10_10_10_2_scaled(b, src, lshift_rgba(b), nir_ishr);
-   case PIPE_FORMAT_B10G10R10A2_SSCALED:
-      return from_10_10_10_2_scaled(b, src, lshift_bgra(b), nir_ishr);
-   case PIPE_FORMAT_R10G10B10A2_USCALED:
-      return from_10_10_10_2_scaled(b, src, lshift_rgba(b), nir_ushr);
-   case PIPE_FORMAT_B10G10R10A2_USCALED:
-      return from_10_10_10_2_scaled(b, src, lshift_bgra(b), nir_ushr);
-   default:
-      unreachable("Unsupported emulated vertex format");
+      switch (fmt) {
+      case PIPE_FORMAT_R10G10B10A2_SNORM:
+         return from_10_10_10_2_snorm(b, src, lshift_rgba(b));
+      case PIPE_FORMAT_B10G10R10A2_SNORM:
+         return from_10_10_10_2_snorm(b, src, lshift_bgra(b));
+      case PIPE_FORMAT_B10G10R10A2_UNORM:
+         return from_10_10_10_2_unorm(b, src, lshift_bgra(b));
+      case PIPE_FORMAT_R10G10B10A2_SSCALED:
+         return from_10_10_10_2_scaled(b, src, lshift_rgba(b), nir_ishr);
+      case PIPE_FORMAT_B10G10R10A2_SSCALED:
+         return from_10_10_10_2_scaled(b, src, lshift_bgra(b), nir_ishr);
+      case PIPE_FORMAT_R10G10B10A2_USCALED:
+         return from_10_10_10_2_scaled(b, src, lshift_rgba(b), nir_ushr);
+      case PIPE_FORMAT_B10G10R10A2_USCALED:
+         return from_10_10_10_2_scaled(b, src, lshift_bgra(b), nir_ushr);
+
+      default:
+         unreachable("Unsupported emulated vertex format");
+      }
    }
 }
 
@@ -147,4 +157,3 @@ d3d12_nir_lower_vs_vertex_conversion(nir_shader *s,
                                        target_formats);
    return result;
 }
-

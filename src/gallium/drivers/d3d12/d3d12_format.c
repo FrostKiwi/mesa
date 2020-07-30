@@ -191,6 +191,17 @@ d3d12_emulated_vtx_format(enum pipe_format fmt)
    case PIPE_FORMAT_B10G10R10A2_SSCALED:
    case PIPE_FORMAT_B10G10R10A2_USCALED:
       return PIPE_FORMAT_R32_UINT;
+
+   case PIPE_FORMAT_R8G8B8_SINT:
+      return PIPE_FORMAT_R8G8B8A8_SINT;
+   case PIPE_FORMAT_R8G8B8_UINT:
+      return PIPE_FORMAT_R8G8B8A8_UINT;
+
+   case PIPE_FORMAT_R16G16B16_SINT:
+      return PIPE_FORMAT_R16G16B16A16_SINT;
+   case PIPE_FORMAT_R16G16B16_UINT:
+      return PIPE_FORMAT_R16G16B16A16_UINT;
+
    default:
       return fmt;
    }
