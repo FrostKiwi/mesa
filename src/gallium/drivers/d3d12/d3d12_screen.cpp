@@ -266,9 +266,6 @@ d3d12_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_MAX_VERTEX_ATTRIB_STRIDE:
       return 2048; /* FIXME: no clue how to query this */
 
-   case PIPE_CAP_SAMPLER_VIEW_TARGET:
-      return 1;
-
    case PIPE_CAP_TEXTURE_FLOAT_LINEAR:
    case PIPE_CAP_TEXTURE_HALF_FLOAT_LINEAR:
       return 1;
