@@ -782,12 +782,23 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
    sampler_view->mip_levels = state->u.tex.last_level - state->u.tex.first_level + 1;
    sampler_view->array_size = texture->array_size;
 
+   int plane_slice = 0;
+
+   /* When reading from a stencil texture we have to use plane 1, and
+    * the formats X24S8 and X32_S8X24 have the actual data in the y-channel
+    * but the shader will read the x component so we need to adjust the swizzle. */
+   if (state->format == PIPE_FORMAT_X24S8_UINT ||
+       state->format == PIPE_FORMAT_X32_S8X24_UINT) {
+      plane_slice = 1;
+      sampler_view->base.swizzle_r = sampler_view->base.swizzle_g;
+   }
+
    D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
    pipe_swizzle swizzle[4] = {
-      (pipe_swizzle) state->swizzle_r,
-      (pipe_swizzle) state->swizzle_g,
-      (pipe_swizzle) state->swizzle_b,
-      (pipe_swizzle) state->swizzle_a
+      (pipe_swizzle) sampler_view->base.swizzle_r,
+      (pipe_swizzle) sampler_view->base.swizzle_g,
+      (pipe_swizzle) sampler_view->base.swizzle_b,
+      (pipe_swizzle) sampler_view->base.swizzle_a
    };
 
    desc.Format = d3d12_get_resource_srv_format(state->format);
@@ -816,16 +827,6 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
 
       desc.Format = format_descr->dxgi_format;
       memcpy(swizzle, format_descr->swizzle, sizeof(swizzle));
-   }
-
-   int plane_slice = 0;
-
-   /* When reading from a stencil texture we have to use plane 1, and
-    * the formats X24S8 and X32_S8X24 have the actual data in the y-channel. */
-   if (state->format == PIPE_FORMAT_X24S8_UINT ||
-       state->format == PIPE_FORMAT_X32_S8X24_UINT) {
-      plane_slice = 1;
-      swizzle[0] = PIPE_SWIZZLE_Y;
    }
 
    desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
