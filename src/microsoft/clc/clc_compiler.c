@@ -1297,6 +1297,7 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, dxil_nir_lower_loads_stores_to_dxil);
    NIR_PASS_V(nir, dxil_nir_opt_alu_deref_srcs);
    NIR_PASS_V(nir, dxil_nir_lower_atomics_to_dxil);
+   NIR_PASS_V(nir, dxil_nir_lower_fp16_casts);
 
    // Convert pack to pack_split
    NIR_PASS_V(nir, nir_lower_pack);

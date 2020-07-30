@@ -200,6 +200,7 @@ enum overload_type {
    DXIL_I16,
    DXIL_I32,
    DXIL_I64,
+   DXIL_F16,
    DXIL_F32,
    DXIL_F64,
    DXIL_NUM_OVERLOADS

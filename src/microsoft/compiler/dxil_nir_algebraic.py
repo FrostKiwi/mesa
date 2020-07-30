@@ -97,6 +97,11 @@ lower_x2b = [
   (('f2b1', 'a'), ('fne', a, 0)),
 ]
 
+no_16bit_conv += [
+  (('f2f32', ('u2u16', 'a@32')), ('unpack_half_2x16_split_x', 'a')),
+  (('u2u32', ('f2f16_rtz', 'a@32')), ('pack_half_2x16_split', 'a', 0)),
+]
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--import-path', required=True)

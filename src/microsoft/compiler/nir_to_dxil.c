@@ -245,6 +245,9 @@ enum dxil_intr {
 
    DXIL_INTR_PRIMITIVE_ID = 108,
 
+   DXIL_INTR_LEGACY_F32TOF16 = 130,
+   DXIL_INTR_LEGACY_F16TOF32 = 131,
+
    DXIL_INTR_ATTRIBUTE_AT_VERTEX = 137,
 };
 
@@ -1378,6 +1381,8 @@ store_dest(struct ntd_context *ctx, nir_dest *dest, unsigned chan,
 
       case nir_type_float:
          assert(nir_dest_bit_size(*dest) != 1);
+         if (nir_dest_bit_size(*dest) == 16)
+            ctx->mod.feats.native_low_precision = true;
          if (nir_dest_bit_size(*dest) == 64) {
             ctx->mod.feats.doubles = true;
             ctx->mod.feats.int64_ops = true;
@@ -1430,7 +1435,7 @@ get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
       return value;
 
    case nir_type_float:
-      assert(nir_src_bit_size(*src) >= 32);
+      assert(nir_src_bit_size(*src) >= 16);
       assert(nir_src_bit_size(*src) != 64 || (ctx->mod.feats.doubles &&
                                               ctx->mod.feats.int64_ops));
       return bitcast_to_float(ctx, nir_src_bit_size(*src), value);
@@ -1518,6 +1523,7 @@ get_cast_op(nir_alu_instr *alu)
       return DXIL_CAST_ZEXT;
 
    /* float -> float */
+   case nir_op_f2f16_rtz:
    case nir_op_f2f32:
    case nir_op_f2f64:
       assert(dst_bits != src_bits);
@@ -1645,6 +1651,7 @@ get_overload(nir_alu_type alu_type, unsigned bit_size)
       }
    case nir_type_float:
       switch (bit_size) {
+      case 16: return DXIL_F16;
       case 32: return DXIL_F32;
       case 64: return DXIL_F64;
       default:
@@ -1792,6 +1799,56 @@ emit_ufind_msb(struct ntd_context *ctx, nir_alu_instr *alu,
 }
 
 static bool
+emit_f16tof32(struct ntd_context *ctx, nir_alu_instr *alu, const struct dxil_value *val)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod,
+                                                    "dx.op.legacyF16ToF32",
+                                                    DXIL_NONE);
+   if (!func)
+      return false;
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_LEGACY_F16TOF32);
+   if (!opcode)
+      return false;
+
+   const struct dxil_value *args[] = {
+     opcode,
+     val
+   };
+
+   const struct dxil_value *v = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+   if (!v)
+      return false;
+   store_alu_dest(ctx, alu, 0, v);
+   return true;
+}
+
+static bool
+emit_f32tof16(struct ntd_context *ctx, nir_alu_instr *alu, const struct dxil_value *val)
+{
+   const struct dxil_func *func = dxil_get_function(&ctx->mod,
+                                                    "dx.op.legacyF32ToF16",
+                                                    DXIL_NONE);
+   if (!func)
+      return false;
+
+   const struct dxil_value *opcode = dxil_module_get_int32_const(&ctx->mod, DXIL_INTR_LEGACY_F32TOF16);
+   if (!opcode)
+      return false;
+
+   const struct dxil_value *args[] = {
+     opcode,
+     val
+   };
+
+   const struct dxil_value *v = dxil_emit_call(&ctx->mod, func, args, ARRAY_SIZE(args));
+   if (!v)
+      return false;
+   store_alu_dest(ctx, alu, 0, v);
+   return true;
+}
+
+static bool
 emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 {
    /* handle vec-instructions first; they are the only ones that produce
@@ -1894,11 +1951,17 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_fmin: return emit_binary_intin(ctx, alu, DXIL_INTR_FMIN, src[0], src[1]);
    case nir_op_ffma: return emit_tertiary_intin(ctx, alu, DXIL_INTR_FFMA, src[0], src[1], src[2]);
 
+   case nir_op_unpack_half_2x16_split_x: return emit_f16tof32(ctx, alu, src[0]);
+   case nir_op_pack_half_2x16_split: return emit_f32tof16(ctx, alu, src[0]);
+
    case nir_op_b2i16:
    case nir_op_i2i16:
    case nir_op_f2i16:
    case nir_op_f2u16:
    case nir_op_u2u16:
+   case nir_op_u2f16:
+   case nir_op_i2f16:
+   case nir_op_f2f16_rtz:
    case nir_op_b2i32:
    case nir_op_f2f32:
    case nir_op_f2i32:

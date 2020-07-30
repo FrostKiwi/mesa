@@ -67,6 +67,8 @@ static struct  predefined_func_descr predefined_funcs[] = {
 {"dx.op.atomicCompareExchange", "O", "i@iiiii", DXIL_ATTR_KIND_READ_NONE},
 {"dx.op.textureStore", "v", "i@iiiOOOOc", DXIL_ATTR_KIND_NONE},
 {"dx.op.primitiveID", "i", "i", DXIL_ATTR_KIND_READ_NONE},
+{"dx.op.legacyF16ToF32", "f", "ii", DXIL_ATTR_KIND_READ_ONLY},
+{"dx.op.legacyF32ToF16", "i", "if", DXIL_ATTR_KIND_READ_ONLY},
 };
 
 struct func_descr {

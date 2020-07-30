@@ -488,6 +488,14 @@ dxil_module_get_int_type(struct dxil_module *m, unsigned bit_size)
 }
 
 static const struct dxil_type *
+get_float16_type(struct dxil_module *m)
+{
+   if (!m->float16_type)
+      m->float16_type = create_float_type(m, 16);
+   return m->float16_type;
+}
+
+static const struct dxil_type *
 get_float32_type(struct dxil_module *m)
 {
    if (!m->float32_type)
@@ -507,6 +515,7 @@ const struct dxil_type *
 dxil_module_get_float_type(struct dxil_module *m, unsigned bit_size)
 {
    switch (bit_size) {
+   case 16: return get_float16_type(m);
    case 32: return get_float32_type(m);
    case 64: return get_float64_type(m);
    default:
@@ -1277,6 +1286,7 @@ static bool
 emit_float_type(struct dxil_module *m, unsigned bit_size)
 {
    switch (bit_size) {
+   case 16: return emit_record(m, TYPE_CODE_HALF, NULL, 0);
    case 32: return emit_record(m, TYPE_CODE_FLOAT, NULL, 0);
    case 64: return emit_record(m, TYPE_CODE_DOUBLE, NULL, 0);
    default:
@@ -2468,7 +2478,8 @@ legal_arith_type(const struct dxil_type *type)
              type->int_bits == 64;
 
    case TYPE_FLOAT:
-      return type->float_bits == 32 ||
+      return type->float_bits == 16 ||
+             type->float_bits == 32 ||
              type->float_bits == 64;
 
    default:
