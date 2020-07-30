@@ -2147,3 +2147,39 @@ TEST_F(ComputeTest, DISABLED_printf)
    run_shader(kernel_source, 1, 1, 1, src, dest);
    EXPECT_EQ(dest[0], 0);
 }
+
+TEST_F(ComputeTest, vload_half)
+{
+   const char *kernel_source = R"(
+   __kernel void main_test(__global half *src, __global float4 *dest)
+   {
+      int offset = get_global_id(0);
+      dest[offset] = vload_half4(offset, src);
+   })";
+   auto src = ShaderArg<uint16_t>({ 0x3c00, 0x4000, 0x4200, 0x4400,
+                                    0x4500, 0x4600, 0x4700, 0x4800 }, SHADER_ARG_INPUT);
+   auto dest = ShaderArg<float>({ FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX,
+                                  FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX }, SHADER_ARG_OUTPUT);
+   run_shader(kernel_source, 2, 1, 1, src, dest);
+   for (unsigned i = 0; i < 8; ++i)
+      EXPECT_FLOAT_EQ(dest[i], (float)(i + 1));
+}
+
+TEST_F(ComputeTest, vstore_half)
+{
+   const char *kernel_source = R"(
+   __kernel void main_test(__global half *dst, __global float4 *src)
+   {
+      int offset = get_global_id(0);
+      vstore_half4(src[offset], offset, dst);
+   })";
+   auto dest = ShaderArg<uint16_t>({0xdead, 0xdead, 0xdead, 0xdead,
+                                   0xdead, 0xdead, 0xdead, 0xdead}, SHADER_ARG_OUTPUT);
+   auto src = ShaderArg<float>({ 1.0, 2.0, 3.0, 4.0,
+                                  5.0, 6.0, 7.0, 8.0 }, SHADER_ARG_INPUT);
+   run_shader(kernel_source, 2, 1, 1, dest, src);
+   const uint16_t expected[] = { 0x3c00, 0x4000, 0x4200, 0x4400,
+                                 0x4500, 0x4600, 0x4700, 0x4800 };
+   for (unsigned i = 0; i < 8; ++i)
+      EXPECT_EQ(dest[i], expected[i]);
+}
