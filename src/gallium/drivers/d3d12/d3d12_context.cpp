@@ -787,18 +787,35 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
    /* When reading from a stencil texture we have to use plane 1, and
     * the formats X24S8 and X32_S8X24 have the actual data in the y-channel
     * but the shader will read the x component so we need to adjust the swizzle. */
-   if (state->format == PIPE_FORMAT_X24S8_UINT ||
-       state->format == PIPE_FORMAT_X32_S8X24_UINT) {
+   if (unlikely(state->format == PIPE_FORMAT_X24S8_UINT ||
+                state->format == PIPE_FORMAT_X32_S8X24_UINT)) {
       plane_slice = 1;
-      sampler_view->base.swizzle_r = sampler_view->base.swizzle_g;
+      enum pipe_swizzle swz[PIPE_SWIZZLE_MAX] = {
+               PIPE_SWIZZLE_Y,
+               PIPE_SWIZZLE_Y,
+               PIPE_SWIZZLE_Y,
+               PIPE_SWIZZLE_Y,
+               PIPE_SWIZZLE_0,
+               PIPE_SWIZZLE_1,
+               PIPE_SWIZZLE_NONE,
+            };
+      sampler_view->swizzle_override_r = swz[sampler_view->base.swizzle_r];
+      sampler_view->swizzle_override_g = swz[sampler_view->base.swizzle_g];
+      sampler_view->swizzle_override_b = swz[sampler_view->base.swizzle_b];
+      sampler_view->swizzle_override_a = swz[sampler_view->base.swizzle_a];
+   } else {
+      sampler_view->swizzle_override_r = sampler_view->base.swizzle_r;
+      sampler_view->swizzle_override_g = sampler_view->base.swizzle_g;
+      sampler_view->swizzle_override_b = sampler_view->base.swizzle_b;
+      sampler_view->swizzle_override_a = sampler_view->base.swizzle_a;
    }
 
    D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
    pipe_swizzle swizzle[4] = {
-      (pipe_swizzle) sampler_view->base.swizzle_r,
-      (pipe_swizzle) sampler_view->base.swizzle_g,
-      (pipe_swizzle) sampler_view->base.swizzle_b,
-      (pipe_swizzle) sampler_view->base.swizzle_a
+      (pipe_swizzle) sampler_view->swizzle_override_r,
+      (pipe_swizzle) sampler_view->swizzle_override_g,
+      (pipe_swizzle) sampler_view->swizzle_override_b,
+      (pipe_swizzle) sampler_view->swizzle_override_a
    };
 
    desc.Format = d3d12_get_resource_srv_format(state->format);
@@ -931,10 +948,11 @@ d3d12_set_sampler_views(struct pipe_context *pctx,
           * encode the use of the shadow texture lookup result as either luminosity,
           * intensity, or alpha. and we need the swizzle state for applying the
           * boundary color correctly */
-         swizzle_state.swizzle_r = views[i]->swizzle_r;
-         swizzle_state.swizzle_g = views[i]->swizzle_g;
-         swizzle_state.swizzle_b = views[i]->swizzle_b;
-         swizzle_state.swizzle_a = views[i]->swizzle_a;
+         struct d3d12_sampler_view *ss = d3d12_sampler_view(views[i]);
+         swizzle_state.swizzle_r = ss->swizzle_override_r;
+         swizzle_state.swizzle_g = ss->swizzle_override_g;
+         swizzle_state.swizzle_b = ss->swizzle_override_b;
+         swizzle_state.swizzle_a = ss->swizzle_override_a;
       }
    }
    ctx->num_sampler_views[shader_type] = start_slot + num_views;

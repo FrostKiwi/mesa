@@ -138,6 +138,10 @@ struct d3d12_sampler_view {
    struct d3d12_descriptor_handle handle;
    unsigned mip_levels;
    unsigned array_size;
+   unsigned swizzle_override_r:3;         /**< PIPE_SWIZZLE_x for red component */
+   unsigned swizzle_override_g:3;         /**< PIPE_SWIZZLE_x for green component */
+   unsigned swizzle_override_b:3;         /**< PIPE_SWIZZLE_x for blue component */
+   unsigned swizzle_override_a:3;         /**< PIPE_SWIZZLE_x for alpha component */
 };
 
 static inline struct d3d12_sampler_view *
