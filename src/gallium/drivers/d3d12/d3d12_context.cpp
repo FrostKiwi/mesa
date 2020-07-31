@@ -72,6 +72,7 @@ d3d12_context_destroy(struct pipe_context *pctx)
    d3d12_descriptor_pool_free(ctx->view_pool);
    util_primconvert_destroy(ctx->primconvert);
    slab_destroy_child(&ctx->transfer_pool);
+   d3d12_gs_variant_cache_destroy(ctx);
    d3d12_gfx_pipeline_state_cache_destroy(ctx);
    d3d12_root_signature_cache_destroy(ctx);
 
@@ -1015,8 +1016,6 @@ bind_stage(struct d3d12_context *ctx, enum pipe_shader_type stage,
            struct d3d12_shader_selector *shader)
 {
    assert(stage < D3D12_GFX_SHADER_STAGES);
-   if (ctx->gfx_stages[stage] && ctx->gfx_stages[stage]->passthrough)
-      delete_shader(ctx, stage, ctx->gfx_stages[stage]);
    ctx->gfx_stages[stage] = shader;
 }
 
@@ -1877,6 +1876,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
 
    d3d12_gfx_pipeline_state_cache_init(ctx);
    d3d12_root_signature_cache_init(ctx);
+   d3d12_gs_variant_cache_init(ctx);
 
    HMODULE hD3D12Mod = LoadLibrary("D3D12.DLL");
    if (!hD3D12Mod) {

@@ -179,6 +179,7 @@ struct d3d12_context {
    struct u_suballocator *so_allocator;
    struct hash_table *pso_cache;
    struct hash_table *root_signature_cache;
+   struct hash_table *gs_variant_cache;
 
    struct d3d12_batch batches[4];
    unsigned current_batch_idx;

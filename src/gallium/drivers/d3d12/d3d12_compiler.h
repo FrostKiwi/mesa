@@ -121,6 +121,19 @@ struct d3d12_shader {
    struct d3d12_shader *next_variant;
 };
 
+struct d3d12_gs_variant_key
+{
+   unsigned passthrough:1;
+
+   struct {
+      const struct glsl_type *type;
+      unsigned interpolation:3;   // INTERP_MODE_COUNT = 5
+      unsigned driver_location:6; // VARYING_SLOT_MAX = 64
+   } varyings[VARYING_SLOT_MAX];
+   uint64_t varyings_mask;
+
+};
+
 struct d3d12_shader_selector {
    enum pipe_shader_type stage;
    nir_shader *initial;
@@ -130,11 +143,11 @@ struct d3d12_shader_selector {
    struct pipe_stream_output_info so_info;
    uint64_t enabled_stream_outputs;
 
-   unsigned passthrough:1;
    unsigned samples_int_textures:1;
    unsigned compare_with_lod_bias_grad:1;
-   uint64_t passthrough_varyings;
 
+   bool is_gs_variant;
+   struct d3d12_gs_variant_key gs_key;
 };
 
 
@@ -149,6 +162,15 @@ d3d12_shader_free(struct d3d12_shader_selector *shader);
 void
 d3d12_select_shader_variants(struct d3d12_context *ctx,
                              const struct pipe_draw_info *dinfo);
+
+void
+d3d12_gs_variant_cache_init(struct d3d12_context *ctx);
+
+void
+d3d12_gs_variant_cache_destroy(struct d3d12_context *ctx);
+
+struct d3d12_shader_selector *
+d3d12_get_gs_variant(struct d3d12_context *ctx, struct d3d12_gs_variant_key *key);
 
 uint64_t
 d3d12_reassign_driver_locations(struct exec_list *io, uint64_t other_stage_mask);
