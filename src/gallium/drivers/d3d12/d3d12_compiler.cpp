@@ -220,8 +220,6 @@ struct d3d12_selection_context {
    const struct pipe_draw_info *dinfo;
    bool needs_point_sprite_lowering;
    bool manual_depth_range;
-   bool samples_int_textures;
-   bool compare_with_lod_bias_grad;
    unsigned missing_dual_src_outputs;
    unsigned frag_result_color_lowering;
 };
@@ -544,9 +542,11 @@ d3d12_compare_shader_keys(const d3d12_shader_key *expect, const d3d12_shader_key
 
 static void
 d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
-                      d3d12_shader_key *key, pipe_shader_type stage,
+                      d3d12_shader_key *key, d3d12_shader_selector *sel,
                       d3d12_shader_selector *prev, d3d12_shader_selector *next)
 {
+   pipe_shader_type stage = sel->stage;
+
    uint64_t system_generated_in_values =
          VARYING_BIT_FACE |
          VARYING_BIT_PNTC |
@@ -607,8 +607,8 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       key->fs.polygon_stipple = sel_ctx->ctx->pstipple.enabled;
    }
 
-   if (sel_ctx->samples_int_textures) {
-      key->samples_int_textures = sel_ctx->samples_int_textures;
+   if (sel->samples_int_textures) {
+      key->samples_int_textures = sel->samples_int_textures;
       key->n_texture_states = sel_ctx->ctx->num_sampler_views[stage];
       /* Copy only states with integer textures */
       for(int i = 0; i < key->n_texture_states; ++i) {
@@ -620,7 +620,7 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
       }
    }
 
-   if (sel_ctx->compare_with_lod_bias_grad) {
+   if (sel->compare_with_lod_bias_grad) {
       key->n_texture_states = sel_ctx->ctx->num_sampler_views[stage];
       memcpy(key->sampler_compare_funcs, sel_ctx->ctx->tex_compare_func[stage],
              key->n_texture_states * sizeof(enum compare_func));
@@ -651,9 +651,7 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
    nir_shader *new_nir_variant;
    unsigned pstipple_binding = UINT32_MAX;
 
-   sel_ctx->samples_int_textures = sel->samples_int_textures;
-   sel_ctx->compare_with_lod_bias_grad = sel->compare_with_lod_bias_grad;
-   d3d12_fill_shader_key(sel_ctx, &key, sel->stage, prev, next);
+   d3d12_fill_shader_key(sel_ctx, &key, sel, prev, next);
 
    /* Check for an existing variant */
    for (d3d12_shader *variant = sel->first; variant;
@@ -698,7 +696,7 @@ select_shader_variant(struct d3d12_selection_context *sel_ctx, d3d12_shader_sele
    if (key.fs.manual_depth_range)
       NIR_PASS_V(new_nir_variant, d3d12_lower_depth_range);
 
-   if (sel_ctx->compare_with_lod_bias_grad)
+   if (sel->compare_with_lod_bias_grad)
       NIR_PASS_V(new_nir_variant, d3d12_lower_sample_tex_compare, key.n_texture_states,
                  key.sampler_compare_funcs, key.swizzle_state);
 
