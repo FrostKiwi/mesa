@@ -115,7 +115,6 @@ d3d12_get_resource_rt_format(enum pipe_format f)
    case PIPE_FORMAT_Z24X8_UNORM:
    case PIPE_FORMAT_X24S8_UINT:
       return DXGI_FORMAT_D24_UNORM_S8_UINT;
-      return DXGI_FORMAT_D24_UNORM_S8_UINT;
    case PIPE_FORMAT_Z32_FLOAT_S8X24_UINT:
    case PIPE_FORMAT_X32_S8X24_UINT:
       return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
