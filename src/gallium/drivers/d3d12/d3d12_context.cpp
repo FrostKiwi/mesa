@@ -1104,6 +1104,8 @@ d3d12_set_vertex_buffers(struct pipe_context *pctx,
 
    for (unsigned i = 0; i < ctx->num_vbs; ++i) {
       const struct pipe_vertex_buffer* buf = ctx->vbs + i;
+      if (!buf->buffer.resource)
+         continue;
       struct d3d12_resource *res = d3d12_resource(buf->buffer.resource);
       ctx->vbvs[i].BufferLocation = d3d12_resource_gpu_virtual_address(res) + buf->buffer_offset;
       ctx->vbvs[i].StrideInBytes = buf->stride;
