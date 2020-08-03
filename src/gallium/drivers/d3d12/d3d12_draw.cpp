@@ -298,6 +298,18 @@ topology(enum pipe_prim_type prim_type)
    case PIPE_PRIM_TRIANGLE_STRIP:
       return D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 
+   case PIPE_PRIM_LINES_ADJACENCY:
+      return D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ;
+
+   case PIPE_PRIM_LINE_STRIP_ADJACENCY:
+      return D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ;
+
+   case PIPE_PRIM_TRIANGLES_ADJACENCY:
+      return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ;
+
+   case PIPE_PRIM_TRIANGLE_STRIP_ADJACENCY:
+      return D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ;
+
 /*
    case PIPE_PRIM_PATCHES:
       return D3D_PRIMITIVE_TOPOLOGY_PATCHLIST;
@@ -361,6 +373,26 @@ transition_surface_subresources_state(struct d3d12_context *ctx,
                                        state, flags);
 }
 
+static bool
+prim_supported(enum pipe_prim_type prim_type)
+{
+   switch (prim_type) {
+   case PIPE_PRIM_POINTS:
+   case PIPE_PRIM_LINES:
+   case PIPE_PRIM_LINE_STRIP:
+   case PIPE_PRIM_TRIANGLES:
+   case PIPE_PRIM_TRIANGLE_STRIP:
+   case PIPE_PRIM_LINES_ADJACENCY:
+   case PIPE_PRIM_LINE_STRIP_ADJACENCY:
+   case PIPE_PRIM_TRIANGLES_ADJACENCY:
+   case PIPE_PRIM_TRIANGLE_STRIP_ADJACENCY:
+      return true;
+
+   default:
+      return false;
+   }
+}
+
 void
 d3d12_draw_vbo(struct pipe_context *pctx,
                const struct pipe_draw_info *dinfo)
@@ -370,9 +402,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    struct pipe_resource *index_buffer = NULL;
    unsigned index_offset = 0;
 
-   if (dinfo->mode >= PIPE_PRIM_QUADS ||
-       dinfo->mode == PIPE_PRIM_LINE_LOOP ||
-       dinfo->mode == PIPE_PRIM_TRIANGLE_FAN ||
+   if (!prim_supported(dinfo->mode) ||
        dinfo->index_size == 1 ||
        (dinfo->primitive_restart && dinfo->restart_index != 0xffff &&
         dinfo->restart_index != 0xffffffff)) {
