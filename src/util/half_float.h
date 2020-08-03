@@ -49,6 +49,9 @@ uint16_t _mesa_uint16_div_64k_to_half(uint16_t v);
  */
 uint16_t _mesa_float_to_float16_rtz(float val);
 
+uint16_t _mesa_float_to_float16_ru(float val);
+uint16_t _mesa_float_to_float16_rd(float val);
+
 static inline uint16_t
 _mesa_float_to_float16_rtne(float val)
 {

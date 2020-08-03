@@ -78,7 +78,7 @@ nir_type_conversion_op(nir_alu_type src, nir_alu_type dst, nir_rounding_mode rnd
                   case ${dst_bits}:
 %                    if src_t == 'float' and dst_t == 'float' and dst_bits == 16:
                      switch(rnd) {
-%                       for rnd_t in [('rtne', '_rtne'), ('rtz', '_rtz'), ('undef', '')]:
+%                       for rnd_t in [('rtne', '_rtne'), ('rtz', '_rtz'), ('ru', '_ru'), ('rd', '_rd'), ('undef', '')]:
                         case nir_rounding_mode_${rnd_t[0]}:
                            return ${'nir_op_{0}2{1}{2}{3}'.format(src_t[0], dst_t[0],
                                                                    dst_bits, rnd_t[1])};
