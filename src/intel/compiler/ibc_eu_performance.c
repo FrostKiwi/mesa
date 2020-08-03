@@ -77,8 +77,8 @@ instruction_desc(const struct gen_eu_instruction_info *info)
    case ALU(FBL):
    case ALU(CBIT):
    //case ALU(ADDC):
-   //case ALU(ROR):
-   //case ALU(ROL):
+   case ALU(ROR):
+   case ALU(ROL):
    //case ALU(SUBB):
    //case ALU(SAD2):
    //case ALU(SADA2):

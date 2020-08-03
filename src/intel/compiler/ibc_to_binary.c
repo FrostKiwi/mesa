@@ -368,6 +368,8 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    BINOP_CASE(XOR)
    BINOP_CASE(SHR)
    BINOP_CASE(SHL)
+   BINOP_CASE(ROR)
+   BINOP_CASE(ROL)
 
    case IBC_ALU_OP_CMP:
       brw_CMP(p, dest, alu->cmod, src[0], src[1]);

@@ -378,6 +378,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    BINOP_CASE(ishl, SHL)
    BINOP_CASE(ishr, SHR)
    BINOP_CASE(ushr, SHR)
+   BINOP_CASE(urol, ROL)
+   BINOP_CASE(uror, ROR)
 
    case nir_op_imul_32x16:
    case nir_op_umul_32x16: {
