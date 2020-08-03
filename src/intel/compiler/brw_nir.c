@@ -794,6 +794,10 @@ brw_nir_should_use_ibc(const nir_shader *nir,
    if (devinfo->gen <= 8 || devinfo->gen >= 12)
       return false;
 
+   /* IBC doesn't support i965's pull constant model. */
+   if (compiler->supports_pull_constants)
+      return false;
+
    if (!is_scalar)
       return false;
 
