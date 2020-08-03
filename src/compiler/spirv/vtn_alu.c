@@ -636,9 +636,7 @@ vtn_handle_convert(struct vtn_builder *b, nir_rounding_mode round,
    } else if (!do_clamp &&
               src_type == nir_type_float &&
               dst_type == nir_type_float &&
-              dst_bit_size == 16 &&
-              (round == nir_rounding_mode_rtne ||
-              round == nir_rounding_mode_rtz)) {
+              dst_bit_size == 16) {
       trivial_convert = true;
    } else {
       trivial_convert = false;
