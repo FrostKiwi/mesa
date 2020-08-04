@@ -50,7 +50,11 @@ lower_int_cubmap_to_array_filter(const nir_instr *instr,
       return false;
    }
 
-   return (tex->dest_type & (nir_type_int | nir_type_uint));
+   int sampler_deref = nir_tex_instr_src_index(tex, nir_tex_src_sampler_deref);
+   assert(sampler_deref >= 0);
+   nir_deref_instr *deref = nir_instr_as_deref(tex->src[sampler_deref].src.ssa->parent_instr);
+   nir_variable *cube = nir_deref_instr_get_variable(deref);
+   return glsl_base_type_is_integer(glsl_get_sampler_result_type(cube->type));
 }
 
 typedef struct {
