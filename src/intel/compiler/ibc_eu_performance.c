@@ -386,6 +386,11 @@ instruction_desc(const struct gen_eu_instruction_info *info)
                                   10 /* XXX */, 100 /* XXX */, 0, 0,
                                   0, 0);
          }
+
+      case GEN7_SFID_PIXEL_INTERPOLATOR:
+         return calculate_desc(info, GEN_UNIT_PI, 2, 0, 0, 14 /* XXX */, 0,
+                               0, 90 /* XXX */, 0, 0, 0, 0);
+
       default:
          abort();
       }
