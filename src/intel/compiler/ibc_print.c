@@ -413,6 +413,7 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_FB_WRITE:           return "fb_write";
    case IBC_INTRINSIC_OP_URB_READ:           return "urb_read";
    case IBC_INTRINSIC_OP_URB_WRITE:          return "urb_write";
+   case IBC_INTRINSIC_OP_PIXEL_INTERP:       return "pixel_interp";
    case IBC_INTRINSIC_OP_BTI_TYPED_READ:     return "bti_typed_read";
    case IBC_INTRINSIC_OP_BTI_TYPED_WRITE:    return "bti_typed_write";
    case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:   return "bti_typed_atomic";
