@@ -520,7 +520,10 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
-   case nir_intrinsic_load_barycentric_at_offset: {
+   case nir_intrinsic_load_barycentric_at_offset:
+   case nir_intrinsic_load_barycentric_at_sample: {
+      prog_data->pulls_bary = true;
+
       enum glsl_interp_mode interpolation = nir_intrinsic_interp_mode(instr);
       ibc_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
 
@@ -531,18 +534,35 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
          },
       };
 
-      for (int i = 0; i < 2; i++) {
-         srcs[IBC_PI_OFFSET_X + i] = (ibc_intrinsic_src) {
-            .ref = ibc_comp_ref(src, i), .num_comps = 1,
-         };
+      if (instr->intrinsic == nir_intrinsic_load_barycentric_at_offset) {
+         for (int i = 0; i < 2; i++) {
+            srcs[IBC_PI_OFFSET_X + i] = (ibc_intrinsic_src) {
+               .ref = ibc_comp_ref(src, i), .num_comps = 1,
+            };
+         }
+
+         dest = ibc_builder_new_logical_reg(b, IBC_TYPE_F, 2);
+
+         ibc_build_intrinsic(b, IBC_INTRINSIC_OP_PIXEL_INTERP,
+                             dest, -1, 2, srcs, IBC_PI_NUM_SRCS);
+      } else {
+         assert(instr->intrinsic == nir_intrinsic_load_barycentric_at_sample);
+
+         if (ibc_ref_read_is_uniform(src)) {
+            srcs[IBC_PI_SAMPLE] = (ibc_intrinsic_src) {
+               .ref = ibc_uniformize(b, src), .num_comps = 1,
+            };
+
+            dest = ibc_builder_new_logical_reg(b, IBC_TYPE_F, 2);
+
+            ibc_build_intrinsic(b, IBC_INTRINSIC_OP_PIXEL_INTERP,
+                                dest, -1, 2, srcs, IBC_PI_NUM_SRCS);
+         } else {
+            /* need to do looping trick */
+            assert(!"TODO: interpolateAtSample(non-uniform-id)");
+         }
+
       }
-
-      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_F, 2);
-
-      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_PIXEL_INTERP,
-                          dest, -1, 2, srcs, IBC_PI_NUM_SRCS);
-
-      prog_data->pulls_bary = true;
       break;
    }
 
