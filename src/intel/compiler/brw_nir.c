@@ -365,6 +365,60 @@ brw_nir_lower_tes_inputs(nir_shader *nir, const struct brw_vue_map *vue_map)
    }
 }
 
+/**
+ * Convert interpolateAtOffset() offsets from [-0.5, +0.5] floating point
+ * offsets to integer [-8, +7] offsets (in units of 1/16th of a pixel).
+ *
+ * We clamp to +7/16 on the upper end of the range, since +0.5 isn't
+ * representable in a S0.4 value; a naive conversion would give us -8/16,
+ * which is the opposite of what was intended.
+ *
+ * This is allowed by GL_ARB_gpu_shader5's quantization rules:
+ *
+ *    "Not all values of <offset> may be supported; x and y offsets may
+ *     be rounded to fixed-point values with the number of fraction bits
+ *     given by the implementation-dependent constant
+ *     FRAGMENT_INTERPOLATION_OFFSET_BITS."
+ */
+static void
+lower_barycentric_at_offset(nir_shader *nir)
+{
+   nir_foreach_function(function, nir) {
+      if (!function->impl)
+         continue;
+
+      nir_builder b;
+      nir_builder_init(&b, function->impl);
+
+      nir_foreach_block(block, function->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
+
+            nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+
+            if (intrin->intrinsic != nir_intrinsic_load_barycentric_at_offset)
+               continue;
+
+            b.cursor = nir_before_instr(instr);
+
+            assert(intrin->src[0].ssa);
+            nir_ssa_def *offset =
+               nir_imin(&b, nir_imm_int(&b, 7),
+                        nir_f2i32(&b, nir_fmul(&b, nir_imm_float(&b, 16),
+                                               intrin->src[0].ssa)));
+
+            nir_instr_rewrite_src(instr, &intrin->src[0],
+                                  nir_src_for_ssa(offset));
+         }
+      }
+
+      nir_metadata_preserve(function->impl, (nir_metadata)
+                            ((unsigned) nir_metadata_block_index |
+                             (unsigned) nir_metadata_dominance));
+   }
+}
+
 void
 brw_nir_lower_fs_inputs(nir_shader *nir,
                         const struct gen_device_info *devinfo,
@@ -404,6 +458,8 @@ brw_nir_lower_fs_inputs(nir_shader *nir,
    nir_lower_io(nir, nir_var_shader_in, type_size_vec4, lower_io_options);
    if (devinfo->gen >= 11)
       nir_lower_interpolation(nir, ~0);
+
+   lower_barycentric_at_offset(nir);
 
    /* This pass needs actual constants */
    nir_opt_constant_folding(nir);
