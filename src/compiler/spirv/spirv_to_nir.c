@@ -3216,6 +3216,17 @@ vtn_handle_image(struct vtn_builder *b, SpvOp opcode,
       if (intrin->num_components != dest_components)
          result = nir_channels(&b->nb, result, (1 << dest_components) - 1);
 
+      /* OpenCL's get_image_array_size returns a size_t, so in 64-bit kernels, the return type of
+       * OpImageQuerySize[Lod] can be UINT64 in the SPIR-V module. Upconvert the nir result to match SPIR-V.
+       */
+      if (intrin->dest.ssa.bit_size != glsl_get_bit_size(type->type)) {
+         nir_alu_type alu_type = nir_alu_type_get_base_type(nir_get_nir_type_for_glsl_type(type->type));
+         nir_op convert = nir_type_conversion_op(alu_type | intrin->dest.ssa.bit_size,
+                                                 alu_type | glsl_get_bit_size(type->type),
+                                                 nir_rounding_mode_undef);
+         result = nir_build_alu(&b->nb, convert, result, NULL, NULL, NULL);
+      }
+
       vtn_push_nir_ssa(b, w[2], result);
 
       if (opcode == SpvOpImageRead) {
