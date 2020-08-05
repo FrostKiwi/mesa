@@ -278,6 +278,9 @@ ibc_instr_dest_latency(const ibc_instr *instr,
          assert(send->desc_imm == BRW_MESSAGE_GATEWAY_SFID_BARRIER_MSG);
          return 200; /* TODO */
 
+      case GEN7_SFID_PIXEL_INTERPOLATOR:
+         return 90; /* TODO */
+
       case BRW_SFID_URB:
          switch (brw_urb_desc_msg_type(devinfo, send->desc_imm)) {
          case GEN8_URB_OPCODE_SIMD8_READ:

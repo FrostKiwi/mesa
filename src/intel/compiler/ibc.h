@@ -1074,6 +1074,7 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_FB_WRITE,
    IBC_INTRINSIC_OP_URB_READ,
    IBC_INTRINSIC_OP_URB_WRITE,
+   IBC_INTRINSIC_OP_PIXEL_INTERP,
 
    /* Sources:
     *  [0] = HW_GRF if it's an initial push constant load
@@ -1168,6 +1169,18 @@ enum ibc_urb_read_src {
    IBC_URB_READ_SRC_GLOBAL_OFFSET,   /* REQUIRED - immediate */
    IBC_URB_READ_SRC_PER_SLOT_OFFSET, /* optional */
    IBC_URB_READ_NUM_SRCS,
+};
+
+/* Sources for pixel interpolator messages.
+ *
+ * Offset and sample are mutually exclusive.
+ */
+enum ibc_pixel_interp_src {
+   IBC_PI_PERSPECTIVE,
+   IBC_PI_OFFSET_X,
+   IBC_PI_OFFSET_Y,
+   IBC_PI_SAMPLE,
+   IBC_PI_NUM_SRCS,
 };
 
 typedef struct {
@@ -1582,6 +1595,7 @@ bool ibc_lower_io_urb_write_to_send(struct ibc_builder *b,
                                     ibc_intrinsic_instr *intrin);
 bool ibc_lower_io_fb_write_to_send(struct ibc_builder *b,
                                    ibc_intrinsic_instr *intrin);
+bool ibc_lower_io_pi_to_send(struct ibc_builder *b, ibc_intrinsic_instr *pi);
 bool ibc_lower_overlapping_send_payloads(ibc_shader *shader);
 bool ibc_lower_phis(ibc_shader *shader);
 bool ibc_lower_simd_width(ibc_shader *shader);

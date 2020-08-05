@@ -174,6 +174,9 @@ ibc_intrinsic_instr_max_simd_width(const ibc_intrinsic_instr *intrin,
    case IBC_INTRINSIC_OP_SAMPLEINFO:
       return ibc_tex_instr_max_simd_width(intrin, devinfo);
 
+   case IBC_INTRINSIC_OP_PIXEL_INTERP:
+      return 16;
+
    default:
       return intrin->instr.simd_width;
    }

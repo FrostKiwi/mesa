@@ -520,6 +520,32 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_load_barycentric_at_offset: {
+      enum glsl_interp_mode interpolation = nir_intrinsic_interp_mode(instr);
+      ibc_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
+
+      ibc_intrinsic_src srcs[IBC_PI_NUM_SRCS] = {
+         [IBC_PI_PERSPECTIVE] = (ibc_intrinsic_src) {
+            .ref = ibc_imm_ud(interpolation != INTERP_MODE_NOPERSPECTIVE),
+            .num_comps = 1,
+         },
+      };
+
+      for (int i = 0; i < 2; i++) {
+         srcs[IBC_PI_OFFSET_X + i] = (ibc_intrinsic_src) {
+            .ref = ibc_comp_ref(src, i), .num_comps = 1,
+         };
+      }
+
+      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_F, 2);
+
+      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_PIXEL_INTERP,
+                          dest, -1, 2, srcs, IBC_PI_NUM_SRCS);
+
+      prog_data->pulls_bary = true;
+      break;
+   }
+
    case nir_intrinsic_load_interpolated_input: {
       assert(nir_dest_is_divergent(instr->dest));
       const unsigned base = nir_intrinsic_base(instr);
@@ -684,6 +710,97 @@ static void
 ibc_emit_alhpa_to_coverage_workaround(struct nir_to_ibc_state *nti)
 {
    unreachable("Unsupported");
+}
+
+bool
+ibc_lower_io_pi_to_send(ibc_builder *b, ibc_intrinsic_instr *pi)
+{
+   const struct gen_device_info *devinfo = b->shader->devinfo;
+
+   assert(pi->op == IBC_INTRINSIC_OP_PIXEL_INTERP);
+   assert(pi->can_reorder && !pi->has_side_effects);
+   assert(!pi->instr.we_all);
+
+   const bool perspective = ibc_ref_as_uint(pi->src[IBC_PI_PERSPECTIVE].ref);
+   const ibc_ref offset_x = pi->src[IBC_PI_OFFSET_X].ref;
+   const ibc_ref offset_y = pi->src[IBC_PI_OFFSET_Y].ref;
+   const ibc_ref sample = pi->src[IBC_PI_SAMPLE].ref;
+
+   unsigned msg_type, desc_bits = 0, num_srcs = 0;
+   ibc_intrinsic_src src[2] = {};
+
+   if (sample.file != IBC_FILE_NONE) {
+      msg_type = GEN7_PIXEL_INTERPOLATOR_LOC_SAMPLE;
+
+      if (sample.file == IBC_FILE_IMM) {
+         desc_bits = ((uint8_t) ibc_ref_as_int(sample) & 0xf) << 4;
+      } else {
+         assert(!"not implemented");
+      }
+   } else {
+      if (offset_x.file == IBC_FILE_IMM && offset_y.file == IBC_FILE_IMM) {
+         msg_type = GEN7_PIXEL_INTERPOLATOR_LOC_SHARED_OFFSET;
+         uint8_t const_x = ibc_ref_as_int(offset_x) & 0xf;
+         uint8_t const_y = ibc_ref_as_int(offset_y) & 0xf;
+         desc_bits |= const_x | (const_y << 4);
+      } else {
+         msg_type = GEN7_PIXEL_INTERPOLATOR_LOC_PER_SLOT_OFFSET;
+         src[num_srcs++] = (ibc_intrinsic_src) { .ref = offset_x };
+         src[num_srcs++] = (ibc_intrinsic_src) { .ref = offset_y };
+      }
+   }
+
+   ibc_builder_push_instr_group(b, &pi->instr);
+
+   ibc_send_instr *send = ibc_send_instr_create(b->shader,
+                                                pi->instr.simd_group,
+                                                pi->instr.simd_width);
+
+   /* Some messages pass the data entirely via the descriptor, mlen = 0 is
+    * not allowed.  In that case, we arbitrarily send g0 (1 register).
+    */
+   unsigned mlen = 1;
+   send->payload[0] = num_srcs ? ibc_MESSAGE(b, src, num_srcs, &mlen)
+                               : ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
+   send->mlen = mlen;
+   send->rlen = 2 * (pi->instr.simd_width / 8);
+   send->sfid = GEN7_SFID_PIXEL_INTERPOLATOR;
+   send->desc_imm = desc_bits |
+                    brw_pixel_interp_desc(devinfo, msg_type, !perspective,
+                                          pi->instr.simd_width == 16,
+                                          pi->instr.simd_group / 16);
+
+   ibc_builder_insert_instr(b, &send->instr);
+   ibc_instr_remove(&pi->instr);
+
+   if (pi->instr.simd_width == 8) {
+      /* SIMD8 messages can write directly to the destination */
+      ibc_instr_set_ref(&send->instr, &send->dest, pi->dest);
+   } else {
+      /* SIMD16 pixel interpolator messages return data in PLN order
+       * <XY[0:7], XY[8:15]>, but we want <XX[0:15], YY[0:15]>.  Zip.
+       */
+      ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, 4 * REG_SIZE, REG_SIZE);
+      ibc_ref grf_ref = ibc_typed_ref(grf, IBC_TYPE_F);
+      ibc_instr_set_ref(&send->instr, &send->dest, grf_ref);
+
+      ibc_ref bary[2];
+
+      for (int i = 0; i < 2; i++) {
+         ibc_ref chan0_7 = grf_ref;
+         ibc_ref chan8_15 = grf_ref;
+         chan0_7.hw_grf.byte = i * REG_SIZE;
+         chan8_15.hw_grf.byte = (i + 2) * REG_SIZE;
+
+         bary[i] = ibc_SIMD_ZIP2(b, chan0_7, chan8_15, 1);
+      }
+
+      ibc_VEC_to(b, pi->dest, bary, 2);
+   }
+
+   ibc_builder_pop(b);
+
+   return true;
 }
 
 enum ibc_fb_write_src {
