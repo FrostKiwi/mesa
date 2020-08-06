@@ -135,6 +135,9 @@ ibc_intrinsic_instr_max_simd_width(const ibc_intrinsic_instr *intrin,
       assert(intrin->src[0].ref.type == IBC_TYPE_F);
       return 16;
 
+   case IBC_INTRINSIC_OP_FB_READ:
+      return 16;
+
    case IBC_INTRINSIC_OP_FB_WRITE:
       return ibc_fb_write_instr_max_simd_width(intrin, devinfo);
 

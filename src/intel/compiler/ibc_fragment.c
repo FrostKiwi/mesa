@@ -430,6 +430,12 @@ brw_barycentric_mode(enum glsl_interp_mode mode, nir_intrinsic_op op)
    return (enum brw_barycentric_mode) bary;
 }
 
+enum ibc_fb_read_src {
+   IBC_FB_READ_SRC_TARGET,
+   IBC_FB_READ_SRC_PERSAMPLE,
+   IBC_FB_READ_NUM_SRCS
+};
+
 bool
 ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
                           const nir_intrinsic_instr *instr)
@@ -606,6 +612,35 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       ibc_builder_push_scalar(b);
       dest = ibc_VEC(b, dest_comps, instr->num_components);
       ibc_builder_pop(b);
+      break;
+   }
+
+   case nir_intrinsic_load_output: {
+      /* TODO: support non-coherent FB fetch on Gen8 */
+      assert(key->coherent_fb_fetch);
+
+      const unsigned l = GET_FIELD(nir_intrinsic_base(instr),
+                                   BRW_NIR_FRAG_OUTPUT_LOCATION);
+      assert(l >= FRAG_RESULT_DATA0);
+      const unsigned load_offset = nir_src_as_uint(instr->src[0]);
+      const unsigned target = l - FRAG_RESULT_DATA0 + load_offset;
+
+      ibc_intrinsic_src srcs[IBC_FB_READ_NUM_SRCS] = {
+         [IBC_FB_READ_SRC_TARGET] = (ibc_intrinsic_src) {
+            .ref = ibc_imm_ud(target), .num_comps = 1,
+         },
+         [IBC_FB_READ_SRC_PERSAMPLE] = (ibc_intrinsic_src) {
+            .ref = ibc_imm_ud(prog_data->persample_dispatch), .num_comps = 1,
+         },
+      };
+
+      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_F, 4);
+
+      ibc_intrinsic_instr *read =
+         ibc_build_intrinsic(b, IBC_INTRINSIC_OP_FB_READ,
+                             dest, -1, 4, srcs, IBC_FB_READ_NUM_SRCS);
+      read->can_reorder = false;
+      read->has_side_effects = true;
       break;
    }
 
@@ -819,6 +854,50 @@ ibc_lower_io_pi_to_send(ibc_builder *b, ibc_intrinsic_instr *pi)
    }
 
    ibc_builder_pop(b);
+
+   return true;
+}
+
+bool
+ibc_lower_io_fb_read_to_send(ibc_builder *b, ibc_intrinsic_instr *read)
+{
+   const struct gen_device_info *devinfo = b->shader->devinfo;
+   struct ibc_fs_payload *payload = b->shader->stage_data;
+
+   assert(read->op == IBC_INTRINSIC_OP_FB_READ);
+   assert(!read->can_reorder && read->has_side_effects);
+   assert(!read->instr.we_all);
+
+   /* We assume render target `i` is at binding table index `i` */
+   unsigned binding_table_index =
+      ibc_ref_as_uint(read->src[IBC_FB_READ_SRC_TARGET].ref);
+   bool persample =
+      ibc_ref_as_uint(read->src[IBC_FB_READ_SRC_PERSAMPLE].ref);
+
+   unsigned msg_control = (read->instr.simd_width == 8) |
+                          (read->instr.simd_group / 16) << 3 |
+                          persample << 5;
+
+   ibc_send_instr *send = ibc_send_instr_create(b->shader,
+                                                read->instr.simd_group,
+                                                read->instr.simd_width);
+
+   send->payload[0] = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
+   send->payload[1] = payload->pixel[read->instr.simd_group / 16],
+   send->dest = read->dest;
+   send->has_header = true;
+   send->check_tdr = true;
+   send->mlen = 1;
+   send->ex_mlen = 1;
+   send->rlen = 4 * (read->instr.simd_width / 8);
+   send->sfid = GEN6_SFID_DATAPORT_RENDER_CACHE;
+   send->desc_imm =
+      brw_dp_read_desc(devinfo, binding_table_index, msg_control,
+                       GEN9_DATAPORT_RC_RENDER_TARGET_READ,
+                       BRW_DATAPORT_READ_TARGET_RENDER_CACHE);
+
+   ibc_builder_insert_instr(b, &send->instr);
+   ibc_instr_remove(&read->instr);
 
    return true;
 }
