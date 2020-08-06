@@ -1071,6 +1071,7 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_MOV_INDIRECT,
    IBC_INTRINSIC_OP_PLN,
    IBC_INTRINSIC_OP_ALIGN16_DDX_FINE,
+   IBC_INTRINSIC_OP_FB_READ,
    IBC_INTRINSIC_OP_FB_WRITE,
    IBC_INTRINSIC_OP_URB_READ,
    IBC_INTRINSIC_OP_URB_WRITE,
@@ -1593,6 +1594,8 @@ bool ibc_lower_io_urb_read_to_send(struct ibc_builder *b,
                                    ibc_intrinsic_instr *intrin);
 bool ibc_lower_io_urb_write_to_send(struct ibc_builder *b,
                                     ibc_intrinsic_instr *intrin);
+bool ibc_lower_io_fb_read_to_send(struct ibc_builder *b,
+                                  ibc_intrinsic_instr *intrin);
 bool ibc_lower_io_fb_write_to_send(struct ibc_builder *b,
                                    ibc_intrinsic_instr *intrin);
 bool ibc_lower_io_pi_to_send(struct ibc_builder *b, ibc_intrinsic_instr *pi);

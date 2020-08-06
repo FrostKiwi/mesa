@@ -410,6 +410,7 @@ intrinsic_op_name(enum ibc_intrinsic_op op)
    case IBC_INTRINSIC_OP_MOV_INDIRECT:       return "mov_indirect";
    case IBC_INTRINSIC_OP_PLN:                return "pln";
    case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE:   return "align16_ddx_fine";
+   case IBC_INTRINSIC_OP_FB_READ:            return "fb_read";
    case IBC_INTRINSIC_OP_FB_WRITE:           return "fb_write";
    case IBC_INTRINSIC_OP_URB_READ:           return "urb_read";
    case IBC_INTRINSIC_OP_URB_WRITE:          return "urb_write";
