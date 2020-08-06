@@ -877,6 +877,10 @@ ibc_lower_io_to_sends(ibc_shader *shader)
          progress |= ibc_lower_io_pi_to_send(&b, intrin);
          break;
 
+      case IBC_INTRINSIC_OP_FB_READ:
+         progress |= ibc_lower_io_fb_read_to_send(&b, intrin);
+         break;
+
       case IBC_INTRINSIC_OP_FB_WRITE:
          progress |= ibc_lower_io_fb_write_to_send(&b, intrin);
          break;
