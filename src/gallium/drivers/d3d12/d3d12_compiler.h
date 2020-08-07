@@ -124,6 +124,7 @@ struct d3d12_shader {
 struct d3d12_gs_variant_key
 {
    unsigned passthrough:1;
+   unsigned fill_mode:2;
 
    struct {
       const struct glsl_type *type;

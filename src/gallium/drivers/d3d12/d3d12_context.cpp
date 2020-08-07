@@ -464,10 +464,7 @@ fill_mode(unsigned mode)
       return D3D12_FILL_MODE_SOLID;
    case PIPE_POLYGON_MODE_LINE:
       return D3D12_FILL_MODE_WIREFRAME;
-
    case PIPE_POLYGON_MODE_POINT:
-      if (d3d12_debug & D3D12_DEBUG_VERBOSE)
-         debug_printf("D3D12: unsupported fill-mode\n");
       return D3D12_FILL_MODE_SOLID;
 
    default:

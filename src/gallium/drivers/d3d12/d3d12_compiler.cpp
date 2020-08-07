@@ -219,6 +219,7 @@ struct d3d12_selection_context {
    struct d3d12_context *ctx;
    const struct pipe_draw_info *dinfo;
    bool needs_point_sprite_lowering;
+   unsigned fill_mode_lowered;
    bool manual_depth_range;
    unsigned missing_dual_src_outputs;
    unsigned frag_result_color_lowering;
@@ -324,6 +325,24 @@ needs_point_sprite_lowering(struct d3d12_context *ctx, const struct pipe_draw_in
 }
 
 static unsigned
+fill_mode_lowered(struct d3d12_context *ctx, const struct pipe_draw_info *dinfo)
+{
+   struct d3d12_shader_selector *vs = ctx->gfx_stages[PIPE_SHADER_VERTEX];
+
+   if ((ctx->gfx_stages[PIPE_SHADER_GEOMETRY] != NULL &&
+        !ctx->gfx_stages[PIPE_SHADER_GEOMETRY]->is_gs_variant) ||
+       ctx->gfx_pipeline_state.rast == NULL ||
+       (dinfo->mode != PIPE_PRIM_TRIANGLES &&
+        dinfo->mode != PIPE_PRIM_TRIANGLE_STRIP))
+      return PIPE_POLYGON_MODE_FILL;
+
+   if (ctx->gfx_pipeline_state.rast->base.fill_front == PIPE_POLYGON_MODE_POINT)
+      return PIPE_POLYGON_MODE_POINT;
+
+   return PIPE_POLYGON_MODE_FILL;
+}
+
+static unsigned
 get_provoking_vertex(struct d3d12_selection_context *sel_ctx, d3d12_shader_selector *prev)
 {
    if (sel_ctx->ctx->gfx_pipeline_state.rast && sel_ctx->ctx->gfx_pipeline_state.rast->base.flatshade_first)
@@ -370,6 +389,7 @@ validate_geometry_shader_variant(struct d3d12_selection_context *sel_ctx)
 {
    struct d3d12_context *ctx = sel_ctx->ctx;
    d3d12_shader_selector *vs = ctx->gfx_stages[PIPE_SHADER_VERTEX];
+   d3d12_shader_selector *fs = ctx->gfx_stages[PIPE_SHADER_FRAGMENT];
    struct d3d12_gs_variant_key key = {0};
    bool variant_needed = false;
 
@@ -382,6 +402,10 @@ validate_geometry_shader_variant(struct d3d12_selection_context *sel_ctx)
    /* Fill the geometry shader variant key */
    if (sel_ctx->needs_point_sprite_lowering) {
       key.passthrough = true;
+      fill_varyings(&key, vs);
+      variant_needed = true;
+   } else if (sel_ctx->fill_mode_lowered != PIPE_POLYGON_MODE_FILL) {
+      key.fill_mode = sel_ctx->fill_mode_lowered;
       fill_varyings(&key, vs);
       variant_needed = true;
    }
@@ -872,6 +896,7 @@ d3d12_select_shader_variants(struct d3d12_context *ctx, const struct pipe_draw_i
    sel_ctx.ctx = ctx;
    sel_ctx.dinfo = dinfo;
    sel_ctx.needs_point_sprite_lowering = needs_point_sprite_lowering(ctx, dinfo);
+   sel_ctx.fill_mode_lowered = fill_mode_lowered(ctx, dinfo);
    sel_ctx.missing_dual_src_outputs = missing_dual_src_outputs(ctx);
    sel_ctx.frag_result_color_lowering = frag_result_color_lowering(ctx);
    sel_ctx.manual_depth_range = manual_depth_range(ctx);
