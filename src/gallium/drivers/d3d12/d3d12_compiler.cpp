@@ -336,6 +336,14 @@ fill_mode_lowered(struct d3d12_context *ctx, const struct pipe_draw_info *dinfo)
         dinfo->mode != PIPE_PRIM_TRIANGLE_STRIP))
       return PIPE_POLYGON_MODE_FILL;
 
+   /* D3D12 supports line mode (wireframe) but doesn't support edge flags */
+   if (((ctx->gfx_pipeline_state.rast->base.fill_front == PIPE_POLYGON_MODE_LINE &&
+         ctx->gfx_pipeline_state.rast->base.cull_face != PIPE_FACE_FRONT) ||
+        (ctx->gfx_pipeline_state.rast->base.fill_back == PIPE_POLYGON_MODE_LINE &&
+         ctx->gfx_pipeline_state.rast->base.cull_face == PIPE_FACE_FRONT)) &&
+       vs->initial->info.outputs_written & VARYING_BIT_EDGE)
+      return PIPE_POLYGON_MODE_LINE;
+
    if (ctx->gfx_pipeline_state.rast->base.fill_front == PIPE_POLYGON_MODE_POINT)
       return PIPE_POLYGON_MODE_POINT;
 
@@ -540,17 +548,19 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
          key->next_varying_inputs |= VARYING_BIT_POS;
    }
 
-   if (stage == PIPE_SHADER_GEOMETRY &&
-       sel_ctx->needs_point_sprite_lowering &&
-       sel_ctx->ctx->gfx_pipeline_state.rast) {
+   if (stage == PIPE_SHADER_GEOMETRY && sel_ctx->ctx->gfx_pipeline_state.rast) {
       struct pipe_rasterizer_state *rast = &sel_ctx->ctx->gfx_pipeline_state.rast->base;
-      key->gs.writes_psize = 1;
-      key->gs.sprite_coord_enable = rast->sprite_coord_enable;
-      key->gs.sprite_origin_upper_left = (rast->sprite_coord_mode != PIPE_SPRITE_COORD_LOWER_LEFT);
-      if (sel_ctx->ctx->flip_y < 0)
-         key->gs.sprite_origin_upper_left = !key->gs.sprite_origin_upper_left;
-      key->gs.aa_point = rast->point_smooth;
-      key->gs.stream_output_factor = 6;
+      if (sel_ctx->needs_point_sprite_lowering) {
+         key->gs.writes_psize = 1;
+         key->gs.sprite_coord_enable = rast->sprite_coord_enable;
+         key->gs.sprite_origin_upper_left = (rast->sprite_coord_mode != PIPE_SPRITE_COORD_LOWER_LEFT);
+         if (sel_ctx->ctx->flip_y < 0)
+            key->gs.sprite_origin_upper_left = !key->gs.sprite_origin_upper_left;
+         key->gs.aa_point = rast->point_smooth;
+         key->gs.stream_output_factor = 6;
+      } else if (sel_ctx->fill_mode_lowered == PIPE_POLYGON_MODE_LINE) {
+         key->gs.stream_output_factor = 2;
+      }
    } else if (stage == PIPE_SHADER_FRAGMENT) {
       key->fs.missing_dual_src_outputs = sel_ctx->missing_dual_src_outputs;
       key->fs.frag_result_color_lowering = sel_ctx->frag_result_color_lowering;

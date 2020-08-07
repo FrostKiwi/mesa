@@ -256,9 +256,63 @@ d3d12_emit_points(struct d3d12_context *ctx, struct d3d12_gs_variant_key *key)
 
    d3d12_begin_emit_primitives_gs(&emit_ctx, ctx, key, GL_POINTS, 3);
 
+   /**
+    *  if (edge_flag)
+    *     out_position = in_position;
+    *  else
+    *     out_position = vec4(-2.0, -2.0, 0.0, 1.0); // Invalid position
+    *
+    *  [...] // Copy other variables
+    *
+    *  EmitVertex();
+    */
+   for (unsigned i = 0; i < emit_ctx.num_vars; ++i) {
+      nir_deref_instr *in_value = nir_build_deref_array(b, nir_build_deref_var(b, emit_ctx.in[i]), emit_ctx.loop_index);
+      if (emit_ctx.in[i]->data.location == VARYING_SLOT_POS && emit_ctx.edgeflag_cmp) {
+         nir_if *edge_check = nir_push_if(b, emit_ctx.edgeflag_cmp);
+         nir_copy_deref(b, nir_build_deref_var(b, emit_ctx.out[i]), in_value);
+         nir_if *edge_else = nir_push_else(b, edge_check);
+         nir_store_deref(b, nir_build_deref_var(b, emit_ctx.out[i]),
+                         nir_imm_vec4(b, -2.0, -2.0, 0.0, 1.0), 0xf);
+         nir_pop_if(b, edge_else);
+      } else {
+         nir_copy_deref(b, nir_build_deref_var(b, emit_ctx.out[i]), in_value);
+      }
+   }
+   nir_emit_vertex(b, 0);
+
+   return d3d12_finish_emit_primitives_gs(&emit_ctx);;
+}
+
+static d3d12_shader_selector*
+d3d12_emit_lines(struct d3d12_context *ctx, struct d3d12_gs_variant_key *key)
+{
+   struct emit_primitives_context emit_ctx = {0};
+   nir_builder *b = &emit_ctx.b;
+
+   d3d12_begin_emit_primitives_gs(&emit_ctx, ctx, key, GL_LINE_STRIP, 6);
+
+   nir_ssa_def *next_index = nir_build_alu(b, nir_op_imod,
+                                           nir_iadd_imm(b, emit_ctx.loop_index, 1),
+                                           nir_imm_int(b, 3),
+                                           NULL, NULL);
+
+   /* First vertex */
    for (unsigned i = 0; i < emit_ctx.num_vars; ++i) {
       nir_deref_instr *in_value = nir_build_deref_array(b, nir_build_deref_var(b, emit_ctx.in[i]), emit_ctx.loop_index);
       nir_copy_deref(b, nir_build_deref_var(b, emit_ctx.out[i]), in_value);
+   }
+   nir_emit_vertex(b, 0);
+
+   /* Second vertex. If not an edge, use same position as first vertex */
+   for (unsigned i = 0; i < emit_ctx.num_vars; ++i) {
+      nir_ssa_def *index = next_index;
+      if (emit_ctx.in[i]->data.location == VARYING_SLOT_POS)
+         index = nir_bcsel(b, emit_ctx.edgeflag_cmp, next_index, emit_ctx.loop_index);
+      else if (key->flat_varyings & (1 << emit_ctx.in[i]->data.location))
+         index = nir_imm_int(b, 2);
+      nir_copy_deref(b, nir_build_deref_var(b, emit_ctx.out[i]),
+                     nir_build_deref_array(b, nir_build_deref_var(b, emit_ctx.in[i]), index));
    }
    nir_emit_vertex(b, 0);
 
@@ -304,6 +358,8 @@ create_geometry_shader_variant(struct d3d12_context *ctx, struct d3d12_gs_varian
       gs = d3d12_make_passthrough_gs(ctx, key);
    else if (key->fill_mode == PIPE_POLYGON_MODE_POINT)
       gs = d3d12_emit_points(ctx, key);
+   else if (key->fill_mode == PIPE_POLYGON_MODE_LINE)
+      gs = d3d12_emit_lines(ctx, key);
 
    if (gs) {
       d3d12_shader_selector *vs = ctx->gfx_stages[PIPE_SHADER_VERTEX];
