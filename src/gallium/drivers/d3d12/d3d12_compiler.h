@@ -125,6 +125,7 @@ struct d3d12_gs_variant_key
 {
    unsigned passthrough:1;
    unsigned fill_mode:2;
+   uint64_t flat_varyings;
 
    struct {
       const struct glsl_type *type;

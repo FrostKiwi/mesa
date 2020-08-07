@@ -393,6 +393,18 @@ fill_varyings(struct d3d12_gs_variant_key *key, d3d12_shader_selector *vs)
 }
 
 static void
+fill_flat_varyings(struct d3d12_gs_variant_key *key, d3d12_shader_selector *fs)
+{
+   if (!fs || !fs->current)
+      return;
+
+   nir_foreach_variable(input, &fs->current->nir->inputs) {
+      if (input->data.interpolation == INTERP_MODE_FLAT)
+         key->flat_varyings |= BITFIELD64_BIT(input->data.location);
+   }
+}
+
+static void
 validate_geometry_shader_variant(struct d3d12_selection_context *sel_ctx)
 {
    struct d3d12_context *ctx = sel_ctx->ctx;
@@ -415,6 +427,7 @@ validate_geometry_shader_variant(struct d3d12_selection_context *sel_ctx)
    } else if (sel_ctx->fill_mode_lowered != PIPE_POLYGON_MODE_FILL) {
       key.fill_mode = sel_ctx->fill_mode_lowered;
       fill_varyings(&key, vs);
+      fill_flat_varyings(&key, fs);
       variant_needed = true;
    }
 

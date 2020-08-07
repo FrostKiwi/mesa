@@ -267,7 +267,9 @@ d3d12_emit_points(struct d3d12_context *ctx, struct d3d12_gs_variant_key *key)
     *  EmitVertex();
     */
    for (unsigned i = 0; i < emit_ctx.num_vars; ++i) {
-      nir_deref_instr *in_value = nir_build_deref_array(b, nir_build_deref_var(b, emit_ctx.in[i]), emit_ctx.loop_index);
+      nir_ssa_def *index = (key->flat_varyings & (1 << emit_ctx.in[i]->data.location))  ?
+                              nir_imm_int(b, 2) : emit_ctx.loop_index;
+      nir_deref_instr *in_value = nir_build_deref_array(b, nir_build_deref_var(b, emit_ctx.in[i]), index);
       if (emit_ctx.in[i]->data.location == VARYING_SLOT_POS && emit_ctx.edgeflag_cmp) {
          nir_if *edge_check = nir_push_if(b, emit_ctx.edgeflag_cmp);
          nir_copy_deref(b, nir_build_deref_var(b, emit_ctx.out[i]), in_value);
@@ -299,7 +301,9 @@ d3d12_emit_lines(struct d3d12_context *ctx, struct d3d12_gs_variant_key *key)
 
    /* First vertex */
    for (unsigned i = 0; i < emit_ctx.num_vars; ++i) {
-      nir_deref_instr *in_value = nir_build_deref_array(b, nir_build_deref_var(b, emit_ctx.in[i]), emit_ctx.loop_index);
+      nir_ssa_def *index = (key->flat_varyings & (1 << emit_ctx.in[i]->data.location)) ?
+                              nir_imm_int(b, 2) : emit_ctx.loop_index;
+      nir_deref_instr *in_value = nir_build_deref_array(b, nir_build_deref_var(b, emit_ctx.in[i]), index);
       nir_copy_deref(b, nir_build_deref_var(b, emit_ctx.out[i]), in_value);
    }
    nir_emit_vertex(b, 0);
