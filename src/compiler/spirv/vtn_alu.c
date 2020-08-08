@@ -607,8 +607,8 @@ clamp_to_range(struct vtn_builder *b, nir_ssa_def *src, nir_alu_type src_type,
    nir_ssa_def *low = NULL, *high = NULL;
    switch (dst_type) {
    case nir_type_int: {
-      unsigned long long ilow = (1ULL << dst_bit_size) - 1;
-      unsigned long long ihigh = (1ULL << (dst_bit_size - 1)) - 1;
+      int64_t ilow = -(1LL << (dst_bit_size - 1));
+      int64_t ihigh = (1LL << (dst_bit_size - 1)) - 1;
       if (src_type == nir_type_int) {
          low = nir_imm_intN_t(&b->nb, ilow, src->bit_size);
          high = nir_imm_intN_t(&b->nb, ihigh, src->bit_size);
@@ -622,7 +622,8 @@ clamp_to_range(struct vtn_builder *b, nir_ssa_def *src, nir_alu_type src_type,
       break;
    }
    case nir_type_uint: {
-      unsigned long long uhigh = (1ULL << dst_bit_size) - 1;
+      unsigned long long uhigh = dst_bit_size == 64 ?
+         ~0ULL : (1ULL << dst_bit_size) - 1;
       if (src_type != nir_type_float) {
          low = nir_imm_intN_t(&b->nb, 0, src->bit_size);
          if (src_type == nir_type_uint || src->bit_size > dst_bit_size)
