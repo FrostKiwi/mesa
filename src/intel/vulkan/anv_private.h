@@ -1265,8 +1265,6 @@ anv_pipeline_cache_upload_kernel(struct anv_pipeline_cache *cache,
                                  gl_shader_stage stage,
                                  const void *key_data, uint32_t key_size,
                                  const void *kernel_data, uint32_t kernel_size,
-                                 const void *constant_data,
-                                 uint32_t constant_data_size,
                                  const struct brw_stage_prog_data *prog_data,
                                  uint32_t prog_data_size,
                                  const struct brw_compile_stats *stats,
@@ -1286,8 +1284,6 @@ anv_device_upload_kernel(struct anv_device *device,
                          gl_shader_stage stage,
                          const void *key_data, uint32_t key_size,
                          const void *kernel_data, uint32_t kernel_size,
-                         const void *constant_data,
-                         uint32_t constant_data_size,
                          const struct brw_stage_prog_data *prog_data,
                          uint32_t prog_data_size,
                          const struct brw_compile_stats *stats,
@@ -3297,9 +3293,6 @@ struct anv_shader_bin {
    struct anv_state kernel;
    uint32_t kernel_size;
 
-   struct anv_state constant_data;
-   uint32_t constant_data_size;
-
    const struct brw_stage_prog_data *prog_data;
    uint32_t prog_data_size;
 
@@ -3316,7 +3309,6 @@ anv_shader_bin_create(struct anv_device *device,
                       gl_shader_stage stage,
                       const void *key, uint32_t key_size,
                       const void *kernel, uint32_t kernel_size,
-                      const void *constant_data, uint32_t constant_data_size,
                       const struct brw_stage_prog_data *prog_data,
                       uint32_t prog_data_size,
                       const struct brw_compile_stats *stats, uint32_t num_stats,
