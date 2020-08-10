@@ -416,32 +416,57 @@ handle_no_wrap(struct vtn_builder *b, struct vtn_value *val, int member,
 }
 
 static nir_ssa_def *
-round_float(struct vtn_builder *b, nir_rounding_mode round,
-            nir_ssa_def *src, nir_alu_type dst_type,
-            unsigned int dst_bit_size)
+round_float_to_int(struct vtn_builder *b, nir_rounding_mode round,
+                   nir_ssa_def *src, unsigned int dst_bit_size)
+{
+   nir_ssa_def *rets[NIR_MAX_VEC_COMPONENTS] = { NULL };
+
+   for (unsigned i = 0; i < src->num_components; i++) {
+      nir_ssa_def *comp = nir_channel(&b->nb, src, i);
+
+      switch (round) {
+      case nir_rounding_mode_ru:
+         rets[i] = nir_fceil(&b->nb, comp);
+         break;
+      case nir_rounding_mode_rd:
+         rets[i] = nir_ffloor(&b->nb, comp);
+         break;
+      case nir_rounding_mode_rtne:
+         rets[i] = nir_fround_even(&b->nb, comp);
+         break;
+      case nir_rounding_mode_undef:
+      case nir_rounding_mode_rtz:
+         rets[i] = comp;
+         break;
+      default:
+         unreachable("unexpected rounding mode");
+      }
+   }
+
+   return nir_vec(&b->nb, rets, src->num_components);
+}
+
+static nir_ssa_def *
+round_float_to_float(struct vtn_builder *b, nir_rounding_mode round,
+                     nir_ssa_def *src, unsigned int dst_bit_size)
 {
    unsigned int src_bit_size = src->bit_size;
    unsigned int max_bit_size = MAX2(src->bit_size, dst_bit_size);
 
    nir_op low_conv = nir_type_conversion_op(nir_type_float | src_bit_size,
-                                            dst_type | dst_bit_size,
+                                            nir_type_float | dst_bit_size,
                                             nir_rounding_mode_undef);
    nir_op high_conv = nir_type_conversion_op(nir_type_float | dst_bit_size,
-                                             dst_type | src_bit_size,
+                                             nir_type_float | src_bit_size,
                                              nir_rounding_mode_undef);
 
-   nir_ssa_def *rets[NIR_MAX_VEC_COMPONENTS] = { 0 };
+   nir_ssa_def *rets[NIR_MAX_VEC_COMPONENTS] = { NULL };
 
    for (unsigned i = 0; i < src->num_components; i++) {
       nir_ssa_def *comp = nir_channel(&b->nb, src, i);
 
       switch (round) {
       case nir_rounding_mode_ru: {
-         if (dst_type == nir_type_int || dst_type == nir_type_uint) {
-            rets[i] = nir_fceil(&b->nb, comp);
-            break;
-         }
-
          /* If lower-precision conversion results in a lower value, push it
          * up one ULP. */
          nir_ssa_def *lower_prec =
@@ -457,11 +482,6 @@ round_float(struct vtn_builder *b, nir_rounding_mode round,
          break;
       }
       case nir_rounding_mode_rd: {
-         if (dst_type == nir_type_int || dst_type == nir_type_uint) {
-            rets[i] = nir_ffloor(&b->nb, comp);
-            break;
-         }
-
          /* If lower-precision conversion results in a higher value, push it
          * down one ULP. */
          nir_ssa_def *lower_prec =
@@ -480,10 +500,8 @@ round_float(struct vtn_builder *b, nir_rounding_mode round,
          nir_ssa_def *pos =
             nir_flt(&b->nb, comp, nir_imm_floatN_t(&b->nb, 0.0f, max_bit_size));
          rets[i] = nir_bcsel(&b->nb, pos,
-                             round_float(b, nir_rounding_mode_ru, comp,
-                                        dst_type, dst_bit_size),
-                             round_float(b, nir_rounding_mode_rd, comp,
-                                        dst_type, dst_bit_size));
+                             round_float_to_float(b, nir_rounding_mode_ru, comp, dst_bit_size),
+                             round_float_to_float(b, nir_rounding_mode_rd, comp, dst_bit_size));
          break;
       }
       case nir_rounding_mode_undef:
@@ -492,6 +510,85 @@ round_float(struct vtn_builder *b, nir_rounding_mode round,
          break;
       default:
          unreachable("unexpected rounding mode");
+      }
+   }
+
+   return nir_vec(&b->nb, rets, src->num_components);
+}
+
+static nir_ssa_def *
+round_int_to_float(struct vtn_builder *b, nir_rounding_mode round,
+                   nir_ssa_def *src, nir_alu_type src_type,
+                   unsigned int dst_bit_size)
+{
+   nir_ssa_def *rets[NIR_MAX_VEC_COMPONENTS] = { NULL };
+   unsigned mantissa_bits;
+   switch (dst_bit_size) {
+   case 16:
+      mantissa_bits = 10;
+      break;
+   case 32:
+      mantissa_bits = 23;
+      break;
+   case 64:
+      mantissa_bits = 52;
+      break;
+   default: unreachable("Unsupported bit size");
+   }
+
+   if (src->bit_size < mantissa_bits)
+      return src;
+
+   for (unsigned i = 0; i < src->num_components; i++) {
+      nir_ssa_def *comp = nir_channel(&b->nb, src, i);
+
+      if (round == nir_rounding_mode_undef ||
+          round == nir_rounding_mode_rtne) {
+         rets[i] = comp;
+      } else if (src_type == nir_type_int) {
+         nir_ssa_def *sign = nir_i2b1(&b->nb, nir_ishr(&b->nb, src, nir_imm_int(&b->nb, src->bit_size - 1)));
+         nir_ssa_def *abs = nir_iabs(&b->nb, src);
+         nir_ssa_def *positive_rounded = round_int_to_float(b, round, abs, nir_type_uint, dst_bit_size);
+         nir_ssa_def *max_positive = nir_imm_intN_t(&b->nb, (1ULL << (src->bit_size - 1)) - 1, src->bit_size);
+         switch (round) {
+         case nir_rounding_mode_rtz:
+            rets[i] = nir_bcsel(&b->nb, sign, nir_ineg(&b->nb, positive_rounded), positive_rounded);
+            break;
+         case nir_rounding_mode_ru:
+            rets[i] = nir_bcsel(&b->nb, sign,
+                                nir_ineg(&b->nb, round_int_to_float(b, nir_rounding_mode_rd, abs, nir_type_uint, dst_bit_size)),
+                                nir_umin(&b->nb, positive_rounded, max_positive));
+            break;
+         case nir_rounding_mode_rd:
+            rets[i] = nir_bcsel(&b->nb, sign,
+                                nir_ineg(&b->nb,
+                                         nir_umin(&b->nb, max_positive,
+                                                  round_int_to_float(b, nir_rounding_mode_ru, abs, nir_type_uint, dst_bit_size))),
+                                positive_rounded);
+            break;
+         default: unreachable("Already handled");
+         }
+      } else {
+         nir_ssa_def *mantissa_bit_size = nir_imm_int(&b->nb, mantissa_bits);
+         nir_ssa_def *msb = nir_imax(&b->nb, nir_ufind_msb(&b->nb, src), mantissa_bit_size);
+         nir_ssa_def *bits_to_lose = nir_isub(&b->nb, msb, mantissa_bit_size);
+         nir_ssa_def *one = nir_imm_intN_t(&b->nb, 1, src->bit_size);
+         nir_ssa_def *adjust = nir_ishl(&b->nb, one, bits_to_lose);
+         nir_ssa_def *mask = nir_inot(&b->nb, nir_isub(&b->nb, adjust, one));
+         nir_ssa_def *truncated = nir_iand(&b->nb, src, mask);
+         switch (round) {
+         case nir_rounding_mode_rtz:
+         case nir_rounding_mode_rd:
+            rets[i] = truncated;
+            break;
+         case nir_rounding_mode_ru: {
+            rets[i] = nir_bcsel(&b->nb, nir_ieq(&b->nb, src, truncated),
+                                src,
+                                nir_uadd_sat(&b->nb, truncated, adjust));
+            break;
+         }
+         default: unreachable("Already handled");
+         }
       }
    }
 
@@ -618,9 +715,11 @@ vtn_handle_convert(struct vtn_builder *b, nir_rounding_mode round,
    }
 
    /* Skip rounding if we can. */
-   if (src_type != nir_type_float) {
+   if (src_type != nir_type_float && dst_type != nir_type_float) {
       round = nir_rounding_mode_undef;
-   } else if (dst_type == nir_type_float && dst_bit_size >= src->bit_size) {
+   } else if (src_type == nir_type_float &&
+              dst_type == nir_type_float &&
+              dst_bit_size >= src->bit_size) {
       round = nir_rounding_mode_undef;
    }
 
@@ -660,7 +759,15 @@ vtn_handle_convert(struct vtn_builder *b, nir_rounding_mode round,
 
    /* round with selected rounding mode */
    if (!trivial_convert && round != nir_rounding_mode_undef) {
-      dst = round_float(b, round, dst, dst_type, dst_bit_size);
+      if (src_type == nir_type_float) {
+         if (dst_type == nir_type_float)
+            dst = round_float_to_float(b, round, dst, dst_bit_size);
+         else
+            dst = round_float_to_int(b, round, dst, dst_bit_size);
+      } else {
+         dst = round_int_to_float(b, round, dst, src_type, dst_bit_size);
+      }
+
       round = nir_rounding_mode_undef;
    }
 
