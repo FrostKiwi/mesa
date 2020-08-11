@@ -212,6 +212,7 @@ struct dxil_module {
 };
 
 struct dxil_instr;
+struct dxil_value;
 
 void
 dxil_module_init(struct dxil_module *m, void *ralloc_ctx);
@@ -293,6 +294,19 @@ dxil_module_add_function_type(struct dxil_module *m,
                               const struct dxil_type *ret_type,
                               const struct dxil_type **arg_types,
                               size_t num_arg_types);
+
+nir_alu_type
+dxil_type_to_nir_type(const struct dxil_type *type);
+
+bool
+dxil_value_type_equal_to(const struct dxil_value *value,
+                         const struct dxil_type *lhs);
+
+bool
+dxil_value_type_bitsize_equal_to(const struct dxil_value *value, unsigned bitsize);
+
+const struct dxil_type *
+dxil_value_get_type(const struct dxil_value *value);
 
 const struct dxil_value *
 dxil_module_get_int1_const(struct dxil_module *m, bool value);

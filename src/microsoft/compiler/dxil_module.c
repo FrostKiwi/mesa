@@ -407,6 +407,46 @@ types_equal(const struct dxil_type *lhs, const struct dxil_type *rhs)
    return retval;
 }
 
+bool
+dxil_value_type_equal_to(const struct dxil_value *value,
+                         const struct dxil_type *rhs)
+{
+   return types_equal(value->type, rhs);
+}
+
+nir_alu_type
+dxil_type_to_nir_type(const struct dxil_type *type)
+{
+   assert(type);
+   switch (type->type) {
+   case TYPE_INTEGER:
+      return type->int_bits == 1 ? nir_type_bool : nir_type_int;
+   case TYPE_FLOAT:
+      return nir_type_float;
+   default:
+      unreachable("Unexpected type in dxil_type_to_nir_type");
+   }
+}
+
+bool
+dxil_value_type_bitsize_equal_to(const struct dxil_value *value, unsigned bitsize)
+{
+   switch (value->type->type) {
+   case TYPE_INTEGER:
+      return value->type->int_bits == bitsize;
+   case TYPE_FLOAT:
+      return value->type->float_bits == bitsize;
+   default:
+      return false;
+   }
+}
+
+const struct dxil_type *
+dxil_value_get_type(const struct dxil_value *value)
+{
+   return value->type;
+}
+
 const struct dxil_type *
 dxil_module_get_void_type(struct dxil_module *m)
 {
