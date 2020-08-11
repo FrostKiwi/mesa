@@ -671,115 +671,13 @@ lower_ufind_msb64(nir_builder *b, nir_ssa_def *x)
 }
 
 static nir_ssa_def *
-lower_u2f(nir_builder *b, nir_ssa_def *x, unsigned dest_bit_size)
-{
-   nir_ssa_def *exp = nir_ufind_msb(b, x);
-   unsigned significand_bits;
-
-   switch (dest_bit_size) {
-   case 64:
-      significand_bits = 52;
-      break;
-   case 32:
-      significand_bits = 23;
-      break;
-   case 16:
-      significand_bits = 10;
-      break;
-   default:
-      unreachable("Invalid dest_bit_size");
-   }
-
-   /* We keep one more bit than can fit in the significand field to let the
-    * u2f32 conversion do the rounding for us.
-    */
-   nir_ssa_def *discard =
-      nir_imax(b, nir_isub(b, exp, nir_imm_int(b, significand_bits + 1)),
-                  nir_imm_int(b, 0));
-
-   /* Part of the "round to nearest" has to be taken care of before we discard
-    * the LSB, and that's what this extra iadd is for.
-    * "Round to nearest even" is handled by u2f. That works because the
-    * shifted value either fits in the significand field (which means no
-    * rounding is required) or contains one extra bit that forces the
-    * conversion op to round things properly.
-    */
-   nir_ssa_def *significand =
-      nir_iadd(b, x, nir_isub(b, nir_ishl(b, nir_imm_int64(b, 1), discard),
-                                 nir_imm_int64(b, 1)));
-   significand = nir_ushr(b, significand, discard);
-
-   if (dest_bit_size == 32) {
-      return nir_fmul(b, nir_u2f32(b, nir_u2u32(b, significand)),
-                         nir_fexp2(b, nir_u2f32(b, discard)));
-   } else if (dest_bit_size == 16) {
-      return nir_fmul(b, nir_u2f16(b, nir_u2u32(b, significand)),
-                         nir_fexp2(b, nir_u2f16(b, discard)));
-   }
-
-   /* When converting to fp64, the significand does not fit in a u32, so we
-    * have to split it.
-    */
-   nir_ssa_def *shift_hi = nir_iadd(b, discard, nir_imm_int(b, 32));
-   nir_ssa_def *mul_lo = nir_fexp2(b, nir_u2f64(b, discard));
-   nir_ssa_def *mul_hi = nir_fexp2(b, nir_u2f64(b, shift_hi));
-
-   return nir_fdot2(b, nir_u2f64(b, nir_unpack_64_2x32(b, significand)),
-                       nir_vec2(b, mul_lo, mul_hi));
-}
-
-static nir_ssa_def *
-lower_i2f(nir_builder *b, nir_ssa_def *x, unsigned dest_bit_size)
-{
-   nir_ssa_def *x_is_neg = nir_ilt(b, x, nir_imm_int64(b, 0));
-   nir_ssa_def *x_abs = nir_iabs(b, x);
-   nir_ssa_def *x_sign = nir_bcsel(b, x_is_neg,
-                                      nir_imm_floatN_t(b, -1, dest_bit_size),
-                                      nir_imm_floatN_t(b, 1, dest_bit_size));
-
-   return nir_fmul(b, lower_u2f(b, x_abs, dest_bit_size), x_sign);
-}
-
-static nir_ssa_def *
-lower_f2u(nir_builder *b, nir_ssa_def *x)
-{
-   x = nir_fmin(b, x, nir_imm_floatN_t(b, UINT64_MAX, x->bit_size));
-   x = nir_ftrunc(b, x);
-
-   nir_ssa_def *div = nir_imm_floatN_t(b, 1ULL << 32, x->bit_size);
-   nir_ssa_def *res_hi = nir_f2u32(b, nir_fdiv(b, x, div));
-   nir_ssa_def *res_lo = nir_f2u32(b, nir_frem(b, x, div));
-
-   return nir_pack_64_2x32_split(b, res_lo, res_hi);
-}
-
-static nir_ssa_def *
-lower_f2i(nir_builder *b, nir_ssa_def *x)
-{
-   nir_ssa_def *x_sign = nir_fsign(b, x);
-
-   x = nir_ftrunc(b, x);
-   x = nir_fmin(b, x, nir_imm_floatN_t(b, 1ULL << 63, x->bit_size));
-   x = nir_fmax(b, x, nir_imm_floatN_t(b, INT64_MIN, x->bit_size));
-   x = nir_fabs(b, x);
-
-   nir_ssa_def *div = nir_imm_floatN_t(b, 1ULL << 32, x->bit_size);
-   nir_ssa_def *res_hi = nir_f2u32(b, nir_fdiv(b, x, div));
-   nir_ssa_def *res_lo = nir_f2u32(b, nir_frem(b, x, div));
-   nir_ssa_def *res = nir_pack_64_2x32_split(b, res_lo, res_hi);
-
-   return nir_bcsel(b, nir_flt(b, x_sign, nir_imm_float(b, 0)),
-                       nir_ineg(b, res), res);
-}
-
-static nir_ssa_def *
 lower_bit_count64(nir_builder *b, nir_ssa_def *x)
 {
-   nir_ssa_def *x_lo = nir_unpack_64_2x32_split_x(b, x);
-   nir_ssa_def *x_hi = nir_unpack_64_2x32_split_y(b, x);
-   nir_ssa_def *lo_count = nir_bit_count(b, x_lo);
-   nir_ssa_def *hi_count = nir_bit_count(b, x_hi);
-   return nir_iadd(b, lo_count, hi_count);
+    nir_ssa_def *x_lo = nir_unpack_64_2x32_split_x(b, x);
+    nir_ssa_def *x_hi = nir_unpack_64_2x32_split_y(b, x);
+    nir_ssa_def *lo_count = nir_bit_count(b, x_lo);
+    nir_ssa_def *hi_count = nir_bit_count(b, x_hi);
+    return nir_iadd(b, lo_count, hi_count);
 }
 
 nir_lower_int64_options
@@ -856,17 +754,7 @@ nir_lower_int64_op_to_options_mask(nir_op opcode)
    case nir_op_ufind_msb:
       return nir_lower_ufind_msb64;
    case nir_op_bit_count:
-      return nir_lower_bit_count64;
-   case nir_op_i2f64:
-   case nir_op_u2f64:
-   case nir_op_i2f32:
-   case nir_op_u2f32:
-   case nir_op_i2f16:
-   case nir_op_u2f16:
-      return nir_lower_i2f;
-   case nir_op_f2i64:
-   case nir_op_f2u64:
-      return nir_lower_f2i;
+       return nir_lower_bit_count64;
    default:
       return 0;
    }
@@ -983,19 +871,7 @@ lower_int64_alu_instr(nir_builder *b, nir_instr *instr, void *_state)
    case nir_op_ufind_msb:
       return lower_ufind_msb64(b, src[0]);
    case nir_op_bit_count:
-      return lower_bit_count64(b, src[0]);
-   case nir_op_i2f64:
-   case nir_op_i2f32:
-   case nir_op_i2f16:
-      return lower_i2f(b, src[0], nir_dest_bit_size(alu->dest.dest));
-   case nir_op_u2f64:
-   case nir_op_u2f32:
-   case nir_op_u2f16:
-      return lower_u2f(b, src[0], nir_dest_bit_size(alu->dest.dest));
-   case nir_op_f2i64:
-      return lower_f2i(b, src[0]);
-   case nir_op_f2u64:
-      return lower_f2u(b, src[0]);
+       return lower_bit_count64(b, src[0]);
    default:
       unreachable("Invalid ALU opcode to lower");
    }
@@ -1051,18 +927,6 @@ should_lower_int64_alu_instr(const nir_instr *instr, const void *_options)
       if (alu->src[0].src.ssa->bit_size != 64)
          return false;
       break;
-   case nir_op_i2f64:
-   case nir_op_u2f64:
-   case nir_op_i2f32:
-   case nir_op_u2f32:
-   case nir_op_i2f16:
-   case nir_op_u2f16:
-      assert(alu->src[0].src.is_ssa);
-      if (alu->src[0].src.ssa->bit_size != 64)
-         return false;
-      break;
-   case nir_op_f2u64:
-   case nir_op_f2i64:
    default:
       assert(alu->dest.dest.is_ssa);
       if (alu->dest.dest.ssa.bit_size != 64)
