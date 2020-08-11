@@ -1464,6 +1464,17 @@ get_src_ptr(struct ntd_context *ctx, nir_src *src, unsigned chan,
    return get_src_ssa(ctx, src->ssa, chan);
 }
 
+static const struct dxil_type *
+get_alu_src_type(struct ntd_context *ctx, nir_alu_instr *alu, unsigned src)
+{
+   assert(!alu->src[src].abs);
+   assert(!alu->src[src].negate);
+   nir_ssa_def *ssa_src = alu->src[src].src.ssa;
+   unsigned chan = alu->src[src].swizzle[0];
+   const struct dxil_value *value = get_src_ssa(ctx, ssa_src, chan);
+   return dxil_value_get_type(value);
+}
+
 static const struct dxil_value *
 get_alu_src(struct ntd_context *ctx, nir_alu_instr *alu, unsigned src)
 {
@@ -1868,6 +1879,18 @@ emit_f32tof16(struct ntd_context *ctx, nir_alu_instr *alu, const struct dxil_val
 }
 
 static bool
+emit_vec(struct ntd_context *ctx, nir_alu_instr *alu, unsigned num_inputs)
+{
+   const struct dxil_type *type = get_alu_src_type(ctx, alu, 0);
+   nir_alu_type t = dxil_type_to_nir_type(type);
+
+   for (unsigned i = 0; i < num_inputs; i++)
+      store_alu_dest(ctx, alu, i, get_src(ctx, &alu->src[i].src,
+                                          alu->src[i].swizzle[0], t));
+   return true;
+}
+
+static bool
 emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
 {
    /* handle vec-instructions first; they are the only ones that produce
@@ -1879,9 +1902,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_vec4:
    case nir_op_vec8:
    case nir_op_vec16:
-      for (unsigned i = 0; i < nir_op_infos[alu->op].num_inputs; i++)
-         store_alu_dest(ctx, alu, i, get_alu_src(ctx, alu, i));
-      return true;
+      return emit_vec(ctx, alu, nir_op_infos[alu->op].num_inputs);
    default:
       /* silence warnings */
       ;
