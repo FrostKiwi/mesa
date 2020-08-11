@@ -767,16 +767,28 @@ lower_f2(nir_builder *b, nir_ssa_def *x, bool dst_is_signed)
 
    if (dst_is_signed)
       x_sign = nir_fsign(b, x);
-   else
-      x = nir_fmin(b, x, nir_imm_floatN_t(b, UINT64_MAX, x->bit_size));
 
    x = nir_ftrunc(b, x);
 
+   nir_ssa_def *min_float = NULL, *max_float = NULL,
+      *min_int = NULL, *max_int = NULL;
    if (dst_is_signed) {
-      x = nir_fmin(b, x, nir_imm_floatN_t(b, INT64_MAX, x->bit_size));
-      x = nir_fmax(b, x, nir_imm_floatN_t(b, INT64_MIN, x->bit_size));
-      x = nir_fabs(b, x);
+      min_float = nir_imm_floatN_t(b, INT64_MIN, x->bit_size);
+      min_int = nir_imm_int64(b, INT64_MIN);
+      max_float = nir_imm_floatN_t(b, INT64_MAX, x->bit_size);
+      max_int = nir_imm_int64(b, INT64_MAX);
+   } else {
+      min_float = nir_imm_floatN_t(b, 0, x->bit_size);
+      min_int = nir_imm_int64(b, 0);
+      max_float = nir_imm_floatN_t(b, UINT64_MAX, x->bit_size);
+      max_int = nir_imm_int64(b, UINT64_MAX);
    }
+
+   nir_ssa_def *underflow = nir_fge(b, min_float, x);
+   nir_ssa_def *overflow = nir_fge(b, x, max_float);
+
+   if (dst_is_signed)
+      x = nir_fabs(b, x);
 
    nir_ssa_def *div = nir_imm_floatN_t(b, 1ULL << 32, x->bit_size);
    nir_ssa_def *res_hi = nir_f2u32(b, nir_fdiv(b, x, div));
@@ -786,6 +798,9 @@ lower_f2(nir_builder *b, nir_ssa_def *x, bool dst_is_signed)
    if (dst_is_signed)
       res = nir_bcsel(b, nir_flt(b, x_sign, nir_imm_float(b, 0)),
                       nir_ineg(b, res), res);
+
+   res = nir_bcsel(b, underflow, min_int,
+                   nir_bcsel(b, overflow, max_int, res));
 
    return res;
 }
