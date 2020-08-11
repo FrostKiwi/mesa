@@ -1336,8 +1336,8 @@ vtn_function_emit(struct vtn_builder *b, struct vtn_function *func,
    b->has_loop_continue = false;
    b->phi_table = _mesa_pointer_hash_table_create(b);
 
-   if (b->shader->info.stage == MESA_SHADER_KERNEL) {
-      b->func->impl->structured = false;
+   b->func->impl->structured = false;
+   if (true || b->shader->info.stage == MESA_SHADER_KERNEL) {
       vtn_emit_cf_func_unstructured(b, func, instruction_handler);
    } else {
       vtn_emit_cf_list_structured(b, &func->body, NULL, NULL,
