@@ -1423,15 +1423,9 @@ get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
 
    const int bit_size = nir_src_bit_size(*src);
 
-   if (bit_size == 1) {
-      assert(dxil_value_type_equal_to(value, dxil_module_get_int_type(&ctx->mod, 1)));
-      return value;
-   }
-
    switch (nir_alu_type_get_base_type(type)) {
    case nir_type_int:
    case nir_type_uint: {
-      assert(bit_size >= 16);
       assert(bit_size != 64 || ctx->mod.feats.int64_ops);
       const struct dxil_type *expect_type =  dxil_module_get_int_type(&ctx->mod, bit_size);
       /* nohing to do */
@@ -1449,6 +1443,13 @@ get_src(struct ntd_context *ctx, nir_src *src, unsigned chan,
          return value;
       assert(dxil_value_type_bitsize_equal_to(value, bit_size));
       return bitcast_to_float(ctx, bit_size, value);
+
+   case nir_type_bool:
+      if (!dxil_value_type_bitsize_equal_to(value, 1)) {
+         return dxil_emit_cast(&ctx->mod, DXIL_CAST_TRUNC,
+                               dxil_module_get_int_type(&ctx->mod, 1), value);
+      }
+      return value;
 
    default:
       unreachable("unexpected nir_alu_type");
