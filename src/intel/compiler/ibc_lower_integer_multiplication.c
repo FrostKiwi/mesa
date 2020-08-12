@@ -172,7 +172,50 @@ lower_mulh(ibc_builder *b, ibc_alu_instr *alu)
    return true;
 }
 
+static bool
+lower_mul_qword(ibc_builder *b, ibc_alu_instr *alu)
+{
+   b->cursor = ibc_after_instr(&alu->instr);
 
+   /* Considering two 64-bit integers ab and cd where each letter        ab
+    * corresponds to 32 bits, we get a 128-bit result WXYZ. We         * cd
+    * only need to provide the YZ part of the result.               -------
+    *                                                                    BD
+    *  Only BD needs to be 64 bits. For AD and BC we only care       +  AD
+    *  about the lower 32 bits (since they are part of the upper     +  BC
+    *  32 bits of our result). AC is not needed since it starts      + AC
+    *  on the 65th bit of the result.                               -------
+    *                                                                  WXYZ
+    */
+
+   /* TODO: We can't assume this on Apollolake */
+   assert(b->shader->devinfo->has_integer_dword_mul);
+
+   /* Here we need the full 64 bit result for 32b * 32b. */
+   ibc_ref bd = ibc_IMUL(b, IBC_TYPE_UQ,
+                         ibc_subscript_ref(alu->src[0].ref, IBC_TYPE_UD, 0),
+                         ibc_subscript_ref(alu->src[1].ref, IBC_TYPE_UD, 0));
+
+   ibc_ref ad = ibc_IMUL(b, IBC_TYPE_UD,
+                         ibc_subscript_ref(alu->src[0].ref, IBC_TYPE_UD, 1),
+                         ibc_subscript_ref(alu->src[1].ref, IBC_TYPE_UD, 0));
+
+   ibc_ref bc = ibc_IMUL(b, IBC_TYPE_UD,
+                         ibc_subscript_ref(alu->src[0].ref, IBC_TYPE_UD, 0),
+                         ibc_subscript_ref(alu->src[1].ref, IBC_TYPE_UD, 1));
+
+   ibc_ref ad_plus_bc = ibc_ADD(b, IBC_TYPE_UD, ad, bc);
+   ibc_ref bd_1_plus_ad = ibc_ADD(b, IBC_TYPE_UD,
+                                  ibc_subscript_ref(bd, IBC_TYPE_UD, 1),
+                                  ad_plus_bc);
+
+   ibc_ref result =
+      ibc_PACK2(b, bd_1_plus_ad, ibc_subscript_ref(bd, IBC_TYPE_UD, 0));
+
+   ibc_MOV_to(b, alu->dest, result);
+
+   return true;
+}
 
 /** Lowers integer multiplication operations where necessary */
 bool
@@ -194,8 +237,10 @@ ibc_lower_integer_multiplication(ibc_shader *shader)
          if (alu->dest.type & IBC_TYPE_VECTOR)
             break;
 
-         if (ibc_type_bit_size(alu->dest.type) == 64) {
-            assert(!"unimplemented");
+         if (ibc_type_bit_size(alu->dest.type) == 64 &&
+             ibc_type_bit_size(alu->src[0].ref.type) == 64 &&
+             ibc_type_bit_size(alu->src[1].ref.type) == 64) {
+            progress |= lower_mul_qword(&b, alu);
          } else if (!devinfo->has_integer_dword_mul &&
                     ibc_type_bit_size(alu->src[0].ref.type) == 32 &&
                     ibc_type_bit_size(alu->src[1].ref.type) == 32) {

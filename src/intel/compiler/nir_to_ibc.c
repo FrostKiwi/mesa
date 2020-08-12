@@ -372,6 +372,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    BINOP_CASE(fadd, ADD)
    BINOP_CASE(fmul, FMUL)
    BINOP_CASE(imul, IMUL)
+   BINOP_CASE(imul_2x32_64, IMUL)
+   BINOP_CASE(umul_2x32_64, IMUL)
    BINOP_CASE(iand, AND)
    BINOP_CASE(ior,  OR)
    BINOP_CASE(ixor, XOR)
