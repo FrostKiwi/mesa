@@ -32,7 +32,7 @@
 #include "../compiler/dxil_nir.h"
 
 static bool
-lower_load_global_invocation_offset(nir_builder *b, nir_intrinsic_instr *intr,
+lower_load_base_global_invocation_id(nir_builder *b, nir_intrinsic_instr *intr,
                                     nir_variable *var)
 {
    b->cursor = nir_after_instr(&intr->instr);
@@ -102,7 +102,7 @@ lower_load_num_work_groups(nir_builder *b, nir_intrinsic_instr *intr,
 }
 
 static bool
-lower_load_work_group_offset(nir_builder *b, nir_intrinsic_instr *intr,
+lower_load_base_work_group_id(nir_builder *b, nir_intrinsic_instr *intr,
                              nir_variable *var)
 {
    b->cursor = nir_after_instr(&intr->instr);
@@ -140,8 +140,8 @@ clc_nir_lower_system_values(nir_shader *nir, nir_variable *var)
             nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
 
             switch (intr->intrinsic) {
-            case nir_intrinsic_load_global_invocation_offset:
-               progress |= lower_load_global_invocation_offset(&b, intr, var);
+            case nir_intrinsic_load_base_global_invocation_id:
+               progress |= lower_load_base_global_invocation_id(&b, intr, var);
                break;
             case nir_intrinsic_load_work_dim:
                progress |= lower_load_work_dim(&b, intr, var);
@@ -150,11 +150,10 @@ clc_nir_lower_system_values(nir_shader *nir, nir_variable *var)
                lower_load_local_group_size(&b, intr);
                break;
             case nir_intrinsic_load_num_work_groups:
-            case nir_intrinsic_load_num_total_work_groups:
                lower_load_num_work_groups(&b, intr, var);
                break;
-            case nir_intrinsic_load_work_group_offset:
-               lower_load_work_group_offset(&b, intr, var);
+            case nir_intrinsic_load_base_work_group_id:
+               lower_load_base_work_group_id(&b, intr, var);
                break;
             default: break;
             }

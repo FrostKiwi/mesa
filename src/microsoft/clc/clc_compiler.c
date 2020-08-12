@@ -471,13 +471,12 @@ clc_lower_64bit_semantics(nir_shader *nir)
                nir_intrinsic_instr *intrinsic = nir_instr_as_intrinsic(instr);
                switch (intrinsic->intrinsic) {
                case nir_intrinsic_load_global_invocation_id:
-               case nir_intrinsic_load_global_invocation_id_with_offset:
-               case nir_intrinsic_load_global_invocation_offset:
+               case nir_intrinsic_load_global_invocation_id_zero_base:
+               case nir_intrinsic_load_base_global_invocation_id:
                case nir_intrinsic_load_local_invocation_id:
                case nir_intrinsic_load_work_group_id:
-               case nir_intrinsic_load_work_group_offset:
-               case nir_intrinsic_load_work_group_id_with_offset:
-               case nir_intrinsic_load_num_total_work_groups:
+               case nir_intrinsic_load_work_group_id_zero_base:
+               case nir_intrinsic_load_base_work_group_id:
                   break;
                default:
                   continue;
@@ -1086,9 +1085,6 @@ clc_to_dxil(struct clc_context *ctx,
    };
    nir_shader_compiler_options nir_options =
       *dxil_get_nir_compiler_options();
-   nir_options.has_cs_global_work_offsets = conf && conf->support_global_work_id_offsets;
-   nir_options.has_cs_work_group_offsets = conf && conf->support_work_group_id_offsets;
-   nir_options.lower_cs_global_id_from_local = nir_options.has_cs_work_group_offsets;
 
    if (conf && conf->lower_bit_size & 64) {
       nir_options.lower_pack_64_2x32_split = false;
@@ -1259,6 +1255,13 @@ clc_to_dxil(struct clc_context *ctx,
               nir_address_format_32bit_offset_as_64bit);
 
    NIR_PASS_V(nir, nir_lower_system_values);
+
+   nir_lower_compute_system_values_options compute_options = {
+      .has_base_global_invocation_id = (conf && conf->support_global_work_id_offsets),
+      .has_base_work_group_id = (conf && conf->support_work_group_id_offsets),
+   };
+   NIR_PASS_V(nir, nir_lower_compute_system_values, &compute_options);
+
    NIR_PASS_V(nir, clc_lower_64bit_semantics);
 
    NIR_PASS_V(nir, nir_opt_deref);

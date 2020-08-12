@@ -100,6 +100,7 @@ nir_options = {
    .vertex_id_zero_based = true,
    .lower_base_vertex = true,
    .denorms_not_supported = true,
+   .has_cs_global_id = true,
 };
 
 const nir_shader_compiler_options*
@@ -3129,10 +3130,12 @@ emit_intrinsic(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
    switch (intr->intrinsic) {
    case nir_intrinsic_load_global_invocation_id:
+   case nir_intrinsic_load_global_invocation_id_zero_base:
       return emit_load_global_invocation_id(ctx, intr);
    case nir_intrinsic_load_local_invocation_id:
       return emit_load_local_invocation_id(ctx, intr);
    case nir_intrinsic_load_work_group_id:
+   case nir_intrinsic_load_work_group_id_zero_base:
       return emit_load_local_work_group_id(ctx, intr);
    case nir_intrinsic_load_ssbo:
       return emit_load_ssbo(ctx, intr);
