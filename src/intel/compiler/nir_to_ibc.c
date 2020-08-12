@@ -391,6 +391,12 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_op_imul_high:
+   case nir_op_umul_high:
+      assert(nir_dest_bit_size(instr->dest.dest) < 64);
+      dest = ibc_IMULH(b, dest_type, src[0], src[1]);
+      break;
+
    case nir_op_iadd_sat:
    case nir_op_uadd_sat: {
       dest = ibc_ADD(b, dest_type, src[0], src[1]);

@@ -28,15 +28,16 @@ static inline ibc_ref
 ibc_builder_new_accum_reg(ibc_builder *b, enum ibc_type type)
 {
    ibc_reg *reg = ibc_accum_reg_create(b->shader, type, b->simd_width);
+   reg->is_wlr = false;
    return ibc_typed_ref(reg, type);
 }
 
 static void
-build_MACH(ibc_builder *b, enum ibc_type dest_type, ibc_ref accum,
+build_MACH(ibc_builder *b, ibc_ref accum, ibc_ref dest,
            ibc_ref src0, ibc_ref src1)
 {
    ibc_alu_instr *mach =
-      ibc_build_alu2(b, IBC_ALU_OP_MACH, ibc_null(dest_type), src0, src1);
+      ibc_build_alu2(b, IBC_ALU_OP_MACH, dest, src0, src1);
    ibc_alu_instr_set_accum(mach, accum, true);
 }
 
@@ -119,6 +120,45 @@ lower_mul(ibc_builder *b, ibc_alu_instr *alu)
    return progress;
 }
 
+static bool
+lower_mulh(ibc_builder *b, ibc_alu_instr *alu)
+{
+   b->cursor = ibc_after_instr(&alu->instr);
+
+   assert(alu->src[1].ref.type == IBC_TYPE_D ||
+          alu->src[1].ref.type == IBC_TYPE_UD);
+
+   ibc_ref y;
+
+   if (alu->src[1].ref.file == IBC_FILE_IMM) {
+      y = ibc_imm_uw(ibc_ref_as_uint(alu->src[1].ref));
+   } else {
+      y = ibc_subscript_ref(alu->src[1].ref, IBC_TYPE_UW, 0);
+   }
+
+   ibc_reg *temp_reg = ibc_logical_reg_create(b->shader, 32, 1,
+                                              alu->instr.simd_group,
+                                              alu->instr.simd_width);
+   temp_reg->logical.align = REG_SIZE;
+   ibc_ref temp_ref = ibc_typed_ref(temp_reg, IBC_TYPE_UD);
+
+   ibc_builder_push_instr_group(b, &alu->instr);
+
+   ibc_ref acc = ibc_builder_new_accum_reg(b, alu->dest.type);
+   ibc_build_alu2(b, IBC_ALU_OP_IMUL, acc, alu->src[0].ref, y);
+   build_MACH(b, acc, temp_ref, alu->src[0].ref, alu->src[1].ref);
+
+   ibc_MOV_to(b, alu->dest, temp_ref);
+
+   ibc_instr_remove(&alu->instr);
+
+   ibc_builder_pop(b);
+
+   return true;
+}
+
+
+
 /** Lowers integer multiplication operations where necessary */
 bool
 ibc_lower_integer_multiplication(ibc_shader *shader)
@@ -136,6 +176,9 @@ ibc_lower_integer_multiplication(ibc_shader *shader)
       switch (alu->op) {
       case IBC_ALU_OP_IMUL:
          progress |= lower_mul(&b, alu);
+         break;
+      case IBC_ALU_OP_IMULH:
+         progress |= lower_mulh(&b, alu);
          break;
       default:
          break;
