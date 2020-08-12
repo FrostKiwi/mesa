@@ -107,7 +107,7 @@ TEST_F(ComputeTest, i64tof32)
    const int64_t expected[] = {
       0x100000000LL,
       -0x100000000LL,
-      0x8000000000000000LL,
+      0x7fffffffffffffffLL,
       0x4000000000000000LL,
       0x4000000000000000LL,
       0x4000008000000000LL,
