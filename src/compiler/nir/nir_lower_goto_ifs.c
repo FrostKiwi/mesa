@@ -61,19 +61,19 @@ struct strct_lvl {
 static void
 set_path_vars(nir_builder *b, struct path_fork *fork, nir_block *target)
 {
-   int i;
    while (fork) {
-      for (i = 0; i < 2; i++) {
+      for (int i = 0; i < 2; i++) {
          if (_mesa_set_search(fork->paths[i].reachable, target)) {
-            if (fork->is_var)
+            if (fork->is_var) {
                nir_store_var(b, fork->path_var, nir_imm_bool(b, i), 1);
-            else
+            } else {
+               assert(fork->path_ssa == NULL);
                fork->path_ssa = nir_imm_bool(b, i);
+            }
             fork = fork->paths[i].fork;
             break;
          }
       }
-      assert(i < 2);
    }
 }
 
@@ -139,7 +139,7 @@ route_to(nir_builder *b, struct routes *routing, nir_block *target)
       nir_jump(b, nir_jump_continue);
    }
    else {
-      assert(!target->successors[0]);   //target is endblock
+      assert(!target->successors[0]);   /* target is endblock */
       nir_jump(b, nir_jump_return);
    }
 }
@@ -181,7 +181,7 @@ route_to_cond(nir_builder *b, struct routes *routing, nir_src condition,
       }
    }
 
-   //then and else blocks are in different routes
+   /* then and else blocks are in different routes */
    nir_push_if_src(b, condition);
    route_to(b, routing, then_block);
    nir_push_else(b, NULL);
@@ -342,6 +342,7 @@ inside_outside(nir_block *block, struct set *loop_heads, struct set *outside,
       if (!_mesa_set_search(brk_reachable, block->dom_children[i]))
          _mesa_set_add(remaining, block->dom_children[i]);
    }
+
    bool progress = true;
    while (remaining->entries && progress) {
       progress = false;
@@ -370,15 +371,20 @@ inside_outside(nir_block *block, struct set *loop_heads, struct set *outside,
          }
       }
    }
-   set_foreach(remaining, entry) {
+
+   /* Add everything remaining to loop_heads */
+   set_foreach(remaining, entry)
       _mesa_set_add_pre_hashed(loop_heads, entry->hash, entry->key);
-   }
+
+   /* Recurse for each remaining */
    set_foreach(remaining, entry) {
       inside_outside((nir_block *) entry->key, loop_heads, outside, reach,
                      brk_reachable);
    }
+
    _mesa_set_destroy(remaining, NULL);
    remaining = NULL;
+
    for (int i = 0; i < 2; i++) {
       if (block->successors[i] && block->successors[i]->successors[0] &&
           !_mesa_set_search(loop_heads, block->successors[i])) {
@@ -451,16 +457,17 @@ handle_irreducible(struct set *remaining, struct strct_lvl *curr_level,
                    struct set *brk_reachable) {
    nir_block *candidate = (nir_block *)
       _mesa_set_next_entry(remaining, NULL)->key;
-   nir_block *to_be_added;
    struct set *old_candidates = _mesa_pointer_set_create(curr_level);
    while (candidate) {
       _mesa_set_add(old_candidates, candidate);
-      to_be_added = candidate;
+      nir_block *to_be_added = candidate;
       candidate = NULL;
+
       _mesa_set_clear(curr_level->blocks, NULL);
       while (to_be_added) {
          _mesa_set_add(curr_level->blocks, to_be_added);
          to_be_added = NULL;
+
          set_foreach(remaining, entry) {
             nir_block *remaining_block = (nir_block *) entry->key;
             if (!_mesa_set_search(curr_level->blocks, remaining_block)
@@ -477,6 +484,7 @@ handle_irreducible(struct set *remaining, struct strct_lvl *curr_level,
    }
    _mesa_set_destroy(old_candidates, NULL);
    old_candidates = NULL;
+
    struct set *loop_heads = _mesa_set_clone(curr_level->blocks, curr_level);
    curr_level->reach = _mesa_pointer_set_create(curr_level);
    set_foreach(curr_level->blocks, entry) {
@@ -517,7 +525,7 @@ handle_irreducible(struct set *remaining, struct strct_lvl *curr_level,
  *   E
  * }
  * F
- * 
+ *
  * \param  levels  uninitialized list
  * \param  is_dominated  if true, no helper variables will be created for the
  *                       zeroth level
@@ -528,10 +536,13 @@ organize_levels(struct exec_list *levels, struct set *remaining,
                 nir_function_impl *impl, bool is_domminated)
 {
    void *mem_ctx = ralloc_parent(remaining);
-   //blocks that can be reached by the remaining blocks
+
+   /* blocks that can be reached by the remaining blocks */
    struct set *remaining_frontier = _mesa_pointer_set_create(mem_ctx);
-   //targets of active skip path
+
+   /* targets of active skip path */
    struct set *skip_targets = _mesa_pointer_set_create(mem_ctx);
+
    exec_list_make_empty(levels);
    while (remaining->entries) {
       _mesa_set_clear(remaining_frontier, NULL);
@@ -544,6 +555,7 @@ organize_levels(struct exec_list *levels, struct set *remaining,
             }
          }
       }
+
       struct strct_lvl *curr_level = ralloc(mem_ctx, struct strct_lvl);
       curr_level->blocks = _mesa_pointer_set_create(curr_level);
       set_foreach(remaining, entry) {
@@ -553,16 +565,18 @@ organize_levels(struct exec_list *levels, struct set *remaining,
             _mesa_set_remove_key(remaining, candidate);
          }
       }
+
       curr_level->irreducible = !curr_level->blocks->entries;
-      if (curr_level->irreducible) {
+      if (curr_level->irreducible)
          handle_irreducible(remaining, curr_level, routing->brk.reachable);
-      }
       assert(curr_level->blocks->entries);
       curr_level->skip_start = 0;
+
       struct strct_lvl *prev_level = NULL;
       struct exec_node *tail;
       if ((tail = exec_list_get_tail(levels)))
          prev_level = exec_node_data(struct strct_lvl, tail, node);
+
       if (skip_targets->entries) {
          set_foreach(skip_targets, entry) {
             if (_mesa_set_search_pre_hashed(curr_level->blocks,
@@ -592,7 +606,8 @@ organize_levels(struct exec_list *levels, struct set *remaining,
             }
          }
       }
-      bool is_in_skip = !!skip_targets->entries;
+
+      bool is_in_skip = skip_targets->entries != 0;
       set_foreach(prev_frontier, entry) {
          if (_mesa_set_search(remaining, entry->key) ||
              (_mesa_set_search(routing->regular.reachable, entry->key) &&
@@ -604,9 +619,11 @@ organize_levels(struct exec_list *levels, struct set *remaining,
             curr_level->skip_start = 1;
          }
       }
+
       curr_level->skip_end = 0;
       exec_list_push_tail(levels, &curr_level->node);
    }
+
    if (skip_targets->entries)
       exec_node_data(struct strct_lvl, exec_list_get_tail(levels), node)
       ->skip_end = 1;
@@ -615,7 +632,7 @@ organize_levels(struct exec_list *levels, struct set *remaining,
    _mesa_set_destroy(skip_targets, NULL);
    skip_targets = NULL;
 
-   //iterate throught all levels reverse and create all the paths and forks
+   /* Iterate throught all levels reverse and create all the paths and forks */
    struct path path_after_skip;
 
    foreach_list_typed_reverse(struct strct_lvl, level, node, levels) {
@@ -672,7 +689,7 @@ static void
 plant_levels(struct exec_list *levels, struct routes *routing,
              nir_builder *b)
 {
-   //place all dominated blocks and build the path forks
+   /* Place all dominated blocks and build the path forks */
    struct exec_node *list_node;
    while ((list_node = exec_list_pop_head(levels))) {
       struct strct_lvl *curr_level =
@@ -692,9 +709,8 @@ plant_levels(struct exec_list *levels, struct routes *routing,
       select_blocks(routing, b, in_path);
       if (curr_level->irreducible)
          loop_routing_end(routing, b);
-      if (curr_level->skip_end) {
+      if (curr_level->skip_end)
          nir_pop_if(b, NULL);
-      }
       ralloc_free(curr_level);
    }
 }
@@ -706,54 +722,61 @@ plant_levels(struct exec_list *levels, struct routes *routing,
 static void
 nir_structurize(struct routes *routing, nir_builder *b, nir_block *block)
 {
-   void *mem_ctx = ralloc_context(routing);  //freed at end of the function
-   struct exec_list levels;
-   struct exec_list outside_levels;
-   struct set *reach;
+   /* Mem context for this function; freed at the end */
+   void *mem_ctx = ralloc_context(routing);
+
    struct set *remaining = _mesa_pointer_set_create(mem_ctx);
    for (int i = 0; i < block->num_dom_children; i++) {
       if (!_mesa_set_search(routing->brk.reachable, block->dom_children[i]))
          _mesa_set_add(remaining, block->dom_children[i]);
    }
-   //if the block can reach back to itself, it is a loop head
+
+   /* If the block can reach back to itself, it is a loop head */
    int is_looped = _mesa_set_search(block->dom_frontier, block) != NULL;
+   struct exec_list outside_levels;
    if (is_looped) {
       struct set *loop_heads = _mesa_pointer_set_create(mem_ctx);
       _mesa_set_add(loop_heads, block);
+
       struct set *outside = _mesa_pointer_set_create(mem_ctx);
-      reach = _mesa_pointer_set_create(mem_ctx);
+      struct set *reach = _mesa_pointer_set_create(mem_ctx);
       inside_outside(block, loop_heads, outside, reach,
                      routing->brk.reachable);
+
       _mesa_set_destroy(loop_heads, NULL);
       loop_heads = NULL;
+
       set_foreach(outside, entry)
          _mesa_set_remove_key(remaining, entry->key);
+
       organize_levels(&outside_levels, outside, reach, routing, b->impl,
                       false);
-      _mesa_set_destroy(outside, NULL);
-      outside = NULL;
-      struct path loop_path;
-      loop_path.reachable = _mesa_pointer_set_create(mem_ctx);
+
+      struct path loop_path = {
+         .reachable = _mesa_pointer_set_create(mem_ctx),
+         .fork = NULL,
+      };
       _mesa_set_add(loop_path.reachable, block);
-      loop_path.fork = NULL;
+
       loop_routing_start(routing, b, loop_path, reach);
       _mesa_set_destroy(reach, NULL);
       reach = NULL;
    }
-   reach = _mesa_pointer_set_create(mem_ctx);
-   if (block->successors[0]->successors[0]) {   //it is not the end_block
+
+   struct set *reach = _mesa_pointer_set_create(mem_ctx);
+   if (block->successors[0]->successors[0]) /* it is not the end_block */
       _mesa_set_add(reach, block->successors[0]);
-   }
-   if (block->successors[1] && block->successors[1]->successors[0]) {
+   if (block->successors[1] && block->successors[1]->successors[0])
       _mesa_set_add(reach, block->successors[1]);
-   }
+
+   struct exec_list levels;
    organize_levels(&levels, remaining, reach, routing, b->impl, true);
    _mesa_set_destroy(remaining, NULL);
    remaining = NULL;
    _mesa_set_destroy(reach, NULL);
    reach = NULL;
 
-   //push all instructions of this block, without the jump instr
+   /* Push all instructions of this block, without the jump instr */
    nir_jump_instr *jump_instr = NULL;
    nir_foreach_instr_safe(instr, block) {
       if (instr->type == nir_instr_type_jump) {
@@ -764,7 +787,7 @@ nir_structurize(struct routes *routing, nir_builder *b, nir_block *block)
       nir_builder_instr_insert(b, instr);
    }
 
-   //find path to the successor blocks
+   /* Find path to the successor blocks */
    if (jump_instr->type == nir_jump_goto_if) {
       route_to_cond(b, routing, jump_instr->condition,
                     jump_instr->target, jump_instr->else_target);
@@ -777,6 +800,7 @@ nir_structurize(struct routes *routing, nir_builder *b, nir_block *block)
       loop_routing_end(routing, b);
       plant_levels(&outside_levels, routing, b);
    }
+
    ralloc_free(mem_ctx);
 }
 
