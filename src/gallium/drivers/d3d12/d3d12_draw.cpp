@@ -184,7 +184,7 @@ fill_state_vars(struct d3d12_context *ctx,
          size += 4;
          break;
       case D3D12_STATE_VAR_FIRST_VERTEX:
-         ptr[0] = dinfo->start;
+         ptr[0] = dinfo->index_size ? dinfo->index_bias : dinfo->start;
          size += 4;
          break;
       case D3D12_STATE_VAR_DEPTH_TRANSFORM:
