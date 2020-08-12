@@ -768,7 +768,6 @@ nir_structurize(struct routes *routing, nir_builder *b, nir_block *block)
    if (jump_instr->type == nir_jump_goto_if) {
       route_to_cond(b, routing, jump_instr->condition,
                     jump_instr->target, jump_instr->else_target);
-      list_del(&jump_instr->condition.use_link);
    } else {
       route_to(b, routing, block->successors[0]);
    }
