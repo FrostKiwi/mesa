@@ -795,6 +795,9 @@ nir_lower_goto_ifs_impl(nir_function_impl *impl)
    nir_cf_extract(&cf_list, nir_before_cf_list(&impl->body),
                             nir_after_cf_list(&impl->body));
 
+   /* From this point on, it's structured */
+   impl->structured = true;
+
    nir_builder b;
    nir_builder_init(&b, impl);
    b.cursor = nir_before_block(nir_start_block(impl));
@@ -823,7 +826,6 @@ nir_lower_goto_ifs_impl(nir_function_impl *impl)
    ralloc_free(routing);
    nir_cf_delete(&cf_list);
 
-   impl->structured = true;
    nir_metadata_preserve(impl, nir_metadata_none);
 
    return true;
