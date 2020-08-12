@@ -2649,7 +2649,7 @@ emit_load_ptr(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 static bool
 emit_load_shared(struct ntd_context *ctx, nir_intrinsic_instr *intr)
 {
-   const struct dxil_value *zero, *one, *index;
+   const struct dxil_value *zero, *index;
    unsigned bit_size = nir_dest_bit_size(intr->dest);
    unsigned align = bit_size / 8;
 
