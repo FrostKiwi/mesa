@@ -141,6 +141,9 @@ init_texture(struct d3d12_screen *screen,
    res->mip_levels = templ->last_level + 1;
    res->dxgi_format = d3d12_get_format(templ->format);
 
+   if (res->dxgi_format == DXGI_FORMAT_UNKNOWN)
+      res->dxgi_format = d3d12_get_emulated_view_format(templ->format)->dxgi_format;
+
    D3D12_RESOURCE_DESC desc;
    desc.Format = res->dxgi_format;
    desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
