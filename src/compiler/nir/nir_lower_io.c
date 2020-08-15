@@ -806,6 +806,18 @@ build_addr_for_var(nir_builder *b, nir_variable *var,
 }
 
 static nir_ssa_def *
+build_runtime_addr_mode_check(nir_builder *b, nir_ssa_def *addr,
+                              nir_address_format addr_format,
+                              nir_variable_mode mode)
+{
+   /* The compile-time check failed; do a run-time check */
+   switch (addr_format) {
+   default:
+      unreachable("Unsupported address mode");
+   }
+}
+
+static nir_ssa_def *
 addr_to_index(nir_builder *b, nir_ssa_def *addr,
               nir_address_format addr_format)
 {
@@ -1364,6 +1376,46 @@ lower_explicit_io_array_length(nir_builder *b, nir_intrinsic_instr *intrin,
    nir_instr_remove(&intrin->instr);
 }
 
+static void
+lower_explicit_io_mode_check(nir_builder *b, nir_intrinsic_instr *intrin,
+                             nir_address_format addr_format)
+{
+   /* If the address format is always global, don't lower */
+   if (addr_format_is_global(addr_format, 0))
+      return;
+
+   assert(intrin->src[0].is_ssa);
+   nir_ssa_def *addr = intrin->src[0].ssa;
+
+   b->cursor = nir_instr_remove(&intrin->instr);
+
+   /* It's entirely possible that, by the time we get here, NIR has figured
+    * out the exact mode.  In that case, we replace it with a constant.
+    */
+   nir_ssa_def *is_mode = NULL;
+   switch (intrin->intrinsic) {
+   case nir_intrinsic_deref_is_temp:
+      is_mode = build_runtime_addr_mode_check(b, addr, addr_format,
+                                              nir_var_function_temp);
+      break;
+
+   case nir_intrinsic_deref_is_shared:
+      is_mode = build_runtime_addr_mode_check(b, addr, addr_format,
+                                              nir_var_mem_shared);
+      break;
+
+   case nir_intrinsic_deref_is_global:
+      is_mode = build_runtime_addr_mode_check(b, addr, addr_format,
+                                              nir_var_mem_global);
+      break;
+
+   default:
+      unreachable("Invalid mode check intrinsic");
+   }
+
+   nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(is_mode));
+}
+
 static bool
 nir_lower_explicit_io_impl(nir_function_impl *impl, nir_variable_mode modes,
                            nir_address_format addr_format)
@@ -1420,6 +1472,17 @@ nir_lower_explicit_io_impl(nir_function_impl *impl, nir_variable_mode modes,
                nir_deref_instr *deref = nir_src_as_deref(intrin->src[0]);
                if (deref->mode & modes) {
                   lower_explicit_io_array_length(&b, intrin, addr_format);
+                  progress = true;
+               }
+               break;
+            }
+
+            case nir_intrinsic_deref_is_temp:
+            case nir_intrinsic_deref_is_global:
+            case nir_intrinsic_deref_is_shared: {
+               nir_deref_instr *deref = nir_src_as_deref(intrin->src[0]);
+               if (deref->mode & modes) {
+                  lower_explicit_io_mode_check(&b, intrin, addr_format);
                   progress = true;
                }
                break;
