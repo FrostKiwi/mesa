@@ -447,6 +447,8 @@ get_variable_mode_str(nir_variable_mode mode, bool want_local_global_mode)
    case nir_var_function_temp:
       return want_local_global_mode ? "function_temp" : "";
    default:
+      if (mode && (mode & nir_var_mem_generic) == mode)
+         return "generic";
       return "";
    }
 }
