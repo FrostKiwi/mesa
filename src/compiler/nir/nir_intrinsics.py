@@ -194,6 +194,16 @@ intrinsic("deref_buffer_array_length", src_comp=[-1], dest_comp=1,
 intrinsic("get_buffer_size", src_comp=[-1], dest_comp=1,
           flags=[CAN_ELIMINATE, CAN_REORDER])
 
+# Intrinsics which detect if a generic pointer actually has one of the
+# nir_var_shader/function_temp, nir_var_mem_shared, or nir_var_mem_global
+# modes.
+intrinsic("deref_is_temp", src_comp=[-1], dest_comp=1,
+          flags=[CAN_ELIMINATE, CAN_REORDER])
+intrinsic("deref_is_shared", src_comp=[-1], dest_comp=1,
+          flags=[CAN_ELIMINATE, CAN_REORDER])
+intrinsic("deref_is_global", src_comp=[-1], dest_comp=1,
+          flags=[CAN_ELIMINATE, CAN_REORDER])
+
 # a barrier is an intrinsic with no inputs/outputs but which can't be moved
 # around/optimized in general
 def barrier(name):

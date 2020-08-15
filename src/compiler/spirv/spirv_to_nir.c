@@ -4162,13 +4162,16 @@ vtn_handle_preamble_instruction(struct vtn_builder *b, SpvOp opcode,
          spv_check_supported(kernel, cap);
          break;
 
+      case SpvCapabilityGenericPointer:
+         spv_check_supported(generic_pointers, cap);
+         break;
+
       case SpvCapabilityImageBasic:
       case SpvCapabilityImageReadWrite:
       case SpvCapabilityImageMipmap:
       case SpvCapabilityPipes:
       case SpvCapabilityDeviceEnqueue:
       case SpvCapabilityLiteralSampler:
-      case SpvCapabilityGenericPointer:
          vtn_warn("Unsupported OpenCL-style SPIR-V capability: %s",
                   spirv_capability_to_string(cap));
          break;
@@ -5005,6 +5008,7 @@ vtn_handle_body_instruction(struct vtn_builder *b, SpvOp opcode,
    case SpvOpArrayLength:
    case SpvOpConvertPtrToU:
    case SpvOpConvertUToPtr:
+   case SpvOpGenericCastToPtrExplicit:
       vtn_handle_variables(b, opcode, w, count);
       break;
 

@@ -1848,6 +1848,9 @@ vtn_storage_class_to_mode(struct vtn_builder *b,
       nir_mode = nir_var_mem_ubo;
       break;
    case SpvStorageClassGeneric:
+      mode = vtn_variable_mode_generic;
+      nir_mode = nir_var_mem_generic;
+      break;
    default:
       vtn_fail("Unhandled variable storage class: %s (%u)",
                spirv_storageclass_to_string(class), class);
@@ -1878,6 +1881,7 @@ vtn_mode_to_address_format(struct vtn_builder *b, enum vtn_variable_mode mode)
    case vtn_variable_mode_workgroup:
       return b->options->shared_addr_format;
 
+   case vtn_variable_mode_generic:
    case vtn_variable_mode_cross_workgroup:
       return b->options->global_addr_format;
 
@@ -2194,6 +2198,8 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
       break;
 
    case vtn_variable_mode_workgroup:
+   case vtn_variable_mode_cross_workgroup:
+   case vtn_variable_mode_generic:
       /* Create the variable normally */
       var->var = rzalloc(b->shader, nir_variable);
       var->var->name = ralloc_strdup(var->var, val->name);
@@ -2294,7 +2300,6 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
    }
 
    case vtn_variable_mode_push_constant:
-   case vtn_variable_mode_cross_workgroup:
       /* These don't need actual variables. */
       break;
 
@@ -2664,6 +2669,71 @@ vtn_handle_variables(struct vtn_builder *b, SpvOp opcode,
       nir_ssa_def *u = vtn_get_nir_ssa(b, w[3]);
       nir_ssa_def *ptr = nir_sloppy_bitcast(&b->nb, u, ptr_type->type);
       vtn_push_pointer(b, w[2], vtn_pointer_from_ssa(b, ptr, ptr_type));
+      break;
+   }
+
+   case SpvOpGenericCastToPtrExplicit: {
+      struct vtn_type *dst_type = vtn_get_type(b, w[1]);
+      struct vtn_type *src_type = vtn_get_value_type(b, w[3]);
+      SpvStorageClass storage_class = w[4];
+
+      vtn_fail_if(dst_type->base_type != vtn_base_type_pointer ||
+                  dst_type->storage_class != storage_class,
+                  "Result type of an SpvOpGenericCastToPtrExplicit must be "
+                  "an OpTypePointer. Its Storage Class must match the "
+                  "storage class specified in the instruction");
+
+      vtn_fail_if(src_type->base_type != vtn_base_type_pointer ||
+                  src_type->deref->id != dst_type->deref->id,
+                  "Source pointer of an SpvOpGenericCastToPtrExplicit must "
+                  "have a type of OpTypePointer whose Type is the same as "
+                  "the Type of Result Type");
+
+      vtn_fail_if(src_type->storage_class != SpvStorageClassGeneric,
+                  "Source pointer of an SpvOpGenericCastToPtrExplicit must "
+                  "point to the Generic Storage Class.");
+
+      vtn_fail_if(storage_class != SpvStorageClassWorkgroup &&
+                  storage_class != SpvStorageClassCrossWorkgroup &&
+                  storage_class != SpvStorageClassFunction,
+                  "Storage must be one of the following literal values from "
+                  "Storage Class: Workgroup, CrossWorkgroup, or Function.");
+
+      nir_deref_instr *src_deref = vtn_nir_deref(b, w[3]);
+
+      enum vtn_variable_mode mode =
+         vtn_storage_class_to_mode(b, storage_class, dst_type->deref, NULL);
+      nir_address_format addr_format = vtn_mode_to_address_format(b, mode);
+
+      nir_ssa_def *null_value =
+         nir_build_imm(&b->nb, nir_address_format_num_components(addr_format),
+                               nir_address_format_bit_size(addr_format),
+                               nir_address_format_null_value(addr_format));
+
+      nir_intrinsic_op check_op;
+      switch (storage_class) {
+      case SpvStorageClassWorkgroup:
+         check_op = nir_intrinsic_deref_is_shared;
+         break;
+      case SpvStorageClassCrossWorkgroup:
+         check_op = nir_intrinsic_deref_is_global;
+         break;
+      case SpvStorageClassFunction:
+         check_op = nir_intrinsic_deref_is_temp;
+         break;
+      default:
+         unreachable("Invalid storage class");
+      }
+
+      nir_intrinsic_instr *check =
+         nir_intrinsic_instr_create(b->shader, check_op);
+      check->src[0] = nir_src_for_ssa(&src_deref->dest.ssa);
+      nir_ssa_dest_init(&check->instr, &check->dest, 1, 1, NULL);
+      nir_builder_instr_insert(&b->nb, &check->instr);
+
+      vtn_push_nir_ssa(b, w[2], nir_bcsel(&b->nb, &check->dest.ssa,
+                                                  &src_deref->dest.ssa,
+                                                  null_value));
       break;
    }
 
