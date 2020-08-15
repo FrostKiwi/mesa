@@ -917,12 +917,68 @@ addr_is_in_bounds(nir_builder *b, nir_ssa_def *addr,
                      nir_iadd_imm(b, nir_channel(b, addr, 3), size));
 }
 
+static nir_variable_mode
+canonicalize_generic_modes(nir_variable_mode modes)
+{
+   assert(modes != 0);
+   if (util_bitcount(modes) == 1)
+      return modes;
+
+   assert(!(modes & ~(nir_var_function_temp | nir_var_shader_temp |
+                      nir_var_mem_shared | nir_var_mem_global)));
+
+   /* Canonicalize by converting shader_temp to function_temp */
+   if (modes & nir_var_shader_temp) {
+      modes &= ~nir_var_shader_temp;
+      modes |= nir_var_function_temp;
+   }
+
+   return modes;
+}
+
 static nir_ssa_def *
 build_explicit_io_load(nir_builder *b, nir_intrinsic_instr *intrin,
                        nir_ssa_def *addr, nir_address_format addr_format,
-                       unsigned num_components)
+                       nir_variable_mode mode, unsigned num_components)
 {
-   nir_variable_mode mode = nir_src_as_deref(intrin->src[0])->mode;
+   mode = canonicalize_generic_modes(mode);
+
+   if (util_bitcount(mode) > 1) {
+      if (addr_format_is_global(addr_format, mode)) {
+         return build_explicit_io_load(b, intrin, addr, addr_format,
+                                       nir_var_mem_global, num_components);
+      } else if (mode & nir_var_function_temp) {
+         nir_push_if(b, build_runtime_addr_mode_check(b, addr, addr_format,
+                                                      nir_var_function_temp));
+         nir_ssa_def *res1 =
+            build_explicit_io_load(b, intrin, addr, addr_format,
+                                   nir_var_function_temp,
+                                   num_components);
+         nir_push_else(b, NULL);
+         nir_ssa_def *res2 =
+            build_explicit_io_load(b, intrin, addr, addr_format,
+                                   mode & ~nir_var_function_temp,
+                                   num_components);
+         nir_pop_if(b, NULL);
+         return nir_if_phi(b, res1, res2);
+      } else {
+         nir_push_if(b, build_runtime_addr_mode_check(b, addr, addr_format,
+                                                      nir_var_mem_shared));
+         assert(mode & nir_var_mem_shared);
+         nir_ssa_def *res1 =
+            build_explicit_io_load(b, intrin, addr, addr_format,
+                                   nir_var_mem_shared,
+                                   num_components);
+         nir_push_else(b, NULL);
+         assert(mode & nir_var_mem_global);
+         nir_ssa_def *res2 =
+            build_explicit_io_load(b, intrin, addr, addr_format,
+                                   nir_var_mem_global,
+                                   num_components);
+         nir_pop_if(b, NULL);
+         return nir_if_phi(b, res1, res2);
+      }
+   }
 
    nir_intrinsic_op op;
    switch (mode) {
@@ -1033,9 +1089,43 @@ build_explicit_io_load(nir_builder *b, nir_intrinsic_instr *intrin,
 static void
 build_explicit_io_store(nir_builder *b, nir_intrinsic_instr *intrin,
                         nir_ssa_def *addr, nir_address_format addr_format,
-                        nir_ssa_def *value, nir_component_mask_t write_mask)
+                        nir_variable_mode mode, nir_ssa_def *value,
+                        nir_component_mask_t write_mask)
 {
-   nir_variable_mode mode = nir_src_as_deref(intrin->src[0])->mode;
+   mode = canonicalize_generic_modes(mode);
+
+   if (util_bitcount(mode) > 1) {
+      if (addr_format_is_global(addr_format, mode)) {
+         build_explicit_io_store(b, intrin, addr, addr_format,
+                                 nir_var_mem_global,
+                                 value, write_mask);
+      } else if (mode & nir_var_function_temp) {
+         nir_push_if(b, build_runtime_addr_mode_check(b, addr, addr_format,
+                                                      nir_var_function_temp));
+         build_explicit_io_store(b, intrin, addr, addr_format,
+                                 nir_var_function_temp,
+                                 value, write_mask);
+         nir_push_else(b, NULL);
+         build_explicit_io_store(b, intrin, addr, addr_format,
+                                 mode & ~nir_var_function_temp,
+                                 value, write_mask);
+         nir_pop_if(b, NULL);
+      } else {
+         nir_push_if(b, build_runtime_addr_mode_check(b, addr, addr_format,
+                                                      nir_var_mem_shared));
+         assert(mode & nir_var_mem_shared);
+         build_explicit_io_store(b, intrin, addr, addr_format,
+                                 nir_var_mem_shared,
+                                 value, write_mask);
+         nir_push_else(b, NULL);
+         assert(mode & nir_var_mem_global);
+         build_explicit_io_store(b, intrin, addr, addr_format,
+                                 nir_var_mem_global,
+                                 value, write_mask);
+         nir_pop_if(b, NULL);
+      }
+      return;
+   }
 
    nir_intrinsic_op op;
    switch (mode) {
@@ -1271,12 +1361,12 @@ nir_lower_explicit_io_instr(nir_builder *b,
                                                          deref->mode,
                                                          vec_stride * i);
             comps[i] = build_explicit_io_load(b, intrin, comp_addr,
-                                              addr_format, 1);
+                                              addr_format, deref->mode, 1);
          }
          value = nir_vec(b, comps, intrin->num_components);
       } else {
          value = build_explicit_io_load(b, intrin, addr, addr_format,
-                                        intrin->num_components);
+                                        deref->mode, intrin->num_components);
       }
       nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(value));
    } else if (intrin->intrinsic == nir_intrinsic_store_deref) {
@@ -1292,11 +1382,11 @@ nir_lower_explicit_io_instr(nir_builder *b,
                                                          deref->mode,
                                                          vec_stride * i);
             build_explicit_io_store(b, intrin, comp_addr, addr_format,
-                                    nir_channel(b, value, i), 1);
+                                    deref->mode, nir_channel(b, value, i), 1);
          }
       } else {
          build_explicit_io_store(b, intrin, addr, addr_format,
-                                 value, write_mask);
+                                 deref->mode, value, write_mask);
       }
    } else {
       nir_ssa_def *value =
