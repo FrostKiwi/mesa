@@ -1029,6 +1029,35 @@ opt_deref_ptr_as_array(nir_builder *b, nir_deref_instr *deref)
    return true;
 }
 
+static bool
+opt_known_deref_is(nir_builder *b, nir_intrinsic_instr *intrin,
+                   nir_variable_mode mode)
+{
+   nir_deref_instr *deref = nir_src_as_deref(intrin->src[0]);
+   if (deref == NULL)
+      return false;
+
+   assert(deref->mode != 0);
+
+   nir_ssa_def *deref_is = NULL;
+
+   /* deref->mode is entirely contained mode */
+   if (!(deref->mode & ~mode))
+      deref_is = nir_imm_true(b);
+
+   /* deref->mode and mode do not overlap */
+   if (!(deref->mode & mode))
+      deref_is = nir_imm_false(b);
+
+   if (deref_is == NULL)
+      return false;
+
+   nir_ssa_def_rewrite_uses(&intrin->dest.ssa, nir_src_for_ssa(deref_is));
+   nir_instr_remove(&intrin->instr);
+
+   return true;
+}
+
 bool
 nir_opt_deref_impl(nir_function_impl *impl)
 {
@@ -1056,6 +1085,32 @@ nir_opt_deref_impl(nir_function_impl *impl)
 
             case nir_deref_type_cast:
                if (opt_deref_cast(&b, deref))
+                  progress = true;
+               break;
+
+            default:
+               /* Do nothing */
+               break;
+            }
+            break;
+         }
+
+         case nir_instr_type_intrinsic: {
+            nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+            switch (intrin->intrinsic) {
+            case nir_intrinsic_deref_is_temp:
+               if (opt_known_deref_is(&b, intrin, nir_var_shader_temp |
+                                                  nir_var_function_temp))
+                  progress = true;
+               break;
+
+            case nir_intrinsic_deref_is_shared:
+               if (opt_known_deref_is(&b, intrin, nir_var_mem_shared))
+                  progress = true;
+               break;
+
+            case nir_intrinsic_deref_is_global:
+               if (opt_known_deref_is(&b, intrin, nir_var_mem_global))
                   progress = true;
                break;
 
