@@ -697,8 +697,7 @@ brw_nir_optimize(nir_shader *nir, const struct brw_compiler *compiler,
           compiler->devinfo->gen >= 6);
 
       OPT(nir_opt_intrinsics);
-      if (!brw_nir_should_use_ibc(nir, compiler, is_scalar))
-         OPT(nir_opt_idiv_const, 32);
+      OPT(nir_opt_idiv_const, 32);
       OPT(nir_opt_algebraic);
       OPT(nir_opt_constant_folding);
 
