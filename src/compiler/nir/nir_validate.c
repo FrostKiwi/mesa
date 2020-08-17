@@ -415,8 +415,18 @@ validate_deref_instr(nir_deref_instr *instr, validate_state *state)
        */
       validate_src(&instr->parent, state, 0, 0);
 
-      /* We just validate that the type and mode are there */
-      validate_assert(state, instr->mode);
+      nir_deref_instr *parent = nir_src_as_deref(instr->parent);
+      if (parent) {
+         /* Casts can change the mode but it can't change completely.  The new
+          * mode must have some bits in common with the old.
+          */
+         validate_assert(state, instr->mode & parent->mode);
+      } else {
+         /* If our parent isn't a deref, just assert the mode is there */
+         validate_assert(state, instr->mode);
+      }
+
+      /* We just validate that the type is there */
       validate_assert(state, instr->type);
    } else {
       /* We require the parent to be SSA.  This may be lifted in the future */
