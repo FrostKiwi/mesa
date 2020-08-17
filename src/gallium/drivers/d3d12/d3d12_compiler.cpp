@@ -132,7 +132,6 @@ compile_nir(struct d3d12_context *ctx, struct d3d12_shader_selector *sel,
    tex_options.lower_rect_offset = true;
 
    NIR_PASS_V(nir, nir_lower_samplers);
-   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform);
    NIR_PASS_V(nir, d3d12_create_bare_samplers);
    NIR_PASS_V(nir, nir_lower_tex, &tex_options);
 
