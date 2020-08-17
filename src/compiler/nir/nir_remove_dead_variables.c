@@ -77,58 +77,18 @@ add_var_use_deref(nir_deref_instr *deref, struct set *live)
 }
 
 static void
-add_var_use_texture_sampler(nir_tex_instr *tex, struct set *samplers, struct set *live)
-{
-   /* derefs are already handled, and we don't care about bindless textures */
-   if (nir_tex_instr_src_index(tex, nir_tex_src_sampler_deref) != -1 ||
-       nir_tex_instr_src_index(tex, nir_tex_src_sampler_handle) != -1)
-      return;
-
-   /* since we have to check the range of arrays of samplers we can't use
-    * set_search here */
-   set_foreach(samplers, entry) {
-      nir_variable *var = (nir_variable *)entry->key;
-      unsigned range = (glsl_type_is_array(var->type)) ? glsl_get_aoa_size(var->type) : 1;
-      if (tex->sampler_index >= var->data.binding &&
-          tex->sampler_index < var->data.binding  + range)  {
-         _mesa_set_add(live, entry->key);
-         /* sampler is live, no need to check again */
-         _mesa_set_remove(samplers, entry);
-         break;
-      }
-   }
-}
-
-static void
 add_var_use_shader(nir_shader *shader, struct set *live, nir_variable_mode modes)
 {
-   struct set *samplers = NULL;
-
-   if (modes & nir_var_uniform) {
-      samplers = _mesa_pointer_set_create(NULL);
-      nir_foreach_variable(var, &shader->uniforms) {
-         const struct glsl_type *type = glsl_without_array(var->type);
-         if (glsl_type_is_sampler(type))
-            _mesa_set_add(samplers, var);
-      }
-   }
-
    nir_foreach_function(function, shader) {
       if (function->impl) {
          nir_foreach_block(block, function->impl) {
             nir_foreach_instr(instr, block) {
                if (instr->type == nir_instr_type_deref)
                   add_var_use_deref(nir_instr_as_deref(instr), live);
-               if (modes & nir_var_uniform &&
-                   instr->type == nir_instr_type_tex &&
-                   samplers->size > 0)
-                  add_var_use_texture_sampler(nir_instr_as_tex(instr), samplers, live);
             }
          }
       }
    }
-
-   _mesa_set_destroy(samplers, NULL);
 }
 
 static void
