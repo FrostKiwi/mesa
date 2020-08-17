@@ -178,6 +178,7 @@ lower_mulh(ibc_builder *b, ibc_alu_instr *alu)
 bool
 ibc_lower_integer_multiplication(ibc_shader *shader)
 {
+   const struct gen_device_info *devinfo = shader->devinfo;
    bool progress = false;
 
    ibc_builder b;
@@ -195,7 +196,8 @@ ibc_lower_integer_multiplication(ibc_shader *shader)
 
          if (ibc_type_bit_size(alu->dest.type) == 64) {
             assert(!"unimplemented");
-         } else if (ibc_type_bit_size(alu->src[0].ref.type) == 32 &&
+         } else if (!devinfo->has_integer_dword_mul &&
+                    ibc_type_bit_size(alu->src[0].ref.type) == 32 &&
                     ibc_type_bit_size(alu->src[1].ref.type) == 32) {
             progress |= lower_mul_dword(&b, alu);
          }
