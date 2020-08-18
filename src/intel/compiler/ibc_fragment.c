@@ -746,6 +746,13 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_is_helper_invocation:
+      /* Unlike the regular gl_HelperInvocation, that is defined at dispatch,
+       * the helperInvocationEXT() (aka SpvOpIsHelperInvocationEXT) takes into
+       * consideration demoted invocations.  Use nti_fs->live_pix.
+       */
+      dest = ibc_NOT(b, IBC_TYPE_FLAG, nti_fs->live_pix);
+      break;
    default:
       return false;
    }
