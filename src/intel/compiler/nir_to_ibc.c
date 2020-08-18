@@ -757,7 +757,8 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
       }
    }
 
-   if (ntex->op == nir_texop_txf_ms &&
+   if ((ntex->op == nir_texop_txf_ms ||
+        ntex->op == nir_texop_samples_identical) &&
        srcs[IBC_TEX_SRC_MCS].ref.file == IBC_FILE_NONE) {
       ibc_intrinsic_src mcs_srcs[IBC_TEX_NUM_SRCS] = {
          [IBC_TEX_SRC_SURFACE_BTI] = srcs[IBC_TEX_SRC_SURFACE_BTI],
@@ -825,6 +826,9 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
    case nir_texop_texture_samples:
       op = IBC_INTRINSIC_OP_SAMPLEINFO;
       break;
+   case nir_texop_samples_identical:
+      /* handled below without an intrinsic */
+      break;
    default:
       unreachable("unknown texture op");
    }
@@ -840,15 +844,34 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
       num_dest_comps = util_last_bit(write_mask);
    }
 
-   const enum ibc_type dest_type = ibc_type_for_nir(ntex->dest_type) |
-                                   nir_dest_bit_size(ntex->dest);
-   ibc_ref dest =
-      ibc_build_ssa_intrinsic(b, op, dest_type, num_dest_comps,
-                              srcs, IBC_TEX_NUM_SRCS);
+   ibc_ref dest;
+   if (ntex->op == nir_texop_samples_identical) {
+      /* If mcs is an immediate value, it means there is no MCS.  In that case
+       * just return false.
+       */
+      if (srcs[IBC_TEX_SRC_MCS].ref.file == IBC_FILE_IMM) {
+         dest = ibc_imm_ud(0u);
+      } else if (srcs[IBC_TEX_SRC_MCS].num_comps == 2) {
+         dest = ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_Z,
+                        ibc_OR(b, IBC_TYPE_UD,
+                               ibc_comp_ref(srcs[IBC_TEX_SRC_MCS].ref, 0),
+                               ibc_comp_ref(srcs[IBC_TEX_SRC_MCS].ref, 1)),
+                        ibc_imm_ud(0u));
+      } else {
+         dest = ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_Z,
+                        srcs[IBC_TEX_SRC_MCS].ref, ibc_imm_ud(0u));
+      }
+   } else {
+      const enum ibc_type dest_type = ibc_type_for_nir(ntex->dest_type) |
+                                      nir_dest_bit_size(ntex->dest);
 
-   if (ntex->op == nir_texop_query_levels) {
-      /* # levels is in .w */
-      dest.logical.comp = 3;
+      dest = ibc_build_ssa_intrinsic(b, op, dest_type, num_dest_comps,
+                                     srcs, IBC_TEX_NUM_SRCS);
+
+      if (ntex->op == nir_texop_query_levels) {
+         /* # levels is in .w */
+         dest.logical.comp = 3;
+      }
    }
 
    ibc_write_nir_dest(nti, &ntex->dest, dest);
