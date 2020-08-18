@@ -512,7 +512,8 @@ validate_deref_instr(nir_deref_instr *instr, validate_state *state)
          validate_assert(state, instr->mode == nir_var_mem_ubo ||
                                 instr->mode == nir_var_mem_ssbo ||
                                 instr->mode == nir_var_mem_shared ||
-                                instr->mode == nir_var_mem_global);
+                                instr->mode == nir_var_mem_global ||
+                                instr->mode == nir_var_mem_constant);
       }
    }
 }
@@ -1345,7 +1346,8 @@ nir_validate_shader(nir_shader *shader, const char *when)
    nir_foreach_variable(var, &shader->uniforms) {
       validate_var_decl(var, nir_var_uniform |
                              nir_var_mem_ubo |
-                             nir_var_mem_ssbo,
+                             nir_var_mem_ssbo |
+                             nir_var_mem_constant,
                         &state);
    }
 
