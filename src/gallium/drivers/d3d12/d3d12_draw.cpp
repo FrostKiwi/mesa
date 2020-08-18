@@ -449,7 +449,6 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       if (ctx->gfx_pipeline_state.stages[i] != shader) {
          ctx->gfx_pipeline_state.stages[i] = shader;
          ctx->state_dirty |= D3D12_DIRTY_SHADER;
-         ctx->shader_dirty[i] |= D3D12_SHADER_DIRTY_ALL;
       }
    }
 
@@ -501,6 +500,8 @@ d3d12_draw_vbo(struct pipe_context *pctx,
       if (ctx->gfx_pipeline_state.root_signature != root_signature) {
          ctx->gfx_pipeline_state.root_signature = root_signature;
          ctx->state_dirty |= D3D12_DIRTY_ROOT_SIGNATURE;
+         for (int i = 0; i < D3D12_GFX_SHADER_STAGES; ++i)
+            ctx->shader_dirty[i] |= D3D12_SHADER_DIRTY_ALL;
       }
    }
 
