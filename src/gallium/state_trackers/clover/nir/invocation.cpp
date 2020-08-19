@@ -105,11 +105,13 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
    if (dev.address_bits() == 32u) {
       spirv_options.shared_addr_format = nir_address_format_32bit_offset;
       spirv_options.global_addr_format = nir_address_format_32bit_global;
-      spirv_options.temp_addr_format = nir_address_format_32bit_global;
+      spirv_options.temp_addr_format = nir_address_format_32bit_offset;
+      spirv_options.constant_addr_format = nir_address_format_32bit_global;
    } else {
       spirv_options.shared_addr_format = nir_address_format_32bit_offset_as_64bit;
       spirv_options.global_addr_format = nir_address_format_64bit_global;
-      spirv_options.temp_addr_format = nir_address_format_64bit_global;
+      spirv_options.temp_addr_format = nir_address_format_32bit_offset_as_64bit;
+      spirv_options.constant_addr_format = nir_address_format_64bit_global;
    }
    spirv_options.caps.address = true;
    spirv_options.caps.float64 = true;
@@ -117,7 +119,6 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
    spirv_options.caps.int16 = true;
    spirv_options.caps.int64 = true;
    spirv_options.caps.kernel = true;
-   spirv_options.constant_as_global = true;
    spirv_options.clc_shader = dev.clc_nir;
    spirv_options.mangle = clover_mangle;
 
@@ -185,6 +186,8 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
       NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_shader_in,
                  nir_address_format_32bit_offset);
 
+      NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_constant,
+                 spirv_options.constant_addr_format);
       NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_shared,
                  spirv_options.shared_addr_format);
       NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_global,
