@@ -177,6 +177,9 @@ nir_remove_dead_variables(nir_shader *shader, nir_variable_mode modes)
    if (modes & nir_var_mem_ubo)
       progress = remove_dead_vars(&shader->uniforms, live, nir_var_mem_ubo) || progress;
 
+   if (modes & nir_var_mem_constant)
+      progress = remove_dead_vars(&shader->uniforms, live, nir_var_mem_constant) || progress;
+
    if (modes & nir_var_shader_in)
       progress = remove_dead_vars(&shader->inputs, live, nir_var_shader_in) || progress;
 

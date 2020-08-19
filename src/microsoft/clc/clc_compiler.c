@@ -584,9 +584,8 @@ clc_context_new(const struct clc_logger *logger)
 
    const struct spirv_to_nir_options libclc_spirv_options = {
       .environment = NIR_SPIRV_OPENCL,
-      .constant_as_global = false,
       .create_library = true,
-      .ubo_addr_format = nir_address_format_32bit_index_offset_pack64,
+      .constant_addr_format = nir_address_format_32bit_index_offset_pack64,
       .global_addr_format = nir_address_format_32bit_index_offset_pack64,
       .shared_addr_format = nir_address_format_32bit_offset_as_64bit,
       .temp_addr_format = nir_address_format_32bit_offset_as_64bit,
@@ -742,7 +741,7 @@ add_work_properties_var(struct clc_dxil_object *dxil,
 }
 
 static void
-clc_lower_ubo_to_ssbo(nir_shader *nir,
+clc_lower_constant_to_ssbo(nir_shader *nir,
                       const struct clc_kernel_info *kerninfo, unsigned *uav_id)
 {
    /* First mark constant inputs as global inputs. */
@@ -755,7 +754,7 @@ clc_lower_ubo_to_ssbo(nir_shader *nir,
 
    /* Update UBO vars and assign them a binding. */
    nir_foreach_variable(var, &nir->uniforms) {
-      if (var->data.mode == nir_var_mem_ubo) {
+      if (var->data.mode == nir_var_mem_constant) {
          var->data.mode = nir_var_mem_ssbo;
          var->data.binding = (*uav_id)++;
       }
@@ -780,7 +779,7 @@ clc_lower_ubo_to_ssbo(nir_shader *nir,
 
             nir_deref_instr *deref = nir_instr_as_deref(instr);
 
-            if (deref->mode != nir_var_mem_ubo)
+            if (deref->mode != nir_var_mem_constant)
                continue;
 
             deref->mode = nir_var_mem_ssbo;
@@ -1067,9 +1066,8 @@ clc_to_dxil(struct clc_context *ctx,
 
    const struct spirv_to_nir_options spirv_options = {
       .environment = NIR_SPIRV_OPENCL,
-      .constant_as_global = false,
       .clc_shader = ctx->libclc_nir,
-      .ubo_addr_format = nir_address_format_32bit_index_offset_pack64,
+      .constant_addr_format = nir_address_format_32bit_index_offset_pack64,
       .global_addr_format = nir_address_format_32bit_index_offset_pack64,
       .shared_addr_format = nir_address_format_32bit_offset_as_64bit,
       .temp_addr_format = nir_address_format_32bit_offset_as_64bit,
@@ -1186,7 +1184,7 @@ clc_to_dxil(struct clc_context *ctx,
 
    // Before removing dead uniforms, dedupe constant samplers to make more dead uniforms
    NIR_PASS_V(nir, clc_nir_dedupe_const_samplers);
-   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform | nir_var_mem_ubo);
+   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_uniform | nir_var_mem_ubo | nir_var_mem_constant);
 
    // Assign bindings for constant samplers
    nir_foreach_variable_safe(var, &nir->uniforms) {
@@ -1238,7 +1236,7 @@ clc_to_dxil(struct clc_context *ctx,
               int_sampler_states, NULL, 14.0f);
 
    NIR_PASS_V(nir, dxil_nir_lower_ubo_to_temp);
-   NIR_PASS_V(nir, clc_lower_ubo_to_ssbo, dxil->kernel, &uav_id);
+   NIR_PASS_V(nir, clc_lower_constant_to_ssbo, dxil->kernel, &uav_id);
    NIR_PASS_V(nir, clc_lower_global_to_ssbo);
    NIR_PASS_V(nir, dxil_nir_lower_deref_ssbo);
 
@@ -1252,10 +1250,8 @@ clc_to_dxil(struct clc_context *ctx,
    assert(nir->info.cs.ptr_size == 64);
    NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_ssbo,
               nir_address_format_32bit_index_offset_pack64);
-   NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_shader_in,
-              nir_address_format_32bit_global);
    NIR_PASS_V(nir, nir_lower_explicit_io,
-              nir_var_mem_shared | nir_var_function_temp,
+              nir_var_mem_shared | nir_var_function_temp | nir_var_shader_in,
               nir_address_format_32bit_offset_as_64bit);
 
    NIR_PASS_V(nir, nir_lower_system_values);

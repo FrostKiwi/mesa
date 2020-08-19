@@ -616,7 +616,7 @@ ubo_to_temp_patch_deref_mode(nir_deref_instr *deref)
 static void
 ubo_to_temp_update_entry(nir_deref_instr *deref, struct hash_entry *he)
 {
-   assert(deref->mode == nir_var_mem_ubo);
+   assert(deref->mode == nir_var_mem_constant);
    assert(deref->dest.is_ssa);
    assert(he->data);
 
@@ -656,7 +656,7 @@ dxil_nir_lower_ubo_to_temp(nir_shader *nir)
                continue;
 
             nir_deref_instr *deref = nir_instr_as_deref(instr);
-            if (deref->mode != nir_var_mem_ubo ||
+            if (deref->mode != nir_var_mem_constant ||
                 deref->deref_type != nir_deref_type_var)
                   continue;
 
@@ -709,7 +709,7 @@ dxil_nir_lower_ubo_to_temp(nir_shader *nir)
                continue;
 
             nir_deref_instr *deref = nir_instr_as_deref(instr);
-            if (deref->mode == nir_var_mem_ubo &&
+            if (deref->mode == nir_var_mem_constant &&
                 deref->deref_type == nir_deref_type_var &&
                 deref->var->data.mode == nir_var_shader_temp)
                ubo_to_temp_patch_deref_mode(deref);
