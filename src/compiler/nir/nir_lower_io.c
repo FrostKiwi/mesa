@@ -1695,7 +1695,8 @@ nir_lower_mem_constant_vars(nir_shader *shader,
    unsigned old_constant_data_size = shader->constant_data_size;
    if (!lower_vars_to_explicit(shader, &shader->uniforms,
                                nir_var_mem_constant, type_info)) {
-      nir_shader_preserve_all_metadata(shader);
+      nir_foreach_function(func, shader)
+         nir_metadata_preserve(func->impl, nir_metadata_all);
       return false;
    }
 
