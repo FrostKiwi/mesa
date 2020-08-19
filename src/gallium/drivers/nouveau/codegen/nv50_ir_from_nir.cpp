@@ -3003,7 +3003,7 @@ Converter::convert(enum gl_access_qualifier access)
 CacheMode
 Converter::getCacheModeFromVar(const nir_variable *var)
 {
-   return convert(var->data.access);
+   return convert((gl_access_qualifier)var->data.access);
 }
 
 bool
