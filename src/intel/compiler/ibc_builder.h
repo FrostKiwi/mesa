@@ -105,8 +105,6 @@ ibc_builder_push_group(ibc_builder *b,
    assert(simd_group + simd_width <= b->simd_width);
    if (b->we_all)
       assert(simd_group == 0);
-   else
-      assert(simd_width >= 8);
 
    _ibc_builder_push(b);
    b->simd_group += simd_group;
