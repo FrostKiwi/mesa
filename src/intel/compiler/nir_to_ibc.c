@@ -120,6 +120,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
              const nir_alu_instr *instr)
 {
    ibc_builder *b = &nti->b;
+   const struct gen_device_info *devinfo = b->shader->devinfo;
 
    ibc_ref src[4];
    for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
@@ -350,21 +351,49 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    }
 
    case nir_op_fddy_fine: {
-      /* First, we have to move it to a GRF so we can stride */
-      assert(src[0].type == IBC_TYPE_F);
-      const unsigned grf_size = b->simd_width * ibc_type_byte_size(src[0].type);
-      ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size, 32);
-      ibc_MOV_to(b, ibc_typed_ref(grf, src[0].type), src[0]);
+      if (devinfo->gen >= 11 ||
+          (devinfo->is_broadwell && src[0].type == IBC_TYPE_HF)) {
+         assert(src[0].type == dest_type);
+         unsigned type_size = ibc_type_byte_size(dest_type);
 
-      /* This requires an ALIGN16 instruction with a swizzle so we punt to an
-       * intrinsic which gets turned into the ALIGN16 in ibc_to_binary.
-       */
-      ibc_intrinsic_src intrin_src = {
-         .ref = ibc_typed_ref(grf, src[0].type),
-         .num_comps = 1,
-      };
-      dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_ALIGN16_DDX_FINE,
-                                     src[0].type, 1, &intrin_src, 1);
+         ibc_reg *dst_grf =
+            ibc_hw_grf_reg_create(b->shader, b->simd_width * type_size, 32);
+         ibc_ref temp = ibc_typed_ref(dst_grf, dest_type);
+
+         ibc_reg *src_grf =
+            ibc_hw_grf_reg_create(b->shader, b->simd_width * type_size, 32);
+         ibc_ref val = ibc_typed_ref(src_grf, src[0].type);
+         ibc_MOV_to(b, val, src[0]);
+
+         for (unsigned g = 0; g < b->simd_width; g += 4) {
+            ibc_builder_push_group(b, g, 4);
+            ibc_ref diff =
+               ibc_ADD(b, dest_type,
+                       ibc_NEG(b, dest_type,
+                               ibc_restride(b, val, dest_type, g, 0, 2, 1)),
+                       ibc_restride(b, val, dest_type, g + 2, 0, 2, 1));
+            ibc_MOV_to(b, ibc_byte_offset(temp, g * type_size), diff);
+            ibc_builder_pop(b);
+         }
+         dest = ibc_MOV(b, dest_type, temp);
+      } else {
+         /* First, we have to move it to a GRF so we can stride */
+         assert(src[0].type == IBC_TYPE_F);
+         const unsigned grf_size =
+            b->simd_width * ibc_type_byte_size(src[0].type);
+         ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size, 32);
+         ibc_MOV_to(b, ibc_typed_ref(grf, src[0].type), src[0]);
+
+         /* This requires an ALIGN16 instruction with a swizzle so we punt to
+          * an intrinsic which gets turned into the ALIGN16 in ibc_to_binary.
+          */
+         ibc_intrinsic_src intrin_src = {
+            .ref = ibc_typed_ref(grf, src[0].type),
+            .num_comps = 1,
+         };
+         dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_ALIGN16_DDX_FINE,
+                                        src[0].type, 1, &intrin_src, 1);
+      }
       break;
    }
 
