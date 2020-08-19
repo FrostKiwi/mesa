@@ -626,6 +626,13 @@ ibc_ref_byte_offset(ibc_ref *ref, uint8_t byte)
    unreachable("Unhandled register file");
 }
 
+static inline ibc_ref
+ibc_byte_offset(ibc_ref ref, uint8_t byte)
+{
+   ibc_ref_byte_offset(&ref, byte);
+   return ref;
+}
+
 static inline void
 ibc_ref_simd_slice(ibc_ref *ref, uint8_t rel_simd_group)
 {
