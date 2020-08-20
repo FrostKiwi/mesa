@@ -531,15 +531,21 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
    memset(key, 0, sizeof(d3d12_shader_key));
    key->stage = stage;
 
-   /* We require as inputs what the previous stage has written,
-    * except certain system values */
    if (prev) {
+      /* We require as inputs what the previous stage has written,
+       * except certain system values */
       if (stage == PIPE_SHADER_FRAGMENT || stage == PIPE_SHADER_GEOMETRY)
          system_out_values |= VARYING_BIT_POS;
       if (stage == PIPE_SHADER_FRAGMENT)
          system_out_values |= VARYING_BIT_PSIZ;
       key->required_varying_inputs = prev->current->nir->info.outputs_written & ~system_out_values;
       key->prev_varying_outputs = prev->current->nir->info.outputs_written;
+
+      /* Set the provoking vertex based on the previous shader output. Only set the
+       * key value if the driver actually supports changing the provoking vertex though */
+      if (stage == PIPE_SHADER_FRAGMENT && sel_ctx->ctx->gfx_pipeline_state.rast &&
+          d3d12_screen(sel_ctx->ctx->base.screen)->have_load_at_vertex)
+         key->fs.provoking_vertex = get_provoking_vertex(sel_ctx, prev);
    }
 
    /* We require as outputs what the next stage reads,
@@ -609,11 +615,6 @@ d3d12_fill_shader_key(struct d3d12_selection_context *sel_ctx,
                 sel_ctx->ctx->gfx_pipeline_state.ves->num_elements * sizeof(enum pipe_format));
       }
    }
-
-   /* Only set the key value if the driver actually supports changing the provoking vertex */
-   if (stage == PIPE_SHADER_FRAGMENT && sel_ctx->ctx->gfx_pipeline_state.rast &&
-       d3d12_screen(sel_ctx->ctx->base.screen)->have_load_at_vertex)
-      key->fs.provoking_vertex = get_provoking_vertex(sel_ctx, prev);
 }
 
 static void
