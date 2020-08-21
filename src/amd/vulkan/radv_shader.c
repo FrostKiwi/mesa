@@ -456,6 +456,8 @@ radv_shader_compile_to_nir(struct radv_device *device,
 		NIR_PASS_V(nir, nir_propagate_invariant);
 
 		NIR_PASS_V(nir, nir_lower_system_values);
+		NIR_PASS_V(nir, nir_lower_compute_system_values);
+
 		NIR_PASS_V(nir, nir_lower_clip_cull_distance_arrays);
 		NIR_PASS_V(nir, radv_nir_lower_ycbcr_textures, layout);
 		if (device->instance->debug_flags & RADV_DEBUG_DISCARD_TO_DEMOTE)

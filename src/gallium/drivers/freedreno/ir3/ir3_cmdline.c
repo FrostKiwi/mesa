@@ -182,6 +182,8 @@ load_glsl(unsigned num_files, char* const* files, gl_shader_stage stage)
 			ir3_glsl_type_size);
 
 	NIR_PASS_V(nir, nir_lower_system_values);
+	NIR_PASS_V(nir, nir_lower_compute_system_values);
+
 	NIR_PASS_V(nir, nir_lower_frexp);
 	NIR_PASS_V(nir, nir_lower_io, nir_var_all, ir3_glsl_type_size, 0);
 	NIR_PASS_V(nir, gl_nir_lower_samplers, prog);
@@ -482,6 +484,7 @@ int main(int argc, char **argv)
 		/* TODO do this somewhere else */
 		nir_lower_int64(nir);
 		nir_lower_system_values(nir);
+		nir_lower_compute_system_values(nir);
 	} else if (num_files > 0) {
 		nir = load_glsl(num_files, filenames, stage);
 	} else {

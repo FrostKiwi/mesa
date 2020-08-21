@@ -193,6 +193,8 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
       NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_ubo, nir_address_format_32bit_index_offset);
 
       NIR_PASS_V(nir, nir_lower_system_values);
+      NIR_PASS_V(nir, nir_lower_compute_system_values);
+
       if (compiler_options->lower_int64_options)
          NIR_PASS_V(nir, nir_lower_int64);
 
