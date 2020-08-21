@@ -182,8 +182,32 @@ module clover::nir::spirv_to_nir(const module &mod, const device &dev,
       NIR_PASS_V(nir, nir_lower_vars_to_ssa);
       NIR_PASS_V(nir, nir_opt_dce);
 
-      /* use offsets for shader_in memory */
+      NIR_PASS_V(nir, nir_lower_system_values);
+      nir_lower_compute_system_values_options sysval_options = { 0 };
+      sysval_options.has_base_global_invocation_id = true;
+      NIR_PASS_V(nir, nir_lower_compute_system_values, &sysval_options);
+
+      auto args = sym.args;
+      NIR_PASS_V(nir, clover_lower_nir, args, dev.max_block_size().size());
+
+      // Calculate input offsets.
+      unsigned offset = 0;
+      nir_foreach_variable(var, &nir->uniforms) {
+         if (var->data.mode != nir_var_uniform)
+            continue;
+         offset = align(offset, glsl_get_cl_alignment(var->type));
+         var->data.driver_location = offset;
+         offset += glsl_get_cl_size(var->type);
+      }
+
+      NIR_PASS_V(nir, nir_lower_vars_to_explicit_types,
+                 nir_var_mem_shared | nir_var_function_temp,
+                 glsl_get_cl_type_size_align);
+
+      /* use offsets for kernel inputs (uniform) */
       NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_shader_in,
+                 nir->info.cs.ptr_size == 64 ?
+                 nir_address_format_32bit_offset_as_64bit :
                  nir_address_format_32bit_offset);
 
       NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_constant,
