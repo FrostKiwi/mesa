@@ -71,7 +71,6 @@ DEBUG_GET_ONCE_FLAGS_OPTION(debug_dxil, "DXIL_DEBUG", debug_options, 0)
 static const nir_shader_compiler_options
 nir_options = {
    .lower_negate = true,
-   .lower_inot = true,
    .lower_ffma = true,
    .lower_isign = true,
    .lower_fsign = true,
@@ -4179,6 +4178,7 @@ optimize_nir(struct nir_shader *s, const struct nir_to_dxil_options *opts)
       if (s->options->lower_int64_options)
          NIR_PASS(progress, s, nir_lower_int64);
       NIR_PASS(progress, s, nir_lower_alu);
+      NIR_PASS(progress, s, dxil_nir_lower_inot);
       NIR_PASS(progress, s, nir_opt_constant_folding);
       NIR_PASS(progress, s, nir_opt_undef);
       NIR_PASS(progress, s, nir_lower_undef_to_zero);

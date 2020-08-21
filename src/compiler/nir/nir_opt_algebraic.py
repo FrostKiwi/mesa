@@ -1775,7 +1775,6 @@ late_optimizations = [
    # differentiation, we have to use an fmul() here.
    (('fneg', a), ('fmul', a, -1.0), 'options->lower_negate'),
    (('ineg', a), ('isub', 0, a), 'options->lower_negate'),
-   (('inot', a), ('ixor', a, -1), 'options->lower_inot'),
    (('iabs', a), ('imax', a, ('ineg', a)), 'options->lower_iabs'),
 
    # These are duplicated from the main optimizations table.  The late
