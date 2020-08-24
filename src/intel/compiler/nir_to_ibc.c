@@ -234,6 +234,7 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_b2i8:
    case nir_op_b2i16:
    case nir_op_b2i32:
+   case nir_op_b2b32:
    case nir_op_b2i64:
    case nir_op_b2f16:
    case nir_op_b2f32:
