@@ -4326,7 +4326,7 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
 
    optimize_nir(s, opts);
 
-   NIR_PASS_V(s, nir_remove_dead_variables, nir_var_function_temp);
+   NIR_PASS_V(s, nir_remove_dead_variables, nir_var_function_temp | nir_var_shader_temp);
 
    if (!allocate_sysvalues(ctx, s))
       return false;

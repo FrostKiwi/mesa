@@ -1219,14 +1219,6 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS(has_printf, nir, clc_nir_lower_printf, uav_id);
    metadata->printf_uav_id = has_printf ? uav_id++ : -1;
 
-   // Needs to come before lower_explicit_io
-   struct clc_image_lower_context image_lower_context = { metadata, &srv_id, &uav_id };
-   NIR_PASS_V(nir, clc_lower_images, &image_lower_context);
-   NIR_PASS_V(nir, clc_lower_nonnormalized_samplers, int_sampler_states);
-   NIR_PASS_V(nir, nir_lower_samplers);
-   NIR_PASS_V(nir, dxil_lower_sample_to_txf_for_integer_tex,
-              int_sampler_states, NULL, 14.0f);
-
    // copy propagate to prepare for lower_explicit_io
    NIR_PASS_V(nir, nir_split_var_copies);
    NIR_PASS_V(nir, nir_opt_copy_prop_vars);
@@ -1236,10 +1228,20 @@ clc_to_dxil(struct clc_context *ctx,
    NIR_PASS_V(nir, nir_opt_dce);
    NIR_PASS_V(nir, split_unaligned_loads_stores);
 
+   // Needs to come before lower_explicit_io
+   struct clc_image_lower_context image_lower_context = { metadata, &srv_id, &uav_id };
+   NIR_PASS_V(nir, clc_lower_images, &image_lower_context);
+   NIR_PASS_V(nir, clc_lower_nonnormalized_samplers, int_sampler_states);
+   NIR_PASS_V(nir, nir_lower_samplers);
+   NIR_PASS_V(nir, dxil_lower_sample_to_txf_for_integer_tex,
+              int_sampler_states, NULL, 14.0f);
+
    NIR_PASS_V(nir, dxil_nir_lower_ubo_to_temp);
    NIR_PASS_V(nir, clc_lower_ubo_to_ssbo, dxil->kernel, &uav_id);
    NIR_PASS_V(nir, clc_lower_global_to_ssbo);
    NIR_PASS_V(nir, dxil_nir_lower_deref_ssbo);
+
+   NIR_PASS_V(nir, nir_remove_dead_variables, nir_var_mem_shared | nir_var_function_temp);
 
    assert(nir->scratch_size == 0);
    NIR_PASS_V(nir, nir_lower_vars_to_explicit_types,

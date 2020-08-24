@@ -537,6 +537,8 @@ clc_to_spirv(const struct clc_compile_args *args,
       "-cl-std=cl1.2",
       // The LLVM-SPIRV-Translator doesn't support memset with variable size
       "-fno-builtin-memset",
+      // LLVM's optimizations can produce code that the translator can't translate
+      "-O0",
    };
    // We assume there's appropriate defines for __OPENCL_VERSION__ and __IMAGE_SUPPORT__
    // being provided by the caller here.
