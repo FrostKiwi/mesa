@@ -3856,7 +3856,8 @@ static void sort_uniforms_by_binding_and_remove_structs(struct exec_list *unifor
 
    nir_foreach_variable_safe(var, uniforms) {
       exec_node_remove(&var->node);
-      if (!glsl_type_is_struct(var->type))
+      const struct glsl_type *type = glsl_without_array(var->type);
+      if (!glsl_type_is_struct(type))
          insert_sorted_by_binding(&new_list, var);
    }
    exec_list_move_nodes_to(&new_list, uniforms);
