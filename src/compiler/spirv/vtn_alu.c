@@ -546,10 +546,10 @@ round_int_to_float(struct vtn_builder *b, nir_rounding_mode round,
           round == nir_rounding_mode_rtne) {
          rets[i] = comp;
       } else if (src_type == nir_type_int) {
-         nir_ssa_def *sign = nir_i2b1(&b->nb, nir_ishr(&b->nb, src, nir_imm_int(&b->nb, src->bit_size - 1)));
-         nir_ssa_def *abs = nir_iabs(&b->nb, src);
+         nir_ssa_def *sign = nir_i2b1(&b->nb, nir_ishr(&b->nb, comp, nir_imm_int(&b->nb, comp->bit_size - 1)));
+         nir_ssa_def *abs = nir_iabs(&b->nb, comp);
          nir_ssa_def *positive_rounded = round_int_to_float(b, round, abs, nir_type_uint, dst_bit_size);
-         nir_ssa_def *max_positive = nir_imm_intN_t(&b->nb, (1ULL << (src->bit_size - 1)) - 1, src->bit_size);
+         nir_ssa_def *max_positive = nir_imm_intN_t(&b->nb, (1ULL << (comp->bit_size - 1)) - 1, comp->bit_size);
          switch (round) {
          case nir_rounding_mode_rtz:
             rets[i] = nir_bcsel(&b->nb, sign, nir_ineg(&b->nb, positive_rounded), positive_rounded);
@@ -570,20 +570,20 @@ round_int_to_float(struct vtn_builder *b, nir_rounding_mode round,
          }
       } else {
          nir_ssa_def *mantissa_bit_size = nir_imm_int(&b->nb, mantissa_bits);
-         nir_ssa_def *msb = nir_imax(&b->nb, nir_ufind_msb(&b->nb, src), mantissa_bit_size);
+         nir_ssa_def *msb = nir_imax(&b->nb, nir_ufind_msb(&b->nb, comp), mantissa_bit_size);
          nir_ssa_def *bits_to_lose = nir_isub(&b->nb, msb, mantissa_bit_size);
-         nir_ssa_def *one = nir_imm_intN_t(&b->nb, 1, src->bit_size);
+         nir_ssa_def *one = nir_imm_intN_t(&b->nb, 1, comp->bit_size);
          nir_ssa_def *adjust = nir_ishl(&b->nb, one, bits_to_lose);
          nir_ssa_def *mask = nir_inot(&b->nb, nir_isub(&b->nb, adjust, one));
-         nir_ssa_def *truncated = nir_iand(&b->nb, src, mask);
+         nir_ssa_def *truncated = nir_iand(&b->nb, comp, mask);
          switch (round) {
          case nir_rounding_mode_rtz:
          case nir_rounding_mode_rd:
             rets[i] = truncated;
             break;
          case nir_rounding_mode_ru: {
-            rets[i] = nir_bcsel(&b->nb, nir_ieq(&b->nb, src, truncated),
-                                src,
+            rets[i] = nir_bcsel(&b->nb, nir_ieq(&b->nb, comp, truncated),
+                                comp,
                                 nir_uadd_sat(&b->nb, truncated, adjust));
             break;
          }
