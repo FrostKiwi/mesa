@@ -274,16 +274,19 @@ public:
       }
    }
 
-   void parseOpDecorate(const spv_parsed_instruction_t *ins)
+   void applyDecoration(uint32_t id, const spv_parsed_instruction_t *ins)
    {
+      auto iter = decorationGroups.find(id);
+      if (iter != decorationGroups.end()) {
+         for (uint32_t entry : iter->second)
+            applyDecoration(entry, ins);
+         return;
+      }
+
       const spv_parsed_operand_t *op;
-      uint32_t id, decoration;
+      uint32_t decoration;
 
       assert(ins->num_operands >= 2);
-
-      op = &ins->operands[0];
-      assert(op->type == SPV_OPERAND_TYPE_ID);
-      id = ins->words[op->offset];
 
       op = &ins->operands[1];
       assert(op->type == SPV_OPERAND_TYPE_DECORATION);
@@ -302,10 +305,60 @@ public:
                case SpvDecorationRestrict:
                   arg.typeQualifier |= CLC_KERNEL_ARG_TYPE_RESTRICT;
                   break;
+               case SpvDecorationFuncParamAttr:
+                  op = &ins->operands[2];
+                  assert(op->type == SPV_OPERAND_TYPE_FUNCTION_PARAMETER_ATTRIBUTE);
+                  switch (ins->words[op->offset]) {
+                  case SpvFunctionParameterAttributeNoAlias:
+                     arg.typeQualifier |= CLC_KERNEL_ARG_TYPE_RESTRICT;
+                     break;
+                  case SpvFunctionParameterAttributeNoWrite:
+                     arg.typeQualifier |= CLC_KERNEL_ARG_TYPE_CONST;
+                     break;
+                  }
+                  break;
                }
             }
 
          }
+      }
+   }
+
+   void parseOpDecorate(const spv_parsed_instruction_t *ins)
+   {
+      const spv_parsed_operand_t *op;
+      uint32_t id, decoration;
+
+      assert(ins->num_operands >= 2);
+
+      op = &ins->operands[0];
+      assert(op->type == SPV_OPERAND_TYPE_ID);
+      id = ins->words[op->offset];
+
+      applyDecoration(id, ins);
+   }
+
+   void parseOpGroupDecorate(const spv_parsed_instruction_t *ins)
+   {
+      assert(ins->num_operands >= 2);
+
+      const spv_parsed_operand_t *op = &ins->operands[0];
+      assert(op->type == SPV_OPERAND_TYPE_ID);
+      uint32_t groupId = ins->words[op->offset];
+
+      auto lowerBound = decorationGroups.lower_bound(groupId);
+      if (lowerBound != decorationGroups.end() &&
+          lowerBound->first == groupId)
+         // Group already filled out
+         return;
+
+      auto iter = decorationGroups.emplace_hint(lowerBound, groupId, std::vector<uint32_t>{});
+      auto& vec = iter->second;
+      vec.reserve(ins->num_operands - 1);
+      for (uint32_t i = 1; i < ins->num_operands; ++i) {
+         op = &ins->operands[i];
+         assert(op->type == SPV_OPERAND_TYPE_ID);
+         vec.push_back(ins->words[op->offset]);
       }
    }
 
@@ -394,6 +447,9 @@ public:
       case SpvOpDecorate:
          parser->parseOpDecorate(ins);
          break;
+      case SpvOpGroupDecorate:
+         parser->parseOpGroupDecorate(ins);
+         break;
       case SpvOpExecutionMode:
          parser->parseExecutionMode(ins);
          break;
@@ -439,6 +495,7 @@ public:
    }
 
    std::vector<SPIRVKernelInfo> kernels;
+   std::map<uint32_t, std::vector<uint32_t>> decorationGroups;
    SPIRVKernelInfo *curKernel;
    spv_context ctx;
 };
