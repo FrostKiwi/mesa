@@ -773,12 +773,12 @@ add_resource(struct ntd_context *ctx, enum dxil_resource_type type,
 }
 
 static bool
-emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned count)
+emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned binding, unsigned count)
 {
    assert(ctx->num_srv_arrays < ARRAY_SIZE(ctx->srv_metadata_nodes));
 
    unsigned id = ctx->num_srv_arrays;
-   resource_array_layout layout = {id, var->data.binding, count};
+   resource_array_layout layout = {id, binding, count};
 
    enum dxil_component_type comp_type = dxil_get_comp_type(var->type);
    enum dxil_resource_kind res_kind = dxil_get_resource_kind(var->type);
@@ -793,13 +793,13 @@ emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned count)
    add_resource(ctx, DXIL_RES_SRV_TYPED, &layout);
 
    for (unsigned i = 0; i < count; ++i) {
-      int idx = var->data.binding + i;
       const struct dxil_value *handle =
          emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SRV,
-                                            id, idx, false);
+                                            id, binding + i, false);
       if (!handle)
          return false;
 
+      int idx = var->data.binding + i;
       uint64_t bit = 1ull << (idx % 64);
       assert(!(ctx->srvs_used[idx / 64] & bit));
       ctx->srv_handles[idx] = handle;
@@ -1077,12 +1077,12 @@ emit_ubo_var(struct ntd_context *ctx, nir_variable *var)
 }
 
 static bool
-emit_sampler(struct ntd_context *ctx, nir_variable *var, unsigned count)
+emit_sampler(struct ntd_context *ctx, nir_variable *var, unsigned binding, unsigned count)
 {
    assert(ctx->num_sampler_arrays < ARRAY_SIZE(ctx->sampler_metadata_nodes));
 
    unsigned id = ctx->num_sampler_arrays;
-   resource_array_layout layout = {id, var->data.binding, count};
+   resource_array_layout layout = {id, binding, count};
    const struct dxil_type *int32_type = dxil_module_get_int_type(&ctx->mod, 32);
    const struct dxil_type *sampler_type = dxil_module_get_struct_type(&ctx->mod, "struct.SamplerState", &int32_type, 1);
    const struct dxil_mdnode *sampler_meta = emit_sampler_metadata(&ctx->mod, sampler_type, var, &layout);
@@ -1094,13 +1094,13 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var, unsigned count)
    add_resource(ctx, DXIL_RES_SAMPLER, &layout);
 
    for (unsigned i = 0; i < count; ++i) {
-      int idx = var->data.binding + i;
       const struct dxil_value *handle =
          emit_createhandle_call_const_index(ctx, DXIL_RESOURCE_CLASS_SAMPLER,
-                                            id, idx, false);
+                                            id, binding + i, false);
       if (!handle)
          return false;
 
+      unsigned idx = var->data.binding + i;
       uint64_t bit = 1ull << idx;
       assert(!(ctx->samplers_used & bit));
       ctx->sampler_handles[idx] = handle;
@@ -3980,6 +3980,8 @@ shader_has_shared_ops(struct nir_shader *s)
 static bool
 emit_module(struct ntd_context *ctx, nir_shader *s)
 {
+   unsigned binding;
+
    /* The validator forces us to emit resources in a specific order:
     * CBVs, Samplers, SRVs, UAVs. While we are at it also remove
     * stale struct uniforms, they are lowered but might not have been removed */
@@ -3990,22 +3992,26 @@ emit_module(struct ntd_context *ctx, nir_shader *s)
       return false;
 
    /* Samplers */
+   binding = 0;
    nir_foreach_variable(var, &s->uniforms) {
       unsigned count = glsl_type_get_sampler_count(var->type);
       if (var->data.mode == nir_var_uniform && count &&
           glsl_get_sampler_result_type(glsl_without_array(var->type)) == GLSL_TYPE_VOID) {
-            if (!emit_sampler(ctx, var, count))
-               return false;
+         if (!emit_sampler(ctx, var, binding, count))
+            return false;
+         binding += count;
       }
    }
 
    /* SRVs */
+   binding = 0;
    nir_foreach_variable(var, &s->uniforms) {
       unsigned count = glsl_type_get_sampler_count(var->type);
       if (var->data.mode == nir_var_uniform && count &&
           glsl_get_sampler_result_type(glsl_without_array(var->type)) != GLSL_TYPE_VOID) {
-         if (!emit_srv(ctx, var, count))
+         if (!emit_srv(ctx, var, binding, count))
             return false;
+         binding += count;
       }
    }
 
