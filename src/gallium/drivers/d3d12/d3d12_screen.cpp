@@ -592,7 +592,8 @@ d3d12_is_format_supported(struct pipe_screen *pscreen,
          ms_info.SampleCount = sample_count;
          if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
                                                      &ms_info,
-                                                     sizeof(ms_info))))
+                                                     sizeof(ms_info))) ||
+             !ms_info.NumQualityLevels)
             return false;
       }
    }
