@@ -1575,15 +1575,17 @@ d3d12_clear(struct pipe_context *pctx,
 
    if (buffers & PIPE_CLEAR_COLOR) {
       for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
-         struct pipe_surface *psurf = ctx->fb.cbufs[i];
-         struct d3d12_surface *surf = d3d12_surface(psurf);
-         d3d12_transition_resource_state(ctx, d3d12_resource(psurf->texture),
-                                         D3D12_RESOURCE_STATE_RENDER_TARGET,
-                                         SubresourceTransitionFlags_None);
-         d3d12_apply_resource_states(ctx, false);
-         ctx->cmdlist->ClearRenderTargetView(surf->desc_handle.cpu_handle,
-                                             color->f, 0, NULL);
-         d3d12_batch_reference_surface_texture(d3d12_current_batch(ctx), surf);
+         if (buffers & (PIPE_CLEAR_COLOR0 << i)) {
+            struct pipe_surface *psurf = ctx->fb.cbufs[i];
+            struct d3d12_surface *surf = d3d12_surface(psurf);
+            d3d12_transition_resource_state(ctx, d3d12_resource(psurf->texture),
+                                            D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                            SubresourceTransitionFlags_None);
+            d3d12_apply_resource_states(ctx, false);
+            ctx->cmdlist->ClearRenderTargetView(surf->desc_handle.cpu_handle,
+                                                color->f, 0, NULL);
+            d3d12_batch_reference_surface_texture(d3d12_current_batch(ctx), surf);
+         }
       }
    }
 
