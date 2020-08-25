@@ -1254,7 +1254,7 @@ d3d12_set_framebuffer_state(struct pipe_context *pctx,
          ctx->gfx_pipeline_state.rtv_formats[i] = d3d12_get_format(state->cbufs[i]->format);
          samples = MAX2(samples, state->cbufs[i]->texture->nr_samples);
       } else
-         ctx->gfx_pipeline_state.rtv_formats[i] = DXGI_FORMAT_R8G8B8A8_UNORM;
+         ctx->gfx_pipeline_state.rtv_formats[i] = DXGI_FORMAT_UNKNOWN;
    }
 
    if (state->zsbuf) {
