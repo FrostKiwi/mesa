@@ -477,6 +477,7 @@ clc_lower_64bit_semantics(nir_shader *nir)
                case nir_intrinsic_load_work_group_id:
                case nir_intrinsic_load_work_group_id_zero_base:
                case nir_intrinsic_load_base_work_group_id:
+               case nir_intrinsic_load_num_work_groups:
                   break;
                default:
                   continue;
