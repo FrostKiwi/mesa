@@ -437,6 +437,17 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_op_usub_sat: {
+      ibc_ref a_gt_b =
+         ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_G, src[0], src[1]);
+      ibc_ref a_minus_b =
+         ibc_ADD(b, dest_type, src[0], ibc_NEG(b, dest_type, src[1]));
+
+      /* a > b ? a - b : 0 */
+      dest = ibc_SEL(b, dest_type, a_gt_b, a_minus_b, ibc_imm_zero(dest_type));
+      break;
+   }
+
    case nir_op_irhadd:
    case nir_op_urhadd:
       assert(ibc_type_bit_size(dest_type) < 64);
