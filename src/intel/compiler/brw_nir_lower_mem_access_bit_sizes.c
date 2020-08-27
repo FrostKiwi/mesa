@@ -323,3 +323,52 @@ brw_nir_lower_mem_access_bit_sizes(nir_shader *shader,
 
    return progress;
 }
+
+bool
+ibc_nir_lower_64bit_ubo_loads(nir_shader *shader,
+                              const struct gen_device_info *devinfo)
+{
+   bool progress = false;
+
+   nir_foreach_function(func, shader) {
+      if (!func->impl)
+         continue;
+
+      nir_builder b;
+      nir_builder_init(&b, func->impl);
+
+      bool impl_progress = false;
+
+      nir_foreach_block(block, func->impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
+
+            b.cursor = nir_after_instr(instr);
+
+            nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+            switch (intrin->intrinsic) {
+            case nir_intrinsic_load_ubo:
+               if (!nir_src_is_const(intrin->src[1]) &&
+                   nir_dest_bit_size(intrin->dest) == 64 &&
+                   lower_mem_load_bit_size(&b, intrin, devinfo))
+                  impl_progress = true;
+               break;
+            default:
+               break;
+            }
+         }
+      }
+
+      if (impl_progress) {
+         nir_metadata_preserve(func->impl, nir_metadata_block_index |
+                                           nir_metadata_dominance);
+      } else {
+         nir_metadata_preserve(func->impl, nir_metadata_all);
+      }
+
+      progress |= impl_progress;
+   }
+
+   return progress;
+}
