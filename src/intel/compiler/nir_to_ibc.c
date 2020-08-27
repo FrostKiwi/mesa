@@ -1307,8 +1307,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_load_ubo:
-      if (nir_src_is_const(instr->src[0]) && nir_src_is_const(instr->src[1])) {
-         const unsigned bti = nir_src_as_uint(instr->src[0]);
+      if (nir_src_is_const(instr->src[1])) {
          const uint64_t offset_B = nir_src_as_uint(instr->src[1]);
          const unsigned comp_size_B = nir_dest_bit_size(instr->dest) / 8;
 
@@ -1317,31 +1316,36 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
             const uint64_t comp_offset_B = offset_B + c * comp_size_B;
 
             /* First, try to look it up in one of the push ranges */
-            for (unsigned i = 0; i < ARRAY_SIZE(nti->payload->ubo_push); i++) {
-               ibc_ref block = nti->payload->ubo_push[i];
-               if (block.file == IBC_FILE_NONE)
-                  continue;
+            if (nir_src_is_const(instr->src[0])) {
+               const unsigned bti = nir_src_as_uint(instr->src[0]);
+               for (unsigned i = 0;
+                    i < ARRAY_SIZE(nti->payload->ubo_push); i++) {
+                  ibc_ref block = nti->payload->ubo_push[i];
+                  if (block.file == IBC_FILE_NONE)
+                     continue;
 
-               ibc_intrinsic_instr *l =
-                  ibc_instr_as_intrinsic(ibc_reg_ssa_instr(block.reg));
-               assert(l->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO);
-               assert(l->instr.simd_width == 1);
+                  ibc_intrinsic_instr *l =
+                     ibc_instr_as_intrinsic(ibc_reg_ssa_instr(block.reg));
+                  assert(l->op == IBC_INTRINSIC_OP_BTI_BLOCK_LOAD_UBO);
+                  assert(l->instr.simd_width == 1);
 
-               const unsigned block_bti = ibc_ref_as_uint(l->src[1].ref);
-               const unsigned block_offset_B = ibc_ref_as_uint(l->src[2].ref);
-               const unsigned block_size_B =
-                  ibc_type_byte_size(l->dest.type) * l->num_dest_comps;
+                  const unsigned block_bti = ibc_ref_as_uint(l->src[1].ref);
+                  const unsigned block_offset_B =
+                     ibc_ref_as_uint(l->src[2].ref);
+                  const unsigned block_size_B =
+                     ibc_type_byte_size(l->dest.type) * l->num_dest_comps;
 
-               if (bti != block_bti ||
-                   comp_offset_B < block_offset_B ||
-                   comp_offset_B + comp_size_B > block_offset_B + block_size_B)
-                  continue;
+                  if (bti != block_bti || comp_offset_B < block_offset_B ||
+                      comp_offset_B + comp_size_B >
+                      block_offset_B + block_size_B)
+                     continue;
 
-               dest_comps[c] = block;
-               dest_comps[c].type = instr->dest.ssa.bit_size;
-               dest_comps[c].hw_grf.byte += comp_offset_B - block_offset_B;
-               ibc_hw_grf_mul_stride(&dest_comps[c].hw_grf, 0);
-               break;
+                  dest_comps[c] = block;
+                  dest_comps[c].type = instr->dest.ssa.bit_size;
+                  dest_comps[c].hw_grf.byte += comp_offset_B - block_offset_B;
+                  ibc_hw_grf_mul_stride(&dest_comps[c].hw_grf, 0);
+                  break;
+               }
             }
 
             /* If we found it as a push constant, we're done. */
