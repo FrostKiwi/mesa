@@ -57,7 +57,8 @@ resolve_supported(const struct pipe_blit_info *info)
       return false;
 
    // check for unsupported operations
-   if (util_format_is_depth_or_stencil(info->src.format) && !(info->mask & PIPE_MASK_ZS)) {
+   if (util_format_is_depth_or_stencil(info->src.format) &&
+       info->mask != PIPE_MASK_Z) {
       return false;
    } else {
       if (util_format_get_mask(info->dst.format) != info->mask ||
