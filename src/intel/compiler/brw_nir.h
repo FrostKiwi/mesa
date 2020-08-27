@@ -132,6 +132,8 @@ void brw_nir_rewrite_bindless_image_intrinsic(nir_intrinsic_instr *intrin,
 
 bool brw_nir_lower_mem_access_bit_sizes(nir_shader *shader,
                                         const struct gen_device_info *devinfo);
+bool ibc_nir_lower_64bit_ubo_loads(nir_shader *shader,
+                                   const struct gen_device_info *devinfo);
 
 bool brw_nir_should_use_ibc(const nir_shader *nir,
                             const struct brw_compiler *compiler,
