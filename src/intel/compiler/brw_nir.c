@@ -1133,6 +1133,9 @@ brw_vectorize_lower_mem_access(nir_shader *nir,
    }
 
    OPT(brw_nir_lower_mem_access_bit_sizes, devinfo);
+   if (brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
+      OPT(ibc_nir_lower_64bit_ubo_loads, devinfo);
+   }
 
    while (progress) {
       progress = false;
