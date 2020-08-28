@@ -1145,6 +1145,39 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_vote_ieq:
+   case nir_intrinsic_vote_feq: {
+      assert(!nir_dest_is_divergent(instr->dest));
+
+      enum ibc_type type = instr->intrinsic == nir_intrinsic_vote_feq ?
+         IBC_TYPE_FLOAT : IBC_TYPE_INT;
+
+      ibc_ref value = ibc_nir_src(nti, instr->src[0], type);
+      ibc_ref flag = nti_initialize_flag(b, -1);
+
+      ibc_ref cmp_srcs[2] = { value, ibc_uniformize(b, value) };
+      ibc_build_alu(b, IBC_ALU_OP_CMP, ibc_null(IBC_TYPE_W), flag,
+                    BRW_CONDITIONAL_Z, cmp_srcs, 2);
+
+      /* For some reason, the any/all predicates don't work properly with
+       * SIMD32.  In particular, it appears that a SEL with a QtrCtrl of 2H
+       * doesn't read the correct subset of the flag register and you end up
+       * getting garbage in the second half.  Work around this by using a pair
+       * of 1-wide MOVs and scattering the result.
+       */
+      ibc_builder_push_scalar(b);
+      ibc_ref tmp = ibc_MOV_from_flag(b, IBC_TYPE_W,
+         ibc_predicate_all(b->shader->simd_width), flag);
+      ibc_builder_pop(b);
+
+      /* Finally, IBC expects 1-bit booleans */
+      ibc_builder_push_scalar(b);
+      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_FLAG, 1);
+      ibc_MOV_to_flag(b, dest, BRW_CONDITIONAL_NZ, tmp);
+      ibc_builder_pop(b);
+      break;
+   }
+
    case nir_intrinsic_ballot: {
       assert(!nir_dest_is_divergent(instr->dest));
       ibc_ref flag = nti_initialize_flag(b, 0);
