@@ -76,7 +76,7 @@ d3d12_make_passthrough_gs(struct d3d12_context *ctx, struct d3d12_gs_variant_key
       snprintf(tmp, ARRAY_SIZE(tmp), "in_%d", key->varyings[i].driver_location);
       in = nir_variable_create(nir,
                                nir_var_shader_in,
-                               key->varyings[i].type,
+                               glsl_array_type(key->varyings[i].type, 1, false),
                                tmp);
       in->data.location = i;
       in->data.driver_location = key->varyings[i].driver_location;
@@ -91,7 +91,9 @@ d3d12_make_passthrough_gs(struct d3d12_context *ctx, struct d3d12_gs_variant_key
       out->data.driver_location = key->varyings[i].driver_location;
       out->data.interpolation = key->varyings[i].interpolation;
 
-      nir_copy_var(&b, out, in);
+      nir_deref_instr *in_value = nir_build_deref_array(&b, nir_build_deref_var(&b, in),
+                                                            nir_imm_int(&b, 0));
+      nir_copy_deref(&b, nir_build_deref_var(&b, out), in_value);
    }
 
    /* EmitVertex */
