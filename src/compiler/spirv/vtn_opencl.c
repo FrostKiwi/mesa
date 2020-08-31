@@ -524,10 +524,6 @@ handle_special(struct vtn_builder *b, uint32_t opcode,
       return nir_nextafter(nb, srcs[0], srcs[1]);
    case OpenCLstd_Normalize:
       return nir_normalize(nb, srcs[0]);
-   case OpenCLstd_Radians:
-      return nir_radians(nb, srcs[0]);
-   case OpenCLstd_Rotate:
-      return nir_rotate(nb, srcs[0], srcs[1]);
    case OpenCLstd_Clz:
       return nir_clz_u(nb, srcs[0]);
    case OpenCLstd_Select:
