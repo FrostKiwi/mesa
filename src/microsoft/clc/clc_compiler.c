@@ -613,6 +613,7 @@ clc_context_new(const struct clc_logger *logger)
       clc_error(logger, "D3D12: spirv_to_nir failed on libclc blob");
       goto err_free_ctx;
    }
+   ((nir_shader*)ctx->libclc_nir)->info.internal = true;
    NIR_PASS_V(ctx->libclc_nir, nir_lower_goto_ifs);
    NIR_PASS_V(ctx->libclc_nir, nir_lower_variable_initializers, nir_var_function_temp);
    NIR_PASS_V(ctx->libclc_nir, nir_lower_returns);
