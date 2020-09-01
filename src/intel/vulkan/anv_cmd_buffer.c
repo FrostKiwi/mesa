@@ -1169,10 +1169,11 @@ VkResult anv_ResetCommandPool(
 {
    ANV_FROM_HANDLE(anv_cmd_pool, pool, commandPool);
 
-   list_for_each_entry(struct anv_cmd_buffer, cmd_buffer,
-                       &pool->cmd_buffers, pool_link) {
-      anv_cmd_buffer_reset(cmd_buffer);
+   list_for_each_entry_safe(struct anv_cmd_buffer, cmd_buffer,
+                            &pool->cmd_buffers, pool_link) {
+      anv_cmd_buffer_destroy(cmd_buffer);
    }
+   list_inithead(&pool->cmd_buffers);
 
    return VK_SUCCESS;
 }

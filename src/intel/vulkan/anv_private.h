@@ -2984,6 +2984,7 @@ struct anv_cmd_state {
 struct anv_cmd_pool {
    struct vk_object_base                        base;
    VkAllocationCallbacks                        alloc;
+   VkCommandPoolCreateFlags                     flags;
    struct list_head                             cmd_buffers;
 };
 
