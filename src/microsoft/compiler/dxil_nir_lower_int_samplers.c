@@ -433,7 +433,7 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
     * giving another LOD when querying the texture size */
    nir_ssa_def *size0 = nir_get_texture_size(b, tex);
 
-   params.lod = nir_imm_int(b, 0.0);
+   params.lod = nir_imm_int(b, 0);
 
    if (active_wrap_state->last_level > 0) {
       lod_params p = {
