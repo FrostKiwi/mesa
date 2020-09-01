@@ -445,7 +445,8 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
       params.lod = evalute_active_lod(b, tex, &p);
 
       /* Evaluate actual level size*/
-      params.size = nir_i2f32(b, nir_ishr(b, size0, params.lod));
+      params.size = nir_i2f32(b, nir_imax(b, nir_ishr(b, size0, params.lod),
+                                             nir_imm_int(b, 1)));
    } else {
       params.size = nir_i2f32(b, size0);
    }
