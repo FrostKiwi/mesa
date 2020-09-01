@@ -1215,7 +1215,6 @@ d3d12_set_scissor_states(struct pipe_context *pctx,
       ctx->scissors[start_slot + i].bottom = states[i].maxy;
       ctx->scissor_states[start_slot + i] = states[i];
    }
-   ctx->num_scissors = start_slot + num_scissors;
    ctx->state_dirty |= D3D12_DIRTY_SCISSOR;
 }
 

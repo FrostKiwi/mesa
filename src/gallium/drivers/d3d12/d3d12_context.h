@@ -196,7 +196,6 @@ struct d3d12_context {
    unsigned num_viewports;
    struct pipe_scissor_state scissor_states[PIPE_MAX_VIEWPORTS];
    D3D12_RECT scissors[PIPE_MAX_VIEWPORTS];
-   unsigned num_scissors;
    float blend_factor[4];
    struct pipe_stencil_ref stencil_ref;
    struct pipe_sampler_view *sampler_views[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
