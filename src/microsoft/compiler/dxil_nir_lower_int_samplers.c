@@ -390,7 +390,7 @@ evalute_active_lod(nir_builder *b, nir_tex_instr *tex, lod_params *params)
                                      nir_imm_float(b, params->max_bias)));
 
    /* Clamp lod according to ibid. eq. (8.10) */
-   lod = nir_fmax(b, lod, nir_imm_int(b, min_lod));
+   lod = nir_fmax(b, lod, nir_imm_float(b, min_lod));
 
    /* If the max lod is > max_bias = log2(max_texture_size), the lod will be clamped
     * by the number of levels, no need to clamp it againt the max_lod first. */
