@@ -545,6 +545,123 @@ util_blit(struct d3d12_context *ctx,
    util_blitter_blit(ctx->blitter, info);
 }
 
+static bool
+resolve_stencil_supported(struct d3d12_context *ctx,
+                          const struct pipe_blit_info *info)
+{
+   assert(is_resolve(info));
+
+   if (!util_format_is_depth_or_stencil(info->src.format) ||
+       !(info->mask & PIPE_MASK_S))
+      return false;
+
+   if (info->mask & PIPE_MASK_Z) {
+      struct pipe_blit_info new_info = *info;
+      new_info.mask = PIPE_MASK_Z;
+      if (!resolve_supported(&new_info) &&
+          !util_blitter_is_blit_supported(ctx->blitter, &new_info))
+         return false;
+   }
+
+   struct pipe_blit_info new_info = *info;
+   new_info.dst.format = PIPE_FORMAT_R8_UINT;
+   return util_blitter_is_blit_supported(ctx->blitter, &new_info);
+}
+
+static struct pipe_resource *
+create_tmp_resource(struct pipe_screen *screen,
+                    const struct pipe_blit_info *info)
+{
+   struct pipe_resource tpl = { 0 };
+   tpl.width0 = info->dst.box.width;
+   tpl.height0 = info->dst.box.height;
+   tpl.depth0 = info->dst.box.depth;
+   tpl.array_size = 1;
+   tpl.format = PIPE_FORMAT_R8_UINT;
+   tpl.target = info->dst.resource->target;
+   tpl.nr_samples = info->dst.resource->nr_samples;
+   tpl.nr_storage_samples = info->dst.resource->nr_storage_samples;
+   tpl.usage = PIPE_USAGE_STREAM;
+   tpl.bind = PIPE_BIND_RENDER_TARGET | PIPE_BIND_SAMPLER_VIEW;
+   return screen->resource_create(screen, &tpl);
+}
+
+static void
+blit_resolve_stencil(struct d3d12_context *ctx,
+                     const struct pipe_blit_info *info)
+{
+   assert(info->mask & PIPE_MASK_S);
+
+   if (D3D12_DEBUG_BLIT & d3d12_debug)
+      debug_printf("D3D12 BLIT: blit_resolve_stencil\n");
+
+   util_blit_save_state(ctx);
+
+   if (info->mask & PIPE_MASK_Z) {
+      /* resolve depth into dst */
+      struct pipe_blit_info new_info = *info;
+      new_info.mask = PIPE_MASK_Z;
+
+      if (resolve_supported(&new_info))
+         blit_resolve(ctx, &new_info);
+      else
+         util_blitter_blit(ctx->blitter, &new_info);
+   }
+
+   struct pipe_resource *tmp = create_tmp_resource(ctx->base.screen, info);
+   if (!tmp) {
+      debug_printf("D3D12: failed to create blit surface\n");
+      return;
+   }
+
+   /* resolve stencil into tmp */
+   struct pipe_blit_info new_info = *info;
+   new_info.dst.resource = tmp;
+   new_info.dst.level = 0;
+   new_info.dst.box.x = new_info.dst.box.y = new_info.dst.box.z = 0;
+   new_info.dst.format = tmp->format;
+   new_info.mask = PIPE_MASK_S;
+   util_blitter_blit(ctx->blitter, &new_info);
+
+   /* copy resolved stencil into dst */
+   struct d3d12_resource *dst = d3d12_resource(info->dst.resource);
+   d3d12_transition_subresources_state(ctx, d3d12_resource(tmp),
+                                       0, 1, 0, 1, 0, 1,
+                                       D3D12_RESOURCE_STATE_COPY_SOURCE,
+                                       SubresourceTransitionFlags_None);
+   d3d12_transition_subresources_state(ctx, dst,
+                                       0, 1, 0, 1, 1, 1,
+                                       D3D12_RESOURCE_STATE_COPY_DEST,
+                                       SubresourceTransitionFlags_None);
+   d3d12_apply_resource_states(ctx, false);
+
+   struct d3d12_batch *batch = d3d12_current_batch(ctx);
+   d3d12_batch_reference_resource(batch, d3d12_resource(tmp));
+   d3d12_batch_reference_resource(batch, dst);
+
+   D3D12_BOX src_box;
+   src_box.left = src_box.top = src_box.front = 0;
+   src_box.right = tmp->width0;
+   src_box.bottom = tmp->height0;
+   src_box.back = tmp->depth0;
+
+   D3D12_TEXTURE_COPY_LOCATION src_loc;
+   src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+   src_loc.SubresourceIndex = 0;
+   src_loc.pResource = d3d12_resource_resource(d3d12_resource(tmp));
+
+   D3D12_TEXTURE_COPY_LOCATION dst_loc;
+   dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+   dst_loc.SubresourceIndex = 1;
+   dst_loc.pResource = d3d12_resource_resource(dst);
+
+   ctx->cmdlist->CopyTextureRegion(&dst_loc, info->dst.box.x,
+                                   info->dst.box.y, info->dst.box.z,
+                                   &src_loc, &src_box);
+
+   pipe_resource_reference(&tmp, NULL);
+}
+
 void
 d3d12_blit(struct pipe_context *pctx,
            const struct pipe_blit_info *info)
@@ -581,6 +698,8 @@ d3d12_blit(struct pipe_context *pctx,
          blit_resolve(ctx, info);
       else if (util_blitter_is_blit_supported(ctx->blitter, info))
          util_blit(ctx, info);
+      else if (resolve_stencil_supported(ctx, info))
+         blit_resolve_stencil(ctx, info);
       else
          debug_printf("D3D12: resolve unsupported %s -> %s\n",
                     util_format_short_name(info->src.resource->format),
