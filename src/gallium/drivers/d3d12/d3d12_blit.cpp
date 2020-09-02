@@ -568,7 +568,8 @@ d3d12_blit(struct pipe_context *pctx,
       blit_same_resource(ctx, info);
    else if (resolve_supported(info))
       blit_resolve(ctx, info);
-   else if (direct_copy_supported(d3d12_screen(pctx->screen), info, ctx->current_predication != nullptr))
+   else if (direct_copy_supported(d3d12_screen(pctx->screen), info,
+                                    ctx->current_predication != nullptr))
       d3d12_direct_copy(ctx, d3d12_resource(info->dst.resource),
                         info->dst.level, &info->dst.box,
                         d3d12_resource(info->src.resource),
