@@ -830,6 +830,46 @@ iris_clear_depth_stencil(struct pipe_context *ctx,
                        depth, stencil);
 }
 
+static void
+iris_clear_buffer(struct pipe_context *ctx,
+                  struct pipe_resource *p_res,
+                  unsigned offset,
+                  unsigned size,
+                  const void *clear_value,
+                  int clear_value_size)
+{
+   struct iris_context *ice = (void *) ctx;
+   struct iris_resource *res = (void *) p_res;
+
+   struct iris_batch *batch = &ice->batches[IRIS_BATCH_RENDER];
+
+   iris_batch_maybe_flush(batch, 1500);
+
+   iris_emit_buffer_barrier_for(batch, res->bo, IRIS_DOMAIN_RENDER_WRITE);
+
+   struct blorp_address dst_addr = {
+      .buffer = res->bo,
+      .offset = res->offset,
+      .reloc_flags = EXEC_OBJECT_WRITE,
+      .mocs = iris_mocs(res->bo, &batch->screen->isl_dev),
+   };
+
+   iris_batch_sync_region_start(batch);
+
+   struct blorp_batch blorp_batch;
+   blorp_batch_init(&ice->blorp, &blorp_batch, batch, 0);
+
+   blorp_buffer_fill(&blorp_batch, dst_addr, clear_value,
+                     clear_value_size, size);
+
+   blorp_batch_finish(&blorp_batch);
+   iris_batch_sync_region_end(batch);
+
+   iris_flush_and_dirty_for_history(ice, batch, res,
+                                    PIPE_CONTROL_RENDER_TARGET_FLUSH,
+                                    "cache history: post color clear");
+}
+
 void
 iris_init_clear_functions(struct pipe_context *ctx)
 {
@@ -837,4 +877,5 @@ iris_init_clear_functions(struct pipe_context *ctx)
    ctx->clear_texture = iris_clear_texture;
    ctx->clear_render_target = iris_clear_render_target;
    ctx->clear_depth_stencil = iris_clear_depth_stencil;
+   ctx->clear_buffer = iris_clear_buffer;
 }
