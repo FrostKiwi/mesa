@@ -919,24 +919,6 @@ void anv_CmdBlitImage2KHR(
    blorp_batch_finish(&batch);
 }
 
-/**
- * Returns the greatest common divisor of a and b that is a power of two.
- */
-static uint64_t
-gcd_pow2_u64(uint64_t a, uint64_t b)
-{
-   assert(a > 0 || b > 0);
-
-   unsigned a_log2 = ffsll(a) - 1;
-   unsigned b_log2 = ffsll(b) - 1;
-
-   /* If either a or b is 0, then a_log2 or b_log2 till be UINT_MAX in which
-    * case, the MIN2() will take the other one.  If both are 0 then we will
-    * hit the assert above.
-    */
-   return 1 << MIN2(a_log2, b_log2);
-}
-
 /* This is maximum possible width/height our HW can handle */
 #define MAX_SURFACE_DIM (1ull << 14)
 
@@ -1079,8 +1061,6 @@ void anv_CmdFillBuffer(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_buffer, dst_buffer, dstBuffer);
-   struct blorp_surf surf;
-   struct isl_surf isl_surf;
 
    struct blorp_batch batch;
    blorp_batch_init(&cmd_buffer->device->blorp, &batch, cmd_buffer, 0);
@@ -1097,62 +1077,12 @@ void anv_CmdFillBuffer(
     */
    fillSize &= ~3ull;
 
-   /* First, we compute the biggest format that can be used with the
-    * given offsets and size.
-    */
-   int bs = 16;
-   bs = gcd_pow2_u64(bs, dstOffset);
-   bs = gcd_pow2_u64(bs, fillSize);
-   enum isl_format isl_format = isl_format_for_size(bs);
-
-   union isl_color_value color = {
-      .u32 = { data, data, data, data },
+   struct blorp_address dst = {
+      .buffer = dst_buffer->address.bo,
+      .offset = dst_buffer->address.offset + dstOffset,
+      .mocs = anv_mocs_for_bo(cmd_buffer->device, dst_buffer->address.bo),
    };
-
-   const uint64_t max_fill_size = MAX_SURFACE_DIM * MAX_SURFACE_DIM * bs;
-   while (fillSize >= max_fill_size) {
-      get_blorp_surf_for_anv_buffer(cmd_buffer->device,
-                                    dst_buffer, dstOffset,
-                                    MAX_SURFACE_DIM, MAX_SURFACE_DIM,
-                                    MAX_SURFACE_DIM * bs, isl_format,
-                                    &surf, &isl_surf);
-
-      blorp_clear(&batch, &surf, isl_format, ISL_SWIZZLE_IDENTITY,
-                  0, 0, 1, 0, 0, MAX_SURFACE_DIM, MAX_SURFACE_DIM,
-                  color, NULL);
-      fillSize -= max_fill_size;
-      dstOffset += max_fill_size;
-   }
-
-   uint64_t height = fillSize / (MAX_SURFACE_DIM * bs);
-   assert(height < MAX_SURFACE_DIM);
-   if (height != 0) {
-      const uint64_t rect_fill_size = height * MAX_SURFACE_DIM * bs;
-      get_blorp_surf_for_anv_buffer(cmd_buffer->device,
-                                    dst_buffer, dstOffset,
-                                    MAX_SURFACE_DIM, height,
-                                    MAX_SURFACE_DIM * bs, isl_format,
-                                    &surf, &isl_surf);
-
-      blorp_clear(&batch, &surf, isl_format, ISL_SWIZZLE_IDENTITY,
-                  0, 0, 1, 0, 0, MAX_SURFACE_DIM, height,
-                  color, NULL);
-      fillSize -= rect_fill_size;
-      dstOffset += rect_fill_size;
-   }
-
-   if (fillSize != 0) {
-      const uint32_t width = fillSize / bs;
-      get_blorp_surf_for_anv_buffer(cmd_buffer->device,
-                                    dst_buffer, dstOffset,
-                                    width, 1,
-                                    width * bs, isl_format,
-                                    &surf, &isl_surf);
-
-      blorp_clear(&batch, &surf, isl_format, ISL_SWIZZLE_IDENTITY,
-                  0, 0, 1, 0, 0, width, 1,
-                  color, NULL);
-   }
+   blorp_buffer_fill(&batch, dst, &data, sizeof(data), fillSize);
 
    blorp_batch_finish(&batch);
 

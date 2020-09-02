@@ -2918,3 +2918,97 @@ blorp_buffer_copy(struct blorp_batch *batch,
       do_buffer_copy(batch, &src, &dst, copy_size / bs, 1, bs);
    }
 }
+
+static void
+do_buffer_fill(struct blorp_batch *batch,
+               struct blorp_address *dst,
+               enum isl_format format,
+               union isl_color_value color,
+               int width, int height, int block_size)
+{
+   UNUSED bool ok;
+   struct isl_surf surf;
+   ok = isl_surf_init(batch->blorp->isl_dev, &surf,
+                      .dim = ISL_SURF_DIM_2D,
+                      .format = format,
+                      .width = width,
+                      .height = height,
+                      .depth = 1,
+                      .levels = 1,
+                      .array_len = 1,
+                      .samples = 1,
+                      .row_pitch_B = width * block_size,
+                      .usage = ISL_SURF_USAGE_TEXTURE_BIT |
+                               ISL_SURF_USAGE_RENDER_TARGET_BIT,
+                      .tiling_flags = ISL_TILING_LINEAR_BIT);
+   assert(ok);
+
+   struct blorp_surf dst_blorp_surf = {
+      .surf = &surf,
+      .addr = *dst,
+   };
+
+   blorp_clear(batch, &dst_blorp_surf, format, ISL_SWIZZLE_IDENTITY,
+               0, 0, 1, 0, 0, width, height, color, NULL);
+}
+
+void
+blorp_buffer_fill(struct blorp_batch *batch,
+                  struct blorp_address dst,
+                  const void *pattern, size_t pattern_size,
+                  uint64_t fill_size)
+{
+   const struct gen_device_info *devinfo = batch->blorp->isl_dev->info;
+
+   /* This is maximum possible width/height our HW can handle */
+   uint64_t max_surface_dim = 1 << (devinfo->gen >= 7 ? 14 : 13);
+
+   assert(fill_size % pattern_size == 0);
+
+   /* TODO: Clover may require us to be more flexible */
+   assert(util_is_power_of_two_nonzero(pattern_size));
+   assert(pattern_size <= 4 * 4);
+
+   /* First, we compute the biggest format that can be used with the
+    * given offsets and size.
+    */
+   int bs = 16;
+   bs = gcd_pow2_u64(bs, dst.offset);
+   bs = gcd_pow2_u64(bs, fill_size);
+
+   /* The actual format we pick doesn't matter as blorp will throw it away.
+    * The only thing that actually matters is the size.
+    */
+   enum isl_format format = isl_format_for_size(bs);
+
+   char data[16];
+   for (int i = 0; i < sizeof(data); i += pattern_size)
+      memcpy(data + i, pattern, MIN2(pattern_size, sizeof(data) - i));
+   union isl_color_value color;
+   isl_color_value_unpack(&color, format, (uint32_t *)data);
+
+   /* First, we make a bunch of max-sized copies */
+   uint64_t max_fill_size = max_surface_dim * max_surface_dim * bs;
+   while (fill_size >= max_fill_size) {
+      do_buffer_fill(batch, &dst, format, color,
+                     max_surface_dim, max_surface_dim, bs);
+      fill_size -= max_fill_size;
+      dst.offset += max_fill_size;
+   }
+
+   /* Now make a max-width copy */
+   uint64_t height = fill_size / (max_surface_dim * bs);
+   assert(height < max_surface_dim);
+   if (height != 0) {
+      uint64_t rect_fill_size = height * max_surface_dim * bs;
+      do_buffer_fill(batch, &dst, format, color,
+                    max_surface_dim, height, bs);
+      fill_size -= rect_fill_size;
+      dst.offset += rect_fill_size;
+   }
+
+   /* Finally, make a small copy to finish it off */
+   if (fill_size != 0) {
+      do_buffer_fill(batch, &dst, format, color, fill_size / bs, 1, bs);
+   }
+}
