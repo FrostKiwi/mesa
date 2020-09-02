@@ -58,8 +58,7 @@ is_resolve(const struct pipe_blit_info *info)
 static bool
 resolve_supported(const struct pipe_blit_info *info)
 {
-   if (is_resolve(info))
-      return false;
+   assert(is_resolve(info));
 
    // check for unsupported operations
    if (util_format_is_depth_or_stencil(info->src.format) &&
@@ -571,9 +570,16 @@ d3d12_blit(struct pipe_context *pctx,
 
    if (is_same_resource(info))
       blit_same_resource(ctx, info);
-   else if (resolve_supported(info))
-      blit_resolve(ctx, info);
-   else if (direct_copy_supported(d3d12_screen(pctx->screen), info,
+   else if (is_resolve(info)) {
+      if (resolve_supported(info))
+         blit_resolve(ctx, info);
+      else if (util_blitter_is_blit_supported(ctx->blitter, info))
+         util_blit(ctx, info);
+      else
+         debug_printf("D3D12: resolve unsupported %s -> %s\n",
+                    util_format_short_name(info->src.resource->format),
+                    util_format_short_name(info->dst.resource->format));
+   } else if (direct_copy_supported(d3d12_screen(pctx->screen), info,
                                     ctx->current_predication != nullptr))
       d3d12_direct_copy(ctx, d3d12_resource(info->dst.resource),
                         info->dst.level, &info->dst.box,
