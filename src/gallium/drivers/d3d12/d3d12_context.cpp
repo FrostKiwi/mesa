@@ -783,11 +783,26 @@ d3d12_create_sampler_view(struct pipe_context *pctx,
 
    int plane_slice = 0;
 
-   /* When reading from a stencil texture we have to use plane 1, and
-    * the formats X24S8 and X32_S8X24 have the actual data in the y-channel
-    * but the shader will read the x component so we need to adjust the swizzle. */
-   if (unlikely(state->format == PIPE_FORMAT_X24S8_UINT ||
-                state->format == PIPE_FORMAT_X32_S8X24_UINT)) {
+   const struct util_format_description
+      *format_desc = util_format_description(state->format);
+   if (util_format_has_depth(format_desc)) {
+      enum pipe_swizzle swz[PIPE_SWIZZLE_MAX] = {
+         PIPE_SWIZZLE_X,
+         PIPE_SWIZZLE_X,
+         PIPE_SWIZZLE_X,
+         PIPE_SWIZZLE_X,
+         PIPE_SWIZZLE_0,
+         PIPE_SWIZZLE_1,
+         PIPE_SWIZZLE_NONE,
+      };
+      sampler_view->swizzle_override_r = swz[sampler_view->base.swizzle_r];
+      sampler_view->swizzle_override_g = swz[sampler_view->base.swizzle_g];
+      sampler_view->swizzle_override_b = swz[sampler_view->base.swizzle_b];
+      sampler_view->swizzle_override_a = swz[sampler_view->base.swizzle_a];
+   } else if (util_format_has_stencil(format_desc)) {
+      /* When reading from a stencil texture we have to use plane 1, and
+       * the formats X24S8 and X32_S8X24 have the actual data in the y-channel
+       * but the shader will read the x component so we need to adjust the swizzle. */
       plane_slice = 1;
       enum pipe_swizzle swz[PIPE_SWIZZLE_MAX] = {
                PIPE_SWIZZLE_Y,
