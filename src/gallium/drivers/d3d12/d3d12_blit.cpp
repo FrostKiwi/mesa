@@ -577,7 +577,7 @@ d3d12_blit(struct pipe_context *pctx,
    else if (util_blitter_is_blit_supported(ctx->blitter, info))
       util_blit(ctx, info);
    else
-      debug_printf("blit unsupported %s -> %s\n",
+      debug_printf("D3D12: blit unsupported %s -> %s\n",
                  util_format_short_name(info->src.resource->format),
                  util_format_short_name(info->dst.resource->format));
 
