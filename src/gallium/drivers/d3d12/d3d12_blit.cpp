@@ -49,11 +49,16 @@ copy_buffer_region_no_barriers(struct d3d12_context *ctx,
 }
 
 static bool
+is_resolve(const struct pipe_blit_info *info)
+{
+   return info->src.resource->nr_samples > 1 &&
+          info->dst.resource->nr_samples <= 1;
+}
+
+static bool
 resolve_supported(const struct pipe_blit_info *info)
 {
-   // need actually be a resolve operation
-   if (info->src.resource->nr_samples <= 1 ||
-       info->dst.resource->nr_samples > 1)
+   if (is_resolve(info))
       return false;
 
    // check for unsupported operations
