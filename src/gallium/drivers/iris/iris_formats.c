@@ -182,6 +182,11 @@ iris_is_format_supported(struct pipe_screen *pscreen,
       supported &= isl_has_matching_typed_storage_image_format(devinfo, format);
    }
 
+   if (usage & PIPE_BIND_COMPUTE_RESOURCE) {
+      supported &= sample_count == 1;
+      supported &= isl_format_supports_typed_writes(devinfo, format);
+   }
+
    if (usage & PIPE_BIND_SAMPLER_VIEW) {
       supported &= isl_format_supports_sampling(devinfo, format);
       if (!is_integer)

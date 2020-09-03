@@ -2871,7 +2871,31 @@ iris_set_compute_resources(struct pipe_context *ctx,
                            unsigned start, unsigned count,
                            struct pipe_surface **resources)
 {
-   assert(count == 0);
+   struct pipe_image_view image[PIPE_MAX_SHADER_IMAGES];
+   assert(count <= PIPE_MAX_SHADER_IMAGES);
+   for (unsigned i = 0; i < count; i++) {
+      memset(&image[i], 0, sizeof(image[i]));
+      if (resources == NULL || resources[i] == NULL)
+         continue;
+
+      image[i].resource = resources[i]->texture;
+      image[i].format = resources[i]->format;
+      image[i].shader_access |= PIPE_IMAGE_ACCESS_WRITE;
+      if (resources[i]->texture->target == PIPE_BUFFER) {
+         image[i].u.buf.offset = resources[i]->u.buf.first_element *
+                                 util_format_get_blocksize(image[i].format);
+         image[i].u.buf.size = (resources[i]->u.buf.last_element -
+                                resources[i]->u.buf.first_element) *
+                               util_format_get_blocksize(image[i].format);
+      } else {
+         image[i].u.tex.first_layer = resources[i]->u.tex.first_layer;
+         image[i].u.tex.last_layer = resources[i]->u.tex.last_layer;
+         image[i].u.tex.level = resources[i]->u.tex.level;
+      }
+   }
+
+   iris_set_shader_images(ctx, PIPE_SHADER_COMPUTE,
+                          start, count, image);
 }
 
 static void

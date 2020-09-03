@@ -517,7 +517,8 @@ iris_resource_configure_main(const struct iris_screen *screen,
    if (templ->bind & PIPE_BIND_SAMPLER_VIEW)
       usage |= ISL_SURF_USAGE_TEXTURE_BIT;
 
-   if (templ->bind & PIPE_BIND_SHADER_IMAGE)
+   if (templ->bind & (PIPE_BIND_SHADER_IMAGE |
+                      PIPE_BIND_COMPUTE_RESOURCE))
       usage |= ISL_SURF_USAGE_STORAGE_BIT;
 
    if (templ->bind & PIPE_BIND_SCANOUT)
@@ -2144,7 +2145,9 @@ iris_flush_bits_for_history(struct iris_resource *res)
    if (res->bind_history & (PIPE_BIND_VERTEX_BUFFER | PIPE_BIND_INDEX_BUFFER))
       flush |= PIPE_CONTROL_VF_CACHE_INVALIDATE;
 
-   if (res->bind_history & (PIPE_BIND_SHADER_BUFFER | PIPE_BIND_SHADER_IMAGE))
+   if (res->bind_history & (PIPE_BIND_SHADER_BUFFER |
+                            PIPE_BIND_SHADER_IMAGE |
+                            PIPE_BIND_COMPUTE_RESOURCE))
       flush |= PIPE_CONTROL_DATA_CACHE_FLUSH;
 
    return flush;
