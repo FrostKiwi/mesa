@@ -510,8 +510,7 @@ blit_same_resource(struct d3d12_context *ctx,
 }
 
 static void
-util_blit(struct d3d12_context *ctx,
-          const struct pipe_blit_info *info)
+util_blit_save_state(struct d3d12_context *ctx)
 {
    util_blitter_save_blend(ctx->blitter, ctx->gfx_pipeline_state.blend);
    util_blitter_save_depth_stencil_alpha(ctx->blitter, ctx->gfx_pipeline_state.zsa);
@@ -535,6 +534,13 @@ util_blit(struct d3d12_context *ctx,
    util_blitter_save_vertex_buffer_slot(ctx->blitter, ctx->vbs);
    util_blitter_save_sample_mask(ctx->blitter, ctx->gfx_pipeline_state.sample_mask);
    util_blitter_save_so_targets(ctx->blitter, ctx->num_so_targets, ctx->so_targets);
+}
+
+static void
+util_blit(struct d3d12_context *ctx,
+          const struct pipe_blit_info *info)
+{
+   util_blit_save_state(ctx);
 
    util_blitter_blit(ctx->blitter, info);
 }
