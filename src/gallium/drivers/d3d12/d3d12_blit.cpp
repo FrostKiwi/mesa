@@ -674,6 +674,22 @@ get_stencil_resolve_fs(struct d3d12_context *ctx)
    return ctx->stencil_resolve_fs;
 }
 
+static void *
+get_sampler_state(struct d3d12_context *ctx)
+{
+   if (ctx->sampler_state)
+      return ctx->sampler_state;
+
+   struct pipe_sampler_state state;
+   memset(&state, 0, sizeof(state));
+   state.wrap_s = PIPE_TEX_WRAP_CLAMP_TO_EDGE;
+   state.wrap_t = PIPE_TEX_WRAP_CLAMP_TO_EDGE;
+   state.wrap_r = PIPE_TEX_WRAP_CLAMP_TO_EDGE;
+   state.normalized_coords = 1;
+
+   return ctx->sampler_state = ctx->base.create_sampler_state(&ctx->base, &state);
+}
+
 static void
 blit_resolve_stencil(struct d3d12_context *ctx,
                      const struct pipe_blit_info *info)

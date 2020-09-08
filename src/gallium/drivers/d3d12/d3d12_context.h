@@ -261,7 +261,7 @@ struct d3d12_context {
 #endif
    struct pipe_query *timestamp_query;
 
-   void *stencil_resolve_vs, *stencil_resolve_fs; /* used by d3d12_blit.cpp */
+   void *stencil_resolve_vs, *stencil_resolve_fs, *sampler_state; /* used by d3d12_blit.cpp */
 };
 
 static inline struct d3d12_context *
