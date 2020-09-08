@@ -690,6 +690,46 @@ get_sampler_state(struct d3d12_context *ctx)
    return ctx->sampler_state = ctx->base.create_sampler_state(&ctx->base, &state);
 }
 
+static struct pipe_resource *
+resolve_stencil_to_temp(struct d3d12_context *ctx,
+                        const struct pipe_blit_info *info)
+{
+   struct pipe_context *pctx = &ctx->base;
+   struct pipe_resource *tmp = create_tmp_resource(pctx->screen, info);
+   if (!tmp) {
+      debug_printf("D3D12: failed to create stencil-resolve temp-resource\n");
+      return NULL;
+   }
+   assert(tmp->nr_samples < 2);
+
+   /* resolve stencil into tmp */
+   struct pipe_surface dst_tmpl;
+   util_blitter_default_dst_texture(&dst_tmpl, tmp, 0, 0);
+   dst_tmpl.format = tmp->format;
+   struct pipe_surface *dst_surf = pctx->create_surface(pctx, tmp, &dst_tmpl);
+   if (!dst_surf) {
+      debug_printf("D3D12: failed to create stencil-resolve dst-surface\n");
+      return NULL;
+   }
+
+   struct pipe_sampler_view src_templ, *src_view;
+   util_blitter_default_src_texture(ctx->blitter, &src_templ,
+                                    info->src.resource, info->src.level);
+   src_templ.format = util_format_stencil_only(info->src.format);
+   src_view = pctx->create_sampler_view(pctx, info->src.resource, &src_templ);
+
+   void *sampler_state = get_sampler_state(ctx);
+
+   util_blit_save_state(ctx);
+   pctx->set_sampler_views(pctx, PIPE_SHADER_FRAGMENT, 0, 1, &src_view);
+   pctx->bind_sampler_states(pctx, PIPE_SHADER_FRAGMENT, 0, 1, &sampler_state);
+   util_blitter_custom_shader(ctx->blitter, dst_surf,
+                              get_stencil_resolve_vs(ctx),
+                              get_stencil_resolve_fs(ctx));
+   util_blitter_restore_textures(ctx->blitter);
+   return tmp;
+}
+
 static void
 blit_resolve_stencil(struct d3d12_context *ctx,
                      const struct pipe_blit_info *info)
@@ -710,20 +750,8 @@ blit_resolve_stencil(struct d3d12_context *ctx,
          util_blit(ctx, &new_info);
    }
 
-   struct pipe_resource *tmp = create_tmp_resource(ctx->base.screen, info);
-   if (!tmp) {
-      debug_printf("D3D12: failed to create stencil-resolve temp-resource\n");
-      return;
-   }
+   struct pipe_resource *tmp = resolve_stencil_to_temp(ctx, info);
 
-   /* resolve stencil into tmp */
-   struct pipe_blit_info new_info = *info;
-   new_info.dst.resource = tmp;
-   new_info.dst.level = 0;
-   new_info.dst.box.x = new_info.dst.box.y = new_info.dst.box.z = 0;
-   new_info.dst.format = tmp->format;
-   new_info.mask = PIPE_MASK_S;
-   util_blit(ctx, &new_info);
 
    /* copy resolved stencil into dst */
    struct d3d12_resource *dst = d3d12_resource(info->dst.resource);
