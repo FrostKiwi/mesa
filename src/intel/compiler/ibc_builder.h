@@ -1390,11 +1390,13 @@ ibc_WHILE(ibc_builder *b, ibc_ref pred,
    /* Link up all the jumps for breaks.  We stashed them in a list in
     * ibc_BREAK.
     */
-   list_for_each_entry(ibc_flow_instr, _break, breaks, builder_link) {
-      ibc_flow_instr_set_jump(_break, _while);
-      _break->merge = _while;
+   if (breaks) {
+      list_for_each_entry(ibc_flow_instr, _break, breaks, builder_link) {
+         ibc_flow_instr_set_jump(_break, _while);
+         _break->merge = _while;
+      }
+      list_inithead(breaks);
    }
-   list_inithead(breaks);
 
    return _while;
 }
