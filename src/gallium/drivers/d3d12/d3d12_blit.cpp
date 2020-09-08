@@ -595,8 +595,6 @@ blit_resolve_stencil(struct d3d12_context *ctx,
    if (D3D12_DEBUG_BLIT & d3d12_debug)
       debug_printf("D3D12 BLIT: blit_resolve_stencil\n");
 
-   util_blit_save_state(ctx);
-
    if (info->mask & PIPE_MASK_Z) {
       /* resolve depth into dst */
       struct pipe_blit_info new_info = *info;
@@ -605,7 +603,7 @@ blit_resolve_stencil(struct d3d12_context *ctx,
       if (resolve_supported(&new_info))
          blit_resolve(ctx, &new_info);
       else
-         util_blitter_blit(ctx->blitter, &new_info);
+         util_blit(ctx, &new_info);
    }
 
    struct pipe_resource *tmp = create_tmp_resource(ctx->base.screen, info);
@@ -621,7 +619,7 @@ blit_resolve_stencil(struct d3d12_context *ctx,
    new_info.dst.box.x = new_info.dst.box.y = new_info.dst.box.z = 0;
    new_info.dst.format = tmp->format;
    new_info.mask = PIPE_MASK_S;
-   util_blitter_blit(ctx->blitter, &new_info);
+   util_blit(ctx, &new_info);
 
    /* copy resolved stencil into dst */
    struct d3d12_resource *dst = d3d12_resource(info->dst.resource);
