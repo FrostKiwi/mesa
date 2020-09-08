@@ -608,7 +608,7 @@ blit_resolve_stencil(struct d3d12_context *ctx,
 
    struct pipe_resource *tmp = create_tmp_resource(ctx->base.screen, info);
    if (!tmp) {
-      debug_printf("D3D12: failed to create blit surface\n");
+      debug_printf("D3D12: failed to create stencil-resolve temp-resource\n");
       return;
    }
 
