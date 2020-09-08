@@ -2747,6 +2747,7 @@ void util_blitter_custom_shader(struct blitter_context *blitter,
    fb_state.nr_cbufs = 1;
    fb_state.cbufs[0] = dstsurf;
    fb_state.zsbuf = 0;
+   fb_state.samples = 0;
    pipe->set_framebuffer_state(pipe, &fb_state);
    pipe->set_sample_mask(pipe, ~0);
 
