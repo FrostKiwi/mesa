@@ -1256,7 +1256,7 @@ d3d12_set_framebuffer_state(struct pipe_context *pctx,
                             const struct pipe_framebuffer_state *state)
 {
    struct d3d12_context *ctx = d3d12_context(pctx);
-   unsigned samples = 0;
+   int samples = -1;
 
    util_copy_framebuffer_state(&d3d12_context(pctx)->fb, state);
 
@@ -1267,21 +1267,22 @@ d3d12_set_framebuffer_state(struct pipe_context *pctx,
          if (util_format_is_float(state->cbufs[i]->format))
             ctx->gfx_pipeline_state.has_float_rtv = true;
          ctx->gfx_pipeline_state.rtv_formats[i] = d3d12_get_format(state->cbufs[i]->format);
-         samples = MAX2(samples, state->cbufs[i]->texture->nr_samples);
-      } else
+         samples = MAX2(samples, (int)state->cbufs[i]->texture->nr_samples);
+      } else {
          ctx->gfx_pipeline_state.rtv_formats[i] = DXGI_FORMAT_UNKNOWN;
+      }
    }
 
    if (state->zsbuf) {
       ctx->gfx_pipeline_state.dsv_format = d3d12_get_resource_rt_format(state->zsbuf->format);
-      samples = MAX2(samples, ctx->fb.zsbuf->texture->nr_samples);
+      samples = MAX2(samples, (int)ctx->fb.zsbuf->texture->nr_samples);
    } else
       ctx->gfx_pipeline_state.dsv_format = DXGI_FORMAT_UNKNOWN;
 
-   if (!samples)
-      samples = MAX2(state->samples, 1);
+   if (samples < 0)
+      samples = state->samples;
 
-   ctx->gfx_pipeline_state.samples = samples;
+   ctx->gfx_pipeline_state.samples = MAX2(samples, 1);
 
    ctx->state_dirty |= D3D12_DIRTY_FRAMEBUFFER;
 }
