@@ -31,6 +31,9 @@
 #include "util/u_blitter.h"
 #include "util/format/u_format.h"
 
+#include "nir_to_dxil.h"
+#include "nir_builder.h"
+
 static void
 copy_buffer_region_no_barriers(struct d3d12_context *ctx,
                                struct d3d12_resource *dst,
@@ -584,6 +587,91 @@ create_tmp_resource(struct pipe_screen *screen,
    tpl.usage = PIPE_USAGE_STREAM;
    tpl.bind = PIPE_BIND_RENDER_TARGET | PIPE_BIND_SAMPLER_VIEW;
    return screen->resource_create(screen, &tpl);
+}
+
+static void *
+get_stencil_resolve_vs(struct d3d12_context *ctx)
+{
+   if (ctx->stencil_resolve_vs)
+      return ctx->stencil_resolve_vs;
+
+   nir_builder b;
+   nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_VERTEX,
+                                  dxil_get_nir_compiler_options());
+   b.shader->info.name = ralloc_strdup(b.shader, "linear_blit_vs");
+
+   const struct glsl_type *vec4 = glsl_vec4_type();
+   nir_variable *pos_in = nir_variable_create(b.shader, nir_var_shader_in,
+                                              vec4, "pos");
+
+   nir_variable *pos_out = nir_variable_create(b.shader, nir_var_shader_out,
+                                               vec4, "gl_Position");
+   pos_out->data.location = VARYING_SLOT_POS;
+
+   nir_store_var(&b, pos_out, nir_load_var(&b, pos_in), 0xf);
+
+   struct pipe_shader_state state = { 0 };
+   state.type = PIPE_SHADER_IR_NIR;
+   state.ir.nir = b.shader;
+   ctx->stencil_resolve_vs = ctx->base.create_vs_state(&ctx->base, &state);
+
+   return ctx->stencil_resolve_vs;
+}
+
+static void *
+get_stencil_resolve_fs(struct d3d12_context *ctx)
+{
+   if (ctx->stencil_resolve_fs)
+      return ctx->stencil_resolve_fs;
+
+   nir_builder b;
+   nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_FRAGMENT,
+                                  dxil_get_nir_compiler_options());
+
+   nir_variable *stencil_out = nir_variable_create(b.shader,
+                                                   nir_var_shader_out,
+                                                   glsl_uint_type(),
+                                                   "stencil_out");
+   stencil_out->data.location = FRAG_RESULT_COLOR;
+
+   const struct glsl_type *sampler_type =
+      glsl_sampler_type(GLSL_SAMPLER_DIM_MS, false, false, GLSL_TYPE_UINT);
+   nir_variable *sampler = nir_variable_create(b.shader, nir_var_uniform,
+                                               sampler_type, "stencil_tex");
+   sampler->data.binding = 0;
+   sampler->data.explicit_binding = true;
+
+   nir_ssa_def *tex_deref = &nir_build_deref_var(&b, sampler)->dest.ssa;
+
+   nir_variable *pos_in = nir_variable_create(b.shader, nir_var_shader_in,
+                                              glsl_vec4_type(), "pos");
+   pos_in->data.location = VARYING_SLOT_POS; // VARYING_SLOT_VAR0?
+   nir_ssa_def *pos = nir_load_var(&b, pos_in);
+
+   nir_tex_instr *tex = nir_tex_instr_create(b.shader, 3);
+   tex->sampler_dim = GLSL_SAMPLER_DIM_MS;
+   tex->op = nir_texop_txf_ms;
+   tex->src[0].src_type = nir_tex_src_coord;
+   tex->src[0].src = nir_src_for_ssa(nir_channels(&b, nir_f2i32(&b, pos), 0x3));
+   tex->src[1].src_type = nir_tex_src_ms_index;
+   tex->src[1].src = nir_src_for_ssa(nir_imm_int(&b, 0)); /* just use first sample */
+   tex->src[2].src_type = nir_tex_src_texture_deref;
+   tex->src[2].src = nir_src_for_ssa(tex_deref);
+   tex->dest_type = nir_type_uint;
+   tex->is_array = false;
+   tex->coord_components = 2;
+
+   nir_ssa_dest_init(&tex->instr, &tex->dest, 4, 32, "tex");
+   nir_builder_instr_insert(&b, &tex->instr);
+
+   nir_store_var(&b, stencil_out, nir_channel(&b, &tex->dest.ssa, 1), 0x1);
+
+   struct pipe_shader_state state = { 0 };
+   state.type = PIPE_SHADER_IR_NIR;
+   state.ir.nir = b.shader;
+   ctx->stencil_resolve_fs = ctx->base.create_fs_state(&ctx->base, &state);
+
+   return ctx->stencil_resolve_fs;
 }
 
 static void
