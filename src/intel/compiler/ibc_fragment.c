@@ -564,10 +564,35 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
             ibc_build_intrinsic(b, IBC_INTRINSIC_OP_PIXEL_INTERP,
                                 dest, -1, 2, srcs, IBC_PI_NUM_SRCS);
          } else {
-            /* need to do looping trick */
-            assert(!"TODO: interpolateAtSample(non-uniform-id)");
-         }
+            /* The sample ID source isn't uniform, but our pixel interpolator
+             * messages can only handle a single sample ID.  Build a loop to
+             * uniformize the sample ID source, getting one of the sample IDs,
+             * perform a predicated PI-message for all channels with that
+             * sample ID, then repeat for any other channels until all of
+             * the sample IDs have been handled.
+             */
+            ibc_flow_instr *_do = ibc_DO(b);
 
+            ibc_ref sample_id = ibc_uniformize(b, src);
+
+            ibc_ref flag =
+               ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_EQ, src, sample_id);
+
+            srcs[IBC_PI_SAMPLE] = (ibc_intrinsic_src) {
+               .ref = sample_id, .num_comps = 1,
+            };
+
+            dest = ibc_builder_new_logical_reg(b, IBC_TYPE_F, 2);
+
+            ibc_intrinsic_instr *pi =
+               ibc_build_intrinsic(b, IBC_INTRINSIC_OP_PIXEL_INTERP,
+                                   dest, -1, 2, srcs, IBC_PI_NUM_SRCS);
+            ibc_instr_set_predicate(&pi->instr, flag, BRW_PREDICATE_NORMAL);
+
+            /* Continue the loop if there are any live channels left */
+            ibc_WHILE(b, flag, ibc_predicate_invert(BRW_PREDICATE_NORMAL),
+                      _do, NULL);
+         }
       }
       break;
    }
@@ -789,6 +814,7 @@ ibc_lower_io_pi_to_send(ibc_builder *b, ibc_intrinsic_instr *pi)
    const ibc_ref sample = pi->src[IBC_PI_SAMPLE].ref;
 
    unsigned msg_type, desc_bits = 0, num_srcs = 0;
+   ibc_ref desc = ibc_null(IBC_TYPE_UD);
    ibc_intrinsic_src src[2] = {};
 
    if (sample.file != IBC_FILE_NONE) {
@@ -797,7 +823,9 @@ ibc_lower_io_pi_to_send(ibc_builder *b, ibc_intrinsic_instr *pi)
       if (sample.file == IBC_FILE_IMM) {
          desc_bits = ((uint8_t) ibc_ref_as_int(sample) & 0xf) << 4;
       } else {
-         assert(!"not implemented");
+         ibc_builder_push_scalar(b);
+         desc = ibc_SHL(b, IBC_TYPE_UD, sample, ibc_imm_ud(4));
+         ibc_builder_pop(b);
       }
    } else {
       if (offset_x.file == IBC_FILE_IMM && offset_y.file == IBC_FILE_IMM) {
@@ -827,6 +855,7 @@ ibc_lower_io_pi_to_send(ibc_builder *b, ibc_intrinsic_instr *pi)
    send->mlen = mlen;
    send->rlen = 2 * (pi->instr.simd_width / 8);
    send->sfid = GEN7_SFID_PIXEL_INTERPOLATOR;
+   send->desc = desc;
    send->desc_imm = desc_bits |
                     brw_pixel_interp_desc(devinfo, msg_type, !perspective,
                                           pi->instr.simd_width == 16,
