@@ -792,6 +792,54 @@ blit_resolve_stencil(struct d3d12_context *ctx,
    pipe_resource_reference(&tmp, NULL);
 }
 
+static bool
+replicate_stencil_supported(struct d3d12_context *ctx,
+                            const struct pipe_blit_info *info)
+{
+   if (info->src.resource->nr_samples > 1 ||
+       info->dst.resource->nr_samples <= 1)
+      return false;
+
+   if (!util_format_is_depth_or_stencil(info->src.format) ||
+       !(info->mask & PIPE_MASK_S))
+      return false;
+
+   if (info->mask & PIPE_MASK_Z) {
+      struct pipe_blit_info new_info = *info;
+      new_info.mask = PIPE_MASK_Z;
+      if (!util_blitter_is_blit_supported(ctx->blitter, &new_info))
+         return false;
+   }
+
+   return true;
+}
+
+static void
+blit_replicate_stencil(struct d3d12_context *ctx,
+                       const struct pipe_blit_info *info)
+{
+   assert(info->mask & PIPE_MASK_S);
+
+   if (D3D12_DEBUG_BLIT & d3d12_debug)
+      debug_printf("D3D12 BLIT: blit_replicate_stencil\n");
+
+   if (info->mask & PIPE_MASK_Z) {
+      /* resolve depth into dst */
+      struct pipe_blit_info new_info = *info;
+      new_info.mask = PIPE_MASK_Z;
+      util_blit(ctx, &new_info);
+   }
+
+   util_blit_save_state(ctx);
+   util_blitter_stencil_fallback(ctx->blitter, info->dst.resource,
+                                 info->dst.level,
+                                 info->dst.box.x, info->dst.box.y,
+                                 info->dst.box.z,
+                                 info->src.resource,
+                                 info->src.level,
+                                 &info->src.box);
+}
+
 void
 d3d12_blit(struct pipe_context *pctx,
            const struct pipe_blit_info *info)
@@ -842,6 +890,8 @@ d3d12_blit(struct pipe_context *pctx,
                         info->src.level, &info->src.box, info->mask);
    else if (util_blitter_is_blit_supported(ctx->blitter, info))
       util_blit(ctx, info);
+   else if (replicate_stencil_supported(ctx, info))
+      blit_replicate_stencil(ctx, info);
    else
       debug_printf("D3D12: blit unsupported %s -> %s\n",
                  util_format_short_name(info->src.resource->format),
