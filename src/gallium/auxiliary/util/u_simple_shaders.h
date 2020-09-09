@@ -159,6 +159,9 @@ util_make_fs_pack_color_zs(struct pipe_context *pipe,
                            enum pipe_format zs_format,
                            bool dst_is_color);
 
+void *
+util_make_fs_stencil_blit(struct pipe_context *pipe, bool msaa_src);
+
 #ifdef __cplusplus
 }
 #endif
