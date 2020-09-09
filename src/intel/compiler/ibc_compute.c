@@ -246,10 +246,20 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_shared_atomic_or:
    case nir_intrinsic_shared_atomic_xor:
    case nir_intrinsic_shared_atomic_exchange:
-   case nir_intrinsic_shared_atomic_comp_swap: {
+   case nir_intrinsic_shared_atomic_comp_swap:
+   case nir_intrinsic_shared_atomic_fmin:
+   case nir_intrinsic_shared_atomic_fmax:
+   case nir_intrinsic_shared_atomic_fcomp_swap: {
       assert(nir_dest_is_divergent(instr->dest));
 
       unsigned aop = brw_aop_for_nir_intrinsic(instr);
+
+      bool is_float =
+         instr->intrinsic == nir_intrinsic_shared_atomic_fmin ||
+         instr->intrinsic == nir_intrinsic_shared_atomic_fmax ||
+         instr->intrinsic == nir_intrinsic_shared_atomic_fcomp_swap;
+
+      enum ibc_type datatype = is_float ? IBC_TYPE_F : IBC_TYPE_UD;
 
       /* Set up the BTI or handle */
       ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
@@ -267,19 +277,19 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
       /* If we're not an atomic aop == -1 so the last two conditions are true
        * vacuously.
        */
-      if (aop != BRW_AOP_INC && aop != BRW_AOP_DEC) {
+      if (is_float || (aop != BRW_AOP_INC && aop != BRW_AOP_DEC)) {
          srcs[IBC_SURFACE_SRC_DATA0] = (ibc_intrinsic_src) {
-            .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+            .ref = ibc_nir_src(nti, instr->src[1], datatype),
          };
       }
 
-      if (aop == BRW_AOP_CMPWR) {
+      if (aop == (is_float ? BRW_AOP_FCMPWR : BRW_AOP_CMPWR)) {
          srcs[IBC_SURFACE_SRC_DATA1] = (ibc_intrinsic_src) {
-            .ref = ibc_nir_src(nti, instr->src[2], IBC_TYPE_UD),
+            .ref = ibc_nir_src(nti, instr->src[2], datatype),
          };
       }
 
-      dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
+      dest = ibc_builder_new_logical_reg(b, datatype, 1);
       ibc_intrinsic_instr *image_op =
          ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC,
                              dest, -1, 1, srcs, IBC_SURFACE_NUM_SRCS);

@@ -244,10 +244,17 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       break;
    case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
       send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
-      desc = brw_dp_untyped_atomic_desc(b->shader->devinfo,
-                                        intrin->instr.simd_width,
-                                        ibc_ref_as_uint(atomic_op),
-                                        intrin->num_dest_comps > 0);
+      if (data0.type == IBC_TYPE_F) {
+         desc = brw_dp_untyped_atomic_float_desc(b->shader->devinfo,
+                                                 intrin->instr.simd_width,
+                                                 ibc_ref_as_uint(atomic_op),
+                                                 intrin->num_dest_comps > 0);
+      } else {
+         desc = brw_dp_untyped_atomic_desc(b->shader->devinfo,
+                                           intrin->instr.simd_width,
+                                           ibc_ref_as_uint(atomic_op),
+                                           intrin->num_dest_comps > 0);
+      }
       break;
    case IBC_INTRINSIC_OP_A64_UNTYPED_READ:
       send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
@@ -279,10 +286,17 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       break;
    case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC:
       send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
-      desc = brw_dp_a64_untyped_atomic_desc(devinfo,
-                                            intrin->instr.simd_width, 32,
-                                            ibc_ref_as_uint(atomic_op),
-                                            intrin->num_dest_comps > 0);
+      if (data0.type == IBC_TYPE_F) {
+         desc = brw_dp_a64_untyped_atomic_float_desc(devinfo,
+                                                     intrin->instr.simd_width,
+                                                     ibc_ref_as_uint(atomic_op),
+                                                     intrin->num_dest_comps > 0);
+      } else {
+         desc = brw_dp_a64_untyped_atomic_desc(devinfo,
+                                               intrin->instr.simd_width, 32,
+                                               ibc_ref_as_uint(atomic_op),
+                                               intrin->num_dest_comps > 0);
+      }
       break;
    case IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC_INT64:
       send->sfid = HSW_SFID_DATAPORT_DATA_CACHE_1;
