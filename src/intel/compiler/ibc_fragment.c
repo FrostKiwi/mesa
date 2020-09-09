@@ -793,12 +793,6 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
    return true;
 }
 
-static void
-ibc_emit_alhpa_to_coverage_workaround(struct nir_to_ibc_state *nti)
-{
-   unreachable("Unsupported");
-}
-
 bool
 ibc_lower_io_pi_to_send(ibc_builder *b, ibc_intrinsic_instr *pi)
 {
@@ -1042,15 +1036,6 @@ ibc_emit_fb_writes(struct nir_to_ibc_state *nti)
    bool replicate_alpha = key->alpha_test_replicate_alpha ||
       (key->nr_color_regions > 1 && key->alpha_to_coverage &&
        nti_fs->out.sample_mask.file == IBC_FILE_NONE);
-
-   /* From the SKL PRM, Volume 7, "Alpha Coverage":
-    *  "If Pixel Shader outputs oMask, AlphaToCoverage is disabled in
-    *   hardware, regardless of the state setting for this feature."
-    */
-   if (key->alpha_to_coverage &&
-       nti_fs->out.sample_mask.file != IBC_FILE_NONE &&
-       nti_fs->out.color[0].file != IBC_FILE_NONE)
-      ibc_emit_alhpa_to_coverage_workaround(nti);
 
    assert(!key->clamp_fragment_color);
 
@@ -1347,6 +1332,22 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
    brw_nir_apply_key(shader, compiler, &key->base, max_subgroup_size, true);
    brw_nir_lower_fs_inputs(shader, compiler->devinfo, key);
    brw_nir_lower_fs_outputs(shader);
+
+   /* The Skylake PRM, Volume 7, "Alpha Coverage" says:
+    *
+    *    "If Pixel Shader outputs oMask, AlphaToCoverage is disabled in
+    *     hardware, regardless of the state setting for this feature."
+    *
+    * So we emulate it in the shader.
+    */
+   if (key->alpha_to_coverage) {
+      /* Run constant fold optimization in order to get the correct source
+       * offset to determine render target 0 store instruction in
+       * emit_alpha_to_coverage pass.
+       */
+      NIR_PASS_V(shader, nir_opt_constant_folding);
+      NIR_PASS_V(shader, brw_nir_lower_alpha_to_coverage);
+   }
 
    if (!key->multisample_fbo)
       NIR_PASS_V(shader, brw_nir_demote_sample_qualifiers);
