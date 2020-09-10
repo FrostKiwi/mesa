@@ -108,8 +108,8 @@ print_ssa_def(nir_ssa_def *def, print_state *state)
    FILE *fp = state->fp;
    if (def->name != NULL)
       fprintf(fp, "/* %s */ ", def->name);
-   fprintf(fp, "%s %u ssa_%u", sizes[def->num_components], def->bit_size,
-           def->index);
+   fprintf(fp, "%s %2u %s ssa_%u", sizes[def->num_components], def->bit_size,
+           def->divergent ? "div" : "con", def->index);
 }
 
 static void
