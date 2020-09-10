@@ -1582,6 +1582,92 @@ d3d12_apply_resource_states(struct d3d12_context *ctx, bool predraw)
 }
 
 static void
+d3d12_clear_render_target(struct pipe_context *pctx,
+                          struct pipe_surface *psurf,
+                          const union pipe_color_union *color,
+                          unsigned dstx, unsigned dsty,
+                          unsigned width, unsigned height,
+                          bool render_condition_enabled)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_surface *surf = d3d12_surface(psurf);
+
+   if (!render_condition_enabled && ctx->current_predication)
+      ctx->cmdlist->SetPredication(NULL, 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
+
+   d3d12_transition_resource_state(ctx, d3d12_resource(psurf->texture),
+                                   D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                   SubresourceTransitionFlags_None);
+   d3d12_apply_resource_states(ctx, false);
+
+   enum pipe_format format = psurf->texture->format;
+   float clear_color[4];
+
+   if (util_format_is_pure_uint(format)) {
+      for (int c = 0; c < 4; ++c)
+         clear_color[c] = color->ui[c];
+   } else if (util_format_is_pure_sint(format)) {
+      for (int c = 0; c < 4; ++c)
+         clear_color[c] = color->i[c];
+   } else {
+      for (int c = 0; c < 4; ++c)
+         clear_color[c] = color->f[c];
+   }
+
+   D3D12_RECT rect = { dstx, dsty, dstx + width, dsty + height };
+   ctx->cmdlist->ClearRenderTargetView(surf->desc_handle.cpu_handle,
+                                       color->f, 1, &rect);
+
+   d3d12_batch_reference_surface_texture(d3d12_current_batch(ctx), surf);
+
+   if (!render_condition_enabled && ctx->current_predication) {
+      ctx->cmdlist->SetPredication(
+         d3d12_resource_resource(ctx->current_predication), 0,
+         D3D12_PREDICATION_OP_EQUAL_ZERO);
+   }
+}
+
+static void
+d3d12_clear_depth_stencil(struct pipe_context *pctx,
+                          struct pipe_surface *psurf,
+                          unsigned clear_flags,
+                          double depth,
+                          unsigned stencil,
+                          unsigned dstx, unsigned dsty,
+                          unsigned width, unsigned height,
+                          bool render_condition_enabled)
+{
+   struct d3d12_context *ctx = d3d12_context(pctx);
+   struct d3d12_surface *surf = d3d12_surface(psurf);
+
+   if (!render_condition_enabled && ctx->current_predication)
+      ctx->cmdlist->SetPredication(NULL, 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
+
+   D3D12_CLEAR_FLAGS flags = (D3D12_CLEAR_FLAGS)0;
+   if (clear_flags & PIPE_CLEAR_DEPTH)
+      flags |= D3D12_CLEAR_FLAG_DEPTH;
+   if (clear_flags & PIPE_CLEAR_STENCIL)
+      flags |= D3D12_CLEAR_FLAG_STENCIL;
+
+   d3d12_transition_resource_state(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
+                                   D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                                   SubresourceTransitionFlags_None);
+   d3d12_apply_resource_states(ctx, false);
+
+   D3D12_RECT rect = { dstx, dsty, dstx + width, dsty + height };
+   ctx->cmdlist->ClearDepthStencilView(surf->desc_handle.cpu_handle, flags,
+                                       depth, stencil, 1, &rect);
+
+   d3d12_batch_reference_surface_texture(d3d12_current_batch(ctx), surf);
+
+   if (!render_condition_enabled && ctx->current_predication) {
+      ctx->cmdlist->SetPredication(
+         d3d12_resource_resource(ctx->current_predication), 0,
+         D3D12_PREDICATION_OP_EQUAL_ZERO);
+   }
+}
+
+static void
 d3d12_clear(struct pipe_context *pctx,
             unsigned buffers,
             const union pipe_color_union *color,
@@ -1593,48 +1679,20 @@ d3d12_clear(struct pipe_context *pctx,
       for (int i = 0; i < ctx->fb.nr_cbufs; ++i) {
          if (buffers & (PIPE_CLEAR_COLOR0 << i)) {
             struct pipe_surface *psurf = ctx->fb.cbufs[i];
-            struct d3d12_surface *surf = d3d12_surface(psurf);
-            enum pipe_format format = psurf->texture->format;
-            float clear_color[4];
-
-            if (util_format_is_pure_uint(format)) {
-               for (int c = 0; c < 4; ++c)
-                  clear_color[c] = color->ui[c];
-            } else if (util_format_is_pure_sint(format)) {
-               for (int c = 0; c < 4; ++c)
-                  clear_color[c] = color->i[c];
-            } else {
-               for (int c = 0; c < 4; ++c)
-                  clear_color[c] = color->f[c];
-            }
-
-            d3d12_transition_resource_state(ctx, d3d12_resource(psurf->texture),
-                                            D3D12_RESOURCE_STATE_RENDER_TARGET,
-                                            SubresourceTransitionFlags_None);
-            d3d12_apply_resource_states(ctx, false);
-            ctx->cmdlist->ClearRenderTargetView(surf->desc_handle.cpu_handle,
-                                                clear_color, 0, NULL);
-            d3d12_batch_reference_surface_texture(d3d12_current_batch(ctx), surf);
+            d3d12_clear_render_target(pctx, psurf, color,
+                                      0, 0, psurf->width, psurf->height,
+                                      true);
          }
       }
    }
 
    if (buffers & PIPE_CLEAR_DEPTHSTENCIL && ctx->fb.zsbuf) {
-      struct d3d12_surface* surf = d3d12_surface(ctx->fb.zsbuf);
-
-      D3D12_CLEAR_FLAGS flags = (D3D12_CLEAR_FLAGS)0;
-      if (buffers & PIPE_CLEAR_DEPTH)
-         flags |= D3D12_CLEAR_FLAG_DEPTH;
-      if (buffers & PIPE_CLEAR_STENCIL)
-         flags |= D3D12_CLEAR_FLAG_STENCIL;
-
-      d3d12_transition_resource_state(ctx, d3d12_resource(ctx->fb.zsbuf->texture),
-                                      D3D12_RESOURCE_STATE_DEPTH_WRITE,
-                                      SubresourceTransitionFlags_None);
-      d3d12_apply_resource_states(ctx, false);
-      ctx->cmdlist->ClearDepthStencilView(surf->desc_handle.cpu_handle, flags,
-                                          depth, stencil, 0, NULL);
-      d3d12_batch_reference_surface_texture(d3d12_current_batch(ctx), surf);
+      struct pipe_surface *psurf = ctx->fb.zsbuf;
+      d3d12_clear_depth_stencil(pctx, psurf,
+                                buffers & PIPE_CLEAR_DEPTHSTENCIL,
+                                depth, stencil,
+                                0, 0, psurf->width, psurf->height,
+                                true);
    }
 }
 
@@ -1870,6 +1928,8 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->base.get_timestamp = d3d12_get_timestamp;
 
    ctx->base.clear = d3d12_clear;
+   ctx->base.clear_render_target = d3d12_clear_render_target;
+   ctx->base.clear_depth_stencil = d3d12_clear_depth_stencil;
    ctx->base.draw_vbo = d3d12_draw_vbo;
    ctx->base.flush = d3d12_flush;
    ctx->base.flush_resource = d3d12_flush_resource;
