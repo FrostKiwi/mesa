@@ -330,6 +330,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    case nir_op_fddx:
    case nir_op_fddx_coarse: {
+      assert(!ibc_ref_read_is_uniform(src[0]));
+
       ibc_ref left = ibc_restride(b, src[0], IBC_TYPE_F, 0, 4, 4, 0);
       ibc_ref right = ibc_restride(b, src[0], IBC_TYPE_F, 1, 4, 4, 0);
       dest = ibc_ADD(b, IBC_TYPE_F, ibc_NEG(b, IBC_TYPE_F, left), right);
@@ -337,6 +339,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    }
 
    case nir_op_fddx_fine: {
+      assert(!ibc_ref_read_is_uniform(src[0]));
+
       ibc_ref left = ibc_restride(b, src[0], IBC_TYPE_F, 0, 2, 2, 0);
       ibc_ref right = ibc_restride(b, src[0], IBC_TYPE_F, 1, 2, 2, 0);
       dest = ibc_ADD(b, IBC_TYPE_F, ibc_NEG(b, IBC_TYPE_F, left), right);
@@ -345,6 +349,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    case nir_op_fddy:
    case nir_op_fddy_coarse: {
+      assert(!ibc_ref_read_is_uniform(src[0]));
+
       ibc_ref top = ibc_restride(b, src[0], IBC_TYPE_F, 0, 4, 4, 0);
       ibc_ref bottom = ibc_restride(b, src[0], IBC_TYPE_F, 2, 4, 4, 0);
       dest = ibc_ADD(b, IBC_TYPE_F, ibc_NEG(b, IBC_TYPE_F, top), bottom);
@@ -352,6 +358,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    }
 
    case nir_op_fddy_fine: {
+      assert(!ibc_ref_read_is_uniform(src[0]));
+
       if (devinfo->gen >= 11 ||
           (devinfo->is_broadwell && src[0].type == IBC_TYPE_HF)) {
          assert(src[0].type == dest_type);
