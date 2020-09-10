@@ -223,6 +223,10 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
       if (mov->src[0].ref.file == IBC_FILE_IMM)
          assert(mov->src[0].mod == IBC_ALU_SRC_MOD_NONE);
 
+      if (mov->src[0].ref.file == IBC_FILE_FLAG &&
+          mov->dest.file != IBC_FILE_FLAG)
+         return false;
+
       /* Cannot saturate or type convert */
       if (mov->src[0].ref.type != mov->dest.type || mov->saturate)
          return false;
