@@ -1254,8 +1254,13 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_intrinsic_instr *write)
 
       /* Stencil is a packed byte value */
       assert(ibc_type_bit_size(src_stencil.type) == 32);
+
       ibc_ref stencil = src_stencil;
       stencil.type = IBC_TYPE_UB;
+
+      if (src_stencil.file == IBC_FILE_IMM)
+         stencil = ibc_imm_ud(ibc_ref_as_uint(src_stencil) & 0xff);
+
       src[num_srcs++].ref = stencil;
    }
 
