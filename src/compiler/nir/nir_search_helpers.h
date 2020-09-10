@@ -318,6 +318,14 @@ is_used_by_non_fsat(nir_alu_instr *instr)
    return false;
 }
 
+static inline bool
+is_convergent(UNUSED struct hash_table *ht,
+              nir_alu_instr *instr, unsigned src,
+              unsigned num_components, const uint8_t *swizzle)
+{
+   return !nir_src_is_divergent(instr->src[src].src);
+}
+
 /**
  * Returns true if a NIR ALU src represents a constant integer
  * of either 32 or 64 bits, and the higher word (bit-size / 2)

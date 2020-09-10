@@ -2306,6 +2306,16 @@ distribute_src_mods = [
    (('fabs', ('fsign(is_used_once)', a)), ('fsign', ('fabs', a))),
 ]
 
+# Run divergence analysis before calling this pass.
+convergent_ops = [
+   (('fddx',        'a(is_convergent)'), 0),
+   (('fddx_fine',   'a(is_convergent)'), 0),
+   (('fddx_coarse', 'a(is_convergent)'), 0),
+   (('fddy',        'a(is_convergent)'), 0),
+   (('fddy_fine',   'a(is_convergent)'), 0),
+   (('fddy_coarse', 'a(is_convergent)'), 0),
+]
+
 print(nir_algebraic.AlgebraicPass("nir_opt_algebraic", optimizations).render())
 print(nir_algebraic.AlgebraicPass("nir_opt_algebraic_before_ffma",
                                   before_ffma_optimizations).render())
@@ -2313,3 +2323,5 @@ print(nir_algebraic.AlgebraicPass("nir_opt_algebraic_late",
                                   late_optimizations).render())
 print(nir_algebraic.AlgebraicPass("nir_opt_algebraic_distribute_src_mods",
                                   distribute_src_mods).render())
+print(nir_algebraic.AlgebraicPass("nir_opt_algebraic_convergent_ops",
+                                  convergent_ops).render())
