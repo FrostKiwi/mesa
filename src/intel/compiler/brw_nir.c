@@ -1256,6 +1256,18 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
 
    OPT(nir_lower_locals_to_regs);
 
+   if (brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
+      NIR_PASS_V(nir, nir_convert_to_lcssa, true, true);
+
+      static const nir_divergence_options divergence_opts =
+         nir_divergence_single_prim_per_subgroup |
+         nir_divergence_single_patch_per_tcs_subgroup |
+         nir_divergence_single_patch_per_tes_subgroup;
+
+      nir_divergence_analysis(nir, divergence_opts);
+      OPT(nir_opt_algebraic_convergent_ops);
+   }
+
    if (unlikely(debug_enabled)) {
       /* Re-index SSA defs so we print more sensible numbers. */
       nir_foreach_function(function, nir) {
@@ -1266,17 +1278,6 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
       fprintf(stderr, "NIR (SSA form) for %s shader:\n",
               _mesa_shader_stage_to_string(nir->info.stage));
       nir_print_shader(nir, stderr);
-   }
-
-   if (brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
-      NIR_PASS_V(nir, nir_convert_to_lcssa, true, true);
-
-      static const nir_divergence_options divergence_opts =
-         nir_divergence_single_prim_per_subgroup |
-         nir_divergence_single_patch_per_tcs_subgroup |
-         nir_divergence_single_patch_per_tes_subgroup;
-
-      nir_divergence_analysis(nir, divergence_opts);
    }
 
    nir_validate_ssa_dominance(nir, "before nir_convert_from_ssa");
