@@ -36,6 +36,7 @@ struct d3d12_query {
    ID3D12QueryHeap *query_heap;
    unsigned curr_query, num_queries;
    size_t query_size;
+   struct d3d12_query *subquery;
 
    D3D12_QUERY_TYPE d3d12qtype;
 
@@ -156,6 +157,8 @@ d3d12_destroy_query(struct pipe_context *pctx,
 {
    struct d3d12_query *query = (struct d3d12_query *)q;
    pipe_resource *predicate = &query->predicate->base;
+   if (query->subquery)
+      d3d12_destroy_query(pctx, (struct pipe_query *)query->subquery);
    pipe_resource_reference(&predicate, NULL);
    query->query_heap->Release();
    FREE(query);
@@ -285,6 +288,9 @@ begin_query(struct d3d12_context *ctx, struct d3d12_query *q, bool restart)
       q->curr_query = 1;
    }
 
+   if (q->subquery)
+      begin_query(ctx, q->subquery, restart);
+
    ctx->cmdlist->BeginQuery(q->query_heap, q->d3d12qtype, q->curr_query);
 }
 
@@ -337,6 +343,10 @@ end_query(struct d3d12_context *ctx, struct d3d12_query *q)
    struct d3d12_batch *batch = d3d12_current_batch(ctx);
    struct d3d12_resource *res = (struct d3d12_resource *)q->buffer;
    ID3D12Resource *d3d12_res = d3d12_resource_underlying(res, &offset);
+
+   /* End subquery first so that we can use fence value from parent */
+   if (q->subquery)
+      end_query(ctx, q->subquery);
 
    /* With QUERY_TIME_ELAPSED we have recorded one value at
     * (2 * q->curr_query), and now we record a value at (2 * q->curr_query + 1)
