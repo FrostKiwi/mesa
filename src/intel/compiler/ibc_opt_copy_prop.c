@@ -318,6 +318,7 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
             }
             comp += intrin->src[i].num_comps;
          }
+         return false;
       }
 
       default:
