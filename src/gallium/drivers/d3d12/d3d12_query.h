@@ -32,4 +32,7 @@ d3d12_suspend_queries(struct d3d12_context *ctx);
 void
 d3d12_resume_queries(struct d3d12_context *ctx);
 
+void
+d3d12_validate_queries(struct d3d12_context *ctx);
+
 #endif

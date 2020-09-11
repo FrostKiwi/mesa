@@ -24,6 +24,7 @@
 #include "d3d12_compiler.h"
 #include "d3d12_context.h"
 #include "d3d12_format.h"
+#include "d3d12_query.h"
 #include "d3d12_resource.h"
 #include "d3d12_root_signature.h"
 #include "d3d12_screen.h"
@@ -444,6 +445,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
    }
 
    d3d12_select_shader_variants(ctx, dinfo);
+   d3d12_validate_queries(ctx);
    for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
       struct d3d12_shader *shader = ctx->gfx_stages[i] ? ctx->gfx_stages[i]->current : NULL;
       if (ctx->gfx_pipeline_state.stages[i] != shader) {

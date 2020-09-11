@@ -56,9 +56,9 @@ d3d12_query_heap_type(unsigned query_type)
    case PIPE_QUERY_OCCLUSION_PREDICATE:
    case PIPE_QUERY_OCCLUSION_PREDICATE_CONSERVATIVE:
       return D3D12_QUERY_HEAP_TYPE_OCCLUSION;
-   case PIPE_QUERY_PRIMITIVES_GENERATED:
    case PIPE_QUERY_PIPELINE_STATISTICS:
       return D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
+   case PIPE_QUERY_PRIMITIVES_GENERATED:
    case PIPE_QUERY_PRIMITIVES_EMITTED:
    case PIPE_QUERY_SO_STATISTICS:
       return D3D12_QUERY_HEAP_TYPE_SO_STATISTICS;
@@ -82,9 +82,9 @@ d3d12_query_type(unsigned query_type)
    case PIPE_QUERY_OCCLUSION_PREDICATE:
    case PIPE_QUERY_OCCLUSION_PREDICATE_CONSERVATIVE:
       return D3D12_QUERY_TYPE_BINARY_OCCLUSION;
-   case PIPE_QUERY_PRIMITIVES_GENERATED:
    case PIPE_QUERY_PIPELINE_STATISTICS:
       return D3D12_QUERY_TYPE_PIPELINE_STATISTICS;
+   case PIPE_QUERY_PRIMITIVES_GENERATED:
    case PIPE_QUERY_PRIMITIVES_EMITTED:
    case PIPE_QUERY_SO_STATISTICS:
       return D3D12_QUERY_TYPE_SO_STATISTICS_STREAM0;
@@ -201,10 +201,6 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
          result->u64 = results_u64[i];
          break;
 
-      case PIPE_QUERY_PRIMITIVES_GENERATED:
-         result->u64 += results_stats[i].IAPrimitives;
-         break;
-
       case PIPE_QUERY_PIPELINE_STATISTICS:
          result->pipeline_statistics.ia_vertices += results_stats[i].IAVertices;
          result->pipeline_statistics.ia_primitives += results_stats[i].IAPrimitives;
@@ -217,6 +213,10 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
          result->pipeline_statistics.hs_invocations += results_stats[i].HSInvocations;
          result->pipeline_statistics.ds_invocations += results_stats[i].DSInvocations;
          result->pipeline_statistics.cs_invocations += results_stats[i].CSInvocations;
+         break;
+
+      case PIPE_QUERY_PRIMITIVES_GENERATED:
+         result->u64 += results_so[i].PrimitivesStorageNeeded;
          break;
 
       case PIPE_QUERY_PRIMITIVES_EMITTED:
@@ -237,6 +237,15 @@ accumulate_result(struct d3d12_context *ctx, struct d3d12_query *q,
                       util_str_query_type(q->type, true));
          unreachable("unexpected query type");
       }
+   }
+
+   if (q->subquery) {
+      union pipe_query_result subresult;
+
+      accumulate_result(ctx, q->subquery, &subresult, false);
+      q->subquery->curr_query = 0;
+      if (q->type == PIPE_QUERY_PRIMITIVES_GENERATED)
+         result->u64 += subresult.pipeline_statistics.ia_primitives;
    }
 
    if (write) {
@@ -418,6 +427,20 @@ d3d12_resume_queries(struct d3d12_context *ctx)
 {
    list_for_each_entry(struct d3d12_query, query, &ctx->active_queries, active_list) {
       begin_query(ctx, query, false);
+   }
+}
+
+void
+d3d12_validate_queries(struct d3d12_context *ctx)
+{
+   bool have_xfb = !!ctx->gfx_pipeline_state.num_so_targets;
+
+   list_for_each_entry(struct d3d12_query, query, &ctx->active_queries, active_list) {
+      if (query->type == PIPE_QUERY_PRIMITIVES_GENERATED && !have_xfb && !query->subquery) {
+         struct pipe_query *subquery = d3d12_create_query(&ctx->base, PIPE_QUERY_PIPELINE_STATISTICS, 0);
+         query->subquery = (struct d3d12_query *)subquery;
+         begin_query(ctx, query->subquery, true);
+      }
    }
 }
 
