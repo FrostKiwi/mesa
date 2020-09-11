@@ -206,7 +206,8 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
       last_vertex_stage_writes_pos = (shader->nir->info.outputs_written & VARYING_BIT_POS) != 0;
    }
 
-   if (last_vertex_stage_writes_pos && state->stages[PIPE_SHADER_FRAGMENT]) {
+   if (last_vertex_stage_writes_pos && state->stages[PIPE_SHADER_FRAGMENT] &&
+       !state->rast->base.rasterizer_discard) {
       auto shader = state->stages[PIPE_SHADER_FRAGMENT];
       pso_desc.PS.BytecodeLength = shader->bytecode_length;
       pso_desc.PS.pShaderBytecode = shader->bytecode;
