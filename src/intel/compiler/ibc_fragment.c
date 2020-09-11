@@ -700,7 +700,7 @@ ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
                                      l == FRAG_RESULT_SAMPLE_MASK) ? 1 : 4;
          *output = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, num_comps);
 
-         if (l == FRAG_RESULT_COLOR) {
+         if (l == FRAG_RESULT_COLOR && i == 0) {
             /* gl_FragColor is replicated to all color outputs */
             assert(output == &nti_fs->out.color[0]);
             for (unsigned i = 1; i < key->nr_color_regions; i++)
