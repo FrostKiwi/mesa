@@ -158,6 +158,7 @@ d3d12_destroy_query(struct pipe_context *pctx,
    pipe_resource *predicate = &query->predicate->base;
    pipe_resource_reference(&predicate, NULL);
    query->query_heap->Release();
+   FREE(query);
 }
 
 static bool
