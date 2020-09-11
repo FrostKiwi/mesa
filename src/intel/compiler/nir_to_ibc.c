@@ -2259,7 +2259,7 @@ nti_emit_if(struct nir_to_ibc_state *nti, nir_if *nif)
 
    if (nir_cf_list_is_simple_jump(&nif->else_list, &ntype)) {
       emit_flow_for_nir_jump_type(nti, ntype, cond, IBC_PREDICATE_NOT);
-      nti_emit_cf_list(nti, &nif->else_list);
+      nti_emit_cf_list(nti, &nif->then_list);
       return;
    }
 
