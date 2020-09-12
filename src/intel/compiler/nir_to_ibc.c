@@ -442,6 +442,36 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_ADD_SAT(b, dest_type, src[0], src[1]);
       break;
 
+   case nir_op_isub_sat: {
+      /* The hardware unfortunately performs source negation at the bit width
+       * of the source.  So if the source is 0x80000000D, the negation is
+       * 0x80000000D.  As a result, subtractSaturate(0, 0x80000000) will
+       * produce 0x80000000 instead of 0x7fffffff.
+       *
+       * We could use the 33-bit accumulator to work around this, but this
+       * doesn't work for 64-bit integers, and wouldn't work for SIMD16/32
+       * without splitting it back to multiple SIMD8 instructions.
+       *
+       * Instead, we use slightly different math.  For any n-bit value x,
+       * we know (x >> 1) != -(x >> 1).  We can use this fact to only do
+       * subtractions involving (x >> 1).  subtractSaturate(a, b) ==
+       * subtractSaturate(subtractSaturate(a, (b >> 1)), b - (b >> 1)).
+       *
+       * In other words:
+       *
+       *    tmp = -(src1 >> 1);
+       *    dst = add.sat(add.sat(src0, tmp), -(src1 + tmp));
+       */
+      enum ibc_type type = dest_type;
+
+      ibc_ref tmp = ibc_NEG(b, type, ibc_SHR(b, type, src[1], ibc_imm_d(1)));
+
+      dest = ibc_ADD_SAT(b, type,
+                         ibc_ADD_SAT(b, type, src[0], tmp),
+                         ibc_NEG(b, type, ibc_ADD(b, type, src[1], tmp)));
+      break;
+   }
+
    case nir_op_usub_sat: {
       ibc_ref a_gt_b =
          ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_G, src[0], src[1]);
