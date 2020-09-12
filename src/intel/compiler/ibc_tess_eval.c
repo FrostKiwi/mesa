@@ -127,7 +127,17 @@ ibc_emit_nir_tes_intrinsic(struct nir_to_ibc_state *nti,
       ibc_emit_urb_read(b, dest, handle, per_slot_offset, global_offset,
                         read_components);
 
-      dest.logical.comp = first_component;
+      if (first_component != 0) {
+         ibc_ref load = dest;
+         dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD,
+                                            instr->num_components);
+
+         ibc_ref srcs[4] = {};
+         for (int i = 0; i < instr->num_components; i++)
+            srcs[i] = ibc_comp_ref(load, first_component + i);
+
+         ibc_VEC_to(b, dest, srcs, instr->num_components);
+      }
 
       if (!divergent)
          ibc_builder_pop(b);
