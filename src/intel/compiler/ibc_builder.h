@@ -729,6 +729,16 @@ ibc_CMP(ibc_builder *b, enum ibc_type dest_type,
    return dest;
 }
 
+static inline ibc_ref
+ibc_ADD_SAT(ibc_builder *b, enum ibc_type dest_type, ibc_ref src0, ibc_ref src1)
+{
+   ibc_ref dest = ibc_ADD(b, dest_type, src0, src1);
+   ibc_alu_instr *add = ibc_instr_as_alu(ibc_reg_ssa_instr(dest.reg));
+   add->saturate = true;
+
+   return dest;
+}
+
 static inline ibc_intrinsic_instr *
 ibc_build_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
                     ibc_ref dest, int num_dest_bytes, int num_dest_comps,
