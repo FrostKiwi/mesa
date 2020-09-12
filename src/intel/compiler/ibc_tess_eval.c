@@ -285,6 +285,7 @@ ibc_emit_icl_tes_eot_workaround(ibc_builder *b, ibc_ref handle)
    send->has_side_effects = true;
    send->has_header = true;
    send->eot = true;
+   send->instr.we_all = true;
    send->sfid = BRW_SFID_URB;
    send->desc_imm =
       brw_urb_desc(devinfo, GEN8_URB_OPCODE_SIMD8_WRITE, false, true, 0);
