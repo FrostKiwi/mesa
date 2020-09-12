@@ -194,7 +194,7 @@ ibc_lower_io_urb_read_to_send(ibc_builder *b, ibc_intrinsic_instr *read)
    const bool per_slot_offset_present =
       !ibc_ref_is_null_or_zero(per_slot_offset);
 
-   ibc_builder_push_instr_group(b, &read->instr);
+   ibc_builder_push_group(b, 0, 8);
 
    assert(!read->can_reorder && read->has_side_effects);
    assert(read->instr.predicate == IBC_PREDICATE_NONE);
