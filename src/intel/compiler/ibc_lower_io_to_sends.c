@@ -594,6 +594,13 @@ lower_tex(ibc_builder *b, ibc_intrinsic_instr *intrin)
          ibc_ref sampler_base_ptr;
          ibc_ref g0_3 = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
          g0_3.hw_grf.byte += 3 * sizeof(uint32_t);
+
+         /* Gen11+ sampler message headers include bits in 4:0 which conflict
+          * with the ones included in g0.3 bits 4:0.  Mask them out.
+          */
+         if (devinfo->gen >= 11)
+            g0_3 = ibc_AND(b, IBC_TYPE_UD, g0_3, ibc_imm_ud(INTEL_MASK(31,5)));
+
          if (sampler_bti.file == IBC_FILE_IMM) {
             assert(sampler_bti_imm >= 16);
             const unsigned sampler_state_size = 16; /* 16 bytes */
@@ -611,6 +618,12 @@ lower_tex(ibc_builder *b, ibc_intrinsic_instr *intrin)
                                     ibc_imm_ud(4)));
          }
          ibc_MOV_to(b, header_3, sampler_base_ptr);
+      } else if (devinfo->gen >= 11) {
+         /* Gen11+ sampler message headers include bits in 4:0 which conflict
+          * with the ones included in g0.3 bits 4:0.  Mask them out.
+          */
+         ibc_build_alu2(b, IBC_ALU_OP_AND, header_3, header_3,
+                        ibc_imm_ud(INTEL_MASK(31, 5)));
       }
       ibc_builder_pop(b);
 
