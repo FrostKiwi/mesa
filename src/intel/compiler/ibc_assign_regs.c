@@ -332,10 +332,17 @@ struct ibc_assign_regs_gc_state {
 };
 
 static unsigned
+reg_index_to_ra_node(const struct ibc_assign_regs_gc_state *state,
+                     unsigned reg_index)
+{
+   return state->num_hack_nodes + reg_index;
+}
+
+static unsigned
 reg_to_ra_node(const struct ibc_assign_regs_gc_state *state,
                const ibc_reg *reg)
 {
-   return state->num_hack_nodes + reg->index;
+   return reg_index_to_ra_node(state, reg->index);
 }
 
 static ibc_ref
