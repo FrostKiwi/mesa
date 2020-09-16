@@ -1215,8 +1215,11 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
    case nir_intrinsic_ballot: {
       assert(!nir_dest_is_divergent(instr->dest));
+      ibc_ref value = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
       ibc_ref flag = nti_initialize_flag(b, 0);
-      ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ, ibc_imm_w(-1));
+
+      ibc_MOV_to_flag(b, flag, BRW_CONDITIONAL_NZ, value);
+
       flag.type = flag.reg->flag.bits <= 16 ? IBC_TYPE_UW : IBC_TYPE_UD;
 
       ibc_builder_push_scalar(b);
