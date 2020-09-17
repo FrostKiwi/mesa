@@ -63,6 +63,8 @@ struct nir_to_ibc_state {
    struct ibc_payload_base *payload;
    void *stage_state;
 
+   nir_rounding_mode float_controls_execution_mode;
+
    ibc_flow_instr *_do;
    struct list_head breaks;
 

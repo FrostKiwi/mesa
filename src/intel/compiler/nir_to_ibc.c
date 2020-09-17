@@ -116,6 +116,18 @@ ibc_setup_curb_payload(ibc_builder *b, struct ibc_payload_base *payload,
 }
 
 static void
+update_rounding_mode(struct nir_to_ibc_state *nti)
+{
+   ibc_builder *b = &nti->b;
+   const unsigned exec_mode = nti->float_controls_execution_mode;
+
+   /* TODO: add remove_extra_rounding_modes() optimization pass */
+
+   if (nir_has_any_rounding_mode_enabled(exec_mode))
+      ibc_RND_MODE(b, brw_rnd_mode_from_execution_mode(exec_mode));
+}
+
+static void
 nti_emit_alu(struct nir_to_ibc_state *nti,
              const nir_alu_instr *instr)
 {
@@ -214,13 +226,30 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
 
    case nir_op_i2f16:
    case nir_op_u2f16:
-   case nir_op_f2f16:
    case nir_op_i2f32:
    case nir_op_u2f32:
-   case nir_op_f2f32:
    case nir_op_i2f64:
    case nir_op_u2f64:
    case nir_op_f2f64:
+      dest = ibc_MOV(b, dest_type, src[0]);
+      break;
+
+   case nir_op_f2f16_rtne:
+   case nir_op_f2f16_rtz:
+   case nir_op_f2f16:
+      if (instr->op != nir_op_f2f16)
+         ibc_RND_MODE(b, brw_rnd_mode_from_nir_op(instr->op));
+      else
+         update_rounding_mode(nti);
+
+      /* guaranteed by brw_nir_lower_conversions */
+      assert(ibc_type_bit_size(src[0].type) < 64);
+      dest = ibc_MOV(b, dest_type, src[0]);
+      break;
+
+   case nir_op_f2f32:
+      update_rounding_mode(nti);
+
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
@@ -407,8 +436,6 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    }
 
    BINOP_CASE(iadd, ADD)
-   BINOP_CASE(fadd, ADD)
-   BINOP_CASE(fmul, FMUL)
    BINOP_CASE(imul, IMUL)
    BINOP_CASE(imul_2x32_64, IMUL)
    BINOP_CASE(umul_2x32_64, IMUL)
@@ -420,6 +447,16 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    BINOP_CASE(ushr, SHR)
    BINOP_CASE(urol, ROL)
    BINOP_CASE(uror, ROR)
+
+   case nir_op_fadd:
+      update_rounding_mode(nti);
+      dest = ibc_ADD(b, dest_type, src[0], src[1]);
+      break;
+
+   case nir_op_fmul:
+      update_rounding_mode(nti);
+      dest = ibc_FMUL(b, dest_type, src[0], src[1]);
+      break;
 
    case nir_op_imul_32x16:
    case nir_op_umul_32x16: {
@@ -539,11 +576,13 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    BINOP_CASE(fmax, MAX)
 
    case nir_op_ffma:
+      update_rounding_mode(nti);
       assert(ibc_type_base_type(dest_type) == IBC_TYPE_FLOAT);
       dest = ibc_MAD(b, dest_type, src[2], src[1], src[0]);
       break;
 
    case nir_op_flrp:
+      update_rounding_mode(nti);
       assert(dest_type == IBC_TYPE_F);
       dest = ibc_LRP(b, dest_type, src[2], src[1], src[0]);
       break;
@@ -2352,6 +2391,30 @@ nti_emit_cf_list(struct nir_to_ibc_state *nti,
    }
 }
 
+static void
+nti_emit_shader_float_controls_execution_mode(struct nir_to_ibc_state *nti)
+{
+   unsigned exec_mode = nti->float_controls_execution_mode;
+
+   if (exec_mode == FLOAT_CONTROLS_DEFAULT_FLOAT_CONTROL_MODE)
+      return;
+
+   unsigned mask, mode = brw_rnd_mode_from_nir(exec_mode, &mask);
+
+   if (mask == 0)
+      return;
+
+   ibc_intrinsic_src srcs[2] = {
+      { .ref = ibc_imm_ud(mode), .num_comps = 1 },
+      { .ref = ibc_imm_ud(mask), .num_comps = 1 },
+   };
+   ibc_intrinsic_instr *intrin =
+      ibc_build_intrinsic(&nti->b, IBC_INTRINSIC_OP_FLOAT_CONTROL_MODE,
+                          ibc_null(IBC_TYPE_UD), -1, -1, srcs, 2);
+   intrin->can_reorder = false;
+   intrin->has_side_effects = true;
+}
+
 void
 nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
                       gl_shader_stage stage,
@@ -2406,6 +2469,9 @@ ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
    }
 
    nti->nir_block_to_ibc = _mesa_pointer_hash_table_create(nti->mem_ctx);
+   nti->float_controls_execution_mode = nir->info.float_controls_execution_mode;
+
+   nti_emit_shader_float_controls_execution_mode(nti);
 
    nti_emit_cf_list(nti, &impl->body);
 }

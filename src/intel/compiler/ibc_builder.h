@@ -1067,6 +1067,20 @@ ibc_PLN(ibc_builder *b, ibc_ref vert, ibc_ref bary)
 }
 
 static inline void
+ibc_RND_MODE(ibc_builder *b, unsigned rnd)
+{
+   ibc_intrinsic_src srcs[2] = {
+      { .ref = ibc_imm_ud(rnd << BRW_CR0_RND_MODE_SHIFT), .num_comps = 1 },
+      { .ref = ibc_imm_ud(BRW_CR0_RND_MODE_MASK), .num_comps = 1 },
+   };
+   ibc_intrinsic_instr *intrin =
+      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_FLOAT_CONTROL_MODE,
+                          ibc_null(IBC_TYPE_UD), -1, -1, srcs, 2);
+   intrin->can_reorder = false;
+   intrin->has_side_effects = true;
+}
+
+static inline void
 ibc_WAIT(ibc_builder *b)
 {
    ibc_builder_push_scalar(b);
