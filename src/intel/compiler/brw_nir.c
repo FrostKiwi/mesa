@@ -1631,6 +1631,53 @@ brw_glsl_base_type_for_nir_type(nir_alu_type type)
    }
 }
 
+unsigned
+brw_rnd_mode_from_nir(unsigned mode, unsigned *mask)
+{
+   unsigned brw_mode = 0;
+   *mask = 0;
+
+   if ((FLOAT_CONTROLS_ROUNDING_MODE_RTZ_FP16 |
+        FLOAT_CONTROLS_ROUNDING_MODE_RTZ_FP32 |
+        FLOAT_CONTROLS_ROUNDING_MODE_RTZ_FP64) &
+       mode) {
+      brw_mode |= BRW_RND_MODE_RTZ << BRW_CR0_RND_MODE_SHIFT;
+      *mask |= BRW_CR0_RND_MODE_MASK;
+   }
+   if ((FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP16 |
+        FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP32 |
+        FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP64) &
+       mode) {
+      brw_mode |= BRW_RND_MODE_RTNE << BRW_CR0_RND_MODE_SHIFT;
+      *mask |= BRW_CR0_RND_MODE_MASK;
+   }
+   if (mode & FLOAT_CONTROLS_DENORM_PRESERVE_FP16) {
+      brw_mode |= BRW_CR0_FP16_DENORM_PRESERVE;
+      *mask |= BRW_CR0_FP16_DENORM_PRESERVE;
+   }
+   if (mode & FLOAT_CONTROLS_DENORM_PRESERVE_FP32) {
+      brw_mode |= BRW_CR0_FP32_DENORM_PRESERVE;
+      *mask |= BRW_CR0_FP32_DENORM_PRESERVE;
+   }
+   if (mode & FLOAT_CONTROLS_DENORM_PRESERVE_FP64) {
+      brw_mode |= BRW_CR0_FP64_DENORM_PRESERVE;
+      *mask |= BRW_CR0_FP64_DENORM_PRESERVE;
+   }
+   if (mode & FLOAT_CONTROLS_DENORM_FLUSH_TO_ZERO_FP16)
+      *mask |= BRW_CR0_FP16_DENORM_PRESERVE;
+   if (mode & FLOAT_CONTROLS_DENORM_FLUSH_TO_ZERO_FP32)
+      *mask |= BRW_CR0_FP32_DENORM_PRESERVE;
+   if (mode & FLOAT_CONTROLS_DENORM_FLUSH_TO_ZERO_FP64)
+      *mask |= BRW_CR0_FP64_DENORM_PRESERVE;
+   if (mode == FLOAT_CONTROLS_DEFAULT_FLOAT_CONTROL_MODE)
+      *mask |= BRW_CR0_FP_MODE_MASK;
+
+   if (*mask != 0)
+      assert((*mask & brw_mode) == brw_mode);
+
+   return brw_mode;
+}
+
 nir_shader *
 brw_nir_create_passthrough_tcs(void *mem_ctx, const struct brw_compiler *compiler,
                                const nir_shader_compiler_options *options,

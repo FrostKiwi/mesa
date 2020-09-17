@@ -698,28 +698,6 @@ emit_find_msb_using_lzd(const fs_builder &bld,
    inst->src[0].negate = true;
 }
 
-static brw_rnd_mode
-brw_rnd_mode_from_nir_op (const nir_op op) {
-   switch (op) {
-   case nir_op_f2f16_rtz:
-      return BRW_RND_MODE_RTZ;
-   case nir_op_f2f16_rtne:
-      return BRW_RND_MODE_RTNE;
-   default:
-      unreachable("Operation doesn't support rounding mode");
-   }
-}
-
-static brw_rnd_mode
-brw_rnd_mode_from_execution_mode(unsigned execution_mode)
-{
-   if (nir_has_any_rounding_mode_rtne(execution_mode))
-      return BRW_RND_MODE_RTNE;
-   if (nir_has_any_rounding_mode_rtz(execution_mode))
-      return BRW_RND_MODE_RTZ;
-   return BRW_RND_MODE_UNSPECIFIED;
-}
-
 fs_reg
 fs_visitor::prepare_alu_destination_and_sources(const fs_builder &bld,
                                                 nir_alu_instr *instr,
