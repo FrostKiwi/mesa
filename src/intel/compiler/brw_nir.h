@@ -47,6 +47,31 @@ type_size_vec4_bytes(const struct glsl_type *type, bool bindless)
    return type_size_vec4(type, bindless) * 16;
 }
 
+static inline enum brw_rnd_mode
+brw_rnd_mode_from_nir_op(const nir_op op)
+{
+   switch (op) {
+   case nir_op_f2f16_rtz:
+      return BRW_RND_MODE_RTZ;
+   case nir_op_f2f16_rtne:
+      return BRW_RND_MODE_RTNE;
+   default:
+      unreachable("Operation doesn't support rounding mode");
+   }
+}
+
+static inline enum brw_rnd_mode
+brw_rnd_mode_from_execution_mode(unsigned execution_mode)
+{
+   if (nir_has_any_rounding_mode_rtne(execution_mode))
+      return BRW_RND_MODE_RTNE;
+   if (nir_has_any_rounding_mode_rtz(execution_mode))
+      return BRW_RND_MODE_RTZ;
+   return BRW_RND_MODE_UNSPECIFIED;
+}
+
+unsigned brw_rnd_mode_from_nir(unsigned mode, unsigned *mask);
+
 /* Flags set in the instr->pass_flags field by i965 analysis passes */
 enum {
    BRW_NIR_NON_BOOLEAN           = 0x0,
