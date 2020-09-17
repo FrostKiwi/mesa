@@ -34,6 +34,7 @@
 
 #include <compiler/shader_enums.h>
 
+#include "brw_compiler.h"
 #include "brw_eu.h"
 
 #ifdef __cplusplus
@@ -1480,6 +1481,9 @@ typedef struct ibc_shader {
 
    /** Total scratch space in bytes used by the shader */
    uint32_t scratch_B;
+
+   /** Shader statistics gathered during compilation */
+   struct brw_compile_stats stats;
 } ibc_shader;
 
 ibc_shader *ibc_shader_create(void *mem_ctx,
@@ -1639,7 +1643,7 @@ void ibc_calc_hw_grf_range(ibc_ref *ref,
                            int num_bytes, int num_comps, uint8_t simd_width,
                            unsigned *min, unsigned *max);
 
-const unsigned *ibc_to_binary(const ibc_shader *shader,
+const unsigned *ibc_to_binary(ibc_shader *shader,
                               const struct shader_info *info,
                               const struct brw_compiler *compiler,
                               void *log_data,

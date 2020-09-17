@@ -419,6 +419,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                struct brw_cs_prog_data *prog_data,
                const struct nir_shader *src_shader,
                int shader_time_index,
+               struct brw_compile_stats *stats,
                char **error_str_out)
 {
    assert(src_shader->info.stage == MESA_SHADER_COMPUTE);
@@ -542,6 +543,9 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
          bin[i].data = ibc_to_binary(ibc, &shader->info, compiler, log_data,
                                      mem_ctx, &bin[i].size);
          bin[i].num_ff_regs = nti.payload->num_ff_regs;
+
+         if (stats)
+            stats[i] = ibc->stats;
       }
 
       ralloc_free(bin_ctx);

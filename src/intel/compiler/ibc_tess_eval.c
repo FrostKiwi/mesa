@@ -325,6 +325,7 @@ ibc_compile_tes(const struct brw_compiler *compiler, void *log_data,
                 const struct brw_vue_map *input_vue_map,
                 struct brw_tes_prog_data *prog_data,
                 struct nir_shader *nir,
+                struct brw_compile_stats *stats,
                 char **error_str_out)
 {
    assert(nir->info.stage == MESA_SHADER_TESS_EVAL);
@@ -380,6 +381,12 @@ ibc_compile_tes(const struct brw_compiler *compiler, void *log_data,
    ibc->cycles = perf->latency;
    ralloc_free(perf);
 
-   return ibc_to_binary(ibc, &nir->info, compiler, log_data, mem_ctx,
-                        &prog_data->base.base.program_size);
+   const unsigned *assembly =
+      ibc_to_binary(ibc, &nir->info, compiler, log_data, mem_ctx,
+                    &prog_data->base.base.program_size);
+
+   if (stats)
+      stats[0] = ibc->stats;
+
+   return assembly;
 }

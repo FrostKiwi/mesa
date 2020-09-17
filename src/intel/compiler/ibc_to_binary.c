@@ -779,7 +779,7 @@ generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
 }
 
 const unsigned *
-ibc_to_binary(const ibc_shader *shader, const shader_info *info,
+ibc_to_binary(ibc_shader *shader, const shader_info *info,
               const struct brw_compiler *compiler, void *log_data,
               void *mem_ctx, unsigned *program_size)
 {
@@ -793,8 +793,7 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
    struct disasm_info *disasm_info = disasm_initialize(devinfo, NULL);
    disasm_new_inst_group(disasm_info, 0);
 
-   unsigned spill_count = 0, fill_count = 0;
-   unsigned loop_count = 0, send_count = 0;
+   unsigned nop_count = 0; /* TODO: Gen8-9 POW/FDIV workaround */
 
    ibc_foreach_instr(instr, shader) {
       brw_push_insn_state(p);
@@ -828,7 +827,7 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
 
       case IBC_INSTR_TYPE_SEND:
          generate_send(p, ibc_instr_as_send(instr));
-         send_count++;
+         shader->stats.sends++;
          break;
 
       case IBC_INSTR_TYPE_INTRINSIC:
@@ -838,7 +837,7 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
       case IBC_INSTR_TYPE_FLOW:
          generate_flow(p, ibc_instr_as_flow(instr));
          if (ibc_instr_as_flow(instr)->op == IBC_FLOW_OP_WHILE)
-            loop_count++;
+            shader->stats.loops++;
          break;
 
       default:
@@ -865,6 +864,9 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
 
    unsigned after_size = p->next_insn_offset - start_offset;
 
+   shader->stats.instructions = before_size / 16 - nop_count;
+   shader->stats.cycles = shader->cycles;
+
    if (INTEL_DEBUG & intel_debug_flag_for_shader_stage(shader->stage)) {
       fprintf(stderr,
               "Native code for %s %s shader %s\n"
@@ -873,9 +875,10 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
               "Compacted %u to %u bytes (%.0f%%)\n",
                info->label ? info->label : "unnamed",
                _mesa_shader_stage_to_string(shader->stage), info->name,
-              shader->simd_width, before_size / 16,
-              loop_count, shader->cycles,
-              spill_count, fill_count, send_count,
+              shader->simd_width, shader->stats.instructions,
+              shader->stats.loops, shader->cycles,
+              shader->stats.spills, shader->stats.fills,
+              shader->stats.sends,
               before_size, after_size,
               100.0f * (before_size - after_size) / before_size);
       dump_assembly(p->store, start_offset, p->next_insn_offset,
@@ -891,9 +894,10 @@ ibc_to_binary(const ibc_shader *shader, const shader_info *info,
                               "Promoted %u constants, "
                               "compacted %d to %d bytes.",
                               _mesa_shader_stage_to_abbrev(shader->stage),
-                              shader->simd_width, before_size / 16,
-                              loop_count, shader->cycles,
-                              spill_count, fill_count, send_count,
+                              shader->simd_width, shader->stats.instructions,
+                              shader->stats.loops, shader->cycles,
+                              shader->stats.spills, shader->stats.fills,
+                              shader->stats.sends,
                               "unknown",
                               0,
                               before_size, after_size);

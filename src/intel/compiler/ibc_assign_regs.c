@@ -750,6 +750,8 @@ emit_unspill(ibc_builder *b,
       scratch_offset_B += block_size_bytes;
       dest_ref.hw_grf.byte += block_size_bytes;
       num_regs -= block_size_regs;
+
+      b->shader->stats.fills++;
    }
 }
 
@@ -796,6 +798,8 @@ emit_spill(ibc_builder *b,
       scratch_offset_B += block_size_bytes;
       data_ref.hw_grf.byte += block_size_bytes;
       num_regs -= block_size_regs;
+
+      b->shader->stats.spills++;
    }
 }
 

@@ -41,6 +41,7 @@ ibc_compile_tes(const struct brw_compiler *compiler, void *log_data,
                 const struct brw_vue_map *input_vue_map,
                 struct brw_tes_prog_data *prog_data,
                 struct nir_shader *shader,
+                struct brw_compile_stats *stats,
                 char **error_str);
 
 const unsigned *
@@ -49,6 +50,7 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
                const struct brw_vs_prog_key *key,
                struct brw_vs_prog_data *prog_data,
                struct nir_shader *shader,
+               struct brw_compile_stats *stats,
                char **error_str);
 
 const unsigned *
@@ -62,6 +64,7 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
                int shader_time_index32,
                bool allow_spilling,
                bool use_rep_send, struct brw_vue_map *vue_map,
+               struct brw_compile_stats *stats, /**< Array of three stats */
                char **error_str);
 
 const unsigned *
@@ -71,6 +74,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                struct brw_cs_prog_data *prog_data,
                const struct nir_shader *shader,
                int shader_time_index,
+               struct brw_compile_stats *stats,
                char **error_str);
 
 #ifdef __cplusplus
