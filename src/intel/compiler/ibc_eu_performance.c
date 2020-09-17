@@ -201,9 +201,7 @@ instruction_desc(const struct gen_eu_instruction_info *info)
          return calculate_desc(info, GEN_UNIT_FPU, 2, 0, 0, 2, 0,
                                0, 8, 4 /* XXX */, 12 /* XXX */, 0, 0);
 
-#if 0
-   case SHADER_OPCODE_RND_MODE:
-   case SHADER_OPCODE_FLOAT_CONTROL_MODE:
+   case INTRIN(FLOAT_CONTROL_MODE):
       if (devinfo->gen >= 11)
          return calculate_desc(info, GEN_UNIT_FPU, 24 /* XXX */, 0, 0,
                                4 /* XXX */, 0,
@@ -212,7 +210,6 @@ instruction_desc(const struct gen_eu_instruction_info *info)
          return calculate_desc(info, GEN_UNIT_FPU, 20 /* XXX */, 0, 0,
                                4 /* XXX */, 0,
                                0, 0, 0, 0, 0, 0);
-#endif
 
    case INTRIN(SIMD_SHUFFLE):
       if (devinfo->gen >= 11)

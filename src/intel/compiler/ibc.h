@@ -1129,6 +1129,9 @@ enum ibc_intrinsic_op {
    IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE,
    IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC_INT64,
    IBC_INTRINSIC_OP_A64_UNTYPED_ATOMIC,
+
+   /* Change the float control or rounding modes */
+   IBC_INTRINSIC_OP_FLOAT_CONTROL_MODE,
 };
 
 /* Sources for [un]typed surface intrinsics */
