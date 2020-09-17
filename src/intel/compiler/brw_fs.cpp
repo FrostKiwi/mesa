@@ -8971,7 +8971,8 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
       return ibc_compile_fs(compiler, log_data, mem_ctx, key, prog_data,
                             shader, shader_time_index8,
                             shader_time_index16, shader_time_index32,
-                            allow_spilling, use_rep_send, vue_map, error_str);
+                            allow_spilling, use_rep_send, vue_map,
+                            stats, error_str);
    }
 
    const unsigned max_subgroup_size = compiler->devinfo->gen >= 6 ? 32 : 16;
@@ -9319,7 +9320,7 @@ brw_compile_cs(const struct brw_compiler *compiler, void *log_data,
 
    if (brw_nir_should_use_ibc(src_shader, compiler, true)) {
       return ibc_compile_cs(compiler, log_data, mem_ctx, key, prog_data,
-                            src_shader, shader_time_index, error_str);
+                            src_shader, shader_time_index, stats, error_str);
    }
 
    if ((int)key->base.subgroup_size_type >= (int)BRW_SUBGROUP_SIZE_REQUIRE_8) {

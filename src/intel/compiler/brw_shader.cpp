@@ -1372,7 +1372,7 @@ brw_compile_tes(const struct brw_compiler *compiler,
 
    if (brw_nir_should_use_ibc(nir, compiler, true)) {
       return ibc_compile_tes(compiler, log_data, mem_ctx, key, input_vue_map,
-                             prog_data, nir, error_str);
+                             prog_data, nir, stats, error_str);
    }
 
    if (is_scalar) {

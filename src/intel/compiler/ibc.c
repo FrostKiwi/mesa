@@ -672,7 +672,7 @@ ibc_shader_create(void *mem_ctx,
 
    shader->devinfo = devinfo;
    shader->stage = stage;
-   shader->simd_width = simd_width;
+   shader->simd_width = shader->stats.dispatch_width = simd_width;
 
    list_inithead(&shader->instrs);
    list_inithead(&shader->flow_instrs);

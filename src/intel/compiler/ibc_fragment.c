@@ -1327,6 +1327,7 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
                bool allow_spilling,
                bool use_rep_send,
                struct brw_vue_map *vue_map,
+               struct brw_compile_stats *stats,
                char **error_str_out)
 {
    assert(shader->info.stage == MESA_SHADER_FRAGMENT);
@@ -1461,6 +1462,9 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
          bin[i].data = ibc_to_binary(ibc, &shader->info, compiler, log_data,
                                      mem_ctx, &bin[i].size);
          bin[i].num_ff_regs = nti.payload->num_ff_regs;
+
+         if (stats)
+            stats[i] = ibc->stats;
       }
 
       ralloc_free(bin_ctx);
