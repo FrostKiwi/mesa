@@ -86,6 +86,12 @@ output_slot_unwritten(const ibc_ref *outputs,
           outputs[varying].file == IBC_FILE_NONE;
 }
 
+static ibc_ref
+value_or_zero(ibc_ref ref)
+{
+   return ref.type != IBC_TYPE_INVALID ? ref : ibc_imm_zero(IBC_TYPE_UD);
+}
+
 void
 ibc_emit_urb_writes(ibc_builder *b,
                     const struct brw_vue_map *vue_map,
@@ -122,15 +128,10 @@ ibc_emit_urb_writes(ibc_builder *b,
             assert(length == 0);
             urb_offset++;
          } else {
-            ibc_ref zero = ibc_imm_zero(IBC_TYPE_UD);
-
-            sources[length++] = zero;
-            sources[length++] = (vue_map->slots_valid & VARYING_BIT_LAYER) ?
-                                outputs[VARYING_SLOT_LAYER] : zero;
-            sources[length++] = (vue_map->slots_valid & VARYING_BIT_VIEWPORT) ?
-                                outputs[VARYING_SLOT_VIEWPORT] : zero;
-            sources[length++] = (vue_map->slots_valid & VARYING_BIT_PSIZ) ?
-                                outputs[VARYING_SLOT_PSIZ] : zero;
+            sources[length++] = ibc_imm_zero(IBC_TYPE_UD);
+            sources[length++] = value_or_zero(outputs[VARYING_SLOT_LAYER]);
+            sources[length++] = value_or_zero(outputs[VARYING_SLOT_VIEWPORT]);
+            sources[length++] = value_or_zero(outputs[VARYING_SLOT_PSIZ]);
          }
       } else if (output_slot_unwritten(outputs, vue_map, slot)) {
          /* Some outputs (like position or clip distances) may have output
