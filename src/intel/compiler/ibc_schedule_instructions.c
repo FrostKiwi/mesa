@@ -137,6 +137,9 @@ ibc_instr_fe_cycles(const ibc_instr *instr,
       case IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL:
          return 2;
 
+      case IBC_INTRINSIC_OP_FLOAT_CONTROL_MODE:
+         return 4;
+
       case IBC_INTRINSIC_OP_SIMD_SHUFFLE:
       case IBC_INTRINSIC_OP_MOV_INDIRECT:
          /* This does an ALU op to fill out the indirect register file plus an
@@ -401,6 +404,7 @@ ibc_instr_dest_latency(const ibc_instr *instr,
       case IBC_INTRINSIC_OP_PLN:
       case IBC_INTRINSIC_OP_ALIGN16_DDX_FINE:
       case IBC_INTRINSIC_OP_STALL_REG:
+      case IBC_INTRINSIC_OP_FLOAT_CONTROL_MODE:
          return ibc_alu_latency(IBC_TYPE_F, devinfo);
 
       case IBC_INTRINSIC_OP_WAIT:
