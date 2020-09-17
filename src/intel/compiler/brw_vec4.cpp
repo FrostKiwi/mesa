@@ -2947,7 +2947,7 @@ brw_compile_vs(const struct brw_compiler *compiler, void *log_data,
 
    if (brw_nir_should_use_ibc(shader, compiler, true)) {
       return ibc_compile_vs(compiler, log_data, mem_ctx, key, prog_data,
-                            shader, error_str);
+                            shader, stats, error_str);
    }
 
    if (is_scalar) {
