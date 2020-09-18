@@ -872,6 +872,7 @@ ibc_to_binary(ibc_shader *shader, const shader_info *info,
 
    shader->stats.instructions = before_size / 16 - nop_count;
    shader->stats.cycles = shader->cycles;
+   shader->stats.sends -= shader->stats.spills + shader->stats.fills;
 
    if (INTEL_DEBUG & intel_debug_flag_for_shader_stage(shader->stage)) {
       fprintf(stderr,
