@@ -1359,6 +1359,10 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          ibc_ref push_comp = nti->payload->push;
          push_comp.type = instr->dest.ssa.bit_size;
          push_comp.hw_grf.byte += base_offset_B + c * comp_size_B;
+         push_comp.hw_grf.width = 8;
+         push_comp.hw_grf.hstride = ibc_type_byte_size(push_comp.type);
+         push_comp.hw_grf.vstride =
+            push_comp.hw_grf.hstride * push_comp.hw_grf.width;
 
          if (nir_src_is_const(instr->src[0])) {
             push_comp.hw_grf.byte += nir_src_as_uint(instr->src[0]);
