@@ -999,14 +999,14 @@ anv_get_physical_device_features_1_2(struct anv_physical_device *pdevice,
 
    f->samplerMirrorClampToEdge            = true;
    f->drawIndirectCount                   = true;
-   f->storageBuffer8BitAccess             = pdevice->info.gen >= 8;
+   f->storageBuffer8BitAccess             = pdevice->info.gen >= 8 && pdevice->info.gen < 11;
    f->uniformAndStorageBuffer8BitAccess   = pdevice->info.gen >= 8;
-   f->storagePushConstant8                = pdevice->info.gen >= 8;
+   f->storagePushConstant8                = pdevice->info.gen >= 8 && pdevice->info.gen < 11;
    f->shaderBufferInt64Atomics            = pdevice->info.gen >= 9 &&
                                             pdevice->use_softpin;
    f->shaderSharedInt64Atomics            = false;
    f->shaderFloat16                       = pdevice->info.gen >= 8;
-   f->shaderInt8                          = pdevice->info.gen >= 8;
+   f->shaderInt8                          = pdevice->info.gen >= 8 && pdevice->info.gen < 11;
 
    bool descIndexing = pdevice->has_a64_buffer_access &&
                        pdevice->has_bindless_images;
