@@ -173,8 +173,15 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       src[num_srcs++].ref = ibc_comp_ref(address, i);
 
    if (data0.file != IBC_FILE_NONE) {
+      /* Byte scattered messages consume 32-bit data and just ignore the
+       * unused bits at the top.  Insert a MOV to ensure we have the right
+       * data size.
+       */
+      ibc_ref data0_32b = ibc_type_bit_size(data0.type) < 32 ?
+                          ibc_MOV(b, IBC_TYPE_UD, data0) : data0;
+
       for (unsigned i = 0; i < num_data_comps; i++)
-         src[num_srcs++].ref = ibc_comp_ref(data0, i);
+         src[num_srcs++].ref = ibc_comp_ref(data0_32b, i);
    }
 
    if (data1.file != IBC_FILE_NONE) {

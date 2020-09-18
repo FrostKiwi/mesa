@@ -1548,12 +1548,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       } else {
          assert(nir_src_bit_size(instr->src[0]) <= 32);
          assert(nir_src_num_components(instr->src[0]) == 1);
-         /* The byte scattered messages consume 32-bit data and just ignore the
-          * unused bits at the top.  Insert a MOV to ensure we have the right
-          * data size.
-          */
-         srcs[IBC_SURFACE_SRC_DATA0].ref =
-            ibc_MOV(b, IBC_TYPE_UD, srcs[IBC_SURFACE_SRC_DATA0].ref);
          store = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_A64_BYTE_SCATTERED_WRITE,
                                      ibc_null(IBC_TYPE_UD), 0, 0, srcs,
                                      IBC_SURFACE_NUM_SRCS);
@@ -1704,12 +1698,6 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       } else {
          assert(nir_src_bit_size(instr->src[0]) <= 32);
          assert(nir_src_num_components(instr->src[0]) == 1);
-         /* The byte scattered messages consume 32-bit data and just ignore the
-          * unused bits at the top.  Insert a MOV to ensure we have the right
-          * data size.
-          */
-         srcs[IBC_SURFACE_SRC_DATA0].ref =
-            ibc_MOV(b, IBC_TYPE_UD, srcs[IBC_SURFACE_SRC_DATA0].ref);
          store = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE,
                                      ibc_null(IBC_TYPE_UD), 0, 0,
                                      srcs, IBC_SURFACE_NUM_SRCS);
