@@ -253,6 +253,27 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
       dest = ibc_MOV(b, dest_type, src[0]);
       break;
 
+   case nir_op_fquantize2f16: {
+      /* Get the appropriately signed zero */
+      ibc_ref src0_ud = src[0];
+      src0_ud.type = IBC_TYPE_UD;
+      ibc_ref zero = ibc_AND(b, IBC_TYPE_UD, src0_ud, ibc_imm_ud(0x80000000));
+      zero.type = IBC_TYPE_F;
+
+      /* Check for denormal */
+      ibc_ref is_denorm =
+         ibc_CMP(b, IBC_TYPE_FLAG, BRW_CONDITIONAL_L,
+                 ibc_ABS(b, IBC_TYPE_F, src[0]), ibc_imm_f(ldexpf(1.0, -14)));
+
+      /* Do the actual F32 -> F16 -> F32 conversion */
+      ibc_ref quantized =
+         ibc_MOV(b, IBC_TYPE_F, ibc_MOV(b, IBC_TYPE_HF, src[0]));
+
+      /* Select that or zero based on normal status */
+      dest = ibc_SEL(b, dest_type, is_denorm, zero, quantized);
+      break;
+   }
+
    case nir_op_b2b1:
    case nir_op_i2b1:
    case nir_op_f2b1:
