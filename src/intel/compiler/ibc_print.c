@@ -282,6 +282,9 @@ print_alu_instr(FILE *fp, const ibc_alu_instr *alu)
          *c += 'a' - 'A';
    fprintf(fp, "%s", alu_op_name);
 
+   if (alu->saturate)
+      fprintf(fp, ".sat");
+
    if (alu->cmod) {
       fprintf(fp, ".%s", conditional_mod_name(alu->cmod));
       assert(alu->instr.flag.file == IBC_FILE_NONE ||
