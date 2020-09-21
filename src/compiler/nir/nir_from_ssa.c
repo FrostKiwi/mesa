@@ -440,7 +440,8 @@ aggressive_coalesce_parallel_copy(nir_parallel_copy_instr *pcopy,
       /* TODO: We can probably do better here but for now we should be safe
        * if we just don't coalesce things with different divergence.
        */
-      if (dest_node->set->divergent != src_node->set->divergent)
+      if (dest_node->set->divergent != src_node->set->divergent &&
+          src_node->def->parent_instr->type != nir_instr_type_ssa_undef)
          continue;
 
       if (!merge_sets_interfere(src_node->set, dest_node->set))
