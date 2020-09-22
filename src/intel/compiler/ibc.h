@@ -539,6 +539,19 @@ ibc_ref_is_null_or_zero(ibc_ref ref)
    return true;
 }
 
+static inline bool
+ibc_ref_is_float_zero(ibc_ref ref)
+{
+   assert(ref.type == IBC_TYPE_F);
+
+   if (ref.file != IBC_FILE_IMM)
+      return false;
+
+   float data = 0;
+   memcpy(&data, ref.imm, sizeof(float));
+   return data == 0.0;
+}
+
 static inline uint64_t
 ibc_ref_as_uint(ibc_ref ref)
 {

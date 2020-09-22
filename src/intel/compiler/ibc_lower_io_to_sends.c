@@ -654,7 +654,7 @@ lower_tex(ibc_builder *b, ibc_intrinsic_instr *intrin)
       break;
 
    case IBC_INTRINSIC_OP_TXL:
-      if (devinfo->gen >= 9 && ibc_ref_is_null_or_zero(lod)) {
+      if (devinfo->gen >= 9 && ibc_ref_is_float_zero(lod)) {
          zero_lod = true;
       } else {
          src[num_srcs++].ref = lod;
