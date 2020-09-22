@@ -427,7 +427,7 @@ d3d12_create_depth_stencil_alpha_state(struct pipe_context *pctx,
       dsa->desc.FrontFace = stencil_op_state(depth_stencil_alpha->stencil);
    }
 
-   if (depth_stencil_alpha->stencil[0].enabled) // XXX not index == 1?
+   if (depth_stencil_alpha->stencil[1].enabled)
       dsa->desc.BackFace = stencil_op_state(depth_stencil_alpha->stencil + 1);
    else
       dsa->desc.BackFace = dsa->desc.FrontFace;
