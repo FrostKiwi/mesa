@@ -652,7 +652,7 @@ d3d12_create_sampler_state(struct pipe_context *pctx,
    desc.AddressU = sampler_address_mode((pipe_tex_wrap) state->wrap_s);
    desc.AddressV = sampler_address_mode((pipe_tex_wrap) state->wrap_t);
    desc.AddressW = sampler_address_mode((pipe_tex_wrap) state->wrap_r);
-   desc.MipLODBias = state->lod_bias;
+   desc.MipLODBias = CLAMP(state->lod_bias, -16.0f, 15.99f);
    memcpy(desc.BorderColor, state->border_color.f, sizeof(float) * 4);
 
    // TODO Normalized Coordinates?
