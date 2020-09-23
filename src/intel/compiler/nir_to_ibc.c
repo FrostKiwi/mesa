@@ -2048,6 +2048,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_bindless_image_size: {
       ibc_builder_push_scalar(b);
 
+      assert(nir_src_as_uint(instr->src[1]) == 0);
+
       ibc_intrinsic_src srcs[IBC_TEX_NUM_SRCS] = {
          [IBC_TEX_SRC_SAMPLER_BTI] = {
             .ref = ibc_imm_ud(0),
