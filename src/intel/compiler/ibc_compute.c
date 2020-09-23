@@ -50,7 +50,7 @@ ibc_setup_cs_payload(ibc_builder *b, unsigned subgroup_id_offset,
 
 bool
 ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
-                          const nir_intrinsic_instr *instr)
+                          nir_intrinsic_instr *instr)
 {
    assert(nti->stage == MESA_SHADER_COMPUTE);
    struct brw_cs_prog_data *prog_data = (void *)nti->prog_data;

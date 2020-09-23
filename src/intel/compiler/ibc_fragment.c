@@ -438,7 +438,7 @@ enum ibc_fb_read_src {
 
 bool
 ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
-                          const nir_intrinsic_instr *instr)
+                          nir_intrinsic_instr *instr)
 {
    assert(nti->stage == MESA_SHADER_FRAGMENT);
    const struct brw_wm_prog_key *key = (const void *)nti->key;
