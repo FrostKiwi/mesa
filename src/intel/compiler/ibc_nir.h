@@ -277,13 +277,13 @@ ibc_builder_push_nir_intrinsic_dest_group(ibc_builder *b,
 }
 
 bool ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
-                               const nir_intrinsic_instr *instr);
+                               nir_intrinsic_instr *instr);
 bool ibc_emit_nir_tes_intrinsic(struct nir_to_ibc_state *nti,
-                                const nir_intrinsic_instr *instr);
+                                nir_intrinsic_instr *instr);
 bool ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
-                               const nir_intrinsic_instr *instr);
+                               nir_intrinsic_instr *instr);
 bool ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
-                               const nir_intrinsic_instr *instr);
+                               nir_intrinsic_instr *instr);
 ibc_ref ibc_emit_fs_sample_live_predicate(struct nir_to_ibc_state *nti);
 
 void ibc_emit_urb_read(ibc_builder *b,

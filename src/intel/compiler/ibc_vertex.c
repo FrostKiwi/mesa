@@ -75,7 +75,7 @@ ibc_setup_vs_payload(ibc_builder *b,
 
 bool
 ibc_emit_nir_vs_intrinsic(struct nir_to_ibc_state *nti,
-                          const nir_intrinsic_instr *instr)
+                          nir_intrinsic_instr *instr)
 {
    assert(nti->stage == MESA_SHADER_VERTEX);
    struct ibc_vs_payload *payload = (struct ibc_vs_payload *)nti->payload;
