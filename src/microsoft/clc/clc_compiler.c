@@ -1316,7 +1316,8 @@ clc_to_dxil(struct clc_context *ctx,
    struct nir_to_dxil_options opts = {
       .interpolate_at_vertex = false,
       .lower_int16 = (conf && (conf->lower_bit_size & 16) != 0),
-      .ubo_binding_offset = 0
+      .ubo_binding_offset = 0,
+      .disable_math_refactoring = true,
    };
 
    for (unsigned i = 0; i < dxil->kernel->num_args; i++) {
