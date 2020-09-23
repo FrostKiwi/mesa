@@ -1044,8 +1044,8 @@ void ibc_alu_instr_set_cmod(ibc_alu_instr *alu, ibc_ref flag,
 void ibc_alu_instr_set_accum(ibc_alu_instr *alu, ibc_ref accum,
                              bool accum_wr_en);
 
-enum ibc_type ibc_alu_instr_exec_type(ibc_alu_instr *alu);
-enum ibc_type ibc_instr_exec_type(ibc_instr *instr);
+enum ibc_type ibc_alu_instr_exec_type(const ibc_alu_instr *alu);
+enum ibc_type ibc_instr_exec_type(const ibc_instr *instr);
 
 typedef struct ibc_send_instr {
    ibc_instr instr;

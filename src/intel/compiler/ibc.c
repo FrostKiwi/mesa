@@ -489,7 +489,7 @@ ibc_type_exec_type(enum ibc_type type)
 }
 
 enum ibc_type
-ibc_alu_instr_exec_type(ibc_alu_instr *alu)
+ibc_alu_instr_exec_type(const ibc_alu_instr *alu)
 {
    enum ibc_type exec_type = IBC_TYPE_INVALID;
    for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
@@ -528,7 +528,7 @@ ibc_alu_instr_exec_type(ibc_alu_instr *alu)
 }
 
 static enum ibc_type
-ibc_intrinsic_instr_exec_type(ibc_intrinsic_instr *intrin)
+ibc_intrinsic_instr_exec_type(const ibc_intrinsic_instr *intrin)
 {
    enum ibc_type exec_type = IBC_TYPE_INVALID;
    for (unsigned i = 0; i < intrin->num_srcs; i++) {
@@ -546,7 +546,7 @@ ibc_intrinsic_instr_exec_type(ibc_intrinsic_instr *intrin)
 }
 
 enum ibc_type
-ibc_instr_exec_type(ibc_instr *instr)
+ibc_instr_exec_type(const ibc_instr *instr)
 {
    switch (instr->type) {
    case IBC_INSTR_TYPE_ALU:
