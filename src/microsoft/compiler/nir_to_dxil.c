@@ -1177,6 +1177,9 @@ get_module_flags(struct ntd_context *ctx)
    if (ctx->mod.feats.native_low_precision)
       flags |= (1 << 23) | (1 << 5);
 
+   if (ctx->opts->disable_math_refactoring)
+      flags |= (1 << 1);
+
    return flags;
 }
 
