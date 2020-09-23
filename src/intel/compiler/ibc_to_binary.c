@@ -27,6 +27,7 @@
 
 #include "dev/gen_debug.h"
 #include "compiler/shader_info.h"
+#include "nir.h"
 
 static enum brw_reg_type
 brw_reg_type_for_ibc_type(enum ibc_type type)
@@ -912,4 +913,27 @@ ibc_to_binary(ibc_shader *shader, const shader_info *info,
    ralloc_free(disasm_info);
 
    return brw_get_program(p, program_size);
+}
+
+const void *
+ibc_append_nir_constant_data(const struct nir_shader *nir,
+                             const void *assembly,
+                             struct brw_stage_prog_data *prog_data)
+{
+   if (nir->constant_data_size == 0)
+      return assembly;
+
+   void *mem_ctx = ralloc_parent(assembly);
+   void *combined =
+      ralloc_size(mem_ctx, prog_data->program_size + nir->constant_data_size);
+
+   memcpy(combined, assembly, prog_data->program_size);
+   memcpy(combined + prog_data->program_size,
+          nir->constant_data, nir->constant_data_size);
+
+   prog_data->const_data_offset = prog_data->program_size;
+   prog_data->const_data_size = nir->constant_data_size;
+   prog_data->program_size += nir->constant_data_size;
+
+   return combined;
 }

@@ -1547,5 +1547,6 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
    }
 
    prog_data->base.program_size = final_size;
-   return final_bin;
+
+   return ibc_append_nir_constant_data(shader, final_bin, &prog_data->base);
 }
