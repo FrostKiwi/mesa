@@ -163,6 +163,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_vec2:
    case nir_op_vec3:
    case nir_op_vec4:
+   case nir_op_vec8:
+   case nir_op_vec16:
       break;
    default:
       assert(nir_dest_num_components(instr->dest.dest) == 1);
@@ -192,6 +194,8 @@ nti_emit_alu(struct nir_to_ibc_state *nti,
    case nir_op_vec2:
    case nir_op_vec3:
    case nir_op_vec4:
+   case nir_op_vec8:
+   case nir_op_vec16:
       dest = ibc_VEC(b, src, nir_dest_num_components(instr->dest.dest));
       break;
 
