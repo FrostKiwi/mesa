@@ -1665,6 +1665,9 @@ const unsigned *ibc_to_binary(ibc_shader *shader,
                               void *log_data,
                               void *mem_ctx,
                               unsigned *program_size);
+const void *ibc_append_nir_constant_data(const struct nir_shader *nir,
+                                         const void *assembly,
+                                         struct brw_stage_prog_data *);
 
 #ifdef NDEBUG
 static inline void

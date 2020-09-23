@@ -582,7 +582,9 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
          memcpy((char *)combined + offset, bin[i].data, bin[i].size);
          offset += ALIGN(bin[i].size, 64);
       }
-      return combined;
+
+      return ibc_append_nir_constant_data(src_shader, combined,
+                                          &prog_data->base);
    } else {
       for (int i = 2; i >= 0; i--) {
          if (bin[i].data == NULL)
@@ -593,6 +595,9 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
          cs_fill_push_const_info(compiler->devinfo, prog_data);
          prog_data->base.dispatch_grf_start_reg = bin[i].num_ff_regs;
          prog_data->base.program_size = bin[i].size;
+
+         bin[i].data = ibc_append_nir_constant_data(src_shader, bin[i].data,
+                                                    &prog_data->base);
 
          return bin[i].data;
       }

@@ -381,12 +381,15 @@ ibc_compile_tes(const struct brw_compiler *compiler, void *log_data,
    ibc->cycles = perf->latency;
    ralloc_free(perf);
 
-   const unsigned *assembly =
+   const void *assembly =
       ibc_to_binary(ibc, &nir->info, compiler, log_data, mem_ctx,
                     &prog_data->base.base.program_size);
 
    if (stats)
       stats[0] = ibc->stats;
+
+   assembly =
+      ibc_append_nir_constant_data(nir, assembly, &prog_data->base.base);
 
    return assembly;
 }

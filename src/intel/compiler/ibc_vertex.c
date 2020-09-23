@@ -198,5 +198,8 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
    if (stats)
       stats[0] = ibc->stats;
 
+   assembly =
+      ibc_append_nir_constant_data(nir, assembly, &prog_data->base.base);
+
    return assembly;
 }
