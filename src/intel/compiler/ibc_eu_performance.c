@@ -24,6 +24,10 @@
 #include "gen_eu_performance.h"
 #include "ibc.h"
 
+/* TODO: drop these when adding Tigerlake support */
+UNUSED static enum gen_eu_dependency_id tgl_swsb_rd_dependency_id(struct tgl_swsb swsb);
+UNUSED static enum gen_eu_dependency_id tgl_swsb_wr_dependency_id(struct tgl_swsb swsb);
+
 #undef OP
 #undef ALU
 #define OP(type, op) (type << 29 | op)
