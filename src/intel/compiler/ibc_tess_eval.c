@@ -75,7 +75,7 @@ ibc_setup_tes_payload(ibc_builder *b,
 
 bool
 ibc_emit_nir_tes_intrinsic(struct nir_to_ibc_state *nti,
-                           const nir_intrinsic_instr *instr)
+                           nir_intrinsic_instr *instr)
 {
    assert(nti->stage == MESA_SHADER_TESS_EVAL);
    struct ibc_tes_payload *payload = (struct ibc_tes_payload *)nti->payload;

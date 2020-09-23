@@ -1137,7 +1137,7 @@ image_intrinsic_coord_components(const nir_intrinsic_instr *instr)
 
 static void
 nti_emit_intrinsic(struct nir_to_ibc_state *nti,
-                   const nir_intrinsic_instr *instr)
+                   nir_intrinsic_instr *instr)
 {
    switch (nti->stage) {
    case MESA_SHADER_VERTEX:
