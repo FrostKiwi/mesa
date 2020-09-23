@@ -1484,7 +1484,7 @@ typedef struct ibc_shader {
     * Used for constructing message headers when lowering intrinsic to SEND
     * instructions.
     */
-   ibc_reg *g0;
+   const ibc_reg *g0;
 
    /** Per-stage data
     *
