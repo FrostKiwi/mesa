@@ -629,6 +629,10 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                                                                                  : ctx->so_buffer_views;
    for (int i = 0; i < ctx->num_so_targets; ++i) {
       struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)so_targets[i];
+
+      if (!target)
+         continue;
+
       struct d3d12_resource *so_buffer = d3d12_resource(target->base.buffer);
       struct d3d12_resource *fill_buffer = d3d12_resource(target->fill_buffer);
 

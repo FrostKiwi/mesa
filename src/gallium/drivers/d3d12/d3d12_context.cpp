@@ -1381,19 +1381,20 @@ d3d12_set_stream_output_targets(struct pipe_context *pctx,
 
    d3d12_disable_fake_so_buffers(ctx);
 
-   for (unsigned i = 0; i < num_targets; i++) {
-      struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)targets[i];
+   for (unsigned i = 0; i < PIPE_MAX_SO_BUFFERS; i++) {
+      struct d3d12_stream_output_target *target =
+         i < num_targets ? (struct d3d12_stream_output_target *)targets[i] : NULL;
 
-      /* Sub-allocate a new fill buffer each time to avoid GPU/CPU synchronization */
-      u_suballocator_alloc(ctx->so_allocator, sizeof(uint64_t), 4,
-                           &target->fill_buffer_offset, &target->fill_buffer);
-      fill_stream_output_buffer_view(&ctx->so_buffer_views[i], target);
-      pipe_so_target_reference(&ctx->so_targets[i], targets[i]);
-   }
-
-   for (unsigned i = num_targets; i < ctx->num_so_targets; i++) {
-      ctx->so_buffer_views[i].SizeInBytes = 0;
-      pipe_so_target_reference(&ctx->so_targets[i], NULL);
+      if (target) {
+         /* Sub-allocate a new fill buffer each time to avoid GPU/CPU synchronization */
+         u_suballocator_alloc(ctx->so_allocator, sizeof(uint64_t), 4,
+                              &target->fill_buffer_offset, &target->fill_buffer);
+         fill_stream_output_buffer_view(&ctx->so_buffer_views[i], target);
+         pipe_so_target_reference(&ctx->so_targets[i], targets[i]);
+      } else {
+         ctx->so_buffer_views[i].SizeInBytes = 0;
+         pipe_so_target_reference(&ctx->so_targets[i], NULL);
+      }
    }
 
    ctx->num_so_targets = num_targets;
