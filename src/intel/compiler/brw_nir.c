@@ -1187,8 +1187,7 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
 
    brw_nir_optimize(nir, compiler, is_scalar, false);
 
-   if (is_scalar && nir_shader_has_local_variables(nir) &&
-       !brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
+   if (is_scalar && nir_shader_has_local_variables(nir)) {
       OPT(nir_lower_vars_to_explicit_types, nir_var_function_temp,
           glsl_get_natural_size_align_bytes);
       OPT(nir_lower_explicit_io, nir_var_function_temp,
