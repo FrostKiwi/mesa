@@ -1408,6 +1408,13 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_load_reloc_const_intel: {
+      uint32_t id = nir_intrinsic_param_idx(instr);
+      ibc_ref v = ibc_imm_ud(id);
+      dest = ibc_build_ssa_alu(b, IBC_ALU_OP_MOV_RELOC_IMM, IBC_TYPE_UD, &v, 1);
+      break;
+   }
+
    case nir_intrinsic_load_uniform: {
       ibc_builder_push_nir_dest_group(b, instr->dest);
 
