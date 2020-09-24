@@ -1371,6 +1371,8 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
       const unsigned *data;
       unsigned size;
       unsigned num_ff_regs;
+      const struct brw_shader_reloc *relocs;
+      unsigned num_relocs;
    } bin[3] = {
       { .enabled = !(INTEL_DEBUG & DEBUG_NO8), },
       { .enabled = !(INTEL_DEBUG & DEBUG_NO16), },
@@ -1460,7 +1462,8 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
          ralloc_free(perf);
 
          bin[i].data = ibc_to_binary(ibc, &shader->info, compiler, log_data,
-                                     mem_ctx, &bin[i].size);
+                                     mem_ctx, &bin[i].size, &bin[i].relocs,
+                                     &bin[i].num_relocs);
          bin[i].num_ff_regs = nti.payload->num_ff_regs;
 
          if (stats)
@@ -1503,6 +1506,8 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
 
    unsigned final_size = 0;
    void *final_bin = NULL;
+   struct brw_shader_reloc *final_relocs = NULL;
+   unsigned final_num_relocs = 0;
 
    for (unsigned i = 0; i < 3; i++) {
       const unsigned bin_simd_width = 8 << i;
@@ -1524,6 +1529,12 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
 
       assert(offset == ALIGN(offset, 64));
       memcpy(final_bin + offset, bin[i].data, bin[i].size);
+
+      final_relocs = reralloc(mem_ctx, final_relocs, struct brw_shader_reloc,
+                              final_num_relocs + bin[i].num_relocs);
+      memcpy(final_relocs + final_num_relocs, bin[i].relocs,
+             bin[i].num_relocs * sizeof(*final_relocs));
+      final_num_relocs += bin[i].num_relocs;
 
       switch (bin_simd_width) {
       case 8:
@@ -1547,6 +1558,8 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
    }
 
    prog_data->base.program_size = final_size;
+   prog_data->base.relocs = final_relocs;
+   prog_data->base.num_relocs = final_num_relocs;
 
    return ibc_append_nir_constant_data(shader, final_bin, &prog_data->base);
 }

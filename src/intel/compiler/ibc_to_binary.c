@@ -372,6 +372,11 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    BINOP_CASE(ROR)
    BINOP_CASE(ROL)
 
+   case IBC_ALU_OP_MOV_RELOC_IMM:
+      assert(src[0].file == BRW_IMMEDIATE_VALUE);
+      brw_MOV_reloc_imm(p, dest, dest.type, src[0].ud);
+      break;
+
    case IBC_ALU_OP_CMP:
       brw_CMP(p, dest, alu->cmod, src[0], src[1]);
       break;
@@ -788,7 +793,9 @@ generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
 const unsigned *
 ibc_to_binary(ibc_shader *shader, const shader_info *info,
               const struct brw_compiler *compiler, void *log_data,
-              void *mem_ctx, unsigned *program_size)
+              void *mem_ctx, unsigned *program_size,
+              const struct brw_shader_reloc **relocs,
+              unsigned *num_relocs)
 {
    const struct gen_device_info *devinfo = shader->devinfo;
 
@@ -911,6 +918,8 @@ ibc_to_binary(ibc_shader *shader, const shader_info *info,
                               before_size, after_size);
 
    ralloc_free(disasm_info);
+
+   *relocs = brw_get_shader_relocs(p, num_relocs);
 
    return brw_get_program(p, program_size);
 }

@@ -474,6 +474,8 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
       const unsigned *data;
       unsigned size;
       unsigned num_ff_regs;
+      const struct brw_shader_reloc *relocs;
+      unsigned num_relocs;
    } bin[3] = {
       { .enabled = !(INTEL_DEBUG & DEBUG_NO8), },
       { .enabled = !(INTEL_DEBUG & DEBUG_NO16), },
@@ -535,7 +537,8 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
          ralloc_free(perf);
 
          bin[i].data = ibc_to_binary(ibc, &shader->info, compiler, log_data,
-                                     mem_ctx, &bin[i].size);
+                                     mem_ctx, &bin[i].size,
+                                     &bin[i].relocs, &bin[i].num_relocs);
          bin[i].num_ff_regs = nti.payload->num_ff_regs;
 
          if (stats)
@@ -569,6 +572,8 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                                      ALIGN(bin[2].size, 64);
       unsigned *combined = rzalloc_size(mem_ctx, prog_data->base.program_size);
       unsigned offset = 0;
+      struct brw_shader_reloc *relocs = NULL;
+      unsigned total_relocs = 0;
 
       prog_data->base.dispatch_grf_start_reg = bin[2].num_ff_regs;
 
@@ -581,7 +586,16 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
          cs_fill_push_const_info(compiler->devinfo, prog_data);
          memcpy((char *)combined + offset, bin[i].data, bin[i].size);
          offset += ALIGN(bin[i].size, 64);
+
+         relocs =
+            reralloc(mem_ctx, relocs, struct brw_shader_reloc, total_relocs);
+         memcpy(relocs + total_relocs, bin[i].relocs,
+                bin[i].num_relocs * sizeof(*relocs));
+         total_relocs += bin[i].num_relocs;
       }
+
+      prog_data->base.relocs = relocs;
+      prog_data->base.num_relocs = total_relocs;
 
       return ibc_append_nir_constant_data(src_shader, combined,
                                           &prog_data->base);
@@ -595,11 +609,11 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
          cs_fill_push_const_info(compiler->devinfo, prog_data);
          prog_data->base.dispatch_grf_start_reg = bin[i].num_ff_regs;
          prog_data->base.program_size = bin[i].size;
+         prog_data->base.relocs = bin[i].relocs;
+         prog_data->base.num_relocs = bin[i].num_relocs;
 
-         bin[i].data = ibc_append_nir_constant_data(src_shader, bin[i].data,
-                                                    &prog_data->base);
-
-         return bin[i].data;
+         return ibc_append_nir_constant_data(src_shader, bin[i].data,
+                                             &prog_data->base);
       }
    }
 

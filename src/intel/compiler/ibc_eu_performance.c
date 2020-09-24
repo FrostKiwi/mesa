@@ -102,6 +102,7 @@ instruction_desc(const struct gen_eu_instruction_info *info)
       }
 
    case ALU(MOV):
+   case ALU(MOV_RELOC_IMM):
    case ALU(CMP):
    case ALU(ADD):
    case ALU(FMUL):
