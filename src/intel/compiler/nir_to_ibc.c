@@ -1164,35 +1164,10 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
    ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
-   case nir_intrinsic_load_subgroup_invocation: {
+   case nir_intrinsic_load_subgroup_invocation:
       assert(nir_dest_is_divergent(instr->dest));
-      ibc_reg *w_tmp_reg =
-         ibc_hw_grf_reg_create(b->shader, b->simd_width * 2, 32);
-      ibc_ref w_tmp = ibc_typed_ref(w_tmp_reg, IBC_TYPE_UW);
-
-      ibc_builder_push_we_all(b, 8);
-      ibc_build_alu1(b, IBC_ALU_OP_MOV, w_tmp, ibc_imm_v(0x76543210));
-      ibc_builder_pop(b);
-
-      if (b->simd_width > 8) {
-         ibc_ref w_tmp_8 = w_tmp;
-         ibc_hw_grf_simd_slice(&w_tmp_8.hw_grf, 8);
-         ibc_builder_push_we_all(b, 8);
-         ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_8, w_tmp, ibc_imm_uw(8));
-         ibc_builder_pop(b);
-      }
-
-      if (b->simd_width > 16) {
-         ibc_ref w_tmp_16 = w_tmp;
-         ibc_hw_grf_simd_slice(&w_tmp_16.hw_grf, 16);
-         ibc_builder_push_we_all(b, 16);
-         ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_16, w_tmp, ibc_imm_uw(16));
-         ibc_builder_pop(b);
-      }
-
-      dest = ibc_MOV(b, IBC_TYPE_UD, w_tmp);
+      dest = nti->subgroup_invocation;
       break;
-   }
 
    case nir_intrinsic_vote_any: {
       assert(!nir_dest_is_divergent(instr->dest));
@@ -2479,6 +2454,40 @@ nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
    ibc_START(&nti->b);
 }
 
+static void
+nti_load_subgroup_invocation(struct nir_to_ibc_state *nti)
+{
+   assert(nti->subgroup_invocation.file == IBC_FILE_NONE);
+
+   ibc_builder *b = &nti->b;
+
+   ibc_reg *w_tmp_reg =
+      ibc_hw_grf_reg_create(b->shader, b->simd_width * 2, 32);
+   ibc_ref w_tmp = ibc_typed_ref(w_tmp_reg, IBC_TYPE_UW);
+
+   ibc_builder_push_we_all(b, 8);
+   ibc_build_alu1(b, IBC_ALU_OP_MOV, w_tmp, ibc_imm_v(0x76543210));
+   ibc_builder_pop(b);
+
+   if (b->simd_width > 8) {
+      ibc_ref w_tmp_8 = w_tmp;
+      ibc_hw_grf_simd_slice(&w_tmp_8.hw_grf, 8);
+      ibc_builder_push_we_all(b, 8);
+      ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_8, w_tmp, ibc_imm_uw(8));
+      ibc_builder_pop(b);
+   }
+
+   if (b->simd_width > 16) {
+      ibc_ref w_tmp_16 = w_tmp;
+      ibc_hw_grf_simd_slice(&w_tmp_16.hw_grf, 16);
+      ibc_builder_push_we_all(b, 16);
+      ibc_build_alu2(b, IBC_ALU_OP_ADD, w_tmp_16, w_tmp, ibc_imm_uw(16));
+      ibc_builder_pop(b);
+   }
+
+   nti->subgroup_invocation = ibc_MOV(b, IBC_TYPE_UD, w_tmp);
+}
+
 void
 ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
                     const nir_shader *nir)
@@ -2506,6 +2515,7 @@ ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
    nti->float_controls_execution_mode = nir->info.float_controls_execution_mode;
 
    nti_emit_shader_float_controls_execution_mode(nti);
+   nti_load_subgroup_invocation(nti);
 
    nti_emit_cf_list(nti, &impl->body);
 }
