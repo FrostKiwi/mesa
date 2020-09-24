@@ -1852,7 +1852,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
-   case nir_intrinsic_get_buffer_size: {
+   case nir_intrinsic_get_ssbo_size: {
       ibc_builder_push_scalar(b);
 
       ibc_intrinsic_src srcs[IBC_TEX_NUM_SRCS] = {
