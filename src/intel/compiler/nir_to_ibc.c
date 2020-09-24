@@ -1135,6 +1135,63 @@ image_intrinsic_coord_components(const nir_intrinsic_instr *instr)
    }
 }
 
+/**
+ * The offsets we get from NIR act as if each SIMD channel has it's own blob
+ * of contiguous space.  However, if we actually place each SIMD channel in
+ * it's own space, we end up with terrible cache performance because each SIMD
+ * channel accesses a different cache line even when they're all accessing the
+ * same byte offset.  To deal with this problem, we swizzle the address using
+ * a simple algorithm which ensures that any time a SIMD message reads or
+ * writes the same address, it's all in the same cache line.  We have to keep
+ * the bottom two bits fixed so that we can read/write up to a dword at a time
+ * and the individual element is contiguous.  We do this by splitting the
+ * address as follows:
+ *
+ *    31                             4-6           2          0
+ *    +-------------------------------+------------+----------+
+ *    |        Hi address bits        | chan index | addr low |
+ *    +-------------------------------+------------+----------+
+ *
+ * In other words, the bottom two address bits stay, and the top 30 get
+ * shifted up so that we can stick the SIMD channel index in the middle.  This
+ * way, we can access 8, 16, or 32-bit elements and, when accessing a 32-bit
+ * at the same logical offset, the scratch read/write instruction acts on
+ * continuous elements and we get good cache locality.
+ */
+static ibc_ref
+swizzle_nir_scratch_addr(struct nir_to_ibc_state *nti,
+                         ibc_ref nir_addr, bool in_dwords)
+{
+   ibc_builder *b = &nti->b;
+   ibc_ref chan_index = nti->subgroup_invocation;
+   const unsigned chan_index_bits = ffs(b->simd_width) - 1;
+
+   if (in_dwords) {
+      /* In this case, we know the address is aligned to a DWORD and we want
+       * the final address in DWORDs.
+       */
+      return ibc_OR(b, IBC_TYPE_UD,
+                    ibc_SHL(b, IBC_TYPE_UD, nir_addr,
+                            ibc_imm_ud(chan_index_bits - 2)),
+                    chan_index);
+   } else {
+      /* This case substantially more annoying because we have to pay
+       * attention to those pesky two bottom bits.
+       */
+      ibc_ref addr_hi =
+         ibc_SHL(b, IBC_TYPE_UD,
+                 ibc_AND(b, IBC_TYPE_UD, nir_addr, ibc_imm_ud(~0x3u)),
+                 ibc_imm_ud(chan_index_bits));
+
+      ibc_ref addr_low = ibc_AND(b, IBC_TYPE_UD, nir_addr, ibc_imm_ud(0x3u));
+
+      ibc_ref chan_addr = ibc_SHL(b, IBC_TYPE_UD, chan_index, ibc_imm_ud(2));
+
+      return ibc_OR(b, IBC_TYPE_UD, addr_low,
+                    ibc_OR(b, IBC_TYPE_UD, chan_addr, addr_hi));
+   }
+}
+
 static void
 nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                    nir_intrinsic_instr *instr)
@@ -1827,6 +1884,87 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_load_scratch: {
+      ibc_builder_push_nir_dest_group(b, instr->dest);
+
+      bool dword = nir_dest_bit_size(instr->dest) == 32 &&
+                   nir_intrinsic_align(instr) >= 4;
+
+      assert(nir_dest_bit_size(instr->dest) <= 32);
+      assert(dword || nir_dest_num_components(instr->dest) == 1);
+
+      ibc_ref addr = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UD);
+      addr = swizzle_nir_scratch_addr(nti, addr, dword);
+
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_SURFACE_BTI] = {
+            .ref = ibc_imm_ud(GEN8_BTI_STATELESS_NON_COHERENT),
+            .num_comps = 1,
+         },
+         [IBC_SURFACE_SRC_ADDRESS] = {
+            .ref = addr,
+            .num_comps = 1,
+         },
+      };
+
+      dest =
+         ibc_builder_new_logical_reg(b, IBC_TYPE_UD, instr->num_components);
+
+      ibc_intrinsic_instr *load =
+         ibc_build_intrinsic(b,
+                             dword ? IBC_INTRINSIC_OP_BTI_DWORD_SCATTERED_READ
+                                   : IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ,
+                             dest, -1, instr->num_components,
+                             srcs, IBC_SURFACE_NUM_SRCS);
+      load->can_reorder = false;
+
+      ibc_builder_pop(b);
+      break;
+   }
+
+   case nir_intrinsic_store_scratch: {
+      bool dword = nir_src_bit_size(instr->src[0]) == 32 &&
+                   nir_intrinsic_align(instr) >= 4;
+
+      assert(nir_src_bit_size(instr->src[0]) <= 32);
+      assert(dword || nir_dest_num_components(instr->dest) == 1);
+
+      ibc_ref addr = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD);
+      addr = swizzle_nir_scratch_addr(nti, addr, dword);
+
+      ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+         [IBC_SURFACE_SRC_SURFACE_BTI] = {
+            .ref = ibc_imm_ud(GEN8_BTI_STATELESS_NON_COHERENT),
+            .num_comps = 1,
+         },
+         [IBC_SURFACE_SRC_ADDRESS] = {
+            .ref = addr,
+            .num_comps = 1,
+         },
+         [IBC_SURFACE_SRC_DATA0] = {
+            .ref = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT),
+            .num_comps = instr->num_components,
+         },
+      };
+
+      if (b->shader->stage == MESA_SHADER_FRAGMENT) {
+         srcs[IBC_SURFACE_SRC_PIXEL_MASK] = (ibc_intrinsic_src) {
+            .ref = ibc_emit_fs_sample_live_predicate(nti),
+            .num_comps = 1,
+         };
+      }
+
+      ibc_intrinsic_instr *store =
+         ibc_build_intrinsic(b,
+                             dword ? IBC_INTRINSIC_OP_BTI_DWORD_SCATTERED_WRITE
+                                   : IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE,
+                             ibc_null(IBC_TYPE_UD), 0, 0,
+                             srcs, IBC_SURFACE_NUM_SRCS);
+      store->can_reorder = false;
+      store->has_side_effects = true;
+      break;
+   }
+
    case nir_intrinsic_get_ssbo_size: {
       ibc_builder_push_scalar(b);
 
@@ -2493,6 +2631,8 @@ ibc_emit_nir_shader(struct nir_to_ibc_state *nti,
                     const nir_shader *nir)
 {
    nir_function_impl *impl = nir_shader_get_entrypoint((nir_shader *)nir);
+
+   nti->b.shader->scratch_B = ALIGN(nir->scratch_size, 4) * nti->b.simd_width;
 
    nti->ssa_to_reg =
       ralloc_array(nti->mem_ctx, const ibc_reg *, impl->ssa_alloc);

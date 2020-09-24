@@ -311,6 +311,8 @@ ibc_instr_dest_latency(const ibc_instr *instr,
 
       case GEN7_SFID_DATAPORT_DATA_CACHE:
          switch (brw_dp_desc_msg_type(devinfo, send->desc_imm)) {
+         case HSW_DATAPORT_DC_PORT0_DWORD_SCATTERED_READ:
+         case HSW_DATAPORT_DC_PORT0_DWORD_SCATTERED_WRITE:
          case HSW_DATAPORT_DC_PORT0_BYTE_SCATTERED_READ:
          case HSW_DATAPORT_DC_PORT0_BYTE_SCATTERED_WRITE:
             /* We have no data for this but assume it's roughly the same as

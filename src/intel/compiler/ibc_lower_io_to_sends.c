@@ -111,6 +111,8 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
    case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:
    case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
    case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
+   case IBC_INTRINSIC_OP_BTI_DWORD_SCATTERED_READ:
+   case IBC_INTRINSIC_OP_BTI_DWORD_SCATTERED_WRITE:
    case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ:
    case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE:
    case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
@@ -144,12 +146,60 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       b->simd_width = 8;
    }
 
+   ibc_ref header = {};
+
+   const bool is_stateless = surface_bti.file == IBC_FILE_IMM &&
+      (ibc_ref_as_uint(surface_bti) == BRW_BTI_STATELESS ||
+       ibc_ref_as_uint(surface_bti) == GEN8_BTI_STATELESS_NON_COHERENT);
+
+   if (is_stateless) {
+      /* Both the typed and scattered byte/dword A32 messages take a buffer
+       * base address in R0.5:[31:0] (See MH1_A32_PSM for typed messages or
+       * MH_A32_GO for byte/dword scattered messages in the SKL PRM Vol. 2d
+       * for more details.)  This is conveniently where the HW places the
+       * scratch surface base address.
+       *
+       * The Skylake PRM, Volume 7, "Per-Thread Scratch Space" says:
+       *
+       *    "When a thread becomes 'active' it is allocated a portion of
+       *     scratch space, sized according to PerThreadScratchSpace.  The
+       *     starting location of each thread’s scratch space allocation,
+       *     ScratchSpaceOffset, is passed in the thread payload in
+       *     R0.5[31:10] and is specified as a 1KB-granular offset from the
+       *     GeneralStateBaseAddress.  The computation of ScratchSpaceOffset
+       *     includes the starting address of the stage’s scratch space
+       *     allocation, as programmed by ScratchSpaceBasePointer."
+       *
+       * The base address is passed in bits R0.5[31:10] and the bottom 10
+       * bits of R0.5 are used for other things.  Therefore, we have to
+       * mask off the bottom 10 bits so that we don't get a garbage base
+       * address.
+       */
+      ibc_reg *hdr_reg = ibc_hw_grf_reg_create(b->shader, REG_SIZE, REG_SIZE);
+      hdr_reg->is_wlr = false;
+      header = ibc_typed_ref(hdr_reg, IBC_TYPE_UD);
+
+      ibc_builder_push_we_all(b, 8);
+      ibc_MOV_to(b, header, ibc_imm_ud(0));
+      ibc_builder_pop(b);
+
+      ibc_ref g0_5 = ibc_typed_ref(b->shader->g0, IBC_TYPE_UD);
+      g0_5.hw_grf.byte += 5 * sizeof(uint32_t);
+      ibc_ref m0_5 = header;
+      m0_5.hw_grf.byte += 5 * sizeof(uint32_t);
+
+      ibc_builder_push_scalar(b);
+      ibc_build_alu2(b, IBC_ALU_OP_AND, m0_5, g0_5, ibc_imm_ud(0xfffffc00));
+      ibc_builder_pop(b);
+   }
+
    ibc_send_instr *send = ibc_send_instr_create(b->shader,
                                                 intrin->instr.simd_group,
                                                 intrin->instr.simd_width);
    send->instr.we_all = intrin->instr.we_all;
    send->can_reorder = intrin->can_reorder;
    send->has_side_effects = intrin->has_side_effects;
+   send->has_header = header.file != IBC_FILE_NONE;
 
    if (pixel_mask.file != IBC_FILE_NONE) {
       /* Add an UNDEF so that liveness analysis doesn't extend our live range
@@ -192,8 +242,15 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
    assert(num_srcs < ARRAY_SIZE(src));
 
    unsigned mlen;
-   send->payload[0] = ibc_MESSAGE(b, src, num_srcs, &mlen);
-   send->mlen = mlen;
+   if (send->has_header) {
+      send->payload[0] = header;
+      send->payload[1] = ibc_MESSAGE(b, src, num_srcs, &mlen);
+      send->mlen = 1;
+      send->ex_mlen = mlen;
+   } else {
+      send->payload[0] = ibc_MESSAGE(b, src, num_srcs, &mlen);
+      send->mlen = mlen;
+   }
 
    uint32_t desc;
    switch (intrin->op) {
@@ -233,6 +290,16 @@ lower_surface_access(ibc_builder *b, ibc_intrinsic_instr *intrin)
       desc = brw_dp_untyped_surface_rw_desc(b->shader->devinfo,
                                             intrin->instr.simd_width,
                                             num_data_comps,
+                                            true    /* write */);
+      break;
+   case IBC_INTRINSIC_OP_BTI_DWORD_SCATTERED_READ:
+      send->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
+      desc = brw_dp_dword_scattered_rw_desc(devinfo, intrin->instr.simd_width,
+                                            false   /* write */);
+      break;
+   case IBC_INTRINSIC_OP_BTI_DWORD_SCATTERED_WRITE:
+      send->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
+      desc = brw_dp_dword_scattered_rw_desc(devinfo, intrin->instr.simd_width,
                                             true    /* write */);
       break;
    case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ:
@@ -887,6 +954,8 @@ ibc_lower_io_to_sends(ibc_shader *shader)
       case IBC_INTRINSIC_OP_BTI_TYPED_ATOMIC:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_READ:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_WRITE:
+      case IBC_INTRINSIC_OP_BTI_DWORD_SCATTERED_READ:
+      case IBC_INTRINSIC_OP_BTI_DWORD_SCATTERED_WRITE:
       case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ:
       case IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_WRITE:
       case IBC_INTRINSIC_OP_BTI_UNTYPED_ATOMIC:
