@@ -1137,6 +1137,7 @@ ibc_assign_regs_graph_color(ibc_shader *shader,
    struct ibc_assign_regs_gc_state state = {
       .mem_ctx = ralloc_context(shader),
       .reg_set = brw_compiler_get_ibc_reg_set(compiler, shader->simd_width),
+      .last_scratch = shader->scratch_B,
    };
 
    state.live = ibc_compute_live_intervals(shader, should_assign_reg,
