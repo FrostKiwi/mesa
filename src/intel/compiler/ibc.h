@@ -1664,7 +1664,9 @@ const unsigned *ibc_to_binary(ibc_shader *shader,
                               const struct brw_compiler *compiler,
                               void *log_data,
                               void *mem_ctx,
-                              unsigned *program_size);
+                              unsigned *program_size,
+                              const struct brw_shader_reloc **relocs,
+                              unsigned *num_relocs);
 const void *ibc_append_nir_constant_data(const struct nir_shader *nir,
                                          const void *assembly,
                                          struct brw_stage_prog_data *);

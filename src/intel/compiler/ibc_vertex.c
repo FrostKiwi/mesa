@@ -193,7 +193,9 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
 
    const unsigned *assembly =
       ibc_to_binary(ibc, &nir->info, compiler, log_data, mem_ctx,
-                    &prog_data->base.base.program_size);
+                    &prog_data->base.base.program_size,
+                    &prog_data->base.base.relocs,
+                    &prog_data->base.base.num_relocs);
 
    if (stats)
       stats[0] = ibc->stats;
