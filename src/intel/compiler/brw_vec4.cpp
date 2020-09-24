@@ -2947,9 +2947,9 @@ brw_compile_vs(const struct brw_compiler *compiler, void *log_data,
       brw_print_vue_map(stderr, &prog_data->base.vue_map);
    }
 
-   if (brw_nir_should_use_ibc(shader, compiler, true)) {
+   if (brw_nir_should_use_ibc(nir, compiler, true)) {
       return ibc_compile_vs(compiler, log_data, mem_ctx, key, prog_data,
-                            shader, stats, error_str);
+                            nir, stats, error_str);
    }
 
    if (is_scalar) {
