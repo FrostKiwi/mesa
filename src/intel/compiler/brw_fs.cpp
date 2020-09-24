@@ -8617,9 +8617,9 @@ brw_compile_fs(const struct brw_compiler *compiler, void *log_data,
    const struct gen_device_info *devinfo = compiler->devinfo;
 
    if (!use_rep_send && allow_spilling &&
-       brw_nir_should_use_ibc(shader, compiler, true)) {
+       brw_nir_should_use_ibc(nir, compiler, true)) {
       return ibc_compile_fs(compiler, log_data, mem_ctx, key, prog_data,
-                            shader, shader_time_index8,
+                            nir, shader_time_index8,
                             shader_time_index16, shader_time_index32,
                             allow_spilling, use_rep_send, vue_map,
                             stats, error_str);
@@ -8967,9 +8967,9 @@ brw_compile_cs(const struct brw_compiler *compiler, void *log_data,
       max_dispatch_width = 32;
    }
 
-   if (brw_nir_should_use_ibc(src_shader, compiler, true)) {
+   if (brw_nir_should_use_ibc(nir, compiler, true)) {
       return ibc_compile_cs(compiler, log_data, mem_ctx, key, prog_data,
-                            src_shader, shader_time_index, stats, error_str);
+                            nir, shader_time_index, stats, error_str);
    }
 
    if ((int)key->base.subgroup_size_type >= (int)BRW_SUBGROUP_SIZE_REQUIRE_8) {
