@@ -796,10 +796,6 @@ static bool
 replicate_stencil_supported(struct d3d12_context *ctx,
                             const struct pipe_blit_info *info)
 {
-   if (info->src.resource->nr_samples > 1 ||
-       info->dst.resource->nr_samples <= 1)
-      return false;
-
    if (!util_format_is_depth_or_stencil(info->src.format) ||
        !(info->mask & PIPE_MASK_S))
       return false;
@@ -833,8 +829,7 @@ blit_replicate_stencil(struct d3d12_context *ctx,
    util_blit_save_state(ctx);
    util_blitter_stencil_fallback(ctx->blitter, info->dst.resource,
                                  info->dst.level,
-                                 info->dst.box.x, info->dst.box.y,
-                                 info->dst.box.z,
+                                 &info->dst.box,
                                  info->src.resource,
                                  info->src.level,
                                  &info->src.box);
