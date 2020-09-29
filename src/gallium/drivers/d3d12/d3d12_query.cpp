@@ -479,7 +479,7 @@ d3d12_context_query_init(struct pipe_context *pctx)
    list_inithead(&ctx->active_queries);
 
    ctx->query_allocator =
-       u_suballocator_create(&ctx->base, 4056, 0, PIPE_USAGE_STAGING,
+       u_suballocator_create(&ctx->base, 4096, 0, PIPE_USAGE_STAGING,
                              0, true);
 
    pctx->create_query = d3d12_create_query;

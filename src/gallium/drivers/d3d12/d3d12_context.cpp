@@ -1946,7 +1946,7 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
 
    ctx->base.stream_uploader = u_upload_create_default(&ctx->base);
    ctx->base.const_uploader = u_upload_create_default(&ctx->base);
-   ctx->so_allocator = u_suballocator_create(&ctx->base, 4056, 0,
+   ctx->so_allocator = u_suballocator_create(&ctx->base, 4096, 0,
                                              PIPE_USAGE_DEFAULT,
                                              0, true);
 
