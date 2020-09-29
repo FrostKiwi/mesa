@@ -478,7 +478,7 @@ create_staging_resource(struct d3d12_context *ctx,
    templ.array_size = 1;
    templ.nr_samples = 1;
    templ.nr_storage_samples = 1;
-   templ.usage = PIPE_USAGE_DEFAULT | PIPE_USAGE_STAGING;
+   templ.usage = PIPE_USAGE_STAGING;
    templ.bind = util_format_is_depth_or_stencil(templ.format) ? PIPE_BIND_DEPTH_STENCIL : PIPE_BIND_RENDER_TARGET;
    templ.target = src->base.target;
 
