@@ -25,6 +25,7 @@
 #include "vtn_private.h"
 #include "spirv_info.h"
 #include "nir_builtin_builder.h"
+#include "nir_conversion_builder.h"
 
 /*
  * Normally, column vectors in SPIR-V correspond to a single NIR SSA
@@ -415,370 +416,6 @@ handle_no_wrap(struct vtn_builder *b, struct vtn_value *val, int member,
    }
 }
 
-static nir_ssa_def *
-round_float_to_int(struct vtn_builder *b, nir_rounding_mode round,
-                   nir_ssa_def *src, unsigned int dst_bit_size)
-{
-   nir_ssa_def *rets[NIR_MAX_VEC_COMPONENTS] = { NULL };
-
-   for (unsigned i = 0; i < src->num_components; i++) {
-      nir_ssa_def *comp = nir_channel(&b->nb, src, i);
-
-      switch (round) {
-      case nir_rounding_mode_ru:
-         rets[i] = nir_fceil(&b->nb, comp);
-         break;
-      case nir_rounding_mode_rd:
-         rets[i] = nir_ffloor(&b->nb, comp);
-         break;
-      case nir_rounding_mode_rtne:
-         rets[i] = nir_fround_even(&b->nb, comp);
-         break;
-      case nir_rounding_mode_undef:
-      case nir_rounding_mode_rtz:
-         rets[i] = comp;
-         break;
-      default:
-         unreachable("unexpected rounding mode");
-      }
-   }
-
-   return nir_vec(&b->nb, rets, src->num_components);
-}
-
-static nir_ssa_def *
-round_float_to_float(struct vtn_builder *b, nir_rounding_mode round,
-                     nir_ssa_def *src, unsigned int dst_bit_size)
-{
-   unsigned int src_bit_size = src->bit_size;
-   unsigned int max_bit_size = MAX2(src->bit_size, dst_bit_size);
-
-   nir_op low_conv = nir_type_conversion_op(nir_type_float | src_bit_size,
-                                            nir_type_float | dst_bit_size,
-                                            nir_rounding_mode_undef);
-   nir_op high_conv = nir_type_conversion_op(nir_type_float | dst_bit_size,
-                                             nir_type_float | src_bit_size,
-                                             nir_rounding_mode_undef);
-
-   nir_ssa_def *rets[NIR_MAX_VEC_COMPONENTS] = { NULL };
-
-   for (unsigned i = 0; i < src->num_components; i++) {
-      nir_ssa_def *comp = nir_channel(&b->nb, src, i);
-
-      switch (round) {
-      case nir_rounding_mode_ru: {
-         /* If lower-precision conversion results in a lower value, push it
-         * up one ULP. */
-         nir_ssa_def *lower_prec =
-            nir_build_alu(&b->nb, low_conv, comp, NULL, NULL, NULL);
-         nir_ssa_def *roundtrip =
-            nir_build_alu(&b->nb, high_conv, lower_prec, NULL, NULL, NULL);
-         nir_ssa_def *cmp = nir_flt(&b->nb, roundtrip, comp);
-
-         rets[i] = nir_bcsel(&b->nb, cmp,
-                        nir_nextafter(&b->nb, lower_prec,
-                                       nir_imm_floatN_t(&b->nb, INFINITY, dst_bit_size)),
-                           lower_prec);
-         break;
-      }
-      case nir_rounding_mode_rd: {
-         /* If lower-precision conversion results in a higher value, push it
-         * down one ULP. */
-         nir_ssa_def *lower_prec =
-            nir_build_alu(&b->nb, low_conv, comp, NULL, NULL, NULL);
-         nir_ssa_def *roundtrip =
-            nir_build_alu(&b->nb, high_conv, lower_prec, NULL, NULL, NULL);
-         nir_ssa_def *cmp = nir_flt(&b->nb, comp, roundtrip);
-
-         rets[i] = nir_bcsel(&b->nb, cmp,
-                             nir_nextafter(&b->nb, lower_prec,
-                                           nir_imm_floatN_t(&b->nb, -INFINITY, dst_bit_size)),
-                             lower_prec);
-         break;
-      }
-      case nir_rounding_mode_rtz: {
-         nir_ssa_def *pos =
-            nir_flt(&b->nb, comp, nir_imm_floatN_t(&b->nb, 0.0f, max_bit_size));
-         rets[i] = nir_bcsel(&b->nb, pos,
-                             round_float_to_float(b, nir_rounding_mode_ru, comp, dst_bit_size),
-                             round_float_to_float(b, nir_rounding_mode_rd, comp, dst_bit_size));
-         break;
-      }
-      case nir_rounding_mode_undef:
-      case nir_rounding_mode_rtne:
-         rets[i] = comp;
-         break;
-      default:
-         unreachable("unexpected rounding mode");
-      }
-   }
-
-   return nir_vec(&b->nb, rets, src->num_components);
-}
-
-static nir_ssa_def *
-round_int_to_float(struct vtn_builder *b, nir_rounding_mode round,
-                   nir_ssa_def *src, nir_alu_type src_type,
-                   unsigned int dst_bit_size)
-{
-   nir_ssa_def *rets[NIR_MAX_VEC_COMPONENTS] = { NULL };
-   unsigned mantissa_bits;
-   switch (dst_bit_size) {
-   case 16:
-      mantissa_bits = 10;
-      break;
-   case 32:
-      mantissa_bits = 23;
-      break;
-   case 64:
-      mantissa_bits = 52;
-      break;
-   default: unreachable("Unsupported bit size");
-   }
-
-   if (src->bit_size < mantissa_bits)
-      return src;
-
-   for (unsigned i = 0; i < src->num_components; i++) {
-      nir_ssa_def *comp = nir_channel(&b->nb, src, i);
-
-      if (round == nir_rounding_mode_undef ||
-          round == nir_rounding_mode_rtne) {
-         rets[i] = comp;
-      } else if (src_type == nir_type_int) {
-         nir_ssa_def *sign = nir_i2b1(&b->nb, nir_ishr(&b->nb, comp, nir_imm_int(&b->nb, comp->bit_size - 1)));
-         nir_ssa_def *abs = nir_iabs(&b->nb, comp);
-         nir_ssa_def *positive_rounded = round_int_to_float(b, round, abs, nir_type_uint, dst_bit_size);
-         nir_ssa_def *max_positive = nir_imm_intN_t(&b->nb, (1ULL << (comp->bit_size - 1)) - 1, comp->bit_size);
-         switch (round) {
-         case nir_rounding_mode_rtz:
-            rets[i] = nir_bcsel(&b->nb, sign, nir_ineg(&b->nb, positive_rounded), positive_rounded);
-            break;
-         case nir_rounding_mode_ru:
-            rets[i] = nir_bcsel(&b->nb, sign,
-                                nir_ineg(&b->nb, round_int_to_float(b, nir_rounding_mode_rd, abs, nir_type_uint, dst_bit_size)),
-                                nir_umin(&b->nb, positive_rounded, max_positive));
-            break;
-         case nir_rounding_mode_rd:
-            rets[i] = nir_bcsel(&b->nb, sign,
-                                nir_ineg(&b->nb,
-                                         nir_umin(&b->nb, max_positive,
-                                                  round_int_to_float(b, nir_rounding_mode_ru, abs, nir_type_uint, dst_bit_size))),
-                                positive_rounded);
-            break;
-         default: unreachable("Already handled");
-         }
-      } else {
-         nir_ssa_def *mantissa_bit_size = nir_imm_int(&b->nb, mantissa_bits);
-         nir_ssa_def *msb = nir_imax(&b->nb, nir_ufind_msb(&b->nb, comp), mantissa_bit_size);
-         nir_ssa_def *bits_to_lose = nir_isub(&b->nb, msb, mantissa_bit_size);
-         nir_ssa_def *one = nir_imm_intN_t(&b->nb, 1, comp->bit_size);
-         nir_ssa_def *adjust = nir_ishl(&b->nb, one, bits_to_lose);
-         nir_ssa_def *mask = nir_inot(&b->nb, nir_isub(&b->nb, adjust, one));
-         nir_ssa_def *truncated = nir_iand(&b->nb, comp, mask);
-         switch (round) {
-         case nir_rounding_mode_rtz:
-         case nir_rounding_mode_rd:
-            rets[i] = truncated;
-            break;
-         case nir_rounding_mode_ru: {
-            rets[i] = nir_bcsel(&b->nb, nir_ieq(&b->nb, comp, truncated),
-                                comp,
-                                nir_uadd_sat(&b->nb, truncated, adjust));
-            break;
-         }
-         default: unreachable("Already handled");
-         }
-      }
-   }
-
-   return nir_vec(&b->nb, rets, src->num_components);
-}
-
-/**
- * Clamp the source value into the widest representatble range of the
- * destination type with cmp + bcsel.
- */
-static nir_ssa_def *
-clamp_to_range(struct vtn_builder *b, nir_ssa_def *src, nir_alu_type src_type,
-               nir_alu_type dst_type, unsigned int dst_bit_size)
-{
-   /* limits of the destination type, expressed in the source type */
-   nir_ssa_def *low = NULL, *high = NULL;
-   switch (dst_type) {
-   case nir_type_int: {
-      int64_t ilow = -(1LL << (dst_bit_size - 1));
-      int64_t ihigh = (1LL << (dst_bit_size - 1)) - 1;
-      if (src_type == nir_type_int) {
-         low = nir_imm_intN_t(&b->nb, ilow, src->bit_size);
-         high = nir_imm_intN_t(&b->nb, ihigh, src->bit_size);
-      } else if (src_type == nir_type_uint) {
-         assert(src->bit_size >= dst_bit_size);
-         high = nir_imm_intN_t(&b->nb, ihigh, src->bit_size);
-      } else {
-         low = nir_imm_floatN_t(&b->nb, ilow, src->bit_size);
-         high = nir_imm_floatN_t(&b->nb, ihigh, src->bit_size);
-      }
-      break;
-   }
-   case nir_type_uint: {
-      unsigned long long uhigh = dst_bit_size == 64 ?
-         ~0ULL : (1ULL << dst_bit_size) - 1;
-      if (src_type != nir_type_float) {
-         low = nir_imm_intN_t(&b->nb, 0, src->bit_size);
-         if (src_type == nir_type_uint || src->bit_size > dst_bit_size)
-            high = nir_imm_intN_t(&b->nb, uhigh, src->bit_size);
-      } else {
-         low = nir_imm_floatN_t(&b->nb, 0.0f, src->bit_size);
-         high = nir_imm_floatN_t(&b->nb, uhigh, src->bit_size);
-      }
-      break;
-   }
-   case nir_type_float: {
-      double flow, fhigh;
-      if (dst_bit_size == 16) {
-         flow = -65504.0f;
-         fhigh = 65504.0f;
-      } else {
-         flow = -FLT_MAX;
-         fhigh = FLT_MAX;
-      }
-
-      if (src_type != nir_type_float) {
-         low = nir_imm_intN_t(&b->nb, flow, src->bit_size);
-         high = nir_imm_intN_t(&b->nb, fhigh, src->bit_size);
-      } else {
-         low = nir_imm_floatN_t(&b->nb, flow, src->bit_size);
-         high = nir_imm_floatN_t(&b->nb, fhigh, src->bit_size);
-      }
-      break;
-   }
-   default:
-      unreachable("clamping to unknown type");
-      break;
-   }
-
-   nir_ssa_def *rets[NIR_MAX_VEC_COMPONENTS] = { 0 };
-
-   /* src-in-range comparators for bcsel */
-   for (unsigned i = 0; i < src->num_components; i++) {
-      nir_ssa_def *low_cond = NULL, *high_cond = NULL;
-      nir_ssa_def *comp = nir_channel(&b->nb, src, i);
-      switch (src_type) {
-      case nir_type_int:
-         low_cond = low ? nir_ilt(&b->nb, comp, low) : NULL;
-         high_cond = high ? nir_ilt(&b->nb, high, comp) : NULL;
-         break;
-      case nir_type_uint:
-         low_cond = low ? nir_ult(&b->nb, src, low) : NULL;
-         high_cond = high ? nir_ult(&b->nb, high, comp) : NULL;
-         break;
-      case nir_type_float:
-         low_cond = low ? nir_flt(&b->nb, comp, low) : NULL;
-         high_cond = high ? nir_flt(&b->nb, high, comp) : NULL;
-         break;
-      default:
-         unreachable("clamping from unknown type");
-      }
-
-      rets[i] = comp;
-      if (low_cond)
-         rets[i] = nir_bcsel(&b->nb, low_cond, low, rets[i]);
-      if (high_cond)
-         rets[i] = nir_bcsel(&b->nb, high_cond, high, rets[i]);
-   }
-
-   return nir_vec(&b->nb, rets, src->num_components);
-}
-
-nir_ssa_def *
-vtn_handle_convert(struct vtn_builder *b, nir_rounding_mode round,
-                   bool want_clamp, nir_alu_type src_type, nir_ssa_def *src,
-                   nir_alu_type dst_type, unsigned int dst_bit_size)
-{
-   nir_ssa_def *dst = src;
-
-   /* Check if we need to do a saturating conversion. */
-   bool do_clamp = want_clamp;
-   if (src_type == dst_type && dst_bit_size >= src->bit_size) {
-      do_clamp = false;
-   } else if (src_type == nir_type_uint && dst_type == nir_type_int &&
-              dst_bit_size > src->bit_size) {
-      do_clamp = false;
-   } else if (src_type == nir_type_float && src->bit_size == 16 &&
-              dst_type == nir_type_int && dst_bit_size >= 32) {
-      do_clamp = false;
-   } else if (src_type != nir_type_float && dst_type == nir_type_float &&
-              (dst_bit_size >= 32 || src->bit_size == 8)) {
-      /* all signed or unsigned ints can fit in float or above;
-         u8 can fit in f16 */
-      do_clamp = false;
-   }
-
-   /* Skip rounding if we can. */
-   if (src_type != nir_type_float && dst_type != nir_type_float) {
-      round = nir_rounding_mode_undef;
-   } else if (src_type == nir_type_float &&
-              dst_type == nir_type_float &&
-              dst_bit_size >= src->bit_size) {
-      round = nir_rounding_mode_undef;
-   }
-
-   /*
-    * If we don't care about rounding and clamping, we can just use NIR's
-    * built-in ops. There is also a special case for SPIR-V in shaders, where
-    * f32/f64 -> f16 conversions can have one of two rounding modes applied,
-    * which NIR has built-in opcodes for.
-    *
-    * For the rest, we have our own implementation of rounding and clamping.
-    */
-   bool trivial_convert;
-   if (!do_clamp && round == nir_rounding_mode_undef) {
-      trivial_convert = true;
-   } else if (!do_clamp &&
-              src_type == nir_type_float &&
-              dst_type == nir_type_float &&
-              dst_bit_size == 16) {
-      trivial_convert = true;
-   } else {
-      trivial_convert = false;
-   }
-   if (trivial_convert) {
-      nir_op op = nir_type_conversion_op(src_type | src->bit_size,
-                                         dst_type | dst_bit_size,
-                                         round);
-      return nir_build_alu(&b->nb, op, src, NULL, NULL, NULL);
-   }
-
-   /* Only OpenCL can use complex rounding modes. */
-   assert(b->nb.shader->info.stage == MESA_SHADER_KERNEL);
-
-   /* clamp the result into range */
-   if (do_clamp) {
-      dst = clamp_to_range(b, dst, src_type, dst_type, dst_bit_size);
-   }
-
-   /* round with selected rounding mode */
-   if (!trivial_convert && round != nir_rounding_mode_undef) {
-      if (src_type == nir_type_float) {
-         if (dst_type == nir_type_float)
-            dst = round_float_to_float(b, round, dst, dst_bit_size);
-         else
-            dst = round_float_to_int(b, round, dst, dst_bit_size);
-      } else {
-         dst = round_int_to_float(b, round, dst, src_type, dst_bit_size);
-      }
-
-      round = nir_rounding_mode_undef;
-   }
-
-   /* now we can convert the value */
-   nir_op op = nir_type_conversion_op(src_type | dst->bit_size,
-                                      dst_type | dst_bit_size,
-                                      round);
-   return nir_build_alu(&b->nb, op, dst, NULL, NULL, NULL);
-}
-
 void
 vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
                const uint32_t *w, unsigned count)
@@ -960,7 +597,6 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    case SpvOpSConvert: {
       nir_alu_type src_type;
       nir_alu_type dst_type;
-      unsigned dst_bit_size = glsl_get_bit_size(dest_type);
       nir_rounding_mode round = nir_rounding_mode_undef;
       vtn_foreach_decoration(b, dest_val, handle_rounding_mode, &round);
 
@@ -1009,18 +645,20 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
          unreachable("Invalid opcode");
       }
 
+      src_type |= src[0]->bit_size;
+      dst_type |= glsl_get_bit_size(dest_type);
+
       /* OpenCL allows all rounding modes; graphics shaders may only
        * use rtne/rtz, and only to f16 */
       vtn_fail_if(b->shader->info.stage != MESA_SHADER_KERNEL &&
                   (round != nir_rounding_mode_undef &&
                   ((round != nir_rounding_mode_rtne &&
                     round != nir_rounding_mode_rtz) ||
-                   dst_type != nir_type_float || dst_bit_size != 16)),
+                   dst_type == nir_type_float16)),
                   "Rounding mode can only be applied to conversions in OpenCL");
 
-      dest->def =
-         vtn_handle_convert(b, round, saturate, src_type, src[0],
-                            dst_type, dst_bit_size);
+      dest->def = nir_convert_with_rounding(&b->nb, src[0], src_type, dst_type,
+                                            round, saturate);
       break;
    }
 

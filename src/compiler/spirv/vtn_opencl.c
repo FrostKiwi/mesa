@@ -26,6 +26,7 @@
 
 #include "math.h"
 #include "nir/nir_builtin_builder.h"
+#include "nir/nir_conversion_builder.h"
 
 #include "vtn_private.h"
 #include "OpenCL.std.h"
@@ -643,7 +644,9 @@ _handle_v_load_store(struct vtn_builder *b, enum OpenCLstd_Entrypoints opcode,
             assert(p->pointer->type->type == glsl_float16_t_type() &&
                    (glsl_get_base_type(dest_type) == GLSL_TYPE_FLOAT ||
                     glsl_get_base_type(dest_type) == GLSL_TYPE_DOUBLE));
-            def = vtn_handle_convert(b, round, false, nir_type_float, def, nir_type_float, 16);
+            def = nir_convert_with_rounding(&b->nb, def, nir_type_float,
+                                            nir_type_float16,
+                                            round, false);
          }
          struct vtn_ssa_value *ssa = vtn_create_ssa_value(b, glsl_scalar_type(glsl_get_base_type(dest_type)));
          ssa->def = nir_channel(&b->nb, def, i);

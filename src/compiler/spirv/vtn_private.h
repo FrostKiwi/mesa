@@ -906,11 +906,6 @@ nir_address_format vtn_mode_to_address_format(struct vtn_builder *b,
 
 nir_rounding_mode vtn_rounding_mode_to_nir(uint32_t mode);
 
-nir_ssa_def *
-vtn_handle_convert(struct vtn_builder *b, nir_rounding_mode round,
-                   bool want_clamp, nir_alu_type src_type, nir_ssa_def *src,
-                   nir_alu_type dst_type, unsigned int dst_bit_size);
-
 static inline uint32_t
 vtn_align_u32(uint32_t v, uint32_t a)
 {
