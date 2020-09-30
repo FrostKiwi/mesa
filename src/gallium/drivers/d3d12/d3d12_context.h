@@ -218,7 +218,6 @@ struct d3d12_context {
 
    struct pipe_stream_output_target *so_targets[PIPE_MAX_SO_BUFFERS];
    D3D12_STREAM_OUTPUT_BUFFER_VIEW so_buffer_views[PIPE_MAX_SO_BUFFERS];
-   unsigned num_so_targets;
    struct pipe_stream_output_target *fake_so_targets[PIPE_MAX_SO_BUFFERS];
    D3D12_STREAM_OUTPUT_BUFFER_VIEW fake_so_buffer_views[PIPE_MAX_SO_BUFFERS];
    unsigned fake_so_buffer_factor;

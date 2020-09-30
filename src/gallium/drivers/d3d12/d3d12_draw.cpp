@@ -277,7 +277,7 @@ validate_stream_output_targets(struct d3d12_context *ctx)
 {
    unsigned factor = 0;
 
-   if (ctx->num_so_targets &&
+   if (ctx->gfx_pipeline_state.num_so_targets &&
        ctx->gfx_pipeline_state.stages[PIPE_SHADER_GEOMETRY])
       factor = ctx->gfx_pipeline_state.stages[PIPE_SHADER_GEOMETRY]->key.gs.stream_output_factor;
 
@@ -627,7 +627,7 @@ d3d12_draw_vbo(struct pipe_context *pctx,
                                                                               : ctx->so_targets;
    D3D12_STREAM_OUTPUT_BUFFER_VIEW *so_buffer_views = ctx->fake_so_buffer_factor ? ctx->fake_so_buffer_views
                                                                                  : ctx->so_buffer_views;
-   for (int i = 0; i < ctx->num_so_targets; ++i) {
+   for (int i = 0; i < ctx->gfx_pipeline_state.num_so_targets; ++i) {
       struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)so_targets[i];
 
       if (!target)

@@ -1396,7 +1396,7 @@ d3d12_set_stream_output_targets(struct pipe_context *pctx,
       }
    }
 
-   ctx->num_so_targets = num_targets;
+   ctx->gfx_pipeline_state.num_so_targets = num_targets;
    ctx->state_dirty |= D3D12_DIRTY_STREAM_OUTPUT;
 }
 
@@ -1408,7 +1408,7 @@ d3d12_enable_fake_so_buffers(struct d3d12_context *ctx, unsigned factor)
 
    d3d12_disable_fake_so_buffers(ctx);
 
-   for (int i = 0; i < ctx->num_so_targets; ++i) {
+   for (int i = 0; i < ctx->gfx_pipeline_state.num_so_targets; ++i) {
       struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)ctx->so_targets[i];
       struct d3d12_stream_output_target *fake_target;
 
@@ -1466,7 +1466,7 @@ d3d12_disable_fake_so_buffers(struct d3d12_context *ctx)
 
    d3d12_flush_cmdlist_and_wait(ctx);
 
-   for (int i = 0; i < ctx->num_so_targets; ++i) {
+   for (int i = 0; i < ctx->gfx_pipeline_state.num_so_targets; ++i) {
       struct d3d12_stream_output_target *target = (struct d3d12_stream_output_target *)ctx->so_targets[i];
       struct d3d12_stream_output_target *fake_target = (struct d3d12_stream_output_target *)ctx->fake_so_targets[i];
       uint64_t filled_size;
@@ -1505,7 +1505,7 @@ d3d12_disable_fake_so_buffers(struct d3d12_context *ctx)
       ctx->fake_so_buffer_views[i].SizeInBytes = 0;
 
       /* Make sure the buffer is not copied twice */
-      for (int j = i + 1; j <= ctx->num_so_targets; ++j) {
+      for (int j = i + 1; j <= ctx->gfx_pipeline_state.num_so_targets; ++j) {
          if (ctx->so_targets[j] && ctx->so_targets[j]->buffer == target->base.buffer)
             pipe_so_target_reference(&ctx->fake_so_targets[j], NULL);
       }

@@ -69,6 +69,7 @@ struct d3d12_gfx_pipeline_state {
    unsigned samples;
    unsigned sample_mask;
    unsigned num_cbufs;
+   unsigned num_so_targets;
    bool has_float_rtv;
    DXGI_FORMAT rtv_formats[8];
    DXGI_FORMAT dsv_format;

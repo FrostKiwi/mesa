@@ -183,9 +183,9 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
    struct d3d12_gfx_pipeline_state *state = &ctx->gfx_pipeline_state;
    enum pipe_prim_type reduced_prim = u_reduced_prim(state->prim_type);
-   D3D12_SO_DECLARATION_ENTRY entries[PIPE_MAX_SO_OUTPUTS];
-   UINT strides[PIPE_MAX_SO_OUTPUTS];
-   UINT num_entries, num_strides;
+   D3D12_SO_DECLARATION_ENTRY entries[PIPE_MAX_SO_OUTPUTS] = { 0 };
+   UINT strides[PIPE_MAX_SO_OUTPUTS] = { 0 };
+   UINT num_entries = 0, num_strides = 0;
 
    D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = { 0 };
    pso_desc.pRootSignature = state->root_signature;
@@ -213,8 +213,9 @@ create_gfx_pipeline_state(struct d3d12_context *ctx)
       pso_desc.PS.pShaderBytecode = shader->bytecode;
    }
 
-   fill_so_declaration(&state->so_info, entries, &num_entries,
-                       strides, &num_strides);
+   if (state->num_so_targets)
+      fill_so_declaration(&state->so_info, entries, &num_entries,
+                          strides, &num_strides);
    pso_desc.StreamOutput.NumEntries = num_entries;
    pso_desc.StreamOutput.pSODeclaration = entries;
    pso_desc.StreamOutput.RasterizedStream = state->rast->base.rasterizer_discard ? D3D12_SO_NO_RASTERIZED_STREAM : 0;
