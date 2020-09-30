@@ -87,6 +87,33 @@ instr_is_alive(ibc_instr *instr)
    unreachable("Invalid instruction type");
 }
 
+/**
+ * Some instructions (like CMP) may write both a flag and a destination
+ * register.  That destination may be dead, even if we still need the
+ * flag result.  Eliminating it will save us a register and eliminate
+ * post-RA scheduling barriers.
+ */
+static bool
+try_removing_dest_write(ibc_instr *instr)
+{
+   bool progress = false;
+
+   if (instr->type == IBC_INSTR_TYPE_ALU) {
+      ibc_alu_instr *alu = ibc_instr_as_alu(instr);
+
+      if (alu->dest.file != IBC_FILE_NONE &&
+          ref_is_dead(&alu->dest, 0, 0, 0, 0, NULL)) {
+         ibc_ref nullref = { .type = alu->dest.type };
+         ibc_instr_set_ref(instr, &alu->dest, nullref);
+         progress = true;
+      }
+   }
+
+   /* TODO: also atomic intrinsic destinations */
+
+   return progress;
+}
+
 bool
 ibc_opt_dead_code(ibc_shader *shader)
 {
@@ -108,6 +135,8 @@ ibc_opt_dead_code(ibc_shader *shader)
    } while (progress);
 
    ibc_foreach_instr_safe(instr, shader) {
+      progress |= try_removing_dest_write(instr);
+
       if (!instr_is_alive(instr)) {
          ibc_instr_remove(instr);
          ralloc_free(instr);
