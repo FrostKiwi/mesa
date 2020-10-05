@@ -150,7 +150,7 @@ ibc_hw_grf_ref(uint8_t nr, uint8_t subnr, enum ibc_type type)
 {
    return (ibc_ref) {
       .file = IBC_FILE_HW_GRF,
-      .type = IBC_TYPE_UD,
+      .type = type,
       .hw_grf = {
          .byte = (uint16_t)nr * REG_SIZE + subnr * ibc_type_byte_size(type),
          .vstride = 8 * ibc_type_byte_size(type),
