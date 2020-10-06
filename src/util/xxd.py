@@ -30,13 +30,15 @@ import os
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('input', help="Name of input file")
     parser.add_argument('output', help="Name of output file")
-    parser.add_argument("-n", "--name",
+    parser.add_argument('input', nargs='+', help="Name of input file(s)")
+    parser.add_argument("-n", "--name", action='append', default=[],
                         help="Name of C variable")
     parser.add_argument("-b", "--binary", dest='binary', action='store_const',
                         const=True, default=False)
     args = parser.parse_args()
+    if args.name and len(args.name) != len(args.input):
+        parser.error('If the --names option is used, it must be used once for each input')
     return args
 
 
@@ -52,43 +54,46 @@ def emit_byte(f, b):
 
 
 def process_file(args):
-    with io.open(args.input, "rb") as infile:
-        try:
-            with io.open(args.output, "wb") as outfile:
-                # If a name was not specified on the command line, pick one based on the
-                # name of the input file.  If no input filename was specified, use
-                # from_stdin.
-                if args.name is not None:
-                    name = args.name
-                else:
-                    name = filename_to_C_identifier(args.input)
+    try:
+        with io.open(args.output, "wb") as outfile:
+            for i, f in enumerate(args.input):
+                with io.open(f, "rb") as infile:
+                        # If a name was not specified on the command line, pick one based on the
+                        # name of the input file.  If no input filename was specified, use
+                        # from_stdin.
+                        if args.name:
+                            name = args.name[i]
+                        else:
+                            name = filename_to_C_identifier(f)
 
-                outfile.write("static const char {}[] = {{\n".format(name).encode('utf-8'))
+                        outfile.write("static const char {}[] = \n".format(name).encode('utf-8'))
+                        outfile.write(b"{")
 
-                linecount = 0
-                while True:
-                    byte = infile.read(1)
-                    if byte == b"":
-                        break
-
-                    if not args.binary:
-                        assert(ord(byte) != 0)
-
-                    emit_byte(outfile, byte)
-                    linecount = linecount + 1
-                    if linecount > 20:
-                        outfile.write(b"\n ")
                         linecount = 0
-                if not args.binary:
-                    outfile.write(b"\n0")
-                outfile.write(b"\n};\n\n")
-        except Exception:
-            # In the event that anything goes wrong, delete the output file,
-            # then re-raise the exception. Deleteing the output file should
-            # ensure that the build system doesn't try to use the stale,
-            # half-generated file.
-            os.unlink(args.output)
-            raise
+                        while True:
+                            byte = infile.read(1)
+                            if byte == b"":
+                                break
+
+                            if not args.binary:
+                                assert(ord(byte) != 0)
+
+                            emit_byte(outfile, byte)
+                            linecount = linecount + 1
+                            if linecount > 20:
+                                outfile.write(b"\n ")
+                                linecount = 0
+
+                        if not args.binary:
+                            outfile.write(b"\n0")
+                        outfile.write(b"\n};\n\n")
+    except Exception:
+        # In the event that anything goes wrong, delete the output file,
+        # then re-raise the exception. Deleteing the output file should
+        # ensure that the build system doesn't try to use the stale,
+        # half-generated file.
+        os.unlink(args.output)
+        raise
 
 
 def main():
