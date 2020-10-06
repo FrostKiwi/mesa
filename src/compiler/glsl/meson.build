@@ -55,9 +55,10 @@ ir_expression_operation_strings_h = custom_target(
 
 float64_glsl_h = custom_target(
   'float64_glsl.h',
-  input : [files_xxd, 'float64.glsl'],
+  input : ['float64.glsl'],
   output : 'float64_glsl.h',
-  command : [prog_python, '@INPUT@', '@OUTPUT@', '-n', 'float64_source'],
+  command : [prog_python, files_xxd, '@OUTPUT@', '@INPUT@', '-n', 'float64_source'],
+  depend_files : files_xxd,
 )
 
 files_libglsl = files(
