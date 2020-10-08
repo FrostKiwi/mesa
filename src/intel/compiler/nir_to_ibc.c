@@ -1561,34 +1561,32 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       } else {
          ibc_builder_push_nir_dest_group(b, instr->dest);
 
-         ibc_intrinsic_src srcs[IBC_TEX_NUM_SRCS] = {
-            [IBC_TEX_SRC_SURFACE_BTI] = {
+         ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
+            [IBC_SURFACE_SRC_SURFACE_BTI] = {
                .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
                                                     IBC_TYPE_UD)),
                .num_comps = 1,
             },
-            [IBC_TEX_SRC_SAMPLER_BTI] = {
-               .ref = ibc_imm_ud(0),
-               .num_comps = 1,
-            },
-            [IBC_TEX_SRC_COORD] = {
+            [IBC_SURFACE_SRC_ADDRESS] = {
                .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
-               .num_comps = 1,
-            },
-            [IBC_TEX_SRC_LOD] = {
-               .ref = ibc_imm_ud(0),
                .num_comps = 1,
             },
          };
 
-         /* We only have headerless rlen shortening on gen9+ */
-         unsigned num_dest_comps =
-            b->shader->devinfo->gen >= 9 ? instr->num_components : 4;
-         assert(nir_dest_bit_size(instr->dest) == 32);
-         dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_TXF,
-                                        IBC_TYPE_UD, num_dest_comps,
-                                        srcs, IBC_TEX_NUM_SRCS);
-
+         dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD,
+                                            instr->num_components);
+         if (nir_intrinsic_align(instr) >= 4 &&
+             nir_dest_bit_size(instr->dest) == 32) {
+            ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_UNTYPED_READ,
+                                dest, -1, instr->num_components,
+                                srcs, IBC_SURFACE_NUM_SRCS);
+         } else {
+            assert(nir_dest_bit_size(instr->dest) <= 32);
+            assert(nir_dest_num_components(instr->dest) == 1);
+            ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ,
+                                dest, -1, instr->num_components,
+                                srcs, IBC_SURFACE_NUM_SRCS);
+         }
          ibc_builder_pop(b);
 
          nti->prog_data->has_ubo_pull = true;
