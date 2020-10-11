@@ -417,6 +417,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                char **error_str_out)
 {
    assert(src_shader->info.stage == MESA_SHADER_COMPUTE);
+   const struct gen_device_info *devinfo = compiler->devinfo;
 
    bool generate_all;
    unsigned min_simd_width = 8;
@@ -434,7 +435,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
                                       src_shader->info.cs.local_size[2];
 
       /* Limit max_threads to 64 for the GPGPU_WALKER command */
-      const uint32_t max_threads = MIN2(64, compiler->devinfo->max_cs_threads);
+      const uint32_t max_threads = MIN2(64, devinfo->max_cs_threads);
       min_simd_width = util_next_power_of_two(
          MAX2(8, DIV_ROUND_UP(local_workgroup_size, max_threads)));
       assert(min_simd_width <= 32);
@@ -502,9 +503,8 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
          compile_cs_to_nir(compiler, mem_ctx, key, src_shader, bin_simd_width);
 
       struct nir_to_ibc_state nti;
-      nir_to_ibc_state_init(&nti, shader->info.stage, compiler->devinfo,
-                            &key->base, &prog_data->base,
-                            NULL, bin_simd_width, mem_ctx);
+      nir_to_ibc_state_init(&nti, shader->info.stage, devinfo, &key->base,
+                            &prog_data->base, NULL, bin_simd_width, mem_ctx);
 
       nti.payload = &ibc_setup_cs_payload(&nti.b, subgroup_id_offset,
                                           prog_data, mem_ctx)->base;
@@ -583,7 +583,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
 
          prog_data->prog_mask |= 1 << i;
          prog_data->prog_offset[i] = offset;
-         cs_fill_push_const_info(compiler->devinfo, prog_data);
+         cs_fill_push_const_info(devinfo, prog_data);
          memcpy((char *)combined + offset, bin[i].data, bin[i].size);
          offset += ALIGN(bin[i].size, 64);
 
@@ -606,7 +606,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
 
          /* Grab the widest shader we find */
          prog_data->prog_mask = 1 << i;
-         cs_fill_push_const_info(compiler->devinfo, prog_data);
+         cs_fill_push_const_info(devinfo, prog_data);
          prog_data->base.dispatch_grf_start_reg = bin[i].num_ff_regs;
          prog_data->base.program_size = bin[i].size;
          prog_data->base.relocs = bin[i].relocs;

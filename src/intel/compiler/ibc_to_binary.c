@@ -228,6 +228,8 @@ set_byte_mask(unsigned byte, void *_data)
 static void
 generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
 {
+   const struct gen_device_info *devinfo = p->devinfo;
+
    /* If the instruction writes to more than one register, it needs to
     * be explicitly marked as compressed on Gen <= 5.  On Gen >= 6 the
     * hardware figures out by itself what the right compression mode is,
@@ -268,21 +270,21 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
    struct brw_reg src[3], dest;
    assert(ibc_alu_op_infos[alu->op].num_srcs <= ARRAY_SIZE(src));
    for (unsigned int i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
-      src[i] = brw_reg_for_ibc_ref(p->devinfo, &alu->src[i].ref,
+      src[i] = brw_reg_for_ibc_ref(devinfo, &alu->src[i].ref,
                                    alu->instr.simd_width,
                                    compressed);
       src[i].abs = (alu->src[i].mod & IBC_ALU_SRC_MOD_ABS) != 0;
       src[i].negate = (alu->src[i].mod & (IBC_ALU_SRC_MOD_NEG |
                                           IBC_ALU_SRC_MOD_NOT)) != 0;
    }
-   dest = brw_reg_for_ibc_ref(p->devinfo, &alu->dest,
+   dest = brw_reg_for_ibc_ref(devinfo, &alu->dest,
                               alu->instr.simd_width,
                               compressed);
 
    brw_set_default_saturate(p, alu->saturate);
    brw_set_default_acc_write_control(p, alu->accum_wr_en);
 
-   if (p->devinfo->gen < 10 && ibc_alu_op_infos[alu->op].num_srcs == 3) {
+   if (devinfo->gen < 10 && ibc_alu_op_infos[alu->op].num_srcs == 3) {
       /* On gen9 and earlier, we don't have 3-src ALIGN1 instructions so they
        * have to be implemented using ALIGN16.
        */
@@ -431,22 +433,24 @@ generate_alu(struct brw_codegen *p, const ibc_alu_instr *alu)
       assert(p->next_insn_offset == last_insn_offset + 16 ||
              !"conditional_mod set for IR emitting more than 1 "
               "instruction");
-      brw_inst_set_cond_modifier(p->devinfo, brw_last_inst, alu->cmod);
+      brw_inst_set_cond_modifier(devinfo, brw_last_inst, alu->cmod);
    }
 }
 
 static void
 generate_send(struct brw_codegen *p, const ibc_send_instr *send)
 {
+   const struct gen_device_info *devinfo = p->devinfo;
+
    struct brw_reg dst =
-      brw_reg_for_ibc_ref(p->devinfo, &send->dest,
+      brw_reg_for_ibc_ref(devinfo, &send->dest,
                           send->instr.simd_width, false);
 
    struct brw_reg payload0 =
-      brw_reg_for_ibc_ref(p->devinfo, &send->payload[0],
+      brw_reg_for_ibc_ref(devinfo, &send->payload[0],
                           send->instr.simd_width, false);
    struct brw_reg payload1 =
-      brw_reg_for_ibc_ref(p->devinfo, &send->payload[1],
+      brw_reg_for_ibc_ref(devinfo, &send->payload[1],
                           send->instr.simd_width, false);
 
    struct brw_reg desc;
@@ -454,22 +458,22 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
       desc = brw_imm_ud(0);
    } else {
       assert(send->desc.type == IBC_TYPE_UD);
-      desc = brw_reg_for_ibc_ref(p->devinfo, &send->desc,
+      desc = brw_reg_for_ibc_ref(devinfo, &send->desc,
                                  send->instr.simd_width, false);
    }
    uint32_t desc_imm = send->desc_imm |
-      brw_message_desc(p->devinfo, send->mlen, send->rlen, send->has_header);
+      brw_message_desc(devinfo, send->mlen, send->rlen, send->has_header);
 
    struct brw_reg ex_desc;
    if (send->ex_desc.file == IBC_FILE_NONE) {
       ex_desc = brw_imm_ud(0);
    } else {
       assert(send->ex_desc.type == IBC_TYPE_UD);
-      ex_desc = brw_reg_for_ibc_ref(p->devinfo, &send->ex_desc,
+      ex_desc = brw_reg_for_ibc_ref(devinfo, &send->ex_desc,
                                     send->instr.simd_width, false);
    }
    uint32_t ex_desc_imm = send->ex_desc_imm |
-      brw_message_ex_desc(p->devinfo, send->ex_mlen);
+      brw_message_ex_desc(devinfo, send->ex_mlen);
 
    if (ex_desc.file != BRW_IMMEDIATE_VALUE || ex_desc_imm) {
       /* If we have any sort of extended descriptor, then we need SENDS.  This
@@ -479,12 +483,12 @@ generate_send(struct brw_codegen *p, const ibc_send_instr *send)
                                       desc, desc_imm, ex_desc, ex_desc_imm,
                                       send->eot);
       if (send->check_tdr)
-         brw_inst_set_opcode(p->devinfo, brw_last_inst, BRW_OPCODE_SENDSC);
+         brw_inst_set_opcode(devinfo, brw_last_inst, BRW_OPCODE_SENDSC);
    } else {
       brw_send_indirect_message(p, send->sfid, dst, payload0, desc, desc_imm,
                                    send->eot);
       if (send->check_tdr)
-         brw_inst_set_opcode(p->devinfo, brw_last_inst, BRW_OPCODE_SENDC);
+         brw_inst_set_opcode(devinfo, brw_last_inst, BRW_OPCODE_SENDC);
    }
 }
 
@@ -532,6 +536,8 @@ generate_mov_indirect(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
                       struct brw_reg dest, struct brw_reg val,
                       struct brw_reg offset, unsigned offset_mul)
 {
+   const struct gen_device_info *devinfo = p->devinfo;
+
    /* Because we're using the address register, we're limited to 16-wide
     * exection and 8-wide for 64-bit types.  We could try and make this
     * instruction splittable higher up in the compiler but that gets weird
@@ -596,8 +602,7 @@ generate_mov_indirect(struct brw_codegen *p, const ibc_intrinsic_instr *intrin,
          }
 
          if (type_sz(val.type) > 4 &&
-             (p->devinfo->is_cherryview ||
-              gen_device_info_is_9lp(p->devinfo))) {
+             (devinfo->is_cherryview || gen_device_info_is_9lp(devinfo))) {
             /* From the Cherryview PRM Vol 7. "Register Region Restrictions":
              *
              *    "When source or destination datatype is 64b or operation is
@@ -629,16 +634,18 @@ static void
 generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
                    const ibc_intrinsic_instr *intrin)
 {
+   const struct gen_device_info *devinfo = p->devinfo;
+
    /* We use a very simple heuristic for intrinsics */
    const bool compressed = intrin->instr.simd_width > 8;
 
    struct brw_reg src[3], dest;
    for (unsigned int i = 0; i < intrin->num_srcs; i++) {
-      src[i] = brw_reg_for_ibc_ref(p->devinfo, &intrin->src[i].ref,
+      src[i] = brw_reg_for_ibc_ref(devinfo, &intrin->src[i].ref,
                                    intrin->src[i].simd_width,
                                    compressed);
    }
-   dest = brw_reg_for_ibc_ref(p->devinfo, &intrin->dest,
+   dest = brw_reg_for_ibc_ref(devinfo, &intrin->dest,
                               intrin->instr.simd_width,
                               compressed);
 
@@ -707,6 +714,8 @@ generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
 static void
 generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
 {
+   const struct gen_device_info *devinfo = p->devinfo;
+
    switch (flow->op) {
    case IBC_FLOW_OP_START:
    case IBC_FLOW_OP_END:
@@ -746,7 +755,7 @@ generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
 
    case IBC_FLOW_OP_HALT_MERGE:
       if (!list_is_singular(&flow->preds)) {
-         int scale = brw_jump_scale(p->devinfo);
+         int scale = brw_jump_scale(devinfo);
 
          /* There is a somewhat strange undocumented requirement of using
           * HALT, according to the simulator.  If some channel has HALTed to
@@ -760,8 +769,8 @@ generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
           * tests.
           */
          brw_inst *merge = brw_HALT(p);
-         brw_inst_set_uip(p->devinfo, merge, 1 * scale);
-         brw_inst_set_jip(p->devinfo, merge, 1 * scale);
+         brw_inst_set_uip(devinfo, merge, 1 * scale);
+         brw_inst_set_jip(devinfo, merge, 1 * scale);
 
          int merge_ip = p->nr_insn;
 
@@ -773,12 +782,12 @@ generate_flow(struct brw_codegen *p, const ibc_flow_instr *flow)
             assert(pred->instr->op == IBC_FLOW_OP_HALT_JUMP);
             int jump_ip = pred->instr->instr.index;
             brw_inst *jump = &p->store[jump_ip];
-            assert(brw_inst_opcode(p->devinfo, jump) == BRW_OPCODE_HALT);
+            assert(brw_inst_opcode(devinfo, jump) == BRW_OPCODE_HALT);
 
             /* HALT takes a half-instruction distance from the
              * pre-incremented IP.
              */
-            brw_inst_set_uip(p->devinfo, jump, (merge_ip - jump_ip) * scale);
+            brw_inst_set_uip(devinfo, jump, (merge_ip - jump_ip) * scale);
          }
       } else {
          ibc_foreach_flow_pred(pred, flow)
