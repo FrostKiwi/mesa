@@ -697,7 +697,8 @@ generate_intrinsic(struct brw_codegen *p, const ibc_shader *shader,
       break;
 
    case IBC_INTRINSIC_OP_STALL_REG:
-      brw_MOV(p, retype(brw_null_reg(), src[0].type), src[0]);
+      if (intrin->src[0].ref.file != IBC_FILE_NONE)
+         brw_MOV(p, retype(brw_null_reg(), src[0].type), src[0]);
       break;
 
    case IBC_INTRINSIC_OP_FLOAT_CONTROL_MODE:
