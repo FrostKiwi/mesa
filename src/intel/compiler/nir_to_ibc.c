@@ -2247,6 +2247,16 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          unreachable("Unsupported barrier intrinsic");
       }
 
+      /* If the compute workgroup fits in a single HW thread, the messages
+       * for SLM are processed in-order and the shader itself is already
+       * synchronized, so the memory fence is not necessary.
+       *
+       * TODO: Check if applies for many HW threads sharing same Data Port.
+       */
+      if (b->shader->stage != MESA_SHADER_COMPUTE ||
+          ibc_cs_workgroup_fits_in_single_thread(nti))
+         modes &= ~nir_var_mem_shared;
+
       uint32_t fence_bti[2];
       unsigned num_fences = 0;
       if (devinfo->gen >= 11) {
