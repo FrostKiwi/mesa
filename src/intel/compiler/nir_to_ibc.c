@@ -782,6 +782,7 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
              const nir_tex_instr *ntex)
 {
    ibc_builder *b = &nti->b;
+   const struct gen_device_info *devinfo = b->shader->devinfo;
 
    ibc_intrinsic_src srcs[IBC_TEX_NUM_SRCS] = {};
 
@@ -888,8 +889,7 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
          /* The NIR src says it takes 4 components but we only care about the
           * first on gen8 and the first two on gen9+.
           */
-         srcs[IBC_TEX_SRC_MCS].num_comps =
-            b->shader->devinfo->gen >= 9 ? 2 : 1;
+         srcs[IBC_TEX_SRC_MCS].num_comps = devinfo->gen >= 9 ? 2 : 1;
          break;
 
       default:
@@ -912,7 +912,7 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
                                  IBC_TYPE_UD, 4, mcs_srcs, IBC_TEX_NUM_SRCS);
       srcs[IBC_TEX_SRC_MCS] = (ibc_intrinsic_src) {
          .ref = mcs_data,
-         .num_comps = b->shader->devinfo->gen < 9 ? 1 : 2,
+         .num_comps = devinfo->gen < 9 ? 1 : 2,
       };
    }
 
@@ -975,7 +975,7 @@ nti_emit_tex(struct nir_to_ibc_state *nti,
 
    unsigned num_dest_comps = 4;
    const unsigned nir_num_dest_comps = nir_tex_instr_dest_size(ntex);
-   if (b->shader->devinfo->gen >= 9 &&
+   if (devinfo->gen >= 9 &&
        ntex->op != nir_texop_tg4 && ntex->op != nir_texop_query_levels) {
       unsigned write_mask = ntex->dest.is_ssa ?
                             nir_ssa_def_components_read(&ntex->dest.ssa):
@@ -1218,6 +1218,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    ibc_builder *b = &nti->b;
+   const struct gen_device_info *devinfo = b->shader->devinfo;
 
    ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
@@ -1983,7 +1984,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       };
 
       /* We only have headerless rlen shortening on gen9+ */
-      unsigned num_dest_comps = b->shader->devinfo->gen >= 9 ? 1 : 4;
+      unsigned num_dest_comps = devinfo->gen >= 9 ? 1 : 4;
       ibc_ref size = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_TXS,
                                              IBC_TYPE_UD, num_dest_comps,
                                              srcs, IBC_TEX_NUM_SRCS);
@@ -2194,8 +2195,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          srcs[IBC_TEX_SRC_SURFACE_HANDLE] = surface;
 
       /* We only have headerless rlen shortening on gen9+ */
-      unsigned num_dest_comps =
-         b->shader->devinfo->gen >= 9 ? instr->num_components : 4;
+      unsigned num_dest_comps = devinfo->gen >= 9 ? instr->num_components : 4;
       ibc_ref size = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_TXS,
                                              IBC_TYPE_UD, num_dest_comps,
                                              srcs, IBC_TEX_NUM_SRCS);
@@ -2249,7 +2249,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
       uint32_t fence_bti[2];
       unsigned num_fences = 0;
-      if (b->shader->devinfo->gen >= 11) {
+      if (devinfo->gen >= 11) {
          if (modes & (nir_var_shader_out |
                       nir_var_mem_ssbo |
                       nir_var_mem_global))

@@ -1286,7 +1286,7 @@ ibc_lower_io_fb_write_to_send(ibc_builder *b, ibc_intrinsic_instr *write)
 
    send->sfid = GEN6_SFID_DATAPORT_RENDER_CACHE;
    send->desc_imm =
-      brw_dp_write_desc(b->shader->devinfo, target, msg_control,
+      brw_dp_write_desc(devinfo, target, msg_control,
                         GEN6_DATAPORT_WRITE_MESSAGE_RENDER_TARGET_WRITE,
                         (flags & IBC_FB_WRITE_FLAG_LAST_RT) != 0,
                         0 /* send_commit_msg */);
@@ -1331,12 +1331,13 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
                char **error_str_out)
 {
    assert(shader->info.stage == MESA_SHADER_FRAGMENT);
+   const struct gen_device_info *devinfo = compiler->devinfo;
 
 //   unsigned max_subgroup_size = unlikely(INTEL_DEBUG & DEBUG_DO32) ? 32 : 16;
    unsigned max_subgroup_size = 32;
 
    brw_nir_apply_key(shader, compiler, &key->base, max_subgroup_size, true);
-   brw_nir_lower_fs_inputs(shader, compiler->devinfo, key);
+   brw_nir_lower_fs_inputs(shader, devinfo, key);
    brw_nir_lower_fs_outputs(shader);
 
    /* The Skylake PRM, Volume 7, "Alpha Coverage" says:
@@ -1360,7 +1361,7 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
    NIR_PASS_V(shader, brw_nir_move_interpolation_to_top);
    brw_postprocess_nir(shader, compiler, true);
 
-   brw_nir_populate_wm_prog_data(shader, compiler->devinfo, key, prog_data);
+   brw_nir_populate_wm_prog_data(shader, devinfo, key, prog_data);
 
    /* TODO: Should this go in populate_wm_prog_data? */
    prog_data->uses_src_depth = prog_data->uses_src_w =
@@ -1397,7 +1398,7 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
          .max_simd_width = 32,
       };
       struct nir_to_ibc_state nti;
-      nir_to_ibc_state_init(&nti, MESA_SHADER_FRAGMENT, compiler->devinfo,
+      nir_to_ibc_state_init(&nti, MESA_SHADER_FRAGMENT, devinfo,
                             &key->base, &prog_data->base,
                             &fs_state, bin_simd_width, bin_ctx);
 
