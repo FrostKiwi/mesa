@@ -87,6 +87,15 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
    }
 
    case nir_intrinsic_control_barrier: {
+      /* If the whole workgroup fits in a single HW thread, then all the
+       * invocations are already executed in lock-step.  Just emit a
+       * scheduling fence instead of an actual barrier.
+       */
+      if (ibc_cs_workgroup_fits_in_single_thread(nti)) {
+         ibc_STALL_REG(b, ibc_null(IBC_TYPE_INVALID));
+         break;
+      }
+
       prog_data->uses_barrier = true;
 
       uint32_t barrier_id_mask;
@@ -390,6 +399,21 @@ cs_fill_push_const_info(const struct gen_device_info *devinfo,
    assert(cs_prog_data->push.cross_thread.dwords +
           cs_prog_data->push.per_thread.dwords ==
              prog_data->nr_params);
+}
+
+bool
+ibc_cs_workgroup_fits_in_single_thread(const struct nir_to_ibc_state *nti)
+{
+   assert(nti->b.shader->stage == MESA_SHADER_COMPUTE);
+
+   const struct brw_cs_prog_data *cs = (const void *)nti->prog_data;
+   unsigned size = cs->local_size[0] * cs->local_size[1] * cs->local_size[2];
+
+   /* This must be a variable-size compute workgroup; assume it won't fit. */
+   if (size == 0)
+      return false;
+
+   return size <= nti->b.shader->simd_width;
 }
 
 static nir_shader *
