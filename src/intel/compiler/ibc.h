@@ -1135,7 +1135,7 @@ enum ibc_intrinsic_op {
    /* Wait for a notificaiton */
    IBC_INTRINSIC_OP_WAIT,
 
-   /* Stall on a register */
+   /* Stall on a register, or act as a scheduling barrier. */
    IBC_INTRINSIC_OP_STALL_REG,
 
    IBC_INTRINSIC_OP_A64_UNTYPED_READ,
