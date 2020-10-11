@@ -287,6 +287,7 @@ bool ibc_emit_nir_fs_intrinsic(struct nir_to_ibc_state *nti,
 bool ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
                                nir_intrinsic_instr *instr);
 ibc_ref ibc_emit_fs_sample_live_predicate(struct nir_to_ibc_state *nti);
+bool ibc_cs_workgroup_fits_in_single_thread(const struct nir_to_ibc_state *);
 
 void ibc_emit_urb_read(ibc_builder *b,
                        ibc_ref dest,
