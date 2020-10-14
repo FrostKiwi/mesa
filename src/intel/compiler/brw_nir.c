@@ -966,6 +966,15 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
 
    UNUSED bool progress; /* Written by OPT */
 
+   nir_divergence_analysis(nir);
+   if (OPT(nir_opt_uniform_atomics)) {
+      const nir_lower_subgroups_options subgroups_options = {
+         .ballot_bit_size = 32,
+         .lower_elect = true,
+      };
+      OPT(nir_lower_subgroups, &subgroups_options);
+   }
+
    OPT(brw_nir_lower_scoped_barriers);
    OPT(nir_opt_combine_memory_barriers, combine_all_barriers, NULL);
 
