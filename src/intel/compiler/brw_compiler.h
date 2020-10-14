@@ -141,6 +141,8 @@ struct brw_compiler {
     * constant or data cache, UBOs must use VK_FORMAT_RAW.
     */
    bool indirect_ubos_use_sampler;
+
+   bool patch_scratch_address;
 };
 
 /**
@@ -656,6 +658,8 @@ enum brw_param_builtin {
 enum brw_shader_reloc_id {
    BRW_SHADER_RELOC_CONST_DATA_ADDR_LOW,
    BRW_SHADER_RELOC_CONST_DATA_ADDR_HIGH,
+   BRW_SHADER_RELOC_SCRATCH_BASE_ADDR,
+   BRW_SHADER_RELOC_PER_THREAD_SCRATCH_SPACE,
 };
 
 /** Represents a code relocation
@@ -1537,6 +1541,38 @@ void brw_debug_key_recompile(const struct brw_compiler *c, void *log,
                              gl_shader_stage stage,
                              const struct brw_base_prog_key *old_key,
                              const struct brw_base_prog_key *key);
+
+/* This is used for calculating scratch sizes when we patch the scratch
+ * address and offset into the shader.  It may not match what's used by the
+ * hardware scratch computation.
+ */
+static inline unsigned
+brw_num_thread_ids(const struct gen_device_info *devinfo)
+{
+   int per_slice_bits = 0;
+   if (devinfo->gen == 12) {
+      per_slice_bits += 3; /* Thread ID */
+      per_slice_bits += 3; /* EU ID */
+      per_slice_bits += 1; /* Subslice ID */
+      per_slice_bits += 2; /* Dual-Subslice ID */
+   } else if (devinfo->gen == 11) {
+      per_slice_bits += 3; /* Thread ID */
+      per_slice_bits += 4; /* EU ID */
+      per_slice_bits += 1; /* Subslice ID */
+      per_slice_bits += 3; /* Dual-Subslice ID */
+   } else if (devinfo->gen == 9 || devinfo->gen == 8) {
+      per_slice_bits += 3; /* Thread ID */
+      per_slice_bits += 4; /* EU ID */
+      per_slice_bits += 3; /* Subslice ID */
+   } else {
+      /* The bits in sr0 move around A LOT.  Don't pretend we can make a
+       * general rule that applies to future generations.
+       */
+      unreachable("Unhandled hardware generation");
+   }
+
+   return devinfo->num_slices << per_slice_bits;
+}
 
 static inline uint32_t
 encode_slm_size(unsigned gen, uint32_t bytes)

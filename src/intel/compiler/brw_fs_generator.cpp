@@ -1518,6 +1518,77 @@ fs_generator::generate_scratch_read_gen7(fs_inst *inst, struct brw_reg dst)
    gen7_block_read_scratch(p, dst, inst->exec_size / 8, inst->offset);
 }
 
+struct bitrange {
+   int high;
+   int low;
+};
+
+static void
+collect_sr0_bits(struct brw_codegen *p, struct brw_reg dst,
+                 unsigned thread_id_shift,
+                 struct bitrange *ranges, unsigned num_ranges)
+{
+   brw_inst *insn;
+
+   /* Compact the bit ranges down */
+   unsigned idx = 0;
+   assert(ranges[0].low <= ranges[0].high);
+   for (unsigned i = 1; i < num_ranges; i++) {
+      assert(ranges[i].low <= ranges[i].high);
+      assert(ranges[i].low > ranges[idx].high);
+      if (ranges[i].low == ranges[idx].high + 1) {
+         ranges[idx].high = ranges[i].high;
+      } else {
+         idx++;
+         if (idx < i)
+            ranges[idx] = ranges[i];
+      }
+   }
+   num_ranges = idx + 1;
+
+   assert(dst.type == BRW_REGISTER_TYPE_UD);
+
+   /* We assume that this is immediately preceeded by a MOV dst g0 with
+    * no_dd_clear set on Gen11 and earlier.
+    */
+   brw_set_default_swsb(p, tgl_swsb_null());
+   for (unsigned i = 0; i < num_ranges; i++) {
+      assert(ranges[i].low <= ranges[i].high);
+      insn = brw_AND(p, suboffset(dst, i), brw_sr0_reg(0),
+                     brw_imm_ud(INTEL_MASK(ranges[i].high, ranges[i].low)));
+      if (p->devinfo->gen < 12)
+         brw_inst_set_no_dd_check(p->devinfo, insn, true);
+      if (p->devinfo->gen < 12 && i < num_ranges - 1)
+         brw_inst_set_no_dd_clear(p->devinfo, insn, true);
+   }
+
+   /* Sadly, past this point, we can't pipeline instructions here on Gen11 and
+    * earlier because they read and write the same register so NoDDClr will
+    * cause a hang on a never-resolved source dependency.
+    */
+
+   brw_set_default_swsb(p, tgl_swsb_regdist(num_ranges));
+   int next_start = thread_id_shift;
+   for (unsigned i = 0; i < num_ranges; i++) {
+      if (ranges[i].low > next_start) {
+         insn = brw_SHR(p, suboffset(dst, i), suboffset(dst, i),
+                        brw_imm_ud(ranges[i].low - next_start));
+      } else {
+         insn = brw_SHL(p, suboffset(dst, i), suboffset(dst, i),
+                        brw_imm_ud(next_start - ranges[i].low));
+      }
+      next_start += ranges[i].high - ranges[i].low + 1;
+   }
+
+   if (num_ranges > 1) {
+      brw_set_default_swsb(p, tgl_swsb_regdist(num_ranges - 1));
+      for (unsigned i = 1; i < num_ranges; i++) {
+         insn = brw_OR(p, dst, dst, suboffset(dst, i));
+         brw_set_default_swsb(p, tgl_swsb_regdist(1));
+      }
+   }
+}
+
 /* The A32 messages take a buffer base address in header.5:[31:0] (See
  * MH1_A32_PSM for typed messages or MH_A32_GO for byte/dword scattered
  * and OWord block messages in the SKL PRM Vol. 2d for more details.)
@@ -1570,22 +1641,86 @@ fs_generator::generate_scratch_header(fs_inst *inst, struct brw_reg dst)
    else
       brw_inst_set_no_dd_clear(p->devinfo, insn, true);
 
-   /* Copy the per-thread scratch space size from g0.3[3:0] */
    brw_set_default_exec_size(p, BRW_EXECUTE_1);
-   insn = brw_AND(p, suboffset(dst, 3),
-                     retype(brw_vec1_grf(0, 3), BRW_REGISTER_TYPE_UD),
-                     brw_imm_ud(INTEL_MASK(3, 0)));
-   if (devinfo->gen < 12) {
-      brw_inst_set_no_dd_clear(p->devinfo, insn, true);
-      brw_inst_set_no_dd_check(p->devinfo, insn, true);
-   }
 
-   /* Copy the scratch base address from g0.5[31:10] */
-   insn = brw_AND(p, suboffset(dst, 5),
-                     retype(brw_vec1_grf(0, 5), BRW_REGISTER_TYPE_UD),
-                     brw_imm_ud(INTEL_MASK(31, 10)));
-   if (devinfo->gen < 12)
-      brw_inst_set_no_dd_check(p->devinfo, insn, true);
+   if (compiler->patch_scratch_address) {
+      /* PTSS = 0 -> 1KB so pre-shift the thread id 10 bits */
+      const unsigned thread_id_shift = 10;
+
+      struct brw_reg ptss = vec1(suboffset(dst, 3));
+      insn = brw_MOV_reloc_imm(p, ptss, BRW_REGISTER_TYPE_UD,
+                               BRW_SHADER_RELOC_PER_THREAD_SCRATCH_SPACE);
+      if (devinfo->gen < 12) {
+         brw_inst_set_no_dd_clear(p->devinfo, insn, true);
+         brw_inst_set_no_dd_check(p->devinfo, insn, true);
+      }
+
+      /* Note: collect_sr0_bits may overwrite the entire second half of dst as
+       * it scratches around doing its computation.
+       */
+      struct brw_reg thread_id = vec1(suboffset(dst, 4));
+
+      /* See also brw_num_thread_ids() in brw_compiler.h */
+      if (p->devinfo->gen == 12) {
+         struct bitrange sr0_bits[] = {
+            { 2, 0 }, /* Thread ID */
+            { 5, 4 }, /* EU ID */
+            { 7, 7 }, /* EU ID */
+            { 8, 8 }, /* Subslice ID */
+            { 10, 9 }, /* Dual-Subslice ID */
+            { 13, 11 }, /* Slice ID */
+         };
+         collect_sr0_bits(p, thread_id, thread_id_shift,
+                          sr0_bits, ARRAY_SIZE(sr0_bits));
+      } else if (p->devinfo->gen == 11) {
+         struct bitrange sr0_bits[] = {
+            { 2, 0 }, /* Thread ID */
+            { 7, 4 }, /* EU ID */
+            { 8, 8 }, /* Subslice ID */
+            { 11, 9 }, /* Dual-Subslice ID */
+            { 14, 12 }, /* Slice ID */
+         };
+         collect_sr0_bits(p, thread_id, thread_id_shift,
+                          sr0_bits, ARRAY_SIZE(sr0_bits));
+      } else if (p->devinfo->gen == 9 || p->devinfo->gen == 8) {
+         struct bitrange sr0_bits[] = {
+            { 2, 0 }, /* Thread ID */
+            { 11, 8 }, /* EU ID */
+            { 13, 12 }, /* Subslice ID */
+            { 15, 14 }, /* Slice ID */
+         };
+         collect_sr0_bits(p, thread_id, thread_id_shift,
+                          sr0_bits, ARRAY_SIZE(sr0_bits));
+      } else {
+         /* The bits in sr0 move around A LOT.  Don't pretend we can make a
+          * general rule that applies to future generations.
+          */
+         unreachable("Unhandled hardware generation");
+      }
+
+      brw_set_default_swsb(p, tgl_swsb_regdist(1));
+      brw_SHL(p, thread_id, thread_id, ptss);
+
+      struct brw_reg base_addr = vec1(suboffset(dst, 5));
+      brw_ADD_reloc_imm(p, base_addr, thread_id, BRW_REGISTER_TYPE_UD,
+                        BRW_SHADER_RELOC_SCRATCH_BASE_ADDR);
+   } else {
+      /* Copy the per-thread scratch space size from g0.3[3:0] */
+      insn = brw_AND(p, suboffset(dst, 3),
+                        retype(brw_vec1_grf(0, 3), BRW_REGISTER_TYPE_UD),
+                        brw_imm_ud(INTEL_MASK(3, 0)));
+      if (devinfo->gen < 12) {
+         brw_inst_set_no_dd_clear(p->devinfo, insn, true);
+         brw_inst_set_no_dd_check(p->devinfo, insn, true);
+      }
+
+      /* Copy the scratch base address from g0.5[31:10] */
+      insn = brw_AND(p, suboffset(dst, 5),
+                        retype(brw_vec1_grf(0, 5), BRW_REGISTER_TYPE_UD),
+                        brw_imm_ud(INTEL_MASK(31, 10)));
+      if (devinfo->gen < 12)
+         brw_inst_set_no_dd_check(p->devinfo, insn, true);
+   }
 }
 
 void
