@@ -5795,23 +5795,25 @@ lower_varying_pull_constant_logical_send(const fs_builder &bld, fs_inst *inst)
          inst->desc |= brw_sampler_desc(devinfo, 0, 0,
                                         GEN5_SAMPLER_MESSAGE_SAMPLE_LD,
                                         simd_mode, 0);
-      } else if (alignment >= 4) {
-         inst->sfid = (devinfo->gen >= 8 || devinfo->is_haswell ?
-                       HSW_SFID_DATAPORT_DATA_CACHE_1 :
-                       GEN7_SFID_DATAPORT_DATA_CACHE);
-         inst->desc |= brw_dp_untyped_surface_rw_desc(devinfo, inst->exec_size,
-                                                      4, /* num_channels */
-                                                      false   /* write */);
       } else {
-         inst->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
-         inst->desc |= brw_dp_byte_scattered_rw_desc(devinfo, inst->exec_size,
-                                                     32,     /* bit_size */
-                                                     false   /* write */);
-         /* The byte scattered messages can only read one dword at a time so
-          * we have to duplicate the message 4 times to read the full vec4.
-          * Hopefully, dead code will clean up the mess if some of them aren't
-          * needed.
-          */
+         unsigned dword_size;
+         if (alignment >= 4) {
+            inst->sfid = GEN6_SFID_DATAPORT_CONSTANT_CACHE;
+            inst->desc |= brw_dp_dword_scattered_rw_desc(devinfo,
+                                                         inst->exec_size,
+                                                         false   /* write */);
+            /* The dword scattered messages are in units of dwords */
+            bld.SHR(ubo_offset, ubo_offset, brw_imm_ud(2));
+            dword_size = 1;
+         } else {
+            inst->sfid = GEN7_SFID_DATAPORT_DATA_CACHE;
+            inst->desc |= brw_dp_byte_scattered_rw_desc(devinfo,
+                                                        inst->exec_size,
+                                                        32,     /* bit_size */
+                                                        false   /* write */);
+            dword_size = 4;
+         }
+
          assert(inst->size_written == 16 * inst->exec_size);
          inst->size_written /= 4;
          for (unsigned c = 1; c < 4; c++) {
@@ -5823,7 +5825,7 @@ lower_varying_pull_constant_logical_send(const fs_builder &bld, fs_inst *inst)
 
             /* Offset the source */
             inst->src[2] = bld.vgrf(BRW_REGISTER_TYPE_UD);
-            bld.ADD(inst->src[2], ubo_offset, brw_imm_ud(c * 4));
+            bld.ADD(inst->src[2], ubo_offset, brw_imm_ud(c * dword_size));
 
             /* Offset the destination */
             inst->dst = offset(inst->dst, bld, 1);

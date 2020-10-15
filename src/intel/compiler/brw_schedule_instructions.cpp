@@ -422,6 +422,18 @@ schedule_node::set_latency_gen7(bool is_haswell)
          }
          break;
 
+      case GEN6_SFID_DATAPORT_CONSTANT_CACHE:
+         switch ((inst->desc >> 14) & 0x1f) {
+         case GEN7_DATAPORT_DC_DWORD_SCATTERED_READ:
+            /* Same as UNIFORM_PULL_CONSTANT_LOAD */
+            latency = 200;
+            break;
+
+         default:
+            unreachable("Unknown constant cache message");
+         }
+         break;
+
       case GEN7_SFID_DATAPORT_DATA_CACHE:
          switch ((inst->desc >> 14) & 0x1f) {
          case BRW_DATAPORT_READ_MESSAGE_OWORD_BLOCK_READ:

@@ -1051,6 +1051,9 @@ namespace {
             else
                abort();
          }
+         case GEN6_SFID_DATAPORT_CONSTANT_CACHE:
+            return calculate_desc(info, unit_dp_cc, 2, 0, 0, 0, 16 /* XXX */,
+                                  10 /* XXX */, 100 /* XXX */, 0, 0, 0, 0);
          case GEN7_SFID_DATAPORT_DATA_CACHE:
          case HSW_SFID_DATAPORT_DATA_CACHE_1:
             if (devinfo->gen >= 8 || devinfo->is_haswell) {
