@@ -4697,6 +4697,32 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       nir_emit_global_atomic_float(bld, brw_aop_for_nir_intrinsic(instr), instr);
       break;
 
+   case nir_intrinsic_load_global_constant_block_intel: {
+      assert(nir_dest_bit_size(instr->dest) == 32);
+      assert(instr->num_components == 8 || instr->num_components == 16);
+
+      const fs_builder ubld = bld.exec_all().group(instr->num_components, 0);
+      fs_reg tmp = ubld.vgrf(BRW_REGISTER_TYPE_UD);
+      assert(nir_intrinsic_align(instr) >= 4);
+      if (nir_intrinsic_align(instr) >= 32) {
+         ubld.emit(SHADER_OPCODE_A64_OWORD_BLOCK_READ_LOGICAL, tmp,
+                   bld.emit_uniformize(get_nir_src(instr->src[0])), /* Address */
+                   fs_reg(), /* No source data */
+                   brw_imm_ud(instr->num_components));
+      } else {
+         ubld.emit(SHADER_OPCODE_A64_UNALIGNED_OWORD_BLOCK_READ_LOGICAL, tmp,
+                   bld.emit_uniformize(get_nir_src(instr->src[0])), /* Address */
+                   fs_reg(), /* No source data */
+                   brw_imm_ud(instr->num_components));
+      }
+
+      for (unsigned i = 0; i < instr->num_components; i++) {
+         bld.MOV(retype(offset(dest, bld, i), BRW_REGISTER_TYPE_UD),
+                 component(tmp, i));
+      }
+      break;
+   }
+
    case nir_intrinsic_load_ssbo: {
       assert(devinfo->gen >= 7);
 

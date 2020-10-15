@@ -965,6 +965,9 @@ image("store_raw_intel", src_comp=[1, 0])
 # src[] = { buffer_index, offset }.
 load("ubo_block_intel", [1, 1], [ACCESS, ALIGN_MUL, ALIGN_OFFSET],
      [CAN_ELIMINATE, CAN_REORDER])
+# src[] = { address }.
+load("global_constant_block_intel", [1], [ACCESS, ALIGN_MUL, ALIGN_OFFSET],
+     [CAN_ELIMINATE, CAN_REORDER])
 
 # Number of data items being operated on for a SIMD program.
 system_value("simd_width_intel", 1)

@@ -308,6 +308,10 @@ brw_instruction_name(const struct gen_device_info *devinfo, enum opcode op)
       return "untyped_surface_write_logical";
    case SHADER_OPCODE_A64_UNTYPED_READ_LOGICAL:
       return "a64_untyped_read_logical";
+   case SHADER_OPCODE_A64_OWORD_BLOCK_READ_LOGICAL:
+      return "a64_oword_block_read_logical";
+   case SHADER_OPCODE_A64_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
+      return "a64_unaligned_oword_block_read_logical";
    case SHADER_OPCODE_A64_UNTYPED_WRITE_LOGICAL:
       return "a64_untyped_write_logical";
    case SHADER_OPCODE_A64_BYTE_SCATTERED_READ_LOGICAL:

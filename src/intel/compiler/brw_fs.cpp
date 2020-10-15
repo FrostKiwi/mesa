@@ -826,6 +826,8 @@ fs_inst::components_read(unsigned i) const
          return 1;
 
    case SHADER_OPCODE_A64_UNTYPED_READ_LOGICAL:
+   case SHADER_OPCODE_A64_OWORD_BLOCK_READ_LOGICAL:
+   case SHADER_OPCODE_A64_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
       assert(src[2].file == IMM);
       return 1;
 
@@ -5707,29 +5709,56 @@ lower_a64_logical_send(const fs_builder &bld, fs_inst *inst)
    if (has_side_effects && bld.shader->stage == MESA_SHADER_FRAGMENT)
       emit_predicate_on_sample_mask(bld, inst);
 
+   /* OWORD messages only take a scalar address in a header */
+   fs_reg block_header;
+   if (inst->opcode == SHADER_OPCODE_A64_OWORD_BLOCK_READ_LOGICAL ||
+       inst->opcode == SHADER_OPCODE_A64_UNALIGNED_OWORD_BLOCK_READ_LOGICAL) {
+      const fs_builder ubld = bld.exec_all().group(8, 0);
+      block_header = ubld.vgrf(BRW_REGISTER_TYPE_UD);
+      ubld.MOV(block_header, brw_imm_ud(0));
+
+      /* Use a 2-wide MOV to fill out the address */
+      assert(type_sz(addr.type) == 8 && addr.stride == 0);
+      fs_reg addr_vec2 = addr;
+      addr_vec2.type = BRW_REGISTER_TYPE_UD;
+      addr_vec2.stride = 1;
+      ubld.group(2, 0).MOV(block_header, addr_vec2);
+   }
+   const unsigned header_size = block_header.file != BAD_FILE ? 1 : 0;
+
    fs_reg payload, payload2;
    unsigned mlen, ex_mlen = 0;
    if (devinfo->gen >= 9) {
       /* On Skylake and above, we have SENDS */
-      mlen = 2 * (inst->exec_size / 8);
+      if (block_header.file != BAD_FILE) {
+         /* Block messages have the address in the header */
+         payload = block_header;
+         mlen = header_size;
+      } else {
+         mlen = 2 * (inst->exec_size / 8);
+         payload = retype(bld.move_to_vgrf(addr, 1), BRW_REGISTER_TYPE_UD);
+      }
       ex_mlen = src_comps * type_sz(src.type) * inst->exec_size / REG_SIZE;
-      payload = retype(bld.move_to_vgrf(addr, 1), BRW_REGISTER_TYPE_UD);
       payload2 = retype(bld.move_to_vgrf(src, src_comps),
                         BRW_REGISTER_TYPE_UD);
    } else {
-      /* Add two because the address is 64-bit */
-      const unsigned dwords = 2 + src_comps;
-      mlen = dwords * (inst->exec_size / 8);
-
       fs_reg sources[5];
+      unsigned n = 0;
 
-      sources[0] = addr;
+      if (block_header.file != BAD_FILE) {
+         /* Block messages have the address in the header */
+         sources[n++] = block_header;
+      } else {
+         sources[n++] = addr;
+      }
 
       for (unsigned i = 0; i < src_comps; i++)
-         sources[1 + i] = offset(src, bld, i);
+         sources[n++] = offset(src, bld, i);
 
-      payload = bld.vgrf(BRW_REGISTER_TYPE_UD, dwords);
-      bld.LOAD_PAYLOAD(payload, sources, 1 + src_comps, 0);
+      payload = fs_reg(VGRF, -1, BRW_REGISTER_TYPE_UD);
+      fs_inst *load = bld.LOAD_PAYLOAD(payload, sources, n, header_size);
+      mlen = regs_written(load);
+      payload.nr = bld.shader->alloc.allocate(mlen);
    }
 
    uint32_t desc;
@@ -5744,6 +5773,20 @@ lower_a64_logical_send(const fs_builder &bld, fs_inst *inst)
       desc = brw_dp_a64_untyped_surface_rw_desc(devinfo, inst->exec_size,
                                                 arg,   /* num_channels */
                                                 true   /* write */);
+      break;
+
+   case SHADER_OPCODE_A64_OWORD_BLOCK_READ_LOGICAL:
+      desc = brw_dp_a64_oword_block_rw_desc(devinfo,
+                                            true, /* align_32B */
+                                            arg, /* num_dwords */
+                                            false /* write */);
+      break;
+
+   case SHADER_OPCODE_A64_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
+      desc = brw_dp_a64_oword_block_rw_desc(devinfo,
+                                            false, /* align_32B */
+                                            arg, /* num_dwords */
+                                            false /* write */);
       break;
 
    case SHADER_OPCODE_A64_BYTE_SCATTERED_READ_LOGICAL:
@@ -5785,7 +5828,7 @@ lower_a64_logical_send(const fs_builder &bld, fs_inst *inst)
    inst->opcode = SHADER_OPCODE_SEND;
    inst->mlen = mlen;
    inst->ex_mlen = ex_mlen;
-   inst->header_size = 0;
+   inst->header_size = header_size;
    inst->send_has_side_effects = has_side_effects;
    inst->send_is_volatile = !has_side_effects;
 
@@ -6023,6 +6066,8 @@ fs_visitor::lower_logical_sends()
 
       case SHADER_OPCODE_A64_UNTYPED_WRITE_LOGICAL:
       case SHADER_OPCODE_A64_UNTYPED_READ_LOGICAL:
+      case SHADER_OPCODE_A64_OWORD_BLOCK_READ_LOGICAL:
+      case SHADER_OPCODE_A64_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
       case SHADER_OPCODE_A64_BYTE_SCATTERED_WRITE_LOGICAL:
       case SHADER_OPCODE_A64_BYTE_SCATTERED_READ_LOGICAL:
       case SHADER_OPCODE_A64_UNTYPED_ATOMIC_LOGICAL:
@@ -6626,6 +6671,8 @@ get_lowered_simd_width(const struct gen_device_info *devinfo,
 
    case SHADER_OPCODE_CONSTANT_OWORD_BLOCK_READ_LOGICAL:
    case SHADER_OPCODE_CONSTANT_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
+   case SHADER_OPCODE_A64_OWORD_BLOCK_READ_LOGICAL:
+   case SHADER_OPCODE_A64_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
       assert(inst->exec_size <= 16);
       return inst->exec_size;
 
