@@ -856,6 +856,110 @@ brw_nir_link_shaders(const struct brw_compiler *compiler,
 }
 
 static bool
+opt_uniform_ubo_load_instr(struct nir_builder *b, nir_instr *instr,
+                           UNUSED void *_data)
+{
+   if (instr->type != nir_instr_type_intrinsic)
+      return false;
+
+   nir_intrinsic_instr *load = nir_instr_as_intrinsic(instr);
+   if (load->intrinsic != nir_intrinsic_load_ubo)
+      return false;
+
+   assert(load->src[0].is_ssa);
+   assert(load->src[1].is_ssa);
+
+   /* We can only handle uniform offsets */
+   if (load->src[1].ssa->divergent)
+      return false;
+
+   /* Leave constant offsets alone */
+   if (nir_src_is_const(load->src[1]))
+      return false;
+
+   /* Block intrinsics require at least a 4B alignment */
+   if (nir_intrinsic_align(load) < 4)
+      return false;
+
+   assert(load->dest.is_ssa);
+   if (load->dest.ssa.bit_size != 32)
+      return false;
+
+   unsigned offset = 0;
+   nir_ssa_scalar base = { load->src[1].ssa, 0 };
+
+   while (1) {
+      if (!nir_ssa_scalar_is_alu(base))
+         break;
+
+      if (nir_ssa_scalar_alu_op(base) != nir_op_iadd)
+         break;
+
+      nir_ssa_scalar left = nir_ssa_scalar_chase_alu_src(base, 0);
+      nir_ssa_scalar right = nir_ssa_scalar_chase_alu_src(base, 1);
+      if (nir_ssa_scalar_is_const(left)) {
+         offset += nir_ssa_scalar_as_uint(left);
+         base = right;
+      } else if (nir_ssa_scalar_is_const(right)) {
+         offset += nir_ssa_scalar_as_uint(right);
+         base = left;
+      } else {
+         break;
+      }
+   }
+
+   b->cursor = nir_instr_remove(&load->instr);
+
+   /* Get rid of any swizzling */
+   base.def = nir_channel(b, base.def, base.comp);
+   base.comp = 0;
+
+   assert(load->dest.ssa.bit_size == 32);
+   if (offset & 0x3) {
+      base.def = nir_iadd_imm(b, base.def, offset & 0x3);
+      offset &= ~0x3u;
+   }
+
+   unsigned load_size = 64;
+
+   nir_ssa_def *comps[NIR_MAX_VEC_COMPONENTS];
+   for (unsigned i = 0; i < load->num_components; i++) {
+      const uint32_t comp_offset = offset + i * (load->dest.ssa.bit_size / 8);
+      const uint32_t comp_aligned = comp_offset & ~(load_size - 1);
+      const uint32_t comp_suboffset = comp_offset & (load_size - 1);
+
+      nir_intrinsic_instr *block_load =
+         nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_ubo_block_intel);
+      block_load->src[0] = nir_src_for_ssa(load->src[0].ssa);
+      block_load->src[1] = nir_src_for_ssa(
+         nir_iadd_imm(b, base.def, comp_aligned));
+      block_load->num_components = load_size / 4;
+      nir_intrinsic_set_access(block_load, nir_intrinsic_access(load));
+      nir_intrinsic_set_align(block_load, 4, 0);
+      nir_ssa_dest_init(&block_load->instr, &block_load->dest,
+                        block_load->num_components, 32, NULL);
+      nir_builder_instr_insert(b, &block_load->instr);
+
+      comps[i] = nir_channel(b, &block_load->dest.ssa,
+                                comp_suboffset / 4);
+   }
+   nir_ssa_def *vec = nir_vec(b, comps, load->num_components);
+
+   nir_ssa_def_rewrite_uses(&load->dest.ssa, nir_src_for_ssa(vec));
+
+   return true;
+}
+
+static bool
+brw_nir_opt_uniform_ubo_load(nir_shader *nir)
+{
+   return nir_shader_instructions_pass(nir, opt_uniform_ubo_load_instr,
+                                       nir_metadata_block_index |
+                                       nir_metadata_dominance,
+                                       NULL);
+}
+
+static bool
 brw_nir_should_vectorize_mem(unsigned align_mul, unsigned align_offset,
                              unsigned bit_size,
                              unsigned num_components,
@@ -965,6 +1069,10 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
       (INTEL_DEBUG & intel_debug_flag_for_shader_stage(nir->info.stage));
 
    UNUSED bool progress; /* Written by OPT */
+
+   nir_convert_to_lcssa(nir, false, false);
+   nir_divergence_analysis(nir);
+   OPT(brw_nir_opt_uniform_ubo_load);
 
    OPT(brw_nir_lower_scoped_barriers);
    OPT(nir_opt_combine_memory_barriers, combine_all_barriers, NULL);
