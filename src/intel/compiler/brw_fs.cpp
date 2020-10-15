@@ -800,6 +800,8 @@ fs_inst::components_read(unsigned i) const
 
    case SHADER_OPCODE_UNTYPED_SURFACE_READ_LOGICAL:
    case SHADER_OPCODE_TYPED_SURFACE_READ_LOGICAL:
+   case SHADER_OPCODE_CONSTANT_OWORD_BLOCK_READ_LOGICAL:
+   case SHADER_OPCODE_CONSTANT_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
       assert(src[SURFACE_LOGICAL_SRC_IMM_DIMS].file == IMM);
       /* Surface coordinates. */
       if (i == SURFACE_LOGICAL_SRC_ADDRESS)
@@ -5404,6 +5406,10 @@ lower_surface_logical_send(const fs_builder &bld, fs_inst *inst)
       inst->opcode == SHADER_OPCODE_UNTYPED_SURFACE_WRITE_LOGICAL ||
       inst->opcode == SHADER_OPCODE_UNTYPED_ATOMIC_LOGICAL;
 
+   const bool is_block_access =
+      inst->opcode == SHADER_OPCODE_CONSTANT_OWORD_BLOCK_READ_LOGICAL ||
+      inst->opcode == SHADER_OPCODE_CONSTANT_UNALIGNED_OWORD_BLOCK_READ_LOGICAL;
+
    const bool is_stateless =
       surface.file == IMM && (surface.ud == BRW_BTI_STATELESS ||
                               surface.ud == GEN8_BTI_STATELESS_NON_COHERENT);
@@ -5426,7 +5432,8 @@ lower_surface_logical_send(const fs_builder &bld, fs_inst *inst)
     * For all stateless A32 messages, we also need a header
     */
    fs_reg header;
-   if ((devinfo->gen < 9 && is_typed_access) || is_stateless) {
+   if ((devinfo->gen < 9 && is_typed_access) ||
+       is_block_access || is_stateless) {
       fs_builder ubld = bld.exec_all().group(8, 0);
       header = ubld.vgrf(BRW_REGISTER_TYPE_UD);
       if (is_stateless) {
@@ -5437,18 +5444,39 @@ lower_surface_logical_send(const fs_builder &bld, fs_inst *inst)
          if (is_surface_access)
             ubld.group(1, 0).MOV(component(header, 7), sample_mask);
       }
+
+      switch (inst->opcode) {
+      case SHADER_OPCODE_CONSTANT_OWORD_BLOCK_READ_LOGICAL:
+         ubld.group(1, 0).SHR(component(header, 2), addr, brw_imm_ud(4));
+         break;
+
+      case SHADER_OPCODE_CONSTANT_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
+         ubld.group(1, 0).MOV(component(header, 2), addr);
+         break;
+
+      default:
+         /* No address in the header */
+         assert(!is_block_access);
+         break;
+      }
    }
    const unsigned header_sz = header.file != BAD_FILE ? 1 : 0;
 
    fs_reg payload, payload2;
    unsigned mlen, ex_mlen = 0;
    if (devinfo->gen >= 9 &&
-       (src.file == BAD_FILE || header.file == BAD_FILE)) {
+       (is_block_access || src.file == BAD_FILE || header.file == BAD_FILE)) {
       /* We have split sends on gen9 and above */
       if (header.file == BAD_FILE) {
          payload = bld.move_to_vgrf(addr, addr_sz);
          payload2 = bld.move_to_vgrf(src, src_sz);
          mlen = addr_sz * (inst->exec_size / 8);
+         ex_mlen = src_sz * (inst->exec_size / 8);
+      } else if (is_block_access) {
+         /* Block messages have the address in the header */
+         payload = header;
+         payload2 = bld.move_to_vgrf(src, src_sz);
+         mlen = header_sz;
          ex_mlen = src_sz * (inst->exec_size / 8);
       } else {
          assert(src.file == BAD_FILE);
@@ -5468,8 +5496,11 @@ lower_surface_logical_send(const fs_builder &bld, fs_inst *inst)
       if (header.file != BAD_FILE)
          components[n++] = header;
 
-      for (unsigned i = 0; i < addr_sz; i++)
-         components[n++] = offset(addr, bld, i);
+      if (!is_block_access) {
+         /* For block messages, the address is in the header */
+         for (unsigned i = 0; i < addr_sz; i++)
+            components[n++] = offset(addr, bld, i);
+      }
 
       for (unsigned i = 0; i < src_sz; i++)
          components[n++] = offset(src, bld, i);
@@ -5489,6 +5520,11 @@ lower_surface_logical_send(const fs_builder &bld, fs_inst *inst)
 
    uint32_t sfid;
    switch (inst->opcode) {
+   case SHADER_OPCODE_CONSTANT_OWORD_BLOCK_READ_LOGICAL:
+   case SHADER_OPCODE_CONSTANT_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
+      sfid = GEN6_SFID_DATAPORT_CONSTANT_CACHE;
+      break;
+
    case SHADER_OPCODE_BYTE_SCATTERED_WRITE_LOGICAL:
    case SHADER_OPCODE_BYTE_SCATTERED_READ_LOGICAL:
       /* Byte scattered opcodes go through the normal data cache */
@@ -5531,6 +5567,18 @@ lower_surface_logical_send(const fs_builder &bld, fs_inst *inst)
 
    uint32_t desc;
    switch (inst->opcode) {
+   case SHADER_OPCODE_CONSTANT_OWORD_BLOCK_READ_LOGICAL:
+      desc = brw_dp_oword_block_rw_desc(devinfo, true, /* align_32B */
+                                        arg.ud, /* num_dwords */
+                                        false /* write */);
+      break;
+
+   case SHADER_OPCODE_CONSTANT_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
+      desc = brw_dp_oword_block_rw_desc(devinfo, false, /* align_32B */
+                                        arg.ud, /* num_dwords */
+                                        false /* write */);
+      break;
+
    case SHADER_OPCODE_UNTYPED_SURFACE_READ_LOGICAL:
       desc = brw_dp_untyped_surface_rw_desc(devinfo, inst->exec_size,
                                             arg.ud, /* num_channels */
@@ -5963,6 +6011,8 @@ fs_visitor::lower_logical_sends()
       case SHADER_OPCODE_BYTE_SCATTERED_WRITE_LOGICAL:
       case SHADER_OPCODE_DWORD_SCATTERED_READ_LOGICAL:
       case SHADER_OPCODE_DWORD_SCATTERED_WRITE_LOGICAL:
+      case SHADER_OPCODE_CONSTANT_OWORD_BLOCK_READ_LOGICAL:
+      case SHADER_OPCODE_CONSTANT_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
       case SHADER_OPCODE_UNTYPED_ATOMIC_LOGICAL:
       case SHADER_OPCODE_UNTYPED_ATOMIC_FLOAT_LOGICAL:
       case SHADER_OPCODE_TYPED_SURFACE_READ_LOGICAL:
@@ -6573,6 +6623,11 @@ get_lowered_simd_width(const struct gen_device_info *devinfo,
    case SHADER_OPCODE_A64_BYTE_SCATTERED_WRITE_LOGICAL:
    case SHADER_OPCODE_A64_BYTE_SCATTERED_READ_LOGICAL:
       return devinfo->gen <= 8 ? 8 : MIN2(16, inst->exec_size);
+
+   case SHADER_OPCODE_CONSTANT_OWORD_BLOCK_READ_LOGICAL:
+   case SHADER_OPCODE_CONSTANT_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
+      assert(inst->exec_size <= 16);
+      return inst->exec_size;
 
    case SHADER_OPCODE_A64_UNTYPED_ATOMIC_LOGICAL:
    case SHADER_OPCODE_A64_UNTYPED_ATOMIC_INT64_LOGICAL:

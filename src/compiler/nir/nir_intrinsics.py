@@ -959,6 +959,13 @@ image("load_raw_intel", src_comp=[1], dest_comp=0,
       flags=[CAN_ELIMINATE])
 image("store_raw_intel", src_comp=[1, 0])
 
+# Intrinsics to load a block of at least 32B of constant data.  The memory
+# address or offset must be at least 4B-aligned and we can potentially use a
+# better intrinsic in the back-end if the alignment is higher.
+# src[] = { buffer_index, offset }.
+load("ubo_block_intel", [1, 1], [ACCESS, ALIGN_MUL, ALIGN_OFFSET],
+     [CAN_ELIMINATE, CAN_REORDER])
+
 # Number of data items being operated on for a SIMD program.
 system_value("simd_width_intel", 1)
 

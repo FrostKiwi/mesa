@@ -782,6 +782,27 @@ brw_dp_dword_scattered_rw_desc(const struct gen_device_info *devinfo,
 }
 
 static inline uint32_t
+brw_dp_oword_block_rw_desc(const struct gen_device_info *devinfo,
+                           bool align_32B,
+                           unsigned num_dwords,
+                           bool write)
+{
+   assert(!write);
+   unsigned msg_type;
+   if (write) {
+      unreachable("OWord block writes not yet used");
+   } else {
+      assert(align_32B || devinfo->gen >= 7);
+      msg_type = align_32B ? HSW_DATAPORT_DC_PORT0_OWORD_BLOCK_READ :
+                             HSW_DATAPORT_DC_PORT0_UNALIGNED_OWORD_BLOCK_READ;
+   }
+
+   unsigned msg_control = BRW_DATAPORT_OWORD_BLOCK_DWORDS(num_dwords);
+
+   return brw_dp_desc(devinfo, 0, msg_type, msg_control);
+}
+
+static inline uint32_t
 brw_dp_a64_untyped_surface_rw_desc(const struct gen_device_info *devinfo,
                                    unsigned exec_size, /**< 0 for SIMD4x2 */
                                    unsigned num_channels,

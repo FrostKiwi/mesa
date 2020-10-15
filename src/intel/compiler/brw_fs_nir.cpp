@@ -4573,6 +4573,52 @@ fs_visitor::nir_emit_intrinsic(const fs_builder &bld, nir_intrinsic_instr *instr
       break;
    }
 
+   case nir_intrinsic_load_ubo_block_intel: {
+      assert(nir_dest_bit_size(instr->dest) == 32);
+      assert(instr->num_components == 8 || instr->num_components == 16);
+
+      fs_reg surf_index = retype(get_nir_src_imm(instr->src[0]),
+                                 BRW_REGISTER_TYPE_UD);
+      if (surf_index.file == BRW_IMMEDIATE_VALUE) {
+         surf_index.ud += stage_prog_data->binding_table.ubo_start;
+      } else {
+         fs_reg tmp = bld.vgrf(BRW_REGISTER_TYPE_UD);
+         bld.ADD(tmp, surf_index,
+                 brw_imm_ud(stage_prog_data->binding_table.ubo_start));
+         surf_index = bld.emit_uniformize(tmp);
+      }
+
+      fs_reg offset_B = retype(get_nir_src_imm(instr->src[1]),
+                               BRW_REGISTER_TYPE_UD);
+      if (offset_B.file != BRW_IMMEDIATE_VALUE)
+         offset_B = bld.emit_uniformize(offset_B);
+
+      fs_reg srcs[SURFACE_LOGICAL_NUM_SRCS];
+      srcs[SURFACE_LOGICAL_SRC_SURFACE] = surf_index;
+      srcs[SURFACE_LOGICAL_SRC_ADDRESS] = offset_B;
+      srcs[SURFACE_LOGICAL_SRC_IMM_DIMS] = brw_imm_ud(1);
+      srcs[SURFACE_LOGICAL_SRC_ALLOW_SAMPLE_MASK] = brw_imm_ud(0);
+      srcs[SURFACE_LOGICAL_SRC_IMM_ARG] = brw_imm_ud(instr->num_components);
+
+      const fs_builder ubld = bld.exec_all().group(instr->num_components, 0);
+      fs_reg tmp = ubld.vgrf(BRW_REGISTER_TYPE_UD);
+      assert(nir_intrinsic_align(instr) >= 4);
+      if (nir_intrinsic_align(instr) >= 32) {
+         ubld.emit(SHADER_OPCODE_CONSTANT_OWORD_BLOCK_READ_LOGICAL,
+                   tmp, srcs, SURFACE_LOGICAL_NUM_SRCS);
+      } else {
+         ubld.emit(SHADER_OPCODE_CONSTANT_UNALIGNED_OWORD_BLOCK_READ_LOGICAL,
+                   tmp, srcs, SURFACE_LOGICAL_NUM_SRCS);
+      }
+      prog_data->has_ubo_pull = true;
+
+      for (unsigned i = 0; i < instr->num_components; i++) {
+         bld.MOV(retype(offset(dest, bld, i), BRW_REGISTER_TYPE_UD),
+                 component(tmp, i));
+      }
+      break;
+   }
+
    case nir_intrinsic_load_global:
    case nir_intrinsic_load_global_constant: {
       assert(devinfo->gen >= 8);

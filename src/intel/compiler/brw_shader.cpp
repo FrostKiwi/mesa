@@ -287,6 +287,11 @@ brw_instruction_name(const struct gen_device_info *devinfo, enum opcode op)
    case SHADER_OPCODE_SHADER_TIME_ADD:
       return "shader_time_add";
 
+   case SHADER_OPCODE_CONSTANT_OWORD_BLOCK_READ_LOGICAL:
+      return "constant_oword_block_read_logical";
+   case SHADER_OPCODE_CONSTANT_UNALIGNED_OWORD_BLOCK_READ_LOGICAL:
+      return "constant_unaligned_oword_block_read_logical";
+
    case VEC4_OPCODE_UNTYPED_ATOMIC:
       return "untyped_atomic";
    case SHADER_OPCODE_UNTYPED_ATOMIC_LOGICAL:

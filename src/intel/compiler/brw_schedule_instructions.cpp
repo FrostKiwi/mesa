@@ -425,6 +425,8 @@ schedule_node::set_latency_gen7(bool is_haswell)
       case GEN6_SFID_DATAPORT_CONSTANT_CACHE:
          switch ((inst->desc >> 14) & 0x1f) {
          case GEN7_DATAPORT_DC_DWORD_SCATTERED_READ:
+         case GEN7_DATAPORT_DC_OWORD_BLOCK_READ:
+         case GEN7_DATAPORT_DC_UNALIGNED_OWORD_BLOCK_READ:
             /* Same as UNIFORM_PULL_CONSTANT_LOAD */
             latency = 200;
             break;

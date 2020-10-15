@@ -135,6 +135,7 @@ visit_intrinsic(nir_shader *shader, nir_intrinsic_instr *instr)
    case nir_intrinsic_load_blend_const_color_rgba8888_unorm:
    case nir_intrinsic_load_simd_width_intel:
    case nir_intrinsic_load_reloc_const_intel:
+   case nir_intrinsic_load_ubo_block_intel:
       is_divergent = false;
       break;
 
