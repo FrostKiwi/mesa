@@ -1428,8 +1428,27 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
             dest = ibc_XOR(b, src.type, scan_src, src);
             break;
 
-         default:
-            unreachable("TODO: Use a shuffle");
+         default: {
+            ibc_ref index =
+               ibc_subscript_ref(nti->subgroup_invocation, IBC_TYPE_W, 0);
+
+            ibc_ref shifted =
+               ibc_SIMD_SHUFFLE(b, scan_src, b->simd_group, b->simd_width,
+                                ibc_ADD(b, IBC_TYPE_W, index, ibc_imm_w(-1)));
+
+            tmp_reg = ibc_hw_grf_reg_create(b->shader, tmp_size, tmp_align);
+            tmp_reg->is_wlr = false;
+            tmp = ibc_typed_ref(tmp_reg, scan_type);
+
+            ibc_builder_push_we_all(b, b->simd_width);
+            ibc_MOV_to(b, tmp, shifted);
+            ibc_builder_pop(b);
+            ibc_builder_push_scalar(b);
+            ibc_MOV_to(b, tmp, nti_reduction_op_identity(redop, src.type));
+            ibc_builder_pop(b);
+
+            dest = ibc_MOV(b, src.type, tmp);
+         }
          }
          break;
       }
