@@ -1398,7 +1398,7 @@ ibc_compile_fs(const struct brw_compiler *compiler, void *log_data,
          .max_simd_width = 32,
       };
       struct nir_to_ibc_state nti;
-      nir_to_ibc_state_init(&nti, MESA_SHADER_FRAGMENT, devinfo,
+      nir_to_ibc_state_init(&nti, MESA_SHADER_FRAGMENT, compiler,
                             &key->base, &prog_data->base,
                             &fs_state, bin_simd_width, bin_ctx);
 
