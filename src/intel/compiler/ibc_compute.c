@@ -527,7 +527,7 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
          compile_cs_to_nir(compiler, mem_ctx, key, src_shader, bin_simd_width);
 
       struct nir_to_ibc_state nti;
-      nir_to_ibc_state_init(&nti, shader->info.stage, devinfo, &key->base,
+      nir_to_ibc_state_init(&nti, shader->info.stage, compiler, &key->base,
                             &prog_data->base, NULL, bin_simd_width, mem_ctx);
 
       nti.payload = &ibc_setup_cs_payload(&nti.b, subgroup_id_offset,

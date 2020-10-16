@@ -2573,22 +2573,23 @@ nti_emit_shader_float_controls_execution_mode(struct nir_to_ibc_state *nti)
 void
 nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
                       gl_shader_stage stage,
-                      const struct gen_device_info *devinfo,
+                      const struct brw_compiler *compiler,
                       const struct brw_base_prog_key *key,
                       struct brw_stage_prog_data *prog_data,
                       void *stage_state,
                       unsigned dispatch_size,
                       void *mem_ctx)
 {
-   ibc_shader *shader = ibc_shader_create(mem_ctx, devinfo, stage,
-                                          dispatch_size);
+   ibc_shader *shader =
+      ibc_shader_create(mem_ctx, compiler->devinfo, stage, dispatch_size);
 
    shader->use_vmask = (stage == MESA_SHADER_FRAGMENT);
    shader->has_packed_dispatch =
-      brw_stage_has_packed_dispatch(devinfo, stage, prog_data);
+      brw_stage_has_packed_dispatch(compiler->devinfo, stage, prog_data);
 
    *nti = (struct nir_to_ibc_state) {
       .mem_ctx = mem_ctx,
+      .compiler = compiler,
       .stage = stage,
       .key = key,
       .prog_data = prog_data,
