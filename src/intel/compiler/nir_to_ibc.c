@@ -1559,6 +1559,41 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          dest = ibc_VEC(b, dest_comps, instr->num_components);
          ibc_builder_pop(b);
          break;
+      } else if (nti->compiler->indirect_ubos_use_sampler &&
+                 nir_dest_bit_size(instr->dest) == 32) {
+         ibc_builder_push_nir_dest_group(b, instr->dest);
+
+         ibc_intrinsic_src srcs[IBC_TEX_NUM_SRCS] = {
+            [IBC_TEX_SRC_SURFACE_BTI] = {
+               .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
+                                                    IBC_TYPE_UD)),
+               .num_comps = 1,
+            },
+            [IBC_TEX_SRC_SAMPLER_BTI] = {
+               .ref = ibc_imm_ud(0),
+               .num_comps = 1,
+            },
+            [IBC_TEX_SRC_COORD] = {
+               .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+               .num_comps = 1,
+            },
+            [IBC_TEX_SRC_LOD] = {
+               .ref = ibc_imm_ud(0),
+               .num_comps = 1,
+            },
+         };
+
+         /* We only have headerless rlen shortening on gen9+ */
+         unsigned num_dest_comps =
+            b->shader->devinfo->gen >= 9 ? instr->num_components : 4;
+         assert(nir_dest_bit_size(instr->dest) == 32);
+         dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_TXF,
+                                        IBC_TYPE_UD, num_dest_comps,
+                                        srcs, IBC_TEX_NUM_SRCS);
+
+         ibc_builder_pop(b);
+
+         nti->prog_data->has_ubo_pull = true;
       } else {
          ibc_builder_push_nir_dest_group(b, instr->dest);
 
