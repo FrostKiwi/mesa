@@ -1203,12 +1203,7 @@ brw_postprocess_nir(nir_shader *nir, const struct brw_compiler *compiler,
    if (brw_nir_should_use_ibc(nir, compiler, is_scalar)) {
       NIR_PASS_V(nir, nir_convert_to_lcssa, true, true);
 
-      static const nir_divergence_options divergence_opts =
-         nir_divergence_single_prim_per_subgroup |
-         nir_divergence_single_patch_per_tcs_subgroup |
-         nir_divergence_single_patch_per_tes_subgroup;
-
-      nir_divergence_analysis(nir, divergence_opts);
+      nir_divergence_analysis(nir);
       OPT(nir_opt_algebraic_convergent_ops);
    }
 
