@@ -148,12 +148,11 @@ ibc_compile_vs(const struct brw_compiler *compiler, void *log_data,
                char **error_str_out)
 {
    assert(nir->info.stage == MESA_SHADER_VERTEX);
-   const struct gen_device_info *devinfo = compiler->devinfo;
 
    struct nir_vs_to_ibc_state vs_state = { 0, };
 
    struct nir_to_ibc_state nti;
-   nir_to_ibc_state_init(&nti, MESA_SHADER_VERTEX, devinfo, &key->base,
+   nir_to_ibc_state_init(&nti, MESA_SHADER_VERTEX, compiler, &key->base,
                          &prog_data->base.base, &vs_state, 8, mem_ctx);
 
    nti.payload = &ibc_setup_vs_payload(&nti.b, prog_data, mem_ctx)->base;

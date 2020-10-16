@@ -329,12 +329,11 @@ ibc_compile_tes(const struct brw_compiler *compiler, void *log_data,
                 char **error_str_out)
 {
    assert(nir->info.stage == MESA_SHADER_TESS_EVAL);
-   const struct gen_device_info *devinfo = compiler->devinfo;
 
    struct nir_tes_to_ibc_state tes_state = { 0, };
 
    struct nir_to_ibc_state nti;
-   nir_to_ibc_state_init(&nti, MESA_SHADER_TESS_EVAL, devinfo, &key->base,
+   nir_to_ibc_state_init(&nti, MESA_SHADER_TESS_EVAL, compiler, &key->base,
                          &prog_data->base.base, &tes_state, 8, mem_ctx);
 
    nti.payload =

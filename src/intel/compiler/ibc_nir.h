@@ -55,6 +55,8 @@ void ibc_setup_curb_payload(ibc_builder *b, struct ibc_payload_base *payload,
 struct nir_to_ibc_state {
    void *mem_ctx;
 
+   const struct brw_compiler *compiler;
+
    ibc_builder b;
 
    gl_shader_stage stage;
@@ -78,7 +80,7 @@ struct nir_to_ibc_state {
 
 void nir_to_ibc_state_init(struct nir_to_ibc_state *nti,
                            gl_shader_stage stage,
-                           const struct gen_device_info *devinfo,
+                           const struct brw_compiler *compiler,
                            const struct brw_base_prog_key *key,
                            struct brw_stage_prog_data *prog_data,
                            void *stage_state,
