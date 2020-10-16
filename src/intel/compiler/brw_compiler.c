@@ -68,7 +68,11 @@
    .lower_usub_sat64 = true,                                                  \
    .lower_hadd64 = true,                                                      \
    .lower_bfe_with_two_constants = true,                                      \
-   .max_unroll_iterations = 32
+   .max_unroll_iterations = 32,                                               \
+   .divergence_analysis_options =                                             \
+      (nir_divergence_single_prim_per_subgroup |                              \
+       nir_divergence_single_patch_per_tcs_subgroup |                         \
+       nir_divergence_single_patch_per_tes_subgroup)
 
 static const struct nir_shader_compiler_options scalar_nir_options = {
    COMMON_OPTIONS,
@@ -195,6 +199,12 @@ brw_compiler_create(void *mem_ctx, const struct gen_device_info *devinfo)
       nir_options->support_8bit_alu = devinfo->gen < 11;
 
       nir_options->unify_interfaces = i < MESA_SHADER_FRAGMENT;
+
+      if (compiler->use_tcs_8_patch) {
+         /* TCS 8_PATCH mode has multiple patches per subgroup */
+         nir_options->divergence_analysis_options &=
+            ~nir_divergence_single_patch_per_tcs_subgroup;
+      }
 
       compiler->glsl_compiler_options[i].NirOptions = nir_options;
 
