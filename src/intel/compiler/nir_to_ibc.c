@@ -1618,10 +1618,12 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                                 srcs, IBC_SURFACE_NUM_SRCS);
          } else {
             assert(nir_dest_bit_size(instr->dest) <= 32);
-            assert(nir_dest_num_components(instr->dest) == 1);
-            ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ,
-                                dest, -1, instr->num_components,
-                                srcs, IBC_SURFACE_NUM_SRCS);
+
+            ibc_ref comps[4] = { };
+            for (unsigned c = 0; c < instr->num_components; c++) {
+               comps[c] = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ, IBC_TYPE_UD, 1, srcs, IBC_SURFACE_NUM_SRCS);
+            }
+            dest = ibc_VEC(b, comps, instr->num_components);
          }
          ibc_builder_pop(b);
 
