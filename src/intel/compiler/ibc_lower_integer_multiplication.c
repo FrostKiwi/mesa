@@ -115,12 +115,18 @@ lower_mul_dword(ibc_builder *b, ibc_alu_instr *alu)
          y_hi = ibc_subscript_ref(y, IBC_TYPE_UW, 1);
       }
 
-      ibc_ref low  = ibc_IMUL(b, IBC_TYPE_D, x, y_lo);
-      ibc_ref high = ibc_IMUL(b, IBC_TYPE_D, x, y_hi);
+      ibc_reg *low_reg =
+         ibc_hw_grf_reg_create(b->shader, 4 * alu->instr.simd_width, 4);
+      ibc_reg *high_reg =
+         ibc_hw_grf_reg_create(b->shader, 4 * alu->instr.simd_width, 4);
+      ibc_ref low = ibc_typed_ref(low_reg, IBC_TYPE_D);
+      ibc_ref high = ibc_typed_ref(high_reg, IBC_TYPE_D);
 
       /* Our construction of "low" violates WLR rules; don't claim it. */
-      ((struct ibc_reg *) low.reg)->is_wlr = false;
+      low_reg->is_wlr = false;
 
+      ibc_build_alu2(b, IBC_ALU_OP_IMUL, low,  x, y_lo);
+      ibc_build_alu2(b, IBC_ALU_OP_IMUL, high, x, y_hi);
       ibc_build_alu2(b, IBC_ALU_OP_ADD,
                      ibc_subscript_ref(low, IBC_TYPE_UW, 1),
                      ibc_subscript_ref(low, IBC_TYPE_UW, 1),
