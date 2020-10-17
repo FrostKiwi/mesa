@@ -1076,7 +1076,7 @@ nti_op_for_nir_reduction_op(nir_op op)
    switch (op) {
    case nir_op_iadd: return IBC_ALU_OP_ADD;
    case nir_op_fadd: return IBC_ALU_OP_ADD;
-//   case nir_op_imul: return IBC_ALU_OP_IMUL;
+   case nir_op_imul: return IBC_ALU_OP_IMUL;
    case nir_op_fmul: return IBC_ALU_OP_FMUL;
    case nir_op_imin: return IBC_ALU_OP_SEL;
    case nir_op_umin: return IBC_ALU_OP_SEL;
