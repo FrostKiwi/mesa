@@ -1381,6 +1381,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       unsigned tmp_align = MIN2(tmp_size, 32);
       ibc_reg *tmp_reg =
          ibc_hw_grf_reg_create(b->shader, tmp_size, tmp_align);
+      tmp_reg->is_wlr = false;
       ibc_ref tmp = ibc_typed_ref(tmp_reg, scan_type);
 
       ibc_builder_push_we_all(b, b->simd_width);
