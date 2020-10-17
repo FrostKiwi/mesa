@@ -466,7 +466,6 @@ ibc_compile_cs(const struct brw_compiler *compiler, void *log_data,
    }
 
    prog_data->base.total_shared = src_shader->info.cs.shared_size;
-   prog_data->slm_size = src_shader->shared_size;
 
    if (key->base.subgroup_size_type >= BRW_SUBGROUP_SIZE_REQUIRE_8) {
       /* These enum values are expressly chosen to be equal to the subgroup
