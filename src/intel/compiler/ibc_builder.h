@@ -1151,6 +1151,7 @@ ibc_build_alu_scan(ibc_builder *b, enum ibc_alu_op op, ibc_ref tmp,
    assert(tmp.hw_grf.hstride == ibc_type_byte_size(tmp.type));
    assert(tmp.hw_grf.hstride * tmp.hw_grf.width == tmp.hw_grf.vstride);
    assert(util_is_power_of_two_nonzero(final_cluster_size));
+   assert(!tmp.reg->is_wlr);
 
    if (final_cluster_size >= 2) {
       ibc_builder_push_we_all(b, b->simd_width / 2);
