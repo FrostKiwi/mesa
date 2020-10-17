@@ -1163,7 +1163,7 @@ swizzle_nir_scratch_addr(struct nir_to_ibc_state *nti,
                          ibc_ref nir_addr, bool in_dwords)
 {
    ibc_builder *b = &nti->b;
-   ibc_ref chan_index = nti->subgroup_invocation;
+   ibc_ref chan_index = ibc_MOV(b, IBC_TYPE_UD, nti->subgroup_invocation);
    const unsigned chan_index_bits = ffs(b->simd_width) - 1;
 
    if (in_dwords) {
@@ -1224,7 +1224,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    switch (instr->intrinsic) {
    case nir_intrinsic_load_subgroup_invocation:
       assert(nir_dest_is_divergent(instr->dest));
-      dest = nti->subgroup_invocation;
+      dest = ibc_MOV(b, IBC_TYPE_UD, nti->subgroup_invocation);
       break;
 
    case nir_intrinsic_vote_any: {
@@ -1430,8 +1430,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
             break;
 
          default: {
-            ibc_ref index =
-               ibc_subscript_ref(nti->subgroup_invocation, IBC_TYPE_W, 0);
+            ibc_ref index = nti->subgroup_invocation;
 
             ibc_ref shifted =
                ibc_SIMD_SHUFFLE(b, scan_src, b->simd_group, b->simd_width,
@@ -2689,7 +2688,7 @@ nti_load_subgroup_invocation(struct nir_to_ibc_state *nti)
       ibc_builder_pop(b);
    }
 
-   nti->subgroup_invocation = ibc_MOV(b, IBC_TYPE_UD, w_tmp);
+   nti->subgroup_invocation = w_tmp;
 }
 
 void
