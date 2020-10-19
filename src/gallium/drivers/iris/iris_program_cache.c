@@ -213,10 +213,8 @@ iris_upload_shader(struct iris_context *ice,
       find_existing_assembly(cache, assembly, prog_data->program_size);
 
    if (prog_data->total_scratch) {
-      assert(cache_id != IRIS_CACHE_BLORP);
-      gl_shader_stage stage = (gl_shader_stage)cache_id;
       shader->scratch_bo =
-         iris_get_scratch_space(ice, prog_data->total_scratch, stage);
+         iris_get_scratch_space(ice, prog_data->total_scratch);
    }
 
    /* If we can find a matching prog in the cache already, then reuse the
@@ -236,6 +234,15 @@ iris_upload_shader(struct iris_context *ice,
                      &shader->map);
       memcpy(shader->map, assembly, prog_data->program_size);
 
+      uint32_t scratch_addr = 0;
+      uint32_t scratch_size = 0;
+      if (prog_data->total_scratch > 0) {
+         assert(shader->scratch_bo->gtt_offset +
+                shader->scratch_bo->size <= (1ull << 32));
+         scratch_addr = shader->scratch_bo->gtt_offset;
+         scratch_size = ffs(prog_data->total_scratch) - 11;
+      }
+
       struct iris_resource *res = (void *) shader->assembly.res;
       uint64_t shader_data_addr = res->bo->gtt_offset +
                                   shader->assembly.offset +
@@ -249,6 +256,14 @@ iris_upload_shader(struct iris_context *ice,
          {
             .id = BRW_SHADER_RELOC_CONST_DATA_ADDR_HIGH,
             .value = shader_data_addr >> 32,
+         },
+         {
+            .id = BRW_SHADER_RELOC_SCRATCH_BASE_ADDR,
+            .value = scratch_addr,
+         },
+         {
+            .id = BRW_SHADER_RELOC_PER_THREAD_SCRATCH_SPACE,
+            .value = scratch_size,
          },
       };
       brw_write_shader_relocs(&screen->devinfo, shader->map, prog_data,

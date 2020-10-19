@@ -618,7 +618,7 @@ struct iris_context {
        * Indexed by the "Per-Thread Scratch Space" field's 4-bit encoding,
        * and shader stage.
        */
-      struct iris_bo *scratch_bos[1 << 4][MESA_SHADER_STAGES];
+      struct iris_bo *scratch_bos[1 << 4];
    } shaders;
 
    struct {
@@ -852,8 +852,7 @@ void iris_upload_ubo_ssbo_surf_state(struct iris_context *ice,
 const struct shader_info *iris_get_shader_info(const struct iris_context *ice,
                                                gl_shader_stage stage);
 struct iris_bo *iris_get_scratch_space(struct iris_context *ice,
-                                       unsigned per_thread_scratch,
-                                       gl_shader_stage stage);
+                                       unsigned per_thread_scratch);
 uint32_t iris_group_index_to_bti(const struct iris_binding_table *bt,
                                  enum iris_surface_group group,
                                  uint32_t index);
