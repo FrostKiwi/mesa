@@ -212,6 +212,13 @@ iris_upload_shader(struct iris_context *ice,
    const struct iris_compiled_shader *existing =
       find_existing_assembly(cache, assembly, prog_data->program_size);
 
+   if (prog_data->total_scratch) {
+      assert(cache_id != IRIS_CACHE_BLORP);
+      gl_shader_stage stage = (gl_shader_stage)cache_id;
+      shader->scratch_bo =
+         iris_get_scratch_space(ice, prog_data->total_scratch, stage);
+   }
+
    /* If we can find a matching prog in the cache already, then reuse the
     * existing stuff without creating new copy into the underlying buffer
     * object.  This is notably useful for programs generating shaders at

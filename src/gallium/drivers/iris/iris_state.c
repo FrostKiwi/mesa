@@ -4231,9 +4231,7 @@ KSP(const struct iris_compiled_shader *shader)
    pkt.Enable           = true;                                           \
                                                                           \
    if (prog_data->total_scratch) {                                        \
-      struct iris_bo *bo =                                                \
-         iris_get_scratch_space(ice, prog_data->total_scratch, stage);    \
-      uint32_t scratch_addr = bo->gtt_offset;                             \
+      uint32_t scratch_addr = shader->scratch_bo->gtt_offset;             \
       pkt.PerThreadScratchSpace = ffs(prog_data->total_scratch) - 11;     \
       pkt.ScratchSpaceBasePointer = rw_bo(NULL, scratch_addr,             \
                                           IRIS_DOMAIN_NONE);              \
@@ -4429,10 +4427,7 @@ iris_store_fs_state(struct iris_context *ice,
          wm_prog_data->uses_pos_offset ? POSOFFSET_SAMPLE : POSOFFSET_NONE;
 
       if (prog_data->total_scratch) {
-         struct iris_bo *bo =
-            iris_get_scratch_space(ice, prog_data->total_scratch,
-                                   MESA_SHADER_FRAGMENT);
-         uint32_t scratch_addr = bo->gtt_offset;
+         uint32_t scratch_addr = shader->scratch_bo->gtt_offset;
          ps.PerThreadScratchSpace = ffs(prog_data->total_scratch) - 11;
          ps.ScratchSpaceBasePointer = rw_bo(NULL, scratch_addr,
                                             IRIS_DOMAIN_NONE);
@@ -5092,12 +5087,9 @@ iris_restore_render_saved_bos(struct iris_context *ice,
             struct iris_bo *bo = iris_resource_bo(shader->assembly.res);
             iris_use_pinned_bo(batch, bo, false, IRIS_DOMAIN_NONE);
 
-            struct brw_stage_prog_data *prog_data = shader->prog_data;
-
-            if (prog_data->total_scratch > 0) {
-               struct iris_bo *bo =
-                  iris_get_scratch_space(ice, prog_data->total_scratch, stage);
-               iris_use_pinned_bo(batch, bo, true, IRIS_DOMAIN_NONE);
+            if (shader->scratch_bo) {
+               iris_use_pinned_bo(batch, shader->scratch_bo, true,
+                                  IRIS_DOMAIN_NONE);
             }
          }
       }
@@ -5162,12 +5154,9 @@ iris_restore_compute_saved_bos(struct iris_context *ice,
             iris_resource_bo(ice->state.last_res.cs_thread_ids);
          iris_use_pinned_bo(batch, curbe_bo, false, IRIS_DOMAIN_NONE);
 
-         struct brw_stage_prog_data *prog_data = shader->prog_data;
-
-         if (prog_data->total_scratch > 0) {
-            struct iris_bo *bo =
-               iris_get_scratch_space(ice, prog_data->total_scratch, stage);
-            iris_use_pinned_bo(batch, bo, true, IRIS_DOMAIN_NONE);
+         if (shader->scratch_bo) {
+            iris_use_pinned_bo(batch, shader->scratch_bo, true,
+                               IRIS_DOMAIN_NONE);
          }
       }
    }
@@ -5767,14 +5756,12 @@ iris_upload_dirty_render_state(struct iris_context *ice,
       struct iris_compiled_shader *shader = ice->shaders.prog[stage];
 
       if (shader) {
-         struct brw_stage_prog_data *prog_data = shader->prog_data;
          struct iris_resource *cache = (void *) shader->assembly.res;
          iris_use_pinned_bo(batch, cache->bo, false, IRIS_DOMAIN_NONE);
 
-         if (prog_data->total_scratch > 0) {
-            struct iris_bo *bo =
-               iris_get_scratch_space(ice, prog_data->total_scratch, stage);
-            iris_use_pinned_bo(batch, bo, true, IRIS_DOMAIN_NONE);
+         if (shader->scratch_bo) {
+            iris_use_pinned_bo(batch, shader->scratch_bo, true,
+                               IRIS_DOMAIN_NONE);
          }
 
          if (stage == MESA_SHADER_FRAGMENT) {
@@ -6678,11 +6665,9 @@ iris_upload_gpgpu_walker(struct iris_context *ice,
 
       iris_emit_cmd(batch, GENX(MEDIA_VFE_STATE), vfe) {
          if (prog_data->total_scratch) {
-            struct iris_bo *bo =
-               iris_get_scratch_space(ice, prog_data->total_scratch,
-                                      MESA_SHADER_COMPUTE);
             vfe.PerThreadScratchSpace = ffs(prog_data->total_scratch) - 11;
-            vfe.ScratchSpaceBasePointer = rw_bo(bo, 0, IRIS_DOMAIN_NONE);
+            vfe.ScratchSpaceBasePointer = rw_bo(shader->scratch_bo, 0,
+                                                IRIS_DOMAIN_NONE);
          }
 
          vfe.MaximumNumberofThreads =

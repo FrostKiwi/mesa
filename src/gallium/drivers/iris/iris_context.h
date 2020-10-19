@@ -438,6 +438,9 @@ struct iris_compiled_shader {
    enum brw_param_builtin *system_values;
    unsigned num_system_values;
 
+   /** The scratch buffer */
+   struct iris_bo *scratch_bo;
+
    /** Size (in bytes) of the kernel input data */
    unsigned kernel_input_size;
 
