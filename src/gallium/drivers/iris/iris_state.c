@@ -6780,6 +6780,10 @@ iris_upload_compute_state(struct iris_context *ice,
    struct iris_compiled_shader *shader =
       ice->shaders.prog[MESA_SHADER_COMPUTE];
 
+   static uint64_t count = 0;
+   if (count++ == 1000)
+      iris_dump_scratch_ids(ice);
+
    iris_batch_sync_region_start(batch);
 
    /* Always pin the binder.  If we're emitting new binding table pointers,

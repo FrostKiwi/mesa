@@ -851,6 +851,7 @@ void iris_upload_ubo_ssbo_surf_state(struct iris_context *ice,
                                      bool ssbo);
 const struct shader_info *iris_get_shader_info(const struct iris_context *ice,
                                                gl_shader_stage stage);
+void iris_dump_scratch_ids(struct iris_context *ice);
 struct iris_bo *iris_get_scratch_space(struct iris_context *ice,
                                        unsigned per_thread_scratch);
 uint32_t iris_group_index_to_bti(const struct iris_binding_table *bt,

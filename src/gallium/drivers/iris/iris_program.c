@@ -2073,6 +2073,40 @@ iris_fill_cs_push_const_buffer(struct brw_cs_prog_data *cs_prog_data,
       dst[8 * t] = t;
 }
 
+void
+iris_dump_scratch_ids(struct iris_context *ice)
+{
+   struct iris_bo *bo = NULL;
+   unsigned per_thread_size;
+   for (unsigned es = 0; es < 16; es++) {
+      if (ice->shaders.scratch_bos[es]) {
+         per_thread_size = 1u << (10 + es);
+         bo = ice->shaders.scratch_bos[es];
+         break;
+      }
+   }
+
+   if (bo == NULL)
+      return;
+
+   const unsigned threads = bo->size / per_thread_size;
+
+   const char *map = iris_bo_map(NULL, bo, MAP_READ);
+   for (unsigned t = 0; t < threads; t++) {
+      for (unsigned i = 0; i < per_thread_size; i++) {
+         if (map[t * per_thread_size + i] != 0) {
+            fprintf(stderr, "Found used scratch id: (%d, %d, %d, %d, %d)\n",
+                    (t >> 11) & 0xf,
+                    (t >> 8) & 0x7,
+                    (t >> 7) & 1,
+                    (t >> 3) & 0xf,
+                    (t >> 0) & 0x7);
+            break;
+         }
+      }
+   }
+}
+
 /**
  * Allocate scratch BOs as needed for the given per-thread size and stage.
  */
