@@ -3646,12 +3646,21 @@ brw_update_reloc_imm(const struct gen_device_info *devinfo,
                      brw_inst *inst,
                      uint32_t value)
 {
-   /* Sanity check that the instruction is a MOV of an immediate */
-   assert(brw_inst_opcode(devinfo, inst) == BRW_OPCODE_MOV);
-   assert(brw_inst_src0_reg_file(devinfo, inst) == BRW_IMMEDIATE_VALUE);
+#ifndef NDEBUG
+   unsigned opcode = brw_inst_opcode(devinfo, inst);
+   const struct opcode_desc *desc = brw_opcode_desc(devinfo, opcode);
+   /* Sanity check that the instruction is a ALU of an immediate */
+   if (desc && desc->nsrc == 1) {
+      assert(brw_inst_src0_reg_file(devinfo, inst) == BRW_IMMEDIATE_VALUE);
+   } else if (desc && desc->nsrc == 2) {
+      assert(brw_inst_src1_reg_file(devinfo, inst) == BRW_IMMEDIATE_VALUE);
+   } else {
+      assert(!"Invalid relocated instruction immediate");
+   }
 
    /* If it was compacted, we can't safely rewrite */
    assert(brw_inst_cmpt_control(devinfo, inst) == 0);
+#endif
 
    brw_inst_set_imm_ud(devinfo, inst, value);
 }
@@ -3661,15 +3670,9 @@ brw_update_reloc_imm(const struct gen_device_info *devinfo,
  */
 #define DEFAULT_PATCH_IMM 0x4a7cc037
 
-void
-brw_MOV_reloc_imm(struct brw_codegen *p,
-                  struct brw_reg dst,
-                  enum brw_reg_type src_type,
-                  uint32_t id)
+static void
+add_imm_reloc(struct brw_codegen *p, uint32_t id)
 {
-   assert(type_sz(src_type) == 4);
-   assert(type_sz(dst.type) == 4);
-
    if (p->num_relocs + 1 > p->reloc_array_size) {
       p->reloc_array_size = MAX2(16, p->reloc_array_size * 2);
       p->relocs = reralloc(p->mem_ctx, p->relocs,
@@ -3680,6 +3683,57 @@ brw_MOV_reloc_imm(struct brw_codegen *p,
       .id = id,
       .offset = p->next_insn_offset,
    };
-
-   brw_MOV(p, dst, retype(brw_imm_ud(DEFAULT_PATCH_IMM), src_type));
 }
+
+static brw_inst *
+brw_alu1_reloc_imm(struct brw_codegen *p, unsigned opcode,
+                   struct brw_reg dest,
+                   enum brw_reg_type src_type, uint32_t id)
+{
+   assert(type_sz(dest.type) == 4);
+   assert(type_sz(src_type) == 4);
+
+   add_imm_reloc(p, id);
+   struct brw_reg src = retype(brw_imm_ud(DEFAULT_PATCH_IMM), src_type);
+
+   return brw_alu1(p, opcode, dest, src);
+}
+
+static brw_inst *
+brw_alu2_reloc_imm(struct brw_codegen *p, unsigned opcode,
+                   struct brw_reg dest, struct brw_reg src0,
+                   enum brw_reg_type src1_type, uint32_t id)
+{
+   assert(type_sz(dest.type) == 4);
+   assert(type_sz(src0.type) == 4);
+   assert(type_sz(src1_type) == 4);
+
+   add_imm_reloc(p, id);
+   struct brw_reg src1 = retype(brw_imm_ud(DEFAULT_PATCH_IMM), src1_type);
+
+   return brw_alu2(p, opcode, dest, src0, src1);
+}
+
+#define ALU1_RELOC_IMM(OP)                                     \
+brw_inst *                                                     \
+brw_##OP##_reloc_imm(struct brw_codegen *p,                    \
+                     struct brw_reg dest,                      \
+                     enum brw_reg_type src_type, uint32_t id)  \
+{                                                              \
+   return brw_alu1_reloc_imm(p, BRW_OPCODE_##OP, dest,         \
+                             src_type, id);                    \
+}
+
+#define ALU2_RELOC_IMM(OP)                                     \
+brw_inst *                                                     \
+brw_##OP##_reloc_imm(struct brw_codegen *p,                    \
+                     struct brw_reg dest, struct brw_reg src0, \
+                     enum brw_reg_type src1_type, uint32_t id) \
+{                                                              \
+   return brw_alu2_reloc_imm(p, BRW_OPCODE_##OP, dest, src0,   \
+                             src1_type, id);                   \
+}
+
+ALU1_RELOC_IMM(MOV)
+ALU2_RELOC_IMM(ADD)
+ALU2_RELOC_IMM(SHL)

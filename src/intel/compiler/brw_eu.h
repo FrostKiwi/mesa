@@ -1249,11 +1249,24 @@ brw_update_reloc_imm(const struct gen_device_info *devinfo,
                      brw_inst *inst,
                      uint32_t value);
 
-void
-brw_MOV_reloc_imm(struct brw_codegen *p,
-                  struct brw_reg dst,
-                  enum brw_reg_type src_type,
-                  uint32_t id);
+#define ALU1_RELOC_IMM(OP)                                     \
+brw_inst *                                                     \
+brw_##OP##_reloc_imm(struct brw_codegen *p,                    \
+                     struct brw_reg dest,                      \
+                     enum brw_reg_type src_type, uint32_t id);
+
+#define ALU2_RELOC_IMM(OP)                                     \
+brw_inst *                                                     \
+brw_##OP##_reloc_imm(struct brw_codegen *p,                    \
+                     struct brw_reg dest, struct brw_reg src0, \
+                     enum brw_reg_type src1_type, uint32_t id);
+
+ALU1_RELOC_IMM(MOV)
+ALU2_RELOC_IMM(ADD)
+ALU2_RELOC_IMM(SHL)
+
+#undef ALU1_RELOC_IMM
+#undef ALU2_RELOC_IMM
 
 /***********************************************************************
  * brw_eu_util.c:
