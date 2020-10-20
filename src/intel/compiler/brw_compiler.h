@@ -1571,6 +1571,7 @@ brw_num_thread_ids(const struct gen_device_info *devinfo)
       unreachable("Unhandled hardware generation");
    }
 
+   return 1 << (3 + per_slice_bits);
    return devinfo->num_slices << per_slice_bits;
 }
 
