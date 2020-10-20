@@ -1990,6 +1990,7 @@ blorp_exec_3d(struct blorp_batch *batch, const struct blorp_params *params)
 
 #if GEN_GEN >= 7
 
+#if GEN_GEN <= 12 && !GEN_IS_GEN12HP
 static uint32_t
 compute_param_value(const struct blorp_params *params, uint32_t indirect_param)
 {
@@ -2059,6 +2060,7 @@ blorp_emit_compute_push_const(struct blorp_batch *batch,
 
    return true;
 }
+#endif /* GEN_GEN <= 12 && !GEN_IS_GEN12HP */
 
 static bool
 blorp_emit_compute_state(struct blorp_batch *batch,
