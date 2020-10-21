@@ -875,9 +875,22 @@ ibc_SIMD_SHUFFLE(ibc_builder *b, ibc_ref val,
       },
    };
 
-   ibc_ref dest =
-      ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_SIMD_SHUFFLE,
-                              val.type, 1, srcs, 2);
+   ibc_ref dest;
+
+   if (!b->we_all || b->simd_width == 1) {
+      dest = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_SIMD_SHUFFLE,
+                                     val.type, 1, srcs, 2);
+   } else {
+      assert(val.type != IBC_TYPE_FLAG);
+
+      unsigned size = ibc_type_byte_size(val.type) * val_simd_width;
+      ibc_reg *reg =
+         ibc_hw_grf_reg_create(b->shader, size, MIN2(size, REG_SIZE));
+      dest = ibc_typed_ref(reg, val.type);
+
+      ibc_build_intrinsic(b, IBC_INTRINSIC_OP_SIMD_SHUFFLE,
+                          dest, -1, 1, srcs, 2);
+   }
 
    return dest;
 }
