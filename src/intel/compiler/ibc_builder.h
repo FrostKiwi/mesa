@@ -456,6 +456,12 @@ ibc_##OP(ibc_builder *b, enum ibc_type dest_type,                    \
 {                                                                    \
    ibc_ref srcs[] = { src0 };                                        \
    return ibc_build_ssa_alu(b, IBC_ALU_OP_##OP, dest_type, srcs, 1); \
+}                                                                    \
+                                                                     \
+static inline ibc_alu_instr *                                        \
+ibc_##OP##_to(ibc_builder *b, ibc_ref dest, ibc_ref src0)            \
+{                                                                    \
+   return ibc_build_alu1(b, IBC_ALU_OP_##OP, dest, src0);            \
 }
 
 #define IBC_BUILDER_DEFINE_ALU2(OP)                                  \
@@ -465,7 +471,15 @@ ibc_##OP(ibc_builder *b, enum ibc_type dest_type,                    \
 {                                                                    \
    ibc_ref srcs[] = { src0, src1 };                                  \
    return ibc_build_ssa_alu(b, IBC_ALU_OP_##OP, dest_type, srcs, 2); \
+}                                                                    \
+                                                                     \
+static inline ibc_alu_instr *                                        \
+ibc_##OP##_to(ibc_builder *b, ibc_ref dest,                          \
+              ibc_ref src0, ibc_ref src1)                            \
+{                                                                    \
+   return ibc_build_alu2(b, IBC_ALU_OP_##OP, dest, src0, src1);      \
 }
+
 
 #define IBC_BUILDER_DEFINE_ALU3(OP)                                  \
 static inline ibc_ref                                                \
@@ -474,6 +488,13 @@ ibc_##OP(ibc_builder *b, enum ibc_type dest_type,                    \
 {                                                                    \
    ibc_ref srcs[] = { src0, src1, src2 };                            \
    return ibc_build_ssa_alu(b, IBC_ALU_OP_##OP, dest_type, srcs, 3); \
+}                                                                    \
+                                                                     \
+static inline ibc_alu_instr *                                        \
+ibc_##OP##_to(ibc_builder *b, ibc_ref dest,                          \
+              ibc_ref src0, ibc_ref src1, ibc_ref src2)              \
+{                                                                    \
+   return ibc_build_alu3(b, IBC_ALU_OP_##OP, dest, src0, src1, src2);\
 }
 
 IBC_BUILDER_DEFINE_ALU1(MOV)
@@ -520,12 +541,6 @@ IBC_BUILDER_DEFINE_ALU2(IREM)
 #undef IBC_BUILDER_DEFINE_ALU1
 #undef IBC_BUILDER_DEFINE_ALU2
 #undef IBC_BUILDER_DEFINE_ALU3
-
-static inline ibc_alu_instr *
-ibc_MOV_to(ibc_builder *b, ibc_ref dest, ibc_ref src)
-{
-   return ibc_build_alu1(b, IBC_ALU_OP_MOV, dest, src);
-}
 
 static inline ibc_ref
 ibc_MOV_scalar(ibc_builder *b, enum ibc_type dest_type, ibc_ref src)
