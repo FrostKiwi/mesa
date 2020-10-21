@@ -427,7 +427,23 @@ ibc_build_ssa_alu(ibc_builder *b, enum ibc_alu_op op, enum ibc_type dest_type,
                   ibc_ref *src, unsigned num_srcs)
 {
    dest_type = _ibc_builder_dest_type(dest_type, src, num_srcs);
-   ibc_ref dest_ref = ibc_builder_new_logical_reg(b, dest_type, 1);
+   ibc_ref dest_ref;
+
+   if (!b->we_all || b->simd_width == 1) {
+      dest_ref = ibc_builder_new_logical_reg(b, dest_type, 1);
+   } else {
+      /* We can't write to multiple logical register channels with NoMask,
+       * so create a temporary HW_GRF register instead.
+       */
+      if (dest_type == IBC_TYPE_FLAG)
+         dest_type = IBC_TYPE_UW;
+
+      unsigned size = ibc_type_byte_size(dest_type) * b->simd_width;
+
+      ibc_reg *reg =
+         ibc_hw_grf_reg_create(b->shader, size, MIN2(size, REG_SIZE));
+      dest_ref = ibc_typed_ref(reg, dest_type);
+   }
 
    ibc_build_alu(b, op, dest_ref, ibc_null(IBC_TYPE_FLAG),
                  BRW_CONDITIONAL_NONE, src, num_srcs);
