@@ -595,6 +595,30 @@ ibc_MOV_from_flag(ibc_builder *b, enum ibc_type dest_type,
    return dest;
 }
 
+static inline ibc_ref
+ibc_MOV_to_hw_grf(ibc_builder *b, ibc_ref src)
+{
+   if (src.file == IBC_FILE_HW_GRF)
+      return src;
+
+   enum ibc_type dst_type = src.type;
+   if (src.type == IBC_TYPE_FLAG)
+      dst_type = b->simd_width == 32 ? IBC_TYPE_UD : IBC_TYPE_UW;
+
+   assert(src.file == IBC_FILE_LOGICAL);
+
+   unsigned grf_size = ibc_type_byte_size(dst_type) *
+                       src.reg->logical.simd_width *
+                       src.reg->logical.num_comps *
+                       MAX2(src.reg->logical.stride, 1);
+
+   ibc_reg *grf = ibc_hw_grf_reg_create(b->shader, grf_size, REG_SIZE);
+   ibc_ref ref = ibc_typed_ref(grf, dst_type);
+   ibc_MOV_to(b, ref, src);
+
+   return ref;
+}
+
 static inline unsigned
 _ibc_builder_ref_stride(ibc_ref ref)
 {
