@@ -376,6 +376,15 @@ ibc_build_alu2(ibc_builder *b, enum ibc_alu_op op, ibc_ref dest,
                         BRW_CONDITIONAL_NONE, srcs, 2);
 }
 
+static inline ibc_alu_instr *
+ibc_build_alu3(ibc_builder *b, enum ibc_alu_op op, ibc_ref dest,
+               ibc_ref src0, ibc_ref src1, ibc_ref src2)
+{
+   ibc_ref srcs[] = { src0, src1, src2 };
+   return ibc_build_alu(b, op, dest, ibc_null(IBC_TYPE_FLAG),
+                        BRW_CONDITIONAL_NONE, srcs, 3);
+}
+
 static inline enum ibc_type
 _ibc_builder_dest_type(enum ibc_type dest_type,
                        ibc_ref *src, unsigned num_srcs)
