@@ -247,7 +247,15 @@ simd_restricted_src(ibc_builder *b, ibc_instr *instr, ibc_ref src,
    if (ibc_instr_foreach_reg_write(instr, does_not_write_reg, src.reg))
       return src;
 
-   ibc_ref dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
+   ibc_ref dest;
+   if (!b->we_all) {
+      dest = ibc_builder_new_logical_reg(b, src.type, num_comps);
+   } else {
+      unsigned size = ibc_type_byte_size(src.type) * simd_width * num_comps;
+      ibc_reg *reg =
+         ibc_hw_grf_reg_create(b->shader, size, MIN2(size, REG_SIZE));
+      dest = ibc_typed_ref(reg, src.type);
+   }
    ibc_MOV_raw(b, dest, src, num_comps);
    return dest;
 }
