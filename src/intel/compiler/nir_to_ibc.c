@@ -1460,6 +1460,17 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       break;
    }
 
+   case nir_intrinsic_quad_broadcast: {
+      ibc_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
+      unsigned idx = nir_src_as_uint(instr->src[1]);
+
+      ibc_ref strided = ibc_restride(b, src, src.type, idx, 4, 4, 0);
+
+      /* TODO: 64-bit on Atoms */
+      dest = ibc_MOV(b, src.type, strided);
+      break;
+   }
+
    case nir_intrinsic_quad_swap_horizontal: {
       ibc_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
       assert(nir_src_num_components(instr->src[0]) == 1);
