@@ -1802,8 +1802,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       }
 
       ibc_intrinsic_instr *store;
-      if (nir_intrinsic_align(instr) >= 4) {
-         assert(nir_src_bit_size(instr->src[0]) == 32);
+      if (nir_src_bit_size(instr->src[0]) == 32 &&
+          nir_intrinsic_align(instr) >= 4) {
          store = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_A64_UNTYPED_WRITE,
                                      ibc_null(IBC_TYPE_UD), 0, 0, srcs,
                                      IBC_SURFACE_NUM_SRCS);
