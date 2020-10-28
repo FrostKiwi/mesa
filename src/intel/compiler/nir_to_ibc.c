@@ -1340,6 +1340,9 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          chan = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UINT);
       }
 
+      if (instr->intrinsic == nir_intrinsic_read_invocation)
+         chan = ibc_uniformize(b, chan);
+
       uint8_t val_simd_group = b->simd_group;
       uint8_t val_simd_width = b->simd_width;
 
