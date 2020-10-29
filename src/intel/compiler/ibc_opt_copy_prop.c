@@ -281,7 +281,7 @@ try_copy_prop_ref(ibc_ref *ref, ibc_alu_instr *alu, int alu_src_idx,
          for (unsigned i = 0; i < intrin->num_srcs; i++) {
             if (ref->logical.broadcast) {
                if (ref->logical.simd_channel < intrin->src[i].simd_group ||
-                   ref->logical.simd_channel >
+                   ref->logical.simd_channel >=
                      intrin->src[i].simd_group + intrin->src[i].simd_width)
                   continue;
             } else {
