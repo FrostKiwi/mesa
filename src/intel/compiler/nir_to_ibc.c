@@ -1288,7 +1288,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       ibc_ref flag = nti_initialize_flag(b, -1);
 
       ibc_ref cmp_srcs[2] = { value, ibc_uniformize(b, value) };
-      ibc_build_alu(b, IBC_ALU_OP_CMP, ibc_null(IBC_TYPE_W), flag,
+      ibc_build_alu(b, IBC_ALU_OP_CMP, ibc_null(value.type), flag,
                     BRW_CONDITIONAL_Z, cmp_srcs, 2);
 
       /* For some reason, the any/all predicates don't work properly with
