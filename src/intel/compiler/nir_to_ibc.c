@@ -1730,6 +1730,8 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       } else {
          ibc_builder_push_nir_dest_group(b, instr->dest);
 
+         ibc_ref addr = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD);
+
          ibc_intrinsic_src srcs[IBC_SURFACE_NUM_SRCS] = {
             [IBC_SURFACE_SRC_SURFACE_BTI] = {
                .ref = ibc_uniformize(b, ibc_nir_src(nti, instr->src[0],
@@ -1737,7 +1739,7 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                .num_comps = 1,
             },
             [IBC_SURFACE_SRC_ADDRESS] = {
-               .ref = ibc_nir_src(nti, instr->src[1], IBC_TYPE_UD),
+               .ref = addr,
                .num_comps = 1,
             },
          };
@@ -1750,10 +1752,14 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
                                 dest, -1, instr->num_components,
                                 srcs, IBC_SURFACE_NUM_SRCS);
          } else {
-            assert(nir_dest_bit_size(instr->dest) <= 32);
+            unsigned bit_size = nir_dest_bit_size(instr->dest);
+            assert(bit_size >= 8 && bit_size <= 32);
 
             ibc_ref comps[4] = { };
             for (unsigned c = 0; c < instr->num_components; c++) {
+               srcs[IBC_SURFACE_SRC_ADDRESS].ref =
+                  ibc_ADD(b, IBC_TYPE_UD, addr, ibc_imm_ud(c * bit_size / 8));
+
                comps[c] = ibc_build_ssa_intrinsic(b, IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ, IBC_TYPE_UD, 1, srcs, IBC_SURFACE_NUM_SRCS);
             }
             dest = ibc_VEC(b, comps, instr->num_components);
