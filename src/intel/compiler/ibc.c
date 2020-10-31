@@ -796,4 +796,5 @@ ibc_lower_and_optimize(ibc_shader *ibc)
    IBC_PASS_V(ibc, ibc_lower_gather_ops);
    IBC_PASS_V(ibc, ibc_lower_overlapping_send_payloads);
    IBC_PASS_V(ibc, ibc_assign_and_lower_accums);
+   IBC_PASS_V(ibc, ibc_lower_restrictions);
 }
