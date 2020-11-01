@@ -1466,11 +1466,15 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
    case nir_intrinsic_quad_broadcast: {
       ibc_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
       unsigned idx = nir_src_as_uint(instr->src[1]);
+      enum ibc_type dest_type = src.type;
+
+      if (src.type == IBC_TYPE_FLAG)
+         src = ibc_MOV(b, IBC_TYPE_UW, src);
 
       ibc_ref strided = ibc_restride(b, src, src.type, idx, 4, 4, 0);
 
       /* TODO: 64-bit on Atoms */
-      dest = ibc_MOV(b, src.type, strided);
+      dest = ibc_MOV(b, dest_type, strided);
       break;
    }
 
