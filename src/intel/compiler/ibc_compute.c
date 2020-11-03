@@ -192,7 +192,7 @@ ibc_emit_nir_cs_intrinsic(struct nir_to_ibc_state *nti,
                                     dest, -1, instr->num_components,
                                     srcs, IBC_SURFACE_NUM_SRCS);
       } else {
-         assert(nir_dest_bit_size(instr->dest) == 32);
+         assert(nir_dest_bit_size(instr->dest) <= 32);
          assert(nir_dest_num_components(instr->dest) == 1);
          load = ibc_build_intrinsic(b, IBC_INTRINSIC_OP_BTI_BYTE_SCATTERED_READ,
                                     dest, -1, instr->num_components,
