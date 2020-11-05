@@ -99,17 +99,20 @@ ibc_assign_logical_reg_strides(ibc_shader *shader)
             continue;
 
          ibc_alu_instr *alu = ibc_instr_as_alu(write->instr);
-         enum ibc_type exec_type = ibc_alu_instr_exec_type(alu);
 
-         /* We don't use ibc_type_byte_size here because we want to gracefully
-          * ignore the source if it's IBC_TYPE_FLAG.
-          */
-         max_exec_width = MAX2(max_exec_width,
-                               ibc_type_bit_size(exec_type) / 8);
-
-         /* Only raw MOV supports a packed-byte destination */
-         if (!ibc_alu_instr_is_raw_mov(alu))
+         /* Raw MOV supports even packed byte destinations */
+         if (!ibc_alu_instr_is_raw_mov(alu)) {
+            /* Everything requires at least a 2-byte stride */
             max_exec_width = MAX2(max_exec_width, 2);
+
+            /* We also need at least the stride of the execution type of the
+             * ALU instruction.  We don't use ibc_type_byte_size here because
+             * we want to gracefully ignore the source if it's IBC_TYPE_FLAG.
+             */
+            enum ibc_type exec_type = ibc_alu_instr_exec_type(alu);
+            max_exec_width = MAX2(max_exec_width,
+                                  ibc_type_bit_size(exec_type) / 8);
+         }
 
          /* ALIGN1 3src instructions on gen10+ only have bits [4:3] of the
           * subnr so we have to align to 8 bytes.
