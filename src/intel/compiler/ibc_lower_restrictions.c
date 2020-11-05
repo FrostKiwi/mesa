@@ -31,8 +31,8 @@ ibc_lower_alu_restrictions(ibc_builder *b, ibc_alu_instr *alu)
    bool progress = false;
 
    if (devinfo->gen >= 11) {
-      /* Byte sized operands are not supported for src1 on Gen11+ */
-      for (unsigned i = 0; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
+      /* Byte sized operands are not supported for src1/2 on Gen11+ */
+      for (unsigned i = 1; i < ibc_alu_op_infos[alu->op].num_srcs; i++) {
          if (ibc_type_bit_size(alu->src[i].ref.type) == 8) {
             b->cursor = ibc_before_instr(&alu->instr);
             enum ibc_type word_type =
