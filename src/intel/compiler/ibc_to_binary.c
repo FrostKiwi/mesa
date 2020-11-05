@@ -222,7 +222,7 @@ static void
 set_byte_mask(unsigned byte, void *_data)
 {
    uint64_t *mask = _data;
-   *mask |= (1u << byte);
+   *mask |= (1ull << byte);
 }
 
 static void
