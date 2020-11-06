@@ -779,6 +779,25 @@ lower_bit_size_callback(const nir_instr *instr, UNUSED void *data)
       break;
    }
 
+   case nir_instr_type_intrinsic: {
+      nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+      switch (intrin->intrinsic) {
+      case nir_intrinsic_reduce:
+      case nir_intrinsic_inclusive_scan:
+      case nir_intrinsic_exclusive_scan:
+         /* The region ops we have to do to generate scans don't work on byte
+          * types on any platform so we have to convert to 16-bit.
+          */
+         if (intrin->dest.ssa.bit_size == 8)
+            return 16;
+         return 0;
+
+      default:
+         return 0;
+      }
+      break;
+   }
+
    default:
       return 0;
    }
