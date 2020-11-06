@@ -41,6 +41,15 @@ ibc_lower_alu_restrictions(ibc_builder *b, ibc_alu_instr *alu)
             ibc_builder_push_instr_group(b, &alu->instr);
             ibc_ref tmp = ibc_MOV(b, word_type, alu->src[i].ref);
             ibc_instr_set_ref(&alu->instr, &alu->src[i].ref, tmp);
+
+            /* Mixed type CMPs with B and W don't appear to work work properly
+             * and neither do mixed-type SEL.cmod.
+             */
+            if (alu->op == IBC_ALU_OP_CMP ||
+                (alu->op == IBC_ALU_OP_SEL && alu->cmod)) {
+               tmp = ibc_MOV(b, word_type, alu->src[0].ref);
+               ibc_instr_set_ref(&alu->instr, &alu->src[0].ref, tmp);
+            }
             ibc_builder_pop(b);
 
             progress = true;
