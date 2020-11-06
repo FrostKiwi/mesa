@@ -237,7 +237,6 @@ ibc_live_intervals_ref_chunks(const ibc_live_intervals *live,
       if (num_comps < 0) {
          assert(ref->hw_grf.hstride * ref->hw_grf.width == ref->hw_grf.vstride);
          assert(ref->hw_grf.hstride == ref_byte_size);
-         assert(num_bytes % byte_divisor == 0);
          const unsigned byte_chunk_start = ref->hw_grf.byte >> byte_shift;
          const unsigned byte_chunk_end =
             (ref->hw_grf.byte + num_bytes - 1) >> byte_shift;
