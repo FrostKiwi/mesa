@@ -169,7 +169,7 @@ brw_reg_for_ibc_ref(const struct gen_device_info *devinfo,
             assert(stride_B <= REG_SIZE);
             brw_reg = stride(brw_vecn_grf(1, nr, 0), stride_elem, 1, 0);
          } else {
-            const unsigned width = MIN2(reg_width, phys_width);
+            const unsigned width = MIN3(reg_width, phys_width, 16);
             brw_reg = stride(brw_vecn_grf(width, nr, 0),
                              width * stride_elem, width, stride_elem);
          }
