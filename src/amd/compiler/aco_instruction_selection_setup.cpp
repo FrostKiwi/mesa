@@ -634,8 +634,12 @@ setup_variables(isel_context *ctx, nir_shader *nir)
 }
 
 unsigned
-lower_bit_size_callback(const nir_alu_instr *alu, void *_)
+lower_bit_size_callback(const nir_instr *alu, void *_)
 {
+   if (instr->type != nir_instr_type_alu)
+      return 0;
+
+   nir_alu_instr *alu = nir_instr_as_alu(instr);
    if (nir_op_is_vec(alu->op))
       return 0;
 
