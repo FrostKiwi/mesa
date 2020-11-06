@@ -1222,6 +1222,14 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
 
    ibc_ref dest = { .file = IBC_FILE_NONE, };
    switch (instr->intrinsic) {
+   case nir_intrinsic_load_subgroup_size:
+      /* This should only happen for fragment shaders because every other
+       * case is lowered in NIR so we can optimize on it.
+       */
+      assert(nti->stage == MESA_SHADER_FRAGMENT);
+      dest = ibc_MOV(b, IBC_TYPE_UD, ibc_imm_ud(b->shader->simd_width));
+      break;
+
    case nir_intrinsic_load_subgroup_invocation:
       assert(nir_dest_is_divergent(instr->dest));
       dest = ibc_MOV(b, IBC_TYPE_UD, nti->subgroup_invocation);
