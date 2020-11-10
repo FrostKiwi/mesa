@@ -1490,99 +1490,60 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
       ibc_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
       assert(nir_src_num_components(instr->src[0]) == 1);
 
-      ibc_builder_push_we_all(b, b->simd_width);
+      enum ibc_type orig_type = src.type;
+
       if (src.type == IBC_TYPE_FLAG) {
          enum ibc_type type = b->simd_width == 32 ? IBC_TYPE_UD : IBC_TYPE_UW;
-         ibc_ref mask02 = ibc_imm_ud(0x55555555); mask02.type = type;
-         ibc_ref mask13 = ibc_imm_ud(0xaaaaaaaa); mask13.type = type;
-         ibc_ref b02 = ibc_AND(b, type, src, mask02);
-         ibc_ref b13 = ibc_AND(b, type, src, mask13);
-         dest = ibc_OR(b, type, ibc_SHR(b, type, b13, ibc_imm_uw(1)),
-                                ibc_SHL(b, type, b02, ibc_imm_uw(1)));
-      } else {
-         src = ibc_MOV_to_hw_grf(b, src);
-
-         ibc_reg *tmp_reg =
-            ibc_hw_grf_reg_create(b->shader, src.reg->hw_grf.size,
-                                  src.reg->hw_grf.align);
-         ibc_ref tmp = ibc_typed_ref(tmp_reg, src.type);
-
-         ibc_builder_push_we_all(b, b->simd_width / 2);
-         ibc_ref src_left  = ibc_restride(b, src, src.type, 0, 8, 4, 2);
-         ibc_ref src_right = ibc_restride(b, src, src.type, 1, 8, 4, 2);
-         ibc_ref tmp_left  = ibc_restride(b, tmp, src.type, 0, 8, 4, 2);
-         ibc_ref tmp_right = ibc_restride(b, tmp, src.type, 1, 8, 4, 2);
-
-         ibc_MOV_to(b, tmp_left, src_right);
-         ibc_MOV_to(b, tmp_right, src_left);
-         ibc_builder_pop(b);
-
-         dest = tmp;
+         src = ibc_MOV(b, type, src);
       }
+
+      ibc_builder_push_we_all(b, b->simd_width);
+      src = ibc_MOV_to_hw_grf(b, src);
+
+      ibc_reg *tmp_reg =
+         ibc_hw_grf_reg_create(b->shader, src.reg->hw_grf.size,
+                               src.reg->hw_grf.align);
+      ibc_ref tmp = ibc_typed_ref(tmp_reg, src.type);
+
+      ibc_builder_push_we_all(b, b->simd_width / 2);
+      ibc_ref src_left  = ibc_restride(b, src, src.type, 0, 8, 4, 2);
+      ibc_ref src_right = ibc_restride(b, src, src.type, 1, 8, 4, 2);
+      ibc_ref tmp_left  = ibc_restride(b, tmp, src.type, 0, 8, 4, 2);
+      ibc_ref tmp_right = ibc_restride(b, tmp, src.type, 1, 8, 4, 2);
+
+      ibc_MOV_to(b, tmp_left, src_right);
+      ibc_MOV_to(b, tmp_right, src_left);
       ibc_builder_pop(b);
 
-      dest = ibc_MOV(b, src.type, dest);
+      ibc_builder_pop(b);
+
+      dest = ibc_MOV(b, orig_type, tmp);
       break;
    }
 
-   case nir_intrinsic_quad_swap_vertical: {
-      ibc_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
-      assert(nir_src_num_components(instr->src[0]) == 1);
-
-      ibc_builder_push_we_all(b, b->simd_width);
-      if (src.type == IBC_TYPE_FLAG) {
-         enum ibc_type type = b->simd_width == 32 ? IBC_TYPE_UD : IBC_TYPE_UW;
-         ibc_ref mask01 = ibc_imm_ud(0x33333333); mask01.type = type;
-         ibc_ref mask23 = ibc_imm_ud(0xcccccccc); mask23.type = type;
-         ibc_ref b01 = ibc_AND(b, type, src, mask01);
-         ibc_ref b23 = ibc_AND(b, type, src, mask23);
-         dest = ibc_OR(b, type, ibc_SHR(b, type, b23, ibc_imm_uw(2)),
-                                ibc_SHL(b, type, b01, ibc_imm_uw(2)));
-      } else {
-         /* TODO: use an align16 instruction for 32-bit types? */
-
-         ibc_ref idx =
-            ibc_XOR(b, IBC_TYPE_W, nti->subgroup_invocation, ibc_imm_w(2));
-         dest = ibc_SIMD_SHUFFLE(b, src, b->simd_group, b->simd_width, idx);
-      }
-      ibc_builder_pop(b);
-
-      dest = ibc_MOV(b, src.type, dest);
-      break;
-   }
-
+   case nir_intrinsic_quad_swap_vertical:
    case nir_intrinsic_quad_swap_diagonal: {
       ibc_ref src = ibc_nir_src(nti, instr->src[0], IBC_TYPE_UINT);
       assert(nir_src_num_components(instr->src[0]) == 1);
 
-      ibc_builder_push_we_all(b, b->simd_width);
+      enum ibc_type orig_type = src.type;
+
       if (src.type == IBC_TYPE_FLAG) {
          enum ibc_type type = b->simd_width == 32 ? IBC_TYPE_UD : IBC_TYPE_UW;
-         ibc_ref mask0 = ibc_imm_ud(0x11111111); mask0.type = type;
-         ibc_ref mask1 = ibc_imm_ud(0x22222222); mask1.type = type;
-         ibc_ref mask2 = ibc_imm_ud(0x44444444); mask2.type = type;
-         ibc_ref mask3 = ibc_imm_ud(0x88888888); mask3.type = type;
-         ibc_ref b0 = ibc_AND(b, type, src, mask0);
-         ibc_ref b1 = ibc_AND(b, type, src, mask1);
-         ibc_ref b2 = ibc_AND(b, type, src, mask2);
-         ibc_ref b3 = ibc_AND(b, type, src, mask3);
-         dest = ibc_OR(b, type,
-                       ibc_OR(b, type,
-                              ibc_SHL(b, type, b0, ibc_imm_uw(3)),
-                              ibc_SHL(b, type, b1, ibc_imm_uw(1))),
-                       ibc_OR(b, type,
-                              ibc_SHR(b, type, b2, ibc_imm_uw(1)),
-                              ibc_SHR(b, type, b3, ibc_imm_uw(3))));
-      } else {
-         /* TODO: use an align16 instruction for 32-bit types? */
-
-         ibc_ref idx =
-            ibc_XOR(b, IBC_TYPE_W, nti->subgroup_invocation, ibc_imm_w(3));
-         dest = ibc_SIMD_SHUFFLE(b, src, b->simd_group, b->simd_width, idx);
+         src = ibc_MOV(b, type, src);
       }
+
+      ibc_builder_push_we_all(b, b->simd_width);
+      /* TODO: use an align16 instruction for 32-bit types? */
+
+      int xor = instr->intrinsic == nir_intrinsic_quad_swap_vertical ? 2 : 3;
+
+      ibc_ref idx =
+         ibc_XOR(b, IBC_TYPE_W, nti->subgroup_invocation, ibc_imm_w(xor));
+      dest = ibc_SIMD_SHUFFLE(b, src, b->simd_group, b->simd_width, idx);
       ibc_builder_pop(b);
 
-      dest = ibc_MOV(b, src.type, dest);
+      dest = ibc_MOV(b, orig_type, dest);
       break;
    }
 
