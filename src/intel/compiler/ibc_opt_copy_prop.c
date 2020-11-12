@@ -51,6 +51,10 @@ try_compose_refs(ibc_ref *ref_out,
    if (inner.file == IBC_FILE_IMM && !supports_imm)
       return false;
 
+   /* Byte immediates aren't allowed */
+   if (inner.file == IBC_FILE_IMM && ibc_type_bit_size(outer.type) == 8)
+      return false;
+
    ibc_ref ref = inner;
 
    switch (ref.file) {
