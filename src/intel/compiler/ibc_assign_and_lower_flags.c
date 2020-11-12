@@ -662,7 +662,7 @@ assigned:
       /* Detect if this flag register is live right before the current
        * instruction.  If it's not then we can assume the flag register starts
        * off valid.  If it is even somewhat live, we assume the whole thing is
-       * valid.  In theory, we could use a finer granularity for this but it
+       * invalid.  In theory, we could use a finer granularity for this but it
        * doesn't seem worth the bother.
        *
        * ip = 0 should only be true for the START instruction.
@@ -670,8 +670,10 @@ assigned:
       assert(ip > 0);
       const ibc_reg_live_intervals *rli = &state->live->regs[reg->index];
       for (unsigned i= 0; i < rli->num_chunks; i++) {
-         if (rli->chunks[i].logical &&
-             interval_set_contains(rli->chunks[i].logical, ip - 1)) {
+         if ((reg->file == IBC_FILE_FLAG &&
+              ip > rli->chunks[i].physical_start) ||
+             (reg->file == IBC_FILE_LOGICAL && rli->chunks[i].logical &&
+              interval_set_contains(rli->chunks[i].logical, ip - 1))) {
             valid &= ~FLAG_REP_FLAG;
             break;
          }
