@@ -1368,6 +1368,18 @@ nti_emit_intrinsic(struct nir_to_ibc_state *nti,
          ibc_nir_src(nti, instr->src[0],
                      ibc_type_for_nir(nir_op_infos[redop].input_types[0]));
 
+      if (!nir_dest_is_divergent(instr->dest)) {
+         /* If the destination isn't divergent, then this is one of the cases
+          * where the destination is just a clone of the source.
+          *
+          * See also nir_divergence_analysis().
+          */
+         ibc_builder_push_scalar(b);
+         dest = ibc_MOV(b, src.type, src);
+         ibc_builder_pop(b);
+         break;
+      }
+
       unsigned cluster_size = instr->intrinsic == nir_intrinsic_reduce ?
                               nir_intrinsic_cluster_size(instr) : 0;
       if (cluster_size == 0 || cluster_size > b->simd_width)
