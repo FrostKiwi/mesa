@@ -754,6 +754,16 @@ instr_set_flag_ref(ibc_instr *instr, ibc_ref *ref, unsigned chunk,
    unsigned start_chunk, num_chunks;
    instr_flag_ref_chunk_range(instr, ref, &start_chunk, &num_chunks);
 
+   /* If we have a physical flag register (not IBC_FILE_LOGICAL) and it's
+    * written as flag, with a write-mask, then there may be data in the other
+    * SIMD channels.  Consider this a read as well as a write so that the flag
+    * gets loaded as needed.
+    */
+   if (ref->file == IBC_FILE_FLAG &&
+       ref->type == IBC_TYPE_FLAG &&
+       !instr->we_all)
+      read |= written;
+
    if (read)
       load_flag_if_needed(chunk, start_chunk, num_chunks, false, state);
    if (written)
