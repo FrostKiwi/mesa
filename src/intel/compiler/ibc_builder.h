@@ -855,12 +855,20 @@ ibc_build_ssa_intrinsic(ibc_builder *b, enum ibc_intrinsic_op op,
 static inline ibc_ref
 ibc_FIND_LIVE_CHANNEL(ibc_builder *b)
 {
+   /* For some unknown reason, accessing the mask register with a non-
+    * zero destination subnr doesn't seem to work reliably.  This has
+    * been observed on at least Gen11.
+    */
+   ibc_reg *tmp_reg = ibc_hw_grf_reg_create(b->shader, 4, 32);
+   ibc_ref tmp_ref = ibc_typed_ref(tmp_reg, IBC_TYPE_UD);
+
    ibc_builder_push_scalar(b);
-   ibc_ref dest = ibc_builder_new_logical_reg(b, IBC_TYPE_UD, 1);
    ibc_intrinsic_instr *intrin =
       ibc_build_intrinsic(b, IBC_INTRINSIC_OP_FIND_LIVE_CHANNEL,
-                          dest, -1, 1, NULL, 0);
+                          tmp_ref, -1, 1, NULL, 0);
    intrin->can_reorder = false;
+   ibc_hw_grf_mul_stride(&tmp_ref.hw_grf, 0);
+   ibc_ref dest = ibc_MOV(b, IBC_TYPE_UD, tmp_ref);
    ibc_builder_pop(b);
 
    return dest;
