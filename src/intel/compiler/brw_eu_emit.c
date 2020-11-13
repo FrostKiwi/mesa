@@ -3279,6 +3279,12 @@ brw_find_live_channel(struct brw_codegen *p, struct brw_reg dst,
       brw_set_default_mask_control(p, BRW_MASK_DISABLE);
 
       if (devinfo->gen >= 8) {
+         /* For some unknown reason, accessing the mask register with a non-
+          * zero destination subnr doesn't seem to work reliably.  This has
+          * been observed on at least Gen11.
+          */
+         assert(dst.subnr == 0);
+
          /* Getting the first active channel index is easy on Gen8: Just find
           * the first bit set in the execution mask.  The register exists on
           * HSW already but it reads back as all ones when the current
