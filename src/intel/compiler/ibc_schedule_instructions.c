@@ -1353,6 +1353,30 @@ ibc_schedule_builder_init_new(ibc_schedule_builder *b,
    ibc_schedule_builder_init(b, graph, sched, direction);
 }
 
+static void
+add_chunk_refs(ibc_schedule_builder *b,
+               unsigned first_chunk,
+               const BITSET_WORD *chunks,
+               unsigned num_chunks)
+{
+   ibc_sched_graph *g = b->graph;
+
+   const uint32_t bitset_words = BITSET_WORDS(num_chunks);
+
+   for (uint32_t w = 0; w < bitset_words; w++) {
+      BITSET_WORD word = chunks[w];
+      while (word) {
+         int i = u_bit_scan(&word);
+         ibc_sched_reg_chunk *chunk =
+            &g->reg_chunks[first_chunk + w * BITSET_WORDBITS + i];
+
+         assert(chunk->num_refs == chunk->ref_count);
+         chunk->num_refs++;
+         chunk->ref_count++;
+      }
+   }
+}
+
 static bool
 add_reg_chunk_refs(ibc_ref *ref,
                    int num_bytes, int num_comps,
@@ -1377,16 +1401,66 @@ add_reg_chunk_refs(ibc_ref *ref,
    ibc_live_intervals_ref_chunks(g->live, ref, num_bytes, num_comps,
                                  simd_group, simd_width, chunks);
 
-   for (unsigned i = 0; i < num_chunks; i++) {
-      if (BITSET_TEST(chunks, i)) {
-         assert(g->reg_chunks[chunk_idx + i].num_refs ==
-                g->reg_chunks[chunk_idx + i].ref_count);
-         g->reg_chunks[chunk_idx + i].num_refs++;
-         g->reg_chunks[chunk_idx + i].ref_count++;
+   add_chunk_refs(b, chunk_idx, chunks, num_chunks);
+
+   return true;
+}
+
+static void
+decref_chunks(ibc_schedule_builder *b,
+              unsigned first_chunk,
+              const BITSET_WORD *chunks,
+              unsigned num_chunks)
+{
+   ibc_sched_graph *g = b->graph;
+
+   const uint32_t bitset_words = BITSET_WORDS(num_chunks);
+
+   for (uint32_t w = 0; w < bitset_words; w++) {
+      BITSET_WORD word = chunks[w];
+      while (word) {
+         int i = u_bit_scan(&word);
+         ibc_sched_reg_chunk *chunk =
+            &g->reg_chunks[first_chunk + w * BITSET_WORDBITS + i];
+
+         assert(chunk->ref_count > 0);
+
+         /* If this is our first dropped reference, it just went live. */
+         if (chunk->num_refs == chunk->ref_count) {
+            b->grf_bytes += chunk->grf_bytes;
+            b->flag_bits += chunk->flag_bits;
+         }
       }
    }
 
-   return true;
+   b->sched->max_grf_bytes = MAX2(b->sched->max_grf_bytes, b->grf_bytes);
+   b->sched->max_flag_bits = MAX2(b->sched->max_flag_bits, b->flag_bits);
+
+   for (uint32_t w = 0; w < bitset_words; w++) {
+      BITSET_WORD word = chunks[w];
+      while (word) {
+         int i = u_bit_scan(&word);
+         ibc_sched_reg_chunk *chunk =
+            &g->reg_chunks[first_chunk + w * BITSET_WORDBITS + i];
+
+         assert(chunk->ref_count > 0);
+         chunk->ref_count--;
+
+         /* If this is our last reference, it just went dead */
+         if (chunk->ref_count == 0) {
+            assert(b->grf_bytes >= chunk->grf_bytes);
+            assert(b->flag_bits >= chunk->flag_bits);
+            b->grf_bytes -= chunk->grf_bytes;
+            b->flag_bits -= chunk->flag_bits;
+
+            /* Also reset num_refs so we don't have to have a separate pass
+             * over all of the chunks on every block just to reset reference
+             * counts.
+             */
+            chunk->num_refs = 0;
+         }
+      }
+   }
 }
 
 static bool
@@ -1413,43 +1487,7 @@ decref_reg_chunks(ibc_ref *ref,
    ibc_live_intervals_ref_chunks(g->live, ref, num_bytes, num_comps,
                                  simd_group, simd_width, chunks);
 
-   for (unsigned i = 0; i < num_chunks; i++) {
-      if (BITSET_TEST(chunks, i)) {
-         ibc_sched_reg_chunk *chunk = &g->reg_chunks[chunk_idx + i];
-         assert(chunk->ref_count > 0);
-
-         /* If this is our first dropped reference, it just went live. */
-         if (chunk->num_refs == chunk->ref_count) {
-            b->grf_bytes += chunk->grf_bytes;
-            b->flag_bits += chunk->flag_bits;
-         }
-      }
-   }
-
-   b->sched->max_grf_bytes = MAX2(b->sched->max_grf_bytes, b->grf_bytes);
-   b->sched->max_flag_bits = MAX2(b->sched->max_flag_bits, b->flag_bits);
-
-   for (unsigned i = 0; i < num_chunks; i++) {
-      if (BITSET_TEST(chunks, i)) {
-         ibc_sched_reg_chunk *chunk = &g->reg_chunks[chunk_idx + i];
-         assert(chunk->ref_count > 0);
-         chunk->ref_count--;
-
-         /* If this is our last reference, it just went dead */
-         if (chunk->ref_count == 0) {
-            assert(b->grf_bytes >= chunk->grf_bytes);
-            assert(b->flag_bits >= chunk->flag_bits);
-            b->grf_bytes -= chunk->grf_bytes;
-            b->flag_bits -= chunk->flag_bits;
-
-            /* Also reset num_refs so we don't have to have a separate pass
-             * over all of the chunks on every block just to reset reference
-             * counts.
-             */
-            chunk->num_refs = 0;
-         }
-      }
-   }
+   decref_chunks(b, chunk_idx, chunks, num_chunks);
 
    return true;
 }
