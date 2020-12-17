@@ -444,13 +444,46 @@ ibc_instr_can_reorder(const ibc_instr *instr)
    unreachable("Invalid IBC instruction type");
 }
 
+/** Returns true if the given instruction breaks a scheduling block
+ *
+ * Most control-flow instructions break a scheduling block and cannot be
+ * scheduled in any interesting way.  However, Predicated breaks, continues,
+ * and halts can be re-scheduled so long as we're careful.  In particular, if
+ * treat flow instructions as having side-effects so they can't be moved past
+ * other side-effect instructions (including other flow instructions) and we
+ * consider everything live-in from the jump target of the flow instruction to
+ * be "read" by the flow instruction.  In this way, we can treat them like any
+ * other instruction and schedule accordingly.
+ */
+static bool
+ibc_instr_breaks_sched_block(const ibc_instr *instr)
+{
+   if (instr->type != IBC_INSTR_TYPE_FLOW)
+      return false;
+
+   const ibc_flow_instr *flow = ibc_instr_as_flow(instr);
+   switch (flow->op) {
+   case IBC_FLOW_OP_BREAK:
+   case IBC_FLOW_OP_CONT:
+   case IBC_FLOW_OP_HALT_JUMP:
+      return flow->instr.predicate == IBC_PREDICATE_NONE;
+
+   default:
+      return true;
+   }
+}
+
 static bool
 ibc_instr_is_full_barrier(const ibc_instr *instr)
 {
-   /* Consider LOAD_PAYLOAD to be a full barrier so nothing gets scheduled
+   /* Consider LOAD_PAYLOAD to be an acquire barrier so nothing gets scheduled
     * before any of them and they remain at the top of the program.
+    *
+    * We also don't want anything moving above a control-flow instruction.
+    * It's theoretically valid in some cases but, unless it's really good for
+    * register pressure, is likely not what we want.
     */
-   return instr->type == IBC_INSTR_TYPE_FLOW ||
+   return ibc_instr_breaks_sched_block(instr) ||
           ibc_instr_is_load_payload(instr);
 }
 
@@ -834,6 +867,52 @@ foreach_dep_node(ibc_ref *ref,
 }
 
 static void
+foreach_livein_dep_node(const ibc_flow_instr *flow,
+                        void (*cb)(const ibc_ref *, uint16_t num_bytes,
+                                   ibc_sched_node *,
+                                   struct ibc_sched_graph_builder *),
+                        struct ibc_sched_graph_builder *b)
+{
+   /* Fixed GRFs must always be considered livein */
+   if (b->grf_last_write != NULL) {
+      for (unsigned i = 0; i < TOTAL_GRF_BYTES; i++) {
+         if (b->grf_last_write[i])
+            cb(NULL, 1, b->grf_last_write[i], b);
+      }
+   }
+
+   /* Same goes for fixed flags */
+   for (unsigned i = 0; i < TOTAL_FLAG_CHUNKS; i++) {
+      if (b->flag_last_write[i])
+         cb(NULL, 1, b->flag_last_write[i], b);
+   }
+
+   /* And fixed accumulators */
+   if (b->accum_last_write)
+      cb(NULL, 1, b->accum_last_write, b);
+
+   ibc_sched_graph *g = b->graph;
+   if (g->live == NULL)
+      return;
+
+   assert(flow->block_index < g->live->num_blocks);
+   const ibc_block_live_sets *bls = &g->live->blocks[flow->block_index];
+   const uint32_t bitset_words = BITSET_WORDS(g->live->num_chunks);
+
+   for (uint32_t w = 0; w < bitset_words; w++) {
+      BITSET_WORD word = bls->livein[w];
+      while (word) {
+         int i = u_bit_scan(&word);
+         uint32_t chunk = w * BITSET_WORDBITS + i;
+         if (b->chunk_last_write[chunk]) {
+            cb(NULL, g->reg_chunks[chunk].grf_bytes,
+               b->chunk_last_write[chunk], b);
+         }
+      }
+   }
+}
+
+static void
 add_raw_dep_cb(const ibc_ref *ref, uint16_t num_bytes,
                ibc_sched_node *dep_node,
                struct ibc_sched_graph_builder *b)
@@ -848,7 +927,7 @@ add_raw_dep_cb(const ibc_ref *ref, uint16_t num_bytes,
     * flag and so there's an extra four cycles of latency for the cmod
     * comparison.
     */
-   if (ref->type == IBC_TYPE_FLAG)
+   if (ref != NULL && ref->type == IBC_TYPE_FLAG)
       raw_latency += 4;
 
    ibc_sched_graph_add_dep(b->graph, b->iter_node, dep_node,
@@ -1113,6 +1192,12 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
       if (!ibc_instr_is_load_payload(instr))
          ibc_instr_foreach_read(instr, add_raw_ref_dep, &b);
 
+      if (instr->type == IBC_INSTR_TYPE_FLOW &&
+          !ibc_instr_breaks_sched_block(instr)) {
+         foreach_livein_dep_node(ibc_instr_as_flow(instr)->jump,
+                                 add_raw_dep_cb, &b);
+      }
+
       ibc_instr_foreach_write(instr, add_waw_ref_dep, &b);
 
       if (last_cant_reorder != NULL && !ibc_instr_can_reorder(instr)) {
@@ -1163,7 +1248,7 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
       list_addtail(&node->link, &next_barrier_deps);
 
       /* Flow instructions are considered to live in the previous block */
-      if (instr->type == IBC_INSTR_TYPE_FLOW)
+      if (ibc_instr_breaks_sched_block(instr))
          block_start = ibc_instr_as_flow(instr);
    }
 
@@ -1190,6 +1275,12 @@ ibc_sched_graph_create(const ibc_shader *shader, void *mem_ctx)
 
       ibc_instr_foreach_write((ibc_instr *)node->instr, record_ref_write, &b);
       ibc_instr_foreach_read((ibc_instr *)node->instr, add_war_ref_dep, &b);
+
+      if (node->instr->type == IBC_INSTR_TYPE_FLOW &&
+          !ibc_instr_breaks_sched_block(node->instr)) {
+         foreach_livein_dep_node(ibc_instr_as_flow(node->instr)->jump,
+                                 add_war_dep_cb, &b);
+      }
 
       /* Anything on which this node depends no longer needs to be a
        * dependency of the next barrier because it will transitively be a
@@ -1407,6 +1498,18 @@ add_reg_chunk_refs(ibc_ref *ref,
 }
 
 static void
+add_livein_chunk_refs(ibc_schedule_builder *b,
+                      const ibc_flow_instr *flow)
+{
+   ibc_sched_graph *g = b->graph;
+
+   assert(flow->block_index < g->live->num_blocks);
+   const ibc_block_live_sets *bls = &g->live->blocks[flow->block_index];
+
+   add_chunk_refs(b, 0, bls->livein, g->live->num_chunks);
+}
+
+static void
 decref_chunks(ibc_schedule_builder *b,
               unsigned first_chunk,
               const BITSET_WORD *chunks,
@@ -1493,6 +1596,18 @@ decref_reg_chunks(ibc_ref *ref,
 }
 
 static void
+decref_livein_chunks(ibc_schedule_builder *b,
+                     const ibc_flow_instr *flow)
+{
+   ibc_sched_graph *g = b->graph;
+
+   assert(flow->block_index < g->live->num_blocks);
+   const ibc_block_live_sets *bls = &g->live->blocks[flow->block_index];
+
+   decref_chunks(b, 0, bls->livein, g->live->num_chunks);
+}
+
+static void
 ibc_schedule_start_block(ibc_schedule_builder *b,
                          const ibc_flow_instr *block_start)
 {
@@ -1508,6 +1623,8 @@ ibc_schedule_start_block(ibc_schedule_builder *b,
    } else {
       assert(b->direction == IBC_SCHED_DIRECTION_BOTTOM_UP);
       const ibc_flow_instr *block_end = ibc_flow_instr_next(block_start);
+      while (!ibc_instr_breaks_sched_block(&block_end->instr))
+         block_end = ibc_flow_instr_next(block_end);
       b->next_idx = block_end->instr.index;
    }
 
@@ -1516,12 +1633,23 @@ ibc_schedule_start_block(ibc_schedule_builder *b,
       return;
 
    const ibc_instr *instr = &block_start->instr;
-   do {
+   while (true) {
       instr = ibc_instr_next(instr);
 
       ibc_instr_foreach_read((ibc_instr *)instr, add_reg_chunk_refs, b);
       ibc_instr_foreach_write((ibc_instr *)instr, add_reg_chunk_refs, b);
-   } while (instr->type != IBC_INSTR_TYPE_FLOW);
+
+      if (ibc_instr_breaks_sched_block(instr))
+         break;
+
+      /* Flow instructions which don't break a scheduling block consume the
+       * entire livein set of the jump target as if they read those registers.
+       *
+       * See also ibc_instr_breaks_sched_block()
+       */
+      if (instr->type == IBC_INSTR_TYPE_FLOW)
+         add_livein_chunk_refs(b, ibc_instr_as_flow(instr)->jump);
+   }
 
    assert(block_start->block_index < g->live->num_blocks);
    const ibc_block_live_sets *bls = &g->live->blocks[block_start->block_index];
@@ -1569,6 +1697,10 @@ ibc_schedule_add_node(ibc_schedule_builder *b,
       if (b->graph->live != NULL) {
          ibc_instr_foreach_read((ibc_instr *)instr, decref_reg_chunks, b);
          ibc_instr_foreach_write((ibc_instr *)instr, decref_reg_chunks, b);
+
+         if (instr->type == IBC_INSTR_TYPE_FLOW &&
+             !ibc_instr_breaks_sched_block(instr))
+            decref_livein_chunks(b, ibc_instr_as_flow(instr)->jump);
       }
 
       node->data.cycle = b->sched->cycles;
@@ -1579,7 +1711,7 @@ ibc_schedule_add_node(ibc_schedule_builder *b,
       }
       b->sched->cycles = node->data.cycle + node->latency.fe_time;
 
-      if (instr->type == IBC_INSTR_TYPE_FLOW &&
+      if (ibc_instr_breaks_sched_block(instr) &&
           ibc_instr_as_flow(instr)->op != IBC_FLOW_OP_END) {
          ASSERTED uint32_t next_idx = b->next_idx;
          ibc_schedule_start_block(b, ibc_instr_as_flow(instr));
@@ -1588,7 +1720,7 @@ ibc_schedule_add_node(ibc_schedule_builder *b,
    } else {
       assert(b->direction == IBC_SCHED_DIRECTION_BOTTOM_UP);
 
-      if (instr->type == IBC_INSTR_TYPE_FLOW &&
+      if (ibc_instr_breaks_sched_block(instr) &&
           ibc_instr_as_flow(instr)->op != IBC_FLOW_OP_START) {
          ASSERTED uint32_t next_idx = b->next_idx;
          ibc_flow_instr *block_start =
@@ -1609,6 +1741,10 @@ ibc_schedule_add_node(ibc_schedule_builder *b,
       if (b->graph->live != NULL) {
          ibc_instr_foreach_read((ibc_instr *)instr, decref_reg_chunks, b);
          ibc_instr_foreach_write((ibc_instr *)instr, decref_reg_chunks, b);
+
+         if (instr->type == IBC_INSTR_TYPE_FLOW &&
+             !ibc_instr_breaks_sched_block(instr))
+            decref_livein_chunks(b, ibc_instr_as_flow(instr)->jump);
       }
 
       b->sched->order[b->next_idx--] = instr->index;
