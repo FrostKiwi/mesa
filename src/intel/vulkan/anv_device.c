@@ -296,6 +296,55 @@ anv_physical_device_free_disk_cache(struct anv_physical_device *device)
 #endif
 }
 
+/* ANV_QUEUE_OVERRIDE is a comma separated list of queue overrides.
+ *
+ * To override the number queues:
+ *  * "rc" refers render queues with compute support
+ *  * "c" refers compute queues with no render support
+ *
+ * For example, ANV_QUEUE_OVERRIDE=rc=2,c=1 would override the number of
+ * advertised queues to be 2 queues with render and compute support, and 1
+ * queue with compute-only support.
+ *
+ * ANV_QUEUE_OVERRIDE=c=1 would override the number of advertised queues to
+ * include 1 queue with compute-only support, but it will not change the
+ * number of render+compute queues.
+ *
+ * ANV_QUEUE_OVERRIDE=rc=0,c=1 would override the number of advertised queues
+ * to include 1 queue with compute-only support, and it would override the
+ * number of render+compute queues to be 0.
+ *
+ */
+static void
+anv_override_engine_counts(int *render, int *compute)
+{
+   int rc_override = -1;
+   int c_override = -1;
+   char *env = getenv("ANV_QUEUE_OVERRIDE");
+
+   if (env == NULL)
+      return;
+
+   env = strdup(env);
+   char *save = NULL;
+   char *next = strtok_r(env, ",", &save);
+   while (next != NULL) {
+      if (strncmp(next, "rc=", 3) == 0) {
+         rc_override = strtol(next + 3, NULL, 0);
+      } else if (strncmp(next, "c=", 2) == 0) {
+         c_override = strtol(next + 2, NULL, 0);
+      } else {
+         mesa_logw("Ignoring unsupported ANV_QUEUE_OVERRIDE token: %s", next);
+      }
+      next = strtok_r(NULL, ",", &save);
+   }
+   free(env);
+   if (rc_override >= 0)
+      *render = rc_override;
+   if (c_override >= 0)
+      *compute = c_override;
+}
+
 static void
 anv_physical_device_init_queue_families(struct anv_physical_device *pdevice)
 {
@@ -305,6 +354,8 @@ anv_physical_device_init_queue_families(struct anv_physical_device *pdevice)
       int render_count = anv_gem_count_engines(pdevice->engine_info,
                                                I915_ENGINE_CLASS_RENDER);
       int compute_count = 0;
+      anv_override_engine_counts(&render_count, &compute_count);
+
       if (render_count > 0) {
          pdevice->queue.families[family_count++] = (struct anv_queue_family) {
             .queueFlags = VK_QUEUE_GRAPHICS_BIT |
