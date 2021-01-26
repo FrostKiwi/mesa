@@ -304,10 +304,19 @@ anv_physical_device_init_queue_families(struct anv_physical_device *pdevice)
    if (pdevice->engine_info) {
       int render_count = anv_gem_count_engines(pdevice->engine_info,
                                                I915_ENGINE_CLASS_RENDER);
+      int compute_count = 0;
       if (render_count > 0) {
          pdevice->queue.families[family_count++] = (struct anv_queue_family) {
             .queueFlags = VK_QUEUE_GRAPHICS_BIT |
                           VK_QUEUE_COMPUTE_BIT |
+                          VK_QUEUE_TRANSFER_BIT,
+            .queueCount = render_count,
+            .engine_class = I915_ENGINE_CLASS_RENDER,
+         };
+      }
+      if (compute_count > 0) {
+         pdevice->queue.families[family_count++] = (struct anv_queue_family) {
+            .queueFlags = VK_QUEUE_COMPUTE_BIT |
                           VK_QUEUE_TRANSFER_BIT,
             .queueCount = render_count,
             .engine_class = I915_ENGINE_CLASS_RENDER,
