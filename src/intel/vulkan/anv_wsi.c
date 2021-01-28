@@ -75,6 +75,15 @@ anv_wsi_signal_fence_for_memory(VkDevice _device,
    impl->bo.state = ANV_BO_FENCE_STATE_SUBMITTED;
 }
 
+static void
+anv_wsi_set_memory_ownership(VkDevice device,
+                             VkDeviceMemory memory,
+                             VkBool32 ownership)
+{
+   ANV_FROM_HANDLE(anv_device_memory, mem, memory);
+   mem->owned_by_wsi = !ownership;
+}
+
 VkResult
 anv_init_wsi(struct anv_physical_device *physical_device)
 {
@@ -95,6 +104,8 @@ anv_init_wsi(struct anv_physical_device *physical_device)
       anv_wsi_signal_semaphore_for_memory;
    physical_device->wsi_device.signal_fence_for_memory =
       anv_wsi_signal_fence_for_memory;
+   physical_device->wsi_device.set_memory_ownership =
+      anv_wsi_set_memory_ownership;
 
    return VK_SUCCESS;
 }

@@ -1480,6 +1480,9 @@ setup_execbuf_for_cmd_buffer(struct anv_execbuf *execbuf,
       /* Add the BOs for all memory objects */
       list_for_each_entry(struct anv_device_memory, mem,
                           &cmd_buffer->device->memory_objects, link) {
+         if (mem->owned_by_wsi)
+            continue;
+
          result = anv_execbuf_add_bo(cmd_buffer->device, execbuf,
                                      mem->bo, NULL, 0);
          if (result != VK_SUCCESS)

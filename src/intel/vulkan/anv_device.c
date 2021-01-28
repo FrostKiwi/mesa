@@ -3520,6 +3520,7 @@ VkResult anv_AllocateMemory(
    mem->type = mem_type;
    mem->map = NULL;
    mem->map_size = 0;
+   mem->owned_by_wsi = false;
    mem->ahw = NULL;
    mem->host_ptr = NULL;
 
