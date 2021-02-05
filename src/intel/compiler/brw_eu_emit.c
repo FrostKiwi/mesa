@@ -3036,10 +3036,8 @@ brw_svb_write(struct brw_codegen *p,
               bool   send_commit_msg)
 {
    const struct gen_device_info *devinfo = p->devinfo;
-   const unsigned target_cache =
-      (devinfo->gen >= 7 ? GEN7_SFID_DATAPORT_DATA_CACHE :
-       devinfo->gen >= 6 ? GEN6_SFID_DATAPORT_RENDER_CACHE :
-       BRW_SFID_DATAPORT_WRITE);
+   assert(devinfo->gen == 6);
+   const unsigned target_cache = GEN6_SFID_DATAPORT_RENDER_CACHE;
    brw_inst *insn;
 
    gen6_resolve_implied_move(p, &src0, msg_reg_nr);
