@@ -1645,10 +1645,9 @@ fs_generator::generate_uniform_pull_constant_load_gen7(fs_inst *inst,
       brw_set_desc(p, send,
                    brw_message_desc(devinfo, 1, DIV_ROUND_UP(inst->size_written,
                                                              REG_SIZE), true) |
-                   brw_dp_read_desc(devinfo, surf_index,
-                                    BRW_DATAPORT_OWORD_BLOCK_DWORDS(inst->exec_size),
-                                    GEN7_DATAPORT_DC_OWORD_BLOCK_READ,
-                                    BRW_DATAPORT_READ_TARGET_DATA_CACHE));
+                   brw_dp_desc(devinfo, surf_index,
+                               GEN7_DATAPORT_DC_OWORD_BLOCK_READ,
+                               BRW_DATAPORT_OWORD_BLOCK_DWORDS(inst->exec_size)));
 
    } else {
       const tgl_swsb swsb = brw_get_default_swsb(p);
@@ -1673,10 +1672,9 @@ fs_generator::generate_uniform_pull_constant_load_gen7(fs_inst *inst,
          retype(payload, BRW_REGISTER_TYPE_UD), addr,
          brw_message_desc(devinfo, 1,
                           DIV_ROUND_UP(inst->size_written, REG_SIZE), true) |
-         brw_dp_read_desc(devinfo, 0 /* surface */,
-                          BRW_DATAPORT_OWORD_BLOCK_DWORDS(inst->exec_size),
-                          GEN7_DATAPORT_DC_OWORD_BLOCK_READ,
-                          BRW_DATAPORT_READ_TARGET_DATA_CACHE),
+         brw_dp_desc(devinfo, 0 /* surface */,
+                     GEN7_DATAPORT_DC_OWORD_BLOCK_READ,
+                     BRW_DATAPORT_OWORD_BLOCK_DWORDS(inst->exec_size)),
          false /* EOT */);
 
       brw_pop_insn_state(p);
