@@ -208,7 +208,7 @@ crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
       }
    }
 
-   if (ice->state.dirty & (CROCUS_DIRTY_BINDINGS_FS | CROCUS_DIRTY_BLEND_STATE)) {
+   if (ice->state.dirty & (CROCUS_DIRTY_BINDINGS_FS | CROCUS_DIRTY_GEN6_BLEND_STATE)) {
       for (unsigned i = 0; i < cso_fb->nr_cbufs; i++) {
          struct crocus_surface *surf = (void *) cso_fb->cbufs[i];
          if (!surf)
@@ -294,7 +294,7 @@ crocus_postdraw_update_resolve_tracking(struct crocus_context *ice,
    }
 
    bool may_have_resolved_color =
-      ice->state.dirty & (CROCUS_DIRTY_BINDINGS_FS | CROCUS_DIRTY_BLEND_STATE);
+      ice->state.dirty & (CROCUS_DIRTY_BINDINGS_FS | CROCUS_DIRTY_GEN6_BLEND_STATE);
 
    for (unsigned i = 0; i < cso_fb->nr_cbufs; i++) {
       struct crocus_surface *surf = (void *) cso_fb->cbufs[i];

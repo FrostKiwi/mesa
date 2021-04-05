@@ -83,7 +83,7 @@ enum {
 #define CROCUS_DIRTY_CC_VIEWPORT              (1ull <<  4)
 #define CROCUS_DIRTY_SF_CL_VIEWPORT           (1ull <<  5)
 #define CROCUS_DIRTY_GEN4_CURBE               (1ull <<  6)
-#define CROCUS_DIRTY_BLEND_STATE              (1ull <<  7)
+#define CROCUS_DIRTY_GEN6_BLEND_STATE         (1ull <<  7)
 #define CROCUS_DIRTY_RASTER                   (1ull <<  8)
 #define CROCUS_DIRTY_CLIP                     (1ull <<  9)
 #define CROCUS_DIRTY_GEN7_SBE                 (1ull << 10)

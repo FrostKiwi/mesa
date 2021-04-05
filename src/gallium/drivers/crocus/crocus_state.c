@@ -1486,7 +1486,9 @@ crocus_bind_blend_state(struct pipe_context *ctx, void *state)
 
    ice->state.dirty |= CROCUS_DIRTY_BINDINGS_FS;
    ice->state.dirty |= CROCUS_DIRTY_WM;
-   ice->state.dirty |= CROCUS_DIRTY_BLEND_STATE;
+#if GEN_GEN >= 6
+   ice->state.dirty |= CROCUS_DIRTY_GEN6_BLEND_STATE;
+#endif
    ice->state.dirty |= CROCUS_DIRTY_COLOR_CALC_STATE;
    ice->state.dirty |= CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES;
    ice->state.dirty |= ice->state.dirty_for_nos[CROCUS_NOS_BLEND];
@@ -1570,12 +1572,13 @@ crocus_bind_zsa_state(struct pipe_context *ctx, void *state)
       if (cso_changed(cso.alpha_ref_value))
          ice->state.dirty |= CROCUS_DIRTY_COLOR_CALC_STATE;
 
+#if GEN_GEN >= 6
       if (cso_changed(cso.alpha_enabled))
-         ice->state.dirty |= CROCUS_DIRTY_BLEND_STATE;
+         ice->state.dirty |= CROCUS_DIRTY_GEN6_BLEND_STATE;
 
       if (cso_changed(cso.alpha_func))
-         ice->state.dirty |= CROCUS_DIRTY_BLEND_STATE;
-
+         ice->state.dirty |= CROCUS_DIRTY_GEN6_BLEND_STATE;
+#endif
       if (cso_changed(depth_writes_enabled))
          ice->state.dirty |= CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES;
 
@@ -3013,9 +3016,11 @@ crocus_set_framebuffer_state(struct pipe_context *ctx,
       ice->state.dirty |= CROCUS_DIRTY_GEN6_MULTISAMPLE;
    }
 
+#if GEN_GEN >= 6
    if (cso->nr_cbufs != state->nr_cbufs) {
-      ice->state.dirty |= CROCUS_DIRTY_BLEND_STATE;
+      ice->state.dirty |= CROCUS_DIRTY_GEN6_BLEND_STATE;
    }
+#endif
 
    if ((cso->layers == 0) != (layers == 0)) {
       ice->state.dirty |= CROCUS_DIRTY_CLIP;
@@ -4973,8 +4978,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
                            ice->shaders.prog[MESA_SHADER_GEOMETRY] != NULL);
    }
 
-   if (dirty & CROCUS_DIRTY_BLEND_STATE) {
 #if GEN_GEN >= 6
+   if (dirty & CROCUS_DIRTY_GEN6_BLEND_STATE) {
       struct crocus_blend_state *cso_blend = ice->state.cso_blend;
       struct pipe_framebuffer_state *cso_fb = &ice->state.framebuffer;
       struct crocus_depth_stencil_alpha_state *cso_zsa = ice->state.cso_zsa;
@@ -5056,8 +5061,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          ptr.BlendStatePointer = blend_offset;
       }
 #endif
-#endif
    }
+#endif
 
    if (dirty & CROCUS_DIRTY_COLOR_CALC_STATE) {
       struct crocus_depth_stencil_alpha_state *cso = ice->state.cso_zsa;
@@ -7373,9 +7378,9 @@ crocus_batch_reset_dirty(struct crocus_batch *batch)
    batch->ice->state.dirty |= CROCUS_DIRTY_VS;
    batch->ice->state.dirty |= CROCUS_DIRTY_GS;
    batch->ice->state.dirty |= CROCUS_DIRTY_CC_VIEWPORT | CROCUS_DIRTY_SF_CL_VIEWPORT;
-   batch->ice->state.dirty |= CROCUS_DIRTY_BLEND_STATE;
 #if GEN_GEN >= 6
    /* SCISSOR_STATE */
+   batch->ice->state.dirty |= CROCUS_DIRTY_GEN6_BLEND_STATE;
    batch->ice->state.dirty |= CROCUS_DIRTY_GEN6_SCISSOR_RECT;
 #endif
 #if GEN_GEN <= 5
