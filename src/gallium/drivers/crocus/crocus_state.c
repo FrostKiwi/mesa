@@ -5221,8 +5221,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #endif
    }
 
-   if (dirty & CROCUS_DIRTY_GEN6_MULTISAMPLE) {
 #if GEN_GEN >= 6
+   if (dirty & CROCUS_DIRTY_GEN6_MULTISAMPLE) {
       crocus_emit_cmd(batch, GENX(3DSTATE_MULTISAMPLE), ms) {
          ms.PixelLocation =
             ice->state.cso_rast->cso.half_pixel_center ? CENTER : UL_CORNER;
@@ -5249,10 +5249,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 	 }
 #endif
       }
-#endif
    }
 
-#if GEN_GEN >= 6
    if (dirty & CROCUS_DIRTY_GEN6_SAMPLE_MASK) {
       crocus_emit_cmd(batch, GENX(3DSTATE_SAMPLE_MASK), ms) {
          ms.SampleMask = ice->state.sample_mask & (GEN_GEN == 6 ? 0xf : 0xff);
