@@ -2937,11 +2937,13 @@ crocus_set_scissor_states(struct pipe_context *ctx,
       }
    }
 
-   ice->state.dirty |= CROCUS_DIRTY_SCISSOR_RECT;
-   ice->state.dirty |= CROCUS_DIRTY_SF_CL_VIEWPORT;
 #if GEN_GEN < 6
    ice->state.dirty |= CROCUS_DIRTY_RASTER; /* SF state */
+#else
+   ice->state.dirty |= CROCUS_DIRTY_GEN6_SCISSOR_RECT;
 #endif
+   ice->state.dirty |= CROCUS_DIRTY_SF_CL_VIEWPORT;
+
 }
 
 /**
@@ -6001,8 +6003,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #endif
    }
 
-   if (dirty & CROCUS_DIRTY_SCISSOR_RECT) {
 #if GEN_GEN >= 6
+   if (dirty & CROCUS_DIRTY_GEN6_SCISSOR_RECT) {
       /* Align to 64-byte boundary as per anv. */
       uint32_t scissor_offset =
          emit_state(batch,
@@ -6013,8 +6015,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
       crocus_emit_cmd(batch, GENX(3DSTATE_SCISSOR_STATE_POINTERS), ptr) {
          ptr.ScissorRectPointer = scissor_offset;
       }
-#endif
    }
+#endif
 
    if (dirty & CROCUS_DIRTY_DEPTH_BUFFER) {
       struct isl_device *isl_dev = &batch->screen->isl_dev;
@@ -7381,6 +7383,7 @@ crocus_batch_reset_dirty(struct crocus_batch *batch)
    batch->ice->state.dirty |= CROCUS_DIRTY_BLEND_STATE;
 #if GEN_GEN >= 6
    /* SCISSOR_STATE */
+   batch->ice->state.dirty |= CROCUS_DIRTY_GEN6_SCISSOR_RECT;
 #endif
 #if GEN_GEN <= 5
    /* dirty the SF state on gen4/5 */

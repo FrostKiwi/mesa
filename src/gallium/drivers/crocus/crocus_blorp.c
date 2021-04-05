@@ -329,7 +329,7 @@ crocus_blorp_exec(struct blorp_batch *blorp_batch,
                          CROCUS_DIRTY_SO_DECL_LIST |
                          CROCUS_DIRTY_LINE_STIPPLE |
                          CROCUS_ALL_DIRTY_FOR_COMPUTE |
-                         CROCUS_DIRTY_SCISSOR_RECT |
+                         CROCUS_DIRTY_GEN6_SCISSOR_RECT |
                          CROCUS_DIRTY_UNCOMPILED_VS |
                          CROCUS_DIRTY_UNCOMPILED_TCS |
                          CROCUS_DIRTY_UNCOMPILED_TES |

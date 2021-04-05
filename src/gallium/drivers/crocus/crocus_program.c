@@ -1750,7 +1750,7 @@ update_last_vue_map(struct crocus_context *ice,
       ice->state.dirty |= CROCUS_DIRTY_CLIP |
                           CROCUS_DIRTY_SF_CL_VIEWPORT |
                           CROCUS_DIRTY_CC_VIEWPORT |
-                          CROCUS_DIRTY_SCISSOR_RECT |
+                          CROCUS_DIRTY_GEN6_SCISSOR_RECT |
                           CROCUS_DIRTY_UNCOMPILED_FS |
                           ice->state.dirty_for_nos[CROCUS_NOS_LAST_VUE_MAP];
    }
