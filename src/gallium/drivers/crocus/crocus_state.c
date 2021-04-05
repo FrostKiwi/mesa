@@ -1589,7 +1589,9 @@ crocus_bind_zsa_state(struct pipe_context *ctx, void *state)
 
    ice->state.cso_zsa = new_cso;
    ice->state.dirty |= CROCUS_DIRTY_CC_VIEWPORT;
-   ice->state.dirty |= CROCUS_DIRTY_WM_DEPTH_STENCIL;
+#if GEN_GEN >= 6
+   ice->state.dirty |= CROCUS_DIRTY_GEN6_WM_DEPTH_STENCIL;
+#endif
    ice->state.dirty |= ice->state.dirty_for_nos[CROCUS_NOS_DEPTH_STENCIL_ALPHA];
 }
 
@@ -5978,8 +5980,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    }
 #endif
 
-   if (dirty & CROCUS_DIRTY_WM_DEPTH_STENCIL) {
 #if GEN_GEN >= 6
+   if (dirty & CROCUS_DIRTY_GEN6_WM_DEPTH_STENCIL) {
       uint32_t ds_offset;
       void *ds_map = stream_state(batch,
                                   sizeof(uint32_t) * GENX(DEPTH_STENCIL_STATE_length),
@@ -5998,10 +6000,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          ptr.PointertoDEPTH_STENCIL_STATE = ds_offset;
       }
 #endif
-#endif
    }
 
-#if GEN_GEN >= 6
    if (dirty & CROCUS_DIRTY_GEN6_SCISSOR_RECT) {
       /* Align to 64-byte boundary as per anv. */
       uint32_t scissor_offset =
@@ -6079,11 +6079,6 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #endif
       }
       isl_emit_depth_stencil_hiz_s(isl_dev, batch_ptr, &info);
-   }
-   if (dirty & (CROCUS_DIRTY_DEPTH_BUFFER | CROCUS_DIRTY_WM_DEPTH_STENCIL)) {
-      /* Listen for buffer changes, and also write enable changes. */
-//      struct pipe_framebuffer_state *cso_fb = &ice->state.framebuffer;
-      // TODO: emit things?
    }
 
    /* TODO: Disable emitting this until something uses a stipple. */

@@ -261,7 +261,7 @@ crocus_postdraw_update_resolve_tracking(struct crocus_context *ice,
 
    bool may_have_resolved_depth =
       ice->state.dirty & (CROCUS_DIRTY_DEPTH_BUFFER |
-                          CROCUS_DIRTY_WM_DEPTH_STENCIL);
+                          CROCUS_DIRTY_GEN6_WM_DEPTH_STENCIL);
 
    struct pipe_surface *zs_surf = cso_fb->zsbuf;
    if (zs_surf) {

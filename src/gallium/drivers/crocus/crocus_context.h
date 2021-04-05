@@ -79,7 +79,7 @@ enum {
 #define CROCUS_DIRTY_COLOR_CALC_STATE         (1ull <<  0)
 #define CROCUS_DIRTY_POLYGON_STIPPLE          (1ull <<  1)
 #define CROCUS_DIRTY_GEN6_SCISSOR_RECT        (1ull <<  2)
-#define CROCUS_DIRTY_WM_DEPTH_STENCIL         (1ull <<  3)
+#define CROCUS_DIRTY_GEN6_WM_DEPTH_STENCIL    (1ull <<  3)
 #define CROCUS_DIRTY_CC_VIEWPORT              (1ull <<  4)
 #define CROCUS_DIRTY_SF_CL_VIEWPORT           (1ull <<  5)
 #define CROCUS_DIRTY_GEN4_CURBE               (1ull <<  6)
