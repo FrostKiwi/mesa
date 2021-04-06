@@ -2124,12 +2124,10 @@ crocus_upload_sampler_states(struct crocus_context *ice,
     * 3DSTATE_SAMPLER_STATE_POINTERS_* commands.
     */
    unsigned size = count * 4 * GENX(SAMPLER_STATE_length);
-   uint32_t *map = stream_state(batch, size, 32, &ice->state.shaders[stage].sampler_offset);
+   uint32_t *map = stream_state(batch, size, 32, &shs->sampler_offset);
 
    if (unlikely(!map))
       return;
-
-   crocus_record_state_size(batch->state_sizes, shs->sampler_table.offset, size);
 
    ice->state.need_border_colors &= ~(1 << stage);
 
@@ -5069,7 +5067,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 
       crocus_emit_cmd(batch, GENX(3DSTATE_SAMPLER_STATE_POINTERS_VS), ptr) {
          ptr._3DCommandSubOpcode = 43 + stage;
-         ptr.PointertoVSSamplerState = shs->sampler_table.offset;
+         ptr.PointertoVSSamplerState = shs->sampler_offset;
       }
 #endif
    }
@@ -6449,7 +6447,7 @@ crocus_upload_compute_state(struct crocus_context *ice,
       const uint64_t ksp = KSP(ice,shader) + brw_cs_prog_data_prog_offset(cs_prog_data, simd_size);
       crocus_pack_state(GENX(INTERFACE_DESCRIPTOR_DATA), desc, idd) {
          idd.KernelStartPointer = ksp;
-         idd.SamplerStatePointer = shs->sampler_table.offset;
+         idd.SamplerStatePointer = shs->sampler_offset;
          idd.BindingTablePointer = ice->shaders.prog[MESA_SHADER_COMPUTE]->bind_bo_offset;
          idd.NumberofThreadsinGPGPUThreadGroup = threads;
          idd.ConstantURBEntryReadLength = cs_prog_data->push.per_thread.regs;
@@ -6585,7 +6583,6 @@ crocus_destroy_state(struct crocus_context *ice)
 
    for (int stage = 0; stage < MESA_SHADER_STAGES; stage++) {
       struct crocus_shader_state *shs = &ice->state.shaders[stage];
-      pipe_resource_reference(&shs->sampler_table.res, NULL);
       for (int i = 0; i < PIPE_MAX_CONSTANT_BUFFERS; i++) {
          pipe_resource_reference(&shs->constbufs[i].buffer, NULL);
          pipe_resource_reference(&shs->constbuf_surf_state[i].res, NULL);

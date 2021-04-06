@@ -401,7 +401,6 @@ struct crocus_shader_state {
    /** Shader Storage Images (image load store) */
    struct crocus_image_view image[PIPE_MAX_SHADER_IMAGES];
 
-   struct crocus_state_ref sampler_table;
    struct crocus_sampler_state *samplers[CROCUS_MAX_TEXTURE_SAMPLERS];
    struct crocus_sampler_view *textures[CROCUS_MAX_TEXTURE_SAMPLERS];
 
