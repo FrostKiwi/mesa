@@ -110,10 +110,10 @@ crocus_populate_sampler_prog_key_data(struct crocus_context *ice,
       key->swizzles[s] = SWIZZLE_NOOP;
       key->scale_factors[s] = 0.0f;
 
-      if (texture->base.target != PIPE_BUFFER) {
-         if (!devinfo->is_haswell) {
-            key->swizzles[s] = crocus_get_texture_swizzle(ice, texture);
-         }
+      if (texture->base.target == PIPE_BUFFER)
+         continue;
+      if (!devinfo->is_haswell) {
+         key->swizzles[s] = crocus_get_texture_swizzle(ice, texture);
       }
 
       ice->vtbl.fill_clamp_mask(ice->state.shaders[stage].samplers[s], s, key->gl_clamp_mask);
@@ -122,7 +122,7 @@ crocus_populate_sampler_prog_key_data(struct crocus_context *ice,
       if (devinfo->gen == 7 && uses_texture_gather) {
          switch (texture->base.format) {
          case PIPE_FORMAT_R32G32_UINT:
-         case PIPE_FORMAT_R32G32_SINT:
+         case PIPE_FORMAT_R32G32_SINT: {
             /* We have to override the format to R32G32_FLOAT_LD.
              * This means that SCS_ALPHA and SCS_ONE will return 0x3f8
              * (1.0) rather than integer 1.  This needs shader hacks.
@@ -132,7 +132,15 @@ crocus_populate_sampler_prog_key_data(struct crocus_context *ice,
              * swizzle, and use XYZW with channels overridden to ONE,
              * leaving normal texture swizzling to SCS.
              */
-            //TODO;
+            unsigned src_swizzle = key->swizzles[s];
+            for (int i = 0; i < 4; i++) {
+               unsigned src_comp = GET_SWZ(src_swizzle, i);
+               if (src_comp == SWIZZLE_ONE || src_comp == SWIZZLE_W) {
+                  key->swizzles[i] &= ~(0x7 << (3 * i));
+                  key->swizzles[i] |= SWIZZLE_ONE << (3 * i);
+               }
+            }
+         }
             /* fallthrough */
          case PIPE_FORMAT_R32G32_FLOAT:
             /* The channel select for green doesn't work - we have to
