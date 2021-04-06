@@ -330,7 +330,6 @@ crocus_blorp_exec(struct blorp_batch *blorp_batch,
                          CROCUS_ALL_DIRTY_FOR_COMPUTE |
                          CROCUS_DIRTY_GEN6_SCISSOR_RECT |
                          CROCUS_DIRTY_GEN75_VF |
-                         CROCUS_DIRTY_GEN6_URB |
                          CROCUS_DIRTY_SF_CL_VIEWPORT);
 
    uint64_t skip_stage_bits = (CROCUS_ALL_STAGE_DIRTY_FOR_COMPUTE |
@@ -372,6 +371,13 @@ crocus_blorp_exec(struct blorp_batch *blorp_batch,
 
    ice->state.dirty |= ~skip_bits;
    ice->state.stage_dirty |= ~skip_stage_bits;
+
+   ice->urb.vsize = 0;
+   ice->urb.gs_present = false;
+   ice->urb.gsize = 0;
+   ice->urb.tess_present = false;
+   ice->urb.hsize = 0;
+   ice->urb.dsize = 0;
 
    if (params->dst.enabled) {
       crocus_render_cache_add_bo(batch, params->dst.addr.buffer,
