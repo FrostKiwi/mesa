@@ -1758,7 +1758,11 @@ update_last_vue_map(struct crocus_context *ice,
                           CROCUS_DIRTY_CC_VIEWPORT;
       if (devinfo->gen < 6)
          ice->state.dirty |= CROCUS_DIRTY_GEN4_CLIP_PROG | CROCUS_DIRTY_GEN4_SF_PROG;
-      else
+
+      if (devinfo->gen <= 6)
+         ice->state.dirty |= CROCUS_DIRTY_GEN4_FF_GS_PROG;
+
+      if (devinfo->gen >= 6)
          ice->state.dirty |= CROCUS_DIRTY_CLIP |
                              CROCUS_DIRTY_GEN6_SCISSOR_RECT;;
       ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_UNCOMPILED_FS |
@@ -2228,8 +2232,10 @@ crocus_update_compiled_shaders(struct crocus_context *ice)
    if (stage_dirty & CROCUS_STAGE_DIRTY_UNCOMPILED_FS)
       crocus_update_compiled_fs(ice);
 
-   if (screen->devinfo.gen <= 6)
-      crocus_update_compiled_ff_gs(ice);
+   if (screen->devinfo.gen <= 6) {
+      if (ice->state.dirty & CROCUS_DIRTY_GEN4_FF_GS_PROG)
+         crocus_update_compiled_ff_gs(ice);
+   }
 
    if (screen->devinfo.gen < 6) {
       if (ice->state.dirty & CROCUS_DIRTY_GEN4_CLIP_PROG)

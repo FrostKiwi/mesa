@@ -1783,6 +1783,9 @@ crocus_bind_rasterizer_state(struct pipe_context *ctx, void *state)
    ice->state.dirty |= CROCUS_DIRTY_GEN4_CLIP_PROG | CROCUS_DIRTY_GEN4_SF_PROG;
    ice->state.dirty |= CROCUS_DIRTY_WM;
 #endif
+#if GEN_GEN <= 6
+   ice->state.dirty |= CROCUS_DIRTY_GEN4_FF_GS_PROG;
+#endif
    ice->state.stage_dirty |= ice->state.stage_dirty_for_nos[CROCUS_NOS_RASTERIZER];
 }
 

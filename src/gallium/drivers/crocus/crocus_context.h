@@ -110,6 +110,7 @@ enum {
 #define CROCUS_DIRTY_VF_STATISTICS            (1ull << 31)
 #define CROCUS_DIRTY_GEN4_CLIP_PROG           (1ull << 32)
 #define CROCUS_DIRTY_GEN4_SF_PROG             (1ull << 33)
+#define CROCUS_DIRTY_GEN4_FF_GS_PROG          (1ull << 34)
 
 #define CROCUS_ALL_DIRTY_FOR_COMPUTE (CROCUS_DIRTY_COMPUTE_RESOLVES_AND_FLUSHES)
 
