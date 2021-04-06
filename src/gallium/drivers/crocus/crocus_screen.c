@@ -597,28 +597,6 @@ crocus_get_disk_shader_cache(struct pipe_screen *pscreen)
    return screen->disk_cache;
 }
 
-static int
-crocus_getparam(struct crocus_screen *screen, int param, int *value)
-{
-   struct drm_i915_getparam gp = { .param = param, .value = value };
-
-   if (ioctl(screen->fd, DRM_IOCTL_I915_GETPARAM, &gp) == -1)
-      return -errno;
-
-   return 0;
-}
-
-static int
-crocus_getparam_integer(struct crocus_screen *screen, int param)
-{
-   int value = -1;
-
-   if (crocus_getparam(screen, param, &value) == 0)
-      return value;
-
-   return -1;
-}
-
 static const struct intel_l3_config *
 crocus_get_default_l3_config(const struct gen_device_info *devinfo,
                              bool compute)
@@ -770,8 +748,7 @@ crocus_screen_create(int fd, const struct pipe_screen_config *config)
    slab_create_parent(&screen->transfer_pool,
                       sizeof(struct crocus_transfer), 64);
 
-   screen->subslice_total =
-      crocus_getparam_integer(screen, I915_PARAM_SUBSLICE_TOTAL);
+   screen->subslice_total = gen_device_info_subslice_total(&screen->devinfo);
    assert(screen->subslice_total >= 1);
 
    struct pipe_screen *pscreen = &screen->base;
