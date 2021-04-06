@@ -2137,177 +2137,6 @@ fmt_swizzle(const struct crocus_format_info *fmt, enum pipe_swizzle swz)
 }
 #endif
 
-static void
-fill_buffer_surface_state(struct isl_device *isl_dev,
-                          struct crocus_resource *res,
-                          void *map,
-                          enum isl_format format,
-                          struct isl_swizzle swizzle,
-                          unsigned offset,
-                          unsigned size)
-{
-   const struct isl_format_layout *fmtl = isl_format_get_layout(format);
-   const unsigned cpp = format == ISL_FORMAT_RAW ? 1 : fmtl->bpb / 8;
-
-   /* The ARB_texture_buffer_specification says:
-    *
-    *    "The number of texels in the buffer texture's texel array is given by
-    *
-    *       floor(<buffer_size> / (<components> * sizeof(<base_type>)),
-    *
-    *     where <buffer_size> is the size of the buffer object, in basic
-    *     machine units and <components> and <base_type> are the element count
-    *     and base data type for elements, as specified in Table X.1.  The
-    *     number of texels in the texel array is then clamped to the
-    *     implementation-dependent limit MAX_TEXTURE_BUFFER_SIZE_ARB."
-    *
-    * We need to clamp the size in bytes to MAX_TEXTURE_BUFFER_SIZE * stride,
-    * so that when ISL divides by stride to obtain the number of texels, that
-    * texel count is clamped to MAX_TEXTURE_BUFFER_SIZE.
-    */
-   unsigned final_size =
-      MIN3(size, res->bo->size - res->offset - offset,
-           CROCUS_MAX_TEXTURE_BUFFER_SIZE * cpp);
-
-   isl_buffer_fill_state(isl_dev, map,
-                         .address = res->bo->gtt_offset + res->offset + offset,
-                         .size_B = final_size,
-                         .format = format,
-                         .swizzle = swizzle,
-                         .stride_B = cpp,
-                         .mocs = mocs(res->bo, isl_dev));
-}
-
-#define SURFACE_STATE_ALIGNMENT 64
-
-/**
- * Allocate several contiguous SURFACE_STATE structures, one for each
- * supported auxiliary surface mode.  This only allocates the CPU-side
- * copy, they will need to be uploaded later after they're filled in.
- */
-static void
-alloc_surface_states(struct crocus_surface_state *surf_state,
-                     unsigned aux_usages)
-{
-   const unsigned surf_size = 4 * GENX(RENDER_SURFACE_STATE_length);
-
-   /* If this changes, update this to explicitly align pointers */
-   // TODO STATIC_ASSERT(surf_size == SURFACE_STATE_ALIGNMENT);
-
-   assert(aux_usages != 0);
-
-   /* In case we're re-allocating them... */
-   free(surf_state->cpu);
-
-   surf_state->num_states = util_bitcount(aux_usages);
-   surf_state->cpu = calloc(surf_state->num_states, surf_size);
-   surf_state->ref.offset = 0;
-   pipe_resource_reference(&surf_state->ref.res, NULL);
-
-   assert(surf_state->cpu);
-}
-
-#if GEN_GEN == 7
-// TODO: check if this is needed for gen7, originally gen8
-/**
- * Return an ISL surface for use with non-coherent render target reads.
- *
- * In a few complex cases, we can't use the SURFACE_STATE for normal render
- * target writes.  We need to make a separate one for sampling which refers
- * to the single slice of the texture being read.
- */
-static void
-get_rt_read_isl_surf(const struct gen_device_info *devinfo,
-                     struct crocus_resource *res,
-                     enum pipe_texture_target target,
-                     struct isl_view *view,
-                     uint32_t *offset_to_tile,
-                     uint32_t *tile_x_sa,
-                     uint32_t *tile_y_sa,
-                     struct isl_surf *surf)
-{
-   *surf = res->surf;
-
-   const enum isl_dim_layout dim_layout =
-      crocus_get_isl_dim_layout(devinfo, res->surf.tiling, target);
-
-   surf->dim = target_to_isl_surf_dim(target);
-
-   if (surf->dim_layout == dim_layout)
-      return;
-
-   /* The layout of the specified texture target is not compatible with the
-    * actual layout of the miptree structure in memory -- You're entering
-    * dangerous territory, this can only possibly work if you only intended
-    * to access a single level and slice of the texture, and the hardware
-    * supports the tile offset feature in order to allow non-tile-aligned
-    * base offsets, since we'll have to point the hardware to the first
-    * texel of the level instead of relying on the usual base level/layer
-    * controls.
-    */
-   assert(view->levels == 1 && view->array_len == 1);
-   assert(*tile_x_sa == 0 && *tile_y_sa == 0);
-
-   *offset_to_tile = crocus_resource_get_tile_offsets(res, view->base_level,
-                                                    view->base_array_layer,
-                                                    tile_x_sa, tile_y_sa);
-   const unsigned l = view->base_level;
-
-   surf->logical_level0_px.width = minify(surf->logical_level0_px.width, l);
-   surf->logical_level0_px.height = surf->dim <= ISL_SURF_DIM_1D ? 1 :
-      minify(surf->logical_level0_px.height, l);
-   surf->logical_level0_px.depth = surf->dim <= ISL_SURF_DIM_2D ? 1 :
-      minify(surf->logical_level0_px.depth, l);
-
-   surf->logical_level0_px.array_len = 1;
-   surf->levels = 1;
-   surf->dim_layout = dim_layout;
-
-   view->base_level = 0;
-   view->base_array_layer = 0;
-}
-#endif
-
-static void
-fill_surface_state(struct isl_device *isl_dev,
-                   void *map,
-                   struct crocus_resource *res,
-                   struct isl_surf *surf,
-                   struct isl_view *view,
-                   unsigned aux_usage,
-                   uint32_t extra_main_offset,
-                   uint32_t tile_x_sa,
-                   uint32_t tile_y_sa)
-{
-   struct isl_surf_fill_state_info f = {
-      .surf = surf,
-      .view = view,
-      .mocs = mocs(res->bo, isl_dev),
-      .address = res->bo->gtt_offset + res->offset + extra_main_offset,
-      .x_offset_sa = tile_x_sa,
-      .y_offset_sa = tile_y_sa,
-   };
-
-   assert(!crocus_resource_unfinished_aux_import(res));
-
-   if (aux_usage != ISL_AUX_USAGE_NONE) {
-      f.aux_surf = &res->aux.surf;
-      f.aux_usage = aux_usage;
-      f.aux_address = res->aux.bo->gtt_offset + res->aux.offset;
-
-      struct crocus_bo *clear_bo = NULL;
-      uint64_t clear_offset = 0;
-      f.clear_color =
-         crocus_resource_get_clear_color(res, &clear_bo, &clear_offset);
-      if (clear_bo) {
-         f.clear_address = clear_bo->gtt_offset + clear_offset;
-         f.use_clear_address = isl_dev->info->gen > 9;
-      }
-   }
-
-   isl_surf_fill_state_s(isl_dev, map, &f);
-}
-
 /**
  * The pipe->create_sampler_view() driver hook.
  */
@@ -2342,10 +2171,6 @@ crocus_create_sampler_view(struct pipe_context *ctx,
 
    isv->res = (struct crocus_resource *) tex;
 
-   alloc_surface_states(&isv->surface_state, isv->res->aux.sampler_usages);
-
-   //   isv->surface_state.bo_address = isv->res->bo->gtt_offset;
-
    isl_surf_usage_flags_t usage = ISL_SURF_USAGE_TEXTURE_BIT;
 
    if (isv->base.target == PIPE_TEXTURE_CUBE ||
@@ -2373,8 +2198,6 @@ crocus_create_sampler_view(struct pipe_context *ctx,
       .usage = usage,
    };
 
-   void *map = isv->surface_state.cpu;
-
    /* Fill out SURFACE_STATE for this view. */
    if (tmpl->target != PIPE_BUFFER) {
       isv->view.base_level = tmpl->u.tex.first_level;
@@ -2387,22 +2210,6 @@ crocus_create_sampler_view(struct pipe_context *ctx,
       if (crocus_resource_unfinished_aux_import(isv->res))
          crocus_resource_finish_aux_import(&screen->base, isv->res);
 
-      unsigned aux_modes = isv->res->aux.sampler_usages;
-      while (aux_modes) {
-         enum isl_aux_usage aux_usage = u_bit_scan(&aux_modes);
-
-         /* If we have a multisampled depth buffer, do not create a sampler
-          * surface state with HiZ.
-          */
-         fill_surface_state(&screen->isl_dev, map, isv->res, &isv->res->surf,
-                            &isv->view, aux_usage, 0, 0, 0);
-
-         map += SURFACE_STATE_ALIGNMENT;
-      }
-   } else {
-      fill_buffer_surface_state(&screen->isl_dev, isv->res, map,
-                                isv->view.format, isv->view.swizzle,
-                                tmpl->u.buf.offset, tmpl->u.buf.size);
    }
 
    return &isv->base;
@@ -2414,8 +2221,6 @@ crocus_sampler_view_destroy(struct pipe_context *ctx,
 {
    struct crocus_sampler_view *isv = (void *) state;
    pipe_resource_reference(&state->texture, NULL);
-   pipe_resource_reference(&isv->surface_state.ref.res, NULL);
-   free(isv->surface_state.cpu);
    free(isv);
 }
 
@@ -2485,12 +2290,6 @@ crocus_create_surface(struct pipe_context *ctx,
    };
 
 #if GEN_GEN == 7
-   // TODO: check if this is needed
-   enum pipe_texture_target target = (tex->target == PIPE_TEXTURE_3D &&
-                                      array_len == 1) ? PIPE_TEXTURE_2D :
-                                     tex->target == PIPE_TEXTURE_1D_ARRAY ?
-                                     PIPE_TEXTURE_2D_ARRAY : tex->target;
-
    struct isl_view *read_view = &surf->read_view;
    *read_view = (struct isl_view) {
       .format = fmt.fmt,
@@ -2510,44 +2309,9 @@ crocus_create_surface(struct pipe_context *ctx,
                           ISL_SURF_USAGE_STENCIL_BIT))
       return psurf;
 
-
-   alloc_surface_states(&surf->surface_state, res->aux.possible_usages);
-   surf->surface_state.bo_address = res->bo->gtt_offset;
-
-#if GEN_GEN == 7
-   // TODO: check if this is needed
-   alloc_surface_states(&surf->surface_state_read, res->aux.possible_usages);
-   surf->surface_state_read.bo_address = res->bo->gtt_offset;
-#endif
-
    if (!isl_format_is_compressed(res->surf.format)) {
       if (crocus_resource_unfinished_aux_import(res))
          crocus_resource_finish_aux_import(&screen->base, res);
-
-      void *map = surf->surface_state.cpu;
-      UNUSED void *map_read = surf->surface_state_read.cpu;
-
-      /* This is a normal surface.  Fill out a SURFACE_STATE for each possible
-       * auxiliary surface mode and return the pipe_surface.
-       */
-      unsigned aux_modes = res->aux.possible_usages;
-      while (aux_modes) {
-         enum isl_aux_usage aux_usage = u_bit_scan(&aux_modes);
-         fill_surface_state(&screen->isl_dev, map, res, &res->surf,
-                            view, aux_usage, 0, 0, 0);
-         map += SURFACE_STATE_ALIGNMENT;
-
-#if GEN_GEN == 7
-         // TODO: check if this is needed
-         struct isl_surf surf;
-         uint32_t offset_to_tile = 0, tile_x_sa = 0, tile_y_sa = 0;
-         get_rt_read_isl_surf(devinfo, res, target, read_view,
-                              &offset_to_tile, &tile_x_sa, &tile_y_sa, &surf);
-         fill_surface_state(&screen->isl_dev, map_read, res, &surf, read_view,
-                            aux_usage, offset_to_tile, tile_x_sa, tile_y_sa);
-         map_read += SURFACE_STATE_ALIGNMENT;
-#endif
-      }
 
       return psurf;
    }
@@ -2619,49 +2383,8 @@ crocus_create_surface(struct pipe_context *ctx,
    psurf->width = isl_surf.logical_level0_px.width;
    psurf->height = isl_surf.logical_level0_px.height;
 
-   struct isl_surf_fill_state_info f = {
-      .surf = &isl_surf,
-      .view = view,
-      .mocs = mocs(res->bo, &screen->isl_dev),
-      .address = res->bo->gtt_offset + offset_B,
-      .x_offset_sa = tile_x_sa,
-      .y_offset_sa = tile_y_sa,
-   };
-
-   isl_surf_fill_state_s(&screen->isl_dev, surf->surface_state.cpu, &f);
-
    return psurf;
 }
-
-#if GEN_GEN >= 7
-static void
-fill_default_image_param(struct brw_image_param *param)
-{
-   memset(param, 0, sizeof(*param));
-   /* Set the swizzling shifts to all-ones to effectively disable swizzling --
-    * See emit_address_calculation() in brw_fs_surface_builder.cpp for a more
-    * detailed explanation of these parameters.
-    */
-   param->swizzling[0] = 0xff;
-   param->swizzling[1] = 0xff;
-}
-
-static void
-fill_buffer_image_param(struct brw_image_param *param,
-                        enum pipe_format pfmt,
-                        unsigned size)
-{
-   const unsigned cpp = util_format_get_blocksize(pfmt);
-
-   fill_default_image_param(param);
-   param->size[0] = size / cpp;
-   param->stride[0] = cpp;
-}
-#else
-#define isl_surf_fill_image_param(x, ...)
-#define fill_default_image_param(x, ...)
-#define fill_buffer_image_param(x, ...)
-#endif
 
 /**
  * The pipe->set_shader_images() driver hook.
@@ -2680,8 +2403,6 @@ crocus_set_shader_images(struct pipe_context *ctx,
    struct crocus_shader_state *shs = &ice->state.shaders[stage];
 #if GEN_GEN == 7
    // TODO
-   struct crocus_genx_state *genx = ice->state.genx;
-   struct brw_image_param *image_params = genx->shaders[stage].image_param;
 #endif
 
    shs->bound_image_views &= ~u_bit_consecutive(start_slot, count);
@@ -2721,11 +2442,6 @@ crocus_set_shader_images(struct pipe_context *ctx,
                isl_fmt = isl_lower_storage_image_format(devinfo, isl_fmt);
          }
 
-         alloc_surface_states(&iv->surface_state, 1 << ISL_AUX_USAGE_NONE);
-         iv->surface_state.bo_address = res->bo->gtt_offset;
-
-         void *map = iv->surface_state.cpu;
-
          if (res->base.target != PIPE_BUFFER) {
             struct isl_view view = {
                .format = isl_fmt,
@@ -2737,40 +2453,17 @@ crocus_set_shader_images(struct pipe_context *ctx,
                .usage = usage,
             };
 
-            if (untyped_fallback) {
-               fill_buffer_surface_state(&screen->isl_dev, res, map,
-                                         isl_fmt, ISL_SWIZZLE_IDENTITY,
-                                         0, res->bo->size);
-            } else {
-               /* Images don't support compression */
-               unsigned aux_modes = 1 << ISL_AUX_USAGE_NONE;
-               while (aux_modes) {
-                  enum isl_aux_usage usage = u_bit_scan(&aux_modes);
+            iv->view = view;
 
-                  fill_surface_state(&screen->isl_dev, map, res, &res->surf,
-                                     &view, usage, 0, 0, 0);
-
-                  map += SURFACE_STATE_ALIGNMENT;
-               }
-            }
-
-            isl_surf_fill_image_param(&screen->isl_dev,
-                                      &image_params[start_slot + i],
-                                      &res->surf, &view);
+            //            isl_surf_fill_image_param(&screen->isl_dev,
+            ///                                      &image_params[start_slot + i],
+            ///                                      &res->surf, &view);
          } else {
             util_range_add(&res->base, &res->valid_buffer_range, img->u.buf.offset,
                            img->u.buf.offset + img->u.buf.size);
-
-            fill_buffer_surface_state(&screen->isl_dev, res, map,
-                                      isl_fmt, ISL_SWIZZLE_IDENTITY,
-                                      img->u.buf.offset, img->u.buf.size);
-            fill_buffer_image_param(&image_params[start_slot + i],
-                                    img->format, img->u.buf.size);
          }
       } else {
          pipe_resource_reference(&iv->base.resource, NULL);
-         pipe_resource_reference(&iv->surface_state.ref.res, NULL);
-         fill_default_image_param(&image_params[start_slot + i]);
       }
    }
 
@@ -2844,9 +2537,6 @@ crocus_surface_destroy(struct pipe_context *ctx, struct pipe_surface *p_surf)
 {
    struct crocus_surface *surf = (void *) p_surf;
    pipe_resource_reference(&p_surf->texture, NULL);
-   pipe_resource_reference(&surf->surface_state.ref.res, NULL);
-   pipe_resource_reference(&surf->surface_state_read.ref.res, NULL);
-   free(surf->surface_state.cpu);
    free(surf);
 }
 
@@ -4379,6 +4069,30 @@ emit_sampler_view(struct crocus_context *ice,
    return offset;
 }
 
+static uint32_t
+emit_image_view(struct crocus_context *ice,
+                  struct crocus_batch *batch,
+                  struct crocus_image_view *iv)
+{
+   UNUSED struct isl_device *isl_dev = &batch->screen->isl_dev;
+   uint32_t offset = 0;
+
+   struct crocus_resource *res = (struct crocus_resource *)iv->base.resource;
+   uint32_t *surf_state = stream_state(batch, isl_dev->ss.size,
+                                       isl_dev->ss.align, &offset);
+   struct isl_surf_fill_state_info f = {
+      .surf = &res->surf,
+      .view = &iv->view,
+      .mocs = mocs(res->bo, isl_dev),
+      .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
+                                    res->bo, 0, RELOC_32BIT),
+   };
+
+   isl_surf_fill_state_s(isl_dev, surf_state, &f);
+
+   return offset;
+}
+
 #define foreach_surface_used(index, group) \
    for (int index = 0; index < bt->sizes[group]; index++) \
       if (crocus_group_index_to_bti(bt, group, index) != \
@@ -4443,7 +4157,8 @@ crocus_populate_binding_table(struct crocus_context *ice,
    }
 
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_IMAGE) {
-
+      struct crocus_image_view *view = &shs->image[i];
+      surf_offsets[s++] = emit_image_view(ice, batch, view);
    }
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_UBO) {
       surf_offsets[s++] = emit_ubo_buffer(ice, batch, &shs->constbufs[i]);
@@ -6757,8 +6472,6 @@ crocus_destroy_state(struct crocus_context *ice)
       }
       for (int i = 0; i < PIPE_MAX_SHADER_IMAGES; i++) {
          pipe_resource_reference(&shs->image[i].base.resource, NULL);
-         pipe_resource_reference(&shs->image[i].surface_state.ref.res, NULL);
-         free(shs->image[i].surface_state.cpu);
       }
       for (int i = 0; i < PIPE_MAX_SHADER_BUFFERS; i++) {
          pipe_resource_reference(&shs->ssbo[i].buffer, NULL);

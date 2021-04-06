@@ -171,33 +171,6 @@ struct crocus_state_ref {
 };
 
 /**
- * The SURFACE_STATE descriptors for a resource.
- */
-struct crocus_surface_state {
-   /**
-    * CPU-side copy of the packed SURFACE_STATE structures, already
-    * aligned so they can be uploaded as a contiguous pile of bytes.
-    *
-    * This can be updated and re-uploaded if (e.g.) addresses need to change.
-    */
-   uint32_t *cpu;
-
-   /**
-    * How many states are there?  (Each aux mode has its own state.)
-    */
-   unsigned num_states;
-
-   /**
-    * Address of the resource (res->bo->gtt_offset).  Note that "Surface
-    * Base Address" may be offset from this value.
-    */
-   uint64_t bo_address;
-
-   /** A reference to the GPU buffer holding our uploaded SURFACE_STATE */
-   struct crocus_state_ref ref;
-};
-
-/**
  * Gallium CSO for sampler views (texture views).
  *
  * In addition to the normal pipe_resource, this adds an ISL view
@@ -216,9 +189,6 @@ struct crocus_sampler_view {
     * chained together; this skips having to traverse base->texture->*.
     */
    struct crocus_resource *res;
-
-   /** The resource (BO) holding our SURFACE_STATE. */
-   struct crocus_surface_state surface_state;
 };
 
 /**
@@ -226,9 +196,7 @@ struct crocus_sampler_view {
  */
 struct crocus_image_view {
    struct pipe_image_view base;
-
-   /** The resource (BO) holding our SURFACE_STATE. */
-   struct crocus_surface_state surface_state;
+   struct isl_view view;
 };
 
 /**
@@ -242,11 +210,6 @@ struct crocus_surface {
    struct isl_view view;
    struct isl_view read_view;
    union isl_color_value clear_color;
-
-   /** The resource (BO) holding our SURFACE_STATE. */
-   struct crocus_surface_state surface_state;
-   /** The resource (BO) holding our SURFACE_STATE for read. */
-   struct crocus_surface_state surface_state_read;
 };
 
 /**
