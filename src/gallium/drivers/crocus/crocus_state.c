@@ -2206,7 +2206,58 @@ crocus_create_sampler_view(struct pipe_context *ctx,
       isv->view.base_array_layer = tmpl->u.tex.first_layer;
       isv->view.array_len =
          tmpl->u.tex.last_layer - tmpl->u.tex.first_layer + 1;
+   }
+#if GEN_GEN >= 6
+   /* just create a second view struct for texture gather just in case */
+   isv->gather_view = isv->view;
 
+#if GEN_GEN >= 7
+   if (fmt.fmt == ISL_FORMAT_R32G32_FLOAT ||
+       fmt.fmt == ISL_FORMAT_R32G32_SINT ||
+       fmt.fmt == ISL_FORMAT_R32G32_UINT) {
+      isv->gather_view.format = ISL_FORMAT_R32G32_FLOAT_LD;
+#if GEN_VERSIONx10 == 75
+      // TODO HSW GREEN TO BLUE
+      isv->gather_view.swizzle = (struct isl_swizzle) {
+         .r = fmt_swizzle(&fmt, tmpl->swizzle_r),
+         .g = fmt_swizzle(&fmt, tmpl->swizzle_g),
+         .b = fmt_swizzle(&fmt, tmpl->swizzle_b),
+         .a = fmt_swizzle(&fmt, tmpl->swizzle_a),
+      };
+#endif
+   }
+#endif
+#if GEN_GEN == 6
+   /* Sandybridge's gather4 message is broken for integer formats.
+    * To work around this, we pretend the surface is UNORM for
+    * 8 or 16-bit formats, and emit shader instructions to recover
+    * the real INT/UINT value.  For 32-bit formats, we pretend
+    * the surface is FLOAT, and simply reinterpret the resulting
+    * bits.
+    */
+   switch (fmt.fmt) {
+   case ISL_FORMAT_R8_SINT:
+   case ISL_FORMAT_R8_UINT:
+      isv->gather_view.format = ISL_FORMAT_R8_UNORM;
+      break;
+
+   case ISL_FORMAT_R16_SINT:
+   case ISL_FORMAT_R16_UINT:
+      isv->gather_view.format = ISL_FORMAT_R16_UNORM;
+      break;
+
+   case ISL_FORMAT_R32_SINT:
+   case ISL_FORMAT_R32_UINT:
+      isv->gather_view.format = ISL_FORMAT_R32_FLOAT;
+      break;
+
+   default:
+      break;
+   }
+#endif
+#endif
+   /* Fill out SURFACE_STATE for this view. */
+   if (tmpl->target != PIPE_BUFFER) {
       if (crocus_resource_unfinished_aux_import(isv->res))
          crocus_resource_finish_aux_import(&screen->base, isv->res);
 
@@ -4050,6 +4101,7 @@ emit_ssbo_buffer(struct crocus_context *ice,
 static uint32_t
 emit_sampler_view(struct crocus_context *ice,
                   struct crocus_batch *batch,
+                  bool for_gather,
                   struct crocus_sampler_view *isv)
 {
    UNUSED struct isl_device *isl_dev = &batch->screen->isl_dev;
@@ -4059,7 +4111,7 @@ emit_sampler_view(struct crocus_context *ice,
                                        isl_dev->ss.align, &offset);
    struct isl_surf_fill_state_info f = {
       .surf = &isv->res->surf,
-      .view = &isv->view,
+      .view = for_gather ? &isv->gather_view : &isv->view,
       .mocs = mocs(isv->res->bo, isl_dev),
       .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
                                     isv->res->bo, 0, RELOC_32BIT),
@@ -4151,10 +4203,22 @@ crocus_populate_binding_table(struct crocus_context *ice,
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_TEXTURE) {
       struct crocus_sampler_view *view = shs->textures[i];
       if (view)
-         surf_offsets[s] = emit_sampler_view(ice, batch, view);
+         surf_offsets[s] = emit_sampler_view(ice, batch, false, view);
       else
          emit_null_surface(batch, &surf_offsets[s]);
       s++;
+   }
+
+   if (info->uses_texture_gather) {
+      foreach_surface_used(i, CROCUS_SURFACE_GROUP_TEXTURE_GATHER) {
+         struct crocus_sampler_view *view = shs->textures[i];
+         if (view)
+            surf_offsets[s] = emit_sampler_view(ice, batch, true, view);
+         else
+            emit_null_surface(batch, &surf_offsets[s]);
+         s++;
+   }
+
    }
 
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_IMAGE) {

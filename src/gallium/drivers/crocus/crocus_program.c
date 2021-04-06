@@ -75,6 +75,23 @@ crocus_get_texture_swizzle(const struct crocus_context *ice,
    return swiz;
 }
 
+static uint8_t
+gen6_gather_workaround(enum pipe_format pformat)
+{
+   switch (pformat) {
+   case PIPE_FORMAT_R8_SINT: return WA_SIGN | WA_8BIT;
+   case PIPE_FORMAT_R8_UINT: return WA_8BIT;
+   case PIPE_FORMAT_R16_SINT: return WA_SIGN | WA_16BIT;
+   case PIPE_FORMAT_R16_UINT: return WA_16BIT;
+   default:
+      /* Note that even though PIPE_FORMAT_R32_SINT and
+       * PIPE_FORMAT_R32_UINThave format overrides in
+       * the surface state, there is no shader w/a required.
+       */
+      return 0;
+   }
+}
+
 static void
 crocus_populate_sampler_prog_key_data(struct crocus_context *ice,
                                       const struct gen_device_info *devinfo,
@@ -100,6 +117,38 @@ crocus_populate_sampler_prog_key_data(struct crocus_context *ice,
       }
 
       ice->vtbl.fill_clamp_mask(ice->state.shaders[stage].samplers[s], s, key->gl_clamp_mask);
+
+      /* gather4 for RG32* is broken in multiple ways on Gen7. */
+      if (devinfo->gen == 7 && uses_texture_gather) {
+         switch (texture->base.format) {
+         case PIPE_FORMAT_R32G32_UINT:
+         case PIPE_FORMAT_R32G32_SINT:
+            /* We have to override the format to R32G32_FLOAT_LD.
+             * This means that SCS_ALPHA and SCS_ONE will return 0x3f8
+             * (1.0) rather than integer 1.  This needs shader hacks.
+             *
+             * On Ivybridge, we whack W (alpha) to ONE in our key's
+             * swizzle.  On Haswell, we look at the original texture
+             * swizzle, and use XYZW with channels overridden to ONE,
+             * leaving normal texture swizzling to SCS.
+             */
+            //TODO;
+            /* fallthrough */
+         case PIPE_FORMAT_R32G32_FLOAT:
+            /* The channel select for green doesn't work - we have to
+             * request blue.  Haswell can use SCS for this, but Ivybridge
+             * needs a shader workaround.
+             */
+            if (!devinfo->is_haswell)
+               key->gather_channel_quirk_mask |= 1 << s;
+            break;
+         default:
+            break;
+         }
+      }
+      if (devinfo->gen == 6 && uses_texture_gather) {
+         key->gen6_gather_wa[s] = gen6_gather_workaround(texture->base.format);
+      }
    }
 }
 
@@ -735,6 +784,11 @@ crocus_setup_binding_table(const struct gen_device_info *devinfo,
    bt->sizes[CROCUS_SURFACE_GROUP_TEXTURE] = BITSET_LAST_BIT(info->textures_used);
    bt->used_mask[CROCUS_SURFACE_GROUP_TEXTURE] = info->textures_used[0];
 
+   if (info->uses_texture_gather) {
+      bt->sizes[CROCUS_SURFACE_GROUP_TEXTURE_GATHER] = BITSET_LAST_BIT(info->textures_used);
+      bt->used_mask[CROCUS_SURFACE_GROUP_TEXTURE_GATHER] = info->textures_used[0];
+   }
+
    bt->sizes[CROCUS_SURFACE_GROUP_IMAGE] = info->num_images;
 
    /* Allocate an extra slot in the UBO section for NIR constants.
@@ -857,8 +911,9 @@ crocus_setup_binding_table(const struct gen_device_info *devinfo,
       nir_foreach_instr (instr, block) {
          if (instr->type == nir_instr_type_tex) {
             nir_tex_instr *tex = nir_instr_as_tex(instr);
+            bool is_gather = tex->op == nir_texop_tg4;
             tex->texture_index =
-               crocus_group_index_to_bti(bt, CROCUS_SURFACE_GROUP_TEXTURE,
+               crocus_group_index_to_bti(bt, is_gather ? CROCUS_SURFACE_GROUP_TEXTURE_GATHER : CROCUS_SURFACE_GROUP_TEXTURE,
                                        tex->texture_index);
             continue;
          }

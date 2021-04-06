@@ -181,6 +181,7 @@ struct crocus_state_ref {
 struct crocus_sampler_view {
    struct pipe_sampler_view base;
    struct isl_view view;
+   struct isl_view gather_view;
 
    union isl_color_value clear_color;
 
