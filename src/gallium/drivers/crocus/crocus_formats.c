@@ -388,32 +388,20 @@ crocus_format_for_usage(const struct gen_device_info *devinfo,
       swizzle = ISL_SWIZZLE(RED, GREEN, BLUE, ONE);
    }
 
+   if (pformat == PIPE_FORMAT_A8_UNORM) {
+     format = ISL_FORMAT_A8_UNORM;
+     swizzle = ISL_SWIZZLE_IDENTITY;
+   }
+   if (!(usage & ISL_SURF_USAGE_RENDER_TARGET_BIT)) {
+     format = get_gen4_texture_format(pformat, format);
+   }
    if (devinfo->gen < 6) {
-     if (pformat == PIPE_FORMAT_A8_UNORM) {
-       format = ISL_FORMAT_A8_UNORM;
-       swizzle = ISL_SWIZZLE_IDENTITY;
-     }
-     if (!(usage & ISL_SURF_USAGE_RENDER_TARGET_BIT)) {
-        format = get_gen4_texture_format(pformat, format);
-     }
      if (pformat == PIPE_FORMAT_Z32_FLOAT_S8X24_UINT)
-        format = ISL_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+       format = ISL_FORMAT_R32_FLOAT_X8X24_TYPELESS;
      if (pformat == PIPE_FORMAT_X32_S8X24_UINT)
-        format = ISL_FORMAT_X32_TYPELESS_G8X24_UINT;
+       format = ISL_FORMAT_X32_TYPELESS_G8X24_UINT;
      if (pformat == PIPE_FORMAT_X24S8_UINT)
-        format = ISL_FORMAT_X24_TYPELESS_G8_UINT;
-   } else {
-     if ((usage & ISL_SURF_USAGE_RENDER_TARGET_BIT) &&
-	 pformat == PIPE_FORMAT_A8_UNORM) {
-       /* Most of the hardware A/LA formats are not renderable, except
-	* for A8_UNORM.  SURFACE_STATE's shader channel select fields
-	* cannot be used to swap RGB and A channels when rendering (as
-	* it could impact alpha blending), so we have to use the actual
-	* A8_UNORM format when rendering.
-	*/
-       format = ISL_FORMAT_A8_UNORM;
-       swizzle = ISL_SWIZZLE_IDENTITY;
-     }
+       format = ISL_FORMAT_X24_TYPELESS_G8_UINT;
    }
 
    /* We choose RGBA over RGBX for rendering the hardware doesn't support
