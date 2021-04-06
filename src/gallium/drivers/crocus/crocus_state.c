@@ -1345,6 +1345,10 @@ crocus_init_render_context(struct crocus_batch *batch)
 
    crocus_emit_cmd(batch, GENX(STATE_SIP), foo);
 
+#if GEN_GEN == 7
+   emit_l3_state(batch);
+#endif
+
 #if GEN_GEN >= 5 || GEN_IS_G4X
    /* Use the legacy AA line coverage computation. */
    crocus_emit_cmd(batch, GENX(3DSTATE_AA_LINE_PARAMETERS), foo);
@@ -1367,6 +1371,9 @@ crocus_init_compute_context(struct crocus_batch *batch)
 
    emit_pipeline_select(batch, GPGPU);
 
+#if GEN_GEN == 7
+   emit_l3_state(batch);
+#endif
 }
 #endif
 
@@ -4934,9 +4941,6 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #endif
    }
 
-#if GEN_GEN == 7
-   emit_l3_state(batch);
-#endif
 #if GEN_GEN >= 6
    if (dirty & CROCUS_DIRTY_GEN6_URB) {
       // TODO GEN6 URB
