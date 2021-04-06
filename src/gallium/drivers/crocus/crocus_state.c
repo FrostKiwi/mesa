@@ -1905,17 +1905,49 @@ crocus_bind_sampler_states(struct pipe_context *ctx,
    }
 }
 
+enum samp_workaround {
+   SAMP_NORMAL,
+   SAMP_CUBE_CLAMP,
+   SAMP_CUBE_CUBE,
+   SAMP_T_WRAP,
+};
+
 static void
 crocus_upload_sampler_state(struct crocus_batch *batch,
                             struct crocus_sampler_state *cso,
                             uint32_t border_color_offset,
+                            enum samp_workaround samp_workaround,
                             void *map)
 {
    struct pipe_sampler_state *state = &cso->pstate;
+   uint32_t wrap_s, wrap_t, wrap_r;
+
+   wrap_s = cso->wrap_s;
+   wrap_t = cso->wrap_t;
+   wrap_r = cso->wrap_r;
+
+   switch (samp_workaround) {
+   case SAMP_CUBE_CLAMP:
+      wrap_s = TCM_CUBE;
+      wrap_t = TCM_CUBE;
+      wrap_r = TCM_CUBE;
+      break;
+   case SAMP_CUBE_CUBE:
+      wrap_s = TCM_CUBE;
+      wrap_t = TCM_CUBE;
+      wrap_r = TCM_CUBE;
+      break;
+   case SAMP_T_WRAP:
+      wrap_t = TCM_WRAP;
+      break;
+   default:
+      break;
+   }
    _crocus_pack_state(batch, GENX(SAMPLER_STATE), map, samp) {
-      samp.TCXAddressControlMode = cso->wrap_s;
-      samp.TCYAddressControlMode = cso->wrap_t;
-      samp.TCZAddressControlMode = cso->wrap_r;
+      samp.TCXAddressControlMode = wrap_s;
+      samp.TCYAddressControlMode = wrap_t;
+      samp.TCZAddressControlMode = wrap_r;
+
       samp.CubeSurfaceControlMode = state->seamless_cube_map;
 #if GEN_GEN >= 6
       samp.NonnormalizedCoordinateEnable = !state->normalized_coords;
@@ -2114,7 +2146,30 @@ crocus_upload_sampler_states(struct crocus_context *ice,
             crocus_upload_border_color(batch, state, tex, &border_color_offset);
          }
 
-         crocus_upload_sampler_state(batch, state, border_color_offset, map);
+         enum samp_workaround wa = SAMP_NORMAL;
+         /* There's a bug in 1D texture sampling - it actually pays
+          * attention to the wrap_t value, though it should not.
+          * Override the wrap_t value here to GL_REPEAT to keep
+          * any nonexistent border pixels from floating in.
+          */
+         if (tex->base.target == PIPE_TEXTURE_1D)
+            wa = SAMP_T_WRAP;
+         else if (tex->base.target == PIPE_TEXTURE_CUBE ||
+                  tex->base.target == PIPE_TEXTURE_CUBE_ARRAY) {
+            /* Cube maps must use the same wrap mode for all three coordinate
+             * dimensions.  Prior to Haswell, only CUBE and CLAMP are valid.
+             *
+             * Ivybridge and Baytrail seem to have problems with CUBE mode and
+             * integer formats.  Fall back to CLAMP for now.
+             */
+            if (state->pstate.seamless_cube_map &&
+                !(GEN_VERSIONx10 == 70 && util_format_is_pure_integer(tex->base.format)))
+               wa = SAMP_CUBE_CUBE;
+            else
+               wa = SAMP_CUBE_CLAMP;
+         }
+
+         crocus_upload_sampler_state(batch, state, border_color_offset, wa, map);
       }
 
       map += GENX(SAMPLER_STATE_length);
