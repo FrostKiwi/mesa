@@ -768,7 +768,7 @@ crocus_resource_create_with_modifiers(struct pipe_screen *pscreen,
          goto fail;
       }
 
-      if (templ->bind & PIPE_BIND_RENDER_TARGET) {
+      if (templ->bind & PIPE_BIND_RENDER_TARGET && devinfo->gen < 6) {
          modifier = I915_FORMAT_MOD_X_TILED;
          res->mod_info = isl_drm_modifier_get_info(modifier);
          tiling_flags = 1 << res->mod_info->tiling;
