@@ -7328,7 +7328,7 @@ crocus_batch_reset_dirty(struct crocus_batch *batch)
     * as the old state batch won't still be available.
     */
    batch->ice->state.dirty |= CROCUS_DIRTY_DEPTH_BUFFER |
-     CROCUS_DIRTY_CLIP | CROCUS_DIRTY_COLOR_CALC_STATE;
+     CROCUS_DIRTY_COLOR_CALC_STATE;
 
    batch->ice->state.dirty |= CROCUS_DIRTY_VERTEX_ELEMENTS | CROCUS_DIRTY_VERTEX_BUFFERS;
 
@@ -7354,13 +7354,13 @@ crocus_batch_reset_dirty(struct crocus_batch *batch)
    /* SCISSOR_STATE */
    batch->ice->state.dirty |= CROCUS_DIRTY_GEN6_BLEND_STATE;
    batch->ice->state.dirty |= CROCUS_DIRTY_GEN6_SCISSOR_RECT;
+   batch->ice->state.dirty |= CROCUS_DIRTY_GEN6_WM_DEPTH_STENCIL;
 #endif
 #if GEN_GEN <= 5
    /* dirty the SF state on gen4/5 */
    batch->ice->state.dirty |= CROCUS_DIRTY_RASTER;
    batch->ice->state.dirty |= CROCUS_DIRTY_GEN4_CURBE;
-#endif
-#if GEN_GEN < 7
+   batch->ice->state.dirty |= CROCUS_DIRTY_CLIP;
    batch->ice->state.dirty |= CROCUS_DIRTY_WM;
 #endif
 }
