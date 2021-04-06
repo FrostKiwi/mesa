@@ -396,7 +396,6 @@ struct crocus_shader_state {
 
    /** Shader Storage Buffers */
    struct pipe_shader_buffer ssbo[PIPE_MAX_SHADER_BUFFERS];
-   struct crocus_state_ref ssbo_surf_state[PIPE_MAX_SHADER_BUFFERS];
 
    /** Shader Storage Images (image load store) */
    struct crocus_image_view image[PIPE_MAX_SHADER_IMAGES];

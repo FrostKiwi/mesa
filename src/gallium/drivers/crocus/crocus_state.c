@@ -3212,8 +3212,6 @@ crocus_set_shader_buffers(struct pipe_context *ctx,
                         ssbo->buffer_offset + ssbo->buffer_size);
       } else {
          pipe_resource_reference(&shs->ssbo[start_slot + i].buffer, NULL);
-         pipe_resource_reference(&shs->ssbo_surf_state[start_slot + i].res,
-                                 NULL);
       }
    }
 
@@ -4336,6 +4334,30 @@ emit_ubo_buffer(struct crocus_context *ice,
 }
 
 static uint32_t
+emit_ssbo_buffer(struct crocus_context *ice,
+                struct crocus_batch *batch,
+                struct pipe_shader_buffer *buffer)
+{
+   UNUSED struct isl_device *isl_dev = &batch->screen->isl_dev;
+   uint32_t offset = 0;
+
+   uint32_t *surf_state = stream_state(batch, isl_dev->ss.size,
+                                       isl_dev->ss.align, &offset);
+   isl_buffer_fill_state(isl_dev, surf_state,
+                         .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
+                                                       crocus_resource_bo(buffer->buffer),
+                                                       buffer->buffer_offset,
+                                                       RELOC_32BIT),
+                         .size_B = buffer->buffer_size,
+                         .format = 0,
+                         .swizzle = ISL_SWIZZLE_IDENTITY,
+                         .stride_B = 1,
+                         .mocs = mocs(crocus_resource_bo(buffer->buffer), isl_dev));
+
+   return offset;
+}
+
+static uint32_t
 emit_sampler_view(struct crocus_context *ice,
                   struct crocus_batch *batch,
                   struct crocus_sampler_view *isv)
@@ -4427,6 +4449,7 @@ crocus_populate_binding_table(struct crocus_context *ice,
       surf_offsets[s++] = emit_ubo_buffer(ice, batch, &shs->constbufs[i]);
    }
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_SSBO) {
+      surf_offsets[s++] = emit_ssbo_buffer(ice, batch, &shs->ssbo[i]);
    }
 
 }
@@ -6739,7 +6762,6 @@ crocus_destroy_state(struct crocus_context *ice)
       }
       for (int i = 0; i < PIPE_MAX_SHADER_BUFFERS; i++) {
          pipe_resource_reference(&shs->ssbo[i].buffer, NULL);
-         pipe_resource_reference(&shs->ssbo_surf_state[i].res, NULL);
       }
       for (int i = 0; i < CROCUS_MAX_TEXTURE_SAMPLERS; i++) {
          pipe_sampler_view_reference((struct pipe_sampler_view **)
