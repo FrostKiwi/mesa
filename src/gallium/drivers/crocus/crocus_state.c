@@ -6504,13 +6504,15 @@ crocus_upload_compute_state(struct crocus_context *ice,
    if ((stage_dirty & CROCUS_STAGE_DIRTY_CONSTANTS_CS) && shs->sysvals_need_upload)
       upload_sysvals(ice, MESA_SHADER_COMPUTE);
 
-//   if (dirty & CROCUS_DIRTY_BINDINGS_CS)
-//      crocus_populate_binding_table(ice, batch, MESA_SHADER_COMPUTE, false);
+   if (stage_dirty & CROCUS_STAGE_DIRTY_BINDINGS_CS) {
+      crocus_populate_binding_table(ice, batch, MESA_SHADER_COMPUTE);
+      ice->shaders.prog[MESA_SHADER_COMPUTE]->bind_bo_offset = crocus_upload_binding_table(ice, batch,
+                                                                                   ice->shaders.prog[MESA_SHADER_COMPUTE]->surf_offset,
+                                                                                   ice->shaders.prog[MESA_SHADER_COMPUTE]->bt.size_bytes);
+   }
 
    if (stage_dirty & CROCUS_STAGE_DIRTY_SAMPLER_STATES_CS)
       crocus_upload_sampler_states(ice, batch, MESA_SHADER_COMPUTE);
-
-//   crocus_use_optional_res(batch, shs->sampler_table.res, false);
 
    if (stage_dirty & CROCUS_STAGE_DIRTY_CS) {
       /* The MEDIA_VFE_STATE documentation for Gen8+ says:
@@ -6530,7 +6532,17 @@ crocus_upload_compute_state(struct crocus_context *ice,
             struct crocus_bo *bo =
                crocus_get_scratch_space(ice, prog_data->total_scratch,
                                       MESA_SHADER_COMPUTE);
-            vfe.PerThreadScratchSpace = ffs(prog_data->total_scratch) - 11;
+#if GEN_VERSIONx10 == 75
+            /* Haswell's Per Thread Scratch Space is in the range [0, 10]
+             * where 0 = 2k, 1 = 4k, 2 = 8k, ..., 10 = 2M.
+             */
+            vfe.PerThreadScratchSpace = ffs(prog_data->total_scratch) - 12;
+#else
+            /* Earlier platforms use the range [0, 11] to mean [1kB, 12kB]
+             * where 0 = 1kB, 1 = 2kB, 2 = 3kB, ..., 11 = 12kB.
+             */
+            vfe.PerThreadScratchSpace = prog_data->total_scratch / 1024 - 1;
+#endif
             vfe.ScratchSpaceBasePointer = rw_bo(bo, 0);
          }
 
@@ -6540,8 +6552,8 @@ crocus_upload_compute_state(struct crocus_context *ice,
             Resettingrelativetimerandlatchingtheglobaltimestamp;
          vfe.BypassGatewayControl = true;
          vfe.GPGPUMode = 1;
-         vfe.NumberofURBEntries = 2;
-         vfe.URBEntryAllocationSize = 2;
+         vfe.NumberofURBEntries = 0;
+         vfe.URBEntryAllocationSize = 0;
 
          vfe.CURBEAllocationSize =
             ALIGN(cs_prog_data->push.per_thread.regs * threads +
@@ -6576,15 +6588,20 @@ crocus_upload_compute_state(struct crocus_context *ice,
                       CROCUS_STAGE_DIRTY_CONSTANTS_CS |
                       CROCUS_STAGE_DIRTY_CS)) {
       uint32_t desc[GENX(INTERFACE_DESCRIPTOR_DATA_length)];
-
+      const uint64_t ksp = KSP(ice,shader) + brw_cs_prog_data_prog_offset(cs_prog_data, simd_size);
       crocus_pack_state(GENX(INTERFACE_DESCRIPTOR_DATA), desc, idd) {
+         idd.KernelStartPointer = ksp;
          idd.SamplerStatePointer = shs->sampler_table.offset;
-         // TODO idd.BindingTablePointer = binder->bt_offset[MESA_SHADER_COMPUTE];
+         idd.BindingTablePointer = ice->shaders.prog[MESA_SHADER_COMPUTE]->bind_bo_offset;
          idd.NumberofThreadsinGPGPUThreadGroup = threads;
+         idd.ConstantURBEntryReadLength = cs_prog_data->push.per_thread.regs;
+         idd.BarrierEnable = cs_prog_data->uses_barrier;
+         idd.SharedLocalMemorySize = encode_slm_size(GEN_GEN,
+                                                     prog_data->total_shared);
+#if GEN_VERSIONx10 >= 75
+         idd.CrossThreadConstantDataReadLength = cs_prog_data->push.cross_thread.regs;
+#endif
       }
-
-      for (int i = 0; i < GENX(INTERFACE_DESCRIPTOR_DATA_length); i++)
-         desc[i] |= ((uint32_t *) shader->derived_data)[i];
 
       crocus_emit_cmd(batch, GENX(MEDIA_INTERFACE_DESCRIPTOR_LOAD), load) {
          load.InterfaceDescriptorTotalLength =

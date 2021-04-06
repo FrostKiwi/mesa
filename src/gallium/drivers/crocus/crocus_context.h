@@ -382,11 +382,6 @@ struct crocus_compiled_shader {
 
    uint32_t bind_bo_offset;
    uint32_t surf_offset[64];//TODO
-   /**
-    * Shader packets and other data derived from prog_data.  These must be
-    * completely determined from prog_data.
-    */
-   uint8_t derived_data[0];
 };
 
 /**
