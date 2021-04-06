@@ -1780,8 +1780,8 @@ crocus_bind_rasterizer_state(struct pipe_context *ctx, void *state)
    ice->state.dirty |= CROCUS_DIRTY_RASTER;
    ice->state.dirty |= CROCUS_DIRTY_CLIP;
 #if GEN_GEN <= 5
+   ice->state.dirty |= CROCUS_DIRTY_GEN4_CLIP_PROG | CROCUS_DIRTY_GEN4_SF_PROG;
    ice->state.dirty |= CROCUS_DIRTY_WM;
-   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_VS;
 #endif
    ice->state.stage_dirty |= ice->state.stage_dirty_for_nos[CROCUS_NOS_RASTERIZER];
 }
@@ -3402,9 +3402,7 @@ crocus_bind_vertex_elements_state(struct pipe_context *ctx, void *state)
 */
    ice->state.cso_vertex_elements = state;
    ice->state.dirty |= CROCUS_DIRTY_VERTEX_ELEMENTS;
-#if !(GEN_VERSIONx10 == 75)
-   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_UNCOMPILED_VS;
-#endif
+   ice->state.stage_dirty |= ice->state.stage_dirty_for_nos[CROCUS_NOS_VERTEX_ELEMENTS];
 }
 
 #if GEN_GEN >= 7

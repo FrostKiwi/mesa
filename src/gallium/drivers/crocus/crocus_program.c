@@ -1718,9 +1718,14 @@ crocus_update_compiled_fs(struct crocus_context *ice)
       // XXX: only need to flag CLIP if barycentric has NONPERSPECTIVE
       // toggles.  might be able to avoid flagging SBE too.
       ice->shaders.prog[CROCUS_CACHE_FS] = shader;
-      ice->state.dirty |= CROCUS_DIRTY_WM |
-                          CROCUS_DIRTY_CLIP |
-                          CROCUS_DIRTY_GEN7_SBE;
+      ice->state.dirty |= CROCUS_DIRTY_WM;
+      /* gen4 clip/sf rely on fs prog_data */
+      if (devinfo->gen < 6)
+         ice->state.dirty |= CROCUS_DIRTY_GEN4_CLIP_PROG | CROCUS_DIRTY_GEN4_SF_PROG;
+      else
+         ice->state.dirty |= CROCUS_DIRTY_CLIP;
+      if (devinfo->gen >= 7)
+         ice->state.dirty |= CROCUS_DIRTY_GEN7_SBE;
       ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_FS |
                                 CROCUS_STAGE_DIRTY_BINDINGS_FS |
                                 CROCUS_STAGE_DIRTY_CONSTANTS_FS;
@@ -1738,6 +1743,8 @@ static void
 update_last_vue_map(struct crocus_context *ice,
                     struct brw_stage_prog_data *prog_data)
 {
+   struct crocus_screen *screen = (struct crocus_screen *)ice->ctx.screen;
+   const struct gen_device_info *devinfo = &screen->devinfo; 
    struct brw_vue_prog_data *vue_prog_data = (void *) prog_data;
    struct brw_vue_map *vue_map = &vue_prog_data->vue_map;
    struct brw_vue_map *old_map = ice->shaders.last_vue_map;
@@ -1747,10 +1754,13 @@ update_last_vue_map(struct crocus_context *ice,
    if (changed_slots & VARYING_BIT_VIEWPORT) {
       ice->state.num_viewports =
          (vue_map->slots_valid & VARYING_BIT_VIEWPORT) ? CROCUS_MAX_VIEWPORTS : 1;
-      ice->state.dirty |= CROCUS_DIRTY_CLIP |
-                          CROCUS_DIRTY_SF_CL_VIEWPORT |
-                          CROCUS_DIRTY_CC_VIEWPORT |
-                          CROCUS_DIRTY_GEN6_SCISSOR_RECT;
+      ice->state.dirty |= CROCUS_DIRTY_SF_CL_VIEWPORT |
+                          CROCUS_DIRTY_CC_VIEWPORT;
+      if (devinfo->gen < 6)
+         ice->state.dirty |= CROCUS_DIRTY_GEN4_CLIP_PROG | CROCUS_DIRTY_GEN4_SF_PROG;
+      else
+         ice->state.dirty |= CROCUS_DIRTY_CLIP |
+                             CROCUS_DIRTY_GEN6_SCISSOR_RECT;;
       ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_UNCOMPILED_FS |
                           ice->state.stage_dirty_for_nos[CROCUS_NOS_LAST_VUE_MAP];
    }
@@ -2222,8 +2232,10 @@ crocus_update_compiled_shaders(struct crocus_context *ice)
       crocus_update_compiled_ff_gs(ice);
 
    if (screen->devinfo.gen < 6) {
-      crocus_update_compiled_clip(ice);
-      crocus_update_compiled_sf(ice);
+      if (ice->state.dirty & CROCUS_DIRTY_GEN4_CLIP_PROG)
+         crocus_update_compiled_clip(ice);
+      if (ice->state.dirty & CROCUS_DIRTY_GEN4_SF_PROG)
+         crocus_update_compiled_sf(ice);
    }
 
 
@@ -2475,9 +2487,13 @@ crocus_create_vs_state(struct pipe_context *ctx,
    struct crocus_uncompiled_shader *ish = crocus_create_shader_state(ctx, state);
 
    ish->nos |= (1ull << CROCUS_NOS_TEXTURES);
-   /* User clip planes */
-   if (ish->nir->info.clip_distance_array_size == 0)
+   /* User clip planes or gen5 sprite coord enable */
+   if (ish->nir->info.clip_distance_array_size == 0 ||
+       screen->devinfo.gen <= 5)
       ish->nos |= (1ull << CROCUS_NOS_RASTERIZER);
+
+   if (!screen->devinfo.is_haswell)
+      ish->nos |= (1ull << CROCUS_NOS_VERTEX_ELEMENTS);
 
    if (screen->precompile) {
       struct brw_vs_prog_key key = { KEY_INIT() };
