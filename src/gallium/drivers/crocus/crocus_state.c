@@ -1928,9 +1928,9 @@ crocus_upload_sampler_state(struct crocus_batch *batch,
 
    switch (samp_workaround) {
    case SAMP_CUBE_CLAMP:
-      wrap_s = TCM_CUBE;
-      wrap_t = TCM_CUBE;
-      wrap_r = TCM_CUBE;
+      wrap_s = TCM_CLAMP;
+      wrap_t = TCM_CLAMP;
+      wrap_r = TCM_CLAMP;
       break;
    case SAMP_CUBE_CUBE:
       wrap_s = TCM_CUBE;
