@@ -2156,7 +2156,7 @@ crocus_update_compiled_shaders(struct crocus_context *ice)
    const uint64_t stage_dirty = ice->state.stage_dirty;
 
    struct brw_vue_prog_data *old_prog_datas[4];
-   if (!(ice->state.dirty & CROCUS_DIRTY_URB)) {
+   if (!(ice->state.dirty & CROCUS_DIRTY_GEN6_URB)) {
       for (int i = MESA_SHADER_VERTEX; i <= MESA_SHADER_GEOMETRY; i++)
          old_prog_datas[i] = get_vue_prog_data(ice, i);
    }
@@ -2246,13 +2246,13 @@ crocus_update_compiled_shaders(struct crocus_context *ice)
 
 
    /* Changing shader interfaces may require a URB configuration. */
-   if (!(ice->state.dirty & CROCUS_DIRTY_URB)) {
+   if (!(ice->state.dirty & CROCUS_DIRTY_GEN6_URB)) {
       for (int i = MESA_SHADER_VERTEX; i <= MESA_SHADER_GEOMETRY; i++) {
          struct brw_vue_prog_data *old = old_prog_datas[i];
          struct brw_vue_prog_data *new = get_vue_prog_data(ice, i);
          if (!!old != !!new ||
              (new && new->urb_entry_size != old->urb_entry_size)) {
-            ice->state.dirty |= CROCUS_DIRTY_URB;
+            ice->state.dirty |= CROCUS_DIRTY_GEN6_URB;
             break;
          }
       }
@@ -2803,7 +2803,7 @@ crocus_bind_tes_state(struct pipe_context *ctx, void *state)
 
    /* Enabling/disabling optional stages requires a URB reconfiguration. */
    if (!!state != !!ice->shaders.uncompiled[MESA_SHADER_TESS_EVAL])
-      ice->state.dirty |= CROCUS_DIRTY_URB;
+      ice->state.dirty |= CROCUS_DIRTY_GEN6_URB;
 
    bind_shader_state((void *) ctx, state, MESA_SHADER_TESS_EVAL);
 }
@@ -2815,7 +2815,7 @@ crocus_bind_gs_state(struct pipe_context *ctx, void *state)
 
    /* Enabling/disabling optional stages requires a URB reconfiguration. */
    if (!!state != !!ice->shaders.uncompiled[MESA_SHADER_GEOMETRY])
-      ice->state.dirty |= CROCUS_DIRTY_URB;
+      ice->state.dirty |= CROCUS_DIRTY_GEN6_URB;
 
    bind_shader_state((void *) ctx, state, MESA_SHADER_GEOMETRY);
 }

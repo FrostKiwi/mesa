@@ -86,7 +86,7 @@ enum {
 #define CROCUS_DIRTY_VERTEX_ELEMENTS          (1ull <<  7)
 #define CROCUS_DIRTY_VERTEX_BUFFERS           (1ull <<  8)
 #define CROCUS_DIRTY_DRAWING_RECTANGLE        (1ull <<  9)
-#define CROCUS_DIRTY_URB                      (1ull << 10)
+#define CROCUS_DIRTY_GEN6_URB                 (1ull << 10)
 #define CROCUS_DIRTY_DEPTH_BUFFER             (1ull << 11)
 #define CROCUS_DIRTY_WM                       (1ull << 12)
 #define CROCUS_DIRTY_SO_DECL_LIST             (1ull << 13)

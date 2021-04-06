@@ -263,7 +263,6 @@ blorp_emit_urb_config(struct blorp_batch *blorp_batch,
    unsigned size[4] = { vs_entry_size, 1, 1, 1 };
 
    genX(emit_urb_setup)(ice, batch, size, false, false);
-   ice->state.dirty |= CROCUS_DIRTY_URB;
 #endif
 }
 #endif
@@ -331,7 +330,7 @@ crocus_blorp_exec(struct blorp_batch *blorp_batch,
                          CROCUS_ALL_DIRTY_FOR_COMPUTE |
                          CROCUS_DIRTY_GEN6_SCISSOR_RECT |
                          CROCUS_DIRTY_GEN75_VF |
-                         CROCUS_DIRTY_URB |
+                         CROCUS_DIRTY_GEN6_URB |
                          CROCUS_DIRTY_SF_CL_VIEWPORT);
 
    uint64_t skip_stage_bits = (CROCUS_ALL_STAGE_DIRTY_FOR_COMPUTE |

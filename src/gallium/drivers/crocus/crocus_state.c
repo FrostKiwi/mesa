@@ -4937,26 +4937,71 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #if GEN_GEN == 7
    emit_l3_state(batch);
 #endif
-   if (dirty & CROCUS_DIRTY_URB) {
-      unsigned size[4];
+#if GEN_GEN >= 6
+   if (dirty & CROCUS_DIRTY_GEN6_URB) {
+      // TODO GEN6 URB
+#if GEN_GEN == 7
+      const struct gen_device_info *devinfo = &batch->screen->devinfo;
+      bool gs_present = ice->shaders.prog[MESA_SHADER_GEOMETRY] != NULL;
+      bool tess_present = ice->shaders.prog[MESA_SHADER_TESS_EVAL] != NULL;
+      unsigned entry_size[4];
 
       for (int i = MESA_SHADER_VERTEX; i <= MESA_SHADER_GEOMETRY; i++) {
          if (!ice->shaders.prog[i]) {
-            size[i] = 1;
+            entry_size[i] = 1;
          } else {
             struct brw_vue_prog_data *vue_prog_data =
                (void *) ice->shaders.prog[i]->prog_data;
-            size[i] = vue_prog_data->urb_entry_size;
+            entry_size[i] = vue_prog_data->urb_entry_size;
          }
-         assert(size[i] != 0);
+         assert(entry_size[i] != 0);
       }
 
-      genX(emit_urb_setup)(ice, batch, size,
-                           ice->shaders.prog[MESA_SHADER_TESS_EVAL] != NULL,
-                           ice->shaders.prog[MESA_SHADER_GEOMETRY] != NULL);
+      /* If we're just switching between programs with the same URB requirements,
+       * skip the rest of the logic.
+       */
+      bool no_change = false;
+      if (ice->urb.vsize == entry_size[MESA_SHADER_VERTEX] &&
+          ice->urb.gs_present == gs_present &&
+          ice->urb.gsize == entry_size[MESA_SHADER_GEOMETRY] &&
+          ice->urb.tess_present == tess_present &&
+          ice->urb.hsize == entry_size[MESA_SHADER_TESS_CTRL] &&
+          ice->urb.dsize == entry_size[MESA_SHADER_TESS_EVAL]) {
+         no_change = true;
+      }
+
+      if (!no_change) {
+         ice->urb.vsize = entry_size[MESA_SHADER_VERTEX];
+         ice->urb.gs_present = gs_present;
+         ice->urb.gsize = entry_size[MESA_SHADER_GEOMETRY];
+         ice->urb.tess_present = tess_present;
+         ice->urb.hsize = entry_size[MESA_SHADER_TESS_CTRL];
+         ice->urb.dsize = entry_size[MESA_SHADER_TESS_EVAL];
+
+         unsigned entries[4];
+         unsigned start[4];
+         bool constrained;
+         intel_get_urb_config(devinfo,
+                              batch->screen->l3_config_3d,
+                              tess_present,
+                              gs_present,
+                              entry_size,
+                              entries, start, NULL, &constrained);
+
+         if (!(GEN_VERSIONx10 == 75) && !devinfo->is_baytrail)
+            gen7_emit_vs_workaround_flush(batch);
+         for (int i = MESA_SHADER_VERTEX; i <= MESA_SHADER_GEOMETRY; i++) {
+            crocus_emit_cmd(batch, GENX(3DSTATE_URB_VS), urb) {
+               urb._3DCommandSubOpcode += i;
+               urb.VSURBStartingAddress     = start[i];
+               urb.VSURBEntryAllocationSize = entry_size[i] - 1;
+               urb.VSNumberofURBEntries     = entries[i];
+            }
+         }
+      }
+#endif
    }
 
-#if GEN_GEN >= 6
    if (dirty & CROCUS_DIRTY_GEN6_BLEND_STATE) {
       struct crocus_blend_state *cso_blend = ice->state.cso_blend;
       struct pipe_framebuffer_state *cso_fb = &ice->state.framebuffer;
@@ -7186,36 +7231,7 @@ crocus_emit_raw_pipe_control(struct crocus_batch *batch,
    }
 }
 
-#if GEN_GEN == 7
-void
-genX(emit_urb_setup)(struct crocus_context *ice,
-                     struct crocus_batch *batch,
-                     const unsigned size[4],
-                     bool tess_present, bool gs_present)
-{
-   const struct gen_device_info *devinfo = &batch->screen->devinfo;
-   unsigned entries[4];
-   unsigned start[4];
-   bool constrained;
-
-   ice->shaders.last_vs_entry_size = size[MESA_SHADER_VERTEX];
-
-   intel_get_urb_config(devinfo, batch->screen->l3_config_3d,
-                        tess_present, gs_present,
-                        size, entries, start, NULL, &constrained);
-
-   if (!(GEN_VERSIONx10 == 75) && !devinfo->is_baytrail)
-      gen7_emit_vs_workaround_flush(batch);
-   for (int i = MESA_SHADER_VERTEX; i <= MESA_SHADER_GEOMETRY; i++) {
-      crocus_emit_cmd(batch, GENX(3DSTATE_URB_VS), urb) {
-         urb._3DCommandSubOpcode += i;
-         urb.VSURBStartingAddress     = start[i];
-         urb.VSURBEntryAllocationSize = size[i] - 1;
-         urb.VSNumberofURBEntries     = entries[i];
-      }
-   }
-}
-#elif GEN_GEN <= 6
+#if GEN_GEN == 6
 void
 genX(emit_urb_setup)(struct crocus_context *ice,
                      struct crocus_batch *batch,
