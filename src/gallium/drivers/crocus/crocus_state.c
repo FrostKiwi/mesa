@@ -1631,6 +1631,8 @@ crocus_create_rasterizer_state(struct pipe_context *ctx,
    else
       cso->num_clip_plane_consts = 0;
 
+   cso->cso = *state;
+
 #if GEN_GEN >= 6
    float line_width = get_line_width(state);
 
@@ -1680,7 +1682,6 @@ crocus_create_rasterizer_state(struct pipe_context *ctx,
 #endif
    }
 #endif
-   cso->cso = *state;
 
 #if GEN_GEN >= 6
    crocus_pack_command(GENX(3DSTATE_CLIP), cso->clip, cl) {
