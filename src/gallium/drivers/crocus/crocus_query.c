@@ -150,6 +150,7 @@ crocus_is_query_pipelined(struct crocus_query *q)
 static void
 mark_available(struct crocus_context *ice, struct crocus_query *q)
 {
+#if GEN_VERSIONx10 == 75
    struct crocus_batch *batch = &ice->batches[q->batch_idx];
    unsigned flags = PIPE_CONTROL_WRITE_IMMEDIATE;
    unsigned offset = offsetof(struct crocus_query_snapshots, snapshots_landed);
@@ -164,6 +165,7 @@ mark_available(struct crocus_context *ice, struct crocus_query *q)
       crocus_emit_pipe_control_write(batch, "query: mark available",
                                    flags, bo, offset, true);
    }
+#endif
 }
 
 /**
@@ -650,14 +652,18 @@ crocus_get_query_result(struct pipe_context *ctx,
       if (q->syncpt == crocus_batch_get_signal_syncpt(batch))
          crocus_batch_flush(batch);
 
+#if GEN_VERSIONx10 == 75
       while (!READ_ONCE(q->map->snapshots_landed)) {
          if (wait)
             crocus_wait_syncpt(ctx->screen, q->syncpt, INT64_MAX);
          else
             return false;
       }
-
       assert(READ_ONCE(q->map->snapshots_landed));
+#else
+      if (wait)
+	 crocus_wait_syncpt(ctx->screen, q->syncpt, INT64_MAX);
+#endif
       calculate_result_on_cpu(devinfo, q);
    }
 

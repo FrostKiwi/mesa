@@ -570,8 +570,6 @@ crocus_store_register_mem32(struct crocus_batch *batch, uint32_t reg,
    }
 }
 
-
-#if GEN_VERSIONx10 == 75
 /**
  * Load a 64-bit value from a buffer into a MMIO register via
  * two MI_LOAD_REGISTER_MEM commands.
@@ -593,6 +591,7 @@ crocus_store_register_mem64(struct crocus_batch *batch, uint32_t reg,
    crocus_store_register_mem32(batch, reg + 4, bo, offset + 4, predicated);
 }
 
+#if GEN_VERSIONx10 == 75
 static void
 crocus_store_data_imm32(struct crocus_batch *batch,
                       struct crocus_bo *bo, uint32_t offset,
@@ -1384,10 +1383,6 @@ crocus_init_compute_context(struct crocus_batch *batch)
  * packets which vary by generation.
  */
 struct crocus_genx_state {
-#if GEN_GEN == 7
-   uint32_t so_buffers[4 * GENX(3DSTATE_SO_BUFFER_length)];
-#endif
-
    struct {
 #if GEN_GEN == 7
       // TODO: verify this is needed, originally only for gen8
@@ -3477,8 +3472,6 @@ crocus_set_stream_output_targets(struct pipe_context *ctx,
                                const unsigned *offsets)
 {
    struct crocus_context *ice = (struct crocus_context *) ctx;
-   struct crocus_genx_state *genx = ice->state.genx;
-   uint32_t *so_buffers = genx->so_buffers;
 
    const bool active = num_targets > 0;
    if (ice->state.streamout_active != active) {
@@ -3518,35 +3511,6 @@ crocus_set_stream_output_targets(struct pipe_context *ctx,
    /* No need to update 3DSTATE_SO_BUFFER unless SOL is active. */
    if (!active)
       return;
-
-   for (unsigned i = 0; i < 4; i++,
-        so_buffers += GENX(3DSTATE_SO_BUFFER_length)) {
-
-      struct crocus_stream_output_target *tgt = (void *) ice->state.so_target[i];
-      unsigned offset = offsets[i];
-
-      if (!tgt) {
-         crocus_pack_command(GENX(3DSTATE_SO_BUFFER), so_buffers, sob) {
-            sob.SOBufferIndex = i;
-         }
-         continue;
-      }
-
-      /* Note that offsets[i] will either be 0, causing us to zero
-       * the value in the buffer, or 0xFFFFFFFF, which happens to mean
-       * "continue appending at the existing offset."
-       */
-      assert(offset == 0 || offset == 0xFFFFFFFF);
-
-      /* We might be called by Begin (offset = 0), Pause, then Resume
-       * (offset = 0xFFFFFFFF) before ever drawing (where these commands
-       * will actually be sent to the GPU).  In this case, we don't want
-       * to append - we still want to do our initial zeroing.
-       */
-      if (!tgt->zeroed)
-         offset = 0;
-      /* REMOVE 3D state so buffer from here */
-   }
 
    ice->state.dirty |= CROCUS_DIRTY_GEN7_SO_BUFFERS;
 }
@@ -4793,9 +4757,6 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    if (!(dirty & CROCUS_ALL_DIRTY_FOR_RENDER) &&
        !(stage_dirty & CROCUS_ALL_STAGE_DIRTY_FOR_RENDER))
       return;
-#if GEN_GEN >= 7
-   struct crocus_genx_state *genx = ice->state.genx;
-#endif
 
 #if GEN_GEN <= 5
    if (stage_dirty & (CROCUS_STAGE_DIRTY_CONSTANTS_VS |
@@ -5356,13 +5317,25 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    // XXX what about SO for earlier gens?
    if (ice->state.streamout_active) {
       if (dirty & CROCUS_DIRTY_GEN7_SO_BUFFERS) {
-         crocus_batch_emit(batch, genx->so_buffers,
-                         4 * 4 * GENX(3DSTATE_SO_BUFFER_length));
          for (int i = 0; i < 4; i++) {
             struct crocus_stream_output_target *tgt =
                (void *) ice->state.so_target[i];
-            if (tgt) {
-               tgt->zeroed = true;
+
+            if (!tgt) {
+               crocus_emit_cmd(batch, GENX(3DSTATE_SO_BUFFER), sob) {
+                  sob.SOBufferIndex = i;
+               }
+               continue;
+            }
+            struct crocus_resource *res = (void *) tgt->base.buffer;
+            uint32_t start = tgt->base.buffer_offset;
+            uint32_t end = ALIGN(start + tgt->base.buffer_size, 4);
+            crocus_emit_cmd(batch, GENX(3DSTATE_SO_BUFFER), sob) {
+               sob.SOBufferIndex = i;
+
+               sob.SurfaceBaseAddress = rw_bo(res->bo, start);
+               sob.SurfacePitch = tgt->stride;
+               sob.SurfaceEndAddress = rw_bo(res->bo, end);
             }
          }
       }
@@ -7468,14 +7441,14 @@ genX(init_state)(struct crocus_context *ice)
    ice->vtbl.load_register_reg64 = crocus_load_register_reg64;
    ice->vtbl.load_register_imm32 = crocus_load_register_imm32;
    ice->vtbl.load_register_imm64 = crocus_load_register_imm64;
-   ice->vtbl.load_register_mem32 = crocus_load_register_mem32;
-   ice->vtbl.load_register_mem64 = crocus_load_register_mem64;
-   ice->vtbl.store_register_mem32 = crocus_store_register_mem32;
-   ice->vtbl.store_register_mem64 = crocus_store_register_mem64;
    ice->vtbl.store_data_imm32 = crocus_store_data_imm32;
    ice->vtbl.store_data_imm64 = crocus_store_data_imm64;
 #endif
 #if GEN_GEN >= 7
+   ice->vtbl.load_register_mem32 = crocus_load_register_mem32;
+   ice->vtbl.load_register_mem64 = crocus_load_register_mem64;
+   ice->vtbl.store_register_mem32 = crocus_store_register_mem32;
+   ice->vtbl.store_register_mem64 = crocus_store_register_mem64;
    ice->vtbl.copy_mem_mem = crocus_copy_mem_mem;
 #endif
    ice->vtbl.update_surface_base_address = crocus_update_surface_base_address;
