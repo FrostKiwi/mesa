@@ -4295,19 +4295,6 @@ emit_null_fb_surface(struct crocus_batch *batch,
                            out_offset);
 }
 
-#if 0
-static uint32_t
-surf_state_offset_for_aux(struct crocus_resource *res,
-                          unsigned aux_modes,
-                          enum isl_aux_usage aux_usage)
-{
-   return SURFACE_STATE_ALIGNMENT *
-          util_bitcount(aux_modes & ((1 << aux_usage) - 1));
-}
-
-
-#endif
-
 static uint32_t
 emit_surface(struct crocus_context *ice,
              struct crocus_batch *batch,
@@ -5327,10 +5314,6 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
                (void *) ice->state.so_target[i];
             if (tgt) {
                tgt->zeroed = true;
-	       //               crocus_use_pinned_bo(batch, crocus_resource_bo(tgt->base.buffer),
-	       //                                  true);
-	       //               crocus_use_pinned_bo(batch, crocus_resource_bo(tgt->offset.res),
-	       //                                  true);
             }
          }
       }
@@ -6506,9 +6489,6 @@ crocus_upload_compute_state(struct crocus_context *ice,
       crocus_upload_sampler_states(ice, batch, MESA_SHADER_COMPUTE);
 
 //   crocus_use_optional_res(batch, shs->sampler_table.res, false);
-
-//   if (ice->state.need_border_colors)
-//      crocus_use_pinned_bo(batch, ice->state.border_color_pool.bo, false);
 
    if (stage_dirty & CROCUS_STAGE_DIRTY_CS) {
       /* The MEDIA_VFE_STATE documentation for Gen8+ says:
