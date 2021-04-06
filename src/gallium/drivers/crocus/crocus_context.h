@@ -92,70 +92,82 @@ enum {
 #define CROCUS_DIRTY_GEN6_MULTISAMPLE         (1ull << 13)
 #define CROCUS_DIRTY_VERTEX_BUFFERS           (1ull << 14)
 #define CROCUS_DIRTY_GEN6_SAMPLE_MASK         (1ull << 15)
-#define CROCUS_DIRTY_SAMPLER_STATES_VS        (1ull << 16)
-#define CROCUS_DIRTY_SAMPLER_STATES_TCS       (1ull << 17)
-#define CROCUS_DIRTY_SAMPLER_STATES_TES       (1ull << 18)
-#define CROCUS_DIRTY_SAMPLER_STATES_GS        (1ull << 19)
-#define CROCUS_DIRTY_SAMPLER_STATES_PS        (1ull << 20)
-#define CROCUS_DIRTY_SAMPLER_STATES_CS        (1ull << 21)
-#define CROCUS_DIRTY_UNCOMPILED_VS            (1ull << 22)
-#define CROCUS_DIRTY_UNCOMPILED_TCS           (1ull << 23)
-#define CROCUS_DIRTY_UNCOMPILED_TES           (1ull << 24)
-#define CROCUS_DIRTY_UNCOMPILED_GS            (1ull << 25)
-#define CROCUS_DIRTY_UNCOMPILED_FS            (1ull << 26)
-#define CROCUS_DIRTY_UNCOMPILED_CS            (1ull << 27)
-#define CROCUS_DIRTY_VS                       (1ull << 28)
-#define CROCUS_DIRTY_TCS                      (1ull << 29)
-#define CROCUS_DIRTY_TES                      (1ull << 30)
-#define CROCUS_DIRTY_GS                       (1ull << 31)
-#define CROCUS_DIRTY_FS                       (1ull << 32)
-#define CROCUS_DIRTY_CS                       (1ull << 33)
-#define CROCUS_DIRTY_URB                      (1ull << 34)
-#define CROCUS_SHIFT_FOR_DIRTY_CONSTANTS      35
-#define CROCUS_DIRTY_CONSTANTS_VS             (1ull << 35)
-#define CROCUS_DIRTY_CONSTANTS_TCS            (1ull << 36)
-#define CROCUS_DIRTY_CONSTANTS_TES            (1ull << 37)
-#define CROCUS_DIRTY_CONSTANTS_GS             (1ull << 38)
-#define CROCUS_DIRTY_CONSTANTS_FS             (1ull << 39)
-#define CROCUS_DIRTY_CONSTANTS_CS             (1ull << 40)
-#define CROCUS_DIRTY_DEPTH_BUFFER             (1ull << 41)
-#define CROCUS_DIRTY_WM                       (1ull << 42)
-#define CROCUS_DIRTY_BINDINGS_VS              (1ull << 43)
-#define CROCUS_DIRTY_BINDINGS_TCS             (1ull << 44)
-#define CROCUS_DIRTY_BINDINGS_TES             (1ull << 45)
-#define CROCUS_DIRTY_BINDINGS_GS              (1ull << 46)
-#define CROCUS_DIRTY_BINDINGS_FS              (1ull << 47)
-#define CROCUS_DIRTY_BINDINGS_CS              (1ull << 48)
-#define CROCUS_DIRTY_GEN7_SO_BUFFERS          (1ull << 49)
-#define CROCUS_DIRTY_SO_DECL_LIST             (1ull << 50)
-#define CROCUS_DIRTY_STREAMOUT                (1ull << 51)
-#define CROCUS_DIRTY_GEN5_PIPELINED_POINTERS  (1ull << 52)
-#define CROCUS_DIRTY_GEN75_VF                 (1ull << 53)
-#define CROCUS_DIRTY_GEN5_BINDING_TABLE_POINTERS  (1ull << 54)
-#define CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES  (1ull << 55)
-#define CROCUS_DIRTY_COMPUTE_RESOLVES_AND_FLUSHES (1ull << 56)
-#define CROCUS_DIRTY_VF_STATISTICS            (1ull << 57)
-#define CROCUS_DIRTY_GEN4_CONSTANT_COLOR      (1ull << 58)
-#define CROCUS_DIRTY_DEPTH_BOUNDS             (1ull << 59)
-#define CROCUS_DIRTY_DRAWING_RECTANGLE        (1ull << 60)
-#define CROCUS_DIRTY_GEN4_URB_FENCE           (1ull << 61)
+#define CROCUS_DIRTY_URB                      (1ull << 16)
+#define CROCUS_DIRTY_DEPTH_BUFFER             (1ull << 17)
+#define CROCUS_DIRTY_WM                       (1ull << 18)
+#define CROCUS_DIRTY_GEN7_SO_BUFFERS          (1ull << 19)
+#define CROCUS_DIRTY_SO_DECL_LIST             (1ull << 20)
+#define CROCUS_DIRTY_STREAMOUT                (1ull << 21)
+#define CROCUS_DIRTY_GEN5_PIPELINED_POINTERS  (1ull << 22)
+#define CROCUS_DIRTY_GEN75_VF                 (1ull << 23)
+#define CROCUS_DIRTY_GEN5_BINDING_TABLE_POINTERS  (1ull << 24)
+#define CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES  (1ull << 25)
+#define CROCUS_DIRTY_COMPUTE_RESOLVES_AND_FLUSHES (1ull << 26)
+#define CROCUS_DIRTY_VF_STATISTICS            (1ull << 27)
+#define CROCUS_DIRTY_GEN4_CONSTANT_COLOR      (1ull << 28)
+#define CROCUS_DIRTY_DEPTH_BOUNDS             (1ull << 29)
+#define CROCUS_DIRTY_DRAWING_RECTANGLE        (1ull << 30)
+#define CROCUS_DIRTY_GEN4_URB_FENCE           (1ull << 31)
+#define CROCUS_DIRTY_GEN7_L3_CONFIG           (1ull << 32)
 
-#define CROCUS_ALL_DIRTY_FOR_COMPUTE (CROCUS_DIRTY_CS | \
-                                    CROCUS_DIRTY_SAMPLER_STATES_CS | \
-                                    CROCUS_DIRTY_UNCOMPILED_CS | \
-                                    CROCUS_DIRTY_CONSTANTS_CS | \
-                                    CROCUS_DIRTY_BINDINGS_CS | \
-                                    CROCUS_DIRTY_COMPUTE_RESOLVES_AND_FLUSHES)
+#define CROCUS_ALL_DIRTY_FOR_COMPUTE (CROCUS_DIRTY_COMPUTE_RESOLVES_AND_FLUSHES)
 
-#define CROCUS_ALL_DIRTY_FOR_RENDER ~CROCUS_ALL_DIRTY_FOR_COMPUTE
+#define CROCUS_ALL_DIRTY_FOR_RENDER (~CROCUS_ALL_DIRTY_FOR_COMPUTE)
 
-#define CROCUS_ALL_DIRTY_BINDINGS (CROCUS_DIRTY_BINDINGS_VS  | \
-                                 CROCUS_DIRTY_BINDINGS_TCS | \
-                                 CROCUS_DIRTY_BINDINGS_TES | \
-                                 CROCUS_DIRTY_BINDINGS_GS  | \
-                                 CROCUS_DIRTY_BINDINGS_FS  | \
-                                   CROCUS_DIRTY_BINDINGS_CS)
+/**
+ * Per-stage dirty flags.  When state changes, we flag some combination of
+ * these to indicate that particular GPU commands need to be re-emitted.
+ * Unlike the IRIS_DIRTY_* flags these are shader stage-specific and can be
+ * indexed by shifting the mask by the shader stage index.
+ *
+ * See crocus_upload_render_state().
+ */
+#define CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS        (1ull << 0)
+#define CROCUS_STAGE_DIRTY_SAMPLER_STATES_TCS       (1ull << 1)
+#define CROCUS_STAGE_DIRTY_SAMPLER_STATES_TES       (1ull << 2)
+#define CROCUS_STAGE_DIRTY_SAMPLER_STATES_GS        (1ull << 3)
+#define CROCUS_STAGE_DIRTY_SAMPLER_STATES_PS        (1ull << 4)
+#define CROCUS_STAGE_DIRTY_SAMPLER_STATES_CS        (1ull << 5)
+#define CROCUS_STAGE_DIRTY_UNCOMPILED_VS            (1ull << 6)
+#define CROCUS_STAGE_DIRTY_UNCOMPILED_TCS           (1ull << 7)
+#define CROCUS_STAGE_DIRTY_UNCOMPILED_TES           (1ull << 8)
+#define CROCUS_STAGE_DIRTY_UNCOMPILED_GS            (1ull << 9)
+#define CROCUS_STAGE_DIRTY_UNCOMPILED_FS            (1ull << 10)
+#define CROCUS_STAGE_DIRTY_UNCOMPILED_CS            (1ull << 11)
+#define CROCUS_STAGE_DIRTY_VS                       (1ull << 12)
+#define CROCUS_STAGE_DIRTY_TCS                      (1ull << 13)
+#define CROCUS_STAGE_DIRTY_TES                      (1ull << 14)
+#define CROCUS_STAGE_DIRTY_GS                       (1ull << 15)
+#define CROCUS_STAGE_DIRTY_FS                       (1ull << 16)
+#define CROCUS_STAGE_DIRTY_CS                       (1ull << 17)
+#define CROCUS_SHIFT_FOR_STAGE_DIRTY_CONSTANTS      18
+#define CROCUS_STAGE_DIRTY_CONSTANTS_VS             (1ull << 18)
+#define CROCUS_STAGE_DIRTY_CONSTANTS_TCS            (1ull << 19)
+#define CROCUS_STAGE_DIRTY_CONSTANTS_TES            (1ull << 20)
+#define CROCUS_STAGE_DIRTY_CONSTANTS_GS             (1ull << 21)
+#define CROCUS_STAGE_DIRTY_CONSTANTS_FS             (1ull << 22)
+#define CROCUS_STAGE_DIRTY_CONSTANTS_CS             (1ull << 23)
+#define CROCUS_STAGE_DIRTY_BINDINGS_VS              (1ull << 24)
+#define CROCUS_STAGE_DIRTY_BINDINGS_TCS             (1ull << 25)
+#define CROCUS_STAGE_DIRTY_BINDINGS_TES             (1ull << 26)
+#define CROCUS_STAGE_DIRTY_BINDINGS_GS              (1ull << 27)
+#define CROCUS_STAGE_DIRTY_BINDINGS_FS              (1ull << 28)
+#define CROCUS_STAGE_DIRTY_BINDINGS_CS              (1ull << 29)
 
+#define CROCUS_ALL_STAGE_DIRTY_FOR_COMPUTE (CROCUS_STAGE_DIRTY_CS | \
+                                          CROCUS_STAGE_DIRTY_SAMPLER_STATES_CS | \
+                                          CROCUS_STAGE_DIRTY_UNCOMPILED_CS |    \
+                                          CROCUS_STAGE_DIRTY_CONSTANTS_CS |     \
+                                          CROCUS_STAGE_DIRTY_BINDINGS_CS)
+
+#define CROCUS_ALL_STAGE_DIRTY_FOR_RENDER (~CROCUS_ALL_STAGE_DIRTY_FOR_COMPUTE)
+
+#define CROCUS_ALL_STAGE_DIRTY_BINDINGS (CROCUS_STAGE_DIRTY_BINDINGS_VS  | \
+                                       CROCUS_STAGE_DIRTY_BINDINGS_TCS | \
+                                       CROCUS_STAGE_DIRTY_BINDINGS_TES | \
+                                       CROCUS_STAGE_DIRTY_BINDINGS_GS  | \
+                                       CROCUS_STAGE_DIRTY_BINDINGS_FS  | \
+                                       CROCUS_STAGE_DIRTY_BINDINGS_CS)
 /**
  * Non-orthogonal state (NOS) dependency flags.
  *
@@ -657,7 +669,8 @@ struct crocus_context {
 
    struct {
       uint64_t dirty;
-      uint64_t dirty_for_nos[CROCUS_NOS_COUNT];
+      uint64_t stage_dirty;
+      uint64_t stage_dirty_for_nos[CROCUS_NOS_COUNT];
 
       unsigned num_viewports;
       unsigned sample_mask;

@@ -1484,14 +1484,14 @@ crocus_bind_blend_state(struct pipe_context *ctx, void *state)
    ice->state.cso_blend = cso;
    ice->state.blend_enables = cso ? cso->blend_enables : 0;
 
-   ice->state.dirty |= CROCUS_DIRTY_BINDINGS_FS;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_BINDINGS_FS;
    ice->state.dirty |= CROCUS_DIRTY_WM;
 #if GEN_GEN >= 6
    ice->state.dirty |= CROCUS_DIRTY_GEN6_BLEND_STATE;
 #endif
    ice->state.dirty |= CROCUS_DIRTY_COLOR_CALC_STATE;
    ice->state.dirty |= CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES;
-   ice->state.dirty |= ice->state.dirty_for_nos[CROCUS_NOS_BLEND];
+   ice->state.stage_dirty |= ice->state.stage_dirty_for_nos[CROCUS_NOS_BLEND];
 }
 
 /**
@@ -1595,7 +1595,7 @@ crocus_bind_zsa_state(struct pipe_context *ctx, void *state)
 #if GEN_GEN >= 6
    ice->state.dirty |= CROCUS_DIRTY_GEN6_WM_DEPTH_STENCIL;
 #endif
-   ice->state.dirty |= ice->state.dirty_for_nos[CROCUS_NOS_DEPTH_STENCIL_ALPHA];
+   ice->state.stage_dirty |= ice->state.stage_dirty_for_nos[CROCUS_NOS_DEPTH_STENCIL_ALPHA];
 }
 
 static float
@@ -1797,9 +1797,10 @@ crocus_bind_rasterizer_state(struct pipe_context *ctx, void *state)
    ice->state.dirty |= CROCUS_DIRTY_RASTER;
    ice->state.dirty |= CROCUS_DIRTY_CLIP;
 #if GEN_GEN <= 5
-   ice->state.dirty |= CROCUS_DIRTY_WM | CROCUS_DIRTY_VS;
+   ice->state.dirty |= CROCUS_DIRTY_WM;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_VS;
 #endif
-   ice->state.dirty |= ice->state.dirty_for_nos[CROCUS_NOS_RASTERIZER];
+   ice->state.stage_dirty |= ice->state.stage_dirty_for_nos[CROCUS_NOS_RASTERIZER];
 }
 
 /**
@@ -1909,10 +1910,10 @@ crocus_bind_sampler_states(struct pipe_context *ctx,
       if (p_stage == PIPE_SHADER_FRAGMENT)
          ice->state.dirty |= CROCUS_DIRTY_WM;
       else if (p_stage == PIPE_SHADER_VERTEX)
-         ice->state.dirty |= CROCUS_DIRTY_VS;
+         ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_VS;
 #endif
-      ice->state.dirty |= CROCUS_DIRTY_SAMPLER_STATES_VS << stage;
-      ice->state.dirty |= ice->state.dirty_for_nos[CROCUS_NOS_TEXTURES];
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << stage;
+      ice->state.stage_dirty |= ice->state.stage_dirty_for_nos[CROCUS_NOS_TEXTURES];
    }
 }
 
@@ -2785,13 +2786,13 @@ crocus_set_shader_images(struct pipe_context *ctx,
       }
    }
 
-   ice->state.dirty |= CROCUS_DIRTY_BINDINGS_VS << stage;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_BINDINGS_VS << stage;
    ice->state.dirty |=
       stage == MESA_SHADER_COMPUTE ? CROCUS_DIRTY_COMPUTE_RESOLVES_AND_FLUSHES
                                    : CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES;
 
    /* Broadwell also needs brw_image_params re-uploaded */
-   ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_VS << stage;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_VS << stage;
    shs->sysvals_need_upload = true;
 }
 
@@ -2825,11 +2826,11 @@ crocus_set_sampler_views(struct pipe_context *ctx,
       }
    }
 
-   ice->state.dirty |= (CROCUS_DIRTY_BINDINGS_VS << stage);
+   ice->state.stage_dirty |= (CROCUS_STAGE_DIRTY_BINDINGS_VS << stage);
    ice->state.dirty |=
       stage == MESA_SHADER_COMPUTE ? CROCUS_DIRTY_COMPUTE_RESOLVES_AND_FLUSHES
                                    : CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES;
-   ice->state.dirty |= ice->state.dirty_for_nos[CROCUS_NOS_TEXTURES];
+   ice->state.stage_dirty |= ice->state.stage_dirty_for_nos[CROCUS_NOS_TEXTURES];
 }
 
 /**
@@ -2846,7 +2847,7 @@ crocus_set_tess_state(struct pipe_context *ctx,
    memcpy(&ice->state.default_outer_level[0], &default_outer_level[0], 4 * sizeof(float));
    memcpy(&ice->state.default_inner_level[0], &default_inner_level[0], 2 * sizeof(float));
 
-   ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_TCS;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_TCS;
    shs->sysvals_need_upload = true;
 }
 
@@ -2875,8 +2876,8 @@ crocus_set_clip_state(struct pipe_context *ctx,
 #if GEN_GEN <= 5
    ice->state.dirty |= CROCUS_DIRTY_GEN4_CURBE;
 #endif
-   ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_VS | CROCUS_DIRTY_CONSTANTS_GS |
-                       CROCUS_DIRTY_CONSTANTS_TES;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_VS | CROCUS_STAGE_DIRTY_CONSTANTS_GS |
+                             CROCUS_STAGE_DIRTY_CONSTANTS_TES;
    shs->sysvals_need_upload = true;
    gshs->sysvals_need_upload = true;
    tshs->sysvals_need_upload = true;
@@ -3047,11 +3048,11 @@ crocus_set_framebuffer_state(struct pipe_context *ctx,
    cso->layers = layers;
 
    /* Render target change */
-   ice->state.dirty |= CROCUS_DIRTY_BINDINGS_FS;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_BINDINGS_FS;
 
    ice->state.dirty |= CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES;
 
-   ice->state.dirty |= ice->state.dirty_for_nos[CROCUS_NOS_FRAMEBUFFER];
+   ice->state.stage_dirty |= ice->state.stage_dirty_for_nos[CROCUS_NOS_FRAMEBUFFER];
 }
 
 /**
@@ -3105,7 +3106,7 @@ crocus_set_constant_buffer(struct pipe_context *ctx,
       shs->bound_cbufs &= ~(1u << index);
    }
 
-   ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_VS << stage;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_VS << stage;
 }
 
 static void
@@ -3228,7 +3229,7 @@ crocus_set_shader_buffers(struct pipe_context *ctx,
       }
    }
 
-   ice->state.dirty |= CROCUS_DIRTY_BINDINGS_VS << stage;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_BINDINGS_VS << stage;
 }
 
 static void
@@ -3419,7 +3420,7 @@ crocus_bind_vertex_elements_state(struct pipe_context *ctx, void *state)
    ice->state.cso_vertex_elements = state;
    ice->state.dirty |= CROCUS_DIRTY_VERTEX_ELEMENTS;
 #if !(GEN_VERSIONx10 == 75)
-   ice->state.dirty |= CROCUS_DIRTY_UNCOMPILED_VS;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_UNCOMPILED_VS;
 #endif
 }
 
@@ -4806,24 +4807,30 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
                                const struct pipe_draw_info *draw)
 {
    uint64_t dirty = ice->state.dirty;
+   uint64_t stage_dirty = ice->state.stage_dirty;
+
 
    crocus_update_surface_base_address(batch);
 
-   if (!(dirty & CROCUS_ALL_DIRTY_FOR_RENDER))
+   if (!(dirty & CROCUS_ALL_DIRTY_FOR_RENDER) &&
+       !(stage_dirty & CROCUS_ALL_STAGE_DIRTY_FOR_RENDER))
       return;
 #if GEN_GEN >= 7
    struct crocus_genx_state *genx = ice->state.genx;
 #endif
 
 #if GEN_GEN <= 5
-   if (dirty & (CROCUS_DIRTY_CONSTANTS_VS |
-		CROCUS_DIRTY_CONSTANTS_FS)) {
+   if (stage_dirty & (CROCUS_STAGE_DIRTY_CONSTANTS_VS |
+                      CROCUS_STAGE_DIRTY_CONSTANTS_FS)) {
       bool ret = calculate_curbe_offsets(batch);
-      if (ret)
-         dirty |= CROCUS_DIRTY_GEN4_CURBE | CROCUS_DIRTY_WM | CROCUS_DIRTY_VS | CROCUS_DIRTY_CLIP;
+      if (ret) {
+         dirty |= CROCUS_DIRTY_GEN4_CURBE | CROCUS_DIRTY_WM | CROCUS_DIRTY_CLIP;
+         stage_dirty |= CROCUS_STAGE_DIRTY_VS;
+      }
    }
 
-   if (dirty & (CROCUS_DIRTY_GEN4_CURBE | CROCUS_DIRTY_RASTER | CROCUS_DIRTY_VS)) {
+   if (dirty & (CROCUS_DIRTY_GEN4_CURBE | CROCUS_DIRTY_RASTER) ||
+       stage_dirty & CROCUS_STAGE_DIRTY_VS) {
      bool ret = crocus_calculate_urb_fence(batch, ice->curbe.total_size,
 					   brw_vue_prog_data(ice->shaders.prog[MESA_SHADER_VERTEX]->prog_data)->urb_entry_size,
 					   ((struct brw_sf_prog_data *)ice->shaders.sf_prog->prog_data)->urb_entry_size);
@@ -5155,7 +5162,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    }
 #endif
    for (int stage = 0; stage <= MESA_SHADER_FRAGMENT; stage++) {
-      if (!(dirty & (CROCUS_DIRTY_CONSTANTS_VS << stage)))
+      if (!(stage_dirty & (CROCUS_STAGE_DIRTY_CONSTANTS_VS << stage)))
          continue;
 
       struct crocus_shader_state *shs = &ice->state.shaders[stage];
@@ -5179,7 +5186,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    }
 
    for (int stage = 0; stage <= MESA_SHADER_FRAGMENT; stage++) {
-      if (dirty & (CROCUS_DIRTY_BINDINGS_VS << stage)) {
+      if (stage_dirty & (CROCUS_STAGE_DIRTY_BINDINGS_VS << stage)) {
          if (ice->shaders.prog[stage]) {
 #if GEN_GEN <= 6
             dirty |= CROCUS_DIRTY_GEN5_BINDING_TABLE_POINTERS;
@@ -5212,7 +5219,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #endif
 
    for (int stage = 0; stage <= MESA_SHADER_FRAGMENT; stage++) {
-      if (!(dirty & (CROCUS_DIRTY_SAMPLER_STATES_VS << stage)) ||
+      if (!(stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << stage)) ||
           !ice->shaders.prog[stage])
          continue;
 
@@ -5267,7 +5274,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 
 #if GEN_GEN >= 7
    struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_FRAGMENT];
-   if ((dirty & CROCUS_DIRTY_FS) && shader) {
+   if ((stage_dirty & CROCUS_STAGE_DIRTY_FS) && shader) {
       struct brw_stage_prog_data *prog_data = shader->prog_data;
       struct brw_wm_prog_data *wm_prog_data = (void *) shader->prog_data;
 
@@ -5469,7 +5476,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #endif
    }
 
-   if (dirty & CROCUS_DIRTY_VS) {
+   if (stage_dirty & CROCUS_STAGE_DIRTY_VS) {
       struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_VERTEX];
       const struct brw_vue_prog_data *vue_prog_data = brw_vue_prog_data(shader->prog_data);
       const struct brw_stage_prog_data *prog_data = &vue_prog_data->base;
@@ -5519,7 +5526,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
       }
    }
 
-   if (dirty & CROCUS_DIRTY_GS) {
+   if (stage_dirty & CROCUS_STAGE_DIRTY_GS) {
       struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_GEOMETRY];
       bool active = GEN_GEN >= 6 && shader;
 #if GEN_GEN >= 6
@@ -5647,7 +5654,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    }
 
 #if GEN_GEN >= 7
-   if (dirty & CROCUS_DIRTY_TCS) {
+   if (stage_dirty & CROCUS_STAGE_DIRTY_TCS) {
       struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_TESS_CTRL];
 
       if (shader) {
@@ -5667,7 +5674,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 
    }
 
-   if (dirty & CROCUS_DIRTY_TES) {
+   if (stage_dirty & CROCUS_STAGE_DIRTY_TES) {
       struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_TESS_EVAL];
       if (shader) {
 	 const struct brw_tes_prog_data *tes_prog_data = brw_tes_prog_data(shader->prog_data);
@@ -6492,7 +6499,7 @@ crocus_upload_compute_state(struct crocus_context *ice,
                           struct crocus_batch *batch,
                           const struct pipe_grid_info *grid)
 {
-   const uint64_t dirty = ice->state.dirty;
+   const uint64_t stage_dirty = ice->state.stage_dirty;
    struct crocus_screen *screen = batch->screen;
    const struct gen_device_info *devinfo = &screen->devinfo;
    struct crocus_shader_state *shs = &ice->state.shaders[MESA_SHADER_COMPUTE];
@@ -6505,13 +6512,13 @@ crocus_upload_compute_state(struct crocus_context *ice,
       brw_cs_simd_size_for_group_size(devinfo, cs_prog_data, group_size);
    const unsigned threads = DIV_ROUND_UP(group_size, simd_size);
 
-   if ((dirty & CROCUS_DIRTY_CONSTANTS_CS) && shs->sysvals_need_upload)
+   if ((stage_dirty & CROCUS_STAGE_DIRTY_CONSTANTS_CS) && shs->sysvals_need_upload)
       upload_sysvals(ice, MESA_SHADER_COMPUTE);
 
 //   if (dirty & CROCUS_DIRTY_BINDINGS_CS)
 //      crocus_populate_binding_table(ice, batch, MESA_SHADER_COMPUTE, false);
 
-   if (dirty & CROCUS_DIRTY_SAMPLER_STATES_CS)
+   if (stage_dirty & CROCUS_STAGE_DIRTY_SAMPLER_STATES_CS)
       crocus_upload_sampler_states(ice, batch, MESA_SHADER_COMPUTE);
 
 //   crocus_use_optional_res(batch, shs->sampler_table.res, false);
@@ -6519,7 +6526,7 @@ crocus_upload_compute_state(struct crocus_context *ice,
 //   if (ice->state.need_border_colors)
 //      crocus_use_pinned_bo(batch, ice->state.border_color_pool.bo, false);
 
-   if (dirty & CROCUS_DIRTY_CS) {
+   if (stage_dirty & CROCUS_STAGE_DIRTY_CS) {
       /* The MEDIA_VFE_STATE documentation for Gen8+ says:
        *
        *   "A stalling PIPE_CONTROL is required before MEDIA_VFE_STATE unless
@@ -6557,7 +6564,7 @@ crocus_upload_compute_state(struct crocus_context *ice,
    }
 
    /* TODO: Combine subgroup-id with cbuf0 so we can push regular uniforms */
-   if (dirty & CROCUS_DIRTY_CS) {
+   if (stage_dirty & CROCUS_STAGE_DIRTY_CS) {
       uint32_t curbe_data_offset = 0;
       assert(cs_prog_data->push.cross_thread.dwords == 0 &&
              cs_prog_data->push.per_thread.dwords == 1 &&
@@ -6578,10 +6585,10 @@ crocus_upload_compute_state(struct crocus_context *ice,
       }
    }
 
-   if (dirty & (CROCUS_DIRTY_SAMPLER_STATES_CS |
-                CROCUS_DIRTY_BINDINGS_CS |
-                CROCUS_DIRTY_CONSTANTS_CS |
-                CROCUS_DIRTY_CS)) {
+   if (stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_CS |
+                      CROCUS_STAGE_DIRTY_BINDINGS_CS |
+                      CROCUS_STAGE_DIRTY_CONSTANTS_CS |
+                      CROCUS_STAGE_DIRTY_CS)) {
       uint32_t desc[GENX(INTERFACE_DESCRIPTOR_DATA_length)];
 
       crocus_pack_state(GENX(INTERFACE_DESCRIPTOR_DATA), desc, idd) {
@@ -6771,7 +6778,7 @@ crocus_rebind_buffer(struct crocus_context *ice,
 
             if (res->bo == crocus_resource_bo(cbuf->buffer)) {
                pipe_resource_reference(&surf_state->res, NULL);
-               ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_VS << s;
+               ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_VS << s;
             }
          }
       }
@@ -7325,11 +7332,11 @@ gen7_emit_isp_disable(struct crocus_batch *batch)
                                 NULL, 0, 0);
 
    struct crocus_context *ice = batch->ice;
-   ice->state.dirty |= (CROCUS_DIRTY_CONSTANTS_VS |
-                        CROCUS_DIRTY_CONSTANTS_TCS |
-                        CROCUS_DIRTY_CONSTANTS_TES |
-                        CROCUS_DIRTY_CONSTANTS_GS |
-                        CROCUS_DIRTY_CONSTANTS_FS);
+   ice->state.stage_dirty |= (CROCUS_STAGE_DIRTY_CONSTANTS_VS |
+                              CROCUS_STAGE_DIRTY_CONSTANTS_TCS |
+                              CROCUS_STAGE_DIRTY_CONSTANTS_TES |
+                              CROCUS_STAGE_DIRTY_CONSTANTS_GS |
+                              CROCUS_STAGE_DIRTY_CONSTANTS_FS);
 }
 #endif
 
@@ -7356,27 +7363,28 @@ crocus_batch_reset_dirty(struct crocus_batch *batch)
    /* for GEN4/5 need to reemit anything that ends up in the state batch that points to anything in the state batch
     * as the old state batch won't still be available.
     */
-   batch->ice->state.dirty |= CROCUS_ALL_DIRTY_BINDINGS | CROCUS_DIRTY_DEPTH_BUFFER |
+   batch->ice->state.dirty |= CROCUS_DIRTY_DEPTH_BUFFER |
      CROCUS_DIRTY_CLIP | CROCUS_DIRTY_COLOR_CALC_STATE;
 
    batch->ice->state.dirty |= CROCUS_DIRTY_VERTEX_ELEMENTS | CROCUS_DIRTY_VERTEX_BUFFERS;
 
-   batch->ice->state.dirty |= CROCUS_DIRTY_SAMPLER_STATES_VS;
-   batch->ice->state.dirty |= CROCUS_DIRTY_SAMPLER_STATES_TES;
-   batch->ice->state.dirty |= CROCUS_DIRTY_SAMPLER_STATES_TCS;
-   batch->ice->state.dirty |= CROCUS_DIRTY_SAMPLER_STATES_GS;
-   batch->ice->state.dirty |= CROCUS_DIRTY_SAMPLER_STATES_PS;
-   batch->ice->state.dirty |= CROCUS_DIRTY_SAMPLER_STATES_CS;
+   batch->ice->state.stage_dirty |= CROCUS_ALL_STAGE_DIRTY_BINDINGS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_SAMPLER_STATES_TES;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_SAMPLER_STATES_TCS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_SAMPLER_STATES_GS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_SAMPLER_STATES_PS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_SAMPLER_STATES_CS;
 
-   batch->ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_VS;
-   batch->ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_TES;
-   batch->ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_TCS;
-   batch->ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_GS;
-   batch->ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_FS;
-   batch->ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_CS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_VS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_TES;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_TCS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_GS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_FS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_CS;
 
-   batch->ice->state.dirty |= CROCUS_DIRTY_VS;
-   batch->ice->state.dirty |= CROCUS_DIRTY_GS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_VS;
+   batch->ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_GS;
    batch->ice->state.dirty |= CROCUS_DIRTY_CC_VIEWPORT | CROCUS_DIRTY_SF_CL_VIEWPORT;
 #if GEN_GEN >= 6
    /* SCISSOR_STATE */
@@ -7509,6 +7517,7 @@ genX(init_state)(struct crocus_context *ice)
    ice->vtbl.batch_reset_dirty = crocus_batch_reset_dirty;
    ice->vtbl.translate_prim_type = translate_prim_type;
    ice->state.dirty = ~0ull;
+   ice->state.stage_dirty = ~0ull;
 
    ice->state.statistics_counters_enabled = true;
 

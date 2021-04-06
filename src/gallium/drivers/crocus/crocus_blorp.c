@@ -330,34 +330,36 @@ crocus_blorp_exec(struct blorp_batch *blorp_batch,
                          CROCUS_DIRTY_LINE_STIPPLE |
                          CROCUS_ALL_DIRTY_FOR_COMPUTE |
                          CROCUS_DIRTY_GEN6_SCISSOR_RECT |
-                         CROCUS_DIRTY_UNCOMPILED_VS |
-                         CROCUS_DIRTY_UNCOMPILED_TCS |
-                         CROCUS_DIRTY_UNCOMPILED_TES |
-                         CROCUS_DIRTY_UNCOMPILED_GS |
-                         CROCUS_DIRTY_UNCOMPILED_FS |
                          CROCUS_DIRTY_GEN75_VF |
                          CROCUS_DIRTY_URB |
-                         CROCUS_DIRTY_SF_CL_VIEWPORT |
-                         CROCUS_DIRTY_SAMPLER_STATES_VS |
-                         CROCUS_DIRTY_SAMPLER_STATES_TCS |
-                         CROCUS_DIRTY_SAMPLER_STATES_TES |
-                         CROCUS_DIRTY_SAMPLER_STATES_GS);
+                         CROCUS_DIRTY_SF_CL_VIEWPORT);
+
+   uint64_t skip_stage_bits = (CROCUS_ALL_STAGE_DIRTY_FOR_COMPUTE |
+                               CROCUS_STAGE_DIRTY_UNCOMPILED_VS |
+                               CROCUS_STAGE_DIRTY_UNCOMPILED_TCS |
+                               CROCUS_STAGE_DIRTY_UNCOMPILED_TES |
+                               CROCUS_STAGE_DIRTY_UNCOMPILED_GS |
+                               CROCUS_STAGE_DIRTY_UNCOMPILED_FS |
+                               CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS |
+                               CROCUS_STAGE_DIRTY_SAMPLER_STATES_TCS |
+                               CROCUS_STAGE_DIRTY_SAMPLER_STATES_TES |
+                               CROCUS_STAGE_DIRTY_SAMPLER_STATES_GS);
 
    if (!ice->shaders.uncompiled[MESA_SHADER_TESS_EVAL]) {
       /* BLORP disabled tessellation, that's fine for the next draw */
-      skip_bits |= CROCUS_DIRTY_TCS |
-                   CROCUS_DIRTY_TES |
-                   CROCUS_DIRTY_CONSTANTS_TCS |
-                   CROCUS_DIRTY_CONSTANTS_TES |
-                   CROCUS_DIRTY_BINDINGS_TCS |
-                   CROCUS_DIRTY_BINDINGS_TES;
+     skip_stage_bits |= CROCUS_STAGE_DIRTY_TCS |
+                        CROCUS_STAGE_DIRTY_TES |
+                        CROCUS_STAGE_DIRTY_CONSTANTS_TCS |
+                        CROCUS_STAGE_DIRTY_CONSTANTS_TES |
+                        CROCUS_STAGE_DIRTY_BINDINGS_TCS |
+                        CROCUS_STAGE_DIRTY_BINDINGS_TES;
    }
 
    if (!ice->shaders.uncompiled[MESA_SHADER_GEOMETRY]) {
       /* BLORP disabled geometry shaders, that's fine for the next draw */
-      skip_bits |= CROCUS_DIRTY_GS |
-                   CROCUS_DIRTY_CONSTANTS_GS |
-                   CROCUS_DIRTY_BINDINGS_GS;
+     skip_stage_bits |= CROCUS_STAGE_DIRTY_GS |
+                        CROCUS_STAGE_DIRTY_CONSTANTS_GS |
+                        CROCUS_STAGE_DIRTY_BINDINGS_GS;
    }
 
    /* we can skip flagging CROCUS_DIRTY_DEPTH_BUFFER, if
@@ -370,6 +372,7 @@ crocus_blorp_exec(struct blorp_batch *blorp_batch,
       skip_bits |= CROCUS_DIRTY_GEN6_BLEND_STATE;
 
    ice->state.dirty |= ~skip_bits;
+   ice->state.stage_dirty |= ~skip_stage_bits;
 
    if (params->dst.enabled) {
       crocus_render_cache_add_bo(batch, params->dst.addr.buffer,

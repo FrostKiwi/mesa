@@ -327,7 +327,7 @@ fast_clear_color(struct crocus_context *ice,
 
    crocus_resource_set_aux_state(ice, res, level, box->z,
                                box->depth, ISL_AUX_STATE_CLEAR);
-   ice->state.dirty |= CROCUS_ALL_DIRTY_BINDINGS;
+   ice->state.stage_dirty |= CROCUS_ALL_STAGE_DIRTY_BINDINGS;
    return;
 }
 

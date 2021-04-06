@@ -764,13 +764,13 @@ crocus_set_active_query_state(struct pipe_context *ctx, bool enable)
    // have to be done dynamically at draw time, which is a pain
    ice->state.statistics_counters_enabled = enable;
    ice->state.dirty |= CROCUS_DIRTY_CLIP |
-                       CROCUS_DIRTY_GS |
                        CROCUS_DIRTY_RASTER |
                        CROCUS_DIRTY_STREAMOUT |
-                       CROCUS_DIRTY_TCS |
-                       CROCUS_DIRTY_TES |
-                       CROCUS_DIRTY_VS |
                        CROCUS_DIRTY_WM;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_GS |
+                             CROCUS_STAGE_DIRTY_TCS |
+                             CROCUS_STAGE_DIRTY_TES |
+                             CROCUS_STAGE_DIRTY_VS;
 }
 
 static void

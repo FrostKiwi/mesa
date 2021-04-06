@@ -153,14 +153,14 @@ crocus_update_draw_info(struct crocus_context *ice,
 
       /* 8_PATCH TCS needs this for key->input_vertices */
       if (compiler->use_tcs_8_patch)
-         ice->state.dirty |= CROCUS_DIRTY_UNCOMPILED_TCS;
+         ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_UNCOMPILED_TCS;
 
       /* Flag constants dirty for gl_PatchVerticesIn if needed. */
       const struct shader_info *tcs_info =
          crocus_get_shader_info(ice, MESA_SHADER_TESS_CTRL);
       if (tcs_info &&
           BITSET_TEST(tcs_info->system_values_read, SYSTEM_VALUE_VERTICES_IN)) {
-         ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_TCS;
+         ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_TCS;
          ice->state.shaders[MESA_SHADER_TESS_CTRL].sysvals_need_upload = true;
       }
    }
@@ -258,6 +258,7 @@ crocus_indirect_draw_vbo(struct crocus_context *ice,
    }
 
    uint64_t orig_dirty = ice->state.dirty;
+   uint64_t orig_stage_dirty = ice->state.stage_dirty;
 
    for (int i = 0; i < indirect.draw_count; i++) {
       info.drawid = i;
@@ -269,6 +270,7 @@ crocus_indirect_draw_vbo(struct crocus_context *ice,
       ice->vtbl.upload_render_state(ice, batch, &info, &indirect, draws);
 
       ice->state.dirty &= ~CROCUS_ALL_DIRTY_FOR_RENDER;
+      ice->state.stage_dirty &= ~CROCUS_ALL_STAGE_DIRTY_FOR_RENDER;
 
       indirect.offset += indirect.stride;
    }
@@ -281,6 +283,7 @@ crocus_indirect_draw_vbo(struct crocus_context *ice,
 
    /* Put this back for post-draw resolves, we'll clear it again after. */
    ice->state.dirty = orig_dirty;
+   ice->state.stage_dirty = orig_stage_dirty;
 }
 
 static void
@@ -324,8 +327,10 @@ crocus_draw_vbo(struct pipe_context *ctx,
    /* We can't safely re-emit 3DSTATE_SO_BUFFERS because it may zero the
     * write offsets, changing the behavior.
     */
-   if (unlikely(INTEL_DEBUG & DEBUG_REEMIT))
+   if (unlikely(INTEL_DEBUG & DEBUG_REEMIT)) {
       ice->state.dirty |= CROCUS_ALL_DIRTY_FOR_RENDER & ~CROCUS_DIRTY_GEN7_SO_BUFFERS;
+      ice->state.stage_dirty |= CROCUS_ALL_STAGE_DIRTY_FOR_RENDER;
+   }
 
    crocus_update_draw_info(ice, info, draws);
 
@@ -353,6 +358,7 @@ crocus_draw_vbo(struct pipe_context *ctx,
    crocus_postdraw_update_resolve_tracking(ice, batch);
 
    ice->state.dirty &= ~CROCUS_ALL_DIRTY_FOR_RENDER;
+   ice->state.stage_dirty &= ~CROCUS_ALL_STAGE_DIRTY_FOR_RENDER;
 }
 
 static void
@@ -407,7 +413,7 @@ crocus_update_grid_size_resource(struct crocus_context *ice,
                          .stride_B = 1,
                          .mocs = ice->vtbl.mocs(grid_bo, isl_dev));
 
-   ice->state.dirty |= CROCUS_DIRTY_BINDINGS_CS;
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_BINDINGS_CS;
 }
 
 void
@@ -419,8 +425,10 @@ crocus_launch_grid(struct pipe_context *ctx, const struct pipe_grid_info *grid)
    if (!crocus_check_conditional_render(ice))
       return;
 
-   if (unlikely(INTEL_DEBUG & DEBUG_REEMIT))
+   if (unlikely(INTEL_DEBUG & DEBUG_REEMIT)) {
       ice->state.dirty |= CROCUS_ALL_DIRTY_FOR_COMPUTE;
+      ice->state.stage_dirty |= CROCUS_ALL_STAGE_DIRTY_FOR_COMPUTE;
+   }
 
    /* We can't do resolves on the compute engine, so awkwardly, we have to
     * do them on the render batch...
@@ -449,6 +457,7 @@ crocus_launch_grid(struct pipe_context *ctx, const struct pipe_grid_info *grid)
    crocus_handle_always_flush_cache(batch);
 
    ice->state.dirty &= ~CROCUS_ALL_DIRTY_FOR_COMPUTE;
+   ice->state.stage_dirty &= ~CROCUS_ALL_STAGE_DIRTY_FOR_COMPUTE;
 
    /* Note: since compute shaders can't access the framebuffer, there's
     * no need to call crocus_postdraw_update_resolve_tracking.

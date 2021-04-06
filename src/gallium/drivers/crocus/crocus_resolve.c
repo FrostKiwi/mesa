@@ -165,10 +165,10 @@ crocus_predraw_resolve_inputs(struct crocus_context *ice,
    struct crocus_shader_state *shs = &ice->state.shaders[stage];
    const struct shader_info *info = crocus_get_shader_info(ice, stage);
 
-   uint64_t dirty = (CROCUS_DIRTY_BINDINGS_VS << stage) |
-                    (consider_framebuffer ? CROCUS_DIRTY_BINDINGS_FS : 0);
+   uint64_t stage_dirty = (CROCUS_STAGE_DIRTY_BINDINGS_VS << stage) |
+      (consider_framebuffer ? CROCUS_STAGE_DIRTY_BINDINGS_FS : 0);
 
-   if (ice->state.dirty & dirty) {
+   if (ice->state.stage_dirty & stage_dirty) {
       resolve_sampler_views(ice, batch, shs, info, draw_aux_buffer_disabled,
                             consider_framebuffer);
       resolve_image_views(ice, batch, shs, draw_aux_buffer_disabled,
@@ -208,7 +208,7 @@ crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
       }
    }
 
-   if (ice->state.dirty & (CROCUS_DIRTY_BINDINGS_FS | CROCUS_DIRTY_GEN6_BLEND_STATE)) {
+   if (ice->state.stage_dirty & CROCUS_STAGE_DIRTY_BINDINGS_FS) {
       for (unsigned i = 0; i < cso_fb->nr_cbufs; i++) {
          struct crocus_surface *surf = (void *) cso_fb->cbufs[i];
          if (!surf)
@@ -224,7 +224,7 @@ crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
          if (ice->state.draw_aux_usage[i] != aux_usage) {
             ice->state.draw_aux_usage[i] = aux_usage;
             /* XXX: Need to track which bindings to make dirty */
-            ice->state.dirty |= CROCUS_ALL_DIRTY_BINDINGS;
+            ice->state.stage_dirty |= CROCUS_ALL_STAGE_DIRTY_BINDINGS;
          }
 
          crocus_resource_prepare_render(ice, batch, res, surf->view.base_level,
@@ -294,7 +294,7 @@ crocus_postdraw_update_resolve_tracking(struct crocus_context *ice,
    }
 
    bool may_have_resolved_color =
-      ice->state.dirty & (CROCUS_DIRTY_BINDINGS_FS | CROCUS_DIRTY_GEN6_BLEND_STATE);
+      ice->state.stage_dirty & CROCUS_STAGE_DIRTY_BINDINGS_FS;
 
    for (unsigned i = 0; i < cso_fb->nr_cbufs; i++) {
       struct crocus_surface *surf = (void *) cso_fb->cbufs[i];
@@ -1267,7 +1267,7 @@ crocus_resource_set_aux_state(struct crocus_context *ice,
       if (res->aux.state[level][start_layer + a] != aux_state) {
          res->aux.state[level][start_layer + a] = aux_state;
          /* XXX: Need to track which bindings to make dirty */
-         ice->state.dirty |= CROCUS_ALL_DIRTY_BINDINGS;
+         ice->state.stage_dirty |= CROCUS_ALL_STAGE_DIRTY_BINDINGS;
       }
    }
 }

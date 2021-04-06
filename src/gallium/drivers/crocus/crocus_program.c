@@ -1136,10 +1136,10 @@ crocus_update_compiled_vs(struct crocus_context *ice)
 
    if (old != shader) {
       ice->shaders.prog[CROCUS_CACHE_VS] = shader;
-      ice->state.dirty |= CROCUS_DIRTY_VS |
-                          CROCUS_DIRTY_BINDINGS_VS |
-                          CROCUS_DIRTY_CONSTANTS_VS/* |
-                          CROCUS_DIRTY_VF_SGVS*/;
+      //      ice->state.dirty |= CROCUS_DIRTY_VF_SGVS;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_VS |
+                                CROCUS_STAGE_DIRTY_BINDINGS_VS |
+                                CROCUS_STAGE_DIRTY_CONSTANTS_VS;
       shs->sysvals_need_upload = true;
 
       const struct brw_vs_prog_data *vs_prog_data =
@@ -1362,9 +1362,9 @@ crocus_update_compiled_tcs(struct crocus_context *ice)
 
    if (old != shader) {
       ice->shaders.prog[CROCUS_CACHE_TCS] = shader;
-      ice->state.dirty |= CROCUS_DIRTY_TCS |
-                          CROCUS_DIRTY_BINDINGS_TCS |
-                          CROCUS_DIRTY_CONSTANTS_TCS;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_TCS |
+                                CROCUS_STAGE_DIRTY_BINDINGS_TCS |
+                                CROCUS_STAGE_DIRTY_CONSTANTS_TCS;
       shs->sysvals_need_upload = true;
    }
 }
@@ -1476,16 +1476,16 @@ crocus_update_compiled_tes(struct crocus_context *ice)
 
    if (old != shader) {
       ice->shaders.prog[CROCUS_CACHE_TES] = shader;
-      ice->state.dirty |= CROCUS_DIRTY_TES |
-                          CROCUS_DIRTY_BINDINGS_TES |
-                          CROCUS_DIRTY_CONSTANTS_TES;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_TES |
+                                CROCUS_STAGE_DIRTY_BINDINGS_TES |
+                                CROCUS_STAGE_DIRTY_CONSTANTS_TES;
       shs->sysvals_need_upload = true;
    }
 
    /* TODO: Could compare and avoid flagging this. */
    const struct shader_info *tes_info = &ish->nir->info;
    if (BITSET_TEST(tes_info->system_values_read, SYSTEM_VALUE_VERTICES_IN)) {
-      ice->state.dirty |= CROCUS_DIRTY_CONSTANTS_TES;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_TES;
       ice->state.shaders[MESA_SHADER_TESS_EVAL].sysvals_need_upload = true;
    }
 }
@@ -1599,9 +1599,9 @@ crocus_update_compiled_gs(struct crocus_context *ice)
 
    if (old != shader) {
       ice->shaders.prog[CROCUS_CACHE_GS] = shader;
-      ice->state.dirty |= CROCUS_DIRTY_GS |
-                          CROCUS_DIRTY_BINDINGS_GS |
-                          CROCUS_DIRTY_CONSTANTS_GS;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_GS |
+                                CROCUS_STAGE_DIRTY_BINDINGS_GS |
+                                CROCUS_STAGE_DIRTY_CONSTANTS_GS;
       shs->sysvals_need_upload = true;
    }
 }
@@ -1718,12 +1718,12 @@ crocus_update_compiled_fs(struct crocus_context *ice)
       // XXX: only need to flag CLIP if barycentric has NONPERSPECTIVE
       // toggles.  might be able to avoid flagging SBE too.
       ice->shaders.prog[CROCUS_CACHE_FS] = shader;
-      ice->state.dirty |= CROCUS_DIRTY_FS |
-                          CROCUS_DIRTY_BINDINGS_FS |
-                          CROCUS_DIRTY_CONSTANTS_FS |
-                          CROCUS_DIRTY_WM |
+      ice->state.dirty |= CROCUS_DIRTY_WM |
                           CROCUS_DIRTY_CLIP |
                           CROCUS_DIRTY_GEN7_SBE;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_FS |
+                                CROCUS_STAGE_DIRTY_BINDINGS_FS |
+                                CROCUS_STAGE_DIRTY_CONSTANTS_FS;
       shs->sysvals_need_upload = true;
    }
 }
@@ -1750,14 +1750,14 @@ update_last_vue_map(struct crocus_context *ice,
       ice->state.dirty |= CROCUS_DIRTY_CLIP |
                           CROCUS_DIRTY_SF_CL_VIEWPORT |
                           CROCUS_DIRTY_CC_VIEWPORT |
-                          CROCUS_DIRTY_GEN6_SCISSOR_RECT |
-                          CROCUS_DIRTY_UNCOMPILED_FS |
-                          ice->state.dirty_for_nos[CROCUS_NOS_LAST_VUE_MAP];
+                          CROCUS_DIRTY_GEN6_SCISSOR_RECT;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_UNCOMPILED_FS |
+                          ice->state.stage_dirty_for_nos[CROCUS_NOS_LAST_VUE_MAP];
    }
 
    if (changed_slots || (old_map && old_map->separate != vue_map->separate)) {
-      ice->state.dirty |= CROCUS_DIRTY_GEN7_SBE |
-	CROCUS_DIRTY_UNCOMPILED_FS;
+      ice->state.dirty |= CROCUS_DIRTY_GEN7_SBE;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_UNCOMPILED_FS;
    }
 
    ice->shaders.last_vue_map = &vue_prog_data->vue_map;
@@ -1788,7 +1788,7 @@ crocus_update_pull_constant_descriptors(struct crocus_context *ice,
    }
 
    if (any_new_descriptors)
-      ice->state.dirty |= CROCUS_DIRTY_BINDINGS_VS << stage;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_BINDINGS_VS << stage;
 }
 
 /**
@@ -2120,7 +2120,7 @@ crocus_update_compiled_ff_gs(struct crocus_context *ice)
          shader = crocus_compile_ff_gs(ice, &key);
    }
    if (old != shader) {
-      ice->state.dirty |= CROCUS_DIRTY_GS;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_GS;
       ice->shaders.ff_gs_prog = shader;
    }
 }
@@ -2139,15 +2139,16 @@ void
 crocus_update_compiled_shaders(struct crocus_context *ice)
 {
    struct crocus_screen *screen = (void *) ice->ctx.screen;
-   const uint64_t dirty = ice->state.dirty;
+   const uint64_t stage_dirty = ice->state.stage_dirty;
 
    struct brw_vue_prog_data *old_prog_datas[4];
-   if (!(dirty & CROCUS_DIRTY_URB)) {
+   if (!(ice->state.dirty & CROCUS_DIRTY_URB)) {
       for (int i = MESA_SHADER_VERTEX; i <= MESA_SHADER_GEOMETRY; i++)
          old_prog_datas[i] = get_vue_prog_data(ice, i);
    }
 
-   if (dirty & (CROCUS_DIRTY_UNCOMPILED_TCS | CROCUS_DIRTY_UNCOMPILED_TES)) {
+   if (stage_dirty & (CROCUS_STAGE_DIRTY_UNCOMPILED_TCS |
+                      CROCUS_STAGE_DIRTY_UNCOMPILED_TES)) {
        struct crocus_uncompiled_shader *tes =
           ice->shaders.uncompiled[MESA_SHADER_TESS_EVAL];
        if (tes) {
@@ -2156,19 +2157,20 @@ crocus_update_compiled_shaders(struct crocus_context *ice)
        } else {
           ice->shaders.prog[CROCUS_CACHE_TCS] = NULL;
           ice->shaders.prog[CROCUS_CACHE_TES] = NULL;
-          ice->state.dirty |=
-             CROCUS_DIRTY_TCS | CROCUS_DIRTY_TES |
-             CROCUS_DIRTY_BINDINGS_TCS | CROCUS_DIRTY_BINDINGS_TES |
-             CROCUS_DIRTY_CONSTANTS_TCS | CROCUS_DIRTY_CONSTANTS_TES;
+          ice->state.stage_dirty |=
+             CROCUS_STAGE_DIRTY_TCS | CROCUS_STAGE_DIRTY_TES |
+             CROCUS_STAGE_DIRTY_BINDINGS_TCS | CROCUS_STAGE_DIRTY_BINDINGS_TES |
+             CROCUS_STAGE_DIRTY_CONSTANTS_TCS | CROCUS_STAGE_DIRTY_CONSTANTS_TES;
        }
    }
 
-   if (dirty & CROCUS_DIRTY_UNCOMPILED_VS)
+   if (stage_dirty & CROCUS_STAGE_DIRTY_UNCOMPILED_VS)
       crocus_update_compiled_vs(ice);
-   if (dirty & CROCUS_DIRTY_UNCOMPILED_GS)
+   if (stage_dirty & CROCUS_STAGE_DIRTY_UNCOMPILED_GS)
       crocus_update_compiled_gs(ice);
 
-   if (dirty & (CROCUS_DIRTY_UNCOMPILED_GS | CROCUS_DIRTY_UNCOMPILED_TES)) {
+   if (stage_dirty & (CROCUS_STAGE_DIRTY_UNCOMPILED_GS |
+                      CROCUS_STAGE_DIRTY_UNCOMPILED_TES)) {
       const struct crocus_compiled_shader *gs =
          ice->shaders.prog[MESA_SHADER_GEOMETRY];
       const struct crocus_compiled_shader *tes =
@@ -2213,7 +2215,7 @@ crocus_update_compiled_shaders(struct crocus_context *ice)
       }
    }
 
-   if (dirty & CROCUS_DIRTY_UNCOMPILED_FS)
+   if (stage_dirty & CROCUS_STAGE_DIRTY_UNCOMPILED_FS)
       crocus_update_compiled_fs(ice);
 
    if (screen->devinfo.gen <= 6)
@@ -2226,7 +2228,7 @@ crocus_update_compiled_shaders(struct crocus_context *ice)
 
 
    /* Changing shader interfaces may require a URB configuration. */
-   if (!(dirty & CROCUS_DIRTY_URB)) {
+   if (!(ice->state.dirty & CROCUS_DIRTY_URB)) {
       for (int i = MESA_SHADER_VERTEX; i <= MESA_SHADER_GEOMETRY; i++) {
          struct brw_vue_prog_data *old = old_prog_datas[i];
          struct brw_vue_prog_data *new = get_vue_prog_data(ice, i);
@@ -2239,7 +2241,7 @@ crocus_update_compiled_shaders(struct crocus_context *ice)
    }
 
    for (int i = MESA_SHADER_VERTEX; i <= MESA_SHADER_FRAGMENT; i++) {
-      if (ice->state.dirty & (CROCUS_DIRTY_CONSTANTS_VS << i))
+      if (ice->state.stage_dirty & (CROCUS_STAGE_DIRTY_CONSTANTS_VS << i))
          crocus_update_pull_constant_descriptors(ice, i);
    }
 }
@@ -2321,9 +2323,9 @@ crocus_update_compiled_cs(struct crocus_context *ice)
 
    if (old != shader) {
       ice->shaders.prog[CROCUS_CACHE_CS] = shader;
-      ice->state.dirty |= CROCUS_DIRTY_CS |
-                          CROCUS_DIRTY_BINDINGS_CS |
-                          CROCUS_DIRTY_CONSTANTS_CS;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CS |
+                          CROCUS_STAGE_DIRTY_BINDINGS_CS |
+                          CROCUS_STAGE_DIRTY_CONSTANTS_CS;
       shs->sysvals_need_upload = true;
    }
 }
@@ -2331,10 +2333,10 @@ crocus_update_compiled_cs(struct crocus_context *ice)
 void
 crocus_update_compiled_compute_shader(struct crocus_context *ice)
 {
-   if (ice->state.dirty & CROCUS_DIRTY_UNCOMPILED_CS)
+   if (ice->state.stage_dirty & CROCUS_STAGE_DIRTY_UNCOMPILED_CS)
       crocus_update_compiled_cs(ice);
 
-   if (ice->state.dirty & CROCUS_DIRTY_CONSTANTS_CS)
+   if (ice->state.stage_dirty & CROCUS_STAGE_DIRTY_CONSTANTS_CS)
       crocus_update_pull_constant_descriptors(ice, MESA_SHADER_COMPUTE);
 }
 
@@ -2662,7 +2664,7 @@ crocus_delete_shader_state(struct pipe_context *ctx, void *state, gl_shader_stag
 
    if (ice->shaders.uncompiled[stage] == ish) {
       ice->shaders.uncompiled[stage] = NULL;
-      ice->state.dirty |= CROCUS_DIRTY_UNCOMPILED_VS << stage;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_UNCOMPILED_VS << stage;
    }
 
    if (ish->const_data) {
@@ -2721,7 +2723,7 @@ bind_shader_state(struct crocus_context *ice,
                   struct crocus_uncompiled_shader *ish,
                   gl_shader_stage stage)
 {
-   uint64_t dirty_bit = CROCUS_DIRTY_UNCOMPILED_VS << stage;
+   uint64_t dirty_bit = CROCUS_STAGE_DIRTY_UNCOMPILED_VS << stage;
    const uint64_t nos = ish ? ish->nos : 0;
 
    const struct shader_info *old_info = crocus_get_shader_info(ice, stage);
@@ -2729,20 +2731,20 @@ bind_shader_state(struct crocus_context *ice,
 
    if ((old_info ? BITSET_LAST_BIT(old_info->textures_used) : 0) !=
        (new_info ? BITSET_LAST_BIT(new_info->textures_used) : 0)) {
-      ice->state.dirty |= CROCUS_DIRTY_SAMPLER_STATES_VS << stage;
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << stage;
    }
 
    ice->shaders.uncompiled[stage] = ish;
-   ice->state.dirty |= dirty_bit;
+   ice->state.stage_dirty |= dirty_bit;
 
    /* Record that CSOs need to mark CROCUS_DIRTY_UNCOMPILED_XS when they change
     * (or that they no longer need to do so).
     */
    for (int i = 0; i < CROCUS_NOS_COUNT; i++) {
       if (nos & (1 << i))
-         ice->state.dirty_for_nos[i] |= dirty_bit;
+         ice->state.stage_dirty_for_nos[i] |= dirty_bit;
       else
-         ice->state.dirty_for_nos[i] &= ~dirty_bit;
+         ice->state.stage_dirty_for_nos[i] &= ~dirty_bit;
    }
 }
 
