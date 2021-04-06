@@ -6638,6 +6638,49 @@ crocus_upload_compute_state(struct crocus_context *ice,
          lrm.RegisterAddress = GPGPU_DISPATCHDIMZ;
          lrm.MemoryAddress = ro_bo(bo, grid_size->offset + 8);
       }
+
+      /* Clear upper 32-bits of SRC0 and all 64-bits of SRC1 */
+      _crocus_emit_lri(batch, MI_PREDICATE_SRC0 + 4, 0);
+      crocus_load_register_imm64(batch, MI_PREDICATE_SRC1, 0);
+
+      /* Load compute_dispatch_indirect_x_size into SRC0 */
+      crocus_load_register_mem32(batch, MI_PREDICATE_SRC0, bo, grid_size->offset + 0);
+
+      /* predicate = (compute_dispatch_indirect_x_size == 0); */
+      crocus_emit_cmd(batch, GENX(MI_PREDICATE), mip) {
+         mip.LoadOperation    = LOAD_LOAD;
+         mip.CombineOperation = COMBINE_SET;
+         mip.CompareOperation = COMPARE_SRCS_EQUAL;
+      };
+
+      /* Load compute_dispatch_indirect_y_size into SRC0 */
+      crocus_load_register_mem32(batch, MI_PREDICATE_SRC0, bo, grid_size->offset + 4);
+
+      /* predicate = (compute_dispatch_indirect_y_size == 0); */
+      crocus_emit_cmd(batch, GENX(MI_PREDICATE), mip) {
+         mip.LoadOperation    = LOAD_LOAD;
+         mip.CombineOperation = COMBINE_SET;
+         mip.CompareOperation = COMPARE_SRCS_EQUAL;
+      };
+
+      /* Load compute_dispatch_indirect_z_size into SRC0 */
+      crocus_load_register_mem32(batch, MI_PREDICATE_SRC0, bo, grid_size->offset + 8);
+
+      /* predicate = (compute_dispatch_indirect_z_size == 0); */
+      crocus_emit_cmd(batch, GENX(MI_PREDICATE), mip) {
+         mip.LoadOperation    = LOAD_LOAD;
+         mip.CombineOperation = COMBINE_SET;
+         mip.CompareOperation = COMPARE_SRCS_EQUAL;
+      };
+
+      /* predicate = !predicate; */
+#define COMPARE_FALSE                           1
+      crocus_emit_cmd(batch, GENX(MI_PREDICATE), mip) {
+         mip.LoadOperation    = LOAD_LOADINV;
+         mip.CombineOperation = COMBINE_OR;
+         mip.CompareOperation = COMPARE_FALSE;
+      }
+
    }
 
    crocus_emit_cmd(batch, GENX(GPGPU_WALKER), ggw) {
