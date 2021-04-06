@@ -4060,6 +4060,7 @@ emit_sampler_view(struct crocus_context *ice,
    struct isl_surf_fill_state_info f = {
       .surf = &isv->res->surf,
       .view = &isv->view,
+      .mocs = mocs(isv->res->bo, isl_dev),
       .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
                                     isv->res->bo, 0, RELOC_32BIT),
    };
