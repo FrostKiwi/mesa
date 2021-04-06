@@ -313,7 +313,6 @@ crocus_draw_vbo(struct pipe_context *ctx,
 {
    struct crocus_context *ice = (struct crocus_context *) ctx;
    struct crocus_screen *screen = (struct crocus_screen*)ice->ctx.screen;
-   const struct gen_device_info *devinfo = &screen->devinfo;
    struct crocus_batch *batch = &ice->batches[CROCUS_BATCH_RENDER];
 
    if (!crocus_check_conditional_render(ice))
