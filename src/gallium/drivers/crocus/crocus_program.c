@@ -2343,6 +2343,8 @@ crocus_compile_cs(struct crocus_context *ice,
 
    nir_shader *nir = nir_shader_clone(mem_ctx, ish->nir);
 
+   NIR_PASS_V(nir, brw_nir_lower_cs_intrinsics);
+
    crocus_setup_uniforms(compiler, mem_ctx, nir, prog_data, &system_values,
                        &num_system_values, &num_cbufs);
 
