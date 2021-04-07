@@ -4168,16 +4168,33 @@ emit_sampler_view(struct crocus_context *ice,
 
    uint32_t *surf_state = stream_state(batch, isl_dev->ss.size,
                                        isl_dev->ss.align, &offset);
-   struct isl_surf_fill_state_info f = {
-      .surf = &isv->res->surf,
-      .view = for_gather ? &isv->gather_view : &isv->view,
-      .mocs = mocs(isv->res->bo, isl_dev),
-      .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
-                                    isv->res->bo, 0, RELOC_32BIT),
-   };
 
-   isl_surf_fill_state_s(isl_dev, surf_state, &f);
-
+   if (isv->base.target == PIPE_BUFFER) {
+      const struct isl_format_layout *fmtl = isl_format_get_layout(isv->view.format);
+      const unsigned cpp = isv->view.format == ISL_FORMAT_RAW ? 1 : fmtl->bpb / 8;
+      unsigned final_size =
+         MIN3(isv->base.u.buf.size, isv->res->bo->size - isv->res->offset - offset,
+              CROCUS_MAX_TEXTURE_BUFFER_SIZE * cpp);
+      isl_buffer_fill_state(isl_dev, surf_state,
+                            .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
+                                                          isv->res->bo,
+                                                          isv->res->offset + isv->base.u.buf.offset, RELOC_32BIT),
+                            .size_B = final_size,
+                            .format = isv->view.format,
+                            .swizzle = isv->view.swizzle,
+                            .stride_B = cpp,
+                            .mocs = mocs(isv->res->bo, isl_dev)
+                            );
+   } else {
+      struct isl_surf_fill_state_info f = {
+         .surf = &isv->res->surf,
+         .view = for_gather ? &isv->gather_view : &isv->view,
+         .mocs = mocs(isv->res->bo, isl_dev),
+         .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
+                                       isv->res->bo, 0, RELOC_32BIT),
+      };
+      isl_surf_fill_state_s(isl_dev, surf_state, &f);
+   }
    return offset;
 }
 
@@ -4192,15 +4209,34 @@ emit_image_view(struct crocus_context *ice,
    struct crocus_resource *res = (struct crocus_resource *)iv->base.resource;
    uint32_t *surf_state = stream_state(batch, isl_dev->ss.size,
                                        isl_dev->ss.align, &offset);
-   struct isl_surf_fill_state_info f = {
-      .surf = &res->surf,
-      .view = &iv->view,
-      .mocs = mocs(res->bo, isl_dev),
-      .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
-                                    res->bo, 0, RELOC_32BIT),
-   };
 
-   isl_surf_fill_state_s(isl_dev, surf_state, &f);
+   if (res->base.target == PIPE_BUFFER) {
+      const struct isl_format_layout *fmtl = isl_format_get_layout(iv->view.format);
+      const unsigned cpp = iv->view.format == ISL_FORMAT_RAW ? 1 : fmtl->bpb / 8;
+      unsigned final_size =
+         MIN3(iv->base.u.buf.size, res->bo->size - res->offset - offset,
+              CROCUS_MAX_TEXTURE_BUFFER_SIZE * cpp);
+      isl_buffer_fill_state(isl_dev, surf_state,
+                            .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
+                                                          res->bo,
+                                                          res->offset + iv->base.u.buf.offset, RELOC_32BIT),
+                            .size_B = final_size,
+                            .format = iv->view.format,
+                            .swizzle = iv->view.swizzle,
+                            .stride_B = cpp,
+                            .mocs = mocs(res->bo, isl_dev)
+                            );
+   } else {
+      struct isl_surf_fill_state_info f = {
+         .surf = &res->surf,
+         .view = &iv->view,
+         .mocs = mocs(res->bo, isl_dev),
+         .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
+                                       res->bo, 0, RELOC_32BIT),
+      };
+
+      isl_surf_fill_state_s(isl_dev, surf_state, &f);
+   }
 
    return offset;
 }
