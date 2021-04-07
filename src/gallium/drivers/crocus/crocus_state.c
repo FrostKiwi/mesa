@@ -5352,7 +5352,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #endif
          INIT_THREAD_DISPATCH_FIELDS(vs, Vertex, MESA_SHADER_VERTEX);
 
-         vs.MaximumNumberofThreads = (batch->screen->devinfo.max_vs_threads / 2)- 1;
+         vs.MaximumNumberofThreads = batch->screen->devinfo.max_vs_threads - 1;
 
 #if GEN_GEN < 6
          vs.GRFRegisterCount = DIV_ROUND_UP(vue_prog_data->total_grf, 16) - 1;
