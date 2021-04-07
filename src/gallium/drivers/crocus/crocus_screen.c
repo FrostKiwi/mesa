@@ -146,7 +146,6 @@ crocus_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_CLIP_HALFZ:
    case PIPE_CAP_TGSI_TEXCOORD:
    case PIPE_CAP_DOUBLES:
-   case PIPE_CAP_ROBUST_BUFFER_ACCESS_BEHAVIOR:
    case PIPE_CAP_DEVICE_RESET_STATUS_QUERY:
    case PIPE_CAP_COPY_BETWEEN_COMPRESSED_AND_PLAIN_FORMATS:
    case PIPE_CAP_SIGNED_VERTEX_BUFFER_OFFSET:
@@ -187,10 +186,12 @@ crocus_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_TGSI_CLOCK:
    case PIPE_CAP_TGSI_TXQS:
    case PIPE_CAP_COMPUTE:
-   case PIPE_CAP_QUERY_BUFFER_OBJECT:
    case PIPE_CAP_SAMPLER_VIEW_TARGET:
    case PIPE_CAP_SHADER_SAMPLES_IDENTICAL:
       return devinfo->gen >= 7;
+   case PIPE_CAP_QUERY_BUFFER_OBJECT:
+   case PIPE_CAP_ROBUST_BUFFER_ACCESS_BEHAVIOR:
+      return devinfo->is_haswell;
    case PIPE_CAP_CULL_DISTANCE:
    case PIPE_CAP_QUERY_PIPELINE_STATISTICS_SINGLE:
    case PIPE_CAP_STREAM_OUTPUT_PAUSE_RESUME:
