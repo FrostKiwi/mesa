@@ -1491,6 +1491,9 @@ crocus_bind_blend_state(struct pipe_context *ctx, void *state)
 #if GEN_GEN >= 6
    ice->state.dirty |= CROCUS_DIRTY_GEN6_BLEND_STATE;
 #endif
+#if GEN_GEN >= 7
+   ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_FS;
+#endif
    ice->state.dirty |= CROCUS_DIRTY_COLOR_CALC_STATE;
    ice->state.dirty |= CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES;
    ice->state.stage_dirty |= ice->state.stage_dirty_for_nos[CROCUS_NOS_BLEND];
@@ -4869,7 +4872,12 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             be.PreBlendColorClampEnable = true;
             be.PostBlendColorClampEnable = true;
 
-            be.ColorBufferBlendEnable = rt->blend_enable;
+            {
+               struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_FRAGMENT];
+               struct brw_wm_prog_data *wm_prog_data = (void *) shader->prog_data;
+               be.ColorBufferBlendEnable = (cso_blend->blend_enables & 1) &&
+                  (!cso_blend->dual_color_blending || wm_prog_data->dual_src_blend);
+            }
 
             be.ColorBlendFunction          = rt->rgb_func;
             be.AlphaBlendFunction          = rt->alpha_func;
@@ -5145,7 +5153,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          ps.PushConstantEnable = prog_data->ubo_ranges[0].length > 0;
 
          ps.oMaskPresenttoRenderTarget = wm_prog_data->uses_omask;
-         ps.DualSourceBlendEnable = wm_prog_data->dual_src_blend; //TODO
+         ps.DualSourceBlendEnable = wm_prog_data->dual_src_blend && ice->state.cso_blend->dual_color_blending;
          ps.AttributeEnable = (wm_prog_data->num_varying_inputs != 0);
          /* From the documentation for this packet:
           * "If the PS kernel does not need the Position XY Offsets to
@@ -5741,11 +5749,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 	 wm.BarycentricInterpolationMode = wm_prog_data->barycentric_interp_modes;
 #endif
 #if GEN_GEN == 6
-      /* TODO
-      wm.DualSourceBlendEnable =
-         wm_prog_data->dual_src_blend && (ctx->Color.BlendEnabled & 1) &&
-         ctx->Color.Blend[0]._UsesDualSrc;
-      */
+      wm.DualSourceBlendEnable = wm_prog_data->dual_src_blend && ice->state.cso_blend->dual_color_blending;
       wm.oMaskPresenttoRenderTarget = wm_prog_data->uses_omask;
       wm.NumberofSFOutputAttributes = wm_prog_data->num_varying_inputs;
 
