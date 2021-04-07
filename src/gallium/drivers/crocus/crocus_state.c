@@ -5320,6 +5320,9 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          cl.PerspectiveDivideDisable = ice->state.window_space_position;
          cl.ViewportXYClipTestEnable = !points_or_lines;
 
+         cl.UserClipDistanceCullTestEnableBitmask =
+            brw_vue_prog_data(ice->shaders.prog[MESA_SHADER_VERTEX]->prog_data)->cull_distance_mask;
+
          if (wm_prog_data->barycentric_interp_modes &
              BRW_BARYCENTRIC_NONPERSPECTIVE_BITS)
             cl.NonPerspectiveBarycentricEnable = true;
