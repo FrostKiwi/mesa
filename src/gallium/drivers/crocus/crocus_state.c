@@ -1668,6 +1668,9 @@ crocus_create_rasterizer_state(struct pipe_context *ctx,
 #endif
 
 #if GEN_GEN >= 6
+
+      if (state->multisample)
+         sf.MultisampleRasterizationMode = MSRASTMODE_ON_PATTERN;
       sf.GlobalDepthOffsetEnableSolid = state->offset_tri;
       sf.GlobalDepthOffsetEnableWireframe = state->offset_line;
       sf.GlobalDepthOffsetEnablePoint = state->offset_point;
@@ -4883,7 +4886,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             be.AlphaToCoverageEnable = cso_blend->cso.alpha_to_coverage;
             be.IndependentAlphaBlendEnable = indep_alpha_blend;
             be.AlphaToOneEnable = cso_blend->cso.alpha_to_one;
-            be.AlphaToCoverageDitherEnable = cso_blend->cso.alpha_to_coverage;
+            be.AlphaToCoverageDitherEnable = GEN_GEN >= 7 && cso_blend->cso.alpha_to_coverage;
             be.ColorDitherEnable = cso_blend->cso.dither;
 
             /* bl.AlphaTestEnable and bs.AlphaTestFunction are filled in later. */
@@ -5776,8 +5779,15 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #if GEN_GEN >= 6
 	 wm.PixelShaderUsesSourceW = wm_prog_data->uses_src_w;
 
-	 wm.MultisampleRasterizationMode = MSRASTMODE_OFF_PIXEL;
-         wm.MultisampleDispatchMode = MSDISPMODE_PERSAMPLE;
+	 if (cso->cso.multisample)
+            wm.MultisampleRasterizationMode = MSRASTMODE_ON_PATTERN;
+	 else
+            wm.MultisampleRasterizationMode = MSRASTMODE_OFF_PIXEL;
+
+	 if (cso->cso.force_persample_interp)
+            wm.MultisampleDispatchMode = MSDISPMODE_PERSAMPLE;
+	 else
+            wm.MultisampleDispatchMode = MSDISPMODE_PERPIXEL;
 #endif
 
 	 wm.PixelShaderUsesSourceDepth = wm_prog_data->uses_src_depth;
