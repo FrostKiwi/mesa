@@ -156,9 +156,8 @@ crocus_update_draw_info(struct crocus_context *ice,
        ice->state.vertices_per_patch != info->vertices_per_patch) {
       ice->state.vertices_per_patch = info->vertices_per_patch;
 
-      /* 8_PATCH TCS needs this for key->input_vertices */
-      if (compiler->use_tcs_8_patch)
-         ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_UNCOMPILED_TCS;
+      /* This is needed for key->input_vertices */
+      ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_UNCOMPILED_TCS;
 
       /* Flag constants dirty for gl_PatchVerticesIn if needed. */
       const struct shader_info *tcs_info =

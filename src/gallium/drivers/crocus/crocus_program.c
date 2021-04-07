@@ -1403,10 +1403,8 @@ crocus_update_compiled_tcs(struct crocus_context *ice)
       KEY_INIT_NO_ID(),
       .base.program_string_id = tcs ? tcs->program_id : 0,
       .tes_primitive_mode = tes_info->tess.primitive_mode,
-      .input_vertices =
-         !tcs || compiler->use_tcs_8_patch ? ice->state.vertices_per_patch : 0,
-      .quads_workaround = devinfo->gen < 9 &&
-                          tes_info->tess.primitive_mode == GL_QUADS &&
+      .input_vertices = ice->state.vertices_per_patch,
+      .quads_workaround = tes_info->tess.primitive_mode == GL_QUADS &&
                           tes_info->tess.spacing == TESS_SPACING_EQUAL,
    };
    get_unified_tess_slots(ice, &key.outputs_written,
