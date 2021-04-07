@@ -6262,7 +6262,7 @@ crocus_upload_render_state(struct crocus_context *ice,
          }
       }
 
-#if GEN_VERSIONx10 == 75
+#if GEN_GEN >= 7
       struct crocus_bo *bo = crocus_resource_bo(indirect->buffer);
       assert(bo);
 
@@ -6297,7 +6297,9 @@ crocus_upload_render_state(struct crocus_context *ice,
             lri.DataDWord = 0;
          }
       }
+#endif
    } else if (indirect && indirect->count_from_stream_output) {
+#if GEN_VERSIONx10 == 75
       struct crocus_stream_output_target *so =
          (void *) indirect->count_from_stream_output;
 
