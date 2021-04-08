@@ -4348,7 +4348,11 @@ crocus_populate_binding_table(struct crocus_context *ice,
       surf_offsets[s++] = emit_image_view(ice, batch, view);
    }
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_UBO) {
-      surf_offsets[s++] = emit_ubo_buffer(ice, batch, &shs->constbufs[i]);
+      if (shs->constbufs[i].buffer)
+         surf_offsets[s] = emit_ubo_buffer(ice, batch, &shs->constbufs[i]);
+      else
+         emit_null_surface(batch, &surf_offsets[s]);
+      s++;
    }
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_SSBO) {
       surf_offsets[s++] = emit_ssbo_buffer(ice, batch, &shs->ssbo[i]);
