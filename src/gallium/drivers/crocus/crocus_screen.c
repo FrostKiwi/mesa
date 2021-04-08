@@ -174,6 +174,7 @@ crocus_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_DEMOTE_TO_HELPER_INVOCATION:
    case PIPE_CAP_TGSI_BALLOT:
    case PIPE_CAP_COMPUTE_SHADER_DERIVATIVES:
+   case PIPE_CAP_PACKED_UNIFORMS:
       return false;
    case PIPE_CAP_FORCE_EDGEFLAG:
       return devinfo->gen <= 5;
@@ -205,7 +206,6 @@ crocus_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_INDEP_BLEND_FUNC:
    case PIPE_CAP_TEXTURE_SHADOW_LOD:
    case PIPE_CAP_LOAD_CONSTBUF:
-   case PIPE_CAP_PACKED_UNIFORMS:
    case PIPE_CAP_DRAW_PARAMETERS:
       return devinfo->gen >= 6;
    case PIPE_CAP_FBFETCH:
