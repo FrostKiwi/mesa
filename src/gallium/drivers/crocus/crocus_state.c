@@ -6596,6 +6596,7 @@ crocus_upload_compute_state(struct crocus_context *ice,
 
    crocus_emit_cmd(batch, GENX(GPGPU_WALKER), ggw) {
       ggw.IndirectParameterEnable    = grid->indirect != NULL;
+      ggw.PredicateEnable            = grid->indirect != NULL;
       ggw.SIMDSize                   = simd_size / 16;
       ggw.ThreadDepthCounterMaximum  = 0;
       ggw.ThreadHeightCounterMaximum = 0;
