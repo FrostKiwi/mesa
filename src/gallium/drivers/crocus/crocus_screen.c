@@ -666,9 +666,6 @@ crocus_detect_swizzling(struct crocus_screen *screen)
     *    reserved, and the CPU's memory controller performs all address
     *    swizzling modifications."
     */
-   if (screen->devinfo.gen >= 8)
-      return false;
-
    uint32_t tiling = I915_TILING_X;
    uint32_t swizzle_mode = 0;
    struct crocus_bo *buffer =
