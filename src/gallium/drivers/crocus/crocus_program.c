@@ -1395,7 +1395,6 @@ crocus_update_compiled_tcs(struct crocus_context *ice)
    struct crocus_uncompiled_shader *tcs =
       ice->shaders.uncompiled[MESA_SHADER_TESS_CTRL];
    struct crocus_screen *screen = (struct crocus_screen *)ice->ctx.screen;
-   const struct brw_compiler *compiler = screen->compiler;
    const struct gen_device_info *devinfo = &screen->devinfo;
 
    const struct shader_info *tes_info =
@@ -1409,7 +1408,7 @@ crocus_update_compiled_tcs(struct crocus_context *ice)
                           tes_info->tess.spacing == TESS_SPACING_EQUAL,
    };
 
-   if (tcs->nos & (1ull << CROCUS_NOS_TEXTURES))
+   if (tcs && tcs->nos & (1ull << CROCUS_NOS_TEXTURES))
       crocus_populate_sampler_prog_key_data(ice, devinfo, MESA_SHADER_TESS_CTRL, tcs,
                                             tcs->nir->info.uses_texture_gather, &key.base.tex);
    get_unified_tess_slots(ice, &key.outputs_written,
