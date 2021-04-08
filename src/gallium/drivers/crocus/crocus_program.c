@@ -1184,7 +1184,8 @@ crocus_update_compiled_vs(struct crocus_context *ice)
    struct brw_vs_prog_key key = { KEY_INIT() };
 
    if (ish->nos & (1ull << CROCUS_NOS_TEXTURES))
-      crocus_populate_sampler_prog_key_data(ice, devinfo, MESA_SHADER_VERTEX, ish, false, &key.base.tex);
+      crocus_populate_sampler_prog_key_data(ice, devinfo, MESA_SHADER_VERTEX, ish,
+                                            ish->nir->info.uses_texture_gather, &key.base.tex);
    ice->vtbl.populate_vs_key(ice, &ish->nir->info, last_vue_stage(ice), &key);
 
    struct crocus_compiled_shader *old = ice->shaders.prog[CROCUS_CACHE_VS];
@@ -1407,6 +1408,10 @@ crocus_update_compiled_tcs(struct crocus_context *ice)
       .quads_workaround = tes_info->tess.primitive_mode == GL_QUADS &&
                           tes_info->tess.spacing == TESS_SPACING_EQUAL,
    };
+
+   if (tcs->nos & (1ull << CROCUS_NOS_TEXTURES))
+      crocus_populate_sampler_prog_key_data(ice, devinfo, MESA_SHADER_TESS_CTRL, tcs,
+                                            tcs->nir->info.uses_texture_gather, &key.base.tex);
    get_unified_tess_slots(ice, &key.outputs_written,
                           &key.patch_outputs_written);
    ice->vtbl.populate_tcs_key(ice, &key);
@@ -1522,6 +1527,12 @@ crocus_update_compiled_tes(struct crocus_context *ice)
    struct crocus_uncompiled_shader *ish =
       ice->shaders.uncompiled[MESA_SHADER_TESS_EVAL];
    struct brw_tes_prog_key key = { KEY_INIT() };
+   struct crocus_screen *screen = (struct crocus_screen *)ice->ctx.screen;
+   const struct gen_device_info *devinfo = &screen->devinfo;
+
+   if (ish->nos & (1ull << CROCUS_NOS_TEXTURES))
+      crocus_populate_sampler_prog_key_data(ice, devinfo, MESA_SHADER_TESS_EVAL, ish,
+                                            ish->nir->info.uses_texture_gather, &key.base.tex);
    get_unified_tess_slots(ice, &key.inputs_read, &key.patch_inputs_read);
    ice->vtbl.populate_tes_key(ice, &ish->nir->info, last_vue_stage(ice), &key);
 
@@ -1645,7 +1656,13 @@ crocus_update_compiled_gs(struct crocus_context *ice)
    struct crocus_compiled_shader *shader = NULL;
 
    if (ish) {
+      struct crocus_screen *screen = (struct crocus_screen *)ice->ctx.screen;
+      const struct gen_device_info *devinfo = &screen->devinfo;
       struct brw_gs_prog_key key = { KEY_INIT() };
+
+      if (ish->nos & (1ull << CROCUS_NOS_TEXTURES))
+         crocus_populate_sampler_prog_key_data(ice, devinfo, MESA_SHADER_GEOMETRY, ish,
+                                               ish->nir->info.uses_texture_gather, &key.base.tex);
       ice->vtbl.populate_gs_key(ice, &ish->nir->info, last_vue_stage(ice), &key);
 
       shader =
@@ -1759,7 +1776,8 @@ crocus_update_compiled_fs(struct crocus_context *ice)
    struct brw_wm_prog_key key = { KEY_INIT() };
 
    if (ish->nos & (1ull << CROCUS_NOS_TEXTURES))
-      crocus_populate_sampler_prog_key_data(ice, devinfo, MESA_SHADER_FRAGMENT, ish, false, &key.base.tex);
+      crocus_populate_sampler_prog_key_data(ice, devinfo, MESA_SHADER_FRAGMENT, ish,
+                                            ish->nir->info.uses_texture_gather, &key.base.tex);
    ice->vtbl.populate_fs_key(ice, &ish->nir->info, &key);
 
    if (ish->nos & (1ull << CROCUS_NOS_LAST_VUE_MAP))
@@ -2388,8 +2406,13 @@ crocus_update_compiled_cs(struct crocus_context *ice)
    struct crocus_shader_state *shs = &ice->state.shaders[MESA_SHADER_COMPUTE];
    struct crocus_uncompiled_shader *ish =
       ice->shaders.uncompiled[MESA_SHADER_COMPUTE];
-
+   struct crocus_screen *screen = (struct crocus_screen *)ice->ctx.screen;
+   const struct gen_device_info *devinfo = &screen->devinfo;
    struct brw_cs_prog_key key = { KEY_INIT() };
+
+   if (ish->nos & (1ull << CROCUS_NOS_TEXTURES))
+      crocus_populate_sampler_prog_key_data(ice, devinfo, MESA_SHADER_COMPUTE, ish,
+                                            ish->nir->info.uses_texture_gather, &key.base.tex);
    ice->vtbl.populate_cs_key(ice, &key);
 
    struct crocus_compiled_shader *old = ice->shaders.prog[CROCUS_CACHE_CS];
@@ -2584,6 +2607,7 @@ crocus_create_tcs_state(struct pipe_context *ctx,
    struct crocus_uncompiled_shader *ish = crocus_create_shader_state(ctx, state);
    struct shader_info *info = &ish->nir->info;
 
+   ish->nos |= (1ull << CROCUS_NOS_TEXTURES);
    if (screen->precompile) {
       const unsigned _GL_TRIANGLES = 0x0004;
       struct brw_tcs_prog_key key = {
@@ -2620,6 +2644,7 @@ crocus_create_tes_state(struct pipe_context *ctx,
    struct crocus_uncompiled_shader *ish = crocus_create_shader_state(ctx, state);
    struct shader_info *info = &ish->nir->info;
 
+   ish->nos |= (1ull << CROCUS_NOS_TEXTURES);
    /* User clip planes */
    if (ish->nir->info.clip_distance_array_size == 0)
       ish->nos |= (1ull << CROCUS_NOS_RASTERIZER);
@@ -2647,6 +2672,7 @@ crocus_create_gs_state(struct pipe_context *ctx,
    struct crocus_screen *screen = (void *) ctx->screen;
    struct crocus_uncompiled_shader *ish = crocus_create_shader_state(ctx, state);
 
+   ish->nos |= (1ull << CROCUS_NOS_TEXTURES);
    /* User clip planes */
    if (ish->nir->info.clip_distance_array_size == 0)
       ish->nos |= (1ull << CROCUS_NOS_RASTERIZER);
@@ -2724,6 +2750,7 @@ crocus_create_compute_state(struct pipe_context *ctx,
    struct crocus_uncompiled_shader *ish =
       crocus_create_uncompiled_shader(ctx, (void *) state->prog, NULL);
 
+   ish->nos |= (1ull << CROCUS_NOS_TEXTURES);
    // XXX: disallow more than 64KB of shared variables
 
    if (screen->precompile) {
