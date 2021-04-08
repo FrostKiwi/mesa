@@ -470,7 +470,9 @@ crocus_is_format_supported(struct pipe_screen *pscreen,
    }
    /* no stencil texturing prior to haswell */
    if (!devinfo->is_haswell) {
-      if (pformat == PIPE_FORMAT_S8_UINT)
+      if (pformat == PIPE_FORMAT_S8_UINT ||
+          pformat == PIPE_FORMAT_X24S8_UINT ||
+          pformat == PIPE_FORMAT_S8X24_UINT)
          return FALSE;
    }
 

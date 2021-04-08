@@ -234,8 +234,7 @@ crocus_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
       return BRW_MAX_SOL_BINDINGS / CROCUS_MAX_SOL_BUFFERS;
    case PIPE_CAP_MAX_STREAM_OUTPUT_INTERLEAVED_COMPONENTS:
       return BRW_MAX_SOL_BINDINGS;
-   case PIPE_CAP_GLSL_FEATURE_LEVEL:
-   case PIPE_CAP_GLSL_FEATURE_LEVEL_COMPATIBILITY: {
+   case PIPE_CAP_GLSL_FEATURE_LEVEL: {
       // TODO haswell
       if (devinfo->is_haswell)
          return 450;
@@ -245,6 +244,9 @@ crocus_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
 	 return 330;
        return 120;
    }
+   case PIPE_CAP_GLSL_FEATURE_LEVEL_COMPATIBILITY:
+      return 130;
+
    case PIPE_CAP_CONSTANT_BUFFER_OFFSET_ALIGNMENT:
       /* 3DSTATE_CONSTANT_XS requires the start of UBOs to be 32B aligned */
       return 32;
@@ -449,7 +451,11 @@ crocus_get_shader_param(struct pipe_screen *pscreen,
    case PIPE_SHADER_CAP_MAX_SAMPLER_VIEWS:
       return devinfo->is_haswell ? CROCUS_MAX_TEXTURE_SAMPLERS : 16;
    case PIPE_SHADER_CAP_MAX_SHADER_IMAGES:
-      return devinfo->gen >= 7 ? CROCUS_MAX_TEXTURE_SAMPLERS : 0;
+      if (devinfo->gen >= 7 &&
+          (p_stage == PIPE_SHADER_FRAGMENT ||
+           p_stage == PIPE_SHADER_COMPUTE))
+         return CROCUS_MAX_TEXTURE_SAMPLERS;
+      return 0;
    case PIPE_SHADER_CAP_MAX_SHADER_BUFFERS:
       return devinfo->gen >= 7 ? (CROCUS_MAX_ABOS + CROCUS_MAX_SSBOS) : 0;
    case PIPE_SHADER_CAP_MAX_HW_ATOMIC_COUNTERS:
