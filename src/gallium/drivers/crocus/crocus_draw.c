@@ -144,6 +144,9 @@ crocus_update_draw_info(struct crocus_context *ice,
       if (screen->devinfo.gen <= 6)
          ice->state.dirty |= CROCUS_DIRTY_GEN4_FF_GS_PROG;
 
+      if (screen->devinfo.gen >= 7)
+         ice->state.dirty |= CROCUS_DIRTY_GEN7_SBE;
+
       /* For XY Clip enables */
       bool points_or_lines = prim_is_points_or_lines(mode);
       if (points_or_lines != ice->state.prim_is_points_or_lines) {

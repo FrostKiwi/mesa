@@ -3442,6 +3442,32 @@ crocus_create_so_decl_list(const struct pipe_stream_output_info *info,
 }
 #endif
 
+
+
+#if GEN_GEN >= 6
+static bool
+crocus_is_drawing_points(const struct crocus_context *ice)
+{
+   const struct crocus_rasterizer_state *cso_rast = ice->state.cso_rast;
+
+   if (cso_rast->cso.fill_front == PIPE_POLYGON_MODE_POINT ||
+       cso_rast->cso.fill_back == PIPE_POLYGON_MODE_POINT)
+      return true;
+
+   if (ice->shaders.prog[MESA_SHADER_GEOMETRY]) {
+      const struct brw_gs_prog_data *gs_prog_data =
+         (void *) ice->shaders.prog[MESA_SHADER_GEOMETRY]->prog_data;
+      return gs_prog_data->output_topology == _3DPRIM_POINTLIST;
+   } else if (ice->shaders.prog[MESA_SHADER_TESS_EVAL]) {
+      const struct brw_tes_prog_data *tes_data =
+         (void *) ice->shaders.prog[MESA_SHADER_TESS_EVAL]->prog_data;
+      return tes_data->output_topology == BRW_TESS_OUTPUT_TOPOLOGY_POINT;
+   } else {
+      return ice->state.prim_mode == PIPE_PRIM_POINTS;
+   }
+}
+#endif
+
 #if GEN_GEN == 7
 static void
 crocus_compute_sbe_urb_read_interval(uint64_t fs_input_slots,
@@ -3640,7 +3666,7 @@ calculate_attr_overrides(
 
       // TODO: set point_sprite_enables, but ONLY if drawing points
       bool point_sprite = false;
-      if (0) {
+      if (crocus_is_drawing_points(ice)) {
          if (fs_attr >= VARYING_SLOT_TEX0 &&
              fs_attr <= VARYING_SLOT_TEX7 &&
              cso_rast->cso.sprite_coord_enable & (1 << (fs_attr - VARYING_SLOT_TEX0)))
@@ -3725,7 +3751,8 @@ crocus_emit_sbe(struct crocus_batch *batch, const struct crocus_context *ice)
                                       &urb_read_offset, &urb_read_length);
 
    unsigned sprite_coord_overrides =
-      crocus_calculate_point_sprite_overrides(wm_prog_data, cso_rast);
+      crocus_is_drawing_points(ice) ?
+      crocus_calculate_point_sprite_overrides(wm_prog_data, cso_rast) : 0;
 
    crocus_emit_cmd(batch, GENX(3DSTATE_SBE), sbe) {
       sbe.AttributeSwizzleEnable = true;
