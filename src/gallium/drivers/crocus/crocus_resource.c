@@ -1488,7 +1488,7 @@ crocus_resource_get_tile_offsets(const struct crocus_resource *res,
  *    mesa: Fix return type of  _mesa_get_format_bytes() (#37351)
  */
 static intptr_t
-s8_offset(uint32_t stride, uint32_t x, uint32_t y)
+s8_offset(uint32_t stride, uint32_t x, uint32_t y, bool swizzled)
 {
    uint32_t tile_size = 4096;
    uint32_t tile_width = 64;
@@ -1512,6 +1512,17 @@ s8_offset(uint32_t stride, uint32_t x, uint32_t y)
                +   4 * ((byte_x / 2) % 2)
                +   2 * (byte_y % 2)
                +   1 * (byte_x % 2);
+
+   if (swizzled) {
+      /* adjust for bit6 swizzling */
+      if (((byte_x / 8) % 2) == 1) {
+         if (((byte_y / 8) % 2) == 0) {
+            u += 64;
+         } else {
+            u -= 64;
+         }
+      }
+   }
 
    return u;
 }
@@ -1537,7 +1548,8 @@ crocus_unmap_s8(struct crocus_transfer *map)
             for (uint32_t x = 0; x < box->width; x++) {
                ptrdiff_t offset = s8_offset(surf->row_pitch_B,
                                             x0_el + box->x + x,
-                                            y0_el + box->y + y);
+                                            y0_el + box->y + y,
+                                            map->has_swizzling);
                tiled_s8_map[offset] =
                   untiled_s8_map[s * xfer->layer_stride + y * xfer->stride + x];
             }
@@ -1584,7 +1596,8 @@ crocus_map_s8(struct crocus_transfer *map)
             for (uint32_t x = 0; x < box->width; x++) {
                ptrdiff_t offset = s8_offset(surf->row_pitch_B,
                                             x0_el + box->x + x,
-                                            y0_el + box->y + y);
+                                            y0_el + box->y + y,
+                                            map->has_swizzling);
                untiled_s8_map[s * xfer->layer_stride + y * xfer->stride + x] =
                   tiled_s8_map[offset];
             }
@@ -1628,8 +1641,6 @@ crocus_unmap_tiled_memcpy(struct crocus_transfer *map)
    struct crocus_resource *res = (struct crocus_resource *) xfer->resource;
    struct isl_surf *surf = &res->surf;
 
-   const bool has_swizzling = ((struct crocus_screen *)res->base.screen)->has_swizzling;
-
    if (xfer->usage & PIPE_MAP_WRITE) {
       char *dst =
          crocus_bo_map(map->dbg, res->bo, (xfer->usage | MAP_RAW) & MAP_FLAGS);
@@ -1642,7 +1653,8 @@ crocus_unmap_tiled_memcpy(struct crocus_transfer *map)
 
          isl_memcpy_linear_to_tiled(x1, x2, y1, y2, dst, ptr,
                                     surf->row_pitch_B, xfer->stride,
-                                    has_swizzling, surf->tiling, ISL_MEMCPY);
+                                    map->has_swizzling,
+                                    surf->tiling, ISL_MEMCPY);
       }
    }
    os_free_aligned(map->buffer);
@@ -1672,8 +1684,6 @@ crocus_map_tiled_memcpy(struct crocus_transfer *map)
    assert(map->buffer);
    map->ptr = (char *)map->buffer + (x1 & 0xf);
 
-   const bool has_swizzling = ((struct crocus_screen *)res->base.screen)->has_swizzling;
-
    if (!(xfer->usage & PIPE_MAP_DISCARD_RANGE)) {
       char *src =
          crocus_bo_map(map->dbg, res->bo, (xfer->usage | MAP_RAW) & MAP_FLAGS);
@@ -1686,7 +1696,8 @@ crocus_map_tiled_memcpy(struct crocus_transfer *map)
          void *ptr = map->ptr + s * xfer->layer_stride;
 
          isl_memcpy_tiled_to_linear(x1, x2, y1, y2, ptr, src, xfer->stride,
-                                    surf->row_pitch_B, has_swizzling,
+                                    surf->row_pitch_B,
+                                    map->has_swizzling,
                                     surf->tiling, ISL_MEMCPY_STREAMING_LOAD);
       }
    }
@@ -1803,6 +1814,7 @@ crocus_transfer_map(struct pipe_context *ctx,
    memset(map, 0, sizeof(*map));
    map->dbg = &ice->dbg;
 
+   map->has_swizzling = ((struct crocus_screen *)ctx->screen)->has_swizzling;
    pipe_resource_reference(&xfer->resource, resource);
    xfer->level = level;
    xfer->usage = usage;

@@ -228,6 +228,7 @@ struct crocus_transfer {
    struct crocus_batch *batch;
 
    bool dest_had_defined_contents;
+   bool has_swizzling;
 
    void (*unmap)(struct crocus_transfer *);
 };
