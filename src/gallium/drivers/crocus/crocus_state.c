@@ -4103,27 +4103,18 @@ emit_null_fb_surface(struct crocus_batch *batch,
 }
 
 static uint32_t
-emit_surface(struct crocus_context *ice,
-             struct crocus_batch *batch,
+emit_surface(struct crocus_batch *batch,
              struct pipe_surface *p_surf,
-             unsigned idx,
              bool writeable,
              enum isl_aux_usage aux_usage,
-             const struct pipe_rt_blend_state *gen4_rt_state)
+             bool blend_enable,
+             uint32_t write_disables)
 {
    struct crocus_surface *surf = (void *) p_surf;
    UNUSED struct isl_device *isl_dev = &batch->screen->isl_dev;
    struct crocus_resource *res = (void *) p_surf->texture;
    uint32_t offset = 0;
 
-#if GEN_GEN <= 5
-   uint32_t write_disables = 0;
-
-   write_disables |= (gen4_rt_state->colormask & PIPE_MASK_A) ? 0x0 : 0x8;
-   write_disables |= (gen4_rt_state->colormask & PIPE_MASK_R) ? 0x0 : 0x4;
-   write_disables |= (gen4_rt_state->colormask & PIPE_MASK_G) ? 0x0 : 0x2;
-   write_disables |= (gen4_rt_state->colormask & PIPE_MASK_B) ? 0x0 : 0x1;
-#endif
    struct isl_view *view = &surf->view;
    union isl_color_value clear_color = { .u32 = { 0, 0, 0, 0 } };
    uint32_t *surf_state = stream_state(batch, isl_dev->ss.size, isl_dev->ss.align, &offset);
@@ -4133,8 +4124,8 @@ emit_surface(struct crocus_context *ice,
    }
    isl_surf_fill_state(isl_dev, surf_state, .surf = &res->surf, .view = view,
                        .address = crocus_state_reloc(batch,
-						     offset + isl_dev->ss.addr_offset,
-						     res->bo, 0, 0),
+                                                     offset + isl_dev->ss.addr_offset,
+                                                     res->bo, 0, 0),
                        .aux_surf = NULL, .aux_usage = 0,
                        .aux_address = 0,
                        .mocs = mocs(res->bo, isl_dev),
@@ -4143,8 +4134,8 @@ emit_surface(struct crocus_context *ice,
                        .clear_address = 0,
                        .x_offset_sa = 0, .y_offset_sa = 0,
 #if GEN_GEN <= 5
+                       .blend_enable = blend_enable,
                        .write_disables = write_disables,
-                       .blend_enable = gen4_rt_state->blend_enable,
 #endif
                        );
    return offset;
@@ -4327,19 +4318,21 @@ crocus_populate_binding_table(struct crocus_context *ice,
       /* Note that cso_fb->nr_cbufs == fs_key->nr_color_regions. */
       if (cso_fb->nr_cbufs) {
          for (unsigned i = 0; i < cso_fb->nr_cbufs; i++) {
+            uint32_t write_disables = 0;
+            bool blend_enable = false;
 #if GEN_GEN <= 5
             const struct pipe_rt_blend_state *rt =
                &ice->state.cso_blend->cso.rt[ice->state.cso_blend->cso.independent_blend_enable ? i : 0];
+            write_disables |= (rt->colormask & PIPE_MASK_A) ? 0x0 : 0x8;
+            write_disables |= (rt->colormask & PIPE_MASK_R) ? 0x0 : 0x4;
+            write_disables |= (rt->colormask & PIPE_MASK_G) ? 0x0 : 0x2;
+            write_disables |= (rt->colormask & PIPE_MASK_B) ? 0x0 : 0x1;
+            blend_enable = rt->blend_enable;
 #endif
             if (cso_fb->cbufs[i]) {
-               surf_offsets[s] = emit_surface(ice, batch, cso_fb->cbufs[i], i, true,
-                                              ice->state.draw_aux_usage[i],
-#if GEN_GEN <= 5
-                                              rt
-#else
-                                              NULL
-#endif
-                                              );
+               surf_offsets[s] = emit_surface(batch, cso_fb->cbufs[i], true, 0,
+                                              blend_enable,
+                                              write_disables);
             } else {
                emit_null_fb_surface(batch, ice, &surf_offsets[s]);
             }
