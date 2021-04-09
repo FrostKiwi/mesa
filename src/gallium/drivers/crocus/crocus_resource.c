@@ -428,12 +428,13 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
    const bool has_hiz = !res->mod_info && !(INTEL_DEBUG & DEBUG_NO_HIZ) &&
       isl_surf_get_hiz_surf(&screen->isl_dev, &res->surf, &res->aux.surf);
 
-   const bool has_ccs =
+   const bool has_ccs = false;
+#if 0
       ((!res->mod_info && !(INTEL_DEBUG & DEBUG_NO_RBC)) ||
        (res->mod_info && res->mod_info->aux_usage != ISL_AUX_USAGE_NONE)) &&
       isl_surf_get_ccs_surf(&screen->isl_dev, &res->surf, &res->aux.surf,
                             &res->aux.extra_aux.surf, 0);
-
+#endif
    /* Having both HIZ and MCS is impossible. */
    assert(!has_mcs || !has_hiz);
 
@@ -841,8 +842,8 @@ crocus_resource_create_with_modifiers(struct pipe_screen *pscreen,
       flags |= BO_ALLOC_COHERENT;
 
    uint64_t aux_size = 0;
-#if 0
    uint32_t aux_preferred_alloc_flags;
+#if 1
    if (!crocus_resource_configure_aux(screen, res, false, &aux_size,
                                     &aux_preferred_alloc_flags)) {
       goto fail;
