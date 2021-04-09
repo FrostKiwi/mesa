@@ -741,6 +741,7 @@ crocus_screen_create(int fd, const struct pipe_screen_config *config)
    screen->compiler->supports_pull_constants = false;
    screen->compiler->supports_shader_constants = false;
    screen->compiler->compact_params = false;
+   screen->compiler->constant_buffer_0_is_relative = true;
 
    if (screen->devinfo.gen == 7) {
       screen->l3_config_3d = crocus_get_default_l3_config(&screen->devinfo, false);
