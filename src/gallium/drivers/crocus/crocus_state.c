@@ -4102,27 +4102,24 @@ emit_null_fb_surface(struct crocus_batch *batch,
                            out_offset);
 }
 
-static uint32_t
-emit_surface(struct crocus_batch *batch,
-             struct pipe_surface *p_surf,
-             bool writeable,
-             enum isl_aux_usage aux_usage,
-             bool blend_enable,
-             uint32_t write_disables)
+static void
+emit_surface_state(struct crocus_batch *batch,
+                   struct crocus_resource *res,
+                   struct isl_view *view,
+                   bool writeable,
+                   enum isl_aux_usage aux_usage,
+                   bool blend_enable,
+                   uint32_t write_disables,
+                   uint32_t *surf_state,
+                   uint32_t offset)
 {
-   struct crocus_surface *surf = (void *) p_surf;
-   UNUSED struct isl_device *isl_dev = &batch->screen->isl_dev;
-   struct crocus_resource *res = (void *) p_surf->texture;
-   uint32_t offset = 0;
+   struct isl_device *isl_dev = &batch->screen->isl_dev;
    uint32_t reloc = RELOC_32BIT;
 
    if (writeable)
      reloc |= RELOC_WRITE;
 
-   struct isl_view *view = &surf->view;
    union isl_color_value clear_color = { .u32 = { 0, 0, 0, 0 } };
-   uint32_t *surf_state = stream_state(batch, isl_dev->ss.size, isl_dev->ss.align, &offset);
-
    if (aux_usage != ISL_AUX_USAGE_NONE) {
       clear_color = crocus_resource_get_clear_color(res);
    }
@@ -4142,6 +4139,25 @@ emit_surface(struct crocus_batch *batch,
                        .write_disables = write_disables,
 #endif
                        );
+}
+
+static uint32_t
+emit_surface(struct crocus_batch *batch,
+             struct crocus_surface *surf,
+             enum isl_aux_usage aux_usage,
+             bool blend_enable,
+             uint32_t write_disables)
+{
+   struct isl_device *isl_dev = &batch->screen->isl_dev;
+   struct crocus_resource *res = (struct crocus_resource *)surf->base.texture;
+   struct isl_view *view = &surf->view;
+   uint32_t offset = 0;
+
+   uint32_t *surf_state = stream_state(batch, isl_dev->ss.size, isl_dev->ss.align, &offset);
+
+   emit_surface_state(batch, res, view, true,
+                      aux_usage, blend_enable, write_disables,
+                      surf_state, offset);
    return offset;
 }
 
@@ -4222,14 +4238,9 @@ emit_sampler_view(struct crocus_context *ice,
                             .mocs = mocs(isv->res->bo, isl_dev)
                             );
    } else {
-      struct isl_surf_fill_state_info f = {
-         .surf = &isv->res->surf,
-         .view = for_gather ? &isv->gather_view : &isv->view,
-         .mocs = mocs(isv->res->bo, isl_dev),
-         .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
-                                       isv->res->bo, 0, RELOC_32BIT),
-      };
-      isl_surf_fill_state_s(isl_dev, surf_state, &f);
+      emit_surface_state(batch, isv->res,
+                         for_gather ? &isv->gather_view : &isv->view,
+                         false, 0, false, 0, surf_state, offset);
    }
    return offset;
 }
@@ -4278,14 +4289,8 @@ emit_image_view(struct crocus_context *ice,
 
 
       } else {
-         struct isl_surf_fill_state_info f = {
-            .surf = &res->surf,
-            .view = &iv->view,
-            .mocs = mocs(res->bo, isl_dev),
-            .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
-                                          res->bo, 0, reloc),
-         };
-         isl_surf_fill_state_s(isl_dev, surf_state, &f);
+         emit_surface_state(batch, res, &iv->view,
+                            false, 0, false, 0, surf_state, offset);
       }
    }
 
@@ -4334,7 +4339,9 @@ crocus_populate_binding_table(struct crocus_context *ice,
             blend_enable = rt->blend_enable;
 #endif
             if (cso_fb->cbufs[i]) {
-               surf_offsets[s] = emit_surface(batch, cso_fb->cbufs[i], true, 0,
+               surf_offsets[s] = emit_surface(batch,
+                                              (struct crocus_surface *)cso_fb->cbufs[i],
+                                              0,
                                               blend_enable,
                                               write_disables);
             } else {
