@@ -52,9 +52,8 @@ disable_rb_aux_buffer(struct crocus_context *ice,
    struct pipe_framebuffer_state *cso_fb = &ice->state.framebuffer;
    bool found = false;
 
-   /* We only need to worry about color compression and fast clears. */
-   if (tex_res->aux.usage != ISL_AUX_USAGE_CCS_D &&
-       tex_res->aux.usage != ISL_AUX_USAGE_CCS_E)
+   /* We only need to worry about fast clears. */
+   if (tex_res->aux.usage != ISL_AUX_USAGE_CCS_D)
       return false;
 
    for (unsigned i = 0; i < cso_fb->nr_cbufs; i++) {
@@ -519,67 +518,6 @@ crocus_mcs_partial_resolve(struct crocus_context *ice,
    blorp_batch_finish(&blorp_batch);
 }
 
-
-/**
- * Return true if the format that will be used to access the resource is
- * CCS_E-compatible with the resource's linear/non-sRGB format.
- *
- * Why use the linear format?  Well, although the resourcemay be specified
- * with an sRGB format, the usage of that color space/format can be toggled.
- * Since our HW tends to support more linear formats than sRGB ones, we use
- * this format variant for check for CCS_E compatibility.
- */
-static bool
-format_ccs_e_compat_with_resource(const struct gen_device_info *devinfo,
-                                  const struct crocus_resource *res,
-                                  enum isl_format access_format)
-{
-   assert(res->aux.usage == ISL_AUX_USAGE_CCS_E);
-
-   enum isl_format isl_format = isl_format_srgb_to_linear(res->surf.format);
-   return isl_formats_are_ccs_e_compatible(devinfo, isl_format, access_format);
-}
-
-static bool
-sample_with_depth_aux(const struct gen_device_info *devinfo,
-                      const struct crocus_resource *res)
-{
-   switch (res->aux.usage) {
-   case ISL_AUX_USAGE_HIZ:
-      return false;
-   case ISL_AUX_USAGE_HIZ_CCS:
-      return false;
-   case ISL_AUX_USAGE_HIZ_CCS_WT:
-      break;
-   default:
-      return false;
-   }
-
-   /* It seems the hardware won't fallback to the depth buffer if some of the
-    * mipmap levels aren't available in the HiZ buffer. So we need all levels
-    * of the texture to be HiZ enabled.
-    */
-   for (unsigned level = 0; level < res->surf.levels; ++level) {
-      if (!crocus_resource_level_has_hiz(res, level))
-         return false;
-   }
-
-   /* If compressed multisampling is enabled, then we use it for the auxiliary
-    * buffer instead.
-    *
-    * From the BDW PRM (Volume 2d: Command Reference: Structures
-    *                   RENDER_SURFACE_STATE.AuxiliarySurfaceMode):
-    *
-    *  "If this field is set to AUX_HIZ, Number of Multisamples must be
-    *   MULTISAMPLECOUNT_1, and Surface Type cannot be SURFTYPE_3D.
-    *
-    * There is no such blurb for 1D textures, but there is sufficient evidence
-    * that this is broken on SKL+.
-    */
-   // XXX: i965 disables this for arrays too, is that reasonable?
-   return res->surf.samples == 1 && res->surf.dim == ISL_SURF_DIM_2D;
-}
-
 /**
  * Perform a HiZ or depth resolve operation.
  *
@@ -825,51 +763,6 @@ get_ccs_d_resolve_op(enum isl_aux_state aux_state,
    unreachable("Invalid aux state for CCS_D");
 }
 
-static enum isl_aux_op
-get_ccs_e_resolve_op(enum isl_aux_state aux_state,
-                     enum isl_aux_usage aux_usage,
-                     bool fast_clear_supported)
-{
-   /* CCS_E surfaces can be accessed as CCS_D if we're careful. */
-   assert(aux_usage == ISL_AUX_USAGE_NONE ||
-          aux_usage == ISL_AUX_USAGE_CCS_D ||
-          aux_usage == ISL_AUX_USAGE_CCS_E);
-
-   switch (aux_state) {
-   case ISL_AUX_STATE_CLEAR:
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      if (fast_clear_supported)
-         return ISL_AUX_OP_NONE;
-      else if (aux_usage == ISL_AUX_USAGE_CCS_E)
-         return ISL_AUX_OP_PARTIAL_RESOLVE;
-      else
-         return ISL_AUX_OP_FULL_RESOLVE;
-
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      if (aux_usage != ISL_AUX_USAGE_CCS_E)
-         return ISL_AUX_OP_FULL_RESOLVE;
-      else if (!fast_clear_supported)
-         return ISL_AUX_OP_PARTIAL_RESOLVE;
-      else
-         return ISL_AUX_OP_NONE;
-
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      if (aux_usage != ISL_AUX_USAGE_CCS_E)
-         return ISL_AUX_OP_FULL_RESOLVE;
-      else
-         return ISL_AUX_OP_NONE;
-
-   case ISL_AUX_STATE_PASS_THROUGH:
-      return ISL_AUX_OP_NONE;
-
-   case ISL_AUX_STATE_RESOLVED:
-   case ISL_AUX_STATE_AUX_INVALID:
-      break;
-   }
-
-   unreachable("Invalid aux state for CCS_E");
-}
-
 static void
 crocus_resource_prepare_ccs_access(struct crocus_context *ice,
                                  struct crocus_batch *batch,
@@ -881,14 +774,10 @@ crocus_resource_prepare_ccs_access(struct crocus_context *ice,
    enum isl_aux_state aux_state = crocus_resource_get_aux_state(res, level, layer);
 
    enum isl_aux_op resolve_op;
-   if (res->aux.usage == ISL_AUX_USAGE_CCS_E) {
-      resolve_op = get_ccs_e_resolve_op(aux_state, aux_usage,
-                                        fast_clear_supported);
-   } else {
-      assert(res->aux.usage == ISL_AUX_USAGE_CCS_D);
-      resolve_op = get_ccs_d_resolve_op(aux_state, aux_usage,
-                                        fast_clear_supported);
-   }
+
+   assert(res->aux.usage == ISL_AUX_USAGE_CCS_D);
+   resolve_op = get_ccs_d_resolve_op(aux_state, aux_usage,
+                                     fast_clear_supported);
 
    if (resolve_op != ISL_AUX_OP_NONE) {
       crocus_resolve_color(ice, batch, res, level, layer, resolve_op);
@@ -921,70 +810,33 @@ crocus_resource_finish_ccs_write(struct crocus_context *ice,
                                enum isl_aux_usage aux_usage)
 {
    assert(aux_usage == ISL_AUX_USAGE_NONE ||
-          aux_usage == ISL_AUX_USAGE_CCS_D ||
-          aux_usage == ISL_AUX_USAGE_CCS_E);
+          aux_usage == ISL_AUX_USAGE_CCS_D);
 
    enum isl_aux_state aux_state =
       crocus_resource_get_aux_state(res, level, layer);
 
-   if (res->aux.usage == ISL_AUX_USAGE_CCS_E) {
-      switch (aux_state) {
-      case ISL_AUX_STATE_CLEAR:
-      case ISL_AUX_STATE_PARTIAL_CLEAR:
-         assert(aux_usage == ISL_AUX_USAGE_CCS_E ||
-                aux_usage == ISL_AUX_USAGE_CCS_D);
+   assert(res->aux.usage == ISL_AUX_USAGE_CCS_D);
+   /* CCS_D is a bit simpler */
+   switch (aux_state) {
+   case ISL_AUX_STATE_CLEAR:
+      assert(aux_usage == ISL_AUX_USAGE_CCS_D);
+      crocus_resource_set_aux_state(ice, res, level, layer, 1,
+                                    ISL_AUX_STATE_PARTIAL_CLEAR);
+      break;
 
-         if (aux_usage == ISL_AUX_USAGE_CCS_E) {
-            crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                        ISL_AUX_STATE_COMPRESSED_CLEAR);
-         } else if (aux_state != ISL_AUX_STATE_PARTIAL_CLEAR) {
-            crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                        ISL_AUX_STATE_PARTIAL_CLEAR);
-         }
-         break;
+   case ISL_AUX_STATE_PARTIAL_CLEAR:
+      assert(aux_usage == ISL_AUX_USAGE_CCS_D);
+      break; /* Nothing to do */
 
-      case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-         assert(aux_usage == ISL_AUX_USAGE_CCS_E);
-         break; /* Nothing to do */
+   case ISL_AUX_STATE_PASS_THROUGH:
+      /* Nothing to do */
+      break;
 
-      case ISL_AUX_STATE_PASS_THROUGH:
-         if (aux_usage == ISL_AUX_USAGE_CCS_E) {
-            crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                        ISL_AUX_STATE_COMPRESSED_NO_CLEAR);
-         } else {
-            /* Nothing to do */
-         }
-         break;
-
-      case ISL_AUX_STATE_RESOLVED:
-      case ISL_AUX_STATE_AUX_INVALID:
-         unreachable("Invalid aux state for CCS_E");
-      }
-   } else {
-      assert(res->aux.usage == ISL_AUX_USAGE_CCS_D);
-      /* CCS_D is a bit simpler */
-      switch (aux_state) {
-      case ISL_AUX_STATE_CLEAR:
-         assert(aux_usage == ISL_AUX_USAGE_CCS_D);
-         crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                     ISL_AUX_STATE_PARTIAL_CLEAR);
-         break;
-
-      case ISL_AUX_STATE_PARTIAL_CLEAR:
-         assert(aux_usage == ISL_AUX_USAGE_CCS_D);
-         break; /* Nothing to do */
-
-      case ISL_AUX_STATE_PASS_THROUGH:
-         /* Nothing to do */
-         break;
-
-      case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      case ISL_AUX_STATE_RESOLVED:
-      case ISL_AUX_STATE_AUX_INVALID:
-         unreachable("Invalid aux state for CCS_D");
-      }
+   case ISL_AUX_STATE_COMPRESSED_CLEAR:
+   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
+   case ISL_AUX_STATE_RESOLVED:
+   case ISL_AUX_STATE_AUX_INVALID:
+      unreachable("Invalid aux state for CCS_D");
    }
 }
 
@@ -1054,9 +906,7 @@ crocus_resource_prepare_hiz_access(struct crocus_context *ice,
                                  bool fast_clear_supported)
 {
    assert(aux_usage == ISL_AUX_USAGE_NONE ||
-          aux_usage == ISL_AUX_USAGE_HIZ ||
-          aux_usage == ISL_AUX_USAGE_HIZ_CCS ||
-          aux_usage == ISL_AUX_USAGE_CCS_E);
+          aux_usage == ISL_AUX_USAGE_HIZ);
 
    enum isl_aux_op hiz_op = ISL_AUX_OP_NONE;
    switch (crocus_resource_get_aux_state(res, level, layer)) {
@@ -1169,7 +1019,6 @@ crocus_resource_prepare_access(struct crocus_context *ice,
       break;
 
    case ISL_AUX_USAGE_MCS:
-   case ISL_AUX_USAGE_MCS_CCS:
       assert(start_level == 0 && num_levels == 1);
       const uint32_t level_layers =
          miptree_layer_range_length(res, 0, start_layer, num_layers);
@@ -1180,7 +1029,6 @@ crocus_resource_prepare_access(struct crocus_context *ice,
       break;
 
    case ISL_AUX_USAGE_CCS_D:
-   case ISL_AUX_USAGE_CCS_E:
       for (uint32_t l = 0; l < num_levels; l++) {
          const uint32_t level = start_level + l;
          const uint32_t level_layers =
@@ -1194,7 +1042,6 @@ crocus_resource_prepare_access(struct crocus_context *ice,
       break;
 
    case ISL_AUX_USAGE_HIZ:
-   case ISL_AUX_USAGE_HIZ_CCS:
       for (uint32_t l = 0; l < num_levels; l++) {
          const uint32_t level = start_level + l;
          if (!crocus_resource_level_has_hiz(res, level))
@@ -1228,7 +1075,6 @@ crocus_resource_finish_write(struct crocus_context *ice,
       break;
 
    case ISL_AUX_USAGE_MCS:
-   case ISL_AUX_USAGE_MCS_CCS:
       for (uint32_t a = 0; a < num_layers; a++) {
          crocus_resource_finish_mcs_write(ice, res, start_layer + a,
                                         aux_usage);
@@ -1236,7 +1082,6 @@ crocus_resource_finish_write(struct crocus_context *ice,
       break;
 
    case ISL_AUX_USAGE_CCS_D:
-   case ISL_AUX_USAGE_CCS_E:
       for (uint32_t a = 0; a < num_layers; a++) {
          crocus_resource_finish_ccs_write(ice, res, level, start_layer + a,
                                         aux_usage);
@@ -1244,7 +1089,6 @@ crocus_resource_finish_write(struct crocus_context *ice,
       break;
 
    case ISL_AUX_USAGE_HIZ:
-   case ISL_AUX_USAGE_HIZ_CCS:
       if (!crocus_resource_level_has_hiz(res, level))
          return;
 
@@ -1299,78 +1143,16 @@ crocus_resource_set_aux_state(struct crocus_context *ice,
    }
 }
 
-/* On Gen9 color buffers may be compressed by the hardware (lossless
- * compression). There are, however, format restrictions and care needs to be
- * taken that the sampler engine is capable for re-interpreting a buffer with
- * format different the buffer was originally written with.
- *
- * For example, SRGB formats are not compressible and the sampler engine isn't
- * capable of treating RGBA_UNORM as SRGB_ALPHA. In such a case the underlying
- * color buffer needs to be resolved so that the sampling surface can be
- * sampled as non-compressed (i.e., without the auxiliary MCS buffer being
- * set).
- */
-static bool
-can_texture_with_ccs(const struct gen_device_info *devinfo,
-                     struct pipe_debug_callback *dbg,
-                     const struct crocus_resource *res,
-                     enum isl_format view_format)
-{
-   if (res->aux.usage != ISL_AUX_USAGE_CCS_E)
-      return false;
-
-   if (!format_ccs_e_compat_with_resource(devinfo, res, view_format)) {
-      const struct isl_format_layout *res_fmtl =
-         isl_format_get_layout(res->surf.format);
-      const struct isl_format_layout *view_fmtl =
-         isl_format_get_layout(view_format);
-
-      perf_debug(dbg, "Incompatible sampling format (%s) for CCS (%s)\n",
-                 view_fmtl->name, res_fmtl->name);
-
-      return false;
-   }
-
-   return true;
-}
-
 enum isl_aux_usage
 crocus_resource_texture_aux_usage(struct crocus_context *ice,
                                 const struct crocus_resource *res,
                                 enum isl_format view_format)
 {
    struct crocus_screen *screen = (void *) ice->ctx.screen;
-   struct gen_device_info *devinfo = &screen->devinfo;
 
    switch (res->aux.usage) {
-   case ISL_AUX_USAGE_HIZ:
-      if (sample_with_depth_aux(devinfo, res))
-         return ISL_AUX_USAGE_HIZ;
-      break;
-
-   case ISL_AUX_USAGE_HIZ_CCS:
-      if (sample_with_depth_aux(devinfo, res))
-         return ISL_AUX_USAGE_CCS_E;
-      break;
-
    case ISL_AUX_USAGE_MCS:
-   case ISL_AUX_USAGE_MCS_CCS:
       return res->aux.usage;
-
-   case ISL_AUX_USAGE_CCS_D:
-   case ISL_AUX_USAGE_CCS_E:
-      /* If we don't have any unresolved color, report an aux usage of
-       * ISL_AUX_USAGE_NONE.  This way, texturing won't even look at the
-       * aux surface and we can save some bandwidth.
-       */
-      if (!crocus_has_color_unresolved(res, 0, INTEL_REMAINING_LEVELS,
-                                     0, INTEL_REMAINING_LAYERS))
-         return ISL_AUX_USAGE_NONE;
-
-      if (can_texture_with_ccs(devinfo, &ice->dbg, res, view_format))
-         return ISL_AUX_USAGE_CCS_E;
-      break;
-
    default:
       break;
    }
@@ -1435,19 +1217,9 @@ crocus_resource_render_aux_usage(struct crocus_context *ice,
 
    switch (res->aux.usage) {
    case ISL_AUX_USAGE_MCS:
-   case ISL_AUX_USAGE_MCS_CCS:
       return res->aux.usage;
 
    case ISL_AUX_USAGE_CCS_D:
-   case ISL_AUX_USAGE_CCS_E:
-      /* Gen9+ hardware technically supports non-0/1 clear colors with sRGB
-       * formats.  However, there are issues with blending where it doesn't
-       * properly apply the sRGB curve to the clear color when blending.
-       */
-      if (res->aux.usage == ISL_AUX_USAGE_CCS_E &&
-          format_ccs_e_compat_with_resource(devinfo, res, render_format))
-         return ISL_AUX_USAGE_CCS_E;
-
       /* Otherwise, we try to fall back to CCS_D */
       if (isl_format_supports_ccs_d(devinfo, render_format))
          return ISL_AUX_USAGE_CCS_D;

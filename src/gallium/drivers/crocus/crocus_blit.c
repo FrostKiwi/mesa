@@ -653,8 +653,6 @@ get_copy_region_aux_settings(const struct gen_device_info *devinfo,
 {
    switch (res->aux.usage) {
    case ISL_AUX_USAGE_MCS:
-   case ISL_AUX_USAGE_MCS_CCS:
-   case ISL_AUX_USAGE_CCS_E:
       /* A stencil resolve operation must be performed prior to doing resource
        * copies or used by CPU.
        * (see HSD 1209978162)
