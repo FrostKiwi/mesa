@@ -2495,6 +2495,20 @@ crocus_create_surface(struct pipe_context *ctx,
    return psurf;
 }
 
+#if GEN_GEN == 7
+static void
+update_default_image_param(struct brw_image_param *param)
+{
+   memset(param, 0, sizeof(*param));
+   /* Set the swizzling shifts to all-ones to effectively disable swizzling --
+    * See emit_address_calculation() in brw_fs_surface_builder.cpp for a more
+    * detailed explanation of these parameters.
+    */
+   param->swizzling[0] = 0xff;
+   param->swizzling[1] = 0xff;
+}
+#endif
+
 /**
  * The pipe->set_shader_images() driver hook.
  */
@@ -2570,6 +2584,7 @@ crocus_set_shader_images(struct pipe_context *ctx,
          }
       } else {
          pipe_resource_reference(&iv->base.resource, NULL);
+         update_default_image_param(&image_params[start_slot + i]);
       }
    }
 
