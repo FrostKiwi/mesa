@@ -4114,6 +4114,10 @@ emit_surface(struct crocus_batch *batch,
    UNUSED struct isl_device *isl_dev = &batch->screen->isl_dev;
    struct crocus_resource *res = (void *) p_surf->texture;
    uint32_t offset = 0;
+   uint32_t reloc = RELOC_32BIT;
+
+   if (writeable)
+     reloc |= RELOC_WRITE;
 
    struct isl_view *view = &surf->view;
    union isl_color_value clear_color = { .u32 = { 0, 0, 0, 0 } };
@@ -4125,7 +4129,7 @@ emit_surface(struct crocus_batch *batch,
    isl_surf_fill_state(isl_dev, surf_state, .surf = &res->surf, .view = view,
                        .address = crocus_state_reloc(batch,
                                                      offset + isl_dev->ss.addr_offset,
-                                                     res->bo, 0, 0),
+                                                     res->bo, 0, reloc),
                        .aux_surf = NULL, .aux_usage = 0,
                        .aux_address = 0,
                        .mocs = mocs(res->bo, isl_dev),
