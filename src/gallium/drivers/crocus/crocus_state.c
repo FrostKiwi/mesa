@@ -4123,12 +4123,25 @@ emit_surface_state(struct crocus_batch *batch,
    if (aux_usage != ISL_AUX_USAGE_NONE) {
       clear_color = crocus_resource_get_clear_color(res);
    }
+
+   struct crocus_bo *aux_bo = NULL;
+   uint32_t aux_offset = 0;
+   struct isl_surf *aux_surf = NULL;
+   if (aux_usage != ISL_AUX_USAGE_NONE) {
+      aux_surf = &res->aux.surf;
+      aux_offset = res->aux.offset;
+      aux_bo = res->aux.bo;
+   }
+
    isl_surf_fill_state(isl_dev, surf_state, .surf = &res->surf, .view = view,
                        .address = crocus_state_reloc(batch,
                                                      offset + isl_dev->ss.addr_offset,
                                                      res->bo, 0, reloc),
-                       .aux_surf = NULL, .aux_usage = 0,
-                       .aux_address = 0,
+                       .aux_surf = aux_surf,
+                       .aux_usage = aux_usage,
+                       .aux_address = aux_bo ? crocus_state_reloc(batch,
+                                                                  offset + isl_dev->ss.aux_addr_offset,
+                                                                  aux_bo, aux_offset, reloc) : 0,
                        .mocs = mocs(res->bo, isl_dev),
                        .clear_color = clear_color,
                        .use_clear_address = false,
@@ -4341,7 +4354,7 @@ crocus_populate_binding_table(struct crocus_context *ice,
             if (cso_fb->cbufs[i]) {
                surf_offsets[s] = emit_surface(batch,
                                               (struct crocus_surface *)cso_fb->cbufs[i],
-                                              0,
+                                              ice->state.draw_aux_usage[i],
                                               blend_enable,
                                               write_disables);
             } else {
