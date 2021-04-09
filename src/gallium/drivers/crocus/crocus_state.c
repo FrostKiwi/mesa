@@ -5862,17 +5862,23 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #endif
 
 #if GEN_GEN >= 6
-	 wm.PixelShaderUsesSourceW = wm_prog_data->uses_src_w;
+         wm.PixelShaderUsesSourceW = wm_prog_data->uses_src_w;
 
-	 if (cso->cso.multisample)
-            wm.MultisampleRasterizationMode = MSRASTMODE_ON_PATTERN;
-	 else
+         struct pipe_framebuffer_state *fb = &ice->state.framebuffer;
+         if (fb->samples > 1) {
+            if (cso->cso.multisample)
+               wm.MultisampleRasterizationMode = MSRASTMODE_ON_PATTERN;
+            else
+               wm.MultisampleRasterizationMode = MSRASTMODE_OFF_PIXEL;
+
+            if (cso->cso.force_persample_interp)
+               wm.MultisampleDispatchMode = MSDISPMODE_PERSAMPLE;
+            else
+               wm.MultisampleDispatchMode = MSDISPMODE_PERPIXEL;
+         } else {
             wm.MultisampleRasterizationMode = MSRASTMODE_OFF_PIXEL;
-
-	 if (cso->cso.force_persample_interp)
             wm.MultisampleDispatchMode = MSDISPMODE_PERSAMPLE;
-	 else
-            wm.MultisampleDispatchMode = MSDISPMODE_PERPIXEL;
+         }
 #endif
 
 	 wm.PixelShaderUsesSourceDepth = wm_prog_data->uses_src_depth;
