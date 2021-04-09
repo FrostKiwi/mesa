@@ -312,20 +312,11 @@ crocus_blorp_surf_for_resource(struct crocus_vtable *vtbl,
    // XXX: ASTC
 }
 
-static bool
-is_astc(enum isl_format format)
-{
-   return format != ISL_FORMAT_UNSUPPORTED &&
-          isl_format_get_layout(format)->txc == ISL_TXC_ASTC;
-}
-
 static void
 tex_cache_flush_hack(struct crocus_batch *batch,
                      enum isl_format view_format,
                      enum isl_format surf_format)
 {
-   const struct gen_device_info *devinfo = &batch->screen->devinfo;
-
    /* The WaSamplerCacheFlushBetweenRedescribedSurfaceReads workaround says:
     *
     *    "Currently Sampler assumes that a surface would not have two
@@ -342,9 +333,7 @@ tex_cache_flush_hack(struct crocus_batch *batch,
     * Icelake (Gen11+) claims to fix this issue, but seems to still have
     * issues with ASTC formats.
     */
-   bool need_flush = devinfo->gen >= 11 ?
-                     is_astc(surf_format) != is_astc(view_format) :
-                     view_format != surf_format;
+   bool need_flush = view_format != surf_format;
    if (!need_flush)
       return;
 
@@ -643,8 +632,7 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
 }
 
 static void
-get_copy_region_aux_settings(const struct gen_device_info *devinfo,
-                             struct crocus_resource *res,
+get_copy_region_aux_settings(struct crocus_resource *res,
                              enum isl_aux_usage *out_aux_usage,
                              bool is_render_target)
 {
@@ -698,9 +686,9 @@ crocus_copy_region(struct blorp_context *blorp,
          return;
    }
    enum isl_aux_usage src_aux_usage, dst_aux_usage;
-   get_copy_region_aux_settings(devinfo, src_res, &src_aux_usage,
+   get_copy_region_aux_settings(src_res, &src_aux_usage,
                                 false);
-   get_copy_region_aux_settings(devinfo, dst_res, &dst_aux_usage,
+   get_copy_region_aux_settings(dst_res, &dst_aux_usage,
                                 true);
 
    if (crocus_batch_references(batch, src_res->bo))
