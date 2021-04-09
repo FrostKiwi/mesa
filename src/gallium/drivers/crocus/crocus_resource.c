@@ -234,7 +234,7 @@ crocus_get_depth_stencil_resources(const struct gen_device_info *devinfo,
    }
 
    /* gen4/5 only supports packed ds */
-   if (devinfo->gen <= 6) {
+   if (devinfo->gen < 6) {
       *out_z = (void *)res;
       *out_s = (void *)res;
       return;
