@@ -594,8 +594,6 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
        *    XXX: In second case by destructing the compression, we might lose
        *    some performance.
        */
-      if (devinfo->gen >= 12)
-         stc_dst_aux_usage = ISL_AUX_USAGE_NONE;
 
       crocus_resource_prepare_access(ice, batch, src_res, info->src.level, 1,
                                    info->src.box.z, info->src.box.depth,
