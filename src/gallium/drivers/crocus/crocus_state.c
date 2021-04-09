@@ -4691,9 +4691,6 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    uint64_t dirty = ice->state.dirty;
    uint64_t stage_dirty = ice->state.stage_dirty;
 
-
-   crocus_update_surface_base_address(batch);
-
    if (!(dirty & CROCUS_ALL_DIRTY_FOR_RENDER) &&
        !(stage_dirty & CROCUS_ALL_STAGE_DIRTY_FOR_RENDER))
       return;
@@ -6239,6 +6236,9 @@ crocus_upload_render_state(struct crocus_context *ice,
 #endif
 
    batch->no_wrap = true;
+
+   crocus_update_surface_base_address(batch);
+
    crocus_upload_dirty_render_state(ice, batch, draw);
 
    batch->no_wrap = false;
