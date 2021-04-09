@@ -257,9 +257,7 @@ bool crocus_resource_set_clear_color(struct crocus_context *ice,
                                    struct crocus_resource *res,
                                    union isl_color_value color);
 union isl_color_value
-crocus_resource_get_clear_color(const struct crocus_resource *res,
-                              struct crocus_bo **clear_color_bo,
-                              uint64_t *clear_color_offset);
+crocus_resource_get_clear_color(const struct crocus_resource *res);
 
 void crocus_init_screen_resource_functions(struct pipe_screen *pscreen);
 

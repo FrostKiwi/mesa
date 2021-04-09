@@ -2029,16 +2029,10 @@ crocus_resource_set_clear_color(struct crocus_context *ice,
 }
 
 union isl_color_value
-crocus_resource_get_clear_color(const struct crocus_resource *res,
-                              struct crocus_bo **clear_color_bo,
-                              uint64_t *clear_color_offset)
+crocus_resource_get_clear_color(const struct crocus_resource *res)
 {
    assert(res->aux.bo);
 
-   if (clear_color_bo)
-      *clear_color_bo = res->aux.clear_color_bo;
-   if (clear_color_offset)
-      *clear_color_offset = res->aux.clear_color_offset;
    return res->aux.clear_color;
 }
 
