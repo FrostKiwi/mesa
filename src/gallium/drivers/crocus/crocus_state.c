@@ -1385,7 +1385,6 @@ crocus_init_compute_context(struct crocus_batch *batch)
 struct crocus_genx_state {
    struct {
 #if GEN_GEN == 7
-      // TODO: verify this is needed, originally only for gen8
       struct brw_image_param image_param[PIPE_MAX_SHADER_IMAGES];
 #endif
    } shaders[MESA_SHADER_STAGES];
@@ -2506,14 +2505,14 @@ crocus_set_shader_images(struct pipe_context *ctx,
                          unsigned unbind_num_trailing_slots,
                          const struct pipe_image_view *p_images)
 {
+#if GEN_GEN == 7
    struct crocus_context *ice = (struct crocus_context *) ctx;
    struct crocus_screen *screen = (struct crocus_screen *)ctx->screen;
    const struct gen_device_info *devinfo = &screen->devinfo;
    gl_shader_stage stage = stage_from_pipe(p_stage);
    struct crocus_shader_state *shs = &ice->state.shaders[stage];
-#if GEN_GEN == 7
-   // TODO
-#endif
+   struct crocus_genx_state *genx = ice->state.genx;
+   struct brw_image_param *image_params = genx->shaders[stage].image_param;
 
    shs->bound_image_views &= ~u_bit_consecutive(start_slot, count);
 
@@ -2535,18 +2534,12 @@ crocus_set_shader_images(struct pipe_context *ctx,
          enum isl_format isl_fmt =
             crocus_format_for_usage(devinfo, img->format, usage).fmt;
 
-         bool untyped_fallback = false;
-
          if (img->shader_access & PIPE_IMAGE_ACCESS_READ) {
             /* On Gen8, try to use typed surfaces reads (which support a
              * limited number of formats), and if not possible, fall back
              * to untyped reads.
              */
-            // TODO
-            untyped_fallback = GEN_GEN == 7 &&
-               !isl_has_matching_typed_storage_image_format(devinfo, isl_fmt);
-
-            if (untyped_fallback)
+	   if (!isl_has_matching_typed_storage_image_format(devinfo, isl_fmt))
                isl_fmt = ISL_FORMAT_RAW;
             else
                isl_fmt = isl_lower_storage_image_format(devinfo, isl_fmt);
@@ -2565,12 +2558,15 @@ crocus_set_shader_images(struct pipe_context *ctx,
 
             iv->view = view;
 
-            //            isl_surf_fill_image_param(&screen->isl_dev,
-            ///                                      &image_params[start_slot + i],
-            ///                                      &res->surf, &view);
+            isl_surf_fill_image_param(&screen->isl_dev,
+                                      &image_params[start_slot + i],
+                                      &res->surf, &view);
          } else {
             util_range_add(&res->base, &res->valid_buffer_range, img->u.buf.offset,
                            img->u.buf.offset + img->u.buf.size);
+            isl_buffer_fill_image_param(&screen->isl_dev,
+                                        &image_params[start_slot + i],
+                                        img->format, img->u.buf.size);
          }
       } else {
          pipe_resource_reference(&iv->base.resource, NULL);
@@ -2585,6 +2581,7 @@ crocus_set_shader_images(struct pipe_context *ctx,
    /* Broadwell also needs brw_image_params re-uploaded */
    ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_CONSTANTS_VS << stage;
    shs->sysvals_need_upload = true;
+#endif
 }
 
 
@@ -2925,7 +2922,6 @@ upload_sysvals(struct crocus_context *ice,
 
       if (BRW_PARAM_DOMAIN(sysval) == BRW_PARAM_DOMAIN_IMAGE) {
 #if GEN_GEN == 7
-         // TODO
          unsigned img = BRW_PARAM_IMAGE_IDX(sysval);
          unsigned offset = BRW_PARAM_IMAGE_OFFSET(sysval);
          struct brw_image_param *param =
@@ -4236,7 +4232,8 @@ emit_image_view(struct crocus_context *ice,
    struct crocus_resource *res = (struct crocus_resource *)iv->base.resource;
    uint32_t *surf_state = stream_state(batch, isl_dev->ss.size,
                                        isl_dev->ss.align, &offset);
-
+   bool write = iv->base.shader_access & PIPE_IMAGE_ACCESS_WRITE;
+   uint32_t reloc = RELOC_32BIT | (write ? RELOC_WRITE : 0);
    if (res->base.target == PIPE_BUFFER) {
       const struct isl_format_layout *fmtl = isl_format_get_layout(iv->view.format);
       const unsigned cpp = iv->view.format == ISL_FORMAT_RAW ? 1 : fmtl->bpb / 8;
@@ -4246,7 +4243,7 @@ emit_image_view(struct crocus_context *ice,
       isl_buffer_fill_state(isl_dev, surf_state,
                             .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
                                                           res->bo,
-                                                          res->offset + iv->base.u.buf.offset, RELOC_32BIT),
+                                                          res->offset + iv->base.u.buf.offset, reloc),
                             .size_B = final_size,
                             .format = iv->view.format,
                             .swizzle = iv->view.swizzle,
@@ -4254,15 +4251,29 @@ emit_image_view(struct crocus_context *ice,
                             .mocs = mocs(res->bo, isl_dev)
                             );
    } else {
-      struct isl_surf_fill_state_info f = {
-         .surf = &res->surf,
-         .view = &iv->view,
-         .mocs = mocs(res->bo, isl_dev),
-         .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
-                                       res->bo, 0, RELOC_32BIT),
-      };
+      if (iv->view.format == ISL_FORMAT_RAW) {
+         isl_buffer_fill_state(isl_dev, surf_state,
+                               .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
+                                                             res->bo,
+                                                             res->offset, reloc),
+                               .size_B = res->bo->size - res->offset,
+                               .format = iv->view.format,
+                               .swizzle = iv->view.swizzle,
+                               .stride_B = 1,
+                               .mocs = mocs(res->bo, isl_dev),
+                               );
 
-      isl_surf_fill_state_s(isl_dev, surf_state, &f);
+
+      } else {
+         struct isl_surf_fill_state_info f = {
+            .surf = &res->surf,
+            .view = &iv->view,
+            .mocs = mocs(res->bo, isl_dev),
+            .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
+                                          res->bo, 0, reloc),
+         };
+         isl_surf_fill_state_s(isl_dev, surf_state, &f);
+      }
    }
 
    return offset;
