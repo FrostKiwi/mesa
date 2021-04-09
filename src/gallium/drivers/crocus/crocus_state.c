@@ -4127,7 +4127,6 @@ emit_surface(struct crocus_context *ice,
    struct isl_view *view = &surf->view;
    union isl_color_value clear_color = { .u32 = { 0, 0, 0, 0 } };
    uint32_t *surf_state = stream_state(batch, isl_dev->ss.size, isl_dev->ss.align, &offset);
-   uint64_t clear_offset = 0;
 
    if (aux_usage != ISL_AUX_USAGE_NONE) {
       clear_color = crocus_resource_get_clear_color(res);
@@ -4141,7 +4140,7 @@ emit_surface(struct crocus_context *ice,
                        .mocs = mocs(res->bo, isl_dev),
                        .clear_color = clear_color,
                        .use_clear_address = false,
-                       .clear_address = clear_offset,
+                       .clear_address = 0,
                        .x_offset_sa = 0, .y_offset_sa = 0,
 #if GEN_GEN <= 5
                        .write_disables = write_disables,
