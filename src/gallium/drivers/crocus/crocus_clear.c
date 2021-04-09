@@ -416,8 +416,9 @@ can_fast_clear_depth(struct crocus_context *ice,
    if (INTEL_DEBUG & DEBUG_NO_FAST_CLEAR)
       return false;
 
-   if (devinfo->gen < 6)
-      return false;
+   return false;
+
+   /* no HIZ or depth fast clear on gens yet */
 
    /* Check for partial clears */
    if (box->x > 0 || box->y > 0 ||

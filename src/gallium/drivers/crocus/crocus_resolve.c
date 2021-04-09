@@ -597,6 +597,7 @@ crocus_hiz_exec(struct crocus_context *ice,
               unsigned int num_layers, enum isl_aux_op op,
               bool update_clear_depth)
 {
+   const struct gen_device_info *devinfo = &batch->screen->devinfo;
    assert(crocus_resource_level_has_hiz(res, level));
    assert(op != ISL_AUX_OP_NONE);
    UNUSED const char *name = NULL;
@@ -643,13 +644,27 @@ crocus_hiz_exec(struct crocus_context *ice,
     * Therefore issue two pipe control flushes, one for cache flush and
     * another for depth stall.
     */
-   crocus_emit_pipe_control_flush(batch,
-                                "hiz op: pre-flushes (1/2)",
-                                PIPE_CONTROL_DEPTH_CACHE_FLUSH |
-                                PIPE_CONTROL_CS_STALL);
-
-   crocus_emit_pipe_control_flush(batch, "hiz op: pre-flushes (2/2)",
-                                PIPE_CONTROL_DEPTH_STALL);
+   if (devinfo->gen == 6) {
+      /* From the Sandy Bridge PRM, volume 2 part 1, page 313:
+       *
+       *   "If other rendering operations have preceded this clear, a
+       *   PIPE_CONTROL with write cache flush enabled and Z-inhibit
+       *   disabled must be issued before the rectangle primitive used for
+       *   the depth buffer clear operation.
+       */
+      crocus_emit_pipe_control_flush(batch,
+                                     "hiz op: pre-flushes (1)",
+                                     PIPE_CONTROL_RENDER_TARGET_FLUSH |
+                                     PIPE_CONTROL_DEPTH_CACHE_FLUSH |
+                                     PIPE_CONTROL_CS_STALL);
+   } else if (devinfo->gen >= 7) {
+      crocus_emit_pipe_control_flush(batch,
+                                     "hiz op: pre-flushes (1/2)",
+                                     PIPE_CONTROL_DEPTH_CACHE_FLUSH |
+                                     PIPE_CONTROL_CS_STALL);
+      crocus_emit_pipe_control_flush(batch, "hiz op: pre-flushes (2/2)",
+                                     PIPE_CONTROL_DEPTH_STALL);
+   }
 
    assert(isl_aux_usage_has_hiz(res->aux.usage) && res->aux.bo);
 
@@ -682,10 +697,22 @@ crocus_hiz_exec(struct crocus_context *ice,
     *
     * TODO: Such as the spec says, this could be conditional.
     */
-   crocus_emit_pipe_control_flush(batch,
-                                "hiz op: post flush",
-                                PIPE_CONTROL_DEPTH_CACHE_FLUSH |
-                                PIPE_CONTROL_DEPTH_STALL);
+   if (devinfo->gen == 6) {
+      /* From the Sandy Bridge PRM, volume 2 part 1, page 314:
+       *
+       *     "DevSNB, DevSNB-B{W/A}]: Depth buffer clear pass must be
+       *     followed by a PIPE_CONTROL command with DEPTH_STALL bit set
+       *     and Then followed by Depth FLUSH'
+      */
+      crocus_emit_pipe_control_flush(batch,
+                                     "hiz op: post-flushes (1/2)",
+                                     PIPE_CONTROL_DEPTH_STALL);
+
+      crocus_emit_pipe_control_flush(batch,
+                                     "hiz op: post-flushes (2/2)",
+                                     PIPE_CONTROL_DEPTH_CACHE_FLUSH |
+                                     PIPE_CONTROL_CS_STALL);
+   }
 }
 
 /**
