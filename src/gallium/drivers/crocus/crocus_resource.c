@@ -120,7 +120,7 @@ select_best_modifier(struct gen_device_info *devinfo, enum pipe_format pfmt,
    return priority_to_modifier[prio];
 }
 
-enum isl_surf_dim
+static enum isl_surf_dim
 target_to_isl_surf_dim(enum pipe_texture_target target)
 {
    switch (target) {
