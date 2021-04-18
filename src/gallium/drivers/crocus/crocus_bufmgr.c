@@ -76,6 +76,19 @@
 #define VG(x)
 #endif
 
+/**
+ * For debugging purposes, this returns a time in seconds.
+ */
+static double
+get_time(void)
+{
+   struct timespec tp;
+
+   clock_gettime(CLOCK_MONOTONIC, &tp);
+
+   return tp.tv_sec + tp.tv_nsec / 1000000000.0;
+}
+
 /* VALGRIND_FREELIKE_BLOCK unfortunately does not actually undo the earlier
  * VALGRIND_MALLOCLIKE_BLOCK but instead leaves vg convinced the memory is
  * leaked. All because it does not call VG(cli_free) from its
