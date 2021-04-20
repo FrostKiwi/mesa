@@ -4133,15 +4133,15 @@ emit_surface_state(struct crocus_batch *batch,
       aux_bo = res->aux.bo;
    }
 
-   isl_surf_fill_state(isl_dev, surf_state, .surf = &res->surf, .view = view,
+   isl_surf_fill_state(isl_dev, surf_state,
+                       .surf = &res->surf,
+                       .view = view,
                        .address = crocus_state_reloc(batch,
                                                      offset + isl_dev->ss.addr_offset,
                                                      res->bo, 0, reloc),
                        .aux_surf = aux_surf,
                        .aux_usage = aux_usage,
-                       .aux_address = aux_bo ? crocus_state_reloc(batch,
-                                                                  offset + isl_dev->ss.aux_addr_offset,
-                                                                  aux_bo, aux_offset, reloc) : 0,
+                       .aux_address = aux_offset,
                        .mocs = mocs(res->bo, isl_dev),
                        .clear_color = clear_color,
                        .use_clear_address = false,
@@ -4152,6 +4152,23 @@ emit_surface_state(struct crocus_batch *batch,
                        .write_disables = write_disables,
 #endif
                        );
+
+      if (aux_surf) {
+         /* On gen7 and prior, the upper 20 bits of surface state DWORD 6 are the
+          * upper 20 bits of the GPU address of the MCS buffer; the lower 12 bits
+          * contain other control information.  Since buffer addresses are always
+          * on 4k boundaries (and thus have their lower 12 bits zero), we can use
+          * an ordinary reloc to do the necessary address translation.
+          *
+          * FIXME: move to the point of assignment.
+          */
+         uint32_t *aux_addr = surf_state + (isl_dev->ss.aux_addr_offset / 4);
+         *aux_addr = crocus_state_reloc(batch,
+                                        offset + isl_dev->ss.aux_addr_offset,
+                                        aux_bo, *aux_addr,
+                                        reloc);
+      }
+
 }
 
 static uint32_t
