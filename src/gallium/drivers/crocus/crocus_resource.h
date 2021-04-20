@@ -110,12 +110,6 @@ struct crocus_resource {
        */
       union isl_color_value clear_color;
 
-      /** Buffer object containing the indirect clear color.  */
-      struct crocus_bo *clear_color_bo;
-
-      /** Offset into bo where the clear color can be found.  */
-      uint64_t clear_color_offset;
-
       /**
        * \brief The type of auxiliary compression used by this resource.
        *

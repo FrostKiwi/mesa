@@ -276,7 +276,6 @@ void
 crocus_resource_disable_aux(struct crocus_resource *res)
 {
    crocus_bo_unreference(res->aux.bo);
-   crocus_bo_unreference(res->aux.clear_color_bo);
    free(res->aux.state);
 
    res->aux.usage = ISL_AUX_USAGE_NONE;
@@ -286,7 +285,6 @@ crocus_resource_disable_aux(struct crocus_resource *res)
    res->aux.surf.size_B = 0;
    res->aux.bo = NULL;
    res->aux.extra_aux.surf.size_B = 0;
-   res->aux.clear_color_bo = NULL;
    res->aux.state = NULL;
 }
 
@@ -369,13 +367,6 @@ create_aux_state_map(struct crocus_resource *res, enum isl_aux_state initial)
    assert((void *)s == data + total_size);
 
    return per_level_arr;
-}
-
-static unsigned
-crocus_get_aux_clear_color_state_size(struct crocus_screen *screen)
-{
-   const struct gen_device_info *devinfo = &screen->devinfo;
-   return devinfo->gen >= 10 ? screen->isl_dev.ss.clear_color_state_size : 0;
 }
 
 static bool
@@ -561,8 +552,6 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
     * to lack of testing we will leave this as 4K for now.
     */
    size = ALIGN(size, 4096);
-   res->aux.clear_color_offset = res->aux.offset + size;
-   size += crocus_get_aux_clear_color_state_size(screen);
    *aux_size_B = size;
 
    if (isl_aux_usage_has_hiz(res->aux.usage)) {
@@ -587,8 +576,7 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
  * Returns false on unexpected error (e.g. mapping a BO failed).
  */
 static bool
-crocus_resource_init_aux_buf(struct crocus_resource *res, uint32_t alloc_flags,
-                           unsigned clear_color_state_size)
+crocus_resource_init_aux_buf(struct crocus_resource *res, uint32_t alloc_flags)
 {
    if (!(alloc_flags & BO_ALLOC_ZEROED)) {
       void *map = crocus_bo_map(NULL, res->aux.bo, MAP_WRITE | MAP_RAW);
@@ -617,16 +605,7 @@ crocus_resource_init_aux_buf(struct crocus_resource *res, uint32_t alloc_flags,
              isl_aux_usage_has_mcs(res->aux.usage) ? 0xFF : 0,
              res->aux.extra_aux.surf.size_B);
 
-      /* Zero the indirect clear color to match ::fast_clear_color. */
-      memset((char *)map + res->aux.clear_color_offset, 0,
-             clear_color_state_size);
-
       crocus_bo_unmap(res->aux.bo);
-   }
-
-   if (clear_color_state_size > 0) {
-      res->aux.clear_color_bo = res->aux.bo;
-      crocus_bo_reference(res->aux.clear_color_bo);
    }
 
    return true;
@@ -662,8 +641,7 @@ crocus_resource_alloc_separate_aux(struct crocus_screen *screen,
       return false;
    }
 
-   if (!crocus_resource_init_aux_buf(res, alloc_flags,
-                                   crocus_get_aux_clear_color_state_size(screen)))
+   if (!crocus_resource_init_aux_buf(res, alloc_flags))
       return false;
 
    return true;
@@ -688,20 +666,7 @@ crocus_resource_finish_aux_import(struct pipe_screen *pscreen,
    res->aux.offset = aux_res->aux.offset;
 
    assert(res->bo->size >= (res->aux.offset + res->aux.surf.size_B));
-   assert(res->aux.clear_color_bo == NULL);
-   res->aux.clear_color_offset = 0;
-
    assert(aux_res->aux.surf.row_pitch_B == res->aux.surf.row_pitch_B);
-
-   unsigned clear_color_state_size =
-      crocus_get_aux_clear_color_state_size(screen);
-
-   if (clear_color_state_size > 0) {
-      res->aux.clear_color_bo =
-         crocus_bo_alloc(screen->bufmgr, "clear color buffer",
-                       clear_color_state_size);
-      res->aux.clear_color_offset = 0;
-   }
 
    crocus_resource_destroy(&screen->base, res->base.next);
    res->base.next = NULL;
@@ -865,9 +830,7 @@ crocus_resource_create_with_modifiers(struct pipe_screen *pscreen,
    if (aux_size > 0) {
       res->aux.bo = res->bo;
       crocus_bo_reference(res->aux.bo);
-      unsigned clear_color_state_size =
-         crocus_get_aux_clear_color_state_size(screen);
-      if (!crocus_resource_init_aux_buf(res, flags, clear_color_state_size))
+      if (!crocus_resource_init_aux_buf(res, flags))
          goto fail;
    }
 
