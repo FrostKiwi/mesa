@@ -4268,9 +4268,16 @@ emit_sampler_view(struct crocus_context *ice,
                             .mocs = mocs(isv->res->bo, isl_dev)
                             );
    } else {
+
+      unsigned aux_modes = isv->res->aux.sampler_usages;
+
+      enum isl_aux_usage aux_usage = ISL_AUX_USAGE_NONE;
+
+      if (aux_modes & (1 << ISL_AUX_USAGE_MCS))
+         aux_usage = ISL_AUX_USAGE_MCS;
       emit_surface_state(batch, isv->res,
                          for_gather ? &isv->gather_view : &isv->view,
-                         false, 0, false, 0, surf_state, offset);
+                         false, aux_usage, false, 0, surf_state, offset);
    }
    return offset;
 }
