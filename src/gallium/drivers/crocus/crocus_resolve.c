@@ -1148,9 +1148,10 @@ crocus_resource_texture_aux_usage(struct crocus_context *ice,
                                 const struct crocus_resource *res,
                                 enum isl_format view_format)
 {
-   struct crocus_screen *screen = (void *) ice->ctx.screen;
-
    switch (res->aux.usage) {
+   case ISL_AUX_USAGE_HIZ:
+      assert(res->surf.format == view_format);
+      return util_last_bit(res->aux.sampler_usages) - 1;
    case ISL_AUX_USAGE_MCS:
       return res->aux.usage;
    default:
