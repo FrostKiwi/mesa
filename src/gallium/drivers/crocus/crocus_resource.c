@@ -420,10 +420,10 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
       res->aux.possible_usages |= 1 << res->mod_info->aux_usage;
    } else if (has_mcs) {
       res->aux.possible_usages |=
-         1 << (has_ccs ? ISL_AUX_USAGE_MCS_CCS : ISL_AUX_USAGE_MCS);
+         1 << ISL_AUX_USAGE_MCS;
    } else if (has_hiz) {
       res->aux.possible_usages |=
-         1 << (has_ccs ? ISL_AUX_USAGE_HIZ_CCS : ISL_AUX_USAGE_HIZ);
+         1 << ISL_AUX_USAGE_HIZ;
    } else if (has_ccs) {
       if (isl_format_supports_ccs_d(devinfo, res->surf.format))
          res->aux.possible_usages |= 1 << ISL_AUX_USAGE_CCS_D;
@@ -436,11 +436,7 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
    /* We don't always support sampling with hiz. But when we do, it must be
     * single sampled.
     */
-   if (!devinfo->has_sample_with_hiz || res->surf.samples > 1)
-      res->aux.sampler_usages &= ~(1 << ISL_AUX_USAGE_HIZ);
-
-   /* ISL_AUX_USAGE_HIZ_CCS doesn't support sampling at all */
-   res->aux.sampler_usages &= ~(1 << ISL_AUX_USAGE_HIZ_CCS);
+   res->aux.sampler_usages &= ~(1 << ISL_AUX_USAGE_HIZ);
 
    enum isl_aux_state initial_state = ISL_AUX_STATE_AUX_INVALID;
    *aux_size_B = 0;
@@ -452,11 +448,9 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
       /* Having no aux buffer is only okay if there's no modifier with aux. */
       return !res->mod_info || res->mod_info->aux_usage == ISL_AUX_USAGE_NONE;
    case ISL_AUX_USAGE_HIZ:
-   case ISL_AUX_USAGE_HIZ_CCS:
       initial_state = ISL_AUX_STATE_AUX_INVALID;
       break;
    case ISL_AUX_USAGE_MCS:
-   case ISL_AUX_USAGE_MCS_CCS:
       /* The Ivybridge PRM, Vol 2 Part 1 p326 says:
        *
        *    "When MCS buffer is enabled and bound to MSRT, it is required

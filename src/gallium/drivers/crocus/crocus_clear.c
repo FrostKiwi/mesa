@@ -56,8 +56,7 @@ crocus_is_color_fast_clear_compatible(struct crocus_context *ice,
          continue;
       }
 
-      if (devinfo->gen < 9 &&
-          color.f32[i] != 0.0f && color.f32[i] != 1.0f) {
+      if (color.f32[i] != 0.0f && color.f32[i] != 1.0f) {
          return false;
       }
    }
@@ -79,7 +78,7 @@ can_fast_clear_color(struct crocus_context *ice,
    if (INTEL_DEBUG & DEBUG_NO_FAST_CLEAR)
       return false;
 
-   if (res->aux.usage == ISL_AUX_USAGE_NONE)
+   if (!isl_aux_usage_has_fast_clears(res->aux.usage))
       return false;
 
    /* Check for partial clear */
@@ -413,27 +412,7 @@ can_fast_clear_depth(struct crocus_context *ice,
    struct crocus_screen *screen = (void *) ctx->screen;
    const struct gen_device_info *devinfo = &screen->devinfo;
 
-   if (INTEL_DEBUG & DEBUG_NO_FAST_CLEAR)
-      return false;
-
    return false;
-
-   /* no HIZ or depth fast clear on gens yet */
-
-   /* Check for partial clears */
-   if (box->x > 0 || box->y > 0 ||
-       box->width < u_minify(p_res->width0, level) ||
-       box->height < u_minify(p_res->height0, level)) {
-      return false;
-   }
-
-   if (!(res->aux.has_hiz & (1 << level)))
-      return false;
-
-   return blorp_can_hiz_clear_depth(devinfo, &res->surf, res->aux.usage,
-                                    level, box->z, box->x, box->y,
-                                    box->x + box->width,
-                                    box->y + box->height);
 }
 
 static void

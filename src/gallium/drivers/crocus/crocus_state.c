@@ -4120,10 +4120,6 @@ emit_surface_state(struct crocus_batch *batch,
      reloc |= RELOC_WRITE;
 
    union isl_color_value clear_color = { .u32 = { 0, 0, 0, 0 } };
-   if (aux_usage != ISL_AUX_USAGE_NONE) {
-      clear_color = crocus_resource_get_clear_color(res);
-   }
-
    struct crocus_bo *aux_bo = NULL;
    uint32_t aux_offset = 0;
    struct isl_surf *aux_surf = NULL;
@@ -4131,6 +4127,8 @@ emit_surface_state(struct crocus_batch *batch,
       aux_surf = &res->aux.surf;
       aux_offset = res->aux.offset;
       aux_bo = res->aux.bo;
+
+      clear_color = crocus_resource_get_clear_color(res);
    }
 
    isl_surf_fill_state(isl_dev, surf_state,
@@ -4268,13 +4266,9 @@ emit_sampler_view(struct crocus_context *ice,
                             .mocs = mocs(isv->res->bo, isl_dev)
                             );
    } else {
+      enum isl_aux_usage aux_usage =
+         crocus_resource_texture_aux_usage(ice, isv->res, isv->view.format);
 
-      unsigned aux_modes = isv->res->aux.sampler_usages;
-
-      enum isl_aux_usage aux_usage = ISL_AUX_USAGE_NONE;
-
-      if (aux_modes & (1 << ISL_AUX_USAGE_MCS))
-         aux_usage = ISL_AUX_USAGE_MCS;
       emit_surface_state(batch, isv->res,
                          for_gather ? &isv->gather_view : &isv->view,
                          false, aux_usage, false, 0, surf_state, offset);
