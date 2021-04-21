@@ -369,28 +369,6 @@ create_aux_state_map(struct crocus_resource *res, enum isl_aux_state initial)
    return per_level_arr;
 }
 
-static bool
-want_ccs_e_for_format(const struct gen_device_info *devinfo,
-                      enum isl_format format)
-{
-   if (!isl_format_supports_ccs_e(devinfo, format))
-      return false;
-
-   const struct isl_format_layout *fmtl = isl_format_get_layout(format);
-
-   /* CCS_E seems to significantly hurt performance with 32-bit floating
-    * point formats.  For example, Paraview's "Wavelet Volume" case uses
-    * both R32_FLOAT and R32G32B32A32_FLOAT, and enabling CCS_E for those
-    * formats causes a 62% FPS drop.
-    *
-    * However, many benchmarks seem to use 16-bit float with no issues.
-    */
-   if (fmtl->channels.r.bits == 32 && fmtl->channels.r.type == ISL_SFLOAT)
-      return false;
-
-   return true;
-}
-
 /**
  * Configure aux for the resource, but don't allocate it. For images which
  * might be shared with modifiers, we must allocate the image and aux data in
@@ -410,8 +388,7 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
    /* Try to create the auxiliary surfaces allowed by the modifier or by
     * the user if no modifier is specified.
     */
-   assert(!res->mod_info || res->mod_info->aux_usage == ISL_AUX_USAGE_NONE ||
-                            res->mod_info->aux_usage == ISL_AUX_USAGE_CCS_E);
+   assert(!res->mod_info || res->mod_info->aux_usage == ISL_AUX_USAGE_NONE);
 
    const bool has_mcs = !res->mod_info &&
       isl_surf_get_mcs_surf(&screen->isl_dev, &res->surf, &res->aux.surf);
@@ -448,9 +425,6 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
       res->aux.possible_usages |=
          1 << (has_ccs ? ISL_AUX_USAGE_HIZ_CCS : ISL_AUX_USAGE_HIZ);
    } else if (has_ccs) {
-      if (want_ccs_e_for_format(devinfo, res->surf.format))
-         res->aux.possible_usages |= 1 << ISL_AUX_USAGE_CCS_E;
-
       if (isl_format_supports_ccs_d(devinfo, res->surf.format))
          res->aux.possible_usages |= 1 << ISL_AUX_USAGE_CCS_D;
    }
@@ -465,8 +439,6 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
    if (!devinfo->has_sample_with_hiz || res->surf.samples > 1)
       res->aux.sampler_usages &= ~(1 << ISL_AUX_USAGE_HIZ);
 
-   /* We don't always support sampling with HIZ_CCS. But when we do, treat it
-    * as CCS_E.*/
    /* ISL_AUX_USAGE_HIZ_CCS doesn't support sampling at all */
    res->aux.sampler_usages &= ~(1 << ISL_AUX_USAGE_HIZ_CCS);
 
@@ -497,7 +469,6 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
       initial_state = ISL_AUX_STATE_CLEAR;
       break;
    case ISL_AUX_USAGE_CCS_D:
-   case ISL_AUX_USAGE_CCS_E:
       /* When CCS_E is used, we need to ensure that the CCS starts off in
        * a valid state.  From the Sky Lake PRM, "MCS Buffer for Render
        * Target(s)":
@@ -1748,8 +1719,7 @@ crocus_transfer_map(struct pipe_context *ctx,
       bool need_hiz_resolve = crocus_resource_level_has_hiz(res, level);
 
       need_color_resolve =
-         (res->aux.usage == ISL_AUX_USAGE_CCS_D ||
-          res->aux.usage == ISL_AUX_USAGE_CCS_E) &&
+         (res->aux.usage == ISL_AUX_USAGE_CCS_D) &&
          crocus_has_color_unresolved(res, level, 1, box->z, box->depth);
 
       need_resolve = need_color_resolve || need_hiz_resolve;
@@ -1818,7 +1788,7 @@ crocus_transfer_map(struct pipe_context *ctx,
    if (fmtl->txc == ISL_TXC_ASTC)
       no_gpu = true;
 
-   if ((map_would_stall || res->aux.usage == ISL_AUX_USAGE_CCS_E) && !no_gpu) {
+   if (map_would_stall && !no_gpu) {
       /* If we need a synchronous mapping and the resource is busy, or needs
        * resolving, we copy to/from a linear temporary buffer using the GPU.
        */

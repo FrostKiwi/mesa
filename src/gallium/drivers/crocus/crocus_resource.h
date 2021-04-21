@@ -123,8 +123,6 @@ struct crocus_resource {
 
       /**
        * A bitfield of ISL_AUX_* modes that might this resource might use.
-       *
-       * For example, a surface might use both CCS_E and CCS_D at times.
        */
       unsigned possible_usages;
 
