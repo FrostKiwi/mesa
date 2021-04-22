@@ -3478,78 +3478,7 @@ crocus_is_drawing_points(const struct crocus_context *ice)
 }
 #endif
 
-#if GEN_GEN == 7
-static void
-crocus_compute_sbe_urb_read_interval(uint64_t fs_input_slots,
-                                   const struct brw_vue_map *last_vue_map,
-                                   bool two_sided_color,
-                                   unsigned *out_offset,
-                                   unsigned *out_length)
-{
-   /* The compiler computes the first URB slot without considering COL/BFC
-    * swizzling (because it doesn't know whether it's enabled), so we need
-    * to do that here too.  This may result in a smaller offset, which
-    * should be safe.
-    */
-   const unsigned first_slot =
-      brw_compute_first_urb_slot_required(fs_input_slots, last_vue_map);
-
-   /* This becomes the URB read offset (counted in pairs of slots). */
-   assert(first_slot % 2 == 0);
-   *out_offset = first_slot / 2;
-
-   /* We need to adjust the inputs read to account for front/back color
-    * swizzling, as it can make the URB length longer.
-    */
-   for (int c = 0; c <= 1; c++) {
-      if (fs_input_slots & (VARYING_BIT_COL0 << c)) {
-         /* If two sided color is enabled, the fragment shader's gl_Color
-          * (COL0) input comes from either the gl_FrontColor (COL0) or
-          * gl_BackColor (BFC0) input varyings.  Mark BFC as used, too.
-          */
-         if (two_sided_color)
-            fs_input_slots |= (VARYING_BIT_BFC0 << c);
-
-         /* If front color isn't written, we opt to give them back color
-          * instead of an undefined value.  Switch from COL to BFC.
-          */
-         if (last_vue_map->varying_to_slot[VARYING_SLOT_COL0 + c] == -1) {
-            fs_input_slots &= ~(VARYING_BIT_COL0 << c);
-            fs_input_slots |= (VARYING_BIT_BFC0 << c);
-         }
-      }
-   }
-
-   /* Compute the minimum URB Read Length necessary for the FS inputs.
-    *
-    * From the Sandy Bridge PRM, Volume 2, Part 1, documentation for
-    * 3DSTATE_SF DWord 1 bits 15:11, "Vertex URB Entry Read Length":
-    *
-    * "This field should be set to the minimum length required to read the
-    *  maximum source attribute.  The maximum source attribute is indicated
-    *  by the maximum value of the enabled Attribute # Source Attribute if
-    *  Attribute Swizzle Enable is set, Number of Output Attributes-1 if
-    *  enable is not set.
-    *  read_length = ceiling((max_source_attr + 1) / 2)
-    *
-    *  [errata] Corruption/Hang possible if length programmed larger than
-    *  recommended"
-    *
-    * Similar text exists for Ivy Bridge.
-    *
-    * We find the last URB slot that's actually read by the FS.
-    */
-   unsigned last_read_slot = last_vue_map->num_slots - 1;
-   while (last_read_slot > first_slot && !(fs_input_slots &
-          (1ull << last_vue_map->slot_to_varying[last_read_slot])))
-      --last_read_slot;
-
-   /* The URB read length is the difference of the two, counted in pairs. */
-   *out_length = DIV_ROUND_UP(last_read_slot - first_slot + 1, 2);
-}
-#endif
-#if GEN_GEN == 6
-
+#if GEN_GEN >= 6
 static void
 get_attr_override(
    struct GENX(SF_OUTPUT_ATTRIBUTE_DETAIL) *attr,
@@ -3726,52 +3655,31 @@ calculate_attr_overrides(
 #endif
 
 #if GEN_GEN == 7
-static unsigned
-crocus_calculate_point_sprite_overrides(const struct brw_wm_prog_data *prog_data,
-                                      const struct crocus_rasterizer_state *cso)
-{
-   unsigned overrides = 0;
-
-   if (prog_data->urb_setup[VARYING_SLOT_PNTC] != -1)
-      overrides |= 1 << prog_data->urb_setup[VARYING_SLOT_PNTC];
-
-   for (int i = 0; i < 8; i++) {
-      if ((cso->cso.sprite_coord_enable & (1 << i)) &&
-          prog_data->urb_setup[VARYING_SLOT_TEX0 + i] != -1)
-         overrides |= 1 << prog_data->urb_setup[VARYING_SLOT_TEX0 + i];
-   }
-
-   return overrides;
-}
-
 static void
 crocus_emit_sbe(struct crocus_batch *batch, const struct crocus_context *ice)
 {
    const struct crocus_rasterizer_state *cso_rast = ice->state.cso_rast;
    const struct brw_wm_prog_data *wm_prog_data = (void *)
       ice->shaders.prog[MESA_SHADER_FRAGMENT]->prog_data;
-   const struct shader_info *fs_info =
-      crocus_get_shader_info(ice, MESA_SHADER_FRAGMENT);
 
-   // TODO Use calculate_attr_overrides instead of these.
-   unsigned urb_read_offset, urb_read_length;
-   crocus_compute_sbe_urb_read_interval(fs_info->inputs_read,
-                                      ice->shaders.last_vue_map,
-                                      cso_rast->cso.light_twoside,
-                                      &urb_read_offset, &urb_read_length);
-
-   unsigned sprite_coord_overrides =
-      crocus_is_drawing_points(ice) ?
-      crocus_calculate_point_sprite_overrides(wm_prog_data, cso_rast) : 0;
+   uint32_t urb_entry_read_length;
+   uint32_t urb_entry_read_offset;
+   uint32_t point_sprite_enables;
 
    crocus_emit_cmd(batch, GENX(3DSTATE_SBE), sbe) {
       sbe.AttributeSwizzleEnable = true;
       sbe.NumberofSFOutputAttributes = wm_prog_data->num_varying_inputs;
       sbe.PointSpriteTextureCoordinateOrigin = cso_rast->cso.sprite_coord_mode;
-      sbe.VertexURBEntryReadOffset = urb_read_offset;
-      sbe.VertexURBEntryReadLength = urb_read_length;
+
+      calculate_attr_overrides(ice,
+                               sbe.Attribute,
+                               &point_sprite_enables,
+                               &urb_entry_read_length,
+                               &urb_entry_read_offset);
+      sbe.VertexURBEntryReadOffset = urb_entry_read_offset;
+      sbe.VertexURBEntryReadLength = urb_entry_read_length;
       sbe.ConstantInterpolationEnable = wm_prog_data->flat_inputs;
-      sbe.PointSpriteTextureCoordinateEnable = sprite_coord_overrides;
+      sbe.PointSpriteTextureCoordinateEnable = point_sprite_enables;
    }
 }
 #endif
