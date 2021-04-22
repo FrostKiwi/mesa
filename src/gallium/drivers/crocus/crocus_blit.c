@@ -299,6 +299,8 @@ crocus_blorp_surf_for_resource(struct crocus_vtable *vtbl,
          .reloc_flags = is_render_target ? EXEC_OBJECT_WRITE : 0,
          .mocs = vtbl->mocs(res->bo, isl_dev),
       };
+      surf->clear_color =
+         crocus_resource_get_clear_color(res);
    }
 
    // XXX: ASTC
