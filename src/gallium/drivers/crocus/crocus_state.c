@@ -4316,7 +4316,11 @@ crocus_populate_binding_table(struct crocus_context *ice,
 
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_IMAGE) {
       struct crocus_image_view *view = &shs->image[i];
-      surf_offsets[s++] = emit_image_view(ice, batch, view);
+      if (view->base.resource)
+         surf_offsets[s] = emit_image_view(ice, batch, view);
+      else
+         emit_null_surface(batch, &surf_offsets[s]);
+      s++;
    }
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_UBO) {
       if (shs->constbufs[i].buffer)
