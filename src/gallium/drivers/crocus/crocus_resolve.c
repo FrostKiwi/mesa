@@ -1149,16 +1149,11 @@ crocus_resource_texture_aux_usage(struct crocus_context *ice,
                                 enum isl_format view_format)
 {
    switch (res->aux.usage) {
-   case ISL_AUX_USAGE_HIZ:
-      assert(res->surf.format == view_format);
-      return util_last_bit(res->aux.sampler_usages) - 1;
    case ISL_AUX_USAGE_MCS:
-      return res->aux.usage;
+      return ISL_AUX_USAGE_MCS;
    default:
-      break;
+      return ISL_AUX_USAGE_NONE;
    }
-
-   return ISL_AUX_USAGE_NONE;
 }
 
 static bool

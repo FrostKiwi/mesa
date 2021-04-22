@@ -2434,7 +2434,6 @@ crocus_create_surface(struct pipe_context *ctx,
     * and create an uncompressed view with multiple layers, however.
     */
    assert(!isl_format_is_compressed(fmt.fmt));
-   assert(res->aux.possible_usages == 1 << ISL_AUX_USAGE_NONE);
    assert(res->surf.samples == 1);
    assert(view->levels == 1);
 

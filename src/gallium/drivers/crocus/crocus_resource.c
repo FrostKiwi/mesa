@@ -279,8 +279,6 @@ crocus_resource_disable_aux(struct crocus_resource *res)
    free(res->aux.state);
 
    res->aux.usage = ISL_AUX_USAGE_NONE;
-   res->aux.possible_usages = 1 << ISL_AUX_USAGE_NONE;
-   res->aux.sampler_usages = 1 << ISL_AUX_USAGE_NONE;
    res->aux.has_hiz = 0;
    res->aux.surf.size_B = 0;
    res->aux.bo = NULL;
@@ -314,9 +312,6 @@ crocus_alloc_resource(struct pipe_screen *pscreen,
    res->base = *templ;
    res->base.screen = pscreen;
    pipe_reference_init(&res->base.reference, 1);
-
-   res->aux.possible_usages = 1 << ISL_AUX_USAGE_NONE;
-   res->aux.sampler_usages = 1 << ISL_AUX_USAGE_NONE;
 
    if (templ->target == PIPE_BUFFER)
       util_range_init(&res->valid_buffer_range);
@@ -416,27 +411,15 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
    }
 
    if (res->mod_info && has_ccs) {
-      /* Only allow a CCS modifier if the aux was created successfully. */
-      res->aux.possible_usages |= 1 << res->mod_info->aux_usage;
+      res->aux.usage = res->mod_info->aux_usage;
    } else if (has_mcs) {
-      res->aux.possible_usages |=
-         1 << ISL_AUX_USAGE_MCS;
+      res->aux.usage = ISL_AUX_USAGE_MCS;
    } else if (has_hiz) {
-      res->aux.possible_usages |=
-         1 << ISL_AUX_USAGE_HIZ;
+      res->aux.usage = ISL_AUX_USAGE_HIZ;
    } else if (has_ccs) {
       if (isl_format_supports_ccs_d(devinfo, res->surf.format))
-         res->aux.possible_usages |= 1 << ISL_AUX_USAGE_CCS_D;
+         res->aux.usage = ISL_AUX_USAGE_CCS_D;
    }
-
-   res->aux.usage = util_last_bit(res->aux.possible_usages) - 1;
-
-   res->aux.sampler_usages = res->aux.possible_usages;
-
-   /* We don't always support sampling with hiz. But when we do, it must be
-    * single sampled.
-    */
-   res->aux.sampler_usages &= ~(1 << ISL_AUX_USAGE_HIZ);
 
    enum isl_aux_state initial_state = ISL_AUX_STATE_AUX_INVALID;
    *aux_size_B = 0;
