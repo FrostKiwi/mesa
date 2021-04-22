@@ -672,11 +672,11 @@ static const struct {
    uint32_t min_entry_size;
    uint32_t  max_entry_size;
 } limits[URB_CS+1] = {
-   { 16, 32, 1, 5 },			/* vs */
-   { 4, 8,  1, 5 },			/* gs */
-   { 5, 10,  1, 5 },			/* clp */
-   { 1, 8,  1, 12 },		        /* sf */
-   { 1, 4,  1, 32 }			/* cs */
+   { 16, 32, 1, 5 },                        /* vs */
+   { 4, 8,  1, 5 },                        /* gs */
+   { 5, 10,  1, 5 },                        /* clp */
+   { 1, 8,  1, 12 },                        /* sf */
+   { 1, 4,  1, 32 }                        /* cs */
 };
 
 static bool check_urb_layout(struct crocus_context *ice)
@@ -711,8 +711,8 @@ crocus_calculate_urb_fence(struct crocus_batch *batch, unsigned csize,
        ice->urb.sfsize < sfsize ||
        ice->urb.csize < csize ||
        (ice->urb.constrained && (ice->urb.vsize > vsize ||
-				 ice->urb.sfsize > sfsize ||
-				 ice->urb.csize > csize))) {
+                                 ice->urb.sfsize > sfsize ||
+                                 ice->urb.csize > csize))) {
 
 
       ice->urb.csize = csize;
@@ -1253,7 +1253,7 @@ emit_pipeline_select(struct crocus_batch *batch, uint32_t pipeline)
        gen7_emit_cs_stall_flush(batch);
 
        crocus_emit_cmd(batch, GENX(3DPRIMITIVE), prim) {
-	  prim.PrimitiveTopologyType = _3DPRIM_POINTLIST;
+          prim.PrimitiveTopologyType = _3DPRIM_POINTLIST;
        };
     }
 #endif
@@ -2552,7 +2552,7 @@ crocus_set_shader_images(struct pipe_context *ctx,
              * limited number of formats), and if not possible, fall back
              * to untyped reads.
              */
-	   if (!isl_has_matching_typed_storage_image_format(devinfo, isl_fmt))
+           if (!isl_has_matching_typed_storage_image_format(devinfo, isl_fmt))
                isl_fmt = ISL_FORMAT_RAW;
             else
                isl_fmt = isl_lower_storage_image_format(devinfo, isl_fmt);
@@ -4668,8 +4668,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    if (dirty & (CROCUS_DIRTY_GEN4_CURBE | CROCUS_DIRTY_RASTER) ||
        stage_dirty & CROCUS_STAGE_DIRTY_VS) {
      bool ret = crocus_calculate_urb_fence(batch, ice->curbe.total_size,
-					   brw_vue_prog_data(ice->shaders.prog[MESA_SHADER_VERTEX]->prog_data)->urb_entry_size,
-					   ((struct brw_sf_prog_data *)ice->shaders.sf_prog->prog_data)->urb_entry_size);
+                                           brw_vue_prog_data(ice->shaders.prog[MESA_SHADER_VERTEX]->prog_data)->urb_entry_size,
+                                           ((struct brw_sf_prog_data *)ice->shaders.sf_prog->prog_data)->urb_entry_size);
      if (ret)
         dirty |= CROCUS_DIRTY_GEN5_PIPELINED_POINTERS;
    }
@@ -5010,8 +5010,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             cc.AlphaTestEnable = cso->cso.alpha_enabled;
             cc.AlphaTestFunction = translate_compare_func(cso->cso.alpha_func);
          }
-	 cc.StatisticsEnable = ice->state.stats_wm ? 1 : 0;
-	 cc.CCViewportStatePointer = ro_bo(batch->state.bo, ice->state.cc_vp_address);
+         cc.StatisticsEnable = ice->state.stats_wm ? 1 : 0;
+         cc.CCViewportStatePointer = ro_bo(batch->state.bo, ice->state.cc_vp_address);
 #else
          cc.AlphaTestFormat = ALPHATEST_FLOAT32;
          cc.AlphaReferenceValueAsFLOAT32 = cso->cso.alpha_ref_value;
@@ -5075,15 +5075,15 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             dirty |= CROCUS_DIRTY_GEN5_BINDING_TABLE_POINTERS;
 #endif
             crocus_populate_binding_table(ice, batch, stage);
-	    ice->shaders.prog[stage]->bind_bo_offset = crocus_upload_binding_table(ice, batch,
+            ice->shaders.prog[stage]->bind_bo_offset = crocus_upload_binding_table(ice, batch,
                                                                                    ice->shaders.prog[stage]->surf_offset,
                                                                                    ice->shaders.prog[stage]->bt.size_bytes);
 
 #if GEN_GEN == 7
-	    crocus_emit_cmd(batch, GENX(3DSTATE_BINDING_TABLE_POINTERS_VS), ptr) {
-	       ptr._3DCommandSubOpcode = 38 + stage;
-	       ptr.PointertoVSBindingTable = ice->shaders.prog[stage]->bind_bo_offset;
-	    }
+            crocus_emit_cmd(batch, GENX(3DSTATE_BINDING_TABLE_POINTERS_VS), ptr) {
+               ptr._3DCommandSubOpcode = 38 + stage;
+               ptr.PointertoVSBindingTable = ice->shaders.prog[stage]->bind_bo_offset;
+            }
 #endif
          }
       }
@@ -5126,24 +5126,24 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          if (ice->state.framebuffer.samples > 0)
             ms.NumberofMultisamples = ffs(ice->state.framebuffer.samples) - 1;
 #if GEN_GEN == 6
-	 INTEL_SAMPLE_POS_4X(ms.Sample);
+         INTEL_SAMPLE_POS_4X(ms.Sample);
 #elif GEN_GEN == 7
-	 switch (ice->state.framebuffer.samples) {
-	 case 1:
-	    INTEL_SAMPLE_POS_1X(ms.Sample);
-	    break;
-	 case 2:
-	    INTEL_SAMPLE_POS_2X(ms.Sample);
-	    break;
-	 case 4:
-	    INTEL_SAMPLE_POS_4X(ms.Sample);
-	    break;
-	 case 8:
-	    INTEL_SAMPLE_POS_8X(ms.Sample);
-	    break;
-	 default:
-	    break;
-	 }
+         switch (ice->state.framebuffer.samples) {
+         case 1:
+            INTEL_SAMPLE_POS_1X(ms.Sample);
+            break;
+         case 2:
+            INTEL_SAMPLE_POS_2X(ms.Sample);
+            break;
+         case 4:
+            INTEL_SAMPLE_POS_4X(ms.Sample);
+            break;
+         case 8:
+            INTEL_SAMPLE_POS_8X(ms.Sample);
+            break;
+         default:
+            break;
+         }
 #endif
       }
    }
@@ -5376,7 +5376,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
       const struct brw_stage_prog_data *prog_data = &vue_prog_data->base;
 #if GEN_GEN == 7
       if (batch->screen->devinfo.is_ivybridge)
-	 gen7_emit_vs_workaround_flush(batch);
+         gen7_emit_vs_workaround_flush(batch);
 #endif
 
 
@@ -5552,18 +5552,18 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
       struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_TESS_CTRL];
 
       if (shader) {
-	 const struct brw_tcs_prog_data *tcs_prog_data = brw_tcs_prog_data(shader->prog_data);
-	 const struct brw_vue_prog_data *vue_prog_data = brw_vue_prog_data(shader->prog_data);
-	 const struct brw_stage_prog_data *prog_data = &tcs_prog_data->base.base;
+         const struct brw_tcs_prog_data *tcs_prog_data = brw_tcs_prog_data(shader->prog_data);
+         const struct brw_vue_prog_data *vue_prog_data = brw_vue_prog_data(shader->prog_data);
+         const struct brw_stage_prog_data *prog_data = &tcs_prog_data->base.base;
 
-	 crocus_emit_cmd(batch, GENX(3DSTATE_HS), hs) {
-	    INIT_THREAD_DISPATCH_FIELDS(hs, Vertex, MESA_SHADER_TESS_CTRL);
-	    hs.InstanceCount = tcs_prog_data->instances - 1;
-	    hs.IncludeVertexHandles = true;
-	    hs.MaximumNumberofThreads = batch->screen->devinfo.max_tcs_threads - 1;
-	 }
+         crocus_emit_cmd(batch, GENX(3DSTATE_HS), hs) {
+            INIT_THREAD_DISPATCH_FIELDS(hs, Vertex, MESA_SHADER_TESS_CTRL);
+            hs.InstanceCount = tcs_prog_data->instances - 1;
+            hs.IncludeVertexHandles = true;
+            hs.MaximumNumberofThreads = batch->screen->devinfo.max_tcs_threads - 1;
+         }
       } else {
-	 crocus_emit_cmd(batch, GENX(3DSTATE_HS), hs);
+         crocus_emit_cmd(batch, GENX(3DSTATE_HS), hs);
       }
 
    }
@@ -5571,28 +5571,28 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    if (stage_dirty & CROCUS_STAGE_DIRTY_TES) {
       struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_TESS_EVAL];
       if (shader) {
-	 const struct brw_tes_prog_data *tes_prog_data = brw_tes_prog_data(shader->prog_data);
-	 const struct brw_vue_prog_data *vue_prog_data = brw_vue_prog_data(shader->prog_data);
-	 const struct brw_stage_prog_data *prog_data = &tes_prog_data->base.base;
+         const struct brw_tes_prog_data *tes_prog_data = brw_tes_prog_data(shader->prog_data);
+         const struct brw_vue_prog_data *vue_prog_data = brw_vue_prog_data(shader->prog_data);
+         const struct brw_stage_prog_data *prog_data = &tes_prog_data->base.base;
 
-	 crocus_emit_cmd(batch, GENX(3DSTATE_TE), te) {
-	    te.Partitioning = tes_prog_data->partitioning;
-	    te.OutputTopology = tes_prog_data->output_topology;
-	    te.TEDomain = tes_prog_data->domain;
-	    te.TEEnable = true;
-	    te.MaximumTessellationFactorOdd = 63.0;
-	    te.MaximumTessellationFactorNotOdd = 64.0;
-	 };
-	 crocus_emit_cmd(batch, GENX(3DSTATE_DS), ds) {
-	    INIT_THREAD_DISPATCH_FIELDS(ds, Patch, MESA_SHADER_TESS_EVAL);
+         crocus_emit_cmd(batch, GENX(3DSTATE_TE), te) {
+            te.Partitioning = tes_prog_data->partitioning;
+            te.OutputTopology = tes_prog_data->output_topology;
+            te.TEDomain = tes_prog_data->domain;
+            te.TEEnable = true;
+            te.MaximumTessellationFactorOdd = 63.0;
+            te.MaximumTessellationFactorNotOdd = 64.0;
+         };
+         crocus_emit_cmd(batch, GENX(3DSTATE_DS), ds) {
+            INIT_THREAD_DISPATCH_FIELDS(ds, Patch, MESA_SHADER_TESS_EVAL);
 
-	    ds.MaximumNumberofThreads = batch->screen->devinfo.max_tes_threads - 1;
-	    ds.ComputeWCoordinateEnable =
-	       tes_prog_data->domain == BRW_TESS_DOMAIN_TRI;
-	 };
+            ds.MaximumNumberofThreads = batch->screen->devinfo.max_tes_threads - 1;
+            ds.ComputeWCoordinateEnable =
+               tes_prog_data->domain == BRW_TESS_DOMAIN_TRI;
+         };
       } else {
-	 crocus_emit_cmd(batch, GENX(3DSTATE_TE), te);
-	 crocus_emit_cmd(batch, GENX(3DSTATE_DS), ds);
+         crocus_emit_cmd(batch, GENX(3DSTATE_TE), te);
+         crocus_emit_cmd(batch, GENX(3DSTATE_DS), ds);
       }
    }
 #endif
@@ -5739,7 +5739,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          wm.DispatchGRFStartRegisterForConstantSetupData0 =
             wm_prog_data->base.dispatch_grf_start_reg;
 #elif GEN_GEN == 6
-	 wm.KernelStartPointer0 = KSP(ice, ice->shaders.prog[MESA_SHADER_FRAGMENT]) +
+         wm.KernelStartPointer0 = KSP(ice, ice->shaders.prog[MESA_SHADER_FRAGMENT]) +
             brw_wm_prog_data_prog_offset(wm_prog_data, wm, 0);
          wm.KernelStartPointer1 = KSP(ice, ice->shaders.prog[MESA_SHADER_FRAGMENT]) +
             brw_wm_prog_data_prog_offset(wm_prog_data, wm, 1);
@@ -5747,11 +5747,11 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             brw_wm_prog_data_prog_offset(wm_prog_data, wm, 2);
 
          wm.DispatchGRFStartRegisterForConstantSetupData0 =
-	   brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, wm, 0);
-	 wm.DispatchGRFStartRegisterForConstantSetupData1 =
-	   brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, wm, 1);
-	 wm.DispatchGRFStartRegisterForConstantSetupData2 =
-	   brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, wm, 2);
+           brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, wm, 0);
+         wm.DispatchGRFStartRegisterForConstantSetupData1 =
+           brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, wm, 1);
+         wm.DispatchGRFStartRegisterForConstantSetupData2 =
+           brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, wm, 2);
 #endif
 #if GEN_GEN <= 5
          wm.ConstantURBEntryReadLength = wm_prog_data->base.curb_read_length;
@@ -5777,14 +5777,14 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          wm.SamplerStatePointer = ro_bo(batch->state.bo, ice->state.shaders[MESA_SHADER_FRAGMENT].sampler_offset);
 #endif
 
-	 wm.StatisticsEnable = (GEN_GEN >= 6 || ice->state.stats_wm) ? 1 : 0;
+         wm.StatisticsEnable = (GEN_GEN >= 6 || ice->state.stats_wm) ? 1 : 0;
 
 #if GEN_GEN >= 6
-	 wm.LineAntialiasingRegionWidth = _10pixels;
-	 wm.LineEndCapAntialiasingRegionWidth = _05pixels;
+         wm.LineAntialiasingRegionWidth = _10pixels;
+         wm.LineEndCapAntialiasingRegionWidth = _05pixels;
 
-	 wm.PointRasterizationRule = RASTRULE_UPPER_RIGHT;
-	 wm.BarycentricInterpolationMode = wm_prog_data->barycentric_interp_modes;
+         wm.PointRasterizationRule = RASTRULE_UPPER_RIGHT;
+         wm.BarycentricInterpolationMode = wm_prog_data->barycentric_interp_modes;
 #endif
 #if GEN_GEN == 6
       wm.DualSourceBlendEnable = wm_prog_data->dual_src_blend && ice->state.cso_blend->dual_color_blending;
@@ -5838,7 +5838,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          }
 #endif
 
-	 wm.PixelShaderUsesSourceDepth = wm_prog_data->uses_src_depth;
+         wm.PixelShaderUsesSourceDepth = wm_prog_data->uses_src_depth;
 
          if (wm_prog_data->uses_kill ||
              ice->state.cso_zsa->cso.alpha_enabled ||
@@ -5851,40 +5851,40 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             wm.ThreadDispatchEnable = true;
 
 #if GEN_GEN >= 7
-	 wm.PixelShaderComputedDepthMode = wm_prog_data->computed_depth_mode;
-	 wm.PixelShaderUsesInputCoverageMask = wm_prog_data->uses_sample_mask;
+         wm.PixelShaderComputedDepthMode = wm_prog_data->computed_depth_mode;
+         wm.PixelShaderUsesInputCoverageMask = wm_prog_data->uses_sample_mask;
 #else
          if (wm_prog_data->base.total_scratch) {
             struct crocus_bo *bo = crocus_get_scratch_space(ice, wm_prog_data->base.total_scratch, MESA_SHADER_FRAGMENT);
             wm.PerThreadScratchSpace = ffs(wm_prog_data->base.total_scratch) - 11;
             wm.ScratchSpaceBasePointer = rw_bo(bo, 0);
-	 }
+         }
 
-	 wm.PixelShaderComputedDepth = writes_depth;
+         wm.PixelShaderComputedDepth = writes_depth;
 
 #endif
-	 /* The "UAV access enable" bits are unnecessary on HSW because they only
-	  * seem to have an effect on the HW-assisted coherency mechanism which we
-	  * don't need, and the rasterization-related UAV_ONLY flag and the
-	  * DISPATCH_ENABLE bit can be set independently from it.
-	  * C.f. gen8_upload_ps_extra().
-	  *
-	  * BRW_NEW_FRAGMENT_PROGRAM | BRW_NEW_FS_PROG_DATA | _NEW_BUFFERS |
-	  * _NEW_COLOR
-	  */
+         /* The "UAV access enable" bits are unnecessary on HSW because they only
+          * seem to have an effect on the HW-assisted coherency mechanism which we
+          * don't need, and the rasterization-related UAV_ONLY flag and the
+          * DISPATCH_ENABLE bit can be set independently from it.
+          * C.f. gen8_upload_ps_extra().
+          *
+          * BRW_NEW_FRAGMENT_PROGRAM | BRW_NEW_FS_PROG_DATA | _NEW_BUFFERS |
+          * _NEW_COLOR
+          */
 #if GEN_VERSIONx10 == 75
-	 // TODO HSW
-	 //	 if (!(brw_color_buffer_write_enabled(brw) || writes_depth) &&
-	 //          wm_prog_data->has_side_effects)
-	 //         wm.PSUAVonly = ON;
+         // TODO HSW
+         //         if (!(brw_color_buffer_write_enabled(brw) || writes_depth) &&
+         //          wm_prog_data->has_side_effects)
+         //         wm.PSUAVonly = ON;
 #endif
 
 #if GEN_GEN >= 7
       /* BRW_NEW_FS_PROG_DATA */
-	 if (wm_prog_data->early_fragment_tests)
-	   wm.EarlyDepthStencilControl = EDSC_PREPS;
-	 else if (wm_prog_data->has_side_effects)
-	   wm.EarlyDepthStencilControl = EDSC_PSEXEC;
+         if (wm_prog_data->early_fragment_tests)
+           wm.EarlyDepthStencilControl = EDSC_PREPS;
+         else if (wm_prog_data->has_side_effects)
+           wm.EarlyDepthStencilControl = EDSC_PSEXEC;
 #endif
       };
    }
@@ -6018,8 +6018,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
       crocus_upload_urb_fence(batch);
 
       crocus_emit_cmd(batch, GENX(CS_URB_STATE), cs) {
-	cs.NumberofURBEntries = ice->urb.nr_cs_entries;
-	cs.URBEntryAllocationSize = ice->urb.csize - 1;
+        cs.NumberofURBEntries = ice->urb.nr_cs_entries;
+        cs.URBEntryAllocationSize = ice->urb.csize - 1;
       }
       dirty |= CROCUS_DIRTY_GEN4_CURBE;
    }
