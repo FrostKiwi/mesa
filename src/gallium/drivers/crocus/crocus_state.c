@@ -1661,6 +1661,8 @@ crocus_create_rasterizer_state(struct pipe_context *ctx,
       sf.FrontWinding = state->front_ccw ? 1 : 0; // Or the other way...
       sf.CullMode = translate_cull_mode(state->cull_face);
 
+      sf.ScissorRectangleEnable = state->scissor;
+
 #if GEN_GEN == 6
       sf.AttributeSwizzleEnable = true;
       if (state->sprite_coord_mode == PIPE_SPRITE_COORD_LOWER_LEFT)
