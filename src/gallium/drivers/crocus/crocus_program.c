@@ -110,6 +110,8 @@ crocus_populate_sampler_prog_key_data(struct crocus_context *ice,
       key->swizzles[s] = SWIZZLE_NOOP;
       key->scale_factors[s] = 0.0f;
 
+      if (!texture)
+         continue;
       if (texture->base.target == PIPE_BUFFER)
          continue;
       if (!devinfo->is_haswell) {
