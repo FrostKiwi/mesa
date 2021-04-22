@@ -793,10 +793,6 @@ crocus_resource_prepare_ccs_access(struct crocus_context *ice,
          break;
 
       case ISL_AUX_OP_PARTIAL_RESOLVE:
-         crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                     ISL_AUX_STATE_COMPRESSED_NO_CLEAR);
-         break;
-
       default:
          unreachable("Invalid resolve op");
       }
