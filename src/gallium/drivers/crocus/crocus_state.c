@@ -3261,7 +3261,6 @@ crocus_stream_output_target_destroy(struct pipe_context *ctx,
    struct crocus_stream_output_target *cso = (void *) state;
 
    pipe_resource_reference(&cso->base.buffer, NULL);
-   pipe_resource_reference(&cso->offset.res, NULL);
 
    free(cso);
 }
@@ -6346,23 +6345,11 @@ crocus_upload_render_state(struct crocus_context *ice,
 #endif
    } else if (indirect && indirect->count_from_stream_output) {
 #if GEN_VERSIONx10 == 75
-      struct crocus_stream_output_target *so =
-         (void *) indirect->count_from_stream_output;
-
+      //TODO
       /* XXX: Replace with actual cache tracking */
       crocus_emit_pipe_control_flush(batch,
                                    "draw count from stream output stall",
                                    PIPE_CONTROL_CS_STALL);
-      struct mi_builder b;
-      mi_builder_init(&b, &batch->screen->devinfo, batch);
-
-      struct crocus_address addr =
-         ro_bo(crocus_resource_bo(so->offset.res), so->offset.offset);
-      struct mi_value offset =
-         mi_iadd_imm(&b, mi_mem32(addr), -so->base.buffer_offset);
-
-      mi_store(&b, mi_reg32(_3DPRIM_VERTEX_COUNT),
-               mi_udiv32_imm(&b, offset, so->stride));
 
       _crocus_emit_lri(batch, _3DPRIM_START_VERTEX, 0);
       _crocus_emit_lri(batch, _3DPRIM_BASE_VERTEX, 0);

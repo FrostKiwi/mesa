@@ -428,9 +428,6 @@ struct crocus_shader_state {
 struct crocus_stream_output_target {
    struct pipe_stream_output_target base;
 
-   /** Storage holding the offset where we're writing in the buffer */
-   struct crocus_state_ref offset;
-
    /** Stride (bytes-per-vertex) during this transform feedback operation */
    uint16_t stride;
 
