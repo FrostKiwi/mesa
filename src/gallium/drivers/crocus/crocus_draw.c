@@ -391,7 +391,8 @@ crocus_update_grid_size_resource(struct crocus_context *ice,
       grid_updated = true;
    } else if (memcmp(ice->state.last_grid, grid->grid, sizeof(grid->grid)) != 0) {
       memcpy(ice->state.last_grid, grid->grid, sizeof(grid->grid));
-      u_upload_data(ice->state.dynamic_uploader, 0, sizeof(grid->grid), 4,
+      //TODO grid
+      u_upload_data(ice->ctx.const_uploader, 0, sizeof(grid->grid), 4,
                     grid->grid, &grid_ref->offset, &grid_ref->res);
       grid_updated = true;
    }

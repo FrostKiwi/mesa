@@ -3251,8 +3251,6 @@ crocus_create_stream_output_target(struct pipe_context *ctx,
    util_range_add(&res->base, &res->valid_buffer_range, buffer_offset,
                   buffer_offset + buffer_size);
 
-   //TODO   upload_state(ctx->stream_uploader, &cso->offset, sizeof(uint32_t), 4);
-
    return &cso->base;
 }
 
@@ -4230,7 +4228,7 @@ emit_image_view(struct crocus_context *ice,
 
       } else {
          emit_surface_state(batch, res, &iv->view,
-                            false, 0, false, 0, surf_state, offset);
+                            write, 0, false, 0, surf_state, offset);
       }
    }
 
@@ -4312,8 +4310,7 @@ crocus_populate_binding_table(struct crocus_context *ice,
          else
             emit_null_surface(batch, &surf_offsets[s]);
          s++;
-   }
-
+      }
    }
 
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_IMAGE) {
@@ -5716,7 +5713,6 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
       _crocus_pack_state(batch, GENX(WM_STATE), wm_ptr, wm) {
 #endif
 #if GEN_GEN <= 6
-	
          wm._8PixelDispatchEnable = wm_prog_data->dispatch_8;
          wm._16PixelDispatchEnable = wm_prog_data->dispatch_16;
          wm._32PixelDispatchEnable = wm_prog_data->dispatch_32;
@@ -6426,6 +6422,7 @@ crocus_upload_compute_state(struct crocus_context *ice,
       brw_cs_simd_size_for_group_size(devinfo, cs_prog_data, group_size);
    const unsigned threads = DIV_ROUND_UP(group_size, simd_size);
 
+   crocus_update_surface_base_address(batch);
    if ((stage_dirty & CROCUS_STAGE_DIRTY_CONSTANTS_CS) && shs->sysvals_need_upload)
       upload_sysvals(ice, MESA_SHADER_COMPUTE);
 
