@@ -5829,7 +5829,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             else
                wm.MultisampleRasterizationMode = MSRASTMODE_OFF_PIXEL;
 
-            if (cso->cso.force_persample_interp)
+            if (wm_prog_data->persample_dispatch)
                wm.MultisampleDispatchMode = MSDISPMODE_PERSAMPLE;
             else
                wm.MultisampleDispatchMode = MSDISPMODE_PERPIXEL;
