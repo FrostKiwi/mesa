@@ -622,6 +622,7 @@ crocus_setup_uniforms(const struct brw_compiler *compiler,
 static const char *surface_group_names[] = {
    [CROCUS_SURFACE_GROUP_RENDER_TARGET]      = "render target",
    [CROCUS_SURFACE_GROUP_RENDER_TARGET_READ] = "non-coherent render target read",
+   [CROCUS_SURFACE_GROUP_SOL]                = "streamout",
    [CROCUS_SURFACE_GROUP_CS_WORK_GROUPS]     = "CS work groups",
    [CROCUS_SURFACE_GROUP_TEXTURE]            = "texture",
    [CROCUS_SURFACE_GROUP_UBO]                = "ubo",
