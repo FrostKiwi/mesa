@@ -2604,7 +2604,6 @@ crocus_create_tcs_state(struct pipe_context *ctx,
 {
    struct crocus_context *ice = (void *) ctx;
    struct crocus_screen *screen = (void *) ctx->screen;
-   const struct brw_compiler *compiler = screen->compiler;
    struct crocus_uncompiled_shader *ish = crocus_create_shader_state(ctx, state);
    struct shader_info *info = &ish->nir->info;
 
@@ -2621,13 +2620,7 @@ crocus_create_tcs_state(struct pipe_context *ctx,
          .patch_outputs_written = info->patch_outputs_written,
       };
 
-      /* 8_PATCH mode needs the key to contain the input patch dimensionality.
-       * We don't have that information, so we randomly guess that the input
-       * and output patches are the same size.  This is a bad guess, but we
-       * can't do much better.
-       */
-      if (compiler->use_tcs_8_patch)
-         key.input_vertices = info->tess.tcs_vertices_out;
+      key.input_vertices = info->tess.tcs_vertices_out;
 
       if (!crocus_disk_cache_retrieve(ice, ish, &key, sizeof(key)))
          crocus_compile_tcs(ice, ish, &key);
