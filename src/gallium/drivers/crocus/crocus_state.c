@@ -4978,12 +4978,13 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             be.PreBlendColorClampEnable = true;
             be.PostBlendColorClampEnable = true;
 
-            {
+            if (i == 0) {
                struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_FRAGMENT];
                struct brw_wm_prog_data *wm_prog_data = (void *) shader->prog_data;
-               be.ColorBufferBlendEnable = (cso_blend->blend_enables & 1) &&
+               be.ColorBufferBlendEnable = rt->blend_enable &&
                   (!cso_blend->dual_color_blending || wm_prog_data->dual_src_blend);
-            }
+            } else
+               be.ColorBufferBlendEnable = rt->blend_enable;
 
             be.ColorBlendFunction          = rt->rgb_func;
             be.AlphaBlendFunction          = rt->alpha_func;
