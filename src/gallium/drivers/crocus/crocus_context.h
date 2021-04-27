@@ -424,19 +424,6 @@ struct crocus_shader_state {
 };
 
 /**
- * Gallium CSO for stream output (transform feedback) targets.
- */
-struct crocus_stream_output_target {
-   struct pipe_stream_output_target base;
-
-   /** Stride (bytes-per-vertex) during this transform feedback operation */
-   uint16_t stride;
-
-   /** Has 3DSTATE_SO_BUFFER actually been emitted, zeroing the offsets? */
-   bool zeroed;
-};
-
-/**
  * Virtual table for generation-specific (genxml) function calls.
  */
 struct crocus_vtable {
@@ -538,6 +525,9 @@ struct crocus_vtable {
                                unsigned vsize, unsigned sfsize);
    void (*batch_reset_dirty)(struct crocus_batch *batch);
    unsigned (*translate_prim_type)(enum pipe_prim_type prim, uint8_t verts_per_patch);
+
+   void (*update_so_strides)(struct crocus_context *ice,
+                             uint16_t *strides);
 };
 
 /**

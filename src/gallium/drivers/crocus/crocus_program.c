@@ -2302,12 +2302,7 @@ crocus_update_compiled_shaders(struct crocus_context *ice)
    }
 
    if (ice->state.streamout_active) {
-      for (int i = 0; i < PIPE_MAX_SO_BUFFERS; i++) {
-         struct crocus_stream_output_target *so =
-            (void *) ice->state.so_target[i];
-         if (so)
-            so->stride = ish->stream_output.stride[i] * sizeof(uint32_t);
-      }
+      ice->vtbl.update_so_strides(ice, ish->stream_output.stride);
    }
 
    if (stage_dirty & CROCUS_STAGE_DIRTY_UNCOMPILED_FS)

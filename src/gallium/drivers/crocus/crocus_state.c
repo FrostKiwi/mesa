@@ -3222,6 +3222,19 @@ crocus_bind_vertex_elements_state(struct pipe_context *ctx, void *state)
 
 #if GEN_GEN >= 7
 /**
+ * Gallium CSO for stream output (transform feedback) targets.
+ */
+struct crocus_stream_output_target {
+   struct pipe_stream_output_target base;
+
+   /** Stride (bytes-per-vertex) during this transform feedback operation */
+   uint16_t stride;
+
+   /** Has 3DSTATE_SO_BUFFER actually been emitted, zeroing the offsets? */
+   bool zeroed;
+};
+
+/**
  * The pipe->create_stream_output_target() driver hook.
  *
  * "Target" here refers to a destination buffer.  We translate this into
@@ -7331,6 +7344,18 @@ struct pipe_rasterizer_state *crocus_get_rast_state(struct crocus_context *ice)
 }
 #endif
 
+#if GEN_GEN >= 7
+static void update_so_strides(struct crocus_context *ice,
+                              uint16_t *strides)
+{
+   for (int i = 0; i < PIPE_MAX_SO_BUFFERS; i++) {
+      struct crocus_stream_output_target *so = (void *)ice->state.so_target[i];
+      if (so)
+         so->stride = strides[i] * sizeof(uint32_t);
+   }
+}
+#endif
+
 static void crocus_fill_clamp_mask(const struct crocus_sampler_state *samp,
                                    int s,
                                    uint32_t *clamp_mask)
@@ -7439,6 +7464,9 @@ genX(init_state)(struct crocus_context *ice)
    ice->vtbl.fill_clamp_mask = crocus_fill_clamp_mask;
    ice->vtbl.batch_reset_dirty = crocus_batch_reset_dirty;
    ice->vtbl.translate_prim_type = translate_prim_type;
+#if GEN_GEN >= 7
+   ice->vtbl.update_so_strides = update_so_strides;
+#endif
    ice->state.dirty = ~0ull;
    ice->state.stage_dirty = ~0ull;
 
