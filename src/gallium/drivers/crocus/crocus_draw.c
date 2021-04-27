@@ -308,6 +308,22 @@ crocus_simple_draw_vbo(struct crocus_context *ice,
    ice->vtbl.upload_render_state(ice, batch, draw, indirect, sc);
 }
 
+static void
+crocus_draw_vbo_get_vertex_count(struct pipe_context *ctx,
+                                 const struct pipe_draw_info *info_in,
+                                 const struct pipe_draw_indirect_info *indirect)
+{
+   struct crocus_context *ice = (struct crocus_context *) ctx;
+   struct pipe_draw_info info = *info_in;
+   struct pipe_draw_start_count draw;
+
+   uint32_t val = ice->vtbl.get_so_offset(indirect->count_from_stream_output);
+
+   draw.start = 0;
+   draw.count = val;
+   ctx->draw_vbo(ctx, &info, NULL, &draw, 1);
+}
+
 /**
  * The pipe->draw_vbo() driver hook.  Performs a draw on the GPU.
  */
@@ -342,6 +358,12 @@ crocus_draw_vbo(struct pipe_context *ctx,
    if (info->primitive_restart && !can_cut_index_handle_prim(ice, info)) {
        util_draw_vbo_without_prim_restart(ctx, info, indirect, draws);
        return;
+   }
+
+   if (indirect && indirect->count_from_stream_output &&
+       !screen->devinfo.is_haswell) {
+      crocus_draw_vbo_get_vertex_count(ctx, info, indirect);
+      return;
    }
 
    /* We can't safely re-emit 3DSTATE_SO_BUFFERS because it may zero the

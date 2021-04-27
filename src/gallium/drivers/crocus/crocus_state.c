@@ -3232,7 +3232,28 @@ struct crocus_stream_output_target {
 
    /** Has 3DSTATE_SO_BUFFER actually been emitted, zeroing the offsets? */
    bool zeroed;
+
+   struct crocus_resource *offset_res;
+   uint32_t offset_offset;
 };
+
+static uint32_t
+crocus_get_so_offset(struct pipe_stream_output_target *so)
+{
+   struct crocus_stream_output_target *tgt = (void *)so;
+   struct pipe_transfer *transfer;
+   struct pipe_box box;
+   uint32_t result;
+   u_box_1d(tgt->offset_offset, 4, &box);
+   void *val = so->context->transfer_map(so->context, &tgt->offset_res->base,
+                                     0, PIPE_MAP_DIRECTLY,
+                                     &box, &transfer);
+   assert(val);
+   result = *(uint32_t *)val;
+   so->context->transfer_unmap(so->context, transfer);
+
+   return result / tgt->stride;
+}
 
 /**
  * The pipe->create_stream_output_target() driver hook.
@@ -3250,6 +3271,7 @@ crocus_create_stream_output_target(struct pipe_context *ctx,
 {
    struct crocus_resource *res = (void *) p_res;
    struct crocus_stream_output_target *cso = calloc(1, sizeof(*cso));
+   struct crocus_context *ice = (struct crocus_context *) ctx;
    if (!cso)
       return NULL;
 
@@ -3264,6 +3286,13 @@ crocus_create_stream_output_target(struct pipe_context *ctx,
    util_range_add(&res->base, &res->valid_buffer_range, buffer_offset,
                   buffer_offset + buffer_size);
 
+   void *temp;
+   u_upload_alloc(ice->ctx.stream_uploader, 0, sizeof(uint32_t), 4,
+                  &cso->offset_offset,
+                  (struct pipe_resource **)&cso->offset_res,
+                  &temp);
+
+
    return &cso->base;
 }
 
@@ -3273,10 +3302,13 @@ crocus_stream_output_target_destroy(struct pipe_context *ctx,
 {
    struct crocus_stream_output_target *cso = (void *) state;
 
+   pipe_resource_reference((struct pipe_resource **)&cso->offset_res, NULL);
    pipe_resource_reference(&cso->base.buffer, NULL);
 
    free(cso);
 }
+
+#define GEN7_SO_WRITE_OFFSET(n)         (0x5280 + (n) * 4)
 
 /**
  * The pipe->set_stream_output_targets() driver hook.
@@ -3292,7 +3324,8 @@ crocus_set_stream_output_targets(struct pipe_context *ctx,
                                const unsigned *offsets)
 {
    struct crocus_context *ice = (struct crocus_context *) ctx;
-
+   struct crocus_batch *batch = &ice->batches[CROCUS_BATCH_RENDER];
+   struct pipe_stream_output_target *old_tgt[4] = { NULL, NULL, NULL, NULL };
    const bool active = num_targets > 0;
    if (ice->state.streamout_active != active) {
       ice->state.streamout_active = active;
@@ -3324,8 +3357,31 @@ crocus_set_stream_output_targets(struct pipe_context *ctx,
 
    ice->state.so_targets = num_targets;
    for (int i = 0; i < 4; i++) {
+      pipe_so_target_reference(&old_tgt[i], ice->state.so_target[i]);
       pipe_so_target_reference(&ice->state.so_target[i],
                                i < num_targets ? targets[i] : NULL);
+   }
+
+   for (int i = 0; i < PIPE_MAX_SO_BUFFERS; i++) {
+      if (num_targets) {
+         struct crocus_stream_output_target *tgt =
+            (void *) ice->state.so_target[i];
+
+         if (offsets[i] == 0)
+            crocus_load_register_imm32(batch, GEN7_SO_WRITE_OFFSET(i), 0);
+         else if (tgt)
+            crocus_load_register_mem32(batch, GEN7_SO_WRITE_OFFSET(i),
+                                       tgt->offset_res->bo,
+                                       tgt->offset_offset);
+      } else {
+         struct crocus_stream_output_target *tgt =
+            (void *) old_tgt[i];
+         if (tgt)
+            crocus_store_register_mem32(batch, GEN7_SO_WRITE_OFFSET(i),
+                                        tgt->offset_res->bo,
+                                        tgt->offset_offset, false);
+      }
+      pipe_so_target_reference(&old_tgt[i], NULL);
    }
 
    /* No need to update 3DSTATE_SO_BUFFER unless SOL is active. */
@@ -7466,6 +7522,7 @@ genX(init_state)(struct crocus_context *ice)
    ice->vtbl.translate_prim_type = translate_prim_type;
 #if GEN_GEN >= 7
    ice->vtbl.update_so_strides = update_so_strides;
+   ice->vtbl.get_so_offset = crocus_get_so_offset;
 #endif
    ice->state.dirty = ~0ull;
    ice->state.stage_dirty = ~0ull;

@@ -528,6 +528,8 @@ struct crocus_vtable {
 
    void (*update_so_strides)(struct crocus_context *ice,
                              uint16_t *strides);
+
+   uint32_t (*get_so_offset)(struct pipe_stream_output_target *tgt);
 };
 
 /**
