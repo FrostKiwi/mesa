@@ -2142,7 +2142,7 @@ crocus_upload_sampler_states(struct crocus_context *ice,
       struct crocus_sampler_state *state = shs->samplers[i];
       struct crocus_sampler_view *tex = shs->textures[i];
 
-      if (!state) {
+      if (!state || !tex) {
          memset(map, 0, 4 * GENX(SAMPLER_STATE_length));
       } else {
          unsigned border_color_offset = 0;
