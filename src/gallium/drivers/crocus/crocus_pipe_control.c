@@ -287,6 +287,12 @@ crocus_texture_barrier(struct pipe_context *ctx, unsigned flags)
    struct crocus_context *ice = (void *) ctx;
    struct crocus_batch *render_batch = &ice->batches[CROCUS_BATCH_RENDER];
    struct crocus_batch *compute_batch = &ice->batches[CROCUS_BATCH_COMPUTE];
+   const struct gen_device_info *devinfo = &render_batch->screen->devinfo;
+
+   if (devinfo->gen < 6) {
+      crocus_emit_mi_flush(render_batch);
+      return;
+   }
 
    if (render_batch->contains_draw ||
        render_batch->cache.render->entries ||
