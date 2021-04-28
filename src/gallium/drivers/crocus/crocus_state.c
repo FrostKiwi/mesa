@@ -2097,6 +2097,8 @@ crocus_upload_border_color(struct crocus_batch *batch,
 
 #elif GEN_GEN == 4
    BORDER_COLOR_ATTR(ASSIGN, , color->f);
+#else
+   BORDER_COLOR_ATTR(ASSIGN, Float, color->f);
 #endif
 
 #undef ASSIGN
