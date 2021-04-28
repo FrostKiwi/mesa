@@ -6669,7 +6669,7 @@ crocus_upload_compute_state(struct crocus_context *ice,
       /* predicate = (compute_dispatch_indirect_y_size == 0); */
       crocus_emit_cmd(batch, GENX(MI_PREDICATE), mip) {
          mip.LoadOperation    = LOAD_LOAD;
-         mip.CombineOperation = COMBINE_SET;
+         mip.CombineOperation = COMBINE_OR;
          mip.CompareOperation = COMPARE_SRCS_EQUAL;
       };
 
@@ -6679,7 +6679,7 @@ crocus_upload_compute_state(struct crocus_context *ice,
       /* predicate = (compute_dispatch_indirect_z_size == 0); */
       crocus_emit_cmd(batch, GENX(MI_PREDICATE), mip) {
          mip.LoadOperation    = LOAD_LOAD;
-         mip.CombineOperation = COMBINE_SET;
+         mip.CombineOperation = COMBINE_OR;
          mip.CompareOperation = COMPARE_SRCS_EQUAL;
       };
 
