@@ -7373,13 +7373,15 @@ static void
 crocus_state_finish_batch(struct crocus_batch *batch)
 {
 #if GEN_VERSIONx10 == 75
-   crocus_emit_mi_flush(batch);
-   crocus_emit_cmd(batch, GENX(3DSTATE_CC_STATE_POINTERS), ptr) {
-      ptr.ColorCalcStatePointer = batch->ice->shaders.cc_offset;
-   }
+   if (batch->name == CROCUS_BATCH_RENDER) {
+      crocus_emit_mi_flush(batch);
+      crocus_emit_cmd(batch, GENX(3DSTATE_CC_STATE_POINTERS), ptr) {
+	 ptr.ColorCalcStatePointer = batch->ice->shaders.cc_offset;
+      }
 
-   crocus_emit_pipe_control_flush(batch, "hsw wa", PIPE_CONTROL_RENDER_TARGET_FLUSH |
-                                  PIPE_CONTROL_CS_STALL);
+      crocus_emit_pipe_control_flush(batch, "hsw wa", PIPE_CONTROL_RENDER_TARGET_FLUSH |
+				     PIPE_CONTROL_CS_STALL);
+   }
 #endif
    gen7_emit_isp_disable(batch);
 }
