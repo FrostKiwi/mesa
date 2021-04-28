@@ -185,30 +185,18 @@ crocus_isl_format_for_pipe_format(enum pipe_format pf)
       /* We also map alpha and luminance-alpha formats to red as well,
        * though most of these (other than A8_UNORM) will be non-renderable.
        */
-      [PIPE_FORMAT_A8_UINT]                 = ISL_FORMAT_R8_UINT,
+//      [PIPE_FORMAT_A8_UINT]                 = ISL_FORMAT_R8_UINT,
       [PIPE_FORMAT_A8_UNORM]                = ISL_FORMAT_R8_UNORM,
-      [PIPE_FORMAT_A8_SINT]                 = ISL_FORMAT_R8_SINT,
       //[PIPE_FORMAT_A8_SNORM]                = ISL_FORMAT_R8_SNORM,
-      [PIPE_FORMAT_A16_UINT]                = ISL_FORMAT_R16_UINT,
       [PIPE_FORMAT_A16_UNORM]               = ISL_FORMAT_R16_UNORM,
-      [PIPE_FORMAT_A16_SINT]                = ISL_FORMAT_R16_SINT,
-      //[PIPE_FORMAT_A16_SNORM]               = ISL_FORMAT_R16_SNORM,
-      [PIPE_FORMAT_A16_FLOAT]               = ISL_FORMAT_R16_FLOAT,
-      [PIPE_FORMAT_A32_UINT]                = ISL_FORMAT_R32_UINT,
-      [PIPE_FORMAT_A32_SINT]                = ISL_FORMAT_R32_SINT,
+      [PIPE_FORMAT_A16_FLOAT]               = ISL_FORMAT_A16_FLOAT,
       [PIPE_FORMAT_A32_FLOAT]               = ISL_FORMAT_R32_FLOAT,
 
-      [PIPE_FORMAT_L8A8_UINT]               = ISL_FORMAT_R8G8_UINT,
       [PIPE_FORMAT_L8A8_UNORM]              = ISL_FORMAT_R8G8_UNORM,
-      [PIPE_FORMAT_L8A8_SINT]               = ISL_FORMAT_R8G8_SINT,
       //[PIPE_FORMAT_L8A8_SNORM]              = ISL_FORMAT_R8G8_SNORM,
-      [PIPE_FORMAT_L16A16_UINT]             = ISL_FORMAT_R16G16_UINT,
       [PIPE_FORMAT_L16A16_UNORM]            = ISL_FORMAT_R16G16_UNORM,
-      [PIPE_FORMAT_L16A16_SINT]             = ISL_FORMAT_R16G16_SINT,
       //[PIPE_FORMAT_L16A16_SNORM]            = ISL_FORMAT_R16G16_SNORM,
       [PIPE_FORMAT_L16A16_FLOAT]            = ISL_FORMAT_R16G16_FLOAT,
-      [PIPE_FORMAT_L32A32_UINT]             = ISL_FORMAT_R32G32_UINT,
-      [PIPE_FORMAT_L32A32_SINT]             = ISL_FORMAT_R32G32_SINT,
       [PIPE_FORMAT_L32A32_FLOAT]            = ISL_FORMAT_R32G32_FLOAT,
 
       /* Sadly, we have to use luminance[-alpha] formats for sRGB decoding. */
