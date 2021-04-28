@@ -2500,7 +2500,7 @@ crocus_create_surface(struct pipe_context *ctx,
 
 #if GEN_GEN == 7
 static void
-update_default_image_param(struct brw_image_param *param)
+fill_default_image_param(struct brw_image_param *param)
 {
    memset(param, 0, sizeof(*param));
    /* Set the swizzling shifts to all-ones to effectively disable swizzling --
@@ -2510,6 +2510,19 @@ update_default_image_param(struct brw_image_param *param)
    param->swizzling[0] = 0xff;
    param->swizzling[1] = 0xff;
 }
+
+static void
+fill_buffer_image_param(struct brw_image_param *param,
+                        enum pipe_format pfmt,
+                        unsigned size)
+{
+   const unsigned cpp = util_format_get_blocksize(pfmt);
+
+   fill_default_image_param(param);
+   param->size[0] = size / cpp;
+   param->stride[0] = cpp;
+}
+
 #endif
 
 /**
@@ -2581,13 +2594,12 @@ crocus_set_shader_images(struct pipe_context *ctx,
          } else {
             util_range_add(&res->base, &res->valid_buffer_range, img->u.buf.offset,
                            img->u.buf.offset + img->u.buf.size);
-            isl_buffer_fill_image_param(&screen->isl_dev,
-                                        &image_params[start_slot + i],
-                                        img->format, img->u.buf.size);
+            fill_buffer_image_param(&image_params[start_slot + i],
+                                    img->format, img->u.buf.size);
          }
       } else {
          pipe_resource_reference(&iv->base.resource, NULL);
-         update_default_image_param(&image_params[start_slot + i]);
+         fill_default_image_param(&image_params[start_slot + i]);
       }
    }
 
