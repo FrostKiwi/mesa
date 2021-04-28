@@ -3065,6 +3065,9 @@ crocus_set_vertex_buffers(struct pipe_context *ctx,
 {
    struct crocus_context *ice = (struct crocus_context *) ctx;
 
+   ice->state.bound_vertex_buffers &=
+      ~u_bit_consecutive64(start_slot, count + unbind_num_trailing_slots);
+
    util_set_vertex_buffers_mask(ice->state.vertex_buffers, &ice->state.bound_vertex_buffers,
                                 buffers, start_slot, count, unbind_num_trailing_slots,
                                 take_ownership);
