@@ -324,6 +324,9 @@ crocus_memory_barrier(struct pipe_context *ctx, unsigned flags)
 {
    struct crocus_context *ice = (void *) ctx;
    unsigned bits = PIPE_CONTROL_DATA_CACHE_FLUSH | PIPE_CONTROL_CS_STALL;
+   const struct gen_device_info *devinfo = &ice->batches[0].screen->devinfo;
+
+   assert(devinfo->gen == 7);
 
    if (flags & (PIPE_BARRIER_VERTEX_BUFFER |
                 PIPE_BARRIER_INDEX_BUFFER |
@@ -340,6 +343,12 @@ crocus_memory_barrier(struct pipe_context *ctx, unsigned flags)
       bits |= PIPE_CONTROL_TEXTURE_CACHE_INVALIDATE |
               PIPE_CONTROL_RENDER_TARGET_FLUSH;
    }
+
+   /* Typed surface messages are handled by the render cache on IVB, so we
+    * need to flush it too.
+    */
+   if (!devinfo->is_haswell)
+      bits |= PIPE_CONTROL_RENDER_TARGET_FLUSH;
 
    for (int i = 0; i < CROCUS_BATCH_COUNT; i++) {
       if (ice->batches[i].contains_draw ||
