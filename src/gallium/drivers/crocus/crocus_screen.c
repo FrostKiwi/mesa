@@ -694,7 +694,7 @@ crocus_screen_create(int fd, const struct pipe_screen_config *config)
    screen->pci_id = screen->devinfo.chipset_id;
    screen->no_hw = screen->devinfo.no_hw;
 
-   if (screen->devinfo.gen > 8)
+   if (screen->devinfo.gen >= 8)
       return NULL;
 
    screen->aperture_bytes = get_aperture_size(fd);
