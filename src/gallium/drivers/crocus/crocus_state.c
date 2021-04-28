@@ -4208,19 +4208,22 @@ emit_ubo_buffer(struct crocus_context *ice,
 
 static uint32_t
 emit_ssbo_buffer(struct crocus_context *ice,
-                struct crocus_batch *batch,
-                struct pipe_shader_buffer *buffer)
+		 struct crocus_batch *batch,
+		 struct pipe_shader_buffer *buffer, bool writeable)
 {
    UNUSED struct isl_device *isl_dev = &batch->screen->isl_dev;
    uint32_t offset = 0;
+   uint32_t reloc = RELOC_32BIT;
 
+   if (writeable)
+      reloc |= RELOC_WRITE;
    uint32_t *surf_state = stream_state(batch, isl_dev->ss.size,
                                        isl_dev->ss.align, &offset);
    isl_buffer_fill_state(isl_dev, surf_state,
                          .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
                                                        crocus_resource_bo(buffer->buffer),
                                                        buffer->buffer_offset,
-                                                       RELOC_32BIT),
+                                                       reloc),
                          .size_B = buffer->buffer_size,
                          .format = ISL_FORMAT_RAW,
                          .swizzle = ISL_SWIZZLE_IDENTITY,
@@ -4415,7 +4418,8 @@ crocus_populate_binding_table(struct crocus_context *ice,
       s++;
    }
    foreach_surface_used(i, CROCUS_SURFACE_GROUP_SSBO) {
-      surf_offsets[s++] = emit_ssbo_buffer(ice, batch, &shs->ssbo[i]);
+      surf_offsets[s++] = emit_ssbo_buffer(ice, batch, &shs->ssbo[i],
+                                           !!(shs->writable_ssbos & (1 << i)));
    }
 
 }
