@@ -529,7 +529,7 @@ clear_depth_stencil(struct crocus_context *ice,
                     float depth,
                     uint8_t stencil)
 {
-   //struct crocus_resource *res = (void *) p_res;
+   struct crocus_resource *res = (void *) p_res;
 
    struct crocus_batch *batch = &ice->batches[CROCUS_BATCH_RENDER];
    enum blorp_batch_flags blorp_flags = 0;
@@ -594,7 +594,7 @@ clear_depth_stencil(struct crocus_context *ice,
                              stencil_mask, stencil);
 
    blorp_batch_finish(&blorp_batch);
-   crocus_flush_and_dirty_for_history(ice, batch, z_res, 0,
+   crocus_flush_and_dirty_for_history(ice, batch, res, 0,
                                     "cache history: post slow ZS clear");
 
    if (clear_depth && z_res) {
