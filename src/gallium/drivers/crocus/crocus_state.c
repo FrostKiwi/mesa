@@ -2075,7 +2075,8 @@ crocus_upload_border_color(struct crocus_batch *batch,
    macro(state.BorderColor ## _color_type ## Alpha, src[3]);
 
 #if GEN_VERSIONx10 == 75
-   //TODO
+   //TODO integer/stencil
+   BORDER_COLOR_ATTR(ASSIGN, Float, color->f);
 #elif GEN_GEN == 5 || GEN_GEN == 6
    BORDER_COLOR_ATTR(UNCLAMPED_FLOAT_TO_UBYTE, Unorm, color->f);
    BORDER_COLOR_ATTR(UNCLAMPED_FLOAT_TO_USHORT, Unorm16, color->f);
