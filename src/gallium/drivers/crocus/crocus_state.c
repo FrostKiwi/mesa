@@ -4222,7 +4222,7 @@ emit_ssbo_buffer(struct crocus_context *ice,
                                                        buffer->buffer_offset,
                                                        RELOC_32BIT),
                          .size_B = buffer->buffer_size,
-                         .format = 0,
+                         .format = ISL_FORMAT_RAW,
                          .swizzle = ISL_SWIZZLE_IDENTITY,
                          .stride_B = 1,
                          .mocs = mocs(crocus_resource_bo(buffer->buffer), isl_dev));
