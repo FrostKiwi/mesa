@@ -567,7 +567,11 @@ clear_depth_stencil(struct crocus_context *ice,
    }
 
    if (clear_depth && z_res) {
-      crocus_resource_prepare_depth(ice, z_res, level, box->z, box->depth);
+      const enum isl_aux_usage aux_usage =
+         crocus_resource_render_aux_usage(ice, z_res, level, z_res->surf.format,
+                                          false);     
+      crocus_resource_prepare_render(ice, z_res, level, box->z, box->depth,
+                                     aux_usage);
       crocus_blorp_surf_for_resource(&ice->vtbl, &batch->screen->isl_dev,
                                    &z_surf, &z_res->base, z_res->aux.usage,
                                    level, true);
@@ -598,8 +602,8 @@ clear_depth_stencil(struct crocus_context *ice,
                                     "cache history: post slow ZS clear");
 
    if (clear_depth && z_res) {
-      crocus_resource_finish_depth(ice, z_res, level,
-                                 box->z, box->depth, true);
+      crocus_resource_finish_render(ice, z_res, level,
+				    box->z, box->depth, z_surf.aux_usage);
    }
 
    if (stencil_mask) {

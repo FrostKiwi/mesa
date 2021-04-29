@@ -2819,8 +2819,9 @@ crocus_set_framebuffer_state(struct pipe_context *ctx,
 {
    struct crocus_context *ice = (struct crocus_context *) ctx;
    struct pipe_framebuffer_state *cso = &ice->state.framebuffer;
-#if 0
    struct crocus_screen *screen = (struct crocus_screen *)ctx->screen;
+   const struct gen_device_info *devinfo = &screen->devinfo;
+#if 0
    struct isl_device *isl_dev = &screen->isl_dev;
    struct crocus_resource *zres;
    struct crocus_resource *stencil_res;
@@ -2862,6 +2863,18 @@ crocus_set_framebuffer_state(struct pipe_context *ctx,
    util_copy_framebuffer_state(cso, state);
    cso->samples = samples;
    cso->layers = layers;
+
+   if (cso->zsbuf) {
+      struct crocus_resource *zres;
+      struct crocus_resource *stencil_res;
+      enum isl_aux_usage aux_usage = ISL_AUX_USAGE_NONE;
+      crocus_get_depth_stencil_resources(devinfo, cso->zsbuf->texture, &zres,
+					 &stencil_res);
+      if (zres && crocus_resource_level_has_hiz(zres, cso->zsbuf->u.tex.level)) {
+	 aux_usage = zres->aux.usage;
+      }
+      ice->state.hiz_usage = aux_usage;
+   }
 
    /* Render target change */
    ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_BINDINGS_FS;

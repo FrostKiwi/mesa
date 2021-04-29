@@ -430,11 +430,4 @@ void crocus_resource_finish_render(struct crocus_context *ice,
                                    struct crocus_resource *res, uint32_t level,
                                    uint32_t start_layer, uint32_t layer_count,
                                    enum isl_aux_usage aux_usage);
-void crocus_resource_prepare_depth(struct crocus_context *ice,
-                                   struct crocus_resource *res, uint32_t level,
-                                   uint32_t start_layer, uint32_t layer_count);
-void crocus_resource_finish_depth(struct crocus_context *ice,
-                                  struct crocus_resource *res, uint32_t level,
-                                  uint32_t start_layer, uint32_t layer_count,
-                                  bool depth_written);
 #endif

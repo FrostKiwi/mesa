@@ -194,10 +194,10 @@ crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
             zs_surf->u.tex.last_layer - zs_surf->u.tex.first_layer + 1;
 
          if (z_res) {
-            crocus_resource_prepare_depth(ice, z_res,
-                                        zs_surf->u.tex.level,
-                                        zs_surf->u.tex.first_layer,
-                                        num_layers);
+            crocus_resource_prepare_render(ice, z_res,
+                                           zs_surf->u.tex.level,
+                                           zs_surf->u.tex.first_layer,
+                                           num_layers, ice->state.hiz_usage);
             crocus_cache_flush_for_depth(batch, z_res->bo);
          }
 
@@ -270,10 +270,10 @@ crocus_postdraw_update_resolve_tracking(struct crocus_context *ice,
          zs_surf->u.tex.last_layer - zs_surf->u.tex.first_layer + 1;
 
       if (z_res) {
-         if (may_have_resolved_depth) {
-            crocus_resource_finish_depth(ice, z_res, zs_surf->u.tex.level,
-                                       zs_surf->u.tex.first_layer, num_layers,
-                                       ice->state.depth_writes_enabled);
+         if (may_have_resolved_depth && ice->state.depth_writes_enabled) {
+            crocus_resource_finish_render(ice, z_res, zs_surf->u.tex.level,
+                                          zs_surf->u.tex.first_layer, num_layers,
+                                          ice->state.hiz_usage);
          }
 
          if (ice->state.depth_writes_enabled)
@@ -963,23 +963,3 @@ crocus_resource_finish_render(struct crocus_context *ice,
                               aux_usage);
 }
 
-void
-crocus_resource_prepare_depth(struct crocus_context *ice,
-                              struct crocus_resource *res, uint32_t level,
-                              uint32_t start_layer, uint32_t layer_count)
-{
-   crocus_resource_prepare_access(ice, res, level, 1, start_layer,
-                                  layer_count, res->aux.usage, !!res->aux.bo);
-}
-
-void
-crocus_resource_finish_depth(struct crocus_context *ice,
-                             struct crocus_resource *res, uint32_t level,
-                             uint32_t start_layer, uint32_t layer_count,
-                             bool depth_written)
-{
-   if (depth_written) {
-      crocus_resource_finish_write(ice, res, level, start_layer, layer_count,
-                                 res->aux.usage);
-   }
-}
