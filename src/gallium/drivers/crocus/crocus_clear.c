@@ -409,7 +409,38 @@ can_fast_clear_depth(struct crocus_context *ice,
    struct crocus_screen *screen = (void *) ctx->screen;
    const struct gen_device_info *devinfo = &screen->devinfo;
 
-   return false;
+   if (devinfo->gen < 6)
+     return false;
+
+   if (INTEL_DEBUG & DEBUG_NO_FAST_CLEAR)
+     return false;
+
+   /* Check for partial clears */
+   if (box->x > 0 || box->y > 0 ||
+       box->width < u_minify(p_res->width0, level) ||
+       box->height < u_minify(p_res->height0, level)) {
+      return false;
+   }
+
+   if (!crocus_resource_level_has_hiz(res, level))
+      return false;
+
+   if (res->base.format == PIPE_FORMAT_Z16_UNORM) {
+      /* From the Sandy Bridge PRM, volume 2 part 1, page 314:
+       *
+       *     "[DevSNB+]: Several cases exist where Depth Buffer Clear cannot be
+       *      enabled (the legacy method of clearing must be performed):
+       *
+       *      - DevSNB{W/A}]: When depth buffer format is D16_UNORM and the
+       *        width of the map (LOD0) is not multiple of 16, fast clear
+       *        optimization must be disabled.
+       */
+      if (devinfo->gen == 6 &&
+          (minify(res->surf.phys_level0_sa.width,
+                  level) % 16) != 0)
+         return false;
+   }
+   return true;
 }
 
 static void
@@ -503,7 +534,11 @@ fast_clear_depth(struct crocus_context *ice,
    for (unsigned l = 0; l < box->depth; l++) {
       enum isl_aux_state aux_state =
          crocus_resource_get_aux_state(res, level, box->z + l);
-      if (aux_state != ISL_AUX_STATE_CLEAR) {
+      if (update_clear_depth || aux_state != ISL_AUX_STATE_CLEAR) {
+         if (aux_state == ISL_AUX_STATE_CLEAR) {
+            perf_debug(&ice->dbg, "Performing HiZ clear just to update the "
+                                  "depth clear value\n");
+         }	
          crocus_hiz_exec(ice, batch, res, level,
                        box->z + l, 1, ISL_AUX_OP_FAST_CLEAR,
                        update_clear_depth);
