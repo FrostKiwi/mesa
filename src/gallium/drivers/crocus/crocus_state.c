@@ -1522,6 +1522,9 @@ has_writeable_rt(const struct crocus_blend_state *cso_blend,
  */
 struct crocus_depth_stencil_alpha_state {
    struct pipe_depth_stencil_alpha_state cso;
+
+   bool depth_writes_enabled;
+   bool stencil_writes_enabled;
 };
 
 /**
@@ -1537,7 +1540,13 @@ crocus_create_zsa_state(struct pipe_context *ctx,
    struct crocus_depth_stencil_alpha_state *cso =
       malloc(sizeof(struct crocus_depth_stencil_alpha_state));
 
+   bool two_sided_stencil = state->stencil[1].enabled;
    cso->cso = *state;
+
+   cso->depth_writes_enabled = state->depth_writemask;
+   cso->stencil_writes_enabled =
+      state->stencil[0].writemask != 0 ||
+      (two_sided_stencil && state->stencil[1].writemask != 0);
 
    /* The state tracker needs to optimize away EQUAL writes for us. */
    assert(!(state->depth_func == PIPE_FUNC_EQUAL && state->depth_writemask));
@@ -1568,8 +1577,12 @@ crocus_bind_zsa_state(struct pipe_context *ctx, void *state)
       if (cso_changed(cso.alpha_func))
          ice->state.dirty |= CROCUS_DIRTY_GEN6_BLEND_STATE;
 #endif
-      if (cso_changed(cso.depth_writemask))
+
+      if (cso_changed(depth_writes_enabled))
          ice->state.dirty |= CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES;
+
+      ice->state.depth_writes_enabled = new_cso->depth_writes_enabled;
+      ice->state.stencil_writes_enabled = new_cso->stencil_writes_enabled;
 
 #if GEN_GEN <= 5
       ice->state.dirty |= CROCUS_DIRTY_COLOR_CALC_STATE;
