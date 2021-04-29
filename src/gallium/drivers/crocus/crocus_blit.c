@@ -339,6 +339,31 @@ tex_cache_flush_hack(struct crocus_batch *batch,
                                 PIPE_CONTROL_TEXTURE_CACHE_INVALIDATE);
 }
 
+static struct crocus_resource *
+crocus_resource_for_aspect(const struct gen_device_info *devinfo,
+			   struct pipe_resource *p_res, unsigned pipe_mask)
+{
+   if (pipe_mask == PIPE_MASK_S) {
+      struct crocus_resource *junk, *s_res;
+      crocus_get_depth_stencil_resources(devinfo, p_res, &junk, &s_res);
+      return s_res;
+   } else {
+      return (struct crocus_resource *)p_res;
+   }
+}
+
+static enum pipe_format
+pipe_format_for_aspect(enum pipe_format format, unsigned pipe_mask)
+{
+   if (pipe_mask == PIPE_MASK_S) {
+      return util_format_stencil_only(format);
+   } else if (pipe_mask == PIPE_MASK_Z) {
+      return util_format_get_depth_only(format);
+   } else {
+      return format;
+   }
+}
+
 /**
  * The pipe->blit() driver hook.
  *
@@ -353,8 +378,6 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
    const struct gen_device_info *devinfo = &screen->devinfo;
    struct crocus_batch *batch = &ice->batches[CROCUS_BATCH_RENDER];
    enum blorp_batch_flags blorp_flags = 0;
-   struct crocus_resource *src_res = (void *) info->src.resource;
-   struct crocus_resource *dst_res = (void *) info->dst.resource;
 
    /* We don't support color masking. */
    assert((info->mask & PIPE_MASK_RGBA) == PIPE_MASK_RGBA ||
@@ -478,66 +501,84 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
       filter = BLORP_FILTER_NEAREST;
    }
 
-   struct crocus_format_info src_fmt =
-      crocus_format_for_usage(devinfo, info->src.format,
-                            ISL_SURF_USAGE_TEXTURE_BIT);
-   enum isl_aux_usage src_aux_usage =
-      crocus_resource_texture_aux_usage(ice, src_res, src_fmt.fmt);
-
-   if (crocus_resource_level_has_hiz(src_res, info->src.level))
-      src_aux_usage = ISL_AUX_USAGE_NONE;
-
-   bool src_clear_supported = src_aux_usage != ISL_AUX_USAGE_NONE &&
-                              src_res->surf.format == src_fmt.fmt;
-
-   crocus_resource_prepare_access(ice, src_res, info->src.level, 1,
-                                info->src.box.z, info->src.box.depth,
-                                src_aux_usage, src_clear_supported);
-
-   struct crocus_format_info dst_fmt =
-      crocus_format_for_usage(devinfo, info->dst.format,
-                            ISL_SURF_USAGE_RENDER_TARGET_BIT);
-   enum isl_aux_usage dst_aux_usage =
-      crocus_resource_render_aux_usage(ice, dst_res, dst_fmt.fmt, false, false);
-   bool dst_clear_supported = dst_aux_usage != ISL_AUX_USAGE_NONE;
-
-   struct blorp_surf src_surf, dst_surf;
-   crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev,  &src_surf,
-                                info->src.resource, src_aux_usage,
-                                info->src.level, false);
-   crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev, &dst_surf,
-                                info->dst.resource, dst_aux_usage,
-                                info->dst.level, true);
-
-   crocus_resource_prepare_access(ice, dst_res, info->dst.level, 1,
-                                info->dst.box.z, info->dst.box.depth,
-                                dst_aux_usage, dst_clear_supported);
-
-   if (crocus_batch_references(batch, src_res->bo))
-      tex_cache_flush_hack(batch, src_fmt.fmt, src_res->surf.format);
-
-   if (dst_res->base.target == PIPE_BUFFER)
-      util_range_add(&dst_res->base, &dst_res->valid_buffer_range, dst_x0, dst_x1);
-
    struct blorp_batch blorp_batch;
    blorp_batch_init(&ice->blorp, &blorp_batch, batch, blorp_flags);
 
-   unsigned main_mask;
-   if (util_format_is_depth_or_stencil(info->dst.format))
-      main_mask = PIPE_MASK_Z;
-   else
-      main_mask = PIPE_MASK_RGBA;
-
    float src_z_step = (float)info->src.box.depth / (float)info->dst.box.depth;
+
+   /* There is no interpolation to the pixel center during rendering, so
+    * add the 0.5 offset ourselves here.
+    */
    float depth_center_offset = 0;
    if (info->src.resource->target == PIPE_TEXTURE_3D)
       depth_center_offset = 0.5 / info->dst.box.depth * info->src.box.depth;
 
-   if (info->mask & main_mask) {
+   /* Perform a blit for each aspect requested by the caller. PIPE_MASK_R is
+    * used to represent the color aspect. */
+   unsigned aspect_mask = info->mask & (PIPE_MASK_R | PIPE_MASK_ZS);
+   while (aspect_mask) {
+      unsigned aspect = 1 << u_bit_scan(&aspect_mask);
+
+      struct crocus_resource *src_res =
+         crocus_resource_for_aspect(devinfo, info->src.resource, aspect);
+      struct crocus_resource *dst_res =
+         crocus_resource_for_aspect(devinfo, info->dst.resource, aspect);
+
+      enum pipe_format src_pfmt =
+         pipe_format_for_aspect(info->src.format, aspect);
+      enum pipe_format dst_pfmt =
+         pipe_format_for_aspect(info->dst.format, aspect);
+
+      if (crocus_resource_unfinished_aux_import(src_res))
+         crocus_resource_finish_aux_import(ctx->screen, src_res);
+      if (crocus_resource_unfinished_aux_import(dst_res))
+         crocus_resource_finish_aux_import(ctx->screen, dst_res);
+
+      struct crocus_format_info src_fmt =
+         crocus_format_for_usage(devinfo, src_pfmt, ISL_SURF_USAGE_TEXTURE_BIT);
+      enum isl_aux_usage src_aux_usage =
+         crocus_resource_texture_aux_usage(ice, src_res, src_fmt.fmt);
+
+      crocus_resource_prepare_texture(ice, src_res, src_fmt.fmt,
+                                    info->src.level, 1, info->src.box.z,
+                                    info->src.box.depth);
+      //      crocus_emit_buffer_barrier_for(batch, src_res->bo,
+      //                                   CROCUS_DOMAIN_OTHER_READ);
+
+      struct crocus_format_info dst_fmt =
+         crocus_format_for_usage(devinfo, dst_pfmt,
+                               ISL_SURF_USAGE_RENDER_TARGET_BIT);
+      enum isl_aux_usage dst_aux_usage =
+         crocus_resource_render_aux_usage(ice, dst_res, info->dst.level,
+                                        dst_fmt.fmt, false);
+
+      struct blorp_surf src_surf, dst_surf;
+      crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev,  &src_surf,
+                                   &src_res->base, src_aux_usage,
+                                   info->src.level, false);
+      crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev, &dst_surf,
+                                   &dst_res->base, dst_aux_usage,
+                                   info->dst.level, true);
+
+      crocus_resource_prepare_render(ice, dst_res, info->dst.level,
+                                   info->dst.box.z, info->dst.box.depth,
+                                   dst_aux_usage);
+      //      crocus_emit_buffer_barrier_for(batch, dst_res->bo,
+      //                                   CROCUS_DOMAIN_RENDER_WRITE);
+
+      if (crocus_batch_references(batch, src_res->bo))
+         tex_cache_flush_hack(batch, src_fmt.fmt, src_res->surf.format);
+
+      if (dst_res->base.target == PIPE_BUFFER) {
+         util_range_add(&dst_res->base, &dst_res->valid_buffer_range,
+                        dst_x0, dst_x1);
+      }
+
       for (int slice = 0; slice < info->dst.box.depth; slice++) {
          unsigned dst_z = info->dst.box.z + slice;
          float src_z = info->src.box.z + slice * src_z_step +
                        depth_center_offset;
+
          crocus_batch_maybe_flush(batch, 1500);
 
          blorp_blit(&blorp_batch,
@@ -548,85 +589,17 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
                     src_x0, src_y0, src_x1, src_y1,
                     dst_x0, dst_y0, dst_x1, dst_y1,
                     filter, mirror_x, mirror_y);
+
       }
-   }
 
-   struct crocus_resource *stc_dst = NULL;
-   enum isl_aux_usage stc_src_aux_usage, stc_dst_aux_usage;
-   if ((info->mask & PIPE_MASK_S) &&
-       util_format_has_stencil(util_format_description(info->dst.format)) &&
-       util_format_has_stencil(util_format_description(info->src.format))) {
-      struct crocus_resource *src_res, *junk;
-      struct blorp_surf src_surf, dst_surf;
-      crocus_get_depth_stencil_resources(devinfo, info->src.resource, &junk, &src_res);
-      crocus_get_depth_stencil_resources(devinfo, info->dst.resource, &junk, &stc_dst);
+      tex_cache_flush_hack(batch, src_fmt.fmt, src_res->surf.format);
 
-      struct crocus_format_info src_fmt =
-         crocus_format_for_usage(devinfo, src_res->base.format,
-                               ISL_SURF_USAGE_TEXTURE_BIT);
-      stc_src_aux_usage =
-         crocus_resource_texture_aux_usage(ice, src_res, src_fmt.fmt);
-
-      struct crocus_format_info dst_fmt =
-         crocus_format_for_usage(devinfo, stc_dst->base.format,
-                               ISL_SURF_USAGE_RENDER_TARGET_BIT);
-      stc_dst_aux_usage =
-         crocus_resource_render_aux_usage(ice, stc_dst, dst_fmt.fmt, false, false);
-
-      /* Resolve destination surface before blit because :
-       *    1. when we try to blit from the same surface, we can't read and
-       *    write to the same surfaces at the same time when we have
-       *    compression enabled so it's safe to resolve surface first and then
-       *    do blit.
-       *    2. While bliting from one surface to another surface, we might be
-       *    mixing compression formats, Our experiments shows that if after
-       *    blit if we set DepthStencilResource flag to 0, blit passes but
-       *    clear fails.
-       *
-       *    XXX: In second case by destructing the compression, we might lose
-       *    some performance.
-       */
-
-      crocus_resource_prepare_access(ice, src_res, info->src.level, 1,
-                                   info->src.box.z, info->src.box.depth,
-                                   stc_src_aux_usage, false);
-      crocus_resource_prepare_access(ice, stc_dst, info->dst.level, 1,
-                                   info->dst.box.z, info->dst.box.depth,
-                                   stc_dst_aux_usage, false);
-      crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev, &src_surf,
-                                   &src_res->base, stc_src_aux_usage,
-                                   info->src.level, false);
-      crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev, &dst_surf,
-                                   &stc_dst->base, stc_dst_aux_usage,
-                                   info->dst.level, true);
-
-      for (int slice = 0; slice < info->dst.box.depth; slice++) {
-         crocus_batch_maybe_flush(batch, 1500);
-
-         blorp_blit(&blorp_batch,
-                    &src_surf, info->src.level, info->src.box.z + slice,
-                    ISL_FORMAT_R8_UINT, ISL_SWIZZLE_IDENTITY,
-                    &dst_surf, info->dst.level, info->dst.box.z + slice,
-                    ISL_FORMAT_R8_UINT, ISL_SWIZZLE_IDENTITY,
-                    src_x0, src_y0, src_x1, src_y1,
-                    dst_x0, dst_y0, dst_x1, dst_y1,
-                    filter, mirror_x, mirror_y);
-      }
+      crocus_resource_finish_render(ice, dst_res, info->dst.level,
+                                  info->dst.box.z, info->dst.box.depth,
+                                  dst_aux_usage);
    }
 
    blorp_batch_finish(&blorp_batch);
-
-   tex_cache_flush_hack(batch, src_fmt.fmt, src_res->surf.format);
-
-   if (info->mask & main_mask) {
-      crocus_resource_finish_write(ice, dst_res, info->dst.level, info->dst.box.z,
-                                 info->dst.box.depth, dst_aux_usage);
-   }
-
-   if (stc_dst) {
-      crocus_resource_finish_write(ice, stc_dst, info->dst.level, info->dst.box.z,
-                                 info->dst.box.depth, stc_dst_aux_usage);
-   }
 
    crocus_flush_and_dirty_for_history(ice, batch, (struct crocus_resource *)
                                     info->dst.resource,
