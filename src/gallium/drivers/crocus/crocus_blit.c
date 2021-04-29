@@ -410,41 +410,6 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
          blorp_flags |= BLORP_BATCH_PREDICATE_ENABLE;
    }
 
-   struct crocus_format_info src_fmt =
-      crocus_format_for_usage(devinfo, info->src.format,
-                            ISL_SURF_USAGE_TEXTURE_BIT);
-   enum isl_aux_usage src_aux_usage =
-      crocus_resource_texture_aux_usage(ice, src_res, src_fmt.fmt);
-
-   if (crocus_resource_level_has_hiz(src_res, info->src.level))
-      src_aux_usage = ISL_AUX_USAGE_NONE;
-
-   bool src_clear_supported = src_aux_usage != ISL_AUX_USAGE_NONE &&
-                              src_res->surf.format == src_fmt.fmt;
-
-   crocus_resource_prepare_access(ice, src_res, info->src.level, 1,
-                                info->src.box.z, info->src.box.depth,
-                                src_aux_usage, src_clear_supported);
-
-   struct crocus_format_info dst_fmt =
-      crocus_format_for_usage(devinfo, info->dst.format,
-                            ISL_SURF_USAGE_RENDER_TARGET_BIT);
-   enum isl_aux_usage dst_aux_usage =
-      crocus_resource_render_aux_usage(ice, dst_res, dst_fmt.fmt, false, false);
-   bool dst_clear_supported = dst_aux_usage != ISL_AUX_USAGE_NONE;
-
-   struct blorp_surf src_surf, dst_surf;
-   crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev,  &src_surf,
-                                info->src.resource, src_aux_usage,
-                                info->src.level, false);
-   crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev, &dst_surf,
-                                info->dst.resource, dst_aux_usage,
-                                info->dst.level, true);
-
-   crocus_resource_prepare_access(ice, dst_res, info->dst.level, 1,
-                                info->dst.box.z, info->dst.box.depth,
-                                dst_aux_usage, dst_clear_supported);
-
    float src_x0 = info->src.box.x;
    float src_x1 = info->src.box.x + info->src.box.width;
    float src_y0 = info->src.box.y;
@@ -468,7 +433,8 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
 
    if (abs(info->dst.box.width) == abs(info->src.box.width) &&
        abs(info->dst.box.height) == abs(info->src.box.height)) {
-      if (src_surf.surf->samples > 1 && dst_surf.surf->samples <= 1) {
+      if (info->src.resource->nr_samples > 1 &&
+          info->dst.resource->nr_samples <= 1) {
          /* The OpenGL ES 3.2 specification, section 16.2.1, says:
           *
           *    "If the read framebuffer is multisampled (its effective
@@ -511,6 +477,41 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
    } else {
       filter = BLORP_FILTER_NEAREST;
    }
+
+   struct crocus_format_info src_fmt =
+      crocus_format_for_usage(devinfo, info->src.format,
+                            ISL_SURF_USAGE_TEXTURE_BIT);
+   enum isl_aux_usage src_aux_usage =
+      crocus_resource_texture_aux_usage(ice, src_res, src_fmt.fmt);
+
+   if (crocus_resource_level_has_hiz(src_res, info->src.level))
+      src_aux_usage = ISL_AUX_USAGE_NONE;
+
+   bool src_clear_supported = src_aux_usage != ISL_AUX_USAGE_NONE &&
+                              src_res->surf.format == src_fmt.fmt;
+
+   crocus_resource_prepare_access(ice, src_res, info->src.level, 1,
+                                info->src.box.z, info->src.box.depth,
+                                src_aux_usage, src_clear_supported);
+
+   struct crocus_format_info dst_fmt =
+      crocus_format_for_usage(devinfo, info->dst.format,
+                            ISL_SURF_USAGE_RENDER_TARGET_BIT);
+   enum isl_aux_usage dst_aux_usage =
+      crocus_resource_render_aux_usage(ice, dst_res, dst_fmt.fmt, false, false);
+   bool dst_clear_supported = dst_aux_usage != ISL_AUX_USAGE_NONE;
+
+   struct blorp_surf src_surf, dst_surf;
+   crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev,  &src_surf,
+                                info->src.resource, src_aux_usage,
+                                info->src.level, false);
+   crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev, &dst_surf,
+                                info->dst.resource, dst_aux_usage,
+                                info->dst.level, true);
+
+   crocus_resource_prepare_access(ice, dst_res, info->dst.level, 1,
+                                info->dst.box.z, info->dst.box.depth,
+                                dst_aux_usage, dst_clear_supported);
 
    if (crocus_batch_references(batch, src_res->bo))
       tex_cache_flush_hack(batch, src_fmt.fmt, src_res->surf.format);
