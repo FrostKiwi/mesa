@@ -6108,6 +6108,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
                info.hiz_address = crocus_command_reloc(batch,
                                                        (batch_ptr - batch->command.map) + isl_dev->ds.hiz_offset,
                                                        zres->aux.bo, zres->aux.offset, RELOC_32BIT);
+               info.depth_clear_value = crocus_resource_get_clear_color(zres).f32[0];
             }
          }
 
