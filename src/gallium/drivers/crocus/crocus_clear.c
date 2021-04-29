@@ -559,7 +559,7 @@ clear_depth_stencil(struct crocus_context *ice,
    /* At this point, we might have fast cleared the depth buffer. So if there's
     * no stencil clear pending, return early.
     */
-   if (!(clear_depth || clear_stencil)) {
+   if (!(clear_depth || (clear_stencil && stencil_res))) {
       return;
    }
 
@@ -570,7 +570,7 @@ clear_depth_stencil(struct crocus_context *ice,
       crocus_resource_prepare_render(ice, z_res, level, box->z, box->depth,
                                      aux_usage);
       crocus_blorp_surf_for_resource(&ice->vtbl, &batch->screen->isl_dev,
-                                   &z_surf, &z_res->base, z_res->aux.usage,
+                                   &z_surf, &z_res->base, aux_usage,
                                    level, true);
    }
 
