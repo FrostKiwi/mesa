@@ -29,10 +29,10 @@
 
 /* crocus_state.c */
 void genX(init_state)(struct crocus_context *ice);
-void genX(emit_urb_setup)(struct crocus_context *ice,
-                          struct crocus_batch *batch,
-                          const unsigned size[4],
-                          bool tess_present, bool gs_present);
+void genX(upload_urb)(struct crocus_batch *batch,
+		      unsigned vs_size,
+		      bool gs_present,
+		      unsigned gs_size);
 void genX(emit_hashing_mode)(struct crocus_context *ice,
                              struct crocus_batch *batch,
                              unsigned width, unsigned height,

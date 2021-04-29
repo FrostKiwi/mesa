@@ -255,14 +255,12 @@ blorp_emit_urb_config(struct blorp_batch *blorp_batch,
                       unsigned vs_entry_size,
                       UNUSED unsigned sf_entry_size)
 {
-   struct crocus_context *ice = blorp_batch->blorp->driver_ctx;
    struct crocus_batch *batch = blorp_batch->driver_batch;
 #if GEN_GEN <= 5
+   struct crocus_context *ice = blorp_batch->blorp->driver_ctx;
    ice->vtbl.calculate_urb_fence(batch, 0, vs_entry_size, sf_entry_size);
 #else
-   unsigned size[4] = { vs_entry_size, 1, 1, 1 };
-
-   genX(emit_urb_setup)(ice, batch, size, false, false);
+   genX(upload_urb)(batch, vs_entry_size, false, 0);
 #endif
 }
 #endif

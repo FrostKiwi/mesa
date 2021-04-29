@@ -4920,7 +4920,22 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 
 #if GEN_GEN >= 6
    if (dirty & CROCUS_DIRTY_GEN6_URB) {
-      // TODO GEN6 URB
+#if GEN_GEN == 6
+      bool gs_present = ice->shaders.prog[MESA_SHADER_GEOMETRY] != NULL
+	 || ice->shaders.ff_gs_prog;
+
+      struct brw_vue_prog_data *vue_prog_data =
+	 (void *) ice->shaders.prog[MESA_SHADER_VERTEX]->prog_data;
+      const unsigned vs_size = vue_prog_data->urb_entry_size;
+      unsigned gs_size = vs_size;
+      if (ice->shaders.prog[MESA_SHADER_GEOMETRY]) {
+	 struct brw_vue_prog_data *gs_vue_prog_data =
+	    (void *) ice->shaders.prog[MESA_SHADER_GEOMETRY]->prog_data;
+	 gs_size = gs_vue_prog_data->urb_entry_size;
+      }
+
+      genX(upload_urb)(batch, vs_size, gs_present, gs_size);
+#endif
 #if GEN_GEN == 7
       const struct gen_device_info *devinfo = &batch->screen->devinfo;
       bool gs_present = ice->shaders.prog[MESA_SHADER_GEOMETRY] != NULL;
@@ -7307,12 +7322,65 @@ crocus_emit_raw_pipe_control(struct crocus_batch *batch,
 
 #if GEN_GEN == 6
 void
-genX(emit_urb_setup)(struct crocus_context *ice,
-                     struct crocus_batch *batch,
-                     const unsigned size[4],
-                     bool tess_present, bool gs_present)
+genX(upload_urb)(struct crocus_batch *batch,
+		 unsigned vs_size,
+		 bool gs_present,
+		 unsigned gs_size)
 {
-   // XXX TODO
+   struct crocus_context *ice = batch->ice;
+   int nr_vs_entries, nr_gs_entries;
+   int total_urb_size = ice->urb.size * 1024; /* in bytes */
+   const struct gen_device_info *devinfo = &batch->screen->devinfo;
+
+      /* Calculate how many entries fit in each stage's section of the URB */
+   if (gs_present) {
+      nr_vs_entries = (total_urb_size/2) / (vs_size * 128);
+      nr_gs_entries = (total_urb_size/2) / (gs_size * 128);
+   } else {
+      nr_vs_entries = total_urb_size / (vs_size * 128);
+      nr_gs_entries = 0;
+   }
+
+   /* Then clamp to the maximum allowed by the hardware */
+   if (nr_vs_entries > devinfo->urb.max_entries[MESA_SHADER_VERTEX])
+      nr_vs_entries = devinfo->urb.max_entries[MESA_SHADER_VERTEX];
+
+   if (nr_gs_entries > devinfo->urb.max_entries[MESA_SHADER_GEOMETRY])
+      nr_gs_entries = devinfo->urb.max_entries[MESA_SHADER_GEOMETRY];
+
+   /* Finally, both must be a multiple of 4 (see 3DSTATE_URB in the PRM). */
+   ice->urb.nr_vs_entries = ROUND_DOWN_TO(nr_vs_entries, 4);
+   ice->urb.nr_gs_entries = ROUND_DOWN_TO(nr_gs_entries, 4);
+
+   assert(ice->urb.nr_vs_entries >=
+          devinfo->urb.min_entries[MESA_SHADER_VERTEX]);
+   assert(ice->urb.nr_vs_entries % 4 == 0);
+   assert(ice->urb.nr_gs_entries % 4 == 0);
+   assert(vs_size <= 5);
+   assert(gs_size <= 5);
+
+   crocus_emit_cmd(batch, GENX(3DSTATE_URB), urb) {
+      urb.VSNumberofURBEntries = ice->urb.nr_vs_entries;
+      urb.VSURBEntryAllocationSize = vs_size - 1;
+
+      urb.GSNumberofURBEntries = ice->urb.nr_gs_entries;
+      urb.GSURBEntryAllocationSize = gs_size - 1;
+   };
+   /* From the PRM Volume 2 part 1, section 1.4.7:
+    *
+    *   Because of a urb corruption caused by allocating a previous gsunit’s
+    *   urb entry to vsunit software is required to send a "GS NULL
+    *   Fence"(Send URB fence with VS URB size == 1 and GS URB size == 0) plus
+    *   a dummy DRAW call before any case where VS will be taking over GS URB
+    *   space.
+    *
+    * It is not clear exactly what this means ("URB fence" is a command that
+    * doesn't exist on Gen6).  So for now we just do a full pipeline flush as
+    * a workaround.
+    */
+   if (ice->urb.gs_present && !gs_present)
+      crocus_emit_mi_flush(batch);
+   ice->urb.gs_present = gs_present;
 }
 #endif
 
