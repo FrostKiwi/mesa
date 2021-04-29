@@ -194,8 +194,6 @@ fast_clear_color(struct crocus_context *ice,
 {
    struct crocus_batch *batch = &ice->batches[CROCUS_BATCH_RENDER];
    struct pipe_resource *p_res = (void *) res;
-   const enum isl_aux_state aux_state =
-      crocus_resource_get_aux_state(res, level, box->z);
 
    color = convert_fast_clear_color(ice, res, format, color);
 
@@ -274,7 +272,9 @@ fast_clear_color(struct crocus_context *ice,
    /* If the buffer is already in ISL_AUX_STATE_CLEAR, and the color hasn't
     * changed, the clear is redundant and can be skipped.
     */
-   if (!color_changed && aux_state == ISL_AUX_STATE_CLEAR)
+   const enum isl_aux_state aux_state =
+      crocus_resource_get_aux_state(res, level, box->z);
+   if (!color_changed && box->depth == 1 && aux_state == ISL_AUX_STATE_CLEAR)
       return;
 
    /* Ivybrigde PRM Vol 2, Part 1, "11.7 MCS Buffer for Render Target(s)":
@@ -492,9 +492,6 @@ fast_clear_depth(struct crocus_context *ice,
          return;
 
       for (unsigned res_level = 0; res_level < res->surf.levels; res_level++) {
-         if (!(res->aux.has_hiz & (1 << res_level)))
-            continue;
-
          const unsigned level_layers =
             crocus_get_num_logical_layers(res, res_level);
          for (unsigned layer = 0; layer < level_layers; layer++) {
@@ -585,10 +582,10 @@ clear_depth_stencil(struct crocus_context *ice,
    if (z_res && clear_depth &&
        can_fast_clear_depth(ice, z_res, level, box, depth)) {
       fast_clear_depth(ice, z_res, level, box, depth);
-      crocus_flush_and_dirty_for_history(ice, batch, z_res, 0,
+      crocus_flush_and_dirty_for_history(ice, batch, res, 0,
                                        "cache history: post fast Z clear");
       clear_depth = false;
-      z_res = false;
+      z_res = NULL;
    }
 
    /* At this point, we might have fast cleared the depth buffer. So if there's
