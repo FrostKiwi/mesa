@@ -744,10 +744,10 @@ get_preferred_batch(struct crocus_context *ice, struct crocus_bo *bo)
  */
 static void
 crocus_resource_copy_region(struct pipe_context *ctx,
-                          struct pipe_resource *dst,
+                          struct pipe_resource *p_dst,
                           unsigned dst_level,
                           unsigned dstx, unsigned dsty, unsigned dstz,
-                          struct pipe_resource *src,
+                          struct pipe_resource *p_src,
                           unsigned src_level,
                           const struct pipe_box *src_box)
 {
@@ -755,42 +755,49 @@ crocus_resource_copy_region(struct pipe_context *ctx,
    struct crocus_batch *batch = &ice->batches[CROCUS_BATCH_RENDER];
    struct crocus_screen *screen = (struct crocus_screen *)ctx->screen;
    const struct gen_device_info *devinfo = &screen->devinfo;
+   struct crocus_resource *src = (void *) p_src;
+   struct crocus_resource *dst = (void *) p_dst;
 
+   if (crocus_resource_unfinished_aux_import(src))
+      crocus_resource_finish_aux_import(ctx->screen, src);
+   if (crocus_resource_unfinished_aux_import(dst))
+      crocus_resource_finish_aux_import(ctx->screen, dst);
+   
    /* Use MI_COPY_MEM_MEM for tiny (<= 16 byte, % 4) buffer copies. */
-   if (src->target == PIPE_BUFFER && dst->target == PIPE_BUFFER &&
+   if (p_src->target == PIPE_BUFFER && p_dst->target == PIPE_BUFFER &&
        (src_box->width % 4 == 0) && src_box->width <= 16 &&
        ice->vtbl.copy_mem_mem) {
-      struct crocus_bo *dst_bo = crocus_resource_bo(dst);
+      struct crocus_bo *dst_bo = crocus_resource_bo(p_dst);
       batch = get_preferred_batch(ice, dst_bo);
       crocus_batch_maybe_flush(batch, 24 + 5 * (src_box->width / 4));
       crocus_emit_pipe_control_flush(batch,
                                    "stall for MI_COPY_MEM_MEM copy_region",
                                    PIPE_CONTROL_CS_STALL);
-      ice->vtbl.copy_mem_mem(batch, dst_bo, dstx, crocus_resource_bo(src),
+      ice->vtbl.copy_mem_mem(batch, dst_bo, dstx, crocus_resource_bo(p_src),
                              src_box->x, src_box->width);
       return;
    }
 
-   if (devinfo->gen < 6 && util_format_is_depth_or_stencil(dst->format)) {
-     util_resource_copy_region(ctx, dst, dst_level, dstx, dsty, dstz,
-			       src, src_level, src_box);
+   if (devinfo->gen < 6 && util_format_is_depth_or_stencil(p_dst->format)) {
+     util_resource_copy_region(ctx, p_dst, dst_level, dstx, dsty, dstz,
+			       p_src, src_level, src_box);
      return;
    }
-   crocus_copy_region(&ice->blorp, batch, dst, dst_level, dstx, dsty, dstz,
-                    src, src_level, src_box);
+   crocus_copy_region(&ice->blorp, batch, p_dst, dst_level, dstx, dsty, dstz,
+                      p_src, src_level, src_box);
 
-   if (util_format_is_depth_and_stencil(dst->format) &&
-       util_format_has_stencil(util_format_description(src->format)) &&
+   if (util_format_is_depth_and_stencil(p_dst->format) &&
+       util_format_has_stencil(util_format_description(p_src->format)) &&
        devinfo->gen >= 6) {
       struct crocus_resource *junk, *s_src_res, *s_dst_res;
-      crocus_get_depth_stencil_resources(devinfo, src, &junk, &s_src_res);
-      crocus_get_depth_stencil_resources(devinfo, dst, &junk, &s_dst_res);
+      crocus_get_depth_stencil_resources(devinfo, p_src, &junk, &s_src_res);
+      crocus_get_depth_stencil_resources(devinfo, p_dst, &junk, &s_dst_res);
 
       crocus_copy_region(&ice->blorp, batch, &s_dst_res->base, dst_level, dstx,
-                       dsty, dstz, &s_src_res->base, src_level, src_box);
+                         dsty, dstz, &s_src_res->base, src_level, src_box);
    }
 
-   crocus_flush_and_dirty_for_history(ice, batch, (struct crocus_resource *) dst,
+   crocus_flush_and_dirty_for_history(ice, batch, dst,
                                     PIPE_CONTROL_RENDER_TARGET_FLUSH,
                                     "cache history: post copy_region");
 }
