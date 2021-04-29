@@ -422,7 +422,7 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
    bool src_clear_supported = src_aux_usage != ISL_AUX_USAGE_NONE &&
                               src_res->surf.format == src_fmt.fmt;
 
-   crocus_resource_prepare_access(ice, batch, src_res, info->src.level, 1,
+   crocus_resource_prepare_access(ice, src_res, info->src.level, 1,
                                 info->src.box.z, info->src.box.depth,
                                 src_aux_usage, src_clear_supported);
 
@@ -441,7 +441,7 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
                                 info->dst.resource, dst_aux_usage,
                                 info->dst.level, true);
 
-   crocus_resource_prepare_access(ice, batch, dst_res, info->dst.level, 1,
+   crocus_resource_prepare_access(ice, dst_res, info->dst.level, 1,
                                 info->dst.box.z, info->dst.box.depth,
                                 dst_aux_usage, dst_clear_supported);
 
@@ -586,10 +586,10 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
        *    some performance.
        */
 
-      crocus_resource_prepare_access(ice, batch, src_res, info->src.level, 1,
+      crocus_resource_prepare_access(ice, src_res, info->src.level, 1,
                                    info->src.box.z, info->src.box.depth,
                                    stc_src_aux_usage, false);
-      crocus_resource_prepare_access(ice, batch, stc_dst, info->dst.level, 1,
+      crocus_resource_prepare_access(ice, stc_dst, info->dst.level, 1,
                                    info->dst.box.z, info->dst.box.depth,
                                    stc_dst_aux_usage, false);
       crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev, &src_surf,
@@ -722,10 +722,10 @@ crocus_copy_region(struct blorp_context *blorp,
       crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev, &dst_surf,
                                    dst, dst_aux_usage, dst_level, true);
 
-      crocus_resource_prepare_access(ice, batch, src_res, src_level, 1,
+      crocus_resource_prepare_access(ice, src_res, src_level, 1,
                                      src_box->z, src_box->depth,
                                      src_aux_usage, false);
-      crocus_resource_prepare_access(ice, batch, dst_res, dst_level, 1,
+      crocus_resource_prepare_access(ice, dst_res, dst_level, 1,
                                      dstz, src_box->depth,
                                      dst_aux_usage, false);
 

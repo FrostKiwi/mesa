@@ -297,12 +297,11 @@ crocus_hiz_exec(struct crocus_context *ice,
  */
 void
 crocus_resource_prepare_access(struct crocus_context *ice,
-                             struct crocus_batch *batch,
-                             struct crocus_resource *res,
-                             uint32_t start_level, uint32_t num_levels,
-                             uint32_t start_layer, uint32_t num_layers,
-                             enum isl_aux_usage aux_usage,
-                             bool fast_clear_supported);
+                               struct crocus_resource *res,
+                               uint32_t start_level, uint32_t num_levels,
+                               uint32_t start_layer, uint32_t num_layers,
+                               enum isl_aux_usage aux_usage,
+                               bool fast_clear_supported);
 
 /**
  * Complete a write operation
@@ -360,13 +359,12 @@ crocus_resource_set_aux_state(struct crocus_context *ice,
  */
 static inline void
 crocus_resource_access_raw(struct crocus_context *ice,
-                         struct crocus_batch *batch,
-                         struct crocus_resource *res,
-                         uint32_t level, uint32_t layer,
-                         uint32_t num_layers,
-                         bool write)
+                           struct crocus_resource *res,
+                           uint32_t level, uint32_t layer,
+                           uint32_t num_layers,
+                           bool write)
 {
-   crocus_resource_prepare_access(ice, batch, res, level, 1, layer, num_layers,
+   crocus_resource_prepare_access(ice, res, level, 1, layer, num_layers,
                                 ISL_AUX_USAGE_NONE, false);
    if (write) {
       crocus_resource_finish_write(ice, res, level, layer, num_layers,
@@ -391,11 +389,10 @@ enum isl_aux_usage crocus_resource_texture_aux_usage(struct crocus_context *ice,
                                                    const struct crocus_resource *res,
                                                    enum isl_format view_fmt);
 void crocus_resource_prepare_texture(struct crocus_context *ice,
-                                   struct crocus_batch *batch,
-                                   struct crocus_resource *res,
-                                   enum isl_format view_format,
-                                   uint32_t start_level, uint32_t num_levels,
-                                   uint32_t start_layer, uint32_t num_layers);
+                                     struct crocus_resource *res,
+                                     enum isl_format view_format,
+                                     uint32_t start_level, uint32_t num_levels,
+                                     uint32_t start_layer, uint32_t num_layers);
 
 static inline bool
 crocus_resource_unfinished_aux_import(struct crocus_resource *res)
@@ -407,9 +404,9 @@ crocus_resource_unfinished_aux_import(struct crocus_resource *res)
 void crocus_resource_finish_aux_import(struct pipe_screen *pscreen,
                                      struct crocus_resource *res);
 
-bool crocus_has_color_unresolved(const struct crocus_resource *res,
-                               unsigned start_level, unsigned num_levels,
-                               unsigned start_layer, unsigned num_layers);
+bool crocus_has_invalid_primary(const struct crocus_resource *res,
+                                unsigned start_level, unsigned num_levels,
+                                unsigned start_layer, unsigned num_layers);
 
 void crocus_resource_check_level_layer(const struct crocus_resource *res,
                                      uint32_t level, uint32_t layer);
@@ -426,20 +423,18 @@ enum isl_aux_usage crocus_resource_render_aux_usage(struct crocus_context *ice,
                                                   bool blend_enabled,
                                                   bool draw_aux_disabled);
 void crocus_resource_prepare_render(struct crocus_context *ice,
-                                  struct crocus_batch *batch,
+                                    struct crocus_resource *res, uint32_t level,
+                                    uint32_t start_layer, uint32_t layer_count,
+                                    enum isl_aux_usage aux_usage);
+void crocus_resource_finish_render(struct crocus_context *ice,
+                                   struct crocus_resource *res, uint32_t level,
+                                   uint32_t start_layer, uint32_t layer_count,
+                                   enum isl_aux_usage aux_usage);
+void crocus_resource_prepare_depth(struct crocus_context *ice,
+                                   struct crocus_resource *res, uint32_t level,
+                                   uint32_t start_layer, uint32_t layer_count);
+void crocus_resource_finish_depth(struct crocus_context *ice,
                                   struct crocus_resource *res, uint32_t level,
                                   uint32_t start_layer, uint32_t layer_count,
-                                  enum isl_aux_usage aux_usage);
-void crocus_resource_finish_render(struct crocus_context *ice,
-                                 struct crocus_resource *res, uint32_t level,
-                                 uint32_t start_layer, uint32_t layer_count,
-                                 enum isl_aux_usage aux_usage);
-void crocus_resource_prepare_depth(struct crocus_context *ice,
-                                 struct crocus_batch *batch,
-                                 struct crocus_resource *res, uint32_t level,
-                                 uint32_t start_layer, uint32_t layer_count);
-void crocus_resource_finish_depth(struct crocus_context *ice,
-                                struct crocus_resource *res, uint32_t level,
-                                uint32_t start_layer, uint32_t layer_count,
-                                bool depth_written);
+                                  bool depth_written);
 #endif

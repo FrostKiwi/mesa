@@ -101,7 +101,7 @@ resolve_sampler_views(struct crocus_context *ice,
                                   "for sampling");
          }
 
-         crocus_resource_prepare_texture(ice, batch, res, isv->view.format,
+         crocus_resource_prepare_texture(ice, res, isv->view.format,
                                        isv->view.base_level, isv->view.levels,
                                        isv->view.base_array_layer,
                                        isv->view.array_len);
@@ -137,10 +137,10 @@ resolve_image_views(struct crocus_context *ice,
             pview->u.tex.last_layer - pview->u.tex.first_layer + 1;
 
          /* The data port doesn't understand any compression */
-         crocus_resource_prepare_access(ice, batch, res,
-                                      pview->u.tex.level, 1,
-                                      pview->u.tex.first_layer, num_layers,
-                                      ISL_AUX_USAGE_NONE, false);
+         crocus_resource_prepare_access(ice, res,
+                                        pview->u.tex.level, 1,
+                                        pview->u.tex.first_layer, num_layers,
+                                        ISL_AUX_USAGE_NONE, false);
       }
 
       crocus_cache_flush_for_read(batch, res->bo);
@@ -194,7 +194,7 @@ crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
             zs_surf->u.tex.last_layer - zs_surf->u.tex.first_layer + 1;
 
          if (z_res) {
-            crocus_resource_prepare_depth(ice, batch, z_res,
+            crocus_resource_prepare_depth(ice, z_res,
                                         zs_surf->u.tex.level,
                                         zs_surf->u.tex.first_layer,
                                         num_layers);
@@ -226,7 +226,7 @@ crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
             ice->state.stage_dirty |= CROCUS_ALL_STAGE_DIRTY_BINDINGS;
          }
 
-         crocus_resource_prepare_render(ice, batch, res, surf->view.base_level,
+         crocus_resource_prepare_render(ice, res, surf->view.base_level,
                                       surf->view.base_array_layer,
                                       surf->view.array_len,
                                       aux_usage);
@@ -706,9 +706,9 @@ miptree_layer_range_length(const struct crocus_resource *res, uint32_t level,
 }
 
 bool
-crocus_has_color_unresolved(const struct crocus_resource *res,
-                          unsigned start_level, unsigned num_levels,
-                          unsigned start_layer, unsigned num_layers)
+crocus_has_invalid_primary(const struct crocus_resource *res,
+                           unsigned start_level, unsigned num_levels,
+                           unsigned start_layer, unsigned num_layers)
 {
    if (!res->aux.bo)
       return false;
@@ -723,8 +723,7 @@ crocus_has_color_unresolved(const struct crocus_resource *res,
       for (unsigned a = 0; a < level_layers; a++) {
          enum isl_aux_state aux_state =
             crocus_resource_get_aux_state(res, level, start_layer + a);
-         assert(aux_state != ISL_AUX_STATE_AUX_INVALID);
-         if (aux_state != ISL_AUX_STATE_PASS_THROUGH)
+         if (!isl_aux_state_has_valid_primary(aux_state))
             return true;
       }
    }
@@ -732,370 +731,91 @@ crocus_has_color_unresolved(const struct crocus_resource *res,
    return false;
 }
 
-static enum isl_aux_op
-get_ccs_d_resolve_op(enum isl_aux_state aux_state,
-                     enum isl_aux_usage aux_usage,
-                     bool fast_clear_supported)
-{
-   assert(aux_usage == ISL_AUX_USAGE_NONE || aux_usage == ISL_AUX_USAGE_CCS_D);
-
-   const bool ccs_supported =
-      (aux_usage == ISL_AUX_USAGE_CCS_D) && fast_clear_supported;
-
-   switch (aux_state) {
-   case ISL_AUX_STATE_CLEAR:
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      if (!ccs_supported)
-         return ISL_AUX_OP_FULL_RESOLVE;
-      else
-         return ISL_AUX_OP_NONE;
-
-   case ISL_AUX_STATE_PASS_THROUGH:
-      return ISL_AUX_OP_NONE;
-
-   case ISL_AUX_STATE_RESOLVED:
-   case ISL_AUX_STATE_AUX_INVALID:
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      break;
-   }
-
-   unreachable("Invalid aux state for CCS_D");
-}
-
-static void
-crocus_resource_prepare_ccs_access(struct crocus_context *ice,
-                                 struct crocus_batch *batch,
-                                 struct crocus_resource *res,
-                                 uint32_t level, uint32_t layer,
-                                 enum isl_aux_usage aux_usage,
-                                 bool fast_clear_supported)
-{
-   enum isl_aux_state aux_state = crocus_resource_get_aux_state(res, level, layer);
-
-   enum isl_aux_op resolve_op;
-
-   assert(res->aux.usage == ISL_AUX_USAGE_CCS_D);
-   resolve_op = get_ccs_d_resolve_op(aux_state, aux_usage,
-                                     fast_clear_supported);
-
-   if (resolve_op != ISL_AUX_OP_NONE) {
-      crocus_resolve_color(ice, batch, res, level, layer, resolve_op);
-
-      switch (resolve_op) {
-      case ISL_AUX_OP_FULL_RESOLVE:
-         /* The CCS full resolve operation destroys the CCS and sets it to the
-          * pass-through state.  (You can also think of this as being both a
-          * resolve and an ambiguate in one operation.)
-          */
-         crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                     ISL_AUX_STATE_PASS_THROUGH);
-         break;
-
-      case ISL_AUX_OP_PARTIAL_RESOLVE:
-      default:
-         unreachable("Invalid resolve op");
-      }
-   }
-}
-
-static void
-crocus_resource_finish_ccs_write(struct crocus_context *ice,
-                               struct crocus_resource *res,
-                               uint32_t level, uint32_t layer,
-                               enum isl_aux_usage aux_usage)
-{
-   assert(aux_usage == ISL_AUX_USAGE_NONE ||
-          aux_usage == ISL_AUX_USAGE_CCS_D);
-
-   enum isl_aux_state aux_state =
-      crocus_resource_get_aux_state(res, level, layer);
-
-   assert(res->aux.usage == ISL_AUX_USAGE_CCS_D);
-   /* CCS_D is a bit simpler */
-   switch (aux_state) {
-   case ISL_AUX_STATE_CLEAR:
-      assert(aux_usage == ISL_AUX_USAGE_CCS_D);
-      crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                    ISL_AUX_STATE_PARTIAL_CLEAR);
-      break;
-
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      assert(aux_usage == ISL_AUX_USAGE_CCS_D);
-      break; /* Nothing to do */
-
-   case ISL_AUX_STATE_PASS_THROUGH:
-      /* Nothing to do */
-      break;
-
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-   case ISL_AUX_STATE_RESOLVED:
-   case ISL_AUX_STATE_AUX_INVALID:
-      unreachable("Invalid aux state for CCS_D");
-   }
-}
-
-static void
-crocus_resource_prepare_mcs_access(struct crocus_context *ice,
-                                 struct crocus_batch *batch,
-                                 struct crocus_resource *res,
-                                 uint32_t layer,
-                                 enum isl_aux_usage aux_usage,
-                                 bool fast_clear_supported)
-{
-   assert(isl_aux_usage_has_mcs(aux_usage));
-
-   switch (crocus_resource_get_aux_state(res, 0, layer)) {
-   case ISL_AUX_STATE_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      if (!fast_clear_supported) {
-         crocus_mcs_partial_resolve(ice, batch, res, layer, 1);
-         crocus_resource_set_aux_state(ice, res, 0, layer, 1,
-                                     ISL_AUX_STATE_COMPRESSED_NO_CLEAR);
-      }
-      break;
-
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      break; /* Nothing to do */
-
-   case ISL_AUX_STATE_RESOLVED:
-   case ISL_AUX_STATE_PASS_THROUGH:
-   case ISL_AUX_STATE_AUX_INVALID:
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      unreachable("Invalid aux state for MCS");
-   }
-}
-
-static void
-crocus_resource_finish_mcs_write(struct crocus_context *ice,
-                               struct crocus_resource *res,
-                               uint32_t layer,
-                               enum isl_aux_usage aux_usage)
-{
-   assert(isl_aux_usage_has_mcs(aux_usage));
-
-   switch (crocus_resource_get_aux_state(res, 0, layer)) {
-   case ISL_AUX_STATE_CLEAR:
-      crocus_resource_set_aux_state(ice, res, 0, layer, 1,
-                                  ISL_AUX_STATE_COMPRESSED_CLEAR);
-      break;
-
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      break; /* Nothing to do */
-
-   case ISL_AUX_STATE_RESOLVED:
-   case ISL_AUX_STATE_PASS_THROUGH:
-   case ISL_AUX_STATE_AUX_INVALID:
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      unreachable("Invalid aux state for MCS");
-   }
-}
-
-static void
-crocus_resource_prepare_hiz_access(struct crocus_context *ice,
-                                 struct crocus_batch *batch,
-                                 struct crocus_resource *res,
-                                 uint32_t level, uint32_t layer,
-                                 enum isl_aux_usage aux_usage,
-                                 bool fast_clear_supported)
-{
-   assert(aux_usage == ISL_AUX_USAGE_NONE ||
-          aux_usage == ISL_AUX_USAGE_HIZ);
-
-   enum isl_aux_op hiz_op = ISL_AUX_OP_NONE;
-   switch (crocus_resource_get_aux_state(res, level, layer)) {
-   case ISL_AUX_STATE_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      if (aux_usage == ISL_AUX_USAGE_NONE || !fast_clear_supported)
-         hiz_op = ISL_AUX_OP_FULL_RESOLVE;
-      break;
-
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-      if (aux_usage == ISL_AUX_USAGE_NONE)
-         hiz_op = ISL_AUX_OP_FULL_RESOLVE;
-      break;
-
-   case ISL_AUX_STATE_PASS_THROUGH:
-   case ISL_AUX_STATE_RESOLVED:
-      break;
-
-   case ISL_AUX_STATE_AUX_INVALID:
-      if (aux_usage != ISL_AUX_USAGE_NONE)
-         hiz_op = ISL_AUX_OP_AMBIGUATE;
-      break;
-
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      unreachable("Invalid HiZ state");
-   }
-
-   if (hiz_op != ISL_AUX_OP_NONE) {
-      crocus_hiz_exec(ice, batch, res, level, layer, 1, hiz_op, false);
-
-      switch (hiz_op) {
-      case ISL_AUX_OP_FULL_RESOLVE:
-         crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                     ISL_AUX_STATE_RESOLVED);
-         break;
-
-      case ISL_AUX_OP_AMBIGUATE:
-         /* The HiZ resolve operation is actually an ambiguate */
-         crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                     ISL_AUX_STATE_PASS_THROUGH);
-         break;
-
-      default:
-         unreachable("Invalid HiZ op");
-      }
-   }
-}
-
-static void
-crocus_resource_finish_hiz_write(struct crocus_context *ice,
-                               struct crocus_resource *res,
-                               uint32_t level, uint32_t layer,
-                               enum isl_aux_usage aux_usage)
-{
-   assert(aux_usage == ISL_AUX_USAGE_NONE ||
-          isl_aux_usage_has_hiz(aux_usage));
-
-   switch (crocus_resource_get_aux_state(res, level, layer)) {
-   case ISL_AUX_STATE_CLEAR:
-      assert(isl_aux_usage_has_hiz(aux_usage));
-      crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                  ISL_AUX_STATE_COMPRESSED_CLEAR);
-      break;
-
-   case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
-   case ISL_AUX_STATE_COMPRESSED_CLEAR:
-      assert(isl_aux_usage_has_hiz(aux_usage));
-      break; /* Nothing to do */
-
-   case ISL_AUX_STATE_RESOLVED:
-      if (isl_aux_usage_has_hiz(aux_usage)) {
-         crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                     ISL_AUX_STATE_COMPRESSED_NO_CLEAR);
-      } else {
-         crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                     ISL_AUX_STATE_AUX_INVALID);
-      }
-      break;
-
-   case ISL_AUX_STATE_PASS_THROUGH:
-      if (isl_aux_usage_has_hiz(aux_usage)) {
-         crocus_resource_set_aux_state(ice, res, level, layer, 1,
-                                     ISL_AUX_STATE_COMPRESSED_NO_CLEAR);
-      }
-      break;
-
-   case ISL_AUX_STATE_AUX_INVALID:
-      assert(!isl_aux_usage_has_hiz(aux_usage));
-      break;
-
-   case ISL_AUX_STATE_PARTIAL_CLEAR:
-      unreachable("Invalid HiZ state");
-   }
-}
-
 void
 crocus_resource_prepare_access(struct crocus_context *ice,
-                             struct crocus_batch *batch,
-                             struct crocus_resource *res,
-                             uint32_t start_level, uint32_t num_levels,
-                             uint32_t start_layer, uint32_t num_layers,
-                             enum isl_aux_usage aux_usage,
-                             bool fast_clear_supported)
+                               struct crocus_resource *res,
+                               uint32_t start_level, uint32_t num_levels,
+                               uint32_t start_layer, uint32_t num_layers,
+                               enum isl_aux_usage aux_usage,
+                               bool fast_clear_supported)
 {
-   num_levels = miptree_level_range_length(res, start_level, num_levels);
+  if (!res->aux.bo)
+      return;
 
-   switch (res->aux.usage) {
-   case ISL_AUX_USAGE_NONE:
-      /* Nothing to do */
-      break;
+   /* We can't do resolves on the compute engine, so awkwardly, we have to
+    * do them on the render batch...
+    */
+   struct crocus_batch *batch = &ice->batches[CROCUS_BATCH_RENDER];
 
-   case ISL_AUX_USAGE_MCS:
-      assert(start_level == 0 && num_levels == 1);
+   const uint32_t clamped_levels =
+      miptree_level_range_length(res, start_level, num_levels);
+   for (uint32_t l = 0; l < clamped_levels; l++) {
+      const uint32_t level = start_level + l;
       const uint32_t level_layers =
-         miptree_layer_range_length(res, 0, start_layer, num_layers);
+         miptree_layer_range_length(res, level, start_layer, num_layers);
       for (uint32_t a = 0; a < level_layers; a++) {
-         crocus_resource_prepare_mcs_access(ice, batch, res, start_layer + a,
-                                          aux_usage, fast_clear_supported);
-      }
-      break;
+         const uint32_t layer = start_layer + a;
+         const enum isl_aux_state aux_state =
+            crocus_resource_get_aux_state(res, level, layer);
+         const enum isl_aux_op aux_op =
+            isl_aux_prepare_access(aux_state, aux_usage, fast_clear_supported);
 
-   case ISL_AUX_USAGE_CCS_D:
-      for (uint32_t l = 0; l < num_levels; l++) {
-         const uint32_t level = start_level + l;
-         const uint32_t level_layers =
-            miptree_layer_range_length(res, level, start_layer, num_layers);
-         for (uint32_t a = 0; a < level_layers; a++) {
-            crocus_resource_prepare_ccs_access(ice, batch, res, level,
-                                             start_layer + a,
-                                             aux_usage, fast_clear_supported);
+         /* Prepare the aux buffer for a conditional or unconditional access.
+          * A conditional access is handled by assuming that the access will
+          * not evaluate to a no-op. If the access does in fact occur, the aux
+          * will be in the required state. If it does not, no data is lost
+          * because the aux_op performed is lossless.
+          */
+         if (aux_op == ISL_AUX_OP_NONE) {
+            /* Nothing to do here. */
+         } else if (isl_aux_usage_has_mcs(res->aux.usage)) {
+            assert(aux_op == ISL_AUX_OP_PARTIAL_RESOLVE);
+            crocus_mcs_partial_resolve(ice, batch, res, layer, 1);
+         } else if (isl_aux_usage_has_hiz(res->aux.usage)) {
+            crocus_hiz_exec(ice, batch, res, level, layer, 1, aux_op, false);
+         } else if (res->aux.usage == ISL_AUX_USAGE_STC_CCS) {
+            unreachable("crocus doesn't resolve STC_CCS resources");
+         } else {
+            assert(isl_aux_usage_has_ccs(res->aux.usage));
+            crocus_resolve_color(ice, batch, res, level, layer, aux_op);
          }
+
+         const enum isl_aux_state new_state =
+            isl_aux_state_transition_aux_op(aux_state, res->aux.usage, aux_op);
+         crocus_resource_set_aux_state(ice, res, level, layer, 1, new_state);
       }
-      break;
-
-   case ISL_AUX_USAGE_HIZ:
-      for (uint32_t l = 0; l < num_levels; l++) {
-         const uint32_t level = start_level + l;
-         if (!crocus_resource_level_has_hiz(res, level))
-            continue;
-
-         const uint32_t level_layers =
-            miptree_layer_range_length(res, level, start_layer, num_layers);
-         for (uint32_t a = 0; a < level_layers; a++) {
-            crocus_resource_prepare_hiz_access(ice, batch, res, level,
-                                             start_layer + a, aux_usage,
-                                             fast_clear_supported);
-         }
-      }
-      break;
-
-   default:
-      unreachable("Invalid aux usage");
    }
 }
 
 void
 crocus_resource_finish_write(struct crocus_context *ice,
-                           struct crocus_resource *res, uint32_t level,
-                           uint32_t start_layer, uint32_t num_layers,
-                           enum isl_aux_usage aux_usage)
+                             struct crocus_resource *res, uint32_t level,
+                             uint32_t start_layer, uint32_t num_layers,
+                             enum isl_aux_usage aux_usage)
 {
-   num_layers = miptree_layer_range_length(res, level, start_layer, num_layers);
+   if (!res->aux.bo)
+      return;
 
-   switch (res->aux.usage) {
-   case ISL_AUX_USAGE_NONE:
-      break;
+   const uint32_t level_layers =
+      miptree_layer_range_length(res, level, start_layer, num_layers);
 
-   case ISL_AUX_USAGE_MCS:
-      for (uint32_t a = 0; a < num_layers; a++) {
-         crocus_resource_finish_mcs_write(ice, res, start_layer + a,
-                                        aux_usage);
-      }
-      break;
+   for (uint32_t a = 0; a < level_layers; a++) {
+      const uint32_t layer = start_layer + a;
+      const enum isl_aux_state aux_state =
+         crocus_resource_get_aux_state(res, level, layer);
 
-   case ISL_AUX_USAGE_CCS_D:
-      for (uint32_t a = 0; a < num_layers; a++) {
-         crocus_resource_finish_ccs_write(ice, res, level, start_layer + a,
-                                        aux_usage);
-      }
-      break;
+      /* Transition the aux state for a conditional or unconditional write. A
+       * conditional write is handled by assuming that the write applies to
+       * only part of the render target. This prevents the new state from
+       * losing the types of compression that might exist in the current state
+       * (e.g. CLEAR). If the write evaluates to a no-op, the state will still
+       * be able to communicate when resolves are necessary (but it may
+       * falsely communicate this as well).
+       */
+      const enum isl_aux_state new_aux_state =
+         isl_aux_state_transition_write(aux_state, aux_usage, false);
 
-   case ISL_AUX_USAGE_HIZ:
-      if (!crocus_resource_level_has_hiz(res, level))
-         return;
-
-      for (uint32_t a = 0; a < num_layers; a++) {
-         crocus_resource_finish_hiz_write(ice, res, level, start_layer + a,
-                                        aux_usage);
-      }
-      break;
-
-   default:
-      unreachable("Invavlid aux usage");
+      crocus_resource_set_aux_state(ice, res, level, layer, 1, new_aux_state);
    }
 }
 
@@ -1171,11 +891,10 @@ isl_formats_are_fast_clear_compatible(enum isl_format a, enum isl_format b)
 
 void
 crocus_resource_prepare_texture(struct crocus_context *ice,
-                              struct crocus_batch *batch,
-                              struct crocus_resource *res,
-                              enum isl_format view_format,
-                              uint32_t start_level, uint32_t num_levels,
-                              uint32_t start_layer, uint32_t num_layers)
+                                struct crocus_resource *res,
+                                enum isl_format view_format,
+                                uint32_t start_level, uint32_t num_levels,
+                                uint32_t start_layer, uint32_t num_layers)
 {
    enum isl_aux_usage aux_usage =
       crocus_resource_texture_aux_usage(ice, res, view_format);
@@ -1189,17 +908,17 @@ crocus_resource_prepare_texture(struct crocus_context *ice,
    if (!isl_formats_are_fast_clear_compatible(res->surf.format, view_format))
       clear_supported = false;
 
-   crocus_resource_prepare_access(ice, batch, res, start_level, num_levels,
-                                start_layer, num_layers,
-                                aux_usage, clear_supported);
+   crocus_resource_prepare_access(ice, res, start_level, num_levels,
+				  start_layer, num_layers,
+				  aux_usage, clear_supported);
 }
 
 enum isl_aux_usage
 crocus_resource_render_aux_usage(struct crocus_context *ice,
-                               struct crocus_resource *res,
-                               enum isl_format render_format,
-                               bool blend_enabled,
-                               bool draw_aux_disabled)
+				 struct crocus_resource *res,
+				 enum isl_format render_format,
+				 bool blend_enabled,
+				 bool draw_aux_disabled)
 {
    struct crocus_screen *screen = (void *) ice->ctx.screen;
    struct gen_device_info *devinfo = &screen->devinfo;
@@ -1225,21 +944,20 @@ crocus_resource_render_aux_usage(struct crocus_context *ice,
 
 void
 crocus_resource_prepare_render(struct crocus_context *ice,
-                             struct crocus_batch *batch,
-                             struct crocus_resource *res, uint32_t level,
-                             uint32_t start_layer, uint32_t layer_count,
-                             enum isl_aux_usage aux_usage)
+			       struct crocus_resource *res, uint32_t level,
+			       uint32_t start_layer, uint32_t layer_count,
+			       enum isl_aux_usage aux_usage)
 {
-   crocus_resource_prepare_access(ice, batch, res, level, 1, start_layer,
+   crocus_resource_prepare_access(ice, res, level, 1, start_layer,
                                 layer_count, aux_usage,
                                 aux_usage != ISL_AUX_USAGE_NONE);
 }
 
 void
 crocus_resource_finish_render(struct crocus_context *ice,
-                            struct crocus_resource *res, uint32_t level,
-                            uint32_t start_layer, uint32_t layer_count,
-                            enum isl_aux_usage aux_usage)
+			      struct crocus_resource *res, uint32_t level,
+			      uint32_t start_layer, uint32_t layer_count,
+			      enum isl_aux_usage aux_usage)
 {
    crocus_resource_finish_write(ice, res, level, start_layer, layer_count,
                               aux_usage);
@@ -1247,19 +965,18 @@ crocus_resource_finish_render(struct crocus_context *ice,
 
 void
 crocus_resource_prepare_depth(struct crocus_context *ice,
-                            struct crocus_batch *batch,
-                            struct crocus_resource *res, uint32_t level,
-                            uint32_t start_layer, uint32_t layer_count)
+                              struct crocus_resource *res, uint32_t level,
+                              uint32_t start_layer, uint32_t layer_count)
 {
-   crocus_resource_prepare_access(ice, batch, res, level, 1, start_layer,
-                                layer_count, res->aux.usage, !!res->aux.bo);
+   crocus_resource_prepare_access(ice, res, level, 1, start_layer,
+                                  layer_count, res->aux.usage, !!res->aux.bo);
 }
 
 void
 crocus_resource_finish_depth(struct crocus_context *ice,
-                           struct crocus_resource *res, uint32_t level,
-                           uint32_t start_layer, uint32_t layer_count,
-                           bool depth_written)
+                             struct crocus_resource *res, uint32_t level,
+                             uint32_t start_layer, uint32_t layer_count,
+                             bool depth_written)
 {
    if (depth_written) {
       crocus_resource_finish_write(ice, res, level, start_layer, layer_count,

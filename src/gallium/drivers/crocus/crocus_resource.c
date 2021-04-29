@@ -956,15 +956,14 @@ static void
 crocus_flush_resource(struct pipe_context *ctx, struct pipe_resource *resource)
 {
    struct crocus_context *ice = (struct crocus_context *)ctx;
-   struct crocus_batch *render_batch = &ice->batches[CROCUS_BATCH_RENDER];
    struct crocus_resource *res = (void *) resource;
    const struct isl_drm_modifier_info *mod = res->mod_info;
 
-   crocus_resource_prepare_access(ice, render_batch, res,
-                                0, INTEL_REMAINING_LEVELS,
-                                0, INTEL_REMAINING_LAYERS,
-                                mod ? mod->aux_usage : ISL_AUX_USAGE_NONE,
-                                mod ? mod->supports_clear_color : false);
+   crocus_resource_prepare_access(ice, res,
+                                  0, INTEL_REMAINING_LEVELS,
+                                  0, INTEL_REMAINING_LAYERS,
+                                  mod ? mod->aux_usage : ISL_AUX_USAGE_NONE,
+                                  mod ? mod->supports_clear_color : false);
 }
 
 static void
@@ -1688,23 +1687,12 @@ crocus_transfer_map(struct pipe_context *ctx,
       usage |= PIPE_MAP_UNSYNCHRONIZED;
    }
 
-   bool need_resolve = false;
-   bool need_color_resolve = false;
-
-   if (resource->target != PIPE_BUFFER) {
-      bool need_hiz_resolve = crocus_resource_level_has_hiz(res, level);
-
-      need_color_resolve =
-         (res->aux.usage == ISL_AUX_USAGE_CCS_D) &&
-         crocus_has_color_unresolved(res, level, 1, box->z, box->depth);
-
-      need_resolve = need_color_resolve || need_hiz_resolve;
-   }
-
    bool map_would_stall = false;
 
    if (!(usage & PIPE_MAP_UNSYNCHRONIZED)) {
-      map_would_stall = need_resolve || resource_is_busy(ice, res);
+      map_would_stall = resource_is_busy(ice, res) ||
+         crocus_has_invalid_primary(res, level, 1, box->z, box->depth);
+
 
       if (map_would_stall && (usage & PIPE_MAP_DONTBLOCK) &&
                              (usage & PIPE_MAP_DIRECTLY))
@@ -1757,7 +1745,8 @@ crocus_transfer_map(struct pipe_context *ctx,
     * temporary and map that, to avoid the resolve.  (It might be better to
     * a tiled temporary and use the tiled_memcpy paths...)
     */
-   if (!(usage & PIPE_MAP_DISCARD_RANGE) && !need_color_resolve)
+   if (!(usage & PIPE_MAP_DISCARD_RANGE) &&
+       !crocus_has_invalid_primary(res, level, 1, box->z, box->depth))
       no_gpu = true;
 
    const struct isl_format_layout *fmtl = isl_format_get_layout(surf->format);
@@ -1774,10 +1763,10 @@ crocus_transfer_map(struct pipe_context *ctx,
    } else {
       /* Otherwise we're free to map on the CPU. */
 
-      if (need_resolve) {
-         crocus_resource_access_raw(ice, &ice->batches[CROCUS_BATCH_RENDER], res,
-                                  level, box->z, box->depth,
-                                  usage & PIPE_MAP_WRITE);
+      if (resource->target != PIPE_BUFFER) {
+         crocus_resource_access_raw(ice, res,
+                                    level, box->z, box->depth,
+                                    usage & PIPE_MAP_WRITE);
       }
 
       if (!(usage & PIPE_MAP_UNSYNCHRONIZED)) {

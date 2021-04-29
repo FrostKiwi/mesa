@@ -254,7 +254,7 @@ fast_clear_color(struct crocus_context *ice,
              * Fortunately, few applications ever change their clear color at
              * different levels/layers, so this shouldn't happen often.
              */
-            crocus_resource_prepare_access(ice, batch, res,
+            crocus_resource_prepare_access(ice, res,
                                          res_lvl, 1, layer, 1,
                                          res->aux.usage,
                                          false);
@@ -372,7 +372,7 @@ clear_color(struct crocus_context *ice,
       crocus_resource_render_aux_usage(ice, res, format,
                                      false, false);
 
-   crocus_resource_prepare_render(ice, batch, res, level,
+   crocus_resource_prepare_render(ice, res, level,
                                 box->z, box->depth, aux_usage);
 
    struct blorp_surf surf;
@@ -567,7 +567,7 @@ clear_depth_stencil(struct crocus_context *ice,
    }
 
    if (clear_depth && z_res) {
-      crocus_resource_prepare_depth(ice, batch, z_res, level, box->z, box->depth);
+      crocus_resource_prepare_depth(ice, z_res, level, box->z, box->depth);
       crocus_blorp_surf_for_resource(&ice->vtbl, &batch->screen->isl_dev,
                                    &z_surf, &z_res->base, z_res->aux.usage,
                                    level, true);
@@ -578,7 +578,7 @@ clear_depth_stencil(struct crocus_context *ice,
 
    uint8_t stencil_mask = clear_stencil && stencil_res ? 0xff : 0;
    if (stencil_mask) {
-      crocus_resource_prepare_access(ice, batch, stencil_res, level, 1, box->z,
+      crocus_resource_prepare_access(ice, stencil_res, level, 1, box->z,
                                    box->depth, stencil_res->aux.usage, false);
       crocus_blorp_surf_for_resource(&ice->vtbl, &batch->screen->isl_dev,
                                    &stencil_surf, &stencil_res->base,
