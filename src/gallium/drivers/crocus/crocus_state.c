@@ -5240,6 +5240,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    }
 #endif
 
+   bool sampler_updates = false;
    for (int stage = 0; stage <= MESA_SHADER_FRAGMENT; stage++) {
       if (!(stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << stage)) ||
           !ice->shaders.prog[stage])
@@ -5247,12 +5248,39 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 
       crocus_upload_sampler_states(ice, batch, stage);
 
+      sampler_updates = true;
+
 #if GEN_GEN >= 7
       struct crocus_shader_state *shs = &ice->state.shaders[stage];
 
       crocus_emit_cmd(batch, GENX(3DSTATE_SAMPLER_STATE_POINTERS_VS), ptr) {
          ptr._3DCommandSubOpcode = 43 + stage;
          ptr.PointertoVSSamplerState = shs->sampler_offset;
+      }
+#endif
+   }
+
+   if (sampler_updates) {
+#if GEN_GEN == 6
+      struct crocus_shader_state *shs_vs = &ice->state.shaders[MESA_SHADER_VERTEX];
+      struct crocus_shader_state *shs_gs = &ice->state.shaders[MESA_SHADER_GEOMETRY];
+      struct crocus_shader_state *shs_fs = &ice->state.shaders[MESA_SHADER_FRAGMENT];
+      crocus_emit_cmd(batch, GENX(3DSTATE_SAMPLER_STATE_POINTERS), ptr) {
+         if (ice->shaders.prog[MESA_SHADER_VERTEX] &&
+             stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << MESA_SHADER_VERTEX)) {
+            ptr.VSSamplerStateChange = true;
+            ptr.PointertoVSSamplerState = shs_vs->sampler_offset;
+         }
+         if (ice->shaders.prog[MESA_SHADER_GEOMETRY] &&
+             stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << MESA_SHADER_GEOMETRY)) {
+            ptr.GSSamplerStateChange = true;
+            ptr.PointertoGSSamplerState = shs_gs->sampler_offset;
+         }
+         if (ice->shaders.prog[MESA_SHADER_FRAGMENT] &&
+             stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << MESA_SHADER_FRAGMENT)) {
+            ptr.PSSamplerStateChange = true;
+            ptr.PointertoPSSamplerState = shs_fs->sampler_offset;
+         }
       }
 #endif
    }
