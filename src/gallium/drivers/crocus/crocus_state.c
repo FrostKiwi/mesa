@@ -4552,7 +4552,7 @@ crocus_update_surface_base_address(struct crocus_batch *batch)
 #if GEN_GEN <= 5
    batch->ice->state.dirty |= CROCUS_DIRTY_GEN5_PIPELINED_POINTERS | CROCUS_DIRTY_GEN5_BINDING_TABLE_POINTERS;
 #elif GEN_GEN == 6
-   batch->ice->state.dirty |= CROCUS_DIRTY_GEN5_BINDING_TABLE_POINTERS;
+   batch->ice->state.dirty |= CROCUS_DIRTY_GEN5_BINDING_TABLE_POINTERS | CROCUS_DIRTY_GEN6_SAMPLER_STATE_POINTERS;
 #else
    //TODO
 #endif
@@ -5240,7 +5240,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    }
 #endif
 
-   bool sampler_updates = false;
+   bool sampler_updates = dirty & CROCUS_DIRTY_GEN6_SAMPLER_STATE_POINTERS;
    for (int stage = 0; stage <= MESA_SHADER_FRAGMENT; stage++) {
       if (!(stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << stage)) ||
           !ice->shaders.prog[stage])
@@ -5267,17 +5267,20 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
       struct crocus_shader_state *shs_fs = &ice->state.shaders[MESA_SHADER_FRAGMENT];
       crocus_emit_cmd(batch, GENX(3DSTATE_SAMPLER_STATE_POINTERS), ptr) {
          if (ice->shaders.prog[MESA_SHADER_VERTEX] &&
-             stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << MESA_SHADER_VERTEX)) {
+             (dirty & CROCUS_DIRTY_GEN6_SAMPLER_STATE_POINTERS ||
+              stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << MESA_SHADER_VERTEX))) {
             ptr.VSSamplerStateChange = true;
             ptr.PointertoVSSamplerState = shs_vs->sampler_offset;
          }
          if (ice->shaders.prog[MESA_SHADER_GEOMETRY] &&
-             stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << MESA_SHADER_GEOMETRY)) {
+             (dirty & CROCUS_DIRTY_GEN6_SAMPLER_STATE_POINTERS ||
+              stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << MESA_SHADER_GEOMETRY))) {
             ptr.GSSamplerStateChange = true;
             ptr.PointertoGSSamplerState = shs_gs->sampler_offset;
          }
          if (ice->shaders.prog[MESA_SHADER_FRAGMENT] &&
-             stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << MESA_SHADER_FRAGMENT)) {
+             (dirty & CROCUS_DIRTY_GEN6_SAMPLER_STATE_POINTERS ||
+              stage_dirty & (CROCUS_STAGE_DIRTY_SAMPLER_STATES_VS << MESA_SHADER_FRAGMENT))) {
             ptr.PSSamplerStateChange = true;
             ptr.PointertoPSSamplerState = shs_fs->sampler_offset;
          }
