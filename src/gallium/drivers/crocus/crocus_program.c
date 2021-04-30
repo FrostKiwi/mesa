@@ -625,6 +625,7 @@ static const char *surface_group_names[] = {
    [CROCUS_SURFACE_GROUP_SOL]                = "streamout",
    [CROCUS_SURFACE_GROUP_CS_WORK_GROUPS]     = "CS work groups",
    [CROCUS_SURFACE_GROUP_TEXTURE]            = "texture",
+   [CROCUS_SURFACE_GROUP_TEXTURE_GATHER]     = "texture gather",
    [CROCUS_SURFACE_GROUP_UBO]                = "ubo",
    [CROCUS_SURFACE_GROUP_SSBO]               = "ssbo",
    [CROCUS_SURFACE_GROUP_IMAGE]              = "image",
