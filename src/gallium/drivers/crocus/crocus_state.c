@@ -1931,6 +1931,7 @@ crocus_upload_sampler_state(struct crocus_batch *batch,
                             struct crocus_sampler_state *cso,
                             uint32_t border_color_offset,
                             enum samp_workaround samp_workaround,
+                            uint32_t first_level,
                             void *map)
 {
    struct pipe_sampler_state *state = &cso->pstate;
@@ -2008,6 +2009,11 @@ crocus_upload_sampler_state(struct crocus_batch *batch,
       samp.MinLOD = CLAMP(cso->min_lod, 0, hw_max_lod);
       samp.MaxLOD = CLAMP(state->max_lod, 0, hw_max_lod);
       samp.TextureLODBias = CLAMP(state->lod_bias, -16, 15);
+
+#if GEN_GEN == 6
+      samp.BaseMipLevel = CLAMP(first_level, 0, hw_max_lod);
+      samp.MinandMagStateNotEqual = samp.MinModeFilter != samp.MagModeFilter;
+#endif
 
 #if GEN_GEN < 6
       samp.BorderColorPointer =
@@ -2184,7 +2190,11 @@ crocus_upload_sampler_states(struct crocus_context *ice,
                wa = SAMP_CUBE_CLAMP;
          }
 
-         crocus_upload_sampler_state(batch, state, border_color_offset, wa, map);
+         uint32_t first_level = 0;
+         if (tex->base.target != PIPE_BUFFER)
+            first_level = tex->base.u.tex.first_level;
+
+         crocus_upload_sampler_state(batch, state, border_color_offset, wa, first_level, map);
       }
 
       map += GENX(SAMPLER_STATE_length);
