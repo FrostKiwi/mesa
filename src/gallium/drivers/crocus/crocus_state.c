@@ -1870,12 +1870,6 @@ crocus_create_sampler_state(struct pipe_context *ctx,
                              wrap_mode_needs_border_color(cso->wrap_t) ||
                              wrap_mode_needs_border_color(cso->wrap_r);
 
-   if (state->seamless_cube_map) {
-      // TODO haswell workaround
-      cso->wrap_s = TCM_CUBE;
-      cso->wrap_t = TCM_CUBE;
-      cso->wrap_r = TCM_CUBE;
-   }
    cso->min_lod = state->min_lod;
    cso->mag_img_filter = state->mag_img_filter;
 
