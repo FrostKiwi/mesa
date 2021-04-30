@@ -1160,9 +1160,10 @@ crocus_compile_vs(struct crocus_context *ice,
 
    struct crocus_compiled_shader *shader =
       crocus_upload_shader(ice, CROCUS_CACHE_VS, sizeof(*key), key, program,
-			   prog_data->program_size,
-			   prog_data, sizeof(*vs_prog_data), so_decls, system_values, num_system_values,
-                         num_cbufs, &bt);
+                           prog_data->program_size,
+                           prog_data, sizeof(*vs_prog_data), so_decls,
+                           system_values, num_system_values,
+                           num_cbufs, &bt);
 
    crocus_disk_cache_store(screen->disk_cache, ish, shader,
                            ice->shaders.cache_bo_map,
@@ -1374,9 +1375,10 @@ crocus_compile_tcs(struct crocus_context *ice,
 
    struct crocus_compiled_shader *shader =
       crocus_upload_shader(ice, CROCUS_CACHE_TCS, sizeof(*key), key, program,
-			   prog_data->program_size,
-			   prog_data, sizeof(*tcs_prog_data), NULL, system_values, num_system_values,
-                         num_cbufs, &bt);
+                           prog_data->program_size,
+                           prog_data, sizeof(*tcs_prog_data), NULL,
+                           system_values, num_system_values,
+                           num_cbufs, &bt);
 
    if (ish)
       crocus_disk_cache_store(screen->disk_cache, ish, shader,
@@ -1506,9 +1508,10 @@ crocus_compile_tes(struct crocus_context *ice,
 
    struct crocus_compiled_shader *shader =
       crocus_upload_shader(ice, CROCUS_CACHE_TES, sizeof(*key), key, program,
-			   prog_data->program_size,
-			   prog_data, sizeof(*tes_prog_data), so_decls, system_values, num_system_values,
-                         num_cbufs, &bt);
+                           prog_data->program_size,
+                           prog_data, sizeof(*tes_prog_data), so_decls,
+                           system_values, num_system_values,
+                           num_cbufs, &bt);
 
    crocus_disk_cache_store(screen->disk_cache, ish, shader,
                            ice->shaders.cache_bo_map,
@@ -1632,9 +1635,10 @@ crocus_compile_gs(struct crocus_context *ice,
 
    struct crocus_compiled_shader *shader =
       crocus_upload_shader(ice, CROCUS_CACHE_GS, sizeof(*key), key, program,
-			   prog_data->program_size,
-			   prog_data, sizeof(*gs_prog_data), so_decls, system_values, num_system_values,
-                         num_cbufs, &bt);
+                           prog_data->program_size,
+                           prog_data, sizeof(*gs_prog_data), so_decls,
+                           system_values, num_system_values,
+                           num_cbufs, &bt);
 
    crocus_disk_cache_store(screen->disk_cache, ish, shader,
                            ice->shaders.cache_bo_map,
@@ -1751,9 +1755,10 @@ crocus_compile_fs(struct crocus_context *ice,
 
    struct crocus_compiled_shader *shader =
       crocus_upload_shader(ice, CROCUS_CACHE_FS, sizeof(*key), key, program,
-			   prog_data->program_size,
-			   prog_data, sizeof(*fs_prog_data), NULL, system_values, num_system_values,
-                         num_cbufs, &bt);
+                           prog_data->program_size,
+                           prog_data, sizeof(*fs_prog_data), NULL,
+                           system_values, num_system_values,
+                           num_cbufs, &bt);
 
    crocus_disk_cache_store(screen->disk_cache, ish, shader,
                            ice->shaders.cache_bo_map,
@@ -1828,7 +1833,7 @@ update_last_vue_map(struct crocus_context *ice,
                     struct brw_stage_prog_data *prog_data)
 {
    struct crocus_screen *screen = (struct crocus_screen *)ice->ctx.screen;
-   const struct gen_device_info *devinfo = &screen->devinfo; 
+   const struct gen_device_info *devinfo = &screen->devinfo;
    struct brw_vue_prog_data *vue_prog_data = (void *) prog_data;
    struct brw_vue_map *vue_map = &vue_prog_data->vue_map;
    struct brw_vue_map *old_map = ice->shaders.last_vue_map;
@@ -1905,7 +1910,7 @@ static struct crocus_compiled_shader *
 crocus_compile_clip(struct crocus_context *ice, struct brw_clip_prog_key *key)
 {
    struct crocus_screen *screen = (struct crocus_screen *)ice->ctx.screen;
-   const struct brw_compiler *compiler = screen->compiler;   
+   const struct brw_compiler *compiler = screen->compiler;
    void *mem_ctx;
    unsigned program_size;
    mem_ctx = ralloc_context(NULL);
@@ -1926,15 +1931,16 @@ crocus_compile_clip(struct crocus_context *ice, struct brw_clip_prog_key *key)
 
    struct crocus_compiled_shader *shader =
       crocus_upload_shader(ice, CROCUS_CACHE_CLIP, sizeof(*key), key, program,
-			   program_size,
-			   (struct brw_stage_prog_data *)clip_prog_data, sizeof(*clip_prog_data), NULL, NULL, 0, 0, &bt);
+                           program_size,
+                           (struct brw_stage_prog_data *)clip_prog_data, sizeof(*clip_prog_data),
+                           NULL, NULL, 0, 0, &bt);
    ralloc_free(mem_ctx);
    return shader;
 }
 static void
 crocus_update_compiled_clip(struct crocus_context *ice)
 {
-   struct crocus_screen *screen = (struct crocus_screen *)ice->ctx.screen;   
+   struct crocus_screen *screen = (struct crocus_screen *)ice->ctx.screen;
    struct brw_clip_prog_key key;
    struct crocus_compiled_shader *old = ice->shaders.clip_prog;
    memset(&key, 0, sizeof(key));
@@ -2058,7 +2064,7 @@ static struct crocus_compiled_shader *
 crocus_compile_sf(struct crocus_context *ice, struct brw_sf_prog_key *key)
 {
    struct crocus_screen *screen = (struct crocus_screen *)ice->ctx.screen;
-   const struct brw_compiler *compiler = screen->compiler;   
+   const struct brw_compiler *compiler = screen->compiler;
    void *mem_ctx;
    unsigned program_size;
    mem_ctx = ralloc_context(NULL);
@@ -2079,8 +2085,9 @@ crocus_compile_sf(struct crocus_context *ice, struct brw_sf_prog_key *key)
    memset(&bt, 0, sizeof(bt));
    struct crocus_compiled_shader *shader =
       crocus_upload_shader(ice, CROCUS_CACHE_SF, sizeof(*key), key, program,
-			   program_size,
-			   (struct brw_stage_prog_data *)sf_prog_data, sizeof(*sf_prog_data), NULL, NULL, 0, 0, &bt);
+                           program_size,
+                           (struct brw_stage_prog_data *)sf_prog_data, sizeof(*sf_prog_data),
+                           NULL, NULL, 0, 0, &bt);
    ralloc_free(mem_ctx);
    return shader;
 }
@@ -2172,7 +2179,8 @@ crocus_compile_ff_gs(struct crocus_context *ice, struct brw_ff_gs_prog_key *key)
    struct crocus_compiled_shader *shader =
       crocus_upload_shader(ice, CROCUS_CACHE_FF_GS, sizeof(*key), key, program,
                            program_size,
-                           (struct brw_stage_prog_data *)ff_gs_prog_data, sizeof(*ff_gs_prog_data), NULL, NULL, 0, 0, &bt);
+                           (struct brw_stage_prog_data *)ff_gs_prog_data, sizeof(*ff_gs_prog_data),
+                           NULL, NULL, 0, 0, &bt);
    ralloc_free(mem_ctx);
    return shader;
 }
@@ -2388,9 +2396,10 @@ crocus_compile_cs(struct crocus_context *ice,
 
    struct crocus_compiled_shader *shader =
       crocus_upload_shader(ice, CROCUS_CACHE_CS, sizeof(*key), key, program,
-			   prog_data->program_size,
-			   prog_data, sizeof(*cs_prog_data), NULL, system_values, num_system_values,
-                         num_cbufs, &bt);
+                           prog_data->program_size,
+                           prog_data, sizeof(*cs_prog_data), NULL,
+                           system_values, num_system_values,
+                           num_cbufs, &bt);
 
    crocus_disk_cache_store(screen->disk_cache, ish, shader,
                            ice->shaders.cache_bo_map,
@@ -2697,7 +2706,7 @@ crocus_create_fs_state(struct pipe_context *ctx,
 
    /* The program key needs the VUE map if there are > 16 inputs or gen4/5 */
    if (screen->devinfo.gen < 6 || util_bitcount64(ish->nir->info.inputs_read &
-						   BRW_FS_VARYING_INPUT_MASK) > 16) {
+                                                   BRW_FS_VARYING_INPUT_MASK) > 16) {
       ish->nos |= (1ull << CROCUS_NOS_LAST_VUE_MAP);
    }
 
@@ -2708,7 +2717,7 @@ crocus_create_fs_state(struct pipe_context *ctx,
            BITFIELD64_BIT(FRAG_RESULT_SAMPLE_MASK));
 
       bool can_rearrange_varyings =
-	screen->devinfo.gen > 6 && util_bitcount64(info->inputs_read & BRW_FS_VARYING_INPUT_MASK) <= 16;
+        screen->devinfo.gen > 6 && util_bitcount64(info->inputs_read & BRW_FS_VARYING_INPUT_MASK) <= 16;
 
       const struct gen_device_info *devinfo = &screen->devinfo;
       struct brw_wm_prog_key key = {
@@ -2721,9 +2730,9 @@ crocus_create_fs_state(struct pipe_context *ctx,
 
       struct brw_vue_map vue_map;
       if (devinfo->gen < 6) {
-	brw_compute_vue_map(devinfo, &vue_map,
-			    info->inputs_read | VARYING_BIT_POS,
-			    false, /* pos slots */ 1);
+        brw_compute_vue_map(devinfo, &vue_map,
+                            info->inputs_read | VARYING_BIT_POS,
+                            false, /* pos slots */ 1);
       }
       if (!crocus_disk_cache_retrieve(ice, ish, &key, sizeof(key)))
          crocus_compile_fs(ice, ish, &key, &vue_map);

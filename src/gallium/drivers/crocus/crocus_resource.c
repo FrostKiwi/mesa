@@ -223,9 +223,9 @@ crocus_resource_set_separate_stencil(struct pipe_resource *p_res,
 
 void
 crocus_get_depth_stencil_resources(const struct gen_device_info *devinfo,
-				   struct pipe_resource *res,
-				   struct crocus_resource **out_z,
-				   struct crocus_resource **out_s)
+                                   struct pipe_resource *res,
+                                   struct crocus_resource **out_z,
+                                   struct crocus_resource **out_s)
 {
    if (!res) {
       *out_z = NULL;
@@ -829,7 +829,7 @@ crocus_resource_from_user_memory(struct pipe_screen *pscreen,
 
    res->internal_format = templ->format;
    res->bo = crocus_bo_create_userptr(bufmgr, "user",
-				      user_memory, templ->width0);
+                                      user_memory, templ->width0);
    if (!res->bo) {
       free(res);
       return NULL;
@@ -851,7 +851,7 @@ crocus_resource_from_handle(struct pipe_screen *pscreen,
    struct crocus_bufmgr *bufmgr = screen->bufmgr;
    struct crocus_resource *res = crocus_alloc_resource(pscreen, templ);
    const struct isl_drm_modifier_info *mod_inf =
-	   isl_drm_modifier_get_info(whandle->modifier);
+           isl_drm_modifier_get_info(whandle->modifier);
    uint32_t tiling;
 
    if (!res)
@@ -1344,8 +1344,8 @@ crocus_resource_get_aligned_offset(const struct crocus_resource *res,
 
 void
 crocus_resource_get_image_offset(struct crocus_resource *res,
-				 uint32_t level, uint32_t z,
-				 uint32_t *x, uint32_t *y)
+                                 uint32_t level, uint32_t z,
+                                 uint32_t *x, uint32_t *y)
 {
    get_image_offset_el(&res->surf, level, z, x, y);
 }

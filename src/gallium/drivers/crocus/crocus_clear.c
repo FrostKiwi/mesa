@@ -535,7 +535,7 @@ fast_clear_depth(struct crocus_context *ice,
          if (aux_state == ISL_AUX_STATE_CLEAR) {
             perf_debug(&ice->dbg, "Performing HiZ clear just to update the "
                                   "depth clear value\n");
-         }	
+         }
          crocus_hiz_exec(ice, batch, res, level,
                        box->z + l, 1, ISL_AUX_OP_FAST_CLEAR,
                        update_clear_depth);
@@ -598,7 +598,7 @@ clear_depth_stencil(struct crocus_context *ice,
    if (clear_depth && z_res) {
       const enum isl_aux_usage aux_usage =
          crocus_resource_render_aux_usage(ice, z_res, level, z_res->surf.format,
-                                          false);     
+                                          false);
       crocus_resource_prepare_render(ice, z_res, level, box->z, box->depth,
                                      aux_usage);
       crocus_blorp_surf_for_resource(&ice->vtbl, &batch->screen->isl_dev,
@@ -632,7 +632,7 @@ clear_depth_stencil(struct crocus_context *ice,
 
    if (clear_depth && z_res) {
       crocus_resource_finish_render(ice, z_res, level,
-				    box->z, box->depth, z_surf.aux_usage);
+                                    box->z, box->depth, z_surf.aux_usage);
    }
 
    if (stencil_mask) {
@@ -663,8 +663,8 @@ crocus_clear(struct pipe_context *ctx,
    if (devinfo->gen < 6) {
      crocus_blitter_begin(ice, CROCUS_SAVE_FRAGMENT_STATE);
      util_blitter_clear(ice->blitter, cso_fb->width, cso_fb->height,
-			util_framebuffer_get_num_layers(cso_fb),
-			buffers, p_color, depth, stencil, false);
+                        util_framebuffer_get_num_layers(cso_fb),
+                        buffers, p_color, depth, stencil, false);
      return;
    }
 

@@ -485,8 +485,8 @@ crocus_resolve_color(struct crocus_context *ice,
    struct blorp_batch blorp_batch;
    blorp_batch_init(&ice->blorp, &blorp_batch, batch, 0);
    blorp_ccs_resolve(&blorp_batch, &surf, level, layer, 1,
-		     isl_format_srgb_to_linear(res->surf.format),
-		     resolve_op);
+                     isl_format_srgb_to_linear(res->surf.format),
+                     resolve_op);
    blorp_batch_finish(&blorp_batch);
 
    /* See comment above */
@@ -909,16 +909,16 @@ crocus_resource_prepare_texture(struct crocus_context *ice,
       clear_supported = false;
 
    crocus_resource_prepare_access(ice, res, start_level, num_levels,
-				  start_layer, num_layers,
-				  aux_usage, clear_supported);
+                                  start_layer, num_layers,
+                                  aux_usage, clear_supported);
 }
 
 enum isl_aux_usage
 crocus_resource_render_aux_usage(struct crocus_context *ice,
-				 struct crocus_resource *res,
-				 enum isl_format render_format,
-				 bool blend_enabled,
-				 bool draw_aux_disabled)
+                                 struct crocus_resource *res,
+                                 enum isl_format render_format,
+                                 bool blend_enabled,
+                                 bool draw_aux_disabled)
 {
    struct crocus_screen *screen = (void *) ice->ctx.screen;
    struct gen_device_info *devinfo = &screen->devinfo;
@@ -944,9 +944,9 @@ crocus_resource_render_aux_usage(struct crocus_context *ice,
 
 void
 crocus_resource_prepare_render(struct crocus_context *ice,
-			       struct crocus_resource *res, uint32_t level,
-			       uint32_t start_layer, uint32_t layer_count,
-			       enum isl_aux_usage aux_usage)
+                               struct crocus_resource *res, uint32_t level,
+                               uint32_t start_layer, uint32_t layer_count,
+                               enum isl_aux_usage aux_usage)
 {
    crocus_resource_prepare_access(ice, res, level, 1, start_layer,
                                 layer_count, aux_usage,
@@ -955,11 +955,10 @@ crocus_resource_prepare_render(struct crocus_context *ice,
 
 void
 crocus_resource_finish_render(struct crocus_context *ice,
-			      struct crocus_resource *res, uint32_t level,
-			      uint32_t start_layer, uint32_t layer_count,
-			      enum isl_aux_usage aux_usage)
+                              struct crocus_resource *res, uint32_t level,
+                              uint32_t start_layer, uint32_t layer_count,
+                              enum isl_aux_usage aux_usage)
 {
    crocus_resource_finish_write(ice, res, level, start_layer, layer_count,
                               aux_usage);
 }
-

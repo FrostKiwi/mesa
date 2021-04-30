@@ -433,7 +433,7 @@ struct crocus_vtable {
    void (*init_compute_context)(struct crocus_batch *batch);
    void (*upload_render_state)(struct crocus_context *ice,
                                struct crocus_batch *batch,
-			       const struct pipe_draw_info *draw,
+                               const struct pipe_draw_info *draw,
                                const struct pipe_draw_indirect_info *indirect,
                                const struct pipe_draw_start_count *sc);
    void (*update_surface_base_address)(struct crocus_batch *batch);
@@ -794,12 +794,12 @@ struct crocus_context {
       /* BRW_NEW_URB_ALLOCATIONS:
     */
    struct {
-      uint32_t vsize;		/* vertex size plus header in urb registers */
-      uint32_t gsize;	        /* GS output size in urb registers */
+      uint32_t vsize;                /* vertex size plus header in urb registers */
+      uint32_t gsize;                /* GS output size in urb registers */
       uint32_t hsize;             /* Tessellation control output size in urb registers */
       uint32_t dsize;             /* Tessellation evaluation output size in urb registers */
-      uint32_t csize;		/* constant buffer size in urb registers */
-      uint32_t sfsize;		/* setup data size in urb registers */
+      uint32_t csize;                /* constant buffer size in urb registers */
+      uint32_t sfsize;                /* setup data size in urb registers */
 
       bool constrained;
 
@@ -886,62 +886,62 @@ enum crocus_blitter_op
 void crocus_blitter_begin(struct crocus_context *ice, enum crocus_blitter_op op);
 
 void crocus_blorp_surf_for_resource(struct crocus_vtable *vtbl,
-                                  struct isl_device *isl_dev,
-                                  struct blorp_surf *surf,
-                                  struct pipe_resource *p_res,
-                                  enum isl_aux_usage aux_usage,
-                                  unsigned level,
-                                  bool is_render_target);
+                                    struct isl_device *isl_dev,
+                                    struct blorp_surf *surf,
+                                    struct pipe_resource *p_res,
+                                    enum isl_aux_usage aux_usage,
+                                    unsigned level,
+                                    bool is_render_target);
 void crocus_copy_region(struct blorp_context *blorp,
-                      struct crocus_batch *batch,
-                      struct pipe_resource *dst,
-                      unsigned dst_level,
-                      unsigned dstx, unsigned dsty, unsigned dstz,
-                      struct pipe_resource *src,
-                      unsigned src_level,
-                      const struct pipe_box *src_box);
+                        struct crocus_batch *batch,
+                        struct pipe_resource *dst,
+                        unsigned dst_level,
+                        unsigned dstx, unsigned dsty, unsigned dstz,
+                        struct pipe_resource *src,
+                        unsigned src_level,
+                        const struct pipe_box *src_box);
 
 /* crocus_draw.c */
 void crocus_draw_vbo(struct pipe_context *ctx,
-		     const struct pipe_draw_info *info,
-		     const struct pipe_draw_indirect_info *indirect,
-		     const struct pipe_draw_start_count *draws,
-		     unsigned num_draws);
+                     const struct pipe_draw_info *info,
+                     const struct pipe_draw_indirect_info *indirect,
+                     const struct pipe_draw_start_count *draws,
+                     unsigned num_draws);
 void crocus_launch_grid(struct pipe_context *, const struct pipe_grid_info *);
 
 /* crocus_pipe_control.c */
 
 void crocus_emit_pipe_control_flush(struct crocus_batch *batch,
-                                  const char *reason, uint32_t flags);
+                                    const char *reason, uint32_t flags);
 void crocus_emit_pipe_control_write(struct crocus_batch *batch,
-                                  const char *reason, uint32_t flags,
-                                  struct crocus_bo *bo, uint32_t offset,
-                                  uint64_t imm);
+                                    const char *reason, uint32_t flags,
+                                    struct crocus_bo *bo, uint32_t offset,
+                                    uint64_t imm);
 void crocus_emit_mi_flush(struct crocus_batch *batch);
 void crocus_emit_depth_stall_flushes(struct crocus_batch *batch);
 void crocus_emit_post_sync_nonzero_flush(struct crocus_batch *batch);
 void crocus_emit_end_of_pipe_sync(struct crocus_batch *batch,
-                                const char *reason, uint32_t flags);
+                                  const char *reason, uint32_t flags);
 void crocus_flush_all_caches(struct crocus_batch *batch);
 
-#define crocus_handle_always_flush_cache(batch) \
-   if (unlikely(batch->screen->driconf.always_flush_cache)) \
+#define crocus_handle_always_flush_cache(batch)                 \
+   if (unlikely(batch->screen->driconf.always_flush_cache))     \
       crocus_flush_all_caches(batch);
 
 void crocus_init_flush_functions(struct pipe_context *ctx);
 
 /* crocus_program.c */
 const struct shader_info *crocus_get_shader_info(const struct crocus_context *ice,
-                                               gl_shader_stage stage);
+                                                 gl_shader_stage stage);
 struct crocus_bo *crocus_get_scratch_space(struct crocus_context *ice,
-                                       unsigned per_thread_scratch,
-                                       gl_shader_stage stage);
+                                           unsigned per_thread_scratch,
+                                           gl_shader_stage stage);
 uint32_t crocus_group_index_to_bti(const struct crocus_binding_table *bt,
-                                 enum crocus_surface_group group,
-                                 uint32_t index);
+                                   enum crocus_surface_group group,
+                                   uint32_t index);
 uint32_t crocus_bti_to_group_index(const struct crocus_binding_table *bt,
-                                 enum crocus_surface_group group,
-                                 uint32_t bti);
+                                   enum crocus_surface_group group,
+                                   uint32_t bti);
 
 /* crocus_disk_cache.c */
 
@@ -953,9 +953,9 @@ void crocus_disk_cache_store(struct disk_cache *cache,
                              uint32_t prog_key_size);
 struct crocus_compiled_shader *
 crocus_disk_cache_retrieve(struct crocus_context *ice,
-                         const struct crocus_uncompiled_shader *ish,
-                         const void *prog_key,
-                         uint32_t prog_key_size);
+                           const struct crocus_uncompiled_shader *ish,
+                           const void *prog_key,
+                           uint32_t prog_key_size);
 
 /* crocus_program_cache.c */
 
@@ -967,26 +967,26 @@ struct crocus_compiled_shader *crocus_find_cached_shader(struct crocus_context *
                                                      uint32_t key_size,
                                                      const void *key);
 struct crocus_compiled_shader *crocus_upload_shader(struct crocus_context *ice,
-                                                enum crocus_program_cache_id,
-                                                uint32_t key_size,
-                                                const void *key,
-                                                const void *assembly,
-						uint32_t asm_size,
-                                                struct brw_stage_prog_data *,
-						uint32_t prog_data_size,
-                                                uint32_t *streamout,
-                                                enum brw_param_builtin *sysv,
-                                                unsigned num_system_values,
-                                                unsigned num_cbufs,
-                                                const struct crocus_binding_table *bt);
+                                                    enum crocus_program_cache_id,
+                                                    uint32_t key_size,
+                                                    const void *key,
+                                                    const void *assembly,
+                                                    uint32_t asm_size,
+                                                    struct brw_stage_prog_data *,
+                                                    uint32_t prog_data_size,
+                                                    uint32_t *streamout,
+                                                    enum brw_param_builtin *sysv,
+                                                    unsigned num_system_values,
+                                                    unsigned num_cbufs,
+                                                    const struct crocus_binding_table *bt);
 const void *crocus_find_previous_compile(const struct crocus_context *ice,
-                                       enum crocus_program_cache_id cache_id,
-                                       unsigned program_string_id);
+                                         enum crocus_program_cache_id cache_id,
+                                         unsigned program_string_id);
 bool crocus_blorp_lookup_shader(struct blorp_batch *blorp_batch,
-                              const void *key,
-                              uint32_t key_size,
-                              uint32_t *kernel_out,
-                              void *prog_data_out);
+                                const void *key,
+                                uint32_t key_size,
+                                uint32_t *kernel_out,
+                                void *prog_data_out);
 bool crocus_blorp_upload_shader(struct blorp_batch *blorp_batch,
                                 uint32_t stage,
                                 const void *key, uint32_t key_size,
@@ -999,33 +999,33 @@ bool crocus_blorp_upload_shader(struct blorp_batch *blorp_batch,
 /* crocus_resolve.c */
 
 void crocus_predraw_resolve_inputs(struct crocus_context *ice,
-                                 struct crocus_batch *batch,
-                                 bool *draw_aux_buffer_disabled,
-                                 gl_shader_stage stage,
-                                 bool consider_framebuffer);
+                                   struct crocus_batch *batch,
+                                   bool *draw_aux_buffer_disabled,
+                                   gl_shader_stage stage,
+                                   bool consider_framebuffer);
 void crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
-                                      struct crocus_batch *batch,
-                                      bool *draw_aux_buffer_disabled);
+                                        struct crocus_batch *batch,
+                                        bool *draw_aux_buffer_disabled);
 void crocus_postdraw_update_resolve_tracking(struct crocus_context *ice,
-                                           struct crocus_batch *batch);
+                                             struct crocus_batch *batch);
 void crocus_cache_sets_clear(struct crocus_batch *batch);
 void crocus_flush_depth_and_render_caches(struct crocus_batch *batch);
 void crocus_cache_flush_for_read(struct crocus_batch *batch, struct crocus_bo *bo);
 void crocus_cache_flush_for_render(struct crocus_batch *batch,
-                                 struct crocus_bo *bo,
-                                 enum isl_format format,
-                                 enum isl_aux_usage aux_usage);
+                                   struct crocus_bo *bo,
+                                   enum isl_format format,
+                                   enum isl_aux_usage aux_usage);
 void crocus_render_cache_add_bo(struct crocus_batch *batch,
-                              struct crocus_bo *bo,
-                              enum isl_format format,
-                              enum isl_aux_usage aux_usage);
+                                struct crocus_bo *bo,
+                                enum isl_format format,
+                                enum isl_aux_usage aux_usage);
 void crocus_cache_flush_for_depth(struct crocus_batch *batch, struct crocus_bo *bo);
 void crocus_depth_cache_add_bo(struct crocus_batch *batch, struct crocus_bo *bo);
 int crocus_get_driver_query_info(struct pipe_screen *pscreen, unsigned index,
-                               struct pipe_driver_query_info *info);
+                                 struct pipe_driver_query_info *info);
 int crocus_get_driver_query_group_info(struct pipe_screen *pscreen,
-                                     unsigned index,
-                                     struct pipe_driver_query_group_info *info);
+                                       unsigned index,
+                                       struct pipe_driver_query_group_info *info);
 
 struct pipe_rasterizer_state *crocus_get_rast_state(struct crocus_context *ctx);
 

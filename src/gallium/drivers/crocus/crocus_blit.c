@@ -41,7 +41,7 @@ void crocus_blitter_begin(struct crocus_context *ice, enum crocus_blitter_op op)
    util_blitter_save_tesseval_shader(ice->blitter, ice->shaders.uncompiled[MESA_SHADER_TESS_EVAL]);
    util_blitter_save_geometry_shader(ice->blitter, ice->shaders.uncompiled[MESA_SHADER_GEOMETRY]);
    util_blitter_save_so_targets(ice->blitter, ice->state.so_targets,
-				(struct pipe_stream_output_target**)ice->state.so_target);
+                                (struct pipe_stream_output_target**)ice->state.so_target);
    util_blitter_save_vertex_buffer_slot(ice->blitter, ice->state.vertex_buffers);
    util_blitter_save_vertex_elements(ice->blitter, (void *)ice->state.cso_vertex_elements);
    if (op & CROCUS_SAVE_FRAGMENT_STATE) {
@@ -302,8 +302,6 @@ crocus_blorp_surf_for_resource(struct crocus_vtable *vtbl,
       surf->clear_color =
          crocus_resource_get_clear_color(res);
    }
-
-   // XXX: ASTC
 }
 
 static void
@@ -341,7 +339,7 @@ tex_cache_flush_hack(struct crocus_batch *batch,
 
 static struct crocus_resource *
 crocus_resource_for_aspect(const struct gen_device_info *devinfo,
-			   struct pipe_resource *p_res, unsigned pipe_mask)
+                           struct pipe_resource *p_res, unsigned pipe_mask)
 {
    if (pipe_mask == PIPE_MASK_S) {
       struct crocus_resource *junk, *s_res;
@@ -762,7 +760,7 @@ crocus_resource_copy_region(struct pipe_context *ctx,
       crocus_resource_finish_aux_import(ctx->screen, src);
    if (crocus_resource_unfinished_aux_import(dst))
       crocus_resource_finish_aux_import(ctx->screen, dst);
-   
+
    /* Use MI_COPY_MEM_MEM for tiny (<= 16 byte, % 4) buffer copies. */
    if (p_src->target == PIPE_BUFFER && p_dst->target == PIPE_BUFFER &&
        (src_box->width % 4 == 0) && src_box->width <= 16 &&
@@ -780,7 +778,7 @@ crocus_resource_copy_region(struct pipe_context *ctx,
 
    if (devinfo->gen < 6 && util_format_is_depth_or_stencil(p_dst->format)) {
      util_resource_copy_region(ctx, p_dst, dst_level, dstx, dsty, dstz,
-			       p_src, src_level, src_box);
+                               p_src, src_level, src_box);
      return;
    }
    crocus_copy_region(&ice->blorp, batch, p_dst, dst_level, dstx, dsty, dstz,

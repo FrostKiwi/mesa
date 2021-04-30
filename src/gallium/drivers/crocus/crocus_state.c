@@ -479,7 +479,7 @@ flush_after_state_base_change(struct crocus_batch *batch)
     * units cache the binding table in the texture cache.  However, we have
     * yet to be able to actually confirm this.
     */
-#if GEN_GEN >= 6   
+#if GEN_GEN >= 6
    crocus_emit_end_of_pipe_sync(batch,
                               "change STATE_BASE_ADDRESS (invalidates)",
                               PIPE_CONTROL_TEXTURE_CACHE_INVALIDATE |
@@ -959,7 +959,7 @@ static const GLfloat fixed_plane[6][4] = {
 static void
 gen4_upload_curbe(struct crocus_batch *batch)
 {
-   struct crocus_context *ice = batch->ice;   
+   struct crocus_context *ice = batch->ice;
    const unsigned sz = ice->curbe.total_size;
    const unsigned buf_sz = sz * 16 * sizeof(float);
 
@@ -1111,7 +1111,7 @@ setup_l3_config(struct crocus_batch *batch, const struct intel_l3_config *cfg)
     */
    const bool urb_low_bw = has_slm && !devinfo->is_baytrail;
    assert(!urb_low_bw || cfg->n[INTEL_L3P_URB] == cfg->n[INTEL_L3P_SLM]);
-      
+
    /* Minimum number of ways that can be allocated to the URB. */
    const unsigned n0_urb = (devinfo->is_baytrail ? 32 : 0);
    assert(cfg->n[INTEL_L3P_URB] >= n0_urb);
@@ -1169,7 +1169,7 @@ setup_l3_config(struct crocus_batch *batch, const struct intel_l3_config *cfg)
                    (has_dc ? 0 : HSW_ROW_CHICKEN3_L3_ATOMIC_DISABLE));
          ADVANCE_BATCH();
                          }
-      
+
 #endif
 }
 
@@ -1240,7 +1240,7 @@ emit_pipeline_select(struct crocus_batch *batch, uint32_t pipeline)
      *
      *   Software must ensure the current pipeline is flushed via an
      *   MI_FLUSH or PIPE_CONTROL prior to the execution of PIPELINE_SELECT.
-     */    
+     */
     crocus_emit_cmd(batch, GENX(MI_FLUSH), foo);
 #endif
 
@@ -2891,9 +2891,9 @@ crocus_set_framebuffer_state(struct pipe_context *ctx,
       struct crocus_resource *stencil_res;
       enum isl_aux_usage aux_usage = ISL_AUX_USAGE_NONE;
       crocus_get_depth_stencil_resources(devinfo, cso->zsbuf->texture, &zres,
-					 &stencil_res);
+                                         &stencil_res);
       if (zres && crocus_resource_level_has_hiz(zres, cso->zsbuf->u.tex.level)) {
-	 aux_usage = zres->aux.usage;
+         aux_usage = zres->aux.usage;
       }
       ice->state.hiz_usage = aux_usage;
    }
@@ -4251,8 +4251,8 @@ emit_ubo_buffer(struct crocus_context *ice,
 
 static uint32_t
 emit_ssbo_buffer(struct crocus_context *ice,
-		 struct crocus_batch *batch,
-		 struct pipe_shader_buffer *buffer, bool writeable)
+                 struct crocus_batch *batch,
+                 struct pipe_shader_buffer *buffer, bool writeable)
 {
    UNUSED struct isl_device *isl_dev = &batch->screen->isl_dev;
    uint32_t offset = 0;
@@ -4518,7 +4518,7 @@ crocus_update_surface_base_address(struct crocus_batch *batch)
 #endif
 #if GEN_GEN >= 6
 
-      
+
       /* The hardware appears to pay attention to the MOCS fields even
        * if you don't set the "Address Modify Enable" bit for the base.
        */
@@ -4939,16 +4939,16 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    if (dirty & CROCUS_DIRTY_GEN6_URB) {
 #if GEN_GEN == 6
       bool gs_present = ice->shaders.prog[MESA_SHADER_GEOMETRY] != NULL
-	 || ice->shaders.ff_gs_prog;
+         || ice->shaders.ff_gs_prog;
 
       struct brw_vue_prog_data *vue_prog_data =
-	 (void *) ice->shaders.prog[MESA_SHADER_VERTEX]->prog_data;
+         (void *) ice->shaders.prog[MESA_SHADER_VERTEX]->prog_data;
       const unsigned vs_size = vue_prog_data->urb_entry_size;
       unsigned gs_size = vs_size;
       if (ice->shaders.prog[MESA_SHADER_GEOMETRY]) {
-	 struct brw_vue_prog_data *gs_vue_prog_data =
-	    (void *) ice->shaders.prog[MESA_SHADER_GEOMETRY]->prog_data;
-	 gs_size = gs_vue_prog_data->urb_entry_size;
+         struct brw_vue_prog_data *gs_vue_prog_data =
+            (void *) ice->shaders.prog[MESA_SHADER_GEOMETRY]->prog_data;
+         gs_size = gs_vue_prog_data->urb_entry_size;
       }
 
       genX(upload_urb)(batch, vs_size, gs_present, gs_size);
@@ -7390,9 +7390,9 @@ crocus_emit_raw_pipe_control(struct crocus_batch *batch,
 #if GEN_GEN == 6
 void
 genX(upload_urb)(struct crocus_batch *batch,
-		 unsigned vs_size,
-		 bool gs_present,
-		 unsigned gs_size)
+                 unsigned vs_size,
+                 bool gs_present,
+                 unsigned gs_size)
 {
    struct crocus_context *ice = batch->ice;
    int nr_vs_entries, nr_gs_entries;
@@ -7449,6 +7449,7 @@ genX(upload_urb)(struct crocus_batch *batch,
       crocus_emit_mi_flush(batch);
    ice->urb.gs_present = gs_present;
 }
+
 #endif
 
 static void
@@ -7537,11 +7538,11 @@ crocus_state_finish_batch(struct crocus_batch *batch)
    if (batch->name == CROCUS_BATCH_RENDER) {
       crocus_emit_mi_flush(batch);
       crocus_emit_cmd(batch, GENX(3DSTATE_CC_STATE_POINTERS), ptr) {
-	 ptr.ColorCalcStatePointer = batch->ice->shaders.cc_offset;
+         ptr.ColorCalcStatePointer = batch->ice->shaders.cc_offset;
       }
 
       crocus_emit_pipe_control_flush(batch, "hsw wa", PIPE_CONTROL_RENDER_TARGET_FLUSH |
-				     PIPE_CONTROL_CS_STALL);
+                                     PIPE_CONTROL_CS_STALL);
    }
 #endif
    gen7_emit_isp_disable(batch);

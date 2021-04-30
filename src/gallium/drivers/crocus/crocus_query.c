@@ -662,7 +662,7 @@ crocus_get_query_result(struct pipe_context *ctx,
       assert(READ_ONCE(q->map->snapshots_landed));
 #else
       if (wait)
-	 crocus_wait_syncpt(ctx->screen, q->syncpt, INT64_MAX);
+         crocus_wait_syncpt(ctx->screen, q->syncpt, INT64_MAX);
 #endif
       calculate_result_on_cpu(devinfo, q);
    }
