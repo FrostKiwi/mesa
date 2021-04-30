@@ -1806,6 +1806,8 @@ crocus_update_compiled_fs(struct crocus_context *ice)
          ice->state.dirty |= CROCUS_DIRTY_GEN4_CLIP_PROG | CROCUS_DIRTY_GEN4_SF_PROG;
       else
          ice->state.dirty |= CROCUS_DIRTY_CLIP;
+      if (devinfo->gen == 6)
+         ice->state.dirty |= CROCUS_DIRTY_RASTER;
       if (devinfo->gen >= 7)
          ice->state.dirty |= CROCUS_DIRTY_GEN7_SBE;
       ice->state.stage_dirty |= CROCUS_STAGE_DIRTY_FS |
